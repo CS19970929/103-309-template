@@ -46,8 +46,9 @@ typedef union __LOG_RECORD_FLAG {
 
 extern LOG_RECORD_FLAG LogRecord_Flag;
 extern UINT8 gu8_Reset_EventRecord;
+extern UINT32 su32_Interval_S_Tcnt ;
 
-//ÓÃÍêÉ¾³ý
+//ï¿½ï¿½ï¿½ï¿½É¾ï¿½ï¿½
 //extern UINT8 BMS_LOG_POINT;
 //extern UINT8 BMS_LOG_RECORD[100][2];
 

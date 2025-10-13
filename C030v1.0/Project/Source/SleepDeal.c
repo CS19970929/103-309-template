@@ -435,6 +435,7 @@ void SleepDeal_Normal_L2(void)
 			// if(++s_u32SleepFirstCnt >= 3) {			//这个，�??一次个后面都是一�?
 			s_u32SleepFirstCnt = 0;
 			s_u8SleepStatus = HICCUP;
+			Sleep_Mode.bits.b1NormalSleep_L2 = 1;
 			Sleep_Status = SLEEP_HICCUP_CONTINUE;
 		}
 		break;
@@ -510,6 +511,7 @@ void SleepDeal_Normal_L3(void)
 			// if(++s_u32SleepFirstCnt >= 1) {			//这个，�??一次个后面都是一�?
 			s_u32SleepFirstCnt = 0;
 			s_u8SleepStatus = HICCUP;
+			Sleep_Mode.bits.b1NormalSleep_L3 = 1;
 			Sleep_Status = SLEEP_HICCUP_CONTINUE;
 		}
 		break;
@@ -566,7 +568,7 @@ void SleepDeal_Normal_Select(void)
 	{
 		if (g_stCellInfoReport.u16VCellMin < OtherElement.u16Sleep_Vlow)
 		{
-			Sleep_Mode.bits.b1NormalSleep_L3 = 1;
+			Sleep_Mode.bits.b1NormalSleep_L3 = 0;
 			Sleep_Status = SLEEP_HICCUP_NORMAL_L3;
 		}
 		// else if (g_stCellInfoReport.u16VCellMin > OtherElement.u16Sleep_VNormal)
@@ -576,7 +578,7 @@ void SleepDeal_Normal_Select(void)
 		// }
 		else
 		{ // 等号均纳�?L2
-			Sleep_Mode.bits.b1NormalSleep_L2 = 1;
+			Sleep_Mode.bits.b1NormalSleep_L2 = 0;
 			Sleep_Status = SLEEP_HICCUP_NORMAL_L2;
 		}
 	}
@@ -723,29 +725,8 @@ void App_SleepDeal(void)
 
 	switch (Sleep_Status)
 	{
-	case SLEEP_HICCUP_SHIFT: // 先跳到这里，再跳到SleepDeal_Continue()，然后进入别的循�?
-		SleepDeal_Shift();	 // 主控跳转函数，开机执行一遍没事进入核心循�?函数
-		break;
 	case SLEEP_HICCUP_NORMAL_SELECT:
 		SleepDeal_Normal_Select();
-		break;
-	case SLEEP_HICCUP_TEST:
-		SleepDeal_Test();
-		break;
-	case SLEEP_HICCUP_OVERCUR:
-		SleepDeal_OverCurrent();
-		break;
-	case SLEEP_HICCUP_OVDELTA:
-		SleepDeal_Vdelta(); // �?前压�?过大直接进入休眠不起来，�?�?�?
-		break;
-	case SLEEP_HICCUP_CBC:
-		SleepDeal_CBC();
-		break;
-	case SLEEP_HICCUP_FORCED:
-		SleepDeal_Forced(); // 还没�?
-		break;
-	case SLEEP_HICCUP_NORMAL_L1:
-		SleepDeal_Normal_L1();
 		break;
 	case SLEEP_HICCUP_NORMAL_L2:
 		SleepDeal_Normal_L2();
@@ -753,19 +734,11 @@ void App_SleepDeal(void)
 	case SLEEP_HICCUP_NORMAL_L3:
 		SleepDeal_Normal_L3();
 		break;
-
-	case SLEEP_HICCUP_VCELLOVP:
-		SleepDeal_VcellOVP();
-		break;
-	case SLEEP_HICCUP_VCELLUVP:
-		SleepDeal_VcellUVP();
-		break;
-
-	case SLEEP_HICCUP_CONTINUE:
-		SleepDeal_Continue();
-		break;
+	// case SLEEP_HICCUP_CONTINUE:
+	// 	SleepDeal_Continue();
+	// 	break;
 	default:
-		Sleep_Status = SLEEP_HICCUP_SHIFT;
+		Sleep_Status = SLEEP_HICCUP_NORMAL_SELECT;
 		break;
 	}
 
@@ -776,6 +749,15 @@ void App_SleepDeal(void)
 	else
 	{
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
+	}
+
+	if ((Sleep_Mode.all & 0x00ff))
+	{
+		extern UINT32 su32_Interval_S_Tcnt;
+		
+		LogRecord_Flag.bits.Log_Sleep = 1;
+		LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+		SleepDeal_Continue();
 	}
 }
 

@@ -39,7 +39,6 @@ int main(void)
 #else
 		App_SysTime();
 		App_AFEGet();
-		App_SH367309();
 
 		App_Sci();
 		App_AnlogCal();
@@ -52,13 +51,14 @@ int main(void)
 
 		APP_LedBar();
 
+#ifdef __FUNC__HEAT__
+		App_Heat_Cool_Ctrl();
+#endif
+
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
 
-#ifdef __FUNC__HEAT__
-		App_Heat_Cool_Ctrl();
-#endif
 #ifdef wdog_enable
 		Feed_WatchDog;
 #endif
@@ -87,13 +87,13 @@ void InitDevice(void)
 	InitCan();
 	InitADC();
 	InitSci();
-	InitData_SOC();		  // 必须放在读完eeprom数据后面
 
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
 
 	InitAFE1();
+	InitMosRelay_DOx();
 
 #ifdef wdog_enable
 	Init_IWDG();

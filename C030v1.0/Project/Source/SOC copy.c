@@ -51,6 +51,7 @@ const UINT16 SOC_Table_Default[42] = {
 void RefreshData_SOC(void)
 {
 	SOC_Enhance_Element.u16_VCellMax = g_stCellInfoReport.u16VCellMax;
+	// SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin;	//扩散出去，不用这个值，去掉6和16串
 	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 公版决定不扩散出去，包含6和16串，客户使用体验问题，低压保护SOC一定要降下来
 	SOC_Enhance_Element.u16_Ichg = g_stCellInfoReport.u16Ichg;
 	SOC_Enhance_Element.u16_Idsg = g_stCellInfoReport.u16IDischg;
@@ -76,6 +77,8 @@ void GetData_SOC(void)
 	{
 		g_stCellInfoReport.SocElement.u16Soc = 0;
 	}
+
+	// g_stCellInfoReport.u16VCell[30] = SOC_Enhance_Element.u8_SOC_OCV_Cali;
 }
 
 // 一次性赋值
@@ -89,33 +92,50 @@ void InitData_SOC(void)
 	;
 	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
 	SOC_Enhance_Element.u16_SOC_TableSelect = OtherElement.u16Soc_TableSelect;
+	// SOC_Enhance_Element.u16_SOC_DsgVcell_Limit = OtherElement.u16Soc_V_0;
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
 	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
 
 	SOC_Enhance_Element.u8_LargeCurFlag_Chg = 0; // 默认是0，除非末端大电流CC充放电导致没法在端点达到100%和0%置1
 	SOC_Enhance_Element.u8_LargeCurFlag_Dsg = 0;
 
+	for (i = 0; i < E2P_AdressNum; ++i)
+	{
+		SOC_Enhance_Element.SOC_E2P_Adress[i] = E2P_ADDR_E2POS_ENHANCE_SOC + 2 * i;
+	}
+
 	for (i = 0; i < SOC_Size_TableCanSet; ++i)
 	{
 		SOC_Enhance_Element.SOC_Table_CanSet[i] = SOC_Table_Set[i];
 	}
-
-	soc_param_lib_init();
+	// SOC_Enhance_Element.SOC_E2P_Adress = E2P_ADDR_E2POS_ENHANCE_SOC;
 }
 
 void App_SOC(void)
 {
+	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_SOC))
+	{
+		return;
+	}
+
+	/*	//放这里，开机会出现电量过低保护，因为200ms后才赋值，该时间内使保护逻辑(10ms时基)运行完毕
+		//太细了
+	if(SOC_Enhance_Element.u16_SOC_InitOver) {
+		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;				//初始化完毕
+	}
+	*/
+
 	if (0 == gu8_200msAccClock_Flag)
 	{
 		return;
 	}
 
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-
 	RefreshData_SOC();
 	GetData_SOC();
-	SOC_IntEnhance_Ctrl();
+	SOC_IntEnhance_Ctrl(gu8_200msAccClock_Flag);
 
+	// 要精确统计，不能在别的地方置零。200ms以内执行一次，然后置零便可。这样就不会被拉长时间导致容量计算有问题。
+	// 例如200ms时基变为240ms，误差就是40/200 = 20%，20Ah统计最后就18Ah。
 	gu8_200msAccClock_Flag = 0;
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)

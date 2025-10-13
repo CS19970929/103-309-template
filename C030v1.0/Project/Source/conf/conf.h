@@ -14,9 +14,9 @@
 // #define __FUNC__HEAT__
 #define __LOAD_REMOVE_SHORT_FUNC__
 
-#define _SECOND_CURR_PROTECT_FUNC_
+// #define _SECOND_CURR_PROTECT_FUNC_
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 #define log_i(...)       ((void)0);
 #define log_w(...)       ((void)0);

@@ -1901,8 +1901,38 @@ void App_VdeltaOp_ThirdCheck(void)
  ******************************************************************************/
 void App_WarnCtrl(void)
 {
+	App_CellOvp_SecondCheck();
+	App_CellOvp_ThirdCheck();
+	App_CellUvp_SecondCheck();
+	App_CellUvp_ThirdCheck();
+
+	App_BatOvp_SecondCheck();
+	App_BatOvp_ThirdCheck();
+	App_BatUvp_SecondCheck();
+	App_BatUvp_ThirdCheck();
+
 	App_MosOtp_SecondCheck();
 	App_MosOtp_ThirdCheck();
+	App_VdeltaOp_SecondCheck();
+	App_VdeltaOp_ThirdCheck();
+
+	App_IdischgOcp_SecondCheck();
+	App_IdischgOcp_ThirdCheck();
+	App_IchgOcp_SecondCheck();
+	App_IchgOcp_ThirdCheck();
+
+	App_CellSocUp_SecondCheck();
+	App_CellSocUp_ThirdCheck();
+
+	App_CellDisChgOtp_SecondCheck();
+	App_CellDisChgOtp_ThirdCheck();
+	App_CellDischgUtp_SecondCheck();
+	App_CellDischgUtp_ThirdCheck();
+
+	App_CellChgOtp_SecondCheck();
+	App_CellChgOtp_ThirdCheck();
+	App_CellChgUtp_SecondCheck();
+	App_CellChgUtp_ThirdCheck();
 }
 
 // 记录是按顺序记录下去，上传则是最新的在顶部

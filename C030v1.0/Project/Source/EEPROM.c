@@ -604,7 +604,6 @@ void WriteEEPROM_ByteData_Circle(void)
 	UINT8 u8temp;
 	const struct PRT_E2ROM_PARAS PrtE2paras_Pos = E2P_ADDR_E2POS_PROTECT;
 	const struct OTHER_ELEMENT OtherCanAdd_Pos = E2P_ADDR_E2POS_OTHER_ELEMENT1;
-	const struct RTC_ELEMENT RTC_Element_Pos = E2P_ADDR_E2POS_RTC;
 	const struct HEAT_COOL_ELEMENT HeatCoolEle_Pos = E2P_ADDR_E2POS_HEAT_COOL;
 
 	if (u8E2P_KB_WriteFlag)
@@ -810,6 +809,7 @@ void InitData_E2prom(void)
 			{
 				OffsetValue_DSG = (UINT32)((UINT16)(0xFFFF - curr_offset + 1)) * 200 * g_u32CS_Res_AFE / (21470); // mA
 			}
+			InitData_SOC(); // 必须放在读完eeprom数据后面
 		}
 	}
 	else
@@ -833,7 +833,11 @@ void InitData_E2prom(void)
 			} while (ret == false);
 			DataLoad_CurrentCali_startup();
 		}
+		soc_factory_param_init_first();
+
 		WriteEEPROM_Word_NoZone(EEPROM_ADDR_PASS, EEPROM_VALUE_BEGIN_FLAG); // 第一次上电初始化完成
+
+		MCU_RESET();
 	}
 }
 

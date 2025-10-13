@@ -227,12 +227,6 @@ void App_SysTime(void)
 	{
 		s_u8Cnt200ms4 = 0;
 		g_st_SysTimeFlag.bits.b1Sys200msFlag4 = 1; // 200ms定时标志
-#if 0
-		if(!MCUI_SLEEP_DET) {
-			MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-		}
-#endif
-		MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 	}
 	if (s_u8Cnt200ms5 >= 20)
 	{

@@ -1,11 +1,11 @@
 #ifndef SYSTEM_MONITOR_H
 #define SYSTEM_MONITOR_H
 
-//ÏµÍ³´íÎó¿ØÖÆÀàÐÍ
+//ÏµÍ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 typedef enum {STARTUP_CONT = 0, STARTUP_OVER = !STARTUP_CONT} StartUp_Status;
 
 enum SYSTEM_ERROR_COMMAND {
-	ERROR_AFE1 = 1,			//ÎªÁË·½±ãÊ¹ÓÃº¯Êý·µ»ØÖµ
+	ERROR_AFE1 = 1,			//Îªï¿½Ë·ï¿½ï¿½ï¿½Ê¹ï¿½Ãºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 	ERROR_AFE2,
 	ERROR_CAN,
 	ERROR_EEPROM_COM,
@@ -120,9 +120,9 @@ struct SYSTEM_ERROR {
 };
 
 
-//ÏµÍ³¿ª»úÊ±Ðò¿ØÖÆÀàÐÍ
+//ÏµÍ³ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 enum SYSTEM_FUNC_STARTUP_COMMAND {
-	SYSTEM_FUNC_STARTUP_SOC = 1,			//ÎªÁË·½±ãÊ¹ÓÃº¯Êý·µ»ØÖµ
+	SYSTEM_FUNC_STARTUP_SOC = 1,			//Îªï¿½Ë·ï¿½ï¿½ï¿½Ê¹ï¿½Ãºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Öµ
 	SYSTEM_FUNC_STARTUP_BALANCE,
 	SYSTEM_FUNC_STARTUP_PROTECT,
 	SYSTEM_FUNC_STARTUP_MOS,
@@ -135,23 +135,23 @@ enum SYSTEM_FUNC_STARTUP_COMMAND {
 };
 
 
-union System_Function_StartUp {				//¹¦ÄÜ³õÊ¼»¯Í³Ò»¹ÜÀí
+union System_Function_StartUp {				//ï¿½ï¿½ï¿½Ü³ï¿½Ê¼ï¿½ï¿½Í³Ò»ï¿½ï¿½ï¿½ï¿½
     UINT32 all;
     struct System_Func_StartUp_Flag {
-		UINT8 b1StartUpFlag_SOC		:1;		//SOC³õÊ¼»¯£¬Ä¿Ç°ÓÃÓÚ¿ªÂ·µçÑ¹ºÍ°²Ê±»ý·Ö£¬×è¿¹¸ú×Ù²»»áÓÃµ½£¬ÒòÎªºóÃæ»á°ÑÎÄ¼þ¸ôÀë
-		UINT8 b1StartUpFlag_Balance	:1;		//¾ùºâ³õÊ¼»¯
-		UINT8 b1StartUpFlag_Protect :1;		//±£»¤¹¦ÄÜ³õÊ¼»¯
-		UINT8 b1StartUpFlag_MOS     :1;		//MOS¹Ü³õÊ¼»¯
+		UINT8 b1StartUpFlag_SOC		:1;		//SOCï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½Ä¿Ç°ï¿½ï¿½ï¿½Ú¿ï¿½Â·ï¿½ï¿½Ñ¹ï¿½Í°ï¿½Ê±ï¿½ï¿½ï¿½Ö£ï¿½ï¿½è¿¹ï¿½ï¿½ï¿½Ù²ï¿½ï¿½ï¿½ï¿½Ãµï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
+		UINT8 b1StartUpFlag_Balance	:1;		//ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½
+		UINT8 b1StartUpFlag_Protect :1;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü³ï¿½Ê¼ï¿½ï¿½
+		UINT8 b1StartUpFlag_MOS     :1;		//MOSï¿½Ü³ï¿½Ê¼ï¿½ï¿½
 		
-		UINT8 b1StartUpFlag_Relay   :1;		//¼ÌµçÆ÷¹Ü³õÊ¼»¯
-		UINT8 b1StartUpFlag_ADC     :1;		//ADC³õÊ¼»¯
-		UINT8 b1StartUpFlag_CAN		:1;		//Can³õÊ¼»¯
-		UINT8 b1StartUpFlag_Cool	:1;		//ÀäÄýÆ÷¿ª»ú×Ô¼ì
+		UINT8 b1StartUpFlag_Relay   :1;		//ï¿½Ìµï¿½ï¿½ï¿½ï¿½Ü³ï¿½Ê¼ï¿½ï¿½
+		UINT8 b1StartUpFlag_ADC     :1;		//ADCï¿½ï¿½Ê¼ï¿½ï¿½
+		UINT8 b1StartUpFlag_CAN		:1;		//Canï¿½ï¿½Ê¼ï¿½ï¿½
+		UINT8 b1StartUpFlag_Cool	:1;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½
 
-		UINT8 b1StartUpFlag_Heat	:1;		//É¢ÈÈÆ÷Æ÷¿ª»ú×Ô¼ì
-		UINT8 b1StartUpFlag_AFE1	:1;		//AFE1		//ÓÉÓÚAFEÔÚÉÏµç»½ÐÑºó±ã³õÊ¼»¯Íê£¬ËùÒÔÕâ¸ö²»ÐèÒª£¬²»È»Ì«¸´ÔÓÁË
+		UINT8 b1StartUpFlag_Heat	:1;		//É¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½
+		UINT8 b1StartUpFlag_AFE1	:1;		//AFE1		//ï¿½ï¿½ï¿½ï¿½AFEï¿½ï¿½ï¿½Ïµç»½ï¿½Ñºï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ê£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½È»Ì«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		UINT8 b1StartUpFlag_AFE2	:1;		//AFE2
-		UINT8 b1StartUpFlag_BlueT	:1;		//À¶ÑÀ¿ª»ú×Ô¼ì
+		UINT8 b1StartUpFlag_BlueT	:1;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½
 		
 		UINT8 bRcved7				:1;		//res
 		UINT8 bRcved8				:1;		//res
@@ -164,60 +164,60 @@ union System_Function_StartUp {				//¹¦ÄÜ³õÊ¼»¯Í³Ò»¹ÜÀí
 };
 
 
-//ÏµÍ³×´Ì¬¸ú×ÙÀàÐÍ
-union System_Status {				//TODO£¬¾ùºâ£¬Heat£¬Cool£¬Ã»¸ã
+//ÏµÍ³×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+union System_Status {				//TODOï¿½ï¿½ï¿½ï¿½ï¿½â£¬Heatï¿½ï¿½Coolï¿½ï¿½Ã»ï¿½ï¿½
     UINT32 all;
     struct System_Status_Flag {
-		UINT8 b1StartUpBMS			:1;		//BMSµÚÒ»´Î¿ª»ú±êÖ¾Î»£¬³õÊ¼Îª1£¬È·¶¨ÄÜ´ò¿ª¹Ü×ÓÊÓÎªÏµÍ³³õÊ¼»¯Íê±Ï				//µÚ¶þ¸ö8Î»
-		UINT8 b1Status_MOS_PRE      :1;		//Ô¤³äMOS¹Ü¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_MOS_CHG      :1;		//³äµçMOS¹Ü¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_MOS_DSG      :1;		//·ÅµçMOS¹Ü¹¦ÄÜ×´Ì¬
+		UINT8 b1StartUpBMS			:1;		//BMSï¿½ï¿½Ò»ï¿½Î¿ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾Î»ï¿½ï¿½ï¿½ï¿½Ê¼Îª1ï¿½ï¿½È·ï¿½ï¿½ï¿½Ü´ò¿ª¹ï¿½ï¿½ï¿½ï¿½ï¿½ÎªÏµÍ³ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½				//ï¿½Ú¶ï¿½ï¿½ï¿½8Î»
+		UINT8 b1Status_MOS_PRE      :1;		//Ô¤ï¿½ï¿½MOSï¿½Ü¹ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_MOS_CHG      :1;		//ï¿½ï¿½ï¿½MOSï¿½Ü¹ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_MOS_DSG      :1;		//ï¿½Åµï¿½MOSï¿½Ü¹ï¿½ï¿½ï¿½×´Ì¬
 
-		UINT8 b1Status_Relay_PRE    :1;		//Ô¤³ä¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Relay_CHG    :1;		//·Ö¿Ú³äµç¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Relay_DSG    :1;		//·Ö¿Ú·Åµç¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Relay_MAIN   :1;		//Í¬¿ÚÖ÷¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
+		UINT8 b1Status_Relay_PRE    :1;		//Ô¤ï¿½ï¿½Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_Relay_CHG    :1;		//ï¿½Ö¿Ú³ï¿½ï¿½Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_Relay_DSG    :1;		//ï¿½Ö¿Ú·Åµï¿½Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_Relay_MAIN   :1;		//Í¬ï¿½ï¿½ï¿½ï¿½ï¿½Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
 
-		UINT8 b1Status_Heat         :1;		//¼ÓÈÈ¹¦ÄÜ×´Ì¬					//µÚÒ»¸ö8Î»
-		UINT8 b1Status_Cool         :1;		//ÖÆÀä¹¦ÄÜ×´Ì¬
+		UINT8 b1Status_Heat         :1;		//ï¿½ï¿½ï¿½È¹ï¿½ï¿½ï¿½×´Ì¬					//ï¿½ï¿½Ò»ï¿½ï¿½8Î»
+		UINT8 b1Status_Cool         :1;		//ï¿½ï¿½ï¿½ä¹¦ï¿½ï¿½×´Ì¬
 		UINT8 b1Status_AFE1         :1;		//AFE1×´Ì¬
 		UINT8 b1Status_AFE2	        :1;		//AFE2×´Ì¬
 
-		UINT8 b1Status_Balance		:1;		//¾ùºâ¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_ToSleep		:1;		//½øÈëÐÝÃßÃüÁî×´Ì¬
-		UINT8 b1Status_BnCloseIO	:1;		//¾ùºâ¿ØÖÆMOS¹Ø±Õ±êÖ¾Î»
-		UINT8 b1Status_HeatCloseIO	:1;		//¼ÓÈÈÊ±¹Ø±ÕMosRelay
+		UINT8 b1Status_Balance		:1;		//ï¿½ï¿½ï¿½â¹¦ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_ToSleep		:1;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
+		UINT8 b1Status_BnCloseIO	:1;		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½MOSï¿½Ø±Õ±ï¿½Ö¾Î»
+		UINT8 b1Status_HeatCloseIO	:1;		//ï¿½ï¿½ï¿½ï¿½Ê±ï¿½Ø±ï¿½MosRelay
 		
-		UINT8 b1Status_SysLimits	:1;		//res						//µÚËÄ¸ö8Î»
-		UINT8 b1Status_ChgCloseIO	:1;		//µçÇ¹ÔÚÏßÇ¿ÖÆ¹Ø±ÕÇý¶¯£¬ÏÞÁ÷Ä£¿éÇ¿ÖÆ¹Ø±ÕÇý¶¯
-		UINT8 b1Status_DriverExtCtrl:1;		//Çý¶¯×ªÎªÍâ²¿¿ØÖÆ£¬ÌØÊâÐèÇó¿ÉÓÃ£¬É÷ÓÃ
+		UINT8 b1Status_SysLimits	:1;		//res						//ï¿½ï¿½ï¿½Ä¸ï¿½8Î»
+		UINT8 b1Status_CBCCloseIO	:1;		//ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½Ç¿ï¿½Æ¹Ø±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Ç¿ï¿½Æ¹Ø±ï¿½ï¿½ï¿½ï¿½ï¿½
+		UINT8 b1Status_DriverExtCtrl:1;		//ï¿½ï¿½ï¿½ï¿½×ªÎªï¿½â²¿ï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½
 		UINT8 bRcved6				:1;		//res
 
-		UINT8 b4Status_ProjectVer	:4;		//¼ÇÂ¼Ò»Ð©ÏîÄ¿ÐÅÏ¢£¬Ä¿Ç°ÐÝÃß´øµçÎª1£¬±ðµÄÎª0
+		UINT8 b4Status_ProjectVer	:4;		//ï¿½ï¿½Â¼Ò»Ð©ï¿½ï¿½Ä¿ï¿½ï¿½Ï¢ï¿½ï¿½Ä¿Ç°ï¿½ï¿½ï¿½ß´ï¿½ï¿½ï¿½Îª1ï¿½ï¿½ï¿½ï¿½ï¿½Îª0
 
-		UINT8 bRcved11				:8;		//res						//µÚÈý¸ö8Î»
+		UINT8 bRcved11				:8;		//res						//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½8Î»
      }bits;
 };
 
 
-//ÏµÍ³¹¦ÄÜ¿ØÖÆÀàÐÍ
+//ÏµÍ³ï¿½ï¿½ï¿½Ü¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 union System_OnOFF_Function {				//TODO
     UINT32 all;
     struct System_OnOFF_Ctrl {
-		UINT8 b1OnOFF_Balance		:1;		//¾ùºâ¹¦ÄÜ
-		UINT8 b1OnOFF_BMS_Source 	:1;		//BMS¸¨Ô´¹¦ÄÜ
-		UINT8 b1OnOFF_MOS_Relay     :1;		//ºËÐÄMOSºÍ½Ó´¥Æ÷¹¦ÄÜ£¬³ä·ÅµçÓÃ£¬ÈôÒªµ¥´¿¿ØÖÆIO£¬Ôò°ÑÏà¹Ø¹¦ÄÜ¹Ø±Õ£¬Í¨¹ýSwitch¿ØÖÆ±ã¿É
-											//Ô­À´ÊÇ·Ö¿ªµÄ£¬µ«ÊÇºóÃæ·¢ÏÖÃ¿¸öÓÃµ½µÄµØ·½¶¼ÒªÑ¡Í¨£¬¸É´à¾ÍºÏ²¢³ÉÒ»¸ö²»ÐèÒªÑ¡Í¨ÁË¡£
-		UINT8 b1OnOFF_Relay_Rec     :1;		//¼ÌµçÆ÷¹¦ÄÜ
+		UINT8 b1OnOFF_Balance		:1;		//ï¿½ï¿½ï¿½â¹¦ï¿½ï¿½
+		UINT8 b1OnOFF_BMS_Source 	:1;		//BMSï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½
+		UINT8 b1OnOFF_MOS_Relay     :1;		//ï¿½ï¿½ï¿½ï¿½MOSï¿½Í½Ó´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü£ï¿½ï¿½ï¿½Åµï¿½ï¿½Ã£ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½IOï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¹ï¿½ï¿½Ü¹Ø±Õ£ï¿½Í¨ï¿½ï¿½Switchï¿½ï¿½ï¿½Æ±ï¿½ï¿½
+											//Ô­ï¿½ï¿½ï¿½Ç·Ö¿ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Çºï¿½ï¿½æ·¢ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½Ãµï¿½ï¿½ÄµØ·ï¿½ï¿½ï¿½ÒªÑ¡Í¨ï¿½ï¿½ï¿½É´ï¿½ÍºÏ²ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÒªÑ¡Í¨ï¿½Ë¡ï¿½
+		UINT8 b1OnOFF_Relay_Rec     :1;		//ï¿½Ìµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		
-		UINT8 b1OnOFF_SOC_Fixed     :1;		//Soc¹Ì¶¨¹¦ÄÜ
-		UINT8 b1OnOFF_Heat          :1;		//¼ÓÈÈ¹¦ÄÜ
-		UINT8 b1OnOFF_Cool          :1;		//ÖÆÀä¹¦ÄÜ
+		UINT8 b1OnOFF_SOC_Fixed     :1;		//Socï¿½Ì¶ï¿½ï¿½ï¿½ï¿½ï¿½
+		UINT8 b1OnOFF_Heat          :1;		//ï¿½ï¿½ï¿½È¹ï¿½ï¿½ï¿½
+		UINT8 b1OnOFF_Cool          :1;		//ï¿½ï¿½ï¿½ä¹¦ï¿½ï¿½
 		UINT8 b1OnOFF_AFE1         	:1;		//AFE1×´Ì¬
 
 		UINT8 b1OnOFF_AFE2	        :1;		//AFE2×´Ì¬
-		UINT8 b1OnOFF_Sleep			:1;		//ÐÝÃß¹¦ÄÜ
-		UINT8 b1OnOFF_SOC_Zero		:1;		//ÐÝÃß¹¦ÄÜ
+		UINT8 b1OnOFF_Sleep			:1;		//ï¿½ï¿½ï¿½ß¹ï¿½ï¿½ï¿½
+		UINT8 b1OnOFF_SOC_Zero		:1;		//ï¿½ï¿½ï¿½ß¹ï¿½ï¿½ï¿½
 		UINT8 bRcved5				:1;		//
 		
 		UINT8 bRcved1				:4;		//res

@@ -554,6 +554,21 @@
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
             </File>
+            <File>
+              <FileName>IO_Control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\IO_Control.c</FilePath>
+            </File>
+            <File>
+              <FileName>IODrivers.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\IODrivers.c</FilePath>
+            </File>
+            <File>
+              <FileName>SocEnhance.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\SocEnhance.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -838,31 +853,6 @@
               <FileName>stm32f10x_wwdg.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_wwdg.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Lib</GroupName>
-          <Files>
-            <File>
-              <FileName>SocEnhance.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Lib\SocEnhance.h</FilePath>
-            </File>
-            <File>
-              <FileName>TestLib.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Lib\TestLib.h</FilePath>
-            </File>
-            <File>
-              <FileName>TestLib.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\Lib\TestLib.lib</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\Lib\SocEnhance.lib</FilePath>
             </File>
           </Files>
         </Group>

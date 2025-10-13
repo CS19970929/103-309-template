@@ -485,10 +485,56 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 	}
 }
 
+void test_Autocurrent_cycle(void)
+{
+	static uint8_t step = 0;
+#if 1
+	static uint16_t CHG_current = 200;
+	static uint16_t DSG_current = 400;
+#else
+	static uint16_t CHG_current = 200;
+	static uint16_t DSG_current = 400;
+#endif
+
+	switch (step)
+	{
+	case 0:
+		if (g_stCellInfoReport.SocElement.u16Soc < 99)
+		{
+			step = 1;
+			g_stCellInfoReport.u16Ichg = CHG_current;
+			g_stCellInfoReport.u16IDischg = 0;
+		}
+		else
+		{
+			step = 1;
+		}
+		break;
+	case 1:
+	{
+		if (g_stCellInfoReport.SocElement.u16Soc >= 99)
+		{
+			step = 2;
+			g_stCellInfoReport.u16Ichg = 0;
+			g_stCellInfoReport.u16IDischg = DSG_current;
+		}
+		break;
+	}
+	case 2:
+		if (g_stCellInfoReport.SocElement.u16Soc <= 1)
+		{
+			step = 0;
+		}
+		break;
+	default:
+		break;
+	}
+}
 // 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
 void App_AFEGet(void)
 {
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3)
 	{
 		return;
 	}
@@ -505,5 +551,9 @@ void App_AFEGet(void)
 	DataLoad_CellVoltMaxMinFind();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
-	DataLoad_Current();
+	// DataLoad_Current();
+	test_Autocurrent_cycle();
+
+	App_SH367309();
+	App_MOS_Relay_Ctrl();
 }
