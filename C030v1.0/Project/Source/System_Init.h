@@ -1,13 +1,13 @@
 #ifndef SYSTEM_INIT_H
 #define SYSTEM_INIT_H
 
-//Î»´ø²Ù×÷,ÊµÏÖ51ÀàËÆµÄGPIO¿ØÖÆ¹¦ÄÜ
-//¾ßÌåÊµÏÖË¼Ïë,²Î¿¼<<CM3È¨ÍþÖ¸ÄÏ>>µÚÎåÕÂ(87Ò³~92Ò³).
-//IO¿Ú²Ù×÷ºê¶¨Òå
+//Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½,Êµï¿½ï¿½51ï¿½ï¿½ï¿½Æµï¿½GPIOï¿½ï¿½ï¿½Æ¹ï¿½ï¿½ï¿½
+//ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½Ë¼ï¿½ï¿½,ï¿½Î¿ï¿½<<CM3È¨ï¿½ï¿½Ö¸ï¿½ï¿½>>ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½(87Ò³~92Ò³).
+//IOï¿½Ú²ï¿½ï¿½ï¿½ï¿½ê¶¨ï¿½ï¿½
 #define BITBAND(addr, bitnum) ((addr & 0xF0000000)+0x2000000+((addr &0xFFFFF)<<5)+(bitnum<<2)) 
 #define MEM_ADDR(addr)  *((volatile unsigned long  *)(addr)) 
 #define BIT_ADDR(addr, bitnum)   MEM_ADDR(BITBAND(addr, bitnum)) 
-//IO¿ÚµØÖ·Ó³Éä
+//IOï¿½Úµï¿½Ö·Ó³ï¿½ï¿½
 #define GPIOA_ODR_Addr    (GPIOA_BASE+12) //0x4001080C
 #define GPIOB_ODR_Addr    (GPIOB_BASE+12) //0x40010C0C
 #define GPIOC_ODR_Addr    (GPIOC_BASE+12) //0x4001100C
@@ -24,33 +24,33 @@
 #define GPIOF_IDR_Addr    (GPIOF_BASE+8) //0x40011A08
 #define GPIOG_IDR_Addr    (GPIOG_BASE+8) //0x40011E08
 
-//IO¿Ú²Ù×÷,Ö»¶Ôµ¥Ò»µÄIO¿Ú!
-//È·±£nµÄÖµÐ¡ÓÚ16!
-#define PAout(n)   BIT_ADDR(GPIOA_ODR_Addr,n)  //Êä³ö
-#define PAin(n)    BIT_ADDR(GPIOA_IDR_Addr,n)  //ÊäÈë
+//IOï¿½Ú²ï¿½ï¿½ï¿½,Ö»ï¿½Ôµï¿½Ò»ï¿½ï¿½IOï¿½ï¿½!
+//È·ï¿½ï¿½nï¿½ï¿½ÖµÐ¡ï¿½ï¿½16!
+#define PAout(n)   BIT_ADDR(GPIOA_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PAin(n)    BIT_ADDR(GPIOA_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PBout(n)   BIT_ADDR(GPIOB_ODR_Addr,n)  //Êä³ö
-#define PBin(n)    BIT_ADDR(GPIOB_IDR_Addr,n)  //ÊäÈë
+#define PBout(n)   BIT_ADDR(GPIOB_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PBin(n)    BIT_ADDR(GPIOB_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PCout(n)   BIT_ADDR(GPIOC_ODR_Addr,n)  //Êä³ö
-#define PCin(n)    BIT_ADDR(GPIOC_IDR_Addr,n)  //ÊäÈë
+#define PCout(n)   BIT_ADDR(GPIOC_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PCin(n)    BIT_ADDR(GPIOC_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PDout(n)   BIT_ADDR(GPIOD_ODR_Addr,n)  //Êä³ö
-#define PDin(n)    BIT_ADDR(GPIOD_IDR_Addr,n)  //ÊäÈë
+#define PDout(n)   BIT_ADDR(GPIOD_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PDin(n)    BIT_ADDR(GPIOD_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PEout(n)   BIT_ADDR(GPIOE_ODR_Addr,n)  //Êä³ö
-#define PEin(n)    BIT_ADDR(GPIOE_IDR_Addr,n)  //ÊäÈë
+#define PEout(n)   BIT_ADDR(GPIOE_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PEin(n)    BIT_ADDR(GPIOE_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PFout(n)   BIT_ADDR(GPIOF_ODR_Addr,n)  //Êä³ö
-#define PFin(n)    BIT_ADDR(GPIOF_IDR_Addr,n)  //ÊäÈë
+#define PFout(n)   BIT_ADDR(GPIOF_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PFin(n)    BIT_ADDR(GPIOF_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
-#define PGout(n)   BIT_ADDR(GPIOG_ODR_Addr,n)  //Êä³ö
-#define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  //ÊäÈë
+#define PGout(n)   BIT_ADDR(GPIOG_ODR_Addr,n)  //ï¿½ï¿½ï¿½
+#define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  //ï¿½ï¿½ï¿½ï¿½
 
 
 #define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
-//µçÔ´Ä£¿é
+//ï¿½ï¿½Ô´Ä£ï¿½ï¿½
 #define MCUO_DRV_CMNT		PCout(12)		//
 #define MCUO_PWSV_CTR		PCout(13)		//
 #define MCUO_PWSV_STB		PDout(2)		//
@@ -58,38 +58,32 @@
 
 
 
-//AFEÄ£¿é
-#define MCUO_AFE_SHIP 		PAout(6)		//AFE_SHIP
-#define MCUO_AFE_MODE 		PCout(8)		//AFE_MODE
-#define MCUO_AFE_VPRO 		PCout(7)		//AFE_VPRO
-#define MCUO_AFE_CTLC 		PCout(4)		//¿ØÖÆÇý¶¯
-
-//ÆäËüÄ£¿é
-#define MCUO_E2PR_WP		PBout(13)	//EEPROMÐ´±£»¤
+//ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
+#define MCUO_E2PR_WP		PBout(13)	//EEPROMÐ´ï¿½ï¿½ï¿½ï¿½
 #define MCUO_DRV_DET_CHG	PBout(3)	//
 //#define MCUO_DRV_DET_LOAD	PAout(8)	//
 
-#define MCUI_INT_WK_MCU		PAin(0)		//»½ÐÑMCU
-#define MCUI_INT_WK_CHG		PAin(15)	//³äµç»½ÐÑ
-//#define MCUI_INT_WK_LOAD	PDin(2)		//¸ºÔØ»½ÐÑ
+#define MCUI_INT_WK_MCU		PAin(0)		//ï¿½ï¿½ï¿½ï¿½MCU
+#define MCUI_INT_WK_CHG		PAin(15)	//ï¿½ï¿½ç»½ï¿½ï¿½
+//#define MCUI_INT_WK_LOAD	PDin(2)		//ï¿½ï¿½ï¿½Ø»ï¿½ï¿½ï¿½
 #define MCUI_CBC_DSG 		PBin(12)
 
 
-//Çý¶¯Ä£¿é
-#define MCUO_MOS_PRE 		PCout(12)	//PC12£¬³äµçMOS
+//ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
+#define MCUO_MOS_PRE 		PCout(12)	//PC12ï¿½ï¿½ï¿½ï¿½ï¿½MOS
 
 
 
-#define MCUO_RELAY_HEAT 	PCout(6)		//¼ÓÈÈ¼ÌµçÆ÷
-#define MCUO_RELAY_COOL 	PCout(6)		//ÀäÄý¼ÌµçÆ÷
+#define MCUO_RELAY_HEAT 	PCout(6)		//ï¿½ï¿½ï¿½È¼Ìµï¿½ï¿½ï¿½
+#define MCUO_RELAY_COOL 	PCout(6)		//ï¿½ï¿½ï¿½ï¿½ï¿½Ìµï¿½ï¿½ï¿½
 
-#define MCUO_ENO_DO1		PCout(0)	//O¿Ú1
-#define MCUO_ENO_DO2		PCout(1)	//O¿Ú2
-#define MCUO_ENO_DO3		PCout(2)	//O¿Ú3
-#define MCUO_ENO_DO4		PCout(3)	//O¿Ú4
-#define MCUO_ENO_DO5		PBout(4)	//O¿Ú5
-#define MCUO_ENO_DO6		PBout(1)	//O¿Ú6
-#define MCUI_ENI_DI1		PCin(2)		//I¿Ú1
+#define MCUO_ENO_DO1		PCout(0)	//Oï¿½ï¿½1
+#define MCUO_ENO_DO2		PCout(1)	//Oï¿½ï¿½2
+#define MCUO_ENO_DO3		PCout(2)	//Oï¿½ï¿½3
+#define MCUO_ENO_DO4		PCout(3)	//Oï¿½ï¿½4
+#define MCUO_ENO_DO5		PBout(4)	//Oï¿½ï¿½5
+#define MCUO_ENO_DO6		PBout(1)	//Oï¿½ï¿½6
+#define MCUI_ENI_DI1		PCin(2)		//Iï¿½ï¿½1
 
 
 union SYS_TIME {			//TODO
@@ -120,10 +114,10 @@ union SYS_TIME {			//TODO
 
 
 struct CBC_ELEMENT {
-	UINT8 u8CBC_CHG_ErrFlag;	//³öÏÖCBC±£»¤±êÖ¾Î»
-	UINT8 u8CBC_CHG_Cnt;		//³öÏÖ³äµçCBCµÄ´ÎÊý
-	UINT8 u8CBC_DSG_ErrFlag;	//³öÏÖCBC±£»¤±êÖ¾Î»
-	UINT8 u8CBC_DSG_Cnt;		//³öÏÖ·ÅµçCBCµÄ´ÎÊý
+	UINT8 u8CBC_CHG_ErrFlag;	//ï¿½ï¿½ï¿½ï¿½CBCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾Î»
+	UINT8 u8CBC_CHG_Cnt;		//ï¿½ï¿½ï¿½Ö³ï¿½ï¿½CBCï¿½Ä´ï¿½ï¿½ï¿½
+	UINT8 u8CBC_DSG_ErrFlag;	//ï¿½ï¿½ï¿½ï¿½CBCï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾Î»
+	UINT8 u8CBC_DSG_Cnt;		//ï¿½ï¿½ï¿½Ö·Åµï¿½CBCï¿½Ä´ï¿½ï¿½ï¿½
 };
 
 

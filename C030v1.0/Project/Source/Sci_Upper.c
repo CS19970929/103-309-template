@@ -195,7 +195,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	}
 }
 
-// 主体OK
 void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 {
 	UINT16 u16SciRegStartAddr;
@@ -1920,7 +1919,6 @@ void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s)
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_I_DSG;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_RES1;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_RES2;
-		InitData_SleepFunc();
 	}
 	else
 	{
@@ -2226,7 +2224,6 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 		InitData_SOC();
 		// 同步更新安时数，循环次数等
 		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
-		InitData_SleepFunc();
 		// CS，直接使用不需要再赋值，TODO
 	}
 	else
@@ -2334,7 +2331,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 
 		case 0x0A: // 立刻进入休眠
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
+			entersleep(DEEP_MODE);
 			break;
 
 		default:

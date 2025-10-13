@@ -1,13 +1,13 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-//#define USE_STDPERIPH_DRIVER	//Ã»ÓÐÕâ¸ö±¨Ò»´ó¶Ñassert_param()º¯ÊýµÄ´íÎó£¬ÒªÔÚ¹¤³ÌÎÄ¼þÖÐÅäÖÃ
+//#define USE_STDPERIPH_DRIVER	//Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½assert_param()ï¿½ï¿½ï¿½ï¿½ï¿½Ä´ï¿½ï¿½ï¿½Òªï¿½Ú¹ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 #include <math.h>
 #include "stm32f10x.h"
-#include "stm32f10x_it.h"			//ÀïÃæÓÐÒ»Ð©Ó²¼þ´íÎóÖ®ÀàµÄÖÐ¶Ï£¬»¹ÊÇÐèÒªµÄ
+#include "stm32f10x_it.h"			//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»Ð©Ó²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö®ï¿½ï¿½ï¿½ï¿½Ð¶Ï£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½
 #include "string.h"
 
-#include "DataDeal.h"				//·ÅÔÚSci_Upper.hÇ°Ãæ²ÅÐÐ
+#include "DataDeal.h"				//ï¿½ï¿½ï¿½ï¿½Sci_Upper.hÇ°ï¿½ï¿½ï¿½ï¿½ï¿½
 #include "Sci_Upper.h"
 #include "System_Init.h"
 #include "System_Monitor.h"
@@ -23,16 +23,16 @@
 #include "Flash.h"
 #include "Cell_balance.h"
 #include "SleepDeal.h"
-#include "Uart_Client.h"
-#include "LCD.h"
 #include "Heat_Cool.h"
 #include "TestLib.h"
-#include "LED_Buzzer.h"
 #include "ProductionID.h"
 #include "SH367309_Func.h"
 #include "ChargerLoadFunc.h"
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
+#include "LedBar.h"
+
+#include "conf.h"
 
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
@@ -51,7 +51,7 @@ FALSE = 0, TRUE
 }BOOL;
 
 
-//10msÊ±»ù¼ÆÊýÆ÷
+//10msÊ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 #define DELAYB10MS_0MS       ((UINT16)0)            //0ms
 #define DELAYB10MS_30MS      ((UINT16)3)            //30ms
 #define DELAYB10MS_50MS      ((UINT16)5)            //50ms
@@ -72,15 +72,15 @@ FALSE = 0, TRUE
 
 
 //#define _DEBUG_CODE
-#define _IAP					//Èç¹û¹¤³ÌÎÄ¼þµØÖ·±äµÄ»°£¬¼ÓÉÏÕâ¸öºÍÉÕIAPµÄproject²ÅÐÐ
+#define _IAP					//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½Ö·ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½IAPï¿½ï¿½projectï¿½ï¿½ï¿½ï¿½
 //#define _SLEEP_WITH_CURRENT
 
-//#define _DI_SWITCH_SYS_ONOFF	//DI¿ª¹ØÓÃ×÷ÐÝÃß
-//#define _DI_SWITCH_DSG_ONOFF	//DI¿ª¹ØÓÃ×÷¿ØÖÆ·Åµç½Ó´¥Æ÷»òÕßMOS
+//#define _DI_SWITCH_SYS_ONOFF	//DIï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//#define _DI_SWITCH_DSG_ONOFF	//DIï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ·Åµï¿½Ó´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½MOS
 
 
 /*============Sci===========*/
-//Ã¿¸ö´®¿ÚÖ»ÄÜÑ¡Ò»ÖÖÍ¨Ñ¶
+//Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Ñ¡Ò»ï¿½ï¿½Í¨Ñ¶
 #define _COMMOM_UPPER_SCI1
 //#define _CLIENT_SCI1
 //#define _LCD_SCI1
@@ -91,7 +91,7 @@ FALSE = 0, TRUE
 //#define _LCD_SCI2
 
 
-//Õâ¸ö°æ±¾Ã»ÓÐ´®¿Ú3
+//ï¿½ï¿½ï¿½ï¿½æ±¾Ã»ï¿½Ð´ï¿½ï¿½ï¿½3
 //#define _COMMOM_UPPER_SCI3
 //#define _CLIENT_SCI3
 //#define _LCD_SCI3

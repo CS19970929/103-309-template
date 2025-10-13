@@ -35,8 +35,6 @@ UINT16 FaultCnt_StartUp_Third = 0;
 
 void FaultWarnRecord(enum FaultFlag num);
 void FaultWarnRecord2(enum FaultFlag num);
-void PwrMag_Protect_Record(enum FaultFlag num);
-void PwrMag_Protect_Record_StartUp(void);
 
 void App_CellOvp_FirstCheck(void)
 {
@@ -1910,6 +1908,7 @@ void App_WarnCtrl(void)
 // 记录是按顺序记录下去，上传则是最新的在顶部
 void FaultWarnRecord(enum FaultFlag num)
 {
+#if 0
 	if (num >= 1 && num <= 13)
 	{
 		if (FaultPoint_First >= Record_len)
@@ -1944,6 +1943,7 @@ void FaultWarnRecord(enum FaultFlag num)
 	// #ifdef  _FAULT_RECORD
 	PwrMag_Protect_Record(num);
 	// #endif
+#endif
 }
 
 void FaultWarnRecord2(enum FaultFlag num)
@@ -1976,6 +1976,7 @@ void FaultWarnRecord2(enum FaultFlag num)
 
 void PwrMag_Protect_Record(enum FaultFlag num)
 {
+#if 0
 	UINT8 j;
 
 	if (SystemStatus.bits.b1StartUpBMS)
@@ -2015,64 +2016,5 @@ void PwrMag_Protect_Record(enum FaultFlag num)
 			}
 		}
 	}
-}
-
-// 该函数的背景是如果刚开机的时候出现2-3个保护，则会卡住，使时基卡住1.5s左右，导致开机时间延后
-void PwrMag_Protect_Record_StartUp(void)
-{
-	UINT8 j;
-	static UINT8 su8_StartUpRecord = 0;
-	if (SystemStatus.bits.b1StartUpBMS)
-	{ // 开机完毕再进入
-		return;
-	}
-
-	/*
-	if(0 == g_st_SysTimeFlag.bits.b1Sys10msFlag3) {
-		return;
-	}
-	*/
-
-	switch (su8_StartUpRecord)
-	{
-	case 0:
-		if (FaultCnt_StartUp_First)
-		{
-			// MCUO_DEBUG_LED2 = 0;
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_FIRST + ((FaultCnt_StartUp_First - 1) << 1), Fault_record_First[FaultCnt_StartUp_First - 1]);
-			// MCUO_DEBUG_LED2 = 1;
-
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_FIRST, FaultCnt_StartUp_First);
-			--FaultCnt_StartUp_First;
-		}
-		else if (FaultCnt_StartUp_Second)
-		{
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_SECOND + ((FaultCnt_StartUp_Second - 1) << 1), Fault_record_Second[FaultCnt_StartUp_Second - 1]);
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_SECOND, FaultCnt_StartUp_Second);
-			--FaultCnt_StartUp_Second;
-		}
-		else if (FaultCnt_StartUp_Third)
-		{
-			// MCUO_DEBUG_LED2 = 0;
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_THIRD + ((FaultCnt_StartUp_Third - 1) << 1), Fault_record_Third[FaultCnt_StartUp_Third - 1]);
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_THIRD, FaultCnt_StartUp_Third);
-			for (j = 0; j < 6; ++j)
-			{
-				WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_THIRD_RTC + (((FaultCnt_StartUp_Third - 1) * 6 + j) << 1), RTC_Fault_record_Third[FaultCnt_StartUp_Third - 1][j]);
-			}
-			// MCUO_DEBUG_LED2 = 1;
-			--FaultCnt_StartUp_Third;
-		}
-		else
-		{
-			su8_StartUpRecord = 1;
-		}
-		break;
-
-	case 1:
-		break;
-
-	default:
-		break;
-	}
+#endif
 }

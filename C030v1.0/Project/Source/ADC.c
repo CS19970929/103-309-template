@@ -87,9 +87,9 @@ void InitADC_GPIO(void)
 	GPIO_InitTypeDef GPIO_InitStructure;
 	// RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+	GPIO_InitStructure.GPIO_Pin = PIN_AD_TTC_MOS1;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	GPIO_Init(GPIO_AD_TTC_MOS1, &GPIO_InitStructure);
 
 #if 0 // 无效
 	GPIO_PinRemapConfig(GPIO_PartialRemap1_TIM2, ENABLE);		//部分重映射1——CH2/PB3
@@ -276,13 +276,10 @@ void App_AnlogCal(void)
 		// return;
 	}
 
-	// 改为1ms时基
 	if (0 == g_st_SysTimeFlag.bits.b1Sys1msFlag)
 	{
 		return;
 	}
 
-	// ADC_Vbc();
 	ADC_TTC();
-	// ADC_Current_Smooth();
 }

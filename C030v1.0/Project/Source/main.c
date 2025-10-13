@@ -29,7 +29,6 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
-// main.c文件只留IO控制函数，别的都不能写在这里，不然太过庞大冗余。
 int main(void)
 {
 	InitDevice(); // 初始化外设
@@ -37,13 +36,6 @@ int main(void)
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
-		App_SysTime();
-		// App_RTCSleepTest();
-		// App_NormalSleepTest();
-		SleepTest();
-		App_SleepDeal();
-		Feed_WatchDog;
-
 #else
 		App_SysTime();
 		App_AFEGet();
@@ -56,19 +48,21 @@ int main(void)
 		App_Can();
 		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		App_SOC();
-		// App_LightBar();
 		App_WarnCtrl();
+
+		APP_LedBar();
 
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
-		Feed_WatchDog;
 
+#ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
-// App_RTC();
-// App_DAC();			//CBC用，不需要即刻改
-// App_PWM();			//CBC用，不需要即刻改
-// App_BlueTooth();		//这玩意后面大概率淘汰，白写了
+#endif
+#ifdef wdog_enable
+		Feed_WatchDog;
+#endif
+
 #endif
 	}
 }
@@ -79,18 +73,9 @@ void InitDevice(void)
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
-	EnterSleepJudge();
-	InitNVIC();
-	InitIO();
-	InitTimer();
-	InitSystemWakeUp();
-	InitE2PROM();
-	InitData_SleepFunc();
-	// Init_IWDG();
-
 #else
 	InitDelay();
-	EnterSleepJudge();
+	IsSleepStartUp();
 	InitNVIC();
 	InitIO();
 	InitTimer();
@@ -100,65 +85,24 @@ void InitDevice(void)
 	InitADC();
 	InitSci();
 	InitData_SOC();		  // 必须放在读完eeprom数据后面
-	InitData_SleepFunc(); // 必须放在读完eeprom数据后面
+
+#ifdef __FUNC__HEAT__
 	InitHeat_Cool();
+#endif
 
 	InitAFE1();
 
+#ifdef wdog_enable
 	Init_IWDG();
+#endif // !1
+
 #endif
 }
 
 void InitVar(void)
 {
-	UINT16 i;
-
 	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默认需求功能修改了，要修改EEPROM的上电标志位
 	InitSystemMonitorData_EEPROM();
-	SystemStatus.bits.b1Status_MOS_DSG = CLOSE;
-
-	// Switch功能
-
-	// 总系统错误监控系统初始化
-	for (i = 0; i < ERROR_NUM; ++i)
-	{
-		//*(&System_ErrFlag.u8ErrFlag_Com_AFE1+i)  =  0;		//在这里就被覆盖了，初始化错误体现不出来了
-	}
-
-	// 保护标志位初始化
-	g_stCellInfoReport.unMdlFault_First.all = 0;
-	g_stCellInfoReport.unMdlFault_Second.all = 0;
-	g_stCellInfoReport.unMdlFault_Third.all = 0;
-	// 当次保护记录初始化
-	FaultPoint_First = 0;
-	FaultPoint_Second = 0;
-	FaultPoint_Third = 0;
-
-	FaultPoint_First2 = 0;
-	FaultPoint_Second2 = 0;
-	FaultPoint_Third2 = 0;
-	for (i = 0; i < Record_len; ++i)
-	{
-		Fault_record_First[i] = 0;
-		Fault_record_Second[i] = 0;
-		Fault_record_Third[i] = 0;
-
-		Fault_record_First2[i] = 0;
-		Fault_record_Second2[i] = 0;
-		Fault_record_Third2[i] = 0;
-	}
-	Fault_Flag_Fisrt.all = 0;
-	Fault_Flag_Second.all = 0;
-	Fault_Flag_Third.all = 0;
-
-	// 继电器驱动开启初始化							//不打算放在这里
-	// RelayCtrl_Command = RELAY_PRE_DET;	//不打算放在这里
-	// HeatCtrl_Command = ST_HEAT_DET_SELF;
-	// CoolCtrl_Command = ST_COOL_DET_SELF;
-
-	// 休眠相关
-
-	// 这样写就不用管前面到底读出来还是复位了(在EEPROM很多个地方算)
 	SeriesNum = OtherElement.u16Sys_SeriesNum;
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
@@ -170,28 +114,14 @@ void InitVar(void)
 
 void InitSystemWakeUp(void)
 {
-	// MCUO_SD_DRV_CHG = 0;
-	MCUO_PWSV_STB = 1;
-	MCUO_PWSV_CTR = 1;
-	MCUO_DRV_CMNT = 1;
-	MCUO_BLE_EN = 1;
-
-	MCUO_AFE_SHIP = 0;
-	MCUO_AFE_MODE = 0;
-	// MCUO_AFE_CTLC = 1;		//刚上电，默认高阻态，所以不慌AFE刚开机瞬间打开MOS
-	__delay_ms(10);
 }
 
 void InitSci(void)
 {
 	InitUSART_CommonUpper();
-	InitUSART_UartClient();
-	InitUSART_LCD();
 }
 
 void App_Sci(void)
 {
 	App_CommonUpper();
-	App_UartClient_Updata();
-	App_USART_LCD();
 }

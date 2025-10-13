@@ -831,13 +831,6 @@ void InitAFE1(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 
-#ifdef _SLEEP_WITH_CURRENT
-	if (FLASH_309_RTC_RTC_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG) || FLASH_309_RTC_NORMAL_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG))
-	{
-		AFE_PARAM_WRITE_Flag = 0; // 如果是RTC起来的，则不需要进入烧写模式，烧写模式会短暂关闭MOS，这个岂不是可以直接控制MOS关掉了嘛？
-	}
-#endif
-
 	__delay_ms(100);
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();

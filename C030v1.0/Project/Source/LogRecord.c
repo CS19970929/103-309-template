@@ -67,7 +67,7 @@ void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
 			LogRecord_Flag.bits.Log_Sleep = 0;
-			SleepElement.u8_ToSleepFlag = 0; // 释放，进入休眠
+			Sleep_Mode.bits.b1_ToSleepFlag = 0; // 释放，进入休眠
 		}
 	}
 	else if (CBC_ERR == event)
@@ -123,7 +123,7 @@ void App_LogRecord(void)
 
 	LogEvent_Record(LogRecord_Flag.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
 	LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-	LogEvent_Record(g_stCellInfoReport.u16BalanceFlag1, BALANCE_OPEN, &su32_Interval_S_Tcnt);
+	// LogEvent_Record(g_stCellInfoReport.u16BalanceFlag1, BALANCE_OPEN, &su32_Interval_S_Tcnt);
 
 	LogEvent_Record(SystemStatus.bits.b1Status_Heat, HEAT_OPEN, &su32_Interval_S_Tcnt);
 	LogEvent_Record(SystemStatus.bits.b1Status_Cool, COOL_OPEN, &su32_Interval_S_Tcnt);

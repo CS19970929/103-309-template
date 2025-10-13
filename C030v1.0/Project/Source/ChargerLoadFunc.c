@@ -98,7 +98,7 @@ void AllSeriesDeal_Sleep_Or_None(void)
 		if (++su16_Sleep_Tcnt >= 300)
 		{
 			su16_Sleep_Tcnt = 0;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(NORMAL_MODE);
 		}
 	}
 
@@ -110,7 +110,7 @@ void AllSeriesDeal_Sleep_Or_None(void)
 		if (++su16_Sleep_Tcnt >= 300)
 		{
 			su16_Sleep_Tcnt = 0;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(NORMAL_MODE);
 		}
 	}
 }
@@ -167,6 +167,10 @@ void Init_Charger_AllSeries(void)
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = PIN_LOAD_OL;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	GPIO_Init(GPIO_LOAD_OL, &GPIO_InitStructure);
 }
 
 // 第一个，第二个不一定有没有时屏蔽

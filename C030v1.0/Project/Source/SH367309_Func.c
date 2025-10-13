@@ -113,7 +113,7 @@ void AFE_IDLE(void)
 // 进入休眠模式
 void AFE_SHIP(void)
 {
-	MCUO_AFE_SHIP = 0;
+	//MCUO_AFE_SHIP = 0;
 }
 
 // 进入IDLE模式
@@ -471,224 +471,6 @@ void SH367309_Driver_Supplement(void)
 
 	MCUO_MOS_PRE = SystemStatus.bits.b1Status_MOS_PRE;
 	// SystemStatus.bits.b1Status_Relay_PRE = MCUO_AFE_CTLC;
-}
-
-// DataDeal.h的参数，默认进入第二级休眠，时间为5天，7200分钟。RTC为期间作出判断
-// 第二级休眠为MOS全关类型
-// 第一级休眠为休眠带电类型
-void SH367309_SleepMode_Ctrl(void)
-{
-	// UINT8 u8_BYTE_01H_SCONF2;
-
-	static UINT8 su8_StartUp_Flag = 0;
-	static UINT16 su16_Delay_100msTCnt = 0;
-
-	static UINT8 su8_SleepExtComCnt = 0;
-
-	static UINT16 su16_RTC1_100msTCnt = 0;
-	static UINT16 su16_Normal1_100msTCnt = 0;
-	static UINT16 su16_RTC2_100msTCnt = 0;
-	static UINT16 su16_Normal2_100msTCnt = 0;
-
-	static UINT16 su16_AFE_ErrSleep_100msTCnt = 0;
-
-	if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
-	{ // 这个时基不能随便调，影响MOS动作，初始化电流校准
-		return;
-	}
-
-	switch (su8_StartUp_Flag)
-	{
-	case 0:
-		// 这里长一点，让电流校准那里先确定完。
-		if (++su16_Delay_100msTCnt >= 5)
-		{
-			su16_Delay_100msTCnt = 0; // 配合RTC的平均功耗问题，如果这里延时10s，RTC搞个10min平均功耗要达到要求
-			su8_StartUp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)
-		{
-			// 有电流不判断
-			su16_RTC1_100msTCnt = 0;
-			su16_RTC2_100msTCnt = 0;
-			su16_Normal1_100msTCnt = 0;
-			su16_Normal2_100msTCnt = 0;
-
-			// 需要把进入休眠时间延长吗？
-			// 先需要吧
-			if (FLASH_309_RTC_RTC_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG))
-			{
-				FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_NORMAL_VALUE);
-			}
-		}
-
-#if 1
-		else if (su8_SleepExtComCnt != RTC_ExtComCnt)
-		{
-			// 有通讯不判断
-			su16_RTC1_100msTCnt = 0;
-			su16_RTC2_100msTCnt = 0;
-			su16_Normal1_100msTCnt = 0;
-			su16_Normal2_100msTCnt = 0;
-			su8_SleepExtComCnt = RTC_ExtComCnt;
-
-			// 需要把进入休眠时间延长吗？
-			// 先需要吧
-			if (FLASH_309_RTC_RTC_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG))
-			{
-				FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_NORMAL_VALUE);
-			}
-		}
-#endif
-
-		else
-		{
-			switch (FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG))
-			{
-			case FLASH_309_RTC_RTC_VALUE:
-				if (AFE_SleepMode_Judge())
-				{
-					// if(++su16_Normal1_100msTCnt > 16) {			//没有这个延时，就算带通讯也立刻进入休眠
-					if (++su16_Normal1_100msTCnt > 100)
-					{ // 没有这个延时，就算带通讯也立刻进入休眠
-						su16_Normal1_100msTCnt = 0;
-						// 下面这个写FLASH别乱放，刚开始放在这个++su16_RTC1_100msTCnt，意味着要写16次，这种用久了单片机报废
-						// 运行起来还稳稳当当没什么问题，非常致命。必须确保只写一次，然后跳到别的地方。
-						SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1; // 进入普通休眠
-					}
-					if (su16_RTC1_100msTCnt)
-						su16_RTC1_100msTCnt = 0;
-				}
-				else
-				{
-					// if(++su16_RTC1_100msTCnt > 16) {			//没有这个延时，就算带通讯也立刻进入休眠
-					if (++su16_RTC1_100msTCnt > 100)
-					{ // 没有这个延时，就算带通讯也立刻进入休眠
-						su16_RTC1_100msTCnt = 0;
-						SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1 = 1; // 继续进入RTC
-					}
-					if (su16_Normal1_100msTCnt)
-						su16_Normal1_100msTCnt = 0;
-				}
-				aaa11 = 1;
-				break;
-
-			case FLASH_309_RTC_NORMAL_VALUE:
-			case FLASH_309_NORMAL_NORMAL_VALUE:
-				if (AFE_SleepMode_Judge())
-				{
-					// Sleep_Mode.bits.b1ForceToSleep_L2 = 1;		//进入普通休眠
-					// 如果有保护的话，则交给休眠函数，让其计算进入休眠
-					// 还是不要了，割开吧，自带休眠体系最后保障。
-					if (++su16_Normal2_100msTCnt >= 10 * 60 * 5)
-					{ // 还是有保护，进入普通休眠模式，20min
-						// if(++su16_Normal_100msTCnt >= 10*20) {
-						su16_Normal2_100msTCnt = 0;
-						SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
-					}
-					if (su16_RTC2_100msTCnt)
-						su16_RTC2_100msTCnt = 0;
-				}
-				else
-				{
-					if (++su16_RTC2_100msTCnt >= 10 * 60 * 5)
-					{ // 正常唤醒，没问题，进入RTC模式，则等10min
-						// if(++su16_RTC_100msTCnt >= 10*20) {
-						su16_RTC2_100msTCnt = 0;
-						SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1 = 1; // 没问题，继续进入RTC休眠
-					}
-					if (su16_Normal2_100msTCnt)
-						su16_Normal2_100msTCnt = 0;
-				}
-				aaa11 = 2;
-				break;
-
-			default:
-				// 给那种第一次用，或者以前用过，然后该地方的值被写过那种，防止出现第一次上电紊乱。
-				// 感悟就是，SOC涉及EEPROM那种，是不是也要用这个default呢，循环次数这里吃过亏。
-				FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_NORMAL_NORMAL_VALUE);
-				break;
-			}
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	// 如果准备进入休眠带电，先检查一些MOS
-	// 如果没打开管子，则不进入休眠带电状态
-	if (SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1)
-	{
-		if (!SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET || !SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET)
-		{
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
-			// TODO，上传上位机，有问题
-			System_ERROR_UserCallback(ERROR_UPPER);
-
-			if (++su16_AFE_ErrSleep_100msTCnt >= 10 * 60 * 10)
-			{
-				su16_AFE_ErrSleep_100msTCnt = 0;
-				SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
-			}
-		}
-		else
-		{
-			if (su16_AFE_ErrSleep_100msTCnt)
-				su16_AFE_ErrSleep_100msTCnt = 0;
-		}
-	}
-
-	// 是为了区分RTC唤醒和别的唤醒形式，别的唤醒形式需要等10min才继续进入休眠，如果是RTC唤醒，则快速再次进入休眠
-	// RTC唤醒那里会修改标志位了
-	// 和这个FLASH_COMPLETE的判断还是要，因为这个写太关键了。
-	if (SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1)
-	{
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_NORMAL_VALUE))
-		{
-			// 成功，不作操作
-		}
-		else
-		{
-			// FLASH错误，但是System_ERROR_UserCallback()函数取消了
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
-		}
-
-		// 把CTLC影响砍掉
-		// 反过来想，默认不要CTLC影响，如果要预充，才加上，这样更容易一些。
-		// 不行，搞不定，因为要开机设置CTLC的缘故，设置好黄花菜都凉，MOS都提前打开。
-		// 最佳办法还是这个，休眠前设置好。
-		// 这个休眠带电，也要预充的想法，已经想好了，但是先不写。
-		// 休眠带电起来，InitAFE()相关寄存器需要读flash休眠标志位分开操作。
-		// 如果是休眠带电期间手动断开电源，则起来无效。这里有点小瑕疵。
-		// 这个想法先不要干，休眠带电默认不需要预充，因为长期打开管子的问题，后面出事再消除第一次短路便可。
-		// u8_BYTE_01H_SCONF2 = BYTE_01H_SCONF2&0xF3;
-		// MTPWrite(MTP_SCONF2, 1, &u8_BYTE_01H_SCONF2);
-	}
-	else if (SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2)
-	{
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_NORMAL_NORMAL_VALUE))
-		{
-			// 成功，不作操作
-		}
-		else
-		{
-			// FLASH错误，但是System_ERROR_UserCallback()函数取消了
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
-		}
-
-		// 如果是要进入normal_normal模式，则提前把CTLC设置好，便可。
-		// u8_BYTE_01H_SCONF2 = BYTE_01H_SCONF2;
-		// MTPWrite(MTP_SCONF2, 1, &u8_BYTE_01H_SCONF2);
-	}
-
-	aaaaaa1 = su16_RTC1_100msTCnt;
-	aaaaaa2 = su16_Normal1_100msTCnt;
-	aaaaaa3 = su16_RTC2_100msTCnt;
-	aaaaaa4 = su16_Normal2_100msTCnt;
 }
 
 void Fault_ChangeToMCU(void)
@@ -1116,7 +898,7 @@ void App_DI1_Switch(void)
 		if (++su16_AntiShake_Cnt1 >= 2)
 		{
 			su16_AntiShake_Cnt1 = 2;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(DEEP_MODE);
 		}
 	}
 	else
@@ -1126,7 +908,6 @@ void App_DI1_Switch(void)
 			--su16_AntiShake_Cnt1;
 			return;
 		}
-		// SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
 	}
 #endif
 }
@@ -1134,13 +915,6 @@ void App_DI1_Switch(void)
 void App_SH367309(void)
 {
 	App_SH367309_Monitor();
-	App_SH367309_Supplement();
 	SH367309_UpdataAfeConfig();
 	App_DI1_Switch();
-
-#ifdef _SLEEP_WITH_CURRENT
-	SH367309_SleepMode_Ctrl();
-#else
-// SH367309_Driver_Supplement();	//10ms时基，需要App_SH367309_Monitor()读回来的内容			   //休眠带电目前不需要预充。
-#endif
 }

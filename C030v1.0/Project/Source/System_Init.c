@@ -13,58 +13,6 @@ UINT8 gu8_200msAccClock_Flag = 0;
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
-// 一般不需要另立函数的IO口处理
-void InitIO(void)
-{
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
-
-	// PA6_MCUO_AFE_SHIP，PA7_PWSV_LDO
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7 | GPIO_Pin_6;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-	// PB15_LED1
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_15;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-	// PC8_MCUO_AFE_MODE，PC13_PWSV_CTR，PC10_PW_SPS_STB，PC7_MCUO_AFE_VPRO，PC11_MCUO_AFE_VPRO
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_7 | GPIO_Pin_13 | GPIO_Pin_12;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-	// PC4_CTLC
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-	GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-	// PA0_INT_WK_MCU
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 上拉输入
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-	// PB5_DI1
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-}
-
 // 使用LSI
 void Init_IWDG(void)
 {

@@ -165,7 +165,7 @@ void CellBalance_Monitor(UINT8 OnOFF_Ctrl)
 	static UINT16 su16_Silence_Tcnt = 0;
 
 	if ((g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)		// 静置均衡，有电流不均衡
-		|| (g_stCellInfoReport.u16VCellMax < OtherElement.u16Balance_OpenVoltage)	// 最大电压没超过开启电压
+		|| (g_stCellInfoReport.u16VCellMin < OtherElement.u16Balance_OpenVoltage)	// 最大电压没超过开启电压
 		|| (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_CloseWindow) // 压差均在关闭窗口以内
 		|| !OnOFF_Ctrl)
 	{
@@ -327,7 +327,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 	case 0:
 		if (0 == Balance_OpenT_MOS)
 		{
-			if (0 == g_u8CBnMonitor)
+			// if (0 == g_u8CBnMonitor)
 			{ // 循环持续到检测到不要均衡才关闭。
 				if (!CB_AFERegistersCtrl(CELL_BALANCE_COLSE))
 				{
@@ -390,58 +390,4 @@ void App_CellBalance(void)
 		g_enBalanceState = BALANCE_ST_INIT;
 		break;
 	}
-}
-
-void CellBalanceTest(void)
-{
-#if 0
-	static UINT16 su16_BalanceFlag = 0;
-	UINT16 u16_hold = 0;
-
-	if(0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2) {
-		return;
-	}
-
-	if(su16_BalanceFlag == 0x80) {
-		su16_BalanceFlag = 0x40;
-	}
-	else {
-		su16_BalanceFlag = 0x80;
-	}
-	
-	MTPWrite(MTP_BALANCEH, 0x02, (UINT8*)&su16_BalanceFlag);
-	MTPRead(MTP_BALANCEH, 0x02, (UINT8*)&u16_hold);
-	g_stCellInfoReport.u16VCell[31] = u16_hold;
-#endif
-
-	static UINT8 su16_BalanceFlag = 0;
-	static UINT8 su8_Delay_Tcnt = 0;
-	UINT8 u16_hold = 0;
-
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
-	{
-		return;
-	}
-
-	if (++su8_Delay_Tcnt < 4)
-	{
-		return;
-	}
-	else
-	{
-		su8_Delay_Tcnt = 0;
-	}
-
-	if (su16_BalanceFlag == 0x80)
-	{
-		su16_BalanceFlag = 0x40;
-	}
-	else
-	{
-		su16_BalanceFlag = 0x80;
-	}
-	su16_BalanceFlag = 0xC3;
-	MTPWrite(MTP_BALANCEH, 0x01, (UINT8 *)&su16_BalanceFlag);
-	MTPRead(MTP_BALANCEH, 0x01, (UINT8 *)&u16_hold);
-	g_stCellInfoReport.u16VCell[31] = u16_hold;
 }

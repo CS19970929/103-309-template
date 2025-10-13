@@ -358,7 +358,7 @@ void DataLoad_CurrentCali(void)
 
 			su8_StartUpFlag = 3;
 			// 如果是normal的休眠和唤醒，则需要再次保存最新的值。
-			FlashWriteOneHalfWord(FLASH_ADDR_SH367309_VALUE, su16_OffsetValue);
+			// FlashWriteOneHalfWord(FLASH_ADDR_SH367309_VALUE, su16_OffsetValue);
 		}
 		break;
 
@@ -589,7 +589,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 		if (++su16_Sleep_DelayT1 >= 5 * 60 * 5)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT1 = 0;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(NORMAL_MODE);
 		}
 	}
 	else
@@ -602,7 +602,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 		if (++su16_Sleep_DelayT2 >= 5 * 60 * 5)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT2 = 0;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(NORMAL_MODE);
 		}
 	}
 	else
@@ -616,7 +616,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 		if (++su16_Sleep_DelayT3 >= 5 * 60 * 5)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT3 = 0;
-			SleepElement.Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+			entersleep(NORMAL_MODE);
 		}
 	}
 	else

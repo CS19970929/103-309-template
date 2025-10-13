@@ -5,14 +5,14 @@
 typedef enum {ODD = 0, EVEN = !ODD} Parity;
 
 typedef	struct{
-	UINT16	u16ChkVal;                      // µ±Ç°±È½ÏÁ¿´óÐ¡
-	UINT16	u16OPValB;                      // ±È½Ï´óÖµ
-	UINT16	u16OPValS;                      // ±È½ÏÐ¡Öµ
-    UINT16   *i16ChkCnt;                     // Ö¸Ïò¼ÆÊ±Æ÷µØÖ·
-    UINT16  u16TimeCntB;                    // ³¬¹ý´óÖµÊ±¼ä
-	UINT16  u16TimeCntS;                    // ³¬¹ýÐ¡ÖµÊ±¼ä
-    UINT8	u8FlagLogic;                    // ÕýÂß¼­ 1£ºu8Flag=s_u16ChkVal > s_u16OPValB ? 1 : 0 ¸ºÂß¼­ 1£ºu8Flag=s_u16ChkVal > s_u16OPValB ? 0 : 1
-	UINT8	u8FlagBit;                      // ÅÐ¶Ï½á¹û
+	UINT16	u16ChkVal;                      // ï¿½ï¿½Ç°ï¿½È½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¡
+	UINT16	u16OPValB;                      // ï¿½È½Ï´ï¿½Öµ
+	UINT16	u16OPValS;                      // ï¿½È½ï¿½Ð¡Öµ
+    UINT16   *i16ChkCnt;                     // Ö¸ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½Ö·
+    UINT16  u16TimeCntB;                    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÖµÊ±ï¿½ï¿½
+	UINT16  u16TimeCntS;                    // ï¿½ï¿½ï¿½ï¿½Ð¡ÖµÊ±ï¿½ï¿½
+    UINT8	u8FlagLogic;                    // ï¿½ï¿½ï¿½ß¼ï¿½ 1ï¿½ï¿½u8Flag=s_u16ChkVal > s_u16OPValB ? 1 : 0 ï¿½ï¿½ï¿½ß¼ï¿½ 1ï¿½ï¿½u8Flag=s_u16ChkVal > s_u16OPValB ? 0 : 1
+	UINT8	u8FlagBit;                      // ï¿½Ð¶Ï½ï¿½ï¿½
 }SPUBOPUPCHK;
 
 
@@ -27,6 +27,7 @@ void Delay1ms(UINT8 delaycnt);
 void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length);
 UINT16 U16_SwapEndian(UINT16 target);
 UINT8 Monitor_TempBreak(UINT16* temp_AD);
+void jtag_disableAndConfIO(void);
 
 #endif	/* PUBFUNC_H */
 
