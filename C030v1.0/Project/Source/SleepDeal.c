@@ -95,6 +95,8 @@ void SleepDeal_Continue(void)
 
 	if (u8FlashWriteOK_flag)
 	{
+		InitAFE1_Sleep(0);
+		AFE_Sleep();
 		MCU_RESET();
 	}
 }
@@ -654,7 +656,6 @@ void IsSleepStartUp(void)
 	case FLASH_HICCUP_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			InitIO();
 			IOstatus_RTCMode();
 			InitWakeUp_RTCMode();
 
@@ -665,7 +666,6 @@ void IsSleepStartUp(void)
 	case FLASH_NORMAL_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			InitIO();
 
 			IOstatus_NormalMode();
 			InitWakeUp_NormalMode();
@@ -676,8 +676,6 @@ void IsSleepStartUp(void)
 	case FLASH_DEEP_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			InitIO();
-
 			IOstatus_DeepMode();
 			InitWakeUp_DeepMode();
 			// Sys_StandbyMode();		//不能掌控外部IO，弃�?
@@ -796,7 +794,6 @@ void IORecover_TestMode(void)
 	MCU_RESET();
 }
 
-
 void Sys_SleepOnExitMode(void)
 {
 	NVIC_SystemLPConfig(NVIC_LP_SLEEPONEXIT, ENABLE); // 库函数版�?，�?�置SLEEP ON EXIT位为1
@@ -832,4 +829,3 @@ void entersleep(enum _SLEEP_MODE mode)
 		break;
 	}
 }
-

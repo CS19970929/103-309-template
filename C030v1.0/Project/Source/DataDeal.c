@@ -249,178 +249,108 @@ void DataLoad_TemperatureMaxMinFind(void)
 	g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp; // min temp
 }
 
-// 这个函数的修改历程，从侧面说明，有符号数的运算，必须彻底搞明白，还有一个是指针
 void DataLoad_CurrentCali(void)
 {
-	static UINT8 su8_StartUpFlag = 0;
-	static UINT8 su8_StartUp_CaliCnt = 0;
-	static UINT8 su8_StartUpDelay_Tcnt1 = 0;
-	static UINT8 su8_StartUpDelay_Tcnt2 = 0;
+	static UINT8 su8_StartUpFlag = 4;
 
-	static UINT16 su16_OffsetValue = 0;
-	static UINT16 su16_OffsetValue_CHG = 0;
-	static UINT16 su16_OffsetValue_DSG = 0;
+	// todo 预留上位机校准接口，以防万一
+	// if (sci_cali_falg)
+	// 	DataLoad_CurrentCali_startup();
 
-	static UINT32 su32_OffsetValue_CHG = 0;
-	static UINT32 su32_OffsetValue_DSG = 0;
-	// static UINT8 su8_OffsetValue_CHG_Cnt = 0;
-	// static UINT8 su8_OffsetValue_DSG_Cnt = 0;
-
-	/* AFE复位后要重新校准 */
-	if (AFE_ResetFlag)
+	if (OffsetValue_CHG)
 	{
-		AFE_ResetFlag = 0;
-		su8_StartUpFlag = 0;
-		su8_StartUp_CaliCnt = 0;
-		su8_StartUpDelay_Tcnt1 = 0;
-		su8_StartUpDelay_Tcnt2 = 0;
-		su16_OffsetValue = 0;
-		su16_OffsetValue_CHG = 0;
-		su16_OffsetValue_DSG = 0;
-		su32_OffsetValue_CHG = 0;
-		su32_OffsetValue_DSG = 0;
+		su8_StartUpFlag = 4;
+	}
+	else
+	{
+		su8_StartUpFlag = 5;
 	}
 
 	switch (su8_StartUpFlag)
 	{
-	case 0:
-// 为什么要隔开呢，如果先烧一个休眠带电的代码，然后再烧一个非休眠带电的代码，则有可能会卡在这里。永不校准。
-#ifdef _SLEEP_WITH_CURRENT
-		// 如果是休眠带电模式进入的休眠，不需要再次进行校准，直接使用保存的校准值。
-		if (FLASH_309_RTC_RTC_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG) || FLASH_309_RTC_NORMAL_VALUE == FlashReadOneHalfWord(FLASH_ADDR_SH367309_FLAG))
-		{
-			su16_OffsetValue = FlashReadOneHalfWord(FLASH_ADDR_SH367309_VALUE);
-			su8_StartUpFlag = 3;
-		}
-		else
-		{
-			SystemStatus.bits.b1Status_BnCloseIO = 1; // 主循环50ms以内肯定还没打开管子，不需要再InitVar()处理
-			if (++su8_StartUpDelay_Tcnt1 >= 3)
-			{ // 改为200ms
-				su8_StartUpDelay_Tcnt1 = 0;
-				su8_StartUpFlag = 1;
-			}
-		}
-
-#else
-		SystemStatus.bits.b1Status_BnCloseIO = 1; // 主循环50ms以内肯定还没打开管子，不需要再InitVar()处理
-		if (++su8_StartUpDelay_Tcnt1 >= 3)
-		{ // 改为200ms
-			su8_StartUpDelay_Tcnt1 = 0;
-			su8_StartUpFlag = 1;
-		}
-#endif
-		break;
-
-	case 1:
-		if (++su8_StartUp_CaliCnt <= 8)
-		{ // 先2s为20*2次，3s为20*3次
-			/*
-			if(SH367309_Read_AFE1.u16Current >= 0xFFFD || SH367309_Read_AFE1.u16Current <= 0x0003) {
-				SH367309_Read_AFE1.u16Current = 0;
-			}
-			//su32_OffsetValue += SH367309_Read_AFE1.u16Current;
-			//CopperLoss_Num[su8_StartUp_CaliCnt] = SH367309_Read_AFE1.u16Current;
-			*/
-			if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
-			{
-				su32_OffsetValue_CHG += SH367309_Read_AFE1.u16Current;
-				//++su8_OffsetValue_CHG_Cnt;
-			}
-			else
-			{
-				// su32_OffsetValue_DSG += SH367309_Read_AFE1.u16Current;
-				su32_OffsetValue_DSG += 0xFFFF - SH367309_Read_AFE1.u16Current + 1;
-				//++su8_OffsetValue_DSG_Cnt;
-			}
-
-			if (su32_OffsetValue_CHG >= su32_OffsetValue_DSG)
-			{
-				su16_OffsetValue = (UINT16)((su32_OffsetValue_CHG - su32_OffsetValue_DSG) >> 3);
-			}
-			else
-			{
-				su16_OffsetValue = (UINT16)(0xFFFF - ((su32_OffsetValue_DSG - su32_OffsetValue_CHG) >> 3) + 1);
-			}
-		}
-		else
-		{
-			su8_StartUp_CaliCnt = 0;
-			su8_StartUpFlag = 2;
-		}
-		break;
-
-	case 2:
-		if (++su8_StartUpDelay_Tcnt2 >= 3)
-		{
-			su8_StartUpDelay_Tcnt2 = 0;
-			SystemStatus.bits.b1Status_BnCloseIO = 0;
-
-			su8_StartUpFlag = 3;
-			// 如果是normal的休眠和唤醒，则需要再次保存最新的值。
-			// FlashWriteOneHalfWord(FLASH_ADDR_SH367309_VALUE, su16_OffsetValue);
-		}
-		break;
-
-	case 3:
-		// 计算mA
-		// su32_OffsetValue = (su32_OffsetValue>>3);
-		if ((su16_OffsetValue & 0x8000) == 0)
-		{
-			su16_OffsetValue_CHG = (UINT32)su16_OffsetValue * 200 * g_u32CS_Res_AFE / (21470);
-		}
-		else
-		{
-			su16_OffsetValue_DSG = (UINT32)((UINT16)(0xFFFF - su16_OffsetValue + 1)) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		}
-
-		// 使用偏置值校准
-		if (su16_OffsetValue_CHG)
-		{
-			su8_StartUpFlag = 4;
-		}
-		else
-		{
-			su8_StartUpFlag = 5;
-		}
-		gu8_DriverStartUpFlag = 1; // 校准完毕，可以打开放电管
-		break;
-
 	// 充电偏置
 	case 4:
-		if (u32_ChgCur_mA > su16_OffsetValue_CHG)
+		if (u32_ChgCur_mA > OffsetValue_CHG)
 		{
-			u32_ChgCur_mA = u32_ChgCur_mA - su16_OffsetValue_CHG;
+			u32_ChgCur_mA = u32_ChgCur_mA - OffsetValue_CHG;
 		}
 		else
 		{
 			// u32_ChgCur_mA = 0;	//不能先置0啊，不然错了
-			u32_DsgCur_mA = u32_DsgCur_mA + su16_OffsetValue_CHG - u32_ChgCur_mA;
+			u32_DsgCur_mA = u32_DsgCur_mA + OffsetValue_CHG - u32_ChgCur_mA;
 			u32_ChgCur_mA = 0;
 		}
 		break;
-
 	case 5:
-		if (u32_DsgCur_mA > su16_OffsetValue_DSG)
+
+		if (u32_DsgCur_mA > OffsetValue_DSG)
 		{
-			u32_DsgCur_mA = u32_DsgCur_mA - su16_OffsetValue_DSG;
+			u32_DsgCur_mA = u32_DsgCur_mA - OffsetValue_DSG;
 		}
 		else
 		{
 			// u32_DsgCur_mA = 0;
-			u32_ChgCur_mA = u32_ChgCur_mA + su16_OffsetValue_DSG - u32_DsgCur_mA;
+			u32_ChgCur_mA = u32_ChgCur_mA + OffsetValue_DSG - u32_DsgCur_mA;
 			u32_DsgCur_mA = 0;
 		}
 		break;
-
 	default:
 		break;
 	}
+}
 
-	g_stCellInfoReport.u16Ichg = (UINT16)(u32_ChgCur_mA / 100);
-	g_stCellInfoReport.u16IDischg = (UINT16)(u32_DsgCur_mA / 100);
-	// aaaaa1 = su16_OffsetValue_CHG;
-	// aaaaa2 = su16_OffsetValue_DSG;
+void DataLoad_Current(void)
+{
+	// if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
+	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
+	{
+		// u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 默认使用200mV的计算方式
+		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
+		// t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+
+		log_i("******************************************\n");
+		log_i("AFE value->%d\n", u32_ChgCur_mA);
+
+		u32_DsgCur_mA = 0;
+	}
+	else
+	{
+		// u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
+		// u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
+		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+
+		log_i("******************************************\n");
+		log_i("AFE value->%d\n", u32_DsgCur_mA);
+
+		u32_ChgCur_mA = 0;
+	}
+
+	DataLoad_CurrentCali();
+
+	if (u32_DsgCur_mA > 2000)
+	{
+		u32_DsgCur_mA = ((u32_DsgCur_mA * g_u16CalibCoefK[MDL_IDSG])) + (INT32)g_i16CalibCoefB[MDL_IDSG] * 1000; // B值是基于A为单位计算出来的
+	}
+	else
+	{
+		u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
+	}
+
+	if (u32_ChgCur_mA > 2000)
+	{
+		u32_ChgCur_mA = ((u32_ChgCur_mA * g_u16CalibCoefK[MDL_ICHG])) + (INT32)g_i16CalibCoefB[MDL_ICHG] * 1000;
+	}
+	else
+	{
+		u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
+	}
+
+	// 改为INT32
+	u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
+	u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
+
+	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
+	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
 
 	if (g_stCellInfoReport.u16Ichg <= 2)
 	{
@@ -430,85 +360,15 @@ void DataLoad_CurrentCali(void)
 	{
 		g_stCellInfoReport.u16IDischg = 0;
 	}
+
+#ifdef __VIRTURE_CURRENT__
+	if (sys_time.isdebugenable == 1)
+	{
+		g_stCellInfoReport.u16Ichg = sys_time.CHG;
+		g_stCellInfoReport.u16IDischg = sys_time.DSG;
+	}
+#endif
 }
-
-// 用AFE1还是AD采样后面再说
-void DataLoad_Current(void)
-{
-	UINT8 temp_I;
-	INT32 t_i32temp;
-
-	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
-	{
-		t_i32temp = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
-		temp_I = CurCHG;
-	}
-	else
-	{
-		t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		temp_I = CurDSG;
-	}
-
-	if (temp_I == CurDSG)
-	{
-		/* 电流大于2a校准有b值 */
-		if (t_i32temp > 2000)
-		{
-			t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_IDSG])) + (INT32)g_i16CalibCoefB[MDL_IDSG] * 1000; // B值是基于A为单位计算出来的
-		}
-		/* 电流小于2a校准无b值 */
-		else
-		{
-			t_i32temp = ((t_i32temp * 1024));
-		}
-	}
-	else
-	{
-		/* 电流大于2a校准有b值 */
-		if (t_i32temp > 2000)
-		{
-			t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_ICHG])) + (INT32)g_i16CalibCoefB[MDL_ICHG] * 1000;
-		}
-		/* 电流小于2a校准无b值 */
-		else
-		{
-			t_i32temp = ((t_i32temp * 1024));
-		}
-	}
-
-	t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
-
-	if (temp_I == CurCHG)
-	{
-		u32_ChgCur_mA = t_i32temp >> 10; // mA
-		u32_DsgCur_mA = 0;
-	}
-	else
-	{
-		u32_ChgCur_mA = 0;
-		u32_DsgCur_mA = t_i32temp >> 10; // mA
-	}
-
-	/*
-	#ifdef _SLEEP_WITH_CURRENT
-	//休眠带电不能校准
-	//1，开机，校准要关管子，带电关管子会出现咔嚓咔嚓MOS疯狂动作
-	//2，如果后端后端接一个小电流不能唤醒的负载，开机突然断电，客户体验很差
-	g_stCellInfoReport.u16Ichg = (UINT16)(u32_ChgCur_mA/100);
-	g_stCellInfoReport.u16IDischg = (UINT16)(u32_DsgCur_mA/100);
-
-	#else
-	DataLoad_CurrentCali();
-	#endif
-	*/
-
-	// 休眠带电也要校准，把偏置值保存起来就行，模拟前端没有进入休眠，管子打开，不需要再次校准而已。
-	// 如果IDLE模式也不行，起来需要再校准的话，需要把看门狗关掉，然后模拟前端不进入休眠，挂着。
-	// 具体修改点，就是休眠函数那里处理一下便可。
-	// 等待后续验证
-	DataLoad_CurrentCali();
-}
-
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
 	static UINT16 su16_Sleep_DelayT1 = 0;

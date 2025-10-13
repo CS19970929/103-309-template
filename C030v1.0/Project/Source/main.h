@@ -32,6 +32,7 @@
 #include "LogRecord.h"
 #include "LedBar.h"
 
+#include "ShortFunc.h"
 #include "conf.h"
 
 

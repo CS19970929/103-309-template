@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source</IncludePath>
+              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -419,11 +419,6 @@
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
             </File>
             <File>
-              <FileName>LCD.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LCD.c</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -464,16 +459,6 @@
               <FilePath>..\Source\System_Monitor.c</FilePath>
             </File>
             <File>
-              <FileName>Uart_Client.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Uart_Client.c</FilePath>
-            </File>
-            <File>
-              <FileName>LED_Buzzer.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LED_Buzzer.c</FilePath>
-            </File>
-            <File>
               <FileName>ProductionID.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ProductionID.c</FilePath>
@@ -507,6 +492,67 @@
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
+            </File>
+            <File>
+              <FileName>LedBar.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LedBar.c</FilePath>
+              <FileOption>
+                <CommonProperty>
+                  <UseCPPCompiler>2</UseCPPCompiler>
+                  <RVCTCodeConst>0</RVCTCodeConst>
+                  <RVCTZI>0</RVCTZI>
+                  <RVCTOtherData>0</RVCTOtherData>
+                  <ModuleSelection>0</ModuleSelection>
+                  <IncludeInBuild>1</IncludeInBuild>
+                  <AlwaysBuild>2</AlwaysBuild>
+                  <GenerateAssemblyFile>2</GenerateAssemblyFile>
+                  <AssembleAssemblyFile>2</AssembleAssemblyFile>
+                  <PublicsOnly>2</PublicsOnly>
+                  <StopOnExitCode>11</StopOnExitCode>
+                  <CustomArgument></CustomArgument>
+                  <IncludeLibraryModules></IncludeLibraryModules>
+                  <ComprImg>1</ComprImg>
+                </CommonProperty>
+                <FileArmAds>
+                  <Cads>
+                    <interw>2</interw>
+                    <Optim>0</Optim>
+                    <oTime>2</oTime>
+                    <SplitLS>2</SplitLS>
+                    <OneElfS>2</OneElfS>
+                    <Strict>2</Strict>
+                    <EnumInt>2</EnumInt>
+                    <PlainCh>2</PlainCh>
+                    <Ropi>2</Ropi>
+                    <Rwpi>2</Rwpi>
+                    <wLevel>0</wLevel>
+                    <uThumb>2</uThumb>
+                    <uSurpInc>2</uSurpInc>
+                    <uC99>2</uC99>
+                    <uGnu>2</uGnu>
+                    <useXO>2</useXO>
+                    <v6Lang>0</v6Lang>
+                    <v6LangP>0</v6LangP>
+                    <vShortEn>2</vShortEn>
+                    <vShortWch>2</vShortWch>
+                    <v6Lto>2</v6Lto>
+                    <v6WtE>2</v6WtE>
+                    <v6Rtti>2</v6Rtti>
+                    <VariousControls>
+                      <MiscControls></MiscControls>
+                      <Define></Define>
+                      <Undefine></Undefine>
+                      <IncludePath></IncludePath>
+                    </VariousControls>
+                  </Cads>
+                </FileArmAds>
+              </FileOption>
+            </File>
+            <File>
+              <FileName>ShortFunc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\ShortFunc.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -799,11 +845,6 @@
           <GroupName>Lib</GroupName>
           <Files>
             <File>
-              <FileName>SleepFunction.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Lib\SleepFunction.h</FilePath>
-            </File>
-            <File>
               <FileName>SocEnhance.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Lib\SocEnhance.h</FilePath>
@@ -823,10 +864,25 @@
               <FileType>4</FileType>
               <FilePath>..\Lib\SocEnhance.lib</FilePath>
             </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>conf</GroupName>
+          <Files>
             <File>
-              <FileName>SleepFunction.lib</FileName>
-              <FileType>4</FileType>
-              <FilePath>..\Lib\SleepFunction.lib</FilePath>
+              <FileName>conf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\conf\conf.c</FilePath>
+            </File>
+            <File>
+              <FileName>conf.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\conf\conf.h</FilePath>
+            </File>
+            <File>
+              <FileName>conf_gpio.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\conf\conf_gpio.h</FilePath>
             </File>
           </Files>
         </Group>

@@ -274,6 +274,8 @@
 #define E2P_ADDR_START_EVENT_RECORD 	1000	//��1198		//100����
 #define E2P_ADDR_E2POS_EVENT_POINT		1200	//��һ��1202
 
+#define E2P_ADDR_SH367309_VALUE		1500	//��һ��1202
+
 extern UINT32 u32E2P_Pro_VolCur_WriteFlag;
 extern UINT32 u32E2P_Pro_Temp_WriteFlag;
 extern UINT32 u32E2P_Pro_Other_WriteFlag;
@@ -297,6 +299,10 @@ void InitE2PROM(void);
 void App_E2promDeal(void);
 
 void EEPROM_test(void);
+
+extern uint16_t curr_offset;
+extern UINT16 OffsetValue_CHG ;
+extern UINT16 OffsetValue_DSG;
 
 #endif	/* EEPROM_H */
 

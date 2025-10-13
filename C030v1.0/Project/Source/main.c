@@ -76,6 +76,9 @@ void InitDevice(void)
 #else
 	InitDelay();
 	IsSleepStartUp();
+
+	jtag_disableAndConfIO();
+
 	InitNVIC();
 	InitIO();
 	InitTimer();
@@ -108,7 +111,7 @@ void InitVar(void)
 
 	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时序
 
-	SystemStatus.bits.b4Status_ProjectVer = 1;
+	// SystemStatus.bits.b4Status_ProjectVer = 1;
 	LogRecord_Flag.bits.Log_StartUp = 1;
 }
 
