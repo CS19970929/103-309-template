@@ -81,9 +81,11 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
+	// MCUO_AFE_CTLC = 1;
 	InitTimer();
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
+	InitAFE1();
 	InitCan();
 	InitADC();
 	InitSci();
@@ -92,8 +94,8 @@ void InitDevice(void)
 	InitHeat_Cool();
 #endif
 
-	InitAFE1();
 	InitMosRelay_DOx();
+	InitData_SOC(); // 必须放在读完eeprom数据后面
 
 #ifdef wdog_enable
 	Init_IWDG();

@@ -706,9 +706,9 @@ void InitCan_CAN1(void)
 	// 如果can采样点选取合适，can总线就能容纳更多的can节点。因此极其重要。
 	// 如果这个不行，就改为那个PDF里面的常用参考参数
 	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
-	CAN_InitStructure.CAN_BS1 = CAN_BS1_3tq; // 时间段1为3个时间单位
-	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq; // 时间段2为2个时间单位
-	CAN_InitStructure.CAN_Prescaler = 12;	 // 时间单位长度为60
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_2tq; // 时间段1为3个时间单位
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq; // 时间段2为2个时间单位
+	CAN_InitStructure.CAN_Prescaler = 4;	 // 时间单位长度为60
 	CAN_Init(CAN1, &CAN_InitStructure);		 // 波特率为：72M/2/6/(1+8+3)=0.5 即500K，非PDF范例
 										// 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
 										// 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例

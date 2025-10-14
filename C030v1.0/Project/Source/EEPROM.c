@@ -809,7 +809,6 @@ void InitData_E2prom(void)
 			{
 				OffsetValue_DSG = (UINT32)((UINT16)(0xFFFF - curr_offset + 1)) * 200 * g_u32CS_Res_AFE / (21470); // mA
 			}
-			InitData_SOC(); // 必须放在读完eeprom数据后面
 		}
 	}
 	else

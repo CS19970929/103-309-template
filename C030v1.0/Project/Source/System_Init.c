@@ -47,13 +47,14 @@ void InitTimer(void)
 	// 定时器TIM3初始化
 	if (0 == System_ErrFlag.u8ErrFlag_HSE)
 	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
+		// TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
+		TIM_TimeBaseStructure.TIM_Prescaler = 80 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
 	}
 	else
 	{
 		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
 	}
-	TIM_TimeBaseStructure.TIM_Period = 499;						// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
+	TIM_TimeBaseStructure.TIM_Period = 99;					// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
 	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// 设置时钟分割:TDTS = Tck_tim——时钟分频
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // TIM向上计数模式
 																// 我看了，向下计数是从自动装载值递减至0，向上计数是从0增加至装载值，也就是说在中断时间上没什么区别
@@ -266,7 +267,7 @@ void TIM3_IRQHandler(void)
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{												// 检查TIM3更新中断发生与否
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // 清除TIMx更新中断标志
-		if ((++g_u81msCnt) >= 2)
+		if ((++g_u81msCnt) >= 1)
 		{ // 1ms
 			g_u81msCnt = 0;
 			g_u81msClockCnt++;
