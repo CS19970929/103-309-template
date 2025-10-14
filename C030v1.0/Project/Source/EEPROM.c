@@ -171,77 +171,6 @@ UINT8 ReadEEPROM_Byte2(UINT16 addr, UINT8 *data)
 	return 0;
 }
 
-UINT8 ReadEEPROM_Word_NoZone2(UINT16 addr, UINT16 *data)
-{
-	UINT8 tmp8a, tmp8b, result = 0;
-	result += ReadEEPROM_Byte2(addr, &tmp8a);	  // 读取低位地址A对应的数据
-	result += ReadEEPROM_Byte2(addr + 1, &tmp8b); // 读取高位地址A+1对应的数据
-	*data = ((UINT16)tmp8b << 8) | tmp8a;		  // 数据存储，如果通讯失败的话，返回的是0x0000
-	return result;
-}
-
-// 思考失败，有点多余的想法
-UINT8 ReadEEPROM_Word_WithZone2(UINT16 addr, UINT16 *data)
-{
-	UINT16 tmp16a, tmp16b, tmp16c;
-	UINT16 addrB, addrC;
-	UINT8 result1 = 0, result2 = 0;
-	addrB = addr + BZONE;
-	addrC = addr + CZONE;
-	result1 += ReadEEPROM_Word_NoZone2(addr, &tmp16a);
-	result1 += ReadEEPROM_Word_NoZone2(addrB, &tmp16b);
-	result1 += ReadEEPROM_Word_NoZone2(addrC, &tmp16c);
-	if (result1 != 0)
-	{
-		return ERROR_EEPROM_COM;
-	}
-
-	if (tmp16a == tmp16b)
-	{ // a == b
-		if (tmp16a != tmp16c)
-		{ // a != c
-			result1 += WriteEEPROM_Word_NoZone(addrC, tmp16a);
-		}
-		*data = tmp16a;
-		++result2;
-	}
-	else
-	{
-		if (tmp16b == tmp16c)
-		{ // b==c  a != b
-			result1 += WriteEEPROM_Word_NoZone(addr, tmp16b);
-			*data = tmp16b;
-			++result2;
-		}
-		else
-		{
-			if (tmp16a == tmp16c)
-			{ // a == c, a != b
-				result1 += WriteEEPROM_Word_NoZone(addrB, tmp16a);
-				*data = tmp16a;
-				++result2;
-			}
-			else
-			{ // a != b, b != c, c != a
-				result1 += WriteEEPROM_Word_NoZone(addr, tmp16a);
-				result1 += WriteEEPROM_Word_NoZone(addrB, tmp16a);
-				result1 += WriteEEPROM_Word_NoZone(addrC, tmp16a);
-				*data = tmp16a; // tmp16a,tmp16b,tmp16c返回默认值，返回第一个值？
-				++result2;
-			}
-		}
-	}
-	if (result1 != 0)
-	{
-		return ERROR_EEPROM_COM;
-	}
-	else if (result2 != 0)
-	{
-		return ERROR_EEPROM_COM;
-	}
-	return 0;
-}
-
 // 后续维护人员禁止使用这个函数
 UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 {
@@ -367,78 +296,6 @@ UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data)
 /*
 =================以下进入第二层应用阶段=================
 */
-
-UINT16 ReadEEPROM_Word_WithZone(UINT16 addr)
-{
-
-	UINT16 tmp16a, tmp16b, tmp16c;
-	UINT8 tmp8a, tmp8b;
-	UINT16 addrB, addrC;
-
-	addrB = addr + BZONE;
-	addrC = addr + CZONE;
-
-	tmp8a = ReadEEPROM_Byte(addr);	   // 读取低位地址A对应的数据
-	tmp8b = ReadEEPROM_Byte(addr + 1); // 读取高位地址A+1对应的数据
-	tmp16a = tmp8b;
-	tmp16a = (tmp16a << 8) | tmp8a; // 数据存储
-
-	tmp8a = ReadEEPROM_Byte(addrB);		// 读取低位地址B对应的数据
-	tmp8b = ReadEEPROM_Byte(addrB + 1); // 读取高位地址B+1对应的数据
-	tmp16b = tmp8b;
-	tmp16b = (tmp16b << 8) | tmp8a; // 数据存储
-
-	tmp8a = ReadEEPROM_Byte(addrC);		// 读取低位地址C对应的数据
-	tmp8b = ReadEEPROM_Byte(addrC + 1); // 读取高位地址C+1对应的数据
-	tmp16c = tmp8b;
-	tmp16c = (tmp16c << 8) | tmp8a; // 数据存储
-
-	if (tmp16a == tmp16b)
-	{ // a == b
-		if (tmp16a != tmp16c)
-		{ // a != c
-			WriteEEPROM_Word_NoZone(addrC, tmp16a);
-		}
-		return tmp16a;
-	}
-	else
-	{
-		if (tmp16b == tmp16c)
-		{ // b==c  a != b
-			WriteEEPROM_Word_NoZone(addr, tmp16b);
-			return tmp16b;
-		}
-		else
-		{
-			if (tmp16a == tmp16c)
-			{ // a == c, a != b
-				WriteEEPROM_Word_NoZone(addrB, tmp16a);
-				return tmp16a;
-			}
-			else
-			{ // a != b, b != c, c != a
-				WriteEEPROM_Word_NoZone(addr, tmp16a);
-				WriteEEPROM_Word_NoZone(addrB, tmp16a);
-				WriteEEPROM_Word_NoZone(addrC, tmp16a);
-				return tmp16a; // tmp16a,tmp16b,tmp16c返回默认值，返回第一个值？
-			}
-		}
-	}
-}
-
-// 主要调这个，加了几句话
-void WriteEEPROM_Word_WithZone(UINT16 addr, UINT16 data)
-{
-	UINT8 result = 0;
-	result += WriteEEPROM_Word_NoZone(addr, data);
-	result += WriteEEPROM_Word_NoZone(addr + BZONE, data);
-	result += WriteEEPROM_Word_NoZone(addr + CZONE, data);
-	if (result != 0)
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_COM);
-	}
-}
-
 void ReadEEPROM_ByteData_StartUp(void)
 {
 	UINT16 i;
@@ -460,7 +317,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 	{ // 保护点
-		t_u16RdTemp = ReadEEPROM_Word_WithZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i));
+		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i));
 		t_u16TempMax = (*(&PrtE2paras_Max.u16VcellOvp_First + i));
 		t_u16TempMin = (*(&PrtE2paras_Min.u16VcellOvp_First + i));
 		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = t_u16RdTemp;
@@ -470,7 +327,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 		else
 		{
 			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{ // 这样其实不太好，最好的办法是把ReadEEPROM_Word_WithZone()这个函数改造以下
+			{ // 这样其实不太好，最好的办法是把ReadEEPROM_Word_NoZone()这个函数改造以下
 				// g_st_SysStatusFlag.bits.b1EepromErr = 1;		//重新改造了一下这个函数，最后失败告终，不改好过改
 				System_ERROR_UserCallback(ERROR_EEPROM_STORE); // 只要确保通讯没问题，就是这个错误。
 			}
@@ -479,7 +336,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_CALIB_K; ++i)
 	{ // K值
-		t_u16RdTemp = ReadEEPROM_Word_WithZone(E2P_ADDR_START_CALIB_K + (i << 1));
+		t_u16RdTemp = ReadEEPROM_Word_NoZone(E2P_ADDR_START_CALIB_K + (i << 1));
 		g_u16CalibCoefK[i] = t_u16RdTemp;
 		if ((t_u16RdTemp >= SYSKMIN) && (t_u16RdTemp <= SYSKMAX))
 		{
@@ -492,7 +349,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 			}
 		}
 
-		t_i16RdTemp = ReadEEPROM_Word_WithZone(E2P_ADDR_START_CALIB_B + (i << 1));
+		t_i16RdTemp = ReadEEPROM_Word_NoZone(E2P_ADDR_START_CALIB_B + (i << 1));
 		g_i16CalibCoefB[i] = t_i16RdTemp; // B值
 		if ((t_i16RdTemp >= SYSBMIN) && (t_i16RdTemp <= SYSBMAX))
 		{
@@ -508,7 +365,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 	{ // Other_CanAdd
-		t_u16RdTemp = ReadEEPROM_Word_WithZone((UINT16) * (&OtherElement_to_Pos.u16Balance_OpenVoltage + i));
+		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&OtherElement_to_Pos.u16Balance_OpenVoltage + i));
 		t_u16TempMax = (*(&OtherElement_to_Max.u16Balance_OpenVoltage + i));
 		t_u16TempMin = (*(&OtherElement_to_Min.u16Balance_OpenVoltage + i));
 		*(&OtherElement.u16Balance_OpenVoltage + i) = t_u16RdTemp;
@@ -527,7 +384,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 	{ // HeatCool_element
-		t_u16RdTemp = ReadEEPROM_Word_WithZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i));
+		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i));
 		t_u16TempMax = (*(&HeatCoolEle_Max.u16Heat_OpenTemp + i));
 		t_u16TempMin = (*(&HeatCoolEle_Min.u16Heat_OpenTemp + i));
 		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = t_u16RdTemp;
@@ -608,8 +465,8 @@ void WriteEEPROM_ByteData_Circle(void)
 
 	if (u8E2P_KB_WriteFlag)
 	{ // 完美KB值操作，既可全部写一遍，也可以单独写其中一对KB值
-		WriteEEPROM_Word_WithZone((E2P_ADDR_START_CALIB_K + (u8E2P_KB_WritePos << 1)), g_u16CalibCoefK[u8E2P_KB_WritePos]);
-		WriteEEPROM_Word_WithZone((E2P_ADDR_START_CALIB_B + (u8E2P_KB_WritePos << 1)), g_i16CalibCoefB[u8E2P_KB_WritePos]);
+		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (u8E2P_KB_WritePos << 1)), g_u16CalibCoefK[u8E2P_KB_WritePos]);
+		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (u8E2P_KB_WritePos << 1)), g_i16CalibCoefB[u8E2P_KB_WritePos]);
 		++u8E2P_KB_WritePos; // 如果u8E2P_KB_WriteFlag=0，则Pos就算错也没用，别的地方想修改KB值的话，这两者必须同时操作。
 		--u8E2P_KB_WriteFlag;
 	}
@@ -619,7 +476,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_VolCur_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_WithZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i),
+				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i),
 										  *(&PRT_E2ROMParas.u16VcellOvp_First + i));
 				u32E2P_Pro_VolCur_WriteFlag -= ((long)1 << i); // 按位操作，有一个减一个。
 				break;
@@ -633,7 +490,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_Temp_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_WithZone((UINT16) * (&PrtE2paras_Pos.u16TChgOTp_First + i),
+				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16TChgOTp_First + i),
 										  *(&PRT_E2ROMParas.u16TChgOTp_First + i));
 				u32E2P_Pro_Temp_WriteFlag -= ((long)1 << i);
 				break;
@@ -647,7 +504,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_Other_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_WithZone((UINT16) * (&PrtE2paras_Pos.u16VdeltaOvp_First + i),
+				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VdeltaOvp_First + i),
 										  *(&PRT_E2ROMParas.u16VdeltaOvp_First + i));
 				u32E2P_Pro_Other_WriteFlag -= ((long)1 << i);
 				break;
@@ -661,7 +518,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_OtherElement1_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_WithZone((UINT16) * (&OtherCanAdd_Pos.u16Balance_OpenVoltage + i),
+				WriteEEPROM_Word_NoZone((UINT16) * (&OtherCanAdd_Pos.u16Balance_OpenVoltage + i),
 										  *(&OtherElement.u16Balance_OpenVoltage + i));
 				u32E2P_OtherElement1_WriteFlag -= ((long)1 << i);
 				break;
@@ -675,7 +532,7 @@ void WriteEEPROM_ByteData_Circle(void)
 	// 	{
 	// 		if ((u32E2P_RTC_Element_WriteFlag >> i) & 1)
 	// 		{
-	// 			WriteEEPROM_Word_WithZone((UINT16) * (&RTC_Element_Pos.RTC_Time_Year + i),
+	// 			WriteEEPROM_Word_NoZone((UINT16) * (&RTC_Element_Pos.RTC_Time_Year + i),
 	// 									  *(&RTC_time.RTC_Time_Year + i));
 	// 			u32E2P_RTC_Element_WriteFlag -= ((long)1 << i);
 	// 			break;
@@ -686,14 +543,14 @@ void WriteEEPROM_ByteData_Circle(void)
 	// else if (u8E2P_SocTable_WriteFlag)
 	// {
 	// 	u8temp = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
-	// 	WriteEEPROM_Word_WithZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
+	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
 	// 	u8E2P_SocTable_WriteFlag--;
 	// }
 	// else if (u8E2P_CopperLoss_WriteFlag)
 	// {
 	// 	u8temp = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
-	// 	WriteEEPROM_Word_WithZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
-	// 	WriteEEPROM_Word_WithZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
+	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
+	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
 	// 	u8E2P_CopperLoss_WriteFlag--;
 	// }
 	else if (u32E2P_HeatCool_WriteFlag)
@@ -702,7 +559,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_HeatCool_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_WithZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i), *(&Heat_Cool_Element.u16Heat_OpenTemp + i));
+				WriteEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i), *(&Heat_Cool_Element.u16Heat_OpenTemp + i));
 				u32E2P_HeatCool_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -711,11 +568,11 @@ void WriteEEPROM_ByteData_Circle(void)
 	else if (gu8_Reset_EventRecord)
 	{
 		u8temp = 100 - gu8_Reset_EventRecord;
-		WriteEEPROM_Word_WithZone(E2P_ADDR_START_EVENT_RECORD + (u8temp << 1), 0);
+		WriteEEPROM_Word_NoZone(E2P_ADDR_START_EVENT_RECORD + (u8temp << 1), 0);
 		gu8_Reset_EventRecord--;
 		if (gu8_Reset_EventRecord == 1)
 		{
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_EVENT_POINT, 0);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_EVENT_POINT, 0);
 		}
 	}
 }

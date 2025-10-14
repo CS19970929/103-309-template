@@ -389,7 +389,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 			}
 			if (u8IICFaultcnt1 == 30 && u8WakeCnt1 <= 20)
 			{
-				SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+				InitAFE1();
 				++u8WakeCnt1;
 			}
 			SystemStatus.bits.b1Status_AFE1 = 0;
@@ -405,7 +405,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 				u8WakeCnt1--;
 			}
 			SystemStatus.bits.b1Status_AFE1 = 1;
-			// System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
+			System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
 		}
 		break;
 
@@ -551,8 +551,8 @@ void App_AFEGet(void)
 	DataLoad_CellVoltMaxMinFind();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
-	// DataLoad_Current();
-	test_Autocurrent_cycle();
+	DataLoad_Current();
+	// test_Autocurrent_cycle();
 
 	App_SH367309();
 	App_MOS_Relay_Ctrl();

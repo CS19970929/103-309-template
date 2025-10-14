@@ -9,6 +9,7 @@ UINT8 g_u81msClockCnt = 0;
 
 UINT8 gu8_200msCnt = 0;
 UINT8 gu8_200msAccClock_Flag = 0;
+UINT8 gu8_1000msAccClock_Flag = 0;
 
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
@@ -113,6 +114,7 @@ void __delay_ms(UINT16 nms)
 	do
 	{
 		temp = SysTick->CTRL;
+		Feed_WatchDog;
 	} while ((temp & 0x01) && !(temp & (1 << 16))); // 等待时间到达
 	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // 关闭计数器
 	SysTick->VAL = 0X00;					   // 清空计数器
@@ -264,6 +266,7 @@ void IWDG_Feed(void)
 // 定时器3中断服务程序
 void TIM3_IRQHandler(void)
 { // TIM3中断
+	static uint16_t cnt_1000ms = 0;
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{												// 检查TIM3更新中断发生与否
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // 清除TIMx更新中断标志
@@ -287,6 +290,11 @@ void TIM3_IRQHandler(void)
 			{
 				gu8_200msCnt = 0;
 				gu8_200msAccClock_Flag = 1;
+			}
+			if(++cnt_1000ms >= 1000)
+			{
+				cnt_1000ms = 0;
+				gu8_1000msAccClock_Flag = 1;
 			}
 		}
 	}

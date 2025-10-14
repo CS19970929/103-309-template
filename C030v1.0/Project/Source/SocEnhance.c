@@ -220,7 +220,7 @@ void soc_factory_param_init_first(void)
 	SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100;
 	SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit * 100;
 
-	SOC_Calculate_Element.u8SOC_Now = 88;
+	SOC_Calculate_Element.u8SOC_Now = 60;
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 	SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH);
 }

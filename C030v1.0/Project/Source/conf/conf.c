@@ -81,7 +81,6 @@ void InitWakeUp_Base(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // ???????????
 
     jtag_disableAndConfIO();
-
 #if 1
     {
         GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU; // ?????GPIO??,PA0?????
@@ -115,36 +114,6 @@ void InitWakeUp_Base(void)
         NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
         NVIC_Init(&NVIC_InitStructure);
-
-        // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIOB, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource3);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line3;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
-
-        // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIOA, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource15);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line15;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
     }
 #endif
 }
@@ -241,13 +210,6 @@ void IOstatus_Base(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 
-    // todo ctlc
-    // #ifndef __test__
-    // 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    // 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    // 	GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // #endif
-
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOC, &GPIO_InitStructure);
@@ -260,32 +222,7 @@ void IOstatus_Base(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOE, &GPIO_InitStructure);
 
-    // ??????
-    // ???
-#if 0
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-    MCUO_DRV_CMNT = 1;
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-    MCUO_PWSV_CTR = 1;
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-    MCUO_PWSV_STB = 0;
-#endif
-
-    __delay_ms(100);
+    // __delay_ms(100);
 }
 
 void IOstatus_RTCMode(void)

@@ -668,7 +668,6 @@ void IsSleepStartUp(void)
 	case FLASH_NORMAL_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-
 			IOstatus_NormalMode();
 			InitWakeUp_NormalMode();
 			Sys_StopMode();
@@ -695,33 +694,35 @@ void IsSleepStartUp(void)
 
 void App_SleepDeal(void)
 {
-	if (!System_OnOFF_Func.bits.b1OnOFF_Sleep)
-	{			// 有个疑问，是不是立刻关了，不需要�?�原�?，均衡是需要关掉�?�原�?
-		return; // Sleep的话，�?�果直接不进去，后续打开会接着上�?�的步伐
-	} // 暂且先这么做，后�?如果要全盘�?�原，�?�时清零再�?�，�?前是接着上�?�的步伐
+	// if (!System_OnOFF_Func.bits.b1OnOFF_Sleep)
+	// {			// 有个疑问，是不是立刻关了，不需要�?�原�?，均衡是需要关掉�?�原�?
+	// 	return; // Sleep的话，�?�果直接不进去，后续打开会接着上�?�的步伐
+	// } // 暂且先这么做，后�?如果要全盘�?�原，�?�时清零再�?�，�?前是接着上�?�的步伐
 	if (reset_sleep_state)
 	{
 		reset_sleep_state = 0;
 		Sleep_Status = SLEEP_HICCUP_SHIFT;
 		Sleep_Mode.all = 0;
 	}
-	if (SystemStatus.bits.b1StartUpBMS)
-	{
-		return;
-	}
-	else
-	{
-		SystemStatus.bits.b1Status_ToSleep = 1;
-	}
-	if (Sleep_Mode.bits.b1_ToSleepFlag)
-	{
-		LogRecord_Flag.bits.Log_Sleep = 1;
-		return;
-	}
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag1 && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
+	// if (SystemStatus.bits.b1StartUpBMS)
+	// {
+	// 	return;
+	// }
+	// else
+	// {
+	// 	SystemStatus.bits.b1Status_ToSleep = 1;
+	// }
+	// if (Sleep_Mode.bits.b1_ToSleepFlag)
+	// {
+	// 	LogRecord_Flag.bits.Log_Sleep = 1;
+	// 	return;
+	// }
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag1 && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
+	if (0 == gu8_1000msAccClock_Flag && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	{
 		return; // 如果�?强制进入休眠的则必须�?点进入休眠，不能�?
 	}
+	gu8_1000msAccClock_Flag = 0;
 
 	switch (Sleep_Status)
 	{

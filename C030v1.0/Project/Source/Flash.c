@@ -43,6 +43,8 @@ void App_FlashUpdate(void)
 #ifdef _IAP
 	if (1 == u8FlashUpdateFlag)
 	{
+		SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
+		SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
 		__delay_ms(10);
 		u8FlashUpdateFlag = 0;
 		__disable_fault_irq();

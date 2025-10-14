@@ -2028,21 +2028,21 @@ void PwrMag_Protect_Record(enum FaultFlag num)
 	{
 		if (num >= 1 && num <= 13)
 		{
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_FIRST + ((FaultPoint_First - 1) << 1), Fault_record_First[FaultPoint_First - 1]);
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_FIRST, FaultPoint_First);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_FIRST + ((FaultPoint_First - 1) << 1), Fault_record_First[FaultPoint_First - 1]);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_FIRST, FaultPoint_First);
 		}
 		else if (num >= 14 && num <= 26)
 		{
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_SECOND + ((FaultPoint_Second - 1) << 1), Fault_record_Second[FaultPoint_Second - 1]);
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_SECOND, FaultPoint_Second);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_SECOND + ((FaultPoint_Second - 1) << 1), Fault_record_Second[FaultPoint_Second - 1]);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_SECOND, FaultPoint_Second);
 		}
 		else
 		{
-			WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_THIRD + ((FaultPoint_Third - 1) << 1), Fault_record_Third[FaultPoint_Third - 1]);
-			WriteEEPROM_Word_WithZone(E2P_ADDR_E2POS_FR_TEMP_THIRD, FaultPoint_Third);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_THIRD + ((FaultPoint_Third - 1) << 1), Fault_record_Third[FaultPoint_Third - 1]);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_THIRD, FaultPoint_Third);
 			for (j = 0; j < 6; ++j)
 			{
-				WriteEEPROM_Word_WithZone(E2P_ADDR_START_FR_THIRD_RTC + (((FaultPoint_Third - 1) * 6 + j) << 1), RTC_Fault_record_Third[FaultPoint_Third - 1][j]);
+				WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_THIRD_RTC + (((FaultPoint_Third - 1) * 6 + j) << 1), RTC_Fault_record_Third[FaultPoint_Third - 1][j]);
 			}
 		}
 	}

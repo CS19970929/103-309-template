@@ -7,11 +7,16 @@ void LedBar_StartUp(void)
 #if 1
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_SOC_20 | PIN_SOC_40 | PIN_SOC_60 | PIN_SOC_80 | PIN_SOC_100;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;    // 推挽输出
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_20;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
     GPIO_Init(PORT_SOC_20, &GPIO_InitStructure);
-    GPIO_Init(PORT_SOC_100, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_40;
+    GPIO_Init(PORT_SOC_40, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_60;
+    GPIO_Init(PORT_SOC_60, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_80;
+    GPIO_Init(PORT_SOC_80, &GPIO_InitStructure);
 
     // GPIO_InitStructure.GPIO_Pin = PIN_SOC_RUN | PIN_SOC_ALM;
     // GPIO_Init(PORT_SOC_RUN, &GPIO_InitStructure);
@@ -34,6 +39,7 @@ void LedBar_Show_Normal(void)
 {
     static UINT8 su8_ShowStatus = 1; // 开机亮5s
     static UINT16 su16_ShowDelay_Tcnt = 0;
+    static uint8_t delay_cnt = 0;
 
     switch (su8_ShowStatus)
     {
@@ -59,6 +65,7 @@ void LedBar_Show_Normal(void)
         // fixme 不起作用
 
     case 1:
+#if 0
         // 5s
         if (++su16_ShowDelay_Tcnt <= 10 * 5)
         {
@@ -99,6 +106,27 @@ void LedBar_Show_Normal(void)
         // 一直按着
         if (!MCUI_SOC_KEY)
             su16_ShowDelay_Tcnt = 0;
+#else
+
+        if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+        {
+            if (++delay_cnt >= 5)
+            {
+                delay_cnt = 0;
+                MCUO_SOC_20 = !MCUO_SOC_20;
+            }
+        }
+        else
+        {
+            delay_cnt = 0;
+            MCUO_SOC_20 = g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0;
+            MCUO_SOC_40 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+            MCUO_SOC_60 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
+            MCUO_SOC_80 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
+        }
+        // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
+
+#endif
         break;
 
     default:
@@ -201,6 +229,11 @@ void LedBar_Show_Sleep(void)
 
 void APP_LedBar(void)
 {
+    if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
+    {
+        return;
+    }
+
     if (SystemStatus.bits.b1StartUpBMS)
     {
         return;
@@ -231,7 +264,7 @@ void APP_LedBar(void)
 
     // LedBar_Show_Fault();
     // 好像有问题
-    LedBar_Show_Sleep();
+    // LedBar_Show_Sleep();
 
     // if (BlueToothFlag)
     // {
