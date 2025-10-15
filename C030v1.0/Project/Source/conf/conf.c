@@ -106,7 +106,7 @@ void InitWakeUp_Base(void)
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource9);
         EXTI_InitStruct.EXTI_Line = EXTI_Line9;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
         EXTI_InitStruct.EXTI_LineCmd = ENABLE;
         EXTI_Init(&EXTI_InitStruct);
         NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;

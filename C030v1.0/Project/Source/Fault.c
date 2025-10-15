@@ -1886,6 +1886,7 @@ void App_VdeltaOp_ThirdCheck(void)
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.VdeltaOvp_Third == 1)
 			{
 				Fault_Flag_Third.bits.VdeltaOvp_Third = 0;
+				System_ERROR_UserCallback(ERROR_REMOVE_VDEATLE_OVER);
 			}
 		}
 	}
