@@ -1752,6 +1752,10 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	if (u16WrRegNum == 5)
 	{
 		t_u16Temp = u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST;
+		if (t_u16Temp == 20 || t_u16Temp == 25)
+		{
+			AFE_PARAM_WRITE_Flag = 1;
+		}
 		for (i = 0; i < 5; ++i)
 		{
 			*(&PRT_E2ROMParas.u16VcellOvp_First + i + t_u16Temp) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));

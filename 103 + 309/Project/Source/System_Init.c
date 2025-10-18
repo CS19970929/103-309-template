@@ -17,11 +17,11 @@ static UINT16 fac_ms = 0;
 // 使用LSI
 void Init_IWDG(void)
 {
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE); // 使能PWR外设时钟，待机模式，RTC，看门狗
-	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// 打开独立看门狗寄存器操作权限
-	IWDG_SetPrescaler(IWDG_Prescaler_64);				// 预分频系数
-	IWDG_SetReload(160);								// 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-						 // 800——1.28s，80——128ms
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);			// 使能PWR外设时钟，待机模式，RTC，看门狗
+	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);				// 打开独立看门狗寄存器操作权限
+	IWDG_SetPrescaler(IWDG_Prescaler_64);						// 预分频系数
+	IWDG_SetReload(160);										// 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
+																// 800——1.28s，80——128ms
 	IWDG_ReloadCounter();										// 喂狗
 	IWDG_Enable();												// 使能IWDG
 	DBGMCU->CR |= ((uint32_t)0x00000100); /* Debug IWDG Stop */ // STlink使用
@@ -55,13 +55,13 @@ void InitTimer(void)
 	{
 		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
 	}
-	TIM_TimeBaseStructure.TIM_Period = 99;					// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
+	TIM_TimeBaseStructure.TIM_Period = 99;						// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
 	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// 设置时钟分割:TDTS = Tck_tim——时钟分频
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // TIM向上计数模式
 																// 我看了，向下计数是从自动装载值递减至0，向上计数是从0增加至装载值，也就是说在中断时间上没什么区别
-	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure); // 根据指定的参数初始化TIMx的时间基数单位
-	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);		// 清除更新中断请求位，据说这个能防止打开中断瞬间立刻进入中断函数
-	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);		// 使能指定的TIM3中断,允许更新中断
+	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);				// 根据指定的参数初始化TIMx的时间基数单位
+	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);					// 清除更新中断请求位，据说这个能防止打开中断瞬间立刻进入中断函数
+	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);					// 使能指定的TIM3中断,允许更新中断
 
 	/*	TIM3 中断嵌套设计*/
 	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
@@ -254,7 +254,7 @@ void App_SysTime(void)
 	{
 		s_u8Cnt1000ms3 = 0;
 		g_st_SysTimeFlag.bits.b1Sys1000msFlag3 = 1; // 1000ms定时标志
-		// MCUO_DEBUG_LED2 = !MCUO_DEBUG_LED2;
+													// MCUO_DEBUG_LED2 = !MCUO_DEBUG_LED2;
 	}
 }
 
@@ -268,7 +268,7 @@ void TIM3_IRQHandler(void)
 { // TIM3中断
 	static uint16_t cnt_1000ms = 0;
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
-	{												// 检查TIM3更新中断发生与否
+	{ // 检查TIM3更新中断发生与否
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // 清除TIMx更新中断标志
 		if ((++g_u81msCnt) >= 1)
 		{ // 1ms
@@ -291,7 +291,7 @@ void TIM3_IRQHandler(void)
 				gu8_200msCnt = 0;
 				gu8_200msAccClock_Flag = 1;
 			}
-			if(++cnt_1000ms >= 1000)
+			if (++cnt_1000ms >= 1000)
 			{
 				cnt_1000ms = 0;
 				gu8_1000msAccClock_Flag = 1;

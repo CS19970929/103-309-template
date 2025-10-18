@@ -153,6 +153,9 @@ bool SH367309_UpdataAfeConfig(void)
 
 	if (AFE_PARAM_WRITE_Flag)
 	{
+		sys_time.cnt_test_enter_afe_param++;
+		sys_time.test_current_cnt++;
+
 		AFE_PARAM_WRITE_Flag = 0;
 		MCUO_AFE_VPRO = 1; // 进入烧写模式
 		Delay1ms(20);
@@ -183,97 +186,97 @@ bool SH367309_UpdataAfeConfig(void)
 
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 {
-	// UINT16 u16WrRegNum;
-	// UINT16 u16SciRegStartAddr;
+	UINT16 u16WrRegNum;
+	UINT16 u16SciRegStartAddr;
 
-	// int i = 0;
-	// UINT16 offset = 0;
-	// UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
-	// u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
-	// u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	int i = 0;
+	UINT16 offset = 0;
+	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
+	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
-	// /* 起始地址在AFE参数范围，且起始地址+写的寄存器数量在范围内 */
-	// if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) && (u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) && (u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
-	// {
-	// 	offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
+	/* 起始地址在AFE参数范围，且起始地址+写的寄存器数量在范围内 */
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) && (u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) && (u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
+	{
+		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
 
-	// 	Feed_WatchDog;
-	// 	for (i = 0; i < u16WrRegNum; i++)
-	// 	{
-	// 		*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
+		Feed_WatchDog;
+		for (i = 0; i < u16WrRegNum; i++)
+		{
+			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
 
-	// 		/* 直接写道EEPROM中 */
-	// 		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), *(P + (i + offset) * 4));
-	// 	}
-	// 	Feed_WatchDog;
-	// 	AFE_PARAM_WRITE_Flag = 1;
-	// 	return 1;
-	// }
+			/* 直接写道EEPROM中 */
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), *(P + (i + offset) * 4));
+		}
+		Feed_WatchDog;
+		AFE_PARAM_WRITE_Flag = 1;
+		return 1;
+	}
 
 	return 0;
 }
 
 void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
 {
-	// UINT16 u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	// if (0x0001 == u16SciRegData)
-	// {
-	// 	EEPROM_ResetData_AFE_ParametersToDefault();
-	// 	AFE_PARAM_WRITE_Flag = 1;
-	// }
-	// else
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
-	// }
+	UINT16 u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	if (0x0001 == u16SciRegData)
+	{
+		EEPROM_ResetData_AFE_ParametersToDefault();
+		AFE_PARAM_WRITE_Flag = 1;
+	}
+	else
+	{
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_DATA_INVALID;
+	}
 }
 
 void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
-	// UINT16 u16SciTemp;
-	// UINT16 i, j;
-	// UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
-	// i = 0;
+	UINT16 u16SciTemp;
+	UINT16 i, j;
+	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
+	i = 0;
 
-	// for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
-	// {
-	// 	u16SciTemp = *(P + j * 4);
-	// 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	// 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	// }
+	for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
+	{
+		u16SciTemp = *(P + j * 4);
+		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
+		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	}
 }
 
 // AFE_Parameters  reset
 void EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
-	// UINT8 i;
-	// UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
+	UINT8 i;
+	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
 
-	// Feed_WatchDog;
-	// for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	// {
-	// 	*(P + i * 4 - 1) = *(P + i * 4); // 当前值变为默认值
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), *(P + i * 4));
-	// }
-	// Feed_WatchDog;
+	Feed_WatchDog;
+	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		*(P + i * 4 - 1) = *(P + i * 4); // 当前值变为默认值
+		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), *(P + i * 4));
+	}
+	Feed_WatchDog;
 }
 
 void ReadEEPROM_AFE_Parameters(void)
 {
-	// UINT16 i;
+	UINT16 i;
 
-	// AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
-	// for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	// {
-	// 	(P + i)->curValue = ReadEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1));
+	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
+	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		(P + i)->curValue = ReadEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1));
 
-	// 	if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
-	// 	{
-	// 		(P + i)->curValue = (P + i)->defaultValue;
-	// 		if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-	// 		{
-	// 			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-	// 		}
-	// 	}
-	// }
+		if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
+		{
+			(P + i)->curValue = (P + i)->defaultValue;
+			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
+			{
+				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+			}
+		}
+	}
 }

@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x8555		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1555		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
 // #define __FUNC__HEAT__
@@ -124,6 +124,7 @@ typedef struct
   uint16_t  cnt_enter_chg_open;
   uint16_t  cnt_enter_dsg_open;
 
+  uint16_t  cnt_test_enter_afe_param;
 
 }Time_T;
 

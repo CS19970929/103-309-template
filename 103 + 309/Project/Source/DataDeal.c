@@ -533,16 +533,18 @@ void test_Autocurrent_cycle(void)
 // 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
 void App_AFEGet(void)
 {
+	// if (0 == gu8_200msAccClock_Flag || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 	// if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3)
 	{
 		return;
 	}
-
 	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
 	{
 		return;
 	}
+	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+	gu8_200msAccClock_Flag = 0;
 
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
@@ -556,4 +558,6 @@ void App_AFEGet(void)
 
 	App_SH367309();
 	App_MOS_Relay_Ctrl();
+
+	App_SOC();
 }

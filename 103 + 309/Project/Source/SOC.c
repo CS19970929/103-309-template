@@ -105,18 +105,14 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
-	if (0 == gu8_200msAccClock_Flag)
-	{
-		return;
-	}
-
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-
+	// if (0 == gu8_200msAccClock_Flag)
+	// {
+	// 	return;
+	// }
 	RefreshData_SOC();
 	GetData_SOC();
 	SOC_IntEnhance_Ctrl();
 
-	gu8_200msAccClock_Flag = 0;
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{
