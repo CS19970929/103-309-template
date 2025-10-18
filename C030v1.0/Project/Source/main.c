@@ -49,7 +49,7 @@ int main(void)
 		App_SOC();
 		App_WarnCtrl();
 
-		APP_LedBar();
+		// APP_LedBar();
 
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
@@ -120,6 +120,22 @@ void InitVar(void)
 
 void InitSystemWakeUp(void)
 {
+	#define MCUO_DRV_CMNT		PCout(12)		//
+//??????
+#define MCUO_PWSV_CTR		PCout(13)		//
+#define MCUO_PWSV_STB		PDout(2)		//
+#define MCUO_BLE_EN 		PBout(12)
+	#define MCUO_AFE_SHIP 		PAout(10)		//AFE_SHIP
+	#define MCUO_AFE_MODE 		PAout(7)		//AFE_MODE
+
+
+	MCUO_PWSV_STB = 1;
+	MCUO_PWSV_CTR = 0;
+	MCUO_DRV_CMNT = 0;
+	// MCUO_BLE_EN = 1;
+
+	MCUO_AFE_SHIP = 0;
+	MCUO_AFE_MODE = 0;
 }
 
 void InitSci(void)

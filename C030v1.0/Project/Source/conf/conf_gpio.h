@@ -13,44 +13,59 @@
 #include "stm32f10x.h"
 #endif // __STM32F1__
 
+#define GPIO_M_STB          GPIOA
+#define PIN_M_STB           GPIO_Pin_15
 
-/**********************************************/
-#define GPIO_INT_WK_MCU         GPIOA
-#define PIN_INT_WK_MCU          GPIO_Pin_0
+#define GPIO_AD_EN        GPIOB
+#define PIN_AD_EN         GPIO_Pin_3
 
-#define GPIO_INT_WK_CMNT         GPIOB
-#define PIN_INT_WK_CMNT          GPIO_Pin_12
+#define GPIO_BLE_EN        GPIOB
+#define PIN_BLE_EN         GPIO_Pin_4
 
-#define GPIO_LOAD_OL             GPIOA 
-#define PIN_LOAD_OL              GPIO_Pin_8
+#define GPIO_SW_EN        GPIOB
+#define PIN_SW_EN         GPIO_Pin_5
 
-#define GPIO_KEY1             GPIOA 
-#define PIN_KEY1              GPIO_Pin_9
 
-#define GPIO_AFE1_CTL           GPIOB
-#define PIN_AFE1_CTL            GPIO_Pin_14
-#define GPIO_AFE1_PRO_EN           GPIOB
-#define PIN_AFE1_PRO_EN            GPIO_Pin_0
-#define GPIO_AFE1_SHIP           GPIOA
-#define PIN_AFE1_SHIP            GPIO_Pin_10
+#define GPIO_CMNT_EN        GPIOA
+#define PIN_CMNT_EN         GPIO_Pin_4
 
-#define GPIO_DBG_LED1             GPIOB 
-#define PIN_DBG_LED1              GPIO_Pin_15
+// #define GPIO_M_CTR          GPIOA
+// #define PIN_M_CTR           GPIO_Pin_8
+#define GPIO_DBG_LED        GPIOB
+#define PIN_DBG_LED         GPIO_Pin_15
+
+#define GPIO_INT_WK_MCU        GPIOA
+#define PIN_INT_WK_MCU         GPIO_Pin_0
+
+#define GPIO_INT_WK_CMNT        GPIOB
+#define PIN_INT_WK_CMNT         GPIO_Pin_12
+
+#define GPIO_KEY1        GPIOA
+#define PIN_KEY1         GPIO_Pin_9
+
+#define GPIO_AFE1_CTL        GPIOB
+#define PIN_AFE1_CTL         GPIO_Pin_14
+
+#define GPIO_AFE1_SHIP        GPIOA
+#define PIN_AFE1_SHIP         GPIO_Pin_10
+
+#define GPIO_AFE1_ALM        GPIOA
+#define PIN_AFE1_ALM         GPIO_Pin_6
+
+#define GPIO_AFE1_MODE        GPIOA
+#define PIN_AFE1_MODE         GPIO_Pin_7
+
+#define GPIO_AFE1_PRO_EN        GPIOB
+#define PIN_AFE1_PRO_EN         GPIO_Pin_0
+
+#define GPIO_LOAD_RM        GPIOA
+#define PIN_LOAD_RM         GPIO_Pin_8
+
+#define GPIO_PORT_K1    GPIOC
+#define GPIO_PIN_K1	    GPIO_Pin_13
 
 #define GPIO_AD_TTC_MOS1             GPIOA 
 #define PIN_AD_TTC_MOS1              GPIO_Pin_1
-
-#define GPIO_CMNT_EN           GPIOA
-#define PIN_CMNT_EN            GPIO_Pin_4
-
-#define GPIO_M_STB           GPIOA
-#define PIN_M_STB            GPIO_Pin_15
-
-#define GPIO_AD_EN           GPIOB
-#define PIN_AD_EN            GPIO_Pin_3
-
-#define GPIO_BLE_EN           GPIOB
-#define PIN_BLE_EN            GPIO_Pin_4
 
 #define GPIO_SCI1_TX	     GPIOB
 #define PIN_SCI1_TX	     GPIO_Pin_6
@@ -62,6 +77,9 @@
 #define PIN_SCI2_TX	     GPIO_Pin_2
 #define GPIO_SCI2_RX	     GPIOA
 #define PIN_SCI2_RX	     GPIO_Pin_3
+
+
+/**********************************************/
 
 #define MCUO_AFE_SHIP 		PAout(10)		//AFE_SHIP
 // #define MCUO_AFE_MODE 		PCout(8)		//AFE_MODE
