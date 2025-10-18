@@ -145,7 +145,7 @@ struct OTHER_ELEMENT {
 
 
 #define CS_Res			2
-#define CS_Res_Num		6
+#define CS_Res_Num		3
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
@@ -174,7 +174,7 @@ struct OTHER_ELEMENT {
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
 	                             3200,	7200,	2800,	10,		10,	10,	240,0,\
-	                             1000,	3,		3550,	2900,\
+	                             200,	3,		3550,	2900,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif
 

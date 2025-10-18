@@ -46,7 +46,6 @@ int main(void)
 		App_CellBalance();
 		App_Can();
 		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		App_SOC();
 		App_WarnCtrl();
 
 		// APP_LedBar();

@@ -105,6 +105,8 @@ struct stCell_Info {
 
 // SCI_485 Message Structure
 struct RS485MSG {
+	USART_TypeDef *uart;		
+	UINT16 gu16_CommuErrCnt; // SCI通信异常计数
 	UINT8	ptr_no;          	// Word stating what state msg is in
 	UINT8	csr;          		// I2C address of slave msg is intended for
 	UINT16	u16RdRegStartAddr;	// read reg start addr
@@ -544,6 +546,7 @@ void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
 
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
+void CommonUpper_irq(struct RS485MSG *s);
 
 #endif	/* SCI_H */
 
