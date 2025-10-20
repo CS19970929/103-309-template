@@ -352,11 +352,11 @@ void DataLoad_Current(void)
 	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
 	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
 
-	if (g_stCellInfoReport.u16Ichg <= 2)
+	if (g_stCellInfoReport.u16Ichg <= 3)
 	{
 		g_stCellInfoReport.u16Ichg = 0;
 	}
-	if (g_stCellInfoReport.u16IDischg <= 2)
+	if (g_stCellInfoReport.u16IDischg <= 3)
 	{
 		g_stCellInfoReport.u16IDischg = 0;
 	}

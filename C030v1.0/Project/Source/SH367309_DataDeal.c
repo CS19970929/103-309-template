@@ -94,6 +94,7 @@ void Refresh_Parameters(void)
 	// temp = PRT_E2ROMParas.u16IchgOcp_Filter * 10; // 当前对应多少ms
 	// AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 	{
+		//实际120A
 		temp = 1000 * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
