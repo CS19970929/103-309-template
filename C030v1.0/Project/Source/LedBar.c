@@ -114,6 +114,9 @@ void LedBar_Show_Normal(void)
             {
                 delay_cnt = 0;
                 MCUO_SOC_20 = !MCUO_SOC_20;
+                MCUO_SOC_40 = 0;
+                MCUO_SOC_60 = 0;
+                MCUO_SOC_80 = 0;
             }
         }
         else

@@ -9,17 +9,18 @@ typedef enum _LEDBAR_COMMAND {
 	LED_BAR_FAULT,
 }LEDBAR_COMMAND;
 
-#define PORT_SOC_20             GPIOB
-#define PIN_SOC_20	            GPIO_Pin_1
+//
+#define PORT_SOC_20             GPIOA
+#define PIN_SOC_20	            GPIO_Pin_5
 
 #define PORT_SOC_40             GPIOA
-#define PIN_SOC_40	            GPIO_Pin_7
+#define PIN_SOC_40	            GPIO_Pin_6
 
 #define PORT_SOC_60             GPIOA
-#define PIN_SOC_60	            GPIO_Pin_6
+#define PIN_SOC_60	            GPIO_Pin_7
 
-#define PORT_SOC_80             GPIOA
-#define PIN_SOC_80	            GPIO_Pin_5
+#define PORT_SOC_80             GPIOB
+#define PIN_SOC_80	            GPIO_Pin_1
 
 #define PORT_SOC_100            GPIOB
 #define PIN_SOC_100	            GPIO_Pin_5
@@ -37,10 +38,10 @@ typedef enum _LEDBAR_COMMAND {
 #define PIN_SOC_KEY              GPIO_Pin_13
 
 
-#define MCUO_SOC_20 		(PBout(1))
-#define MCUO_SOC_40 		(PAout(7))
-#define MCUO_SOC_60 		(PAout(6))
-#define MCUO_SOC_80 		(PAout(5))
+#define MCUO_SOC_20 		(PAout(5))
+#define MCUO_SOC_40 		(PAout(6))
+#define MCUO_SOC_60 		(PAout(7))
+#define MCUO_SOC_80 		(PBout(1))
 #define MCUO_SOC_100 		(PBout(5))
 
 // #define MCUO_SOC_RUN 		(PORT_OUT_GPIOC->bit14)
