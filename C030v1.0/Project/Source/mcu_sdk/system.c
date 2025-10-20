@@ -380,13 +380,13 @@ static void weather_data_raw_handle(const u8 p_data[], u16 data_len)
  */
 static void cellular_heatbeat_check_timer(void)
 {
-	#error "请自行完成相关代码,并删除该行"
+	//#error "请自行完成相关代码,并删除该行"
 }
 
 // 接收到蜂窝的数据后，对检测定时器进行复位，定时器重新计时
 static void cellular_heatbeat_reset_timer(void)
 {
-	#error "请自行完成相关代码,并删除该行"
+	//#error "请自行完成相关代码,并删除该行"
 }
 
 /**

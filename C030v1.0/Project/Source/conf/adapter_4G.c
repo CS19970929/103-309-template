@@ -16,7 +16,7 @@ void RecvByte_4G(void)
 {
     unsigned char Res = 0;
 
-    if ((USART1->SR & UART_FLAG_RXNE) != 0)
+    if ((USART1->SR & USART_IT_RXNE) != 0)
     {
         Res = USART1->DR;
         uart_receive_input(Res);

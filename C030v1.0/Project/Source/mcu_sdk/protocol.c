@@ -27,9 +27,15 @@
 2:程序正常初始化完成后,建议不进行关串口中断,如必须关中断,关中断时间必须短,关中断会引起串口数据包丢失
 3:请勿在中断/定时器中断内调用上报函数
 ******************************************************************************/
-
+#include "stm32f10x.h"
+#include "System_Init.h"
+#include "Sci_Upper.h"
+#include "System_Monitor.h"
 #include "cellular.h"
 #include "adapter_4G.h"
+// #include "conf.h"
+#include "stdint.h"
+// #include "main.h"
 
 CELLULAR_CALL_STATUS_E s_phone_call_status = CELLULAR_PHONE_IDLE;
 
@@ -152,8 +158,6 @@ void uart_transmit_output(u8 value)
  */
 void all_data_update(void)
 {
-    #error "请在此处理可下发可上报数据及只上报数据示例,处理完成后删除该行"
-
     /*
     //此代码为平台自动生成，请按照实际数据修改每个可下发可上报函数和只上报函数
     mcu_dp_value_update(DPID_VER,当前软件硬件版本); //VALUE型数据上报;
@@ -182,31 +186,121 @@ void all_data_update(void)
     mcu_dp_value_update(DPID_NUM_12_VOL,当前第12节电压); //VALUE型数据上报;
 
     */
+    uint16_t time_chg = 0xffff;
+    uint16_t time_dsg = 0xffff;
+    int16_t current = 0xffff;
+    int16_t temperature = 0xffff;
+    uint16_t fault_code = 0;
+    if(g_stCellInfoReport.u16Ichg == 0)
+    {
+        time_chg = 0xffff;
+    }
+    else
+    {
+        time_chg = (g_stCellInfoReport.SocElement.u16CapacityFactory - g_stCellInfoReport.SocElement.u16CapacityNow) / g_stCellInfoReport.u16Ichg * 60 / 10;
+    }
+    if(g_stCellInfoReport.u16IDischg == 0)
+    {
+        time_dsg = 0xffff;
+    }
+    else
+    {
+        time_dsg = (g_stCellInfoReport.SocElement.u16CapacityNow) / g_stCellInfoReport.u16IDischg * 60 / 10;
+    }
 
-    mcu_dp_value_update(DPID_VER,当前软件硬件版本); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_SOC,当前SOC); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_FULL_CAP,当前满容量); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_REMAINING_CAP,当前剩余容量); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_CHARGING_TIME,当前充电时间); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_DISCHARGE_TIME,当前放电时间); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_VOL,当前总电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_CUR,当前充放电电流); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_TEMP,当前电池温度); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_CYCLES,当前循环次数); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_SOH,当前健康状态); //VALUE型数据上报;
-    mcu_dp_fault_update(DPID_FAULT_CODE,当前故障代码); //故障型数据上报;
-    mcu_dp_value_update(DPID_NUM_1_VOL,当前第1节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_2_VOL,当前第2节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_3_VOL,当前第3节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_4_VOL,当前第4节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_5_VOL,当前第5节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_6_VOL,当前第6节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_7_VOL,当前第7节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_8_VOL,当前第8节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_9_VOL,当前第9节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_10_VOL,当前第10节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_11_VOL,当前第11节电压); //VALUE型数据上报;
-    mcu_dp_value_update(DPID_NUM_12_VOL,当前第12节电压); //VALUE型数据上报;
+    if(g_stCellInfoReport.u16IDischg)
+    {
+        current = -g_stCellInfoReport.u16IDischg * 10;
+    }
+    else
+    {
+        current = g_stCellInfoReport.u16Ichg * 10;
+    }
+    //todo待测试
+    // if(g_stCellInfoReport.u16Temperature[0] < 400)
+    {
+        temperature = (int16_t)g_stCellInfoReport.u16Temperature[0] / 10 - 40;
+    }
+    // else
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp)
+        fault_code |= 1 << 0;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp)
+        fault_code |= 1 << 1;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp)
+        fault_code |= 1 << 2;
+    // if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp)
+    //     fault_code = 1 << 2;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
+        fault_code |= 1 << 4;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
+        fault_code |= 1 << 5;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
+        fault_code |= 1 << 6;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
+        fault_code |= 1 << 7;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
+        fault_code |= 1 << 8;
+    if(g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+        fault_code |= 1 << 9;
+    if(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
+        fault_code |= 1 << 10;
+    if(g_stCellInfoReport.SocElement.u16Soc == 100)
+        fault_code |= 1 << 11;
+    if(System_ERROR_UserCallback(ERROR_AFE1))
+        fault_code |= 1 << 12;
+    // if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp)
+    //     fault_code = 1 << 2;
+    // if(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp)
+    //     fault_code = 1 << 2;
+
+    mcu_dp_value_update(DPID_VER, 0xF100); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_SOC, g_stCellInfoReport.SocElement.u16Soc * 100); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_FULL_CAP, g_stCellInfoReport.SocElement.u16CapacityFactory); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_REMAINING_CAP,g_stCellInfoReport.SocElement.u16CapacityNow); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_CHARGING_TIME,time_chg); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_DISCHARGE_TIME,time_dsg); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_VOL,g_stCellInfoReport.u16VCellTotle * 10); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_CUR,current); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_TEMP,temperature); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_CYCLES,g_stCellInfoReport.SocElement.u16Cycle_times); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_SOH,g_stCellInfoReport.SocElement.u16Soh); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_fault_update(DPID_FAULT_CODE,fault_code); //故障型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_1_VOL, g_stCellInfoReport.u16VCell[0]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_2_VOL, g_stCellInfoReport.u16VCell[1]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_3_VOL, g_stCellInfoReport.u16VCell[2]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_4_VOL, g_stCellInfoReport.u16VCell[3]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_5_VOL, g_stCellInfoReport.u16VCell[4]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_6_VOL, g_stCellInfoReport.u16VCell[5]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_7_VOL, g_stCellInfoReport.u16VCell[6]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_8_VOL, g_stCellInfoReport.u16VCell[7]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_9_VOL, g_stCellInfoReport.u16VCell[8]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_10_VOL,g_stCellInfoReport.u16VCell[9]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_11_VOL,g_stCellInfoReport.u16VCell[10]); //VALUE型数据上报;
+	Feed_WatchDog;
+    mcu_dp_value_update(DPID_NUM_12_VOL,g_stCellInfoReport.u16VCell[11]); //VALUE型数据上报;
+	Feed_WatchDog;
 }
 
 
@@ -635,7 +729,7 @@ void get_feature_test_result(u8 sim_st,u8 auth,u8 rf,u8 signal)
  */
 static void get_cellular_work_mode_result(u8 result)
 {
-    #error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
+    // #error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
 
     switch(result) {
         case 1:
@@ -659,7 +753,7 @@ static void get_cellular_work_mode_result(u8 result)
  */
 static void get_cellular_IMSI_result(u8 imsi[], u16 data_len)
 {
-    #error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
 }
 
 /**
@@ -671,7 +765,7 @@ static void get_cellular_IMSI_result(u8 imsi[], u16 data_len)
  */
 static void get_cellular_IMCI_result(u8 imci[], u16 data_len)
 {
-    #error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
+//    #error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
 }
 
 /**
@@ -683,7 +777,7 @@ static void get_cellular_IMCI_result(u8 imci[], u16 data_len)
  */
 static void get_cellular_IMEI_result(u8 imei[], u16 data_len)
 {
-    #error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取国际移动用户识别码结果处理代码,完成后请删除该行"
 }
 #ifdef GNSS_SERIVCE_ENABLE
 /**
@@ -1309,7 +1403,7 @@ static void get_contrl_sms_result(u8 sms_info[], u16 data_len)
  */
 static void get_cellular_vbat_vol_result(u8 battery)
 {
-    #error "请自行实现获取蜂窝设备的电池电量功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的电池电量功能处理代码,完成后请删除该行"
 
 }
 
@@ -1321,7 +1415,7 @@ static void get_cellular_vbat_vol_result(u8 battery)
  */
 static void get_vbat_charging_status_result(u8 status)
 {
-    #error "请自行实现获取蜂窝设备的充电状态功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的充电状态功能处理代码,完成后请删除该行"
     if (status == 1) {
         //开始充电
     }
@@ -1357,7 +1451,7 @@ static void get_vbat_charging_status_result(u8 status)
  */
 static void get_set_cellular_volume_result(u8 cmd, u8 result)
 {
-    #error "请自行实现获取蜂窝设备的音量设置功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的音量设置功能处理代码,完成后请删除该行"
     switch (cmd) {
         case 1:{
             if (!result) {
@@ -1392,7 +1486,7 @@ static void get_set_cellular_volume_result(u8 cmd, u8 result)
  */
 static void get_contrl_cellulat_audio_play_result(u8 play_info[], u16 data_len)
 {
-    #error "请自行实现获取蜂窝设备的音频播放功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的音频播放功能处理代码,完成后请删除该行"
     if (data_len < 4) {
         return;
     }
@@ -1414,7 +1508,7 @@ static void get_contrl_cellulat_audio_play_result(u8 play_info[], u16 data_len)
  */
 static void get_voice_play_status_result(u8 cmd, u8 result)
 {
-    #error "请自行实现获取蜂窝设备的音频播放状态功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的音频播放状态功能处理代码,完成后请删除该行"
     switch (cmd) {
         case 0:{
             if (!result) {
@@ -1468,7 +1562,7 @@ static void get_voice_play_status_result(u8 cmd, u8 result)
  */
 static void get_voice_play_finish_result(u8 cmd)
 {
-    #error "请自行实现获取蜂窝设备的音频播放状态功能处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的音频播放状态功能处理代码,完成后请删除该行"
 }
 
 
@@ -1480,7 +1574,7 @@ static void get_voice_play_finish_result(u8 cmd)
  */
 static void get_set_cellular_ctrl_low_vol_power_result(u8 result)
 {
-    #error "请自行实现获取低电量关机设置结果后的处理代码,完成后请删除该行"
+    //#error "请自行实现获取低电量关机设置结果后的处理代码,完成后请删除该行"
     if (result){
         //设置成功
     }else{
@@ -1497,7 +1591,7 @@ static void get_set_cellular_ctrl_low_vol_power_result(u8 result)
  */
 void get_set_cellular_ctrl_offline_result(u8 result)
 {
-    #error "请自行实现设置offline开关的处理代码,完成后请删除该行"
+    //#error "请自行实现设置offline开关的处理代码,完成后请删除该行"
     if (result){
         //设置成功
     }else{
@@ -1513,7 +1607,7 @@ void get_set_cellular_ctrl_offline_result(u8 result)
  */
 static void get_set_cellular_ctrl_ble_conn_result(u8 result)
 {
-    #error "请自行实现获取蓝牙控制是否启动的处理代码,完成后请删除该行"
+    //#error "请自行实现获取蓝牙控制是否启动的处理代码,完成后请删除该行"
     if (result){
         //设置成功
     }else{
@@ -1544,7 +1638,7 @@ static void get_set_cellular_send_shorturl_result(u8 *shorturl)
  */
 void get_dtmf_value_result(u8 dtmf)
 {
-    #error "请自行实现获取当前接收到的dtmf值处理代码,完成后请删除该行"
+    //#error "请自行实现获取当前接收到的dtmf值处理代码,完成后请删除该行"
     switch (dtmf)
     {
         case 0:// DTMF 0
@@ -1591,7 +1685,7 @@ void get_dtmf_value_result(u8 dtmf)
  */
 void get_dtmf_ack_result(u8 result)
 {
-    #error "请自行实现获取蜂窝设备的DTMF结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的DTMF结果处理代码,完成后请删除该行"
 
     if (result){
         //设置成功
@@ -1608,7 +1702,7 @@ void get_dtmf_ack_result(u8 result)
  */
 void get_cellular_ver_result(u8 ver_info[],u16 len,u8 result)
 {
-    #error "请自行实现获取蜂窝设备的版本结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的版本结果处理代码,完成后请删除该行"
     if (result){
         //获取成功
     }
@@ -1625,7 +1719,7 @@ void get_cellular_ver_result(u8 ver_info[],u16 len,u8 result)
  */
 void get_cellular_nettype_result(u8 nettype)
 {
-    #error "请自行实现获取蜂窝设备的网络类型结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的网络类型结果处理代码,完成后请删除该行"
     switch(nettype){
         case 1://其他异常码
         break;
@@ -1650,7 +1744,7 @@ void get_cellular_nettype_result(u8 nettype)
  */
 void contrl_cellular_mic_gain_result(u8 ctrl,u8 result,u8 gain)
 {
-    #error "请自行实现蜂窝设备的设置/获取MIC增益结果处理代码,完成后请删除该行"
+    //#error "请自行实现蜂窝设备的设置/获取MIC增益结果处理代码,完成后请删除该行"
     if (result){
         //成功
     }
@@ -1669,7 +1763,7 @@ void contrl_cellular_mic_gain_result(u8 ctrl,u8 result,u8 gain)
  */
 void contrl_cellular_side_gain_result(u8 ctrl,u8 result,u8 gain)
 {
-    #error "请自行实现蜂窝设备的设置/获取MIC增益结果处理代码,完成后请删除该行"
+    //#error "请自行实现蜂窝设备的设置/获取MIC增益结果处理代码,完成后请删除该行"
     if (result){
         //成功
     }
@@ -1687,7 +1781,7 @@ void contrl_cellular_side_gain_result(u8 ctrl,u8 result,u8 gain)
  */
 void get_set_cellular_ctrl_mute_result(u8 type, u8 result)
 {
-    #error "请自行实现蜂窝设备的设置静音结果处理代码,完成后请删除该行"
+    //#error "请自行实现蜂窝设备的设置静音结果处理代码,完成后请删除该行"
     if (result){
         //成功
         switch(type) {
@@ -1711,7 +1805,7 @@ void get_set_cellular_ctrl_mute_result(u8 type, u8 result)
  */
 void get_set_cellular_ctrl_dtmf_result(u8 result)
 {
-    #error "请自行实现蜂窝设备的设置静音结果处理代码,完成后请删除该行"
+    //#error "请自行实现蜂窝设备的设置静音结果处理代码,完成后请删除该行"
     if (result){
         //成功
     }
@@ -1728,7 +1822,7 @@ void get_set_cellular_ctrl_dtmf_result(u8 result)
  */
 void get_cellular_warning_result(u8 result)
 {
-    #error "请自行实现获取蜂窝上报的告警事件处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝上报的告警事件处理代码,完成后请删除该行"
     switch (result)
     {
         case 1:/* 网络注册错误 */
@@ -1749,7 +1843,7 @@ void get_cellular_warning_result(u8 result)
  */
 void get_set_cellular_wakeup_gpio_result(u8 result)
 {
-    #error "请自行实现获取设置外部唤醒管脚配置处理代码,完成后请删除该行"
+    //#error "请自行实现获取设置外部唤醒管脚配置处理代码,完成后请删除该行"
     if (result){
         //成功
     }
@@ -1766,7 +1860,7 @@ void get_set_cellular_wakeup_gpio_result(u8 result)
  */
 void get_cellular_reboot_result(void)
 {
-    #error "请自行实现获取设置外部唤醒管脚配置处理代码,完成后请删除该行"
+    //#error "请自行实现获取设置外部唤醒管脚配置处理代码,完成后请删除该行"
     u8 length = 0;
     length = set_cellular_uart_byte(length, REQ_CELLULAR_MCU_REBOOT);
     cellular_uart_write_frame(SET_CELLULAR_CMD, MCU_TX_VER, length);
@@ -1785,7 +1879,7 @@ void get_cellular_reboot_result(void)
  */
 void get_set_cellular_sim_hotplug_result(u8 result)
 {
-    #error "请自行实现获取设置SIM卡热插拔使能控制的应答处理代码,完成后请删除该行"
+    //#error "请自行实现获取设置SIM卡热插拔使能控制的应答处理代码,完成后请删除该行"
     if (result){
         //成功
     }
@@ -1890,7 +1984,7 @@ void get_cellular_plmn_result(u8 result,u8 *data,u16 len)
  */
 void get_cellular_contrl_mem_audio_result(u8 *data,u16 len)
 {
-	#error "请自行执行，完成后删除此行"
+	//#error "请自行执行，完成后删除此行"
     u8 cmd = data[0];
     if (cmd != 5) {
         u8 result = data[1];
@@ -2368,7 +2462,7 @@ void get_offline_dynamic_pswd_result(u8 result_data[])
  */
 void open_expand_service_reset_result(u8 result)
 {
-    #error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
 
     if (result){
         //设置成功
@@ -2385,7 +2479,7 @@ void open_expand_service_reset_result(u8 result)
  */
 void process_expand_service_reset_result(u8 result)
 {
-    #error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
     u16 length = 0;
     switch(result) {
         case 0:
@@ -2412,7 +2506,7 @@ void process_expand_service_reset_result(u8 result)
  */
 void process_expand_service_ota_result(u8 result)
 {
-    #error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
+    //#error "请自行实现获取蜂窝设备的工作模式结果处理代码,完成后请删除该行"
     u16 length = 0;
     if(result == 1) {
         // 0x01:升级异常

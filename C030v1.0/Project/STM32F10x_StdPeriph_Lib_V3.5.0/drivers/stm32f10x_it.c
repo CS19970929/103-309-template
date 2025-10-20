@@ -24,6 +24,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x_it.h"
 #include "main.h" //在it的头文件可能会导致别的地方也能调用main的东西，不符合安全规范
+#include "adapter_4G.h"
 
 // #include "stm32_eval.h"
 

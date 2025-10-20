@@ -969,7 +969,7 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 9600;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1281,7 +1281,7 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 9600;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位

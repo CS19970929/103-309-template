@@ -818,7 +818,7 @@ u32 mcu_get_dp_download_value(const u8 value[],u16 len)
  */
 void uart_receive_input(u8 value)
 {
-    #error "请在收到多个字节的串口数据时调用此函数,串口数据由MCU_SDK处理,用户请勿再另行处理,完成后删除该行"
+    //#error "请在收到多个字节的串口数据时调用此函数,串口数据由MCU_SDK处理,用户请勿再另行处理,完成后删除该行"
     if(1 == rx_buf_out - rx_buf_in) {
         //串口接收缓存已满
     }else if((rx_buf_in > rx_buf_out) && ((rx_buf_in - rx_buf_out) >= sizeof(cellular_uart_rx_buf))) {
@@ -842,7 +842,7 @@ void uart_receive_input(u8 value)
  */
 void uart_receive_buff_input(u8 value[], u16 data_len)
 {
-    #error "请在需要一次缓存多个字节串口数据处调用此函数,串口数据由MCU_SDK处理,用户请勿再另行处理,完成后删除该行"
+//    #error "请在需要一次缓存多个字节串口数据处调用此函数,串口数据由MCU_SDK处理,用户请勿再另行处理,完成后删除该行"
     u16 i = 0;
     for(i = 0; i < data_len; i++) {
         uart_receive_input(value[i]);
@@ -934,7 +934,7 @@ void cellular_uart_service(void)
  */
 void cellular_protocol_init(void)
 {
-    #error " 请在main函数中添加cellular_protocol_init()完成协议初始化,并删除该行"
+    //#error " 请在main函数中添加cellular_protocol_init()完成协议初始化,并删除该行"
     rx_buf_in = (u8 *)cellular_uart_rx_buf;
     rx_buf_out = (u8 *)cellular_uart_rx_buf;
 
