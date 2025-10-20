@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf</IncludePath>
+              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\mcu_sdk</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -873,6 +873,26 @@
               <FileName>conf_gpio.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Source\conf\conf_gpio.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>mcu_sdk</GroupName>
+          <Files>
+            <File>
+              <FileName>mcu_api.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\mcu_sdk\mcu_api.c</FilePath>
+            </File>
+            <File>
+              <FileName>protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\mcu_sdk\protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>system.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\mcu_sdk\system.c</FilePath>
             </File>
           </Files>
         </Group>
