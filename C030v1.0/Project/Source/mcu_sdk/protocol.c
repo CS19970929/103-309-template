@@ -29,6 +29,7 @@
 ******************************************************************************/
 
 #include "cellular.h"
+#include "adapter_4G.h"
 
 CELLULAR_CALL_STATUS_E s_phone_call_status = CELLULAR_PHONE_IDLE;
 
@@ -119,9 +120,10 @@ const DOWNLOAD_CMD_S download_cmd[] =
  */
 void uart_transmit_output(u8 value)
 {
-    #error "请将MCU串口发送函数填入该函数,并删除该行"
     //Example:
     //Uart_PutChar(value);                                    //串口发送函数
+
+    SendByte_4G(value);
 }
 
 /******************************************************************************
@@ -180,6 +182,31 @@ void all_data_update(void)
     mcu_dp_value_update(DPID_NUM_12_VOL,当前第12节电压); //VALUE型数据上报;
 
     */
+
+    mcu_dp_value_update(DPID_VER,当前软件硬件版本); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_SOC,当前SOC); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_FULL_CAP,当前满容量); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_REMAINING_CAP,当前剩余容量); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_CHARGING_TIME,当前充电时间); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_DISCHARGE_TIME,当前放电时间); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_VOL,当前总电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_CUR,当前充放电电流); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_TEMP,当前电池温度); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_CYCLES,当前循环次数); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_SOH,当前健康状态); //VALUE型数据上报;
+    mcu_dp_fault_update(DPID_FAULT_CODE,当前故障代码); //故障型数据上报;
+    mcu_dp_value_update(DPID_NUM_1_VOL,当前第1节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_2_VOL,当前第2节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_3_VOL,当前第3节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_4_VOL,当前第4节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_5_VOL,当前第5节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_6_VOL,当前第6节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_7_VOL,当前第7节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_8_VOL,当前第8节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_9_VOL,当前第9节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_10_VOL,当前第10节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_11_VOL,当前第11节电压); //VALUE型数据上报;
+    mcu_dp_value_update(DPID_NUM_12_VOL,当前第12节电压); //VALUE型数据上报;
 }
 
 

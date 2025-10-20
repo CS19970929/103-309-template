@@ -247,26 +247,27 @@ void USART1_IRQHandler(void)
   Sci1_CommonUpper_FaultChk();
 #endif
 
-  if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
-  {
-    RTC_ExtComCnt++;
+  //   if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+  //   {
+  //     RTC_ExtComCnt++;
 
-#ifdef _COMMOM_UPPER_SCI1
-    Sci1_CommonUpper_FaultChk();
-    Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
-#endif
+  // #ifdef _COMMOM_UPPER_SCI1
+  //     Sci1_CommonUpper_FaultChk();
+  //     Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
+  // #endif
 
-#ifdef _CLIENT_SCI1
-    UartClient_FaultChk_SCI1();
-    UartClient_Rx_Deal_SCI1(&g_UartClientMsgPtr_SCI1);
-// RTC_ExtComCnt++;
-#endif
+  // #ifdef _CLIENT_SCI1
+  //     UartClient_FaultChk_SCI1();
+  //     UartClient_Rx_Deal_SCI1(&g_UartClientMsgPtr_SCI1);
+  // // RTC_ExtComCnt++;
+  // #endif
 
-#ifdef _LCD_SCI1
-    LCD_FaultChk_SCI1();
-    LCD_Rx_Deal_SCI1(&g_stCurrentMsgPtrLCD_SCI1);
-#endif
-  }
+  // #ifdef _LCD_SCI1
+  //     LCD_FaultChk_SCI1();
+  //     LCD_Rx_Deal_SCI1(&g_stCurrentMsgPtrLCD_SCI1);
+  // #endif
+  //   }
+  RecvByte_4G();
 }
 
 void USART2_IRQHandler(void)

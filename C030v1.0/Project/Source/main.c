@@ -1,4 +1,5 @@
 #include "main.h"
+#include "mcu_api.h"
 
 UINT8 SeriesNum = 16;
 
@@ -38,6 +39,7 @@ int main(void)
 #if (defined _DEBUG_CODE)
 #else
 		App_SysTime();
+		cellular_uart_service();
 		App_AFEGet();
 
 		App_Sci();
@@ -97,6 +99,7 @@ void InitDevice(void)
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
 
+	cellular_protocol_init();
 #ifdef wdog_enable
 	Init_IWDG();
 #endif // !1

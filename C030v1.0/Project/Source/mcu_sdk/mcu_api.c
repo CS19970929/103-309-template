@@ -857,7 +857,6 @@ void uart_receive_buff_input(u8 value[], u16 data_len)
  */
 void cellular_uart_service(void)
 {
-    #error "请直接在main函数的while(1){}中添加cellular_uart_service(),调用该函数不要加任何条件判断,完成后删除该行"
     static u16 rx_in = 0;
     u16 offset = 0;
     u8 frame_type = 0;
