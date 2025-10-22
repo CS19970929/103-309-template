@@ -122,7 +122,7 @@ void LedBar_Show_Normal(void)
         else
         {
             delay_cnt = 0;
-            MCUO_SOC_20 = g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0;
+            MCUO_SOC_20 = g_stCellInfoReport.SocElement.u16Soc >= 0 ? 1 : 0;
             MCUO_SOC_40 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
             MCUO_SOC_60 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
             MCUO_SOC_80 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
