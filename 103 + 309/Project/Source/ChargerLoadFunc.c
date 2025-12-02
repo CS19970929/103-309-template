@@ -168,9 +168,9 @@ void Init_Charger_AllSeries(void)
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
-	GPIO_InitStructure.GPIO_Pin = PIN_LOAD_OL;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-	GPIO_Init(GPIO_LOAD_OL, &GPIO_InitStructure);
+	// GPIO_InitStructure.GPIO_Pin = PIN_LOAD_OL;
+	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	// GPIO_Init(GPIO_LOAD_OL, &GPIO_InitStructure);
 }
 
 // 第一个，第二个不一定有没有时屏蔽

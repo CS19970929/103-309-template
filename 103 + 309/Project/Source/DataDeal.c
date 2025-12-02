@@ -446,7 +446,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 
 	if (System_ERROR_UserCallback(ERROR_STATUS_AFE1))
 	{
-		if (++su16_Sleep_DelayT1 >= 5 * 60 * 5)
+		if (++su16_Sleep_DelayT1 >= 5 * 60)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT1 = 0;
 			entersleep(NORMAL_MODE);
@@ -459,7 +459,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 
 	if (System_ERROR_UserCallback(ERROR_STATUS_AFE2))
 	{
-		if (++su16_Sleep_DelayT2 >= 5 * 60 * 5)
+		if (++su16_Sleep_DelayT2 >= 5 * 60)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT2 = 0;
 			entersleep(NORMAL_MODE);
@@ -473,7 +473,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 	// 暂时寄存这里
 	if (System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) || System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE))
 	{
-		if (++su16_Sleep_DelayT3 >= 5 * 60 * 5)
+		if (++su16_Sleep_DelayT3 >= 5 * 60)
 		{ // 等待5min后进入休眠
 			su16_Sleep_DelayT3 = 0;
 			entersleep(NORMAL_MODE);
@@ -547,7 +547,6 @@ void App_AFEGet(void)
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
 	DataLoad_CellVolt();
-	// DataLoad_CellVolt_Test();
 	DataLoad_CellVoltMaxMinFind();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();

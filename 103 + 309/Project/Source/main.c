@@ -47,9 +47,9 @@ int main(void)
 		App_Can();
 		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		App_SOC();
-		App_WarnCtrl();
+		// App_WarnCtrl();
 
-		APP_LedBar();
+		// APP_LedBar();
 
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
@@ -82,7 +82,6 @@ void InitDevice(void)
 	InitNVIC();
 	InitIO();
 	// MCUO_AFE_CTLC = 1;
-	InitTimer();
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
@@ -100,6 +99,7 @@ void InitDevice(void)
 #ifdef wdog_enable
 	Init_IWDG();
 #endif // !1
+	InitTimer();
 
 #endif
 }

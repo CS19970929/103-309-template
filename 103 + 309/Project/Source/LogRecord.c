@@ -144,7 +144,7 @@ void App_LogRecord(void)
 
 	// 以下这3个选项都不会清零，所以只会运行一次。
 	// AFE和EEPROM(无复原机制)，出现过一次之后，5min会进入休眠，AFE1因为是++所以可能会有小BUG，但是影响不大。
-	LogEvent_Record(System_ERROR_UserCallback(ERROR_STATUS_AFE1), AFE1_ERR, &su32_Interval_S_Tcnt);
+	// LogEvent_Record(System_ERROR_UserCallback(ERROR_STATUS_AFE1), AFE1_ERR, &su32_Interval_S_Tcnt);
 	LogEvent_Record(System_ERROR_UserCallback(ERROR_STATUS_AFE2), AFE2_ERR, &su32_Interval_S_Tcnt);
 	temp = System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE) + System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM);
 	LogEvent_Record(temp, EEPROM_ERR, &su32_Interval_S_Tcnt);

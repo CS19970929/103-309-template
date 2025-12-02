@@ -134,18 +134,18 @@ struct OTHER_ELEMENT {
 };
 
 
-#define  BMS_HARDWARE_VERDION_DEFAULT   "hanstar"
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "a036-20251013-c091"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	"hanstar"
+#define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c073v1p0"  //32
+#define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
 #define SNum 		7
 
-#define TERNARYLI		//��Ԫ﮵�أ���ѡһ
-// #define LIFEPO			//������﮵�أ���ѡһ
+// #define TERNARYLI		//��Ԫ﮵�أ���ѡһ
+#define LIFEPO			//������﮵�أ���ѡһ
 
 
 #define CS_Res			2
-#define CS_Res_Num		6
+#define CS_Res_Num		3
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax

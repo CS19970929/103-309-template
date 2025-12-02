@@ -8,15 +8,15 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x1020		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x3320		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
-#define  wdog_enable
+// #define  wdog_enable
 // #define __FUNC__HEAT__
-#define __LOAD_REMOVE_SHORT_FUNC__
+// #define __LOAD_REMOVE_SHORT_FUNC__
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 #define log_i(...)       ((void)0);
 #define log_w(...)       ((void)0);

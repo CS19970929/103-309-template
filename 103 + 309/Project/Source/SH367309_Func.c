@@ -690,10 +690,6 @@ void App_SH367309_Monitor(void)
 			break;
 		}
 
-#ifdef _SLEEP_WITH_CURRENT
-		// ÐÝÃß´øµç¿ØÖÆ
-		SH367309_SleepMode_Ctrl();
-#endif
 	}
 	else
 	{

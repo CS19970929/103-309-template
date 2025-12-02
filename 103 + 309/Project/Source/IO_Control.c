@@ -272,6 +272,7 @@ void App_DI1_Switch(void)
 
 void Drivers_External_Ctrl(void)
 {
+#if 1
 	if (Driver_Element.u8_DriverCtrl_Right)
 	{
 		if (SystemStatus.bits.b1Status_MOS_CHG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG)
@@ -286,6 +287,16 @@ void Drivers_External_Ctrl(void)
 			sys_time.cnt_enter_dsg_open++;
 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
 		}
+	}
+#endif
+
+	if(0 == System_OnOFF_Func.bits.b1OnOFF_MOS_Relay || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE)
+	{
+		MCUO_AFE_CTLC = 0;
+	}
+	else
+	{
+		MCUO_AFE_CTLC = 1;
 	}
 }
 

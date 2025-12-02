@@ -37,10 +37,86 @@ int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 	return i;
 }
 
+void Refresh_Parameters(void)
+{
+	int i = 0;
+	int temp = 0;
+	UINT8 TR = 0;
+	UINT16 AFE_TEMPERATURE[8] = {0}; // 温度，摄氏度+40，（0度的值为40）
+
+	// 读309的TR，顺便把AFE默认值配置传到AFE_ROM_PARAMETERS_Struction结构体(#define类型)。
+	if (MTPRead(0x19, 1, &TR))
+	{
+		SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
+		ucMTPBuffer[25] = TR & 0x7F;
+		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
+	}
+
+	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+
+	/* 串数 */
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
+
+	/* 充电过压 */
+	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) >> 8) & 0x3;
+	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) & 0x00FF;
+	/* 充电过压延时时间 */
+	temp = AFE_Parameters_RS485_Struction.u16VcellOvp_Filter.curValue * 10;
+	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVT = Choose_Right_Value(temp, AFE_OVT_UVT);
+	/* 充电过压恢复 */
+	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) >> 8) & 0x3;
+	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) & 0x00FF;
+
+	/*放电低压延时时间 */
+	temp = AFE_Parameters_RS485_Struction.u16VcellUvp_Filter.curValue * 10;
+	AFE_ROM_PARAMETERS_Struction.m04H_05H.UVT = Choose_Right_Value(temp, AFE_OVT_UVT);
+	/* 放电低压 */
+	AFE_ROM_PARAMETERS_Struction.m06H_07H.UV = (AFE_Parameters_RS485_Struction.u16VcellUvp.curValue / 20) & 0x00FF;
+	/* 放电低压恢复 */
+	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
+
+	/* 放电过流:     二级过流值（A*10）/         */
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
+	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
+	/* 放电过流滤波时间 */
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 当前对应多少ms
+	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
+
+	/* 充电过流 */
+	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
+	/* 充电过流滤波时间 */
+	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10; // 当前对应多少ms
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
+
+	/* 短路延时 */
+	temp = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = Choose_Right_Value(temp, AFE_SCT);
+	/* 短路电压 */
+	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE; // 当前对应多少mv
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, AFE_SCV);
+
+	/* 所有的温度保护 */
+	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;		 /* 充电高温保护 */
+	AFE_TEMPERATURE[1] = AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue / 10;	 /* 充电高温保护恢复 */
+	AFE_TEMPERATURE[2] = AFE_Parameters_RS485_Struction.u16TchgUTp.curValue / 10;		 /* 充电低温保护 */
+	AFE_TEMPERATURE[3] = AFE_Parameters_RS485_Struction.u16TchgUTp_Rcv.curValue / 10;	 /* 充电低温保护恢复 */
+	AFE_TEMPERATURE[4] = AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue / 10;	 /* 放电高温保护 */
+	AFE_TEMPERATURE[5] = AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue / 10; /* 放电高温保护恢复 */
+	AFE_TEMPERATURE[6] = AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue / 10;	 /* 放电低温保护 */
+	AFE_TEMPERATURE[7] = AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue / 10; /* 放电低温保护恢复 */
+
+	for (i = 0; i < 8; i++)
+	{
+		temp = iSheldTemp_10K_NTC[AFE_TEMPERATURE[i]];
+		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) = (UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
+	}
+}
+
 // 全部数据刷新到AFE_ROM_PARAMETERS_Struction结构体里面
 // 一部分是默认的配置，从.h文件的#define里面来
 // 一部分是可修改的，AFE_Parameters_RS485_Struction里面来
-void Refresh_Parameters(void)
+void fac_sh367309_param_init(void)
 {
 	int i = 0;
 	int temp = 0;
@@ -147,6 +223,39 @@ bool Write_Parameters(void)
 
 	return ret;
 }
+
+bool fac_sh367309_param_init_first_powerup(void)
+{
+	bool ret = false;
+
+	// if (AFE_PARAM_WRITE_Flag)
+	{
+		// AFE_PARAM_WRITE_Flag = 0;
+		MCUO_AFE_VPRO = 1; // 进入烧写模式
+		Delay1ms(20);
+		Feed_WatchDog;
+
+		fac_sh367309_param_init();
+		ret = Write_Parameters();
+
+		Feed_WatchDog;
+		MCUO_AFE_VPRO = 0; // 退出烧写模式
+		Delay1ms(1);
+
+		/* 每次写完如果不报错都要复位一下。这样写进去的参数才有效 */
+		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+		{
+			AFE_Reset(); // Reset IC
+			Delay1ms(5);
+			AFE_IsReady();
+			AFE_ResetFlag = 1;
+		}
+
+		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+	}
+	return ret;
+}
+
 // 开机的时候，AFE_PARAM_WRITE_Flag=1是默认值，所以开机的时候会执行一次。
 bool SH367309_UpdataAfeConfig(void)
 {
