@@ -685,7 +685,8 @@ void InitData_E2prom(void)
 				initAFE1_IIC();
 				AFE_IsReady();
 				AFE_PARAM_WRITE_Flag = 1;
-				ret = fac_sh367309_param_init_first_powerup();
+				// ret = fac_sh367309_param_init_first_powerup();
+				ret = SH367309_UpdataAfeConfig();
 			} while (ret == false);
 			DataLoad_CurrentCali_startup();
 		}

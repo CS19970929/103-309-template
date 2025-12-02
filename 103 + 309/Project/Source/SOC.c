@@ -101,6 +101,7 @@ void InitData_SOC(void)
 	}
 
 	soc_param_lib_init();
+	GetData_SOC();
 }
 
 void App_SOC(void)
@@ -110,7 +111,7 @@ void App_SOC(void)
 		return;
 	}
 
-	// MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 
 	RefreshData_SOC();
 	GetData_SOC();

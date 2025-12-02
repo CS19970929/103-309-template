@@ -245,6 +245,28 @@ void soc_param_lib_init(void)
 
 	SOC_DealEEPROM_Data(EEPROM_DATA_READ);
 	SOC_Enhance_Element.u16_SOC_InitOver = 1; // Soc初始化完毕
+
+	{
+		SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Now;
+	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
+	{
+		SOC_Enhance_Element.u8_SOH = 100;
+	}
+	else
+	{
+		SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
+	}
+	SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
+	SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
+	SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
+	SOC_Enhance_Element.u16_Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
+
+	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
+	}
+
+// extern void GetData_SOC(void);
+	// GetData_SOC();
+
 }
 
 UINT8 Get_OpenCircuit_Value(void)

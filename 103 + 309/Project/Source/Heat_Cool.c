@@ -332,5 +332,4 @@ void InitHeat_Cool(void)
 void App_Heat_Cool_Ctrl(void)
 {
 	Heat_Control();
-	Cool_Control();
 }

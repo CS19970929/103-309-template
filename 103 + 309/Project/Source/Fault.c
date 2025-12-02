@@ -1902,11 +1902,7 @@ void App_VdeltaOp_ThirdCheck(void)
  ******************************************************************************/
 void App_WarnCtrl(void)
 {
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-	// 	return;
 	sys_time.sys_tick_10ms++;
-
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 
 	App_CellOvp_SecondCheck();
 	App_CellOvp_ThirdCheck();
