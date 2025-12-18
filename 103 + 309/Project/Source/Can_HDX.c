@@ -1021,6 +1021,7 @@ void App_CanTest(void)
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
+	sys_time.can_rcv_cnt++;
 	// CanRxMsg RxMessage;
 	RxMessage.StdId = 0x00;
 	RxMessage.ExtId = 0x00;

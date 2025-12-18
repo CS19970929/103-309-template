@@ -84,6 +84,7 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
     }
+        GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
     
     MCUO_PWSV_STB = 1;
     MCUO_PWSV_CTR = 0;

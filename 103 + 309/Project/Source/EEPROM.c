@@ -652,6 +652,8 @@ UINT16 OffsetValue_CHG = 0;
 UINT16 OffsetValue_DSG = 0;
 void InitData_E2prom(void)
 {
+	ReadEEPROM_ByteData_StartUp();
+#if 0
 	if (EEPROM_VALUE_BEGIN_FLAG == ReadEEPROM_Word_NoZone(EEPROM_ADDR_PASS))
 	{ // 第二次上电就会执行这个
 		ReadEEPROM_ByteData_StartUp();
@@ -696,6 +698,7 @@ void InitData_E2prom(void)
 
 		MCU_RESET();
 	}
+#endif
 }
 
 void App_E2promDeal(void)

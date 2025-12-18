@@ -63,6 +63,7 @@ typedef struct
 {
   uint64_t    sys_tick_10ms;
   uint64_t    sys_tick_1ms;
+  uint32_t    can_rcv_cnt;
 
   // uint16_t    cov1_cnt;
   // uint16_t    cov2_cnt;
