@@ -552,7 +552,6 @@ void App_AFEGet(void)
 	DataLoad_TemperatureMaxMinFind();
 	DataLoad_Current();
 	// test_Autocurrent_cycle();
-
 	App_SH367309();
 	App_MOS_Relay_Ctrl();
 }

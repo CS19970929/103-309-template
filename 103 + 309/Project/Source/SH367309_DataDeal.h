@@ -1,8 +1,10 @@
 #ifndef _SH367309_DATADEAL_H
 #define _SH367309_DATADEAL_H
 
+#include "conf.h"
 
-#define E2P_ADDR_E2POS_AFE_Parameters			950		//到974，AFE参数保存到eeprom的起始地址
+
+#define E2P_ADDR_E2POS_AFE_Parameters			3000		//到974，AFE参数保存到eeprom的起始地址
 #define RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START 0x2400  
 #define RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END 	0x2417
 #define AFE_PARAMETES_TOTAL_LENGTH  			24    //单位，寄存器
@@ -10,6 +12,7 @@
 
 #define RS485_ADDR_RW_AFE_PARAMETER  0x2400
 
+#ifdef LIFEPO
 #define COV_1           3550
 #define COV_2           3550
 #define COV_3           3800
@@ -25,17 +28,20 @@
 #define CUV_filter1      100
 #define CUV_filter2     100
 #define CUV_filter3     200
+#else
+#define AFE_COV           (4280)
+#define AFE_COV_recover   (4150)
+#define AFE_COV_filter     100
 
-#define OTC_1           ((60 + 40) * 10)
-#define OTC_2           ((60 + 40) * 10)
-#define OTC_3           ((65 + 40) * 10)
-#define OTC_recover     ((55 + 40) * 10)
-#define OTC_filter1       100
-#define OTC_filter2      100
-#define OTC_filter3      100
+#define AFE_CUV           (2800)
+#define AFE_CUV_recover     (2900)
+#define AFE_CUV_filter     (100)
+#endif // LIFEPO
 
-#define UTC_1           ((0 + 40) * 10)
-#define UTC_2           ((0 + 40) * 10)
+#define AFE_OTC           ((60 + 40) * 10)
+#define AFE_OTC_recover     ((50 + 40) * 10)
+#define AFE_OTC_filter      100
+
 #ifdef __FUNC__HEAT__
 #if (AFE_TYPE == sh36xx)
 #define UTC_3           ((-20 + 40) * 10)
@@ -43,246 +49,58 @@
 #define UTC_3           ((-28 + 40) * 10)
 #endif
 #else
-#define UTC_3           ((-3 + 40) * 10)
+#define AFE_UTC           ((-3 + 40) * 10)
 #endif // DEBUG
-#define UTC_recover     ((0 + 40) * 10)
-#define UTC_filter1      100
-#define UTC_filter2      100
-#define UTC_filter3      100
+#define AFE_UTC_recover     ((3 + 40) * 10)
+#define AFE_UTC_filter      100
 
-#define OTD_1           ((50 + 40) * 10)
-#define OTD_2           ((60 + 40) * 10)
-#define OTD_3           ((75 + 40) * 10)
-#define OTD_recover     ((60 + 40) * 10)
-#define OTD_filter1      100
-#define OTD_filter2      100
-#define OTD_filter3      100
+#define AFE_OTD           ((70 + 40) * 10)
+#define AFE_OTD_recover     ((60 + 40) * 10)
+#define AFE_OTD_filter      100
 
-#define UTD_1           ((-10 + 40) * 10)
-#define UTD_2           ((-10 + 40) * 10)
-#define UTD_3           ((-20 + 40) * 10)
-#define UTD_recover     ((0 + 40) * 10)
-#define UTD_filter1      100
-#define UTD_filter2      100
-#define UTD_filter3      100
-
-#define mos_1           ((80 + 40) * 10)
-#define mos_2           ((80 + 40) * 10)
-#define mos_3           ((80 + 40) * 10)
-#define mos_recover     ((60 + 40) * 10)
-#define mos_filter1      100
-#define mos_filter2      100
-#define mos_filter3      100
-
-#define VDELTER_1       1000
-#define VDELTER_2       1000
-#define VDELTER_3       1000
-#define VDELTER_recover 900
-#define VDELTER_filter1  100
-#define VDELTER_filter2  100
-#define VDELTER_filter3  100
-
-#define socLow_1        3
-#define socLow_2        2
-#define socLow_3        1
-#define socLow_recover  2
-#define socLow_filter1   100
-#define socLow_filter2   100
-#define socLow_filter3   100
-
-#if (LEVEL_CURR == CURR_80A)
-#define _CURR_		80
-#elif (LEVEL_CURR == CURR_100A)
-#define _CURR_		100
-#elif (LEVEL_CURR == CURR_150A)
-#define _CURR_		150
-#elif (LEVEL_CURR == CURR_200A)
-#define _CURR_		200
-#elif (LEVEL_CURR == CURR_250A)
-#define _CURR_		250
-#elif (LEVEL_CURR == CURR_TEST)
-#define _CURR_		1000
-#elif (LEVEL_CURR == CURR_DEFAULT)
-#define _CURR_		1000
-#endif
-
-#define CURR_1C		(10 * _CURR_)
-#define CURR_5C		(5 * 10 * _CURR_)
-
-#if (LEVEL_CURR == CURR_80A)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  300 
-
-#define ODC_1       (0.7 * CURR_5C) 
-#define ODC_2       (0.8 * CURR_5C) 
-#define ODC_3       (CURR_5C) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  30 
-#elif (LEVEL_CURR == CURR_100A)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  300 
-
-#define ODC_1       (500 * 10) 
-#define ODC_2       (600 * 10) 
-#define ODC_3       (700 * 10) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  30 
-#elif (LEVEL_CURR == CURR_150A)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  300 
-
-#define ODC_1       (600 * 10) 
-#define ODC_2       (700 * 10) 
-#define ODC_3       (800 * 10) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  30 
-#elif (LEVEL_CURR == CURR_200A)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  300 
-
-#define ODC_1       (700 * 10) 
-#define ODC_2       (800 * 10) 
-#define ODC_3       (900 * 10) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  30 
-#elif (LEVEL_CURR == CURR_250A)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  300 
-
-#define ODC_1       (700 * 10) 
-#define ODC_2       (800 * 10) 
-#define ODC_3       (900 * 10) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  30 
-#elif (LEVEL_CURR == CURR_TEST)
-#define OCC_1       (0.6 * CURR_1C) 
-#define OCC_2       (0.8 * CURR_1C) 
-#define OCC_3       (CURR_1C) 
-#define OCC_recover (0.5 * CURR_1C) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  100 
-
-#define ODC_1       (700 * 10) 
-#define ODC_2       (CURR_1C) 
-#define ODC_3       (CURR_1C) 
-#define ODC_recover (0.5 * ODC_3) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  20 
-#elif (LEVEL_CURR == CURR_DEFAULT)
-#define OCC_1       (75) 
-#define OCC_2       (75) 
-#define OCC_3       (80) 
-#define OCC_recover (70) 
-#define OCC_filter1  300 
-#define OCC_filter2  300 
-#define OCC_filter3  100 
-
-#define ODC_1       (75) 
-#define ODC_2       (75) 
-#define ODC_3       (80) 
-#define ODC_recover (70) 
-#define ODC_filter1  30 
-#define ODC_filter2  30 
-#define ODC_filter3  100 
-#endif
+#define AFE_UTD         ((-20 + 40) * 10)
+#define AFE_UTD_recover     ((-10 + 40) * 10)
+#define AFE_UTD_filter      100
 
 
-#ifdef TERNARYLI
+#define AFE_OCC1       		(700) 
+#define AFE_OCC1_filter  	(10)
+#define AFE_OCC2       		(700) 
+#define AFE_OCC2_filter  	(10)
+
+#define AFE_ODC1       		(1500) 
+#define AFE_ODC1_filter  	(2000)
+#define AFE_ODC2       		(100) 
+#define AFE_ODC2_filter  	(10)
+
+
 /*curValue*/  /*defaultValue*/ /*maxValue*/ /*minValue*/
 #define AFE_PARAMETERS_RS485_STRUCTION_DEFAULT  {\
-	/*单节过压*/			4200,	4200,	5000,	1000,\
-	/*单节过压恢复*/			4000,	4000,	5000,	1000,\
-	/*单节过压延时*/			100,	100,	50000,	1,\
-	/*单节低压*/			800,	2800,	5000,	1000,\
-	/*单节低压恢复*/			2900,	2900,	5000,	1000,\
-	/*单节低压延时*/			100,	100,	50000,	1,\
-	/*一级充电过流*/			1200,	1200,	50000,	10,\
-	/*一级充电过流延时*/100,			100,	50000,	1,\
-	/*二级充电过流*/			1300,	1300,	50000,	10,\
-	/*二级充电过流延时*/100,			100,	50000,	1,\
-	/*一级放电过流*/			1200,	1200,	50000,	10,\
-	/*一级放电过流延时*/100,			100,	50000,	1,\
-	/*二级放电过流*/			1300,	1300,	50000,	10,\
-	/*二级放电过流延时*/100,			100,	50000,	1,\
-	/*充电高温*/			1200,	1200,	2000,	400,\
-	/*充电高温恢复*/			1150,	1150,	50000,	1,\
-	/*充电低温*/			410,	410,	800,	0,\
-	/*充电低温恢复*/			450,	450,	50000,	1,\
-	/*放电高温*/			1200,	1200,	2000,	400,\
-	/*放电高温恢复*/			1150,	1150,	50000,	1,\
-	/*放电低温*/			410,	410,	800,	0,\
-	/*放电低温恢复*/			450,	450,	50000,	1,\
-	/*短路电流*/			100,	100,	65000,	0,\
+	/*单节过压*/			AFE_COV,			AFE_COV,			5000,	1000,\
+	/*单节过压恢复*/		AFE_COV_recover,	AFE_COV_recover,	5000,	1000,\
+	/*单节过压延时*/		AFE_COV_filter,		AFE_COV_filter,		50000,	1,\
+	/*单节低压*/			AFE_CUV,			AFE_CUV,			5000,	1000,\
+	/*单节低压恢复*/		AFE_CUV_recover,	AFE_CUV_recover,	5000,	1000,\
+	/*单节低压延时*/		AFE_CUV_filter,		AFE_CUV_filter,		50000,	1,\
+	/*一级充电过流*/		AFE_OCC1,			AFE_OCC1,			50000,	10,\
+	/*一级充电过流延时*/	AFE_OCC1_filter,	AFE_OCC1_filter,	50000,	1,\
+	/*二级充电过流*/		AFE_OCC2,			AFE_OCC2,			50000,	10,\
+	/*二级充电过流延时*/	AFE_OCC2_filter,	AFE_OCC2_filter,	50000,	1,\
+	/*一级放电过流*/		AFE_ODC1,			AFE_ODC2,			50000,	10,\
+	/*一级放电过流延时*/    AFE_ODC1_filter,	AFE_ODC1_filter,	50000,	1,\
+	/*二级放电过流*/		AFE_ODC2,	        AFE_ODC2,			50000,	10,\
+	/*二级放电过流延时*/    AFE_ODC2_filter,	AFE_ODC2_filter,	50000,	1,\
+	/*充电高温*/			AFE_OTC,	       AFE_OTC,				2000,	400,\
+	/*充电高温恢复*/		AFE_OTC_recover,	AFE_OTC_recover,	50000,	1,\
+	/*充电低温*/			AFE_UTC,	       AFE_UTC,				800,	0,\
+	/*充电低温恢复*/		AFE_UTC_recover,	AFE_UTC_recover,	50000,	1,\
+	/*放电高温*/			AFE_OTD,	       AFE_OTD,				2000,	400,\
+	/*放电高温恢复*/		AFE_OTD_recover,	AFE_OTD_recover,	50000,	1,\
+	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
+	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
+	/*短路电流*/			400,	400,	65000,	0,\
 	/*短路延时*/			64,		64,		65000,	0,\
 }
-//磷酸铁锂
-#elif (defined(LIFEPO))
-/*curValue*/  /*defaultValue*/ /*maxValue*/ /*minValue*/
-#define AFE_PARAMETERS_RS485_STRUCTION_DEFAULT  {\
-	/*单节过压*/			COV_3,	COV_3,	5000,	1000,\
-	/*单节过压恢复*/		COV_recover,	COV_recover,	5000,	1000,\
-	/*单节过压延时*/			100,	100,	50000,	1,\
-	/*单节低压*/			CUV_3,	CUV_3,	5000,	1000,\
-	/*单节低压恢复*/			CUV_recover,	CUV_recover,	5000,	1000,\
-	/*单节低压延时*/			100,	100,	50000,	1,\
-	/*一级充电过流*/			1200,	1200,	50000,	10,\
-	/*一级充电过流延时*/100,			100,	50000,	1,\
-	/*二级充电过流*/			1300,	1300,	50000,	10,\
-	/*二级充电过流延时*/100,			100,	50000,	1,\
-	/*一级放电过流*/			1200,	1200,	50000,	10,\
-	/*一级放电过流延时*/100,			100,	50000,	1,\
-	/*二级放电过流*/			1300,	1300,	50000,	10,\
-	/*二级放电过流延时*/100,			100,	50000,	1,\
-	/*充电高温*/			OTC_3,	OTC_3,	2000,	400,\
-	/*充电高温恢复*/			OTC_recover,	OTC_recover,	50000,	1,\
-	/*充电低温*/			UTC_3,	UTC_3,	800,	0,\
-	/*充电低温恢复*/			UTC_recover,	UTC_recover,	50000,	1,\
-	/*放电高温*/			OTD_3,	OTD_3,	2000,	400,\
-	/*放电高温恢复*/			OTD_recover,	OTD_recover,	50000,	1,\
-	/*放电低温*/			UTD_3,	UTD_3,	800,	0,\
-	/*放电低温恢复*/			UTD_recover,	UTD_recover,	50000,	1,\
-	/*短路电流*/			1000,	1000,	65000,	0,\
-	/*短路延时*/			64,		64,		65000,	0,\
-}
-
-#endif
 
 
 //typedef  unsigned char UINT8;

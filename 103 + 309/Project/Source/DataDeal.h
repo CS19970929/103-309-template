@@ -135,17 +135,17 @@ struct OTHER_ELEMENT {
 
 
 #define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c073v1p0"  //32
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c094v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		7
+#define SNum 		12
 
-// #define TERNARYLI		//��Ԫ﮵�أ���ѡһ
-#define LIFEPO			//������﮵�أ���ѡһ
+#define TERNARYLI		//��Ԫ﮵�أ���ѡһ
+// #define LIFEPO			//������﮵�أ���ѡһ
 
 
 #define CS_Res			2
-#define CS_Res_Num		3
+#define CS_Res_Num		8
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
@@ -163,11 +163,11 @@ struct OTHER_ELEMENT {
 
 
 #ifdef TERNARYLI
-#define OtherElement_default 	{4000,	30,	20,		0,	0,		0,	0,	0,\
+#define OtherElement_default 	{4100,	30,	20,		0,	0,		0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_TERNARYLI,	0,		1000,	30,\
-	                             3200,	7200,	2800,	10,		10,		10,	240,0,\
-	                             1000,	3,		4200,	3000,\
+	                             3200,	7200,	3000,	10,		10,		10,	240,0,\
+	                             500,	3,		4200,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))
 #define OtherElement_default 	{3200,	30,	20,	0,	0,	0,	0,	0,\
