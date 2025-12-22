@@ -116,32 +116,6 @@ void AFE_SHIP(void)
 	// MCUO_AFE_SHIP = 0;
 }
 
-// 进入IDLE模式
-// 0，IDLE。1，Sleep。2，SHIP(没通讯上)
-UINT8 AFE_SleepMode_Judge(void)
-{
-	UINT8 result = 0;
-
-	if (MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all))
-	{
-		if (SH367309_Reg_Store.REG_BSTATUS1.all || SH367309_Reg_Store.REG_BSTATUS2.all || SH367309_Reg_Store.REG_BSTATUS3.bits.L0V || SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET)
-		{
-			// 不能进入IDLE
-			result = 1;
-		}
-		else
-		{
-			result = 0;
-		}
-	}
-	else
-	{
-		result = 2;
-	}
-
-	return result;
-}
-
 // 1，出问题，同时上报系统AFE错误
 // 0，没问题
 UINT8 AFE_IsReady(void)
@@ -151,7 +125,7 @@ UINT8 AFE_IsReady(void)
 
 	while (1)
 	{
-		Feed_WatchDog;
+		Feed_IWatchDog;
 
 		TempVar = 0;
 		if (MTPRead(MTP_BFLAG2, 1, &TempVar))
@@ -209,8 +183,8 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
 	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
 	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 放电MOS由AFE硬件控制
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 充电MOS由AFE硬件控制
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // 放电MOS由AFE硬件控制
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
@@ -261,7 +235,7 @@ void SH367309_UpdataAfeConfig_Old(void)
 	UINT8 i;
 	UINT16 ResTemp[8];
 
-	Feed_WatchDog;
+	Feed_IWatchDog;
 
 	// 和EEPROM相关寄存器修改
 	ucMTPBuffer[0x0E] = (BYTE_0EH_SCV_SCT & 0xF0) | (OtherElement.u16CBC_DelayT >> 6);

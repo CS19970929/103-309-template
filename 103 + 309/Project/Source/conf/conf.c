@@ -1,7 +1,10 @@
 // #include "conf.h"
 #include "main.h"
 
-Time_T sys_time;
+Time_T sys_time = {
+    .time_enter_rtc = 30,
+    .power_on = false,
+};
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -133,7 +136,7 @@ void InitWakeUp_Base(void)
         NVIC_Init(&NVIC_InitStructure);
     }
 
-     {
+    {
         GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // ?????GPIO??,PA0?????
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
         GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
@@ -152,13 +155,16 @@ void InitWakeUp_Base(void)
 #endif
 }
 
-void InitWakeUp_NormalMode	(void)
+void InitWakeUp_NormalMode(void)
 {
     EXTI_InitTypeDef EXTI_InitStruct;
     NVIC_InitTypeDef NVIC_InitStructure;
     GPIO_InitTypeDef GPIO_InitStructure;
 
     InitWakeUp_Base();
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??????????????
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // ???????????
 
     {
         GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
@@ -271,20 +277,39 @@ void IOstatus_RTCMode(void)
 
     ADC_DeInit(ADC1); // ????????????????
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+#if 0
+    if (sys_time.power_on)
+    {
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_SOC_Y) & (~PIN_SOC_G) & (~PIN_SOC_25) & (~PIN_SOC_50) & (~PIN_SOC_75);
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+        GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_SOC_100);
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+        GPIO_Init(GPIOB, &GPIO_InitStructure);
+    }
+    else
+    {
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+        GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14);
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+        GPIO_Init(GPIOB, &GPIO_InitStructure);
+    }
+#endif
+
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_SOC_Y) & (~PIN_SOC_G) & (~PIN_SOC_25) & (~PIN_SOC_50) & (~PIN_SOC_75);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-#if 0
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All ;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-#else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_SOC_100);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
-#endif
 
 #if 1
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
@@ -330,7 +355,7 @@ void IOstatus_RTCMode(void)
     MCUO_PWSV_STB = 0;
 #endif
 
-    __delay_ms(100);
+    // __delay_ms(100);
 }
 
 void IOstatus_NormalMode(void)
@@ -379,9 +404,10 @@ void Sys_StopMode(void)
 #endif
 }
 
-#if 0
+#if 1
 void Init(void)
 {
+    InitSci();
 #if 0
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
@@ -390,61 +416,33 @@ void Init(void)
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
 
-	InitSci();
 #endif
 
-#ifdef _DEBUG_
-	// cpu_frequency_conf();
-	InitIO();
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
+    if (is_rtc_wakekup)
+    {
+    }
+    else
+    {
+        cpu_frequency_conf();
 
-	InitSci();
-#endif
-	
+        is_wakeup = true;
 
-	if (is_rtc_wakekup)
-	{
-	}
-	else
-	{
-		cpu_frequency_conf();
+        InitDelay();
+        InitIO();
 
-		is_wakeup = true;
-
-		InitDelay();
-		InitIO();
-
-		// InitSystemWakeUp();
-		// {
-		//     MCUO_PWSV_STB = 1;
-		//     MCUO_PWSV_CTR = 1;
-		//     // bug fixme 注意
-		//     MCUO_AFE_SHIP = 0;
-		//     MCUO_AFE_MODE = 0;
-		// }
-
-		// InitSci();
-		// Init_ChargerLoad_Det();
-		ADC_DeInit(ADC1);
-		InitADC();
-		//?????adc配置有什么影响
-		// Init_ChargerLoad_Det();
+        // Init_ChargerLoad_Det();
+        ADC_DeInit(ADC1);
+        InitADC();
+        //?????adc配置有什么影响
+        // Init_ChargerLoad_Det();
 
 #ifdef __FUNC__HEAT__
-		InitHeat_Cool();
+        InitHeat_Cool();
 #endif
 #ifdef __FUNC__LED__
-		APP_LedBar();
-		set_LED_state(LED_BAR_NORMAL, 4);
+        APP_LedBar();
+        set_LED_state(LED_BAR_NORMAL, 4);
 #endif // DEBUG
-		InitTimer();
-		// InitTimer_10ms_fault3();
-
 
         USART_DeInit(USART1);
         USART_DeInit(USART2);
@@ -452,13 +450,18 @@ void Init(void)
         InitSci();
 
         InitCan();
-	}
+        extern void LedBar_gpio_Init(void);
+        LedBar_gpio_Init();
 
-	initAFE_IIC();
-	
-	InitE2PROM();
+        InitTimer();
+        sys_time.wakeup_rtc = true;
+    }
 
-	Init_ChargerLoad_Det();
+    initAFE1_IIC();
+
+    InitE2PROM_i2c();
+
+    Init_ChargerLoad_Det();
 }
 
 #endif

@@ -221,7 +221,7 @@ UINT8 TwiChkClkRelease(void)
 
 	while (TimeoutCnt--)
 	{
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		Delay4us();
 		if (TWI_RD_CLK)
 		{
@@ -692,7 +692,7 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
 	UINT8 result;
 	UINT8 i;
-	Feed_WatchDog;
+	Feed_IWatchDog;
 
 	for (i = 0; i < Length; i++)
 	{
@@ -729,7 +729,7 @@ UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 
 	for (i = 0; i < Length; i++)
 	{
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		result = TwiWrite(AFE_ID, WrAddr, 1, WrBuf);
 		if (!result)
 		{
@@ -759,7 +759,7 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 {
 	UINT8 result = 1;
 
-	Feed_WatchDog;
+	Feed_IWatchDog;
 
 	/*
 	if(System_ErrFlag.u8ErrFlag_Com_AFE1) {

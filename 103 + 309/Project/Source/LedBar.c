@@ -2,6 +2,15 @@
 
 LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
 
+void LedBar_gpio_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // 选择要用的GPIO引脚,PA0也可以唤醒
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
+}
+
 void LedBar_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -44,46 +53,36 @@ void LedBar_Init(void)
         MCUO_SOC_Y = 1;
     }
 }
+
+static uint16_t cnt_100ms = 0;
+static uint16_t key_cnt = 0;
+static uint8_t led_start_state = 0;
+void LedBar_StartUp_var_init(void)
+{
+    cnt_100ms = 0;
+    key_cnt = 0;
+    LedBar_Command = LED_BAR_STARTUP;
+    sys_time.power_on = false;
+    led_start_state = 0;
+}
+
 void LedBar_StartUp(void)
 {
-    static uint16_t cnt_100ms = 0;
-    static bool power_on = false;
-    static uint16_t key_cnt = 0;
-
-    if (!power_on)
+    if(0 == MCUI_SOC_KEY)
     {
-        if (0 == MCUI_SOC_KEY)
-        {
-            ++key_cnt;
-            cnt_100ms = 0;
-            if (key_cnt >= (100 * 4))
-            {
-                power_on = true;
-                MCUO_SOC_G = 0;
-                MCUO_SOC_25 = 0;
-                MCUO_SOC_50 = 0;
-                MCUO_SOC_75 = 0;
-                MCUO_SOC_100 = 0;
-                // OPEN_DSG();
-                Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
-            }
-        }
-        else
-        {
-            key_cnt = 0;
-            ++cnt_100ms;
-        }
-
-        if (cnt_100ms >= (100 * 9))
-        {
-            // entersleep(DEEP_MODE);
-        }
+        sys_time.enter_rtc_delay = 0;
     }
-    else
+    switch (led_start_state)
     {
-        static uint16_t cnt = 0;
-        ++cnt;
-        if (cnt >= 25)
+    case 0:
+        if (g_irq_t == CHG_IRQ)
+        {
+        }
+        else if (g_irq_t == soc_key)
+        {
+        }
+
+        if (g_stCellInfoReport.SocElement.u16Soc >= 20)
         {
             MCUO_SOC_G = 1;
             MCUO_SOC_25 = 1;
@@ -91,18 +90,102 @@ void LedBar_StartUp(void)
             MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
             MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
             MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-            LedBar_Command = LED_BAR_NORMAL;
         }
-        else if (cnt >= 20)
-            MCUO_SOC_100 = 1;
-        else if (cnt >= 15)
-            MCUO_SOC_75 = 1;
-        else if (cnt >= 10)
-            MCUO_SOC_50 = 1;
-        else if (cnt >= 5)
+        else
         {
-            MCUO_SOC_25 = 1;
+            MCUO_SOC_Y = 1;
         }
+        led_start_state = 1;
+        break;
+    case 1:
+        if (!sys_time.power_on)
+        {
+            if (g_irq_t == CHG_IRQ)
+            {
+                // todo 测试优化逻辑
+                sys_time.power_on = true;
+                MCUO_SOC_G = 0;
+                MCUO_SOC_25 = 0;
+                MCUO_SOC_50 = 0;
+                MCUO_SOC_75 = 0;
+                MCUO_SOC_100 = 0;
+                // OPEN_DSG();
+                Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
+                Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
+            }
+
+            if (0 == MCUI_SOC_KEY)
+            {
+                ++key_cnt;
+                cnt_100ms = 0;
+                if (key_cnt >= (100 * 4))
+                {
+                    sys_time.power_on = true;
+                    MCUO_SOC_G = 0;
+                    MCUO_SOC_25 = 0;
+                    MCUO_SOC_50 = 0;
+                    MCUO_SOC_75 = 0;
+                    MCUO_SOC_100 = 0;
+                    // OPEN_DSG();
+                    Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
+                    Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
+                }
+            }
+            else
+            {
+                key_cnt = 0;
+                ++cnt_100ms;
+            }
+
+            if (cnt_100ms >= (100 * 9))
+            {
+
+                led_start_state = 2;
+            }
+        }
+        else
+        {
+            static uint16_t cnt = 0;
+            ++cnt;
+            if (cnt >= 100)
+            {
+                MCUO_SOC_G = 1;
+                MCUO_SOC_25 = 1;
+                // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+                MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+                MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
+                MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
+                LedBar_Command = LED_BAR_NORMAL;
+            }
+            else if (cnt >= 80)
+                MCUO_SOC_100 = 1;
+            else if (cnt >= 60)
+                MCUO_SOC_75 = 1;
+            else if (cnt >= 40)
+                MCUO_SOC_50 = 1;
+            else if (cnt >= 20)
+            {
+                MCUO_SOC_25 = 1;
+            }
+        }
+        break;
+    case 2:
+        // entersleep(HICCUP_MODE);
+        MCUO_SOC_G = 0;
+        MCUO_SOC_25 = 0;
+        MCUO_SOC_50 = 0;
+        MCUO_SOC_75 = 0;
+        MCUO_SOC_100 = 0;
+        // LedBar_StartUp_var_init();
+        if (0 == MCUI_SOC_KEY)
+        {
+            led_start_state = 0;
+        }
+        break;
+
+    default:
+        led_start_state = 2;
+        break;
     }
 
 #if 0
@@ -421,7 +504,6 @@ void APP_LedBar(void)
     // {
     //     return;
     // }
-
     if (SystemStatus.bits.b1StartUpBMS)
     {
         return;

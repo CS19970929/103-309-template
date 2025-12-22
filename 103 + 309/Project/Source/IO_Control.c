@@ -277,13 +277,13 @@ void Drivers_External_Ctrl(void)
 	{
 		if (SystemStatus.bits.b1Status_MOS_CHG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG)
 		{
-			log_w();
+			//log_w();
 			sys_time.cnt_enter_chg_open++;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
 		}
 		if (SystemStatus.bits.b1Status_MOS_DSG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG)
 		{
-			log_w();
+			//log_w();
 			sys_time.cnt_enter_dsg_open++;
 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
 		}

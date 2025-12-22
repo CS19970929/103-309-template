@@ -775,31 +775,3 @@ void Sys_SleepOnExitMode(void)
 	__ASM volatile("wfi");
 }
 
-void entersleep(enum _SLEEP_MODE mode)
-{
-	switch (mode)
-	{
-	case HICCUP_MODE:
-		Sleep_Mode.bits.b1ForceToSleep_L1 = 1;
-		// g_sleepModeSelect = HICCUP_MODE;
-		break;
-	case NORMAL_MODE:
-		Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
-		// g_sleepModeSelect = NORMAL_MODE;
-		break;
-	case DEEP_MODE:
-		Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
-		// g_sleepModeSelect = DEEP_MODE;
-#ifdef __FUNC__LED__
-		// set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-		break;
-	// case NO_SLEEP:
-	//     // g_sleepModeSelect = NO_SLEEP;
-	//     Sleep_Status = SLEEP_HICCUP_SHIFT;
-	//     Sleep_Mode.all = 0;
-	//     break;
-	default:
-		break;
-	}
-}

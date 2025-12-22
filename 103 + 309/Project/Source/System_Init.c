@@ -115,7 +115,7 @@ void __delay_ms(UINT16 nms)
 	do
 	{
 		temp = SysTick->CTRL;
-		Feed_WatchDog;
+		Feed_IWatchDog;
 	} while ((temp & 0x01) && !(temp & (1 << 16))); // 等待时间到达
 	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // 关闭计数器
 	SysTick->VAL = 0X00;					   // 清空计数器
@@ -294,6 +294,7 @@ void TIM3_IRQHandler(void)
 				gu8_200msCnt = 0;
 				gu8_200msAccClock_Flag = 1;
 				gu8_200msAccClock_Flag2 = 1;
+				MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 			}
 			if(++cnt_1000ms >= 1000)
 			{

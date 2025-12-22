@@ -162,6 +162,7 @@ void EXTI0_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
+    g_irq_t = CHG_IRQ;
     EXTI_ClearITPendingBit(EXTI_Line0);
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
   }
@@ -212,6 +213,13 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
+    g_irq_t = soc_key;
+    if (!sys_time.power_on)
+    {
+      extern void LedBar_StartUp_var_init(void);
+      LedBar_StartUp_var_init();
+    }
+
     EXTI_ClearITPendingBit(EXTI_Line9);
   }
 }

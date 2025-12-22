@@ -89,12 +89,7 @@ void Refresh_Parameters(void)
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10; // 当前对应多少ms
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 
-	/* 短路延时 */
-	temp = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = Choose_Right_Value(temp, AFE_SCT);
-	/* 短路电压 */
-	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE; // 当前对应多少mv
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, AFE_SCV);
+	InitShortCur();
 
 	/* 所有的温度保护 */
 	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;		 /* 充电高温保护 */
@@ -170,7 +165,7 @@ void fac_sh367309_param_init(void)
 	// temp = PRT_E2ROMParas.u16IchgOcp_Filter * 10; // 当前对应多少ms
 	// AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 	{
-		//实际120A
+		// 实际120A
 		temp = 1000 * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
@@ -233,12 +228,12 @@ bool fac_sh367309_param_init_first_powerup(void)
 		// AFE_PARAM_WRITE_Flag = 0;
 		MCUO_AFE_VPRO = 1; // 进入烧写模式
 		Delay1ms(20);
-		Feed_WatchDog;
+		Feed_IWatchDog;
 
 		fac_sh367309_param_init();
 		ret = Write_Parameters();
 
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		MCUO_AFE_VPRO = 0; // 退出烧写模式
 		Delay1ms(1);
 
@@ -256,6 +251,7 @@ bool fac_sh367309_param_init_first_powerup(void)
 	return ret;
 }
 
+#if 0
 // 开机的时候，AFE_PARAM_WRITE_Flag=1是默认值，所以开机的时候会执行一次。
 bool SH367309_UpdataAfeConfig(void)
 {
@@ -266,12 +262,12 @@ bool SH367309_UpdataAfeConfig(void)
 		AFE_PARAM_WRITE_Flag = 0;
 		MCUO_AFE_VPRO = 1; // 进入烧写模式
 		Delay1ms(20);
-		Feed_WatchDog;
+		Feed_IWatchDog;
 
 		Refresh_Parameters();
 		ret = Write_Parameters();
 
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		MCUO_AFE_VPRO = 0; // 退出烧写模式
 		Delay1ms(1);
 
@@ -286,6 +282,66 @@ bool SH367309_UpdataAfeConfig(void)
 
 		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 	}
+	return ret;
+}
+#endif
+bool SH367309_UpdataAfeConfig(void)
+{
+	uint8_t isdiff = 0;
+	bool ret = false;
+
+	if (AFE_PARAM_WRITE_Flag)
+	{
+		AFE_PARAM_WRITE_Flag = 0;
+
+		Refresh_Parameters();
+		{
+			int i = 0;
+			UINT8 temp[26] = {0};
+			UINT8 *P = (UINT8 *)&AFE_ROM_PARAMETERS_Struction;
+
+			if (MTPRead(0x00, 25, temp))
+			{
+				for (i = 0; i < 25; i++)
+				{ // 最后一个TR不做对比
+					if (temp[i] != P[i])
+					{
+						// MTPWriteROM(i, 1, P + i); // 重写EEPROM的寄存器，两次
+						isdiff = 1;
+						break;
+					}
+				}
+			}
+		}
+
+		if (isdiff)
+		{
+			MCUO_AFE_VPRO = 1; // 进入烧写模式
+			Delay1ms(20);
+			Feed_IWatchDog;
+
+			ret = Write_Parameters();
+
+			Feed_IWatchDog;
+			MCUO_AFE_VPRO = 0; // 退出烧写模式
+			Delay1ms(1);
+
+			/* 每次写完如果不报错都要复位一下。这样写进去的参数才有效 */
+			if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+			{
+				AFE_Reset(); // Reset IC
+				Delay1ms(5);
+				AFE_IsReady();
+				AFE_ResetFlag = 1;
+			}
+			SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+		}
+		else
+		{
+			ret = true;
+		}
+	}
+
 	return ret;
 }
 
@@ -307,7 +363,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 	{
 		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
 
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		for (i = 0; i < u16WrRegNum; i++)
 		{
 			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
@@ -315,7 +371,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 			/* 直接写道EEPROM中 */
 			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), *(P + (i + offset) * 4));
 		}
-		Feed_WatchDog;
+		Feed_IWatchDog;
 		AFE_PARAM_WRITE_Flag = 1;
 		return 1;
 	}
@@ -359,13 +415,13 @@ void EEPROM_ResetData_AFE_ParametersToDefault(void)
 	UINT8 i;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
 
-	Feed_WatchDog;
+	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
 		*(P + i * 4 - 1) = *(P + i * 4); // 当前值变为默认值
 		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), *(P + i * 4));
 	}
-	Feed_WatchDog;
+	Feed_IWatchDog;
 }
 
 void ReadEEPROM_AFE_Parameters(void)

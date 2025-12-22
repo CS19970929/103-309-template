@@ -45,7 +45,8 @@ int main(void)
 		App_E2promDeal();
 		App_CellBalance();
 		App_Can();
-		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		sleep();
 		App_SOC();
 
 #ifdef __FUNC__HEAT__
@@ -58,8 +59,9 @@ int main(void)
 		// __delay_ms(1000);
 
 #ifdef wdog_enable
-		Feed_WatchDog;#endif
+		Feed_IWatchDog;
 
+#endif
 #endif
 	}
 }
@@ -72,12 +74,18 @@ void InitDevice(void)
 	InitDelay();
 #else
 	InitDelay();
+
 	IsSleepStartUp();
+	
+	InitIO();
+#ifdef ELOG_OUTPUT_ENABLE
+	InitUSART_CommonUpper();
+	elogInit();
+#endif
 
 	jtag_disableAndConfIO();
 
 	InitNVIC();
-	InitIO();
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
@@ -91,11 +99,12 @@ void InitDevice(void)
 
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
-extern void LedBar_Init(void);
+	extern void LedBar_Init(void);
 	LedBar_Init();
 
 	//???充电
 	Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
+	Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
 
 #ifdef wdog_enable
 	Init_IWDG();

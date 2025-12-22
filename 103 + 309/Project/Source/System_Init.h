@@ -122,7 +122,7 @@ struct CBC_ELEMENT {
 
 
 void IWDG_Feed(void);
-#define Feed_WatchDog IWDG_Feed()
+#define Feed_IWatchDog IWDG_Feed()
 
 extern volatile union SYS_TIME g_st_SysTimeFlag;
 extern struct CBC_ELEMENT CBC_Element;

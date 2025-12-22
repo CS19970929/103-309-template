@@ -367,6 +367,14 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 	static UINT8 su8_Delay_Cnt = 0;
 	UINT8 result = 0;
 
+	if (sys_time.wakeup_rtc)
+	{
+		sys_time.wakeup_rtc = false;
+
+		su8_StartUp_Flag = 0;
+		su8_Delay_Cnt = 0;
+	}
+
 	switch (su8_StartUp_Flag)
 	{
 	case 0: // 刚开机，不能判断，因为查询AFE函数已经被分割，不能拿到数据，此时判断必为错

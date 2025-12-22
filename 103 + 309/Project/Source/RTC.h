@@ -1,22 +1,24 @@
 #ifndef RTC_H
 #define RTC_H
 
+#include "conf.h"
+
 
 #define RTC_BKP_DATA        0xA5A5
 #define LSE_START_TIMEOUT   ((uint16_t)0x5000) /*!< Time out for LSE start up */
 #define LSE_FREQUENT		32767
-#define TIME_ZOOM			(8*60*60)			//Ïà¶ÔÖÐÊ±ÇøµÄ±±¾©Ê±¼ä
-#define	UNIX_TIME_YEAR		1970				//¼ÍÔªÊ±¼ä
-#define SEC_DAY				86400L          	//Ò»ÌìÓÐ¶àÉÙs 
+#define TIME_ZOOM			(8*60*60)			//ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½Ä±ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
+#define	UNIX_TIME_YEAR		1970				//ï¿½ï¿½ÔªÊ±ï¿½ï¿½
+#define SEC_DAY				86400L          	//Ò»ï¿½ï¿½ï¿½Ð¶ï¿½ï¿½ï¿½s 
 
-#define ALARM_TIME_SEC		(UINT32)10       //s£¬ÐÝÃß»½ÐÑÊ±¼ä 
+#define ALARM_TIME_SEC		(UINT32)10       //sï¿½ï¿½ï¿½ï¿½ï¿½ß»ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ 
 
-#define	Leapyear(year)		((year) % 4 == 0)	//·´Õý²»»á³¬¹ý2100£¬Ã»ÎÊÌâ
+#define	Leapyear(year)		((year) % 4 == 0)	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á³¬ï¿½ï¿½2100ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½
 #define	Days_in_year(a) 	(Leapyear(a) ? 366 : 365)
 
 /*
 struct RTC_TIME {
-	UINT16 RTC_year;		//ÎªÊ²Ã´Õâ¸öÎª16Î»ÊÇÒòÎª¼ÆËãÖÐÐèÒª16Î»£¬µ«ÉÏ´«²»ÐèÒª
+	UINT16 RTC_year;		//ÎªÊ²Ã´ï¿½ï¿½ï¿½Îª16Î»ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òª16Î»ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½ï¿½ï¿½ï¿½ï¿½Òª
 	UINT8 RTC_mon;
 	UINT8 RTC_day;
 	UINT8 RTC_hour;
@@ -56,10 +58,12 @@ struct RTC_ELEMENT {
 
 extern struct RTC_ELEMENT RTC_time;
 //extern UINT8 RTC_Faultcnt;
+extern volatile bool is_rtc_wakekup;
+extern volatile uint16_t rtc_cnt;
 
 
 void RTC_WKTimeConfig(void);
-void InitRTC(void);
+void Init_RTC(void);
 void App_RTC(void);
 
 #endif	/* RTC_H */

@@ -8,7 +8,7 @@ struct RTC_ELEMENT RTC_time;
 struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
 
 UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-#define Days_in_month(a) (month_days[(a) - 1])
+#define Days_in_month(a) (month_days[(a)-1])
 
 #ifdef _WEEK
 void GregorianDay(struct RTC_ELEMENT *tm)
@@ -151,7 +151,7 @@ UINT8 RTC_ClockConfig(void)
 	else
 	{
 		//++RTC_Faultcnt;											//RTC错误单数为LSE出错
-		System_ERROR_UserCallback(ERROR_LSE);
+		// System_ERROR_UserCallback(ERROR_LSE);
 		RCC_LSICmd(ENABLE); // 使能 LSI 振荡
 		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
 			;									// 等待到 LSI 预备
@@ -221,13 +221,15 @@ void RTC_WKTimeConfig(void)
 {
 	PWR_BackupAccessCmd(ENABLE);														// 后备域解锁
 	RTC_ITConfig(RTC_IT_SEC, DISABLE);													// 禁止实时时钟秒中断
-	RTC_SetAlarm(RTC_GetCounter() + (UINT32)OtherElement.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
+	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)OtherElement.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
+	//RTC_SetAlarm(RTC_GetCounter() + OtherElement.time_sleep_rtcing); // 唤醒时间
+	RTC_SetAlarm(RTC_GetCounter() + 1); // 唤醒时间
 	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
 	RTC_WaitForLastTask();
 	RTC_ITConfig(RTC_FLAG_ALR, ENABLE); // 打开闹钟中断
 }
 
-void InitRTC(void)
+void Init_RTC(void)
 {
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE); // 使能PWR外设时钟，待机模式，RTC，看门狗
 	RTC_ClockConfig();														 // RTC时钟配置
@@ -273,12 +275,14 @@ void RTCAlarm_IRQHandler(void)
 	EXTI_ClearITPendingBit(EXTI_Line17); // 两个都要，不然会死机
 	// RTC_ClearITPendingBit(RTC_IT_ALR);			//不需要
 	// RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
-	if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_RTC_VALUE))
-	{
-		// RTC唤醒，则写标志位
-	}
+	// if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_RTC_VALUE))
+	// {
+	// 	// RTC唤醒，则写标志位
+	// }
 }
 
+volatile bool is_rtc_wakekup = false;
+volatile uint16_t rtc_cnt = 0;
 void RTC_IRQHandler(void)
 {
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
@@ -292,5 +296,8 @@ void RTC_IRQHandler(void)
 	{										 // 成了！CNM！我太难了老铁
 		RTC_ClearITPendingBit(RTC_FLAG_ALR); // 会运行到这个地方，这里也要把这个标志位去除，不然卡在这里无法唤醒
 		RTC_WaitForLastTask();
+
+		is_rtc_wakekup = true;
+		rtc_cnt++;
 	}
 }

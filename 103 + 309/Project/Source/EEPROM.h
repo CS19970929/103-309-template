@@ -297,6 +297,7 @@ void InitE2PROM(void);
 void App_E2promDeal(void);
 
 void EEPROM_test(void);
+void InitE2PROM_i2c(void);
 
 extern uint16_t curr_offset;
 extern UINT16 OffsetValue_CHG ;

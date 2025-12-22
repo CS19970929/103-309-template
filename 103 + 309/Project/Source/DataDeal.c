@@ -547,7 +547,7 @@ void App_AFEGet(void)
 		return;
 	}
 
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+	// MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 

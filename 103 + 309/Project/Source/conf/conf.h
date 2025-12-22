@@ -8,8 +8,9 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x5445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
+#define __ONLY_UPDATE_NO_REFREH_PARAM__
 // #define  wdog_enable
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
@@ -125,7 +126,12 @@ typedef struct
   uint16_t  cnt_enter_chg_open;
   uint16_t  cnt_enter_dsg_open;
 
+   uint8_t  wakeup_reason;
+  bool     wakeup_rtc;
+  uint8_t time_enter_rtc;
+  bool power_on;
 
+  uint16_t enter_rtc_delay;
 }Time_T;
 
 extern Time_T  sys_time;
