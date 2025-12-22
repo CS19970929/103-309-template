@@ -285,6 +285,7 @@ void TIM3_IRQHandler(void)
 				{ // 10ms
 					g_u810msClockCnt = 0;
 					App_WarnCtrl();
+					APP_LedBar();
 				}
 			}
 

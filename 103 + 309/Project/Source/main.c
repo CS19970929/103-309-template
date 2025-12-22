@@ -51,14 +51,14 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
+		// APP_LedBar();
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
 		// __delay_ms(1000);
 
 #ifdef wdog_enable
-		Feed_WatchDog;
-#endif
+		Feed_WatchDog;#endif
 
 #endif
 	}
@@ -78,7 +78,6 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
-	// MCUO_AFE_CTLC = 1;
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
@@ -92,10 +91,16 @@ void InitDevice(void)
 
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
+extern void LedBar_Init(void);
+	LedBar_Init();
+
+	//???充电
+	Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
 
 #ifdef wdog_enable
 	Init_IWDG();
 #endif // !1
+
 	InitTimer();
 
 #endif

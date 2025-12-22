@@ -10,7 +10,7 @@
 
 #define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
-#define  wdog_enable
+// #define  wdog_enable
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
 

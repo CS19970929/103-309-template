@@ -31,6 +31,7 @@
 #include "LogRecord.h"
 #include "LedBar.h"
 
+#include "rtc_sleep.h"
 #include "IO_Control.h"
 #include "ShortFunc.h"
 #include "conf.h"
