@@ -13,21 +13,13 @@
 #define RS485_ADDR_RW_AFE_PARAMETER  0x2400
 
 #ifdef LIFEPO
-#define COV_1           3550
-#define COV_2           3550
-#define COV_3           3800
-#define COV_recover     3600
-#define COV_filter1      100
-#define COV_filter2     100
-#define COV_filter3     100
+#define AFE_COV           (3780)
+#define AFE_COV_recover   (3500)
+#define AFE_COV_filter     100
 
-#define CUV_1           3000
-#define CUV_2           3000
-#define CUV_3           3000
-#define CUV_recover     3100
-#define CUV_filter1      100
-#define CUV_filter2     100
-#define CUV_filter3     200
+#define AFE_CUV           (2400)
+#define AFE_CUV_recover     (2800)
+#define AFE_CUV_filter     (100)
 #else
 #define AFE_COV           (4280)
 #define AFE_COV_recover   (4150)
@@ -69,8 +61,8 @@
 #define AFE_OCC2_filter  	(10)
 
 #define AFE_ODC1       		(1500) 
-#define AFE_ODC1_filter  	(2000)
-#define AFE_ODC2       		(100) 
+#define AFE_ODC1_filter  	(10)
+#define AFE_ODC2       		(1500) 
 #define AFE_ODC2_filter  	(10)
 
 
@@ -86,7 +78,7 @@
 	/*一级充电过流延时*/	AFE_OCC1_filter,	AFE_OCC1_filter,	50000,	1,\
 	/*二级充电过流*/		AFE_OCC2,			AFE_OCC2,			50000,	10,\
 	/*二级充电过流延时*/	AFE_OCC2_filter,	AFE_OCC2_filter,	50000,	1,\
-	/*一级放电过流*/		AFE_ODC1,			AFE_ODC2,			50000,	10,\
+	/*一级放电过流*/		AFE_ODC1,			AFE_ODC1,			50000,	10,\
 	/*一级放电过流延时*/    AFE_ODC1_filter,	AFE_ODC1_filter,	50000,	1,\
 	/*二级放电过流*/		AFE_ODC2,	        AFE_ODC2,			50000,	10,\
 	/*二级放电过流延时*/    AFE_ODC2_filter,	AFE_ODC2_filter,	50000,	1,\

@@ -9,6 +9,7 @@ UINT8 g_u81msClockCnt = 0;
 
 UINT8 gu8_200msCnt = 0;
 UINT8 gu8_200msAccClock_Flag = 0;
+UINT8 gu8_200msAccClock_Flag2 = 0;
 UINT8 gu8_1000msAccClock_Flag = 0;
 
 static UINT8 fac_us = 0; // usÑÓÊ±±¶³ËÊý
@@ -291,6 +292,7 @@ void TIM3_IRQHandler(void)
 			{
 				gu8_200msCnt = 0;
 				gu8_200msAccClock_Flag = 1;
+				gu8_200msAccClock_Flag2 = 1;
 			}
 			if(++cnt_1000ms >= 1000)
 			{

@@ -584,11 +584,6 @@ void App_SH367309_Monitor(void)
 
 	static UINT8 su8_CtrlMos_Flag = 0;
 
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
-	// { // 这个时基不能随便调，影响MOS动作，初始化电流校准
-	// 	return;
-	// }
-
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{

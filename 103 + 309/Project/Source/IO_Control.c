@@ -364,11 +364,6 @@ bool isforceClose(void)
 }
 void App_MOS_Relay_Ctrl(void)
 {
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-	// {
-	// 	return;
-	// }
-
 	App_DI1_Switch();
 	RefreshData_Drivers();
 	GetData_Drivers();
