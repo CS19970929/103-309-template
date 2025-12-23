@@ -277,21 +277,21 @@ void IOstatus_RTCMode(void)
 
     ADC_DeInit(ADC1); // ????????????????
 
-#if 0
+#if 1
+    //!!! key会触发中断
     if (sys_time.power_on)
     {
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_SOC_Y) & (~PIN_SOC_G) & (~PIN_SOC_25) & (~PIN_SOC_50) & (~PIN_SOC_75);
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_SOC_Y) & (~PIN_SOC_G) & (~PIN_SOC_25) & (~PIN_SOC_50) & (~PIN_SOC_75) & (~PIN_SOC_KEY);
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
         GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
         GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_SOC_100);
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
         GPIO_Init(GPIOB, &GPIO_InitStructure);
     }
     else
     {
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All  & (~PIN_SOC_KEY);
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
         GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -302,6 +302,7 @@ void IOstatus_RTCMode(void)
     }
 #endif
 
+#if 0
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_SOC_Y) & (~PIN_SOC_G) & (~PIN_SOC_25) & (~PIN_SOC_50) & (~PIN_SOC_75);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
@@ -310,6 +311,7 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_SOC_100);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
+#endif
 
 #if 1
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
@@ -332,7 +334,7 @@ void IOstatus_RTCMode(void)
 
     // ??????
     // ???
-#if 1
+#if 0
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
@@ -453,15 +455,17 @@ void Init(void)
         extern void LedBar_gpio_Init(void);
         LedBar_gpio_Init();
 
+        if (!sys_time.power_on)
+            LedBar_Init();
+
         InitTimer();
         sys_time.wakeup_rtc = true;
+        Init_ChargerLoad_Det();
     }
 
     initAFE1_IIC();
 
     InitE2PROM_i2c();
-
-    Init_ChargerLoad_Det();
 }
 
 #endif

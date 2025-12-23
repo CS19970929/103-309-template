@@ -612,170 +612,6 @@ void sleep(void)
 #endif
 }
 
-void rtc_sleep(void)
-{
-    if (!gu8_1000msAccClock_Flag)
-        return;
-    gu8_1000msAccClock_Flag = 0;
-
-    BQ769x0_SleepMode_Ctrl();
-
-    static uint8_t state_sleep = 0;
-    static uint32_t sleep_cnt = 0;
-
-    switch (state_sleep)
-    {
-    case 0:
-    {
-        if (g_sleepModeSelect == HICCUP_MODE)
-        {
-            // Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            // LogRecord_Flag.bits.Log_Sleep = 1;
-            // USART_DeInit(USART1);
-            state_sleep = 1;
-            break;
-        }
-        if (g_sleepModeSelect == DEEP_MODE)
-        {
-            Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            LogRecord_Flag.bits.Log_Sleep = 1;
-            state_sleep = 1;
-            break;
-        }
-    }
-    case 1:
-    {
-        if (Sleep_Mode.bits.b1_ToSleepFlag)
-        {
-            return;
-        }
-        switch (g_sleepModeSelect)
-        {
-        case NORMAL_MODE:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_NORMAL_SLEEP_VALUE))
-            {
-                ;
-            }
-            break;
-        case HICCUP_MODE:
-        {
-            before_rtcsleep();
-
-        rtcsleep:
-            Init_RTC();
-            IOstatus_RTCMode();
-            InitWakeUp_RTCMode();
-            // USART_DeInit(USART1);
-            // USART_DeInit(USART2);
-            // USART_DeInit(USART3);
-            is_rtc_wakekup = false;
-            g_irq_t = NO_IRQ;
-            // __delay_ms(100);
-
-            Feed_IWatchDog;
-            Sys_StopMode();
-            Feed_IWatchDog;
-
-            // DISABLE_INT();
-#if 1
-#if defined(UART1_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(UART2_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(RS485_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
-#endif
-            // exti_conf(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
-            // exti_conf(EXTI_Line0, EXTI_Trigger_Rising, DISABLE);
-            // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
-            // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
-            RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
-#endif
-
-            if (is_rtc_wakekup)
-                ++sleep_cnt;
-            // deal_wakeup();
-            Init();
-            log_w("cnt %d", sleep_cnt);
-            if (is_rtc_wakekup)
-            {
-                // Init();
-                // entersleep(HICCUP_MODE);
-                // 还没更新
-                // getdata_and_analyse()
-                if (isException())
-                {
-                    is_rtc_wakekup = false;
-                    // todo wakeup or deep sleep
-                    goto error;
-                }
-                else
-                {
-                    update_rtc_soc(&sleep_cnt);
-
-#if 0
-                    // if (sleep_cnt / 3 >= OtherElement.u16Sleep_TimeNormal)
-                    if (sleep_cnt * OtherElement.time_sleep_rtcing / 60 >= OtherElement.u16Sleep_TimeNormal)
-                    // if (sleep_cnt * 20 / 60 >= OtherElement.u16Sleep_TimeNormal)
-                    {
-                        log_e("enter normal sleep");
-                        before_wakeup(&sleep_cnt);
-                        // entersleep(DEEP_MODE);
-                        LogRecord_Flag.bits.Log_Sleep = 1;
-
-                        goto DEEP_SLEEP;
-                    }
-                    // run_idle_and_record();
-#endif
-
-                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt / 3);
-                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt * OtherElement.time_sleep_rtcing / 60);
-
-                    goto rtcsleep;
-                }
-            }
-        error:
-            // todo
-            //  deal_exception_and_record();
-            Init();
-
-            state_sleep = 0;
-            entersleep(NO_SLEEP);
-
-            report_wkup_sig();
-
-            before_wakeup(&sleep_cnt);
-            sleep_cnt = 0;
-        }
-        break;
-        case DEEP_MODE:
-        DEEP_SLEEP:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
-            {
-                if ((Sleep_Mode.all & 0x00ff))
-                {
-                    extern UINT32 su32_Interval_S_Tcnt;
-
-                    LogRecord_Flag.bits.Log_Sleep = 1;
-                    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-                    // SleepDeal_Continue();
-                }
-
-                log_w("deep sleep\n");
-                MCU_RESET();
-                break;
-            }
-        default:
-            // 不调整引脚进入休眠，功耗会很大
-            break;
-        }
-    }
-    default:
-        break;
-    }
-}
 
 static bool rtc_monitor(void)
 {
@@ -1392,5 +1228,170 @@ static bool isErr_enterRTC(void)
     else
     {
         return false;
+    }
+}
+
+void rtc_sleep(void)
+{
+    if (!gu8_1000msAccClock_Flag)
+        return;
+    gu8_1000msAccClock_Flag = 0;
+
+    BQ769x0_SleepMode_Ctrl();
+
+    static uint8_t state_sleep = 0;
+    static uint32_t sleep_cnt = 0;
+
+    switch (state_sleep)
+    {
+    case 0:
+    {
+        if (g_sleepModeSelect == HICCUP_MODE)
+        {
+            // Sleep_Mode.bits.b1_ToSleepFlag = 1;
+            // LogRecord_Flag.bits.Log_Sleep = 1;
+            // USART_DeInit(USART1);
+            state_sleep = 1;
+            break;
+        }
+        if (g_sleepModeSelect == DEEP_MODE)
+        {
+            Sleep_Mode.bits.b1_ToSleepFlag = 1;
+            LogRecord_Flag.bits.Log_Sleep = 1;
+            state_sleep = 1;
+            break;
+        }
+    }
+    case 1:
+    {
+        if (Sleep_Mode.bits.b1_ToSleepFlag)
+        {
+            return;
+        }
+        switch (g_sleepModeSelect)
+        {
+        case NORMAL_MODE:
+            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_NORMAL_SLEEP_VALUE))
+            {
+                ;
+            }
+            break;
+        case HICCUP_MODE:
+        {
+            before_rtcsleep();
+
+        rtcsleep:
+            Init_RTC();
+            IOstatus_RTCMode();
+            InitWakeUp_RTCMode();
+            // USART_DeInit(USART1);
+            // USART_DeInit(USART2);
+            // USART_DeInit(USART3);
+            is_rtc_wakekup = false;
+            g_irq_t = NO_IRQ;
+            // __delay_ms(100);
+
+            Feed_IWatchDog;
+            Sys_StopMode();
+            Feed_IWatchDog;
+
+            // DISABLE_INT();
+#if 1
+#if defined(UART1_WAKEUP_ENABLE)
+            exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+            exti_conf(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(RS485_WAKEUP_ENABLE)
+            exti_conf(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
+#endif
+            // exti_conf(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
+            // exti_conf(EXTI_Line0, EXTI_Trigger_Rising, DISABLE);
+            // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
+            // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
+            RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
+#endif
+
+            if (is_rtc_wakekup)
+                ++sleep_cnt;
+            // deal_wakeup();
+            Init();
+            log_w("cnt %d", sleep_cnt);
+            if (is_rtc_wakekup)
+            {
+                // Init();
+                // entersleep(HICCUP_MODE);
+                // 还没更新
+                // getdata_and_analyse()
+                if (isException())
+                {
+                    is_rtc_wakekup = false;
+                    // todo wakeup or deep sleep
+                    goto error;
+                }
+                else
+                {
+                    update_rtc_soc(&sleep_cnt);
+
+#if 0
+                    // if (sleep_cnt / 3 >= OtherElement.u16Sleep_TimeNormal)
+                    if (sleep_cnt * OtherElement.time_sleep_rtcing / 60 >= OtherElement.u16Sleep_TimeNormal)
+                    // if (sleep_cnt * 20 / 60 >= OtherElement.u16Sleep_TimeNormal)
+                    {
+                        log_e("enter normal sleep");
+                        before_wakeup(&sleep_cnt);
+                        // entersleep(DEEP_MODE);
+                        LogRecord_Flag.bits.Log_Sleep = 1;
+
+                        goto DEEP_SLEEP;
+                    }
+                    // run_idle_and_record();
+#endif
+
+                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt / 3);
+                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt * OtherElement.time_sleep_rtcing / 60);
+
+                    goto rtcsleep;
+                }
+            }
+        error:
+            // todo
+            //  deal_exception_and_record();
+            Init();
+
+            state_sleep = 0;
+            entersleep(NO_SLEEP);
+
+            report_wkup_sig();
+
+            before_wakeup(&sleep_cnt);
+            sleep_cnt = 0;
+        }
+        break;
+        case DEEP_MODE:
+        DEEP_SLEEP:
+            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
+            {
+                if ((Sleep_Mode.all & 0x00ff))
+                {
+                    extern UINT32 su32_Interval_S_Tcnt;
+
+                    LogRecord_Flag.bits.Log_Sleep = 1;
+                    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+                    SleepDeal_Continue();
+                }
+
+                log_w("deep sleep\n");
+                MCU_RESET();
+                break;
+            }
+        default:
+            // 不调整引脚进入休眠，功耗会很大
+            break;
+        }
+    }
+    default:
+        break;
     }
 }

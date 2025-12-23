@@ -19,24 +19,11 @@ void LedBar_Init(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
     GPIO_Init(PORT_SOC_25, &GPIO_InitStructure);
-    // GPIO_InitStructure.GPIO_Pin = PIN_SOC_40;
-    // GPIO_Init(PORT_SOC_40, &GPIO_InitStructure);
-    // GPIO_InitStructure.GPIO_Pin = PIN_SOC_60;
-    // GPIO_Init(PORT_SOC_60, &GPIO_InitStructure);
-    // GPIO_InitStructure.GPIO_Pin = PIN_SOC_80;
-    // GPIO_Init(PORT_SOC_80, &GPIO_InitStructure);
     GPIO_InitStructure.GPIO_Pin = PIN_SOC_100;
     GPIO_Init(PORT_SOC_100, &GPIO_InitStructure);
 
-    // GPIO_InitStructure.GPIO_Pin = PIN_SOC_RUN | PIN_SOC_ALM;
-    // GPIO_Init(PORT_SOC_RUN, &GPIO_InitStructure);
-
-    // GPIO_InitStructure.GPIO_Pin = PIN_SOC_BLE;
-    // GPIO_Init(PORT_SOC_BLE, &GPIO_InitStructure);
-
     GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // 选择要用的GPIO引脚,PA0也可以唤醒
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    // GPIO_InitStructure.GPIO_Mode = GPIO_PuPd_NOPULL;
     GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
 
     if (g_stCellInfoReport.SocElement.u16Soc >= 20)
@@ -51,6 +38,15 @@ void LedBar_Init(void)
     else
     {
         MCUO_SOC_Y = 1;
+    }
+
+    if (g_irq_t == CHG_IRQ)
+    {
+        LedBar_Command = LED_BAR_CHG;
+    }
+    else
+    {
+        LedBar_Command = LED_BAR_STARTUP;
     }
 }
 
@@ -68,10 +64,25 @@ void LedBar_StartUp_var_init(void)
 
 void LedBar_StartUp(void)
 {
-    if(0 == MCUI_SOC_KEY)
+    if (0 == MCUI_SOC_KEY)
     {
         sys_time.enter_rtc_delay = 0;
     }
+
+    static uint8_t toggle_cnt = 0;
+    if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
+    {
+        if (++toggle_cnt >= (10 * 2))
+        {
+            toggle_cnt = 0;
+            MCUO_SOC_Y = !MCUO_SOC_Y;
+        }
+    }
+    else
+    {
+        toggle_cnt = 0;
+    }
+
     switch (led_start_state)
     {
     case 0:
@@ -82,7 +93,7 @@ void LedBar_StartUp(void)
         {
         }
 
-        if (g_stCellInfoReport.SocElement.u16Soc >= 20)
+        if (g_stCellInfoReport.SocElement.u16Soc > 20)
         {
             MCUO_SOC_G = 1;
             MCUO_SOC_25 = 1;
@@ -149,12 +160,12 @@ void LedBar_StartUp(void)
             ++cnt;
             if (cnt >= 100)
             {
-                MCUO_SOC_G = 1;
-                MCUO_SOC_25 = 1;
-                // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-                MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-                MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-                MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
+                // MCUO_SOC_G = 1;
+                // MCUO_SOC_25 = 1;
+                // // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+                // MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+                // MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
+                // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
                 LedBar_Command = LED_BAR_NORMAL;
             }
             else if (cnt >= 80)
@@ -209,23 +220,26 @@ void LedBar_StartUp(void)
 void LedBar_sleep(void)
 {
     static uint16_t cnt_100ms = 0;
-    static bool power_on = false;
+    static bool sleep_on = false;
     static uint16_t key_cnt = 0;
     static uint16_t cnt_10ms_toggle = 0;
 
-    if (++cnt_10ms_toggle >= (50))
+    if (!sleep_on)
     {
-        cnt_10ms_toggle = 0;
-        MCUO_SOC_G = 0;
-        MCUO_SOC_Y = 0;
+        if (++cnt_10ms_toggle >= (50))
+        {
+            cnt_10ms_toggle = 0;
+            MCUO_SOC_G = 0;
+            MCUO_SOC_Y = 0;
 
-        MCUO_SOC_25 = !MCUO_SOC_25;
-        MCUO_SOC_50 = !MCUO_SOC_50;
-        MCUO_SOC_75 = !MCUO_SOC_75;
-        MCUO_SOC_100 = !MCUO_SOC_100;
+            MCUO_SOC_25 = !MCUO_SOC_25;
+            MCUO_SOC_50 = !MCUO_SOC_50;
+            MCUO_SOC_75 = !MCUO_SOC_75;
+            MCUO_SOC_100 = !MCUO_SOC_100;
+        }
     }
 
-    if (!power_on)
+    if (!sleep_on)
     {
         if (0 == MCUI_SOC_KEY)
         {
@@ -233,8 +247,8 @@ void LedBar_sleep(void)
             cnt_100ms = 0;
             if (key_cnt >= (100 * 4))
             {
-                power_on = true;
-                MCUO_SOC_G = 1;
+                sleep_on = true;
+                // MCUO_SOC_G = 1;
                 MCUO_SOC_25 = 1;
                 MCUO_SOC_50 = 1;
                 MCUO_SOC_75 = 1;
@@ -258,18 +272,19 @@ void LedBar_sleep(void)
     {
         static uint16_t cnt = 0;
         ++cnt;
-        if (cnt >= 25)
+        if (cnt >= 100)
         {
+            cnt = 0;
             MCUO_SOC_G = 0;
             entersleep(DEEP_MODE);
         }
-        else if (cnt >= 20)
+        else if (cnt >= 80)
             MCUO_SOC_25 = 0;
-        else if (cnt >= 15)
+        else if (cnt >= 60)
             MCUO_SOC_50 = 0;
-        else if (cnt >= 10)
+        else if (cnt >= 40)
             MCUO_SOC_75 = 0;
-        else if (cnt >= 5)
+        else if (cnt >= 20)
         {
             MCUO_SOC_100 = 0;
             // MCUO_SOC_25 = 1;
@@ -307,7 +322,32 @@ void LedBar_Show_Normal(void)
     switch (su8_ShowStatus)
     {
     case 0:
+        
+        if (g_stCellInfoReport.u16Ichg)
+        {
+            LedBar_Command = LED_BAR_CHG;
+        }
 
+        static uint8_t toggle_cnt = 0;
+        if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
+        {
+            if (++toggle_cnt >= (10 * 2))
+            {
+                toggle_cnt = 0;
+                MCUO_SOC_Y = !MCUO_SOC_Y;
+            }
+        }
+        else
+        {
+            toggle_cnt = 0;
+
+            MCUO_SOC_G = 1;
+            MCUO_SOC_25 = 1;
+            // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+            MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+            MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
+            MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
+        }
         if (MCUI_SOC_KEY == 0)
         {
             // su8_ShowStatus = 1;
@@ -319,19 +359,11 @@ void LedBar_Show_Normal(void)
             MCUO_SOC_75 = 1;
             MCUO_SOC_100 = 1;
         }
-
-        if (g_stCellInfoReport.u16Ichg)
-        {
-            LedBar_Command = LED_BAR_CHG;
-        }
-
-        if (g_stCellInfoReport.u16IDischg)
-        {
-            LedBar_Command = LED_BAR_DSG;
-        }
+        // if (g_stCellInfoReport.u16IDischg)
+        // {
+        //     LedBar_Command = LED_BAR_DSG;
+        // }
         break;
-        // fixme 不起作用
-
     case 1:
 #if 0
         // 5s
@@ -530,9 +562,9 @@ void APP_LedBar(void)
     case LED_BAR_CHG:
         LedBar_Show_CHG();
         break;
-    case LED_BAR_DSG:
-        LedBar_Show_DSG();
-        break;
+    // case LED_BAR_DSG:
+    //     LedBar_Show_DSG();
+    //     break;
     case LED_BAR_SLEEP:
         LedBar_sleep();
         break;

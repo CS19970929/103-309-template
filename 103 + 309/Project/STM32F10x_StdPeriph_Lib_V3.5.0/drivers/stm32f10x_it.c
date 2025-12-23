@@ -162,6 +162,7 @@ void EXTI0_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
+    sys_time.cnt_PA0_irq++;
     g_irq_t = CHG_IRQ;
     EXTI_ClearITPendingBit(EXTI_Line0);
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
@@ -201,6 +202,8 @@ void EXTI9_5_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
+    g_irq_t = bms_keyirq;
+    sys_time.cnt_bms1_keyirq++;
     EXTI_ClearITPendingBit(EXTI_Line5);
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
@@ -213,11 +216,24 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
+    sys_time.test_cnt1++;
+    extern LEDBAR_COMMAND LedBar_Command;
     g_irq_t = soc_key;
     if (!sys_time.power_on)
     {
       extern void LedBar_StartUp_var_init(void);
       LedBar_StartUp_var_init();
+    }
+    else
+    {
+      LedBar_Command = LED_BAR_SLEEP;
+      // MCUO_DO1_EN = !MCUO_DO1_EN;
+      MCUO_SOC_Y = 0;
+      MCUO_SOC_G = 0;
+      MCUO_SOC_25 = 1;
+      MCUO_SOC_50 = 1;
+      MCUO_SOC_75 = 1;
+      MCUO_SOC_100 = 1;
     }
 
     EXTI_ClearITPendingBit(EXTI_Line9);

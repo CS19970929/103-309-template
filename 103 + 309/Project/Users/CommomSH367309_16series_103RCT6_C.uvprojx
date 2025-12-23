@@ -574,6 +574,16 @@
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
             </File>
+            <File>
+              <FileName>canard.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\canard.c</FilePath>
+            </File>
+            <File>
+              <FileName>canard_stm32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\canard_stm32.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

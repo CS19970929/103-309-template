@@ -223,7 +223,7 @@ void RTC_WKTimeConfig(void)
 	RTC_ITConfig(RTC_IT_SEC, DISABLE);													// 禁止实时时钟秒中断
 	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)OtherElement.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
 	//RTC_SetAlarm(RTC_GetCounter() + OtherElement.time_sleep_rtcing); // 唤醒时间
-	RTC_SetAlarm(RTC_GetCounter() + 1); // 唤醒时间
+	RTC_SetAlarm(RTC_GetCounter() + 5); // 唤醒时间
 	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
 	RTC_WaitForLastTask();
 	RTC_ITConfig(RTC_FLAG_ALR, ENABLE); // 打开闹钟中断
