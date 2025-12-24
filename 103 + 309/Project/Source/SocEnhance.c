@@ -876,6 +876,45 @@ void InitSOC_IntEnhance(void)
 	SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 }
 
+void soc_cali(void)
+{
+	static uint8_t dsg_soc0_delay = 0;
+// todo 实时校准 待完善
+#ifdef _SOC_OCV_Fix2_func_
+	SOC_OCV_Fix2();
+#endif
+
+#ifdef TERNARYLI
+#define Totle_soc100 (4000)
+#elif (defined(LIFEPO))
+#define Totle_soc100 (3300)
+#endif
+
+	if (isCHG())
+	{
+		if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && SOC_Enhance_Element.u16_VCellMin >= Totle_soc100)
+		{
+			set_soc_param(100, 1, 1);
+		}
+	}
+	else
+	{
+		if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= 2000))
+		{
+			if (++dsg_soc0_delay >= (5 * 10))
+			{
+				dsg_soc0_delay = 0;
+				set_soc_param(0, 1, 1);
+			}
+		}
+		else
+		{
+			dsg_soc0_delay = 0;
+		}
+	}
+}
+
+
 /*
 >>后记：
 1，这个做法会出现一个问题，SOC加速，容量膨胀，然后静置之后，SOC保持不变，但是满电容量减少(因为满电容量是实打实计算的)。
@@ -908,6 +947,7 @@ void SOC_IntEnhance_Ctrl(void)
 		break;
 	}
 
+	soc_cali();
 	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
 	SOC_EEPROM_Deal_Monitor();
 	SOC_RefreshData_Monitor(); // 有顺序，放最后>>应该没顺序了

@@ -11,7 +11,7 @@ void sendCanard(void);
 #define MY_NODE_ID 1
 
 // #define BATTERY_MANUFACTURER_NAME "Example Battery Co."
-#define BATTERY_MANUFACTURER_NAME "abc666"
+#define BATTERY_MANUFACTURER_NAME "abc123456789"
 
 enum uavcan_protocol_param_Value_type_t
 {
@@ -334,19 +334,23 @@ static void send_BatteryInfo(void)
 	memset(&pkt, 0, sizeof(pkt));
 	uint8_t buffer[UAVCAN_EQUIPMENT_POWER_BATTERYINFO_MAX_SIZE];
 
+	float temp = g_stCellInfoReport.u16TempMin;
+	float vtotle = g_stCellInfoReport.u16VCellTotle;
+	float bms_current = g_stCellInfoReport.u16IDischg > 0 ? g_stCellInfoReport.u16IDischg / 10 : g_stCellInfoReport.u16Ichg / 10;
+	temp = temp / 10 - 40;
+	vtotle = vtotle / 100;
 	// make up some synthetic status data
-	pkt.temperature = battery.temperature_K;
-	pkt.voltage = battery.voltage;
-	pkt.current = battery.current;
+	pkt.temperature = temp;
+	pkt.voltage = vtotle;
+	pkt.current = bms_current;
 	pkt.average_power_10sec = 0;
 	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
 	pkt.full_charge_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
 	pkt.hours_to_full_charge = 100;
-	pkt.status_flags 			= g_stCellInfoReport.unMdlFault_Third.all;
-	pkt.state_of_health_pct     = battery.soh;
-	pkt.state_of_charge_pct     = g_stCellInfoReport.SocElement.u16Soc;
+	pkt.status_flags = g_stCellInfoReport.unMdlFault_Third.all;
+	pkt.state_of_health_pct = g_stCellInfoReport.SocElement.u16Soh;
+	pkt.state_of_charge_pct = g_stCellInfoReport.SocElement.u16Soc;
 	pkt.state_of_charge_pct_stdev = 3;
-
 
 	/*
 	  Note!! fill in all remaining fields from the DSDL
@@ -481,41 +485,23 @@ int test_dronecan(void)
 	if (!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
 		return;
 
-	// while (true)
-	{
-		{
-			// process1HzTasks(ts);
-		}
-		{
-			send_BatteryInfo();
-			// battery_update(dt_us * 1.0e-6);
-		}
-	}
-
-	return 0;
+	send_BatteryInfo();
 }
 
 void sendCanard(void)
 {
-	const CanardCANFrame* txf = canardPeekTxQueue(&canard); 
-	while(txf)
+	const CanardCANFrame *txf = canardPeekTxQueue(&canard);
+	while (txf)
 	{
-        const int NodeStatus_tx_res = canardSTM32Transmit(txf);
-        if (NodeStatus_tx_res < 0)                  // Failure - drop the frame and report
-        {
-            __ASM volatile("BKPT #01");  			// TODO: handle the error properly
-        }
-        if(NodeStatus_tx_res > 0)
-        {
-            canardPopTxQueue(&canard);
-        }
-        txf = canardPeekTxQueue(&canard); 
+		const int NodeStatus_tx_res = canardSTM32Transmit(txf);
+		if (NodeStatus_tx_res < 0) // Failure - drop the frame and report
+		{
+			__ASM volatile("BKPT #01"); // TODO: handle the error properly
+		}
+		if (NodeStatus_tx_res > 0)
+		{
+			canardPopTxQueue(&canard);
+		}
+		txf = canardPeekTxQueue(&canard);
 	}
-
-    // if(g_uptime - node_status_updata_time >= 1000)
-    // {
-    //     process1HzTasks(g_uptime);
-    //     node_status_updata_time = g_uptime;
-    // }
-    
 }

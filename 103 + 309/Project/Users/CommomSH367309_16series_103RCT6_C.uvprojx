@@ -584,6 +584,11 @@
               <FileType>1</FileType>
               <FilePath>..\Source\canard_stm32.c</FilePath>
             </File>
+            <File>
+              <FileName>uavcan.equipment.power.BatteryInfo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\uavcan.equipment.power.BatteryInfo.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
