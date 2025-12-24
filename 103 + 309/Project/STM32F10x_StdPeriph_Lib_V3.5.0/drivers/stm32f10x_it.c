@@ -190,6 +190,11 @@ void EXTI15_10_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line12);
+    if (!sys_time.power_on)
+    {
+      extern void LedBar_StartUp_var_init(void);
+      LedBar_StartUp_var_init();
+    }
   }
 }
 
