@@ -2,12 +2,16 @@
 #include "uavcan.equipment.power.BatteryInfo.h"
 
 #define PREFERRED_NODE_ID 73
+static void processTxRxOnce(void);
+void sendCanard(void);
+
 /*
   in this example we will use dynamic node allocation if MY_NODE_ID is zero
  */
-#define MY_NODE_ID 0
+#define MY_NODE_ID 1
 
-#define BATTERY_MANUFACTURER_NAME "Example Battery Co."
+// #define BATTERY_MANUFACTURER_NAME "Example Battery Co."
+#define BATTERY_MANUFACTURER_NAME "abc666"
 
 enum uavcan_protocol_param_Value_type_t
 {
@@ -24,35 +28,22 @@ enum uavcan_protocol_param_Value_type_t
 
 };
 
-struct uavcan_protocol_NodeStatus {
+struct uavcan_protocol_NodeStatus
+{
 
 #if defined(__cplusplus) && defined(DRONECAN_CXX_WRAPPERS)
-    using cxx_iface = uavcan_protocol_NodeStatus_cxx_iface;
+	using cxx_iface = uavcan_protocol_NodeStatus_cxx_iface;
 #endif
 
+	uint32_t uptime_sec;
 
+	uint8_t health;
 
+	uint8_t mode;
 
-    uint32_t uptime_sec;
+	uint8_t sub_mode;
 
-
-
-    uint8_t health;
-
-
-
-    uint8_t mode;
-
-
-
-    uint8_t sub_mode;
-
-
-
-    uint16_t vendor_specific_status_code;
-
-
-
+	uint16_t vendor_specific_status_code;
 };
 /*
   keep the state of the battery
@@ -65,6 +56,7 @@ static struct battery_state
 	float remaining_capacity;
 	float total_capacity_Ah;
 	float consumed_Ah;
+	float soh;
 } battery;
 
 /*
@@ -146,6 +138,8 @@ int main(void)
 #else
 		App_SysTime();
 		App_AFEGet();
+		// processTxRxOnce();
+		sendCanard();
 
 		App_Sci();
 		App_AnlogCal();
@@ -253,7 +247,7 @@ void App_Sci(void)
 }
 
 static CanardInstance canard;
-static uint8_t memory_pool[200];
+static uint8_t memory_pool[500];
 
 static void onTransferReceived(CanardInstance *ins, CanardRxTransfer *transfer)
 {
@@ -344,6 +338,15 @@ static void send_BatteryInfo(void)
 	pkt.temperature = battery.temperature_K;
 	pkt.voltage = battery.voltage;
 	pkt.current = battery.current;
+	pkt.average_power_10sec = 0;
+	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
+	pkt.full_charge_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
+	pkt.hours_to_full_charge = 100;
+	pkt.status_flags 			= g_stCellInfoReport.unMdlFault_Third.all;
+	pkt.state_of_health_pct     = battery.soh;
+	pkt.state_of_charge_pct     = g_stCellInfoReport.SocElement.u16Soc;
+	pkt.state_of_charge_pct_stdev = 3;
+
 
 	/*
 	  Note!! fill in all remaining fields from the DSDL
@@ -396,11 +399,86 @@ void dronecan_init(void)
 	{
 		printf("Waiting for DNA node allocation\n");
 	}
+
+	battery.voltage = 3000;
+	battery.current = -15.5;
 }
+
+typedef struct
+{
+	uint32_t id; // DroneCAN 消息ID（NodeID + DataType）
+	uint8_t dlc; // 数据长度
+	uint8_t data[8];
+} DroneCAN_Frame_t;
+
+void DroneCAN_Send(DroneCAN_Frame_t *frame)
+{
+	CanTxMsg msg;
+
+	msg.StdId = (frame->id & 0x7FF); // 如果使用标准帧
+	msg.ExtId = 0;
+	msg.IDE = CAN_ID_STD;
+	msg.RTR = CAN_RTR_DATA;
+	msg.DLC = frame->dlc;
+	memcpy(msg.Data, frame->data, frame->dlc);
+
+	CAN_Tx_Data(&msg); // 调用你已有的发送函数
+}
+
+static void processTxRxOnce(void)
+{
+	// Transmitting
+	for (const CanardCANFrame *txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
+	{
+		// const int16_t tx_res = LinuxCANTransmit(can, txf, 0);
+		const int16_t tx_res = CAN_Tx_Data(txf);
+		if (tx_res < 0)
+		{ // Failure - drop the frame
+			canardPopTxQueue(&canard);
+		}
+		else if (tx_res > 0) // Success - just drop the frame
+		{
+			canardPopTxQueue(&canard);
+		}
+		else // Timeout - just exit and try again later
+		{
+			break;
+		}
+	}
+
+	// Receiving
+	// CanardCANFrame rx_frame;
+
+	// const uint64_t timestamp = micros64();
+	// const int16_t rx_res = LinuxCANReceive(can, &rx_frame, timeout_msec);
+	// if (rx_res < 0)
+	// {
+	// 	(void)fprintf(stderr, "Receive error %d, errno '%s'\n", rx_res, strerror(errno));
+	// }
+	// else if (rx_res > 0) // Success - process the frame
+	// {
+	// 	canardHandleRxFrame(&canard, &rx_frame, timestamp);
+	// }
+}
+
+// void dronecan_process_tx(void)
+// {
+//     const CanardTxQueueItem* item = canardTxPeek(&canard);
+//     if (item == NULL) {
+//         return;
+//     }
+
+//     if (CAN_SendFrame(item->frame.id,
+//                       item->frame.data,
+//                       item->frame.data_len))
+//     {
+//         canardTxPop(&canard);   // ★ 释放 allocator block
+//     }
+// }
 
 int test_dronecan(void)
 {
-	if(!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
+	if (!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
 		return;
 
 	// while (true)
@@ -415,4 +493,29 @@ int test_dronecan(void)
 	}
 
 	return 0;
+}
+
+void sendCanard(void)
+{
+	const CanardCANFrame* txf = canardPeekTxQueue(&canard); 
+	while(txf)
+	{
+        const int NodeStatus_tx_res = canardSTM32Transmit(txf);
+        if (NodeStatus_tx_res < 0)                  // Failure - drop the frame and report
+        {
+            __ASM volatile("BKPT #01");  			// TODO: handle the error properly
+        }
+        if(NodeStatus_tx_res > 0)
+        {
+            canardPopTxQueue(&canard);
+        }
+        txf = canardPeekTxQueue(&canard); 
+	}
+
+    // if(g_uptime - node_status_updata_time >= 1000)
+    // {
+    //     process1HzTasks(g_uptime);
+    //     node_status_updata_time = g_uptime;
+    // }
+    
 }
