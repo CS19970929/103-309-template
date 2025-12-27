@@ -8,10 +8,10 @@ void sendCanard(void);
 /*
   in this example we will use dynamic node allocation if MY_NODE_ID is zero
  */
-#define MY_NODE_ID 1
+#define MY_NODE_ID 100
 
 // #define BATTERY_MANUFACTURER_NAME "Example Battery Co."
-#define BATTERY_MANUFACTURER_NAME "battery001"
+#define BATTERY_MANUFACTURER_NAME "battery0001"
 
 enum uavcan_protocol_param_Value_type_t
 {
@@ -342,27 +342,35 @@ static void send_BatteryInfo(void)
 
 	float temp = g_stCellInfoReport.u16TempMin;
 	float vtotle = g_stCellInfoReport.u16VCellTotle;
-	float bms_current = g_stCellInfoReport.u16IDischg > 0 ? g_stCellInfoReport.u16IDischg / 10 : g_stCellInfoReport.u16Ichg / 10;
+	float bms_current = g_stCellInfoReport.u16IDischg > 0 ? -g_stCellInfoReport.u16IDischg / 10 : g_stCellInfoReport.u16Ichg / 10;
 	temp = temp / 10 - 40;
 	vtotle = vtotle / 100;
 	// make up some synthetic status data
 	pkt.temperature = temp;
 	pkt.voltage = vtotle;
 	pkt.current = bms_current;
-	pkt.average_power_10sec = 0;
-	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
-	pkt.full_charge_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow;
-	pkt.hours_to_full_charge = 100;
-	pkt.status_flags = g_stCellInfoReport.unMdlFault_Third.all;
+	pkt.average_power_10sec = vtotle * bms_current;
+	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow /100 * vtotle;
+	pkt.full_charge_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityFull / 100 * vtotle;
+	pkt.hours_to_full_charge = 0;
+	uint16_t status = 0;
+	status |= status | (1 << 0);
+	status |= status | ((g_stCellInfoReport.u16Ichg > 0) << 1);
+	status |= status | ((g_stCellInfoReport.u16Ichg > 0) << 2);
+	status |= status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 2);
+	status |= status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ) << 2);
+	status |= status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 5);
+	pkt.status_flags = status;
 	pkt.state_of_health_pct = g_stCellInfoReport.SocElement.u16Soh;
 	pkt.state_of_charge_pct = g_stCellInfoReport.SocElement.u16Soc;
 	pkt.state_of_charge_pct_stdev = 3;
+	pkt.battery_id = MY_NODE_ID;
 
 	/*
 	  Note!! fill in all remaining fields from the DSDL
 	 */
 
-	pkt.battery_id = settings.battery_index;
+	// pkt.battery_id = settings.battery_index;
 	pkt.model_instance_id = 0;
 	pkt.model_name.len = strlen(BATTERY_MANUFACTURER_NAME);
 	strncpy((char *)pkt.model_name.data, BATTERY_MANUFACTURER_NAME, sizeof(pkt.model_name.data));

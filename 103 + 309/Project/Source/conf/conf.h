@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x2227		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x6666		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 // #define __ONLY_UPDATE_NO_REFREH_PARAM__
 #define  wdog_enable
@@ -18,7 +18,7 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-#define __VIRTURE_CURRENT__
+// #define __VIRTURE_CURRENT__
 
 #define log_i(...)       ((void)0);
 #define log_w(...)       ((void)0);
