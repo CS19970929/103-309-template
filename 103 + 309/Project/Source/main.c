@@ -11,7 +11,7 @@ void sendCanard(void);
 #define MY_NODE_ID 1
 
 // #define BATTERY_MANUFACTURER_NAME "Example Battery Co."
-#define BATTERY_MANUFACTURER_NAME "abc123456789"
+#define BATTERY_MANUFACTURER_NAME "battery001"
 
 enum uavcan_protocol_param_Value_type_t
 {
@@ -128,7 +128,7 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
-//todo 好像有问题，串口通信不上有可能，can影响的？log？
+// todo 好像有问题，串口通信不上有可能，can影响的？log？
 
 int main(void)
 {
@@ -155,6 +155,7 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
+		AllSeriesDeal_Charger_ON();
 		// APP_LedBar();
 		App_FlashUpdate();
 		App_LogRecord();
@@ -213,11 +214,12 @@ void InitDevice(void)
 	Init_IWDG();
 #endif // !1
 	dronecan_init();
+	Init_Charger_AllSeries();
 
 	InitTimer();
 
 	log_w("init over");
-	printf("init over");
+	// printf("init over");
 
 #endif
 }
@@ -492,6 +494,8 @@ int test_dronecan(void)
 	send_BatteryInfo();
 }
 
+//todo 叼你妈的，真坑
+#if 0
 void sendCanard(void)
 {
 	const CanardCANFrame *txf = canardPeekTxQueue(&canard);
@@ -508,4 +512,25 @@ void sendCanard(void)
 		}
 		txf = canardPeekTxQueue(&canard);
 	}
+}
+#endif
+void sendCanard(void)
+{
+    const CanardCANFrame *txf = canardPeekTxQueue(&canard);
+    if (txf == NULL)
+    {
+        return;
+    }
+
+    int res = canardSTM32Transmit(txf);
+
+    if (res > 0)
+    {
+        canardPopTxQueue(&canard);
+    }
+    else if (res < 0)
+    {
+        // 可选：丢包 / 统计错误
+        canardPopTxQueue(&canard);
+    }
 }

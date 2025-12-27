@@ -477,7 +477,7 @@ void WriteEEPROM_ByteData_Circle(void)
 			if ((u32E2P_Pro_VolCur_WriteFlag >> i) & 1)
 			{
 				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i),
-										  *(&PRT_E2ROMParas.u16VcellOvp_First + i));
+										*(&PRT_E2ROMParas.u16VcellOvp_First + i));
 				u32E2P_Pro_VolCur_WriteFlag -= ((long)1 << i); // 按位操作，有一个减一个。
 				break;
 			}
@@ -491,7 +491,7 @@ void WriteEEPROM_ByteData_Circle(void)
 			if ((u32E2P_Pro_Temp_WriteFlag >> i) & 1)
 			{
 				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16TChgOTp_First + i),
-										  *(&PRT_E2ROMParas.u16TChgOTp_First + i));
+										*(&PRT_E2ROMParas.u16TChgOTp_First + i));
 				u32E2P_Pro_Temp_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -505,7 +505,7 @@ void WriteEEPROM_ByteData_Circle(void)
 			if ((u32E2P_Pro_Other_WriteFlag >> i) & 1)
 			{
 				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VdeltaOvp_First + i),
-										  *(&PRT_E2ROMParas.u16VdeltaOvp_First + i));
+										*(&PRT_E2ROMParas.u16VdeltaOvp_First + i));
 				u32E2P_Pro_Other_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -519,7 +519,7 @@ void WriteEEPROM_ByteData_Circle(void)
 			if ((u32E2P_OtherElement1_WriteFlag >> i) & 1)
 			{
 				WriteEEPROM_Word_NoZone((UINT16) * (&OtherCanAdd_Pos.u16Balance_OpenVoltage + i),
-										  *(&OtherElement.u16Balance_OpenVoltage + i));
+										*(&OtherElement.u16Balance_OpenVoltage + i));
 				u32E2P_OtherElement1_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -672,6 +672,7 @@ UINT16 OffsetValue_CHG = 0;
 UINT16 OffsetValue_DSG = 0;
 void InitData_E2prom(void)
 {
+	
 #if 1
 	if (EEPROM_VALUE_BEGIN_FLAG == ReadEEPROM_Word_NoZone(EEPROM_ADDR_PASS))
 	{ // 第二次上电就会执行这个

@@ -364,11 +364,13 @@ void BQ769x0_SleepMode_Ctrl(void)
     //todo过充、充电管关了？进待机？
     if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
     {
+        sys_time.enter_rtc_delay = 0;
         ++deepsleep_cnt_1min;
         if (deepsleep_cnt_1min >= (60))
         {
             entersleep(DEEP_MODE);
         }
+        return;
     }
     else if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
     {
@@ -384,6 +386,7 @@ void BQ769x0_SleepMode_Ctrl(void)
     else
     {
         deepsleep_cnt = 0;
+        deepsleep_cnt_1min = 0;
     }
 
     switch (su8_StartUp_Flag)

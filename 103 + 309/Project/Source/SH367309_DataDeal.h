@@ -25,8 +25,8 @@
 #define AFE_COV_recover   (4150)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2800)
-#define AFE_CUV_recover     (2900)
+#define AFE_CUV           (2500)
+#define AFE_CUV_recover     (2600)
 #define AFE_CUV_filter     (100)
 #endif // LIFEPO
 
