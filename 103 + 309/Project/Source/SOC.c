@@ -62,7 +62,7 @@ void GetData_SOC(void)
 	System_ErrFlag.u8ErrFlag_SOC_Cail = SOC_Enhance_Element.u16_SOC_CailFaultCnt;
 
 	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
-	// g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
+	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
 	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
 	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
 	g_stCellInfoReport.SocElement.u16CapacityFactory = SOC_Enhance_Element.u16_CapacityFactory;

@@ -11,6 +11,37 @@ void LedBar_gpio_Init(void)
     GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
 }
 
+static uint8_t GetSocLevel(uint16_t soc)
+{
+    if (soc >= 100)
+        return 4;
+    else if (soc >= 75)
+        return 3;
+    else if (soc >= 50)
+        return 2;
+    else if (soc >= 25)
+        return 1;
+    else if (soc >= 20)
+        return 0;
+    else
+        return -1; // 20% 以下
+}
+
+static uint8_t LedBar_Blink(void)
+{
+    static uint16_t cnt = 0;
+
+    cnt++;
+    if (cnt < 50)
+        return 1; // 亮
+    else if (cnt < 100)
+        return 0; // 灭
+    else
+        cnt = 0;
+
+    return 1;
+}
+
 void LedBar_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -68,19 +99,21 @@ void LedBar_StartUp(void)
     {
         sys_time.enter_rtc_delay = 0;
     }
-
-    static uint8_t toggle_cnt = 0;
-    if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
+    // static uint8_t toggle_cnt = 0;
+    // if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
+    // {
+    //     if (++toggle_cnt >= (10 * 2))
+    //     {
+    //         toggle_cnt = 0;
+    //         MCUO_SOC_Y = !MCUO_SOC_Y;
+    //     }
+    // }
+    // else
+    // {
+    //     toggle_cnt = 0;
+    // }
+    if (led_start_state == 0)
     {
-        if (++toggle_cnt >= (10 * 2))
-        {
-            toggle_cnt = 0;
-            MCUO_SOC_Y = !MCUO_SOC_Y;
-        }
-    }
-    else
-    {
-        toggle_cnt = 0;
     }
 
     switch (led_start_state)
@@ -92,9 +125,9 @@ void LedBar_StartUp(void)
         else if (g_irq_t == soc_key)
         {
         }
-
         if (g_stCellInfoReport.SocElement.u16Soc > 20)
         {
+            MCUO_SOC_Y = 0;
             MCUO_SOC_G = 1;
             MCUO_SOC_25 = 1;
             // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
@@ -105,6 +138,7 @@ void LedBar_StartUp(void)
         else
         {
             MCUO_SOC_Y = 1;
+            MCUO_SOC_G = 0;
         }
         led_start_state = 1;
         break;
@@ -182,6 +216,7 @@ void LedBar_StartUp(void)
         break;
     case 2:
         // entersleep(HICCUP_MODE);
+        MCUO_SOC_Y = 0;
         MCUO_SOC_G = 0;
         MCUO_SOC_25 = 0;
         MCUO_SOC_50 = 0;
@@ -322,7 +357,7 @@ void LedBar_Show_Normal(void)
     switch (su8_ShowStatus)
     {
     case 0:
-        
+
         if (g_stCellInfoReport.u16Ichg)
         {
             LedBar_Command = LED_BAR_CHG;
@@ -334,13 +369,19 @@ void LedBar_Show_Normal(void)
             if (++toggle_cnt >= (10 * 2))
             {
                 toggle_cnt = 0;
+                MCUO_SOC_G = 0;
                 MCUO_SOC_Y = !MCUO_SOC_Y;
+                MCUO_SOC_25 = 0;
+                MCUO_SOC_50 = 0;
+                MCUO_SOC_75 = 0;
+                MCUO_SOC_100 = 0;
             }
         }
         else
         {
             toggle_cnt = 0;
 
+            MCUO_SOC_Y = 0;
             MCUO_SOC_G = 1;
             MCUO_SOC_25 = 1;
             // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
@@ -440,12 +481,60 @@ void LedBar_Show_Normal(void)
 
 void LedBar_Show_CHG(void)
 {
+    int8_t soc_level;
+    uint8_t blink;
+
+    soc_level = GetSocLevel(g_stCellInfoReport.SocElement.u16Soc);
+    blink = LedBar_Blink();
+
+    /* 1. 已达到的 SOC 灯：常亮 */
+    MCUO_SOC_Y = 0;
+    MCUO_SOC_G = (soc_level >= 0);
+    MCUO_SOC_25 = (soc_level >= 1);
+    MCUO_SOC_50 = (soc_level >= 2);
+    MCUO_SOC_75 = (soc_level >= 3);
+    MCUO_SOC_100 = (soc_level >= 4);
+
+    /* 2. 正在充电的下一档灯：闪烁 */
+    if (g_stCellInfoReport.u16Ichg > 0)
+    {
+        switch (soc_level + 1)
+        {
+        case 0:
+            MCUO_SOC_G = blink;
+            break;
+        case 1:
+            MCUO_SOC_25 = blink;
+            break;
+        case 2:
+            MCUO_SOC_50 = blink;
+            break;
+        case 3:
+            MCUO_SOC_75 = blink;
+            break;
+        case 4:
+            MCUO_SOC_100 = blink;
+            break;
+        default:
+            break;
+        }
+    }
+    else
+    {
+        LedBar_Command = LED_BAR_NORMAL;
+    }
+}
+
+#if 0
+
+void LedBar_Show_CHG(void)
+{
     static UINT8 su8_temp = 0;
     static UINT16 su16_ShowDelay = 0;
 
     if (++su16_ShowDelay <= 5)
     {
-        su8_temp = ~(1 << (g_stCellInfoReport.SocElement.u16Soc / 20)); // 充电的灭
+        su8_temp = ~(1 << (g_stCellInfoReport.SocElement.u16Soc / 25)); // 充电的灭
     }
     else if (++su16_ShowDelay <= 10)
     {
@@ -455,15 +544,14 @@ void LedBar_Show_CHG(void)
     {
         su16_ShowDelay = 0;
     }
-
     // SOC =100的时候，为0x20，运算结果相当于全亮，不会有闪的
     // SOC =0的时候，也要闪
     // MCUO_SOC_RUN = 1;
-    MCUO_SOC_G = 1;
-    MCUO_SOC_25 = (g_stCellInfoReport.SocElement.u16Soc >= 0 ? 1 : 0) && (su8_temp & 0x01); // 这里的三目运算符为>=，而不是>，因为这个灯一定要亮
-    MCUO_SOC_50 = (g_stCellInfoReport.SocElement.u16Soc >= 20 ? 1 : 0) && (su8_temp & 0x02);
-    MCUO_SOC_75 = (g_stCellInfoReport.SocElement.u16Soc >= 40 ? 1 : 0) && (su8_temp & 0x04);
-    MCUO_SOC_100 = (g_stCellInfoReport.SocElement.u16Soc >= 60 ? 1 : 0) && (su8_temp & 0x08);
+    MCUO_SOC_G = (g_stCellInfoReport.SocElement.u16Soc >= 20 ? 1 : 0) && (su8_temp & 0x01); // 这里的三目运算符为>=，而不是>，因为这个灯一定要亮
+    MCUO_SOC_25 = (g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0) && (su8_temp & 0x01); // 这里的三目运算符为>=，而不是>，因为这个灯一定要亮
+    MCUO_SOC_50 = (g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0) && (su8_temp & 0x02);
+    MCUO_SOC_75 = (g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0) && (su8_temp & 0x04);
+    MCUO_SOC_100 = (g_stCellInfoReport.SocElement.u16Soc >= 100 ? 1 : 0) && (su8_temp & 0x08);
 
     if (g_stCellInfoReport.u16Ichg == 0)
     {
@@ -476,6 +564,7 @@ void LedBar_Show_CHG(void)
         LedBar_Command = LED_BAR_NORMAL;
     }
 }
+#endif
 
 void LedBar_Show_DSG(void)
 {
@@ -541,14 +630,11 @@ void APP_LedBar(void)
         return;
     }
 
-    // static bool test[6] = {false};
+    if (g_stCellInfoReport.u16Ichg)
+    {
+        LedBar_Command = LED_BAR_CHG;
+    }
 
-    // MCUO_SOC_25 = test[0] == true ? 1 : 0;
-    // MCUO_SOC_Y = test[1] == true ? 1 : 0;
-    // MCUO_SOC_G = test[2] == true ? 1 : 0;
-    // MCUO_SOC_50 = test[3] == true ? 1 : 0;
-    // MCUO_SOC_75 = test[4] == true ? 1 : 0;
-    // MCUO_SOC_100 = test[5] == true ? 1 : 0;
 #if 1
     switch (LedBar_Command)
     {

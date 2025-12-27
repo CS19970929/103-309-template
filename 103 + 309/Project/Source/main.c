@@ -128,6 +128,8 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
+//todo 好像有问题，串口通信不上有可能，can影响的？log？
+
 int main(void)
 {
 	InitDevice(); // 初始化外设
@@ -145,7 +147,7 @@ int main(void)
 		App_AnlogCal();
 		App_E2promDeal();
 		App_CellBalance();
-		App_Can();
+		// App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		sleep();
 		App_SOC();
@@ -203,7 +205,6 @@ void InitDevice(void)
 	InitData_SOC(); // 必须放在读完eeprom数据后面
 	extern void LedBar_Init(void);
 	LedBar_Init();
-
 	//???充电
 	Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
 	Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
@@ -214,6 +215,9 @@ void InitDevice(void)
 	dronecan_init();
 
 	InitTimer();
+
+	log_w("init over");
+	printf("init over");
 
 #endif
 }

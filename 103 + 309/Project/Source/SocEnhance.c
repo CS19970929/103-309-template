@@ -20,11 +20,11 @@
 // 充电可以提前充满，但是不能卡死
 // #define _CAL_SLOW_DOWN_CHG
 
-//typedef enum _CUR
+// typedef enum _CUR
 //{
 //	CurCHG = 0,
 //	CurDSG
-//} _Cur;
+// } _Cur;
 
 enum SOC_CALI_STATE
 {
@@ -248,25 +248,24 @@ void soc_param_lib_init(void)
 
 	{
 		SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Now;
-	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
-	{
-		SOC_Enhance_Element.u8_SOH = 100;
-	}
-	else
-	{
-		SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
-	}
-	SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
-	SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
-	SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
-	SOC_Enhance_Element.u16_Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
+		if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
+		{
+			SOC_Enhance_Element.u8_SOH = 100;
+		}
+		else
+		{
+			SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
+		}
+		SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
+		SOC_Enhance_Element.u16_Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
 
-	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
+		SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
 	}
 
-// extern void GetData_SOC(void);
+	// extern void GetData_SOC(void);
 	// GetData_SOC();
-
 }
 
 UINT8 Get_OpenCircuit_Value(void)
@@ -876,6 +875,16 @@ void InitSOC_IntEnhance(void)
 	SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 }
 
+UINT8 isCHG(void)
+{
+	return SOC_Enhance_Element.u16_Ichg > SOC_VIRTUAL_CURRENT_CHG ? 1 : 0;
+}
+
+UINT8 isDSG(void)
+{
+	return SOC_Enhance_Element.u16_Idsg > SOC_VIRTUAL_CURRENT_DSG ? 1 : 0;
+}
+
 void soc_cali(void)
 {
 	static uint8_t dsg_soc0_delay = 0;
@@ -894,7 +903,8 @@ void soc_cali(void)
 	{
 		if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && SOC_Enhance_Element.u16_VCellMin >= Totle_soc100)
 		{
-			set_soc_param(100, 1, 1);
+			SOC_Calculate_Element.u8SOC_Now = 100;
+			SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u32CapFactory;
 		}
 	}
 	else
@@ -904,7 +914,8 @@ void soc_cali(void)
 			if (++dsg_soc0_delay >= (5 * 10))
 			{
 				dsg_soc0_delay = 0;
-				set_soc_param(0, 1, 1);
+				SOC_Calculate_Element.u8SOC_Now = 0;
+				SOC_Calculate_Element.u32CapNow = 0;
 			}
 		}
 		else
@@ -913,7 +924,6 @@ void soc_cali(void)
 		}
 	}
 }
-
 
 /*
 >>后记：

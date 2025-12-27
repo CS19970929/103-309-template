@@ -2,6 +2,10 @@
 
 #define LOG_TAG "rtc_sleep"
 
+// #define UART1_WAKEUP_ENABLE
+// #define UART2_WAKEUP_ENABLE
+#define RS485_WAKEUP_ENABLE
+
 enum irqWakeup g_irq_t = NO_IRQ;
 
 void rtc_sleep(void);
@@ -351,11 +355,22 @@ void BQ769x0_SleepMode_Ctrl(void)
     static UINT8 su8_StartUp_Flag = 0;
     static UINT8 su8_SleepExtComCnt = 0;
     static uint32_t deepsleep_cnt = 0;
+    static uint16_t deepsleep_cnt_1min = 0;
 
     UINT8 u8_CurComDelay_Flag = 0;
 
     // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
-    if (AFE_SleepMode_Judge() == 1)
+    // if (AFE_SleepMode_Judge() == 1)
+    //todo过充、充电管关了？进待机？
+    if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
+    {
+        ++deepsleep_cnt_1min;
+        if (deepsleep_cnt_1min >= (60))
+        {
+            entersleep(DEEP_MODE);
+        }
+    }
+    else if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
     {
         sys_time.enter_rtc_delay = 0;
         // print_vcell();
@@ -612,7 +627,6 @@ void sleep(void)
 #endif
 }
 
-
 static bool rtc_monitor(void)
 {
     bool result = false;
@@ -655,7 +669,7 @@ static bool rtc_monitor_sh367309(void)
 
     if (!sys_time.power_on)
     {
-        //todo 冗余检测
+        // todo 冗余检测
         return false;
     }
 
@@ -709,7 +723,7 @@ bool isException(void)
     }
 
     // todo read AFE status and to deal logi
-    if (isHaveCurrent() || rtc_monitor() || isVol_cuv() || isVol_cov())
+    if (isHaveCurrent() || rtc_monitor() || isVol_cuv() || isVol_cov() || (g_stCellInfoReport.u16VCellMin <= 2600))
     {
         return true;
     }
@@ -1311,6 +1325,7 @@ void rtc_sleep(void)
             // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
             // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
             RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
+            exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
 #endif
 
             if (is_rtc_wakekup)
@@ -1373,6 +1388,7 @@ void rtc_sleep(void)
         DEEP_SLEEP:
             if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
             {
+                log_w("deep sleep\n");
                 if ((Sleep_Mode.all & 0x00ff))
                 {
                     extern UINT32 su32_Interval_S_Tcnt;
@@ -1381,9 +1397,7 @@ void rtc_sleep(void)
                     LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
                     SleepDeal_Continue();
                 }
-
-                log_w("deep sleep\n");
-                MCU_RESET();
+                // MCU_RESET();
                 break;
             }
         default:

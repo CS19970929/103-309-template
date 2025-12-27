@@ -427,31 +427,13 @@ void SleepDeal_Normal_L2(void)
 			s_u32SleepHiccupCnt = 0;
 	}
 
-	switch (s_u8SleepStatus)
+	if (++s_u32SleepFirstCnt > (UINT32)OtherElement.u16Sleep_TimeNormal * 60)
 	{
-	case FIRST:
-		if (++s_u32SleepFirstCnt > (UINT32)OtherElement.u16Sleep_TimeNormal * 60)
-		{
-			// if(++s_u32SleepFirstCnt >= 3) {			//这个，�??一次个后面都是一�?
-			s_u32SleepFirstCnt = 0;
-			s_u8SleepStatus = HICCUP;
-			Sleep_Mode.bits.b1NormalSleep_L2 = 1;
-			Sleep_Status = SLEEP_HICCUP_CONTINUE;
-		}
-		break;
-
-	case HICCUP:
-		if (++s_u32SleepHiccupCnt > (UINT32)OtherElement.u16Sleep_TimeNormal * 60)
-		{
-			// if(++s_u32SleepHiccupCnt >= 1) {
-			s_u32SleepHiccupCnt = 0;
-			Sleep_Status = SLEEP_HICCUP_CONTINUE;
-		}
-		break;
-
-	default:
-		s_u8SleepStatus = FIRST; // 下个回合再来
-		break;
+		// if(++s_u32SleepFirstCnt >= 3) {			//这个，�??一次个后面都是一�?
+		s_u32SleepFirstCnt = 0;
+		s_u8SleepStatus = HICCUP;
+		Sleep_Mode.bits.b1NormalSleep_L2 = 1;
+		Sleep_Status = SLEEP_HICCUP_CONTINUE;
 	}
 
 	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
@@ -495,39 +477,13 @@ void SleepDeal_Normal_L3(void)
 		return;
 	}
 
-#if 0
-	if(su8_SleepExtComCnt != RTC_ExtComCnt) {
-		su8_SleepExtComCnt = RTC_ExtComCnt;
-		if(s_u32SleepFirstCnt)s_u32SleepFirstCnt = 0;
-		if(s_u32SleepHiccupCnt)s_u32SleepHiccupCnt = 0;
-	}
-#endif
-
-	switch (s_u8SleepStatus)
+	if (++s_u32SleepFirstCnt > (UINT32)OtherElement.u16Sleep_TimeVlow * 60)
 	{
-	case FIRST:
-		if (++s_u32SleepFirstCnt > (UINT32)OtherElement.u16Sleep_TimeVlow * 60)
-		{
-			// if(++s_u32SleepFirstCnt >= 1) {			//这个，�??一次个后面都是一�?
-			s_u32SleepFirstCnt = 0;
-			s_u8SleepStatus = HICCUP;
-			Sleep_Mode.bits.b1NormalSleep_L3 = 1;
-			Sleep_Status = SLEEP_HICCUP_CONTINUE;
-		}
-		break;
-
-	case HICCUP:
-		if (++s_u32SleepHiccupCnt > (UINT32)OtherElement.u16Sleep_TimeVlow * 60)
-		{
-			// if(++s_u32SleepHiccupCnt >= 1) {
-			s_u32SleepHiccupCnt = 0;
-			Sleep_Status = SLEEP_HICCUP_CONTINUE;
-		}
-		break;
-
-	default:
-		s_u8SleepStatus = FIRST; // 下个回合再来
-		break;
+		// if(++s_u32SleepFirstCnt >= 1) {			//这个，�??一次个后面都是一�?
+		s_u32SleepFirstCnt = 0;
+		s_u8SleepStatus = HICCUP;
+		Sleep_Mode.bits.b1NormalSleep_L3 = 1;
+		Sleep_Status = SLEEP_HICCUP_CONTINUE;
 	}
 
 	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
@@ -746,7 +702,7 @@ void App_SleepDeal(void)
 	if ((Sleep_Mode.all & 0x00ff))
 	{
 		extern UINT32 su32_Interval_S_Tcnt;
-		
+
 		LogRecord_Flag.bits.Log_Sleep = 1;
 		LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
 		SleepDeal_Continue();
@@ -774,4 +730,3 @@ void Sys_SleepOnExitMode(void)
 	// SCB->SCR|=1<<1;//寄存器版�?，�?�置SLEEP ON EXIT位为1
 	__ASM volatile("wfi");
 }
-
