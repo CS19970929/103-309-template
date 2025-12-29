@@ -569,6 +569,11 @@
               <FileType>1</FileType>
               <FilePath>..\Source\SH367309_Func.c</FilePath>
             </File>
+            <File>
+              <FileName>rtc_sleep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -34,6 +34,7 @@
 #include "IO_Control.h"
 #include "ShortFunc.h"
 #include "conf.h"
+#include "rtc_sleep.h"
 
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
