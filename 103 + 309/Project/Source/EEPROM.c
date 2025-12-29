@@ -174,7 +174,7 @@ UINT8 ReadEEPROM_Byte2(UINT16 addr, UINT8 *data)
 // 后续维护人员禁止使用这个函数
 UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 {
-	Feed_WatchDog;
+	Feed_IWatchDog;
 	MCUO_E2PR_WP = 0;
 
 	IIC_Start_SEE();
@@ -207,14 +207,14 @@ UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 	__delay_ms(5);	// EEPROM特性，需要5ms保证写完
 
 	MCUO_E2PR_WP = 1;
-	Feed_WatchDog;
+	Feed_IWatchDog;
 	return 0;
 }
 
 UINT8 ReadEEPROM_Byte(UINT16 addr)
 {
 	UINT8 temp = 0;
-	Feed_WatchDog;
+	Feed_IWatchDog;
 	IIC_Start_SEE();
 	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_W); // 发送写命令
 	if (1 == IIC_Wait_Ack_SEE())
@@ -250,7 +250,7 @@ UINT8 ReadEEPROM_Byte(UINT16 addr)
 
 	temp = IIC_Read_Byte_SEE(0);
 	IIC_Stop_SEE(); // 产生一个停止条件
-	Feed_WatchDog;
+	Feed_IWatchDog;
 	return temp;
 }
 
@@ -575,6 +575,26 @@ void WriteEEPROM_ByteData_Circle(void)
 			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_EVENT_POINT, 0);
 		}
 	}
+}
+
+void InitE2PROM_i2c(void)
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+	// PB3_I2C_SCL_eeprom，PB5_I2C_SDA_eeprom
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+	// GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);	//PB3为JTAG口
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_SetBits(GPIOB, GPIO_Pin_10 | GPIO_Pin_11); // 输出高
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_SetBits(GPIOB, GPIO_Pin_13); // 输出高
 }
 
 void InitE2PROM(void)

@@ -36,6 +36,8 @@
 #include "conf.h"
 #include "rtc_sleep.h"
 
+#include "elog.h"
+
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
 #define S2U(x)   (*((volatile UINT16*)(&(x))))

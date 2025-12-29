@@ -1,7 +1,11 @@
 // #include "conf.h"
 #include "main.h"
 
-Time_T sys_time;
+Time_T sys_time = {
+    .time_enter_rtc = 30,
+    .power_on = false,
+};
+
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -141,7 +145,7 @@ void InitWakeUp_Base(void)
 #endif
 }
 
-void InitWakeUp_NormalMode	(void)
+void InitWakeUp_NormalMode(void)
 {
     EXTI_InitTypeDef EXTI_InitStruct;
     NVIC_InitTypeDef NVIC_InitStructure;
@@ -451,3 +455,59 @@ void Init(void)
 }
 
 #endif
+
+void Init(void)
+{
+    InitSci();
+#if 0
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOC, ENABLE); // 开启GPIOC的外设时钟
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOD, ENABLE); // 开启GPIOB的外设时钟
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
+
+#endif
+
+    if (is_rtc_wakekup)
+    {
+    }
+    else
+    {
+        cpu_frequency_conf();
+
+        is_wakeup = true;
+
+        InitDelay();
+        InitIO();
+
+        // Init_ChargerLoad_Det();
+        ADC_DeInit(ADC1);
+        InitADC();
+        //?????adc配置有什么影响
+        // Init_ChargerLoad_Det();
+
+#ifdef __FUNC__HEAT__
+        InitHeat_Cool();
+#endif
+#ifdef __FUNC__LED__
+        APP_LedBar();
+        set_LED_state(LED_BAR_NORMAL, 4);
+#endif // DEBUG
+
+        USART_DeInit(USART1);
+        USART_DeInit(USART2);
+
+        InitSci();
+
+        InitCan();
+
+        InitTimer();
+        sys_time.wakeup_rtc = true;
+        Init_ChargerLoad_Det();
+    }
+
+    initAFE1_IIC();
+
+    InitE2PROM_i2c();
+}

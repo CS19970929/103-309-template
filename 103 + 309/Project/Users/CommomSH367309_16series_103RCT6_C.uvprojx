@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf</IncludePath>
+              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -878,6 +878,36 @@
               <FileName>conf_gpio.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Source\conf\conf_gpio.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>log</GroupName>
+          <Files>
+            <File>
+              <FileName>elog_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\port\elog_port.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog_async.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog_async.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog_buf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog_buf.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
             </File>
           </Files>
         </Group>

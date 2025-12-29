@@ -40,22 +40,22 @@ void InitShortCur(void)
     UINT16 temp = 0;
 
 #if (AFE_TYPE == bq76xx_afe)
-    g_tParam.other.u16CS_Cur_CHGmax = 2000 * g_tParam.other.u16Sys_CS_Res_Num / g_tParam.other.u16Sys_CS_Res;
-    g_tParam.other.u16CS_Cur_DSGmax = 2000 * g_tParam.other.u16Sys_CS_Res_Num / g_tParam.other.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
     /* 短路延时 */
-    temp = Choose_Right_Value(g_tParam.other.u16CBC_DelayT / 10, AFE_SCT);
-    g_tParam.other.u16CBC_DelayT = AFE_SCT[temp] * 10; // 修改最终设置的值，接近的那个
+    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
+    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // 修改最终设置的值，接近的那个
 
     Registers_AFE1.Protect1.Protect1Bit.SCD_DELAY = temp >= 3 ? 3 : temp;
 
     /* 短路电压 */
-    temp = g_tParam.other.u16CBC_Cur_DSG / 10;                                     // A
-    temp = temp * g_tParam.other.u16Sys_CS_Res / g_tParam.other.u16Sys_CS_Res_Num; // 当前对应多少mV
+    temp = OtherElement.u16CBC_Cur_DSG / 10;                                     // A
+    temp = temp * OtherElement.u16Sys_CS_Res / OtherElement.u16Sys_CS_Res_Num; // 当前对应多少mV
     temp = Choose_Right_Value(temp, AFE_SCV);
     // 修改最终设置的值，接近的那个
-    g_tParam.other.u16CBC_Cur_DSG = AFE_SCV[temp] * g_tParam.other.u16Sys_CS_Res_Num / g_tParam.other.u16Sys_CS_Res;
-    g_tParam.other.u16CBC_Cur_DSG *= 10; // 防止数据溢出。
+    OtherElement.u16CBC_Cur_DSG = AFE_SCV[temp] * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CBC_Cur_DSG *= 10; // 防止数据溢出。
 
     if (temp <= 1)
     {

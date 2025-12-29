@@ -57,7 +57,7 @@ int main(void)
 		App_ProID_Deal();
 		// __delay_ms(1000);
 #ifdef wdog_enable
-		Feed_WatchDog;
+		Feed_IWatchDog;
 #endif
 
 #endif
@@ -78,7 +78,10 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
-	// MCUO_AFE_CTLC = 1;
+#ifdef ELOG_OUTPUT_ENABLE
+	InitUSART_CommonUpper();
+	elogInit();
+#endif
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();

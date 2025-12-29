@@ -11,6 +11,7 @@
 #define EEPROM_VALUE_BEGIN_FLAG				0x2445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
+#define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
 
@@ -114,7 +115,7 @@ typedef struct
   uint16_t    test_sci2_err_cnt;
 
   uint16_t    cnt_PA0_irq;
-  // uint16_t cnt_bms1_keyirq;
+  uint16_t cnt_bms1_keyirq;
   uint16_t    bq33100_read_cnt;
   uint16_t    pec_err_cnt;
   
@@ -125,7 +126,13 @@ typedef struct
   uint16_t  cnt_enter_chg_open;
   uint16_t  cnt_enter_dsg_open;
 
+   uint8_t  wakeup_reason;
+  bool     wakeup_rtc;
+  uint8_t time_enter_rtc;
+  bool power_on;
+  uint16_t test_cnt1;
 
+  uint16_t enter_rtc_delay;
 }Time_T;
 
 extern Time_T  sys_time;

@@ -1,7 +1,25 @@
 #ifndef __RTC_SLEEP__
 #define __RTC_SLEEP__
 
-// #include "stm32f0xx_it.h"			//ÀïÃæÓÐÒ»Ð©Ó²¼þ´íÎóÖ®ÀàµÄÖÐ¶Ï£¬»¹ÊÇÐèÒªµÄ
+// #include "stm32f0xx_it.h"			//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»Ð©Ó²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö®ï¿½ï¿½ï¿½ï¿½Ð¶Ï£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½
+enum irqWakeup
+{
+  uart1_irq = 1,
+  uart2_irq,
+  uart3_irq,
+  PA0_irq,
+  bms_keyirq,
+  soc_key,
+  CHG_IRQ,
+  current_wake,
+  chg_dsg_close,
+  error_wake,
+  cuv_wake,
+  cov_wake,
+  rs485_irq,
+  NO_IRQ
+};
+extern enum irqWakeup g_irq_t;
 
 #define SET_BIT(REG, BIT)     ((REG) |= (BIT))
 
