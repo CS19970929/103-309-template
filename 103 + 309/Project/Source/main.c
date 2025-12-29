@@ -55,7 +55,6 @@ int main(void)
 		App_LogRecord();
 		App_ProID_Deal();
 		// __delay_ms(1000);
-
 #ifdef wdog_enable
 		Feed_WatchDog;
 #endif

@@ -135,7 +135,7 @@ struct OTHER_ELEMENT {
 
 
 #define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c094v1p0"  //32
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c073v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
 #define SNum 		10
@@ -170,11 +170,11 @@ struct OTHER_ELEMENT {
 	                             500,	3,		4200,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))
-#define OtherElement_default 	{3200,	30,	20,	0,	0,	0,	0,	0,\
+#define OtherElement_default 	{3300,	50,	20,	0,	0,	0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
-	                             3200,	7200,	2800,	10,		10,	10,	240,0,\
-	                             1000,	3,		3550,	2900,\
+	                             3200,	7200,	3000,	10,	10,	10,	240, 0,\
+	                             200,	3,		3600,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif
 

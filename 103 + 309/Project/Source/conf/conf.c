@@ -49,12 +49,12 @@ void InitIO(void)
     {
         //???这个函数没起作用
         // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
-        GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_SET);
+        // GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
         // GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, Bit_RESET);
         // GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, Bit_RESET);
 
         GPIO_SetBits(GPIO_M_STB, PIN_M_STB);
-        // GPIO_ResetBits(GPIO_AD_EN, PIN_AD_EN);
+        GPIO_ResetBits(GPIO_AD_EN, PIN_AD_EN);
         GPIO_ResetBits(GPIO_BLE_EN, PIN_BLE_EN);
         GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         GPIO_SetBits(GPIO_SW_EN, PIN_SW_EN);
@@ -84,7 +84,12 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
     }
-        GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
+
+    MCUO_PWSV_STB = 1;
+    MCUO_PWSV_CTR = 0;
+    MCUO_DRV_CMNT = 0;
+    MCUO_AFE_SHIP = 0;
+    MCUO_AFE_MODE = 0;
 }
 
 void InitWakeUp_Base(void)
