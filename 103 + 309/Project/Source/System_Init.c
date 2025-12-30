@@ -290,7 +290,7 @@ void TIM3_IRQHandler(void)
 				if (g_u810msClockCnt >= 5)
 				{ // 10ms
 					g_u810msClockCnt = 0;
-					App_WarnCtrl();
+					// App_WarnCtrl();
 				}
 			}
 

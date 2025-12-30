@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x3445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
 #define __FUNC_RTC__
@@ -133,6 +133,7 @@ typedef struct
   uint16_t test_cnt1;
 
   uint16_t enter_rtc_delay;
+  uint32_t rtc_sleep_cnt;
 }Time_T;
 
 extern Time_T  sys_time;

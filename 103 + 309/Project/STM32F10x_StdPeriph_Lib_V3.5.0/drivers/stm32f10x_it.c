@@ -256,16 +256,6 @@ void USART1_IRQHandler(void)
     Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
 #endif
 
-#ifdef _CLIENT_SCI1
-    UartClient_FaultChk_SCI1();
-    UartClient_Rx_Deal_SCI1(&g_UartClientMsgPtr_SCI1);
-// RTC_ExtComCnt++;
-#endif
-
-#ifdef _LCD_SCI1
-    LCD_FaultChk_SCI1();
-    LCD_Rx_Deal_SCI1(&g_stCurrentMsgPtrLCD_SCI1);
-#endif
   }
 }
 
@@ -306,17 +296,8 @@ void USART2_IRQHandler(void)
     Sci2_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI2);
 #endif
 
-#ifdef _CLIENT_SCI2
-    UartClient_FaultChk_SCI2();
-    UartClient_Rx_Deal_SCI2(&g_UartClientMsgPtr_SCI2);
-#endif
-
-#ifdef _LCD_SCI2
-    LCD_FaultChk_SCI2();
-    LCD_Rx_Deal_SCI2(&g_stCurrentMsgPtrLCD_SCI2);
-#endif
   }
-  
+
   // ---- 3. ¿ÉÑ¡IDLEÇå³ý ----
   if (isr & USART_SR_IDLE)
   {
@@ -341,15 +322,6 @@ void USART3_IRQHandler(void)
     Sci3_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI3);
 #endif
 
-#ifdef _CLIENT_SCI3
-    UartClient_FaultChk_SCI3();
-    UartClient_Rx_Deal_SCI3(&g_UartClientMsgPtr_SCI3);
-#endif
-
-#ifdef _LCD_SCI3
-    LCD_FaultChk_SCI3();
-    LCD_Rx_Deal_SCI3(&g_stCurrentMsgPtrLCD_SCI3);
-#endif
   }
 }
 

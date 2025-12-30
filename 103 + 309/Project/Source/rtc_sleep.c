@@ -1257,7 +1257,6 @@ void rtc_sleep(void)
     BQ769x0_SleepMode_Ctrl();
 
     static uint8_t state_sleep = 0;
-    static uint32_t sleep_cnt = 0;
 
     switch (state_sleep)
     {
@@ -1332,10 +1331,10 @@ void rtc_sleep(void)
 #endif
 
             if (is_rtc_wakekup)
-                ++sleep_cnt;
+                ++sys_time.rtc_sleep_cnt;
             // deal_wakeup();
             Init();
-            log_w("cnt %d", sleep_cnt);
+            log_w("cnt %d", sys_time.rtc_sleep_cnt);
             if (is_rtc_wakekup)
             {
                 // Init();
@@ -1350,7 +1349,7 @@ void rtc_sleep(void)
                 }
                 else
                 {
-                    update_rtc_soc(&sleep_cnt);
+                    update_rtc_soc(&sys_time.rtc_sleep_cnt);
 
 #if 0
                     // if (sleep_cnt / 3 >= OtherElement.u16Sleep_TimeNormal)
@@ -1383,8 +1382,8 @@ void rtc_sleep(void)
 
             report_wkup_sig();
 
-            before_wakeup(&sleep_cnt);
-            sleep_cnt = 0;
+            before_wakeup(&sys_time.rtc_sleep_cnt);
+            sys_time.rtc_sleep_cnt = 0;
         }
         break;
         case DEEP_MODE:
