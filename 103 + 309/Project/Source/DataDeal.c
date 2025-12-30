@@ -299,6 +299,9 @@ void DataLoad_CurrentCali(void)
 	}
 }
 
+extern uint16_t time_chg;
+extern uint16_t time_dsg;
+extern uint16_t time_real;
 void DataLoad_Current(void)
 {
 	// if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
@@ -368,6 +371,41 @@ void DataLoad_Current(void)
 		g_stCellInfoReport.u16IDischg = sys_time.DSG;
 	}
 #endif
+
+	if (g_stCellInfoReport.u16Ichg)
+	{
+		time_dsg = 0xffff;
+		// todo 1、满充、满放容量校准 2、soh与学习满充容量
+		//  time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFactory - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / g_stCellInfoReport.u16Ichg;
+		time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg * CURRENT_K_CHG);
+		time_real = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg);
+	}
+	else if (g_stCellInfoReport.u16IDischg)
+	{
+		float time;
+		time_chg = 0xffff;
+		time = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg * CURRENT_K_DSG);
+		time_dsg = (uint16_t)time;
+		time_real = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg);
+	}
+	else
+	{
+		if (g_stCellInfoReport.SocElement.u16Soc == 0)
+		{
+			time_chg = 0xffff;
+			time_dsg = 0;
+		}
+		else if ((g_stCellInfoReport.SocElement.u16Soc == 100))
+		{
+			time_chg = 0;
+			time_dsg = 0xffff;
+		}
+		else
+		{
+			time_chg = 0xffff;
+			time_dsg = 0xffff;
+		}
+	}
 }
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
@@ -561,28 +599,27 @@ extern UINT8 gu8_200msAccClock_Flag2;
 // 	gu8_200msAccClock_Flag2 = 0;
 // }
 
-void App_AFEGet(void) {
-	if(0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
-		|| 1 == gu8_TxEnable_SCI3) {
+void App_AFEGet(void)
+{
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	{
 		return;
 	}
 
-	if(u32E2P_Pro_VolCur_WriteFlag!=0 || u32E2P_Pro_Temp_WriteFlag!=0 || u32E2P_Pro_Other_WriteFlag!=0\
-		|| u32E2P_OtherElement1_WriteFlag!=0 || u32E2P_RTC_Element_WriteFlag!=0 || u8E2P_SocTable_WriteFlag!=0\
-		|| u8E2P_CopperLoss_WriteFlag!=0 || u8E2P_KB_WriteFlag!=0) {
+	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
+	{
 		return;
 	}
 
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
-    DataLoad_CellVolt();
-    //DataLoad_CellVolt_Test();
-    DataLoad_CellVoltMaxMinFind();
-    DataLoad_Temperature();
-    DataLoad_TemperatureMaxMinFind();
+	DataLoad_CellVolt();
+	// DataLoad_CellVolt_Test();
+	DataLoad_CellVoltMaxMinFind();
+	DataLoad_Temperature();
+	DataLoad_TemperatureMaxMinFind();
 	DataLoad_Current();
 
 	App_SH367309();
-	App_MOS_Relay_Ctrl();
+	// App_MOS_Relay_Ctrl();
 }
-

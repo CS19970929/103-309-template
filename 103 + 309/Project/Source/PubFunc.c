@@ -440,3 +440,25 @@ void jtag_disableAndConfIO(void)
 
 #endif
 }
+
+uint8_t getBcc(uint8_t *data, uint16_t length)
+{
+	uint8_t i;
+	uint8_t bcc = 0; // Initial value
+#if 0
+	while(length--)
+	{
+		bcc ^= *data++;
+	}
+#else
+	// for ( i = 0; i <= length; i++ )
+	// {
+	// 	bcc ^= data[i];        // crc ^= *data;
+	// }
+	for (i = 0; i < length; i++)
+	{
+		bcc ^= data[i]; // crc ^= *data;
+	}
+#endif
+	return bcc;
+}

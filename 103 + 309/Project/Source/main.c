@@ -60,6 +60,15 @@ int main(void)
 		App_LogRecord();
 		App_ProID_Deal();
 		// __delay_ms(1000);
+		if (reset_numPro)
+		{
+			UINT8 i;
+			reset_numPro = 0;
+			for (i = 1; i <= 11; i++)
+			{
+				WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+			}
+		}
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif

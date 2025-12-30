@@ -17,8 +17,8 @@
 #define AFE_COV_recover   (3500)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2800)
-#define AFE_CUV_recover     (2900)
+#define AFE_CUV           (2500)
+#define AFE_CUV_recover     (2600)
 #define AFE_CUV_filter     (100)
 #else
 #define AFE_COV           (4280)

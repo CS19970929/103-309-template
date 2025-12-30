@@ -28,6 +28,7 @@ void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length);
 UINT16 U16_SwapEndian(UINT16 target);
 UINT8 Monitor_TempBreak(UINT16* temp_AD);
 void jtag_disableAndConfIO(void);
+uint8_t getBcc(uint8_t *data, uint16_t length);
 
 #endif	/* PUBFUNC_H */
 

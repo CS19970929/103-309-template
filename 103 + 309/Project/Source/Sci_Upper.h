@@ -1,6 +1,18 @@
 #ifndef SCI_H
 #define SCI_H
 
+#define SCI_software_ver			"06"
+
+#define __BAUD_RATE__  115200
+
+
+// #define SCI_software_ver			"1D"
+// #define	BatteryNUM					"        \0\0\0"
+
+#define UART_BAUD_9600					(UINT16)9600
+#define UART_BAUD_19200					(UINT16)19200
+#define UART_BAUD_115200				(UINT16)11520
+
 #define	RS485_BROADCAST_ADDR		(( UINT8 ) 0x00 )
 #define	RS485_SLAVE_ADDR			(( UINT8 ) 0x01 )
 
@@ -15,8 +27,12 @@ enum RS485_CMD_E {
 	RS485_CMD_WRITE_REG = 6,
 	RS485_CMD_WRITE_REGS = 16,
 	
-	//UART_CLIENT_CMD_0x01 = 0xA1,	//�ͻ���
-	//UART_CLIENT_CMD_0x02 = 0xA2,	
+	UART_CLIENT_CMD_0x01 = 0xA1,	//客户的
+	UART_CLIENT_CMD_0x02 = 0xA2,	
+
+	UART_CLIENT_CMD_0x04 = 0x04,
+	UART_CLIENT_CMD_0x05 = 0x05,
+	UART_CLIENT_CMD_0x06 = 0x06,
 };
 
 
@@ -89,6 +105,14 @@ struct stCell_Info {
 #define	RS485_STA_RX_OK				2
 #define	RS485_STA_TX_COMPLETE		3
 
+//***********************SCI
+#define SCI_STA_RX_COMPLETE			10
+#define SCI_STA_RX_OK				11
+#define	SCI_STA_TX_COMPLETE			12
+#define SCI_STA_RX_COMPLETE2		13
+
+#define SCI_HEAD1					0X5A
+#define SCI_HEAD2					0xA5		
 
 #define	RS485_ACK_POS			        0x00	// ����Ӧ
 #define	RS485_ACK_NEG			        0x01	// ����Ӧ
@@ -158,6 +182,8 @@ struct RS485MSG {
 #define RS485_ADDR_SN_HAEDWARE_VER		0xFFF1
 #define RS485_ADDR_SN_SOFTWARE_VER		0xFFF2
 
+#define RS485_ADDR_ONLY_BATNUM			0xFFF3 
+
 
 #define RS485_CMD_ADDR_FLASH_CONNECT	0xFFFD		//MCU����������������
 
@@ -171,6 +197,8 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_SET_ONCE_SOC,
 	RS485_CMD_ADDR_RESET_AFE_PARAMETERS,
 	RS485_CMD_ADDR_RESET_EVENT_RECORD,
+
+	RS485_CMD_ADDR_Change_BAUD_RECORD,
 
 	#if 0	//��ģ����������з����ж��ٿ�ʼ�����������ù�������ϵͳ��ʵ��û��ô����������
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_BALANCE = 0x1100,
@@ -534,6 +562,25 @@ extern struct RS485MSG g_stCurrentMsgPtr_SCI3;
 
 extern struct stCell_Info g_stCellInfoReport;
 
+struct nrb_protect
+{
+	UINT16	shortPro;
+	UINT16	chgOcp;
+	UINT16	dsgOcp;
+	UINT16	cellOvp;
+
+	UINT16	chgOtp;
+	UINT16	chgUtp;
+	UINT16	dsgOtp;
+	UINT16	dsgUtp;
+
+	UINT16	batOvp;
+	UINT16	batUvp;
+	UINT16	recover;
+
+};
+
+extern struct nrb_protect num_pro;
 
 void Sci1_CommonUpper_FaultChk(void);
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s);
@@ -544,6 +591,8 @@ void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
 
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
+
+extern UINT8 reset_numPro;
 
 #endif	/* SCI_H */
 

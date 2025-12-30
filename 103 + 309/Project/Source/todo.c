@@ -5,6 +5,9 @@
 telink  i2c研究
 flash、soc、日志逻辑
 
+
+协议测试
+
 struct RS485MSG {
 	UINT8	ptr_no;          	// Word stating what state msg is in
 	UINT8	csr;          		// I2C address of slave msg is intended for

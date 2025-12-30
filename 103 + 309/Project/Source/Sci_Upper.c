@@ -1,5 +1,14 @@
 #include "main.h"
 
+struct nrb_protect num_pro;
+
+uint16_t time_chg = 0;
+uint16_t time_dsg = 0;
+uint16_t time_real = 0;
+
+UINT8 reset_numPro;
+UINT16 his_shortPro;
+
 struct RS485MSG g_stCurrentMsgPtr_SCI1;
 UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI1 = 0;
@@ -34,6 +43,7 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
+void Sci_WrRegs_0x10_updateBatNum(struct RS485MSG *s);
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
@@ -45,6 +55,11 @@ void Sci_WrReg_0x06_SwitchOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
+
+void UART_CLIENT_deal_0x03(struct RS485MSG *s);
+void UART_CLIENT_deal_0x04(struct RS485MSG *s);
+void UART_CLIENT_deal_0x05(struct RS485MSG *s);
+void UART_CLIENT_deal_0x06(struct RS485MSG *s);
 
 void Sci_DataInit(struct RS485MSG *s)
 {
@@ -318,6 +333,9 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	case RS485_CMD_ADDR_FLASH_CONNECT:
 		Sci_WrRegs_0x10_FlashConnect(s);
 		break; // 少了个BREAK导致OVER。
+	case RS485_ADDR_ONLY_BATNUM:
+		Sci_WrRegs_0x10_updateBatNum(s);
+		break;
 
 	default:
 		s->AckType = RS485_ACK_NEG;
@@ -399,6 +417,23 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 			t_u8BuffTemp[i++] = ProductionInfor.BMS_SoftWareVersion[j];
 		}
 		break;
+	case 4:
+		for (j = 0; j < MAX_BATSNUM_LEN; j++)
+		{
+#if 0
+            if (j < g_tParam.sysinfo.BatSNUMLENGTH)
+                t_u8BuffTemp[i++] = g_tParam.sysinfo.BatSnum[j];
+            else if (j < MAX_BATSNUM_LEN - 1)
+                t_u8BuffTemp[i++] = '0';
+            else
+                t_u8BuffTemp[i] = '\0';
+#else
+
+			t_u8BuffTemp[i++] = sysinfo.BatSnum[j];
+
+#endif
+		}
+		break;
 
 	case 8:
 		Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
@@ -426,15 +461,18 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 
 	// 0xD100_33
-	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Month) | (RTC_time.RTC_Time_Year << 8);
+	u16SciTemp = __LIANXING_VERSION__;
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Hour) | (RTC_time.RTC_Time_Day << 8);
+	// u16SciTemp = (UINT16)(RTC_time.RTC_Time_Hour) | (RTC_time.RTC_Time_Day<<8);
+
+	u16SciTemp = time_chg;
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
+	// u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute<<8);
+	u16SciTemp = time_dsg;
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
@@ -969,7 +1007,7 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -997,6 +1035,13 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 	// receive complete, to deal the receive data
 	case RS485_STA_RX_COMPLETE:
 	{
+#ifdef print_modbus_cmd
+		for (i = 0; i < s->ptr_no; i++)
+		{
+			BSP_Printf(" %02X", s->u16Buffer[i]);
+		}
+		BSP_Printf("\n****************************\n");
+#endif							  // print_modbs
 		USART1->CR1 &= ~(1 << 5); // 禁止产生中断
 		CRC_verify(s);
 		if (s->AckType == RS485_ACK_POS)
@@ -1022,6 +1067,225 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 		s->csr = RS485_STA_RX_OK; // receive the correct data, switch to transmit wait 50ms
 		break;					  // 下一轮再来
 	}
+	case SCI_STA_RX_COMPLETE:
+	{
+		USART1->CR1 &= ~(1 << 5); // 禁止产生中断
+
+		if (getBcc(&s->u16Buffer[2], 3) == s->u16Buffer[5])
+		{
+			switch (s->enRs485CmdType)
+			{
+			case 0x03:
+				UART_CLIENT_deal_0x03(s);
+				break;
+			case UART_CLIENT_CMD_0x04:
+				UART_CLIENT_deal_0x04(s);
+				break;
+			case UART_CLIENT_CMD_0x05:
+				UART_CLIENT_deal_0x05(s);
+				break;
+			case UART_CLIENT_CMD_0x06:
+				UART_CLIENT_deal_0x06(s);
+				break;
+			default:
+				break;
+			}
+		}
+		else
+		{
+			uint8_t index = 0;
+
+			s->u16Buffer[index++] = SCI_HEAD1;
+			s->u16Buffer[index++] = SCI_HEAD2;
+			s->u16Buffer[index++] = s->u16Buffer[2] | 0x80;
+
+			s->u16Buffer[index++] = 0xf0;
+
+			s->AckLenth = index;
+			s->ptr_no = 0;
+			s->csr = RS485_STA_TX_COMPLETE;
+		}
+
+		gu8_TxEnable_SCI1 = 1;
+		s->csr = RS485_STA_TX_COMPLETE;
+		break;
+	}
+	case SCI_STA_RX_COMPLETE2:
+	{
+		uint8_t index = 0, i;
+		UINT16 *p, u16SciTemp, sum = 0;
+
+		USART1->CR1 &= ~(1 << 5);
+
+		switch (s->enRs485CmdType)
+		{
+		case RS485_CMD_READ_REGS:
+			if ((s->u16Buffer[2] == 0xaa) && (s->u16Buffer[3] == 0x00) && (s->u16Buffer[4] == 0xff) && (s->u16Buffer[5] == 0x56))
+			{
+				// num_pro.shortPro = System_ErrFlag.u8ErrFlag_CBC_DSG + his_shortPro;
+
+				// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 1 * 2, num_pro.shortPro);
+
+				p = &num_pro.shortPro;
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0xaa;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x16;
+
+				for (i = 1; i < 12; i++)
+				{
+					u16SciTemp = *p;
+
+					s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+					s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+
+					sum = (*p & 0x00ff) + (*p >> 8 & 0xff) + sum;
+
+					p++;
+				}
+				sum = sum + 0x16;
+				sum = ~sum + 1;
+
+				s->u16Buffer[index++] = (sum >> 8) & 0x00ff;
+				s->u16Buffer[index++] = sum & 0x00ff;
+
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else
+			{
+				uint8_t index = 0;
+
+				s->u16Buffer[index++] = SCI_HEAD1;
+				s->u16Buffer[index++] = SCI_HEAD2;
+				s->u16Buffer[index++] = s->u16Buffer[2] | 0x80;
+
+				s->u16Buffer[index++] = 0xf0;
+
+				s->AckLenth = index;
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			break;
+
+		case RS485_CMD_WRITE_REGS:
+			if ((s->u16Buffer[2] == 0x01) && (s->u16Buffer[3] == 0x02) && (s->u16Buffer[4] == 0x28) && (s->u16Buffer[5] == 0x28) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0xad))
+			{
+				{
+					reset_numPro = 1;
+
+					// System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
+					his_shortPro = 0;
+				}
+
+				p = &num_pro.shortPro;
+				for (i = 1; i <= 11; i++)
+				{
+					*p = 0;
+					p++;
+					// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+				}
+				// for (i = 1; i <= 11; i++)
+				// {
+				//     // WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i*2, (UINT16)0);
+				//     WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+				// }
+
+				index = 0;
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else if ((s->u16Buffer[2] == 0xe1) && (s->u16Buffer[3] == 0x02) && (s->u16Buffer[4] == 0x00))
+			{
+				index = 0;
+
+				if ((s->u16Buffer[5] == 0x00) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1d))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x01) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1c))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x02) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1b))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x03) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1a))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
+				}
+				else
+				{
+					s->u16Buffer[index++] = 0xdd;
+					s->u16Buffer[index++] = 0x01;
+					s->u16Buffer[index++] = 0x00;
+					s->u16Buffer[index++] = s->u16Buffer[3] | 0x80;
+
+					// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+					// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+
+					s->u16Buffer[index++] = 0x77;
+
+					s->AckLenth = index;
+
+					s->ptr_no = 0;
+					s->csr = RS485_STA_TX_COMPLETE;
+
+					break;
+				}
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else
+			{
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = s->u16Buffer[3] | 0x80;
+
+				// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+				// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			break;
+		default:
+			break;
+		}
+
+		gu8_TxEnable_SCI1 = 1;
+		break;
+	}
 	// receive ok, to transmit wait 50ms
 	case RS485_STA_RX_OK:
 	{
@@ -1037,7 +1301,6 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 		default: // 这个defualt不用加错误操作
 			break;
 		}
-		USART1->CR1 |= (1 << 3); // 使能发送
 		gu8_TxEnable_SCI1 = 1;
 	}
 	// transmit complete, to switch receive wait 20ms
@@ -1124,15 +1387,11 @@ void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
-	// NVIC_DisableIRQ(USART2_IRQn);
+	// NVIC_DisableIRQ(USART1_IRQn);
 	USART2->CR1 &= ~(1 << 5);			  // 和上面那句话二选一
 	s->u16Buffer[s->ptr_no] = USART2->DR; // 从RXFIFO 中读取接收到的数据
-	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
-	{
-		s->ptr_no = 0;
-		s->u16Buffer[0] = 0;
-	}
-	else
+
+	if ((s->u16Buffer[0] == RS485_SLAVE_ADDR) || (s->u16Buffer[0] == RS485_BROADCAST_ADDR))
 	{
 		if (s->ptr_no == 1)
 		{
@@ -1161,10 +1420,9 @@ void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 			case RS485_CMD_READ_REGS:
 			case RS485_CMD_WRITE_REG:
 				if (s->ptr_no == 7)
-				{ //	receive complete
+				{
 					s->csr = RS485_STA_RX_COMPLETE;
-					// RCSTA1bits.CREN = 0;  //禁止接收
-					// RC1IE = 0;			// 禁止EUSART2 接收中断
+
 					USART2->CR1 &= ~(1 << 2);
 					USART2->CR1 &= ~(1 << 5);
 				}
@@ -1173,10 +1431,7 @@ void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 				if ((s->ptr_no >= 7) && (s->ptr_no == (s->u16Buffer[6] + 8)))
 				{
 					s->csr = RS485_STA_RX_COMPLETE;
-					// disable rx TODO
-					// disable rx/tx interrupt TODO
-					// RCSTA1bits.CREN = 0;    //禁止接收
-					// RC1IE = 0;				// 禁止EUSART2 接收中断
+
 					USART2->CR1 &= ~(1 << 2);
 					USART2->CR1 &= ~(1 << 5);
 				}
@@ -1194,9 +1449,229 @@ void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 			s->u16Buffer[0] = 0;
 		}
 	}
+	else if ((s->u16Buffer[0] == 0x5a))
+	{
+#if 0
+
+#else
+		if (s->ptr_no == 1)
+		{
+			switch (s->u16Buffer[s->ptr_no])
+			{
+			case 0xA5:
+				// s->enRs485CmdType = RS485_CMD_READ_REGS;
+				break;
+			// case RS485_CMD_WRITE_REG:
+			// 	s->enRs485CmdType = RS485_CMD_WRITE_REG;
+			// 	break;
+			default:
+				s->ptr_no = RS485_MAX_BUFFER_SIZE;
+				s->u16Buffer[0] = 0;
+				s->u16Buffer[1] = 0;
+				break;
+			}
+		}
+		else if (s->ptr_no >= 2)
+		{
+			switch (s->u16Buffer[2])
+			{
+			case 0x03:
+				if ((s->ptr_no == 6))
+				{
+					if ((s->u16Buffer[s->ptr_no] == 0xF0))
+					{
+						s->csr = SCI_STA_RX_COMPLETE;
+						s->enRs485CmdType = 0x03;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+				break;
+			case UART_CLIENT_CMD_0x04:
+				if ((s->ptr_no == 6))
+				{
+					if ((s->u16Buffer[s->ptr_no] == 0xF0))
+					{
+						s->csr = SCI_STA_RX_COMPLETE;
+						s->enRs485CmdType = UART_CLIENT_CMD_0x04;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+				break;
+			case UART_CLIENT_CMD_0x05:
+				if ((s->ptr_no == 6))
+				{
+					if ((s->u16Buffer[s->ptr_no] == 0xF0))
+					{
+						s->enRs485CmdType = UART_CLIENT_CMD_0x05;
+						s->csr = SCI_STA_RX_COMPLETE;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+				break;
+			case UART_CLIENT_CMD_0x06:
+				// if ((s->ptr_no == 6) && (s->u16Buffer[s->ptr_no] == 0xF0))
+				// {
+				// 	s->enRs485CmdType = UART_CLIENT_CMD_0x06;
+				// 	s->csr = SCI_STA_RX_COMPLETE;
+
+				// 	USART1->CR1 &= ~(1 << 2);
+				// 	USART1->CR1 &= ~(1 << 5);
+				// }
+				// break;
+				if ((s->ptr_no == 6))
+				{
+					if ((s->u16Buffer[s->ptr_no] == 0xF0))
+					{
+						s->enRs485CmdType = UART_CLIENT_CMD_0x06;
+						s->csr = SCI_STA_RX_COMPLETE;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+				break;
+			default:
+				s->ptr_no = RS485_MAX_BUFFER_SIZE;
+				s->u16Buffer[0] = 0;
+				break;
+			}
+		}
+		s->ptr_no++;
+		if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
+		{
+			s->ptr_no = 0;
+			s->u16Buffer[0] = 0;
+		}
+#endif
+	}
+	/*todo 还缺几条协议
+	   1、DD A5 AA 00 FF 56 77
+		  DD AA 00 16 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FF E3 77
+
+	   2、DD 5A 01 02 28 28 FF AD 77
+		  DD 01 00 00 00 00 77
+
+
+	   3、DD 5A E1 02 00 xx checksum_H, checksum_L 77
+		  DD E1 00 00 00 00 77
+		   xx的值	MOS动作
+		   0x00    解除软件关闭MOS管动作
+		   0x01	软件关闭充电MOS, 解除软件关闭放电MOS
+		   0x02	软件关闭放电MOS, 解除软件关闭放电MOS
+		   0x03	软件同时关闭充、放电MOS
+
+	   */
+	else if ((s->u16Buffer[0] == 0xDD))
+	{
+		if (s->ptr_no == 1)
+		{
+			switch (s->u16Buffer[s->ptr_no])
+			{
+			case 0xA5:
+				s->enRs485CmdType = RS485_CMD_READ_REGS;
+				break;
+			case 0x5a:
+				s->enRs485CmdType = RS485_CMD_WRITE_REGS;
+				break;
+			// case RS485_CMD_WRITE_REG:
+			// 	break;
+			default:
+				s->ptr_no = RS485_MAX_BUFFER_SIZE;
+				s->u16Buffer[0] = 0;
+				s->u16Buffer[1] = 0;
+				break;
+			}
+		}
+		else if (s->ptr_no >= 2)
+		{
+			switch (s->enRs485CmdType)
+			{
+			case RS485_CMD_READ_REGS:
+				if (s->ptr_no == 6)
+				{
+					if (s->u16Buffer[s->ptr_no] == 0x77)
+					{
+						s->csr = SCI_STA_RX_COMPLETE2;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+				break;
+			case RS485_CMD_WRITE_REGS:
+				// if ((s->ptr_no == (s->u16Buffer[3] + 6)) && (s->u16Buffer[s->ptr_no] == 0x77))
+
+				// todo why 这个bug原因
+				if (s->ptr_no == 8)
+				{
+					if ((s->u16Buffer[s->ptr_no] == 0x77))
+					{
+						s->csr = SCI_STA_RX_COMPLETE2;
+
+						USART2->CR1 &= ~(1 << 2);
+						USART2->CR1 &= ~(1 << 5);
+					}
+					else
+					{
+						s->ptr_no = RS485_MAX_BUFFER_SIZE;
+						s->u16Buffer[0] = 0;
+					}
+				}
+
+				break;
+			default:
+				s->ptr_no = RS485_MAX_BUFFER_SIZE;
+				s->u16Buffer[0] = 0;
+				break;
+			}
+		}
+
+		s->ptr_no++;
+		if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
+		{
+			s->ptr_no = 0;
+			s->u16Buffer[0] = 0;
+		}
+	}
+	else
+	{
+		s->ptr_no = 0;
+		s->u16Buffer[0] = 0;
+	}
+
 	USART2->CR1 |= (1 << 5);
 }
-
 void Sci2_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	static int delayFlag = 0;
@@ -1281,7 +1756,7 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1334,6 +1809,226 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 		s->csr = RS485_STA_RX_OK; // receive the correct data, switch to transmit wait 50ms
 		break;					  // 下一轮再来
 	}
+	case SCI_STA_RX_COMPLETE:
+	{
+		USART2->CR1 &= ~(1 << 5); // 禁止产生中断
+
+		if (getBcc(&s->u16Buffer[2], 3) == s->u16Buffer[5])
+		{
+			switch (s->enRs485CmdType)
+			{
+			case 0x03:
+				UART_CLIENT_deal_0x03(s);
+				break;
+			case UART_CLIENT_CMD_0x04:
+				UART_CLIENT_deal_0x04(s);
+				break;
+			case UART_CLIENT_CMD_0x05:
+				UART_CLIENT_deal_0x05(s);
+				break;
+			case UART_CLIENT_CMD_0x06:
+				UART_CLIENT_deal_0x06(s);
+				break;
+			default:
+				break;
+			}
+		}
+		else
+		{
+			uint8_t index = 0;
+
+			s->u16Buffer[index++] = SCI_HEAD1;
+			s->u16Buffer[index++] = SCI_HEAD2;
+			s->u16Buffer[index++] = s->u16Buffer[2] | 0x80;
+
+			s->u16Buffer[index++] = 0xf0;
+
+			s->AckLenth = index;
+			s->ptr_no = 0;
+			s->csr = RS485_STA_TX_COMPLETE;
+		}
+
+		gu8_TxEnable_SCI2 = 1;
+		s->csr = RS485_STA_TX_COMPLETE;
+
+		break;
+	}
+	case SCI_STA_RX_COMPLETE2:
+	{
+		uint8_t index = 0, i;
+		UINT16 *p, u16SciTemp, sum = 0;
+
+		USART2->CR1 &= ~(1 << 5);
+
+		switch (s->enRs485CmdType)
+		{
+		case RS485_CMD_READ_REGS:
+			if ((s->u16Buffer[2] == 0xaa) && (s->u16Buffer[3] == 0x00) && (s->u16Buffer[4] == 0xff) && (s->u16Buffer[5] == 0x56))
+			{
+				// num_pro.shortPro = System_ErrFlag.u8ErrFlag_CBC_DSG + his_shortPro;
+
+				// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 1 * 2, num_pro.shortPro);
+
+				p = &num_pro.shortPro;
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0xaa;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x16;
+
+				for (i = 1; i < 12; i++)
+				{
+					u16SciTemp = *p;
+
+					s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+					s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+
+					sum = (*p & 0x00ff) + (*p >> 8 & 0xff) + sum;
+
+					p++;
+				}
+				sum = sum + 0x16;
+				sum = ~sum + 1;
+
+				s->u16Buffer[index++] = (sum >> 8) & 0x00ff;
+				s->u16Buffer[index++] = sum & 0x00ff;
+
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else
+			{
+				uint8_t index = 0;
+
+				s->u16Buffer[index++] = SCI_HEAD1;
+				s->u16Buffer[index++] = SCI_HEAD2;
+				s->u16Buffer[index++] = s->u16Buffer[2] | 0x80;
+
+				s->u16Buffer[index++] = 0xf0;
+
+				s->AckLenth = index;
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			break;
+
+		case RS485_CMD_WRITE_REGS:
+			if ((s->u16Buffer[2] == 0x01) && (s->u16Buffer[3] == 0x02) && (s->u16Buffer[4] == 0x28) && (s->u16Buffer[5] == 0x28) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0xad))
+			{
+				{
+					reset_numPro = 1;
+
+					// System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
+					his_shortPro = 0;
+				}
+
+				p = &num_pro.shortPro;
+				for (i = 1; i <= 11; i++)
+				{
+					*p = 0;
+					p++;
+					// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+				}
+				// for (i = 1; i <= 11; i++)
+				// {
+				//     // WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i*2, (UINT16)0);
+				//     WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+				// }
+
+				index = 0;
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else if ((s->u16Buffer[2] == 0xe1) && (s->u16Buffer[3] == 0x02) && (s->u16Buffer[4] == 0x00))
+			{
+				index = 0;
+
+				if ((s->u16Buffer[5] == 0x00) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1d))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x01) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1c))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x02) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1b))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
+				}
+				else if ((s->u16Buffer[5] == 0x03) && (s->u16Buffer[6] == 0xff) && (s->u16Buffer[7] == 0x1a))
+				{
+					Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
+				}
+				else
+				{
+					s->u16Buffer[index++] = 0xdd;
+					s->u16Buffer[index++] = 0x01;
+					s->u16Buffer[index++] = 0x00;
+					s->u16Buffer[index++] = s->u16Buffer[3] | 0x80;
+
+					// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+					// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+
+					s->u16Buffer[index++] = 0x77;
+
+					s->AckLenth = index;
+
+					s->ptr_no = 0;
+					s->csr = RS485_STA_TX_COMPLETE;
+
+					break;
+				}
+
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			else
+			{
+				s->u16Buffer[index++] = 0xdd;
+				s->u16Buffer[index++] = 0x01;
+				s->u16Buffer[index++] = 0x00;
+				s->u16Buffer[index++] = s->u16Buffer[3] | 0x80;
+
+				// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+				// s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+
+				s->u16Buffer[index++] = 0x77;
+
+				s->AckLenth = index;
+
+				s->ptr_no = 0;
+				s->csr = RS485_STA_TX_COMPLETE;
+			}
+			break;
+		default:
+			break;
+		}
+
+		gu8_TxEnable_SCI2 = 1;
+		break;
+	}
 	// receive ok, to transmit wait 50ms
 	case RS485_STA_RX_OK:
 	{
@@ -1380,7 +2075,6 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 	Sci2_CommonUpper_Tx_Deal(s);
 	// Sci1_FaultChk();	//没必要在这加
 }
-
 #endif
 
 #if (defined _COMMOM_UPPER_SCI3)
@@ -2003,6 +2697,28 @@ void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s)
 	}
 }
 
+void Sci_WrRegs_0x10_updateBatNum(struct RS485MSG *s)
+{
+	int8_t index = 0;
+	UINT16 regNum;
+
+	regNum = (s->u16Buffer[4] << 8) + s->u16Buffer[5];
+
+	if (regNum == 6)
+	{
+		for (index = 0; index < MAX_BATSNUM_LEN; index++)
+		{
+			sysinfo.BatSnum[index] = s->u16Buffer[7 + index];
+			WriteEEPROM_Byte(E2P_ADDR_SYSINFO + index, sysinfo.BatSnum[index]);
+		}
+	}
+	else
+	{
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_CMD_INVALID;
+	}
+}
+
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
@@ -2464,4 +3180,400 @@ int fputc(int ch, FILE *f)
 
 	return ch;
 #endif
+}
+
+void UART_CLIENT_deal_0x03(struct RS485MSG *s)
+{
+	UINT8 index = 0, len = 16, i;
+	UINT16 u16SciTemp;
+	// uint16_t  time_chg = 0;
+	// uint16_t  time_dsg = 0;
+
+	s->u16Buffer[index++] = SCI_HEAD1;
+	s->u16Buffer[index++] = SCI_HEAD2;
+	s->u16Buffer[index++] = 0x03;
+
+	s->u16Buffer[index++] = len;
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16CapacityFull / 10;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	u16SciTemp = time_chg;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	u16SciTemp = time_dsg;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	for (uint8_t i = 0; i < 5; i++)
+	{
+		u16SciTemp = 0;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+	s->u16Buffer[index++] = 0xf0;
+
+	s->AckLenth = index;
+	s->ptr_no = 0;
+	s->csr = RS485_STA_TX_COMPLETE;
+}
+
+void UART_CLIENT_deal_0x04(struct RS485MSG *s)
+{
+	UINT8 index = 0, len = 0x23, i;
+	UINT16 u16SciTemp;
+
+	s->u16Buffer[index++] = SCI_HEAD1;
+	s->u16Buffer[index++] = SCI_HEAD2;
+	s->u16Buffer[index++] = 0x01;
+
+	s->u16Buffer[index++] = len;
+
+	for (i = 0; i < 6; i++)
+	{
+		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	// todo	温度负值待处理	好像没问题，后面测试考虑
+	//	if (g_stCellInfoReport.u16TempMin >= 400)
+	//	{
+	//		u16_tmp16a = g_stCellInfoReport.u16TempMin - 400;
+
+	//		// 除法？？？？优化
+	//		u16_tmp16a = u16_tmp16a / 10 + 273;
+	//		g_tCanTxMsg.Data[index++] = (uint8_t)(u16_tmp16a & 0xFF);
+	//		g_tCanTxMsg.Data[index++] = (uint8_t)((u16_tmp16a >> 8) & 0xFF);
+	//	}
+	//	else
+	//	{
+	//		u16_tmp16a = 400 - g_stCellInfoReport.u16TempMin;
+	//		u16_tmp16a = 273 - (u16_tmp16a / 10);
+	//		g_tCanTxMsg.Data[index++] = (int8_t)(u16_tmp16a & 0xFF);
+	//		g_tCanTxMsg.Data[index++] = (int8_t)((u16_tmp16a >> 8) & 0xFF);
+	//	}
+	// u16SciTemp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
+	u16SciTemp = g_stCellInfoReport.u16TempMax;
+	u16SciTemp = (u16SciTemp - 400) / 10 + 40;
+	s->u16Buffer[index++] = u16SciTemp;
+
+	// todo balance status
+	{
+		s->u16Buffer[index++] = g_stCellInfoReport.u16BalanceFlag1;
+	}
+
+	u16SciTemp = g_stCellInfoReport.u16VCellTotle / 10;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	// todo current
+	if (g_stCellInfoReport.u16Ichg > 0)
+	{
+		// current	区分充放电 分辨率0.01A，偏移量100A
+		u16SciTemp = g_stCellInfoReport.u16Ichg * 10 + 10000;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+	else if (g_stCellInfoReport.u16IDischg > 0)
+	{
+		u16SciTemp = 10000 - g_stCellInfoReport.u16IDischg * 10;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+	else
+	{
+		u16SciTemp = 100 * 100;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16Soc;
+	s->u16Buffer[index++] = u16SciTemp;
+
+	{
+		u16SciTemp = 0x00;
+		if (Fault_Flag_Third.bits.CellOvp_Third)
+			u16SciTemp |= 1 << 0;
+		if (Fault_Flag_Third.bits.CellUvp_Third)
+			u16SciTemp |= 1 << 1;
+		if (Fault_Flag_Third.bits.MosOTp_Third)
+			u16SciTemp |= 1 << 2;
+		if (Fault_Flag_Third.bits.VdeltaOvp_Third)
+			u16SciTemp |= 1 << 3;
+		if (Fault_Flag_Third.bits.IchgOcp_Third)
+			u16SciTemp |= 1 << 4;
+		if (Fault_Flag_Third.bits.IdischgOcp_Third)
+			u16SciTemp |= 1 << 5;
+
+		s->u16Buffer[index++] = u16SciTemp;
+	}
+
+	{
+		u16SciTemp = PRT_E2ROMParas.u16VcellOvp_Third;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16VcellUvp_Third;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		// todo 温度范围 1字节 后面估计还需要处理
+		u16SciTemp = PRT_E2ROMParas.u16TdischgOTp_Third;
+		u16SciTemp = (u16SciTemp - 400) / 10;
+		s->u16Buffer[index++] = u16SciTemp;
+
+		u16SciTemp = PRT_E2ROMParas.u16IchgOcp_Third / 10 + 1000;
+		u16SciTemp = 10 * u16SciTemp;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16IdsgOcp_Third / 10 + 1000;
+		u16SciTemp = 10 * u16SciTemp;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16CapacityFull / 10;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	{
+		u16SciTemp = PRT_E2ROMParas.u16VcellOvp_Rcv;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16VcellUvp_Rcv;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+	s->u16Buffer[index++] = 0xf0;
+
+	s->AckLenth = index;
+	s->ptr_no = 0;
+	s->csr = RS485_STA_TX_COMPLETE;
+}
+
+char BatteryNUM[11] = {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0'};
+void UART_CLIENT_deal_0x05(struct RS485MSG *s)
+{
+	UINT8 index = 0, len = 0x0f, i = 0;
+	UINT16 u16SciTemp;
+
+	// char BatteryNUM[11] = {'0'};
+	BatteryNUM[10] = '1';
+
+	s->u16Buffer[index++] = 0xAA;
+	s->u16Buffer[index++] = 0xEB;
+	s->u16Buffer[index++] = 0x0f;
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16Cycle_times;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	s->u16Buffer[index++] = (char)SCI_software_ver[i++];
+	s->u16Buffer[index++] = (char)SCI_software_ver[i++];
+
+#if 0
+    for (i = 0; i < 11; i++)
+        s->u16Buffer[index++] = (char)BatteryNUM[i];
+#else
+	for (i = 0; i < MAX_BATSNUM_LEN; i++)
+		// s->u16Buffer[index++] = (char)ProductionInfor.sysInfo.BatSnum[i];
+		s->u16Buffer[index++] = (char)sysinfo.BatSnum[i];
+
+#endif
+
+	s->u16Buffer[index++] = getBcc(&s->u16Buffer[3], len);
+
+	s->u16Buffer[index++] = 0xfa;
+
+	s->AckLenth = index;
+	s->ptr_no = 0;
+	s->csr = RS485_STA_TX_COMPLETE;
+}
+
+void UART_CLIENT_deal_0x06(struct RS485MSG *s)
+{
+	UINT8 index = 0, len = 0x3f, i = 0;
+	UINT16 u16SciTemp;
+
+	s->u16Buffer[index++] = SCI_HEAD1;
+	s->u16Buffer[index++] = SCI_HEAD2;
+	s->u16Buffer[index++] = 0x02;
+
+	s->u16Buffer[index++] = len;
+
+	u16SciTemp = OtherElement.u16Sys_SeriesNum;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+
+	for (i = 0; i < 6; i++)
+	{
+		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	u16SciTemp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
+	// todo	温度负值待处理
+	u16SciTemp = (u16SciTemp - 400) / 10 + 40;
+	s->u16Buffer[index++] = u16SciTemp;
+
+	// balance status
+	{
+		s->u16Buffer[index++] = g_stCellInfoReport.u16BalanceFlag1;
+	}
+
+	u16SciTemp = g_stCellInfoReport.u16VCellTotle / 10;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	// current	区分充放电 分辨率0.01A，偏移量100A
+	// u16SciTemp = g_stCellInfoReport.u16Ichg;
+	// s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	// s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	if (g_stCellInfoReport.u16Ichg > 0)
+	{
+		u16SciTemp = g_stCellInfoReport.u16Ichg * 10 + 10000;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+	else if (g_stCellInfoReport.u16IDischg > 0)
+	{
+		u16SciTemp = 10000 - g_stCellInfoReport.u16IDischg * 10;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+	else
+	{
+		u16SciTemp = 100 * 100;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16Soc;
+	s->u16Buffer[index++] = u16SciTemp;
+
+	{
+		u16SciTemp = 0x00;
+		if (Fault_Flag_Third.bits.CellOvp_Third)
+			u16SciTemp |= 1 << 0;
+		if (Fault_Flag_Third.bits.CellUvp_Third)
+			u16SciTemp |= 1 << 1;
+		if (Fault_Flag_Third.bits.MosOTp_Third)
+			u16SciTemp |= 1 << 2;
+		if (Fault_Flag_Third.bits.IchgOcp_Third)
+			u16SciTemp |= 1 << 4;
+		if (Fault_Flag_Third.bits.IdischgOcp_Third)
+			u16SciTemp |= 1 << 5;
+
+		s->u16Buffer[index++] = u16SciTemp;
+	}
+
+	{
+		u16SciTemp = PRT_E2ROMParas.u16VcellOvp_Third;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16VcellUvp_Third;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		// u16SciTemp = g_tParam.protect.u16TmosOTp_Third;
+		// s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		// s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16TdischgOTp_Third;
+		u16SciTemp = (u16SciTemp - 400) / 10;
+		s->u16Buffer[index++] = u16SciTemp;
+
+		// u16SciTemp = g_tParam.protect.u16IchgOcp_Third;
+		// s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		// s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		// u16SciTemp = g_tParam.protect.u16IdsgOcp_Third;
+		// s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		// s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16IchgOcp_Third / 10 + 1000;
+		u16SciTemp = 10 * u16SciTemp;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16IdsgOcp_Third / 10 + 1000;
+		u16SciTemp = 10 * u16SciTemp;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	u16SciTemp = g_stCellInfoReport.SocElement.u16CapacityFull / 10;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+	s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+	{
+		u16SciTemp = PRT_E2ROMParas.u16VcellOvp_Rcv;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = PRT_E2ROMParas.u16VcellUvp_Rcv;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	// todo 保护次数
+	{
+		UINT8 cnt = 0x10;
+
+		u16SciTemp = cnt;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = cnt;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = cnt;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = cnt;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		u16SciTemp = cnt;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+
+	s->u16Buffer[index++] = 0xAA;
+	s->u16Buffer[index++] = 0xEB;
+
+	{
+		u16SciTemp = g_stCellInfoReport.SocElement.u16Cycle_times;
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+
+		s->u16Buffer[index++] = (char)SCI_software_ver[i++];
+		s->u16Buffer[index++] = (char)SCI_software_ver[i++];
+
+		// i = 0;
+		// bug
+		i = 0;
+		BatteryNUM[10] = '1';
+		for (i = 0; i < 11; i++)
+			s->u16Buffer[index++] = (char)BatteryNUM[i];
+	}
+	s->u16Buffer[index++] = getBcc(&s->u16Buffer[2], len + 2);
+	s->u16Buffer[index++] = 0xf0;
+
+	s->AckLenth = index;
+	s->ptr_no = 0;
+	s->csr = RS485_STA_TX_COMPLETE;
 }

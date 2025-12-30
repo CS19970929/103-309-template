@@ -1,6 +1,18 @@
 #ifndef EEPROM_H
 #define EEPROM_H
 
+#include "conf.h"
+
+typedef struct SYSINFO
+{
+	// UINT8 BatSnum[MAX_BATSNUM_LEN];
+	char BatSnum[MAX_BATSNUM_LEN];
+	UINT16 BatSNUMLENGTH;
+	UINT16 AddBatsnum;
+}SYSINFO_T;
+
+extern SYSINFO_T			sysinfo;
+
 //Mini STM32������ʹ�õ���24c02
 //#define AT24C02
 #define DELAY_US_IIC_EEPROM		2	//4Ϊ100KHz��2Ϊ150KHz
@@ -275,6 +287,10 @@
 #define E2P_ADDR_E2POS_EVENT_POINT		1200	//��һ��1202
 
 #define E2P_ADDR_SH367309_VALUE		1500	//��һ��1202
+
+#define E2P_ADDR_BAUD_RECORD          	1206
+
+#define E2P_ADDR_SYSINFO 2000
 
 extern UINT32 u32E2P_Pro_VolCur_WriteFlag;
 extern UINT32 u32E2P_Pro_Temp_WriteFlag;
