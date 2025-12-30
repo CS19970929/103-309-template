@@ -969,7 +969,7 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 115200;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1281,7 +1281,7 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 115200;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -2438,5 +2438,30 @@ void App_CommonUpper(void)
 
 #ifdef _COMMOM_UPPER_SCI3
 	App_CommonUpperSCI3(&g_stCurrentMsgPtr_SCI3);
+#endif
+}
+
+#if 1
+#define debug_uart USART1
+#else
+#define debug_uart USART2
+#endif
+
+int fputc(int ch, FILE *f)
+{
+#if 0 /* 将需要printf的字符通过串口中断FIFO发送出去，printf函数会立即返回 */
+	comSendChar(COM1, ch);
+
+	return ch;
+#else /* 采用阻塞方式发送每个字符,等待数据发送完毕 */
+	/* 写一个字节到USART1 */
+	USART_SendData(debug_uart, (uint8_t)ch);
+
+	/* 等待发送结束 */
+	while (USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET)
+	{
+	}
+
+	return ch;
 #endif
 }

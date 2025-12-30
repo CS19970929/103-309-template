@@ -44,7 +44,7 @@ int main(void)
 		App_AnlogCal();
 		App_E2promDeal();
 		App_CellBalance();
-		App_Can();
+		// App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		sleep();
 		App_SOC();
@@ -85,7 +85,7 @@ void InitDevice(void)
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
-	InitCan();
+	// InitCan();
 	InitADC();
 	InitSci();
 
@@ -100,6 +100,7 @@ void InitDevice(void)
 	Init_IWDG();
 #endif // !1
 	InitTimer();
+	log_w("init over");
 
 #endif
 }
