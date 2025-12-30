@@ -271,9 +271,31 @@ void USART1_IRQHandler(void)
 
 void USART2_IRQHandler(void)
 {
-#ifdef _COMMOM_UPPER_SCI2
-  Sci2_CommonUpper_FaultChk();
-#endif
+  uint32_t isr = USART2->SR;
+
+  // ---- 1. 错误检测与清除 ----
+  if (isr & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
+  {
+    volatile uint32_t dump = USART2->DR;
+    (void)dump;
+
+    // 手动清除错误标志（ICR是写1清零）
+    // USART2->CR = (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0);
+
+    // gu16_CommuErrCnt_SCI2++;
+    return;
+  }
+
+  // // ---- 2. 循环读取所有接收到的数据 ----
+  // while (USART2->SR & USART_SR_RXNE)
+  // {
+  // 	uint8_t data = (uint8_t)USART2->RDR;
+  // 	uart_receive_input(data);
+  // }
+
+  // #ifdef _COMMOM_UPPER_SCI2
+  //   Sci2_CommonUpper_FaultChk();
+  // #endif
 
   if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
   {
@@ -293,6 +315,14 @@ void USART2_IRQHandler(void)
     LCD_FaultChk_SCI2();
     LCD_Rx_Deal_SCI2(&g_stCurrentMsgPtrLCD_SCI2);
 #endif
+  }
+  
+  // ---- 3. 可选IDLE清除 ----
+  if (isr & USART_SR_IDLE)
+  {
+    volatile uint32_t dump = USART2->DR;
+    (void)dump;
+    // USART2->CR = (1 << 4); // IDLECF
   }
 }
 

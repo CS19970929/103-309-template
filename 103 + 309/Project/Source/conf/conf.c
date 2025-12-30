@@ -154,20 +154,20 @@ void InitWakeUp_NormalMode(void)
     InitWakeUp_Base();
 
     {
-        GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line7;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
+        // GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
+        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        // GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
+        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
+        // EXTI_InitStruct.EXTI_Line = EXTI_Line7;
+        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        // EXTI_Init(&EXTI_InitStruct);
+        // NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
+        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        // NVIC_Init(&NVIC_InitStructure);
 
         // GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX; // ?????GPIO??,PA0?????
         // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
