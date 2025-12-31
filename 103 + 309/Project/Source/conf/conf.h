@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x6445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1231		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (6)
 #define CURRENT_K_DSG   (float)100.0 / 93
@@ -24,7 +24,7 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-#define __VIRTURE_CURRENT__
+// #define __VIRTURE_CURRENT__
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS

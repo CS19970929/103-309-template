@@ -499,8 +499,7 @@ void Init(void)
         USART_DeInit(USART2);
 
         InitSci();
-
-        InitCan();
+        // InitCan();
 
         InitTimer();
         sys_time.wakeup_rtc = true;

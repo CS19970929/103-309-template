@@ -288,9 +288,9 @@ extern SYSINFO_T			sysinfo;
 
 #define E2P_ADDR_SH367309_VALUE		1500	//��һ��1202
 
-#define E2P_ADDR_BAUD_RECORD          	1206
 
 #define E2P_ADDR_SYSINFO 2000
+#define E2P_ADDR_BAUD_RECORD          	2500
 
 extern UINT32 u32E2P_Pro_VolCur_WriteFlag;
 extern UINT32 u32E2P_Pro_Temp_WriteFlag;

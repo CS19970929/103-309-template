@@ -405,6 +405,12 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	ReadEEPROM_AFE_Parameters();
 	ReadEEPROM_EventRecord_Parameters();
+	UINT16 *p = &num_pro.shortPro;
+	for (i = 1; i <= 11; i++)
+	{
+		*p = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 2 * i);
+		p++;
+	}
 }
 
 // Sci命令的数据
@@ -454,6 +460,11 @@ void EEPROM_ResetData_OtherToDefault(void)
 	EEPROM_ResetData_EventRecord_ToDefault();
 
 	SystemMonitorResetData_EEPROM(); // 系统功能选取标志位存储
+
+	for (uint8_t i = 1; i <= 11; i++)
+	{
+		WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
+	}
 }
 
 // Sci命令表中，因为STM8的缘故，决定全部从通讯中移出来写

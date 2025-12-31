@@ -1,6 +1,5 @@
 #include "main.h"
 
-
 struct PRT_E2ROM_PARAS PRT_E2ROMParas;
 
 union FAULT_FLAG_FIRST Fault_Flag_Fisrt;
@@ -36,42 +35,8 @@ UINT16 FaultCnt_StartUp_Third = 0;
 
 void FaultWarnRecord(enum FaultFlag num);
 void FaultWarnRecord2(enum FaultFlag num);
-
-void App_CellOvp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16VCellMax;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16VcellOvp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16VcellOvp_First - 10; // DELAYB10MS_500MS改为filter
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16VcellOvp_Filter;				  // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16VcellOvp_Filter;				  // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;												  // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellOvp; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1CellOvp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.CellOvp_First)
-				{
-					FaultWarnRecord(CellOvp_First);
-					FaultWarnRecord2(CellOvp_First);
-					Fault_Flag_Fisrt.bits.CellOvp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellOvp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.CellOvp_First = 0;
-			}
-		}
-	}
-}
+void PwrMag_Protect_Record(enum FaultFlag num);
+void PwrMag_Protect_Record_StartUp(void);
 
 void App_CellOvp_SecondCheck(void)
 {
@@ -135,47 +100,14 @@ void App_CellOvp_ThirdCheck(void)
 					FaultWarnRecord(CellOvp_Third);
 					FaultWarnRecord2(CellOvp_Third);
 					Fault_Flag_Third.bits.CellOvp_Third = 1;
+
+					num_pro.cellOvp++;
+					WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 4 * 2, num_pro.cellOvp);
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellOvp_Third == 1)
 			{
 				Fault_Flag_Third.bits.CellOvp_Third = 0;
-			}
-		}
-	}
-}
-
-void App_CellUvp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16VCellMin;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16VcellUvp_First + 10;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16VcellUvp_First;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16VcellUvp_Filter;				  // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16VcellUvp_Filter;				  // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 0;												  // 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellUvp; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1CellUvp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.CellUvp_First)
-				{
-					FaultWarnRecord(CellUvp_First);
-					FaultWarnRecord2(CellUvp_First);
-					Fault_Flag_Fisrt.bits.CellUvp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellUvp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.CellUvp_First = 0;
 			}
 		}
 	}
@@ -243,47 +175,13 @@ void App_CellUvp_ThirdCheck(void)
 					FaultWarnRecord(CellUvp_Third);
 					FaultWarnRecord2(CellUvp_Third);
 					Fault_Flag_Third.bits.CellUvp_Third = 1;
+
+					// Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellUvp_Third == 1)
 			{
 				Fault_Flag_Third.bits.CellUvp_Third = 0;
-			}
-		}
-	}
-}
-
-void App_BatOvp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag2)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16VCellTotle;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16VbusOvp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16VbusOvp_First - 10; // Delta = 100mV
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16VbusOvp_Filter;				 // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16VbusOvp_Filter;				 // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;												 // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1BatOvp; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1BatOvp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.BatOvp_First)
-				{
-					FaultWarnRecord(BatOvp_First);
-					FaultWarnRecord2(BatOvp_First);
-					Fault_Flag_Fisrt.bits.BatOvp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.BatOvp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.BatOvp_First = 0;
 			}
 		}
 	}
@@ -351,47 +249,14 @@ void App_BatOvp_ThirdCheck(void)
 					FaultWarnRecord(BatOvp_Third);
 					FaultWarnRecord2(BatOvp_Third);
 					Fault_Flag_Third.bits.BatOvp_Third = 1;
+
+					num_pro.batOvp++;
+					WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 9 * 2, num_pro.batOvp);
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.BatOvp_Third == 1)
 			{
 				Fault_Flag_Third.bits.BatOvp_Third = 0;
-			}
-		}
-	}
-}
-
-void App_BatUvp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag2)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16VCellTotle;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16VbusUvp_First + 10;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16VbusUvp_First;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16VbusUvp_Filter;				 // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16VbusUvp_Filter;				 // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 0;												 // 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1BatUvp; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1BatUvp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.BatUvp_First)
-				{
-					FaultWarnRecord(BatUvp_First);
-					FaultWarnRecord2(BatUvp_First);
-					Fault_Flag_Fisrt.bits.BatUvp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.BatUvp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.BatUvp_First = 0;
 			}
 		}
 	}
@@ -459,6 +324,9 @@ void App_BatUvp_ThirdCheck(void)
 					FaultWarnRecord(BatUvp_Third);
 					FaultWarnRecord2(BatUvp_Third);
 					Fault_Flag_Third.bits.BatUvp_Third = 1;
+
+					num_pro.batUvp++;
+					WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 10 * 2, num_pro.batUvp);
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.BatUvp_Third == 1)
@@ -466,55 +334,6 @@ void App_BatUvp_ThirdCheck(void)
 				Fault_Flag_Third.bits.BatUvp_Third = 0;
 			}
 		}
-	}
-}
-
-void App_IchgOcp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	// static UINT16 s_i16TimeCntClr = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag3)
-	{
-		// if(0 == g_stCellInfoReport.unMdlFault_First.bits.b1IchgOcp) {
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16Ichg;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16IchgOcp_First;		// 过流判断
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16IchgOcp_First - 10; // 没有恢复判断
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16IchgOcp_Filter;					  // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16IchgOcp_Filter + CurOverFaultDelay; // 没有恢复判断-->有恢复判断
-		t_sPubOPUPChk.u8FlagLogic = 1;													  // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1IchgOcp;	  // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1IchgOcp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.IchgOcp_First)
-				{
-					FaultWarnRecord(IchgOcp_First);
-					FaultWarnRecord2(IchgOcp_First);
-					Fault_Flag_Fisrt.bits.IchgOcp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.IchgOcp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.IchgOcp_First = 0;
-			}
-		}
-//}
-#ifdef _hiccup_mode
-		else
-		{
-			if ((++s_i16TimeCntClr) > DELAYB10MS_5S)
-			{ // 5S后清标志位，故障恢复，即打嗝处理
-				s_i16TimeCntClr = 0;
-				g_stCellInfoReport.unMdlFault_First.bits.b1IchgOcp = 0;
-			}
-		}
-#endif
 	}
 }
 
@@ -595,6 +414,9 @@ void App_IchgOcp_ThirdCheck(void)
 					FaultWarnRecord(IchgOcp_Third);
 					FaultWarnRecord2(IchgOcp_Third);
 					Fault_Flag_Third.bits.IchgOcp_Third = 1;
+
+					num_pro.chgOcp++;
+					WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 2 * 2, num_pro.chgOcp);
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.IchgOcp_Third == 1)
@@ -610,55 +432,6 @@ void App_IchgOcp_ThirdCheck(void)
 			{ // 5S后清标志位，故障恢复，即打嗝处理
 				s_i16TimeCntClr = 0;
 				g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = 0;
-			}
-		}
-#endif
-	}
-}
-
-void App_IdischgOcp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	// static UINT16 s_i16TimeCntClr = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag3)
-	{
-		// if(0 == g_stCellInfoReport.unMdlFault_First.bits.b1IdischgOcp) {
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16IDischg;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16IdsgOcp_First;		// 过流判断
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16IdsgOcp_First - 10; // 没有恢复判断
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16IdsgOcp_Filter;					  // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16IdsgOcp_Filter + CurOverFaultDelay; // 没有恢复判断-->有恢复判断
-		t_sPubOPUPChk.u8FlagLogic = 1;													  // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1IdischgOcp;  // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1IdischgOcp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.IdischgOcp_First)
-				{
-					FaultWarnRecord(IdischgOcp_First);
-					FaultWarnRecord2(IdischgOcp_First);
-					Fault_Flag_Fisrt.bits.IdischgOcp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.IdischgOcp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.IdischgOcp_First = 0;
-			}
-		}
-//}
-#ifdef _hiccup_mode
-		else
-		{
-			if ((++s_i16TimeCntClr) > DELAYB10MS_5S)
-			{ // 5S后清标志位，故障恢复，即打嗝处理
-				s_i16TimeCntClr = 0;
-				g_stCellInfoReport.unMdlFault_First.bits.b1IdischgOcp = 0;
 			}
 		}
 #endif
@@ -742,6 +515,9 @@ void App_IdischgOcp_ThirdCheck(void)
 					FaultWarnRecord(IdischgOcp_Third);
 					FaultWarnRecord2(IdischgOcp_Third);
 					Fault_Flag_Third.bits.IdischgOcp_Third = 1;
+
+					num_pro.dsgOcp++;
+					WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 3 * 2, num_pro.dsgOcp);
 				}
 			}
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.IdischgOcp_Third == 1)
@@ -760,73 +536,6 @@ void App_IdischgOcp_ThirdCheck(void)
 			}
 		}
 #endif
-	}
-}
-
-void App_CellChgOtp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag4)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16TempMax;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TChgOTp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TChgOTp_First - 10;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16TChgOTp_Filter;					 // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16TChgOTp_Filter;					 // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;													 // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellChgOtp; // 故障标志赋旧值
-
-		switch (t_sPubOPUPChk.u8FlagBit)
-		{
-		case 0:
-			if (g_stCellInfoReport.u16Ichg > OTP_UTP_VirCur_Chg)
-			{
-				if (App_PubOPUPChk(&t_sPubOPUPChk))
-				{
-					g_stCellInfoReport.unMdlFault_First.bits.b1CellChgOtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-					if (t_sPubOPUPChk.u8FlagBit == 1)
-					{
-						if (0 == Fault_Flag_Fisrt.bits.CellChgOTp_First)
-						{
-							FaultWarnRecord(CellChgOTp_First);
-							FaultWarnRecord2(CellChgOTp_First);
-							Fault_Flag_Fisrt.bits.CellChgOTp_First = 1;
-						}
-					}
-					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellChgOTp_First == 1)
-					{
-						Fault_Flag_Fisrt.bits.CellChgOTp_First = 0;
-					}
-				}
-			}
-			break;
-
-		case 1:
-			if (App_PubOPUPChk(&t_sPubOPUPChk))
-			{
-				g_stCellInfoReport.unMdlFault_First.bits.b1CellChgOtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-				if (t_sPubOPUPChk.u8FlagBit == 1)
-				{
-					if (0 == Fault_Flag_Fisrt.bits.CellChgOTp_First)
-					{
-						FaultWarnRecord(CellChgOTp_First);
-						FaultWarnRecord2(CellChgOTp_First);
-						Fault_Flag_Fisrt.bits.CellChgOTp_First = 1;
-					}
-				}
-				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellChgOTp_First == 1)
-				{
-					Fault_Flag_Fisrt.bits.CellChgOTp_First = 0;
-				}
-			}
-			break;
-
-		default:
-			break;
-		}
 	}
 }
 
@@ -928,6 +637,9 @@ void App_CellChgOtp_ThirdCheck(void)
 							FaultWarnRecord(CellChgOTp_Third);
 							FaultWarnRecord2(CellChgOTp_Third);
 							Fault_Flag_Third.bits.CellChgOTp_Third = 1;
+
+							num_pro.chgOtp++;
+							WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 5 * 2, num_pro.chgOtp);
 						}
 					}
 					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellChgOTp_Third == 1)
@@ -954,73 +666,6 @@ void App_CellChgOtp_ThirdCheck(void)
 				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellChgOTp_Third == 1)
 				{
 					Fault_Flag_Third.bits.CellChgOTp_Third = 0;
-				}
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-}
-
-void App_CellDisChgOtp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag4)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16TempMax;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TdischgOTp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TdischgOTp_First - 10;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16TdischgOTp_Filter;					// 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16TdischgOTp_Filter;					// 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;														// 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgOtp; // 故障标志赋旧值
-
-		switch (t_sPubOPUPChk.u8FlagBit)
-		{
-		case 0:
-			if (g_stCellInfoReport.u16IDischg > OTP_UTP_VirCur_Dsg)
-			{
-				if (App_PubOPUPChk(&t_sPubOPUPChk))
-				{
-					g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgOtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-					if (t_sPubOPUPChk.u8FlagBit == 1)
-					{
-						if (0 == Fault_Flag_Fisrt.bits.CellDsgOTp_First)
-						{
-							FaultWarnRecord(CellDsgOTp_First);
-							FaultWarnRecord2(CellDsgOTp_First);
-							Fault_Flag_Fisrt.bits.CellDsgOTp_First = 1;
-						}
-					}
-					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellDsgOTp_First == 1)
-					{
-						Fault_Flag_Fisrt.bits.CellDsgOTp_First = 0;
-					}
-				}
-			}
-			break;
-
-		case 1:
-			if (App_PubOPUPChk(&t_sPubOPUPChk))
-			{
-				g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgOtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-				if (t_sPubOPUPChk.u8FlagBit == 1)
-				{
-					if (0 == Fault_Flag_Fisrt.bits.CellDsgOTp_First)
-					{
-						FaultWarnRecord(CellDsgOTp_First);
-						FaultWarnRecord2(CellDsgOTp_First);
-						Fault_Flag_Fisrt.bits.CellDsgOTp_First = 1;
-					}
-				}
-				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellDsgOTp_First == 1)
-				{
-					Fault_Flag_Fisrt.bits.CellDsgOTp_First = 0;
 				}
 			}
 			break;
@@ -1129,6 +774,9 @@ void App_CellDisChgOtp_ThirdCheck(void)
 							FaultWarnRecord(CellDsgOTp_Third);
 							FaultWarnRecord2(CellDsgOTp_Third);
 							Fault_Flag_Third.bits.CellDsgOTp_Third = 1;
+
+							num_pro.dsgOtp++;
+							WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 7 * 2, num_pro.dsgOtp);
 						}
 					}
 					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellDsgOTp_Third == 1)
@@ -1161,42 +809,6 @@ void App_CellDisChgOtp_ThirdCheck(void)
 
 		default:
 			break;
-		}
-	}
-}
-
-void App_MosOtp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TmosOTp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TmosOTp_First - 10;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16TmosOTp_Filter;				  // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16TmosOTp_Filter;				  // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;												  // 正逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1TmosOtp; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1TmosOtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.MosOTp_First)
-				{
-					FaultWarnRecord(MosOTp_First);
-					FaultWarnRecord2(MosOTp_First);
-					Fault_Flag_Fisrt.bits.MosOTp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.MosOTp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.MosOTp_First = 0;
-			}
 		}
 	}
 }
@@ -1269,73 +881,6 @@ void App_MosOtp_ThirdCheck(void)
 			{
 				Fault_Flag_Third.bits.MosOTp_Third = 0;
 			}
-		}
-	}
-}
-
-void App_CellChgUtp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16TempMin;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TchgUTp_First + 10;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TchgUTp_First;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16TchgUTp_Filter;					 // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16TchgUTp_Filter;					 // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 0;													 // 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellChgUtp; // 故障标志赋旧值
-
-		switch (t_sPubOPUPChk.u8FlagBit)
-		{
-		case 0:
-			if (g_stCellInfoReport.u16Ichg > OTP_UTP_VirCur_Chg)
-			{
-				if (App_PubOPUPChk(&t_sPubOPUPChk))
-				{
-					g_stCellInfoReport.unMdlFault_First.bits.b1CellChgUtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-					if (t_sPubOPUPChk.u8FlagBit == 1)
-					{
-						if (0 == Fault_Flag_Fisrt.bits.CellChgUTp_First)
-						{
-							FaultWarnRecord(CellChgUTp_First);
-							FaultWarnRecord2(CellChgUTp_First);
-							Fault_Flag_Fisrt.bits.CellChgUTp_First = 1;
-						}
-					}
-					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellChgUTp_First == 1)
-					{
-						Fault_Flag_Fisrt.bits.CellChgUTp_First = 0;
-					}
-				}
-			}
-			break;
-
-		case 1:
-			if (App_PubOPUPChk(&t_sPubOPUPChk))
-			{
-				g_stCellInfoReport.unMdlFault_First.bits.b1CellChgUtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-				if (t_sPubOPUPChk.u8FlagBit == 1)
-				{
-					if (0 == Fault_Flag_Fisrt.bits.CellChgUTp_First)
-					{
-						FaultWarnRecord(CellChgUTp_First);
-						FaultWarnRecord2(CellChgUTp_First);
-						Fault_Flag_Fisrt.bits.CellChgUTp_First = 1;
-					}
-				}
-				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellChgUTp_First == 1)
-				{
-					Fault_Flag_Fisrt.bits.CellChgUTp_First = 0;
-				}
-			}
-			break;
-
-		default:
-			break;
 		}
 	}
 }
@@ -1438,6 +983,9 @@ void App_CellChgUtp_ThirdCheck(void)
 							FaultWarnRecord(CellChgUTp_Third);
 							FaultWarnRecord2(CellChgUTp_Third);
 							Fault_Flag_Third.bits.CellChgUTp_Third = 1;
+
+							num_pro.chgUtp++;
+							WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 6 * 2, num_pro.chgUtp);
 						}
 					}
 					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellChgUTp_Third == 1)
@@ -1464,73 +1012,6 @@ void App_CellChgUtp_ThirdCheck(void)
 				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellChgUTp_Third == 1)
 				{
 					Fault_Flag_Third.bits.CellChgUTp_Third = 0;
-				}
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-}
-
-void App_CellDischgUtp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16TempMin;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TdischgUTp_First + 10;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TdischgUTp_First;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16TdischgUTp_Filter;					// 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16TdischgUTp_Filter;					// 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 0;														// 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgUtp; // 故障标志赋旧值
-
-		switch (t_sPubOPUPChk.u8FlagBit)
-		{
-		case 0:
-			if (g_stCellInfoReport.u16IDischg > OTP_UTP_VirCur_Dsg)
-			{
-				if (App_PubOPUPChk(&t_sPubOPUPChk))
-				{
-					g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgUtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-					if (t_sPubOPUPChk.u8FlagBit == 1)
-					{
-						if (0 == Fault_Flag_Fisrt.bits.CellDsgUTp_First)
-						{
-							FaultWarnRecord(CellDsgUTp_First);
-							FaultWarnRecord2(CellDsgUTp_First);
-							Fault_Flag_Fisrt.bits.CellDsgUTp_First = 1;
-						}
-					}
-					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellDsgUTp_First == 1)
-					{
-						Fault_Flag_Fisrt.bits.CellDsgUTp_First = 0;
-					}
-				}
-			}
-			break;
-
-		case 1:
-			if (App_PubOPUPChk(&t_sPubOPUPChk))
-			{
-				g_stCellInfoReport.unMdlFault_First.bits.b1CellDischgUtp = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-				if (t_sPubOPUPChk.u8FlagBit == 1)
-				{
-					if (0 == Fault_Flag_Fisrt.bits.CellDsgUTp_First)
-					{
-						FaultWarnRecord(CellDsgUTp_First);
-						FaultWarnRecord2(CellDsgUTp_First);
-						Fault_Flag_Fisrt.bits.CellDsgUTp_First = 1;
-					}
-				}
-				if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellDsgUTp_First == 1)
-				{
-					Fault_Flag_Fisrt.bits.CellDsgUTp_First = 0;
 				}
 			}
 			break;
@@ -1639,6 +1120,9 @@ void App_CellDischgUtp_ThirdCheck(void)
 							FaultWarnRecord(CellDsgUTp_Third);
 							FaultWarnRecord2(CellDsgUTp_Third);
 							Fault_Flag_Third.bits.CellDsgUTp_Third = 1;
+
+							num_pro.dsgUtp++;
+							WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 8 * 2, num_pro.dsgUtp);
 						}
 					}
 					if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.CellDsgUTp_Third == 1)
@@ -1671,42 +1155,6 @@ void App_CellDischgUtp_ThirdCheck(void)
 
 		default:
 			break;
-		}
-	}
-}
-
-void App_CellSocUp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag4)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.SocElement.u16Soc;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16SocUp_First + 2;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16SocUp_First;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16SocUp_Filter;					 // 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16SocUp_Filter;					 // 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 0;												 // 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1SocLow; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1SocLow = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.CellSocUp_First)
-				{
-					FaultWarnRecord(CellSocUp_First);
-					FaultWarnRecord2(CellSocUp_First);
-					Fault_Flag_Fisrt.bits.CellSocUp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.CellSocUp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.CellSocUp_First = 0;
-			}
 		}
 	}
 }
@@ -1783,42 +1231,6 @@ void App_CellSocUp_ThirdCheck(void)
 	}
 }
 
-void App_VdeltaOp_FirstCheck(void)
-{
-	static UINT16 s_i16TimeCnt = 0;
-	SPUBOPUPCHK t_sPubOPUPChk;
-
-	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
-	{
-		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16VCellDelta;
-		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16VdeltaOvp_First;
-		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16VdeltaOvp_First - 10;
-		t_sPubOPUPChk.i16ChkCnt = &s_i16TimeCnt;
-		t_sPubOPUPChk.u16TimeCntB = PRT_E2ROMParas.u16VdeltaOvp_Filter;						// 故障判断时间500ms
-		t_sPubOPUPChk.u16TimeCntS = PRT_E2ROMParas.u16VdeltaOvp_Filter;						// 故障恢复判断时间500ms
-		t_sPubOPUPChk.u8FlagLogic = 1;														// 负逻辑
-		t_sPubOPUPChk.u8FlagBit = g_stCellInfoReport.unMdlFault_First.bits.b1VcellDeltaBig; // 故障标志赋旧值
-
-		if (App_PubOPUPChk(&t_sPubOPUPChk))
-		{
-			g_stCellInfoReport.unMdlFault_First.bits.b1VcellDeltaBig = t_sPubOPUPChk.u8FlagBit; // 返回故障判断结果
-			if (t_sPubOPUPChk.u8FlagBit == 1)
-			{
-				if (0 == Fault_Flag_Fisrt.bits.VdeltaOvp_First)
-				{
-					FaultWarnRecord(VdeltaOvp_First);
-					FaultWarnRecord2(VdeltaOvp_First);
-					Fault_Flag_Fisrt.bits.VdeltaOvp_First = 1;
-				}
-			}
-			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Fisrt.bits.VdeltaOvp_First == 1)
-			{
-				Fault_Flag_Fisrt.bits.VdeltaOvp_First = 0;
-			}
-		}
-	}
-}
-
 void App_VdeltaOp_SecondCheck(void)
 {
 	static UINT16 s_i16TimeCnt = 0;
@@ -1887,7 +1299,6 @@ void App_VdeltaOp_ThirdCheck(void)
 			if (t_sPubOPUPChk.u8FlagBit == 0 && Fault_Flag_Third.bits.VdeltaOvp_Third == 1)
 			{
 				Fault_Flag_Third.bits.VdeltaOvp_Third = 0;
-				System_ERROR_UserCallback(ERROR_REMOVE_VDEATLE_OVER);
 			}
 		}
 	}
@@ -1903,7 +1314,16 @@ void App_VdeltaOp_ThirdCheck(void)
  ******************************************************************************/
 void App_WarnCtrl(void)
 {
-	//sys_time.sys_tick_10ms++;
+#if 0 // 原来函数时基被内置了，懒得改了。
+	if(0 == g_st_SysTimeFlag.bits.b1Sys10msFlag3) {
+		return STARTUP_CONT;
+	}
+#endif
+
+	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_PROTECT))
+	{
+		return;
+	}
 
 	App_CellOvp_SecondCheck();
 	App_CellOvp_ThirdCheck();
@@ -1937,12 +1357,13 @@ void App_WarnCtrl(void)
 	App_CellChgOtp_ThirdCheck();
 	App_CellChgUtp_SecondCheck();
 	App_CellChgUtp_ThirdCheck();
+
+	// PwrMag_Protect_Record_StartUp();
 }
 
 // 记录是按顺序记录下去，上传则是最新的在顶部
 void FaultWarnRecord(enum FaultFlag num)
 {
-#if 0
 	if (num >= 1 && num <= 13)
 	{
 		if (FaultPoint_First >= Record_len)
@@ -1965,18 +1386,18 @@ void FaultWarnRecord(enum FaultFlag num)
 		{
 			FaultPoint_Third = 0;
 		}
+		/*
 		RTC_Fault_record_Third[FaultPoint_Third][0] = RTC_time.RTC_Time_Year;
 		RTC_Fault_record_Third[FaultPoint_Third][1] = RTC_time.RTC_Time_Month;
 		RTC_Fault_record_Third[FaultPoint_Third][2] = RTC_time.RTC_Time_Day;
 		RTC_Fault_record_Third[FaultPoint_Third][3] = RTC_time.RTC_Time_Hour;
 		RTC_Fault_record_Third[FaultPoint_Third][4] = RTC_time.RTC_Time_Minute;
 		RTC_Fault_record_Third[FaultPoint_Third][5] = RTC_time.RTC_Time_Second;
-
+		*/
 		Fault_record_Third[FaultPoint_Third++] = num;
 	}
-	// #ifdef  _FAULT_RECORD
+#ifdef _FAULT_RECORD
 	PwrMag_Protect_Record(num);
-	// #endif
 #endif
 }
 
@@ -2008,9 +1429,9 @@ void FaultWarnRecord2(enum FaultFlag num)
 	}
 }
 
+#ifdef _FAULT_RECORD
 void PwrMag_Protect_Record(enum FaultFlag num)
 {
-#if 0
 	UINT8 j;
 
 	if (SystemStatus.bits.b1StartUpBMS)
@@ -2050,5 +1471,59 @@ void PwrMag_Protect_Record(enum FaultFlag num)
 			}
 		}
 	}
-#endif
 }
+
+// 该函数的背景是如果刚开机的时候出现2-3个保护，则会卡住，使时基卡住1.5s左右，导致开机时间延后
+void PwrMag_Protect_Record_StartUp(void)
+{
+	UINT8 j;
+	static UINT8 su8_StartUpRecord = 0;
+	if (SystemStatus.bits.b1StartUpBMS)
+	{ // 开机完毕再进入
+		return;
+	}
+
+	switch (su8_StartUpRecord)
+	{
+	case 0:
+		if (FaultCnt_StartUp_First)
+		{
+			// MCUO_DEBUG_LED2 = 0;
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_FIRST + ((FaultCnt_StartUp_First - 1) << 1), Fault_record_First[FaultCnt_StartUp_First - 1]);
+			// MCUO_DEBUG_LED2 = 1;
+
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_FIRST, FaultCnt_StartUp_First);
+			--FaultCnt_StartUp_First;
+		}
+		else if (FaultCnt_StartUp_Second)
+		{
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_SECOND + ((FaultCnt_StartUp_Second - 1) << 1), Fault_record_Second[FaultCnt_StartUp_Second - 1]);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_SECOND, FaultCnt_StartUp_Second);
+			--FaultCnt_StartUp_Second;
+		}
+		else if (FaultCnt_StartUp_Third)
+		{
+			MCUO_DEBUG_LED2 = 0;
+			WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_THIRD + ((FaultCnt_StartUp_Third - 1) << 1), Fault_record_Third[FaultCnt_StartUp_Third - 1]);
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_FR_TEMP_THIRD, FaultCnt_StartUp_Third);
+			for (j = 0; j < 6; ++j)
+			{
+				WriteEEPROM_Word_NoZone(E2P_ADDR_START_FR_THIRD_RTC + (((FaultCnt_StartUp_Third - 1) * 6 + j) << 1), RTC_Fault_record_Third[FaultCnt_StartUp_Third - 1][j]);
+			}
+			MCUO_DEBUG_LED2 = 1;
+			--FaultCnt_StartUp_Third;
+		}
+		else
+		{
+			su8_StartUpRecord = 1;
+		}
+		break;
+
+	case 1:
+		break;
+
+	default:
+		break;
+	}
+}
+#endif
