@@ -621,5 +621,5 @@ void App_AFEGet(void)
 	DataLoad_Current();
 
 	App_SH367309();
-	// App_MOS_Relay_Ctrl();
+	App_MOS_Relay_Ctrl();
 }

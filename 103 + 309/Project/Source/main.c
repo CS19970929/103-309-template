@@ -41,8 +41,6 @@ int main(void)
 		App_WarnCtrl();
 		App_AFEGet();
 
-		// App_SH367309();
-		// App_MOS_Relay_Ctrl();
 
 		App_Sci();
 		App_AnlogCal();

@@ -9,6 +9,8 @@
 #include "conf_gpio.h"
 
 #define __LIANXING_VERSION__   (6)
+#define CURRENT_K_DSG   (float)100.0 / 93
+#define CURRENT_K_CHG   (float)100.0 / 93
 
 #define __lianxing__
 
@@ -21,15 +23,11 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-#define __VIRTURE_CURRENT__
+// #define __VIRTURE_CURRENT__
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
 #define _DI_SWITCH_longKEY_ONOFF
-
-
-
-#define VERSION         (5)
 
 
 #define   CURR_80A      0
