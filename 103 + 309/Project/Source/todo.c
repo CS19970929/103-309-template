@@ -304,3 +304,10 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 	Sci2_CommonUpper_Tx_Deal(s);
 	// Sci1_FaultChk();	//没必要在这加
 }
+
+
+todo 
+- 各种休眠测试
+- 协议测试
+- 各种保护测试，特别是温度采样
+- 

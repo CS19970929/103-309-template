@@ -264,8 +264,8 @@ void soc_param_lib_init(void)
 		SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
 	}
 
-	// extern void GetData_SOC(void);
-	// GetData_SOC();
+	extern void GetData_SOC(void);
+	GetData_SOC();
 }
 
 UINT8 Get_OpenCircuit_Value(void)
@@ -779,12 +779,12 @@ void SOC_RefreshData_Monitor(void)
 
 void SOC_Result_Pass(void)
 {
-	static UINT8 su8_TimeCnt = 0;
-	if (++su8_TimeCnt < 5)
-	{
-		return;
-	}
-	su8_TimeCnt = 0;
+	// static UINT8 su8_TimeCnt = 0;
+	// if (++su8_TimeCnt < 5)
+	// {
+	// 	return;
+	// }
+	// su8_TimeCnt = 0;
 
 	SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Now;
 	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)

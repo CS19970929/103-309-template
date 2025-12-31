@@ -581,6 +581,7 @@ void App_SH367309_Monitor(void)
 			{
 				System_ERROR_UserCallback(ERROR_CBC_DSG);
 				su8_SC_Flag = 1;
+				ChargerLoad_Func.bits.b1OFFDriver_CBC = 1;
 			}
 			break;
 

@@ -26,6 +26,28 @@ void AllSeriesDeal_Charger_ON(void)
 			break;
 
 		case 2:
+		{
+			System_ERROR_UserCallback(ERROR_REMOVE_CBC_DSG);
+
+			SH367309_Reg_Store.REG_BSTATUS1.bits.SC = 0;
+			SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 = 0;
+			SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2 = 0;
+			// SH367309_Reg_Store.REG_BSTATUS1.bits.OCC = 0;
+
+			SH367309_Reg_Store.REG_MTP_CONF.bits.OCRC = 0;
+			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+			__delay_ms(2);
+
+			SH367309_Reg_Store.REG_MTP_CONF.bits.OCRC = 1;
+			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+			__delay_ms(2);
+
+			SH367309_Reg_Store.REG_MTP_CONF.bits.OCRC = 0;
+			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+		}
+
+			if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
+				System_ERROR_UserCallback(ERROR_REMOVE_CBC_DSG);
 			// 作出操作，使能驱动功能
 			System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1;
 			ChargerLoad_Func.bits.b1OFFDriver_Uvp = 0;
@@ -168,9 +190,9 @@ void Init_Charger_AllSeries(void)
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
-	// GPIO_InitStructure.GPIO_Pin = PIN_LOAD_OL;
+	// GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8; // 选择要用的GPIO引脚
 	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-	// GPIO_Init(GPIO_LOAD_OL, &GPIO_InitStructure);
+	// GPIO_Init(GPIOA, &GPIO_InitStructure);
 }
 
 // 第一个，第二个不一定有没有时屏蔽
