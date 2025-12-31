@@ -81,8 +81,8 @@ void InitShortCur(void)
 #elif (AFE_TYPE == sh36xx)
     extern AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction;
     // todo
-    OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-    OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_CHGmax = 10000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_DSGmax = 10000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
     /* ¶ÌÂ·ÑÓÊ± */
     temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
