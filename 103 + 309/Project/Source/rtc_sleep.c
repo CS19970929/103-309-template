@@ -1328,7 +1328,7 @@ void rtc_sleep(void)
             // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
             // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
             RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
-            exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
+            // exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
 #endif
 
             if (is_rtc_wakekup)
