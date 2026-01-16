@@ -361,7 +361,7 @@ void BQ769x0_SleepMode_Ctrl(void)
 
     // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
     // if (AFE_SleepMode_Judge() == 1)
-    //todo过充、充电管关了？进待机？
+    // todo过充、充电管关了？进待机？
     if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
     {
         sys_time.enter_rtc_delay = 0;
@@ -1389,20 +1389,20 @@ void rtc_sleep(void)
         break;
         case DEEP_MODE:
         DEEP_SLEEP:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
-            {
-                log_w("deep sleep\n");
-                if ((Sleep_Mode.all & 0x00ff))
-                {
-                    extern UINT32 su32_Interval_S_Tcnt;
+            // if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
+            // {
+            //     log_w("deep sleep\n");
+            //     if ((Sleep_Mode.all & 0x00ff))
+            //     {
+            //         extern UINT32 su32_Interval_S_Tcnt;
 
-                    LogRecord_Flag.bits.Log_Sleep = 1;
-                    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-                    SleepDeal_Continue();
-                }
-                // MCU_RESET();
-                break;
-            }
+            //         LogRecord_Flag.bits.Log_Sleep = 1;
+            //         LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+            //         SleepDeal_Continue();
+            //     }
+            //     MCU_RESET();
+            // }
+            break;
         default:
             // 不调整引脚进入休眠，功耗会很大
             break;

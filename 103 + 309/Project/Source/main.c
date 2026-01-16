@@ -148,8 +148,8 @@ int main(void)
 		App_E2promDeal();
 		App_CellBalance();
 		// App_Can();
-		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		sleep();
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		// sleep();
 		App_SOC();
 
 #ifdef __FUNC__HEAT__
@@ -217,6 +217,7 @@ void InitDevice(void)
 	Init_Charger_AllSeries();
 
 	InitTimer();
+	// DBGMCU_Config(DBGMCU_STOP, ENABLE);
 
 	log_w("init over");
 	// printf("init over");
@@ -350,7 +351,7 @@ static void send_BatteryInfo(void)
 	pkt.voltage = vtotle;
 	pkt.current = bms_current;
 	pkt.average_power_10sec = vtotle * bms_current;
-	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow /100 * vtotle;
+	pkt.remaining_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityNow / 100 * vtotle;
 	pkt.full_charge_capacity_wh = g_stCellInfoReport.SocElement.u16CapacityFull / 100 * vtotle;
 	pkt.hours_to_full_charge = 0;
 	uint16_t status = 0;
@@ -358,7 +359,7 @@ static void send_BatteryInfo(void)
 	status |= status | ((g_stCellInfoReport.u16Ichg > 0) << 1);
 	status |= status | ((g_stCellInfoReport.u16Ichg > 0) << 2);
 	status |= status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 2);
-	status |= status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ) << 2);
+	status |= status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp) << 2);
 	status |= status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 5);
 	pkt.status_flags = status;
 	pkt.state_of_health_pct = g_stCellInfoReport.SocElement.u16Soh;
@@ -502,7 +503,7 @@ int test_dronecan(void)
 	send_BatteryInfo();
 }
 
-//todo 叼你妈的，真坑
+// todo 叼你妈的，真坑
 #if 0
 void sendCanard(void)
 {
@@ -524,21 +525,21 @@ void sendCanard(void)
 #endif
 void sendCanard(void)
 {
-    const CanardCANFrame *txf = canardPeekTxQueue(&canard);
-    if (txf == NULL)
-    {
-        return;
-    }
+	const CanardCANFrame *txf = canardPeekTxQueue(&canard);
+	if (txf == NULL)
+	{
+		return;
+	}
 
-    int res = canardSTM32Transmit(txf);
+	int res = canardSTM32Transmit(txf);
 
-    if (res > 0)
-    {
-        canardPopTxQueue(&canard);
-    }
-    else if (res < 0)
-    {
-        // 可选：丢包 / 统计错误
-        canardPopTxQueue(&canard);
-    }
+	if (res > 0)
+	{
+		canardPopTxQueue(&canard);
+	}
+	else if (res < 0)
+	{
+		// 可选：丢包 / 统计错误
+		canardPopTxQueue(&canard);
+	}
 }

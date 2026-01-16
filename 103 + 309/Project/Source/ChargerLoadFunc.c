@@ -177,13 +177,15 @@ void Init_Charger_AllSeries(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 因为是开机，所以还是要
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0; // 选择要用的GPIO引脚
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
 	EXTI_InitStruct.EXTI_Line = EXTI_Line0;
 	EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-	EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+	// EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+	EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
 	EXTI_InitStruct.EXTI_LineCmd = ENABLE;
 	EXTI_Init(&EXTI_InitStruct);
 

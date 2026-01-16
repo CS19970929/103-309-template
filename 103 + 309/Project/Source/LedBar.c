@@ -57,19 +57,19 @@ void LedBar_Init(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
 
-    if (g_stCellInfoReport.SocElement.u16Soc >= 20)
-    {
-        MCUO_SOC_G = 1;
-        MCUO_SOC_25 = 1;
-        // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-        MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-        MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-        MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-    }
-    else
-    {
-        MCUO_SOC_Y = 1;
-    }
+    // if (g_stCellInfoReport.SocElement.u16Soc >= 20)
+    // {
+    //     MCUO_SOC_G = 1;
+    //     MCUO_SOC_25 = 1;
+    //     // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+    //     MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
+    //     MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
+    //     MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
+    // }
+    // else
+    // {
+    //     MCUO_SOC_Y = 1;
+    // }
 
     if (g_irq_t == CHG_IRQ)
     {
@@ -128,7 +128,7 @@ void LedBar_StartUp(void)
         if (g_stCellInfoReport.SocElement.u16Soc > 20)
         {
             MCUO_SOC_Y = 0;
-            MCUO_SOC_G = 1;
+            MCUO_SOC_G = 0;
             MCUO_SOC_25 = 1;
             // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
             MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
@@ -145,7 +145,8 @@ void LedBar_StartUp(void)
     case 1:
         if (!sys_time.power_on)
         {
-            if (g_irq_t == CHG_IRQ)
+            // if (g_irq_t == CHG_IRQ || )
+            if (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU))
             {
                 // todo ²âÊÔÓÅ»¯Âß¼­
                 sys_time.power_on = true;
@@ -184,8 +185,8 @@ void LedBar_StartUp(void)
 
             if (cnt_100ms >= (100 * 9))
             {
-
-                led_start_state = 2;
+                // led_start_state = 2;
+                entersleep(DEEP_MODE);
             }
         }
         else
