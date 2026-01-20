@@ -106,7 +106,8 @@ void InitWakeUp_Base(void)
 #if 1
     {
         GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
         GPIO_Init(GPIO_INT_WK_MCU, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
         EXTI_InitStruct.EXTI_Line = EXTI_Line0;
@@ -123,7 +124,8 @@ void InitWakeUp_Base(void)
 
     {
         GPIO_InitStructure.GPIO_Pin = PIN_KEY1; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
         GPIO_Init(GPIO_KEY1, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource5);
         EXTI_InitStruct.EXTI_Line = EXTI_Line5;
@@ -140,7 +142,7 @@ void InitWakeUp_Base(void)
 
     {
         GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
         GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource9);
         EXTI_InitStruct.EXTI_Line = EXTI_Line9;
@@ -168,6 +170,7 @@ void InitWakeUp_NormalMode(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??????????????
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // ???????????
 
+#if 0
     {
         GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
@@ -217,6 +220,7 @@ void InitWakeUp_NormalMode(void)
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
         NVIC_Init(&NVIC_InitStructure);
     }
+#endif
 }
 
 void InitWakeUp_RTCMode(void)

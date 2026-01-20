@@ -71,11 +71,11 @@ void LedBar_Init(void)
     //     MCUO_SOC_Y = 1;
     // }
 
-    if (g_irq_t == CHG_IRQ)
-    {
-        LedBar_Command = LED_BAR_CHG;
-    }
-    else
+    // if (g_irq_t == CHG_IRQ)
+    // {
+    //     LedBar_Command = LED_BAR_CHG;
+    // }
+    // else
     {
         LedBar_Command = LED_BAR_STARTUP;
     }
@@ -86,11 +86,11 @@ static uint16_t key_cnt = 0;
 static uint8_t led_start_state = 0;
 void LedBar_StartUp_var_init(void)
 {
-    cnt_100ms = 0;
-    key_cnt = 0;
-    LedBar_Command = LED_BAR_STARTUP;
-    sys_time.power_on = false;
-    led_start_state = 0;
+    // cnt_100ms = 0;
+    // key_cnt = 0;
+    // LedBar_Command = LED_BAR_STARTUP;
+    // sys_time.power_on = false;
+    // led_start_state = 0;
 }
 
 void LedBar_StartUp(void)
