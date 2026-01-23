@@ -55,14 +55,14 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(200) 
+#define AFE_OCC1       		(600) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(200) 
+#define AFE_OCC2       		(600) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(300) 
+#define AFE_ODC1       		(600) 
 #define AFE_ODC1_filter  	(10)
-#define AFE_ODC2       		(300) 
+#define AFE_ODC2       		(600) 
 #define AFE_ODC2_filter  	(10)
 
 
@@ -91,7 +91,7 @@
 	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
 	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
 	/*短路电流*/			100,	100,	65000,	0,\
-	/*短路延时*/			64,		64,		65000,	0,\
+	/*短路延时*/			128,		128,		65000,	0,\
 }
 
 

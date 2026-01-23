@@ -10,6 +10,7 @@ UINT8 g_u8CBnMonitor;	 // 是否有电池需要均衡的标志位
 // UINT16 g_u16CBnFLAG_ToUpper;    //上传到上位机的
 UINT8 g_u8CBn_StatusFlag; // 用于控制Mos或者Relay
 
+#if 1
 void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
 {
 	UINT16 temp1;
@@ -47,6 +48,21 @@ void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
 		break;
 	}
 }
+#endif
+#if 0
+void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
+{
+	UINT16 temp1;
+	UINT8 i;
+
+	MTPRead(MTP_BALANCEH, 0x02, (UINT8 *)&temp1);
+	temp1 = U16_SwapEndian(temp1);
+	for (i = 0; i < SeriesNum; ++i)
+	{ // 这个能同时处理16串，不需要额外操作
+		g_stCellInfoReport.u16BalanceFlag1 |= (((temp1 >> SeriesSelect_AFE1[SeriesNum - 1][i]) & 0x0001) << i);
+	}
+}
+#endif
 
 void CB_StateCalculate(void)
 {
@@ -390,4 +406,6 @@ void App_CellBalance(void)
 		g_enBalanceState = BALANCE_ST_INIT;
 		break;
 	}
+	// todo 测试均衡
+	// CB_ChangeUpperFlag(CELL_BALANCE_ON_ODD);
 }

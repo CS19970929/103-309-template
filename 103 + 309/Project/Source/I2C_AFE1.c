@@ -848,6 +848,7 @@ void InitAFE1(void)
 	// GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	// GPIO_Init(GPIOC, &GPIO_InitStructure);
 
+	AFE_Reset();
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	SH367309_Enable_AFE_Wdt_Cadc_Drivers();

@@ -679,16 +679,6 @@ void InitData_E2prom(void)
 	{ // 第二次上电就会执行这个
 		ReadEEPROM_ByteData_StartUp();
 		{
-#ifdef __lianxing__
-			int8_t i = 0;
-			for (i = 0; i < MAX_BATSNUM_LEN; i++)
-			{
-				sysinfo.BatSnum[i] =  ReadEEPROM_Byte(E2P_ADDR_SYSINFO + i);
-			}
-			sysinfo.BatSNUMLENGTH = 10;
-#endif
-		}
-		{
 			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 			curr_offset = ReadEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE);
 			if ((curr_offset & 0x8000) == 0)
@@ -711,17 +701,6 @@ void InitData_E2prom(void)
 		EEPROM_ResetData_OtherToDefault(); // 把E2P_BEGIN_FLAG写进头地址，
 										   // 如果有别的添加，可以往这个函数写，目前加了保护记录初始化
 		WriteProID_Default();
-		{
-#ifdef __lianxing__
-			int8_t i = 0;
-			for (i = 0; i < MAX_BATSNUM_LEN; i++)
-			{
-				sysinfo.BatSnum[i] = '8';
-				WriteEEPROM_Byte(E2P_ADDR_SYSINFO + i, sysinfo.BatSnum[i]);
-			}
-			sysinfo.BatSNUMLENGTH = 10;
-#endif
-		}
 		{
 			bool ret = false;
 			do

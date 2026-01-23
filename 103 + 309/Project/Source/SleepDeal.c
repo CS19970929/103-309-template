@@ -730,7 +730,7 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2500 && !g_stCellInfoReport.u16Ichg)
+	if (g_stCellInfoReport.u16VCellMin < 2600 && !g_stCellInfoReport.u16Ichg)
 	{
 		++force_sleep_delay;
 		if (force_sleep_delay >= 60)

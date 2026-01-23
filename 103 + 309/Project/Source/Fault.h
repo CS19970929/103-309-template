@@ -202,15 +202,15 @@ struct PRT_E2ROM_PARAS {
 #define COV_1           3500
 #define COV_2           3600
 #define COV_3           3650
-#define COV_recover     3500
+#define COV_recover     3600
 #define COV_filter1      100
 #define COV_filter2     100
 #define COV_filter3     100
 
-#define CUV_1           3000
-#define CUV_2           3000
-#define CUV_3           2900
-#define CUV_recover     3000
+#define CUV_1           2600
+#define CUV_2           2600
+#define CUV_3           2500
+#define CUV_recover     2600
 #define CUV_filter1      100
 #define CUV_filter2     100
 #define CUV_filter3     100
@@ -218,7 +218,7 @@ struct PRT_E2ROM_PARAS {
 #define BOV_1           (350 * SNum)
 #define BOV_2           (360 * SNum)
 #define BOV_3           (365 * SNum)
-#define BOV_recover     (350 * SNum)
+#define BOV_recover     (360 * SNum)
 // #define BOV_1           (2800)
 // #define BOV_2           (2920)
 // #define BOV_3           (3000)
@@ -228,16 +228,16 @@ struct PRT_E2ROM_PARAS {
 #define BOV_filter3     100 
 
 
-#define BUV_1           (300 * SNum)
-#define BUV_2           (300 * SNum)
-#define BUV_3           (290 * SNum)
-#define BUV_recover     (300 * SNum)
+#define BUV_1           (260 * SNum)
+#define BUV_2           (260 * SNum)
+#define BUV_3           (250 * SNum)
+#define BUV_recover     (260 * SNum)
 #define BUV_filter1      100 
 #define BUV_filter2     100 
 #define BUV_filter3     100 
 
 
-#define OTC_1           ((40 + 40) * 10)
+#define OTC_1           ((50 + 40) * 10)
 #define OTC_2           ((50 + 40) * 10)
 #define OTC_3           ((55 + 40) * 10)
 #define OTC_recover     ((50 + 40) * 10)
@@ -264,13 +264,13 @@ struct PRT_E2ROM_PARAS {
 #define OTD_1           ((50 + 40) * 10)
 #define OTD_2           ((50 + 40) * 10)
 #define OTD_3           ((60 + 40) * 10)
-#define OTD_recover     ((50 + 40) * 10)
+#define OTD_recover     ((55 + 40) * 10)
 #define OTD_filter1      100
 #define OTD_filter2      100
 #define OTD_filter3      100
 
 #define UTD_1           ((-10 + 40) * 10)
-#define UTD_2           ((-15 + 40) * 10)
+#define UTD_2           ((-10 + 40) * 10)
 #define UTD_3           ((-20 + 40) * 10)
 #define UTD_recover     ((-10 + 40) * 10)
 #define UTD_filter1      100
@@ -301,17 +301,17 @@ struct PRT_E2ROM_PARAS {
 #define socLow_filter2   100
 #define socLow_filter3   100
 
-#define OCC_1       (100) 
-#define OCC_2       (150) 
-#define OCC_3       (200) 
+#define OCC_1       (500) 
+#define OCC_2       (550) 
+#define OCC_3       (600) 
 #define OCC_recover (100) 
 #define OCC_filter1  (100 * 5) 
 #define OCC_filter2  (100 * 5) 
 #define OCC_filter3  10 
 
-#define ODC_1       (100) 
-#define ODC_2       (150) 
-#define ODC_3       (200) 
+#define ODC_1       (500) 
+#define ODC_2       (550) 
+#define ODC_3       (600) 
 #define ODC_recover (100) 
 #define ODC_filter1  (100 * 5) 
 #define ODC_filter2  (100 * 5) 

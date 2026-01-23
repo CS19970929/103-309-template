@@ -355,11 +355,11 @@ void DataLoad_Current(void)
 	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
 	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
 
-	if (g_stCellInfoReport.u16Ichg <= 3)
+	if (g_stCellInfoReport.u16Ichg <= 2)
 	{
 		g_stCellInfoReport.u16Ichg = 0;
 	}
-	if (g_stCellInfoReport.u16IDischg <= 3)
+	if (g_stCellInfoReport.u16IDischg <= 2)
 	{
 		g_stCellInfoReport.u16IDischg = 0;
 	}
@@ -372,6 +372,7 @@ void DataLoad_Current(void)
 	}
 #endif
 
+#if 0
 	if (g_stCellInfoReport.u16Ichg)
 	{
 		time_dsg = 0xffff;
@@ -406,6 +407,7 @@ void DataLoad_Current(void)
 			time_dsg = 0xffff;
 		}
 	}
+#endif
 }
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
@@ -621,5 +623,5 @@ void App_AFEGet(void)
 	DataLoad_Current();
 
 	App_SH367309();
-	// App_MOS_Relay_Ctrl();
+	App_MOS_Relay_Ctrl();
 }

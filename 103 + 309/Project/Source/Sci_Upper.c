@@ -461,7 +461,8 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 
 	// 0xD100_33
-	u16SciTemp = __LIANXING_VERSION__;
+	// u16SciTemp = __LIANXING_VERSION__;
+	u16SciTemp = 0;
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
@@ -1007,7 +1008,7 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 19200;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1756,7 +1757,7 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 19200;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位

@@ -59,7 +59,8 @@ void InitIO(void)
 
         GPIO_SetBits(GPIO_M_STB, PIN_M_STB);
         GPIO_ResetBits(GPIO_AD_EN, PIN_AD_EN);
-        GPIO_ResetBits(GPIO_BLE_EN, PIN_BLE_EN);
+        // GPIO_ResetBits(GPIO_BLE_EN, PIN_BLE_EN);
+        GPIO_SetBits(GPIO_BLE_EN, PIN_BLE_EN);
         GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         GPIO_SetBits(GPIO_SW_EN, PIN_SW_EN);
 
@@ -77,6 +78,7 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_BLE_EN, &GPIO_InitStructure);
+        GPIO_ResetBits(GPIO_BLE_EN, PIN_BLE_EN);
 
         GPIO_InitStructure.GPIO_Pin = PIN_SW_EN;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出

@@ -29,6 +29,8 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
+// #define _DEBUG_CODE
+
 int main(void)
 {
 	InitDevice(); // 初始化外设
@@ -36,6 +38,7 @@ int main(void)
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
+		App_SysTime();
 #else
 		App_SysTime();
 		App_WarnCtrl();
@@ -48,9 +51,11 @@ int main(void)
 		App_AnlogCal();
 		App_E2promDeal();
 		App_CellBalance();
-		// App_Can();
-		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		sleep();
+#ifdef __FUNC__CAN__
+		App_Can();
+#endif // __FUNC__CAN__
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		// sleep();
 		App_SOC();
 
 #ifdef __FUNC__HEAT__
@@ -59,16 +64,7 @@ int main(void)
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
-		// __delay_ms(1000);
-		if (reset_numPro)
-		{
-			UINT8 i;
-			reset_numPro = 0;
-			for (i = 1; i <= 11; i++)
-			{
-				WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
-			}
-		}
+
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif
@@ -83,6 +79,11 @@ void InitDevice(void)
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
+	jtag_disableAndConfIO();
+
+	InitNVIC();
+	InitIO();
+	InitTimer();
 #else
 	InitDelay();
 	IsSleepStartUp();
@@ -98,7 +99,9 @@ void InitDevice(void)
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
-	// InitCan();
+#ifdef __FUNC__CAN__
+	InitCan();
+#endif // __FUNC__CAN__
 	InitADC();
 	InitSci();
 
