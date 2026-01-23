@@ -6,7 +6,6 @@ Time_T sys_time = {
     .power_on = false,
 };
 
-
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // GPIO_ResetBits(GPIOB, GPIO_Pin_15);
@@ -458,7 +457,8 @@ void Init(void)
 
 void Init(void)
 {
-    InitSci();
+   
+
 #if 0
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
@@ -498,15 +498,19 @@ void Init(void)
         USART_DeInit(USART1);
         USART_DeInit(USART2);
 
-        InitSci();
         // InitCan();
 
         InitTimer();
         sys_time.wakeup_rtc = true;
         Init_ChargerLoad_Det();
+        
     }
-
-    initAFE1_IIC();
-
+     initAFE1_IIC();
     InitE2PROM_i2c();
+
+    extern void InitSCI1_CommonUpper_rtc(void);
+    extern void InitSCI2_CommonUpper_rtc(void);
+    InitSCI1_CommonUpper_rtc();
+    InitSCI2_CommonUpper_rtc();
+    // InitUSART_CommonUpper();
 }

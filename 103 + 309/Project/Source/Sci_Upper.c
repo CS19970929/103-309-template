@@ -56,6 +56,8 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
 
+static void Sci_WrReg_0x06_ChangeBaud(struct RS485MSG *s);
+
 void UART_CLIENT_deal_0x03(struct RS485MSG *s);
 void UART_CLIENT_deal_0x04(struct RS485MSG *s);
 void UART_CLIENT_deal_0x05(struct RS485MSG *s);
@@ -201,6 +203,9 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 
 	case RS485_CMD_ADDR_RESET_EVENT_RECORD:
 		Sci_WrReg_0x06_Reset_EventRecord(s);
+		break;
+	case RS485_CMD_ADDR_Change_BAUD_RECORD:
+		Sci_WrReg_0x06_ChangeBaud(s);
 		break;
 
 	default:
@@ -978,8 +983,8 @@ void Sci1_CommonUpper_Tx_Deal(struct RS485MSG *s)
 	}
 }
 
-// 串口初始化函数
-void InitSCI1_CommonUpper(void)
+UINT32 UART_BAUD;
+void InitSCI1_CommonUpper_rtc(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
 	USART_InitTypeDef USART_InitStructure;
@@ -1007,7 +1012,70 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
+	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
+	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None; // 设置流控制
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;					// 设置工作模式
+	USART_Init(USART1, &USART_InitStructure);
+
+	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
+	USART_Cmd(USART1, ENABLE);					   // 使能串口1
+
+	Sci_DataInit(&g_stCurrentMsgPtr_SCI1);
+}
+// 串口初始化函数
+void InitSCI1_CommonUpper(void)
+{
+	UINT16 _baud;
+
+	GPIO_InitTypeDef GPIO_InitStructure;
+	USART_InitTypeDef USART_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+	GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE); // PB6,PB7
+
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+	// USART1_TX   PA9
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6; // PA9
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP; // 复用推挽输出，按道理是开漏输出
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+	// USART1_RX	  PA10初始化
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;			  // PA10
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+	_baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
+    switch (_baud)
+    {
+    case UART_BAUD_9600:
+        UART_BAUD = UART_BAUD_9600;
+        break;
+    case UART_BAUD_19200:
+        UART_BAUD = UART_BAUD_19200;
+        break;
+    case UART_BAUD_115200:
+        UART_BAUD = 115200;
+        break;
+    default:
+        UART_BAUD = 115200;
+        break;
+    }
+
+	// 串口初始化
+	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1728,8 +1796,7 @@ void Sci2_CommonUpper_Tx_Deal(struct RS485MSG *s)
 	}
 }
 
-// 串口初始化函数
-void InitSCI2_CommonUpper(void)
+void InitSCI2_CommonUpper_rtc(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
 	USART_InitTypeDef USART_InitStructure;
@@ -1756,7 +1823,69 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 115200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
+	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
+	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None; // 设置流控制
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;					// 设置工作模式
+	USART_Init(USART2, &USART_InitStructure);
+
+	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+
+	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
+	USART_Cmd(USART2, ENABLE);					   // 使能串口2
+
+	Sci_DataInit(&g_stCurrentMsgPtr_SCI2);
+}
+// 串口初始化函数
+void InitSCI2_CommonUpper(void)
+{
+	UINT16 _Baud;
+
+	GPIO_InitTypeDef GPIO_InitStructure;
+	USART_InitTypeDef USART_InitStructure;
+	NVIC_InitTypeDef NVIC_InitStructure;
+
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+	// USART2_TX   PA2
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP; // 复用推挽输出，按道理是开漏输出
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	// USART2_RX	  PA3
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	_Baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
+    switch (_Baud)
+    {
+    case UART_BAUD_9600:
+        UART_BAUD = UART_BAUD_9600;
+        break;
+    case UART_BAUD_19200:
+        UART_BAUD = UART_BAUD_19200;
+        break;
+    case UART_BAUD_115200:
+        UART_BAUD = 115200;
+        break;
+    default:
+        UART_BAUD = 115200;
+        break;
+    }
+
+	// 串口初始化
+	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -3125,6 +3254,36 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
 	}
+}
+
+void Sci_WrReg_0x06_ChangeBaud(struct RS485MSG *s)
+{
+    UINT16 u16SciRegData;
+
+    u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+
+    switch (u16SciRegData)
+    {
+    case 1:
+        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_9600);
+        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_9600);
+        break;
+    case 2:
+        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_19200);
+        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_19200);
+        break;
+    case 3:
+        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_115200);
+        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_115200);
+        break;
+    default:
+        break;
+    }
+    // MCU_RESET();
+    InitSCI1_CommonUpper();
+    InitSCI2_CommonUpper();
+
+    __delay_ms(100);
 }
 
 void InitUSART_CommonUpper(void)
