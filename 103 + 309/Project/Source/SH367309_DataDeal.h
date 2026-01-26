@@ -17,8 +17,8 @@
 #define AFE_COV_recover   (3500)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2500)
-#define AFE_CUV_recover     (2600)
+#define AFE_CUV           (2300)
+#define AFE_CUV_recover     (2500)
 #define AFE_CUV_filter     (100)
 #else
 #define AFE_COV           (4280)
@@ -41,7 +41,7 @@
 #define UTC_3           ((-28 + 40) * 10)
 #endif
 #else
-#define AFE_UTC           ((-3 + 40) * 10)
+#define AFE_UTC           ((-1 + 40) * 10)
 #endif // DEBUG
 #define AFE_UTC_recover     ((3 + 40) * 10)
 #define AFE_UTC_filter      100
@@ -55,14 +55,14 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(600) 
+#define AFE_OCC1       		(700) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(600) 
+#define AFE_OCC2       		(700) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(600) 
+#define AFE_ODC1       		(700) 
 #define AFE_ODC1_filter  	(10)
-#define AFE_ODC2       		(600) 
+#define AFE_ODC2       		(700) 
 #define AFE_ODC2_filter  	(10)
 
 

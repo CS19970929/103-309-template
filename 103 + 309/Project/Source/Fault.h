@@ -315,7 +315,7 @@ struct PRT_E2ROM_PARAS {
 #define ODC_recover (100) 
 #define ODC_filter1  (100 * 5) 
 #define ODC_filter2  (100 * 5) 
-#define ODC_filter3  10
+#define ODC_filter3  100
 
 
 #define E2P_PROTECT_MIN_PRT		{/*���ڹ�ѹ*/1000,	1000,	1000,	1000,	1,\
