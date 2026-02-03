@@ -47,6 +47,9 @@
 #include "sh36735_regs.h"
 #include "sh36735_spi.h"
 
+#include "hard_spi_afe.h"
+#include "spi_bus_soft_test.h"
+
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
 #define S2U(x)   (*((volatile UINT16*)(&(x))))

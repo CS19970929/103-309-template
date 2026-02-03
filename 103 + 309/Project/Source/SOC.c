@@ -107,6 +107,7 @@ extern sh3673520_t afe;
 
 extern bool sh3673520_spi_read_be_u16_test(sh3673520_spi_t *s, uint8_t reg_hi, uint16_t *out);
 
+uint8_t read_buf[2];
 void spi_task(void)
 {
 	uint16_t cadc = 0;
@@ -120,6 +121,9 @@ void spi_task(void)
 	// sh3673520_spi_read_be_u16(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
 	// sh3673520_spi_read_be_u16_test(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
+extern void read_vcell_test(void);
+	// read_vcell_test();
+	// ic_read_reg(0x6B, 2, read_buf);
 }
 
 void App_SOC(void)

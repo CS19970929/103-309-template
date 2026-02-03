@@ -4,6 +4,7 @@
 
 UINT8 SeriesNum = 16;
 
+#if 0
 void init_afe(void)
 {
 	// sh36735_spi_sw_init();
@@ -37,6 +38,7 @@ void init_afe(void)
         // while (1) {}
     }
 }
+#endif
 
 #if 0
 int main_3520_test(void)
@@ -161,10 +163,14 @@ void InitDevice(void)
 	InitNVIC();
 	InitIO();
 	InitTimer();
-	spi_init();
+	// spi_init();
 	InitSci();
-	init_afe();
-	// bsp_InitSPIBus();
+	// init_afe();
+	
+	bsp_InitSPIBus();
+	sh36735_spi_sw_init();
+	// AFE_SPI_Init();
+	// softspi_mode3_gpio_init();
 #else
 	InitDelay();
 	IsSleepStartUp();
