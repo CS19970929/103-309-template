@@ -11,7 +11,7 @@
 */
 #include "main.h"
 #include "driver_spi.h"
-#include "driver_timer.h"
+// #include "driver_timer.h"
 
 #define SPI_Delay()     us_timer_delay(10)
 
@@ -43,7 +43,7 @@ void SPI_Init(void)
     HAL_GPIO_Init(SPIx_MISO_GPIO_PORT, &GPIO_InitStruct); // MISO为输入
     
     W25_CS(1);      // CS初始化高
-    SPI_CLK(0);     // CLK初始化低
+    SPI_CLK(1);     // CLK初始化低
 }
 
 /*

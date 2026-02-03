@@ -12,30 +12,31 @@
 #ifndef __DRIVER_SPI_H
 #define __DRIVER_SPI_H
 
-#include "stm32f1xx_hal.h"
+// #include "stm32f1xx_hal.h"
+#include "bsp_spi_bus.h"
 
 /************************* SPI 硬件相关定义 *************************/
 #define SPIx                             SPI1
-#define SPIx_CLK_ENABLE()                __HAL_RCC_SPI1_CLK_ENABLE()
-#define SPIx_SCK_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOA_CLK_ENABLE()
-#define SPIx_MISO_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOA_CLK_ENABLE() 
-#define SPIx_MOSI_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOA_CLK_ENABLE() 
-#define W25_CS_GPIO_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE() 
+#define SPIx_CLK_ENABLE()                RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
+#define SPIx_SCK_GPIO_CLK_ENABLE()       RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
+#define SPIx_MISO_GPIO_CLK_ENABLE()      RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
+#define SPIx_MOSI_GPIO_CLK_ENABLE()      RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
+#define W25_CS_GPIO_CLK_ENABLE()         RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
 
-#define SPIx_FORCE_RESET()               __HAL_RCC_SPI1_FORCE_RESET()
-#define SPIx_RELEASE_RESET()             __HAL_RCC_SPI1_RELEASE_RESET()
+#define SPIx_FORCE_RESET()               ;
+#define SPIx_RELEASE_RESET()             ;
 
-#define SPIx_SCK_PIN                     GPIO_PIN_5
-#define SPIx_SCK_GPIO_PORT               GPIOA
+#define SPIx_SCK_PIN                     GPIO_SCLK_SPI
+#define SPIx_SCK_GPIO_PORT               PIN_SCLK_SPI
 
-#define SPIx_MISO_PIN                    GPIO_PIN_6
-#define SPIx_MISO_GPIO_PORT              GPIOA
+#define SPIx_MISO_PIN                    GPIO_MISO_SPI
+#define SPIx_MISO_GPIO_PORT              PIN_MISO_SPI
 
-#define SPIx_MOSI_PIN                    GPIO_PIN_7
-#define SPIx_MOSI_GPIO_PORT              GPIOA
+#define SPIx_MOSI_PIN                    GPIO_MOSI_SPI
+#define SPIx_MOSI_GPIO_PORT              PIN_MOSI_SPI
 
-#define W25_CS_PIN                       GPIO_PIN_4               
-#define W25_CS_GPIO_PORT                 GPIOA    
+#define W25_CS_PIN                       GPIO_CS_SPI               
+#define W25_CS_GPIO_PORT                 PIN_CS_SPI    
 
 #define SPI_CLK(level)                   HAL_GPIO_WritePin(SPIx_SCK_GPIO_PORT, SPIx_SCK_PIN, level?GPIO_PIN_SET:GPIO_PIN_RESET)                                    
 #define SPI_MISO()                       HAL_GPIO_ReadPin(SPIx_MISO_GPIO_PORT, SPIx_MISO_PIN)

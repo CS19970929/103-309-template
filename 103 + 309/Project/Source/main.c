@@ -4,6 +4,56 @@
 
 UINT8 SeriesNum = 16;
 
+void init_afe(void)
+{
+	// sh36735_spi_sw_init();
+	// 1) MCU 时钟初始化略…
+
+    // 2) 初始化 SPI：模式3，建议 <= 1MHz（更稳）
+    sh36735_spi_hw_init(72000000, 500000);
+
+    // 3) 等待 AFE WarmUp（建议 20~50ms）
+    sh_delay_us(50000);
+
+    // 4) 先尝试软件复位，确认 ACK=0xA5（不通就先别写配置）
+    if (!sh36735_sw_reset()) {
+        // TODO: 打印错误，检查硬件连线 / SPI mode / CS
+        // while (1) {}
+    }
+    sh_delay_us(50000);
+
+    // 5) 读一段寄存器验证 SPI 通了（读 0x40 起 9 字节）
+    // uint8_t r[9];
+    // if (sh36735_read_regs(0x40, r, sizeof(r))) {
+    //     // log_hex("REG40..", r, sizeof(r));
+    // } else {
+    //     while (1) {}
+    // }
+
+    // 6) 写配置（先跑通：不开温度保护，开 OV/UV/OCD/SC + pump + chg/dsg mos）
+    sh36735_cfg_t cfg;
+    sh36735_cfg_default_ternary_20s(&cfg);
+    if (!sh36735_apply_cfg(&cfg)) {
+        // while (1) {}
+    }
+}
+
+#if 0
+int main_3520_test(void)
+{
+    // 7) 主循环：周期性读取状态/电压（你按你的寄存器表补齐地址）
+    while (1) {
+        // 示例：读 BSTATUS1/BSTATUS2/FLAG1…（地址请按你的 PDF 校对）
+        uint8_t st[3];
+        if (sh36735_read_regs(0x5A, st, 3)) {
+            log_hex("STATUS", st, 3);
+        }
+        sh_delay_us(100000);
+    }
+}
+#endif
+
+
 // 不同串数维护的表格
 // 中颖
 const unsigned char SeriesSelect_AFE1[16][16] = {
@@ -113,6 +163,7 @@ void InitDevice(void)
 	InitTimer();
 	spi_init();
 	InitSci();
+	init_afe();
 	// bsp_InitSPIBus();
 #else
 	InitDelay();

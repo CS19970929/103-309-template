@@ -117,8 +117,9 @@ void spi_task(void)
 	// }
 
 	// sh3673520_spi_read_be_u16(&afe, 0x69, &g_stCellInfoReport.u16VCell[0]);
-	sh3673520_spi_read_be_u16(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
+	// sh3673520_spi_read_be_u16(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
 	// sh3673520_spi_read_be_u16_test(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
+	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 }
 
 void App_SOC(void)

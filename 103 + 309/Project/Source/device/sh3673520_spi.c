@@ -113,7 +113,7 @@ bool sh3673520_spi_read(sh3673520_spi_t *s, uint8_t reg, uint8_t *out, uint8_t l
     crc = sh_crc8_update(crc, len);
     (void)xfer(s, len); dly(s, s->byte_gap_us);
 
-    xfer(s, 0xFF);
+    xfer(s, 0xFF); dly(s, s->byte_gap_us);
     /* Read data */
     for (uint8_t i = 0; i < len; i++) {
         uint8_t b = xfer(s, 0xFF);

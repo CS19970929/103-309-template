@@ -42,6 +42,11 @@
 #include "sh3673520_port_softspi_stm32f1.h"
 #include "bsp_spi_bus.h"
 
+#include "sh36735_cfg.h"
+#include "sh36735_port.h"
+#include "sh36735_regs.h"
+#include "sh36735_spi.h"
+
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
 #define S2U(x)   (*((volatile UINT16*)(&(x))))
