@@ -81,5 +81,19 @@
 #define GPIO_INT_WK_CMNT         GPIOB
 #define PIN_INT_WK_CMNT          GPIO_Pin_12
 
+//!!!!!!!!!!!!!!!!!!
+
+#define GPIO_CS_SPI          GPIOA   
+#define PIN_CS_SPI           GPIO_Pin_4
+
+#define GPIO_MISO_SPI          GPIOA   
+#define PIN_MISO_SPI           GPIO_Pin_6
+
+#define GPIO_MOSI_SPI          GPIOA   
+#define PIN_MOSI_SPI           GPIO_Pin_7
+
+#define GPIO_SCLK_SPI          GPIOA   
+#define PIN_SCLK_SPI           GPIO_Pin_5
+
 #endif
 

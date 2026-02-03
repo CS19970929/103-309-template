@@ -38,6 +38,9 @@
 
 #include "elog.h"
 
+#include "sh3673520.h"
+#include "sh3673520_port_softspi_stm32f1.h"
+
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
 #define S2U(x)   (*((volatile UINT16*)(&(x))))

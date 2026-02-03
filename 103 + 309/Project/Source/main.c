@@ -1,4 +1,6 @@
 #include "main.h"
+#include "sh3673520.h"
+#include "sh3673520_port_softspi_stm32f1.h"
 
 UINT8 SeriesNum = 16;
 
@@ -29,7 +31,7 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
-// #define _DEBUG_CODE
+#define _DEBUG_CODE
 
 int main(void)
 {
@@ -39,6 +41,8 @@ int main(void)
 	{
 #if (defined _DEBUG_CODE)
 		App_SysTime();
+		App_SOC();
+		App_Sci();
 #else
 		App_SysTime();
 		App_WarnCtrl();
@@ -70,6 +74,32 @@ int main(void)
 	}
 }
 
+static void delay_us(uint32_t us)
+{
+    /* Replace with your SysTick/DWT delay if you have one */
+    while (us--) {
+        for (volatile int i = 0; i < 24; i++) __NOP();
+    }
+}
+sh3673520_t afe;
+ sh3673520_softspi_t soft = {
+        .cs_port = GPIO_CS_SPI, 	.cs_pin = PIN_CS_SPI,
+        .sck_port = GPIO_SCLK_SPI,  .sck_pin = PIN_SCLK_SPI,
+        .miso_port = GPIO_MISO_SPI, .miso_pin = PIN_MISO_SPI,
+        .mosi_port = GPIO_MOSI_SPI, .mosi_pin = PIN_MOSI_SPI,
+        .half_period_nops = 40,
+        .delay_us_cb = delay_us,
+    };
+    sh3673520_spi_t spi;
+void spi_init(void)
+{
+	
+    sh3673520_softspi_init(&soft);
+
+    sh3673520_spi_init(&spi, sh3673520_softspi_make_port(&soft));
+
+    sh3673520_init(&afe, spi);
+}
 void InitDevice(void)
 {
 	SystemInit(); // HSE默认倍频到72MHz，如果没HSE切回HSI怎么处理目前还没了解
@@ -81,6 +111,8 @@ void InitDevice(void)
 	InitNVIC();
 	InitIO();
 	InitTimer();
+	spi_init();
+	InitSci();
 #else
 	InitDelay();
 	IsSleepStartUp();

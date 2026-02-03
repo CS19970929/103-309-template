@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
+              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc;..\Source\common;..\Source\device;..\Source\port_softspi</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -908,6 +908,46 @@
               <FileName>elog_utils.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AFE_common</GroupName>
+          <Files>
+            <File>
+              <FileName>sh_crc8.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\common\sh_crc8.h</FilePath>
+            </File>
+            <File>
+              <FileName>sh_spi_port.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\common\sh_spi_port.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AFE/port</GroupName>
+          <Files>
+            <File>
+              <FileName>sh3673520_port_softspi_stm32f1.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\port_softspi\sh3673520_port_softspi_stm32f1.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AFE/dev</GroupName>
+          <Files>
+            <File>
+              <FileName>sh3673520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\device\sh3673520.c</FilePath>
+            </File>
+            <File>
+              <FileName>sh3673520_spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\device\sh3673520_spi.c</FilePath>
             </File>
           </Files>
         </Group>
