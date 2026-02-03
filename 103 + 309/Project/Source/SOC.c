@@ -108,13 +108,13 @@ extern sh3673520_t afe;
 void spi_task(void)
 {
 	uint16_t cadc = 0;
-	if (sh3673520_read_cadc_u16(&afe, &cadc))
-	{
-		/* TODO: print cadc via uart */
-		(void)cadc;
-	}
+	// if (sh3673520_read_cadc_u16(&afe, &cadc))
+	// {
+	// 	/* TODO: print cadc via uart */
+	// 	(void)cadc;
+	// }
 
-	sh3673520_spi_read_be_u16(&afe, 0x69, &g_stCellInfoReport.u16VCell[0]);
+	// sh3673520_spi_read_be_u16(&afe, 0x69, &g_stCellInfoReport.u16VCell[0]);
 	sh3673520_spi_read_be_u16(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
 }
 
