@@ -1,12 +1,12 @@
 /*
 *********************************************************************************************************
 *
-*	Ä£¿éÃû³Æ : SPI×ÜÏßÇý¶¯
-*	ÎÄ¼þÃû³Æ : bsp_spi_bus.h
-*	°æ    ±¾ : V1.0
-*	Ëµ    Ã÷ : Í·ÎÄ¼þ
+*	Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ : SPIï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+*	ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ : bsp_spi_bus.h
+*	ï¿½ï¿½    ï¿½ï¿½ : V1.0
+*	Ëµ    ï¿½ï¿½ : Í·ï¿½Ä¼ï¿½
 *
-*	Copyright (C), 2014-2015, °²¸»À³µç×Ó www.armfly.com
+*	Copyright (C), 2014-2015, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ www.armfly.com
 *
 *********************************************************************************************************
 */
@@ -14,13 +14,54 @@
 #ifndef __BSP_SPI_BUS_H
 #define __BSP_SPI_BUS_H
 
-#define SOFT_SPI		/* ¶¨Òå´ËÐÐ±íÊ¾Ê¹ÓÃGPIOÄ£ÄâSPI½Ó¿Ú */
-// #define HARD_SPI		/* ¶¨Òå´ËÐÐ±íÊ¾Ê¹ÓÃCPUµÄÓ²¼þSPI½Ó¿Ú */
+#include "stdint.h"
+
+#define SOFT_SPI		/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð±ï¿½Ê¾Ê¹ï¿½ï¿½GPIOÄ£ï¿½ï¿½SPIï¿½Ó¿ï¿½ */
+// #define HARD_SPI		/* ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð±ï¿½Ê¾Ê¹ï¿½ï¿½CPUï¿½ï¿½Ó²ï¿½ï¿½SPIï¿½Ó¿ï¿½ */
 
 /*
-	¡¾SPIÊ±ÖÓ×î¿ìÊÇ2·ÖÆµ£¬²»Ö§³Ö²»·ÖÆµ¡¿
-	Èç¹ûÊÇSPI1£¬2·ÖÆµÊ±SCKÊ±ÖÓ = 42M£¬4·ÖÆµÊ±SCKÊ±ÖÓ = 21M
-	Èç¹ûÊÇSPI3, 2·ÖÆµÊ±SCKÊ±ÖÓ = 21M
+	å®‰å¯ŒèŽ±STM32-V5 å¼€å‘æ¿å£çº¿åˆ†é…
+	PB3/SPI3_SCK/SPI1_SCK
+	PB4/SPI3_MISO/SPI1_MISO
+	PB5/SPI3_MOSI/SPI1_MOSI
+
+	STM32ç¡¬ä»¶SPIæŽ¥å£ = SPI3 æˆ–è€… SPI1
+	ç”±äºŽSPI1çš„æ—¶é’Ÿæºæ˜¯84M, SPI3çš„æ—¶é’Ÿæºæ˜¯42Mã€‚ä¸ºäº†èŽ·å¾—æ›´å¿«çš„é€Ÿåº¦ï¼Œè½¯ä»¶ä¸Šé€‰æ‹©SPI1ã€‚
+*/
+#ifdef SOFT_SPI		/* è½¯ä»¶SPI */
+	/* å®šä¹‰GPIOç«¯å£ */
+	#define RCC_SCK 	RCC_APB2Periph_GPIOA
+	#define PORT_SCK	GPIO_SCLK_SPI
+	#define PIN_SCK		PIN_SCLK_SPI
+
+	#define RCC_MOSI 	RCC_APB2Periph_GPIOA
+	#define PORT_MOSI	GPIO_MOSI_SPI
+	#define PIN_MOSI	PIN_MOSI_SPI
+
+	#define RCC_MISO 	RCC_APB2Periph_GPIOA
+	#define PORT_MISO	GPIO_MISO_SPI
+	#define PIN_MISO	PIN_MISO_SPI
+
+	// #define SCK_0()		PORT_SCK->BSRR = PIN_SCK
+	// #define SCK_1()		PORT_SCK->BRR = PIN_SCK
+	#define SCK_0()		PORT_SCK->BRR = PIN_SCK
+	#define SCK_1()		PORT_SCK->BSRR = PIN_SCK
+
+#if 1
+	#define MOSI_0()	PORT_MOSI->BSRR = PIN_MOSI
+	#define MOSI_1()	PORT_MOSI->BRR = PIN_MOSI
+#else
+	#define MOSI_0()	PORT_MOSI->BRR = PIN_MOSI
+	#define MOSI_1()	PORT_MOSI->BSRR = PIN_MOSI
+#endif
+
+	#define MISO_IS_HIGH()	(GPIO_ReadInputDataBit(PORT_MISO, PIN_MISO) == Bit_SET)
+#endif
+
+/*
+	ï¿½ï¿½SPIÊ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½2ï¿½ï¿½Æµï¿½ï¿½ï¿½ï¿½Ö§ï¿½Ö²ï¿½ï¿½ï¿½Æµï¿½ï¿½
+	ï¿½ï¿½ï¿½ï¿½ï¿½SPI1ï¿½ï¿½2ï¿½ï¿½ÆµÊ±SCKÊ±ï¿½ï¿½ = 42Mï¿½ï¿½4ï¿½ï¿½ÆµÊ±SCKÊ±ï¿½ï¿½ = 21M
+	ï¿½ï¿½ï¿½ï¿½ï¿½SPI3, 2ï¿½ï¿½ÆµÊ±SCKÊ±ï¿½ï¿½ = 21M
 */
 #define SPI_SPEED_42M		SPI_BaudRatePrescaler_2
 #define SPI_SPEED_21M		SPI_BaudRatePrescaler_4
@@ -48,4 +89,4 @@ void bsp_SetSpiSck(uint8_t _data);
 
 #endif
 
-/***************************** °²¸»À³µç×Ó www.armfly.com (END OF FILE) *********************************/
+/***************************** ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ www.armfly.com (END OF FILE) *********************************/

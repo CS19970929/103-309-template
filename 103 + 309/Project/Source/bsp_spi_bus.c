@@ -17,38 +17,9 @@
 
 // #include "bsp.h"
 #include "bsp_spi_bus.h"
+#include "main.h"
 
-/*
-	安富莱STM32-V5 开发板口线分配
-	PB3/SPI3_SCK/SPI1_SCK
-	PB4/SPI3_MISO/SPI1_MISO
-	PB5/SPI3_MOSI/SPI1_MOSI
 
-	STM32硬件SPI接口 = SPI3 或者 SPI1
-	由于SPI1的时钟源是84M, SPI3的时钟源是42M。为了获得更快的速度，软件上选择SPI1。
-*/
-#ifdef SOFT_SPI		/* 软件SPI */
-	/* 定义GPIO端口 */
-	#define RCC_SCK 	RCC_AHB1Periph_GPIOB
-	#define PORT_SCK	GPIOB
-	#define PIN_SCK		GPIO_Pin_3
-
-	#define RCC_MOSI 	RCC_AHB1Periph_GPIOB
-	#define PORT_MOSI	GPIOB
-	#define PIN_MOSI	GPIO_Pin_5
-
-	#define RCC_MISO 	RCC_AHB1Periph_GPIOB
-	#define PORT_MISO	GPIOB
-	#define PIN_MISO	GPIO_Pin_4
-
-	#define SCK_0()		PORT_SCK->BSRRH = PIN_SCK
-	#define SCK_1()		PORT_SCK->BSRRL = PIN_SCK
-
-	#define MOSI_0()	PORT_MOSI->BSRRH = PIN_MOSI
-	#define MOSI_1()	PORT_MOSI->BSRRL = PIN_MOSI
-
-	#define MISO_IS_HIGH()	(GPIO_ReadInputDataBit(PORT_MISO, PIN_MISO) == Bit_SET)
-#endif
 
 uint8_t g_spi_busy = 0;		/* SPI 总线共享标志 */
 
@@ -66,13 +37,13 @@ void bsp_InitSPIBus(void)
 	GPIO_InitTypeDef  GPIO_InitStructure;
 
 	/* 打开GPIO时钟 */
-	RCC_AHB1PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_SCK | RCC_MOSI | RCC_MISO, ENABLE);
 
 	/* 配置几个推完输出IO */
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;		/* 设为输出口 */
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;		/* 设为推挽模式 */
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;	/* 上下拉电阻不使能 */
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;	/* IO口最大速度 */
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;		/* 设为输出口 */
+	// GPIO_InitStructure.GPIO_OType = GPIO_Mode_Out_PP;		/* 设为推挽模式 */
+	// GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;	/* 上下拉电阻不使能 */
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;	/* IO口最大速度 */
 
 	GPIO_InitStructure.GPIO_Pin = PIN_SCK;
 	GPIO_Init(PORT_SCK, &GPIO_InitStructure);
@@ -81,10 +52,10 @@ void bsp_InitSPIBus(void)
 	GPIO_Init(PORT_MOSI, &GPIO_InitStructure);
 
 	/* 配置GPIO为浮动输入模式(实际上CPU复位后就是输入状态) */
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;		/* 设为输入口 */
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;		/* 设为推挽模式 */
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;	/* 无需上下拉电阻 */
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;	/* IO口最大速度 */
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;		/* 设为输入口 */
+	// GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;		/* 设为推挽模式 */
+	// GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;	/* 无需上下拉电阻 */
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;	/* IO口最大速度 */
 
 	GPIO_InitStructure.GPIO_Pin = PIN_MISO;
 	GPIO_Init(PORT_MISO, &GPIO_InitStructure);
@@ -130,7 +101,7 @@ void bsp_InitSPIBus(void)
 */
 void bsp_SPI_Init(uint16_t _cr1)
 {
-	SPI1->CR1 = ((SPI1->CR1 & 0x3040) | _cr1);
+	// SPI1->CR1 = ((SPI1->CR1 & 0x3040) | _cr1);
 }
 
 /*

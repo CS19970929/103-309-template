@@ -98,8 +98,8 @@ bool sh3673520_spi_read(sh3673520_spi_t *s, uint8_t reg, uint8_t *out, uint8_t l
     begin(s);
 
     /* Prefix 0xFF participates in CRC for READ per doc */
-    crc = sh_crc8_update(crc, SH_READ_PREFIX);
-    (void)xfer(s, SH_READ_PREFIX); dly(s, s->byte_gap_us);
+    // crc = sh_crc8_update(crc, SH_READ_PREFIX);
+    // (void)xfer(s, SH_READ_PREFIX); dly(s, s->byte_gap_us);
 
     /* CMD */
     crc = sh_crc8_update(crc, SH_CMD_READ);
@@ -113,6 +113,7 @@ bool sh3673520_spi_read(sh3673520_spi_t *s, uint8_t reg, uint8_t *out, uint8_t l
     crc = sh_crc8_update(crc, len);
     (void)xfer(s, len); dly(s, s->byte_gap_us);
 
+    xfer(s, 0xFF);
     /* Read data */
     for (uint8_t i = 0; i < len; i++) {
         uint8_t b = xfer(s, 0xFF);

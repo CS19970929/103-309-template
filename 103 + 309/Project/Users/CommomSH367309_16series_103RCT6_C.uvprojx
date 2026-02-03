@@ -574,6 +574,16 @@
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_spi_bus.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_spi_bus.c</FilePath>
+            </File>
+            <File>
+              <FileName>afe_spi_test.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe_spi_test.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

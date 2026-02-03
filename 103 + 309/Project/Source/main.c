@@ -113,6 +113,7 @@ void InitDevice(void)
 	InitTimer();
 	spi_init();
 	InitSci();
+	// bsp_InitSPIBus();
 #else
 	InitDelay();
 	IsSleepStartUp();
