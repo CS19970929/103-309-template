@@ -41,6 +41,7 @@ bool sh36735_write_reg_u8(uint8_t reg, uint8_t val)
     (void)sh36735_spi_xfer(reg);
     (void)sh36735_spi_xfer(val);
     uint8_t ack = sh36735_spi_xfer(crc);
+    sh36735_spi_xfer(0x00);
 
     sh_delay_us(1);
     sh_cs_high();
@@ -53,13 +54,15 @@ bool sh36735_read_regs(uint8_t reg, uint8_t *buf, uint8_t n)
     if (!buf || n == 0) return false;
 
     sh_cs_low();
-    sh_delay_us(1);
+    sh_delay_us(100);
 
     // 发送读命令同时收到一个字节（通常为 0xFF），CRC 需要从该字节开始
     uint8_t rx0 = sh36735_spi_xfer(SH_SPI_CMD_READ_REG);
 
     (void)sh36735_spi_xfer(reg);
     (void)sh36735_spi_xfer(n);
+
+    sh36735_spi_xfer(0x00);
 
     for (uint8_t i = 0; i < n; i++) {
         buf[i] = sh36735_spi_xfer(0x00);

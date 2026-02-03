@@ -169,6 +169,12 @@ void InitDevice(void)
 	
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
+	sh36735_write_reg_u8(0x43, 19);
+	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
+
+	sh36735_write_reg_u8(0x41, 0x03);
+	sh36735_write_reg_u8(0x43, 19);
+	sh36735_write_reg_u8(0x45, 0);
 	// AFE_SPI_Init();
 	// softspi_mode3_gpio_init();
 #else
