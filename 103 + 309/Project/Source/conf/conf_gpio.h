@@ -35,8 +35,8 @@
 #define GPIO_CMNT_EN        GPIOA
 #define PIN_CMNT_EN         GPIO_Pin_4
 
-#define GPIO_KEY1        GPIOA
-#define PIN_KEY1         GPIO_Pin_9
+#define GPIO_KEY1        GPIOB
+#define PIN_KEY1         GPIO_Pin_5
 
 #define GPIO_AFE1_CTL        GPIOB
 #define PIN_AFE1_CTL         GPIO_Pin_14

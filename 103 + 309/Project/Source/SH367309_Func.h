@@ -19,6 +19,23 @@
 
 #endif
 
+#define AFE_REG_FLAG1		0x0000
+#define AFE_REG_FLAG2		0x1000
+
+typedef enum						// AFE��������
+{
+	AFE_FLAG_OV				= 0x01|AFE_REG_FLAG1,
+	AFE_FLAG_UV				= 0x02|AFE_REG_FLAG1,
+	AFE_FLAG_OCD1			= 0x04|AFE_REG_FLAG1,
+	AFE_FLAG_OCD2			= 0x08|AFE_REG_FLAG1,
+	AFE_FLAG_SC				= 0x10|AFE_REG_FLAG1,
+	AFE_FLAG_OCC			= 0x20|AFE_REG_FLAG1,
+	AFE_FLAG_UTC			= 0x10|AFE_REG_FLAG2,
+	AFE_FLAG_OTC			= 0x20|AFE_REG_FLAG2,
+	AFE_FLAG_UTD			= 0x40|AFE_REG_FLAG2,
+	AFE_FLAG_OTD			= 0x80|AFE_REG_FLAG2,
+}AFE_ProtectType;
+
 /*
 摄氏度
 充电高温保护------->70
@@ -266,6 +283,7 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void);
 
 
 void App_SH367309(void);
+bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect);
 
 #endif	/* SH367309_FUNC_H */
 

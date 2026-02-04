@@ -65,6 +65,38 @@ typedef struct {
     uint8_t  ocd2t_code;   // 原始OVT码 (0..7)
 } sh_ocd2_ocd2t_t;
 
+static const uint32_t k_occ_delay_ms[8] = {
+    140,   // 000
+    280,   // 001
+    490,   // 010
+    980,   // 011 (默认)
+    2030,  // 100
+    3010,  // 101
+    4970,  // 110
+    10010  // 111
+};
+
+typedef struct {
+    uint16_t occ_mv;      // 过充保护电压 (mV)
+    uint32_t occ_ms;     // 过充保护延时 (ms)
+    uint16_t occ_code;    // 原始OV码 (0..1023)
+    uint8_t  occt_code;   // 原始OVT码 (0..7)
+} sh_occ_occt_t;
+
+typedef struct {
+    sh_ovh_ovt_t        ov;
+    sh_uvh_uvt_t        uv;
+    sh_ocd1_ocd1t_t     ocd1;
+    sh_ocd2_ocd2t_t     ocd2;
+    sh_occ_occt_t       occ;
+    uint16_t            otc;
+    uint16_t            utc;
+    uint16_t            otd;
+    uint16_t            utd;
+} AFE_PARAM_T;
+
+AFE_PARAM_T afe_protect;
+
 /* ------------------ 解码：从0x49/0x4A两个寄存器值 -> 电压/延时 ------------------ */
 static inline sh_ovh_ovt_t sh_decode_ovh_ovt(uint8_t reg49, uint8_t reg4A, bool idle_mode)
 {
@@ -135,13 +167,6 @@ static inline uint8_t sh_pick_ovt_code_by_ms(uint32_t target_ms)
     return best;
 }
 
-
-
-sh_ovh_ovt_t ov_param;
-sh_uvh_uvt_t uv_param;
-sh_ocd1_ocd1t_t ocd1_param;
-sh_ocd2_ocd2t_t ocd2_param;
-
 static inline sh_uvh_uvt_t sh_decode_uvh_uvt(uint8_t reg49, uint8_t reg4A, bool idle_mode)
 {
     sh_uvh_uvt_t out;
@@ -195,13 +220,34 @@ static inline sh_ocd2_ocd2t_t sh_decode_ocd2_ocd2t(uint8_t reg, bool idle_mode)
     return out;
 }
 
+static inline sh_occ_occt_t sh_decode_occ_occt(uint8_t reg, bool idle_mode)
+{
+   sh_occ_occt_t out;
+
+    // OV[9:0] = reg4A[1:0] << 8 | reg49[7:0]
+    // out.ocd1_code = (uint16_t)(((uint8_t)(reg49 & 0x03) << 8) | reg4A);
+    out.occ_code = (reg & 0x1f);
+    out.occ_mv   = (uint16_t)(out.occ_code * 1.375) + 1.375;
+
+    // OVT[2:0] = reg4A[6:4]
+    out.occt_code = (uint8_t)((reg >> 5) & 0x07);
+    out.occ_ms   = k_occ_delay_ms[out.occt_code];
+
+    // IDLE模式：延时为设定值的4倍
+    if (idle_mode) out.occ_ms *= 4u;
+}
 
 void test_read_afe_param(void)
 {
-    ov_param = sh_decode_ovh_ovt(Registers_AFE1.OVT_OVH, Registers_AFE1.OVL, false);
-    uv_param = sh_decode_uvh_uvt(Registers_AFE1.UVT_UVH, Registers_AFE1.UVL, false);
-    ocd1_param = sh_decode_ocd1_ocd1t(Registers_AFE1.OCD1V_OCD1T, false);
-    ocd2_param = sh_decode_ocd2_ocd2t(Registers_AFE1.OCD2V_OCD2T, false);
+    afe_protect.ov = sh_decode_ovh_ovt(Registers_AFE1.OVT_OVH, Registers_AFE1.OVL, false);
+    afe_protect.uv = sh_decode_uvh_uvt(Registers_AFE1.UVT_UVH, Registers_AFE1.UVL, false);
+    afe_protect.ocd1 = sh_decode_ocd1_ocd1t(Registers_AFE1.OCD1V_OCD1T, false);
+    afe_protect.ocd2 = sh_decode_ocd2_ocd2t(Registers_AFE1.OCD2V_OCD2T, false);
+    afe_protect.occ = sh_decode_occ_occt(Registers_AFE1.OCCV_OCCT, false);
+    afe_protect.otc = Registers_AFE1.OTC;
+    afe_protect.utc = Registers_AFE1.UTC;
+    afe_protect.otd = Registers_AFE1.OTD;
+    afe_protect.utd = Registers_AFE1.UTD;
     // v.ov_mv  = 4200mV
     // v.ovt_ms = 988ms（因为 reg4A[6:4]=0b011）
 

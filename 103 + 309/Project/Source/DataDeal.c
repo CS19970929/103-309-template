@@ -188,13 +188,14 @@ void DataLoad_Temperature(void)
 	// Select = 2;
 	Select = 5;
 	// 没纳入统计的，默认值就是0了
-	for (i = 0; i < Select; i++)
-	{
-		t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
-		t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP1 + i]) + g_i16CalibCoefB[MDL_TEMP1 + i]) >> 10;
-		g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
-		Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
-	}
+	// for (i = 0; i < Select; i++)
+	// {
+	// 	t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
+	// 	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP1 + i]) + g_i16CalibCoefB[MDL_TEMP1 + i]) >> 10;
+	// 	g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
+	// 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
+	// }
+	g_stCellInfoReport.u16Temperature[0] = (66 + 40) * 10;
 
 #if 0
 	//环境温度1
@@ -634,9 +635,20 @@ void App_AFEGet(void)
 	DataLoad_Current();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
-#if 0
 
-	App_SH367309();
+	if(sys_time.clear_cov)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
+	else if (sys_time.clear_cuv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
+	else if (sys_time.clear_odc1)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+	else if (sys_time.clear_otc)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
+	else if (sys_time.clear_otd)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
+#if 1
+
+	// App_SH367309();
 	App_MOS_Relay_Ctrl();
 #endif
 }

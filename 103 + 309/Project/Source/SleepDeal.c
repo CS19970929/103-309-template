@@ -95,7 +95,7 @@ void SleepDeal_Continue(void)
 
 	if (u8FlashWriteOK_flag)
 	{
-		InitAFE1_Sleep(0);
+		// InitAFE1_Sleep(0);
 		AFE_Sleep();
 		MCU_RESET();
 	}

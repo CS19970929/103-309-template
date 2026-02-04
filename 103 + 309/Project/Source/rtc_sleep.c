@@ -266,6 +266,7 @@ void entersleep(enum _SLEEP_MODE mode)
     case DEEP_MODE:
         Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
         g_sleepModeSelect = DEEP_MODE;
+        sh36735_write_reg_u8(AFE_SCONF1, 0xAA);
 #ifdef __FUNC__LED__
         set_LED_state(LED_BAR_NORMAL, 4);
 #endif // DEBUG

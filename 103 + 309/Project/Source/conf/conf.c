@@ -137,8 +137,8 @@ void InitWakeUp_Base(void)
         GPIO_InitStructure.GPIO_Pin = PIN_KEY1; // ?????GPIO??,PA0?????
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
         GPIO_Init(GPIO_KEY1, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource9);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line9;
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource5);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line5;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
         EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
         EXTI_InitStruct.EXTI_LineCmd = ENABLE;

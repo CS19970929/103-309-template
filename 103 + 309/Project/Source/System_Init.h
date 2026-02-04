@@ -83,7 +83,7 @@
 #define MCUO_ENO_DO4		PCout(3)	//O��4
 #define MCUO_ENO_DO5		PBout(4)	//O��5
 #define MCUO_ENO_DO6		PBout(1)	//O��6
-#define MCUI_ENI_DI1		PAin(9)		//I��1
+#define MCUI_ENI_DI1		PBin(5)		//I��1
 
 
 union SYS_TIME {			//TODO

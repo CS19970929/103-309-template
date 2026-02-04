@@ -133,6 +133,17 @@ typedef struct
 
   uint16_t enter_rtc_delay;
   uint32_t rtc_sleep_cnt;
+  
+  bool     clear_cov;
+  bool     clear_cuv;
+  bool     clear_occ;
+  bool     clear_odc1;
+  bool     clear_odc2;
+  bool     clear_short;
+  bool     clear_otc;
+  bool     clear_utc;
+  bool     clear_otd;
+  bool     clear_utd;
 }Time_T;
 
 extern Time_T  sys_time;

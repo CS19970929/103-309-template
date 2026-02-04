@@ -222,6 +222,7 @@ bool Write_Parameters(void)
 
 bool fac_sh367309_param_init_first_powerup(void)
 {
+#if 0
 	bool ret = false;
 
 	// if (AFE_PARAM_WRITE_Flag)
@@ -250,6 +251,7 @@ bool fac_sh367309_param_init_first_powerup(void)
 		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 	}
 	return ret;
+#endif
 }
 
 // 开机的时候，AFE_PARAM_WRITE_Flag=1是默认值，所以开机的时候会执行一次。

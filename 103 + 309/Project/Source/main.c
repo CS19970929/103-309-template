@@ -4,60 +4,6 @@
 
 UINT8 SeriesNum = 16;
 
-#if 0
-void init_afe(void)
-{
-	// sh36735_spi_sw_init();
-	// 1) MCU 时钟初始化略…
-
-    // 2) 初始化 SPI：模式3，建议 <= 1MHz（更稳）
-    sh36735_spi_hw_init(72000000, 500000);
-
-    // 3) 等待 AFE WarmUp（建议 20~50ms）
-    sh_delay_us(50000);
-
-    // 4) 先尝试软件复位，确认 ACK=0xA5（不通就先别写配置）
-    if (!sh36735_sw_reset()) {
-        // TODO: 打印错误，检查硬件连线 / SPI mode / CS
-        // while (1) {}
-    }
-    sh_delay_us(50000);
-
-    // 5) 读一段寄存器验证 SPI 通了（读 0x40 起 9 字节）
-    // uint8_t r[9];
-    // if (sh36735_read_regs(0x40, r, sizeof(r))) {
-    //     // log_hex("REG40..", r, sizeof(r));
-    // } else {
-    //     while (1) {}
-    // }
-
-    // 6) 写配置（先跑通：不开温度保护，开 OV/UV/OCD/SC + pump + chg/dsg mos）
-    sh36735_cfg_t cfg;
-    sh36735_cfg_default_ternary_20s(&cfg);
-    if (!sh36735_apply_cfg(&cfg)) {
-        // while (1) {}
-    }
-}
-#endif
-
-#if 0
-int main_3520_test(void)
-{
-    // 7) 主循环：周期性读取状态/电压（你按你的寄存器表补齐地址）
-    while (1) {
-        // 示例：读 BSTATUS1/BSTATUS2/FLAG1…（地址请按你的 PDF 校对）
-        uint8_t st[3];
-        if (sh36735_read_regs(0x5A, st, 3)) {
-            log_hex("STATUS", st, 3);
-        }
-        sh_delay_us(100000);
-    }
-}
-#endif
-
-
-// 不同串数维护的表格
-// 中颖
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1串
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2串
@@ -97,6 +43,8 @@ int main(void)
 		App_AFEGet();
 		App_WarnCtrl();
 		App_Sci();
+		App_E2promDeal();
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 #else
 		App_SysTime();
 		App_AFEGet();
@@ -129,29 +77,35 @@ int main(void)
 
 static void delay_us(uint32_t us)
 {
-    /* Replace with your SysTick/DWT delay if you have one */
-    while (us--) {
-        for (volatile int i = 0; i < 24; i++) __NOP();
-    }
+	/* Replace with your SysTick/DWT delay if you have one */
+	while (us--)
+	{
+		for (volatile int i = 0; i < 24; i++)
+			__NOP();
+	}
 }
 sh3673520_t afe;
- sh3673520_softspi_t soft = {
-        .cs_port = GPIO_CS_SPI, 	.cs_pin = PIN_CS_SPI,
-        .sck_port = GPIO_SCLK_SPI,  .sck_pin = PIN_SCLK_SPI,
-        .miso_port = GPIO_MISO_SPI, .miso_pin = PIN_MISO_SPI,
-        .mosi_port = GPIO_MOSI_SPI, .mosi_pin = PIN_MOSI_SPI,
-        .half_period_nops = 40,
-        .delay_us_cb = delay_us,
-    };
-    sh3673520_spi_t spi;
+sh3673520_softspi_t soft = {
+	.cs_port = GPIO_CS_SPI,
+	.cs_pin = PIN_CS_SPI,
+	.sck_port = GPIO_SCLK_SPI,
+	.sck_pin = PIN_SCLK_SPI,
+	.miso_port = GPIO_MISO_SPI,
+	.miso_pin = PIN_MISO_SPI,
+	.mosi_port = GPIO_MOSI_SPI,
+	.mosi_pin = PIN_MOSI_SPI,
+	.half_period_nops = 40,
+	.delay_us_cb = delay_us,
+};
+sh3673520_spi_t spi;
 void spi_init(void)
 {
-	
-    sh3673520_softspi_init(&soft);
 
-    sh3673520_spi_init(&spi, sh3673520_softspi_make_port(&soft));
+	sh3673520_softspi_init(&soft);
 
-    sh3673520_init(&afe, spi);
+	sh3673520_spi_init(&spi, sh3673520_softspi_make_port(&soft));
+
+	sh3673520_init(&afe, spi);
 }
 void InitDevice(void)
 {
@@ -159,6 +113,7 @@ void InitDevice(void)
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
+	IsSleepStartUp();
 	jtag_disableAndConfIO();
 
 	InitNVIC();
@@ -167,15 +122,21 @@ void InitDevice(void)
 	InitSci();
 	// init_afe();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
-	
+
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
-	// sh36735_write_reg_u8(0x43, 19);
+
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 
-	// sh36735_write_reg_u8(0x41, 0x03);
-	// sh36735_write_reg_u8(0x43, 20);
-	// sh36735_write_reg_u8(0x45, 0);
+	InitMosRelay_DOx();
+
+	Registers_AFE1.sonf2.all |= 0x80;
+	Registers_AFE1.sonf2.bits.CHGMOS = 1;
+	Registers_AFE1.sonf2.bits.DSGMOS = 1;
+	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
+	Registers_AFE1.sonf4 = SNum;
+	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf2.all);
+
 	InitTimer();
 #else
 	InitDelay();
@@ -212,6 +173,7 @@ void InitDevice(void)
 	log_w("init over");
 
 #endif
+	sh36735_write_reg_u8(AFE_SCONF1, 0);
 }
 
 void InitVar(void)

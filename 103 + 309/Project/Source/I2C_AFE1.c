@@ -870,17 +870,10 @@ void InitAFE1(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
 
-	// // 预充MOS，模拟前端驱动的补充
-	// GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	// GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	// GPIO_Init(GPIOC, &GPIO_InitStructure);
-
 	AFE_Reset();
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	MCUO_AFE_CTLC = 1;
 }
 
 /*调试心得
@@ -900,12 +893,19 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
 
+	// sh36735_read_regs(0x5B, (uint8_t *)&Registers_AFE1.bstatus1, (0x5c - 0x5b + 1));
+	sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1));
+#if 1
 	sh36735_read_regs(0x40, (uint8_t *)&Registers_AFE1.sonf1, (0x46 - 0x40 + 1));
 	sh36735_read_regs(0x47, (uint8_t *)&Registers_AFE1.OWV_ALARMH, (0x57 - 0x47 + 1));
-	sh36735_read_regs(0x5B, (uint8_t *)&Registers_AFE1.bstatus1, (0x5c - 0x5b + 1));
 	// sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x90 - 0x5D + 1));
 	sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x96 - 0x5D + 1));
+#endif
 	// sh36735_read_regs(0x40, (uint8_t *)Registers_AFE1.sonf1, (0x99 - 0x40 + 1));
+	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
+	SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
+extern void SH_AFE_GetProtectStatus(void);
+	// SH_AFE_GetProtectStatus();
 
 	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo代码返回1为OK，

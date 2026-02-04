@@ -71,8 +71,7 @@ void AFE_Reset(void)
 // 进入休眠模式
 void AFE_Sleep(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	sh36735_write_reg_u8(AFE_SCONF1, 0xAA);
 }
 
 // 进入IDLE模式
@@ -175,128 +174,87 @@ Others:
 *******************************************************************************/
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
-	// ucMTP_CONF |= 0x04;						//开启看门狗，不开看门狗行不行
-	// 结论，可以不开启。看门狗溢出，操作是
-	// 1，关闭充放电MOS和预充MOS
-	// 2，清除均衡
-	// 两者对于目前使用情况意义不大，休眠带电不允许开，MCU控驱动没意义
-	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
-	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 放电MOS由AFE硬件控制
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
-// 1：修改失败。0：修改成功
-UINT8 SH367309_SC_DelayT_Set(void)
+#define is_AFE_COV Registers_AFE1.flag1.bits.ov_flg
+#define is_AFE_CUV Registers_AFE1.flag1.bits.uv_flg
+#define is_AFE_OCC Registers_AFE1.flag1.bits.occ_flg
+#define is_AFE_ODC Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg
+#define is_AFE_OTC Registers_AFE1.flag2.bits.otc_flg
+#define is_AFE_UTC Registers_AFE1.flag2.bits.utc_flg
+#define is_AFE_OTD Registers_AFE1.flag2.bits.otd_flg
+#define is_AFE_UTD Registers_AFE1.flag2.bits.utd_flg
+
+// #define isCOV g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp
+// #define isCUV
+// #define isOCC
+// #define isODC
+// #define isOTC
+// #define isUTC
+// #define isOTD
+// #define isUTD
+
+void SH_AFE_GetProtectStatus(void)
 {
-	UINT8 result = 0;
-	UINT8 u8temp_now = 0;
-	UINT8 u8temp_need = 0;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = Registers_AFE1.flag1.bits.ov_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = Registers_AFE1.flag1.bits.uv_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = Registers_AFE1.flag1.bits.occ_flg;
+	System_ErrFlag.u8ErrFlag_CBC_DSG = Registers_AFE1.flag1.bits.sc_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg;
 
-	u8temp_now = SH367309_Reg_Store.u8_MTP_SCV_SCT & 0x0F;
-	u8temp_need = OtherElement.u16CBC_DelayT >> 6; // 除以64得出等级，其表格就是以64us为一个等级的
-	if (u8temp_need > 15)
-		u8temp_need = 15;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = Registers_AFE1.flag2.bits.otc_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = Registers_AFE1.flag2.bits.utc_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = Registers_AFE1.flag2.bits.otd_flg;
+	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = Registers_AFE1.flag2.bits.utd_flg;
+}
 
-	if (u8temp_now != u8temp_need)
+bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect)
+{
+	bool Result = false;
+	uint8_t Temp;
+	uint8_t write_reg = Registers_AFE1.sonf2.all | 0x80; // 配置LTCLR=1
+	sh36735_write_reg_u8(AFE_SCONF2, write_reg);
+
+	if (AFE_Protect & 0xFF00)
 	{
-		if (MTPWriteROM(0x0E, 1, (UINT8 *)((SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need)))
-		{
-			SH367309_Reg_Store.u8_MTP_SCV_SCT = (SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need;
-			OtherElement.u16CBC_DelayT = (UINT16)u8temp_need << 6;
-		}
-		else
-		{
-			// 写失败
-			OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
-			result = 1;
-		}
+		Temp = (Registers_AFE1.flag2.all) & (uint8_t)(~(AFE_Protect | 0xFE)); // 将需要恢复的保护标志位清零
+		Result = sh36735_write_reg_u8(AFE_FLAG2, Temp);
 	}
 	else
 	{
-		// 相同，则修改上传参数便可
-		OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
+		Temp = (Registers_AFE1.flag1.all) & (uint8_t)(~AFE_Protect);
+		Result = sh36735_write_reg_u8(AFE_FLAG1, Temp);
 	}
 
-	return result;
+	return Result;
 }
-
-// 休眠带电需要的，控制权全权交给AFE
-// MCU的驱动，完全不用管内部各种保护是怎么样，只需要把影响均衡的两个地方配置好就行
-// 温度保护设置宽一些
-// 取消二次过充保护
-// 目前打算把两个函数合并，AFE驱动和MCU驱动区别，只要把温度数值替换就行，两者都是取消二次过充保护的
-// 结果是，使用MCU驱动时，稍微影响一点点开机时间，问题不大
-void SH367309_UpdataAfeConfig_Old(void)
+#if 0
+void ProtectOV(void)
 {
-	UINT8 bufferbak[26], mtpbufferbak[26];
-	UINT8 i;
-	UINT16 ResTemp[8];
-
-	Feed_IWatchDog;
-
-	// 和EEPROM相关寄存器修改
-	ucMTPBuffer[0x0E] = (BYTE_0EH_SCV_SCT & 0xF0) | (OtherElement.u16CBC_DelayT >> 6);
-
-	SH367309_Reg_Store.u8_MTP_SCONF2 = ucMTPBuffer[0x01];
-	SH367309_Reg_Store.u8_MTP_SCV_SCT = ucMTPBuffer[0x0E];
-
-	if (MTPRead(0x00, 26, bufferbak))
-	{													// 读309配置,包括TR
-		ucMTPBuffer[MTP_TR] = bufferbak[MTP_TR] & 0x7F; // 先获取TR[6~0]的值
-		MemoryCopy(ucMTPBuffer, mtpbufferbak, sizeof(ucMTPBuffer));
-		SH367309_Reg_Store.TR_ResRef = 680 + 5 * ucMTPBuffer[MTP_TR];
-
-		// 只要保证低温保护类型低于25摄氏度，(UINT8)强制转换相当于-256处理了
-		for (i = 0; i < 8; ++i)
+	if (!Info.bOV)
+	{
+		usOVRDelayCnt = 0;
+	}
+	else
+	{
+		if (Info.ssVCellMax < parameter.E2usOVRVol) // OV恢复电压判定
 		{
-			ResTemp[i] = iSheldTemp_10K_NTC[ucMTPBuffer[i + MTP_OTC]];
-			mtpbufferbak[i + MTP_OTC] = (UINT8)(((UINT32)ResTemp[i] << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + ResTemp[i]));
-		}
-
-		for (i = 0; i < 25; i++)
-		{ // 最后一个TR不做对比
-			if (bufferbak[i] != mtpbufferbak[i])
+			if (++usOVRDelayCnt >= OVR_DELAY_CNT)
 			{
-				MCUO_AFE_VPRO = 1;
-				Delay1ms(20);
-				if (!MTPWriteROM(0x00, 25, mtpbufferbak))
-				{ // 重写EEPROM的寄存器，两次
-				  // System_ERROR_UserCallback(ERROR_AFE1);
-				}
-				MCUO_AFE_VPRO = 0;
-				Delay1ms(1);
-
-				if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+				if (SH_AFE_ClearProtectFlag(AFE_FLAG_OV)) // 清零AFE中的标志位
 				{
-					// EA = 0;								//啥意思啊，这句话TODO
-					AFE_Reset(); // Reset IC
-					Delay1ms(5);
-					AFE_IsReady();
+					Info.bOV = 0;
+					usOVRDelayCnt = 0;
 				}
-
-				break;
 			}
 		}
-
-		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+		else
 		{
-			if (MTPRead(0x00, 26, bufferbak))
-			{ // Read MTP value
-				for (i = 0; i < 25; i++)
-				{ // 最后一个TR不做对比
-					if (bufferbak[i] != mtpbufferbak[i])
-					{
-						System_ERROR_UserCallback(ERROR_AFE1);
-						// break;
-					}
-				}
-			}
+			usOVRDelayCnt = 0;
 		}
 	}
 }
+#endif
 
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 {
@@ -305,223 +263,22 @@ void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 	case GPIO_PreCHG:
 		SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = OnOFF;
 		break;
-
 	case GPIO_CHG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = OnOFF;
+		Registers_AFE1.sonf2.bits.CHGMOS = OnOFF;
 		break;
-
 	case GPIO_DSG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = OnOFF;
+		Registers_AFE1.sonf2.bits.DSGMOS = OnOFF;
 		break;
-
 	default:
 		break;
 	}
 
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	Registers_AFE1.sonf2.all |= 0x80;
+	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
 }
 
 void Fault_ChangeToMCU(void)
 {
-	static UINT8 su8_CellOvp_Flag = 0;
-	static UINT8 su8_CellUvp_Flag = 0;
-	static UINT8 su8_IdischgOcp1_Flag = 0;
-	static UINT8 su8_IdischgOcp2_Flag = 0;
-	static UINT8 su8_IchgOcp_Flag = 0;
-	static UINT8 su8_CellChgUtp_Flag = 0;
-	static UINT8 su8_CellChgOtp_Flag = 0;
-	static UINT8 su8_CellDsgUtp_Flag = 0;
-	static UINT8 su8_CellDsgOtp_Flag = 0;
-
-	switch (su8_CellOvp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			FaultWarnRecord2(CellOvp_Third);
-			su8_CellOvp_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			su8_CellOvp_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
-	switch (su8_CellUvp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
-		{
-			FaultWarnRecord2(CellUvp_Third);
-			su8_CellUvp_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
-		{
-			su8_CellUvp_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
-
-#if 1
-	// g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1;
-	switch (su8_IdischgOcp1_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
-		{
-			// FaultWarnRecord2(IdischgOcp_Second);
-			FaultWarnRecord2(IdischgOcp_Third);
-			su8_IdischgOcp1_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
-		{
-			su8_IdischgOcp1_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-#endif
-
-	switch (su8_IdischgOcp2_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
-		{
-			FaultWarnRecord2(IdischgOcp_Third);
-			su8_IdischgOcp2_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
-		{
-			su8_IdischgOcp2_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
-#if 1
-	switch (su8_IchgOcp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			FaultWarnRecord2(IchgOcp_Third);
-			su8_IchgOcp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			su8_IchgOcp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-#else
-
-#endif
-
-	switch (su8_CellChgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			FaultWarnRecord2(CellChgUTp_Third);
-			su8_CellChgUtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			su8_CellChgUtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellChgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			FaultWarnRecord2(CellChgOTp_Third);
-			su8_CellChgOtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			su8_CellChgOtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellDsgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			FaultWarnRecord2(CellDsgUTp_Third);
-			su8_CellDsgUtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			su8_CellDsgUtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellDsgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			FaultWarnRecord2(CellDsgOTp_Third);
-			su8_CellDsgOtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			su8_CellDsgOtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
 }
 
 void TemperatureCheck(void)
@@ -565,13 +322,6 @@ void App_SH367309_Monitor(void)
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
-		// g_stCellInfoReport.u16BalanceFlag1 = SH367309_Reg_Store.u8_MTP_BALANCEL;
-		// g_stCellInfoReport.u16BalanceFlag2 = SH367309_Reg_Store.u8_MTP_BALANCEH;
-		// SystemStatus.bits.b1Status_MOS_PRE = SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET;
-		SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
-		SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
-
-		// TemperatureCheck();
 		Fault_ChangeToMCU();
 
 		switch (su8_SC_Flag)
@@ -595,74 +345,6 @@ void App_SH367309_Monitor(void)
 		default:
 			break;
 		}
-
-		// 观察类型，不能被置位，置位说明有问题，配置不对
-		// SH367309_Reg_Store.REG_BSTATUS1.bits.PF;
-		// SH367309_Reg_Store.REG_BSTATUS1.bits.WDT;
-		// SH367309_Reg_Store.REG_BSTATUS3.bits.L0V;
-		// SH367309_Reg_Store.REG_BSTATUS3.bits.EEPR_WR;
-		switch (su8_EEPR_WR_Flag)
-		{
-		case 0:
-			if (SH367309_Reg_Store.REG_BSTATUS3.bits.EEPR_WR)
-			{
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-				su8_EEPR_WR_Flag = 1;
-			}
-			break;
-
-		case 1:
-			// 负载断开(DSGD管教电平低于VDSGD)，持续时间超过负载释放延时tD1，现在设置为2s
-			if (!SH367309_Reg_Store.REG_BSTATUS3.bits.EEPR_WR)
-			{
-				su8_EEPR_WR_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
-		}
-
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.PF)
-		{
-			System_ERROR_UserCallback(ERROR_SPI);
-		}
-
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.WDT)
-		{
-			System_ERROR_UserCallback(ERROR_UPPER);
-		}
-
-		if (SH367309_Reg_Store.REG_BSTATUS3.bits.L0V)
-		{
-			System_ERROR_UserCallback(ERROR_CLIENT);
-		}
-
-		// 原则上执行一次便可，不能根据MOS状态长期执行这个函数，不然效率低下
-		switch (su8_CtrlMos_Flag)
-		{
-		case 0:
-			if (SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
-				su8_CtrlMos_Flag = 1;
-			}
-			break;
-
-		case 1:
-			if (!SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
-				su8_CtrlMos_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
-		}
-
 	}
 	else
 	{

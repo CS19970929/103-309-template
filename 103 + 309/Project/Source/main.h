@@ -49,6 +49,7 @@
 
 #include "hard_spi_afe.h"
 #include "spi_bus_soft_test.h"
+#include "SH36735_reg.h"
 
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}

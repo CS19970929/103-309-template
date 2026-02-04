@@ -48,10 +48,145 @@
 #define MTP_BFLAG2			0x71
 #define MTP_RSTSTAT			0x72
 
+typedef union __MTP_REG_sconf2 {
+    UINT8 all;
+    struct _MTP_REG_sconf2 {
+		UINT8 CHGMOS     			:1;		//单节过压
+		UINT8 DSGMOS     			:1;		//单节低压
+		UINT8 PDSGMOS      		:1;		//放电过流1保护状态
+		UINT8 PDSG_CTL      		:1;		//放电过流2保护状态
+		
+		UINT8 PUMP_EN     			:1;		//充电过流保护状态
+		UINT8 PD_CTL  				:1;		//短路保护状态
+		UINT8 PD_EN  				:1;		//二次过充电保护状态位
+		UINT8 LTCLR  				:1;		//看门狗溢出位
+     }bits;
+}sconf2;
+
+typedef union __MTP_REG_sconf3 {
+    UINT8 all;
+    struct _MTP_REG_sconf3 {
+		UINT8 OWD_TRG     			:1;		//单节过压
+		UINT8 OWD_EN     			:1;		//单节低压
+		UINT8 CRLD_EN      			:2;		//放电过流1保护状态
+		
+		UINT8 LD_WK     			:2;		//充电过流保护状态
+		UINT8 GRK_WK  				:1;		//短路保护状态
+		UINT8 RES  					:1;		//看门狗溢出位
+     }bits;
+}sconf3;
+
+// typedef union __MTP_REG_sconf4 {
+//     UINT8 all;
+//     struct _MTP_REG_sconf4 {
+// 		UINT8 OWD_TRG     			:1;		//单节过压
+// 		UINT8 OWD_EN     			:1;		//单节低压
+// 		UINT8 CRLD_EN      			:2;		//放电过流1保护状态
+		
+// 		UINT8 LD_WK     			:2;		//充电过流保护状态
+// 		UINT8 GRK_WK  				:1;		//短路保护状态
+// 		UINT8 RES  					:1;		//看门狗溢出位
+//      }bits;
+// }sconf4;
+
+//todo mos强制开启要不要？？？分口
+// typedef union __MTP_REG_sconf3 {
+//     UINT8 all;
+//     struct _MTP_REG_sconf3 {
+// 		UINT8 OWD_TRG     			:1;		//单节过压
+// 		UINT8 OWD_EN     			:1;		//单节低压
+// 		UINT8 CRLD_EN      			:2;		//放电过流1保护状态
+		
+// 		UINT8 LD_WK     			:2;		//充电过流保护状态
+// 		UINT8 GRK_WK  				:1;		//短路保护状态
+// 		UINT8 RES  					:1;		//看门狗溢出位
+//      }bits;
+// }sconf5;
+
+typedef union __MTP_REG_sconf6 {
+    UINT8 all;
+    struct _MTP_REG_sconf6 {
+		UINT8 ov_en     			:1;		//单节过压
+		UINT8 uv_en     			:1;		//单节低压
+		UINT8 ocd_en      			:1;		//放电过流1保护状态
+		UINT8 sc_en      			:1;		//放电过流1保护状态
+		
+		UINT8 ts1_en     			:1;		//充电过流保护状态
+		UINT8 ts2_en   				:1;		//短路保护状态
+		UINT8 ts3_en   				:1;		//短路保护状态
+		UINT8 ts4_en   				:1;		//短路保护状态
+     }bits;
+}sconf6;
+
+typedef union __MTP_REG_flag1 {
+    UINT8 all;
+    struct _MTP_REG_flag1 {
+		UINT8 ov_flg     			:1;		//单节过压
+		UINT8 uv_flg     			:1;		//单节过压
+		UINT8 ocd1_flg     			:1;		//单节低压
+		UINT8 ocd2_flg      			:1;		//放电过流1保护状态
+
+		UINT8 sc_flg      			:1;		//放电过流1保护状态
+		UINT8 occ_flg     			:1;		//充电过流保护状态
+		UINT8 wk_flg   				:1;		//短路保护状态
+		UINT8 rst1_flg   				:1;		//短路保护状态
+     }bits;
+}reg_flag1;
+
+typedef union __MTP_REG_flag2 {
+    UINT8 all;
+    struct _MTP_REG_flag2 {
+		UINT8 cadc_flg     			:1;		//单节过压
+		UINT8 vadc_flg     			:1;		//单节过压
+		UINT8 wdt_flg     			:1;		//单节低压
+		UINT8 rst2_flg      			:1;		//放电过流1保护状态
+
+		UINT8 utc_flg      			:1;		//放电过流1保护状态
+		UINT8 otc_flg     			:1;		//充电过流保护状态
+		UINT8 utd_flg   				:1;		//短路保护状态
+		UINT8 otd_flg   				:1;		//短路保护状态
+     }bits;
+}reg_flag2;
+
+typedef union __MTP_REG_bstatus1 {
+    UINT8 all;
+    struct _MTP_REG_bstatus1 {
+		UINT8 CHG_FET     			:1;		//单节过压
+		UINT8 DSG_FET     			:1;		//单节过压
+		UINT8 PDSG_FET     			:1;		//单节低压
+		UINT8 res      				:1;		//放电过流1保护状态
+
+		UINT8 HCHG_FET      			:1;		//放电过流1保护状态
+		UINT8 HDSG_FET     			:1;		//充电过流保护状态
+		UINT8 E2P_ERR   				:1;		//短路保护状态
+		UINT8 res2   				:1;		//短路保护状态
+     }bits;
+}reg_bstatus1;
+
+typedef union __MTP_REG_bstatus2 {
+    UINT8 all;
+    struct _MTP_REG_bstatus2 {
+		UINT8 LOADOFF     			:1;		//单节过压
+		UINT8 LOADON     			:1;		//单节过压
+		UINT8 RES     			:1;		//单节低压
+		UINT8 BAL      				:1;		//放电过流1保护状态
+
+		UINT8 IDLE      			:1;		//放电过流1保护状态
+		UINT8 SLEEP     			:1;		//充电过流保护状态
+		UINT8 DSGING   				:1;		//短路保护状态
+		UINT8 CHGING   				:1;		//短路保护状态
+     }bits;
+}reg_bstatus2;
+
+
+
+
+
+
 typedef struct _AFEDATA_{
 	uint8_t sonf1;
-	uint8_t sonf2;
-	uint8_t sonf3;
+	sconf2 sonf2;
+	sconf3 sonf3;
 	uint8_t sonf4;
 	uint8_t sonf5;
 	uint8_t sonf6;
@@ -75,11 +210,11 @@ typedef struct _AFEDATA_{
 	uint8_t BALANCEM;
 	// uint8_t res[17];
 
-	uint8_t flag1;
-	uint8_t flag2;
+	reg_flag1 flag1;
+	reg_flag2 flag2;
 	uint8_t flag3;
-	uint8_t bstatus1;
-	uint8_t bstatus2;
+	reg_bstatus1 bstatus1;
+	reg_bstatus2 bstatus2;
 
 	UINT16 Temp1;		//����֮��V*100
 	UINT16 Temp2;
