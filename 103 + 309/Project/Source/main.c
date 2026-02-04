@@ -29,7 +29,7 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
-#define _DEBUG_CODE
+// #define _DEBUG_CODE
 
 int main(void)
 {
@@ -39,20 +39,15 @@ int main(void)
 	{
 #if (defined _DEBUG_CODE)
 		App_SysTime();
-		App_SOC();
-		App_AFEGet();
-		App_WarnCtrl();
-		App_Sci();
-		App_E2promDeal();
-		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 #else
 		App_SysTime();
 		App_AFEGet();
+		App_WarnCtrl();
 
 		App_Sci();
-		App_AnlogCal();
+		// App_AnlogCal();
 		App_E2promDeal();
-		App_CellBalance();
+		// App_CellBalance();
 #ifdef __FUNC__CAN__
 		App_Can();
 #endif // __FUNC__CAN__
@@ -129,13 +124,14 @@ void InitDevice(void)
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 
 	InitMosRelay_DOx();
+	InitCan();
 
 	Registers_AFE1.sonf2.all |= 0x80;
 	Registers_AFE1.sonf2.bits.CHGMOS = 1;
 	Registers_AFE1.sonf2.bits.DSGMOS = 1;
 	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
 	Registers_AFE1.sonf4 = SNum;
-	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf2.all);
+	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
 
 	InitTimer();
 #else
@@ -152,11 +148,11 @@ void InitDevice(void)
 #endif
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
-	InitAFE1();
+	// InitAFE1();
 #ifdef __FUNC__CAN__
 	InitCan();
 #endif // __FUNC__CAN__
-	InitADC();
+	// InitADC();
 	InitSci();
 
 #ifdef __FUNC__HEAT__
@@ -166,6 +162,19 @@ void InitDevice(void)
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
 
+	bsp_InitSPIBus();
+	sh36735_spi_sw_init();
+
+	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
+	sh36735_write_reg_u8(AFE_SCONF1, 0);
+
+	Registers_AFE1.sonf2.all |= 0x80;
+	Registers_AFE1.sonf2.bits.CHGMOS = 1;
+	Registers_AFE1.sonf2.bits.DSGMOS = 1;
+	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
+	Registers_AFE1.sonf4 = SNum;
+	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
+
 #ifdef wdog_enable
 	Init_IWDG();
 #endif // !1
@@ -173,7 +182,6 @@ void InitDevice(void)
 	log_w("init over");
 
 #endif
-	sh36735_write_reg_u8(AFE_SCONF1, 0);
 }
 
 void InitVar(void)

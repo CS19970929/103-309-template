@@ -32,7 +32,7 @@
 #define PIN_SW_EN         GPIO_Pin_5
 
 
-#define GPIO_CMNT_EN        GPIOA
+#define GPIO_CMNT_EN        GPIOB
 #define PIN_CMNT_EN         GPIO_Pin_4
 
 #define GPIO_KEY1        GPIOB

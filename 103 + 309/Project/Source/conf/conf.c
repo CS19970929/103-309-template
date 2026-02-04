@@ -78,6 +78,11 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
 
+        GPIO_InitStructure.GPIO_Pin = PIN_CS_SPI;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_CS_SPI, &GPIO_InitStructure);
+
         GPIO_SetBits(GPIOB, GPIO_Pin_14);
         GPIO_InitStructure.GPIO_Pin = GPIO_Pin_14;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出

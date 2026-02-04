@@ -403,7 +403,7 @@ void ReadEEPROM_ByteData_StartUp(void)
 		}
 	}
 
-	ReadEEPROM_AFE_Parameters();
+	// ReadEEPROM_AFE_Parameters();
 	ReadEEPROM_EventRecord_Parameters();
 }
 

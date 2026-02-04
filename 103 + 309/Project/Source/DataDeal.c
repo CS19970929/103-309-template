@@ -195,7 +195,7 @@ void DataLoad_Temperature(void)
 	// 	g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
 	// 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
 	// }
-	g_stCellInfoReport.u16Temperature[0] = (66 + 40) * 10;
+	g_stCellInfoReport.u16Temperature[0] = (25 + 40) * 10;
 
 #if 0
 	//»·¾³ÎÂ¶È1
