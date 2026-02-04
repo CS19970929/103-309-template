@@ -44,7 +44,7 @@ int main(void)
 		App_WarnCtrl();
 		App_Sci();
 		App_E2promDeal();
-		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 #else
 		App_SysTime();
 		App_AFEGet();

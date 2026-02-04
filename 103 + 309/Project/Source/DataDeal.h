@@ -138,7 +138,7 @@ struct OTHER_ELEMENT {
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260204-c099v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		20
+#define SNum 		19
 
 #define TERNARYLI		//��Ԫ﮵�أ���ѡһ
 // #define LIFEPO			//������﮵�أ���ѡһ
