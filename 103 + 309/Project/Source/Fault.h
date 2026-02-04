@@ -199,6 +199,40 @@ struct PRT_E2ROM_PARAS {
 	UINT16	u16SocUp_Filter;
 };
 
+#ifdef TERNARYLI
+#define COV_1           4100
+#define COV_2           4100
+#define COV_3           4200
+#define COV_recover     4100
+#define COV_filter1      100
+#define COV_filter2     100
+#define COV_filter3     100
+
+#define CUV_1           3000
+#define CUV_2           2900
+#define CUV_3           2800
+#define CUV_recover     3000
+#define CUV_filter1      100
+#define CUV_filter2     100
+#define CUV_filter3     100
+
+#define BOV_1           (410 * SNum)
+#define BOV_2           (410 * SNum)
+#define BOV_3           (420 * SNum)
+#define BOV_recover     (410 * SNum)
+#define BOV_filter1      100 
+#define BOV_filter2     100 
+#define BOV_filter3     100 
+
+
+#define BUV_1           (300 * SNum)
+#define BUV_2           (260 * SNum)
+#define BUV_3           (290 * SNum)
+#define BUV_recover     (280 * SNum)
+#define BUV_filter1      100 
+#define BUV_filter2     100 
+#define BUV_filter3     100 
+#elif (defined(LIFEPO))
 #define COV_1           3500
 #define COV_2           3600
 #define COV_3           3650
@@ -219,10 +253,6 @@ struct PRT_E2ROM_PARAS {
 #define BOV_2           (360 * SNum)
 #define BOV_3           (365 * SNum)
 #define BOV_recover     (360 * SNum)
-// #define BOV_1           (2800)
-// #define BOV_2           (2920)
-// #define BOV_3           (3000)
-// #define BOV_recover     (2800)
 #define BOV_filter1      100 
 #define BOV_filter2     100 
 #define BOV_filter3     100 
@@ -235,12 +265,14 @@ struct PRT_E2ROM_PARAS {
 #define BUV_filter1      100 
 #define BUV_filter2     100 
 #define BUV_filter3     100 
+#endif
+
 
 
 #define OTC_1           ((50 + 40) * 10)
 #define OTC_2           ((50 + 40) * 10)
-#define OTC_3           ((55 + 40) * 10)
-#define OTC_recover     ((50 + 40) * 10)
+#define OTC_3           ((50 + 40) * 10)
+#define OTC_recover     ((40 + 40) * 10)
 #define OTC_filter1       100
 #define OTC_filter2      100
 #define OTC_filter3      100
@@ -262,8 +294,8 @@ struct PRT_E2ROM_PARAS {
 #define UTC_filter3      100
 
 #define OTD_1           ((50 + 40) * 10)
-#define OTD_2           ((50 + 40) * 10)
-#define OTD_3           ((60 + 40) * 10)
+#define OTD_2           ((60 + 40) * 10)
+#define OTD_3           ((70 + 40) * 10)
 #define OTD_recover     ((55 + 40) * 10)
 #define OTD_filter1      100
 #define OTD_filter2      100
@@ -301,21 +333,21 @@ struct PRT_E2ROM_PARAS {
 #define socLow_filter2   100
 #define socLow_filter3   100
 
-#define OCC_1       (500) 
-#define OCC_2       (550) 
-#define OCC_3       (600) 
+#define OCC_1       (200) 
+#define OCC_2       (300) 
+#define OCC_3       (400) 
 #define OCC_recover (100) 
 #define OCC_filter1  (100 * 5) 
 #define OCC_filter2  (100 * 5) 
 #define OCC_filter3  10 
 
-#define ODC_1       (500) 
-#define ODC_2       (550) 
-#define ODC_3       (600) 
+#define ODC_1       (1000) 
+#define ODC_2       (1000) 
+#define ODC_3       (1000) 
 #define ODC_recover (100) 
 #define ODC_filter1  (100 * 5) 
 #define ODC_filter2  (100 * 5) 
-#define ODC_filter3  100
+#define ODC_filter3  10
 
 
 #define E2P_PROTECT_MIN_PRT		{/*���ڹ�ѹ*/1000,	1000,	1000,	1000,	1,\
@@ -332,24 +364,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*ѹ�����*/10,	10,		10,		10,		1,\
 		        				 /*��������*/0,		0,		0,		0,		1}
 
-//��Ԫ��
-#ifdef TERNARYLI
-#define E2P_PROTECT_DEFAULT_PRT	{/*���ڹ�ѹ*/4200,	4200,	4250,	4100,	100,\
-								 /*���ڵ�ѹ*/3000,	3000,	2900,	3100,	100,\
-								 /*��ѹ��ѹ*/420*SNum, 420*SNum, 420*SNum, 400*SNum, 100,\
-								 /*��ѹ��ѹ*/300*SNum, 300*SNum, 290*SNum, 300*SNum, 100,\
-		        				 /*������*/650,	650,	650,	10,	1000,\
-		        				 /*�ŵ����*/1500,	1500,	1500,	10,	200,\
-								 /*������*/900,	900,	900,	800,	100,\
-								 /*������*/400,	400,	400,	450,	100,\
-								 /*�ŵ����*/1000,	1000,	1000,	900,	100,\
-								 /*�ŵ����*/300,	300,	300,	400,	100,\
-		        				 /*��������*/1200,	1200,	1350,	1000,	100,\
-		        				 /*ѹ�����*/1000,	1000,	1000,	900,	100,\
-		        				 /*��������*/3,		2,		1,		2,		100}
-
-//�������
-#elif (defined(LIFEPO))
 #define E2P_PROTECT_DEFAULT_PRT	{/*单节过压*/COV_1,	COV_2,	COV_3,	COV_recover,	COV_filter3,\
 								 /*单节低压*/CUV_1,	CUV_2,	CUV_3,	CUV_recover,	CUV_filter3,\
 								 /*总压过压*/BOV_1, BOV_2,	BOV_3,  BOV_recover, 	BOV_filter3,\
@@ -363,9 +377,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*驱动高温*/mos_1,	mos_2,	mos_3,	mos_recover,	mos_filter3,\
 		        				 /*压差过大*/VDELTER_1,	VDELTER_2,	VDELTER_3,	VDELTER_recover,	VDELTER_filter3,\
 		        				 /*电量过低*/socLow_1,	socLow_2,	socLow_3,	socLow_recover,		socLow_filter3}
-
-#endif
-
 
 
 

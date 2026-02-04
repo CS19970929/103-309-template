@@ -18,6 +18,45 @@ struct OTHER_ELEMENT OtherElement;
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 
+// uint8_t Sh_GetCadcCurrent(uint32_t *current)
+uint8_t Sh_GetCadcCurrent(void)
+{
+	#define RSENSE   (0.00025)
+	uint8_t ret = 0;
+	//uint8_t cadc[2];
+	uint16_t tempvalue;
+
+	//SH_iicReadRam(0x6e,2,cadc);
+	//ShRamRegs.cadcdh = cadc[0];
+	//ShRamRegs.cadcdl = cadc[1];
+	// tempvalue = (uint16_t)(ShRamRegs.cadcdh << 8) + ShRamRegs.cadcdl;
+	tempvalue = (uint16_t)SH367309_Read_AFE1.u16Current;
+
+	if ((tempvalue & 0x8000) == 0x8000)
+	{
+		tempvalue = 0x10000 - tempvalue;
+		//*current = (uint16_t)((float)(tempvalue + CurrOffset) * 200 / 21470.0 / RSENSE);
+		// *current = (uint32_t)((float)(tempvalue) * 200 / 21470.0 / RSENSE);
+		g_stCellInfoReport.u16IDischg = (uint32_t)((float)(tempvalue) * 100 / 29127.0 / RSENSE);
+		g_stCellInfoReport.u16Ichg = 0;
+	}
+	else
+	{
+		//*current = (uint16_t)((float)(tempvalue - CurrOffset) * 200 / 21470.0 / RSENSE);
+		// *current = (uint32_t)((float)(tempvalue) * 200 / 21470.0 / RSENSE);
+		g_stCellInfoReport.u16Ichg = (uint32_t)((float)(tempvalue) * 100 / 29127.0 / RSENSE);
+		g_stCellInfoReport.u16IDischg = 0;
+	}
+	//校准
+	// *current = *current * (float)CurrK/1000 + (float)CurrO/1000;
+
+	// if ((ShRamRegs.cadcdh & 0x80) == 0x80)
+	// {
+	// 	ret = 1;
+	// }
+	return ret;
+}
+
 void Init_Registers(UINT8 num)
 {
 	UINT8 j;
@@ -68,7 +107,8 @@ void DataLoad_CellVolt(void)
 
 	for (i = 0; i < SeriesNum; ++i)
 	{
-		t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+		// t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+		t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[i];
 		if (g_u16CalibCoefK[VOLT_AFE1] != 1024 || g_i16CalibCoefB[VOLT_AFE1] != 0)
 		{
 			t_i32temp = ((t_i32temp * g_u16CalibCoefK[VOLT_AFE1]) >> 10) + g_i16CalibCoefB[VOLT_AFE1];
@@ -85,33 +125,6 @@ void DataLoad_CellVolt(void)
 			g_stCellInfoReport.u16VCell[i] = 61001;
 		}
 	}
-
-	if (g_stCellInfoReport.u16Ichg > 0)
-	{
-		for (i = 0; i < CompensateNUM; ++i)
-		{
-			if (CopperLoss_Num[i] == 0)
-			{
-				break;
-			}
-			t_i32temp = (UINT32)CopperLoss[i] * g_stCellInfoReport.u16Ichg;
-			g_stCellInfoReport.u16VCell[CopperLoss_Num[i] - 1] -= (UINT16)(((t_i32temp >> 14) + (t_i32temp >> 15) + (t_i32temp >> 17)) & 0xFFFF);
-		}
-	}
-	else if (g_stCellInfoReport.u16IDischg > 0)
-	{
-		for (i = 0; i < CompensateNUM; ++i)
-		{
-			if (CopperLoss_Num[i] == 0)
-			{
-				break;
-			}
-			t_i32temp = (UINT32)CopperLoss[i] * g_stCellInfoReport.u16IDischg;
-			g_stCellInfoReport.u16VCell[CopperLoss_Num[i] - 1] += (UINT16)(((t_i32temp >> 14) + (t_i32temp >> 15) + (t_i32temp >> 17)) & 0xFFFF);
-		}
-	}
-
-	// DataLoad_CellVolt_Test();
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -172,7 +185,8 @@ void DataLoad_Temperature(void)
 	INT32 t_i32temp;
 	UINT8 Select;
 
-	Select = 2;
+	// Select = 2;
+	Select = 5;
 	// 没纳入统计的，默认值就是0了
 	for (i = 0; i < Select; i++)
 	{
@@ -181,8 +195,6 @@ void DataLoad_Temperature(void)
 		g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
 		Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
 	}
-
-	g_stCellInfoReport.u16Temperature[2] = 0;
 
 #if 0
 	//环境温度1
@@ -308,7 +320,7 @@ void DataLoad_Current(void)
 	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
 	{
 		// u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 默认使用200mV的计算方式
-		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
+		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 100 * g_u32CS_Res_AFE / (29127);
 		// t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
 		log_i("******************************************\n");
@@ -320,7 +332,7 @@ void DataLoad_Current(void)
 	{
 		// u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
 		// u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (29127) * 100; // mA
 
 		log_i("******************************************\n");
 		log_i("AFE value->%d\n", u32_DsgCur_mA);
@@ -328,7 +340,7 @@ void DataLoad_Current(void)
 		u32_ChgCur_mA = 0;
 	}
 
-	DataLoad_CurrentCali();
+	// DataLoad_CurrentCali();
 
 	if (u32_DsgCur_mA > 2000)
 	{
@@ -613,15 +625,18 @@ void App_AFEGet(void)
 		return;
 	}
 
-	MonitorAFE(0, UpdateVoltageFromBqMaximo());
+	// MonitorAFE(0, UpdateVoltageFromBqMaximo());
+	UpdateVoltageFromBqMaximo();
 
 	DataLoad_CellVolt();
-	// DataLoad_CellVolt_Test();
 	DataLoad_CellVoltMaxMinFind();
+	// Sh_GetCadcCurrent();
+	DataLoad_Current();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
-	DataLoad_Current();
+#if 0
 
 	App_SH367309();
 	App_MOS_Relay_Ctrl();
+#endif
 }

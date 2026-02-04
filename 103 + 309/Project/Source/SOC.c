@@ -103,28 +103,6 @@ void InitData_SOC(void)
 	soc_param_lib_init();
 	GetData_SOC();
 }
-extern sh3673520_t afe;
-
-extern bool sh3673520_spi_read_be_u16_test(sh3673520_spi_t *s, uint8_t reg_hi, uint16_t *out);
-
-uint8_t read_buf[2];
-void spi_task(void)
-{
-	uint16_t cadc = 0;
-	// if (sh3673520_read_cadc_u16(&afe, &cadc))
-	// {
-	// 	/* TODO: print cadc via uart */
-	// 	(void)cadc;
-	// }
-
-	// sh3673520_spi_read_be_u16(&afe, 0x69, &g_stCellInfoReport.u16VCell[0]);
-	// sh3673520_spi_read_be_u16(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
-	// sh3673520_spi_read_be_u16_test(&afe, 0x6B, &g_stCellInfoReport.u16VCell[1]);
-	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
-extern void read_vcell_test(void);
-	// read_vcell_test();
-	// ic_read_reg(0x6B, 2, read_buf);
-}
 
 void App_SOC(void)
 {
@@ -134,7 +112,6 @@ void App_SOC(void)
 	}
 
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-	spi_task();
 
 	RefreshData_SOC();
 	GetData_SOC();

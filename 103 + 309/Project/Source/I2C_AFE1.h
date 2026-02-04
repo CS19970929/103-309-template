@@ -49,19 +49,60 @@
 #define MTP_RSTSTAT			0x72
 
 typedef struct _AFEDATA_{
+	uint8_t sonf1;
+	uint8_t sonf2;
+	uint8_t sonf3;
+	uint8_t sonf4;
+	uint8_t sonf5;
+	uint8_t sonf6;
+	uint8_t sonf7;
+	uint8_t OWV_ALARMH;
+	uint8_t ALARML;
+	uint8_t OVT_OVH;
+	uint8_t OVL;
+	uint8_t UVT_UVH;
+	uint8_t UVL;
+	uint8_t OCD1V_OCD1T;
+	uint8_t OCD2V_OCD2T;
+	uint8_t SCV_SCT;
+	uint8_t OCCV_OCCT;
+	uint8_t OTC;
+	uint8_t OTD;
+	uint8_t UTC;
+	uint8_t UTD;
+	uint8_t BALANCEH;
+	uint8_t BALANCEL;
+	uint8_t BALANCEM;
+	// uint8_t res[17];
+
+	uint8_t flag1;
+	uint8_t flag2;
+	uint8_t flag3;
+	uint8_t bstatus1;
+	uint8_t bstatus2;
+
 	UINT16 Temp1;		//����֮��V*100
 	UINT16 Temp2;
 	UINT16 Temp3;
+	UINT16 Temp4;
+	UINT16 TempI;
+
 	INT16 Cur1;			//ʵʱ����ֵ����Vadc
-	UINT16 Cell[16];
+	UINT16 Cell[20];
 	INT16 Cadc;			//����׼�Ŀ��ؼƣ������
+	uint16_t VTOP;			//����׼�Ŀ��ؼƣ������
+	uint16_t VCHGR;			//����׼�Ŀ��ؼƣ������
+	uint8_t owdh;			//����׼�Ŀ��ؼƣ������
+	uint8_t odwm;			//����׼�Ŀ��ؼƣ������
+	uint8_t owdl;			//����׼�Ŀ��ؼƣ������
 }AFEDATA;
 
 
 struct SH367309_Read {			/* AD Read	*/
-	UINT16		u16VCell[16];   // mv
-	UINT16		u16TempBat[3];					
-	UINT32		u32VBat;       	// mv
+	UINT16		u16VCell[20];   // mv
+	UINT16		u16TempBat[5];					
+	UINT32		vbatB;       	// mv
+	UINT32		vbatC;       	// mv
 	UINT16      u16Current;     // mA
 };
 

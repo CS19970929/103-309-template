@@ -5,6 +5,10 @@
 telink  i2c研究
 flash、soc、日志逻辑
 
+//**********************************************************
+todo 
+1、crc 判断 spi通讯异常？？？
+
 
 协议测试
 
@@ -304,3 +308,5 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 	Sci2_CommonUpper_Tx_Deal(s);
 	// Sci1_FaultChk();	//没必要在这加
 }
+
+// 给出ovt、ovh寄存器方便、简洁转换为对应保护电压、延时的代码

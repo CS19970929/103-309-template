@@ -1008,7 +1008,7 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -1757,7 +1757,7 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
-	USART_InitStructure.USART_BaudRate = 19200;									// 设置串口波特率
+	USART_InitStructure.USART_BaudRate = 19200;										// 设置串口波特率
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;						// 设置数据位
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;							// 设置停止位
 	USART_InitStructure.USART_Parity = USART_Parity_No;								// 设置效验位
@@ -3028,6 +3028,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 				System_Func_StartUp.bits.b1StartUpFlag_MOS = 1;
 				System_Func_StartUp.bits.b1StartUpFlag_Relay = 1;
 			}
+			sh36735_write_reg_u8(0x41, 0x03);
 			break;
 
 		case 6: // 加热功能
@@ -3093,6 +3094,10 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	{
 		//*(&System_OnOFF_Func.bits.b1OnOFF_Balance+(u16SciRegData-1)) = 0;
 		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // 功能途中关闭不需要初始化验证
+		if (System_OnOFF_Func.bits.b1OnOFF_MOS_Relay == 0)
+		{
+			sh36735_write_reg_u8(0x41, 0);
+		}
 
 		if (u16SciRegData == 0x0B)
 		{

@@ -94,10 +94,11 @@ int main(void)
 #if (defined _DEBUG_CODE)
 		App_SysTime();
 		App_SOC();
+		App_AFEGet();
+		App_WarnCtrl();
 		App_Sci();
 #else
 		App_SysTime();
-		App_WarnCtrl();
 		App_AFEGet();
 
 		App_Sci();
@@ -162,21 +163,20 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
-	InitTimer();
 	// spi_init();
 	InitSci();
 	// init_afe();
+	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
-	sh36735_write_reg_u8(0x43, 19);
+	// sh36735_write_reg_u8(0x43, 19);
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 
-	sh36735_write_reg_u8(0x41, 0x03);
-	sh36735_write_reg_u8(0x43, 19);
-	sh36735_write_reg_u8(0x45, 0);
-	// AFE_SPI_Init();
-	// softspi_mode3_gpio_init();
+	// sh36735_write_reg_u8(0x41, 0x03);
+	// sh36735_write_reg_u8(0x43, 20);
+	// sh36735_write_reg_u8(0x45, 0);
+	InitTimer();
 #else
 	InitDelay();
 	IsSleepStartUp();

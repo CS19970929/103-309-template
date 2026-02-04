@@ -51,6 +51,9 @@ bool sh36735_write_reg_u8(uint8_t reg, uint8_t val)
 
 bool sh36735_read_regs(uint8_t reg, uint8_t *buf, uint8_t n)
 {
+    uint8_t *p = (uint8_t *)buf;
+    // uint8_t n = (uint8_t)(n / 3);
+
     if (!buf || n == 0) return false;
 
     sh_cs_low();
@@ -67,6 +70,13 @@ bool sh36735_read_regs(uint8_t reg, uint8_t *buf, uint8_t n)
     for (uint8_t i = 0; i < n; i++) {
         buf[i] = sh36735_spi_xfer(0x00);
     }
+
+    //  for (uint8_t i = 0; i < n; i += 2) {
+    //     uint8_t t = p[i];
+    //     p[i] = p[i + 1];
+    //     p[i + 1] = t;
+    // }
+
     uint8_t crc_rx = sh36735_spi_xfer(0x00);
 
     sh_delay_us(1);

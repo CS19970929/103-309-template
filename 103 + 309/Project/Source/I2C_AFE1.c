@@ -6,34 +6,62 @@ struct SH367309_Read SH367309_Read_AFE1;
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	// AD(kΩ*100)		(Temp+40)*10
-	11611, 100, //-30
-	8935, 150,	//-25
-	6943, 200,	//-20
-	5442, 250,	//-15
-	4300, 300,	//-10
-	3422, 350,	//-5
-	2751, 400,	// 0
-	2214, 450,	// 5
-	1801, 500,	// 10
-	1470, 550,	// 15
-	1209, 600,	// 20
-	1000, 650,	// 25
-	831, 700,	// 30
-	694, 750,	// 35
-	583, 800,	// 40
-	492, 850,	// 45
-	416, 900,	// 50
-	355, 950,	// 55
-	303, 1000,	// 60
-	260, 1050,	// 65
-	224, 1100,	// 70
-	193, 1150,	// 75
-	167, 1200,	// 80
-	146, 1250,	// 85
-	127, 1300,	// 90
-	111, 1350,	// 95
-	98, 1400,	// 100
-	86, 1450,	// 105
+	11611,
+	100, //-30
+	8935,
+	150, //-25
+	6943,
+	200, //-20
+	5442,
+	250, //-15
+	4300,
+	300, //-10
+	3422,
+	350, //-5
+	2751,
+	400, // 0
+	2214,
+	450, // 5
+	1801,
+	500, // 10
+	1470,
+	550, // 15
+	1209,
+	600, // 20
+	1000,
+	650, // 25
+	831,
+	700, // 30
+	694,
+	750, // 35
+	583,
+	800, // 40
+	492,
+	850, // 45
+	416,
+	900, // 50
+	355,
+	950, // 55
+	303,
+	1000, // 60
+	260,
+	1050, // 65
+	224,
+	1100, // 70
+	193,
+	1150, // 75
+	167,
+	1200, // 80
+	146,
+	1250, // 85
+	127,
+	1300, // 90
+	111,
+	1350, // 95
+	98,
+	1400, // 100
+	86,
+	1450, // 105
 };
 
 // 这个code是啥
@@ -833,7 +861,7 @@ Output: NULL
 Others:
 *******************************************************************************/
 void InitAFE1(void)
- {
+{
 	GPIO_InitTypeDef GPIO_InitStructure;
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
@@ -872,30 +900,51 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
 
-	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
+	sh36735_read_regs(0x40, (uint8_t *)&Registers_AFE1.sonf1, (0x46 - 0x40 + 1));
+	sh36735_read_regs(0x47, (uint8_t *)&Registers_AFE1.OWV_ALARMH, (0x57 - 0x47 + 1));
+	sh36735_read_regs(0x5B, (uint8_t *)&Registers_AFE1.bstatus1, (0x5c - 0x5b + 1));
+	// sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x90 - 0x5D + 1));
+	sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x96 - 0x5D + 1));
+	// sh36735_read_regs(0x40, (uint8_t *)Registers_AFE1.sonf1, (0x99 - 0x40 + 1));
+
+	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo代码返回1为OK，
-		for (i = 0; i < SeriesNum; i++)
+		// for (i = 0; i < SeriesNum; i++)
+		for (i = 0; i < 20; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
 		}
 
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp1)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp1));
+		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp1));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[0] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp2)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp2));
+		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp2)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp2));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp3)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp3));
+		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp3)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp3));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp4));
+		UPDNLMT16(u32temp, 65535, 0);
+		SH367309_Read_AFE1.u16TempBat[3] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+
+		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.TempI));
+		UPDNLMT16(u32temp, 65535, 0);
+		SH367309_Read_AFE1.u16TempBat[4] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
 		// 电流要不要加滤波1s除以4，demo是这样的，现在先观察一下
 		// SH367309_Read_AFE1.i16Current = (UINT16)((UINT32)U16_SwapEndian(Registers_AFE1.Cadc)*200/(21470*RSENSE));		//TODO
 		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
+		// SH367309_Read_AFE1.vbatB = ((uint32_t)U16_SwapEndian(Registers_AFE1.VTOP) *5 >> 5 * 25);
+		SH367309_Read_AFE1.vbatB = (((UINT32)U16_SwapEndian(Registers_AFE1.VTOP) * 5 >> 5) * 25);  ////Vcell*5/32
+		SH367309_Read_AFE1.vbatC = (((UINT32)U16_SwapEndian(Registers_AFE1.VCHGR) * 5 >> 5) * 25); ////Vcell*5/32
 	}
-	else
-	{
-		result = 1;
-	}
+
+void test_read_afe_param(void);
+	test_read_afe_param();
+	//	else
+	//	{
+	//		result = 1;
+	//	}
 	return result;
 }

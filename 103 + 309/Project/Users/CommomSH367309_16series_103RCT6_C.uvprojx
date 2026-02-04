@@ -594,6 +594,11 @@
               <FileType>1</FileType>
               <FilePath>..\Source\spi_bus_soft_test.c</FilePath>
             </File>
+            <File>
+              <FileName>AFE_PROTECT_param.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\AFE_PROTECT_param.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

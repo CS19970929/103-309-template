@@ -701,18 +701,18 @@ void InitData_E2prom(void)
 		EEPROM_ResetData_OtherToDefault(); // 把E2P_BEGIN_FLAG写进头地址，
 										   // 如果有别的添加，可以往这个函数写，目前加了保护记录初始化
 		WriteProID_Default();
-		{
-			bool ret = false;
-			do
-			{
-				initAFE1_IIC();
-				AFE_IsReady();
-				AFE_PARAM_WRITE_Flag = 1;
-				// ret = fac_sh367309_param_init_first_powerup();
-				ret = SH367309_UpdataAfeConfig();
-			} while (ret == false);
-			DataLoad_CurrentCali_startup();
-		}
+		// {
+		// 	bool ret = false;
+		// 	do
+		// 	{
+		// 		initAFE1_IIC();
+		// 		AFE_IsReady();
+		// 		AFE_PARAM_WRITE_Flag = 1;
+		// 		// ret = fac_sh367309_param_init_first_powerup();
+		// 		ret = SH367309_UpdataAfeConfig();
+		// 	} while (ret == false);
+		// 	DataLoad_CurrentCali_startup();
+		// }
 		soc_factory_param_init_first();
 
 		WriteEEPROM_Word_NoZone(EEPROM_ADDR_PASS, EEPROM_VALUE_BEGIN_FLAG); // 第一次上电初始化完成
