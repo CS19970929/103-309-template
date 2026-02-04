@@ -205,20 +205,20 @@ void DataLoad_Temperature(void)
 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
 #endif
 
-	// 环境温度2
-	// 如果没有，这个默认就是0(ADC.c不会调用)
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
-	t_i32temp = -40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
+	// // 环境温度2
+	// // 如果没有，这个默认就是0(ADC.c不会调用)
+	// t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
+	// t_i32temp = -40;
+	// t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
+	// g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
 
-	// 环境温度3
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
-	t_i32temp = -40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
+	// // 环境温度3
+	// t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
+	// t_i32temp = -40;
+	// t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
+	// g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
 
-#if 1
+#if 0
 	// MOS温度为散热片温度
 	// 取两者最大值
 	// t_i32temp = (g_i32ADCResult[ADC_TEMP_MOS1] > g_i32ADCResult[ADC_TEMP_MOS2] ? g_i32ADCResult[ADC_TEMP_MOS1]:g_i32ADCResult[ADC_TEMP_MOS2]);

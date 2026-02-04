@@ -490,7 +490,7 @@ void Init(void)
 
         // Init_ChargerLoad_Det();
         ADC_DeInit(ADC1);
-        InitADC();
+        // InitADC();
         //?????adc配置有什么影响
         // Init_ChargerLoad_Det();
 
