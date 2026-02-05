@@ -21,15 +21,15 @@ UINT32 u32_DsgCur_mA = 0;
 // uint8_t Sh_GetCadcCurrent(uint32_t *current)
 uint8_t Sh_GetCadcCurrent(void)
 {
-	#define RSENSE   (0.00025)
+#define RSENSE (0.00025)
 	uint8_t ret = 0;
-	//uint8_t cadc[2];
+	// uint8_t cadc[2];
 	uint16_t tempvalue;
 
-	//SH_iicReadRam(0x6e,2,cadc);
-	//ShRamRegs.cadcdh = cadc[0];
-	//ShRamRegs.cadcdl = cadc[1];
-	// tempvalue = (uint16_t)(ShRamRegs.cadcdh << 8) + ShRamRegs.cadcdl;
+	// SH_iicReadRam(0x6e,2,cadc);
+	// ShRamRegs.cadcdh = cadc[0];
+	// ShRamRegs.cadcdl = cadc[1];
+	//  tempvalue = (uint16_t)(ShRamRegs.cadcdh << 8) + ShRamRegs.cadcdl;
 	tempvalue = (uint16_t)SH367309_Read_AFE1.u16Current;
 
 	if ((tempvalue & 0x8000) == 0x8000)
@@ -47,8 +47,8 @@ uint8_t Sh_GetCadcCurrent(void)
 		g_stCellInfoReport.u16Ichg = (uint32_t)((float)(tempvalue) * 100 / 29127.0 / RSENSE);
 		g_stCellInfoReport.u16IDischg = 0;
 	}
-	//校准
-	// *current = *current * (float)CurrK/1000 + (float)CurrO/1000;
+	// 校准
+	//  *current = *current * (float)CurrK/1000 + (float)CurrO/1000;
 
 	// if ((ShRamRegs.cadcdh & 0x80) == 0x80)
 	// {
@@ -185,17 +185,17 @@ void DataLoad_Temperature(void)
 	INT32 t_i32temp;
 	UINT8 Select;
 
-	// Select = 2;
-	Select = 5;
+	Select = 2;
+	// Select = 5;
 	// 没纳入统计的，默认值就是0了
-	// for (i = 0; i < Select; i++)
-	// {
-	// 	t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
-	// 	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP1 + i]) + g_i16CalibCoefB[MDL_TEMP1 + i]) >> 10;
-	// 	g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
-	// 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
-	// }
-	g_stCellInfoReport.u16Temperature[0] = (25 + 40) * 10;
+	for (i = 0; i < Select; i++)
+	{
+		t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
+		t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP1 + i]) + g_i16CalibCoefB[MDL_TEMP1 + i]) >> 10;
+		g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
+		Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
+	}
+	// g_stCellInfoReport.u16Temperature[0] = (25 + 40) * 10;
 
 #if 0
 	//环境温度1
@@ -206,28 +206,21 @@ void DataLoad_Temperature(void)
 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
 #endif
 
-	// // 环境温度2
-	// // 如果没有，这个默认就是0(ADC.c不会调用)
-	// t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
-	// t_i32temp = -40;
-	// t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
-	// g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
-
-	// // 环境温度3
-	// t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
-	// t_i32temp = -40;
-	// t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
-	// g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
-
-#if 0
+#if 1
 	// MOS温度为散热片温度
 	// 取两者最大值
 	// t_i32temp = (g_i32ADCResult[ADC_TEMP_MOS1] > g_i32ADCResult[ADC_TEMP_MOS2] ? g_i32ADCResult[ADC_TEMP_MOS1]:g_i32ADCResult[ADC_TEMP_MOS2]);
-	t_i32temp = g_i32ADCResult[ADC_TEMP_MOS1];
+	t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[3];
 	t_i32temp = t_i32temp / 10 - 40;
 	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
 	g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[MOS_TEMP1]);
+
+	// t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[4];
+	// t_i32temp = t_i32temp / 10 - 40;
+	// t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1]) >> 10;
+	// g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
+	// Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
 #endif
 }
 
@@ -636,18 +629,114 @@ void App_AFEGet(void)
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
 
-	if(sys_time.clear_cov)
+	if (IS_AFE_SC)
+	{
+		System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
+		static uint8_t state = 0;
+		switch (state)
+		{
+		case 0:
+			// Registers_AFE1.sonf3.bits.CRLD_EN = 2;
+			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
+			sh36735_write_reg_u8(AFE_SCONF3, write);
+			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
+			if (Registers_AFE1.sonf3.bits.CRLD_EN = 2)
+				state = 1;
+			break;
+		case 1:
+			if (Registers_AFE1.bstatus2.bits.LOADOFF)
+			{
+				SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
+				state = 0;
+
+				Registers_AFE1.sonf3.bits.CRLD_EN = 0;
+				sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
+				sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
+				if (Registers_AFE1.sonf3.bits.CRLD_EN = 0)
+					state = 0;
+			}
+			break;
+		default:
+
+			break;
+		}
+	}
+	else
+		System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
+
+	if (is_AFE_COV && g_stCellInfoReport.u16VCellMax < PRT_E2ROMParas.u16VcellOvp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
+	else if (is_AFE_CUV && g_stCellInfoReport.u16VCellMin > PRT_E2ROMParas.u16VcellUvp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
+	else if (is_AFE_OCC)
+	{
+		// todo c+电压采集
+#if 0
+		static uint8_t state = 0;
+		switch (state)
+		{
+		case 0:
+			// Registers_AFE1.sonf3.bits.CRLD_EN = 2;
+			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
+			sh36735_write_reg_u8(AFE_SCONF3, write);
+			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
+			if (Registers_AFE1.sonf3.bits.CRLD_EN = 2)
+				state = 1;
+			break;
+		case 1:
+			if (Registers_AFE1.bstatus2.bits.LOADOFF)
+			{
+				SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
+				state = 0;
+
+				Registers_AFE1.sonf3.bits.CRLD_EN = 0;
+				sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
+				sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
+				if (Registers_AFE1.sonf3.bits.CRLD_EN = 0)
+					state = 0;
+			}
+			break;
+		default:
+
+			break;
+		}
+#endif
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
+	}
+	else if (is_AFE_ODC)
+	{
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+	}
+	else if (is_AFE_OTC && g_stCellInfoReport.u16TempMax < PRT_E2ROMParas.u16TChgOTp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
+	else if (is_AFE_UTC && g_stCellInfoReport.u16TempMin > PRT_E2ROMParas.u16TchgUTp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UTC);
+	else if (is_AFE_OTD && g_stCellInfoReport.u16TempMax < PRT_E2ROMParas.u16TdischgOTp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
+	else if (is_AFE_UTD && g_stCellInfoReport.u16TempMin > PRT_E2ROMParas.u16TdischgUTp_Rcv)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UTD);
+
+#if 0
+	if (sys_time.clear_cov)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
 	else if (sys_time.clear_cuv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
 	else if (sys_time.clear_odc1)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+	else if (sys_time.clear_odc2)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
 	else if (sys_time.clear_otc)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
 	else if (sys_time.clear_otd)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
-#if 1
+	else if (sys_time.clear_short)
+	{
+		SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
+	}
+#endif
 
+#if 1
 	// App_SH367309();
 	App_MOS_Relay_Ctrl();
 #endif

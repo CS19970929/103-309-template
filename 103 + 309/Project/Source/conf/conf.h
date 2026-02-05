@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x6666		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1666		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
 // #define __FUNC_RTC__
@@ -144,6 +144,11 @@ typedef struct
   bool     clear_utc;
   bool     clear_otd;
   bool     clear_utd;
+
+  bool     charger_online1;
+  bool     charger_online2;
+  bool     load_online1;
+  bool     load_online2;
 }Time_T;
 
 extern Time_T  sys_time;

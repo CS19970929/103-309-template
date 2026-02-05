@@ -148,7 +148,7 @@ void InitDevice(void)
 #endif
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
-	// InitAFE1();
+				  // InitAFE1();
 #ifdef __FUNC__CAN__
 	InitCan();
 #endif // __FUNC__CAN__
@@ -174,6 +174,37 @@ void InitDevice(void)
 	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
 	Registers_AFE1.sonf4 = SNum;
 	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
+	Registers_AFE1.sonf3.bits.CRLD_EN = 0;
+	sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
+
+	int8_t mos_en = 0x7f;
+	// uint8_t mos_en = 0xff;
+	sh36735_write_reg_u8(AFE_SCONF6, mos_en);
+
+	{
+		uint8_t ov_code = 0;
+		uint8_t ov_delay_code = 0;
+		sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);
+		sh36735_write_reg_u8(AFE_OCD2V_OCD2T, 3);
+		//目前分流器，step 5.5
+		sh36735_write_reg_u8(AFE_OCCV_OCCT, 1);
+		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 6);
+
+		uint8_t otc, utc, otd, utd;
+		float Rt;
+		Rt = 3.55; //55du
+		otc = Rt * 512 / (10 + Rt);
+		Rt = 27.513; //0du
+		utc = Rt * 512 / (10 + Rt);
+		Rt = 1.935; //75du
+		otd = Rt * 512 / (10 + Rt);
+		Rt = 116.11; //-25du
+		utd = Rt * 512 / (10 + Rt);
+		sh36735_write_reg_u8(AFE_OTC, otc);
+		sh36735_write_reg_u8(AFE_UTC, utc);
+		sh36735_write_reg_u8(AFE_OTD, otd);
+		sh36735_write_reg_u8(AFE_UTD, utd);
+	}
 
 #ifdef wdog_enable
 	Init_IWDG();

@@ -83,18 +83,25 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_CS_SPI, &GPIO_InitStructure);
 
-        GPIO_SetBits(GPIOB, GPIO_Pin_14);
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_14;
+        GPIO_InitStructure.GPIO_Pin = PIN_CHG_DET;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_CHG_DET, &GPIO_InitStructure);
+        GPIO_InitStructure.GPIO_Pin = PIN_DSG_DET;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_DSG_DET, &GPIO_InitStructure);
+
+        GPIO_SetBits(GPIO_M_CCC, PIN_M_CCC);
+        GPIO_InitStructure.GPIO_Pin = PIN_M_CCC;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIOB, &GPIO_InitStructure);
+        GPIO_Init(GPIO_M_CCC, &GPIO_InitStructure);
     }
 
-    MCUO_PWSV_STB = 1;
-    MCUO_PWSV_CTR = 0;
-    MCUO_DRV_CMNT = 0;
-    MCUO_AFE_SHIP = 0;
-    MCUO_AFE_MODE = 0;
+    // MCUO_PWSV_STB = 1;
+    // MCUO_PWSV_CTR = 0;
+    // MCUO_DRV_CMNT = 0;
+    // MCUO_AFE_SHIP = 0;
+    // MCUO_AFE_MODE = 0;
 }
 
 void InitWakeUp_Base(void)

@@ -3,6 +3,18 @@
 
 #include "conf.h"
 
+#define is_AFE_COV Registers_AFE1.flag1.bits.ov_flg
+#define is_AFE_CUV Registers_AFE1.flag1.bits.uv_flg
+#define is_AFE_OCC Registers_AFE1.flag1.bits.occ_flg
+#define is_AFE_ODC Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg
+#define is_AFE_OTC Registers_AFE1.flag2.bits.otc_flg
+#define is_AFE_UTC Registers_AFE1.flag2.bits.utc_flg
+#define is_AFE_OTD Registers_AFE1.flag2.bits.otd_flg
+#define is_AFE_UTD Registers_AFE1.flag2.bits.utd_flg
+#define IS_AFE_SC Registers_AFE1.flag1.bits.sc_flg
+
+
+
 #ifdef TERNARYLI
 #define VAL_CELL_OVP			((UINT16)4205)	//单位mV	
 #define VAL_CELL_OVP_REC		((UINT16)4010)	//单位mV，过充保护恢复

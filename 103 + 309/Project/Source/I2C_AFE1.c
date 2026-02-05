@@ -909,26 +909,25 @@ extern void SH_AFE_GetProtectStatus(void);
 
 	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo´úÂë·µ»Ø1ÎªOK£¬
-		// for (i = 0; i < SeriesNum; i++)
-		for (i = 0; i < 20; i++)
+		for (i = 0; i < SNum; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
 		}
 
-		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp1));
+		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp1));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[0] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp2)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp2));
+		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp2)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp2));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp3)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp3));
+		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp3)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp3));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp4));
+		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp4)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp4));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[3] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
-		u32temp = ((UINT32)10 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.TempI));
+		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.TempI)) / (32768 - U16_SwapEndian(Registers_AFE1.TempI));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[4] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 

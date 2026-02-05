@@ -82,6 +82,14 @@
 #define PIN_INT_WK_CMNT          GPIO_Pin_12
 
 //!!!!!!!!!!!!!!!!!!
+#define GPIO_DSG_DET          GPIOA   
+#define PIN_DSG_DET           GPIO_Pin_8
+#define GPIO_CHG_DET          GPIOA   
+#define PIN_CHG_DET           GPIO_Pin_9
+
+#define GPIO_M_CCC          GPIOB   
+#define PIN_M_CCC           GPIO_Pin_14
+
 
 #define GPIO_CS_SPI          GPIOA   
 #define PIN_CS_SPI           GPIO_Pin_4

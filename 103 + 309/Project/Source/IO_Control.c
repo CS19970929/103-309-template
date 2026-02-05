@@ -272,6 +272,10 @@ void App_DI1_Switch(void)
 
 void Drivers_External_Ctrl(void)
 {
+	if(is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
+	{
+		return;
+	}
 #if 1
 	if (Driver_Element.u8_DriverCtrl_Right)
 	{
