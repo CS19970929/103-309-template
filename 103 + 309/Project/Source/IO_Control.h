@@ -4,6 +4,35 @@
 // #include "IODrivers_030.h"
 #include "IODrivers.h"
 
+bool is_charger_online(void);
+bool is_load_online(void);
+// inline bool is_charger_online(void)
+// {
+// 	if (0 == GPIO_ReadInputDataBit(GPIO_CHG_DET, PIN_CHG_DET))
+// 		return true;
+
+// 	return false;
+// }
+// inline bool is_load_online(void)
+// {
+// 	if (0 == GPIO_ReadInputDataBit(GPIO_DSG_DET, PIN_DSG_DET))
+// 		return true;
+
+// 	return false;
+// }
+
+enum system_status
+{
+	S_DSG = 0,
+	S_CHG,
+	S_CHARGESIG,
+	S_STARTUP,
+	S_IDLE,
+	S_PRECHG,
+};
+
+extern enum system_status bms_status;
+
 typedef enum _IO_STATUS {
 OPEN = 1, CLOSE = 0
 }IO_STATUS;

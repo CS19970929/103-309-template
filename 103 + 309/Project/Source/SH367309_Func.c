@@ -256,6 +256,10 @@ void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 		break;
 	case GPIO_CHG:
 		Registers_AFE1.sonf2.bits.CHGMOS = OnOFF;
+		if (OnOFF)
+			GPIO_SetBits(GPIO_M_CCC, PIN_M_CCC);
+		else
+			GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
 		break;
 	case GPIO_DSG:
 		Registers_AFE1.sonf2.bits.DSGMOS = OnOFF;

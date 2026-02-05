@@ -670,6 +670,9 @@ void App_AFEGet(void)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
 	else if (is_AFE_OCC)
 	{
+		if (!is_charger_online())
+			SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
+
 		// todo c+µÁ—π≤…ºØ
 #if 0
 		static uint8_t state = 0;
@@ -701,12 +704,14 @@ void App_AFEGet(void)
 			break;
 		}
 #endif
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
 	}
 	else if (is_AFE_ODC)
 	{
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+		if (!is_load_online())
+		{
+			SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+			SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+		}
 	}
 	else if (is_AFE_OTC && g_stCellInfoReport.u16TempMax < PRT_E2ROMParas.u16TChgOTp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
@@ -730,6 +735,8 @@ void App_AFEGet(void)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
 	else if (sys_time.clear_otd)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
+	else if (sys_time.clear_occ)
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
 	else if (sys_time.clear_short)
 	{
 		SH_AFE_ClearProtectFlag(AFE_FLAG_SC);

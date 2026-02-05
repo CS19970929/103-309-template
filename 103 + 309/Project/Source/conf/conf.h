@@ -18,7 +18,7 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-#define __VIRTURE_CURRENT__
+// #define __VIRTURE_CURRENT__
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS

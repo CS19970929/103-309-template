@@ -8,6 +8,21 @@ enum MOS_CTRL_STATUS MOSCtrl_Command = MOS_PRE_DET;
 volatile union Switch_OnOFF_Function Switch_OnOFF_Func;
 UINT8 gu8_DsgFirstOpen_Flag = 0;
 
+ bool is_charger_online(void)
+{
+	if (0 == GPIO_ReadInputDataBit(GPIO_CHG_DET, PIN_CHG_DET))
+		return true;
+
+	return false;
+}
+bool is_load_online(void)
+{
+	if (0 == GPIO_ReadInputDataBit(GPIO_DSG_DET, PIN_DSG_DET))
+		return true;
+
+	return false;
+}
+
 // 长期更新数据
 void RefreshData_Drivers(void)
 {
@@ -269,31 +284,135 @@ void App_DI1_Switch(void)
 
 #endif
 }
+void close_chg(void)
+{
+	SH367309_DriverMos_Ctrl(GPIO_CHG, CLOSE);
+}
 
+enum system_status bms_status = S_STARTUP;
 void Drivers_External_Ctrl(void)
 {
-	if(is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
+	if (is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
 	{
 		return;
 	}
 #if 1
+	switch (bms_status)
+	{
+	case S_IDLE:
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+
+		if(is_charger_online())
+		{
+			bms_status = S_CHG;
+		}
+		if(is_load_online())
+		{
+			bms_status = S_DSG;
+		}
+		break;
+	case S_STARTUP:
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		if(is_charger_online())
+		{
+			bms_status = S_DSG;
+		}
+		if(is_load_online())
+		{
+			bms_status = S_CHG;
+		}
+		break;
+	case S_DSG:
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		if(!is_load_online())
+		{
+			bms_status = S_IDLE;
+		}
+		if(is_charger_online())
+		{
+			bms_status = S_CHG;
+		}
+		break;
+	case S_CHG:
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 1;
+
+		static UINT16 I_cnt = 0;
+
+		if (!g_stCellInfoReport.u16Ichg)
+		{
+			if (++I_cnt >= 5)
+			{
+				I_cnt = 0;
+
+				close_chg();
+				if(!is_charger_online())
+				{
+					if(is_load_online())
+					{
+						bms_status = S_DSG;
+					}
+					else
+					{
+						bms_status = S_IDLE;
+					}
+				}
+			}
+		}
+		else
+		{
+			I_cnt = 0;
+		}
+		break;
+	default:
+		break;
+	}
+
+	// todo 测试ctlc、芯片异常等情况对afe寄存器状态的影响
+	// todo 状态变化时 会有问题？？？时序有影响，还会有其他问题吗
 	if (Driver_Element.u8_DriverCtrl_Right)
 	{
 		if (SystemStatus.bits.b1Status_MOS_CHG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG)
 		{
-			//log_w();
+			// log_w();
 			sys_time.cnt_enter_chg_open++;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
 		}
 		if (SystemStatus.bits.b1Status_MOS_DSG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG)
 		{
-			//log_w();
+			// log_w();
 			sys_time.cnt_enter_dsg_open++;
 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
 		}
 	}
+
 #endif
 }
+// void Drivers_External_Ctrl(void)
+// {
+// 	if (is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
+// 	{
+// 		return;
+// 	}
+// #if 1
+// 	if (Driver_Element.u8_DriverCtrl_Right)
+// 	{
+// 		if (SystemStatus.bits.b1Status_MOS_CHG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG)
+// 		{
+// 			// log_w();
+// 			sys_time.cnt_enter_chg_open++;
+// 			SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
+// 		}
+// 		if (SystemStatus.bits.b1Status_MOS_DSG != Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG)
+// 		{
+// 			// log_w();
+// 			sys_time.cnt_enter_dsg_open++;
+// 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
+// 		}
+// 	}
+// #endif
+// }
 
 void InitMosRelay_DOx(void)
 {

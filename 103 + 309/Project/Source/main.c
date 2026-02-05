@@ -169,8 +169,8 @@ void InitDevice(void)
 	sh36735_write_reg_u8(AFE_SCONF1, 0);
 
 	Registers_AFE1.sonf2.all |= 0x80;
-	Registers_AFE1.sonf2.bits.CHGMOS = 1;
-	Registers_AFE1.sonf2.bits.DSGMOS = 1;
+	Registers_AFE1.sonf2.bits.CHGMOS = 0;
+	Registers_AFE1.sonf2.bits.DSGMOS = 0;
 	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
 	Registers_AFE1.sonf4 = SNum;
 	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
@@ -182,13 +182,15 @@ void InitDevice(void)
 	sh36735_write_reg_u8(AFE_SCONF6, mos_en);
 
 	{
+		sh36735_write_reg_u8(AFE_OVT_OVH, 0x03);
+		sh36735_write_reg_u8(AFE_OVL, 0x52);
 		uint8_t ov_code = 0;
 		uint8_t ov_delay_code = 0;
-		sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);
+		// sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);
 		sh36735_write_reg_u8(AFE_OCD2V_OCD2T, 3);
 		//目前分流器，step 5.5
-		sh36735_write_reg_u8(AFE_OCCV_OCCT, 1);
-		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 6);
+		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 2);
+		sh36735_write_reg_u8(AFE_OCCV_OCCT, 6);
 
 		uint8_t otc, utc, otd, utd;
 		float Rt;
