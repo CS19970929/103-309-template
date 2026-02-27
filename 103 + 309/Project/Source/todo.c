@@ -8,6 +8,8 @@ flash、soc、日志逻辑
 //**********************************************************
 todo 
 1、crc 判断 spi通讯异常？？？
+- 软、硬件参数确认
+- 硬件参数、周期check
 
 
 充电器、负载检测
@@ -15,6 +17,11 @@ todo
 
 
 协议测试
+
+
+/*
+
+*/
 
 struct RS485MSG {
 	UINT8	ptr_no;          	// Word stating what state msg is in

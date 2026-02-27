@@ -8,7 +8,7 @@ enum MOS_CTRL_STATUS MOSCtrl_Command = MOS_PRE_DET;
 volatile union Switch_OnOFF_Function Switch_OnOFF_Func;
 UINT8 gu8_DsgFirstOpen_Flag = 0;
 
- bool is_charger_online(void)
+bool is_charger_online(void)
 {
 	if (0 == GPIO_ReadInputDataBit(GPIO_CHG_DET, PIN_CHG_DET))
 		return true;
@@ -303,11 +303,11 @@ void Drivers_External_Ctrl(void)
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
 
-		if(is_charger_online())
+		if (is_charger_online())
 		{
 			bms_status = S_CHG;
 		}
-		if(is_load_online())
+		if (is_load_online())
 		{
 			bms_status = S_DSG;
 		}
@@ -315,28 +315,31 @@ void Drivers_External_Ctrl(void)
 	case S_STARTUP:
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
-		if(is_charger_online())
+		if (is_charger_online())
 		{
 			bms_status = S_DSG;
 		}
-		if(is_load_online())
+		if (is_load_online())
 		{
 			bms_status = S_CHG;
 		}
 		break;
 	case S_DSG:
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
-		if(!is_load_online())
+		if (!is_load_online())
 		{
 			bms_status = S_IDLE;
 		}
-		if(is_charger_online())
+		if (is_charger_online())
 		{
 			bms_status = S_CHG;
 		}
 		break;
 	case S_CHG:
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 1;
+		if (is_load_online())
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 1;
+		else
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
 
 		static UINT16 I_cnt = 0;
 
@@ -347,9 +350,9 @@ void Drivers_External_Ctrl(void)
 				I_cnt = 0;
 
 				close_chg();
-				if(!is_charger_online())
+				if (!is_charger_online())
 				{
-					if(is_load_online())
+					if (is_load_online())
 					{
 						bms_status = S_DSG;
 					}

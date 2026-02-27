@@ -156,7 +156,8 @@ void CAN_TX_0x02(void)
 	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
 	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
 
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
+	// u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
+	u16_tmp16a = g_stCellInfoReport.unMdlFault_Second.all;
 	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
 	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
 
@@ -995,6 +996,7 @@ void InitCan(void)
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
+	static uint16_t cnt_send_0x02 = 0;
 	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_CAN))
 	{
 		// return;
@@ -1008,6 +1010,13 @@ void App_Can(void)
 	Can_BusOFF_Monitor();
 	Can_ReceiveDeal();
 	Can_TransmitDeal();
+
+	++cnt_send_0x02;
+	if(cnt_send_0x02 >= ((50)))
+	{
+		cnt_send_0x02 = 0;
+		CAN_TX_0x02();
+	}
 }
 
 void App_CanTest(void)

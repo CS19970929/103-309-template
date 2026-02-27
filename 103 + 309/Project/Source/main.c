@@ -165,10 +165,14 @@ void InitDevice(void)
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
 
+	//todo check 上电通讯正常
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 	sh36735_write_reg_u8(AFE_SCONF1, 0);
+	//todo 配置不主动pd
 
 	Registers_AFE1.sonf2.all |= 0x80;
+	//todo 测试, 2、spi crc校验
+	Registers_AFE1.sonf2.bits.PD_EN = 0;
 	Registers_AFE1.sonf2.bits.CHGMOS = 0;
 	Registers_AFE1.sonf2.bits.DSGMOS = 0;
 	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
@@ -190,7 +194,7 @@ void InitDevice(void)
 		sh36735_write_reg_u8(AFE_OCD2V_OCD2T, 3);
 		//目前分流器，step 5.5
 		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 2);
-		sh36735_write_reg_u8(AFE_OCCV_OCCT, 6);
+		sh36735_write_reg_u8(AFE_OCCV_OCCT, 7);
 
 		uint8_t otc, utc, otd, utd;
 		float Rt;
