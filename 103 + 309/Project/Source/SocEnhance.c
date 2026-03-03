@@ -904,7 +904,7 @@ void soc_cali(void)
 			SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u32CapFull;
 		}
 	}
-	else
+	// else
 	{
 		if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= 2000))
 		{

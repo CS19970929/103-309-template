@@ -175,6 +175,7 @@ void InitDevice(void)
 	Registers_AFE1.sonf2.bits.PD_EN = 0;
 	Registers_AFE1.sonf2.bits.CHGMOS = 0;
 	Registers_AFE1.sonf2.bits.DSGMOS = 0;
+	Registers_AFE1.sonf2.bits.PUMP_EN = 0;
 	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
 	Registers_AFE1.sonf4 = SNum;
 	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
