@@ -26,7 +26,7 @@
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-#define _DI_SWITCH_longKEY_ONOFF
+// #define _DI_SWITCH_longKEY_ONOFF
 
 
 
