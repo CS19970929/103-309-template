@@ -55,14 +55,14 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(700) 
+#define AFE_OCC1       		(500) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(700) 
+#define AFE_OCC2       		(500) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(700) 
+#define AFE_ODC1       		(500) 
 #define AFE_ODC1_filter  	(10)
-#define AFE_ODC2       		(700) 
+#define AFE_ODC2       		(500) 
 #define AFE_ODC2_filter  	(10)
 
 

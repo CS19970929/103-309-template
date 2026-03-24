@@ -8,12 +8,12 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0126		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x0324		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
 // #define __FUNC_RTC__
 // #define __FUNC__HEAT__
-#define __FUNC__CAN__
+// #define __FUNC__CAN__
 // #define __LOAD_REMOVE_SHORT_FUNC__
 
 // #define _SECOND_CURR_PROTECT_FUNC_
