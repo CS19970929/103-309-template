@@ -802,9 +802,9 @@ void feidao_send_soc_1000ms(void)
 	memcpy(&data[3], &time_chg, 2);	  // 温度，自动LSB first
 
 #if (BAT_TYPE == BAT_MASTER)
-	bat_type = 0x01;
+	bat_type = 0x00;
 #elif (BAT_TYPE == BAT_SLAVE)
-	bat_type = 0x02;
+	bat_type = 0x01;
 #endif								// BAT_TYPE == BAT_MASTER
 	memcpy(&data[5], &bat_type, 1); // 温度，自动LSB first
 	memcpy(&data[6], &res, 2); // 温度，自动LSB first
