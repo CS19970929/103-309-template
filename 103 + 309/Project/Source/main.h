@@ -37,12 +37,7 @@
 #include "rtc_sleep.h"
 
 #include "elog.h"
-
-#include "sh3673520.h"
-#include "sh3673520_port_softspi_stm32f1.h"
 #include "bsp_spi_bus.h"
-
-#include "sh36735_cfg.h"
 #include "sh36735_port.h"
 #include "sh36735_regs.h"
 #include "sh36735_spi.h"

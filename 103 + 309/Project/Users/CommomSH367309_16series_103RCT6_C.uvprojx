@@ -631,21 +631,6 @@
               <FilePath>..\Source\bsp_spi_bus.c</FilePath>
             </File>
             <File>
-              <FileName>afe_spi_test.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\afe_spi_test.c</FilePath>
-            </File>
-            <File>
-              <FileName>hard_spi_afe.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\hard_spi_afe.c</FilePath>
-            </File>
-            <File>
-              <FileName>spi_bus_soft_test.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\spi_bus_soft_test.c</FilePath>
-            </File>
-            <File>
               <FileName>AFE_PROTECT_param.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\AFE_PROTECT_param.c</FilePath>
@@ -1003,38 +988,8 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>AFE/port</GroupName>
-          <Files>
-            <File>
-              <FileName>sh3673520_port_softspi_stm32f1.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\port_softspi\sh3673520_port_softspi_stm32f1.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>AFE/dev</GroupName>
-          <Files>
-            <File>
-              <FileName>sh3673520.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\device\sh3673520.c</FilePath>
-            </File>
-            <File>
-              <FileName>sh3673520_spi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\device\sh3673520_spi.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
           <GroupName>AFE_driver</GroupName>
           <Files>
-            <File>
-              <FileName>sh36735_cfg.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\sh3520 driver\sh36735_cfg.c</FilePath>
-            </File>
             <File>
               <FileName>sh36735_spi_hw.c</FileName>
               <FileType>1</FileType>

@@ -18,10 +18,10 @@
 #define AFE_OCD2V_OCD2T			0x4E
 #define AFE_SCV_SCT				0x4F
 #define AFE_OCCV_OCCT			0x50
-#define AFE_OTC					0x51
-#define AFE_OTD					0x52
-#define AFE_UTC					0x53
-#define AFE_UTD					0x54
+#define AFE_REG_OTC				0x51
+#define AFE_REG_OTD				0x52
+#define AFE_REG_UTC				0x53
+#define AFE_REG_UTD				0x54
 #define AFE_BALANCEH			0x55
 #define AFE_BALANCEM			0x56
 #define AFE_BALANCEL			0x57

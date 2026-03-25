@@ -1,6 +1,4 @@
 #include "main.h"
-#include "sh3673520.h"
-#include "sh3673520_port_softspi_stm32f1.h"
 
 UINT8 SeriesNum = 16;
 
@@ -70,38 +68,6 @@ int main(void)
 	}
 }
 
-static void delay_us(uint32_t us)
-{
-	/* Replace with your SysTick/DWT delay if you have one */
-	while (us--)
-	{
-		for (volatile int i = 0; i < 24; i++)
-			__NOP();
-	}
-}
-sh3673520_t afe;
-sh3673520_softspi_t soft = {
-	.cs_port = GPIO_CS_SPI,
-	.cs_pin = PIN_CS_SPI,
-	.sck_port = GPIO_SCLK_SPI,
-	.sck_pin = PIN_SCLK_SPI,
-	.miso_port = GPIO_MISO_SPI,
-	.miso_pin = PIN_MISO_SPI,
-	.mosi_port = GPIO_MOSI_SPI,
-	.mosi_pin = PIN_MOSI_SPI,
-	.half_period_nops = 40,
-	.delay_us_cb = delay_us,
-};
-sh3673520_spi_t spi;
-void spi_init(void)
-{
-
-	sh3673520_softspi_init(&soft);
-
-	sh3673520_spi_init(&spi, sh3673520_softspi_make_port(&soft));
-
-	sh3673520_init(&afe, spi);
-}
 void InitDevice(void)
 {
 	SystemInit(); // HSE默认倍频到72MHz，如果没HSE切回HSI怎么处理目前还没了解
@@ -113,7 +79,6 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
-	// spi_init();
 	InitSci();
 	// init_afe();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
@@ -207,10 +172,10 @@ void InitDevice(void)
 		otd = Rt * 512 / (10 + Rt);
 		Rt = 116.11; //-25du
 		utd = Rt * 512 / (10 + Rt);
-		sh36735_write_reg_u8(AFE_OTC, otc);
-		sh36735_write_reg_u8(AFE_UTC, utc);
-		sh36735_write_reg_u8(AFE_OTD, otd);
-		sh36735_write_reg_u8(AFE_UTD, utd);
+		sh36735_write_reg_u8(AFE_REG_OTC, otc);
+		sh36735_write_reg_u8(AFE_REG_UTC, utc);
+		sh36735_write_reg_u8(AFE_REG_OTD, otd);
+		sh36735_write_reg_u8(AFE_REG_UTD, utd);
 	}
 
 #ifdef wdog_enable
