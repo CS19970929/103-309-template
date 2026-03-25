@@ -321,3 +321,5 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 }
 
 // 给出ovt、ovh寄存器方便、简洁转换为对应保护电压、延时的代码
+
+梳理当前sleep,和flash擦除，sleep模块中flash替换

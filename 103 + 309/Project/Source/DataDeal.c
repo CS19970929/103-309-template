@@ -84,15 +84,15 @@ void Init_Registers(UINT8 num)
 
 void DataLoad_CellVolt_Test(void)
 {
-	g_stCellInfoReport.u16VCell[23] = SH367309_Reg_Store.REG_BSTATUS1.all;
-	g_stCellInfoReport.u16VCell[24] = SH367309_Reg_Store.REG_BSTATUS2.all;
-	g_stCellInfoReport.u16VCell[25] = SH367309_Reg_Store.REG_BSTATUS3.all;
+//	g_stCellInfoReport.u16VCell[23] = SH367309_Reg_Store.REG_BSTATUS1.all;
+//	g_stCellInfoReport.u16VCell[24] = SH367309_Reg_Store.REG_BSTATUS2.all;
+//	g_stCellInfoReport.u16VCell[25] = SH367309_Reg_Store.REG_BSTATUS3.all;
 
-	g_stCellInfoReport.u16VCell[27] = aaaaaa1;
-	g_stCellInfoReport.u16VCell[28] = aaaaaa2;
-	g_stCellInfoReport.u16VCell[29] = aaaaaa3;
-	g_stCellInfoReport.u16VCell[30] = aaaaaa4;
-	g_stCellInfoReport.u16VCell[31] = aaa11;
+//	g_stCellInfoReport.u16VCell[27] = aaaaaa1;
+//	g_stCellInfoReport.u16VCell[28] = aaaaaa2;
+//	g_stCellInfoReport.u16VCell[29] = aaaaaa3;
+//	g_stCellInfoReport.u16VCell[30] = aaaaaa4;
+//	g_stCellInfoReport.u16VCell[31] = aaa11;
 }
 
 // 这里排列好就行，不需要电池位号映射表。>61000为不用
@@ -417,6 +417,7 @@ void DataLoad_Current(void)
 }
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
+#if 0
 	static UINT16 su16_Sleep_DelayT1 = 0;
 	static UINT16 su16_Sleep_DelayT2 = 0;
 	static UINT16 su16_Sleep_DelayT3 = 0;
@@ -529,6 +530,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 	{
 		su16_Sleep_DelayT3 = 0;
 	}
+#endif
 }
 
 void test_Autocurrent_cycle(void)
@@ -640,7 +642,7 @@ void App_AFEGet(void)
 			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
 			sh36735_write_reg_u8(AFE_SCONF3, write);
 			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
-			if (Registers_AFE1.sonf3.bits.CRLD_EN = 2)
+			if (2 == Registers_AFE1.sonf3.bits.CRLD_EN)
 				state = 1;
 			break;
 		case 1:
@@ -652,7 +654,7 @@ void App_AFEGet(void)
 				Registers_AFE1.sonf3.bits.CRLD_EN = 0;
 				sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
 				sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
-				if (Registers_AFE1.sonf3.bits.CRLD_EN = 0)
+				if (0 == Registers_AFE1.sonf3.bits.CRLD_EN)
 					state = 0;
 			}
 			break;
