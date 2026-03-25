@@ -1,23 +1,72 @@
 #include "main.h"
 
+#define CB_BALANCE_REG_RETRY_MAX    ((UINT8)3)
+#define CB_BALANCE_REG_BYTES        ((UINT8)3)
+
 enum BALANCE_STATE_E g_enBalanceState = BALANCE_ST_INIT;
 enum CELL_BALANCE_STATUS_E g_enCellBalanceStatus[CELL_NUMS_MAX];
 UINT8 g_u8CellBalanceFilterCnt[CELL_NUMS_MAX];
 
-UINT16 CellBalFlag_AFE1; // Êµ¼Ê´®Êı±êÖ¾Î»´æ´¢£¬ÓÃÓÚ²Ù×÷AFE¼Ä´æÆ÷
-UINT8 g_u8CBnMonitor;	 // ÊÇ·ñÓĞµç³ØĞèÒª¾ùºâµÄ±êÖ¾Î»
+UINT16 CellBalFlag_AFE1; // å®é™…ä¸²æ•°æ ‡å¿—ä½å­˜å‚¨ï¼Œç”¨äºæ“ä½œAFEå¯„å­˜å™¨
+UINT8 g_u8CBnMonitor;	 // æ˜¯å¦æœ‰ç”µæ± éœ€è¦å‡è¡¡çš„æ ‡å¿—ä½
 
-// UINT16 g_u16CBnFLAG_ToUpper;    //ÉÏ´«µ½ÉÏÎ»»úµÄ
-UINT8 g_u8CBn_StatusFlag; // ÓÃÓÚ¿ØÖÆMos»òÕßRelay
+static UINT8 CB_AfeWriteBalanceMaskU24(uint32_t balance_mask)
+{
+	UINT8 retry;
+	UINT8 balance_h = (UINT8)((balance_mask >> 16) & 0xFF);
+	UINT8 balance_m = (UINT8)((balance_mask >> 8) & 0xFF);
+	UINT8 balance_l = (UINT8)(balance_mask & 0xFF);
+
+	for (retry = 0; retry < CB_BALANCE_REG_RETRY_MAX; ++retry)
+	{
+		if (sh36735_write_reg_u8(AFE_BALANCEH, balance_h)
+			&& sh36735_write_reg_u8(AFE_BALANCEM, balance_m)
+			&& sh36735_write_reg_u8(AFE_BALANCEL, balance_l))
+		{
+			return 0;
+		}
+		Delay1ms(1);
+	}
+
+	return 1;
+}
+
+static UINT8 CB_AfeReadBalanceMaskU24(uint32_t *balance_mask)
+{
+	UINT8 retry;
+	UINT8 balance_regs[CB_BALANCE_REG_BYTES] = {0};
+
+	if (NULL == balance_mask)
+	{
+		return 1;
+	}
+
+	for (retry = 0; retry < CB_BALANCE_REG_RETRY_MAX; ++retry)
+	{
+		if (sh36735_read_regs(AFE_BALANCEH, balance_regs, CB_BALANCE_REG_BYTES))
+		{
+			*balance_mask = ((uint32_t)balance_regs[0] << 16)
+						  | ((uint32_t)balance_regs[1] << 8)
+						  | (uint32_t)balance_regs[2];
+			return 0;
+		}
+		Delay1ms(1);
+	}
+
+	*balance_mask = 0;
+	return 1;
+}
+
+// UINT16 g_u16CBnFLAG_ToUpper;    //ä¸Šä¼ åˆ°ä¸Šä½æœºçš„
+UINT8 g_u8CBn_StatusFlag; // ç”¨äºæ§åˆ¶Mosæˆ–è€…Relay
 
 #if 1
 void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
 {
-	UINT16 temp1;
+	UINT32 temp_mask = 0;
 	UINT8 i;
 
-	MTPRead(MTP_BALANCEH, 0x02, (UINT8 *)&temp1);
-	temp1 = U16_SwapEndian(temp1);
+	(void)CB_AfeReadBalanceMaskU24(&temp_mask);
 
 	switch (type)
 	{
@@ -27,20 +76,26 @@ void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
 
 	case CELL_BALANCE_ON_ODD:
 		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		temp1 = temp1 & ODD_SELECT;
 		for (i = 0; i < SeriesNum; ++i)
-		{ // Õâ¸öÄÜÍ¬Ê±´¦Àí16´®£¬²»ĞèÒª¶îÍâ²Ù×÷
-			g_stCellInfoReport.u16BalanceFlag1 |= (((temp1 >> SeriesSelect_AFE1[SeriesNum - 1][i]) & 0x0001) << i);
+		{ // è¿™ä¸ªèƒ½åŒæ—¶å¤„ç†16ä¸²ï¼Œä¸éœ€è¦é¢å¤–æ“ä½œ
+			if ((temp_mask & (1UL << SeriesSelect_AFE1[SeriesNum - 1][i])) != 0UL)
+			{
+				g_stCellInfoReport.u16BalanceFlag1 |= ((UINT16)1u << i);
+			}
 		}
+		g_stCellInfoReport.u16BalanceFlag1 &= ODD_SELECT;
 		break;
 
 	case CELL_BALANCE_ON_EVEN:
 		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		temp1 = temp1 & EVEN_SELECT;
 		for (i = 0; i < SeriesNum; ++i)
 		{
-			g_stCellInfoReport.u16BalanceFlag1 |= (((temp1 >> SeriesSelect_AFE1[SeriesNum - 1][i]) & 0x0001) << i);
+			if ((temp_mask & (1UL << SeriesSelect_AFE1[SeriesNum - 1][i])) != 0UL)
+			{
+				g_stCellInfoReport.u16BalanceFlag1 |= ((UINT16)1u << i);
+			}
 		}
+		g_stCellInfoReport.u16BalanceFlag1 &= EVEN_SELECT;
 		break;
 
 	default:
@@ -58,7 +113,7 @@ void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
 	MTPRead(MTP_BALANCEH, 0x02, (UINT8 *)&temp1);
 	temp1 = U16_SwapEndian(temp1);
 	for (i = 0; i < SeriesNum; ++i)
-	{ // Õâ¸öÄÜÍ¬Ê±´¦Àí16´®£¬²»ĞèÒª¶îÍâ²Ù×÷
+	{ // è¿™ä¸ªèƒ½åŒæ—¶å¤„ç†16ä¸²ï¼Œä¸éœ€è¦é¢å¤–æ“ä½œ
 		g_stCellInfoReport.u16BalanceFlag1 |= (((temp1 >> SeriesSelect_AFE1[SeriesNum - 1][i]) & 0x0001) << i);
 	}
 }
@@ -112,41 +167,39 @@ void CB_StateCalculate(void)
 	}
 
 	if (ts_u8CBChanged)
-	{ // ÓĞ±ä»¯²ÅĞŞ¸ÄÁ½¸ö±êÖ¾Î»£¬Ã»±ä»¯²»ĞŞ¸ÄÁ½¸ö±êÖ¾Î»
+	{ // æœ‰å˜åŒ–æ‰ä¿®æ”¹ä¸¤ä¸ªæ ‡å¿—ä½ï¼Œæ²¡å˜åŒ–ä¸ä¿®æ”¹ä¸¤ä¸ªæ ‡å¿—ä½
 		CellBalFlag_AFE1 = 0;
 		for (i = 0; i < SeriesNum; ++i)
-		{ // ¸²¸ÇÁË16´®£¬µÚ6´®Ò²²»ÓÃ¸Ä£¬Ó³Éäµ½16´®
+		{ // è¦†ç›–äº†16ä¸²ï¼Œç¬¬6ä¸²ä¹Ÿä¸ç”¨æ”¹ï¼Œæ˜ å°„åˆ°16ä¸²
 			CellBalFlag_AFE1 |= ((UINT16)(g_enCellBalanceStatus[i] > 0 ? 1 : 0) << SeriesSelect_AFE1[SeriesNum - 1][i]);
 		}
 	}
 }
 
-// Output: result:0--OK£¬1--Error
+// Output: result:0--OKï¼Œ1--Error
 UINT8 CB_AFERegistersCtrl(enum CELL_BALANCE_FLAG_UPPER CellBalance_Flag)
 {
 	UINT8 result = 0;
-	UINT16 u16_BalanceFlag = 0;
+	UINT32 u32BalanceFlag = 0;
 
 	switch (CellBalance_Flag)
 	{
 	case CELL_BALANCE_COLSE:
-		u16_BalanceFlag = U16_SwapEndian(0);
-		result = !MTPWrite(MTP_BALANCEH, 0x02, (UINT8 *)&u16_BalanceFlag);
+		result = CB_AfeWriteBalanceMaskU24(0);
 		break;
 
 	case CELL_BALANCE_ON_ODD:
-		u16_BalanceFlag = U16_SwapEndian(CellBalFlag_AFE1 & ODD_SELECT);
-		result = !MTPWrite(MTP_BALANCEH, 0x02, (UINT8 *)&u16_BalanceFlag);
+		u32BalanceFlag = (UINT32)(CellBalFlag_AFE1 & ODD_SELECT);
+		result = CB_AfeWriteBalanceMaskU24(u32BalanceFlag);
 		break;
 
 	case CELL_BALANCE_ON_EVEN:
-		u16_BalanceFlag = U16_SwapEndian(CellBalFlag_AFE1 & EVEN_SELECT);
-		result = !MTPWrite(MTP_BALANCEH, 0x02, (UINT8 *)&u16_BalanceFlag);
+		u32BalanceFlag = (UINT32)(CellBalFlag_AFE1 & EVEN_SELECT);
+		result = CB_AfeWriteBalanceMaskU24(u32BalanceFlag);
 		break;
 
 	default:
-		u16_BalanceFlag = U16_SwapEndian(0);
-		result = !MTPWrite(MTP_BALANCEH, 0x02, (UINT8 *)&u16_BalanceFlag);
+		result = CB_AfeWriteBalanceMaskU24(0);
 		break;
 	}
 
@@ -165,7 +218,7 @@ void CellBalance_DataInit(void)
 	CellBalFlag_AFE1 = 0;
 	g_u8CBn_StatusFlag = 0;
 	g_stCellInfoReport.u16BalanceFlag1 = 0;
-	MTPWrite(0x41, 0x02, (UINT8 *)&g_stCellInfoReport.u16BalanceFlag1);
+	(void)CB_AFERegistersCtrl(CELL_BALANCE_COLSE);
 
 	// if(SeriesNum == 16)MCUO_EXT_CB = 0;
 	if (SystemStatus.bits.b1Status_BnCloseIO == 0)
@@ -180,9 +233,9 @@ void CellBalance_Monitor(UINT8 OnOFF_Ctrl)
 	static UINT8 su8_Cur_Flag = 0;
 	static UINT16 su16_Silence_Tcnt = 0;
 
-	if ((g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)		// ¾²ÖÃ¾ùºâ£¬ÓĞµçÁ÷²»¾ùºâ
-		|| (g_stCellInfoReport.u16VCellMin < OtherElement.u16Balance_OpenVoltage)	// ×î´óµçÑ¹Ã»³¬¹ı¿ªÆôµçÑ¹
-		|| (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_CloseWindow) // Ñ¹²î¾ùÔÚ¹Ø±Õ´°¿ÚÒÔÄÚ
+	if ((g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)		// é™ç½®å‡è¡¡ï¼Œæœ‰ç”µæµä¸å‡è¡¡
+		|| (g_stCellInfoReport.u16VCellMin < OtherElement.u16Balance_OpenVoltage)	// æœ€å¤§ç”µå‹æ²¡è¶…è¿‡å¼€å¯ç”µå‹
+		|| (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_CloseWindow) // å‹å·®å‡åœ¨å…³é—­çª—å£ä»¥å†…
 		|| !OnOFF_Ctrl)
 	{
 		if (g_stCellInfoReport.u16BalanceFlag1 || CellBalFlag_AFE1 || g_u8CBn_StatusFlag)
@@ -198,7 +251,7 @@ void CellBalance_Monitor(UINT8 OnOFF_Ctrl)
 		return;
 	}
 
-	// ¾²ÖÃ5min
+	// é™ç½®5min
 	if (su8_Cur_Flag)
 	{
 		if (++su16_Silence_Tcnt >= 1 * 60 * 5)
@@ -240,7 +293,7 @@ void CellBalance_StateOddOn(UINT8 OnOFF_Ctrl)
 		ts_u8TempCnt = 0;
 		s_u8Select = 0;
 		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//ĞèÒªË¢ĞÂÊı¾İÁË
+		// BnElement.u16_RefreshData_Flag = 1;		//éœ€è¦åˆ·æ–°æ•°æ®äº†
 	}
 
 	switch (s_u8Select)
@@ -248,7 +301,7 @@ void CellBalance_StateOddOn(UINT8 OnOFF_Ctrl)
 	case 0:
 		if (0 == (CellBalFlag_AFE1 & ODD_SELECT))
 		{
-			g_enBalanceState = BALANCE_ST_EVEN_ON; // ²»ĞèÒª¿ª£¬²»×÷²Ù×÷£¬Ö±½ÓÌø×ß
+			g_enBalanceState = BALANCE_ST_EVEN_ON; // ä¸éœ€è¦å¼€ï¼Œä¸ä½œæ“ä½œï¼Œç›´æ¥è·³èµ°
 			break;
 		}
 		if (!CB_AFERegistersCtrl(CELL_BALANCE_ON_ODD))
@@ -257,7 +310,7 @@ void CellBalance_StateOddOn(UINT8 OnOFF_Ctrl)
 			++s_u8Select;
 			if (0 != Balance_OpenT_ODD)
 			{
-				g_u8CBn_StatusFlag = 1; // ºóĞøÓÅ»¯µã£¬Èç¹ûÆæ»òÕßÅ¼ÓĞÒ»¸öÎª0£¬Ôò»á³öÏÖ×ÊÔ´ÀË·ÑµÄBUG
+				g_u8CBn_StatusFlag = 1; // åç»­ä¼˜åŒ–ç‚¹ï¼Œå¦‚æœå¥‡æˆ–è€…å¶æœ‰ä¸€ä¸ªä¸º0ï¼Œåˆ™ä¼šå‡ºç°èµ„æºæµªè´¹çš„BUG
 			}
 		}
 		break;
@@ -287,7 +340,7 @@ void CellBalance_StateEvenOn(UINT8 OnOFF_Ctrl)
 		ts_u8TempCnt = 0;
 		s_u8Select = 0;
 		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//ĞèÒªË¢ĞÂÊı¾İÁË
+		// BnElement.u16_RefreshData_Flag = 1;		//éœ€è¦åˆ·æ–°æ•°æ®äº†
 	}
 
 	switch (s_u8Select)
@@ -295,7 +348,7 @@ void CellBalance_StateEvenOn(UINT8 OnOFF_Ctrl)
 	case 0:
 		if (0 == (CellBalFlag_AFE1 & EVEN_SELECT))
 		{
-			g_enBalanceState = BALANCE_ST_OFF; // ²»ĞèÒª¿ª£¬²»×÷²Ù×÷£¬Ö±½ÓÌø×ß
+			g_enBalanceState = BALANCE_ST_OFF; // ä¸éœ€è¦å¼€ï¼Œä¸ä½œæ“ä½œï¼Œç›´æ¥è·³èµ°
 			break;
 		}
 		if (!CB_AFERegistersCtrl(CELL_BALANCE_ON_EVEN))
@@ -324,7 +377,7 @@ void CellBalance_StateEvenOn(UINT8 OnOFF_Ctrl)
 	}
 }
 
-// Õâ¸öº¯ÊıÓ¦¸Ã¿ÉÒÔÁË
+// è¿™ä¸ªå‡½æ•°åº”è¯¥å¯ä»¥äº†
 void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 {
 	static UINT8 s_u8Select = 0;
@@ -335,7 +388,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 		ts_u8TempCnt = 0;
 		s_u8Select = 0;
 		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//ĞèÒªË¢ĞÂÊı¾İÁË
+		// BnElement.u16_RefreshData_Flag = 1;		//éœ€è¦åˆ·æ–°æ•°æ®äº†
 	}
 
 	switch (s_u8Select)
@@ -344,7 +397,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 		if (0 == Balance_OpenT_MOS)
 		{
 			// if (0 == g_u8CBnMonitor)
-			{ // Ñ­»·³ÖĞøµ½¼ì²âµ½²»Òª¾ùºâ²Å¹Ø±Õ¡£
+			{ // å¾ªç¯æŒç»­åˆ°æ£€æµ‹åˆ°ä¸è¦å‡è¡¡æ‰å…³é—­ã€‚
 				if (!CB_AFERegistersCtrl(CELL_BALANCE_COLSE))
 				{
 					CB_ChangeUpperFlag(CELL_BALANCE_COLSE);
@@ -355,7 +408,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 		else
 		{
 			if (!CB_AFERegistersCtrl(CELL_BALANCE_COLSE))
-			{ // ÎŞÂÛÄÄÀï¹ıÀ´µÄ£¬¶¼¿ÉÒÔÔËĞĞÕâ¸öº¯ÊıÒ»ÂÖÔÙ»ØÈ¥
+			{ // æ— è®ºå“ªé‡Œè¿‡æ¥çš„ï¼Œéƒ½å¯ä»¥è¿è¡Œè¿™ä¸ªå‡½æ•°ä¸€è½®å†å›å»
 				CB_ChangeUpperFlag(CELL_BALANCE_COLSE);
 				++s_u8Select;
 				g_u8CBn_StatusFlag = 0;
@@ -365,7 +418,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 
 	case 1:
 		if ((++ts_u8TempCnt) >= Balance_OpenT_MOS + OtherElement.u16Sys_PreChg_Time)
-		{ // ¼ÓÉÏÔ¤³äÊ±¼ä
+		{ // åŠ ä¸Šé¢„å……æ—¶é—´
 			ts_u8TempCnt = 0;
 			g_enBalanceState = BALANCE_ST_MONITOR;
 			s_u8Select = 0;
@@ -406,6 +459,6 @@ void App_CellBalance(void)
 		g_enBalanceState = BALANCE_ST_INIT;
 		break;
 	}
-	// todo ²âÊÔ¾ùºâ
+	// todo æµ‹è¯•å‡è¡¡
 	// CB_ChangeUpperFlag(CELL_BALANCE_ON_ODD);
 }

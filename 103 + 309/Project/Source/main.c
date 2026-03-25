@@ -5,8 +5,8 @@
 UINT8 SeriesNum = 16;
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1´®
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2´®
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1ä¸²
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2ä¸²
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 3
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 4
 	{0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 5
@@ -33,8 +33,8 @@ void InitSystemWakeUp(void);
 
 int main(void)
 {
-	InitDevice(); // ³õÊ¼»¯ÍâÉè
-	InitVar();	  // ³õÊ¼»¯±äÁ¿
+	InitDevice(); // åˆå§‹åŒ–å¤–è®¾
+	InitVar();	  // åˆå§‹åŒ–å˜é‡
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
@@ -47,11 +47,11 @@ int main(void)
 		App_Sci();
 		// App_AnlogCal();
 		App_E2promDeal();
-		// App_CellBalance();
+		App_CellBalance();
 #ifdef __FUNC__CAN__
 		App_Can();
 #endif // __FUNC__CAN__
-		App_SleepDeal(); // ¹Ø±ÕÕâ¸ö¹¦ÄÜµÄ»°£¬ÔÚInitVar()ÖĞSystem_OnOFF_FuncÏà¹ØÖÃÁã£¬»òÕßÖ±½ÓÆÁ±Î
+		App_SleepDeal(); // å…³é—­è¿™ä¸ªåŠŸèƒ½çš„è¯ï¼Œåœ¨InitVar()ä¸­System_OnOFF_Funcç›¸å…³ç½®é›¶ï¼Œæˆ–è€…ç›´æ¥å±è”½
 		// sleep();
 		App_SOC();
 
@@ -104,7 +104,7 @@ void spi_init(void)
 }
 void InitDevice(void)
 {
-	SystemInit(); // HSEÄ¬ÈÏ±¶Æµµ½72MHz£¬Èç¹ûÃ»HSEÇĞ»ØHSIÔõÃ´´¦ÀíÄ¿Ç°»¹Ã»ÁË½â
+	SystemInit(); // HSEé»˜è®¤å€é¢‘åˆ°72MHzï¼Œå¦‚æœæ²¡HSEåˆ‡å›HSIæ€ä¹ˆå¤„ç†ç›®å‰è¿˜æ²¡äº†è§£
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
@@ -116,7 +116,7 @@ void InitDevice(void)
 	// spi_init();
 	InitSci();
 	// init_afe();
-	InitE2PROM(); // ¾ö¶¨°ÑÕâ¸ö·ÅÔÚÇ°Ãæ£¬ÓÅÏÈ¼¶Ìá¸ß£¬ÒòÎª¿Í»§´®¿Ú³õÊ¼»¯£¬ÓĞ¿ÉÄÜÒª¶ÁÆä×Ô¼ºµÄÊı¾İ
+	InitE2PROM(); // å†³å®šæŠŠè¿™ä¸ªæ”¾åœ¨å‰é¢ï¼Œä¼˜å…ˆçº§æé«˜ï¼Œå› ä¸ºå®¢æˆ·ä¸²å£åˆå§‹åŒ–ï¼Œæœ‰å¯èƒ½è¦è¯»å…¶è‡ªå·±çš„æ•°æ®
 
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
@@ -147,7 +147,7 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	InitE2PROM(); // ¾ö¶¨°ÑÕâ¸ö·ÅÔÚÇ°Ãæ£¬ÓÅÏÈ¼¶Ìá¸ß£¬ÒòÎª¿Í»§´®¿Ú³õÊ¼»¯£¬ÓĞ¿ÉÄÜÒª¶ÁÆä×Ô¼ºµÄÊı¾İ
+	InitE2PROM(); // å†³å®šæŠŠè¿™ä¸ªæ”¾åœ¨å‰é¢ï¼Œä¼˜å…ˆçº§æé«˜ï¼Œå› ä¸ºå®¢æˆ·ä¸²å£åˆå§‹åŒ–ï¼Œæœ‰å¯èƒ½è¦è¯»å…¶è‡ªå·±çš„æ•°æ®
 				  // InitAFE1();
 #ifdef __FUNC__CAN__
 	InitCan();
@@ -160,18 +160,18 @@ void InitDevice(void)
 #endif
 
 	InitMosRelay_DOx();
-	InitData_SOC(); // ±ØĞë·ÅÔÚ¶ÁÍêeepromÊı¾İºóÃæ
+	InitData_SOC(); // å¿…é¡»æ”¾åœ¨è¯»å®Œeepromæ•°æ®åé¢
 
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
 
-	//todo check ÉÏµçÍ¨Ñ¶Õı³£
+	//todo check ä¸Šç”µé€šè®¯æ­£å¸¸
 	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
 	sh36735_write_reg_u8(AFE_SCONF1, 0);
-	//todo ÅäÖÃ²»Ö÷¶¯pd
+	//todo é…ç½®ä¸ä¸»åŠ¨pd
 
 	Registers_AFE1.sonf2.all |= 0x80;
-	//todo ²âÊÔ, 2¡¢spi crcĞ£Ñé
+	//todo æµ‹è¯•, 2ã€spi crcæ ¡éªŒ
 	Registers_AFE1.sonf2.bits.PD_EN = 0;
 	Registers_AFE1.sonf2.bits.CHGMOS = 0;
 	Registers_AFE1.sonf2.bits.DSGMOS = 0;
@@ -193,7 +193,7 @@ void InitDevice(void)
 		uint8_t ov_delay_code = 0;
 		// sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);
 		sh36735_write_reg_u8(AFE_OCD2V_OCD2T, 3);
-		//Ä¿Ç°·ÖÁ÷Æ÷£¬step 5.5
+		//ç›®å‰åˆ†æµå™¨ï¼Œstep 5.5
 		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 2);
 		sh36735_write_reg_u8(AFE_OCCV_OCCT, 7);
 
@@ -224,12 +224,12 @@ void InitDevice(void)
 
 void InitVar(void)
 {
-	// SystemMonitorResetData_EEPROM();							//Õâ¸öº¯ÊıµÄ³õÊ¼»¯Ä¬ÈÏĞèÇó¹¦ÄÜĞŞ¸ÄÁË£¬ÒªĞŞ¸ÄEEPROMµÄÉÏµç±êÖ¾Î»
+	// SystemMonitorResetData_EEPROM();							//è¿™ä¸ªå‡½æ•°çš„åˆå§‹åŒ–é»˜è®¤éœ€æ±‚åŠŸèƒ½ä¿®æ”¹äº†ï¼Œè¦ä¿®æ”¹EEPROMçš„ä¸Šç”µæ ‡å¿—ä½
 	InitSystemMonitorData_EEPROM();
 	SeriesNum = OtherElement.u16Sys_SeriesNum;
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	SystemStatus.bits.b1StartUpBMS = 0; // È¥µô¿ª»úÊ±Ğò
+	SystemStatus.bits.b1StartUpBMS = 0; // å»æ‰å¼€æœºæ—¶åº
 	SystemStatus.bits.b1Status_ToSleep = 1;
 
 	// SystemStatus.bits.b4Status_ProjectVer = 1;
