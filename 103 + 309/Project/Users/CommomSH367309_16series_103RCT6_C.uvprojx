@@ -943,36 +943,6 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>log</GroupName>
-          <Files>
-            <File>
-              <FileName>elog_port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\port\elog_port.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_async.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_async.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_buf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_buf.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_utils.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
           <GroupName>AFE_common</GroupName>
           <Files>
             <File>

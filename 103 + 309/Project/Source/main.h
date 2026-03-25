@@ -41,9 +41,6 @@
 #include "sh36735_port.h"
 #include "sh36735_regs.h"
 #include "sh36735_spi.h"
-
-#include "hard_spi_afe.h"
-#include "spi_bus_soft_test.h"
 #include "SH36735_reg.h"
 
 
