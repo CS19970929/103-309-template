@@ -4,6 +4,12 @@
 // #include "IODrivers_030.h"
 #include "IODrivers.h"
 
+#define CLOSE_DSG()		SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
+#define OPEN_DSG()		SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
+
+#define CLOSE_CHG()		SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
+#define OPEN_CHG()		SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
+
 typedef enum _IO_STATUS {
 OPEN = 1, CLOSE = 0
 }IO_STATUS;
@@ -76,8 +82,8 @@ union Switch_OnOFF_Function {
 };
 
 
-#define PreRelayCloseT 			10			//�����Ӵ�����Ԥ��̵����ر�ʱ��
-#define PreDsgMOSCloseT 		10			//�����ŵ�ܺ�Ԥ��ŵ�ܹر�ʱ��
+#define PreRelayCloseT 			10			//�����Ӵ�����Ԥ��̵����ر�ʱ��?
+#define PreDsgMOSCloseT 		10			//�����ŵ�ܺ�Ԥ��ŵ�ܹر�ʱ��?
 
 
 /*

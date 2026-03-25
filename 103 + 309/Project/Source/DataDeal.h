@@ -1,6 +1,8 @@
 #ifndef DATADEAL_SYS_H
 #define DATADEAL_SYS_H
 
+#include "conf.h"
+
 #define CompensateNUM 			16
 
 #define CopperLoss_Min 			(UINT16)0
@@ -138,20 +140,27 @@ struct OTHER_ELEMENT {
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c073v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		16
+#define SNum 		10
 
-// #define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
-#define LIFEPO			//������﮵�أ���ѡ�?
+#define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
+// #define LIFEPO			//������﮵�أ���ѡ�?
 
 
+#if (BAT_TYPE == BAT_MASTER)
 #define CS_Res			2
 #define CS_Res_Num		3
+#define BMS_CAPCITY     180
+#elif (BAT_TYPE == BAT_SLAVE)
+#define CS_Res			2
+#define CS_Res_Num		6
+#define BMS_CAPCITY     270
+#endif		
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
-#define CBC_DelayT		1280
+#define CBC_DelayT		2560
 // #define CBC_Cur_DSG		((CS_Cur_CHGmax<<2)/5)
-#define CBC_Cur_DSG		(1000)
+#define CBC_Cur_DSG		(2000)
 
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
@@ -166,15 +175,15 @@ struct OTHER_ELEMENT {
 #define OtherElement_default 	{4100,	30,	20,		0,	0,		0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_TERNARYLI,	0,		1000,	30,\
-	                             3200,	7200,	3000,	10,		10,		10,	240,0,\
-	                             500,	3,		4200,	3000,\
+	                             3200,	7200,	3000,	1440,		10,		10,	240,0,\
+	                             BMS_CAPCITY,	3,		4200,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))
 #define OtherElement_default 	{3400,	30,	20,	0,	0,	0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
 	                             3200,	7200,	3000,	10,	10,	10,	240, 0,\
-	                             200,	3,		3600,	3000,\
+	                             BMS_CAPCITY,	3,		3600,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif
 

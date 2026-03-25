@@ -199,6 +199,40 @@ struct PRT_E2ROM_PARAS {
 	UINT16	u16SocUp_Filter;
 };
 
+
+#ifdef TERNARYLI
+#define COV_1           4100
+#define COV_2           4200
+#define COV_3           4250
+#define COV_recover     4150
+#define COV_filter1      100
+#define COV_filter2     100
+#define COV_filter3     100
+
+#define CUV_1           3000
+#define CUV_2           2900
+#define CUV_3           2800
+#define CUV_recover     3000
+#define CUV_filter1      100
+#define CUV_filter2     100
+#define CUV_filter3     100
+
+#define BOV_1           (410 * SNum)
+#define BOV_2           (420 * SNum)
+#define BOV_3           (425 * SNum)
+#define BOV_recover     (415 * SNum)
+#define BOV_filter1      100 
+#define BOV_filter2     100 
+#define BOV_filter3     100 
+
+#define BUV_1           (300 * SNum)
+#define BUV_2           (290 * SNum)
+#define BUV_3           (280 * SNum)
+#define BUV_recover     (300 * SNum)
+#define BUV_filter1      100 
+#define BUV_filter2     100 
+#define BUV_filter3     100 
+#elif (defined(LIFEPO))
 #define COV_1           3500
 #define COV_2           3600
 #define COV_3           3650
@@ -235,6 +269,7 @@ struct PRT_E2ROM_PARAS {
 #define BUV_filter1      100 
 #define BUV_filter2     100 
 #define BUV_filter3     100 
+#endif
 
 
 #define OTC_1           ((50 + 40) * 10)
@@ -301,6 +336,7 @@ struct PRT_E2ROM_PARAS {
 #define socLow_filter2   100
 #define socLow_filter3   100
 
+#if (BAT_TYPE == BAT_MASTER)
 #define OCC_1       (200) 
 #define OCC_2       (300) 
 #define OCC_3       (300) 
@@ -310,12 +346,30 @@ struct PRT_E2ROM_PARAS {
 #define OCC_filter3  10 
 
 #define ODC_1       (200) 
-#define ODC_2       (300) 
-#define ODC_3       (300) 
+#define ODC_2       (400) 
+#define ODC_3       (400) 
 #define ODC_recover (100) 
 #define ODC_filter1  (100 * 5) 
 #define ODC_filter2  (100 * 5) 
 #define ODC_filter3  100
+#elif (BAT_TYPE == BAT_SLAVE)
+#define OCC_1       (400) 
+#define OCC_2       (500) 
+#define OCC_3       (500) 
+#define OCC_recover (100) 
+#define OCC_filter1  (100 * 5) 
+#define OCC_filter2  (100 * 5) 
+#define OCC_filter3  10 
+
+#define ODC_1       (400) 
+#define ODC_2       (600) 
+#define ODC_3       (600) 
+#define ODC_recover (100) 
+#define ODC_filter1  (100 * 5) 
+#define ODC_filter2  (100 * 5) 
+#define ODC_filter3  100
+#endif // BAT_TYPE == BAT_MASTER
+
 
 
 #define E2P_PROTECT_MIN_PRT		{/*���ڹ�ѹ*/1000,	1000,	1000,	1000,	1,\
@@ -323,33 +377,17 @@ struct PRT_E2ROM_PARAS {
 								 /*��ѹ��ѹ*/300,	300,	300,	300,	1,\
 								 /*��ѹ��ѹ*/300,	300,	300,	300,	1,\
 		        				 /*������*/10,	10,		10,		10,		1,\
-		        				 /*�ŵ����?*/10,	10,		10,		10,		1,\
+		        				 /*�ŵ����?*/10,	10,		10,		10,		1,\
 								 /*������*/400,	400,	400,	400,	1,\
 								 /*������*/0,		0,		0,		0,		1,\
-								 /*�ŵ����?*/400,	400,	400,	400,	1,\
-								 /*�ŵ����?*/0,		0,		0,		0,		1,\
+								 /*�ŵ����?*/400,	400,	400,	400,	1,\
+								 /*�ŵ����?*/0,		0,		0,		0,		1,\
 		        				 /*��������*/400,	400,	400,	400,	1,\
-		        				 /*ѹ�����?*/10,	10,		10,		10,		1,\
+		        				 /*ѹ�����?*/10,	10,		10,		10,		1,\
 		        				 /*��������*/0,		0,		0,		0,		1}
 
 //��Ԫ��
-#ifdef TERNARYLI
-#define E2P_PROTECT_DEFAULT_PRT	{/*���ڹ�ѹ*/4200,	4200,	4250,	4100,	100,\
-								 /*���ڵ�ѹ*/3000,	3000,	2900,	3100,	100,\
-								 /*��ѹ��ѹ*/420*SNum, 420*SNum, 420*SNum, 400*SNum, 100,\
-								 /*��ѹ��ѹ*/300*SNum, 300*SNum, 290*SNum, 300*SNum, 100,\
-		        				 /*������*/650,	650,	650,	10,	1000,\
-		        				 /*�ŵ����?*/1500,	1500,	1500,	10,	200,\
-								 /*������*/900,	900,	900,	800,	100,\
-								 /*������*/400,	400,	400,	450,	100,\
-								 /*�ŵ����?*/1000,	1000,	1000,	900,	100,\
-								 /*�ŵ����?*/300,	300,	300,	400,	100,\
-		        				 /*��������*/1200,	1200,	1350,	1000,	100,\
-		        				 /*ѹ�����?*/1000,	1000,	1000,	900,	100,\
-		        				 /*��������*/3,		2,		1,		2,		100}
 
-//�������?
-#elif (defined(LIFEPO))
 #define E2P_PROTECT_DEFAULT_PRT	{/*单节过压*/COV_1,	COV_2,	COV_3,	COV_recover,	COV_filter3,\
 								 /*单节低压*/CUV_1,	CUV_2,	CUV_3,	CUV_recover,	CUV_filter3,\
 								 /*总压过压*/BOV_1, BOV_2,	BOV_3,  BOV_recover, 	BOV_filter3,\
@@ -364,8 +402,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*压差过大*/VDELTER_1,	VDELTER_2,	VDELTER_3,	VDELTER_recover,	VDELTER_filter3,\
 		        				 /*电量过低*/socLow_1,	socLow_2,	socLow_3,	socLow_recover,		socLow_filter3}
 
-#endif
-
 
 
 
@@ -374,13 +410,13 @@ struct PRT_E2ROM_PARAS {
 								 /*��ѹ��ѹ*/20000,	20000,	20000,	20000,	50000,\
 								 /*��ѹ��ѹ*/20000,	20000,	20000,	20000,	50000,\
 		        				 /*������*/50000,	50000,	50000,	50000,	50000,\
-		        				 /*�ŵ����?*/50000,	50000,	50000,	50000,	50000,\
+		        				 /*�ŵ����?*/50000,	50000,	50000,	50000,	50000,\
 								 /*������*/2000,	2000,	2000,	2000,	50000,\
 								 /*������*/800,	800,	800,	800,	50000,\
-								 /*�ŵ����?*/2000,	2000,	2000,	2000,	50000,\
-								 /*�ŵ����?*/800,	800,	800,	800,	50000,\
+								 /*�ŵ����?*/2000,	2000,	2000,	2000,	50000,\
+								 /*�ŵ����?*/800,	800,	800,	800,	50000,\
 		        				 /*��������*/2000,	2000,	2000,	2000,	50000,\
-		        				 /*ѹ�����?*/2000,	2000,	2000,	2000,	50000,\
+		        				 /*ѹ�����?*/2000,	2000,	2000,	2000,	50000,\
 		        				 /*��������*/50,	50,		50,		50,		50000}
 
 

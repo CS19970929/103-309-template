@@ -245,7 +245,7 @@ void App_DI1_Switch(void)
 			su16_AntiShake_Cnt1 = 0;
 			entersleep(DEEP_MODE);
 
-			BSP_Printf("switch deep sleep\n");
+			// BSP_Printf("switch deep sleep\n");
 		}
 	}
 	else
