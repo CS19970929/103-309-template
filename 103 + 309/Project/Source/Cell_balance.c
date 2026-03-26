@@ -1,16 +1,41 @@
 #include "main.h"
 
 #define CB_BALANCE_REG_RETRY_MAX    ((UINT8)3)
-#define CB_BALANCE_REG_BYTES        ((UINT8)3)
+#define CB_BALANCE_CURRENT_LIMIT     ((UINT16)10)
+#define CB_BALANCE_REST_DELAY_S      ((UINT16)(5 * 60))
 
 enum BALANCE_STATE_E g_enBalanceState = BALANCE_ST_INIT;
 enum CELL_BALANCE_STATUS_E g_enCellBalanceStatus[CELL_NUMS_MAX];
 UINT8 g_u8CellBalanceFilterCnt[CELL_NUMS_MAX];
 
-UINT16 CellBalFlag_AFE1; // 实际串数标志位存储，用于操作AFE寄存器
-UINT8 g_u8CBnMonitor;	 // 是否有电池需要均衡的标志位
+UINT16 g_u16CBnFLAG_ToUpper = 0;
+UINT8 g_u8CBn_StatusFlag = 0;
+UINT8 g_u8CBn_AFECloseFlag = 1;
 
-static UINT8 CB_AfeWriteBalanceMaskU24(uint32_t balance_mask)
+static UINT16 s_u16BalanceCandidateMask = 0;
+static UINT16 s_u16BalanceActiveMask = 0;
+
+static UINT8 CB_GetCellCount(void)
+{
+	if (SeriesNum > CELL_NUMS_MAX)
+	{
+		return CELL_NUMS_MAX;
+	}
+
+	return SeriesNum;
+}
+
+static UINT16 CB_GetCellBit(UINT8 cell_index)
+{
+	if (cell_index >= CELL_NUMS_MAX)
+	{
+		return 0;
+	}
+
+	return (UINT16)(1u << cell_index);
+}
+
+static UINT8 CB_AfeWriteBalanceMaskU24(UINT32 balance_mask)
 {
 	UINT8 retry;
 	UINT8 balance_h = (UINT8)((balance_mask >> 16) & 0xFF);
@@ -25,203 +50,167 @@ static UINT8 CB_AfeWriteBalanceMaskU24(uint32_t balance_mask)
 		{
 			return 0;
 		}
+
 		Delay1ms(1);
 	}
 
 	return 1;
 }
 
-static UINT8 CB_AfeReadBalanceMaskU24(uint32_t *balance_mask)
+static void CB_UpdateDebugInfo(UINT16 active_mask)
 {
-	UINT8 retry;
-	UINT8 balance_regs[CB_BALANCE_REG_BYTES] = {0};
+	g_stCellInfoReport.u16BalanceFlag1 = active_mask;
+	g_stCellInfoReport.u16BalanceFlag2 = 0;
+	g_u16CBnFLAG_ToUpper = s_u16BalanceCandidateMask;
+}
 
-	if (NULL == balance_mask)
+static UINT8 CB_ApplyBalanceMask(UINT16 active_mask)
+{
+	if (0 != CB_AfeWriteBalanceMaskU24((UINT32)active_mask))
 	{
 		return 1;
 	}
 
-	for (retry = 0; retry < CB_BALANCE_REG_RETRY_MAX; ++retry)
+	s_u16BalanceActiveMask = active_mask;
+	g_u8CBn_StatusFlag = (active_mask != 0) ? 1 : 0;
+	g_u8CBn_AFECloseFlag = (active_mask == 0) ? 1 : 0;
+	CB_UpdateDebugInfo(active_mask);
+	return 0;
+}
+
+static UINT8 CB_ApplyCandidateMask(enum CELL_BALANCE_FLAG_UPPER balance_flag)
+{
+	UINT16 apply_mask = 0;
+
+	switch (balance_flag)
 	{
-		if (sh36735_read_regs(AFE_BALANCEH, balance_regs, CB_BALANCE_REG_BYTES))
-		{
-			*balance_mask = ((uint32_t)balance_regs[0] << 16)
-						  | ((uint32_t)balance_regs[1] << 8)
-						  | (uint32_t)balance_regs[2];
-			return 0;
-		}
-		Delay1ms(1);
+	case CELL_BALANCE_ON_ODD:
+		apply_mask = (UINT16)(s_u16BalanceCandidateMask & ODD_SELECT);
+		break;
+
+	case CELL_BALANCE_ON_EVEN:
+		apply_mask = (UINT16)(s_u16BalanceCandidateMask & EVEN_SELECT);
+		break;
+
+	case CELL_BALANCE_COLSE:
+	default:
+		apply_mask = 0;
+		break;
 	}
 
-	*balance_mask = 0;
+	return CB_ApplyBalanceMask(apply_mask);
+}
+
+static UINT8 CB_IsBalanceAllowed(UINT8 onoff_ctrl)
+{
+	if (0 == onoff_ctrl)
+	{
+		return 0;
+	}
+
+	if ((g_stCellInfoReport.u16Ichg > CB_BALANCE_CURRENT_LIMIT)
+		|| (g_stCellInfoReport.u16IDischg > CB_BALANCE_CURRENT_LIMIT))
+	{
+		return 0;
+	}
+
+	if (g_stCellInfoReport.u16VCellMax < OtherElement.u16Balance_OpenVoltage)
+	{
+		return 0;
+	}
+
+	if (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_CloseWindow)
+	{
+		return 0;
+	}
+
 	return 1;
 }
 
-// UINT16 g_u16CBnFLAG_ToUpper;    //上传到上位机的
-UINT8 g_u8CBn_StatusFlag; // 用于控制Mos或者Relay
-
-#if 1
-void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
+static void CB_RebuildCandidateMask(void)
 {
-	UINT32 temp_mask = 0;
 	UINT8 i;
+	UINT8 cell_count = CB_GetCellCount();
+	UINT8 changed = 0;
+	UINT16 vcell_min = g_stCellInfoReport.u16VCellMin;
 
-	(void)CB_AfeReadBalanceMaskU24(&temp_mask);
-
-	switch (type)
+	for (i = 0; i < cell_count; ++i)
 	{
-	case CELL_BALANCE_COLSE:
-		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		break;
+		UINT16 cell_bit = CB_GetCellBit(i);
+		UINT16 cell_volt = g_stCellInfoReport.u16VCell[i];
+		UINT8 need_balance = 0;
 
-	case CELL_BALANCE_ON_ODD:
-		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		for (i = 0; i < SeriesNum; ++i)
-		{ // 这个能同时处理16串，不需要额外操作
-			if ((temp_mask & (1UL << SeriesSelect_AFE1[SeriesNum - 1][i])) != 0UL)
-			{
-				g_stCellInfoReport.u16BalanceFlag1 |= ((UINT16)1u << i);
-			}
-		}
-		g_stCellInfoReport.u16BalanceFlag1 &= ODD_SELECT;
-		break;
-
-	case CELL_BALANCE_ON_EVEN:
-		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		for (i = 0; i < SeriesNum; ++i)
+		if ((cell_volt >= OtherElement.u16Balance_OpenVoltage)
+			&& ((UINT16)(cell_volt - vcell_min) >= OtherElement.u16Balance_OpenWindow))
 		{
-			if ((temp_mask & (1UL << SeriesSelect_AFE1[SeriesNum - 1][i])) != 0UL)
-			{
-				g_stCellInfoReport.u16BalanceFlag1 |= ((UINT16)1u << i);
-			}
+			need_balance = 1;
 		}
-		g_stCellInfoReport.u16BalanceFlag1 &= EVEN_SELECT;
-		break;
 
-	default:
-		g_stCellInfoReport.u16BalanceFlag1 = 0;
-		break;
-	}
-}
-#endif
-#if 0
-void CB_ChangeUpperFlag(enum CELL_BALANCE_FLAG_UPPER type)
-{
-	UINT16 temp1;
-	UINT8 i;
-
-	MTPRead(MTP_BALANCEH, 0x02, (UINT8 *)&temp1);
-	temp1 = U16_SwapEndian(temp1);
-	for (i = 0; i < SeriesNum; ++i)
-	{ // 这个能同时处理16串，不需要额外操作
-		g_stCellInfoReport.u16BalanceFlag1 |= (((temp1 >> SeriesSelect_AFE1[SeriesNum - 1][i]) & 0x0001) << i);
-	}
-}
-#endif
-
-void CB_StateCalculate(void)
-{
-	UINT8 i;
-	UINT8 ts_u8CBChanged = 0;
-	UINT16 VC_min = g_stCellInfoReport.u16VCellMin;
-
-	g_u8CBnMonitor = 0;
-	for (i = 0; i < SeriesNum; i++)
-	{
 		if (CELL_BALANCE_STATUS_OFF == g_enCellBalanceStatus[i])
 		{
-			if ((g_stCellInfoReport.u16VCell[i] >= OtherElement.u16Balance_OpenVoltage) && (g_stCellInfoReport.u16VCell[i] >= OtherElement.u16Balance_OpenWindow + VC_min))
+			if (need_balance)
 			{
 				if ((++g_u8CellBalanceFilterCnt[i]) >= TIME_1000MS_2S)
 				{
+					g_u8CellBalanceFilterCnt[i] = 0;
 					g_enCellBalanceStatus[i] = CELL_BALANCE_STATUS_ON_VOLT_DELTA;
-					g_u8CellBalanceFilterCnt[i] = 0;
-					ts_u8CBChanged = 1;
+					s_u16BalanceCandidateMask |= cell_bit;
+					changed = 1;
 				}
 			}
-			else
+			else if (g_u8CellBalanceFilterCnt[i] > 0)
 			{
-				if (g_u8CellBalanceFilterCnt[i] > 0)
-					--g_u8CellBalanceFilterCnt[i];
+				--g_u8CellBalanceFilterCnt[i];
 			}
 		}
-		else if (CELL_BALANCE_STATUS_ON_VOLT_DELTA == g_enCellBalanceStatus[i])
+		else
 		{
-			if ((g_stCellInfoReport.u16VCell[i] < OtherElement.u16Balance_OpenVoltage) || (g_stCellInfoReport.u16VCell[i] < OtherElement.u16Balance_CloseWindow + VC_min))
+			if ((cell_volt < OtherElement.u16Balance_OpenVoltage)
+				|| ((UINT16)(cell_volt - vcell_min) < OtherElement.u16Balance_CloseWindow))
 			{
 				if ((++g_u8CellBalanceFilterCnt[i]) >= TIME_1000MS_2S)
 				{
-					g_enCellBalanceStatus[i] = CELL_BALANCE_STATUS_OFF;
 					g_u8CellBalanceFilterCnt[i] = 0;
-					ts_u8CBChanged = 1;
+					g_enCellBalanceStatus[i] = CELL_BALANCE_STATUS_OFF;
+					s_u16BalanceCandidateMask &= (UINT16)(~cell_bit);
+					changed = 1;
 				}
 			}
-			else
+			else if (g_u8CellBalanceFilterCnt[i] > 0)
 			{
-				if (g_u8CellBalanceFilterCnt[i] > 0)
-					--g_u8CellBalanceFilterCnt[i];
+				--g_u8CellBalanceFilterCnt[i];
 			}
 		}
-
-		g_u8CBnMonitor += g_enCellBalanceStatus[i];
 	}
 
-	if (ts_u8CBChanged)
-	{ // 有变化才修改两个标志位，没变化不修改两个标志位
-		CellBalFlag_AFE1 = 0;
-		for (i = 0; i < SeriesNum; ++i)
-		{ // 覆盖了16串，第6串也不用改，映射到16串
-			CellBalFlag_AFE1 |= ((UINT16)(g_enCellBalanceStatus[i] > 0 ? 1 : 0) << SeriesSelect_AFE1[SeriesNum - 1][i]);
-		}
-	}
-}
-
-// Output: result:0--OK，1--Error
-UINT8 CB_AFERegistersCtrl(enum CELL_BALANCE_FLAG_UPPER CellBalance_Flag)
-{
-	UINT8 result = 0;
-	UINT32 u32BalanceFlag = 0;
-
-	switch (CellBalance_Flag)
+	for (; i < CELL_NUMS_MAX; ++i)
 	{
-	case CELL_BALANCE_COLSE:
-		result = CB_AfeWriteBalanceMaskU24(0);
-		break;
-
-	case CELL_BALANCE_ON_ODD:
-		u32BalanceFlag = (UINT32)(CellBalFlag_AFE1 & ODD_SELECT);
-		result = CB_AfeWriteBalanceMaskU24(u32BalanceFlag);
-		break;
-
-	case CELL_BALANCE_ON_EVEN:
-		u32BalanceFlag = (UINT32)(CellBalFlag_AFE1 & EVEN_SELECT);
-		result = CB_AfeWriteBalanceMaskU24(u32BalanceFlag);
-		break;
-
-	default:
-		result = CB_AfeWriteBalanceMaskU24(0);
-		break;
+		g_enCellBalanceStatus[i] = CELL_BALANCE_STATUS_OFF;
+		g_u8CellBalanceFilterCnt[i] = 0;
 	}
 
-	return result;
+	if (changed)
+	{
+		g_u16CBnFLAG_ToUpper = s_u16BalanceCandidateMask;
+	}
 }
 
 void CellBalance_DataInit(void)
 {
 	UINT8 i;
 
-	for (i = 0; i < CELL_NUMS_MAX; i++)
+	for (i = 0; i < CELL_NUMS_MAX; ++i)
 	{
 		g_enCellBalanceStatus[i] = CELL_BALANCE_STATUS_OFF;
 		g_u8CellBalanceFilterCnt[i] = 0;
 	}
-	CellBalFlag_AFE1 = 0;
-	g_u8CBn_StatusFlag = 0;
-	g_stCellInfoReport.u16BalanceFlag1 = 0;
-	(void)CB_AFERegistersCtrl(CELL_BALANCE_COLSE);
 
-	// if(SeriesNum == 16)MCUO_EXT_CB = 0;
-	if (SystemStatus.bits.b1Status_BnCloseIO == 0)
+	s_u16BalanceCandidateMask = 0;
+	s_u16BalanceActiveMask = 0;
+	g_u16CBnFLAG_ToUpper = 0;
+	(void)CB_ApplyBalanceMask(0);
+
+	if (0 == SystemStatus.bits.b1Status_BnCloseIO)
 	{
 		g_enBalanceState = BALANCE_ST_MONITOR;
 	}
@@ -230,46 +219,51 @@ void CellBalance_DataInit(void)
 void CellBalance_Monitor(UINT8 OnOFF_Ctrl)
 {
 	static UINT8 s_u8BnRecord = 0;
-	static UINT8 su8_Cur_Flag = 0;
-	static UINT16 su16_Silence_Tcnt = 0;
+	static UINT8 s_u8CurrentSeen = 0;
+	static UINT16 s_u16RestDelayCnt = 0;
 
-	if ((g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)		// 静置均衡，有电流不均衡
-		|| (g_stCellInfoReport.u16VCellMin < OtherElement.u16Balance_OpenVoltage)	// 最大电压没超过开启电压
-		|| (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_CloseWindow) // 压差均在关闭窗口以内
-		|| !OnOFF_Ctrl)
+	if ((g_stCellInfoReport.u16Ichg > CB_BALANCE_CURRENT_LIMIT)
+		|| (g_stCellInfoReport.u16IDischg > CB_BALANCE_CURRENT_LIMIT))
 	{
-		if (g_stCellInfoReport.u16BalanceFlag1 || CellBalFlag_AFE1 || g_u8CBn_StatusFlag)
-		{
-			g_enBalanceState = BALANCE_ST_INIT;
-		}
-		if (g_stCellInfoReport.u16Ichg > 10 || g_stCellInfoReport.u16IDischg > 10)
-		{
-			su8_Cur_Flag = 1;
-			if (su16_Silence_Tcnt)
-				su16_Silence_Tcnt = 0;
-		}
-		return;
+		s_u8CurrentSeen = 1;
+		s_u16RestDelayCnt = 0;
 	}
 
-	// 静置5min
-	if (su8_Cur_Flag)
+	if (0 == CB_IsBalanceAllowed(OnOFF_Ctrl))
 	{
-		if (++su16_Silence_Tcnt >= 1 * 60 * 5)
+		s_u16BalanceCandidateMask = 0;
+		g_u16CBnFLAG_ToUpper = 0;
+
+		if ((s_u16BalanceActiveMask != 0) || (0 != g_u8CBn_StatusFlag))
 		{
-			su16_Silence_Tcnt = 0;
-			su8_Cur_Flag = 0;
+			g_enBalanceState = BALANCE_ST_OFF;
 		}
 		else
 		{
-			return;
+			CB_UpdateDebugInfo(0);
 		}
+
+		return;
 	}
 
-	CB_StateCalculate(); // change the CBnTIME reg when some cell balance stu changed
-	if (g_u8CBnMonitor > 0)
+	if (s_u8CurrentSeen)
+	{
+		if (++s_u16RestDelayCnt < CB_BALANCE_REST_DELAY_S)
+		{
+			return;
+		}
+
+		s_u8CurrentSeen = 0;
+		s_u16RestDelayCnt = 0;
+	}
+
+	CB_RebuildCandidateMask();
+
+	if (s_u16BalanceCandidateMask != 0)
 	{
 		g_enBalanceState = BALANCE_ST_ODD_ON;
-		if (!s_u8BnRecord)
+
+		if (0 == s_u8BnRecord)
 		{
 			System_ERROR_UserCallback(ERROR_BALANCED);
 			s_u8BnRecord = 1;
@@ -278,156 +272,109 @@ void CellBalance_Monitor(UINT8 OnOFF_Ctrl)
 	else
 	{
 		g_enBalanceState = BALANCE_ST_OFF;
-		if (s_u8BnRecord)
-			s_u8BnRecord = !s_u8BnRecord;
+		s_u8BnRecord = 0;
 	}
 }
 
 void CellBalance_StateOddOn(UINT8 OnOFF_Ctrl)
 {
-	static UINT8 s_u8Select = 0;
-	static UINT16 ts_u8TempCnt = 0;
+	static UINT16 s_u16StateCnt = 0;
 
-	if (!OnOFF_Ctrl)
+	if ((0 == OnOFF_Ctrl) || (0 == CB_IsBalanceAllowed(OnOFF_Ctrl)))
 	{
-		ts_u8TempCnt = 0;
-		s_u8Select = 0;
-		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//需要刷新数据了
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_OFF;
+		return;
 	}
 
-	switch (s_u8Select)
+	if (0 == (s_u16BalanceCandidateMask & ODD_SELECT))
 	{
-	case 0:
-		if (0 == (CellBalFlag_AFE1 & ODD_SELECT))
-		{
-			g_enBalanceState = BALANCE_ST_EVEN_ON; // 不需要开，不作操作，直接跳走
-			break;
-		}
-		if (!CB_AFERegistersCtrl(CELL_BALANCE_ON_ODD))
-		{
-			CB_ChangeUpperFlag(CELL_BALANCE_ON_ODD);
-			++s_u8Select;
-			if (0 != Balance_OpenT_ODD)
-			{
-				g_u8CBn_StatusFlag = 1; // 后续优化点，如果奇或者偶有一个为0，则会出现资源浪费的BUG
-			}
-		}
-		break;
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_EVEN_ON;
+		return;
+	}
 
-	case 1:
-		if ((++ts_u8TempCnt) >= Balance_OpenT_ODD)
+	if (0 == s_u16StateCnt)
+	{
+		if (0 != CB_ApplyCandidateMask(CELL_BALANCE_ON_ODD))
 		{
-			ts_u8TempCnt = 0;
-			g_enBalanceState = BALANCE_ST_EVEN_ON;
-			s_u8Select = 0;
+			g_enBalanceState = BALANCE_ST_OFF;
+			return;
 		}
-		break;
+	}
 
-	default:
-		s_u8Select = 0;
-		break;
+	if (++s_u16StateCnt >= Balance_OpenT_ODD)
+	{
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_EVEN_ON;
 	}
 }
 
 void CellBalance_StateEvenOn(UINT8 OnOFF_Ctrl)
 {
-	static UINT8 s_u8Select = 0;
-	static UINT16 ts_u8TempCnt = 0;
+	static UINT16 s_u16StateCnt = 0;
 
-	if (!OnOFF_Ctrl)
+	if ((0 == OnOFF_Ctrl) || (0 == CB_IsBalanceAllowed(OnOFF_Ctrl)))
 	{
-		ts_u8TempCnt = 0;
-		s_u8Select = 0;
-		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//需要刷新数据了
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_OFF;
+		return;
 	}
 
-	switch (s_u8Select)
+	if (0 == (s_u16BalanceCandidateMask & EVEN_SELECT))
 	{
-	case 0:
-		if (0 == (CellBalFlag_AFE1 & EVEN_SELECT))
-		{
-			g_enBalanceState = BALANCE_ST_OFF; // 不需要开，不作操作，直接跳走
-			break;
-		}
-		if (!CB_AFERegistersCtrl(CELL_BALANCE_ON_EVEN))
-		{
-			CB_ChangeUpperFlag(CELL_BALANCE_ON_EVEN);
-			++s_u8Select;
-			if (0 != Balance_OpenT_EVEN)
-			{
-				g_u8CBn_StatusFlag = 1;
-			}
-		}
-		break;
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_OFF;
+		return;
+	}
 
-	case 1:
-		if ((++ts_u8TempCnt) >= Balance_OpenT_EVEN)
+	if (0 == s_u16StateCnt)
+	{
+		if (0 != CB_ApplyCandidateMask(CELL_BALANCE_ON_EVEN))
 		{
-			ts_u8TempCnt = 0;
 			g_enBalanceState = BALANCE_ST_OFF;
-			s_u8Select = 0;
+			return;
 		}
-		break;
+	}
 
-	default:
-		s_u8Select = 0;
-		break;
+	if (++s_u16StateCnt >= Balance_OpenT_EVEN)
+	{
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_OFF;
 	}
 }
 
-// 这个函数应该可以了
 void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 {
-	static UINT8 s_u8Select = 0;
-	static UINT16 ts_u8TempCnt = 0;
+	static UINT16 s_u16StateCnt = 0;
+	UINT16 off_delay_s = (UINT16)(Balance_OpenT_MOS + OtherElement.u16Sys_PreChg_Time);
 
-	if (!OnOFF_Ctrl)
+	if (s_u16BalanceActiveMask != 0)
 	{
-		ts_u8TempCnt = 0;
-		s_u8Select = 0;
-		g_enBalanceState = BALANCE_ST_MONITOR;
-		// BnElement.u16_RefreshData_Flag = 1;		//需要刷新数据了
+		(void)CB_ApplyBalanceMask(0);
 	}
 
-	switch (s_u8Select)
+	if (0 == off_delay_s)
 	{
-	case 0:
-		if (0 == Balance_OpenT_MOS)
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_MONITOR;
+		return;
+	}
+
+	if ((0 == OnOFF_Ctrl) || (0 == CB_IsBalanceAllowed(OnOFF_Ctrl)))
+	{
+		if (++s_u16StateCnt >= off_delay_s)
 		{
-			// if (0 == g_u8CBnMonitor)
-			{ // 循环持续到检测到不要均衡才关闭。
-				if (!CB_AFERegistersCtrl(CELL_BALANCE_COLSE))
-				{
-					CB_ChangeUpperFlag(CELL_BALANCE_COLSE);
-				}
-			}
+			s_u16StateCnt = 0;
 			g_enBalanceState = BALANCE_ST_MONITOR;
 		}
-		else
-		{
-			if (!CB_AFERegistersCtrl(CELL_BALANCE_COLSE))
-			{ // 无论哪里过来的，都可以运行这个函数一轮再回去
-				CB_ChangeUpperFlag(CELL_BALANCE_COLSE);
-				++s_u8Select;
-				g_u8CBn_StatusFlag = 0;
-			}
-		}
-		break;
+		return;
+	}
 
-	case 1:
-		if ((++ts_u8TempCnt) >= Balance_OpenT_MOS + OtherElement.u16Sys_PreChg_Time)
-		{ // 加上预充时间
-			ts_u8TempCnt = 0;
-			g_enBalanceState = BALANCE_ST_MONITOR;
-			s_u8Select = 0;
-		}
-		break;
-
-	default:
-		s_u8Select = 0;
-		break;
+	if (++s_u16StateCnt >= off_delay_s)
+	{
+		s_u16StateCnt = 0;
+		g_enBalanceState = BALANCE_ST_MONITOR;
 	}
 }
 
@@ -443,22 +390,25 @@ void App_CellBalance(void)
 	case BALANCE_ST_INIT:
 		CellBalance_DataInit();
 		break;
+
 	case BALANCE_ST_MONITOR:
 		CellBalance_Monitor(System_OnOFF_Func.bits.b1OnOFF_Balance);
 		break;
+
 	case BALANCE_ST_ODD_ON:
 		CellBalance_StateOddOn(System_OnOFF_Func.bits.b1OnOFF_Balance);
 		break;
+
 	case BALANCE_ST_EVEN_ON:
 		CellBalance_StateEvenOn(System_OnOFF_Func.bits.b1OnOFF_Balance);
 		break;
+
 	case BALANCE_ST_OFF:
 		CellBalance_StateOFF(System_OnOFF_Func.bits.b1OnOFF_Balance);
 		break;
+
 	default:
 		g_enBalanceState = BALANCE_ST_INIT;
 		break;
 	}
-	// todo 测试均衡
-	// CB_ChangeUpperFlag(CELL_BALANCE_ON_ODD);
 }
