@@ -114,8 +114,8 @@ void App_SOC(void)
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 
 	RefreshData_SOC();
-	GetData_SOC();
 	SOC_IntEnhance_Ctrl();
+	GetData_SOC();
 
 	gu8_200msAccClock_Flag = 0;
 

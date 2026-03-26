@@ -721,14 +721,14 @@ void App_SleepDeal(void)
 		break;
 	}
 
-	if (SLEEP_HICCUP_CONTINUE == Sleep_Status)
-	{
-		Sleep_Mode.bits.b1_ToSleepFlag = 1;
-	}
-	else
-	{
-		Sleep_Mode.bits.b1_ToSleepFlag = 0;
-	}
+	// if (SLEEP_HICCUP_CONTINUE == Sleep_Status)
+	// {
+	// 	Sleep_Mode.bits.b1_ToSleepFlag = 1;
+	// }
+	// else
+	// {
+	// 	Sleep_Mode.bits.b1_ToSleepFlag = 0;
+	// }
 
 	if (g_stCellInfoReport.u16VCellMin < 2500)
 	{

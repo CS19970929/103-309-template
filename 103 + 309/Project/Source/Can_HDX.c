@@ -708,7 +708,8 @@ void feidao_logi(void)
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
-	if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag1)
 	{
 		return;
 	}
@@ -727,7 +728,7 @@ void CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t lengt
 	/* 设置CAN ID (扩展帧) */
 	tx_msg.RTR = CAN_RTR_DATA; // 为数据帧
 	tx_msg.IDE = CAN_ID_EXT;
-	tx_msg.ExtId = 0x141F0200 | chd_index;
+	tx_msg.ExtId = 0x14F80200 | chd_index;
 	// tx_msg.ExtId = (BATTERY_CAN_ID << 24) | (BROADCAST_CAN_ID << 19) |
 	//   (0x00 << 16) | (index << 8) | chd_index;
 
@@ -807,7 +808,7 @@ void feidao_send_soc_1000ms(void)
 	bat_type = 0x01;
 #endif								// BAT_TYPE == BAT_MASTER
 	memcpy(&data[5], &bat_type, 1); // 温度，自动LSB first
-	memcpy(&data[6], &res, 2); // 温度，自动LSB first
+	memcpy(&data[6], &res, 2);		// 温度，自动LSB first
 	CAN_Battery_SendData_feidao(2, &data, 8);
 }
 
@@ -837,7 +838,7 @@ void feidao_send_status_5000ms(void)
 {
 	uint8_t data[8];
 	uint8_t work_status = 0;
-	uint8_t exception_status;
+	uint8_t exception_status = 0;
 	uint16_t cap_fac, cap_now, cap_design;
 	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_DSG << 0);
 	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_CHG << 1);
@@ -849,11 +850,31 @@ void feidao_send_status_5000ms(void)
 	if (g_stCellInfoReport.u16IDischg)
 		work_status |= work_status | (1 << 4);
 
-	exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 0);
-	exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp << 1);
-	exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp) << 2);
-	exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) << 3);
-	exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 4);
+	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 0);
+	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp << 1);
+	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp) << 2);
+	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) << 3);
+	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 4);
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+		exception_status = 0x02;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
+		exception_status = 0x03;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
+		exception_status = 0x04;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
+		exception_status = 0x05;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+		exception_status = 0x06;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+		exception_status = 0x07;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
+		exception_status = 0x08;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
+		exception_status = 0x09;
+	if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
+		exception_status = 0x0C;
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1VcellDeltaBig)
+		exception_status = 0x0D;
 	cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
 	cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10;
 	cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
@@ -868,6 +889,7 @@ void feidao_send_status_5000ms(void)
 void feidao_can_send(void)
 {
 	// feidao_send_soc_1000ms();
+	// feidao_send_status_5000ms();
 #if 1
 	// if (!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
 	// if (!g_st_SysTimeFlag.bits.b1Sys10msFlag1)
