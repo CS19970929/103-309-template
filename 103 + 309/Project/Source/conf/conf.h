@@ -8,13 +8,13 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x1325		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x0325		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define BAT_MASTER  (0)    //20A
 #define BAT_SLAVE   (1)    //40A
 
-#define BAT_TYPE     BAT_SLAVE
-// #define BAT_TYPE     BAT_MASTER
+// #define BAT_TYPE     BAT_SLAVE
+#define BAT_TYPE     BAT_MASTER
 
 
 
