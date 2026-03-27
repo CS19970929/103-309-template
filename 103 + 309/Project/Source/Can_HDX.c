@@ -783,7 +783,7 @@ void feidao_send_soc_1000ms(void)
 	uint8_t data[8];
 	uint8_t chg_status, soc;
 	int8_t temp;
-	uint16_t bat_type;
+	uint8_t bat_type;
 	uint16_t time_chg = 100;
 	uint16_t res = 0;
 	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
