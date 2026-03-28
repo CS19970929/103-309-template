@@ -313,8 +313,11 @@ void Drivers_External_Ctrl(void)
 		}
 		break;
 	case S_STARTUP:
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
+		// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		//todo 不能这样搞啊，不能置1
+		// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 1;
+		// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 1;
 		if (is_charger_online())
 		{
 			bms_status = S_DSG;
