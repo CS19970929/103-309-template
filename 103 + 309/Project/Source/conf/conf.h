@@ -10,7 +10,7 @@
 
 #define EEPROM_VALUE_BEGIN_FLAG				0x0303		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
-#define  wdog_enable
+// #define  wdog_enable
 // #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 #define __FUNC__CAN__
@@ -149,6 +149,9 @@ typedef struct
   bool     charger_online2;
   bool     load_online1;
   bool     load_online2;
+  bool     bal_cell[20];
+  uint32_t bal_channel;
+  uint16_t bal_time;
 }Time_T;
 
 extern Time_T  sys_time;

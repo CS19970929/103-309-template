@@ -27,7 +27,7 @@ enum RS485_CMD_E {
 	RS485_CMD_WRITE_REG = 6,
 	RS485_CMD_WRITE_REGS = 16,
 	
-	UART_CLIENT_CMD_0x01 = 0xA1,	//客户的
+	UART_CLIENT_CMD_0x01 = 0xA1,	//客户�?
 	UART_CLIENT_CMD_0x02 = 0xA2,	
 
 	UART_CLIENT_CMD_0x04 = 0x04,
@@ -37,11 +37,11 @@ enum RS485_CMD_E {
 
 
 struct SOC_CAL_ELEMENT_UPPER {
-	UINT16 u16Soc;                 	//��ǰ���SOC     0��100 Ϊ��������ٷֱ�
+	UINT16 u16Soc;                 	//��ǰ���SOC     0��100 Ϊ��������ٷֱ�?
 	UINT16 u16Soh;                 	//Ϊ���������ٷֱ�0����100
 	UINT16 u16CapacityNow;        	//��ǰ����	Ah*100
-	UINT16 u16CapacityFull;        	//��ǰ��������	Ah*100		//Ϊʲô*100Ϊ��λ�أ���Ϊ��λ����mAh�������������ʾ����
-	UINT16 u16CapacityFactory;     	//������������	Ah*100		//�����Ľ����650Ah���
+	UINT16 u16CapacityFull;        	//��ǰ��������	Ah*100		//Ϊʲô*100Ϊ��λ�أ���Ϊ��λ����mAh�������������ʾ����?
+	UINT16 u16CapacityFactory;     	//������������	Ah*100		//�����Ľ����?650Ah���?
 	UINT16 u16Cycle_times;     		//ѭ������
 };
 
@@ -96,6 +96,7 @@ struct stCell_Info {
 	union MDLCHGFAULT_REG unMdlFault_Third;
 	UINT16	u16BalanceFlag1;                 //��ؾ����־λ1
 	UINT16	u16BalanceFlag2;                 //��ؾ����־λ2
+	uint32_t balance_status;
 };
 
 
@@ -118,7 +119,7 @@ struct stCell_Info {
 #define	RS485_ACK_NEG			        0x01	// ����Ӧ
 //Error type
 #define	RS485_ERROR_ADDR_INVALID	    0x01	// ��ַ���Ϸ�
-#define	RS485_ERROR_CRC_ERROR			0x02	// CRCУ�����
+#define	RS485_ERROR_CRC_ERROR			0x02	// CRCУ�����?
 #define	RS485_ERROR_DATA_INVALID	    0x03	// �������Ϸ�
 #define	RS485_ERROR_CMD_INVALID			0x04	// ��ǰ״̬��������Ч
 #define	RS485_ERROR_RONLY_NO_W			0x05	// ֻ�������ܾ�д��
@@ -132,7 +133,7 @@ struct RS485MSG {
 	UINT8	ptr_no;          	// Word stating what state msg is in
 	UINT8	csr;          		// I2C address of slave msg is intended for
 	UINT16	u16RdRegStartAddr;	// read reg start addr
-	UINT16	u16RdRegStartAddrActure;	//�Զ����ַ����
+	UINT16	u16RdRegStartAddrActure;	//�Զ����ַ����?
 	UINT8	u16RdRegByteNum;    // read byte lenth
 	UINT8	AckLenth;			// ack byte lenth
 	UINT8	AckType;			// ack type
@@ -152,7 +153,7 @@ struct RS485MSG {
 
 //�Լ����Լ���Ŀӣ�����˲��Ǳ�׼MODBUSЭ����
 #if 0
-//ѭ��ֻ����Ҫ��1s���ϴ����
+//ѭ��ֻ����Ҫ��1s���ϴ����?
 #define RS485_ADDR_RO_START0			0xD000
 #define RS485_ADDR_RO_START1			0xD001
 #define RS485_ADDR_RO_START2			0xD002
@@ -200,7 +201,7 @@ enum RS485_CMD_RW_E {
 
 	RS485_CMD_ADDR_Change_BAUD_RECORD,
 
-	#if 0	//��ģ����������з����ж��ٿ�ʼ�����������ù�������ϵͳ��ʵ��û��ô����������
+	#if 0	//��ģ����������з����ж��ٿ�ʼ�����������ù�������ϵͳ��ʵ��û��ô����������?
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_BALANCE = 0x1100,
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_BMS_SOURCE,
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_MOS,

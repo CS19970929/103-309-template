@@ -27,7 +27,7 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
-// #define _DEBUG_CODE
+// #define _DEBUG_CODESE
 
 int main(void)
 {
@@ -153,7 +153,7 @@ void InitDevice(void)
 
 	{
 		sh36735_write_reg_u8(AFE_OVT_OVH, 0x03);
-		sh36735_write_reg_u8(AFE_OVL, 0x52);
+		sh36735_write_reg_u8(AFE_OVL, 0x50);
 		uint8_t ov_code = 0;
 		uint8_t ov_delay_code = 0;
 		// sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);

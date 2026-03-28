@@ -1,7 +1,7 @@
 #include "main.h"
 
-#define CB_BALANCE_REG_RETRY_MAX    ((UINT8)3)
-#define CB_BALANCE_REG_BYTES        ((UINT8)3)
+#define CB_BALANCE_REG_RETRY_MAX ((UINT8)3)
+#define CB_BALANCE_REG_BYTES ((UINT8)3)
 
 enum BALANCE_STATE_E g_enBalanceState = BALANCE_ST_INIT;
 enum CELL_BALANCE_STATUS_E g_enCellBalanceStatus[CELL_NUMS_MAX];
@@ -17,18 +17,22 @@ static UINT8 CB_AfeWriteBalanceMaskU24(uint32_t balance_mask)
 	UINT8 balance_m = (UINT8)((balance_mask >> 8) & 0xFF);
 	UINT8 balance_l = (UINT8)(balance_mask & 0xFF);
 
-	for (retry = 0; retry < CB_BALANCE_REG_RETRY_MAX; ++retry)
-	{
-		if (sh36735_write_reg_u8(AFE_BALANCEH, balance_h)
-			&& sh36735_write_reg_u8(AFE_BALANCEM, balance_m)
-			&& sh36735_write_reg_u8(AFE_BALANCEL, balance_l))
-		{
-			return 0;
-		}
-		Delay1ms(1);
-	}
+	// for (retry = 0; retry < CB_BALANCE_REG_RETRY_MAX; ++retry)
+	// {
+	// 	if (sh36735_write_reg_u8(AFE_BALANCEH, balance_h)
+	// 		&& sh36735_write_reg_u8(AFE_BALANCEM, balance_m)
+	// 		&& sh36735_write_reg_u8(AFE_BALANCEL, balance_l))
+	// 	{
+	// 		return 0;
+	// 	}
+	// 	Delay1ms(1);
+	// }
 
-	return 1;
+	// return 1;
+	sh36735_write_reg_u8(AFE_BALANCEH, balance_h);
+	sh36735_write_reg_u8(AFE_BALANCEM, balance_m);
+	sh36735_write_reg_u8(AFE_BALANCEL, balance_l);
+	return 0;
 }
 
 static UINT8 CB_AfeReadBalanceMaskU24(uint32_t *balance_mask)
@@ -45,9 +49,7 @@ static UINT8 CB_AfeReadBalanceMaskU24(uint32_t *balance_mask)
 	{
 		if (sh36735_read_regs(AFE_BALANCEH, balance_regs, CB_BALANCE_REG_BYTES))
 		{
-			*balance_mask = ((uint32_t)balance_regs[0] << 16)
-						  | ((uint32_t)balance_regs[1] << 8)
-						  | (uint32_t)balance_regs[2];
+			*balance_mask = ((uint32_t)balance_regs[0] << 16) | ((uint32_t)balance_regs[1] << 8) | (uint32_t)balance_regs[2];
 			return 0;
 		}
 		Delay1ms(1);
@@ -438,6 +440,58 @@ void App_CellBalance(void)
 		return;
 	}
 
+	// 1 每一串均衡单独测试， 2、多串一起均衡，测试afe均衡逻辑 3、均衡31s，自动停止
+	static uint8_t bal_state = 0;
+	uint8_t i;
+	uint32_t balancebk = 0;
+	switch (bal_state)
+	{
+	case 0:
+		if (sys_time.bal_channel != 0)
+		{
+			for (i = 0; i < SNum; i++)
+			{
+				if (sys_time.bal_cell[i])
+				{
+					balancebk |= (1 << i);
+				}
+			}
+
+			if (balancebk != 0)
+			{
+				CB_AfeWriteBalanceMaskU24(balancebk);
+				bal_state = 1;
+				sys_time.bal_time = 0;
+			}
+		}
+		break;
+	case 1:
+		// 超时、计时、35s
+		sys_time.bal_time++;
+		CB_AfeReadBalanceMaskU24(&g_stCellInfoReport.balance_status);
+		if (sys_time.bal_time >= 100 || g_stCellInfoReport.balance_status == 0)
+		{
+			bal_state = 0;
+			sys_time.bal_channel = 0;
+			sys_time.bal_time = 0;
+			g_stCellInfoReport.balance_status = 0;
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+#if 0
+
+void App_CellBalance(void)
+{
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	{
+		return;
+	}
+
 	switch (g_enBalanceState)
 	{
 	case BALANCE_ST_INIT:
@@ -462,3 +516,5 @@ void App_CellBalance(void)
 	// todo 测试均衡
 	// CB_ChangeUpperFlag(CELL_BALANCE_ON_ODD);
 }
+
+#endif

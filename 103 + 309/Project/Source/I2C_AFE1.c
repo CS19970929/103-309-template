@@ -893,6 +893,8 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
 
+	
+
 	// sh36735_read_regs(0x5B, (uint8_t *)&Registers_AFE1.bstatus1, (0x5c - 0x5b + 1));
 	sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1));
 #if 1
