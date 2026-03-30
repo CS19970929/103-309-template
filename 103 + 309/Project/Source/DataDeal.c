@@ -639,7 +639,7 @@ void App_AFEGet(void)
 		{
 		case 0:
 			// Registers_AFE1.sonf3.bits.CRLD_EN = 2;
-			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
+			uint8_t write = Registers_AFE1.sonf3.all | 0x0C;
 			sh36735_write_reg_u8(AFE_SCONF3, write);
 			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
 			if (2 == Registers_AFE1.sonf3.bits.CRLD_EN)

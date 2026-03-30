@@ -95,9 +95,17 @@ void SleepDeal_Continue(void)
 
 	if (u8FlashWriteOK_flag)
 	{
-		// InitAFE1_Sleep(0);
-		AFE_Sleep();
-		MCU_RESET();
+		//todo crc check
+		SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
+		SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
+		sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1));
+		SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
+		SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
+		if(0 == SystemStatus.bits.b1Status_MOS_CHG && 0 == SystemStatus.bits.b1Status_MOS_DSG)
+		{
+			AFE_Sleep();
+			MCU_RESET();
+		}
 	}
 }
 
@@ -730,10 +738,10 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2600 && !g_stCellInfoReport.u16Ichg)
+	if (g_stCellInfoReport.u16VCellMin < 2500 )
 	{
 		++force_sleep_delay;
-		if (force_sleep_delay >= 60)
+		if (force_sleep_delay >= (60 * 60))
 		{
 			entersleep(DEEP_MODE);
 		}
