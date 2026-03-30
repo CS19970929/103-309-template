@@ -152,8 +152,14 @@ void InitDevice(void)
 	sh36735_write_reg_u8(AFE_SCONF6, mos_en);
 
 	{
+		uint16_t ov_thd = 4250 / 5;
+		uint16_t uv_thd = 2500 / 5;
 		sh36735_write_reg_u8(AFE_OVT_OVH, 0x03);
 		sh36735_write_reg_u8(AFE_OVL, 0x50);
+		sh36735_write_reg_u8(AFE_OVT_OVH, (ov_thd >> 8) & 0x3);
+		sh36735_write_reg_u8(AFE_OVL, ov_thd & 0xff);
+		sh36735_write_reg_u8(AFE_UVT_UVH, (uv_thd >> 8) & 0x3);
+		sh36735_write_reg_u8(AFE_UVL, uv_thd & 0xff);
 		uint8_t ov_code = 0;
 		uint8_t ov_delay_code = 0;
 		// sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);

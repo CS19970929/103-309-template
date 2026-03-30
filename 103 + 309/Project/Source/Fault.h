@@ -426,6 +426,7 @@ extern UINT16 FaultCnt_StartUp_Third;
 
 void App_WarnCtrl(void);
 void FaultWarnRecord2(enum FaultFlag num);
+void fault_report(uint8_t *err_flag, uint8_t isErr, enum FaultFlag err_type);
 
 #endif	/* FAULT_H */
 

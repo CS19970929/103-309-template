@@ -290,10 +290,29 @@ void close_chg(void)
 }
 
 enum system_status bms_status = S_STARTUP;
+
 void Drivers_External_Ctrl(void)
 {
+	static uint8_t cov1_flag = 0;
+	static uint8_t cuv1_flag = 0;
+	static uint8_t otc1_flag = 0;
+	static uint8_t utc1_flag = 0;
+	static uint8_t otd1_flag = 0;
+	static uint8_t utd1_flag = 0;
+	static uint8_t occ1_flag = 0;
+	static uint8_t ocd1_flag = 0;
+	static uint8_t mos1_flag = 0;
+
 	if (is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
 	{
+		fault_report(&cov1_flag, is_AFE_COV, CellOvp_Third);
+		fault_report(&cuv1_flag, is_AFE_CUV, CellUvp_Third);
+		fault_report(&otc1_flag, is_AFE_OTC, CellChgOTp_Third);
+		fault_report(&utc1_flag, is_AFE_UTC, CellChgUTp_Third);
+		fault_report(&otd1_flag, is_AFE_OTD, CellDsgOTp_Third);
+		fault_report(&utd1_flag, is_AFE_UTD, CellDsgUTp_Third);
+		fault_report(&occ1_flag, is_AFE_OCC, IchgOcp_Third);
+		fault_report(&ocd1_flag, is_AFE_ODC, IdischgOcp_Third);
 		return;
 	}
 #if 1
@@ -336,9 +355,7 @@ void Drivers_External_Ctrl(void)
 		}
 		break;
 	case S_CHG:
-		if (is_load_online())
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 1;
-		else
+		if (!is_load_online())
 			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
 
 		static UINT16 I_cnt = 0;

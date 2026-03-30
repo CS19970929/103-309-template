@@ -323,3 +323,59 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 // 给出ovt、ovh寄存器方便、简洁转换为对应保护电压、延时的代码
 
 梳理当前sleep,和flash擦除，sleep模块中flash替换
+
+void App_CellBalance(void)
+{
+	uint8_t i;
+	uint32_t balancebk = 0;
+	static uint32_t uiBalanceChannel = 0;
+	static uint8_t ucBalUpdateTimeCnt = 0;
+	static uint8_t ucBalanceTimeCnt[20] = {0};
+
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	{
+		return;
+	}
+
+	if((g_stCellInfoReport.u16IDischg > 0) 
+	|| (g_stCellInfoReport.u16VCellMin < OtherElement.u16Balance_OpenVoltage)
+	|| (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_OpenWindow))
+	{
+		for(i=0; i<SeriesNum; i++)
+		{
+			ucBalanceTimeCnt[i] = 0;
+		}
+		balancebk = 0;
+	}
+	else
+	{
+		uint16_t VC_min = g_stCellInfoReport.u16VCellMin;
+
+		for (i = 0; i < SeriesNum; i++)
+		{
+			if ((g_stCellInfoReport.u16VCell[i] >= OtherElement.u16Balance_OpenVoltage) && (g_stCellInfoReport.u16VCell[i] >= OtherElement.u16Balance_OpenWindow + VC_min))
+			{
+				if (++ucBalanceTimeCnt[i] >= 3) // 该电芯满足平衡条件且超过延时阈值
+				{
+					ucBalanceTimeCnt[i] = 3;
+					balancebk |= (1 << i);
+				}
+			}
+			else // 电芯不满足平衡条件时立即停止该电芯的平衡
+			{
+				ucBalanceTimeCnt[i] = 0;
+				balancebk &= ~(1 << i);
+			}
+		}
+	}
+
+	if ((uiBalanceChannel != balancebk)				// 平衡状态改变时配置平衡，或平衡过程中定时写平衡寄存器
+			|| ((uiBalanceChannel != 0) && (++ucBalUpdateTimeCnt >= (3))))
+		{
+			ucBalUpdateTimeCnt = 0;
+			uiBalanceChannel = balancebk;
+			g_stCellInfoReport.balance_status = uiBalanceChannel;
+			
+			CB_AfeWriteBalanceMaskU24(g_stCellInfoReport.balance_status);
+		}	
+}

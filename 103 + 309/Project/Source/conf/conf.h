@@ -8,9 +8,9 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0303		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1330		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
-// #define  wdog_enable
+#define  wdog_enable
 // #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 #define __FUNC__CAN__
@@ -152,6 +152,9 @@ typedef struct
   bool     bal_cell[20];
   uint32_t bal_channel;
   uint16_t bal_time;
+  bool crc_err;
+	uint32_t crc_err_cnt;
+  
 }Time_T;
 
 extern Time_T  sys_time;

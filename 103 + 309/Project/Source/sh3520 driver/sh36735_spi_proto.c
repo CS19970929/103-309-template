@@ -1,4 +1,5 @@
 #include "sh36735_spi.h"
+#include "conf.h"
 
 // 如果你实测写 CRC 需要包含“长度=1”这个字节，把下面改成 1
 #ifndef SH_WRITE_CRC_INCLUDE_LEN
@@ -91,6 +92,11 @@ bool sh36735_read_regs(uint8_t reg, uint8_t *buf, uint8_t n)
     for (uint8_t i = 0; i < n; i++) tmp[4 + i] = buf[i];
 
     uint8_t crc = sh36735_crc8(tmp, (uint32_t)(4 + n));
+    if(crc != crc_rx)
+        sys_time.crc_err = true;
+    else
+        sys_time.crc_err = false;
+        
     return (crc == crc_rx);
 }
 

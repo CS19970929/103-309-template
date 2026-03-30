@@ -95,9 +95,27 @@ void SleepDeal_Continue(void)
 
 	if (u8FlashWriteOK_flag)
 	{
-		// InitAFE1_Sleep(0);
-		AFE_Sleep();
-		MCU_RESET();
+		// todo crc check
+		// if (1 == SystemStatus.bits.b1Status_MOS_CHG || 1 == SystemStatus.bits.b1Status_MOS_DSG)
+		// {
+		// 	SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
+		// 	SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
+		// 	sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1));
+		// 	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
+		// 	SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
+		// }
+		// // SystemStatus.bits.b1Status_MOS_CHG = 1;
+		// // SystemStatus.bits.b1Status_MOS_DSG = 1;
+		// if (0 == SystemStatus.bits.b1Status_MOS_CHG && 0 == SystemStatus.bits.b1Status_MOS_DSG)
+		{
+			AFE_Sleep();
+
+			extern UINT32 su32_Interval_S_Tcnt;
+
+			LogRecord_Flag.bits.Log_Sleep = 1;
+			LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+			MCU_RESET();
+		}
 	}
 }
 
@@ -702,6 +720,19 @@ void App_SleepDeal(void)
 	}
 	gu8_1000msAccClock_Flag = 0;
 
+	if (sys_time.crc_err)
+	{
+		if (++sys_time.crc_err_cnt >= (60))
+		{
+			sys_time.crc_err_cnt = 0;
+			entersleep(DEEP_MODE);
+		}
+	}
+	else
+	{
+		sys_time.crc_err_cnt = 0;
+	}
+
 	switch (Sleep_Status)
 	{
 	case SLEEP_HICCUP_NORMAL_SELECT:
@@ -730,10 +761,10 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2600 && !g_stCellInfoReport.u16Ichg)
+	if (g_stCellInfoReport.u16VCellMin < 2500)
 	{
 		++force_sleep_delay;
-		if (force_sleep_delay >= 60)
+		if (force_sleep_delay >= (60 * 60))
 		{
 			entersleep(DEEP_MODE);
 		}
@@ -745,10 +776,6 @@ void App_SleepDeal(void)
 
 	if ((Sleep_Mode.all & 0x00ff))
 	{
-		extern UINT32 su32_Interval_S_Tcnt;
-		
-		LogRecord_Flag.bits.Log_Sleep = 1;
-		LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
 		SleepDeal_Continue();
 	}
 }

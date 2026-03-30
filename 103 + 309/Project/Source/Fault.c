@@ -2007,3 +2007,25 @@ void FaultWarnRecord2(enum FaultFlag num)
 		Fault_record_Third2[FaultPoint_Third2++] = num;
 	}
 }
+
+void fault_report(uint8_t *err_flag, uint8_t isErr, enum FaultFlag err_type)
+{
+	switch (*err_flag)
+	{
+	case 0:
+		if (isErr)
+		{
+			FaultWarnRecord2(err_type);
+			*err_flag = 1;
+		}
+		break;
+	case 1:
+		if (!isErr)
+		{
+			*err_flag = 0;
+		}
+		break;
+	default:
+		break;
+	}
+}
