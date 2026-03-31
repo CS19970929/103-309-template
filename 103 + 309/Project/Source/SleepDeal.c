@@ -708,10 +708,10 @@ void App_SleepDeal(void)
 		SleepDeal_Normal_Select();
 		break;
 	case SLEEP_HICCUP_NORMAL_L2:
-		// SleepDeal_Normal_L2();
+		SleepDeal_Normal_L2();
 		break;
 	case SLEEP_HICCUP_NORMAL_L3:
-		// SleepDeal_Normal_L3();
+		SleepDeal_Normal_L3();
 		break;
 	// case SLEEP_HICCUP_CONTINUE:
 	// 	SleepDeal_Continue();
