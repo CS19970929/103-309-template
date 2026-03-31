@@ -240,12 +240,10 @@ void App_DI1_Switch(void)
 	// if (state1 && state2 && state3)
 	if (state1)
 	{
-		if (++su16_AntiShake_Cnt1 >= 10 * 2)
+		if (++su16_AntiShake_Cnt1 >= 5 * 2)
 		{
 			su16_AntiShake_Cnt1 = 0;
 			entersleep(DEEP_MODE);
-
-			BSP_Printf("switch deep sleep\n");
 		}
 	}
 	else

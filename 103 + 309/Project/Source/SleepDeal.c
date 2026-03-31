@@ -708,10 +708,10 @@ void App_SleepDeal(void)
 		SleepDeal_Normal_Select();
 		break;
 	case SLEEP_HICCUP_NORMAL_L2:
-		SleepDeal_Normal_L2();
+		// SleepDeal_Normal_L2();
 		break;
 	case SLEEP_HICCUP_NORMAL_L3:
-		SleepDeal_Normal_L3();
+		// SleepDeal_Normal_L3();
 		break;
 	// case SLEEP_HICCUP_CONTINUE:
 	// 	SleepDeal_Continue();
@@ -730,7 +730,7 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2500)
+	if (g_stCellInfoReport.u16VCellMin < 2300)
 	{
 		++force_sleep_delay;
 		if (force_sleep_delay >= 60 * 60)
