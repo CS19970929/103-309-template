@@ -1058,21 +1058,21 @@ void InitSCI1_CommonUpper(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	_baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
-    switch (_baud)
-    {
-    case UART_BAUD_9600:
-        UART_BAUD = UART_BAUD_9600;
-        break;
-    case UART_BAUD_19200:
-        UART_BAUD = UART_BAUD_19200;
-        break;
-    case UART_BAUD_115200:
-        UART_BAUD = 115200;
-        break;
-    default:
-        UART_BAUD = 115200;
-        break;
-    }
+	switch (_baud)
+	{
+	case UART_BAUD_9600:
+		UART_BAUD = UART_BAUD_9600;
+		break;
+	case UART_BAUD_19200:
+		UART_BAUD = UART_BAUD_19200;
+		break;
+	case UART_BAUD_115200:
+		UART_BAUD = 115200;
+		break;
+	default:
+		UART_BAUD = 115200;
+		break;
+	}
 
 	// 串口初始化
 	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
@@ -1868,21 +1868,21 @@ void InitSCI2_CommonUpper(void)
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	_Baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
-    switch (_Baud)
-    {
-    case UART_BAUD_9600:
-        UART_BAUD = UART_BAUD_9600;
-        break;
-    case UART_BAUD_19200:
-        UART_BAUD = UART_BAUD_19200;
-        break;
-    case UART_BAUD_115200:
-        UART_BAUD = 115200;
-        break;
-    default:
-        UART_BAUD = 115200;
-        break;
-    }
+	switch (_Baud)
+	{
+	case UART_BAUD_9600:
+		UART_BAUD = UART_BAUD_9600;
+		break;
+	case UART_BAUD_19200:
+		UART_BAUD = UART_BAUD_19200;
+		break;
+	case UART_BAUD_115200:
+		UART_BAUD = 115200;
+		break;
+	default:
+		UART_BAUD = 115200;
+		break;
+	}
 
 	// 串口初始化
 	USART_InitStructure.USART_BaudRate = UART_BAUD;									// 设置串口波特率
@@ -3258,32 +3258,32 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 
 void Sci_WrReg_0x06_ChangeBaud(struct RS485MSG *s)
 {
-    UINT16 u16SciRegData;
+	UINT16 u16SciRegData;
 
-    u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
-    switch (u16SciRegData)
-    {
-    case 1:
-        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_9600);
-        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_9600);
-        break;
-    case 2:
-        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_19200);
-        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_19200);
-        break;
-    case 3:
-        // FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_115200);
-        WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_115200);
-        break;
-    default:
-        break;
-    }
-    // MCU_RESET();
-    InitSCI1_CommonUpper();
-    InitSCI2_CommonUpper();
+	switch (u16SciRegData)
+	{
+	case 1:
+		// FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_9600);
+		WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_9600);
+		break;
+	case 2:
+		// FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_19200);
+		WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_19200);
+		break;
+	case 3:
+		// FlashWriteOneHalfWord(FLASH_ADDR_BAUDchange_ADD, UART_BAUD_115200);
+		WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD, UART_BAUD_115200);
+		break;
+	default:
+		break;
+	}
+	// MCU_RESET();
+	InitSCI1_CommonUpper();
+	InitSCI2_CommonUpper();
 
-    __delay_ms(100);
+	__delay_ms(100);
 }
 
 void InitUSART_CommonUpper(void)
@@ -3390,14 +3390,38 @@ void UART_CLIENT_deal_0x04(struct RS485MSG *s)
 	s->u16Buffer[index++] = SCI_HEAD2;
 	s->u16Buffer[index++] = 0x01;
 
+#if (SNum <= 6)
+	len = 0x23;
 	s->u16Buffer[index++] = len;
 
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < SNum; i++)
 	{
 		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
 		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
+
+	if (OtherElement.u16Sys_SeriesNum < 6)
+	{
+		for (i = OtherElement.u16Sys_SeriesNum; i < 6; i++)
+		{
+			s->u16Buffer[index++] = 0x10;
+			s->u16Buffer[index++] = 0x0e;
+		}
+	}
+#elif (SNum == 7)
+	len = 0x25;
+	s->u16Buffer[index++] = len;
+
+	for (i = 0; i < SNum; i++)
+	{
+		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+#else
+#error "error!!!"
+#endif
 
 	// todo	温度负值待处理	好像没问题，后面测试考虑
 	//	if (g_stCellInfoReport.u16TempMin >= 400)
@@ -3567,17 +3591,44 @@ void UART_CLIENT_deal_0x06(struct RS485MSG *s)
 	s->u16Buffer[index++] = SCI_HEAD2;
 	s->u16Buffer[index++] = 0x02;
 
+#if (SNum <= 6)
+	len = 0x3f;
 	s->u16Buffer[index++] = len;
 
 	u16SciTemp = OtherElement.u16Sys_SeriesNum;
 	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
 
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < SNum; i++)
 	{
 		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
 		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
+
+	if (OtherElement.u16Sys_SeriesNum < 6)
+	{
+		for (i = OtherElement.u16Sys_SeriesNum; i < 6; i++)
+		{
+			s->u16Buffer[index++] = 0x10;
+			s->u16Buffer[index++] = 0x0e;
+		}
+	}
+#elif (SNum == 7)
+	len = 0x41;
+	s->u16Buffer[index++] = len;
+
+	u16SciTemp = OtherElement.u16Sys_SeriesNum;
+	s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+
+	for (i = 0; i < SNum; i++)
+	{
+		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + i);
+		s->u16Buffer[index++] = u16SciTemp & 0x00ff;
+		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
+	}
+#else
+#error "error!!!"
+#endif
 
 	u16SciTemp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
 	// todo	温度负值待处理
