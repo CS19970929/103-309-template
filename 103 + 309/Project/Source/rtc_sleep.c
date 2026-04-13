@@ -19,6 +19,8 @@ static bool isErr_enterRTC(void);
 
 static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
+static uint32_t rtc_sleep_get_period_seconds(void);
+static void rtc_sleep_prepare_rtc(void);
 static bool rtc_monitor_sh367309(void);
 static bool updataData_rtc_sh3x(void);
 static bool updataData_rtc_bq7x(void);
@@ -826,6 +828,7 @@ void get_soc(SOC_T *soc, uint16_t vcell_min, uint16_t vcell_max, uint16_t vcell_
 static void before_wakeup(uint32_t *_sleep_cnt)
 {
     uint8_t temp_soc;
+    uint32_t sleep_period_s;
 
 #define SOC_ERROR 10
     // g_stCellInfoReport.SocElement.u16Soc =  get_rtc_soc();
@@ -844,9 +847,15 @@ static void before_wakeup(uint32_t *_sleep_cnt)
     }
 #else
     // su32_Interval_S_Tcnt += *_sleep_cnt * OtherElement.time_sleep_rtcing;
-    su32_Interval_S_Tcnt += *_sleep_cnt * 5;
+    sleep_period_s = (uint32_t)g_tParam.other.u16Sleep_RTC_WakeUpTime;
+    if (sleep_period_s == 0U)
+    {
+        sleep_period_s = 3U;
+    }
+    sleep_period_s *= 60U;
+    su32_Interval_S_Tcnt += *_sleep_cnt * sleep_period_s;
 
-    if (*_sleep_cnt >= (3600 * 6))
+    if (su32_Interval_S_Tcnt >= (3600 * 6))
     {
         // set_soc_param(soc_update_wakeup.soc_disp, 11, 1);
         log_e("sleep_cnt %d, rtc soc ocv success %d old disp_soc %d, real soc %d\n", *_sleep_cnt, soc_update_wakeup.soc_disp, soc_befor_sleep.soc_disp, soc_befor_sleep.soc_real);
@@ -856,7 +865,7 @@ static void before_wakeup(uint32_t *_sleep_cnt)
         // log_e("sleep cnt %d < %d, no update soc", *_sleep_cnt, g_tParam.dev.time_ocv_soc_rtcing);
         // log_e("sleep cnt %d < %d, no update soc", *_sleep_cnt, g_tParam.dev.time_ocv_soc_rtcing);
     }
-    log_a("sleep time %d", su32_Interval_S_Tcnt);
+    log_a("sleep time %d s", su32_Interval_S_Tcnt);
 #endif
 }
 
@@ -871,6 +880,30 @@ static void before_rtcsleep(void)
     // err_flag_reset();
     // SOC_OCV_Fix2_var_reset();
     // todo before sleep clear all cnt
+}
+
+static uint32_t rtc_sleep_get_period_seconds(void)
+{
+    uint32_t wake_min = (uint32_t)g_tParam.other.u16Sleep_RTC_WakeUpTime;
+
+    if (wake_min == 0U)
+    {
+        wake_min = 3U;
+    }
+
+    return wake_min * 60U;
+}
+
+static void rtc_sleep_prepare_rtc(void)
+{
+    before_rtcsleep();
+
+    Init_RTC();
+    IOstatus_RTCMode();
+    InitWakeUp_RTCMode();
+
+    is_rtc_wakekup = false;
+    g_irq_t = NO_IRQ;
 }
 
 static uint8_t soc_rtc;
@@ -1294,17 +1327,11 @@ void rtc_sleep(void)
             break;
         case HICCUP_MODE:
         {
-            before_rtcsleep();
-
         rtcsleep:
-            Init_RTC();
-            IOstatus_RTCMode();
-            InitWakeUp_RTCMode();
+            rtc_sleep_prepare_rtc();
             // USART_DeInit(USART1);
             // USART_DeInit(USART2);
             // USART_DeInit(USART3);
-            is_rtc_wakekup = false;
-            g_irq_t = NO_IRQ;
             // __delay_ms(100);
 
             Feed_IWatchDog;
@@ -1331,57 +1358,28 @@ void rtc_sleep(void)
 #endif
 
             if (is_rtc_wakekup)
+            {
                 ++sys_time.rtc_sleep_cnt;
-            // deal_wakeup();
+            }
+
             Init();
             log_w("cnt %d", sys_time.rtc_sleep_cnt);
             if (is_rtc_wakekup)
             {
-                // Init();
-                // entersleep(HICCUP_MODE);
-                // 还没更新
-                // getdata_and_analyse()
                 if (isException())
                 {
                     is_rtc_wakekup = false;
-                    // todo wakeup or deep sleep
-                    goto error;
                 }
                 else
                 {
                     update_rtc_soc(&sys_time.rtc_sleep_cnt);
-
-#if 0
-                    // if (sleep_cnt / 3 >= OtherElement.u16Sleep_TimeNormal)
-                    if (sleep_cnt * OtherElement.time_sleep_rtcing / 60 >= OtherElement.u16Sleep_TimeNormal)
-                    // if (sleep_cnt * 20 / 60 >= OtherElement.u16Sleep_TimeNormal)
-                    {
-                        log_e("enter normal sleep");
-                        before_wakeup(&sleep_cnt);
-                        // entersleep(DEEP_MODE);
-                        LogRecord_Flag.bits.Log_Sleep = 1;
-
-                        goto DEEP_SLEEP;
-                    }
-                    // run_idle_and_record();
-#endif
-
-                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt / 3);
-                    // log_i("continue rtc, sleep %ds, %d min sleep\n", OtherElement.time_sleep_rtcing, OtherElement.u16Sleep_TimeNormal - sleep_cnt * OtherElement.time_sleep_rtcing / 60);
-
                     goto rtcsleep;
                 }
             }
-        error:
-            // todo
-            //  deal_exception_and_record();
-            Init();
 
             state_sleep = 0;
             entersleep(NO_SLEEP);
-
             report_wkup_sig();
-
             before_wakeup(&sys_time.rtc_sleep_cnt);
             sys_time.rtc_sleep_cnt = 0;
         }

@@ -175,6 +175,19 @@ static UINT8 RTC_ClockConfig(BOOL need_init)
 
 	return result;
 }
+
+static UINT32 RTC_GetWakeAlarmSeconds(void)
+{
+	UINT32 wake_min = (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime;
+
+	// 0 表示配置缺失，保留一个保守默认值，避免误配后进入极短周期唤醒。
+	if (wake_min == 0U)
+	{
+		wake_min = 3U;
+	}
+
+	return wake_min * 60U;
+}
 void RTC_TimeConfig(void)
 {
 	// GregorianDay(tm);			//计算星期
@@ -230,9 +243,7 @@ void RTC_WKTimeConfig(void)
 	RTC_ITConfig(RTC_IT_ALR, DISABLE);								// 禁止闹钟中断
 	RTC_ClearFlag(RTC_FLAG_ALR);									// 先清标志，避免旧闹钟残留
 	EXTI_ClearITPendingBit(EXTI_Line17);								// 清 EXTI17 悬挂位
-	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + 10); // 唤醒时间
-	RTC_SetAlarm(RTC_GetCounter() + 3); // 唤醒时间
+	RTC_SetAlarm(RTC_GetCounter() + RTC_GetWakeAlarmSeconds()); // 唤醒时间
 	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
 	RTC_WaitForLastTask();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE);	// 打开闹钟中断

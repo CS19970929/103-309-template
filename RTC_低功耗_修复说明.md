@@ -24,6 +24,19 @@
 - 修正 `RTCAlarm_IRQHandler()`，确保真正清除闹钟中断标志。
 - 休眠重新配置闹钟前，先清 EXTI17 和 RTC 闹钟标志，避免旧事件残留。
 
+### 4. RTC 唤醒周期改为配置驱动
+
+- `RTC_WKTimeConfig()` 不再写死 3 秒。
+- 统一读取 `g_tParam.other.u16Sleep_RTC_WakeUpTime`，单位为分钟。
+- 当配置值为 0 时，保留一个保守默认值 3 分钟，避免误配置导致极短周期唤醒。
+
+### 5. `rtc_sleep` 流程收敛
+
+- 将 RTC 进入前的准备动作收敛为 `rtc_sleep_prepare_rtc()`。
+- 将唤醒后的退出动作收敛为统一的清理路径。
+- `sys_time.rtc_sleep_cnt` 仍然表示“RTC 唤醒轮次”，累计总睡眠时长时按“轮次 × 实际唤醒周期”换算，而不是固定 5 秒。
+- `before_wakeup()` 由原来的硬编码秒数改为按实际 RTC 周期累计，避免配置变化后统计失真。
+
 ## 相关文件
 
 - [`103 + 309/Project/Source/RTC.c`](103%20+%20309/Project/Source/RTC.c)
@@ -34,3 +47,5 @@
 - 如果板上没有外部 32.768 kHz 晶振，优先让工程走 LSI 兜底。
 - `Init_RTC()` 不要在所有运行路径里无条件重置备份域。
 - 进入 Stop / Standby 前重新配置闹钟时，先清 `RTC_FLAG_ALR` 和 `EXTI_Line17`。
+- `u16Sleep_RTC_WakeUpTime` 是 RTC 唤醒周期，单位是分钟，不要和“进入 RTC 休眠的等待时长”混用。
+- `sys_time.rtc_sleep_cnt` 是唤醒次数，统计累计睡眠时长时要乘实际 RTC 周期。
