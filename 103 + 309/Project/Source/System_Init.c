@@ -12,119 +12,129 @@ UINT8 gu8_200msAccClock_Flag = 0;
 UINT8 gu8_200msAccClock_Flag2 = 0;
 UINT8 gu8_1000msAccClock_Flag = 0;
 
-static UINT8 fac_us = 0; // usÑÓÊ±±¶³ËÊı
+static UINT8 fac_us = 0; // uså»¶æ—¶å€ä¹˜æ•°
 static UINT16 fac_ms = 0;
 
-// Ê¹ÓÃLSI
+static void EnableLowPowerDebug(void)
+{
+#ifdef _DEBUG_
+	DBGMCU->CR |= DBGMCU_CR_DBG_SLEEP;
+	DBGMCU->CR |= DBGMCU_CR_DBG_STOP;
+	DBGMCU->CR |= DBGMCU_CR_DBG_STANDBY;
+	DBGMCU->CR |= DBGMCU_CR_DBG_IWDG_STOP;
+	DBGMCU->CR |= DBGMCU_CR_DBG_WWDG_STOP;
+#endif
+}
+
+// ä½¿ç”¨LSI
 void Init_IWDG(void)
 {
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE); // Ê¹ÄÜPWRÍâÉèÊ±ÖÓ£¬´ı»úÄ£Ê½£¬RTC£¬¿´ÃÅ¹·
-	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// ´ò¿ª¶ÀÁ¢¿´ÃÅ¹·¼Ä´æÆ÷²Ù×÷È¨ÏŞ
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE); // ä½¿èƒ½PWRå¤–è®¾æ—¶é’Ÿï¼Œå¾…æœºæ¨¡å¼ï¼ŒRTCï¼Œçœ‹é—¨ç‹—
+	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// æ‰“å¼€ç‹¬ç«‹çœ‹é—¨ç‹—å¯„å­˜å™¨æ“ä½œæƒé™
 #ifndef __FUNC_RTC__
-	IWDG_SetPrescaler(IWDG_Prescaler_64); // Ô¤·ÖÆµÏµÊı
-	IWDG_SetReload(160);				  // ÉèÖÃÖØÔØ¼ÆÊıÖµ£¬k = Xms / (1 / (40KHz/64)) = X/64*40; 4096×î¸ß
+	IWDG_SetPrescaler(IWDG_Prescaler_64); // é¢„åˆ†é¢‘ç³»æ•°
+	IWDG_SetReload(160);				  // è®¾ç½®é‡è½½è®¡æ•°å€¼ï¼Œk = Xms / (1 / (40KHz/64)) = X/64*40; 4096æœ€é«˜
 #else
-	IWDG_SetPrescaler(IWDG_Prescaler_256); // Ô¤·ÖÆµÏµÊı
-	IWDG_SetReload(0x0FFF);				   // ÉèÖÃÖØÔØ¼ÆÊıÖµ£¬k = Xms / (1 / (40KHz/64)) = X/64*40; 4096×î¸ß
-										   // 800¡ª¡ª1.28s£¬80¡ª¡ª128ms
-#endif															// ÉèÖÃÖØÔØ¼ÆÊıÖµ£¬k = Xms / (1 / (40KHz/64)) = X/64*40; 4096×î¸ß
-																// 800¡ª¡ª1.28s£¬80¡ª¡ª128ms
-	IWDG_ReloadCounter();										// Î¹¹·
-	IWDG_Enable();												// Ê¹ÄÜIWDG
-	DBGMCU->CR |= ((uint32_t)0x00000100); /* Debug IWDG Stop */ // STlinkÊ¹ÓÃ
-	DBGMCU->CR |= ((uint32_t)0x00000200);						/* Debug WWDG Stop */
+	IWDG_SetPrescaler(IWDG_Prescaler_256); // é¢„åˆ†é¢‘ç³»æ•°
+	IWDG_SetReload(0x0FFF);				   // è®¾ç½®é‡è½½è®¡æ•°å€¼ï¼Œk = Xms / (1 / (40KHz/64)) = X/64*40; 4096æœ€é«˜
+										   // 800â€”â€”1.28sï¼Œ80â€”â€”128ms
+#endif															// è®¾ç½®é‡è½½è®¡æ•°å€¼ï¼Œk = Xms / (1 / (40KHz/64)) = X/64*40; 4096æœ€é«˜
+																// 800â€”â€”1.28sï¼Œ80â€”â€”128ms
+	IWDG_ReloadCounter();										// å–‚ç‹—
+	IWDG_Enable();												// ä½¿èƒ½IWDG
+	EnableLowPowerDebug();
 }
 
-// ¹ØÓÚNVIC_PriorityGroupConfigÕâ¸öº¯Êı
+// å…³äºNVIC_PriorityGroupConfigè¿™ä¸ªå‡½æ•°
 // https://blog.csdn.net/zhuminzeng/article/details/8880138
-// µÚ0×é£ºËùÓĞ4Î»ÓÃÓÚÖ¸¶¨ÏìÓ¦ÓÅÏÈ¼¶
-// µÚ1×é£º×î¸ß1Î»ÓÃÓÚÖ¸¶¨ÇÀÕ¼Ê½ÓÅÏÈ¼¶£¬×îµÍ3Î»ÓÃÓÚÖ¸¶¨ÏìÓ¦ÓÅÏÈ¼¶
+// ç¬¬0ç»„ï¼šæ‰€æœ‰4ä½ç”¨äºæŒ‡å®šå“åº”ä¼˜å…ˆçº§
+// ç¬¬1ç»„ï¼šæœ€é«˜1ä½ç”¨äºæŒ‡å®šæŠ¢å å¼ä¼˜å…ˆçº§ï¼Œæœ€ä½3ä½ç”¨äºæŒ‡å®šå“åº”ä¼˜å…ˆçº§
 void InitNVIC(void)
 {
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1); // ÖĞ¶ÏÇ¶Ì×Éè¼Æ
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1); // ä¸­æ–­åµŒå¥—è®¾è®¡
 }
 
-// ·ÇPCLK1(×î´ó36MHz)£¬ËùÒÔÎª72MHz
+// éPCLK1(æœ€å¤§36MHz)ï¼Œæ‰€ä»¥ä¸º72MHz
 void InitTimer(void)
 {
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
 	NVIC_InitTypeDef NVIC_InitStructure;
 
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); // Ê±ÖÓ3Ê¹ÄÜ
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); // æ—¶é’Ÿ3ä½¿èƒ½
 
-	// ¶¨Ê±Æ÷TIM3³õÊ¼»¯
+	// å®šæ—¶å™¨TIM3åˆå§‹åŒ–
 	if (0 == System_ErrFlag.u8ErrFlag_HSE)
 	{
-		// TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // ÉèÖÃÓÃÀ´×÷ÎªTIMxÊ±ÖÓÆµÂÊ³ıÊıµÄÔ¤·ÖÆµÖµ¡ª¡ª¼ÆÊı·ÖÆµ
-		TIM_TimeBaseStructure.TIM_Prescaler = 80 - 1; // ÉèÖÃÓÃÀ´×÷ÎªTIMxÊ±ÖÓÆµÂÊ³ıÊıµÄÔ¤·ÖÆµÖµ¡ª¡ª¼ÆÊı·ÖÆµ
+		// TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // è®¾ç½®ç”¨æ¥ä½œä¸ºTIMxæ—¶é’Ÿé¢‘ç‡é™¤æ•°çš„é¢„åˆ†é¢‘å€¼â€”â€”è®¡æ•°åˆ†é¢‘
+		TIM_TimeBaseStructure.TIM_Prescaler = 80 - 1; // è®¾ç½®ç”¨æ¥ä½œä¸ºTIMxæ—¶é’Ÿé¢‘ç‡é™¤æ•°çš„é¢„åˆ†é¢‘å€¼â€”â€”è®¡æ•°åˆ†é¢‘
 	}
 	else
 	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // ÉèÖÃÓÃÀ´×÷ÎªTIMxÊ±ÖÓÆµÂÊ³ıÊıµÄÔ¤·ÖÆµÖµ¡ª¡ª¼ÆÊı·ÖÆµ
+		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // è®¾ç½®ç”¨æ¥ä½œä¸ºTIMxæ—¶é’Ÿé¢‘ç‡é™¤æ•°çš„é¢„åˆ†é¢‘å€¼â€”â€”è®¡æ•°åˆ†é¢‘
 	}
-	TIM_TimeBaseStructure.TIM_Period = 99;					// ÉèÖÃÔÚÏÂÒ»¸ö¸üĞÂÊÂ¼ş×°Èë»î¶¯µÄ×Ô¶¯ÖØ×°ÔØ¼Ä´æÆ÷ÖÜÆÚµÄÖµ
-	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// ÉèÖÃÊ±ÖÓ·Ö¸î:TDTS = Tck_tim¡ª¡ªÊ±ÖÓ·ÖÆµ
-	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // TIMÏòÉÏ¼ÆÊıÄ£Ê½
-																// ÎÒ¿´ÁË£¬ÏòÏÂ¼ÆÊıÊÇ´Ó×Ô¶¯×°ÔØÖµµİ¼õÖÁ0£¬ÏòÉÏ¼ÆÊıÊÇ´Ó0Ôö¼ÓÖÁ×°ÔØÖµ£¬Ò²¾ÍÊÇËµÔÚÖĞ¶ÏÊ±¼äÉÏÃ»Ê²Ã´Çø±ğ
-	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure); // ¸ù¾İÖ¸¶¨µÄ²ÎÊı³õÊ¼»¯TIMxµÄÊ±¼ä»ùÊıµ¥Î»
-	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);		// Çå³ı¸üĞÂÖĞ¶ÏÇëÇóÎ»£¬¾İËµÕâ¸öÄÜ·ÀÖ¹´ò¿ªÖĞ¶ÏË²¼äÁ¢¿Ì½øÈëÖĞ¶Ïº¯Êı
-	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);		// Ê¹ÄÜÖ¸¶¨µÄTIM3ÖĞ¶Ï,ÔÊĞí¸üĞÂÖĞ¶Ï
+	TIM_TimeBaseStructure.TIM_Period = 99;					// è®¾ç½®åœ¨ä¸‹ä¸€ä¸ªæ›´æ–°äº‹ä»¶è£…å…¥æ´»åŠ¨çš„è‡ªåŠ¨é‡è£…è½½å¯„å­˜å™¨å‘¨æœŸçš„å€¼
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// è®¾ç½®æ—¶é’Ÿåˆ†å‰²:TDTS = Tck_timâ€”â€”æ—¶é’Ÿåˆ†é¢‘
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // TIMå‘ä¸Šè®¡æ•°æ¨¡å¼
+																// æˆ‘çœ‹äº†ï¼Œå‘ä¸‹è®¡æ•°æ˜¯ä»è‡ªåŠ¨è£…è½½å€¼é€’å‡è‡³0ï¼Œå‘ä¸Šè®¡æ•°æ˜¯ä»0å¢åŠ è‡³è£…è½½å€¼ï¼Œä¹Ÿå°±æ˜¯è¯´åœ¨ä¸­æ–­æ—¶é—´ä¸Šæ²¡ä»€ä¹ˆåŒºåˆ«
+	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure); // æ ¹æ®æŒ‡å®šçš„å‚æ•°åˆå§‹åŒ–TIMxçš„æ—¶é—´åŸºæ•°å•ä½
+	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);		// æ¸…é™¤æ›´æ–°ä¸­æ–­è¯·æ±‚ä½ï¼Œæ®è¯´è¿™ä¸ªèƒ½é˜²æ­¢æ‰“å¼€ä¸­æ–­ç¬é—´ç«‹åˆ»è¿›å…¥ä¸­æ–­å‡½æ•°
+	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);		// ä½¿èƒ½æŒ‡å®šçš„TIM3ä¸­æ–­,å…è®¸æ›´æ–°ä¸­æ–­
 
-	/*	TIM3 ÖĞ¶ÏÇ¶Ì×Éè¼Æ*/
+	/*	TIM3 ä¸­æ–­åµŒå¥—è®¾è®¡*/
 	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; // ÏÈÕ¼ÓÅÏÈ¼¶0¼¶
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // ´ÓÓÅÏÈ¼¶3¼¶
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; // å…ˆå ä¼˜å…ˆçº§0çº§
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // ä»ä¼˜å…ˆçº§3çº§
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
 
-	TIM_Cmd(TIM3, ENABLE); // Ê¹ÄÜTIMx
+	TIM_Cmd(TIM3, ENABLE); // ä½¿èƒ½TIMx
 }
 
 /*
-HCLK¼´SYSCLK·ÖÆµµÃÀ´£¨ÔÚ´ËÎ´·ÖÆµ£©£¬¼´HCLK==SystemCoreClock
-SysTickÊ±ÖÓÊÇHCLK8·ÖÆµ£¬¼´SysTickÊ±ÖÓÆµÂÊ==HCLK/8==SystemCoreClock/8
+HCLKå³SYSCLKåˆ†é¢‘å¾—æ¥ï¼ˆåœ¨æ­¤æœªåˆ†é¢‘ï¼‰ï¼Œå³HCLK==SystemCoreClock
+SysTickæ—¶é’Ÿæ˜¯HCLK8åˆ†é¢‘ï¼Œå³SysTickæ—¶é’Ÿé¢‘ç‡==HCLK/8==SystemCoreClock/8
 */
 void InitDelay(void)
 {
-	SysTick->CTRL &= ~(1 << 2);			// 1=ÄÚºËÊ±ÖÓ(FCLK)       0=Íâ²¿Ê±ÖÓÔ´(STCLK)
-	fac_us = SystemCoreClock / 8000000; // SysTickÊ±ÖÓÊÇSYSCLK 8·ÖÆµ£¬¼´SysTickÊ±ÖÓÆµÂÊ=SYSCLK/8£¬1usÒª¼ÆµÄ¸öÊıÎª»¹µÃ/1MHz
-	fac_ms = (INT16)fac_us * 1000;		// Ã¿¸ömsĞèÒªµÄsystickÊ±ÖÓÊı
+	SysTick->CTRL &= ~(1 << 2);			// 1=å†…æ ¸æ—¶é’Ÿ(FCLK)       0=å¤–éƒ¨æ—¶é’Ÿæº(STCLK)
+	fac_us = SystemCoreClock / 8000000; // SysTickæ—¶é’Ÿæ˜¯SYSCLK 8åˆ†é¢‘ï¼Œå³SysTickæ—¶é’Ÿé¢‘ç‡=SYSCLK/8ï¼Œ1usè¦è®¡çš„ä¸ªæ•°ä¸ºè¿˜å¾—/1MHz
+	fac_ms = (INT16)fac_us * 1000;		// æ¯ä¸ªmséœ€è¦çš„systickæ—¶é’Ÿæ•°
 }
 
 void __delay_us(UINT32 nus)
 {
 	UINT32 temp;
-	SysTick->LOAD = nus * fac_us;			  // Ê±¼ä¼ÓÔØ
-	SysTick->VAL = 0x00;					  // Çå¿Õ¼ÆÊıÆ÷
-	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // ¿ªÊ¼µ¹Êı
+	SysTick->LOAD = nus * fac_us;			  // æ—¶é—´åŠ è½½
+	SysTick->VAL = 0x00;					  // æ¸…ç©ºè®¡æ•°å™¨
+	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // å¼€å§‹å€’æ•°
 	do
 	{
 		temp = SysTick->CTRL;
-	} while ((temp & 0x01) && !(temp & (1 << 16))); // µÈ´ıÊ±¼äµ½´ï
-	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // ¹Ø±Õ¼ÆÊıÆ÷
-	SysTick->VAL = 0X00;					   // Çå¿Õ¼ÆÊıÆ÷
+	} while ((temp & 0x01) && !(temp & (1 << 16))); // ç­‰å¾…æ—¶é—´åˆ°è¾¾
+	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // å…³é—­è®¡æ•°å™¨
+	SysTick->VAL = 0X00;					   // æ¸…ç©ºè®¡æ•°å™¨
 }
 
-// ×¢ÒânmsµÄ·¶Î§
-// SysTick->LOADÎª24Î»¼Ä´æÆ÷,ËùÒÔ,×î´óÑÓÊ±Îª:
+// æ³¨æ„nmsçš„èŒƒå›´
+// SysTick->LOADä¸º24ä½å¯„å­˜å™¨,æ‰€ä»¥,æœ€å¤§å»¶æ—¶ä¸º:
 // nms<=2^24*8*1000/SYSCLK = 2^24/fac_ms
-// SYSCLKµ¥Î»ÎªHz,nmsµ¥Î»Îªms
-// ¶Ô72MÌõ¼şÏÂ,nms<=1864
-// 48MÎªnms<=2^24/6000 = 2796
-// ÒâË¼¾ÍÊÇ2^24´Î¼ÆÊı¶ÔÓ¦Ê±¼ä³¤¶È(»ùÓÚHCLK/8   )
+// SYSCLKå•ä½ä¸ºHz,nmså•ä½ä¸ºms
+// å¯¹72Mæ¡ä»¶ä¸‹,nms<=1864
+// 48Mä¸ºnms<=2^24/6000 = 2796
+// æ„æ€å°±æ˜¯2^24æ¬¡è®¡æ•°å¯¹åº”æ—¶é—´é•¿åº¦(åŸºäºHCLK/8   )
 void __delay_ms(UINT16 nms)
 {
 	UINT32 temp;
-	SysTick->LOAD = (UINT32)nms * fac_ms;	  // Ê±¼ä¼ÓÔØ(SysTick->LOADÎª24bit)
-	SysTick->VAL = 0x00;					  // Çå¿Õ¼ÆÊıÆ÷
-	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // ¿ªÊ¼µ¹Êı
+	SysTick->LOAD = (UINT32)nms * fac_ms;	  // æ—¶é—´åŠ è½½(SysTick->LOADä¸º24bit)
+	SysTick->VAL = 0x00;					  // æ¸…ç©ºè®¡æ•°å™¨
+	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // å¼€å§‹å€’æ•°
 	do
 	{
 		temp = SysTick->CTRL;
 		Feed_IWatchDog;
-	} while ((temp & 0x01) && !(temp & (1 << 16))); // µÈ´ıÊ±¼äµ½´ï
-	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // ¹Ø±Õ¼ÆÊıÆ÷
-	SysTick->VAL = 0X00;					   // Çå¿Õ¼ÆÊıÆ÷
+	} while ((temp & 0x01) && !(temp & (1 << 16))); // ç­‰å¾…æ—¶é—´åˆ°è¾¾
+	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk; // å…³é—­è®¡æ•°å™¨
+	SysTick->VAL = 0X00;					   // æ¸…ç©ºè®¡æ•°å™¨
 }
 
 void App_SysTime(void)
@@ -148,7 +158,7 @@ void App_SysTime(void)
 
 	g_st_SysTimeFlag.bits.b1Sys1msFlag = 0;
 	if (s_u8Cnt1ms != g_u81msClockCnt)
-	{ // 1ms¶¨Ê±±êÖ¾
+	{ // 1mså®šæ—¶æ ‡å¿—
 		s_u8Cnt1ms = g_u81msClockCnt;
 		g_st_SysTimeFlag.bits.b1Sys1msFlag = 1;
 	}
@@ -159,7 +169,7 @@ void App_SysTime(void)
 	g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 0;
 	if (s_u8Cnt10ms != g_u810msClockCnt)
-	{ // 10ms¶¨Ê±±êÖ¾
+	{ // 10mså®šæ—¶æ ‡å¿—
 		s_u8Cnt10ms = g_u810msClockCnt;
 		switch (g_u810msClockCnt)
 		{
@@ -179,8 +189,8 @@ void App_SysTime(void)
 			break;
 
 		case 3:
-			s_u8Cnt200ms1++; // ±¾ÏëÓÃÒ»¸ö±äÁ¿¸ãÒ»¸öÑ­»·È»ºóÖÃÎ»£¬·¢ÏÖÓĞBUG£¬²»ĞĞ
-			s_u8Cnt200ms2++; // »á³ÖĞø½øÀ´Ò»¸ö10ms£¬±ØĞë¸Ä±ä±êÖ¾Î»ÈÃÆä²»ÔÙ½øÀ´
+			s_u8Cnt200ms1++; // æœ¬æƒ³ç”¨ä¸€ä¸ªå˜é‡æä¸€ä¸ªå¾ªç¯ç„¶åç½®ä½ï¼Œå‘ç°æœ‰BUGï¼Œä¸è¡Œ
+			s_u8Cnt200ms2++; // ä¼šæŒç»­è¿›æ¥ä¸€ä¸ª10msï¼Œå¿…é¡»æ”¹å˜æ ‡å¿—ä½è®©å…¶ä¸å†è¿›æ¥
 			s_u8Cnt200ms3++;
 			s_u8Cnt200ms4++;
 			s_u8Cnt200ms5++;
@@ -203,14 +213,14 @@ void App_SysTime(void)
 	if (s_u8Cnt50ms >= 5)
 	{
 		s_u8Cnt50ms = 0;
-		g_st_SysTimeFlag.bits.b1Sys50msFlag = 1; // 50ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys50msFlag = 1; // 50mså®šæ—¶æ ‡å¿—
 	}
 
 	g_st_SysTimeFlag.bits.b1Sys100msFlag = 0;
 	if (s_u8Cnt100ms >= 10)
 	{
 		s_u8Cnt100ms = 0;
-		g_st_SysTimeFlag.bits.b1Sys100msFlag = 1; // 100ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys100msFlag = 1; // 100mså®šæ—¶æ ‡å¿—
 	}
 
 	g_st_SysTimeFlag.bits.b1Sys200msFlag1 = 0;
@@ -221,27 +231,27 @@ void App_SysTime(void)
 	if (s_u8Cnt200ms1 >= 20)
 	{
 		s_u8Cnt200ms1 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag1 = 1; // 200ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys200msFlag1 = 1; // 200mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt200ms2 >= 20)
 	{
 		s_u8Cnt200ms2 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag2 = 1; // 200ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys200msFlag2 = 1; // 200mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt200ms3 >= 20)
 	{
 		s_u8Cnt200ms3 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag3 = 1; // 200ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys200msFlag3 = 1; // 200mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt200ms4 >= 20)
 	{
 		s_u8Cnt200ms4 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag4 = 1; // 200ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys200msFlag4 = 1; // 200mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt200ms5 >= 20)
 	{
 		s_u8Cnt200ms5 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag5 = 1; // 200ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys200msFlag5 = 1; // 200mså®šæ—¶æ ‡å¿—
 	}
 
 	g_st_SysTimeFlag.bits.b1Sys1000msFlag1 = 0;
@@ -250,17 +260,17 @@ void App_SysTime(void)
 	if (s_u8Cnt1000ms1 >= 100)
 	{
 		s_u8Cnt1000ms1 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag1 = 1; // 1000ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys1000msFlag1 = 1; // 1000mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt1000ms2 >= 100)
 	{
 		s_u8Cnt1000ms2 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag2 = 1; // 1000ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys1000msFlag2 = 1; // 1000mså®šæ—¶æ ‡å¿—
 	}
 	if (s_u8Cnt1000ms3 >= 100)
 	{
 		s_u8Cnt1000ms3 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag3 = 1; // 1000ms¶¨Ê±±êÖ¾
+		g_st_SysTimeFlag.bits.b1Sys1000msFlag3 = 1; // 1000mså®šæ—¶æ ‡å¿—
 		// MCUO_DEBUG_LED2 = !MCUO_DEBUG_LED2;
 	}
 }
@@ -270,13 +280,13 @@ void IWDG_Feed(void)
 	IWDG_ReloadCounter();
 }
 
-// ¶¨Ê±Æ÷3ÖĞ¶Ï·şÎñ³ÌĞò
+// å®šæ—¶å™¨3ä¸­æ–­æœåŠ¡ç¨‹åº
 void TIM3_IRQHandler(void)
-{ // TIM3ÖĞ¶Ï
+{ // TIM3ä¸­æ–­
 	static uint16_t cnt_1000ms = 0;
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
-	{												// ¼ì²éTIM3¸üĞÂÖĞ¶Ï·¢ÉúÓë·ñ
-		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // Çå³ıTIMx¸üĞÂÖĞ¶Ï±êÖ¾
+	{												// æ£€æŸ¥TIM3æ›´æ–°ä¸­æ–­å‘ç”Ÿä¸å¦
+		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // æ¸…é™¤TIMxæ›´æ–°ä¸­æ–­æ ‡å¿—
 		if ((++g_u81msCnt) >= 1)
 		{ // 1ms
 			g_u81msCnt = 0;
