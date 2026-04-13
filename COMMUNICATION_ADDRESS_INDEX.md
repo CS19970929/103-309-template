@@ -21,15 +21,71 @@
 - `u16VCellMax / u16VCellMin`
 - `u16VCellMaxPosition / u16VCellMinPosition`
 - `u16VCellDelta / u16VCellTotle`
-- `u16Temperature[...]`、`u16TempMax / u16TempMin`
+- `u16Temperature[0..9]`，其中 `TEMP_NUM = 10`
+- `u16TempMax / u16TempMin`
 - `u16Ichg / u16IDischg`
 - `SocElement`、三组故障位、均衡标志位
+
+#### 1.1.1 `0xD000` 寄存器级展开
+
+`0xD000` 区按结构体顺序连续输出，共 63 个 halfword，当前对应关系如下：
+
+| 偏移 | 数据 |
+|---|---|
+| 0 ~ 31 | `u16VCell[0..31]` |
+| 32 | `u16VCellMax` |
+| 33 | `u16VCellMin` |
+| 34 | `u16VCellMaxPosition` |
+| 35 | `u16VCellMinPosition` |
+| 36 | `u16VCellDelta` |
+| 37 | `u16VCellTotle` |
+| 38 ~ 47 | `u16Temperature[0..9]` |
+| 48 | `u16TempMax` |
+| 49 | `u16TempMin` |
+| 50 | `u16Ichg` |
+| 51 | `u16IDischg` |
+| 52 | `SocElement.u16Soc` |
+| 53 | `SocElement.u16Soh` |
+| 54 | `SocElement.u16CapacityNow` |
+| 55 | `SocElement.u16CapacityFull` |
+| 56 | `SocElement.u16CapacityFactory` |
+| 57 | `SocElement.u16Cycle_times` |
+| 58 | `unMdlFault_First.all` |
+| 59 | `unMdlFault_Second.all` |
+| 60 | `unMdlFault_Third.all` |
+| 61 | `u16BalanceFlag1` |
+| 62 | `u16BalanceFlag2` |
 
 ### 1.2 `0xD100` 字段顺序
 
 - RTC 时间
 - 三段故障记录及对应 RTC 记录
 - 系统错误位 / 开关机状态
+
+#### 1.2.1 `0xD100` 寄存器级展开
+
+`0xD100` 区当前实现按下面顺序打包。代码里有预留零值寄存器，所以文档以“字段顺序 + 预留位”方式记录，避免和抓包长度混淆。
+
+| 顺序 | 数据 |
+|---|---|
+| 0 | `RTC_time.RTC_Time_Year / RTC_time.RTC_Time_Month` |
+| 1 | `RTC_time.RTC_Time_Day / RTC_time.RTC_Time_Hour` |
+| 2 | `RTC_time.RTC_Time_Minute / RTC_time.RTC_Time_Second` |
+| 3 ~ 4 | `Fault_record_First2` 打包字段 |
+| 5 ~ 6 | `Fault_record_Second2` 打包字段 |
+| 7 ~ 8 | `Fault_record_Third2` 打包字段 |
+| 9 ~ 20 | `System_ErrFlag` 12 个寄存器，按字节对打包 |
+| 21 | `SystemStatus` 低 16 位 |
+| 22 | `SystemStatus` 高 16 位 |
+| 23 | `System_OnOFF_Func` 低 16 位 |
+| 24 | `System_OnOFF_Func` 高 16 位 |
+| 25 ~ 26 | 预留零值寄存器 |
+| 27 | `Heat_Cool_FaultFlag.all` |
+| 28 ~ 33 | 预留零值寄存器 |
+
+### 1.2.2 读区说明
+
+`0xD100` 区的用途不是只做一个单一数据块，而是把 RTC、三段历史故障、系统状态和开关机状态拼在一起，方便上位机一次性读完。
 
 ## 2. `0x06` 单寄存器控制 / 复位
 
@@ -370,14 +426,44 @@
 | 0xFFF2 | `RS485_ADDR_SN_SOFTWARE_VER` | 软件版本 | `Sci_WrRegs_0x10_SN_Version()` |
 | 0xFFFD | `RS485_CMD_ADDR_FLASH_CONNECT` | Flash 更新触发 | `Sci_WrRegs_0x10_FlashConnect()` |
 
-## 4. 读取与写入的索引规则
+## 4. `0xC000 ~ 0xC008` 读区索引
+
+### 4.1 `0xC000` LCD 汇总区
+
+| 顺序 | 数据 |
+|---|---|
+| 0 | 固定版本值 `1` |
+| 1 | 总电压 |
+| 2 | 电流 |
+| 3 | 最高温度 |
+| 4 | SOC |
+
+### 4.2 `0xC001` RTC 区
+
+`0xC001` 作为 RTC 快速读取区，当前主要用于上位机快速拿时间类数据，逻辑上与 `0xD100` 的 RTC 读取一致。
+
+### 4.3 `0xC002` SN / 版本区
+
+| 顺序 | 数据 |
+|---|---|
+| 0 ~ `PRODUCT_ID_LENGTH_MAX-1` | 序列号 |
+| `PRODUCT_ID_LENGTH_MAX` ~ `2*PRODUCT_ID_LENGTH_MAX-1` | 硬件版本 |
+| `2*PRODUCT_ID_LENGTH_MAX` ~ `3*PRODUCT_ID_LENGTH_MAX-1` | 软件版本 |
+
+### 4.4 `0xC008` 事件记录区
+
+| 顺序 | 数据 |
+|---|---|
+| 0 ~ 199 | 100 条事件记录，每条 2 字节 |
+
+## 5. 读取与写入的索引规则
 
 - `0x03`：起始地址决定读区，数据按寄存器连续返回。
 - `0x06`：地址本身就是命令值，单寄存器写后执行控制动作。
 - `0x10`：起始地址决定参数块，寄存器数量决定写入长度。
 - 绝大多数 `0x10` 写入会先改 RAM，再置写标志，最后由后台统一落盘。
 
-## 5. 备注
+## 6. 备注
 
 - `0x2000 ~ 0x205D` 为校准系数区。
 - `0x2100 ~ 0x2140` 为保护参数区。
