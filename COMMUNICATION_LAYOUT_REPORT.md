@@ -763,3 +763,11 @@ flowchart TD
 - [`COMMUNICATION_ADDRESS_INDEX.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_ADDRESS_INDEX.md)
 
 如果后续要继续补细，优先看这份索引，再回到主报告看分组逻辑和读写流程。
+
+## 20. 0x10 详细写地址清单
+
+`0x10` 的子地址已经进一步展开为寄存器级清单，按功能块列出了完整写入地址、宏名和入口函数。
+
+- [`COMMUNICATION_WRITE_DETAIL.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_WRITE_DETAIL.md)
+
+这份文档适合直接给上位机联调、测试和排障使用；如果需要看总览逻辑，仍然先回到本主报告，再跳到地址索引。
