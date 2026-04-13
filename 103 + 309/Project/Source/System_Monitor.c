@@ -8,11 +8,11 @@ volatile union System_Function_StartUp System_Func_StartUp;
 
 void InitSystemMonitorData_EEPROM(void)
 {
-	// ÏµÍ³¹¦ÄÜ¿ØÖÆÀàĞÍ£¬Ô­ÔòÉÏ£¬¹Ø±Õ¹¦ÄÜ²»ÓÃ¹ÜÏÂÃæµÄ£¬Ö»ĞèÒªÕâ¸öÖÃÁã¾ÍºÃ
+	// ç³»ç»ŸåŠŸèƒ½æ§åˆ¶ç±»å‹ï¼ŒåŸåˆ™ä¸Šï¼Œå…³é—­åŠŸèƒ½ä¸ç”¨ç®¡ä¸‹é¢çš„ï¼Œåªéœ€è¦è¿™ä¸ªç½®é›¶å°±å¥½
 	System_OnOFF_Func.all = 0;
-	System_OnOFF_Func.bits.b1OnOFF_Balance = 1; // ÒòÎª¾ùºâ»¹Ã»´¦ÀíºÃ£¬È«ÏµÁĞÆÁ±Î
+	System_OnOFF_Func.bits.b1OnOFF_Balance = 1; // å› ä¸ºå‡è¡¡è¿˜æ²¡å¤„ç†å¥½ï¼Œå…¨ç³»åˆ—å±è”½
 	System_OnOFF_Func.bits.b1OnOFF_BMS_Source = 1;
-	System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1; // ºËĞÄ¹¦ÄÜ
+	System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1; // æ ¸å¿ƒåŠŸèƒ½
 	// System_OnOFF_Func.bits.b1OnOFF_Relay_Rec = 1;
 	System_OnOFF_Func.bits.b1OnOFF_AFE1 = 1;
 	// System_OnOFF_Func.bits.b1OnOFF_AFE2 = 1;
@@ -21,38 +21,38 @@ void InitSystemMonitorData_EEPROM(void)
 	System_OnOFF_Func.bits.b1OnOFF_Cool = 0;
 	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 0;
 
-	// ÏµÍ³¿ª»úÊ±Ğò¿ØÖÆÀàĞÍ
-	System_Func_StartUp.all = 0; // ÖÃ1µÄÔ­ÒòÊÇĞèÒª³õÊ¼»¯µÄÒâË¼£¬ÒâË¼ÊÇÕâ¸ö¹¦ÄÜĞèÒª³õÊ¼»¯£¬ËùÒÔ²»ÓÃ0
+	// ç³»ç»Ÿå¼€æœºæ—¶åºæ§åˆ¶ç±»å‹
+	System_Func_StartUp.all = 0; // ç½®1çš„åŸå› æ˜¯éœ€è¦åˆå§‹åŒ–çš„æ„æ€ï¼Œæ„æ€æ˜¯è¿™ä¸ªåŠŸèƒ½éœ€è¦åˆå§‹åŒ–ï¼Œæ‰€ä»¥ä¸ç”¨0
 	System_Func_StartUp.bits.b1StartUpFlag_SOC = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_Balance = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_Protect = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Relay = 1; // Ã»ÓÃ¼ÌµçÆ÷ÓÃMOS£¬Õâ¸öÖµ¾Í²»¹Ü¾ÍºÃ£¬ÒòÎª³õÊ¼»¯½¨Á¢ÊÇ||£¬ÆäÖĞÒ»¸ö½¨Á¢±ã¿É
+	System_Func_StartUp.bits.b1StartUpFlag_Relay = 1; // æ²¡ç”¨ç»§ç”µå™¨ç”¨MOSï¼Œè¿™ä¸ªå€¼å°±ä¸ç®¡å°±å¥½ï¼Œå› ä¸ºåˆå§‹åŒ–å»ºç«‹æ˜¯||ï¼Œå…¶ä¸­ä¸€ä¸ªå»ºç«‹ä¾¿å¯
 	System_Func_StartUp.bits.b1StartUpFlag_MOS = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_ADC = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_CAN = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_Cool = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Heat = 1;  // Ô­ÔòÉÏ²»ÓÃ£¬ÏÈÁô×Å
+	System_Func_StartUp.bits.b1StartUpFlag_Heat = 1;  // åŸåˆ™ä¸Šä¸ç”¨ï¼Œå…ˆç•™ç€
 	System_Func_StartUp.bits.b1StartUpFlag_BlueT = 1; //
 
-	// ÏµÍ³×´Ì¬¸ú×ÙÀàĞÍ
+	// ç³»ç»ŸçŠ¶æ€è·Ÿè¸ªç±»å‹
 	SystemStatus.all = 0;
-	// SystemStatus.bits.b1Status_SysLimits = 0;		//Ä¬ÈÏÎŞÃÜÂë£¬²»ÏŞÖÆ
-	SystemStatus.bits.b1StartUpBMS = 1;			  // MOS»òÕß½Ó´¥Æ÷ÄÜ´ò¿ªÒâÎ¶×Å³õÊ¼»¯Íê±Ï
-	SystemStatus.bits.b1Status_Relay_PRE = CLOSE; // Ä¬ÈÏÊÇ²»´ò¿ª£¬µ«ÊÇCLOSE²»Ò»¶¨ÊÇµÍµçÆ½
-	SystemStatus.bits.b1Status_Relay_CHG = CLOSE; // È«²¿Ğ´£¬·½±ãÉÏ´«¸øÉÏÎ»»ú£¬²»ĞèÒªÑ¡Í¨ÔÙ¸Ä
+	// SystemStatus.bits.b1Status_SysLimits = 0;		//é»˜è®¤æ— å¯†ç ï¼Œä¸é™åˆ¶
+	SystemStatus.bits.b1StartUpBMS = 1;			  // MOSæˆ–è€…æ¥è§¦å™¨èƒ½æ‰“å¼€æ„å‘³ç€åˆå§‹åŒ–å®Œæ¯•
+	SystemStatus.bits.b1Status_Relay_PRE = CLOSE; // é»˜è®¤æ˜¯ä¸æ‰“å¼€ï¼Œä½†æ˜¯CLOSEä¸ä¸€å®šæ˜¯ä½ç”µå¹³
+	SystemStatus.bits.b1Status_Relay_CHG = CLOSE; // å…¨éƒ¨å†™ï¼Œæ–¹ä¾¿ä¸Šä¼ ç»™ä¸Šä½æœºï¼Œä¸éœ€è¦é€‰é€šå†æ”¹
 	SystemStatus.bits.b1Status_Relay_DSG = CLOSE;
 	SystemStatus.bits.b1Status_Relay_MAIN = CLOSE;
 	SystemStatus.bits.b1Status_MOS_PRE = CLOSE;
 	SystemStatus.bits.b1Status_MOS_CHG = CLOSE;
 	SystemStatus.bits.b1Status_MOS_DSG = CLOSE;
 
-	// ×Ü¸Ğ¾õ£¬Õâ¸ö´æÔÚºÜÂé·³£¬Èç¹û°å×ÓÒÔÇ°ÉÕÁË´úÂë£¬ÔòÕâ¸ö¹Ø±Õ¼ÓÈÈÀäÄı¹¦ÄÜÔòÃ»·¨´¦Àí¡£
-	// µ«ÊÇÆÁ±ÎÁË£¬¼ÙÉè¾ùºâ¹Øµô£¬ÔÙ´ÎÆô¶¯ÓÖ´ò¿ªºÜÂé·³(µ«ÊÇ»ù±¾¶¼ÊÇÒªÇó¾ùºâµÄ)
-	// ×ÛÉÏËùÊö£¬ÏÈÆÁ±Î¹Û²ìÒ»ÏÂ
+	// æ€»æ„Ÿè§‰ï¼Œè¿™ä¸ªå­˜åœ¨å¾ˆéº»çƒ¦ï¼Œå¦‚æœæ¿å­ä»¥å‰çƒ§äº†ä»£ç ï¼Œåˆ™è¿™ä¸ªå…³é—­åŠ çƒ­å†·å‡åŠŸèƒ½åˆ™æ²¡æ³•å¤„ç†ã€‚
+	// ä½†æ˜¯å±è”½äº†ï¼Œå‡è®¾å‡è¡¡å…³æ‰ï¼Œå†æ¬¡å¯åŠ¨åˆæ‰“å¼€å¾ˆéº»çƒ¦(ä½†æ˜¯åŸºæœ¬éƒ½æ˜¯è¦æ±‚å‡è¡¡çš„)
+	// ç»¼ä¸Šæ‰€è¿°ï¼Œå…ˆå±è”½è§‚å¯Ÿä¸€ä¸‹
 	// System_OnOFF_Func.all = (UINT32)ReadEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT);
-	// System_OnOFF_Func.all |= ((UINT32)ReadEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2)<<16);		//ÏÈÀ©´óÎª32Î»ÔÙÒÆÎ»
+	// System_OnOFF_Func.all |= ((UINT32)ReadEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2)<<16);		//å…ˆæ‰©å¤§ä¸º32ä½å†ç§»ä½
 
-	System_OnOFF_Func_StartUpRec.all = System_OnOFF_Func.all; // Èç¹ûÄ³¹¦ÄÜ¿ª»ú²»´ò¿ª£¬ºóĞøÔËĞĞÖĞÍ¾´ò¿ª£¬ÔòĞèÒª³õÊ¼»¯£¬¸ÃÎ»Îª¼ÇÂ¼Î»
+	System_OnOFF_Func_StartUpRec.all = System_OnOFF_Func.all; // å¦‚æœæŸåŠŸèƒ½å¼€æœºä¸æ‰“å¼€ï¼Œåç»­è¿è¡Œä¸­é€”æ‰“å¼€ï¼Œåˆ™éœ€è¦åˆå§‹åŒ–ï¼Œè¯¥ä½ä¸ºè®°å½•ä½
 	if (!System_OnOFF_Func.bits.b1OnOFF_Balance)
 		System_Func_StartUp.bits.b1StartUpFlag_Balance = 0;
 	if (!System_OnOFF_Func.bits.b1OnOFF_Heat)
@@ -60,23 +60,23 @@ void InitSystemMonitorData_EEPROM(void)
 	if (!System_OnOFF_Func.bits.b1OnOFF_Cool)
 		System_Func_StartUp.bits.b1StartUpFlag_Cool = 0;
 	if (!System_OnOFF_Func.bits.b1OnOFF_MOS_Relay)
-	{ // Ã»´ò¿ªMOS¹¦ÄÜ£¬Ôò²»»áÍê³É³õÊ¼»¯£¬´ò¿ª²ÅÄÜ°ÑSystemStatus.bits.b1StartUpBMS¹ØµôÍ¬Ê±´ò¿ªMOS
+	{ // æ²¡æ‰“å¼€MOSåŠŸèƒ½ï¼Œåˆ™ä¸ä¼šå®Œæˆåˆå§‹åŒ–ï¼Œæ‰“å¼€æ‰èƒ½æŠŠSystemStatus.bits.b1StartUpBMSå…³æ‰åŒæ—¶æ‰“å¼€MOS
 		System_Func_StartUp.bits.b1StartUpFlag_MOS = 0;
 		System_Func_StartUp.bits.b1StartUpFlag_Relay = 0;
 	}
 
-	// ÏµÍ³´íÎó¿ØÖÆÀàĞÍ
-	// Õâ¸öÃ»ÓĞ
+	// ç³»ç»Ÿé”™è¯¯æ§åˆ¶ç±»å‹
+	// è¿™ä¸ªæ²¡æœ‰
 }
 
-// Õâ¸öº¯ÊıĞŞ¸ÄÁË£¬ÒªĞŞ¸ÄEEPROMµÄÉÏµç±êÖ¾Î»
+// è¿™ä¸ªå‡½æ•°ä¿®æ”¹äº†ï¼Œè¦ä¿®æ”¹EEPROMçš„ä¸Šç”µæ ‡å¿—ä½
 void SystemMonitorResetData_EEPROM(void)
 {
-	// ÏµÍ³¹¦ÄÜ¿ØÖÆÀàĞÍ
+	// ç³»ç»ŸåŠŸèƒ½æ§åˆ¶ç±»å‹
 	System_OnOFF_Func.all = 0;
 	System_OnOFF_Func.bits.b1OnOFF_Balance = 1;
 	System_OnOFF_Func.bits.b1OnOFF_BMS_Source = 1;
-	System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1; // ºËĞÄ¹¦ÄÜ
+	System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1; // æ ¸å¿ƒåŠŸèƒ½
 	// System_OnOFF_Func.bits.b1OnOFF_Relay_Rec = 1;
 	System_OnOFF_Func.bits.b1OnOFF_AFE1 = 1;
 	// System_OnOFF_Func.bits.b1OnOFF_AFE2 = 1;
@@ -85,8 +85,7 @@ void SystemMonitorResetData_EEPROM(void)
 	System_OnOFF_Func.bits.b1OnOFF_Cool = 1;
 	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 0;
 
-	WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT, (UINT16)(System_OnOFF_Func.all & 0x0000FFFF));
-	WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2, (UINT16)(System_OnOFF_Func.all >> 16));
+	EEPROM_MarkDirty(EEPROM_DIRTY_BLOCK_SYS_FLAG);
 }
 
 UINT16 Sys_FindProtectFilterMax(void)
@@ -95,7 +94,7 @@ UINT16 Sys_FindProtectFilterMax(void)
 	static UINT16 s_u16ProtectFilterMax = 0;
 	if (0 != s_u16ProtectFilterMax)
 	{
-		return s_u16ProtectFilterMax + 2; // ÍÆ³Ù20ms
+		return s_u16ProtectFilterMax + 2; // æ¨è¿Ÿ20ms
 	}
 	for (i = 0; i < 13; ++i)
 	{
@@ -105,36 +104,36 @@ UINT16 Sys_FindProtectFilterMax(void)
 		}
 	}
 	s_u16ProtectFilterMax = 0;
-	return s_u16ProtectFilterMax + 2; // ÍÆ³Ù20ms
+	return s_u16ProtectFilterMax + 2; // æ¨è¿Ÿ20ms
 }
 
-// Ç°Ãæ³õÊ¼»¯£¬Ó²¼ş3s£¬¶ÁEEPROMÒª1s
-// ¿ª»úÊ±Ğò»ã×Ü£¬ADÎÈ¶¨500ms£¬SOC³õÊ¼»¯400ms£¬±£»¤µãÅĞ¶Ï1s(×î´óÖµ)£¬´ò¿ª¹Ü×Ó30ms
-// ¼ÓÆğÀ´´ó¸Å6s
+// å‰é¢åˆå§‹åŒ–ï¼Œç¡¬ä»¶3sï¼Œè¯»EEPROMè¦1s
+// å¼€æœºæ—¶åºæ±‡æ€»ï¼ŒADç¨³å®š500msï¼ŒSOCåˆå§‹åŒ–400msï¼Œä¿æŠ¤ç‚¹åˆ¤æ–­1s(æœ€å¤§å€¼)ï¼Œæ‰“å¼€ç®¡å­30ms
+// åŠ èµ·æ¥å¤§æ¦‚6s
 StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFunction)
 {
 #if 0
 	static UINT16 s_u16SysStartUpCnt_ADC = 0, s_u16SysStartUpCnt_Protect = 0, s_u16SysStartUpCnt_Mos = 0;
 	static UINT16 s_u16SysStartUpCnt_Relay = 0;
-	StartUp_Status result = STARTUP_CONT; // Ö±½ÓÒ»µ¶ÇĞ£¬È«²¿·µ»Ø´ı³õÊ¼»¯Öµ£¬ºóĞø×Ô¼ºÅĞ¶ÏÊÇ·ñÊÇÒÑ¾­³õÊ¼»¯
+	StartUp_Status result = STARTUP_CONT; // ç›´æ¥ä¸€åˆ€åˆ‡ï¼Œå…¨éƒ¨è¿”å›å¾…åˆå§‹åŒ–å€¼ï¼Œåç»­è‡ªå·±åˆ¤æ–­æ˜¯å¦æ˜¯å·²ç»åˆå§‹åŒ–
 
 	switch (SystemFunction)
-	{							  // DelayÀàĞÍÆô¶¯³õÊ¼»¯µÄ»°£¬Íâ²¿º¯Êı±ØĞëÒªÍ¬Ê±ÔËĞĞ£¬²»ÄÜreturn·µ»Ø
-	case SYSTEM_FUNC_STARTUP_ADC: // ±ğµÄÃ»³õÊ¼»¯Íê±ØĞëreturn·µ»Ø½ûÖ¹ÔËĞĞ
+	{							  // Delayç±»å‹å¯åŠ¨åˆå§‹åŒ–çš„è¯ï¼Œå¤–éƒ¨å‡½æ•°å¿…é¡»è¦åŒæ—¶è¿è¡Œï¼Œä¸èƒ½returnè¿”å›
+	case SYSTEM_FUNC_STARTUP_ADC: // åˆ«çš„æ²¡åˆå§‹åŒ–å®Œå¿…é¡»returnè¿”å›ç¦æ­¢è¿è¡Œ
 		if (System_Func_StartUp.bits.b1StartUpFlag_ADC)
-		{ // AD²ÉÑùºÍAFE(ÎÂ¶ÈÎªÖ÷)ÊÇÒ»ÖÂµÄ£¬Í¬Ê±ÔËĞĞ3sºó£¬ÎÈ¶¨£¬ËùÒÔÁôÒ»¸ö¾ÍºÃ
+		{ // ADé‡‡æ ·å’ŒAFE(æ¸©åº¦ä¸ºä¸»)æ˜¯ä¸€è‡´çš„ï¼ŒåŒæ—¶è¿è¡Œ3såï¼Œç¨³å®šï¼Œæ‰€ä»¥ç•™ä¸€ä¸ªå°±å¥½
 			if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-			{ // Ê±»ù±ØĞëÄÚÇ¶£¬²»È»ºÍÍâ²¿Ê±»ùôÛºÏÔÚÒ»Æğ¾ÍÍêÁË
+			{ // æ—¶åŸºå¿…é¡»å†…åµŒï¼Œä¸ç„¶å’Œå¤–éƒ¨æ—¶åŸºç³…åˆåœ¨ä¸€èµ·å°±å®Œäº†
 				if (++s_u16SysStartUpCnt_ADC >= DELAYB10MS_500MS)
-				{								// Õâ¸öĞèÒª¹Û²ìºÍÂË²¨Ëã·¨
-					s_u16SysStartUpCnt_ADC = 0; // ¸ÄÎª1msÊ±»ù£¬ÂË²¨´ÎÊıÒ²¸ÄÎª5´Î
+				{								// è¿™ä¸ªéœ€è¦è§‚å¯Ÿå’Œæ»¤æ³¢ç®—æ³•
+					s_u16SysStartUpCnt_ADC = 0; // æ”¹ä¸º1msæ—¶åŸºï¼Œæ»¤æ³¢æ¬¡æ•°ä¹Ÿæ”¹ä¸º5æ¬¡
 					System_Func_StartUp.bits.b1StartUpFlag_ADC = 0;
 					// MCUO_DEBUG_LED2 = 1;
 				}
 			}
 		}
 		else
-		{ // ÕâÑùĞ´£¬´úÂëµÄĞ§ÂÊÒ²¸ßµÃÒ»Æ¥
+		{ // è¿™æ ·å†™ï¼Œä»£ç çš„æ•ˆç‡ä¹Ÿé«˜å¾—ä¸€åŒ¹
 			result = STARTUP_OVER;
 		}
 		break;
@@ -144,8 +143,8 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		{
 			if (!System_Func_StartUp.bits.b1StartUpFlag_ADC)
 			{
-				// System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;	//ÕâÀï²»ÄÜĞ´³õÊ¼»¯Íê±Ï£¬±ØĞëµÃÖ´ĞĞÍê³õÊ¼»¯º¯Êı²ÅÄÜ
-				result = STARTUP_OVER; // ÊÇ¿É½¨Á¢£¬¶ø·Ç³õÊ¼»¯Íê£¬ÕâÑùĞ´¾Í¶ÔÁË
+				// System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;	//è¿™é‡Œä¸èƒ½å†™åˆå§‹åŒ–å®Œæ¯•ï¼Œå¿…é¡»å¾—æ‰§è¡Œå®Œåˆå§‹åŒ–å‡½æ•°æ‰èƒ½
+				result = STARTUP_OVER; // æ˜¯å¯å»ºç«‹ï¼Œè€Œéåˆå§‹åŒ–å®Œï¼Œè¿™æ ·å†™å°±å¯¹äº†
 			}
 		}
 		else
@@ -159,7 +158,7 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		{
 			if (!System_Func_StartUp.bits.b1StartUpFlag_ADC)
 			{
-				System_Func_StartUp.bits.b1StartUpFlag_Balance = 0; // Õâ¸ö¾ùºâÒ²¿ÉÒÔÕâÃ´Ğ´£¬²»ĞèÒªSOCÄÇÑù
+				System_Func_StartUp.bits.b1StartUpFlag_Balance = 0; // è¿™ä¸ªå‡è¡¡ä¹Ÿå¯ä»¥è¿™ä¹ˆå†™ï¼Œä¸éœ€è¦SOCé‚£æ ·
 			}
 		}
 		else
@@ -178,12 +177,12 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 				if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
 				{
 					if (++s_u16SysStartUpCnt_Protect >= Sys_FindProtectFilterMax())
-					{									// ÒÔ±£»¤×î´óÑÓ³ÙÎª»ù×¼£¬¼ÙÉèÈ«²¿Ğ¡ÓÚ3s
-						s_u16SysStartUpCnt_Protect = 0; //>>ÒÑĞŞ¸ÄÎªÖ±½ÓÑ°ÕÒ×î´óÖµ
+					{									// ä»¥ä¿æŠ¤æœ€å¤§å»¶è¿Ÿä¸ºåŸºå‡†ï¼Œå‡è®¾å…¨éƒ¨å°äº3s
+						s_u16SysStartUpCnt_Protect = 0; //>>å·²ä¿®æ”¹ä¸ºç›´æ¥å¯»æ‰¾æœ€å¤§å€¼
 						System_Func_StartUp.bits.b1StartUpFlag_Protect = 0;
 					}
 				}
-				result = STARTUP_OVER; // Õâ¸öÓĞµãÌØµã£¬Õâ¸öÊÇ²»½öÓĞÇ°Ìá³õÊ¼»¯Ìõ¼ş£¬»¹ĞèÒªÑÓÊ±³õÊ¼»¯ôÛºÏÔÚÒ»Æğ
+				result = STARTUP_OVER; // è¿™ä¸ªæœ‰ç‚¹ç‰¹ç‚¹ï¼Œè¿™ä¸ªæ˜¯ä¸ä»…æœ‰å‰æåˆå§‹åŒ–æ¡ä»¶ï¼Œè¿˜éœ€è¦å»¶æ—¶åˆå§‹åŒ–ç³…åˆåœ¨ä¸€èµ·
 			}
 		}
 		else
@@ -196,15 +195,15 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		if (System_Func_StartUp.bits.b1StartUpFlag_MOS)
 		{
 			if (!System_Func_StartUp.bits.b1StartUpFlag_Protect)
-			{ // ±£»¤½¨Á¢Íê±Ï£¬²ÅÄÜ²Ù×÷MOS
+			{ // ä¿æŠ¤å»ºç«‹å®Œæ¯•ï¼Œæ‰èƒ½æ“ä½œMOS
 				if (!System_Func_StartUp.bits.b1StartUpFlag_Cool)
-				{ // ÀäÄı×Ô¼ìÍê±Ï
+				{ // å†·å‡è‡ªæ£€å®Œæ¯•
 					if (!System_Func_StartUp.bits.b1StartUpFlag_Heat)
-					{ // ¼ÓÈÈ×Ô¼ìÍê±Ï
+					{ // åŠ çƒ­è‡ªæ£€å®Œæ¯•
 						if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag2)
 						{
 							if (++s_u16SysStartUpCnt_Mos >= 3)
-							{ // ÑÓÊ±Ò»ÏÂ
+							{ // å»¶æ—¶ä¸€ä¸‹
 								s_u16SysStartUpCnt_Mos = 0;
 								System_Func_StartUp.bits.b1StartUpFlag_MOS = 0;
 
@@ -227,15 +226,15 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		if (System_Func_StartUp.bits.b1StartUpFlag_Relay)
 		{
 			if (!System_Func_StartUp.bits.b1StartUpFlag_Protect)
-			{ // ±£»¤½¨Á¢Íê±Ï£¬²ÅÄÜ²Ù×÷MOS
+			{ // ä¿æŠ¤å»ºç«‹å®Œæ¯•ï¼Œæ‰èƒ½æ“ä½œMOS
 				if (!System_Func_StartUp.bits.b1StartUpFlag_Cool)
-				{ // ÀäÄı×Ô¼ìÍê±Ï
+				{ // å†·å‡è‡ªæ£€å®Œæ¯•
 					if (!System_Func_StartUp.bits.b1StartUpFlag_Heat)
-					{ // ¼ÓÈÈ×Ô¼ìÍê±Ï
+					{ // åŠ çƒ­è‡ªæ£€å®Œæ¯•
 						if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag3)
 						{
 							if (++s_u16SysStartUpCnt_Relay >= 3)
-							{ // ÑÓÊ±Ò»ÏÂ
+							{ // å»¶æ—¶ä¸€ä¸‹
 								s_u16SysStartUpCnt_Relay = 0;
 								System_Func_StartUp.bits.b1StartUpFlag_Relay = 0;
 
@@ -258,7 +257,7 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		if (System_Func_StartUp.bits.b1StartUpFlag_CAN)
 		{
 			if (0 == System_Func_StartUp.bits.b1StartUpFlag_MOS || 0 == System_Func_StartUp.bits.b1StartUpFlag_Relay)
-			{ // Õâ¸ö||¾«Ëè
+			{ // è¿™ä¸ª||ç²¾é«“
 				System_Func_StartUp.bits.b1StartUpFlag_CAN = 0;
 			}
 		}
@@ -268,7 +267,7 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		}
 		break;
 
-	case SYSTEM_FUNC_STARTUP_COOL: // ÕâÀï²»ÄÜĞ´³õÊ¼»¯Íê±Ï£¬±ØĞëµÃÖ´ĞĞÍê³õÊ¼»¯º¯Êı²ÅÄÜ£¬ºÍSOCÒ»ÖÂ
+	case SYSTEM_FUNC_STARTUP_COOL: // è¿™é‡Œä¸èƒ½å†™åˆå§‹åŒ–å®Œæ¯•ï¼Œå¿…é¡»å¾—æ‰§è¡Œå®Œåˆå§‹åŒ–å‡½æ•°æ‰èƒ½ï¼Œå’ŒSOCä¸€è‡´
 		if (System_Func_StartUp.bits.b1StartUpFlag_Cool)
 		{
 			result = STARTUP_OVER;
@@ -279,7 +278,7 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 		}
 		break;
 
-	case SYSTEM_FUNC_STARTUP_HEAT: // ÕâÀï²»ÄÜĞ´³õÊ¼»¯Íê±Ï£¬±ØĞëµÃÖ´ĞĞÍê³õÊ¼»¯º¯Êı²ÅÄÜ£¬ºÍSOCÒ»ÖÂ
+	case SYSTEM_FUNC_STARTUP_HEAT: // è¿™é‡Œä¸èƒ½å†™åˆå§‹åŒ–å®Œæ¯•ï¼Œå¿…é¡»å¾—æ‰§è¡Œå®Œåˆå§‹åŒ–å‡½æ•°æ‰èƒ½ï¼Œå’ŒSOCä¸€è‡´
 		if (System_Func_StartUp.bits.b1StartUpFlag_Heat)
 		{
 			result = STARTUP_OVER;
@@ -301,7 +300,7 @@ StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFuncti
 	return STARTUP_OVER;
 }
 
-// 0:Ã»´íÎó£¬X£ºÓĞ´íÎó
+// 0:æ²¡é”™è¯¯ï¼ŒXï¼šæœ‰é”™è¯¯
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	UINT8 result = 0;

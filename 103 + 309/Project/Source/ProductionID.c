@@ -38,7 +38,7 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_SerialNumberHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_SerialNumber[i * 2])));
+								  *((UINT16 *)(&ProductionInfor.BMS_SerialNumber[i * 2])));
 		}
 		ProductionInfor.BMS_SerialNumber_WriteFlag = 0;
 	}
@@ -49,7 +49,7 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_HardWareVersionHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_HardWareVersion[i * 2])));
+								  *((UINT16 *)(&ProductionInfor.BMS_HardWareVersion[i * 2])));
 		}
 		ProductionInfor.BMS_HardWareVersion_WriteFlag = 0;
 	}
@@ -60,9 +60,14 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_SoftWareVersionHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_SoftWareVersion[i * 2])));
+								  *((UINT16 *)(&ProductionInfor.BMS_SoftWareVersion[i * 2])));
 		}
 		ProductionInfor.BMS_SoftWareVersion_WriteFlag = 0;
+	}
+
+	if (!ProductionInfor.BMS_SerialNumber_WriteFlag && !ProductionInfor.BMS_HardWareVersion_WriteFlag && !ProductionInfor.BMS_SoftWareVersion_WriteFlag)
+	{
+		EEPROM_ClearDirty(EEPROM_DIRTY_BLOCK_PRODUCT_INFO);
 	}
 }
 
@@ -83,8 +88,11 @@ void WriteProID_Default(void)
 	memcpy(&ProductionInfor.BMS_SerialNumber[0], BMS_SERIAL_NUMBER_DEFAULT, serialNumberCount);
 
 	ProductionInfor.BMS_SerialNumber_WriteFlag = 1;
+	EEPROM_MarkDirty(EEPROM_DIRTY_BLOCK_PRODUCT_INFO);
 	ProductionInfor.BMS_HardWareVersion_WriteFlag = 1;
+	EEPROM_MarkDirty(EEPROM_DIRTY_BLOCK_PRODUCT_INFO);
 	ProductionInfor.BMS_SoftWareVersion_WriteFlag = 1;
+	EEPROM_MarkDirty(EEPROM_DIRTY_BLOCK_PRODUCT_INFO);
 	WriteProID();
 }
 
@@ -108,3 +116,7 @@ void App_ProID_Deal(void)
 		break;
 	}
 }
+
+
+
+

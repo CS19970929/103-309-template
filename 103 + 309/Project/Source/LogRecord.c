@@ -213,6 +213,7 @@ void Sci_WrReg_0x06_Reset_EventRecord(struct RS485MSG *s)
 		BMS_LOG_POINT = 0;
 
 		gu8_Reset_EventRecord = EVENT_RECORD_LENGTH;
+	EEPROM_MarkDirty(EEPROM_DIRTY_BLOCK_EVENT_RECORD);
 	}
 	else
 	{
@@ -283,3 +284,6 @@ void ReadEEPROM_EventRecord_Parameters(void)
 		}
 	}
 }
+
+
+

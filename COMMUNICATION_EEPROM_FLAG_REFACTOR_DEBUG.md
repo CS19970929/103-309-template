@@ -1,12 +1,10 @@
-# 通信写 EEPROM 标志位收敛与 Keil 调试方案
+# 閫氫俊鍐?EEPROM 鏍囧織浣嶆敹鏁涗笌 Keil 璋冭瘯鏂规
 
-本文只讨论一件事：**不改 EEPROM 地址、不改通信地址**，把当前过多的写标志位收敛掉，同时让逻辑更适合 Keil 在线调试。
+鏈枃鍙璁轰竴浠朵簨锛?*涓嶆敼 EEPROM 鍦板潃銆佷笉鏀归€氫俊鍦板潃**锛屾妸褰撳墠杩囧鐨勫啓鏍囧織浣嶆敹鏁涙帀锛屽悓鏃惰閫昏緫鏇撮€傚悎 Keil 鍦ㄧ嚎璋冭瘯銆?
+## 1. 褰撳墠鐜扮姸
 
-## 1. 当前现状
-
-### 1.1 通信写入口
-
-`0x10` 写寄存器最终会进入 `Sci_Deal_WrRegs_0x10()`，再分发到：
+### 1.1 閫氫俊鍐欏叆鍙?
+`0x10` 鍐欏瘎瀛樺櫒鏈€缁堜細杩涘叆 `Sci_Deal_WrRegs_0x10()`锛屽啀鍒嗗彂鍒帮細
 
 - `Sci_WrRegs_0x10_CalibCoef()`
 - `Sci_WrRegs_0x10_Protect()`
@@ -22,12 +20,9 @@
 - `Sci_WrRegs_0x10_SN_Version()`
 - `Sci_WrRegs_0x10_FlashConnect()`
 
-这些函数大多数不是直接写 EEPROM，而是先改 RAM，再把一堆全局写标志位拉起来。
-
-### 1.2 现有写标志
-
-当前写标志比较分散，典型的有：
-
+杩欎簺鍑芥暟澶у鏁颁笉鏄洿鎺ュ啓 EEPROM锛岃€屾槸鍏堟敼 RAM锛屽啀鎶婁竴鍫嗗叏灞€鍐欐爣蹇椾綅鎷夎捣鏉ャ€?
+### 1.2 鐜版湁鍐欐爣蹇?
+褰撳墠鍐欐爣蹇楁瘮杈冨垎鏁ｏ紝鍏稿瀷鐨勬湁锛?
 - `u8E2P_KB_WriteFlag`
 - `u32E2P_Pro_VolCur_WriteFlag`
 - `u32E2P_Pro_Temp_WriteFlag`
@@ -40,158 +35,123 @@
 - `gu8_Reset_EventRecord`
 - `ProductionInfor.BMS_*_WriteFlag`
 
-问题不在于“有标志”，而在于“标志过细、过散、职责混杂”。
+闂涓嶅湪浜庘€滄湁鏍囧織鈥濓紝鑰屽湪浜庘€滄爣蹇楄繃缁嗐€佽繃鏁ｃ€佽亴璐ｆ贩鏉傗€濄€?
+### 1.3 褰撳墠璋冨害鏂瑰紡
 
-### 1.3 当前调度方式
+`App_E2promDeal()` 鐜板湪浼氳疆璇㈣繖浜涙爣蹇楋紝鍙鍛戒腑灏辫皟鐢?`WriteEEPROM_ByteData_Circle()`銆?
+杩欎釜妯″紡鏈韩娌￠敊锛屼絾瀹冪殑闂鏄細
 
-`App_E2promDeal()` 现在会轮询这些标志，只要命中就调用 `WriteEEPROM_ByteData_Circle()`。
+- 涓婂眰閫氫俊鍜屼笅灞傚瓨鍌ㄨ€﹀悎澶繁
+- 鏍囧織浣嶅鍒伴毦浠ヤ竴鐪肩湅鎳?- Keil 璋冭瘯鏃跺緢闅惧垽鏂€滆繖娆″埌搴曡鍐欏摢涓€鍧椻€?
+## 2. 鐩爣
 
-这个模式本身没错，但它的问题是：
+鐩爣淇濇寔寰堟槑纭細
 
-- 上层通信和下层存储耦合太深
-- 标志位多到难以一眼看懂
-- Keil 调试时很难判断“这次到底该写哪一块”
+- EEPROM 鍦板潃涓嶅彉
+- 閫氫俊瀵勫瓨鍣ㄥ湴鍧€涓嶅彉
+- 鍙傛暟鍚箟涓嶅彉
+- 浣嗗啓鍏ラ€昏緫鏇寸畝鍗?- 鏇寸ǔ瀹?- 鏇撮€傚悎 Keil 鍦ㄧ嚎璋冭瘯
 
-## 2. 目标
-
-目标保持很明确：
-
-- EEPROM 地址不变
-- 通信寄存器地址不变
-- 参数含义不变
-- 但写入逻辑更简单
-- 更稳定
-- 更适合 Keil 在线调试
-
-## 3. 推荐的收敛方案
-
-### 3.1 只保留“块级 dirty”
-
-建议把所有写标志收敛成一个总 dirty 掩码，例如：
+## 3. 鎺ㄨ崘鐨勬敹鏁涙柟妗?
+### 3.1 鍙繚鐣欌€滃潡绾?dirty鈥?
+寤鸿鎶婃墍鏈夊啓鏍囧織鏀舵暃鎴愪竴涓€?dirty 鎺╃爜锛屼緥濡傦細
 
 - `u32EepromDirtyMask`
 
-每一位代表一个大块：
+姣忎竴浣嶄唬琛ㄤ竴涓ぇ鍧楋細
 
-- bit0: 校准块
-- bit1: 保护块
-- bit2: RTC 块
-- bit3: SOC 表块
-- bit4: 铜损块
-- bit5: OtherElement1 块
-- bit6: 热管理块
-- bit7: 产品信息块
-- bit8: 事件记录块
-- bit9: AFE 参数块
-- bit10: 偏移量块
-- bit11: 系统功能位块
+- bit0: 鏍″噯鍧?- bit1: 淇濇姢鍧?- bit2: RTC 鍧?- bit3: SOC 琛ㄥ潡
+- bit4: 閾滄崯鍧?- bit5: OtherElement1 鍧?- bit6: 鐑鐞嗗潡
+- bit7: 浜у搧淇℃伅鍧?- bit8: 浜嬩欢璁板綍鍧?- bit9: AFE 鍙傛暟鍧?- bit10: 鍋忕Щ閲忓潡
+- bit11: 绯荤粺鍔熻兘浣嶅潡
 
-通信层只做：
+閫氫俊灞傚彧鍋氾細
 
-1. 更新 RAM
+1. 鏇存柊 RAM
 2. `mark_dirty(block_id)`
 
-EEPROM 层只做：
+EEPROM 灞傚彧鍋氾細
 
-1. 找到 dirty 块
-2. 写一个最小单元
-3. 清掉对应 dirty 位
+1. 鎵惧埌 dirty 鍧?2. 鍐欎竴涓渶灏忓崟鍏?3. 娓呮帀瀵瑰簲 dirty 浣?
+### 3.2 澶у潡鍐嶄繚鐣欏皯閲忓瓙浣嶅浘
 
-### 3.2 大块再保留少量子位图
-
-如果你还想保留“分段写”的优势，可以只给少数大块保留子 mask：
-
+濡傛灉浣犺繕鎯充繚鐣欌€滃垎娈靛啓鈥濈殑浼樺娍锛屽彲浠ュ彧缁欏皯鏁板ぇ鍧椾繚鐣欏瓙 mask锛?
 - `u32ProtectDirtyMask`
 - `u32Other1DirtyMask`
 - `u32HeatCoolDirtyMask`
 - `u32CalibDirtyMask`
 
-这样：
+杩欐牱锛?
+- 澶у潡鍙啓鍙樺姩瀛楁
+- 灏忓潡鐩存帴鏁村潡鍐?- 涓嶉渶瑕佸啀鎵╁睍涓€鍫嗗叏灞€ flag
 
-- 大块只写变动字段
-- 小块直接整块写
-- 不需要再扩展一堆全局 flag
+### 3.3 鏃ф爣蹇楃殑褰掑苟鎬濊矾
 
-### 3.3 旧标志的归并思路
-
-可以这样合并：
-
-| 旧标志 | 建议归属 |
+鍙互杩欐牱鍚堝苟锛?
+| 鏃ф爣蹇?| 寤鸿褰掑睘 |
 |---|---|
-| `u8E2P_KB_WriteFlag` | 校准块 |
-| `u32E2P_Pro_VolCur_WriteFlag` | 保护块 |
-| `u32E2P_Pro_Temp_WriteFlag` | 保护块 |
-| `u32E2P_Pro_Other_WriteFlag` | 保护块 |
-| `u32E2P_OtherElement1_WriteFlag` | OtherElement1 块 |
-| `u32E2P_HeatCool_WriteFlag` | 热管理块 |
-| `u32E2P_RTC_Element_WriteFlag` | RTC 块 |
-| `u8E2P_SocTable_WriteFlag` | SOC 表块 |
-| `u8E2P_CopperLoss_WriteFlag` | 铜损块 |
-| `gu8_Reset_EventRecord` | 事件记录块 |
-| `ProductionInfor.BMS_*_WriteFlag` | 产品信息块 |
+| `u8E2P_KB_WriteFlag` | 鏍″噯鍧?|
+| `u32E2P_Pro_VolCur_WriteFlag` | 淇濇姢鍧?|
+| `u32E2P_Pro_Temp_WriteFlag` | 淇濇姢鍧?|
+| `u32E2P_Pro_Other_WriteFlag` | 淇濇姢鍧?|
+| `u32E2P_OtherElement1_WriteFlag` | OtherElement1 鍧?|
+| `u32E2P_HeatCool_WriteFlag` | 鐑鐞嗗潡 |
+| `u32E2P_RTC_Element_WriteFlag` | RTC 鍧?|
+| `u8E2P_SocTable_WriteFlag` | SOC 琛ㄥ潡 |
+| `u8E2P_CopperLoss_WriteFlag` | 閾滄崯鍧?|
+| `gu8_Reset_EventRecord` | 浜嬩欢璁板綍鍧?|
+| `ProductionInfor.BMS_*_WriteFlag` | 浜у搧淇℃伅鍧?|
 
-### 3.4 最终接口建议
-
-建议最后只保留这类高层接口：
-
+### 3.4 鏈€缁堟帴鍙ｅ缓璁?
+寤鸿鏈€鍚庡彧淇濈暀杩欑被楂樺眰鎺ュ彛锛?
 - `EEPROM_MarkDirty(block_id)`
 - `EEPROM_Process()`
 - `EEPROM_LoadAll()`
 - `EEPROM_WriteWordVerified()`
 - `EEPROM_ReadWord()`
 
-通信层不要再直接调用底层单字节写。
-
-## 4. 推荐的执行流程
-
-### 4.1 通信写流程
-
+閫氫俊灞備笉瑕佸啀鐩存帴璋冪敤搴曞眰鍗曞瓧鑺傚啓銆?
+## 4. 鎺ㄨ崘鐨勬墽琛屾祦绋?
+### 4.1 閫氫俊鍐欐祦绋?
 ```mermaid
 flowchart TD
-    A["收到 0x06/0x10 写命令"] --> B["校验地址和长度"]
-    B --> C["更新 RAM 参数"]
-    C --> D["设置 dirty block / submask"]
-    D --> E["立即应答通信"]
-    E --> F["EEPROM_Process 后台落盘"]
-    F --> G["写成功则清 dirty"]
-    F --> H["写失败则置错误标志"]
+    A["鏀跺埌 0x06/0x10 鍐欏懡浠?] --> B["鏍￠獙鍦板潃鍜岄暱搴?]
+    B --> C["鏇存柊 RAM 鍙傛暟"]
+    C --> D["璁剧疆 dirty block / submask"]
+    D --> E["绔嬪嵆搴旂瓟閫氫俊"]
+    E --> F["EEPROM_Process 鍚庡彴钀界洏"]
+    F --> G["鍐欐垚鍔熷垯娓?dirty"]
+    F --> H["鍐欏け璐ュ垯缃敊璇爣蹇?]
 ```
 
-### 4.2 EEPROM 落盘流程
+### 4.2 EEPROM 钀界洏娴佺▼
 
-1. 只看 dirty mask
-2. 挑一个块
-3. 按块内顺序写
-4. 每次写完回读校验
-5. 成功后清 dirty
-6. 失败则保留 dirty，下一轮继续
+1. 鍙湅 dirty mask
+2. 鎸戜竴涓潡
+3. 鎸夊潡鍐呴『搴忓啓
+4. 姣忔鍐欏畬鍥炶鏍￠獙
+5. 鎴愬姛鍚庢竻 dirty
+6. 澶辫触鍒欎繚鐣?dirty锛屼笅涓€杞户缁?
+杩欐牱鍙互閬垮厤锛?
+- 閫氫俊閲屽爢澶ч噺钀界洏閫昏緫
+- 涓€娆℃€у啓寰堝鍧?- 鍑洪敊鍚庝笉鐭ラ亾鍝竴姝ュ仠浜?
+## 5. Keil 鍦ㄧ嚎璋冭瘯寤鸿
 
-这样可以避免：
-
-- 通信里堆大量落盘逻辑
-- 一次性写很多块
-- 出错后不知道哪一步停了
-
-## 5. Keil 在线调试建议
-
-这一部分是为了你实际下断点好用。
-
-### 5.1 建议重点观察的变量
-
-在 Keil Watch 里优先看这些：
-
+杩欎竴閮ㄥ垎鏄负浜嗕綘瀹為檯涓嬫柇鐐瑰ソ鐢ㄣ€?
+### 5.1 寤鸿閲嶇偣瑙傚療鐨勫彉閲?
+鍦?Keil Watch 閲屼紭鍏堢湅杩欎簺锛?
 - `u32EepromDirtyMask`
 - `u32ProtectDirtyMask`
 - `u32Other1DirtyMask`
 - `u32HeatCoolDirtyMask`
 - `u32CalibDirtyMask`
-- `u8E2P_KB_WriteFlag`  如果还没删干净
+- `u8E2P_KB_WriteFlag`  濡傛灉杩樻病鍒犲共鍑€
 - `gu8_Reset_EventRecord`
 - `System_ErrFlag.u8ErrFlag_Com_EEPROM`
 - `u8FlashUpdateE2PROM`
 - `MCUO_E2PR_WP`
 
-如果先做过渡版本，还可以继续盯：
+濡傛灉鍏堝仛杩囨浮鐗堟湰锛岃繕鍙互缁х画鐩細
 
 - `u32E2P_Pro_VolCur_WriteFlag`
 - `u32E2P_Pro_Temp_WriteFlag`
@@ -199,12 +159,12 @@ flowchart TD
 - `u32E2P_OtherElement1_WriteFlag`
 - `u32E2P_HeatCool_WriteFlag`
 
-### 5.2 建议下断点的位置
+### 5.2 寤鸿涓嬫柇鐐圭殑浣嶇疆
 
-优先下在这些函数上：
+浼樺厛涓嬪湪杩欎簺鍑芥暟涓婏細
 
 1. `Sci_Deal_WrRegs_0x10()`
-2. 对应的 `Sci_WrRegs_0x10_*()` 分发函数
+2. 瀵瑰簲鐨?`Sci_WrRegs_0x10_*()` 鍒嗗彂鍑芥暟
 3. `App_E2promDeal()`
 4. `WriteEEPROM_ByteData_Circle()`
 5. `WriteEEPROM_Word_NoZone()`
@@ -212,73 +172,80 @@ flowchart TD
 7. `ReadEEPROM_ByteData_StartUp()`
 8. `InitData_E2prom()`
 
-### 5.3 观察顺序
+### 5.3 瑙傚療椤哄簭
 
-建议按这个顺序看：
+寤鸿鎸夎繖涓『搴忕湅锛?
+1. 閫氫俊鏀跺埌鍐欏懡浠ゅ悗锛孯AM 鏈夋病鏈夊厛鏀瑰
+2. dirty 浣嶆湁娌℃湁琚纭疆浣?3. `App_E2promDeal()` 鏈夋病鏈夎鍛ㄦ湡璋冪敤
+4. EEPROM 鍐欏嚱鏁版湁娌℃湁鐪熺殑杩涙潵
+5. `MCUO_E2PR_WP` 鏈夋病鏈夊湪閫€鍑烘椂鎭㈠涓?1
+6. `WriteEEPROM_Word_NoZone()` 鍥炶鏄惁涓€鑷?7. 澶辫触鏃堕敊璇爣蹇楁湁娌℃湁璁剧疆
 
-1. 通信收到写命令后，RAM 有没有先改对
-2. dirty 位有没有被正确置位
-3. `App_E2promDeal()` 有没有被周期调用
-4. EEPROM 写函数有没有真的进来
-5. `MCUO_E2PR_WP` 有没有在退出时恢复为 1
-6. `WriteEEPROM_Word_NoZone()` 回读是否一致
-7. 失败时错误标志有没有设置
+### 5.4 Keil 璋冭瘯鎶€宸?
+- 鍦?`Sci_WrRegs_0x10_*()` 閲屽厛瑙傚療 RAM 鏄惁宸茬粡鏇存柊
+- 鍦?`App_E2promDeal()` 閲岀湅 dirty 浣嶆槸鍚﹁娑堣€?- 鍦?`WriteEEPROM_Byte()` 閲岀湅 WP 寮曡剼鏄惁鍦ㄥ紓甯歌矾寰勪笂鎭㈠
+- 鍦?`WriteEEPROM_Word_NoZone()` 閲岀湅 `result` 鍜?`tmp16` 鏄惁涓€鑷?- 濡傛灉鎬€鐤戝湴鍧€鍐欓敊锛岀洿鎺ョ湅 `addr` 鍜屽搴旂殑 RAM 瀛楁鍊?
+## 6. 寤鸿鐨勮繃娓℃柟妗?
+涓嶅缓璁竴涓嬪瓙鎶婃墍鏈夋棫 flag 鍒犲厜銆?
+鏇寸ǔ鐨勬柟寮忔槸涓夋璧帮細
 
-### 5.4 Keil 调试技巧
+### 绗竴姝?
+鏂板锛?
+- 鎬?dirty mask
+- 鍧楃骇澶勭悊鍑芥暟
+- 鏂扮殑缁熶竴璋冨害鍏ュ彛
 
-- 在 `Sci_WrRegs_0x10_*()` 里先观察 RAM 是否已经更新
-- 在 `App_E2promDeal()` 里看 dirty 位是否被消耗
-- 在 `WriteEEPROM_Byte()` 里看 WP 引脚是否在异常路径上恢复
-- 在 `WriteEEPROM_Word_NoZone()` 里看 `result` 和 `tmp16` 是否一致
-- 如果怀疑地址写错，直接看 `addr` 和对应的 RAM 字段值
+### 绗簩姝?
+璁?`Sci_WrRegs_0x10_*()` 鍙礋璐ｏ細
 
-## 6. 建议的过渡方案
+- 鏇存柊 RAM
+- 璁剧疆鏂?dirty 浣?
+鏃?flag 鍏堜繚鐣欎竴娈垫椂闂达紝渚夸簬瀵圭収璋冭瘯銆?
+### 绗笁姝?
+纭鏂版祦绋嬬ǔ瀹氬悗锛屽啀閫愭鍒犳帀锛?
+- 瀛楁绾у啓鏍囧織
+- 澶氫綑鐨?`else if` 鍒嗘敮
+- 鏃х殑鏁ｄ贡鍐欏叆鍙?
+## 7. 鏈€缁堝缓璁?
+濡傛灉瑕佸吋椤锯€滃畨鍏ㄣ€佺ǔ瀹氥€佺畝鍗曘€佸ソ璋冭瘯鈥濓紝鎴戝缓璁渶缁堢粨鏋勬槸锛?
+- 鍦板潃琛ㄤ笉鍙?- 閫氫俊鍦板潃涓嶅彉
+- 鍙繚鐣欏潡绾?dirty
+- 灏戦噺鍧椾繚鐣欏瓙 mask
+- EEPROM 鍚庡彴缁熶竴澶勭悊
+- Keil 閲岄噸鐐圭洴 dirty銆乄P銆佸啓鍥炵粨鏋滃拰閿欒鏍囧織
 
-不建议一下子把所有旧 flag 删光。
+杩欐瘮鐜板湪鐨勬柟寮忔洿瀹规槗缁存姢锛屼篃鏇村鏄撳畾浣嶉€氫俊鍐?EEPROM 鐨勯棶棰樸€?
+## 7. 旧标志与新标志对照
 
-更稳的方式是三步走：
-
-### 第一步
-
-新增：
-
-- 总 dirty mask
-- 块级处理函数
-- 新的统一调度入口
-
-### 第二步
-
-让 `Sci_WrRegs_0x10_*()` 只负责：
-
-- 更新 RAM
-- 设置新 dirty 位
-
-旧 flag 先保留一段时间，便于对照调试。
-
-### 第三步
-
-确认新流程稳定后，再逐步删掉：
-
-- 字段级写标志
-- 多余的 `else if` 分支
-- 旧的散乱写入口
-
-## 7. 最终建议
-
-如果要兼顾“安全、稳定、简单、好调试”，我建议最终结构是：
-
-- 地址表不变
-- 通信地址不变
-- 只保留块级 dirty
-- 少量块保留子 mask
-- EEPROM 后台统一处理
-- Keil 里重点盯 dirty、WP、写回结果和错误标志
-
-这比现在的方式更容易维护，也更容易定位通信写 EEPROM 的问题。
-
-## 7. �ɱ�־���±�־����
-
-�����Ҫ�����滻��ǰ���ֶμ�д��־������ֱ�ӿ���ݶ��ձ���
+如果你要逐项替换当前的字段级写标志，可以直接看这份对照表：
 
 - [COMMUNICATION_EEPROM_FLAG_MAPPING.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_MAPPING.md)
+
+
+## 8. 当前代码落地状态
+
+截至本轮修改，以下内容已经接入代码：
+
+- u32EepromDirtyMask、EEPROM_MarkDirty()、EEPROM_ClearDirty()、EEPROM_GetDirtyMask() 已加入
+- 校准、保护、RTC、SOC 表、铜损、OtherElement1、热管理、产品信息、事件记录的写入口已接到块级 dirty
+- RTC / SOC / CopperLoss 的后台写分支已恢复，避免写请求卡死
+- WriteProID() 已在写完后自动清除产品信息 dirty
+
+### 8.1 本轮新增落地
+
+- `System_OnOFF_Func` 的保存已改为 `EEPROM_DIRTY_BLOCK_SYS_FLAG`，通信侧不再直接写 `EEPROM_ADDR_SYS_FUNC_SELECT`
+- `DataLoad_CurrentCali_startup()` 生成的偏移值已改为 `EEPROM_DIRTY_BLOCK_OFFSET`
+- `App_E2promDeal()` 现在统一轮询 `u32EepromDirtyMask` 和旧写标志，Keil 里可直接观察 `u32EepromDirtyMask`
+- `DataLoad_CurrentCali_startup()` 内部会主动刷新 `OFFSET` dirty，避免首次校准只改 RAM 不落盘
+
+### 8.2 调试优先级
+
+Keil 在线调试时优先观察：
+
+1. `u32EepromDirtyMask`
+2. `g_u16CurrentCaliOffsetValue`
+3. `System_OnOFF_Func.all`
+4. `u8E2P_KB_WriteFlag`
+5. `u32E2P_Pro_VolCur_WriteFlag`
+6. `gu8_Reset_EventRecord`
 
