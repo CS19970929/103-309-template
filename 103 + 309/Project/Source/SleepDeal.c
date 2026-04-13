@@ -635,22 +635,6 @@ void SleepDeal_Shift(void)
 	}
 }
 
-void SleepDeal_Test(void)
-{
-	static UINT16 s_u16HaltTestCnt = 0;
-	if (!Sleep_Mode.bits.b1TestSleep)
-	{ // 加强雍余设�??
-		Sleep_Status = SLEEP_HICCUP_SHIFT;
-		return;
-	}
-
-	if (++s_u16HaltTestCnt >= 2)
-	{ // 10s——Test
-		s_u16HaltTestCnt = 0;
-		Sleep_Status = SLEEP_HICCUP_CONTINUE;
-	}
-}
-
 void IsSleepStartUp(void)
 {
 	switch (FlashReadOneHalfWord(FLASH_ADDR_SLEEP_FLAG))
@@ -685,7 +669,6 @@ void IsSleepStartUp(void)
 		}
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
-		// 不作处理
 		break;
 	default:
 		break;

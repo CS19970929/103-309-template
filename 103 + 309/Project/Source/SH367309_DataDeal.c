@@ -54,10 +54,18 @@ void Refresh_Parameters(void)
 
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	/* 串数 */
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
+	{
+		AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
+		temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
+		if (temp > 0xFF)
+		{
+			temp = 0xFF;
+		}
+		AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = (UINT8)temp;
+	}
 
-	/* 充电过压 */
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) >> 8) & 0x3;
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) & 0x00FF;
 	/* 充电过压延时时间 */
