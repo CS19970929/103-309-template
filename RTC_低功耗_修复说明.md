@@ -43,6 +43,12 @@
 - 日志会包含 `is_rtc_wakekup`、`sys_time.rtc_sleep_cnt`、`RTC_FLAG_ALR`、`EXTI_Line17` 和备份寄存器值。
 - 这可以直接用于判断问题是在“闹钟没挂上”、“闹钟到了但 EXTI 没清掉”，还是“唤醒后上层状态机没有继续往下走”。
 
+### 7. 去掉 `goto` 型回睡控制
+
+- HICCUP 模式的 RTC 回睡流程改成 `rtc_sleep_run_hiccup_cycle()`。
+- 外层通过 `while (...)` 控制是否继续回到 RTC 睡眠，不再依赖 `goto rtcsleep`。
+- 这样更容易看清“一次 RTC 周期做了什么”，也方便后续插入额外的唤醒后处理逻辑。
+
 ## 相关文件
 
 - [`103 + 309/Project/Source/RTC.c`](103%20+%20309/Project/Source/RTC.c)
@@ -56,3 +62,4 @@
 - `u16Sleep_RTC_WakeUpTime` 是 RTC 唤醒周期，单位是分钟，不要和“进入 RTC 休眠的等待时长”混用。
 - `sys_time.rtc_sleep_cnt` 是唤醒次数，统计累计睡眠时长时要乘实际 RTC 周期。
 - 如果怀疑卡在 RTC 流程，优先看 `rtc_sleep_dump_state()` 的三处日志：`enter`、`wake`、`exit`。
+- 如果后续要加新的 RTC 唤醒后动作，建议放进 `rtc_sleep_run_hiccup_cycle()`，不要再把控制流拉回到 `goto`。

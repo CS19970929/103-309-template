@@ -22,6 +22,7 @@ static void before_rtcsleep(void);
 static uint32_t rtc_sleep_get_period_seconds(void);
 static void rtc_sleep_prepare_rtc(void);
 static void rtc_sleep_dump_state(const char *stage);
+static bool rtc_sleep_run_hiccup_cycle(void);
 static bool rtc_monitor_sh367309(void);
 static bool updataData_rtc_sh3x(void);
 static bool updataData_rtc_bq7x(void);
@@ -46,6 +47,7 @@ static SOC_T soc_befor_sleep;
 static SOC_T soc_update_wakeup;
 
 static enum _SLEEP_MODE g_sleepModeSelect = NO_SLEEP;
+static uint8_t state_sleep = 0;
 bool is_wakeup = false;
 
 void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
@@ -910,6 +912,66 @@ static void rtc_sleep_dump_state(const char *stage)
           (unsigned int)BKP_ReadBackupRegister(BKP_DR1));
 }
 
+static bool rtc_sleep_run_hiccup_cycle(void)
+{
+    rtc_sleep_prepare_rtc();
+    rtc_sleep_dump_state("enter");
+    // USART_DeInit(USART1);
+    // USART_DeInit(USART2);
+    // USART_DeInit(USART3);
+    // __delay_ms(100);
+
+    Feed_IWatchDog;
+    Sys_StopMode();
+    Feed_IWatchDog;
+
+    // DISABLE_INT();
+#if 1
+#if defined(UART1_WAKEUP_ENABLE)
+    exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+    exti_conf(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(RS485_WAKEUP_ENABLE)
+    exti_conf(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
+#endif
+    // exti_conf(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
+    // exti_conf(EXTI_Line0, EXTI_Trigger_Rising, DISABLE);
+    // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
+    // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
+    RTC_ITConfig(RTC_IT_ALR, DISABLE);
+    exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
+#endif
+
+    if (is_rtc_wakekup)
+    {
+        ++sys_time.rtc_sleep_cnt;
+        rtc_sleep_dump_state("wake");
+    }
+
+    Init();
+    log_w("cnt %d", sys_time.rtc_sleep_cnt);
+    if (is_rtc_wakekup && !isException())
+    {
+        update_rtc_soc(&sys_time.rtc_sleep_cnt);
+        return true;
+    }
+
+    if (is_rtc_wakekup)
+    {
+        is_rtc_wakekup = false;
+    }
+
+    state_sleep = 0;
+    rtc_sleep_dump_state("exit");
+    entersleep(NO_SLEEP);
+    report_wkup_sig();
+    before_wakeup(&sys_time.rtc_sleep_cnt);
+    sys_time.rtc_sleep_cnt = 0;
+    return false;
+}
+
 static uint8_t soc_rtc;
 
 static uint8_t array_soc[5];
@@ -1293,8 +1355,6 @@ void rtc_sleep(void)
 
     BQ769x0_SleepMode_Ctrl();
 
-    static uint8_t state_sleep = 0;
-
     switch (state_sleep)
     {
     case 0:
@@ -1331,64 +1391,9 @@ void rtc_sleep(void)
             break;
         case HICCUP_MODE:
         {
-        rtcsleep:
-            rtc_sleep_prepare_rtc();
-            rtc_sleep_dump_state("enter");
-            // USART_DeInit(USART1);
-            // USART_DeInit(USART2);
-            // USART_DeInit(USART3);
-            // __delay_ms(100);
-
-            Feed_IWatchDog;
-            Sys_StopMode();
-            Feed_IWatchDog;
-
-            // DISABLE_INT();
-#if 1
-#if defined(UART1_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(UART2_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(RS485_WAKEUP_ENABLE)
-            exti_conf(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
-#endif
-            // exti_conf(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
-            // exti_conf(EXTI_Line0, EXTI_Trigger_Rising, DISABLE);
-            // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
-            // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
-            RTC_ITConfig(RTC_IT_ALR, DISABLE);
-            exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
-#endif
-
-            if (is_rtc_wakekup)
+            while (rtc_sleep_run_hiccup_cycle())
             {
-                ++sys_time.rtc_sleep_cnt;
-                rtc_sleep_dump_state("wake");
             }
-
-            Init();
-            log_w("cnt %d", sys_time.rtc_sleep_cnt);
-            if (is_rtc_wakekup)
-            {
-                if (isException())
-                {
-                    is_rtc_wakekup = false;
-                }
-                else
-                {
-                    update_rtc_soc(&sys_time.rtc_sleep_cnt);
-                    goto rtcsleep;
-                }
-            }
-
-            state_sleep = 0;
-            rtc_sleep_dump_state("exit");
-            entersleep(NO_SLEEP);
-            report_wkup_sig();
-            before_wakeup(&sys_time.rtc_sleep_cnt);
-            sys_time.rtc_sleep_cnt = 0;
         }
         break;
         case DEEP_MODE:
