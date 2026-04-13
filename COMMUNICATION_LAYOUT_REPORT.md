@@ -668,3 +668,90 @@ flowchart TD
 - `0x10` 主要负责“参数写入”，先改内存，再置写标志，最后由后台统一落盘。
 - AFE 参数是独立闭环，通信地址和 EEPROM 落点是一一对应的。
 - Flash 更新是特殊路径，写的是更新标志，不是业务参数。
+
+## 17. 系统功能位速查
+
+`System_OnOFF_Func` 是通信里最容易被上位机误用的状态位集合。`0x06` 的 `SwitchON/SwitchOFF` 和 `BMS_FunctionON/BMS_FunctionOFF` 最终都会操作这组位。
+
+### 17.1 位定义
+
+| 位号 | 成员名 | 含义 | 相关入口 |
+|---|---|---|---|
+| 0 | `b1OnOFF_Balance` | 均衡功能 | `0x06` 开关命令 |
+| 1 | `b1OnOFF_BMS_Source` | BMS 电源相关 | 初始化默认位 |
+| 2 | `b1OnOFF_MOS_Relay` | MOS / 继电器功能 | `0x06` 开关命令 |
+| 3 | `b1OnOFF_Relay_Rec` | 继电器记录位 | 系统内部 |
+| 4 | `b1OnOFF_SOC_Fixed` | SOC 固定功能 | `0x06` 功能开关 |
+| 5 | `b1OnOFF_Heat` | 加热功能 | `0x06` 开关命令 |
+| 6 | `b1OnOFF_Cool` | 冷却功能 | `0x06` 开关命令 |
+| 7 | `b1OnOFF_AFE1` | AFE1 状态 | 初始化默认位 |
+| 8 | `b1OnOFF_AFE2` | AFE2 状态 | 初始化默认位 |
+| 9 | `b1OnOFF_Sleep` | 睡眠功能 | 初始化默认位 / 开关命令 |
+| 10 | `b1OnOFF_SOC_Zero` | SOC 清零 | `0x06` 功能开关 |
+
+### 17.2 当前默认状态
+
+从 `System_Monitor.c` 的初始化逻辑可以看到，当前工程默认大致是：
+
+- `Balance = 1`
+- `BMS_Source = 1`
+- `MOS_Relay = 1`
+- `AFE1 = 1`
+- `Sleep = 1`
+- `Heat = 1`
+- `Cool = 0` 或按初始化路径设定
+- `SOC_Fixed = 0`
+
+这意味着：
+
+- 很多功能默认是打开的，上位机写 `OFF` 时需要确认不会与系统启动逻辑冲突。
+- `BMS_FunctionON/OFF` 不只是简单开关，还会影响启动验证标记 `System_Func_StartUp`。
+
+### 17.3 开关命令和功能位关系
+
+| `0x06` 命令值 | 功能位 | 行为 |
+|---|---|---|
+| `1` | 均衡 | 设置/清除 `b1OnOFF_Balance` |
+| `2` | BMS Source | 设置/清除 `b1OnOFF_BMS_Source` |
+| `3` | MOS / Relay | 设置/清除 `b1OnOFF_MOS_Relay` |
+| `4` | Relay Rec | 设置/清除 `b1OnOFF_Relay_Rec` |
+| `5` | SOC Fixed | 设置/清除 `b1OnOFF_SOC_Fixed` |
+| `6` | Heat | 设置/清除 `b1OnOFF_Heat` |
+| `7` | Cool | 设置/清除 `b1OnOFF_Cool` |
+| `8` | AFE1 | 设置/清除 `b1OnOFF_AFE1` |
+| `9` | AFE2 | 设置/清除 `b1OnOFF_AFE2` |
+| `10` | Sleep | 设置/清除 `b1OnOFF_Sleep` |
+| `11` | SOC Zero | 设置/清除 `b1OnOFF_SOC_Zero` |
+
+## 18. 事件记录结构
+
+事件记录是一个独立的环形缓冲区，既能通过 `0x03` 读取，也能通过 `0x06` 清空。
+
+### 18.1 记录格式
+
+| 项目 | 值 |
+|---|---|
+| 记录长度 | `100` 条 |
+| 每条记录 | `2` 字节 |
+| 第 1 字节 | 事件号 |
+| 第 2 字节 | 时间间隔编码 |
+
+### 18.2 读取逻辑
+
+`Sci_ACK_0x03_ReadRegs_EventRecord()` 读取顺序是倒序：
+
+- 从当前写指针 `BMS_LOG_POINT` 往前读
+- 读取 `EVENT_RECORD_LENGTH = 100` 条
+- 如果指针回绕，则按环形缓冲处理
+
+### 18.3 清空逻辑
+
+`Sci_WrReg_0x06_Reset_EventRecord()` 会：
+
+- 将 `BMS_LOG_RECORD` 全部清零
+- 将 `BMS_LOG_POINT` 置 0
+- 将 `gu8_Reset_EventRecord` 置为 `EVENT_RECORD_LENGTH`
+
+### 18.4 时间编码
+
+`LogTime_Map()` 会把时间压缩成一个字节存储。当前代码中这部分是事件第二字节的来源，便于在 EEPROM / RAM 中节省空间。
