@@ -182,6 +182,62 @@ AFE 参数区，共 `24` 个寄存器。
 
 `Sci_WrRegs_0x10_*()` 是通信写参数的主路径，写入后通常会同步置位对应的 EEPROM 落盘标志。
 
+### 4.3 `0x06` 控制命令与魔术值
+
+这部分是最容易和上位机联调出问题的地方，建议直接按下面的值核对。
+
+| 命令 | 允许值 | 行为 |
+|---|---|---|
+| `RS485_CMD_ADDR_RESET_CALIB_COEF` | `0x55AA` / `0x55AB` / `0x55AC` / `0x55AD` / `0x55AE` / `0x55AF` / `0x55B0` | 复位全部或指定通道的 K/B 校准值 |
+| `RS485_CMD_ADDR_RESET_PROTECT_RECORD` | `0x0001` | 清空故障记录缓存 |
+| `RS485_CMD_ADDR_RESET_PROTECT_ELEMENT` | `0x0001` | 恢复保护参数默认值并触发后台落盘 |
+| `RS485_CMD_ADDR_RESET_OTHER_CANADD` | `0x0001` | 恢复 OtherElement 扩展参数默认值 |
+| `RS485_CMD_ADDR_RESET_HEAT_COOL` | `0x0001` | 恢复加热/冷却参数默认值 |
+| `RS485_CMD_ADDR_SET_ONCE_SOC` | `0 ~ 100` | 设置一次 SOC，写入后由刷新逻辑接管 |
+| `RS485_CMD_ADDR_RESET_AFE_PARAMETERS` | 复位命令值 | 恢复 AFE 参数默认值 |
+| `RS485_CMD_ADDR_RESET_EVENT_RECORD` | 复位命令值 | 清空事件记录 |
+| `RS485_CMD_ADDR_SWITCH_ON` / `RS485_CMD_ADDR_SWITCH_OFF` | `1 ~ 32` | 打开/关闭指定功能位 |
+| `RS485_CMD_ADDR_SYSTEM_FUNCTION_ON` / `RS485_CMD_ADDR_SYSTEM_FUNCTION_OFF` | `1 ~ 32` | BMS 功能开关，带初始化标记 |
+
+其中：
+
+- `0x55AA`：全部校准通道复位
+- `0x55AB`：AFE1 校准复位
+- `0x55AC`：AFE2 校准复位
+- `0x55AD`：VBUS 校准复位
+- `0x55AE`：温度通道校准复位
+- `0x55AF`：放电电流校准复位
+- `0x55B0`：充电电流校准复位
+
+### 4.4 `0x10` 请求字段索引规则
+
+`0x10` 的请求数据按标准 Modbus RTU 风格解析，代码中使用的关键索引如下：
+
+| 字段 | 缓冲区索引 | 说明 |
+|---|---|---|
+| 起始地址 | `u16Buffer[2]` / `u16Buffer[3]` | 高字节在前，低字节在后 |
+| 寄存器数量 | `u16Buffer[4]` / `u16Buffer[5]` | 高字节在前，低字节在后 |
+| 字节数 | `u16Buffer[6]` | 这次写入的数据总字节数 |
+| 写入数据 | `u16Buffer[7]` 起 | 每个寄存器 2 字节，高字节在前 |
+
+因此，后续所有 `Sci_WrRegs_0x10_*()` 基本都按：
+
+- `u16Buffer[3] + (u16Buffer[2] << 8)` 读取起始地址
+- `u16Buffer[5] + (u16Buffer[4] << 8)` 读取寄存器数量
+- `u16Buffer[7...]` 读取实际数据
+
+### 4.5 `0x10` 地址段与函数对应表
+
+| 起始地址 | 处理函数 | 作用 |
+|---|---|---|
+| `0x2400` ~ `0x2417` | `Sci_WrRegs_0x10_AFE_Parameters()` | AFE 参数写入 |
+| `0x2000` 起 | `Sci_WrRegs_0x10_CalibCoef()` | K/B 校准系数 |
+| `0x2100` 起 | `Sci_WrRegs_0x10_Protect()` | 保护参数 |
+| `0x2200` 起 | `Sci_WrRegs_0x10_SocTable()` / `Sci_WrRegs_0x10_CopperLoss()` / `Sci_WrRegs_0x10_RTC()` | SOC 表、铜损、RTC |
+| `0x2300` 起 | `Sci_WrRegs_0x10_Balance()` / `Sci_WrRegs_0x10_SysOther()` / `Sci_WrRegs_0x10_SleepElement()` / `Sci_WrRegs_0x10_SocElement()` / `Sci_WrRegs_0x10_SystemElement()` / `Sci_WrRegs_0x10_HeatCoolElement()` | 扩展参数 |
+| `0xFFF0` ~ `0xFFF2` | `Sci_WrRegs_0x10_SN_Version()` | SN / HW / SW |
+| `0xFFFD` | `Sci_WrRegs_0x10_FlashConnect()` | Flash 更新触发 |
+
 #### 4.2.1 校准参数
 
 写入 `0x2000` 起的 K/B 校准系数。
@@ -299,6 +355,25 @@ CAN 在当前工程中主要是固定 ID 检查帧，不做 RS485 那种寄存�
 | `1200` | 事件指针 | 事件记录更新 |
 | `1500` | SH367309 偏移值 | 电流偏移校准逻辑 |
 
+### 7.1 关键入口对照
+
+| 通信入口 | 最终落点 |
+|---|---|
+| `Sci_WrRegs_0x10_CalibCoef()` | `E2P_ADDR_START_CALIB_K` / `E2P_ADDR_START_CALIB_B` |
+| `Sci_WrRegs_0x10_Protect()` | `E2P_ADDR_E2POS_PROTECT` |
+| `Sci_WrRegs_0x10_SocTable()` | `E2P_ADDR_START_SOC_TABLE` |
+| `Sci_WrRegs_0x10_CopperLoss()` | `E2P_ADDR_START_COPPERLOSS` / `E2P_ADDR_START_COPPERLOSS_NUM` |
+| `Sci_WrRegs_0x10_RTC()` | `E2P_ADDR_E2POS_RTC` |
+| `Sci_WrRegs_0x10_Balance()` | `E2P_ADDR_START_OTHER_ELEMENT1` |
+| `Sci_WrRegs_0x10_SysOther()` | `E2P_ADDR_START_OTHER_ELEMENT1`，并联动系统电流/AFE 参数 |
+| `Sci_WrRegs_0x10_SleepElement()` | `E2P_ADDR_START_OTHER_ELEMENT1` |
+| `Sci_WrRegs_0x10_SocElement()` | `E2P_ADDR_START_OTHER_ELEMENT1` |
+| `Sci_WrRegs_0x10_SystemElement()` | `E2P_ADDR_START_OTHER_ELEMENT1` |
+| `Sci_WrRegs_0x10_HeatCoolElement()` | `E2P_ADDR_E2POS_HEAT_COOL` |
+| `Sci_WrRegs_0x10_SN_Version()` | `E2P_ADDR_E2POS_SERIAL_NUM` / `E2P_ADDR_E2POS_HAEDWARE_VER` / `E2P_ADDR_E2POS_SOFTWARE_VER` |
+| `Sci_WrReg_0x06_BMS_FunctionON()` / `OFF()` | `EEPROM_ADDR_SYS_FUNC_SELECT` |
+| `Sci_WrRegs_0x10_FlashConnect()` | `FLASH_ADDR_UPDATE_FLAG` |
+
 ## 8. 通信相关状态位
 
 通信命令写入后，很多逻辑不会直接立刻刷 EEPROM，而是先置位写标志，等待后台统一落盘。
@@ -317,6 +392,16 @@ CAN 在当前工程中主要是固定 ID 检查帧，不做 RS485 那种寄存�
 - `AFE_PARAM_WRITE_Flag`
 
 这种设计的目的，是把通信写入和 EEPROM 擦写解耦，降低频繁写 EEPROM 的风险。
+
+### 8.1 常见联动行为
+
+以下联动在排查“写了但没生效”时很重要：
+
+- 写保护参数后，通常会联动 `InitData_SOC()`
+- 写 `OtherElement` 或 `SystemElement` 后，会重新计算 `SeriesNum`、`g_u32CS_Res_AFE`
+- 写 `SysOther` 或 `SystemElement` 后，会把 `AFE_PARAM_WRITE_Flag` 置位
+- 写 `SocElement` 后，会刷新 SOC 相关计算数据
+- 写 `BMS_FunctionON/OFF` 后，会同步改 `System_OnOFF_Func` 并写入 `EEPROM_ADDR_SYS_FUNC_SELECT`
 
 ## 9. 初始化与主循环中的通信顺序
 
@@ -338,6 +423,16 @@ CAN 在当前工程中主要是固定 ID 检查帧，不做 RS485 那种寄存�
 - 参数写回处理
 - 事件记录处理
 - Flash 更新处理
+
+### 9.3 运行时入口
+
+`App_CommonUpper()` 会按编译宏分别调度：
+
+- `App_CommonUpperSCI1(&g_stCurrentMsgPtr_SCI1)`
+- `App_CommonUpperSCI2(&g_stCurrentMsgPtr_SCI2)`
+- `App_CommonUpperSCI3(&g_stCurrentMsgPtr_SCI3)`
+
+也就是说，协议框架是共用的，只是物理串口入口不同。
 
 ## 10. 工程地址与构建信息
 
@@ -375,4 +470,3 @@ scatter 文件显示：
 4. AFE 参数是一个独立闭环，通信地址为 `0x2400 ~ 0x2417`，EEPROM 落点从 `3000` 开始。
 5. CAN 目前主要承担检查帧和状态发送，不是主寄存器型协议。
 6. 工程应用区从 `0x08004800` 开始，当前 ROM 约 `52.30KB`。
-
