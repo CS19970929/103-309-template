@@ -563,3 +563,108 @@ scatter 文件显示：
 6. 复位类命令是否使用了正确的魔术值，例如 `0x55AA`、`0x0001`。
 7. `BMS_FunctionON/OFF` 是否已经写入 `EEPROM_ADDR_SYS_FUNC_SELECT`。
 8. `FlashConnect` 是否真的写到了 `FLASH_ADDR_UPDATE_FLAG`，并且后续流程进入 IAP。
+
+## 15. 按模块的地址总表
+
+这一节把地址按功能模块重新聚合，便于直接按业务查找。
+
+### 15.1 校准模块
+
+| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+|---|---|---|---|
+| `0x2000` 起 | 电芯/AFE/总压/电流/温度校准 | `154` / `248` 等 | `Sci_WrRegs_0x10_CalibCoef()` |
+| `0x55AA` | 全部校准复位 | `154` / `248` 等 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55AB` | AFE1 校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55AC` | AFE2 校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55AD` | VBUS 校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55AE` | 温度校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55AF` | 放电电流校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+| `0x55B0` | 充电电流校准复位 | 对应通道 | `Sci_WrReg_0x06_Reset_CalibCoef()` |
+
+### 15.2 保护模块
+
+| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+|---|---|---|---|
+| `0x2100` 起 | 电压/温度/电流/其他保护参数 | `0` | `Sci_WrRegs_0x10_Protect()` |
+| `0x0001` | 保护参数复位 | `0` | `Sci_WrReg_0x06_Reset_ProtectElement()` |
+| `0x0001` | 故障记录清空 | `490` | `Sci_WrReg_0x06_Reset_ProtectRecord()` |
+
+### 15.3 运行参数模块
+
+| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+|---|---|---|---|
+| `0x2200` | SOC 表 | `342` | `Sci_WrRegs_0x10_SocTable()` |
+| `0x2200` | CopperLoss / Num | `426` / `458` | `Sci_WrRegs_0x10_CopperLoss()` |
+| `0x2200` | RTC | `130` | `Sci_WrRegs_0x10_RTC()` |
+| `0x2300` | 均衡参数 | `676` | `Sci_WrRegs_0x10_Balance()` |
+| `0x2300` | 系统参数 | `676` | `Sci_WrRegs_0x10_SysOther()` |
+| `0x2300` | 睡眠参数 | `676` | `Sci_WrRegs_0x10_SleepElement()` |
+| `0x2300` | SOC 扩展 | `790` | `Sci_WrRegs_0x10_SocElement()` |
+| `0x2300` | 系统串数/检流/预充 | `676` | `Sci_WrRegs_0x10_SystemElement()` |
+| `0x2300` | 热管理参数 | `740` | `Sci_WrRegs_0x10_HeatCoolElement()` |
+
+### 15.4 产品信息模块
+
+| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+|---|---|---|---|
+| `0xFFF0` | 序列号 | `830` | `Sci_WrRegs_0x10_SN_Version()` |
+| `0xFFF1` | 硬件版本 | `870` | `Sci_WrRegs_0x10_SN_Version()` |
+| `0xFFF2` | 软件版本 | `910` | `Sci_WrRegs_0x10_SN_Version()` |
+| `0xC002` | 序列号/版本号读区 | 读取上面三块 | `Sci_ACK_0x03_ReadRegs_LCD()` |
+
+### 15.5 事件与日志模块
+
+| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+|---|---|---|---|
+| `0xC008` | 事件记录读区 | `1000` / `1200` | `Sci_ACK_0x03_ReadRegs_LCD()` |
+| `0x0001` | 事件记录清空 | `1000` / `1200` | `Sci_WrReg_0x06_Reset_EventRecord()` |
+
+### 15.6 Flash / 启动模块
+
+| 通信地址 / 地址 | 含义 | 触发函数 | 备注 |
+|---|---|---|---|
+| `0xFFFD` | Flash 更新触发 | `Sci_WrRegs_0x10_FlashConnect()` | 写入更新标志 |
+| `0x0801F800` | 更新标志位 | `InitAreaSelect()` / 启动流程 | 判断是否进 IAP |
+| `0x0801FC00` | 休眠标志位 | `SleepDeal.c` | 记忆睡眠模式 |
+
+## 16. 通信处理流程图
+
+```mermaid
+flowchart TD
+    A["串口接收帧"] --> B["CRC_verify()"]
+    B -->|CRC 正确| C["Sci_Deal_ReadRegs_0x03 / Sci_Deal_WrRegs_0x06 / Sci_Deal_WrRegs_0x10"]
+    B -->|CRC 错误| Z["返回 CRC 错误"]
+
+    C --> D{"功能码"}
+    D -->|0x03| E["按起始地址分发读区"]
+    D -->|0x06| F["命令式控制 / 复位 / 开关"]
+    D -->|0x10| G["参数写入 / 联动写标志"]
+
+    E --> E1["0xD000 主状态"]
+    E --> E2["0xD100 RTC / 故障"]
+    E --> E3["0xC000 LCD"]
+    E --> E4["0xC002 SN/版本"]
+    E --> E5["0xC008 事件"]
+    E --> E6["0x2400 AFE 参数"]
+
+    F --> F1["BMS 功能位写入"]
+    F --> F2["清空故障 / 复位校准 / 复位参数"]
+    F --> F3["设置一次 SOC"]
+    F --> F4["更新 EEPROM_ADDR_SYS_FUNC_SELECT"]
+
+    G --> G1["写校准 / 保护 / SOC / RTC / 扩展参数"]
+    G --> G2["置位 EEPROM 写标志"]
+    G --> G3["后台 App_E2promDeal() 落盘"]
+    G --> G4["必要时联动 InitData_SOC() / AFE_PARAM_WRITE_Flag"]
+
+    G3 --> H["EEPROM"]
+    G4 --> I["同步刷新运行态结构体"]
+```
+
+### 16.1 流程说明
+
+- `0x03` 主要负责“读”，按地址段路由到不同数据源。
+- `0x06` 主要负责“控制动作”，很多命令会直接修改系统位或复位状态。
+- `0x10` 主要负责“参数写入”，先改内存，再置写标志，最后由后台统一落盘。
+- AFE 参数是独立闭环，通信地址和 EEPROM 落点是一一对应的。
+- Flash 更新是特殊路径，写的是更新标志，不是业务参数。
