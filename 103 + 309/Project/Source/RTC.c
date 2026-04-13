@@ -1,7 +1,7 @@
-#include "main.h"
+ï»¿#include "main.h"
 
 // UINT8 RTC_Faultcnt = 0;
-__IO UINT8 TimeDisplay = 0; // ÃëÖĞ¶Ï±êÖ¾£¬½øÈëÃëÖĞ¶ÏÊ±ÖÃ1£¬µ±Ê±¼ä±»Ë¢ĞÂÖ®ºóÇå0
+__IO UINT8 TimeDisplay = 0; // ç§’ä¸­æ–­æ ‡å¿—ï¼Œè¿›å…¥ç§’ä¸­æ–­æ—¶ç½®1ï¼Œå½“æ—¶é—´è¢«åˆ·æ–°ä¹‹åæ¸…0
 
 struct RTC_ELEMENT RTC_time;
 
@@ -19,9 +19,9 @@ void GregorianDay(struct RTC_ELEMENT *tm)
 	int MonthOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 	lastYear = tm->RTC_Time_Year - 1;
-	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // ¼ÆËã´Ó¹«ÔªÔªÄêµ½¼ÆÊıµÄÇ°Ò»ÄêÖ®ÖĞÒ»¹²¾­ÀúÁË¶àÉÙ¸öÈòÄê
+	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // è®¡ç®—ä»å…¬å…ƒå…ƒå¹´åˆ°è®¡æ•°çš„å‰ä¸€å¹´ä¹‹ä¸­ä¸€å…±ç»å†äº†å¤šå°‘ä¸ªé—°å¹´
 
-	if ((tm->RTC_Time_Year % 4 == 0) // ÈçÈô¼ÆÊıµÄÕâÒ»ÄêÎªÈòÄê£¬ÇÒ¼ÆÊıµÄÔÂ·İÔÚ2ÔÂÖ®ºó£¬ÔòÈÕÊı¼Ó1£¬·ñÔò²»¼Ó1
+	if ((tm->RTC_Time_Year % 4 == 0) // å¦‚è‹¥è®¡æ•°çš„è¿™ä¸€å¹´ä¸ºé—°å¹´ï¼Œä¸”è®¡æ•°çš„æœˆä»½åœ¨2æœˆä¹‹åï¼Œåˆ™æ—¥æ•°åŠ 1ï¼Œå¦åˆ™ä¸åŠ 1
 		&& ((tm->RTC_Time_Year % 100 != 0) || (tm->RTC_Time_Year % 400 == 0)) && (tm->RTC_Time_Month > 2))
 	{
 		day = 1;
@@ -31,14 +31,14 @@ void GregorianDay(struct RTC_ELEMENT *tm)
 		day = 0;
 	}
 
-	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // ¼ÆËã´Ó¹«ÔªÔªÄêÔªµ©µ½¼ÆÊıÈÕÆÚÒ»¹²ÓĞ¶àÉÙÌì
+	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // è®¡ç®—ä»å…¬å…ƒå…ƒå¹´å…ƒæ—¦åˆ°è®¡æ•°æ—¥æœŸä¸€å…±æœ‰å¤šå°‘å¤©
 
 	tm->tm_wday = day % 7;
 }
 
 #endif
 
-// ´Ëº¯ÊıÎª¡ª¡ªLinuxÔ´ÂëÖĞµÄmktimeËã·¨
+// æ­¤å‡½æ•°ä¸ºâ€”â€”Linuxæºç ä¸­çš„mktimeç®—æ³•
 UINT32 mktimev(struct RTC_ELEMENT *tm)
 {
 	if (0 >= (int)(tm->RTC_Time_Month -= 2))
@@ -63,8 +63,8 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	UINT32 i;
 	UINT32 Second_res, Day;
 
-	Day = AllSecond / SEC_DAY;		  /* ÓĞ¶àÉÙÌì */
-	Second_res = AllSecond % SEC_DAY; /* ½ñÌìµÄÊ±¼ä£¬µ¥Î»s */
+	Day = AllSecond / SEC_DAY;		  /* æœ‰å¤šå°‘å¤© */
+	Second_res = AllSecond % SEC_DAY; /* ä»Šå¤©çš„æ—¶é—´ï¼Œå•ä½s */
 
 	/* Hours, minutes, seconds are easy */
 	RTCtime->RTC_Time_Hour = Second_res / 3600;
@@ -72,14 +72,14 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	RTCtime->RTC_Time_Second = (Second_res % 3600) % 60;
 
 	for (i = UNIX_TIME_YEAR; Day >= Days_in_year(i); i++)
-	{ // Ëã³öµ±Ç°Äê·İ£¬ÆğÊ¼µÄ¼ÆÊıÄê·İÎª1970Äê
+	{ // ç®—å‡ºå½“å‰å¹´ä»½ï¼Œèµ·å§‹çš„è®¡æ•°å¹´ä»½ä¸º1970å¹´
 		Day -= Days_in_year(i);
 	}
-	i %= 100; // Ö»±£ÁôºóÁ½Î»
+	i %= 100; // åªä¿ç•™åä¸¤ä½
 	RTCtime->RTC_Time_Year = (UINT8)i;
 
 	if (Leapyear(RTCtime->RTC_Time_Year))
-	{ // ¼ÆËãµ±Ç°µÄÔÂ·İ
+	{ // è®¡ç®—å½“å‰çš„æœˆä»½
 		Days_in_month(2) = 29;
 	}
 	for (i = 1; Day >= Days_in_month(i); i++)
@@ -89,9 +89,9 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	Days_in_month(2) = 28;
 	RTCtime->RTC_Time_Month = (UINT8)i;
 
-	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // ¼ÆËãµ±Ç°ÈÕÆÚ
+	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // è®¡ç®—å½“å‰æ—¥æœŸ
 
-	// GregorianDay(tm);						//¼ÆËãĞÇÆÚ¼¸
+	// GregorianDay(tm);						//è®¡ç®—æ˜ŸæœŸå‡ 
 }
 
 void Get_RTC_Time(void)
@@ -99,80 +99,86 @@ void Get_RTC_Time(void)
 	UINT32 u32BJ_SecondTimeVar;
 
 	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
-	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // °Ñ¶¨Ê±Æ÷µÄÖµ×ª»»Îª±±¾©Ê±¼ä
+	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // æŠŠå®šæ—¶å™¨çš„å€¼è½¬æ¢ä¸ºåŒ—äº¬æ—¶é—´
 }
 
-// ´Ëº¯ÊıÎª¡ª¡ªLinuxÔ´ÂëÖĞµÄmktimeËã·¨ĞŞ¸ÄÎª¡ª¡ªÒ×¶Á¶®ĞÍ
-// 1970Äê1ÔÂ1ÈÕ0Ê±ÎªUNIX TIMEµÄ¼ÍÔªÊ±¼ä
+// æ­¤å‡½æ•°ä¸ºâ€”â€”Linuxæºç ä¸­çš„mktimeç®—æ³•ä¿®æ”¹ä¸ºâ€”â€”æ˜“è¯»æ‡‚å‹
+// 1970å¹´1æœˆ1æ—¥0æ—¶ä¸ºUNIX TIMEçš„çºªå…ƒæ—¶é—´
 UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 {
 	UINT32 Y_day, M_day, D_day;
 	UINT32 X_day, T_sec;
 
 	if (0 >= (int)(RTC_t->RTC_Time_Month -= 2))
-	{ // Ç°Á½¸öÔÂ±»ÍÆµ½ÉÏÒ»ÄêÈ¥
+	{ // å‰ä¸¤ä¸ªæœˆè¢«æ¨åˆ°ä¸Šä¸€å¹´å»
 		RTC_t->RTC_Time_Month += 12;
 		RTC_t->RTC_Time_Year -= 1;
 	}
 	Y_day = (RTC_t->RTC_Time_Year - 1) * 365 + RTC_t->RTC_Time_Year / 4 - RTC_t->RTC_Time_Year / 100 + RTC_t->RTC_Time_Year / 400;
 	M_day = 367 * RTC_t->RTC_Time_Month / 12 - 30 + 59;
 	D_day = RTC_t->RTC_Time_Day - 1;
-	X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162Îª0Äê0ÔÂ0ÈÕ0Ê±µ½¼ÍÔªÊ±¼äµÄÌìÊı
+	X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162ä¸º0å¹´0æœˆ0æ—¥0æ—¶åˆ°çºªå…ƒæ—¶é—´çš„å¤©æ•°
 	T_sec = ((X_day * 24 + RTC_t->RTC_Time_Hour) * 60 + RTC_t->RTC_Time_Minute) * 60 + RTC_t->RTC_Time_Second;
 
 	return T_sec;
 }
 
-UINT8 RTC_ClockConfig(void)
+static UINT8 RTC_ClockConfig(BOOL need_init)
 {
-	__IO UINT16 StartUpCounter = 0, HSEStatus = 0;
+	__IO UINT16 StartUpCounter = 0, LSEStatus = 0;
 	INT8 result = 0;
-	PWR_BackupAccessCmd(ENABLE); // ÔÊĞí·ÃÎÊRTC
-	BKP_DeInit();				 // ºÃÏñÉÙÁËÕâ¾ä»°µ¼ÖÂ¸÷ÖÖwaitº¯Êı¿¨ËÀ
-	RCC_LSEConfig(RCC_LSE_ON);	 // Ê¹ÄÜÍâ²¿LSE¾§Õñ£¬RCC_LSE_BypassÅÔÂ·µÄÒâË¼Ó¦¸ÃÊÇÊ¹ÄÜÕâ¸öLSEÊ±ÖÓ£¬µ«ÊÇµ¥Æ¬»ú²»ÓÃ£¬ÍâÎ§µçÂ·ÓÃ?
+	PWR_BackupAccessCmd(ENABLE); // å…è®¸è®¿é—®RTC
+
+	if (!need_init)
+	{
+		RCC_RTCCLKCmd(ENABLE);					// ä½¿èƒ½RTCæ—¶é’Ÿ
+		RTC_WaitForSynchro();					// ç­‰å¾… RTC APB å¯„å­˜å™¨åŒæ­¥
+		RTC_WaitForLastTask();					// ç¡®ä¿ä¸Šä¸€æ¬¡ RTC çš„æ“ä½œå®Œæˆ
+		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// ä½¿èƒ½ RTC ç§’ä¸­æ–­
+		RTC_WaitForLastTask();					// ç¡®ä¿ä¸Šä¸€æ¬¡ RTC çš„æ“ä½œå®Œæˆ
+		return result;
+	}
+
+	BKP_DeInit();				 // åªæœ‰é¦–æ¬¡åˆå§‹åŒ–æ—¶æ‰é‡ç½®å¤‡ä»½åŸŸ
+	RCC_LSEConfig(RCC_LSE_ON);	 // ä½¿èƒ½å¤–éƒ¨LSEæ™¶æŒ¯ï¼ŒRCC_LSE_Bypassæ—è·¯çš„æ„æ€åº”è¯¥æ˜¯ä½¿èƒ½è¿™ä¸ªLSEæ—¶é’Ÿï¼Œä½†æ˜¯å•ç‰‡æœºä¸ç”¨ï¼Œå¤–å›´ç”µè·¯ç”¨?
 	do
 	{
-		HSEStatus = RCC_GetFlagStatus(RCC_FLAG_LSERDY);
+		LSEStatus = RCC_GetFlagStatus(RCC_FLAG_LSERDY);
 		StartUpCounter++;
-	} while ((HSEStatus == RESET) && (StartUpCounter < LSE_START_TIMEOUT)); // µÈ´ıµ½ LSE Ô¤±¸
+	} while ((LSEStatus == RESET) && (StartUpCounter < LSE_START_TIMEOUT)); // ç­‰å¾…åˆ° LSE é¢„å¤‡
 
 	if (StartUpCounter < LSE_START_TIMEOUT)
 	{
-		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE); // °ÑRTC Ê±ÖÓÔ´ÅäÖÃÎªLSE
-		RCC_RTCCLKCmd(ENABLE);					// Ê¹ÄÜRTCÊ±ÖÓ
-		RTC_WaitForSynchro();					// µÈ´ı RTC APB ¼Ä´æÆ÷Í¬²½
-		RTC_WaitForLastTask();					// È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
-		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// Ê¹ÄÜ RTC ÃëÖĞ¶Ï
-		RTC_WaitForLastTask();					// È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
-		RTC_SetPrescaler(LSE_FREQUENT);			// ÉèÖÃ RTC ·ÖÆµ: Ê¹ RTC ÖÜÆÚÎª1s
-										// RTC period = RTCCLK/RTC_PR = (32.768 KHz)/(32767+1) = 1HZ
-		RTC_WaitForLastTask(); // È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
+		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE); // æŠŠRTC æ—¶é’Ÿæºé…ç½®ä¸ºLSE
 	}
 	else
 	{
-		//++RTC_Faultcnt;											//RTC´íÎóµ¥ÊıÎªLSE³ö´í
+		//++RTC_Faultcnt;								//RTCé”™è¯¯å•æ•°ä¸ºLSEå‡ºé”™
 		// System_ERROR_UserCallback(ERROR_LSE);
-		RCC_LSICmd(ENABLE); // Ê¹ÄÜ LSI Õñµ´
-		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
-			;									// µÈ´ıµ½ LSI Ô¤±¸
-		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI); // °ÑRTC Ê±ÖÓÔ´ÅäÖÃÎªLSI
-		RCC_RTCCLKCmd(ENABLE);					// Ê¹ÄÜRTCÊ±ÖÓ
-		RTC_WaitForSynchro();					// µÈ´ı RTC APB ¼Ä´æÆ÷Í¬²½
-		RTC_WaitForLastTask();					// È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
-		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// Ê¹ÄÜ RTC ÃëÖĞ¶Ï
-		RTC_WaitForLastTask();					// È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
-		RTC_SetPrescaler(40000 - 1);			// RTC period = RTCCLK/RTC_PR = (40 KHz)/(40000-1+1) = 1HZ
-		RTC_WaitForLastTask();					// È·±£ÉÏÒ»´Î RTC µÄ²Ù×÷Íê³É
+		RCC_LSICmd(ENABLE); // ä½¿èƒ½ LSI æŒ¯è¡
+		StartUpCounter = 0;
+		while ((RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET) && (StartUpCounter < LSE_START_TIMEOUT))
+		{
+			StartUpCounter++;
+		}
+		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI); // æŠŠRTC æ—¶é’Ÿæºé…ç½®ä¸ºLSI
 		result = 1;
 	}
 
+	RCC_RTCCLKCmd(ENABLE);					// ä½¿èƒ½RTCæ—¶é’Ÿ
+	RTC_WaitForSynchro();					// ç­‰å¾… RTC APB å¯„å­˜å™¨åŒæ­¥
+	RTC_WaitForLastTask();					// ç¡®ä¿ä¸Šä¸€æ¬¡ RTC çš„æ“ä½œå®Œæˆ
+	RTC_ITConfig(RTC_IT_SEC, ENABLE);		// ä½¿èƒ½ RTC ç§’ä¸­æ–­
+	RTC_WaitForLastTask();					// ç¡®ä¿ä¸Šä¸€æ¬¡ RTC çš„æ“ä½œå®Œæˆ
+	RTC_SetPrescaler((result == 0) ? LSE_FREQUENT : (40000 - 1));		// è®¾ç½® RTC åˆ†é¢‘: ä½¿ RTC å‘¨æœŸä¸º1s
+	RTC_WaitForLastTask();					// ç¡®ä¿ä¸Šä¸€æ¬¡ RTC çš„æ“ä½œå®Œæˆ
+
 	return result;
 }
-
 void RTC_TimeConfig(void)
 {
-	// GregorianDay(tm);			//¼ÆËãĞÇÆÚ
-	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // ÓÉÈÕÆÚ¼ÆËãÊ±¼ä´Á²¢Ğ´Èëµ½RTC¼ÆÊı¼Ä´æÆ÷
+	// GregorianDay(tm);			//è®¡ç®—æ˜ŸæœŸ
+	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // ç”±æ—¥æœŸè®¡ç®—æ—¶é—´æˆ³å¹¶å†™å…¥åˆ°RTCè®¡æ•°å¯„å­˜å™¨
 	RTC_WaitForLastTask();
 }
 
@@ -181,21 +187,21 @@ void RTC_AlarmConfig(void)
 	NVIC_InitTypeDef NVIC_InitStructure;
 	EXTI_InitTypeDef EXTI_InitStructure;
 
-#if 0 // ²»ÔÚÕâÀï³õÊ¼»¯
-	PWR_BackupAccessCmd(ENABLE);											//ºó±¸Óò½âËø
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);										//½ûÖ¹ÊµÊ±Ê±ÖÓÃëÖĞ¶Ï
-	RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//»½ĞÑÊ±¼ä
+#if 0 // ä¸åœ¨è¿™é‡Œåˆå§‹åŒ–
+	PWR_BackupAccessCmd(ENABLE);											//åå¤‡åŸŸè§£é”
+	RTC_ITConfig(RTC_IT_SEC, DISABLE);										//ç¦æ­¢å®æ—¶æ—¶é’Ÿç§’ä¸­æ–­
+	RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//å”¤é†’æ—¶é—´
   	RTC_WaitForLastTask();
-  	RTC_ITConfig(RTC_FLAG_ALR, ENABLE);										//´ò¿ªÄÖÖÓÖĞ¶Ï
+  	RTC_ITConfig(RTC_IT_ALR, ENABLE);										//æ‰“å¼€é—¹é’Ÿä¸­æ–­
 #endif
 
-	//------------EXTI17 ÅäÖÃ -------------------
+	//------------EXTI17 é…ç½® -------------------
 	EXTI_InitStructure.EXTI_Line = EXTI_Line17;
 	EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
 	EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
 	EXTI_InitStructure.EXTI_LineCmd = ENABLE;
 	EXTI_Init(&EXTI_InitStructure);
-	//------------ÉèÖÃ ÖĞ¶Ï-------------------
+	//------------è®¾ç½® ä¸­æ–­-------------------
 	NVIC_InitStructure.NVIC_IRQChannel = RTCAlarm_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
@@ -216,49 +222,54 @@ void RTC_NVIC_Config(void)
 	NVIC_Init(&NVIC_InitStructure);
 }
 
-// RTC»½ĞÑÊ±¼äÉèÖÃ£¬
+// RTCå”¤é†’æ—¶é—´è®¾ç½®ï¼Œ
 void RTC_WKTimeConfig(void)
 {
-	PWR_BackupAccessCmd(ENABLE);														// ºó±¸Óò½âËø
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);													// ½ûÖ¹ÊµÊ±Ê±ÖÓÃëÖĞ¶Ï
-	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime * 60); // »½ĞÑÊ±¼ä
-	// RTC_SetAlarm(RTC_GetCounter() + 10); // »½ĞÑÊ±¼ä
-	RTC_SetAlarm(RTC_GetCounter() + 3); // »½ĞÑÊ±¼ä
-	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//»½ĞÑÊ±¼ä
+	PWR_BackupAccessCmd(ENABLE);								// åå¤‡åŸŸè§£é”
+	RTC_ITConfig(RTC_IT_SEC, DISABLE);								// ç¦æ­¢å®æ—¶æ—¶é’Ÿç§’ä¸­æ–­
+	RTC_ITConfig(RTC_IT_ALR, DISABLE);								// ç¦æ­¢é—¹é’Ÿä¸­æ–­
+	RTC_ClearFlag(RTC_FLAG_ALR);									// å…ˆæ¸…æ ‡å¿—ï¼Œé¿å…æ—§é—¹é’Ÿæ®‹ç•™
+	EXTI_ClearITPendingBit(EXTI_Line17);								// æ¸… EXTI17 æ‚¬æŒ‚ä½
+	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime * 60); // å”¤é†’æ—¶é—´
+	// RTC_SetAlarm(RTC_GetCounter() + 10); // å”¤é†’æ—¶é—´
+	RTC_SetAlarm(RTC_GetCounter() + 3); // å”¤é†’æ—¶é—´
+	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//å”¤é†’æ—¶é—´
 	RTC_WaitForLastTask();
-	RTC_ITConfig(RTC_FLAG_ALR, ENABLE); // ´ò¿ªÄÖÖÓÖĞ¶Ï
+	RTC_ITConfig(RTC_IT_ALR, ENABLE);	// æ‰“å¼€é—¹é’Ÿä¸­æ–­
+	RTC_WaitForLastTask();
 }
-
 void Init_RTC(void)
-{ // Ê¹ÄÜPWRÍâÉèÊ±ÖÓ£¬´ı»úÄ£Ê½£¬RTC£¬¿´ÃÅ¹·
-	RTC_ClockConfig();														 // RTCÊ±ÖÓÅäÖÃ
+{ // ä½¿èƒ½PWRå¤–è®¾æ—¶é’Ÿï¼Œå¾…æœºæ¨¡å¼ï¼ŒRTCï¼Œçœ‹é—¨ç‹—
+	PWR_BackupAccessCmd(ENABLE);
+	BOOL need_init = (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA);
 
-	if (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA)
-	{ // ¶ÁÈ¡±¸·İÀïÃæµÄÖµÊÇ·ñ±»Ğ´¹ı¡£
+	RTC_ClockConfig(need_init);								 // RTCæ—¶é’Ÿé…ç½®
+
+	if (need_init)
+	{ // è¯»å–å¤‡ä»½é‡Œé¢çš„å€¼æ˜¯å¦è¢«å†™è¿‡ã€‚
 		RTC_TimeConfig();
 		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
 		RTC_AlarmConfig();
 	}
 	else
-	{ // ÒÔÏÂÕâ¶Î»°ĞèÒªÂğ£¿
+	{ // ä»¥ä¸‹è¿™æ®µè¯éœ€è¦å—ï¼Ÿ
 		if (RCC_GetFlagStatus(RCC_FLAG_PORRST) != RESET)
-		{ // ÕâÊÇÉ¶
+		{ // è¿™æ˜¯å•¥
 			//("\r\n Power On Reset occurred....\n\r");
 			//++RTC_Faultcnt;
 		}
 		else if (RCC_GetFlagStatus(RCC_FLAG_PINRST) != RESET)
-		{ // ÕâÊÇÉ¶
+		{ // è¿™æ˜¯å•¥
 			// printf("\r\n External Reset occurred....\n\r");
 		}
 		RTC_ClearFlag(RTC_FLAG_ALR); // Clear the RTC Alarm Flag
 		EXTI_ClearITPendingBit(EXTI_Line17);
 		RCC_ClearFlag();
-		// RTC_TimeShow();				//Display the RTC Time and Alarm£¬Õâ¸öºóÃæ»áÓÃµ½
+		// RTC_TimeShow();					//Display the RTC Time and Alarmï¼Œè¿™ä¸ªåé¢ä¼šç”¨åˆ°
 		// RTC_AlarmShow();
 	}
 	RTC_NVIC_Config();
 }
-
 void App_RTC(void)
 {
 	if (0 == TimeDisplay)
@@ -271,12 +282,15 @@ void App_RTC(void)
 
 void RTCAlarm_IRQHandler(void)
 {
-	EXTI_ClearITPendingBit(EXTI_Line17); // Á½¸ö¶¼Òª£¬²»È»»áËÀ»ú
-	// RTC_ClearITPendingBit(RTC_IT_ALR);			//²»ĞèÒª
-	// RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
+	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
+	{
+		RTC_ClearITPendingBit(RTC_IT_ALR);
+	}
+	EXTI_ClearITPendingBit(EXTI_Line17); // ä¸¤ä¸ªéƒ½è¦ï¼Œä¸ç„¶ä¼šæ­»æœº
+	// RTC_ITConfig(RTC_IT_ALR, DISABLE);
 	// if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_RTC_VALUE))
 	// {
-	// 	// RTC»½ĞÑ£¬ÔòĞ´±êÖ¾Î»
+	// 	// RTCå”¤é†’ï¼Œåˆ™å†™æ ‡å¿—ä½
 	// }
 }
 
@@ -291,12 +305,18 @@ void RTC_IRQHandler(void)
 		RTC_WaitForLastTask();			   // Wait until last write operation on RTC registers has finished
 	}
 
-	if (RTC_GetITStatus(RTC_FLAG_ALR) != RESET)
-	{										 // ³ÉÁË£¡CNM£¡ÎÒÌ«ÄÑÁËÀÏÌú
-		RTC_ClearITPendingBit(RTC_FLAG_ALR); // »áÔËĞĞµ½Õâ¸öµØ·½£¬ÕâÀïÒ²Òª°ÑÕâ¸ö±êÖ¾Î»È¥³ı£¬²»È»¿¨ÔÚÕâÀïÎŞ·¨»½ĞÑ
+	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
+	{										 // æˆäº†ï¼CNMï¼æˆ‘å¤ªéš¾äº†è€é“
+		RTC_ClearITPendingBit(RTC_IT_ALR); // ä¼šè¿è¡Œåˆ°è¿™ä¸ªåœ°æ–¹ï¼Œè¿™é‡Œä¹Ÿè¦æŠŠè¿™ä¸ªæ ‡å¿—ä½å»é™¤ï¼Œä¸ç„¶å¡åœ¨è¿™é‡Œæ— æ³•å”¤é†’
 		RTC_WaitForLastTask();
 
 		is_rtc_wakekup = true;
 		rtc_cnt++;
 	}
 }
+
+
+
+
+
+
