@@ -771,3 +771,10 @@ flowchart TD
 - [`COMMUNICATION_WRITE_DETAIL.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_WRITE_DETAIL.md)
 
 这份文档适合直接给上位机联调、测试和排障使用；如果需要看总览逻辑，仍然先回到本主报告，再跳到地址索引。
+
+## 21. EEPROM д��־��������Է���
+
+�����Ҫ�Ż�ͨ��д EEPROM �ı�־λ������ϣ���� Keil ���ߵ���ʱ�����׹۲����̣�����ֱ�ӿ���ݷ�����
+
+- [COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md)
+
