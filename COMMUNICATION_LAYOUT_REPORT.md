@@ -755,3 +755,11 @@ flowchart TD
 ### 18.4 时间编码
 
 `LogTime_Map()` 会把时间压缩成一个字节存储。当前代码中这部分是事件第二字节的来源，便于在 EEPROM / RAM 中节省空间。
+
+## 19. 详细地址索引
+
+完整的 `0x03 / 0x06 / 0x10` 子地址清单已经单独展开到：
+
+- [`COMMUNICATION_ADDRESS_INDEX.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_ADDRESS_INDEX.md)
+
+如果后续要继续补细，优先看这份索引，再回到主报告看分组逻辑和读写流程。
