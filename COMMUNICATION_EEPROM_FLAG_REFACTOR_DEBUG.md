@@ -275,3 +275,10 @@ flowchart TD
 - Keil 里重点盯 dirty、WP、写回结果和错误标志
 
 这比现在的方式更容易维护，也更容易定位通信写 EEPROM 的问题。
+
+## 7. �ɱ�־���±�־����
+
+�����Ҫ�����滻��ǰ���ֶμ�д��־������ֱ�ӿ���ݶ��ձ���
+
+- [COMMUNICATION_EEPROM_FLAG_MAPPING.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_MAPPING.md)
+
