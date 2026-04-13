@@ -21,6 +21,7 @@ static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
 static uint32_t rtc_sleep_get_period_seconds(void);
 static void rtc_sleep_prepare_rtc(void);
+static void rtc_sleep_dump_state(const char *stage);
 static bool rtc_monitor_sh367309(void);
 static bool updataData_rtc_sh3x(void);
 static bool updataData_rtc_bq7x(void);
@@ -828,7 +829,6 @@ void get_soc(SOC_T *soc, uint16_t vcell_min, uint16_t vcell_max, uint16_t vcell_
 static void before_wakeup(uint32_t *_sleep_cnt)
 {
     uint8_t temp_soc;
-    uint32_t sleep_period_s;
 
 #define SOC_ERROR 10
     // g_stCellInfoReport.SocElement.u16Soc =  get_rtc_soc();
@@ -846,14 +846,7 @@ static void before_wakeup(uint32_t *_sleep_cnt)
         log_w("<error> rtc ocv soc error\n");
     }
 #else
-    // su32_Interval_S_Tcnt += *_sleep_cnt * OtherElement.time_sleep_rtcing;
-    sleep_period_s = (uint32_t)g_tParam.other.u16Sleep_RTC_WakeUpTime;
-    if (sleep_period_s == 0U)
-    {
-        sleep_period_s = 3U;
-    }
-    sleep_period_s *= 60U;
-    su32_Interval_S_Tcnt += *_sleep_cnt * sleep_period_s;
+    su32_Interval_S_Tcnt += *_sleep_cnt * rtc_sleep_get_period_seconds();
 
     if (su32_Interval_S_Tcnt >= (3600 * 6))
     {
@@ -904,6 +897,17 @@ static void rtc_sleep_prepare_rtc(void)
 
     is_rtc_wakekup = false;
     g_irq_t = NO_IRQ;
+}
+
+static void rtc_sleep_dump_state(const char *stage)
+{
+    log_w("[rtc_sleep] %s wake=%d cnt=%d alr=%d ex17=%d bkp=%u",
+          stage,
+          is_rtc_wakekup,
+          sys_time.rtc_sleep_cnt,
+          (int)RTC_GetFlagStatus(RTC_FLAG_ALR),
+          (int)EXTI_GetITStatus(EXTI_Line17),
+          (unsigned int)BKP_ReadBackupRegister(BKP_DR1));
 }
 
 static uint8_t soc_rtc;
@@ -1329,6 +1333,7 @@ void rtc_sleep(void)
         {
         rtcsleep:
             rtc_sleep_prepare_rtc();
+            rtc_sleep_dump_state("enter");
             // USART_DeInit(USART1);
             // USART_DeInit(USART2);
             // USART_DeInit(USART3);
@@ -1360,6 +1365,7 @@ void rtc_sleep(void)
             if (is_rtc_wakekup)
             {
                 ++sys_time.rtc_sleep_cnt;
+                rtc_sleep_dump_state("wake");
             }
 
             Init();
@@ -1378,6 +1384,7 @@ void rtc_sleep(void)
             }
 
             state_sleep = 0;
+            rtc_sleep_dump_state("exit");
             entersleep(NO_SLEEP);
             report_wkup_sig();
             before_wakeup(&sys_time.rtc_sleep_cnt);

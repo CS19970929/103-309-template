@@ -37,6 +37,12 @@
 - `sys_time.rtc_sleep_cnt` 仍然表示“RTC 唤醒轮次”，累计总睡眠时长时按“轮次 × 实际唤醒周期”换算，而不是固定 5 秒。
 - `before_wakeup()` 由原来的硬编码秒数改为按实际 RTC 周期累计，避免配置变化后统计失真。
 
+### 6. 增加 RTC 睡眠状态日志
+
+- 新增 `rtc_sleep_dump_state()`，在进入、唤醒和退出时打印当前状态。
+- 日志会包含 `is_rtc_wakekup`、`sys_time.rtc_sleep_cnt`、`RTC_FLAG_ALR`、`EXTI_Line17` 和备份寄存器值。
+- 这可以直接用于判断问题是在“闹钟没挂上”、“闹钟到了但 EXTI 没清掉”，还是“唤醒后上层状态机没有继续往下走”。
+
 ## 相关文件
 
 - [`103 + 309/Project/Source/RTC.c`](103%20+%20309/Project/Source/RTC.c)
@@ -49,3 +55,4 @@
 - 进入 Stop / Standby 前重新配置闹钟时，先清 `RTC_FLAG_ALR` 和 `EXTI_Line17`。
 - `u16Sleep_RTC_WakeUpTime` 是 RTC 唤醒周期，单位是分钟，不要和“进入 RTC 休眠的等待时长”混用。
 - `sys_time.rtc_sleep_cnt` 是唤醒次数，统计累计睡眠时长时要乘实际 RTC 周期。
+- 如果怀疑卡在 RTC 流程，优先看 `rtc_sleep_dump_state()` 的三处日志：`enter`、`wake`、`exit`。
