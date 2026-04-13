@@ -174,6 +174,8 @@ UINT8 ReadEEPROM_Byte2(UINT16 addr, UINT8 *data)
 // 后续维护人员禁止使用这个函数
 UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 {
+	UINT8 result = 0;
+
 	Feed_IWatchDog;
 	MCUO_E2PR_WP = 0;
 
@@ -181,14 +183,16 @@ UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_W); // 发送写命令
 	if (1 == IIC_Wait_Ack_SEE())
 	{
-		return 1;
+		result = 1;
+		goto __exit;
 	}
 
 #ifndef AT24C02
 	IIC_Send_Byte_SEE(addr >> 8); // 发送高地址
 	if (1 == IIC_Wait_Ack_SEE())
 	{
-		return 1;
+		result = 1;
+		goto __exit;
 	}
 
 #endif
@@ -196,19 +200,22 @@ UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
 	IIC_Send_Byte_SEE(addr % 256); // 发送低地址
 	if (1 == IIC_Wait_Ack_SEE())
 	{
-		return 1;
+		result = 1;
+		goto __exit;
 	}
 	IIC_Send_Byte_SEE(val); // 发送字节
 	if (1 == IIC_Wait_Ack_SEE())
 	{
-		return 1;
+		result = 1;
+		goto __exit;
 	}
 	IIC_Stop_SEE(); // 产生一个停止条件
 	__delay_ms(5);	// EEPROM特性，需要5ms保证写完
 
+__exit:
 	MCUO_E2PR_WP = 1;
 	Feed_IWatchDog;
-	return 0;
+	return result;
 }
 
 UINT8 ReadEEPROM_Byte(UINT16 addr)
@@ -732,3 +739,5 @@ void App_E2promDeal(void)
 		WriteEEPROM_ByteData_Circle();
 	}
 }
+
+

@@ -242,3 +242,8 @@
 4. `FLASH_ADDR_SH367309_VALUE` 这个名字容易误导，它的实际访问路径是 EEPROM API，不是内部 Flash API。
 5. 日志记录区是允许自动修复的，保护参数区则只做校验，不会自动改默认值。
 
+
+EEPROM �������ĵ�ַ���д�Ż�˵������
+
+- [EEPROM_LAYOUT_OPTIMIZATION.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/EEPROM_LAYOUT_OPTIMIZATION.md)
+
