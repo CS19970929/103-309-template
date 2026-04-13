@@ -879,7 +879,7 @@ static void before_rtcsleep(void)
 
 static uint32_t rtc_sleep_get_period_seconds(void)
 {
-    uint32_t wake_min = (uint32_t)g_tParam.other.u16Sleep_RTC_WakeUpTime;
+    uint32_t wake_min = (uint32_t)OtherElement.u16Sleep_RTC_WakeUpTime;
 
     if (wake_min == 0U)
     {
