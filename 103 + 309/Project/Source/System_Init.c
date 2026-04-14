@@ -15,7 +15,7 @@ UINT8 gu8_1000msAccClock_Flag = 0;
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
-static void EnableLowPowerDebug(void)
+void EnableLowPowerDebug(void)
 {
 #ifdef _DEBUG_
 	DBGMCU->CR |= DBGMCU_CR_DBG_SLEEP;
@@ -42,7 +42,6 @@ void Init_IWDG(void)
 																// 800——1.28s，80——128ms
 	IWDG_ReloadCounter();										// 喂狗
 	IWDG_Enable();												// 使能IWDG
-	EnableLowPowerDebug();
 }
 
 // 关于NVIC_PriorityGroupConfig这个函数

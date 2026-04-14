@@ -59,7 +59,6 @@ struct RTC_ELEMENT {
 extern struct RTC_ELEMENT RTC_time;
 //extern UINT8 RTC_Faultcnt;
 extern volatile bool is_rtc_wakekup;
-extern volatile uint16_t rtc_cnt;
 
 
 void RTC_WKTimeConfig(void);

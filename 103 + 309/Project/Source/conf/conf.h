@@ -8,13 +8,15 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x2445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 // #define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
-
+#define UART1_WAKEUP_ENABLE
+// #define UART2_WAKEUP_ENABLE
+#define RS485_WAKEUP_ENABLE
 // #define _SECOND_CURR_PROTECT_FUNC_
 
 #define __VIRTURE_CURRENT__
@@ -130,6 +132,8 @@ typedef struct
 
   uint16_t enter_rtc_delay;
   uint32_t rtc_sleep_cnt;
+  uint32_t rtc_sec_cnt;
+  uint32_t rtc_alm_cnt;
 }Time_T;
 
 extern Time_T  sys_time;

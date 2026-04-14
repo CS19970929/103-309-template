@@ -2,10 +2,9 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 30,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
-
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -154,20 +153,22 @@ void InitWakeUp_NormalMode(void)
     InitWakeUp_Base();
 
     {
-        // GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line7;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
+#ifdef UART1_WAKEUP_ENABLE
+        GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line7;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStruct);
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&NVIC_InitStructure);
+#endif // UART1_WAKEUP_ENABLE
 
         // GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX; // ?????GPIO??,PA0?????
         // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
@@ -268,17 +269,10 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-#if 0
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All ;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-#else
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
-#endif
-
 #if 1
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
@@ -323,7 +317,7 @@ void IOstatus_RTCMode(void)
     MCUO_PWSV_STB = 0;
 #endif
 
-    __delay_ms(100);
+    // __delay_ms(100);
 }
 
 void IOstatus_NormalMode(void)

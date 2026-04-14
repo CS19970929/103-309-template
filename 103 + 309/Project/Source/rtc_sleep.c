@@ -2,9 +2,7 @@
 
 #define LOG_TAG "rtc_sleep"
 
-// #define UART1_WAKEUP_ENABLE
-// #define UART2_WAKEUP_ENABLE
-#define RS485_WAKEUP_ENABLE
+
 
 enum irqWakeup g_irq_t = NO_IRQ;
 
@@ -675,11 +673,11 @@ static bool rtc_monitor_sh367309(void)
 {
 #if AFE_TYPE == sh36xx
 
-    if (!sys_time.power_on)
-    {
-        // todo 冗余检测
-        return false;
-    }
+    // if (!sys_time.power_on)
+    // {
+    //     // todo 冗余检测
+    //     return false;
+    // }
 
     bool result = false;
     if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
@@ -963,6 +961,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         is_rtc_wakekup = false;
     }
 
+    Init();
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);

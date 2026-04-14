@@ -33,6 +33,8 @@ int main(void)
 {
 	InitDevice(); // 初始化外设
 	InitVar();	  // 初始化变量
+	// Init_RTC();
+	// RTC_WKTimeConfig();
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
@@ -56,6 +58,8 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
+		App_ChargerLoad_Det();
+
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
@@ -96,6 +100,7 @@ void InitDevice(void)
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
+	Init_ChargerLoad_Det();
 
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
@@ -105,6 +110,9 @@ void InitDevice(void)
 #endif // !1
 	InitTimer();
 	log_w("init over");
+
+	// EnableLowPowerDebug();
+	DBGMCU_Config(DBGMCU_STOP, ENABLE);
 
 #endif
 }
