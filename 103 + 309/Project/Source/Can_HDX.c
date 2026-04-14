@@ -21,12 +21,31 @@ CanRxMsg RxMessage;
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN×ÜÏß¹Ø±Õ¼ÆÊ±
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s¼ÆÊ±±êÖ¾Î»
 
+static void feidao_put_u16_be(uint8_t *data, uint8_t offset, uint16_t value)
+{
+    data[offset] = (uint8_t)((value >> 8) & 0xFF);
+    data[offset + 1] = (uint8_t)(value & 0xFF);
+}
+
+static void feidao_put_u32_be(uint8_t *data, uint8_t offset, uint32_t value)
+{
+    data[offset] = (uint8_t)((value >> 24) & 0xFF);
+    data[offset + 1] = (uint8_t)((value >> 16) & 0xFF);
+    data[offset + 2] = (uint8_t)((value >> 8) & 0xFF);
+    data[offset + 3] = (uint8_t)(value & 0xFF);
+}
+
+static void feidao_put_i32_be(uint8_t *data, uint8_t offset, int32_t value)
+{
+    feidao_put_u32_be(data, offset, (uint32_t)value);
+}
+
 void CAN_TX_xintiao(void)
 {
 	UINT16 u16_tmp16a;
 	uint8_t temp;
 
-	// TxMessage.StdId = CANID_CHECK_0x00; // ±ê×ar¼±êÊ¶·û
+	// TxMessage.StdId = CANID_CHECK_0x00; // ±ê×ar¼±êÊ¶·?
 	TxMessage.StdId = 0;		// ±ê×¼±êÊ¶·û
 	TxMessage.ExtId = 0x180000; // À©Õ¹±êÊ¶·û
 	// TxMessage.IDE = CAN_ID_STD; // Ê¹ÓÃ±ê×¼±êÊ¶·û
@@ -748,189 +767,185 @@ void CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t lengt
 
 void feidao_send_volage_current_1000ms(void)
 {
-	uint8_t data[8];
-	int32_t current;
-	uint32_t voltage = (uint32_t)g_stCellInfoReport.u16VCellTotle * 10;
-	if (g_stCellInfoReport.u16IDischg > 0)
-		current = -(uint32_t)g_stCellInfoReport.u16IDischg * 100;
-	else
-		current = (uint32_t)g_stCellInfoReport.u16Ichg * 100;
+    uint8_t data[8] = {0};
+    int32_t current;
+    uint32_t voltage = (uint32_t)g_stCellInfoReport.u16VCellTotle * 10;
+    if (g_stCellInfoReport.u16IDischg > 0)
+        current = -(uint32_t)g_stCellInfoReport.u16IDischg * 100;
+    else
+        current = (uint32_t)g_stCellInfoReport.u16Ichg * 100;
 
-	// ÊµÊ±µçÑ¹£¨32Î»£¬LSB first£©
-	// data[0] = (voltage >> 0) & 0xFF;
-	// data[1] = (voltage >> 8) & 0xFF;
-	// data[2] = (voltage >> 16) & 0xFF;
-	// data[3] = (voltage >> 24) & 0xFF;
-	memcpy(&data[0], &voltage, 4); // µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[4], &current, 4); // ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(0, &data, 8);
+    // ÊµÊ±µçÑ¹£¨32Î»£¬MSB first£©
+    feidao_put_u32_be(data, 0, voltage);
+    feidao_put_i32_be(data, 4, current);
+    CAN_Battery_SendData_feidao(0, &data, 8);
 }
 
 void feidao_send_cap_5000ms(void)
 {
-	uint8_t data[8];
-	// uint32_t cap = g_stCellInfoReport.SocElement.u16CapacityNow / 100 * 1000 * (3.6 * SNum);
-	uint32_t real_cap = g_stCellInfoReport.SocElement.u16CapacityNow * 100 * (3.6 * SNum);
-	uint32_t design_cap = g_stCellInfoReport.SocElement.u16CapacityFactory * 100 * (3.6 * SNum);
+    uint8_t data[8] = {0};
+    // uint32_t cap = g_stCellInfoReport.SocElement.u16CapacityNow / 100 * 1000 * (3.6 * SNum);
+    uint32_t real_cap = g_stCellInfoReport.SocElement.u16CapacityNow * 100 * (3.6 * SNum);
+    uint32_t design_cap = g_stCellInfoReport.SocElement.u16CapacityFactory * 100 * (3.6 * SNum);
 
-	memcpy(&data[0], &real_cap, 4);	  // µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[4], &design_cap, 4); // ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(1, &data, 8);
+    feidao_put_u32_be(data, 0, real_cap);   // Êµ¼ÊÈÝÁ¿£¬MSB first
+    feidao_put_u32_be(data, 4, design_cap); // Éè¼ÆÈÝÁ¿£¬MSB first
+    CAN_Battery_SendData_feidao(1, &data, 8);
 }
 
 void feidao_send_soc_1000ms(void)
 {
-	uint8_t data[8];
-	uint8_t chg_status, soc;
-	int8_t temp;
-	uint8_t bat_type;
-	uint16_t time_chg = 100;
-	uint16_t res = 0;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
-		chg_status = 2;
-	else if (g_stCellInfoReport.u16Ichg)
-		chg_status = 1;
-	else
-		chg_status = 0;
-	soc = g_stCellInfoReport.SocElement.u16Soc;
-	// soc = 66;
-	// if(g_stCellInfoReport.u16TempMax < 400)
-	temp = (int8_t)((int16_t)g_stCellInfoReport.u16TempMax / 10 - 40);
+    uint8_t data[8] = {0};
+    uint8_t chg_status, soc;
+    int8_t temp;
+    uint8_t bat_type;
+    uint16_t time_chg = 100;
+    uint16_t res = 0;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+        chg_status = 2;
+    else if (g_stCellInfoReport.u16Ichg)
+        chg_status = 1;
+    else
+        chg_status = 0;
+    soc = g_stCellInfoReport.SocElement.u16Soc;
+    // soc = 66;
+    // if(g_stCellInfoReport.u16TempMax < 400)
+    temp = (int8_t)((int16_t)g_stCellInfoReport.u16TempMax / 10 - 40);
 
-	memcpy(&data[0], &chg_status, 1); // µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[1], &soc, 1);		  // ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[2], &temp, 1);		  // ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[3], &time_chg, 2);	  // ÎÂ¶È£¬×Ô¶¯LSB first
+    data[0] = chg_status;
+    data[1] = soc;
+    data[2] = (uint8_t)temp;
+    feidao_put_u16_be(data, 3, time_chg); // Ê£Óà³äµçÊ±¼ä£¬MSB first
 
 #if (BAT_TYPE == BAT_MASTER)
-	bat_type = 0x00;
+    bat_type = 0x00;
 #elif (BAT_TYPE == BAT_SLAVE)
-	bat_type = 0x01;
-#endif								// BAT_TYPE == BAT_MASTER
-	memcpy(&data[5], &bat_type, 1); // ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[6], &res, 2);		// ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(2, &data, 8);
+    bat_type = 0x01;
+#endif                              // BAT_TYPE == BAT_MASTER
+    data[5] = bat_type;
+    feidao_put_u16_be(data, 6, res); // ±£Áô×Ö¶Î£¬MSB first
+    CAN_Battery_SendData_feidao(2, &data, 8);
 }
 
 void feidao_send_soh_5000ms(void)
 {
-	uint8_t data[8];
-	uint8_t soh = g_stCellInfoReport.SocElement.u16Soh;
-	uint16_t cycles = g_stCellInfoReport.SocElement.u16Cycle_times;
+    uint8_t data[8] = {0};
+    uint8_t soh = g_stCellInfoReport.SocElement.u16Soh;
+    uint16_t cycles = g_stCellInfoReport.SocElement.u16Cycle_times;
 
-	memcpy(&data[0], &soh, 1);	  // µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[1], &cycles, 2); // ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(3, &data, 8);
+    data[0] = soh;
+    feidao_put_u16_be(data, 1, cycles); // Ñ­»·´ÎÊý£¬MSB first
+    CAN_Battery_SendData_feidao(3, &data, 8);
 }
 
 void feidao_send_version_5000ms(void)
 {
-	uint8_t data[8];
-	uint8_t pro_version = 1;
-	uint16_t soft_version = 1;
+    uint8_t data[8] = {0};
+    uint8_t pro_version = 1;
+    uint16_t soft_version = 1;
 
-	memcpy(&data[0], &pro_version, 1);	// µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[1], &soft_version, 1); // ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(4, &data, 8);
+    data[0] = pro_version;
+    feidao_put_u16_be(data, 1, soft_version); // Èí¼þ°æ±¾£¬MSB first
+    CAN_Battery_SendData_feidao(4, &data, 8);
 }
 
 void feidao_send_status_5000ms(void)
 {
-	uint8_t data[8];
-	uint8_t work_status = 0;
-	uint8_t exception_status = 0;
-	uint16_t cap_fac, cap_now, cap_design;
-	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_DSG << 0);
-	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_CHG << 1);
-	if (g_stCellInfoReport.u16Ichg)
-	{
-		work_status |= work_status | (1 << 2);
-		work_status |= work_status | (1 << 3);
-	}
-	if (g_stCellInfoReport.u16IDischg)
-		work_status |= work_status | (1 << 4);
+    uint8_t data[8] = {0};
+    uint8_t work_status = 0;
+    uint8_t exception_status = 0;
+    uint16_t cap_fac, cap_now, cap_design;
+    work_status |= work_status | (SystemStatus.bits.b1Status_MOS_DSG << 0);
+    work_status |= work_status | (SystemStatus.bits.b1Status_MOS_CHG << 1);
+    if (g_stCellInfoReport.u16Ichg)
+    {
+        work_status |= work_status | (1 << 2);
+        work_status |= work_status | (1 << 3);
+    }
+    if (g_stCellInfoReport.u16IDischg)
+        work_status |= work_status | (1 << 4);
 
-	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 0);
-	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp << 1);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp) << 2);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) << 3);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 4);
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
-		exception_status = 0x02;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
-		exception_status = 0x03;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
-		exception_status = 0x04;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
-		exception_status = 0x05;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
-		exception_status = 0x06;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
-		exception_status = 0x07;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
-		exception_status = 0x08;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
-		exception_status = 0x09;
-	if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
-		exception_status = 0x0C;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1VcellDeltaBig)
-		exception_status = 0x0D;
-	cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
-	cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10;
-	cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
+    // exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 0);
+    // exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp << 1);
+    // exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp) << 2);
+    // exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) << 3);
+    // exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 4);
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+        exception_status = 0x02;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
+        exception_status = 0x03;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
+        exception_status = 0x04;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
+        exception_status = 0x05;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+        exception_status = 0x06;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+        exception_status = 0x07;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
+        exception_status = 0x08;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
+        exception_status = 0x09;
+    if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
+        exception_status = 0x0C;
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1VcellDeltaBig)
+        exception_status = 0x0D;
+    cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
+    cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10;
+    cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
 
-	memcpy(&data[0], &work_status, 1);		// µçÑ¹£¬×Ô¶¯LSB first
-	memcpy(&data[1], &exception_status, 1); // ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[2], &cap_fac, 2);			// ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[4], &cap_now, 2);			// ÎÂ¶È£¬×Ô¶¯LSB first
-	memcpy(&data[6], &cap_design, 2);		// ÎÂ¶È£¬×Ô¶¯LSB first
-	CAN_Battery_SendData_feidao(5, &data, 8);
+    data[0] = work_status;
+    data[1] = exception_status;
+    feidao_put_u16_be(data, 2, cap_fac);    // ÍêÈ«³äµçÈÝÁ¿£¬MSB first
+    feidao_put_u16_be(data, 4, cap_now);    // µ±Ç°Ê£ÓàÈÝÁ¿£¬MSB first
+    feidao_put_u16_be(data, 6, cap_design); // Éè¼ÆÈÝÁ¿£¬MSB first
+    CAN_Battery_SendData_feidao(5, &data, 8);
 }
+
 void feidao_can_send(void)
 {
-	// feidao_send_soc_1000ms();
-	// feidao_send_status_5000ms();
+    // feidao_send_soc_1000ms();
+    // feidao_send_status_5000ms();
 #if 1
-	// if (!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
-	// if (!g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-	// 	return;
-	static uint8_t send_state = 0;
+    // if (!g_st_SysTimeFlag.bits.b1Sys1000msFlag1)
+    // if (!g_st_SysTimeFlag.bits.b1Sys10msFlag1)
+    //  return;
+    static uint8_t send_state = 0;
 
-	// xintiao();
+    // xintiao();
 
-	switch (send_state)
-	{
-	case 0:
-		feidao_send_volage_current_1000ms();
-		send_state++;
-		break;
-	case 1:
-		feidao_send_cap_5000ms();
-		send_state++;
-		break;
-	case 2:
-		feidao_send_soc_1000ms();
-		send_state++;
-		break;
-	case 3:
-		feidao_send_soh_5000ms();
-		send_state++;
-		break;
-	case 4:
-		feidao_send_version_5000ms();
-		send_state++;
-		break;
-	case 5:
-		feidao_send_status_5000ms();
-		send_state = 0;
-		break;
-	default:
-		send_state = 0;
-		break;
-	}
+    switch (send_state)
+    {
+    case 0:
+        feidao_send_volage_current_1000ms();
+        send_state++;
+        break;
+    case 1:
+        feidao_send_cap_5000ms();
+        send_state++;
+        break;
+    case 2:
+        feidao_send_soc_1000ms();
+        send_state++;
+        break;
+    case 3:
+        feidao_send_soh_5000ms();
+        send_state++;
+        break;
+    case 4:
+        feidao_send_version_5000ms();
+        send_state++;
+        break;
+    case 5:
+        feidao_send_status_5000ms();
+        send_state = 0;
+        break;
+    default:
+        send_state = 0;
+        break;
+    }
 #endif
 }
-
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	sys_time.can_rcv_cnt++;
