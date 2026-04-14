@@ -98,7 +98,7 @@ enum tagInfoForKBArray {
 struct OTHER_ELEMENT {
     UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
     UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
+    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
     UINT16 u16Balance_Res1;			//����λ
     UINT16 u16Balance_Res2;			//����λ
     UINT16 u16Balance_Res3;			//����λ
@@ -142,8 +142,8 @@ struct OTHER_ELEMENT {
 
 #define SNum 		16
 
-// #define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
-#define LIFEPO			//������﮵�أ���ѡ�?
+// #define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
+#define LIFEPO			//������﮵�أ���ѡ�?
 
 
 
@@ -171,7 +171,7 @@ struct OTHER_ELEMENT {
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
 	                             3200,	7200,	3000,	10,	10,	10,	240, 0,\
-	                             200,	3,		3600,	3000,\
+	                             200,	3,		3550,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif
 

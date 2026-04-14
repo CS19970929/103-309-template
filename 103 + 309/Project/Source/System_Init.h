@@ -74,7 +74,7 @@
 
 
 
-#define MCUO_RELAY_HEAT 	PCout(6)		//���ȼ̵���
+#define MCUO_RELAY_HEAT 	PAout(5)		//���ȼ̵���
 #define MCUO_RELAY_COOL 	PCout(6)		//�����̵���
 
 #define MCUO_ENO_DO1		PCout(0)	//O��1

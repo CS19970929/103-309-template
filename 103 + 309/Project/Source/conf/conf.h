@@ -8,11 +8,11 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0331		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x0414		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define  wdog_enable
 // #define __FUNC_RTC__
-// #define __FUNC__HEAT__
+#define __FUNC__HEAT__
 // #define __FUNC__CAN__
 // #define __LOAD_REMOVE_SHORT_FUNC__
 
@@ -31,13 +31,14 @@
 
 #define   CURR_10A     0
 #define   CURR_20A     1
-#define   CURR_40A     2
+#define   CURR_30A     2
+#define   CURR_40A     3
 
 #define bq76xx_afe  0
 #define sh36xx      1
 
 
-#define   LEVEL_CURR     CURR_40A
+#define   LEVEL_CURR     CURR_30A
 #define   AFE_TYPE        sh36xx
 
 #if (LEVEL_CURR == CURR_10A)
@@ -105,6 +106,39 @@
 #define AFE_ODC1_filter  	(10)
 #define AFE_ODC2       		(500) 
 #define AFE_ODC2_filter  	(10)
+#elif (LEVEL_CURR == CURR_30A)
+#define CS_Res			2
+#define CS_Res_Num		3
+#define CBC_DelayT		1280
+#define CBC_Cur_DSG		(1000)
+
+#define OCC_1       (300) 
+#define OCC_2       (300) 
+#define OCC_3       (400) 
+#define OCC_recover (100) 
+#define OCC_filter1  (100 * 5) 
+#define OCC_filter2  (100 * 5) 
+#define OCC_filter3  10 
+
+#define ODC_1       (300) 
+#define ODC_2       (300) 
+#define ODC_3       (400) 
+#define ODC_recover (100) 
+#define ODC_filter1  (100 * 5) 
+#define ODC_filter2  (100 * 5) 
+#define ODC_filter3  10
+
+//***********AFE*****
+#define AFE_OCC1       		(500) 
+#define AFE_OCC1_filter  	(10)
+#define AFE_OCC2       		(500) 
+#define AFE_OCC2_filter  	(10)
+
+#define AFE_ODC1       		(500) 
+#define AFE_ODC1_filter  	(10)
+#define AFE_ODC2       		(500) 
+#define AFE_ODC2_filter  	(10)
+
 
 #elif (LEVEL_CURR == CURR_40A)
 #define CS_Res			2
