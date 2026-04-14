@@ -16,6 +16,9 @@
 // #define BAT_TYPE     BAT_SLAVE
 #define BAT_TYPE     BAT_MASTER
 
+#define FD_YEAR     26
+#define FD_MONTH     4
+#define FD_DAY      15
 
 
 
@@ -142,7 +145,7 @@ typedef struct
 
   uint16_t enter_rtc_delay;
   uint32_t rtc_sleep_cnt;
-}Time_T;
+  }Time_T;
 
 extern Time_T  sys_time;
 
