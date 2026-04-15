@@ -562,6 +562,12 @@ extern UINT8 gu8_200msAccClock_Flag2;
 // }
 
 void App_AFEGet(void) {
+	// if(0 == gu8_200msAccClock_Flag || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
+	// 	|| 1 == gu8_TxEnable_SCI3) {
+	// 	return;
+	// }
+	// gu8_200msAccClock_Flag = 0;
+
 	if(0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
 		|| 1 == gu8_TxEnable_SCI3) {
 		return;
@@ -572,6 +578,7 @@ void App_AFEGet(void) {
 		|| u8E2P_CopperLoss_WriteFlag!=0 || u8E2P_KB_WriteFlag!=0) {
 		return;
 	}
+
 
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 

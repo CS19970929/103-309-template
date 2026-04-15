@@ -1376,10 +1376,10 @@ void rtc_sleep(void)
     }
     case 1:
     {
-        if (Sleep_Mode.bits.b1_ToSleepFlag)
-        {
-            return;
-        }
+        // if (Sleep_Mode.bits.b1_ToSleepFlag)
+        // {
+        //     return;
+        // }
         switch (g_sleepModeSelect)
         {
         case NORMAL_MODE:

@@ -2,6 +2,64 @@
 
 UINT8 SeriesNum = 16;
 
+void IOstatus_RTCMode_test(void)
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // ??GPIOB??
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // ??GPIOC??
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
+
+	ADC_DeInit(ADC1); // ????????????????
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_3) & (~GPIO_Pin_2);
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~GPIO_Pin_7) & (~GPIO_Pin_15) & (~GPIO_Pin_6);
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_Init(GPIOE, &GPIO_InitStructure);
+
+	// ??????
+	// ???
+#if 1
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);
+	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
+	MCUO_DRV_CMNT = 1;
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);
+	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
+	MCUO_PWSV_CTR = 1;
+
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOD, &GPIO_InitStructure);
+	// GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
+	MCUO_PWSV_STB = 0;
+#endif
+
+	// __delay_ms(100);
+}
 // 不同串数维护的表格
 // 中颖
 const unsigned char SeriesSelect_AFE1[16][16] = {
@@ -35,9 +93,22 @@ int main(void)
 	InitVar();	  // 初始化变量
 	// Init_RTC();
 	// RTC_WKTimeConfig();
+	// while (1)
+	// {
+	// 	App_AFEGet();
+	// 	App_Sci();
+	// 	/* Low power: WFI between tasks */
+	// 	IOstatus_RTCMode_test();
+	// 	// if (1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	// 	if (0 == gu8_TxEnable_SCI1 && 0 == gu8_TxEnable_SCI2 && 0 == gu8_TxEnable_SCI3)
+	// 		__WFI();
+	// }
+
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
+		App_AFEGet();
+		App_Sci();
 #else
 		App_SysTime();
 		App_WarnCtrl();
@@ -78,6 +149,7 @@ void InitDevice(void)
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
+	InitIO();
 #else
 	InitDelay();
 	IsSleepStartUp();

@@ -21,3 +21,10 @@ low power
 - 外设
 - 
 
+
+sleep mode下，虽然串口中断可以触发，但是sleep状态下，cpu stop很久的话，会丢data，必须设置进入sleep时间
+
+sleep
+- 无通信
+- 无充放电
+- 持续N秒

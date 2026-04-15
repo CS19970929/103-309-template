@@ -903,17 +903,17 @@ void Sci1_CommonUpper_Tx_Deal(struct RS485MSG *s)
 		return;
 	}
 
-	if (delayFlag)
-	{
-		if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-		{
-			if (++delayFlag == 6)
-			{
-				delayFlag = 0;
-			}
-		}
-		return;
-	}
+	// if (delayFlag)
+	// {
+	// 	if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
+	// 	{
+	// 		if (++delayFlag == 6)
+	// 		{
+	// 			delayFlag = 0;
+	// 		}
+	// 	}
+	// 	return;
+	// }
 
 	while (!((USART1->SR) & (1 << 7)))
 		; // 1<<6 也可以
@@ -1216,17 +1216,17 @@ void Sci2_CommonUpper_Tx_Deal(struct RS485MSG *s)
 		return;
 	}
 
-	if (delayFlag)
-	{
-		if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
-		{
-			if (++delayFlag == 6)
-			{
-				delayFlag = 0;
-			}
-		}
-		return;
-	}
+	// if (delayFlag)
+	// {
+	// 	if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
+	// 	{
+	// 		if (++delayFlag == 6)
+	// 		{
+	// 			delayFlag = 0;
+	// 		}
+	// 	}
+	// 	return;
+	// }
 
 	while (!((USART2->SR) & (1 << 7)))
 		; // 1<<6 也可以
