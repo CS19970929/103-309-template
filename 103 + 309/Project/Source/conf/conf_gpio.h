@@ -19,24 +19,13 @@
 #define PIN_INT_WK_MCU          GPIO_Pin_0
 
 
-#define GPIO_M_STB          GPIOA
-#define PIN_M_STB           GPIO_Pin_15
 
-#define GPIO_AD_EN        GPIOB
-#define PIN_AD_EN         GPIO_Pin_3
 
 #define GPIO_BLE_EN        GPIOB
 #define PIN_BLE_EN         GPIO_Pin_4
 
 #define GPIO_SW_EN        GPIOB
 #define PIN_SW_EN         GPIO_Pin_5
-
-
-#define GPIO_CMNT_EN        GPIOA
-#define PIN_CMNT_EN         GPIO_Pin_4
-
-#define GPIO_KEY1        GPIOA
-#define PIN_KEY1         GPIO_Pin_9
 
 
 #define GPIO_AFE1_SHIP        GPIOA
@@ -107,8 +96,35 @@
 #define GPIO_AFE1_PRO_EN        GPIOB
 #define PIN_AFE1_PRO_EN         GPIO_Pin_0
 
-#define GPIO_ADC_VBU        GPIOA
-#define PIN_RF_EN         GPIO_Pin_7
+#define GPIO_ADC_VBUS        GPIOA
+#define PIN_ADC_VBUS         GPIO_Pin_1
+
+#define GPIO_SPI1_NSS        GPIOA
+#define PIN_SPI1_NSS         GPIO_Pin_4
+
+#define GPIO_SPI1_SCK        GPIOA
+#define PIN_SPI1_SCK         GPIO_Pin_5
+
+#define GPIO_ADC_NMOS        GPIOB
+#define PIN_ADC_NMOS         GPIO_Pin_1
+
+#define GPIO_ADC_CUR        GPIOA
+#define PIN_ADC_CUR         GPIO_Pin_2
+
+#define GPIO_2727_EN        GPIOA
+#define PIN_2737_EN         GPIO_Pin_3
+
+#define GPIO_M_STB          GPIOA
+#define PIN_M_STB           GPIO_Pin_15
+
+#define GPIO_AD_EN        GPIOB
+#define PIN_AD_EN         GPIO_Pin_3
+
+#define GPIO_CMNT_EN        GPIOB
+#define PIN_CMNT_EN         GPIO_Pin_4
+
+#define GPIO_ADC_BUS_EN        GPIOB
+#define PIN_ADC_BUS_EN         GPIO_Pin_5
 
 #endif
 

@@ -842,12 +842,6 @@ void InitAFE1(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
 
-	// // 预充MOS，模拟前端驱动的补充
-	// GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	// GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	// GPIO_Init(GPIOC, &GPIO_InitStructure);
-
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	SH367309_Enable_AFE_Wdt_Cadc_Drivers();

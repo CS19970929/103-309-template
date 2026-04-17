@@ -10,6 +10,28 @@
 
 #define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
+#define T3MAX         0
+#define T3            1
+
+#define FD_BMS_TYPE   C11_AND_C11pro
+
+#define BAT_MASTER  (0)    //20A
+#define BAT_SLAVE   (1)    //40A
+
+// #define BAT_TYPE     BAT_SLAVE
+#define BAT_TYPE     BAT_MASTER
+
+#if (BAT_TYPE == BAT_MASTER)
+// #define CS_Res			2
+// #define CS_Res_Num		3
+#define BMS_CAPCITY     180
+#elif (BAT_TYPE == BAT_SLAVE)
+// #define CS_Res			2
+// #define CS_Res_Num		6
+#define BMS_CAPCITY     270
+#endif		
+
+
 // #define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
