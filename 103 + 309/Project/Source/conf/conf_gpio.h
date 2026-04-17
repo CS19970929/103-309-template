@@ -38,8 +38,6 @@
 #define GPIO_KEY1        GPIOA
 #define PIN_KEY1         GPIO_Pin_9
 
-#define GPIO_AFE1_CTL        GPIOB
-#define PIN_AFE1_CTL         GPIO_Pin_14
 
 #define GPIO_AFE1_SHIP        GPIOA
 #define PIN_AFE1_SHIP         GPIO_Pin_10
@@ -50,11 +48,7 @@
 #define GPIO_AFE1_MODE        GPIOA
 #define PIN_AFE1_MODE         GPIO_Pin_7
 
-#define GPIO_AFE1_PRO_EN        GPIOB
-#define PIN_AFE1_PRO_EN         GPIO_Pin_0
 
-#define GPIO_DBG_LED        GPIOB
-#define PIN_DBG_LED         GPIO_Pin_15
 
 #define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
@@ -78,8 +72,43 @@
 #define GPIO_SCI1_RX	     GPIOB
 #define PIN_SCI1_RX	     GPIO_Pin_7
 
+
+/**********************************************/
+#define GPIO_CHG_IN         GPIOA
+#define PIN_CHG_IN          GPIO_Pin_0
+
 #define GPIO_INT_WK_CMNT         GPIOB
 #define PIN_INT_WK_CMNT          GPIO_Pin_12
+
+#define GPIO_MCC_C         GPIOA
+#define PIN_MCC_C          GPIO_Pin_8
+
+#define GPIO_MCU_WK         GPIOB
+#define PIN_MCU_WK          GPIO_Pin_13
+
+#define GPIO_SW         GPIOA
+#define PIN_SW          GPIO_Pin_9
+
+#define GPIO_AFE1_CTL        GPIOB
+#define PIN_AFE1_CTL         GPIO_Pin_14
+
+#define GPIO_DC_EN        GPIOA
+#define PIN_DC_EN         GPIO_Pin_10
+
+#define GPIO_DBG_LED        GPIOB
+#define PIN_DBG_LED         GPIO_Pin_15
+
+#define GPIO_SPI_MOSI        GPIOA
+#define PIN_SPI_MOSI         GPIO_Pin_6
+
+#define GPIO_RF_EN        GPIOA
+#define PIN_RF_EN         GPIO_Pin_7
+
+#define GPIO_AFE1_PRO_EN        GPIOB
+#define PIN_AFE1_PRO_EN         GPIO_Pin_0
+
+#define GPIO_ADC_VBU        GPIOA
+#define PIN_RF_EN         GPIO_Pin_7
 
 #endif
 
