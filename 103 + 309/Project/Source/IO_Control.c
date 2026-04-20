@@ -233,7 +233,7 @@ void App_DI1_Switch(void)
 	uint8_t state2 = 2;
 	uint8_t state3 = 2;
 	// if (MCUI_ENI_DI1 && MCUI_ENI_DI2 && MCUI_ENI_DI3)
-	state1 = GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1);
+	state1 = GPIO_ReadInputDataBit(GPIO_SW, PIN_SW);
 	// state2 = GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_3);
 	// state3 = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_15);
 

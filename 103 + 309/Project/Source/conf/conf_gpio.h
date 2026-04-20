@@ -19,11 +19,6 @@
 #define PIN_INT_WK_MCU          GPIO_Pin_0
 
 
-
-
-#define GPIO_BLE_EN        GPIOB
-#define PIN_BLE_EN         GPIO_Pin_4
-
 #define GPIO_SW_EN        GPIOB
 #define PIN_SW_EN         GPIO_Pin_5
 
@@ -43,7 +38,6 @@
 
 #define MCUO_DRV_CMNT		PCout(12)		//
 //��Դģ��
-#define MCUO_PWSV_CTR		PCout(13)		//
 #define MCUO_PWSV_STB		PDout(2)		//
 
 #define MCUO_AFE_SHIP 		PAout(10)		//AFE_SHIP

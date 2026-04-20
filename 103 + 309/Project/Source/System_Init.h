@@ -50,14 +50,6 @@
 
 #define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
-//��Դģ��
-#define MCUO_DRV_CMNT		PCout(12)		//
-#define MCUO_PWSV_CTR		PCout(13)		//
-#define MCUO_PWSV_STB		PDout(2)		//
-#define MCUO_BLE_EN 		PBout(12)
-
-
-
 //����ģ��
 #define MCUO_E2PR_WP		PBout(13)	//EEPROMд����
 #define MCUO_DRV_DET_CHG	PBout(3)	//

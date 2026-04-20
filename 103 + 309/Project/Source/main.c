@@ -48,7 +48,6 @@ void IOstatus_RTCMode_test(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-	MCUO_PWSV_CTR = 1;
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -177,14 +176,15 @@ void InitDevice(void)
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面
 
-#ifdef wdog_enable
-	Init_IWDG();
-#endif // !1
 	InitTimer();
 	log_w("init over");
 
 	// EnableLowPowerDebug();
 	DBGMCU_Config(DBGMCU_STOP, ENABLE);
+
+#ifdef wdog_enable
+	Init_IWDG();
+#endif // !1
 
 #endif
 }
