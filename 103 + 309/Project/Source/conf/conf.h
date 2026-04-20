@@ -8,14 +8,14 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0420		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1420		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 // #define _SOC_UPDATE_FAC_
 
 #define BAT_MASTER  (0)    //20A
 #define BAT_SLAVE   (1)    //40A
 
-// #define BAT_TYPE     BAT_SLAVE
-#define BAT_TYPE     BAT_MASTER
+#define BAT_TYPE     BAT_SLAVE
+// #define BAT_TYPE     BAT_MASTER
 
 #define FD_YEAR     26
 #define FD_MONTH     4
