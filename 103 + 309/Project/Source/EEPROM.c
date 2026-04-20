@@ -713,7 +713,9 @@ void InitData_E2prom(void)
 			} while (ret == false);
 			DataLoad_CurrentCali_startup();
 		}
+	#ifdef _SOC_UPDATE_FAC_
 		soc_factory_param_init_first();
+	#endif // !_SOC_NO_UPDATE_
 
 		WriteEEPROM_Word_NoZone(EEPROM_ADDR_PASS, EEPROM_VALUE_BEGIN_FLAG); // 第一次上电初始化完成
 

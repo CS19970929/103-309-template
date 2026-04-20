@@ -32,7 +32,7 @@ void InitSystemWakeUp(void);
 // #define _DEBUG_CODE
 
 int main(void)
-{
+{ 
 	InitDevice(); // 初始化外设
 	InitVar();	  // 初始化变量
 	while (1)
