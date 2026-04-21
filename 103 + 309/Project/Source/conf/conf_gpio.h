@@ -15,12 +15,6 @@
 
 
 /**********************************************/
-#define GPIO_INT_WK_MCU         GPIOA
-#define PIN_INT_WK_MCU          GPIO_Pin_0
-
-
-#define GPIO_SW_EN        GPIOB
-#define PIN_SW_EN         GPIO_Pin_5
 
 
 #define GPIO_AFE1_SHIP        GPIOA

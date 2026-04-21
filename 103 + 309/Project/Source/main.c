@@ -86,6 +86,72 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
+void open_chg_close_dsg(void)
+{
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 瀵?拷閸氱枌ADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_SET);
+}
+void open_dsg_close_chg(void)
+{
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 瀵?拷閸氱枌ADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+}
+void enter_fac_mode(bool on)
+{
+#if 1
+	if (on)
+	{
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 瀵?拷閸氱枌ADC
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 閸忓懐鏁窶OS閻㈢泧FE绾?兛娆㈤幒褍鍩?
+		MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+		GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_SET);
+	}
+	else
+	{
+		open_dsg_close_chg();
+	}
+#endif
+}
+
+void charger_detect_and_keyLogi_200ms(void)
+{
+	static uint8_t state = 0;
+
+	switch (state)
+	{
+	case 0:
+		if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 1;
+			open_chg_close_dsg();
+		}
+		else
+		{
+		}
+		break;
+	case 1:
+		if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 0;
+			open_dsg_close_chg();
+		}
+		else
+		{
+		}
+		break;
+	default:
+		state = 0;
+		break;
+	}
+}
+
 int main(void)
 {
 	InitDevice(); // 初始化外设
@@ -111,11 +177,9 @@ int main(void)
 #else
 		App_SysTime();
 		APP_LedBar();
-		App_WarnCtrl();
+		// App_WarnCtrl();
+		charger_detect_and_keyLogi_200ms();
 		App_AFEGet();
-
-		// App_SH367309();
-		// App_MOS_Relay_Ctrl();
 
 		App_Sci();
 		App_AnlogCal();
@@ -129,12 +193,11 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
-		App_ChargerLoad_Det();
+		// App_ChargerLoad_Det();
 
 		App_FlashUpdate();
 		App_LogRecord();
 		App_ProID_Deal();
-		// __delay_ms(1000);
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif
@@ -165,14 +228,14 @@ void InitDevice(void)
 	InitSystemWakeUp();
 	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
-	// InitCan();
+	InitCan();
 	InitADC();
 	InitSci();
 
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
-	Init_ChargerLoad_Det();
+	// Init_ChargerLoad_Det();
 
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面

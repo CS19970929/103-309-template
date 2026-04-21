@@ -39,4 +39,6 @@ todo
 - soc 
 - can结合低功耗？
 - 74hc595 + 5pin ->> N * (N - 1) = 20pin是led数码管控制
--
+- 分口
+
+5 pin led不是直接由mcu控制的，而是74hc595的前5pin分别控制的，mcu只通过spi控制74hc595来控制数码管显示

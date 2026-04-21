@@ -803,51 +803,6 @@ void SOC_Result_Pass(void)
 	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
 }
 
-void SOC_Data_Filter(void)
-{
-	static UINT8 su8_StartUp_Flag = 0;
-
-	static UINT16 su16_Filter_Tcnt1 = 0;
-
-	static UINT16 su16_VcellMax_hold = 0;
-	static UINT16 su16_Vcellmin_hold = 0;
-
-	// 电压突变滤波。例如5V和500mV，则下面计算就出问题了，满电容量变0或者很小的值。
-	// 如果真的是的话，下面计算瞬间让满电容量和当前容量为0，问题不大。
-	// 如果能通过这个滤波这种情况一般只会在电容爆掉，啥的，硬件出问题。
-	// 如果通不过，就是瞬间变化，过滤掉不需要管。(有可能是采样，或者AFE出问题，海诚hs012出现)
-	if (ModulusSub(SOC_Enhance_Element.u16_VCellMax, SOC_Enhance_Element.u16_VCellMin) < 600)
-	{
-		su16_VcellMax_hold = SOC_Enhance_Element.u16_VCellMax;
-		su16_Vcellmin_hold = SOC_Enhance_Element.u16_VCellMin;
-		su8_StartUp_Flag = 1;
-		if (su16_Filter_Tcnt1)
-			su16_Filter_Tcnt1 = 0;
-	}
-	else
-	{
-		if (++su16_Filter_Tcnt1 < 5 * 10)
-		{ // 延时10s
-			if (!su8_StartUp_Flag)
-			{ // 如果开局就进来这里，则赋值一下。
-				su16_VcellMax_hold = SOC_Enhance_Element.u16_VCellMax;
-				su16_Vcellmin_hold = SOC_Enhance_Element.u16_VCellMin;
-			}
-			SOC_Enhance_Element.u16_VCellMax = su16_VcellMax_hold;
-			SOC_Enhance_Element.u16_VCellMin = su16_Vcellmin_hold;
-		}
-		else
-		{
-			su16_Filter_Tcnt1 = 50;
-		}
-	}
-
-	// TODO
-	// 还有两种突变。
-	// 1，突然整体暴涨几百mV。换电池。那得重新循环学习就好。
-	// 2，电流突变，这个正常。
-}
-
 void InitSOC_IntEnhance(void)
 {
 	// 外部获取的数据初始化

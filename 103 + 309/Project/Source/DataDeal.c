@@ -85,33 +85,6 @@ void DataLoad_CellVolt(void)
 			g_stCellInfoReport.u16VCell[i] = 61001;
 		}
 	}
-
-	if (g_stCellInfoReport.u16Ichg > 0)
-	{
-		for (i = 0; i < CompensateNUM; ++i)
-		{
-			if (CopperLoss_Num[i] == 0)
-			{
-				break;
-			}
-			t_i32temp = (UINT32)CopperLoss[i] * g_stCellInfoReport.u16Ichg;
-			g_stCellInfoReport.u16VCell[CopperLoss_Num[i] - 1] -= (UINT16)(((t_i32temp >> 14) + (t_i32temp >> 15) + (t_i32temp >> 17)) & 0xFFFF);
-		}
-	}
-	else if (g_stCellInfoReport.u16IDischg > 0)
-	{
-		for (i = 0; i < CompensateNUM; ++i)
-		{
-			if (CopperLoss_Num[i] == 0)
-			{
-				break;
-			}
-			t_i32temp = (UINT32)CopperLoss[i] * g_stCellInfoReport.u16IDischg;
-			g_stCellInfoReport.u16VCell[CopperLoss_Num[i] - 1] += (UINT16)(((t_i32temp >> 14) + (t_i32temp >> 15) + (t_i32temp >> 17)) & 0xFFFF);
-		}
-	}
-
-	// DataLoad_CellVolt_Test();
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -325,7 +298,7 @@ void DataLoad_Current(void)
 		u32_ChgCur_mA = 0;
 	}
 
-	DataLoad_CurrentCali();
+	// DataLoad_CurrentCali();
 
 	if (u32_DsgCur_mA > 2000)
 	{
@@ -561,35 +534,33 @@ extern UINT8 gu8_200msAccClock_Flag2;
 // 	gu8_200msAccClock_Flag2 = 0;
 // }
 
-void App_AFEGet(void) {
+void App_AFEGet(void)
+{
 	// if(0 == gu8_200msAccClock_Flag || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
 	// 	|| 1 == gu8_TxEnable_SCI3) {
 	// 	return;
 	// }
 	// gu8_200msAccClock_Flag = 0;
 
-	if(0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
-		|| 1 == gu8_TxEnable_SCI3) {
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	{
 		return;
 	}
 
-	if(u32E2P_Pro_VolCur_WriteFlag!=0 || u32E2P_Pro_Temp_WriteFlag!=0 || u32E2P_Pro_Other_WriteFlag!=0\
-		|| u32E2P_OtherElement1_WriteFlag!=0 || u32E2P_RTC_Element_WriteFlag!=0 || u8E2P_SocTable_WriteFlag!=0\
-		|| u8E2P_CopperLoss_WriteFlag!=0 || u8E2P_KB_WriteFlag!=0) {
+	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
+	{
 		return;
 	}
-
 
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
-    DataLoad_CellVolt();
-    //DataLoad_CellVolt_Test();
-    DataLoad_CellVoltMaxMinFind();
-    DataLoad_Temperature();
-    DataLoad_TemperatureMaxMinFind();
+	DataLoad_CellVolt();
+	// DataLoad_CellVolt_Test();
+	DataLoad_CellVoltMaxMinFind();
+	DataLoad_Temperature();
+	DataLoad_TemperatureMaxMinFind();
 	DataLoad_Current();
 
 	App_SH367309();
 	// App_MOS_Relay_Ctrl();
 }
-

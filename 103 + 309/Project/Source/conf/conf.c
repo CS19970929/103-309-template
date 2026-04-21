@@ -163,9 +163,9 @@ void InitWakeUp_Base(void)
     jtag_disableAndConfIO();
 #if 1
     {
-        GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU; // ?????GPIO??,PA0?????
+        GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN; // ?????GPIO??,PA0?????
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_INT_WK_MCU, &GPIO_InitStructure);
+        GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
         EXTI_InitStruct.EXTI_Line = EXTI_Line0;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;

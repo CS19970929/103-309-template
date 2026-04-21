@@ -255,16 +255,6 @@ void App_DI1_Switch(void)
 		return;
 	}
 
-#if 0
-	if (!MCUI_ENI_DI1 || !MCUI_ENI_DI2 || !MCUI_ENI_DI3)
-	{
-		return;
-	}
-	else
-	{
-	}
-#endif
-
 #endif
 
 #endif

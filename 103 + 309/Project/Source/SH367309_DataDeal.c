@@ -88,8 +88,7 @@ void Refresh_Parameters(void)
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
 	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10; // 瑜版挸澧犵?电懓绨叉径姘?毌ms
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = 0;
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
+	
 	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 瑜版挸澧犵?电懓绨叉径姘?毌mv
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, AFE_OCD2V);
 	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 瑜版挸澧犵?电懓绨叉径姘?毌ms
@@ -112,91 +111,6 @@ void Refresh_Parameters(void)
 	AFE_TEMPERATURE[5] = AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue / 10; /* 放电高温保护恢复 */
 	AFE_TEMPERATURE[6] = AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue / 10;	 /* 放电低温保护 */
 	AFE_TEMPERATURE[7] = AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue / 10; /* 放电低温保护恢复 */
-
-	for (i = 0; i < 8; i++)
-	{
-		temp = iSheldTemp_10K_NTC[AFE_TEMPERATURE[i]];
-		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) = (UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
-	}
-}
-
-// 全部数据刷新到AFE_ROM_PARAMETERS_Struction结构体里面
-// 一部分是默认的配置，从.h文件的#define里面来
-// 一部分是可修改的，AFE_Parameters_RS485_Struction里面来
-void fac_sh367309_param_init(void)
-{
-	int i = 0;
-	int temp = 0;
-	UINT8 TR = 0;
-	UINT16 AFE_TEMPERATURE[8] = {0}; // 温度，摄氏度+40，（0度的值为40）
-
-	// 读309的TR，顺便把AFE默认值配置传到AFE_ROM_PARAMETERS_Struction结构体(#define类型)。
-	if (MTPRead(0x19, 1, &TR))
-	{
-		SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
-		ucMTPBuffer[25] = TR & 0x7F;
-		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
-	}
-
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
-	// AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = (0x00 >> 6);
-
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
-
-	if (PRT_E2ROMParas.u16VcellOvp_Third > 3800)
-	{
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((4300 / 5) >> 8) & 0x3;
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (4300 / 5) & 0x00FF;
-
-		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((4200 / 5) >> 8) & 0x3;
-		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (4200 / 5) & 0x00FF;
-	}
-	else
-	{
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((3800 / 5) >> 8) & 0x3;
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (3800 / 5) & 0x00FF;
-
-		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((3600 / 5) >> 8) & 0x3;
-		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (3600 / 5) & 0x00FF;
-	}
-	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVT = 0;
-
-	AFE_ROM_PARAMETERS_Struction.m04H_05H.UVT = 0;
-	AFE_ROM_PARAMETERS_Struction.m06H_07H.UV = (2000 / 20) & 0x00FF;
-	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (2200 / 20) & 0x00FF;
-
-	// temp = PRT_E2ROMParas.u16IdsgOcp_Third * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-	// temp = PRT_E2ROMParas.u16IdsgOcp_Filter * 10; // 当前对应多少ms
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
-
-	// temp = PRT_E2ROMParas.u16IchgOcp_Third * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
-	// AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-	// temp = PRT_E2ROMParas.u16IchgOcp_Filter * 10; // 当前对应多少ms
-	// AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
-	{
-		// 实际120A
-		temp = 1000 * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
-		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
-
-		temp = 1000 * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
-		AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-		AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = 0;
-	}
-
-	InitShortCur();
-
-	AFE_TEMPERATURE[0] = (70 + 40);	 /* 充电高温保护 */
-	AFE_TEMPERATURE[1] = (60 + 40);	 /* 充电高温保护恢复 */
-	AFE_TEMPERATURE[2] = (-20 + 40); /* 充电低温保护 */
-	AFE_TEMPERATURE[3] = (-10 + 40); /* 充电低温保护恢复 */
-	AFE_TEMPERATURE[4] = (80 + 40);	 /* 放电高温保护 */
-	AFE_TEMPERATURE[5] = (70 + 40);	 /* 放电高温保护恢复 */
-	AFE_TEMPERATURE[6] = (-20 + 40); /* 放电低温保护 */
-	AFE_TEMPERATURE[7] = (-15 + 40); /* 放电低温保护恢复 */
 
 	for (i = 0; i < 8; i++)
 	{
@@ -231,39 +145,6 @@ bool Write_Parameters(void)
 	return ret;
 }
 
-bool fac_sh367309_param_init_first_powerup(void)
-{
-	bool ret = false;
-
-	// if (AFE_PARAM_WRITE_Flag)
-	{
-		// AFE_PARAM_WRITE_Flag = 0;
-		MCUO_AFE_VPRO = 1; // 进入烧写模式
-		Delay1ms(20);
-		Feed_IWatchDog;
-
-		fac_sh367309_param_init();
-		ret = Write_Parameters();
-
-		Feed_IWatchDog;
-		MCUO_AFE_VPRO = 0; // 退出烧写模式
-		Delay1ms(1);
-
-		/* 每次写完如果不报错都要复位一下。这样写进去的参数才有效 */
-		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-		{
-			AFE_Reset(); // Reset IC
-			Delay1ms(5);
-			AFE_IsReady();
-			AFE_ResetFlag = 1;
-		}
-
-		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	}
-	return ret;
-}
-
-// 开机的时候，AFE_PARAM_WRITE_Flag=1是默认值，所以开机的时候会执行一次。
 #if 0
 bool SH367309_UpdataAfeConfig(void)
 {
