@@ -6,6 +6,7 @@ int AFE_PARAM_WRITE_Flag = 1;
 int AFE_ResetFlag = 0;
 
 const UINT16 AFE_OCD1V_OCCV[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};					   // 一级放电过流和充电过流，单位mv
+const UINT16 AFE_OCD2V[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500}; 
 const UINT16 AFE_SCV[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};					   // 短路保护电压，单位mv
 const UINT16 AFE_OVT_UVT[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000}; // 过压低压延时时间。单位ms
 const UINT16 AFE_SCT[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};					   // 短路延时,单位us。
@@ -83,12 +84,16 @@ void Refresh_Parameters(void)
 	/* 放电低压恢复 */
 	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
 
-	/* 放电过流:     二级过流值（A*10）/         */
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue * 100 / g_u32CS_Res_AFE; // 瑜版挸澧犵?电懓绨叉径姘?毌mv
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-	/* 放电过流滤波时间 */
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 当前对应多少ms
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10; // 瑜版挸澧犵?电懓绨叉径姘?毌ms
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
+	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = 0;
+	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 瑜版挸澧犵?电懓绨叉径姘?毌mv
+	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, AFE_OCD2V);
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // 瑜版挸澧犵?电懓绨叉径姘?毌ms
+	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2T = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 
 	/* 充电过流 */
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
@@ -172,7 +177,7 @@ void fac_sh367309_param_init(void)
 	// temp = PRT_E2ROMParas.u16IchgOcp_Filter * 10; // 当前对应多少ms
 	// AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 	{
-		//实际120A
+		// 实际120A
 		temp = 1000 * 100 / g_u32CS_Res_AFE; // 当前对应多少mv
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
 		AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = 0;
