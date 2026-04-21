@@ -1,23 +1,21 @@
 #include "main.h"
+#include <string.h>
 
 typedef struct
 {
-    GPIO_TypeDef *port;
-    uint16_t pin;
-} LedBarPinDef;
-
-typedef struct
-{
-    uint8_t sel_595_bit;
     uint8_t low_pin;
     uint8_t high_pin;
 } LedBarRoute;
+
+typedef struct
+{
+    uint32_t lit_mask;
+} LedBarPattern;
 
 typedef enum
 {
     LEDBAR_ROUTE_HUNDREDS_1_UPPER = 0,
     LEDBAR_ROUTE_HUNDREDS_1_LOWER,
-
     LEDBAR_ROUTE_TENS_A,
     LEDBAR_ROUTE_TENS_B,
     LEDBAR_ROUTE_TENS_C,
@@ -25,7 +23,6 @@ typedef enum
     LEDBAR_ROUTE_TENS_E,
     LEDBAR_ROUTE_TENS_F,
     LEDBAR_ROUTE_TENS_G,
-
     LEDBAR_ROUTE_ONES_A,
     LEDBAR_ROUTE_ONES_B,
     LEDBAR_ROUTE_ONES_C,
@@ -33,37 +30,20 @@ typedef enum
     LEDBAR_ROUTE_ONES_E,
     LEDBAR_ROUTE_ONES_F,
     LEDBAR_ROUTE_ONES_G,
-
     LEDBAR_ROUTE_ICON_CHARGE,
     LEDBAR_ROUTE_ICON_PERCENT,
-
     LEDBAR_ROUTE_COUNT
 } LedBarRouteId;
 
-#define LEDBAR_DIGIT_BIT_A (1u << 0)
-#define LEDBAR_DIGIT_BIT_B (1u << 1)
-#define LEDBAR_DIGIT_BIT_C (1u << 2)
-#define LEDBAR_DIGIT_BIT_D (1u << 3)
-#define LEDBAR_DIGIT_BIT_E (1u << 4)
-#define LEDBAR_DIGIT_BIT_F (1u << 5)
-#define LEDBAR_DIGIT_BIT_G (1u << 6)
-
-#define LEDBAR_595_SEL_HUNDREDS 0u
-#define LEDBAR_595_SEL_TENS     1u
-#define LEDBAR_595_SEL_ONES     2u
-#define LEDBAR_595_SEL_CHARGE   3u
-#define LEDBAR_595_SEL_PERCENT  4u
-
-#define LEDBAR_GPIO_P1 GPIOC
-#define LEDBAR_PIN_P1  GPIO_Pin_4
-#define LEDBAR_GPIO_P2 GPIOC
-#define LEDBAR_PIN_P2  GPIO_Pin_3
-#define LEDBAR_GPIO_P3 GPIOC
-#define LEDBAR_PIN_P3  GPIO_Pin_2
-#define LEDBAR_GPIO_P4 GPIOC
-#define LEDBAR_PIN_P4  GPIO_Pin_1
-#define LEDBAR_GPIO_P5 GPIOC
-#define LEDBAR_PIN_P5  GPIO_Pin_0
+#define LEDBAR_DIGIT_BIT_A         (1u << 0)
+#define LEDBAR_DIGIT_BIT_B         (1u << 1)
+#define LEDBAR_DIGIT_BIT_C         (1u << 2)
+#define LEDBAR_DIGIT_BIT_D         (1u << 3)
+#define LEDBAR_DIGIT_BIT_E         (1u << 4)
+#define LEDBAR_DIGIT_BIT_F         (1u << 5)
+#define LEDBAR_DIGIT_BIT_G         (1u << 6)
+#define LEDBAR_PATTERN_MASK_MAX    30u
+#define LEDBAR_FRAME_PATTERN_COUNT 5u
 
 #define LEDBAR_595_GPIO_DATA  GPIO_LED595_DATA
 #define LEDBAR_595_PIN_DATA   PIN_LED595_DATA
@@ -72,48 +52,28 @@ typedef enum
 #define LEDBAR_595_GPIO_LATCH GPIO_LED595_LATCH
 #define LEDBAR_595_PIN_LATCH  PIN_LED595_LATCH
 
-#define LEDBAR_INVALID_SCAN_INDEX 0xFFu
-
 LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
 
-static const LedBarPinDef s_ledbar_pins[LEDBAR_PIN_COUNT] =
-{
-    { LEDBAR_GPIO_P1, LEDBAR_PIN_P1 },
-    { LEDBAR_GPIO_P2, LEDBAR_PIN_P2 },
-    { LEDBAR_GPIO_P3, LEDBAR_PIN_P3 },
-    { LEDBAR_GPIO_P4, LEDBAR_PIN_P4 },
-    { LEDBAR_GPIO_P5, LEDBAR_PIN_P5 },
-};
-
-/*
- * Charlie 路由沿用 charlie_595_display_framework/LedBar.c 的实测结果：
- * - H1/H2：组成百位“1”
- * - H3：充电图标
- * - H4：百分号图标
- */
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
 {
-    [LEDBAR_ROUTE_HUNDREDS_1_UPPER] = { LEDBAR_595_SEL_HUNDREDS, 3u, 2u },
-    [LEDBAR_ROUTE_HUNDREDS_1_LOWER] = { LEDBAR_595_SEL_HUNDREDS, 3u, 1u },
-
-    [LEDBAR_ROUTE_TENS_A] = { LEDBAR_595_SEL_TENS, 2u, 1u },
-    [LEDBAR_ROUTE_TENS_B] = { LEDBAR_595_SEL_TENS, 1u, 2u },
-    [LEDBAR_ROUTE_TENS_C] = { LEDBAR_595_SEL_TENS, 2u, 3u },
-    [LEDBAR_ROUTE_TENS_D] = { LEDBAR_595_SEL_TENS, 1u, 3u },
-    [LEDBAR_ROUTE_TENS_E] = { LEDBAR_595_SEL_TENS, 1u, 4u },
-    [LEDBAR_ROUTE_TENS_F] = { LEDBAR_595_SEL_TENS, 2u, 4u },
-    [LEDBAR_ROUTE_TENS_G] = { LEDBAR_595_SEL_TENS, 3u, 4u },
-
-    [LEDBAR_ROUTE_ONES_A] = { LEDBAR_595_SEL_ONES, 1u, 0u },
-    [LEDBAR_ROUTE_ONES_B] = { LEDBAR_595_SEL_ONES, 0u, 1u },
-    [LEDBAR_ROUTE_ONES_C] = { LEDBAR_595_SEL_ONES, 2u, 0u },
-    [LEDBAR_ROUTE_ONES_D] = { LEDBAR_595_SEL_ONES, 0u, 2u },
-    [LEDBAR_ROUTE_ONES_E] = { LEDBAR_595_SEL_ONES, 3u, 0u },
-    [LEDBAR_ROUTE_ONES_F] = { LEDBAR_595_SEL_ONES, 0u, 3u },
-    [LEDBAR_ROUTE_ONES_G] = { LEDBAR_595_SEL_ONES, 0u, 4u },
-
-    [LEDBAR_ROUTE_ICON_CHARGE] = { LEDBAR_595_SEL_CHARGE, 4u, 2u },
-    [LEDBAR_ROUTE_ICON_PERCENT] = { LEDBAR_595_SEL_PERCENT, 4u, 1u },
+    {3u, 2u},
+    {3u, 1u},
+    {2u, 1u},
+    {1u, 2u},
+    {2u, 3u},
+    {1u, 3u},
+    {1u, 4u},
+    {2u, 4u},
+    {3u, 4u},
+    {1u, 0u},
+    {0u, 1u},
+    {2u, 0u},
+    {0u, 2u},
+    {3u, 0u},
+    {0u, 3u},
+    {0u, 4u},
+    {4u, 2u},
+    {4u, 1u},
 };
 
 static const uint8_t s_ledbar_digit_map[10] =
@@ -130,28 +90,243 @@ static const uint8_t s_ledbar_digit_map[10] =
     LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
-static volatile uint32_t s_ledbar_active_mask = 0u;
+/*
+ * These tables are generated against the current schematic:
+ * QA~QE drive D0~D4 directly and OE is always enabled.
+ * Each row is the shortest 74HC595 pattern sequence that covers the target
+ * display while minimizing unavoidable extra lit segments.
+ */
+static const uint8_t s_ledbar_soc_patterns[101][5] =
+{
+    {1, 14, 0, 0, 0}, /* 000, extra=1 */
+    {2, 3, 0, 0, 0}, /* 001, extra=3 */
+    {1, 14, 30, 0, 0}, /* 002, extra=3 */
+    {1, 14, 30, 0, 0}, /* 003, extra=3 */
+    {26, 11, 0, 0, 0}, /* 004, extra=3 */
+    {1, 14, 30, 0, 0}, /* 005, extra=3 */
+    {1, 14, 30, 0, 0}, /* 006, extra=2 */
+    {1, 2, 0, 0, 0}, /* 007, extra=3 */
+    {1, 14, 30, 0, 0}, /* 008, extra=1 */
+    {1, 14, 30, 0, 0}, /* 009, extra=2 */
+    {12, 8, 1, 14, 0}, /* 010, extra=2 */
+    {4, 10, 11, 0, 0}, /* 011, extra=5 */
+    {5, 10, 30, 0, 0}, /* 012, extra=4 */
+    {12, 9, 14, 30, 0}, /* 013, extra=3 */
+    {4, 11, 30, 0, 0}, /* 014, extra=4 */
+    {28, 9, 11, 0, 0}, /* 015, extra=3 */
+    {28, 11, 1, 0, 0}, /* 016, extra=3 */
+    {12, 9, 14, 0, 0}, /* 017, extra=4 */
+    {12, 8, 1, 14, 30}, /* 018, extra=2 */
+    {12, 9, 14, 30, 0}, /* 019, extra=2 */
+    {2, 12, 17, 0, 0}, /* 020, extra=3 */
+    {2, 29, 17, 0, 0}, /* 021, extra=4 */
+    {2, 20, 29, 21, 0}, /* 022, extra=2 */
+    {2, 20, 9, 0, 0}, /* 023, extra=3 */
+    {10, 20, 8, 11, 0}, /* 024, extra=3 */
+    {11, 20, 8, 9, 0}, /* 025, extra=2 */
+    {3, 21, 28, 0, 0}, /* 026, extra=2 */
+    {2, 29, 17, 0, 0}, /* 027, extra=3 */
+    {2, 28, 17, 0, 0}, /* 028, extra=2 */
+    {10, 20, 9, 0, 0}, /* 029, extra=2 */
+    {10, 12, 17, 0, 0}, /* 030, extra=3 */
+    {2, 21, 9, 0, 0}, /* 031, extra=5 */
+    {10, 21, 28, 0, 0}, /* 032, extra=3 */
+    {2, 20, 9, 0, 0}, /* 033, extra=3 */
+    {10, 20, 8, 11, 0}, /* 034, extra=3 */
+    {11, 20, 8, 9, 0}, /* 035, extra=2 */
+    {11, 21, 28, 0, 0}, /* 036, extra=2 */
+    {2, 21, 9, 0, 0}, /* 037, extra=4 */
+    {10, 28, 17, 0, 0}, /* 038, extra=2 */
+    {10, 20, 9, 0, 0}, /* 039, extra=2 */
+    {12, 8, 17, 14, 0}, /* 040, extra=3 */
+    {4, 11, 18, 0, 0}, /* 041, extra=6 */
+    {20, 10, 16, 21, 0}, /* 042, extra=4 */
+    {12, 9, 16, 14, 0}, /* 043, extra=4 */
+    {20, 10, 27, 0, 0}, /* 044, extra=4 */
+    {12, 9, 16, 15, 0}, /* 045, extra=3 */
+    {28, 11, 17, 0, 0}, /* 046, extra=3 */
+    {13, 11, 18, 0, 0}, /* 047, extra=5 */
+    {20, 10, 17, 0, 0}, /* 048, extra=3 */
+    {12, 9, 16, 14, 0}, /* 049, extra=3 */
+    {19, 9, 14, 0, 0}, /* 050, extra=2 */
+    {2, 8, 19, 0, 0}, /* 051, extra=3 */
+    {2, 9, 19, 22, 0}, /* 052, extra=3 */
+    {2, 9, 18, 22, 0}, /* 053, extra=2 */
+    {11, 8, 18, 0, 0}, /* 054, extra=1 */
+    {2, 9, 18, 30, 0}, /* 055, extra=2 */
+    {11, 28, 17, 0, 0}, /* 056, extra=2 */
+    {2, 9, 18, 0, 0}, /* 057, extra=2 */
+    {2, 9, 19, 30, 0}, /* 058, extra=1 */
+    {2, 9, 18, 30, 0}, /* 059, extra=1 */
+    {10, 8, 17, 14, 0}, /* 060, extra=1 */
+    {10, 8, 16, 11, 0}, /* 061, extra=2 */
+    {10, 8, 17, 30, 0}, /* 062, extra=2 */
+    {10, 9, 16, 30, 0}, /* 063, extra=1 */
+    {10, 8, 16, 11, 0}, /* 064, extra=0 */
+    {10, 9, 16, 30, 0}, /* 065, extra=1 */
+    {11, 28, 17, 0, 0}, /* 066, extra=1 */
+    {2, 9, 16, 0, 0}, /* 067, extra=2 */
+    {10, 8, 17, 30, 0}, /* 068, extra=0 */
+    {10, 9, 16, 30, 0}, /* 069, extra=0 */
+    {10, 4, 1, 0, 0}, /* 070, extra=2 */
+    {2, 4, 11, 0, 0}, /* 071, extra=4 */
+    {10, 5, 30, 0, 0}, /* 072, extra=3 */
+    {10, 28, 9, 0, 0}, /* 073, extra=3 */
+    {10, 28, 11, 0, 0}, /* 074, extra=3 */
+    {11, 28, 9, 0, 0}, /* 075, extra=2 */
+    {11, 28, 1, 0, 0}, /* 076, extra=2 */
+    {2, 13, 9, 0, 0}, /* 077, extra=3 */
+    {10, 28, 1, 0, 0}, /* 078, extra=2 */
+    {10, 28, 9, 0, 0}, /* 079, extra=2 */
+    {10, 12, 17, 0, 0}, /* 080, extra=1 */
+    {10, 29, 17, 0, 0}, /* 081, extra=3 */
+    {10, 28, 17, 0, 0}, /* 082, extra=2 */
+    {10, 28, 16, 9, 0}, /* 083, extra=1 */
+    {10, 28, 16, 11, 0}, /* 084, extra=1 */
+    {11, 28, 16, 9, 0}, /* 085, extra=0 */
+    {11, 28, 17, 0, 0}, /* 086, extra=0 */
+    {10, 29, 17, 0, 0}, /* 087, extra=2 */
+    {10, 28, 17, 0, 0}, /* 088, extra=0 */
+    {10, 28, 16, 9, 0}, /* 089, extra=0 */
+    {10, 12, 17, 0, 0}, /* 090, extra=2 */
+    {10, 29, 17, 0, 0}, /* 091, extra=4 */
+    {10, 28, 17, 0, 0}, /* 092, extra=3 */
+    {10, 28, 16, 9, 0}, /* 093, extra=2 */
+    {10, 28, 16, 11, 0}, /* 094, extra=2 */
+    {11, 28, 16, 9, 0}, /* 095, extra=1 */
+    {11, 28, 17, 0, 0}, /* 096, extra=1 */
+    {10, 29, 17, 0, 0}, /* 097, extra=3 */
+    {10, 28, 17, 0, 0}, /* 098, extra=1 */
+    {10, 28, 16, 9, 0}, /* 099, extra=1 */
+    {2, 5, 25, 12, 0}, /* 100, extra=1 */
+};
+
+static const uint8_t s_ledbar_soc_charge_patterns[101][5] =
+{
+    {1, 14, 0, 0, 0}, /* 000, extra=0 */
+    {2, 3, 15, 0, 0}, /* 001, extra=3 */
+    {1, 14, 30, 0, 0}, /* 002, extra=2 */
+    {1, 14, 30, 0, 0}, /* 003, extra=2 */
+    {14, 1, 30, 0, 0}, /* 004, extra=3 */
+    {1, 14, 30, 0, 0}, /* 005, extra=2 */
+    {1, 14, 30, 0, 0}, /* 006, extra=1 */
+    {1, 14, 0, 0, 0}, /* 007, extra=3 */
+    {1, 14, 30, 0, 0}, /* 008, extra=0 */
+    {1, 14, 30, 0, 0}, /* 009, extra=1 */
+    {12, 8, 1, 14, 0}, /* 010, extra=1 */
+    {4, 10, 11, 0, 0}, /* 011, extra=4 */
+    {5, 10, 30, 0, 0}, /* 012, extra=3 */
+    {12, 9, 14, 30, 0}, /* 013, extra=2 */
+    {4, 11, 30, 0, 0}, /* 014, extra=3 */
+    {28, 9, 15, 0, 0}, /* 015, extra=2 */
+    {28, 8, 1, 15, 0}, /* 016, extra=2 */
+    {12, 9, 14, 0, 0}, /* 017, extra=3 */
+    {12, 8, 1, 14, 30}, /* 018, extra=1 */
+    {12, 9, 14, 30, 0}, /* 019, extra=1 */
+    {2, 12, 17, 0, 0}, /* 020, extra=2 */
+    {2, 13, 17, 0, 0}, /* 021, extra=4 */
+    {2, 5, 13, 20, 0}, /* 022, extra=2 */
+    {2, 4, 9, 20, 0}, /* 023, extra=3 */
+    {10, 12, 16, 11, 0}, /* 024, extra=3 */
+    {11, 12, 16, 9, 0}, /* 025, extra=2 */
+    {3, 4, 28, 21, 0}, /* 026, extra=2 */
+    {2, 13, 17, 0, 0}, /* 027, extra=3 */
+    {2, 12, 16, 1, 0}, /* 028, extra=2 */
+    {10, 4, 9, 20, 0}, /* 029, extra=2 */
+    {10, 12, 17, 0, 0}, /* 030, extra=2 */
+    {11, 13, 18, 0, 0}, /* 031, extra=4 */
+    {2, 5, 8, 22, 0}, /* 032, extra=3 */
+    {11, 13, 22, 0, 0}, /* 033, extra=2 */
+    {11, 12, 18, 0, 0}, /* 034, extra=3 */
+    {11, 12, 16, 9, 0}, /* 035, extra=2 */
+    {11, 4, 28, 21, 0}, /* 036, extra=2 */
+    {11, 13, 18, 0, 0}, /* 037, extra=3 */
+    {3, 5, 8, 22, 0}, /* 038, extra=2 */
+    {2, 12, 9, 18, 0}, /* 039, extra=2 */
+    {12, 8, 17, 14, 0}, /* 040, extra=2 */
+    {4, 11, 18, 0, 0}, /* 041, extra=5 */
+    {21, 24, 14, 0, 0}, /* 042, extra=4 */
+    {12, 9, 16, 14, 0}, /* 043, extra=3 */
+    {12, 11, 18, 0, 0}, /* 044, extra=4 */
+    {12, 9, 16, 15, 0}, /* 045, extra=2 */
+    {12, 24, 17, 15, 0}, /* 046, extra=2 */
+    {13, 11, 18, 0, 0}, /* 047, extra=4 */
+    {12, 24, 17, 14, 0}, /* 048, extra=2 */
+    {12, 9, 16, 14, 0}, /* 049, extra=2 */
+    {19, 9, 14, 0, 0}, /* 050, extra=1 */
+    {18, 9, 15, 0, 0}, /* 051, extra=3 */
+    {3, 9, 18, 6, 0}, /* 052, extra=3 */
+    {18, 9, 6, 0, 0}, /* 053, extra=2 */
+    {11, 8, 18, 15, 0}, /* 054, extra=1 */
+    {18, 9, 14, 0, 0}, /* 055, extra=2 */
+    {3, 9, 18, 14, 0}, /* 056, extra=2 */
+    {18, 9, 15, 0, 0}, /* 057, extra=2 */
+    {3, 9, 18, 14, 0}, /* 058, extra=1 */
+    {18, 9, 14, 0, 0}, /* 059, extra=1 */
+    {10, 8, 17, 14, 0}, /* 060, extra=0 */
+    {10, 8, 16, 11, 15}, /* 061, extra=2 */
+    {10, 24, 17, 14, 0}, /* 062, extra=2 */
+    {10, 9, 16, 14, 0}, /* 063, extra=1 */
+    {10, 8, 16, 11, 15}, /* 064, extra=0 */
+    {10, 9, 16, 14, 0}, /* 065, extra=1 */
+    {10, 24, 17, 14, 0}, /* 066, extra=1 */
+    {18, 25, 15, 0, 0}, /* 067, extra=2 */
+    {10, 24, 17, 14, 0}, /* 068, extra=0 */
+    {10, 9, 16, 14, 0}, /* 069, extra=0 */
+    {10, 4, 1, 0, 0}, /* 070, extra=1 */
+    {2, 4, 11, 0, 0}, /* 071, extra=3 */
+    {10, 5, 30, 0, 0}, /* 072, extra=2 */
+    {11, 13, 30, 0, 0}, /* 073, extra=2 */
+    {11, 4, 30, 0, 0}, /* 074, extra=2 */
+    {11, 13, 28, 0, 0}, /* 075, extra=2 */
+    {11, 5, 30, 0, 0}, /* 076, extra=2 */
+    {2, 13, 9, 0, 0}, /* 077, extra=2 */
+    {11, 5, 30, 0, 0}, /* 078, extra=1 */
+    {11, 13, 30, 0, 0}, /* 079, extra=1 */
+    {10, 12, 17, 0, 0}, /* 080, extra=0 */
+    {10, 13, 17, 0, 0}, /* 081, extra=3 */
+    {10, 4, 24, 21, 0}, /* 082, extra=2 */
+    {10, 12, 16, 9, 0}, /* 083, extra=1 */
+    {10, 12, 16, 11, 0}, /* 084, extra=1 */
+    {11, 12, 16, 9, 0}, /* 085, extra=0 */
+    {11, 12, 16, 1, 0}, /* 086, extra=0 */
+    {10, 13, 17, 0, 0}, /* 087, extra=2 */
+    {10, 12, 16, 1, 0}, /* 088, extra=0 */
+    {10, 12, 16, 9, 0}, /* 089, extra=0 */
+    {10, 12, 17, 0, 0}, /* 090, extra=1 */
+    {11, 13, 18, 0, 0}, /* 091, extra=3 */
+    {3, 4, 9, 18, 0}, /* 092, extra=3 */
+    {2, 4, 9, 18, 0}, /* 093, extra=2 */
+    {11, 12, 18, 0, 0}, /* 094, extra=2 */
+    {11, 12, 16, 9, 0}, /* 095, extra=1 */
+    {11, 12, 16, 1, 0}, /* 096, extra=1 */
+    {11, 13, 18, 0, 0}, /* 097, extra=2 */
+    {3, 12, 9, 18, 0}, /* 098, extra=1 */
+    {2, 12, 9, 18, 0}, /* 099, extra=1 */
+    {2, 5, 25, 12, 0}, /* 100, extra=0 */
+};
+
 static volatile uint8_t s_ledbar_number = 0u;
 static volatile uint8_t s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
 static uint8_t s_ledbar_initialized = 0u;
-static uint8_t s_ledbar_scan_index = LEDBAR_INVALID_SCAN_INDEX;
+static uint8_t s_ledbar_force_blank = 0u;
+static uint8_t s_ledbar_frame_patterns[LEDBAR_FRAME_PATTERN_COUNT];
+static uint8_t s_ledbar_frame_length = 0u;
+static uint8_t s_ledbar_frame_index = 0u;
 static uint8_t s_ledbar_last_595_value = 0xFFu;
+static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
 
-static uint8_t LedBar_GetPinIndex(uint16_t pin)
+static uint8_t LedBar_Popcount32(uint32_t value)
 {
-    uint8_t index = 0u;
+    uint8_t count = 0u;
 
-    if (pin == 0u)
+    while (value != 0u)
     {
-        return 0u;
+        value &= (value - 1u);
+        count++;
     }
 
-    while (((pin >> index) & 0x1u) == 0u)
-    {
-        index++;
-    }
-
-    return index;
+    return count;
 }
 
 static void LedBar_SetGpioLevel(GPIO_TypeDef *port, uint16_t pin, uint8_t level)
@@ -163,54 +338,6 @@ static void LedBar_SetGpioLevel(GPIO_TypeDef *port, uint16_t pin, uint8_t level)
     else
     {
         port->BRR = pin;
-    }
-}
-
-static void LedBar_PinModeF1(GPIO_TypeDef *port, uint32_t pin_index, uint32_t mode_bits)
-{
-    volatile uint32_t *config_reg;
-    uint32_t shift;
-
-    if (pin_index < 8u)
-    {
-        config_reg = &port->CRL;
-        shift = pin_index * 4u;
-    }
-    else
-    {
-        config_reg = &port->CRH;
-        shift = (pin_index - 8u) * 4u;
-    }
-
-    *config_reg &= ~(0xFu << shift);
-    *config_reg |= (mode_bits << shift);
-}
-
-static void LedBar_PinToInput(uint8_t pin_id)
-{
-    GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
-    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_pins[pin_id].pin);
-
-    LedBar_PinModeF1(port, pin_index, 0x4u);
-}
-
-static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
-{
-    GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
-    uint16_t pin = s_ledbar_pins[pin_id].pin;
-    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(pin);
-
-    LedBar_SetGpioLevel(port, pin, (uint8_t)(level != Bit_RESET));
-    LedBar_PinModeF1(port, pin_index, 0x2u);
-}
-
-static void LedBar_AllPinsHiZ(void)
-{
-    uint8_t pin_id;
-
-    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
-    {
-        LedBar_PinToInput(pin_id);
     }
 }
 
@@ -241,132 +368,340 @@ static void LedBar_595WriteByte(uint8_t data)
     LedBar_SetGpioLevel(LEDBAR_595_GPIO_LATCH, LEDBAR_595_PIN_LATCH, 0u);
 }
 
-static void LedBar_Select595(uint8_t bit_index)
+static void LedBar_OutputPattern(uint8_t pattern_mask)
 {
-    uint8_t value = 0u;
+    pattern_mask = (uint8_t)(pattern_mask & 0x1Fu);
 
-    if (bit_index < 8u)
+    if (pattern_mask != s_ledbar_last_595_value)
     {
-        value = (uint8_t)(1u << bit_index);
-    }
-
-    if (value != s_ledbar_last_595_value)
-    {
-        LedBar_595WriteByte(value);
-        s_ledbar_last_595_value = value;
+        LedBar_595WriteByte(pattern_mask);
+        s_ledbar_last_595_value = pattern_mask;
     }
 }
 
 static void LedBar_OutputOff(void)
 {
-    LedBar_AllPinsHiZ();
-    LedBar_Select595(0xFFu);
+    LedBar_OutputPattern(0u);
 }
 
-static void LedBar_LightRoute(LedBarRouteId route_id)
+static void LedBar_InitPatternTable(void)
 {
-    const LedBarRoute *route = &s_ledbar_routes[route_id];
+    uint8_t pattern_mask;
+    uint8_t route_id;
 
-    LedBar_AllPinsHiZ();
-    LedBar_Select595(route->sel_595_bit);
-    LedBar_PinToOutput(route->low_pin, Bit_RESET);
-    LedBar_PinToOutput(route->high_pin, Bit_SET);
+    for (pattern_mask = 0u; pattern_mask <= LEDBAR_PATTERN_MASK_MAX; ++pattern_mask)
+    {
+        uint32_t lit_mask = 0u;
+
+        for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+        {
+            const LedBarRoute *route = &s_ledbar_routes[route_id];
+            uint8_t high_level = (uint8_t)((pattern_mask >> route->high_pin) & 0x1u);
+            uint8_t low_level = (uint8_t)((pattern_mask >> route->low_pin) & 0x1u);
+
+            if ((high_level != 0u) && (low_level == 0u))
+            {
+                lit_mask |= (1UL << route_id);
+            }
+        }
+
+        s_ledbar_patterns[pattern_mask].lit_mask = lit_mask;
+    }
 }
 
-static void LedBar_RebuildActiveMask(void)
+static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
 {
-    uint8_t value = s_ledbar_number;
     uint8_t show_hundreds = (uint8_t)(value >= 100u);
     uint8_t show_tens = (uint8_t)((value >= 10u) || (show_hundreds != 0u));
     uint8_t tens = (uint8_t)((value / 10u) % 10u);
     uint8_t ones = (uint8_t)(value % 10u);
     uint8_t digit_mask;
-    uint32_t active_mask = 0u;
+    uint32_t target_mask = 0u;
 
     if (show_hundreds != 0u)
     {
-        active_mask |= (1UL << LEDBAR_ROUTE_HUNDREDS_1_UPPER);
-        active_mask |= (1UL << LEDBAR_ROUTE_HUNDREDS_1_LOWER);
+        target_mask |= (1UL << LEDBAR_ROUTE_HUNDREDS_1_UPPER);
+        target_mask |= (1UL << LEDBAR_ROUTE_HUNDREDS_1_LOWER);
     }
 
     if (show_tens != 0u)
     {
         digit_mask = s_ledbar_digit_map[tens];
-        if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_A); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_B); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_C); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_D); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_E); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_F); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_TENS_G); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_A); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_B); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_C); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_D); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_E); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_F); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_G); }
     }
 
     digit_mask = s_ledbar_digit_map[ones];
-    if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_A); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_B); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_C); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_D); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_E); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_F); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { active_mask |= (1UL << LEDBAR_ROUTE_ONES_G); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_A); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_B); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_C); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_D); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_E); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_F); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_G); }
 
-    if ((s_ledbar_indicator_mask & LEDBAR_ICON_CHARGE_MASK) != 0u)
+    if ((indicator_mask & LEDBAR_ICON_CHARGE_MASK) != 0u)
     {
-        active_mask |= (1UL << LEDBAR_ROUTE_ICON_CHARGE);
+        target_mask |= (1UL << LEDBAR_ROUTE_ICON_CHARGE);
     }
-    if ((s_ledbar_indicator_mask & LEDBAR_ICON_PERCENT_MASK) != 0u)
+    if ((indicator_mask & LEDBAR_ICON_PERCENT_MASK) != 0u)
     {
-        active_mask |= (1UL << LEDBAR_ROUTE_ICON_PERCENT);
+        target_mask |= (1UL << LEDBAR_ROUTE_ICON_PERCENT);
     }
 
-    s_ledbar_active_mask = active_mask;
+    return target_mask;
+}
+
+static void LedBar_CopyFramePatterns(const uint8_t *patterns)
+{
+    uint8_t index;
+
+    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
+    s_ledbar_frame_length = 0u;
+    s_ledbar_frame_index = 0u;
+
+    for (index = 0u; index < LEDBAR_FRAME_PATTERN_COUNT; ++index)
+    {
+        if (patterns[index] == 0u)
+        {
+            break;
+        }
+
+        s_ledbar_frame_patterns[s_ledbar_frame_length] = patterns[index];
+        s_ledbar_frame_length++;
+    }
+}
+
+static uint8_t LedBar_FindBestPatternForRoute(uint8_t route_id, uint32_t target_mask)
+{
+    uint8_t pattern_mask;
+    uint8_t best_pattern = 0u;
+    int16_t best_score = -32768;
+
+    for (pattern_mask = 1u; pattern_mask <= LEDBAR_PATTERN_MASK_MAX; ++pattern_mask)
+    {
+        uint32_t lit_mask = s_ledbar_patterns[pattern_mask].lit_mask;
+        uint8_t extra_count;
+        uint8_t desired_count;
+        int16_t score;
+
+        if ((lit_mask & (1UL << route_id)) == 0u)
+        {
+            continue;
+        }
+
+        extra_count = LedBar_Popcount32(lit_mask & (~target_mask));
+        desired_count = LedBar_Popcount32(lit_mask & target_mask);
+
+        score = (int16_t)(desired_count * 2) - (int16_t)(extra_count * 6);
+        if (extra_count == 0u)
+        {
+            score += 4;
+        }
+
+        if (score > best_score)
+        {
+            best_score = score;
+            best_pattern = pattern_mask;
+        }
+    }
+
+    return best_pattern;
+}
+
+static void LedBar_BuildGreedyFrame(uint32_t target_mask)
+{
+    uint32_t covered_mask = 0u;
+    uint32_t remaining_mask = target_mask;
+
+    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
+    s_ledbar_frame_length = 0u;
+    s_ledbar_frame_index = 0u;
+
+    while ((remaining_mask != 0u) && (s_ledbar_frame_length < LEDBAR_FRAME_PATTERN_COUNT))
+    {
+        uint8_t pattern_mask;
+        uint8_t best_pattern = 0u;
+        int16_t best_score = -32768;
+
+        for (pattern_mask = 1u; pattern_mask <= LEDBAR_PATTERN_MASK_MAX; ++pattern_mask)
+        {
+            uint32_t lit_mask = s_ledbar_patterns[pattern_mask].lit_mask;
+            uint32_t new_target_mask = lit_mask & remaining_mask;
+            uint8_t new_target_count;
+            uint8_t extra_count;
+            uint8_t repeated_count;
+            int16_t score;
+
+            if (new_target_mask == 0u)
+            {
+                continue;
+            }
+
+            new_target_count = LedBar_Popcount32(new_target_mask);
+            extra_count = LedBar_Popcount32(lit_mask & (~target_mask));
+            repeated_count = LedBar_Popcount32(lit_mask & covered_mask);
+
+            score = (int16_t)(new_target_count * 12) - (int16_t)(extra_count * 5) - (int16_t)repeated_count;
+            if (extra_count == 0u)
+            {
+                score += 2;
+            }
+            if (new_target_count >= 3u)
+            {
+                score += 1;
+            }
+
+            if (score > best_score)
+            {
+                best_score = score;
+                best_pattern = pattern_mask;
+            }
+        }
+
+        if (best_pattern == 0u)
+        {
+            break;
+        }
+
+        s_ledbar_frame_patterns[s_ledbar_frame_length] = best_pattern;
+        s_ledbar_frame_length++;
+        covered_mask |= (s_ledbar_patterns[best_pattern].lit_mask & target_mask);
+        remaining_mask = target_mask & (~covered_mask);
+    }
+
+    while ((remaining_mask != 0u) && (s_ledbar_frame_length < LEDBAR_FRAME_PATTERN_COUNT))
+    {
+        uint8_t route_id;
+        uint8_t fallback_pattern = 0u;
+
+        for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+        {
+            if ((remaining_mask & (1UL << route_id)) != 0u)
+            {
+                fallback_pattern = LedBar_FindBestPatternForRoute(route_id, target_mask);
+                break;
+            }
+        }
+
+        if (fallback_pattern == 0u)
+        {
+            break;
+        }
+
+        s_ledbar_frame_patterns[s_ledbar_frame_length] = fallback_pattern;
+        s_ledbar_frame_length++;
+        covered_mask |= (s_ledbar_patterns[fallback_pattern].lit_mask & target_mask);
+        remaining_mask = target_mask & (~covered_mask);
+    }
+}
+
+static void LedBar_RebuildFrame(void)
+{
+    uint8_t value = s_ledbar_number;
+    uint8_t indicator_mask = (uint8_t)(s_ledbar_indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
+
+    if (value > 100u)
+    {
+        value = 100u;
+    }
+
+    if (s_ledbar_force_blank != 0u)
+    {
+        memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
+        s_ledbar_frame_length = 0u;
+        s_ledbar_frame_index = 0u;
+        return;
+    }
+
+    if (indicator_mask == LEDBAR_ICON_PERCENT_MASK)
+    {
+        LedBar_CopyFramePatterns(s_ledbar_soc_patterns[value]);
+        return;
+    }
+
+    if (indicator_mask == (LEDBAR_ICON_PERCENT_MASK | LEDBAR_ICON_CHARGE_MASK))
+    {
+        LedBar_CopyFramePatterns(s_ledbar_soc_charge_patterns[value]);
+        return;
+    }
+
+    LedBar_BuildGreedyFrame(LedBar_BuildTargetMask(value, indicator_mask));
 }
 
 void LedBar_Init(void)
 {
-    GPIO_InitTypeDef gpio_init;
+    if (s_ledbar_initialized != 0u)
+    {
+        return;
+    }
 
-    gpio_init.GPIO_Pin = LEDBAR_PIN_P1 | LEDBAR_PIN_P2 | LEDBAR_PIN_P3 | LEDBAR_PIN_P4 | LEDBAR_PIN_P5;
-    gpio_init.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &gpio_init);
-
+    LedBar_InitPatternTable();
     s_ledbar_number = 0u;
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
-    s_ledbar_scan_index = LEDBAR_INVALID_SCAN_INDEX;
+    s_ledbar_force_blank = 0u;
     s_ledbar_last_595_value = 0xFFu;
-    s_ledbar_initialized = 1u;
     LedBar_Command = LED_BAR_NORMAL;
-    LedBar_RebuildActiveMask();
+    LedBar_RebuildFrame();
     LedBar_OutputOff();
+    s_ledbar_initialized = 1u;
 }
 
 void LedBar_Clear(void)
 {
-    s_ledbar_number = 0u;
-    s_ledbar_indicator_mask = 0u;
-    LedBar_RebuildActiveMask();
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
+    s_ledbar_force_blank = 1u;
+    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
+    s_ledbar_frame_length = 0u;
+    s_ledbar_frame_index = 0u;
+    LedBar_OutputOff();
 }
 
 void LedBar_SetNumber(uint8_t value)
 {
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
     if (value > 100u)
     {
         value = 100u;
     }
 
     s_ledbar_number = value;
-    LedBar_RebuildActiveMask();
+    s_ledbar_force_blank = 0u;
+    LedBar_RebuildFrame();
 }
 
 void LedBar_SetIndicators(uint8_t indicator_mask)
 {
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
     s_ledbar_indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
-    LedBar_RebuildActiveMask();
+    s_ledbar_force_blank = 0u;
+    LedBar_RebuildFrame();
 }
 
 void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable)
 {
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
     indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
 
     if (enable != 0u)
@@ -378,40 +713,29 @@ void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable)
         s_ledbar_indicator_mask &= (uint8_t)(~indicator_mask);
     }
 
-    LedBar_RebuildActiveMask();
+    s_ledbar_force_blank = 0u;
+    LedBar_RebuildFrame();
 }
 
 void LedBar_Scan1ms(void)
 {
-    uint8_t next_index;
-    uint8_t count;
-
     if (s_ledbar_initialized == 0u)
     {
-        return;
+        LedBar_Init();
     }
 
-    if (s_ledbar_active_mask == 0u)
+    if (s_ledbar_frame_length == 0u)
     {
-        s_ledbar_scan_index = LEDBAR_INVALID_SCAN_INDEX;
         LedBar_OutputOff();
         return;
     }
 
-    next_index = s_ledbar_scan_index;
-    for (count = 0u; count < (uint8_t)LEDBAR_ROUTE_COUNT; ++count)
+    LedBar_OutputPattern(s_ledbar_frame_patterns[s_ledbar_frame_index]);
+    s_ledbar_frame_index++;
+    if (s_ledbar_frame_index >= s_ledbar_frame_length)
     {
-        next_index = (uint8_t)((next_index + 1u) % (uint8_t)LEDBAR_ROUTE_COUNT);
-        if ((s_ledbar_active_mask & (1UL << next_index)) != 0u)
-        {
-            s_ledbar_scan_index = next_index;
-            LedBar_LightRoute((LedBarRouteId)next_index);
-            return;
-        }
+        s_ledbar_frame_index = 0u;
     }
-
-    s_ledbar_scan_index = LEDBAR_INVALID_SCAN_INDEX;
-    LedBar_OutputOff();
 }
 
 void APP_LedBar(void)
@@ -468,6 +792,8 @@ void APP_LedBar(void)
         LedBar_Command = LED_BAR_FAULT;
     }
 
-    LedBar_SetNumber(display_value);
-    LedBar_SetIndicators(indicator_mask);
+    s_ledbar_number = display_value;
+    s_ledbar_indicator_mask = indicator_mask;
+    s_ledbar_force_blank = 0u;
+    LedBar_RebuildFrame();
 }
