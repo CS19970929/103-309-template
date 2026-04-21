@@ -110,6 +110,7 @@ int main(void)
 		App_Sci();
 #else
 		App_SysTime();
+		APP_LedBar();
 		App_WarnCtrl();
 		App_AFEGet();
 
