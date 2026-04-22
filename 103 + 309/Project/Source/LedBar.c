@@ -1,4 +1,4 @@
-#include "main.h"
+﻿#include "main.h"
 #include <string.h>
 
 #define LEDBAR_FRAME_PATTERN_COUNT 5u
@@ -352,7 +352,7 @@ static uint8_t LedBar_Popcount32(uint32_t value)
     return count;
 }
 
-/* 物理层：74HC595 引脚时序 */
+/* 鐗╃悊灞傦細74HC595 寮曡剼鏃跺簭 */
 static void LedBar_SetGpioLevel(GPIO_TypeDef *port, uint16_t pin, uint8_t level)
 {
     if (level != 0u)
@@ -433,7 +433,7 @@ static void LedBar_InitPatternTable(void)
     }
 }
 
-/* 业务层：SOC/图标 -> 路由掩码 */
+/* 涓氬姟灞傦細SOC/鍥炬爣 -> 璺敱鎺╃爜 */
 static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
 {
     uint8_t show_hundreds = (uint8_t)(value >= 100u);
@@ -652,7 +652,7 @@ static void LedBar_CommitBackFrameIfPending(void)
     }
 }
 
-/* 业务层：重建 back buffer，扫描层在安全点切换到 front buffer */
+/* 涓氬姟灞傦細閲嶅缓 back buffer锛屾壂鎻忓眰鍦ㄥ畨鍏ㄧ偣鍒囨崲鍒?front buffer */
 static void LedBar_RebuildFrame(void)
 {
     uint8_t value = s_ledbar_number;
@@ -970,27 +970,32 @@ void APP_LedBar(void)
         LedBar_Init();
     }
 
+    if (SystemStatus.bits.b1StartUpBMS != 0u)
+    {
+        LedBar_Command = LED_BAR_STARTUP;
+        LedBar_SetSleep(1u);
+    }
+    else
+    {
+        /* TODO(确认): b1_ToSleepFlag 与真实睡眠动作时序需上板确认。当前仅用于显示熄屏联动。 */
+        if (Sleep_Mode.bits.b1_ToSleepFlag != 0u)
+        {
+            LedBar_SetSleep(1u);
+        }
+        else if (s_ledbar_sleep != 0u)
+        {
+            LedBar_Wakeup();
+        }
+    }
+
     if (g_st_SysTimeFlag.bits.b1Sys1msFlag != 0u)
     {
         LedBar_Scan1ms();
     }
 
-    if (SystemStatus.bits.b1StartUpBMS != 0u)
+    if (s_ledbar_sleep != 0u)
     {
-        LedBar_Command = LED_BAR_STARTUP;
-        LedBar_SetSleep(1u);
         return;
-    }
-
-    /* TODO(确认): b1_ToSleepFlag 与真实睡眠动作时序需上板确认。当前仅用于显示熄屏联动。 */
-    if (Sleep_Mode.bits.b1_ToSleepFlag != 0u)
-    {
-        LedBar_SetSleep(1u);
-        return;
-    }
-    else if (s_ledbar_sleep != 0u)
-    {
-        LedBar_Wakeup();
     }
 
     if (s_ledbar_test_single_segment_enable != 0u)
