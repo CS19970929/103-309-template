@@ -28,7 +28,7 @@
 
 
 
-// #define  wdog_enable
+#define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__

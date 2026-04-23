@@ -145,7 +145,7 @@ struct OTHER_ELEMENT {
 
 
 #define CS_Res			2
-#define CS_Res_Num		3
+#define CS_Res_Num		6
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
