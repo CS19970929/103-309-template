@@ -51,3 +51,5 @@ IsSleepStartUp使用到了备份域寄存器，我从之前的030 mcu上复制�
 
 
 梳理用到的所有外设、中断、备份域寄存器、flash地址范围、大小、ram，输出文档
+
+目前项目没有eeprom了，我把InitE2PROM屏蔽了，一切和eeprom相关功能都需要修改了，使用内部flash替换，给出解决方案

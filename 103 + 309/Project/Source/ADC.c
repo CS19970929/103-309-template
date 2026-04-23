@@ -127,17 +127,17 @@ void InitADC_GPIO(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif
 	// todo adc配置
-	GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
-	GPIO_Init(GPIO_ADC_VBUS, &GPIO_InitStructure);
+	// GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
+	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	// GPIO_Init(GPIO_ADC_VBUS, &GPIO_InitStructure);
 
-	GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
-	GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
+	// GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
+	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	// GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
 
-	GPIO_InitStructure.GPIO_Pin = PIN_ADC_CUR;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
-	GPIO_Init(GPIO_ADC_CUR, &GPIO_InitStructure);
+	// GPIO_InitStructure.GPIO_Pin = PIN_ADC_CUR;
+	// GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	// GPIO_Init(GPIO_ADC_CUR, &GPIO_InitStructure);
 }
 
 void InitADC_TIMER(void)

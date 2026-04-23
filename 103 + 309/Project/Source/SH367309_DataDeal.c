@@ -55,7 +55,7 @@ void Refresh_Parameters(void)
 
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
 	{
 		AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;

@@ -818,11 +818,6 @@ void initAFE1_IIC(void)
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
 
-	// 预充MOS，模拟前端驱动的补充
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
 }
 
 /*******************************************************************************
@@ -834,13 +829,7 @@ Others:
 *******************************************************************************/
 void InitAFE1(void)
  {
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
+	initAFE1_IIC();
 
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();

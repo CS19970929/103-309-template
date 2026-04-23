@@ -1,6 +1,6 @@
 #include "main.h"
 
-UINT8 SeriesNum = 16;
+UINT8 SeriesNum = 7;
 
 void IOstatus_RTCMode_test(void)
 {
@@ -139,9 +139,9 @@ int main(void)
 		App_Sci();
 #else
 		App_SysTime();
-		APP_LedBar();
+		// APP_LedBar();
 		// App_WarnCtrl();
-		new_todo_logi();
+		// new_todo_logi();
 		App_AFEGet();
 
 		App_Sci();
@@ -189,7 +189,7 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
+	// InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
 	InitAFE1();
 	InitCan();
 	InitADC();
@@ -220,7 +220,6 @@ void InitVar(void)
 {
 	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默认需求功能修改了，要修改EEPROM的上电标志位
 	InitSystemMonitorData_EEPROM();
-	SeriesNum = OtherElement.u16Sys_SeriesNum;
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
 	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时序

@@ -95,28 +95,28 @@ void DataLoad_CellVolt_Test(void)
 // 如果又变成单独使用本身KB值校准，出现错误。
 void DataLoad_CellVolt(void)
 {
-	UINT8 i;
-	INT32 t_i32temp;
+    UINT8 i;
+    INT32 t_i32temp;
 
-	for (i = 0; i < SeriesNum; ++i)
-	{
-		t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
-		if (g_u16CalibCoefK[VOLT_AFE1] != 1024 || g_i16CalibCoefB[VOLT_AFE1] != 0)
-		{
-			t_i32temp = ((t_i32temp * g_u16CalibCoefK[VOLT_AFE1]) >> 10) + g_i16CalibCoefB[VOLT_AFE1];
-		}
-		t_i32temp = ((t_i32temp * g_u16CalibCoefK[i]) >> 10) + g_i16CalibCoefB[i];
-		t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
-		g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
-	}
+    for (i = 0; i < SeriesNum; ++i)
+    {
+        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+        // if (g_tParam.CalibCoefK[VOLT_AFE1] != 1024 || g_tParam.CalibCoefB[VOLT_AFE1] != 0)
+        // {
+        // 	t_i32temp = ((t_i32temp * g_tParam.CalibCoefK[VOLT_AFE1]) >> 10) + g_tParam.CalibCoefB[VOLT_AFE1];
+        // }
+        t_i32temp = ((t_i32temp * SYSKDEFAULT) >> 10) + SYSBDEFAULT;
+        t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
+        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
+    }
 
-	if (SeriesNum < 32)
-	{
-		for (i = SeriesNum; i < 32; ++i)
-		{
-			g_stCellInfoReport.u16VCell[i] = 61001;
-		}
-	}
+    if (SeriesNum < 32)
+    {
+        for (i = SeriesNum; i < 32; ++i)
+        {
+            g_stCellInfoReport.u16VCell[i] = 61001;
+        }
+    }
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -306,72 +306,75 @@ void DataLoad_CurrentCali(void)
 
 void DataLoad_Current(void)
 {
-	// if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
-	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
-	{
-		// u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 默认使用200mV的计算方式
-		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
-		// t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+    // if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
+    if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
+    {
+        // u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 榛樿?浣跨敤200mV鐨勮?绠楁柟寮?
+        u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
+        // t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
-		log_i("******************************************\n");
-		log_i("AFE value->%d\n", u32_ChgCur_mA);
+        log_i("******************************************\n");
+        log_i("AFE value->%d\n", u32_ChgCur_mA);
 
-		u32_DsgCur_mA = 0;
-	}
-	else
-	{
-		// u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
-		// u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+        u32_DsgCur_mA = 0;
+    }
+    else
+    {
+        // u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
+        // u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
+        u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
-		log_i("******************************************\n");
-		log_i("AFE value->%d\n", u32_DsgCur_mA);
+        log_i("******************************************\n");
+        log_i("AFE value->%d\n", u32_DsgCur_mA);
 
-		u32_ChgCur_mA = 0;
-	}
+        u32_ChgCur_mA = 0;
+    }
+    // DataLoad_CurrentCali();
+    if (u32_DsgCur_mA > 2000)
+    {
+        u32_DsgCur_mA = ((u32_DsgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000; // B鍊兼槸鍩轰簬A涓哄崟浣嶈?绠楀嚭鏉ョ殑
+    }
+    else
+    {
+        u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
+    }
 
-	// DataLoad_CurrentCali();
+    if (u32_ChgCur_mA > 2000)
+    {
+        u32_ChgCur_mA = ((u32_ChgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000;
+    }
+    else
+    {
+        u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
+    }
 
-	if (u32_DsgCur_mA > 2000)
-	{
-		u32_DsgCur_mA = ((u32_DsgCur_mA * g_u16CalibCoefK[MDL_IDSG])) + (INT32)g_i16CalibCoefB[MDL_IDSG] * 1000; // B值是基于A为单位计算出来的
-	}
-	else
-	{
-		u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
-	}
+    // 鏀逛负INT32
+    u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
+    u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
 
-	if (u32_ChgCur_mA > 2000)
-	{
-		u32_ChgCur_mA = ((u32_ChgCur_mA * g_u16CalibCoefK[MDL_ICHG])) + (INT32)g_i16CalibCoefB[MDL_ICHG] * 1000;
-	}
-	else
-	{
-		u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
-	}
+#if (FD_BMS_TYPE == C11_AND_C11pro)
+    g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
+    g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 10 / 12);
+#else
+    g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
+    g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
+#endif
 
-	// 改为INT32
-	u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
-	u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
-
-	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
-	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
-
-	if (g_stCellInfoReport.u16Ichg <= 3)
-	{
-		g_stCellInfoReport.u16Ichg = 0;
-	}
-	if (g_stCellInfoReport.u16IDischg <= 3)
-	{
-		g_stCellInfoReport.u16IDischg = 0;
-	}
+    if (g_stCellInfoReport.u16Ichg <= 2)
+    {
+        g_stCellInfoReport.u16Ichg = 0;
+    }
+    if (g_stCellInfoReport.u16IDischg <= 2)
+    {
+        g_stCellInfoReport.u16IDischg = 0;
+    }
 
 #ifdef __VIRTURE_CURRENT__
-	if (sys_time.isdebugenable == 1)
-	{
-		g_stCellInfoReport.u16Ichg = sys_time.CHG;
-		g_stCellInfoReport.u16IDischg = sys_time.DSG;
-	}
+    if (sys_time.isdebugenable == 1)
+    {
+        g_stCellInfoReport.u16Ichg = sys_time.CHG;
+        g_stCellInfoReport.u16IDischg = sys_time.DSG;
+    }
 #endif
 }
 void MonitorAFE(UINT8 num, UINT8 Result)
