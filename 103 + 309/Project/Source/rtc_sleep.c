@@ -7,6 +7,7 @@
 enum irqWakeup g_irq_t = NO_IRQ;
 
 void rtc_sleep(void);
+void App_LowPowerProcess(void);
 void test_dealError(void);
 
 static bool rtc_monitor(void);
@@ -18,6 +19,10 @@ static bool isErr_enterRTC(void);
 static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
 static uint32_t rtc_sleep_get_period_seconds(void);
+static void low_power_clear_force_request(void);
+static void low_power_prepare_reset_sleep(void);
+static void low_power_log_and_commit_sleep(void);
+static void low_power_guess_wakeup_source(void);
 static void rtc_sleep_prepare_rtc(void);
 static void rtc_sleep_dump_state(const char *stage);
 static bool rtc_sleep_run_hiccup_cycle(void);
@@ -255,18 +260,51 @@ static bool isHaveCurrent_bq7x(void)
 #endif
 }
 
-void entersleep(enum _SLEEP_MODE mode)
+static void low_power_clear_force_request(void)
+{
+    Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
+    Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
+    Sleep_Mode.bits.b1ForceToSleep_L3 = 0;
+}
+
+static void low_power_prepare_reset_sleep(void)
+{
+    Sleep_Mode.bits.b1_ToSleepFlag = 1;
+    LogRecord_Flag.bits.Log_Sleep = 1;
+    state_sleep = 1;
+}
+
+static void low_power_log_and_commit_sleep(void)
+{
+    extern UINT32 su32_Interval_S_Tcnt;
+
+    if ((Sleep_Mode.all & 0x00ffU) == 0U)
+    {
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
+
+    LogRecord_Flag.bits.Log_Sleep = 1;
+    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+    SleepDeal_Continue();
+}
+
+void LowPower_Request(enum _SLEEP_MODE mode)
 {
     switch (mode)
     {
     case HICCUP_MODE:
+        low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L1 = 1;
         g_sleepModeSelect = HICCUP_MODE;
         break;
     case NORMAL_MODE:
-
+        low_power_clear_force_request();
+        Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+        g_sleepModeSelect = NORMAL_MODE;
         break;
     case DEEP_MODE:
+        low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
         g_sleepModeSelect = DEEP_MODE;
 #ifdef __FUNC__LED__
@@ -275,12 +313,18 @@ void entersleep(enum _SLEEP_MODE mode)
         break;
     case NO_SLEEP:
         g_sleepModeSelect = NO_SLEEP;
+        state_sleep = 0;
         Sleep_Status = SLEEP_HICCUP_SHIFT;
         Sleep_Mode.all = 0;
         break;
     default:
         break;
     }
+}
+
+void entersleep(enum _SLEEP_MODE mode)
+{
+    LowPower_Request(mode);
 }
 
 #if (AFE_TYPE == bq76xx_afe)
@@ -436,9 +480,14 @@ void BQ769x0_SleepMode_Ctrl(void)
     }
 }
 
-void sleep(void)
+void App_LowPowerProcess(void)
 {
     rtc_sleep();
+}
+
+void sleep(void)
+{
+    App_LowPowerProcess();
 #if 0
     if (System_OnOFF_Func.bits.b1OnOFF_RTC)
         rtc_sleep();
@@ -692,14 +741,7 @@ static void before_rtcsleep(void)
 
 static uint32_t rtc_sleep_get_period_seconds(void)
 {
-    uint32_t wake_min = (uint32_t)OtherElement.u16Sleep_TimeRTC;
-
-    if (wake_min == 0U)
-    {
-        wake_min = 3U;
-    }
-
-    return wake_min * 60U;
+    return RTC_GetWakeupPeriodSeconds();
 }
 
 static void rtc_sleep_prepare_rtc(void)
@@ -723,6 +765,41 @@ static void rtc_sleep_dump_state(const char *stage)
           (int)RTC_GetFlagStatus(RTC_FLAG_ALR),
           (int)EXTI_GetITStatus(EXTI_Line17),
           (unsigned int)BKP_ReadBackupRegister(BKP_DR1));
+}
+
+static void low_power_guess_wakeup_source(void)
+{
+    if ((g_irq_t != NO_IRQ) || is_rtc_wakekup)
+    {
+        return;
+    }
+
+    if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) != Bit_RESET)
+    {
+        g_irq_t = PA0_irq;
+        return;
+    }
+
+    if (GPIO_ReadInputDataBit(GPIO_SW, PIN_SW) == Bit_RESET)
+    {
+        g_irq_t = soc_key;
+        return;
+    }
+
+#if defined(RS485_WAKEUP_ENABLE)
+    if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) != Bit_RESET)
+    {
+        g_irq_t = rs485_irq;
+        return;
+    }
+#endif
+
+#if defined(UART1_WAKEUP_ENABLE)
+    if (GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) != Bit_RESET)
+    {
+        g_irq_t = uart1_irq;
+    }
+#endif
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -780,6 +857,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
+    low_power_guess_wakeup_source();
     report_wkup_sig();
     before_wakeup(&sys_time.rtc_sleep_cnt);
     sys_time.rtc_sleep_cnt = 0;
@@ -943,64 +1021,45 @@ void rtc_sleep(void)
 
     BQ769x0_SleepMode_Ctrl();
 
-    switch (state_sleep)
-    {
-    case 0:
+    if (state_sleep == 0U)
     {
         if (g_sleepModeSelect == HICCUP_MODE)
         {
-            // Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            // LogRecord_Flag.bits.Log_Sleep = 1;
-            // USART_DeInit(USART1);
-            state_sleep = 1;
-            break;
-        }
-        if (g_sleepModeSelect == DEEP_MODE)
-        {
             Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            LogRecord_Flag.bits.Log_Sleep = 1;
             state_sleep = 1;
-            break;
+        }
+        else if ((g_sleepModeSelect == NORMAL_MODE) || (g_sleepModeSelect == DEEP_MODE))
+        {
+            low_power_prepare_reset_sleep();
+        }
+        else
+        {
+            return;
         }
     }
-    case 1:
+
+    if (state_sleep != 1U)
     {
-        // if (Sleep_Mode.bits.b1_ToSleepFlag)
-        // {
-        //     return;
-        // }
-        switch (g_sleepModeSelect)
+        return;
+    }
+
+    switch (g_sleepModeSelect)
+    {
+    case NORMAL_MODE:
+        log_w("normal sleep\n");
+        low_power_log_and_commit_sleep();
+        break;
+    case HICCUP_MODE:
+        while (rtc_sleep_run_hiccup_cycle())
         {
-        case NORMAL_MODE:
-            BootFlag_Write(FLASH_NORMAL_SLEEP_VALUE);
-            break;
-        case HICCUP_MODE:
-        {
-            while (rtc_sleep_run_hiccup_cycle())
-            {
-            }
         }
         break;
-        case DEEP_MODE:
-        DEEP_SLEEP:
-            BootFlag_Write(FLASH_DEEP_SLEEP_VALUE);
-            log_w("deep sleep\n");
-            if ((Sleep_Mode.all & 0x00ff))
-            {
-                extern UINT32 su32_Interval_S_Tcnt;
-
-                LogRecord_Flag.bits.Log_Sleep = 1;
-                LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-                SleepDeal_Continue();
-            }
-            // MCU_RESET();
-            break;
-        default:
-            // 不调整引脚进入休眠，功耗会很大
-            break;
-        }
-    }
+    case DEEP_MODE:
+        log_w("deep sleep\n");
+        low_power_log_and_commit_sleep();
+        break;
     default:
+        LowPower_Request(NO_SLEEP);
         break;
     }
 }
