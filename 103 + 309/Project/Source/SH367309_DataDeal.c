@@ -1,30 +1,28 @@
-#include "main.h"
+ï»¿#include "main.h"
 #include "SH367309_DataDeal.h"
 #include "string.h"
 
 int AFE_PARAM_WRITE_Flag = 1;
 int AFE_ResetFlag = 0;
 
-const UINT16 AFE_OCD1V_OCCV[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};					   // Ò»¼¶·Åµç¹ýÁ÷ºÍ³äµç¹ýÁ÷£¬µ¥Î»mv
-const UINT16 AFE_OCD2V[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500}; 
-const UINT16 AFE_SCV[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};					   // ¶ÌÂ·±£»¤µçÑ¹£¬µ¥Î»mv
-const UINT16 AFE_OVT_UVT[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000}; // ¹ýÑ¹µÍÑ¹ÑÓÊ±Ê±¼ä¡£µ¥Î»ms
-const UINT16 AFE_SCT[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};					   // ¶ÌÂ·ÑÓÊ±,µ¥Î»us¡£
-const UINT16 AFE_OCD1T[16] = {50, 100, 200, 400, 600, 800, 1000, 2000, 4000, 6000, 8000, 10000, 15000, 20000, 30000, 40000};   // ·Åµç¹ýÁ÷1ÑÓÊ±¡£µ¥Î»ms
-const UINT16 AFE_OCCT_OCD2T[16] = {10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000};		   // ·Åµç¹ýÁ÷2ºÍ³äµç¹ýÁ÷ÑÓÊ±¡£µ¥Î»ms
+const UINT16 AFE_OCD1V_OCCV[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};
+const UINT16 AFE_OCD2V[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500};
+const UINT16 AFE_SCV[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};
+const UINT16 AFE_OVT_UVT[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000};
+const UINT16 AFE_SCT[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};
+const UINT16 AFE_OCD1T[16] = {50, 100, 200, 400, 600, 800, 1000, 2000, 4000, 6000, 8000, 10000, 15000, 20000, 30000, 40000};
+const UINT16 AFE_OCCT_OCD2T[16] = {10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000};
 
 AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
-/* ÓÃµ½µÄÍâ²¿µÄÊý¾Ý */
 extern UINT8 ucMTPBuffer[26];
 extern UINT16 iSheldTemp_10K_NTC[141];
 
-#define DSG_CHG_OCP_DELAY_TIME 30 * 100 // ¹ýÁ÷ÑÓÊ±Ê±¼ä (10msµ¥Î»)
+#define DSG_CHG_OCP_DELAY_TIME (30 * 100)
 #define OFF 0
 #define ON 1
 
-/* ÕÒ³öÒªÐ´ÈëAFE¼Ä´æÆ÷µÄÖµ£º²ÎÊý1£ºµ±Ç°ÒªÐ´µÄÖµ£¬²ÎÊý2£ºAFE²ÎÊýÁÐ±íµÄµØÖ· */
 int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 {
 	int i = 0;
@@ -43,9 +41,8 @@ void Refresh_Parameters(void)
 	int i = 0;
 	int temp = 0;
 	UINT8 TR = 0;
-	UINT16 AFE_TEMPERATURE[8] = {0}; // ÎÂ¶È£¬ÉãÊÏ¶È+40£¬£¨0¶ÈµÄÖµÎª40£©
+	UINT16 AFE_TEMPERATURE[8] = {0};
 
-	// ¶Á309µÄTR£¬Ë³±ã°ÑAFEÄ¬ÈÏÖµÅäÖÃ´«µ½AFE_ROM_PARAMETERS_Struction½á¹¹Ìå(#defineÀàÐÍ)¡£
 	if (MTPRead(0x19, 1, &TR))
 	{
 		SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
@@ -57,60 +54,50 @@ void Refresh_Parameters(void)
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
+	temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
+	if (temp > 0xFF)
 	{
-		AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
-		temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
-		if (temp > 0xFF)
-		{
-			temp = 0xFF;
-		}
-		AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = (UINT8)temp;
+		temp = 0xFF;
 	}
+	AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = (UINT8)temp;
 
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) >> 8) & 0x3;
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) & 0x00FF;
-	/* ³äµç¹ýÑ¹ÑÓÊ±Ê±¼ä */
 	temp = AFE_Parameters_RS485_Struction.u16VcellOvp_Filter.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVT = Choose_Right_Value(temp, AFE_OVT_UVT);
-	/* ³äµç¹ýÑ¹»Ö¸´ */
 	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) >> 8) & 0x3;
 	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) & 0x00FF;
 
-	/*·ÅµçµÍÑ¹ÑÓÊ±Ê±¼ä */
 	temp = AFE_Parameters_RS485_Struction.u16VcellUvp_Filter.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m04H_05H.UVT = Choose_Right_Value(temp, AFE_OVT_UVT);
-	/* ·ÅµçµÍÑ¹ */
 	AFE_ROM_PARAMETERS_Struction.m06H_07H.UV = (AFE_Parameters_RS485_Struction.u16VcellUvp.curValue / 20) & 0x00FF;
-	/* ·ÅµçµÍÑ¹»Ö¸´ */
 	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
 
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue * 100 / g_u32CS_Res_AFE; // è¤°æ’³å¢ ç?µç‘°ç°²æ¾¶æ°?š¯mv
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10; // è¤°æ’³å¢ ç?µç‘°ç°²æ¾¶æ°?š¯ms
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, AFE_OCD1T);
-	
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // è¤°æ’³å¢ ç?µç‘°ç°²æ¾¶æ°?š¯mv
+
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, AFE_OCD2V);
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10; // è¤°æ’³å¢ ç?µç‘°ç°²æ¾¶æ°?š¯ms
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2T = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 
-	/* ³äµç¹ýÁ÷ */
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE; // µ±Ç°¶ÔÓ¦¶àÉÙmv
+	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, AFE_OCD1V_OCCV);
-	/* ³äµç¹ýÁ÷ÂË²¨Ê±¼ä */
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10; // µ±Ç°¶ÔÓ¦¶àÉÙms
+	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 
 	InitShortCur();
-	/* ËùÓÐµÄÎÂ¶È±£»¤ */
-	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;		 /* ³äµç¸ßÎÂ±£»¤ */
-	AFE_TEMPERATURE[1] = AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue / 10;	 /* ³äµç¸ßÎÂ±£»¤»Ö¸´ */
-	AFE_TEMPERATURE[2] = AFE_Parameters_RS485_Struction.u16TchgUTp.curValue / 10;		 /* ³äµçµÍÎÂ±£»¤ */
-	AFE_TEMPERATURE[3] = AFE_Parameters_RS485_Struction.u16TchgUTp_Rcv.curValue / 10;	 /* ³äµçµÍÎÂ±£»¤»Ö¸´ */
-	AFE_TEMPERATURE[4] = AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue / 10;	 /* ·Åµç¸ßÎÂ±£»¤ */
-	AFE_TEMPERATURE[5] = AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue / 10; /* ·Åµç¸ßÎÂ±£»¤»Ö¸´ */
-	AFE_TEMPERATURE[6] = AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue / 10;	 /* ·ÅµçµÍÎÂ±£»¤ */
-	AFE_TEMPERATURE[7] = AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue / 10; /* ·ÅµçµÍÎÂ±£»¤»Ö¸´ */
+	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;
+	AFE_TEMPERATURE[1] = AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue / 10;
+	AFE_TEMPERATURE[2] = AFE_Parameters_RS485_Struction.u16TchgUTp.curValue / 10;
+	AFE_TEMPERATURE[3] = AFE_Parameters_RS485_Struction.u16TchgUTp_Rcv.curValue / 10;
+	AFE_TEMPERATURE[4] = AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue / 10;
+	AFE_TEMPERATURE[5] = AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue / 10;
+	AFE_TEMPERATURE[6] = AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue / 10;
+	AFE_TEMPERATURE[7] = AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue / 10;
 
 	for (i = 0; i < 8; i++)
 	{
@@ -119,70 +106,78 @@ void Refresh_Parameters(void)
 	}
 }
 
-/* Ã¿´ÎÊý¾Ý¸Ä±ä¶¼¶ÁÈ¡rom²ÎÊý±È½ÏÒ»ÏÂ£¬ÄÇ¸ö²ÎÊý¸Ä±ä¾ÍÐ´ÈëÄÇ=ÄÄ¸ö */
+static void AFE_CopyCurValues(UINT16 *values)
+{
+	UINT16 i;
+	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
+
+	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		values[i] = (param + i)->curValue;
+	}
+}
+
+static void AFE_RestoreCurValues(const UINT16 *values)
+{
+	UINT16 i;
+	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
+
+	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		(param + i)->curValue = values[i];
+	}
+}
+
+static UINT8 AFE_SaveCurValuesToFlash(void)
+{
+	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
+
+	AFE_CopyCurValues(values);
+	return StorageFlash_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
+}
+
 bool Write_Parameters(void)
 {
 	int i = 0;
 	UINT8 temp[26] = {0};
+	UINT8 verify[26] = {0};
 	UINT8 *P = (UINT8 *)&AFE_ROM_PARAMETERS_Struction;
-	bool ret = true;
 
-	if (MTPRead(0x00, 25, temp))
+	if (!MTPRead(0x00, 25, temp))
 	{
-		for (i = 0; i < 25; i++)
-		{ // ×îºóÒ»¸öTR²»×ö¶Ô±È
-			if (temp[i] != P[i])
-			{
-				MTPWriteROM(i, 1, P + i); // ÖØÐ´EEPROMµÄ¼Ä´æÆ÷£¬Á½´Î
-			}
-		}
-	}
-	else
-	{
-		ret = false;
+		return false;
 	}
 
-	return ret;
-}
-
-#if 0
-bool SH367309_UpdataAfeConfig(void)
-{
-	bool ret = false;
-
-	if (AFE_PARAM_WRITE_Flag)
+	for (i = 0; i < 25; i++)
 	{
-		AFE_PARAM_WRITE_Flag = 0;
-		MCUO_AFE_VPRO = 1; // ½øÈëÉÕÐ´Ä£Ê½
-		Delay1ms(20);
-		Feed_IWatchDog;
-
-		Refresh_Parameters();
-		ret = Write_Parameters();
-
-		Feed_IWatchDog;
-		MCUO_AFE_VPRO = 0; // ÍË³öÉÕÐ´Ä£Ê½
-		Delay1ms(1);
-
-		/* Ã¿´ÎÐ´ÍêÈç¹û²»±¨´í¶¼Òª¸´Î»Ò»ÏÂ¡£ÕâÑùÐ´½øÈ¥µÄ²ÎÊý²ÅÓÐÐ§ */
-		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+		if ((temp[i] != P[i]) && !MTPWriteROM((UINT8)i, 1, P + i))
 		{
-			AFE_Reset(); // Reset IC
-			Delay1ms(5);
-			AFE_IsReady();
-			AFE_ResetFlag = 1;
+			return false;
 		}
-
-		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 	}
-	return ret;
+
+	if (!MTPRead(0x00, 25, verify))
+	{
+		return false;
+	}
+
+	for (i = 0; i < 25; i++)
+	{
+		if (verify[i] != P[i])
+		{
+			System_ERROR_UserCallback(ERROR_AFE1);
+			return false;
+		}
+	}
+
+	return true;
 }
-#endif
+
 bool SH367309_UpdataAfeConfig(void)
 {
 	bool ret = false;
-
-	uint8_t isdiff = 0;
+	UINT8 isdiff = 0;
+	UINT8 can_compare = 0;
 
 	if (AFE_PARAM_WRITE_Flag)
 	{
@@ -195,11 +190,11 @@ bool SH367309_UpdataAfeConfig(void)
 
 			if (MTPRead(0x00, 25, temp))
 			{
+				can_compare = 1;
 				for (i = 0; i < 25; i++)
-				{ // ×îºóÒ»¸öTR²»×ö¶Ô±È
+				{
 					if (temp[i] != P[i])
 					{
-						// MTPWriteROM(i, 1, P + i); // ÖØÐ´EEPROMµÄ¼Ä´æÆ÷£¬Á½´Î
 						isdiff = 1;
 						break;
 					}
@@ -207,30 +202,36 @@ bool SH367309_UpdataAfeConfig(void)
 			}
 		}
 
+		if (!can_compare)
+		{
+			AFE_PARAM_WRITE_Flag = 1;
+			return false;
+		}
+
 		if (isdiff)
 		{
-
-			MCUO_AFE_VPRO = 1; // ½øÈëÉÕÐ´Ä£Ê½
+			MCUO_AFE_VPRO = 1;
 			Delay1ms(20);
 			Feed_IWatchDog;
 
 			ret = Write_Parameters();
 
 			Feed_IWatchDog;
-			MCUO_AFE_VPRO = 0; // ÍË³öÉÕÐ´Ä£Ê½
+			MCUO_AFE_VPRO = 0;
 			Delay1ms(1);
 
-			/* Ã¿´ÎÐ´ÍêÈç¹û²»±¨´í¶¼Òª¸´Î»Ò»ÏÂ¡£ÕâÑùÐ´½øÈ¥µÄ²ÎÊý²ÅÓÐÐ§ */
 			if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
 			{
-				AFE_Reset(); // Reset IC
+				AFE_Reset();
 				Delay1ms(5);
 				AFE_IsReady();
 				AFE_ResetFlag = 1;
 			}
 			SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-
-			// read_afe();
+			if (!ret)
+			{
+				AFE_PARAM_WRITE_Flag = 1;
+			}
 		}
 		else
 		{
@@ -241,33 +242,39 @@ bool SH367309_UpdataAfeConfig(void)
 	return ret;
 }
 
-/*********************************** ÒÔÏÂÊÇÊý¾ÝÎªÁË±£´æµ½EEPROMµÄÉè¼Æ **********************************/
-
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
 	UINT16 u16SciRegStartAddr;
-
 	int i = 0;
 	UINT16 offset = 0;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
+	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
+	(void)u16Channel;
+
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
-	/* ÆðÊ¼µØÖ·ÔÚAFE²ÎÊý·¶Î§£¬ÇÒÆðÊ¼µØÖ·+Ð´µÄ¼Ä´æÆ÷ÊýÁ¿ÔÚ·¶Î§ÄÚ */
 	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) && (u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) && (u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
 	{
 		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
+		AFE_CopyCurValues(snapshot);
 
 		Feed_IWatchDog;
 		for (i = 0; i < u16WrRegNum; i++)
 		{
 			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
-
-			/* Ö±½ÓÐ´µÀEEPROMÖÐ */
-			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), *(P + (i + offset) * 4));
 		}
 		Feed_IWatchDog;
+
+		if (!AFE_SaveCurValuesToFlash())
+		{
+			AFE_RestoreCurValues(snapshot);
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_CMD_INVALID;
+			return 1;
+		}
+
 		AFE_PARAM_WRITE_Flag = 1;
 		return 1;
 	}
@@ -280,8 +287,11 @@ void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
 	UINT16 u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
-		EEPROM_ResetData_AFE_ParametersToDefault();
-		AFE_PARAM_WRITE_Flag = 1;
+		if (!EEPROM_ResetData_AFE_ParametersToDefault())
+		{
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_CMD_INVALID;
+		}
 	}
 	else
 	{
@@ -293,9 +303,10 @@ void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
 void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
-	UINT16 i, j;
+	UINT16 i = 0;
+	UINT16 j;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
-	i = 0;
+	(void)s;
 
 	for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
 	{
@@ -305,8 +316,7 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 }
 
-// AFE_Parameters  reset
-void EEPROM_ResetData_AFE_ParametersToDefault(void)
+UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT8 i;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
@@ -314,28 +324,46 @@ void EEPROM_ResetData_AFE_ParametersToDefault(void)
 	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		*(P + i * 4 - 1) = *(P + i * 4); // µ±Ç°Öµ±äÎªÄ¬ÈÏÖµ
-		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), *(P + i * 4));
+		*(P + i * 4 - 1) = *(P + i * 4);
 	}
 	Feed_IWatchDog;
+
+	if (!AFE_SaveCurValuesToFlash())
+	{
+		return 0;
+	}
+
+	AFE_PARAM_WRITE_Flag = 1;
+	return 1;
 }
 
 void ReadEEPROM_AFE_Parameters(void)
 {
 	UINT16 i;
-
 	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
+	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
+	UINT8 use_default = 0;
+
+	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
+	{
+		use_default = 1;
+	}
+
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		(P + i)->curValue = ReadEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1));
-
-		if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
+		if (!use_default)
 		{
-			(P + i)->curValue = (P + i)->defaultValue;
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
+			(P + i)->curValue = values[i];
+			if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
 			{
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+				use_default = 1;
 			}
 		}
+	}
+
+	if (use_default)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		EEPROM_ResetData_AFE_ParametersToDefault();
 	}
 }

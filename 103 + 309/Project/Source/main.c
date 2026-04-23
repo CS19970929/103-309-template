@@ -1,4 +1,4 @@
-#include "main.h"
+ï»¿#include "main.h"
 
 UINT8 SeriesNum = 7;
 
@@ -52,11 +52,11 @@ void IOstatus_RTCMode_test(void)
 
 	// __delay_ms(100);
 }
-// ²»Í¬´®ÊıÎ¬»¤µÄ±í¸ñ
-// ÖĞÓ±
+// ä¸åŒä¸²æ•°ç»´æŠ¤çš„è¡¨æ ¼
+// ä¸­é¢–
 const unsigned char SeriesSelect_AFE1[16][16] = {
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1´®
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2´®
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1ä¸²
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2ä¸²
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 3
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 4
 	{0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 5
@@ -81,17 +81,17 @@ void InitSystemWakeUp(void);
 
 void open_chg_close_dsg(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // å¯?¿½éšç–ŒADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // ç€µ?æ‹·é–¸æ°±æŒADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_SET);
 }
 void open_dsg_close_chg(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // å¯?¿½éšç–ŒADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // ç€µ?æ‹·é–¸æ°±æŒADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
@@ -100,9 +100,9 @@ void enter_fac_mode(bool on)
 #if 1
 	if (on)
 	{
-		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // å¯?¿½éšç–ŒADC
-		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
-		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // éå‘¯æ•¸MOSé¢ç›‡FEçº?ƒ¿æ¬¢éºÑƒåŸ?
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // ç€µ?æ‹·é–¸æ°±æŒADC
+		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
+		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // é–¸å¿“æ‡éçª¶OSé–»ãˆ¢æ³§FEç»¾?å…›å¨†ãˆ¤å¹’è¤é©?
 		MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 		GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_SET);
 	}
@@ -117,8 +117,8 @@ extern void new_todo_logi(void);
 
 int main(void)
 {
-	InitDevice(); // ³õÊ¼»¯ÍâÉè
-	InitVar();	  // ³õÊ¼»¯±äÁ¿
+	InitDevice(); // åˆå§‹åŒ–å¤–è®¾
+	InitVar();	  // åˆå§‹åŒ–å˜é‡
 	// Init_RTC();
 	// RTC_WKTimeConfig();
 	// while (1)
@@ -149,7 +149,7 @@ int main(void)
 		App_E2promDeal();
 		// App_CellBalance();
 		App_Can();
-		// App_SleepDeal(); // ¹Ø±ÕÕâ¸ö¹¦ÄÜµÄ»°£¬ÔÚInitVar()ÖĞSystem_OnOFF_FuncÏà¹ØÖÃÁã£¬»òÕßÖ±½ÓÆÁ±Î
+		// App_SleepDeal(); // å…³é—­è¿™ä¸ªåŠŸèƒ½çš„è¯ï¼Œåœ¨InitVar()ä¸­System_OnOFF_Funcç›¸å…³ç½®é›¶ï¼Œæˆ–è€…ç›´æ¥å±è”½
 		sleep();
 		App_SOC();
 
@@ -171,7 +171,7 @@ int main(void)
 
 void InitDevice(void)
 {
-	SystemInit(); // HSEÄ¬ÈÏ±¶Æµµ½72MHz£¬Èç¹ûÃ»HSEÇĞ»ØHSIÔõÃ´´¦ÀíÄ¿Ç°»¹Ã»ÁË½â
+	SystemInit(); // HSEé»˜è®¤å€é¢‘åˆ°72MHzï¼Œå¦‚æœæ²¡HSEåˆ‡å›HSIæ€ä¹ˆå¤„ç†ç›®å‰è¿˜æ²¡äº†è§£
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
@@ -189,7 +189,7 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	// InitE2PROM(); // ¾ö¶¨°ÑÕâ¸ö·ÅÔÚÇ°Ãæ£¬ÓÅÏÈ¼¶Ìá¸ß£¬ÒòÎª¿Í»§´®¿Ú³õÊ¼»¯£¬ÓĞ¿ÉÄÜÒª¶ÁÆä×Ô¼ºµÄÊı¾İ
+	InitE2PROM();
 	InitAFE1();
 	InitCan();
 	InitADC();
@@ -201,7 +201,7 @@ void InitDevice(void)
 	// Init_ChargerLoad_Det();
 
 	InitMosRelay_DOx();
-	InitData_SOC(); // ±ØĞë·ÅÔÚ¶ÁÍêeepromÊı¾İºóÃæ
+	InitData_SOC(); // å¿…é¡»æ”¾åœ¨è¯»å®Œeepromæ•°æ®åé¢
 
 	InitTimer();
 	log_w("init over");
@@ -218,15 +218,15 @@ void InitDevice(void)
 
 void InitVar(void)
 {
-	// SystemMonitorResetData_EEPROM();							//Õâ¸öº¯ÊıµÄ³õÊ¼»¯Ä¬ÈÏĞèÇó¹¦ÄÜĞŞ¸ÄÁË£¬ÒªĞŞ¸ÄEEPROMµÄÉÏµç±êÖ¾Î»
+	// SystemMonitorResetData_EEPROM();							//è¿™ä¸ªå‡½æ•°çš„åˆå§‹åŒ–é»˜è®¤éœ€æ±‚åŠŸèƒ½ä¿®æ”¹äº†ï¼Œè¦ä¿®æ”¹EEPROMçš„ä¸Šç”µæ ‡å¿—ä½
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	SystemStatus.bits.b1StartUpBMS = 0; // È¥µô¿ª»úÊ±Ğò
+	SystemStatus.bits.b1StartUpBMS = 0; // å»æ‰å¼€æœºæ—¶åº
 	SystemStatus.bits.b1Status_ToSleep = 1;
 
-	// SystemStatus.bits.b4Status_ProjectVer = 1;
-	LogRecord_Flag.bits.Log_StartUp = 1;
+	SystemStatus.bits.b4Status_ProjectVer = 1;
+	// LogRecord_Flag.bits.Log_StartUp = 1;
 }
 
 void InitSystemWakeUp(void)
@@ -242,3 +242,4 @@ void App_Sci(void)
 {
 	App_CommonUpper();
 }
+

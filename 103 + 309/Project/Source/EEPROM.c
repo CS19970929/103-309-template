@@ -1,4 +1,4 @@
-#include "main.h"
+ï»¿#include "main.h"
 
 UINT32 u32E2P_Pro_VolCur_WriteFlag = 0;
 UINT32 u32E2P_Pro_Temp_WriteFlag = 0;
@@ -10,414 +10,42 @@ UINT32 u32E2P_HeatCool_WriteFlag = 0;
 UINT8 u8E2P_SocTable_WriteFlag = 0;
 UINT8 u8E2P_CopperLoss_WriteFlag = 0;
 UINT8 u8E2P_KB_WriteFlag = 0;
-
 UINT8 u8E2P_KB_WritePos = 0;
 
-void InitData_E2prom(void);
+uint16_t curr_offset = 0;
+UINT16 OffsetValue_CHG = 0;
+UINT16 OffsetValue_DSG = 0;
 
-// ²úÉúIICÆðÊ¼ÐÅºÅ
-void IIC_Start_SEE(void)
+extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
+
+static void EEPROM_ClearLegacyWriteFlags(void)
 {
-	SDA_OUT_SEE(); // sdaÏßÊä³ö
-	IIC_SDA_SEE = 1;
-	IIC_SCL_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SDA_SEE = 0; // START:when CLK is high,DATA change form high to low
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 0; // Ç¯×¡I2C×ÜÏß£¬×¼±¸·¢ËÍ»ò½ÓÊÕÊý¾Ý
+	u32E2P_Pro_VolCur_WriteFlag = 0;
+	u32E2P_Pro_Temp_WriteFlag = 0;
+	u32E2P_Pro_Other_WriteFlag = 0;
+	u32E2P_RTC_Element_WriteFlag = 0;
+	u32E2P_OtherElement1_WriteFlag = 0;
+	u32E2P_HeatCool_WriteFlag = 0;
+	u8E2P_SocTable_WriteFlag = 0;
+	u8E2P_CopperLoss_WriteFlag = 0;
+	u8E2P_KB_WriteFlag = 0;
+	u8E2P_KB_WritePos = 0;
+	gu8_Reset_EventRecord = 0;
 }
 
-// ²úÉúIICÍ£Ö¹ÐÅºÅ
-void IIC_Stop_SEE(void)
+static void EEPROM_LoadDefaultProtect(void)
 {
-	SDA_OUT_SEE(); // sdaÏßÊä³ö
-	IIC_SCL_SEE = 0;
-	IIC_SDA_SEE = 0; // STOP:when CLK is high DATA change form low to high
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SDA_SEE = 1; // ·¢ËÍI2C×ÜÏß½áÊøÐÅºÅ
-	__delay_us(DELAY_US_IIC_EEPROM);
-}
-
-// µÈ´ýÓ¦´ðÐÅºÅµ½À´
-// ·µ»ØÖµ£º1£¬½ÓÊÕÓ¦´ðÊ§°Ü
-//         0£¬½ÓÊÕÓ¦´ð³É¹¦
-UINT8 IIC_Wait_Ack_SEE(void)
-{
-	UINT8 ucErrTime = 0;
-	SDA_IN_SEE(); // SDAÉèÖÃÎªÊäÈë
-	// IIC_SDA_SEE=1;__delay_us(4);
-	IIC_SCL_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	while (READ_SDA_SEE)
-	{
-		ucErrTime++;
-		if (ucErrTime > 250)
-		{
-			IIC_Stop_SEE();
-			return 1;
-		}
-	}
-	IIC_SCL_SEE = 0; // Ê±ÖÓÊä³ö0
-	__delay_us(DELAY_US_IIC_EEPROM);
-	return 0;
-}
-
-// ²úÉúACKÓ¦´ð
-void IIC_Ack_SEE(void)
-{
-	IIC_SCL_SEE = 0;
-	SDA_OUT_SEE();
-	IIC_SDA_SEE = 0;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 0;
-}
-
-// ²»²úÉúACKÓ¦´ð
-void IIC_NAck_SEE(void)
-{
-	IIC_SCL_SEE = 0;
-	SDA_OUT_SEE();
-	IIC_SDA_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 1;
-	__delay_us(DELAY_US_IIC_EEPROM);
-	IIC_SCL_SEE = 0;
-}
-
-// IIC·¢ËÍÒ»¸ö×Ö½Ú
-// ·µ»Ø´Ó»úÓÐÎÞÓ¦´ð
-// 1£¬ÓÐÓ¦´ð
-// 0£¬ÎÞÓ¦´ð
-void IIC_Send_Byte_SEE(UINT8 txd)
-{
-	UINT8 t;
-	SDA_OUT_SEE();
-	IIC_SCL_SEE = 0; // À­µÍÊ±ÖÓ¿ªÊ¼Êý¾Ý´«Êä
-	for (t = 0; t < 8; t++)
-	{
-		// IIC_SDA=(txd&0x80)>>7;
-		if ((txd & 0x80) >> 7)
-			IIC_SDA_SEE = 1;
-		else
-			IIC_SDA_SEE = 0;
-		txd <<= 1;
-		__delay_us(DELAY_US_IIC_EEPROM); // ¶ÔTEA5767ÕâÈý¸öÑÓÊ±¶¼ÊÇ±ØÐëµÄ
-		IIC_SCL_SEE = 1;
-		__delay_us(DELAY_US_IIC_EEPROM);
-		IIC_SCL_SEE = 0;
-		__delay_us(DELAY_US_IIC_EEPROM);
-	}
-}
-
-// ¶Á1¸ö×Ö½Ú£¬ack=1Ê±£¬·¢ËÍACK£¬ack=0£¬·¢ËÍnACK
-UINT8 IIC_Read_Byte_SEE(unsigned char ack)
-{
-	unsigned char i, receive = 0;
-	SDA_IN_SEE(); // SDAÉèÖÃÎªÊäÈë
-	for (i = 0; i < 8; i++)
-	{
-		IIC_SCL_SEE = 0;
-		__delay_us(DELAY_US_IIC_EEPROM);
-		IIC_SCL_SEE = 1;
-		receive <<= 1;
-		if (READ_SDA_SEE)
-			receive++;
-		__delay_us(DELAY_US_IIC_EEPROM);
-	}
-	if (!ack)
-		IIC_NAck_SEE(); // ·¢ËÍnACK
-	else
-		IIC_Ack_SEE(); // ·¢ËÍACK
-	return receive;
-}
-
-// ÒÔÏÂÏë·¨Ê§°Ü
-UINT8 ReadEEPROM_Byte2(UINT16 addr, UINT8 *data)
-{
-	IIC_Start_SEE();
-	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_W); // ·¢ËÍÐ´ÃüÁî
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		return 1; // µ«ÊÇ·µ»ØÖµµÄÎÊÌâ£¬Ö»ÄÜÔÚÕâÀï¼ÓÁË
-	}
-
-#ifndef AT24C02
-	IIC_Send_Byte_SEE(addr >> 8); // ·¢ËÍ¸ßµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		return 1;
-	}
-#endif
-
-	IIC_Send_Byte_SEE(addr % 256); // ·¢ËÍµÍµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		return 1;
-	}
-
-	IIC_Start_SEE();
-	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_R); // ½øÈë½ÓÊÕÄ£Ê½
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		return 1;
-	}
-
-	*data = IIC_Read_Byte_SEE(0);
-	IIC_Stop_SEE(); // ²úÉúÒ»¸öÍ£Ö¹Ìõ¼þ
-	return 0;
-}
-
-// ºóÐøÎ¬»¤ÈËÔ±½ûÖ¹Ê¹ÓÃÕâ¸öº¯Êý
-UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
-{
-	UINT8 result = 0;
-
-	Feed_IWatchDog;
-	MCUO_E2PR_WP = 0;
-
-	IIC_Start_SEE();
-	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_W); // ·¢ËÍÐ´ÃüÁî
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		result = 1;
-		goto __exit;
-	}
-
-#ifndef AT24C02
-	IIC_Send_Byte_SEE(addr >> 8); // ·¢ËÍ¸ßµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		result = 1;
-		goto __exit;
-	}
-
-#endif
-
-	IIC_Send_Byte_SEE(addr % 256); // ·¢ËÍµÍµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		result = 1;
-		goto __exit;
-	}
-	IIC_Send_Byte_SEE(val); // ·¢ËÍ×Ö½Ú
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		result = 1;
-		goto __exit;
-	}
-	IIC_Stop_SEE(); // ²úÉúÒ»¸öÍ£Ö¹Ìõ¼þ
-	__delay_ms(5);	// EEPROMÌØÐÔ£¬ÐèÒª5ms±£Ö¤Ð´Íê
-
-__exit:
-	MCUO_E2PR_WP = 1;
-	Feed_IWatchDog;
-	return result;
-}
-
-UINT8 ReadEEPROM_Byte(UINT16 addr)
-{
-	UINT8 temp = 0;
-	Feed_IWatchDog;
-	IIC_Start_SEE();
-	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_W); // ·¢ËÍÐ´ÃüÁî
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_COM); // ±¾À´´òËãÔÚ×îºóÒ»²ã²Åµ÷ÓÃÕâ¸öº¯Êý£¬Õâ¸ö±à³Ì·ç¸ñ
-		return 0;									 // µ«ÊÇ·µ»ØÖµµÄÎÊÌâ£¬Ö»ÄÜÔÚÕâÀï¼ÓÁË
-	}
-
-#ifndef AT24C02
-	IIC_Send_Byte_SEE(addr >> 8); // ·¢ËÍ¸ßµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_COM);
-		return 0;
-	}
-
-#endif
-
-	IIC_Send_Byte_SEE(addr % 256); // ·¢ËÍµÍµØÖ·
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_COM);
-		return 0;
-	}
-
-	IIC_Start_SEE();
-	IIC_Send_Byte_SEE(sEEAddress | I2C_RW_R); // ½øÈë½ÓÊÕÄ£Ê½
-	if (1 == IIC_Wait_Ack_SEE())
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_COM);
-		return 0;
-	}
-
-	temp = IIC_Read_Byte_SEE(0);
-	IIC_Stop_SEE(); // ²úÉúÒ»¸öÍ£Ö¹Ìõ¼þ
-	Feed_IWatchDog;
-	return temp;
-}
-
-UINT16 ReadEEPROM_Word_NoZone(UINT16 addr)
-{
-	UINT16 tmp16a;
-	UINT8 tmp8a, tmp8b;
-	tmp8a = ReadEEPROM_Byte(addr);	   // ¶ÁÈ¡µÍÎ»µØÖ·A¶ÔÓ¦µÄÊý¾Ý
-	tmp8b = ReadEEPROM_Byte(addr + 1); // ¶ÁÈ¡¸ßÎ»µØÖ·A+1¶ÔÓ¦µÄÊý¾Ý
-	tmp16a = tmp8b;
-	tmp16a = (tmp16a << 8) | tmp8a; // Êý¾Ý´æ´¢
-
-	return tmp16a;
-}
-
-// Ö÷Òªµ÷Õâ¸ö£¬¼ÓÁË¼¸¾ä»°
-UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data)
-{
-	UINT8 tmp8a, tmp8b, WriteCounter = 0, result = 0;
-	UINT16 tmp_addr, tmp16;
-	;
-
-	tmp_addr = addr; // ÒÆÖ²ÍüÁËÕâ¾ä»°
-	WriteCounter = 0;
-	do
-	{
-		result += WriteEEPROM_Byte(tmp_addr, data & 0xff);	 // Êý¾ÝµÄµÍ8Î»Ð´ÈëEEPROM
-		result += WriteEEPROM_Byte(tmp_addr + 1, data >> 8); // Êý¾ÝµÄ¸ß8Î»Ð´ÈëEEPROM
-		tmp8a = ReadEEPROM_Byte(tmp_addr);					 // »ñÈ¡¸Õ´æÈëEEPROMµÄµÍ8Î»Êý¾Ý
-		tmp8b = ReadEEPROM_Byte(tmp_addr + 1);				 // »ñÈ¡¸Õ´æÈëEEPROMµÄ¸ß8Î»Êý¾Ý
-		tmp16 = (tmp8b << 8) | tmp8a;						 // ´æ´¢¶Áµ½µÄÊý¾ÝÓÚ±äÁ¿tmp16
-
-		WriteCounter++;
-		if (WriteCounter > 2 || result != 0)
-		{			  /*ÅÐ¶Ïtmp16 != dataµÄ¼ÆÊý*/
-			++result; // ÒªÌø³öÀ´Ö´ÐÐÐ´±£»¤ÖÃÎ»
-			break;
-		}
-	} while (tmp16 != data);
-	return result;
-}
-
-/*
-=================ÒÔÏÂ½øÈëµÚ¶þ²ãÓ¦ÓÃ½×¶Î=================
-*/
-void ReadEEPROM_ByteData_StartUp(void)
-{
-	UINT16 i;
-	UINT16 t_u16RdTemp;
-	INT16 t_i16RdTemp;
-	UINT16 t_u16TempMax, t_u16TempMin;
-
-	const struct PRT_E2ROM_PARAS PrtE2paras_Min = E2P_PROTECT_MIN_PRT;
-	const struct PRT_E2ROM_PARAS PrtE2paras_Max = E2P_PROTECT_MAX_PRT;
-	const struct PRT_E2ROM_PARAS PrtE2paras_Pos = E2P_ADDR_E2POS_PROTECT;
-
-	const struct OTHER_ELEMENT OtherElement_to_Max = OtherElement_max;
-	const struct OTHER_ELEMENT OtherElement_to_Min = OtherElement_min;
-	const struct OTHER_ELEMENT OtherElement_to_Pos = E2P_ADDR_E2POS_OTHER_ELEMENT1;
-
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Max = HeatCoolElement_Max;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Min = HeatCoolElement_Min;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Pos = E2P_ADDR_E2POS_HEAT_COOL;
+	UINT8 i;
+	const struct PRT_E2ROM_PARAS protect_default = E2P_PROTECT_DEFAULT_PRT;
 
 	for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
-	{ // ±£»¤µã
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i));
-		t_u16TempMax = (*(&PrtE2paras_Max.u16VcellOvp_First + i));
-		t_u16TempMin = (*(&PrtE2paras_Min.u16VcellOvp_First + i));
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = t_u16RdTemp;
-		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
-		{
-		}
-		else
-		{
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{ // ÕâÑùÆäÊµ²»Ì«ºÃ£¬×îºÃµÄ°ì·¨ÊÇ°ÑReadEEPROM_Word_NoZone()Õâ¸öº¯Êý¸ÄÔìÒÔÏÂ
-				// g_st_SysStatusFlag.bits.b1EepromErr = 1;		//ÖØÐÂ¸ÄÔìÁËÒ»ÏÂÕâ¸öº¯Êý£¬×îºóÊ§°Ü¸æÖÕ£¬²»¸ÄºÃ¹ý¸Ä
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE); // Ö»ÒªÈ·±£Í¨Ñ¶Ã»ÎÊÌâ£¬¾ÍÊÇÕâ¸ö´íÎó¡£
-			}
-		}
+	{
+		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = *(&protect_default.u16VcellOvp_First + i);
 	}
-
-	for (i = 0; i < E2P_PARA_NUM_CALIB_K; ++i)
-	{ // KÖµ
-		t_u16RdTemp = ReadEEPROM_Word_NoZone(E2P_ADDR_START_CALIB_K + (i << 1));
-		g_u16CalibCoefK[i] = t_u16RdTemp;
-		if ((t_u16RdTemp >= SYSKMIN) && (t_u16RdTemp <= SYSKMAX))
-		{
-		}
-		else
-		{
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			}
-		}
-
-		t_i16RdTemp = ReadEEPROM_Word_NoZone(E2P_ADDR_START_CALIB_B + (i << 1));
-		g_i16CalibCoefB[i] = t_i16RdTemp; // BÖµ
-		if ((t_i16RdTemp >= SYSBMIN) && (t_i16RdTemp <= SYSBMAX))
-		{
-		}
-		else
-		{
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			}
-		}
-	}
-
-	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
-	{ // Other_CanAdd
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&OtherElement_to_Pos.u16Balance_OpenVoltage + i));
-		t_u16TempMax = (*(&OtherElement_to_Max.u16Balance_OpenVoltage + i));
-		t_u16TempMin = (*(&OtherElement_to_Min.u16Balance_OpenVoltage + i));
-		*(&OtherElement.u16Balance_OpenVoltage + i) = t_u16RdTemp;
-		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
-		{
-		}
-		else
-		{
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{
-				// g_st_SysStatusFlag.bits.b1EepromErr = 1;
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			}
-		}
-	}
-
-	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-	{ // HeatCool_element
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i));
-		t_u16TempMax = (*(&HeatCoolEle_Max.u16Heat_OpenTemp + i));
-		t_u16TempMin = (*(&HeatCoolEle_Min.u16Heat_OpenTemp + i));
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = t_u16RdTemp;
-		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
-		{
-		}
-		else
-		{
-			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
-			{
-				// g_st_SysStatusFlag.bits.b1EepromErr = 1;
-				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			}
-		}
-	}
-
-	ReadEEPROM_AFE_Parameters();
-	ReadEEPROM_EventRecord_Parameters();
 }
 
-// SciÃüÁîµÄÊý¾Ý
-void EEPROM_ResetData_AllToDefault(void)
+static void EEPROM_LoadDefaultCalib(void)
 {
-	const struct PRT_E2ROM_PARAS PrtE2PARAS_Default = E2P_PROTECT_DEFAULT_PRT;
-	const struct OTHER_ELEMENT OtherElement_Default = OtherElement_default;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Default = HeatCoolElement_Default;
 	UINT8 i;
 
 	for (i = 0; i < KB_NUM; ++i)
@@ -425,318 +53,113 @@ void EEPROM_ResetData_AllToDefault(void)
 		g_u16CalibCoefK[i] = SYSKDEFAULT;
 		g_i16CalibCoefB[i] = SYSBDEFAULT;
 	}
-	u8E2P_KB_WriteFlag = KB_NUM;
-	u8E2P_KB_WritePos = 0;
+}
 
-	// Protect
-	for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
-	{
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
-	}
-	u32E2P_Pro_VolCur_WriteFlag = E2P_PARA_ALL_VOLCUR_PROTECT;
-	u32E2P_Pro_Temp_WriteFlag = E2P_PARA_ALL_TEM_PROTECT;
-	u32E2P_Pro_Other_WriteFlag = E2P_PARA_ALL_OTHER_PROTECT;
+static void EEPROM_LoadDefaultOtherElement(void)
+{
+	UINT8 i;
+	const struct OTHER_ELEMENT other_default = OtherElement_default;
 
-	// Other_CanAdd_element
 	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 	{
-		*(&OtherElement.u16Balance_OpenVoltage + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
+		*(&OtherElement.u16Balance_OpenVoltage + i) = *(&other_default.u16Balance_OpenVoltage + i);
 	}
-	u32E2P_OtherElement1_WriteFlag = E2P_PARA_ALL_OTHER_ELEMENT1;
 
-	// HeatCool_element
+	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+}
+
+static void EEPROM_LoadDefaultHeatCool(void)
+{
+	UINT8 i;
+	const struct HEAT_COOL_ELEMENT heatcool_default = HeatCoolElement_Default;
+
 	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 	{
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
+		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&heatcool_default.u16Heat_OpenTemp + i);
 	}
-	u32E2P_HeatCool_WriteFlag = E2P_PARA_ALL_HEAT_COOL_ELE;
 }
 
-// ÀúÊ·±£»¤¼ÇÂ¼reset
-void EEPROM_ResetData_OtherToDefault(void)
+static void EEPROM_LoadDefaultSocTable(void)
 {
-	EEPROM_ResetData_AFE_ParametersToDefault();
-	EEPROM_ResetData_EventRecord_ToDefault();
+	UINT8 i;
 
-	SystemMonitorResetData_EEPROM(); // ÏµÍ³¹¦ÄÜÑ¡È¡±êÖ¾Î»´æ´¢
+	for (i = 0; i < SOC_TABLE_SIZE; ++i)
+	{
+		SOC_Table_Set[i] = SOC_Table_Default[i];
+	}
 }
 
-// SciÃüÁî±íÖÐ£¬ÒòÎªSTM8µÄÔµ¹Ê£¬¾ö¶¨È«²¿´ÓÍ¨Ñ¶ÖÐÒÆ³öÀ´Ð´
-void WriteEEPROM_ByteData_Circle(void)
+static void EEPROM_LoadDefaultCopperLoss(void)
 {
-	UINT8 i = 0;
-	UINT8 u8temp;
-	const struct PRT_E2ROM_PARAS PrtE2paras_Pos = E2P_ADDR_E2POS_PROTECT;
-	const struct OTHER_ELEMENT OtherCanAdd_Pos = E2P_ADDR_E2POS_OTHER_ELEMENT1;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Pos = E2P_ADDR_E2POS_HEAT_COOL;
+	UINT8 i;
 
-	if (u8E2P_KB_WriteFlag)
-	{ // ÍêÃÀKBÖµ²Ù×÷£¬¼È¿ÉÈ«²¿Ð´Ò»±é£¬Ò²¿ÉÒÔµ¥¶ÀÐ´ÆäÖÐÒ»¶ÔKBÖµ
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (u8E2P_KB_WritePos << 1)), g_u16CalibCoefK[u8E2P_KB_WritePos]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (u8E2P_KB_WritePos << 1)), g_i16CalibCoefB[u8E2P_KB_WritePos]);
-		++u8E2P_KB_WritePos; // Èç¹ûu8E2P_KB_WriteFlag=0£¬ÔòPos¾ÍËã´íÒ²Ã»ÓÃ£¬±ðµÄµØ·½ÏëÐÞ¸ÄKBÖµµÄ»°£¬ÕâÁ½Õß±ØÐëÍ¬Ê±²Ù×÷¡£
-		--u8E2P_KB_WriteFlag;
-	}
-	else if (u32E2P_Pro_VolCur_WriteFlag & E2P_PARA_ALL_VOLCUR_PROTECT)
+	for (i = 0; i < CompensateNUM; ++i)
 	{
-		while (i < E2P_PARA_ALL_VOLCUR_PROTECT)
-		{
-			if ((u32E2P_Pro_VolCur_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i),
-										  *(&PRT_E2ROMParas.u16VcellOvp_First + i));
-				u32E2P_Pro_VolCur_WriteFlag -= ((long)1 << i); // °´Î»²Ù×÷£¬ÓÐÒ»¸ö¼õÒ»¸ö¡£
-				break;
-			}
-			i++;
-		}
+		CopperLoss[i] = CopperLoss_Default;
+		CopperLoss_Num[i] = CopperLossNum_Default;
 	}
-	else if (u32E2P_Pro_Temp_WriteFlag & E2P_PARA_ALL_TEM_PROTECT)
-	{
-		while (i < E2P_PARA_ALL_TEM_PROTECT)
-		{
-			if ((u32E2P_Pro_Temp_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16TChgOTp_First + i),
-										  *(&PRT_E2ROMParas.u16TChgOTp_First + i));
-				u32E2P_Pro_Temp_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_Pro_Other_WriteFlag & E2P_PARA_ALL_OTHER_PROTECT)
-	{
-		while (i < E2P_PARA_ALL_OTHER_PROTECT)
-		{
-			if ((u32E2P_Pro_Other_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VdeltaOvp_First + i),
-										  *(&PRT_E2ROMParas.u16VdeltaOvp_First + i));
-				u32E2P_Pro_Other_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_OtherElement1_WriteFlag & E2P_PARA_ALL_OTHER_ELEMENT1)
-	{
-		while (i < E2P_PARA_ALL_OTHER_ELEMENT1)
-		{
-			if ((u32E2P_OtherElement1_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&OtherCanAdd_Pos.u16Balance_OpenVoltage + i),
-										  *(&OtherElement.u16Balance_OpenVoltage + i));
-				u32E2P_OtherElement1_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	// else if (u32E2P_RTC_Element_WriteFlag)
-	// {
-	// 	while (i < E2P_PARA_ALL_RTC_ELEMENT)
-	// 	{
-	// 		if ((u32E2P_RTC_Element_WriteFlag >> i) & 1)
-	// 		{
-	// 			WriteEEPROM_Word_NoZone((UINT16) * (&RTC_Element_Pos.RTC_Time_Year + i),
-	// 									  *(&RTC_time.RTC_Time_Year + i));
-	// 			u32E2P_RTC_Element_WriteFlag -= ((long)1 << i);
-	// 			break;
-	// 		}
-	// 		i++;
-	// 	}
-	// }
-	// else if (u8E2P_SocTable_WriteFlag)
-	// {
-	// 	u8temp = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
-	// 	u8E2P_SocTable_WriteFlag--;
-	// }
-	// else if (u8E2P_CopperLoss_WriteFlag)
-	// {
-	// 	u8temp = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
-	// 	u8E2P_CopperLoss_WriteFlag--;
-	// }
-	else if (u32E2P_HeatCool_WriteFlag)
-	{
-		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-		{
-			if ((u32E2P_HeatCool_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i), *(&Heat_Cool_Element.u16Heat_OpenTemp + i));
-				u32E2P_HeatCool_WriteFlag -= ((long)1 << i);
-				break;
-			}
-		}
-	}
-	else if (gu8_Reset_EventRecord)
-	{
-		u8temp = 100 - gu8_Reset_EventRecord;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_START_EVENT_RECORD + (u8temp << 1), 0);
-		gu8_Reset_EventRecord--;
-		if (gu8_Reset_EventRecord == 1)
-		{
-			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_EVENT_POINT, 0);
-		}
-	}
+}
+
+static void EEPROM_LoadDefaultRuntimeData(void)
+{
+	EEPROM_LoadDefaultProtect();
+	EEPROM_LoadDefaultCalib();
+	EEPROM_LoadDefaultOtherElement();
+	EEPROM_LoadDefaultHeatCool();
+	EEPROM_LoadDefaultSocTable();
+	EEPROM_LoadDefaultCopperLoss();
+
+	curr_offset = 0;
+	OffsetValue_CHG = 0;
+	OffsetValue_DSG = 0;
+
+	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
+	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
+}
+
+UINT8 ReadEEPROM_Byte(UINT16 addr)
+{
+	(void)addr;
+	return 0xFF;
+}
+
+UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
+{
+	(void)addr;
+	(void)val;
+	return 0;
+}
+
+UINT16 ReadEEPROM_Word_NoZone(UINT16 addr)
+{
+	(void)addr;
+	return 0xFFFF;
+}
+
+UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data)
+{
+	(void)addr;
+	(void)data;
+	return 0;
 }
 
 void InitE2PROM_i2c(void)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-	// PB3_I2C_SCL_eeprom£¬PB5_I2C_SDA_eeprom
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-	// GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);	//PB3ÎªJTAG¿Ú
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_10 | GPIO_Pin_11); // Êä³ö¸ß
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_13); // Êä³ö¸ß
 }
 
 void InitE2PROM(void)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-	// PB3_I2C_SCL_eeprom£¬PB5_I2C_SDA_eeprom
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-	// GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);	//PB3ÎªJTAG¿Ú
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_10 | GPIO_Pin_11); // Êä³ö¸ß
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_13); // Êä³ö¸ß
-
-	__delay_ms(100);
-
-	InitData_E2prom();
-}
-
-void DataLoad_CurrentCali_startup(void)
-{
-	static UINT8 su8_StartUp_CaliCnt = 0;
-	static UINT16 su16_OffsetValue = 0;
-
-	static UINT32 su32_OffsetValue_CHG = 0;
-	static UINT32 su32_OffsetValue_DSG = 0;
-
-	log_i("virtual current cali\n");
-	SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-	SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
-
-	__delay_ms(1000);
-	// step 2
-	while (su8_StartUp_CaliCnt < 16)
-	{ // ÏÈ2sÎª20*2´Î£¬3sÎª20*3´Î
-		UpdateVoltageFromBqMaximo();
-
-		if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
-		{
-			su32_OffsetValue_CHG += SH367309_Read_AFE1.u16Current;
-		}
-		else
-		{
-			su32_OffsetValue_DSG += 0xFFFF - SH367309_Read_AFE1.u16Current + 1;
-		}
-
-		if (su32_OffsetValue_CHG >= su32_OffsetValue_DSG)
-		{
-			su16_OffsetValue = (UINT16)((su32_OffsetValue_CHG - su32_OffsetValue_DSG) >> 4);
-		}
-		else
-		{
-			su16_OffsetValue = (UINT16)(0xFFFF - ((su32_OffsetValue_DSG - su32_OffsetValue_CHG) >> 4) + 1);
-		}
-
-		++su8_StartUp_CaliCnt;
-		__delay_ms(500);
-	}
-	// step 2
-	{
-		// Èç¹ûÊÇnormalµÄÐÝÃßºÍ»½ÐÑ£¬ÔòÐèÒªÔÙ´Î±£´æ×îÐÂµÄÖµ¡£
-		WriteEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE, su16_OffsetValue);
-	}
-}
-
-uint16_t curr_offset;
-UINT16 OffsetValue_CHG = 0;
-UINT16 OffsetValue_DSG = 0;
-void InitData_E2prom(void)
-{
-#if 1
-	if (EEPROM_VALUE_BEGIN_FLAG == ReadEEPROM_Word_NoZone(EEPROM_ADDR_PASS))
-	{ // µÚ¶þ´ÎÉÏµç¾Í»áÖ´ÐÐÕâ¸ö
-		ReadEEPROM_ByteData_StartUp();
-		{
-			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-			curr_offset = ReadEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE);
-			if ((curr_offset & 0x8000) == 0)
-			{
-				OffsetValue_CHG = (UINT32)curr_offset * 200 * g_u32CS_Res_AFE / (21470);
-			}
-			else
-			{
-				OffsetValue_DSG = (UINT32)((UINT16)(0xFFFF - curr_offset + 1)) * 200 * g_u32CS_Res_AFE / (21470); // mA
-			}
-		}
-	}
-	else
-	{ // µÚÒ»´ÎÉÏµç£¬ÓÃÓÚÁ¿²ú
-		EEPROM_ResetData_AllToDefault();
-		while (u8E2P_KB_WriteFlag || u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag || u32E2P_Pro_Other_WriteFlag || u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u32E2P_RTC_Element_WriteFlag || u32E2P_OtherElement1_WriteFlag || u32E2P_HeatCool_WriteFlag)
-		{ // 0x2000,0x2100,0x2200,0x2300
-			WriteEEPROM_ByteData_Circle();
-		}
-		EEPROM_ResetData_OtherToDefault(); // °ÑE2P_BEGIN_FLAGÐ´½øÍ·µØÖ·£¬
-										   // Èç¹ûÓÐ±ðµÄÌí¼Ó£¬¿ÉÒÔÍùÕâ¸öº¯ÊýÐ´£¬Ä¿Ç°¼ÓÁË±£»¤¼ÇÂ¼³õÊ¼»¯
-		WriteProID_Default();
-		{
-			bool ret = false;
-			do
-			{
-				initAFE1_IIC();
-				AFE_IsReady();
-				AFE_PARAM_WRITE_Flag = 1;
-				ret = SH367309_UpdataAfeConfig();
-			} while (ret == false);
-			// DataLoad_CurrentCali_startup();
-		}
-		soc_factory_param_init_first();
-
-		WriteEEPROM_Word_NoZone(EEPROM_ADDR_PASS, EEPROM_VALUE_BEGIN_FLAG); // µÚÒ»´ÎÉÏµç³õÊ¼»¯Íê³É
-
-		MCU_RESET();
-	}
-#endif
+	EEPROM_LoadDefaultRuntimeData();
+	ReadEEPROM_AFE_Parameters();
+	ReadEEPROM_EventRecord_Parameters();
+	EEPROM_ClearLegacyWriteFlags();
 }
 
 void App_E2promDeal(void)
 {
-	if (u8E2P_KB_WriteFlag || u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag || u32E2P_Pro_Other_WriteFlag || u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u32E2P_RTC_Element_WriteFlag || u32E2P_OtherElement1_WriteFlag || u32E2P_HeatCool_WriteFlag)
-	{ // 0x2000,0x2100,0x2200,0x2300
-		WriteEEPROM_ByteData_Circle();
-	}
-
-	if (gu8_Reset_EventRecord)
-	{ // ²¹³äÔÚÕâÀï°É
-		WriteEEPROM_ByteData_Circle();
-	}
+	EEPROM_ClearLegacyWriteFlags();
 }
 
-
+void EEPROM_test(void)
+{
+}
