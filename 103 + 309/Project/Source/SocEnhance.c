@@ -335,8 +335,6 @@ static void SOC_ApplyRestCompensation(UINT32 rest_seconds)
 	UINT8 target_soc;
 	UINT8 current_soc;
 	UINT8 new_soc;
-	UINT8 up_step;
-	UINT8 down_step;
 	INT16 diff;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
@@ -365,59 +363,20 @@ static void SOC_ApplyRestCompensation(UINT32 rest_seconds)
 		return;
 	}
 
-	switch (bucket)
-	{
-	case 1:
-		up_step = 1U;
-		down_step = 2U;
-		break;
-	case 2:
-		up_step = 2U;
-		down_step = 3U;
-		break;
-	case 3:
-		up_step = 3U;
-		down_step = 6U;
-		break;
-	default:
-		up_step = 6U;
-		down_step = 20U;
-		break;
-	}
-
-	if (SOC_Enhance_Element.u16_VCellMin <= (UINT16)(SOC_Enhance_Element.u16_SOC_0_Vol + 60U))
-	{
-		down_step = (UINT8)(down_step + 4U);
-	}
-
-	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && (target_soc > current_soc))
-	{
-		up_step = (UINT8)(up_step + 2U);
-	}
-
+	/* Non-charging relaxation compensation may only keep or lower SOC. */
 	if (diff > 0)
 	{
-		if ((UINT16)diff > up_step)
-		{
-			diff = (INT16)up_step;
-		}
+		g_soc_runtime.u8RestBucketApplied = bucket;
+		return;
 	}
-	else
+
+	/* Each non-charging relaxation correction may drop SOC by at most 1%. */
+	if (diff < -1)
 	{
-		if ((UINT16)(-diff) > down_step)
-		{
-			diff = -(INT16)down_step;
-		}
+		diff = -1;
 	}
 
 	new_soc = (UINT8)((INT16)current_soc + diff);
-	if ((bucket >= 4U) &&
-		((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) ||
-		 (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol)))
-	{
-		new_soc = target_soc;
-	}
-
 	SOC_ApplySocNow(new_soc);
 	g_soc_runtime.u8RestBucketApplied = bucket;
 }
@@ -452,7 +411,6 @@ static void SOC_ApplyWeakCellGuard(void)
 	UINT8 guard_soc = 100U;
 	UINT8 target_soc;
 	UINT8 current_soc;
-	UINT8 drop_step;
 
 	if (isCHG() || (SOC_Enhance_Element.u16_VCellMin < 2000U))
 	{
@@ -509,17 +467,9 @@ static void SOC_ApplyWeakCellGuard(void)
 		return;
 	}
 
-	drop_step = 2U;
-	if (SOC_Enhance_Element.u16_VCellMin <= (UINT16)(SOC_Enhance_Element.u16_SOC_0_Vol + SOC_WEAK_CELL_CRITICAL_WINDOW_MV))
-	{
-		drop_step = 100U;
-	}
-
-	if ((UINT8)(current_soc - guard_soc) > drop_step)
-	{
-		current_soc = (UINT8)(current_soc - drop_step);
-	}
-	else
+	/* Guard path may only lower one step per execution. */
+	current_soc = (UINT8)(current_soc - 1U);
+	if (current_soc < guard_soc)
 	{
 		current_soc = guard_soc;
 	}
@@ -530,7 +480,6 @@ static void SOC_ApplyWeakCellGuard(void)
 static void SOC_UpdateDisplaySoc(void)
 {
 	UINT8 target_soc;
-	UINT8 step_down = 1U;
 
 	target_soc = SOC_Calculate_Element.u8SOC_Now;
 
@@ -553,18 +502,9 @@ static void SOC_UpdateDisplaySoc(void)
 
 	if (g_soc_runtime.u8DisplaySoc > target_soc)
 	{
-		if ((target_soc <= 2U) || (SOC_Enhance_Element.u16_VCellMin <= (UINT16)(SOC_Enhance_Element.u16_SOC_0_Vol + SOC_WEAK_CELL_CRITICAL_WINDOW_MV)))
+		if ((UINT8)(g_soc_runtime.u8DisplaySoc - target_soc) > 1U)
 		{
-			step_down = 4U;
-		}
-		else if (SOC_Enhance_Element.u16_VCellMin <= (UINT16)(SOC_Enhance_Element.u16_SOC_0_Vol + 60U))
-		{
-			step_down = 2U;
-		}
-
-		if ((UINT8)(g_soc_runtime.u8DisplaySoc - target_soc) > step_down)
-		{
-			g_soc_runtime.u8DisplaySoc = (UINT8)(g_soc_runtime.u8DisplaySoc - step_down);
+			g_soc_runtime.u8DisplaySoc = (UINT8)(g_soc_runtime.u8DisplaySoc - 1U);
 		}
 		else
 		{
@@ -1079,7 +1019,25 @@ void SOC_Update_StartUp(void)
 	switch (SOC_Enhance_Element.u16_RefreshData_Flag)
 	{
 	case 1:
-		SOC_Calculate_Element.u8SOC_Now = Get_OpenCircuit_Value();
+	{
+		UINT8 target_soc;
+		UINT8 current_soc;
+
+		target_soc = Get_OpenCircuit_Value();
+		current_soc = SOC_Calculate_Element.u8SOC_Now;
+		if (!isCHG())
+		{
+			if (target_soc > current_soc)
+			{
+				target_soc = current_soc;
+			}
+			else if ((UINT8)(current_soc - target_soc) > 1U)
+			{
+				target_soc = (UINT8)(current_soc - 1U);
+			}
+		}
+		SOC_Calculate_Element.u8SOC_Now = target_soc;
+	}
 		break;
 
 	case 2: // SOC归零类型，改为循环次数归初始化
@@ -1221,15 +1179,18 @@ void soc_cali(void)
 		}
 	}
 	else
-	{
-		if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= 2000))
 		{
-			if (++dsg_soc0_delay >= (5 * 10))
+			if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= 2000))
 			{
-				dsg_soc0_delay = 0;
-				SOC_ApplySocNow(0U);
+				if (++dsg_soc0_delay >= (5 * 10))
+				{
+					dsg_soc0_delay = 0;
+					if (SOC_Calculate_Element.u8SOC_Now > 0U)
+					{
+						SOC_ApplySocNow((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
+					}
+				}
 			}
-		}
 		else
 		{
 			dsg_soc0_delay = 0;
@@ -1297,4 +1258,3 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
 	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
 }
-
