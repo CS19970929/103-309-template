@@ -1021,20 +1021,11 @@ void SOC_Update_StartUp(void)
 	case 1:
 	{
 		UINT8 target_soc;
-		UINT8 current_soc;
 
 		target_soc = Get_OpenCircuit_Value();
-		current_soc = SOC_Calculate_Element.u8SOC_Now;
-		if (!isCHG())
+		if ((!isCHG()) && (target_soc > SOC_Calculate_Element.u8SOC_Now))
 		{
-			if (target_soc > current_soc)
-			{
-				target_soc = current_soc;
-			}
-			else if ((UINT8)(current_soc - target_soc) > 1U)
-			{
-				target_soc = (UINT8)(current_soc - 1U);
-			}
+			target_soc = SOC_Calculate_Element.u8SOC_Now;
 		}
 		SOC_Calculate_Element.u8SOC_Now = target_soc;
 	}
@@ -1185,10 +1176,7 @@ void soc_cali(void)
 				if (++dsg_soc0_delay >= (5 * 10))
 				{
 					dsg_soc0_delay = 0;
-					if (SOC_Calculate_Element.u8SOC_Now > 0U)
-					{
-						SOC_ApplySocNow((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
-					}
+					SOC_ApplySocNow(0U);
 				}
 			}
 		else
