@@ -81,13 +81,13 @@
           </BeforeMake>
           <AfterMake>
             <RunUserProg1>1</RunUserProg1>
-            <RunUserProg2>0</RunUserProg2>
+            <RunUserProg2>1</RunUserProg2>
             <UserProg1Name>fromelf.exe --bin -o "$L@L.bin" "#L"</UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg2Name>powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\\check_flash_layout.ps1" ".\\Listings\\CommomSH367309_16series_103RCT6_C.map" "..\\Source\\Flash.h"</UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopA1X>0</nStopA1X>
-            <nStopA2X>0</nStopA2X>
+            <nStopA2X>1</nStopA2X>
           </AfterMake>
           <SelectedForBatchBuild>0</SelectedForBatchBuild>
           <SVCSIdString></SVCSIdString>
@@ -276,7 +276,7 @@
               <OCR_RVCT4>
                 <Type>1</Type>
                 <StartAddress>0x8004800</StartAddress>
-                <Size>0x20000</Size>
+                <Size>0x17800</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
