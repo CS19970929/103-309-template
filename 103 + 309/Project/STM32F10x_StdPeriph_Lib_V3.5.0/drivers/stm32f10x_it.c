@@ -244,85 +244,20 @@ void EXTI9_5_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI1
-  Sci1_CommonUpper_FaultChk();
+  Sci1_CommonUpper_IRQHandler();
 #endif
-
-  if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
-  {
-    RTC_ExtComCnt++;
-
-#ifdef _COMMOM_UPPER_SCI1
-    Sci1_CommonUpper_FaultChk();
-    Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
-#endif
-
-  }
 }
-
 void USART2_IRQHandler(void)
 {
-  uint32_t isr = USART2->SR;
-
-  // ---- 1. 错误检测与清除 ----
-  if (isr & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
-  {
-    volatile uint32_t dump = USART2->DR;
-    (void)dump;
-
-    // 手动清除错误标志（ICR是写1清零）
-    // USART2->CR = (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0);
-
-    // gu16_CommuErrCnt_SCI2++;
-    return;
-  }
-
-  // // ---- 2. 循环读取所有接收到的数据 ----
-  // while (USART2->SR & USART_SR_RXNE)
-  // {
-  // 	uint8_t data = (uint8_t)USART2->RDR;
-  // 	uart_receive_input(data);
-  // }
-
-  // #ifdef _COMMOM_UPPER_SCI2
-  //   Sci2_CommonUpper_FaultChk();
-  // #endif
-
-  if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
-  {
-    RTC_ExtComCnt++;
-
 #ifdef _COMMOM_UPPER_SCI2
-    Sci2_CommonUpper_FaultChk();
-    Sci2_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI2);
+  Sci2_CommonUpper_IRQHandler();
 #endif
-
-  }
-
-  // ---- 3. 可选IDLE清除 ----
-  if (isr & USART_SR_IDLE)
-  {
-    volatile uint32_t dump = USART2->DR;
-    (void)dump;
-    // USART2->CR = (1 << 4); // IDLECF
-  }
 }
-
 void USART3_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI3
-  Sci3_CommonUpper_FaultChk();
+  Sci3_CommonUpper_IRQHandler();
 #endif
-
-  if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
-  {
-    RTC_ExtComCnt++;
-
-#ifdef _COMMOM_UPPER_SCI3
-    Sci3_CommonUpper_FaultChk();
-    Sci3_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI3);
-#endif
-
-  }
 }
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

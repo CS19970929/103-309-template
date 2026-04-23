@@ -1,0 +1,117 @@
+# 串口通信模块重构说明
+
+## 目标
+
+本次重构针对当前 `Sci_Upper` 串口通信链路做结构性优化，目标如下：
+
+1. 保持现有 Modbus 地址、功能码、寄存器读写行为不变。
+2. 去掉主循环中的逐字节轮询发送，改为中断驱动发送。
+3. 把“串口传输层”和“协议处理层”拆开，降低后续接入客户协议的成本。
+4. 保持现有工程初始化入口、主循环入口和大部分上层调用方式不变，降低回归风险。
+
+## 本次改动
+
+### 1. 串口端口层统一
+
+原实现里 SCI1 / SCI2 / SCI3 各自维护一套几乎相同的：
+
+- 错误检查
+- 接收状态机
+- 发送轮询
+- 初始化流程
+
+现在统一为一套 `SCI_PORT_RUNTIME` 端口运行时模型，端口层只负责：
+
+- USART 错误处理
+- 接收字节搬运
+- 中断驱动发送
+- 帧完成后上抛给协议层
+- 端口忙状态聚合
+
+这样后续新增端口能力或修复收发问题，只需要改一处。
+
+### 2. 协议层抽象
+
+新增 `SCI_PROTOCOL_OPS` 协议接口，当前 Modbus 实现通过以下回调接入：
+
+- `pfReset`
+- `pfRxFeed`
+- `pfProcessFrame`
+- `pfGetTxBuffer`
+- `pfGetTxLength`
+- `pfIsBusy`
+- `pfOnTxComplete`
+
+当前默认绑定的是现有 Modbus 处理逻辑，因此：
+
+- 地址映射未改
+- 功能码 `0x03 / 0x06 / 0x10` 处理逻辑未改
+- 原有寄存器读写业务函数未改
+
+这意味着以后如果要兼容客户私有协议，只需要新增一组协议回调并绑定到对应端口，不需要再复制整套 SCI1/SCI2/SCI3 驱动代码。
+
+### 3. 发送路径改为中断驱动
+
+原发送流程依赖 `App_CommonUpper()` 在主循环里反复调用 `Sci*_CommonUpper_Tx_Deal()`，每次只塞一个字节，存在两个问题：
+
+- 主循环空转，效率低
+- AFE 采集、低功耗和通信互相影响
+
+现在改为：
+
+1. 主循环只负责在“完整帧收到后”做一次协议处理。
+2. 回包准备完成后，直接使能 `TXE/TC` 中断。
+3. 后续字节发送完全由 USART 中断完成。
+4. 发送完成后统一恢复接收状态。
+
+这样主循环不再承担逐字节发送工作，串口响应更稳定，也更适合后续扩展。
+
+### 4. 上层忙状态统一出口
+
+新增 `Sci_IsAnyPortBusy()`，并接入：
+
+- 主循环空闲休眠判断
+- `App_AFEGet()` 的通信忙门控
+
+这比直接依赖 `gu8_TxEnable_SCIx` 更稳，因为现在“待处理完整帧”和“中断发送中”都能统一反映为通信忙状态。
+
+## 兼容性说明
+
+以下行为保持不变：
+
+- `RS485_SLAVE_ADDR` 仍为 `0x01`
+- Modbus 现有地址段与寄存器映射不变
+- 现有读写业务函数不变
+- `InitUSART_CommonUpper()` / `App_CommonUpper()` 对外入口保留
+- `g_stCurrentMsgPtr_SCIx`、`gu8_TxEnable_SCIx` 等兼容变量保留
+
+因此本次重构属于“架构重组 + 发送机制替换”，不是协议层行为重写。
+
+## 后续接入客户协议建议
+
+如果后续某个串口需要兼容客户协议，建议按下面方式扩展：
+
+1. 新增一组协议回调，实现客户协议的收帧、解帧、应答组包。
+2. 在端口初始化时将对应端口绑定到新的协议回调。
+3. 保持端口层不动，只替换协议层绑定关系。
+
+推荐优先按“端口绑定协议”的方式扩展，而不是再复制一份 `Sci_Upper.c`。
+
+## 验证结果
+
+已使用 Keil 命令行完成工程编译验证：
+
+- 工程：`103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`
+- Target：`Target 1`
+- 编译结果：`0 Error(s), 0 Warning(s)`
+- 产物：
+  - `103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.axf`
+  - `103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.bin`
+
+## 涉及文件
+
+- `103 + 309/Project/Source/Sci_Upper.c`
+- `103 + 309/Project/Source/Sci_Upper.h`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/main.c`
+- `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x_it.c`

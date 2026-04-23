@@ -90,9 +90,7 @@ static UINT8 MainLoop_HasPendingWork(void)
 		return 1U;
 	}
 
-	if ((gu8_TxEnable_SCI1 != 0U) ||
-		(gu8_TxEnable_SCI2 != 0U) ||
-		(gu8_TxEnable_SCI3 != 0U))
+	if (Sci_IsAnyPortBusy() != 0U)
 	{
 		return 1U;
 	}
