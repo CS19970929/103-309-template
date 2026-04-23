@@ -41,7 +41,6 @@ void IOstatus_RTCMode_test(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-	MCUO_DRV_CMNT = 1;
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -49,12 +48,6 @@ void IOstatus_RTCMode_test(void)
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOD, &GPIO_InitStructure);
-	// GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-	MCUO_PWSV_STB = 0;
 #endif
 
 	// __delay_ms(100);
@@ -120,37 +113,7 @@ void enter_fac_mode(bool on)
 #endif
 }
 
-void charger_detect_and_keyLogi_200ms(void)
-{
-	static uint8_t state = 0;
-
-	switch (state)
-	{
-	case 0:
-		if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-		{
-			state = 1;
-			open_chg_close_dsg();
-		}
-		else
-		{
-		}
-		break;
-	case 1:
-		if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-		{
-			state = 0;
-			open_dsg_close_chg();
-		}
-		else
-		{
-		}
-		break;
-	default:
-		state = 0;
-		break;
-	}
-}
+extern void new_todo_logi(void);
 
 int main(void)
 {
@@ -178,7 +141,7 @@ int main(void)
 		App_SysTime();
 		APP_LedBar();
 		// App_WarnCtrl();
-		charger_detect_and_keyLogi_200ms();
+		new_todo_logi();
 		App_AFEGet();
 
 		App_Sci();

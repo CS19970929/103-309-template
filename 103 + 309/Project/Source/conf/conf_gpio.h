@@ -30,12 +30,8 @@
 
 #define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
-#define MCUO_DRV_CMNT		PCout(12)		//
-//��Դģ��
 #define MCUO_PWSV_STB		PDout(2)		//
 
-#define MCUO_AFE_SHIP 		PAout(10)		//AFE_SHIP
-#define MCUO_AFE_MODE 		PAout(7)		//AFE_MODE
 #define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
 #define MCUO_AFE_CTLC 		PBout(14)		//��������
 

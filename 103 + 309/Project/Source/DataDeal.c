@@ -18,6 +18,38 @@ struct OTHER_ELEMENT OtherElement;
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 
+void charger_detect_and_keyLogi_200ms(void)
+{
+	static uint8_t state = 0;
+
+	switch (state)
+	{
+	case 0:
+		if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 1;
+			open_chg_close_dsg();
+		}
+		else
+		{
+		}
+		break;
+	case 1:
+		if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 0;
+			open_dsg_close_chg();
+		}
+		else
+		{
+		}
+		break;
+	default:
+		state = 0;
+		break;
+	}
+}
+
 void Init_Registers(UINT8 num)
 {
 	UINT8 j;
@@ -533,6 +565,138 @@ extern UINT8 gu8_200msAccClock_Flag2;
 
 // 	gu8_200msAccClock_Flag2 = 0;
 // }
+
+void open_ctlc(void)
+{
+	MCUO_AFE_CTLC = 1;
+}
+void close_ctlc(void)
+{
+	MCUO_AFE_CTLC = 0;
+	// todo 会不会存在冲突，逻辑完备？？？
+	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+}
+void new_todo_logi(void)
+{
+	static uint8_t mos_state = 0;
+	charger_detect_and_keyLogi_200ms();
+
+	// todo 什么电平唤醒？
+	if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
+	{
+	}
+	// todo 待确认 typec供电逻辑
+	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
+	{
+#ifdef DISP_VBAT_AND_TEMP_
+		g_stCellInfoReport.u16VCell[29] = bat_temp_mv;
+		g_stCellInfoReport.u16VCell[30] = mos_temp_mv;
+		g_stCellInfoReport.u16VCell[31] = Vbat_mv;
+#endif // ! FAC_TEST
+
+		switch (mos_state)
+		{
+		case 0:
+			if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] >= (95 + 40) * 10)
+			{
+				close_ctlc();
+				FaultWarnRecord2(MosOTp_Third);
+				mos_state = 1;
+			}
+			break;
+		case 1:
+			if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] <= (75 + 40) * 10)
+			{
+				open_ctlc();
+				mos_state = 0;
+			}
+			break;
+		default:
+			mos_state = 0;
+			break;
+		}
+
+#ifdef _UL_RENZHENG_ENABLE_
+
+		if (1 == System_ErrFlag.u8ErrFlag_Com_AFE1)
+		{
+			rong_fuse = 0;
+			state_fuse = 0;
+
+			close_ctlc();
+			// todo mcc关了，when 开
+			if (Vbat_mv >= 4280 * SeriesNum || g_stCellInfoReport.u16Temperature[8] >= (85 + 40) * 10)
+			{
+				if (++rong_fuse_afe_err_cnt >= 10)
+				{
+					rong_fuse_afe_err_cnt = 0;
+#ifdef _UL_RENZHENG_ENABLE_
+					GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
+#endif
+				}
+			}
+		}
+		else
+		{
+			static u16 delay_cnt = 0;
+
+			switch (state_fuse)
+			{
+			case 0:
+				if ((g_stCellInfoReport.u16Temperature[8] >= (80 + 40) * 10))
+				{
+					state_fuse = 1;
+					close_ctlc();
+					FaultWarnRecord2(CellChgOTp_Third);
+					FaultWarnRecord2(CellDsgOTp_Third);
+				}
+				if ((g_stCellInfoReport.u16VCellMax >= 4270) && (g_stCellInfoReport.u16VCellMin >= 1000))
+				{
+					++delay_cnt;
+					if (delay_cnt >= 15)
+					{
+						delay_cnt = 0;
+						state_fuse = 1;
+						close_ctlc();
+						// 是否应该强制关掉放电？？？
+						FaultWarnRecord2(CellOvp_Third);
+						FaultWarnRecord2(BatOvp_Third);
+					}
+				}
+				else
+					delay_cnt = 0;
+				break;
+			case 1:
+				if ((g_stCellInfoReport.u16Temperature[8] < (75 + 40) * 10) && (g_stCellInfoReport.u16VCellMax <= 4150))
+				{
+					state_fuse = 0;
+					open_ctlc();
+				}
+				if (((g_stCellInfoReport.u16VCellMax >= 4280) || (Vbat_mv >= 4280 * SeriesNum) || g_stCellInfoReport.u16Temperature[8] >= (85 + 40) * 10) && (g_stCellInfoReport.u16Ichg))
+				{
+					if (++rong_fuse >= (15))
+					{
+						rong_fuse = 0;
+#ifdef _UL_RENZHENG_ENABLE_
+						GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
+#endif
+					}
+				}
+				else
+				{
+					rong_fuse = 0;
+				}
+				break;
+			default:
+				state_fuse = 0;
+				break;
+			}
+		}
+#endif
+	}
+
+	// 74hc595 控制5pin 18 seg led ,待完善spi驱动、配置
+}
 
 void App_AFEGet(void)
 {

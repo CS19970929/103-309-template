@@ -26,6 +26,8 @@
 #define FLASH_HICCUP_SLEEP_VALUE    	((UINT16)0x1236)
 #define FLASH_SLEEP_RESET_VALUE    		((UINT16)0xFFFF)
 
+#define BOOT_FLAG_RESET_VALUE     		FLASH_SLEEP_RESET_VALUE
+
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr,uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);

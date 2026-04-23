@@ -138,7 +138,7 @@ struct OTHER_ELEMENT {
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-240826-c073v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		10
+#define SNum 		7
 
 #define TERNARYLI		
 // #define LIFEPO			
@@ -152,6 +152,16 @@ struct OTHER_ELEMENT {
 #define CBC_DelayT		2000
 // #define CBC_Cur_DSG		((CS_Cur_CHGmax<<2)/5)
 #define CBC_Cur_DSG		(2000)
+
+#if (BAT_TYPE == BAT_MASTER)
+// #define CS_Res			2
+// #define CS_Res_Num		3
+#define BMS_CAPCITY     180
+#elif (BAT_TYPE == BAT_SLAVE)
+// #define CS_Res			2
+// #define CS_Res_Num		6
+#define BMS_CAPCITY     270
+#endif		
 
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\

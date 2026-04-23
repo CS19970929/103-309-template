@@ -33,7 +33,7 @@ void Init_IWDG(void)
 	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// 打开独立看门狗寄存器操作权限
 #ifndef __FUNC_RTC__
 	IWDG_SetPrescaler(IWDG_Prescaler_64); // 预分频系数
-	IWDG_SetReload(160);				  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
+	IWDG_SetReload(800);				  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
 #else
 	IWDG_SetPrescaler(IWDG_Prescaler_256); // 预分频系数
 	IWDG_SetReload(0x0FFF);				   // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高

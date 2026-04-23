@@ -4,7 +4,7 @@ __IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
 
 INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在计算过程出错了！
 								   // 不能改UINT32
-INT32 g_i32ADCResult[ADC_NUM]; // ADC结果保存
+INT32 g_i32ADCResult[ADC_NUM];	   // ADC结果保存
 
 UINT16 g_u16IoutOffsetAD;
 UINT16 gu16_BusCurr_CHG; // A*10
@@ -13,34 +13,62 @@ UINT16 gu16_BusCurr_DSG; // A*10
 // 12位，4096最大
 const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
 	// AD		(Temp+40)*10
-	3771, 100, //-30
-	3683, 150, //-25
-	3580, 200, //-20
-	3460, 250, //-15
-	3323, 300, //-10
-	3169, 350, //-5
-	3004, 400, // 0
-	2820, 450, // 5
-	2633, 500, // 10
-	2437, 550, // 15
-	2241, 600, // 20
-	2048, 650, // 25
-	1859, 700, // 30
-	1679, 750, // 35
-	1509, 800, // 40
-	1351, 850, // 45
-	1204, 900, // 50
-	1073, 950, // 55
-	953, 1000, // 60
-	845, 1050, // 65
-	749, 1100, // 70
-	664, 1150, // 75
-	588, 1200, // 80
-	522, 1250, // 85
-	463, 1300, // 90
-	411, 1350, // 95
-	366, 1400, // 100
-	326, 1450, // 105
+	3771,
+	100, //-30
+	3683,
+	150, //-25
+	3580,
+	200, //-20
+	3460,
+	250, //-15
+	3323,
+	300, //-10
+	3169,
+	350, //-5
+	3004,
+	400, // 0
+	2820,
+	450, // 5
+	2633,
+	500, // 10
+	2437,
+	550, // 15
+	2241,
+	600, // 20
+	2048,
+	650, // 25
+	1859,
+	700, // 30
+	1679,
+	750, // 35
+	1509,
+	800, // 40
+	1351,
+	850, // 45
+	1204,
+	900, // 50
+	1073,
+	950, // 55
+	953,
+	1000, // 60
+	845,
+	1050, // 65
+	749,
+	1100, // 70
+	664,
+	1150, // 75
+	588,
+	1200, // 80
+	522,
+	1250, // 85
+	463,
+	1300, // 90
+	411,
+	1350, // 95
+	366,
+	1400, // 100
+	326,
+	1450, // 105
 
 };
 
@@ -98,6 +126,18 @@ void InitADC_GPIO(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif
+	// todo adc配置
+	GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	GPIO_Init(GPIO_ADC_VBUS, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = PIN_ADC_CUR;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN; // 推挽输出
+	GPIO_Init(GPIO_ADC_CUR, &GPIO_InitStructure);
 }
 
 void InitADC_TIMER(void)
