@@ -219,13 +219,40 @@ void RTC_NVIC_Config(void)
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
 	UINT32 wake_min = (UINT32)OtherElement.u16Sleep_TimeRTC;
+	UINT32 wake_seconds;
 
 	if (wake_min == 0U)
 	{
 		wake_min = 3U;
 	}
 
-	return wake_min * 60U;
+	wake_seconds = wake_min * 60U;
+
+#if defined(wdog_enable)
+#if defined(__FUNC_RTC__)
+	{
+		const UINT32 watchdog_timeout_seconds = ((UINT32)0x0FFF * 256U) / 40000U;
+		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 5U) ? (watchdog_timeout_seconds - 5U) : 1U;
+
+		if (wake_seconds > watchdog_safe_window)
+		{
+			wake_seconds = watchdog_safe_window;
+		}
+	}
+#else
+	{
+		const UINT32 watchdog_timeout_seconds = (800U * 64U) / 40000U;
+		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 1U) ? (watchdog_timeout_seconds - 1U) : 1U;
+
+		if (wake_seconds > watchdog_safe_window)
+		{
+			wake_seconds = watchdog_safe_window;
+		}
+	}
+#endif
+#endif
+
+	return wake_seconds;
 }
 
 // RTC唤醒时间设置，

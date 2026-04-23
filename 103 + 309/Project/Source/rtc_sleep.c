@@ -9,6 +9,7 @@ enum irqWakeup g_irq_t = NO_IRQ;
 void rtc_sleep(void);
 void App_LowPowerProcess(void);
 void test_dealError(void);
+void Fault_ChangeToMCU(void);
 
 static bool rtc_monitor(void);
 static bool isException(void);
@@ -552,8 +553,7 @@ static bool rtc_monitor_sh367309(void)
         SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
         SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
 
-        // TemperatureCheck();
-        // Fault_ChangeToMCU();
+        Fault_ChangeToMCU();
 #if 0
 		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
 		{
@@ -577,6 +577,16 @@ static bool rtc_monitor_sh367309(void)
             result = true;
             log_w("DSG close\n");
             g_irq_t = chg_dsg_close;
+        }
+
+        if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
+        {
+            result = true;
+            if (g_irq_t == NO_IRQ)
+            {
+                g_irq_t = error_wake;
+            }
+            log_w("afe fault 0x%04x\n", g_stCellInfoReport.unMdlFault_Third.all);
         }
     }
     return result;
@@ -674,12 +684,8 @@ static bool updataData_rtc_sh3x(void)
     // }
     DataLoad_CellVolt();
     DataLoad_CellVoltMaxMinFind();
-
-#ifdef __test__
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    DataLoad_Current();
-#endif
 
     return true;
 
