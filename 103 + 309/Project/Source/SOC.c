@@ -111,7 +111,9 @@ void App_SOC(void)
 		return;
 	}
 
+#if (defined _DEBUG_CODE)
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+#endif
 
 	RefreshData_SOC();
 	GetData_SOC();

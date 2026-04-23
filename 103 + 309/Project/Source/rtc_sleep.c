@@ -692,7 +692,7 @@ static void before_rtcsleep(void)
 
 static uint32_t rtc_sleep_get_period_seconds(void)
 {
-    uint32_t wake_min = (uint32_t)OtherElement.u16Sleep_RTC_WakeUpTime;
+    uint32_t wake_min = (uint32_t)OtherElement.u16Sleep_TimeRTC;
 
     if (wake_min == 0U)
     {
@@ -788,254 +788,28 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
 static uint8_t soc_rtc;
 
-static uint8_t array_soc[5];
-
 static bool update_rtc_soc(uint32_t *_sleep_cnt)
 {
-#if 0
-    // static uint8_t last_soc = soc_befor_sleep, curr_soc;
-    static uint8_t last_soc, curr_soc;
-    // todo init
-    static uint16_t invalid_soc_cnt = 0;
+    uint32_t rest_seconds;
 
-    // const static uint8_t enter_rtc_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    log_w("rtc sleep cnt -> %d\n", *_sleep_cnt);
-    if (*_sleep_cnt < (3600))
-    // if (*_sleep_cnt % g_tParam.dev.time_ocv_soc_rtcing != 0 || *_sleep_cnt == 0)
-    // if (*_sleep_cnt % g_tParam.dev.time_ocv_soc_rtcing != 0 || *_sleep_cnt == 0)
-    // if (*_sleep_cnt * OtherElement.time_sleep_rtcing / 3600 != 0 || *_sleep_cnt == 0)
-        return true;
-
-    // last_soc = g_stCellInfoReport.soc_real;
-    last_soc = g_stCellInfoReport.SocElement.u16Soc;
-
+    if ((_sleep_cnt == 0) || (*_sleep_cnt == 0U))
     {
-#ifdef __test__
-        curr_soc = get_soc_from_openVol_new(g_stCellInfoReport.u16VCellMin);
-#else
-        curr_soc = get_soc_from_openVol_onlyDec_new(g_stCellInfoReport.u16VCellMin);
-        soc_update_wakeup.soc_disp = curr_soc;
-#endif
-        log_w("vcell min -> %d, ocv soc %d\n", g_stCellInfoReport.u16VCellMin, curr_soc);
-
-        // last_soc = curr_soc;
-
-#ifdef __test__
-        // if (ModulusSub(soc_befor_sleep, curr_soc) < 50)
-        // {
-        //     // last_soc = curr_soc;
-        //     soc_rtc = curr_soc;
-        //     // soc_rtc = (soc_rtc + curr_soc) / (*_sleep_cnt - RTC_SOC_OCV_TIME);
-        // }
-        // else
-        // {
-        //     log_e("<error> invalid soc last soc %d, curr soc %d\n", soc_befor_sleep, curr_soc);
-        //     if (++invalid_soc_cnt >= 10)
-        //     {
-        //         // goto invalid_soc;
-        //         log_e("<error error> over invalid soc cnt\n");
-        //     }
-        // }
-        soc_update_wakeup.soc_disp = curr_soc;
-
-#else
-        soc_rtc = curr_soc;
-#endif
+        return true;
     }
 
-    return true;
-#endif
-}
+    rest_seconds = (*_sleep_cnt) * rtc_sleep_get_period_seconds();
+    SOC_ApplyRtcRelaxationCompensation(rest_seconds,
+                                       g_stCellInfoReport.u16VCellMin,
+                                       g_stCellInfoReport.u16VCellMax);
+    soc_rtc = SOC_Enhance_Element.u8_SOC;
 
-// todo 完善不同策略
-// fixme a036
-#if 0
-bool update_rtc_soc(uint32_t *_sleep_cnt)
-{
-    // static uint8_t last_soc = soc_befor_sleep, curr_soc;
-    static uint8_t last_soc, curr_soc;
-    // todo init
-    static uint16_t invalid_soc_cnt = 0;
-
-    // const static uint8_t enter_rtc_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    log_w("rtc sleep cnt -> %d\n", *_sleep_cnt);
-    // if (*_sleep_cnt < RTC_SOC_OCV_TIME)
-    if (*_sleep_cnt % RTC_SOC_OCV_TIME != 0 || *_sleep_cnt == 0)
-        return true;
-
-    // last_soc = g_stCellInfoReport.soc_real;
-    last_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    {
-#ifdef __test__
-        curr_soc = get_soc_form_openVol_new(g_stCellInfoReport.u16VCellMin);
-#else
-        curr_soc = get_soc_fromm_openVol_onlyDec_new(g_stCellInfoReport.u16VCellMin);
-#endif
-        log_w("vcell min -> %d, ocv soc %d\n", g_stCellInfoReport.u16VCellMin, curr_soc);
-
-        // last_soc = curr_soc;
-
-        soc_rtc = curr_soc;
-    }
+    log_w("rtc rest %lu s, vmin %u, soc %u",
+          (unsigned long)rest_seconds,
+          (unsigned int)g_stCellInfoReport.u16VCellMin,
+          (unsigned int)SOC_Enhance_Element.u8_SOC);
 
     return true;
 }
-#else
-
-#define LARGE_CURR 500
-#define LARGE_CURR2 100
-
-#define OCV_VOL_ENABLE 3400
-
-#define N 5
-
-static uint8_t arr_soc[N] = {0, 0, 0, 0, 0};
-
-#if 0
-bool update_rtc_soc(uint32_t *_sleep_cnt)
-{
-    static uint8_t ocv_soc_record[10];
-    static uint8_t index = 0;
-
-    static uint8_t ocv_cnt = 0;
-
-    static uint8_t ocv_state = 0;
-
-    // if (SOC_Enhance_Element.u16_Ichg > 2 || SOC_Enhance_Element.u16_Idsg > 2)
-    // {
-    // 	ocv_state = 0;
-
-    // 	ocv_cnt = 0;
-    // 	// return;
-    // }
-
-    switch (ocv_state)
-    {
-    case 0:
-    {
-        if (*_sleep_cnt < RTC_SOC_OCV_TIME)
-            return;
-        else
-        {
-            ocv_state = 1;
-        }
-        break;
-    }
-    case 1:
-    {
-        // 20s rtc一次 get soc，5次滤波后的值
-        /*****************/
-        {
-            // PRE_OCV()之后，200ms ocv一次，具体的机制后续考虑
-            // 到这儿 突然有电流 怎么办 会有影响吗 原子操作？？？？
-            //  temp_soc = get_soc_from_openVol();
-            arr_soc[ocv_cnt] = get_soc_from_openVol_onlyDec();
-            log_w("arr_soc[%d] %d", ocv_cnt, arr_soc[ocv_cnt]);
-
-#if 0
-			if (ModulusSub(temp_soc[ocv_cnt], g_stCellInfoReport.soc_real) < 10)
-			{
-				if (++ocv_cnt >= 3)
-				{
-					ocv_cnt = 0;
-
-					ocv_state = 2;
-				}
-				// updateParam_soc();
-				// set_soc_param(temp_soc, 1, 0);
-			}
-			else
-			{
-				//todo 异常soc 当前、last处理
-				// static uint8_t err_soc_cnt = 0;
-				;
-				ocv_cnt = 0;
-			}
-#else
-
-            if (++ocv_cnt >= N)
-            {
-                ocv_cnt = 0;
-
-                ocv_state = 2;
-            }
-
-#endif
-        }
-    }
-    break;
-    // todo 最近N次soc参考值 参考价值 故障诊断
-    case 2:
-    {
-        // set_soc_param((temp_soc[0] + temp_soc[1] + temp_soc[2]) / 3, 1, 0);
-        // uint8_t i = 0;
-        uint16_t sum = 0;
-        uint8_t temp = 0;
-        uint8_t temp_soc = 0;
-
-        char count, i, j;
-
-        // {
-        for (j = 0; j < (N - 1); j++)
-        {
-            for (i = 0; i < (N - j - 1); i++)
-            {
-                if (arr_soc[i] > arr_soc[i + 1])
-                {
-                    temp = arr_soc[i];
-                    arr_soc[i] = arr_soc[i + 1];
-                    arr_soc[i + 1] = temp;
-                }
-            }
-        }
-
-#ifdef __test__
-
-        uint8_t k = 0;
-
-        log_w("arr_soc[]: ");
-        for (k = 0; k < N; k++)
-        {
-            log_w("%d ", arr_soc[k]);
-        }
-        log_w("\n");
-#endif
-        for (count = 1; count < N - 1; count++)
-        {
-            sum += arr_soc[count];
-        }
-        // return (char)(sum / (N - 2));
-        temp_soc = (uint8_t)(sum / (N - 2));
-        log_e("ocv cali soc->%d", temp_soc);
-        // log_w("**********************************\n");
-        // }
-
-        // for (i = 0; i < 5; i++)
-        // {
-        // 	sum += arr_soc[i];
-        // }
-        // // error 忘改了
-        // uint8_t temp_soc = sum / 5;
-        // // uint8_t temp_soc = (arr_soc[0] + arr_soc[1] + arr_soc[2]) / 3;
-        soc_calculate.u8SOC_Now = temp_soc;
-
-        soc_calculate.u32CapNow = (UINT32)soc_calculate.u8SOC_Now * soc_calculate.u32CapFull / 100;
-
-        ocv_state = 1;
-
-        soc_rtc = temp_soc;
-        break;
-    }
-    default:
-        break;
-    }
-}
-#endif
-
-#endif
 
 uint8_t get_rtc_soc(void)
 {

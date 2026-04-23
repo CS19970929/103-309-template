@@ -78,6 +78,51 @@ void InitDevice(void);
 void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
+static UINT8 MainLoop_HasPendingWork(void);
+static void MainLoop_EnterIdleSleep(void);
+
+static UINT8 MainLoop_HasPendingWork(void)
+{
+	if ((g_st_SysTimeFlag.all != 0U) ||
+		(gu8_200msAccClock_Flag != 0U) ||
+		(gu8_1000msAccClock_Flag != 0U))
+	{
+		return 1U;
+	}
+
+	if ((gu8_TxEnable_SCI1 != 0U) ||
+		(gu8_TxEnable_SCI2 != 0U) ||
+		(gu8_TxEnable_SCI3 != 0U))
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+static void MainLoop_EnterIdleSleep(void)
+{
+	if (!System_OnOFF_Func.bits.b1OnOFF_Sleep)
+	{
+		return;
+	}
+
+	if (MainLoop_HasPendingWork())
+	{
+		return;
+	}
+
+	if (__get_PRIMASK() != 0U)
+	{
+		return;
+	}
+
+	/* 空闲等待只允许进入 Sleep，避免残留的 SLEEPDEEP 影响主循环。 */
+	SCB->SCR &= (uint32_t)(~SCB_SCR_SLEEPDEEP_Msk);
+	__DSB();
+	__WFI();
+	__ISB();
+}
 
 void open_chg_close_dsg(void)
 {
@@ -164,6 +209,7 @@ int main(void)
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif
+		MainLoop_EnterIdleSleep();
 
 #endif
 	}
