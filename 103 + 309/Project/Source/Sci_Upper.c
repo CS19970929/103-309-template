@@ -29,6 +29,7 @@ typedef UINT8 *(*SCI_PROTOCOL_TX_BUFFER_FN)(void *pvProtocolCtx);
 typedef UINT16 (*SCI_PROTOCOL_TX_LENGTH_FN)(void *pvProtocolCtx);
 typedef UINT8 (*SCI_PROTOCOL_IS_BUSY_FN)(void *pvProtocolCtx);
 typedef void (*SCI_PROTOCOL_RESET_FN)(void *pvProtocolCtx);
+typedef void (*SCI_PROTOCOL_RX_IDLE_FN)(void *pvProtocolCtx);
 typedef void (*SCI_PROTOCOL_TX_COMPLETE_FN)(void *pvProtocolCtx);
 
 struct SCI_PROTOCOL_OPS {
@@ -38,6 +39,7 @@ struct SCI_PROTOCOL_OPS {
 	SCI_PROTOCOL_TX_BUFFER_FN pfGetTxBuffer;
 	SCI_PROTOCOL_TX_LENGTH_FN pfGetTxLength;
 	SCI_PROTOCOL_IS_BUSY_FN pfIsBusy;
+	SCI_PROTOCOL_RX_IDLE_FN pfOnRxIdle;
 	SCI_PROTOCOL_TX_COMPLETE_FN pfOnTxComplete;
 };
 
@@ -61,6 +63,7 @@ static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx);
 static UINT16 Sci_ModbusGetTxLength(void *pvProtocolCtx);
 static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx);
 static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
+static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
@@ -88,6 +91,7 @@ static const struct SCI_PROTOCOL_OPS g_stSciModbusProtocolOps = {
 	Sci_ModbusGetTxBuffer,
 	Sci_ModbusGetTxLength,
 	Sci_ModbusIsBusy,
+	Sci_ModbusOnRxIdle,
 	Sci_ModbusOnTxComplete};
 
 static struct SCI_PORT_RUNTIME g_stSciPort1 = {
@@ -1034,6 +1038,16 @@ static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx)
 	return (UINT8)((s->ptr_no != 0U) || (s->csr != RS485_STA_IDLE));
 }
 
+static void Sci_ModbusOnRxIdle(void *pvProtocolCtx)
+{
+	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
+
+	if ((s->ptr_no != 0U) && (s->csr == RS485_STA_IDLE))
+	{
+		Sci_ModbusResetMessage(s);
+	}
+}
+
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx)
 {
 	Sci_ModbusResetMessage((struct RS485MSG *)pvProtocolCtx);
@@ -1041,11 +1055,16 @@ static void Sci_ModbusOnTxComplete(void *pvProtocolCtx)
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort)
 {
+	volatile UINT16 u16Dummy;
+
 	pstPort->u8FramePending = 0;
 	pstPort->u16TxIndex = 0;
 	pstPort->u16TxLength = 0;
 	pstPort->pu8TxBuffer = 0;
-	pstPort->pstUsart->CR1 |= (USART_CR1_RE | USART_CR1_RXNEIE);
+	u16Dummy = pstPort->pstUsart->SR;
+	u16Dummy = pstPort->pstUsart->DR;
+	(void)u16Dummy;
+	pstPort->pstUsart->CR1 |= (USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
 	pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_TXEIE | USART_CR1_TCIE);
 }
 
@@ -1084,7 +1103,7 @@ static void Sci_PortStartTx(struct SCI_PORT_RUNTIME *pstPort)
 		*pstPort->pu8TxFinishFlag = 0;
 	}
 
-	pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_TCIE);
+	pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_TCIE);
 	pstPort->pstUsart->CR1 |= (USART_CR1_TE | USART_CR1_TXEIE);
 }
 
@@ -1156,7 +1175,25 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 			(pstPort->pstProtocolOps->pfRxFeed(pstPort->pvProtocolCtx, u8RxData) != 0U))
 		{
 			pstPort->u8FramePending = 1;
-			pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE);
+			pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
+		}
+	}
+
+	u16Status = pstPort->pstUsart->SR;
+	if (((u16Status & USART_SR_IDLE) != 0U) &&
+		((pstPort->pstUsart->CR1 & USART_CR1_IDLEIE) != 0U))
+	{
+		volatile UINT16 u16Dummy;
+
+		u16Dummy = pstPort->pstUsart->DR;
+		(void)u16Dummy;
+
+		if ((pstPort->u8FramePending == 0U) &&
+			(pstPort->u16TxLength == 0U) &&
+			(pstPort->pstProtocolOps != 0) &&
+			(pstPort->pstProtocolOps->pfOnRxIdle != 0))
+		{
+			pstPort->pstProtocolOps->pfOnRxIdle(pstPort->pvProtocolCtx);
 		}
 	}
 
@@ -1301,6 +1338,7 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 
 	pstPort->pstUsart->CR3 |= USART_CR3_EIE;
 	USART_ITConfig(pstPort->pstUsart, USART_IT_RXNE, ENABLE);
+	USART_ITConfig(pstPort->pstUsart, USART_IT_IDLE, ENABLE);
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TXE, DISABLE);
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TC, DISABLE);
 	USART_Cmd(pstPort->pstUsart, ENABLE);
