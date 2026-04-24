@@ -5,6 +5,7 @@
 #include "DataDeal.h"
 #include "Flash.h"
 #include "Sci_Upper.h"
+#include "System_Monitor.h"
 #include <string.h>
 
 #ifndef STORAGE_FLASH_SOC_API_DECLARED
@@ -109,8 +110,12 @@ static struct SOC_RUNTIME_CONTEXT g_soc_runtime;
 
 void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command);
 static void SOC_ResetRuntimeContext(void);
+static UINT8 SOC_IsVoltageValid(void);
 static UINT32 SOC_GetCapBase(void);
+static void SOC_SetSocValue(UINT8 soc_now, UINT8 clear_cap_change);
 static void SOC_ApplySocNow(UINT8 soc_now);
+static void SOC_ApplySocCorrection(UINT8 soc_now);
+static UINT8 SOC_StepTowardTarget(UINT8 current_soc, UINT8 target_soc, UINT8 max_step);
 static void SOC_PersistSnapshotIfChanged(void);
 static UINT8 SOC_GetRestBucket(UINT32 rest_seconds);
 static void SOC_ApplyRestCompensation(UINT32 rest_seconds);
@@ -264,6 +269,11 @@ static void SOC_ResetRuntimeContext(void)
 	memset(&g_soc_runtime, 0, sizeof(g_soc_runtime));
 }
 
+static UINT8 SOC_IsVoltageValid(void)
+{
+	return (SOC_Enhance_Element.u16_VCellMin >= 2000U) ? 1U : 0U;
+}
+
 static UINT32 SOC_GetCapBase(void)
 {
 	if (SOC_Calculate_Element.u32CapFull != 0U)
@@ -274,7 +284,7 @@ static UINT32 SOC_GetCapBase(void)
 	return SOC_Calculate_Element.u32CapFactory;
 }
 
-static void SOC_ApplySocNow(UINT8 soc_now)
+static void SOC_SetSocValue(UINT8 soc_now, UINT8 clear_cap_change)
 {
 	UINT32 cap_base;
 
@@ -285,8 +295,56 @@ static void SOC_ApplySocNow(UINT8 soc_now)
 
 	cap_base = SOC_GetCapBase();
 	SOC_Calculate_Element.u8SOC_Now = soc_now;
-	SOC_Calculate_Element.u32CapNow = (UINT32)soc_now * cap_base / 100U;
-	SOC_Calculate_Element.u32CapChange = 0U;
+	if (cap_base == 0U)
+	{
+		SOC_Calculate_Element.u32CapNow = 0U;
+	}
+	else
+	{
+		SOC_Calculate_Element.u32CapNow = (UINT32)soc_now * cap_base / 100U;
+	}
+
+	if (clear_cap_change)
+	{
+		SOC_Calculate_Element.u32CapChange = 0U;
+	}
+}
+
+static void SOC_ApplySocNow(UINT8 soc_now)
+{
+	SOC_SetSocValue(soc_now, 1U);
+}
+
+static void SOC_ApplySocCorrection(UINT8 soc_now)
+{
+	SOC_SetSocValue(soc_now, 0U);
+}
+
+static UINT8 SOC_StepTowardTarget(UINT8 current_soc, UINT8 target_soc, UINT8 max_step)
+{
+	UINT8 step;
+
+	if ((max_step == 0U) || (current_soc == target_soc))
+	{
+		return current_soc;
+	}
+
+	if (current_soc < target_soc)
+	{
+		step = (UINT8)(target_soc - current_soc);
+		if (step > max_step)
+		{
+			step = max_step;
+		}
+		return (UINT8)(current_soc + step);
+	}
+
+	step = (UINT8)(current_soc - target_soc);
+	if (step > max_step)
+	{
+		step = max_step;
+	}
+	return (UINT8)(current_soc - step);
 }
 
 static void SOC_PersistSnapshotIfChanged(void)
@@ -335,14 +393,14 @@ static void SOC_ApplyRestCompensation(UINT32 rest_seconds)
 	UINT8 target_soc;
 	UINT8 current_soc;
 	UINT8 new_soc;
-	INT16 diff;
+	UINT8 max_step = 0U;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
 	{
 		return;
 	}
 
-	if ((SOC_Enhance_Element.u16_VCellMin < 2000U) || isCHG() || isDSG())
+	if (!SOC_IsVoltageValid() || isCHG() || isDSG())
 	{
 		return;
 	}
@@ -355,29 +413,31 @@ static void SOC_ApplyRestCompensation(UINT32 rest_seconds)
 
 	target_soc = Get_OpenCircuit_Value();
 	current_soc = SOC_Calculate_Element.u8SOC_Now;
-	diff = (INT16)target_soc - (INT16)current_soc;
-
-	if (diff == 0)
+	if (target_soc < current_soc)
 	{
-		g_soc_runtime.u8RestBucketApplied = bucket;
-		return;
+		if (bucket >= 4U)
+		{
+			max_step = 3U;
+		}
+		else if (bucket >= 3U)
+		{
+			max_step = 2U;
+		}
+		else
+		{
+			max_step = 1U;
+		}
+	}
+	else if ((target_soc > current_soc) && (current_soc >= 90U) && (bucket >= 3U))
+	{
+		max_step = (bucket >= 4U) ? 2U : 1U;
 	}
 
-	/* Non-charging relaxation compensation may only keep or lower SOC. */
-	if (diff > 0)
+	new_soc = SOC_StepTowardTarget(current_soc, target_soc, max_step);
+	if (new_soc != current_soc)
 	{
-		g_soc_runtime.u8RestBucketApplied = bucket;
-		return;
+		SOC_ApplySocCorrection(new_soc);
 	}
-
-	/* Each non-charging relaxation correction may drop SOC by at most 1%. */
-	if (diff < -1)
-	{
-		diff = -1;
-	}
-
-	new_soc = (UINT8)((INT16)current_soc + diff);
-	SOC_ApplySocNow(new_soc);
 	g_soc_runtime.u8RestBucketApplied = bucket;
 }
 
@@ -390,7 +450,7 @@ static void SOC_UpdateRestMonitor(void)
 		return;
 	}
 
-	if (isCHG() || isDSG() || (SOC_Enhance_Element.u16_VCellMin < 2000U))
+	if (isCHG() || isDSG() || !SOC_IsVoltageValid())
 	{
 		g_soc_runtime.u32RestTicks = 0U;
 		g_soc_runtime.u8RestBucketApplied = 0U;
@@ -412,7 +472,7 @@ static void SOC_ApplyWeakCellGuard(void)
 	UINT8 target_soc;
 	UINT8 current_soc;
 
-	if (isCHG() || (SOC_Enhance_Element.u16_VCellMin < 2000U))
+	if (isCHG() || !SOC_IsVoltageValid())
 	{
 		return;
 	}
@@ -468,13 +528,8 @@ static void SOC_ApplyWeakCellGuard(void)
 	}
 
 	/* Guard path may only lower one step per execution. */
-	current_soc = (UINT8)(current_soc - 1U);
-	if (current_soc < guard_soc)
-	{
-		current_soc = guard_soc;
-	}
-
-	SOC_ApplySocNow(current_soc);
+	current_soc = SOC_StepTowardTarget(current_soc, guard_soc, 1U);
+	SOC_ApplySocCorrection(current_soc);
 }
 
 static void SOC_UpdateDisplaySoc(void)
@@ -526,20 +581,46 @@ static void SOC_SyncOutputData(UINT8 force_display_follow)
 	}
 
 	SOC_Enhance_Element.u8_SOC = g_soc_runtime.u8DisplaySoc;
-	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
+	if (SOC_Calculate_Element.u32CapFactory == 0U)
+	{
+		SOC_Enhance_Element.u8_SOH = 0U;
+		SOC_Enhance_Element.u16_CapacityNow = 0U;
+		SOC_Enhance_Element.u16_CapacityFull = 0U;
+		SOC_Enhance_Element.u16_CapacityFactory = 0U;
+	}
+	else if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
 	{
 		SOC_Enhance_Element.u8_SOH = 100;
+		SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
 	}
 	else
 	{
 		SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
+		SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
+		SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
 	}
-	SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
-	SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
-	SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
 	SOC_Enhance_Element.u16_Cycle_times = SOC_Calculate_Element.u32Cycle_times / 100;
 
 	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
+
+	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
+	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
+	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
+	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
+	g_stCellInfoReport.SocElement.u16CapacityFactory = SOC_Enhance_Element.u16_CapacityFactory;
+	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
+
+	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
+	{
+		g_stCellInfoReport.SocElement.u16Soc = 60U;
+	}
+	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
+	{
+		g_stCellInfoReport.SocElement.u16Soc = 0U;
+	}
 }
 
 void soc_factory_param_init_first(void)
@@ -634,8 +715,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			if (++su16_SocChgCal_L1_Tcnt >= 10)
 			{
 				su16_SocChgCal_L1_Tcnt = 0;
-				SOC_Calculate_Element.u8SOC_Now += 1;
-				SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now + 1U));
 			}
 		}
 		else if (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol && SOC_Calculate_Element.u8SOC_Now < 100)
@@ -645,8 +725,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				if (++su16_SocChgCal_L2_Tcnt >= 8)
 				{
 					su16_SocChgCal_L2_Tcnt = 0;
-					SOC_Calculate_Element.u8SOC_Now += 1;
-					SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now + 1U));
 				}
 			}
 			else
@@ -654,8 +733,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				if (++su16_SocChgCal_L3_Tcnt >= 4)
 				{
 					su16_SocChgCal_L3_Tcnt = 0;
-					SOC_Calculate_Element.u8SOC_Now += 1;
-					SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now + 1U));
 				}
 			}
 		}
@@ -666,8 +744,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			if (++su16_SocChgCal_L4_Tcnt >= 2)
 			{
 				su16_SocChgCal_L4_Tcnt = 0;
-				SOC_Calculate_Element.u8SOC_Now += 1;
-				SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now + 1U));
 			}
 		}
 
@@ -677,10 +754,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 		// 如果执行以上的几个情况，这个就不会执行，
 		if (SOC_Calculate_Element.u8SOC_Now >= 98 && SOC_Enhance_Element.u16_VCellMax < SOC_Enhance_Element.u16_SOC_100_Vol)
 		{
-			// SOC_Calculate_Element.u8SOC_Now = 98;
-			SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now; // SOC保持不变
-			SOC_Calculate_Element.u32CapChange = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
-			SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
+			SOC_ApplySocNow(SOC_Calculate_Element.u8SOC_Now);
 		}
 #endif
 
@@ -698,10 +772,9 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 		if (SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol + 100 && SOC_Enhance_Element.u16_VCellMin > SOC_Enhance_Element.u16_SOC_0_Vol && SOC_Calculate_Element.u8SOC_Now > 5)
 		{
 			if (++su16_SocDsgCal_L1_Tcnt >= 10)
-			{ // 第一级校准
+			{
 				su16_SocDsgCal_L1_Tcnt = 0;
-				SOC_Calculate_Element.u8SOC_Now -= 1;
-				SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
 			}
 		}
 		else if (SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol && SOC_Calculate_Element.u8SOC_Now > 0)
@@ -709,19 +782,17 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			if (SOC_Calculate_Element.u8SOC_Now < 5)
 			{ // 第二级校准
 				if (++su16_SocDsgCal_L2_Tcnt >= 8)
-				{										  // 电科大电流还是有一定的概率留下1%，从10改为8吧。
-					su16_SocDsgCal_L2_Tcnt = 0;			  // 但是兼顾小电流能放久一些，不能改为6
-					SOC_Calculate_Element.u8SOC_Now -= 1; // 客户好像对放电末端，如果只剩2%以内貌似可以接受，但是充电必须100%
-					SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+				{
+					su16_SocDsgCal_L2_Tcnt = 0;
+					SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
 				}
 			}
 			else
-			{ // 快没电了，还有很大的SOC
+			{
 				if (++su16_SocDsgCal_L3_Tcnt >= 4)
-				{ // 第三级校准
+				{
 					su16_SocDsgCal_L3_Tcnt = 0;
-					SOC_Calculate_Element.u8SOC_Now -= 1;
-					SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
 				}
 			}
 		}
@@ -733,17 +804,13 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			if (++su16_SocDsgCal_L4_Tcnt >= 2)
 			{
 				su16_SocDsgCal_L4_Tcnt = 0;
-				SOC_Calculate_Element.u8SOC_Now -= 1;
-				SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_ApplySocCorrection((UINT8)(SOC_Calculate_Element.u8SOC_Now - 1U));
 			}
 		}
 
 		if (SOC_Calculate_Element.u8SOC_Now <= 1 && SOC_Enhance_Element.u16_VCellMin > SOC_Enhance_Element.u16_SOC_0_Vol)
 		{
-			// SOC_Calculate_Element.u8SOC_Now = 2;
-			SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now; // SOC保持不变
-			SOC_Calculate_Element.u32CapChange = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
-			SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
+			SOC_ApplySocNow(SOC_Calculate_Element.u8SOC_Now);
 		}
 
 		if (su16_SocChgCal_L1_Tcnt)
@@ -761,49 +828,13 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 	}
 }
 
-// 末端大电流恒流充，调用的函数
-// 本来打算合成一个函数，但是想想后续可能会有不同的策略，决定分开
-// 多级保护，有个BUG，就是电压上涨太快，算不过来
-void CorrectionTerminal_CC(enum _CUR CurrentType)
-{
-}
-
 void Correction_Terminal(enum _CUR CurrentType)
 {
-
-	switch (CurrentType)
-	{
-	case CurCHG:
-		switch (SOC_Enhance_Element.u8_LargeCurFlag_Chg)
-		{
-		case 0:
-			CorrectionTerminal_CV(CurrentType);
-			break;
-		case 1:
-			CorrectionTerminal_CC(CurrentType);
-			break;
-		default:
-			break;
-		}
-		break;
-
-	case CurDSG:
-		switch (SOC_Enhance_Element.u8_LargeCurFlag_Dsg)
-		{
-		case 0:
-			CorrectionTerminal_CV(CurrentType);
-			break;
-		case 1:
-			CorrectionTerminal_CC(CurrentType);
-			break;
-		default:
-			break;
-		}
-		break;
-
-	default:
-		break;
-	}
+	/*
+	 * 当前工程没有独立的 CC 末端策略实现。
+	 * 为避免外部 flag 被置位后直接跳过末端校准，统一回落到 CV 策略。
+	 */
+	CorrectionTerminal_CV(CurrentType);
 }
 
 void SOC_Cont_AH_Int_CHG(void)
@@ -831,13 +862,22 @@ void SOC_Cont_AH_Int_CHG(void)
 			SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 			return;
 		}
-		--s_u8_CHG200msCnt;
+		if (s_u8_CHG200msCnt > 0U)
+		{
+			--s_u8_CHG200msCnt;
+		}
 	}
 
 #if 1 // 原来的计算方式着实太拖沓，下面的三句搞定，还清晰明了，例如，容量没到100%前，都是99%，到达那一瞬间才是100%
 	  // 这个的效果和优化的没啥差别，基于放电没操作，这个也不改了吧。
 	if (SOC_Calculate_Element.u8CHG_AHCalcu_Flag)
 	{
+		if (SOC_Calculate_Element.u32CapFactory == 0U)
+		{
+			SOC_Calculate_Element.u8CHG_AHCalcu_Flag = 0U;
+			return;
+		}
+
 		Correction_Terminal(CurCHG);
 		SOC_Calculate_Element.u8SOC_Old = SOC_Calculate_Element.u8SOC_Now;
 		// SOC_Calculate_Element.u32CapChange += ((UINT32)SOC_Calculate_Element.u8n_CoulombicEff * SOC_Enhance_Element.u16_Ichg * 1+50)/100;	//As*10*100(库伦效率100)
@@ -884,22 +924,35 @@ void SOC_Cont_AH_Int_DSG(void)
 			SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 			return;
 		}
-		--s_u8_DSG200msCnt;
+		if (s_u8_DSG200msCnt > 0U)
+		{
+			--s_u8_DSG200msCnt;
+		}
 	}
 
 #if 1 // 这个计算方式还是妥一些，满减1%，SOC才显示99，客户体验会更好一些
 	if (SOC_Calculate_Element.u8DSG_AHCalcu_Flag)
 	{
+		if (SOC_Calculate_Element.u32CapFactory == 0U)
+		{
+			SOC_Calculate_Element.u8DSG_AHCalcu_Flag = 0U;
+			return;
+		}
+
 		Correction_Terminal(CurDSG);
 
 		SOC_Calculate_Element.u8SOC_Old = SOC_Calculate_Element.u8SOC_Now;
 		// SOC_Calculate_Element.u32CapChange += ((UINT32)SOC_Calculate_Element.u8n_CoulombicEff * SOC_Enhance_Element.u16_Idsg * 1 + 50)/100; //As*10*100(库伦效率100)
 		// SOC_Calculate_Element.u32CapNow-= ((UINT32)SOC_Calculate_Element.u8n_CoulombicEff * SOC_Enhance_Element.u16_Idsg * 1 + 50)/100; 	//剩余容量实时跟踪
 		SOC_Calculate_Element.u32CapChange += (UINT32)SOC_Enhance_Element.u16_Idsg * 1;
-		SOC_Calculate_Element.u32CapNow -= (UINT32)SOC_Enhance_Element.u16_Idsg * 1;
-
-		if (SOC_Calculate_Element.u32CapNow > SOC_Calculate_Element.u32CapFactory)
-			SOC_Calculate_Element.u32CapNow = 0;
+		if (SOC_Calculate_Element.u32CapNow > (UINT32)SOC_Enhance_Element.u16_Idsg)
+		{
+			SOC_Calculate_Element.u32CapNow -= (UINT32)SOC_Enhance_Element.u16_Idsg * 1;
+		}
+		else
+		{
+			SOC_Calculate_Element.u32CapNow = 0U;
+		}
 		C_change_per = SOC_Calculate_Element.u32CapChange * 100 / SOC_Calculate_Element.u32CapFactory;
 		SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Old - C_change_per;
 		if (SOC_Calculate_Element.u8SOC_Now > 100)
@@ -1148,41 +1201,30 @@ UINT8 isDSG(void)
 }
 
 
-void soc_cali(void)
+static void SOC_ApplyVoltageCalibration(void)
 {
-	static uint8_t dsg_soc0_delay = 0;
-// todo 实时校准 待完善
+	UINT16 total_soc100 = 0U;
+
 #ifdef _SOC_OCV_Fix2_func_
 	SOC_OCV_Fix2();
 #endif
 
-#ifdef TERNARYLI
-#define Totle_soc100 (4000)
-#elif (defined(LIFEPO))
-#define Totle_soc100 (3300)
-#endif
+	#ifdef TERNARYLI
+		total_soc100 = 4000U;
+	#elif (defined(LIFEPO))
+		total_soc100 = 3300U;
+	#endif
 
-	if (isCHG())
+	if (!isCHG())
 	{
-		if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && SOC_Enhance_Element.u16_VCellMin >= Totle_soc100)
-		{
-			SOC_ApplySocNow(100U);
-		}
+		return;
 	}
-	else
-		{
-			if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= 2000))
-			{
-				if (++dsg_soc0_delay >= (5 * 10))
-				{
-					dsg_soc0_delay = 0;
-					SOC_ApplySocNow(0U);
-				}
-			}
-		else
-		{
-			dsg_soc0_delay = 0;
-		}
+
+	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) &&
+		(SOC_Enhance_Element.u16_VCellMin >= total_soc100) &&
+		(SOC_Calculate_Element.u8SOC_Now < 100U))
+	{
+		SOC_ApplySocNow(100U);
 	}
 }
 /*
@@ -1216,13 +1258,13 @@ void SOC_IntEnhance_Ctrl(void)
 		SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 		break;
 	}
-	soc_cali();
+	SOC_ApplyVoltageCalibration();
 	SOC_UpdateRestMonitor();
 	SOC_ApplyWeakCellGuard();
 
-	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
+	// 参数刷新命令先落地，再决定是否持久化，减少手动校准后一拍延迟。
+	SOC_RefreshData_Monitor();
 	SOC_EEPROM_Deal_Monitor();
-	SOC_RefreshData_Monitor(); // 有顺序，放最后>>应该没顺序了
 	SOC_Result_Pass();
 }
 
@@ -1239,10 +1281,4 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	SOC_ApplyWeakCellGuard();
 	SOC_PersistSnapshotIfChanged();
 	SOC_SyncOutputData(1U);
-
-	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
-	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
-	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
-	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
-	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
 }

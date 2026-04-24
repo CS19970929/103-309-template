@@ -311,11 +311,6 @@ void InitADC(void)
 // 延时类型初始化是不需要return的
 void App_AnlogCal(void)
 {
-	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_ADC))
-	{
-		// return;
-	}
-
 	if (0 == g_st_SysTimeFlag.bits.b1Sys1msFlag)
 	{
 		return;

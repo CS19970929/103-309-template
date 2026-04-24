@@ -1249,11 +1249,6 @@ void InitCan(void)
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
-	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_CAN))
-	{
-		// return;
-	}
-
 	// if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag2)
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag1)
 	{

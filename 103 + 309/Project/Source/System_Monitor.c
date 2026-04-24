@@ -89,13 +89,6 @@ void SystemMonitorResetData_EEPROM(void)
 	WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2, (UINT16)(System_OnOFF_Func.all >> 16));
 }
 
-// 前面初始化，硬件3s，读EEPROM要1s
-// 开机时序汇总，AD稳定500ms，SOC初始化400ms，保护点判断1s(最大值)，打开管子30ms
-// 加起来大概6s
-StartUp_Status System_FUNC_StartUp(enum SYSTEM_FUNC_STARTUP_COMMAND SystemFunction)
-{
-}
-
 // 0:没错误，X：有错误
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
