@@ -84,12 +84,16 @@ void InitADC_DMA(void)
 // 这是个BUG，后续观察
 void InitADC_GPIO(void)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-	// RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
+    GPIO_InitTypeDef GPIO_InitStructure;
+    // RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
 
-	GPIO_InitStructure.GPIO_Pin = PIN_AD_TTC_MOS1;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIO_AD_TTC_MOS1, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 #if 0 // 无效
 	GPIO_PinRemapConfig(GPIO_PartialRemap1_TIM2, ENABLE);		//部分重映射1——CH2/PB3
@@ -149,10 +153,9 @@ void InitADC_ADC1(void)
 
 	RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 配置ADC时钟PCLK2的8分频，即9MHz
 
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5); // 配置ADC通道的转换顺序和采样时间
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_12, 2, ADC_SampleTime_55Cycles5);	//配置ADC通道的转换顺序和采样时间
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_14, 3, ADC_SampleTime_55Cycles5);
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_15, 4, ADC_SampleTime_55Cycles5);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5);    // PB1: GPIO_ADC_NMOS
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);     // PA2: GPIO_ADC_CUR
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_239Cycles5);    // PA1: GPIO_ADC_VBUS
 
 	ADC_Cmd(ADC1, ENABLE);	  // 开启ADC，并开始转换
 	ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
@@ -170,64 +173,90 @@ void InitADC_ADC1(void)
 
 void ADC_Current_Smooth(void)
 {
-	static UINT8 su8_ADcnt = 0;
-	INT32 t_i32temp = 0;
-	UINT32 u32_ADC_CUR_AMP = 0;
-	UINT32 u32_AD_VREF_AD = 0;
+    static UINT8 su8_ADcnt = 0;
+    static UINT8 su8_OffsetCnt = 0;
+    static UINT32 su32_OffsetSum = 0;
+    INT32 t_i32temp = 0;
+    UINT32 u32_ADC_CUR_AMP = 0;
+    UINT32 u32_AD_Diff = 0;
 
-	if (su8_ADcnt++ < AD_CalNum_Cur)
-	{
-		g_u32ADCValFilter2[ADC_CUR_AMP] += g_u16ADCValFilter[ADC_CUR_AMP];
-		g_u32ADCValFilter2[AD_VREF_AD] += g_u16ADCValFilter[AD_VREF_AD];
-	}
-	else
-	{
-		su8_ADcnt = 0;
-		u32_ADC_CUR_AMP = g_u32ADCValFilter2[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
-		u32_AD_VREF_AD = g_u32ADCValFilter2[AD_VREF_AD] >> AD_CalNum_Cur_2;
-		g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
-		g_u32ADCValFilter2[AD_VREF_AD] = 0;
+    if (su8_ADcnt++ < AD_CalNum_Cur)
+    {
+        g_u32ADCValFilter2[ADC_CUR_AMP] += g_u16ADCValFilter[ADC_CUR_AMP];
+    }
+    else
+    {
+        su8_ADcnt = 0;
+        u32_ADC_CUR_AMP = g_u32ADCValFilter2[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
+        g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
 
-		u32_ADC_CUR_AMP = u32_ADC_CUR_AMP * 151 / 100;
-		if (u32_AD_VREF_AD > u32_ADC_CUR_AMP)
-		{
-			t_i32temp = ModulusSub(u32_AD_VREF_AD, u32_ADC_CUR_AMP) * 3300 / 4096;					  // mV
-			t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1; // A*10	//A*10/Gain = >>1
-			g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
-			gu16_BusCurr_DSG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
-			gu16_BusCurr_CHG = 0;
-		}
-		else
-		{
-			t_i32temp = ModulusSub(u32_AD_VREF_AD, u32_ADC_CUR_AMP) * 3300 / 4096;					  // mV
-			t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1; // A*10	//A*10/Gain = >>1
-			g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
-			gu16_BusCurr_DSG = 0;
-			gu16_BusCurr_CHG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
-		}
-	}
+        if (0 == g_u16IoutOffsetAD)
+        {
+            if (0 == u32_ADC_CUR_AMP)
+            {
+                gu16_BusCurr_DSG = 0;
+                gu16_BusCurr_CHG = 0;
+                return;
+            }
+
+            su32_OffsetSum += u32_ADC_CUR_AMP;
+            if (++su8_OffsetCnt >= AD_CurOffsetCalNum)
+            {
+                g_u16IoutOffsetAD = (UINT16)(su32_OffsetSum >> AD_CurOffsetCalNum_2);
+                su32_OffsetSum = 0;
+                su8_OffsetCnt = 0;
+            }
+            gu16_BusCurr_DSG = 0;
+            gu16_BusCurr_CHG = 0;
+            return;
+        }
+
+        if (0 == OtherElement.u16Sys_CS_Res)
+        {
+            gu16_BusCurr_DSG = 0;
+            gu16_BusCurr_CHG = 0;
+            return;
+        }
+
+        if ((u32_ADC_CUR_AMP + AD_CurZeroDeadband) < g_u16IoutOffsetAD)
+        {
+            u32_AD_Diff = g_u16IoutOffsetAD - u32_ADC_CUR_AMP;
+            t_i32temp = u32_AD_Diff * 3300 / 4096;
+            t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1;
+            g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
+            g_i32ADCResult[ADC_CURR] = g_u32ADCValFilter2[ADC_CURR];
+            gu16_BusCurr_DSG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
+            gu16_BusCurr_CHG = 0;
+        }
+        else if (u32_ADC_CUR_AMP > (g_u16IoutOffsetAD + AD_CurZeroDeadband))
+        {
+            u32_AD_Diff = u32_ADC_CUR_AMP - g_u16IoutOffsetAD;
+            t_i32temp = u32_AD_Diff * 3300 / 4096;
+            t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1;
+            g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
+            g_i32ADCResult[ADC_CURR] = g_u32ADCValFilter2[ADC_CURR];
+            gu16_BusCurr_DSG = 0;
+            gu16_BusCurr_CHG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
+        }
+        else
+        {
+            g_u32ADCValFilter2[ADC_CURR] = 0;
+            g_i32ADCResult[ADC_CURR] = 0;
+            gu16_BusCurr_DSG = 0;
+            gu16_BusCurr_CHG = 0;
+        }
+    }
 }
 
 void ADC_TTC(void)
 {
-	INT32 t_i32temp = 0;
-	//-------------TEMP1温度(+40)-------------
-	t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_EV1]; // 读取AD值
-	t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
-	g_u32ADCValFilter2[ADC_TEMP_EV1] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_EV1]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_EV1];
-	g_i32ADCResult[ADC_TEMP_EV1] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_EV1] + 512) >> 10);
+    INT32 t_i32temp = 0;
 
-	//-------------MOS1温度(+40)-------------
-	t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS1]; // 读取AD值
-	t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
-	g_u32ADCValFilter2[ADC_TEMP_MOS1] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_MOS1]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_MOS1];
-	g_i32ADCResult[ADC_TEMP_MOS1] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_MOS1] + 512) >> 10);
-
-	//-------------MOS2温度(+40)-------------
-	t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS2]; // 读取AD值
-	t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
-	g_u32ADCValFilter2[ADC_TEMP_MOS2] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_MOS2]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_MOS2];
-	g_i32ADCResult[ADC_TEMP_MOS2] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_MOS2] + 512) >> 10);
+    //-------------MOS1温度(+40)-------------
+    t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS1]; // 读取AD值
+    t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
+    g_u32ADCValFilter2[ADC_TEMP_MOS1] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_MOS1]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_MOS1];
+    g_i32ADCResult[ADC_TEMP_MOS1] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_MOS1] + 512) >> 10);
 }
 
 void ADC_Vbc(void)
@@ -254,32 +283,38 @@ void ADC_Vbc(void)
 // 关于那个表，因为为12位分辨率，所以最大输入为4096。
 void InitADC(void)
 {
-	UINT8 i;
-	InitADC_GPIO();
-	InitADC_TIMER();
-	InitADC_DMA();
-	InitADC_ADC1();
+    UINT8 i;
+    InitADC_GPIO();
+    InitADC_TIMER();
+    InitADC_DMA();
+    InitADC_ADC1();
 
-	for (i = 0; i < ADC_NUM; i++)
-	{
-		g_u16ADCValFilter[i] = 0;
-		g_i32ADCResult[i] = 0;
-		g_u32ADCValFilter2[i] = 0;
-	}
+    for (i = 0; i < ADC_NUM; i++)
+    {
+        g_u16ADCValFilter[i] = 0;
+        g_i32ADCResult[i] = 0;
+        g_u32ADCValFilter2[i] = 0;
+    }
+
+    g_u16IoutOffsetAD = 0;
+    gu16_BusCurr_CHG = 0;
+    gu16_BusCurr_DSG = 0;
 }
 
 // 延时类型初始化是不需要return的
 void App_AnlogCal(void)
 {
-	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_ADC))
-	{
-		// return;
-	}
+    if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_ADC))
+    {
+        // return;
+    }
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1msFlag)
-	{
-		return;
-	}
+    if (0 == g_st_SysTimeFlag.bits.b1Sys1msFlag)
+    {
+        return;
+    }
 
-	ADC_TTC();
+    ADC_TTC();
+    ADC_Vbc();
+    ADC_Current_Smooth();
 }

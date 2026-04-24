@@ -90,20 +90,13 @@ void InitIO(void)
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
     GPIO_Init(GPIO_RF_EN, &GPIO_InitStructure);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_ADC_VBUS, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_CUR;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_ADC_CUR, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
@@ -143,10 +136,6 @@ void InitIO(void)
         GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
     }
 
-    MCUO_PWSV_STB = 1;
-    MCUO_DRV_CMNT = 0;
-    MCUO_AFE_SHIP = 0;
-    MCUO_AFE_MODE = 0;
 }
 
 void InitWakeUp_Base(void)
@@ -354,7 +343,6 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOC, &GPIO_InitStructure);
     // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-    MCUO_DRV_CMNT = 1;
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -367,10 +355,7 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOD, &GPIO_InitStructure);
     // GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-    MCUO_PWSV_STB = 0;
 #endif
-
-    // __delay_ms(100);
 }
 
 void IOstatus_NormalMode(void)
@@ -418,89 +403,6 @@ void Sys_StopMode(void)
         ; // ??PLL?????????
 #endif
 }
-
-#if 0
-void Init(void)
-{
-#if 0
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOC, ENABLE); // 开启GPIOC的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOD, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
-
-	InitSci();
-#endif
-
-#ifdef _DEBUG_
-	// cpu_frequency_conf();
-	InitIO();
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
-
-	InitSci();
-#endif
-	
-
-	if (is_rtc_wakekup)
-	{
-	}
-	else
-	{
-		cpu_frequency_conf();
-
-		is_wakeup = true;
-
-		InitDelay();
-		InitIO();
-
-		// InitSystemWakeUp();
-		// {
-		//     MCUO_PWSV_STB = 1;
-		//     // bug fixme 注意
-		//     MCUO_AFE_SHIP = 0;
-		//     MCUO_AFE_MODE = 0;
-		// }
-
-		// InitSci();
-		// Init_ChargerLoad_Det();
-		ADC_DeInit(ADC1);
-		InitADC();
-		//?????adc配置有什么影响
-		// Init_ChargerLoad_Det();
-
-#ifdef __FUNC__HEAT__
-		InitHeat_Cool();
-#endif
-#ifdef __FUNC__LED__
-		APP_LedBar();
-		set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-		InitTimer();
-		// InitTimer_10ms_fault3();
-
-
-        USART_DeInit(USART1);
-        USART_DeInit(USART2);
-
-        InitSci();
-
-        InitCan();
-	}
-
-	initAFE_IIC();
-	
-	InitE2PROM();
-
-	Init_ChargerLoad_Det();
-}
-
-#endif
 
 void Init(void)
 {

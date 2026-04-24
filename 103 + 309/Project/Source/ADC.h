@@ -1,7 +1,7 @@
 #ifndef ADC_H
 #define ADC_H
 
-#define AD_Used_amount 		1
+#define AD_Used_amount      3
 
 
 #define AD_CalNum			8		//后面是位移处理>>2，所以这个别乱改
@@ -9,6 +9,10 @@
 
 #define AD_CalNum_Cur		32		//后面是位移处理>>5，所以这个别乱改
 #define AD_CalNum_Cur_2		5		//2^5 = 32，上面那个数是2的多少次方，用于位移
+
+#define AD_CurOffsetCalNum  16
+#define AD_CurOffsetCalNum_2 4
+#define AD_CurZeroDeadband  4
 
 //AD采样变量枚举
 enum tagInfoForADCArray {

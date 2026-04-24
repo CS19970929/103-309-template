@@ -15,41 +15,17 @@
 
 
 /**********************************************/
-
-
-#define GPIO_AFE1_SHIP        GPIOA
-#define PIN_AFE1_SHIP         GPIO_Pin_10
-
-#define GPIO_AFE1_ALM        GPIOA
-#define PIN_AFE1_ALM         GPIO_Pin_6
-
-#define GPIO_AFE1_MODE        GPIOA
-#define PIN_AFE1_MODE         GPIO_Pin_7
-
-
-
 #define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
-#define MCUO_DRV_CMNT		PCout(12)		//
-//��Դģ��
-#define MCUO_PWSV_STB		PDout(2)		//
-
-#define MCUO_AFE_SHIP 		PAout(10)		//AFE_SHIP
-#define MCUO_AFE_MODE 		PAout(7)		//AFE_MODE
 #define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
 #define MCUO_AFE_CTLC 		PBout(14)		//��������
 
-
-#define GPIO_AD_TTC_MOS1             GPIOA 
-#define PIN_AD_TTC_MOS1              GPIO_Pin_1
 
 #define GPIO_SCI1_TX	     GPIOB
 #define PIN_SCI1_TX	     GPIO_Pin_6
 
 #define GPIO_SCI1_RX	     GPIOB
 #define PIN_SCI1_RX	     GPIO_Pin_7
-
-
 /**********************************************/
 #define GPIO_CHG_IN         GPIOA
 #define PIN_CHG_IN          GPIO_Pin_0
@@ -90,6 +66,9 @@
 #define GPIO_ADC_VBUS        GPIOA
 #define PIN_ADC_VBUS         GPIO_Pin_1
 
+#define GPIO_AD_TTC_MOS1     GPIO_ADC_VBUS
+#define PIN_AD_TTC_MOS1      PIN_ADC_VBUS
+
 #define GPIO_SPI1_NSS        GPIOA
 #define PIN_SPI1_NSS         GPIO_Pin_4
 
@@ -110,6 +89,9 @@
 
 #define GPIO_2727_EN        GPIOA
 #define PIN_2737_EN         GPIO_Pin_3
+
+#define GPIO_SEG_EN          GPIOB
+#define PIN_SEG_EN           GPIO_Pin_10
 
 #define GPIO_M_STB          GPIOA
 #define PIN_M_STB           GPIO_Pin_15
