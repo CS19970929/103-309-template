@@ -57,6 +57,7 @@ extern bool is_wakeup;
 
 extern UINT16 gu8_WakeUp_Type;
 
+void cpu_frequency_conf(void);
 void rtc_sleep(void);
 
 uint8_t get_rtc_soc(void);

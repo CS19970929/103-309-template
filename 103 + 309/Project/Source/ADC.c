@@ -171,6 +171,25 @@ void InitADC_ADC1(void)
 	ADC_ExternalTrigConvCmd(ADC1, ENABLE);
 }
 
+void ADC_StopForLowPower(void)
+{
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+
+    TIM_Cmd(TIM2, DISABLE);
+    ADC_ExternalTrigConvCmd(ADC1, DISABLE);
+    ADC_DMACmd(ADC1, DISABLE);
+    ADC_Cmd(ADC1, DISABLE);
+    DMA_Cmd(DMA1_Channel1, DISABLE);
+    DMA_DeInit(DMA1_Channel1);
+    ADC_DeInit(ADC1);
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, DISABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, DISABLE);
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, DISABLE);
+}
+
 void ADC_Current_Smooth(void)
 {
     static UINT8 su8_ADcnt = 0;
@@ -284,10 +303,6 @@ void ADC_Vbc(void)
 void InitADC(void)
 {
     UINT8 i;
-    InitADC_GPIO();
-    InitADC_TIMER();
-    InitADC_DMA();
-    InitADC_ADC1();
 
     for (i = 0; i < ADC_NUM; i++)
     {
@@ -296,9 +311,13 @@ void InitADC(void)
         g_u32ADCValFilter2[i] = 0;
     }
 
-    g_u16IoutOffsetAD = 0;
     gu16_BusCurr_CHG = 0;
     gu16_BusCurr_DSG = 0;
+
+    InitADC_GPIO();
+    InitADC_TIMER();
+    InitADC_DMA();
+    InitADC_ADC1();
 }
 
 // 延时类型初始化是不需要return的

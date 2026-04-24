@@ -173,7 +173,9 @@ void IORecover_RTCMode(void);
 void IORecover_NormalMode(void);
 void IORecover_DeepMode(void);
 void Sys_StopMode(void);
-// void Init(void);
+void InitRtcWakeupCheck(void);
+void InitRunAfterStopWakeup(void);
+void Init(void);
 
 
 #endif

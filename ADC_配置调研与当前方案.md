@@ -285,7 +285,19 @@ ADC_Current_Smooth();   // 电流，单端采样加启动零点
 3. 总压比例 `Vbc_scale`、NTC 表、电流采样电阻/放大倍数仍需要上板实测校准。
 4. 总压分压必须确认最大包压下 ADC 输入不超过 `VDDA/VREF+`，否则有烧毁 MCU 或读数饱和风险。
 
-## 8. 构建验证
+## 8. STOP/RTC 唤醒与 ADC 恢复
+
+本次补充了 STOP 低功耗下的 ADC 处理策略：
+
+1. 进入 STOP 前调用 `ADC_StopForLowPower()`，显式关闭 `TIM2`、`ADC1`、`DMA1_Channel1`，再把 GPIO 切到低功耗状态，避免唤醒后残留触发源或 DMA 状态。
+2. `Sys_StopMode()` 从 STOP 返回后无条件调用 `cpu_frequency_conf()`，不再依赖未定义的 `_HSE_8M_PLL_48M` / `_HSE_12M_PLL_48M` 宏恢复 HSE/PLL。
+3. RTC 周期唤醒时只走 `InitRtcWakeupCheck()`，恢复延时、串口日志、AFE IIC 和 EEPROM IIC，用于读取 AFE 状态。
+4. 若 RTC 唤醒后 AFE 判断无充电、无放电、无异常，`rtc_sleep_run_hiccup_cycle()` 直接返回继续下一轮 RTC STOP，不启动 ADC。
+5. 若 RTC 唤醒发现电流或异常，或者由外部中断唤醒，则走 `InitRunAfterStopWakeup()`，完整恢复 `InitIO()`、`InitADC()`、CAN、TIM3 等运行外设。
+
+ADC 电流零点 `g_u16IoutOffsetAD` 在 `InitADC()` 中不再每次清零，STOP 唤醒后会尽量沿用休眠前的零点，避免“带电流唤醒后重新把当前电流当零点”的风险。首次上电时该变量仍由 BSS 初始化为 0，后续会按原逻辑自动采集零点。
+
+## 9. 构建验证
 
 2026-04-24 使用 Keil MDK 命令行全量重编译：
 
@@ -296,8 +308,8 @@ UV4.exe -r 103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx -t 
 结果：
 
 ```text
-0 Error(s), 41 Warning(s)
-Program Size: Code=45256 RO-data=4020 RW-data=1256 ZI-data=6176
+0 Error(s), 37 Warning(s)
+Program Size: Code=45356 RO-data=4020 RW-data=1256 ZI-data=6176
 ```
 
 主要产物：
@@ -307,9 +319,9 @@ Program Size: Code=45256 RO-data=4020 RW-data=1256 ZI-data=6176
 103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.bin
 ```
 
-这些 warning 为工程已有的隐式声明、未使用变量、文件末尾换行等问题；本次 ADC 配置相关文件没有编译错误。
+这些 warning 为工程已有的未使用变量、缺少 return、文件末尾换行等问题；本次 STOP/ADC 恢复相关文件没有编译错误。
 
-## 9. 参考资料
+## 10. 参考资料
 
 1. ST 官方参考手册 RM0008：`STM32F101xx, STM32F102xx, STM32F103xx ... advanced ARM-based 32-bit MCUs`，ADC 章节包含扫描模式、外部触发、DMA、规则组/注入组、多 ADC 模式说明。  
    https://www.st.com/resource/en/reference_manual/rm0008-stm32f101xx-stm32f102xx-stm32f103xx-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf

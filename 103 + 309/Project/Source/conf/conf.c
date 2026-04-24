@@ -1,6 +1,9 @@
 // #include "conf.h"
 #include "main.h"
 
+void InitSci(void);
+void InitE2PROM_i2c(void);
+
 Time_T sys_time = {
     .time_enter_rtc = 10,
     .power_on = false,
@@ -271,7 +274,7 @@ void IOstatus_Base(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
-    ADC_DeInit(ADC1); // ????????????????
+    ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
@@ -306,7 +309,7 @@ void IOstatus_RTCMode(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
-    ADC_DeInit(ADC1); // ????????????????
+    ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
@@ -386,76 +389,62 @@ void IORecover_DeepMode(void)
 
 void Sys_StopMode(void)
 {
-    // RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
-// ????????????????????
-// ?????????????????????
-#if (defined _HSE_8M_PLL_48M) || (defined _HSE_12M_PLL_48M)
-    RCC_HSEConfig(RCC_HSE_ON); // ????????HSI
-    while (RCC_GetFlagStatus(RCC_FLAG_HSERDY) == RESET)
-        ;               // ?? HSE ????
-    RCC_PLLCmd(ENABLE); // ?? PLL
-    while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET)
-        ;                                      // ?? PLL ????
-    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK); // ??PLL???????
-    while (RCC_GetSYSCLKSource() != 0x08)
-        ; // ??PLL?????????
+    cpu_frequency_conf();
+}
+
+void InitRtcWakeupCheck(void)
+{
+    InitDelay();
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
+    InitSci();
+    initAFE1_IIC();
+    InitE2PROM_i2c();
+}
+
+void InitRunAfterStopWakeup(void)
+{
+    is_wakeup = true;
+
+    InitDelay();
+    InitIO();
+
+    ADC_StopForLowPower();
+    InitADC();
+
+#ifdef __FUNC__HEAT__
+    InitHeat_Cool();
 #endif
+#ifdef __FUNC__LED__
+    APP_LedBar();
+    set_LED_state(LED_BAR_NORMAL, 4);
+#endif // DEBUG
+
+    USART_DeInit(USART1);
+    USART_DeInit(USART2);
+
+    InitSci();
+    InitCan();
+    InitTimer();
+
+    sys_time.wakeup_rtc = true;
+    Init_ChargerLoad_Det();
+
+    initAFE1_IIC();
+    InitE2PROM_i2c();
 }
 
 void Init(void)
 {
-    InitSci();
-#if 0
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOC, ENABLE); // 开启GPIOC的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOD, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
-
-#endif
-
     if (is_rtc_wakekup)
     {
+        InitRtcWakeupCheck();
     }
     else
     {
-        cpu_frequency_conf();
-
-        is_wakeup = true;
-
-        InitDelay();
-        InitIO();
-
-        // Init_ChargerLoad_Det();
-        ADC_DeInit(ADC1);
-        InitADC();
-        //?????adc配置有什么影响
-        // Init_ChargerLoad_Det();
-
-#ifdef __FUNC__HEAT__
-        InitHeat_Cool();
-#endif
-#ifdef __FUNC__LED__
-        APP_LedBar();
-        set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-
-        USART_DeInit(USART1);
-        USART_DeInit(USART2);
-
-        InitSci();
-
-        InitCan();
-
-        InitTimer();
-        sys_time.wakeup_rtc = true;
-        Init_ChargerLoad_Det();
+        InitRunAfterStopWakeup();
     }
-
-    initAFE1_IIC();
-
-    InitE2PROM_i2c();
 }

@@ -761,22 +761,20 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     {
         ++sys_time.rtc_sleep_cnt;
         rtc_sleep_dump_state("wake");
-    }
 
-    Init();
-    log_w("cnt %d", sys_time.rtc_sleep_cnt);
-    if (is_rtc_wakekup && !isException())
-    {
-        update_rtc_soc(&sys_time.rtc_sleep_cnt);
-        return true;
-    }
+        InitRtcWakeupCheck();
+        log_w("cnt %d", sys_time.rtc_sleep_cnt);
+        if (!isException())
+        {
+            update_rtc_soc(&sys_time.rtc_sleep_cnt);
+            return true;
+        }
 
-    if (is_rtc_wakekup)
-    {
         is_rtc_wakekup = false;
     }
 
-    Init();
+    InitRunAfterStopWakeup();
+    log_w("cnt %d", sys_time.rtc_sleep_cnt);
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
