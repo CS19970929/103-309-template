@@ -223,81 +223,6 @@ UINT8 SH367309_SC_DelayT_Set(void)
 	return result;
 }
 
-// 休眠带电需要的，控制权全权交给AFE
-// MCU的驱动，完全不用管内部各种保护是怎么样，只需要把影响均衡的两个地方配置好就行
-// 温度保护设置宽一些
-// 取消二次过充保护
-// 目前打算把两个函数合并，AFE驱动和MCU驱动区别，只要把温度数值替换就行，两者都是取消二次过充保护的
-// 结果是，使用MCU驱动时，稍微影响一点点开机时间，问题不大
-void SH367309_UpdataAfeConfig_Old(void)
-{
-	UINT8 bufferbak[26], mtpbufferbak[26];
-	UINT8 i;
-	UINT16 ResTemp[8];
-
-	Feed_IWatchDog;
-
-	// 和EEPROM相关寄存器修改
-	ucMTPBuffer[0x0E] = (BYTE_0EH_SCV_SCT & 0xF0) | (OtherElement.u16CBC_DelayT >> 6);
-
-	SH367309_Reg_Store.u8_MTP_SCONF2 = ucMTPBuffer[0x01];
-	SH367309_Reg_Store.u8_MTP_SCV_SCT = ucMTPBuffer[0x0E];
-
-	if (MTPRead(0x00, 26, bufferbak))
-	{													// 读309配置,包括TR
-		ucMTPBuffer[MTP_TR] = bufferbak[MTP_TR] & 0x7F; // 先获取TR[6~0]的值
-		MemoryCopy(ucMTPBuffer, mtpbufferbak, sizeof(ucMTPBuffer));
-		SH367309_Reg_Store.TR_ResRef = 680 + 5 * ucMTPBuffer[MTP_TR];
-
-		// 只要保证低温保护类型低于25摄氏度，(UINT8)强制转换相当于-256处理了
-		for (i = 0; i < 8; ++i)
-		{
-			ResTemp[i] = iSheldTemp_10K_NTC[ucMTPBuffer[i + MTP_OTC]];
-			mtpbufferbak[i + MTP_OTC] = (UINT8)(((UINT32)ResTemp[i] << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + ResTemp[i]));
-		}
-
-		for (i = 0; i < 25; i++)
-		{ // 最后一个TR不做对比
-			if (bufferbak[i] != mtpbufferbak[i])
-			{
-				MCUO_AFE_VPRO = 1;
-				Delay1ms(20);
-				if (!MTPWriteROM(0x00, 25, mtpbufferbak))
-				{ // 重写EEPROM的寄存器，两次
-				  // System_ERROR_UserCallback(ERROR_AFE1);
-				}
-				MCUO_AFE_VPRO = 0;
-				Delay1ms(1);
-
-				if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-				{
-					// EA = 0;								//啥意思啊，这句话TODO
-					AFE_Reset(); // Reset IC
-					Delay1ms(5);
-					AFE_IsReady();
-				}
-
-				break;
-			}
-		}
-
-		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-		{
-			if (MTPRead(0x00, 26, bufferbak))
-			{ // Read MTP value
-				for (i = 0; i < 25; i++)
-				{ // 最后一个TR不做对比
-					if (bufferbak[i] != mtpbufferbak[i])
-					{
-						System_ERROR_UserCallback(ERROR_AFE1);
-						// break;
-					}
-				}
-			}
-		}
-	}
-}
-
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 {
 	switch (Type)
@@ -323,234 +248,238 @@ void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 
 void Fault_ChangeToMCU(void)
 {
-	static UINT8 su8_CellOvp_Flag = 0;
-	static UINT8 su8_CellUvp_Flag = 0;
-	static UINT8 su8_IdischgOcp1_Flag = 0;
-	static UINT8 su8_IdischgOcp2_Flag = 0;
-	static UINT8 su8_IchgOcp_Flag = 0;
-	static UINT8 su8_CellChgUtp_Flag = 0;
-	static UINT8 su8_CellChgOtp_Flag = 0;
-	static UINT8 su8_CellDsgUtp_Flag = 0;
-	static UINT8 su8_CellDsgOtp_Flag = 0;
+    static UINT8 su8_CellOvp_Flag = 0;
+    static UINT8 su8_CellUvp_Flag = 0;
+    static UINT8 su8_IdischgOcp1_Flag = 0;
+    static UINT8 su8_IdischgOcp2_Flag = 0;
+    static UINT8 su8_IchgOcp_Flag = 0;
+    static UINT8 su8_CellChgUtp_Flag = 0;
+    static UINT8 su8_CellChgOtp_Flag = 0;
+    static UINT8 su8_CellDsgUtp_Flag = 0;
+    static UINT8 su8_CellDsgOtp_Flag = 0;
 
-	switch (su8_CellOvp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			FaultWarnRecord2(CellOvp_Third);
-			su8_CellOvp_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			su8_CellOvp_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
-	switch (su8_CellUvp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
-		{
-			FaultWarnRecord2(CellUvp_Third);
-			su8_CellUvp_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
-		{
-			su8_CellUvp_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = SH367309_Reg_Store.REG_BSTATUS1.bits.OV;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = SH367309_Reg_Store.REG_BSTATUS1.bits.UV;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCC;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTC;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTC;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTD;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTD;
+    if (SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
+        System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
+    else
+        System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
+
+    switch (su8_CellOvp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
+        {
+            FaultWarnRecord2(CellOvp_Third);
+            su8_CellOvp_Flag = 1;
+        }
+        break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
+        {
+            su8_CellOvp_Flag = 0;
+        }
+        break;
+    default:
+        break;
+    }
+    switch (su8_CellUvp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
+        {
+            FaultWarnRecord2(CellUvp_Third);
+            su8_CellUvp_Flag = 1;
+        }
+        break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
+        {
+            su8_CellUvp_Flag = 0;
+        }
+        break;
+    default:
+        break;
+    }
 
 #if 1
-	// g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1;
-	switch (su8_IdischgOcp1_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
-		{
-			// FaultWarnRecord2(IdischgOcp_Second);
-			FaultWarnRecord2(IdischgOcp_Third);
-			su8_IdischgOcp1_Flag = 1;
-		}
-		break;
+    switch (su8_IdischgOcp1_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
+        {
+            // FaultWarnRecord2(IdischgOcp_Second);
+            FaultWarnRecord2(IdischgOcp_Third);
+            su8_IdischgOcp1_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
-		{
-			su8_IdischgOcp1_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
+        {
+            su8_IdischgOcp1_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 #endif
 
-	switch (su8_IdischgOcp2_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
-		{
-			FaultWarnRecord2(IdischgOcp_Third);
-			su8_IdischgOcp2_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
-		{
-			su8_IdischgOcp2_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
+    // switch (su8_IdischgOcp2_Flag)
+    // {
+    // case 0:
+    // 	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+    // 	{
+    // 		FaultWarnRecord2(IdischgOcp_Third);
+    // 		su8_IdischgOcp2_Flag = 1;
+    // 	}
+    // 	break;
+    // case 1:
+    // 	if (!g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+    // 	{
+    // 		su8_IdischgOcp2_Flag = 0;
+    // 	}
+    // 	break;
+    // default:
+    // 	break;
+    // }
 #if 1
-	switch (su8_IchgOcp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			FaultWarnRecord2(IchgOcp_Third);
-			su8_IchgOcp_Flag = 1;
-		}
-		break;
+    switch (su8_IchgOcp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
+        {
+            FaultWarnRecord2(IchgOcp_Third);
+            su8_IchgOcp_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			su8_IchgOcp_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
+        {
+            su8_IchgOcp_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 
 #else
+    // switch (su8_IchgOcp_Flag)
+    // {
+    // case 0:
+    // 	if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
+    // 	{
+    // 		FaultWarnRecord2(IchgOcp_Second);
+    // 		su8_IchgOcp_Flag = 1;
+    // 	}
+    // 	break;
 
+    // case 1:
+    // 	if (!g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
+    // 	{
+    // 		su8_IchgOcp_Flag = 0;
+    // 	}
+    // 	break;
+
+    // default:
+    // 	break;
+    // }
 #endif
 
-	switch (su8_CellChgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			FaultWarnRecord2(CellChgUTp_Third);
-			su8_CellChgUtp_Flag = 1;
-		}
-		break;
+    switch (su8_CellChgUtp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
+        {
+            FaultWarnRecord2(CellChgUTp_Third);
+            su8_CellChgUtp_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			su8_CellChgUtp_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
+        {
+            su8_CellChgUtp_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 
-	switch (su8_CellChgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			FaultWarnRecord2(CellChgOTp_Third);
-			su8_CellChgOtp_Flag = 1;
-		}
-		break;
+    switch (su8_CellChgOtp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
+        {
+            FaultWarnRecord2(CellChgOTp_Third);
+            su8_CellChgOtp_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			su8_CellChgOtp_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
+        {
+            su8_CellChgOtp_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 
-	switch (su8_CellDsgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			FaultWarnRecord2(CellDsgUTp_Third);
-			su8_CellDsgUtp_Flag = 1;
-		}
-		break;
+    switch (su8_CellDsgUtp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
+        {
+            FaultWarnRecord2(CellDsgUTp_Third);
+            su8_CellDsgUtp_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			su8_CellDsgUtp_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
+        {
+            su8_CellDsgUtp_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 
-	switch (su8_CellDsgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			FaultWarnRecord2(CellDsgOTp_Third);
-			su8_CellDsgOtp_Flag = 1;
-		}
-		break;
+    switch (su8_CellDsgOtp_Flag)
+    {
+    case 0:
+        if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
+        {
+            FaultWarnRecord2(CellDsgOTp_Third);
+            su8_CellDsgOtp_Flag = 1;
+        }
+        break;
 
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			su8_CellDsgOtp_Flag = 0;
-		}
-		break;
+    case 1:
+        if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
+        {
+            su8_CellDsgOtp_Flag = 0;
+        }
+        break;
 
-	default:
-		break;
-	}
+    default:
+        break;
+    }
 }
 
-void TemperatureCheck(void)
-{
-	// SH367309_Reg_Store.REG_BSTATUS2.bits.OTC;
-	// SH367309_Reg_Store.REG_BSTATUS2.bits.UTC;
-	// SH367309_Reg_Store.REG_BSTATUS2.bits.OTD;
-	// SH367309_Reg_Store.REG_BSTATUS2.bits.UTD;
-
-	if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTC || SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-	{
-		if (g_stCellInfoReport.u16Ichg == 0)
-		{
-			SH367309_Reg_Store.REG_BSTATUS2.bits.OTC = 0;
-			SH367309_Reg_Store.REG_BSTATUS2.bits.UTC = 0;
-		}
-	}
-
-	if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTD || SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-	{
-		if (g_stCellInfoReport.u16IDischg == 0)
-		{
-			SH367309_Reg_Store.REG_BSTATUS2.bits.OTD = 0;
-			SH367309_Reg_Store.REG_BSTATUS2.bits.UTD = 0;
-		}
-	}
-}
-
-// mos控制汇总，历史保护记录加入体系
 void App_SH367309_Monitor(void)
 {
 	static UINT8 su8_SC_Flag = 0;
@@ -571,7 +500,6 @@ void App_SH367309_Monitor(void)
 		SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
 		SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
 
-		// TemperatureCheck();
 		Fault_ChangeToMCU();
 
 		switch (su8_SC_Flag)

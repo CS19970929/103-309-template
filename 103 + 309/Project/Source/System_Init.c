@@ -285,7 +285,6 @@ void IWDG_Feed(void)
 void TIM3_IRQHandler(void)
 { // TIM3中断
 	static uint16_t cnt_1000ms = 0;
-	// MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 	// gu8_200msAccClock_Flag = 1;
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{												// 检查TIM3更新中断发生与否

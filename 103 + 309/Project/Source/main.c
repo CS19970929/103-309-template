@@ -41,7 +41,6 @@ void IOstatus_RTCMode_test(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-	MCUO_DRV_CMNT = 1;
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -54,10 +53,7 @@ void IOstatus_RTCMode_test(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOD, &GPIO_InitStructure);
 	// GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-	MCUO_PWSV_STB = 0;
 #endif
-
-	// __delay_ms(100);
 }
 // 不同串数维护的表格
 // 中颖

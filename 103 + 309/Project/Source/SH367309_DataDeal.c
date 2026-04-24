@@ -145,39 +145,6 @@ bool Write_Parameters(void)
 	return ret;
 }
 
-#if 0
-bool SH367309_UpdataAfeConfig(void)
-{
-	bool ret = false;
-
-	if (AFE_PARAM_WRITE_Flag)
-	{
-		AFE_PARAM_WRITE_Flag = 0;
-		MCUO_AFE_VPRO = 1; // 进入烧写模式
-		Delay1ms(20);
-		Feed_IWatchDog;
-
-		Refresh_Parameters();
-		ret = Write_Parameters();
-
-		Feed_IWatchDog;
-		MCUO_AFE_VPRO = 0; // 退出烧写模式
-		Delay1ms(1);
-
-		/* 每次写完如果不报错都要复位一下。这样写进去的参数才有效 */
-		if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-		{
-			AFE_Reset(); // Reset IC
-			Delay1ms(5);
-			AFE_IsReady();
-			AFE_ResetFlag = 1;
-		}
-
-		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	}
-	return ret;
-}
-#endif
 bool SH367309_UpdataAfeConfig(void)
 {
 	bool ret = false;

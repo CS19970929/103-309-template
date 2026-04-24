@@ -1,9 +1,6 @@
 #ifndef SYSTEM_INIT_H
 #define SYSTEM_INIT_H
 
-//λ������,ʵ��51���Ƶ�GPIO���ƹ���
-//����ʵ��˼��,�ο�<<CM3Ȩ��ָ��>>������(87ҳ~92ҳ).
-//IO�ڲ����궨��
 #define BITBAND(addr, bitnum) ((addr & 0xF0000000)+0x2000000+((addr &0xFFFFF)<<5)+(bitnum<<2)) 
 #define MEM_ADDR(addr)  *((volatile unsigned long  *)(addr)) 
 #define BIT_ADDR(addr, bitnum)   MEM_ADDR(BITBAND(addr, bitnum)) 
@@ -48,33 +45,14 @@
 #define PGin(n)    BIT_ADDR(GPIOG_IDR_Addr,n)  //����
 
 
-#define MCUO_DEBUG_LED1 	PBout(15)		//LED1
-
-//����ģ��
 #define MCUO_E2PR_WP		PBout(13)	//EEPROMд����
-#define MCUO_DRV_DET_CHG	PBout(3)	//
-//#define MCUO_DRV_DET_LOAD	PAout(8)	//
 
 #define MCUI_INT_WK_MCU		PAin(0)		//����MCU
-#define MCUI_INT_WK_CHG		PAin(15)	//��绽��
-//#define MCUI_INT_WK_LOAD	PDin(2)		//���ػ���
-#define MCUI_CBC_DSG 		PBin(12)
-
-
-//����ģ��
-#define MCUO_MOS_PRE 		PCout(12)	//PC12�����MOS
-
 
 
 #define MCUO_RELAY_HEAT 	PCout(6)		//���ȼ̵���
 #define MCUO_RELAY_COOL 	PCout(6)		//�����̵���
 
-#define MCUO_ENO_DO1		PCout(0)	//O��1
-#define MCUO_ENO_DO2		PCout(1)	//O��2
-#define MCUO_ENO_DO3		PCout(2)	//O��3
-#define MCUO_ENO_DO4		PCout(3)	//O��4
-#define MCUO_ENO_DO5		PBout(4)	//O��5
-#define MCUO_ENO_DO6		PBout(1)	//O��6
 #define MCUI_ENI_DI1		PAin(9)		//I��1
 
 

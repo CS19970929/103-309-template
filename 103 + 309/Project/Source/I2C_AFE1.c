@@ -6,34 +6,62 @@ struct SH367309_Read SH367309_Read_AFE1;
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	// AD(kΩ*100)		(Temp+40)*10
-	11611, 100, //-30
-	8935, 150,	//-25
-	6943, 200,	//-20
-	5442, 250,	//-15
-	4300, 300,	//-10
-	3422, 350,	//-5
-	2751, 400,	// 0
-	2214, 450,	// 5
-	1801, 500,	// 10
-	1470, 550,	// 15
-	1209, 600,	// 20
-	1000, 650,	// 25
-	831, 700,	// 30
-	694, 750,	// 35
-	583, 800,	// 40
-	492, 850,	// 45
-	416, 900,	// 50
-	355, 950,	// 55
-	303, 1000,	// 60
-	260, 1050,	// 65
-	224, 1100,	// 70
-	193, 1150,	// 75
-	167, 1200,	// 80
-	146, 1250,	// 85
-	127, 1300,	// 90
-	111, 1350,	// 95
-	98, 1400,	// 100
-	86, 1450,	// 105
+	11611,
+	100, //-30
+	8935,
+	150, //-25
+	6943,
+	200, //-20
+	5442,
+	250, //-15
+	4300,
+	300, //-10
+	3422,
+	350, //-5
+	2751,
+	400, // 0
+	2214,
+	450, // 5
+	1801,
+	500, // 10
+	1470,
+	550, // 15
+	1209,
+	600, // 20
+	1000,
+	650, // 25
+	831,
+	700, // 30
+	694,
+	750, // 35
+	583,
+	800, // 40
+	492,
+	850, // 45
+	416,
+	900, // 50
+	355,
+	950, // 55
+	303,
+	1000, // 60
+	260,
+	1050, // 65
+	224,
+	1100, // 70
+	193,
+	1150, // 75
+	167,
+	1200, // 80
+	146,
+	1250, // 85
+	127,
+	1300, // 90
+	111,
+	1350, // 95
+	98,
+	1400, // 100
+	86,
+	1450, // 105
 };
 
 // 这个code是啥
@@ -817,12 +845,6 @@ void initAFE1_IIC(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
-
-	// 预充MOS，模拟前端驱动的补充
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
 }
 
 /*******************************************************************************
@@ -833,14 +855,8 @@ Output: NULL
 Others:
 *******************************************************************************/
 void InitAFE1(void)
- {
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
+{
+	initAFE1_IIC();
 
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
