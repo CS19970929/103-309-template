@@ -1249,8 +1249,8 @@ void InitCan(void)
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag2)
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag1)
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag)
 	{
 		return;
 	}

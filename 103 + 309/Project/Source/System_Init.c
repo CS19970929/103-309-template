@@ -1,16 +1,13 @@
 #include "main.h"
 
 volatile union SYS_TIME g_st_SysTimeFlag;
+static volatile union SYS_TIME s_st_SysTimePending;
 struct CBC_ELEMENT CBC_Element;
 
-UINT8 g_u81msCnt = 0;
-UINT8 g_u810msClockCnt = 0;
-UINT8 g_u81msClockCnt = 0;
-
-UINT8 gu8_200msCnt = 0;
-UINT8 gu8_200msAccClock_Flag = 0;
-UINT8 gu8_200msAccClock_Flag2 = 0;
-UINT8 gu8_1000msAccClock_Flag = 0;
+static UINT8 s_u8Cnt50ms = 0;
+static UINT8 s_u8Cnt100ms = 0;
+static UINT8 s_u8Cnt200ms = 0;
+static UINT8 s_u8Cnt1000ms = 0;
 
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
@@ -54,43 +51,70 @@ void InitNVIC(void)
 }
 
 // 非PCLK1(最大36MHz)，所以为72MHz
-void InitTimer(void)
+static UINT16 Timer_GetPrescalerFor100kHz(void)
 {
-	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-	NVIC_InitTypeDef NVIC_InitStructure;
+	UINT32 div = SystemCoreClock / 100000U;
 
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); // 时钟3使能
-
-	// 定时器TIM3初始化
-	if (0 == System_ErrFlag.u8ErrFlag_HSE)
+	if (div == 0U)
 	{
-		// TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-		TIM_TimeBaseStructure.TIM_Prescaler = 80 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-		// TIM_TimeBaseStructure.TIM_Prescaler = 8000 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
+		div = 1U;
 	}
-	else
+	if (div > 0x10000U)
 	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
+		div = 0x10000U;
 	}
-	TIM_TimeBaseStructure.TIM_Period = 99;						// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
-	// TIM_TimeBaseStructure.TIM_Period = 1;						// 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
-	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// 设置时钟分割:TDTS = Tck_tim——时钟分频
-	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // TIM向上计数模式
-																// 我看了，向下计数是从自动装载值递减至0，向上计数是从0增加至装载值，也就是说在中断时间上没什么区别
-	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);				// 根据指定的参数初始化TIMx的时间基数单位
-	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);					// 清除更新中断请求位，据说这个能防止打开中断瞬间立刻进入中断函数
-	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);					// 使能指定的TIM3中断,允许更新中断
 
-	/*	TIM3 中断嵌套设计*/
-	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; // 先占优先级0级
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 从优先级3级
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
-	TIM_Cmd(TIM3, ENABLE); // 使能TIMx
+	return (UINT16)(div - 1U);
 }
 
+static void SysTime_ResetCounters(void)
+{
+	UINT32 primask = __get_PRIMASK();
+
+	__disable_irq();
+
+	g_st_SysTimeFlag.all = 0U;
+	s_st_SysTimePending.all = 0U;
+
+	s_u8Cnt50ms = 0U;
+	s_u8Cnt100ms = 0U;
+	s_u8Cnt200ms = 0U;
+	s_u8Cnt1000ms = 0U;
+
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
+}
+
+void InitTimer(void)
+{
+	TIM_TimeBaseInitTypeDef timer_init;
+	NVIC_InitTypeDef nvic_init;
+
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+	TIM_Cmd(TIM3, DISABLE);
+	TIM_ITConfig(TIM3, TIM_IT_Update, DISABLE);
+
+	timer_init.TIM_Prescaler = Timer_GetPrescalerFor100kHz();
+	timer_init.TIM_Period = 999U;
+	timer_init.TIM_ClockDivision = TIM_CKD_DIV1;
+	timer_init.TIM_CounterMode = TIM_CounterMode_Up;
+	timer_init.TIM_RepetitionCounter = 0x00;
+	TIM_TimeBaseInit(TIM3, &timer_init);
+	TIM_SetCounter(TIM3, 0U);
+	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
+
+	nvic_init.NVIC_IRQChannel = TIM3_IRQn;
+	nvic_init.NVIC_IRQChannelPreemptionPriority = 0;
+	nvic_init.NVIC_IRQChannelSubPriority = 3;
+	nvic_init.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&nvic_init);
+
+	SysTime_ResetCounters();
+	TIM_Cmd(TIM3, ENABLE);
+}
 /*
 HCLK即SYSCLK分频得来（在此未分频），即HCLK==SystemCoreClock
 SysTick时钟是HCLK8分频，即SysTick时钟频率==HCLK/8==SystemCoreClock/8
@@ -138,144 +162,53 @@ void __delay_ms(UINT16 nms)
 	SysTick->VAL = 0X00;					   // 清空计数器
 }
 
-void App_SysTime(void)
+void SysTime_LatchTaskFlags(void)
 {
-	static UINT8 s_u8Cnt1ms = 0;
+	UINT32 primask = __get_PRIMASK();
 
-	static UINT8 s_u8Cnt10ms = 0;
-	// static UINT8 s_u8Cnt20ms = 0;
-	static UINT8 s_u8Cnt50ms = 0;
-	static UINT8 s_u8Cnt100ms = 0;
+	__disable_irq();
+	g_st_SysTimeFlag.all = s_st_SysTimePending.all;
+	s_st_SysTimePending.all = 0U;
 
-	static UINT8 s_u8Cnt200ms1 = 0;
-	static UINT8 s_u8Cnt200ms2 = 4;
-	static UINT8 s_u8Cnt200ms3 = 8;
-	static UINT8 s_u8Cnt200ms4 = 12;
-	static UINT8 s_u8Cnt200ms5 = 16;
-
-	static UINT8 s_u8Cnt1000ms1 = 0;
-	static UINT8 s_u8Cnt1000ms2 = 33;
-	static UINT8 s_u8Cnt1000ms3 = 66;
-
-	g_st_SysTimeFlag.bits.b1Sys1msFlag = 0;
-	if (s_u8Cnt1ms != g_u81msClockCnt)
-	{ // 1ms定时标志
-		s_u8Cnt1ms = g_u81msClockCnt;
-		g_st_SysTimeFlag.bits.b1Sys1msFlag = 1;
-	}
-
-	g_st_SysTimeFlag.bits.b1Sys10msFlag1 = 0;
-	g_st_SysTimeFlag.bits.b1Sys10msFlag2 = 0;
-	g_st_SysTimeFlag.bits.b1Sys10msFlag3 = 0;
-	g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 0;
-	g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 0;
-	if (s_u8Cnt10ms != g_u810msClockCnt)
-	{ // 10ms定时标志
-		s_u8Cnt10ms = g_u810msClockCnt;
-		switch (g_u810msClockCnt)
-		{
-		case 0:
-			g_st_SysTimeFlag.bits.b1Sys10msFlag1 = 1;
-			// MCUO_DEBUG_LED2 = !MCUO_DEBUG_LED2;
-			break;
-
-		case 1:
-			s_u8Cnt50ms++;
-			g_st_SysTimeFlag.bits.b1Sys10msFlag2 = 1;
-			break;
-
-		case 2:
-			s_u8Cnt100ms++;
-			g_st_SysTimeFlag.bits.b1Sys10msFlag3 = 1;
-			break;
-
-		case 3:
-			s_u8Cnt200ms1++; // 本想用一个变量搞一个循环然后置位，发现有BUG，不行
-			s_u8Cnt200ms2++; // 会持续进来一个10ms，必须改变标志位让其不再进来
-			s_u8Cnt200ms3++;
-			s_u8Cnt200ms4++;
-			s_u8Cnt200ms5++;
-			g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 1;
-			break;
-
-		case 4:
-			s_u8Cnt1000ms1++;
-			s_u8Cnt1000ms2++;
-			s_u8Cnt1000ms3++;
-			g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 1;
-			break;
-
-		default:
-			break;
-		}
-	}
-
-	g_st_SysTimeFlag.bits.b1Sys50msFlag = 0;
-	if (s_u8Cnt50ms >= 5)
+	if (primask == 0U)
 	{
-		s_u8Cnt50ms = 0;
-		g_st_SysTimeFlag.bits.b1Sys50msFlag = 1; // 50ms定时标志
-	}
-
-	g_st_SysTimeFlag.bits.b1Sys100msFlag = 0;
-	if (s_u8Cnt100ms >= 10)
-	{
-		s_u8Cnt100ms = 0;
-		g_st_SysTimeFlag.bits.b1Sys100msFlag = 1; // 100ms定时标志
-	}
-
-	g_st_SysTimeFlag.bits.b1Sys200msFlag1 = 0;
-	g_st_SysTimeFlag.bits.b1Sys200msFlag2 = 0;
-	g_st_SysTimeFlag.bits.b1Sys200msFlag3 = 0;
-	g_st_SysTimeFlag.bits.b1Sys200msFlag4 = 0;
-	g_st_SysTimeFlag.bits.b1Sys200msFlag5 = 0;
-	if (s_u8Cnt200ms1 >= 20)
-	{
-		s_u8Cnt200ms1 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag1 = 1; // 200ms定时标志
-	}
-	if (s_u8Cnt200ms2 >= 20)
-	{
-		s_u8Cnt200ms2 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag2 = 1; // 200ms定时标志
-	}
-	if (s_u8Cnt200ms3 >= 20)
-	{
-		s_u8Cnt200ms3 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag3 = 1; // 200ms定时标志
-	}
-	if (s_u8Cnt200ms4 >= 20)
-	{
-		s_u8Cnt200ms4 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag4 = 1; // 200ms定时标志
-	}
-	if (s_u8Cnt200ms5 >= 20)
-	{
-		s_u8Cnt200ms5 = 0;
-		g_st_SysTimeFlag.bits.b1Sys200msFlag5 = 1; // 200ms定时标志
-	}
-
-	g_st_SysTimeFlag.bits.b1Sys1000msFlag1 = 0;
-	g_st_SysTimeFlag.bits.b1Sys1000msFlag2 = 0;
-	g_st_SysTimeFlag.bits.b1Sys1000msFlag3 = 0;
-	if (s_u8Cnt1000ms1 >= 100)
-	{
-		s_u8Cnt1000ms1 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag1 = 1; // 1000ms定时标志
-	}
-	if (s_u8Cnt1000ms2 >= 100)
-	{
-		s_u8Cnt1000ms2 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag2 = 1; // 1000ms定时标志
-	}
-	if (s_u8Cnt1000ms3 >= 100)
-	{
-		s_u8Cnt1000ms3 = 0;
-		g_st_SysTimeFlag.bits.b1Sys1000msFlag3 = 1; // 1000ms定时标志
-													// MCUO_DEBUG_LED2 = !MCUO_DEBUG_LED2;
+		__enable_irq();
 	}
 }
 
+UINT8 SysTime_HasPendingTaskFlags(void)
+{
+	return (s_st_SysTimePending.all != 0U) ? 1U : 0U;
+}
+
+static void SysTime_Post10msTick(void)
+{
+	s_st_SysTimePending.bits.b1Sys10msFlag = 1U;
+
+	if (++s_u8Cnt50ms >= 5U)
+	{
+		s_u8Cnt50ms = 0U;
+		s_st_SysTimePending.bits.b1Sys50msFlag = 1U;
+	}
+
+	if (++s_u8Cnt100ms >= 10U)
+	{
+		s_u8Cnt100ms = 0U;
+		s_st_SysTimePending.bits.b1Sys100msFlag = 1U;
+	}
+
+	if (++s_u8Cnt200ms >= 20U)
+	{
+		s_u8Cnt200ms = 0U;
+		s_st_SysTimePending.bits.b1Sys200msFlag = 1U;
+	}
+
+	if (++s_u8Cnt1000ms >= 100U)
+	{
+		s_u8Cnt1000ms = 0U;
+		s_st_SysTimePending.bits.b1Sys1000msFlag = 1U;
+	}
+}
 void IWDG_Feed(void)
 {
 	IWDG_ReloadCounter();
@@ -283,40 +216,10 @@ void IWDG_Feed(void)
 
 // 定时器3中断服务程序
 void TIM3_IRQHandler(void)
-{ // TIM3中断
-	static uint16_t cnt_1000ms = 0;
-	// gu8_200msAccClock_Flag = 1;
+{
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
-	{												// 检查TIM3更新中断发生与否
-		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // 清除TIMx更新中断标志
-		if ((++g_u81msCnt) >= 1)
-		{ // 1ms
-			g_u81msCnt = 0;
-			g_u81msClockCnt++;
-			gu8_200msCnt++;
-
-			if (g_u81msClockCnt >= 2)
-			{ // 2ms
-				g_u81msClockCnt = 0;
-				g_u810msClockCnt++;
-				if (g_u810msClockCnt >= 5)
-				{ // 10ms
-					g_u810msClockCnt = 0;
-					// App_WarnCtrl();
-				}
-			}
-
-			if (gu8_200msCnt >= 200)
-			{
-				gu8_200msCnt = 0;
-				gu8_200msAccClock_Flag = 1;
-				gu8_200msAccClock_Flag2 = 1;
-			}
-			if(++cnt_1000ms >= 1000)
-			{
-				cnt_1000ms = 0;
-				gu8_1000msAccClock_Flag = 1;
-			}
-		}
+	{
+		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+		SysTime_Post10msTick();
 	}
 }

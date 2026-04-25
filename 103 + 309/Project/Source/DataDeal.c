@@ -535,10 +535,9 @@ void test_Autocurrent_cycle(void)
 }
 // 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
 
-extern UINT8 gu8_200msAccClock_Flag2;
 // void App_AFEGet(void)
 // {
-// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 0 != Sci_IsAnyPortBusy())
+// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
 // 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 // 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2)
 // 	// if (0 == gu8_200msAccClock_Flag2)
@@ -704,7 +703,7 @@ void App_AFEGet(void)
 	// }
 	// gu8_200msAccClock_Flag = 0;
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 0 != Sci_IsAnyPortBusy())
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
 	{
 		return;
 	}

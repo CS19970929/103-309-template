@@ -56,30 +56,16 @@
 #define MCUI_ENI_DI1		PAin(9)		//I��1
 
 
-union SYS_TIME {			//TODO
-    UINT16 all;
-    struct StatusSysTimeFlagBit {
-        UINT8 b1Sys10msFlag1        :1;
-        UINT8 b1Sys10msFlag2        :1;
-        UINT8 b1Sys10msFlag3        :1;
-        UINT8 b1Sys10msFlag4        :1;
-		
-        UINT8 b1Sys10msFlag5        :1;
-		//UINT8 b1Sys20msFlag        	:1;
-		UINT8 b1Sys1msFlag        	:1;	
-		UINT8 b1Sys50msFlag        	:1;
-		UINT8 b1Sys100msFlag       	:1;
-
-		UINT8 b1Sys200msFlag1       :1;
-		UINT8 b1Sys200msFlag2       :1;
-		UINT8 b1Sys200msFlag3       :1;
-		UINT8 b1Sys200msFlag4       :1;
-		
-		UINT8 b1Sys200msFlag5       :1;
-		UINT8 b1Sys1000msFlag1      :1;
-		UINT8 b1Sys1000msFlag2      :1;
-		UINT8 b1Sys1000msFlag3      :1;
-     }bits;
+union SYS_TIME {
+	UINT16 all;
+	struct StatusSysTimeFlagBit {
+		UINT16 b1Sys10msFlag   : 1;
+		UINT16 b1Sys50msFlag   : 1;
+		UINT16 b1Sys100msFlag  : 1;
+		UINT16 b1Sys200msFlag  : 1;
+		UINT16 b1Sys1000msFlag : 1;
+		UINT16 reserved        : 11;
+	} bits;
 };
 
 
@@ -96,8 +82,6 @@ void IWDG_Feed(void);
 
 extern volatile union SYS_TIME g_st_SysTimeFlag;
 extern struct CBC_ELEMENT CBC_Element;
-extern UINT8 gu8_200msAccClock_Flag;
-extern UINT8 gu8_1000msAccClock_Flag;
 
 
 void InitDelay(void);
@@ -109,7 +93,8 @@ void InitIO(void);
 void InitNVIC(void);
 void Init_IWDG(void);
 void App_CBC(void);
-void App_SysTime(void);
+void SysTime_LatchTaskFlags(void);
+UINT8 SysTime_HasPendingTaskFlags(void);
 void App_ChgDet_Status(void);
 
 

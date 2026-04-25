@@ -121,7 +121,7 @@ void App_LogRecord(void)
 {
 	UINT8 temp;
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag3)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag)
 	{
 		return;
 	}

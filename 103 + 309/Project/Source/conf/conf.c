@@ -274,6 +274,7 @@ void IOstatus_Base(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
+    LedBar_SetSleep(1u);
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
@@ -309,6 +310,7 @@ void IOstatus_RTCMode(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
+    LedBar_SetSleep(1u);
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
@@ -390,6 +392,10 @@ void IORecover_DeepMode(void)
 void Sys_StopMode(void)
 {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    TIM_Cmd(TIM3, DISABLE);
+    TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();

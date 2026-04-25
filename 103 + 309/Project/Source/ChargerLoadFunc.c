@@ -187,7 +187,7 @@ void Init_ChargerLoad_Det(void)
 
 void App_ChargerLoad_Det(void)
 {
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag)
 	{
 		return;
 	}

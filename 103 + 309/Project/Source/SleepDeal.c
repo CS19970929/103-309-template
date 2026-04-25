@@ -772,12 +772,11 @@ void IsSleepStartUp(void)
 void App_SleepDeal(void)
 {
 	static uint8_t force_sleep_delay = 0;
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag1 && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
-	if (0 == gu8_1000msAccClock_Flag && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
+	if ((0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag) && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	{
 		return;
 	}
-	gu8_1000msAccClock_Flag = 0;
 
 	switch (Sleep_Status)
 	{

@@ -67,7 +67,7 @@ void Cool_Control(void)
 		return;
 	}
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag)
 	{
 		return;
 	}
@@ -206,7 +206,7 @@ void Heat_Control(void)
 		return;
 	}
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag)
 	{
 		return;
 	}

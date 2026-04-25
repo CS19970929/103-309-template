@@ -106,7 +106,7 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
-	if (0 == gu8_200msAccClock_Flag)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag)
 	{
 		return;
 	}
@@ -117,7 +117,6 @@ void App_SOC(void)
 	GetData_SOC();
 	SOC_IntEnhance_Ctrl();
 
-	gu8_200msAccClock_Flag = 0;
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{

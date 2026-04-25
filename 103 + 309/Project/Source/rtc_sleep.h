@@ -60,6 +60,7 @@ extern UINT16 gu8_WakeUp_Type;
 void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);
 void rtc_sleep(void);
+void cpu_frequency_conf(void);
 
 uint8_t get_rtc_soc(void);
 void set_rtc_soc(uint8_t _soc);

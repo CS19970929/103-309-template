@@ -81,9 +81,7 @@ static void MainLoop_EnterIdleSleep(void);
 
 static UINT8 MainLoop_HasPendingWork(void)
 {
-	if ((g_st_SysTimeFlag.all != 0U) ||
-		(gu8_200msAccClock_Flag != 0U) ||
-		(gu8_1000msAccClock_Flag != 0U))
+	if (SysTime_HasPendingTaskFlags() != 0U)
 	{
 		return 1U;
 	}
@@ -179,7 +177,7 @@ int main(void)
 		App_AFEGet();
 		App_Sci();
 #else
-		App_SysTime();
+		SysTime_LatchTaskFlags();
 		APP_LedBar();
 		// App_WarnCtrl();
 		charger_detect_and_keyLogi_200ms();

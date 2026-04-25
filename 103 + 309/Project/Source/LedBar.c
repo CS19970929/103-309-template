@@ -384,6 +384,83 @@ static uint8_t s_ledbar_scan_hold_tick = 0u;
 static LedBarScanState s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
 static uint8_t s_ledbar_last_595_value = 0xFFu;
 static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
+static uint8_t s_ledbar_scan_timer_initialized = 0u;
+static uint8_t s_ledbar_scan_timer_enabled = 0u;
+
+static UINT16 LedBar_GetTimerPrescalerFor100kHz(void)
+{
+    UINT32 div = SystemCoreClock / 100000U;
+
+    if (div == 0U)
+    {
+        div = 1U;
+    }
+    if (div > 0x10000U)
+    {
+        div = 0x10000U;
+    }
+
+    return (UINT16)(div - 1U);
+}
+
+static void LedBar_ScanTimerInit(void)
+{
+    TIM_TimeBaseInitTypeDef timer_init;
+    NVIC_InitTypeDef nvic_init;
+
+    if (s_ledbar_scan_timer_initialized != 0u)
+    {
+        return;
+    }
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+    TIM_Cmd(TIM4, DISABLE);
+
+    timer_init.TIM_Prescaler = LedBar_GetTimerPrescalerFor100kHz();
+    timer_init.TIM_Period = 99U;
+    timer_init.TIM_ClockDivision = TIM_CKD_DIV1;
+    timer_init.TIM_CounterMode = TIM_CounterMode_Up;
+    timer_init.TIM_RepetitionCounter = 0x00;
+    TIM_TimeBaseInit(TIM4, &timer_init);
+    TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+    TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
+
+    nvic_init.NVIC_IRQChannel = TIM4_IRQn;
+    nvic_init.NVIC_IRQChannelPreemptionPriority = 1;
+    nvic_init.NVIC_IRQChannelSubPriority = 3;
+    nvic_init.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic_init);
+
+    s_ledbar_scan_timer_initialized = 1u;
+}
+
+static void LedBar_ScanTimerSetEnabled(uint8_t enable)
+{
+    enable = (enable != 0u) ? 1u : 0u;
+
+    if (enable == 0u)
+    {
+        if (s_ledbar_scan_timer_initialized != 0u)
+        {
+            TIM_Cmd(TIM4, DISABLE);
+            TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
+            TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+            RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
+            s_ledbar_scan_timer_initialized = 0u;
+        }
+        s_ledbar_scan_timer_enabled = 0u;
+        return;
+    }
+
+    LedBar_ScanTimerInit();
+    if (s_ledbar_scan_timer_enabled == 0u)
+    {
+        TIM_SetCounter(TIM4, 0U);
+        TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+        TIM_Cmd(TIM4, ENABLE);
+        s_ledbar_scan_timer_enabled = 1u;
+    }
+}
 
 static uint8_t LedBar_Popcount32(uint32_t value)
 {
@@ -856,6 +933,7 @@ void LedBar_Init(void)
     LedBar_CommitBackFrameIfPending();
     LedBar_OutputOff();
     s_ledbar_initialized = 1u;
+    LedBar_ScanTimerSetEnabled(1u);
 }
 
 void LedBar_Clear(void)
@@ -888,8 +966,13 @@ void LedBar_SetSleep(uint8_t enable)
     LedBar_RebuildFrame();
     if (s_ledbar_sleep != 0u)
     {
+        LedBar_ScanTimerSetEnabled(0u);
         LedBar_CommitBackFrameIfPending();
         LedBar_OutputOff();
+    }
+    else
+    {
+        LedBar_ScanTimerSetEnabled(1u);
     }
 }
 
@@ -1087,6 +1170,15 @@ void LedBar_Scan1ms(void)
     }
 }
 
+void TIM4_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+        LedBar_Scan1ms();
+    }
+}
+
 void APP_LedBar(void)
 {
     uint8_t display_value;
@@ -1112,11 +1204,6 @@ void APP_LedBar(void)
     else if (s_ledbar_sleep != 0u)
     {
         LedBar_Wakeup();
-    }
-
-    if (g_st_SysTimeFlag.bits.b1Sys1msFlag != 0u)
-    {
-        LedBar_Scan1ms();
     }
 
     if (s_ledbar_test_single_segment_enable != 0u)

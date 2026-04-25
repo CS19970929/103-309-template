@@ -152,21 +152,8 @@ static bool isVol_cov(void)
 void cpu_frequency_conf(void)
 {
     SystemInit();
-
-    {
-        RCC_HSEConfig(RCC_HSE_ON);
-        while (RCC_GetFlagStatus(RCC_FLAG_HSERDY) == RESET)
-        {
-        }
-        RCC_PLLCmd(ENABLE);
-        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET)
-        {
-        }
-        RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
-        while (RCC_GetSYSCLKSource() != 0x08)
-        {
-        }
-    }
+    SystemCoreClockUpdate();
+    InitDelay();
 }
 
 bool isHaveCurrent(void)
@@ -1021,9 +1008,8 @@ static bool isErr_enterRTC(void)
 
 void rtc_sleep(void)
 {
-    if (!gu8_1000msAccClock_Flag)
+    if (g_st_SysTimeFlag.bits.b1Sys1000msFlag == 0U)
         return;
-    gu8_1000msAccClock_Flag = 0;
 
     BQ769x0_SleepMode_Ctrl();
 

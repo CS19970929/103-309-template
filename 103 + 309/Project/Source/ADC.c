@@ -108,32 +108,36 @@ void InitADC_TIMER(void)
 {
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
 	TIM_OCInitTypeDef TIM_OCInitStructure;
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
-	TIM_Cmd(TIM2, DISABLE); // 先停止TIM2时钟
-	if (0 == System_ErrFlag.u8ErrFlag_HSE)
-	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-	}
-	else
-	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-	}
-	TIM_TimeBaseStructure.TIM_Period = 999; // 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
+	UINT32 timer_div;
 
-	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // 向上计数
-	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;		// 时钟分频
-	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0x00;			// 溢出指定(+1)次数后产生中断
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+	TIM_Cmd(TIM2, DISABLE);
+
+	timer_div = SystemCoreClock / 100000U;
+	if (timer_div == 0U)
+	{
+		timer_div = 1U;
+	}
+	if (timer_div > 0x10000U)
+	{
+		timer_div = 0x10000U;
+	}
+
+	TIM_TimeBaseStructure.TIM_Prescaler = (UINT16)(timer_div - 1U);
+	TIM_TimeBaseStructure.TIM_Period = 999U;
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0x00;
 
 	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
 	TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-	TIM_OCInitStructure.TIM_Pulse = 1;
+	TIM_OCInitStructure.TIM_Pulse = 1U;
 	TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
 
 	TIM_OC2Init(TIM2, &TIM_OCInitStructure);
 	TIM_Cmd(TIM2, ENABLE);
 }
-
 void InitADC_ADC1(void)
 {
 	ADC_InitTypeDef ADC_InitStruct;
@@ -323,7 +327,7 @@ void InitADC(void)
 // 延时类型初始化是不需要return的
 void App_AnlogCal(void)
 {
-    if (0 == g_st_SysTimeFlag.bits.b1Sys1msFlag)
+    if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag)
     {
         return;
     }

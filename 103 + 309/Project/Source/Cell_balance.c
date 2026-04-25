@@ -364,7 +364,7 @@ void CellBalance_StateOFF(UINT8 OnOFF_Ctrl)
 
 void App_CellBalance(void)
 {
-	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag)
 	{
 		return;
 	}
