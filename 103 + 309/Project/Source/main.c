@@ -253,8 +253,9 @@ void InitDevice(void)
 	InitTimer();
 	log_w("init over");
 
-	// EnableLowPowerDebug();
+#ifdef _DEBUG_
 	DBGMCU_Config(DBGMCU_STOP, ENABLE);
+#endif
 
 #ifdef wdog_enable
 	Init_IWDG();

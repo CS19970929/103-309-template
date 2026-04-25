@@ -123,12 +123,23 @@ UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 	return T_sec;
 }
 
-UINT8 RTC_ClockConfig(void)
+static UINT8 RTC_ClockConfig(UINT8 need_full_init)
 {
 	__IO UINT16 StartUpCounter = 0, HSEStatus = 0;
 	INT8 result = 0;
 	PWR_BackupAccessCmd(ENABLE); // 允许访问RTC
-	BKP_DeInit();				 // 好像少了这句话导致各种wait函数卡死
+
+	if (!need_full_init)
+	{
+		RCC_RTCCLKCmd(ENABLE);
+		RTC_WaitForSynchro();
+		RTC_WaitForLastTask();
+		RTC_ITConfig(RTC_IT_SEC, ENABLE);
+		RTC_WaitForLastTask();
+		return 0;
+	}
+
+	BKP_DeInit();				 // 仅首次初始化 RTC 时重置备份域
 	RCC_LSEConfig(RCC_LSE_ON);	 // 使能外部LSE晶振，RCC_LSE_Bypass旁路的意思应该是使能这个LSE时钟，但是单片机不用，外围电路用?
 	do
 	{
@@ -167,6 +178,14 @@ UINT8 RTC_ClockConfig(void)
 	}
 
 	return result;
+}
+
+static void RTC_ClearAlarmPending(void)
+{
+	RTC_ClearITPendingBit(RTC_IT_ALR);
+	RTC_ClearFlag(RTC_FLAG_ALR);
+	RTC_WaitForLastTask();
+	EXTI_ClearITPendingBit(EXTI_Line17);
 }
 
 void RTC_TimeConfig(void)
@@ -218,6 +237,10 @@ void RTC_NVIC_Config(void)
 
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
+	/*
+	 * 当前通信参数中 OtherElement.u16Sleep_TimeRTC 实际承载 RTC 周期。
+	 * u16Sleep_RTC_WakeUpTime 仍保留在结构体内，避免影响既有 EEPROM/协议布局。
+	 */
 	UINT32 wake_min = (UINT32)OtherElement.u16Sleep_TimeRTC;
 	UINT32 wake_seconds;
 
@@ -258,27 +281,30 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 // RTC唤醒时间设置，
 void RTC_WKTimeConfig(void)
 {
-	PWR_BackupAccessCmd(ENABLE);														// 后备域解锁
-	// RTC_ITConfig(RTC_IT_SEC, DISABLE);													// 禁止实时时钟秒中断
-	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + 30); // 唤醒时间
+	PWR_BackupAccessCmd(ENABLE); // 后备域解锁
+	RTC_ITConfig(RTC_IT_ALR, DISABLE);
+	RTC_WaitForLastTask();
+	RTC_ClearAlarmPending();
 	RTC_SetAlarm(RTC_GetCounter() + RTC_GetWakeupPeriodSeconds()); // 配置值按分钟存储，这里换算成秒
-	// RTC_SetAlarm(RTC_GetCounter() + 3); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
 	RTC_WaitForLastTask();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE); // 打开闹钟中断
+	RTC_WaitForLastTask();
 }
 
 void Init_RTC(void)
 { // 使能PWR外设时钟，待机模式，RTC，看门狗
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
-	RTC_ClockConfig();														 // RTC时钟配置
+	UINT8 need_full_init;
 
-	if (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA)
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+
+	need_full_init = (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA) ? 1U : 0U;
+	RTC_ClockConfig(need_full_init); // RTC时钟配置
+
+	if (need_full_init)
 	{ // 读取备份里面的值是否被写过。
 		RTC_TimeConfig();
 		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
-		RTC_AlarmConfig();
 	}
 	else
 	{ // 以下这段话需要吗？
@@ -291,12 +317,12 @@ void Init_RTC(void)
 		{ // 这是啥
 			// printf("\r\n External Reset occurred....\n\r");
 		}
-		RTC_ClearFlag(RTC_FLAG_ALR); // Clear the RTC Alarm Flag
-		EXTI_ClearITPendingBit(EXTI_Line17);
 		RCC_ClearFlag();
 		// RTC_TimeShow();				//Display the RTC Time and Alarm，这个后面会用到
 		// RTC_AlarmShow();
 	}
+	RTC_ClearAlarmPending();
+	RTC_AlarmConfig();
 	RTC_NVIC_Config();
 }
 void App_RTC(void)
@@ -309,17 +335,37 @@ void App_RTC(void)
 	TimeDisplay = 0;
 }
 
-void RTCAlarm_IRQHandler(void)
+volatile bool is_rtc_wakekup = false;
+
+static void RTC_HandleAlarmWakeup(void)
 {
-	EXTI_ClearITPendingBit(EXTI_Line17); // 两个都要，不然会死机
-	// RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	// if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_RTC_VALUE))
-	// {
-	// 	// RTC唤醒，则写标志位
-	// }
+	UINT8 had_alarm = 0;
+
+	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
+	{
+		RTC_ClearITPendingBit(RTC_IT_ALR);
+		RTC_WaitForLastTask();
+		had_alarm = 1;
+	}
+
+	if (EXTI_GetITStatus(EXTI_Line17) != RESET)
+	{
+		EXTI_ClearITPendingBit(EXTI_Line17);
+		had_alarm = 1;
+	}
+
+	if (had_alarm)
+	{
+		sys_time.rtc_alm_cnt++;
+		is_rtc_wakekup = true;
+	}
 }
 
-volatile bool is_rtc_wakekup = false;
+void RTCAlarm_IRQHandler(void)
+{
+	RTC_HandleAlarmWakeup();
+}
+
 void RTC_IRQHandler(void)
 {
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
@@ -331,14 +377,8 @@ void RTC_IRQHandler(void)
 	}
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
-	{										 // 成了！CNM！我太难了老铁
-		RTC_ClearITPendingBit(RTC_IT_ALR); // 会运行到这个地方，这里也要把这个标志位去除，不然卡在这里无法唤醒
-		sys_time.rtc_alm_cnt++;
-		RTC_WaitForLastTask();
-
-		// RTC_SetAlarm(RTC_GetCounter() + 1);
-
-		is_rtc_wakekup = true;
+	{
+		RTC_HandleAlarmWakeup();
 	}
 }
 

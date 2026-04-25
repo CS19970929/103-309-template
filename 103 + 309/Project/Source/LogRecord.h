@@ -54,6 +54,7 @@ extern UINT32 su32_Interval_S_Tcnt ;
 
 
 void App_LogRecord(void);
+void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt);
 void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 t_u8BuffTemp[]);
 void Sci_WrReg_0x06_Reset_EventRecord(struct RS485MSG *s);
 UINT8 EEPROM_ResetData_EventRecord_ToDefault(void);
