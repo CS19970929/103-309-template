@@ -1,6 +1,24 @@
 #include "main.h"
 #include <string.h>
 
+#define LEDBAR_FRAME_PATTERN_COUNT 5u
+
+#ifndef LEDBAR_SOC_DISPLAY_SNAP_ENABLE
+#define LEDBAR_SOC_DISPLAY_SNAP_ENABLE 1u
+#endif
+
+#ifndef LEDBAR_SOC_DISPLAY_SNAP_WINDOW
+#define LEDBAR_SOC_DISPLAY_SNAP_WINDOW 1u
+#endif
+
+#ifndef LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA
+#define LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA 4u
+#endif
+
+#ifndef LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN
+#define LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1u
+#endif
+
 typedef struct
 {
     uint8_t low_pin;
@@ -11,6 +29,21 @@ typedef struct
 {
     uint32_t lit_mask;
 } LedBarPattern;
+
+typedef struct
+{
+    uint8_t patterns[LEDBAR_FRAME_PATTERN_COUNT];
+    uint8_t length;
+} LedBarFrameBuffer;
+
+typedef enum
+{
+    LEDBAR_SCAN_STATE_OFF_PRE = 0,
+    LEDBAR_SCAN_STATE_OUTPUT_TARGET,
+    LEDBAR_SCAN_STATE_HOLD_TARGET,
+    LEDBAR_SCAN_STATE_OFF_POST,
+    LEDBAR_SCAN_STATE_NEXT_ITEM
+} LedBarScanState;
 
 typedef enum
 {
@@ -43,7 +76,7 @@ typedef enum
 #define LEDBAR_DIGIT_BIT_F         (1u << 5)
 #define LEDBAR_DIGIT_BIT_G         (1u << 6)
 #define LEDBAR_PATTERN_MASK_MAX    30u
-#define LEDBAR_FRAME_PATTERN_COUNT 5u
+#define LEDBAR_SCAN_HOLD_TICKS     1u
 
 #define LEDBAR_595_GPIO_DATA  GPIO_LED595_DATA
 #define LEDBAR_595_PIN_DATA   PIN_LED595_DATA
@@ -306,13 +339,49 @@ static const uint8_t s_ledbar_soc_charge_patterns[101][5] =
     {2, 5, 25, 12, 0}, /* 100, extra=0 */
 };
 
+static const uint8_t s_ledbar_soc_extra_score[101] =
+{
+    1u, 3u, 3u, 3u, 3u, 3u, 2u, 3u, 1u, 2u,
+    2u, 5u, 4u, 3u, 4u, 3u, 3u, 4u, 2u, 2u,
+    3u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+    3u, 5u, 3u, 3u, 3u, 2u, 2u, 4u, 2u, 2u,
+    3u, 6u, 4u, 4u, 4u, 3u, 3u, 5u, 3u, 3u,
+    2u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
+    1u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
+    2u, 4u, 3u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+    1u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
+    2u, 4u, 3u, 2u, 2u, 1u, 1u, 3u, 1u, 1u,
+    1u
+};
+
+static const uint8_t s_ledbar_soc_charge_extra_score[101] =
+{
+    0u, 3u, 2u, 2u, 3u, 2u, 1u, 3u, 0u, 1u,
+    1u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 1u, 1u,
+    2u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+    2u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 2u, 2u,
+    2u, 5u, 4u, 3u, 4u, 2u, 2u, 4u, 2u, 2u,
+    1u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
+    0u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
+    1u, 3u, 2u, 2u, 2u, 2u, 2u, 2u, 1u, 1u,
+    0u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
+    1u, 3u, 3u, 2u, 2u, 1u, 1u, 2u, 1u, 1u,
+    0u
+};
+
 static volatile uint8_t s_ledbar_number = 0u;
 static volatile uint8_t s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
 static uint8_t s_ledbar_initialized = 0u;
 static uint8_t s_ledbar_force_blank = 0u;
-static uint8_t s_ledbar_frame_patterns[LEDBAR_FRAME_PATTERN_COUNT];
-static uint8_t s_ledbar_frame_length = 0u;
-static uint8_t s_ledbar_frame_index = 0u;
+static uint8_t s_ledbar_sleep = 0u;
+static uint8_t s_ledbar_test_single_segment_enable = 0u;
+static uint8_t s_ledbar_test_single_segment_id = 0u;
+static LedBarFrameBuffer s_ledbar_frame_front;
+static LedBarFrameBuffer s_ledbar_frame_back;
+static uint8_t s_ledbar_frame_pending = 0u;
+static uint8_t s_ledbar_scan_index = 0u;
+static uint8_t s_ledbar_scan_hold_tick = 0u;
+static LedBarScanState s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
 static uint8_t s_ledbar_last_595_value = 0xFFu;
 static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
 
@@ -457,14 +526,17 @@ static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
     return target_mask;
 }
 
-static void LedBar_CopyFramePatterns(const uint8_t *patterns)
+static void LedBar_ClearFrameBuffer(LedBarFrameBuffer *frame)
+{
+    memset(frame->patterns, 0, sizeof(frame->patterns));
+    frame->length = 0u;
+}
+
+static void LedBar_CopyFramePatternsToBuffer(LedBarFrameBuffer *frame, const uint8_t *patterns)
 {
     uint8_t index;
 
-    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
-    s_ledbar_frame_length = 0u;
-    s_ledbar_frame_index = 0u;
-
+    LedBar_ClearFrameBuffer(frame);
     for (index = 0u; index < LEDBAR_FRAME_PATTERN_COUNT; ++index)
     {
         if (patterns[index] == 0u)
@@ -472,8 +544,8 @@ static void LedBar_CopyFramePatterns(const uint8_t *patterns)
             break;
         }
 
-        s_ledbar_frame_patterns[s_ledbar_frame_length] = patterns[index];
-        s_ledbar_frame_length++;
+        frame->patterns[frame->length] = patterns[index];
+        frame->length++;
     }
 }
 
@@ -514,16 +586,14 @@ static uint8_t LedBar_FindBestPatternForRoute(uint8_t route_id, uint32_t target_
     return best_pattern;
 }
 
-static void LedBar_BuildGreedyFrame(uint32_t target_mask)
+static void LedBar_BuildGreedyFrameToBuffer(LedBarFrameBuffer *frame, uint32_t target_mask)
 {
     uint32_t covered_mask = 0u;
     uint32_t remaining_mask = target_mask;
 
-    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
-    s_ledbar_frame_length = 0u;
-    s_ledbar_frame_index = 0u;
+    LedBar_ClearFrameBuffer(frame);
 
-    while ((remaining_mask != 0u) && (s_ledbar_frame_length < LEDBAR_FRAME_PATTERN_COUNT))
+    while ((remaining_mask != 0u) && (frame->length < LEDBAR_FRAME_PATTERN_COUNT))
     {
         uint8_t pattern_mask;
         uint8_t best_pattern = 0u;
@@ -569,13 +639,13 @@ static void LedBar_BuildGreedyFrame(uint32_t target_mask)
             break;
         }
 
-        s_ledbar_frame_patterns[s_ledbar_frame_length] = best_pattern;
-        s_ledbar_frame_length++;
+        frame->patterns[frame->length] = best_pattern;
+        frame->length++;
         covered_mask |= (s_ledbar_patterns[best_pattern].lit_mask & target_mask);
         remaining_mask = target_mask & (~covered_mask);
     }
 
-    while ((remaining_mask != 0u) && (s_ledbar_frame_length < LEDBAR_FRAME_PATTERN_COUNT))
+    while ((remaining_mask != 0u) && (frame->length < LEDBAR_FRAME_PATTERN_COUNT))
     {
         uint8_t route_id;
         uint8_t fallback_pattern = 0u;
@@ -594,11 +664,119 @@ static void LedBar_BuildGreedyFrame(uint32_t target_mask)
             break;
         }
 
-        s_ledbar_frame_patterns[s_ledbar_frame_length] = fallback_pattern;
-        s_ledbar_frame_length++;
+        frame->patterns[frame->length] = fallback_pattern;
+        frame->length++;
         covered_mask |= (s_ledbar_patterns[fallback_pattern].lit_mask & target_mask);
         remaining_mask = target_mask & (~covered_mask);
     }
+}
+
+static void LedBar_ResetScanState(void)
+{
+    s_ledbar_scan_hold_tick = 0u;
+    s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
+    if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
+    {
+        s_ledbar_scan_index = 0u;
+    }
+}
+
+static void LedBar_CommitBackFrame(void)
+{
+    memcpy(&s_ledbar_frame_front, &s_ledbar_frame_back, sizeof(s_ledbar_frame_front));
+    s_ledbar_frame_pending = 0u;
+    LedBar_ResetScanState();
+}
+
+static void LedBar_CommitBackFrameIfPending(void)
+{
+    if (s_ledbar_frame_pending != 0u)
+    {
+        LedBar_CommitBackFrame();
+    }
+}
+
+static uint8_t LedBar_GetDisplayExtraScore(uint8_t value, uint8_t indicator_mask)
+{
+    if (value > 100u)
+    {
+        value = 100u;
+    }
+
+    if (indicator_mask == (LEDBAR_ICON_PERCENT_MASK | LEDBAR_ICON_CHARGE_MASK))
+    {
+        return s_ledbar_soc_charge_extra_score[value];
+    }
+
+    if (indicator_mask == LEDBAR_ICON_PERCENT_MASK)
+    {
+        return s_ledbar_soc_extra_score[value];
+    }
+
+    return 0u;
+}
+
+static uint8_t LedBar_SelectDisplayValue(uint8_t value, uint8_t indicator_mask)
+{
+#if LEDBAR_SOC_DISPLAY_SNAP_ENABLE
+    /* Only move severe ghosting values by a small range; keep normal values exact. */
+    uint8_t best_value = value;
+    uint8_t best_extra;
+    uint8_t exact_extra;
+    uint8_t delta;
+
+    if ((indicator_mask != LEDBAR_ICON_PERCENT_MASK) &&
+        (indicator_mask != (LEDBAR_ICON_PERCENT_MASK | LEDBAR_ICON_CHARGE_MASK)))
+    {
+        return value;
+    }
+
+    if ((value < 10u) || (value >= 100u))
+    {
+        return value;
+    }
+
+    exact_extra = LedBar_GetDisplayExtraScore(value, indicator_mask);
+    if (exact_extra < LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA)
+    {
+        return value;
+    }
+
+    best_extra = exact_extra;
+    for (delta = 1u; delta <= LEDBAR_SOC_DISPLAY_SNAP_WINDOW; ++delta)
+    {
+        if (value >= delta)
+        {
+            uint8_t candidate = (uint8_t)(value - delta);
+            uint8_t candidate_extra = LedBar_GetDisplayExtraScore(candidate, indicator_mask);
+
+            if (((candidate_extra + LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN) <= exact_extra) &&
+                (candidate_extra < best_extra))
+            {
+                best_extra = candidate_extra;
+                best_value = candidate;
+            }
+        }
+
+        if ((uint8_t)(value + delta) <= 100u)
+        {
+            uint8_t candidate = (uint8_t)(value + delta);
+            uint8_t candidate_extra = LedBar_GetDisplayExtraScore(candidate, indicator_mask);
+
+            if (((candidate_extra + LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN) <= exact_extra) &&
+                (candidate_extra < best_extra))
+            {
+                best_extra = candidate_extra;
+                best_value = candidate;
+            }
+        }
+    }
+
+    return best_value;
+#else
+    (void)indicator_mask;
+    return value;
+#endif
 }
 
 static void LedBar_RebuildFrame(void)
@@ -611,27 +789,45 @@ static void LedBar_RebuildFrame(void)
         value = 100u;
     }
 
-    if (s_ledbar_force_blank != 0u)
+    if ((s_ledbar_force_blank != 0u) || (s_ledbar_sleep != 0u))
     {
-        memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
-        s_ledbar_frame_length = 0u;
-        s_ledbar_frame_index = 0u;
+        LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
+        s_ledbar_frame_pending = 1u;
         return;
     }
 
+    if (s_ledbar_test_single_segment_enable != 0u)
+    {
+        uint8_t route_id = (uint8_t)(s_ledbar_test_single_segment_id % (uint8_t)LEDBAR_ROUTE_COUNT);
+        uint8_t pattern = LedBar_FindBestPatternForRoute(route_id, (1UL << route_id));
+        LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
+        if (pattern != 0u)
+        {
+            s_ledbar_frame_back.patterns[0] = pattern;
+            s_ledbar_frame_back.length = 1u;
+        }
+        s_ledbar_frame_pending = 1u;
+        return;
+    }
+
+    value = LedBar_SelectDisplayValue(value, indicator_mask);
+
     if (indicator_mask == LEDBAR_ICON_PERCENT_MASK)
     {
-        LedBar_CopyFramePatterns(s_ledbar_soc_patterns[value]);
+        LedBar_CopyFramePatternsToBuffer(&s_ledbar_frame_back, s_ledbar_soc_patterns[value]);
+        s_ledbar_frame_pending = 1u;
         return;
     }
 
     if (indicator_mask == (LEDBAR_ICON_PERCENT_MASK | LEDBAR_ICON_CHARGE_MASK))
     {
-        LedBar_CopyFramePatterns(s_ledbar_soc_charge_patterns[value]);
+        LedBar_CopyFramePatternsToBuffer(&s_ledbar_frame_back, s_ledbar_soc_charge_patterns[value]);
+        s_ledbar_frame_pending = 1u;
         return;
     }
 
-    LedBar_BuildGreedyFrame(LedBar_BuildTargetMask(value, indicator_mask));
+    LedBar_BuildGreedyFrameToBuffer(&s_ledbar_frame_back, LedBar_BuildTargetMask(value, indicator_mask));
+    s_ledbar_frame_pending = 1u;
 }
 
 void LedBar_Init(void)
@@ -645,9 +841,19 @@ void LedBar_Init(void)
     s_ledbar_number = 0u;
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     s_ledbar_force_blank = 0u;
+    s_ledbar_sleep = 0u;
+    s_ledbar_test_single_segment_enable = 0u;
+    s_ledbar_test_single_segment_id = 0u;
+    LedBar_ClearFrameBuffer(&s_ledbar_frame_front);
+    LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
+    s_ledbar_frame_pending = 0u;
+    s_ledbar_scan_index = 0u;
+    s_ledbar_scan_hold_tick = 0u;
+    s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
     s_ledbar_last_595_value = 0xFFu;
     LedBar_Command = LED_BAR_NORMAL;
     LedBar_RebuildFrame();
+    LedBar_CommitBackFrameIfPending();
     LedBar_OutputOff();
     s_ledbar_initialized = 1u;
 }
@@ -660,10 +866,81 @@ void LedBar_Clear(void)
     }
 
     s_ledbar_force_blank = 1u;
-    memset(s_ledbar_frame_patterns, 0, sizeof(s_ledbar_frame_patterns));
-    s_ledbar_frame_length = 0u;
-    s_ledbar_frame_index = 0u;
+    LedBar_RebuildFrame();
+    LedBar_CommitBackFrameIfPending();
     LedBar_OutputOff();
+}
+
+void LedBar_SetSleep(uint8_t enable)
+{
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
+    enable = (enable != 0u) ? 1u : 0u;
+    if (s_ledbar_sleep == enable)
+    {
+        return;
+    }
+
+    s_ledbar_sleep = enable;
+    LedBar_RebuildFrame();
+    if (s_ledbar_sleep != 0u)
+    {
+        LedBar_CommitBackFrameIfPending();
+        LedBar_OutputOff();
+    }
+}
+
+void LedBar_Wakeup(void)
+{
+    LedBar_SetSleep(0u);
+}
+
+void LedBar_EnableSingleSegmentTest(uint8_t enable)
+{
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
+    enable = (enable != 0u) ? 1u : 0u;
+    if (s_ledbar_test_single_segment_enable == enable)
+    {
+        return;
+    }
+
+    s_ledbar_test_single_segment_enable = enable;
+    if (enable == 0u)
+    {
+        s_ledbar_test_single_segment_id = 0u;
+    }
+    s_ledbar_force_blank = 0u;
+    LedBar_RebuildFrame();
+}
+
+void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
+{
+    if (s_ledbar_initialized == 0u)
+    {
+        LedBar_Init();
+    }
+
+    if (segment_id > LEDBAR_SINGLE_SEG_ID_MAX)
+    {
+        segment_id = LEDBAR_SINGLE_SEG_ID_MAX;
+    }
+    if (s_ledbar_test_single_segment_id == segment_id)
+    {
+        return;
+    }
+
+    s_ledbar_test_single_segment_id = segment_id;
+    if (s_ledbar_test_single_segment_enable != 0u)
+    {
+        LedBar_RebuildFrame();
+    }
 }
 
 void LedBar_SetNumber(uint8_t value)
@@ -678,6 +955,11 @@ void LedBar_SetNumber(uint8_t value)
         value = 100u;
     }
 
+    if ((s_ledbar_number == value) && (s_ledbar_force_blank == 0u))
+    {
+        return;
+    }
+
     s_ledbar_number = value;
     s_ledbar_force_blank = 0u;
     LedBar_RebuildFrame();
@@ -690,27 +972,41 @@ void LedBar_SetIndicators(uint8_t indicator_mask)
         LedBar_Init();
     }
 
-    s_ledbar_indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
+    indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
+    if ((s_ledbar_indicator_mask == indicator_mask) && (s_ledbar_force_blank == 0u))
+    {
+        return;
+    }
+
+    s_ledbar_indicator_mask = indicator_mask;
     s_ledbar_force_blank = 0u;
     LedBar_RebuildFrame();
 }
 
 void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable)
 {
+    uint8_t old_indicator_mask;
+
     if (s_ledbar_initialized == 0u)
     {
         LedBar_Init();
     }
 
     indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
+    old_indicator_mask = s_ledbar_indicator_mask;
 
     if (enable != 0u)
     {
-        s_ledbar_indicator_mask |= indicator_mask;
+        s_ledbar_indicator_mask = (uint8_t)(s_ledbar_indicator_mask | indicator_mask);
     }
     else
     {
-        s_ledbar_indicator_mask &= (uint8_t)(~indicator_mask);
+        s_ledbar_indicator_mask = (uint8_t)(s_ledbar_indicator_mask & (uint8_t)(~indicator_mask));
+    }
+
+    if ((s_ledbar_indicator_mask == old_indicator_mask) && (s_ledbar_force_blank == 0u))
+    {
+        return;
     }
 
     s_ledbar_force_blank = 0u;
@@ -724,17 +1020,70 @@ void LedBar_Scan1ms(void)
         LedBar_Init();
     }
 
-    if (s_ledbar_frame_length == 0u)
+    if (s_ledbar_sleep != 0u)
     {
         LedBar_OutputOff();
+        LedBar_ResetScanState();
         return;
     }
 
-    LedBar_OutputPattern(s_ledbar_frame_patterns[s_ledbar_frame_index]);
-    s_ledbar_frame_index++;
-    if (s_ledbar_frame_index >= s_ledbar_frame_length)
+    if (s_ledbar_frame_front.length == 0u)
     {
-        s_ledbar_frame_index = 0u;
+        LedBar_CommitBackFrameIfPending();
+        if (s_ledbar_frame_front.length == 0u)
+        {
+            LedBar_OutputOff();
+            LedBar_ResetScanState();
+            return;
+        }
+    }
+
+    switch (s_ledbar_scan_state)
+    {
+    case LEDBAR_SCAN_STATE_OFF_PRE:
+        LedBar_OutputOff();
+        s_ledbar_scan_state = LEDBAR_SCAN_STATE_OUTPUT_TARGET;
+        break;
+
+    case LEDBAR_SCAN_STATE_OUTPUT_TARGET:
+        if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
+        {
+            s_ledbar_scan_index = 0u;
+        }
+        LedBar_OutputPattern(s_ledbar_frame_front.patterns[s_ledbar_scan_index]);
+        s_ledbar_scan_hold_tick = 0u;
+        s_ledbar_scan_state = LEDBAR_SCAN_STATE_HOLD_TARGET;
+        break;
+
+    case LEDBAR_SCAN_STATE_HOLD_TARGET:
+        s_ledbar_scan_hold_tick++;
+        if (s_ledbar_scan_hold_tick >= LEDBAR_SCAN_HOLD_TICKS)
+        {
+            s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_POST;
+        }
+        break;
+
+    case LEDBAR_SCAN_STATE_OFF_POST:
+        LedBar_OutputOff();
+        s_ledbar_scan_state = LEDBAR_SCAN_STATE_NEXT_ITEM;
+        break;
+
+    case LEDBAR_SCAN_STATE_NEXT_ITEM:
+    default:
+        LedBar_CommitBackFrameIfPending();
+        if (s_ledbar_frame_front.length == 0u)
+        {
+            LedBar_ResetScanState();
+            break;
+        }
+
+        s_ledbar_scan_index++;
+        if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
+        {
+            s_ledbar_scan_index = 0u;
+        }
+        s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
+        break;
     }
 }
 
@@ -751,13 +1100,29 @@ void APP_LedBar(void)
     if (SystemStatus.bits.b1StartUpBMS != 0u)
     {
         LedBar_Command = LED_BAR_STARTUP;
-        LedBar_OutputOff();
+        LedBar_SetSleep(1u);
         return;
+    }
+
+    if (Sleep_Mode.bits.b1_ToSleepFlag != 0u)
+    {
+        LedBar_SetSleep(1u);
+        return;
+    }
+    else if (s_ledbar_sleep != 0u)
+    {
+        LedBar_Wakeup();
     }
 
     if (g_st_SysTimeFlag.bits.b1Sys1msFlag != 0u)
     {
         LedBar_Scan1ms();
+    }
+
+    if (s_ledbar_test_single_segment_enable != 0u)
+    {
+        LedBar_Command = LED_BAR_NORMAL;
+        return;
     }
 
     if (g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u)
@@ -792,8 +1157,13 @@ void APP_LedBar(void)
         LedBar_Command = LED_BAR_FAULT;
     }
 
-    s_ledbar_number = display_value;
-    s_ledbar_indicator_mask = indicator_mask;
-    s_ledbar_force_blank = 0u;
-    LedBar_RebuildFrame();
+    if ((s_ledbar_number != display_value) ||
+        (s_ledbar_indicator_mask != indicator_mask) ||
+        (s_ledbar_force_blank != 0u))
+    {
+        s_ledbar_number = display_value;
+        s_ledbar_indicator_mask = indicator_mask;
+        s_ledbar_force_blank = 0u;
+        LedBar_RebuildFrame();
+    }
 }
