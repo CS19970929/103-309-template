@@ -8,18 +8,18 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x1445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x2445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
 
 #define T3MAX         0
 #define T3            1
 
-#define FD_BMS_TYPE   C11_AND_C11pro
+// #define FD_BMS_TYPE   C11_AND_C11pro
 
 #define BAT_MASTER  (0)    //20A
 #define BAT_SLAVE   (1)    //40A
 
-// #define BAT_TYPE     BAT_SLAVE
-#define BAT_TYPE     BAT_MASTER
+#define BAT_TYPE     BAT_SLAVE
+// #define BAT_TYPE     BAT_MASTER
 
 #define FD_YEAR     26
 #define FD_MONTH     4
@@ -28,7 +28,7 @@
 
 
 
-#define  wdog_enable
+// #define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
@@ -38,6 +38,7 @@
 // #define _SECOND_CURR_PROTECT_FUNC_
 
 #define __VIRTURE_CURRENT__
+
 /* Enable only for destructive rear-64KB application storage test. */
 // #define FLASH64K_APP_QUICK_TEST_ENABLE
 #define FLASH64K_APP_QUICK_TEST_CYCLES 96U

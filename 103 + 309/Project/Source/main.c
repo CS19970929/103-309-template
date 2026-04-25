@@ -1,7 +1,7 @@
 #include "main.h"
 #include "Flash64KAppTest.h"
 
-UINT8 SeriesNum = 16;
+UINT8 SeriesNum = 7;
 
 void IOstatus_RTCMode_test(void)
 {
@@ -181,8 +181,8 @@ int main(void)
 		SysTime_LatchTaskFlags();
 		APP_LedBar();
 		// App_WarnCtrl();
-		charger_detect_and_keyLogi_200ms();
 		App_AFEGet();
+		//new_todo_logi();
 
 		App_Sci();
 		App_AnlogCal();
@@ -190,7 +190,7 @@ int main(void)
 		// App_CellBalance();
 		App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		App_LowPowerProcess();
+		// App_LowPowerProcess();
 		App_SOC();
 
 #ifdef __FUNC__HEAT__

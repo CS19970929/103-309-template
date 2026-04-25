@@ -9,10 +9,10 @@
  * 2. Enable only the reset switches that must overwrite field parameters.
  * 3. Increase UPGRADE_PARAM_POLICY_VERSION before building the package.
  */
-#define UPGRADE_PARAM_POLICY_ENABLE        1
+#define UPGRADE_PARAM_POLICY_ENABLE        0
 #define UPGRADE_PARAM_POLICY_VERSION       0x0001
 
-#define UPGRADE_PARAM_RESET_AFE            0
+#define UPGRADE_PARAM_RESET_AFE            1
 #define UPGRADE_PARAM_RESET_PROTECT        0
 #define UPGRADE_PARAM_RESET_SOC_TABLE      0
 #define UPGRADE_PARAM_RESET_SOC_CONFIG     0
