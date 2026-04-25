@@ -55,7 +55,8 @@ void Refresh_Parameters(void)
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
-	temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
+	// temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
+	temp = (4160 + 10) / 20;
 	if (temp > 0xFF)
 	{
 		temp = 0xFF;
@@ -89,7 +90,12 @@ void Refresh_Parameters(void)
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, AFE_OCCT_OCD2T);
 
-	InitShortCur();
+	// InitShortCur();
+	temp = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = Choose_Right_Value(temp, AFE_SCT);
+	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE; // 当前对应多少mv
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, AFE_SCV);
+
 	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;
 	AFE_TEMPERATURE[1] = AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue / 10;
 	AFE_TEMPERATURE[2] = AFE_Parameters_RS485_Struction.u16TchgUTp.curValue / 10;

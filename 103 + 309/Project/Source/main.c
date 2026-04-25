@@ -1,7 +1,7 @@
 #include "main.h"
 #include "Flash64KAppTest.h"
 
-UINT8 SeriesNum = 7;
+UINT8 SeriesNum = 10;
 
 void IOstatus_RTCMode_test(void)
 {
@@ -190,7 +190,7 @@ int main(void)
 		// App_CellBalance();
 		App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		// App_LowPowerProcess();
+		App_LowPowerProcess();
 		App_SOC();
 		StorageFlash_AppUseTest_Task();
 
@@ -205,7 +205,7 @@ int main(void)
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif
-		MainLoop_EnterIdleSleep();
+		// MainLoop_EnterIdleSleep();
 
 #endif
 	}
@@ -273,7 +273,7 @@ void InitVar(void)
 	SystemStatus.bits.b1Status_ToSleep = 1;
 
 	SystemStatus.bits.b4Status_ProjectVer = 1;
-	// LogRecord_Flag.bits.Log_StartUp = 1;
+	LogRecord_Flag.bits.Log_StartUp = 1;
 }
 
 void InitSystemWakeUp(void)

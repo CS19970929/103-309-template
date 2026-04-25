@@ -48,6 +48,8 @@ void charger_detect_and_keyLogi_200ms(void)
 		state = 0;
 		break;
 	}
+
+	App_DI1_Switch();
 }
 
 void Init_Registers(UINT8 num)
@@ -572,8 +574,10 @@ void close_ctlc(void)
 void new_todo_logi(void)
 {
 	static uint8_t mos_state = 0;
+
 	charger_detect_and_keyLogi_200ms();
 
+#if 0
 	// todo 什么电平唤醒？
 	if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
 	{
@@ -689,6 +693,7 @@ void new_todo_logi(void)
 	}
 
 	// 74hc595 控制5pin 18 seg led ,待完善spi驱动、配置
+#endif
 }
 
 void App_AFEGet(void)
@@ -715,4 +720,5 @@ void App_AFEGet(void)
 
 	App_SH367309();
 	// App_MOS_Relay_Ctrl();
+	new_todo_logi();
 }
