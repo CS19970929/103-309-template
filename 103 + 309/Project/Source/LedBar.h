@@ -18,6 +18,7 @@ typedef enum _LEDBAR_COMMAND
 #define LEDBAR_ICON_PERCENT_MASK (1u << 1)
 #define LEDBAR_SINGLE_SEG_ID_MIN 0u
 #define LEDBAR_SINGLE_SEG_ID_MAX 17u
+#define LEDBAR_SOC_DISPLAY_10MS  500u
 
 void LedBar_Init(void);
 void LedBar_Scan1ms(void);
@@ -29,6 +30,10 @@ void LedBar_SetSleep(uint8_t enable);
 void LedBar_Wakeup(void);
 void LedBar_EnableSingleSegmentTest(uint8_t enable);
 void LedBar_SetSingleSegmentIndex(uint8_t segment_id);
+void LedBar_SaveSleepSoc(void);
+uint8_t LedBar_LoadSleepSoc(void);
+void LedBar_ShowSleepSocPreview(void);
+void LedBar_PrepareForStop(void);
 void APP_LedBar(void);
 
 #endif

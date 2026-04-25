@@ -11,7 +11,8 @@ uint8_t reset_sleep_state = 0;
 
 static UINT8 IsChargerWakeupActive(void)
 {
-	return (UINT8)GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN);
+	// return (UINT8)GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN);
+	return 0;
 }
 
 static UINT8 IsKeyPressed(void)
@@ -23,39 +24,67 @@ static UINT8 IsKeyPressed(void)
 static UINT8 IsSleepWakeupValid(void)
 {
 	UINT16 hold_cnt = 0;
+	UINT16 display_cnt = 0;
 
-	// PA0��绽�ѱ���������Ч
 	if (IsChargerWakeupActive())
 	{
 		return 1;
 	}
 
-	if (!IsKeyPressed())
+	while (1)
 	{
-		return 0;
-	}
-
-	while (IsKeyPressed())
-	{
-		if (IsChargerWakeupActive())
+		if (!IsKeyPressed())
 		{
-			return 1;
+			LedBar_PrepareForStop();
+			return 0;
 		}
 
-		__delay_ms(10);
-		if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
+		LedBar_ShowSleepSocPreview();
+		hold_cnt = 0;
+		while (IsKeyPressed())
 		{
-			return 1;
+			if (IsChargerWakeupActive())
+			{
+				return 1;
+			}
+
+			__delay_ms(10);
+			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
+			{
+				return 1;
+			}
+		}
+
+		display_cnt = 0;
+		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
+		{
+			if (IsChargerWakeupActive())
+			{
+				return 1;
+			}
+			if (IsKeyPressed())
+			{
+				break;
+			}
+
+			__delay_ms(10);
+			display_cnt++;
+		}
+
+		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
+		{
+			LedBar_PrepareForStop();
+			return 0;
 		}
 	}
-
-	return 0;
 }
 
 void SleepDeal_Continue(void)
 {
 	UINT8 u8FlashWriteOK_flag = 0;
 	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
+
+	LedBar_SaveSleepSoc();
 
 	if (Sleep_Mode.bits.b1TestSleep)
 	{
