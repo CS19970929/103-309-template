@@ -7,6 +7,7 @@ uint32_t JumpAddress;
 
 #define FLASH_STORAGE_MAGIC_SOC ((UINT32)0x534F4331)
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
+#define FLASH_STORAGE_MAGIC_RW_PARAM ((UINT32)0x52575031)
 #define FLASH_STORAGE_MAGIC_LOG ((UINT32)0x4C4F4731)
 #define FLASH_STORAGE_VERSION   ((UINT16)0x0001)
 #define FLASH_SIZE_REG_ADDR     ((UINT32)0x1FFFF7E0)
@@ -638,6 +639,35 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 	return result;
 }
 
+UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
+{
+	if (data == 0)
+	{
+		return 0;
+	}
+
+	return StorageFlash_LoadPair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
+								 FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
+								 FLASH_STORAGE_MAGIC_RW_PARAM,
+								 (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
+								 (UINT8 *)data);
+}
+
+UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
+{
+	if (data == 0)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0;
+	}
+
+	return StorageFlash_SavePair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
+								 FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
+								 FLASH_STORAGE_MAGIC_RW_PARAM,
+								 (const UINT8 *)data,
+								 (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA));
+}
+
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
 {
 	STORAGE_FLASH_LOG_DATA data;
@@ -704,10 +734,14 @@ void StorageFlash_PrintBootCheck(void)
 	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
 	UINT8 afe_valid_a;
 	UINT8 afe_valid_b;
+	UINT8 rw_valid_a;
+	UINT8 rw_valid_b;
 	UINT8 soc_valid_a;
 	UINT8 soc_valid_b;
 	UINT32 afe_seq_a = 0;
 	UINT32 afe_seq_b = 0;
+	UINT32 rw_seq_a = 0;
+	UINT32 rw_seq_b = 0;
 	UINT32 soc_seq_a = 0;
 	UINT32 soc_seq_b = 0;
 	UINT32 soc_next_a = FLASH_ADDR_STORAGE_SOC_SLOT_A;
@@ -736,6 +770,17 @@ void StorageFlash_PrintBootCheck(void)
 										0,
 										&afe_seq_b);
 
+	rw_valid_a = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
+									   FLASH_STORAGE_MAGIC_RW_PARAM,
+									   (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
+									   0,
+									   &rw_seq_a);
+	rw_valid_b = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
+									   FLASH_STORAGE_MAGIC_RW_PARAM,
+									   (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
+									   0,
+									   &rw_seq_b);
+
 	soc_valid_a = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 											   FLASH_STORAGE_MAGIC_SOC,
 											   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
@@ -755,6 +800,12 @@ void StorageFlash_PrintBootCheck(void)
 		   afe_valid_b,
 		   (unsigned long)afe_seq_b,
 		   StorageFlash_SelectLabel(afe_valid_a, afe_seq_a, afe_valid_b, afe_seq_b));
+	printf("[FLASH_BOOT] RW_PARAM A=%u seq=%lu B=%u seq=%lu selected=%c\r\n",
+		   rw_valid_a,
+		   (unsigned long)rw_seq_a,
+		   rw_valid_b,
+		   (unsigned long)rw_seq_b,
+		   StorageFlash_SelectLabel(rw_valid_a, rw_seq_a, rw_valid_b, rw_seq_b));
 	printf("[FLASH_BOOT] SOC A=%u seq=%lu next=0x%04lX B=%u seq=%lu next=0x%04lX selected=%c\r\n",
 		   soc_valid_a,
 		   (unsigned long)soc_seq_a,

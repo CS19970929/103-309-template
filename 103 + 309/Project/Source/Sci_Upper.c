@@ -140,7 +140,8 @@ void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s);
-void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s);
+void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s);
+void Sci_WrRegs_0x10_HeatCoolElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
 
@@ -304,6 +305,130 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	}
 }
 
+static void Sci_SetWrError(struct RS485MSG *s, UINT8 error)
+{
+	s->AckType = RS485_ACK_NEG;
+	s->ErrorType = error;
+}
+
+static UINT16 Sci_GetWrRegNum(const struct RS485MSG *s)
+{
+	return (UINT16)(s->u16Buffer[5] + (s->u16Buffer[4] << 8));
+}
+
+static UINT16 Sci_GetWrValue(const struct RS485MSG *s, UINT16 index)
+{
+	return (UINT16)(s->u16Buffer[2 * index + 8] + (s->u16Buffer[2 * index + 7] << 8));
+}
+
+static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
+{
+	return (UINT8)(s->u16Buffer[6] == (UINT8)(reg_count << 1));
+}
+
+static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total)
+{
+	if ((count == 0) || (offset >= total))
+	{
+		return 0;
+	}
+	return (UINT8)(count <= (UINT16)(total - offset));
+}
+
+static UINT8 Sci_RangeOverlaps(UINT16 start, UINT16 count, UINT16 block_start, UINT16 block_count)
+{
+	UINT16 end = (UINT16)(start + count);
+	UINT16 block_end = (UINT16)(block_start + block_count);
+
+	return (UINT8)((start < block_end) && (block_start < end));
+}
+
+static void Sci_CopyWords(UINT16 *dst, const UINT16 *src, UINT16 count)
+{
+	UINT16 i;
+
+	for (i = 0; i < count; ++i)
+	{
+		dst[i] = src[i];
+	}
+}
+
+static UINT8 Sci_WrValuesInRange(const struct RS485MSG *s,
+								 UINT16 offset,
+								 UINT16 count,
+								 const UINT16 *min_values,
+								 const UINT16 *max_values)
+{
+	UINT16 i;
+	UINT16 value;
+
+	for (i = 0; i < count; ++i)
+	{
+		value = Sci_GetWrValue(s, i);
+		if ((value < min_values[offset + i]) || (value > max_values[offset + i]))
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static void Sci_WriteWordsFromRequest(struct RS485MSG *s, UINT16 *dst, UINT16 offset, UINT16 count)
+{
+	UINT16 i;
+
+	for (i = 0; i < count; ++i)
+	{
+		dst[offset + i] = Sci_GetWrValue(s, i);
+	}
+}
+
+static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
+{
+	if (Sci_RangeOverlaps(offset,
+						count,
+						0,
+						(UINT16)(RS485_CMD_ADDR_TCHG_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST)))
+	{
+		InitData_SOC();
+	}
+}
+
+static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
+{
+	if (Sci_RangeOverlaps(offset, count, 0, 8))
+	{
+#if AFE_TYPE == bq76xx_afe
+#elif AFE_TYPE == sh36xx
+		AFE_PARAM_WRITE_Flag = 1;
+#else
+#error "error!!!"
+#endif
+	}
+
+	if (Sci_RangeOverlaps(offset, count, 8, 8) ||
+		Sci_RangeOverlaps(offset, count, 28, 4))
+	{
+		AFE_PARAM_WRITE_Flag = 1;
+	}
+
+	if (Sci_RangeOverlaps(offset, count, 24, 4))
+	{
+		InitData_SOC();
+		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
+	}
+
+	if (Sci_RangeOverlaps(offset, count, 28, 4))
+	{
+		SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
+		if (OtherElement.u16Sys_CS_Res != 0)
+		{
+			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+		}
+	}
+}
+
 void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 {
 	UINT16 u16SciRegStartAddr;
@@ -311,6 +436,27 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	if (Sci_WrRegs_0x10_AFE_Parameters(u16SciRegStartAddr, s))
 	{
+		return;
+	}
+
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_VCELL_OVP_FIRST) &&
+		(u16SciRegStartAddr < (UINT16)(RS485_CMD_ADDR_VCELL_OVP_FIRST + E2P_PARA_NUM_PROTECT)))
+	{
+		Sci_WrRegs_0x10_Protect(u16SciRegStartAddr, s);
+		return;
+	}
+
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_BALANCE_OV) &&
+		(u16SciRegStartAddr < (UINT16)(RS485_CMD_ADDR_BALANCE_OV + E2P_PARA_NUM_OTHER_ELEMENT1)))
+	{
+		Sci_WrRegs_0x10_OtherElement(u16SciRegStartAddr, s);
+		return;
+	}
+
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_HEAT_DSG_HIGH) &&
+		(u16SciRegStartAddr < (UINT16)(RS485_CMD_ADDR_HEAT_DSG_HIGH + E2P_PARA_NUM_HEAT_COOL)))
+	{
+		Sci_WrRegs_0x10_HeatCoolElement(u16SciRegStartAddr, s);
 		return;
 	}
 
@@ -415,7 +561,7 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 		break;
 
 	case RS485_CMD_ADDR_HEAT_DSG_HIGH:
-		Sci_WrRegs_0x10_HeatCoolElement(s);
+		Sci_WrRegs_0x10_HeatCoolElement(u16SciRegStartAddr, s);
 		break;
 
 	case RS485_ADDR_SN_SERIAL_NUM:
@@ -1478,31 +1624,46 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 // 节省了很多代码量吧？
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 {
-	UINT16 t_u16Temp, i;
+	UINT16 offset;
 	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 5)
-	{
-		t_u16Temp = u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST;
-		for (i = 0; i < 5; ++i)
-		{
-			*(&PRT_E2ROMParas.u16VcellOvp_First + i + t_u16Temp) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
+	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
+	const struct PRT_E2ROM_PARAS protect_min = E2P_PROTECT_MIN_PRT;
+	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
+	UINT16 *base = &PRT_E2ROMParas.u16VcellOvp_First;
 
-		if (u16Channel < RS485_CMD_ADDR_TCHG_OTP_FIRST)
-		{
-			InitData_SOC();
-		}
-	}
-	else
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST);
+	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
+		!Sci_RangeFits(offset, u16WrRegNum, E2P_PARA_NUM_PROTECT))
 	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
 	}
+
+	if (!Sci_WrValuesInRange(s,
+						   offset,
+						   u16WrRegNum,
+						   &protect_min.u16VcellOvp_First,
+						   &protect_max.u16VcellOvp_First))
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_PROTECT);
+	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
+
+	if (!EEPROM_SaveRWParametersToFlash())
+	{
+		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_PROTECT);
+		Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
+	Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
 }
 
-// 这种写法其实也有问题，主要是，倘若写失败，但是上传上位机是修改成功，就尴尬
-// 但是上位机会有EEPROM写失败标志位弥补
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 {
 	UINT8 i;
@@ -1563,134 +1724,109 @@ void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 	}
 }
 
+void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
+{
+	UINT16 offset;
+	UINT16 u16WrRegNum;
+	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
+	const struct OTHER_ELEMENT other_min = OtherElement_min;
+	const struct OTHER_ELEMENT other_max = OtherElement_max;
+	UINT16 *base = &OtherElement.u16Balance_OpenVoltage;
+
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_BALANCE_OV);
+	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
+		!Sci_RangeFits(offset, u16WrRegNum, E2P_PARA_NUM_OTHER_ELEMENT1))
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
+	if (!Sci_WrValuesInRange(s,
+						   offset,
+						   u16WrRegNum,
+						   &other_min.u16Balance_OpenVoltage,
+						   &other_max.u16Balance_OpenVoltage))
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_OTHER_ELEMENT1);
+	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
+
+	if (!EEPROM_SaveRWParametersToFlash())
+	{
+		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_OTHER_ELEMENT1);
+		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
+	Sci_ApplyOtherElementSideEffects(offset, u16WrRegNum);
+}
+
 void Sci_WrRegs_0x10_Balance(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 8)
-	{
-		for (i = 0; i < 8; ++i)
-		{
-			*(&OtherElement.u16Balance_OpenVoltage + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-#if AFE_TYPE == bq76xx_afe
-#elif AFE_TYPE == sh36xx
-		AFE_PARAM_WRITE_Flag = 1;
-#else
-#error "error!!!"
-#endif
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_BALANCE_OV, s);
 }
 
 void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 8)
-	{
-		for (i = 0; i < 8; ++i)
-		{
-			*(&OtherElement.u16CS_Cur_CHGmax + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-
-		AFE_PARAM_WRITE_Flag = 1;
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_CS_CUR_CHGMAX, s);
 }
 
 void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 8)
-	{
-		for (i = 0; i < 8; ++i)
-		{
-			*(&OtherElement.u16Sleep_VNormal + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SLEEP_V_NORMAL, s);
 }
 
 void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 4)
-	{
-		for (i = 0; i < 4; ++i)
-		{
-			*(&OtherElement.u16Soc_Ah + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-		InitData_SOC();
-		// 同步更新安时数，循环次数等
-		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SOC_AH, s);
 }
 
 void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 4)
-	{
-		for (i = 0; i < 4; ++i)
-		{
-			*(&OtherElement.u16Sys_SeriesNum + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-		SeriesNum = OtherElement.u16Sys_SeriesNum;
-		// CS，直接使用不需要再赋值，TODO
-		// 还是赋值吧，提高效率
-		g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-		AFE_PARAM_WRITE_Flag = 1; // CS检流电阻修改，则过流保护等要跟着修改。
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SYS_SERIES_NUM, s);
 }
 
-void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s)
+void Sci_WrRegs_0x10_HeatCoolElement(UINT16 u16Channel, struct RS485MSG *s)
 {
-	UINT8 i;
+	UINT16 offset;
 	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_HEAT_COOL)
+	UINT16 snapshot[E2P_PARA_NUM_HEAT_COOL];
+	const struct HEAT_COOL_ELEMENT heat_min = HeatCoolElement_Min;
+	const struct HEAT_COOL_ELEMENT heat_max = HeatCoolElement_Max;
+	UINT16 *base = &Heat_Cool_Element.u16Heat_OpenTemp;
+
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_HEAT_DSG_HIGH);
+	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
+		!Sci_RangeFits(offset, u16WrRegNum, E2P_PARA_NUM_HEAT_COOL))
 	{
-		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-		{
-			*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
 	}
-	else
+
+	if (!Sci_WrValuesInRange(s,
+						   offset,
+						   u16WrRegNum,
+						   &heat_min.u16Heat_OpenTemp,
+						   &heat_max.u16Heat_OpenTemp))
 	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_HEAT_COOL);
+	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
+
+	if (!EEPROM_SaveRWParametersToFlash())
+	{
+		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_HEAT_COOL);
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
 	}
 }
 
@@ -1873,13 +2009,24 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	UINT8 i;
+	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
+	UINT16 *base = &PRT_E2ROMParas.u16VcellOvp_First;
 	const struct PRT_E2ROM_PARAS PrtE2PARAS_Default = E2P_PROTECT_DEFAULT_PRT;
+
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
+		Sci_CopyWords(snapshot, base, E2P_PARA_NUM_PROTECT);
 		for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 		{
-			*(&PRT_E2ROMParas.u16VcellOvp_First + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
+			*(base + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
+		}
+
+		if (!EEPROM_SaveRWParametersToFlash())
+		{
+			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_PROTECT);
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
 		}
 		InitData_SOC();
 	}
@@ -1894,22 +2041,27 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	UINT8 i;
+	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
+	UINT16 *base = &OtherElement.u16Balance_OpenVoltage;
 	const struct OTHER_ELEMENT OtherElement_Default = OtherElement_default;
+
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
+		Sci_CopyWords(snapshot, base, E2P_PARA_NUM_OTHER_ELEMENT1);
 		for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 		{
-			*(&OtherElement.u16Balance_OpenVoltage + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
+			*(base + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
 		}
-		SeriesNum = OtherElement.u16Sys_SeriesNum;
-		g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-		AFE_PARAM_WRITE_Flag = 1; // CS检流电阻修改，则过流保护等要跟着修改。
 
-		InitData_SOC();
-		// 同步更新安时数，循环次数等
-		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
-		// CS，直接使用不需要再赋值，TODO
+		if (!EEPROM_SaveRWParametersToFlash())
+		{
+			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_OTHER_ELEMENT1);
+			Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
+		}
+		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
 	}
 	else
 	{
@@ -1922,14 +2074,24 @@ void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	UINT8 i;
+	UINT16 snapshot[E2P_PARA_NUM_HEAT_COOL];
+	UINT16 *base = &Heat_Cool_Element.u16Heat_OpenTemp;
 	const struct HEAT_COOL_ELEMENT HeatCoolEle_Default = HeatCoolElement_Default;
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
+		Sci_CopyWords(snapshot, base, E2P_PARA_NUM_HEAT_COOL);
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 		{
-			*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
+			*(base + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
+		}
+
+		if (!EEPROM_SaveRWParametersToFlash())
+		{
+			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_HEAT_COOL);
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
 		}
 	}
 	else
