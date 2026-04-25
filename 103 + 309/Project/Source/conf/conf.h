@@ -21,18 +21,14 @@
 // #define BAT_TYPE     BAT_SLAVE
 #define BAT_TYPE     BAT_MASTER
 
-#if (BAT_TYPE == BAT_MASTER)
-// #define CS_Res			2
-// #define CS_Res_Num		3
-#define BMS_CAPCITY     180
-#elif (BAT_TYPE == BAT_SLAVE)
-// #define CS_Res			2
-// #define CS_Res_Num		6
-#define BMS_CAPCITY     270
-#endif		
+#define FD_YEAR     26
+#define FD_MONTH     4
+#define FD_DAY      15
 
 
-// #define  wdog_enable
+
+
+#define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
@@ -173,9 +169,7 @@ void IORecover_RTCMode(void);
 void IORecover_NormalMode(void);
 void IORecover_DeepMode(void);
 void Sys_StopMode(void);
-void InitRtcWakeupCheck(void);
-void InitRunAfterStopWakeup(void);
-void Init(void);
+// void Init(void);
 
 
 #endif

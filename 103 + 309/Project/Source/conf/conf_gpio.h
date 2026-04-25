@@ -66,9 +66,6 @@
 #define GPIO_ADC_VBUS        GPIOA
 #define PIN_ADC_VBUS         GPIO_Pin_1
 
-#define GPIO_AD_TTC_MOS1     GPIO_ADC_VBUS
-#define PIN_AD_TTC_MOS1      PIN_ADC_VBUS
-
 #define GPIO_SPI1_NSS        GPIOA
 #define PIN_SPI1_NSS         GPIO_Pin_4
 

@@ -61,6 +61,7 @@ extern struct RTC_ELEMENT RTC_time;
 extern volatile bool is_rtc_wakekup;
 
 
+UINT32 RTC_GetWakeupPeriodSeconds(void);
 void RTC_WKTimeConfig(void);
 void Init_RTC(void);
 void App_RTC(void);

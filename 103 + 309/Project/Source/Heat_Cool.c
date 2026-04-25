@@ -67,11 +67,6 @@ void Cool_Control(void)
 		return;
 	}
 
-	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_COOL))
-	{
-		return;
-	}
-
 	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
 	{
 		return;
@@ -208,11 +203,6 @@ void Heat_Control(void)
 
 	if (!System_OnOFF_Func.bits.b1OnOFF_Heat)
 	{ // 没有这个功能，不进来
-		return;
-	}
-
-	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_HEAT))
-	{
 		return;
 	}
 

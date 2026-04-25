@@ -74,6 +74,9 @@ extern uint8_t reset_sleep_state;
 void App_NormalSleepTest(void);
 void App_SleepDeal(void);
 void App_SleepTest(void);
+void BootFlag_Write(UINT16 flag);
+UINT16 BootFlag_Read(void);
+void BootFlag_Clear(void);
 void IsSleepStartUp(void);
 
 #endif	/* SLEEPDEAL_H */

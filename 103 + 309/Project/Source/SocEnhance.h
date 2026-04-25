@@ -73,10 +73,7 @@ struct SOC_ENHANCE_ELEMENT {
 extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 void SOC_IntEnhance_Ctrl(void);
-
-
-extern UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);
-extern UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data);
+void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
 
 void soc_factory_param_init_first(void);
 void soc_param_lib_init(void);

@@ -249,7 +249,7 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s,UINT8 t_u8BuffTemp[]);
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel,struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s);
 
-void EEPROM_ResetData_AFE_ParametersToDefault(void);
+UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void);
 void ReadEEPROM_AFE_Parameters(void);
 
 

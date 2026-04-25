@@ -18,6 +18,38 @@ struct OTHER_ELEMENT OtherElement;
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 
+void charger_detect_and_keyLogi_200ms(void)
+{
+	static uint8_t state = 0;
+
+	switch (state)
+	{
+	case 0:
+		if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 1;
+			open_chg_close_dsg();
+		}
+		else
+		{
+		}
+		break;
+	case 1:
+		if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+		{
+			state = 0;
+			open_dsg_close_chg();
+		}
+		else
+		{
+		}
+		break;
+	default:
+		state = 0;
+		break;
+	}
+}
+
 void Init_Registers(UINT8 num)
 {
 	UINT8 j;
@@ -66,17 +98,17 @@ void DataLoad_CellVolt(void)
 	UINT8 i;
 	INT32 t_i32temp;
 
-	for (i = 0; i < SeriesNum; ++i)
-	{
-		t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
-		if (g_u16CalibCoefK[VOLT_AFE1] != 1024 || g_i16CalibCoefB[VOLT_AFE1] != 0)
-		{
-			t_i32temp = ((t_i32temp * g_u16CalibCoefK[VOLT_AFE1]) >> 10) + g_i16CalibCoefB[VOLT_AFE1];
-		}
-		t_i32temp = ((t_i32temp * g_u16CalibCoefK[i]) >> 10) + g_i16CalibCoefB[i];
-		t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
-		g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
-	}
+    for (i = 0; i < SeriesNum; ++i)
+    {
+        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+        // if (g_tParam.CalibCoefK[VOLT_AFE1] != 1024 || g_tParam.CalibCoefB[VOLT_AFE1] != 0)
+        // {
+        // 	t_i32temp = ((t_i32temp * g_tParam.CalibCoefK[VOLT_AFE1]) >> 10) + g_tParam.CalibCoefB[VOLT_AFE1];
+        // }
+        t_i32temp = ((t_i32temp * SYSKDEFAULT) >> 10) + SYSBDEFAULT;
+        t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
+        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
+    }
 
 	if (SeriesNum < 32)
 	{
@@ -274,53 +306,51 @@ void DataLoad_CurrentCali(void)
 
 void DataLoad_Current(void)
 {
-	// if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
-	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
-	{
-		// u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 默认使用200mV的计算方式
-		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
-		// t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+    // if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
+    if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
+    {
+        // u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 榛樿?浣跨敤200mV鐨勮?绠楁柟寮?
+        u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
+        // t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
-		log_i("******************************************\n");
-		log_i("AFE value->%d\n", u32_ChgCur_mA);
+        log_i("******************************************\n");
+        log_i("AFE value->%d\n", u32_ChgCur_mA);
 
-		u32_DsgCur_mA = 0;
-	}
-	else
-	{
-		// u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
-		// u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
+        u32_DsgCur_mA = 0;
+    }
+    else
+    {
+        // u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
+        // u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
+        u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
-		log_i("******************************************\n");
-		log_i("AFE value->%d\n", u32_DsgCur_mA);
+        log_i("******************************************\n");
+        log_i("AFE value->%d\n", u32_DsgCur_mA);
 
-		u32_ChgCur_mA = 0;
-	}
+        u32_ChgCur_mA = 0;
+    }
+    // DataLoad_CurrentCali();
+    if (u32_DsgCur_mA > 2000)
+    {
+        u32_DsgCur_mA = ((u32_DsgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000; // B鍊兼槸鍩轰簬A涓哄崟浣嶈?绠楀嚭鏉ョ殑
+    }
+    else
+    {
+        u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
+    }
 
-	// DataLoad_CurrentCali();
+    if (u32_ChgCur_mA > 2000)
+    {
+        u32_ChgCur_mA = ((u32_ChgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000;
+    }
+    else
+    {
+        u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
+    }
 
-	if (u32_DsgCur_mA > 2000)
-	{
-		u32_DsgCur_mA = ((u32_DsgCur_mA * g_u16CalibCoefK[MDL_IDSG])) + (INT32)g_i16CalibCoefB[MDL_IDSG] * 1000; // B值是基于A为单位计算出来的
-	}
-	else
-	{
-		u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
-	}
-
-	if (u32_ChgCur_mA > 2000)
-	{
-		u32_ChgCur_mA = ((u32_ChgCur_mA * g_u16CalibCoefK[MDL_ICHG])) + (INT32)g_i16CalibCoefB[MDL_ICHG] * 1000;
-	}
-	else
-	{
-		u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
-	}
-
-	// 改为INT32
-	u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
-	u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
+    // 鏀逛负INT32
+    u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
+    u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
 
 	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
 	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
@@ -508,7 +538,7 @@ void test_Autocurrent_cycle(void)
 extern UINT8 gu8_200msAccClock_Flag2;
 // void App_AFEGet(void)
 // {
-// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 0 != Sci_IsAnyPortBusy())
 // 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 // 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2)
 // 	// if (0 == gu8_200msAccClock_Flag2)
@@ -534,6 +564,138 @@ extern UINT8 gu8_200msAccClock_Flag2;
 // 	gu8_200msAccClock_Flag2 = 0;
 // }
 
+void open_ctlc(void)
+{
+	MCUO_AFE_CTLC = 1;
+}
+void close_ctlc(void)
+{
+	MCUO_AFE_CTLC = 0;
+	// todo 会不会存在冲突，逻辑完备？？？
+	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+}
+void new_todo_logi(void)
+{
+	static uint8_t mos_state = 0;
+	charger_detect_and_keyLogi_200ms();
+
+	// todo 什么电平唤醒？
+	if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
+	{
+	}
+	// todo 待确认 typec供电逻辑
+	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
+	{
+#ifdef DISP_VBAT_AND_TEMP_
+		g_stCellInfoReport.u16VCell[29] = bat_temp_mv;
+		g_stCellInfoReport.u16VCell[30] = mos_temp_mv;
+		g_stCellInfoReport.u16VCell[31] = Vbat_mv;
+#endif // ! FAC_TEST
+
+		switch (mos_state)
+		{
+		case 0:
+			if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] >= (95 + 40) * 10)
+			{
+				close_ctlc();
+				FaultWarnRecord2(MosOTp_Third);
+				mos_state = 1;
+			}
+			break;
+		case 1:
+			if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] <= (75 + 40) * 10)
+			{
+				open_ctlc();
+				mos_state = 0;
+			}
+			break;
+		default:
+			mos_state = 0;
+			break;
+		}
+
+#ifdef _UL_RENZHENG_ENABLE_
+
+		if (1 == System_ErrFlag.u8ErrFlag_Com_AFE1)
+		{
+			rong_fuse = 0;
+			state_fuse = 0;
+
+			close_ctlc();
+			// todo mcc关了，when 开
+			if (Vbat_mv >= 4280 * SeriesNum || g_stCellInfoReport.u16Temperature[8] >= (85 + 40) * 10)
+			{
+				if (++rong_fuse_afe_err_cnt >= 10)
+				{
+					rong_fuse_afe_err_cnt = 0;
+#ifdef _UL_RENZHENG_ENABLE_
+					GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
+#endif
+				}
+			}
+		}
+		else
+		{
+			static u16 delay_cnt = 0;
+
+			switch (state_fuse)
+			{
+			case 0:
+				if ((g_stCellInfoReport.u16Temperature[8] >= (80 + 40) * 10))
+				{
+					state_fuse = 1;
+					close_ctlc();
+					FaultWarnRecord2(CellChgOTp_Third);
+					FaultWarnRecord2(CellDsgOTp_Third);
+				}
+				if ((g_stCellInfoReport.u16VCellMax >= 4270) && (g_stCellInfoReport.u16VCellMin >= 1000))
+				{
+					++delay_cnt;
+					if (delay_cnt >= 15)
+					{
+						delay_cnt = 0;
+						state_fuse = 1;
+						close_ctlc();
+						// 是否应该强制关掉放电？？？
+						FaultWarnRecord2(CellOvp_Third);
+						FaultWarnRecord2(BatOvp_Third);
+					}
+				}
+				else
+					delay_cnt = 0;
+				break;
+			case 1:
+				if ((g_stCellInfoReport.u16Temperature[8] < (75 + 40) * 10) && (g_stCellInfoReport.u16VCellMax <= 4150))
+				{
+					state_fuse = 0;
+					open_ctlc();
+				}
+				if (((g_stCellInfoReport.u16VCellMax >= 4280) || (Vbat_mv >= 4280 * SeriesNum) || g_stCellInfoReport.u16Temperature[8] >= (85 + 40) * 10) && (g_stCellInfoReport.u16Ichg))
+				{
+					if (++rong_fuse >= (15))
+					{
+						rong_fuse = 0;
+#ifdef _UL_RENZHENG_ENABLE_
+						GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
+#endif
+					}
+				}
+				else
+				{
+					rong_fuse = 0;
+				}
+				break;
+			default:
+				state_fuse = 0;
+				break;
+			}
+		}
+#endif
+	}
+
+	// 74hc595 控制5pin 18 seg led ,待完善spi驱动、配置
+}
+
 void App_AFEGet(void)
 {
 	// if(0 == gu8_200msAccClock_Flag || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
@@ -542,7 +704,7 @@ void App_AFEGet(void)
 	// }
 	// gu8_200msAccClock_Flag = 0;
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
+	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 0 != Sci_IsAnyPortBusy())
 	{
 		return;
 	}

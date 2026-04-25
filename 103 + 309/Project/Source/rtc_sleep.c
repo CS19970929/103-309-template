@@ -7,7 +7,9 @@
 enum irqWakeup g_irq_t = NO_IRQ;
 
 void rtc_sleep(void);
+void App_LowPowerProcess(void);
 void test_dealError(void);
+void Fault_ChangeToMCU(void);
 
 static bool rtc_monitor(void);
 static bool isException(void);
@@ -18,6 +20,10 @@ static bool isErr_enterRTC(void);
 static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
 static uint32_t rtc_sleep_get_period_seconds(void);
+static void low_power_clear_force_request(void);
+static void low_power_prepare_reset_sleep(void);
+static void low_power_log_and_commit_sleep(void);
+static void low_power_guess_wakeup_source(void);
 static void rtc_sleep_prepare_rtc(void);
 static void rtc_sleep_dump_state(const char *stage);
 static bool rtc_sleep_run_hiccup_cycle(void);
@@ -255,18 +261,51 @@ static bool isHaveCurrent_bq7x(void)
 #endif
 }
 
-void entersleep(enum _SLEEP_MODE mode)
+static void low_power_clear_force_request(void)
+{
+    Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
+    Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
+    Sleep_Mode.bits.b1ForceToSleep_L3 = 0;
+}
+
+static void low_power_prepare_reset_sleep(void)
+{
+    Sleep_Mode.bits.b1_ToSleepFlag = 1;
+    LogRecord_Flag.bits.Log_Sleep = 1;
+    state_sleep = 1;
+}
+
+static void low_power_log_and_commit_sleep(void)
+{
+    extern UINT32 su32_Interval_S_Tcnt;
+
+    if ((Sleep_Mode.all & 0x00ffU) == 0U)
+    {
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
+
+    LogRecord_Flag.bits.Log_Sleep = 1;
+    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+    SleepDeal_Continue();
+}
+
+void LowPower_Request(enum _SLEEP_MODE mode)
 {
     switch (mode)
     {
     case HICCUP_MODE:
+        low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L1 = 1;
         g_sleepModeSelect = HICCUP_MODE;
         break;
     case NORMAL_MODE:
-
+        low_power_clear_force_request();
+        Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
+        g_sleepModeSelect = NORMAL_MODE;
         break;
     case DEEP_MODE:
+        low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
         g_sleepModeSelect = DEEP_MODE;
 #ifdef __FUNC__LED__
@@ -275,12 +314,18 @@ void entersleep(enum _SLEEP_MODE mode)
         break;
     case NO_SLEEP:
         g_sleepModeSelect = NO_SLEEP;
+        state_sleep = 0;
         Sleep_Status = SLEEP_HICCUP_SHIFT;
         Sleep_Mode.all = 0;
         break;
     default:
         break;
     }
+}
+
+void entersleep(enum _SLEEP_MODE mode)
+{
+    LowPower_Request(mode);
 }
 
 #if (AFE_TYPE == bq76xx_afe)
@@ -436,9 +481,14 @@ void BQ769x0_SleepMode_Ctrl(void)
     }
 }
 
-void sleep(void)
+void App_LowPowerProcess(void)
 {
     rtc_sleep();
+}
+
+void sleep(void)
+{
+    App_LowPowerProcess();
 #if 0
     if (System_OnOFF_Func.bits.b1OnOFF_RTC)
         rtc_sleep();
@@ -503,8 +553,7 @@ static bool rtc_monitor_sh367309(void)
         SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
         SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
 
-        // TemperatureCheck();
-        // Fault_ChangeToMCU();
+        Fault_ChangeToMCU();
 #if 0
 		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
 		{
@@ -528,6 +577,16 @@ static bool rtc_monitor_sh367309(void)
             result = true;
             log_w("DSG close\n");
             g_irq_t = chg_dsg_close;
+        }
+
+        if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
+        {
+            result = true;
+            if (g_irq_t == NO_IRQ)
+            {
+                g_irq_t = error_wake;
+            }
+            log_w("afe fault 0x%04x\n", g_stCellInfoReport.unMdlFault_Third.all);
         }
     }
     return result;
@@ -625,12 +684,8 @@ static bool updataData_rtc_sh3x(void)
     // }
     DataLoad_CellVolt();
     DataLoad_CellVoltMaxMinFind();
-
-#ifdef __test__
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    DataLoad_Current();
-#endif
 
     return true;
 
@@ -692,14 +747,7 @@ static void before_rtcsleep(void)
 
 static uint32_t rtc_sleep_get_period_seconds(void)
 {
-    uint32_t wake_min = (uint32_t)OtherElement.u16Sleep_RTC_WakeUpTime;
-
-    if (wake_min == 0U)
-    {
-        wake_min = 3U;
-    }
-
-    return wake_min * 60U;
+    return RTC_GetWakeupPeriodSeconds();
 }
 
 static void rtc_sleep_prepare_rtc(void)
@@ -723,6 +771,41 @@ static void rtc_sleep_dump_state(const char *stage)
           (int)RTC_GetFlagStatus(RTC_FLAG_ALR),
           (int)EXTI_GetITStatus(EXTI_Line17),
           (unsigned int)BKP_ReadBackupRegister(BKP_DR1));
+}
+
+static void low_power_guess_wakeup_source(void)
+{
+    if ((g_irq_t != NO_IRQ) || is_rtc_wakekup)
+    {
+        return;
+    }
+
+    if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) != Bit_RESET)
+    {
+        g_irq_t = PA0_irq;
+        return;
+    }
+
+    if (GPIO_ReadInputDataBit(GPIO_SW, PIN_SW) == Bit_RESET)
+    {
+        g_irq_t = soc_key;
+        return;
+    }
+
+#if defined(RS485_WAKEUP_ENABLE)
+    if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) != Bit_RESET)
+    {
+        g_irq_t = rs485_irq;
+        return;
+    }
+#endif
+
+#if defined(UART1_WAKEUP_ENABLE)
+    if (GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) != Bit_RESET)
+    {
+        g_irq_t = uart1_irq;
+    }
+#endif
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -761,23 +844,26 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     {
         ++sys_time.rtc_sleep_cnt;
         rtc_sleep_dump_state("wake");
+    }
 
-        InitRtcWakeupCheck();
-        log_w("cnt %d", sys_time.rtc_sleep_cnt);
-        if (!isException())
-        {
-            update_rtc_soc(&sys_time.rtc_sleep_cnt);
-            return true;
-        }
+    Init();
+    log_w("cnt %d", sys_time.rtc_sleep_cnt);
+    if (is_rtc_wakekup && !isException())
+    {
+        update_rtc_soc(&sys_time.rtc_sleep_cnt);
+        return true;
+    }
 
+    if (is_rtc_wakekup)
+    {
         is_rtc_wakekup = false;
     }
 
-    InitRunAfterStopWakeup();
-    log_w("cnt %d", sys_time.rtc_sleep_cnt);
+    Init();
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
+    low_power_guess_wakeup_source();
     report_wkup_sig();
     before_wakeup(&sys_time.rtc_sleep_cnt);
     sys_time.rtc_sleep_cnt = 0;
@@ -786,254 +872,28 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
 static uint8_t soc_rtc;
 
-static uint8_t array_soc[5];
-
 static bool update_rtc_soc(uint32_t *_sleep_cnt)
 {
-#if 0
-    // static uint8_t last_soc = soc_befor_sleep, curr_soc;
-    static uint8_t last_soc, curr_soc;
-    // todo init
-    static uint16_t invalid_soc_cnt = 0;
+    uint32_t rest_seconds;
 
-    // const static uint8_t enter_rtc_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    log_w("rtc sleep cnt -> %d\n", *_sleep_cnt);
-    if (*_sleep_cnt < (3600))
-    // if (*_sleep_cnt % g_tParam.dev.time_ocv_soc_rtcing != 0 || *_sleep_cnt == 0)
-    // if (*_sleep_cnt % g_tParam.dev.time_ocv_soc_rtcing != 0 || *_sleep_cnt == 0)
-    // if (*_sleep_cnt * OtherElement.time_sleep_rtcing / 3600 != 0 || *_sleep_cnt == 0)
-        return true;
-
-    // last_soc = g_stCellInfoReport.soc_real;
-    last_soc = g_stCellInfoReport.SocElement.u16Soc;
-
+    if ((_sleep_cnt == 0) || (*_sleep_cnt == 0U))
     {
-#ifdef __test__
-        curr_soc = get_soc_from_openVol_new(g_stCellInfoReport.u16VCellMin);
-#else
-        curr_soc = get_soc_from_openVol_onlyDec_new(g_stCellInfoReport.u16VCellMin);
-        soc_update_wakeup.soc_disp = curr_soc;
-#endif
-        log_w("vcell min -> %d, ocv soc %d\n", g_stCellInfoReport.u16VCellMin, curr_soc);
-
-        // last_soc = curr_soc;
-
-#ifdef __test__
-        // if (ModulusSub(soc_befor_sleep, curr_soc) < 50)
-        // {
-        //     // last_soc = curr_soc;
-        //     soc_rtc = curr_soc;
-        //     // soc_rtc = (soc_rtc + curr_soc) / (*_sleep_cnt - RTC_SOC_OCV_TIME);
-        // }
-        // else
-        // {
-        //     log_e("<error> invalid soc last soc %d, curr soc %d\n", soc_befor_sleep, curr_soc);
-        //     if (++invalid_soc_cnt >= 10)
-        //     {
-        //         // goto invalid_soc;
-        //         log_e("<error error> over invalid soc cnt\n");
-        //     }
-        // }
-        soc_update_wakeup.soc_disp = curr_soc;
-
-#else
-        soc_rtc = curr_soc;
-#endif
+        return true;
     }
 
-    return true;
-#endif
-}
+    rest_seconds = (*_sleep_cnt) * rtc_sleep_get_period_seconds();
+    SOC_ApplyRtcRelaxationCompensation(rest_seconds,
+                                       g_stCellInfoReport.u16VCellMin,
+                                       g_stCellInfoReport.u16VCellMax);
+    soc_rtc = SOC_Enhance_Element.u8_SOC;
 
-// todo 完善不同策略
-// fixme a036
-#if 0
-bool update_rtc_soc(uint32_t *_sleep_cnt)
-{
-    // static uint8_t last_soc = soc_befor_sleep, curr_soc;
-    static uint8_t last_soc, curr_soc;
-    // todo init
-    static uint16_t invalid_soc_cnt = 0;
-
-    // const static uint8_t enter_rtc_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    log_w("rtc sleep cnt -> %d\n", *_sleep_cnt);
-    // if (*_sleep_cnt < RTC_SOC_OCV_TIME)
-    if (*_sleep_cnt % RTC_SOC_OCV_TIME != 0 || *_sleep_cnt == 0)
-        return true;
-
-    // last_soc = g_stCellInfoReport.soc_real;
-    last_soc = g_stCellInfoReport.SocElement.u16Soc;
-
-    {
-#ifdef __test__
-        curr_soc = get_soc_form_openVol_new(g_stCellInfoReport.u16VCellMin);
-#else
-        curr_soc = get_soc_fromm_openVol_onlyDec_new(g_stCellInfoReport.u16VCellMin);
-#endif
-        log_w("vcell min -> %d, ocv soc %d\n", g_stCellInfoReport.u16VCellMin, curr_soc);
-
-        // last_soc = curr_soc;
-
-        soc_rtc = curr_soc;
-    }
+    log_w("rtc rest %lu s, vmin %u, soc %u",
+          (unsigned long)rest_seconds,
+          (unsigned int)g_stCellInfoReport.u16VCellMin,
+          (unsigned int)SOC_Enhance_Element.u8_SOC);
 
     return true;
 }
-#else
-
-#define LARGE_CURR 500
-#define LARGE_CURR2 100
-
-#define OCV_VOL_ENABLE 3400
-
-#define N 5
-
-static uint8_t arr_soc[N] = {0, 0, 0, 0, 0};
-
-#if 0
-bool update_rtc_soc(uint32_t *_sleep_cnt)
-{
-    static uint8_t ocv_soc_record[10];
-    static uint8_t index = 0;
-
-    static uint8_t ocv_cnt = 0;
-
-    static uint8_t ocv_state = 0;
-
-    // if (SOC_Enhance_Element.u16_Ichg > 2 || SOC_Enhance_Element.u16_Idsg > 2)
-    // {
-    // 	ocv_state = 0;
-
-    // 	ocv_cnt = 0;
-    // 	// return;
-    // }
-
-    switch (ocv_state)
-    {
-    case 0:
-    {
-        if (*_sleep_cnt < RTC_SOC_OCV_TIME)
-            return;
-        else
-        {
-            ocv_state = 1;
-        }
-        break;
-    }
-    case 1:
-    {
-        // 20s rtc一次 get soc，5次滤波后的值
-        /*****************/
-        {
-            // PRE_OCV()之后，200ms ocv一次，具体的机制后续考虑
-            // 到这儿 突然有电流 怎么办 会有影响吗 原子操作？？？？
-            //  temp_soc = get_soc_from_openVol();
-            arr_soc[ocv_cnt] = get_soc_from_openVol_onlyDec();
-            log_w("arr_soc[%d] %d", ocv_cnt, arr_soc[ocv_cnt]);
-
-#if 0
-			if (ModulusSub(temp_soc[ocv_cnt], g_stCellInfoReport.soc_real) < 10)
-			{
-				if (++ocv_cnt >= 3)
-				{
-					ocv_cnt = 0;
-
-					ocv_state = 2;
-				}
-				// updateParam_soc();
-				// set_soc_param(temp_soc, 1, 0);
-			}
-			else
-			{
-				//todo 异常soc 当前、last处理
-				// static uint8_t err_soc_cnt = 0;
-				;
-				ocv_cnt = 0;
-			}
-#else
-
-            if (++ocv_cnt >= N)
-            {
-                ocv_cnt = 0;
-
-                ocv_state = 2;
-            }
-
-#endif
-        }
-    }
-    break;
-    // todo 最近N次soc参考值 参考价值 故障诊断
-    case 2:
-    {
-        // set_soc_param((temp_soc[0] + temp_soc[1] + temp_soc[2]) / 3, 1, 0);
-        // uint8_t i = 0;
-        uint16_t sum = 0;
-        uint8_t temp = 0;
-        uint8_t temp_soc = 0;
-
-        char count, i, j;
-
-        // {
-        for (j = 0; j < (N - 1); j++)
-        {
-            for (i = 0; i < (N - j - 1); i++)
-            {
-                if (arr_soc[i] > arr_soc[i + 1])
-                {
-                    temp = arr_soc[i];
-                    arr_soc[i] = arr_soc[i + 1];
-                    arr_soc[i + 1] = temp;
-                }
-            }
-        }
-
-#ifdef __test__
-
-        uint8_t k = 0;
-
-        log_w("arr_soc[]: ");
-        for (k = 0; k < N; k++)
-        {
-            log_w("%d ", arr_soc[k]);
-        }
-        log_w("\n");
-#endif
-        for (count = 1; count < N - 1; count++)
-        {
-            sum += arr_soc[count];
-        }
-        // return (char)(sum / (N - 2));
-        temp_soc = (uint8_t)(sum / (N - 2));
-        log_e("ocv cali soc->%d", temp_soc);
-        // log_w("**********************************\n");
-        // }
-
-        // for (i = 0; i < 5; i++)
-        // {
-        // 	sum += arr_soc[i];
-        // }
-        // // error 忘改了
-        // uint8_t temp_soc = sum / 5;
-        // // uint8_t temp_soc = (arr_soc[0] + arr_soc[1] + arr_soc[2]) / 3;
-        soc_calculate.u8SOC_Now = temp_soc;
-
-        soc_calculate.u32CapNow = (UINT32)soc_calculate.u8SOC_Now * soc_calculate.u32CapFull / 100;
-
-        ocv_state = 1;
-
-        soc_rtc = temp_soc;
-        break;
-    }
-    default:
-        break;
-    }
-}
-#endif
-
-#endif
 
 uint8_t get_rtc_soc(void)
 {
@@ -1167,69 +1027,45 @@ void rtc_sleep(void)
 
     BQ769x0_SleepMode_Ctrl();
 
-    switch (state_sleep)
-    {
-    case 0:
+    if (state_sleep == 0U)
     {
         if (g_sleepModeSelect == HICCUP_MODE)
         {
-            // Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            // LogRecord_Flag.bits.Log_Sleep = 1;
-            // USART_DeInit(USART1);
-            state_sleep = 1;
-            break;
-        }
-        if (g_sleepModeSelect == DEEP_MODE)
-        {
             Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            LogRecord_Flag.bits.Log_Sleep = 1;
             state_sleep = 1;
-            break;
+        }
+        else if ((g_sleepModeSelect == NORMAL_MODE) || (g_sleepModeSelect == DEEP_MODE))
+        {
+            low_power_prepare_reset_sleep();
+        }
+        else
+        {
+            return;
         }
     }
-    case 1:
+
+    if (state_sleep != 1U)
     {
-        // if (Sleep_Mode.bits.b1_ToSleepFlag)
-        // {
-        //     return;
-        // }
-        switch (g_sleepModeSelect)
+        return;
+    }
+
+    switch (g_sleepModeSelect)
+    {
+    case NORMAL_MODE:
+        log_w("normal sleep\n");
+        low_power_log_and_commit_sleep();
+        break;
+    case HICCUP_MODE:
+        while (rtc_sleep_run_hiccup_cycle())
         {
-        case NORMAL_MODE:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_NORMAL_SLEEP_VALUE))
-            {
-                ;
-            }
-            break;
-        case HICCUP_MODE:
-        {
-            while (rtc_sleep_run_hiccup_cycle())
-            {
-            }
         }
         break;
-        case DEEP_MODE:
-        DEEP_SLEEP:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
-            {
-                log_w("deep sleep\n");
-                if ((Sleep_Mode.all & 0x00ff))
-                {
-                    extern UINT32 su32_Interval_S_Tcnt;
-
-                    LogRecord_Flag.bits.Log_Sleep = 1;
-                    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-                    SleepDeal_Continue();
-                }
-                // MCU_RESET();
-                break;
-            }
-        default:
-            // 不调整引脚进入休眠，功耗会很大
-            break;
-        }
-    }
+    case DEEP_MODE:
+        log_w("deep sleep\n");
+        low_power_log_and_commit_sleep();
+        break;
     default:
+        LowPower_Request(NO_SLEEP);
         break;
     }
 }
