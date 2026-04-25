@@ -5,6 +5,13 @@ UINT8 u8WakeCnt1 = 0;
 UINT8 u8IICFaultcnt2 = 0;
 UINT8 u8WakeCnt2 = 0;
 
+#define MONITOR_AFE_FAIL_LIMIT              ((UINT8)50)
+#define MONITOR_AFE_RECOVER_TRIGGER         ((UINT8)30)
+#define MONITOR_AFE_WAKE_RETRY_LIMIT        ((UINT8)20)
+#define MONITOR_AFE_TASK_PERIOD_MS          ((UINT16)200)
+#define MONITOR_AFE_SLEEP_DELAY_SEC         ((UINT16)(5U * 60U))
+#define MONITOR_AFE_SLEEP_DELAY_TICKS       ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
+
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
@@ -374,6 +381,134 @@ void DataLoad_Current(void)
 	}
 #endif
 }
+
+static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
+{
+	switch (num)
+	{
+	case 0:
+		SystemStatus.bits.b1Status_AFE1 = is_ok;
+		break;
+	case 1:
+		SystemStatus.bits.b1Status_AFE2 = is_ok;
+		break;
+	default:
+		break;
+	}
+}
+
+static void MonitorAFE_ReportError(UINT8 num)
+{
+	switch (num)
+	{
+	case 0:
+		System_ERROR_UserCallback(ERROR_AFE1);
+		break;
+	case 1:
+		System_ERROR_UserCallback(ERROR_AFE2);
+		break;
+	default:
+		break;
+	}
+}
+
+static void MonitorAFE_ClearError(UINT8 num)
+{
+	switch (num)
+	{
+	case 0:
+		System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
+		break;
+	case 1:
+		System_ERROR_UserCallback(ERROR_REMOVE_AFE2);
+		break;
+	default:
+		break;
+	}
+}
+
+static void MonitorAFE_Recover(UINT8 num)
+{
+	switch (num)
+	{
+	case 0:
+		InitAFE1();
+		break;
+	case 1:
+		SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+		break;
+	default:
+		break;
+	}
+}
+
+static void MonitorAFE_UpdateChannel(UINT8 num, UINT8 result, UINT8 *fault_cnt, UINT8 *wake_cnt)
+{
+	if ((fault_cnt == 0) || (wake_cnt == 0))
+	{
+		return;
+	}
+
+	if (result != 0)
+	{
+		if (*fault_cnt < 0xFFU)
+		{
+			++(*fault_cnt);
+		}
+
+		if (*fault_cnt > MONITOR_AFE_FAIL_LIMIT)
+		{
+			Init_Registers(num);
+			*fault_cnt = 0;
+			MonitorAFE_ReportError(num);
+		}
+
+		if ((*fault_cnt == MONITOR_AFE_RECOVER_TRIGGER) && (*wake_cnt < MONITOR_AFE_WAKE_RETRY_LIMIT))
+		{
+			MonitorAFE_Recover(num);
+			++(*wake_cnt);
+		}
+
+		MonitorAFE_SetStatus(num, 0);
+	}
+	else
+	{
+		if (*fault_cnt > 0)
+		{
+			--(*fault_cnt);
+		}
+
+		if (*wake_cnt > 0)
+		{
+			--(*wake_cnt);
+		}
+
+		MonitorAFE_SetStatus(num, 1);
+		MonitorAFE_ClearError(num);
+	}
+}
+
+static void MonitorAFE_UpdateSleepDelay(UINT8 is_error, UINT16 *delay_tick)
+{
+	if (delay_tick == 0)
+	{
+		return;
+	}
+
+	if (is_error)
+	{
+		if (++(*delay_tick) >= MONITOR_AFE_SLEEP_DELAY_TICKS)
+		{
+			*delay_tick = 0;
+			entersleep(NORMAL_MODE);
+		}
+	}
+	else
+	{
+		*delay_tick = 0;
+	}
+}
+
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
 	static UINT16 su16_Sleep_DelayT1 = 0;
@@ -383,111 +518,22 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 	switch (num)
 	{
 	case 0:
-		if (Result != 0)
-		{
-			++u8IICFaultcnt1;
-			if (u8IICFaultcnt1 > 50)
-			{ // 20次1s
-				Init_Registers(num);
-				u8IICFaultcnt1 = 0;
-				System_ERROR_UserCallback(ERROR_AFE1); // 这里调用便可
-			}
-			if (u8IICFaultcnt1 == 30 && u8WakeCnt1 <= 20)
-			{
-				InitAFE1();
-				++u8WakeCnt1;
-			}
-			SystemStatus.bits.b1Status_AFE1 = 0;
-		}
-		else
-		{
-			if (u8IICFaultcnt1 > 0)
-			{
-				u8IICFaultcnt1--;
-			}
-			if (u8WakeCnt1 > 0)
-			{
-				u8WakeCnt1--;
-			}
-			SystemStatus.bits.b1Status_AFE1 = 1;
-			System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
-		}
+		MonitorAFE_UpdateChannel(num, Result, &u8IICFaultcnt1, &u8WakeCnt1);
 		break;
 
 	case 1:
-		if (Result != 0)
-		{
-			++u8IICFaultcnt2;
-			if (u8IICFaultcnt2 > 50)
-			{
-				Init_Registers(num);
-				u8IICFaultcnt2 = 0;
-				System_ERROR_UserCallback(ERROR_AFE2); // 这里调用便可
-			}
-			if (u8IICFaultcnt2 == 30 && u8WakeCnt2 <= 20)
-			{
-				SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-				++u8WakeCnt2;
-			}
-			SystemStatus.bits.b1Status_AFE2 = 0;
-		}
-		else
-		{
-			if (u8IICFaultcnt2 > 0)
-			{
-				u8IICFaultcnt2--;
-			}
-			if (u8WakeCnt2 > 0)
-			{
-				u8WakeCnt2--;
-			}
-			SystemStatus.bits.b1Status_AFE2 = 1;
-			// System_ERROR_UserCallback(ERROR_REMOVE_AFE2);
-		}
+		MonitorAFE_UpdateChannel(num, Result, &u8IICFaultcnt2, &u8WakeCnt2);
 		break;
 	default:
 		break;
 	}
 
-	if (System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-	{
-		if (++su16_Sleep_DelayT1 >= 5 * 60)
-		{ // 等待5min后进入休眠
-			su16_Sleep_DelayT1 = 0;
-			entersleep(NORMAL_MODE);
-		}
-	}
-	else
-	{
-		su16_Sleep_DelayT1 = 0;
-	}
-
-	if (System_ERROR_UserCallback(ERROR_STATUS_AFE2))
-	{
-		if (++su16_Sleep_DelayT2 >= 5 * 60)
-		{ // 等待5min后进入休眠
-			su16_Sleep_DelayT2 = 0;
-			entersleep(NORMAL_MODE);
-		}
-	}
-	else
-	{
-		su16_Sleep_DelayT2 = 0;
-	}
-
-	// 暂时寄存这里
-	if (System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) || System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE))
-	{
-		if (++su16_Sleep_DelayT3 >= 5 * 60)
-		{ // 等待5min后进入休眠
-			su16_Sleep_DelayT3 = 0;
-			entersleep(NORMAL_MODE);
-		}
-	}
-	else
-	{
-		su16_Sleep_DelayT3 = 0;
-	}
+	MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE1), &su16_Sleep_DelayT1);
+	MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE2), &su16_Sleep_DelayT2);
+	/* Sleep after persistent storage communication faults too. */
+	MonitorAFE_UpdateSleepDelay((UINT8)(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) ||
+										System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE)),
+								&su16_Sleep_DelayT3);
 }
 
 void test_Autocurrent_cycle(void)
