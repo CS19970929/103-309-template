@@ -5,6 +5,7 @@ __IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
 INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在计算过程出错了！
 								   // 不能改UINT32
 INT32 g_i32ADCResult[ADC_NUM]; // ADC结果保存
+static UINT32 s_u32AnlogCalLast10msTick = 0U;
 
 UINT16 g_u16IoutOffsetAD;
 UINT16 gu16_BusCurr_CHG; // A*10
@@ -175,6 +176,11 @@ void InitADC_ADC1(void)
 	ADC_ExternalTrigConvCmd(ADC1, ENABLE);
 }
 
+void ADC_ResetAnlogCalSchedule(void)
+{
+    s_u32AnlogCalLast10msTick = 0U;
+}
+
 void ADC_StopForLowPower(void)
 {
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
@@ -317,6 +323,7 @@ void InitADC(void)
 
     gu16_BusCurr_CHG = 0;
     gu16_BusCurr_DSG = 0;
+    ADC_ResetAnlogCalSchedule();
 
     InitADC_GPIO();
     InitADC_TIMER();
@@ -327,12 +334,22 @@ void InitADC(void)
 // 延时类型初始化是不需要return的
 void App_AnlogCal(void)
 {
-    if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag)
+    UINT32 u32Now10msTick;
+    UINT32 u32Elapsed10msTick;
+
+    u32Now10msTick = SysTime_Get10msTickCount();
+    u32Elapsed10msTick = u32Now10msTick - s_u32AnlogCalLast10msTick;
+    if (0U == u32Elapsed10msTick)
     {
         return;
     }
+    s_u32AnlogCalLast10msTick = u32Now10msTick;
 
-    ADC_TTC();
-    ADC_Vbc();
-    ADC_Current_Smooth();
+    while (u32Elapsed10msTick > 0U)
+    {
+        ADC_TTC();
+        ADC_Vbc();
+        ADC_Current_Smooth();
+        u32Elapsed10msTick--;
+    }
 }

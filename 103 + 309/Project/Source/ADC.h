@@ -45,6 +45,7 @@ extern UINT16 gu16_BusCurr_DSG;
 
 void InitADC(void);
 void ADC_StopForLowPower(void);
+void ADC_ResetAnlogCalSchedule(void);
 void App_AnlogCal(void);
 
 #endif	/* ADC_H */

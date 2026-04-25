@@ -2,6 +2,7 @@
 
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
+static volatile UINT32 s_u32Sys10msTickCount = 0U;
 struct CBC_ELEMENT CBC_Element;
 
 static UINT8 s_u8Cnt50ms = 0;
@@ -75,6 +76,8 @@ static void SysTime_ResetCounters(void)
 
 	g_st_SysTimeFlag.all = 0U;
 	s_st_SysTimePending.all = 0U;
+	s_u32Sys10msTickCount = 0U;
+	ADC_ResetAnlogCalSchedule();
 
 	s_u8Cnt50ms = 0U;
 	s_u8Cnt100ms = 0U;
@@ -181,8 +184,25 @@ UINT8 SysTime_HasPendingTaskFlags(void)
 	return (s_st_SysTimePending.all != 0U) ? 1U : 0U;
 }
 
+UINT32 SysTime_Get10msTickCount(void)
+{
+	UINT32 tick_count;
+	UINT32 primask = __get_PRIMASK();
+
+	__disable_irq();
+	tick_count = s_u32Sys10msTickCount;
+
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
+
+	return tick_count;
+}
+
 static void SysTime_Post10msTick(void)
 {
+	s_u32Sys10msTickCount++;
 	s_st_SysTimePending.bits.b1Sys10msFlag = 1U;
 
 	if (++s_u8Cnt50ms >= 5U)

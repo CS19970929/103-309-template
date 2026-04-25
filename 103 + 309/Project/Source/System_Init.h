@@ -95,6 +95,7 @@ void Init_IWDG(void);
 void App_CBC(void);
 void SysTime_LatchTaskFlags(void);
 UINT8 SysTime_HasPendingTaskFlags(void);
+UINT32 SysTime_Get10msTickCount(void);
 void App_ChgDet_Status(void);
 
 
