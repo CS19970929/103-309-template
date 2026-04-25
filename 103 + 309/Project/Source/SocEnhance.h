@@ -9,6 +9,7 @@
 #define SOC_Size_LiFePO 		(UINT16)42
 #define SOC_Size_TernaryLi 		(UINT16)42
 #define SOC_Size_LiFePO2 		(UINT16)42
+#define SOC_DEFAULT_STARTUP_PERCENT ((UINT8)60)
 
 enum SOC_TABLE_SELECT {
 	SOC_TABLE_TEST = 0,
@@ -54,5 +55,6 @@ void SOC_IntEnhance_Ctrl(void);
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
 
 void soc_param_lib_init(void);
+UINT8 SOC_ResetStoredSnapshotToDefault(void);
 #endif	/* SOCENHANCE_H */
 

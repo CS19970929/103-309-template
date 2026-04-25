@@ -55,13 +55,14 @@
 | SOC 运行快照：当前 SOC、放电累计、循环次数 | SOC journal `0x0801E000/0x0801E800` | 不自动覆盖 |
 | SOC 默认 OCV 表 | 当前只在 RAM 中加载 | 新固件默认表会在每次启动加载；上位机写表当前不跨重启保存 |
 
-需要让后续固件主动改现场参数时，有三种方式：
+需要让后续固件主动改现场参数时，有四种方式：
 
 1. 上位机写 `RS485_CMD_ADDR_SOC_AH` 起始的 SOC 配置参数，成功后会走 `EEPROM_SaveRWParametersToFlash()` 落盘。
 2. 修改 `UpgradeParamPolicy.h`：打开 `UPGRADE_PARAM_RESET_SOC_CONFIG`，并递增 `UPGRADE_PARAM_POLICY_VERSION`，让升级包一次性覆盖现场 SOC 配置。
-3. 擦除后 64K 参数区或用维护命令重置参数，让固件重新按编译期默认值初始化。
+3. 修改 `UpgradeParamPolicy.h`：打开 `UPGRADE_PARAM_RESET_SOC_SNAPSHOT`，并递增 `UPGRADE_PARAM_POLICY_VERSION`，让升级包一次性把历史 SOC 快照写回默认启动快照。
+4. 擦除后 64K 参数区或用维护命令重置参数，让固件重新按编译期默认值初始化。
 
-注意：`UPGRADE_PARAM_RESET_SOC_CONFIG` 只覆盖 SOC 配置，不会自动清空 SOC journal 中的历史 SOC 快照。要改当前 SOC，可使用设置 SOC 一次的通信命令；要让板子完全回到首次快照，需要擦除或重置 SOC journal。
+注意：`UPGRADE_PARAM_RESET_SOC_CONFIG` 只覆盖 SOC 配置，不会自动清空 SOC journal 中的历史 SOC 快照；`UPGRADE_PARAM_RESET_SOC_SNAPSHOT` 只重写 SOC journal，默认写入 SOC=60%、放电累计=0、循环次数=当前 SOC 配置循环次数。需要升级后基础参数和历史快照一起回到默认值时，两个开关要同时打开。
 
 ## 3. 运行逻辑
 

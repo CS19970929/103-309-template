@@ -77,7 +77,6 @@ enum SOC_CALI_STATE SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER; // SOC state machin
 #define SOC_REST_SECONDS_PER_TICK ((UINT32)5)
 #define SOC_WEAK_CELL_GUARD_WINDOW_MV ((UINT16)120)
 #define SOC_WEAK_CELL_CRITICAL_WINDOW_MV ((UINT16)30)
-#define SOC_DEFAULT_STARTUP_PERCENT ((UINT8)60)
 
 struct SOC_RUNTIME_CONTEXT
 {
@@ -647,6 +646,17 @@ void soc_param_lib_init(void)
 	SOC_Enhance_Element.u16_SOC_InitOver = 1U;
 	SOC_ResetRuntimeContext();
 	SOC_SyncOutputData(1U);
+}
+
+UINT8 SOC_ResetStoredSnapshotToDefault(void)
+{
+	STORAGE_FLASH_SOC_DATA flash_data;
+
+	flash_data.u16SocNow = SOC_DEFAULT_STARTUP_PERCENT;
+	flash_data.u16DsgSocInt = 0U;
+	flash_data.u32CycleTimes = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+
+	return StorageFlash_SaveSocData(&flash_data);
 }
 
 static UINT8 Get_OpenCircuit_Value(void)

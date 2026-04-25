@@ -1,5 +1,6 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
+#include "SocEnhance.h"
 
 uint16_t curr_offset = 0;
 UINT16 OffsetValue_CHG = 0;
@@ -286,6 +287,13 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 	{
 		result = 0;
 	}
+
+#if UPGRADE_PARAM_RESET_SOC_SNAPSHOT
+	if (result && !SOC_ResetStoredSnapshotToDefault())
+	{
+		result = 0;
+	}
+#endif
 
 	if (!result)
 	{
