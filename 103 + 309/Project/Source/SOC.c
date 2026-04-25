@@ -2,7 +2,7 @@
 
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
-const UINT16 SOC_Table_Default[42] = {
+const UINT16 SOC_Table_Default[SOC_TABLE_SIZE] = {
 	3336,
 	100,
 	3332,
@@ -48,7 +48,7 @@ const UINT16 SOC_Table_Default[42] = {
 };
 
 // 长期更新数据
-void RefreshData_SOC(void)
+static void SOC_RefreshInputData(void)
 {
 	SOC_Enhance_Element.u16_VCellMax = g_stCellInfoReport.u16VCellMax;
 	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 公版决定不扩散出去，包含6和16串，客户使用体验问题，低压保护SOC一定要降下来
@@ -57,10 +57,8 @@ void RefreshData_SOC(void)
 }
 
 // 获取数据
-void GetData_SOC(void)
+static void SOC_PublishOutputData(void)
 {
-	System_ErrFlag.u8ErrFlag_SOC_Cail = SOC_Enhance_Element.u16_SOC_CailFaultCnt;
-
 	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
 	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
 	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
@@ -79,29 +77,28 @@ void GetData_SOC(void)
 }
 
 // 一次性赋值
-void InitData_SOC(void)
+static void SOC_LoadConfigData(void)
 {
 	UINT16 i;
 
 	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
-	;
 	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
-	;
 	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
 	SOC_Enhance_Element.u16_SOC_TableSelect = OtherElement.u16Soc_TableSelect;
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
 	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
 
-	SOC_Enhance_Element.u8_LargeCurFlag_Chg = 0; // 默认是0，除非末端大电流CC充放电导致没法在端点达到100%和0%置1
-	SOC_Enhance_Element.u8_LargeCurFlag_Dsg = 0;
-
 	for (i = 0; i < SOC_Size_TableCanSet; ++i)
 	{
 		SOC_Enhance_Element.SOC_Table_CanSet[i] = SOC_Table_Set[i];
 	}
+}
 
+void InitData_SOC(void)
+{
+	SOC_LoadConfigData();
 	soc_param_lib_init();
-	GetData_SOC();
+	SOC_PublishOutputData();
 }
 
 void App_SOC(void)
@@ -113,10 +110,9 @@ void App_SOC(void)
 
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 
-	RefreshData_SOC();
-	GetData_SOC();
+	SOC_RefreshInputData();
+	SOC_PublishOutputData();
 	SOC_IntEnhance_Ctrl();
-
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{
