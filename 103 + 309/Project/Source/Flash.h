@@ -7,6 +7,7 @@
 /* Reserved persistent-storage pages start at 0x0801C000. */
 #define FLASH_ADDR_SH367309_VALUE        0x0801E000
 #define FLASH_ADDR_SH367309_FLAG         0x0801E800
+#define FLASH_ADDR_UPGRADE_PARAM_FLAG    ((UINT32)0x0801F000)
 #define FLASH_ADDR_UPDATE_FLAG           0x0801F800
 #define FLASH_ADDR_SLEEP_FLAG            0x0801FC00
 
@@ -29,6 +30,7 @@
 
 #define FLASH_TO_IAP_VALUE               ((UINT16)0x00AB)
 #define FLASH_TO_APP_VALUE               ((UINT16)0xFFFF)
+#define FLASH_UPGRADE_PARAM_FLAG_RESET   ((UINT16)0xFFFF)
 
 #define FLASH_NORMAL_SLEEP_VALUE         ((UINT16)0x1234)
 #define FLASH_DEEP_SLEEP_VALUE           ((UINT16)0x1235)
