@@ -38,6 +38,9 @@
 // #define _SECOND_CURR_PROTECT_FUNC_
 
 #define __VIRTURE_CURRENT__
+/* Enable only for destructive rear-64KB application storage test. */
+// #define FLASH64K_APP_QUICK_TEST_ENABLE
+#define FLASH64K_APP_QUICK_TEST_CYCLES 96U
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS

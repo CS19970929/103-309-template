@@ -1,4 +1,5 @@
 #include "main.h"
+#include "Flash64KAppTest.h"
 
 UINT8 SeriesNum = 16;
 
@@ -229,6 +230,9 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
+#ifdef FLASH64K_APP_QUICK_TEST_ENABLE
+	StorageFlash_RunAppQuickTest();
+#endif
 	InitE2PROM(); // ¾ö¶¨°ÑÕâ¸ö·ÅÔÚÇ°Ãæ£¬ÓÅÏÈ¼¶Ìá¸ß£¬ÒòÎª¿Í»§´®¿Ú³õÊ¼»¯£¬ÓÐ¿ÉÄÜÒª¶ÁÆä×Ô¼ºµÄÊý¾Ý
 	InitAFE1();
 	InitCan();
