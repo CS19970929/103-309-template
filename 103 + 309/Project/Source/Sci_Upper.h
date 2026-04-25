@@ -526,11 +526,15 @@ extern UINT8 u8FlashUpdateFlag;
 extern UINT8 u8FlashUpdateE2PROM;
 extern UINT8 gu8_TxEnable_SCI1;
 extern UINT8 gu8_TxEnable_SCI2;
+#ifdef _COMMOM_UPPER_SCI3
 extern UINT8 gu8_TxEnable_SCI3;
+#endif
 
 extern struct RS485MSG g_stCurrentMsgPtr_SCI1;
 extern struct RS485MSG g_stCurrentMsgPtr_SCI2;
+#ifdef _COMMOM_UPPER_SCI3
 extern struct RS485MSG g_stCurrentMsgPtr_SCI3;
+#endif
 
 extern struct stCell_Info g_stCellInfoReport;
 
@@ -538,7 +542,9 @@ UINT8 Sci_IsAnyPortBusy(void);
 
 void Sci1_CommonUpper_IRQHandler(void);
 void Sci2_CommonUpper_IRQHandler(void);
+#ifdef _COMMOM_UPPER_SCI3
 void Sci3_CommonUpper_IRQHandler(void);
+#endif
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
 

@@ -581,32 +581,6 @@ void test_Autocurrent_cycle(void)
 		break;
 	}
 }
-// 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
-
-// void App_AFEGet(void)
-// {
-// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
-// 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
-// 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2)
-// 	// if (0 == gu8_200msAccClock_Flag2)
-// 	{
-// 		return;
-// 	}
-
-// 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
-
-// 	DataLoad_CellVolt();
-// 	DataLoad_CellVoltMaxMinFind();
-// 	DataLoad_Temperature();
-// 	DataLoad_TemperatureMaxMinFind();
-// 	DataLoad_Current();
-// 	// test_Autocurrent_cycle();
-// 	App_SH367309();
-// 	App_MOS_Relay_Ctrl();
-
-// 	gu8_200msAccClock_Flag2 = 0;
-// }
-
 void open_ctlc(void)
 {
 	MCUO_AFE_CTLC = 1;
@@ -617,6 +591,8 @@ void close_ctlc(void)
 	// todo 会不会存在冲突，逻辑完备？？？
 	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
+
+//todo 总压、typec逻辑、电流
 void new_todo_logi(void)
 {
 	static uint8_t mos_state = 0;
@@ -744,12 +720,6 @@ void new_todo_logi(void)
 
 void App_AFEGet(void)
 {
-	// if(0 == gu8_200msAccClock_Flag || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2\
-	// 	|| 1 == gu8_TxEnable_SCI3) {
-	// 	return;
-	// }
-	// gu8_200msAccClock_Flag = 0;
-
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
 	{
 		return;
@@ -758,7 +728,6 @@ void App_AFEGet(void)
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
 	DataLoad_CellVolt();
-	// DataLoad_CellVolt_Test();
 	DataLoad_CellVoltMaxMinFind();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();

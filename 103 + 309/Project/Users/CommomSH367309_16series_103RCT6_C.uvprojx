@@ -474,11 +474,6 @@
               <FilePath>..\Source\Can_HDX.c</FilePath>
             </File>
             <File>
-              <FileName>Cell_balance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Cell_balance.c</FilePath>
-            </File>
-            <File>
               <FileName>ChargerLoadFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ChargerLoadFunc.c</FilePath>

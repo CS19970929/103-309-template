@@ -25,6 +25,9 @@
 #define FD_MONTH     4
 #define FD_DAY      15
 
+// #define TERNARYLI		
+#define LIFEPO			
+
 
 
 

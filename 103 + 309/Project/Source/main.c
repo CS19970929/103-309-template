@@ -2,7 +2,6 @@
 #include "Flash64KAppTest.h"
 
 UINT8 SeriesNum = 10;
-
 void IOstatus_RTCMode_test(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -51,8 +50,7 @@ void IOstatus_RTCMode_test(void)
 
 #endif
 }
-// ²»Í¬´®ÊýÎ¬»¤µÄ±í¸ñ
-// ÖÐÓ±
+
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1´®
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2´®
@@ -182,12 +180,9 @@ int main(void)
 		APP_LedBar();
 		// App_WarnCtrl();
 		App_AFEGet();
-		//new_todo_logi();
 
 		App_Sci();
 		App_AnlogCal();
-		App_E2promDeal();
-		// App_CellBalance();
 		App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		App_LowPowerProcess();
@@ -197,7 +192,6 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
-		// App_ChargerLoad_Det();
 
 		App_FlashUpdate();
 		App_LogRecord();

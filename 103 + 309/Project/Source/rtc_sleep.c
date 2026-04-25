@@ -1,4 +1,4 @@
-﻿#include "main.h"
+#include "main.h"
 
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
@@ -68,15 +68,6 @@ bool is_wakeup = false;
 void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
 {
     EXTI_InitTypeDef EXTI_InitStruct;
-
-    // EXTI_InitTypeDef  config = {0};
-    // config.EXTI_Line = Line;
-    // config.EXTI_Mode = EXTI_Mode_Interrupt;
-    // config.EXTI_Trigger = Trigger;
-    // config.EXTI_LineCmd = Cmd;
-    // EXTI_Init(&config);
-    // EXTI_ClearITPendingBit(Line);
-
     //????
     // SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
     EXTI_InitStruct.EXTI_Line = Line;
@@ -982,11 +973,6 @@ static bool isErr_enterRTC(void)
     else if (SystemStatus.bits.b1Status_Heat)
     {
         log_e("Heating");
-        return true;
-    }
-    else if (g_enBalanceState == BALANCE_ST_ODD_ON || g_enBalanceState == BALANCE_ST_EVEN_ON)
-    {
-        log_e("Balancing");
         return true;
     }
 #ifdef __same_door__

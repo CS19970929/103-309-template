@@ -1,6 +1,8 @@
 #ifndef DATADEAL_SYS_H
 #define DATADEAL_SYS_H
 
+#include "conf.h"
+
 #define CompensateNUM 			16
 
 #define CopperLoss_Min 			(UINT16)0
@@ -140,8 +142,6 @@ struct OTHER_ELEMENT {
 
 #define SNum 		10
 
-#define TERNARYLI		
-// #define LIFEPO			
 
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)

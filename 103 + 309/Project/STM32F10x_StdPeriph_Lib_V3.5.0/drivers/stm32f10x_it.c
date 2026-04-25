@@ -253,11 +253,11 @@ void USART2_IRQHandler(void)
   Sci2_CommonUpper_IRQHandler();
 #endif
 }
+#ifdef _COMMOM_UPPER_SCI3
 void USART3_IRQHandler(void)
 {
-#ifdef _COMMOM_UPPER_SCI3
   Sci3_CommonUpper_IRQHandler();
-#endif
 }
+#endif
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/
