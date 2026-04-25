@@ -288,7 +288,7 @@ void SleepDeal_Forced(void)
 	static UINT32 s_u32SleepFirstCnt = 0;
 	static UINT32 s_u32SleepHiccupCnt = 0;
 
-	if (!Sleep_Mode.bits.b1ForceToSleep_L1 && Sleep_Mode.bits.b1ForceToSleep_L2 && Sleep_Mode.bits.b1ForceToSleep_L3)
+	if (!Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	{									   // 加强雍余设�??
 		Sleep_Status = SLEEP_HICCUP_SHIFT; // 其实这个�?以不要，设�?��?�求，除了这�?函数�?以把这个标志位去除�?�，�?的地方不�?以便�?
 		return;
@@ -631,7 +631,7 @@ void SleepDeal_Normal_Select(void)
 		return;
 	}
 
-	if (g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Chg)
+	if (g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (g_stCellInfoReport.u16VCellMin < OtherElement.u16Sleep_Vlow)
 		{

@@ -1,5 +1,6 @@
 ﻿#include "main.h"
 
+#undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
 
 
@@ -10,6 +11,12 @@ void rtc_sleep(void);
 void App_LowPowerProcess(void);
 void test_dealError(void);
 void Fault_ChangeToMCU(void);
+void Init(void);
+void DataLoad_CellVolt(void);
+void DataLoad_CellVoltMaxMinFind(void);
+void DataLoad_Temperature(void);
+void DataLoad_TemperatureMaxMinFind(void);
+void DataLoad_Current(void);
 
 static bool rtc_monitor(void);
 static bool isException(void);
@@ -27,11 +34,17 @@ static void low_power_guess_wakeup_source(void);
 static void rtc_sleep_prepare_rtc(void);
 static void rtc_sleep_dump_state(const char *stage);
 static bool rtc_sleep_run_hiccup_cycle(void);
+
+#if (AFE_TYPE == sh36xx)
+static bool isHaveCurrent_sh3x(void);
 static bool rtc_monitor_sh367309(void);
 static bool updataData_rtc_sh3x(void);
+#elif (AFE_TYPE == bq76xx_afe)
 static bool updataData_rtc_bq7x(void);
 static bool isHaveCurrent_bq7x(void);
 static bool rtc_monitor_bq7x(void);
+#endif
+
 static bool update_rtc_soc(uint32_t *_sleep_cnt);
 
 typedef struct
@@ -47,8 +60,6 @@ typedef struct
 } SOC_T;
 
 SOC_T g_Psoc;
-static SOC_T soc_befor_sleep;
-static SOC_T soc_update_wakeup;
 
 static enum _SLEEP_MODE g_sleepModeSelect = NO_SLEEP;
 static uint8_t state_sleep = 0;
@@ -114,7 +125,6 @@ static bool isVol_cuv(void)
 static bool isVol_cov(void)
 {
     uint8_t i;
-    uint8_t j;
 
     for (i = 0; i < OtherElement.u16Sys_SeriesNum; i++)
     {
@@ -171,12 +181,12 @@ bool isHaveCurrent(void)
     return isCURR;
 }
 
-bool isHaveCurrent_sh3x(void)
-{
 #if (AFE_TYPE == sh36xx)
-
+static bool isHaveCurrent_sh3x(void)
+{
     bool isCURR = false;
     uint16_t current = SH367309_Read_AFE1.u16Current;
+    (void)current;
 
     DataLoad_Current();
     // DataLoad_Current_OK();
@@ -201,15 +211,16 @@ bool isHaveCurrent_sh3x(void)
     }
 
     return isCURR;
-#endif
 }
+#endif
 
+#if (AFE_TYPE == bq76xx_afe)
 static bool isHaveCurrent_bq7x(void)
 {
-#if AFE_TYPE == bq76xx_afe
     bool isCURR = false;
 
     uint16_t current = g_stBq769x0_Read_AFE1.u16Current;
+    (void)current;
 
     DataLoad_Current();
 
@@ -245,8 +256,8 @@ static bool isHaveCurrent_bq7x(void)
 #endif
 
     return isCURR;
-#endif
 }
+#endif
 
 static void low_power_clear_force_request(void)
 {
@@ -500,9 +511,9 @@ static bool rtc_monitor(void)
     return result;
 }
 
+#if (AFE_TYPE == bq76xx_afe)
 static bool rtc_monitor_bq7x(void)
 {
-#if AFE_TYPE == bq76xx_afe
     bool result = false;
 
     I2CReadRegisterByteWithCRC(DEVICE_ADDR_AFE1, SYS_CTRL2, &(Registers_AFE1.SysCtrl2.SysCtrl2Byte));
@@ -517,14 +528,12 @@ static bool rtc_monitor_bq7x(void)
     }
 
     return result;
-#endif
-    return false;
 }
+#endif
 
+#if (AFE_TYPE == sh36xx)
 static bool rtc_monitor_sh367309(void)
 {
-#if AFE_TYPE == sh36xx
-
     // if (!sys_time.power_on)
     // {
     //     // todo 冗余检测
@@ -577,11 +586,10 @@ static bool rtc_monitor_sh367309(void)
         }
     }
     return result;
-
-#endif
 }
+#endif
 
-bool isException(void)
+static bool isException(void)
 {
     // todo rtc起来读afe保护状态 2、ocv逻辑 大电流 延时ocv
     if (!updataData_rtc())
@@ -625,9 +633,9 @@ static bool updataData_rtc(void)
 }
 
 // todo 需要考虑afe采样时序
+#if (AFE_TYPE == bq76xx_afe)
 static bool updataData_rtc_bq7x(void)
 {
-#if (AFE_TYPE == bq76xx_afe)
     // if (UpdateVoltageFromBqMaximo(DEVICE_ADDR_AFE1) && UpdateVoltageFromBqMaximo2(DEVICE_ADDR_AFE1))
     if (UpdateVoltageFromBqMaximo(DEVICE_ADDR_AFE1))
     {
@@ -650,13 +658,12 @@ static bool updataData_rtc_bq7x(void)
 #endif
 
     return true;
-
-#endif
 }
+#endif
 
+#if (AFE_TYPE == sh36xx)
 static bool updataData_rtc_sh3x(void)
 {
-#if (AFE_TYPE == sh36xx)
     // if (UpdateVoltageFromBqMaximo(DEVICE_ADDR_AFE1) && UpdateVoltageFromBqMaximo2(DEVICE_ADDR_AFE1))
     if (UpdateVoltageFromBqMaximo())
     {
@@ -675,9 +682,8 @@ static bool updataData_rtc_sh3x(void)
     DataLoad_TemperatureMaxMinFind();
 
     return true;
-
-#endif
 }
+#endif
 
 void get_soc(SOC_T *soc, uint16_t vcell_min, uint16_t vcell_max, uint16_t vcell_mean)
 {
@@ -685,13 +691,11 @@ void get_soc(SOC_T *soc, uint16_t vcell_min, uint16_t vcell_max, uint16_t vcell_
 
 static void before_wakeup(uint32_t *_sleep_cnt)
 {
-    uint8_t temp_soc;
-
-#define SOC_ERROR 10
     // g_stCellInfoReport.SocElement.u16Soc =  get_rtc_soc();
     // temp_soc = get_rtc_soc();
 
 #if 0
+#define SOC_ERROR 10
     if (ModulusSub(soc_befor_sleep, temp_soc) < SOC_ERROR)
     {
         set_soc_param(temp_soc, 11, 0);
@@ -707,8 +711,7 @@ static void before_wakeup(uint32_t *_sleep_cnt)
 
     if (su32_Interval_S_Tcnt >= (3600 * 6))
     {
-        // set_soc_param(soc_update_wakeup.soc_disp, 11, 1);
-        log_e("sleep_cnt %d, rtc soc ocv success %d old disp_soc %d, real soc %d\n", *_sleep_cnt, soc_update_wakeup.soc_disp, soc_befor_sleep.soc_disp, soc_befor_sleep.soc_real);
+        log_e("sleep_cnt %lu, rtc soc update window reached\n", (unsigned long)(*_sleep_cnt));
     }
     else
     {
@@ -846,7 +849,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         is_rtc_wakekup = false;
     }
 
-    Init();
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
