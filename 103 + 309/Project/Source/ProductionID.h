@@ -16,10 +16,6 @@ typedef struct {
 	UINT16 BMS_SerialNumberHeadAdress;		//BMS序列号地址
 	UINT16 BMS_HardWareVersionHeadAdress;	//BMS硬件版本号地址
 	UINT16 BMS_SoftWareVersionHeadAdress;	//BMS软件版本号地址
-
-	UINT8 BMS_SerialNumber_WriteFlag;
-	UINT8 BMS_HardWareVersion_WriteFlag;
-	UINT8 BMS_SoftWareVersion_WriteFlag;
 }PRODUCTION_ID_INFO;
 
 extern PRODUCTION_ID_INFO ProductionInfor;

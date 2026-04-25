@@ -544,10 +544,6 @@ void test_Autocurrent_cycle(void)
 // 	{
 // 		return;
 // 	}
-// 	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
-// 	{
-// 		return;
-// 	}
 
 // 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
@@ -704,11 +700,6 @@ void App_AFEGet(void)
 	// gu8_200msAccClock_Flag = 0;
 
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
-	{
-		return;
-	}
-
-	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
 	{
 		return;
 	}

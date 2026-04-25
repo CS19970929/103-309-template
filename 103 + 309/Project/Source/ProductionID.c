@@ -16,9 +16,6 @@ static void InitProID_DefaultData(void)
 	ProductionInfor.BMS_SerialNumberLength = serialNumberCount;
 	ProductionInfor.BMS_HardWareVersionLength = harewareCount;
 	ProductionInfor.BMS_SoftWareVersionLength = softwareCount;
-	ProductionInfor.BMS_SerialNumber_WriteFlag = 0;
-	ProductionInfor.BMS_HardWareVersion_WriteFlag = 0;
-	ProductionInfor.BMS_SoftWareVersion_WriteFlag = 0;
 }
 
 void InitProID(void)
@@ -26,12 +23,6 @@ void InitProID(void)
 	InitProID_DefaultData();
 }
 
-void WriteProID(void)
-{
-	ProductionInfor.BMS_SerialNumber_WriteFlag = 0;
-	ProductionInfor.BMS_HardWareVersion_WriteFlag = 0;
-	ProductionInfor.BMS_SoftWareVersion_WriteFlag = 0;
-}
 
 void WriteProID_Default(void)
 {
@@ -46,9 +37,5 @@ void App_ProID_Deal(void)
 	{
 		InitProID();
 		su8_StartUpFlag = 1;
-	}
-	else
-	{
-		WriteProID();
 	}
 }

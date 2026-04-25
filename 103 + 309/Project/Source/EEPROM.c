@@ -1,37 +1,10 @@
 #include "main.h"
 
-UINT32 u32E2P_Pro_VolCur_WriteFlag = 0;
-UINT32 u32E2P_Pro_Temp_WriteFlag = 0;
-UINT32 u32E2P_Pro_Other_WriteFlag = 0;
-UINT32 u32E2P_RTC_Element_WriteFlag = 0;
-UINT32 u32E2P_OtherElement1_WriteFlag = 0;
-UINT32 u32E2P_HeatCool_WriteFlag = 0;
-
-UINT8 u8E2P_SocTable_WriteFlag = 0;
-UINT8 u8E2P_CopperLoss_WriteFlag = 0;
-UINT8 u8E2P_KB_WriteFlag = 0;
-UINT8 u8E2P_KB_WritePos = 0;
-
 uint16_t curr_offset = 0;
 UINT16 OffsetValue_CHG = 0;
 UINT16 OffsetValue_DSG = 0;
 
 extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
-
-static void EEPROM_ClearLegacyWriteFlags(void)
-{
-	u32E2P_Pro_VolCur_WriteFlag = 0;
-	u32E2P_Pro_Temp_WriteFlag = 0;
-	u32E2P_Pro_Other_WriteFlag = 0;
-	u32E2P_RTC_Element_WriteFlag = 0;
-	u32E2P_OtherElement1_WriteFlag = 0;
-	u32E2P_HeatCool_WriteFlag = 0;
-	u8E2P_SocTable_WriteFlag = 0;
-	u8E2P_CopperLoss_WriteFlag = 0;
-	u8E2P_KB_WriteFlag = 0;
-	u8E2P_KB_WritePos = 0;
-	gu8_Reset_EventRecord = 0;
-}
 
 static void EEPROM_LoadDefaultProtect(void)
 {
@@ -152,12 +125,10 @@ void InitE2PROM(void)
 	EEPROM_LoadDefaultRuntimeData();
 	ReadEEPROM_AFE_Parameters();
 	ReadEEPROM_EventRecord_Parameters();
-	EEPROM_ClearLegacyWriteFlags();
 }
 
 void App_E2promDeal(void)
 {
-	EEPROM_ClearLegacyWriteFlags();
 }
 
 
