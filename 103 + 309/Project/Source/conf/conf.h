@@ -43,6 +43,13 @@
 // #define FLASH64K_APP_QUICK_TEST_ENABLE
 #define FLASH64K_APP_QUICK_TEST_CYCLES 96U
 
+/* Enable for customer-use style SOC/AFE storage verification while app runs. */
+#define FLASH64K_APP_USE_TEST_ENABLE
+#define FLASH64K_APP_USE_TEST_PRINT_PERIOD_SEC 10U
+#define FLASH64K_APP_USE_TEST_ACCEL_ENABLE
+#define FLASH64K_APP_USE_TEST_ACCEL_SOC_PERIOD_SEC 1U
+#define FLASH64K_APP_USE_TEST_ACCEL_AFE_PERIOD_SEC 30U
+
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
 // #define _DI_SWITCH_longKEY_ONOFF

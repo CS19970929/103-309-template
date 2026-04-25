@@ -11,7 +11,11 @@
 #define FLASH_ADDR_UPDATE_FLAG           0x0801F800
 #define FLASH_ADDR_SLEEP_FLAG            0x0801FC00
 
+#if defined(STM32F10X_MD)
+#define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000400)
+#else
 #define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000800)
+#endif
 #define FLASH_STORAGE_SLOT_SIZE          FLASH_STORAGE_PAGE_SIZE
 
 #define FLASH_ADDR_STORAGE_AFE_SLOT_A    ((UINT32)0x0801C000)
@@ -58,6 +62,7 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 
+void StorageFlash_PrintBootCheck(void);
 void App_FlashUpdate(void);
 void APP_To_IAP_Jump(void);
 void InitAreaSelect(void);

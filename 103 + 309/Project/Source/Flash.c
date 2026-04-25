@@ -1,4 +1,5 @@
 #include "main.h"
+#include "Flash64KAppTest.h"
 
 typedef void (*pFunction)(void);
 pFunction Jump_To_Application;
@@ -8,6 +9,7 @@ uint32_t JumpAddress;
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
 #define FLASH_STORAGE_MAGIC_LOG ((UINT32)0x4C4F4731)
 #define FLASH_STORAGE_VERSION   ((UINT16)0x0001)
+#define FLASH_SIZE_REG_ADDR     ((UINT32)0x1FFFF7E0)
 
 typedef struct
 {
@@ -586,17 +588,21 @@ UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 {
+	UINT8 result;
+
 	if (data == 0)
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0;
 	}
 
-	return StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
-										FLASH_ADDR_STORAGE_SOC_SLOT_B,
-										FLASH_STORAGE_MAGIC_SOC,
-										(const UINT8 *)data,
-										(UINT16)sizeof(STORAGE_FLASH_SOC_DATA));
+	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
+										  FLASH_ADDR_STORAGE_SOC_SLOT_B,
+										  FLASH_STORAGE_MAGIC_SOC,
+										  (const UINT8 *)data,
+										  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA));
+	StorageFlash_AppUseTest_OnSocSaved(data, result);
+	return result;
 }
 
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
@@ -615,17 +621,21 @@ UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
 
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 {
+	UINT8 result;
+
 	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0;
 	}
 
-	return StorageFlash_SavePair(FLASH_ADDR_STORAGE_AFE_SLOT_A,
-								 FLASH_ADDR_STORAGE_AFE_SLOT_B,
-								 FLASH_STORAGE_MAGIC_AFE,
-								 (const UINT8 *)values,
-								 (UINT16)(word_count * sizeof(UINT16)));
+	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_AFE_SLOT_A,
+								   FLASH_ADDR_STORAGE_AFE_SLOT_B,
+								   FLASH_STORAGE_MAGIC_AFE,
+								   (const UINT8 *)values,
+								   (UINT16)(word_count * sizeof(UINT16)));
+	StorageFlash_AppUseTest_OnAfeSaved(values, word_count, result);
+	return result;
 }
 
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
@@ -670,6 +680,95 @@ UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LO
 										FLASH_STORAGE_MAGIC_LOG,
 										(const UINT8 *)&data,
 										(UINT16)sizeof(STORAGE_FLASH_LOG_DATA));
+}
+
+static char StorageFlash_SelectLabel(UINT8 valid_a, UINT32 seq_a, UINT8 valid_b, UINT32 seq_b)
+{
+	if (valid_a && valid_b)
+	{
+		return (seq_a >= seq_b) ? 'A' : 'B';
+	}
+	if (valid_a)
+	{
+		return 'A';
+	}
+	if (valid_b)
+	{
+		return 'B';
+	}
+	return '-';
+}
+
+void StorageFlash_PrintBootCheck(void)
+{
+	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
+	UINT8 afe_valid_a;
+	UINT8 afe_valid_b;
+	UINT8 soc_valid_a;
+	UINT8 soc_valid_b;
+	UINT32 afe_seq_a = 0;
+	UINT32 afe_seq_b = 0;
+	UINT32 soc_seq_a = 0;
+	UINT32 soc_seq_b = 0;
+	UINT32 soc_next_a = FLASH_ADDR_STORAGE_SOC_SLOT_A;
+	UINT32 soc_next_b = FLASH_ADDR_STORAGE_SOC_SLOT_B;
+	UINT16 update_flag = 0xFFFF;
+	UINT16 upgrade_flag = 0xFFFF;
+
+	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu\r\n",
+		   flash_size_kb,
+		   (unsigned long)FLASH_STORAGE_PAGE_SIZE);
+
+	if (flash_size_kb < 128U)
+	{
+		printf("[FLASH_BOOT] rear64 unavailable: skip 0x08010000+ storage check\r\n");
+		return;
+	}
+
+	afe_valid_a = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_AFE_SLOT_A,
+										FLASH_STORAGE_MAGIC_AFE,
+										(UINT16)(FLASH_STORAGE_AFE_WORD_COUNT * sizeof(UINT16)),
+										0,
+										&afe_seq_a);
+	afe_valid_b = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_AFE_SLOT_B,
+										FLASH_STORAGE_MAGIC_AFE,
+										(UINT16)(FLASH_STORAGE_AFE_WORD_COUNT * sizeof(UINT16)),
+										0,
+										&afe_seq_b);
+
+	soc_valid_a = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_A,
+											   FLASH_STORAGE_MAGIC_SOC,
+											   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
+											   0,
+											   &soc_seq_a,
+											   &soc_next_a);
+	soc_valid_b = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_B,
+											   FLASH_STORAGE_MAGIC_SOC,
+											   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
+											   0,
+											   &soc_seq_b,
+											   &soc_next_b);
+
+	printf("[FLASH_BOOT] AFE A=%u seq=%lu B=%u seq=%lu selected=%c\r\n",
+		   afe_valid_a,
+		   (unsigned long)afe_seq_a,
+		   afe_valid_b,
+		   (unsigned long)afe_seq_b,
+		   StorageFlash_SelectLabel(afe_valid_a, afe_seq_a, afe_valid_b, afe_seq_b));
+	printf("[FLASH_BOOT] SOC A=%u seq=%lu next=0x%04lX B=%u seq=%lu next=0x%04lX selected=%c\r\n",
+		   soc_valid_a,
+		   (unsigned long)soc_seq_a,
+		   (unsigned long)(soc_next_a - FLASH_ADDR_STORAGE_SOC_SLOT_A),
+		   soc_valid_b,
+		   (unsigned long)soc_seq_b,
+		   (unsigned long)(soc_next_b - FLASH_ADDR_STORAGE_SOC_SLOT_B),
+		   StorageFlash_SelectLabel(soc_valid_a, soc_seq_a, soc_valid_b, soc_seq_b));
+
+	update_flag = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
+	upgrade_flag = FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG);
+	printf("[FLASH_BOOT] flag update=0x%04X upgrade_param=0x%04X\r\n",
+		   update_flag,
+		   upgrade_flag);
 }
 
 void App_FlashUpdate(void)
