@@ -87,77 +87,85 @@ typedef enum
     LEDBAR_ROUTE_COUNT
 } LedBarRouteId;
 
-#define LEDBAR_DIGIT_BIT_A         (1u << 0)
-#define LEDBAR_DIGIT_BIT_B         (1u << 1)
-#define LEDBAR_DIGIT_BIT_C         (1u << 2)
-#define LEDBAR_DIGIT_BIT_D         (1u << 3)
-#define LEDBAR_DIGIT_BIT_E         (1u << 4)
-#define LEDBAR_DIGIT_BIT_F         (1u << 5)
-#define LEDBAR_DIGIT_BIT_G         (1u << 6)
-#define LEDBAR_PATTERN_MASK_MAX    30u
-#define LEDBAR_SCAN_HOLD_TICKS     3u
+#define LEDBAR_DIGIT_BIT_A (1u << 0)
+#define LEDBAR_DIGIT_BIT_B (1u << 1)
+#define LEDBAR_DIGIT_BIT_C (1u << 2)
+#define LEDBAR_DIGIT_BIT_D (1u << 3)
+#define LEDBAR_DIGIT_BIT_E (1u << 4)
+#define LEDBAR_DIGIT_BIT_F (1u << 5)
+#define LEDBAR_DIGIT_BIT_G (1u << 6)
+#define LEDBAR_PATTERN_MASK_MAX 30u
+#define LEDBAR_SCAN_HOLD_TICKS 3u
 
-#define LEDBAR_595_GPIO_DATA  GPIO_LED595_DATA
-#define LEDBAR_595_PIN_DATA   PIN_LED595_DATA
-#define LEDBAR_595_GPIO_CLK   GPIO_LED595_CLK
-#define LEDBAR_595_PIN_CLK    PIN_LED595_CLK
+#define LEDBAR_595_GPIO_DATA GPIO_LED595_DATA
+#define LEDBAR_595_PIN_DATA PIN_LED595_DATA
+#define LEDBAR_595_GPIO_CLK GPIO_LED595_CLK
+#define LEDBAR_595_PIN_CLK PIN_LED595_CLK
 #define LEDBAR_595_GPIO_LATCH GPIO_LED595_LATCH
-#define LEDBAR_595_PIN_LATCH  PIN_LED595_LATCH
+#define LEDBAR_595_PIN_LATCH PIN_LED595_LATCH
 
-#define LEDBAR_KEY_LONG_PRESS_10MS       300u
-#define LEDBAR_SLEEP_SOC_MAGIC           0x5A00u
-#define LEDBAR_SLEEP_SOC_MAGIC_MASK      0xFF00u
-#define LEDBAR_SLEEP_SOC_VALUE_MASK      0x00FFu
-#define LEDBAR_SLEEP_SOC_REG             BKP_DR4
-#define LEDBAR_SLEEP_SOC_INV_REG         BKP_DR5
+#define LEDBAR_KEY_LONG_PRESS_10MS 300u
+#define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
+#define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
+#define LEDBAR_SLEEP_SOC_VALUE_MASK 0x00FFu
+#define LEDBAR_SLEEP_SOC_REG BKP_DR4
+#define LEDBAR_SLEEP_SOC_INV_REG BKP_DR5
 
 LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
 
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
-{
-    {3u, 2u},
-    {3u, 1u},
-    {2u, 1u},
-    {1u, 2u},
-    {2u, 3u},
-    {1u, 3u},
-    {1u, 4u},
-    {2u, 4u},
-    {3u, 4u},
-    {1u, 0u},
-    {0u, 1u},
-    {2u, 0u},
-    {0u, 2u},
-    {3u, 0u},
-    {0u, 3u},
-    {0u, 4u},
-    {4u, 2u},
-    {4u, 1u},
+    {
+        {3u, 2u},
+        {3u, 1u},
+        {2u, 1u},
+        {1u, 2u},
+        {2u, 3u},
+        {1u, 3u},
+        {1u, 4u},
+        {2u, 4u},
+        {3u, 4u},
+        {1u, 0u},
+        {0u, 1u},
+        {2u, 0u},
+        {0u, 2u},
+        {3u, 0u},
+        {0u, 3u},
+        {0u, 4u},
+        {4u, 2u},
+        {4u, 1u},
 };
 
 #if LEDBAR_DRIVER_GPIO_CHARLIE
-static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] =
-{
-    {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
+static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] = {
+    {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
+    {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
     {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
     {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
-    {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
-    {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
+    {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
 };
+
+// static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] =
+// {
+//     {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
+//     {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
+//     {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
+//     {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
+//     {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
+// };
 #endif
 
 static const uint8_t s_ledbar_digit_map[10] =
-{
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F,
-    LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+    {
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F,
+        LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+        LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
 #if !LEDBAR_DRIVER_GPIO_CHARLIE
@@ -168,245 +176,243 @@ static const uint8_t s_ledbar_digit_map[10] =
  * display while minimizing unavoidable extra lit segments.
  */
 static const uint8_t s_ledbar_soc_patterns[101][5] =
-{
-    {1, 14, 0, 0, 0}, /* 000, extra=1 */
-    {2, 3, 0, 0, 0}, /* 001, extra=3 */
-    {1, 14, 30, 0, 0}, /* 002, extra=3 */
-    {1, 14, 30, 0, 0}, /* 003, extra=3 */
-    {26, 11, 0, 0, 0}, /* 004, extra=3 */
-    {1, 14, 30, 0, 0}, /* 005, extra=3 */
-    {1, 14, 30, 0, 0}, /* 006, extra=2 */
-    {1, 2, 0, 0, 0}, /* 007, extra=3 */
-    {1, 14, 30, 0, 0}, /* 008, extra=1 */
-    {1, 14, 30, 0, 0}, /* 009, extra=2 */
-    {12, 8, 1, 14, 0}, /* 010, extra=2 */
-    {4, 10, 11, 0, 0}, /* 011, extra=5 */
-    {5, 10, 30, 0, 0}, /* 012, extra=4 */
-    {12, 9, 14, 30, 0}, /* 013, extra=3 */
-    {4, 11, 30, 0, 0}, /* 014, extra=4 */
-    {28, 9, 11, 0, 0}, /* 015, extra=3 */
-    {28, 11, 1, 0, 0}, /* 016, extra=3 */
-    {12, 9, 14, 0, 0}, /* 017, extra=4 */
-    {12, 8, 1, 14, 30}, /* 018, extra=2 */
-    {12, 9, 14, 30, 0}, /* 019, extra=2 */
-    {2, 12, 17, 0, 0}, /* 020, extra=3 */
-    {2, 29, 17, 0, 0}, /* 021, extra=4 */
-    {2, 20, 29, 21, 0}, /* 022, extra=2 */
-    {2, 20, 9, 0, 0}, /* 023, extra=3 */
-    {10, 20, 8, 11, 0}, /* 024, extra=3 */
-    {11, 20, 8, 9, 0}, /* 025, extra=2 */
-    {3, 21, 28, 0, 0}, /* 026, extra=2 */
-    {2, 29, 17, 0, 0}, /* 027, extra=3 */
-    {2, 28, 17, 0, 0}, /* 028, extra=2 */
-    {10, 20, 9, 0, 0}, /* 029, extra=2 */
-    {10, 12, 17, 0, 0}, /* 030, extra=3 */
-    {2, 21, 9, 0, 0}, /* 031, extra=5 */
-    {10, 21, 28, 0, 0}, /* 032, extra=3 */
-    {2, 20, 9, 0, 0}, /* 033, extra=3 */
-    {10, 20, 8, 11, 0}, /* 034, extra=3 */
-    {11, 20, 8, 9, 0}, /* 035, extra=2 */
-    {11, 21, 28, 0, 0}, /* 036, extra=2 */
-    {2, 21, 9, 0, 0}, /* 037, extra=4 */
-    {10, 28, 17, 0, 0}, /* 038, extra=2 */
-    {10, 20, 9, 0, 0}, /* 039, extra=2 */
-    {12, 8, 17, 14, 0}, /* 040, extra=3 */
-    {4, 11, 18, 0, 0}, /* 041, extra=6 */
-    {20, 10, 16, 21, 0}, /* 042, extra=4 */
-    {12, 9, 16, 14, 0}, /* 043, extra=4 */
-    {20, 10, 27, 0, 0}, /* 044, extra=4 */
-    {12, 9, 16, 15, 0}, /* 045, extra=3 */
-    {28, 11, 17, 0, 0}, /* 046, extra=3 */
-    {13, 11, 18, 0, 0}, /* 047, extra=5 */
-    {20, 10, 17, 0, 0}, /* 048, extra=3 */
-    {12, 9, 16, 14, 0}, /* 049, extra=3 */
-    {19, 9, 14, 0, 0}, /* 050, extra=2 */
-    {2, 8, 19, 0, 0}, /* 051, extra=3 */
-    {2, 9, 19, 22, 0}, /* 052, extra=3 */
-    {2, 9, 18, 22, 0}, /* 053, extra=2 */
-    {11, 8, 18, 0, 0}, /* 054, extra=1 */
-    {2, 9, 18, 30, 0}, /* 055, extra=2 */
-    {11, 28, 17, 0, 0}, /* 056, extra=2 */
-    {2, 9, 18, 0, 0}, /* 057, extra=2 */
-    {2, 9, 19, 30, 0}, /* 058, extra=1 */
-    {2, 9, 18, 30, 0}, /* 059, extra=1 */
-    {10, 8, 17, 14, 0}, /* 060, extra=1 */
-    {10, 8, 16, 11, 0}, /* 061, extra=2 */
-    {10, 8, 17, 30, 0}, /* 062, extra=2 */
-    {10, 9, 16, 30, 0}, /* 063, extra=1 */
-    {10, 8, 16, 11, 0}, /* 064, extra=0 */
-    {10, 9, 16, 30, 0}, /* 065, extra=1 */
-    {11, 28, 17, 0, 0}, /* 066, extra=1 */
-    {2, 9, 16, 0, 0}, /* 067, extra=2 */
-    {10, 8, 17, 30, 0}, /* 068, extra=0 */
-    {10, 9, 16, 30, 0}, /* 069, extra=0 */
-    {10, 4, 1, 0, 0}, /* 070, extra=2 */
-    {2, 4, 11, 0, 0}, /* 071, extra=4 */
-    {10, 5, 30, 0, 0}, /* 072, extra=3 */
-    {10, 28, 9, 0, 0}, /* 073, extra=3 */
-    {10, 28, 11, 0, 0}, /* 074, extra=3 */
-    {11, 28, 9, 0, 0}, /* 075, extra=2 */
-    {11, 28, 1, 0, 0}, /* 076, extra=2 */
-    {2, 13, 9, 0, 0}, /* 077, extra=3 */
-    {10, 28, 1, 0, 0}, /* 078, extra=2 */
-    {10, 28, 9, 0, 0}, /* 079, extra=2 */
-    {10, 12, 17, 0, 0}, /* 080, extra=1 */
-    {10, 29, 17, 0, 0}, /* 081, extra=3 */
-    {10, 28, 17, 0, 0}, /* 082, extra=2 */
-    {10, 28, 16, 9, 0}, /* 083, extra=1 */
-    {10, 28, 16, 11, 0}, /* 084, extra=1 */
-    {11, 28, 16, 9, 0}, /* 085, extra=0 */
-    {11, 28, 17, 0, 0}, /* 086, extra=0 */
-    {10, 29, 17, 0, 0}, /* 087, extra=2 */
-    {10, 28, 17, 0, 0}, /* 088, extra=0 */
-    {10, 28, 16, 9, 0}, /* 089, extra=0 */
-    {10, 12, 17, 0, 0}, /* 090, extra=2 */
-    {10, 29, 17, 0, 0}, /* 091, extra=4 */
-    {10, 28, 17, 0, 0}, /* 092, extra=3 */
-    {10, 28, 16, 9, 0}, /* 093, extra=2 */
-    {10, 28, 16, 11, 0}, /* 094, extra=2 */
-    {11, 28, 16, 9, 0}, /* 095, extra=1 */
-    {11, 28, 17, 0, 0}, /* 096, extra=1 */
-    {10, 29, 17, 0, 0}, /* 097, extra=3 */
-    {10, 28, 17, 0, 0}, /* 098, extra=1 */
-    {10, 28, 16, 9, 0}, /* 099, extra=1 */
-    {2, 5, 25, 12, 0}, /* 100, extra=1 */
+    {
+        {1, 14, 0, 0, 0},    /* 000, extra=1 */
+        {2, 3, 0, 0, 0},     /* 001, extra=3 */
+        {1, 14, 30, 0, 0},   /* 002, extra=3 */
+        {1, 14, 30, 0, 0},   /* 003, extra=3 */
+        {26, 11, 0, 0, 0},   /* 004, extra=3 */
+        {1, 14, 30, 0, 0},   /* 005, extra=3 */
+        {1, 14, 30, 0, 0},   /* 006, extra=2 */
+        {1, 2, 0, 0, 0},     /* 007, extra=3 */
+        {1, 14, 30, 0, 0},   /* 008, extra=1 */
+        {1, 14, 30, 0, 0},   /* 009, extra=2 */
+        {12, 8, 1, 14, 0},   /* 010, extra=2 */
+        {4, 10, 11, 0, 0},   /* 011, extra=5 */
+        {5, 10, 30, 0, 0},   /* 012, extra=4 */
+        {12, 9, 14, 30, 0},  /* 013, extra=3 */
+        {4, 11, 30, 0, 0},   /* 014, extra=4 */
+        {28, 9, 11, 0, 0},   /* 015, extra=3 */
+        {28, 11, 1, 0, 0},   /* 016, extra=3 */
+        {12, 9, 14, 0, 0},   /* 017, extra=4 */
+        {12, 8, 1, 14, 30},  /* 018, extra=2 */
+        {12, 9, 14, 30, 0},  /* 019, extra=2 */
+        {2, 12, 17, 0, 0},   /* 020, extra=3 */
+        {2, 29, 17, 0, 0},   /* 021, extra=4 */
+        {2, 20, 29, 21, 0},  /* 022, extra=2 */
+        {2, 20, 9, 0, 0},    /* 023, extra=3 */
+        {10, 20, 8, 11, 0},  /* 024, extra=3 */
+        {11, 20, 8, 9, 0},   /* 025, extra=2 */
+        {3, 21, 28, 0, 0},   /* 026, extra=2 */
+        {2, 29, 17, 0, 0},   /* 027, extra=3 */
+        {2, 28, 17, 0, 0},   /* 028, extra=2 */
+        {10, 20, 9, 0, 0},   /* 029, extra=2 */
+        {10, 12, 17, 0, 0},  /* 030, extra=3 */
+        {2, 21, 9, 0, 0},    /* 031, extra=5 */
+        {10, 21, 28, 0, 0},  /* 032, extra=3 */
+        {2, 20, 9, 0, 0},    /* 033, extra=3 */
+        {10, 20, 8, 11, 0},  /* 034, extra=3 */
+        {11, 20, 8, 9, 0},   /* 035, extra=2 */
+        {11, 21, 28, 0, 0},  /* 036, extra=2 */
+        {2, 21, 9, 0, 0},    /* 037, extra=4 */
+        {10, 28, 17, 0, 0},  /* 038, extra=2 */
+        {10, 20, 9, 0, 0},   /* 039, extra=2 */
+        {12, 8, 17, 14, 0},  /* 040, extra=3 */
+        {4, 11, 18, 0, 0},   /* 041, extra=6 */
+        {20, 10, 16, 21, 0}, /* 042, extra=4 */
+        {12, 9, 16, 14, 0},  /* 043, extra=4 */
+        {20, 10, 27, 0, 0},  /* 044, extra=4 */
+        {12, 9, 16, 15, 0},  /* 045, extra=3 */
+        {28, 11, 17, 0, 0},  /* 046, extra=3 */
+        {13, 11, 18, 0, 0},  /* 047, extra=5 */
+        {20, 10, 17, 0, 0},  /* 048, extra=3 */
+        {12, 9, 16, 14, 0},  /* 049, extra=3 */
+        {19, 9, 14, 0, 0},   /* 050, extra=2 */
+        {2, 8, 19, 0, 0},    /* 051, extra=3 */
+        {2, 9, 19, 22, 0},   /* 052, extra=3 */
+        {2, 9, 18, 22, 0},   /* 053, extra=2 */
+        {11, 8, 18, 0, 0},   /* 054, extra=1 */
+        {2, 9, 18, 30, 0},   /* 055, extra=2 */
+        {11, 28, 17, 0, 0},  /* 056, extra=2 */
+        {2, 9, 18, 0, 0},    /* 057, extra=2 */
+        {2, 9, 19, 30, 0},   /* 058, extra=1 */
+        {2, 9, 18, 30, 0},   /* 059, extra=1 */
+        {10, 8, 17, 14, 0},  /* 060, extra=1 */
+        {10, 8, 16, 11, 0},  /* 061, extra=2 */
+        {10, 8, 17, 30, 0},  /* 062, extra=2 */
+        {10, 9, 16, 30, 0},  /* 063, extra=1 */
+        {10, 8, 16, 11, 0},  /* 064, extra=0 */
+        {10, 9, 16, 30, 0},  /* 065, extra=1 */
+        {11, 28, 17, 0, 0},  /* 066, extra=1 */
+        {2, 9, 16, 0, 0},    /* 067, extra=2 */
+        {10, 8, 17, 30, 0},  /* 068, extra=0 */
+        {10, 9, 16, 30, 0},  /* 069, extra=0 */
+        {10, 4, 1, 0, 0},    /* 070, extra=2 */
+        {2, 4, 11, 0, 0},    /* 071, extra=4 */
+        {10, 5, 30, 0, 0},   /* 072, extra=3 */
+        {10, 28, 9, 0, 0},   /* 073, extra=3 */
+        {10, 28, 11, 0, 0},  /* 074, extra=3 */
+        {11, 28, 9, 0, 0},   /* 075, extra=2 */
+        {11, 28, 1, 0, 0},   /* 076, extra=2 */
+        {2, 13, 9, 0, 0},    /* 077, extra=3 */
+        {10, 28, 1, 0, 0},   /* 078, extra=2 */
+        {10, 28, 9, 0, 0},   /* 079, extra=2 */
+        {10, 12, 17, 0, 0},  /* 080, extra=1 */
+        {10, 29, 17, 0, 0},  /* 081, extra=3 */
+        {10, 28, 17, 0, 0},  /* 082, extra=2 */
+        {10, 28, 16, 9, 0},  /* 083, extra=1 */
+        {10, 28, 16, 11, 0}, /* 084, extra=1 */
+        {11, 28, 16, 9, 0},  /* 085, extra=0 */
+        {11, 28, 17, 0, 0},  /* 086, extra=0 */
+        {10, 29, 17, 0, 0},  /* 087, extra=2 */
+        {10, 28, 17, 0, 0},  /* 088, extra=0 */
+        {10, 28, 16, 9, 0},  /* 089, extra=0 */
+        {10, 12, 17, 0, 0},  /* 090, extra=2 */
+        {10, 29, 17, 0, 0},  /* 091, extra=4 */
+        {10, 28, 17, 0, 0},  /* 092, extra=3 */
+        {10, 28, 16, 9, 0},  /* 093, extra=2 */
+        {10, 28, 16, 11, 0}, /* 094, extra=2 */
+        {11, 28, 16, 9, 0},  /* 095, extra=1 */
+        {11, 28, 17, 0, 0},  /* 096, extra=1 */
+        {10, 29, 17, 0, 0},  /* 097, extra=3 */
+        {10, 28, 17, 0, 0},  /* 098, extra=1 */
+        {10, 28, 16, 9, 0},  /* 099, extra=1 */
+        {2, 5, 25, 12, 0},   /* 100, extra=1 */
 };
 
 static const uint8_t s_ledbar_soc_charge_patterns[101][5] =
-{
-    {1, 14, 0, 0, 0}, /* 000, extra=0 */
-    {2, 3, 15, 0, 0}, /* 001, extra=3 */
-    {1, 14, 30, 0, 0}, /* 002, extra=2 */
-    {1, 14, 30, 0, 0}, /* 003, extra=2 */
-    {14, 1, 30, 0, 0}, /* 004, extra=3 */
-    {1, 14, 30, 0, 0}, /* 005, extra=2 */
-    {1, 14, 30, 0, 0}, /* 006, extra=1 */
-    {1, 14, 0, 0, 0}, /* 007, extra=3 */
-    {1, 14, 30, 0, 0}, /* 008, extra=0 */
-    {1, 14, 30, 0, 0}, /* 009, extra=1 */
-    {12, 8, 1, 14, 0}, /* 010, extra=1 */
-    {4, 10, 11, 0, 0}, /* 011, extra=4 */
-    {5, 10, 30, 0, 0}, /* 012, extra=3 */
-    {12, 9, 14, 30, 0}, /* 013, extra=2 */
-    {4, 11, 30, 0, 0}, /* 014, extra=3 */
-    {28, 9, 15, 0, 0}, /* 015, extra=2 */
-    {28, 8, 1, 15, 0}, /* 016, extra=2 */
-    {12, 9, 14, 0, 0}, /* 017, extra=3 */
-    {12, 8, 1, 14, 30}, /* 018, extra=1 */
-    {12, 9, 14, 30, 0}, /* 019, extra=1 */
-    {2, 12, 17, 0, 0}, /* 020, extra=2 */
-    {2, 13, 17, 0, 0}, /* 021, extra=4 */
-    {2, 5, 13, 20, 0}, /* 022, extra=2 */
-    {2, 4, 9, 20, 0}, /* 023, extra=3 */
-    {10, 12, 16, 11, 0}, /* 024, extra=3 */
-    {11, 12, 16, 9, 0}, /* 025, extra=2 */
-    {3, 4, 28, 21, 0}, /* 026, extra=2 */
-    {2, 13, 17, 0, 0}, /* 027, extra=3 */
-    {2, 12, 16, 1, 0}, /* 028, extra=2 */
-    {10, 4, 9, 20, 0}, /* 029, extra=2 */
-    {10, 12, 17, 0, 0}, /* 030, extra=2 */
-    {11, 13, 18, 0, 0}, /* 031, extra=4 */
-    {2, 5, 8, 22, 0}, /* 032, extra=3 */
-    {11, 13, 22, 0, 0}, /* 033, extra=2 */
-    {11, 12, 18, 0, 0}, /* 034, extra=3 */
-    {11, 12, 16, 9, 0}, /* 035, extra=2 */
-    {11, 4, 28, 21, 0}, /* 036, extra=2 */
-    {11, 13, 18, 0, 0}, /* 037, extra=3 */
-    {3, 5, 8, 22, 0}, /* 038, extra=2 */
-    {2, 12, 9, 18, 0}, /* 039, extra=2 */
-    {12, 8, 17, 14, 0}, /* 040, extra=2 */
-    {4, 11, 18, 0, 0}, /* 041, extra=5 */
-    {21, 24, 14, 0, 0}, /* 042, extra=4 */
-    {12, 9, 16, 14, 0}, /* 043, extra=3 */
-    {12, 11, 18, 0, 0}, /* 044, extra=4 */
-    {12, 9, 16, 15, 0}, /* 045, extra=2 */
-    {12, 24, 17, 15, 0}, /* 046, extra=2 */
-    {13, 11, 18, 0, 0}, /* 047, extra=4 */
-    {12, 24, 17, 14, 0}, /* 048, extra=2 */
-    {12, 9, 16, 14, 0}, /* 049, extra=2 */
-    {19, 9, 14, 0, 0}, /* 050, extra=1 */
-    {18, 9, 15, 0, 0}, /* 051, extra=3 */
-    {3, 9, 18, 6, 0}, /* 052, extra=3 */
-    {18, 9, 6, 0, 0}, /* 053, extra=2 */
-    {11, 8, 18, 15, 0}, /* 054, extra=1 */
-    {18, 9, 14, 0, 0}, /* 055, extra=2 */
-    {3, 9, 18, 14, 0}, /* 056, extra=2 */
-    {18, 9, 15, 0, 0}, /* 057, extra=2 */
-    {3, 9, 18, 14, 0}, /* 058, extra=1 */
-    {18, 9, 14, 0, 0}, /* 059, extra=1 */
-    {10, 8, 17, 14, 0}, /* 060, extra=0 */
-    {10, 8, 16, 11, 15}, /* 061, extra=2 */
-    {10, 24, 17, 14, 0}, /* 062, extra=2 */
-    {10, 9, 16, 14, 0}, /* 063, extra=1 */
-    {10, 8, 16, 11, 15}, /* 064, extra=0 */
-    {10, 9, 16, 14, 0}, /* 065, extra=1 */
-    {10, 24, 17, 14, 0}, /* 066, extra=1 */
-    {18, 25, 15, 0, 0}, /* 067, extra=2 */
-    {10, 24, 17, 14, 0}, /* 068, extra=0 */
-    {10, 9, 16, 14, 0}, /* 069, extra=0 */
-    {10, 4, 1, 0, 0}, /* 070, extra=1 */
-    {2, 4, 11, 0, 0}, /* 071, extra=3 */
-    {10, 5, 30, 0, 0}, /* 072, extra=2 */
-    {11, 13, 30, 0, 0}, /* 073, extra=2 */
-    {11, 4, 30, 0, 0}, /* 074, extra=2 */
-    {11, 13, 28, 0, 0}, /* 075, extra=2 */
-    {11, 5, 30, 0, 0}, /* 076, extra=2 */
-    {2, 13, 9, 0, 0}, /* 077, extra=2 */
-    {11, 5, 30, 0, 0}, /* 078, extra=1 */
-    {11, 13, 30, 0, 0}, /* 079, extra=1 */
-    {10, 12, 17, 0, 0}, /* 080, extra=0 */
-    {10, 13, 17, 0, 0}, /* 081, extra=3 */
-    {10, 4, 24, 21, 0}, /* 082, extra=2 */
-    {10, 12, 16, 9, 0}, /* 083, extra=1 */
-    {10, 12, 16, 11, 0}, /* 084, extra=1 */
-    {11, 12, 16, 9, 0}, /* 085, extra=0 */
-    {11, 12, 16, 1, 0}, /* 086, extra=0 */
-    {10, 13, 17, 0, 0}, /* 087, extra=2 */
-    {10, 12, 16, 1, 0}, /* 088, extra=0 */
-    {10, 12, 16, 9, 0}, /* 089, extra=0 */
-    {10, 12, 17, 0, 0}, /* 090, extra=1 */
-    {11, 13, 18, 0, 0}, /* 091, extra=3 */
-    {3, 4, 9, 18, 0}, /* 092, extra=3 */
-    {2, 4, 9, 18, 0}, /* 093, extra=2 */
-    {11, 12, 18, 0, 0}, /* 094, extra=2 */
-    {11, 12, 16, 9, 0}, /* 095, extra=1 */
-    {11, 12, 16, 1, 0}, /* 096, extra=1 */
-    {11, 13, 18, 0, 0}, /* 097, extra=2 */
-    {3, 12, 9, 18, 0}, /* 098, extra=1 */
-    {2, 12, 9, 18, 0}, /* 099, extra=1 */
-    {2, 5, 25, 12, 0}, /* 100, extra=0 */
+    {
+        {1, 14, 0, 0, 0},    /* 000, extra=0 */
+        {2, 3, 15, 0, 0},    /* 001, extra=3 */
+        {1, 14, 30, 0, 0},   /* 002, extra=2 */
+        {1, 14, 30, 0, 0},   /* 003, extra=2 */
+        {14, 1, 30, 0, 0},   /* 004, extra=3 */
+        {1, 14, 30, 0, 0},   /* 005, extra=2 */
+        {1, 14, 30, 0, 0},   /* 006, extra=1 */
+        {1, 14, 0, 0, 0},    /* 007, extra=3 */
+        {1, 14, 30, 0, 0},   /* 008, extra=0 */
+        {1, 14, 30, 0, 0},   /* 009, extra=1 */
+        {12, 8, 1, 14, 0},   /* 010, extra=1 */
+        {4, 10, 11, 0, 0},   /* 011, extra=4 */
+        {5, 10, 30, 0, 0},   /* 012, extra=3 */
+        {12, 9, 14, 30, 0},  /* 013, extra=2 */
+        {4, 11, 30, 0, 0},   /* 014, extra=3 */
+        {28, 9, 15, 0, 0},   /* 015, extra=2 */
+        {28, 8, 1, 15, 0},   /* 016, extra=2 */
+        {12, 9, 14, 0, 0},   /* 017, extra=3 */
+        {12, 8, 1, 14, 30},  /* 018, extra=1 */
+        {12, 9, 14, 30, 0},  /* 019, extra=1 */
+        {2, 12, 17, 0, 0},   /* 020, extra=2 */
+        {2, 13, 17, 0, 0},   /* 021, extra=4 */
+        {2, 5, 13, 20, 0},   /* 022, extra=2 */
+        {2, 4, 9, 20, 0},    /* 023, extra=3 */
+        {10, 12, 16, 11, 0}, /* 024, extra=3 */
+        {11, 12, 16, 9, 0},  /* 025, extra=2 */
+        {3, 4, 28, 21, 0},   /* 026, extra=2 */
+        {2, 13, 17, 0, 0},   /* 027, extra=3 */
+        {2, 12, 16, 1, 0},   /* 028, extra=2 */
+        {10, 4, 9, 20, 0},   /* 029, extra=2 */
+        {10, 12, 17, 0, 0},  /* 030, extra=2 */
+        {11, 13, 18, 0, 0},  /* 031, extra=4 */
+        {2, 5, 8, 22, 0},    /* 032, extra=3 */
+        {11, 13, 22, 0, 0},  /* 033, extra=2 */
+        {11, 12, 18, 0, 0},  /* 034, extra=3 */
+        {11, 12, 16, 9, 0},  /* 035, extra=2 */
+        {11, 4, 28, 21, 0},  /* 036, extra=2 */
+        {11, 13, 18, 0, 0},  /* 037, extra=3 */
+        {3, 5, 8, 22, 0},    /* 038, extra=2 */
+        {2, 12, 9, 18, 0},   /* 039, extra=2 */
+        {12, 8, 17, 14, 0},  /* 040, extra=2 */
+        {4, 11, 18, 0, 0},   /* 041, extra=5 */
+        {21, 24, 14, 0, 0},  /* 042, extra=4 */
+        {12, 9, 16, 14, 0},  /* 043, extra=3 */
+        {12, 11, 18, 0, 0},  /* 044, extra=4 */
+        {12, 9, 16, 15, 0},  /* 045, extra=2 */
+        {12, 24, 17, 15, 0}, /* 046, extra=2 */
+        {13, 11, 18, 0, 0},  /* 047, extra=4 */
+        {12, 24, 17, 14, 0}, /* 048, extra=2 */
+        {12, 9, 16, 14, 0},  /* 049, extra=2 */
+        {19, 9, 14, 0, 0},   /* 050, extra=1 */
+        {18, 9, 15, 0, 0},   /* 051, extra=3 */
+        {3, 9, 18, 6, 0},    /* 052, extra=3 */
+        {18, 9, 6, 0, 0},    /* 053, extra=2 */
+        {11, 8, 18, 15, 0},  /* 054, extra=1 */
+        {18, 9, 14, 0, 0},   /* 055, extra=2 */
+        {3, 9, 18, 14, 0},   /* 056, extra=2 */
+        {18, 9, 15, 0, 0},   /* 057, extra=2 */
+        {3, 9, 18, 14, 0},   /* 058, extra=1 */
+        {18, 9, 14, 0, 0},   /* 059, extra=1 */
+        {10, 8, 17, 14, 0},  /* 060, extra=0 */
+        {10, 8, 16, 11, 15}, /* 061, extra=2 */
+        {10, 24, 17, 14, 0}, /* 062, extra=2 */
+        {10, 9, 16, 14, 0},  /* 063, extra=1 */
+        {10, 8, 16, 11, 15}, /* 064, extra=0 */
+        {10, 9, 16, 14, 0},  /* 065, extra=1 */
+        {10, 24, 17, 14, 0}, /* 066, extra=1 */
+        {18, 25, 15, 0, 0},  /* 067, extra=2 */
+        {10, 24, 17, 14, 0}, /* 068, extra=0 */
+        {10, 9, 16, 14, 0},  /* 069, extra=0 */
+        {10, 4, 1, 0, 0},    /* 070, extra=1 */
+        {2, 4, 11, 0, 0},    /* 071, extra=3 */
+        {10, 5, 30, 0, 0},   /* 072, extra=2 */
+        {11, 13, 30, 0, 0},  /* 073, extra=2 */
+        {11, 4, 30, 0, 0},   /* 074, extra=2 */
+        {11, 13, 28, 0, 0},  /* 075, extra=2 */
+        {11, 5, 30, 0, 0},   /* 076, extra=2 */
+        {2, 13, 9, 0, 0},    /* 077, extra=2 */
+        {11, 5, 30, 0, 0},   /* 078, extra=1 */
+        {11, 13, 30, 0, 0},  /* 079, extra=1 */
+        {10, 12, 17, 0, 0},  /* 080, extra=0 */
+        {10, 13, 17, 0, 0},  /* 081, extra=3 */
+        {10, 4, 24, 21, 0},  /* 082, extra=2 */
+        {10, 12, 16, 9, 0},  /* 083, extra=1 */
+        {10, 12, 16, 11, 0}, /* 084, extra=1 */
+        {11, 12, 16, 9, 0},  /* 085, extra=0 */
+        {11, 12, 16, 1, 0},  /* 086, extra=0 */
+        {10, 13, 17, 0, 0},  /* 087, extra=2 */
+        {10, 12, 16, 1, 0},  /* 088, extra=0 */
+        {10, 12, 16, 9, 0},  /* 089, extra=0 */
+        {10, 12, 17, 0, 0},  /* 090, extra=1 */
+        {11, 13, 18, 0, 0},  /* 091, extra=3 */
+        {3, 4, 9, 18, 0},    /* 092, extra=3 */
+        {2, 4, 9, 18, 0},    /* 093, extra=2 */
+        {11, 12, 18, 0, 0},  /* 094, extra=2 */
+        {11, 12, 16, 9, 0},  /* 095, extra=1 */
+        {11, 12, 16, 1, 0},  /* 096, extra=1 */
+        {11, 13, 18, 0, 0},  /* 097, extra=2 */
+        {3, 12, 9, 18, 0},   /* 098, extra=1 */
+        {2, 12, 9, 18, 0},   /* 099, extra=1 */
+        {2, 5, 25, 12, 0},   /* 100, extra=0 */
 };
 
 #if LEDBAR_SOC_DISPLAY_SNAP_ENABLE
 static const uint8_t s_ledbar_soc_extra_score[101] =
-{
-    1u, 3u, 3u, 3u, 3u, 3u, 2u, 3u, 1u, 2u,
-    2u, 5u, 4u, 3u, 4u, 3u, 3u, 4u, 2u, 2u,
-    3u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
-    3u, 5u, 3u, 3u, 3u, 2u, 2u, 4u, 2u, 2u,
-    3u, 6u, 4u, 4u, 4u, 3u, 3u, 5u, 3u, 3u,
-    2u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
-    1u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
-    2u, 4u, 3u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
-    1u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
-    2u, 4u, 3u, 2u, 2u, 1u, 1u, 3u, 1u, 1u,
-    1u
-};
+    {
+        1u, 3u, 3u, 3u, 3u, 3u, 2u, 3u, 1u, 2u,
+        2u, 5u, 4u, 3u, 4u, 3u, 3u, 4u, 2u, 2u,
+        3u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+        3u, 5u, 3u, 3u, 3u, 2u, 2u, 4u, 2u, 2u,
+        3u, 6u, 4u, 4u, 4u, 3u, 3u, 5u, 3u, 3u,
+        2u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
+        1u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
+        2u, 4u, 3u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+        1u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
+        2u, 4u, 3u, 2u, 2u, 1u, 1u, 3u, 1u, 1u,
+        1u};
 
 static const uint8_t s_ledbar_soc_charge_extra_score[101] =
-{
-    0u, 3u, 2u, 2u, 3u, 2u, 1u, 3u, 0u, 1u,
-    1u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 1u, 1u,
-    2u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
-    2u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 2u, 2u,
-    2u, 5u, 4u, 3u, 4u, 2u, 2u, 4u, 2u, 2u,
-    1u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
-    0u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
-    1u, 3u, 2u, 2u, 2u, 2u, 2u, 2u, 1u, 1u,
-    0u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
-    1u, 3u, 3u, 2u, 2u, 1u, 1u, 2u, 1u, 1u,
-    0u
-};
+    {
+        0u, 3u, 2u, 2u, 3u, 2u, 1u, 3u, 0u, 1u,
+        1u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 1u, 1u,
+        2u, 4u, 2u, 3u, 3u, 2u, 2u, 3u, 2u, 2u,
+        2u, 4u, 3u, 2u, 3u, 2u, 2u, 3u, 2u, 2u,
+        2u, 5u, 4u, 3u, 4u, 2u, 2u, 4u, 2u, 2u,
+        1u, 3u, 3u, 2u, 1u, 2u, 2u, 2u, 1u, 1u,
+        0u, 2u, 2u, 1u, 0u, 1u, 1u, 2u, 0u, 0u,
+        1u, 3u, 2u, 2u, 2u, 2u, 2u, 2u, 1u, 1u,
+        0u, 3u, 2u, 1u, 1u, 0u, 0u, 2u, 0u, 0u,
+        1u, 3u, 3u, 2u, 2u, 1u, 1u, 2u, 1u, 1u,
+        0u};
 #endif
 #endif
 
@@ -463,15 +469,17 @@ static void LedBar_GpioInitForDisplay(void)
 {
 #if LEDBAR_DRIVER_GPIO_CHARLIE
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
-                           RCC_APB2Periph_GPIOA |
-                           RCC_APB2Periph_GPIOB, ENABLE);
+                               RCC_APB2Periph_GPIOA |
+                               RCC_APB2Periph_GPIOB,
+                           ENABLE);
     LedBar_AllPinsHiZ();
 #else
     GPIO_InitTypeDef gpio_init;
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
-                           RCC_APB2Periph_GPIOA |
-                           RCC_APB2Periph_GPIOB, ENABLE);
+                               RCC_APB2Periph_GPIOA |
+                               RCC_APB2Periph_GPIOB,
+                           ENABLE);
 
     gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
     gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
@@ -493,13 +501,15 @@ static void LedBar_GpioPrepareForStop(void)
 {
 #if LEDBAR_DRIVER_GPIO_CHARLIE
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
-                           RCC_APB2Periph_GPIOB, ENABLE);
+                               RCC_APB2Periph_GPIOB,
+                           ENABLE);
     LedBar_AllPinsAnalog();
 #else
     GPIO_InitTypeDef gpio_init;
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
-                           RCC_APB2Periph_GPIOB, ENABLE);
+                               RCC_APB2Periph_GPIOB,
+                           ENABLE);
 
     GPIO_ResetBits(GPIO_SEG_EN, PIN_SEG_EN);
 
@@ -840,23 +850,65 @@ static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
     if (show_tens != 0u)
     {
         digit_mask = s_ledbar_digit_map[tens];
-        if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_A); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_B); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_C); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_D); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_E); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_F); }
-        if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_TENS_G); }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_A);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_B);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_C);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_D);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_E);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_F);
+        }
+        if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u)
+        {
+            target_mask |= (1UL << LEDBAR_ROUTE_TENS_G);
+        }
     }
 
     digit_mask = s_ledbar_digit_map[ones];
-    if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_A); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_B); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_C); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_D); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_E); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_F); }
-    if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u) { target_mask |= (1UL << LEDBAR_ROUTE_ONES_G); }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_A) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_A);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_B) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_B);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_C) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_C);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_D) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_D);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_E) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_E);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_F) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_F);
+    }
+    if ((digit_mask & LEDBAR_DIGIT_BIT_G) != 0u)
+    {
+        target_mask |= (1UL << LEDBAR_ROUTE_ONES_G);
+    }
 
     if ((indicator_mask & LEDBAR_ICON_CHARGE_MASK) != 0u)
     {
@@ -1292,6 +1344,21 @@ void LedBar_SetSleep(uint8_t enable)
     }
 
     enable = (enable != 0u) ? 1u : 0u;
+#if !LEDBAR_SLEEP_ENABLE
+    if (enable != 0u)
+    {
+        if (s_ledbar_sleep != 0u)
+        {
+            s_ledbar_sleep = 0u;
+            LedBar_RebuildFrame();
+            if (s_ledbar_force_blank == 0u)
+            {
+                LedBar_ShowFrontFrameNow();
+            }
+        }
+        return;
+    }
+#endif
     if (s_ledbar_sleep == enable)
     {
         return;
@@ -1512,6 +1579,10 @@ void LedBar_PrepareForStop(void)
         LedBar_Init();
     }
 
+#if !LEDBAR_SLEEP_ENABLE
+    LedBar_SetSleep(0u);
+    return;
+#else
     s_ledbar_sleep = 1u;
     s_ledbar_force_blank = 1u;
     LedBar_RebuildFrame();
@@ -1520,6 +1591,7 @@ void LedBar_PrepareForStop(void)
     LedBar_GpioInitForDisplay();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
+#endif
 }
 
 void LedBar_Scan1ms(void)
@@ -1646,13 +1718,28 @@ static void LedBar_RequestSocDisplayWindow(void)
 
 static uint8_t LedBar_IsSocDisplayRequested(void)
 {
+#if !LEDBAR_SLEEP_ENABLE
+    return 1u;
+#else
     if ((s_ledbar_soc_display_10ms != 0u) || (s_ledbar_key_last_pressed != 0u))
     {
         return 1u;
     }
 
     return 0u;
+#endif
 }
+
+#if LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST
+static void LedBar_ToggleLongPressTestOutputs(void)
+{
+    BitAction dc_state = (GPIO_ReadOutputDataBit(GPIO_DC_EN, PIN_DC_EN) == Bit_RESET) ? Bit_SET : Bit_RESET;
+    BitAction en2727_state = (GPIO_ReadOutputDataBit(GPIO_2727_EN, PIN_2737_EN) == Bit_RESET) ? Bit_SET : Bit_RESET;
+
+    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, dc_state);
+    GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, en2727_state);
+}
+#endif
 
 static void LedBar_ServiceSwitch(void)
 {
@@ -1681,9 +1768,13 @@ static void LedBar_ServiceSwitch(void)
             (s_ledbar_key_long_handled == 0u))
         {
             s_ledbar_key_long_handled = 1u;
+#if LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST
+            LedBar_ToggleLongPressTestOutputs();
+#else
             LedBar_SaveSleepSoc();
             entersleep(DEEP_MODE);
             SleepDeal_Continue();
+#endif
         }
 #endif
     }
@@ -1711,6 +1802,7 @@ void APP_LedBar(void)
 
     LedBar_ServiceSwitch();
 
+#if LEDBAR_SLEEP_ENABLE
     if (SystemStatus.bits.b1StartUpBMS != 0u)
     {
         LedBar_Command = LED_BAR_STARTUP;
@@ -1724,6 +1816,7 @@ void APP_LedBar(void)
         LedBar_SetSleep(1u);
         return;
     }
+#endif
 
     if (s_ledbar_test_single_segment_enable != 0u)
     {
@@ -1764,7 +1857,7 @@ void APP_LedBar(void)
         display_value = 100u;
     }
 
-    if (g_stCellInfoReport.u16Ichg != 0u)
+    if (g_stCellInfoReport.u16Ichg != 0u || (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK)))
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
         LedBar_Command = LED_BAR_CHG;
