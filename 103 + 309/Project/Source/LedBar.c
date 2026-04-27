@@ -465,6 +465,11 @@ static uint8_t LedBar_GetRuntimeSoc(void)
     return (uint8_t)soc;
 }
 
+static uint8_t LedBar_IsMcuWakeActive(void)
+{
+    return (uint8_t)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
+}
+
 static void LedBar_GpioInitForDisplay(void)
 {
 #if LEDBAR_DRIVER_GPIO_CHARLIE
@@ -1721,6 +1726,11 @@ static uint8_t LedBar_IsSocDisplayRequested(void)
 #if !LEDBAR_SLEEP_ENABLE
     return 1u;
 #else
+    if (LedBar_IsMcuWakeActive() != 0u)
+    {
+        return 1u;
+    }
+
     if ((s_ledbar_soc_display_10ms != 0u) || (s_ledbar_key_last_pressed != 0u))
     {
         return 1u;
@@ -1794,6 +1804,7 @@ void APP_LedBar(void)
     uint8_t display_value;
     uint8_t indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     uint8_t display_requested;
+    uint8_t mcu_wk_active;
 
     if (s_ledbar_initialized == 0u)
     {
@@ -1801,6 +1812,7 @@ void APP_LedBar(void)
     }
 
     LedBar_ServiceSwitch();
+    mcu_wk_active = LedBar_IsMcuWakeActive();
 
 #if LEDBAR_SLEEP_ENABLE
     if (SystemStatus.bits.b1StartUpBMS != 0u)
@@ -1810,7 +1822,7 @@ void APP_LedBar(void)
         return;
     }
 
-    if (Sleep_Mode.bits.b1_ToSleepFlag != 0u)
+    if ((Sleep_Mode.bits.b1_ToSleepFlag != 0u) && (mcu_wk_active == 0u))
     {
         LedBar_SaveSleepSoc();
         LedBar_SetSleep(1u);
@@ -1857,7 +1869,7 @@ void APP_LedBar(void)
         display_value = 100u;
     }
 
-    if (g_stCellInfoReport.u16Ichg != 0u || (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK)))
+    if ((g_stCellInfoReport.u16Ichg != 0u) || (mcu_wk_active != 0u))
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
         LedBar_Command = LED_BAR_CHG;
