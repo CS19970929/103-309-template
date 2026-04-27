@@ -11,7 +11,7 @@ uint8_t reset_sleep_state = 0;
 
 static UINT8 IsChargerWakeupActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) != Bit_RESET);
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
 }
 
 static UINT8 IsKeyPressed(void)
