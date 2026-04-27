@@ -13,8 +13,9 @@
 
 - 发送报文返回 `CAN_TxStatus_Ok`，说明总线上至少有节点 ACK，认为总线有其他设备。
 - CAN RX0 中断收到报文，也认为总线有其他设备。
-- 连续出现 ACK 失败或发送超时达到阈值后，认为总线无其他设备。
-- 无设备状态下每 10 秒 RTC 唤醒会发送两帧探测帧；如果中途接入的 CAN 设备能 ACK 任一帧，立即恢复为总线有设备。
+- 上电或状态未知时先按有设备处理，避免有对端时直接进入 10 秒静默周期。
+- 连续多个 CAN 上电发送窗口都没有 ACK 或发送超时后，才认为总线无其他设备；单个发送窗口内多帧失败只累计一次无 ACK，避免收发器供电刚切换时误判。
+- 无设备状态下每 10 秒 RTC 唤醒会发送两帧探测帧；普通唤醒退出 RTC 后也保留 1 秒一次的轻量探测路径。如果中途接入的 CAN 设备能 ACK 任一帧，立即恢复为总线有设备。
 
 如果完全不发送探测帧，且休眠时收发器关闭，那么软件无法发现只会 ACK、不主动发帧的中途接入设备。因此当前实现把“无设备不发业务 CAN”收敛为“无设备每 10 秒只发两帧探测”。
 
@@ -140,6 +141,8 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 - 无设备路径仍只压入两帧探测，探测成功后恢复有设备状态。
 - CAN 收发器从断电到重新供电需要硬件稳定时间；`FEIDAO_CAN_POWER_STABLE_TICKS` 由 10ms 放宽到 100ms，RTC 服务窗口放宽到 1.5s，避免电源刚打开时第一帧过早发送导致误判无 ACK。
 - RTC 服务窗口内设置 `s_u8FeidaoCanRtcServiceActive`，只发送本次预加载的到期帧或探测帧，不再因为 1.5s 服务窗口跨过 1s 周期而额外生成新一轮周期帧。
+- 发送失败判定改为每个 CAN 上电发送窗口最多累计一次无 ACK；窗口内任一帧发送成功或 RX 收到报文都会立即清零无 ACK 状态。
+- 有设备策略下如果本次上电窗口第一帧就无 ACK，则结束本窗口并关闭 CAN 收发器，下一轮再试；无设备探测窗口仍保留两帧探测，兼顾功耗和中途接入检测。
 
 验证：
 
@@ -162,9 +165,9 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 
 处理：
 
-- `feidao_can_record_tx_failed()` 改为所有 TX failed 都累计一次无 ACK；如果 LEC 是 ACKErr，则额外统计 ACK error 计数。
+- `feidao_can_record_tx_failed()` 改为所有 TX failed 都纳入无 ACK 判定；如果 LEC 是 ACKErr，则额外统计 ACK error 计数。
 - TX timeout 仍按无 ACK 处理。
-- 连续失败达到 `FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT` 后，`s_u8FeidaoCanBusActive` 置 0，后续 RTC 周期切换到 10 秒。
+- 无 ACK 判定按 CAN 上电发送窗口累计，不按单帧累计；连续多个窗口失败达到 `FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT` 后，`s_u8FeidaoCanBusActive` 置 0，后续 RTC 周期切换到 10 秒。
 - 为避免供电切换或对端唤醒瞬间造成误判，无 ACK 阈值由 3 次放宽到 6 次；无设备探测帧由 1 帧改为 2 帧，提高中途接入设备被 ACK 检出的概率。
 
 验证：
@@ -172,6 +175,25 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 - 接 CAN 对端运行，确认 `Can_IsBusActive()` 为 1，RTC 周期为有设备周期。
 - 断开 CAN 对端，观察连续发送失败或 timeout 后，`s_u8FeidaoCanNoAckCnt` 增加并最终将 `s_u8FeidaoCanBusActive` 置 0。
 - 下一轮 RTC 配置应使用 `FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS`，表现为约 10 秒唤醒一次。
+
+### 退出 RTC 后 CAN 永久不再发送
+
+现象：
+
+- CAN 已经被判定为无设备后，RTC 10 秒唤醒期间没有观察到有效 CAN 通信。
+- 之后即使退出 RTC 低功耗回到普通主循环，CAN 也一直不再发送，导致中途接入设备无法恢复通信。
+
+原因：
+
+- 无设备状态下 `s_u8FeidaoCanNoAckCnt` 已达到阈值。
+- 普通 `App_Can()` 调度出的周期 pending 会被 `feidao_can_drop_pending_if_bus_inactive()` 清掉。
+- 如果没有单独保留探测 pending，CAN 状态机就会一直保持空闲，既不会发送业务帧，也不会发送探测帧。
+
+处理：
+
+- 无设备状态下，普通主循环不再调度完整业务帧，但每 1 秒允许压入两帧轻量探测帧，并设置探测标志，避免 pending 被 inactive 逻辑清掉。
+- 探测发送结束后关闭 CAN 收发器供电并清除探测标志，保证低功耗入口仍能正常进入 RTC。
+- 任一探测帧发送成功或 RX 收到报文后，立即恢复有设备状态，后续重新按 1s / 5s 业务周期发送。
 
 ## 验证建议
 
