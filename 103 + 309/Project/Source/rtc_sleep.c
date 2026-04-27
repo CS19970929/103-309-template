@@ -274,6 +274,7 @@ static void low_power_log_and_commit_sleep(void)
         return;
     }
 
+    Can_PrepareSleep();
     LogRecord_Flag.bits.Log_Sleep = 1;
     LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
     SleepDeal_Continue();
@@ -733,6 +734,7 @@ static uint32_t rtc_sleep_get_period_seconds(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    Can_PrepareSleep();
     before_rtcsleep();
 
     Init_RTC();
@@ -1043,4 +1045,3 @@ void rtc_sleep(void)
         break;
     }
 }
-

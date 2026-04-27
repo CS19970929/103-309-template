@@ -4,6 +4,7 @@ volatile union Can_Status Can_Status_Flag;
 volatile union CanTxType_Status CanTxType_Flag;
 CanTxMsg TxMessage;
 CanRxMsg RxMessage;
+volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -26,6 +27,7 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_TXMAILBOX_0 ((UINT8)0U)
 #define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
 #define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
+#define FEIDAO_CAN_ABORT_WAIT_LOOP ((UINT16)1000U)
 
 enum FEIDAO_CAN_POWER_STATE
 {
@@ -46,6 +48,14 @@ static void feidao_can_power_on(UINT32 now_tick);
 static void feidao_can_power_off(void);
 static void feidao_can_abort_all_tx(void);
 static void feidao_can_clear_tx_done(UINT8 mailbox);
+static void feidao_can_inc_u16(volatile UINT16 *counter);
+static void feidao_can_update_error_snapshot(void);
+static void feidao_can_record_ack_error_from_snapshot(void);
+static void feidao_can_record_tx_failed(void);
+static void feidao_can_record_tx_timeout(void);
+static void feidao_can_record_tx_no_mailbox(void);
+static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox);
+static void feidao_can_cancel_tx(UINT8 mailbox);
 static UINT8 feidao_can_start_next_frame(void);
 static void feidao_can_start_next_tx_or_power_off(UINT32 now_tick);
 static void feidao_can_schedule_period_frames(UINT32 now_tick);
@@ -252,6 +262,68 @@ static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 
 	return (((UINT32)(now_tick - start_tick)) >= wait_ticks) ? 1U : 0U;
 }
 
+static void feidao_can_inc_u16(volatile UINT16 *counter)
+{
+	if (*counter < (UINT16)0xFFFFU)
+	{
+		(*counter)++;
+	}
+}
+
+static void feidao_can_update_error_snapshot(void)
+{
+	UINT32 esr = CAN1->ESR;
+
+	g_stCanErrorSnapshot.u8LastErrorCode = (UINT8)(esr & CAN_ESR_LEC);
+	g_stCanErrorSnapshot.u8ReceiveErrorCounter = (UINT8)((esr & CAN_ESR_REC) >> 24);
+	g_stCanErrorSnapshot.u8TransmitErrorCounter = (UINT8)((esr & CAN_ESR_TEC) >> 16);
+	g_stCanErrorSnapshot.u8ErrorWarning = (UINT8)((esr & CAN_ESR_EWGF) ? 1U : 0U);
+	g_stCanErrorSnapshot.u8ErrorPassive = (UINT8)((esr & CAN_ESR_EPVF) ? 1U : 0U);
+	g_stCanErrorSnapshot.u8BusOff = (UINT8)((esr & CAN_ESR_BOFF) ? 1U : 0U);
+}
+
+static void feidao_can_record_ack_error_from_snapshot(void)
+{
+	if (CAN_ErrorCode_ACKErr == g_stCanErrorSnapshot.u8LastErrorCode)
+	{
+		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16AckErrorCnt);
+	}
+}
+
+static void feidao_can_record_tx_failed(void)
+{
+	feidao_can_update_error_snapshot();
+	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxFailedCnt);
+	feidao_can_record_ack_error_from_snapshot();
+}
+
+static void feidao_can_record_tx_timeout(void)
+{
+	feidao_can_update_error_snapshot();
+	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxTimeoutCnt);
+}
+
+static void feidao_can_record_tx_no_mailbox(void)
+{
+	feidao_can_update_error_snapshot();
+	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxNoMailboxCnt);
+}
+
+static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox)
+{
+	switch (mailbox)
+	{
+	case FEIDAO_CAN_TXMAILBOX_0:
+		return ((CAN1->TSR & CAN_TSR_TME0) != 0U) ? 1U : 0U;
+	case FEIDAO_CAN_TXMAILBOX_1:
+		return ((CAN1->TSR & CAN_TSR_TME1) != 0U) ? 1U : 0U;
+	case FEIDAO_CAN_TXMAILBOX_2:
+		return ((CAN1->TSR & CAN_TSR_TME2) != 0U) ? 1U : 0U;
+	default:
+		return 1U;
+	}
+}
+
 static void feidao_can_power_on(UINT32 now_tick)
 {
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_ON_LEVEL);
@@ -269,9 +341,9 @@ static void feidao_can_power_off(void)
 
 static void feidao_can_abort_all_tx(void)
 {
-	CAN_CancelTransmit(CAN1, FEIDAO_CAN_TXMAILBOX_0);
-	CAN_CancelTransmit(CAN1, FEIDAO_CAN_TXMAILBOX_1);
-	CAN_CancelTransmit(CAN1, FEIDAO_CAN_TXMAILBOX_2);
+	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_0);
+	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_1);
+	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_2);
 }
 
 static void feidao_can_clear_tx_done(UINT8 mailbox)
@@ -290,6 +362,28 @@ static void feidao_can_clear_tx_done(UINT8 mailbox)
 	default:
 		break;
 	}
+}
+
+static void feidao_can_cancel_tx(UINT8 mailbox)
+{
+	UINT16 wait_cnt = 0U;
+
+	if (mailbox > FEIDAO_CAN_TXMAILBOX_2)
+	{
+		return;
+	}
+
+	if (!feidao_can_mailbox_is_empty(mailbox))
+	{
+		CAN_CancelTransmit(CAN1, mailbox);
+		while ((!feidao_can_mailbox_is_empty(mailbox)) && (wait_cnt < FEIDAO_CAN_ABORT_WAIT_LOOP))
+		{
+			wait_cnt++;
+		}
+		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxAbortCnt);
+	}
+
+	feidao_can_clear_tx_done(mailbox);
 }
 
 static UINT8 feidao_can_start_next_frame(void)
@@ -415,15 +509,23 @@ static void feidao_can_send(UINT32 now_tick)
 		}
 
 		tx_status = CAN_TransmitStatus(CAN1, s_u8FeidaoCanTxMailbox);
-		if ((CAN_TxStatus_Ok == tx_status) || (CAN_TxStatus_Failed == tx_status))
+		if (CAN_TxStatus_Ok == tx_status)
 		{
+			feidao_can_clear_tx_done(s_u8FeidaoCanTxMailbox);
+			s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
+			feidao_can_start_next_tx_or_power_off(now_tick);
+		}
+		else if (CAN_TxStatus_Failed == tx_status)
+		{
+			feidao_can_record_tx_failed();
 			feidao_can_clear_tx_done(s_u8FeidaoCanTxMailbox);
 			s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
 			feidao_can_start_next_tx_or_power_off(now_tick);
 		}
 		else if (feidao_can_tick_elapsed(now_tick, s_u32FeidaoCanTxTick, FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS))
 		{
-			CAN_CancelTransmit(CAN1, s_u8FeidaoCanTxMailbox);
+			feidao_can_record_tx_timeout();
+			feidao_can_cancel_tx(s_u8FeidaoCanTxMailbox);
 			s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
 			feidao_can_start_next_tx_or_power_off(now_tick);
 		}
@@ -487,6 +589,7 @@ UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 	u8MailBoxUsed = CAN_Transmit(CAN1, Msg);
 	if (CAN_TxStatus_NoMailBox == u8MailBoxUsed)
 	{
+		feidao_can_record_tx_no_mailbox();
 		System_ERROR_UserCallback(ERROR_CAN);
 	}
 
@@ -1170,6 +1273,8 @@ void Can_BusOFF_FaultChk(void)
 	{
 		if (CAN1->ESR & CAN_ESR_BOFF)
 		{											  // 检测到BusOff，总线进入离线状态，找不到相关函数，自己写
+			feidao_can_update_error_snapshot();
+			feidao_can_inc_u16(&g_stCanErrorSnapshot.u16BusOffCnt);
 			Can_Status_Flag.bits.b1Can_BusOFF = TRUE; // 找到了 --> CAN_GetFlagStatus(CAN1, CAN_FLAG_BOF)==SET
 			CAN1->MCR |= CAN_MCR_INRQ;				  // 置位，从正常模式转为初始化模式(一旦当前的CAN活动(发送或接收)结束，CAN就进入初始化模式)
 			s_u8FlagBusOff = 1;
@@ -1425,6 +1530,36 @@ void InitCan(void)
 	InitCan_NVIC();
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
 	InitCan_Filter(); // 这个调到后面，RX也可以了
+	feidao_can_power_off();
+}
+
+UINT8 Can_IsBusy(void)
+{
+	if (s_u8FeidaoCanPowerState != FEIDAO_CAN_POWER_IDLE)
+	{
+		return 1U;
+	}
+	if (s_u16FeidaoCanPendingMask != 0U)
+	{
+		return 1U;
+	}
+	if (s_u8FeidaoCanTxMailbox != CAN_TxStatus_NoMailBox)
+	{
+		return 1U;
+	}
+	if ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME)
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+void Can_PrepareSleep(void)
+{
+	s_u16FeidaoCanPendingMask = 0U;
+	feidao_can_abort_all_tx();
+	s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
 	feidao_can_power_off();
 }
 

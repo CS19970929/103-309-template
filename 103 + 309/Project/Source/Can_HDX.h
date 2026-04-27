@@ -81,6 +81,23 @@ union Can_Status {
      }bits;
 };
 
+struct CAN_ERROR_SNAPSHOT {
+	UINT8 u8LastErrorCode;
+	UINT8 u8ReceiveErrorCounter;
+	UINT8 u8TransmitErrorCounter;
+	UINT8 u8ErrorWarning;
+	UINT8 u8ErrorPassive;
+	UINT8 u8BusOff;
+	UINT16 u16AckErrorCnt;
+	UINT16 u16TxFailedCnt;
+	UINT16 u16TxTimeoutCnt;
+	UINT16 u16TxAbortCnt;
+	UINT16 u16TxNoMailboxCnt;
+	UINT16 u16BusOffCnt;
+};
+
+extern volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
+
 
 union MDLREPORTFAULT_REG {
     UINT16 all;
@@ -174,5 +191,7 @@ union MOS_RELAY_REG {
 void InitCan(void);
 void App_Can(void);
 void App_CanTest(void);
+UINT8 Can_IsBusy(void);
+void Can_PrepareSleep(void);
 
 #endif
