@@ -353,15 +353,15 @@ void IOstatus_Base(void)
 //         GPIO_Init(GPIO_SEG_EN, &GPIO_InitStructure);
 // #endif
 
-        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+        // GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
+        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        // GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
 
-        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
+        // GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
+        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        // GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
     }
 }
 
