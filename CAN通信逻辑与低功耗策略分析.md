@@ -103,7 +103,7 @@ bitrate = PCLK1 / CAN_Prescaler / (1 + BS1 + BS2)
         = 250 kbit/s
 ```
 
-注意：工程中部分历史文档和源码注释仍残留 72 MHz 或 `BS1=2, BS2=1` 的描述，和当前源码不完全一致。如果目标协议要求 500 kbit/s，需要重新确认 `BS1/BS2/Prescaler/PCLK1` 的组合。
+注意：CAN 目标波特率固定为 250 kbit/s。工程中历史文档或源码注释若出现非 250 kbit/s 描述，均属于旧配置残留；后续调整系统时钟时，也必须按 250 kbit/s 重新计算 `BS1/BS2/Prescaler/PCLK1`。
 
 ## 5. 当前发送逻辑
 
@@ -600,15 +600,15 @@ CANH / CANL
 
 从 10ms 开始向下收敛，例如 5ms、2ms、1ms，以第一帧稳定收到为准。
 
-### 13.4 当前 CAN bit rate 可能与目标不一致
+### 13.4 CAN bit rate 固定为 250 kbit/s
 
-当前源码组合在 8MHz PCLK1 下是 250 kbit/s。如果目标系统是 500 kbit/s，需要改回等效参数，例如：
+当前产品目标 CAN bit rate 明确为 250 kbit/s，源码组合在 8MHz PCLK1 下正好满足该目标：
 
 ```text
-8 MHz / 4 / (1 + 2 + 1) = 500 kbit/s
+8 MHz / 4 / (1 + 5 + 2) = 250 kbit/s
 ```
 
-或者重新按目标采样点计算 `BS1/BS2/Prescaler`。这个问题和低功耗无关，但会直接影响通信是否能被对端正确识别。
+如果后续恢复 72 MHz 或修改 APB1 分频，必须继续以 250 kbit/s 为目标重算 `BS1/BS2/Prescaler`。这个问题和低功耗无关，但会直接影响通信是否能被对端正确识别。
 
 ### 13.5 周期广播不会刷新外部通信活动计数
 
@@ -648,7 +648,7 @@ GPIO_CMNT_EN = Bit_SET，关闭 transceiver
 
 ## 14. 建议验证清单
 
-1. 确认目标 CAN bit rate：用 CAN analyzer 验证当前实际是 250 kbit/s 还是目标所需速率。
+1. 验证 CAN bit rate：用 CAN analyzer 确认当前实际为目标 250 kbit/s。
 2. 测 `GPIO_CMNT_EN` 电平：确认 `Bit_RESET` 上电、`Bit_SET` 断电与硬件一致。
 3. 测 transceiver 电流：分别测常上电、当前状态机正常发送、无接收设备三种场景。
 4. 测第一帧可靠性：重点验证上电 10ms 后第一帧是否稳定收到。
@@ -664,7 +664,7 @@ GPIO_CMNT_EN = Bit_SET，关闭 transceiver
 
 | 优先级 | 事项 | 原因 |
 | --- | --- | --- |
-| P0 | 确认并修正 CAN bit rate | 当前源码在 8MHz 下为 250 kbit/s，若目标 500 kbit/s 会直接通信失败 |
+| P0 | 验证 CAN bit rate | 目标固定为 250 kbit/s，需用 CAN analyzer 确认实测值与源码计算一致 |
 | P0 | 实测 `GPIO_CMNT_EN` 与 transceiver 电源拓扑 | 决定功耗收益是否真实成立 |
 | P1 | 测量上电稳定时间并收敛 `FEIDAO_CAN_POWER_STABLE_TICKS` | 当前 10ms 保守，缩短后可进一步降低 duty |
 | P1 | 明确是否需要随时接收 CAN | 当前策略偏广播，不适合实时请求应答 |

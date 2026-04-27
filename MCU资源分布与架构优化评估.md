@@ -341,7 +341,7 @@ Removing startup_stm32f10x_hd.o(HEAP), (512 bytes)
 | USART1 | 上位机/通信口 | PB6/PB7，重映射，19200 |
 | USART2 | 上位机/通信口 | PA2/PA3，19200 |
 | USART3 | 代码支持但当前未启用 | `_COMMOM_UPPER_SCI3` 未定义 |
-| CAN1 | CAN 通信 | PA11/PA12，500 kbps 注释意图 |
+| CAN1 | CAN 通信 | PA11/PA12，目标波特率 250 kbit/s |
 | ADC1 | 模拟采样 | 3 路 ADC |
 | DMA1 Channel1 | ADC 数据搬运 | 环形模式，无实际 DMA 中断 |
 | TIM2 | ADC 外部触发 | TIM2 CC2 触发 ADC |
