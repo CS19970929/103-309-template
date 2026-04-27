@@ -107,7 +107,7 @@
 | --- | --- |
 | [SOC 模块逻辑与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 计算、默认值、首次烧录逻辑 |
 | [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md) | ADC 配置、采样、低功耗关联 |
-| [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md) | PA2 Type-C 输出电流采样、放大倍数、稳定值与标定方法 |
+| [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md) | PA2 直接采 10mΩ 分流器压降、Type-C 输出电流稳定值与标定方法 |
 | [App_AnlogCal 时基修改影响说明](App_AnlogCal时基修改影响说明.md) | 模拟校准任务时基调整影响 |
 | [MonitorAFE 逻辑优化说明](MONITOR_AFE_LOGIC_OPTIMIZATION.md) | AFE 监控和恢复逻辑优化 |
 | [后 64K SOC/AFE 参数快速测试说明](后64K_SOC_AFE快速测试说明.md) | 后 64K 参数区快速测试 |

@@ -14,8 +14,7 @@
 #define AD_CurOffsetCalNum_2 4
 #define AD_CurZeroDeadband  4
 
-#define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm
-#define TYPEC_CUR_AMP_GAIN_X10      10U     // current amplifier gain * 10, update after hardware is confirmed
+#define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm, PA2 samples shunt voltage directly
 #define TYPEC_CUR_VDDA_MV           3300U   // ADC reference voltage
 
 //AD采样变量枚举

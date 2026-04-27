@@ -46,103 +46,81 @@ ADC_Current_Smooth();
 Rsense = 10mohm
 ```
 
-典型前端链路：
+当前确认的前端链路：
 
 ```text
 Type-C 输出电流 Iout
 -> 10mohm 采样电阻
 -> 产生采样压降 Vshunt
--> 电流检测放大器/运放放大
--> 可能叠加零点偏置 Voffset
--> MCU PA2 ADC 采样
+-> MCU PA2 ADC 直接采样分流器两端压降
 ```
 
 物理关系：
 
 ```text
 Vshunt_mV = Iout_A * Rsense_mohm
-Vadc_delta_mV = Vshunt_mV * G
-Iout_A = Vadc_delta_mV / (Rsense_mohm * G)
-Iout_mA = Vadc_delta_mV * 1000 / (Rsense_mohm * G)
+Vadc_delta_mV = Vshunt_mV
+Iout_A = Vadc_delta_mV / Rsense_mohm
+Iout_mA = Vadc_delta_mV * 1000 / Rsense_mohm
 ```
 
-其中 `G` 是从采样电阻两端压降到 MCU ADC 输入端的总电压增益。
-
-当前代码用 `TYPEC_CUR_AMP_GAIN_X10` 表示 `G * 10`，所以整数公式为：
+当前代码整数公式为：
 
 ```c
-Iout_mA = Vadc_delta_mV * 10000 / (TYPEC_CUR_RSENSE_MOHM * TYPEC_CUR_AMP_GAIN_X10);
+Iout_mA = Vadc_delta_mV * 1000 / TYPEC_CUR_RSENSE_MOHM;
 ```
 
 当 `Rsense = 10mohm` 时：
 
 ```text
-Iout_A = Vadc_delta_mV / (10 * G)
-Iout_A10 = Vadc_delta_mV / G
+Iout_A = Vadc_delta_mV / 10
+Iout_mA = Vadc_delta_mV * 100
+Iout_A10 = Vadc_delta_mV
 ```
 
-## 4. 放大倍数如何根据电路调整
+示例：
 
-`TYPEC_CUR_AMP_GAIN_X10` 不是采样电阻值，而是总链路增益 `G` 的 10 倍。
-
-### 4.1 使用电流检测芯片
-
-如果 PA2 前面是专用电流检测芯片，优先查芯片手册的固定增益。例如：
-
-| 芯片/档位示例 | 增益 G | 宏配置 |
-| --- | --- | --- |
-| 20 V/V | 20 | `TYPEC_CUR_AMP_GAIN_X10 200U` |
-| 50 V/V | 50 | `TYPEC_CUR_AMP_GAIN_X10 500U` |
-| 100 V/V | 100 | `TYPEC_CUR_AMP_GAIN_X10 1000U` |
-
-如果芯片输出后还有分压进入 MCU ADC，需要把分压衰减也乘进去：
-
-```text
-G_total = G_chip * K_divider
-K_divider = R_down / (R_up + R_down)
+```
+10mV -> 1000mA -> 1A
+20mV -> 2000mA -> 2A
+50mV -> 5000mA -> 5A
 ```
 
-最终：
+## 4. 当前参数如何调整
+
+当前只保留两个硬件相关参数：
 
 ```c
-#define TYPEC_CUR_AMP_GAIN_X10  ((UINT16)(G_total * 10))
+#define TYPEC_CUR_RSENSE_MOHM       10U
+#define TYPEC_CUR_VDDA_MV           3300U
 ```
 
-### 4.2 使用运放搭建放大电路
+调整原则：
 
-如果是普通运放电路，需要按实际拓扑计算：
+| 参数 | 含义 | 什么时候改 |
+| --- | --- | --- |
+| `TYPEC_CUR_RSENSE_MOHM` | Type-C 输出支路分流器阻值，单位 mohm | 更换采样电阻时修改 |
+| `TYPEC_CUR_VDDA_MV` | MCU ADC 参考电压，单位 mV | VDDA/VREF+ 不是 3.3V 或需要标定时修改 |
 
-| 拓扑 | 理想增益 |
-| --- | --- |
-| 同相放大 | `G = 1 + Rf / Rg` |
-| 反相放大 | `G = Rf / Rin`，符号由硬件极性决定 |
-| 差分放大 | 匹配电阻条件下 `G = Rf / Rin` |
+如果后续电路改成“分流器压降经过运放/电流检测芯片后再进 PA2”，那时需要重新引入前端比例系数：
 
-如果运放后面还有 RC 滤波、电阻分压、限幅网络，且会改变直流幅值，也必须计入总增益。
+```text
+Vadc_delta_mV = Vshunt_mV * G
+Iout_mA = Vadc_delta_mV * 1000 / (Rsense_mohm * G)
+```
 
-### 4.3 用已知负载反标定
+但这不是当前硬件状态。当前 PA2 直接采分流器两端压降，因此代码不配置放大倍数。
 
-如果原理图参数不确定，可以用电子负载反推。
+### 4.1 用已知负载验证
 
-步骤：
+建议用电子负载验证直接采样关系：
 
 1. Type-C 无负载上电，等待零点建立。
-2. 接入一个稳定已知负载，例如 5V/2A。
-3. 读取 `g_u16TypeCOutDelta_mV`。
-4. 用下面公式反推：
+2. 接入稳定负载，例如 1A、2A、3A。
+3. 读取 `g_u16TypeCOutDelta_mV` 和 `g_u16TypeCOutCurrent_mA`。
+4. 对 10mohm 分流器，理论上 `g_u16TypeCOutDelta_mV` 应约等于 `I_A * 10`。
 
-```text
-TYPEC_CUR_AMP_GAIN_X10 = g_u16TypeCOutDelta_mV * 10000 / (10 * I_known_mA)
-```
-
-示例：采样电阻 10mohm，已知输出电流 2000mA，调试读到 `g_u16TypeCOutDelta_mV = 400mV`：
-
-```text
-TYPEC_CUR_AMP_GAIN_X10 = 400 * 10000 / (10 * 2000) = 200
-G = 20
-```
-
-建议至少用 0.5A、1A、2A 三个点检查线性。如果不同电流点反推出来的增益差异较大，优先检查采样电阻精度、放大器饱和、输出滤波、ADC 参考电压、Type-C 负载是否稳定。
+示例：2A 负载时，分流器压降约 20mV，软件输出约 2000mA。如果偏差明显，优先检查采样电阻精度、PA2 接线、ADC 参考电压、负载稳定性和零点是否正确。
 
 ## 5. 当前新增调试变量
 
@@ -188,8 +166,8 @@ g_u16IoutOffsetAD          // 当前镜像为 g_u16TypeCOutOffsetAD
 1. 首次零点建立要求 Type-C 输出支路无电流，否则会把带载电流当成零点。
 2. 若产品可能带载启动，应增加“确认无 Type-C 输出后再校零”或“强制重新校零”的状态机。
 3. `TYPEC_CUR_VDDA_MV` 当前按 3300mV 处理。如果 VDDA 偏差较大，电流会按比例偏差。
-4. `TYPEC_CUR_AMP_GAIN_X10` 当前默认是 `10U`，即暂按 `G = 1` 计算，只是占位值，不代表真实电路。
-5. 若 PA2 前端放大器在大电流下接近 0V 或 VDDA 饱和，ADC 结果会失真，必须降低增益或调整偏置。
+4. 当前 PA2 直接采分流器两端压降；若后续增加运放/电流检测芯片，需要重新设计换算公式。
+5. 10mohm 直接采样时电压很小，1A 只有 10mV；低电流分辨率和噪声需要上板验证。
 
 ## 8. 后续接入 SOC 的边界
 
@@ -215,5 +193,5 @@ Ibat_equiv = I_typec_out * V_typec_out / V_bat / efficiency
 1. 用户确认 PA2 ADC 电流不是 `DataDeal/SciUpper` 中的 AFE 电池电流，而是 Type-C 输出电流。
 2. 用户确认 Type-C 电流采样电阻为 10mohm。
 3. 当前先完成 Type-C ADC 电流计算，暂不接入 SOC。
-4. 电流单位不能只根据旧变量注释推断，必须基于采样电阻、放大倍数、ADC 参考电压计算。
-5. 放大倍数当前未知，因此代码使用 `TYPEC_CUR_AMP_GAIN_X10` 参数化，等待根据原理图或实测标定。
+4. 用户进一步确认 PA2 ADC 当前采到的就是 10mohm 分流器两端压降，不经过前端放大。
+5. 当前代码按直接采样配置，不再使用放大倍数参数；后续电路改版时再按新前端重新调整参数和公式。

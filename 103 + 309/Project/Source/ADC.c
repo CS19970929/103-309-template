@@ -230,7 +230,6 @@ static void ADC_ClearTypeCOutCurrent(void)
 
 static UINT16 ADC_TypeCAdDiffToMilliAmp(UINT32 ad_diff, UINT16 *delta_mV_out)
 {
-    UINT32 denominator;
     UINT32 delta_mV;
     UINT32 current_mA;
 
@@ -240,13 +239,12 @@ static UINT16 ADC_TypeCAdDiffToMilliAmp(UINT32 ad_diff, UINT16 *delta_mV_out)
         *delta_mV_out = ADC_LimitU16(delta_mV);
     }
 
-    if ((TYPEC_CUR_RSENSE_MOHM == 0U) || (TYPEC_CUR_AMP_GAIN_X10 == 0U))
+    if (TYPEC_CUR_RSENSE_MOHM == 0U)
     {
         return 0;
     }
 
-    denominator = (UINT32)TYPEC_CUR_RSENSE_MOHM * (UINT32)TYPEC_CUR_AMP_GAIN_X10;
-    current_mA = (delta_mV * 10000U + (denominator / 2U)) / denominator;
+    current_mA = (delta_mV * 1000U + ((UINT32)TYPEC_CUR_RSENSE_MOHM / 2U)) / (UINT32)TYPEC_CUR_RSENSE_MOHM;
 
     return ADC_LimitU16(current_mA);
 }
