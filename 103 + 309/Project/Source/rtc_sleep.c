@@ -63,6 +63,7 @@ SOC_T g_Psoc;
 
 static enum _SLEEP_MODE g_sleepModeSelect = NO_SLEEP;
 static uint8_t state_sleep = 0;
+static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
 bool is_wakeup = false;
 
 void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
@@ -554,12 +555,12 @@ static bool rtc_monitor_sh367309(void)
 			log_w("低压\n");
 		}
 #endif
-        if (!SystemStatus.bits.b1Status_MOS_CHG)
-        {
-            result = true;
-            log_w("CHG close\n");
-            g_irq_t = chg_dsg_close;
-        }
+        // if (!SystemStatus.bits.b1Status_MOS_CHG)
+        // {
+        //     result = true;
+        //     log_w("CHG close\n");
+        //     g_irq_t = chg_dsg_close;
+        // }
         if (!SystemStatus.bits.b1Status_MOS_DSG)
         {
             result = true;
@@ -699,7 +700,7 @@ static void before_wakeup(uint32_t *_sleep_cnt)
         log_w("<error> rtc ocv soc error\n");
     }
 #else
-    su32_Interval_S_Tcnt += *_sleep_cnt * rtc_sleep_get_period_seconds();
+    su32_Interval_S_Tcnt += s_u32RtcSleepElapsedSeconds;
 
     if (su32_Interval_S_Tcnt >= (3600 * 6))
     {
@@ -729,11 +730,16 @@ static void before_rtcsleep(void)
 
 static uint32_t rtc_sleep_get_period_seconds(void)
 {
-    return RTC_GetWakeupPeriodSeconds();
+    return RTC_GetLastWakeupPeriodSeconds();
 }
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    if (sys_time.rtc_sleep_cnt == 0U)
+    {
+        s_u32RtcSleepElapsedSeconds = 0U;
+    }
+
     Can_PrepareSleep();
     before_rtcsleep();
 
@@ -763,7 +769,7 @@ static void low_power_guess_wakeup_source(void)
         return;
     }
 
-    if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) != Bit_RESET)
+    if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET)
     {
         g_irq_t = PA0_irq;
         return;
@@ -775,24 +781,26 @@ static void low_power_guess_wakeup_source(void)
         return;
     }
 
-#if defined(RS485_WAKEUP_ENABLE)
-    if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) != Bit_RESET)
-    {
-        g_irq_t = rs485_irq;
-        return;
-    }
-#endif
+// #if defined(RS485_WAKEUP_ENABLE)
+//     if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) != Bit_RESET)
+//     {
+//         g_irq_t = rs485_irq;
+//         return;
+//     }
+// #endif
 
-#if defined(UART1_WAKEUP_ENABLE)
-    if (GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) != Bit_RESET)
-    {
-        g_irq_t = uart1_irq;
-    }
-#endif
+// #if defined(UART1_WAKEUP_ENABLE)
+//     if (GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) != Bit_RESET)
+//     {
+//         g_irq_t = uart1_irq;
+//     }
+// #endif
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
+    uint32_t rtc_elapsed_seconds = 0U;
+
     rtc_sleep_prepare_rtc();
     rtc_sleep_dump_state("enter");
     // USART_DeInit(USART1);
@@ -825,7 +833,9 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     if (is_rtc_wakekup)
     {
+        rtc_elapsed_seconds = rtc_sleep_get_period_seconds();
         ++sys_time.rtc_sleep_cnt;
+        s_u32RtcSleepElapsedSeconds += rtc_elapsed_seconds;
         rtc_sleep_dump_state("wake");
     }
 
@@ -834,6 +844,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     if (is_rtc_wakekup && !isException())
     {
         update_rtc_soc(&sys_time.rtc_sleep_cnt);
+        Can_RtcWakeService(rtc_elapsed_seconds);
         return true;
     }
 
@@ -842,6 +853,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         is_rtc_wakekup = false;
     }
 
+    Init();
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
@@ -849,6 +861,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     report_wkup_sig();
     before_wakeup(&sys_time.rtc_sleep_cnt);
     sys_time.rtc_sleep_cnt = 0;
+    s_u32RtcSleepElapsedSeconds = 0U;
     return false;
 }
 
@@ -863,7 +876,7 @@ static bool update_rtc_soc(uint32_t *_sleep_cnt)
         return true;
     }
 
-    rest_seconds = (*_sleep_cnt) * rtc_sleep_get_period_seconds();
+    rest_seconds = s_u32RtcSleepElapsedSeconds;
     SOC_ApplyRtcRelaxationCompensation(rest_seconds,
                                        g_stCellInfoReport.u16VCellMin,
                                        g_stCellInfoReport.u16VCellMax);
@@ -977,6 +990,11 @@ static bool isErr_enterRTC(void)
         log_e("Heating");
         return true;
     }
+    else if (Can_IsBusy())
+    {
+        log_e("can busy");
+        return true;
+    }
 #ifdef __same_door__
     else if (!SystemStatus.bits.b1Status_MOS_CHG || !SystemStatus.bits.b1Status_MOS_DSG)
     {
@@ -984,11 +1002,11 @@ static bool isErr_enterRTC(void)
         return true;
     }
 #else
-    else if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == 1)
-    {
-        log_e("diff door and is CHGING");
-        return true;
-    }
+    // else if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == 1)
+    // {
+    //     log_e("diff door and is CHGING");
+    //     return true;
+    // }
 #endif
     else
     {

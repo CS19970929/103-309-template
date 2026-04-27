@@ -10,6 +10,128 @@ struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
 UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 #define Days_in_month(a) (month_days[(a)-1])
 
+#define RTC_CLOCK_OK             0U
+#define RTC_CLOCK_USE_LSI        1U
+#define RTC_CLOCK_NEED_REINIT    2U
+#define RTC_CLOCK_INIT_FAILED    3U
+#define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
+
+static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
+
+static UINT8 RTC_WaitForLastTaskSafe(void)
+{
+	UINT32 timeout = RTC_WAIT_TIMEOUT;
+
+	while ((RTC->CRL & RTC_FLAG_RTOFF) == (uint16_t)RESET)
+	{
+		if (timeout-- == 0U)
+		{
+			return 0U;
+		}
+	}
+
+	return 1U;
+}
+
+static UINT8 RTC_WaitForSynchroSafe(void)
+{
+	UINT32 timeout = RTC_WAIT_TIMEOUT;
+
+	RTC->CRL &= (uint16_t)~RTC_FLAG_RSF;
+	while ((RTC->CRL & RTC_FLAG_RSF) == (uint16_t)RESET)
+	{
+		if (timeout-- == 0U)
+		{
+			return 0U;
+		}
+	}
+
+	return 1U;
+}
+
+static UINT8 RTC_EnableLsiOscillator(void)
+{
+	UINT32 timeout = RTC_WAIT_TIMEOUT;
+
+	RCC_LSICmd(ENABLE);
+	while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
+	{
+		if (timeout-- == 0U)
+		{
+			return 0U;
+		}
+	}
+
+	return 1U;
+}
+
+static UINT8 RTC_PrepareExistingClock(void)
+{
+	uint32_t bdcr = RCC->BDCR;
+	uint32_t rtcsel = bdcr & RCC_BDCR_RTCSEL;
+
+	if ((bdcr & RCC_BDCR_RTCEN) == 0U)
+	{
+		return 0U;
+	}
+
+	if (rtcsel == RCC_BDCR_RTCSEL_LSE)
+	{
+		return ((bdcr & RCC_BDCR_LSERDY) != 0U) ? 1U : 0U;
+	}
+
+	if (rtcsel == RCC_BDCR_RTCSEL_LSI)
+	{
+		return RTC_EnableLsiOscillator();
+	}
+
+	return 0U;
+}
+
+static UINT8 RTC_EnableLsiClock(void)
+{
+	if (!RTC_EnableLsiOscillator())
+	{
+		return 0U;
+	}
+
+	RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
+	RCC_RTCCLKCmd(ENABLE);
+	if (!RTC_WaitForSynchroSafe())
+	{
+		return 0U;
+	}
+	if (!RTC_WaitForLastTaskSafe())
+	{
+		return 0U;
+	}
+	RTC_ITConfig(RTC_IT_SEC, ENABLE);
+	if (!RTC_WaitForLastTaskSafe())
+	{
+		return 0U;
+	}
+	RTC_SetPrescaler(40000 - 1);
+	if (!RTC_WaitForLastTaskSafe())
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+static UINT8 RTC_ReinitWithLsiClock(void)
+{
+	BKP_DeInit();
+	PWR_BackupAccessCmd(ENABLE);
+
+	if (!RTC_EnableLsiClock())
+	{
+		return RTC_CLOCK_INIT_FAILED;
+	}
+
+	return RTC_CLOCK_USE_LSI;
+}
+
 #ifdef _WEEK
 void GregorianDay(struct RTC_ELEMENT *tm)
 {
@@ -126,17 +248,30 @@ UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 static UINT8 RTC_ClockConfig(UINT8 need_full_init)
 {
 	__IO UINT16 StartUpCounter = 0, HSEStatus = 0;
-	INT8 result = 0;
+	UINT8 result = RTC_CLOCK_OK;
 	PWR_BackupAccessCmd(ENABLE); // 允许访问RTC
 
 	if (!need_full_init)
 	{
+		if (!RTC_PrepareExistingClock())
+		{
+			return RTC_CLOCK_NEED_REINIT;
+		}
 		RCC_RTCCLKCmd(ENABLE);
-		RTC_WaitForSynchro();
-		RTC_WaitForLastTask();
+		if (!RTC_WaitForSynchroSafe())
+		{
+			return RTC_CLOCK_NEED_REINIT;
+		}
+		if (!RTC_WaitForLastTaskSafe())
+		{
+			return RTC_CLOCK_NEED_REINIT;
+		}
 		RTC_ITConfig(RTC_IT_SEC, ENABLE);
-		RTC_WaitForLastTask();
-		return 0;
+		if (!RTC_WaitForLastTaskSafe())
+		{
+			return RTC_CLOCK_NEED_REINIT;
+		}
+		return RTC_CLOCK_OK;
 	}
 
 	BKP_DeInit();				 // 仅首次初始化 RTC 时重置备份域
@@ -151,30 +286,35 @@ static UINT8 RTC_ClockConfig(UINT8 need_full_init)
 	{
 		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE); // 把RTC 时钟源配置为LSE
 		RCC_RTCCLKCmd(ENABLE);					// 使能RTC时钟
-		RTC_WaitForSynchro();					// 等待 RTC APB 寄存器同步
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
+		if (!RTC_WaitForSynchroSafe())			// 等待 RTC APB 寄存器同步
+		{
+			return RTC_ReinitWithLsiClock();
+		}
+		if (!RTC_WaitForLastTaskSafe())			// 确保上一次 RTC 的操作完成
+		{
+			return RTC_ReinitWithLsiClock();
+		}
 		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// 使能 RTC 秒中断
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
+		if (!RTC_WaitForLastTaskSafe())			// 确保上一次 RTC 的操作完成
+		{
+			return RTC_ReinitWithLsiClock();
+		}
 		RTC_SetPrescaler(LSE_FREQUENT);			// 设置 RTC 分频: 使 RTC 周期为1s
 										// RTC period = RTCCLK/RTC_PR = (32.768 KHz)/(32767+1) = 1HZ
-		RTC_WaitForLastTask(); // 确保上一次 RTC 的操作完成
+		if (!RTC_WaitForLastTaskSafe()) // 确保上一次 RTC 的操作完成
+		{
+			return RTC_ReinitWithLsiClock();
+		}
 	}
 	else
 	{
 		//++RTC_Faultcnt;											//RTC错误单数为LSE出错
 		// System_ERROR_UserCallback(ERROR_LSE);
-		RCC_LSICmd(ENABLE); // 使能 LSI 振荡
-		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
-			;									// 等待到 LSI 预备
-		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI); // 把RTC 时钟源配置为LSI
-		RCC_RTCCLKCmd(ENABLE);					// 使能RTC时钟
-		RTC_WaitForSynchro();					// 等待 RTC APB 寄存器同步
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// 使能 RTC 秒中断
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_SetPrescaler(40000 - 1);			// RTC period = RTCCLK/RTC_PR = (40 KHz)/(40000-1+1) = 1HZ
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		result = 1;
+		if (!RTC_EnableLsiClock())
+		{
+			return RTC_CLOCK_INIT_FAILED;
+		}
+		result = RTC_CLOCK_USE_LSI;
 	}
 
 	return result;
@@ -184,7 +324,7 @@ static void RTC_ClearAlarmPending(void)
 {
 	RTC_ClearITPendingBit(RTC_IT_ALR);
 	RTC_ClearFlag(RTC_FLAG_ALR);
-	RTC_WaitForLastTask();
+	RTC_WaitForLastTaskSafe();
 	EXTI_ClearITPendingBit(EXTI_Line17);
 }
 
@@ -192,7 +332,7 @@ void RTC_TimeConfig(void)
 {
 	// GregorianDay(tm);			//计算星期
 	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // 由日期计算时间戳并写入到RTC计数寄存器
-	RTC_WaitForLastTask();
+	RTC_WaitForLastTaskSafe();
 }
 
 void RTC_AlarmConfig(void)
@@ -237,19 +377,12 @@ void RTC_NVIC_Config(void)
 
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
-	/*
-	 * 当前通信参数中 OtherElement.u16Sleep_TimeRTC 实际承载 RTC 周期。
-	 * u16Sleep_RTC_WakeUpTime 仍保留在结构体内，避免影响既有 EEPROM/协议布局。
-	 */
-	UINT32 wake_min = (UINT32)OtherElement.u16Sleep_TimeRTC;
-	UINT32 wake_seconds;
+	UINT32 wake_seconds = Can_GetIdleRtcPeriodSeconds();
 
-	if (wake_min == 0U)
+	if (wake_seconds == 0U)
 	{
-		wake_min = 3U;
+		wake_seconds = 1U;
 	}
-
-	wake_seconds = wake_min * 60U;
 
 #if defined(wdog_enable)
 #if defined(__FUNC_RTC__)
@@ -278,28 +411,49 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 	return wake_seconds;
 }
 
+UINT32 RTC_GetLastWakeupPeriodSeconds(void)
+{
+	return s_u32RtcLastWakeupPeriodSeconds;
+}
+
 // RTC唤醒时间设置，
 void RTC_WKTimeConfig(void)
 {
+	UINT32 wake_seconds;
+
 	PWR_BackupAccessCmd(ENABLE); // 后备域解锁
 	RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	RTC_WaitForLastTask();
+	RTC_WaitForLastTaskSafe();
 	RTC_ClearAlarmPending();
-	RTC_SetAlarm(RTC_GetCounter() + RTC_GetWakeupPeriodSeconds()); // 配置值按分钟存储，这里换算成秒
-	RTC_WaitForLastTask();
+	wake_seconds = RTC_GetWakeupPeriodSeconds();
+	s_u32RtcLastWakeupPeriodSeconds = wake_seconds;
+	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
+	RTC_WaitForLastTaskSafe();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE); // 打开闹钟中断
-	RTC_WaitForLastTask();
+	RTC_WaitForLastTaskSafe();
 }
 
 void Init_RTC(void)
 { // 使能PWR外设时钟，待机模式，RTC，看门狗
 	UINT8 need_full_init;
+	UINT8 clock_status;
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
 	PWR_BackupAccessCmd(ENABLE);
 
 	need_full_init = (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA) ? 1U : 0U;
-	RTC_ClockConfig(need_full_init); // RTC时钟配置
+	clock_status = RTC_ClockConfig(need_full_init); // RTC时钟配置
+
+	if ((!need_full_init) && (clock_status == RTC_CLOCK_NEED_REINIT))
+	{
+		need_full_init = 1U;
+		clock_status = RTC_ClockConfig(need_full_init);
+	}
+
+	if (clock_status == RTC_CLOCK_INIT_FAILED)
+	{
+		return;
+	}
 
 	if (need_full_init)
 	{ // 读取备份里面的值是否被写过。
@@ -344,7 +498,7 @@ static void RTC_HandleAlarmWakeup(void)
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 	{
 		RTC_ClearITPendingBit(RTC_IT_ALR);
-		RTC_WaitForLastTask();
+		RTC_WaitForLastTaskSafe();
 		had_alarm = 1;
 	}
 
@@ -373,7 +527,7 @@ void RTC_IRQHandler(void)
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		sys_time.rtc_sec_cnt++;
 		TimeDisplay = 1;				   // Enable time update
-		RTC_WaitForLastTask();			   // Wait until last write operation on RTC registers has finished
+		RTC_WaitForLastTaskSafe();		   // Wait until last write operation on RTC registers has finished
 	}
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
