@@ -108,7 +108,9 @@ void App_SOC(void)
 		return;
 	}
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+#endif
 
 	SOC_RefreshInputData();
 	SOC_PublishOutputData();

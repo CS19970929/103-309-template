@@ -1,7 +1,12 @@
 #include "main.h"
 #include <string.h>
 
-#define LEDBAR_FRAME_PATTERN_COUNT 5u
+#define LEDBAR_595_FRAME_PATTERN_COUNT 5u
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+#define LEDBAR_FRAME_PATTERN_COUNT 18u
+#else
+#define LEDBAR_FRAME_PATTERN_COUNT LEDBAR_595_FRAME_PATTERN_COUNT
+#endif
 
 #define LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
 
@@ -27,10 +32,20 @@ typedef struct
     uint8_t high_pin;
 } LedBarRoute;
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} LedBarPinDef;
+#endif
+
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 typedef struct
 {
     uint32_t lit_mask;
 } LedBarPattern;
+#endif
 
 typedef struct
 {
@@ -38,6 +53,7 @@ typedef struct
     uint8_t length;
 } LedBarFrameBuffer;
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 typedef enum
 {
     LEDBAR_SCAN_STATE_OFF_PRE = 0,
@@ -46,6 +62,7 @@ typedef enum
     LEDBAR_SCAN_STATE_OFF_POST,
     LEDBAR_SCAN_STATE_NEXT_ITEM
 } LedBarScanState;
+#endif
 
 typedef enum
 {
@@ -118,6 +135,17 @@ static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
     {4u, 1u},
 };
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] =
+{
+    {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
+    {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
+    {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
+    {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
+    {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
+};
+#endif
+
 static const uint8_t s_ledbar_digit_map[10] =
 {
     LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F,
@@ -132,6 +160,7 @@ static const uint8_t s_ledbar_digit_map[10] =
     LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 /*
  * These tables are generated against the current schematic:
  * QA~QE drive D0~D4 directly and OE is always enabled.
@@ -379,6 +408,7 @@ static const uint8_t s_ledbar_soc_charge_extra_score[101] =
     0u
 };
 #endif
+#endif
 
 static volatile uint8_t s_ledbar_number = 0u;
 static volatile uint8_t s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
@@ -391,10 +421,12 @@ static LedBarFrameBuffer s_ledbar_frame_front;
 static LedBarFrameBuffer s_ledbar_frame_back;
 static uint8_t s_ledbar_frame_pending = 0u;
 static uint8_t s_ledbar_scan_index = 0u;
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 static uint8_t s_ledbar_scan_hold_tick = 0u;
 static LedBarScanState s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
 static uint8_t s_ledbar_last_595_value = 0xFFu;
 static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
+#endif
 static uint8_t s_ledbar_scan_timer_initialized = 0u;
 static uint8_t s_ledbar_scan_timer_enabled = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
@@ -402,6 +434,11 @@ static uint16_t s_ledbar_key_hold_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+static void LedBar_AllPinsHiZ(void);
+static void LedBar_AllPinsAnalog(void);
+static void LedBar_OutputRoute(uint8_t route_id);
+#endif
 static void LedBar_CommitBackFrameIfPending(void);
 
 static void LedBar_EnableBackupAccess(void)
@@ -424,6 +461,12 @@ static uint8_t LedBar_GetRuntimeSoc(void)
 
 static void LedBar_GpioInitForDisplay(void)
 {
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
+                           RCC_APB2Periph_GPIOA |
+                           RCC_APB2Periph_GPIOB, ENABLE);
+    LedBar_AllPinsHiZ();
+#else
     GPIO_InitTypeDef gpio_init;
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
@@ -443,10 +486,16 @@ static void LedBar_GpioInitForDisplay(void)
     GPIO_Init(GPIO_SEG_EN, &gpio_init);
 
     GPIO_SetBits(GPIO_SEG_EN, PIN_SEG_EN);
+#endif
 }
 
 static void LedBar_GpioPrepareForStop(void)
 {
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
+                           RCC_APB2Periph_GPIOB, ENABLE);
+    LedBar_AllPinsAnalog();
+#else
     GPIO_InitTypeDef gpio_init;
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
@@ -465,6 +514,7 @@ static void LedBar_GpioPrepareForStop(void)
     GPIO_Init(LEDBAR_595_GPIO_LATCH, &gpio_init);
     gpio_init.GPIO_Pin = PIN_SEG_EN;
     GPIO_Init(GPIO_SEG_EN, &gpio_init);
+#endif
 }
 
 static UINT16 LedBar_GetTimerPrescalerFor100kHz(void)
@@ -543,6 +593,7 @@ static void LedBar_ScanTimerSetEnabled(uint8_t enable)
     }
 }
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 static uint8_t LedBar_Popcount32(uint32_t value)
 {
     uint8_t count = 0u;
@@ -567,7 +618,115 @@ static void LedBar_SetGpioLevel(GPIO_TypeDef *port, uint16_t pin, uint8_t level)
         port->BRR = pin;
     }
 }
+#endif
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+static uint8_t LedBar_GetPinIndex(uint16_t pin)
+{
+    uint8_t index = 0u;
+
+    while (((pin >> index) & 0x1u) == 0u)
+    {
+        index++;
+    }
+
+    return index;
+}
+
+static void LedBar_PinModeF1(GPIO_TypeDef *port, uint32_t pin_index, uint32_t mode_bits)
+{
+    volatile uint32_t *config_reg;
+    uint32_t shift;
+
+    if (pin_index < 8u)
+    {
+        config_reg = &port->CRL;
+        shift = pin_index * 4u;
+    }
+    else
+    {
+        config_reg = &port->CRH;
+        shift = (pin_index - 8u) * 4u;
+    }
+
+    *config_reg &= ~(0xFu << shift);
+    *config_reg |= (mode_bits << shift);
+}
+
+static void LedBar_PinToInput(uint8_t pin_id)
+{
+    GPIO_TypeDef *port = s_ledbar_gpio_pins[pin_id].port;
+    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_gpio_pins[pin_id].pin);
+
+    LedBar_PinModeF1(port, pin_index, 0x4u);
+}
+
+static void LedBar_PinToAnalog(uint8_t pin_id)
+{
+    GPIO_TypeDef *port = s_ledbar_gpio_pins[pin_id].port;
+    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_gpio_pins[pin_id].pin);
+
+    LedBar_PinModeF1(port, pin_index, 0x0u);
+}
+
+static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
+{
+    GPIO_TypeDef *port = s_ledbar_gpio_pins[pin_id].port;
+    uint16_t pin = s_ledbar_gpio_pins[pin_id].pin;
+    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(pin);
+
+    if (level != Bit_RESET)
+    {
+        port->BSRR = pin;
+    }
+    else
+    {
+        port->BRR = pin;
+    }
+
+    LedBar_PinModeF1(port, pin_index, 0x2u);
+}
+
+static void LedBar_AllPinsHiZ(void)
+{
+    uint8_t pin_id;
+
+    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+    {
+        LedBar_PinToInput(pin_id);
+    }
+}
+
+static void LedBar_AllPinsAnalog(void)
+{
+    uint8_t pin_id;
+
+    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+    {
+        LedBar_PinToAnalog(pin_id);
+    }
+}
+
+static void LedBar_OutputRoute(uint8_t route_id)
+{
+    const LedBarRoute *route;
+
+    LedBar_AllPinsHiZ();
+    if (route_id >= (uint8_t)LEDBAR_ROUTE_COUNT)
+    {
+        return;
+    }
+
+    route = &s_ledbar_routes[route_id];
+    LedBar_PinToOutput(route->low_pin, Bit_RESET);
+    LedBar_PinToOutput(route->high_pin, Bit_SET);
+}
+
+static void LedBar_OutputOff(void)
+{
+    LedBar_AllPinsHiZ();
+}
+#else
 static void LedBar_595DelaySmall(void)
 {
     __NOP();
@@ -610,6 +769,7 @@ static void LedBar_OutputOff(void)
 {
     LedBar_OutputPattern(0u);
 }
+#endif
 
 static void LedBar_ShowFrontFrameNow(void)
 {
@@ -623,12 +783,19 @@ static void LedBar_ShowFrontFrameNow(void)
     }
 
     LedBar_ScanTimerSetEnabled(1u);
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    s_ledbar_scan_index = 0u;
+    LedBar_OutputRoute(s_ledbar_frame_front.patterns[0]);
+    s_ledbar_scan_index = (s_ledbar_frame_front.length > 1u) ? 1u : 0u;
+#else
     s_ledbar_scan_index = 0u;
     s_ledbar_scan_hold_tick = 0u;
     s_ledbar_scan_state = LEDBAR_SCAN_STATE_HOLD_TARGET;
     LedBar_OutputPattern(s_ledbar_frame_front.patterns[0]);
+#endif
 }
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 static void LedBar_InitPatternTable(void)
 {
     uint8_t pattern_mask;
@@ -653,6 +820,7 @@ static void LedBar_InitPatternTable(void)
         s_ledbar_patterns[pattern_mask].lit_mask = lit_mask;
     }
 }
+#endif
 
 static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
 {
@@ -708,12 +876,13 @@ static void LedBar_ClearFrameBuffer(LedBarFrameBuffer *frame)
     frame->length = 0u;
 }
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 static void LedBar_CopyFramePatternsToBuffer(LedBarFrameBuffer *frame, const uint8_t *patterns)
 {
     uint8_t index;
 
     LedBar_ClearFrameBuffer(frame);
-    for (index = 0u; index < LEDBAR_FRAME_PATTERN_COUNT; ++index)
+    for (index = 0u; index < LEDBAR_595_FRAME_PATTERN_COUNT; ++index)
     {
         if (patterns[index] == 0u)
         {
@@ -724,7 +893,30 @@ static void LedBar_CopyFramePatternsToBuffer(LedBarFrameBuffer *frame, const uin
         frame->length++;
     }
 }
+#endif
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+static void LedBar_BuildRouteFrameToBuffer(LedBarFrameBuffer *frame, uint32_t target_mask)
+{
+    uint8_t route_id;
+
+    LedBar_ClearFrameBuffer(frame);
+    for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+    {
+        if ((target_mask & (1UL << route_id)) != 0u)
+        {
+            frame->patterns[frame->length] = route_id;
+            frame->length++;
+            if (frame->length >= LEDBAR_FRAME_PATTERN_COUNT)
+            {
+                break;
+            }
+        }
+    }
+}
+#endif
+
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 static uint8_t LedBar_FindBestPatternForRoute(uint8_t route_id, uint32_t target_mask)
 {
     uint8_t pattern_mask;
@@ -846,15 +1038,20 @@ static void LedBar_BuildGreedyFrameToBuffer(LedBarFrameBuffer *frame, uint32_t t
         remaining_mask = target_mask & (~covered_mask);
     }
 }
+#endif
 
 static void LedBar_ResetScanState(void)
 {
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    s_ledbar_scan_index = 0u;
+#else
     s_ledbar_scan_hold_tick = 0u;
     s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
     if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
     {
         s_ledbar_scan_index = 0u;
     }
+#endif
 }
 
 static void LedBar_CommitBackFrame(void)
@@ -872,6 +1069,7 @@ static void LedBar_CommitBackFrameIfPending(void)
     }
 }
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
 #if LEDBAR_SOC_DISPLAY_SNAP_ENABLE
 static uint8_t LedBar_GetDisplayExtraScore(uint8_t value, uint8_t indicator_mask)
 {
@@ -956,17 +1154,40 @@ static uint8_t LedBar_SelectDisplayValue(uint8_t value, uint8_t indicator_mask)
     return value;
 #endif
 }
+#endif
 
 static void LedBar_RebuildFrame(void)
 {
     uint8_t value = s_ledbar_number;
     uint8_t indicator_mask = (uint8_t)(s_ledbar_indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    uint32_t target_mask;
+#endif
 
     if (value > 100u)
     {
         value = 100u;
     }
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    if ((s_ledbar_force_blank != 0u) || (s_ledbar_sleep != 0u))
+    {
+        target_mask = 0u;
+    }
+    else if (s_ledbar_test_single_segment_enable != 0u)
+    {
+        uint8_t route_id = (uint8_t)(s_ledbar_test_single_segment_id % (uint8_t)LEDBAR_ROUTE_COUNT);
+        target_mask = (1UL << route_id);
+    }
+    else
+    {
+        target_mask = LedBar_BuildTargetMask(value, indicator_mask);
+    }
+
+    LedBar_BuildRouteFrameToBuffer(&s_ledbar_frame_back, target_mask);
+    s_ledbar_frame_pending = 1u;
+    return;
+#else
     if ((s_ledbar_force_blank != 0u) || (s_ledbar_sleep != 0u))
     {
         LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
@@ -1006,6 +1227,7 @@ static void LedBar_RebuildFrame(void)
 
     LedBar_BuildGreedyFrameToBuffer(&s_ledbar_frame_back, LedBar_BuildTargetMask(value, indicator_mask));
     s_ledbar_frame_pending = 1u;
+#endif
 }
 
 void LedBar_Init(void)
@@ -1015,7 +1237,9 @@ void LedBar_Init(void)
         return;
     }
 
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
     LedBar_InitPatternTable();
+#endif
     s_ledbar_number = 0u;
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     s_ledbar_force_blank = 1u;
@@ -1030,9 +1254,11 @@ void LedBar_Init(void)
     LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
     s_ledbar_frame_pending = 0u;
     s_ledbar_scan_index = 0u;
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
     s_ledbar_scan_hold_tick = 0u;
     s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
     s_ledbar_last_595_value = 0xFFu;
+#endif
     LedBar_Command = LED_BAR_NORMAL;
     LedBar_RebuildFrame();
     LedBar_CommitBackFrameIfPending();
@@ -1303,6 +1529,34 @@ void LedBar_Scan1ms(void)
         LedBar_Init();
     }
 
+#if LEDBAR_DRIVER_GPIO_CHARLIE
+    if (s_ledbar_sleep != 0u)
+    {
+        LedBar_OutputOff();
+        LedBar_ResetScanState();
+        return;
+    }
+
+    LedBar_CommitBackFrameIfPending();
+    if (s_ledbar_frame_front.length == 0u)
+    {
+        LedBar_OutputOff();
+        LedBar_ResetScanState();
+        return;
+    }
+
+    if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
+    {
+        s_ledbar_scan_index = 0u;
+    }
+
+    LedBar_OutputRoute(s_ledbar_frame_front.patterns[s_ledbar_scan_index]);
+    s_ledbar_scan_index++;
+    if (s_ledbar_scan_index >= s_ledbar_frame_front.length)
+    {
+        s_ledbar_scan_index = 0u;
+    }
+#else
     if (s_ledbar_sleep != 0u)
     {
         LedBar_OutputOff();
@@ -1368,6 +1622,7 @@ void LedBar_Scan1ms(void)
         s_ledbar_scan_state = LEDBAR_SCAN_STATE_OFF_PRE;
         break;
     }
+#endif
 }
 
 void TIM4_IRQHandler(void)
