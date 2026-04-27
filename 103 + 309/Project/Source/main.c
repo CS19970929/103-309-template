@@ -183,9 +183,9 @@ int main(void)
 
 		App_Sci();
 		App_AnlogCal();
+		App_LowPowerProcess();
 		App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		App_LowPowerProcess();
 		App_SOC();
 		StorageFlash_AppUseTest_Task();
 
