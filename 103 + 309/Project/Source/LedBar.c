@@ -26,6 +26,12 @@
 #define LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1u
 #endif
 
+#define LEDBAR_SCAN_TIMER_100KHZ_TICKS 50u
+#define LEDBAR_MCU_WK_ON_FILTER_10MS 3u
+#define LEDBAR_MCU_WK_OFF_FILTER_10MS 3u
+#define LEDBAR_CHARGE_ON_FILTER_100MS 1u
+#define LEDBAR_CHARGE_OFF_FILTER_100MS 5u
+
 typedef struct
 {
     uint8_t low_pin;
@@ -439,10 +445,18 @@ static uint16_t s_ledbar_soc_display_10ms = 0u;
 static uint16_t s_ledbar_key_hold_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
+static uint8_t s_ledbar_mcu_wk_filter_initialized = 0u;
+static uint8_t s_ledbar_mcu_wk_active = 0u;
+static uint8_t s_ledbar_mcu_wk_on_10ms = 0u;
+static uint8_t s_ledbar_mcu_wk_off_10ms = 0u;
+static uint8_t s_ledbar_charge_filter_initialized = 0u;
+static uint8_t s_ledbar_charge_active = 0u;
+static uint8_t s_ledbar_charge_on_100ms = 0u;
+static uint8_t s_ledbar_charge_off_100ms = 0u;
 
 #if LEDBAR_DRIVER_GPIO_CHARLIE
 static void LedBar_AllPinsHiZ(void);
-static void LedBar_AllPinsAnalog(void);
+static void LedBar_AllPinsOutputLow(void);
 static void LedBar_OutputRoute(uint8_t route_id);
 #endif
 static void LedBar_CommitBackFrameIfPending(void);
@@ -465,9 +479,100 @@ static uint8_t LedBar_GetRuntimeSoc(void)
     return (uint8_t)soc;
 }
 
-static uint8_t LedBar_IsMcuWakeActive(void)
+static uint8_t LedBar_ReadMcuWakeRaw(void)
 {
     return (uint8_t)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
+}
+
+static void LedBar_ServiceMcuWakeFilter(void)
+{
+    uint8_t raw_active = LedBar_ReadMcuWakeRaw();
+
+    if (s_ledbar_mcu_wk_filter_initialized == 0u)
+    {
+        s_ledbar_mcu_wk_filter_initialized = 1u;
+        s_ledbar_mcu_wk_active = raw_active;
+        s_ledbar_mcu_wk_on_10ms = (raw_active != 0u) ? LEDBAR_MCU_WK_ON_FILTER_10MS : 0u;
+        s_ledbar_mcu_wk_off_10ms = (raw_active == 0u) ? LEDBAR_MCU_WK_OFF_FILTER_10MS : 0u;
+        return;
+    }
+
+    if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
+    {
+        return;
+    }
+
+    if (raw_active != 0u)
+    {
+        s_ledbar_mcu_wk_off_10ms = 0u;
+        if (s_ledbar_mcu_wk_on_10ms < LEDBAR_MCU_WK_ON_FILTER_10MS)
+        {
+            s_ledbar_mcu_wk_on_10ms++;
+        }
+        if (s_ledbar_mcu_wk_on_10ms >= LEDBAR_MCU_WK_ON_FILTER_10MS)
+        {
+            s_ledbar_mcu_wk_active = 1u;
+        }
+    }
+    else
+    {
+        s_ledbar_mcu_wk_on_10ms = 0u;
+        if (s_ledbar_mcu_wk_off_10ms < LEDBAR_MCU_WK_OFF_FILTER_10MS)
+        {
+            s_ledbar_mcu_wk_off_10ms++;
+        }
+        if (s_ledbar_mcu_wk_off_10ms >= LEDBAR_MCU_WK_OFF_FILTER_10MS)
+        {
+            s_ledbar_mcu_wk_active = 0u;
+        }
+    }
+}
+
+static uint8_t LedBar_IsMcuWakeActive(void)
+{
+    return s_ledbar_mcu_wk_active;
+}
+
+static void LedBar_ServiceChargeDisplayFilter(uint8_t raw_active)
+{
+    if (s_ledbar_charge_filter_initialized == 0u)
+    {
+        s_ledbar_charge_filter_initialized = 1u;
+        s_ledbar_charge_active = raw_active;
+        s_ledbar_charge_on_100ms = (raw_active != 0u) ? LEDBAR_CHARGE_ON_FILTER_100MS : 0u;
+        s_ledbar_charge_off_100ms = (raw_active == 0u) ? LEDBAR_CHARGE_OFF_FILTER_100MS : 0u;
+        return;
+    }
+
+    if (g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u)
+    {
+        return;
+    }
+
+    if (raw_active != 0u)
+    {
+        s_ledbar_charge_off_100ms = 0u;
+        if (s_ledbar_charge_on_100ms < LEDBAR_CHARGE_ON_FILTER_100MS)
+        {
+            s_ledbar_charge_on_100ms++;
+        }
+        if (s_ledbar_charge_on_100ms >= LEDBAR_CHARGE_ON_FILTER_100MS)
+        {
+            s_ledbar_charge_active = 1u;
+        }
+    }
+    else
+    {
+        s_ledbar_charge_on_100ms = 0u;
+        if (s_ledbar_charge_off_100ms < LEDBAR_CHARGE_OFF_FILTER_100MS)
+        {
+            s_ledbar_charge_off_100ms++;
+        }
+        if (s_ledbar_charge_off_100ms >= LEDBAR_CHARGE_OFF_FILTER_100MS)
+        {
+            s_ledbar_charge_active = 0u;
+        }
+    }
 }
 
 static void LedBar_GpioInitForDisplay(void)
@@ -508,7 +613,7 @@ static void LedBar_GpioPrepareForStop(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
                                RCC_APB2Periph_GPIOB,
                            ENABLE);
-    LedBar_AllPinsAnalog();
+    LedBar_AllPinsOutputLow();
 #else
     GPIO_InitTypeDef gpio_init;
 
@@ -562,7 +667,7 @@ static void LedBar_ScanTimerInit(void)
     TIM_Cmd(TIM4, DISABLE);
 
     timer_init.TIM_Prescaler = LedBar_GetTimerPrescalerFor100kHz();
-    timer_init.TIM_Period = 99U;
+    timer_init.TIM_Period = LEDBAR_SCAN_TIMER_100KHZ_TICKS - 1U;
     timer_init.TIM_ClockDivision = TIM_CKD_DIV1;
     timer_init.TIM_CounterMode = TIM_CounterMode_Up;
     timer_init.TIM_RepetitionCounter = 0x00;
@@ -590,6 +695,8 @@ static void LedBar_ScanTimerSetEnabled(uint8_t enable)
             TIM_Cmd(TIM4, DISABLE);
             TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
             TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+            NVIC_DisableIRQ(TIM4_IRQn);
+            NVIC_ClearPendingIRQ(TIM4_IRQn);
             RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
             s_ledbar_scan_timer_initialized = 0u;
         }
@@ -676,14 +783,6 @@ static void LedBar_PinToInput(uint8_t pin_id)
     LedBar_PinModeF1(port, pin_index, 0x4u);
 }
 
-static void LedBar_PinToAnalog(uint8_t pin_id)
-{
-    GPIO_TypeDef *port = s_ledbar_gpio_pins[pin_id].port;
-    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_gpio_pins[pin_id].pin);
-
-    LedBar_PinModeF1(port, pin_index, 0x0u);
-}
-
 static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
 {
     GPIO_TypeDef *port = s_ledbar_gpio_pins[pin_id].port;
@@ -712,13 +811,14 @@ static void LedBar_AllPinsHiZ(void)
     }
 }
 
-static void LedBar_AllPinsAnalog(void)
+static void LedBar_AllPinsOutputLow(void)
 {
     uint8_t pin_id;
 
+    LedBar_AllPinsHiZ();
     for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
     {
-        LedBar_PinToAnalog(pin_id);
+        LedBar_PinToOutput(pin_id, Bit_RESET);
     }
 }
 
@@ -1307,6 +1407,14 @@ void LedBar_Init(void)
     s_ledbar_key_hold_10ms = 0u;
     s_ledbar_key_last_pressed = 0u;
     s_ledbar_key_long_handled = 0u;
+    s_ledbar_mcu_wk_filter_initialized = 0u;
+    s_ledbar_mcu_wk_active = 0u;
+    s_ledbar_mcu_wk_on_10ms = 0u;
+    s_ledbar_mcu_wk_off_10ms = 0u;
+    s_ledbar_charge_filter_initialized = 0u;
+    s_ledbar_charge_active = 0u;
+    s_ledbar_charge_on_100ms = 0u;
+    s_ledbar_charge_off_100ms = 0u;
     LedBar_ClearFrameBuffer(&s_ledbar_frame_front);
     LedBar_ClearFrameBuffer(&s_ledbar_frame_back);
     s_ledbar_frame_pending = 0u;
@@ -1805,12 +1913,14 @@ void APP_LedBar(void)
     uint8_t indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     uint8_t display_requested;
     uint8_t mcu_wk_active;
+    uint8_t charge_raw_active;
 
     if (s_ledbar_initialized == 0u)
     {
         LedBar_Init();
     }
 
+    LedBar_ServiceMcuWakeFilter();
     LedBar_ServiceSwitch();
     mcu_wk_active = LedBar_IsMcuWakeActive();
 
@@ -1869,7 +1979,9 @@ void APP_LedBar(void)
         display_value = 100u;
     }
 
-    if ((g_stCellInfoReport.u16Ichg != 0u) || (mcu_wk_active != 0u))
+    charge_raw_active = (uint8_t)(((g_stCellInfoReport.u16Ichg != 0u) || (mcu_wk_active != 0u)) ? 1u : 0u);
+    LedBar_ServiceChargeDisplayFilter(charge_raw_active);
+    if (s_ledbar_charge_active != 0u)
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
         LedBar_Command = LED_BAR_CHG;

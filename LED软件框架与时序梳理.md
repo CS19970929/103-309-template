@@ -27,7 +27,7 @@
 | 宏 | 当前值/状态 | 影响 |
 | --- | --- | --- |
 | `LEDBAR_DRIVER_GPIO_CHARLIE` | `1u` | 当前使用 5Pin GPIO Charlieplexing 方式直接扫描段位 |
-| `LEDBAR_SLEEP_ENABLE` | `1u` | 未请求显示或进入休眠时允许熄屏、关 TIM4、GPIO 转低功耗 |
+| `LEDBAR_SLEEP_ENABLE` | `1u` | 未请求显示或进入休眠时允许熄屏、关 TIM4、GPIO 进入确定关断态 |
 | `_DI_SWITCH_longKEY_ONOFF` | 已定义 | DI1 长按 3 秒会触发深度休眠 |
 | `__FUNC_RTC__` | 已定义 | 当前低功耗主路径走 RTC 打嗝休眠 |
 | `wdog_enable` | 已定义 | RTC 周期会按看门狗安全窗口裁剪 |
@@ -80,8 +80,8 @@
 - `LedBar_GpioInitForDisplay()`：打开 GPIO 时钟，所有 LED 管脚先设为输入高阻。
 - `LedBar_OutputRoute(route_id)`：先把 5 个 LED 管脚全部高阻，再将目标 route 的一端拉低、一端拉高。
 - `LedBar_OutputOff()`：所有 LED 管脚高阻。
-- `LedBar_GpioPrepareForStop()`：所有 LED 管脚转模拟输入，降低 STOP 前漏电。
-- `TIM4_IRQHandler()`：每 1ms 调用一次 `LedBar_Scan1ms()`。
+- `LedBar_GpioPrepareForStop()`：所有 LED 管脚先高阻再统一输出低电平，避免 STOP 前后引脚漂浮导致段位误亮。
+- `TIM4_IRQHandler()`：每 0.5ms 调用一次 `LedBar_Scan1ms()`。
 
 当前 Charlieplexing 模式没有 74HC595 锁存输出；`74HC595` 相关代码保留在 `#if !LEDBAR_DRIVER_GPIO_CHARLIE` 分支内，当前不会编译进主路径。
 
@@ -117,11 +117,11 @@ flowchart TD
     B --> C["APP_LedBar"]
     C --> D["LedBar_ServiceSwitch"]
     C --> E{"是否需要显示"}
-    E -->|否| F["LedBar_Clear: 熄屏/停 TIM4/GPIO 模拟输入"]
+    E -->|否| F["LedBar_Clear: 熄屏/停 TIM4/GPIO 全低"]
     E -->|是| G["读取 SOC 和状态"]
     G --> H["LedBar_RebuildFrame"]
     H --> I["LedBar_ShowFrontFrameNow: 启动 TIM4"]
-    I --> J["TIM4_IRQHandler 每 1ms 扫描下一段"]
+    I --> J["TIM4_IRQHandler 每 0.5ms 扫描下一段"]
     B --> K["App_LowPowerProcess"]
     K --> L["rtc_sleep: 每 1000ms 判定低功耗"]
 ```
@@ -145,8 +145,8 @@ flowchart TD
 `LedBar.c` 使用 TIM4 独立扫描：
 
 - TIM4 计数频率：100kHz。
-- `TIM_Period = 99`，所以 TIM4 中断周期为 1ms。
-- `TIM4_IRQHandler()` 每 1ms 调用 `LedBar_Scan1ms()`。
+- `TIM_Period = 49`，所以 TIM4 中断周期为 0.5ms。
+- `TIM4_IRQHandler()` 每 0.5ms 调用 `LedBar_Scan1ms()`。
 
 当前 Charlieplexing 模式下：
 
@@ -155,10 +155,10 @@ LedBar_OutputRoute(s_ledbar_frame_front.patterns[s_ledbar_scan_index]);
 s_ledbar_scan_index++;
 ```
 
-即每 1ms 点亮一个 route，完整刷新周期为：
+即每 0.5ms 点亮一个 route，完整刷新周期为：
 
 ```text
-完整帧周期 = 当前 frame.length * 1ms
+完整帧周期 = 当前 frame.length * 0.5ms
 单段占空比 ≈ 1 / frame.length
 ```
 
@@ -166,10 +166,10 @@ s_ledbar_scan_index++;
 
 | 显示内容 | 估算 route 数 | 完整扫描周期 | 单段刷新频率 |
 | --- | ---: | ---: | ---: |
-| `8%` | 个位 7 段 + `%` = 8 | 约 8ms | 约 125Hz |
-| `88%` | 十位 7 段 + 个位 7 段 + `%` = 15 | 约 15ms | 约 66.7Hz |
-| `100%` | 百位 2 段 + 十位 6 段 + 个位 6 段 + `%` = 15 | 约 15ms | 约 66.7Hz |
-| `88% + charge` | 16 | 约 16ms | 约 62.5Hz |
+| `8%` | 个位 7 段 + `%` = 8 | 约 4ms | 约 250Hz |
+| `88%` | 十位 7 段 + 个位 7 段 + `%` = 15 | 约 7.5ms | 约 133Hz |
+| `100%` | 百位 2 段 + 十位 6 段 + 个位 6 段 + `%` = 15 | 约 7.5ms | 约 133Hz |
+| `88% + charge` | 16 | 约 8ms | 约 125Hz |
 
 注意：route 数越多，占空比越低，亮度会下降；这属于 Charlieplexing 扫描方式的天然结果。
 
@@ -179,7 +179,7 @@ s_ledbar_scan_index++;
 
 - 首次从 blank 进入显示时立即刷新。
 - 已经显示时，只有 `b1Sys100msFlag` 到来才检查 SOC/图标变化。
-- TIM4 扫描不依赖 100ms 业务刷新，只要前台帧存在并且 TIM4 开启，就会持续 1ms 扫描。
+- TIM4 扫描不依赖 100ms 业务刷新，只要前台帧存在并且 TIM4 开启，就会持续 0.5ms 扫描。
 
 ## 按键显示时序
 
@@ -212,9 +212,10 @@ static bool low_power_is_mcu_wake_active(void)
 LED 侧逻辑：
 
 - `LedBar_IsSocDisplayRequested()` 中优先判断 `GPIO_MCU_WK`。
-- 只要 `GPIO_MCU_WK` 高电平，返回“需要显示”。
+- `GPIO_MCU_WK` 显示侧经过 10ms 级去抖，高电平稳定后返回“需要显示”。
 - `APP_LedBar()` 中即使 `Sleep_Mode.bits.b1_ToSleepFlag` 已经被置位，只要 `GPIO_MCU_WK` 高电平，也不会执行 LED 熄屏分支。
 - 显示内容仍为当前 SOC + `%`；同时叠加 charge 图标。
+- charge 图标经过 100ms 级保持滤波，短时间 `u16Ichg` 或 `GPIO_MCU_WK` 抖动不会立即闪灭。
 
 低功耗侧逻辑：
 
@@ -256,7 +257,7 @@ LedBar_Clear();
 2. 重建空帧。
 3. 输出关闭。
 4. 关闭 TIM4。
-5. LED GPIO 转模拟输入。
+5. LED GPIO 统一输出低电平。
 
 这是“LED 自身省电”，不一定代表 MCU 进入 STOP。
 
@@ -275,7 +276,7 @@ LedBar_SetSleep(1u);
 2. `s_ledbar_sleep = 1`。
 3. 清空显示帧。
 4. 关闭 TIM4。
-5. 输出关闭，GPIO 转模拟输入。
+5. 输出关闭，LED GPIO 统一输出低电平。
 
 ### STOP 前准备
 
@@ -285,7 +286,7 @@ LedBar_SetSleep(1u);
 2. `s_ledbar_force_blank = 1`。
 3. 提交空帧。
 4. 关闭 TIM4。
-5. GPIO 转模拟输入。
+5. LED GPIO 统一输出低电平。
 
 ### 休眠中 SOC 预览
 
@@ -484,7 +485,7 @@ void BQ769x0_SleepMode_Ctrl(void)
 
 ### 桌面代码检查
 
-1. 确认 `LedBar.c` 只有 `GPIO_MCU_WK` helper 和显示保持逻辑变化。
+1. 确认 `LedBar.c` 的扫描周期、`GPIO_MCU_WK` 显示去抖、charge 图标保持、STOP 前 LED GPIO 全低逻辑符合预期。
 2. 确认 `rtc_sleep.c` 在低压分支之前阻断 `GPIO_MCU_WK`。
 3. 确认未改动 `SleepDeal_Continue()` 的复位休眠流程。
 
@@ -504,14 +505,14 @@ void BQ769x0_SleepMode_Ctrl(void)
 
 | 信号 | 期望 |
 | --- | --- |
-| TIM4 扫描管脚 | 显示期间约 1ms 切换一次 route |
-| LED 完整帧 | 周期约为 `frame.length ms` |
+| TIM4 扫描管脚 | 显示期间约 0.5ms 切换一次 route |
+| LED 完整帧 | 周期约为 `frame.length * 0.5ms` |
 | `GPIO_MCU_WK` | 高电平期间 TIM4 不应因显示窗口耗尽而关闭 |
 | STOP 电流 | `GPIO_MCU_WK=1` 时不应进入 RTC STOP 的低电流平台 |
 
 ## 风险与注意事项
 
-1. `GPIO_MCU_WK` 当前是浮空输入。如果外部没有可靠上下拉，可能误判高电平，导致 LED 常亮并阻断休眠。硬件上应确认 PB13 有确定电平；软件上可考虑改为上拉/下拉或增加滤波。
+1. `GPIO_MCU_WK` 当前是浮空输入。显示侧已加软件去抖，但低功耗阻断仍按实时电平判断；如果外部没有可靠上下拉，仍可能误判高电平并阻断休眠。硬件上应确认 PB13 有确定电平，软件上可进一步考虑改为上拉/下拉。
 2. `GPIO_MCU_WK` 高电平现在会清除待休眠请求，包括已挂起的 `g_sleepModeSelect`。这是按“高电平不进入休眠”实现的。如果后续需要“只阻断自动休眠，不阻断上位机强制休眠”，需要把 `LowPower_Request(NO_SLEEP)` 改成只清自动计数。
 3. 当前故障状态只改 `LedBar_Command`，没有实际故障闪烁图案。如果产品定义要求故障显示优先级，应补充显示策略。
 4. `App_SleepDeal()` 未启用，但保留代码没有同步加入 `GPIO_MCU_WK` 阻断。若恢复旧路径，需要补齐。

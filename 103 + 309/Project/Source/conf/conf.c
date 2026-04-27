@@ -338,6 +338,8 @@ void IOstatus_Base(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
     }
+
+    LedBar_PrepareForStop();
 }
 
 void IOstatus_RTCMode(void)
@@ -409,6 +411,8 @@ void IOstatus_RTCMode(void)
     GPIO_Init(GPIOD, &GPIO_InitStructure);
     // GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
 #endif
+
+    LedBar_PrepareForStop();
 }
 
 void IOstatus_NormalMode(void)
