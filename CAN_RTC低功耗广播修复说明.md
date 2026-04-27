@@ -1,28 +1,29 @@
-# CAN RTC低功耗广播回归说明
+# CAN通信回退到9ec9f26说明
 
 ## 背景
 
-现场反馈当前版本仍然没有 CAN 通信，而 `b42e9f5cf8721a73ed2d8cdd00f103a2321e1714` 版本仍有通信。对比后确认，`Can_HDX.c` 在该提交之后的差异集中在 CAN 位时序、过滤器、无 ACK 后续发送策略、首次周期调度和 `CAN_Tx_Data()` 直接发送路径。
+现场确认 `9ec9f26df29b1aa6c773fde20448e6363758ba1f` 是最后一版 CAN 可以通信的提交。检查后发现，当前 `Can_HDX.c` 和 `Can_HDX.h` 已经与该提交一致；继续存在的差异在 CAN 外围运行环境，包括 IO 低功耗配置和通信宏开关。
 
-为优先恢复现场通信，本次将 `103 + 309/Project/Source/Can_HDX.c` 的功能实现恢复到 `b42e9f5` 时的状态。
+为按最后可通信版本恢复，本次将 CAN 通信相关运行路径对齐到 `9ec9f26`。
 
-## 恢复内容
+## 本次恢复文件
 
-文件：`103 + 309/Project/Source/Can_HDX.c`
+1. `103 + 309/Project/Source/Can_HDX.c`
+   当前已经与 `9ec9f26` 一致，本次保持不再改动。
 
-1. 恢复 `b42e9f5` 的 CAN 位时序配置：`BS1=5tq`、`BS2=2tq`、`Prescaler=4`。
-2. 恢复原 16 位标准帧过滤器配置，不再使用 32 位全接收掩码。
-3. 恢复原无 ACK 处理：非探测窗口首帧失败后结束本轮发送窗口并断电。
-4. 恢复原首次周期调度：第一次进入调度时只锚定 1s/5s tick，不立即压入首轮周期帧。
-5. 恢复原 `CAN_Tx_Data()` 和 `CAN_TX_Test()` 发送路径，不再增加额外的阻塞式收发器上电/等待/断电包装。
+2. `103 + 309/Project/Source/Can_HDX.h`
+   当前已经与 `9ec9f26` 一致，本次保持不再改动。
 
-## 保留策略
+3. `103 + 309/Project/Source/conf/conf.c`
+   恢复 `IOstatus_Base()` 和 `IOstatus_RTCMode()` 中的 IO 状态到 `9ec9f26`，包括 DC/2727 供电脚、SEG 脚和 RTC 模式 GPIO 配置。
 
-- RTC 有设备/无设备周期、探测帧、低功耗前 `Can_PrepareSleep()`、RTC 唤醒 `Can_RtcWakeService()` 等 `b42e9f5` 已具备的逻辑保持不变。
-- 后续如果继续优化“有设备仍收不到广播”，应先基于本次恢复后的可通信版本，用示波器同时确认 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL，再逐项调整，避免再次同时改变位时序和发送路径。
+4. `103 + 309/Project/Source/main.c`
+   移除后续版本额外加入的无条件 `DBGMCU_Config(DBGMCU_STOP, ENABLE)`，恢复到 `9ec9f26`。
 
-## 验证建议
+5. `103 + 309/Project/Source/main.h`
+   恢复 `_COMMOM_UPPER_SCI2` 宏定义到 `9ec9f26` 状态。
 
-1. 烧录后先验证正常模式下是否恢复到 `b42e9f5` 的通信表现。
-2. 若仍无通信，优先确认当前硬件实际使用的 CAN 波特率、终端电阻、CANH/CANL 接线和 `GPIO_CMNT_EN` 极性。
-3. 若正常模式恢复，再单独验证 RTC 1s/10s 周期和中途接入/断开收敛。
+## 验证
+
+- 已确认上述运行相关文件相对 `9ec9f26` 无差异。
+- 该回退优先恢复最后可通信基线。若后续仍要调整 CAN 低功耗策略，应在该基线上单项修改并实测 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL。

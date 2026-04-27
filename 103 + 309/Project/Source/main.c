@@ -254,7 +254,6 @@ void InitDevice(void)
 #ifdef wdog_enable
 	Init_IWDG();
 #endif // !1
-	DBGMCU_Config(DBGMCU_STOP, ENABLE);
 
 #endif
 }
