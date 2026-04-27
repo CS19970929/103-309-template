@@ -17,6 +17,9 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TICKS_PER_SECOND ((UINT32)100U)
+#define FEIDAO_CAN_BS1 CAN_BS1_2tq
+#define FEIDAO_CAN_BS2 CAN_BS2_1tq
+#define FEIDAO_CAN_PRESCALER ((uint16_t)4U)
 #define FEIDAO_CAN_RTC_ACTIVE_PERIOD_SECONDS ((UINT32)1U)
 #define FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS ((UINT32)10U)
 #define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
@@ -375,16 +378,21 @@ static void feidao_can_record_tx_cycle_no_ack(void)
 
 static UINT8 feidao_can_stop_cycle_after_no_ack(void)
 {
-	if ((0U == s_u8FeidaoCanProbeActive) &&
-		(0U == s_u8FeidaoCanTxCycleAcked) &&
-		(0U != s_u8FeidaoCanTxCycleNoAckRecorded))
+	if ((0U != s_u8FeidaoCanProbeActive) ||
+		(0U != s_u8FeidaoCanTxCycleAcked) ||
+		(0U == s_u8FeidaoCanTxCycleNoAckRecorded))
 	{
-		s_u16FeidaoCanPendingMask = 0U;
-		feidao_can_power_off();
-		return 1U;
+		return 0U;
 	}
 
-	return 0U;
+	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_RTC_PROBE_MSG_MASK)
+	{
+		return 0U;
+	}
+
+	s_u16FeidaoCanPendingMask = 0U;
+	feidao_can_power_off();
+	return 1U;
 }
 
 static void feidao_can_drop_pending_if_bus_inactive(void)
@@ -1396,41 +1404,18 @@ void InitCan_NVIC(void)
 
 void InitCan_Filter(void)
 {
-	UINT16 u16CAN_FilterIdHigh;
-	UINT16 u16CAN_FilterIdLow;
-	UINT16 u16CAN_FilterMaskIdHigh;
-	UINT16 u16CAN_FilterMaskIdLow;
 	CAN_FilterInitTypeDef CAN_FilterInitStructure;
 
-	// 这两句怎么来的，详细看截图——过滤器配置表
-	// CAN_ID_STD之类的不需要移位，官方已经定好
-	// CAN_FilterMode_IdList，列表模式FBMx = 1
-	// CAN_FilterScale_16bit，过滤器组的位宽，FSCx = 0
-	// 结合这两个，高位的屏蔽位也作为标识符列表，可以搞4个CANID
-	// 别的情况是高位作为低位的屏蔽位。
-
-	// stm32 can的屏蔽位模式：
-	// 一个是标识符寄存器(过滤器Filter)，一个是屏蔽位寄存器(Mask)。
-	// 凡是屏蔽位寄存器里为1的位所对应的标识符寄存器的位，这些位是必须匹配的
-	// 也就是说，你接受到的Message里面的标识符（ID）里面对应的位必须跟标识符寄存器里对应的位相同，才能被接受。
-
-	// 远程帧过滤器
-	u16CAN_FilterIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA;
-	u16CAN_FilterIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
-
-	u16CAN_FilterMaskIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA; // 设置成一样
-	u16CAN_FilterMaskIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
-
-	CAN_FilterInitStructure.CAN_FilterNumber = 0;							// 指定过滤器为0，如果想接收多几个，范围为0——13
-	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;			// 指定过滤器为屏蔽模式
-	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_16bit;		// 过滤器位宽为16位，也即2个带屏蔽位的标准帧
-	CAN_FilterInitStructure.CAN_FilterIdHigh = u16CAN_FilterIdHigh;			// 过滤器标识符的高16位值
-	CAN_FilterInitStructure.CAN_FilterIdLow = u16CAN_FilterIdLow;			// 过滤器标识符的低16位值
-	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = u16CAN_FilterMaskIdHigh; // 过滤器屏蔽标识符的高16位值
-	CAN_FilterInitStructure.CAN_FilterMaskIdLow = u16CAN_FilterMaskIdLow;	// 过滤器屏蔽标识符的低16位值
-	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;	// 设定了指向过滤器的FIFO为0
-	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;					// 使能过滤器
-	CAN_FilterInit(&CAN_FilterInitStructure);								// 按上面的参数初始化过滤器
+	CAN_FilterInitStructure.CAN_FilterNumber = 0;
+	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;
+	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_32bit;
+	CAN_FilterInitStructure.CAN_FilterIdHigh = 0x0000U;
+	CAN_FilterInitStructure.CAN_FilterIdLow = 0x0000U;
+	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0x0000U;
+	CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0x0000U;
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
+	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
+	CAN_FilterInit(&CAN_FilterInitStructure);
 }
 
 void InitCan_CAN1(void)
@@ -1451,27 +1436,11 @@ void InitCan_CAN1(void)
 	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CAN设置为正常模式
 												  // CAN_InitStructure.CAN_Mode = CAN_Mode_LoopBack;
 
-	// 关于以下的设置，sample=(1+CAN_BS1)/(1+CAN_BS1+CAN_BS2)，采样点设置在80%到87.5%之间比较好。
-	// 如果can采样点选取合适，can总线就能容纳更多的can节点。因此极其重要。
-	// 如果这个不行，就改为那个PDF里面的常用参考参数
-	// CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
-	// CAN_InitStructure.CAN_BS1 = CAN_BS1_3tq; // 时间段1为3个时间单位
-	// CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq; // 时间段2为2个时间单位
-	// CAN_InitStructure.CAN_Prescaler = 24;	 // 时间单位长度为60
-#if 1
 	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
-	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq; // 时间段1为3个时间单位
-	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq; // 时间段2为2个时间单位
-#else
-	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
-	CAN_InitStructure.CAN_BS1 = CAN_BS1_2tq; // 时间段1为3个时间单位
-	CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq; // 时间段2为2个时间单位
-
-#endif
-	CAN_InitStructure.CAN_Prescaler = 4; // 时间单位长度为60
-	CAN_Init(CAN1, &CAN_InitStructure);	 // 波特率为：72M/2/6/(1+8+3)=0.5 即500K，非PDF范例
-										 // 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
-										 // 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例
+	CAN_InitStructure.CAN_BS1 = FEIDAO_CAN_BS1;
+	CAN_InitStructure.CAN_BS2 = FEIDAO_CAN_BS2;
+	CAN_InitStructure.CAN_Prescaler = FEIDAO_CAN_PRESCALER;
+	CAN_Init(CAN1, &CAN_InitStructure); // 8MHz PCLK1: 8M / 4 / (1 + 2 + 1) = 500K
 
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // 使能FIFO0消息挂号中断
 }
