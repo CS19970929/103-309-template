@@ -6,10 +6,16 @@ INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在
 								   // 不能改UINT32
 INT32 g_i32ADCResult[ADC_NUM]; // ADC结果保存
 static UINT32 s_u32AnlogCalLast10msTick = 0U;
+static INT32 s_i32TypeCOutCurrentFilter_mA = 0;
 
 UINT16 g_u16IoutOffsetAD;
-UINT16 gu16_BusCurr_CHG; // A*10
-UINT16 gu16_BusCurr_DSG; // A*10
+UINT16 g_u16TypeCOutCurrent_mA;
+UINT16 g_u16TypeCOutCurrent_A10;
+UINT16 g_u16TypeCOutOffsetAD;
+UINT16 g_u16TypeCOutStableAD;
+UINT16 g_u16TypeCOutDelta_mV;
+UINT16 gu16_BusCurr_CHG; // legacy mirror, A*10
+UINT16 gu16_BusCurr_DSG; // legacy mirror, A*10
 
 // 12位，4096最大
 const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
@@ -200,14 +206,60 @@ void ADC_StopForLowPower(void)
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, DISABLE);
 }
 
+static UINT16 ADC_LimitU16(UINT32 value)
+{
+    if (value > 0xFFFFU)
+    {
+        return 0xFFFFU;
+    }
+
+    return (UINT16)value;
+}
+
+static void ADC_ClearTypeCOutCurrent(void)
+{
+    s_i32TypeCOutCurrentFilter_mA = 0;
+    g_u16TypeCOutCurrent_mA = 0;
+    g_u16TypeCOutCurrent_A10 = 0;
+    g_u16TypeCOutDelta_mV = 0;
+    g_u32ADCValFilter2[ADC_CURR] = 0;
+    g_i32ADCResult[ADC_CURR] = 0;
+    gu16_BusCurr_CHG = 0;
+    gu16_BusCurr_DSG = 0;
+}
+
+static UINT16 ADC_TypeCAdDiffToMilliAmp(UINT32 ad_diff, UINT16 *delta_mV_out)
+{
+    UINT32 denominator;
+    UINT32 delta_mV;
+    UINT32 current_mA;
+
+    delta_mV = (ad_diff * (UINT32)TYPEC_CUR_VDDA_MV + 2048U) / 4096U;
+    if (delta_mV_out != 0)
+    {
+        *delta_mV_out = ADC_LimitU16(delta_mV);
+    }
+
+    if ((TYPEC_CUR_RSENSE_MOHM == 0U) || (TYPEC_CUR_AMP_GAIN_X10 == 0U))
+    {
+        return 0;
+    }
+
+    denominator = (UINT32)TYPEC_CUR_RSENSE_MOHM * (UINT32)TYPEC_CUR_AMP_GAIN_X10;
+    current_mA = (delta_mV * 10000U + (denominator / 2U)) / denominator;
+
+    return ADC_LimitU16(current_mA);
+}
+
 void ADC_Current_Smooth(void)
 {
     static UINT8 su8_ADcnt = 0;
     static UINT8 su8_OffsetCnt = 0;
     static UINT32 su32_OffsetSum = 0;
-    INT32 t_i32temp = 0;
-    UINT32 u32_ADC_CUR_AMP = 0;
-    UINT32 u32_AD_Diff = 0;
+    UINT32 u32TypeCAdAvg = 0;
+    UINT32 u32AdDiff = 0;
+    UINT16 u16DeltaMv = 0;
+    UINT16 u16Current_mA = 0;
 
     if (su8_ADcnt++ < AD_CalNum_Cur)
     {
@@ -216,64 +268,59 @@ void ADC_Current_Smooth(void)
     else
     {
         su8_ADcnt = 0;
-        u32_ADC_CUR_AMP = g_u32ADCValFilter2[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
+        u32TypeCAdAvg = g_u32ADCValFilter2[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
         g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
+        g_u16TypeCOutStableAD = ADC_LimitU16(u32TypeCAdAvg);
 
-        if (0 == g_u16IoutOffsetAD)
+        if (0 == g_u16TypeCOutOffsetAD)
         {
-            if (0 == u32_ADC_CUR_AMP)
+            if (0 == u32TypeCAdAvg)
             {
-                gu16_BusCurr_DSG = 0;
-                gu16_BusCurr_CHG = 0;
+                ADC_ClearTypeCOutCurrent();
                 return;
             }
 
-            su32_OffsetSum += u32_ADC_CUR_AMP;
+            su32_OffsetSum += u32TypeCAdAvg;
             if (++su8_OffsetCnt >= AD_CurOffsetCalNum)
             {
-                g_u16IoutOffsetAD = (UINT16)(su32_OffsetSum >> AD_CurOffsetCalNum_2);
+                g_u16TypeCOutOffsetAD = (UINT16)(su32_OffsetSum >> AD_CurOffsetCalNum_2);
+                g_u16IoutOffsetAD = g_u16TypeCOutOffsetAD;
                 su32_OffsetSum = 0;
                 su8_OffsetCnt = 0;
             }
-            gu16_BusCurr_DSG = 0;
-            gu16_BusCurr_CHG = 0;
+            ADC_ClearTypeCOutCurrent();
             return;
         }
 
-        if (0 == OtherElement.u16Sys_CS_Res)
+        g_u16IoutOffsetAD = g_u16TypeCOutOffsetAD;
+        if ((u32TypeCAdAvg + AD_CurZeroDeadband) < g_u16TypeCOutOffsetAD)
         {
-            gu16_BusCurr_DSG = 0;
-            gu16_BusCurr_CHG = 0;
-            return;
+            u32AdDiff = (UINT32)g_u16TypeCOutOffsetAD - u32TypeCAdAvg;
         }
-
-        if ((u32_ADC_CUR_AMP + AD_CurZeroDeadband) < g_u16IoutOffsetAD)
+        else if (u32TypeCAdAvg > ((UINT32)g_u16TypeCOutOffsetAD + AD_CurZeroDeadband))
         {
-            u32_AD_Diff = g_u16IoutOffsetAD - u32_ADC_CUR_AMP;
-            t_i32temp = u32_AD_Diff * 3300 / 4096;
-            t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1;
-            g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
-            g_i32ADCResult[ADC_CURR] = g_u32ADCValFilter2[ADC_CURR];
-            gu16_BusCurr_DSG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
-            gu16_BusCurr_CHG = 0;
-        }
-        else if (u32_ADC_CUR_AMP > (g_u16IoutOffsetAD + AD_CurZeroDeadband))
-        {
-            u32_AD_Diff = u32_ADC_CUR_AMP - g_u16IoutOffsetAD;
-            t_i32temp = u32_AD_Diff * 3300 / 4096;
-            t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1;
-            g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
-            g_i32ADCResult[ADC_CURR] = g_u32ADCValFilter2[ADC_CURR];
-            gu16_BusCurr_DSG = 0;
-            gu16_BusCurr_CHG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
+            u32AdDiff = u32TypeCAdAvg - (UINT32)g_u16TypeCOutOffsetAD;
         }
         else
         {
-            g_u32ADCValFilter2[ADC_CURR] = 0;
-            g_i32ADCResult[ADC_CURR] = 0;
-            gu16_BusCurr_DSG = 0;
-            gu16_BusCurr_CHG = 0;
+            ADC_ClearTypeCOutCurrent();
+            return;
         }
+
+        u16Current_mA = ADC_TypeCAdDiffToMilliAmp(u32AdDiff, &u16DeltaMv);
+        g_u16TypeCOutDelta_mV = u16DeltaMv;
+        s_i32TypeCOutCurrentFilter_mA = (((INT32)u16Current_mA - s_i32TypeCOutCurrentFilter_mA) >> 3) + s_i32TypeCOutCurrentFilter_mA;
+        if (s_i32TypeCOutCurrentFilter_mA < 0)
+        {
+            s_i32TypeCOutCurrentFilter_mA = 0;
+        }
+
+        g_u16TypeCOutCurrent_mA = ADC_LimitU16((UINT32)s_i32TypeCOutCurrentFilter_mA);
+        g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
+        g_u32ADCValFilter2[ADC_CURR] = g_u16TypeCOutCurrent_A10;
+        g_i32ADCResult[ADC_CURR] = g_u16TypeCOutCurrent_A10;
+        gu16_BusCurr_CHG = 0;
+        gu16_BusCurr_DSG = g_u16TypeCOutCurrent_A10;
     }
 }
 
@@ -321,8 +368,8 @@ void InitADC(void)
         g_u32ADCValFilter2[i] = 0;
     }
 
-    gu16_BusCurr_CHG = 0;
-    gu16_BusCurr_DSG = 0;
+    ADC_ClearTypeCOutCurrent();
+    g_u16TypeCOutStableAD = 0;
     ADC_ResetAnlogCalSchedule();
 
     InitADC_GPIO();

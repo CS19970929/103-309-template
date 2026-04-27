@@ -14,6 +14,10 @@
 #define AD_CurOffsetCalNum_2 4
 #define AD_CurZeroDeadband  4
 
+#define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm
+#define TYPEC_CUR_AMP_GAIN_X10      10U     // current amplifier gain * 10, update after hardware is confirmed
+#define TYPEC_CUR_VDDA_MV           3300U   // ADC reference voltage
+
 //AD采样变量枚举
 enum tagInfoForADCArray {
     ADC_TEMP_MOS1,      // MOS1温度
@@ -39,6 +43,11 @@ enum tagInfoForADCArray {
 
 extern INT32 g_i32ADCResult[ADC_NUM];             //ADC数据缓存
 //extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//这个位数不能改
+extern UINT16 g_u16TypeCOutCurrent_mA;
+extern UINT16 g_u16TypeCOutCurrent_A10;
+extern UINT16 g_u16TypeCOutOffsetAD;
+extern UINT16 g_u16TypeCOutStableAD;
+extern UINT16 g_u16TypeCOutDelta_mV;
 extern UINT16 gu16_BusCurr_CHG;
 extern UINT16 gu16_BusCurr_DSG;
 
