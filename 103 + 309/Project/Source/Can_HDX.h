@@ -192,6 +192,7 @@ void InitCan(void);
 void App_Can(void);
 void App_CanTest(void);
 UINT8 Can_IsBusy(void);
+UINT8 Can_IsSleepBlocked(void);
 void Can_PrepareSleep(void);
 UINT8 Can_IsBusActive(void);
 UINT32 Can_GetIdleRtcPeriodSeconds(void);

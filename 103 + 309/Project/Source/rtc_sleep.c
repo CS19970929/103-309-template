@@ -990,7 +990,7 @@ static bool isErr_enterRTC(void)
         log_e("Heating");
         return true;
     }
-    else if (Can_IsBusy())
+    else if (Can_IsSleepBlocked())
     {
         log_e("can busy");
         return true;

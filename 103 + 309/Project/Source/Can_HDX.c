@@ -596,6 +596,11 @@ static void feidao_can_send(UINT32 now_tick)
 	}
 	feidao_can_drop_pending_if_bus_inactive();
 
+	if ((0U == s_u16FeidaoCanPendingMask) && (FEIDAO_CAN_POWER_IDLE == s_u8FeidaoCanPowerState))
+	{
+		return;
+	}
+
 	switch (s_u8FeidaoCanPowerState)
 	{
 	case FEIDAO_CAN_POWER_IDLE:
@@ -1670,6 +1675,24 @@ UINT8 Can_IsBusy(void)
 		return 1U;
 	}
 	if (s_u16FeidaoCanPendingMask != 0U)
+	{
+		return 1U;
+	}
+	if (s_u8FeidaoCanTxMailbox != CAN_TxStatus_NoMailBox)
+	{
+		return 1U;
+	}
+	if ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME)
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+UINT8 Can_IsSleepBlocked(void)
+{
+	if (s_u8FeidaoCanPowerState != FEIDAO_CAN_POWER_IDLE)
 	{
 		return 1U;
 	}
