@@ -7,8 +7,9 @@
 #include "stm32f10x.h"
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
+#include "Project_Config.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x2445		//Ĭ��0x1133������Լ���Ҫˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG
 
 #define T3MAX         0
 #define T3            1
@@ -18,48 +19,136 @@
 #define BAT_MASTER  (0)    //20A
 #define BAT_SLAVE   (1)    //40A
 
-#define BAT_TYPE     BAT_SLAVE
-// #define BAT_TYPE     BAT_MASTER
+#define BAT_TYPE     PROJECT_CFG_BAT_TYPE
 
-#define FD_YEAR     26
-#define FD_MONTH     4
-#define FD_DAY      15
+#define FD_YEAR      PROJECT_CFG_FD_YEAR
+#define FD_MONTH     PROJECT_CFG_FD_MONTH
+#define FD_DAY       PROJECT_CFG_FD_DAY
 
-// #define TERNARYLI		
-#define LIFEPO			
+#if (PROJECT_CFG_BAT_CHEMISTRY == 0)
+#define TERNARYLI
+#elif (PROJECT_CFG_BAT_CHEMISTRY == 1)
+#define LIFEPO
+#else
+#error "Invalid PROJECT_CFG_BAT_CHEMISTRY"
+#endif
 
 
 
 
-#define  wdog_enable
+#if PROJECT_CFG_WDOG_ENABLE
+#define wdog_enable
+#endif
+
+#if PROJECT_CFG_RTC_ENABLE
 #define __FUNC_RTC__
-// #define __FUNC__HEAT__
-// #define __LOAD_REMOVE_SHORT_FUNC__
-#define UART1_WAKEUP_ENABLE
-// #define UART2_WAKEUP_ENABLE
-#define RS485_WAKEUP_ENABLE
-// #define _SECOND_CURR_PROTECT_FUNC_
+#endif
 
+#if PROJECT_CFG_HEAT_ENABLE
+#define __FUNC__HEAT__
+#endif
+
+#if PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE
+#define __LOAD_REMOVE_SHORT_FUNC__
+#endif
+
+#if PROJECT_CFG_UART1_WAKEUP_ENABLE
+#define UART1_WAKEUP_ENABLE
+#endif
+
+#if PROJECT_CFG_UART2_WAKEUP_ENABLE
+#define UART2_WAKEUP_ENABLE
+#endif
+
+#if PROJECT_CFG_RS485_WAKEUP_ENABLE
+#define RS485_WAKEUP_ENABLE
+#endif
+
+#if PROJECT_CFG_SECOND_CURR_PROTECT_ENABLE
+#define _SECOND_CURR_PROTECT_FUNC_
+#endif
+
+#if PROJECT_CFG_VIRTUAL_CURRENT_ENABLE
 #define __VIRTURE_CURRENT__
+#endif
 
 /* Enable only for destructive rear-64KB application storage test. */
-// #define FLASH64K_APP_QUICK_TEST_ENABLE
-#define FLASH64K_APP_QUICK_TEST_CYCLES 96U
+#if PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE
+#define FLASH64K_APP_QUICK_TEST_ENABLE
+#endif
+#define FLASH64K_APP_QUICK_TEST_CYCLES PROJECT_CFG_FLASH64K_QUICK_TEST_CYCLES
 
 /* Enable for customer-use style SOC/AFE storage verification while app runs. */
-// #define FLASH64K_APP_USE_TEST_ENABLE
-#define FLASH64K_APP_USE_TEST_PRINT_PERIOD_SEC 10U
+#if PROJECT_CFG_FLASH64K_USE_TEST_ENABLE
+#define FLASH64K_APP_USE_TEST_ENABLE
+#endif
+#define FLASH64K_APP_USE_TEST_PRINT_PERIOD_SEC PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC
+
+#if PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE
 #define FLASH64K_APP_USE_TEST_ACCEL_ENABLE
-#define FLASH64K_APP_USE_TEST_ACCEL_SOC_PERIOD_SEC 1U
-#define FLASH64K_APP_USE_TEST_ACCEL_AFE_PERIOD_SEC 30U
+#endif
+#define FLASH64K_APP_USE_TEST_ACCEL_SOC_PERIOD_SEC PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_SOC_PERIOD_SEC
+#define FLASH64K_APP_USE_TEST_ACCEL_AFE_PERIOD_SEC PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC
 
-//#define _DI_SWITCH_SYS_ONOFF	//DI������������
-//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
+#if PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE
+#define _DI_SWITCH_SYS_ONOFF
+#endif
+
+#if PROJECT_CFG_DI_SWITCH_DSG_ONOFF_ENABLE
+#define _DI_SWITCH_DSG_ONOFF
+#endif
+
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
 #define _DI_SWITCH_longKEY_ONOFF
+#endif
 
+#if PROJECT_CFG_LED_FUNC_ENABLE
+#define __FUNC__LED__
+#endif
 
+#if PROJECT_CFG_DEBUG_CODE_ENABLE
+#define _DEBUG_CODE
+#endif
 
-#define VERSION         (5)
+#if PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE
+#define _SLEEP_WITH_CURRENT
+#endif
+
+#if PROJECT_CFG_IAP_ENABLE
+#define _IAP
+#endif
+
+#if (PROJECT_CFG_SCI1_ROLE == 1)
+#define _COMMOM_UPPER_SCI1
+#elif (PROJECT_CFG_SCI1_ROLE == 2)
+#define _CLIENT_SCI1
+#elif (PROJECT_CFG_SCI1_ROLE == 3)
+#define _LCD_SCI1
+#elif (PROJECT_CFG_SCI1_ROLE != 0)
+#error "Invalid PROJECT_CFG_SCI1_ROLE"
+#endif
+
+#if (PROJECT_CFG_SCI2_ROLE == 1)
+#define _COMMOM_UPPER_SCI2
+#elif (PROJECT_CFG_SCI2_ROLE == 2)
+#define _CLIENT_SCI2
+#elif (PROJECT_CFG_SCI2_ROLE == 3)
+#define _LCD_SCI2
+#elif (PROJECT_CFG_SCI2_ROLE != 0)
+#error "Invalid PROJECT_CFG_SCI2_ROLE"
+#endif
+
+#if (PROJECT_CFG_SCI3_ROLE == 1)
+#define _COMMOM_UPPER_SCI3
+#elif (PROJECT_CFG_SCI3_ROLE == 2)
+#define _CLIENT_SCI3
+#elif (PROJECT_CFG_SCI3_ROLE == 3)
+#define _LCD_SCI3
+#elif (PROJECT_CFG_SCI3_ROLE != 0)
+#error "Invalid PROJECT_CFG_SCI3_ROLE"
+#endif
+
+#define VERSION         (PROJECT_CFG_VERSION)
 
 
 #define   CURR_80A      0
@@ -72,8 +161,8 @@
 #define sh36xx      1
 
 
-#define   LEVEL_CURR     CURR_150A
-#define   AFE_TYPE        sh36xx
+#define   LEVEL_CURR     PROJECT_CFG_LEVEL_CURR
+#define   AFE_TYPE        PROJECT_CFG_AFE_TYPE
 
 #ifdef __FUNC__HEAT__
 #define CHG_LOWTEMP_PARAM   120

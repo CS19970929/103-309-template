@@ -74,31 +74,7 @@ FALSE = 0, TRUE
 #define DELAYB10MS_2MIN      ((UINT16)12000)         //30s
 
 
-//#define _DEBUG_CODE
-#define _IAP					//��������ļ���ַ��Ļ��������������IAP��project����
-//#define _SLEEP_WITH_CURRENT
-
-//#define _DI_SWITCH_SYS_ONOFF	//DI������������
-//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-
-
-/*============Sci===========*/
-//ÿ������ֻ��ѡһ��ͨѶ
-#define _COMMOM_UPPER_SCI1
-//#define _CLIENT_SCI1
-//#define _LCD_SCI1
-
-
-// #define _COMMOM_UPPER_SCI2
-//#define _CLIENT_SCI2
-//#define _LCD_SCI2
-
-
-//����汾û�д���3
-//#define _COMMOM_UPPER_SCI3
-//#define _CLIENT_SCI3
-//#define _LCD_SCI3
-/*============Sci===========*/
+/* Project feature switches and SCI roles are derived from conf/Project_Config.h. */
 
 void InitSystemWakeUp(void);
 

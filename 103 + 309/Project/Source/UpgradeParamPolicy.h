@@ -1,25 +1,28 @@
 #ifndef UPGRADE_PARAM_POLICY_H
 #define UPGRADE_PARAM_POLICY_H
 
+#include "Project_Config.h"
+
 /*
  * Customer upgrade parameter policy.
  *
  * Workflow for a customer-specific package:
  * 1. Modify the firmware default parameter tables.
- * 2. Enable only the reset switches that must overwrite field parameters.
- * 3. Increase UPGRADE_PARAM_POLICY_VERSION before building the package.
+ * 2. Open conf/Project_Config.h with Keil Configuration Wizard.
+ * 3. Enable only the reset switches that must overwrite field parameters.
+ * 4. Increase PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION before building.
  */
-#define UPGRADE_PARAM_POLICY_ENABLE        1
-#define UPGRADE_PARAM_POLICY_VERSION       0x0001
+#define UPGRADE_PARAM_POLICY_ENABLE        PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE
+#define UPGRADE_PARAM_POLICY_VERSION       PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION
 
-#define UPGRADE_PARAM_RESET_AFE            0
-#define UPGRADE_PARAM_RESET_PROTECT        0
-#define UPGRADE_PARAM_RESET_SOC_TABLE      0
-#define UPGRADE_PARAM_RESET_SOC_CONFIG     1
-#define UPGRADE_PARAM_RESET_SOC_SNAPSHOT   0
+#define UPGRADE_PARAM_RESET_AFE            PROJECT_CFG_UPGRADE_PARAM_RESET_AFE
+#define UPGRADE_PARAM_RESET_PROTECT        PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT
+#define UPGRADE_PARAM_RESET_SOC_TABLE      PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE
+#define UPGRADE_PARAM_RESET_SOC_CONFIG     PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG
+#define UPGRADE_PARAM_RESET_SOC_SNAPSHOT   PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT
 
 /* Test only. Keep 0 in release packages to avoid repeated resets. */
-#define UPGRADE_PARAM_FORCE_REAPPLY        0
+#define UPGRADE_PARAM_FORCE_REAPPLY        PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY
 
 #define UPGRADE_PARAM_POLICY_HAS_ACTION \
 	(UPGRADE_PARAM_RESET_AFE || \

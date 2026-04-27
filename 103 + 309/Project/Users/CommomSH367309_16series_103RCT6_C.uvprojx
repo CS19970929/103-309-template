@@ -875,6 +875,11 @@
               <FilePath>..\Source\conf\conf.h</FilePath>
             </File>
             <File>
+              <FileName>Project_Config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\conf\Project_Config.h</FilePath>
+            </File>
+            <File>
               <FileName>conf_gpio.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Source\conf\conf_gpio.h</FilePath>
