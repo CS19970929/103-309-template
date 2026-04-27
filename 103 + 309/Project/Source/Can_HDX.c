@@ -78,6 +78,7 @@ static void feidao_can_record_tx_cycle_no_ack(void);
 static UINT8 feidao_can_stop_cycle_after_no_ack(void);
 static void feidao_can_drop_pending_if_bus_inactive(void);
 static void feidao_can_anchor_schedule(UINT32 now_tick);
+static void feidao_can_schedule_first_cycle(UINT32 now_tick);
 static void feidao_can_start_idle_probe(void);
 static void feidao_can_schedule_rtc_period_frames(UINT32 now_tick, UINT32 elapsed_seconds);
 static void feidao_can_inc_u16(volatile UINT16 *counter);
@@ -86,6 +87,8 @@ static void feidao_can_record_ack_error_from_snapshot(void);
 static void feidao_can_record_tx_failed(void);
 static void feidao_can_record_tx_timeout(void);
 static void feidao_can_record_tx_no_mailbox(void);
+static UINT8 feidao_can_transmit_raw(CanTxMsg *Msg);
+static UINT8 feidao_can_direct_transmit(CanTxMsg *Msg);
 static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox);
 static void feidao_can_cancel_tx(UINT8 mailbox);
 static UINT8 feidao_can_start_next_frame(void);
@@ -412,6 +415,13 @@ static void feidao_can_anchor_schedule(UINT32 now_tick)
 	s_u32FeidaoCanLast5000msTick = now_tick;
 }
 
+static void feidao_can_schedule_first_cycle(UINT32 now_tick)
+{
+	s_u8FeidaoCanScheduleInit = 1U;
+	s_u32FeidaoCanLast1000msTick = now_tick - FEIDAO_CAN_PERIOD_1000MS_TICKS;
+	s_u32FeidaoCanLast5000msTick = now_tick - FEIDAO_CAN_PERIOD_5000MS_TICKS;
+}
+
 static void feidao_can_start_idle_probe(void)
 {
 	s_u16FeidaoCanPendingMask = FEIDAO_CAN_RTC_PROBE_MSG_MASK;
@@ -635,8 +645,7 @@ static void feidao_can_schedule_period_frames(UINT32 now_tick)
 {
 	if (0U == s_u8FeidaoCanScheduleInit)
 	{
-		feidao_can_anchor_schedule(now_tick);
-		return;
+		feidao_can_schedule_first_cycle(now_tick);
 	}
 
 	if ((0U == s_u8FeidaoCanBusActive) && (s_u8FeidaoCanNoAckCnt >= FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT))
@@ -761,14 +770,12 @@ static UINT8 feidao_can_service_until_idle(UINT32 timeout_ticks)
 
 void CAN_TX_Test(void)
 {
-	UINT8 TXCounter = 0, TXStatus = 0;
-	UINT8 u8MailBoxUsed;
-	TxMessage.StdId = CANID_TX_Test; // 标准标识符
-	TxMessage.ExtId = 0;			 // 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;		 // 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;	 // 为数据帧
-	TxMessage.DLC = 8;				 // 消息的数据长度为8个字节
-	TxMessage.Data[0] = 1;			 // 数据
+	TxMessage.StdId = CANID_TX_Test;
+	TxMessage.ExtId = 0;
+	TxMessage.IDE = CAN_ID_STD;
+	TxMessage.RTR = CAN_RTR_DATA;
+	TxMessage.DLC = 8;
+	TxMessage.Data[0] = 1;
 	TxMessage.Data[1] = 2;
 	TxMessage.Data[2] = 3;
 	TxMessage.Data[3] = 4;
@@ -777,30 +784,10 @@ void CAN_TX_Test(void)
 	TxMessage.Data[6] = 7;
 	TxMessage.Data[7] = 8;
 
-	/*
-	while((CAN_TxStatus_Ok!=CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage)))&&(++i<0xFFF));		//发送数据
-	if(i >= 0xFF) {
-		ERROR_UserCallback(CAN_ERROR);
-	}
-	*/
-	u8MailBoxUsed = CAN_Transmit(CAN1, &TxMessage);
-	// CAN_Transmit已集成Can发送流程代码，非常方便
-	// 这个++i和硬件的BusOFF是不冲突的，这个可以是在等邮箱空的次数，CAN_TxStatus_Pending和BusOFF分开
-	do
-	{
-		// 出现Can错误的原因就是这句话！连续执行导致连续mailbox0是满的！CAN_Transmit()地方都放错了！
-		// TXStatus = CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage));
-		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
-		TXCounter++;
-	} while ((TXStatus != CAN_TxStatus_Ok) && (TXCounter < 0xFF)); // Fail和OK不用管
-
-	if (TXCounter >= 0xFF)
-	{
-		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
-	}
+	(void)CAN_Tx_Data(&TxMessage);
 }
 
-UINT8 CAN_Tx_Data(CanTxMsg *Msg)
+static UINT8 feidao_can_transmit_raw(CanTxMsg *Msg)
 {
 	UINT8 u8MailBoxUsed;
 
@@ -817,6 +804,68 @@ UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 	}
 
 	return u8MailBoxUsed;
+}
+
+static UINT8 feidao_can_direct_transmit(CanTxMsg *Msg)
+{
+	UINT8 u8MailBoxUsed;
+	UINT8 tx_status;
+	UINT32 waited_ticks = 0U;
+
+	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_ON_LEVEL);
+	while (waited_ticks < FEIDAO_CAN_POWER_STABLE_TICKS)
+	{
+		Feed_IWatchDog;
+		__delay_ms(10);
+		waited_ticks++;
+	}
+
+	feidao_can_begin_tx_cycle();
+	u8MailBoxUsed = feidao_can_transmit_raw(Msg);
+	if (CAN_TxStatus_NoMailBox == u8MailBoxUsed)
+	{
+		feidao_can_power_off();
+		return u8MailBoxUsed;
+	}
+
+	waited_ticks = 0U;
+	while (waited_ticks < FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS)
+	{
+		tx_status = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
+		if (CAN_TxStatus_Ok == tx_status)
+		{
+			feidao_can_mark_tx_cycle_active();
+			feidao_can_clear_tx_done(u8MailBoxUsed);
+			feidao_can_power_off();
+			return u8MailBoxUsed;
+		}
+		if (CAN_TxStatus_Failed == tx_status)
+		{
+			feidao_can_record_tx_failed();
+			feidao_can_clear_tx_done(u8MailBoxUsed);
+			feidao_can_power_off();
+			return u8MailBoxUsed;
+		}
+
+		Feed_IWatchDog;
+		__delay_ms(10);
+		waited_ticks++;
+	}
+
+	feidao_can_record_tx_timeout();
+	feidao_can_cancel_tx(u8MailBoxUsed);
+	feidao_can_power_off();
+	return u8MailBoxUsed;
+}
+
+UINT8 CAN_Tx_Data(CanTxMsg *Msg)
+{
+	if (FEIDAO_CAN_POWER_IDLE == s_u8FeidaoCanPowerState)
+	{
+		return feidao_can_direct_transmit(Msg);
+	}
+
+	return feidao_can_transmit_raw(Msg);
 }
 void CAN_TX_0x00(void)
 {
