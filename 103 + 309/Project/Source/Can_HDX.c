@@ -17,9 +17,6 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TICKS_PER_SECOND ((UINT32)100U)
-#define FEIDAO_CAN_BS1 CAN_BS1_2tq
-#define FEIDAO_CAN_BS2 CAN_BS2_1tq
-#define FEIDAO_CAN_PRESCALER ((uint16_t)4U)
 #define FEIDAO_CAN_RTC_ACTIVE_PERIOD_SECONDS ((UINT32)1U)
 #define FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS ((UINT32)10U)
 #define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
@@ -78,7 +75,6 @@ static void feidao_can_record_tx_cycle_no_ack(void);
 static UINT8 feidao_can_stop_cycle_after_no_ack(void);
 static void feidao_can_drop_pending_if_bus_inactive(void);
 static void feidao_can_anchor_schedule(UINT32 now_tick);
-static void feidao_can_schedule_first_cycle(UINT32 now_tick);
 static void feidao_can_start_idle_probe(void);
 static void feidao_can_schedule_rtc_period_frames(UINT32 now_tick, UINT32 elapsed_seconds);
 static void feidao_can_inc_u16(volatile UINT16 *counter);
@@ -87,8 +83,6 @@ static void feidao_can_record_ack_error_from_snapshot(void);
 static void feidao_can_record_tx_failed(void);
 static void feidao_can_record_tx_timeout(void);
 static void feidao_can_record_tx_no_mailbox(void);
-static UINT8 feidao_can_transmit_raw(CanTxMsg *Msg);
-static UINT8 feidao_can_direct_transmit(CanTxMsg *Msg);
 static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox);
 static void feidao_can_cancel_tx(UINT8 mailbox);
 static UINT8 feidao_can_start_next_frame(void);
@@ -381,21 +375,16 @@ static void feidao_can_record_tx_cycle_no_ack(void)
 
 static UINT8 feidao_can_stop_cycle_after_no_ack(void)
 {
-	if ((0U != s_u8FeidaoCanProbeActive) ||
-		(0U != s_u8FeidaoCanTxCycleAcked) ||
-		(0U == s_u8FeidaoCanTxCycleNoAckRecorded))
+	if ((0U == s_u8FeidaoCanProbeActive) &&
+		(0U == s_u8FeidaoCanTxCycleAcked) &&
+		(0U != s_u8FeidaoCanTxCycleNoAckRecorded))
 	{
-		return 0U;
+		s_u16FeidaoCanPendingMask = 0U;
+		feidao_can_power_off();
+		return 1U;
 	}
 
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_RTC_PROBE_MSG_MASK)
-	{
-		return 0U;
-	}
-
-	s_u16FeidaoCanPendingMask = 0U;
-	feidao_can_power_off();
-	return 1U;
+	return 0U;
 }
 
 static void feidao_can_drop_pending_if_bus_inactive(void)
@@ -413,13 +402,6 @@ static void feidao_can_anchor_schedule(UINT32 now_tick)
 	s_u8FeidaoCanScheduleInit = 1U;
 	s_u32FeidaoCanLast1000msTick = now_tick;
 	s_u32FeidaoCanLast5000msTick = now_tick;
-}
-
-static void feidao_can_schedule_first_cycle(UINT32 now_tick)
-{
-	s_u8FeidaoCanScheduleInit = 1U;
-	s_u32FeidaoCanLast1000msTick = now_tick - FEIDAO_CAN_PERIOD_1000MS_TICKS;
-	s_u32FeidaoCanLast5000msTick = now_tick - FEIDAO_CAN_PERIOD_5000MS_TICKS;
 }
 
 static void feidao_can_start_idle_probe(void)
@@ -645,7 +627,8 @@ static void feidao_can_schedule_period_frames(UINT32 now_tick)
 {
 	if (0U == s_u8FeidaoCanScheduleInit)
 	{
-		feidao_can_schedule_first_cycle(now_tick);
+		feidao_can_anchor_schedule(now_tick);
+		return;
 	}
 
 	if ((0U == s_u8FeidaoCanBusActive) && (s_u8FeidaoCanNoAckCnt >= FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT))
@@ -770,12 +753,14 @@ static UINT8 feidao_can_service_until_idle(UINT32 timeout_ticks)
 
 void CAN_TX_Test(void)
 {
-	TxMessage.StdId = CANID_TX_Test;
-	TxMessage.ExtId = 0;
-	TxMessage.IDE = CAN_ID_STD;
-	TxMessage.RTR = CAN_RTR_DATA;
-	TxMessage.DLC = 8;
-	TxMessage.Data[0] = 1;
+	UINT8 TXCounter = 0, TXStatus = 0;
+	UINT8 u8MailBoxUsed;
+	TxMessage.StdId = CANID_TX_Test; // 标准标识符
+	TxMessage.ExtId = 0;			 // 扩展标识符
+	TxMessage.IDE = CAN_ID_STD;		 // 使用标准标识符
+	TxMessage.RTR = CAN_RTR_DATA;	 // 为数据帧
+	TxMessage.DLC = 8;				 // 消息的数据长度为8个字节
+	TxMessage.Data[0] = 1;			 // 数据
 	TxMessage.Data[1] = 2;
 	TxMessage.Data[2] = 3;
 	TxMessage.Data[3] = 4;
@@ -784,10 +769,30 @@ void CAN_TX_Test(void)
 	TxMessage.Data[6] = 7;
 	TxMessage.Data[7] = 8;
 
-	(void)CAN_Tx_Data(&TxMessage);
+	/*
+	while((CAN_TxStatus_Ok!=CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage)))&&(++i<0xFFF));		//发送数据
+	if(i >= 0xFF) {
+		ERROR_UserCallback(CAN_ERROR);
+	}
+	*/
+	u8MailBoxUsed = CAN_Transmit(CAN1, &TxMessage);
+	// CAN_Transmit已集成Can发送流程代码，非常方便
+	// 这个++i和硬件的BusOFF是不冲突的，这个可以是在等邮箱空的次数，CAN_TxStatus_Pending和BusOFF分开
+	do
+	{
+		// 出现Can错误的原因就是这句话！连续执行导致连续mailbox0是满的！CAN_Transmit()地方都放错了！
+		// TXStatus = CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage));
+		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
+		TXCounter++;
+	} while ((TXStatus != CAN_TxStatus_Ok) && (TXCounter < 0xFF)); // Fail和OK不用管
+
+	if (TXCounter >= 0xFF)
+	{
+		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
+	}
 }
 
-static UINT8 feidao_can_transmit_raw(CanTxMsg *Msg)
+UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 {
 	UINT8 u8MailBoxUsed;
 
@@ -804,68 +809,6 @@ static UINT8 feidao_can_transmit_raw(CanTxMsg *Msg)
 	}
 
 	return u8MailBoxUsed;
-}
-
-static UINT8 feidao_can_direct_transmit(CanTxMsg *Msg)
-{
-	UINT8 u8MailBoxUsed;
-	UINT8 tx_status;
-	UINT32 waited_ticks = 0U;
-
-	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_ON_LEVEL);
-	while (waited_ticks < FEIDAO_CAN_POWER_STABLE_TICKS)
-	{
-		Feed_IWatchDog;
-		__delay_ms(10);
-		waited_ticks++;
-	}
-
-	feidao_can_begin_tx_cycle();
-	u8MailBoxUsed = feidao_can_transmit_raw(Msg);
-	if (CAN_TxStatus_NoMailBox == u8MailBoxUsed)
-	{
-		feidao_can_power_off();
-		return u8MailBoxUsed;
-	}
-
-	waited_ticks = 0U;
-	while (waited_ticks < FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS)
-	{
-		tx_status = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
-		if (CAN_TxStatus_Ok == tx_status)
-		{
-			feidao_can_mark_tx_cycle_active();
-			feidao_can_clear_tx_done(u8MailBoxUsed);
-			feidao_can_power_off();
-			return u8MailBoxUsed;
-		}
-		if (CAN_TxStatus_Failed == tx_status)
-		{
-			feidao_can_record_tx_failed();
-			feidao_can_clear_tx_done(u8MailBoxUsed);
-			feidao_can_power_off();
-			return u8MailBoxUsed;
-		}
-
-		Feed_IWatchDog;
-		__delay_ms(10);
-		waited_ticks++;
-	}
-
-	feidao_can_record_tx_timeout();
-	feidao_can_cancel_tx(u8MailBoxUsed);
-	feidao_can_power_off();
-	return u8MailBoxUsed;
-}
-
-UINT8 CAN_Tx_Data(CanTxMsg *Msg)
-{
-	if (FEIDAO_CAN_POWER_IDLE == s_u8FeidaoCanPowerState)
-	{
-		return feidao_can_direct_transmit(Msg);
-	}
-
-	return feidao_can_transmit_raw(Msg);
 }
 void CAN_TX_0x00(void)
 {
@@ -1453,18 +1396,41 @@ void InitCan_NVIC(void)
 
 void InitCan_Filter(void)
 {
+	UINT16 u16CAN_FilterIdHigh;
+	UINT16 u16CAN_FilterIdLow;
+	UINT16 u16CAN_FilterMaskIdHigh;
+	UINT16 u16CAN_FilterMaskIdLow;
 	CAN_FilterInitTypeDef CAN_FilterInitStructure;
 
-	CAN_FilterInitStructure.CAN_FilterNumber = 0;
-	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;
-	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_32bit;
-	CAN_FilterInitStructure.CAN_FilterIdHigh = 0x0000U;
-	CAN_FilterInitStructure.CAN_FilterIdLow = 0x0000U;
-	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0x0000U;
-	CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0x0000U;
-	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
-	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
-	CAN_FilterInit(&CAN_FilterInitStructure);
+	// 这两句怎么来的，详细看截图——过滤器配置表
+	// CAN_ID_STD之类的不需要移位，官方已经定好
+	// CAN_FilterMode_IdList，列表模式FBMx = 1
+	// CAN_FilterScale_16bit，过滤器组的位宽，FSCx = 0
+	// 结合这两个，高位的屏蔽位也作为标识符列表，可以搞4个CANID
+	// 别的情况是高位作为低位的屏蔽位。
+
+	// stm32 can的屏蔽位模式：
+	// 一个是标识符寄存器(过滤器Filter)，一个是屏蔽位寄存器(Mask)。
+	// 凡是屏蔽位寄存器里为1的位所对应的标识符寄存器的位，这些位是必须匹配的
+	// 也就是说，你接受到的Message里面的标识符（ID）里面对应的位必须跟标识符寄存器里对应的位相同，才能被接受。
+
+	// 远程帧过滤器
+	u16CAN_FilterIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA;
+	u16CAN_FilterIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
+
+	u16CAN_FilterMaskIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA; // 设置成一样
+	u16CAN_FilterMaskIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
+
+	CAN_FilterInitStructure.CAN_FilterNumber = 0;							// 指定过滤器为0，如果想接收多几个，范围为0——13
+	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;			// 指定过滤器为屏蔽模式
+	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_16bit;		// 过滤器位宽为16位，也即2个带屏蔽位的标准帧
+	CAN_FilterInitStructure.CAN_FilterIdHigh = u16CAN_FilterIdHigh;			// 过滤器标识符的高16位值
+	CAN_FilterInitStructure.CAN_FilterIdLow = u16CAN_FilterIdLow;			// 过滤器标识符的低16位值
+	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = u16CAN_FilterMaskIdHigh; // 过滤器屏蔽标识符的高16位值
+	CAN_FilterInitStructure.CAN_FilterMaskIdLow = u16CAN_FilterMaskIdLow;	// 过滤器屏蔽标识符的低16位值
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;	// 设定了指向过滤器的FIFO为0
+	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;					// 使能过滤器
+	CAN_FilterInit(&CAN_FilterInitStructure);								// 按上面的参数初始化过滤器
 }
 
 void InitCan_CAN1(void)
@@ -1485,11 +1451,27 @@ void InitCan_CAN1(void)
 	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CAN设置为正常模式
 												  // CAN_InitStructure.CAN_Mode = CAN_Mode_LoopBack;
 
+	// 关于以下的设置，sample=(1+CAN_BS1)/(1+CAN_BS1+CAN_BS2)，采样点设置在80%到87.5%之间比较好。
+	// 如果can采样点选取合适，can总线就能容纳更多的can节点。因此极其重要。
+	// 如果这个不行，就改为那个PDF里面的常用参考参数
+	// CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
+	// CAN_InitStructure.CAN_BS1 = CAN_BS1_3tq; // 时间段1为3个时间单位
+	// CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq; // 时间段2为2个时间单位
+	// CAN_InitStructure.CAN_Prescaler = 24;	 // 时间单位长度为60
+#if 1
 	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
-	CAN_InitStructure.CAN_BS1 = FEIDAO_CAN_BS1;
-	CAN_InitStructure.CAN_BS2 = FEIDAO_CAN_BS2;
-	CAN_InitStructure.CAN_Prescaler = FEIDAO_CAN_PRESCALER;
-	CAN_Init(CAN1, &CAN_InitStructure); // 8MHz PCLK1: 8M / 4 / (1 + 2 + 1) = 500K
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_5tq; // 时间段1为3个时间单位
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_2tq; // 时间段2为2个时间单位
+#else
+	CAN_InitStructure.CAN_SJW = CAN_SJW_1tq; // 重新同步跳跃宽度1个时间单位
+	CAN_InitStructure.CAN_BS1 = CAN_BS1_2tq; // 时间段1为3个时间单位
+	CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq; // 时间段2为2个时间单位
+
+#endif
+	CAN_InitStructure.CAN_Prescaler = 4; // 时间单位长度为60
+	CAN_Init(CAN1, &CAN_InitStructure);	 // 波特率为：72M/2/6/(1+8+3)=0.5 即500K，非PDF范例
+										 // 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
+										 // 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例
 
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // 使能FIFO0消息挂号中断
 }
