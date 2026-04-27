@@ -1008,6 +1008,10 @@ static bool isErr_enterRTC(void)
     //     return true;
     // }
 #endif
+    else if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
+    {
+        return true;
+    }
     else
     {
         return false;

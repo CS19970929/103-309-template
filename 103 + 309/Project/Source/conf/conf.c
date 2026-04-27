@@ -233,6 +233,25 @@ void InitWakeUp_NormalMode(void)
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
         NVIC_Init(&NVIC_InitStructure);
     }
+
+    {
+        GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK; // ?????GPIO??,PA0?????
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_MCU_WK, &GPIO_InitStructure);
+
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource13);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line13;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStruct);
+
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&NVIC_InitStructure);
+    }
 }
 
 void InitWakeUp_RTCMode(void)
@@ -334,8 +353,9 @@ void IOstatus_RTCMode(void)
     LedBar_SetSleep(1u);
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_DC_EN) & (~PIN_2737_EN);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_2737_EN);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -361,6 +381,12 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOE, &GPIO_InitStructure);
+
+    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
+    GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+    GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
 
     // ??????
     // ???

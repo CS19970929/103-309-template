@@ -180,7 +180,6 @@ void InitDevice(void)
 	InitHeat_Cool();
 #endif
 	// Init_ChargerLoad_Det();
-
 	// InitMosRelay_DOx();
 	InitData_SOC(); // ±ØÐë·ÅÔÚ¶ÁÍêeepromÊý¾ÝºóÃæ
 
