@@ -5,7 +5,7 @@
 空闲进入 HICCUP RTC 休眠后，根据 CAN 总线是否存在其他设备自动调整 RTC 唤醒周期：
 
 - 检测到 CAN 总线上有其他设备：RTC 休眠 1 秒，唤醒后继续按原 1s / 5s CAN 报文节奏发送。
-- 未检测到其他设备：RTC 休眠 10 秒，唤醒后只发送一帧轻量探测帧；未得到 ACK 时不继续发送业务周期帧，降低无 ACK 场景下的功耗。
+- 未检测到其他设备：RTC 休眠 10 秒，唤醒后只发送两帧轻量探测帧；未得到 ACK 时不继续发送业务周期帧，降低无 ACK 场景下的功耗。
 
 ## 总线设备判定
 
@@ -14,9 +14,9 @@
 - 发送报文返回 `CAN_TxStatus_Ok`，说明总线上至少有节点 ACK，认为总线有其他设备。
 - CAN RX0 中断收到报文，也认为总线有其他设备。
 - 连续出现 ACK 失败或发送超时达到阈值后，认为总线无其他设备。
-- 无设备状态下每 10 秒 RTC 唤醒会发送一帧探测帧；如果中途接入的 CAN 设备能 ACK 该帧，立即恢复为总线有设备。
+- 无设备状态下每 10 秒 RTC 唤醒会发送两帧探测帧；如果中途接入的 CAN 设备能 ACK 任一帧，立即恢复为总线有设备。
 
-如果完全不发送探测帧，且休眠时收发器关闭，那么软件无法发现只会 ACK、不主动发帧的中途接入设备。因此当前实现把“无设备不发业务 CAN”收敛为“无设备每 10 秒只发一帧探测”。
+如果完全不发送探测帧，且休眠时收发器关闭，那么软件无法发现只会 ACK、不主动发帧的中途接入设备。因此当前实现把“无设备不发业务 CAN”收敛为“无设备每 10 秒只发两帧探测”。
 
 ## 时序处理
 
@@ -25,7 +25,7 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 - 正常运行时，逻辑 tick 跟随 `SysTime_Get10msTickCount()` 推进。
 - RTC Stop 期间 TIM3 停止，RTC 唤醒后通过实际 RTC 休眠秒数补偿逻辑 tick。
 - 有设备时，RTC 唤醒后调用 CAN RTC 服务窗口，复用原 `feidao_can_send()` 状态机完成上电、稳定等待、发送、发送完成/超时处理。
-- 无设备时，RTC 唤醒后只压入一帧 1000ms 电压/电流报文作为探测，不补发 10 秒内积累的周期报文；探测成功后把 1s / 5s 调度锚点重置到当前逻辑时间。
+- 无设备时，RTC 唤醒后只压入 1000ms 电压/电流和 SOC 两帧作为探测，不补发 10 秒内积累的周期报文；探测成功后把 1s / 5s 调度锚点重置到当前逻辑时间。
 - 低功耗入口只等待正在进行的 CAN 上电/发送动作完成；已排队但还没开始发送的周期 pending 会在进入睡眠前丢弃，避免周期 CAN 任务反复打断 RTC 入睡计时。
 - 主循环先执行 `App_LowPowerProcess()` 再执行 `App_Can()`，避免 1 秒 tick 到来时 CAN 先进入 `FEIDAO_CAN_POWER_WAIT_STABLE`，导致低功耗判断每次都认为 CAN 正在上电。
 
@@ -36,14 +36,14 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 - `103 + 309/Project/Source/Can_HDX.c`
   - 维护 CAN 总线活跃状态。
   - 提供 `Can_GetIdleRtcPeriodSeconds()`，输出 1 秒或 10 秒 RTC 周期。
-  - 提供 `Can_RtcWakeService()`，RTC 唤醒后按补偿时间执行 CAN 发送窗口；无设备状态下只执行单帧探测。
+  - 提供 `Can_RtcWakeService()`，RTC 唤醒后按补偿时间执行 CAN 发送窗口；无设备状态下只执行两帧探测。
   - `InitCan_GPIO()` 会恢复 CAN_TX/CAN_RX 和 `GPIO_CMNT_EN`，保证 RTC 模式把 IO 置为模拟输入后，唤醒发送窗口能重新驱动 CAN 收发器电源脚。
 - `103 + 309/Project/Source/RTC.c`
   - `RTC_GetWakeupPeriodSeconds()` 改为读取 CAN 给出的自适应周期。
   - `RTC_WKTimeConfig()` 记录本次实际配置的 RTC 周期，供休眠累计使用。
 - `103 + 309/Project/Source/rtc_sleep.c`
   - 按每次 RTC Alarm 的实际周期累计休眠秒数。
-  - RTC 周期内有设备时执行 CAN 发送，无设备时只执行单帧探测。
+  - RTC 周期内有设备时执行 CAN 发送，无设备时只执行两帧探测。
 
 ## 问题记录与处理
 
@@ -79,8 +79,8 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 
 处理：
 
-- 无设备状态仍保持 10 秒 RTC 周期，但每次 RTC 唤醒只发送一帧探测帧。
-- 探测帧得到 ACK 后，立即恢复为有设备状态，并重新锚定 1s / 5s 报文调度。
+- 无设备状态仍保持 10 秒 RTC 周期，但每次 RTC 唤醒只发送两帧探测帧。
+- 任一探测帧得到 ACK 后，立即恢复为有设备状态，并重新锚定 1s / 5s 报文调度。
 - 探测失败时不补发业务周期帧，继续保持低功耗策略。
 
 ### CAN pending 导致无法进入 RTC
@@ -137,12 +137,14 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 
 - `InitCan_GPIO()` 增加 GPIOB 时钟、JTAG disable remap 和 `GPIO_CMNT_EN/PIN_CMNT_EN` 推挽输出配置。
 - RTC 有设备路径调用 `feidao_can_schedule_rtc_period_frames()`，按实际 RTC 休眠秒数补偿并压入到期 1s / 5s 报文，避免第一次 RTC 服务只初始化调度而不发送。
-- 无设备路径仍只压入单帧探测，探测成功后恢复有设备状态。
+- 无设备路径仍只压入两帧探测，探测成功后恢复有设备状态。
+- CAN 收发器从断电到重新供电需要硬件稳定时间；`FEIDAO_CAN_POWER_STABLE_TICKS` 由 10ms 放宽到 100ms，RTC 服务窗口放宽到 1.5s，避免电源刚打开时第一帧过早发送导致误判无 ACK。
+- RTC 服务窗口内设置 `s_u8FeidaoCanRtcServiceActive`，只发送本次预加载的到期帧或探测帧，不再因为 1.5s 服务窗口跨过 1s 周期而额外生成新一轮周期帧。
 
 验证：
 
 - 在 `Can_RtcWakeService()` 入口打断点，确认 RTC Alarm 唤醒后进入该函数。
-- 用示波器同时看 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL：有设备时应看到 1 秒 RTC 唤醒窗口内短时上电并发送业务帧；无设备时应看到 10 秒一次单帧探测。
+- 用示波器同时看 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL：有设备时应看到 1 秒 RTC 唤醒窗口内短时上电并发送业务帧；无设备时应看到 10 秒一次两帧探测。
 - 如果 `GPIO_CMNT_EN` 有脉冲但 CAN_TX 没有波形，继续检查 `CAN_Transmit()` 返回邮箱状态和 `feidao_can_service_until_idle()` 的 10ms 推进。
 
 ### 有设备时断开 CAN 对端后未切到 10 秒休眠
@@ -163,6 +165,7 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 - `feidao_can_record_tx_failed()` 改为所有 TX failed 都累计一次无 ACK；如果 LEC 是 ACKErr，则额外统计 ACK error 计数。
 - TX timeout 仍按无 ACK 处理。
 - 连续失败达到 `FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT` 后，`s_u8FeidaoCanBusActive` 置 0，后续 RTC 周期切换到 10 秒。
+- 为避免供电切换或对端唤醒瞬间造成误判，无 ACK 阈值由 3 次放宽到 6 次；无设备探测帧由 1 帧改为 2 帧，提高中途接入设备被 ACK 检出的概率。
 
 验证：
 
@@ -175,5 +178,5 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 1. 不接 CAN 对端：进入 RTC 后应为约 10 秒唤醒一次，`GPIO_CMNT_EN` 每 10 秒只出现一次短探测窗口，不应连续发送周期业务帧。
 2. 接 CAN 对端并能 ACK：进入 RTC 后应约 1 秒唤醒一次，`GPIO_CMNT_EN` 在发送窗口短时上电，1s / 5s 报文周期保持。
 3. 运行中拔掉对端：连续 ACK 失败后切到 10 秒静默周期。
-4. 进入 10 秒无设备周期后再接入 CAN 对端：下一次 10 秒 RTC 唤醒的探测帧得到 ACK 后，应切回约 1 秒 RTC 周期。
+4. 进入 10 秒无设备周期后再接入 CAN 对端：下一次 10 秒 RTC 唤醒的任一探测帧得到 ACK 后，应切回约 1 秒 RTC 周期。
 5. 用示波器同时看 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL，确认收发器上电稳定时间和发送窗口满足芯片要求。

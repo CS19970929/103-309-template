@@ -12,15 +12,15 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
 #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
 
-#define FEIDAO_CAN_POWER_STABLE_TICKS ((UINT32)1U)      /* 10ms tick */
-#define FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS ((UINT32)2U)   /* 20ms backstop */
+#define FEIDAO_CAN_POWER_STABLE_TICKS ((UINT32)10U)     /* 100ms for transceiver wake */
+#define FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS ((UINT32)20U)  /* 200ms backstop after RTC wake */
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TICKS_PER_SECOND ((UINT32)100U)
 #define FEIDAO_CAN_RTC_ACTIVE_PERIOD_SECONDS ((UINT32)1U)
 #define FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS ((UINT32)10U)
-#define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)50U)
-#define FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT ((UINT8)3U)
+#define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
+#define FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT ((UINT8)6U)
 #define FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS ((UINT16)0x0001U)
 #define FEIDAO_CAN_MSG_SOC_1000MS ((UINT16)0x0002U)
 #define FEIDAO_CAN_MSG_CAP_5000MS ((UINT16)0x0004U)
@@ -28,7 +28,7 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_MSG_VERSION_5000MS ((UINT16)0x0010U)
 #define FEIDAO_CAN_MSG_STATUS_5000MS ((UINT16)0x0020U)
 #define FEIDAO_CAN_MSG_FACTORY_TIME_5000MS ((UINT16)0x0040U)
-#define FEIDAO_CAN_RTC_PROBE_MSG_MASK FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS
+#define FEIDAO_CAN_RTC_PROBE_MSG_MASK (FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS | FEIDAO_CAN_MSG_SOC_1000MS)
 #define FEIDAO_CAN_TXMAILBOX_0 ((UINT8)0U)
 #define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
 #define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
@@ -55,6 +55,7 @@ static UINT8 s_u8FeidaoCanScheduleInit = 0U;
 static UINT8 s_u8FeidaoCanBusActive = 0U;
 static UINT8 s_u8FeidaoCanNoAckCnt = 0U;
 static UINT8 s_u8FeidaoCanProbeActive = 0U;
+static UINT8 s_u8FeidaoCanRtcServiceActive = 0U;
 UINT8 CAN_Tx_Data(CanTxMsg *Msg);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
@@ -605,7 +606,7 @@ static void feidao_can_send(UINT32 now_tick)
 {
 	UINT8 tx_status;
 
-	if (0U == s_u8FeidaoCanProbeActive)
+	if ((0U == s_u8FeidaoCanProbeActive) && (0U == s_u8FeidaoCanRtcServiceActive))
 	{
 		feidao_can_schedule_period_frames(now_tick);
 	}
@@ -1732,6 +1733,8 @@ UINT8 Can_IsSleepBlocked(void)
 
 void Can_PrepareSleep(void)
 {
+	s_u8FeidaoCanProbeActive = 0U;
+	s_u8FeidaoCanRtcServiceActive = 0U;
 	s_u16FeidaoCanPendingMask = 0U;
 	feidao_can_abort_all_tx();
 	s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
@@ -1759,8 +1762,10 @@ void Can_RtcWakeService(UINT32 elapsed_seconds)
 	if (0U == s_u8FeidaoCanBusActive)
 	{
 		feidao_can_start_idle_probe();
+		s_u8FeidaoCanRtcServiceActive = 1U;
 		feidao_can_send(s_u32FeidaoCanLogicalTick);
 		(void)feidao_can_service_until_idle(FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS);
+		s_u8FeidaoCanRtcServiceActive = 0U;
 		s_u8FeidaoCanProbeActive = 0U;
 
 		if (0U == s_u8FeidaoCanBusActive)
@@ -1777,8 +1782,10 @@ void Can_RtcWakeService(UINT32 elapsed_seconds)
 	}
 
 	feidao_can_schedule_rtc_period_frames(s_u32FeidaoCanLogicalTick, elapsed_seconds);
+	s_u8FeidaoCanRtcServiceActive = 1U;
 	feidao_can_send(s_u32FeidaoCanLogicalTick);
 	(void)feidao_can_service_until_idle(FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS);
+	s_u8FeidaoCanRtcServiceActive = 0U;
 	Can_PrepareSleep();
 }
 
