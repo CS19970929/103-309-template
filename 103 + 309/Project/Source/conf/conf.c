@@ -61,42 +61,11 @@ void InitIO(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIO_SW, &GPIO_InitStructure);
 
-    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-    GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
-
 #if !LEDBAR_DRIVER_GPIO_CHARLIE
     GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
     GPIO_Init(GPIO_DBG_LED, &GPIO_InitStructure);
-#endif
-
-    // todo 确认spi配置
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-    GPIO_InitStructure.GPIO_Pin = PIN_SPI_MOSI;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_SPI_MOSI, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_SPI1_NSS;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_SPI1_NSS, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_SPI1_SCK;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_SPI1_SCK, &GPIO_InitStructure);
-#else
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_InitStructure.GPIO_Pin = PIN_SPI1_NSS | PIN_SPI1_SCK | PIN_SPI_MOSI;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-    GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED | PIN_SEG_EN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif
 
     GPIO_InitStructure.GPIO_Pin = PIN_RF_EN;
@@ -111,13 +80,6 @@ void InitIO(void)
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-    GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
-
     {
         //???这个函数没起作用
         // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
@@ -128,9 +90,6 @@ void InitIO(void)
         GPIO_SetBits(GPIO_AD_EN, PIN_AD_EN);
         GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-        GPIO_SetBits(GPIO_SEG_EN, PIN_SEG_EN);
-#endif
 
         GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
@@ -152,12 +111,23 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
 
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-        GPIO_InitStructure.GPIO_Pin = PIN_SEG_EN;
+        if(sys_time.test_1)
+        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
+        else
+        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
+        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_SEG_EN, &GPIO_InitStructure);
-#endif
+        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+
+        if(sys_time.test_2)
+        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
+        else
+        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
+        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
     }
 }
 
@@ -322,11 +292,6 @@ void IOstatus_Base(void)
         GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
         GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
         GPIO_WriteBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, Bit_RESET);
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-        GPIO_WriteBit(GPIO_SEG_EN, PIN_SEG_EN, Bit_RESET);
-#endif
-        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
 
         GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
@@ -347,23 +312,6 @@ void IOstatus_Base(void)
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
-
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-        GPIO_InitStructure.GPIO_Pin = PIN_SEG_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_SEG_EN, &GPIO_InitStructure);
-#endif
-
-        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
     }
 }
 
@@ -381,6 +329,7 @@ void IOstatus_RTCMode(void)
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_DC_EN) & (~PIN_2737_EN);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -409,7 +358,7 @@ void IOstatus_RTCMode(void)
 
     // ??????
     // ???
-#if 1
+#if 0
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;

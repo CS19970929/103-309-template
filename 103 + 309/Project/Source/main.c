@@ -2,54 +2,6 @@
 #include "Flash64KAppTest.h"
 
 UINT8 SeriesNum = 10;
-void IOstatus_RTCMode_test(void)
-{
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // ??GPIOB??
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // ??GPIOC??
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
-
-	ADC_DeInit(ADC1); // ????????????????
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_3) & (~GPIO_Pin_2);
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14) & (~GPIO_Pin_7) & (~GPIO_Pin_15) & (~GPIO_Pin_6);
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_Init(GPIOE, &GPIO_InitStructure);
-
-	// ??????
-	// ???
-#if 1
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOC, &GPIO_InitStructure);
-	// GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-
-#endif
-}
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1´®
@@ -157,18 +109,6 @@ int main(void)
 {
 	InitDevice(); // ³õÊ¼»¯ÍâÉè
 	InitVar();	  // ³õÊ¼»¯±äÁ¿
-	// Init_RTC();
-	// RTC_WKTimeConfig();
-	// while (1)
-	// {
-	// 	App_AFEGet();
-	// 	App_Sci();
-	// 	/* Low power: WFI between tasks */
-	// 	IOstatus_RTCMode_test();
-	// 	// if (1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
-	// 	if (0 == gu8_TxEnable_SCI1 && 0 == gu8_TxEnable_SCI2 && 0 == gu8_TxEnable_SCI3)
-	// 		__WFI();
-	// }
 
 	while (1)
 	{
@@ -180,6 +120,16 @@ int main(void)
 		APP_LedBar();
 		// App_WarnCtrl();
 		App_AFEGet();
+
+		// if (sys_time.test_1)
+		// 	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
+		// else
+		// 	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
+
+		// if (sys_time.test_2)
+		// 	GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
+		// else
+		// 	GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
 
 		App_Sci();
 		App_AnlogCal();
