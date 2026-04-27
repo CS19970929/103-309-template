@@ -111,18 +111,12 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
 
-        if(sys_time.test_1)
-        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-        else
         GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
         GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
 
-        if(sys_time.test_2)
-        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
-        else
         GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
         GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出

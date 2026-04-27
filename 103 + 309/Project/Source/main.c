@@ -121,16 +121,6 @@ int main(void)
 		// App_WarnCtrl();
 		App_AFEGet();
 
-		// if (sys_time.test_1)
-		// 	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-		// else
-		// 	GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-
-		// if (sys_time.test_2)
-		// 	GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
-		// else
-		// 	GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-
 		App_Sci();
 		App_AnlogCal();
 		App_LowPowerProcess();
