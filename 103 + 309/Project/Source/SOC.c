@@ -47,35 +47,6 @@ const UINT16 SOC_Table_Default[SOC_TABLE_SIZE] = {
 	0,
 };
 
-// 长期更新数据
-static void SOC_RefreshInputData(void)
-{
-	SOC_Enhance_Element.u16_VCellMax = g_stCellInfoReport.u16VCellMax;
-	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 公版决定不扩散出去，包含6和16串，客户使用体验问题，低压保护SOC一定要降下来
-	SOC_Enhance_Element.u16_Ichg = g_stCellInfoReport.u16Ichg;
-	SOC_Enhance_Element.u16_Idsg = g_stCellInfoReport.u16IDischg;
-}
-
-// 获取数据
-static void SOC_PublishOutputData(void)
-{
-	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
-	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
-	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
-	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
-	g_stCellInfoReport.SocElement.u16CapacityFactory = SOC_Enhance_Element.u16_CapacityFactory;
-	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
-
-	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
-	{
-		g_stCellInfoReport.SocElement.u16Soc = 60;
-	}
-	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
-	{
-		g_stCellInfoReport.SocElement.u16Soc = 0;
-	}
-}
-
 // 一次性赋值
 static void SOC_LoadConfigData(void)
 {
@@ -98,7 +69,7 @@ void InitData_SOC(void)
 {
 	SOC_LoadConfigData();
 	soc_param_lib_init();
-	SOC_PublishOutputData();
+	SOC_PublishReportData();
 }
 
 void App_SOC(void)
@@ -112,8 +83,11 @@ void App_SOC(void)
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 #endif
 
-	SOC_RefreshInputData();
-	SOC_PublishOutputData();
+	SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
+					 g_stCellInfoReport.u16VCellMin,
+					 g_stCellInfoReport.u16Ichg,
+					 g_stCellInfoReport.u16IDischg);
+	SOC_PublishReportData();
 	SOC_IntEnhance_Ctrl();
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)

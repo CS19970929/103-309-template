@@ -68,11 +68,32 @@
 
 `App_SOC()` 每 200ms 执行一次：
 
-1. 刷新电压、电流输入。
-2. 发布上一轮 SOC 输出。
+1. 通过 `SOC_UpdateSampleData()` 刷新电压、电流输入。
+2. 通过 `SOC_PublishReportData()` 发布上一轮 SOC 输出。
 3. `SOC_IntEnhance_Ctrl()` 按状态机处理充电积分、放电积分、静置 OCV 补偿、弱单体保护修正。
 4. 处理上位机刷新命令：`1` 为 OCV 刷新，`2` 为容量/循环初始化，`3` 为设置 SOC 一次。
 5. SOC、放电累计或循环次数变化时写入 SOC journal。
 6. 每 1s 平滑一次对外显示 SOC。
 
 本次整理后，SOC 初始化集中为三步：加载容量配置、清零计算状态、读取或创建 SOC 快照；删除了没有调用路径或没有计算作用的旧字段和旧初始化函数。
+
+## 4. 本次策略与架构优化
+
+本次优化把 `SOC.c` 收敛为应用层调度入口：只负责从 `OtherElement` 加载 SOC 配置、在 200ms 周期把系统采样传入 SOC 模块、触发 SOC 控制。SOC 输入刷新和对外报告结构写入统一放到 `SocEnhance.c` 的 `SOC_UpdateSampleData()`、`SOC_PublishReportData()`，这样固定 SOC、SOC 置零、容量/SOH/循环次数这些对外发布规则只有一个出口。
+
+积分策略改为以当前可用容量基准计算：
+
+| 项目 | 优化前 | 优化后 |
+|---|---|---|
+| SOC 百分比积分分母 | 固定使用 `u32CapFactory` | 优先使用 `u32CapFull`，无有效满充容量时回退 `u32CapFactory` |
+| 充/放电方向切换 | 共用 `u32CapChange`，上一方向未满 1% 的余量会带到反方向 | 增加 `u8IntegrateDirection`，方向改变时清空积分余量 |
+| 剩余容量边界 | 充电按出厂容量截断 | 按当前容量基准截断，避免 SOH 容量下降后 SOC 仍按出厂容量漂移 |
+| 循环次数 | 放电积分到 80% 增加 1 次 | 保留 80% 规则，改由本轮放电导致的 SOC 下降量累计 |
+
+持久化策略也做了收敛：`SOC_DealEEPROM_Data()` 改为返回保存结果，`SOC_PersistSnapshotIfChanged()` 只有在 Flash journal 保存成功后才更新备份值。若首次启动创建默认 SOC 快照但写 Flash 失败，会把备份 SOC 置为非法哨兵，后续 200ms 监控仍会继续尝试保存，避免一次写入失败后永久不重试。
+
+仍需注意的边界：
+
+1. `SOC_Table_Set` 仍是 RAM 表，上位机写自定义 OCV 表后不会跨重启保存。
+2. 当前 `u32CapFull` 启动时仍等于出厂容量，后续如果要做真实 SOH 学习，需要把满充容量学习值纳入 SOC journal 或独立参数区。
+3. `SOC_ApplyRtcRelaxationCompensation()` 只在 RTC 休眠唤醒后使用休眠秒数做静置 OCV 补偿，不替代运行态 200ms 积分。
