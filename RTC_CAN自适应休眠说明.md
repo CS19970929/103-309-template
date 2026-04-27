@@ -37,6 +37,7 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
   - 维护 CAN 总线活跃状态。
   - 提供 `Can_GetIdleRtcPeriodSeconds()`，输出 1 秒或 10 秒 RTC 周期。
   - 提供 `Can_RtcWakeService()`，RTC 唤醒后按补偿时间执行 CAN 发送窗口；无设备状态下只执行单帧探测。
+  - `InitCan_GPIO()` 会恢复 CAN_TX/CAN_RX 和 `GPIO_CMNT_EN`，保证 RTC 模式把 IO 置为模拟输入后，唤醒发送窗口能重新驱动 CAN 收发器电源脚。
 - `103 + 309/Project/Source/RTC.c`
   - `RTC_GetWakeupPeriodSeconds()` 改为读取 CAN 给出的自适应周期。
   - `RTC_WKTimeConfig()` 记录本次实际配置的 RTC 周期，供休眠累计使用。
@@ -124,28 +125,50 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 现象：
 
 - 前述修改后，系统可以进入 RTC 休眠。
-- 但在 RTC 周期唤醒期间，暂未观察到 CAN 报文发送。
+- 但在 RTC 周期唤醒期间，没有观察到 `GPIO_CMNT_EN` 上电脉冲或 CAN_TX 波形。
 
-当前判断：
+原因：
 
-- RTC 周期唤醒后，CAN 发送只会在 `rtc_sleep_run_hiccup_cycle()` 中满足 `is_rtc_wakekup && !isException()` 时调用 `Can_RtcWakeService(rtc_elapsed_seconds)`。
-- 如果 `isException()` 为真，代码会退出 RTC 流程，不会执行 RTC 周期 CAN 服务。
-- 如果 `s_u8FeidaoCanBusActive == 0`，RTC 唤醒只发送一帧探测帧，不会发送完整 1s / 5s 业务报文。
-- 如果总线活跃状态在入睡前没有被 ACK 或 RX 标记为 1，现象会表现为“休眠期间没有业务 CAN”，实际只应看到 10 秒一次探测帧。
+- 进入 RTC 前 `IOstatus_RTCMode()` 会把 GPIOB 置为模拟输入，`GPIO_CMNT_EN` 是 PB4，也会被关闭输出功能。
+- RTC Alarm 唤醒后 `Can_RtcWakeService()` 会调用 `InitCan()`，但原先 `InitCan_GPIO()` 只恢复 PA11/PA12 的 CAN 引脚，没有恢复 PB4 的收发器电源控制脚。
+- 另外，如果 CAN 调度锚点还没有初始化，第一次 RTC CAN 服务可能只设置 1s / 5s 调度基准，不会立即压入到期报文。
 
-排查办法：
+处理：
 
-- 在 `Can_RtcWakeService()` 入口打断点或加日志，确认 RTC Alarm 唤醒后是否进入该函数。
-- 同时观察 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL：如果 `GPIO_CMNT_EN` 没有短时上电，说明 CAN RTC 服务没有被调用或提前返回。
-- 检查唤醒时 `isException()` 的结果；异常唤醒路径当前不会发送 CAN。
-- 检查入睡前 `Can_IsBusActive()` 是否为 1；若为 0，只应期待 10 秒一次探测帧。
-- 若 `GPIO_CMNT_EN` 有上电脉冲但 CAN_TX 没有波形，继续检查 `FEIDAO_CAN_POWER_STABLE_TICKS`、`feidao_can_service_until_idle()` 内部 10ms 推进，以及 `CAN_Transmit()` 返回邮箱状态。
+- `InitCan_GPIO()` 增加 GPIOB 时钟、JTAG disable remap 和 `GPIO_CMNT_EN/PIN_CMNT_EN` 推挽输出配置。
+- RTC 有设备路径调用 `feidao_can_schedule_rtc_period_frames()`，按实际 RTC 休眠秒数补偿并压入到期 1s / 5s 报文，避免第一次 RTC 服务只初始化调度而不发送。
+- 无设备路径仍只压入单帧探测，探测成功后恢复有设备状态。
 
-后续处理方向：
+验证：
 
-- 先用断点或示波器确认问题落在“未进入 `Can_RtcWakeService()`”还是“进入后未发出 CAN_TX”。
-- 如果是 `isException()` 导致跳过，需要明确异常唤醒时是否仍要求发送 CAN；若要求，需要在异常路径增加受控的 CAN 服务窗口。
-- 如果是总线活跃状态为 0，则当前行为符合低功耗策略；需要业务 CAN 时，应在入睡前由 ACK/RX 标记总线活跃，或调整策略为每次 RTC 唤醒都发送业务帧。
+- 在 `Can_RtcWakeService()` 入口打断点，确认 RTC Alarm 唤醒后进入该函数。
+- 用示波器同时看 `GPIO_CMNT_EN`、CAN_TX、CANH/CANL：有设备时应看到 1 秒 RTC 唤醒窗口内短时上电并发送业务帧；无设备时应看到 10 秒一次单帧探测。
+- 如果 `GPIO_CMNT_EN` 有脉冲但 CAN_TX 没有波形，继续检查 `CAN_Transmit()` 返回邮箱状态和 `feidao_can_service_until_idle()` 的 10ms 推进。
+
+### 有设备时断开 CAN 对端后未切到 10 秒休眠
+
+现象：
+
+- 总线上有其它 CAN 设备时，系统按有设备策略进行 RTC 周期发送。
+- 中途断开其它 CAN 设备后，没有按预期切换到 10 秒 RTC 休眠。
+
+原因：
+
+- 原先 `CAN_TxStatus_Failed` 路径只在 CAN ESR 的 LEC 恰好为 `CAN_ErrorCode_ACKErr` 时才累计无 ACK。
+- 实测断线时，发送失败状态不一定稳定保留为 ACKErr；如果只依赖 LEC，可能只记录失败次数，但不推进 `s_u8FeidaoCanNoAckCnt`。
+- 无 ACK 计数达不到阈值时，`s_u8FeidaoCanBusActive` 会一直保持 1，`Can_GetIdleRtcPeriodSeconds()` 就仍返回有设备周期。
+
+处理：
+
+- `feidao_can_record_tx_failed()` 改为所有 TX failed 都累计一次无 ACK；如果 LEC 是 ACKErr，则额外统计 ACK error 计数。
+- TX timeout 仍按无 ACK 处理。
+- 连续失败达到 `FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT` 后，`s_u8FeidaoCanBusActive` 置 0，后续 RTC 周期切换到 10 秒。
+
+验证：
+
+- 接 CAN 对端运行，确认 `Can_IsBusActive()` 为 1，RTC 周期为有设备周期。
+- 断开 CAN 对端，观察连续发送失败或 timeout 后，`s_u8FeidaoCanNoAckCnt` 增加并最终将 `s_u8FeidaoCanBusActive` 置 0。
+- 下一轮 RTC 配置应使用 `FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS`，表现为约 10 秒唤醒一次。
 
 ## 验证建议
 

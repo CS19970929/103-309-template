@@ -69,6 +69,7 @@ static void feidao_can_mark_no_ack(void);
 static void feidao_can_drop_pending_if_bus_inactive(void);
 static void feidao_can_anchor_schedule(UINT32 now_tick);
 static void feidao_can_start_idle_probe(void);
+static void feidao_can_schedule_rtc_period_frames(UINT32 now_tick, UINT32 elapsed_seconds);
 static void feidao_can_inc_u16(volatile UINT16 *counter);
 static void feidao_can_update_error_snapshot(void);
 static void feidao_can_record_ack_error_from_snapshot(void);
@@ -366,6 +367,20 @@ static void feidao_can_start_idle_probe(void)
 	s_u8FeidaoCanProbeActive = 1U;
 }
 
+static void feidao_can_schedule_rtc_period_frames(UINT32 now_tick, UINT32 elapsed_seconds)
+{
+	UINT32 elapsed_ticks = feidao_can_seconds_to_ticks(elapsed_seconds);
+
+	if ((0U == s_u8FeidaoCanScheduleInit) && (elapsed_ticks > 0U))
+	{
+		s_u8FeidaoCanScheduleInit = 1U;
+		s_u32FeidaoCanLast1000msTick = now_tick - elapsed_ticks;
+		s_u32FeidaoCanLast5000msTick = now_tick - elapsed_ticks;
+	}
+
+	feidao_can_schedule_period_frames(now_tick);
+}
+
 static void feidao_can_inc_u16(volatile UINT16 *counter)
 {
 	if (*counter < (UINT16)0xFFFFU)
@@ -391,7 +406,6 @@ static void feidao_can_record_ack_error_from_snapshot(void)
 	if (CAN_ErrorCode_ACKErr == g_stCanErrorSnapshot.u8LastErrorCode)
 	{
 		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16AckErrorCnt);
-		feidao_can_mark_no_ack();
 	}
 }
 
@@ -400,6 +414,7 @@ static void feidao_can_record_tx_failed(void)
 	feidao_can_update_error_snapshot();
 	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxFailedCnt);
 	feidao_can_record_ack_error_from_snapshot();
+	feidao_can_mark_no_ack();
 }
 
 static void feidao_can_record_tx_timeout(void)
@@ -1272,7 +1287,14 @@ void CAN_TX_0x11(void)
 void InitCan_GPIO(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA, ENABLE); // 复用功能和GPIOB端口时钟使能
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 复用功能和GPIO端口时钟使能
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
+
+	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_OFF_LEVEL);
+	GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;	  // Configure CAN pin: RX    // PD0
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 上拉输入
@@ -1754,6 +1776,7 @@ void Can_RtcWakeService(UINT32 elapsed_seconds)
 		return;
 	}
 
+	feidao_can_schedule_rtc_period_frames(s_u32FeidaoCanLogicalTick, elapsed_seconds);
 	feidao_can_send(s_u32FeidaoCanLogicalTick);
 	(void)feidao_can_service_until_idle(FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS);
 	Can_PrepareSleep();
