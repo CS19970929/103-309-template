@@ -14,6 +14,9 @@ UINT16 g_u16TypeCOutCurrent_A10;
 UINT16 g_u16TypeCOutOffsetAD;
 UINT16 g_u16TypeCOutStableAD;
 UINT16 g_u16TypeCOutDelta_mV;
+UINT16 g_u16VbcStableAD;
+UINT16 g_u16VbcAdc_mV;
+UINT32 g_u32Vbat_mV;
 UINT16 gu16_BusCurr_CHG; // legacy mirror, A*10
 UINT16 gu16_BusCurr_DSG; // legacy mirror, A*10
 
@@ -283,6 +286,35 @@ static UINT16 ADC_TypeCDeltaMvToMilliAmp(UINT16 delta_mV)
     return ADC_LimitU16(current_mA);
 }
 
+static UINT16 ADC_VbcAdToMilliVolt(UINT32 ad_value)
+{
+    UINT32 adc_mV;
+
+    adc_mV = (ad_value * (UINT32)VBC_ADC_VDDA_MV + 2048U) / 4096U;
+
+    return ADC_LimitU16(adc_mV);
+}
+
+static UINT32 ADC_VbcAdcMvToBatteryMv(UINT16 adc_mV)
+{
+    UINT32 divider_top;
+    UINT32 divider_bottom;
+
+    divider_top = (UINT32)VBC_DIVIDER_RTOP_KOHM;
+    divider_bottom = (UINT32)VBC_DIVIDER_RBOTTOM_KOHM;
+    if (divider_bottom == 0U)
+    {
+        return 0U;
+    }
+
+    return ((UINT32)adc_mV * (divider_top + divider_bottom) + (divider_bottom / 2U)) / divider_bottom;
+}
+
+UINT32 ADC_GetVbatMilliVolt(void)
+{
+    return g_u32Vbat_mV;
+}
+
 void ADC_Current_Smooth(void)
 {
     static UINT8 su8_ADcnt = 0;
@@ -351,7 +383,9 @@ void ADC_TTC(void)
 void ADC_Vbc(void)
 {
     static UINT8 s8ADcnt = 0;
-    INT32 t_i32temp = 0;
+    UINT32 u32AdAvg = 0;
+    UINT32 u32VbatCalc_mV = 0;
+
     if (s8ADcnt++ < AD_CalNum)
     {
         g_u32ADCValFilter2[ADC_VBC] += (UINT32)g_u16ADCValFilter[ADC_VBC];
@@ -359,12 +393,20 @@ void ADC_Vbc(void)
     else
     {
         s8ADcnt = 0;
-        t_i32temp = g_u32ADCValFilter2[ADC_VBC] >> AD_CalNum_2; // 读取AD值，mV
+        u32AdAvg = (UINT32)g_u32ADCValFilter2[ADC_VBC] >> AD_CalNum_2;
         g_u32ADCValFilter2[ADC_VBC] = 0;
-        // t_i32temp *= 21;							// AD值转换为模拟量
-        t_i32temp = ((t_i32temp * 825) >> 10) * Vbc_scale; // 12位，4096为基准
-        t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
-        g_i32ADCResult[ADC_VBC] = ((t_i32temp - g_i32ADCResult[ADC_VBC]) >> 3) + g_i32ADCResult[ADC_VBC]; // mV
+
+        g_u16VbcStableAD = ADC_LimitU16(u32AdAvg);
+        g_u16VbcAdc_mV = ADC_VbcAdToMilliVolt(u32AdAvg);
+        u32VbatCalc_mV = ADC_VbcAdcMvToBatteryMv(g_u16VbcAdc_mV);
+
+        g_i32ADCResult[ADC_VBC] = (((INT32)u32VbatCalc_mV - g_i32ADCResult[ADC_VBC]) >> 3)
+                                 + g_i32ADCResult[ADC_VBC];
+        if (g_i32ADCResult[ADC_VBC] < 0)
+        {
+            g_i32ADCResult[ADC_VBC] = 0;
+        }
+        g_u32Vbat_mV = (UINT32)g_i32ADCResult[ADC_VBC];
     }
 }
 
@@ -383,6 +425,9 @@ void InitADC(void)
 
     ADC_ClearTypeCOutCurrent();
     g_u16TypeCOutStableAD = 0;
+    g_u16VbcStableAD = 0;
+    g_u16VbcAdc_mV = 0;
+    g_u32Vbat_mV = 0;
     ADC_ResetAnlogCalSchedule();
 
     InitADC_GPIO();
@@ -412,4 +457,5 @@ void App_AnlogCal(void)
         ADC_Current_Smooth();
         u32Elapsed10msTick--;
     }
+    g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
 }

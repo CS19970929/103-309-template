@@ -130,49 +130,58 @@ void DataLoad_CellVolt(void)
 
 void DataLoad_CellVoltMaxMinFind(void)
 {
-	UINT8 i;
-	UINT16 t_u16VcellTemp;
-	UINT16 t_u16VcellMaxTemp;
-	UINT16 t_u16VcellMinTemp;
-	UINT8 t_u8VcellMaxPosition;
-	UINT8 t_u8VcellMinPosition;
-	UINT32 u32VCellTotle;
+    UINT8 i;
+    UINT16 t_u16VcellTemp;
+    UINT16 t_u16VcellMaxTemp;
+    UINT16 t_u16VcellMinTemp;
+    UINT8 t_u8VcellMaxPosition;
+    UINT8 t_u8VcellMinPosition;
+    UINT32 u32VCellTotle;
+    UINT32 u32AdcVbat_mV;
+    INT32 i32VCellTotle;
 
-	t_u16VcellMaxTemp = 0;
-	t_u16VcellMinTemp = 0x7FFF;
-	t_u8VcellMaxPosition = 0;
-	t_u8VcellMinPosition = 0;
-	u32VCellTotle = 0;
+    t_u16VcellMaxTemp = 0;
+    t_u16VcellMinTemp = 0x7FFF;
+    t_u8VcellMaxPosition = 0;
+    t_u8VcellMinPosition = 0;
+    u32VCellTotle = 0;
 
-	for (i = 0; i < SeriesNum; i++)
-	{
-		t_u16VcellTemp = g_stCellInfoReport.u16VCell[i];
-		u32VCellTotle += g_stCellInfoReport.u16VCell[i];
-		if (t_u16VcellMaxTemp < t_u16VcellTemp)
-		{
-			t_u16VcellMaxTemp = t_u16VcellTemp;
-			t_u8VcellMaxPosition = i;
-		}
-		if (t_u16VcellMinTemp > t_u16VcellTemp)
-		{
-			t_u16VcellMinTemp = t_u16VcellTemp;
-			t_u8VcellMinPosition = i;
-		}
-	}
+    for (i = 0; i < SeriesNum; i++)
+    {
+        t_u16VcellTemp = g_stCellInfoReport.u16VCell[i];
+        u32VCellTotle += g_stCellInfoReport.u16VCell[i];
+        if (t_u16VcellMaxTemp < t_u16VcellTemp)
+        {
+            t_u16VcellMaxTemp = t_u16VcellTemp;
+            t_u8VcellMaxPosition = i;
+        }
+        if (t_u16VcellMinTemp > t_u16VcellTemp)
+        {
+            t_u16VcellMinTemp = t_u16VcellTemp;
+            t_u8VcellMinPosition = i;
+        }
+    }
 
-	// 单片机读总压
-	// u32VCellTotle = ((g_i32ADCResult[ADC_VBC]*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-	// AFE读总压
-	// u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-	// 所有单节电池电压加起来
-	u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
+    // ADC 分压总压优先；ADC 尚未更新时保留单体累加值作为启动兜底。
+    u32AdcVbat_mV = ADC_GetVbatMilliVolt();
+    if (u32AdcVbat_mV > 0U)
+    {
+        u32VCellTotle = u32AdcVbat_mV;
+    }
 
-	g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // 除以10
-	g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;									// max cell voltage
-	g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;									// min cell voltage
-	g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;			// delta cell voltage
-	g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;					// max cell voltage
-	g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;					// min cell voltage
+    i32VCellTotle = (INT32)((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10)
+                     + (INT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
+    if (i32VCellTotle < 0)
+    {
+        i32VCellTotle = 0;
+    }
+
+    g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)i32VCellTotle + 5U) / 10U); // 10mV
+    g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;                              // max cell voltage
+    g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;                              // min cell voltage
+    g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;         // delta cell voltage
+    g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;                // max cell voltage
+    g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;                // min cell voltage
 }
 
 /*这个是数据溢出的问题，其次是>>这个的优先级和别的符号优先级的问题

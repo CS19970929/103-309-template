@@ -16,6 +16,9 @@
 
 #define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm, PA2 samples shunt voltage directly
 #define TYPEC_CUR_VDDA_MV           3300U   // ADC reference voltage
+#define VBC_ADC_VDDA_MV           3300U   // ADC reference voltage for PA1 VBUS divider
+#define VBC_DIVIDER_RTOP_KOHM     300U    // Vbat+ to PA1 divider resistor, adjust with hardware
+#define VBC_DIVIDER_RBOTTOM_KOHM  10U     // PA1 to GND divider resistor, adjust with hardware
 
 //AD采样变量枚举
 enum tagInfoForADCArray {
@@ -37,7 +40,7 @@ enum tagInfoForADCArray {
 
 
 #define LENGTH_TBLTEMP_PORT_10K    ((UINT16)56)
-#define Vbc_scale 	  31	  		//总压采比例值
+#define Vbc_scale (((VBC_DIVIDER_RTOP_KOHM + VBC_DIVIDER_RBOTTOM_KOHM) / VBC_DIVIDER_RBOTTOM_KOHM)) // legacy integer divider ratio
 
 
 extern INT32 g_i32ADCResult[ADC_NUM];             //ADC数据缓存
@@ -47,6 +50,9 @@ extern UINT16 g_u16TypeCOutCurrent_A10;
 extern UINT16 g_u16TypeCOutOffsetAD;
 extern UINT16 g_u16TypeCOutStableAD;
 extern UINT16 g_u16TypeCOutDelta_mV;
+extern UINT16 g_u16VbcStableAD;
+extern UINT16 g_u16VbcAdc_mV;
+extern UINT32 g_u32Vbat_mV;
 extern UINT16 gu16_BusCurr_CHG;
 extern UINT16 gu16_BusCurr_DSG;
 
@@ -54,6 +60,7 @@ extern UINT16 gu16_BusCurr_DSG;
 void InitADC(void);
 void ADC_StopForLowPower(void);
 void ADC_ResetAnlogCalSchedule(void);
+UINT32 ADC_GetVbatMilliVolt(void);
 void App_AnlogCal(void);
 
 #endif	/* ADC_H */
