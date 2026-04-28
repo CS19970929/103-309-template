@@ -275,5 +275,6 @@ void IORecover_DeepMode(void);
 void Sys_StopMode(void);
 // void Init(void);
 
+#include "Project_BuildGuard.h"
 
 #endif

@@ -7,6 +7,16 @@
 
 // <h>Project Visual Configuration
 
+// <h>Build Profile
+// <o> Build profile
+//   <0=> Release
+//   <1=> Debug
+//   <2=> Factory/Test
+#ifndef PROJECT_CFG_BUILD_PROFILE
+#define PROJECT_CFG_BUILD_PROFILE 0
+#endif
+// </h>
+
 // <h>Product
 // <o> EEPROM init flag <0x0000-0xFFFF>
 // <i> Change this value only when field parameters must be reinitialized.
@@ -135,7 +145,7 @@
 #define PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC 10
 
 // <q> Enable app test acceleration
-#define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE 1
+#define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE 0
 
 // <o> Accelerated SOC save period, seconds <1-65535>
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_SOC_PERIOD_SEC 1

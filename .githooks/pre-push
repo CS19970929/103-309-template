@@ -3,6 +3,20 @@
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -n "$REPO_ROOT" ] || exit 0
 
+CHECK_SCRIPT="$REPO_ROOT/tools/project_check.py"
+if [ -f "$CHECK_SCRIPT" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN=python3
+    elif command -v python >/dev/null 2>&1 && python -c 'import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)' >/dev/null 2>&1; then
+        PYTHON_BIN=python
+    else
+        printf '%s\n' 'ERROR: python3 is required to run tools/project_check.py'
+        exit 1
+    fi
+
+    "$PYTHON_BIN" "$CHECK_SCRIPT" --quiet || exit $?
+fi
+
 PENDING_FILES="$REPO_ROOT/TODO.md $REPO_ROOT/TEST_PENDING.md"
 FOUND=0
 
