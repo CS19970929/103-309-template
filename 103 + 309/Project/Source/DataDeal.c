@@ -137,7 +137,6 @@ void DataLoad_CellVoltMaxMinFind(void)
     UINT8 t_u8VcellMaxPosition;
     UINT8 t_u8VcellMinPosition;
     UINT32 u32VCellTotle;
-    UINT32 u32AdcVbat_mV;
     INT32 i32VCellTotle;
 
     t_u16VcellMaxTemp = 0;
@@ -162,13 +161,7 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    // ADC 分压总压优先；ADC 尚未更新时保留单体累加值作为启动兜底。
-    u32AdcVbat_mV = ADC_GetVbatMilliVolt();
-    if (u32AdcVbat_mV > 0U)
-    {
-        u32VCellTotle = u32AdcVbat_mV;
-    }
-
+    // 最终上报总压使用 AFE 单体采样累加值，ADC_VBC 仅作为独立调试/校准参考。
     i32VCellTotle = (INT32)((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10)
                      + (INT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
     if (i32VCellTotle < 0)

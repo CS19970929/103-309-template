@@ -2,6 +2,8 @@
 
 本文说明当前工程如何通过 PA1 / `ADC_VBC` 测量电池包总压，以及后续更换分压电阻时需要修改的位置。
 
+注意：`ADC_VBC` 计算出的总压只作为独立调试、分压电阻验证和校准参考。`DataDeal.c` 中对外上报的 `g_stCellInfoReport.u16VCellTotle` 使用 AFE 单体电压采样累加值，不使用 ADC 总压。
+
 ## 1. 硬件关系
 
 总压采样按普通电阻分压处理：
@@ -55,13 +57,13 @@ g_u16VbcAdc_mV = ADC_AD * VBC_ADC_VDDA_MV / 4096
 Vbat_mV = g_u16VbcAdc_mV * (Rtop + Rbottom) / Rbottom
 ```
 
-5. `g_i32ADCResult[ADC_VBC]` 和 `g_u32Vbat_mV` 保存滤波后的电池包总压，单位 mV。
-6. `DataLoad_CellVoltMaxMinFind()` 优先用 `ADC_GetVbatMilliVolt()` 作为最终总压来源。
-7. `g_stCellInfoReport.u16VCellTotle` 输出单位仍是 10mV。
+5. `g_i32ADCResult[ADC_VBC]` 和 `g_u32Vbat_mV` 保存滤波后的 ADC 分压还原总压，单位 mV。
+6. `ADC_GetVbatMilliVolt()` 返回 `g_u32Vbat_mV`，供调试或验证分压电阻使用。
+7. `DataLoad_CellVoltMaxMinFind()` 不使用 ADC 总压；它累加 AFE 单体采样值生成 `g_stCellInfoReport.u16VCellTotle`。
 
-## 4. 最终总压单位
+## 4. 调试总压与上报总压单位
 
-内部调试变量：
+ADC 调试变量：
 
 ```c
 g_u16VbcStableAD     // PA1 总压通道 8 次平均后的 ADC 值
@@ -70,7 +72,7 @@ g_u32Vbat_mV         // 电池包总压，单位 mV，已做 1/8 IIR
 g_i32ADCResult[ADC_VBC] // 同样表示电池包总压，单位 mV，已做 1/8 IIR
 ```
 
-对外上报变量：
+对外上报变量，来源是 AFE 单体电压累加：
 
 ```c
 g_stCellInfoReport.u16VCellTotle // 电池包总压，单位 10mV
@@ -79,9 +81,11 @@ g_stCellInfoReport.u16VCellTotle // 电池包总压，单位 10mV
 例子：
 
 ```text
-实际总压 42000mV
-g_u32Vbat_mV ≈ 42000
+AFE 单体采样累加值 42000mV
 g_stCellInfoReport.u16VCellTotle ≈ 4200
+
+ADC 分压测得总压 42000mV
+g_u32Vbat_mV ≈ 42000
 ```
 
 ## 5. 更换分压电阻时怎么改
@@ -111,23 +115,23 @@ g_stCellInfoReport.u16VCellTotle ≈ 4200
 
 ## 6. 校准关系
 
-分压电阻用于硬件比例还原，通信校准系数仍保留：
+分压电阻只影响 `ADC_VBC` 调试总压，不影响 `g_stCellInfoReport.u16VCellTotle` 的来源。通信校准系数仍保留在 AFE 累加总压上：
 
 ```c
 g_u16CalibCoefK[VOLT_VBUS] // 默认 1024，表示 1.0 倍
 g_i16CalibCoefB[VOLT_VBUS] // 默认 0，单位 V，代码里换算成 mV
 ```
 
-最终总压计算顺序是：
+上报总压计算顺序是：
 
 ```text
-ADC 分压还原出的 Vbat_mV
+AFE 单体采样累加出的总压 mV
 -> 乘 VOLT_VBUS K 系数
 -> 加 VOLT_VBUS B 偏移
 -> 转为 10mV 写入 u16VCellTotle
 ```
 
-所以建议先把分压电阻宏设置成真实电阻，再用校准 K/B 修正小比例误差。
+所以分压电阻宏只按实际硬件设置，用于看 `g_u32Vbat_mV` 是否符合万用表测量值；`u16VCellTotle` 的小比例误差仍通过 `VOLT_VBUS` 的 K/B 校准修正。
 
 ## 7. 上板检查
 
