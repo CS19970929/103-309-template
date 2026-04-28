@@ -88,6 +88,7 @@
 | [通信逻辑与地址整理文档](COMMUNICATION_LAYOUT_REPORT.md) | 通信寄存器、读写逻辑、地址布局总览 |
 | [通信完整地址索引](COMMUNICATION_ADDRESS_INDEX.md) | 通信地址索引表 |
 | [0x10 子地址完整清单](COMMUNICATION_WRITE_DETAIL.md) | 0x10 写寄存器子地址明细 |
+| [参数修改方式与可修改性梳理](参数修改方式与可修改性梳理.md) | 当前可修改参数、修改方式、持久化状态与不可修改边界 |
 | [通信写 EEPROM 标志位映射表](COMMUNICATION_EEPROM_FLAG_MAPPING.md) | 写 EEPROM 标志位与参数区映射 |
 | [通信写 EEPROM 标志位收敛与 Keil 调试方案](COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md) | EEPROM 写标志收敛和调试方法 |
 | [EEPROM 地址与读写逻辑梳理](EEPROM_LAYOUT_OPTIMIZATION.md) | EEPROM 地址规划和读写流程 |
