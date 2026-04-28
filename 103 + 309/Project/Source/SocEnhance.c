@@ -206,7 +206,7 @@ const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi] = {
 	3371,
 	5,
 	3136,
-	0,
+	3,
 };
 
 // 单位为mV和SOC
@@ -800,9 +800,11 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	return StorageFlash_SaveSocData(&flash_data);
 }
 
+#if 0
 static UINT8 Get_OpenCircuit_Value(void)
 {
 	UINT8 result = 0;
+
 	switch (SOC_Enhance_Element.u16_SOC_TableSelect)
 	{
 	case SOC_TABLE_TEST:
@@ -821,6 +823,16 @@ static UINT8 Get_OpenCircuit_Value(void)
 		result = GetEndValue(SOC_Table_LiFePO, (UINT16)SOC_Size_TableCanSet, (UINT16)SOC_Enhance_Element.u16_VCellMin);
 		break;
 	}
+	return result;
+}
+#endif
+
+static UINT8 Get_OpenCircuit_Value(void)
+{
+	UINT8 result = 0;
+	
+	result = GetEndValue(SocTable_TernaryLi, (UINT16)SOC_Size_TernaryLi, (UINT16)SOC_Enhance_Element.u16_VCellMin);
+
 	return result;
 }
 

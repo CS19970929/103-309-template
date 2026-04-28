@@ -187,7 +187,7 @@
 
 // <h>Upgrade Parameter Policy
 // <q> Enable upgrade parameter policy
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 0
 
 // <o> Upgrade parameter policy version <0x0000-0xFFFE>
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0005
