@@ -161,20 +161,19 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    // 最终上报总压使用 AFE 单体采样累加值，ADC_VBC 仅作为独立调试/校准参考。
-    i32VCellTotle = (INT32)((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10)
-                     + (INT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
-    if (i32VCellTotle < 0)
-    {
-        i32VCellTotle = 0;
-    }
+	// 单片机读总压
+	// u32VCellTotle = ((g_i32ADCResult[ADC_VBC]*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
+	// AFE读总压
+	// u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
+	// 所有单节电池电压加起来
+	u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
 
-    g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)i32VCellTotle + 5U) / 10U); // 10mV
-    g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;                              // max cell voltage
-    g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;                              // min cell voltage
-    g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;         // delta cell voltage
-    g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;                // max cell voltage
-    g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;                // min cell voltage
+	g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // 除以10
+	g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;									// max cell voltage
+	g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;									// min cell voltage
+	g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;			// delta cell voltage
+	g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;					// max cell voltage
+	g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;					// min cell voltage
 }
 
 /*这个是数据溢出的问题，其次是>>这个的优先级和别的符号优先级的问题

@@ -4,11 +4,11 @@
 #define AD_Used_amount      3
 
 
-#define AD_CalNum			8		//ºóÃæÊÇÎ»ÒÆ´¦Àí>>2£¬ËùÒÔÕâ¸ö±ðÂÒ¸Ä
-#define AD_CalNum_2			3		//2^3 = 8£¬ÉÏÃæÄÇ¸öÊýÊÇ2µÄ¶àÉÙ´Î·½£¬ÓÃÓÚÎ»ÒÆ
+#define AD_CalNum			8		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½Æ´ï¿½ï¿½ï¿½>>2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¸ï¿½
+#define AD_CalNum_2			3		//2^3 = 8ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¸ï¿½ï¿½ï¿½ï¿½ï¿½2ï¿½Ä¶ï¿½ï¿½Ù´Î·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½
 
-#define AD_CalNum_Cur		32		//ºóÃæÊÇÎ»ÒÆ´¦Àí>>5£¬ËùÒÔÕâ¸ö±ðÂÒ¸Ä
-#define AD_CalNum_Cur_2		5		//2^5 = 32£¬ÉÏÃæÄÇ¸öÊýÊÇ2µÄ¶àÉÙ´Î·½£¬ÓÃÓÚÎ»ÒÆ
+#define AD_CalNum_Cur		32		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½Æ´ï¿½ï¿½ï¿½>>5ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¸ï¿½
+#define AD_CalNum_Cur_2		5		//2^5 = 32ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¸ï¿½ï¿½ï¿½ï¿½ï¿½2ï¿½Ä¶ï¿½ï¿½Ù´Î·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½
 
 #define AD_CurOffsetCalNum  16
 #define AD_CurOffsetCalNum_2 4
@@ -17,22 +17,22 @@
 #define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm, PA2 samples shunt voltage directly
 #define TYPEC_CUR_VDDA_MV           3300U   // ADC reference voltage
 #define VBC_ADC_VDDA_MV           3300U   // ADC reference voltage for PA1 VBUS divider
-#define VBC_DIVIDER_RTOP_KOHM     300U    // Vbat+ to PA1 divider resistor, adjust with hardware
-#define VBC_DIVIDER_RBOTTOM_KOHM  10U     // PA1 to GND divider resistor, adjust with hardware
+#define VBC_DIVIDER_RTOP_KOHM     470U    // Vbat+ to PA1 divider resistor, adjust with hardware
+#define VBC_DIVIDER_RBOTTOM_KOHM  15U     // PA1 to GND divider resistor, adjust with hardware
 
-//AD²ÉÑù±äÁ¿Ã¶¾Ù
+//ADï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¶ï¿½ï¿½
 enum tagInfoForADCArray {
-    ADC_TEMP_MOS1,      // MOS1ÎÂ¶È
-	ADC_CUR_AMP,		//µçÁ÷²ÉÑùµçÑ¹
-    ADC_VBC,            // Ä¸ÏßµçÑ¹
-    ADC_TEMP_EV1,       // Íâ²¿ÎÂ¶È
+    ADC_TEMP_MOS1,      // MOS1ï¿½Â¶ï¿½
+	ADC_CUR_AMP,		//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¹
+    ADC_VBC,            // Ä¸ï¿½ßµï¿½Ñ¹
+    ADC_TEMP_EV1,       // ï¿½â²¿ï¿½Â¶ï¿½
 
-    ADC_TEMP_MOS2,		// MOS2ÎÂ¶È
-    AD_VREF_AD,			//Ì§ÉýµçÑ¹
-	ADC_TEMP_EV2,		// Íâ²¿ÎÂ¶È
-	ADC_TEMP_EV3,		// Íâ²¿ÎÂ¶È
-    ADC_EXT_C1,         // µÚ1½Úµç³ØµçÑ¹
-    ADC_EXT_C2,         // µÚ2½Úµç³ØµçÑ¹
+    ADC_TEMP_MOS2,		// MOS2ï¿½Â¶ï¿½
+    AD_VREF_AD,			//Ì§ï¿½ï¿½ï¿½ï¿½Ñ¹
+	ADC_TEMP_EV2,		// ï¿½â²¿ï¿½Â¶ï¿½
+	ADC_TEMP_EV3,		// ï¿½â²¿ï¿½Â¶ï¿½
+    ADC_EXT_C1,         // ï¿½ï¿½1ï¿½Úµï¿½Øµï¿½Ñ¹
+    ADC_EXT_C2,         // ï¿½ï¿½2ï¿½Úµï¿½Øµï¿½Ñ¹
 	ADC_CURR,
 
 	ADC_NUM		        // ADC number
@@ -43,8 +43,8 @@ enum tagInfoForADCArray {
 #define Vbc_scale (((VBC_DIVIDER_RTOP_KOHM + VBC_DIVIDER_RBOTTOM_KOHM) / VBC_DIVIDER_RBOTTOM_KOHM)) // legacy integer divider ratio
 
 
-extern INT32 g_i32ADCResult[ADC_NUM];             //ADCÊý¾Ý»º´æ
-//extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//Õâ¸öÎ»Êý²»ÄÜ¸Ä
+extern INT32 g_i32ADCResult[ADC_NUM];             //ADCï¿½ï¿½ï¿½Ý»ï¿½ï¿½ï¿½
+//extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½Ü¸ï¿½
 extern UINT16 g_u16TypeCOutCurrent_mA;
 extern UINT16 g_u16TypeCOutCurrent_A10;
 extern UINT16 g_u16TypeCOutOffsetAD;

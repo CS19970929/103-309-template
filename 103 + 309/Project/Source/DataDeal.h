@@ -156,7 +156,7 @@ struct OTHER_ELEMENT {
 #define BMS_CAPCITY     180
 #elif (BAT_TYPE == BAT_SLAVE)
 #define CS_Res			2
-#define CS_Res_Num		6
+#define CS_Res_Num		4
 #define BMS_CAPCITY     270
 #endif	
 

@@ -1,5 +1,16 @@
 todo
 
+soc安时积分改成任意
+
+datadeal中的g_stCellInfoReport.u16VCellTotle使用afe采样累加值，不要使用adc采样总压
+
+修改g_u16TypeCOutCurrent_mA由直接g_u16TypeCOutDelta_mV计算，这样更快，不需要滤波，我调试发现没什么用，反而一直滞后于g_u16TypeCOutDelta_mV
+
+e172988af06bfd92ed8e80b343907e0658373abd这次cimmit导致不能进入rtc，而且can没有之前的低功耗逻辑了，功耗一直很高
+提交本次git，然后adc测量计算总压是怎么计算的，我怎么计算最终的电池总压，电路是一个分压电路，你帮我处理好，我后面自己调整分压电阻，并输出文档
+
+adc测量typec电流是准的，但是断开typec充电后g_u16TypeCOutCurrent_mA还是之前测量的输出电流
+
  阅读readme
 -  数码管好像有点闪烁感，然后充电图表偶尔会闪一下，进入rtc低功耗状态时，有时某些段数码管会无缘无故亮
 -  soc校准，低压时容量直接校准为0，soc慢慢降？
