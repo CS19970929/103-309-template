@@ -74,6 +74,9 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
+	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
+	UINT8 u8HasNewAfeSample;
+
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag)
 	{
 		return;
@@ -83,12 +86,20 @@ void App_SOC(void)
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 #endif
 
-	SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
-					 g_stCellInfoReport.u16VCellMin,
-					 g_stCellInfoReport.u16Ichg,
-					 g_stCellInfoReport.u16IDischg);
-	SOC_PublishReportData();
-	SOC_IntEnhance_Ctrl();
+	u8HasNewAfeSample = (g_u32AfeCurrentSampleSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
+	if (u8HasNewAfeSample)
+	{
+		s_u32LastAfeCurrentSampleSeq = g_u32AfeCurrentSampleSeq;
+		SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
+							 g_stCellInfoReport.u16VCellMin,
+							 g_stCellInfoReport.u16Ichg,
+							 g_stCellInfoReport.u16IDischg);
+		SOC_IntEnhance_Ctrl();
+	}
+	else
+	{
+		SOC_PublishReportData();
+	}
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{

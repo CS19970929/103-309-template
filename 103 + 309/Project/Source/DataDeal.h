@@ -85,6 +85,43 @@ enum tagInfoForKBArray {
     KB_NUM		  // KB number_47
 };
 
+typedef enum _AFE_CURRENT_ZERO_STATE {
+    AFE_CURRENT_ZERO_IDLE = 0,
+    AFE_CURRENT_ZERO_STARTUP = 1,
+    AFE_CURRENT_ZERO_READY = 2,
+    AFE_CURRENT_ZERO_TIMEOUT = 3,
+    AFE_CURRENT_ZERO_IIC_FAIL = 4
+} AFE_CURRENT_ZERO_STATE;
+
+typedef enum _AFE_CURRENT_DIR {
+    AFE_CURRENT_DIR_ZERO = 0,
+    AFE_CURRENT_DIR_CHG = 1,
+    AFE_CURRENT_DIR_DSG = 2
+} AFE_CURRENT_DIR;
+
+typedef struct _AFE_CURRENT_DEBUG {
+    UINT16 u16RawCode;
+    INT32 i32RawSigned;
+    INT32 i32ZeroOffsetRaw;
+    INT32 i32CorrectedRaw;
+    UINT32 u32AbsRaw;
+    UINT32 u32Current_mA;
+    UINT32 u32ChgCurrent_mA;
+    UINT32 u32DsgCurrent_mA;
+    UINT16 u16Ichg_A10;
+    UINT16 u16IDsg_A10;
+    UINT16 u16ZeroLimitRaw;
+    UINT16 u16ZeroDeadbandRaw;
+    UINT16 u16ZeroDeltaRaw;
+    UINT8 u8ZeroState;
+    UINT8 u8ZeroReady;
+    UINT8 u8StableCnt;
+    UINT8 u8StartupSampleCnt;
+    UINT8 u8StartupFailCnt;
+    UINT8 u8KbCalibEnable;
+    UINT8 u8Direction;
+} AFE_CURRENT_DEBUG;
+
 
 #define SYSKMAX   		((UINT16)1536)      // 1.5
 #define SYSKDEFAULT		((UINT16)1024)      // 1
@@ -201,8 +238,18 @@ extern UINT16 CopperLoss[CompensateNUM];
 extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
+extern UINT32 g_u32AfeCurrentSampleSeq;
+extern volatile AFE_CURRENT_DEBUG g_stAfeCurrentDebug;
+extern volatile INT32 g_i32AfeCurrentZeroOffsetRawQ4;
+extern volatile INT32 g_i32AfeCurrentLastRawSigned;
+extern volatile UINT8 g_u8AfeCurrentZeroStableCnt;
+extern volatile UINT8 g_u8AfeCurrentZeroReady;
 
 void App_AFEGet(  void);
+void AfeCurrent_PrepareStartupZero(void);
+void AfeCurrent_StartupZeroCal(void);
+UINT8 AfeCurrent_IsStartupZeroDone(void);
+void open_ctlc(void);
+void close_ctlc(void);
 
 #endif	/* DATADEAL_SYS_H */
-

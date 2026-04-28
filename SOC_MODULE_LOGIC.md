@@ -66,20 +66,22 @@
 
 ## 3. 运行逻辑
 
-`App_SOC()` 每 200ms 执行一次：
+`App_AFEGet()` 每 200ms 成功刷新一次 AFE 电流后递增 `g_u32AfeCurrentSampleSeq`。`App_SOC()` 同样挂在 200ms 时基上，但只消费新的 AFE 样本，避免通信忙导致 AFE 未刷新时重复积分旧电流。
 
-1. 通过 `SOC_UpdateSampleData()` 刷新电压、电流输入。
-2. 通过 `SOC_PublishReportData()` 发布上一轮 SOC 输出。
-3. `SOC_IntEnhance_Ctrl()` 按状态机处理充电积分、放电积分、静置 OCV 补偿、弱单体保护修正。
-4. 处理上位机刷新命令：`1` 为 OCV 刷新，`2` 为容量/循环初始化，`3` 为设置 SOC 一次。
+当前 SOC 数据流：
+
+1. `App_AFEGet()` 刷新电压、电流，并递增 AFE 样本序号。
+2. `App_SOC()` 检查样本序号，有新样本才调用 `SOC_UpdateSampleData()`。
+3. `SOC_IntEnhance_Ctrl()` 按“命令处理 → 电流方向判断 → 200ms 安时积分 → 端点电压校准 → 静置 OCV 修正 → 弱单体低压保护 → 快照持久化 → 输出同步”顺序执行。
+4. 上位机刷新命令仍保留：`1` 为 OCV 刷新，`2` 为容量/循环初始化，`3` 为设置 SOC 一次。
 5. SOC、放电累计或循环次数变化时写入 SOC journal。
-6. 每 1s 平滑一次对外显示 SOC。
+6. 对外 SOC 每个 200ms 样本最多向内部 SOC 靠近 1%，手动刷新和 RTC 休眠补偿会强制同步。
 
 ## 4. SOC 校准策略
 
 当前 SOC 不是单纯按电压查表，也不是单纯安时积分，而是以下几类策略叠加：
 
-1. 安时积分作为主路径，按充/放电电流每 1s 累加一次容量变化。
+1. 安时积分作为主路径，按充/放电电流每 200ms 累加一次容量变化，并保存小数余量。
 2. 充电末端按单体最高电压逐步拉高 SOC，满足满电条件时可直接校准到 100%。
 3. 放电末端按单体最低电压逐步拉低 SOC。
 4. 弱单体低压保护会限制 SOC 上限，避免某个单体已经接近空电时 SOC 仍显示很高。
@@ -94,26 +96,26 @@
 |---|---|---|
 | 内部估算 SOC | `SOC_Calculate_Element.u8SOC_Now` | 算法真实状态，安时积分、端点校准、弱单体保护都会直接修改它 |
 | 内部剩余容量 | `SOC_Calculate_Element.u32CapNow` | 单位 `As * 10`，每次 `SOC_SetSocValue()` 都会按 SOC 百分比重新计算 |
-| 对外发布 SOC | `SOC_Enhance_Element.u8_SOC` / `g_stCellInfoReport.SocElement.u16Soc` | 默认每 1s 向内部 SOC 靠近 1%，用于显示和通信 |
+| 对外发布 SOC | `SOC_Enhance_Element.u8_SOC` / `g_stCellInfoReport.SocElement.u16Soc` | 默认每个有效 200ms 样本向内部 SOC 靠近 1%，用于显示和通信 |
 
 因此“校准到 0”要分两种情况看：
 
 - 内部容量/SOC 可以被直接或快速校准到目标值。
-- 对外显示 SOC 默认是平滑变化的，下降时通常每 1s 降 1%，避免数码管、CAN、RS485 读数突然跳变。
+- 对外显示 SOC 默认是平滑变化的，每个有效 200ms 样本最多变化 1%，避免数码管、CAN、RS485 读数突然跳变。
 
-`SOC_ApplyRtcRelaxationCompensation()`、手动 OCV 刷新、容量重置、设置一次 SOC 会强制对外 SOC 跟随内部值；正常 200ms 主循环中的积分和低压保护则经 1s 平滑发布。
+`SOC_ApplyRtcRelaxationCompensation()`、手动 OCV 刷新、容量重置、设置一次 SOC 会强制对外 SOC 跟随内部值；正常 200ms 主循环中的积分和低压保护则经显示平滑路径发布。
 
 ### 4.2 安时积分主路径
 
-`SOC_State_Transfer()` 先判断电流方向：
+当前已经取消原来的 `SOC_CALI_STATE_TRANSFER / CONT_CHG / CONT_DSG` 状态机，直接按最新 AFE 样本判断方向：
 
 | 条件 | 行为 |
 |---|---|
-| `u16_Ichg >= SOC_VIRTUAL_CURRENT_CHG` 连续 3 个 200ms tick | 进入持续充电积分 |
-| `u16_Idsg >= SOC_VIRTUAL_CURRENT_DSG` 连续 3 个 200ms tick | 进入持续放电积分 |
-| 当前方向电流低于阈值连续 2 个 200ms tick | 回到 `SOC_CALI_STATE_TRANSFER` |
+| `u16_Ichg >= SOC_VIRTUAL_CURRENT_CHG` 且不小于放电电流 | 本次 200ms 样本按充电积分 |
+| `u16_Idsg >= SOC_VIRTUAL_CURRENT_DSG` | 本次 200ms 样本按放电积分 |
+| 两者都低于阈值 | 空闲，不积分，静置计时可继续累计 |
 
-进入充电或放电积分后，每 5 个 200ms tick 积分一次，即 1s 一次。积分分母优先用 `u32CapFull`，没有有效满充容量时回退 `u32CapFactory`。
+每个 200ms 样本的容量增量为 `current(A*10) * 200 / 1000`，内部单位仍为 `As * 10`。不能整除的余量保存在 `u32IntegrateRemainderMs`，所以 0.2A 这类小电流不会因为 200ms 周期被直接截断为 0。
 
 低容量边界处理在 `SOC_ApplyCapacityDelta()` 中完成：
 
@@ -143,7 +145,7 @@
 
 放电低压校准有两条路径：端点 CV 修正和弱单体保护。
 
-端点 CV 修正在持续放电积分路径内执行，按 1s 节奏计数：
+端点 CV 修正在持续放电积分路径内执行，按 200ms tick 计数，但阈值仍按秒级窗口配置：
 
 | 条件 | 内部 SOC 修正 |
 |---|---|
@@ -168,7 +170,7 @@
 
 1. 如果安时积分已经把容量耗尽，内部 `u32CapNow` 和 `u8SOC_Now` 会直接归 0。
 2. 如果是电压先触发低压保护，内部 SOC 会按端点修正和弱单体保护逐步降低；`SOC_ApplySocCorrection()` 会同步按新 SOC 重新计算 `u32CapNow`。
-3. 对外 SOC 通常不会立即跳到内部目标，而是每 1s 降 1%，除非走手动刷新或 RTC 休眠补偿这类强制同步路径。
+3. 对外 SOC 通常不会立即跳到内部目标，而是每个有效 200ms 样本最多下降 1%，除非走手动刷新或 RTC 休眠补偿这类强制同步路径。
 
 ### 4.5 静置 OCV 与 RTC 休眠补偿
 

@@ -19,6 +19,11 @@ UINT8 u8WakeCnt2 = 0;
 #define AFE_CURRENT_AUTO_ZERO_FILTER_DIV    ((INT32)16L)
 #define AFE_CURRENT_CALIB_MIN_MA            ((UINT32)2000U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_A10     ((UINT16)3U)
+#define AFE_CURRENT_KB_CALIB_ENABLE         0
+#define AFE_CURRENT_STARTUP_ZERO_CONFIRM_CNT ((UINT8)4U)
+#define AFE_CURRENT_STARTUP_ZERO_MAX_CNT    ((UINT8)8U)
+#define AFE_CURRENT_STARTUP_ZERO_SETTLE_MS  ((UINT16)40U)
+#define AFE_CURRENT_STARTUP_ZERO_INTERVAL_MS ((UINT16)20U)
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
@@ -27,6 +32,12 @@ UINT16 CopperLoss[CompensateNUM]; // u¦¸
 UINT16 CopperLoss_Num[CompensateNUM];
 
 UINT32 g_u32CS_Res_AFE = 0;
+UINT32 g_u32AfeCurrentSampleSeq = 0U;
+volatile AFE_CURRENT_DEBUG g_stAfeCurrentDebug = {0};
+volatile INT32 g_i32AfeCurrentZeroOffsetRawQ4 = 0;
+volatile INT32 g_i32AfeCurrentLastRawSigned = 0;
+volatile UINT8 g_u8AfeCurrentZeroStableCnt = 0;
+volatile UINT8 g_u8AfeCurrentZeroReady = 0;
 
 struct OTHER_ELEMENT OtherElement;
 
@@ -865,6 +876,10 @@ void App_AFEGet(void)
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
 	DataLoad_Current();
+	if (++g_u32AfeCurrentSampleSeq == 0U)
+	{
+		++g_u32AfeCurrentSampleSeq;
+	}
 
 	App_SH367309();
 	// App_MOS_Relay_Ctrl();
