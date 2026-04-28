@@ -9,8 +9,20 @@
 | `BMS_CAPCITY` | `270` | `10 * Ah`，即 27.0Ah |
 | `SNum` | `10` | 默认 10 串 |
 | `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | `0` | 升级参数策略当前默认关闭 |
+| `PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV` | `80mV` | 满电确认时最低单体必须接近 `V100` 的裕量 |
+| `PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV` | `120mV` | 满电确认允许的最大单体压差，`0` 表示不检查 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE` | `1` | 启用轻载在线 OCV 有界融合 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS` | `30s` | 在线 OCV 偏差持续多久后允许修正 1% |
+| `PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT` | `3%` | 在线 OCV 目标与内部 SOC 的最小有效偏差 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER` | `10` | 在线 OCV 最大电流为 `C / divider`，默认 `C/10` |
+| `PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV` | `2000mV` | 电压类校准允许的最低单体电压 |
+| `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV` | `5000mV` | 电压类校准允许的最高单体电压 |
+| `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV` | `1000mV` | 电压类校准允许的最大单体压差 |
+| `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT` | `1` | 三级保护故障时禁止 SOC 电压类校准 |
+| `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT` | `1` | AFE/ADC/CBC/温度异常时禁止 SOC 电压类校准 |
 
 如果切换到 `BAT_MASTER`、`LIFEPO` 或修改容量/端点参数，默认容量、OCV 表、满电确认阈值会随编译期配置变化。
+这些 SOC 校准参数均由 `Project_BuildGuard.h` 做编译期范围检查，避免误配置导致 SOC 收敛速度或端点可信度失控。
 
 ## 1. 模块结论
 
@@ -23,6 +35,7 @@
 3. `Flash.c` 用 SOC journal 保存 V2 快照，并兼容旧 V1 快照。
 4. SOC 基础配置保存在内部 Flash RW 参数区；SOC 运行快照保存在内部 Flash SOC journal；自定义 SOC 表当前只在 RAM 生效，不跨重启保存。
 5. 充电积分到容量上限时不会直接显示 100%，内部 SOC 最多先到 99%，只有通过满电确认条件后才进入 100% 可信满电锚点。
+6. 轻载充/放电过程中允许使用 OCV 表做多点有界融合，但只按方向小步收敛，不直接用端电压覆盖 SOC。
 
 ## 2. 文件边界
 
@@ -31,7 +44,7 @@
 | `SOC.c` | 加载 `OtherElement` 与 `SOC_Table_Set`，提供 `InitData_SOC()` / `App_SOC()`，按 AFE 样本序号驱动 SOC 算法 |
 | `SOC.h` | SOC 表长度、边界、模块入口声明 |
 | `SocEnhance.h` | SOC 对外结构体、表选择枚举、对外 API |
-| `SocEnhance.c` | SOC 算法主实现：状态机、积分、OCV、端点、学习、显示、快照 |
+| `SocEnhance.c` | SOC 算法主实现：状态机、积分、端点、静置/在线 OCV、学习、显示、快照 |
 | `Flash.h` | SOC V2 快照结构体、SOC journal 地址与读写 API |
 | `Flash.c` | V1/V2 SOC 快照加载、保存、journal 双槽、CRC/sequence 校验 |
 | `EEPROM.c` | 当前实际已替换为内部 Flash 参数初始化/保存；负责默认 SOC 表、RW 参数加载、升级策略 |
@@ -129,10 +142,11 @@
 2. 判断当前电流方向并更新 `CHG / DSG / RELAX` 模式。
 3. 根据方向执行安时积分和端点渐进修正。
 4. 执行满电确认。
-5. 执行运行态静置 OCV 修正。
-6. 执行弱单体低压保护修正。
-7. 判断是否需要保存 SOC journal。
-8. 更新对外 SOC/SOH/容量/循环次数并发布到 `g_stCellInfoReport`。
+5. 执行轻载在线 OCV 有界融合。
+6. 执行运行态静置 OCV 修正。
+7. 执行弱单体低压保护修正。
+8. 判断是否需要保存 SOC journal。
+9. 更新对外 SOC/SOH/容量/循环次数并发布到 `g_stCellInfoReport`。
 
 ## 7. 电流模式与积分
 
@@ -200,11 +214,12 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 | --- | --- |
 | 模式 | 必须为 `CHG` |
 | 最高单体 | `VCellMax >= V100` |
-| 最低单体 | `VCellMin >= SOC_GetFullCellConfirmVoltage()` |
+| 最低单体 | `VCellMin >= max(化学体系最低门槛, V100 - 80mV)` |
+| 单体压差 | `abs(VCellMax - VCellMin) <= 120mV`；配置为 `0` 时不检查 |
 | 电流 | `Ichg != 0` 且 `Ichg <= C/20`，并且不低于 0.4A |
 | 持续时间 | `SOC_FULL_CONFIRM_SECONDS = 60s` |
 
-当前 `TERNARYLI` 的 `SOC_GetFullCellConfirmVoltage()` 为 `4000mV`；`LIFEPO/LIFEPO2` 为 `3300mV`。27Ah 默认 taper 电流为 `270 / 20 = 13`，单位 `A * 10`，约 1.3A。
+当前 `TERNARYLI` 的化学体系最低门槛为 `4000mV`，`LIFEPO/LIFEPO2` 为 `3300mV`。在 27Ah 三元锂默认 `V100 = 4180mV` 下，实际最低单体确认阈值为 `4100mV`；默认 taper 电流为 `270 / 20 = 13`，单位 `A * 10`，约 1.3A。
 
 满电确认成功后：
 
@@ -225,7 +240,32 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 
 放电积分导致 `CapNow = 0`，或弱单体保护把 SOC 压到 0 且 `VCellMin <= V0` 时，会触发可信空电锚点。
 
-## 9. 静置 OCV 与 RTC 休眠补偿
+## 9. 在线多点 OCV 有界融合
+
+在线 OCV 融合用于解决只靠端点校准收敛慢的问题，但不把负载端电压当成真实 OCV 直接覆盖 SOC。当前策略是“轻载、持续、有方向、单步”的 guard：
+
+| 条件 | 当前默认 |
+| --- | --- |
+| 开关 | `PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE = 1` |
+| 电流条件 | 充/放电电流必须在 `0.4A ~ C/10` 内；27Ah 默认上限约 `2.7A` |
+| 电压条件 | `VCellMin/VCellMax` 必须在 `2000~5000mV`，且 `VCellMax >= VCellMin`、压差 `<=1000mV` |
+| 状态条件 | 无三级保护故障；无 AFE1/AFE2/ADC/CBC/温度采样异常 |
+| OCV 目标范围 | 只接受 `5% ~ 95%` 的 OCV 查表目标，端点仍交给满/空可信锚点 |
+| 最小偏差 | OCV 目标和内部 SOC 至少相差 `3%` |
+| 修正节奏 | 偏差持续 `30s` 后修正 `1%`，随后重新计时 |
+| 方向限制 | 充电只允许上修；放电只允许下修 |
+| LFP 平台区 | `20% ~ 90%` 中段默认不做在线 OCV 修正，只保留端点/静置修正 |
+
+这套逻辑实现了多点 OCV 的收敛能力，但把收敛速度限制在用户可接受的范围内。对外 SOC 仍走平滑发布，在线 OCV 只改变内部目标，不会让显示瞬间跳变。
+
+边界说明：
+
+1. 高电流充/放电下端电压极化明显，在线 OCV guard 会拒绝修正，避免误校准。
+2. 在线 OCV 只把 SOC 收敛到配置的误差窗口附近；最终 0%/100% 仍依赖可信空电/满电锚点。
+3. 如果电流采样零点或 OCV 表本身不准，算法无法物理保证绝对精度，需要通过产测标定和曲线验证保证输入质量。
+4. 异常电压、三级保护故障、AFE/ADC/CBC/温度异常均不参与 OCV/满电/静置类校准；弱单体保护属于安全下修，不按 OCV 校准处理。
+
+## 10. 静置 OCV 与 RTC 休眠补偿
 
 运行态静置 OCV 修正要求：
 
@@ -249,7 +289,7 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 
 `SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max)` 用于 RTC 休眠唤醒。它复用 `SOC_ApplyRestCompensation()` 和弱单体保护，但入口最后会强制同步对外 SOC。RTC 入口本身依赖休眠时长和唤醒采样，不完全等同于运行态 30s 电压稳定窗口。
 
-## 10. 弱单体保护
+## 11. 弱单体保护
 
 弱单体保护用于避免最低单体已经接近空电端点时，对外仍长期显示较高 SOC。
 
@@ -271,7 +311,7 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 
 当内部 SOC 被压到 0 且 `VCellMin <= V0` 时，记录可信空电锚点。
 
-## 11. 对外 SOC、SOH 与容量发布
+## 12. 对外 SOC、SOH 与容量发布
 
 内部估算和对外发布分离：
 
@@ -306,7 +346,7 @@ SOH 计算：
 
 `SOC_Enhance_Element.u8_SOC_OCV_Cali` 当前实际被赋值为 `u8DSG_SOC_Int`，更像放电循环百分比累计的调试/兼容字段，不是独立的 OCV 校准状态。
 
-## 12. FCC/SOH 学习
+## 13. FCC/SOH 学习
 
 学习只在可信满电和可信空电锚点之间进行。
 
@@ -322,9 +362,9 @@ SOH 计算：
 
 如果在学习过程中方向反转，并且已经累计 `u32LearnPassedAs10`，本轮学习会被取消，避免半程充放电把 FCC 学坏。
 
-## 13. SOC 快照与持久化
+## 14. SOC 快照与持久化
 
-### 13.1 存储位置
+### 14.1 存储位置
 
 | 数据 | 位置 | 说明 |
 | --- | --- | --- |
@@ -334,7 +374,7 @@ SOH 计算：
 
 `Flash.h` 中 `FLASH_STORAGE_PAGE_SIZE` 会随 `STM32F10X_MD` 选择为 `0x400`，否则为 `0x800`。SOC slot 起始地址仍是 `0x0801E000` 和 `0x0801E800`。
 
-### 13.2 V2 快照字段
+### 14.2 V2 快照字段
 
 | 字段 | 说明 |
 | --- | --- |
@@ -370,7 +410,7 @@ SOH 计算：
 | `CapFull` | 必须在出厂容量 50% ~ 110% 内，否则回退出厂容量并清除学习标志 |
 | `CapNow` | 非 0 且不超过 `cap_base` 时使用，否则按 SOC 重新计算 |
 
-### 13.3 保存触发
+### 14.3 保存触发
 
 `SOC_PersistSnapshotIfChanged()` 当前在以下字段变化时保存：
 
@@ -387,9 +427,9 @@ SOH 计算：
 
 如果默认快照首次保存失败，代码会把备份状态中的 SOC 置为 `0xFF`，后续运行中会持续尝试再次保存。
 
-## 14. 上位机和控制入口
+## 15. 上位机和控制入口
 
-### 14.1 `0x10` 多寄存器写
+### 15.1 `0x10` 多寄存器写
 
 | 地址 | 参数 | 当前行为 |
 | --- | --- | --- |
@@ -404,7 +444,7 @@ SOH 计算：
 1. 调用 `InitData_SOC()` 重新加载配置和快照。
 2. 设置 `u16_RefreshData_Flag = 2`，下一次 SOC 调度会执行容量/循环初始化，使容量基准回到新配置。
 
-### 14.2 `0x06` 单寄存器控制
+### 15.2 `0x06` 单寄存器控制
 
 | 命令 | 行为 |
 | --- | --- |
@@ -416,7 +456,7 @@ SOH 计算：
 
 `SOC_Fixed` 和 `SOC_Zero` 的显示覆盖发生在 `SOC_PublishReportData()`，覆盖的是 `g_stCellInfoReport.SocElement.u16Soc`，不是内部 `SOC_Calculate_Element.u8SOC_Now`。
 
-## 15. 升级策略
+## 16. 升级策略
 
 升级策略当前由 `UpgradeParamPolicy.h` 和 `Project_Config.h` 控制。当前默认 `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE = 0`，所以不会主动执行重置。
 
@@ -434,9 +474,28 @@ SOH 计算：
 2. `UPGRADE_PARAM_RESET_SOC_SNAPSHOT` 不会自动修改 SOC 基础配置。
 3. 如果升级后既要更换容量/端点，又要让现场 SOC 回到默认 60%，需要同时打开 SOC config 和 SOC snapshot，并递增策略版本。
 
-## 16. 当前评价
+## 17. 回放测试
 
-### 16.1 优点
+当前新增主机侧策略回放脚本：
+
+```bash
+python3 tools/soc_replay_test.py
+```
+
+覆盖场景：
+
+1. 单体不均衡时拒绝满电确认。
+2. 单体接近 `V100` 且 taper 电流满足条件时确认满电。
+3. 轻载放电时，在线 OCV 多点目标持续偏低后按 1%/30s 下修。
+4. 轻载充电时，在线 OCV 多点目标持续偏高后按 1%/30s 上修。
+5. 重载放电时拒绝在线 OCV 修正。
+6. `LIFEPO` 平台区中段拒绝在线 OCV 修正。
+
+该脚本不依赖 Keil/STM32 库，用于快速验证校准策略边界；固件发布前仍需要台架实测验证 OCV 表、采样电流和温度影响。
+
+## 18. 当前评价
+
+### 18.1 优点
 
 1. 架构边界清楚：调度、算法、存储、通信基本分离。
 2. 用户体验比纯电压查表稳定：内部 SOC 可快速校正，对外 SOC 默认平滑变化。
@@ -445,7 +504,7 @@ SOH 计算：
 5. `App_SOC()` 通过 AFE 样本序号避免重复积分旧电流，这是当前实现里很关键的正确性保护。
 6. Flash 保存触发有节制，不会每 200ms 写入，写入压力可控。
 
-### 16.2 风险与边界
+### 18.2 风险与边界
 
 1. 自定义 SOC 表不持久化。上位机写表重启后丢失，长期定制只能改固件默认表或新增表持久化。
 2. SOC 算法仍依赖 AFE 电流零点和采样质量。小电流阈值为 0.4A，低于阈值的长期电流不会积分。
@@ -454,14 +513,14 @@ SOH 计算：
 5. `SOC_Zero` / `SOC_Fixed` 的通信打开动作带有刷新副作用，调试时要区分“显示覆盖”和“内部状态被命令刷新”。
 6. 当前实现不是专用 fuel gauge，也没有 impedance table、EKF 或温度容量矩阵，不应按高精度计量芯片的指标评估。
 
-### 16.3 建议后续工作
+### 18.3 建议后续工作
 
-1. 优先补 SOC 场景回放测试：冷启动、V1 迁移、CRC 错误、满电确认、空电锚点、弱单体保护、RTC 唤醒、设置一次 SOC、容量学习。
+1. 持续扩展 SOC 场景回放测试：冷启动、V1 迁移、CRC 错误、空电锚点、弱单体保护、RTC 唤醒、设置一次 SOC、容量学习。
 2. 若客户需要上位机长期配置 OCV 表，新增 SOC 表内部 Flash 持久化，不能继续依赖 `SOC_Table_Set` RAM 表。
 3. 若对 SOH 精度要求提高，先补温度分档端点和实验台数据，再考虑更复杂模型。
 4. 保持当前 API 边界，不建议把通信、Flash 细节继续塞进 `SocEnhance.c`。
 
-## 17. 文档核对结果
+## 19. 文档核对结果
 
 本次核对代码后，原文档中需要修正的关键点包括：
 

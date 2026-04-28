@@ -45,6 +45,21 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LEARN_CAP_MAX_STEP_PERCENT ((UINT16)5U)
 #define SOC_MAX_ERROR_DEFAULT_PERCENT ((UINT16)100U)
 #define SOC_MAX_ERROR_LEARNED_PERCENT ((UINT16)5U)
+#define SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
+#define SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
+#define SOC_ONLINE_OCV_GUARD_ENABLE ((UINT8)PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE)
+#define SOC_ONLINE_OCV_CORRECTION_SECONDS ((UINT16)PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS)
+#define SOC_ONLINE_OCV_MIN_DELTA_PERCENT ((UINT8)PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT)
+#define SOC_ONLINE_OCV_CURRENT_DIVIDER ((UINT16)PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER)
+#define SOC_CALIBRATION_MIN_CELL_VALID_MV ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
+#define SOC_CALIBRATION_MAX_CELL_VALID_MV ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
+#define SOC_CALIBRATION_MAX_CELL_DELTA_MV ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV)
+#define SOC_CALIBRATION_BLOCK_PROTECTION_FAULT ((UINT8)PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT)
+#define SOC_CALIBRATION_BLOCK_SYSTEM_FAULT ((UINT8)PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT)
+#define SOC_ONLINE_OCV_TARGET_MIN_PERCENT ((UINT8)5U)
+#define SOC_ONLINE_OCV_TARGET_MAX_PERCENT ((UINT8)95U)
+#define SOC_ONLINE_OCV_LFP_LOW_EDGE_PERCENT ((UINT8)20U)
+#define SOC_ONLINE_OCV_LFP_HIGH_EDGE_PERCENT ((UINT8)90U)
 
 enum EEPROM_COMMAND
 {
@@ -105,9 +120,11 @@ struct SOC_RUNTIME_CONTEXT
 	UINT16 u16ChgTerminalTicks;
 	UINT16 u16DsgTerminalTicks;
 	UINT16 u16FullConfirmTicks;
+	UINT16 u16OnlineOcvTicks;
 	UINT16 u16RelaxRefVCellMin;
 	UINT16 u16RelaxRefVCellMax;
 	UINT32 u32RestTicks;
+	UINT8 u8OnlineOcvDirection;
 };
 
 static struct SOC_RUNTIME_CONTEXT g_soc_runtime;
@@ -118,6 +135,11 @@ static void SOC_LoadDefaultSnapshot(void);
 static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command);
 static void SOC_ResetRuntimeContext(void);
 static UINT8 SOC_IsVoltageValid(void);
+static UINT16 SOC_GetCellDeltaMv(void);
+static UINT8 SOC_IsCalibrationVoltageValid(void);
+static UINT8 SOC_HasBlockingProtectionFault(void);
+static UINT8 SOC_HasBlockingSystemFault(void);
+static UINT8 SOC_IsCalibrationAllowed(void);
 static UINT32 SOC_GetCapBase(void);
 static void SOC_SelectIntegrateDirection(UINT8 direction);
 static UINT8 SOC_ApplyCapacityDelta(enum _CUR current_type, UINT16 current);
@@ -145,8 +167,11 @@ static void SOC_SyncOutputData(UINT8 force_display_follow);
 static UINT8 SOC_GetMeasuredCurrentDirection(void);
 static UINT8 SOC_GetCurrentDirection(void);
 static void SOC_RunCoulombCounter(UINT8 direction);
+static void SOC_ApplyOnlineOcvGuard(UINT8 direction);
 static void SOC_ApplyTerminalCorrection(UINT8 direction);
 static UINT16 SOC_GetFullCellConfirmVoltage(void);
+static UINT8 SOC_IsFullConfirmCellDeltaValid(void);
+static UINT16 SOC_GetCurrentLimitA10(UINT16 divider);
 static UINT16 SOC_GetTaperCurrentA10(void);
 static UINT8 Get_OpenCircuit_Value(void);
 static UINT8 isCHG(void);
@@ -324,7 +349,78 @@ void SOC_PublishReportData(void)
 
 static UINT8 SOC_IsVoltageValid(void)
 {
-	return (SOC_Enhance_Element.u16_VCellMin >= 2000U) ? 1U : 0U;
+	if ((SOC_Enhance_Element.u16_VCellMin < SOC_CALIBRATION_MIN_CELL_VALID_MV) ||
+		(SOC_Enhance_Element.u16_VCellMax < SOC_CALIBRATION_MIN_CELL_VALID_MV))
+	{
+		return 0U;
+	}
+
+	if ((SOC_Enhance_Element.u16_VCellMin > SOC_CALIBRATION_MAX_CELL_VALID_MV) ||
+		(SOC_Enhance_Element.u16_VCellMax > SOC_CALIBRATION_MAX_CELL_VALID_MV))
+	{
+		return 0U;
+	}
+
+	if (SOC_Enhance_Element.u16_VCellMax < SOC_Enhance_Element.u16_VCellMin)
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+static UINT16 SOC_GetCellDeltaMv(void)
+{
+	return (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_VCellMin) ?
+		(UINT16)(SOC_Enhance_Element.u16_VCellMax - SOC_Enhance_Element.u16_VCellMin) :
+		(UINT16)(SOC_Enhance_Element.u16_VCellMin - SOC_Enhance_Element.u16_VCellMax);
+}
+
+static UINT8 SOC_IsCalibrationVoltageValid(void)
+{
+	if (!SOC_IsVoltageValid())
+	{
+		return 0U;
+	}
+
+	if (SOC_CALIBRATION_MAX_CELL_DELTA_MV == 0U)
+	{
+		return 1U;
+	}
+
+	return (UINT8)(SOC_GetCellDeltaMv() <= SOC_CALIBRATION_MAX_CELL_DELTA_MV);
+}
+
+static UINT8 SOC_HasBlockingProtectionFault(void)
+{
+	if (!SOC_CALIBRATION_BLOCK_PROTECTION_FAULT)
+	{
+		return 0U;
+	}
+
+	return (UINT8)(g_stCellInfoReport.unMdlFault_Third.all != 0U);
+}
+
+static UINT8 SOC_HasBlockingSystemFault(void)
+{
+	if (!SOC_CALIBRATION_BLOCK_SYSTEM_FAULT)
+	{
+		return 0U;
+	}
+
+	return (UINT8)((System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_ADC) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_CBC_CHG) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) != 0U));
+}
+
+static UINT8 SOC_IsCalibrationAllowed(void)
+{
+	return (UINT8)(SOC_IsCalibrationVoltageValid() &&
+		(!SOC_HasBlockingProtectionFault()) &&
+		(!SOC_HasBlockingSystemFault()));
 }
 
 static UINT32 SOC_GetCapBase(void)
@@ -792,7 +888,7 @@ static void SOC_ApplyRestCompensation(UINT32 rest_seconds)
 		return;
 	}
 
-	if (!SOC_IsVoltageValid() || isCHG() || isDSG())
+	if (!SOC_IsCalibrationAllowed() || isCHG() || isDSG())
 	{
 		return;
 	}
@@ -852,7 +948,7 @@ static void SOC_UpdateRestMonitor(void)
 		return;
 	}
 
-	if ((g_soc_runtime.u8Mode != SOC_MODE_RELAX) || !SOC_IsVoltageValid())
+	if ((g_soc_runtime.u8Mode != SOC_MODE_RELAX) || !SOC_IsCalibrationAllowed())
 	{
 		SOC_ResetRestMonitor();
 		return;
@@ -1158,16 +1254,72 @@ static UINT8 Get_OpenCircuit_Value(void)
 
 static UINT16 SOC_GetFullCellConfirmVoltage(void)
 {
+	UINT16 chemistry_floor;
+	UINT16 min_cell_mv;
+
 	switch (SOC_Enhance_Element.u16_SOC_TableSelect)
 	{
 	case SOC_TABLE_TERNARYLI:
-		return 4000U;
+		chemistry_floor = 4000U;
+		break;
 	case SOC_TABLE_LIFEPO:
 	case SOC_TABLE_LIFEPO2:
-		return 3300U;
+		chemistry_floor = 3300U;
+		break;
 	default:
-		return (SOC_Enhance_Element.u16_SOC_100_Vol >= 3900U) ? 4000U : 3300U;
+		chemistry_floor = (SOC_Enhance_Element.u16_SOC_100_Vol >= 3900U) ? 4000U : 3300U;
+		break;
 	}
+
+	if (SOC_Enhance_Element.u16_SOC_100_Vol > SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
+	{
+		min_cell_mv = (UINT16)(SOC_Enhance_Element.u16_SOC_100_Vol - SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV);
+	}
+	else
+	{
+		min_cell_mv = 0U;
+	}
+
+	if (min_cell_mv < chemistry_floor)
+	{
+		min_cell_mv = chemistry_floor;
+	}
+
+	return min_cell_mv;
+}
+
+static UINT8 SOC_IsFullConfirmCellDeltaValid(void)
+{
+	UINT16 delta_mv;
+
+	if (SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV == 0U)
+	{
+		return 1U;
+	}
+
+	delta_mv = (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_VCellMin) ?
+		(UINT16)(SOC_Enhance_Element.u16_VCellMax - SOC_Enhance_Element.u16_VCellMin) :
+		(UINT16)(SOC_Enhance_Element.u16_VCellMin - SOC_Enhance_Element.u16_VCellMax);
+
+	return (UINT8)(delta_mv <= SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV);
+}
+
+static UINT16 SOC_GetCurrentLimitA10(UINT16 divider)
+{
+	UINT16 limit;
+
+	if (divider == 0U)
+	{
+		divider = 1U;
+	}
+
+	limit = (UINT16)(SOC_Enhance_Element.u16_SOC_Ah / divider);
+	if (limit < SOC_CURRENT_ENTER_A10)
+	{
+		limit = SOC_CURRENT_ENTER_A10;
+	}
+
+	return limit;
 }
 
 static UINT8 SOC_TerminalCounterReady(UINT16 *counter, UINT16 limit_ticks)
@@ -1340,6 +1492,131 @@ static void SOC_RunCoulombCounter(UINT8 direction)
 	}
 }
 
+static void SOC_ResetOnlineOcvGuard(void)
+{
+	g_soc_runtime.u16OnlineOcvTicks = 0U;
+	g_soc_runtime.u8OnlineOcvDirection = SOC_INTEGRATE_DIRECTION_IDLE;
+}
+
+static UINT8 SOC_IsOnlineOcvTargetTrusted(UINT8 target_soc)
+{
+	if ((target_soc < SOC_ONLINE_OCV_TARGET_MIN_PERCENT) ||
+		(target_soc > SOC_ONLINE_OCV_TARGET_MAX_PERCENT))
+	{
+		return 0U;
+	}
+
+	if (((SOC_Enhance_Element.u16_SOC_TableSelect == SOC_TABLE_LIFEPO) ||
+		 (SOC_Enhance_Element.u16_SOC_TableSelect == SOC_TABLE_LIFEPO2)) &&
+		(target_soc > SOC_ONLINE_OCV_LFP_LOW_EDGE_PERCENT) &&
+		(target_soc < SOC_ONLINE_OCV_LFP_HIGH_EDGE_PERCENT))
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+static UINT8 SOC_IsOnlineOcvLightCurrent(UINT8 direction)
+{
+	UINT16 current;
+	UINT16 limit;
+
+	if (direction == SOC_INTEGRATE_DIRECTION_CHG)
+	{
+		current = SOC_Enhance_Element.u16_Ichg;
+	}
+	else if (direction == SOC_INTEGRATE_DIRECTION_DSG)
+	{
+		current = SOC_Enhance_Element.u16_Idsg;
+	}
+	else
+	{
+		return 0U;
+	}
+
+	limit = SOC_GetCurrentLimitA10(SOC_ONLINE_OCV_CURRENT_DIVIDER);
+	return (UINT8)((current >= SOC_CURRENT_ENTER_A10) && (current <= limit));
+}
+
+static void SOC_ApplyOnlineOcvGuard(UINT8 direction)
+{
+	UINT8 target_soc;
+	UINT8 current_soc;
+	UINT8 new_soc;
+	UINT16 limit_ticks;
+
+	if ((!SOC_ONLINE_OCV_GUARD_ENABLE) ||
+		(!SOC_Enhance_Element.u16_SOC_InitOver) ||
+		(!SOC_IsCalibrationAllowed()) ||
+		((direction != SOC_INTEGRATE_DIRECTION_CHG) && (direction != SOC_INTEGRATE_DIRECTION_DSG)) ||
+		(!SOC_IsOnlineOcvLightCurrent(direction)))
+	{
+		SOC_ResetOnlineOcvGuard();
+		return;
+	}
+
+	target_soc = Get_OpenCircuit_Value();
+	if (!SOC_IsOnlineOcvTargetTrusted(target_soc))
+	{
+		SOC_ResetOnlineOcvGuard();
+		return;
+	}
+
+	current_soc = SOC_Calculate_Element.u8SOC_Now;
+	if (direction == SOC_INTEGRATE_DIRECTION_CHG)
+	{
+		if (target_soc > SOC_ONLINE_OCV_TARGET_MAX_PERCENT)
+		{
+			target_soc = SOC_ONLINE_OCV_TARGET_MAX_PERCENT;
+		}
+		if (target_soc <= (UINT8)(current_soc + SOC_ONLINE_OCV_MIN_DELTA_PERCENT))
+		{
+			SOC_ResetOnlineOcvGuard();
+			return;
+		}
+	}
+	else
+	{
+		if (target_soc < SOC_ONLINE_OCV_TARGET_MIN_PERCENT)
+		{
+			target_soc = SOC_ONLINE_OCV_TARGET_MIN_PERCENT;
+		}
+		if (current_soc <= (UINT8)(target_soc + SOC_ONLINE_OCV_MIN_DELTA_PERCENT))
+		{
+			SOC_ResetOnlineOcvGuard();
+			return;
+		}
+	}
+
+	if (g_soc_runtime.u8OnlineOcvDirection != direction)
+	{
+		g_soc_runtime.u8OnlineOcvDirection = direction;
+		g_soc_runtime.u16OnlineOcvTicks = 0U;
+	}
+
+	limit_ticks = (UINT16)(SOC_ONLINE_OCV_CORRECTION_SECONDS * SOC_TICKS_PER_SECOND);
+	if (limit_ticks == 0U)
+	{
+		limit_ticks = 1U;
+	}
+	if (g_soc_runtime.u16OnlineOcvTicks < limit_ticks)
+	{
+		++g_soc_runtime.u16OnlineOcvTicks;
+	}
+	if (g_soc_runtime.u16OnlineOcvTicks < limit_ticks)
+	{
+		return;
+	}
+
+	g_soc_runtime.u16OnlineOcvTicks = 0U;
+	new_soc = SOC_StepTowardTarget(current_soc, target_soc, 1U);
+	if (new_soc != current_soc)
+	{
+		SOC_ApplySocCorrection(new_soc);
+	}
+}
+
 static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 {
 	STORAGE_FLASH_SOC_DATA flash_data;
@@ -1441,6 +1718,10 @@ static void SOC_Update_StartUp(void)
 	switch (SOC_Enhance_Element.u16_RefreshData_Flag)
 	{
 	case 1:
+		if (!SOC_IsCalibrationAllowed())
+		{
+			break;
+		}
 		target_soc = Get_OpenCircuit_Value();
 		if ((!isCHG()) && (target_soc > SOC_Calculate_Element.u8SOC_Now))
 		{
@@ -1508,14 +1789,7 @@ static UINT8 isDSG(void)
 
 static UINT16 SOC_GetTaperCurrentA10(void)
 {
-	UINT16 taper_current;
-
-	taper_current = (UINT16)(SOC_Enhance_Element.u16_SOC_Ah / 20U);
-	if (taper_current < SOC_CURRENT_ENTER_A10)
-	{
-		taper_current = SOC_CURRENT_ENTER_A10;
-	}
-	return taper_current;
+	return SOC_GetCurrentLimitA10(20U);
 }
 
 static void SOC_ApplyVoltageCalibration(void)
@@ -1523,7 +1797,7 @@ static void SOC_ApplyVoltageCalibration(void)
 	UINT16 full_confirm_mv;
 	UINT16 confirm_limit_ticks;
 
-	if (g_soc_runtime.u8Mode != SOC_MODE_CHG)
+	if ((g_soc_runtime.u8Mode != SOC_MODE_CHG) || !SOC_IsCalibrationAllowed())
 	{
 		g_soc_runtime.u16FullConfirmTicks = 0U;
 		return;
@@ -1533,6 +1807,7 @@ static void SOC_ApplyVoltageCalibration(void)
 	confirm_limit_ticks = (UINT16)(SOC_FULL_CONFIRM_SECONDS * SOC_TICKS_PER_SECOND);
 	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) &&
 		(SOC_Enhance_Element.u16_VCellMin >= full_confirm_mv) &&
+		(SOC_IsFullConfirmCellDeltaValid()) &&
 		(SOC_Enhance_Element.u16_Ichg != 0U) &&
 		(SOC_Enhance_Element.u16_Ichg <= SOC_GetTaperCurrentA10()))
 	{
@@ -1565,6 +1840,7 @@ void SOC_IntEnhance_Ctrl(void)
 	direction = SOC_GetCurrentDirection();
 	SOC_RunCoulombCounter(direction);
 	SOC_ApplyVoltageCalibration();
+	SOC_ApplyOnlineOcvGuard(direction);
 	SOC_UpdateRestMonitor();
 	SOC_ApplyWeakCellGuard();
 	SOC_EEPROM_Deal_Monitor();

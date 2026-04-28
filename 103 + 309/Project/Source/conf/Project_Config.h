@@ -154,6 +154,41 @@
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC 30
 // </h>
 
+// <h>SOC Calibration
+// <o> Full confirm minimum cell margin from V100, mV <0-500>
+#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
+
+// <o> Full confirm maximum cell delta, mV <0-1000>
+#define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
+
+// <q> Enable online OCV guard under light current
+#define PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE 1
+
+// <o> Online OCV correction interval, seconds <1-600>
+#define PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS 30
+
+// <o> Online OCV minimum SOC gap, percent <1-50>
+#define PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT 3
+
+// <o> Online OCV max current divisor of C-rate <2-100>
+#define PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER 10
+
+// <o> Calibration minimum valid cell voltage, mV <1000-3500>
+#define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
+
+// <o> Calibration maximum valid cell voltage, mV <3600-6000>
+#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
+
+// <o> Calibration maximum cell delta, mV <0-3000>
+#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 1000
+
+// <q> Block SOC calibration when third-level protection fault exists
+#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT 1
+
+// <q> Block SOC calibration when AFE/ADC/CBC/temperature system fault exists
+#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT 1
+// </h>
+
 // <h>LedBar
 // <q> Use GPIO Charlieplexing driver
 #define PROJECT_CFG_LEDBAR_DRIVER_GPIO_CHARLIE 1
