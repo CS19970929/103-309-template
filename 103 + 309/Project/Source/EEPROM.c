@@ -239,6 +239,15 @@ static void EEPROM_LoadDefaultSocConfig(void)
 }
 #endif
 
+#if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
+static void EEPROM_LoadDefaultBalanceOpenVoltage(void)
+{
+	const struct OTHER_ELEMENT other_default = OtherElement_default;
+
+	OtherElement.u16Balance_OpenVoltage = other_default.u16Balance_OpenVoltage;
+}
+#endif
+
 UINT8 UpgradeParamPolicy_ApplyOnce(void)
 {
 #if (!UPGRADE_PARAM_POLICY_ENABLE)
@@ -271,6 +280,11 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 
 #if UPGRADE_PARAM_RESET_PROTECT
 	EEPROM_LoadDefaultProtect();
+	rw_param_dirty = 1;
+#endif
+
+#if UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
+	EEPROM_LoadDefaultBalanceOpenVoltage();
 	rw_param_dirty = 1;
 #endif
 
