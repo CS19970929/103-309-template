@@ -33,9 +33,17 @@ static UINT16 Flash64K_AppTest_ReadFlashSizeKb(void)
 static UINT8 Flash64K_AppTest_SocEqual(const STORAGE_FLASH_SOC_DATA *a,
 									   const STORAGE_FLASH_SOC_DATA *b)
 {
-	return (UINT8)((a->u16SocNow == b->u16SocNow) &&
+	return (UINT8)((a->u16FormatVersion == b->u16FormatVersion) &&
+				   (a->u16SocNow == b->u16SocNow) &&
 				   (a->u16DsgSocInt == b->u16DsgSocInt) &&
-				   (a->u32CycleTimes == b->u32CycleTimes));
+				   (a->u16MaxErrorPercent == b->u16MaxErrorPercent) &&
+				   (a->u32CycleTimes == b->u32CycleTimes) &&
+				   (a->u32CapNow == b->u32CapNow) &&
+				   (a->u32CapFull == b->u32CapFull) &&
+				   (a->u32LearnPassedAs10 == b->u32LearnPassedAs10) &&
+				   (a->u16LearnAnchorSoc == b->u16LearnAnchorSoc) &&
+				   (a->u16LearnState == b->u16LearnState) &&
+				   (a->u16Flags == b->u16Flags));
 }
 
 static UINT8 Flash64K_AppTest_AfeEqual(const UINT16 *a, const UINT16 *b)
@@ -82,9 +90,18 @@ static void Flash64K_AppTest_DelayOneSecond(void)
 
 static void Flash64K_AppTest_FillSoc(STORAGE_FLASH_SOC_DATA *data, UINT16 cycle)
 {
+	memset(data, 0, sizeof(*data));
+	data->u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 	data->u16SocNow = (UINT16)(cycle % 101U);
 	data->u16DsgSocInt = (UINT16)((100U - (cycle % 101U)) % 101U);
+	data->u16MaxErrorPercent = (UINT16)(100U - (cycle % 10U));
 	data->u32CycleTimes = ((UINT32)0x5A5A0000U) | (UINT32)cycle;
+	data->u32CapFull = 972000U;
+	data->u32CapNow = ((UINT32)data->u16SocNow * data->u32CapFull) / 100U;
+	data->u32LearnPassedAs10 = (UINT32)cycle * 37U;
+	data->u16LearnAnchorSoc = (UINT16)(cycle % 101U);
+	data->u16LearnState = (UINT16)(cycle % 3U);
+	data->u16Flags = (UINT16)(cycle & 0x00FFU);
 }
 
 static void Flash64K_AppTest_FillAfe(UINT16 *values, UINT16 cycle)
@@ -338,9 +355,14 @@ static void Flash64K_AppUseTest_AccelSocSave(void)
 {
 	STORAGE_FLASH_SOC_DATA data;
 
+	memset(&data, 0, sizeof(data));
+	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 	data.u16SocNow = s_flash64k_use_test.accel_soc_value;
 	data.u16DsgSocInt = s_flash64k_use_test.accel_soc_value;
+	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = s_flash64k_use_test.accel_soc_write;
+	data.u32CapFull = 972000U;
+	data.u32CapNow = ((UINT32)data.u16SocNow * data.u32CapFull) / 100U;
 
 	s_flash64k_use_test.accel_soc_write++;
 	(void)StorageFlash_SaveSocData(&data);

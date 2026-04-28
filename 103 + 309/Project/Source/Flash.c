@@ -14,6 +14,13 @@ uint32_t JumpAddress;
 
 typedef struct
 {
+	UINT16 u16SocNow;
+	UINT16 u16DsgSocInt;
+	UINT32 u32CycleTimes;
+} STORAGE_FLASH_SOC_DATA_V1;
+
+typedef struct
+{
 	UINT32 magic;
 	UINT16 version;
 	UINT16 length;
@@ -575,20 +582,46 @@ void FlashTest(void)
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
+	STORAGE_FLASH_SOC_DATA_V1 legacy_data;
+
 	if (data == 0)
 	{
 		return 0;
 	}
 
-	return StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
-										FLASH_ADDR_STORAGE_SOC_SLOT_B,
-										FLASH_STORAGE_MAGIC_SOC,
-										(UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
-										(UINT8 *)data);
+	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
+									 FLASH_ADDR_STORAGE_SOC_SLOT_B,
+									 FLASH_STORAGE_MAGIC_SOC,
+									 (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
+									 (UINT8 *)data))
+	{
+		if (data->u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION_V2)
+		{
+			return 1;
+		}
+	}
+
+	if (!StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
+									  FLASH_ADDR_STORAGE_SOC_SLOT_B,
+									  FLASH_STORAGE_MAGIC_SOC,
+									  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA_V1),
+									  (UINT8 *)&legacy_data))
+	{
+		return 0;
+	}
+
+	memset(data, 0, sizeof(*data));
+	data->u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data->u16SocNow = legacy_data.u16SocNow;
+	data->u16DsgSocInt = legacy_data.u16DsgSocInt;
+	data->u32CycleTimes = legacy_data.u32CycleTimes;
+	data->u16MaxErrorPercent = 100U;
+	return 1;
 }
 
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 {
+	STORAGE_FLASH_SOC_DATA save_data;
 	UINT8 result;
 
 	if (data == 0)
@@ -597,12 +630,14 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 		return 0;
 	}
 
+	save_data = *data;
+	save_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 										  FLASH_ADDR_STORAGE_SOC_SLOT_B,
 										  FLASH_STORAGE_MAGIC_SOC,
-										  (const UINT8 *)data,
+										  (const UINT8 *)&save_data,
 										  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA));
-	StorageFlash_AppUseTest_OnSocSaved(data, result);
+	StorageFlash_AppUseTest_OnSocSaved(&save_data, result);
 	return result;
 }
 
@@ -793,6 +828,24 @@ void StorageFlash_PrintBootCheck(void)
 											   0,
 											   &soc_seq_b,
 											   &soc_next_b);
+	if (!soc_valid_a)
+	{
+		soc_valid_a = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_A,
+												   FLASH_STORAGE_MAGIC_SOC,
+												   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA_V1),
+												   0,
+												   &soc_seq_a,
+												   &soc_next_a);
+	}
+	if (!soc_valid_b)
+	{
+		soc_valid_b = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_B,
+												   FLASH_STORAGE_MAGIC_SOC,
+												   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA_V1),
+												   0,
+												   &soc_seq_b,
+												   &soc_next_b);
+	}
 
 	printf("[FLASH_BOOT] AFE A=%u seq=%lu B=%u seq=%lu selected=%c\r\n",
 		   afe_valid_a,

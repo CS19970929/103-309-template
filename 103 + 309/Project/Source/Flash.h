@@ -32,6 +32,7 @@
 #define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT     32
 #define FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT 24
 #define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
+#define FLASH_STORAGE_SOC_DATA_VERSION_V2 ((UINT16)0x0002)
 
 #define FLASH_309_RTC_RTC_VALUE          ((UINT16)0x1222)
 #define FLASH_309_RTC_NORMAL_VALUE       ((UINT16)0x2333)
@@ -51,9 +52,18 @@
 
 typedef struct
 {
+	UINT16 u16FormatVersion;
 	UINT16 u16SocNow;
 	UINT16 u16DsgSocInt;
+	UINT16 u16MaxErrorPercent;
 	UINT32 u32CycleTimes;
+	UINT32 u32CapNow;
+	UINT32 u32CapFull;
+	UINT32 u32LearnPassedAs10;
+	UINT16 u16LearnAnchorSoc;
+	UINT16 u16LearnState;
+	UINT16 u16Flags;
+	UINT16 u16Reserved[4];
 } STORAGE_FLASH_SOC_DATA;
 
 typedef struct
