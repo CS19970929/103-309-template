@@ -115,23 +115,23 @@ Iout_mA = Vadc_delta_mV * 1000 / (Rsense_mohm * G)
 
 建议用电子负载验证直接采样关系：
 
-1. Type-C 无负载上电，等待零点建立。
+1. Type-C 无负载时确认 PA2 ADC 接近 0。
 2. 接入稳定负载，例如 1A、2A、3A。
 3. 读取 `g_u16TypeCOutDelta_mV` 和 `g_u16TypeCOutCurrent_mA`。
 4. 对 10mohm 分流器，理论上 `g_u16TypeCOutDelta_mV` 应约等于 `I_A * 10`。
 
-示例：2A 负载时，分流器压降约 20mV，软件输出约 2000mA。如果偏差明显，优先检查采样电阻精度、PA2 接线、ADC 参考电压、负载稳定性和零点是否正确。
+示例：2A 负载时，分流器压降约 20mV，软件输出约 2000mA。如果偏差明显，优先检查采样电阻精度、PA2 接线、ADC 参考电压和负载稳定性。
 
 ## 5. 当前新增调试变量
 
 本次新增以下对外变量：
 
 ```c
-g_u16TypeCOutCurrent_mA    // Type-C 输出电流，单位 mA，已滤波
-g_u16TypeCOutCurrent_A10   // Type-C 输出电流，单位 A*10，已滤波
-g_u16TypeCOutOffsetAD      // Type-C 电流零点 ADC
+g_u16TypeCOutCurrent_mA    // Type-C 输出电流，单位 mA，由 g_u16TypeCOutDelta_mV 直接换算
+g_u16TypeCOutCurrent_A10   // Type-C 输出电流，单位 A*10，由 mA 值直接换算
+g_u16TypeCOutOffsetAD      // 当前不参与 Type-C 电流计算，固定清 0
 g_u16TypeCOutStableAD      // 32 次平均后的 PA2 ADC 值
-g_u16TypeCOutDelta_mV      // PA2 相对零点的 ADC 端电压差，mV
+g_u16TypeCOutDelta_mV      // PA2 ADC 端电压，mV
 ```
 
 兼容保留：
@@ -140,7 +140,7 @@ g_u16TypeCOutDelta_mV      // PA2 相对零点的 ADC 端电压差，mV
 g_i32ADCResult[ADC_CURR]   // 当前镜像为 Type-C 输出电流 A*10
 gu16_BusCurr_DSG           // 当前镜像为 Type-C 输出电流 A*10
 gu16_BusCurr_CHG           // 当前固定为 0
-g_u16IoutOffsetAD          // 当前镜像为 g_u16TypeCOutOffsetAD
+g_u16IoutOffsetAD          // 当前不参与 Type-C 电流计算，固定清 0
 ```
 
 后续新代码应优先使用 `g_u16TypeCOutCurrent_mA` 或 `g_u16TypeCOutCurrent_A10`，不要再用 `gu16_BusCurr_*` 表达 Type-C 电流。
@@ -149,25 +149,22 @@ g_u16IoutOffsetAD          // 当前镜像为 g_u16TypeCOutOffsetAD
 
 `ADC_Current_Smooth()` 当前流程：
 
-1. 累加 `ADC_CUR_AMP` 32 次。
-2. 得到 `g_u16TypeCOutStableAD`。
-3. 若 `g_u16TypeCOutOffsetAD == 0`，累计 16 组稳定值作为零点。
-4. 后续计算当前稳定 AD 与零点差值。
-5. 差值在 `AD_CurZeroDeadband` 内时，输出电流清零。
-6. 差值超过死区时，换算 `g_u16TypeCOutDelta_mV`。
-7. 按 `Rsense` 和 `G` 换算 `g_u16TypeCOutCurrent_mA`。
-8. 做 1/8 IIR 滤波。
-9. 输出 `g_u16TypeCOutCurrent_A10`。
+1. 实时读取 `ADC_CUR_AMP`，连续 3 次小于等于 `AD_CurZeroDeadband` 时立即清零输出。
+2. 非零电流时累加 `ADC_CUR_AMP` 32 次。
+3. 得到 `g_u16TypeCOutStableAD`。
+4. 若稳定 AD 小于等于 `AD_CurZeroDeadband`，输出电流清零。
+5. 将稳定 AD 直接换算为 `g_u16TypeCOutDelta_mV`。
+6. 按 `Rsense` 由 `g_u16TypeCOutDelta_mV` 直接换算 `g_u16TypeCOutCurrent_mA`。
+7. 输出 `g_u16TypeCOutCurrent_A10`。
 
-当前不区分正负方向，因为 Type-C 输出支路对 SOC 来说最终只会是负载消耗。硬件极性只影响当前 AD 高于零点还是低于零点，软件取绝对差值计算电流。
+当前按 PA2 直接采 Type-C 分流器压降处理，不再建立运行时零点，也不再使用 `g_u16TypeCOutOffsetAD` 参与计算。
 
 ## 7. 调试注意事项
 
-1. 首次零点建立要求 Type-C 输出支路无电流，否则会把带载电流当成零点。
-2. 若产品可能带载启动，应增加“确认无 Type-C 输出后再校零”或“强制重新校零”的状态机。
-3. `TYPEC_CUR_VDDA_MV` 当前按 3300mV 处理。如果 VDDA 偏差较大，电流会按比例偏差。
-4. 当前 PA2 直接采分流器两端压降；若后续增加运放/电流检测芯片，需要重新设计换算公式。
-5. 10mohm 直接采样时电压很小，1A 只有 10mV；低电流分辨率和噪声需要上板验证。
+1. PA2 无负载时应接近 0；如果无负载仍有明显 AD 值，软件会按真实采样值换算出电流。
+2. `TYPEC_CUR_VDDA_MV` 当前按 3300mV 处理。如果 VDDA 偏差较大，电流会按比例偏差。
+3. 当前 PA2 直接采分流器两端压降；若后续增加运放/电流检测芯片，需要重新设计换算公式。
+4. 10mohm 直接采样时电压很小，1A 只有 10mV；低电流分辨率和噪声需要上板验证。
 
 ## 8. 后续接入 SOC 的边界
 
