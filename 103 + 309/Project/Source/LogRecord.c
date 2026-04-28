@@ -173,6 +173,12 @@ void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 t_u8BuffTemp[])
 void Sci_WrReg_0x06_Reset_EventRecord(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+
+	if (0x0000 == u16SciRegData)
+	{
+		return;
+	}
+
 	if (0x0001 == u16SciRegData)
 	{
 		if (!EEPROM_ResetData_EventRecord_ToDefault())

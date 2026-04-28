@@ -309,6 +309,13 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 	}
 #endif
 
+#if UPGRADE_PARAM_RESET_EVENT_RECORD
+	if (result && !EEPROM_ResetData_EventRecord_ToDefault())
+	{
+		result = 0;
+	}
+#endif
+
 	if (!result)
 	{
 		return 0;

@@ -195,7 +195,7 @@ AFE 参数区，共 `24` 个寄存器。
 | `RS485_CMD_ADDR_RESET_HEAT_COOL` | `0x0001` | 恢复加热/冷却参数默认值 |
 | `RS485_CMD_ADDR_SET_ONCE_SOC` | `0 ~ 100` | 设置一次 SOC，写入后由刷新逻辑接管 |
 | `RS485_CMD_ADDR_RESET_AFE_PARAMETERS` | 复位命令值 | 恢复 AFE 参数默认值 |
-| `RS485_CMD_ADDR_RESET_EVENT_RECORD` | 复位命令值 | 清空事件记录 |
+| `RS485_CMD_ADDR_RESET_EVENT_RECORD` | `0x0001` / `0x0000` | `0x0001` 清空事件记录，`0x0000` 保留事件记录并正常应答 |
 | `RS485_CMD_ADDR_SWITCH_ON` / `RS485_CMD_ADDR_SWITCH_OFF` | `1 ~ 32` | 打开/关闭指定功能位 |
 | `RS485_CMD_ADDR_SYSTEM_FUNCTION_ON` / `RS485_CMD_ADDR_SYSTEM_FUNCTION_OFF` | `1 ~ 32` | BMS 功能开关，带初始化标记 |
 
@@ -617,7 +617,7 @@ scatter 文件显示：
 | 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
 |---|---|---|---|
 | `0xC008` | 事件记录读区 | `1000` / `1200` | `Sci_ACK_0x03_ReadRegs_LCD()` |
-| `0x0001` | 事件记录清空 | `1000` / `1200` | `Sci_WrReg_0x06_Reset_EventRecord()` |
+| `0x0001` / `0x0000` | 事件记录清空 / 保留 | `1000` / `1200` | `Sci_WrReg_0x06_Reset_EventRecord()` |
 
 ### 15.6 Flash / 启动模块
 
@@ -725,7 +725,7 @@ flowchart TD
 
 ## 18. 事件记录结构
 
-事件记录是一个独立的环形缓冲区，既能通过 `0x03` 读取，也能通过 `0x06` 清空。
+事件记录是一个独立的环形缓冲区，既能通过 `0x03` 读取，也能通过 `0x06` 控制是否清空。
 
 ### 18.1 记录格式
 
@@ -746,11 +746,18 @@ flowchart TD
 
 ### 18.3 清空逻辑
 
-`Sci_WrReg_0x06_Reset_EventRecord()` 会：
+`Sci_WrReg_0x06_Reset_EventRecord()` 的写入值语义：
+
+- `0x0001`：清空事件记录
+- `0x0000`：保留事件记录，正常应答
+- 其他值：返回数据无效
+
+执行清空时会：
 
 - 将 `BMS_LOG_RECORD` 全部清零
 - 将 `BMS_LOG_POINT` 置 0
-- 将 `gu8_Reset_EventRecord` 置为 `EVENT_RECORD_LENGTH`
+- 将 `gu8_Reset_EventRecord` 置 0
+- 调用 `StorageFlash_SaveLogData()` 写回内部 Flash 日志区
 
 ### 18.4 时间编码
 

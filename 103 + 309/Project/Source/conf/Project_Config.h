@@ -210,6 +210,9 @@
 // <q> Reset SOC snapshot
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
+// <q> Reset event record
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+
 // <q> Force reapply policy, test only
 #define PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY 0
 // </h>
