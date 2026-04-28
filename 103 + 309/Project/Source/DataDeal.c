@@ -11,6 +11,14 @@ UINT8 u8WakeCnt2 = 0;
 #define MONITOR_AFE_TASK_PERIOD_MS          ((UINT16)200)
 #define MONITOR_AFE_SLEEP_DELAY_SEC         ((UINT16)(5U * 60U))
 #define MONITOR_AFE_SLEEP_DELAY_TICKS       ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
+#define AFE_CURRENT_ADC_FULL_SCALE_MV       ((UINT32)200U)
+#define AFE_CURRENT_ADC_DENOMINATOR         ((UINT32)21470U)
+#define AFE_CURRENT_AUTO_ZERO_LIMIT_MA      ((UINT32)1000U)
+#define AFE_CURRENT_AUTO_ZERO_STABLE_RAW    ((UINT16)8U)
+#define AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT   ((UINT8)16U)
+#define AFE_CURRENT_AUTO_ZERO_FILTER_DIV    ((INT32)16L)
+#define AFE_CURRENT_CALIB_MIN_MA            ((UINT32)2000U)
+#define AFE_CURRENT_OUTPUT_DEADBAND_A10     ((UINT16)3U)
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
@@ -264,122 +272,246 @@ void DataLoad_TemperatureMaxMinFind(void)
 	g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp; // min temp
 }
 
-void DataLoad_CurrentCali(void)
+static INT32 DataLoad_CurrentRawToSigned(UINT16 raw_code)
 {
-	static UINT8 su8_StartUpFlag = 4;
+    if ((raw_code & 0x8000U) != 0U)
+    {
+        return (INT32)raw_code - 65536L;
+    }
 
-	// todo 预留上位机校准接口，以防万一
-	// if (sci_cali_falg)
-	// 	DataLoad_CurrentCali_startup();
+    return (INT32)raw_code;
+}
 
-	if (OffsetValue_CHG)
-	{
-		su8_StartUpFlag = 4;
-	}
-	else
-	{
-		su8_StartUpFlag = 5;
-	}
+static UINT32 DataLoad_CurrentAbsI32(INT32 value)
+{
+    if (value < 0)
+    {
+        return (UINT32)(-value);
+    }
 
-	switch (su8_StartUpFlag)
-	{
-	// 充电偏置
-	case 4:
-		if (u32_ChgCur_mA > OffsetValue_CHG)
-		{
-			u32_ChgCur_mA = u32_ChgCur_mA - OffsetValue_CHG;
-		}
-		else
-		{
-			// u32_ChgCur_mA = 0;	//不能先置0啊，不然错了
-			u32_DsgCur_mA = u32_DsgCur_mA + OffsetValue_CHG - u32_ChgCur_mA;
-			u32_ChgCur_mA = 0;
-		}
-		break;
-	case 5:
+    return (UINT32)value;
+}
 
-		if (u32_DsgCur_mA > OffsetValue_DSG)
-		{
-			u32_DsgCur_mA = u32_DsgCur_mA - OffsetValue_DSG;
-		}
-		else
-		{
-			// u32_DsgCur_mA = 0;
-			u32_ChgCur_mA = u32_ChgCur_mA + OffsetValue_DSG - u32_DsgCur_mA;
-			u32_DsgCur_mA = 0;
-		}
-		break;
-	default:
-		break;
-	}
+static UINT16 DataLoad_CurrentMilliAmpToRaw(UINT32 current_mA)
+{
+    uint64_t numerator;
+    uint64_t denominator;
+    uint64_t raw_code;
+
+    if ((current_mA == 0U) || (g_u32CS_Res_AFE == 0U))
+    {
+        return 0;
+    }
+
+    denominator = (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
+    numerator = ((uint64_t)current_mA * (uint64_t)AFE_CURRENT_ADC_DENOMINATOR) + (denominator / 2U);
+    raw_code = numerator / denominator;
+
+    if (raw_code > 0x7FFFU)
+    {
+        return 0x7FFFU;
+    }
+
+    return (UINT16)raw_code;
+}
+
+static UINT32 DataLoad_CurrentRawToMilliAmp(UINT32 raw_abs)
+{
+    uint64_t current_mA;
+
+    if ((raw_abs == 0U) || (g_u32CS_Res_AFE == 0U))
+    {
+        return 0U;
+    }
+
+    current_mA = (uint64_t)raw_abs * (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
+    current_mA = (current_mA + ((uint64_t)AFE_CURRENT_ADC_DENOMINATOR / 2U)) / (uint64_t)AFE_CURRENT_ADC_DENOMINATOR;
+
+    if (current_mA > 0xFFFFFFFFU)
+    {
+        return 0xFFFFFFFFU;
+    }
+
+    return (UINT32)current_mA;
+}
+
+static INT32 DataLoad_CurrentClampZeroOffset(INT32 offset_raw)
+{
+    INT32 limit_raw = (INT32)DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
+
+    if (limit_raw <= 0)
+    {
+        return 0;
+    }
+
+    if (offset_raw > limit_raw)
+    {
+        return limit_raw;
+    }
+
+    if (offset_raw < -limit_raw)
+    {
+        return -limit_raw;
+    }
+
+    return offset_raw;
+}
+
+static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
+{
+    static INT32 s_i32ZeroOffsetRawQ4 = 0;
+    static INT32 s_i32LastRawSigned = 0;
+    static UINT8 s_u8StableCnt = 0;
+    static UINT8 s_u8ZeroReady = 0;
+    INT32 current_offset_raw;
+    UINT16 limit_raw;
+    UINT16 deadband_raw;
+    UINT32 learn_abs;
+    UINT32 delta_abs;
+    UINT8 can_learn;
+    INT32 target_q4;
+
+    current_offset_raw = s_i32ZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
+    deadband_raw = DataLoad_CurrentMilliAmpToRaw((UINT32)AFE_CURRENT_OUTPUT_DEADBAND_A10 * 100U);
+    delta_abs = DataLoad_CurrentAbsI32(raw_signed - s_i32LastRawSigned);
+    can_learn = 0;
+
+    if (s_u8ZeroReady == 0U)
+    {
+        learn_abs = DataLoad_CurrentAbsI32(raw_signed);
+        if ((limit_raw > 0U) && (learn_abs <= (UINT32)limit_raw))
+        {
+            can_learn = 1U;
+        }
+    }
+    else
+    {
+        learn_abs = DataLoad_CurrentAbsI32(raw_signed - current_offset_raw);
+        if ((deadband_raw > 0U) && (learn_abs <= (UINT32)deadband_raw))
+        {
+            can_learn = 1U;
+        }
+    }
+
+    if ((can_learn != 0U) && (delta_abs <= (UINT32)AFE_CURRENT_AUTO_ZERO_STABLE_RAW))
+    {
+        if (s_u8StableCnt < AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
+        {
+            ++s_u8StableCnt;
+        }
+
+        if (s_u8StableCnt >= AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
+        {
+            target_q4 = DataLoad_CurrentClampZeroOffset(raw_signed) * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+            if (s_u8ZeroReady == 0U)
+            {
+                s_i32ZeroOffsetRawQ4 = target_q4;
+                s_u8ZeroReady = 1U;
+            }
+            else
+            {
+                s_i32ZeroOffsetRawQ4 += (target_q4 - s_i32ZeroOffsetRawQ4) / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+            }
+        }
+    }
+    else
+    {
+        s_u8StableCnt = 0;
+    }
+
+    s_i32LastRawSigned = raw_signed;
+
+    return raw_signed - (s_i32ZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV);
+}
+
+static UINT32 DataLoad_CurrentApplyCalib(UINT32 current_mA, UINT8 calib_index)
+{
+    UINT16 calib_k;
+    INT16 calib_b;
+    int64_t current_q10;
+
+    if (current_mA <= AFE_CURRENT_CALIB_MIN_MA)
+    {
+        return current_mA;
+    }
+
+    calib_k = g_u16CalibCoefK[calib_index];
+    calib_b = g_i16CalibCoefB[calib_index];
+    if ((calib_k < SYSKMIN) || (calib_k > SYSKMAX))
+    {
+        calib_k = SYSKDEFAULT;
+    }
+    if ((calib_b < SYSBMIN) || (calib_b > SYSBMAX))
+    {
+        calib_b = SYSBDEFAULT;
+    }
+
+    current_q10 = ((int64_t)current_mA * (int64_t)calib_k) + ((int64_t)calib_b * 1000LL);
+    if (current_q10 <= 0)
+    {
+        return 0U;
+    }
+
+    current_q10 >>= 10;
+    if (current_q10 > 0xFFFFFFFFU)
+    {
+        return 0xFFFFFFFFU;
+    }
+
+    return (UINT32)current_q10;
+}
+
+static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
+{
+    UINT32 current_a10;
+
+    if (current_mA >= ((UINT32)0xFFFFU * 100U))
+    {
+        return 0xFFFFU;
+    }
+
+    current_a10 = (current_mA + 50U) / 100U;
+    if (current_a10 <= (UINT32)AFE_CURRENT_OUTPUT_DEADBAND_A10)
+    {
+        return 0;
+    }
+
+    return (UINT16)current_a10;
 }
 
 void DataLoad_Current(void)
 {
-    // if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
-    if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
+    INT32 raw_signed;
+    INT32 corrected_raw;
+    UINT32 current_mA;
+
+    raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
+    corrected_raw = DataLoad_CurrentApplyAutoZero(raw_signed);
+    current_mA = DataLoad_CurrentRawToMilliAmp(DataLoad_CurrentAbsI32(corrected_raw));
+
+    u32_ChgCur_mA = 0;
+    u32_DsgCur_mA = 0;
+    g_stCellInfoReport.u16Ichg = 0;
+    g_stCellInfoReport.u16IDischg = 0;
+
+    if (corrected_raw >= 0)
     {
-        // u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 榛樿?浣跨敤200mV鐨勮?绠楁柟寮?
-        u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 200 * g_u32CS_Res_AFE / (21470);
-        // t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
-
-        log_i("******************************************\n");
-        log_i("AFE value->%d\n", u32_ChgCur_mA);
-
-        u32_DsgCur_mA = 0;
+        u32_ChgCur_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_ICHG);
+        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(u32_ChgCur_mA);
     }
     else
     {
-        // u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
-        // u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-        u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
-
-        log_i("******************************************\n");
-        log_i("AFE value->%d\n", u32_DsgCur_mA);
-
-        u32_ChgCur_mA = 0;
+        u32_DsgCur_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_IDSG);
+        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(u32_DsgCur_mA);
     }
-    // DataLoad_CurrentCali();
-    if (u32_DsgCur_mA > 2000)
-    {
-        u32_DsgCur_mA = ((u32_DsgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000; // B鍊兼槸鍩轰簬A涓哄崟浣嶈?绠楀嚭鏉ョ殑
-    }
-    else
-    {
-        u32_DsgCur_mA = ((u32_DsgCur_mA * 1024));
-    }
-
-    if (u32_ChgCur_mA > 2000)
-    {
-        u32_ChgCur_mA = ((u32_ChgCur_mA * SYSKDEFAULT)) + (INT32)SYSBDEFAULT * 1000;
-    }
-    else
-    {
-        u32_ChgCur_mA = ((u32_ChgCur_mA * 1024));
-    }
-
-    // 鏀逛负INT32
-    u32_ChgCur_mA = u32_ChgCur_mA > 0 ? u32_ChgCur_mA : 0;
-    u32_DsgCur_mA = u32_DsgCur_mA > 0 ? u32_DsgCur_mA : 0;
-
-	g_stCellInfoReport.u16Ichg = (UINT16)((u32_ChgCur_mA >> 10) / 100);
-	g_stCellInfoReport.u16IDischg = (UINT16)((u32_DsgCur_mA >> 10) / 100);
-
-	if (g_stCellInfoReport.u16Ichg <= 3)
-	{
-		g_stCellInfoReport.u16Ichg = 0;
-	}
-	if (g_stCellInfoReport.u16IDischg <= 3)
-	{
-		g_stCellInfoReport.u16IDischg = 0;
-	}
 
 #ifdef __VIRTURE_CURRENT__
-	if (sys_time.isdebugenable == 1)
-	{
-		g_stCellInfoReport.u16Ichg = sys_time.CHG;
-		g_stCellInfoReport.u16IDischg = sys_time.DSG;
-	}
+    if (sys_time.isdebugenable == 1)
+    {
+        g_stCellInfoReport.u16Ichg = sys_time.CHG;
+        g_stCellInfoReport.u16IDischg = sys_time.DSG;
+    }
 #endif
 }
 
