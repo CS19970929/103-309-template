@@ -34,6 +34,7 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIOB, &GPIO_InitStructure);
+        MCUO_AFE_CTLC = 0;
     }
 
     // GPIO_WriteBit(GPIOB, GPIO_Pin_15, Bit_RESET);
@@ -52,6 +53,7 @@ void InitIO(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
     GPIO_Init(GPIO_MCC_C, &GPIO_InitStructure);
+    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 
     GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;

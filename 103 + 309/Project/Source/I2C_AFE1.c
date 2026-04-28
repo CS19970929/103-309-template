@@ -856,13 +856,28 @@ Others:
 *******************************************************************************/
 void InitAFE1(void)
 {
+	UINT8 do_startup_zero;
+
+	do_startup_zero = ((g_u32AfeCurrentSampleSeq == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
+
 	initAFE1_IIC();
+	if (do_startup_zero != 0U)
+	{
+		AfeCurrent_PrepareStartupZero();
+	}
 
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 	open_dsg_close_chg();
-	MCUO_AFE_CTLC = 1;
+	if (do_startup_zero != 0U)
+	{
+		AfeCurrent_StartupZeroCal();
+	}
+	else
+	{
+		open_ctlc();
+	}
 }
 
 /*µ÷ÊÔÐÄµÃ

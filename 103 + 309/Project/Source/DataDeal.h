@@ -99,7 +99,7 @@ typedef enum _AFE_CURRENT_DIR {
     AFE_CURRENT_DIR_DSG = 2
 } AFE_CURRENT_DIR;
 
-typedef struct _AFE_CURRENT_DEBUG {
+typedef struct _AFE_CURRENT_OBSERVE {
     UINT16 u16RawCode;
     INT32 i32RawSigned;
     INT32 i32ZeroOffsetRaw;
@@ -120,7 +120,8 @@ typedef struct _AFE_CURRENT_DEBUG {
     UINT8 u8StartupFailCnt;
     UINT8 u8KbCalibEnable;
     UINT8 u8Direction;
-} AFE_CURRENT_DEBUG;
+    UINT8 u8CtlcState;
+} AFE_CURRENT_OBSERVE;
 
 
 #define SYSKMAX   		((UINT16)1536)      // 1.5
@@ -239,11 +240,12 @@ extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 extern UINT32 g_u32AfeCurrentSampleSeq;
-extern volatile AFE_CURRENT_DEBUG g_stAfeCurrentDebug;
-extern volatile INT32 g_i32AfeCurrentZeroOffsetRawQ4;
-extern volatile INT32 g_i32AfeCurrentLastRawSigned;
-extern volatile UINT8 g_u8AfeCurrentZeroStableCnt;
-extern volatile UINT8 g_u8AfeCurrentZeroReady;
+extern AFE_CURRENT_OBSERVE g_stAfeCurrentObserve;
+extern INT32 g_i32AfeCurrentZeroOffsetRawQ4;
+extern INT32 g_i32AfeCurrentLastRawSigned;
+extern UINT8 g_u8AfeCurrentZeroStableCnt;
+extern UINT8 g_u8AfeCurrentZeroReady;
+extern UINT8 g_u8AfeCurrentZeroState;
 
 void App_AFEGet(  void);
 void AfeCurrent_PrepareStartupZero(void);
