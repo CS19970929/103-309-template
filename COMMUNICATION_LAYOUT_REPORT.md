@@ -233,8 +233,8 @@ AFE 参数区，共 `24` 个寄存器。
 | `0x2400` ~ `0x2417` | `Sci_WrRegs_0x10_AFE_Parameters()` | AFE 参数写入 |
 | `0x2000` 起 | `Sci_WrRegs_0x10_CalibCoef()` | K/B 校准系数 |
 | `0x2100` 起 | `Sci_WrRegs_0x10_Protect()` | 保护参数 |
-| `0x2200` 起 | `Sci_WrRegs_0x10_SocTable()` / `Sci_WrRegs_0x10_CopperLoss()` / `Sci_WrRegs_0x10_RTC()` | SOC 表、铜损、RTC |
-| `0x2300` 起 | `Sci_WrRegs_0x10_Balance()` / `Sci_WrRegs_0x10_SysOther()` / `Sci_WrRegs_0x10_SleepElement()` / `Sci_WrRegs_0x10_SocElement()` / `Sci_WrRegs_0x10_SystemElement()` / `Sci_WrRegs_0x10_HeatCoolElement()` | 扩展参数 |
+| `0x2200` 起 | `Sci_WrRegs_0x10_SocTable()` / `Sci_WrRegs_0x10_CopperLoss()` / `Sci_WrRegs_0x10_RTC()` | SOC 表、铜损、RTC；当前写 RAM，不进入 RW 参数 Flash |
+| `0x2300` 起 | `Sci_WrRegs_0x10_Balance()` / `Sci_WrRegs_0x10_SysOther()` / `Sci_WrRegs_0x10_SleepElement()` / `Sci_WrRegs_0x10_SocElement()` / `Sci_WrRegs_0x10_SystemElement()` / `Sci_WrRegs_0x10_HeatCoolElement()` | `OtherElement` / 热管理扩展参数；其中 SOC 基础参数为 `0x2318~0x231B` |
 | `0xFFF0` ~ `0xFFF2` | `Sci_WrRegs_0x10_SN_Version()` | SN / HW / SW |
 | `0xFFFD` | `Sci_WrRegs_0x10_FlashConnect()` | Flash 更新触发 |
 
@@ -254,9 +254,11 @@ AFE 参数区，共 `24` 个寄存器。
 - CopperLoss
 - CopperLoss_Num
 
+当前代码只把这些数据写入 RAM。`SOC_Table_Set` 写满 42 个寄存器后会调用 `InitData_SOC()` 立即生效，但不会保存到内部 Flash；CopperLoss / CopperLoss_Num 也不会跨重启保存。
+
 #### 4.2.4 RTC
 
-通信写 RTC 后，会触发 RTC 参数落盘。
+当前 `Sci_WrRegs_0x10_RTC()` 只更新 RAM 中的 `RTC_time`，没有内部 Flash 落盘。
 
 #### 4.2.5 扩展参数
 
@@ -265,7 +267,7 @@ AFE 参数区，共 `24` 个寄存器。
 - 均衡相关参数
 - 系统参数
 - 睡眠参数
-- SOC 扩展项
+- SOC 基础参数：容量、循环初值、`V100`、`V0`
 - 加热/冷却参数
 
 #### 4.2.6 AFE 参数
@@ -333,21 +335,21 @@ CAN 在当前工程中主要是固定 ID 检查帧，不做 RS485 那种寄存�
 
 ## 7. 通信驱动的 EEPROM 落点
 
-通信写入后，最终会落到 EEPROM 的几个关键区域：
+本节保留历史 EEPROM 地址作为通信布局参考。当前工程已经把主要可写参数迁移到内部 Flash RW 参数区，部分表项只写 RAM。
 
-| EEPROM 起始地址 | 含义 | 通信触发 |
+| 历史 EEPROM 起始地址/当前落点 | 含义 | 通信触发 |
 |---|---|---|
 | `0` | 保护参数 | `0x10` 写保护参数、复位保护参数 |
-| `130` | RTC 参数 | `0x10` 写 RTC |
+| RAM only | RTC 参数 | `0x10` 写 RTC，当前不落盘 |
 | `154` | K 校准值 | `0x10` 写校准区 |
 | `248` | B 校准值 | `0x10` 写校准区 |
-| `342` | SOC 表 | `0x10` 写 SOC 表 |
-| `426` | CopperLoss | `0x10` 写铜损参数 |
-| `458` | CopperLoss_Num | `0x10` 写铜损参数 |
+| RAM only，历史地址 `342` | SOC 表 | `0x10` 写 SOC 表，当前不落盘 |
+| RAM only，历史地址 `426` | CopperLoss | `0x10` 写铜损参数，当前不落盘 |
+| RAM only，历史地址 `458` | CopperLoss_Num | `0x10` 写铜损参数，当前不落盘 |
 | `490` | 故障记录 | `0x06` / `0x10` 触发复位或更新 |
 | `676` | OtherElement1 | 均衡、睡眠、系统相关参数 |
 | `740` | HeatCool 参数 | `0x10` 写加热/冷却参数 |
-| `790` | SOC 扩展项 | SOC 相关扩展参数 |
+| 内部 Flash RW 参数区，历史 `676` | SOC 基础参数 | `0x2318~0x231B`，属于 `OtherElement` |
 | `830` | 序列号 | 产品 ID 写入 |
 | `870` | 硬件版本 | 产品 ID 写入 |
 | `910` | 软件版本 | 产品 ID 写入 |
@@ -492,10 +494,10 @@ scatter 文件显示：
 | RS485 写 | `0xFFF0 ~ 0xFFF2` | SN / HW / SW | `Sci_WrRegs_0x10_SN_Version()` |
 | RS485 写 | `0xFFFD` | Flash 更新触发 | `Sci_WrRegs_0x10_FlashConnect()` |
 | EEPROM | `0` | 保护参数 | 写保护参数后台落盘 |
-| EEPROM | `130` | RTC 参数 | 写 RTC 后落盘 |
+| RAM only | `0x224A~0x2255` | RTC 参数 | 写 RTC 后当前不落盘 |
 | EEPROM | `154 / 248` | K / B 校准 | 写校准后落盘 |
-| EEPROM | `342` | SOC 表 | 写 SOC 表后落盘 |
-| EEPROM | `426 / 458` | 铜损及数量 | 写铜损后落盘 |
+| RAM only | `0x2200~0x2229` | SOC 表 | 写 SOC 表后当前不落盘 |
+| RAM only | `0x222A~0x2249` | 铜损及数量 | 写铜损后当前不落盘 |
 | EEPROM | `490` | 故障记录 | 复位 / 清除 |
 | EEPROM | `676` | 扩展参数 1 | 均衡、睡眠、系统参数 |
 | EEPROM | `740` | 加热/冷却参数 | 热管理参数 |
@@ -591,15 +593,15 @@ scatter 文件显示：
 
 ### 15.3 运行参数模块
 
-| 通信地址 | 含义 | EEPROM 落点 | 触发函数 |
+| 通信地址 | 含义 | 当前落点 | 触发函数 |
 |---|---|---|---|
-| `0x2200` | SOC 表 | `342` | `Sci_WrRegs_0x10_SocTable()` |
-| `0x2200` | CopperLoss / Num | `426` / `458` | `Sci_WrRegs_0x10_CopperLoss()` |
-| `0x2200` | RTC | `130` | `Sci_WrRegs_0x10_RTC()` |
+| `0x2200` | SOC 表 | RAM only，重启恢复默认表 | `Sci_WrRegs_0x10_SocTable()` |
+| `0x222A` | CopperLoss / Num | RAM only，重启恢复默认值 | `Sci_WrRegs_0x10_CopperLoss()` |
+| `0x224A` | RTC | RAM only | `Sci_WrRegs_0x10_RTC()` |
 | `0x2300` | 均衡参数 | `676` | `Sci_WrRegs_0x10_Balance()` |
 | `0x2300` | 系统参数 | `676` | `Sci_WrRegs_0x10_SysOther()` |
 | `0x2300` | 睡眠参数 | `676` | `Sci_WrRegs_0x10_SleepElement()` |
-| `0x2300` | SOC 扩展 | `790` | `Sci_WrRegs_0x10_SocElement()` |
+| `0x2318~0x231B` | SOC 基础参数 | 内部 Flash RW 参数区，属于 `OtherElement` | `Sci_WrRegs_0x10_SocElement()` |
 | `0x2300` | 系统串数/检流/预充 | `676` | `Sci_WrRegs_0x10_SystemElement()` |
 | `0x2300` | 热管理参数 | `740` | `Sci_WrRegs_0x10_HeatCoolElement()` |
 

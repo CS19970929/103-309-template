@@ -52,7 +52,7 @@
 | `490` | `E2P_ADDR_START_FAULT_RECORD` | 故障记录起点 | 3 段故障记录 + 临时区 |
 | `676` | `E2P_ADDR_START_OTHER_ELEMENT1` | 扩展参数 1 | 32 个半字 |
 | `740` | `E2P_ADDR_E2POS_HEAT_COOL` | 加热/冷却参数 | 24 个半字 |
-| `790` | `E2P_ADDR_E2POS_ENHANCE_SOC` | SOC 扩展参数 | 当前定义为起始地址 |
+| `790` | `E2P_ADDR_E2POS_ENHANCE_SOC` | 历史 SOC 扩展预留 | 当前未作为 SOC 基础参数落点；实际 SOC 基础参数在 `OtherElement`，由内部 Flash RW 参数区保存 |
 | `830` | `E2P_ADDR_E2POS_SERIAL_NUM` | 序列号 | 首字存长度，后续为内容 |
 | `870` | `E2P_ADDR_E2POS_HAEDWARE_VER` | 硬件版本 | 首字存长度，后续为内容 |
 | `910` | `E2P_ADDR_E2POS_SOFTWARE_VER` | 软件版本 | 首字存长度，后续为内容 |

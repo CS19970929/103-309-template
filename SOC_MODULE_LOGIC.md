@@ -1,41 +1,101 @@
-# SOC 模块逻辑与首次烧录默认值
+# SOC 模块完整逻辑说明与首次烧录默认值
 
-适用当前配置：`103 + 309/Project/Source/conf/Project_Config.h` 中 `PROJECT_CFG_BAT_TYPE = 1`、`PROJECT_CFG_BAT_CHEMISTRY = 0`，即 `BAT_SLAVE` + `TERNARYLI`，当前产品默认按三元锂、10 串、27Ah 处理。若切到 `BAT_MASTER`、`LIFEPO` 或修改容量参数，容量、电压端点和 OCV 表会随配置变化。
+本文按当前代码实现核对，覆盖 `SOC.c`、`SocEnhance.c/.h`、`Flash.c/.h`、`EEPROM.c`、`Sci_Upper.c`、`rtc_sleep.c` 中和 SOC 直接相关的逻辑。当前配置来自 `103 + 309/Project/Source/conf/Project_Config.h`：
 
-## 1. 首次烧录默认值
-
-启动顺序：
-
-1. `InitE2PROM()` 把编译期默认参数加载到 RAM。
-2. 如果后 64K 的 RW 参数区无有效数据，则把默认参数写入 `0x0801C400/0x0801CC00`。
-3. `InitData_SOC()` 把 `OtherElement` 中的 SOC 配置复制到 `SOC_Enhance_Element`。
-4. `soc_param_lib_init()` 读取 SOC 快照；如果 `0x0801E000/0x0801E800` 没有有效快照，则创建默认 V2 快照并写入 Flash journal。
-
-当前首次默认 SOC 配置：
-
-| 变量 | 首次值 | 说明 |
+| 配置项 | 当前值 | 含义 |
 | --- | ---: | --- |
-| `u16_SOC_TableSelect` | `SOC_TABLE_TERNARYLI` = 2 | 三元锂 OCV 表 |
-| `u16_SOC_Ah` | 270 | 单位 `10 * Ah`，即 27.0Ah |
-| `u16_SOC_CycleT_Ever` | 3 | 初始循环次数 |
-| `u16_SOC_CycleT_Limit` | 5000 | SOC 模块内部默认循环寿命 |
-| `u16_SOC_100_Vol` | 4180mV | 满电端点电压 |
-| `u16_SOC_0_Vol` | 3000mV | 空电端点电压 |
-| `u8SOC_Now` | 60% | 没有历史 SOC 快照时的启动 SOC |
-| `u8DSG_SOC_Int` | 0 | 放电循环累计百分比 |
-| `u32Cycle_times` | 300 | 内部按 `循环次数 * 100` 保存，对外显示 3 |
-| `u32CapFactory` | 972000 | `270 * 3600`，内部单位 `As * 10` |
-| `u32CapFull` | 972000 | 首次默认 `FCC/SOH` 为 100% |
-| `u32CapNow` | 583200 | 60% 剩余容量 |
-| `u16MaxErrorPercent` | 100 | 默认可信度较低，等待端点/学习收敛 |
-| `u8_SOC` | 60 | 对外 SOC |
-| `u8_SOH` | 100 | 对外 SOH |
-| `u16_CapacityNow` | 1620 | 单位 `Ah * 100`，即 16.20Ah |
-| `u16_CapacityFull` | 2700 | 27.00Ah |
-| `u16_CapacityFactory` | 2700 | 27.00Ah |
-| `u16_Cycle_times` | 3 | 对外循环次数 |
+| `PROJECT_CFG_BAT_TYPE` | `1` | `BAT_SLAVE`，当前 40A 档 |
+| `PROJECT_CFG_BAT_CHEMISTRY` | `0` | `TERNARYLI` |
+| `BMS_CAPCITY` | `270` | `10 * Ah`，即 27.0Ah |
+| `SNum` | `10` | 默认 10 串 |
+| `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | `0` | 升级参数策略当前默认关闭 |
 
-默认 SOC 表由 `OtherElement.u16Soc_TableSelect` 选择。当前 `TERNARYLI` 默认使用 `SocTable_TernaryLi`，21 组点为：
+如果切换到 `BAT_MASTER`、`LIFEPO` 或修改容量/端点参数，默认容量、OCV 表、满电确认阈值会随编译期配置变化。
+
+## 1. 模块结论
+
+当前 SOC 模块已经不是简单电压查表，而是“安时积分为主、端点/静置 OCV 校准为辅、内部 SOC 与对外显示分离、Flash 快照恢复现场”的中等增强方案。
+
+当前实现的核心特征：
+
+1. `SOC.c` 只做配置加载和 200ms 调度，不承载算法细节。
+2. `SocEnhance.c` 维护内部运行上下文，负责 `CHG / DSG / RELAX` 状态、安时积分、端点校准、静置 OCV、弱单体保护、SOC 平滑发布和快照触发。
+3. `Flash.c` 用 SOC journal 保存 V2 快照，并兼容旧 V1 快照。
+4. SOC 基础配置保存在内部 Flash RW 参数区；SOC 运行快照保存在内部 Flash SOC journal；自定义 SOC 表当前只在 RAM 生效，不跨重启保存。
+5. 充电积分到容量上限时不会直接显示 100%，内部 SOC 最多先到 99%，只有通过满电确认条件后才进入 100% 可信满电锚点。
+
+## 2. 文件边界
+
+| 文件 | 责任 |
+| --- | --- |
+| `SOC.c` | 加载 `OtherElement` 与 `SOC_Table_Set`，提供 `InitData_SOC()` / `App_SOC()`，按 AFE 样本序号驱动 SOC 算法 |
+| `SOC.h` | SOC 表长度、边界、模块入口声明 |
+| `SocEnhance.h` | SOC 对外结构体、表选择枚举、对外 API |
+| `SocEnhance.c` | SOC 算法主实现：状态机、积分、OCV、端点、学习、显示、快照 |
+| `Flash.h` | SOC V2 快照结构体、SOC journal 地址与读写 API |
+| `Flash.c` | V1/V2 SOC 快照加载、保存、journal 双槽、CRC/sequence 校验 |
+| `EEPROM.c` | 当前实际已替换为内部 Flash 参数初始化/保存；负责默认 SOC 表、RW 参数加载、升级策略 |
+| `Sci_Upper.c` | RS485 上位机写 SOC 表、SOC 基础参数、设置一次 SOC、功能开关 |
+| `rtc_sleep.c` | RTC 休眠唤醒后调用 `SOC_ApplyRtcRelaxationCompensation()` 做静置补偿 |
+| `LedBar.c` / `Can_HDX.c` / `Sci_Upper.c` | 使用 `g_stCellInfoReport.SocElement` 中的对外 SOC/SOH/容量/循环次数 |
+
+## 3. 启动流程
+
+当前主程序初始化顺序中，和 SOC 相关的路径是：
+
+1. `StorageFlash_PrintBootCheck()` 打印后 64K 参数区检查结果。
+2. `InitE2PROM()` 加载默认运行参数，再从内部 Flash RW 参数区加载现场参数。
+3. `InitE2PROM()` 继续加载 AFE 参数、事件日志，并按升级策略执行一次性重置。
+4. `InitData_SOC()` 复制 SOC 基础配置，初始化 SOC 算法。
+5. 主循环 200ms 周期调用 `App_AFEGet()` 和 `App_SOC()`。
+
+`InitData_SOC()` 的具体动作：
+
+1. `SOC_LoadConfigData()` 从 `OtherElement` 复制 SOC 基础配置到 `SOC_Enhance_Element`。
+2. 同时把 `SOC_Table_Set[42]` 复制到 `SOC_Enhance_Element.SOC_Table_CanSet`。
+3. `soc_param_lib_init()` 清空内部计算状态，加载出厂容量/循环次数。
+4. 读取 SOC journal；读取失败或数据非法时创建默认 V2 快照并尝试保存。
+5. 设置 `u16_SOC_InitOver = 1`，重置运行上下文，强制同步一次对外数据。
+
+## 4. 首次烧录默认值
+
+首次烧录、后 64K 无有效 RW 参数且无有效 SOC journal 时，当前默认值如下：
+
+| 变量/字段 | 当前值 | 说明 |
+| --- | ---: | --- |
+| `OtherElement.u16Soc_TableSelect` | `SOC_TABLE_TERNARYLI = 2` | 默认三元锂内置 OCV 表 |
+| `OtherElement.u16Soc_Ah` | `270` | 单位 `10 * Ah`，即 27.0Ah |
+| `OtherElement.u16Soc_Cycle_times` | `3` | 初始循环次数 |
+| `OtherElement.u16Soc_V_100` | `4180mV` | 满电端点电压 `V100` |
+| `OtherElement.u16Soc_V_0` | `3000mV` | 空电端点电压 `V0` |
+| `SOC_DEFAULT_STARTUP_PERCENT` | `60%` | 无有效快照时的启动 SOC |
+| `SOC_Calculate_Element.u32CapFactory` | `972000` | `270 * 3600`，内部单位 `As * 10` |
+| `SOC_Calculate_Element.u32CapFull` | `972000` | 首次默认 FCC 等于出厂容量 |
+| `SOC_Calculate_Element.u32CapNow` | `583200` | 60% 剩余容量 |
+| `SOC_Calculate_Element.u32Cycle_times` | `300` | 内部单位 `cycle * 100`，对外显示 3 |
+| `SOC_Calculate_Element.u8DSG_SOC_Int` | `0` | 放电循环百分比累计 |
+| `SOC_Calculate_Element.u16MaxErrorPercent` | `100` | 快照可信度粗略字段，默认未收敛 |
+| `SOC_Enhance_Element.u8_SOC` | `60` | 首次对外 SOC |
+| `SOC_Enhance_Element.u8_SOH` | `100` | 首次对外 SOH |
+| `SOC_Enhance_Element.u16_CapacityNow` | `1620` | `Ah * 100`，即 16.20Ah |
+| `SOC_Enhance_Element.u16_CapacityFull` | `2700` | `Ah * 100`，即 27.00Ah |
+| `SOC_Enhance_Element.u16_CapacityFactory` | `2700` | `Ah * 100`，即 27.00Ah |
+| `SOC_Enhance_Element.u16_Cycle_times` | `3` | 对外循环次数 |
+
+`SOC_Enhance_Element.u16_SOC_CycleT_Limit` 当前固定赋值 `5000`，但代码中没有参与 SOH、保护或告警计算，属于预留字段。
+
+## 5. OCV 表
+
+当前有 4 类表选择：
+
+| 枚举 | 值 | 查表来源 | 是否持久化 |
+| --- | ---: | --- | --- |
+| `SOC_TABLE_TEST` | `0` | `SOC_Enhance_Element.SOC_Table_CanSet`，来自 `SOC_Table_Set` | 仅 RAM |
+| `SOC_TABLE_LIFEPO` | `1` | `SOC_Table_LiFePO` | 固件常量 |
+| `SOC_TABLE_TERNARYLI` | `2` | `SocTable_TernaryLi` | 固件常量 |
+| `SOC_TABLE_LIFEPO2` | `3` | `SocTable_LiFePO2` | 固件常量 |
+
+当前三元锂默认表为：
 
 ```text
 4126/100, 4066/95, 4011/90, 3955/85, 3888/80,
@@ -45,145 +105,163 @@
 3136/3
 ```
 
-`SOC_Table_Default` 当前仍是 `SOC_TABLE_TEST` 自定义表的 RAM 初始值，不是当前默认产品的真实运行表。
+查表函数是 `GetEndValue()`，按相邻 `电压/SOC` 点线性插值。电压超出表范围时返回边界 SOC。`Get_OpenCircuit_Value()` 会把结果钳位到 `0~100`。
 
-电压、电流采样字段 `u16_VCellMax/u16_VCellMin/u16_Ichg/u16_Idsg` 上电时为全局零初始化值，主循环 200ms 周期进入 `App_SOC()` 后从 `g_stCellInfoReport` 刷新。
+注意：
 
-## 2. 后续烧录与快照兼容
+1. `SOC_Table_Default` 当前是 `SOC_TABLE_TEST` 自定义表的 RAM 初始值，不是当前产品默认运行表。
+2. 上位机写 `0x2200` 起 42 个寄存器只更新 `SOC_Table_Set`，然后调用 `InitData_SOC()` 让 RAM 表立即生效。
+3. 当前没有把 `SOC_Table_Set` 保存到内部 Flash。重启后 `EEPROM_LoadDefaultSocTable()` 会重新加载 `SOC_Table_Default`。
+4. 只有 `OtherElement.u16Soc_TableSelect = SOC_TABLE_TEST` 时，上位机写入的自定义表才参与 OCV 查表。
 
-普通 APP 烧录通常不会擦除后 64K 参数区，所以已经有效的 Flash 参数会优先于新固件默认值：
+## 6. 运行数据流
 
-| 数据 | 存储位置 | 后续烧录默认是否覆盖 |
+`App_SOC()` 挂在系统 200ms 时基上，但不会盲目重复积分旧电流：
+
+1. `App_AFEGet()` 成功刷新电流采样后递增 `g_u32AfeCurrentSampleSeq`。
+2. `App_SOC()` 发现样本序号变化后，调用 `SOC_UpdateSampleData()` 更新 `VCellMax/VCellMin/Ichg/Idsg`。
+3. 有新样本时执行 `SOC_IntEnhance_Ctrl()`。
+4. 没有新 AFE 样本时只调用 `SOC_PublishReportData()`，避免通信忙或 AFE 未刷新时重复积分。
+
+`SOC_IntEnhance_Ctrl()` 当前执行顺序：
+
+1. 处理上位机刷新命令：OCV 刷新、容量初始化、设置一次 SOC。
+2. 判断当前电流方向并更新 `CHG / DSG / RELAX` 模式。
+3. 根据方向执行安时积分和端点渐进修正。
+4. 执行满电确认。
+5. 执行运行态静置 OCV 修正。
+6. 执行弱单体低压保护修正。
+7. 判断是否需要保存 SOC journal。
+8. 更新对外 SOC/SOH/容量/循环次数并发布到 `g_stCellInfoReport`。
+
+## 7. 电流模式与积分
+
+当前积分周期为 200ms：
+
+| 常量 | 当前值 | 说明 |
+| --- | ---: | --- |
+| `SOC_INTEGRATE_PERIOD_MS` | `200ms` | SOC 算法采样周期 |
+| `SOC_TICKS_PER_SECOND` | `5` | 每秒 5 个 SOC tick |
+| `SOC_CURRENT_ENTER_A10` | `4` | 进入充/放电的电流阈值，单位 `A * 10`，即 0.4A |
+| `SOC_MODE_RELAX_ENTRY_SECONDS` | `5s` | 连续无有效电流后进入 `RELAX` |
+
+方向判断：
+
+| 条件 | 模式 | 行为 |
 | --- | --- | --- |
-| SOC 配置：容量、循环次数、0/100 电压、表选择 | RW 参数区 `0x0801C400/0x0801CC00` | 不自动覆盖 |
-| SOC 运行快照：SOC、容量、循环、学习状态 | SOC journal `0x0801E000/0x0801E800` | 不自动覆盖 |
-| SOC 默认 OCV 表 | 当前只在 RAM 中加载 | 新固件默认表会在每次启动加载；上位机写表当前不跨重启保存 |
+| `Ichg >= 0.4A` 且 `Ichg >= Idsg` | `CHG` | 按充电积分 |
+| `Idsg >= 0.4A` | `DSG` | 按放电积分 |
+| 充/放电都低于阈值 | 保持/进入 `RELAX` | 不积分，累计 5s 后进入静置模式 |
 
-SOC 快照已经升级为 V2。`StorageFlash_LoadSocData()` 会优先读取 V2；如果 V2 无效，再兼容读取旧 V1 快照，并用当前配置补齐 V2 字段，下一次保存会自动迁移为 V2。
+方向切换时会清空：
 
-| 字段 | V1 | V2 | 说明 |
-| --- | --- | --- | --- |
-| `u16SocNow` | 有 | 有 | 内部 SOC |
-| `u16DsgSocInt` | 有 | 有 | 放电循环累计百分比 |
-| `u32CycleTimes` | 有 | 有 | 循环次数，内部单位 `count * 100` |
-| `u16FormatVersion` | 无 | 有 | V2 固定 `0x0002` |
-| `u16MaxErrorPercent` | 无 | 有 | 粗略可信度/误差上限 |
-| `u32CapNow` | 无 | 有 | 剩余容量，单位 `As * 10` |
-| `u32CapFull` | 无 | 有 | 当前 `FCC/SOH` 容量基准 |
-| `u32LearnPassedAs10` | 无 | 有 | 满/空锚点之间已通过电量 |
-| `u16LearnAnchorSoc` | 无 | 有 | 当前学习锚点，0 或 100 |
-| `u16LearnState` | 无 | 有 | 学习状态 |
-| `u16Flags` | 无 | 有 | 学习标志，例如已学习 |
-| `u16Reserved[4]` | 无 | 有 | 后续兼容预留 |
+1. 未满 1% 的容量累计 `u32CapChange`。
+2. 200ms 不能整除留下的积分余量 `u32IntegrateRemainderMs`。
+3. 充放电端点计数和满电确认计数。
 
-需要让后续固件主动改现场参数时，有四种方式：
-
-1. 上位机写 `RS485_CMD_ADDR_SOC_AH` 起始的 SOC 配置参数，成功后走 `EEPROM_SaveRWParametersToFlash()` 落盘。
-2. 修改 `UpgradeParamPolicy.h`：打开 `UPGRADE_PARAM_RESET_SOC_CONFIG`，并递增 `UPGRADE_PARAM_POLICY_VERSION`，让升级包一次性覆盖现场 SOC 配置。
-3. 修改 `UpgradeParamPolicy.h`：打开 `UPGRADE_PARAM_RESET_SOC_SNAPSHOT`，并递增 `UPGRADE_PARAM_POLICY_VERSION`，让升级包一次性把历史 SOC 快照写回默认启动快照。
-4. 擦除后 64K 参数区或用维护命令重置参数，让固件重新按编译期默认值初始化。
-
-注意：`UPGRADE_PARAM_RESET_SOC_CONFIG` 只覆盖 SOC 配置，不会自动清空 SOC journal 中的历史 SOC 快照；`UPGRADE_PARAM_RESET_SOC_SNAPSHOT` 只重写 SOC journal。
-
-## 3. 模块边界
-
-本次优化保持模块边界简单：
-
-| 模块 | 责任 |
-| --- | --- |
-| `SOC.c` | 加载配置、200ms 调度、把系统采样输入 SOC 模块 |
-| `SocEnhance.c` | SOC 状态机、安时积分、端点校准、静置 OCV、弱单体保护、显示平滑、快照触发 |
-| `Flash.c/.h` | SOC 快照 V1/V2 读写兼容和 journal 存储 |
-| 文档 | 解释策略和测试边界 |
-
-新增运行状态集中在 `SOC_RUNTIME_CONTEXT` 中，避免更多散落 `static` 状态。策略均为固定阈值和有限状态，不引入动态内存、浮点计算、后台任务或跨模块隐式依赖。
-
-## 4. 运行数据流
-
-`App_AFEGet()` 每 200ms 成功刷新一次 AFE 电流后递增 `g_u32AfeCurrentSampleSeq`。`App_SOC()` 同样挂在 200ms 时基上，但只消费新的 AFE 样本，避免通信忙导致 AFE 未刷新时重复积分旧电流。
-
-当前 SOC 主流程：
-
-1. `App_AFEGet()` 刷新电压、电流，并递增 AFE 样本序号。
-2. `App_SOC()` 检查样本序号，有新样本才调用 `SOC_UpdateSampleData()`。
-3. `SOC_IntEnhance_Ctrl()` 按“命令处理 → 电流模式判断 → 安时积分 → 满电确认 → 静置 OCV → 弱单体保护 → 快照持久化 → 输出同步”执行。
-4. 上位机刷新命令仍保留：`1` 为 OCV 刷新，`2` 为容量/循环初始化，`3` 为设置 SOC 一次。
-5. SOC、放电累计、循环次数、`FCC` 或学习状态变化时写入 SOC journal。
-6. 对外 SOC 默认约 `1%/s` 向内部 SOC 靠近；首次启动、手动刷新和 RTC 休眠补偿会强制同步。
-
-## 5. 核心策略
-
-### 5.1 内部 SOC 与对外 SOC 分离
-
-| 层级 | 变量 | 说明 |
-| --- | --- | --- |
-| 内部估算 SOC | `SOC_Calculate_Element.u8SOC_Now` | 算法真实状态，积分、端点、低压保护会直接修改 |
-| 内部剩余容量 | `SOC_Calculate_Element.u32CapNow` | 单位 `As * 10`，基于当前 `FCC` 计算 |
-| 对外发布 SOC | `SOC_Enhance_Element.u8_SOC` / `g_stCellInfoReport.SocElement.u16Soc` | 默认平滑跟随，供显示和通信使用 |
-
-正常显示变化限制为约 `1%/s`。当弱单体进入 `V0 + 30mV` 临界窗口且对外 SOC 高于内部目标时，可按 200ms 样本快速下降，避免低压风险被高 SOC 掩盖。
-
-### 5.2 `CHG / DSG / RELAX` 模式滞回
-
-当前使用 `SOC_CURRENT_ENTER_A10 = 4`，单位 `A * 10`，即约 0.4A。该阈值高于现有 AFE 小电流清零区间，避免噪声触发积分。
-
-| 条件 | 行为 |
-| --- | --- |
-| `u16_Ichg >= 0.4A` 且不小于放电电流 | 进入 `CHG`，本次样本按充电积分 |
-| `u16_Idsg >= 0.4A` | 进入 `DSG`，本次样本按放电积分 |
-| 两者都低于阈值 | 不积分；连续约 5s 无有效电流后进入 `RELAX` |
-
-方向切换时会清空未满 1% 的容量余量、积分时间余量和端点计数，避免上一方向的小数余量带到反方向。
-
-### 5.3 安时积分主路径
-
-每个 200ms 样本的容量增量为：
+单次容量增量：
 
 ```text
-current(A * 10) * 200ms / 1000
+delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 ```
 
-内部容量单位仍为 `As * 10`。不能整除的余量保存在 `u32IntegrateRemainderMs`，小电流不会因为 200ms 周期被直接截断。
+其中 `current_A10` 单位为 `A * 10`，所以 `delta_as10` 的单位是 `As * 10`。
+
+积分后的边界处理：
 
 | 场景 | 内部处理 |
 | --- | --- |
-| 充电后 `u32CapNow >= cap_base` | `u32CapNow = cap_base`，`u8SOC_Now = 100` |
-| 放电后 `u32CapNow <= 0` | `u32CapNow = 0`，`u8SOC_Now = 0`，触发可信空电锚点 |
-| 未到边界但累计容量达到 1% | SOC 按累计百分比增减，余量保留到下一次积分 |
+| 充电后 `u32CapNow >= cap_base` | `u32CapNow = cap_base`，内部 SOC 最高先到 `99%`，等待满电确认 |
+| 放电后 `u32CapNow <= 0` | `u32CapNow = 0`，内部 SOC 到 `0%`，触发可信空电锚点 |
+| 未到边界但累计容量达到 1% | 按累计百分比增减内部 SOC，并扣除已使用的 `u32CapChange` |
 
-`cap_base` 优先使用学习后的 `u32CapFull`，无有效学习值时回退 `u32CapFactory`。
+`cap_base` 优先使用学习后的 `u32CapFull`，无有效值时回退 `u32CapFactory`。
 
-### 5.4 满电确认
+## 8. 端点校准
 
-充电末端分两层：
+### 8.1 充电末端
 
-1. 端点电压逐步上修：靠近或超过 `V100` 时，仍按秒级窗口每次上修 1%，但普通充电路径最多上修到 99%，避免未经确认就显示满电。
-2. 可信满电确认：只有满足全部条件并持续约 60s 后，才把内部 SOC 设为 100%，并触发可信满电锚点。
+充电末端有两层逻辑：
 
-可信满电条件：
+1. 端点渐进上修：靠近 `V100` 时每隔数秒上调 1%，但最多只上修到 99%。
+2. 满电确认：只有满足更严格条件并持续约 60s，才把内部 SOC 设为 100%，并触发可信满电锚点。
 
-| 条件 | 目的 |
+端点渐进上修条件：
+
+| 条件 | 周期 | 行为 |
+| --- | ---: | --- |
+| `VCellMax >= V100 + 50mV` 且 SOC `< 100` | 2s | SOC 每次 +1%，最多到 99% |
+| `VCellMax >= V100` 且 SOC `< 100` | SOC `>95` 时 8s，否则 4s | SOC 每次 +1%，最多到 99% |
+| `VCellMax >= V100 - 100mV` 且 `< V100` 且 SOC `<95` | 10s | SOC 每次 +1% |
+
+满电确认条件：
+
+| 条件 | 当前逻辑 |
 | --- | --- |
-| 当前模式为 `CHG` | 必须处于真实充电过程 |
-| `VCellMax >= V100` | 至少有单体达到满电端点 |
-| `VCellMin >= SOC_GetFullCellConfirmVoltage()` | 防止只有最高单体虚高；当前三元锂默认 4000mV，`LIFEPO` 默认 3300mV |
-| `Ichg != 0` 且 `Ichg <= C/20` | 必须进入 taper 阶段；27Ah 默认约 1.35A，下限不低于 0.4A |
-| 持续约 60s | 防止瞬态误判 |
+| 模式 | 必须为 `CHG` |
+| 最高单体 | `VCellMax >= V100` |
+| 最低单体 | `VCellMin >= SOC_GetFullCellConfirmVoltage()` |
+| 电流 | `Ichg != 0` 且 `Ichg <= C/20`，并且不低于 0.4A |
+| 持续时间 | `SOC_FULL_CONFIRM_SECONDS = 60s` |
 
-### 5.5 放电末端与弱单体保护
+当前 `TERNARYLI` 的 `SOC_GetFullCellConfirmVoltage()` 为 `4000mV`；`LIFEPO/LIFEPO2` 为 `3300mV`。27Ah 默认 taper 电流为 `270 / 20 = 13`，单位 `A * 10`，约 1.3A。
 
-放电端点仍按 `V0` 附近窗口逐步下修：
+满电确认成功后：
 
-| 条件 | 内部 SOC 修正 |
-| --- | --- |
-| `VCellMin <= V0 + 100mV` 且 `> V0`，当前 SOC `> 5` | 每 10s 降低 1% |
-| `VCellMin <= V0`，当前 SOC `>= 5` | 每 4s 降低 1% |
-| `VCellMin <= V0`，当前 SOC `< 5` | 每 8s 降低 1% |
-| `VCellMin <= V0 - 50mV`，当前 SOC `> 0` | 每 2s 降低 1% |
+1. `SOC_ApplySocNow(100)` 把内部 SOC 和 `CapNow` 同步到满电。
+2. `SOC_OnTrustedFullAnchor()` 记录可信满电锚点。
+3. 如从可信空电锚点到满电且跨度满足条件，则尝试 FCC 学习。
 
-弱单体保护在每次 `SOC_IntEnhance_Ctrl()` 中检查，并限制 SOC 上限：
+### 8.2 放电末端
 
-| `VCellMin` 条件 | SOC 上限 | 最大单次下修 |
+放电末端按最低单体电压逐步下修：
+
+| 条件 | 周期 | 行为 |
+| --- | ---: | --- |
+| `VCellMin <= V0 + 100mV` 且 `> V0`，SOC `>5` | 10s | SOC 每次 -1% |
+| `VCellMin <= V0`，SOC `>=5` | 4s | SOC 每次 -1% |
+| `VCellMin <= V0`，SOC `<5` | 8s | SOC 每次 -1% |
+| `VCellMin <= V0 - 50mV`，SOC `>0` | 2s | SOC 每次 -1% |
+
+放电积分导致 `CapNow = 0`，或弱单体保护把 SOC 压到 0 且 `VCellMin <= V0` 时，会触发可信空电锚点。
+
+## 9. 静置 OCV 与 RTC 休眠补偿
+
+运行态静置 OCV 修正要求：
+
+1. SOC 模块初始化完成。
+2. 当前处于 `RELAX`。
+3. 单体电压有效：`VCellMin >= 2000mV`。
+4. 当前没有有效充/放电电流。
+5. 运行态静置时，最低/最高单体电压需在 30s 内稳定在 `3mV` 窗口内。
+
+静置时间分桶：
+
+| 静置时间 | bucket | 最大修正步长 |
+| ---: | ---: | --- |
+| `< 10min` | 0 | 不修正 |
+| `10min ~ 30min` | 1 | 向下最多 1% |
+| `30min ~ 1h` | 2 | 向下最多 1% |
+| `1h ~ 6h` | 3 | 向下最多 2%；若当前 SOC `>=90`，允许向上最多 1% |
+| `>= 6h` | 4 | 向下最多 3%；若当前 SOC `>=90`，允许向上最多 2% |
+
+`LIFEPO/LIFEPO2` 在平台区中段会进一步限制下修步长，避免 OCV 平台区误差造成明显跳变。
+
+`SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max)` 用于 RTC 休眠唤醒。它复用 `SOC_ApplyRestCompensation()` 和弱单体保护，但入口最后会强制同步对外 SOC。RTC 入口本身依赖休眠时长和唤醒采样，不完全等同于运行态 30s 电压稳定窗口。
+
+## 10. 弱单体保护
+
+弱单体保护用于避免最低单体已经接近空电端点时，对外仍长期显示较高 SOC。
+
+触发前提：
+
+1. 当前不是充电。
+2. `VCellMin >= 2000mV`。
+3. `VCellMin <= V0 + 120mV`。
+
+保护逻辑会先按 OCV 表得到 `target_soc`，再和电压窗口上限取更保守的值：
+
+| `VCellMin` 条件 | SOC 上限 | 单次最大下修 |
 | --- | ---: | ---: |
 | `<= V0` | 0% | 5% |
 | `<= V0 + 30mV` | 2% | 2% |
@@ -191,88 +269,203 @@ current(A * 10) * 200ms / 1000
 | `<= V0 + 90mV` | 6% | 1% |
 | `<= V0 + 120mV` | 8% | 1% |
 
-弱单体达到 `V0` 且内部 SOC 被压到 0 时，触发可信空电锚点。
+当内部 SOC 被压到 0 且 `VCellMin <= V0` 时，记录可信空电锚点。
 
-### 5.6 静置 OCV 与 RTC 补偿
+## 11. 对外 SOC、SOH 与容量发布
 
-运行态静置必须满足：`RELAX` 模式、无有效充/放电、单体电压有效，并且电压在 30s 内稳定在约 3mV 窗口内，才允许 OCV 修正。
+内部估算和对外发布分离：
 
-静置时间分桶：
+| 层级 | 变量 | 说明 |
+| --- | --- | --- |
+| 内部 SOC | `SOC_Calculate_Element.u8SOC_Now` | 算法真实状态 |
+| 内部容量 | `SOC_Calculate_Element.u32CapNow/u32CapFull/u32CapFactory` | 单位 `As * 10` |
+| 对外 SOC | `SOC_Enhance_Element.u8_SOC` | 平滑后的 SOC |
+| 全局上报 | `g_stCellInfoReport.SocElement.u16Soc` | RS485/CAN/LedBar 使用 |
 
-| 静置时间 | bucket | 最大修正步长 |
-| ---: | ---: | ---: |
-| `< 10min` | 0 | 不修正 |
-| `10min ~ 30min` | 1 | 向下最多 1% |
-| `30min ~ 1h` | 2 | 向下最多 1% |
-| `1h ~ 6h` | 3 | 向下最多 2%；若当前 SOC `>= 90`，可向上最多 1% |
-| `>= 6h` | 4 | 向下最多 3%；若当前 SOC `>= 90`，可向上最多 2% |
+正常情况下，`SOC_UpdateDisplaySoc()` 每 `SOC_DISPLAY_STEP_SECONDS = 1s` 向内部 SOC 靠近 1%。如果最低单体进入 `V0 + 30mV` 临界窗口且对外 SOC 高于内部 SOC，则每个 200ms 样本可下降 1%，避免低压风险被平滑延迟掩盖。
 
-`LFP/LiFePO2` 平台区中段只做保守修正，避免 OCV 表平台误差造成明显跳变。`SOC_ApplyRtcRelaxationCompensation()` 用 RTC 休眠秒数走同一套 OCV 修正，但由于本身来自长时间休眠唤醒，会强制同步对外 SOC。
+容量发布换算：
 
-### 5.7 轻量 `FCC/SOH` 学习
+```text
+Ah * 100 = (As * 10 + 180) / 360
+```
 
-学习只在可信满电/空电锚点之间统计 passed charge：
+SOH 计算：
+
+| 条件 | 对外 SOH |
+| --- | ---: |
+| `u32CapFactory == 0` | 0 |
+| `u32CapFull >= u32CapFactory` | 100 |
+| 其他 | `100 * u32CapFull / u32CapFactory` |
+
+循环次数：
+
+1. 内部 `u32Cycle_times` 单位为 `cycle * 100`。
+2. 每累计 `SOC_CYCLE_PERCENT_PER_COUNT = 80%` 放电量，循环次数增加 `100`，即对外 +1 次。
+3. 对外 `u16_Cycle_times = u32Cycle_times / 100`，超过 `0xFFFF` 时饱和。
+
+`SOC_Enhance_Element.u8_SOC_OCV_Cali` 当前实际被赋值为 `u8DSG_SOC_Int`，更像放电循环百分比累计的调试/兼容字段，不是独立的 OCV 校准状态。
+
+## 12. FCC/SOH 学习
+
+学习只在可信满电和可信空电锚点之间进行。
 
 | 项 | 当前策略 |
 | --- | --- |
-| 学习触发 | 满电锚点到空电锚点，或空电锚点到满电锚点 |
+| 学习路径 | 满电锚点到空电锚点，或空电锚点到满电锚点 |
 | 首次学习跨度 | 至少 90% SOC |
 | 后续学习跨度 | 至少 40% SOC |
 | 容量允许范围 | 出厂容量的 50% ~ 110% |
-| 单次变化限制 | 不超过旧 `FCC` 的 5% |
-| 学习成功后 | 设置 `SOC_LEARN_FLAG_LEARNED`，`u16MaxErrorPercent` 收敛到 5 |
+| 单次 FCC 变化限制 | 不超过旧容量的 5% |
+| 学习成功标志 | `SOC_LEARN_FLAG_LEARNED` |
+| 学习后可信度 | `u16MaxErrorPercent = 5` |
 
-方向反转且已经累计 passed charge 时，会放弃本轮学习，防止半程充放电把 `FCC` 学坏。
+如果在学习过程中方向反转，并且已经累计 `u32LearnPassedAs10`，本轮学习会被取消，避免半程充放电把 FCC 学坏。
 
-## 6. 手动校准入口
+## 13. SOC 快照与持久化
 
-| 入口 | 标志/函数 | 行为 |
+### 13.1 存储位置
+
+| 数据 | 位置 | 说明 |
 | --- | --- | --- |
-| OCV 刷新 | `u16_RefreshData_Flag = 1` | 按当前 `VCellMin` 查 OCV 表；非充电状态下只允许降低 SOC，不允许抬高 SOC |
-| 容量/循环初始化 | `u16_RefreshData_Flag = 2` | 清空放电循环累计，重新加载容量配置，`u32CapFull = u32CapFactory`，清除学习标志 |
-| 设置一次 SOC | `u16_RefreshData_Flag = 3` + `u8_SetSocOnce` | 把内部 SOC 设置为指定 `0~100`，按容量基准重算 `u32CapNow`，强制同步对外 SOC |
-| SOC 固定 | `b1OnOFF_SOC_Fixed` | 对外发布 SOC 强制为 60%，不改变内部积分状态 |
-| SOC 清零显示 | `b1OnOFF_SOC_Zero` | 对外发布 SOC 强制为 0%，不等价于清空内部容量快照 |
+| SOC 基础配置 | RW 参数区 `0x0801C400 / 0x0801CC00` | 属于 `OtherElement` 的 32 个 halfword |
+| SOC 运行快照 | SOC journal `0x0801E000 / 0x0801E800` | V2 快照，双槽 journal |
+| 自定义 SOC 表 | RAM `SOC_Table_Set[42]` | 当前不跨重启保存 |
 
-## 7. 可调整参数
+`Flash.h` 中 `FLASH_STORAGE_PAGE_SIZE` 会随 `STM32F10X_MD` 选择为 `0x400`，否则为 `0x800`。SOC slot 起始地址仍是 `0x0801E000` 和 `0x0801E800`。
 
-### 7.1 上位机/RW 参数可调整项
+### 13.2 V2 快照字段
 
-| 参数 | 当前默认值 | 作用 | 生效方式与注意点 |
-| --- | ---: | --- | --- |
-| `OtherElement.u16Soc_Ah` | `270` | 出厂容量，单位 `10 * Ah` | 通过 `RS485_CMD_ADDR_SOC_AH` 写入后保存；影响积分分母和容量显示 |
-| `OtherElement.u16Soc_Cycle_times` | `3` | 初始循环次数 | 历史 SOC 快照存在时，运行循环次数优先来自 SOC journal |
-| `OtherElement.u16Soc_V_100` | `4180mV` | 满电端点电压 `V100` | 当前枚举名为 `RS485_CMD_ADDR_SOC_RES1` |
-| `OtherElement.u16Soc_V_0` | `3000mV` | 空电端点电压 `V0` | 当前枚举名为 `RS485_CMD_ADDR_SOC_RES2` |
-| `OtherElement.u16Soc_TableSelect` | `SOC_TABLE_TERNARYLI` | OCV 表选择 | 当前位于 `OtherElement` offset 12 |
-| `SOC_Table_Set[42]` | `SOC_Table_Default` | 自定义 OCV 表，21 组 `电压/SOC` | 只有选择 `SOC_TABLE_TEST` 时用于查表；当前只在 RAM 中生效 |
-| `u8_SetSocOnce` | 无固定默认 | 一次性设置 SOC | 写 `0~100` 后触发 `u16_RefreshData_Flag = 3` |
+| 字段 | 说明 |
+| --- | --- |
+| `u16FormatVersion` | 固定 `FLASH_STORAGE_SOC_DATA_VERSION_V2 = 0x0002` |
+| `u16SocNow` | 内部 SOC |
+| `u16DsgSocInt` | 放电循环百分比累计 |
+| `u16MaxErrorPercent` | 粗略可信度字段 |
+| `u32CycleTimes` | 循环次数，内部单位 `cycle * 100` |
+| `u32CapNow` | 当前剩余容量，单位 `As * 10` |
+| `u32CapFull` | 当前 FCC/SOH 容量基准，单位 `As * 10` |
+| `u32LearnPassedAs10` | 当前学习锚点之间累计通过电量 |
+| `u16LearnAnchorSoc` | 当前学习锚点，0 或 100 |
+| `u16LearnState` | `SOC_LEARN_STATE_*` |
+| `u16Flags` | 学习标志 |
+| `u16Reserved[4]` | 后续兼容预留 |
 
-### 7.2 源码常量可调整项
+读取逻辑：
 
-| 参数 | 当前值 | 作用 | 修改风险 |
-| --- | ---: | --- | --- |
-| `SOC_DEFAULT_STARTUP_PERCENT` | `60%` | 无有效 SOC 快照时的默认启动 SOC | 首次烧录或 SOC journal 无效时生效 |
-| `SOC_CURRENT_ENTER_A10` | `4` | 充/放电模式进入阈值，单位 `A * 10` | 改小可能受采样零点噪声影响，改大会漏掉小电流 |
-| `SOC_MODE_RELAX_ENTRY_SECONDS` | `5s` | 无有效电流后进入 `RELAX` 的滞回时间 | 改小会增加模式抖动 |
-| `SOC_FULL_CONFIRM_SECONDS` | `60s` | 满电确认保持时间 | 改小会增加满电误判风险 |
-| `SOC_DISPLAY_STEP_SECONDS` | `1s` | 对外 SOC 正常平滑步进周期 | 改大显示更稳但跟随更慢 |
-| `SOC_RELAX_STABLE_SECONDS` | `30s` | 运行态静置 OCV 的电压稳定时间 | 改小会放大瞬态电压影响 |
-| `SOC_RELAX_VOLT_STABLE_WINDOW_MV` | `3mV` | 静置电压稳定窗口 | 需结合 AFE 精度和噪声实测 |
-| `SOC_REST_BUCKET_1_SECONDS` | `600` | 静置 OCV 第一档 | 改小会增加静置修正频率 |
-| `SOC_REST_BUCKET_2_SECONDS` | `1800` | 静置 OCV 第二档 | 同上 |
-| `SOC_REST_BUCKET_3_SECONDS` | `3600` | 静置 OCV 第三档 | 同上 |
-| `SOC_REST_BUCKET_4_SECONDS` | `21600` | 静置 OCV 第四档 | 同上 |
-| `SOC_WEAK_CELL_GUARD_WINDOW_MV` | `120mV` | 弱单体保护总窗口 | 改大后 SOC 会更早被低压单体压低 |
-| `SOC_WEAK_CELL_CRITICAL_WINDOW_MV` | `30mV` | 弱单体临界窗口 | 影响快速下修和显示快速下降 |
-| `SOC_LEARN_FIRST_SPAN_PERCENT` | `90%` | 首次 FCC 学习所需跨度 | 改小会增加误学习风险 |
-| `SOC_LEARN_NEXT_SPAN_PERCENT` | `40%` | 后续 FCC 学习所需跨度 | 改小会更灵敏但更容易受片段循环影响 |
-| `SOC_LEARN_CAP_MIN/MAX_PERCENT` | `50%/110%` | 学习容量允许范围 | 超出范围会拒绝学习 |
-| `SOC_LEARN_CAP_MAX_STEP_PERCENT` | `5%` | 单次 FCC 变化限制 | 改大可能造成 SOH/SOC 跳变 |
-| `SOC_CYCLE_PERCENT_PER_COUNT` | `80%` | 放电累计多少百分比计 1 次循环 | 改动会影响循环次数增长速度 |
+1. 优先按 V2 长度读取 SOC journal。
+2. V2 无效时，尝试读取旧 V1 快照。
+3. V1 只包含 `SOC / DSG_SOC_Int / CycleTimes`，读取后补齐 V2 字段。
+4. 两种格式都无效时加载默认 60% 快照，并尝试写入 V2。
 
-## 8. 当前边界
+加载后的合法性检查：
 
-1. `SOC_Table_Set` 仍是 RAM 表，上位机写自定义 OCV 表后不会跨重启保存。
-2. `u32LearnPassedAs10` 不作为单独 Flash 写入触发条件，避免每个小积分都写 Flash；当 SOC、循环、`FCC` 或学习状态变化保存时会随 V2 快照一起落盘。
-3. 现有策略仍是保护板场景的中等增强方案，不等价于专用 fuel gauge 的 `Impedance Track` 或 `ModelGauge`。
+| 字段 | 检查 |
+| --- | --- |
+| `SocNow` | `<= 100` |
+| `DsgSocInt` | `<= 100` |
+| `MaxErrorPercent` | `<= 100` |
+| `LearnAnchorSoc` | `<= 100` |
+| `LearnState` | 不超过 `SOC_LEARN_STATE_EMPTY_ANCHOR` |
+| `CapFull` | 必须在出厂容量 50% ~ 110% 内，否则回退出厂容量并清除学习标志 |
+| `CapNow` | 非 0 且不超过 `cap_base` 时使用，否则按 SOC 重新计算 |
+
+### 13.3 保存触发
+
+`SOC_PersistSnapshotIfChanged()` 当前在以下字段变化时保存：
+
+1. `u8SOC_Now`
+2. `u8DSG_SOC_Int`
+3. `u32Cycle_times`
+4. `u32CapFull`
+5. `u16LearnAnchorSoc`
+6. `u16LearnState`
+7. `u16MaxErrorPercent`
+8. `u16LearnFlags`
+
+当前不会因为每个小的 `u32CapNow` 或 `u32LearnPassedAs10` 变化立即写 Flash。这样能降低写入压力，但代价是掉电时可能丢失尚未导致 SOC/循环/学习状态变化的细小积分。下一次触发保存时，V2 快照会携带当时的 `CapNow` 和 `LearnPassedAs10`。
+
+如果默认快照首次保存失败，代码会把备份状态中的 SOC 置为 `0xFF`，后续运行中会持续尝试再次保存。
+
+## 14. 上位机和控制入口
+
+### 14.1 `0x10` 多寄存器写
+
+| 地址 | 参数 | 当前行为 |
+| --- | --- | --- |
+| `0x2200` 起 | SOC 表 42 个寄存器 | 必须一次写满 42 个寄存器；只更新 RAM；调用 `InitData_SOC()` |
+| `0x2318` | `OtherElement.u16Soc_Ah` | 保存到内部 Flash RW 参数区；影响容量基准 |
+| `0x2319` | `OtherElement.u16Soc_Cycle_times` | 保存到内部 Flash RW 参数区；无快照或重置快照时影响初始循环 |
+| `0x231A` | `OtherElement.u16Soc_V_100` | 保存到内部 Flash RW 参数区；影响满电端点 |
+| `0x231B` | `OtherElement.u16Soc_V_0` | 保存到内部 Flash RW 参数区；影响空电端点 |
+
+写 `0x2318~0x231B` 后会触发 `Sci_ApplyOtherElementSideEffects()`：
+
+1. 调用 `InitData_SOC()` 重新加载配置和快照。
+2. 设置 `u16_RefreshData_Flag = 2`，下一次 SOC 调度会执行容量/循环初始化，使容量基准回到新配置。
+
+### 14.2 `0x06` 单寄存器控制
+
+| 命令 | 行为 |
+| --- | --- |
+| 设置一次 SOC：`0x1005`，数据 `0~100` | 设置 `u16_RefreshData_Flag = 3` 和 `u8_SetSocOnce`，下一次 SOC 调度同步内部 SOC、`CapNow` 和对外 SOC |
+| OCV 刷新 | 设置 `u16_RefreshData_Flag = 1`，按当前 `VCellMin` 查表；非充电状态不允许上修 |
+| 容量/循环初始化 | 设置 `u16_RefreshData_Flag = 2`，重载容量配置、清放电累计、FCC 回出厂容量、清学习标志 |
+| `SOC_Fixed` 功能开关 | 对外发布 SOC 强制显示 60%；通信打开时当前还会触发一次 OCV 刷新副作用 |
+| `SOC_Zero` 功能开关 | 对外发布 SOC 强制显示 0%；通信打开时当前还会触发一次容量初始化副作用；该开关不写入旧 EEPROM 地址 |
+
+`SOC_Fixed` 和 `SOC_Zero` 的显示覆盖发生在 `SOC_PublishReportData()`，覆盖的是 `g_stCellInfoReport.SocElement.u16Soc`，不是内部 `SOC_Calculate_Element.u8SOC_Now`。
+
+## 15. 升级策略
+
+升级策略当前由 `UpgradeParamPolicy.h` 和 `Project_Config.h` 控制。当前默认 `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE = 0`，所以不会主动执行重置。
+
+相关开关：
+
+| 开关 | 当前作用 |
+| --- | --- |
+| `UPGRADE_PARAM_RESET_SOC_TABLE` | 把 `SOC_Table_Set` 重新加载为 `SOC_Table_Default`；由于表只在 RAM，重启本来也会恢复默认表 |
+| `UPGRADE_PARAM_RESET_SOC_CONFIG` | 只重置 `OtherElement` 中的 SOC 基础参数：表选择、容量、循环次数、`V100`、`V0`，并保存 RW 参数区 |
+| `UPGRADE_PARAM_RESET_SOC_SNAPSHOT` | 把 SOC journal 重写为默认 60% 快照 |
+
+注意：
+
+1. `UPGRADE_PARAM_RESET_SOC_CONFIG` 不会自动清空历史 SOC journal。
+2. `UPGRADE_PARAM_RESET_SOC_SNAPSHOT` 不会自动修改 SOC 基础配置。
+3. 如果升级后既要更换容量/端点，又要让现场 SOC 回到默认 60%，需要同时打开 SOC config 和 SOC snapshot，并递增策略版本。
+
+## 16. 当前评价
+
+### 16.1 优点
+
+1. 架构边界清楚：调度、算法、存储、通信基本分离。
+2. 用户体验比纯电压查表稳定：内部 SOC 可快速校正，对外 SOC 默认平滑变化。
+3. 满电和空电使用可信锚点，避免普通电压瞬态直接把 SOC 拉到 0 或 100。
+4. V2 快照保存了容量、FCC、学习状态，掉电恢复体验明显好于只保存百分比。
+5. `App_SOC()` 通过 AFE 样本序号避免重复积分旧电流，这是当前实现里很关键的正确性保护。
+6. Flash 保存触发有节制，不会每 200ms 写入，写入压力可控。
+
+### 16.2 风险与边界
+
+1. 自定义 SOC 表不持久化。上位机写表重启后丢失，长期定制只能改固件默认表或新增表持久化。
+2. SOC 算法仍依赖 AFE 电流零点和采样质量。小电流阈值为 0.4A，低于阈值的长期电流不会积分。
+3. `u32CapNow` 小幅变化不单独触发保存，异常掉电时会损失未触发 SOC 变化的小积分。
+4. 温度对容量和端点的影响当前没有建模，低温/高温下只能依赖端点和 OCV 的保守修正。
+5. `SOC_Zero` / `SOC_Fixed` 的通信打开动作带有刷新副作用，调试时要区分“显示覆盖”和“内部状态被命令刷新”。
+6. 当前实现不是专用 fuel gauge，也没有 impedance table、EKF 或温度容量矩阵，不应按高精度计量芯片的指标评估。
+
+### 16.3 建议后续工作
+
+1. 优先补 SOC 场景回放测试：冷启动、V1 迁移、CRC 错误、满电确认、空电锚点、弱单体保护、RTC 唤醒、设置一次 SOC、容量学习。
+2. 若客户需要上位机长期配置 OCV 表，新增 SOC 表内部 Flash 持久化，不能继续依赖 `SOC_Table_Set` RAM 表。
+3. 若对 SOH 精度要求提高，先补温度分档端点和实验台数据，再考虑更复杂模型。
+4. 保持当前 API 边界，不建议把通信、Flash 细节继续塞进 `SocEnhance.c`。
+
+## 17. 文档核对结果
+
+本次核对代码后，原文档中需要修正的关键点包括：
+
+1. “充电容量到上限后 SOC 直接到 100%”不符合代码，当前真实逻辑是先到 99%，满电确认后才到 100%。
+2. “SOC 表写入后落盘”不符合当前代码，当前只写 RAM。
+3. “SOC 扩展项落到 EEPROM 地址 790”是旧 EEPROM 布局残留；当前 `0x2318~0x231B` 的 SOC 基础参数属于 `OtherElement`，保存到内部 Flash RW 参数区。
+4. `SOC_Fixed` / `SOC_Zero` 需要区分显示覆盖和通信打开时的刷新副作用。

@@ -41,7 +41,7 @@
 ### 修改 SOC / ADC / AFE 监控
 
 1. [主流 BMS SOC 策略对比与本工程取舍](BMS_SOC_STRATEGY_COMPARISON.md)
-2. [SOC 模块逻辑与首次烧录默认值](SOC_MODULE_LOGIC.md)
+2. [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md)
 3. [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md)
 4. [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md)
 5. [ADC 总压分压计算说明](ADC总压分压计算说明.md)
@@ -109,7 +109,7 @@
 | 文档 | 内容定位 |
 | --- | --- |
 | [主流 BMS SOC 策略对比与本工程取舍](BMS_SOC_STRATEGY_COMPARISON.md) | 对比 OCV、安时积分、IR 修正、高级 fuel gauge 思路，并说明本工程用户体验优先的中等增强方案 |
-| [SOC 模块逻辑与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 计算、默认值、首次烧录逻辑 |
+| [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 入口、状态机、积分、校准、快照、通信配置和当前边界 |
 | [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md) | ADC 配置、采样、低功耗关联 |
 | [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md) | PA2 直接采 10mΩ 分流器压降、Type-C 输出电流稳定值与标定方法 |
 | [ADC 总压分压计算说明](ADC总压分压计算说明.md) | PA1 总压分压采样、电阻参数调整、AFE 上报总压来源说明 |
