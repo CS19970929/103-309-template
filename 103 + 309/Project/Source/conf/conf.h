@@ -118,9 +118,7 @@
 #define _SLEEP_WITH_CURRENT
 #endif
 
-#if PROJECT_CFG_IAP_ENABLE
 #define _IAP
-#endif
 
 #if (PROJECT_CFG_SCI1_ROLE == 1)
 #define _COMMOM_UPPER_SCI1

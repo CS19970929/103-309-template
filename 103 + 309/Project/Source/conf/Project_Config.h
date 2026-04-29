@@ -132,10 +132,6 @@
 // <q> Enable sleep with current
 #define PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE 0
 
-// <q> Enable IAP jump support
-#define PROJECT_CFG_IAP_ENABLE 1
-// </h>
-
 // <h>SCI Role
 // <o> SCI1 role
 //   <0=> Disabled
@@ -220,7 +216,7 @@
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
 
 // <o> Calibration maximum cell delta, mV <0-3000>
-#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 1000
+#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 300
 
 // <q> Block SOC calibration when third-level protection fault exists
 #define PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT 0
@@ -272,7 +268,7 @@
 
 // <h>Upgrade Parameter Policy
 // <q> Enable upgrade parameter policy
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 0
 
 // <o> Upgrade parameter policy version <0x0000-0xFFFE>
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0429
