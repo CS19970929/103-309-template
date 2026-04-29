@@ -321,7 +321,7 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 		return 0;
 	}
 
-	if (FlashWriteOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG, UPGRADE_PARAM_POLICY_VERSION) != FLASH_COMPLETE)
+ 	if (FlashWriteOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG, UPGRADE_PARAM_POLICY_VERSION) != FLASH_COMPLETE)
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0;

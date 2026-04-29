@@ -831,6 +831,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     Feed_IWatchDog;
 
     // DISABLE_INT();
+    exti_conf(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
 #if 1
 #if defined(UART1_WAKEUP_ENABLE)
     exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);

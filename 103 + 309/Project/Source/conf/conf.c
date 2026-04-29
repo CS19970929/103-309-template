@@ -241,7 +241,7 @@ void InitWakeUp_Base(void)
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
         EXTI_InitStruct.EXTI_Line = EXTI_Line0;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
         EXTI_InitStruct.EXTI_LineCmd = ENABLE;
         EXTI_Init(&EXTI_InitStruct);
         NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
@@ -311,6 +311,23 @@ void InitWakeUp_NormalMode(void)
         // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
         // NVIC_Init(&NVIC_InitStructure);
     }
+    {
+        GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN; // ?????GPIO??,PA0?????
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line0;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStruct);
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&NVIC_InitStructure);
+    }
+
     {
         GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_CMNT; // ?????GPIO??,PA0?????
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
