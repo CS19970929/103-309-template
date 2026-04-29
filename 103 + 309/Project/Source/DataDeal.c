@@ -1,4 +1,5 @@
 #include "main.h"
+#include "EbikeRideSim.h"
 
 UINT8 u8IICFaultcnt1 = 0;
 UINT8 u8WakeCnt1 = 0;
@@ -1114,6 +1115,9 @@ void App_AFEGet(void)
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
 	DataLoad_Current();
+#if PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE
+	EbikeRideSim_Update(200U);
+#endif
 	if (++g_u32AfeCurrentSampleSeq == 0U)
 	{
 		++g_u32AfeCurrentSampleSeq;

@@ -394,6 +394,11 @@
               <FilePath>..\Source\DataDeal.c</FilePath>
             </File>
             <File>
+              <FileName>EbikeRideSim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\EbikeRideSim.c</FilePath>
+            </File>
+            <File>
               <FileName>EEPROM.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\EEPROM.c</FilePath>
@@ -1309,6 +1314,11 @@
               <FileName>DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\DataDeal.c</FilePath>
+            </File>
+            <File>
+              <FileName>EbikeRideSim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\EbikeRideSim.c</FilePath>
             </File>
             <File>
               <FileName>EEPROM.c</FileName>

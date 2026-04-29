@@ -72,6 +72,10 @@
 #define __VIRTURE_CURRENT__
 #endif
 
+#if PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE
+#define EBIKE_RIDE_SIM_ENABLE
+#endif
+
 /* Enable only for destructive rear-64KB application storage test. */
 #if PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE
 #define FLASH64K_APP_QUICK_TEST_ENABLE

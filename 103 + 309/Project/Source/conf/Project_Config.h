@@ -86,6 +86,26 @@
 // <q> Enable virtual current compensation
 #define PROJECT_CFG_VIRTUAL_CURRENT_ENABLE 1
 
+// <h>Ebike Ride SOC Simulation
+// <q> Enable ebike ride input simulation
+#define PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE 0
+
+// <o> Ebike ride profile
+//   <0=> Auto ride profile
+//   <1=> Constant discharge profile
+//   <2=> Manual debugger sample
+#define PROJECT_CFG_EBIKE_RIDE_SIM_PROFILE 0
+
+// <o> Initial truth SOC, percent <0-100>
+#define PROJECT_CFG_EBIKE_RIDE_SIM_INITIAL_SOC_PERCENT 80
+
+// <o> Simulated cell internal resistance, mohm <0-100>
+#define PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM 8
+
+// <o> Simulated max cell imbalance, mV <0-100>
+#define PROJECT_CFG_EBIKE_RIDE_SIM_CELL_IMBALANCE_MV 6
+// </h>
+
 // <q> Enable DI system on/off switch
 #define PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE 0
 
