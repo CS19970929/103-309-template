@@ -8,9 +8,11 @@
 
 typedef struct _EBIKE_RIDE_SIM_SEGMENT {
     UINT16 u16Seconds;
-    UINT16 u16Ichg_A10;
-    UINT16 u16IDsg_A10;
-    INT16 i16ExtraCellSag_mV;
+    UINT16 u16BaseIDsg_A10;
+    UINT16 u16Ripple_A10;
+    UINT16 u16Pulse_A10;
+    UINT16 u16PulsePeriod_s;
+    UINT16 u16PulseWidth_s;
 } EBIKE_RIDE_SIM_SEGMENT;
 
 typedef struct _EBIKE_RIDE_SIM_OCV_POINT {
@@ -23,17 +25,20 @@ EBIKE_RIDE_SIM_OBSERVE g_stEbikeRideSimObserve;
 #if PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE
 
 static const EBIKE_RIDE_SIM_SEGMENT s_stAutoProfile[] = {
-    { 60U, 0U,   0U,   0 },
-    { 10U, 0U, 300U, -40 },
-    {300U, 0U,  80U, -10 },
-    { 60U, 0U, 250U, -35 },
-    {120U, 0U,  25U,   8 },
-    { 90U, 0U,   0U,  20 },
-    { 60U, 30U,  0U,  15 },
+    { 20U,   0U,   0U,   0U,  1U, 0U },
+    {  8U, 260U,  60U, 140U, 11U, 2U },
+    {180U,  75U,  35U,  55U, 13U, 2U },
+    { 70U, 190U,  70U, 110U,  9U, 3U },
+    { 35U,  12U,  12U,   0U,  1U, 0U },
+    {220U, 105U,  45U,  70U, 17U, 2U },
+    { 16U, 320U,  90U, 160U,  8U, 3U },
+    {110U, 145U,  55U,  95U, 10U, 2U },
+    { 45U,   8U,   8U,   0U,  1U, 0U },
+    { 25U,   0U,   0U,   0U,  1U, 0U },
 };
 
 static const EBIKE_RIDE_SIM_SEGMENT s_stConstantProfile[] = {
-    {600U, 0U, 80U, -10 },
+    {600U, 80U, 0U, 0U, 1U, 0U },
 };
 
 #ifndef LIFEPO
@@ -74,6 +79,7 @@ static UINT8 s_u8Initialized;
 static UINT16 s_u16ManualCellMv;
 static UINT16 s_u16ManualIchgA10;
 static UINT16 s_u16ManualIDsgA10;
+static INT16 s_i16PolarizationMv;
 
 static UINT32 EbikeRideSim_GetCapacityFullAs10(void)
 {
@@ -314,6 +320,9 @@ static void EbikeRideSim_ApplyManualProfile(UINT16 period_ms)
 {
     UINT16 ichg_a10;
     UINT16 idsg_a10;
+    UINT16 res_mohm;
+    UINT16 ohmic_sag_mv;
+    INT16 polarization_mv;
 
     ichg_a10 = s_u16ManualIchgA10;
     idsg_a10 = s_u16ManualIDsgA10;
@@ -324,7 +333,130 @@ static void EbikeRideSim_ApplyManualProfile(UINT16 period_ms)
 
     EbikeRideSim_ApplyTruthCapacity(period_ms, ichg_a10, idsg_a10);
     g_stEbikeRideSimObserve.u16CellOcv_mV = EbikeRideSim_GetOcvMv(g_stEbikeRideSimObserve.u8TruthSoc);
+    res_mohm = (UINT16)PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM;
+    ohmic_sag_mv = (UINT16)(((UINT32)idsg_a10 * (UINT32)res_mohm) / 10U);
+    polarization_mv = s_i16PolarizationMv;
+    g_stEbikeRideSimObserve.u16OhmicSag_mV = ohmic_sag_mv;
+    g_stEbikeRideSimObserve.u16EffectiveRes_mOhm = res_mohm;
+    g_stEbikeRideSimObserve.i16Polarization_mV = polarization_mv;
     EbikeRideSim_ApplyCellPack(s_u16ManualCellMv, ichg_a10, idsg_a10);
+}
+
+static UINT16 EbikeRideSim_GetTriangle(UINT16 value, UINT16 period)
+{
+    UINT16 phase;
+    UINT16 half;
+
+    if (period < 2U)
+    {
+        return 0U;
+    }
+
+    phase = (UINT16)(value % period);
+    half = (UINT16)(period / 2U);
+    if (phase < half)
+    {
+        return phase;
+    }
+
+    return (UINT16)(period - phase);
+}
+
+static INT16 EbikeRideSim_GetSignedTriangle(UINT16 value, UINT16 period, UINT16 amplitude)
+{
+    UINT16 tri;
+    UINT16 half;
+    INT32 scaled;
+
+    if ((period < 2U) || (amplitude == 0U))
+    {
+        return 0;
+    }
+
+    half = (UINT16)(period / 2U);
+    if (half == 0U)
+    {
+        return 0;
+    }
+
+    tri = EbikeRideSim_GetTriangle(value, period);
+    scaled = ((INT32)tri * (INT32)amplitude * 2) / (INT32)half;
+    return (INT16)(scaled - (INT32)amplitude);
+}
+
+static UINT16 EbikeRideSim_GetRideDischargeCurrent(const EBIKE_RIDE_SIM_SEGMENT *segment)
+{
+    UINT16 idsg_a10;
+    UINT16 tick;
+    INT16 ripple;
+    UINT16 pulse_window;
+
+    idsg_a10 = segment->u16BaseIDsg_A10;
+    tick = (UINT16)(g_stEbikeRideSimObserve.u32ElapsedMs / 200U);
+
+    if (segment->u16Ripple_A10 != 0U)
+    {
+        ripple = EbikeRideSim_GetSignedTriangle(
+            (UINT16)(tick + (UINT16)g_stEbikeRideSimObserve.u8SegmentIndex * 11U),
+            28U,
+            segment->u16Ripple_A10);
+        if ((ripple < 0) && (idsg_a10 < (UINT16)(-ripple)))
+        {
+            idsg_a10 = 0U;
+        }
+        else
+        {
+            idsg_a10 = (UINT16)((INT16)idsg_a10 + ripple);
+        }
+    }
+
+    if ((segment->u16Pulse_A10 != 0U) && (segment->u16PulseWidth_s != 0U))
+    {
+        pulse_window = (UINT16)((g_stEbikeRideSimObserve.u32SegmentElapsedMs / 1000U) %
+            segment->u16PulsePeriod_s);
+        if (pulse_window < segment->u16PulseWidth_s)
+        {
+            idsg_a10 = (UINT16)(idsg_a10 + segment->u16Pulse_A10);
+        }
+        else if (pulse_window == (UINT16)(segment->u16PulsePeriod_s / 2U))
+        {
+            idsg_a10 = (UINT16)(idsg_a10 + (segment->u16Pulse_A10 / 2U));
+        }
+    }
+
+    return idsg_a10;
+}
+
+static UINT16 EbikeRideSim_GetEffectiveResMohm(void)
+{
+    UINT16 base_mohm;
+    UINT16 low_soc_gain_mohm;
+
+    base_mohm = (UINT16)PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM;
+    low_soc_gain_mohm = (UINT16)(((UINT32)base_mohm *
+        (UINT32)(100U - g_stEbikeRideSimObserve.u8TruthSoc)) / 100U);
+    return (UINT16)(base_mohm + low_soc_gain_mohm);
+}
+
+static INT16 EbikeRideSim_UpdatePolarization(UINT16 period_ms, UINT16 idsg_a10, UINT16 res_mohm)
+{
+    INT16 target_mv;
+    INT16 delta_mv;
+    INT16 step_mv;
+    UINT16 pol_res_mohm;
+
+    pol_res_mohm = (UINT16)((res_mohm / 2U) + 1U);
+    target_mv = (INT16)(((UINT32)idsg_a10 * (UINT32)pol_res_mohm) / 10U);
+    delta_mv = (INT16)(target_mv - s_i16PolarizationMv);
+    step_mv = (INT16)((delta_mv * (INT16)period_ms) / 12000);
+
+    if ((step_mv == 0) && (delta_mv != 0))
+    {
+        step_mv = (delta_mv > 0) ? 1 : -1;
+    }
+
+    s_i16PolarizationMv = (INT16)(s_i16PolarizationMv + step_mv);
+    return s_i16PolarizationMv;
 }
 
 static void EbikeRideSim_SelectNextSegment(UINT16 period_ms)
@@ -355,10 +487,14 @@ static void EbikeRideSim_ApplyAutoProfile(UINT16 period_ms)
     UINT8 profile_count;
     const EBIKE_RIDE_SIM_SEGMENT *profile;
     const EBIKE_RIDE_SIM_SEGMENT *segment;
+    UINT16 ichg_a10;
+    UINT16 idsg_a10;
     UINT16 ocv_mv;
     UINT16 cell_load_mv;
     INT32 load_mv;
     INT32 sag_mv;
+    INT16 polarization_mv;
+    UINT16 res_mohm;
 
     profile = EbikeRideSim_GetProfile(&profile_count);
     if (g_stEbikeRideSimObserve.u8SegmentIndex >= profile_count)
@@ -367,16 +503,23 @@ static void EbikeRideSim_ApplyAutoProfile(UINT16 period_ms)
     }
 
     segment = &profile[g_stEbikeRideSimObserve.u8SegmentIndex];
-    EbikeRideSim_ApplyTruthCapacity(period_ms, segment->u16Ichg_A10, segment->u16IDsg_A10);
+    ichg_a10 = 0U;
+    idsg_a10 = EbikeRideSim_GetRideDischargeCurrent(segment);
+    EbikeRideSim_ApplyTruthCapacity(period_ms, ichg_a10, idsg_a10);
 
     ocv_mv = EbikeRideSim_GetOcvMv(g_stEbikeRideSimObserve.u8TruthSoc);
-    sag_mv = ((INT32)segment->u16IDsg_A10 - (INT32)segment->u16Ichg_A10) *
-        (INT32)PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM / 10;
-    load_mv = (INT32)ocv_mv - sag_mv + (INT32)segment->i16ExtraCellSag_mV;
+    res_mohm = EbikeRideSim_GetEffectiveResMohm();
+    polarization_mv = EbikeRideSim_UpdatePolarization(period_ms, idsg_a10, res_mohm);
+    sag_mv = ((INT32)idsg_a10 - (INT32)ichg_a10) *
+        (INT32)res_mohm / 10;
+    load_mv = (INT32)ocv_mv - sag_mv - (INT32)polarization_mv;
     cell_load_mv = EbikeRideSim_LimitCellMv(load_mv);
 
     g_stEbikeRideSimObserve.u16CellOcv_mV = ocv_mv;
-    EbikeRideSim_ApplyCellPack(cell_load_mv, segment->u16Ichg_A10, segment->u16IDsg_A10);
+    g_stEbikeRideSimObserve.u16OhmicSag_mV = (UINT16)sag_mv;
+    g_stEbikeRideSimObserve.u16EffectiveRes_mOhm = res_mohm;
+    g_stEbikeRideSimObserve.i16Polarization_mV = polarization_mv;
+    EbikeRideSim_ApplyCellPack(cell_load_mv, ichg_a10, idsg_a10);
     EbikeRideSim_SelectNextSegment(period_ms);
 }
 
@@ -399,6 +542,7 @@ void EbikeRideSim_Reset(UINT8 initial_soc_percent)
     s_u16ManualCellMv = EbikeRideSim_GetOcvMv(initial_soc_percent);
     s_u16ManualIchgA10 = 0U;
     s_u16ManualIDsgA10 = 0U;
+    s_i16PolarizationMv = 0;
     s_u8Initialized = 1U;
 }
 
@@ -412,6 +556,25 @@ void EbikeRideSim_SetManualSample(UINT16 cell_mv, UINT16 ichg_a10, UINT16 idsg_a
     s_u16ManualCellMv = EbikeRideSim_LimitCellMv((INT32)cell_mv);
     s_u16ManualIchgA10 = ichg_a10;
     s_u16ManualIDsgA10 = idsg_a10;
+}
+
+void EbikeRideSim_InjectManualSample(UINT16 period_ms, UINT16 cell_mv, UINT16 ichg_a10, UINT16 idsg_a10)
+{
+    if (period_ms == 0U)
+    {
+        return;
+    }
+
+    if (!s_u8Initialized)
+    {
+        EbikeRideSim_Reset((UINT8)PROJECT_CFG_EBIKE_RIDE_SIM_INITIAL_SOC_PERCENT);
+    }
+
+    EbikeRideSim_SetManualSample(cell_mv, ichg_a10, idsg_a10);
+    g_stEbikeRideSimObserve.u8Enabled = 1U;
+    g_stEbikeRideSimObserve.u8Profile = EBIKE_RIDE_SIM_PROFILE_MANUAL;
+    g_stEbikeRideSimObserve.u32ElapsedMs += period_ms;
+    EbikeRideSim_ApplyManualProfile(period_ms);
 }
 
 void EbikeRideSim_Update(UINT16 period_ms)
@@ -450,6 +613,14 @@ void EbikeRideSim_Reset(UINT8 initial_soc_percent)
 
 void EbikeRideSim_SetManualSample(UINT16 cell_mv, UINT16 ichg_a10, UINT16 idsg_a10)
 {
+    (void)cell_mv;
+    (void)ichg_a10;
+    (void)idsg_a10;
+}
+
+void EbikeRideSim_InjectManualSample(UINT16 period_ms, UINT16 cell_mv, UINT16 ichg_a10, UINT16 idsg_a10)
+{
+    (void)period_ms;
     (void)cell_mv;
     (void)ichg_a10;
     (void)idsg_a10;

@@ -106,6 +106,14 @@
 #define PROJECT_CFG_EBIKE_RIDE_SIM_CELL_IMBALANCE_MV 6
 // </h>
 
+// <h>SOC Automatic Test
+// <q> Enable SOC automatic self-test
+#define PROJECT_CFG_SOC_AUTO_TEST_ENABLE 0
+
+// <o> Virtual 200ms SOC samples executed per App_SOC call <1-1000>
+#define PROJECT_CFG_SOC_AUTO_TEST_TICKS_PER_CALL 100
+// </h>
+
 // <q> Enable DI system on/off switch
 #define PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE 0
 

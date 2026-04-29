@@ -14,13 +14,13 @@
   - `0`：关闭，正常使用真实 AFE/ADC 采样。
   - `1`：开启模拟。Release 构建会被 `Project_BuildGuard.h` 拦截，测试时应切到 Debug 或 Factory/Test profile。
 - `PROJECT_CFG_EBIKE_RIDE_SIM_PROFILE`
-  - `0`：自动骑行工况，包含静置、起步、巡航、爬坡、轻载回弹和小电流充电。
+  - `0`：自动骑行工况，包含静置、起步、巡航、爬坡、滑行回弹、短时冲刺和停车恢复，默认只模拟 ebike 放电骑行。
   - `1`：恒定 8A 放电，便于核对库仑积分速度。
   - `2`：手动调试器输入，通过 `EbikeRideSim_SetManualSample(cell_mv, ichg_a10, idsg_a10)` 注入单点。
 - `PROJECT_CFG_EBIKE_RIDE_SIM_INITIAL_SOC_PERCENT`
   - 模拟器内部真实 SOC 初值。
 - `PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM`
-  - 单体等效内阻，决定负载压降和充电抬升。
+  - 单体等效内阻，决定放电负载压降和轻载回弹幅度。
 - `PROJECT_CFG_EBIKE_RIDE_SIM_CELL_IMBALANCE_MV`
   - 单体间最大模拟不一致电压。
 
@@ -82,6 +82,49 @@ EbikeRideSim_SetManualSample(3600, 0, 0);   // 单体 3600mV，静置
 ```text
 SOC 误差 = g_stCellInfoReport.SocElement.u16Soc - g_stEbikeRideSimObserve.u8TruthSoc
 ```
+
+## 自动化加速测试
+
+固件内已提供 `SocAutoTest_Task()`，用于在板端自动推进 SOC 测试。开启后，`App_SOC()` 不再等待真实 AFE 样本，而是在每次 200ms 调度中连续执行多帧虚拟样本：
+
+```c
+#define PROJECT_CFG_BUILD_PROFILE 2
+#define PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE 1
+#define PROJECT_CFG_SOC_AUTO_TEST_ENABLE 1
+#define PROJECT_CFG_SOC_AUTO_TEST_TICKS_PER_CALL 100
+```
+
+`PROJECT_CFG_SOC_AUTO_TEST_TICKS_PER_CALL=100` 表示每次 `App_SOC()` 调用推进 100 个虚拟 200ms 样本，相当于约 100 倍时间加速。可以调到 `1` 做单步观察，也可以调到 `200` 或更高缩短台架等待时间；过高会增加单次调度耗时。
+
+自动化测试包含一条真实 ebike 放电骑行曲线：静置、起步大电流、巡航波动、爬坡高负载、滑行回弹、短时冲刺和停车恢复。这里不是随意组合电压和电流，而是先生成电机负载电流，再用同一电流驱动容量和电压模型。每个虚拟 tick 都会重新计算：
+
+- 放电电流：0A 到约 57A，包含加速脉冲和路况波动。
+- 单体 OCV：由内部真实 SOC 查表得到。
+- 内阻：基础内阻来自 `PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM`，低 SOC 时等效内阻上升。
+- 欧姆压降：`V_ohmic = I_dsg * R_eff`。
+- 极化压降：一阶 RC 动态，负载持续时逐渐增大，滑行/停车时逐渐恢复。
+- 负载电压：`V_cell = OCV(SOC_truth) - V_ohmic - V_polarization`。
+- 单体差异：按 cell index 和运行时间生成轻微不一致。
+
+下载后用调试器观察 `g_stSocAutoTestReport`：
+
+- `u8Done=1`：自动测试已结束。
+- `u8Passed=1`：全部自动用例通过。
+- `u16CaseFailed=0` 且 `u16CasePassed == u16CaseTotal`：通过条件。
+- `u16FailCode`：失败定位，百位以上是用例号，低两位是失败原因。
+- `u8ActualSoc` / `u8TruthSoc`：当前 SOC 算法结果与模拟真实 SOC。
+- `u16ObservedIDsgMin_A10` / `u16ObservedIDsgMax_A10`：确认骑行电流确实在变化。
+- `u16ObservedVMin_mV` / `u16ObservedVMax_mV`：确认骑行电压确实在变化。
+
+同时观察 `g_stEbikeRideSimObserve` 可以确认物理链路：
+
+- `u16CellOcv_mV`：由真实 SOC 查表得到的开路电压。
+- `u16EffectiveRes_mOhm`：当前等效内阻。
+- `u16OhmicSag_mV`：由当前电流和等效内阻计算的瞬时压降。
+- `i16Polarization_mV`：一阶极化压降。
+- `u16CellLoad_mV`：最终送给 SOC/AFE 数据结构的负载端单体电压。
+
+真实放电骑行用例通过条件是：电流变化幅度至少 8A，单体电压变化幅度至少 60mV，模拟真实 SOC 必须下降，并且 SOC 内核值与模拟真实 SOC 偏差不超过 3%。
 
 ## 完整测试用例
 

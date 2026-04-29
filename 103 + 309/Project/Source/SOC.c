@@ -1,4 +1,5 @@
 #include "main.h"
+#include "SocAutoTest.h"
 
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
@@ -74,8 +75,10 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
+#if !PROJECT_CFG_SOC_AUTO_TEST_ENABLE
 	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
 	UINT8 u8HasNewAfeSample;
+#endif
 
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag)
 	{
@@ -86,6 +89,9 @@ void App_SOC(void)
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 #endif
 
+#if PROJECT_CFG_SOC_AUTO_TEST_ENABLE
+	SocAutoTest_Task();
+#else
 	u8HasNewAfeSample = (g_u32AfeCurrentSampleSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
 	if (u8HasNewAfeSample)
 	{
@@ -100,6 +106,7 @@ void App_SOC(void)
 	{
 		SOC_PublishReportData();
 	}
+#endif
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{

@@ -2005,3 +2005,23 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	SOC_PersistSnapshotIfChanged();
 	SOC_SyncOutputData(1U);
 }
+#if PROJECT_CFG_SOC_AUTO_TEST_ENABLE
+void SOC_Test_SetKernelSoc(UINT8 soc)
+{
+	if (soc > 100U)
+	{
+		soc = 100U;
+	}
+
+	SOC_ResetLearningState();
+	SOC_ResetRuntimeContext();
+	SOC_ApplySocNow(soc);
+	SOC_SyncOutputData(1U);
+	SOC_Calculate_Element_backup = SOC_Calculate_Element;
+}
+
+UINT8 SOC_Test_GetKernelSoc(void)
+{
+	return SOC_Calculate_Element.u8SOC_Now;
+}
+#endif

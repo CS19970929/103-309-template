@@ -58,5 +58,6 @@ void SOC_PublishReportData(void);
 
 void soc_param_lib_init(void);
 UINT8 SOC_ResetStoredSnapshotToDefault(void);
+void SOC_Test_SetKernelSoc(UINT8 soc);
+UINT8 SOC_Test_GetKernelSoc(void);
 #endif	/* SOCENHANCE_H */
-
