@@ -15,6 +15,10 @@
 | `PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS` | `30s` | 在线 OCV 偏差持续多久后允许修正 1% |
 | `PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT` | `3%` | 在线 OCV 目标与内部 SOC 的最小有效偏差 |
 | `PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER` | `10` | 在线 OCV 最大电流为 `C / divider`，默认 `C/10` |
+| `PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER` | `3` | 重载放电判定电流为 `C / divider`，默认 `C/3` |
+| `PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS` | `180s` | 重载放电后禁止在线 OCV 融合的恢复窗口 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS` | `20s` | 在线 OCV 要求电压稳定的时间 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV` | `8mV` | 在线 OCV 电压稳定窗口 |
 | `PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV` | `2000mV` | 电压类校准允许的最低单体电压 |
 | `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV` | `5000mV` | 电压类校准允许的最高单体电压 |
 | `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV` | `1000mV` | 电压类校准允许的最大单体压差 |
@@ -248,11 +252,13 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 | --- | --- |
 | 开关 | `PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE = 1` |
 | 电流条件 | 充/放电电流必须在 `0.4A ~ C/10` 内；27Ah 默认上限约 `2.7A` |
+| 重载恢复抑制 | 放电电流达到 `C/3` 后，默认 `180s` 内禁止在线 OCV 融合 |
 | 电压条件 | `VCellMin/VCellMax` 必须在 `2000~5000mV`，且 `VCellMax >= VCellMin`、压差 `<=1000mV` |
+| 在线稳定条件 | `VCellMin/VCellMax` 在 `20s` 内变化不超过 `8mV` 后才开始累计修正时间 |
 | 状态条件 | 无三级保护故障；无 AFE1/AFE2/ADC/CBC/温度采样异常 |
 | OCV 目标范围 | 只接受 `5% ~ 95%` 的 OCV 查表目标，端点仍交给满/空可信锚点 |
 | 最小偏差 | OCV 目标和内部 SOC 至少相差 `3%` |
-| 修正节奏 | 偏差持续 `30s` 后修正 `1%`，随后重新计时 |
+| 修正节奏 | 电压稳定后，偏差持续 `30s` 再修正 `1%`，随后重新计时 |
 | 方向限制 | 充电只允许上修；放电只允许下修 |
 | LFP 平台区 | `20% ~ 90%` 中段默认不做在线 OCV 修正，只保留端点/静置修正 |
 
@@ -261,9 +267,10 @@ delta_as10 = (current_A10 * 200ms + remainder_ms) / 1000
 边界说明：
 
 1. 高电流充/放电下端电压极化明显，在线 OCV guard 会拒绝修正，避免误校准。
-2. 在线 OCV 只把 SOC 收敛到配置的误差窗口附近；最终 0%/100% 仍依赖可信空电/满电锚点。
-3. 如果电流采样零点或 OCV 表本身不准，算法无法物理保证绝对精度，需要通过产测标定和曲线验证保证输入质量。
-4. 异常电压、三级保护故障、AFE/ADC/CBC/温度异常均不参与 OCV/满电/静置类校准；弱单体保护属于安全下修，不按 OCV 校准处理。
+2. 大电流放电结束后，电压还未完全回弹时，holdoff 和电压稳定判定会阻止在线 OCV 把 SOC 慢速拉低。
+3. 在线 OCV 只把 SOC 收敛到配置的误差窗口附近；最终 0%/100% 仍依赖可信空电/满电锚点。
+4. 如果电流采样零点或 OCV 表本身不准，算法无法物理保证绝对精度，需要通过产测标定和曲线验证保证输入质量。
+5. 异常电压、三级保护故障、AFE/ADC/CBC/温度异常均不参与 OCV/满电/静置类校准；弱单体保护属于安全下修，不按 OCV 校准处理。
 
 ## 10. 静置 OCV 与 RTC 休眠补偿
 
@@ -486,10 +493,13 @@ python3 tools/soc_replay_test.py
 
 1. 单体不均衡时拒绝满电确认。
 2. 单体接近 `V100` 且 taper 电流满足条件时确认满电。
-3. 轻载放电时，在线 OCV 多点目标持续偏低后按 1%/30s 下修。
-4. 轻载充电时，在线 OCV 多点目标持续偏高后按 1%/30s 上修。
+3. 轻载放电时，在线 OCV 多点目标持续偏低且电压稳定后按 1%/30s 下修。
+4. 轻载充电时，在线 OCV 多点目标持续偏高且电压稳定后按 1%/30s 上修。
 5. 重载放电时拒绝在线 OCV 修正。
-6. `LIFEPO` 平台区中段拒绝在线 OCV 修正。
+6. 重载放电后恢复窗口内拒绝在线 OCV 修正。
+7. 电压持续回弹未稳定时拒绝在线 OCV 修正。
+8. 最高/最低单体反序、保护故障、系统故障时拒绝在线 OCV 修正。
+9. `LIFEPO` 平台区中段拒绝在线 OCV 修正。
 
 该脚本不依赖 Keil/STM32 库，用于快速验证校准策略边界；固件发布前仍需要台架实测验证 OCV 表、采样电流和温度影响。
 

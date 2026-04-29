@@ -67,11 +67,13 @@
 | --- | --- |
 | 开关 | `PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE = 1` |
 | 电流窗口 | `0.4A <= I <= C/10`，27Ah 默认约 `0.4A~2.7A` |
+| 重载恢复抑制 | 放电电流达到 `C/3` 后，默认 `180s` 内禁止在线 OCV 融合 |
 | 电压门控 | 单体在 `2000~5000mV`，`VCellMax >= VCellMin`，压差 `<=1000mV` |
+| 在线稳定门控 | `VCellMin/VCellMax` 在 `20s` 内变化不超过 `8mV` 后才开始累计修正时间 |
 | 状态门控 | 无三级保护故障，无 AFE/ADC/CBC/温度异常 |
 | OCV 目标范围 | 只接受 `5%~95%` |
 | 最小有效偏差 | OCV 目标与内部 SOC 至少相差 `3%` |
-| 持续时间 | 偏差持续 `30s` 后才修正 |
+| 持续时间 | 电压稳定后，偏差再持续 `30s` 才修正 |
 | 单次步长 | 每次只修正 `1%` |
 | 方向限制 | 充电只允许上修；放电只允许下修 |
 | LFP 平台区 | `20%~90%` 默认不做在线 OCV 修正 |
@@ -79,16 +81,18 @@
 收敛示例：
 
 1. 当前内部 SOC 为 80%，轻载放电，OCV 查表目标约 70%。
-2. 如果电流、电压和状态均可信，并且偏差持续 30s，则内部 SOC 从 80% 调到 79%。
-3. 后续仍满足条件时，每 30s 再下修 1%。
-4. 对外显示 SOC 继续按平滑规则跟随，不会一次跳到 70%。
+2. 如果电流、电压、状态均可信，并且不在重载恢复抑制窗口内，先等待电压稳定。
+3. 电压稳定后，偏差再持续 30s，则内部 SOC 从 80% 调到 79%。
+4. 后续仍满足条件时，每 30s 再下修 1%。
+5. 对外显示 SOC 继续按平滑规则跟随，不会一次跳到 70%。
 
 这样做的意义：
 
 1. 可在充放电过程中做多点 OCV 收敛。
 2. 不把负载端电压瞬态当成真实开路电压。
-3. 不在 LFP 平台区用很小电压差强行判断大 SOC 差。
-4. 用户看到的是缓慢、可解释的 SOC 变化，而不是突然跳变。
+3. 大电流骑行后电压未完全回弹时，不会立刻用偏低端电压下修 SOC。
+4. 不在 LFP 平台区用很小电压差强行判断大 SOC 差。
+5. 用户看到的是缓慢、可解释的 SOC 变化，而不是突然跳变。
 
 ## 5. 影响 SOC 的可配置参数
 
@@ -106,6 +110,10 @@
 | `PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS` | `30` | 在线 OCV 每 1% 修正所需持续时间 | 变小收敛快但更易可见，变大更平滑 |
 | `PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT` | `3` | 触发在线 OCV 的最小 SOC 偏差 | 变小更敏感，变大更稳定 |
 | `PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER` | `10` | 在线 OCV 最大电流为 `C/divider` | divider 变大更严格，变小更宽松 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER` | `3` | 重载放电判定阈值为 `C/divider` | divider 变小更严格，变大更容易进入 holdoff |
+| `PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS` | `180` | 重载放电结束后禁止在线 OCV 的时间 | 变大更稳，变小恢复更快 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS` | `20` | 在线 OCV 要求电压稳定的时间 | 变大更稳，变小收敛更快 |
+| `PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV` | `8` | 在线 OCV 电压稳定窗口 | 变小更严格，变大更宽松 |
 | `PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV` | `2000` | 校准可接受的最低单体电压 | 一般不建议改低 |
 | `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV` | `5000` | 校准可接受的最高单体电压 | 一般不建议改高 |
 | `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV` | `1000` | OCV/端点校准允许的最大压差 | 变小更保守，异常更不易误校准 |
@@ -165,11 +173,13 @@
 
 建议：
 
-1. 默认在线 OCV 为 `30s/1%`，适合优先用户体验。
+1. 默认在线 OCV 为“电压稳定 `20s` 后，再按 `30s/1%` 修正”，适合优先用户体验。
 2. 如果希望更快收敛，可把 `PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS` 调到 `20s`，但要先台架确认负载极化不会误导。
 3. 如果现场电压噪声较大，把 `PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT` 从 `3%` 调到 `4~5%`。
 4. 如果轻载定义过宽导致误修正，把 `PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER` 从 `10` 调到 `15~20`，等价于从 `C/10` 收紧到 `C/15~C/20`。
-5. LFP 平台区不要开放在线 OCV 中段修正，除非有温度补偿和高分辨率 OCV 数据。
+5. 如果 e-bike 大电流松油后 SOC 仍偏低，把 `PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS` 从 `180s` 提高到 `240~300s`。
+6. 如果电压回弹很慢或采样抖动明显，把 `PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS` 提高到 `30s`，或把稳定窗口从 `8mV` 收紧到 `5mV`。
+7. LFP 平台区不要开放在线 OCV 中段修正，除非有温度补偿和高分辨率 OCV 数据。
 
 ### 6.3 低压安全与显示一致性
 
@@ -198,7 +208,8 @@
 2. Keil 编译 `FD_Debug` 和 `FD_Release`。
 3. 台架模拟异常电压：`VCellMax < VCellMin`、单体超 5000mV、单体低于 2000mV、压差超 1000mV，确认 OCV/满电/静置/在线校准均不动作。
 4. 注入三级保护故障、AFE/ADC/CBC/温度异常，确认不做电压类校准。
-5. 轻载充放电验证在线 OCV：只在 `0.4A~C/10` 内按 `1%/30s` 单向收敛。
-6. 重载和 LFP 平台区验证：不做在线 OCV 修正。
-7. 满电验证：taper 电流、最低单体窗口、压差和 60s 持续时间全部满足后才到 100%。
-8. 低压验证：异常采样不误清零，真实弱单体低压能保守下修。
+5. 轻载充放电验证在线 OCV：只在 `0.4A~C/10` 内，电压稳定后按 `1%/30s` 单向收敛。
+6. 重载后恢复验证：`Idsg >= C/3` 后，默认 `180s` 内不做在线 OCV；电压持续回弹未稳定时也不做在线 OCV。
+7. 重载和 LFP 平台区验证：不做在线 OCV 修正。
+8. 满电验证：taper 电流、最低单体窗口、压差和 60s 持续时间全部满足后才到 100%。
+9. 低压验证：异常采样不误清零，真实弱单体低压能保守下修。

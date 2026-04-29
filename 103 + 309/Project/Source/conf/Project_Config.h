@@ -13,7 +13,7 @@
 //   <1=> Debug
 //   <2=> Factory/Test
 #ifndef PROJECT_CFG_BUILD_PROFILE
-#define PROJECT_CFG_BUILD_PROFILE 1
+#define PROJECT_CFG_BUILD_PROFILE 0
 #endif
 // </h>
 
@@ -60,7 +60,7 @@
 
 // <h>Feature Switches
 // <q> Enable IWDG watchdog
-#define PROJECT_CFG_WDOG_ENABLE 0
+#define PROJECT_CFG_WDOG_ENABLE 1
 
 // <q> Enable RTC function
 #define PROJECT_CFG_RTC_ENABLE 1
@@ -172,6 +172,18 @@
 
 // <o> Online OCV max current divisor of C-rate <2-100>
 #define PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER 10
+
+// <o> Online OCV heavy discharge current divisor of C-rate <1-100>
+#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER 3
+
+// <o> Online OCV holdoff after heavy discharge, seconds <0-1800>
+#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS 180
+
+// <o> Online OCV voltage stable time, seconds <0-600>
+#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS 20
+
+// <o> Online OCV voltage stable window, mV <0-100>
+#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV 8
 
 // <o> Calibration minimum valid cell voltage, mV <1000-3500>
 #define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000

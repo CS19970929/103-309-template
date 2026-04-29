@@ -18,6 +18,10 @@ SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV = 120
 SOC_ONLINE_OCV_CORRECTION_SECONDS = 30
 SOC_ONLINE_OCV_MIN_DELTA_PERCENT = 3
 SOC_ONLINE_OCV_CURRENT_DIVIDER = 10
+SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER = 3
+SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS = 180
+SOC_ONLINE_OCV_STABLE_SECONDS = 20
+SOC_ONLINE_OCV_STABLE_WINDOW_MV = 8
 SOC_CALIBRATION_MIN_CELL_VALID_MV = 2000
 SOC_CALIBRATION_MAX_CELL_VALID_MV = 5000
 SOC_CALIBRATION_MAX_CELL_DELTA_MV = 1000
@@ -108,6 +112,10 @@ class SocReplay:
     capacity_a10: int = 270
     full_ticks: int = 0
     online_ticks: int = 0
+    online_stable_ticks: int = 0
+    online_recovery_holdoff_ticks: int = 0
+    online_ref_vmin: int = 0
+    online_ref_vmax: int = 0
     online_direction: int = 0
     protection_fault: bool = False
     system_fault: bool = False
@@ -150,6 +158,54 @@ class SocReplay:
                 return False
         return True
 
+    def reset_online_stability(self):
+        self.online_stable_ticks = 0
+        self.online_ref_vmin = 0
+        self.online_ref_vmax = 0
+
+    def reset_online_guard(self):
+        self.online_ticks = 0
+        self.online_direction = 0
+        self.reset_online_stability()
+
+    def track_online_recovery_holdoff(self, idsg):
+        holdoff_limit = SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS * SOC_TICKS_PER_SECOND
+        if holdoff_limit == 0:
+            self.online_recovery_holdoff_ticks = 0
+            return
+
+        if idsg >= self.current_limit(SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER):
+            self.online_recovery_holdoff_ticks = holdoff_limit
+            self.reset_online_guard()
+            return
+
+        if self.online_recovery_holdoff_ticks > 0:
+            self.online_recovery_holdoff_ticks -= 1
+
+    def update_online_voltage_stable(self, vmax, vmin):
+        stable_limit = SOC_ONLINE_OCV_STABLE_SECONDS * SOC_TICKS_PER_SECOND
+        if stable_limit == 0:
+            return True
+
+        if self.online_ref_vmin == 0 or self.online_ref_vmax == 0:
+            self.online_ref_vmin = vmin
+            self.online_ref_vmax = vmax
+            self.online_stable_ticks = 0
+            return False
+
+        if (
+            abs(vmin - self.online_ref_vmin) <= SOC_ONLINE_OCV_STABLE_WINDOW_MV
+            and abs(vmax - self.online_ref_vmax) <= SOC_ONLINE_OCV_STABLE_WINDOW_MV
+        ):
+            if self.online_stable_ticks < stable_limit:
+                self.online_stable_ticks += 1
+            return self.online_stable_ticks >= stable_limit
+
+        self.online_ref_vmin = vmin
+        self.online_ref_vmax = vmax
+        self.online_stable_ticks = 0
+        return False
+
     def tick(self, vmax, vmin, ichg, idsg):
         direction = 0
         if ichg >= SOC_CURRENT_ENTER_A10 and ichg >= idsg:
@@ -157,6 +213,7 @@ class SocReplay:
         elif idsg >= SOC_CURRENT_ENTER_A10:
             direction = 2
 
+        self.track_online_recovery_holdoff(idsg)
         self.apply_full_confirm(direction, vmax, vmin, ichg)
         self.apply_online_ocv(direction, vmax, vmin, ichg, idsg)
 
@@ -180,43 +237,46 @@ class SocReplay:
 
     def apply_online_ocv(self, direction, vmax, vmin, ichg, idsg):
         if direction not in (1, 2):
-            self.online_ticks = 0
-            self.online_direction = 0
+            self.reset_online_guard()
             return
 
         if not self.calibration_allowed(vmax, vmin):
-            self.online_ticks = 0
-            self.online_direction = 0
+            self.reset_online_guard()
             return
 
         current = ichg if direction == 1 else idsg
         if not (SOC_CURRENT_ENTER_A10 <= current <= self.current_limit(SOC_ONLINE_OCV_CURRENT_DIVIDER)):
-            self.online_ticks = 0
-            self.online_direction = 0
+            self.reset_online_guard()
+            return
+
+        if self.online_recovery_holdoff_ticks != 0:
+            self.reset_online_guard()
             return
 
         target = interp_soc(self.table(), vmin)
         if not self.target_trusted(target):
-            self.online_ticks = 0
-            self.online_direction = 0
+            self.reset_online_guard()
             return
 
         if direction == 1:
             target = min(target, SOC_ONLINE_OCV_TARGET_MAX_PERCENT)
             if target <= self.soc + SOC_ONLINE_OCV_MIN_DELTA_PERCENT:
-                self.online_ticks = 0
-                self.online_direction = 0
+                self.reset_online_guard()
                 return
         else:
             target = max(target, SOC_ONLINE_OCV_TARGET_MIN_PERCENT)
             if self.soc <= target + SOC_ONLINE_OCV_MIN_DELTA_PERCENT:
-                self.online_ticks = 0
-                self.online_direction = 0
+                self.reset_online_guard()
                 return
 
         if self.online_direction != direction:
             self.online_direction = direction
             self.online_ticks = 0
+            self.reset_online_stability()
+
+        if not self.update_online_voltage_stable(vmax, vmin):
+            self.online_ticks = 0
+            return
 
         self.online_ticks += 1
         if self.online_ticks >= SOC_ONLINE_OCV_CORRECTION_SECONDS * SOC_TICKS_PER_SECOND:
@@ -249,19 +309,34 @@ def test_full_confirm_rejects_abnormal_voltage_sample():
 
 def test_online_ocv_discharge_converges_down_under_light_load():
     model = SocReplay(soc=80)
-    run_seconds(model, 300, vmax=3756, vmin=3756, ichg=0, idsg=20)
+    run_seconds(model, 320, vmax=3756, vmin=3756, ichg=0, idsg=20)
     assert model.soc == 70
 
 
 def test_online_ocv_charge_converges_up_under_light_load():
     model = SocReplay(soc=50)
-    run_seconds(model, 300, vmax=3793, vmin=3793, ichg=20, idsg=0)
+    run_seconds(model, 320, vmax=3793, vmin=3793, ichg=20, idsg=0)
     assert model.soc == 60
 
 
 def test_online_ocv_ignores_heavy_discharge_load():
     model = SocReplay(soc=80)
     run_seconds(model, 300, vmax=3756, vmin=3756, ichg=0, idsg=80)
+    assert model.soc == 80
+
+
+def test_online_ocv_holdoff_after_heavy_discharge():
+    model = SocReplay(soc=80)
+    run_seconds(model, 10, vmax=3700, vmin=3700, ichg=0, idsg=100)
+    run_seconds(model, 180, vmax=3756, vmin=3756, ichg=0, idsg=20)
+    assert model.soc == 80
+
+
+def test_online_ocv_waits_for_voltage_rebound_to_stabilize():
+    model = SocReplay(soc=80)
+    for second in range(180):
+        vmin = 3720 + second
+        run_seconds(model, 1, vmax=vmin, vmin=vmin, ichg=0, idsg=20)
     assert model.soc == 80
 
 
@@ -297,6 +372,8 @@ def main():
         test_online_ocv_discharge_converges_down_under_light_load,
         test_online_ocv_charge_converges_up_under_light_load,
         test_online_ocv_ignores_heavy_discharge_load,
+        test_online_ocv_holdoff_after_heavy_discharge,
+        test_online_ocv_waits_for_voltage_rebound_to_stabilize,
         test_online_ocv_ignores_reversed_cell_range,
         test_online_ocv_ignores_protection_fault,
         test_online_ocv_ignores_system_fault,
