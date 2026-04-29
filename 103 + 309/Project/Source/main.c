@@ -109,6 +109,8 @@ int main(void)
 {
 	InitDevice(); // ³õÊ¼»¯ÍâÉè
 	InitVar();	  // ³õÊ¼»¯±äÁ¿
+    Init_RTC();
+    // RTC_WKTimeConfig();
 
 	while (1)
 	{

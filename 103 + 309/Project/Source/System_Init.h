@@ -88,8 +88,6 @@ void InitDelay(void);
 void __delay_ms(UINT16 nms);
 void __delay_us(UINT32 nus);
 void InitTimer(void);
-void InitIO(void);
-//void InitKey(void);
 void InitNVIC(void);
 void Init_IWDG(void);
 void App_CBC(void);

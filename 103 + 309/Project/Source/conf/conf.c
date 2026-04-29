@@ -9,6 +9,100 @@ Time_T sys_time = {
     .power_on = false,
 };
 
+void InitIO_rtc(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
+
+    GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
+
+    // todo GPIO_INT_WK_CMNT
+    GPIO_InitStructure.GPIO_Pin = PIN_MCC_C;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+    GPIO_Init(GPIO_MCC_C, &GPIO_InitStructure);
+    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIO_MCU_WK, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_SW;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIO_SW, &GPIO_InitStructure);
+
+#if !LEDBAR_DRIVER_GPIO_CHARLIE
+    GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+    GPIO_Init(GPIO_DBG_LED, &GPIO_InitStructure);
+#endif
+
+    GPIO_InitStructure.GPIO_Pin = PIN_RF_EN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+    GPIO_Init(GPIO_RF_EN, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    {
+        //???这个函数没起作用
+        // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
+        // GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
+        // GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, Bit_RESET);
+        // GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, Bit_RESET);
+        GPIO_SetBits(GPIO_M_STB, PIN_M_STB);
+        GPIO_SetBits(GPIO_AD_EN, PIN_AD_EN);
+        GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
+        GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
+
+        GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_M_STB, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = PIN_AD_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_AD_EN, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = PIN_ADC_BUS_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
+
+        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
+        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+
+        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
+        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
+    }
+}
+
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
 // GPIO_ResetBits(GPIOB, GPIO_Pin_15);
@@ -470,7 +564,8 @@ void InitRunAfterStopWakeup(void)
     is_wakeup = true;
 
     InitDelay();
-    InitIO();
+    // InitIO();
+    InitIO_rtc();
 
     ADC_StopForLowPower();
     InitADC();

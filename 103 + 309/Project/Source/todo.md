@@ -1,5 +1,21 @@
 todo
 
+soc融合逻辑，充电有点快，待仔细测试，确认soc计算频率
+
+需要实现每次rtc唤醒后，都发送一次can并保证发送成功，再进入rtc休眠
+rtc_sleep_run_hiccup_cycle中的feidao_send_soc_1000ms();调用没有用了，can总线没收到
+
+测试soc
+
+RTC_IT_SEC中断和RTC_IT_ALR区别，RTC_IT_SEC能唤醒stop吗，我调试发现进入stop后，虽然被唤醒了，但好像没有进入	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
+	{
+		RTC_HandleAlarmWakeup();
+		sys_time.rtc_alm_cnt++;
+	}
+
+s_u8FeidaoCanPowerState有几率阻止进入rtc好像，
+目前开了RTC_IT_SECz中断，不影响rtc stop
+
 soc安时积分改成任意
 
 datadeal中的g_stCellInfoReport.u16VCellTotle使用afe采样累加值，不要使用adc采样总压

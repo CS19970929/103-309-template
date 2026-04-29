@@ -253,6 +253,7 @@ typedef struct
   uint32_t rtc_sleep_cnt;
   uint32_t rtc_sec_cnt;
   uint32_t rtc_alm_cnt;
+  uint32_t rtc_irq_cnt;
 
   bool    test_1;
   bool    test_2;
