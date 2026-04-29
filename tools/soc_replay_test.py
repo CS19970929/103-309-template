@@ -13,6 +13,7 @@ from dataclasses import dataclass
 SOC_TICKS_PER_SECOND = 5
 SOC_CURRENT_ENTER_A10 = 4
 SOC_FULL_CONFIRM_SECONDS = 60
+SOC_FULL_CONFIRM_MIN_SOC_PERCENT = 95
 SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV = 80
 SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV = 120
 SOC_ONLINE_OCV_CORRECTION_SECONDS = 30
@@ -133,6 +134,12 @@ class SocReplay:
     def full_delta_ok(self, vmax, vmin):
         return abs(vmax - vmin) <= SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV
 
+    def full_soc_ready(self, ichg):
+        return (
+            self.soc >= SOC_FULL_CONFIRM_MIN_SOC_PERCENT
+            or (ichg != 0 and ichg <= self.current_limit(20))
+        )
+
     def voltage_valid(self, vmax, vmin):
         return (
             SOC_CALIBRATION_MIN_CELL_VALID_MV <= vmin <= SOC_CALIBRATION_MAX_CELL_VALID_MV
@@ -218,15 +225,14 @@ class SocReplay:
         self.apply_online_ocv(direction, vmax, vmin, ichg, idsg)
 
     def apply_full_confirm(self, direction, vmax, vmin, ichg):
-        if direction != 1 or not self.calibration_allowed(vmax, vmin):
+        if direction == 2 or not self.calibration_allowed(vmax, vmin):
             self.full_ticks = 0
             return
         if (
             vmax >= self.v100_mv
             and vmin >= self.full_confirm_min_cell_mv()
             and self.full_delta_ok(vmax, vmin)
-            and ichg != 0
-            and ichg <= self.current_limit(20)
+            and self.full_soc_ready(ichg)
         ):
             self.full_ticks += 1
             if self.full_ticks >= SOC_FULL_CONFIRM_SECONDS * SOC_TICKS_PER_SECOND:
@@ -301,6 +307,24 @@ def test_full_confirm_accepts_balanced_taper_pack():
     assert model.soc == 100
 
 
+def test_full_confirm_accepts_no_cv_current_when_near_full():
+    model = SocReplay(soc=96)
+    run_seconds(model, 60, vmax=4180, vmin=4110, ichg=50, idsg=0)
+    assert model.soc == 100
+
+
+def test_full_confirm_accepts_no_current_after_charge_cutoff():
+    model = SocReplay(soc=96)
+    run_seconds(model, 60, vmax=4180, vmin=4110, ichg=0, idsg=0)
+    assert model.soc == 100
+
+
+def test_full_confirm_rejects_high_voltage_before_near_full():
+    model = SocReplay(soc=80)
+    run_seconds(model, 90, vmax=4180, vmin=4110, ichg=50, idsg=0)
+    assert model.soc == 80
+
+
 def test_full_confirm_rejects_abnormal_voltage_sample():
     model = SocReplay(soc=98)
     run_seconds(model, 90, vmax=5100, vmin=4110, ichg=10, idsg=0)
@@ -368,6 +392,9 @@ def main():
     tests = [
         test_full_confirm_rejects_imbalanced_pack,
         test_full_confirm_accepts_balanced_taper_pack,
+        test_full_confirm_accepts_no_cv_current_when_near_full,
+        test_full_confirm_accepts_no_current_after_charge_cutoff,
+        test_full_confirm_rejects_high_voltage_before_near_full,
         test_full_confirm_rejects_abnormal_voltage_sample,
         test_online_ocv_discharge_converges_down_under_light_load,
         test_online_ocv_charge_converges_up_under_light_load,

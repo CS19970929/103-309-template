@@ -35,6 +35,8 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_CURRENT_ENTER_A10 ((UINT16)4U)
 #define SOC_MODE_RELAX_ENTRY_SECONDS ((UINT16)5U)
 #define SOC_FULL_CONFIRM_SECONDS ((UINT16)60U)
+#define SOC_FULL_CONFIRM_MIN_SOC_PERCENT ((UINT8)95U)
+#define SOC_FULL_CONFIRM_CAP_NEAR_PERCENT ((UINT8)95U)
 #define SOC_DISPLAY_STEP_SECONDS ((UINT16)1U)
 #define SOC_RELAX_STABLE_SECONDS ((UINT16)30U)
 #define SOC_RELAX_VOLT_STABLE_WINDOW_MV ((UINT16)3U)
@@ -182,6 +184,8 @@ static void SOC_ApplyOnlineOcvGuard(UINT8 direction);
 static void SOC_ApplyTerminalCorrection(UINT8 direction);
 static UINT16 SOC_GetFullCellConfirmVoltage(void);
 static UINT8 SOC_IsFullConfirmCellDeltaValid(void);
+static UINT8 SOC_IsFullConfirmSocReady(void);
+static UINT8 SOC_IsFullConfirmReady(void);
 static UINT16 SOC_GetCurrentLimitA10(UINT16 divider);
 static UINT16 SOC_GetTaperCurrentA10(void);
 static UINT8 Get_OpenCircuit_Value(void);
@@ -1315,6 +1319,55 @@ static UINT8 SOC_IsFullConfirmCellDeltaValid(void)
 	return (UINT8)(delta_mv <= SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV);
 }
 
+static UINT8 SOC_IsFullConfirmSocReady(void)
+{
+	UINT32 cap_base;
+	UINT32 cap_near;
+
+	if (SOC_Calculate_Element.u8SOC_Now >= SOC_FULL_CONFIRM_MIN_SOC_PERCENT)
+	{
+		return 1U;
+	}
+
+	cap_base = SOC_GetCapBase();
+	if (cap_base != 0U)
+	{
+		cap_near = (UINT32)(((uint64_t)cap_base * SOC_FULL_CONFIRM_CAP_NEAR_PERCENT + 99ULL) / 100ULL);
+		if (SOC_Calculate_Element.u32CapNow >= cap_near)
+		{
+			return 1U;
+		}
+	}
+
+	if ((SOC_Enhance_Element.u16_Ichg != 0U) &&
+		(SOC_Enhance_Element.u16_Ichg <= SOC_GetTaperCurrentA10()))
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+static UINT8 SOC_IsFullConfirmReady(void)
+{
+	UINT16 full_confirm_mv;
+
+	if ((isDSG()) || !SOC_IsCalibrationAllowed())
+	{
+		return 0U;
+	}
+
+	full_confirm_mv = SOC_GetFullCellConfirmVoltage();
+	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) &&
+		(SOC_Enhance_Element.u16_VCellMin >= full_confirm_mv) &&
+		(SOC_IsFullConfirmCellDeltaValid()) &&
+		(SOC_IsFullConfirmSocReady()))
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
 static UINT16 SOC_GetCurrentLimitA10(UINT16 divider)
 {
 	UINT16 limit;
@@ -1896,37 +1949,25 @@ static UINT16 SOC_GetTaperCurrentA10(void)
 
 static void SOC_ApplyVoltageCalibration(void)
 {
-	UINT16 full_confirm_mv;
 	UINT16 confirm_limit_ticks;
 
-	if ((g_soc_runtime.u8Mode != SOC_MODE_CHG) || !SOC_IsCalibrationAllowed())
+	if (!SOC_IsFullConfirmReady())
 	{
 		g_soc_runtime.u16FullConfirmTicks = 0U;
 		return;
 	}
 
-	full_confirm_mv = SOC_GetFullCellConfirmVoltage();
 	confirm_limit_ticks = (UINT16)(SOC_FULL_CONFIRM_SECONDS * SOC_TICKS_PER_SECOND);
-	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) &&
-		(SOC_Enhance_Element.u16_VCellMin >= full_confirm_mv) &&
-		(SOC_IsFullConfirmCellDeltaValid()) &&
-		(SOC_Enhance_Element.u16_Ichg != 0U) &&
-		(SOC_Enhance_Element.u16_Ichg <= SOC_GetTaperCurrentA10()))
+	if (g_soc_runtime.u16FullConfirmTicks < confirm_limit_ticks)
 	{
-		if (g_soc_runtime.u16FullConfirmTicks < confirm_limit_ticks)
-		{
-			++g_soc_runtime.u16FullConfirmTicks;
-		}
-		if (g_soc_runtime.u16FullConfirmTicks >= confirm_limit_ticks)
-		{
-			SOC_ApplySocNow(100U);
-			SOC_OnTrustedFullAnchor();
-			g_soc_runtime.u16FullConfirmTicks = 0U;
-		}
-		return;
+		++g_soc_runtime.u16FullConfirmTicks;
 	}
-
-	g_soc_runtime.u16FullConfirmTicks = 0U;
+	if (g_soc_runtime.u16FullConfirmTicks >= confirm_limit_ticks)
+	{
+		SOC_ApplySocNow(100U);
+		SOC_OnTrustedFullAnchor();
+		g_soc_runtime.u16FullConfirmTicks = 0U;
+	}
 }
 
 void SOC_IntEnhance_Ctrl(void)
