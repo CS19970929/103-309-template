@@ -55,7 +55,6 @@ static void SOC_LoadConfigData(void)
 
 	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
 	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
-	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
 	SOC_Enhance_Element.u16_SOC_TableSelect = OtherElement.u16Soc_TableSelect;
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
 	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;

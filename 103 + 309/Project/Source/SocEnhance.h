@@ -25,7 +25,6 @@ extern const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2];
 struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_SOC_Ah;                 // 10 * Ah
 	UINT16 u16_SOC_CycleT_Ever;        // cycle count loaded from config
-	UINT16 u16_SOC_CycleT_Limit;       // cycle limit
 	UINT16 u16_SOC_TableSelect;        // enum SOC_TABLE_SELECT
 	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
 	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
@@ -39,12 +38,11 @@ struct SOC_ENHANCE_ELEMENT {
 
 	UINT16 u16_SOC_InitOver;
 	UINT8 u8_SOC;
-	UINT8 u8_SOH;
+	UINT8 u8_SOH;                      // fixed 100 when factory capacity is valid
 	UINT16 u16_CapacityNow;            // Ah * 100
-	UINT16 u16_CapacityFull;           // Ah * 100
+	UINT16 u16_CapacityFull;           // Ah * 100, equals factory capacity
 	UINT16 u16_CapacityFactory;        // Ah * 100
 	UINT16 u16_Cycle_times;
-	UINT8 u8_SOC_OCV_Cali;
 
 	UINT16 u16_RefreshData_Flag;       // 1: OCV refresh, 2: capacity reset, 3: set SOC once
 };

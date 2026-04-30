@@ -9,27 +9,6 @@
 #include <string.h>
 #include <stdint.h>
 
-#ifndef STORAGE_FLASH_SOC_API_DECLARED
-typedef struct
-{
-	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT16 u16MaxErrorPercent;
-	UINT32 u32CycleTimes;
-	UINT32 u32CapNow;
-	UINT32 u32CapFull;
-	UINT32 u32LearnPassedAs10;
-	UINT16 u16LearnAnchorSoc;
-	UINT16 u16LearnState;
-	UINT16 u16Flags;
-	UINT16 u16Reserved[4];
-} STORAGE_FLASH_SOC_DATA;
-
-extern UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
-extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-#endif
-
 #define SOC_INTEGRATE_PERIOD_MS ((UINT32)200U)
 #define SOC_INTEGRATE_MS_PER_SECOND ((UINT32)1000U)
 #define SOC_CURRENT_ENTER_A10 ((UINT16)4U)
@@ -40,13 +19,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_DISPLAY_STEP_SECONDS ((UINT16)1U)
 #define SOC_RELAX_STABLE_SECONDS ((UINT16)30U)
 #define SOC_RELAX_VOLT_STABLE_WINDOW_MV ((UINT16)3U)
-#define SOC_LEARN_FIRST_SPAN_PERCENT ((UINT16)90U)
-#define SOC_LEARN_NEXT_SPAN_PERCENT ((UINT16)40U)
-#define SOC_LEARN_CAP_MIN_PERCENT ((UINT16)50U)
-#define SOC_LEARN_CAP_MAX_PERCENT ((UINT16)110U)
-#define SOC_LEARN_CAP_MAX_STEP_PERCENT ((UINT16)5U)
 #define SOC_MAX_ERROR_DEFAULT_PERCENT ((UINT16)100U)
-#define SOC_MAX_ERROR_LEARNED_PERCENT ((UINT16)5U)
 #define SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
 #define SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
 #define SOC_ONLINE_OCV_GUARD_ENABLE ((UINT8)PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE)
@@ -76,23 +49,24 @@ enum EEPROM_COMMAND
 struct SOC_CALCULATE_ELEMENT
 {
 	UINT32 u32CapFactory;            // As * 10
-	UINT32 u32CapFull;               // As * 10, SOH capacity base
 	UINT32 u32CapNow;                // As * 10
 	UINT32 u32CapChange;             // As * 10 accumulated until SOC changes by 1%
 	UINT32 u32IntegrateRemainderMs;  // current(A*10) * ms remainder
 	UINT32 u32Cycle_times;           // cycle count * 100
-	UINT32 u32LearnPassedAs10;       // As * 10 counted between trusted anchors
-	UINT16 u16LearnAnchorSoc;        // 0 or 100 for current anchor
-	UINT16 u16LearnState;            // SOC_LEARN_STATE_*
-	UINT16 u16MaxErrorPercent;       // coarse confidence exported by snapshot
-	UINT16 u16LearnFlags;            // SOC_LEARN_FLAG_*
 	UINT8 u8SOC_Now;                 // 0..100
 	UINT8 u8DSG_SOC_Int;             // discharged percent accumulator
 };
 
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;			   // 对外交互结构体,lib文件的桥梁
 struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element;		   // 内部计算结构体
-struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element_backup; // 内部计算结构体
+struct SOC_PERSIST_CACHE
+{
+	UINT32 u32Cycle_times;
+	UINT8 u8SOC_Now;
+	UINT8 u8DSG_SOC_Int;
+};
+
+static struct SOC_PERSIST_CACHE g_soc_persist_cache;
 
 #define SOC_REST_BUCKET_1_SECONDS ((UINT32)600)
 #define SOC_REST_BUCKET_2_SECONDS ((UINT32)1800)
@@ -108,10 +82,6 @@ struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element_backup; // 内部计算结构体
 #define SOC_MODE_RELAX SOC_INTEGRATE_DIRECTION_IDLE
 #define SOC_MODE_CHG SOC_INTEGRATE_DIRECTION_CHG
 #define SOC_MODE_DSG SOC_INTEGRATE_DIRECTION_DSG
-#define SOC_LEARN_STATE_NONE ((UINT16)0)
-#define SOC_LEARN_STATE_FULL_ANCHOR ((UINT16)1)
-#define SOC_LEARN_STATE_EMPTY_ANCHOR ((UINT16)2)
-#define SOC_LEARN_FLAG_LEARNED ((UINT16)0x0001)
 
 struct SOC_RUNTIME_CONTEXT
 {
@@ -153,16 +123,13 @@ static UINT8 SOC_IsCalibrationAllowed(void);
 static UINT32 SOC_GetCapBase(void);
 static void SOC_SelectIntegrateDirection(UINT8 direction);
 static UINT8 SOC_ApplyCapacityDelta(enum _CUR current_type, UINT16 current);
-static void SOC_AddLearnPassed(UINT8 direction, UINT32 delta_as10);
-static void SOC_ResetLearningState(void);
-static void SOC_OnTrustedFullAnchor(void);
-static void SOC_OnTrustedEmptyAnchor(void);
-static void SOC_ApplyLearnedFullCapacity(UINT32 learned_cap);
 static void SOC_AddDischargeCyclePercent(UINT8 delta_soc);
 static void SOC_SetSocValue(UINT8 soc_now, UINT8 clear_cap_change);
 static void SOC_ApplySocNow(UINT8 soc_now);
 static void SOC_ApplySocCorrection(UINT8 soc_now);
 static UINT8 SOC_StepTowardTarget(UINT8 current_soc, UINT8 target_soc, UINT8 max_step);
+static void SOC_UpdatePersistCache(void);
+static UINT8 SOC_IsPersistCacheChanged(void);
 static void SOC_PersistSnapshotIfChanged(void);
 static UINT8 SOC_GetRestBucket(UINT32 rest_seconds);
 static void SOC_ResetRestMonitor(void);
@@ -440,11 +407,6 @@ static UINT8 SOC_IsCalibrationAllowed(void)
 
 static UINT32 SOC_GetCapBase(void)
 {
-	if (SOC_Calculate_Element.u32CapFull != 0U)
-	{
-		return SOC_Calculate_Element.u32CapFull;
-	}
-
 	return SOC_Calculate_Element.u32CapFactory;
 }
 
@@ -513,7 +475,6 @@ static UINT8 SOC_ApplyCapacityDelta(enum _CUR current_type, UINT16 current)
 		}
 	}
 
-	SOC_AddLearnPassed(direction, delta_as10);
 	SOC_Calculate_Element.u32CapChange += delta_as10;
 	percent = (UINT32)(((uint64_t)SOC_Calculate_Element.u32CapChange * 100ULL) / (uint64_t)cap_base);
 	if (percent > 100U)
@@ -535,7 +496,7 @@ static UINT8 SOC_ApplyCapacityDelta(enum _CUR current_type, UINT16 current)
 		SOC_Calculate_Element.u8SOC_Now = 0U;
 		SOC_Calculate_Element.u32CapChange = 0U;
 		SOC_Calculate_Element.u32IntegrateRemainderMs = 0U;
-		SOC_OnTrustedEmptyAnchor();
+		SOC_Calculate_Element.u32CapNow = 0U;
 	}
 	else if (percent != 0U)
 	{
@@ -581,135 +542,6 @@ static UINT8 SOC_ApplyCapacityDelta(enum _CUR current_type, UINT16 current)
 	return (old_soc > new_soc) ? (UINT8)(old_soc - new_soc) : (UINT8)(new_soc - old_soc);
 }
 
-
-static void SOC_ResetLearningState(void)
-{
-	SOC_Calculate_Element.u32LearnPassedAs10 = 0U;
-	SOC_Calculate_Element.u16LearnAnchorSoc = 0U;
-	SOC_Calculate_Element.u16LearnState = SOC_LEARN_STATE_NONE;
-}
-
-static void SOC_AddLearnPassed(UINT8 direction, UINT32 delta_as10)
-{
-	if ((delta_as10 == 0U) || (SOC_Calculate_Element.u16LearnState == SOC_LEARN_STATE_NONE))
-	{
-		return;
-	}
-
-	if (((SOC_Calculate_Element.u16LearnState == SOC_LEARN_STATE_FULL_ANCHOR) && (direction == SOC_INTEGRATE_DIRECTION_DSG)) ||
-		((SOC_Calculate_Element.u16LearnState == SOC_LEARN_STATE_EMPTY_ANCHOR) && (direction == SOC_INTEGRATE_DIRECTION_CHG)))
-	{
-		if (SOC_Calculate_Element.u32LearnPassedAs10 <= (0xFFFFFFFFU - delta_as10))
-		{
-			SOC_Calculate_Element.u32LearnPassedAs10 += delta_as10;
-		}
-		else
-		{
-			SOC_Calculate_Element.u32LearnPassedAs10 = 0xFFFFFFFFU;
-		}
-	}
-	else if (SOC_Calculate_Element.u32LearnPassedAs10 != 0U)
-	{
-		SOC_ResetLearningState();
-	}
-}
-
-static void SOC_ApplyLearnedFullCapacity(UINT32 learned_cap)
-{
-	UINT32 min_cap;
-	UINT32 max_cap;
-	UINT32 max_step;
-	UINT32 old_cap;
-	UINT32 delta;
-
-	if (SOC_Calculate_Element.u32CapFactory == 0U)
-	{
-		return;
-	}
-
-	min_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32CapFactory * SOC_LEARN_CAP_MIN_PERCENT) / 100ULL);
-	max_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32CapFactory * SOC_LEARN_CAP_MAX_PERCENT) / 100ULL);
-	if ((learned_cap < min_cap) || (learned_cap > max_cap))
-	{
-		return;
-	}
-
-	old_cap = SOC_GetCapBase();
-	if (old_cap == 0U)
-	{
-		old_cap = SOC_Calculate_Element.u32CapFactory;
-	}
-
-	max_step = (UINT32)(((uint64_t)old_cap * SOC_LEARN_CAP_MAX_STEP_PERCENT) / 100ULL);
-	if (max_step == 0U)
-	{
-		max_step = 1U;
-	}
-
-	if (learned_cap > old_cap)
-	{
-		delta = learned_cap - old_cap;
-		SOC_Calculate_Element.u32CapFull = old_cap + ((delta > max_step) ? max_step : delta);
-	}
-	else
-	{
-		delta = old_cap - learned_cap;
-		SOC_Calculate_Element.u32CapFull = old_cap - ((delta > max_step) ? max_step : delta);
-	}
-
-	SOC_Calculate_Element.u16LearnFlags |= SOC_LEARN_FLAG_LEARNED;
-	SOC_Calculate_Element.u16MaxErrorPercent = SOC_MAX_ERROR_LEARNED_PERCENT;
-}
-
-static void SOC_OnTrustedFullAnchor(void)
-{
-	UINT16 span;
-	UINT16 required_span;
-	UINT32 learned_cap;
-
-	if (SOC_Calculate_Element.u16LearnState == SOC_LEARN_STATE_EMPTY_ANCHOR)
-	{
-		span = (SOC_Calculate_Element.u16LearnAnchorSoc <= 100U) ?
-			(UINT16)(100U - SOC_Calculate_Element.u16LearnAnchorSoc) : 0U;
-		required_span = (SOC_Calculate_Element.u16LearnFlags & SOC_LEARN_FLAG_LEARNED) ?
-			SOC_LEARN_NEXT_SPAN_PERCENT : SOC_LEARN_FIRST_SPAN_PERCENT;
-		if ((span >= required_span) && (SOC_Calculate_Element.u32LearnPassedAs10 != 0U))
-		{
-			learned_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32LearnPassedAs10 * 100ULL) / span);
-			SOC_ApplyLearnedFullCapacity(learned_cap);
-		}
-	}
-
-	SOC_Calculate_Element.u16LearnState = SOC_LEARN_STATE_FULL_ANCHOR;
-	SOC_Calculate_Element.u16LearnAnchorSoc = 100U;
-	SOC_Calculate_Element.u32LearnPassedAs10 = 0U;
-	SOC_Calculate_Element.u32CapNow = SOC_GetCapBase();
-}
-
-static void SOC_OnTrustedEmptyAnchor(void)
-{
-	UINT16 span;
-	UINT16 required_span;
-	UINT32 learned_cap;
-
-	if (SOC_Calculate_Element.u16LearnState == SOC_LEARN_STATE_FULL_ANCHOR)
-	{
-		span = (SOC_Calculate_Element.u16LearnAnchorSoc <= 100U) ?
-			SOC_Calculate_Element.u16LearnAnchorSoc : 0U;
-		required_span = (SOC_Calculate_Element.u16LearnFlags & SOC_LEARN_FLAG_LEARNED) ?
-			SOC_LEARN_NEXT_SPAN_PERCENT : SOC_LEARN_FIRST_SPAN_PERCENT;
-		if ((span >= required_span) && (SOC_Calculate_Element.u32LearnPassedAs10 != 0U))
-		{
-			learned_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32LearnPassedAs10 * 100ULL) / span);
-			SOC_ApplyLearnedFullCapacity(learned_cap);
-		}
-	}
-
-	SOC_Calculate_Element.u16LearnState = SOC_LEARN_STATE_EMPTY_ANCHOR;
-	SOC_Calculate_Element.u16LearnAnchorSoc = 0U;
-	SOC_Calculate_Element.u32LearnPassedAs10 = 0U;
-	SOC_Calculate_Element.u32CapNow = 0U;
-}
 
 static void SOC_AddDischargeCyclePercent(UINT8 delta_soc)
 {
@@ -794,6 +626,20 @@ static UINT8 SOC_StepTowardTarget(UINT8 current_soc, UINT8 target_soc, UINT8 max
 	return (UINT8)(current_soc - step);
 }
 
+static void SOC_UpdatePersistCache(void)
+{
+	g_soc_persist_cache.u32Cycle_times = SOC_Calculate_Element.u32Cycle_times;
+	g_soc_persist_cache.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now;
+	g_soc_persist_cache.u8DSG_SOC_Int = SOC_Calculate_Element.u8DSG_SOC_Int;
+}
+
+static UINT8 SOC_IsPersistCacheChanged(void)
+{
+	return (UINT8)((SOC_Calculate_Element.u8SOC_Now != g_soc_persist_cache.u8SOC_Now) ||
+		(SOC_Calculate_Element.u8DSG_SOC_Int != g_soc_persist_cache.u8DSG_SOC_Int) ||
+		(SOC_Calculate_Element.u32Cycle_times != g_soc_persist_cache.u32Cycle_times));
+}
+
 static void SOC_PersistSnapshotIfChanged(void)
 {
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
@@ -801,22 +647,14 @@ static void SOC_PersistSnapshotIfChanged(void)
 		return;
 	}
 
-	if ((SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element_backup.u8SOC_Now) ||
-		(SOC_Calculate_Element.u8DSG_SOC_Int != SOC_Calculate_Element_backup.u8DSG_SOC_Int) ||
-		(SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element_backup.u32Cycle_times) ||
-		(SOC_Calculate_Element.u32CapFull != SOC_Calculate_Element_backup.u32CapFull) ||
-		(SOC_Calculate_Element.u16LearnAnchorSoc != SOC_Calculate_Element_backup.u16LearnAnchorSoc) ||
-		(SOC_Calculate_Element.u16LearnState != SOC_Calculate_Element_backup.u16LearnState) ||
-		(SOC_Calculate_Element.u16MaxErrorPercent != SOC_Calculate_Element_backup.u16MaxErrorPercent) ||
-		(SOC_Calculate_Element.u16LearnFlags != SOC_Calculate_Element_backup.u16LearnFlags))
+	if (SOC_IsPersistCacheChanged())
 	{
 		if (SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH))
 		{
-			SOC_Calculate_Element_backup = SOC_Calculate_Element;
+			SOC_UpdatePersistCache();
 		}
 	}
 }
-
 static UINT8 SOC_GetRestBucket(UINT32 rest_seconds)
 {
 	if (rest_seconds < SOC_REST_BUCKET_1_SECONDS)
@@ -1047,7 +885,7 @@ static void SOC_ApplyWeakCellGuard(void)
 	SOC_ApplySocCorrection(current_soc);
 	if ((current_soc == 0U) && (SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol))
 	{
-		SOC_OnTrustedEmptyAnchor();
+		SOC_Calculate_Element.u32CapNow = 0U;
 	}
 }
 
@@ -1147,18 +985,11 @@ static void SOC_SyncOutputData(UINT8 force_display_follow)
 		SOC_Enhance_Element.u16_CapacityFull = 0U;
 		SOC_Enhance_Element.u16_CapacityFactory = 0U;
 	}
-	else if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
+	else
 	{
 		SOC_Enhance_Element.u8_SOH = 100U;
 		SOC_Enhance_Element.u16_CapacityNow = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapNow);
-		SOC_Enhance_Element.u16_CapacityFull = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapFull);
-		SOC_Enhance_Element.u16_CapacityFactory = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapFactory);
-	}
-	else
-	{
-		SOC_Enhance_Element.u8_SOH = (UINT8)(((uint64_t)100U * (uint64_t)SOC_Calculate_Element.u32CapFull) / (uint64_t)SOC_Calculate_Element.u32CapFactory);
-		SOC_Enhance_Element.u16_CapacityNow = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapNow);
-		SOC_Enhance_Element.u16_CapacityFull = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapFull);
+		SOC_Enhance_Element.u16_CapacityFull = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapFactory);
 		SOC_Enhance_Element.u16_CapacityFactory = SOC_CapAs10ToAh100(SOC_Calculate_Element.u32CapFactory);
 	}
 	if ((SOC_Calculate_Element.u32Cycle_times / 100U) > 0xFFFFU)
@@ -1170,7 +1001,6 @@ static void SOC_SyncOutputData(UINT8 force_display_follow)
 		SOC_Enhance_Element.u16_Cycle_times = (UINT16)(SOC_Calculate_Element.u32Cycle_times / 100U);
 	}
 
-	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
 
 	SOC_PublishReportData();
 }
@@ -1191,11 +1021,7 @@ static void SOC_LoadDefaultSnapshot(void)
 	SOC_Calculate_Element.u8SOC_Now = SOC_DEFAULT_STARTUP_PERCENT;
 	SOC_Calculate_Element.u8DSG_SOC_Int = 0U;
 	SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
-	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 	SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100U;
-	SOC_Calculate_Element.u16MaxErrorPercent = SOC_MAX_ERROR_DEFAULT_PERCENT;
-	SOC_Calculate_Element.u16LearnFlags = 0U;
-	SOC_ResetLearningState();
 }
 
 void soc_param_lib_init(void)
@@ -1218,7 +1044,6 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	flash_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 	flash_data.u16SocNow = SOC_DEFAULT_STARTUP_PERCENT;
 	flash_data.u16DsgSocInt = 0U;
-	flash_data.u16MaxErrorPercent = SOC_MAX_ERROR_DEFAULT_PERCENT;
 	flash_data.u32CycleTimes = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	flash_data.u32CapFull = cap_factory;
 	flash_data.u32CapNow = (UINT32)SOC_DEFAULT_STARTUP_PERCENT * cap_factory / 100U;
@@ -1777,8 +1602,6 @@ static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 	STORAGE_FLASH_SOC_DATA flash_data;
 	UINT8 valid = 0;
 	UINT8 save_ok = 1U;
-	UINT32 min_cap;
-	UINT32 max_cap;
 	UINT32 cap_base;
 
 	switch (Command)
@@ -1788,14 +1611,9 @@ static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 		flash_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 		flash_data.u16SocNow = SOC_Calculate_Element.u8SOC_Now;
 		flash_data.u16DsgSocInt = SOC_Calculate_Element.u8DSG_SOC_Int;
-		flash_data.u16MaxErrorPercent = SOC_Calculate_Element.u16MaxErrorPercent;
 		flash_data.u32CycleTimes = SOC_Calculate_Element.u32Cycle_times;
 		flash_data.u32CapNow = SOC_Calculate_Element.u32CapNow;
 		flash_data.u32CapFull = SOC_GetCapBase();
-		flash_data.u32LearnPassedAs10 = SOC_Calculate_Element.u32LearnPassedAs10;
-		flash_data.u16LearnAnchorSoc = SOC_Calculate_Element.u16LearnAnchorSoc;
-		flash_data.u16LearnState = SOC_Calculate_Element.u16LearnState;
-		flash_data.u16Flags = SOC_Calculate_Element.u16LearnFlags;
 		return StorageFlash_SaveSocData(&flash_data);
 
 	case EEPROM_DATA_READ:
@@ -1803,10 +1621,7 @@ static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 		if (valid)
 		{
 			if ((flash_data.u16SocNow > 100U) ||
-				(flash_data.u16DsgSocInt > 100U) ||
-				(flash_data.u16MaxErrorPercent > 100U) ||
-				(flash_data.u16LearnAnchorSoc > 100U) ||
-				(flash_data.u16LearnState > SOC_LEARN_STATE_EMPTY_ANCHOR))
+				(flash_data.u16DsgSocInt > 100U))
 			{
 				valid = 0U;
 			}
@@ -1822,40 +1637,15 @@ static UINT8 SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 			SOC_Calculate_Element.u8SOC_Now = (UINT8)flash_data.u16SocNow;
 			SOC_Calculate_Element.u8DSG_SOC_Int = (UINT8)flash_data.u16DsgSocInt;
 			SOC_Calculate_Element.u32Cycle_times = flash_data.u32CycleTimes;
-			SOC_Calculate_Element.u16MaxErrorPercent = (flash_data.u16MaxErrorPercent == 0U) ?
-				SOC_MAX_ERROR_DEFAULT_PERCENT : flash_data.u16MaxErrorPercent;
-			SOC_Calculate_Element.u16LearnAnchorSoc = flash_data.u16LearnAnchorSoc;
-			SOC_Calculate_Element.u16LearnState = flash_data.u16LearnState;
-			SOC_Calculate_Element.u16LearnFlags = flash_data.u16Flags;
-			SOC_Calculate_Element.u32LearnPassedAs10 = flash_data.u32LearnPassedAs10;
-
-			min_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32CapFactory * SOC_LEARN_CAP_MIN_PERCENT) / 100ULL);
-			max_cap = (UINT32)(((uint64_t)SOC_Calculate_Element.u32CapFactory * SOC_LEARN_CAP_MAX_PERCENT) / 100ULL);
-			if ((flash_data.u32CapFull >= min_cap) && (flash_data.u32CapFull <= max_cap))
-			{
-				SOC_Calculate_Element.u32CapFull = flash_data.u32CapFull;
-			}
-			else
-			{
-				SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
-				SOC_Calculate_Element.u16LearnFlags = 0U;
-			}
 
 			cap_base = SOC_GetCapBase();
-			if ((flash_data.u32CapNow != 0U) && (flash_data.u32CapNow <= cap_base))
-			{
-				SOC_Calculate_Element.u32CapNow = flash_data.u32CapNow;
-			}
-			else
-			{
-				SOC_Calculate_Element.u32CapNow = (UINT32)(((uint64_t)SOC_Calculate_Element.u8SOC_Now * cap_base) / 100ULL);
-			}
+			SOC_Calculate_Element.u32CapNow = (UINT32)(((uint64_t)SOC_Calculate_Element.u8SOC_Now * cap_base) / 100ULL);
 		}
 
-		SOC_Calculate_Element_backup = SOC_Calculate_Element;
+		SOC_UpdatePersistCache();
 		if (!save_ok)
 		{
-			SOC_Calculate_Element_backup.u8SOC_Now = 0xFFU;
+			g_soc_persist_cache.u8SOC_Now = 0xFFU;
 		}
 		return save_ok;
 
@@ -1882,24 +1672,17 @@ static void SOC_Update_StartUp(void)
 		{
 			target_soc = SOC_Calculate_Element.u8SOC_Now;
 		}
-		SOC_ResetLearningState();
 		SOC_ApplySocNow(target_soc);
 		break;
 
 	case 2:
 		target_soc = SOC_Calculate_Element.u8SOC_Now;
 		SOC_LoadFactoryRuntimeConfig();
-		SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 		SOC_Calculate_Element.u8DSG_SOC_Int = 0U;
-		SOC_Calculate_Element.u16MaxErrorPercent = SOC_MAX_ERROR_DEFAULT_PERCENT;
-		SOC_Calculate_Element.u16LearnFlags = 0U;
-		SOC_ResetLearningState();
 		SOC_ApplySocNow(target_soc);
 		break;
 
 	case 3:
-		SOC_ResetLearningState();
-		SOC_Calculate_Element.u16MaxErrorPercent = SOC_MAX_ERROR_DEFAULT_PERCENT;
 		SOC_ApplySocNow(SOC_Enhance_Element.u8_SetSocOnce);
 		break;
 
@@ -1965,7 +1748,6 @@ static void SOC_ApplyVoltageCalibration(void)
 	if (g_soc_runtime.u16FullConfirmTicks >= confirm_limit_ticks)
 	{
 		SOC_ApplySocNow(100U);
-		SOC_OnTrustedFullAnchor();
 		g_soc_runtime.u16FullConfirmTicks = 0U;
 	}
 }
@@ -2013,11 +1795,10 @@ void SOC_Test_SetKernelSoc(UINT8 soc)
 		soc = 100U;
 	}
 
-	SOC_ResetLearningState();
 	SOC_ResetRuntimeContext();
 	SOC_ApplySocNow(soc);
 	SOC_SyncOutputData(1U);
-	SOC_Calculate_Element_backup = SOC_Calculate_Element;
+	SOC_UpdatePersistCache();
 }
 
 UINT8 SOC_Test_GetKernelSoc(void)

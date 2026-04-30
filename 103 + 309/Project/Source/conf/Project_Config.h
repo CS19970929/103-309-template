@@ -140,22 +140,22 @@
 
 // <h>Upgrade Parameter Policy
 // <q> Enable upgrade parameter policy
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 0
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
 
 // <o> Upgrade parameter policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0429
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0001
 
 // <q> Reset AFE parameters
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
 // <q> Reset protect parameters
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
 
 // Reset OtherElement balance open voltage
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
 
 // <q> Reset SOC table
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 1
 
 // <q> Reset SOC config
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
