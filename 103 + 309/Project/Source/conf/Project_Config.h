@@ -1,7 +1,13 @@
 #ifndef PROJECT_CONFIG_H
 #define PROJECT_CONFIG_H
 
-/* Keil uVision: right click this file and select "Configuration Wizard". */
+/*
+ * Product-facing configuration.
+ *
+ * Keil uVision: right click this file and select "Configuration Wizard".
+ * Keep only daily release/product decisions here. Test switches and algorithm
+ * tuning defaults live in Project_AdvancedConfig.h.
+ */
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
@@ -86,34 +92,6 @@
 // <q> Enable virtual current compensation
 #define PROJECT_CFG_VIRTUAL_CURRENT_ENABLE 1
 
-// <h>Ebike Ride SOC Simulation
-// <q> Enable ebike ride input simulation
-#define PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE 0
-
-// <o> Ebike ride profile
-//   <0=> Auto ride profile
-//   <1=> Constant discharge profile
-//   <2=> Manual debugger sample
-#define PROJECT_CFG_EBIKE_RIDE_SIM_PROFILE 0
-
-// <o> Initial truth SOC, percent <0-100>
-#define PROJECT_CFG_EBIKE_RIDE_SIM_INITIAL_SOC_PERCENT 80
-
-// <o> Simulated cell internal resistance, mohm <0-100>
-#define PROJECT_CFG_EBIKE_RIDE_SIM_CELL_RES_MOHM 8
-
-// <o> Simulated max cell imbalance, mV <0-100>
-#define PROJECT_CFG_EBIKE_RIDE_SIM_CELL_IMBALANCE_MV 6
-// </h>
-
-// <h>SOC Automatic Test
-// <q> Enable SOC automatic self-test
-#define PROJECT_CFG_SOC_AUTO_TEST_ENABLE 0
-
-// <o> Virtual 200ms SOC samples executed per App_SOC call <1-1000>
-#define PROJECT_CFG_SOC_AUTO_TEST_TICKS_PER_CALL 100
-// </h>
-
 // <q> Enable DI system on/off switch
 #define PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE 0
 
@@ -125,9 +103,6 @@
 
 // <q> Enable LED function marker
 #define PROJECT_CFG_LED_FUNC_ENABLE 0
-
-// <q> Enable debug code
-#define PROJECT_CFG_DEBUG_CODE_ENABLE 0
 
 // <q> Enable sleep with current
 #define PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE 0
@@ -155,115 +130,12 @@
 #define PROJECT_CFG_SCI3_ROLE 0
 // </h>
 
-// <h>Flash 64K Storage Test
-// <q> Enable destructive quick test
-#define PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE 0
-
-// <o> Quick test cycles <1-65535>
-#define PROJECT_CFG_FLASH64K_QUICK_TEST_CYCLES 96
-
-// <q> Enable app running storage test
-#define PROJECT_CFG_FLASH64K_USE_TEST_ENABLE 0
-
-// <o> App test print period, seconds <1-65535>
-#define PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC 10
-
-// <q> Enable app test acceleration
-#define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE 0
-
-// <o> Accelerated SOC save period, seconds <1-65535>
-#define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_SOC_PERIOD_SEC 1
-
-// <o> Accelerated AFE save period, seconds <1-65535>
-#define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC 30
-// </h>
-
-// <h>SOC Calibration
-// <o> Full confirm minimum cell margin from V100, mV <0-500>
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
-
-// <o> Full confirm maximum cell delta, mV <0-1000>
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
-
-// <q> Enable online OCV guard under light current
-#define PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE 1
-
-// <o> Online OCV correction interval, seconds <1-600>
-#define PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS 30
-
-// <o> Online OCV minimum SOC gap, percent <1-50>
-#define PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT 3
-
-// <o> Online OCV max current divisor of C-rate <2-100>
-#define PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER 10
-
-// <o> Online OCV heavy discharge current divisor of C-rate <1-100>
-#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER 3
-
-// <o> Online OCV holdoff after heavy discharge, seconds <0-1800>
-#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS 180
-
-// <o> Online OCV voltage stable time, seconds <0-600>
-#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS 20
-
-// <o> Online OCV voltage stable window, mV <0-100>
-#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV 8
-
-// <o> Calibration minimum valid cell voltage, mV <1000-3500>
-#define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
-
-// <o> Calibration maximum valid cell voltage, mV <3600-6000>
-#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
-
-// <o> Calibration maximum cell delta, mV <0-3000>
-#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 300
-
-// <q> Block SOC calibration when third-level protection fault exists
-#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT 0
-
-// <q> Block SOC calibration when AFE/ADC/CBC/temperature system fault exists
-#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT 0
-// </h>
-
 // <h>LedBar
 // <q> Use GPIO Charlieplexing driver
 #define PROJECT_CFG_LEDBAR_DRIVER_GPIO_CHARLIE 1
 
 // <q> Enable LedBar sleep SOC backup
 #define PROJECT_CFG_LEDBAR_SLEEP_ENABLE 1
-
-// <q> Enable long-press GPIO toggle test
-#define PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST 0
-
-// <o> SOC display time, 10ms ticks <1-65535>
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
-
-// <q> Enable SOC display snap strategy
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
-
-// <o> SOC display snap window <0-20>
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_WINDOW 2
-
-// <o> SOC snap minimum extra segments <0-30>
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA 4
-
-// <o> SOC snap minimum gain <0-30>
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1
-
-// <o> Scan timer period in 100kHz ticks <1-1000>
-#define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
-
-// <o> MCU_WK on filter, 10ms ticks <0-255>
-#define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
-
-// <o> MCU_WK off filter, 10ms ticks <0-255>
-#define PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS 3
-
-// <o> Charge on filter, 100ms ticks <0-255>
-#define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 1
-
-// <o> Charge off filter, 100ms ticks <0-255>
-#define PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS 5
 // </h>
 
 // <h>Upgrade Parameter Policy
@@ -301,5 +173,7 @@
 // </h>
 
 // <<< end of configuration section >>>
+
+#include "Project_AdvancedConfig.h"
 
 #endif

@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "CommomSH367309_16series_103RCT6_C.uvprojx"
 PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_Config.h"
+ADVANCED_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_AdvancedConfig.h"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
@@ -71,6 +72,29 @@ GUARD_REQUIRED_TOKENS = [
     "FLASH64K_APP_QUICK_TEST_ENABLE",
     "FLASH64K_APP_USE_TEST_ENABLE",
     "ELOG_OUTPUT_ENABLE",
+]
+PUBLIC_CONFIG_HIDDEN_TOKENS = [
+    "PROJECT_CFG_DEBUG_CODE_ENABLE",
+    "PROJECT_CFG_EBIKE_RIDE_SIM_ENABLE",
+    "PROJECT_CFG_EBIKE_RIDE_SIM_PROFILE",
+    "PROJECT_CFG_SOC_AUTO_TEST_ENABLE",
+    "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE",
+    "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
+    "PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE",
+    "PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV",
+    "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST",
+    "PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS",
+    "PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS",
+]
+ADVANCED_CONFIG_REQUIRED_TOKENS = PUBLIC_CONFIG_HIDDEN_TOKENS + [
+    "PROJECT_CFG_SOC_AUTO_TEST_TICKS_PER_CALL",
+    "PROJECT_CFG_FLASH64K_QUICK_TEST_CYCLES",
+    "PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
+    "PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS",
+    "PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV",
+    "PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS",
 ]
 
 
@@ -167,8 +191,27 @@ def parse_header_defines(header_path):
     return defines
 
 
+def parse_config_defines():
+    defines = {}
+    for header_path in [PROJECT_CONFIG, ADVANCED_CONFIG]:
+        if header_path.exists():
+            defines.update(parse_header_defines(header_path))
+    return defines
+
+
 def check_required_files(reporter):
-    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
+    required = [
+        PROJECT,
+        PROJECT_CONFIG,
+        ADVANCED_CONFIG,
+        BUILD_GUARD,
+        CONF_H,
+        ELOG_CFG_H,
+        GITIGNORE,
+        PRE_COMMIT,
+        PRE_PUSH,
+    ]
+    for path in required:
         if path.exists():
             reporter.ok("required file exists: {0}".format(path.relative_to(ROOT)))
         else:
@@ -259,18 +302,43 @@ def check_keil_targets(reporter):
 
 
 def check_release_defaults(reporter):
-    if not PROJECT_CONFIG.exists():
+    if not PROJECT_CONFIG.exists() or not ADVANCED_CONFIG.exists():
         return
 
-    defines = parse_header_defines(PROJECT_CONFIG)
+    defines = parse_config_defines()
     for name, expected in sorted(RELEASE_SAFE_DEFAULTS.items()):
         actual = defines.get(name)
         if actual is None:
-            reporter.fail("Project_Config.h missing {0}".format(name))
+            reporter.fail("config headers missing {0}".format(name))
         elif actual != expected:
-            reporter.fail("Project_Config.h {0} should default to {1}, got {2}".format(name, expected, actual))
+            reporter.fail("config headers {0} should default to {1}, got {2}".format(name, expected, actual))
         else:
-            reporter.ok("Project_Config.h {0} default is {1}".format(name, expected))
+            reporter.ok("config headers {0} default is {1}".format(name, expected))
+
+
+def check_config_surface(reporter):
+    if not PROJECT_CONFIG.exists() or not ADVANCED_CONFIG.exists():
+        return
+
+    public_text = read_text(PROJECT_CONFIG)
+    advanced_text = read_text(ADVANCED_CONFIG)
+
+    if '#include "Project_AdvancedConfig.h"' in public_text:
+        reporter.ok("Project_Config.h includes Project_AdvancedConfig.h")
+    else:
+        reporter.fail("Project_Config.h must include Project_AdvancedConfig.h")
+
+    for token in PUBLIC_CONFIG_HIDDEN_TOKENS:
+        if token in public_text:
+            reporter.fail("Project_Config.h exposes internal setting {0}".format(token))
+        else:
+            reporter.ok("Project_Config.h hides {0}".format(token))
+
+    for token in ADVANCED_CONFIG_REQUIRED_TOKENS:
+        if token in advanced_text:
+            reporter.ok("Project_AdvancedConfig.h defines {0}".format(token))
+        else:
+            reporter.fail("Project_AdvancedConfig.h missing {0}".format(token))
 
 
 def check_guard_includes(reporter):
@@ -338,6 +406,7 @@ def main(argv):
     check_required_files(reporter)
     check_keil_targets(reporter)
     check_release_defaults(reporter)
+    check_config_surface(reporter)
     check_guard_includes(reporter)
     check_build_guard(reporter)
     check_gitignore(reporter)
