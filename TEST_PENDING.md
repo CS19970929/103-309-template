@@ -4,7 +4,7 @@
 
 ## SOC 主机侧检查
 
-- [x] 主机回放：执行 `python3 tools/soc_replay_test.py`，覆盖冷启动、快照恢复、设置一次 SOC、积分、循环/SOH、满电确认、低压锚定、RTC 静置、显示平滑、Fixed/Zero 覆盖和低压轻载 guard。
+- [x] 主机回放：执行 `python3 tools/soc_replay_test.py`，覆盖冷启动、快照恢复、设置一次 SOC、积分、循环/SOH、满电确认、低压表、RTC 静置、显示平滑、Fixed/Zero 覆盖和自动校准步长。
 - [x] 语法检查：对 `SOC.c` 和 `SocEnhance.c` 执行 C99 `clang -fsyntax-only`，确认当前改动可被主机编译器解析。
 - [x] Flash 兼容：保持 `STORAGE_FLASH_SOC_DATA` V2 结构、`StorageFlash_LoadSocData()`、`StorageFlash_SaveSocData()` 和旧 V1 快照迁移入口不变。
 - [x] 通信兼容：保持 `InitData_SOC()`、`App_SOC()`、`SOC_UpdateSampleData()`、`SOC_PublishReportData()`、`SOC_ApplyRtcRelaxationCompensation()`、`SOC_ResetStoredSnapshotToDefault()` 调用签名不变。
@@ -36,17 +36,22 @@
 
 ## 满电验证
 
-- [ ] 满电确认：`CHG`、`Ichg <= max(0.4A,C/20)`、`VCellMax >= V100`、`VCellMax >=4180mV`、`VCellMin >=4120mV`、压差 `<=120mV` 持续 `60s` 后才显示 `100%`。
+- [ ] 满电确认：非 `DSG`、`VCellMax >= max(V100,4180mV)` 后，满足 `VCellMin >=4150mV` 且压差 `<=150mV` 持续 `5s`，或内部 SOC `>=95%`、`VCellMin >=4100mV`、压差 `<=200mV` 累计 `15s` 后，每次只上修 `1%` 直到 `100%`。
 - [ ] 满电前显示：未确认满电前内部和显示 SOC 最高不超过 `99%`。
-- [ ] 压差异常：压差超过 `120mV` 时不确认满电。
-- [ ] 充电器行为：确认实际 charger CV/taper 阶段能满足 `C/20`，否则记录不能满电确认的原因。
+- [ ] 停充满电：充电器停止输出、电流变成 0 且进入 `RELAX` 后，只要高压条件仍满足，也能确认 `100%`。
+- [ ] 满电计数抗抖：满电条件短暂丢失时计数器递减而不是完全清零，确认采样抖动不会导致永远不到 `100%`。
+- [ ] 压差异常：压差超过当前确认阈值时不确认满电。
 
 ## 低压与 OCV 验证
 
-- [ ] 空电锚定：放电下 `VCellMin <=3000mV` 持续 `4s` 后，每次最多向 `0%` 下修 `5%`。
-- [ ] 末端兜底：`VCellMin <=2750mV` 时限制到 `<=1%`，`VCellMin <=2500mV` 时强制 `0%`。
-- [ ] 低压轻载 guard：`VCellMin <=3400mV` 且静置或 `Idsg <= C/5` 时，按 OCV 上限 `10s/1%` 下修。
-- [ ] 重载屏蔽：大电流骑行导致 voltage sag 时，低压轻载 guard 不应误动作。
+- [ ] 自动校准步长：满电确认、低压表、静置/RTC OCV、极端低压兜底，每次内部 SOC 校准变化都不得超过 `1%`。
+- [ ] 宽范围低压表：非充电下 `VCellMin <=3400mV` 后，按 RELAX、轻载 `<=C/5`、中载 `<=C/2`、重载 `>C/2` 四档表驱动下修。
+- [ ] 大电流 holdoff：`Idsg > C/2` 或刚结束大电流后的 `30s` 内，若 `VCellMin > V0 + 50mV`，低压表、low guard、静置 OCV 都不得校准 SOC。
+- [ ] 显示空电区：`VCellMin <=3000mV` 时，所有电流档位都按表向 `0%` 收敛，但每次仍只允许下修 `1%`。
+- [ ] 控制器保护前归零：`VCellMin <=2950mV` 时以最快 `1%/200ms` 收敛到 `0%`，不得一次跳变到 `0%`。
+- [ ] 低压停放电：低压保护后电流变成 0 且仍低于 `3000mV` 时，`RELAX` 状态继续把 SOC 收敛到 `0%`。
+- [ ] 极端兜底：`VCellMin <=2750mV/2500mV` 保留最快 `1%/200ms` 收敛，不作为正常 e-bike 空电依赖点。
+- [ ] 重载补偿：大电流骑行 voltage sag 下，表目标应高于轻载目标，避免 SOC 过早掉到 0。
 - [ ] 静置 OCV：运行态 `RELAX >=30min` 后只小步修正内部 SOC，显示继续平滑。
 - [ ] RTC OCV：长时间休眠唤醒后按 OCV 小步修正，不产生大幅显示跳变。
 

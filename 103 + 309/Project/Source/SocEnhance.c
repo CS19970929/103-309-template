@@ -36,16 +36,21 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_DEFAULT_CAP_A10          ((UINT16)270U)
 #define SOC_SOH_MIN                  ((UINT8)70U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)50U)
-#define SOC_FULL_SECONDS             ((UINT16)60U)
+#define SOC_FULL_SECONDS             ((UINT16)15U)
+#define SOC_FULL_FAST_SECONDS        ((UINT16)5U)
+#define SOC_FULL_MIN_SOC             ((UINT8)95U)
 #define SOC_FULL_MIN_VMAX_MV         ((UINT16)4180U)
-#define SOC_FULL_MIN_VMIN_MV         ((UINT16)4120U)
-#define SOC_FULL_MAX_DELTA_MV        ((UINT16)120U)
-#define SOC_TAPER_CURRENT_DIVIDER    ((UINT16)20U)
+#define SOC_FULL_MIN_VMIN_MV         ((UINT16)4100U)
+#define SOC_FULL_FAST_MIN_VMIN_MV    ((UINT16)4150U)
+#define SOC_FULL_MAX_DELTA_MV        ((UINT16)200U)
+#define SOC_FULL_FAST_MAX_DELTA_MV   ((UINT16)150U)
 #define SOC_EMPTY_MV                 ((UINT16)3000U)
 #define SOC_EMPTY_FAST_MV            ((UINT16)2750U)
 #define SOC_EMPTY_FORCE_MV           ((UINT16)2500U)
-#define SOC_EMPTY_SECONDS            ((UINT16)4U)
-#define SOC_EMPTY_STEP               ((UINT8)5U)
+#define SOC_EMPTY_CUR_LIGHT_DIVIDER  ((UINT16)5U)
+#define SOC_EMPTY_CUR_MID_DIVIDER    ((UINT16)2U)
+#define SOC_SAG_HOLDOFF_SECONDS      ((UINT16)30U)
+#define SOC_SAG_ALLOW_OFFSET_MV      ((int16_t)50)
 #define SOC_REST_OCV_SECONDS         ((UINT32)1800U)
 #define SOC_LOW_GUARD_MV             ((UINT16)3400U)
 #define SOC_LOW_GUARD_CRITICAL_MV    ((UINT16)3250U)
@@ -53,6 +58,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LOW_GUARD_CRIT_MARGIN    ((UINT8)3U)
 #define SOC_LOW_GUARD_SECONDS        ((UINT16)10U)
 #define SOC_LOW_GUARD_CUR_DIVIDER    ((UINT16)5U)
+#define SOC_CAL_STEP                 ((UINT8)1U)
 #define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)5U)
 #define SOC_DISPLAY_CHG_SECONDS      ((UINT8)10U)
 #define SOC_DISPLAY_LOW_SECONDS      ((UINT8)1U)
@@ -62,6 +68,11 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_MODE_RELAX               ((UINT8)0U)
 #define SOC_MODE_CHG                 ((UINT8)1U)
 #define SOC_MODE_DSG                 ((UINT8)2U)
+#define SOC_EMPTY_BAND_RELAX         ((UINT8)0U)
+#define SOC_EMPTY_BAND_LIGHT         ((UINT8)1U)
+#define SOC_EMPTY_BAND_MID           ((UINT8)2U)
+#define SOC_EMPTY_BAND_HEAVY         ((UINT8)3U)
+#define SOC_EMPTY_BAND_COUNT         ((UINT8)4U)
 
 typedef struct
 {
@@ -76,6 +87,7 @@ typedef struct
 	UINT16 rest_ticks;
 	UINT16 low_guard_ticks;
 	UINT16 display_ticks;
+	UINT16 sag_hold_ticks;
 	UINT8 soc;
 	UINT8 soh;
 	UINT8 display_soc;
@@ -86,10 +98,28 @@ typedef struct
 	UINT8 force_display;
 } SOC_STATE;
 
+typedef struct
+{
+	int16_t offset_mv;
+	UINT8 target[SOC_EMPTY_BAND_COUNT];
+	UINT8 ticks[SOC_EMPTY_BAND_COUNT];
+} SOC_EMPTY_TAIL_RULE;
+
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
 static SOC_STATE s_saved_soc;
+
+static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
+	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
+	{-25, {0U, 0U, 0U, 0U}, {5U, 5U, 1U, 1U}},
+	{0, {0U, 0U, 0U, 0U}, {10U, 5U, 5U, 5U}},
+	{50, {4U, 5U, 8U, 12U}, {20U, 15U, 10U, 8U}},
+	{100, {8U, 10U, 14U, 18U}, {35U, 30U, 25U, 20U}},
+	{200, {12U, 14U, 20U, 25U}, {60U, 50U, 40U, 30U}},
+	{300, {14U, 18U, 25U, 32U}, {90U, 75U, 60U, 45U}},
+	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
+};
 
 const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO] = {
 	3336, 100, 3332, 90, 3330, 80, 3327, 75, 3316, 70, 3301, 65,
@@ -271,28 +301,44 @@ static UINT16 soc_empty_mv(void)
 		SOC_Enhance_Element.u16_SOC_0_Vol : SOC_EMPTY_MV;
 }
 
+static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
+{
+	UINT16 empty_mv = soc_empty_mv();
+	UINT16 offset;
+
+	if (offset_mv >= 0)
+	{
+		offset = (UINT16)offset_mv;
+		return (empty_mv > (UINT16)(SOC_VALID_MAX_MV - offset)) ?
+			SOC_VALID_MAX_MV : (UINT16)(empty_mv + offset);
+	}
+	offset = (UINT16)(-offset_mv);
+	return (empty_mv > offset) ? (UINT16)(empty_mv - offset) : 0U;
+}
+
 static UINT16 soc_full_mv(void)
 {
 	return (SOC_Enhance_Element.u16_SOC_100_Vol != 0U) ?
 		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_FULL_MIN_VMAX_MV;
 }
 
-static UINT16 soc_taper_current_a10(void)
+static UINT16 soc_current_limit_a10(UINT16 divider)
 {
 	UINT16 cap_a10 = (SOC_Enhance_Element.u16_SOC_Ah != 0U) ?
 		SOC_Enhance_Element.u16_SOC_Ah : SOC_DEFAULT_CAP_A10;
-	UINT16 taper = (UINT16)((cap_a10 + SOC_TAPER_CURRENT_DIVIDER - 1U) /
-		SOC_TAPER_CURRENT_DIVIDER);
-	return (taper < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : taper;
+	UINT16 limit;
+
+	if (divider == 0U)
+	{
+		divider = 1U;
+	}
+	limit = (UINT16)((cap_a10 + divider - 1U) / divider);
+	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
 }
 
 static UINT16 soc_low_guard_current_a10(void)
 {
-	UINT16 cap_a10 = (SOC_Enhance_Element.u16_SOC_Ah != 0U) ?
-		SOC_Enhance_Element.u16_SOC_Ah : SOC_DEFAULT_CAP_A10;
-	UINT16 limit = (UINT16)((cap_a10 + SOC_LOW_GUARD_CUR_DIVIDER - 1U) /
-		SOC_LOW_GUARD_CUR_DIVIDER);
-	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
+	return soc_current_limit_a10(SOC_LOW_GUARD_CUR_DIVIDER);
 }
 
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg)
@@ -469,7 +515,6 @@ static void soc_integrate(UINT8 mode)
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 {
 	UINT8 target;
-	UINT8 step = 1U;
 	UINT8 old_soc = s_soc.soc;
 
 	if ((rest_seconds < SOC_REST_OCV_SECONDS) || !soc_calibration_allowed())
@@ -482,69 +527,199 @@ static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 	{
 		return 0U;
 	}
-	if (rest_seconds >= 21600U)
-	{
-		step = 3U;
-	}
-	else if (rest_seconds >= 3600U)
-	{
-		step = 2U;
-	}
-	soc_set(soc_step(s_soc.soc, target, step));
+	soc_set(soc_step(s_soc.soc, target, SOC_CAL_STEP));
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
-static void soc_apply_full_empty(UINT8 mode)
+static UINT8 soc_full_confirm_seconds(void)
 {
+	UINT16 full_mv = soc_full_mv();
+	UINT16 vmax_min = (full_mv > SOC_FULL_MIN_VMAX_MV) ? full_mv :
+		SOC_FULL_MIN_VMAX_MV;
+	UINT16 delta;
+
+	if (!soc_calibration_allowed() ||
+		(SOC_Enhance_Element.u16_VCellMax < vmax_min))
+	{
+		return 0U;
+	}
+
+	delta = soc_cell_delta();
+	if ((SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_FAST_MIN_VMIN_MV) &&
+		(delta <= SOC_FULL_FAST_MAX_DELTA_MV))
+	{
+		return (UINT8)SOC_FULL_FAST_SECONDS;
+	}
+	if ((s_soc.soc >= SOC_FULL_MIN_SOC) &&
+		(SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_MIN_VMIN_MV) &&
+		(delta <= SOC_FULL_MAX_DELTA_MV))
+	{
+		return (UINT8)SOC_FULL_SECONDS;
+	}
+	return 0U;
+}
+
+static UINT8 soc_empty_current_band(UINT8 mode)
+{
+	if (mode == SOC_MODE_RELAX)
+	{
+		return SOC_EMPTY_BAND_RELAX;
+	}
+	if (SOC_Enhance_Element.u16_Idsg <=
+		soc_current_limit_a10(SOC_EMPTY_CUR_LIGHT_DIVIDER))
+	{
+		return SOC_EMPTY_BAND_LIGHT;
+	}
+	if (SOC_Enhance_Element.u16_Idsg <=
+		soc_current_limit_a10(SOC_EMPTY_CUR_MID_DIVIDER))
+	{
+		return SOC_EMPTY_BAND_MID;
+	}
+	return SOC_EMPTY_BAND_HEAVY;
+}
+
+static UINT8 soc_heavy_discharge_active(UINT8 mode)
+{
+	return (UINT8)((mode == SOC_MODE_DSG) &&
+		(SOC_Enhance_Element.u16_Idsg >
+		 soc_current_limit_a10(SOC_EMPTY_CUR_MID_DIVIDER)));
+}
+
+static void soc_update_sag_hold(UINT8 mode)
+{
+	if (soc_heavy_discharge_active(mode))
+	{
+		s_soc.sag_hold_ticks = (UINT16)(SOC_SAG_HOLDOFF_SECONDS *
+			SOC_TICKS_PER_SECOND);
+	}
+	else if (s_soc.sag_hold_ticks > 0U)
+	{
+		--s_soc.sag_hold_ticks;
+	}
+}
+
+static UINT8 soc_sag_hold_blocks_calibration(void)
+{
+	return (UINT8)((s_soc.sag_hold_ticks > 0U) &&
+		soc_voltage_valid() &&
+		(SOC_Enhance_Element.u16_VCellMin >
+		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
+}
+
+static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT8 *ticks)
+{
+	UINT8 band = soc_empty_current_band(mode);
+	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
+	UINT16 threshold;
+	UINT16 i;
+
+	for (i = 0U; i < (UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])); ++i)
+	{
+		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
+		if (vmin <= threshold)
+		{
+			*target = s_empty_tail_table[i].target[band];
+			*ticks = s_empty_tail_table[i].ticks[band];
+			if (*ticks == 0U)
+			{
+				*ticks = 1U;
+			}
+			return 1U;
+		}
+	}
+	return 0U;
+}
+
+static UINT8 soc_empty_tail_active(UINT8 mode)
+{
+	UINT8 target;
+	UINT8 ticks;
+
+	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
+	{
+		return 0U;
+	}
+	if (soc_sag_hold_blocks_calibration())
+	{
+		return 0U;
+	}
+	if ((SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FORCE_MV) ||
+		(SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV))
+	{
+		return 1U;
+	}
+	return soc_empty_tail_config(mode, &target, &ticks);
+}
+
+static UINT8 soc_apply_full_empty(UINT8 mode)
+{
+	UINT8 full_seconds;
+	UINT8 empty_target;
+	UINT8 empty_ticks;
+	UINT8 old_soc = s_soc.soc;
+
+	if (mode != SOC_MODE_DSG)
+	{
+		full_seconds = soc_full_confirm_seconds();
+		if (full_seconds != 0U)
+		{
+			s_soc.empty_ticks = 0U;
+			if (s_soc.full_ticks < (UINT16)(full_seconds * SOC_TICKS_PER_SECOND))
+			{
+				++s_soc.full_ticks;
+			}
+			if (s_soc.full_ticks >= (UINT16)(full_seconds * SOC_TICKS_PER_SECOND))
+			{
+				soc_set(soc_step(s_soc.soc, 100U, SOC_CAL_STEP));
+				s_soc.full_ticks = 0U;
+				s_soc.full_anchor = (s_soc.soc >= 100U) ? 1U : 0U;
+			}
+			return (UINT8)(s_soc.soc != old_soc);
+		}
+		if (s_soc.full_ticks > 0U)
+		{
+			--s_soc.full_ticks;
+		}
+	}
+	else
+	{
+		s_soc.full_ticks = 0U;
+	}
+
 	if (mode == SOC_MODE_CHG)
 	{
 		s_soc.empty_ticks = 0U;
-		if (soc_calibration_allowed() &&
-			(SOC_Enhance_Element.u16_Ichg <= soc_taper_current_a10()) &&
-			(SOC_Enhance_Element.u16_VCellMax >= soc_full_mv()) &&
-			(SOC_Enhance_Element.u16_VCellMax >= SOC_FULL_MIN_VMAX_MV) &&
-			(SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_MIN_VMIN_MV) &&
-			(soc_cell_delta() <= SOC_FULL_MAX_DELTA_MV))
-		{
-			if (++s_soc.full_ticks >= (UINT16)(SOC_FULL_SECONDS * SOC_TICKS_PER_SECOND))
-			{
-				soc_set(100U);
-				s_soc.full_ticks = 0U;
-				s_soc.full_anchor = 1U;
-				s_soc.force_display = 1U;
-			}
-			return;
-		}
-		s_soc.full_ticks = 0U;
-		return;
+		return 0U;
 	}
-
-	s_soc.full_ticks = 0U;
-	if ((mode != SOC_MODE_DSG) || !soc_voltage_valid())
+	if (!soc_voltage_valid())
 	{
 		s_soc.empty_ticks = 0U;
-		return;
+		return 0U;
+	}
+	if (soc_sag_hold_blocks_calibration())
+	{
+		s_soc.empty_ticks = 0U;
+		return 0U;
 	}
 	if (SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FORCE_MV)
 	{
-		soc_set(0U);
-		s_soc.empty_ticks = 0U;
-		s_soc.force_display = 1U;
+		empty_target = 0U;
+		empty_ticks = 1U;
 	}
-	else if (SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV)
+	else if ((SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV) ||
+		soc_empty_tail_config(mode, &empty_target, &empty_ticks))
 	{
-		if (s_soc.soc > 1U)
+		if (SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV)
 		{
-			soc_set(1U);
+			empty_target = 0U;
+			empty_ticks = 1U;
 		}
-		s_soc.empty_ticks = 0U;
-		s_soc.force_display = 1U;
-	}
-	else if (SOC_Enhance_Element.u16_VCellMin <= soc_empty_mv())
-	{
-		if (++s_soc.empty_ticks >= (UINT16)(SOC_EMPTY_SECONDS * SOC_TICKS_PER_SECOND))
+		if (++s_soc.empty_ticks >= (UINT16)empty_ticks)
 		{
-			soc_set(soc_step(s_soc.soc, 0U, SOC_EMPTY_STEP));
+			if (s_soc.soc > empty_target)
+			{
+				soc_set(soc_step(s_soc.soc, empty_target, SOC_CAL_STEP));
+			}
 			s_soc.empty_ticks = 0U;
 		}
 	}
@@ -552,25 +727,27 @@ static void soc_apply_full_empty(UINT8 mode)
 	{
 		s_soc.empty_ticks = 0U;
 	}
+	return (UINT8)(s_soc.soc != old_soc);
 }
 
-static void soc_apply_low_voltage_guard(UINT8 mode)
+static UINT8 soc_apply_low_voltage_guard(UINT8 mode)
 {
 	UINT8 target;
 	UINT8 limit;
 	UINT8 margin;
+	UINT8 old_soc = s_soc.soc;
 
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid() ||
 		(SOC_Enhance_Element.u16_VCellMin > SOC_LOW_GUARD_MV))
 	{
 		s_soc.low_guard_ticks = 0U;
-		return;
+		return 0U;
 	}
 	if ((mode == SOC_MODE_DSG) &&
 		(SOC_Enhance_Element.u16_Idsg > soc_low_guard_current_a10()))
 	{
 		s_soc.low_guard_ticks = 0U;
-		return;
+		return 0U;
 	}
 	target = soc_ocv_percent();
 	margin = (SOC_Enhance_Element.u16_VCellMin <= SOC_LOW_GUARD_CRITICAL_MV) ?
@@ -580,7 +757,7 @@ static void soc_apply_low_voltage_guard(UINT8 mode)
 	{
 		if (++s_soc.low_guard_ticks >= (UINT16)(SOC_LOW_GUARD_SECONDS * SOC_TICKS_PER_SECOND))
 		{
-			soc_set(soc_step(s_soc.soc, limit, 1U));
+			soc_set(soc_step(s_soc.soc, limit, SOC_CAL_STEP));
 			s_soc.low_guard_ticks = 0U;
 		}
 	}
@@ -588,6 +765,7 @@ static void soc_apply_low_voltage_guard(UINT8 mode)
 	{
 		s_soc.low_guard_ticks = 0U;
 	}
+	return (UINT8)(s_soc.soc != old_soc);
 }
 
 static void soc_update_rest_timer(UINT8 mode)
@@ -639,15 +817,19 @@ static void soc_publish(UINT8 force_display)
 	else if (s_soc.display_soc != target)
 	{
 		if ((target < s_soc.display_soc) &&
-			(SOC_Enhance_Element.u16_VCellMin <= soc_empty_mv()))
+			(SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(50)))
 		{
-			seconds = SOC_DISPLAY_LOW_SECONDS;
+			ticks = (SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(-50)) ?
+				1U : (UINT8)(SOC_DISPLAY_LOW_SECONDS * SOC_TICKS_PER_SECOND);
 		}
-		else if ((target > s_soc.display_soc) && (s_soc.mode == SOC_MODE_CHG))
+		else
 		{
-			seconds = SOC_DISPLAY_CHG_SECONDS;
+			if ((target > s_soc.display_soc) && (s_soc.mode == SOC_MODE_CHG))
+			{
+				seconds = SOC_DISPLAY_CHG_SECONDS;
+			}
+			ticks = (UINT8)(seconds * SOC_TICKS_PER_SECOND);
 		}
-		ticks = (UINT8)(seconds * SOC_TICKS_PER_SECOND);
 		if (++s_soc.display_ticks >= ticks)
 		{
 			if (s_soc.display_soc < target)
@@ -753,6 +935,8 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 void SOC_IntEnhance_Ctrl(void)
 {
 	UINT8 force;
+	UINT8 calibrated;
+	UINT8 empty_active;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
 	{
@@ -765,9 +949,21 @@ void SOC_IntEnhance_Ctrl(void)
 	}
 	s_soc.mode = soc_direction();
 	soc_integrate(s_soc.mode);
-	soc_apply_full_empty(s_soc.mode);
-	soc_apply_low_voltage_guard(s_soc.mode);
-	soc_update_rest_timer(s_soc.mode);
+	soc_update_sag_hold(s_soc.mode);
+	empty_active = soc_empty_tail_active(s_soc.mode);
+	calibrated = soc_apply_full_empty(s_soc.mode);
+	if (!empty_active && !calibrated && !soc_sag_hold_blocks_calibration())
+	{
+		calibrated = soc_apply_low_voltage_guard(s_soc.mode);
+	}
+	if (!empty_active && !calibrated && !soc_sag_hold_blocks_calibration())
+	{
+		soc_update_rest_timer(s_soc.mode);
+	}
+	else if (empty_active || soc_sag_hold_blocks_calibration())
+	{
+		s_soc.rest_ticks = 0U;
+	}
 	soc_save_if_needed();
 	force = s_soc.force_display;
 	s_soc.force_display = 0U;
