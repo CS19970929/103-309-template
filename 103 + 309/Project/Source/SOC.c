@@ -3,51 +3,29 @@
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
 const UINT16 SOC_Table_Default[SOC_TABLE_SIZE] = {
-	3336,
-	100,
-	3332,
-	90,
-	3330,
-	80,
-	3327,
-	75,
-	3316,
-	70,
-	3301,
-	65,
-	3294,
-	60,
-	3291,
-	55,
-	3290,
-	50,
-	3288,
-	45,
-	3286,
-	40,
-	3279,
-	35,
-	3266,
-	30,
-	3254,
-	25,
-	3236,
-	20,
-	3212,
-	15,
-	3198,
-	10,
-	3112,
-	5,
-	2526,
-	0,
-	1000,
-	0,
-	1000,
-	0,
+	4160, 100,
+	4100, 95,
+	4050, 90,
+	3995, 85,
+	3935, 80,
+	3880, 75,
+	3835, 70,
+	3795, 65,
+	3760, 60,
+	3725, 55,
+	3695, 50,
+	3670, 45,
+	3645, 40,
+	3615, 35,
+	3585, 30,
+	3555, 25,
+	3525, 20,
+	3480, 15,
+	3400, 10,
+	3250, 5,
+	3000, 0,
 };
 
-// 一次性赋值
 static void SOC_LoadConfigData(void)
 {
 	UINT16 i;
@@ -94,6 +72,6 @@ void App_SOC(void)
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{
-		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0; // 初始化完毕
+		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
 	}
 }
