@@ -94,8 +94,8 @@
 
 - `App_CellBalance()` 被注释，均衡主流程不运行。
 - `App_MOS_Relay_Ctrl()` 没有实际调用，MOS/继电器统一控制入口不运行。
-- `__FUNC__HEAT__` 在 `conf.h` 中被注释，热管理入口当前不参与编译。
-- `App_Heat_Cool_Ctrl()` 即使启用，也只调用 `Heat_Control()`，没有调用 `Cool_Control()`。
+- `__FUNC__HEAT__` 当前在 `conf.h` 中已定义，热管理入口参与编译。
+- `App_Heat_Cool_Ctrl()` 当前只调用 `Heat_Control()`，没有调用 `Cool_Control()`。
 - `App_LowPowerProcess()` 当前直接调用 `rtc_sleep()`，老的 `b1OnOFF_RTC` 相关逻辑在 `#if 0` 中，且 `System_OnOFF_Function` 内没有 `b1OnOFF_RTC` 字段。
 
 这会影响对变量有效性的判断：有些字段不是完全没有逻辑，而是对应业务入口已经关闭。
@@ -124,7 +124,7 @@
 | `u8ErrFlag_Balanced` | 均衡动作记录/错误 | 均衡逻辑会置位，但主循环 `App_CellBalance()` 当前被注释 | 取决于是否恢复均衡 |
 | `u8ErrFlag_ADC` | ADC 错误 | 未找到有效外部置位/读取 | 疑似废弃 |
 | `u8ErrFlag_SOC_Cail` | SOC 校准/估算错误计数 | `SOC.c` 直接同步 `SOC_Enhance_Element.u16_SOC_CailFaultCnt` | 保留 |
-| `u8ErrFlag_Heat` | 加热超时错误 | 热管理启用后会置位；当前宏关闭 | 取决于是否恢复加热 |
+| `u8ErrFlag_Heat` | 加热超时错误 | 热管理启用后会置位；当前宏已开启 | 需上板验证 3 小时超时和恢复路径 |
 | `u8ErrFlag_Cool` | 冷却错误 | 未找到有效外部置位/读取 | 疑似废弃 |
 | `u8ErrFlag_TempBreak` | 温感断线错误 | `PubFunc.c` 置位/清零，IO、LED、日志读取 | 保留 |
 | `u8Res6` | 保留字节 | 无业务作用 | 保留为协议/对齐占位或重命名 |
@@ -152,7 +152,7 @@
 | `b1OnOFF_MOS_Relay` | MOS/继电器总开关 | `IO_Control.c`、`ChargerLoadFunc.c`、`Sci_Upper.c` 使用；但 `App_MOS_Relay_Ctrl()` 当前无调用 | 逻辑残留，需结合实际驱动路径确认 |
 | `b1OnOFF_Relay_Rec` | 继电器记录/恢复 | 只初始化注释，未找到业务读取 | 疑似废弃 |
 | `b1OnOFF_SOC_Fixed` | SOC 固定为 60 | `SOC.c`、`SocEnhance.c`、上位机写寄存器使用 | 保留，调试/生产功能 |
-| `b1OnOFF_Heat` | 加热功能开关 | `Heat_Cool.c` 读取；当前 `__FUNC__HEAT__` 关闭 | 取决于是否恢复加热 |
+| `b1OnOFF_Heat` | 加热功能开关 | `Heat_Cool.c` 读取；当前 `__FUNC__HEAT__` 已开启 | 需验证不会绕过充电保护链路 |
 | `b1OnOFF_Cool` | 冷却功能开关 | `Cool_Control()` 读取；但 `Cool_Control()` 当前未被主入口调用 | 疑似未完成/未启用 |
 | `b1OnOFF_AFE1` | AFE1 功能开关 | 只初始化，未找到业务读取 | 疑似废弃 |
 | `b1OnOFF_AFE2` | AFE2 功能开关 | 只初始化，未找到业务读取 | 疑似废弃 |

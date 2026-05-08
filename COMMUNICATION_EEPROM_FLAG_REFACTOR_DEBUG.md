@@ -263,22 +263,8 @@ flowchart TD
 - 多余的 `else if` 分支
 - 旧的散乱写入口
 
-## 7. 最终建议
+## 7. 可变标志与 dirty 位映射表
 
-如果要兼顾“安全、稳定、简单、好调试”，我建议最终结构是：
+如果需要逐项替换当前字段级写标志，或确认通信字段与 EEPROM 参数块的对应关系，优先参考这份对照表：
 
-- 地址表不变
-- 通信地址不变
-- 只保留块级 dirty
-- 少量块保留子 mask
-- EEPROM 后台统一处理
-- Keil 里重点盯 dirty、WP、写回结果和错误标志
-
-这比现在的方式更容易维护，也更容易定位通信写 EEPROM 的问题。
-
-## 7. �ɱ�־���±�־����
-
-�����Ҫ�����滻��ǰ���ֶμ�д��־������ֱ�ӿ���ݶ��ձ���
-
-- [COMMUNICATION_EEPROM_FLAG_MAPPING.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_MAPPING.md)
-
+- [COMMUNICATION_EEPROM_FLAG_MAPPING.md](COMMUNICATION_EEPROM_FLAG_MAPPING.md)

@@ -194,6 +194,7 @@ UINT8 SH367309_SC_DelayT_Set(void)
 	UINT8 result = 0;
 	UINT8 u8temp_now = 0;
 	UINT8 u8temp_need = 0;
+	UINT8 u8temp_write = 0;
 
 	u8temp_now = SH367309_Reg_Store.u8_MTP_SCV_SCT & 0x0F;
 	u8temp_need = OtherElement.u16CBC_DelayT >> 6; // 除以64得出等级，其表格就是以64us为一个等级的
@@ -202,9 +203,11 @@ UINT8 SH367309_SC_DelayT_Set(void)
 
 	if (u8temp_now != u8temp_need)
 	{
-		if (MTPWriteROM(0x0E, 1, (UINT8 *)((SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need)))
+		u8temp_write = (UINT8)((SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need);
+
+		if (MTPWriteROM(0x0E, 1, &u8temp_write))
 		{
-			SH367309_Reg_Store.u8_MTP_SCV_SCT = (SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need;
+			SH367309_Reg_Store.u8_MTP_SCV_SCT = u8temp_write;
 			OtherElement.u16CBC_DelayT = (UINT16)u8temp_need << 6;
 		}
 		else

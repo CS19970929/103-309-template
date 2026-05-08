@@ -197,7 +197,7 @@ void Heat_Control(void)
 {
 	static UINT8 heat_Flag = 0; // heat_Flag == 1，加热功能打开
 	static UINT8 temp_Count = 0;
-	static UINT8 heat_Count = 0;
+	static UINT16 heat_Count = 0;
 	static UINT16 closeChgMosCount = 0;
 	static UINT8 dsg_Count = 0; // 放电时间计数
 
@@ -217,6 +217,10 @@ void Heat_Control(void)
 		SystemStatus.bits.b1Status_Heat = 0;
 		MCUO_RELAY_HEAT = 0;
 		heat_Flag = 0;
+		temp_Count = 0;
+		heat_Count = 0;
+		closeChgMosCount = 0;
+		dsg_Count = 0;
 		// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 		SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
 		return;
@@ -263,10 +267,12 @@ void Heat_Control(void)
 			/* 停止加热 */
 			SystemStatus.bits.b1Status_Heat = 0;
 			heat_Flag = 0;
+			heat_Count = 0;
+			closeChgMosCount = 0;
 		}
 
 		/* 加热时间超过最大加热时间时间 */
-		if (++heat_Count == 60 * 60 * 3)
+		if (++heat_Count >= (UINT16)(60U * 60U * 3U))
 		{
 			/* 外部不控制充电管 */
 			// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
@@ -274,6 +280,9 @@ void Heat_Control(void)
 
 			System_ERROR_UserCallback(ERROR_HEAT);
 			heat_Flag = 0;
+			heat_Count = 0;
+			closeChgMosCount = 0;
+			dsg_Count = 0;
 		}
 	}
 	else
@@ -289,6 +298,9 @@ void Heat_Control(void)
 				/* 开始加热 */
 				SystemStatus.bits.b1Status_Heat = 1;
 				heat_Flag = 1;
+				heat_Count = 0;
+				closeChgMosCount = 0;
+				dsg_Count = 0;
 			}
 		}
 		else
@@ -301,6 +313,9 @@ void Heat_Control(void)
 			/* 关闭加热 */
 			SystemStatus.bits.b1Status_Heat = 0;
 			temp_Count = 0;
+			heat_Count = 0;
+			closeChgMosCount = 0;
+			dsg_Count = 0;
 		}
 	}
 

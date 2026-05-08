@@ -109,6 +109,7 @@ extern UINT8 gu8_DsgFirstOpen_Flag;
 void InitMosRelay_DOx(void);
 void InitData_Drivers(void);
 void App_MOS_Relay_Ctrl(void);
+void App_DI1_Switch(void);
 
 #endif	/* IO_CONTROL_H */
 

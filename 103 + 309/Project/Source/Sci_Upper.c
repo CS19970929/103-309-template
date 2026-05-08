@@ -67,6 +67,8 @@ static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx);
 static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
 static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
+static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
+static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count);
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
 static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort);
@@ -200,32 +202,38 @@ void CRC_verify(struct RS485MSG *s)
 void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 {
 	UINT16 t_u16Temp;
+	UINT16 u16ActualAddr;
+	UINT16 u16RegCount;
+	UINT16 u16WindowWords;
+	UINT16 u16ReadByteNum;
+	UINT16 u16ValidateOffset;
 
 	t_u16Temp = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+	u16ActualAddr = t_u16Temp;
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
 	if (t_u16Temp >= RS485_ADDR_RO_START2)
-	{ // 1个字
+	{ // D200 offset maps to combined RO buffer
 		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
 	}
 
 	else if (t_u16Temp >= RS485_ADDR_RO_START1)
-	{ // 33个字
+	{ // D100 offset maps to combined RO buffer
 		t_u16Temp -= (RS485_ADDR_RO_START1 - 63);
 	}
 
 	else if (t_u16Temp >= RS485_ADDR_RO_START0)
-	{ // 63个字
+	{ // D000 base window
 		t_u16Temp -= RS485_ADDR_RO_START0;
 	}
-	// 新加进来的
+	// Independent read-only sub-blocks
 	else if (t_u16Temp >= RS485_ADDR_RO_LCD)
 	{
-		t_u16Temp -= RS485_ADDR_RO_LCD; // LCD，有一次顺序乱了，显示数据不对导致找不到原因
+		t_u16Temp -= RS485_ADDR_RO_LCD;
 	}
 	else if (t_u16Temp >= RS485_ADDR_RW_AFE_PARAMETER)
 	{
-		t_u16Temp -= RS485_ADDR_RW_AFE_PARAMETER; // AFE，耕耘代码添加，前面出问题是忘了这里要添加
+		t_u16Temp -= RS485_ADDR_RW_AFE_PARAMETER;
 	}
 	else if (t_u16Temp >= RS485_ADDR_RW_OTHER_CANADD)
 	{
@@ -245,9 +253,35 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	}
 
 	s->u16RdRegStartAddr = t_u16Temp;
-	s->u16RdRegByteNum = (s->u16Buffer[5] + (s->u16Buffer[4] << 8)) << 1;
-}
+	u16RegCount = (UINT16)(s->u16Buffer[5] + (s->u16Buffer[4] << 8));
+	u16ReadByteNum = (UINT16)(u16RegCount << 1);
 
+	if ((u16RegCount == 0U) ||
+		(u16ReadByteNum > (UINT16)(RS485_MAX_BUFFER_SIZE - 5U)))
+	{
+		s->u16RdRegByteNum = 0;
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_DATA_INVALID;
+		return;
+	}
+
+	u16ValidateOffset = t_u16Temp;
+	if ((u16ActualAddr >= RS485_ADDR_RO_LCD) && (u16ActualAddr < RS485_ADDR_RO_START0))
+	{
+		u16ValidateOffset = 0U;
+	}
+
+	if ((!Sci_GetReadWindowWordCount(u16ActualAddr, &u16WindowWords)) ||
+		(!Sci_RangeFits(u16ValidateOffset, u16RegCount, u16WindowWords)))
+	{
+		s->u16RdRegByteNum = 0;
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_ADDR_INVALID;
+		return;
+	}
+
+	s->u16RdRegByteNum = (UINT8)u16ReadByteNum;
+}
 void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 {
 	UINT16 u16SciRegAddr;
@@ -346,6 +380,67 @@ static UINT8 Sci_RangeOverlaps(UINT16 start, UINT16 count, UINT16 block_start, U
 	UINT16 block_end = (UINT16)(block_start + block_count);
 
 	return (UINT8)((start < block_end) && (block_start < end));
+}
+
+static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
+{
+	if (word_count == 0)
+	{
+		return 0;
+	}
+
+	if (actual_addr >= RS485_ADDR_RO_START0)
+	{
+		*word_count = 97U;
+		return 1;
+	}
+	if (actual_addr >= RS485_ADDR_RO_LCD)
+	{
+		switch (actual_addr)
+		{
+		case RS485_ADDR_RO_LCD:
+			*word_count = 5U;
+			return 1;
+		case RS485_ADDR_RO_FA_RTC:
+			*word_count = (UINT16)(Record_len * 7U);
+			return 1;
+		case RS485_ADDR_SN_READ:
+			*word_count = (UINT16)(((UINT16)PRODUCT_ID_LENGTH_MAX * 3U + 1U) / 2U);
+			return 1;
+		case RS485_ADDR_EVENT_RECORD:
+			*word_count = (UINT16)(FLASH_STORAGE_LOG_RECORD_COUNT / 2U);
+			return 1;
+		default:
+			return 0;
+		}
+	}
+	if (actual_addr >= RS485_ADDR_RW_AFE_PARAMETER)
+	{
+		*word_count = AFE_PARAMETES_TOTAL_LENGTH;
+		return 1;
+	}
+	if (actual_addr >= RS485_ADDR_RW_OTHER_CANADD)
+	{
+		*word_count = (UINT16)(E2P_PARA_NUM_OTHER_ELEMENT1 + E2P_PARA_NUM_HEAT_COOL);
+		return 1;
+	}
+	if (actual_addr >= RS485_ADDR_RW_OTHER)
+	{
+		*word_count = (UINT16)(SOC_Size_TableCanSet + CompensateNUM + CompensateNUM + E2P_PARA_NUM_RTC);
+		return 1;
+	}
+	if (actual_addr >= RS485_ADDR_RW_PORTECT)
+	{
+		*word_count = E2P_PARA_NUM_PROTECT;
+		return 1;
+	}
+	if (actual_addr >= RS485_ADDR_RW_CALIB)
+	{
+		*word_count = (UINT16)(KB_NUM * 2U);
+		return 1;
+	}
+
+	return 0;
 }
 
 static void Sci_CopyWords(UINT16 *dst, const UINT16 *src, UINT16 count)

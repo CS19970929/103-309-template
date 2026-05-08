@@ -13,7 +13,7 @@
 //   <1=> Debug
 //   <2=> Factory/Test
 #ifndef PROJECT_CFG_BUILD_PROFILE
-#define PROJECT_CFG_BUILD_PROFILE 1
+#define PROJECT_CFG_BUILD_PROFILE 0
 #endif
 // </h>
 
@@ -60,7 +60,7 @@
 
 // <h>Feature Switches
 // <q> Enable IWDG watchdog
-#define PROJECT_CFG_WDOG_ENABLE 0
+#define PROJECT_CFG_WDOG_ENABLE 1
 
 // <q> Enable RTC function
 #define PROJECT_CFG_RTC_ENABLE 1

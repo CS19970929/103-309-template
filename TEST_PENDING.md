@@ -2,6 +2,17 @@
 
 本文记录当前 SOC 重写后需要持续验证的事项。主机侧回放覆盖算法边界，Keil 和上板项仍需在目标环境完成。
 
+## 项目级审查后待验证项 2026-05-09
+
+- [ ] Windows + Keil MDK 完整编译：分别编译 `FD_Release` / `FD_Debug`，确认 ARMCC 下没有新增 warning/error。
+- [ ] RS485 `0x03` 正常读兼容：覆盖 `0xD000 / 0xD100 / 0xD200 / 0xC000 / 0xC001 / 0xC002 / 0xC008 / 0x2000~0x2400`。
+- [ ] RS485 `0x03` 异常读：非法地址、`reg_count=0`、跨区读取、超长读取应返回负响应，不允许越界取数。
+- [ ] AFE MTP 写入：验证 `SH367309_SC_DelayT_Set()` 写 MTP `0x0E` 成功路径、失败路径和 `OtherElement.u16CBC_DelayT` 回退逻辑。
+- [ ] 热管理超时：打开加热后持续低温场景应在 3 小时超时触发 `ERROR_HEAT`，关闭/重启后计数器应重新开始。
+- [ ] 热管理与保护链路：任何充电相关保护触发后，`Heat_Cool` 不得重新打开 CHG MOS。
+- [ ] Release 看门狗：`PROJECT_CFG_WDOG_ENABLE=1` 时确认 IWDG 正常启动、主循环喂狗、异常卡死可复位。
+- [ ] 文档链接巡检：根目录 Markdown 不应再出现旧 Windows 绝对路径、副本工程路径或已过期看门狗描述。
+
 ## SOC 主机侧检查
 
 - [x] 主机回放：执行 `python3 tools/soc_replay_test.py`，覆盖冷启动、快照恢复、设置一次 SOC、积分、循环/SOH、满电确认、低压表、RTC 静置、显示平滑、Fixed/Zero 覆盖和自动校准步长。

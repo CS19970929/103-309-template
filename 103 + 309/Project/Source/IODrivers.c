@@ -1683,7 +1683,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		if (Driver_Element.u16_CurChg > CHG_MOS_OPEN_CUR)
 		{
 			s_MosDSG_Status_VolUvp = OPEN_MODE;
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = FORCE_KEEP_MODE;
+			Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
 		}
 	}
 

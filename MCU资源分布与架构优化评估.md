@@ -349,8 +349,8 @@ Removing startup_stm32f10x_hd.o(HEAP), (512 bytes)
 | TIM4 | LED 数码/74HC595 扫描 | 1 ms Update 中断 |
 | SysTick | 阻塞延时 | 不作为系统 tick |
 | RTC / BKP / PWR | 低功耗、休眠唤醒、BKP 标志 | RTC 主初始化未直接启用，低功耗路径使用 |
-| IWDG | 看门狗代码存在 | 当前 `wdog_enable` 注释，实际未启用 |
-| DBGMCU | 调试低功耗配置 | 当前 `DBGMCU_STOP` 使能 |
+| IWDG | 看门狗代码存在 | 当前 Release 默认通过 `PROJECT_CFG_WDOG_ENABLE=1` 启用；`FD_Debug` 可按调试需要临时关闭 |
+| DBGMCU | 调试低功耗配置 | `DBGMCU_STOP` 已限定在 `_DEBUG_` 下启用，Release 不应打开低功耗调试位 |
 
 ### 5.2 ADC 使用
 

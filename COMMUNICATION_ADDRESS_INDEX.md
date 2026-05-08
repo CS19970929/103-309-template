@@ -15,6 +15,8 @@
 | 0xC002 | RS485_ADDR_SN_READ | 序列号 / 硬件版本 / 软件版本 | Sci_ACK_0x03_ReadRegs_LCD() |
 | 0xC008 | RS485_ADDR_EVENT_RECORD | 事件记录区 | Sci_ACK_0x03_ReadRegs_LCD() / Sci_ACK_0x03_ReadRegs_EventRecord() |
 
+当前 `0x03` 读请求会做读窗口校验：非法地址、`reg_count=0`、响应长度过大或跨出读区都会返回负响应，不再允许从发送缓存越界取数。
+
 ### 1.1 `0xD000` 字段顺序
 
 - `u16VCell[0..31]` 逐串电压

@@ -4,15 +4,15 @@
 
 本文基于当前仓库中的 `103 + 309` 工程源码整理，主要参考：
 
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\Sci_Upper.h`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/Sci_Upper.h)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\Sci_Upper.c`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/Sci_Upper.c)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\SH367309_DataDeal.h`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/SH367309_DataDeal.h)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\SH367309_DataDeal.c`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/SH367309_DataDeal.c)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\Can_HDX.h`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/Can_HDX.h)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\System_Monitor.c`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/System_Monitor.c)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Source\LogRecord.c`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/LogRecord.c)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Users\Objects\CommomSH367309_16series_103RCT6_C.build_log.htm`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.build_log.htm)
-- [`E:\TODO\103 + 309 - 副本 - 副本\103 + 309\Project\Users\Objects\CommomSH367309_16series_103RCT6_C.sct`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.sct)
+- [`Sci_Upper.h`](<103 + 309/Project/Source/Sci_Upper.h>)
+- [`Sci_Upper.c`](<103 + 309/Project/Source/Sci_Upper.c>)
+- [`SH367309_DataDeal.h`](<103 + 309/Project/Source/SH367309_DataDeal.h>)
+- [`SH367309_DataDeal.c`](<103 + 309/Project/Source/SH367309_DataDeal.c>)
+- [`Can_HDX.h`](<103 + 309/Project/Source/Can_HDX.h>)
+- [`System_Monitor.c`](<103 + 309/Project/Source/System_Monitor.c>)
+- [`LogRecord.c`](<103 + 309/Project/Source/LogRecord.c>)
+- [`CommomSH367309_16series_103RCT6_C.build_log.htm`](<103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.build_log.htm>)
+- [`CommomSH367309_16series_103RCT6_C.sct`](<103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.sct>)
 
 ## 1. 通信总览
 
@@ -27,7 +27,7 @@
 
 ### 2.1 基本参数
 
-定义在 [`Sci_Upper.h`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/103%20+%20309/Project/Source/Sci_Upper.h)：
+定义在 [`Sci_Upper.h`](<103 + 309/Project/Source/Sci_Upper.h>)：
 
 - 广播地址：`0x00`
 - 从机地址：`0x01`
@@ -120,6 +120,13 @@ RS485 采用寄存器地址做逻辑分区，不同地址段对应不同数据�
 7. `>= 0x2200`：其它参数区
 8. `>= 0x2100`：保护参数区
 9. 否则：校准区
+
+当前实现会先校验寄存器数量和读窗口长度：
+
+- `reg_count == 0` 返回 `RS485_ERROR_DATA_INVALID`。
+- 响应字节数超过 `RS485_MAX_BUFFER_SIZE` 可承载范围时返回 `RS485_ERROR_DATA_INVALID`。
+- 起始地址不属于任何已知读区，或读取长度跨出当前读区时返回 `RS485_ERROR_ADDR_INVALID`。
+- `0xC000 / 0xC001 / 0xC002 / 0xC008` 是独立只读子块，按各自子块长度校验，不按 `0xC000` 大连续区处理。
 
 ### 3.2 主要读区内容
 
@@ -525,6 +532,12 @@ scatter 文件显示：
 | 寄存器数量低字节 | `u16Buffer[5]` |  |
 | CRC 低 / 高 | 尾部两个字节 | CRC16RTU |
 
+请求约束：
+
+- 寄存器数量必须大于 0。
+- 返回数据区必须能放入 `RS485_MAX_BUFFER_SIZE`。
+- 起始地址和读取长度必须落在同一个已知读窗口内。
+
 应答：
 
 | 字段 | 说明 |
@@ -769,7 +782,7 @@ flowchart TD
 
 完整的 `0x03 / 0x06 / 0x10` 子地址清单已经单独展开到：
 
-- [`COMMUNICATION_ADDRESS_INDEX.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_ADDRESS_INDEX.md)
+- [`COMMUNICATION_ADDRESS_INDEX.md`](COMMUNICATION_ADDRESS_INDEX.md)
 
 如果后续要继续补细，优先看这份索引，再回到主报告看分组逻辑和读写流程。
 
@@ -777,20 +790,18 @@ flowchart TD
 
 `0x10` 的子地址已经进一步展开为寄存器级清单，按功能块列出了完整写入地址、宏名和入口函数。
 
-- [`COMMUNICATION_WRITE_DETAIL.md`](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_WRITE_DETAIL.md)
+- [`COMMUNICATION_WRITE_DETAIL.md`](COMMUNICATION_WRITE_DETAIL.md)
 
 这份文档适合直接给上位机联调、测试和排障使用；如果需要看总览逻辑，仍然先回到本主报告，再跳到地址索引。
 
-## 21. EEPROM д��־��������Է���
+## 21. EEPROM 写标志收敛与 Keil 调试方案
 
-�����Ҫ�Ż�ͨ��д EEPROM �ı�־λ������ϣ���� Keil ���ߵ���ʱ�����׹۲����̣�����ֱ�ӿ���ݷ�����
+如需优化通信写 EEPROM 的标志位收敛，或在 Keil 在线调试时更清楚地观察 dirty 位、WP 和写回结果，优先参考：
 
-- [COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md)
+- [COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md](COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md)
 
+## 22. 可变标志位与 dirty 位映射
 
-## 22. �ɱ�־λ���� dirty λ����
+如需查找每个通信字段对应的写标志、dirty 位和参数块，优先参考：
 
-Ҫ�����ڵ��ֶμ�д��־���������ȿ����������ձ���
-
-- [COMMUNICATION_EEPROM_FLAG_MAPPING.md](E:/TODO/103%20+%20309%20-%20%E5%89%AF%E6%9C%AC%20-%20%E5%89%AF%E6%9C%AC/COMMUNICATION_EEPROM_FLAG_MAPPING.md)
-
+- [COMMUNICATION_EEPROM_FLAG_MAPPING.md](COMMUNICATION_EEPROM_FLAG_MAPPING.md)

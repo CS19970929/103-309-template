@@ -77,6 +77,9 @@ FALSE = 0, TRUE
 /* Project feature switches and SCI roles are derived from conf/Project_Config.h. */
 
 void InitSystemWakeUp(void);
+void open_chg_close_dsg(void);
+void open_dsg_close_chg(void);
+void enter_fac_mode(bool on);
 
 
 extern const unsigned char SeriesSelect_AFE1[16][16];
