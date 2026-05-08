@@ -77,16 +77,6 @@ void App_SOC(void)
 	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
 	UINT8 u8HasNewAfeSample;
 
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag)
-	{
-		return;
-	}
-
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-#if !LEDBAR_DRIVER_GPIO_CHARLIE
-	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-#endif
-
 	u8HasNewAfeSample = (g_u32AfeCurrentSampleSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
 	if (u8HasNewAfeSample)
 	{

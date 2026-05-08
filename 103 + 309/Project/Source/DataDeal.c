@@ -1100,13 +1100,15 @@ void new_todo_logi(void)
 #endif
 }
 
+extern bool g_200ms_task_flag;
 void App_AFEGet(void)
 {
-	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
-	{
+	// if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
+	if(!g_200ms_task_flag)
 		return;
-	}
+	g_200ms_task_flag = false;
 
+	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
 	DataLoad_CellVolt();
@@ -1122,4 +1124,5 @@ void App_AFEGet(void)
 	App_SH367309();
 	// App_MOS_Relay_Ctrl();
 	new_todo_logi();
+	App_SOC();
 }

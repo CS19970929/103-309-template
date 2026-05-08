@@ -13,6 +13,8 @@ static UINT8 s_u8Cnt1000ms = 0;
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
+bool g_200ms_task_flag = false;
+
 void EnableLowPowerDebug(void)
 {
 #ifdef _DEBUG_
@@ -234,12 +236,19 @@ void IWDG_Feed(void)
 	IWDG_ReloadCounter();
 }
 
-// 定时器3中断服务程序
 void TIM3_IRQHandler(void)
 {
+	static uint16_t count_200ms = 0;
+
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
+
+		if(++count_200ms >= 20)
+		{
+			count_200ms = 0;
+			g_200ms_task_flag = true;
+		}
 	}
 }

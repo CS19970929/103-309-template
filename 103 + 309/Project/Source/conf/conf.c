@@ -101,6 +101,11 @@ void InitIO_rtc(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
     }
+
+    GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+    GPIO_Init(GPIO_DBG_LED, &GPIO_InitStructure);
 }
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
