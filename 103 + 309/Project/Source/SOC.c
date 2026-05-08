@@ -82,6 +82,7 @@ void App_SOC(void)
 		return;
 	}
 
+	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 #if !LEDBAR_DRIVER_GPIO_CHARLIE
 	MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
 #endif

@@ -129,12 +129,19 @@ static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
 };
 
 #if LEDBAR_DRIVER_GPIO_CHARLIE
+// static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] = {
+//     {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
+//     {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
+//     {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
+//     {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
+//     {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
+// };
 static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] = {
-    {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
-    {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
-    {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
-    {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
     {LEDBAR_GPIO_P1, LEDBAR_PIN_P1},
+    {LEDBAR_GPIO_P3, LEDBAR_PIN_P3},
+    {LEDBAR_GPIO_P2, LEDBAR_PIN_P2},
+    {LEDBAR_GPIO_P4, LEDBAR_PIN_P4},
+    {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
 };
 
 // static const LedBarPinDef s_ledbar_gpio_pins[LEDBAR_PIN_COUNT] =
