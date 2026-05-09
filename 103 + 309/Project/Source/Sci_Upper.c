@@ -151,6 +151,7 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_HeatCoolElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
+void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s);
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
@@ -212,7 +213,11 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	u16ActualAddr = t_u16Temp;
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
-	if (t_u16Temp >= RS485_ADDR_RO_START2)
+	if (t_u16Temp >= RS485_ADDR_RO_SOC_TEST)
+	{
+		t_u16Temp -= (RS485_ADDR_RO_SOC_TEST - RS485_RO_SOC_TEST_OFFSET);
+	}
+	else if (t_u16Temp >= RS485_ADDR_RO_START2)
 	{ // D200 offset maps to combined RO buffer
 		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
 	}
@@ -391,7 +396,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 
 	if (actual_addr >= RS485_ADDR_RO_START0)
 	{
-		*word_count = 97U;
+		*word_count = RS485_RO_TOTAL_WORDS;
 		return 1;
 	}
 	if (actual_addr >= RS485_ADDR_RO_LCD)
@@ -533,6 +538,12 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 {
 	UINT16 u16SciRegStartAddr;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+
+	if (u16SciRegStartAddr == RS485_CMD_ADDR_SOC_TEST_SAMPLE)
+	{
+		Sci_WrRegs_0x10_SocTestMode(s);
+		return;
+	}
 
 	if (Sci_WrRegs_0x10_AFE_Parameters(u16SciRegStartAddr, s))
 	{
@@ -911,6 +922,17 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = 0; // 可以加多一个
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+
+	{
+		UINT16 status_words[RS485_RO_SOC_TEST_WORDS];
+		SOC_TestMode_ReadStatus(status_words, RS485_RO_SOC_TEST_WORDS);
+		for (j = 0; j < RS485_RO_SOC_TEST_WORDS; ++j)
+		{
+			u16SciTemp = status_words[j];
+			t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
+			t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		}
+	}
 }
 
 /*=================================================================
@@ -1026,6 +1048,37 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 }
 
+void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
+{
+	UINT16 reg_count = Sci_GetWrRegNum(s);
+	UINT8 enable;
+	UINT16 vcell_max;
+	UINT16 vcell_min;
+	UINT16 ichg;
+	UINT16 idsg;
+	UINT16 ticks;
+
+	if ((reg_count != 6U) || (!Sci_WrRegsByteCountValid(s, reg_count)))
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	enable = (Sci_GetWrValue(s, 0) != 0U) ? 1U : 0U;
+	vcell_max = Sci_GetWrValue(s, 1);
+	vcell_min = Sci_GetWrValue(s, 2);
+	ichg = Sci_GetWrValue(s, 3);
+	idsg = Sci_GetWrValue(s, 4);
+	ticks = Sci_GetWrValue(s, 5);
+	if (!SOC_TestMode_RunSample(enable, vcell_max, vcell_min, ichg, idsg, ticks))
+	{
+#if PROJECT_CFG_SOC_TEST_MODE_ENABLE
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+#else
+		Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);
+#endif
+	}
+}
 void Sci_ACK_0x03(struct RS485MSG *s)
 {
 	UINT8 i;

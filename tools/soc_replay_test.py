@@ -437,6 +437,34 @@ def test_discharge_integration_reduces_soc_and_counts_cycle_fraction():
     assert model.cycle_x100 % 100 == 10
 
 
+def test_coulomb_counting_tick_is_200ms_5hz():
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    start_cap = model.cap_now
+    model.tick(vmax=3700, vmin=3700, idsg=10)
+    assert start_cap - model.cap_now == 2
+
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    start_cap = model.cap_now
+    run_seconds(model, 1, idsg=10)
+    assert start_cap - model.cap_now == 10
+
+
+def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
+    model = SocModel.from_snapshot(Snapshot(soc=70, cap_now=CAP_FACTORY_AS10 * 70 // 100))
+    start_cap = model.cap_now
+    expected_delta = 0
+    currents = [30, 260, 80, 420, 0, 160, 320, 40]
+    for index in range(120 * TICKS_PER_SECOND):
+        idsg = currents[index % len(currents)]
+        vmax, vmin = ride_voltage(model, idsg=idsg, imbalance=8 if idsg >= 260 else 4)
+        model.tick(vmax=vmax, vmin=vmin, idsg=idsg)
+        expected_delta += idsg * PERIOD_MS // 1000
+    actual_delta = start_cap - model.cap_now
+    assert abs(actual_delta - expected_delta) <= 1
+    assert 66 <= model.soc <= 70
+    assert model.display_soc >= model.soc
+
+
 def test_charge_integration_stops_display_before_full_confirm():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
     run_seconds(model, 900, ichg=270, vmax=4100, vmin=4050)
@@ -689,6 +717,8 @@ def main():
         test_valid_snapshot_restores_capacity_and_cycle_soh,
         test_set_soc_once_syncs_internal_capacity_and_display,
         test_discharge_integration_reduces_soc_and_counts_cycle_fraction,
+        test_coulomb_counting_tick_is_200ms_5hz,
+        test_fast_current_pulses_integrate_average_energy_at_sample_rate,
         test_charge_integration_stops_display_before_full_confirm,
         test_soh_maps_cycles_to_capacity_floor,
         test_full_confirm_is_voltage_based_and_tolerates_charge_current,

@@ -15,6 +15,9 @@ extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
 
 void InitData_SOC(void);
 void App_SOC(void);
+UINT8 SOC_TestMode_RunSample(UINT8 enable, UINT16 vcell_max, UINT16 vcell_min,
+							 UINT16 ichg, UINT16 idsg, UINT16 ticks);
+void SOC_TestMode_ReadStatus(UINT16 status_words[], UINT16 word_count);
 
 #endif	/* SOC_H */
 

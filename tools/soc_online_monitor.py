@@ -39,6 +39,15 @@ def build_write_single(slave: int, addr: int, value: int) -> bytes:
     return append_crc(bytes((slave, 0x06)) + u16be(addr) + u16be(value))
 
 
+def build_write_multiple(slave: int, addr: int, values: list[int]) -> bytes:
+    if not values:
+        raise ValueError("values must not be empty")
+    payload = b"".join(u16be(value & 0xFFFF) for value in values)
+    return append_crc(
+        bytes((slave, 0x10)) + u16be(addr) + u16be(len(values)) + bytes((len(payload),)) + payload
+    )
+
+
 def verify_crc(frame: bytes) -> None:
     expected = crc16_modbus(frame[:-2])
     actual = frame[-2] | (frame[-1] << 8)
@@ -80,6 +89,19 @@ def write_single_register(ser, slave: int, addr: int, value: int) -> None:
         raise RuntimeError("write echo mismatch")
 
 
+def write_multiple_registers(ser, slave: int, addr: int, values: list[int]) -> None:
+    request = build_write_multiple(slave, addr, values)
+    ser.reset_input_buffer()
+    ser.write(request)
+    ser.flush()
+    frame = ser.read(8)
+    if len(frame) != 8:
+        raise RuntimeError("timeout waiting write-multiple response")
+    verify_crc(frame)
+    if frame[:6] != request[:6]:
+        raise RuntimeError("write-multiple echo mismatch")
+
+
 def read_status(ser, slave: int) -> dict[str, int]:
     regs = read_registers(ser, slave, 0xD000, 63)
     return {
@@ -117,6 +139,47 @@ def set_soc_once(ser, slave: int, soc: int) -> None:
     if not 0 <= soc <= 100:
         raise ValueError("SOC must be 0..100")
     write_single_register(ser, slave, 0x1005, soc)
+
+
+def read_soc_test_status(ser, slave: int) -> dict[str, int]:
+    regs = read_registers(ser, slave, 0xD300, 16)
+    return {
+        "supported": regs[0],
+        "enabled": regs[1],
+        "tick_ms": regs[2],
+        "ticks_per_second": regs[3],
+        "max_ticks_per_write": regs[4],
+        "last_vmax_mv": regs[5],
+        "last_vmin_mv": regs[6],
+        "last_ichg_a10": regs[7],
+        "last_idsg_a10": regs[8],
+        "last_ticks": regs[9],
+        "total_ticks": (regs[10] << 16) | regs[11],
+        "soc": regs[12],
+        "soh": regs[13],
+        "cap_now_ah100": regs[14],
+        "last_result": regs[15],
+    }
+
+
+def run_mcu_soc_test_sample(
+    ser,
+    slave: int,
+    *,
+    vmax_mv: int,
+    vmin_mv: int,
+    ichg_a10: int,
+    idsg_a10: int,
+    ticks: int,
+    enable: int = 1,
+) -> dict[str, int]:
+    write_multiple_registers(
+        ser,
+        slave,
+        0x2500,
+        [enable, vmax_mv, vmin_mv, ichg_a10, idsg_a10, ticks],
+    )
+    return read_soc_test_status(ser, slave)
 
 
 def main() -> int:

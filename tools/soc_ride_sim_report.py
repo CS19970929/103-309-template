@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Generate reusable SOC ride simulation reports.
 
 The simulator feeds the host-side SocModel with voltage/current generated from
@@ -98,6 +98,20 @@ def scenario_hill_climb() -> list[Segment]:
     ]
 
 
+def scenario_fast_current_pulses() -> list[Segment]:
+    pattern = [
+        Segment("pulse-light", 1, idsg_a10=30, imbalance_mv=4),
+        Segment("pulse-accelerate", 1, idsg_a10=260, imbalance_mv=8),
+        Segment("pulse-cruise", 1, idsg_a10=80, imbalance_mv=4),
+        Segment("pulse-steep", 1, idsg_a10=420, imbalance_mv=12),
+        Segment("pulse-coast", 1, idsg_a10=0, imbalance_mv=4),
+        Segment("pulse-recover", 1, idsg_a10=160, imbalance_mv=6),
+        Segment("pulse-restart", 1, idsg_a10=320, imbalance_mv=10),
+        Segment("pulse-roll", 1, idsg_a10=40, imbalance_mv=4),
+    ]
+    return pattern * 45
+
+
 def scenario_deep_cutoff() -> list[Segment]:
     return [
         Segment("low-soc-cruise", 240, idsg_a10=120, imbalance_mv=6),
@@ -116,6 +130,7 @@ def scenario_charge_anchor() -> list[Segment]:
 SCENARIOS = {
     "city_commute": (80.0, scenario_city_commute),
     "hill_climb": (60.0, scenario_hill_climb),
+    "fast_current_pulses": (70.0, scenario_fast_current_pulses),
     "deep_cutoff": (18.0, scenario_deep_cutoff),
     "charge_anchor": (88.0, scenario_charge_anchor),
 }
@@ -179,6 +194,9 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
     elif name == "hill_climb":
         passed = model.soc > 40 and max_abs_error <= 12.0
         notes = "大电流压降不能误判空电"
+    elif name == "fast_current_pulses":
+        passed = max_abs_error <= 8.0 and 60 <= model.soc <= 70
+        notes = "200ms/5Hz current pulse tracking should follow sampled average current"
     elif name == "deep_cutoff":
         passed = min_vmin <= 3050 and model.soc == 0 and model.display_soc <= 5
         notes = "接近控制器截止电压时应收敛到零"
@@ -219,6 +237,7 @@ def write_report(path: Path, results: list[ScenarioResult], csv_path: Path) -> N
         "## 测试模型",
         "",
         "- 电流输入使用 `A * 10`，与固件 `u16Ichg/u16IDischg` 一致。",
+        "- MCU SOC 安时积分节拍为 `200ms/5Hz`；快变电流测试按每个 200ms 样本平均电流校验。",
         "- 电压由真实容量 SOC 反推 OCV，并叠加放电压降、充电极化和单体不一致。",
         "- 被测对象是 `tools/soc_replay_test.py` 中镜像 `SocEnhance.c` 的主机模型。",
         "- CSV 明细文件：`{0}`。".format(csv_path.name),

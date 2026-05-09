@@ -12,7 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import soc_ride_sim_report as sim
-from soc_online_monitor import read_soc_params, read_status, set_soc_once
+from soc_online_monitor import read_soc_params, read_soc_test_status, read_status, run_mcu_soc_test_sample, set_soc_once
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +104,7 @@ class SocTestUi(tk.Tk):
         self.online_stop = threading.Event()
         self.online_rows: list[dict[str, object]] = []
         self.sim_rows: list[dict[str, object]] = []
+        self.mcu_rows: list[dict[str, object]] = []
         self._build_ui()
         self.after(100, self._poll_queue)
 
@@ -124,6 +125,7 @@ class SocTestUi(tk.Tk):
         self.tabs = ttk.Notebook(root)
         self.tabs.pack(fill="both", expand=True, pady=(10, 0))
         self._build_sim_tab()
+        self._build_mcu_test_tab()
         self._build_online_tab()
         self._build_report_tab()
         self._build_log_tab()
@@ -169,6 +171,45 @@ class SocTestUi(tk.Tk):
         self.volt_chart.pack(fill="both", expand=True, pady=(8, 0))
         self.soc_chart.bind("<Configure>", lambda _e: self.soc_chart.redraw())
         self.volt_chart.bind("<Configure>", lambda _e: self.volt_chart.redraw())
+
+    def _build_mcu_test_tab(self) -> None:
+        tab = ttk.Frame(self.tabs, padding=10)
+        self.tabs.add(tab, text="MCU加速测试")
+        controls = ttk.Frame(tab)
+        controls.pack(fill="x")
+        ttk.Button(controls, text="读取测试状态", command=self.read_mcu_test_status).pack(side="left", padx=4)
+        ttk.Button(controls, text="运行MCU真实骑行", command=self.run_mcu_ride_test).pack(side="left", padx=4)
+        ttk.Button(controls, text="运行快变电流", command=self.run_mcu_pulse_test).pack(side="left", padx=4)
+        ttk.Button(controls, text="关闭测试模式", command=self.disable_mcu_test_mode).pack(side="left", padx=4)
+        ttk.Label(
+            controls,
+            text="测试固件专用：量产固件默认会拒绝0x2500写入，D300状态supported=0。",
+        ).pack(side="left", padx=12)
+
+        self.mcu_status_var = tk.StringVar(value="MCU测试状态：未读取")
+        ttk.Label(tab, textvariable=self.mcu_status_var).pack(anchor="w", pady=(8, 0))
+
+        columns = ("step", "scenario", "soc", "vmin", "vmax", "ichg", "idsg", "ticks", "result")
+        self.mcu_tree = ttk.Treeview(tab, columns=columns, show="headings", height=12)
+        headings = {
+            "step": "step",
+            "scenario": "scenario",
+            "soc": "SOC",
+            "vmin": "Vmin",
+            "vmax": "Vmax",
+            "ichg": "Ichg",
+            "idsg": "Idsg",
+            "ticks": "ticks",
+            "result": "result",
+        }
+        for col in columns:
+            self.mcu_tree.heading(col, text=headings[col])
+            self.mcu_tree.column(col, width=92, anchor="center")
+        self.mcu_tree.pack(fill="x", pady=(10, 8))
+
+        self.mcu_chart = LineChart(tab, height=360)
+        self.mcu_chart.pack(fill="both", expand=True)
+        self.mcu_chart.bind("<Configure>", lambda _e: self.mcu_chart.redraw())
 
     def _build_online_tab(self) -> None:
         tab = ttk.Frame(self.tabs, padding=10)
@@ -321,6 +362,102 @@ class SocTestUi(tk.Tk):
         self.set_status("正在读取板端 SOC 参数...")
         threading.Thread(target=worker, daemon=True).start()
 
+    def read_mcu_test_status(self) -> None:
+        def worker() -> None:
+            try:
+                with self._open_serial() as ser:
+                    status = read_soc_test_status(ser, int(self.slave_var.get()))
+                self.queue.put(("mcu_status", status))
+            except Exception as exc:
+                self.queue.put(("error", f"读取MCU测试状态失败：{exc}"))
+
+        self.set_status("正在读取MCU SOC测试状态...")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _run_mcu_scenario_names(self, scenario_names: list[str]) -> None:
+        self.mcu_rows = []
+        for item in self.mcu_tree.get_children():
+            self.mcu_tree.delete(item)
+
+        def worker() -> None:
+            try:
+                rows: list[dict[str, object]] = []
+                with self._open_serial() as ser:
+                    slave = int(self.slave_var.get())
+                    status = read_soc_test_status(ser, slave)
+                    if status["supported"] != 1:
+                        raise RuntimeError("当前固件未开启SOC测试模式，量产固件会正常拒绝该测试")
+                    max_ticks = max(1, min(50, int(status["max_ticks_per_write"])))
+                    step_index = 0
+                    for name in scenario_names:
+                        start_soc, factory = sim.SCENARIOS[name]
+                        pack = sim.TruePack(start_soc)
+                        for segment in factory():
+                            remaining = segment.seconds * sim.TICKS_PER_SECOND
+                            while remaining > 0:
+                                ticks = min(max_ticks, remaining)
+                                vmax, vmin = pack.voltage(segment.idsg_a10, segment.ichg_a10, segment.imbalance_mv)
+                                status = run_mcu_soc_test_sample(
+                                    ser,
+                                    slave,
+                                    vmax_mv=vmax,
+                                    vmin_mv=vmin,
+                                    ichg_a10=segment.ichg_a10,
+                                    idsg_a10=segment.idsg_a10,
+                                    ticks=ticks,
+                                )
+                                for _ in range(ticks):
+                                    pack.step(segment.idsg_a10, segment.ichg_a10)
+                                step_index += 1
+                                row = {
+                                    "time_s": step_index,
+                                    "step": step_index,
+                                    "scenario": name,
+                                    "soc": status["soc"],
+                                    "vmin_mv": vmin,
+                                    "vmax_mv": vmax,
+                                    "ichg_a10": segment.ichg_a10,
+                                    "idsg_a10": segment.idsg_a10,
+                                    "ticks": ticks,
+                                    "result": status["last_result"],
+                                }
+                                rows.append(row)
+                                self.queue.put(("mcu_row", row))
+                                remaining -= ticks
+                    self.queue.put(("mcu_done", rows))
+            except Exception as exc:
+                self.queue.put(("error", f"MCU加速测试失败：{exc}"))
+
+        self.set_status("正在运行MCU SOC加速测试...")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_mcu_ride_test(self) -> None:
+        self._run_mcu_scenario_names(["city_commute", "hill_climb", "fast_current_pulses"])
+
+    def run_mcu_pulse_test(self) -> None:
+        self._run_mcu_scenario_names(["fast_current_pulses"])
+
+    def disable_mcu_test_mode(self) -> None:
+        def worker() -> None:
+            try:
+                with self._open_serial() as ser:
+                    status = run_mcu_soc_test_sample(
+                        ser,
+                        int(self.slave_var.get()),
+                        vmax_mv=3600,
+                        vmin_mv=3600,
+                        ichg_a10=0,
+                        idsg_a10=0,
+                        ticks=1,
+                        enable=0,
+                    )
+                self.queue.put(("mcu_status", status))
+            except Exception as exc:
+                self.queue.put(("error", f"关闭MCU测试模式失败：{exc}"))
+
+        self.set_status("正在关闭MCU SOC测试模式...")
+        threading.Thread(target=worker, daemon=True).start()
+
     def write_set_soc_once(self) -> None:
         try:
             soc = int(self.set_soc_var.get())
@@ -425,6 +562,18 @@ class SocTestUi(tk.Tk):
                     soc, row = payload  # type: ignore[misc]
                     self.set_status(f"已写入一次 SOC={soc}%，读回显示 SOC={row['soc']}%")
                     self._show_online_row(row)
+                elif kind == "mcu_status":
+                    status = payload  # type: ignore[assignment]
+                    self.mcu_status_var.set(
+                        "MCU测试状态：supported={supported} enabled={enabled} tick={tick_ms}ms "
+                        "max_ticks={max_ticks_per_write} total_ticks={total_ticks} soc={soc}% result={last_result}".format(**status)
+                    )
+                    self.set_status("MCU SOC测试状态已读取")
+                elif kind == "mcu_row":
+                    self._show_mcu_row(payload)  # type: ignore[arg-type]
+                elif kind == "mcu_done":
+                    self.mcu_rows = payload  # type: ignore[assignment]
+                    self.set_status(f"MCU SOC加速测试完成：{len(self.mcu_rows)}步")
                 elif kind == "error":
                     self.set_status(str(payload))
                     messagebox.showerror("错误", str(payload))
@@ -504,6 +653,38 @@ class SocTestUi(tk.Tk):
             "在线数据",
         )
         self.status_var.set(f"在线：SOC={row['soc']}% Vmin={row['vmin_mv']}mV")
+
+
+    def _show_mcu_row(self, row: dict[str, object]) -> None:
+        self.mcu_rows.append(row)
+        self.mcu_tree.insert(
+            "",
+            "end",
+            values=(
+                row["step"],
+                row["scenario"],
+                row["soc"],
+                row["vmin_mv"],
+                row["vmax_mv"],
+                row["ichg_a10"],
+                row["idsg_a10"],
+                row["ticks"],
+                row["result"],
+            ),
+        )
+        if len(self.mcu_tree.get_children()) > 300:
+            self.mcu_tree.delete(self.mcu_tree.get_children()[0])
+        self.mcu_tree.yview_moveto(1.0)
+        self.mcu_chart.set_data(
+            self.mcu_rows,
+            [
+                ("soc", "SOC", "#16a34a"),
+                ("vmin_mv", "Vmin", "#7c3aed"),
+                ("idsg_a10", "Idsg", "#dc2626"),
+                ("ichg_a10", "Ichg", "#2563eb"),
+            ],
+            "MCU测试数据",
+        )
 
 
 def main() -> int:
