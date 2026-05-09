@@ -39,11 +39,10 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_FULL_SECONDS             ((UINT16)15U)
 #define SOC_FULL_FAST_SECONDS        ((UINT16)5U)
 #define SOC_FULL_MIN_SOC             ((UINT8)95U)
-#define SOC_FULL_MIN_VMAX_MV         ((UINT16)4180U)
-#define SOC_FULL_MIN_VMIN_MV         ((UINT16)4100U)
-#define SOC_FULL_FAST_MIN_VMIN_MV    ((UINT16)4150U)
-#define SOC_FULL_MAX_DELTA_MV        ((UINT16)200U)
-#define SOC_FULL_FAST_MAX_DELTA_MV   ((UINT16)150U)
+#define SOC_DEFAULT_FULL_MV          ((UINT16)4180U)
+#define SOC_FULL_FAST_MARGIN_MV      ((UINT16)30U)
+#define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
+#define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
 #define SOC_EMPTY_MV                 ((UINT16)3000U)
 #define SOC_EMPTY_FAST_MV            ((UINT16)2750U)
 #define SOC_EMPTY_FORCE_MV           ((UINT16)2500U)
@@ -62,9 +61,9 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)5U)
 #define SOC_DISPLAY_CHG_SECONDS      ((UINT8)10U)
 #define SOC_DISPLAY_LOW_SECONDS      ((UINT8)1U)
-#define SOC_VALID_MIN_MV             ((UINT16)2000U)
-#define SOC_VALID_MAX_MV             ((UINT16)5000U)
-#define SOC_VALID_MAX_DELTA_MV       ((UINT16)1000U)
+#define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
+#define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
+#define SOC_VALID_MAX_DELTA_MV       ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV)
 #define SOC_MODE_RELAX               ((UINT8)0U)
 #define SOC_MODE_CHG                 ((UINT8)1U)
 #define SOC_MODE_DSG                 ((UINT8)2U)
@@ -253,19 +252,42 @@ static UINT8 soc_voltage_valid(void)
 	return 1U;
 }
 
+static UINT16 soc_voltage_with_margin(UINT16 base_mv, UINT16 margin_mv)
+{
+	return (base_mv > margin_mv) ? (UINT16)(base_mv - margin_mv) : 0U;
+}
+
+static UINT8 soc_protection_fault_blocks_calibration(void)
+{
+#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT
+	return (UINT8)(g_stCellInfoReport.unMdlFault_Third.all != 0U);
+#else
+	return 0U;
+#endif
+}
+
+static UINT8 soc_system_fault_blocks_calibration(void)
+{
+#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT
+	return (UINT8)((System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_ADC) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_CBC_CHG) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) != 0U));
+#else
+	return 0U;
+#endif
+}
+
 static UINT8 soc_calibration_allowed(void)
 {
 	if (!soc_voltage_valid() || (soc_cell_delta() > SOC_VALID_MAX_DELTA_MV))
 	{
 		return 0U;
 	}
-	return (UINT8)((g_stCellInfoReport.unMdlFault_Third.all == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_AFE1) == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_ADC) == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_CBC_CHG) == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) == 0U) &&
-		(System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) == 0U));
+	return (UINT8)((!soc_protection_fault_blocks_calibration()) &&
+		(!soc_system_fault_blocks_calibration()));
 }
 
 static const UINT16 *soc_ocv_table(UINT16 *size)
@@ -319,7 +341,7 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 static UINT16 soc_full_mv(void)
 {
 	return (SOC_Enhance_Element.u16_SOC_100_Vol != 0U) ?
-		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_FULL_MIN_VMAX_MV;
+		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_DEFAULT_FULL_MV;
 }
 
 static UINT16 soc_current_limit_a10(UINT16 divider)
@@ -534,8 +556,9 @@ static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 static UINT8 soc_full_confirm_seconds(void)
 {
 	UINT16 full_mv = soc_full_mv();
-	UINT16 vmax_min = (full_mv > SOC_FULL_MIN_VMAX_MV) ? full_mv :
-		SOC_FULL_MIN_VMAX_MV;
+	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
+	UINT16 vmin_min = vmax_min;
+	UINT16 vmin_fast = soc_voltage_with_margin(full_mv, SOC_FULL_FAST_MARGIN_MV);
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
@@ -545,13 +568,13 @@ static UINT8 soc_full_confirm_seconds(void)
 	}
 
 	delta = soc_cell_delta();
-	if ((SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_FAST_MIN_VMIN_MV) &&
-		(delta <= SOC_FULL_FAST_MAX_DELTA_MV))
+	if ((SOC_Enhance_Element.u16_VCellMin >= vmin_fast) &&
+		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
 		return (UINT8)SOC_FULL_FAST_SECONDS;
 	}
 	if ((s_soc.soc >= SOC_FULL_MIN_SOC) &&
-		(SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_MIN_VMIN_MV) &&
+		(SOC_Enhance_Element.u16_VCellMin >= vmin_min) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
 		return (UINT8)SOC_FULL_SECONDS;

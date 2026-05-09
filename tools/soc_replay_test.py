@@ -20,6 +20,8 @@ SOH_STEP_CYCLES = 50
 FULL_SECONDS = 15
 FULL_FAST_SECONDS = 5
 FULL_MIN_SOC = 95
+FULL_CONFIRM_MARGIN_MV = 80
+FULL_CONFIRM_MAX_DELTA_MV = 120
 EMPTY_MV = 3000
 REST_OCV_SECONDS = 1800
 LOW_GUARD_SECONDS = 10
@@ -28,6 +30,8 @@ EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = 1
 SAG_HOLDOFF_SECONDS = 30
 SAG_ALLOW_MV = EMPTY_MV + 50
+BLOCK_CALIBRATION_PROTECTION_FAULT = False
+BLOCK_CALIBRATION_SYSTEM_FAULT = False
 
 EMPTY_BAND_RELAX = 0
 EMPTY_BAND_LIGHT = 1
@@ -161,8 +165,12 @@ class SocModel:
             return MODE_DSG
         return MODE_RELAX
 
-    def voltage_allowed(self, vmax, vmin, fault=False):
-        return not fault and 2000 <= vmin <= vmax <= 5000 and (vmax - vmin) <= 1000
+    def voltage_allowed(self, vmax, vmin, fault=False, system_fault=False):
+        if BLOCK_CALIBRATION_PROTECTION_FAULT and fault:
+            return False
+        if BLOCK_CALIBRATION_SYSTEM_FAULT and system_fault:
+            return False
+        return 2000 <= vmin <= vmax <= 5000 and (vmax - vmin) <= 1000
 
     def add_cycle_capacity(self, delta):
         unit = self.cap_factory // 100
@@ -239,13 +247,15 @@ class SocModel:
             self.empty_ticks = 0
         return self.soc != old
 
-    def full_confirm_seconds(self, vmax, vmin):
-        if not self.voltage_allowed(vmax, vmin) or vmax < 4180:
+    def full_confirm_seconds(self, vmax, vmin, v100=4180):
+        vmin_min = max(0, v100 - FULL_CONFIRM_MARGIN_MV)
+        vmin_fast = max(0, v100 - 30)
+        if not self.voltage_allowed(vmax, vmin) or vmax < vmin_min:
             return 0
         delta = vmax - vmin
-        if vmin >= 4150 and delta <= 150:
+        if vmin >= vmin_fast and delta <= FULL_CONFIRM_MAX_DELTA_MV:
             return FULL_FAST_SECONDS
-        if self.soc >= FULL_MIN_SOC and vmin >= 4100 and delta <= 200:
+        if self.soc >= FULL_MIN_SOC and vmin >= vmin_min and delta <= FULL_CONFIRM_MAX_DELTA_MV:
             return FULL_SECONDS
         return 0
 
@@ -432,6 +442,21 @@ def test_full_confirm_is_voltage_based_and_tolerates_charge_current():
     run_seconds(model, FULL_SECONDS + 1, ichg=270, vmax=4180, vmin=4090)
     assert model.soc != 100
 
+    model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
+    run_seconds(model, FULL_SECONDS + 1, ichg=270, vmax=4180, vmin=4050)
+    assert model.soc != 100
+
+    model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
+    run_seconds(model, FULL_SECONDS + 1, ichg=270, vmax=4180, vmin=4040)
+    assert model.soc != 100
+
+
+def test_full_confirm_threshold_follows_configured_v100():
+    model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
+    assert model.full_confirm_seconds(vmax=3570, vmin=3570, v100=3650) == FULL_SECONDS
+    assert model.full_confirm_seconds(vmax=3569, vmin=3569, v100=3650) == 0
+    assert model.full_confirm_seconds(vmax=3650, vmin=3520, v100=3650) == 0
+
 
 def test_empty_anchor_limits_low_voltage_tail():
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
@@ -482,12 +507,13 @@ def test_rtc_rest_ocv_applies_small_bounded_step():
     assert model.display_soc == 51
 
 
-def test_ocv_correction_blocks_fault_and_direction_errors():
+def test_ocv_correction_fault_blocking_follows_config_and_direction_errors():
     model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
     assert not model.apply_rest_ocv(21600, vmax=3835, vmin=3835, direction=MODE_DSG)
     assert model.soc == 50
-    assert not model.apply_rest_ocv(21600, vmax=3835, vmin=3835, fault=True)
-    assert model.soc == 50
+    changed = model.apply_rest_ocv(21600, vmax=3835, vmin=3835, fault=True)
+    assert changed == (not BLOCK_CALIBRATION_PROTECTION_FAULT)
+    assert model.soc == (51 if not BLOCK_CALIBRATION_PROTECTION_FAULT else 50)
 
 
 def test_display_smoothing_charge_and_low_voltage_down():
@@ -579,9 +605,10 @@ def main():
         test_charge_integration_stops_display_before_full_confirm,
         test_soh_maps_cycles_to_capacity_floor,
         test_full_confirm_is_voltage_based_and_tolerates_charge_current,
+        test_full_confirm_threshold_follows_configured_v100,
         test_empty_anchor_limits_low_voltage_tail,
         test_rtc_rest_ocv_applies_small_bounded_step,
-        test_ocv_correction_blocks_fault_and_direction_errors,
+        test_ocv_correction_fault_blocking_follows_config_and_direction_errors,
         test_display_smoothing_charge_and_low_voltage_down,
         test_fixed_and_zero_overlay_do_not_change_internal_soc,
         test_low_voltage_tail_table_uses_current_bands_and_rate_limits,
