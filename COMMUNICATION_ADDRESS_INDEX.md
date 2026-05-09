@@ -16,6 +16,7 @@
 | 0xC008 | RS485_ADDR_EVENT_RECORD | 事件记录区 | Sci_ACK_0x03_ReadRegs_LCD() / Sci_ACK_0x03_ReadRegs_EventRecord() |
 
 当前 `0x03` 读请求会做读窗口校验：非法地址、`reg_count=0`、响应长度过大或跨出读区都会返回负响应，不再允许从发送缓存越界取数。
+`0xC008` 事件记录区保持兼容：上位机读取 `0x01 03 C0 08 00 64 F9 E3` 时，`0x0064` 表示 100 个 Modbus 寄存器；每条事件记录为 2 字节，正好对应 1 个寄存器，因此合法窗口长度必须是 `FLASH_STORAGE_LOG_RECORD_COUNT`，不能再除以 2。
 
 ### 1.1 `0xD000` 字段顺序
 

@@ -413,7 +413,8 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 			*word_count = (UINT16)(((UINT16)PRODUCT_ID_LENGTH_MAX * 3U + 1U) / 2U);
 			return 1;
 		case RS485_ADDR_EVENT_RECORD:
-			*word_count = (UINT16)(FLASH_STORAGE_LOG_RECORD_COUNT / 2U);
+			/* Each event log entry is two bytes, exactly one Modbus register. */
+			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
 			return 1;
 		default:
 			return 0;
