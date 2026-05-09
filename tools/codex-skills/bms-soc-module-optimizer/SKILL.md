@@ -31,11 +31,17 @@ Use this skill for STM32 BMS SOC work: SOC accuracy, ride simulation, low-voltag
 5. Online board readback
    - Default current project: RS485 Modbus RTU, COM port from Windows, `19200 8N1`, slave `1`.
    - Read only first:
-     - `py tools\soc_online_monitor.py --port COM4 --baud 19200 --samples 30 --interval 1 --csv SOC_ONLINE_MONITOR.csv`
+   - `py tools\soc_online_monitor.py --port COM4 --baud 19200 --samples 30 --interval 1 --csv SOC_ONLINE_MONITOR.csv`
    - Verify `0xD000`: voltage, current, SOC/SOH/capacity/cycles/faults.
    - Verify `0x2318~0x231B`: capacity, cycles, V100, V0.
 
-6. Write commands only when needed
+6. Use the GUI upper-computer when observation matters
+   - Launch: `py tools/soc_test_ui.py`
+   - Use it to run accelerated scenarios, inspect SOC/voltage/current curves, monitor a board through RS485, and view/export reports.
+   - Online tab supports reading `0xD000`, reading SOC params at `0x2318~0x231B`, and confirmed writes to `0x1005`.
+   - The GUI is a wrapper over the same scripts, so command-line results and GUI results should match.
+
+7. Write commands only when needed
    - `0x1005` set-SOC changes board state. Ask or state the exact value and restore plan before using it.
    - SOC parameter/table writes must be documented and validated by readback.
 

@@ -35,6 +35,10 @@ def build_read(slave: int, addr: int, count: int) -> bytes:
     return append_crc(bytes((slave, 0x03)) + u16be(addr) + u16be(count))
 
 
+def build_write_single(slave: int, addr: int, value: int) -> bytes:
+    return append_crc(bytes((slave, 0x06)) + u16be(addr) + u16be(value))
+
+
 def verify_crc(frame: bytes) -> None:
     expected = crc16_modbus(frame[:-2])
     actual = frame[-2] | (frame[-1] << 8)
@@ -42,8 +46,8 @@ def verify_crc(frame: bytes) -> None:
         raise RuntimeError("CRC mismatch expected=0x{0:04X} actual=0x{1:04X}".format(expected, actual))
 
 
-def read_status(ser, slave: int) -> dict[str, int]:
-    request = build_read(slave, 0xD000, 63)
+def read_registers(ser, slave: int, addr: int, count: int) -> list[int]:
+    request = build_read(slave, addr, count)
     ser.reset_input_buffer()
     ser.write(request)
     ser.flush()
@@ -60,7 +64,24 @@ def read_status(ser, slave: int) -> dict[str, int]:
     frame = head + body
     verify_crc(frame)
     payload = frame[3 : 3 + byte_count]
-    regs = [(payload[i] << 8) | payload[i + 1] for i in range(0, len(payload), 2)]
+    return [(payload[i] << 8) | payload[i + 1] for i in range(0, len(payload), 2)]
+
+
+def write_single_register(ser, slave: int, addr: int, value: int) -> None:
+    request = build_write_single(slave, addr, value)
+    ser.reset_input_buffer()
+    ser.write(request)
+    ser.flush()
+    frame = ser.read(8)
+    if len(frame) != 8:
+        raise RuntimeError("timeout waiting write response")
+    verify_crc(frame)
+    if frame[:6] != request[:6]:
+        raise RuntimeError("write echo mismatch")
+
+
+def read_status(ser, slave: int) -> dict[str, int]:
+    regs = read_registers(ser, slave, 0xD000, 63)
     return {
         "vmax_mv": regs[32],
         "vmin_mv": regs[33],
@@ -80,6 +101,22 @@ def read_status(ser, slave: int) -> dict[str, int]:
         "balance1": regs[61],
         "balance2": regs[62],
     }
+
+
+def read_soc_params(ser, slave: int) -> dict[str, int]:
+    regs = read_registers(ser, slave, 0x2318, 4)
+    return {
+        "capacity_a10": regs[0],
+        "cycle_times": regs[1],
+        "v100_mv": regs[2],
+        "v0_mv": regs[3],
+    }
+
+
+def set_soc_once(ser, slave: int, soc: int) -> None:
+    if not 0 <= soc <= 100:
+        raise ValueError("SOC must be 0..100")
+    write_single_register(ser, slave, 0x1005, soc)
 
 
 def main() -> int:
