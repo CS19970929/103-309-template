@@ -863,6 +863,7 @@ void InitAFE1(void)
 	initAFE1_IIC();
 	if (do_startup_zero != 0U)
 	{
+		AfeCurrent_SetStartupColdBoot((SleepDeal_IsBootFromSleepStartup() != 0U) ? 0U : 1U);
 		AfeCurrent_PrepareStartupZero();
 	}
 

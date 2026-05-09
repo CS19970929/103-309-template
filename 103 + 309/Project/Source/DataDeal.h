@@ -90,7 +90,8 @@ typedef enum _AFE_CURRENT_ZERO_STATE {
     AFE_CURRENT_ZERO_STARTUP = 1,
     AFE_CURRENT_ZERO_READY = 2,
     AFE_CURRENT_ZERO_TIMEOUT = 3,
-    AFE_CURRENT_ZERO_IIC_FAIL = 4
+    AFE_CURRENT_ZERO_IIC_FAIL = 4,
+    AFE_CURRENT_ZERO_RANGE_FAIL = 5
 } AFE_CURRENT_ZERO_STATE;
 
 typedef enum _AFE_CURRENT_DIR {
@@ -117,7 +118,10 @@ typedef struct _AFE_CURRENT_OBSERVE {
     UINT8 u8ZeroReady;
     UINT8 u8StableCnt;
     UINT8 u8StartupSampleCnt;
+    UINT8 u8StartupColdBoot;
+    UINT8 u8StartupDiscardCnt;
     UINT8 u8StartupFailCnt;
+    UINT8 u8StartupRangeFailCnt;
     UINT8 u8KbCalibEnable;
     UINT8 u8Direction;
     UINT8 u8CtlcState;
@@ -249,6 +253,7 @@ extern UINT8 g_u8AfeCurrentZeroReady;
 extern UINT8 g_u8AfeCurrentZeroState;
 
 void App_AFEGet(  void);
+void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);
 void AfeCurrent_PrepareStartupZero(void);
 void AfeCurrent_StartupZeroCal(void);
 UINT8 AfeCurrent_IsStartupZeroDone(void);

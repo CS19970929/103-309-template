@@ -78,6 +78,7 @@ void App_SleepTest(void);
 void BootFlag_Write(UINT16 flag);
 UINT16 BootFlag_Read(void);
 void BootFlag_Clear(void);
+UINT8 SleepDeal_IsBootFromSleepStartup(void);
 void IsSleepStartUp(void);
 
 #endif	/* SLEEPDEAL_H */

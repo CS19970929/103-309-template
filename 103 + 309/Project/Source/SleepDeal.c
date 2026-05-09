@@ -6,6 +6,7 @@ enum SLEEP_STATUS Sleep_Status = SLEEP_HICCUP_SHIFT;
 UINT8 gu8_SleepStatus = 0;
 UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
+static UINT8 s_u8BootFromSleepStartup = 0U;
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)300) // PC13����3��պϲ���Ϊ��Ч
 
@@ -749,14 +750,21 @@ void BootFlag_Clear(void)
 	BootFlag_Write(BOOT_FLAG_RESET_VALUE);
 }
 
+UINT8 SleepDeal_IsBootFromSleepStartup(void)
+{
+	return s_u8BootFromSleepStartup;
+}
+
 void IsSleepStartUp(void)
 {
 	UINT16 sleep_flag;
 
 	sleep_flag = BootFlag_Read();
+	s_u8BootFromSleepStartup = 0U;
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
+		s_u8BootFromSleepStartup = 1U;
 		BootFlag_Clear();
 		Init_RTC();
 
@@ -770,6 +778,7 @@ void IsSleepStartUp(void)
 		IORecover_RTCMode();
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
+		s_u8BootFromSleepStartup = 1U;
 		BootFlag_Clear();
 		IOstatus_NormalMode();
 		InitWakeUp_NormalMode();
@@ -780,6 +789,7 @@ void IsSleepStartUp(void)
 		IORecover_NormalMode();
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
+		s_u8BootFromSleepStartup = 1U;
 		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
