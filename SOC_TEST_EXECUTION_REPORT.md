@@ -122,3 +122,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\soc_auto_test.ps1 -Por
 - 当前接入的板子能正常通信，SOC/SOH/电压/容量/故障位可读。
 - 当前板子不是测试固件，不能执行 MCU 加速注入；这正好证明量产固件不会被测试模式影响。
 - 要完成“MCU真实骑行加速闭环”，下一步需要烧录开启 `PROJECT_CFG_SOC_TEST_MODE_ENABLE=1` 的测试固件，再运行 UI 的“MCU加速测试”。
+
+## 烧录注意
+
+当前工程 App 链接地址为 `0x08004800`，IAP 位于 `0x08000000`。测试 App 或正常 App 的裸 `.bin` 必须写到 `0x08004800`，不能写到 `0x08000000`。详见 `SOC_MCU_SAFE_FLASH_GUIDE.md`。

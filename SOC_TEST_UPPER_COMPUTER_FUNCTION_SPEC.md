@@ -103,11 +103,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\soc_auto_test.ps1 -Por
 ### 测试固件验证真实骑行
 
 1. 编译并烧录测试固件：`PROJECT_CFG_BUILD_PROFILE=Debug` 或 `Factory/Test`，`PROJECT_CFG_SOC_TEST_MODE_ENABLE=1`。
-2. 打开 UI，确认串口在线。
-3. “MCU加速测试”页读取状态，确认 `supported=1`、`tick=200ms`。
-4. 点击“运行MCU真实骑行”，观察 SOC、电压、电流曲线。
-5. 点击“运行快变电流”，重点确认大电流脉冲下 SOC 变化是否按平均电流积分。
-6. 测试后点击“关闭测试模式”，再回到在线监控确认板端真实状态。
+2. 注意当前工程 App 地址是 `0x08004800`，IAP 地址是 `0x08000000`；裸 `bin` 必须写到 `0x08004800`，推荐使用 `tools\soc_flash_app_safe.ps1`。
+3. 打开 UI，确认串口在线。
+4. “MCU加速测试”页读取状态，确认 `supported=1`、`tick=200ms`。
+5. 点击“运行MCU真实骑行”，观察 SOC、电压、电流曲线。
+6. 点击“运行快变电流”，重点确认大电流脉冲下 SOC 变化是否按平均电流积分。
+7. 测试后点击“关闭测试模式”，再回到在线监控确认板端真实状态。
 
 ## 后续增强建议
 
