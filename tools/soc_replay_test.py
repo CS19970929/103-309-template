@@ -370,6 +370,36 @@ def run_seconds(model, seconds, **kwargs):
         model.tick(**kwargs)
 
 
+def voltage_from_soc(soc):
+    soc = max(0, min(100, soc))
+    for (v1, s1), (v2, s2) in zip(OCV_TABLE, OCV_TABLE[1:]):
+        if s1 >= soc >= s2:
+            if s1 == s2:
+                return v1
+            return int((v1 * (soc - s2) + v2 * (s1 - soc)) / (s1 - s2))
+    return OCV_TABLE[0][0] if soc >= OCV_TABLE[0][1] else OCV_TABLE[-1][0]
+
+
+def ride_voltage(model, idsg=0, ichg=0, imbalance=4):
+    base = voltage_from_soc(model.soc)
+    if idsg:
+        sag = min(520, idsg // 2)
+        vmin = max(2400, base - sag - imbalance)
+    elif ichg:
+        rise = min(120, ichg // 8)
+        vmin = min(4200, base + rise)
+    else:
+        vmin = base
+    vmax = min(5000, vmin + imbalance)
+    return vmax, vmin
+
+
+def run_ride_segment(model, seconds, idsg=0, ichg=0, imbalance=4):
+    for _ in range(seconds * TICKS_PER_SECOND):
+        vmax, vmin = ride_voltage(model, idsg=idsg, ichg=ichg, imbalance=imbalance)
+        model.tick(vmax=vmax, vmin=vmin, ichg=ichg, idsg=idsg)
+
+
 def test_invalid_snapshot_defaults_to_60_percent():
     model = SocModel.from_snapshot(Snapshot(valid=False))
     assert model.soc == 60
@@ -595,6 +625,63 @@ def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
     assert model.soc == 0
 
 
+def test_real_city_ride_profile_is_smooth_and_monotonic():
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    previous_soc = model.soc
+    profile = [
+        (60, 0),
+        (300, 80),
+        (120, 220),
+        (300, 120),
+        (60, 0),
+        (180, 350),
+        (300, 100),
+    ]
+    for seconds, idsg in profile:
+        run_ride_segment(model, seconds, idsg=idsg)
+        assert model.soc <= previous_soc
+        assert 0 <= model.display_soc <= 100
+        previous_soc = model.soc
+    assert 55 <= model.soc <= 70
+    assert model.cap_now < CAP_FACTORY_AS10 * 80 // 100
+    assert abs(model.display_soc - model.soc) <= 3
+
+
+def test_hill_climb_voltage_sag_does_not_false_empty_pack():
+    model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
+    run_ride_segment(model, 180, idsg=420, imbalance=10)
+    hill_soc = model.soc
+    assert hill_soc >= 48
+    assert model.sag_hold_ticks > 0
+
+    run_ride_segment(model, 120, idsg=0, imbalance=4)
+    assert model.soc <= hill_soc
+    assert model.soc >= 47
+
+
+def test_deep_ride_profile_reaches_zero_near_cutoff_voltage():
+    model = SocModel.from_snapshot(Snapshot(soc=18, cap_now=CAP_FACTORY_AS10 * 18 // 100))
+    min_seen = 5000
+    for _ in range(900 * TICKS_PER_SECOND):
+        vmax, vmin = ride_voltage(model, idsg=180, imbalance=6)
+        min_seen = min(min_seen, vmin)
+        model.tick(vmax=vmax, vmin=vmin, idsg=180)
+        if model.soc == 0:
+            break
+    assert min_seen <= 3050
+    assert model.soc == 0
+    assert model.display_soc <= 5
+
+
+def test_charge_after_ride_stays_below_full_until_voltage_anchor():
+    model = SocModel.from_snapshot(Snapshot(soc=88, cap_now=CAP_FACTORY_AS10 * 88 // 100))
+    run_seconds(model, 600, ichg=270, vmax=4100, vmin=4050)
+    assert model.soc == 99
+    assert model.display_soc < 100
+    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
+    assert model.soc == 100
+
+
 def main():
     tests = [
         test_invalid_snapshot_defaults_to_60_percent,
@@ -614,6 +701,10 @@ def main():
         test_low_voltage_tail_table_uses_current_bands_and_rate_limits,
         test_auto_calibration_never_steps_more_than_one_percent,
         test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail,
+        test_real_city_ride_profile_is_smooth_and_monotonic,
+        test_hill_climb_voltage_sag_does_not_false_empty_pack,
+        test_deep_ride_profile_reaches_zero_near_cutoff_voltage,
+        test_charge_after_ride_stays_below_full_until_voltage_anchor,
     ]
     for test in tests:
         test()
