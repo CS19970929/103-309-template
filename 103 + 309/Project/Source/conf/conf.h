@@ -9,6 +9,8 @@
 #include "conf_gpio.h"
 #include "Project_Config.h"
 
+#define _UL_RENZHENG_ENABLE_
+
 #ifndef PROJECT_CFG_SOC_TEST_MODE_ENABLE
 #define PROJECT_CFG_SOC_TEST_MODE_ENABLE 0
 #endif

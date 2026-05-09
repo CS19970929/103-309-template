@@ -391,7 +391,7 @@
 
 // <o> 升级参数策略版本 <0x0000-0xFFFE>
 // <i> 升级参数策略版本。策略内容变化时递增，避免重复或漏执行。
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0003
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0509
 
 // <q> 重置 AFE 参数
 // <i> 升级时重置 AFE 参数。只在 AFE 默认参数必须覆盖现场值时开启。
@@ -403,7 +403,7 @@
 
 // <q> 重置均衡开启电压
 // <i> 升级时重置均衡开启电压。用于修正现场旧版本均衡参数。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
 
 // <q> 重置 SOC 表
 // <i> 升级时重置 SOC OCV 表。电芯曲线或默认表变化时开启。
