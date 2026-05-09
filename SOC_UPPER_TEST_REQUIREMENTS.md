@@ -1,5 +1,11 @@
 # SOC 自动化测试与上位机需求整理
 
+> 最新完整需求、功能和实测报告见：
+> - `SOC_TEST_REQUIREMENTS_SUMMARY.md`
+> - `SOC_TEST_UPPER_COMPUTER_FUNCTION_SPEC.md`
+> - `SOC_TEST_EXECUTION_REPORT.md`
+> - `SOC_MCU_RIDE_TEST_MODE.md`
+
 ## 目标
 
 把 SOC 模块测试拆成两条线：
