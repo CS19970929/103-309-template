@@ -5,272 +5,424 @@
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
-// <h>Project Visual Configuration
+// <h>项目可视化配置
 
-// <h>Build Profile
-// <o> Build profile
-//   <0=> Release
-//   <1=> Debug
-//   <2=> Factory/Test
+// <h>构建档位
+// <o> 构建档位
+//   <0=> 量产 Release
+//   <1=> 调试 Debug
+//   <2=> 工厂/测试 Factory/Test
+// <i> 构建用途选择。量产必须使用 Release，SOC 注入测试必须使用 Factory/Test。
 #ifndef PROJECT_CFG_BUILD_PROFILE
 #define PROJECT_CFG_BUILD_PROFILE 0
 #endif
 // </h>
 
-// <h>Product
-// <o> EEPROM init flag <0x0000-0xFFFF>
+// <h>产品基础配置
+// <o> EEPROM 初始化标记 <0x0000-0xFFFF>
 // <i> Change this value only when field parameters must be reinitialized.
+// <i> EEPROM 参数初始化标记。只有需要强制重置现场参数时才修改。
 #define PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG 0x2445
 
-// <o> Battery type
-//   <0=> BAT_MASTER, 20A
-//   <1=> BAT_SLAVE, 40A
+// <o> 电池包类型
+//   <0=> 主包 BAT_MASTER，20A
+//   <1=> 从包 BAT_SLAVE，40A
+// <i> 电池包类型。影响默认电流等级、协议身份和部分产品差异配置。
 #define PROJECT_CFG_BAT_TYPE 1
 
-// <o> Battery chemistry
-//   <0=> TERNARYLI
-//   <1=> LIFEPO
+// <o> 电芯体系
+//   <0=> 三元锂 TERNARYLI
+//   <1=> 磷酸铁锂 LIFEPO
+// <i> 电芯体系。影响电压平台、SOC 表和保护参数选择。
 #define PROJECT_CFG_BAT_CHEMISTRY 0
 
-// <o> Firmware year <0-99>
+// <o> 固件年份 <0-99>
+// <i> 固件年份，两位数显示。
 #define PROJECT_CFG_FD_YEAR 26
 
-// <o> Firmware month <1-12>
-#define PROJECT_CFG_FD_MONTH 4
+// <o> 固件月份 <1-12>
+// <i> 固件月份，用于版本信息上报。
+#define PROJECT_CFG_FD_MONTH 5
 
-// <o> Firmware day <1-31>
-#define PROJECT_CFG_FD_DAY 15
+// <o> 固件日期 <1-31>
+// <i> 固件日期，用于版本信息上报。
+#define PROJECT_CFG_FD_DAY 9
 
-// <o> Firmware version <0-65535>
+// <o> 固件版本号 <0-65535>
+// <i> 固件版本号，用于上位机、升级策略和现场识别。
 #define PROJECT_CFG_VERSION 5
 
-// <o> Current level
-//   <0=> CURR_80A
-//   <1=> CURR_100A
-//   <2=> CURR_150A
-//   <3=> CURR_200A
-//   <4=> CURR_250A
+// <o> 电流档位
+//   <0=> 80A 档 CURR_80A
+//   <1=> 100A 档 CURR_100A
+//   <2=> 150A 档 CURR_150A
+//   <3=> 200A 档 CURR_200A
+//   <4=> 250A 档 CURR_250A
+// <i> 额定电流档位。影响保护、电流显示和整机能力配置。
 #define PROJECT_CFG_LEVEL_CURR 2
 
-// <o> AFE type
-//   <0=> bq76xx_afe
-//   <1=> sh36xx
+// <o> AFE 类型
+//   <0=> bq76xx AFE
+//   <1=> sh36xx AFE
+// <i> AFE 芯片类型。必须与硬件实际焊接型号一致。
 #define PROJECT_CFG_AFE_TYPE 1
 // </h>
 
-// <h>Feature Switches
-// <q> Enable IWDG watchdog
+// <h>功能开关
+// <q> 使能 IWDG 看门狗
+// <i> 使能独立看门狗。量产建议开启，防止程序跑飞后长期无响应。
 #define PROJECT_CFG_WDOG_ENABLE 1
 
-// <q> Enable RTC function
+// <q> 使能 RTC 功能
+// <i> 使能 RTC。用于低功耗计时、休眠唤醒和 SOC 休眠修正。
 #define PROJECT_CFG_RTC_ENABLE 1
 
-// <q> Enable heat function
+// <q> 使能加热功能
+// <i> 使能加热功能。仅硬件具备加热回路时开启。
 #define PROJECT_CFG_HEAT_ENABLE 0
 
-// <q> Enable load remove short function
+// <q> 使能负载移除短路恢复
+// <i> 使能负载移除短路恢复逻辑。按产品保护策略决定。
 #define PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE 0
 
-// <q> Enable UART1 wakeup
+// <q> 使能 UART1 唤醒
+// <i> 允许 UART1 唤醒系统。上位机或外设接在 UART1 时开启。
 #define PROJECT_CFG_UART1_WAKEUP_ENABLE 1
 
-// <q> Enable UART2 wakeup
+// <q> 使能 UART2 唤醒
+// <i> 允许 UART2 唤醒系统。未使用 UART2 唤醒时保持关闭。
 #define PROJECT_CFG_UART2_WAKEUP_ENABLE 0
 
-// <q> Enable RS485 wakeup
+// <q> 使能 RS485 唤醒
+// <i> 允许 RS485 通信唤醒系统。需要休眠后上位机唤醒时开启。
 #define PROJECT_CFG_RS485_WAKEUP_ENABLE 1
 
-// <q> Enable second current protection
+// <q> 使能第二路电流保护
+// <i> 使能第二路电流保护。只有硬件和参数支持时开启。
 #define PROJECT_CFG_SECOND_CURR_PROTECT_ENABLE 0
 
-// <q> Enable virtual current compensation
+// <q> 使能虚拟电流补偿
+// <i> 使能虚拟电流补偿。用于修正部分工况下的电流估算偏差。
 #define PROJECT_CFG_VIRTUAL_CURRENT_ENABLE 1
 
-// <q> Enable DI system on/off switch
+// <q> 使能 DI 系统开关输入
+// <i> 使能 DI 系统开关输入。需要外部系统开关时开启。
 #define PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE 0
 
-// <q> Enable DI discharge on/off switch
+// <q> 使能 DI 放电开关输入
+// <i> 使能 DI 放电开关输入。需要外部控制放电时开启。
 #define PROJECT_CFG_DI_SWITCH_DSG_ONOFF_ENABLE 0
 
-// <q> Enable DI long-key on/off switch
+// <q> 使能 DI 长按开关输入
+// <i> 使能 DI 长按开关输入。用于按键长按开关机。
 #define PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE 1
 
-// <q> Enable LED function marker
+// <q> 使能旧 LED 功能标记
+// <i> 使能旧 LED 功能标记。新 LedBar 方案通常不依赖此项。
 #define PROJECT_CFG_LED_FUNC_ENABLE 0
 
-// <q> Enable debug code
+// <q> 使能调试代码
+// <i> 使能调试代码。量产必须关闭。
 #define PROJECT_CFG_DEBUG_CODE_ENABLE 0
 
-// <q> Enable sleep with current
+// <q> 允许带电流休眠
+// <i> 允许带电流进入休眠。通常保持关闭，避免带载误休眠。
 #define PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE 0
 
-// <q> Enable IAP jump support
+// <q> 使能 IAP 跳转支持
+// <i> 使能 IAP 跳转支持。带 bootloader 的 App 必须开启。
 #define PROJECT_CFG_IAP_ENABLE 1
 // </h>
 
-// <h>SCI Role
-// <o> SCI1 role
-//   <0=> Disabled
-//   <1=> Common upper
-//   <2=> Client
+// <h>串口角色
+// <o> SCI1 角色
+//   <0=> 禁用
+//   <1=> 通用上位机
+//   <2=> 客户端
 //   <3=> LCD
+// <i> SCI1 通信角色。当前常用于通用上位机协议。
 #define PROJECT_CFG_SCI1_ROLE 1
 
-// <o> SCI2 role
-//   <0=> Disabled
-//   <1=> Common upper
-//   <2=> Client
+// <o> SCI2 角色
+//   <0=> 禁用
+//   <1=> 通用上位机
+//   <2=> 客户端
 //   <3=> LCD
+// <i> SCI2 通信角色。未接外设时保持 Disabled。
 #define PROJECT_CFG_SCI2_ROLE 0
 
-// <o> SCI3 role
-//   <0=> Disabled
-//   <1=> Common upper
-//   <2=> Client
+// <o> SCI3 角色
+//   <0=> 禁用
+//   <1=> 通用上位机
+//   <2=> 客户端
 //   <3=> LCD
+// <i> SCI3 通信角色。未接外设时保持 Disabled。
 #define PROJECT_CFG_SCI3_ROLE 0
 // </h>
 
-// <h>Flash 64K Storage Test
-// <q> Enable destructive quick test
+// <h>Flash 64K 存储测试
+// <q> 使能破坏性快速测试
+// <i> 使能 Flash 后 64K 破坏性快速测试。只允许实验固件开启。
 #define PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE 0
 
-// <o> Quick test cycles <1-65535>
+// <o> 快速测试循环次数 <1-65535>
+// <i> 破坏性快速测试循环次数。仅测试模式使用。
 #define PROJECT_CFG_FLASH64K_QUICK_TEST_CYCLES 96
 
-// <q> Enable app running storage test
+// <q> 使能 App 运行存储测试
+// <i> 使能 App 运行期间存储测试。用于验证 SOC/AFE 存储稳定性。
 #define PROJECT_CFG_FLASH64K_USE_TEST_ENABLE 0
 
-// <o> App test print period, seconds <1-65535>
+// <o> App 测试打印周期，秒 <1-65535>
+// <i> App 运行存储测试日志打印周期，单位秒。
 #define PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC 10
 
-// <q> Enable app test acceleration
+// <q> 使能 App 测试加速
+// <i> 使能运行存储测试加速。只用于缩短台架验证时间。
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE 0
 
-// <o> Accelerated SOC save period, seconds <1-65535>
+// <o> 加速 SOC 保存周期，秒 <1-65535>
+// <i> 加速测试时 SOC 快照保存周期，单位秒。
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_SOC_PERIOD_SEC 1
 
-// <o> Accelerated AFE save period, seconds <1-65535>
+// <o> 加速 AFE 保存周期，秒 <1-65535>
+// <i> 加速测试时 AFE 参数保存周期，单位秒。
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC 30
 // </h>
 
-// <h>SOC Calibration
-// <o> Full confirm minimum cell margin from V100, mV <0-500>
+// <h>SOC 校准参数
+// <o> 满电确认最小电压余量，mV <0-500>
+// <i> 普通满电确认允许低于满电电压的余量。越大越容易到 100%。
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
 
-// <o> Full confirm maximum cell delta, mV <0-1000>
+// <o> 满电确认最大单体压差，mV <0-1000>
+// <i> 满电确认允许的最大单体压差。越小越保守。
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
 
-// <q> Enable online OCV guard under light current
+// <o> 普通满电确认时间，秒 <1-600>
+// <i> 普通满电条件需要持续的时间。越长越稳，越短到 100% 越快。
+#define PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS 15
+
+// <o> 快速满电确认时间，秒 <1-600>
+// <i> 快速满电条件需要持续的时间。必须不大于普通确认时间。
+#define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS 5
+
+// <o> 普通满电确认最低 SOC，百分比 <0-100>
+// <i> 普通满电确认要求的最低内部 SOC。用于避免中低电量误跳 100%。
+#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT 95
+
+// <o> 快速满电确认电压余量，mV <0-500>
+// <i> 快速满电确认允许低于满电电压的余量。越大越容易快速到 100%。
+#define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV 30
+
+// <q> 使能轻载在线 OCV 守护
+// <i> 在线 OCV 守护开关。当前仅配置和校验，SOC 主逻辑暂未接入。
 #define PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE 1
 
-// <o> Online OCV correction interval, seconds <1-600>
+// <o> 在线 OCV 修正间隔，秒 <1-600>
+// <i> 在线 OCV 修正间隔。当前仅配置和校验，SOC 主逻辑暂未接入。
 #define PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS 30
 
-// <o> Online OCV minimum SOC gap, percent <1-50>
+// <o> 在线 OCV 最小 SOC 偏差，百分比 <1-50>
+// <i> 在线 OCV 修正所需最小 SOC 偏差。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT 3
 
-// <o> Online OCV max current divisor of C-rate <2-100>
+// <o> 在线 OCV 最大电流除数 <2-100>
+// <i> 在线 OCV 允许的最大电流，按 C 倍率除数表示。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER 10
 
-// <o> Online OCV heavy discharge current divisor of C-rate <1-100>
+// <o> 在线 OCV 大电流放电除数 <1-100>
+// <i> 在线 OCV 判定大电流放电的阈值除数。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER 3
 
-// <o> Online OCV holdoff after heavy discharge, seconds <0-1800>
+// <o> 大电流放电后 OCV 禁止时间，秒 <0-1800>
+// <i> 大电流放电后的在线 OCV 禁止时间。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS 180
 
-// <o> Online OCV voltage stable time, seconds <0-600>
+// <o> 在线 OCV 电压稳定时间，秒 <0-600>
+// <i> 在线 OCV 要求电压稳定的持续时间。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS 20
 
-// <o> Online OCV voltage stable window, mV <0-100>
+// <o> 在线 OCV 电压稳定窗口，mV <0-100>
+// <i> 在线 OCV 电压稳定窗口。当前仅配置和校验。
 #define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV 8
 
-// <o> Calibration minimum valid cell voltage, mV <1000-3500>
+// <o> 校准最小有效单体电压，mV <1000-3500>
+// <i> SOC 校准允许使用的最低单体电压。低于该值认为采样异常。
 #define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
 
-// <o> Calibration maximum valid cell voltage, mV <3600-6000>
+// <o> 校准最大有效单体电压，mV <3600-6000>
+// <i> SOC 校准允许使用的最高单体电压。高于该值认为采样异常。
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
 
-// <o> Calibration maximum cell delta, mV <0-3000>
+// <o> 校准最大单体压差，mV <0-3000>
+// <i> SOC 校准允许的最大单体压差。越小越能过滤异常串。
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 1000
 
-// <q> Block SOC calibration when third-level protection fault exists
+// <q> 三级保护故障时禁止 SOC 校准
+// <i> 三级保护故障时是否禁止 SOC 自动校准。开启后更保守。
 #define PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT 0
 
-// <q> Block SOC calibration when AFE/ADC/CBC/temperature system fault exists
+// <q> 系统故障时禁止 SOC 校准
+// <i> AFE/ADC/均衡/温度等系统异常时是否禁止 SOC 自动校准。
 #define PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT 0
+
+// <o> 空电快速兜底电压，mV <1500-3500>
+// <i> 极低压快速归零门槛。用于欠压兜底，不建议按体验随意调高。
+#define PROJECT_CFG_SOC_EMPTY_FAST_MV 2750
+
+// <o> 空电强制归零电压，mV <1500-3500>
+// <i> 强制归零门槛。电压低到该值附近时 SOC 必须快速收敛到 0。
+#define PROJECT_CFG_SOC_EMPTY_FORCE_MV 2500
+
+// <o> 大电流压降校准延迟，秒 <0-1800>
+// <i> 大电流压降后的校准延迟时间。用于避免瞬态压降误拉低 SOC。
+#define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
+
+// <o> 压降延迟允许校准余量，mV <0-500>
+// <i> 压降延迟期间，低于 V0 加该余量才允许末端校准。
+#define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
+
+// <o> 静置 OCV 修正等待时间，秒 <60-43200>
+// <i> 静置多久后允许按 OCV 小步修正 SOC。三元锂通常建议 30 分钟起。
+#define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
+
+// <o> 低压 guard 入口电压，mV <2500-4200>
+// <i> 低压 guard 入口电压。越高越早限制高估 SOC。
+#define PROJECT_CFG_SOC_LOW_GUARD_MV 3400
+
+// <o> 临界低压 guard 电压，mV <2000-4200>
+// <i> 临界低压 guard 入口电压。必须不高于普通低压 guard。
+#define PROJECT_CFG_SOC_LOW_GUARD_CRITICAL_MV 3250
+
+// <o> 低压 guard SOC 余量，百分比 <0-50>
+// <i> 普通低压区允许 SOC 高于 OCV 估算的余量。
+#define PROJECT_CFG_SOC_LOW_GUARD_MARGIN_PERCENT 8
+
+// <o> 临界低压 guard SOC 余量，百分比 <0-50>
+// <i> 临界低压区允许 SOC 高于 OCV 估算的余量，建议小于普通余量。
+#define PROJECT_CFG_SOC_LOW_GUARD_CRIT_MARGIN_PERCENT 3
+
+// <o> 低压 guard 确认时间，秒 <0-600>
+// <i> 低压 guard 条件确认时间。越短响应越快，越长越抗瞬态。
+#define PROJECT_CFG_SOC_LOW_GUARD_SECONDS 10
+
+// <o> 低压 guard 最大电流除数 <1-100>
+// <i> 低压 guard 最大允许电流，按 C 倍率除数表示，当前 5 表示 C/5。
+#define PROJECT_CFG_SOC_LOW_GUARD_CURRENT_DIVIDER 5
+
+// <o> 自动校准最大步长，百分比 <1-10>
+// <i> 自动校准单次最大步长。建议保持 1%，避免用户看到跳电。
+#define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 // </h>
 
-// <h>LedBar
-// <q> Use GPIO Charlieplexing driver
+// <h>SOC 测试模式
+// <q> 使能 SOC 注入测试模式
+// <i> SOC 注入式测试入口。量产必须保持关闭，只允许 Factory/Test 固件开启。
+#ifndef PROJECT_CFG_SOC_TEST_MODE_ENABLE
+#define PROJECT_CFG_SOC_TEST_MODE_ENABLE 0
+#endif
+
+// <o> SOC 单次注入最大 tick 数 <1-1000>
+// <i> 单次 0x2500 注入最多模拟多少个 200ms tick，用于限制测试加速强度。
+#ifndef PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX
+#define PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX 300
+#endif
+// </h>
+
+// <h>灯条配置
+// <q> 使用 GPIO Charlieplexing 灯条驱动
+// <i> 使用 GPIO Charlieplexing 灯条驱动。需与硬件灯条连接方式一致。
 #define PROJECT_CFG_LEDBAR_DRIVER_GPIO_CHARLIE 1
 
-// <q> Enable LedBar sleep SOC backup
+// <q> 使能灯条休眠 SOC 备份
+// <i> 休眠前备份灯条 SOC 显示状态，唤醒后用于恢复显示体验。
 #define PROJECT_CFG_LEDBAR_SLEEP_ENABLE 1
 
-// <q> Enable long-press GPIO toggle test
+// <q> 使能长按 GPIO 翻转测试
+// <i> 长按 GPIO 翻转测试开关。仅调试硬件按键/灯条时开启。
 #define PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST 0
 
-// <o> SOC display time, 10ms ticks <1-65535>
+// <o> SOC 显示时间，10ms tick <1-65535>
+// <i> SOC 显示保持时间，单位 10ms。500 表示 5 秒。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
 
-// <q> Enable SOC display snap strategy
+// <q> 使能 SOC 显示避重影策略
+// <i> 使能灯条 SOC 段位避重影策略。可改善显示观感但会微调显示数值。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
 
-// <o> SOC display snap window <0-20>
+// <o> SOC 显示避重影窗口 <0-20>
+// <i> 避重影策略允许调整的窗口范围。越大越可能偏离真实 SOC。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_WINDOW 2
 
-// <o> SOC snap minimum extra segments <0-30>
+// <o> SOC 避重影最小额外段数 <0-30>
+// <i> 启动避重影替代显示所需的最小额外段数。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA 4
 
-// <o> SOC snap minimum gain <0-30>
+// <o> SOC 避重影最小改善幅度 <0-30>
+// <i> 替代显示必须带来的最小改善幅度。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1
 
-// <o> Scan timer period in 100kHz ticks <1-1000>
+// <o> 扫描定时周期，100kHz tick <1-1000>
+// <i> 灯条扫描定时周期，基于 100kHz tick。影响刷新频率和亮度稳定性。
 #define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
 
-// <o> MCU_WK on filter, 10ms ticks <0-255>
+// <o> MCU_WK 有效滤波，10ms tick <0-255>
+// <i> MCU_WK 有效滤波时间，单位 10ms。用于消抖。
 #define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
 
-// <o> MCU_WK off filter, 10ms ticks <0-255>
+// <o> MCU_WK 无效滤波，10ms tick <0-255>
+// <i> MCU_WK 无效滤波时间，单位 10ms。用于消抖。
 #define PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS 3
 
-// <o> Charge on filter, 100ms ticks <0-255>
+// <o> 充电接入滤波，100ms tick <0-255>
+// <i> 充电插入有效滤波时间，单位 100ms。
 #define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 1
 
-// <o> Charge off filter, 100ms ticks <0-255>
+// <o> 充电断开滤波，100ms tick <0-255>
+// <i> 充电拔出无效滤波时间，单位 100ms。
 #define PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS 5
 // </h>
 
-// <h>Upgrade Parameter Policy
-// <q> Enable upgrade parameter policy
+// <h>升级参数策略
+// <q> 使能升级参数策略
+// <i> 使能升级参数策略。只有需要随固件升级重置现场参数时开启。
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
 
-// <o> Upgrade parameter policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0429
+// <o> 升级参数策略版本 <0x0000-0xFFFE>
+// <i> 升级参数策略版本。策略内容变化时递增，避免重复或漏执行。
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0003
 
-// <q> Reset AFE parameters
+// <q> 重置 AFE 参数
+// <i> 升级时重置 AFE 参数。只在 AFE 默认参数必须覆盖现场值时开启。
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
-// <q> Reset protect parameters
+// <q> 重置保护参数
+// <i> 升级时重置保护参数。会影响保护阈值，必须谨慎开启。
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
 
-// Reset OtherElement balance open voltage
+// <q> 重置均衡开启电压
+// <i> 升级时重置均衡开启电压。用于修正现场旧版本均衡参数。
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
 
-// <q> Reset SOC table
+// <q> 重置 SOC 表
+// <i> 升级时重置 SOC OCV 表。电芯曲线或默认表变化时开启。
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 0
 
-// <q> Reset SOC config
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
+// <q> 重置 SOC 配置
+// <i> 升级时重置 SOC 容量、电压锚点等配置。会影响用户可见电量。
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
 
-// <q> Reset SOC snapshot
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
+// <q> 重置 SOC 快照
+// <i> 升级时清除 SOC 快照。开启后首次启动可能重新按 OCV 估算 SOC。
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
-// <q> Reset event record
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
+// <q> 重置事件记录
+// <i> 升级时清除事件记录。售后需要保留历史故障时必须关闭。
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
 
-// <q> Force reapply policy, test only
+// <q> 强制重复执行策略，仅测试
+// <i> 强制重复执行升级参数策略。只用于测试，量产必须关闭。
 #define PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY 0
 // </h>
 

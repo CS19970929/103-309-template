@@ -82,6 +82,29 @@ static void SOC_TestMode_ApplyReportSample(UINT16 vcell_max, UINT16 vcell_min,
 }
 #endif
 
+static UINT16 SOC_LimitA10(UINT32 current_a10)
+{
+	return (current_a10 > (UINT32)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
+}
+
+static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
+									 UINT16 *soc_ichg, UINT16 *soc_idsg)
+{
+	UINT32 chg_a10 = report_ichg;
+	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)g_u16TypeCOutCurrent_A10;
+
+	if (chg_a10 >= dsg_a10)
+	{
+		*soc_ichg = SOC_LimitA10(chg_a10 - dsg_a10);
+		*soc_idsg = 0U;
+	}
+	else
+	{
+		*soc_ichg = 0U;
+		*soc_idsg = SOC_LimitA10(dsg_a10 - chg_a10);
+	}
+}
+
 static void SOC_LoadConfigData(void)
 {
 	UINT16 i;
@@ -110,6 +133,8 @@ void App_SOC(void)
 {
 	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
 	UINT8 u8HasNewAfeSample;
+	UINT16 soc_ichg;
+	UINT16 soc_idsg;
 
 #if PROJECT_CFG_SOC_TEST_MODE_ENABLE
 	if (s_stSocTestMode.u8Enabled)
@@ -127,10 +152,14 @@ void App_SOC(void)
 	if (u8HasNewAfeSample)
 	{
 		s_u32LastAfeCurrentSampleSeq = g_u32AfeCurrentSampleSeq;
+		SOC_GetNetCurrentForCalc(g_stCellInfoReport.u16Ichg,
+								 g_stCellInfoReport.u16IDischg,
+								 &soc_ichg,
+								 &soc_idsg);
 		SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
 							 g_stCellInfoReport.u16VCellMin,
-							 g_stCellInfoReport.u16Ichg,
-							 g_stCellInfoReport.u16IDischg);
+							 soc_ichg,
+							 soc_idsg);
 		SOC_IntEnhance_Ctrl();
 	}
 	else

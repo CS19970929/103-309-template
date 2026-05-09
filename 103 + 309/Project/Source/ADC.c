@@ -360,7 +360,6 @@ void ADC_Current_Smooth(void)
 
         g_u16TypeCOutDelta_mV = ADC_TypeCAdToMilliVolt(u32TypeCAdAvg);
         g_u16TypeCOutCurrent_mA = ADC_TypeCDeltaMvToMilliAmp(g_u16TypeCOutDelta_mV);
-        g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
         g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
         g_u32ADCValFilter2[ADC_CURR] = g_u16TypeCOutCurrent_A10;
         g_i32ADCResult[ADC_CURR] = g_u16TypeCOutCurrent_A10;
@@ -457,5 +456,7 @@ void App_AnlogCal(void)
         ADC_Current_Smooth();
         u32Elapsed10msTick--;
     }
+    g_u16TypeCOutCurrent_mA = sys_time.typc_curr;
     g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
+    g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
 }

@@ -28,6 +28,9 @@ LOW_GUARD_SECONDS = 10
 LOW_GUARD_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = 1
+DISPLAY_NORMAL_SECONDS = 5
+DISPLAY_CHG_SECONDS = DISPLAY_NORMAL_SECONDS
+DISPLAY_LOW_SECONDS = 1
 SAG_HOLDOFF_SECONDS = 30
 SAG_ALLOW_MV = EMPTY_MV + 50
 BLOCK_CALIBRATION_PROTECTION_FAULT = False
@@ -344,11 +347,11 @@ class SocModel:
         if self.display_soc == target:
             self.display_ticks = 0
             return
-        ticks = 5 * TICKS_PER_SECOND
+        ticks = DISPLAY_NORMAL_SECONDS * TICKS_PER_SECOND
         if target < self.display_soc and vmin <= EMPTY_MV + 50:
-            ticks = 1 if vmin <= EMPTY_MV - 50 else TICKS_PER_SECOND
+            ticks = 1 if vmin <= EMPTY_MV - 50 else DISPLAY_LOW_SECONDS * TICKS_PER_SECOND
         elif target > self.display_soc and self.mode == MODE_CHG:
-            ticks = 10 * TICKS_PER_SECOND
+            ticks = DISPLAY_CHG_SECONDS * TICKS_PER_SECOND
         self.display_ticks += 1
         if self.display_ticks >= ticks:
             self.display_soc += 1 if self.display_soc < target else -1
@@ -578,7 +581,7 @@ def test_display_smoothing_charge_and_low_voltage_down():
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     model.display_soc = 79
     model.mode = MODE_CHG
-    for _ in range(10 * TICKS_PER_SECOND - 1):
+    for _ in range(DISPLAY_NORMAL_SECONDS * TICKS_PER_SECOND - 1):
         model.update_display()
     assert model.display_soc == 79
     model.update_display()

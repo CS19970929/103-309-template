@@ -321,7 +321,7 @@ void Fault_ChangeToMCU(void)
 	switch (su8_IdischgOcp1_Flag)
 	{
 	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
+		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
 		{
 			// FaultWarnRecord2(IdischgOcp_Second);
 			FaultWarnRecord2(IdischgOcp_Third);
@@ -330,7 +330,7 @@ void Fault_ChangeToMCU(void)
 		break;
 
 	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)
+		if ((!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)&& (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2))
 		{
 			su8_IdischgOcp1_Flag = 0;
 		}
@@ -494,12 +494,6 @@ void App_SH367309_Monitor(void)
 	static UINT8 su8_SC_Flag = 0;
 	static UINT8 su8_EEPR_WR_Flag = 0;
 
-	static UINT8 su8_CtrlMos_Flag = 0;
-	// if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
-	// { // 这个时基不能随便调，影响MOS动作，初始化电流校准
-	// 	return;
-	// }
-
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
@@ -573,31 +567,6 @@ void App_SH367309_Monitor(void)
 		if (SH367309_Reg_Store.REG_BSTATUS3.bits.L0V)
 		{
 			System_ERROR_UserCallback(ERROR_CLIENT);
-		}
-
-		// 原则上执行一次便可，不能根据MOS状态长期执行这个函数，不然效率低下
-		switch (su8_CtrlMos_Flag)
-		{
-		case 0:
-			if (SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
-				su8_CtrlMos_Flag = 1;
-			}
-			break;
-
-		case 1:
-			if (!SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
-				su8_CtrlMos_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
 		}
 	}
 	else

@@ -24,6 +24,7 @@ ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / 
 GITIGNORE = ROOT / ".gitignore"
 PRE_COMMIT = ROOT / ".githooks" / "pre-commit"
 PRE_PUSH = ROOT / ".githooks" / "pre-push"
+PROJECT_CONFIG_WIZARD_MARKER = "\u9879\u76ee\u53ef\u89c6\u5316\u914d\u7f6e"
 
 
 COMMON_DEFINES = {"STM32F10X_MD", "USE_STDPERIPH_DRIVER"}
@@ -42,6 +43,7 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE": "0",
     "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST": "0",
+    "PROJECT_CFG_SOC_TEST_MODE_ENABLE": "0",
     "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY": "0",
 }
 GUARD_REQUIRED_TOKENS = [
@@ -51,6 +53,10 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
     "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST",
     "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT",
+    "PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
     "PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE",
@@ -64,6 +70,18 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV",
     "PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV",
     "PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV",
+    "PROJECT_CFG_SOC_EMPTY_FAST_MV",
+    "PROJECT_CFG_SOC_EMPTY_FORCE_MV",
+    "PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS",
+    "PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV",
+    "PROJECT_CFG_SOC_REST_OCV_SECONDS",
+    "PROJECT_CFG_SOC_LOW_GUARD_MV",
+    "PROJECT_CFG_SOC_LOW_GUARD_CRITICAL_MV",
+    "PROJECT_CFG_SOC_LOW_GUARD_MARGIN_PERCENT",
+    "PROJECT_CFG_SOC_LOW_GUARD_CRIT_MARGIN_PERCENT",
+    "PROJECT_CFG_SOC_LOW_GUARD_SECONDS",
+    "PROJECT_CFG_SOC_LOW_GUARD_CURRENT_DIVIDER",
+    "PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT",
     "PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT",
     "PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT",
     "_DEBUG_",
@@ -173,6 +191,22 @@ def check_required_files(reporter):
             reporter.ok("required file exists: {0}".format(path.relative_to(ROOT)))
         else:
             reporter.fail("required file missing: {0}".format(path.relative_to(ROOT)))
+
+
+def check_project_config_wizard_encoding(reporter):
+    if not PROJECT_CONFIG.exists():
+        return
+
+    try:
+        text = PROJECT_CONFIG.read_bytes().decode("gbk")
+    except UnicodeDecodeError as exc:
+        reporter.fail("Project_Config.h must be saved as GBK/ANSI for Keil Configuration Wizard: {0}".format(exc))
+        return
+
+    if PROJECT_CONFIG_WIZARD_MARKER in text:
+        reporter.ok("Project_Config.h GBK/ANSI text is readable for Keil Configuration Wizard")
+    else:
+        reporter.fail("Project_Config.h GBK/ANSI text marker is missing or unreadable for Keil Configuration Wizard")
 
 
 def check_keil_targets(reporter):
@@ -336,6 +370,7 @@ def main(argv):
     print("Project check: {0}".format(ROOT))
 
     check_required_files(reporter)
+    check_project_config_wizard_encoding(reporter)
     check_keil_targets(reporter)
     check_release_defaults(reporter)
     check_guard_includes(reporter)

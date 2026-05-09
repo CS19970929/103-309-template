@@ -267,6 +267,8 @@ typedef struct
   uint32_t rtc_alm_cnt;
   uint32_t rtc_irq_cnt;
 
+  uint16_t typc_curr;
+
   bool    test_1;
   bool    test_2;
 }Time_T;
