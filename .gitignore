@@ -36,3 +36,8 @@ Users/CommomSH367309_16series_103RCT6_C.uvoptx
 *.ewp
 
 *.o
+
+# SOC test UI PyInstaller artifacts
+build/
+dist/
+*.spec

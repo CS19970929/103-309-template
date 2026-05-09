@@ -17,7 +17,10 @@ import soc_ride_sim_report as sim
 from soc_online_monitor import read_soc_params, read_soc_test_status, read_status, run_mcu_soc_test_sample, set_soc_once
 
 
-ROOT = Path(__file__).resolve().parents[1]
+if getattr(sys, "frozen", False):
+    ROOT = Path(sys.executable).resolve().parent
+else:
+    ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "SOC_RIDE_SIM_REPORT.md"
 SIM_CSV_PATH = ROOT / "SOC_RIDE_SIM_SAMPLES.csv"
 ONLINE_CSV_PATH = ROOT / "SOC_ONLINE_MONITOR.csv"
