@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import csv
+import argparse
 import queue
+import sys
 import threading
 import time
 import tkinter as tk
@@ -19,6 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT_PATH = ROOT / "SOC_RIDE_SIM_REPORT.md"
 SIM_CSV_PATH = ROOT / "SOC_RIDE_SIM_SAMPLES.csv"
 ONLINE_CSV_PATH = ROOT / "SOC_ONLINE_MONITOR.csv"
+
+
+def _missing_pyserial_message() -> str:
+    return (
+        "当前 Python 环境缺少 pyserial，所以不能打开串口。\n"
+        f"当前解释器: {sys.executable}\n"
+        "请从仓库根目录使用 tools\\start_soc_test_ui.ps1 启动，"
+        "或执行: py -3.9 -m pip install pyserial"
+    )
 
 
 class LineChart(tk.Canvas):
@@ -320,8 +331,7 @@ class SocTestUi(tk.Tk):
 
         def worker() -> None:
             try:
-                import serial  # type: ignore
-                with serial.Serial(port, baud, timeout=max(0.2, interval)) as ser:
+                with self._open_serial_for(port, baud, max(0.2, interval)) as ser:
                     start = time.time()
                     for index in range(samples):
                         if self.online_stop.is_set():
@@ -344,12 +354,18 @@ class SocTestUi(tk.Tk):
         self.set_status("已请求停止在线监控")
 
     def _open_serial(self):
-        import serial  # type: ignore
-        return serial.Serial(
+        return self._open_serial_for(
             self.port_var.get().strip(),
             int(self.baud_var.get()),
-            timeout=max(0.5, float(self.interval_var.get())),
+            max(0.5, float(self.interval_var.get())),
         )
+
+    def _open_serial_for(self, port: str, baud: int, timeout: float):
+        try:
+            import serial  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(_missing_pyserial_message()) from exc
+        return serial.Serial(port, baud, timeout=timeout)
 
     def read_board_params(self) -> None:
         def worker() -> None:
@@ -686,9 +702,38 @@ class SocTestUi(tk.Tk):
             "MCU测试数据",
         )
 
+    def run_demo_sequence(self) -> None:
+        self.log(f"Python executable: {sys.executable}")
+        self.tabs.select(0)
+        self.run_simulation()
+        self.after(2500, self._run_online_demo_step)
+
+    def _run_online_demo_step(self) -> None:
+        self.tabs.select(2)
+        self.read_board_params()
+        self.read_mcu_test_status()
+        self.start_online()
+
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="BMS SOC automated test UI")
+    parser.add_argument("--demo", action="store_true", help="run simulation and online monitor after startup")
+    parser.add_argument("--port", default="COM4")
+    parser.add_argument("--baud", default="19200")
+    parser.add_argument("--slave", default="1")
+    parser.add_argument("--samples", default="60")
+    parser.add_argument("--interval", default="1.0")
+    args = parser.parse_args()
+
     app = SocTestUi()
+    app.port_var.set(args.port)
+    app.baud_var.set(args.baud)
+    app.slave_var.set(args.slave)
+    app.samples_var.set(args.samples)
+    app.interval_var.set(args.interval)
+    app.log(f"Python executable: {sys.executable}")
+    if args.demo:
+        app.after(500, app.run_demo_sequence)
     app.mainloop()
     return 0
 
