@@ -47,9 +47,9 @@
 1. SOC 调试只读区
    - 内部 SOC、显示 SOC 分开输出。
    - `cap_now_as10/cap_full_as10/dsg_acc_as10/rem_ms`
-   - `full_ticks/empty_ticks/rest_ticks/low_guard_ticks/sag_hold_ticks`
+   - `full_ticks/empty_ticks/rest_ticks/sag_hold_ticks`
    - 当前模式 `RELAX/CHG/DSG`
-   - 最近一次校准原因：积分、满电、低压尾段、低压 guard、静置 OCV、RTC OCV、上位机设置。
+   - 最近一次校准原因：积分、满电、低压表、静置 OCV、RTC OCV、上位机设置。
 
 2. 测试模式开关
    - 允许上位机注入虚拟电压/电流样本，不依赖真实电池负载。

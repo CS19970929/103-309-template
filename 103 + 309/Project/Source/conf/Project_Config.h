@@ -215,40 +215,7 @@
 // <i> 快速满电确认允许低于满电电压的余量。越大越容易快速到 100%。
 #define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV 30
 
-// <q> 使能轻载在线 OCV 守护
-// <i> 在线 OCV 守护开关。当前仅配置和校验，SOC 主逻辑暂未接入。
-#define PROJECT_CFG_SOC_ONLINE_OCV_GUARD_ENABLE 1
-
-// <o> 在线 OCV 修正间隔，秒 <1-600>
-// <i> 在线 OCV 修正间隔。当前仅配置和校验，SOC 主逻辑暂未接入。
-#define PROJECT_CFG_SOC_ONLINE_OCV_CORRECTION_SECONDS 30
-
-// <o> 在线 OCV 最小 SOC 偏差，百分比 <1-50>
-// <i> 在线 OCV 修正所需最小 SOC 偏差。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_MIN_DELTA_PERCENT 3
-
-// <o> 在线 OCV 最大电流除数 <2-100>
-// <i> 在线 OCV 允许的最大电流，按 C 倍率除数表示。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_CURRENT_DIVIDER 10
-
-// <o> 在线 OCV 大电流放电除数 <1-100>
-// <i> 在线 OCV 判定大电流放电的阈值除数。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_CURRENT_DIVIDER 3
-
-// <o> 大电流放电后 OCV 禁止时间，秒 <0-1800>
-// <i> 大电流放电后的在线 OCV 禁止时间。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_HEAVY_DSG_HOLDOFF_SECONDS 180
-
-// <o> 在线 OCV 电压稳定时间，秒 <0-600>
-// <i> 在线 OCV 要求电压稳定的持续时间。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_SECONDS 20
-
-// <o> 在线 OCV 电压稳定窗口，mV <0-100>
-// <i> 在线 OCV 电压稳定窗口。当前仅配置和校验。
-#define PROJECT_CFG_SOC_ONLINE_OCV_STABLE_WINDOW_MV 8
-
-// <o> 校准最小有效单体电压，mV <1000-3500>
-// <i> SOC 校准允许使用的最低单体电压。低于该值认为采样异常。
+// <o> SOC calibration min valid cell voltage, mV <1000-3500>
 #define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
 
 // <o> 校准最大有效单体电压，mV <3600-6000>
@@ -267,16 +234,7 @@
 // <i> AFE/ADC/均衡/温度等系统异常时是否禁止 SOC 自动校准。
 #define PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT 0
 
-// <o> 空电快速兜底电压，mV <1500-3500>
-// <i> 极低压快速归零门槛。用于欠压兜底，不建议按体验随意调高。
-#define PROJECT_CFG_SOC_EMPTY_FAST_MV 2750
-
-// <o> 空电强制归零电压，mV <1500-3500>
-// <i> 强制归零门槛。电压低到该值附近时 SOC 必须快速收敛到 0。
-#define PROJECT_CFG_SOC_EMPTY_FORCE_MV 2500
-
-// <o> 大电流压降校准延迟，秒 <0-1800>
-// <i> 大电流压降后的校准延迟时间。用于避免瞬态压降误拉低 SOC。
+// <o> SOC sag holdoff seconds <0-1800>
 #define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
 
 // <o> 压降延迟允许校准余量，mV <0-500>
@@ -287,32 +245,7 @@
 // <i> 静置多久后允许按 OCV 小步修正 SOC。三元锂通常建议 30 分钟起。
 #define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
 
-// <o> 低压 guard 入口电压，mV <2500-4200>
-// <i> 低压 guard 入口电压。越高越早限制高估 SOC。
-#define PROJECT_CFG_SOC_LOW_GUARD_MV 3400
-
-// <o> 临界低压 guard 电压，mV <2000-4200>
-// <i> 临界低压 guard 入口电压。必须不高于普通低压 guard。
-#define PROJECT_CFG_SOC_LOW_GUARD_CRITICAL_MV 3250
-
-// <o> 低压 guard SOC 余量，百分比 <0-50>
-// <i> 普通低压区允许 SOC 高于 OCV 估算的余量。
-#define PROJECT_CFG_SOC_LOW_GUARD_MARGIN_PERCENT 8
-
-// <o> 临界低压 guard SOC 余量，百分比 <0-50>
-// <i> 临界低压区允许 SOC 高于 OCV 估算的余量，建议小于普通余量。
-#define PROJECT_CFG_SOC_LOW_GUARD_CRIT_MARGIN_PERCENT 3
-
-// <o> 低压 guard 确认时间，秒 <0-600>
-// <i> 低压 guard 条件确认时间。越短响应越快，越长越抗瞬态。
-#define PROJECT_CFG_SOC_LOW_GUARD_SECONDS 10
-
-// <o> 低压 guard 最大电流除数 <1-100>
-// <i> 低压 guard 最大允许电流，按 C 倍率除数表示，当前 5 表示 C/5。
-#define PROJECT_CFG_SOC_LOW_GUARD_CURRENT_DIVIDER 5
-
-// <o> 自动校准最大步长，百分比 <1-10>
-// <i> 自动校准单次最大步长。建议保持 1%，避免用户看到跳电。
+// <o> SOC auto calibration max step percent <1-10>
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 // </h>
 

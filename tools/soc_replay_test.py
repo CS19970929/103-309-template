@@ -24,8 +24,7 @@ FULL_CONFIRM_MARGIN_MV = 80
 FULL_CONFIRM_MAX_DELTA_MV = 120
 EMPTY_MV = 3000
 REST_OCV_SECONDS = 1800
-LOW_GUARD_SECONDS = 10
-LOW_GUARD_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
+EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = 1
 DISPLAY_NORMAL_SECONDS = 5
@@ -114,7 +113,7 @@ class SocModel:
     remainder_ms: int = 0
     full_ticks: int = 0
     empty_ticks: int = 0
-    low_guard_ticks: int = 0
+    rest_ticks: int = 0
     display_ticks: int = 0
     sag_hold_ticks: int = 0
     full_anchor: bool = False
@@ -233,16 +232,11 @@ class SocModel:
         if self.sag_hold_blocks_calibration(vmax, vmin):
             self.empty_ticks = 0
             return False
-        if vmin <= 2500:
-            target, ticks = 0, 1
-        elif vmin <= 2750:
-            target, ticks = 0, 1
-        else:
-            config = self.empty_tail_config(direction, vmin, idsg)
-            if not config:
-                self.empty_ticks = 0
-                return False
-            target, ticks = config
+        config = self.empty_tail_config(direction, vmin, idsg)
+        if not config:
+            self.empty_ticks = 0
+            return False
+        target, ticks = config
         self.empty_ticks += 1
         if self.empty_ticks >= ticks:
             if self.soc > target:
@@ -265,7 +259,7 @@ class SocModel:
     def empty_current_band(self, direction, idsg):
         if direction == MODE_RELAX:
             return EMPTY_BAND_RELAX
-        if idsg <= LOW_GUARD_CURRENT_A10:
+        if idsg <= EMPTY_LIGHT_CURRENT_A10:
             return EMPTY_BAND_LIGHT
         if idsg <= EMPTY_MID_CURRENT_A10:
             return EMPTY_BAND_MID
@@ -290,34 +284,12 @@ class SocModel:
                 return targets[band], max(1, ticks[band])
         return None
 
-    def empty_tail_active(self, direction, vmax, vmin, idsg):
+    def low_tail_active(self, direction, vmax, vmin, idsg):
         if direction == MODE_CHG or not self.voltage_allowed(vmax, vmin):
             return False
         if self.sag_hold_blocks_calibration(vmax, vmin):
             return False
-        if vmin <= 2750 or vmin <= 2500:
-            return True
         return self.empty_tail_config(direction, vmin, idsg) is not None
-
-    def apply_low_voltage_guard(self, direction, vmax, vmin, idsg):
-        old = self.soc
-        if direction == MODE_CHG or not self.voltage_allowed(vmax, vmin) or vmin > 3400:
-            self.low_guard_ticks = 0
-            return False
-        if direction == MODE_DSG and idsg > LOW_GUARD_CURRENT_A10:
-            self.low_guard_ticks = 0
-            return False
-        target = interp_soc(vmin)
-        margin = 3 if vmin <= 3250 else 8
-        limit = min(100, target + margin)
-        if self.soc > limit:
-            self.low_guard_ticks += 1
-            if self.low_guard_ticks >= LOW_GUARD_SECONDS * TICKS_PER_SECOND:
-                self.set_soc(step_toward(self.soc, limit, 1))
-                self.low_guard_ticks = 0
-        else:
-            self.low_guard_ticks = 0
-        return self.soc != old
 
     def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX, fault=False):
         if rest_seconds < REST_OCV_SECONDS or not self.voltage_allowed(vmax, vmin, fault):
@@ -330,6 +302,15 @@ class SocModel:
         old = self.soc
         self.set_soc(step_toward(self.soc, target, CAL_STEP))
         return self.soc != old
+
+    def update_rest_timer(self, vmax, vmin):
+        if self.mode != MODE_RELAX:
+            self.rest_ticks = 0
+            return
+        self.rest_ticks = min(self.rest_ticks + 1, REST_OCV_SECONDS * TICKS_PER_SECOND)
+        if self.rest_ticks >= REST_OCV_SECONDS * TICKS_PER_SECOND:
+            self.apply_rest_ocv(REST_OCV_SECONDS, vmax, vmin, direction=MODE_RELAX)
+            self.rest_ticks = 0
 
     def display_target(self):
         if self.zero:
@@ -361,10 +342,12 @@ class SocModel:
         self.mode = self.direction(ichg, idsg)
         self.integrate(self.mode, ichg if self.mode == MODE_CHG else idsg)
         self.update_sag_hold(self.mode, idsg)
-        empty_active = self.empty_tail_active(self.mode, vmax, vmin, idsg)
+        low_tail_active = self.low_tail_active(self.mode, vmax, vmin, idsg)
         calibrated = self.apply_full_empty(self.mode, vmax, vmin, ichg, idsg)
-        if not empty_active and not calibrated and not self.sag_hold_blocks_calibration(vmax, vmin):
-            self.apply_low_voltage_guard(self.mode, vmax, vmin, idsg)
+        if not low_tail_active and not calibrated and not self.sag_hold_blocks_calibration(vmax, vmin):
+            self.update_rest_timer(vmax, vmin)
+        elif low_tail_active or self.sag_hold_blocks_calibration(vmax, vmin):
+            self.rest_ticks = 0
         self.update_display(vmin=vmin)
 
 
@@ -525,19 +508,19 @@ def test_empty_anchor_limits_low_voltage_tail():
     assert model.soc == 25
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
-    run_seconds(model, 500, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=3400, vmin=3400)
+    run_seconds(model, 500, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3400, vmin=3400)
     assert model.soc == 30
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
-    run_seconds(model, 300, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=3300, vmin=3300)
+    run_seconds(model, 300, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3300, vmin=3300)
     assert 35 <= model.soc <= 36
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    run_seconds(model, 80, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=3100, vmin=3100)
+    run_seconds(model, 80, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3100, vmin=3100)
     assert 13 <= model.soc <= 14
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    run_seconds(model, 50, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=3050, vmin=3050)
+    run_seconds(model, 50, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3050, vmin=3050)
     assert 8 <= model.soc <= 9
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
@@ -547,12 +530,12 @@ def test_empty_anchor_limits_low_voltage_tail():
     model.tick(idsg=40, vmax=2500, vmin=2500)
     assert model.soc == 29
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    run_seconds(model, 15, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=3000, vmin=3000)
+    run_seconds(model, 15, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3000, vmin=3000)
     assert model.soc == 15
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    model.tick(idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=2950, vmin=2950)
+    model.tick(idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
     assert model.soc == 29
-    run_seconds(model, 6, idsg=LOW_GUARD_CURRENT_A10 + 10, vmax=2950, vmin=2950)
+    run_seconds(model, 6, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
     assert model.soc == 0
 
 
@@ -614,7 +597,7 @@ def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
     assert model.soc == 39
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
-    run_seconds(model, 16, idsg=LOW_GUARD_CURRENT_A10 + 1, vmax=3400, vmin=3400)
+    run_seconds(model, 16, idsg=EMPTY_LIGHT_CURRENT_A10 + 1, vmax=3400, vmin=3400)
     assert model.soc == 39
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))

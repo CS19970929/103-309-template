@@ -34,7 +34,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_TICKS_PER_SECOND         ((UINT16)5U)
 #define SOC_CURRENT_ACTIVE_A10       ((UINT16)4U)
 #define SOC_DEFAULT_CAP_A10          ((UINT16)270U)
-#define SOC_SOH_MIN                  ((UINT8)80U)
+#define SOC_SOH_MIN                  ((UINT8)70U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
 #define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
 #define SOC_FULL_FAST_SECONDS        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS)
@@ -44,19 +44,11 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
 #define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
 #define SOC_EMPTY_MV                 ((UINT16)3000U)
-#define SOC_EMPTY_FAST_MV            ((UINT16)PROJECT_CFG_SOC_EMPTY_FAST_MV)
-#define SOC_EMPTY_FORCE_MV           ((UINT16)PROJECT_CFG_SOC_EMPTY_FORCE_MV)
 #define SOC_EMPTY_CUR_LIGHT_DIVIDER  ((UINT16)5U)
 #define SOC_EMPTY_CUR_MID_DIVIDER    ((UINT16)2U)
 #define SOC_SAG_HOLDOFF_SECONDS      ((UINT16)PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS)
 #define SOC_SAG_ALLOW_OFFSET_MV      ((int16_t)PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV)
 #define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
-#define SOC_LOW_GUARD_MV             ((UINT16)PROJECT_CFG_SOC_LOW_GUARD_MV)
-#define SOC_LOW_GUARD_CRITICAL_MV    ((UINT16)PROJECT_CFG_SOC_LOW_GUARD_CRITICAL_MV)
-#define SOC_LOW_GUARD_MARGIN         ((UINT8)PROJECT_CFG_SOC_LOW_GUARD_MARGIN_PERCENT)
-#define SOC_LOW_GUARD_CRIT_MARGIN    ((UINT8)PROJECT_CFG_SOC_LOW_GUARD_CRIT_MARGIN_PERCENT)
-#define SOC_LOW_GUARD_SECONDS        ((UINT16)PROJECT_CFG_SOC_LOW_GUARD_SECONDS)
-#define SOC_LOW_GUARD_CUR_DIVIDER    ((UINT16)PROJECT_CFG_SOC_LOW_GUARD_CURRENT_DIVIDER)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)5U)
 #define SOC_DISPLAY_CHG_SECONDS      SOC_DISPLAY_NORMAL_SECONDS
@@ -84,7 +76,6 @@ typedef struct
 	UINT16 full_ticks;
 	UINT16 empty_ticks;
 	UINT16 rest_ticks;
-	UINT16 low_guard_ticks;
 	UINT16 display_ticks;
 	UINT16 sag_hold_ticks;
 	UINT8 soc;
@@ -94,7 +85,6 @@ typedef struct
 	UINT8 last_mode;
 	UINT8 display_ready;
 	UINT8 full_anchor;
-	UINT8 force_display;
 } SOC_STATE;
 
 typedef struct
@@ -356,11 +346,6 @@ static UINT16 soc_current_limit_a10(UINT16 divider)
 	}
 	limit = (UINT16)((cap_a10 + divider - 1U) / divider);
 	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
-}
-
-static UINT16 soc_low_guard_current_a10(void)
-{
-	return soc_current_limit_a10(SOC_LOW_GUARD_CUR_DIVIDER);
 }
 
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg)
@@ -653,7 +638,7 @@ static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT8 *ticks)
 	return 0U;
 }
 
-static UINT8 soc_empty_tail_active(UINT8 mode)
+static UINT8 soc_low_tail_active(UINT8 mode)
 {
 	UINT8 target;
 	UINT8 ticks;
@@ -665,11 +650,6 @@ static UINT8 soc_empty_tail_active(UINT8 mode)
 	if (soc_sag_hold_blocks_calibration())
 	{
 		return 0U;
-	}
-	if ((SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FORCE_MV) ||
-		(SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV))
-	{
-		return 1U;
 	}
 	return soc_empty_tail_config(mode, &target, &ticks);
 }
@@ -724,19 +704,8 @@ static UINT8 soc_apply_full_empty(UINT8 mode)
 		s_soc.empty_ticks = 0U;
 		return 0U;
 	}
-	if (SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FORCE_MV)
+	if (soc_empty_tail_config(mode, &empty_target, &empty_ticks))
 	{
-		empty_target = 0U;
-		empty_ticks = 1U;
-	}
-	else if ((SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV) ||
-		soc_empty_tail_config(mode, &empty_target, &empty_ticks))
-	{
-		if (SOC_Enhance_Element.u16_VCellMin <= SOC_EMPTY_FAST_MV)
-		{
-			empty_target = 0U;
-			empty_ticks = 1U;
-		}
 		if (++s_soc.empty_ticks >= (UINT16)empty_ticks)
 		{
 			if (s_soc.soc > empty_target)
@@ -749,44 +718,6 @@ static UINT8 soc_apply_full_empty(UINT8 mode)
 	else
 	{
 		s_soc.empty_ticks = 0U;
-	}
-	return (UINT8)(s_soc.soc != old_soc);
-}
-
-static UINT8 soc_apply_low_voltage_guard(UINT8 mode)
-{
-	UINT8 target;
-	UINT8 limit;
-	UINT8 margin;
-	UINT8 old_soc = s_soc.soc;
-
-	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid() ||
-		(SOC_Enhance_Element.u16_VCellMin > SOC_LOW_GUARD_MV))
-	{
-		s_soc.low_guard_ticks = 0U;
-		return 0U;
-	}
-	if ((mode == SOC_MODE_DSG) &&
-		(SOC_Enhance_Element.u16_Idsg > soc_low_guard_current_a10()))
-	{
-		s_soc.low_guard_ticks = 0U;
-		return 0U;
-	}
-	target = soc_ocv_percent();
-	margin = (SOC_Enhance_Element.u16_VCellMin <= SOC_LOW_GUARD_CRITICAL_MV) ?
-		SOC_LOW_GUARD_CRIT_MARGIN : SOC_LOW_GUARD_MARGIN;
-	limit = (target > (UINT8)(100U - margin)) ? 100U : (UINT8)(target + margin);
-	if (s_soc.soc > limit)
-	{
-		if (++s_soc.low_guard_ticks >= (UINT16)(SOC_LOW_GUARD_SECONDS * SOC_TICKS_PER_SECOND))
-		{
-			soc_set(soc_step(s_soc.soc, limit, SOC_CAL_STEP));
-			s_soc.low_guard_ticks = 0U;
-		}
-	}
-	else
-	{
-		s_soc.low_guard_ticks = 0U;
 	}
 	return (UINT8)(s_soc.soc != old_soc);
 }
@@ -957,9 +888,8 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 
 void SOC_IntEnhance_Ctrl(void)
 {
-	UINT8 force;
 	UINT8 calibrated;
-	UINT8 empty_active;
+	UINT8 low_tail_active;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
 	{
@@ -973,24 +903,18 @@ void SOC_IntEnhance_Ctrl(void)
 	s_soc.mode = soc_direction();
 	soc_integrate(s_soc.mode);
 	soc_update_sag_hold(s_soc.mode);
-	empty_active = soc_empty_tail_active(s_soc.mode);
+	low_tail_active = soc_low_tail_active(s_soc.mode);
 	calibrated = soc_apply_full_empty(s_soc.mode);
-	if (!empty_active && !calibrated && !soc_sag_hold_blocks_calibration())
-	{
-		calibrated = soc_apply_low_voltage_guard(s_soc.mode);
-	}
-	if (!empty_active && !calibrated && !soc_sag_hold_blocks_calibration())
+	if (!low_tail_active && !calibrated && !soc_sag_hold_blocks_calibration())
 	{
 		soc_update_rest_timer(s_soc.mode);
 	}
-	else if (empty_active || soc_sag_hold_blocks_calibration())
+	else if (low_tail_active || soc_sag_hold_blocks_calibration())
 	{
 		s_soc.rest_ticks = 0U;
 	}
 	soc_save_if_needed();
-	force = s_soc.force_display;
-	s_soc.force_display = 0U;
-	soc_publish(force);
+	soc_publish(0U);
 }
 
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max)

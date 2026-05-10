@@ -20,7 +20,7 @@
 1. 200ms AFE 电流样本驱动安时积分。
 2. Flash 双槽 journal 保存 SOC 快照，掉电后优先恢复快照。
 3. 无快照或快照无效时，用 OCV 表估算启动 SOC；电压无效才回退到 60%。
-4. 满电、低压末端、低压 guard、静置/RTC OCV 都只做小步校准，每次最多 1%。
+4. 满电、低压表、静置/RTC OCV 都只做小步校准，每次最多 1%。
 5. 内部 SOC 与对外显示 SOC 分离，对外输出经过平滑处理。
 6. RS485、CAN、LedBar 最终都读取 `g_stCellInfoReport.SocElement`，也就是显示侧 SOC/SOH/容量。
 
@@ -123,7 +123,7 @@ OCV 表按 `(电压mV, SOC%)` 成对存储，通过 `GetEndValue()` 做线性插
 3000/0
 ```
 
-OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不直接替代运行中的安时积分。
+OCV 表主要影响启动估算和静置校正，不直接替代运行中的安时积分；骑行低压区由低压表单独收敛。
 
 ### 3.4 满电确认
 
@@ -163,15 +163,9 @@ OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不
 
 如果电压已经低到 `V0 + 50mV` 附近，则认为进入真实末端，仍允许低压收敛。
 
-### 3.7 低压 guard
+### 3.7 低压校准互斥
 
-非充电、有效电压、`VCellMin <= 3400mV`、放电电流不大于 `C/5` 时，低压 guard 会用 OCV 表算一个目标，然后限制 SOC 不能明显高于目标：
-
-- 普通低压：上限约为 `OCV_SOC + 8%`
-- 临界低压 `<=3250mV`：上限约为 `OCV_SOC + 3%`
-- 条件持续 10s 后，每次下修 1%
-
-作用是防止低压区 SOC 明显高估。
+当前低压电压类校准只保留低压表一条路径。低压表活跃时会阻断静置 OCV，避免同一调度 tick 内出现多条校准路径竞争；大电流 sag holdoff 未解除时，若电压仍高于 `V0 + 50mV`，低压表也不动作。
 
 ### 3.8 静置/RTC OCV 校正
 
@@ -211,7 +205,7 @@ OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不
 | `OtherElement.u16Soc_Cycle_times` | `0x2319` | 初始循环次数 | 越大 SOH 越低，满充容量越小，显示更保守 |
 | `OtherElement.u16Soc_V_100` | `0x231A` | 满电确认电压 | 调低更容易到 100%；调高可能长期 99% |
 | `OtherElement.u16Soc_V_0` | `0x231B` | 空电/低压末端基准 | 调高会更早快速掉电并提示低电；调低会更耐看但可能欠压前仍显示偏高 |
-| `OtherElement.u16Soc_TableSelect` | `0x230C` | OCV 表选择 | 影响启动、静置校正、低压 guard；电芯类型不匹配会导致放置后电量偏差 |
+| `OtherElement.u16Soc_TableSelect` | `0x230C` | OCV 表选择 | 影响启动和静置校正；电芯类型不匹配会导致放置后电量偏差 |
 | `SOC_Table_Set[42]` | `0x2200~0x2229` | 用户自定义 OCV 表，仅表选择为 `SOC_TABLE_TEST` 时使用 | 可按实测曲线优化静置/启动 SOC；表写错会造成 SOC 估算严重偏差 |
 | 一次性设置 SOC | `0x1005` | `0..100` 直接设置当前 SOC 并保存 | 适合售后校准；用户会看到电量立即跳变 |
 | SOC 低电保护阈值 | `0x213C~0x2140` | 一/二/三级 SOC 低电告警/保护及滤波 | 阈值高则更早告警/限用；阈值低则续航感更足但风险更靠近欠压 |
@@ -233,28 +227,18 @@ OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不
 | `PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV` | 1000mV | 校准允许的最大压差 | 越大越容易校正；越小越避免异常串影响 SOC |
 | `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT` | 0 | 三阶保护故障时是否禁止校准 | 打开后故障时 SOC 更稳定但纠偏变慢 |
 | `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT` | 0 | AFE/ADC/CBC/温度异常时是否禁止校准 | 打开后异常采样更不易影响 SOC |
-| `PROJECT_CFG_SOC_EMPTY_FAST_MV` | 2750mV | 极低压快速归零门槛 | 安全兜底。过高会过早 0%，过低可能欠压前还不归零 |
-| `PROJECT_CFG_SOC_EMPTY_FORCE_MV` | 2500mV | 强制归零门槛 | 硬兜底，不建议提高太多 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | 30s | 大电流压降后禁止误校准的时间 | 越长越不容易被瞬态压降拉低 SOC，但低电纠偏更慢 |
 | `PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV` | 50mV | holdoff 期间低于 `V0+offset` 才允许末端校准 | 越大越保守，越不容易被压降误拉低 |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | 1800s | 静置 OCV 校正等待时间 | 调小纠偏快但容易采信未稳定电压；三元锂建议 30min 起 |
-| `PROJECT_CFG_SOC_LOW_GUARD_MV` | 3400mV | 低压 guard 入口 | 越高越早限制高 SOC，用户会感觉低电掉得更早 |
-| `PROJECT_CFG_SOC_LOW_GUARD_CRITICAL_MV` | 3250mV | 临界低压 guard 入口 | 越高越早强保守，必须不高于低压 guard 入口 |
-| `PROJECT_CFG_SOC_LOW_GUARD_MARGIN_PERCENT` | 8% | 普通低压允许 SOC 比 OCV 高出的余量 | 越小越保守，越容易掉电；越大更耐看但可能高估 |
-| `PROJECT_CFG_SOC_LOW_GUARD_CRIT_MARGIN_PERCENT` | 3% | 临界低压允许 SOC 比 OCV 高出的余量 | 临界区建议小，当前 3% 合理 |
-| `PROJECT_CFG_SOC_LOW_GUARD_SECONDS` | 10s | 低压 guard 条件持续时间 | 越小响应快但容易受瞬态影响；越大更稳但纠偏慢 |
-| `PROJECT_CFG_SOC_LOW_GUARD_CURRENT_DIVIDER` | 5 | 低压 guard 最大电流，`C / divider` | 用于避免大电流压降误判，当前等于 `C/5` |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | 1% | 自动校准单次最大步长 | 不建议改大。改大用户会看到跳电 |
 | `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | 0 | 打开 MCU 注入式 SOC 测试 | 量产必须关闭；打开后上位机可写样本加速跑 SOC |
 | `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX` | 300 | 单次注入最大 200ms tick 数 | 越大测试越快，但越偏离真实运行节奏 |
 
 `PROJECT_CFG_BUILD_PROFILE=0` 的 Release 构建会强制禁止 `PROJECT_CFG_SOC_TEST_MODE_ENABLE=1`。
 
-当前 `PROJECT_CFG_SOC_ONLINE_OCV_*` 一组宏只在配置文件和 build guard 中定义/校验，当前 `SocEnhance.c` 没有引用它们；调这些宏不会改变运行 SOC 行为。
-
 ### 4.3 内部常量参数
 
-这些是 `SocEnhance.c` 内部使用的短名。当前满电确认、空电兜底、压降 holdoff、静置 OCV、低压 guard、校准步长已经接到 `Project_Config.h`，可以通过 `PROJECT_CFG_*` 修改；时基、容量兜底、SOH 简化模型、电流档位枚举仍属于源码策略常量。
+这些是 `SocEnhance.c` 内部使用的短名。当前满电确认、压降 holdoff、静置 OCV、校准步长已经接到 `Project_Config.h`，可以通过 `PROJECT_CFG_*` 修改；时基、容量兜底、SOH 简化模型、低压表和电流档位枚举仍属于源码策略常量。
 
 #### 4.3.1 时基与模式
 
@@ -292,8 +276,6 @@ OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不
 | 常量 | 当前值 | 影响什么 | 建议怎么设置 |
 | --- | ---: | --- | --- |
 | `SOC_EMPTY_MV` | 3000mV | 默认空电单体电压 | 三元锂 e-bike 当前 3000mV 合理。优先通过 `0x231B u16Soc_V_0` 调 |
-| `SOC_EMPTY_FAST_MV` | 2750mV | 极低压快速归零门槛 | 安全兜底，通常不按体验调。过高会过早 0%，过低可能欠压前还不归零 |
-| `SOC_EMPTY_FORCE_MV` | 2500mV | 强制归零门槛 | 硬兜底，不建议提高太多 |
 | `SOC_EMPTY_CUR_LIGHT_DIVIDER` | 5 | 轻载分界：`C / 5`，27Ah 时约 5.4A | 当前适合 e-bike。越大，轻载门槛越低；越小，更多场景被当轻载 |
 | `SOC_EMPTY_CUR_MID_DIVIDER` | 2 | 中/重载分界：`C / 2`，27Ah 时约 13.5A | 用于识别大电流压降。当前适合电动车场景 |
 | `SOC_SAG_HOLDOFF_SECONDS` | 30s | 大电流压降后禁止误校准的时间 | 大负载时电量掉太快可加大；松油门后低电纠正太慢可减小 |
@@ -304,18 +286,12 @@ OCV 表主要影响启动估算、静置校正、低压 guard 的目标值，不
 | `SOC_EMPTY_BAND_HEAVY` | 3 | 低压表重载档位枚举 | 不要改值 |
 | `SOC_EMPTY_BAND_COUNT` | 4 | 低压表档位数量 | 不要改值，除非同步重写低压表逻辑 |
 
-#### 4.3.5 静置 OCV 与低压 guard
+#### 4.3.5 静置 OCV 与校准步长
 
 | 常量 | 当前值 | 影响什么 | 建议怎么设置 |
 | --- | ---: | --- | --- |
 | `SOC_REST_OCV_SECONDS` | 1800s | 静置 30min 后按 OCV 小步校正 | 调小纠偏快但容易采信未稳定电压；三元锂建议 30min 起 |
-| `SOC_LOW_GUARD_MV` | 3400mV | 低压 guard 入口 | 越高越早限制高 SOC，用户会感觉低电掉得更早 |
-| `SOC_LOW_GUARD_CRITICAL_MV` | 3250mV | 临界低压 guard 入口 | 越高越早强保守。当前适合三元锂低电区 |
-| `SOC_LOW_GUARD_MARGIN` | 8% | 普通低压允许 SOC 比 OCV 高 8% | 越小越保守，越容易掉电；越大更耐看但可能高估 |
-| `SOC_LOW_GUARD_CRIT_MARGIN` | 3% | 临界低压允许 SOC 比 OCV 高 3% | 临界区建议小，当前 3 合理 |
-| `SOC_LOW_GUARD_SECONDS` | 10s | 低压 guard 条件持续时间 | 越小响应快但容易受瞬态影响；越大更稳但纠偏慢 |
-| `SOC_LOW_GUARD_CUR_DIVIDER` | 5 | 仅小于等于 `C / 5` 时做低压 guard | 用于避免大电流压降误判。当前合理 |
-| `SOC_CAL_STEP` | 1% | 满电、空电、低压 guard、静置 OCV 每次自动校准的最大步长 | 不建议改大。改大用户会看到跳电 |
+| `SOC_CAL_STEP` | 1% | 满电、低压表、静置 OCV 每次自动校准的最大步长 | 不建议改大。改大用户会看到跳电 |
 
 #### 4.3.6 校准有效性
 
@@ -381,7 +357,6 @@ LedBar 直接取 `g_stCellInfoReport.SocElement.u16Soc`，也就是平滑后的 
 
 ## 7. 当前风险点
 
-1. `PROJECT_CFG_SOC_ONLINE_OCV_*` 宏当前未接入 SOC 状态机，容易让人误以为已生效。
-2. SOC 表 `0x2200~0x2229` 写入后只更新 RAM 表；是否持久化需结合当前 Flash RW 参数保存策略确认。
-3. 对外 SOC 是显示平滑值，不是内部瞬时值；做台架比对时需要考虑显示滞后。
-4. 调 `u16Soc_Ah / V100 / V0 / OCV 表` 会直接影响用户可见电量，应通过骑行回放或上位机注入样本验证后再出货。
+1. SOC 表 `0x2200~0x2229` 写入后只更新 RAM 表；是否持久化需结合当前 Flash RW 参数保存策略确认。
+2. 对外 SOC 是显示平滑值，不是内部瞬时值；做台架比对时需要考虑显示滞后。
+3. 调 `u16Soc_Ah / V100 / V0 / OCV 表` 会直接影响用户可见电量，应通过骑行回放或上位机注入样本验证后再出货。
