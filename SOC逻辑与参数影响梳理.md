@@ -456,3 +456,5 @@ python3 tools/soc_replay_test.py
 python3 tools/project_check.py
 git diff --check
 ```
+
+没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/soc_replay_test.py` 覆盖 `39` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、短静置、长时间不用车、回弹保护、异常输入和随机不变量。

@@ -337,7 +337,7 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 python3 tools/soc_replay_test.py
 ```
 
-当前覆盖 28 个场景：
+当前覆盖 39 个场景：
 
 - 无快照默认 60%。
 - 无快照且电压有效时按启动 OCV。
@@ -357,5 +357,7 @@ python3 tools/soc_replay_test.py
 - 中低压弱约束按电压、电流、周期慢速下修。
 - 中低压弱约束条件中断后计数器清零。
 - 重载关机后的快照回弹标志会阻止开机电压误校准。
+- OCV 表单调性、Python 模型与 C 源码表格一致性、方向阈值、满电计数器递减、低压/中低压全表矩阵。
+- 异常电压矩阵、长期静置收敛、回弹保护过期清标志、随机运行不变量。
 
 本机已通过 `clang -fsyntax-only -std=c99 -Wall -Wextra` 语法检查。Keil 完整编译仍需 Windows + Keil MDK 环境。

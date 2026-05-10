@@ -6,9 +6,14 @@ anchoring, SOH mapping, and display smoothing. It intentionally avoids STM32
 bindings so it can run in CI or during local review.
 """
 
+import random
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOC_ENHANCE_SOURCE = PROJECT_ROOT / '103 + 309/Project/Source/SocEnhance.c'
 TICKS_PER_SECOND = 5
 PERIOD_MS = 200
 CURRENT_ENTER_A10 = 4
@@ -297,6 +302,8 @@ class SocModel:
             self.rebound_hold = True
         elif self.sag_hold_ticks > 0:
             self.sag_hold_ticks -= 1
+            if self.sag_hold_ticks == 0:
+                self.rebound_hold = False
         else:
             self.rebound_hold = False
 
@@ -466,6 +473,67 @@ def run_seconds(model, seconds, **kwargs):
         model.tick(**kwargs)
 
 
+def assert_model_invariants(model):
+    assert 0 <= model.soc <= 100
+    assert 0 <= model.display_soc <= 100
+    assert SOH_MIN <= model.soh <= 100
+    assert 0 <= model.cap_now <= model.cap_full <= model.cap_factory
+    assert 0 <= model.cycle_acc_as10 < max(1, model.cap_factory // 100)
+    assert model.rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
+    assert model.stable_rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
+    assert model.short_rest_ticks <= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND
+    assert model.sag_hold_ticks <= REBOUND_BOOT_HOLDOFF_SECONDS * TICKS_PER_SECOND
+
+
+def idsg_for_band(band):
+    if band == EMPTY_BAND_RELAX:
+        return 0
+    if band == EMPTY_BAND_LIGHT:
+        return CURRENT_ENTER_A10
+    if band == EMPTY_BAND_MID:
+        return EMPTY_LIGHT_CURRENT_A10 + 1
+    return EMPTY_MID_CURRENT_A10 + 1
+
+
+def direction_for_band(band):
+    return MODE_RELAX if band == EMPTY_BAND_RELAX else MODE_DSG
+
+
+def c_source_text():
+    return SOC_ENHANCE_SOURCE.read_text(encoding='utf-8')
+
+
+def parse_c_number(token):
+    token = token.strip()
+    if token == 'SOC_MID_TARGET_DISABLED':
+        return MID_TARGET_DISABLED
+    token = re.sub(r'[()A-Za-z_]+', '', token)
+    return int(token, 0)
+
+
+def parse_c_tail_table(name):
+    match = re.search(r'static const SOC_EMPTY_TAIL_RULE\s+' + name +
+                      r'\[\]\s*=\s*\{(.*?)\};', c_source_text(), re.S)
+    assert match, name
+    rows = []
+    for offset, targets, ticks in re.findall(r'\{\s*([^,]+),\s*\{([^}]*)\},\s*\{([^}]*)\}\s*\}',
+                                             match.group(1)):
+        rows.append((
+            parse_c_number(offset),
+            tuple(parse_c_number(item) for item in targets.split(',')),
+            tuple(parse_c_number(item) for item in ticks.split(',')),
+        ))
+    return rows
+
+
+def parse_c_ternary_ocv_table():
+    match = re.search(r'const UINT16 SocTable_TernaryLi\[[^\]]+\]\s*=\s*\{(.*?)\};',
+                      c_source_text(), re.S)
+    assert match
+    values = [int(item) for item in re.findall(r'\d+', match.group(1))]
+    return list(zip(values[0::2], values[1::2]))
+
+
 def voltage_from_soc(soc):
     soc = max(0, min(100, soc))
     for (v1, s1), (v2, s2) in zip(OCV_TABLE, OCV_TABLE[1:]):
@@ -561,6 +629,19 @@ def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
     assert model.display_soc >= model.soc
 
 
+def test_direction_thresholds_and_conflict_resolution():
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model.tick(ichg=CURRENT_ENTER_A10 - 1, idsg=CURRENT_ENTER_A10 - 1)
+    assert model.mode == MODE_RELAX
+
+    model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10)
+    assert model.mode == MODE_CHG
+
+    model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10 + 1)
+    assert model.mode == MODE_DSG
+    assert model.remainder_ms == 0
+
+
 def test_charge_integration_stops_display_before_full_confirm():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
     run_seconds(model, 900, ichg=270, vmax=4100, vmin=4050)
@@ -574,6 +655,27 @@ def test_soh_maps_cycles_to_capacity_floor():
     assert soh_from_cycle(10000) == 99
     assert soh_from_cycle(200000) == 80
     assert soh_from_cycle(300000) == 80
+
+
+def test_ocv_table_is_monotonic_and_exact_points_match():
+    previous_soc = 100
+    for mv, soc in OCV_TABLE:
+        assert interp_soc(mv) == soc
+        assert soc <= previous_soc
+        previous_soc = soc
+
+    previous = 100
+    for mv in range(4200, 2900, -5):
+        now = interp_soc(mv)
+        assert 0 <= now <= 100
+        assert now <= previous
+        previous = now
+
+
+def test_python_model_tables_match_c_source():
+    assert parse_c_ternary_ocv_table() == OCV_TABLE
+    assert parse_c_tail_table('s_empty_tail_table') == EMPTY_TAIL_TABLE
+    assert parse_c_tail_table('s_mid_tail_table') == MID_TAIL_TABLE
 
 
 def test_full_confirm_is_voltage_based_and_tolerates_charge_current():
@@ -611,6 +713,17 @@ def test_full_confirm_threshold_follows_configured_v100():
     assert model.full_confirm_seconds(vmax=3570, vmin=3570, v100=3650) == FULL_SECONDS
     assert model.full_confirm_seconds(vmax=3569, vmin=3569, v100=3650) == 0
     assert model.full_confirm_seconds(vmax=3650, vmin=3520, v100=3650) == 0
+
+
+def test_full_confirm_counter_decrements_instead_of_resetting():
+    model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
+    run_seconds(model, FULL_SECONDS - 1, ichg=270, vmax=4180, vmin=4100)
+    assert model.full_ticks == (FULL_SECONDS - 1) * TICKS_PER_SECOND
+
+    model.tick(ichg=270, vmax=4000, vmin=3990)
+    assert model.full_ticks == (FULL_SECONDS - 1) * TICKS_PER_SECOND - 1
+    run_seconds(model, 2, ichg=270, vmax=4180, vmin=4100)
+    assert model.soc == 99
 
 
 def test_empty_anchor_limits_low_voltage_tail():
@@ -716,6 +829,29 @@ def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
     assert model.soc == 39
 
 
+def test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull():
+    for offset, targets, ticks in EMPTY_TAIL_TABLE:
+        vcell = EMPTY_MV + offset
+        for band in (EMPTY_BAND_RELAX, EMPTY_BAND_LIGHT, EMPTY_BAND_MID, EMPTY_BAND_HEAVY):
+            direction = direction_for_band(band)
+            idsg = idsg_for_band(band)
+            model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+            assert model.empty_tail_config(direction, vcell, idsg) == (targets[band], max(1, ticks[band]))
+
+            model.soc = min(100, targets[band] + 5)
+            model.cap_now = model.cap_full * model.soc // 100
+            for _ in range(max(1, ticks[band]) - 1):
+                assert not model.apply_full_empty(direction, vcell, vcell, 0, idsg)
+            changed = model.apply_full_empty(direction, vcell, vcell, 0, idsg)
+            assert changed == (model.soc == targets[band] + 4)
+
+            model = SocModel.from_snapshot(Snapshot(soc=max(0, targets[band] - 2),
+                                                    cap_now=CAP_FACTORY_AS10 * max(0, targets[band] - 2) // 100))
+            for _ in range(max(1, ticks[band]) + 1):
+                model.apply_full_empty(direction, vcell, vcell, 0, idsg)
+            assert model.soc == max(0, targets[band] - 2)
+
+
 def test_auto_calibration_never_steps_more_than_one_percent():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
     run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
@@ -732,6 +868,10 @@ def test_auto_calibration_never_steps_more_than_one_percent():
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2500, vmin=2500)
     assert model.soc == 29
+
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    run_seconds(model, 150, idsg=20, vmax=3650, vmin=3650)
+    assert model.soc == 79
 
 
 def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
@@ -784,6 +924,36 @@ def test_mid_voltage_counter_resets_when_condition_breaks():
     assert model.soc == 79
 
 
+def test_mid_voltage_tail_table_matrix_and_guards():
+    for offset, targets, ticks in MID_TAIL_TABLE:
+        vcell = EMPTY_MV + offset
+        for band in (EMPTY_BAND_RELAX, EMPTY_BAND_LIGHT, EMPTY_BAND_MID, EMPTY_BAND_HEAVY):
+            direction = direction_for_band(band)
+            idsg = idsg_for_band(band)
+            model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+            expected = None if targets[band] is None else (targets[band], ticks[band])
+            assert model.mid_tail_config(direction, vcell, vcell, idsg) == expected
+
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    assert model.mid_tail_config(MODE_CHG, 3650, 3650, 0) is None
+    assert model.mid_tail_config(MODE_RELAX, 3400, 3400, 0) is None
+    assert model.mid_tail_config(MODE_RELAX, 3851, 3650, 0) is None
+    model.sag_hold_ticks = SAG_HOLDOFF_SECONDS * TICKS_PER_SECOND
+    assert model.mid_tail_config(MODE_RELAX, 3650, 3650, 0) is None
+
+
+def test_short_rest_rejects_imbalance_and_restarts_after_voltage_jump():
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    run_seconds(model, SHORT_REST_STEP_SECONDS + 1, vmax=3835, vmin=3600)
+    assert model.soc == 50
+
+    run_seconds(model, SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835)
+    assert model.stable_rest_ticks >= SHORT_REST_MIN_SECONDS * TICKS_PER_SECOND
+    model.tick(vmax=3870, vmin=3870)
+    assert model.stable_rest_ticks == 0
+    assert model.short_rest_ticks == 0
+
+
 def test_persisted_rebound_hold_blocks_startup_voltage_correction():
     model = SocModel.from_snapshot(Snapshot(soc=80,
                                             cap_now=CAP_FACTORY_AS10 * 80 // 100,
@@ -791,6 +961,32 @@ def test_persisted_rebound_hold_blocks_startup_voltage_correction():
     run_seconds(model, 120, vmax=3500, vmin=3500)
     assert model.soc == 80
     assert model.sag_hold_ticks > 0
+
+
+def test_rebound_hold_expires_then_allows_voltage_correction():
+    model = SocModel.from_snapshot(Snapshot(soc=80,
+                                            cap_now=CAP_FACTORY_AS10 * 80 // 100,
+                                            rebound_hold=True))
+    run_seconds(model, REBOUND_BOOT_HOLDOFF_SECONDS - 1, vmax=3500, vmin=3500)
+    assert model.soc == 80
+    assert model.rebound_hold
+
+    run_seconds(model, 1, vmax=3500, vmin=3500)
+    assert not model.rebound_hold
+
+    run_seconds(model, 90, vmax=3500, vmin=3500)
+    assert model.soc == 79
+
+
+def test_long_storage_stable_voltage_converges_gradually_without_jump():
+    model = SocModel.from_snapshot(Snapshot(soc=90, cap_now=CAP_FACTORY_AS10 * 90 // 100))
+    previous = model.soc
+    for _ in range(3600 * TICKS_PER_SECOND):
+        model.tick(vmax=3835, vmin=3835)
+        assert previous - model.soc in (0, 1)
+        previous = model.soc
+        assert_model_invariants(model)
+    assert 83 <= model.soc <= 85
 
 
 def test_real_city_ride_profile_is_smooth_and_monotonic():
@@ -850,6 +1046,56 @@ def test_charge_after_ride_stays_below_full_until_voltage_anchor():
     assert model.soc == 100
 
 
+def test_voltage_error_matrix_never_calibrates_or_clears_state_wrongly():
+    bad_samples = [
+        (1999, 1999),
+        (5001, 5001),
+        (3600, 3700),
+        (4700, 3600),
+        (0, 0),
+    ]
+    for vmax, vmin in bad_samples:
+        model = SocModel.from_snapshot(Snapshot(soc=70, cap_now=CAP_FACTORY_AS10 * 70 // 100))
+        assert not model.apply_ocv_step(vmax, vmin)
+        assert not model.low_tail_active(MODE_RELAX, vmax, vmin, 0)
+        assert not model.mid_tail_active(MODE_RELAX, vmax, vmin, 0)
+        run_seconds(model, SHORT_REST_STEP_SECONDS + 1, vmax=vmax, vmin=vmin)
+        assert model.soc == 70
+        assert_model_invariants(model)
+
+
+def test_randomized_operating_matrix_preserves_core_invariants():
+    random.seed(103309)
+    model = SocModel.from_snapshot(Snapshot(soc=65, cap_now=CAP_FACTORY_AS10 * 65 // 100))
+    for tick_index in range(20000):
+        phase = tick_index % 17
+        if phase in (0, 1, 2):
+            ichg = random.choice([0, 4, 20, 80, 270])
+            idsg = random.choice([0, 1, 3])
+        elif phase in (3, 4, 5, 6, 7, 8):
+            ichg = 0
+            idsg = random.choice([4, 20, EMPTY_LIGHT_CURRENT_A10, EMPTY_LIGHT_CURRENT_A10 + 1,
+                                  EMPTY_MID_CURRENT_A10, EMPTY_MID_CURRENT_A10 + 1, 420])
+        else:
+            ichg = 0
+            idsg = 0
+
+        if random.random() < 0.08:
+            vmax, vmin = random.choice([(0, 0), (1990, 1990), (3600, 3700), (4700, 3600)])
+        else:
+            center = random.choice([2950, 3000, 3050, 3100, 3200, 3300, 3400,
+                                    3500, 3600, 3650, 3700, 3835, 4100, 4180])
+            delta = random.choice([0, 5, 30, 120, 199])
+            vmin = max(2000, min(5000, center))
+            vmax = min(5000, vmin + delta)
+
+        old_soc = model.soc
+        model.tick(vmax=vmax, vmin=vmin, ichg=ichg, idsg=idsg)
+        assert_model_invariants(model)
+        if ichg == 0 and idsg == 0 and model.sag_hold_ticks == 0 and model.low_tail_active(model.mode, vmax, vmin, idsg):
+            assert model.soc <= old_soc
+
+
 def main():
     tests = [
         test_invalid_snapshot_defaults_to_60_percent,
@@ -859,27 +1105,38 @@ def main():
         test_discharge_integration_reduces_soc_and_counts_cycle_fraction,
         test_coulomb_counting_tick_is_200ms_5hz,
         test_fast_current_pulses_integrate_average_energy_at_sample_rate,
+        test_direction_thresholds_and_conflict_resolution,
         test_charge_integration_stops_display_before_full_confirm,
         test_soh_maps_cycles_to_capacity_floor,
+        test_ocv_table_is_monotonic_and_exact_points_match,
+        test_python_model_tables_match_c_source,
         test_full_confirm_is_voltage_based_and_tolerates_charge_current,
         test_full_confirm_threshold_follows_configured_v100,
+        test_full_confirm_counter_decrements_instead_of_resetting,
         test_empty_anchor_limits_low_voltage_tail,
         test_rtc_rest_ocv_applies_small_bounded_step,
         test_ocv_correction_fault_blocking_follows_config_and_direction_errors,
         test_display_smoothing_charge_and_low_voltage_down,
         test_fixed_and_zero_overlay_do_not_change_internal_soc,
         test_low_voltage_tail_table_uses_current_bands_and_rate_limits,
+        test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull,
         test_auto_calibration_never_steps_more_than_one_percent,
         test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail,
         test_short_stable_rest_can_calibrate_before_30_minutes,
         test_unstable_short_rest_does_not_ocv_calibrate,
         test_mid_voltage_light_load_weakly_limits_high_soc,
         test_mid_voltage_counter_resets_when_condition_breaks,
+        test_mid_voltage_tail_table_matrix_and_guards,
+        test_short_rest_rejects_imbalance_and_restarts_after_voltage_jump,
         test_persisted_rebound_hold_blocks_startup_voltage_correction,
+        test_rebound_hold_expires_then_allows_voltage_correction,
+        test_long_storage_stable_voltage_converges_gradually_without_jump,
         test_real_city_ride_profile_is_smooth_and_monotonic,
         test_hill_climb_voltage_sag_does_not_false_empty_pack,
         test_deep_ride_profile_reaches_zero_near_cutoff_voltage,
         test_charge_after_ride_stays_below_full_until_voltage_anchor,
+        test_voltage_error_matrix_never_calibrates_or_clears_state_wrongly,
+        test_randomized_operating_matrix_preserves_core_invariants,
     ]
     for test in tests:
         test()

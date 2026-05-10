@@ -654,6 +654,10 @@ static void soc_update_sag_hold(UINT8 mode)
 	else if (s_soc.sag_hold_ticks > 0U)
 	{
 		--s_soc.sag_hold_ticks;
+		if (s_soc.sag_hold_ticks == 0U)
+		{
+			s_soc.snapshot_flags &= (UINT16)(~SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
+		}
 	}
 	else
 	{

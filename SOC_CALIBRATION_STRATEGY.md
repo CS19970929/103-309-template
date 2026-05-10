@@ -223,3 +223,5 @@ cap_full = cap_factory * SOH / 100
 3. Keil 编译：在 Windows + Keil MDK 环境编译 `FD_Debug` 和 `FD_Release`。
 4. 台架验证：覆盖启动、满电、低压、RTC、SOC 设置、断电恢复、异常采样、短静置、重载关机后快速重启。
 5. 上板验证：确认 CAN、RS485、LED 和内部 `g_stCellInfoReport.SocElement` 显示一致。
+
+无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。主机回放当前覆盖 `39` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵和随机运行不变量；它可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。
