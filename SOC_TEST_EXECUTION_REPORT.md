@@ -85,6 +85,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\soc_auto_test.ps1 -Por
 
 在线读数：
 
+> 说明：以下为 2026-05-09 旧固件现场读数，保留用于追溯当时板端状态。当前源码已改为 `SOH = clamp(100 - cycle / 100, 80, 100)`；例如循环 300 时，新模型 SOH 为 `97%`，不是下表旧模型读到的 `94%`。
+
 | 样本 | SOC | SOH | Vmin | Vmax | Ichg | Idsg | 容量 | 故障 |
 |---:|---:|---:|---:|---:|---:|---:|---|---|
 | 0 | 99% | 94% | 3676mV | 3678mV | 0 | 0 | 2513/2538 | 0000/0000/0000 |

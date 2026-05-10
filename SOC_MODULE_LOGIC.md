@@ -45,6 +45,7 @@
 | 标称容量 | `27Ah` | `OtherElement.u16Soc_Ah = 270`，单位 `10 * Ah` |
 | 满电端点 | `4180mV` | `OtherElement.u16Soc_V_100`，满电确认不再硬依赖 taper 电流 |
 | 显示空电端点 | `3000mV` | `OtherElement.u16Soc_V_0`，e-bike 显示 0% 口径 |
+| SOH 下限 | `80%` | `SOC_SOH_MIN`，循环衰减不再低于 80% |
 | 低压表范围 | `3400mV~2950mV` | 按电压和骑行电流给 SOC 设置保守上限，每次只修正 `1%` |
 | 控制器保护前归零 | `2950mV` | 默认 `V0 - 50mV`，以最高 `1%/200ms` 收敛到 0 |
 | 默认启动 SOC | `60%` | 仅无快照且电压无效时使用 |
@@ -134,7 +135,7 @@ delta_as10 = (current_A10 * 200ms + rem_ms) / 1000
 SOH 当前只按循环次数映射：
 
 ```text
-SOH = clamp(100 - cycle / 50, 70, 100)
+SOH = clamp(100 - cycle / 100, 80, 100)
 cap_full = cap_factory * SOH / 100
 ```
 
@@ -157,19 +158,19 @@ cap_full = cap_factory * SOH / 100
 
 - 当前不是 `DSG`，即允许 `CHG` 或充电器停止后的 `RELAX`。
 - 电压类校准门控通过。
-- `VCellMax >= max(V100, 4180mV)`。
+- `VCellMax >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
 
 快速确认：
 
-- `VCellMin >= 4150mV`。
-- 单体压差 `<=150mV`。
+- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV`，当前默认 `4150mV`。
+- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
 - 持续 `5s` 后确认 `100%`。
 
 普通确认：
 
 - 内部 SOC 已经 `>=95%`。
-- `VCellMin >=4100mV`。
-- 单体压差 `<=200mV`。
+- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
+- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
 - 条件累计满足 `15s` 后确认 `100%`。
 
 满电计数器采用“满足时累加、不满足时递减”的方式，不会因为一次采样抖动完全清零。确认前 SOC 最高只到 `99%`。确认条件满足后，内部 SOC 每次只上修 `1%`，直到 `100%`；显示 SOC 继续按显示平滑跟随，不做大跳变。
@@ -197,8 +198,8 @@ cap_full = cap_factory * SOH / 100
 
 - `2000mV <= VCellMin <= VCellMax <= 5000mV`。
 - 单体压差 `<=1000mV`。
-- 无三级保护故障。
-- 无 AFE1/AFE2/ADC/CBC/温度异常。
+- 当 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT=1` 时，无三级保护故障。
+- 当 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT=1` 时，无 AFE1/AFE2/ADC/CBC/温度异常。
 
 ### 启动 OCV
 

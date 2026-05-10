@@ -1,9 +1,9 @@
 # SOC 校准策略与参数调优说明
 
-本文记录当前 SOC 模块的校准边界、参数口径和现场调优方法。当前实现已去掉复杂 FCC 学习和运行态在线 OCV 融合，主策略简化为：
+本文记录当前 SOC 模块的校准边界、参数口径和现场调优方法。当前实现已去掉复杂 FCC 学习和运行态连续 OCV 融合，主策略简化为：
 
 ```text
-安时积分主导 + 满/空端点锚定 + 静置/RTC OCV 小步修正 + 低电压轻载 guard + 显示平滑
+安时积分主导 + 满电确认 + 低压表收敛 + 静置/RTC OCV 小步修正 + 显示平滑
 ```
 
 代码依据：
@@ -25,7 +25,7 @@
 
 “每次最多 `1%`”是硬约束：满电确认、低压收敛、静置/RTC OCV、骑行中电压表修正都不能一次性跳变超过 `1%`。启动初始化、上位机 `0x1005` 设置一次 SOC、`SOC_Fixed/SOC_Zero` 显示覆盖不属于运行态自动校准。
 
-大电流 voltage sag 也有硬约束：`Idsg > C/2` 时进入大电流 holdoff，持续 `30s`。holdoff 期间如果 `VCellMin > V0 + 50mV`，禁止使用端电压做低压表、low guard、静置 OCV 校准；如果已经低到 `V0 + 50mV` 以内，说明接近真实末端，仍允许按 `1%` 步进向 0 收敛。
+大电流 voltage sag 也有硬约束：`Idsg > C/2` 时进入大电流 holdoff，持续 `30s`。holdoff 期间如果 `VCellMin > V0 + 50mV`，禁止使用端电压做低压表和静置 OCV 校准；如果已经低到 `V0 + 50mV` 以内，说明接近真实末端，仍允许按 `1%` 步进向 0 收敛。
 
 ## 2. SOC 校准路径
 
@@ -49,8 +49,8 @@
 | --- | --- |
 | 单体电压有效 | `2000mV <= VCellMin <= VCellMax <= 5000mV` |
 | 单体压差合理 | `VCellMax - VCellMin <=1000mV` |
-| 保护状态 | 无三级保护故障 |
-| 系统状态 | AFE1、AFE2、ADC、CBC_CHG、CBC_DSG、TEMP_BREAK 均正常 |
+| 保护状态 | `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT=1` 时要求无三级保护故障 |
+| 系统状态 | `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT=1` 时要求 AFE1、AFE2、ADC、CBC_CHG、CBC_DSG、TEMP_BREAK 均正常 |
 
 说明：
 
@@ -80,19 +80,19 @@
 
 - 当前不是 `DSG`，允许 `CHG` 或停充后的 `RELAX`。
 - 电压类校准门控通过。
-- `VCellMax >= max(V100, 4180mV)`。
+- `VCellMax >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
 
 快速确认条件：
 
-- `VCellMin >=4150mV`。
-- 单体压差 `<=150mV`。
+- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV`，当前默认 `4150mV`。
+- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
 - 持续 `5s`。
 
 普通确认条件：
 
 - 内部 SOC `>=95%`。
-- `VCellMin >=4100mV`。
-- 单体压差 `<=200mV`。
+- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
+- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
 - 累计满足 `15s`。
 
 计数器满足时累加，不满足时递减，避免单次采样抖动把满电确认进度完全清掉。
@@ -136,7 +136,7 @@
 当前 SOH 映射：
 
 ```text
-SOH = clamp(100 - cycle / 50, 70, 100)
+SOH = clamp(100 - cycle / 100, 80, 100)
 cap_full = cap_factory * SOH / 100
 ```
 
@@ -154,7 +154,7 @@ cap_full = cap_factory * SOH / 100
 | 场景 | 当前速率 |
 | --- | --- |
 | 普通变化 | `5s/1%` |
-| 充电上升 | `10s/1%` |
+| 充电上升 | `5s/1%` |
 | 低压下降 | `VCellMin <= V0 + 50mV` 时 `1s/1%` |
 | 设置一次 SOC、工厂显示覆盖 | 可立即同步 |
 | 自动满电、自动空电、静置/RTC OCV | 每次校准 `1%`，显示继续平滑 |
@@ -162,18 +162,22 @@ cap_full = cap_factory * SOH / 100
 显示调优原则：
 
 1. 普通区不要追求显示立即响应，优先稳定。
-2. 充电上升比放电更慢，避免插上充电器后 SOC 快速跳高。
+2. 充电上升与普通变化同为 `5s/1%`，避免插上充电器后立即跳高。
 3. 低压下降必须更快，避免临近欠压时显示滞后。
 
 ## 9. 参数入口
 
-| 参数 | 来源 | 影响 |
+| 参数 | 范围 | 影响 |
 | --- | --- | --- |
-| `OtherElement.u16Soc_Ah` / `0x2318` | 上位机基础参数 | 出厂容量、积分比例、C/5 轻载阈值、SOH 容量基准 |
-| `OtherElement.u16Soc_Cycle_times` / `0x2319` | 上位机基础参数 | 初始循环次数和初始 SOH |
-| `OtherElement.u16Soc_V_100` / `0x231A` | 上位机基础参数 | 满电确认的目标端点 |
-| `OtherElement.u16Soc_V_0` / `0x231B` | 上位机基础参数 | 显示空电端点，默认 `3000mV` |
-| `SOC_Table_Set[42]` / `0x2200` | 上位机 SOC 表 | 运行态 OCV 表 |
+| `OtherElement.u16Soc_Ah` / `0x2318` | `0..65535`，单位 `10*Ah`，0 使用默认 270 | 出厂容量、积分比例、C/5 轻载阈值、SOH 容量基准 |
+| `OtherElement.u16Soc_Cycle_times` / `0x2319` | `0..65535 cycles` | 初始循环次数和初始 SOH |
+| `OtherElement.u16Soc_V_100` / `0x231A` | `0..5000mV`，0 使用默认 4180mV | 满电确认的目标端点 |
+| `OtherElement.u16Soc_V_0` / `0x231B` | `0..5000mV`，0 使用默认 3000mV | 低压表和显示空电端点 |
+| `OtherElement.u16Soc_TableSelect` | `0..3` | 启动/静置 OCV 表选择 |
+| `SOC_Table_Set[42]` / `0x2200` | 21 组 `(mV, SOC%)`，仅 RAM 生效 | `SOC_TABLE_TEST` 的 OCV 表 |
+| `0x1005` 设置一次 SOC | 建议 `0..100%` | 直接设置内部和显示 SOC，并保存快照 |
+
+完整编译宏范围、内部常量和函数清单见 `SOC逻辑与参数影响梳理.md`。
 
 ## 10. 推荐验证
 

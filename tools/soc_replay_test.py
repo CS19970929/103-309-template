@@ -15,8 +15,8 @@ CURRENT_ENTER_A10 = 4
 DEFAULT_SOC = 60
 CAP_A10 = 270
 CAP_FACTORY_AS10 = CAP_A10 * 3600
-SOH_MIN = 70
-SOH_STEP_CYCLES = 50
+SOH_MIN = 80
+SOH_STEP_CYCLES = 100
 FULL_SECONDS = 15
 FULL_FAST_SECONDS = 5
 FULL_MIN_SOC = 95
@@ -400,10 +400,10 @@ def test_invalid_snapshot_uses_valid_startup_ocv():
 
 
 def test_valid_snapshot_restores_capacity_and_cycle_soh():
-    cap_full = CAP_FACTORY_AS10 * 98 // 100
+    cap_full = CAP_FACTORY_AS10 * 99 // 100
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=cap_full * 80 // 100, cycle_x100=10000))
     assert model.soc == 80
-    assert model.soh == 98
+    assert model.soh == 99
     assert model.cap_full == cap_full
 
 
@@ -460,9 +460,10 @@ def test_charge_integration_stops_display_before_full_confirm():
 
 def test_soh_maps_cycles_to_capacity_floor():
     assert soh_from_cycle(0) == 100
-    assert soh_from_cycle(5000) == 99
-    assert soh_from_cycle(150000) == 70
-    assert soh_from_cycle(250000) == 70
+    assert soh_from_cycle(5000) == 100
+    assert soh_from_cycle(10000) == 99
+    assert soh_from_cycle(200000) == 80
+    assert soh_from_cycle(300000) == 80
 
 
 def test_full_confirm_is_voltage_based_and_tolerates_charge_current():
