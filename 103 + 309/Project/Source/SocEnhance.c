@@ -64,6 +64,13 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_EMPTY_BAND_MID           ((UINT8)2U)
 #define SOC_EMPTY_BAND_HEAVY         ((UINT8)3U)
 #define SOC_EMPTY_BAND_COUNT         ((UINT8)4U)
+#define SOC_MID_TARGET_DISABLED      ((UINT8)0xFFU)
+#define SOC_MID_MAX_DELTA_MV         ((UINT16)200U)
+#define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
+#define SOC_SHORT_REST_MIN_SECONDS   ((UINT32)300U)
+#define SOC_SHORT_REST_STEP_SECONDS  ((UINT32)600U)
+#define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
+#define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
 
 typedef struct
 {
@@ -73,11 +80,17 @@ typedef struct
 	UINT32 cycle_x100;
 	UINT32 dsg_acc_as10;
 	UINT32 rem_ms;
+	UINT32 rest_ticks;
+	UINT32 stable_rest_ticks;
+	UINT32 short_rest_ticks;
 	UINT16 full_ticks;
 	UINT16 empty_ticks;
-	UINT16 rest_ticks;
+	UINT16 mid_ticks;
 	UINT16 display_ticks;
 	UINT16 sag_hold_ticks;
+	UINT16 rest_ref_vmin;
+	UINT16 rest_ref_vmax;
+	UINT16 snapshot_flags;
 	UINT8 soc;
 	UINT8 soh;
 	UINT8 display_soc;
@@ -91,13 +104,16 @@ typedef struct
 {
 	int16_t offset_mv;
 	UINT8 target[SOC_EMPTY_BAND_COUNT];
-	UINT8 ticks[SOC_EMPTY_BAND_COUNT];
+	UINT16 ticks[SOC_EMPTY_BAND_COUNT];
 } SOC_EMPTY_TAIL_RULE;
 
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
 static SOC_STATE s_saved_soc;
+
+static UINT8 soc_sag_hold_blocks_calibration(void);
+static UINT8 soc_apply_ocv_step(UINT8 mode);
 
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
@@ -108,6 +124,13 @@ static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{200, {12U, 14U, 20U, 25U}, {60U, 50U, 40U, 30U}},
 	{300, {14U, 18U, 25U, 32U}, {90U, 75U, 60U, 45U}},
 	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
+};
+
+static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
+	{500, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {450U, 450U, 600U, 0U}},
+	{600, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {600U, 600U, 750U, 0U}},
+	{650, {45U, 50U, 58U, SOC_MID_TARGET_DISABLED}, {750U, 750U, 900U, 0U}},
+	{700, {55U, 60U, SOC_MID_TARGET_DISABLED, SOC_MID_TARGET_DISABLED}, {900U, 900U, 0U, 0U}},
 };
 
 const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO] = {
@@ -136,6 +159,11 @@ static UINT16 soc_cell_delta(void)
 	return (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_VCellMin) ?
 		(UINT16)(SOC_Enhance_Element.u16_VCellMax - SOC_Enhance_Element.u16_VCellMin) :
 		(UINT16)(SOC_Enhance_Element.u16_VCellMin - SOC_Enhance_Element.u16_VCellMax);
+}
+
+static UINT16 soc_abs_diff_u16(UINT16 a, UINT16 b)
+{
+	return (a >= b) ? (UINT16)(a - b) : (UINT16)(b - a);
 }
 
 static UINT8 soc_step(UINT8 now, UINT8 target, UINT8 step)
@@ -379,6 +407,7 @@ static UINT8 soc_save(void)
 	data.u32CapNow = s_soc.cap_now_as10;
 	data.u32CapFull = s_soc.cap_full_as10;
 	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
+	data.u16Flags = (UINT16)(s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
 	if (unit != 0U)
 	{
 		data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
@@ -398,7 +427,8 @@ static void soc_save_if_needed(void)
 	}
 	if ((s_soc.soc != s_saved_soc.soc) ||
 		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
-		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10))
+		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
+		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
 	{
 		if (soc_save())
 		{
@@ -432,6 +462,12 @@ static void soc_load_or_default(void)
 		else
 		{
 			soc_set((UINT8)data.u16SocNow);
+		}
+		s_soc.snapshot_flags = (UINT16)(data.u16Flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
+		if ((s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD) != 0U)
+		{
+			s_soc.sag_hold_ticks = (UINT16)(SOC_REBOUND_BOOT_HOLDOFF_SECONDS *
+				SOC_TICKS_PER_SECOND);
 		}
 	}
 	else
@@ -521,10 +557,19 @@ static void soc_integrate(UINT8 mode)
 
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 {
+	if ((rest_seconds < SOC_REST_OCV_SECONDS) || !soc_calibration_allowed())
+	{
+		return 0U;
+	}
+	return soc_apply_ocv_step(mode);
+}
+
+static UINT8 soc_apply_ocv_step(UINT8 mode)
+{
 	UINT8 target;
 	UINT8 old_soc = s_soc.soc;
 
-	if ((rest_seconds < SOC_REST_OCV_SECONDS) || !soc_calibration_allowed())
+	if (!soc_calibration_allowed() || soc_sag_hold_blocks_calibration())
 	{
 		return 0U;
 	}
@@ -593,16 +638,26 @@ static UINT8 soc_heavy_discharge_active(UINT8 mode)
 		 soc_current_limit_a10(SOC_EMPTY_CUR_MID_DIVIDER)));
 }
 
+static UINT32 soc_seconds_to_ticks(UINT32 seconds)
+{
+	return seconds * (UINT32)SOC_TICKS_PER_SECOND;
+}
+
 static void soc_update_sag_hold(UINT8 mode)
 {
 	if (soc_heavy_discharge_active(mode))
 	{
 		s_soc.sag_hold_ticks = (UINT16)(SOC_SAG_HOLDOFF_SECONDS *
 			SOC_TICKS_PER_SECOND);
+		s_soc.snapshot_flags |= SOC_SNAPSHOT_FLAG_REBOUND_HOLD;
 	}
 	else if (s_soc.sag_hold_ticks > 0U)
 	{
 		--s_soc.sag_hold_ticks;
+	}
+	else
+	{
+		s_soc.snapshot_flags &= (UINT16)(~SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
 	}
 }
 
@@ -614,7 +669,7 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
 }
 
-static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT8 *ticks)
+static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
 {
 	UINT8 band = soc_empty_current_band(mode);
 	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
@@ -641,7 +696,7 @@ static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT8 *ticks)
 static UINT8 soc_low_tail_active(UINT8 mode)
 {
 	UINT8 target;
-	UINT8 ticks;
+	UINT16 ticks;
 
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
 	{
@@ -654,11 +709,75 @@ static UINT8 soc_low_tail_active(UINT8 mode)
 	return soc_empty_tail_config(mode, &target, &ticks);
 }
 
+static UINT8 soc_mid_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
+{
+	UINT8 band = soc_empty_current_band(mode);
+	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
+	UINT16 threshold;
+	UINT16 i;
+
+	if ((mode == SOC_MODE_CHG) ||
+		!soc_voltage_valid() ||
+		(soc_cell_delta() > SOC_MID_MAX_DELTA_MV) ||
+		soc_sag_hold_blocks_calibration() ||
+		(vmin <= soc_empty_threshold_mv(400)))
+	{
+		return 0U;
+	}
+
+	for (i = 0U; i < (UINT16)(sizeof(s_mid_tail_table) / sizeof(s_mid_tail_table[0])); ++i)
+	{
+		threshold = soc_empty_threshold_mv(s_mid_tail_table[i].offset_mv);
+		if (vmin <= threshold)
+		{
+			if (s_mid_tail_table[i].target[band] == SOC_MID_TARGET_DISABLED)
+			{
+				return 0U;
+			}
+			*target = s_mid_tail_table[i].target[band];
+			*ticks = s_mid_tail_table[i].ticks[band];
+			if (*ticks == 0U)
+			{
+				return 0U;
+			}
+			return 1U;
+		}
+	}
+	return 0U;
+}
+
+static UINT8 soc_mid_tail_active(UINT8 mode)
+{
+	UINT8 target;
+	UINT16 ticks;
+
+	return soc_mid_tail_config(mode, &target, &ticks);
+}
+
+static UINT8 soc_apply_mid_tail(UINT8 mode)
+{
+	UINT8 target;
+	UINT16 ticks;
+	UINT8 old_soc = s_soc.soc;
+
+	if (!soc_mid_tail_config(mode, &target, &ticks) || (s_soc.soc <= target))
+	{
+		s_soc.mid_ticks = 0U;
+		return 0U;
+	}
+	if (++s_soc.mid_ticks >= ticks)
+	{
+		soc_set(soc_step(s_soc.soc, target, SOC_CAL_STEP));
+		s_soc.mid_ticks = 0U;
+	}
+	return (UINT8)(s_soc.soc != old_soc);
+}
+
 static UINT8 soc_apply_full_empty(UINT8 mode)
 {
 	UINT8 full_seconds;
 	UINT8 empty_target;
-	UINT8 empty_ticks;
+	UINT16 empty_ticks;
 	UINT8 old_soc = s_soc.soc;
 
 	if (mode != SOC_MODE_DSG)
@@ -722,21 +841,80 @@ static UINT8 soc_apply_full_empty(UINT8 mode)
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
+static void soc_reset_rest_confidence(void)
+{
+	s_soc.rest_ticks = 0U;
+	s_soc.stable_rest_ticks = 0U;
+	s_soc.short_rest_ticks = 0U;
+	s_soc.rest_ref_vmin = 0U;
+	s_soc.rest_ref_vmax = 0U;
+}
+
+static UINT8 soc_rest_voltage_stable(void)
+{
+	if (!soc_calibration_allowed() ||
+		(soc_cell_delta() > SOC_MID_MAX_DELTA_MV) ||
+		soc_sag_hold_blocks_calibration())
+	{
+		return 0U;
+	}
+	if ((s_soc.rest_ref_vmin == 0U) || (s_soc.rest_ref_vmax == 0U))
+	{
+		s_soc.rest_ref_vmin = SOC_Enhance_Element.u16_VCellMin;
+		s_soc.rest_ref_vmax = SOC_Enhance_Element.u16_VCellMax;
+		return 1U;
+	}
+	if ((soc_abs_diff_u16(SOC_Enhance_Element.u16_VCellMin, s_soc.rest_ref_vmin) <= SOC_REST_STABLE_DELTA_MV) &&
+		(soc_abs_diff_u16(SOC_Enhance_Element.u16_VCellMax, s_soc.rest_ref_vmax) <= SOC_REST_STABLE_DELTA_MV))
+	{
+		return 1U;
+	}
+	s_soc.rest_ref_vmin = SOC_Enhance_Element.u16_VCellMin;
+	s_soc.rest_ref_vmax = SOC_Enhance_Element.u16_VCellMax;
+	return 0U;
+}
+
 static void soc_update_rest_timer(UINT8 mode)
 {
+	UINT32 rest_limit_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
+	UINT32 short_min_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_MIN_SECONDS);
+	UINT32 short_step_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_STEP_SECONDS);
+
 	if (mode != SOC_MODE_RELAX)
 	{
-		s_soc.rest_ticks = 0U;
+		soc_reset_rest_confidence();
 		return;
 	}
-	if (s_soc.rest_ticks < (UINT16)(SOC_REST_OCV_SECONDS * SOC_TICKS_PER_SECOND))
+	if (s_soc.rest_ticks < rest_limit_ticks)
 	{
 		++s_soc.rest_ticks;
 	}
-	if (s_soc.rest_ticks >= (UINT16)(SOC_REST_OCV_SECONDS * SOC_TICKS_PER_SECOND))
+	if (soc_rest_voltage_stable())
+	{
+		if (s_soc.stable_rest_ticks < rest_limit_ticks)
+		{
+			++s_soc.stable_rest_ticks;
+		}
+		if (s_soc.short_rest_ticks < short_step_ticks)
+		{
+			++s_soc.short_rest_ticks;
+		}
+	}
+	else
+	{
+		s_soc.stable_rest_ticks = 0U;
+		s_soc.short_rest_ticks = 0U;
+	}
+	if (s_soc.rest_ticks >= rest_limit_ticks)
 	{
 		(void)soc_apply_rest_ocv(SOC_REST_OCV_SECONDS, SOC_MODE_RELAX);
-		s_soc.rest_ticks = 0U;
+		soc_reset_rest_confidence();
+	}
+	else if ((s_soc.stable_rest_ticks >= short_min_ticks) &&
+		(s_soc.short_rest_ticks >= short_step_ticks))
+	{
+		(void)soc_apply_ocv_step(SOC_MODE_RELAX);
+		s_soc.short_rest_ticks = 0U;
 	}
 }
 
@@ -890,6 +1068,7 @@ void SOC_IntEnhance_Ctrl(void)
 {
 	UINT8 calibrated;
 	UINT8 low_tail_active;
+	UINT8 mid_tail_active;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
 	{
@@ -904,14 +1083,23 @@ void SOC_IntEnhance_Ctrl(void)
 	soc_integrate(s_soc.mode);
 	soc_update_sag_hold(s_soc.mode);
 	low_tail_active = soc_low_tail_active(s_soc.mode);
+	mid_tail_active = soc_mid_tail_active(s_soc.mode);
 	calibrated = soc_apply_full_empty(s_soc.mode);
+	if (!mid_tail_active)
+	{
+		s_soc.mid_ticks = 0U;
+	}
+	if (!calibrated && !low_tail_active && mid_tail_active)
+	{
+		calibrated = soc_apply_mid_tail(s_soc.mode);
+	}
 	if (!low_tail_active && !calibrated && !soc_sag_hold_blocks_calibration())
 	{
 		soc_update_rest_timer(s_soc.mode);
 	}
 	else if (low_tail_active || soc_sag_hold_blocks_calibration())
 	{
-		s_soc.rest_ticks = 0U;
+		soc_reset_rest_confidence();
 	}
 	soc_save_if_needed();
 	soc_publish(0U);
