@@ -23,7 +23,7 @@
 运行主链路固定为：
 
 ```text
-采样 -> 积分 -> sag/rebound holdoff -> 满电确认 -> 中低压弱约束/低压表 -> 短静置/长静置/RTC OCV -> 保存 -> 发布
+采样 -> 积分 -> sag/rebound holdoff -> 满电确认 -> 中低压弱约束/低压表 -> 稳定静置/RTC OCV -> 保存 -> 发布
 ```
 
 关键边界：
@@ -33,7 +33,7 @@
 3. 中低压和低压都走 table-driven 上限约束，默认覆盖 `V0+700mV` 到 `V0-50mV`。
 4. 大电流 `Idsg > C/2` 触发 sag holdoff，未回弹且未到真实末端时阻断电压校准。
 5. 重载后关机再开机时，快照 `u16Flags bit0` 会带来 `5min` 回弹保护，避免未回弹电压把 SOC 校低。
-6. 短静置不是必须等满 `30min`；电压稳定 `5min` 后按 `10min/1%` 慢速收敛。
+6. 运行态静置 OCV 不再按固定 `30min` 到点校准；电压稳定 `5min` 后按 `10min/1%` 慢速收敛，电压持续回弹/跳动则不校准。
 7. 无 Flash 快照冷启动时，电压有效按 OCV 表；电压无效才默认 `60%`。
 8. 对外只有 `g_stCellInfoReport.SocElement`，RS485、CAN、LedBar 都读这里的平滑 SOC/SOH/容量。
 
@@ -121,7 +121,7 @@ cap_full_as10 = cap_factory_as10 * SOH / 100
 
 ### 4.3 OCV 表
 
-OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑行中上限约束参考，不替代运行中的安时积分。当前三元锂默认表：
+OCV 表只用于冷启动、稳定静置/RTC，以及骑行中上限约束参考，不替代运行中的安时积分。当前三元锂默认表：
 
 ```text
 4160/100, 4100/95, 4050/90, 3995/85, 3935/80,
@@ -153,7 +153,7 @@ OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑
 
 门控失败只阻断电压校准，不停止安时积分，也不会用隐藏兜底改 SOC。
 
-短静置和中低压弱约束在统一门控之外额外要求单体压差 `<=200mV`，避免电芯不一致或采样异常时扩大校准误差。
+稳定静置和中低压弱约束在统一门控之外额外要求单体压差 `<=200mV`，避免电芯不一致或采样异常时扩大校准误差。
 
 ### 4.5 满电确认
 
@@ -221,7 +221,7 @@ OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑
 
 ### 4.9 静置/RTC OCV
 
-静置 `RELAX` 满 `1800s` 或 RTC 唤醒传入足够休眠时间后，按 OCV 目标小步校正。
+运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒只有休眠时长和当前电压一个样本，因此仍按传入休眠时长做一次小步补偿，但会被电压合法性、方向、故障和 sag/rebound holdoff 阻断。
 
 方向约束：
 
@@ -230,12 +230,13 @@ OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑
 - `DSG`：只允许向下。
 - 每次最多 `1%`。
 
-短静置补偿：
+稳定静置补偿：
 
 - `RELAX` 下电压稳定 `5min` 后启用。
 - `VCellMin/VCellMax` 相对参考值波动 `<=30mV`。
 - 每累计 `10min` 最多按 OCV 表修正 `1%`。
-- 重新骑行、电压跳动、低压表活跃或 sag/rebound holdoff 会清空短静置可信度。
+- 重新骑行、电压跳动、低压表活跃或 sag/rebound holdoff 会清空静置可信度。
+- 即使 `RELAX` 超过 `30min`，只要电压仍在回弹/跳动，也不会强行使用 OCV。
 
 ### 4.10 显示平滑
 
@@ -286,7 +287,7 @@ OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑
 | `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT` | `0` | `0/1` | 为 1 时 AFE/ADC/CBC/温度异常阻断电压校准 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | `30` | `0..1800s` | 大电流压降后阻断电压校准的时间 |
 | `PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV` | `50` | `0..500mV` | holdoff 期间允许末端校准的 `V0 + offset` 边界 |
-| `PROJECT_CFG_SOC_REST_OCV_SECONDS` | `1800` | `60..43200s` | 静置 OCV 校正等待时间 |
+| `PROJECT_CFG_SOC_REST_OCV_SECONDS` | `1800` | `60..43200s` | 静置计数上限/兼容配置；运行态 OCV 触发以稳定窗口为准 |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | `1` | `1..10%` | 自动校准单次最大步长，当前策略要求保持 `1` |
 | `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | `0` | `0/1` | MCU 注入式 SOC 测试入口，量产必须关闭 |
 | `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX` | `300` | `1..1000` | 单次测试注入最多模拟多少个 200ms tick |
@@ -309,10 +310,10 @@ OCV 表只用于冷启动、静置/RTC、短静置稳定小步校正，以及骑
 | `SOC_EMPTY_MV` | `3000mV` | `V0` 为 0 时的空电默认值 |
 | `SOC_EMPTY_CUR_LIGHT_DIVIDER` | `5` | 轻载门槛 `C/5` |
 | `SOC_EMPTY_CUR_MID_DIVIDER` | `2` | 中/重载门槛 `C/2` |
-| `SOC_MID_MAX_DELTA_MV` | `200mV` | 短静置和中低压弱约束允许的最大单体压差 |
-| `SOC_REST_STABLE_DELTA_MV` | `30mV` | 短静置参考电压允许波动 |
-| `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 短静置可信度最短稳定时间 |
-| `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 短静置每次 `1%` OCV 修正节拍 |
+| `SOC_MID_MAX_DELTA_MV` | `200mV` | 稳定静置和中低压弱约束允许的最大单体压差 |
+| `SOC_REST_STABLE_DELTA_MV` | `30mV` | 静置参考电压允许波动 |
+| `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 静置可信度最短稳定时间 |
+| `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 稳定静置每次 `1%` OCV 修正节拍 |
 | `SOC_REBOUND_BOOT_HOLDOFF_SECONDS` | `300s` | 重载后跨重启回弹保护时间 |
 | `SOC_SNAPSHOT_FLAG_REBOUND_HOLD` | `0x0001` | Flash 快照中的回弹保护标志 |
 | `SOC_DISPLAY_NORMAL_SECONDS` | `5s` | 普通显示跟随速度 |
@@ -388,7 +389,7 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | 函数 | 作用 |
 | --- | --- |
 | `soc_cell_delta()` | 计算当前最大/最小单体电压差 |
-| `soc_abs_diff_u16()` | 计算两个无符号 16 位值的绝对差，用于短静置稳定性判断 |
+| `soc_abs_diff_u16()` | 计算两个无符号 16 位值的绝对差，用于静置稳定性判断 |
 | `soc_step()` | 将 SOC 按指定步长靠近目标，自动避免越界 |
 | `soc_factory_cap_as10_from()` | 将 `10*Ah` 参数转换为 `As*10`，参数为 0 时使用默认 27Ah |
 | `soc_soh_from_cycle()` | 按 `cycle_x100` 计算 SOH，当前公式最低 80% |
@@ -429,9 +430,9 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `soc_mid_tail_active()` | 判断当前 tick 是否有中低压弱约束路径可用 |
 | `soc_apply_mid_tail()` | 执行中低压弱约束，只向下小步限制明显高估 SOC |
 | `soc_apply_full_empty()` | 执行满电确认或低压表收敛，二者互斥 |
-| `soc_reset_rest_confidence()` | 清空短静置/长静置可信度计数和参考电压 |
-| `soc_rest_voltage_stable()` | 判断当前 RELAX 电压是否满足短静置稳定条件 |
-| `soc_update_rest_timer()` | RELAX 计时，满足短静置或长静置条件后调用 OCV 小步校正 |
+| `soc_reset_rest_confidence()` | 清空静置可信度计数和参考电压 |
+| `soc_rest_voltage_stable()` | 判断当前 RELAX 电压是否满足静置稳定条件 |
+| `soc_update_rest_timer()` | RELAX 计时，电压稳定窗口满足后调用 OCV 小步校正 |
 | `soc_display_target()` | 计算显示目标，处理 `SOC_Fixed/SOC_Zero` 覆盖 |
 | `soc_publish()` | 显示平滑、容量/SOH/循环换算、发布到对外数据源 |
 | `soc_handle_command()` | 处理 `RefreshData_Flag`：OCV 刷新、参数刷新、设置一次 SOC |
@@ -459,4 +460,4 @@ python3 tools/project_check.py
 git diff --check
 ```
 
-没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，覆盖 `9` 个关键 C 源码路径；`tools/soc_replay_test.py` 覆盖 `39` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、短静置、长时间不用车、回弹保护、异常输入和随机不变量。
+没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，覆盖 `10` 个关键 C 源码路径；`tools/soc_replay_test.py` 覆盖 `40` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、稳定静置、静置超过 30min 但电压不稳定不校准、长时间不用车、回弹保护、异常输入和随机不变量。

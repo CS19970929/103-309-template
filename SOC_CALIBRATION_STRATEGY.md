@@ -23,7 +23,7 @@
 5. SOH 先按循环次数映射，有效容量由 SOH 反推，不做容量学习。
 6. 所有通信地址、函数签名和 Flash V2 快照结构保持兼容。
 7. 运行态自动校准每次最多 `1%`，以后新增任何 SOC 校准策略都必须遵守该原则。
-8. 静置校准不只依赖固定 `30min` 门槛；短静置只要电压稳定，也允许慢速收敛。
+8. 静置校准不再依赖“到固定 `30min` 就校准”；运行态必须先确认电压回弹变化已经进入稳定窗口。
 9. 重载骑行后的未回弹电压不能立刻用于校准；关机前的回弹风险需要跨重启保留。
 
 “每次最多 `1%`”是硬约束：满电确认、低压收敛、静置/RTC OCV、骑行中电压表修正都不能一次性跳变超过 `1%`。启动初始化、上位机 `0x1005` 设置一次 SOC、`SOC_Fixed/SOC_Zero` 显示覆盖不属于运行态自动校准。
@@ -39,10 +39,9 @@
 | 安时积分 | 充/放电电流 `>=0.4A` 且 AFE 电流样本更新 | 按 `200ms` 电流积分更新内部容量 | 显示平滑跟随 |
 | 启动 OCV | 无有效 Flash 快照且单体电压有效 | 按 OCV 表初始化内部 SOC | 启动时同步显示 |
 | 满电确认 | 充电或停充静置下满足高压、电压差和短时间累计 | 每次上修 `1%`，直到 `100%` | 显示平滑跟随 |
-| 短静置稳定 OCV | `RELAX` 下电压稳定 `5min` 后，按 `10min/step` 节拍 | 内部 SOC 每次最多修正 `1%` | 不满足 30min 也能慢速纠偏 |
+| 静置稳定 OCV | `RELAX` 下电压稳定 `5min` 后，按 `10min/step` 节拍 | 内部 SOC 每次最多修正 `1%` | 不硬等 30min，也不到点强校准 |
 | 低压表 | 非充电下 `VCellMin <=3400mV~2950mV` | 按电压/电流表每次下修 `1%` | 低压区快速跟随 |
-| 静置 OCV | `RELAX` 持续 `30min` 以上 | 内部 SOC 每次最多修正 `1%` | 显示不跳变 |
-| RTC OCV | RTC 唤醒后传入休眠时长和电压 | 同静置 OCV 小步修正 | 显示平滑跟随 |
+| RTC OCV | RTC 唤醒后传入休眠时长和电压，且未被 rebound holdoff 阻断 | 内部 SOC 每次最多修正 `1%` | 显示平滑跟随 |
 | 中低压弱约束 | `VCellMin <= V0 + 700mV` 且高于低压表范围 | 只向下限制明显高估 SOC，每次 `1%` | 扩大收敛区间但避免瞬态误校 |
 | 骑行中低压表修正 | `VCellMin <= V0 + 400mV` | 给内部 SOC 设置分电流档位上限 | 防止低压高估 |
 | 设置一次 SOC | 上位机 `0x1005` | 内部和显示同步到设定值 | 立即生效 |
@@ -64,7 +63,7 @@
 1. 门控失败只阻止 OCV、满电确认和低压电压类修正，不直接停止电流积分。
 2. `VCellMax < VCellMin`、`0mV`、超上限等采样异常不能把 SOC 拉到 0。
 3. 低压表仍要求基础电压合法，避免异常采样误触发。
-4. 短静置和中低压弱约束额外要求单体压差 `<=200mV`，降低单串异常或均衡差异造成的误判。
+4. 稳定静置和中低压弱约束额外要求单体压差 `<=200mV`，降低单串异常或均衡差异造成的误判。
 
 ## 4. 默认 OCV 表口径
 
@@ -209,10 +208,10 @@ cap_full = cap_factory * SOH / 100
 
 | 常量 | 当前值 | 影响 |
 | --- | ---: | --- |
-| `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 短静置稳定可信度最短时间 |
-| `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 短静置每次 `1%` OCV 修正周期 |
-| `SOC_REST_STABLE_DELTA_MV` | `30mV` | 短静置电压稳定判定窗口 |
-| `SOC_MID_MAX_DELTA_MV` | `200mV` | 中低压弱约束和短静置的单体压差门槛 |
+| `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 静置稳定可信度最短时间 |
+| `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 稳定静置每次 `1%` OCV 修正周期 |
+| `SOC_REST_STABLE_DELTA_MV` | `30mV` | 静置电压回弹稳定判定窗口 |
+| `SOC_MID_MAX_DELTA_MV` | `200mV` | 中低压弱约束和静置稳定的单体压差门槛 |
 | `SOC_REBOUND_BOOT_HOLDOFF_SECONDS` | `300s` | 重载后跨重启回弹保护时间 |
 
 完整编译宏范围、内部常量和函数清单见 `SOC逻辑与参数影响梳理.md`。
@@ -223,7 +222,7 @@ cap_full = cap_factory * SOH / 100
 2. 主机回放矩阵：`python3 tools/soc_replay_test.py`。
 3. 语法检查：对 `SOC.c` 和 `SocEnhance.c` 运行 C99 `clang -fsyntax-only`。
 4. Keil 编译：在 Windows + Keil MDK 环境编译 `FD_Debug` 和 `FD_Release`。
-5. 台架验证：覆盖启动、满电、低压、RTC、SOC 设置、断电恢复、异常采样、短静置、重载关机后快速重启。
+5. 台架验证：覆盖启动、满电、低压、RTC、SOC 设置、断电恢复、异常采样、稳定静置、重载关机后快速重启。
 6. 上板验证：确认 CAN、RS485、LED 和内部 `g_stCellInfoReport.SocElement` 显示一致。
 
-无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前覆盖 `9` 个关键 C 源码路径；`tools/soc_replay_test.py` 当前覆盖 `39` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。
+无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前覆盖 `10` 个关键 C 源码路径；`tools/soc_replay_test.py` 当前覆盖 `40` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵、静置不稳定超过 30min 仍不校准和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。

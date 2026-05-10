@@ -557,7 +557,7 @@ static void soc_integrate(UINT8 mode)
 
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 {
-	if ((rest_seconds < SOC_REST_OCV_SECONDS) || !soc_calibration_allowed())
+	if ((rest_seconds < SOC_SHORT_REST_MIN_SECONDS) || !soc_calibration_allowed())
 	{
 		return 0U;
 	}
@@ -909,12 +909,7 @@ static void soc_update_rest_timer(UINT8 mode)
 		s_soc.stable_rest_ticks = 0U;
 		s_soc.short_rest_ticks = 0U;
 	}
-	if (s_soc.rest_ticks >= rest_limit_ticks)
-	{
-		(void)soc_apply_rest_ocv(SOC_REST_OCV_SECONDS, SOC_MODE_RELAX);
-		soc_reset_rest_confidence();
-	}
-	else if ((s_soc.stable_rest_ticks >= short_min_ticks) &&
+	if ((s_soc.stable_rest_ticks >= short_min_ticks) &&
 		(s_soc.short_rest_ticks >= short_step_ticks))
 	{
 		(void)soc_apply_ocv_step(SOC_MODE_RELAX);

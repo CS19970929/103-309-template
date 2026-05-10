@@ -377,7 +377,7 @@ class SocModel:
         return self.soc != old
 
     def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX, fault=False):
-        if rest_seconds < REST_OCV_SECONDS:
+        if rest_seconds < SHORT_REST_MIN_SECONDS:
             return False
         return self.apply_ocv_step(vmax, vmin, direction=direction, fault=fault)
 
@@ -416,10 +416,7 @@ class SocModel:
         else:
             self.stable_rest_ticks = 0
             self.short_rest_ticks = 0
-        if self.rest_ticks >= REST_OCV_SECONDS * TICKS_PER_SECOND:
-            self.apply_rest_ocv(REST_OCV_SECONDS, vmax, vmin, direction=MODE_RELAX)
-            self.reset_rest_confidence()
-        elif (self.stable_rest_ticks >= SHORT_REST_MIN_SECONDS * TICKS_PER_SECOND and
+        if (self.stable_rest_ticks >= SHORT_REST_MIN_SECONDS * TICKS_PER_SECOND and
               self.short_rest_ticks >= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND):
             self.apply_ocv_step(vmax, vmin, direction=MODE_RELAX)
             self.short_rest_ticks = 0
@@ -765,7 +762,8 @@ def test_empty_anchor_limits_low_voltage_tail():
 
 def test_rtc_rest_ocv_applies_small_bounded_step():
     model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
-    changed = model.apply_rest_ocv(21600, vmax=3835, vmin=3835)
+    assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS - 1, vmax=3835, vmin=3835)
+    changed = model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835)
     assert changed
     assert model.soc == 51
     model.update_display()
@@ -777,9 +775,9 @@ def test_rtc_rest_ocv_applies_small_bounded_step():
 
 def test_ocv_correction_fault_blocking_follows_config_and_direction_errors():
     model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
-    assert not model.apply_rest_ocv(21600, vmax=3835, vmin=3835, direction=MODE_DSG)
+    assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, direction=MODE_DSG)
     assert model.soc == 50
-    changed = model.apply_rest_ocv(21600, vmax=3835, vmin=3835, fault=True)
+    changed = model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, fault=True)
     assert changed == (not BLOCK_CALIBRATION_PROTECTION_FAULT)
     assert model.soc == (51 if not BLOCK_CALIBRATION_PROTECTION_FAULT else 50)
 
@@ -904,6 +902,19 @@ def test_unstable_short_rest_does_not_ocv_calibrate():
         run_seconds(model, 60, vmax=3810, vmin=3810)
         run_seconds(model, 60, vmax=3770, vmin=3770)
     assert model.soc == 80
+
+
+def test_unstable_long_rest_waits_for_voltage_convergence():
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    for index in range(9):
+        vcell = 3835 if (index % 2) == 0 else 3770
+        run_seconds(model, 200, vmax=vcell, vmin=vcell)
+    assert model.soc == 50
+
+    run_seconds(model, 399, vmax=3835, vmin=3835)
+    assert model.soc == 50
+    run_seconds(model, 2, vmax=3835, vmin=3835)
+    assert model.soc == 51
 
 
 def test_mid_voltage_light_load_weakly_limits_high_soc():
@@ -1124,6 +1135,7 @@ def main():
         test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail,
         test_short_stable_rest_can_calibrate_before_30_minutes,
         test_unstable_short_rest_does_not_ocv_calibrate,
+        test_unstable_long_rest_waits_for_voltage_convergence,
         test_mid_voltage_light_load_weakly_limits_high_soc,
         test_mid_voltage_counter_resets_when_condition_breaks,
         test_mid_voltage_tail_table_matrix_and_guards,

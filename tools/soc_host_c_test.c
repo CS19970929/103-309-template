@@ -230,6 +230,27 @@ static void test_short_rest_ocv_step_before_30min(void)
 	CHECK_EQ_U32(host_internal_soc(), 51U);
 }
 
+static void test_unstable_long_rest_waits_for_voltage_convergence(void)
+{
+	UINT16 i;
+	UINT16 vcell;
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	for (i = 0U; i < 9U; ++i)
+	{
+		vcell = ((i & 1U) == 0U) ? 3835U : 3770U;
+		host_run_seconds(200U, vcell, vcell, 0U, 0U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+
+	host_run_seconds(399U, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+	host_run_seconds(2U, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 51U);
+}
+
 static void test_rebound_flag_clears_when_holdoff_expires(void)
 {
 	host_reset_state();
@@ -283,6 +304,7 @@ int main(void)
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_step_before_30min();
+	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_rebound_flag_clears_when_holdoff_expires();
 	test_display_overlays_do_not_modify_internal_soc();
 	test_set_soc_once_command_saves_snapshot();
@@ -292,6 +314,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 9\n");
+	printf("SOC host C tests passed: 10\n");
 	return 0;
 }

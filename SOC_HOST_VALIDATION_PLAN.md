@@ -4,7 +4,7 @@
 
 ## 1. 结论
 
-可以在电脑上完整验证 SOC 算法的软件状态机，包括启动恢复、安时积分、OCV 表、满电确认、中低压弱约束、低压表、短静置、RTC 静置、回弹保护、显示平滑、异常电压和随机运行不变量。
+可以在电脑上完整验证 SOC 算法的软件状态机，包括启动恢复、安时积分、OCV 表、满电确认、中低压弱约束、低压表、稳定静置、RTC 静置、回弹保护、显示平滑、异常电压和随机运行不变量。
 
 当前最高可信度的无板验证入口是 `tools/run_soc_host_c_test.py`：它直接编译并执行 MCU 工程中的真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，测试 harness 只替代 Flash、系统错误回调和全局采样结构。也就是说，SOC 主状态机、积分、OCV、低压、满电、显示发布等逻辑不是 Python 复刻，而是同一份 C 源码在电脑上运行。
 
@@ -40,9 +40,9 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
   "103 + 309/Project/Source/SocEnhance.c"
 ```
 
-`tools/run_soc_host_c_test.py` 当前覆盖 `9` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、短静置不足 30min 时的小步校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
+`tools/run_soc_host_c_test.py` 当前覆盖 `10` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置小步校准、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
 
-`tools/soc_replay_test.py` 当前覆盖 `39` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
+`tools/soc_replay_test.py` 当前覆盖 `40` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 
 ## 3. 覆盖矩阵
 
@@ -57,8 +57,8 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 | 中低压弱约束 | `3500mV~3700mV` 全表目标/周期、重载禁用、压差门控、条件中断计数清零 |
 | 低压表 | `3400mV~2950mV` 全表目标/周期、四个电流档位、只下修不上拉、末端快速到 0 |
 | 大电流回弹 | `Idsg > C/2` sag holdoff、真实末端放行、跨重启 5min rebound holdoff、归零即清标志 |
-| 短静置 | 稳定 5min 后按 10min/step 修正，不稳定电压或压差过大不校准 |
-| 长时间不用车 | 稳定电压长时间 RELAX 会逐步收敛，且每 tick 自动校准不跳超过 1% |
+| 稳定静置 | 稳定 5min 后按 10min/step 修正，不稳定电压、持续回弹或压差过大不校准 |
+| 长时间不用车 | 稳定电压长时间 RELAX 会逐步收敛；如果电压超过 30min 仍不稳定，也不会到点强校准 |
 | 显示 | 内部 SOC 与显示 SOC 分离，普通 5s/1%，低压 1s/1%，Fixed/Zero 不破坏内部 SOC |
 | 异常输入 | 0mV、反向电压、超上限、压差过大等坏样本不触发电压校准 |
 | 随机矩阵 | 20000 tick 的充/放/静置/坏电压组合，持续检查 SOC、显示、容量、SOH、计数器不变量 |
