@@ -6,6 +6,8 @@
 
 可以在电脑上完整验证 SOC 算法的软件状态机，包括启动恢复、安时积分、OCV 表、满电确认、中低压弱约束、低压表、短静置、RTC 静置、回弹保护、显示平滑、异常电压和随机运行不变量。
 
+当前最高可信度的无板验证入口是 `tools/run_soc_host_c_test.py`：它直接编译并执行 MCU 工程中的真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，测试 harness 只替代 Flash、系统错误回调和全局采样结构。也就是说，SOC 主状态机、积分、OCV、低压、满电、显示发布等逻辑不是 Python 复刻，而是同一份 C 源码在电脑上运行。
+
 不能只靠电脑证明硬件层完全可靠。以下内容仍需要板端或台架：
 
 - AFE 实际电流零点、噪声、温漂和采样延迟。
@@ -14,11 +16,12 @@
 - RS485/CAN/LED 的实际电气、时序和外设中断交互。
 - Keil 完整链接、下载、量产烧录与 IAP 地址安全。
 
-所以当前策略是：主机测试作为每日/每次改动的算法门禁；板端测试作为采样、通信、存储和用户体验最终验收。
+所以当前策略是：Host C 真实源码测试作为第一门禁，Python 回放矩阵作为广覆盖补充；板端测试作为采样、通信、存储和用户体验最终验收。
 
 ## 2. 当前主机验证入口
 
 ```bash
+python3 tools/run_soc_host_c_test.py
 python3 tools/soc_replay_test.py
 python3 tools/project_check.py
 git diff --check
@@ -37,12 +40,15 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
   "103 + 309/Project/Source/SocEnhance.c"
 ```
 
+`tools/run_soc_host_c_test.py` 当前覆盖 `9` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、短静置不足 30min 时的小步校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
+
 `tools/soc_replay_test.py` 当前覆盖 `39` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 
 ## 3. 覆盖矩阵
 
 | 类别 | 已覆盖内容 |
 | --- | --- |
+| 真实 C 源码路径 | host 直接编译 `SOC.c` + `SocEnhance.c` + `PubFunc.c`，验证 `InitData_SOC()` / `App_SOC()` / `SOC_IntEnhance_Ctrl()` 的真实调用链 |
 | 启动恢复 | 无快照默认 60%、无快照有效电压按 OCV、V2 快照恢复 SOC/容量/循环/SOH、重载回弹标志恢复 |
 | 安时积分 | 200ms/5Hz 积分、充电/放电方向、脉冲电流平均能量、容量边界、循环小数累计 |
 | SOH | 循环到 SOH 映射、80% 下限、SOH 变化后有效容量约束 |
@@ -59,15 +65,29 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 
 ## 4. 新增 SOC 逻辑时必须补的测试
 
-1. 新增自动校准路径时，必须加入“单次最多 `1%`”测试。
-2. 新增电压表或阈值时，必须加入全表矩阵测试，而不是只测一个典型点。
-3. 新增静置或休眠逻辑时，必须同时测“满足条件”和“不满足条件不校准”。
-4. 新增快照字段时，必须测启动恢复、未知值掩码、保存触发和断电后重启语义。
-5. 新增显示策略时，必须确认内部 SOC、显示 SOC、通信输出不会互相污染。
+1. 先在 `tools/soc_host_c_test.c` 增加真实 C 源码场景，证明 MCU SOC 主路径行为正确。
+2. 新增自动校准路径时，必须加入“单次最多 `1%`”测试。
+3. 新增电压表或阈值时，必须加入全表矩阵测试，而不是只测一个典型点。
+4. 新增静置或休眠逻辑时，必须同时测“满足条件”和“不满足条件不校准”。
+5. 新增快照字段时，必须测启动恢复、未知值掩码、保存触发和断电后重启语义。
+6. 新增显示策略时，必须确认内部 SOC、显示 SOC、通信输出不会互相污染。
 
-## 5. 无板验证边界
+## 5. 用户自测方式
 
-主机回放只能证明“给定输入下，SOC 状态机输出符合预期”。它不证明输入一定真实。因此上线前仍建议用台架补以下数据：
+没有板子时，推荐每次改 SOC 后按以下顺序执行：
+
+```bash
+python3 tools/run_soc_host_c_test.py
+python3 tools/soc_replay_test.py
+python3 tools/project_check.py
+git diff --check
+```
+
+有 Windows + Keil 环境时，再补 `FD_Debug` 和 `FD_Release` 完整编译。有实物板时，使用 `tools/start_soc_test_ui.ps1` 启动 SOC 测试上位机做串口在线监控或 demo；Host C 测试本身是命令行门禁，没有 UI，因为它的目的不是展示，而是让 CI/提交前快速失败。
+
+## 6. 无板验证边界
+
+Host C 测试和主机回放只能证明“给定输入下，SOC 状态机输出符合预期”。它不证明输入一定真实。因此上线前仍建议用台架补以下数据：
 
 - 不同 SOC、不同电流下的单体电压下陷和回弹时间。
 - 停车 5min、10min、30min、6h 后的实际 OCV 回归程度。

@@ -7,6 +7,7 @@
 - `103 + 309/Project/Source/Flash.c/.h`
 - `103 + 309/Project/Source/Sci_Upper.c`
 - `103 + 309/Project/Source/rtc_sleep.c`
+- `tools/run_soc_host_c_test.py`
 - `tools/soc_replay_test.py`
 
 ## 1. 设计目标
@@ -331,7 +332,15 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 
 ## 14. 已验证项目
 
-主机回放：
+真实 C 源码主机测试：
+
+```bash
+python3 tools/run_soc_host_c_test.py
+```
+
+当前覆盖 9 个关键 C 路径：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、短静置小步校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
+
+主机回放矩阵：
 
 ```bash
 python3 tools/soc_replay_test.py
@@ -360,4 +369,4 @@ python3 tools/soc_replay_test.py
 - OCV 表单调性、Python 模型与 C 源码表格一致性、方向阈值、满电计数器递减、低压/中低压全表矩阵。
 - 异常电压矩阵、长期静置收敛、回弹保护过期清标志、随机运行不变量。
 
-本机已通过 `clang -fsyntax-only -std=c99 -Wall -Wextra` 语法检查。Keil 完整编译仍需 Windows + Keil MDK 环境。
+本机已通过真实 C 源码主机测试、Python 回放矩阵和 `clang -fsyntax-only -std=c99 -Wall -Wextra` 语法检查。Keil 完整编译仍需 Windows + Keil MDK 环境。

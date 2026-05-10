@@ -112,9 +112,9 @@
 | 文档 | 内容定位 |
 | --- | --- |
 | [主流 BMS SOC 策略对比与本工程取舍](BMS_SOC_STRATEGY_COMPARISON.md) | 对比 OCV、安时积分、IR 修正、高级 fuel gauge 思路，并说明本工程用户体验优先的中等增强方案 |
-| [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 入口、状态机、积分、静置/RTC OCV 小步校正、快照、通信配置和回放测试 |
+| [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 入口、状态机、积分、静置/RTC OCV 小步校正、快照、通信配置和真实 C/回放测试 |
 | [SOC 校准策略与参数调优说明](SOC_CALIBRATION_STRATEGY.md) | SOC 校准策略、异常不校准门控、低压表、可配置参数和调优建议 |
-| [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) | 没有实物板时的 SOC 主机回放、矩阵测试、随机不变量和台架边界 |
+| [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) | 没有实物板时的 SOC 真实 C 源码主机测试、回放矩阵、随机不变量和台架边界 |
 | [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md) | ADC 配置、采样、低功耗关联 |
 | [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md) | PA2 直接采 10mΩ 分流器压降、Type-C 输出电流稳定值与标定方法 |
 | [ADC 总压分压计算说明](ADC总压分压计算说明.md) | PA1 总压分压采样、电阻参数调整、AFE 上报总压来源说明 |
