@@ -94,8 +94,9 @@ void App_CBC(void);
 void SysTime_LatchTaskFlags(void);
 UINT8 SysTime_HasPendingTaskFlags(void);
 UINT32 SysTime_Get10msTickCount(void);
+UINT8 SysTime_Take200msTaskPeriod(void);
+UINT16 SysTime_Get200msTaskOverflowCount(void);
 void App_ChgDet_Status(void);
 
 
 #endif	/* SYSTEM_INIT_H */
-

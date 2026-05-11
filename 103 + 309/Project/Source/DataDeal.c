@@ -1194,13 +1194,11 @@ void new_todo_logi(void)
 #endif
 }
 
-extern bool g_200ms_task_flag;
 void App_AFEGet(void)
 {
     // if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
-    if (!g_200ms_task_flag)
+    if (0U == SysTime_Take200msTaskPeriod())
         return;
-    g_200ms_task_flag = false;
 
     MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
     MonitorAFE(0, UpdateVoltageFromBqMaximo());

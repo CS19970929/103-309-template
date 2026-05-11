@@ -13,7 +13,10 @@ static UINT8 s_u8Cnt1000ms = 0;
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
-bool g_200ms_task_flag = false;
+#define SYS_TIME_200MS_PENDING_LIMIT ((UINT8)5U)
+
+static volatile UINT8 s_u8Sys200msPendingPeriods = 0U;
+static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 
 void EnableLowPowerDebug(void)
 {
@@ -85,6 +88,8 @@ static void SysTime_ResetCounters(void)
 	s_u8Cnt100ms = 0U;
 	s_u8Cnt200ms = 0U;
 	s_u8Cnt1000ms = 0U;
+	s_u8Sys200msPendingPeriods = 0U;
+	s_u16Sys200msOverflowCnt = 0U;
 
 	if (primask == 0U)
 	{
@@ -202,6 +207,54 @@ UINT32 SysTime_Get10msTickCount(void)
 	return tick_count;
 }
 
+UINT8 SysTime_Take200msTaskPeriod(void)
+{
+	UINT8 has_period = 0U;
+	UINT32 primask = __get_PRIMASK();
+
+	__disable_irq();
+	if (s_u8Sys200msPendingPeriods != 0U)
+	{
+		s_u8Sys200msPendingPeriods--;
+		has_period = 1U;
+	}
+
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
+
+	return has_period;
+}
+
+UINT16 SysTime_Get200msTaskOverflowCount(void)
+{
+	UINT16 overflow_count;
+	UINT32 primask = __get_PRIMASK();
+
+	__disable_irq();
+	overflow_count = s_u16Sys200msOverflowCnt;
+
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
+
+	return overflow_count;
+}
+
+static void SysTime_Post200msTaskPeriod(void)
+{
+	if (s_u8Sys200msPendingPeriods < SYS_TIME_200MS_PENDING_LIMIT)
+	{
+		s_u8Sys200msPendingPeriods++;
+	}
+	else if (s_u16Sys200msOverflowCnt < (UINT16)0xFFFFU)
+	{
+		s_u16Sys200msOverflowCnt++;
+	}
+}
+
 static void SysTime_Post10msTick(void)
 {
 	s_u32Sys10msTickCount++;
@@ -223,6 +276,7 @@ static void SysTime_Post10msTick(void)
 	{
 		s_u8Cnt200ms = 0U;
 		s_st_SysTimePending.bits.b1Sys200msFlag = 1U;
+		SysTime_Post200msTaskPeriod();
 	}
 
 	if (++s_u8Cnt1000ms >= 100U)
@@ -238,17 +292,9 @@ void IWDG_Feed(void)
 
 void TIM3_IRQHandler(void)
 {
-	static uint16_t count_200ms = 0;
-
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
-
-		if(++count_200ms >= 20)
-		{
-			count_200ms = 0;
-			g_200ms_task_flag = true;
-		}
 	}
 }
