@@ -469,6 +469,11 @@
               <FilePath>..\Source\Can_HDX.c</FilePath>
             </File>
             <File>
+              <FileName>Bms_EUavcan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Bms_EUavcan.c</FilePath>
+            </File>
+            <File>
               <FileName>Cell_balance.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Cell_balance.c</FilePath>
