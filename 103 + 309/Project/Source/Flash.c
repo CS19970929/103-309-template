@@ -783,6 +783,7 @@ void StorageFlash_PrintBootCheck(void)
 	UINT32 soc_next_b = FLASH_ADDR_STORAGE_SOC_SLOT_B;
 	UINT16 update_flag = 0xFFFF;
 	UINT16 upgrade_flag = 0xFFFF;
+	UINT16 aging_flag = 0xFFFF;
 
 	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu\r\n",
 		   flash_size_kb,
@@ -870,9 +871,11 @@ void StorageFlash_PrintBootCheck(void)
 
 	update_flag = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
 	upgrade_flag = FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG);
-	printf("[FLASH_BOOT] flag update=0x%04X upgrade_param=0x%04X\r\n",
+	aging_flag = FlashReadOneHalfWord(FLASH_ADDR_FACTORY_AGING_FLAG);
+	printf("[FLASH_BOOT] flag update=0x%04X upgrade_param=0x%04X factory_aging=0x%04X\r\n",
 		   update_flag,
-		   upgrade_flag);
+		   upgrade_flag,
+		   aging_flag);
 }
 
 void App_FlashUpdate(void)

@@ -132,6 +132,14 @@
 // <q> 使能 IAP 跳转支持
 // <i> 使能 IAP 跳转支持。带 bootloader 的 App 必须开启。
 #define PROJECT_CFG_IAP_ENABLE 1
+
+// <q> 使能出厂老化模式
+// <i> 首次出厂运行期间打开充放电管；完成后写入 Flash 标志，后续不再自动进入老化。
+#define PROJECT_CFG_FACTORY_AGING_ENABLE 1
+
+// <o> 出厂老化运行时长，秒 <1-604800>
+// <i> 默认 259200 秒，即 3 天。只累计 MCU 正常运行态 TIM3 tick，RTC/STOP 休眠时间不计入。
+#define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 // </h>
 
 // <h>串口角色

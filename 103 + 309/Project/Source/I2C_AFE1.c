@@ -870,7 +870,14 @@ void InitAFE1(void)
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	open_dsg_close_chg();
+	if (FactoryAging_IsActive() != 0U)
+	{
+		enter_fac_mode(true);
+	}
+	else
+	{
+		open_dsg_close_chg();
+	}
 	if (do_startup_zero != 0U)
 	{
 		AfeCurrent_StartupZeroCal();

@@ -415,6 +415,18 @@ void BQ769x0_SleepMode_Ctrl(void)
         return;
     }
 
+    if (FactoryAging_IsActive() != 0U)
+    {
+        sys_time.enter_rtc_delay = 0;
+        deepsleep_cnt = 0;
+        deepsleep_cnt_1min = 0;
+        if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
+        {
+            LowPower_Request(NO_SLEEP);
+        }
+        return;
+    }
+
     // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
     // if (AFE_SleepMode_Judge() == 1)
     //todo过充、充电管关了？进待机？

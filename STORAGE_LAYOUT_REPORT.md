@@ -129,10 +129,18 @@
 |---|---|---|
 | `0x08000000` | `FLASH_ADDR_IAP_START` | IAP/Boot 区起点 |
 | `0x08004800` | `FLASH_ADDR_APP_START` | 应用程序起点 |
+| `0x0801C000` | `FLASH_ADDR_STORAGE_AFE_SLOT_A` | AFE 参数 Slot A |
+| `0x0801C400` | `FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A` | 运行参数 Slot A |
+| `0x0801C800` | `FLASH_ADDR_STORAGE_AFE_SLOT_B` | AFE 参数 Slot B |
+| `0x0801CC00` | `FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B` | 运行参数 Slot B |
+| `0x0801D000` | `FLASH_ADDR_STORAGE_LOG_SLOT_A` | 事件日志 Slot A |
+| `0x0801D800` | `FLASH_ADDR_STORAGE_LOG_SLOT_B` | 事件日志 Slot B |
+| `0x0801E000` | `FLASH_ADDR_STORAGE_SOC_SLOT_A` / `FLASH_ADDR_SH367309_VALUE` | SOC 数据 Slot A |
+| `0x0801E800` | `FLASH_ADDR_STORAGE_SOC_SLOT_B` / `FLASH_ADDR_SH367309_FLAG` | SOC 数据 Slot B |
+| `0x0801F000` | `FLASH_ADDR_UPGRADE_PARAM_FLAG` | 升级参数策略执行标志 |
+| `0x0801F400` | `FLASH_ADDR_FACTORY_AGING_FLAG` | 出厂老化完成标志 |
 | `0x0801F800` | `FLASH_ADDR_UPDATE_FLAG` | IAP/更新标志位 |
 | `0x0801FC00` | `FLASH_ADDR_SLEEP_FLAG` | 休眠模式标志位 |
-| `0x0803E000` | `FLASH_ADDR_SH367309_VALUE` | 名称上是 Flash 地址，当前代码实际以 EEPROM API 访问 |
-| `0x0803E800` | `FLASH_ADDR_SH367309_FLAG` | SH367309 相关标志位 |
 
 ### 2.1 Flash 读写逻辑
 
@@ -174,6 +182,15 @@
 
 更新标志和睡眠标志都是“半字哨兵位”。
 写入逻辑的核心不是保存大数据，而是保存一个状态字。
+
+#### 2.2.4 出厂老化完成标志
+
+[main.c](103 + 309/Project/Source/main.c) 会读取 `FLASH_ADDR_FACTORY_AGING_FLAG`：
+
+- `FLASH_FACTORY_AGING_DONE_VALUE = 0xA93D`
+- `FLASH_FACTORY_AGING_RESET_VALUE = 0xFFFF`
+
+如果该页保持 `0xFFFF`，固件首次运行会进入出厂老化模式；运行态累计满 `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` 后写入完成标志。后续重启读到 `0xA93D` 时不再自动进入老化，并保持充电管关闭、放电管打开。
 
 ## 3. 工程大小与链接布局
 

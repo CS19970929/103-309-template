@@ -29,6 +29,18 @@ void App_Sci(void);
 void InitSystemWakeUp(void);
 static UINT8 MainLoop_HasPendingWork(void);
 static void MainLoop_EnterIdleSleep(void);
+static void FactoryAging_Task(void);
+
+#define FACTORY_AGING_STATE_UNINIT  ((UINT8)0U)
+#define FACTORY_AGING_STATE_RUNNING ((UINT8)1U)
+#define FACTORY_AGING_STATE_DONE    ((UINT8)2U)
+#define FACTORY_AGING_10MS_PER_SEC  ((UINT32)100U)
+#define FACTORY_AGING_DURATION_10MS \
+	((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS * FACTORY_AGING_10MS_PER_SEC)
+
+static UINT8 s_u8FactoryAgingState = FACTORY_AGING_STATE_UNINIT;
+static UINT32 s_u32FactoryAgingElapsed10ms = 0U;
+static UINT32 s_u32FactoryAgingLastTick = 0U;
 
 static UINT8 MainLoop_HasPendingWork(void)
 {
@@ -103,6 +115,117 @@ void enter_fac_mode(bool on)
 #endif
 }
 
+static UINT8 FactoryAging_IsDoneStored(void)
+{
+	return (FlashReadOneHalfWord(FLASH_ADDR_FACTORY_AGING_FLAG) ==
+			FLASH_FACTORY_AGING_DONE_VALUE) ? 1U : 0U;
+}
+
+static void FactoryAging_MarkDone(void)
+{
+	if (FactoryAging_IsDoneStored() != 0U)
+	{
+		return;
+	}
+
+	if (FlashWriteOneHalfWord(FLASH_ADDR_FACTORY_AGING_FLAG,
+							  FLASH_FACTORY_AGING_DONE_VALUE) != FLASH_COMPLETE)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	}
+}
+
+static void FactoryAging_Start(UINT32 now_tick)
+{
+	s_u32FactoryAgingElapsed10ms = 0U;
+	s_u32FactoryAgingLastTick = now_tick;
+	enter_fac_mode(true);
+	s_u8FactoryAgingState = FACTORY_AGING_STATE_RUNNING;
+}
+
+static void FactoryAging_AddRunningTicks(UINT32 now_tick)
+{
+	UINT32 delta;
+
+	if (now_tick >= s_u32FactoryAgingLastTick)
+	{
+		delta = now_tick - s_u32FactoryAgingLastTick;
+	}
+	else
+	{
+		/* TIM3 is reset after STOP wakeup; sleep time is not aging time. */
+		delta = 0U;
+	}
+
+	s_u32FactoryAgingLastTick = now_tick;
+
+	if (delta == 0U)
+	{
+		return;
+	}
+
+	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	{
+		return;
+	}
+
+	if (delta >= (FACTORY_AGING_DURATION_10MS - s_u32FactoryAgingElapsed10ms))
+	{
+		s_u32FactoryAgingElapsed10ms = FACTORY_AGING_DURATION_10MS;
+	}
+	else
+	{
+		s_u32FactoryAgingElapsed10ms += delta;
+	}
+}
+
+static void FactoryAging_Finish(void)
+{
+	enter_fac_mode(false);
+	FactoryAging_MarkDone();
+	s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;
+}
+
+UINT8 FactoryAging_IsActive(void)
+{
+#if PROJECT_CFG_FACTORY_AGING_ENABLE
+	return (s_u8FactoryAgingState == FACTORY_AGING_STATE_RUNNING) ? 1U : 0U;
+#else
+	return 0U;
+#endif
+}
+
+static void FactoryAging_Task(void)
+{
+#if PROJECT_CFG_FACTORY_AGING_ENABLE
+	UINT32 now_tick = SysTime_Get10msTickCount();
+
+	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_UNINIT)
+	{
+		if (FactoryAging_IsDoneStored() != 0U)
+		{
+			enter_fac_mode(false);
+			s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;
+			return;
+		}
+
+		FactoryAging_Start(now_tick);
+		return;
+	}
+
+	if (s_u8FactoryAgingState != FACTORY_AGING_STATE_RUNNING)
+	{
+		return;
+	}
+
+	FactoryAging_AddRunningTicks(now_tick);
+	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	{
+		FactoryAging_Finish();
+	}
+#endif
+}
+
 extern void new_todo_logi(void);
 
 int main(void)
@@ -119,6 +242,7 @@ int main(void)
 		App_Sci();
 #else
 		SysTime_LatchTaskFlags();
+		FactoryAging_Task();
 		APP_LedBar();
 		// App_WarnCtrl();
 		App_AFEGet();
