@@ -279,7 +279,7 @@ RTC 唤醒补偿不再按“累计休眠超过 `300s` 后每次唤醒修正”�
 | 低压下降 | `VCellMin <= V0 + 50mV` 时 `1s / 1%` |
 | 设置一次 SOC / 工厂显示覆盖 | 可强制同步 |
 | 自动满电 / 自动空电校准 | 内部每次 `1%`，显示继续平滑 |
-| RTC/静置 OCV 小步修正 | 不强制同步，继续平滑跟随 |
+| RTC/静置 OCV deferred target | 目标本身不显示；后续小步修正后继续平滑跟随 |
 | `SOC_Fixed` | 只对外显示 60%，不破坏内部 SOC |
 | `SOC_Zero` | 只对外显示 0%，不破坏内部 SOC |
 
@@ -342,7 +342,7 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 python3 tools/run_soc_host_c_test.py
 ```
 
-当前覆盖 10 个关键 C 路径：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置小步校准、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
+当前覆盖 14 个关键 C 路径：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
 
 主机回放矩阵：
 
@@ -350,7 +350,7 @@ python3 tools/run_soc_host_c_test.py
 python3 tools/soc_replay_test.py
 ```
 
-当前覆盖 40 个场景：
+当前覆盖 43 个场景：
 
 - 无快照默认 60%。
 - 无快照且电压有效时按启动 OCV。
@@ -360,13 +360,14 @@ python3 tools/soc_replay_test.py
 - SOH 循环映射。
 - 满电确认。
 - 空电/低压表。
-- RTC/静置 OCV 小步修正与显示平滑。
+- RTC/静置 OCV deferred target、后续充/放电消化与显示平滑。
 - 异常方向/故障不做 OCV。
 - 显示平滑。
 - `SOC_Fixed/SOC_Zero` 只影响显示。
 - 低压表电流分档速率和重载屏蔽。
-- 稳定静置不足 30min 时允许慢速 OCV 收敛。
+- 稳定静置不足 30min 时只记录 OCV target，不立即改 SOC。
 - 静置超过 30min 但电压不稳定时不做 OCV 校准。
+- 久置低 OCV 场景按 `30min/1%` 慢速下修。
 - 中低压弱约束按电压、电流、周期慢速下修。
 - 中低压弱约束条件中断后计数器清零。
 - 重载关机后的快照回弹标志会阻止开机电压误校准。

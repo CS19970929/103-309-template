@@ -40,9 +40,9 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
   "103 + 309/Project/Source/SocEnhance.c"
 ```
 
-`tools/run_soc_host_c_test.py` 当前覆盖 `10` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置小步校准、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
+`tools/run_soc_host_c_test.py` 当前覆盖 `14` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
 
-`tools/soc_replay_test.py` 当前覆盖 `40` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
+`tools/soc_replay_test.py` 当前覆盖 `43` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 
 ## 3. 覆盖矩阵
 
@@ -52,13 +52,13 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 | 启动恢复 | 无快照默认 60%、无快照有效电压按 OCV、V2 快照恢复 SOC/容量/循环/SOH、重载回弹标志恢复 |
 | 安时积分 | 200ms/5Hz 积分、充电/放电方向、脉冲电流平均能量、容量边界、循环小数累计 |
 | SOH | 循环到 SOH 映射、80% 下限、SOH 变化后有效容量约束 |
-| OCV 表 | 表项精确命中、全电压范围单调性、与 C 源码表格一致性、静置/RTC 小步修正、方向约束 |
+| OCV 表 | 表项精确命中、全电压范围单调性、与 C 源码表格一致性、静置/RTC deferred target、方向约束 |
 | 满电 | 快速/普通确认、V100 参数影响、计数器递减而非清零、满电前不直接显示 100 |
 | 中低压弱约束 | `3500mV~3700mV` 全表目标/周期、重载禁用、压差门控、条件中断计数清零 |
 | 低压表 | `3400mV~2950mV` 全表目标/周期、四个电流档位、只下修不上拉、末端快速到 0 |
 | 大电流回弹 | `Idsg > C/2` sag holdoff、真实末端放行、跨重启 5min rebound holdoff、归零即清标志 |
-| 稳定静置 | 稳定 5min 后按 10min/step 修正，不稳定电压、持续回弹或压差过大不校准 |
-| 长时间不用车 | 稳定电压长时间 RELAX 会逐步收敛；如果电压超过 30min 仍不稳定，也不会到点强校准 |
+| 稳定静置 | 稳定 5min 后按 10min/step 记录 OCV target，短静置不立即改 SOC；方向匹配的充/放电阶段再消化差值 |
+| 长时间不用车 | 稳定电压长时间 RELAX 且 OCV target 低于内部 SOC 时，按 30min/1% 慢速下修；如果电压超过 30min 仍不稳定，也不会到点强校准 |
 | 显示 | 内部 SOC 与显示 SOC 分离，普通 5s/1%，低压 1s/1%，Fixed/Zero 不破坏内部 SOC |
 | 异常输入 | 0mV、反向电压、超上限、压差过大等坏样本不触发电压校准 |
 | 随机矩阵 | 20000 tick 的充/放/静置/坏电压组合，持续检查 SOC、显示、容量、SOH、计数器不变量 |

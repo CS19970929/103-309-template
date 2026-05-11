@@ -15,7 +15,7 @@
 
 ## SOC 主机侧检查
 
-- [x] 主机回放：执行 `python3 tools/soc_replay_test.py`，覆盖冷启动、快照恢复、设置一次 SOC、积分、循环/SOH、满电确认、低压表、RTC 静置、显示平滑、Fixed/Zero 覆盖和自动校准步长。
+- [x] 主机回放：执行 `python3 tools/soc_replay_test.py`，覆盖冷启动、快照恢复、设置一次 SOC、积分、循环/SOH、满电确认、低压表、RTC 静置、OCV deferred target、久置低 OCV 慢速下修、显示平滑、Fixed/Zero 覆盖和自动校准步长。
 - [x] 语法检查：对 `SOC.c` 和 `SocEnhance.c` 执行 C99 `clang -fsyntax-only`，确认当前改动可被主机编译器解析。
 - [x] Flash 兼容：保持 `STORAGE_FLASH_SOC_DATA` V2 结构、`StorageFlash_LoadSocData()`、`StorageFlash_SaveSocData()` 和旧 V1 快照迁移入口不变。
 - [x] 通信兼容：保持 `InitData_SOC()`、`App_SOC()`、`SOC_UpdateSampleData()`、`SOC_PublishReportData()`、`SOC_ApplyRtcRelaxationCompensation()`、`SOC_ResetStoredSnapshotToDefault()` 调用签名不变。
@@ -63,8 +63,8 @@
 - [ ] 低压停放电：低压保护后电流变成 0 且仍低于 `3000mV` 时，`RELAX` 状态继续把 SOC 收敛到 `0%`。
 - [ ] 低压表最快收敛：`VCellMin <=2950mV` 通过表项以最快 `1%/200ms` 收敛，不再依赖额外极端低压兜底分支。
 - [ ] 重载补偿：大电流骑行 voltage sag 下，表目标应高于轻载目标，避免 SOC 过早掉到 0。
-- [ ] 静置 OCV：运行态 `RELAX >=30min` 后只小步修正内部 SOC，显示继续平滑。
-- [ ] RTC OCV：长时间休眠唤醒后按 OCV 小步修正，不产生大幅显示跳变。
+- [ ] 静置 OCV：稳定 `RELAX` 先记录 OCV deferred target，方向匹配的充/放电阶段按 `10min/1%` 消化，久置低 OCV 按 `30min/1%` 慢速下修。
+- [ ] RTC OCV：长时间休眠唤醒后先记录 OCV deferred target，只有久置低 OCV 慢速下修或后续充/放电消化时才改变内部 SOC，不产生大幅显示跳变。
 
 ## 异常输入验证
 
