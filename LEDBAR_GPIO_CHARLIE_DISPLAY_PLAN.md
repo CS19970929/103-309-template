@@ -1,8 +1,10 @@
 # LedBar GPIO Charlieplexing 显示方案
 
+> 2026-05-11 更新：当前实现已经按 GPIO Charlieplexing 单路径重写，旧 `74HC595` 兼容代码已删除。后续维护以 [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md) 为准。
+
 ## 需求
 
-数码管控制方案从单颗 `74HC595` 输出改为 MCU GPIO 直接控制。原 74HC595 方案代码需要保留，默认启用新的 GPIO 查理复用方案。
+数码管控制方案从旧兼容路径收敛为 MCU GPIO 直接控制，不再保留 `74HC595` 方案代码。
 
 新方案使用 5 根 MCU GPIO 直接连接 5pin 数码管，按查理复用方式扫描：每次只驱动一个目标段，一根 GPIO 输出高电平，一根 GPIO 输出低电平，其余 GPIO 保持高阻。这样软件可以避免 74HC595 推挽直推时无法关闭非目标线导致的串亮问题。
 
@@ -18,11 +20,9 @@
 | P4 | SPI_MOSI | PA6 |
 | P5 | SEG_EN | PB10 |
 
-宏定义为：
+相关引脚宏为：
 
 ```c
-#define LEDBAR_DRIVER_GPIO_CHARLIE 1u
-
 #define LEDBAR_GPIO_P1 GPIO_DBG_LED
 #define LEDBAR_PIN_P1  PIN_DBG_LED
 #define LEDBAR_GPIO_P2 GPIO_SPI1_NSS
@@ -39,8 +39,8 @@
 
 ## 软件实现
 
-- `LedBar.c` 保留原 74HC595 图样表、贪心图样生成和 `LedBar_595WriteByte()` 输出路径；把 `LEDBAR_DRIVER_GPIO_CHARLIE` 改为 `0u` 可切回旧方案。
-- 默认 GPIO 方案不再输出 5bit 595 图样，而是把当前显示内容展开为段 ID 列表。
+- `LedBar.c` 不再保留旧图样表、贪心图样生成和驱动选择宏。
+- GPIO 方案把当前显示内容展开为段 ID 列表。
 - TIM4 仍作为扫描定时器，1ms 中断内调用 `LedBar_Scan1ms()`，每次扫描一个目标段。
 - 输出段前先把 5 根线全部设为输入浮空，再配置目标低端为推挽低电平、目标高端为推挽高电平。
 - 显示关闭、休眠和 STOP 前会关闭 TIM4，并把 5 根显示线切到高阻或模拟输入。

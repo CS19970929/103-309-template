@@ -1,5 +1,7 @@
 # LED 软件框架与时序梳理
 
+> 2026-05-11 更新：当前量产代码已删除 `74HC595` 兼容分支，只保留 GPIO Charlieplexing 扫描路径。数码管最新代码边界、扩展规则和验收点以 [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md) 为准；本文保留为时序和低功耗联动参考。
+
 ## 目的
 
 本文用于快速熟悉当前 LED 数码管软件框架、显示刷新链路、休眠交互链路，以及后续修改入口。当前需求已经纳入代码：
@@ -26,7 +28,6 @@
 
 | 宏 | 当前值/状态 | 影响 |
 | --- | --- | --- |
-| `LEDBAR_DRIVER_GPIO_CHARLIE` | `1u` | 当前使用 5Pin GPIO Charlieplexing 方式直接扫描段位 |
 | `LEDBAR_SLEEP_ENABLE` | `1u` | 未请求显示或进入休眠时允许熄屏、关 TIM4、GPIO 进入确定关断态 |
 | `_DI_SWITCH_longKEY_ONOFF` | 已定义 | DI1 长按 3 秒会触发深度休眠 |
 | `__FUNC_RTC__` | 已定义 | 当前低功耗主路径走 RTC 打嗝休眠 |
@@ -83,7 +84,7 @@
 - `LedBar_GpioPrepareForStop()`：所有 LED 管脚先高阻再统一输出低电平，避免 STOP 前后引脚漂浮导致段位误亮。
 - `TIM4_IRQHandler()`：每 0.5ms 调用一次 `LedBar_Scan1ms()`。
 
-当前 Charlieplexing 模式没有 74HC595 锁存输出；`74HC595` 相关代码保留在 `#if !LEDBAR_DRIVER_GPIO_CHARLIE` 分支内，当前不会编译进主路径。
+当前代码只保留 GPIO Charlieplexing 扫描路径，没有旧驱动兼容分支。
 
 ### 帧构建层
 

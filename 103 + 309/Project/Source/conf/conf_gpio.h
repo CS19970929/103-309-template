@@ -54,9 +54,6 @@
 #define GPIO_SPI_MOSI        GPIOA
 #define PIN_SPI_MOSI         GPIO_Pin_6
 
-#define GPIO_LED595_DATA     GPIO_SPI_MOSI
-#define PIN_LED595_DATA      PIN_SPI_MOSI
-
 #define GPIO_RF_EN        GPIOA
 #define PIN_RF_EN         GPIO_Pin_7
 
@@ -69,14 +66,8 @@
 #define GPIO_SPI1_NSS        GPIOA
 #define PIN_SPI1_NSS         GPIO_Pin_4
 
-#define GPIO_LED595_LATCH    GPIO_SPI1_NSS
-#define PIN_LED595_LATCH     PIN_SPI1_NSS
-
 #define GPIO_SPI1_SCK        GPIOA
 #define PIN_SPI1_SCK         GPIO_Pin_5
-
-#define GPIO_LED595_CLK      GPIO_SPI1_SCK
-#define PIN_LED595_CLK       PIN_SPI1_SCK
 
 #define GPIO_ADC_NMOS        GPIOB
 #define PIN_ADC_NMOS         GPIO_Pin_1
@@ -103,4 +94,3 @@
 #define PIN_ADC_BUS_EN         GPIO_Pin_5
 
 #endif
-

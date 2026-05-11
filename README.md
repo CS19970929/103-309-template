@@ -16,11 +16,10 @@
 
 ### 修改 LED / 数码管显示
 
-1. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
-2. [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md)
-3. [Charlie + 74HC595 显示框架审查与移植说明](CHARLIE_595_DISPLAY_PORT_REVIEW.md)
-4. [LedBar SOC 显示策略状况分析](LEDBAR_SOC_DISPLAY_STRATEGY_ANALYSIS.md)
-5. [LedBar SOC 1~100 显示完美度逐项分析](LEDBAR_SOC_1_100_DISPLAY_ANALYSIS.md)
+1. [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md)
+2. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
+3. [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md)
+4. [休眠唤醒数码管显示 10 秒说明](休眠唤醒数码管显示10秒说明.md)
 
 ### 修改低功耗 / RTC / CAN 唤醒
 
@@ -69,12 +68,10 @@
 
 | 文档 | 内容定位 |
 | --- | --- |
+| [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md) | 当前量产数码管代码边界、需求、扩展规则和验收点 |
 | [LED 软件框架与时序梳理](LED软件框架与时序梳理.md) | 当前 LED 软件架构、刷新时序、休眠交互、`GPIO_MCU_WK` 持续显示逻辑 |
 | [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md) | GPIO Charlieplexing 方案设计 |
-| [LedBar 74HC595 + 5Pin Charlieplexing 最优显示方案](LEDBAR_74HC595_CHARLIEPLEX_OPTIMAL_PLAN.md) | 74HC595 分支的显示优化方案 |
-| [Charlie + 74HC595 显示框架审查与移植说明](CHARLIE_595_DISPLAY_PORT_REVIEW.md) | 显示端口和移植风险审查 |
-| [LedBar SOC 显示策略状况分析](LEDBAR_SOC_DISPLAY_STRATEGY_ANALYSIS.md) | SOC 显示策略、串亮情况分析 |
-| [LedBar SOC 1~100 显示完美度逐项分析](LEDBAR_SOC_1_100_DISPLAY_ANALYSIS.md) | 1~100 每个 SOC 显示质量逐项分析 |
+| [休眠唤醒数码管显示 10 秒说明](休眠唤醒数码管显示10秒说明.md) | 上电、复位、休眠唤醒后的显示窗口规则 |
 
 ### 低功耗 / RTC / CAN
 

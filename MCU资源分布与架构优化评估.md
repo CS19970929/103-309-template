@@ -346,7 +346,7 @@ Removing startup_stm32f10x_hd.o(HEAP), (512 bytes)
 | DMA1 Channel1 | ADC 数据搬运 | 环形模式，无实际 DMA 中断 |
 | TIM2 | ADC 外部触发 | TIM2 CC2 触发 ADC |
 | TIM3 | 系统 10 ms 软件节拍 | Update 中断 |
-| TIM4 | LED 数码/74HC595 扫描 | 1 ms Update 中断 |
+| TIM4 | LED 数码管 GPIO Charlie 扫描 | 1 ms Update 中断 |
 | SysTick | 阻塞延时 | 不作为系统 tick |
 | RTC / BKP / PWR | 低功耗、休眠唤醒、BKP 标志 | RTC 主初始化未直接启用，低功耗路径使用 |
 | IWDG | 看门狗代码存在 | 当前 Release 默认通过 `PROJECT_CFG_WDOG_ENABLE=1` 启用；`FD_Debug` 可按调试需要临时关闭 |

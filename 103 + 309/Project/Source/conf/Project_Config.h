@@ -274,7 +274,6 @@
 // <h>灯条配置
 // <q> 使用 GPIO Charlieplexing 灯条驱动
 // <i> 使用 GPIO Charlieplexing 灯条驱动。需与硬件灯条连接方式一致。
-#define PROJECT_CFG_LEDBAR_DRIVER_GPIO_CHARLIE 1
 
 // <q> 使能灯条休眠 SOC 备份
 // <i> 休眠前备份灯条 SOC 显示状态，唤醒后用于恢复显示体验。
@@ -292,24 +291,8 @@
 // <i> After MCU reset from sleep wakeup, keep SOC display for 10s by default.
 #define PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS 1000
 
-// <q> 使能 SOC 显示避重影策略
-// <i> 使能灯条 SOC 段位避重影策略。可改善显示观感但会微调显示数值。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
-
-// <o> SOC 显示避重影窗口 <0-20>
-// <i> 避重影策略允许调整的窗口范围。越大越可能偏离真实 SOC。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_WINDOW 2
-
-// <o> SOC 避重影最小额外段数 <0-30>
-// <i> 启动避重影替代显示所需的最小额外段数。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA 4
-
-// <o> SOC 避重影最小改善幅度 <0-30>
-// <i> 替代显示必须带来的最小改善幅度。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1
-
-// <o> 扫描定时周期，100kHz tick <1-1000>
-// <i> 灯条扫描定时周期，基于 100kHz tick。影响刷新频率和亮度稳定性。
+// <o> LedBar scan timer period, 100kHz tick <1-1000>
+// <i> GPIO Charlieplexing only. 50 means 0.5ms per route.
 #define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
 
 // <o> MCU_WK 有效滤波，10ms tick <0-255>
