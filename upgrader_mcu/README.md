@@ -54,6 +54,12 @@ tools/build_upgrader_mcu_f103c8.ps1
 tools/run_upgrader_mcu_tests.py
 ```
 
+Keil 工程入口：
+
+```text
+upgrader_mcu/keil/UPG_F103C8.uvprojx
+```
+
 ## 3. STM32F103C8 接入方式
 
 当前适配层默认采用：
