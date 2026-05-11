@@ -53,10 +53,10 @@ extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 void SOC_IntEnhance_Ctrl(void);
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
+void SOC_SaveSnapshotBeforeSleep(void);
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg);
 void SOC_PublishReportData(void);
 
 void soc_param_lib_init(void);
 UINT8 SOC_ResetStoredSnapshotToDefault(void);
 #endif	/* SOCENHANCE_H */
-

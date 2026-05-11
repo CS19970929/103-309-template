@@ -230,6 +230,50 @@ static void test_short_rest_ocv_step_before_30min(void)
 	CHECK_EQ_U32(host_internal_soc(), 51U);
 }
 
+static void test_rtc_ocv_uses_stable_step_period(void)
+{
+	UINT32 seconds;
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+
+	for (seconds = 10U; seconds < 610U; seconds += 10U)
+	{
+		SOC_ApplyRtcRelaxationCompensation(seconds, 3835U, 3835U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+
+	SOC_ApplyRtcRelaxationCompensation(610U, 3835U, 3835U);
+	CHECK_EQ_U32(host_internal_soc(), 51U);
+}
+
+static void test_rtc_ocv_waits_for_voltage_convergence(void)
+{
+	UINT32 seconds;
+	UINT16 vcell;
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+
+	for (seconds = 60U; seconds <= 600U; seconds += 60U)
+	{
+		vcell = (((seconds / 60U) & 1U) == 0U) ? 3770U : 3835U;
+		SOC_ApplyRtcRelaxationCompensation(seconds, vcell, vcell);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+
+	for (seconds = 660U; seconds < 1260U; seconds += 60U)
+	{
+		SOC_ApplyRtcRelaxationCompensation(seconds, 3835U, 3835U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+
+	SOC_ApplyRtcRelaxationCompensation(1260U, 3835U, 3835U);
+	CHECK_EQ_U32(host_internal_soc(), 51U);
+}
+
 static void test_unstable_long_rest_waits_for_voltage_convergence(void)
 {
 	UINT16 i;
@@ -304,6 +348,8 @@ int main(void)
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_step_before_30min();
+	test_rtc_ocv_uses_stable_step_period();
+	test_rtc_ocv_waits_for_voltage_convergence();
 	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_rebound_flag_clears_when_holdoff_expires();
 	test_display_overlays_do_not_modify_internal_soc();
@@ -314,6 +360,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 10\n");
+	printf("SOC host C tests passed: 12\n");
 	return 0;
 }

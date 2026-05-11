@@ -50,6 +50,7 @@ STM32F103xC/D/E 支持 Sleep、Stop、Standby 三类低功耗模式。官方资�
 
 1. `rtc_sleep_prepare_rtc()` 调用：
    - `Can_PrepareSleep()`
+   - `SOC_SaveSnapshotBeforeSleep()`
    - `Init_RTC()`
    - `IOstatus_RTCMode()`
    - `InitWakeUp_RTCMode()`
@@ -94,7 +95,7 @@ if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 
 但 STOP 模式下的 RTC Alarm 唤醒路径应主要看 `RTCAlarm_IRQHandler()`，而不是 `RTC_IRQHandler()`。调试时如果断在 `RTC_IRQHandler()` 的 `RTC_IT_ALR` 分支，可能会误判为“没有进入 Alarm 中断”。
 
-另外，`RTC_HandleAlarmWakeup()` 内部已经对 `sys_time.rtc_alm_cnt` 做了加 1；`RTC_IRQHandler()` 的 Alarm 分支后面又加 1。这个分支如果触发，会重复计数。
+当前源码已经把 Alarm 计数收敛到 `RTC_HandleAlarmWakeup()` 内部，`RTCAlarm_IRQHandler()` 和 `RTC_IRQHandler()` 只共用该处理函数，不再在外层重复维护 `sys_time.rtc_alm_cnt`。
 
 ## 推荐低功耗策略
 
@@ -248,6 +249,7 @@ static void LowPower_ClearWakePending(void)
 
 - 生产硬件应优先保证 LSE 正常。
 - 如果 fallback 到 LSI，记录状态位或日志，并适当降低 SOC 休眠补偿置信度。
+- RTC SOC 校准必须继续按稳定窗口和 `10min/step` 节拍执行，不能因为 RTC 唤醒周期是 `1s/10s` 就每次唤醒修正。
 - 后续可以在 Backup Register 记录 RTC 时钟源，便于售后诊断。
 
 ### 优先级 P3：Standby 暂不作为主路径

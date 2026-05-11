@@ -41,7 +41,7 @@
 | 满电确认 | 充电或停充静置下满足高压、电压差和短时间累计 | 每次上修 `1%`，直到 `100%` | 显示平滑跟随 |
 | 静置稳定 OCV | `RELAX` 下电压稳定 `5min` 后，按 `10min/step` 节拍 | 内部 SOC 每次最多修正 `1%` | 不硬等 30min，也不到点强校准 |
 | 低压表 | 非充电下 `VCellMin <=3400mV~2950mV` | 按电压/电流表每次下修 `1%` | 低压区快速跟随 |
-| RTC OCV | RTC 唤醒后传入休眠时长和电压，且未被 rebound holdoff 阻断 | 内部 SOC 每次最多修正 `1%` | 显示平滑跟随 |
+| RTC OCV | RTC 唤醒后传入休眠时长和电压，连续唤醒电压稳定，且未被 rebound holdoff 阻断 | 稳定窗口按 `10min/step`，内部 SOC 每次最多修正 `1%` | 不随 `1s/10s` RTC 唤醒频率快速跳变 |
 | 中低压弱约束 | `VCellMin <= V0 + 700mV` 且高于低压表范围 | 只向下限制明显高估 SOC，每次 `1%` | 扩大收敛区间但避免瞬态误校 |
 | 骑行中低压表修正 | `VCellMin <= V0 + 400mV` | 给内部 SOC 设置分电流档位上限 | 防止低压高估 |
 | 设置一次 SOC | 上位机 `0x1005` | 内部和显示同步到设定值 | 立即生效 |
@@ -211,6 +211,7 @@ cap_full = cap_factory * SOH / 100
 | `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 静置稳定可信度最短时间 |
 | `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 稳定静置每次 `1%` OCV 修正周期 |
 | `SOC_REST_STABLE_DELTA_MV` | `30mV` | 静置电压回弹稳定判定窗口 |
+| RTC OCV 首次采样 | 建参考值，不累计稳定窗口 | 防止单次 RTC 唤醒电压直接触发校准 |
 | `SOC_MID_MAX_DELTA_MV` | `200mV` | 中低压弱约束和静置稳定的单体压差门槛 |
 | `SOC_REBOUND_BOOT_HOLDOFF_SECONDS` | `300s` | 重载后跨重启回弹保护时间 |
 
