@@ -97,7 +97,7 @@ typedef enum
 #define LEDBAR_595_GPIO_LATCH GPIO_LED595_LATCH
 #define LEDBAR_595_PIN_LATCH PIN_LED595_LATCH
 
-#define LEDBAR_KEY_LONG_PRESS_10MS 300u
+#define LEDBAR_KEY_LONG_PRESS_10MS 300u /* 3s */
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
 #define LEDBAR_SLEEP_SOC_VALUE_MASK 0x00FFu
@@ -436,7 +436,8 @@ static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
 static uint8_t s_ledbar_scan_timer_initialized = 0u;
 static uint8_t s_ledbar_scan_timer_enabled = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
-static uint16_t s_ledbar_key_hold_10ms = 0u;
+static uint32_t s_ledbar_key_hold_10ms = 0u;
+static uint32_t s_ledbar_key_press_start_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
 static uint8_t s_ledbar_mcu_wk_filter_initialized = 0u;
@@ -1399,6 +1400,7 @@ void LedBar_Init(void)
     s_ledbar_test_single_segment_id = 0u;
     s_ledbar_soc_display_10ms = 0u;
     s_ledbar_key_hold_10ms = 0u;
+    s_ledbar_key_press_start_10ms = 0u;
     s_ledbar_key_last_pressed = 0u;
     s_ledbar_key_long_handled = 0u;
     s_ledbar_mcu_wk_filter_initialized = 0u;
@@ -1856,24 +1858,19 @@ static void LedBar_ToggleLongPressTestOutputs(void)
 static void LedBar_ServiceSwitch(void)
 {
     uint8_t pressed = LedBar_IsSwitchPressed();
+    uint32_t now_10ms = SysTime_Get10msTickCount();
 
     if ((pressed != 0u) && (s_ledbar_key_last_pressed == 0u))
     {
         LedBar_RequestSocDisplayWindow();
+        s_ledbar_key_press_start_10ms = now_10ms;
+        s_ledbar_key_hold_10ms = 0u;
     }
     s_ledbar_key_last_pressed = pressed;
 
-    if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
-    {
-        return;
-    }
-
     if (pressed != 0u)
     {
-        if (s_ledbar_key_hold_10ms < LEDBAR_KEY_LONG_PRESS_10MS)
-        {
-            s_ledbar_key_hold_10ms++;
-        }
+        s_ledbar_key_hold_10ms = now_10ms - s_ledbar_key_press_start_10ms;
 
 #ifdef _DI_SWITCH_longKEY_ONOFF
         if ((s_ledbar_key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
@@ -1893,7 +1890,12 @@ static void LedBar_ServiceSwitch(void)
     else
     {
         s_ledbar_key_hold_10ms = 0u;
+        s_ledbar_key_press_start_10ms = now_10ms;
         s_ledbar_key_long_handled = 0u;
+        if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
+        {
+            return;
+        }
         if (s_ledbar_soc_display_10ms != 0u)
         {
             s_ledbar_soc_display_10ms--;
