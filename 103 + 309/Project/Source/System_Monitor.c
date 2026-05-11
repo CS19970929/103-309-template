@@ -136,7 +136,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 		System_ErrFlag.u8ErrFlag_CBC_DSG++;
 		break;
 	case ERROR_EEPROM_STORE:
-		System_ErrFlag.u8ErrFlag_Store_EEPROM++;
+		// System_ErrFlag.u8ErrFlag_Store_EEPROM++;
 		break;
 	case ERROR_HSE:
 		System_ErrFlag.u8ErrFlag_HSE++;
