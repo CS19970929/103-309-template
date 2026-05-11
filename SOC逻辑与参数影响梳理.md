@@ -221,7 +221,9 @@ OCV 表只用于冷启动、稳定静置/RTC，以及骑行中上限约束参考
 
 ### 4.9 静置/RTC OCV
 
-运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒只有休眠时长和当前电压一个样本，因此仍按传入休眠时长做一次小步补偿，但会被电压合法性、方向、故障和 sag/rebound holdoff 阻断。
+运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒路径也使用稳定窗口：第一次 RTC 电压样本只建立参考值，后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才累计稳定时间；稳定累计达到 `5min` 且 `10min/step` 节拍到达时，最多按 OCV 表修正 `1%`。
+
+RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周期只影响通信探测频率，不再直接决定 SOC 校准频率。RTC OCV 仍会被电压合法性、故障和 sag/rebound holdoff 阻断。
 
 方向约束：
 
@@ -416,7 +418,8 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `soc_load_or_default()` | 加载有效快照；无效时按 OCV 或默认 60% 初始化 |
 | `soc_add_discharge()` | 累计放电量，更新 `cycle_x100`，必要时刷新 SOH/SOC |
 | `soc_integrate()` | 按 200ms tick 做充/放电安时积分 |
-| `soc_apply_rest_ocv()` | 静置/RTC OCV 小步校正，单次最多 `SOC_CAL_STEP` |
+| `soc_apply_rest_ocv()` | 主动 OCV 刷新小步校正，单次最多 `SOC_CAL_STEP` |
+| `soc_apply_rtc_rest_ocv()` | RTC 休眠 OCV 稳定窗口累计与 `10min/step` 小步校正 |
 | `soc_apply_ocv_step()` | 执行一次 OCV 小步修正，并受 sag/rebound holdoff 阻断 |
 | `soc_full_confirm_seconds()` | 判断当前是否满足快速/普通满电确认，并返回所需秒数 |
 | `soc_empty_current_band()` | 按 `RELAX/C/5/C/2/>C/2` 选择低压表电流档位 |
@@ -440,6 +443,7 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `SOC_ResetStoredSnapshotToDefault()` | 将 SOC 快照重置为默认 60%，用于升级策略或维护动作 |
 | `SOC_IntEnhance_Ctrl()` | SOC 增强算法主状态机入口 |
 | `SOC_ApplyRtcRelaxationCompensation()` | RTC 唤醒后按休眠时长和电压做静置 OCV 补偿 |
+| `SOC_SaveSnapshotBeforeSleep()` | 进入 RTC/普通/深度休眠前刷新 SOC Flash 快照 |
 
 ## 8. 调参与验证建议
 

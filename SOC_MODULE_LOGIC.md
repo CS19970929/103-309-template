@@ -232,7 +232,9 @@ cap_full = cap_factory * SOH / 100
 - 如果中途电压跳动、重新骑行、进入低压表或触发 holdoff，静置可信度清零。
 - 即使 `RELAX` 已经超过 `30min`，只要电压仍在回弹/跳动，也不会强行按 OCV 校准。
 
-RTC 唤醒补偿仍按传入休眠时长和当前电压做一次小步修正，最小休眠时间使用同一 `5min` 置信下限；如果快照里带有重载回弹标志，开机 `5min` rebound holdoff 会继续阻断这类电压校准。
+RTC 唤醒补偿不再按“累计休眠超过 `300s` 后每次唤醒修正”处理。RTC 第一次唤醒只建立 `VCellMin/VCellMax` 参考值，后续唤醒电压相对参考值波动 `<=30mV` 才累计稳定窗口；稳定累计达到 `5min` 且 `10min/step` 节拍到达时，最多按 OCV 表修正 `1%`。CAN active/idle 只决定 RTC 唤醒频率，不直接决定 SOC 校准频率。
+
+如果快照里带有重载回弹标志，开机 `5min` rebound holdoff 会继续阻断这类电压校准。
 
 当前版本不强制显示跳变，显示 SOC 继续按平滑规则跟随。
 
@@ -323,6 +325,7 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 - `SOC_UpdateSampleData()`
 - `SOC_PublishReportData()`
 - `SOC_ApplyRtcRelaxationCompensation()`
+- `SOC_SaveSnapshotBeforeSleep()`
 - `SOC_ResetStoredSnapshotToDefault()`
 
 ## 14. 已验证项目

@@ -759,6 +759,7 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     Can_PrepareSleep();
+    SOC_SaveSnapshotBeforeSleep();
     before_rtcsleep();
 
     Init_RTC();

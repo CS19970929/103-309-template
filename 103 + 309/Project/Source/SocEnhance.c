@@ -111,6 +111,7 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
 static SOC_STATE s_saved_soc;
+static UINT32 s_u32RtcRestCursorSeconds;
 
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT8 soc_apply_ocv_step(UINT8 mode);
@@ -917,6 +918,73 @@ static void soc_update_rest_timer(UINT8 mode)
 	}
 }
 
+static void soc_add_rest_seconds(UINT32 *ticks, UINT32 seconds, UINT32 limit_seconds)
+{
+	UINT32 limit_ticks = soc_seconds_to_ticks(limit_seconds);
+	UINT32 delta_ticks = soc_seconds_to_ticks(seconds);
+
+	if (*ticks >= limit_ticks)
+	{
+		return;
+	}
+	if (delta_ticks > (limit_ticks - *ticks))
+	{
+		*ticks = limit_ticks;
+	}
+	else
+	{
+		*ticks += delta_ticks;
+	}
+}
+
+static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
+{
+	UINT32 delta_seconds;
+	UINT32 short_min_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_MIN_SECONDS);
+	UINT32 short_step_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_STEP_SECONDS);
+	UINT8 has_rest_ref;
+	UINT8 changed = 0U;
+
+	if (rest_seconds < s_u32RtcRestCursorSeconds)
+	{
+		soc_reset_rest_confidence();
+		s_u32RtcRestCursorSeconds = 0U;
+	}
+
+	delta_seconds = rest_seconds - s_u32RtcRestCursorSeconds;
+	s_u32RtcRestCursorSeconds = rest_seconds;
+	if (delta_seconds == 0U)
+	{
+		return 0U;
+	}
+
+	soc_add_rest_seconds(&s_soc.rest_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
+	has_rest_ref = (UINT8)((s_soc.rest_ref_vmin != 0U) && (s_soc.rest_ref_vmax != 0U));
+	if (soc_rest_voltage_stable())
+	{
+		if (!has_rest_ref)
+		{
+			return 0U;
+		}
+		soc_add_rest_seconds(&s_soc.stable_rest_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
+		soc_add_rest_seconds(&s_soc.short_rest_ticks, delta_seconds, SOC_SHORT_REST_STEP_SECONDS);
+	}
+	else
+	{
+		s_soc.stable_rest_ticks = 0U;
+		s_soc.short_rest_ticks = 0U;
+		return 0U;
+	}
+
+	if ((s_soc.stable_rest_ticks >= short_min_ticks) &&
+		(s_soc.short_rest_ticks >= short_step_ticks))
+	{
+		changed = soc_apply_ocv_step(SOC_MODE_RELAX);
+		s_soc.short_rest_ticks = 0U;
+	}
+	return changed;
+}
+
 static UINT8 soc_display_target(void)
 {
 	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
@@ -1036,6 +1104,7 @@ void soc_param_lib_init(void)
 	memset(&s_soc, 0, sizeof(s_soc));
 	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
 	s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
+	s_u32RtcRestCursorSeconds = 0U;
 	soc_refresh_capacity_base();
 	SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
 						 g_stCellInfoReport.u16VCellMin,
@@ -1061,6 +1130,15 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	data.u32CapFull = cap_full;
 	data.u32CapNow = (UINT32)(((uint64_t)cap_full * SOC_DEFAULT_STARTUP_PERCENT) / 100ULL);
 	return StorageFlash_SaveSocData(&data);
+}
+
+void SOC_SaveSnapshotBeforeSleep(void)
+{
+	if (!SOC_Enhance_Element.u16_SOC_InitOver)
+	{
+		return;
+	}
+	soc_save_if_needed();
 }
 
 void SOC_IntEnhance_Ctrl(void)
@@ -1114,7 +1192,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	}
 	SOC_Enhance_Element.u16_VCellMin = vcell_min;
 	SOC_Enhance_Element.u16_VCellMax = vcell_max;
-	changed = soc_apply_rest_ocv(rest_seconds, SOC_MODE_RELAX);
+	changed = soc_apply_rtc_rest_ocv(rest_seconds);
 	if (changed && soc_save())
 	{
 		s_saved_soc = s_soc;

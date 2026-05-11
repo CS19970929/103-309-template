@@ -85,6 +85,7 @@ void SleepDeal_Continue(void)
 	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
 
 	Can_PrepareSleep();
+	SOC_SaveSnapshotBeforeSleep();
 	LedBar_SaveSleepSoc();
 
 	if (Sleep_Mode.bits.b1TestSleep)
