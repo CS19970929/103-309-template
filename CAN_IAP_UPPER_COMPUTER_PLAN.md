@@ -46,6 +46,41 @@ PC 上位机真实连接电池板时，必须有一个 CAN 物理接口。这个
 
 这一步仍然只负责跳转，不负责升级写 Flash。
 
+当前分支已增加 App 侧标准帧命令骨架：
+
+| 方向 | 标准帧 ID | 说明 |
+| --- | --- | --- |
+| 上位机 -> App | `(CAN_ADRESS_STD_ID << 7) | 0x60`，当前为 `0x060` | App 命令 |
+| App -> 上位机 | `(CAN_ADRESS_STD_ID << 7) | 0x61`，当前为 `0x061` | App ACK |
+
+App 命令 8 字节固定格式：
+
+| 字节 | 含义 |
+| --- | --- |
+| 0 | `0xA5` |
+| 1 | `0x5A` |
+| 2 | 命令 |
+| 3~5 | 参数 |
+| 6~7 | 前 6 字节的 Modbus CRC16，高字节在前 |
+
+App ACK 8 字节固定格式：
+
+| 字节 | 含义 |
+| --- | --- |
+| 0 | `0x5A` |
+| 1 | `0xA5` |
+| 2 | 原命令 |
+| 3 | 状态码，`0x00` 为成功 |
+| 4~5 | 返回值 |
+| 6~7 | 前 6 字节的 Modbus CRC16，高字节在前 |
+
+已定义命令：
+
+| 命令 | 参数 | 返回值 | 说明 |
+| --- | --- | --- | --- |
+| `0x01` | `00 00 00` | `SOC, SOH` | 读取基础状态 |
+| `0x02` | `C3 3C CAN_ADRESS_STD_ID` | `08 48` | 写升级标志并延迟约 200ms 复位进入 IAP |
+
 ### 第三阶段：IAP 实现 CAN 升级
 
 目标：
@@ -78,6 +113,7 @@ PC 上位机真实连接电池板时，必须有一个 CAN 物理接口。这个
 固定参数：
 
 - `node_id` 默认 `1`。
+- 当前 App 固件 CAN 位时序为 `250 kbit/s`，上位机默认 `250000`。
 - `APP_BASE_ADDR` 固定 `0x08004800`。
 - `IAP_BASE_ADDR` 固定 `0x08000000`。
 - 固件数据最后一帧不足 8 字节时用 `0xFF` 填充，但 CRC 只计算原始 `.bin` 实际长度。
@@ -110,7 +146,11 @@ CRC 使用 Modbus CRC16，和当前工程 `Sci_CRC16RTU()` 路径保持一致。
 ```powershell
 .\tools\start_can_bms_host.ps1 -Mode detect
 
-.\tools\start_can_bms_host.ps1 -Mode listen -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 500000 -Duration 10
+.\tools\start_can_bms_host.ps1 -Mode listen -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 250000 -Duration 10
+
+.\tools\start_can_bms_host.ps1 -Mode app-read-status -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 250000 -CanAddress 0
+
+.\tools\start_can_bms_host.ps1 -Mode app-enter-iap -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 250000 -CanAddress 0 -ConfirmEnterIap
 
 .\tools\start_can_bms_host.ps1 -Mode upgrade-dry-run -Bin "103 + 309\Project\Users\Objects\FD_Release.bin"
 ```
@@ -124,7 +164,7 @@ CRC 使用 Modbus CRC16，和当前工程 `Sci_CRC16RTU()` 路径保持一致。
 真实发升级帧必须等 IAP 固件支持该协议后再执行，并且必须显式确认 App 地址：
 
 ```powershell
-.\tools\start_can_bms_host.ps1 -Mode upgrade -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 500000 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
+.\tools\start_can_bms_host.ps1 -Mode upgrade -Interface pcan -Channel PCAN_USBBUS1 -Bitrate 250000 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
 ```
 
 ## 6. 固件侧待办

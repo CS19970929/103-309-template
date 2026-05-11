@@ -33,6 +33,20 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
 #define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
 #define FEIDAO_CAN_ABORT_WAIT_LOOP ((UINT16)1000U)
+#define FEIDAO_CAN_HOST_MAGIC0 ((UINT8)0xA5U)
+#define FEIDAO_CAN_HOST_MAGIC1 ((UINT8)0x5AU)
+#define FEIDAO_CAN_HOST_ACK_MAGIC0 ((UINT8)0x5AU)
+#define FEIDAO_CAN_HOST_ACK_MAGIC1 ((UINT8)0xA5U)
+#define FEIDAO_CAN_HOST_CMD_GET_STATUS ((UINT8)0x01U)
+#define FEIDAO_CAN_HOST_CMD_ENTER_IAP ((UINT8)0x02U)
+#define FEIDAO_CAN_HOST_STATUS_OK ((UINT8)0x00U)
+#define FEIDAO_CAN_HOST_STATUS_CRC_ERROR ((UINT8)0x01U)
+#define FEIDAO_CAN_HOST_STATUS_CMD_INVALID ((UINT8)0x02U)
+#define FEIDAO_CAN_HOST_STATUS_KEY_INVALID ((UINT8)0x03U)
+#define FEIDAO_CAN_HOST_STATUS_FLASH_ERROR ((UINT8)0x04U)
+#define FEIDAO_CAN_HOST_IAP_KEY0 ((UINT8)0xC3U)
+#define FEIDAO_CAN_HOST_IAP_KEY1 ((UINT8)0x3CU)
+#define FEIDAO_CAN_HOST_IAP_RESET_DELAY_TICKS ((UINT16)20U)
 
 enum FEIDAO_CAN_POWER_STATE
 {
@@ -58,6 +72,8 @@ static UINT8 s_u8FeidaoCanProbeActive = 0U;
 static UINT8 s_u8FeidaoCanRtcServiceActive = 0U;
 static UINT8 s_u8FeidaoCanTxCycleAcked = 0U;
 static UINT8 s_u8FeidaoCanTxCycleNoAckRecorded = 0U;
+static UINT8 s_u8FeidaoCanHostIapResetPending = 0U;
+static UINT16 s_u16FeidaoCanHostIapResetDelayTicks = 0U;
 UINT8 CAN_Tx_Data(CanTxMsg *Msg);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
@@ -90,6 +106,11 @@ static void feidao_can_start_next_tx_or_power_off(UINT32 now_tick);
 static void feidao_can_schedule_period_frames(UINT32 now_tick);
 static void feidao_can_send(UINT32 now_tick);
 static UINT8 feidao_can_service_until_idle(UINT32 timeout_ticks);
+static void feidao_can_host_put_crc(CanTxMsg *msg);
+static UINT8 feidao_can_host_is_crc_valid(const CanRxMsg *msg);
+static void feidao_can_host_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1);
+static void feidao_can_host_process_cmd(const CanRxMsg *msg);
+static void feidao_can_host_service_iap_reset(void);
 static void feidao_put_u16_be(uint8_t *data, uint8_t offset, uint16_t value)
 {
 	data[offset] = (uint8_t)((value >> 8) & 0xFF);
@@ -810,6 +831,126 @@ UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 
 	return u8MailBoxUsed;
 }
+
+static void feidao_can_host_put_crc(CanTxMsg *msg)
+{
+	UINT16 crc;
+
+	crc = Sci_CRC16RTU(msg->Data, 6);
+	msg->Data[6] = (UINT8)((crc >> 8) & 0xFF);
+	msg->Data[7] = (UINT8)(crc & 0xFF);
+}
+
+static UINT8 feidao_can_host_is_crc_valid(const CanRxMsg *msg)
+{
+	UINT16 crc_expect;
+	UINT16 crc_actual;
+
+	if (msg->DLC != 8U)
+	{
+		return 0U;
+	}
+
+	crc_expect = (UINT16)(((UINT16)msg->Data[6] << 8) | msg->Data[7]);
+	crc_actual = Sci_CRC16RTU((UINT8 *)msg->Data, 6);
+	return (crc_expect == crc_actual) ? 1U : 0U;
+}
+
+static void feidao_can_host_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1)
+{
+	CanTxMsg ack_msg;
+
+	ack_msg.StdId = CANID_HOST_ACK;
+	ack_msg.ExtId = 0U;
+	ack_msg.IDE = CAN_ID_STD;
+	ack_msg.RTR = CAN_RTR_DATA;
+	ack_msg.DLC = 8U;
+	ack_msg.Data[0] = FEIDAO_CAN_HOST_ACK_MAGIC0;
+	ack_msg.Data[1] = FEIDAO_CAN_HOST_ACK_MAGIC1;
+	ack_msg.Data[2] = cmd;
+	ack_msg.Data[3] = status;
+	ack_msg.Data[4] = value0;
+	ack_msg.Data[5] = value1;
+	feidao_can_host_put_crc(&ack_msg);
+	(void)CAN_Tx_Data(&ack_msg);
+}
+
+static void feidao_can_host_process_cmd(const CanRxMsg *msg)
+{
+	UINT8 cmd;
+
+	cmd = msg->Data[2];
+	if ((msg->DLC != 8U) ||
+		(msg->Data[0] != FEIDAO_CAN_HOST_MAGIC0) ||
+		(msg->Data[1] != FEIDAO_CAN_HOST_MAGIC1))
+	{
+		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CMD_INVALID, 0U, 0U);
+		return;
+	}
+
+	if (!feidao_can_host_is_crc_valid(msg))
+	{
+		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CRC_ERROR, 0U, 0U);
+		return;
+	}
+
+	switch (cmd)
+	{
+	case FEIDAO_CAN_HOST_CMD_GET_STATUS:
+		feidao_can_host_send_ack(cmd,
+							 FEIDAO_CAN_HOST_STATUS_OK,
+							 (UINT8)g_stCellInfoReport.SocElement.u16Soc,
+							 (UINT8)g_stCellInfoReport.SocElement.u16Soh);
+		break;
+
+	case FEIDAO_CAN_HOST_CMD_ENTER_IAP:
+		if ((msg->Data[3] != FEIDAO_CAN_HOST_IAP_KEY0) ||
+			(msg->Data[4] != FEIDAO_CAN_HOST_IAP_KEY1) ||
+			(msg->Data[5] != (UINT8)CAN_ADRESS_STD_ID))
+		{
+			feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_KEY_INVALID, 0U, 0U);
+			break;
+		}
+
+		if (FLASH_COMPLETE != FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE))
+		{
+			feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_FLASH_ERROR, 0U, 0U);
+			break;
+		}
+
+		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_OK, 0x08U, 0x48U);
+		s_u8FeidaoCanHostIapResetPending = 1U;
+		s_u16FeidaoCanHostIapResetDelayTicks = FEIDAO_CAN_HOST_IAP_RESET_DELAY_TICKS;
+		break;
+
+	default:
+		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CMD_INVALID, 0U, 0U);
+		break;
+	}
+}
+
+static void feidao_can_host_service_iap_reset(void)
+{
+	if (0U == s_u8FeidaoCanHostIapResetPending)
+	{
+		return;
+	}
+
+	if (!g_st_SysTimeFlag.bits.b1Sys10msFlag)
+	{
+		return;
+	}
+
+	if (s_u16FeidaoCanHostIapResetDelayTicks > 0U)
+	{
+		s_u16FeidaoCanHostIapResetDelayTicks--;
+		return;
+	}
+
+	s_u8FeidaoCanHostIapResetPending = 0U;
+	u8FlashUpdateFlag = 1U;
+}
+
 void CAN_TX_0x00(void)
 {
 	UINT16 u16_tmp16a;
@@ -1553,11 +1694,20 @@ void Can_ReceiveDeal(void)
 		return;
 	}
 
+	if (RxMessage.IDE != CAN_ID_STD)
+	{
+		Can_Status_Flag.bits.b1Can_Received = 0;
+		return;
+	}
+
 	// ID已经过滤掉，不需要再判断ID是否为本机
 	if ((RxMessage.StdId >> 7) != CAN_ADRESS_STD_ID)
 	{
+		Can_Status_Flag.bits.b1Can_Received = 0;
 		return;
 	}
+
+	RTC_ExtComCnt++;
 
 	switch (RxMessage.StdId & 0x007F)
 	{ // 按照逻辑，是这个函数处理接受数据，然后处理数据，然后赋值标志位返回才对
@@ -1614,6 +1764,9 @@ void Can_ReceiveDeal(void)
 		break;
 	case CANID_CHECK_0x11:
 		CanTxType_Flag.bits.b1CanTx_0x11 = 1;
+		break;
+	case CANID_HOST_CMD:
+		feidao_can_host_process_cmd(&RxMessage);
 		break;
 
 	default:
@@ -1855,9 +2008,10 @@ void App_Can(void)
 		Can_BusOFF_Monitor();
 	}
 
-	// Can_ReceiveDeal();
-	// Can_TransmitDeal();
+	Can_ReceiveDeal();
+	Can_TransmitDeal();
 	feidao_can_send(now_tick);
+	feidao_can_host_service_iap_reset();
 }
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {

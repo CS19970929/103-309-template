@@ -24,6 +24,9 @@
 #define CANID_CHECK_0x10   ((UINT16)0x10)
 #define CANID_CHECK_0x11   ((UINT16)0x11)
 
+#define CANID_HOST_CMD    ((UINT16)0x60)
+#define CANID_HOST_ACK    ((UINT16)0x61)
+
 
 
 #define CAN_ADRESS_STD_ID				0x00

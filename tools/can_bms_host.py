@@ -23,6 +23,13 @@ CAN_IAP_DEVICE_ACK_BASE = 0x14F8F100
 CAN_IAP_DATA_BASE = 0x14F90000
 CAN_IAP_PROTOCOL_VERSION = 1
 
+CAN_APP_CMD_ID = 0x60
+CAN_APP_ACK_ID = 0x61
+CAN_APP_MAGIC = bytes([0xA5, 0x5A])
+CAN_APP_ACK_MAGIC = bytes([0x5A, 0xA5])
+CAN_APP_CMD_GET_STATUS = 0x01
+CAN_APP_CMD_ENTER_IAP = 0x02
+
 CMD_HELLO = 0x01
 CMD_START = 0x02
 CMD_END = 0x04
@@ -147,6 +154,35 @@ def iap_data_id(node_id: int, seq: int) -> int:
     return CAN_IAP_DATA_BASE | ((seq & 0xFFFF) << 8) | (node_id & 0xFF)
 
 
+def app_std_id(base_id: int, can_address: int) -> int:
+    return ((can_address & 0x0F) << 7) | (base_id & 0x7F)
+
+
+def build_app_command(cmd: int, arg0: int = 0, arg1: int = 0, arg2: int = 0) -> bytes:
+    payload = bytearray(8)
+    payload[0:2] = CAN_APP_MAGIC
+    payload[2] = cmd & 0xFF
+    payload[3] = arg0 & 0xFF
+    payload[4] = arg1 & 0xFF
+    payload[5] = arg2 & 0xFF
+    crc = crc16_modbus(bytes(payload[:6]))
+    payload[6] = (crc >> 8) & 0xFF
+    payload[7] = crc & 0xFF
+    return bytes(payload)
+
+
+def validate_app_ack(data: bytes) -> tuple[int, int, int, int]:
+    if len(data) != 8:
+        raise SystemExit(f"App ACK 长度错误: {len(data)}")
+    if data[0:2] != CAN_APP_ACK_MAGIC:
+        raise SystemExit(f"App ACK magic 错误: {format_bytes(data)}")
+    crc_expect = (data[6] << 8) | data[7]
+    crc_actual = crc16_modbus(data[:6])
+    if crc_expect != crc_actual:
+        raise SystemExit(f"App ACK CRC 错误: expect=0x{crc_expect:04X} actual=0x{crc_actual:04X}")
+    return data[2], data[3], data[4], data[5]
+
+
 def build_iap_control_frames(image: bytes, node_id: int) -> list[tuple[int, bytes, str]]:
     image_size = len(image)
     image_crc = crc16_modbus(image)
@@ -266,6 +302,51 @@ def cmd_listen(args: argparse.Namespace) -> int:
     return 0
 
 
+def send_app_command(args: argparse.Namespace, cmd: int, payload: bytes) -> bytes:
+    bus = open_bus(args.interface, args.channel, args.bitrate)
+    req_id = app_std_id(CAN_APP_CMD_ID, args.can_address)
+    ack_id = app_std_id(CAN_APP_ACK_ID, args.can_address)
+    try:
+        bus.send(make_message(req_id, payload, extended=False), timeout=args.timeout)
+        deadline = time.monotonic() + args.ack_timeout
+        while time.monotonic() < deadline:
+            msg = bus.recv(timeout=min(0.1, max(0.0, deadline - time.monotonic())))
+            if msg is None:
+                continue
+            if (not msg.is_extended_id) and msg.arbitration_id == ack_id:
+                data = bytes(msg.data)
+                ack_cmd, status, _value0, _value1 = validate_app_ack(data)
+                if ack_cmd != cmd:
+                    raise SystemExit(f"App ACK 命令不匹配: expect=0x{cmd:02X} actual=0x{ack_cmd:02X}")
+                if status != 0:
+                    raise SystemExit(f"App 返回错误: cmd=0x{cmd:02X} status=0x{status:02X}")
+                print(f"App ACK: id=0x{ack_id:03X} data={format_bytes(data)}")
+                return data
+        raise SystemExit(f"等待 App ACK 超时: id=0x{ack_id:03X}")
+    finally:
+        shutdown = getattr(bus, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
+
+
+def cmd_app_read_status(args: argparse.Namespace) -> int:
+    payload = build_app_command(CAN_APP_CMD_GET_STATUS)
+    data = send_app_command(args, CAN_APP_CMD_GET_STATUS, payload)
+    _cmd, _status, soc, soh = validate_app_ack(data)
+    print(f"基础状态: SOC={soc}% SOH={soh}%")
+    return 0
+
+
+def cmd_app_enter_iap(args: argparse.Namespace) -> int:
+    if not args.confirm_enter_iap:
+        raise SystemExit("进入 IAP 会让 App 复位，请显式添加 --confirm-enter-iap 或 PowerShell -ConfirmEnterIap")
+    payload = build_app_command(CAN_APP_CMD_ENTER_IAP, 0xC3, 0x3C, args.can_address)
+    data = send_app_command(args, CAN_APP_CMD_ENTER_IAP, payload)
+    _cmd, _status, addr_hi, addr_lo = validate_app_ack(data)
+    print(f"App 已接受进入 IAP 请求，ACK 地址提示=0x{addr_hi:02X}{addr_lo:02X}，约 200ms 后复位。")
+    return 0
+
+
 def cmd_upgrade_dry_run(args: argparse.Namespace) -> int:
     bin_path = Path(args.bin).resolve()
     image = load_image(bin_path, args.app_address)
@@ -345,6 +426,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_listen.add_argument("--duration", type=float, default=10.0, help="监听秒数，0 表示一直监听")
     p_listen.set_defaults(func=cmd_listen)
 
+    p_app_status = sub.add_parser("app-read-status", help="通过 App CAN 命令读取基础 SOC/SOH")
+    add_can_args(p_app_status)
+    add_app_args(p_app_status)
+    p_app_status.set_defaults(func=cmd_app_read_status)
+
+    p_app_iap = sub.add_parser("app-enter-iap", help="通过 App CAN 命令写升级标志并复位进入 IAP")
+    add_can_args(p_app_iap)
+    add_app_args(p_app_iap)
+    p_app_iap.add_argument("--confirm-enter-iap", action="store_true", help="确认让 App 复位进入 IAP")
+    p_app_iap.set_defaults(func=cmd_app_enter_iap)
+
     p_dry = sub.add_parser("upgrade-dry-run", help="检查 App bin 并生成 CAN-IAP 分包计划")
     add_upgrade_args(p_dry)
     p_dry.set_defaults(func=cmd_upgrade_dry_run)
@@ -365,8 +457,13 @@ def build_parser() -> argparse.ArgumentParser:
 def add_can_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--interface", default="pcan", help="python-can interface，如 pcan/kvaser/slcan/virtual")
     parser.add_argument("--channel", default="PCAN_USBBUS1", help="CAN 通道，如 PCAN_USBBUS1/0/COM3/test")
-    parser.add_argument("--bitrate", type=int, default=500000, help="CAN 波特率")
+    parser.add_argument("--bitrate", type=int, default=250000, help="CAN 波特率，当前固件默认 250000")
     parser.add_argument("--timeout", type=float, default=1.0, help="发送/接收超时秒数")
+
+
+def add_app_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--can-address", type=lambda value: int(value, 0), default=0, help="App 标准帧地址高位，当前工程默认 0")
+    parser.add_argument("--ack-timeout", type=float, default=2.0, help="等待 App ACK 超时秒数")
 
 
 def add_upgrade_args(parser: argparse.ArgumentParser) -> None:

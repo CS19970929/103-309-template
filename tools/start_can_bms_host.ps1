@@ -1,15 +1,17 @@
 param(
-    [ValidateSet("detect", "listen", "upgrade-dry-run", "upgrade")]
+    [ValidateSet("detect", "listen", "app-read-status", "app-enter-iap", "upgrade-dry-run", "upgrade")]
     [string]$Mode = "detect",
     [string]$Interface = "pcan",
     [string]$Channel = "PCAN_USBBUS1",
-    [int]$Bitrate = 500000,
+    [int]$Bitrate = 250000,
     [double]$Duration = 10.0,
     [string]$Bin = "",
     [int]$NodeId = 1,
+    [int]$CanAddress = 0,
     [string]$ConfirmAppAddress = "",
     [string]$PythonVersion = "3.9",
-    [switch]$WaitAck
+    [switch]$WaitAck,
+    [switch]$ConfirmEnterIap
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +26,7 @@ try {
         $Mode
     )
 
-    if ($Mode -eq "listen" -or $Mode -eq "upgrade") {
+    if ($Mode -eq "listen" -or $Mode -eq "upgrade" -or $Mode -eq "app-read-status" -or $Mode -eq "app-enter-iap") {
         $CommonArgs += @(
             "--interface", $Interface,
             "--channel", $Channel,
@@ -34,6 +36,16 @@ try {
 
     if ($Mode -eq "listen") {
         $CommonArgs += @("--duration", [string]$Duration)
+    }
+
+    if ($Mode -eq "app-read-status" -or $Mode -eq "app-enter-iap") {
+        $CommonArgs += @("--can-address", [string]$CanAddress)
+    }
+
+    if ($Mode -eq "app-enter-iap") {
+        if ($ConfirmEnterIap) {
+            $CommonArgs += "--confirm-enter-iap"
+        }
     }
 
     if ($Mode -eq "upgrade-dry-run" -or $Mode -eq "upgrade") {
