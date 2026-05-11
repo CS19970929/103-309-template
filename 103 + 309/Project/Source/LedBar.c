@@ -436,6 +436,7 @@ static LedBarPattern s_ledbar_patterns[LEDBAR_PATTERN_MASK_MAX + 1u];
 static uint8_t s_ledbar_scan_timer_initialized = 0u;
 static uint8_t s_ledbar_scan_timer_enabled = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
+static uint8_t s_ledbar_sleep_wakeup_display_armed = 0u;
 static uint32_t s_ledbar_key_hold_10ms = 0u;
 static uint32_t s_ledbar_key_press_start_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
@@ -1399,6 +1400,7 @@ void LedBar_Init(void)
     s_ledbar_test_single_segment_enable = 0u;
     s_ledbar_test_single_segment_id = 0u;
     s_ledbar_soc_display_10ms = 0u;
+    s_ledbar_sleep_wakeup_display_armed = 0u;
     s_ledbar_key_hold_10ms = 0u;
     s_ledbar_key_press_start_10ms = 0u;
     s_ledbar_key_last_pressed = 0u;
@@ -1822,8 +1824,35 @@ static uint8_t LedBar_IsSwitchPressed(void)
 
 static void LedBar_RequestSocDisplayWindow(void)
 {
-    s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
+    if (s_ledbar_soc_display_10ms < LEDBAR_SOC_DISPLAY_10MS)
+    {
+        s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
+    }
 }
+
+#if LEDBAR_SLEEP_ENABLE
+static void LedBar_RequestWakeupDisplayWindow(void)
+{
+    if (s_ledbar_soc_display_10ms < LEDBAR_WAKEUP_DISPLAY_10MS)
+    {
+        s_ledbar_soc_display_10ms = LEDBAR_WAKEUP_DISPLAY_10MS;
+    }
+}
+
+static void LedBar_ServiceSleepWakeDisplayWindow(void)
+{
+    if ((s_ledbar_sleep_wakeup_display_armed == 0u) &&
+        (SleepDeal_IsBootFromSleepStartup() != 0u))
+    {
+        s_ledbar_sleep_wakeup_display_armed = 1u;
+        LedBar_RequestWakeupDisplayWindow();
+    }
+}
+#else
+static void LedBar_ServiceSleepWakeDisplayWindow(void)
+{
+}
+#endif
 
 static uint8_t LedBar_IsSocDisplayRequested(void)
 {
@@ -1918,6 +1947,7 @@ void APP_LedBar(void)
 
     LedBar_ServiceMcuWakeFilter();
     LedBar_ServiceSwitch();
+    LedBar_ServiceSleepWakeDisplayWindow();
     mcu_wk_active = LedBar_IsMcuWakeActive();
 
 #if LEDBAR_SLEEP_ENABLE

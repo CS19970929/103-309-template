@@ -280,6 +280,10 @@
 // <i> SOC 显示保持时间，单位 10ms。500 表示 5 秒。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
 
+// <o> Sleep wakeup SOC display time, 10ms tick <1-65535>
+// <i> After MCU reset from sleep wakeup, keep SOC display for 10s by default.
+#define PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS 1000
+
 // <q> 使能 SOC 显示避重影策略
 // <i> 使能灯条 SOC 段位避重影策略。可改善显示观感但会微调显示数值。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
