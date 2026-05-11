@@ -1,0 +1,80 @@
+#ifndef UPG_PROTOCOL_H
+#define UPG_PROTOCOL_H
+
+#include <stdint.h>
+
+#define UPG_VERSION                         ((uint8_t)0x01U)
+#define UPG_SERIAL_SOF0                     ((uint8_t)0x55U)
+#define UPG_SERIAL_SOF1                     ((uint8_t)0xAAU)
+#define UPG_SERIAL_MAX_PAYLOAD              ((uint16_t)512U)
+#define UPG_SERIAL_MAX_FRAME                ((uint16_t)(2U + 1U + 1U + 2U + 1U + 2U + 2U + UPG_SERIAL_MAX_PAYLOAD + 2U))
+
+#define UPG_SERIAL_FLAG_ACK                 ((uint8_t)0x01U)
+#define UPG_SERIAL_FLAG_ERROR               ((uint8_t)0x02U)
+
+#define UPG_STATUS_OK                       ((uint8_t)0x00U)
+#define UPG_STATUS_BAD_PARAM                ((uint8_t)0x01U)
+#define UPG_STATUS_BUSY                     ((uint8_t)0x02U)
+#define UPG_STATUS_SERIAL_CRC_ERROR         ((uint8_t)0x03U)
+#define UPG_STATUS_CAN_TIMEOUT              ((uint8_t)0x04U)
+#define UPG_STATUS_BMS_ERROR                ((uint8_t)0x05U)
+#define UPG_STATUS_BMS_CRC_ERROR            ((uint8_t)0x06U)
+#define UPG_STATUS_IMAGE_INVALID            ((uint8_t)0x07U)
+#define UPG_STATUS_NO_BUFFER                ((uint8_t)0x08U)
+#define UPG_STATUS_ABORTED                  ((uint8_t)0x09U)
+#define UPG_STATUS_PROTECTION               ((uint8_t)0x0AU)
+#define UPG_STATUS_UNKNOWN                  ((uint8_t)0xFFU)
+
+#define UPG_CMD_GET_DEVICE_INFO             ((uint8_t)0x01U)
+#define UPG_CMD_SET_CAN_CONFIG              ((uint8_t)0x02U)
+#define UPG_CMD_PING_BMS                    ((uint8_t)0x03U)
+#define UPG_CMD_READ_BMS_SNAPSHOT           ((uint8_t)0x10U)
+#define UPG_CMD_CAN_OBJECT_READ             ((uint8_t)0x11U)
+#define UPG_CMD_CAN_OBJECT_WRITE            ((uint8_t)0x12U)
+#define UPG_CMD_PARAM_READ                  ((uint8_t)0x13U)
+#define UPG_CMD_PARAM_WRITE                 ((uint8_t)0x14U)
+#define UPG_CMD_PARAM_WRITE_BATCH           ((uint8_t)0x15U)
+#define UPG_CMD_ENTER_BMS_IAP               ((uint8_t)0x20U)
+#define UPG_CMD_UPGRADE_PREPARE             ((uint8_t)0x21U)
+#define UPG_CMD_UPGRADE_PACKET_DATA         ((uint8_t)0x22U)
+#define UPG_CMD_UPGRADE_PACKET_COMMIT       ((uint8_t)0x23U)
+#define UPG_CMD_UPGRADE_FINISH              ((uint8_t)0x24U)
+#define UPG_CMD_UPGRADE_ABORT               ((uint8_t)0x25U)
+#define UPG_CMD_GET_UPGRADE_STATUS          ((uint8_t)0x26U)
+#define UPG_CMD_CAN_RAW_TX                  ((uint8_t)0x30U)
+#define UPG_CMD_CAN_RAW_LISTEN              ((uint8_t)0x31U)
+#define UPG_CMD_EVENT_REPORT                ((uint8_t)0x40U)
+#define UPG_CMD_MCU_RESET                   ((uint8_t)0x7FU)
+
+#define FEIDAO_NODE_IOT                     ((uint8_t)0x10U)
+#define FEIDAO_NODE_BATTERY                 ((uint8_t)0x14U)
+#define FEIDAO_NODE_BROADCAST               ((uint8_t)0x1FU)
+
+#define FEIDAO_CTRL_WRITE                   ((uint8_t)0x00U)
+#define FEIDAO_CTRL_READ                    ((uint8_t)0x01U)
+#define FEIDAO_CTRL_ACK                     ((uint8_t)0x02U)
+#define FEIDAO_CTRL_ERR_ACK                 ((uint8_t)0x03U)
+#define FEIDAO_CTRL_LONG_START              ((uint8_t)0x04U)
+#define FEIDAO_CTRL_LONG_DATA               ((uint8_t)0x05U)
+#define FEIDAO_CTRL_LONG_END                ((uint8_t)0x06U)
+#define FEIDAO_CTRL_ALARM                   ((uint8_t)0x07U)
+
+#define FEIDAO_UPGRADE_START_INDEX          ((uint8_t)0x04U)
+#define FEIDAO_UPGRADE_DATA_INDEX           ((uint8_t)0x05U)
+#define FEIDAO_UPGRADE_START_ACK_CHD        ((uint8_t)0x01U)
+#define FEIDAO_UPGRADE_CHUNK_CHD            ((uint8_t)0x00U)
+
+#define FEIDAO_UPGRADE_STATUS_CHUNK_OK      ((uint8_t)0x00U)
+#define FEIDAO_UPGRADE_STATUS_CHUNK_CRC_ERR ((uint8_t)0x01U)
+#define FEIDAO_UPGRADE_STATUS_FILE_CRC_ERR  ((uint8_t)0x02U)
+#define FEIDAO_UPGRADE_STATUS_DONE          ((uint8_t)0x03U)
+#define FEIDAO_UPGRADE_STATUS_OTHER_ERR     ((uint8_t)0xFFU)
+
+#define UPG_LONG_PACKET_MAX_FRAMES          ((uint16_t)256U)
+#define UPG_LONG_PACKET_BYTES               ((uint16_t)2048U)
+
+#define UPG_APP_BASE_ADDR                   ((uint32_t)0x08004800UL)
+#define UPG_APP_MAX_END_EXCLUSIVE           ((uint32_t)0x0801C000UL)
+#define UPG_APP_MAX_SIZE                    ((uint32_t)(UPG_APP_MAX_END_EXCLUSIVE - UPG_APP_BASE_ADDR))
+
+#endif
