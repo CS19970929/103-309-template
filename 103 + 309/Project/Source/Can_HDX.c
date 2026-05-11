@@ -47,7 +47,18 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_HOST_IAP_KEY0 ((UINT8)0xC3U)
 #define FEIDAO_CAN_HOST_IAP_KEY1 ((UINT8)0x3CU)
 #define FEIDAO_CAN_HOST_IAP_RESET_DELAY_TICKS ((UINT16)20U)
-
+#define FEIDAO_CAN_NODE_IOT ((UINT8)0x10U)
+#define FEIDAO_CAN_NODE_BATTERY ((UINT8)0x14U)
+#define FEIDAO_CAN_NODE_BROADCAST ((UINT8)0x1FU)
+#define FEIDAO_CAN_CTRL_WRITE ((UINT8)0x00U)
+#define FEIDAO_CAN_CTRL_READ ((UINT8)0x01U)
+#define FEIDAO_CAN_CTRL_ACK ((UINT8)0x02U)
+#define FEIDAO_CAN_CTRL_ERR_ACK ((UINT8)0x03U)
+#define FEIDAO_CAN_OBJECT_INFO_INDEX ((UINT8)0x02U)
+#define FEIDAO_CAN_OBJECT_PARAM_INDEX ((UINT8)0x20U)
+#define FEIDAO_CAN_ERR_BAD_OBJECT ((UINT8)0x01U)
+#define FEIDAO_CAN_ERR_WRITE_DENIED ((UINT8)0x02U)
+#define FEIDAO_CAN_ERR_FLASH ((UINT8)0x03U)
 enum FEIDAO_CAN_POWER_STATE
 {
 	FEIDAO_CAN_POWER_IDLE = 0,
@@ -111,6 +122,7 @@ static UINT8 feidao_can_host_is_crc_valid(const CanRxMsg *msg);
 static void feidao_can_host_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1);
 static void feidao_can_host_process_cmd(const CanRxMsg *msg);
 static void feidao_can_host_service_iap_reset(void);
+static void feidao_can_process_ext_cmd(const CanRxMsg *msg);
 static void feidao_put_u16_be(uint8_t *data, uint8_t offset, uint16_t value)
 {
 	data[offset] = (uint8_t)((value >> 8) & 0xFF);
@@ -129,7 +141,245 @@ static void feidao_put_i32_be(uint8_t *data, uint8_t offset, int32_t value)
 {
 	feidao_put_u32_be(data, offset, (uint32_t)value);
 }
-
+static UINT16 feidao_get_u16_be(const uint8_t *data, uint8_t offset)
+{
+	return (UINT16)(((UINT16)data[offset] << 8) | data[offset + 1]);
+}
+static UINT32 feidao_build_ext_id(UINT8 src, UINT8 dst, UINT8 ctrl, UINT8 index, UINT8 chd)
+{
+	return (((UINT32)(src & 0x1FU) << 24) |
+			((UINT32)(dst & 0x1FU) << 19) |
+			((UINT32)(ctrl & 0x07U) << 16) |
+			((UINT32)index << 8) |
+			(UINT32)chd);
+}
+static void feidao_decode_ext_id(UINT32 ext_id, UINT8 *src, UINT8 *dst, UINT8 *ctrl, UINT8 *index, UINT8 *chd)
+{
+	*src = (UINT8)((ext_id >> 24) & 0x1FU);
+	*dst = (UINT8)((ext_id >> 19) & 0x1FU);
+	*ctrl = (UINT8)((ext_id >> 16) & 0x07U);
+	*index = (UINT8)((ext_id >> 8) & 0xFFU);
+	*chd = (UINT8)(ext_id & 0xFFU);
+}
+static void feidao_clear_data(UINT8 *data)
+{
+	UINT8 i;
+	for (i = 0U; i < 8U; i++)
+	{
+		data[i] = 0U;
+	}
+}
+static UINT8 feidao_can_send_ext(UINT8 dst, UINT8 ctrl, UINT8 index, UINT8 chd, const UINT8 *data)
+{
+	CanTxMsg tx_msg;
+	UINT8 i;
+	tx_msg.StdId = 0U;
+	tx_msg.RTR = CAN_RTR_DATA;
+	tx_msg.IDE = CAN_ID_EXT;
+	tx_msg.ExtId = feidao_build_ext_id(FEIDAO_CAN_NODE_BATTERY, dst, ctrl, index, chd);
+	tx_msg.DLC = 8U;
+	for (i = 0U; i < 8U; i++)
+	{
+		tx_msg.Data[i] = data[i];
+	}
+	return CAN_Tx_Data(&tx_msg);
+}
+static void feidao_can_send_ext_error(UINT8 dst, UINT8 index, UINT8 chd, UINT8 status)
+{
+	UINT8 data[8];
+	feidao_clear_data(data);
+	data[0] = status;
+	(void)feidao_can_send_ext(dst, FEIDAO_CAN_CTRL_ERR_ACK, index, chd, data);
+}
+static UINT8 feidao_can_fill_info_object(UINT8 chd, UINT8 *data)
+{
+	int32_t current;
+	UINT16 cap_fac;
+	UINT16 cap_now;
+	UINT16 cap_design;
+	UINT8 work_status;
+	UINT8 exception_status;
+	feidao_clear_data(data);
+	switch (chd)
+	{
+	case 0U:
+		if (g_stCellInfoReport.u16IDischg > 0)
+		{
+			current = -(int32_t)((UINT32)g_stCellInfoReport.u16IDischg * 100U);
+		}
+		else
+		{
+			current = (int32_t)((UINT32)g_stCellInfoReport.u16Ichg * 100U);
+		}
+		feidao_put_u32_be(data, 0, (UINT32)g_stCellInfoReport.u16VCellTotle * 10U);
+		feidao_put_i32_be(data, 4, current);
+		return 1U;
+	case 2U:
+		data[0] = (g_stCellInfoReport.u16Ichg > 0U) ? 1U : 0U;
+		data[1] = (UINT8)g_stCellInfoReport.SocElement.u16Soc;
+		data[2] = (UINT8)((int16_t)g_stCellInfoReport.u16TempMax / 10 - 40);
+		feidao_put_u16_be(data, 3, 100U);
+		return 1U;
+	case 3U:
+		data[0] = (UINT8)g_stCellInfoReport.SocElement.u16Soh;
+		feidao_put_u16_be(data, 1, g_stCellInfoReport.SocElement.u16Cycle_times);
+		return 1U;
+	case 4U:
+		data[0] = 1U;
+		data[1] = 1U;
+		return 1U;
+	case 5U:
+		work_status = 0U;
+		exception_status = 0U;
+		work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_DSG << 0);
+		work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_CHG << 1);
+		if (g_stCellInfoReport.u16Ichg != 0U)
+		{
+			work_status |= (UINT8)((1U << 2) | (1U << 3));
+		}
+		if (g_stCellInfoReport.u16IDischg != 0U)
+		{
+			work_status |= (UINT8)(1U << 4);
+		}
+		if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+		{
+			exception_status = 0x06U;
+		}
+		if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+		{
+			exception_status = 0x07U;
+		}
+		cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10U;
+		cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10U;
+		cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10U;
+		data[0] = work_status;
+		data[1] = exception_status;
+		feidao_put_u16_be(data, 2, cap_fac);
+		feidao_put_u16_be(data, 4, cap_now);
+		feidao_put_u16_be(data, 6, cap_design);
+		return 1U;
+	default:
+		return 0U;
+	}
+}
+static UINT8 feidao_can_fill_param_object(UINT8 chd, UINT8 *data)
+{
+	feidao_clear_data(data);
+	switch (chd)
+	{
+	case 0U:
+		feidao_put_u16_be(data, 0, PRT_E2ROMParas.u16VcellOvp_First);
+		feidao_put_u16_be(data, 2, PRT_E2ROMParas.u16VcellUvp_First);
+		return 1U;
+	case 1U:
+		feidao_put_u16_be(data, 0, PRT_E2ROMParas.u16VcellOvp_Filter);
+		feidao_put_u16_be(data, 2, PRT_E2ROMParas.u16VcellUvp_Filter);
+		return 1U;
+	default:
+		return 0U;
+	}
+}
+static UINT8 feidao_can_param_in_range(UINT16 value, UINT16 min_value, UINT16 max_value)
+{
+	return ((value >= min_value) && (value <= max_value)) ? 1U : 0U;
+}
+static UINT8 feidao_can_write_param_object(UINT8 chd, const UINT8 *data)
+{
+	const struct PRT_E2ROM_PARAS protect_min = E2P_PROTECT_MIN_PRT;
+	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
+	UINT16 value0;
+	UINT16 value1;
+	UINT16 old0;
+	UINT16 old1;
+	value0 = feidao_get_u16_be(data, 0);
+	value1 = feidao_get_u16_be(data, 2);
+	switch (chd)
+	{
+	case 0U:
+		if ((feidao_can_param_in_range(value0, protect_min.u16VcellOvp_First, protect_max.u16VcellOvp_First) == 0U) ||
+			(feidao_can_param_in_range(value1, protect_min.u16VcellUvp_First, protect_max.u16VcellUvp_First) == 0U))
+		{
+			return 0U;
+		}
+		old0 = PRT_E2ROMParas.u16VcellOvp_First;
+		old1 = PRT_E2ROMParas.u16VcellUvp_First;
+		PRT_E2ROMParas.u16VcellOvp_First = value0;
+		PRT_E2ROMParas.u16VcellUvp_First = value1;
+		if (EEPROM_SaveRWParametersToFlash() == 0U)
+		{
+			PRT_E2ROMParas.u16VcellOvp_First = old0;
+			PRT_E2ROMParas.u16VcellUvp_First = old1;
+			return 0U;
+		}
+		return 1U;
+	case 1U:
+		if ((feidao_can_param_in_range(value0, protect_min.u16VcellOvp_Filter, protect_max.u16VcellOvp_Filter) == 0U) ||
+			(feidao_can_param_in_range(value1, protect_min.u16VcellUvp_Filter, protect_max.u16VcellUvp_Filter) == 0U))
+		{
+			return 0U;
+		}
+		old0 = PRT_E2ROMParas.u16VcellOvp_Filter;
+		old1 = PRT_E2ROMParas.u16VcellUvp_Filter;
+		PRT_E2ROMParas.u16VcellOvp_Filter = value0;
+		PRT_E2ROMParas.u16VcellUvp_Filter = value1;
+		if (EEPROM_SaveRWParametersToFlash() == 0U)
+		{
+			PRT_E2ROMParas.u16VcellOvp_Filter = old0;
+			PRT_E2ROMParas.u16VcellUvp_Filter = old1;
+			return 0U;
+		}
+		return 1U;
+	default:
+		return 0U;
+	}
+}
+static void feidao_can_process_ext_cmd(const CanRxMsg *msg)
+{
+	UINT8 src;
+	UINT8 dst;
+	UINT8 ctrl;
+	UINT8 index;
+	UINT8 chd;
+	UINT8 data[8];
+	if ((msg->IDE != CAN_ID_EXT) || (msg->DLC != 8U))
+	{
+		return;
+	}
+	feidao_decode_ext_id(msg->ExtId, &src, &dst, &ctrl, &index, &chd);
+	if ((dst != FEIDAO_CAN_NODE_BATTERY) && (dst != FEIDAO_CAN_NODE_BROADCAST))
+	{
+		return;
+	}
+	if (ctrl == FEIDAO_CAN_CTRL_READ)
+	{
+		if (((index == FEIDAO_CAN_OBJECT_INFO_INDEX) && (feidao_can_fill_info_object(chd, data) != 0U)) ||
+			((index == FEIDAO_CAN_OBJECT_PARAM_INDEX) && (feidao_can_fill_param_object(chd, data) != 0U)))
+		{
+			(void)feidao_can_send_ext(src, FEIDAO_CAN_CTRL_ACK, index, chd, data);
+		}
+		else
+		{
+			feidao_can_send_ext_error(src, index, chd, FEIDAO_CAN_ERR_BAD_OBJECT);
+		}
+		return;
+	}
+	if (ctrl == FEIDAO_CAN_CTRL_WRITE)
+	{
+		if ((index == FEIDAO_CAN_OBJECT_PARAM_INDEX) &&
+			(feidao_can_write_param_object(chd, msg->Data) != 0U))
+		{
+			(void)feidao_can_send_ext(src, FEIDAO_CAN_CTRL_ACK, index, chd, msg->Data);
+		}
+		else if (index == FEIDAO_CAN_OBJECT_PARAM_INDEX)
+		{
+			feidao_can_send_ext_error(src, index, chd, FEIDAO_CAN_ERR_FLASH);
+		}
+		else
+		{
+			feidao_can_send_ext_error(src, index, chd, FEIDAO_CAN_ERR_WRITE_DENIED);
+		}
+	}
+}
 UINT8 CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t length)
 {
 	CanTxMsg tx_msg;
@@ -1537,41 +1787,17 @@ void InitCan_NVIC(void)
 
 void InitCan_Filter(void)
 {
-	UINT16 u16CAN_FilterIdHigh;
-	UINT16 u16CAN_FilterIdLow;
-	UINT16 u16CAN_FilterMaskIdHigh;
-	UINT16 u16CAN_FilterMaskIdLow;
 	CAN_FilterInitTypeDef CAN_FilterInitStructure;
-
-	// 这两句怎么来的，详细看截图——过滤器配置表
-	// CAN_ID_STD之类的不需要移位，官方已经定好
-	// CAN_FilterMode_IdList，列表模式FBMx = 1
-	// CAN_FilterScale_16bit，过滤器组的位宽，FSCx = 0
-	// 结合这两个，高位的屏蔽位也作为标识符列表，可以搞4个CANID
-	// 别的情况是高位作为低位的屏蔽位。
-
-	// stm32 can的屏蔽位模式：
-	// 一个是标识符寄存器(过滤器Filter)，一个是屏蔽位寄存器(Mask)。
-	// 凡是屏蔽位寄存器里为1的位所对应的标识符寄存器的位，这些位是必须匹配的
-	// 也就是说，你接受到的Message里面的标识符（ID）里面对应的位必须跟标识符寄存器里对应的位相同，才能被接受。
-
-	// 远程帧过滤器
-	u16CAN_FilterIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA;
-	u16CAN_FilterIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
-
-	u16CAN_FilterMaskIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA; // 设置成一样
-	u16CAN_FilterMaskIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
-
-	CAN_FilterInitStructure.CAN_FilterNumber = 0;							// 指定过滤器为0，如果想接收多几个，范围为0——13
-	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;			// 指定过滤器为屏蔽模式
-	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_16bit;		// 过滤器位宽为16位，也即2个带屏蔽位的标准帧
-	CAN_FilterInitStructure.CAN_FilterIdHigh = u16CAN_FilterIdHigh;			// 过滤器标识符的高16位值
-	CAN_FilterInitStructure.CAN_FilterIdLow = u16CAN_FilterIdLow;			// 过滤器标识符的低16位值
-	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = u16CAN_FilterMaskIdHigh; // 过滤器屏蔽标识符的高16位值
-	CAN_FilterInitStructure.CAN_FilterMaskIdLow = u16CAN_FilterMaskIdLow;	// 过滤器屏蔽标识符的低16位值
-	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;	// 设定了指向过滤器的FIFO为0
-	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;					// 使能过滤器
-	CAN_FilterInit(&CAN_FilterInitStructure);								// 按上面的参数初始化过滤器
+	CAN_FilterInitStructure.CAN_FilterNumber = 0;
+	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;
+	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_32bit;
+	CAN_FilterInitStructure.CAN_FilterIdHigh = 0U;
+	CAN_FilterInitStructure.CAN_FilterIdLow = 0U;
+	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = 0U;
+	CAN_FilterInitStructure.CAN_FilterMaskIdLow = 0U;
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
+	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;
+	CAN_FilterInit(&CAN_FilterInitStructure);
 }
 
 void InitCan_CAN1(void)
@@ -1691,6 +1917,13 @@ void Can_ReceiveDeal(void)
 {
 	if (!Can_Status_Flag.bits.b1Can_Received)
 	{
+		return;
+	}
+
+	if (RxMessage.IDE == CAN_ID_EXT)
+	{
+		feidao_can_process_ext_cmd(&RxMessage);
+		Can_Status_Flag.bits.b1Can_Received = 0;
 		return;
 	}
 

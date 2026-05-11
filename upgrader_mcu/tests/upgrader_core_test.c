@@ -1,4 +1,5 @@
 #include "upg_core.h"
+#include "upg_crc16.h"
 #include "upg_protocol.h"
 #include "upg_serial.h"
 #include "upg_utils.h"
@@ -103,6 +104,26 @@ static void inject_feidao(TestEnv *env, uint8_t src, uint8_t dst, uint8_t ctrl, 
     UpgCanFrame frame;
 
     UpgFeidao_MakeFrame(&frame, src, dst, ctrl, index, chd, data);
+    UpgCore_OnCanFrame(&env->core, &frame);
+}
+
+static void inject_app_iap_ack(TestEnv *env, uint8_t status)
+{
+    UpgCanFrame frame;
+    uint16_t crc;
+
+    memset(&frame, 0, sizeof(frame));
+    frame.id = BMS_APP_CAN_ACK_ID;
+    frame.extended = 0U;
+    frame.dlc = 8U;
+    frame.data[0] = BMS_APP_ACK_MAGIC0;
+    frame.data[1] = BMS_APP_ACK_MAGIC1;
+    frame.data[2] = BMS_APP_CMD_ENTER_IAP;
+    frame.data[3] = status;
+    frame.data[4] = 0x08U;
+    frame.data[5] = 0x48U;
+    crc = UpgCrc16_Calc(frame.data, 6U);
+    UpgWriteBe16(&frame.data[6], crc);
     UpgCore_OnCanFrame(&env->core, &frame);
 }
 
@@ -230,6 +251,36 @@ static void test_upgrade_prepare_commit_finish(void)
     }
 }
 
+static void test_enter_iap_uses_app_standard_command(void)
+{
+    TestEnv env;
+    uint16_t crc;
+
+    test_env_init(&env);
+    send_pc_frame(&env, UPG_CMD_ENTER_BMS_IAP, 8U, 0, 0U);
+
+    CHECK_EQ_U32(&env, env.can_count, 1U);
+    CHECK_EQ_U32(&env, env.can_frames[0].extended, 0U);
+    CHECK_EQ_U32(&env, env.can_frames[0].id, BMS_APP_CAN_CMD_ID);
+    CHECK_EQ_U32(&env, env.can_frames[0].data[0], BMS_APP_CMD_MAGIC0);
+    CHECK_EQ_U32(&env, env.can_frames[0].data[1], BMS_APP_CMD_MAGIC1);
+    CHECK_EQ_U32(&env, env.can_frames[0].data[2], BMS_APP_CMD_ENTER_IAP);
+    CHECK_EQ_U32(&env, env.can_frames[0].data[3], BMS_APP_IAP_KEY0);
+    CHECK_EQ_U32(&env, env.can_frames[0].data[4], BMS_APP_IAP_KEY1);
+    crc = UpgCrc16_Calc(env.can_frames[0].data, 6U);
+    CHECK_EQ_U32(&env, UpgReadBe16(&env.can_frames[0].data[6]), crc);
+
+    inject_app_iap_ack(&env, BMS_APP_STATUS_OK);
+    CHECK_EQ_U32(&env, last_status(&env), UPG_STATUS_OK);
+    CHECK_EQ_U32(&env, last_data(&env)[0], 0x08U);
+    CHECK_EQ_U32(&env, last_data(&env)[1], 0x48U);
+
+    if (env.failures == 0U)
+    {
+        printf("PASS test_enter_iap_uses_app_standard_command\n");
+    }
+}
+
 static void test_snapshot_cache(void)
 {
     TestEnv env;
@@ -260,6 +311,7 @@ int main(void)
     test_serial_object_read();
     test_param_write_read_modify_write();
     test_upgrade_prepare_commit_finish();
+    test_enter_iap_uses_app_standard_command();
     test_snapshot_cache();
 
     return 0;

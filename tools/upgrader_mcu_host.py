@@ -340,7 +340,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
 
 def add_serial_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--port", required=True, help="升级器 MCU 串口，例如 COM8")
-    parser.add_argument("--baud", type=int, default=921600, help="串口波特率，默认 921600")
+    parser.add_argument("--baud", type=int, default=115200, help="串口波特率，默认 115200")
     parser.add_argument("--timeout", type=float, default=2.0, help="串口响应超时秒数")
 
 

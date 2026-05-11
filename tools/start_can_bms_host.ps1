@@ -6,11 +6,16 @@ param(
     [int]$Bitrate = 250000,
     [double]$Duration = 10.0,
     [string]$Bin = "",
-    [int]$NodeId = 1,
+    [int]$HostNode = 0x10,
+    [int]$DeviceNode = 0x14,
+    [Nullable[int]]$NodeId = $null,
     [int]$CanAddress = 0,
+    [ValidateSet("0", "1")]
+    [string]$LongIndexBase = "0",
     [string]$ConfirmAppAddress = "",
     [string]$PythonVersion = "3.9",
     [switch]$WaitAck,
+    [switch]$NoWaitAck,
     [switch]$ConfirmEnterIap
 )
 
@@ -54,12 +59,20 @@ try {
         }
         $CommonArgs += @(
             "--bin", $Bin,
-            "--node-id", [string]$NodeId
+            "--host-node", ("0x{0:X}" -f $HostNode),
+            "--device-node", ("0x{0:X}" -f $DeviceNode),
+            "--long-index-base", $LongIndexBase
         )
+        if ($null -ne $NodeId) {
+            $CommonArgs += @("--node-id", ("0x{0:X}" -f $NodeId.Value))
+        }
     }
 
     if ($Mode -eq "upgrade") {
         $CommonArgs += @("--confirm-app-address", $ConfirmAppAddress)
+        if ($NoWaitAck) {
+            $CommonArgs += "--no-wait-ack"
+        }
         if ($WaitAck) {
             $CommonArgs += "--wait-ack"
         }

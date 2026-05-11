@@ -46,6 +46,17 @@
 #define UPG_CMD_EVENT_REPORT                ((uint8_t)0x40U)
 #define UPG_CMD_MCU_RESET                   ((uint8_t)0x7FU)
 
+#define BMS_APP_CAN_CMD_ID                  ((uint32_t)0x60U)
+#define BMS_APP_CAN_ACK_ID                  ((uint32_t)0x61U)
+#define BMS_APP_CMD_MAGIC0                  ((uint8_t)0xA5U)
+#define BMS_APP_CMD_MAGIC1                  ((uint8_t)0x5AU)
+#define BMS_APP_ACK_MAGIC0                  ((uint8_t)0x5AU)
+#define BMS_APP_ACK_MAGIC1                  ((uint8_t)0xA5U)
+#define BMS_APP_CMD_ENTER_IAP               ((uint8_t)0x02U)
+#define BMS_APP_IAP_KEY0                    ((uint8_t)0xC3U)
+#define BMS_APP_IAP_KEY1                    ((uint8_t)0x3CU)
+#define BMS_APP_STATUS_OK                   ((uint8_t)0x00U)
+
 #define FEIDAO_NODE_IOT                     ((uint8_t)0x10U)
 #define FEIDAO_NODE_BATTERY                 ((uint8_t)0x14U)
 #define FEIDAO_NODE_BROADCAST               ((uint8_t)0x1FU)

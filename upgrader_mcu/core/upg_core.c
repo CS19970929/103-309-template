@@ -412,7 +412,9 @@ static void UpgCommandParamWrite(UpgCore *ctx, const UpgSerialFrameView *frame)
 static void UpgCommandEnterIap(UpgCore *ctx, const UpgSerialFrameView *frame)
 {
     uint8_t data[8] = {0};
+    uint16_t crc;
     uint16_t timeout_ms;
+    UpgCanFrame can_frame;
 
     if (ctx->pending.type != UPG_PENDING_NONE)
     {
@@ -420,10 +422,21 @@ static void UpgCommandEnterIap(UpgCore *ctx, const UpgSerialFrameView *frame)
         return;
     }
     timeout_ms = (frame->len >= 2U) ? UpgReadBe16(&frame->payload[0]) : 2000U;
-    data[0] = 0xC3U;
-    data[1] = 0x3CU;
-    (void)UpgStartPending(ctx, UPG_PENDING_ENTER_IAP, frame->cmd, frame->seq, 0x04U, 0x02U, timeout_ms);
-    if (UpgCanWriteObject(ctx, 0x04U, 0x02U, data) == 0U)
+    data[0] = BMS_APP_CMD_MAGIC0;
+    data[1] = BMS_APP_CMD_MAGIC1;
+    data[2] = BMS_APP_CMD_ENTER_IAP;
+    data[3] = BMS_APP_IAP_KEY0;
+    data[4] = BMS_APP_IAP_KEY1;
+    data[5] = 0x00U;
+    crc = UpgCrc16_Calc(data, 6U);
+    UpgWriteBe16(&data[6], crc);
+
+    can_frame.id = BMS_APP_CAN_CMD_ID;
+    can_frame.extended = 0U;
+    can_frame.dlc = 8U;
+    memcpy(can_frame.data, data, 8U);
+    (void)UpgStartPending(ctx, UPG_PENDING_ENTER_IAP, frame->cmd, frame->seq, 0U, 0U, timeout_ms);
+    if (UpgSendCan(ctx, &can_frame) == 0U)
     {
         UpgFinishPendingError(ctx, UPG_STATUS_UNKNOWN, 0U);
     }
@@ -910,6 +923,44 @@ static void UpgHandleUpgradeAck(UpgCore *ctx, const UpgCanFrame *frame)
     }
 }
 
+static void UpgHandleEnterIapAck(UpgCore *ctx, const UpgCanFrame *frame)
+{
+    uint16_t expected_crc;
+    uint16_t actual_crc;
+
+    if ((ctx->pending.type != UPG_PENDING_ENTER_IAP) ||
+        (frame->extended != 0U) ||
+        (frame->id != BMS_APP_CAN_ACK_ID) ||
+        (frame->dlc != 8U))
+    {
+        return;
+    }
+
+    if ((frame->data[0] != BMS_APP_ACK_MAGIC0) ||
+        (frame->data[1] != BMS_APP_ACK_MAGIC1) ||
+        (frame->data[2] != BMS_APP_CMD_ENTER_IAP))
+    {
+        return;
+    }
+
+    expected_crc = UpgReadBe16(&frame->data[6]);
+    actual_crc = UpgCrc16_Calc(frame->data, 6U);
+    if (expected_crc != actual_crc)
+    {
+        UpgFinishPendingError(ctx, UPG_STATUS_BMS_CRC_ERROR, 0U);
+        return;
+    }
+
+    if (frame->data[3] != BMS_APP_STATUS_OK)
+    {
+        UpgFinishPendingError(ctx, UPG_STATUS_BMS_ERROR, frame->data[3]);
+        return;
+    }
+
+    (void)UpgRespond(ctx, ctx->pending.cmd, ctx->pending.seq, UPG_STATUS_OK, 0U, &frame->data[4], 2U);
+    UpgClearPending(ctx);
+}
+
 void UpgCore_Init(UpgCore *ctx, const UpgHal *hal)
 {
     if (ctx == 0)
@@ -975,6 +1026,7 @@ void UpgCore_OnCanFrame(UpgCore *ctx, const UpgCanFrame *frame)
     }
     UpgSnapshot_Update(ctx, frame);
     UpgHandleUpgradeAck(ctx, frame);
+    UpgHandleEnterIapAck(ctx, frame);
     if (ctx->pending.type != UPG_PENDING_NONE)
     {
         UpgHandleObjectAck(ctx, frame);

@@ -1,6 +1,6 @@
 # STM32F103C8 CAN 升级器 MCU 实现说明
 
-本目录实现专用升级器 MCU 的硬件无关核心逻辑。目标硬件按 STM32F103C8 设计，但当前代码不绑定具体 GPIO、USART、CAN 外设寄存器；硬件工程只需要把 UART/CAN 驱动接到 `UpgHal` 回调。
+本目录实现专用升级器 MCU 的核心逻辑和 STM32F103C8 适配层。默认硬件连接为 USART1 `PA9/PA10` 接 PC USB 转串口，CAN1 `PA11/PA12` 接 BMS，CAN 波特率 250 kbit/s，串口波特率 115200。
 
 ## 1. 当前已实现能力
 
@@ -20,6 +20,8 @@
 | 每长包 ACK 和最终完成 ACK 处理 | 已实现 |
 | PC 串口上位工具 | 已实现 |
 | 主机侧 C 单元测试 | 已实现 |
+| STM32F103C8 固件适配层 | 已实现 |
+| ARMCC 构建脚本 | 已实现 |
 
 ## 2. 目录结构
 
@@ -35,6 +37,12 @@ upgrader_mcu/
     upg_protocol.h       命令码、错误码、节点、地址常量
   tests/
     upgrader_core_test.c 主机侧协议测试
+  stm32f103c8/
+    board_main.c          STM32F103C8 主循环
+    board_uart.c/.h       USART1 串口收发
+    board_can.c/.h        CAN1 扩展帧收发
+    board_config.h        板级默认参数
+    UPG_F103C8.sct        64KB Flash scatter
 ```
 
 PC 侧工具：
@@ -42,19 +50,34 @@ PC 侧工具：
 ```text
 tools/upgrader_mcu_host.py
 tools/start_upgrader_mcu_host.ps1
+tools/build_upgrader_mcu_f103c8.ps1
 tools/run_upgrader_mcu_tests.py
 ```
 
 ## 3. STM32F103C8 接入方式
 
-推荐先采用：
+当前适配层默认采用：
 
 | 方向 | 接口 |
 | --- | --- |
-| PC -> 升级器 MCU | UART + USB 转串口芯片 |
-| 升级器 MCU -> BMS | CAN1 默认 PA11/PA12 |
+| PC -> 升级器 MCU | USART1 `PA9/PA10` + USB 转串口芯片，115200 |
+| 升级器 MCU -> BMS | CAN1 默认 `PA11/PA12`，250 kbit/s |
 
-如果使用 STM32 原生 USB CDC，则 USB 会占用 PA11/PA12，CAN1 必须重映射到 PB8/PB9。当前核心代码不关心引脚，具体由硬件适配层决定。
+如果使用 STM32 原生 USB CDC，则 USB 会占用 PA11/PA12，CAN1 必须重映射到 PB8/PB9。当前实现先按 USB 转串口芯片方案走，避免和 CAN 默认引脚冲突。
+
+构建升级器 MCU 固件：
+
+```powershell
+.\tools\build_upgrader_mcu_f103c8.ps1 -Clean
+```
+
+产物输出：
+
+```text
+upgrader_mcu/build/f103c8/UPG_F103C8.bin
+upgrader_mcu/build/f103c8/UPG_F103C8.axf
+upgrader_mcu/build/f103c8/UPG_F103C8.map
+```
 
 硬件适配层只需要实现：
 
@@ -99,6 +122,8 @@ while (1) {
 ```
 
 ## 4. PC 串口工具
+
+默认串口参数：`115200, 8N1, no flow control`。如果后续硬件时钟改为更高主频，可同步修改 `upgrader_mcu/stm32f103c8/board_config.h` 和 PC 工具 `--baud`。
 
 列出串口：
 
@@ -166,7 +191,7 @@ while (1) {
 | `0x1004` | `0x20` | `0x01` | 2 | U16 | 允许，需确认 |
 | `0x1101` | `0x02` | `0x02` | 1 | U8 | 只读 |
 
-这些参数 ID 是升级器 MCU 内部稳定 ID。正式项目需要根据 BMS CAN 参数协议，把保护参数、温度参数、过流参数等全部补入此表。通用 `read-object/write-object` 已经可用于协议联调。
+这些参数 ID 是升级器 MCU 内部稳定 ID。当前 BMS App 已支持 `0x1001..0x1004` 对应的单节过压、单节低压及其滤波时间读写；后续需要继续把温度参数、过流参数等补入此表。通用 `read-object/write-object` 已经可用于协议联调。
 
 ## 6. 测试
 
@@ -184,13 +209,15 @@ py -3.9 tools\run_upgrader_mcu_tests.py
 4. `UPGRADE_PACKET_DATA/COMMIT/FINISH` 发送长包起始、数据帧、结束帧，并处理完成 ACK。
 5. BMS 广播缓存和 `READ_BMS_SNAPSHOT`。
 
-## 7. 后续硬件工程接入清单
+## 7. 后续联调清单
 
-1. 新建 STM32F103C8 Keil/CMake 工程。
-2. 加入 `upgrader_mcu/core/*.c`。
-3. 实现 UART RX 中断或 DMA 环形缓冲。
-4. 实现 CAN1 250k 初始化，扩展帧收发。
-5. 在主循环调用 `UpgCore_Tick()`、`UpgCore_OnSerialBytes()`、`UpgCore_OnCanFrame()`。
-6. 做真实 BMS 联调：先 `read-object`，再 `enter-iap`，最后升级。
+1. 烧录 `upgrader_mcu/build/f103c8/UPG_F103C8.bin` 到升级器 MCU `0x08000000`。
+2. PC 运行 `.\tools\start_upgrader_mcu_host.ps1 -Mode info -Port COMx`，确认能读到 `STM32F103C8-UPG`。
+3. 接入 BMS CAN，先用 `read-object` 读取 `Index=0x02 Chd=0x04`。
+4. 再执行 `snapshot`，确认广播缓存有电池信息。
+5. 用 `read-param/write-param` 验证 `0x1001..0x1004` 示例保护参数读写。
+6. 最后执行 `upgrade-dry-run` 和真实 `upgrade -EnterIap`。
 
 核心规则：硬件工程不要改业务协议逻辑，协议逻辑集中在 `core` 目录，便于主机测试持续覆盖。
+
+`ENTER_BMS_IAP` 兼容当前 BMS App 已有的标准帧命令：升级器向标准 ID `0x60` 发送 `A5 5A 02 C3 3C 00 CRC16`，等待标准 ID `0x61` ACK。BMS 复位进入 IAP 后，实际固件传输严格使用 PDF V1.6 第七节扩展帧协议。

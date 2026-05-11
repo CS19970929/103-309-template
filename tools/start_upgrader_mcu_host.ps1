@@ -2,7 +2,7 @@ param(
     [ValidateSet("detect", "info", "snapshot", "read-object", "write-object", "read-param", "write-param", "upgrade-dry-run", "upgrade")]
     [string]$Mode = "detect",
     [string]$Port = "",
-    [int]$Baud = 921600,
+    [int]$Baud = 115200,
     [string]$Bin = "",
     [string]$Index = "",
     [string]$Chd = "",

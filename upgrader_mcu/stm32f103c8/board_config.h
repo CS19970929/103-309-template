@@ -1,0 +1,16 @@
+#ifndef BOARD_CONFIG_H
+#define BOARD_CONFIG_H
+
+#include "stm32f10x.h"
+
+#define UPG_BOARD_UART_BAUD              ((uint32_t)115200U)
+#define UPG_BOARD_UART_RX_BUFFER_SIZE    ((uint16_t)512U)
+#define UPG_BOARD_UART_TX_TIMEOUT_MS     ((uint32_t)1000U)
+#define UPG_BOARD_CAN_TX_TIMEOUT_MS      ((uint32_t)50U)
+
+#define UPG_BOARD_CAN_TRANSCEIVER_PORT   GPIOB
+#define UPG_BOARD_CAN_TRANSCEIVER_CLK    RCC_APB2Periph_GPIOB
+#define UPG_BOARD_CAN_TRANSCEIVER_PIN    GPIO_Pin_4
+#define UPG_BOARD_CAN_TRANSCEIVER_ON     Bit_RESET
+
+#endif
