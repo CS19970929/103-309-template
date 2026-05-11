@@ -23,7 +23,6 @@ static bool isException(void);
 static bool updataData_rtc(void);
 static void report_wkup_sig(void);
 static bool isErr_enterRTC(void);
-static bool low_power_is_mcu_wake_active(void);
 
 static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
@@ -66,11 +65,6 @@ static enum _SLEEP_MODE g_sleepModeSelect = NO_SLEEP;
 static uint8_t state_sleep = 0;
 static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
 bool is_wakeup = false;
-
-static bool low_power_is_mcu_wake_active(void)
-{
-    return GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET;
-}
 
 void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
 {
@@ -402,18 +396,6 @@ void BQ769x0_SleepMode_Ctrl(void)
     static uint16_t deepsleep_cnt_1min = 0;
 
     UINT8 u8_CurComDelay_Flag = 0;
-
-    if (low_power_is_mcu_wake_active())
-    {
-        sys_time.enter_rtc_delay = 0;
-        deepsleep_cnt = 0;
-        deepsleep_cnt_1min = 0;
-        if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
-        {
-            LowPower_Request(NO_SLEEP);
-        }
-        return;
-    }
 
     // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
     // if (AFE_SleepMode_Judge() == 1)
@@ -847,7 +829,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
     // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
     RTC_ITConfig(RTC_IT_ALR, DISABLE);
-    exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
+    exti_conf(SOC_KEY_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
 #endif
 
     if (is_rtc_wakekup)
@@ -1027,10 +1009,6 @@ static bool isErr_enterRTC(void)
     //     return true;
     // }
 #endif
-    else if (low_power_is_mcu_wake_active())
-    {
-        return true;
-    }
     else
     {
         return false;

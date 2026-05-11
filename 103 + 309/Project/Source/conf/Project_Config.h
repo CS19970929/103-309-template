@@ -28,7 +28,8 @@
 //   <0=> 主包 BAT_MASTER，20A
 //   <1=> 从包 BAT_SLAVE，40A
 // <i> 电池包类型。影响默认电流等级、协议身份和部分产品差异配置。
-#define PROJECT_CFG_BAT_TYPE 1
+#define PROJECT_CFG_BAT_TYPE 0
+
 
 // <o> 电芯体系
 //   <0=> 三元锂 TERNARYLI
@@ -264,59 +265,10 @@
 // </h>
 
 // <h>灯条配置
-// <q> 使用 GPIO Charlieplexing 灯条驱动
-// <i> 使用 GPIO Charlieplexing 灯条驱动。需与硬件灯条连接方式一致。
-#define PROJECT_CFG_LEDBAR_DRIVER_GPIO_CHARLIE 1
-
-// <q> 使能灯条休眠 SOC 备份
-// <i> 休眠前备份灯条 SOC 显示状态，唤醒后用于恢复显示体验。
-#define PROJECT_CFG_LEDBAR_SLEEP_ENABLE 1
-
-// <q> 使能长按 GPIO 翻转测试
-// <i> 长按 GPIO 翻转测试开关。仅调试硬件按键/灯条时开启。
-#define PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST 0
-
 // <o> SOC 显示时间，10ms tick <1-65535>
-// <i> SOC 显示保持时间，单位 10ms。500 表示 5 秒。
+// <i> D010 socKey 单击后 SOC LED 保持显示时间，单位 10ms。500 表示 5 秒。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
-
-// <q> 使能 SOC 显示避重影策略
-// <i> 使能灯条 SOC 段位避重影策略。可改善显示观感但会微调显示数值。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_ENABLE 0
-
-// <o> SOC 显示避重影窗口 <0-20>
-// <i> 避重影策略允许调整的窗口范围。越大越可能偏离真实 SOC。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_WINDOW 2
-
-// <o> SOC 避重影最小额外段数 <0-30>
-// <i> 启动避重影替代显示所需的最小额外段数。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_EXTRA 4
-
-// <o> SOC 避重影最小改善幅度 <0-30>
-// <i> 替代显示必须带来的最小改善幅度。
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_SNAP_MIN_GAIN 1
-
-// <o> 扫描定时周期，100kHz tick <1-1000>
-// <i> 灯条扫描定时周期，基于 100kHz tick。影响刷新频率和亮度稳定性。
-#define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
-
-// <o> MCU_WK 有效滤波，10ms tick <0-255>
-// <i> MCU_WK 有效滤波时间，单位 10ms。用于消抖。
-#define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
-
-// <o> MCU_WK 无效滤波，10ms tick <0-255>
-// <i> MCU_WK 无效滤波时间，单位 10ms。用于消抖。
-#define PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS 3
-
-// <o> 充电接入滤波，100ms tick <0-255>
-// <i> 充电插入有效滤波时间，单位 100ms。
-#define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 1
-
-// <o> 充电断开滤波，100ms tick <0-255>
-// <i> 充电拔出无效滤波时间，单位 100ms。
-#define PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS 5
 // </h>
-
 // <h>升级参数策略
 // <q> 使能升级参数策略
 // <i> 使能升级参数策略。只有需要随固件升级重置现场参数时开启。

@@ -16,11 +16,12 @@
 
 ### 修改 LED / 数码管显示
 
-1. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
-2. [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md)
-3. [Charlie + 74HC595 显示框架审查与移植说明](CHARLIE_595_DISPLAY_PORT_REVIEW.md)
-4. [LedBar SOC 显示策略状况分析](LEDBAR_SOC_DISPLAY_STRATEGY_ANALYSIS.md)
-5. [LedBar SOC 1~100 显示完美度逐项分析](LEDBAR_SOC_1_100_DISPLAY_ANALYSIS.md)
+1. [D010 板级移植说明](D010_BOARD_PORTING.md)
+2. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
+3. [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md)
+4. [Charlie + 74HC595 显示框架审查与移植说明](CHARLIE_595_DISPLAY_PORT_REVIEW.md)
+5. [LedBar SOC 显示策略状况分析](LEDBAR_SOC_DISPLAY_STRATEGY_ANALYSIS.md)
+6. [LedBar SOC 1~100 显示完美度逐项分析](LEDBAR_SOC_1_100_DISPLAY_ANALYSIS.md)
 
 ### 修改低功耗 / RTC / CAN 唤醒
 
@@ -69,7 +70,8 @@
 
 | 文档 | 内容定位 |
 | --- | --- |
-| [LED 软件框架与时序梳理](LED软件框架与时序梳理.md) | 当前 LED 软件架构、刷新时序、休眠交互、`GPIO_MCU_WK` 持续显示逻辑 |
+| [D010 板级移植说明](D010_BOARD_PORTING.md) | D010 BAT_MASTER 硬件 IO、SOC LED、socKey、Type-C/数码管删除范围和低功耗交互 |
+| [LED 软件框架与时序梳理](LED软件框架与时序梳理.md) | 旧版 LED/数码管软件架构、刷新时序和休眠交互背景 |
 | [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md) | GPIO Charlieplexing 方案设计 |
 | [LedBar 74HC595 + 5Pin Charlieplexing 最优显示方案](LEDBAR_74HC595_CHARLIEPLEX_OPTIMAL_PLAN.md) | 74HC595 分支的显示优化方案 |
 | [Charlie + 74HC595 显示框架审查与移植说明](CHARLIE_595_DISPLAY_PORT_REVIEW.md) | 显示端口和移植风险审查 |

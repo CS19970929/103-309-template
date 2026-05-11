@@ -1054,7 +1054,7 @@ void close_ctlc(void)
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
-// todo 总压、typec逻辑、电流
+// D010: 总压、MOS 温度和熔断保护逻辑
 void new_todo_logi(void)
 {
     static uint8_t mos_state = 0;
@@ -1062,12 +1062,6 @@ void new_todo_logi(void)
     charger_detect_and_keyLogi_200ms();
 
 #if 1
-    // // todo 什么电平唤醒？
-    // if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
-    // {
-    // }
-    // // todo 待确认 typec供电逻辑
-    // GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
     {
 #ifdef DISP_VBAT_AND_TEMP_
         g_stCellInfoReport.u16VCell[29] = bat_temp_mv;

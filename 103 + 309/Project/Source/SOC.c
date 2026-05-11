@@ -91,7 +91,7 @@ static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
 									 UINT16 *soc_ichg, UINT16 *soc_idsg)
 {
 	UINT32 chg_a10 = report_ichg;
-	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)g_u16TypeCOutCurrent_A10;
+	UINT32 dsg_a10 = report_idsg;
 
 	if (chg_a10 >= dsg_a10)
 	{

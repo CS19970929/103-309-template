@@ -53,7 +53,7 @@
 #define MCUO_RELAY_HEAT 	PCout(6)		//���ȼ̵���
 #define MCUO_RELAY_COOL 	PCout(6)		//�����̵���
 
-#define MCUI_ENI_DI1		PAin(9)		//I��1
+#define MCUI_ENI_DI1		PAin(6)		// D010 socKey PA6
 
 
 union SYS_TIME {
