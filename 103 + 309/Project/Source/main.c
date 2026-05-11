@@ -30,6 +30,8 @@ void InitSystemWakeUp(void);
 static UINT8 MainLoop_HasPendingWork(void);
 static void MainLoop_EnterIdleSleep(void);
 static void FactoryAging_Task(void);
+static void Runtime_RunDebugOnce(void);
+static void Runtime_RunOnce(void);
 
 #define FACTORY_AGING_STATE_UNINIT  ((UINT8)0U)
 #define FACTORY_AGING_STATE_RUNNING ((UINT8)1U)
@@ -226,6 +228,41 @@ static void FactoryAging_Task(void)
 #endif
 }
 
+static void Runtime_RunDebugOnce(void)
+{
+	App_AFEGet();
+	App_Sci();
+}
+
+static void Runtime_RunOnce(void)
+{
+	SysTime_LatchTaskFlags();
+	FactoryAging_Task();
+	APP_LedBar();
+	// App_WarnCtrl();
+	App_AFEGet();
+
+	App_Sci();
+	App_AnlogCal();
+	App_LowPowerProcess();
+	App_Can();
+	// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+	// App_SOC();
+	StorageFlash_AppUseTest_Task();
+
+#ifdef __FUNC__HEAT__
+	App_Heat_Cool_Ctrl();
+#endif
+
+	App_FlashUpdate();
+	App_LogRecord();
+	App_ProID_Deal();
+#ifdef wdog_enable
+	Feed_IWatchDog;
+#endif
+	// MainLoop_EnterIdleSleep();
+}
+
 extern void new_todo_logi(void);
 
 int main(void)
@@ -238,35 +275,9 @@ int main(void)
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
-		App_AFEGet();
-		App_Sci();
+		Runtime_RunDebugOnce();
 #else
-		SysTime_LatchTaskFlags();
-		FactoryAging_Task();
-		APP_LedBar();
-		// App_WarnCtrl();
-		App_AFEGet();
-
-		App_Sci();
-		App_AnlogCal();
-		App_LowPowerProcess();
-		App_Can();
-		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
-		// App_SOC();
-		StorageFlash_AppUseTest_Task();
-
-#ifdef __FUNC__HEAT__
-		App_Heat_Cool_Ctrl();
-#endif
-
-		App_FlashUpdate();
-		App_LogRecord();
-		App_ProID_Deal();
-#ifdef wdog_enable
-		Feed_IWatchDog;
-#endif
-		// MainLoop_EnterIdleSleep();
-
+		Runtime_RunOnce();
 #endif
 	}
 }

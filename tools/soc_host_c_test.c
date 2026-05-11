@@ -219,7 +219,7 @@ static void test_low_voltage_tail_reaches_zero(void)
 	CHECK_EQ_U32(host_internal_soc(), 0U);
 }
 
-static void test_short_rest_ocv_step_before_30min(void)
+static void test_short_rest_ocv_defers_until_active_charge(void)
 {
 	host_reset_state();
 	host_set_snapshot(50U, 0U);
@@ -227,10 +227,23 @@ static void test_short_rest_ocv_step_before_30min(void)
 	host_run_seconds(599U, 3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 50U);
 	host_run_seconds(1U, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 51U);
 }
 
-static void test_rtc_ocv_uses_stable_step_period(void)
+static void test_short_rest_ocv_defers_until_active_discharge(void)
+{
+	host_reset_state();
+	host_set_snapshot(80U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds(600U, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 80U);
+	host_run_seconds(600U, 3835U, 3835U, 0U, 4U);
+	CHECK_EQ_U32(host_internal_soc(), 79U);
+}
+
+static void test_rtc_ocv_uses_stable_target_and_active_charge(void)
 {
 	UINT32 seconds;
 
@@ -245,6 +258,8 @@ static void test_rtc_ocv_uses_stable_step_period(void)
 	CHECK_EQ_U32(host_internal_soc(), 50U);
 
 	SOC_ApplyRtcRelaxationCompensation(610U, 3835U, 3835U);
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 51U);
 }
 
@@ -271,6 +286,8 @@ static void test_rtc_ocv_waits_for_voltage_convergence(void)
 	CHECK_EQ_U32(host_internal_soc(), 50U);
 
 	SOC_ApplyRtcRelaxationCompensation(1260U, 3835U, 3835U);
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 51U);
 }
 
@@ -292,7 +309,18 @@ static void test_unstable_long_rest_waits_for_voltage_convergence(void)
 	host_run_seconds(399U, 3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 50U);
 	host_run_seconds(2U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 51U);
+	CHECK_EQ_U32(host_internal_soc(), 50U);
+}
+
+static void test_long_rest_ocv_slowly_reduces_soc_above_low_tail(void)
+{
+	host_reset_state();
+	host_set_snapshot(80U, 0U);
+	host_init_with_voltage(3725U, 3725U);
+	host_run_seconds(3599U, 3725U, 3725U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 80U);
+	host_run_seconds(1U, 3725U, 3725U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 79U);
 }
 
 static void test_rebound_flag_clears_when_holdoff_expires(void)
@@ -347,10 +375,12 @@ int main(void)
 	test_typec_current_offsets_charge_current();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
-	test_short_rest_ocv_step_before_30min();
-	test_rtc_ocv_uses_stable_step_period();
+	test_short_rest_ocv_defers_until_active_charge();
+	test_short_rest_ocv_defers_until_active_discharge();
+	test_rtc_ocv_uses_stable_target_and_active_charge();
 	test_rtc_ocv_waits_for_voltage_convergence();
 	test_unstable_long_rest_waits_for_voltage_convergence();
+	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();
 	test_rebound_flag_clears_when_holdoff_expires();
 	test_display_overlays_do_not_modify_internal_soc();
 	test_set_soc_once_command_saves_snapshot();
@@ -360,6 +390,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 12\n");
+	printf("SOC host C tests passed: 14\n");
 	return 0;
 }

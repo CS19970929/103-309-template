@@ -42,6 +42,7 @@ MID_MAX_DELTA_MV = 200
 REST_STABLE_DELTA_MV = 30
 SHORT_REST_MIN_SECONDS = 300
 SHORT_REST_STEP_SECONDS = 600
+LONG_REST_DOWN_STEP_SECONDS = 1800
 BLOCK_CALIBRATION_PROTECTION_FAULT = False
 BLOCK_CALIBRATION_SYSTEM_FAULT = False
 
@@ -135,10 +136,14 @@ class SocModel:
     rest_ticks: int = 0
     stable_rest_ticks: int = 0
     short_rest_ticks: int = 0
+    long_rest_down_ticks: int = 0
     rest_ref_vmin: int = 0
     rest_ref_vmax: int = 0
     mid_ticks: int = 0
     display_ticks: int = 0
+    deferred_ocv_ticks: int = 0
+    deferred_ocv_target: int = 0
+    deferred_ocv_valid: bool = False
     sag_hold_ticks: int = 0
     rebound_hold: bool = False
     full_anchor: bool = False
@@ -235,6 +240,30 @@ class SocModel:
         if direction == MODE_CHG and not self.full_anchor and self.soc >= 100:
             self.soc = 99
             self.cap_now = self.cap_full * 99 // 100
+
+    def clear_deferred_ocv(self):
+        self.deferred_ocv_valid = False
+        self.deferred_ocv_target = 0
+        self.deferred_ocv_ticks = 0
+        self.long_rest_down_ticks = 0
+
+    def set_deferred_ocv_target(self, target):
+        if target == self.soc:
+            self.clear_deferred_ocv()
+            return
+        if not self.deferred_ocv_valid or self.deferred_ocv_target != target:
+            self.deferred_ocv_target = target
+            self.deferred_ocv_valid = True
+            self.deferred_ocv_ticks = 0
+            self.long_rest_down_ticks = 0
+
+    def latch_rest_ocv_target(self, vmax, vmin, fault=False):
+        if not self.voltage_allowed(vmax, vmin, fault):
+            return False
+        if self.sag_hold_blocks_calibration(vmax, vmin):
+            return False
+        self.set_deferred_ocv_target(interp_soc(vmin))
+        return self.deferred_ocv_valid
 
     def apply_full_empty(self, direction, vmax, vmin, ichg, idsg):
         old = self.soc
@@ -362,12 +391,11 @@ class SocModel:
             self.mid_ticks = 0
         return self.soc != old
 
-    def apply_ocv_step(self, vmax, vmin, direction=MODE_RELAX, fault=False):
+    def apply_ocv_target_step(self, target, vmax, vmin, direction=MODE_RELAX, fault=False):
         if not self.voltage_allowed(vmax, vmin, fault):
             return False
         if self.sag_hold_blocks_calibration(vmax, vmin):
             return False
-        target = interp_soc(vmin)
         if direction == MODE_CHG and target <= self.soc:
             return False
         if direction == MODE_DSG and target >= self.soc:
@@ -375,6 +403,45 @@ class SocModel:
         old = self.soc
         self.set_soc(step_toward(self.soc, target, CAL_STEP))
         return self.soc != old
+
+    def apply_ocv_step(self, vmax, vmin, direction=MODE_RELAX, fault=False):
+        return self.apply_ocv_target_step(interp_soc(vmin), vmax, vmin, direction=direction, fault=fault)
+
+    def apply_deferred_ocv_step(self, vmax, vmin, direction):
+        if not self.deferred_ocv_valid or direction == MODE_RELAX:
+            return False
+        if self.deferred_ocv_target == self.soc:
+            self.clear_deferred_ocv()
+            return False
+        if ((self.deferred_ocv_target > self.soc and direction != MODE_CHG) or
+                (self.deferred_ocv_target < self.soc and direction != MODE_DSG)):
+            self.clear_deferred_ocv()
+            return False
+        self.deferred_ocv_ticks += 1
+        if self.deferred_ocv_ticks < SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND:
+            return False
+        old_target = self.deferred_ocv_target
+        changed = self.apply_ocv_target_step(old_target, vmax, vmin, direction=direction)
+        self.deferred_ocv_ticks = 0
+        if self.soc == old_target:
+            self.clear_deferred_ocv()
+        return changed
+
+    def apply_long_rest_down_step(self, vmax, vmin, delta_ticks=1):
+        if (not self.deferred_ocv_valid or self.deferred_ocv_target >= self.soc or
+                self.rest_ticks < REST_OCV_SECONDS * TICKS_PER_SECOND):
+            self.long_rest_down_ticks = 0
+            return False
+        limit = LONG_REST_DOWN_STEP_SECONDS * TICKS_PER_SECOND
+        self.long_rest_down_ticks = min(limit, self.long_rest_down_ticks + delta_ticks)
+        if self.long_rest_down_ticks < limit:
+            return False
+        old_target = self.deferred_ocv_target
+        changed = self.apply_ocv_target_step(old_target, vmax, vmin, direction=MODE_RELAX)
+        self.long_rest_down_ticks = 0
+        if self.soc == old_target:
+            self.clear_deferred_ocv()
+        return changed
 
     def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX, fault=False):
         if rest_seconds < SHORT_REST_MIN_SECONDS:
@@ -385,6 +452,7 @@ class SocModel:
         self.rest_ticks = 0
         self.stable_rest_ticks = 0
         self.short_rest_ticks = 0
+        self.long_rest_down_ticks = 0
         self.rest_ref_vmin = 0
         self.rest_ref_vmax = 0
 
@@ -416,10 +484,13 @@ class SocModel:
         else:
             self.stable_rest_ticks = 0
             self.short_rest_ticks = 0
+            self.long_rest_down_ticks = 0
+            self.clear_deferred_ocv()
         if (self.stable_rest_ticks >= SHORT_REST_MIN_SECONDS * TICKS_PER_SECOND and
               self.short_rest_ticks >= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND):
-            self.apply_ocv_step(vmax, vmin, direction=MODE_RELAX)
+            self.latch_rest_ocv_target(vmax, vmin)
             self.short_rest_ticks = 0
+        self.apply_long_rest_down_step(vmax, vmin)
 
     def display_target(self):
         if self.zero:
@@ -458,6 +529,8 @@ class SocModel:
             self.mid_ticks = 0
         if not calibrated and not low_tail_active and mid_tail_active:
             calibrated = self.apply_mid_tail(self.mode, vmax, vmin, idsg)
+        if not calibrated and not low_tail_active:
+            calibrated = self.apply_deferred_ocv_step(vmax, vmin, self.mode)
         if not low_tail_active and not calibrated and not self.sag_hold_blocks_calibration(vmax, vmin):
             self.update_rest_timer(vmax, vmin)
         elif low_tail_active or self.sag_hold_blocks_calibration(vmax, vmin):
@@ -479,6 +552,8 @@ def assert_model_invariants(model):
     assert model.rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
     assert model.stable_rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
     assert model.short_rest_ticks <= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND
+    assert model.long_rest_down_ticks <= LONG_REST_DOWN_STEP_SECONDS * TICKS_PER_SECOND
+    assert model.deferred_ocv_ticks <= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND
     assert model.sag_hold_ticks <= REBOUND_BOOT_HOLDOFF_SECONDS * TICKS_PER_SECOND
 
 
@@ -888,12 +963,30 @@ def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
     assert model.soc == 0
 
 
-def test_short_stable_rest_can_calibrate_before_30_minutes():
+def test_short_stable_rest_latches_ocv_without_immediate_soc_change():
     model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
     run_seconds(model, SHORT_REST_STEP_SECONDS - 1, vmax=3835, vmin=3835)
     assert model.soc == 50
     run_seconds(model, 1, vmax=3835, vmin=3835)
+    assert model.soc == 50
+    assert model.deferred_ocv_valid
+    assert model.deferred_ocv_target == 70
+
+
+def test_deferred_rest_ocv_upward_gap_is_consumed_during_charge():
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    run_seconds(model, SHORT_REST_STEP_SECONDS, vmax=3835, vmin=3835)
+    assert model.soc == 50
+    run_seconds(model, SHORT_REST_STEP_SECONDS, ichg=CURRENT_ENTER_A10, vmax=3835, vmin=3835)
     assert model.soc == 51
+
+
+def test_deferred_rest_ocv_downward_gap_is_consumed_during_discharge():
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    run_seconds(model, SHORT_REST_STEP_SECONDS, vmax=3835, vmin=3835)
+    assert model.soc == 80
+    run_seconds(model, SHORT_REST_STEP_SECONDS, idsg=CURRENT_ENTER_A10, vmax=3835, vmin=3835)
+    assert model.soc == 79
 
 
 def test_unstable_short_rest_does_not_ocv_calibrate():
@@ -914,7 +1007,9 @@ def test_unstable_long_rest_waits_for_voltage_convergence():
     run_seconds(model, 399, vmax=3835, vmin=3835)
     assert model.soc == 50
     run_seconds(model, 2, vmax=3835, vmin=3835)
-    assert model.soc == 51
+    assert model.soc == 50
+    assert model.deferred_ocv_valid
+    assert model.deferred_ocv_target == 70
 
 
 def test_mid_voltage_light_load_weakly_limits_high_soc():
@@ -997,7 +1092,16 @@ def test_long_storage_stable_voltage_converges_gradually_without_jump():
         assert previous - model.soc in (0, 1)
         previous = model.soc
         assert_model_invariants(model)
-    assert 83 <= model.soc <= 85
+    assert model.soc == 89
+
+
+def test_long_rest_ocv_slowly_reduces_soc_above_low_tail():
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    run_seconds(model, REST_OCV_SECONDS + LONG_REST_DOWN_STEP_SECONDS - 1,
+                vmax=3725, vmin=3725)
+    assert model.soc == 80
+    run_seconds(model, 1, vmax=3725, vmin=3725)
+    assert model.soc == 79
 
 
 def test_real_city_ride_profile_is_smooth_and_monotonic():
@@ -1133,7 +1237,9 @@ def main():
         test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull,
         test_auto_calibration_never_steps_more_than_one_percent,
         test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail,
-        test_short_stable_rest_can_calibrate_before_30_minutes,
+        test_short_stable_rest_latches_ocv_without_immediate_soc_change,
+        test_deferred_rest_ocv_upward_gap_is_consumed_during_charge,
+        test_deferred_rest_ocv_downward_gap_is_consumed_during_discharge,
         test_unstable_short_rest_does_not_ocv_calibrate,
         test_unstable_long_rest_waits_for_voltage_convergence,
         test_mid_voltage_light_load_weakly_limits_high_soc,
@@ -1143,6 +1249,7 @@ def main():
         test_persisted_rebound_hold_blocks_startup_voltage_correction,
         test_rebound_hold_expires_then_allows_voltage_correction,
         test_long_storage_stable_voltage_converges_gradually_without_jump,
+        test_long_rest_ocv_slowly_reduces_soc_above_low_tail,
         test_real_city_ride_profile_is_smooth_and_monotonic,
         test_hill_climb_voltage_sag_does_not_false_empty_pack,
         test_deep_ride_profile_reaches_zero_near_cutoff_voltage,
