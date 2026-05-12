@@ -9,6 +9,11 @@
 #define HOST_CAP_FACTORY_AS10      ((UINT32)HOST_CAP_A10 * 3600U)
 #define HOST_REBOUND_FLAG          ((UINT16)0x0001U)
 #define HOST_TICKS_PER_SECOND      ((UINT16)5U)
+#define HOST_SHORT_REST_STEP_SECONDS ((UINT16)600U)
+#define HOST_LONG_REST_DOWN_STEP_SECONDS ((UINT16)1800U)
+#define HOST_REST_DOWN_START_SECONDS \
+	(((UINT16)PROJECT_CFG_SOC_REST_OCV_SECONDS > HOST_SHORT_REST_STEP_SECONDS) ? \
+	 (UINT16)PROJECT_CFG_SOC_REST_OCV_SECONDS : HOST_SHORT_REST_STEP_SECONDS)
 
 struct OTHER_ELEMENT OtherElement;
 struct stCell_Info g_stCellInfoReport;
@@ -325,10 +330,13 @@ static void test_unstable_long_rest_waits_for_voltage_convergence(void)
 
 static void test_long_rest_ocv_slowly_reduces_soc_above_low_tail(void)
 {
+	UINT32 wait_seconds = (UINT32)HOST_REST_DOWN_START_SECONDS +
+		(UINT32)HOST_LONG_REST_DOWN_STEP_SECONDS;
+
 	host_reset_state();
 	host_set_snapshot(80U, 0U);
 	host_init_with_voltage(3725U, 3725U);
-	host_run_seconds(3599U, 3725U, 3725U, 0U, 0U);
+	host_run_seconds((UINT16)(wait_seconds - 1U), 3725U, 3725U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 80U);
 	host_run_seconds(1U, 3725U, 3725U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 79U);

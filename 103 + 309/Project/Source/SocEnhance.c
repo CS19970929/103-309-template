@@ -777,6 +777,12 @@ static UINT32 soc_seconds_to_ticks(UINT32 seconds)
 	return seconds * (UINT32)SOC_TICKS_PER_SECOND;
 }
 
+static UINT32 soc_rest_stable_limit_seconds(void)
+{
+	return (SOC_REST_OCV_SECONDS < SOC_SHORT_REST_MIN_SECONDS) ?
+		SOC_SHORT_REST_MIN_SECONDS : SOC_REST_OCV_SECONDS;
+}
+
 static void soc_update_sag_hold(UINT8 mode)
 {
 	if (soc_heavy_discharge_active(mode))
@@ -1031,6 +1037,7 @@ static UINT8 soc_rest_voltage_stable(void)
 static void soc_update_rest_timer(UINT8 mode)
 {
 	UINT32 rest_limit_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
+	UINT32 stable_limit_ticks = soc_seconds_to_ticks(soc_rest_stable_limit_seconds());
 	UINT32 short_min_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_MIN_SECONDS);
 	UINT32 short_step_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_STEP_SECONDS);
 
@@ -1045,7 +1052,7 @@ static void soc_update_rest_timer(UINT8 mode)
 	}
 	if (soc_rest_voltage_stable())
 	{
-		if (s_soc.stable_rest_ticks < rest_limit_ticks)
+		if (s_soc.stable_rest_ticks < stable_limit_ticks)
 		{
 			++s_soc.stable_rest_ticks;
 		}
@@ -1119,7 +1126,8 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		{
 			return 0U;
 		}
-		soc_add_rest_seconds(&s_soc.stable_rest_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
+		soc_add_rest_seconds(&s_soc.stable_rest_ticks, delta_seconds,
+			soc_rest_stable_limit_seconds());
 		soc_add_rest_seconds(&s_soc.short_rest_ticks, delta_seconds, SOC_SHORT_REST_STEP_SECONDS);
 	}
 	else

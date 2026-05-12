@@ -14,6 +14,20 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOC_ENHANCE_SOURCE = PROJECT_ROOT / '103 + 309/Project/Source/SocEnhance.c'
+PROJECT_CONFIG_SOURCE = PROJECT_ROOT / '103 + 309/Project/Source/conf/Project_Config.h'
+try:
+    PROJECT_CONFIG_TEXT = PROJECT_CONFIG_SOURCE.read_text(encoding='utf-8', errors='ignore')
+except FileNotFoundError:
+    PROJECT_CONFIG_TEXT = ''
+
+
+def project_config_int(name, default):
+    match = re.search(r'^\s*#define\s+{0}\s+(\d+)\b'.format(re.escape(name)),
+                      PROJECT_CONFIG_TEXT,
+                      re.MULTILINE)
+    return int(match.group(1)) if match else default
+
+
 TICKS_PER_SECOND = 5
 PERIOD_MS = 200
 CURRENT_ENTER_A10 = 2
@@ -22,29 +36,34 @@ CAP_A10 = 270
 CAP_FACTORY_AS10 = CAP_A10 * 3600
 SOH_MIN = 80
 SOH_STEP_CYCLES = 100
-FULL_SECONDS = 15
-FULL_FAST_SECONDS = 5
-FULL_MIN_SOC = 95
-FULL_CONFIRM_MARGIN_MV = 80
-FULL_CONFIRM_MAX_DELTA_MV = 120
+FULL_SECONDS = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS', 15)
+FULL_FAST_SECONDS = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS', 5)
+FULL_MIN_SOC = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT', 95)
+FULL_CONFIRM_MARGIN_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV', 80)
+FULL_FAST_MARGIN_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV', 30)
+FULL_CONFIRM_MAX_DELTA_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV', 120)
 EMPTY_MV = 3000
-REST_OCV_SECONDS = 1800
+REST_OCV_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_OCV_SECONDS', 1800)
 EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
-CAL_STEP = 1
+CAL_STEP = project_config_int('PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT', 1)
 DISPLAY_NORMAL_SECONDS = 5
 DISPLAY_CHG_SECONDS = DISPLAY_NORMAL_SECONDS
 DISPLAY_LOW_SECONDS = 1
-SAG_HOLDOFF_SECONDS = 30
-SAG_ALLOW_MV = EMPTY_MV + 50
+SAG_HOLDOFF_SECONDS = project_config_int('PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS', 30)
+SAG_ALLOW_MV = EMPTY_MV + project_config_int('PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV', 50)
 REBOUND_BOOT_HOLDOFF_SECONDS = 300
 MID_MAX_DELTA_MV = 200
 REST_STABLE_DELTA_MV = 30
 SHORT_REST_MIN_SECONDS = 300
 SHORT_REST_STEP_SECONDS = 600
 LONG_REST_DOWN_STEP_SECONDS = 1800
-BLOCK_CALIBRATION_PROTECTION_FAULT = False
-BLOCK_CALIBRATION_SYSTEM_FAULT = False
+REST_STABLE_LIMIT_SECONDS = max(REST_OCV_SECONDS, SHORT_REST_MIN_SECONDS)
+VALID_MIN_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV', 2000)
+VALID_MAX_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV', 5000)
+VALID_MAX_DELTA_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV', 1000)
+BLOCK_CALIBRATION_PROTECTION_FAULT = bool(project_config_int('PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT', 0))
+BLOCK_CALIBRATION_SYSTEM_FAULT = bool(project_config_int('PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT', 0))
 
 EMPTY_BAND_RELAX = 0
 EMPTY_BAND_LIGHT = 1
@@ -205,7 +224,7 @@ class SocModel:
             return False
         if BLOCK_CALIBRATION_SYSTEM_FAULT and system_fault:
             return False
-        return 2000 <= vmin <= vmax <= 5000 and (vmax - vmin) <= 1000
+        return VALID_MIN_MV <= vmin <= vmax <= VALID_MAX_MV and (vmax - vmin) <= VALID_MAX_DELTA_MV
 
     def add_cycle_capacity(self, delta):
         unit = self.cap_factory // 100
@@ -303,7 +322,7 @@ class SocModel:
 
     def full_confirm_seconds(self, vmax, vmin, v100=4180):
         vmin_min = max(0, v100 - FULL_CONFIRM_MARGIN_MV)
-        vmin_fast = max(0, v100 - 30)
+        vmin_fast = max(0, v100 - FULL_FAST_MARGIN_MV)
         if not self.voltage_allowed(vmax, vmin) or vmax < vmin_min:
             return 0
         delta = vmax - vmin
@@ -479,7 +498,8 @@ class SocModel:
             return
         self.rest_ticks = min(self.rest_ticks + 1, REST_OCV_SECONDS * TICKS_PER_SECOND)
         if self.rest_voltage_stable(vmax, vmin):
-            self.stable_rest_ticks = min(self.stable_rest_ticks + 1, REST_OCV_SECONDS * TICKS_PER_SECOND)
+            self.stable_rest_ticks = min(self.stable_rest_ticks + 1,
+                                         REST_STABLE_LIMIT_SECONDS * TICKS_PER_SECOND)
             self.short_rest_ticks = min(self.short_rest_ticks + 1, SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND)
         else:
             self.stable_rest_ticks = 0
@@ -550,7 +570,7 @@ def assert_model_invariants(model):
     assert 0 <= model.cap_now <= model.cap_full <= model.cap_factory
     assert 0 <= model.cycle_acc_as10 < max(1, model.cap_factory // 100)
     assert model.rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
-    assert model.stable_rest_ticks <= REST_OCV_SECONDS * TICKS_PER_SECOND
+    assert model.stable_rest_ticks <= REST_STABLE_LIMIT_SECONDS * TICKS_PER_SECOND
     assert model.short_rest_ticks <= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND
     assert model.long_rest_down_ticks <= LONG_REST_DOWN_STEP_SECONDS * TICKS_PER_SECOND
     assert model.deferred_ocv_ticks <= SHORT_REST_STEP_SECONDS * TICKS_PER_SECOND
@@ -1097,7 +1117,8 @@ def test_long_storage_stable_voltage_converges_gradually_without_jump():
 
 def test_long_rest_ocv_slowly_reduces_soc_above_low_tail():
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    run_seconds(model, REST_OCV_SECONDS + LONG_REST_DOWN_STEP_SECONDS - 1,
+    rest_down_start_seconds = max(REST_OCV_SECONDS, SHORT_REST_STEP_SECONDS)
+    run_seconds(model, rest_down_start_seconds + LONG_REST_DOWN_STEP_SECONDS - 1,
                 vmax=3725, vmin=3725)
     assert model.soc == 80
     run_seconds(model, 1, vmax=3725, vmin=3725)
