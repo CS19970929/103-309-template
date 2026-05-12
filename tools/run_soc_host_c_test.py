@@ -25,10 +25,9 @@ def compiler() -> str:
     raise RuntimeError("no C compiler found; install clang/gcc or set CC")
 
 
-def main() -> int:
+def build_and_run(cc: str, exe: Path, extra_defines=None) -> None:
+    extra_defines = extra_defines or []
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    exe = BUILD_DIR / "soc_host_c_test"
-    cc = compiler()
 
     cmd = [
         cc,
@@ -41,6 +40,7 @@ def main() -> int:
         "-fdata-sections",
         "-DSTM32F10X_HD",
         "-DUSE_STDPERIPH_DRIVER",
+        *extra_defines,
         "-I" + str(SOURCE_DIR),
         "-I" + str(SOURCE_DIR / "conf"),
         "-I" + str(SOURCE_DIR / "easylogger" / "inc"),
@@ -58,10 +58,25 @@ def main() -> int:
         str(exe),
     ]
 
-    print("Building SOC host C test with:", cc, flush=True)
+    print("Building SOC host C test with:", cc, exe.name, flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
     print("Running", exe, flush=True)
     subprocess.run([str(exe)], cwd=ROOT, check=True)
+
+
+def main() -> int:
+    cc = compiler()
+
+    build_and_run(cc, BUILD_DIR / "soc_host_c_test")
+    build_and_run(
+        cc,
+        BUILD_DIR / "soc_host_c_test_debug_watch",
+        [
+            "-DPROJECT_CFG_BUILD_PROFILE=1",
+            "-DPROJECT_CFG_DEBUG_WATCH_ENABLE=1",
+            "-D_DEBUG_",
+        ],
+    )
     return 0
 
 

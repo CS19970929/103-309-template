@@ -283,6 +283,12 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Debug defines _DEBUG_")
 
+        watch_value = find_define_value(debug["defines"], "PROJECT_CFG_DEBUG_WATCH_ENABLE")
+        if watch_value != "1":
+            reporter.fail("FD_Debug should define PROJECT_CFG_DEBUG_WATCH_ENABLE=1 for Keil Watch")
+        else:
+            reporter.ok("FD_Debug enables Keil SOC Watch")
+
         if debug["output_name"] != "FD_Debug":
             reporter.fail("FD_Debug OutputName should be FD_Debug, got {0}".format(debug["output_name"]))
         else:

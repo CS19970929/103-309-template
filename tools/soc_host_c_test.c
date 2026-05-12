@@ -187,6 +187,12 @@ static void test_startup_ocv_uses_real_c_code(void)
 	host_init_with_voltage(3835U, 3835U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 70U);
 	CHECK_EQ_U32(host_internal_soc(), 70U);
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	CHECK_TRUE(g_dbg_soc_watch != 0);
+	CHECK_EQ_U32(g_dbg_soc_watch->u8InternalSoc, 70U);
+	CHECK_EQ_U32(g_dbg_soc_watch->u8DisplaySoc, 70U);
+	CHECK_EQ_U32(g_dbg_soc_watch->u8LastCalibSource, SOC_WATCH_CALIB_STARTUP_OCV);
+#endif
 }
 
 static void test_discharge_integration_uses_app_soc_path(void)

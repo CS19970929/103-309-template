@@ -1254,7 +1254,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,_DEBUG_</Define>
+              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_</Define>
               <Undefine></Undefine>
               <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
