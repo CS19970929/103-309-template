@@ -24,6 +24,7 @@ REQUIRED_FILES = [
     ROOT / "README.md",
     ROOT / "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md",
     ROOT / "FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md",
+    ROOT / "REWRITE_COMPLETION_STATUS_2026-05-13.md",
     KEIL_PROJECT,
     REWRITE / "README.md",
     REWRITE / "CMakeLists.txt",
@@ -43,6 +44,9 @@ REQUIRED_FILES = [
     REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.c",
     REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.h",
     ROOT / "tools" / "run_rewrite_host_tests.py",
+    ROOT / "tools" / "run_rewrite_ci.py",
+    ROOT / "tools" / "check_rewrite_keil_project.py",
+    ROOT / "tools" / "build_rewrite_keil.ps1",
     ROOT / "tools" / "soc_flash_app_safe.ps1",
 ]
 
@@ -223,6 +227,7 @@ def check_readme_index(reporter):
     if (
         "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md" in text
         and "FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md" in text
+        and "REWRITE_COMPLETION_STATUS_2026-05-13.md" in text
         and "firmware_rewrite" in text
     ):
         reporter.ok("README indexes the clean-room rewrite")
@@ -258,6 +263,45 @@ def check_script_uses_warnings(reporter):
             reporter.ok("rewrite host build uses {0}".format(flag))
         else:
             reporter.fail("rewrite host build missing {0}".format(flag))
+
+
+def check_rewrite_ci_script(reporter):
+    script = ROOT / "tools" / "run_rewrite_ci.py"
+    if not script.exists():
+        return
+    text = read_text(script)
+    required = [
+        "tools/project_check.py",
+        "tools/check_rewrite_keil_project.py",
+        "tools/run_rewrite_host_tests.py",
+        "ctest",
+    ]
+    for token in required:
+        if token in text:
+            reporter.ok("rewrite CI includes {0}".format(token))
+        else:
+            reporter.fail("rewrite CI missing {0}".format(token))
+
+
+def check_completion_doc(reporter):
+    doc = ROOT / "REWRITE_COMPLETION_STATUS_2026-05-13.md"
+    if not doc.exists():
+        return
+    text = read_text(doc)
+    required = [
+        "不能声明",
+        "port",
+        "CI",
+        "Windows/Keil",
+        "bms_stm32f1_board_*",
+        "0x08004800",
+        "0x08000000",
+    ]
+    for token in required:
+        if token in text:
+            reporter.ok("completion status document contains {0}".format(token))
+        else:
+            reporter.fail("completion status document missing {0}".format(token))
 
 
 def check_keil_project(reporter):
@@ -306,6 +350,8 @@ def main(argv):
     check_readme_index(reporter)
     check_no_legacy_truth_source(reporter)
     check_script_uses_warnings(reporter)
+    check_rewrite_ci_script(reporter)
+    check_completion_doc(reporter)
     check_keil_project(reporter)
 
     return reporter.summary()

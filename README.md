@@ -12,10 +12,11 @@
 4. [运行架构与时基重构方案](运行架构与时基重构方案.md)
 5. [103 + 309 从零重写需求与架构说明](PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md)
 6. [103 + 309 应用层替换完成报告](FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md)
-7. [System_Monitor 模块梳理](System_Monitor模块梳理.md)
-8. [项目宏定义梳理](项目宏定义梳理.md)
-9. [休眠低功耗逻辑梳理与优化建议](休眠低功耗逻辑梳理与优化建议.md)
-10. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
+7. [103 + 309 重写完成度与剩余边界](REWRITE_COMPLETION_STATUS_2026-05-13.md)
+8. [System_Monitor 模块梳理](System_Monitor模块梳理.md)
+9. [项目宏定义梳理](项目宏定义梳理.md)
+10. [休眠低功耗逻辑梳理与优化建议](休眠低功耗逻辑梳理与优化建议.md)
+11. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
 
 ### 修改 LED / 数码管显示
 
@@ -66,6 +67,7 @@
 | [运行架构与时基重构方案](运行架构与时基重构方案.md) | 主循环、任务调度、时基所有权、低功耗和 CAN 服务化重构路线 |
 | [103 + 309 从零重写需求与架构说明](PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md) | 不沿用旧应用层架构时必须保留的需求、通信契约、安全边界、旧代码删除边界和 clean-room 实现目录 |
 | [103 + 309 应用层替换完成报告](FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md) | 旧应用层删除范围、新 `firmware_rewrite` 模块状态、已测行为和上板前硬件 port 清单 |
+| [103 + 309 重写完成度与剩余边界](REWRITE_COMPLETION_STATUS_2026-05-13.md) | 是否可替代旧代码、Keil 编译状态、CI/port 含义和上板前剩余验收 |
 | [firmware_rewrite](firmware_rewrite/README.md) | 当前有效 clean-room 重写源码、CMake 构建入口和 host 测试说明 |
 | [System_Monitor 模块梳理](System_Monitor模块梳理.md) | 系统状态位、功能开关、错误标志使用关系 |
 | [项目宏定义梳理](项目宏定义梳理.md) | 编译宏、产品配置、硬件映射、参数地址、第三方库宏使用边界 |
