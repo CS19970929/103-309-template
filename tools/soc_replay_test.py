@@ -47,17 +47,22 @@ REST_OCV_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_OCV_SECONDS', 1800)
 EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = project_config_int('PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT', 1)
-DISPLAY_NORMAL_SECONDS = 5
-DISPLAY_CHG_SECONDS = DISPLAY_NORMAL_SECONDS
-DISPLAY_LOW_SECONDS = 1
+EMPTY_TAIL_START_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV', 400)
+EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT', 0)
+EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT', 100)
+DISPLAY_NORMAL_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS', 5)
+DISPLAY_CHG_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS', DISPLAY_NORMAL_SECONDS)
+DISPLAY_LOW_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS', 1)
+DISPLAY_LOW_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV', 50)
+DISPLAY_EMPTY_FAST_BELOW_V0_MV = project_config_int('PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV', 50)
 SAG_HOLDOFF_SECONDS = project_config_int('PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS', 30)
 SAG_ALLOW_MV = EMPTY_MV + project_config_int('PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV', 50)
 REBOUND_BOOT_HOLDOFF_SECONDS = 300
 MID_MAX_DELTA_MV = 200
 REST_STABLE_DELTA_MV = 30
-SHORT_REST_MIN_SECONDS = 300
-SHORT_REST_STEP_SECONDS = 600
-LONG_REST_DOWN_STEP_SECONDS = 1800
+SHORT_REST_MIN_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS', 300)
+SHORT_REST_STEP_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS', 600)
+LONG_REST_DOWN_STEP_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS', 1800)
 REST_STABLE_LIMIT_SECONDS = max(REST_OCV_SECONDS, SHORT_REST_MIN_SECONDS)
 VALID_MIN_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV', 2000)
 VALID_MAX_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV', 5000)
@@ -359,10 +364,17 @@ class SocModel:
         return self.sag_hold_ticks > 0 and self.voltage_allowed(vmax, vmin) and vmin > SAG_ALLOW_MV
 
     def empty_tail_config(self, direction, vmin, idsg):
+        if vmin > EMPTY_MV + EMPTY_TAIL_START_OFFSET_MV:
+            return None
         band = self.empty_current_band(direction, idsg)
         for offset, targets, ticks in EMPTY_TAIL_TABLE:
             if vmin <= EMPTY_MV + offset:
-                return targets[band], max(1, ticks[band])
+                target = targets[band]
+                tick_count = max(1, ticks[band])
+                if offset > 0:
+                    target = min(100, target + EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT)
+                    tick_count = max(1, (tick_count * EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT + 50) // 100)
+                return target, tick_count
         return None
 
     def low_tail_active(self, direction, vmax, vmin, idsg):
@@ -529,8 +541,8 @@ class SocModel:
             self.display_ticks = 0
             return
         ticks = DISPLAY_NORMAL_SECONDS * TICKS_PER_SECOND
-        if target < self.display_soc and vmin <= EMPTY_MV + 50:
-            ticks = 1 if vmin <= EMPTY_MV - 50 else DISPLAY_LOW_SECONDS * TICKS_PER_SECOND
+        if target < self.display_soc and vmin <= EMPTY_MV + DISPLAY_LOW_OFFSET_MV:
+            ticks = 1 if vmin <= EMPTY_MV - DISPLAY_EMPTY_FAST_BELOW_V0_MV else DISPLAY_LOW_SECONDS * TICKS_PER_SECOND
         elif target > self.display_soc and self.mode == MODE_CHG:
             ticks = DISPLAY_CHG_SECONDS * TICKS_PER_SECOND
         self.display_ticks += 1

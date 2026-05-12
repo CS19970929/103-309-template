@@ -259,8 +259,49 @@
 // <i> 静置多久后允许按 OCV 小步修正 SOC。三元锂通常建议 30 分钟起。
 #define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
 
+// <o> 稳定静置最短可信时间，秒 <60-7200>
+// <i> 电压稳定至少多久后才允许记录 OCV deferred target。调小会更快修正，调大更稳。
+#define PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS 300
+
+// <o> 稳定静置/后续充放电消化 OCV 差值节拍，秒 <60-7200>
+// <i> 达到稳定窗口后，每隔多久允许刷新或消化 1% OCV 修正。
+#define PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS 600
+
+// <o> 久置低 OCV 静置下修节拍，秒 <60-43200>
+// <i> 长时间静置且 OCV 目标低于内部 SOC 时，每隔多久最多下修 1%。
+#define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800
+
 // <o> SOC auto calibration max step percent <1-10>
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
+
+// <o> 低压尾段校准起始偏移，mV <0-1000>
+// <i> VCellMin <= V0 + 该偏移时才允许进入低压尾段表。调小可减少最后 20% 掉电过快。
+#define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
+
+// <o> 低压软尾段目标抬高百分比 <0-30>
+// <i> 只作用于 V0 以上的软尾段表项。调大可让低电区显示更不保守，V0 及以下仍强制向 0 收敛。
+#define PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT 0
+
+// <o> 低压软尾段下修速度比例，百分比 <25-400>
+// <i> 只作用于 V0 以上的软尾段表项。100 为默认；调大变慢，调小变快。
+#define PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT 100
+
+// <o> 普通显示跟随速度，秒/1% <1-60>
+#define PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS 5
+
+// <o> 充电显示上升速度，秒/1% <1-60>
+#define PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS 5
+
+// <o> 低压显示下降速度，秒/1% <1-60>
+#define PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS 1
+
+// <o> 低压显示加速边界，mV <0-500>
+// <i> VCellMin <= V0 + 该偏移时，显示下降使用低压速度。
+#define PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV 50
+
+// <o> 空电显示最快边界，低于 V0 的 mV <0-500>
+// <i> VCellMin <= V0 - 该值时，显示每个 200ms tick 最多下降 1%。
+#define PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV 50
 // </h>
 
 // <h>SOC 测试模式

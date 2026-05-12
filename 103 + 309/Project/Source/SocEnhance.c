@@ -48,10 +48,18 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_SAG_HOLDOFF_SECONDS      ((UINT16)PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS)
 #define SOC_SAG_ALLOW_OFFSET_MV      ((int16_t)PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV)
 #define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
+#define SOC_SHORT_REST_MIN_SECONDS   ((UINT32)PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS)
+#define SOC_SHORT_REST_STEP_SECONDS  ((UINT32)PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS)
+#define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
-#define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)5U)
-#define SOC_DISPLAY_CHG_SECONDS      SOC_DISPLAY_NORMAL_SECONDS
-#define SOC_DISPLAY_LOW_SECONDS      ((UINT8)1U)
+#define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
+#define SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT ((UINT8)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT)
+#define SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT)
+#define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS)
+#define SOC_DISPLAY_CHG_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS)
+#define SOC_DISPLAY_LOW_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS)
+#define SOC_DISPLAY_LOW_OFFSET_MV    ((int16_t)PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV)
+#define SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV ((int16_t)PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV)
 #define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
 #define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV)
@@ -66,9 +74,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_MID_TARGET_DISABLED      ((UINT8)0xFFU)
 #define SOC_MID_MAX_DELTA_MV         ((UINT16)200U)
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
-#define SOC_SHORT_REST_MIN_SECONDS   ((UINT32)300U)
-#define SOC_SHORT_REST_STEP_SECONDS  ((UINT32)600U)
-#define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)1800U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
 
@@ -413,6 +418,15 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 	}
 	offset = (UINT16)(-offset_mv);
 	return (empty_mv > offset) ? (UINT16)(empty_mv - offset) : 0U;
+}
+
+static UINT8 soc_vmin_above_empty_offset(UINT16 offset_mv)
+{
+	UINT16 empty_mv = soc_empty_mv();
+	UINT16 threshold = (empty_mv > (UINT16)(SOC_VALID_MAX_MV - offset_mv)) ?
+		SOC_VALID_MAX_MV : (UINT16)(empty_mv + offset_mv);
+
+	return (UINT8)(SOC_Enhance_Element.u16_VCellMin > threshold);
 }
 
 static UINT16 soc_full_mv(void)
@@ -818,7 +832,8 @@ static UINT8 soc_tail_rule_lookup(const SOC_EMPTY_TAIL_RULE *rules,
 								  UINT8 band,
 								  UINT8 disabled_target,
 								  UINT8 zero_ticks_to_one,
-								  SOC_TAIL_STEP *step)
+								  SOC_TAIL_STEP *step,
+								  int16_t *matched_offset)
 {
 	UINT16 i;
 	UINT16 threshold;
@@ -842,10 +857,39 @@ static UINT8 soc_tail_rule_lookup(const SOC_EMPTY_TAIL_RULE *rules,
 				}
 				step->ticks = 1U;
 			}
+			if (matched_offset != 0)
+			{
+				*matched_offset = rules[i].offset_mv;
+			}
 			return 1U;
 		}
 	}
 	return 0U;
+}
+
+static void soc_apply_empty_tail_tuning(int16_t offset_mv, SOC_TAIL_STEP *step)
+{
+	UINT32 ticks;
+	UINT16 target;
+
+	if (offset_mv <= 0)
+	{
+		return;
+	}
+	if (SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT != 0U)
+	{
+		target = (UINT16)step->target + SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT;
+		step->target = (target > 100U) ? 100U : (UINT8)target;
+	}
+	if (SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT != 100U)
+	{
+		ticks = ((UINT32)step->ticks * SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT + 50U) / 100U;
+		if (ticks == 0U)
+		{
+			ticks = 1U;
+		}
+		step->ticks = (ticks > 0xFFFFU) ? 0xFFFFU : (UINT16)ticks;
+	}
 }
 
 static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
@@ -866,13 +910,25 @@ static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 static UINT8 soc_empty_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 {
 	UINT8 band = soc_empty_current_band(mode);
+	int16_t matched_offset = 0;
+	UINT8 found;
 
-	return soc_tail_rule_lookup(s_empty_tail_table,
+	if (soc_vmin_above_empty_offset(SOC_EMPTY_TAIL_START_OFFSET_MV))
+	{
+		return 0U;
+	}
+	found = soc_tail_rule_lookup(s_empty_tail_table,
 		(UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])),
 		band,
 		SOC_MID_TARGET_DISABLED,
 		1U,
-		step);
+		step,
+		&matched_offset);
+	if (found)
+	{
+		soc_apply_empty_tail_tuning(matched_offset, step);
+	}
+	return found;
 }
 
 static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
@@ -907,7 +963,8 @@ static UINT8 soc_mid_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 		band,
 		SOC_MID_TARGET_DISABLED,
 		0U,
-		step);
+		step,
+		0);
 }
 
 static UINT8 soc_apply_mid_tail(const SOC_TAIL_STEP *step)
@@ -1180,9 +1237,10 @@ static void soc_publish(UINT8 force_display)
 	else if (s_soc.display_soc != target)
 	{
 		if ((target < s_soc.display_soc) &&
-			(SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(50)))
+			(SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(SOC_DISPLAY_LOW_OFFSET_MV)))
 		{
-			ticks = (SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(-50)) ?
+			ticks = (SOC_Enhance_Element.u16_VCellMin <=
+				soc_empty_threshold_mv((int16_t)(0 - SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV))) ?
 				1U : (UINT8)(SOC_DISPLAY_LOW_SECONDS * SOC_TICKS_PER_SECOND);
 		}
 		else
