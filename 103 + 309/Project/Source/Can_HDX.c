@@ -101,6 +101,10 @@ static FeidaoCanRuntime s_feidao_can_runtime =
 	0U,
 };
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
+#endif
+
 #define s_u8FeidaoCanPowerState (s_feidao_can_runtime.power_state)
 #define s_u8FeidaoCanTxMailbox (s_feidao_can_runtime.tx_mailbox)
 #define s_u16FeidaoCanPendingMask (s_feidao_can_runtime.pending_mask)

@@ -178,6 +178,10 @@ static LedBarRuntime s_ledbar_runtime =
     0u,
 };
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+LedBarRuntime * const g_dbg_ledbar_runtime = &s_ledbar_runtime;
+#endif
+
 #define s_ledbar_initialized (s_ledbar_runtime.initialized)
 #define s_ledbar_sleep (s_ledbar_runtime.sleep)
 #define s_ledbar_blank (s_ledbar_runtime.blank)

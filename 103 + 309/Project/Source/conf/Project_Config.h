@@ -125,6 +125,12 @@
 // <i> 使能调试代码。量产必须关闭。
 #define PROJECT_CFG_DEBUG_CODE_ENABLE 0
 
+// <q> Export Keil Watch debug observation entries
+// <i> Debug only. Release build must keep this disabled. Exports g_dbg_* watch pointers.
+#ifndef PROJECT_CFG_DEBUG_WATCH_ENABLE
+#define PROJECT_CFG_DEBUG_WATCH_ENABLE 0
+#endif
+
 // <q> 允许带电流休眠
 // <i> 允许带电流进入休眠。通常保持关闭，避免带载误休眠。
 #define PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE 0

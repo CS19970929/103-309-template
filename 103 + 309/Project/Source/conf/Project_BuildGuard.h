@@ -15,6 +15,10 @@
 #define PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX 300
 #endif
 
+#ifndef PROJECT_CFG_DEBUG_WATCH_ENABLE
+#define PROJECT_CFG_DEBUG_WATCH_ENABLE 0
+#endif
+
 #endif
 
 /* Checks stay outside the include guard so late-defined macros are still caught. */
@@ -110,6 +114,11 @@
 #error "Invalid PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX"
 #endif
 
+#if (PROJECT_CFG_DEBUG_WATCH_ENABLE != 0) && \
+    (PROJECT_CFG_DEBUG_WATCH_ENABLE != 1)
+#error "Invalid PROJECT_CFG_DEBUG_WATCH_ENABLE"
+#endif
+
 #if (PROJECT_CFG_FACTORY_AGING_ENABLE != 0) && \
     (PROJECT_CFG_FACTORY_AGING_ENABLE != 1)
 #error "Invalid PROJECT_CFG_FACTORY_AGING_ENABLE"
@@ -133,6 +142,10 @@
 
 #if PROJECT_CFG_DEBUG_CODE_ENABLE
 #error "Release build: PROJECT_CFG_DEBUG_CODE_ENABLE must be 0"
+#endif
+
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+#error "Release build: PROJECT_CFG_DEBUG_WATCH_ENABLE must be 0"
 #endif
 
 #if PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE
