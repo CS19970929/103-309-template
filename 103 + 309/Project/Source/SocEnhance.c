@@ -1,5 +1,4 @@
 #include "SocEnhance.h"
-#include "PubFunc.h"
 #include "conf.h"
 #include "EEPROM.h"
 #include "DataDeal.h"
@@ -112,6 +111,12 @@ typedef struct
 	UINT16 ticks[SOC_EMPTY_BAND_COUNT];
 } SOC_EMPTY_TAIL_RULE;
 
+typedef struct
+{
+	UINT8 target;
+	UINT16 ticks;
+} SOC_TAIL_STEP;
+
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
@@ -121,6 +126,7 @@ static UINT32 s_u32RtcRestCursorSeconds;
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode);
+static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
@@ -338,8 +344,54 @@ static const UINT16 *soc_ocv_table(UINT16 *size)
 static UINT8 soc_ocv_percent(void)
 {
 	UINT16 size;
-	UINT16 soc = GetEndValue(soc_ocv_table(&size), size, SOC_Enhance_Element.u16_VCellMin);
+	const UINT16 *table = soc_ocv_table(&size);
+	UINT16 soc = soc_table_percent(table, size, SOC_Enhance_Element.u16_VCellMin);
 	return (soc > 100U) ? 100U : (UINT8)soc;
+}
+
+static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv)
+{
+	UINT16 i;
+	UINT16 last;
+	UINT16 x1;
+	UINT16 x2;
+	int32_t value;
+	int32_t dx;
+
+	if ((table == 0) || (size < 4U))
+	{
+		return 0U;
+	}
+
+	for (i = 0U; i <= (UINT16)(size - 4U); i = (UINT16)(i + 2U))
+	{
+		x1 = table[i];
+		x2 = table[i + 2U];
+		if (((voltage_mv >= x1) && (voltage_mv <= x2)) ||
+			((voltage_mv <= x1) && (voltage_mv >= x2)))
+		{
+			if (x1 == x2)
+			{
+				return table[i + 1U];
+			}
+			dx = (int32_t)x2 - (int32_t)x1;
+			value = (int32_t)table[i + 1U] +
+				(((int32_t)voltage_mv - (int32_t)x1) *
+				 ((int32_t)table[i + 3U] - (int32_t)table[i + 1U])) / dx;
+			if (value <= 0)
+			{
+				return 0U;
+			}
+			return (value > (int32_t)0xFFFFU) ? 0xFFFFU : (UINT16)value;
+		}
+	}
+
+	last = (UINT16)(size - 2U);
+	if (table[0] <= table[last])
+	{
+		return (voltage_mv >= table[last]) ? table[last + 1U] : table[1U];
+	}
+	return (voltage_mv >= table[0]) ? table[1U] : table[last + 1U];
 }
 
 static UINT16 soc_empty_mv(void)
@@ -426,6 +478,14 @@ static UINT8 soc_save(void)
 	return StorageFlash_SaveSocData(&data);
 }
 
+static void soc_save_current_snapshot(void)
+{
+	if (soc_save())
+	{
+		s_saved_soc = s_soc;
+	}
+}
+
 static void soc_save_if_needed(void)
 {
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
@@ -437,10 +497,7 @@ static void soc_save_if_needed(void)
 		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
 		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
 	{
-		if (soc_save())
-		{
-			s_saved_soc = s_soc;
-		}
+		soc_save_current_snapshot();
 	}
 }
 
@@ -750,23 +807,34 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
 }
 
-static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
+static UINT8 soc_tail_rule_lookup(const SOC_EMPTY_TAIL_RULE *rules,
+								  UINT16 count,
+								  UINT8 band,
+								  UINT8 disabled_target,
+								  UINT8 zero_ticks_to_one,
+								  SOC_TAIL_STEP *step)
 {
-	UINT8 band = soc_empty_current_band(mode);
-	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
-	UINT16 threshold;
 	UINT16 i;
+	UINT16 threshold;
 
-	for (i = 0U; i < (UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])); ++i)
+	for (i = 0U; i < count; ++i)
 	{
-		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
-		if (vmin <= threshold)
+		threshold = soc_empty_threshold_mv(rules[i].offset_mv);
+		if (SOC_Enhance_Element.u16_VCellMin <= threshold)
 		{
-			*target = s_empty_tail_table[i].target[band];
-			*ticks = s_empty_tail_table[i].ticks[band];
-			if (*ticks == 0U)
+			if (rules[i].target[band] == disabled_target)
 			{
-				*ticks = 1U;
+				return 0U;
+			}
+			step->target = rules[i].target[band];
+			step->ticks = rules[i].ticks[band];
+			if (step->ticks == 0U)
+			{
+				if (!zero_ticks_to_one)
+				{
+					return 0U;
+				}
+				step->ticks = 1U;
 			}
 			return 1U;
 		}
@@ -774,11 +842,35 @@ static UINT8 soc_empty_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
 	return 0U;
 }
 
-static UINT8 soc_low_tail_active(UINT8 mode)
+static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 {
-	UINT8 target;
-	UINT16 ticks;
+	UINT8 old_soc = s_soc.soc;
 
+	if (++(*counter) >= step->ticks)
+	{
+		if (s_soc.soc > step->target)
+		{
+			soc_set(soc_step(s_soc.soc, step->target, SOC_CAL_STEP));
+		}
+		*counter = 0U;
+	}
+	return (UINT8)(s_soc.soc != old_soc);
+}
+
+static UINT8 soc_empty_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
+{
+	UINT8 band = soc_empty_current_band(mode);
+
+	return soc_tail_rule_lookup(s_empty_tail_table,
+		(UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])),
+		band,
+		SOC_MID_TARGET_DISABLED,
+		1U,
+		step);
+}
+
+static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
+{
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
 	{
 		return 0U;
@@ -787,15 +879,13 @@ static UINT8 soc_low_tail_active(UINT8 mode)
 	{
 		return 0U;
 	}
-	return soc_empty_tail_config(mode, &target, &ticks);
+	return soc_empty_tail_config(mode, step);
 }
 
-static UINT8 soc_mid_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
+static UINT8 soc_mid_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 {
 	UINT8 band = soc_empty_current_band(mode);
 	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
-	UINT16 threshold;
-	UINT16 i;
 
 	if ((mode == SOC_MODE_CHG) ||
 		!soc_voltage_valid() ||
@@ -806,59 +896,29 @@ static UINT8 soc_mid_tail_config(UINT8 mode, UINT8 *target, UINT16 *ticks)
 		return 0U;
 	}
 
-	for (i = 0U; i < (UINT16)(sizeof(s_mid_tail_table) / sizeof(s_mid_tail_table[0])); ++i)
-	{
-		threshold = soc_empty_threshold_mv(s_mid_tail_table[i].offset_mv);
-		if (vmin <= threshold)
-		{
-			if (s_mid_tail_table[i].target[band] == SOC_MID_TARGET_DISABLED)
-			{
-				return 0U;
-			}
-			*target = s_mid_tail_table[i].target[band];
-			*ticks = s_mid_tail_table[i].ticks[band];
-			if (*ticks == 0U)
-			{
-				return 0U;
-			}
-			return 1U;
-		}
-	}
-	return 0U;
+	return soc_tail_rule_lookup(s_mid_tail_table,
+		(UINT16)(sizeof(s_mid_tail_table) / sizeof(s_mid_tail_table[0])),
+		band,
+		SOC_MID_TARGET_DISABLED,
+		0U,
+		step);
 }
 
-static UINT8 soc_mid_tail_active(UINT8 mode)
+static UINT8 soc_apply_mid_tail(const SOC_TAIL_STEP *step)
 {
-	UINT8 target;
-	UINT16 ticks;
-
-	return soc_mid_tail_config(mode, &target, &ticks);
-}
-
-static UINT8 soc_apply_mid_tail(UINT8 mode)
-{
-	UINT8 target;
-	UINT16 ticks;
-	UINT8 old_soc = s_soc.soc;
-
-	if (!soc_mid_tail_config(mode, &target, &ticks) || (s_soc.soc <= target))
+	if (s_soc.soc <= step->target)
 	{
 		s_soc.mid_ticks = 0U;
 		return 0U;
 	}
-	if (++s_soc.mid_ticks >= ticks)
-	{
-		soc_set(soc_step(s_soc.soc, target, SOC_CAL_STEP));
-		s_soc.mid_ticks = 0U;
-	}
-	return (UINT8)(s_soc.soc != old_soc);
+	return soc_apply_tail_step(step, &s_soc.mid_ticks);
 }
 
-static UINT8 soc_apply_full_empty(UINT8 mode)
+static UINT8 soc_apply_full_empty(UINT8 mode,
+								  UINT8 empty_active,
+								  const SOC_TAIL_STEP *empty_step)
 {
 	UINT16 full_seconds;
-	UINT8 empty_target;
-	UINT16 empty_ticks;
 	UINT8 old_soc = s_soc.soc;
 
 	if (mode != SOC_MODE_DSG)
@@ -889,37 +949,12 @@ static UINT8 soc_apply_full_empty(UINT8 mode)
 		s_soc.full_ticks = 0U;
 	}
 
-	if (mode == SOC_MODE_CHG)
+	if (!empty_active)
 	{
 		s_soc.empty_ticks = 0U;
 		return 0U;
 	}
-	if (!soc_voltage_valid())
-	{
-		s_soc.empty_ticks = 0U;
-		return 0U;
-	}
-	if (soc_sag_hold_blocks_calibration())
-	{
-		s_soc.empty_ticks = 0U;
-		return 0U;
-	}
-	if (soc_empty_tail_config(mode, &empty_target, &empty_ticks))
-	{
-		if (++s_soc.empty_ticks >= (UINT16)empty_ticks)
-		{
-			if (s_soc.soc > empty_target)
-			{
-				soc_set(soc_step(s_soc.soc, empty_target, SOC_CAL_STEP));
-			}
-			s_soc.empty_ticks = 0U;
-		}
-	}
-	else
-	{
-		s_soc.empty_ticks = 0U;
-	}
-	return (UINT8)(s_soc.soc != old_soc);
+	return soc_apply_tail_step(empty_step, &s_soc.empty_ticks);
 }
 
 static void soc_reset_rest_confidence(void)
@@ -1212,10 +1247,7 @@ static void soc_handle_command(void)
 	SOC_Enhance_Element.u16_RefreshData_Flag = 0U;
 	if (save)
 	{
-		if (soc_save())
-		{
-			s_saved_soc = s_soc;
-		}
+		soc_save_current_snapshot();
 	}
 	soc_publish(1U);
 }
@@ -1264,6 +1296,8 @@ void SOC_SaveSnapshotBeforeSleep(void)
 
 void SOC_IntEnhance_Ctrl(void)
 {
+	SOC_TAIL_STEP low_tail_step;
+	SOC_TAIL_STEP mid_tail_step;
 	UINT8 calibrated;
 	UINT8 low_tail_active;
 	UINT8 mid_tail_active;
@@ -1280,16 +1314,16 @@ void SOC_IntEnhance_Ctrl(void)
 	s_soc.mode = soc_direction();
 	soc_integrate(s_soc.mode);
 	soc_update_sag_hold(s_soc.mode);
-	low_tail_active = soc_low_tail_active(s_soc.mode);
-	mid_tail_active = soc_mid_tail_active(s_soc.mode);
-	calibrated = soc_apply_full_empty(s_soc.mode);
+	low_tail_active = soc_low_tail_config(s_soc.mode, &low_tail_step);
+	mid_tail_active = soc_mid_tail_config(s_soc.mode, &mid_tail_step);
+	calibrated = soc_apply_full_empty(s_soc.mode, low_tail_active, &low_tail_step);
 	if (!mid_tail_active)
 	{
 		s_soc.mid_ticks = 0U;
 	}
 	if (!calibrated && !low_tail_active && mid_tail_active)
 	{
-		calibrated = soc_apply_mid_tail(s_soc.mode);
+		calibrated = soc_apply_mid_tail(&mid_tail_step);
 	}
 	if (!calibrated && !low_tail_active)
 	{
@@ -1318,9 +1352,9 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	SOC_Enhance_Element.u16_VCellMin = vcell_min;
 	SOC_Enhance_Element.u16_VCellMax = vcell_max;
 	changed = soc_apply_rtc_rest_ocv(rest_seconds);
-	if (changed && soc_save())
+	if (changed)
 	{
-		s_saved_soc = s_soc;
+		soc_save_current_snapshot();
 	}
 	soc_publish(0U);
 }

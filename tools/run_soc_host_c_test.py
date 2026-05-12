@@ -53,7 +53,6 @@ def main() -> int:
         str(ROOT / "tools" / "soc_host_c_test.c"),
         str(SOURCE_DIR / "SOC.c"),
         str(SOURCE_DIR / "SocEnhance.c"),
-        str(SOURCE_DIR / "PubFunc.c"),
         "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections",
         "-o",
         str(exe),
