@@ -96,11 +96,16 @@
 firmware_rewrite/
   CMakeLists.txt
   include/bms_app.h
+  include/bms_firmware.h
   src/bms_app.c
+  src/bms_firmware.c
   src/bms_comm.c
   src/bms_power_can.c
+  src/bms_protection.c
   src/bms_soc.c
   src/bms_storage.c
+  src/bms_ui_iap.c
+  ports/stm32f1_spl/
   tests/test_rewrite_core.c
 tools/run_rewrite_host_tests.py
 ```
@@ -112,10 +117,14 @@ tools/run_rewrite_host_tests.py
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
 | App | `bms_app.c` | 单一上下文初始化、采样推进、RTC 唤醒入口、快照保存 |
+| Firmware | `bms_firmware.c` | 固件主循环入口：平台采样、业务推进、输出应用 |
 | SOC | `bms_soc.c` | 积分、满电、低压表、中低压、sag holdoff、静置 OCV、显示平滑 |
 | Comm | `bms_comm.c` | `0x1005`、`0x2200`、`0x2318~0x231B`、`0xD000` 兼容层 |
 | Power/CAN | `bms_power_can.c` | RTC 进入判定、深睡判定、CAN 有/无设备策略 |
+| Protection | `bms_protection.c` | OVP/UVP/OCP/温度/电压异常和 MOS 输出 |
+| UI/IAP | `bms_ui_iap.c` | DI1 短按显示、长按深睡、`GPIO_MCU_WK`、IAP 请求 |
 | Storage | `bms_storage.c` | SOC 双槽快照、版本、序号、CRC、读回验证 |
+| STM32F1 port | `ports/stm32f1_spl` | 硬件适配边界，禁止硬件细节进入 core |
 | Host Test | `tests/test_rewrite_core.c` | 需求级行为验证 |
 
 ## 6. 当前已覆盖的行为
@@ -132,7 +141,11 @@ tools/run_rewrite_host_tests.py
 | CAN 有设备 `1s`、无设备 `10s` | 已实现并测试 |
 | 无设备 RTC 探测帧、ACK 恢复 | 已实现并测试 |
 | SOC 双槽快照恢复 | 已实现并测试 |
-| STM32 SPL 硬件 port | 尚未接入，本分支先完成核心架构 |
+| 基础保护与 MOS 输出 | 已实现并测试 |
+| 短按显示、长按深睡、`GPIO_MCU_WK` | 已实现并测试 |
+| `0xFFFD` IAP 请求 | 已实现并测试 |
+| 固件主循环入口 `bms_firmware_run_once()` | 已实现并测试 |
+| STM32 SPL 硬件 port | 已有可编译空壳，真实 AFE/Flash/CAN/RTC/LED 接线待上板阶段完成 |
 | Keil 工程集成 | 尚未接入，需后续新增独立 target |
 | AFE/保护参数真实写入 | 尚未接入，需硬件 port 和参数 service |
 | LED Charlieplexing 真实扫描 | 尚未接入，当前先保留体验契约 |

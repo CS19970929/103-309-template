@@ -22,15 +22,23 @@ LEGACY_SOURCE = ROOT / "103 + 309" / "Project" / "Source"
 REQUIRED_FILES = [
     ROOT / "README.md",
     ROOT / "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md",
+    ROOT / "FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md",
     REWRITE / "README.md",
     REWRITE / "CMakeLists.txt",
     REWRITE / "include" / "bms_app.h",
+    REWRITE / "include" / "bms_firmware.h",
     REWRITE / "src" / "bms_app.c",
     REWRITE / "src" / "bms_comm.c",
+    REWRITE / "src" / "bms_firmware.c",
     REWRITE / "src" / "bms_power_can.c",
+    REWRITE / "src" / "bms_protection.c",
     REWRITE / "src" / "bms_soc.c",
     REWRITE / "src" / "bms_storage.c",
+    REWRITE / "src" / "bms_ui_iap.c",
     REWRITE / "tests" / "test_rewrite_core.c",
+    REWRITE / "ports" / "stm32f1_spl" / "README.md",
+    REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.c",
+    REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.h",
     ROOT / "tools" / "run_rewrite_host_tests.py",
     ROOT / "tools" / "soc_flash_app_safe.ps1",
 ]
@@ -44,7 +52,11 @@ REQUIRED_HEADER_TOKENS = [
     "BMS_ADDR_SET_ONCE_SOC 0x1005u",
     "BMS_ADDR_SOC_TABLE_START 0x2200u",
     "BMS_ADDR_SOC_PARAM_START 0x2318u",
+    "BMS_ADDR_IAP_CONNECT 0xFFFDu",
+    "BMS_IAP_REQUEST_VALUE 0x00ABu",
     "BMS_RO_D000_WORDS 63u",
+    "BMS_FAULT_CELL_OVP",
+    "bms_platform_ops_t",
 ]
 
 REQUIRED_SOC_TOKENS = [
@@ -75,6 +87,36 @@ REQUIRED_TEST_TOKENS = [
     "test_sag_hold_blocks_wide_low_table",
     "test_can_idle_strategy",
     "test_storage_dual_slot",
+    "test_protection_and_outputs",
+    "test_ui_key_and_mcu_wake",
+    "test_iap_and_rtc_outputs",
+    "test_firmware_run_once_entry",
+]
+
+REQUIRED_FIRMWARE_TOKENS = [
+    "bms_firmware_run_once",
+    "bms_app_process_sample",
+    "bms_app_apply_outputs",
+]
+
+REQUIRED_PORT_TOKENS = [
+    "bms_stm32f1_platform_ops",
+    "read_sample",
+    "enter_rtc_stop",
+    "request_iap_reset",
+]
+
+REQUIRED_PROTECTION_TOKENS = [
+    "BMS_FAULT_CELL_OVP",
+    "BMS_FAULT_CELL_UVP",
+    "charge_mos_on",
+    "discharge_mos_on",
+]
+
+REQUIRED_UI_TOKENS = [
+    "BMS_UI_DISPLAY_HOLD_MS 5000u",
+    "BMS_UI_LONG_PRESS_MS 3000u",
+    "bms_iap_request",
 ]
 
 
@@ -163,7 +205,11 @@ def check_safe_flash_script(reporter):
 
 def check_readme_index(reporter):
     text = read_text(ROOT / "README.md") if (ROOT / "README.md").exists() else ""
-    if "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md" in text and "firmware_rewrite" in text:
+    if (
+        "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md" in text
+        and "FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md" in text
+        and "firmware_rewrite" in text
+    ):
         reporter.ok("README indexes the clean-room rewrite")
     else:
         reporter.fail("README must index the clean-room rewrite docs")
@@ -210,7 +256,11 @@ def main(argv):
     check_required_files(reporter)
     check_tokens(reporter, REWRITE / "include" / "bms_app.h", REQUIRED_HEADER_TOKENS)
     check_tokens(reporter, REWRITE / "src" / "bms_soc.c", REQUIRED_SOC_TOKENS)
+    check_tokens(reporter, REWRITE / "src" / "bms_firmware.c", REQUIRED_FIRMWARE_TOKENS)
     check_tokens(reporter, REWRITE / "src" / "bms_power_can.c", REQUIRED_CAN_TOKENS)
+    check_tokens(reporter, REWRITE / "src" / "bms_protection.c", REQUIRED_PROTECTION_TOKENS)
+    check_tokens(reporter, REWRITE / "src" / "bms_ui_iap.c", REQUIRED_UI_TOKENS)
+    check_tokens(reporter, REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.c", REQUIRED_PORT_TOKENS)
     check_tokens(reporter, REWRITE / "tests" / "test_rewrite_core.c", REQUIRED_TEST_TOKENS)
     check_legacy_source_retired(reporter)
     check_safe_flash_script(reporter)

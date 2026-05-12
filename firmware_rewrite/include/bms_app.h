@@ -14,12 +14,21 @@
 #define BMS_ADDR_SOC_TABLE_END 0x2229u
 #define BMS_ADDR_SOC_PARAM_START 0x2318u
 #define BMS_ADDR_SOC_PARAM_END 0x231Bu
+#define BMS_ADDR_IAP_CONNECT 0xFFFDu
+#define BMS_IAP_REQUEST_VALUE 0x00ABu
 
 #define BMS_FLASH_IAP_START 0x08000000ul
 #define BMS_FLASH_APP_START 0x08004800ul
 #define BMS_FLASH_STORAGE_START 0x0801C000ul
 #define BMS_FLASH_SOC_SLOT_A 0x0801E000ul
 #define BMS_FLASH_SOC_SLOT_B 0x0801E800ul
+
+#define BMS_FAULT_CELL_OVP 0x00000001ul
+#define BMS_FAULT_CELL_UVP 0x00000002ul
+#define BMS_FAULT_CHG_OCP 0x00000004ul
+#define BMS_FAULT_DSG_OCP 0x00000008ul
+#define BMS_FAULT_TEMP_HIGH 0x00000010ul
+#define BMS_FAULT_VOLTAGE_INVALID 0x00000020ul
 
 typedef enum {
     BMS_SOC_MODE_RELAX = 0,
@@ -32,6 +41,13 @@ typedef enum {
     BMS_POWER_RTC_HICCUP,
     BMS_POWER_DEEP_SLEEP
 } bms_power_state_id_t;
+
+typedef enum {
+    BMS_KEY_NONE = 0,
+    BMS_KEY_PRESSED,
+    BMS_KEY_RELEASED,
+    BMS_KEY_HELD
+} bms_key_event_t;
 
 typedef struct {
     uint16_t voltage_mv;
@@ -48,6 +64,14 @@ typedef struct {
     uint16_t rtc_idle_with_can_s;
     uint16_t rtc_idle_without_can_s;
     uint16_t idle_before_rtc_s;
+    uint16_t cell_ovp_mv;
+    uint16_t cell_ovp_release_mv;
+    uint16_t cell_uvp_mv;
+    uint16_t cell_uvp_release_mv;
+    uint16_t charge_ocp_a10;
+    uint16_t discharge_ocp_a10;
+    uint16_t temp_high_c;
+    uint16_t temp_high_release_c;
 } bms_config_t;
 
 typedef struct {
@@ -65,6 +89,7 @@ typedef struct {
     bool mcu_wake;
     bool protection_fault;
     bool communication_active;
+    bms_key_event_t key_event;
 } bms_sample_t;
 
 typedef struct {
@@ -148,14 +173,51 @@ typedef struct {
 } bms_power_state_t;
 
 typedef struct {
+    uint32_t active_faults;
+    bool charge_mos_on;
+    bool discharge_mos_on;
+} bms_protection_state_t;
+
+typedef struct {
+    bool display_on;
+    bool charge_icon_on;
+    bool deep_sleep_request;
+    uint32_t display_hold_ms;
+    uint32_t key_hold_ms;
+    uint8_t display_soc;
+} bms_ui_state_t;
+
+typedef struct {
+    bool requested;
+    uint16_t request_value;
+} bms_iap_state_t;
+
+typedef struct {
     bms_config_t config;
     bms_soc_state_t soc;
     bms_can_state_t can;
     bms_power_state_t power;
+    bms_protection_state_t protection;
+    bms_ui_state_t ui;
+    bms_iap_state_t iap;
     bms_storage_t *storage;
     bms_sample_t last_sample;
     bool has_sample;
 } bms_app_t;
+
+typedef struct {
+    bool (*read_sample)(void *ctx, bms_sample_t *sample);
+    bool (*save_snapshot)(void *ctx, const bms_snapshot_t *snapshot);
+    bool (*load_snapshot)(void *ctx, bms_snapshot_t *snapshot);
+    bool (*can_send_probe)(void *ctx);
+    bool (*can_send_status)(void *ctx, const bms_soc_report_t *report);
+    void (*set_charge_mos)(void *ctx, bool on);
+    void (*set_discharge_mos)(void *ctx, bool on);
+    void (*set_display)(void *ctx, bool on, uint8_t soc, bool charge_icon);
+    void (*enter_rtc_stop)(void *ctx, uint16_t seconds);
+    void (*request_iap_reset)(void *ctx);
+    void *ctx;
+} bms_platform_ops_t;
 
 bms_config_t bms_config_default(void);
 bms_sample_t bms_sample_default(void);
@@ -181,11 +243,21 @@ void bms_can_on_rtc_wake(bms_can_state_t *can, const bms_config_t *config, uint3
 void bms_power_init(bms_power_state_t *power);
 void bms_power_update(bms_power_state_t *power, const bms_config_t *config, const bms_sample_t *sample, const bms_can_state_t *can, uint32_t elapsed_ms);
 
+void bms_protection_init(bms_protection_state_t *protection);
+void bms_protection_update(bms_protection_state_t *protection, const bms_config_t *config, const bms_sample_t *sample);
+
+void bms_ui_init(bms_ui_state_t *ui);
+void bms_ui_update(bms_ui_state_t *ui, const bms_soc_report_t *report, const bms_sample_t *sample, uint32_t elapsed_ms);
+
+void bms_iap_init(bms_iap_state_t *iap);
+bool bms_iap_request(bms_iap_state_t *iap, uint16_t value);
+
 void bms_app_init(bms_app_t *app, const bms_config_t *config, bms_storage_t *storage);
 void bms_app_process_sample(bms_app_t *app, const bms_sample_t *sample, uint32_t elapsed_ms);
 void bms_app_apply_rtc_wake(bms_app_t *app, uint32_t slept_seconds, const bms_sample_t *sample);
 bms_soc_report_t bms_app_report(const bms_app_t *app);
 bool bms_app_save_snapshot(bms_app_t *app);
+void bms_app_apply_outputs(const bms_app_t *app, const bms_platform_ops_t *ops);
 
 bool bms_comm_write_single(bms_app_t *app, uint16_t address, uint16_t value);
 bool bms_comm_write_block(bms_app_t *app, uint16_t address, const uint16_t *values, size_t count);

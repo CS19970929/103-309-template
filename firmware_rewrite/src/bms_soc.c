@@ -470,6 +470,14 @@ bms_config_t bms_config_default(void)
     config.rtc_idle_with_can_s = 1u;
     config.rtc_idle_without_can_s = 10u;
     config.idle_before_rtc_s = 10u;
+    config.cell_ovp_mv = 4250u;
+    config.cell_ovp_release_mv = 4150u;
+    config.cell_uvp_mv = 2800u;
+    config.cell_uvp_release_mv = 3000u;
+    config.charge_ocp_a10 = 500u;
+    config.discharge_ocp_a10 = 800u;
+    config.temp_high_c = 65u;
+    config.temp_high_release_c = 55u;
     return config;
 }
 

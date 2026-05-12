@@ -15,13 +15,18 @@
 
 ```text
 include/bms_app.h              对外 API 和核心数据结构
+include/bms_firmware.h         固件主循环入口
 CMakeLists.txt                 host/CI 构建入口
 src/bms_app.c                  App 门面与统一入口
+src/bms_firmware.c             平台 read_sample -> app -> output 的运行闭环
 src/bms_soc.c                  SOC 策略和显示体验
 src/bms_comm.c                 RS485/Modbus-like 地址兼容层
 src/bms_power_can.c            低功耗判定和 CAN 有/无设备策略
+src/bms_protection.c           基础保护和 MOS 输出
+src/bms_ui_iap.c               DI1/MCU_WK 显示体验和 IAP 请求
 src/bms_storage.c              SOC 双槽快照
 tests/test_rewrite_core.c      host 行为测试
+ports/stm32f1_spl/             STM32F1 SPL 硬件适配边界
 ```
 
 ## 验证
@@ -41,6 +46,7 @@ ctest --test-dir build/firmware_rewrite_cmake --output-on-failure
 ```
 
 当前 host 测试覆盖 `0x1005`、`0xD000`、满电到 `100%`、低压到 `0%`、静置 OCV deferred target、大电流 sag holdoff、CAN RTC 周期和 SOC 快照恢复。
+同时覆盖基础保护/MOS、DI1 显示、`GPIO_MCU_WK`、长按深睡、`0xFFFD` IAP 请求和 `bms_firmware_run_once()` 主循环入口。
 
 ## 接板原则
 

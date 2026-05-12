@@ -15,6 +15,10 @@ bool bms_comm_write_single(bms_app_t *app, uint16_t address, uint16_t value)
         return true;
     }
 
+    if (address == BMS_ADDR_IAP_CONNECT) {
+        return bms_iap_request(&app->iap, value);
+    }
+
     return false;
 }
 
@@ -105,5 +109,7 @@ bool bms_comm_read_d000(const bms_app_t *app, uint16_t *words, size_t count)
     words[55] = report.capacity_full_ah100;
     words[56] = report.capacity_factory_ah100;
     words[57] = report.cycle_count;
+    words[58] = (uint16_t)(app->protection.active_faults & 0xFFFFu);
+    words[59] = (uint16_t)((app->protection.active_faults >> 16) & 0xFFFFu);
     return true;
 }
