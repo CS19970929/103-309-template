@@ -86,6 +86,7 @@ void SleepDeal_Continue(void)
 
 	Can_PrepareSleep();
 	SOC_SaveSnapshotBeforeSleep();
+	FactoryAging_SaveProgressBeforeSleep();
 	LedBar_SaveSleepSoc();
 
 	if (Sleep_Mode.bits.b1TestSleep)

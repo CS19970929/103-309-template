@@ -138,7 +138,7 @@
 | `0x0801E000` | `FLASH_ADDR_STORAGE_SOC_SLOT_A` / `FLASH_ADDR_SH367309_VALUE` | SOC 数据 Slot A |
 | `0x0801E800` | `FLASH_ADDR_STORAGE_SOC_SLOT_B` / `FLASH_ADDR_SH367309_FLAG` | SOC 数据 Slot B |
 | `0x0801F000` | `FLASH_ADDR_UPGRADE_PARAM_FLAG` | 升级参数策略执行标志 |
-| `0x0801F400` | `FLASH_ADDR_FACTORY_AGING_FLAG` | 出厂老化完成标志 |
+| `0x0801F400` | `FLASH_ADDR_FACTORY_AGING_FLAG` | 出厂老化进度 journal / 完成标志 |
 | `0x0801F800` | `FLASH_ADDR_UPDATE_FLAG` | IAP/更新标志位 |
 | `0x0801FC00` | `FLASH_ADDR_SLEEP_FLAG` | 休眠模式标志位 |
 
@@ -183,14 +183,19 @@
 更新标志和睡眠标志都是“半字哨兵位”。
 写入逻辑的核心不是保存大数据，而是保存一个状态字。
 
-#### 2.2.4 出厂老化完成标志
+#### 2.2.4 出厂老化进度 journal
 
 [main.c](103 + 309/Project/Source/main.c) 会读取 `FLASH_ADDR_FACTORY_AGING_FLAG`：
 
 - `FLASH_FACTORY_AGING_DONE_VALUE = 0xA93D`
 - `FLASH_FACTORY_AGING_RESET_VALUE = 0xFFFF`
+- `FLASH_FACTORY_AGING_STATE_RUNNING = 0xA931`
 
-如果该页保持 `0xFFFF`，固件首次运行会进入出厂老化模式；运行态累计满 `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` 后写入完成标志。后续重启读到 `0xA93D` 时不再自动进入老化，并保持充电管关闭、放电管打开。
+如果该页保持 `0xFFFF`，固件首次运行会进入出厂老化模式；运行态累计过程中会低频追加 journal record，保存累计 `elapsed10ms` 和状态。Flash checkpoint 当前约 2 小时一次，正常 3 天老化不会写满该 1KB 页。MCU reset 或主动深睡唤醒后，会优先使用 BKP 最近值，再结合 Flash journal 最新有效记录恢复进度，不从 0 重新开始。
+
+运行态累计满 `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` 后写入 `DONE` record。后续重启读到 `0xA93D` 状态时不再自动进入老化，并保持充电管关闭、放电管打开。完成记录写失败时，运行态不会进入 `DONE`，后续继续重试，避免本次误判完成、下次重启又重新老化。
+
+返工需要重新执行老化时，除了擦除 `0x0801F400` journal 页，还需要清除 BKP `DR6~DR10` 中的老化进度缓存，避免刚擦完 Flash 又被 BKP 里的旧进度恢复。
 
 ## 3. 工程大小与链接布局
 
