@@ -18,7 +18,8 @@ UINT8 u8WakeCnt2 = 0;
 #define AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT ((UINT8)16U)
 #define AFE_CURRENT_AUTO_ZERO_FILTER_DIV ((INT32)16L)
 #define AFE_CURRENT_CALIB_MIN_MA ((UINT32)2000U)
-#define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)3U)
+#define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
+#define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)2U)
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -652,7 +653,7 @@ static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
 
     current_offset_raw = g_i32AfeCurrentZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
     limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
-    deadband_raw = DataLoad_CurrentMilliAmpToRaw((UINT32)AFE_CURRENT_OUTPUT_DEADBAND_A10 * 100U);
+    deadband_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_OUTPUT_DEADBAND_MA);
     delta_abs = DataLoad_CurrentAbsI32(raw_signed - g_i32AfeCurrentLastRawSigned);
     can_learn = 0U;
 
@@ -776,7 +777,7 @@ static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
     }
 
     current_a10 = (current_mA + 50U) / 100U;
-    if (current_a10 <= (UINT32)AFE_CURRENT_OUTPUT_DEADBAND_A10)
+    if (current_mA < AFE_CURRENT_OUTPUT_DEADBAND_MA)
     {
         return 0;
     }

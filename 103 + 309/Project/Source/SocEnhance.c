@@ -32,7 +32,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 
 #define SOC_TICK_MS                  ((UINT32)200U)
 #define SOC_TICKS_PER_SECOND         ((UINT16)5U)
-#define SOC_CURRENT_ACTIVE_A10       ((UINT16)4U)
+#define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)
 #define SOC_DEFAULT_CAP_A10          ((UINT16)270U)
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
@@ -660,7 +660,7 @@ static UINT8 soc_apply_deferred_ocv_step(UINT8 mode)
 	return changed;
 }
 
-static UINT8 soc_full_confirm_seconds(void)
+static UINT16 soc_full_confirm_seconds(void)
 {
 	UINT16 full_mv = soc_full_mv();
 	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
@@ -678,13 +678,13 @@ static UINT8 soc_full_confirm_seconds(void)
 	if ((SOC_Enhance_Element.u16_VCellMin >= vmin_fast) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
-		return (UINT8)SOC_FULL_FAST_SECONDS;
+		return SOC_FULL_FAST_SECONDS;
 	}
 	if ((s_soc.soc >= SOC_FULL_MIN_SOC) &&
 		(SOC_Enhance_Element.u16_VCellMin >= vmin_min) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
-		return (UINT8)SOC_FULL_SECONDS;
+		return SOC_FULL_SECONDS;
 	}
 	return 0U;
 }
@@ -856,7 +856,7 @@ static UINT8 soc_apply_mid_tail(UINT8 mode)
 
 static UINT8 soc_apply_full_empty(UINT8 mode)
 {
-	UINT8 full_seconds;
+	UINT16 full_seconds;
 	UINT8 empty_target;
 	UINT16 empty_ticks;
 	UINT8 old_soc = s_soc.soc;

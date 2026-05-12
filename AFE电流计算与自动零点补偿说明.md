@@ -27,7 +27,7 @@
 2. 在原始采样码层做自动零点补偿，得到 `corrected_raw`。
 3. 对 `corrected_raw` 取绝对值，按 `raw * 200mV * g_u32CS_Res_AFE / 21470` 换算为 mA。
 4. K/B 校准路径保留在 `DataLoad_CurrentApplyCalib()`，但当前文件内常量 `s_u8AfeCurrentKbCalibEnable = 0U`，电流先直接按硬件采样结果输出。
-5. mA 四舍五入转 A*10，`<= 0.3A` 的输出保持为 0。
+5. mA 四舍五入转 A*10，`< 0.2A` 的输出保持为 0，`0.2A` 及以上可以输出给 SOC 积分。
 
 ## 自动零点策略
 

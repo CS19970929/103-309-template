@@ -11,6 +11,8 @@ static UINT32 s_u32AnlogCalLast10msTick = 0U;
 UINT16 g_u16IoutOffsetAD;
 UINT16 g_u16TypeCOutCurrent_mA;
 UINT16 g_u16TypeCOutCurrent_A10;
+UINT16 g_u16TypeCBatEquivCurrent_mA;
+UINT16 g_u16TypeCBatEquivCurrent_A10;
 UINT16 g_u16TypeCOutOffsetAD;
 UINT16 g_u16TypeCOutStableAD;
 UINT16 g_u16TypeCOutDelta_mV;
@@ -256,6 +258,8 @@ static void ADC_ClearTypeCOutCurrent(void)
 {
     g_u16TypeCOutCurrent_mA = 0;
     g_u16TypeCOutCurrent_A10 = 0;
+    g_u16TypeCBatEquivCurrent_mA = 0;
+    g_u16TypeCBatEquivCurrent_A10 = 0;
     g_u16TypeCOutDelta_mV = 0;
     g_u32ADCValFilter2[ADC_CURR] = 0;
     g_i32ADCResult[ADC_CURR] = 0;

@@ -19,7 +19,11 @@ volatile union System_OnOFF_Function System_OnOFF_Func;
 volatile union System_Status SystemStatus;
 
 UINT8 SeriesNum = 10U;
+UINT16 g_u16TypeCOutCurrent_mA;
 UINT16 g_u16TypeCOutCurrent_A10;
+UINT16 g_u16TypeCBatEquivCurrent_mA;
+UINT16 g_u16TypeCBatEquivCurrent_A10;
+UINT32 g_u32Vbat_mV;
 UINT32 g_u32AfeCurrentSampleSeq;
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
@@ -114,7 +118,11 @@ static void host_reset_state(void)
 	memset(&SOC_Enhance_Element, 0, sizeof(SOC_Enhance_Element));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
+	g_u16TypeCOutCurrent_mA = 0U;
 	g_u16TypeCOutCurrent_A10 = 0U;
+	g_u16TypeCBatEquivCurrent_mA = 0U;
+	g_u16TypeCBatEquivCurrent_A10 = 0U;
+	g_u32Vbat_mV = 0U;
 	host_apply_default_config();
 }
 
@@ -137,6 +145,7 @@ static void host_init_with_voltage(UINT16 vmax, UINT16 vmin)
 {
 	g_stCellInfoReport.u16VCellMax = vmax;
 	g_stCellInfoReport.u16VCellMin = vmin;
+	g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)vmin * (UINT32)SeriesNum) / 10U);
 	g_stCellInfoReport.u16Ichg = 0U;
 	g_stCellInfoReport.u16IDischg = 0U;
 	InitData_SOC();
@@ -146,6 +155,7 @@ static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 {
 	g_stCellInfoReport.u16VCellMax = vmax;
 	g_stCellInfoReport.u16VCellMin = vmin;
+	g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)vmin * (UINT32)SeriesNum) / 10U);
 	g_stCellInfoReport.u16Ichg = ichg;
 	g_stCellInfoReport.u16IDischg = idsg;
 	++g_u32AfeCurrentSampleSeq;
@@ -184,18 +194,19 @@ static void test_discharge_integration_uses_app_soc_path(void)
 	CHECK_TRUE(g_stCellInfoReport.SocElement.u16Soc >= host_internal_soc());
 }
 
-static void test_typec_current_offsets_charge_current(void)
+static void test_typec_output_current_converts_to_battery_equivalent(void)
 {
 	host_reset_state();
 	host_set_snapshot(60U, 0U);
 	host_init_with_voltage(3835U, 3835U);
-	g_u16TypeCOutCurrent_A10 = 270U;
-	host_run_seconds(360U, 3835U, 3835U, 270U, 0U);
+	g_u16TypeCOutCurrent_mA = 9000U;
+	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 60U);
+	CHECK_RANGE_U32(g_u16TypeCBatEquivCurrent_A10, 23U, 24U);
 
-	g_u16TypeCOutCurrent_A10 = 0U;
-	host_run_seconds(360U, 3835U, 3835U, 270U, 0U);
-	CHECK_RANGE_U32(host_internal_soc(), 69U, 70U);
+	g_u16TypeCOutCurrent_mA = 0U;
+	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
+	CHECK_RANGE_U32(host_internal_soc(), 61U, 62U);
 }
 
 static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
@@ -372,7 +383,7 @@ int main(void)
 {
 	test_startup_ocv_uses_real_c_code();
 	test_discharge_integration_uses_app_soc_path();
-	test_typec_current_offsets_charge_current();
+	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_defers_until_active_charge();

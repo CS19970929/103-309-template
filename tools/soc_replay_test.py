@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOC_ENHANCE_SOURCE = PROJECT_ROOT / '103 + 309/Project/Source/SocEnhance.c'
 TICKS_PER_SECOND = 5
 PERIOD_MS = 200
-CURRENT_ENTER_A10 = 4
+CURRENT_ENTER_A10 = 2
 DEFAULT_SOC = 60
 CAP_A10 = 270
 CAP_FACTORY_AS10 = CAP_A10 * 3600
@@ -711,7 +711,7 @@ def test_direction_thresholds_and_conflict_resolution():
 
     model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10 + 1)
     assert model.mode == MODE_DSG
-    assert model.remainder_ms == 0
+    assert model.remainder_ms == ((CURRENT_ENTER_A10 + 1) * PERIOD_MS) % 1000
 
 
 def test_charge_integration_stops_display_before_full_confirm():

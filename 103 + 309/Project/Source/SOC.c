@@ -1,4 +1,5 @@
 #include "main.h"
+#include <stdint.h>
 
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
@@ -87,11 +88,55 @@ static UINT16 SOC_LimitA10(UINT32 current_a10)
 	return (current_a10 > (UINT32)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
 }
 
+static UINT32 SOC_GetPackVoltageForTypeCMv(void)
+{
+	UINT32 pack_mv = (UINT32)g_stCellInfoReport.u16VCellTotle * 10U;
+
+	if (pack_mv != 0U)
+	{
+		return pack_mv;
+	}
+	return g_u32Vbat_mV;
+}
+
+static UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
+{
+	uint64_t numerator;
+	uint64_t denominator;
+	uint64_t current_mA;
+	UINT32 pack_mv = SOC_GetPackVoltageForTypeCMv();
+
+	g_u16TypeCBatEquivCurrent_mA = 0U;
+	g_u16TypeCBatEquivCurrent_A10 = 0U;
+	if ((g_u16TypeCOutCurrent_mA == 0U) ||
+		(pack_mv == 0U) ||
+		(TYPEC_OUT_VOLTAGE_MV == 0U) ||
+		(TYPEC_DCDC_EFFICIENCY_PERMILLE == 0U))
+	{
+		return 0U;
+	}
+
+	numerator = (uint64_t)g_u16TypeCOutCurrent_mA *
+		(uint64_t)TYPEC_OUT_VOLTAGE_MV * 1000ULL;
+	denominator = (uint64_t)pack_mv *
+		(uint64_t)TYPEC_DCDC_EFFICIENCY_PERMILLE;
+	current_mA = (numerator + (denominator / 2ULL)) / denominator;
+	if (current_mA > 0xFFFFULL)
+	{
+		current_mA = 0xFFFFULL;
+	}
+
+	g_u16TypeCBatEquivCurrent_mA = (UINT16)current_mA;
+	g_u16TypeCBatEquivCurrent_A10 =
+		SOC_LimitA10((UINT32)((current_mA + 50ULL) / 100ULL));
+	return g_u16TypeCBatEquivCurrent_A10;
+}
+
 static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
 									 UINT16 *soc_ichg, UINT16 *soc_idsg)
 {
 	UINT32 chg_a10 = report_ichg;
-	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)g_u16TypeCOutCurrent_A10;
+	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)SOC_GetTypeCBatEquivCurrentA10();
 
 	if (chg_a10 >= dsg_a10)
 	{

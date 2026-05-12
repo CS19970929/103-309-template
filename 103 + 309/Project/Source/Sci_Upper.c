@@ -503,6 +503,9 @@ static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 
 static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 {
+	UINT8 reload_soc = 0U;
+	UINT8 reset_soc_capacity = 0U;
+
 	if (Sci_RangeOverlaps(offset, count, 0, 8))
 	{
 #if AFE_TYPE == bq76xx_afe
@@ -519,9 +522,24 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 		AFE_PARAM_WRITE_Flag = 1;
 	}
 
+	if (Sci_RangeOverlaps(offset, count, 12, 1))
+	{
+		reload_soc = 1U;
+	}
+
 	if (Sci_RangeOverlaps(offset, count, 24, 4))
 	{
+		reload_soc = 1U;
+		reset_soc_capacity = 1U;
+	}
+
+	if (reload_soc)
+	{
 		InitData_SOC();
+	}
+
+	if (reset_soc_capacity)
+	{
 		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
 	}
 

@@ -7,9 +7,9 @@
 | 电流来源 | 代码入口 | 物理含义 | 当前用途 |
 | --- | --- | --- | --- |
 | SH367309 AFE CADC | `DataDeal_Current()`、`g_stCellInfoReport.u16Ichg/u16IDischg` | 电池包主回路充放电电流 | 已参与保护、CAN、SOC |
-| MCU ADC PA2 | `ADC_CUR_AMP`、`ADC_Current_Smooth()` | Type-C 输出支路电流 | 本次先完成独立计算，暂未接入 SOC |
+| MCU ADC PA2 | `ADC_CUR_AMP`、`ADC_Current_Smooth()` | Type-C 输出支路电流 | 输出侧电流独立保留，SOC 使用换算后的电池侧等效电流 |
 
-本次处理目标是先把 PA2 ADC 采样的 Type-C 输出电流计算出来，形成可调试、可标定的稳定值；SOC 如何扣减留到后续独立设计。
+当前处理目标是把 PA2 ADC 采样的 Type-C 输出电流计算出来，并在 SOC 中按输出功率换算为电池侧等效放电电流。PA2 电流不经过 AFE 主回路采样，因此不能直接按 9V 输出侧电流扣减 SOC。
 
 ## 2. 当前 ADC 采样链路
 
@@ -129,6 +129,8 @@ Iout_mA = Vadc_delta_mV * 1000 / (Rsense_mohm * G)
 ```c
 g_u16TypeCOutCurrent_mA    // Type-C 输出电流，单位 mA，由 g_u16TypeCOutDelta_mV 直接换算
 g_u16TypeCOutCurrent_A10   // Type-C 输出电流，单位 A*10，由 mA 值直接换算
+g_u16TypeCBatEquivCurrent_mA  // Type-C 折算到电池侧的等效放电电流，单位 mA，供 SOC 使用
+g_u16TypeCBatEquivCurrent_A10 // Type-C 折算到电池侧的等效放电电流，单位 A*10，供 SOC 使用
 g_u16TypeCOutOffsetAD      // 当前不参与 Type-C 电流计算，固定清 0
 g_u16TypeCOutStableAD      // 32 次平均后的 PA2 ADC 值
 g_u16TypeCOutDelta_mV      // PA2 ADC 端电压，mV
@@ -168,14 +170,12 @@ g_u16IoutOffsetAD          // 当前不参与 Type-C 电流计算，固定清 0
 
 ## 8. 后续接入 SOC 的边界
 
-本次没有把 Type-C ADC 电流接入 SOC。
-
-后续接入前必须先确认 Type-C 输出电流是否已经被 AFE 主回路电流覆盖：
+Type-C PA2 电流不经过 AFE 主回路采样，当前已按电池侧等效电流接入 SOC：
 
 | 情况 | SOC 处理 |
 | --- | --- |
 | Type-C 输出电流已经流过 AFE 采样电阻 | 不应重复扣减 SOC |
-| Type-C 输出支路绕过 AFE 采样电阻 | 需要换算为电池侧等效放电电流后加到 SOC 放电电流 |
+| Type-C 输出支路绕过 AFE 采样电阻 | 当前项目属于该情况，需要换算为电池侧等效放电电流后加到 SOC 放电电流 |
 
 如果需要换算电池侧等效电流，应考虑 Type-C 输出电压、电池包电压和 DC/DC 效率：
 
@@ -183,12 +183,14 @@ g_u16IoutOffsetAD          // 当前不参与 Type-C 电流计算，固定清 0
 Ibat_equiv = I_typec_out * V_typec_out / V_bat / efficiency
 ```
 
+当前默认 `V_typec_out = 9000mV`，`efficiency = 90%`。电池包电压优先使用 `g_stCellInfoReport.u16VCellTotle * 10mV`，该值无效时回退使用 ADC 分压计算得到的 `g_u32Vbat_mV`。
+
 这部分应作为 SOC 设计的独立改动处理。
 
 ## 9. 本次对话重点记录
 
 1. 用户确认 PA2 ADC 电流不是 `DataDeal/SciUpper` 中的 AFE 电池电流，而是 Type-C 输出电流。
 2. 用户确认 Type-C 电流采样电阻为 10mohm。
-3. 当前先完成 Type-C ADC 电流计算，暂不接入 SOC。
+3. 当前已按“输出侧 9V 电流 -> 电池侧等效电流”接入 SOC，不能再直接把 `g_u16TypeCOutCurrent_A10` 加到 SOC 放电电流。
 4. 用户进一步确认 PA2 ADC 当前采到的就是 10mohm 分流器两端压降，不经过前端放大。
 5. 当前代码按直接采样配置，不再使用放大倍数参数；后续电路改版时再按新前端重新调整参数和公式。

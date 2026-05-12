@@ -16,6 +16,8 @@
 
 #define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm, PA2 samples shunt voltage directly
 #define TYPEC_CUR_VDDA_MV           3300U   // ADC reference voltage
+#define TYPEC_OUT_VOLTAGE_MV        9000U   // Type-C output voltage used for SOC battery-side equivalent current
+#define TYPEC_DCDC_EFFICIENCY_PERMILLE 900U // 900 means 90% DC/DC efficiency
 #define VBC_ADC_VDDA_MV           3300U   // ADC reference voltage for PA1 VBUS divider
 #define VBC_DIVIDER_RTOP_KOHM     470U    // Vbat+ to PA1 divider resistor, adjust with hardware
 #define VBC_DIVIDER_RBOTTOM_KOHM  15U     // PA1 to GND divider resistor, adjust with hardware
@@ -47,6 +49,8 @@ extern INT32 g_i32ADCResult[ADC_NUM];             //ADC���ݻ���
 //extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//���λ�����ܸ�
 extern UINT16 g_u16TypeCOutCurrent_mA;
 extern UINT16 g_u16TypeCOutCurrent_A10;
+extern UINT16 g_u16TypeCBatEquivCurrent_mA;
+extern UINT16 g_u16TypeCBatEquivCurrent_A10;
 extern UINT16 g_u16TypeCOutOffsetAD;
 extern UINT16 g_u16TypeCOutStableAD;
 extern UINT16 g_u16TypeCOutDelta_mV;

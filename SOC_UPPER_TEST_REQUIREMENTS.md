@@ -75,6 +75,7 @@
 - `tools/soc_online_monitor.py`：通过 RS485 在线读取板端状态并保存 CSV。
 - `tools/soc_auto_test.ps1`：一键执行回放、加速仿真和可选在线监控。
 - `tools/soc_test_ui.py`：图形化 SOC 测试上位机，集成场景仿真、曲线、在线监控和报告查看。
+- `tools/start_soc_test_ui.ps1`：固定图形化上位机启动入口，默认使用已验证的 Windows Python Launcher `py -3.9`，避免双击脚本时进入错误 Python 环境。
 
 后续图形化上位机可以直接复用这些协议和场景定义，界面只负责选择串口、选择场景、启动测试、展示曲线和导出报告。
 
@@ -92,7 +93,7 @@
    - 长爬坡：大电流、压降、松油恢复。
    - 低压截止：接近控制器保护电压时 SOC 应收敛到 0。
    - 充电回满：积分到 99 后必须等待满电电压锚点确认到 100。
-   - 静置恢复：30min/RTC OCV 小步修正。
+   - 静置恢复：稳定窗口建立 deferred OCV target，后续充/放电方向匹配时消化；久置低 OCV 按 30min/1% 下修。
 
 3. 加速测试
    - 主机仿真天然加速，不等待真实时间。
@@ -129,7 +130,13 @@
 启动图形化上位机：
 
 ```powershell
-py tools\soc_test_ui.py
+.\tools\start_soc_test_ui.ps1
+```
+
+启动图形化上位机并自动演示在线监控：
+
+```powershell
+.\tools\start_soc_test_ui.ps1 -Demo -Port COM4 -Baud 19200 -Slave 1 -Samples 10 -Interval 0.5
 ```
 
 主机自动化 + 在线读板：

@@ -21,6 +21,11 @@ PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_C
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
+ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
+DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
+SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
+SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
+SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
 GITIGNORE = ROOT / ".gitignore"
 PRE_COMMIT = ROOT / ".githooks" / "pre-commit"
 PRE_PUSH = ROOT / ".githooks" / "pre-push"
@@ -349,6 +354,61 @@ def check_hooks(reporter):
             reporter.warn("{0} does not run tools/project_check.py".format(hook.relative_to(ROOT)))
 
 
+def check_soc_parameter_side_effects(reporter):
+    if not SCI_UPPER_C.exists():
+        return
+
+    text = read_text(SCI_UPPER_C)
+    start = text.find("static void Sci_ApplyOtherElementSideEffects")
+    end = text.find("\n}\n\nvoid Sci_Deal_WrRegs_0x10", start)
+    if start == -1 or end == -1:
+        reporter.fail("Sci_ApplyOtherElementSideEffects is missing or moved unexpectedly")
+        return
+
+    body = text[start:end]
+    if (
+        "Sci_RangeOverlaps(offset, count, 12, 1)" in body
+        and "reload_soc = 1U;" in body
+        and "Sci_RangeOverlaps(offset, count, 24, 4)" in body
+        and "SOC_Enhance_Element.u16_RefreshData_Flag = 2;" in body
+    ):
+        reporter.ok("SOC table select and capacity parameter writes refresh SOC runtime state")
+    else:
+        reporter.fail("SOC table select/capacity side effects must refresh SOC runtime state")
+
+
+def check_soc_current_and_typec_policy(reporter):
+    required_files = [ADC_H, DATADEAL_C, SOC_C, SOC_ENHANCE_C]
+    if any(not path.exists() for path in required_files):
+        return
+
+    adc_h = read_text(ADC_H)
+    datadeal_c = read_text(DATADEAL_C)
+    soc_c = read_text(SOC_C)
+    soc_enhance_c = read_text(SOC_ENHANCE_C)
+
+    if (
+        "TYPEC_OUT_VOLTAGE_MV" in adc_h
+        and "TYPEC_DCDC_EFFICIENCY_PERMILLE" in adc_h
+        and "g_u16TypeCBatEquivCurrent_A10" in adc_h
+        and "SOC_GetTypeCBatEquivCurrentA10" in soc_c
+        and "g_u16TypeCOutCurrent_mA" in soc_c
+        and "report_idsg + (UINT32)g_u16TypeCOutCurrent_A10" not in soc_c
+    ):
+        reporter.ok("Type-C SOC path uses battery-side equivalent current")
+    else:
+        reporter.fail("Type-C output current must be converted before entering SOC")
+
+    if (
+        "#define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)" in soc_enhance_c
+        and "#define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)" in datadeal_c
+        and "#define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)2U)" in datadeal_c
+    ):
+        reporter.ok("SOC active current threshold and AFE output deadband are 0.2A")
+    else:
+        reporter.fail("SOC active current threshold and AFE output deadband must stay at 0.2A")
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="Check Keil project release/debug configuration.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Only print warnings, errors, and summary.")
@@ -365,6 +425,8 @@ def main(argv):
     check_build_guard(reporter)
     check_gitignore(reporter)
     check_hooks(reporter)
+    check_soc_parameter_side_effects(reporter)
+    check_soc_current_and_typec_policy(reporter)
 
     return reporter.summary()
 

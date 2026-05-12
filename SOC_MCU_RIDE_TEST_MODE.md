@@ -55,7 +55,7 @@
 ## 上位机使用流程
 
 1. 烧录测试固件：Debug 或 Factory/Test profile，并显式开启 `PROJECT_CFG_SOC_TEST_MODE_ENABLE=1`。
-2. 打开 `py tools\soc_test_ui.py`。
+2. 打开上位机：`.\tools\start_soc_test_ui.ps1`。
 3. 在“在线板端监控”里确认串口、波特率、地址可读。
 4. 进入“MCU加速测试”，先点“读取测试状态”，确认 `supported=1`、`tick=200ms`。
 5. 点“运行MCU真实骑行”执行城市骑行、爬坡、高动态电流脉冲场景。

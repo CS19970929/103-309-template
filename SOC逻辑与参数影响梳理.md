@@ -33,7 +33,7 @@
 3. 中低压和低压都走 table-driven 上限约束，默认覆盖 `V0+700mV` 到 `V0-50mV`。
 4. 大电流 `Idsg > C/2` 触发 sag holdoff，未回弹且未到真实末端时阻断电压校准。
 5. 重载后关机再开机时，快照 `u16Flags bit0` 会带来 `5min` 回弹保护，避免未回弹电压把 SOC 校低。
-6. 运行态静置 OCV 不再按固定 `30min` 到点校准；电压稳定 `5min` 后按 `10min/1%` 慢速收敛，电压持续回弹/跳动则不校准。
+6. 运行态静置 OCV 不再按固定 `30min` 到点校准；电压稳定 `5min` 后只记录可信 OCV 目标，后续优先在充电/放电阶段按 `10min/1%` 消化差值，久置低 OCV 才允许静置下修。
 7. 无 Flash 快照冷启动时，电压有效按 OCV 表；电压无效才默认 `60%`。
 8. 对外只有 `g_stCellInfoReport.SocElement`，RS485、CAN、LedBar 都读这里的平滑 SOC/SOH/容量。
 
@@ -65,11 +65,12 @@
 
 `App_SOC()` 只在 `g_u32AfeCurrentSampleSeq` 变化时执行完整算法，避免同一 AFE 样本被重复积分。没有新样本时只重新发布当前显示数据。
 
-Type-C 输出电流会进入 SOC 净电流：
+Type-C PA2 电流不经过 AFE 主回路采样，SOC 不再直接扣 9V 输出侧电流，而是先按输出功率换算为电池侧等效放电电流：
 
 ```text
-SOC放电输入 = AFE放电 + Type-C放电 - AFE充电
-SOC充电输入 = AFE充电 - AFE放电 - Type-C放电
+Type-C电池侧等效电流 = Type-C输出电流 * 9000mV / 电池包电压 / 0.9
+SOC放电输入 = AFE放电 + Type-C电池侧等效放电 - AFE充电
+SOC充电输入 = AFE充电 - AFE放电 - Type-C电池侧等效放电
 ```
 
 这保证边充边外放时不会虚增 SOC。
@@ -78,11 +79,11 @@ SOC充电输入 = AFE充电 - AFE放电 - Type-C放电
 
 | 条件 | 模式 |
 | --- | --- |
-| `Ichg >= 0.4A` 且 `Ichg >= Idsg` | `CHG` |
-| `Idsg >= 0.4A` | `DSG` |
+| `Ichg >= 0.2A` 且 `Ichg >= Idsg` | `CHG` |
+| `Idsg >= 0.2A` | `DSG` |
 | 其他 | `RELAX` |
 
-`0.4A` 以下视作静置，用于抑制电流零漂。
+`0.2A` 以下视作静置，用于抑制电流零漂。AFE 输出死区也同步为 `200mA`，避免 SOC 门槛降低后仍被前级 `0.3A` 死区挡掉。
 
 ## 4. 核心算法
 
@@ -221,22 +222,23 @@ OCV 表只用于冷启动、稳定静置/RTC，以及骑行中上限约束参考
 
 ### 4.9 静置/RTC OCV
 
-运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒路径也使用稳定窗口：第一次 RTC 电压样本只建立参考值，后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才累计稳定时间；稳定累计达到 `5min` 且 `10min/step` 节拍到达时，最多按 OCV 表修正 `1%`。
+运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒路径也使用稳定窗口：第一次 RTC 电压样本只建立参考值，后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才累计稳定时间；稳定累计达到 `5min` 后按 OCV 表计算可信目标，并按 `10min` 节拍刷新 deferred target。
 
 RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周期只影响通信探测频率，不再直接决定 SOC 校准频率。RTC OCV 仍会被电压合法性、故障和 sag/rebound holdoff 阻断。
 
 方向约束：
 
-- `RELAX`：可向上或向下靠近 OCV。
-- `CHG`：只允许向上。
-- `DSG`：只允许向下。
+- `RELAX`：通常只记录 deferred target，不直接向上修正；若稳定静置超过 `30min` 且 OCV 目标低于当前 SOC，允许按 `30min/1%` 慢速下修。
+- `CHG`：只允许向上消化 deferred target，节拍 `10min/1%`。
+- `DSG`：只允许向下消化 deferred target，节拍 `10min/1%`。
 - 每次最多 `1%`。
 
 稳定静置补偿：
 
-- `RELAX` 下电压稳定 `5min` 后启用。
+- `RELAX` 下电压稳定 `5min` 后建立可信 OCV 目标。
 - `VCellMin/VCellMax` 相对参考值波动 `<=30mV`。
-- 每累计 `10min` 最多按 OCV 表修正 `1%`。
+- 每累计 `10min` 刷新 deferred target；目标与当前方向不匹配时会清空，避免静置阶段直接把 SOC 快速拉到 OCV。
+- 长时间不用车且 OCV 目标明显低于当前 SOC 时，`RELAX/RTC` 可以按 `30min/1%` 下修，避免电池久置没电但 SOC 仍长期挂高。
 - 重新骑行、电压跳动、低压表活跃或 sag/rebound holdoff 会清空静置可信度。
 - 即使 `RELAX` 超过 `30min`，只要电压仍在回弹/跳动，也不会强行使用 OCV。
 
@@ -304,7 +306,7 @@ RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周�
 | --- | ---: | --- |
 | `SOC_TICK_MS` | `200ms` | 安时积分时间基准，必须与 AFE 样本周期一致 |
 | `SOC_TICKS_PER_SECOND` | `5` | 满电、低压、静置、显示计时换算 |
-| `SOC_CURRENT_ACTIVE_A10` | `4` | 充放电模式判定门槛，`0.4A` |
+| `SOC_CURRENT_ACTIVE_A10` | `2` | 充放电模式判定门槛，`0.2A` |
 | `SOC_DEFAULT_CAP_A10` | `270` | 参数容量为 0 时的冷启动兜底容量，`27Ah` |
 | `SOC_SOH_MIN` | `80` | SOH 最低值 |
 | `SOC_SOH_CYCLE_STEP` | `100` | 每 `100` 次循环 SOH 下降 `1%` |
@@ -328,7 +330,7 @@ RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周�
 
 | 参数 | 当前值 | 影响什么 |
 | --- | ---: | --- |
-| `AFE_CURRENT_OUTPUT_DEADBAND_A10` | `3` | 0.3A 输出死区，影响小电流是否进入 SOC |
+| `AFE_CURRENT_OUTPUT_DEADBAND_MA` / `AFE_CURRENT_OUTPUT_DEADBAND_A10` | `200mA` / `2` | AFE 输出死区，影响小电流是否进入 SOC |
 | `AFE_CURRENT_AUTO_ZERO_LIMIT_MA` | `1000mA` | 自动零点学习允许的电流范围 |
 | `AFE_CURRENT_AUTO_ZERO_STABLE_RAW` | `8` | 零点稳定判断窗口 |
 | `AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT` | `16` | 自动零点确认次数 |
@@ -379,7 +381,7 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `SOC_TestMode_InputValid()` | 测试模式下校验注入样本的电压、电流和 tick 数范围 |
 | `SOC_TestMode_ApplyReportSample()` | 测试模式下把注入样本写入 `g_stCellInfoReport`，模拟 AFE 报告 |
 | `SOC_LimitA10()` | 将净电流限制到 `UINT16` 范围 |
-| `SOC_GetNetCurrentForCalc()` | 合成 SOC 计算用净充/放电电流，包含 Type-C 输出抵消 |
+| `SOC_GetNetCurrentForCalc()` | 合成 SOC 计算用净充/放电电流，包含 Type-C 电池侧等效电流抵消 |
 | `SOC_LoadConfigData()` | 从 `OtherElement` 和 `SOC_Table_Set` 复制 SOC 配置到 `SOC_Enhance_Element` |
 | `InitData_SOC()` | SOC 初始化入口，加载配置、初始化增强状态并发布数据 |
 | `App_SOC()` | SOC 周期入口；有新 AFE 样本时执行算法，无新样本时只发布 |
@@ -419,8 +421,12 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `soc_add_discharge()` | 累计放电量，更新 `cycle_x100`，必要时刷新 SOH/SOC |
 | `soc_integrate()` | 按 200ms tick 做充/放电安时积分 |
 | `soc_apply_rest_ocv()` | 主动 OCV 刷新小步校正，单次最多 `SOC_CAL_STEP` |
-| `soc_apply_rtc_rest_ocv()` | RTC 休眠 OCV 稳定窗口累计与 `10min/step` 小步校正 |
-| `soc_apply_ocv_step()` | 执行一次 OCV 小步修正，并受 sag/rebound holdoff 阻断 |
+| `soc_apply_rtc_rest_ocv()` | RTC 休眠 OCV 稳定窗口累计与 deferred target 刷新 |
+| `soc_apply_ocv_target_step()` | 按当前模式方向约束执行一次 OCV 目标小步修正 |
+| `soc_latch_rest_ocv_target()` | 电压稳定窗口满足后锁存可信 OCV 目标 |
+| `soc_set_deferred_ocv_target()` | 记录后续充/放电阶段要消化的 OCV 目标 |
+| `soc_apply_deferred_ocv_step()` | 在 `CHG/DSG` 中按方向和 `10min/1%` 节拍消化 deferred target |
+| `soc_apply_long_rest_down_step()` | 久置且 OCV 目标低于当前 SOC 时，`RELAX/RTC` 按 `30min/1%` 慢速下修 |
 | `soc_full_confirm_seconds()` | 判断当前是否满足快速/普通满电确认，并返回所需秒数 |
 | `soc_empty_current_band()` | 按 `RELAX/C/5/C/2/>C/2` 选择低压表电流档位 |
 | `soc_heavy_discharge_active()` | 判断是否处于 `Idsg > C/2` 大电流放电 |
@@ -435,7 +441,7 @@ SOC 快照使用内部 Flash 双槽 journal，格式保持 V2 兼容：
 | `soc_apply_full_empty()` | 执行满电确认或低压表收敛，二者互斥 |
 | `soc_reset_rest_confidence()` | 清空静置可信度计数和参考电压 |
 | `soc_rest_voltage_stable()` | 判断当前 RELAX 电压是否满足静置稳定条件 |
-| `soc_update_rest_timer()` | RELAX 计时，电压稳定窗口满足后调用 OCV 小步校正 |
+| `soc_update_rest_timer()` | RELAX 计时，电压稳定窗口满足后锁存 OCV 目标，并处理久置下修例外 |
 | `soc_display_target()` | 计算显示目标，处理 `SOC_Fixed/SOC_Zero` 覆盖 |
 | `soc_publish()` | 显示平滑、容量/SOH/循环换算、发布到对外数据源 |
 | `soc_handle_command()` | 处理 `RefreshData_Flag`：OCV 刷新、参数刷新、设置一次 SOC |
@@ -464,4 +470,4 @@ python3 tools/project_check.py
 git diff --check
 ```
 
-没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，覆盖 `10` 个关键 C 源码路径；`tools/soc_replay_test.py` 覆盖 `40` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、稳定静置、静置超过 30min 但电压不稳定不校准、长时间不用车、回弹保护、异常输入和随机不变量。
+没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，覆盖 `14` 个关键 C 源码路径；`tools/soc_replay_test.py` 覆盖 `43` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、稳定静置、deferred OCV、静置超过 30min 但电压不稳定不校准、长时间不用车、回弹保护、异常输入和随机不变量。

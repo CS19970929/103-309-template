@@ -40,7 +40,7 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
   "103 + 309/Project/Source/SocEnhance.c"
 ```
 
-`tools/run_soc_host_c_test.py` 当前覆盖 `14` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
+`tools/run_soc_host_c_test.py` 当前覆盖 `14` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
 
 `tools/soc_replay_test.py` 当前覆盖 `43` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 

@@ -1,5 +1,7 @@
 # SOC 配置门控接入与调试记录
 
+> 说明：本文记录的是配置门控接入当时的阶段性变更和验证结果。当前 SOC 完整回归入口仍以 `tools/run_soc_host_c_test.py`、`tools/soc_replay_test.py`、`tools/project_check.py` 为准，最新主机 C 测试覆盖 `14` 项，回放测试覆盖 `43` 项。
+
 ## 背景
 
 当前工程已经在 `conf/Project_Config.h` 中提供了 SOC 校准相关配置项，包括满电确认裕量、最大单体压差、有效电压范围，以及保护/系统故障是否阻断电压类校准。但 `SocEnhance.c` 仍有部分逻辑使用固定阈值，导致配置界面修改后不会完整影响 SOC 算法。

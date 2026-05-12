@@ -59,7 +59,7 @@
 | 控制器保护前归零 | `2950mV` | 默认 `V0 - 50mV`，以最高 `1%/200ms` 收敛到 0 |
 | 默认启动 SOC | `60%` | 仅无快照且电压无效时使用 |
 | 积分周期 | `200ms` | AFE 新电流样本触发 |
-| 有效电流阈值 | `0.4A` | `Ichg/Idsg >= 4`，单位 `A * 10` |
+| 有效电流阈值 | `0.2A` | `Ichg/Idsg >= 2`，单位 `A * 10` |
 
 ## 4. OCV 表
 
@@ -132,8 +132,8 @@
 
 | 条件 | 模式 |
 | --- | --- |
-| `Ichg >= 0.4A` 且 `Ichg >= Idsg` | `CHG` |
-| `Idsg >= 0.4A` | `DSG` |
+| `Ichg >= 0.2A` 且 `Ichg >= Idsg` | `CHG` |
+| `Idsg >= 0.2A` | `DSG` |
 | 其他 | `RELAX` |
 
 容量增量：
@@ -342,7 +342,7 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 python3 tools/run_soc_host_c_test.py
 ```
 
-当前覆盖 14 个关键 C 路径：启动 OCV、放电积分、Type-C 电流抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
+当前覆盖 14 个关键 C 路径：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
 
 主机回放矩阵：
 
