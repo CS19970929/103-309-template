@@ -15,6 +15,7 @@
 
 ```text
 include/bms_app.h              对外 API 和核心数据结构
+CMakeLists.txt                 host/CI 构建入口
 src/bms_app.c                  App 门面与统一入口
 src/bms_soc.c                  SOC 策略和显示体验
 src/bms_comm.c                 RS485/Modbus-like 地址兼容层
@@ -31,6 +32,14 @@ tests/test_rewrite_core.c      host 行为测试
 python3 tools/run_rewrite_host_tests.py
 ```
 
+也可以直接使用 CMake：
+
+```bash
+cmake -S firmware_rewrite -B build/firmware_rewrite_cmake
+cmake --build build/firmware_rewrite_cmake
+ctest --test-dir build/firmware_rewrite_cmake --output-on-failure
+```
+
 当前 host 测试覆盖 `0x1005`、`0xD000`、满电到 `100%`、低压到 `0%`、静置 OCV deferred target、大电流 sag holdoff、CAN RTC 周期和 SOC 快照恢复。
 
 ## 接板原则
@@ -44,3 +53,7 @@ python3 tools/run_rewrite_host_tests.py
 - LED/DI1 按体验契约接入，不改变 SOC core。
 
 不要把旧 `main.c`、旧低功耗状态机或旧 CAN 调度写法搬进该目录。
+
+## 旧代码边界
+
+旧 `103 + 309/Project/Source` 应用层源码已退役删除。当前分支只保留厂商 SPL/启动文件、安全烧录脚本和历史文档；后续所有功能都应在 `firmware_rewrite` 或新 port 层补齐。

@@ -94,6 +94,7 @@
 
 ```text
 firmware_rewrite/
+  CMakeLists.txt
   include/bms_app.h
   src/bms_app.c
   src/bms_comm.c
@@ -172,3 +173,13 @@ python3 tools/run_rewrite_host_tests.py
 - 不做复杂 FCC 在线学习。SOC 用户体验优先，先用可解释 SOH 映射和稳定端点校准。
 - 不做多套兜底状态机。异常只做明确拒绝、保持原状态或请求安全休眠。
 - 不把硬件驱动写进 core。核心可 host 测试，硬件差异留给 port 层。
+
+## 10. 旧应用层删除边界
+
+本分支已删除 `103 + 309/Project/Source` 下旧应用层 C/H 源码，包括旧 `main.c`、旧 SOC、旧低功耗、旧 CAN、旧 LED、旧参数和旧 EasyLogger 接入代码。保留内容只包括：
+
+- `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0`：厂商 SPL、CMSIS、启动文件，后续 STM32F1 port 可继续复用。
+- `tools/soc_flash_app_safe.ps1`：App 安全烧录入口，继续保留 `0x08004800` 地址检查。
+- 历史 Markdown 文档：作为需求来源和验证清单，不再作为代码结构来源。
+
+`tools/project_check.py` 已改为检查 `firmware_rewrite`，并要求旧 `Source` 不再包含 C/H 文件。

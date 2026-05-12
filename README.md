@@ -63,7 +63,8 @@
 | [MCU 资源分布与架构优化评估](MCU资源分布与架构优化评估.md) | MCU 外设、资源占用、架构优化方向 |
 | [系统时钟系统梳理](系统时钟系统梳理.md) | TIM3 系统节拍、任务 flag、时基关系 |
 | [运行架构与时基重构方案](运行架构与时基重构方案.md) | 主循环、任务调度、时基所有权、低功耗和 CAN 服务化重构路线 |
-| [103 + 309 从零重写需求与架构说明](PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md) | 不沿用旧应用层架构时必须保留的需求、通信契约、安全边界和 clean-room 实现目录 |
+| [103 + 309 从零重写需求与架构说明](PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md) | 不沿用旧应用层架构时必须保留的需求、通信契约、安全边界、旧代码删除边界和 clean-room 实现目录 |
+| [firmware_rewrite](firmware_rewrite/README.md) | 当前有效 clean-room 重写源码、CMake 构建入口和 host 测试说明 |
 | [System_Monitor 模块梳理](System_Monitor模块梳理.md) | 系统状态位、功能开关、错误标志使用关系 |
 | [项目宏定义梳理](项目宏定义梳理.md) | 编译宏、产品配置、硬件映射、参数地址、第三方库宏使用边界 |
 | [TODO](TODO.md) | 根目录待办事项 |
