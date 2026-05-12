@@ -1,291 +1,217 @@
 # SOC 模块逻辑说明
 
-本文按当前代码实现记录 SOC 模块边界、数据流、存储、算法策略和验证要求。代码依据：
+本文按 2026-05-12 当前工作区源码重新梳理 SOC 模块。结论以代码为准，主要依据：
 
 - `103 + 309/Project/Source/SOC.c`
-- `103 + 309/Project/Source/SocEnhance.c/.h`
-- `103 + 309/Project/Source/Flash.c/.h`
+- `103 + 309/Project/Source/SOC.h`
+- `103 + 309/Project/Source/SocEnhance.c`
+- `103 + 309/Project/Source/SocEnhance.h`
+- `103 + 309/Project/Source/Flash.c`
+- `103 + 309/Project/Source/Flash.h`
+- `103 + 309/Project/Source/DataDeal.c`
 - `103 + 309/Project/Source/Sci_Upper.c`
+- `103 + 309/Project/Source/Sci_Upper.h`
 - `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/SleepDeal.c`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/Can_HDX.c`
+- `103 + 309/Project/Source/conf/Project_Config.h`
+- `103 + 309/Project/Source/conf/Project_BuildGuard.h`
 - `tools/run_soc_host_c_test.py`
 - `tools/soc_replay_test.py`
+- `tools/soc_online_monitor.py`
 
-## 1. 设计目标
+## 1. 当前结论
 
-当前 SOC 面向 e-bike 场景，目标不是建立复杂电池模型，而是在工程可维护前提下做到：
+当前 SOC 是以安时积分为主、端点/低压/静置 OCV 小步校正为辅的工程化状态机。内部 SOC 与对外显示 SOC 分离，内部容量和循环用于计算，`g_stCellInfoReport.SocElement` 发布的是经过显示平滑或显示覆盖后的结果。
 
-1. 安时积分为主，保证骑行/充电过程连续。
-2. 端点和静置 OCV 只做可信、小步修正，避免端电压瞬态导致跳变。
-3. 显示 SOC 与内部 SOC 分离，用户看到的是平滑结果。
-4. 低电压区优先防止高估，避免临近欠压仍显示较高电量。
-5. SOH 暂按循环次数映射，不做 FCC 学习。
-6. 保留原通信地址、函数签名和 Flash V2 快照格式。
-7. OCV 表只作为可信场景下的参考锚点，不在骑行瞬态中直接覆盖 SOC。
-8. 不把“满足 30min 静置”作为立即校准入口；运行态必须先看到电压回弹变化变小，再把 OCV 作为 deferred target。
+核心约束：
 
-运行态自动校准必须遵守硬原则：**每次最多校准 `1%`**。满电确认、低压收敛、静置/RTC OCV、低压表修正都只能按 `1%` 一步移动内部 SOC，不允许一次性从任意 SOC 跳到 `100%` 或 `0%`。稳定静置/RTC OCV 默认只记录可信目标，不立即追平；后续在方向匹配的充电或放电阶段按小步消化差值。启动初始化、上位机 `0x1005` 设置一次 SOC、`SOC_Fixed/SOC_Zero` 显示覆盖不属于运行态自动校准。
+1. `App_SOC()` 只在 AFE 电流新样本到达时推进完整算法，避免重复积分旧样本。
+2. 采样周期按 `200ms` 计算，`SOC_TICKS_PER_SECOND = 5`。
+3. 自动校正每次最多移动 `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT`，当前为 `1%`。
+4. 充电积分不能直接到 `100%`，必须通过满电电压确认后逐步锚定。
+5. 低压和中低压修正只会向下限制明显高估 SOC，不会把 SOC 向上拉高。
+6. 静置/RTC OCV 先生成 deferred target，不立即跳变；后续方向匹配的充/放电或久置低 OCV 才小步消化。
+7. 大电流压降会进入 sag/rebound holdoff，阻止把未回弹端电压当作真实 OCV。
+8. SOC 快照使用内部 Flash V2 journal，并兼容旧 V1 快照。
+9. 量产默认关闭 SOC 注入测试入口，`0xD300 supported=0` 是正常结果。
 
-大电流骑行导致的 voltage sag 不能直接用于校准。当前以 `Idsg > C/2` 作为大电流判定，触发后进入 `30s` sag holdoff；holdoff 期间若 `VCellMin > V0 + 50mV`，禁止低压表和静置 OCV 校准。若电压已经低到 `V0 + 50mV` 以内，则认为进入真实末端，仍允许按 `1%` 步进收敛，保证保护前到 0。
+## 2. 安全边界
 
-为覆盖“重载后关机、未充分回弹又开机”的场景，大电流 holdoff 会通过 Flash 快照 `u16Flags bit0` 持久化。下次开机如果发现该标志，先进入 `5min` 回弹保护窗口，期间禁止把未回弹电压当成真实 OCV 下修 SOC。
+量产和测试必须隔离：
 
-## 2. 模块边界
+- 量产配置必须保持 `PROJECT_CFG_BUILD_PROFILE 0`。
+- 量产配置必须保持 `PROJECT_CFG_SOC_TEST_MODE_ENABLE 0`。
+- SOC 注入测试固件才允许使用 `PROJECT_CFG_BUILD_PROFILE 2`、`PROJECT_CFG_SOC_TEST_MODE_ENABLE 1`、`PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX 300`。
+- `Project_BuildGuard.h` 会在 SOC 测试入口开启但构建 profile 不是 Factory/Test 时直接编译报错。
 
-| 文件 | 责任 |
-| --- | --- |
-| `SOC.c` | 加载 `OtherElement` 和 SOC 表，提供 `InitData_SOC()` / `App_SOC()`，按 AFE 电流样本序号驱动算法 |
-| `SocEnhance.c` | 单一 `SOC_STATE` 状态机，负责积分、端点、OCV、低压表、显示、快照 |
-| `SocEnhance.h` | 对外结构体、表选择枚举、API 声明 |
-| `Flash.c/.h` | SOC V2 快照 journal 读写，并兼容旧 V1 快照 |
-| `Sci_Upper.c` | 上位机写 SOC 表、SOC 基础参数、设置一次 SOC、功能开关 |
-| `rtc_sleep.c` | RTC 唤醒后调用 `SOC_ApplyRtcRelaxationCompensation()` 做休眠静置修正 |
-| `LedBar.c` / `Can_HDX.c` / `Sci_Upper.c` | 使用 `g_stCellInfoReport.SocElement` 的对外 SOC/SOH/容量/循环次数 |
+烧录安全：
 
-## 3. 当前关键配置
+- IAP/Bootloader 地址是 `0x08000000`。
+- 正常 App 地址是 `0x08004800`。
+- App scatter 文件是 `103 + 309/Project/Users/Objects/FD_Release.sct`。
+- 禁止把 `FD_Debug.bin` 或 `FD_Release.bin` 裸写到 `0x08000000`。
+- App 烧录优先使用：
 
-| 项目 | 当前默认值 | 说明 |
-| --- | ---: | --- |
-| 电芯体系 | `TERNARYLI` | INR21700-45E，NMC/graphite |
-| 串数 | `10` | `SNum = 10` |
-| 标称容量 | `27Ah` | `OtherElement.u16Soc_Ah = 270`，单位 `10 * Ah` |
-| 满电端点 | `4180mV` | `OtherElement.u16Soc_V_100`，满电确认不再硬依赖 taper 电流 |
-| 显示空电端点 | `3000mV` | `OtherElement.u16Soc_V_0`，e-bike 显示 0% 口径 |
-| SOH 下限 | `80%` | `SOC_SOH_MIN`，循环衰减不再低于 80% |
-| 低压表范围 | `3400mV~2950mV` | 按电压和骑行电流给 SOC 设置保守上限，每次只修正 `1%` |
-| 中低压弱约束 | `3500mV~3700mV` | 只向下限制明显高估 SOC，重载禁用，每次只修正 `1%` |
-| 稳定静置 OCV | `5min` 稳定后，每 `10min` 记录 OCV 目标 | 静置不立刻追平；方向匹配的充/放电按 `10min/1%` 消化 |
-| 久置低 OCV 下修 | 稳定且超过 `30min` 后，OCV 目标低于内部 SOC | 静置阶段按 `30min/1%` 慢速下修，避免久置没电但 SOC 仍偏高 |
-| 重载重启回弹保护 | `5min` | 重载关机后重新开机，防止未回弹电压把 SOC 校低 |
-| 控制器保护前归零 | `2950mV` | 默认 `V0 - 50mV`，以最高 `1%/200ms` 收敛到 0 |
-| 默认启动 SOC | `60%` | 仅无快照且电压无效时使用 |
-| 积分周期 | `200ms` | AFE 新电流样本触发 |
-| 有效电流阈值 | `0.2A` | `Ichg/Idsg >= 2`，单位 `A * 10` |
-
-## 4. OCV 表
-
-当前三元锂默认表按 INR21700-45E 和 e-bike 3.0V 空电口径设置：
-
-```text
-4160/100, 4100/95, 4050/90, 3995/85, 3935/80,
-3880/75, 3835/70, 3795/65, 3760/60, 3725/55,
-3695/50, 3670/45, 3645/40, 3615/35, 3585/30,
-3555/25, 3525/20, 3480/15, 3400/10, 3250/5,
-3000/0
+```powershell
+.\tools\soc_flash_app_safe.ps1 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -Flash
 ```
 
-表选择仍兼容原枚举：
+上位机启动：
 
-| 枚举 | 值 | 来源 |
+- 不直接双击 `tools\soc_test_ui.py`。
+- 固定使用 `.\tools\start_soc_test_ui.ps1`。
+- 自动演示使用：
+
+```powershell
+.\tools\start_soc_test_ui.ps1 -Demo -Port COM4 -Baud 19200 -Slave 1 -Samples 10 -Interval 0.5
+```
+
+## 3. 模块边界
+
+| 文件 | 当前责任 |
+| --- | --- |
+| `SOC.c` | SOC 门面层；加载 `OtherElement` 和 SOC 表；处理 Type-C 等效电流；按 AFE 样本序号调用算法；实现 SOC 测试注入口 |
+| `SOC.h` | SOC 表大小、默认表声明、`InitData_SOC()` / `App_SOC()` / 测试 API 声明 |
+| `SocEnhance.c` | SOC 主状态机；负责积分、SOH、满电、低压、中低压、静置/RTC OCV、显示平滑、快照 |
+| `SocEnhance.h` | 对外结构 `SOC_ENHANCE_ELEMENT`、表选择枚举、状态机 API |
+| `DataDeal.c` | AFE 采样、最大/最小单体、电流计算；每 200ms 增加 `g_u32AfeCurrentSampleSeq` 后调用 `App_SOC()` |
+| `Flash.c/.h` | SOC V2 快照 journal；V1 兼容读取；内部 Flash 地址定义 |
+| `Sci_Upper.c/.h` | RS485/Modbus-like 读写窗口；SOC 表、SOC 参数、一次 SOC、SOC 测试模式 |
+| `rtc_sleep.c` | RTC 周期唤醒后累计休眠秒数，调用 `SOC_ApplyRtcRelaxationCompensation()` |
+| `SleepDeal.c` | 正常休眠前保存 SOC 快照和灯条 SOC 备份 |
+| `LedBar.c` | 读取 `SocElement.u16Soc` 做数码管/灯条显示；休眠前把显示 SOC 存到 BKP |
+| `Can_HDX.c` | CAN 对外上报 SOC、SOH、剩余容量、满电容量、循环次数 |
+
+## 4. 当前默认配置
+
+| 项目 | 当前值 | 来源与说明 |
 | --- | ---: | --- |
-| `SOC_TABLE_TEST` | `0` | 上位机写入的 `SOC_Table_Set`，仅 RAM 生效 |
-| `SOC_TABLE_LIFEPO` | `1` | 固件内置 LFP 表 |
-| `SOC_TABLE_TERNARYLI` | `2` | 当前三元锂默认表 |
-| `SOC_TABLE_LIFEPO2` | `3` | 固件内置备用 LFP 表 |
+| 构建 profile | `0` | `PROJECT_CFG_BUILD_PROFILE`，量产 Release |
+| SOC 测试入口 | `0` | `PROJECT_CFG_SOC_TEST_MODE_ENABLE`，量产关闭 |
+| SOC 单次注入 tick 上限 | `300` | 每 tick 为 `200ms`，测试固件才生效 |
+| 电芯体系 | `TERNARYLI` | `PROJECT_CFG_BAT_CHEMISTRY=0` |
+| 电池板类型 | `BAT_SLAVE` | `PROJECT_CFG_BAT_TYPE=1` |
+| 串数 | `10` | `SNum=10`，`SeriesNum` 默认 10 |
+| 标称容量 | `27Ah` | `BMS_CAPCITY=270`，单位 `10 * Ah` |
+| 默认循环次数 | `3` | `OtherElement.u16Soc_Cycle_times` |
+| SOC 表选择 | `SOC_TABLE_TERNARYLI` | `OtherElement.u16Soc_TableSelect` |
+| 满电电压 | `4180mV` | `OtherElement.u16Soc_V_100` |
+| 空电显示端点 | `3000mV` | `OtherElement.u16Soc_V_0` |
+| 满电普通确认 | `15s` | `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` |
+| 满电快速确认 | `5s` | `PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS` |
+| 满电普通最低 SOC | `95%` | 防止中低电量误锚定 100% |
+| 满电普通电压裕量 | `80mV` | `V100 - 80mV = 4100mV` |
+| 满电快速电压裕量 | `30mV` | `V100 - 30mV = 4150mV` |
+| 满电最大压差 | `120mV` | 单体压差门控 |
+| 校准有效电压 | `2000~5000mV` | 单体最小/最大有效范围 |
+| 校准最大压差 | `1000mV` | 通用电压校准门控 |
+| 中低压/静置最大压差 | `200mV` | 更严格的弱约束门控 |
+| 静置稳定波动 | `30mV` | `VCellMin/VCellMax` 相对参考值 |
+| 静置 OCV 配置时间 | `60s` | `PROJECT_CFG_SOC_REST_OCV_SECONDS`，当前不等于 OCV 立即生效时间 |
+| 静置 OCV 最小稳定 | `5min` | `SOC_SHORT_REST_MIN_SECONDS` |
+| OCV 目标刷新节拍 | `10min` | `SOC_SHORT_REST_STEP_SECONDS` |
+| 久置低 OCV 下修节拍 | `30min/1%` | `SOC_LONG_REST_DOWN_STEP_SECONDS` |
+| 大电流 holdoff | `30s` | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` |
+| holdoff 允许末端偏移 | `50mV` | `V0 + 50mV` 以下允许低压收敛 |
+| 重载重启回弹保护 | `5min` | 快照 `u16Flags bit0` 恢复后启用 |
+| Type-C 输出电压 | `9000mV` | `TYPEC_OUT_VOLTAGE_MV` |
+| Type-C DC/DC 效率 | `90%` | `TYPEC_DCDC_EFFICIENCY_PERMILLE=900` |
+| 显示平滑 | `5s/1%` | 普通上升/下降 |
+| 低压显示下降 | `1s/1%` 或 `0.2s/1%` | 低压末端加速显示跟随 |
 
-上位机写 `0x2200` 起 42 个寄存器只更新 RAM 表，当前不新增 SOC 表持久化。
+## 5. 启动与运行链路
 
-这张表的定位是“可信 OCV 参考”，不是所有电芯、所有温度、所有负载下的真实 SOC。运行态只在启动无快照、稳定静置/RTC 和受限弱约束场景使用它。稳定静置/RTC 场景先形成 deferred target，再由后续充放电或久置低 OCV 慢速下修消化，避免把电芯批次、老化、温度或内阻差异直接放大成用户可见跳变。
+启动顺序：
 
-## 5. 内部状态
+1. `main()` 调用 `InitDevice()`。
+2. `InitDevice()` 先执行 `InitE2PROM()`，加载默认参数和内部 Flash RW 参数。
+3. 初始化 AFE、CAN、ADC、SCI。
+4. 调用 `InitData_SOC()`，此处必须在参数读取之后。
+5. `InitData_SOC()` 从 `OtherElement` 复制容量、循环、表选择、V100、V0 和 `SOC_Table_Set`。
+6. `soc_param_lib_init()` 初始化 `SOC_STATE`，读取或创建 SOC 快照，并强制发布一次 SOC。
 
-`SocEnhance.c` 只保留一个内部状态结构 `SOC_STATE`：
+运行链路：
+
+1. 主循环 `Runtime_RunOnce()` 调用 `SysTime_LatchTaskFlags()`。
+2. `App_AFEGet()` 通过 `SysTime_Take200msTaskPeriod()` 保证 200ms 周期。
+3. AFE 刷新单体电压、总压、温度和电流。
+4. `g_u32AfeCurrentSampleSeq++`，序号溢出到 0 时会再加一次，避免 0。
+5. `App_AFEGet()` 末尾调用 `App_SOC()`。
+6. `App_SOC()` 只有发现样本序号变化才调用 `SOC_UpdateSampleData()` 和 `SOC_IntEnhance_Ctrl()`；否则只发布已有 SOC。
+
+`Runtime_RunOnce()` 中单独的 `App_SOC()` 当前被注释，SOC 推进由 AFE 200ms 样本驱动。
+
+## 6. 输入数据
+
+电压输入来自 `g_stCellInfoReport`：
+
+- `u16VCellMax`：最大单体电压，mV。
+- `u16VCellMin`：最小单体电压，mV。
+- `u16VCellDelta`：单体压差，mV。
+- `u16VCellTotle`：总压，单位 `V * 100`，换算包电压时乘以 `10` 得 mV。
+
+电流输入：
+
+- `u16Ichg`：充电电流，单位 `A * 10`。
+- `u16IDischg`：放电电流，单位 `A * 10`。
+- 有效方向阈值为 `2`，即 `0.2A`。
+
+Type-C 输出侧电流会折算为电池侧等效放电电流：
+
+```text
+pack_mv = g_stCellInfoReport.u16VCellTotle * 10
+I_bat_mA = I_typec_out_mA * TYPEC_OUT_VOLTAGE_MV * 1000
+           / (pack_mv * TYPEC_DCDC_EFFICIENCY_PERMILLE)
+I_bat_A10 = round(I_bat_mA / 100)
+```
+
+`SOC_GetNetCurrentForCalc()` 用 `AFE 充电电流 - AFE 放电电流 - Type-C 等效放电电流` 得到最终积分电流：
+
+- 净值为正：作为 `soc_ichg`。
+- 净值为负：绝对值作为 `soc_idsg`。
+- 这样 Type-C 对外供电会抵消充电，或叠加到放电。
+
+## 7. 内部状态与单位
+
+`SocEnhance.c` 只保留一个 `SOC_STATE`：
 
 | 字段 | 含义 |
 | --- | --- |
-| `cap_factory_as10` | 出厂容量，单位 `As * 10` |
-| `cap_full_as10` | 当前有效容量，按 SOH 从出厂容量映射 |
+| `cap_factory_as10` | 出厂容量，单位 `As * 10`；`27Ah` 对应 `270 * 3600` |
+| `cap_full_as10` | 当前有效满容量，按 SOH 从出厂容量折算 |
 | `cap_now_as10` | 当前剩余容量 |
 | `cycle_x100` | 循环次数，内部单位 `cycle * 100` |
-| `dsg_acc_as10` | 当前未满 1% 循环的放电累计 |
+| `dsg_acc_as10` | 未满 `1%` 循环的放电累计 |
 | `rem_ms` | 200ms 积分余量 |
 | `soc` | 内部 SOC |
 | `display_soc` | 对外显示 SOC |
-| `soh` | 对外 SOH |
-| `mode` | `RELAX / CHG / DSG` |
-| `full/empty/rest/display/sag` ticks | 满电、低压表、静置、显示平滑、压降 holdoff 计数 |
-| `stable_rest/short_rest` ticks | 静置稳定窗口和 OCV 目标刷新节拍 |
-| `long_rest_down_ticks` | 久置且 OCV 目标低于内部 SOC 时的慢速下修节拍 |
-| `mid_ticks` | 中低压弱约束每 `1%` 下修计数 |
-| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 稳定静置/RTC 生成的待消化 OCV 目标及充放电消化节拍 |
+| `soh` | 当前 SOH |
+| `mode/last_mode` | `RELAX / CHG / DSG` |
+| `full_ticks` | 满电确认计数 |
+| `empty_ticks` | 低压表下修计数 |
+| `mid_ticks` | 中低压弱约束下修计数 |
+| `rest_ticks/stable_rest_ticks/short_rest_ticks` | 静置可信和 OCV 目标刷新计数 |
+| `long_rest_down_ticks` | 久置低 OCV 慢速下修计数 |
+| `sag_hold_ticks` | 大电流压降/重启回弹保护计数 |
+| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 静置/RTC 生成的待消化 OCV 目标 |
 | `rest_ref_vmin/rest_ref_vmax` | 静置稳定性参考电压 |
-| `snapshot_flags` | 需要跨关机保留的 SOC 状态标志，目前 bit0 表示重载回弹保护 |
+| `snapshot_flags` | 需要持久化的状态标志，当前 bit0 为 rebound hold |
+| `full_anchor` | 是否已经通过满电锚定到 100% |
 
-不再保留 FCC 学习状态、复杂在线 OCV 融合、学习锚点等复杂字段。Flash V2 结构中未使用字段仍保留为兼容位。
+对外 `SocElement` 字段：
 
-## 6. 启动流程
+- `u16Soc`：显示 SOC，百分比。
+- `u16Soh`：SOH，百分比。
+- `u16CapacityNow`：剩余容量，单位 `Ah * 100`，等价于 `10mAh`。
+- `u16CapacityFull`：当前满电容量，单位 `Ah * 100`。
+- `u16CapacityFactory`：出厂容量，单位 `Ah * 100`。
+- `u16Cycle_times`：对外整数循环次数。
 
-1. `InitE2PROM()` 加载默认参数和内部 Flash RW 参数。
-2. `InitData_SOC()` 从 `OtherElement` 复制 SOC 基础配置到 `SOC_Enhance_Element`。
-3. `soc_param_lib_init()` 初始化 `SOC_STATE` 容量、循环、SOH。
-4. 读取 SOC journal：
-   - 有效快照：恢复 `soc/cap_now/cycle/dsg_acc/snapshot_flags`。
-   - 如果快照标记存在重载回弹保护，开机后先保持 `5min` 电压校准 holdoff。
-   - 无有效快照且当前单体电压有效：按 OCV 表估算启动 SOC。
-   - 无有效快照且电压无效：使用默认 `60%`。
-5. 初始化后强制发布一次对外 SOC。
+## 8. 快照与掉电恢复
 
-## 7. 安时积分
-
-`App_SOC()` 只有在 `g_u32AfeCurrentSampleSeq` 变化时运行完整算法，避免重复积分旧电流。
-
-方向判断：
-
-| 条件 | 模式 |
-| --- | --- |
-| `Ichg >= 0.2A` 且 `Ichg >= Idsg` | `CHG` |
-| `Idsg >= 0.2A` | `DSG` |
-| 其他 | `RELAX` |
-
-容量增量：
-
-```text
-delta_as10 = (current_A10 * 200ms + rem_ms) / 1000
-```
-
-处理规则：
-
-- 充电增加 `cap_now_as10`，但满电确认前内部 SOC 最多到 `99%`。
-- 放电减少 `cap_now_as10`，并累计等效循环。
-- 方向切换时清空积分余量，避免反向继承。
-
-## 8. SOH 与容量
-
-SOH 当前只按循环次数映射：
-
-```text
-SOH = clamp(100 - cycle / 100, 80, 100)
-cap_full = cap_factory * SOH / 100
-```
-
-循环计数：
-
-```text
-每累计 factory_capacity / 100 的放电量，cycle_x100 + 1
-对外循环次数 = cycle_x100 / 100
-```
-
-该策略简单稳定，不依赖完整满空学习。后续若要提高 SOH 精度，应先补台架容量数据，再增加温度/倍率分档。
-
-## 9. 满电与空电策略
-
-### 满电确认
-
-满电确认按电压可信度分两档，不再要求 `Ichg <= C/20`。这样可以兼容充电器不稳定 taper、充满后电流变成 0 或采样抖动的场景。
-
-基础条件：
-
-- 当前不是 `DSG`，即允许 `CHG` 或充电器停止后的 `RELAX`。
-- 电压类校准门控通过。
-- `VCellMax >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
-
-快速确认：
-
-- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV`，当前默认 `4150mV`。
-- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
-- 持续 `5s` 后确认 `100%`。
-
-普通确认：
-
-- 内部 SOC 已经 `>=95%`。
-- `VCellMin >= V100 - PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV`，当前默认 `4100mV`。
-- 单体压差 `<= PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV`，当前默认 `120mV`。
-- 条件累计满足 `15s` 后确认 `100%`。
-
-满电计数器采用“满足时累加、不满足时递减”的方式，不会因为一次采样抖动完全清零。确认前 SOC 最高只到 `99%`。确认条件满足后，内部 SOC 每次只上修 `1%`，直到 `100%`；显示 SOC 继续按显示平滑跟随，不做大跳变。
-
-### 空电与低压表
-
-低压逻辑改为表驱动，按 `V0` 相对电压和放电电流档位给内部 SOC 设置保守上限。默认 `V0=3000mV` 时表如下：
-
-| VCellMin | RELAX 目标/周期 | 轻载 `<=C/5` | 中载 `<=C/2` | 重载 `>C/2` |
-| --- | --- | --- | --- | --- |
-| `<=3400mV` | `18% / 24s` | `22% / 20s` | `30% / 16s` | `40% / 12s` |
-| `<=3300mV` | `14% / 18s` | `18% / 15s` | `25% / 12s` | `32% / 9s` |
-| `<=3200mV` | `12% / 12s` | `14% / 10s` | `20% / 8s` | `25% / 6s` |
-| `<=3100mV` | `8% / 7s` | `10% / 6s` | `14% / 5s` | `18% / 4s` |
-| `<=3050mV` | `4% / 4s` | `5% / 3s` | `8% / 2s` | `12% / 1.6s` |
-| `<=3000mV` | `0% / 2s` | `0% / 1s` | `0% / 1s` | `0% / 1s` |
-| `<=2975mV` | `0% / 1s` | `0% / 1s` | `0% / 0.2s` | `0% / 0.2s` |
-| `<=2950mV` | `0% / 0.2s` | `0% / 0.2s` | `0% / 0.2s` | `0% / 0.2s` |
-
-表中的“周期”表示每下修 `1%` 所需时间，不允许一次下修超过 `1%`。低压逻辑在非充电状态下运行，包含放电和放电截止后的 `RELAX`。这样低压保护后即使电流变成 0，SOC 也能继续收敛到 0%。电压采样必须基本有效，避免异常采样把 SOC 误清零。
-
-## 10. OCV 修正与低压表门控
-
-电压类修正统一门控：
-
-- `2000mV <= VCellMin <= VCellMax <= 5000mV`。
-- 单体压差 `<=1000mV`。
-- 当 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT=1` 时，无三级保护故障。
-- 当 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT=1` 时，无 AFE1/AFE2/ADC/CBC/温度异常。
-
-### 启动 OCV
-
-无有效 SOC 快照时，如果上电时已有有效电压采样，直接按 OCV 表设置启动 SOC；否则使用默认 60%。
-
-### 静置/RTC OCV
-
-运行态 `RELAX` 不再按固定 30min 到点校准，也不在短静置阶段直接追平 OCV。当前逻辑按“最小静置时间 + 电压回弹稳定”先判断 OCV 是否可信，然后把 OCV 结果保存为 deferred target：
-
-- 只在 `RELAX` 下运行。
-- 电压合法、单体压差 `<=200mV`。
-- 没有大电流 sag/rebound holdoff。
-- `VCellMin/VCellMax` 相对静置参考值波动 `<=30mV`。
-- 连续稳定 `5min` 后，每累计 `10min` 刷新一次 OCV deferred target，不立即修改内部 SOC。
-- deferred target 高于内部 SOC 时，只在后续 `CHG` 阶段按 `10min/1%` 上修。
-- deferred target 低于内部 SOC 时，优先在后续 `DSG` 阶段按 `10min/1%` 下修。
-- 如果稳定静置已经超过 `30min`，且 OCV target 持续低于内部 SOC，则允许静置阶段按 `30min/1%` 慢速下修，解决电池久置自放电后 SOC 仍明显偏高的问题。
-- 如果中途电压跳动、重新骑行、进入低压表或触发 holdoff，静置可信度清零。
-- 即使 `RELAX` 已经超过 `30min`，只要电压仍在回弹/跳动，也不会强行按 OCV 校准。
-
-RTC 唤醒补偿不再按“累计休眠超过 `300s` 后每次唤醒修正”处理。RTC 第一次唤醒只建立 `VCellMin/VCellMax` 参考值，后续唤醒电压相对参考值波动 `<=30mV` 才累计稳定窗口；稳定累计达到 `5min` 且 `10min/step` 节拍到达时，只刷新 OCV deferred target。若 target 低于内部 SOC 且稳定久置超过 `30min`，RTC 路径也按 `30min/1%` 最多下修一步。CAN active/idle 只决定 RTC 唤醒频率，不直接决定 SOC 校准频率。
-
-如果快照里带有重载回弹标志，开机 `5min` rebound holdoff 会继续阻断这类电压校准。
-
-当前版本不强制显示跳变，显示 SOC 继续按平滑规则跟随。低压表和满电确认仍保留主动收敛，保证保护前能到 `0%`、满电确认后能到 `100%`。
-
-### 骑行中电压表修正
-
-骑行中电压修正分两层：中低压弱约束和低压表。两者都不是直接用端电压覆盖 SOC，而是在安时积分结果之上设置“当前电压和电流档位下不应高于多少”的上限。
-
-中低压弱约束覆盖 `V0 + 500mV` 到 `V0 + 700mV`，默认即 `3500mV~3700mV`：
-
-| VCellMin | RELAX 目标/周期 | 轻载 `<=C/5` | 中载 `<=C/2` | 重载 `>C/2` |
-| --- | --- | --- | --- | --- |
-| `<=3500mV` | `25% / 90s` | `32% / 90s` | `42% / 120s` | 禁用 |
-| `<=3600mV` | `35% / 120s` | `42% / 120s` | `50% / 150s` | 禁用 |
-| `<=3650mV` | `45% / 150s` | `50% / 150s` | `58% / 180s` | 禁用 |
-| `<=3700mV` | `55% / 180s` | `60% / 180s` | 禁用 | 禁用 |
-
-中低压弱约束只向下修正明显高估 SOC，SOC 低于目标时不向上修正。它要求单体压差 `<=200mV`，且不能处于 sag/rebound holdoff；重载档位禁用，避免爬坡或急加速电压下陷导致误校准。
-
-低压表覆盖 `V0 + 400mV` 到 `V0 - 50mV`，默认即 `3400mV~2950mV`：
-
-- SOC 低于表目标时不向上修正。
-- SOC 高于表目标时，每到表中周期只下修 `1%`。
-- 电流越大，允许的 SOC 上限越高，避免重载 voltage sag 过度下修。
-- 电压越低，目标越低、周期越短，保证控制器保护前可收敛到 0。
-- 低压表活跃时，不叠加静置 OCV，保证同一调度最多一个校准动作。
-- 大电流 `>C/2` 或刚结束大电流后的 `30s` 内，若电压还高于 `V0 + 50mV`，低压表不参与校准；只有真实进入末端区才允许继续收敛。
-
-## 11. 显示体验
-
-内部 SOC 和显示 SOC 分离：
-
-| 场景 | 显示跟随 |
-| --- | --- |
-| 普通上升/下降 | `5s / 1%` |
-| 充电上升 | 与普通放电一致，`5s / 1%` |
-| 低压下降 | `VCellMin <= V0 + 50mV` 时 `1s / 1%` |
-| 设置一次 SOC / 工厂显示覆盖 | 可强制同步 |
-| 自动满电 / 自动空电校准 | 内部每次 `1%`，显示继续平滑 |
-| RTC/静置 OCV deferred target | 目标本身不显示；后续小步修正后继续平滑跟随 |
-| `SOC_Fixed` | 只对外显示 60%，不破坏内部 SOC |
-| `SOC_Zero` | 只对外显示 0%，不破坏内部 SOC |
-
-## 12. Flash 快照
-
-SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
+SOC 快照结构是 `STORAGE_FLASH_SOC_DATA` V2，存储在内部 Flash journal：
 
 | Slot | 地址 |
 | --- | --- |
@@ -296,82 +222,447 @@ SOC 运行快照仍使用 `STORAGE_FLASH_SOC_DATA` V2，地址不变：
 
 | 字段 | 用途 |
 | --- | --- |
+| `u16FormatVersion` | V2 固定写 `0x0002` |
 | `u16SocNow` | 内部 SOC |
 | `u16DsgSocInt` | 放电循环小数百分比兼容字段 |
+| `u16MaxErrorPercent` | 固定写 `100`，兼容字段 |
 | `u32CycleTimes` | `cycle * 100` |
 | `u32CapNow` | 当前剩余容量 |
-| `u32CapFull` | 当前有效容量 |
-| `u32LearnPassedAs10` | 当前未满 1% 循环的放电累计 |
-| `u16Flags bit0` | 重载后关机/重启的回弹保护标志 |
+| `u32CapFull` | 当前有效满容量 |
+| `u32LearnPassedAs10` | 未满 `1%` 循环的放电累计 |
+| `u16Flags bit0` | 重载/大电流后回弹保护标志 |
+
+恢复规则：
+
+1. 优先按 V2 长度和 magic 读取 journal。
+2. 如果 V2 不存在，再尝试读取旧 V1 结构，并迁移到 V2 内存格式。
+3. 快照有效条件包含 `u16SocNow <= 100`、`u16DsgSocInt <= 100`。
+4. 若 `u32CapNow` 有效且不超过 `cap_full_as10`，按容量恢复内部 SOC。
+5. 否则按 `u16SocNow` 恢复，并同步 `cap_now_as10`。
+6. 若 `u16Flags bit0` 存在，启动后设置 `5min` rebound holdoff。
+7. 无有效快照时，如果当前电压有效，则按 OCV 表估算启动 SOC；否则使用默认 `60%`，并立即保存快照。
 
 保存触发：
 
-- 内部 SOC 变化。
-- 循环次数变化。
-- `cap_full_as10` 因 SOH 变化。
-- `snapshot_flags` 变化。
-- 设置一次 SOC、容量/循环初始化、RTC 修正等需要落盘的动作。
+- 内部 SOC 改变。
+- 循环次数改变。
+- SOH 变化导致 `cap_full_as10` 改变。
+- `snapshot_flags` 改变。
+- 设置一次 SOC、容量/循环重置、RTC 静置修正等需要强制落盘的动作。
+- 进入休眠前调用 `SOC_SaveSnapshotBeforeSleep()`。
 
-## 13. 通信兼容
+## 9. OCV 表
 
-保持原接口和寄存器：
+默认三元锂表：
 
-| 功能 | 入口 |
+```text
+4160/100, 4100/95, 4050/90, 3995/85, 3935/80,
+3880/75, 3835/70, 3795/65, 3760/60, 3725/55,
+3695/50, 3670/45, 3645/40, 3615/35, 3585/30,
+3555/25, 3525/20, 3480/15, 3400/10, 3250/5,
+3000/0
+```
+
+表选择：
+
+| 枚举 | 值 | 来源 |
+| --- | ---: | --- |
+| `SOC_TABLE_TEST` | `0` | 上位机写入的 `SOC_Table_Set` |
+| `SOC_TABLE_LIFEPO` | `1` | 固件内置磷酸铁锂表 |
+| `SOC_TABLE_TERNARYLI` | `2` | 当前默认三元锂表 |
+| `SOC_TABLE_LIFEPO2` | `3` | 固件内置备用磷酸铁锂表 |
+
+`0x2200` 起写 42 个寄存器只更新 RAM 中的 `SOC_Table_Set` 并重新初始化 SOC；当前没有把 SOC 表写入 Flash。`SOC_Table_Set` 只有在 `OtherElement.u16Soc_TableSelect=SOC_TABLE_TEST` 时才作为 OCV 表使用。表选择本身位于 `OtherElement` 参数区偏移 12，对应 `0x230C`，会随 RW 参数保存到内部 Flash。
+
+OCV 表使用线性插值。它只在这些场景参与：
+
+- 无有效快照时的启动估算。
+- 稳定静置/RTC 生成 deferred target。
+- 手动刷新标志触发的受限 OCV 小步修正。
+
+骑行瞬态不会用 OCV 表直接覆盖 SOC。
+
+## 10. 安时积分
+
+方向判断：
+
+| 条件 | 模式 |
 | --- | --- |
-| 设置一次 SOC | `0x1005` |
-| 写 SOC 表 | `0x2200` 起 42 个寄存器 |
-| 写容量/循环/V100/V0 | `0x2318~0x231B` |
-| 固定 SOC 显示 | 系统功能开关 `SOC_Fixed` |
-| SOC 清零显示 | 系统功能开关 `SOC_Zero` |
+| `Ichg >= 0.2A` 且 `Ichg >= Idsg` | `CHG` |
+| `Idsg >= 0.2A` | `DSG` |
+| 其他 | `RELAX` |
 
-保持原函数签名：
+方向切换时清空 `rem_ms`，避免余量跨方向继承。
 
-- `InitData_SOC()`
-- `App_SOC()`
-- `SOC_UpdateSampleData()`
-- `SOC_PublishReportData()`
-- `SOC_ApplyRtcRelaxationCompensation()`
-- `SOC_SaveSnapshotBeforeSleep()`
-- `SOC_ResetStoredSnapshotToDefault()`
+积分公式：
 
-## 14. 已验证项目
-
-真实 C 源码主机测试：
-
-```bash
-python3 tools/run_soc_host_c_test.py
+```text
+acc_ms = current_A10 * 200 + rem_ms
+delta_as10 = acc_ms / 1000
+rem_ms = acc_ms % 1000
 ```
 
-当前覆盖 14 个关键 C 路径：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。该测试直接编译 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，硬件、Flash 和全局采样依赖由 host harness 替代。
+处理规则：
 
-主机回放矩阵：
+- `CHG` 增加 `cap_now_as10`，上限为 `cap_full_as10`。
+- `DSG` 减少 `cap_now_as10`，同时累计 `dsg_acc_as10` 和循环。
+- `RELAX` 不积分，并清空 `rem_ms`。
+- 如果充电积分算到 `100%`，但 `full_anchor` 还没建立，会回退到 `99%`，等待满电电压确认。
 
-```bash
-python3 tools/soc_replay_test.py
+## 11. SOH 与循环
+
+SOH 当前只按循环次数映射，不做 FCC 学习：
+
+```text
+drop = floor(cycle / 100)
+SOH = max(100 - drop, 80)
+cap_full = cap_factory * SOH / 100
 ```
 
-当前覆盖 43 个场景：
+循环计数：
 
-- 无快照默认 60%。
-- 无快照且电压有效时按启动 OCV。
-- V2 快照恢复容量和循环 SOH。
-- 设置一次 SOC。
-- 充/放电积分。
-- SOH 循环映射。
+```text
+unit = cap_factory_as10 / 100
+每累计 unit 放电量，cycle_x100 += 1
+对外 cycle_times = cycle_x100 / 100
+```
+
+默认循环次数为 `3`，因此初始 SOH 仍为 `100%`。当 SOH 因循环数下降时，会重新计算 `cap_full_as10`，并用当前容量重新得到内部 SOC。
+
+## 12. 校准统一门控
+
+通用电压校准门控：
+
+- `VCellMin >= 2000mV`。
+- `VCellMax <= 5000mV`。
+- `VCellMax >= VCellMin`。
+- `VCellMax - VCellMin <= 1000mV`。
+- 若 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT=1`，三级保护故障会阻止校准。
+- 若 `PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT=1`，AFE/ADC/CBC/温度断线等系统故障会阻止校准。
+
+中低压弱约束和静置 OCV 还要求：
+
+- 单体压差 `<=200mV`。
+- 不处于 sag/rebound holdoff。
+
+sag/rebound holdoff：
+
+- `Idsg > C/2` 时触发，当前 `C/2 = 13.5A`，即 `Idsg > 135`。
+- 触发后保持 `30s`，并把 `u16Flags bit0` 写入快照。
+- 如果重载后关机，下次开机恢复 `u16Flags bit0` 后进入 `5min` rebound holdoff。
+- holdoff 期间只在 `VCellMin > V0 + 50mV` 时阻止电压类校准。
+- 如果 `VCellMin <= V0 + 50mV`，认为已经进入真实末端，低压表仍可收敛到 0。
+
+## 13. 满电确认
+
+满电确认在非 `DSG` 模式下运行，即 `CHG` 和充电停止后的 `RELAX` 都可确认。
+
+基础条件：
+
+- 通用电压校准门控通过。
+- `VCellMax >= V100 - 80mV`，当前为 `4100mV`。
+- 单体压差最终要求 `<=120mV`。
+
+快速确认：
+
+- `VCellMin >= V100 - 30mV`，当前为 `4150mV`。
+- 单体压差 `<=120mV`。
+- 条件持续 `5s` 后，把内部 SOC 朝 `100%` 小步推进。
+
+普通确认：
+
+- 内部 SOC `>=95%`。
+- `VCellMin >= V100 - 80mV`，当前为 `4100mV`。
+- 单体压差 `<=120mV`。
+- 条件持续 `15s` 后，把内部 SOC 朝 `100%` 小步推进。
+
+计数方式：
+
+- 满足条件时 `full_ticks++`。
+- 不满足但计数不为 0 时 `full_ticks--`，不是一次抖动直接清零。
+- 每次锚定最多移动 `1%`。
+- 到达 `100%` 后设置 `full_anchor=1`。
+
+## 14. 低压表
+
+低压表在非充电状态运行，包括 `DSG` 和放电停止后的 `RELAX`。它根据 `V0 + offset` 和电流档位给 SOC 设置保守上限，只向下修正，不向上拉高。
+
+电流档位：
+
+| 档位 | 条件 |
+| --- | --- |
+| `RELAX` | 当前模式为 `RELAX` |
+| 轻载 | `Idsg <= C/5`，当前约 `5.4A` |
+| 中载 | `Idsg <= C/2`，当前约 `13.5A` |
+| 重载 | `Idsg > C/2` |
+
+默认 `V0=3000mV` 时低压表如下。周期表示每下修 `1%` 所需时间：
+
+| VCellMin | RELAX 目标/周期 | 轻载目标/周期 | 中载目标/周期 | 重载目标/周期 |
+| --- | --- | --- | --- | --- |
+| `<=2950mV` | `0% / 0.2s` | `0% / 0.2s` | `0% / 0.2s` | `0% / 0.2s` |
+| `<=2975mV` | `0% / 1s` | `0% / 1s` | `0% / 0.2s` | `0% / 0.2s` |
+| `<=3000mV` | `0% / 2s` | `0% / 1s` | `0% / 1s` | `0% / 1s` |
+| `<=3050mV` | `4% / 4s` | `5% / 3s` | `8% / 2s` | `12% / 1.6s` |
+| `<=3100mV` | `8% / 7s` | `10% / 6s` | `14% / 5s` | `18% / 4s` |
+| `<=3200mV` | `12% / 12s` | `14% / 10s` | `20% / 8s` | `25% / 6s` |
+| `<=3300mV` | `14% / 18s` | `18% / 15s` | `25% / 12s` | `32% / 9s` |
+| `<=3400mV` | `18% / 24s` | `22% / 20s` | `30% / 16s` | `40% / 12s` |
+
+低压表活跃时：
+
+- 不叠加静置 OCV。
+- 每个调度最多一个校准动作。
+- 若处于 holdoff 且 `VCellMin > V0 + 50mV`，低压表不参与。
+- 若已进入 `V0 + 50mV` 以下，允许继续向 0 收敛。
+
+## 15. 中低压弱约束
+
+中低压弱约束用于限制明显高估 SOC，范围是 `V0 + 400mV < VCellMin <= V0 + 700mV`。默认 `V0=3000mV` 时，实际覆盖 `3400mV~3700mV` 之间，不包含低压表已经覆盖的 `<=3400mV`。
+
+启用条件：
+
+- 非 `CHG`。
+- 电压有效。
+- 单体压差 `<=200mV`。
+- 不处于 sag/rebound holdoff。
+- `VCellMin > V0 + 400mV`。
+
+默认表如下。周期表示每下修 `1%` 所需时间：
+
+| VCellMin | RELAX 目标/周期 | 轻载目标/周期 | 中载目标/周期 | 重载 |
+| --- | --- | --- | --- | --- |
+| `<=3500mV` | `25% / 90s` | `32% / 90s` | `42% / 120s` | 禁用 |
+| `<=3600mV` | `35% / 120s` | `42% / 120s` | `50% / 150s` | 禁用 |
+| `<=3650mV` | `45% / 150s` | `50% / 150s` | `58% / 180s` | 禁用 |
+| `<=3700mV` | `55% / 180s` | `60% / 180s` | 禁用 | 禁用 |
+
+SOC 低于目标时不动作；条件中断时 `mid_ticks` 清零。
+
+## 16. 静置与 RTC OCV
+
+静置 OCV 不再按“到 30min 直接按表校准”。当前逻辑先判断电压是否稳定，再生成 deferred target，并且默认不立即修改内部 SOC。
+
+运行态 `RELAX` 路径：
+
+1. 只有 `RELAX` 时累计静置；进入 `CHG/DSG` 会清空静置可信计数。
+2. 电压必须通过校准门控，且压差 `<=200mV`。
+3. 第一次稳定采样会记录 `rest_ref_vmin/rest_ref_vmax`。
+4. 后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才继续累计稳定。
+5. 稳定至少 `5min` 且 `10min` 刷新节拍到达时，记录一次 OCV deferred target。
+6. 记录 target 不会立即修改内部 SOC。
+7. target 高于内部 SOC 时，只在后续 `CHG` 阶段按 `10min/1%` 上修。
+8. target 低于内部 SOC 时，只在后续 `DSG` 阶段按 `10min/1%` 下修。
+9. 如果后续方向与 target 不匹配，target 会被丢弃。
+10. 若 target 低于内部 SOC 且一直稳定久置，静置阶段也允许按 `30min/1%` 慢速下修。
+
+当前默认配置下，第一次久置低 OCV 下修的有效时间约为：
+
+```text
+10min 生成 deferred target + 30min 慢速下修节拍 = 约 40min 下修 1%
+```
+
+RTC 休眠路径：
+
+1. 进入 RTC/STOP 前调用 `SOC_SaveSnapshotBeforeSleep()`。
+2. 每次 RTC 唤醒后累计 `s_u32RtcSleepElapsedSeconds`。
+3. `update_rtc_soc()` 调用 `SOC_ApplyRtcRelaxationCompensation(rest_seconds, vmin, vmax)`。
+4. RTC 路径复用同一套稳定电压、deferred target、久置慢速下修规则。
+5. 第一次 RTC 唤醒通常只建立参考，不立即校准。
+6. 若中途电压跳动超过 `30mV`，会重置稳定窗口和 target。
+
+CAN active/idle 只影响 RTC 唤醒服务频率，不直接改变 SOC 校准速率。
+
+## 17. 显示与对外发布
+
+内部 SOC 和显示 SOC 分离：
+
+- `s_soc.soc` 是内部计算值。
+- `s_soc.display_soc` 是发布给 `g_stCellInfoReport.SocElement.u16Soc` 的显示值。
+- 容量、SOH、循环次数仍来自内部状态。
+
+显示目标：
+
+| 条件 | 显示目标 |
+| --- | --- |
+| `System_OnOFF_Func.bits.b1OnOFF_SOC_Zero=1` | `0%` |
+| `System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed=1` | `60%` |
+| 其他 | 内部 SOC |
+
+显示跟随：
+
+| 场景 | 跟随速度 |
+| --- | --- |
+| 普通上升或下降 | `5s / 1%` |
+| 低压下降且 `VCellMin <= V0 + 50mV` | `1s / 1%` |
+| 极低压下降且 `VCellMin <= V0 - 50mV` | `0.2s / 1%` |
+| 初始化、设置一次 SOC、显示覆盖 | 强制同步显示目标 |
+
+`SOC_Fixed` 和 `SOC_Zero` 只影响显示，不修改内部 SOC 或容量快照。
+
+`LedBar.c` 从 `g_stCellInfoReport.SocElement.u16Soc` 读取显示值，并在休眠前把当前显示 SOC 写入 `BKP_DR4/BKP_DR5`，用于唤醒前预览。
+
+## 18. RS485/Modbus-like 通信
+
+读状态：
+
+| 地址 | 内容 |
+| --- | --- |
+| `0xD000` | 基础只读窗口，当前基区 97 个 word |
+| `0xD000 + 52` | `SocElement.u16Soc` |
+| `0xD000 + 53` | `SocElement.u16Soh` |
+| `0xD000 + 54` | `SocElement.u16CapacityNow` |
+| `0xD000 + 55` | `SocElement.u16CapacityFull` |
+| `0xD000 + 56` | `SocElement.u16CapacityFactory` |
+| `0xD000 + 57` | `SocElement.u16Cycle_times` |
+| `0xD300` | SOC 注入测试状态窗口，16 个 word |
+
+`0xD300` 状态 word：
+
+| word | 含义 |
+| ---: | --- |
+| 0 | `PROJECT_CFG_SOC_TEST_MODE_ENABLE`，量产为 0 |
+| 1 | 测试模式当前 enabled 状态 |
+| 2 | tick 毫秒数，固定 200 |
+| 3 | 每秒 tick 数，固定 5 |
+| 4 | 单次写入最大 tick 数，当前 300 |
+| 5 | 上次注入 `vcell_max` |
+| 6 | 上次注入 `vcell_min` |
+| 7 | 上次注入 `ichg` |
+| 8 | 上次注入 `idsg` |
+| 9 | 上次注入 `ticks` |
+| 10..11 | 累计注入 tick，高低 16 位 |
+| 12 | 当前 SOC |
+| 13 | 当前 SOH |
+| 14 | 当前剩余容量 |
+| 15 | 结果码，量产为 unsupported |
+
+写入口：
+
+| 功能 | 地址 | 说明 |
+| --- | --- | --- |
+| 设置一次 SOC | `0x1005` | `0..100`，设置 `u16_RefreshData_Flag=3`，下个 SOC 调度落盘 |
+| 写 SOC 表 | `0x2200` 起 42 word | 只更新 RAM 表并 `InitData_SOC()`，不持久化 |
+| 写 SOC 表选择 | `0x230C` | `0..3`，属于 `OtherElement`，保存到内部 Flash RW 参数区 |
+| 写 SOC 容量/循环/V100/V0 | `0x2318~0x231B` | 属于 `OtherElement`，保存到内部 Flash RW 参数区 |
+| SOC 注入样本 | `0x2500` 起 6 word | `[enable, vmax, vmin, ichg, idsg, ticks]`，量产无权限 |
+| 固定 SOC 显示 | 系统功能开关 | 只影响显示目标 60% |
+| SOC 清零显示 | 系统功能开关 | 只影响显示目标 0% |
+
+`0x2500` 校验：
+
+- word 数必须为 6。
+- `ticks` 必须 `1..PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX`。
+- `1000mV <= vcell_min <= vcell_max <= 5000mV`。
+- `ichg/idsg <= 5000`。
+- SOC 必须已经初始化完成。
+
+## 19. CAN 输出
+
+CAN 输出读取的是 `g_stCellInfoReport.SocElement`：
+
+- 飞道扩展帧 `feidao_send_soc_1000ms()`：发送充电状态、SOC、温度、电池类型等。
+- 飞道扩展帧 `feidao_send_cap_5000ms()`：发送实时能量和设计能量。
+- 飞道扩展帧 `feidao_send_soh_5000ms()`：发送 SOH 和循环次数。
+- 标准帧 `CAN_TX_0x00()`：总压、电流、剩余容量。
+- 标准帧 `CAN_TX_0x01()`：满电容量、循环次数、SOC。
+- 标准帧 `CAN_TX_0x05()`：SOH。
+
+因此 CAN 侧看到的 SOC 与 RS485 `0xD000+52` 一致，都是显示 SOC。
+
+## 20. 上位机与验证脚本
+
+在线监控脚本：
+
+```powershell
+py -3.9 tools\soc_online_monitor.py --port COM4 --baud 19200 --slave 1 --samples 30 --interval 1
+```
+
+脚本默认读取：
+
+- `0xD000` 63 个寄存器，解析 SOC、SOH、容量、电压、电流和故障。
+- `0x2318` 4 个寄存器，解析容量、循环、V100、V0。
+- `0xD300` 16 个寄存器，解析 SOC 测试入口状态。
+
+设置一次 SOC 对应协议是 `0x06` 写单寄存器 `0x1005`，值为 `0..100`。`tools\soc_online_monitor.py` 内部提供 `set_soc_once()` 辅助函数，但当前 CLI 入口主要用于在线读取；需要图形界面或自动演示时，使用 `tools\start_soc_test_ui.ps1`。
+
+量产固件验收时，读取 `0xD300` 得到 `supported=0` 是正确结果，表示注入式 SOC 测试入口关闭。
+
+## 21. 已验证项目
+
+本次重梳理后已在当前工作区执行：
+
+```powershell
+py -3.9 tools\run_soc_host_c_test.py
+py -3.9 tools\soc_replay_test.py
+```
+
+结果：
+
+- `SOC host C tests passed: 14`
+- `SOC replay tests passed: 43`
+
+真实 C 源码主机测试直接编译 `SOC.c` 和 `SocEnhance.c`，覆盖：
+
+- 启动 OCV。
+- 放电积分。
+- Type-C 输出侧电流折算为电池侧等效电流。
 - 满电确认。
-- 空电/低压表。
-- RTC/静置 OCV deferred target、后续充/放电消化与显示平滑。
-- 异常方向/故障不做 OCV。
-- 显示平滑。
-- `SOC_Fixed/SOC_Zero` 只影响显示。
-- 低压表电流分档速率和重载屏蔽。
-- 稳定静置不足 30min 时只记录 OCV target，不立即改 SOC。
-- 静置超过 30min 但电压不稳定时不做 OCV 校准。
-- 久置低 OCV 场景按 `30min/1%` 慢速下修。
-- 中低压弱约束按电压、电流、周期慢速下修。
-- 中低压弱约束条件中断后计数器清零。
-- 重载关机后的快照回弹标志会阻止开机电压误校准。
-- OCV 表单调性、Python 模型与 C 源码表格一致性、方向阈值、满电计数器递减、低压/中低压全表矩阵。
-- 异常电压矩阵、长期静置收敛、回弹保护过期清标志、随机运行不变量。
+- 低压到 0。
+- 稳定静置 deferred target。
+- RTC 稳定窗口。
+- 久置低 OCV 慢速下修。
+- 电压不稳定时不校准。
+- 重载回弹标志清除。
+- 显示覆盖不污染内部 SOC。
+- 设置一次 SOC 保存快照。
 
-本机已通过真实 C 源码主机测试、Python 回放矩阵和 `clang -fsyntax-only -std=c99 -Wall -Wextra` 语法检查。Keil 完整编译仍需 Windows + Keil MDK 环境。
+Python 回放矩阵覆盖 43 个场景，包括：
+
+- 快照有效/无效恢复。
+- OCV 表单调性和 C 源码表一致性。
+- 200ms 积分和方向阈值。
+- 满电确认计数器递减。
+- 低压表和中低压表全矩阵。
+- 大电流 sag holdoff。
+- rebound holdoff 跨重启。
+- 静置/RTC OCV deferred target。
+- 随机运行不变量。
+
+Keil 完整编译和上板 RS485/CAN 验证仍需实物与 Keil MDK 环境。
+
+## 22. 上板复核清单
+
+量产固件：
+
+1. 确认 `PROJECT_CFG_BUILD_PROFILE 0`。
+2. 确认 `PROJECT_CFG_SOC_TEST_MODE_ENABLE 0`。
+3. 使用安全脚本烧录 App 到 `0x08004800`。
+4. 通过 `COM4/19200/slave=1` 读取 `0xD000`。
+5. 核对 `SOC/SOH/CapacityNow/CapacityFull/CapacityFactory/Cycle`。
+6. 读取 `0xD300`，确认 `supported=0`。
+
+SOC 测试固件：
+
+1. 只在 Factory/Test profile 下开启 `PROJECT_CFG_SOC_TEST_MODE_ENABLE 1`。
+2. 通过 `0x2500` 注入 `[enable, vmax, vmin, ichg, idsg, ticks]`。
+3. 通过 `0xD300` 核对 last sample、total ticks、SOC、last result。
+4. 测试结束恢复量产配置，并再次确认 `0xD300 supported=0`。
+
+## 23. 当前风险与后续方向
+
+已知设计取舍：
+
+- SOH 只是循环次数映射，不代表真实 FCC 学习。
+- SOC 表只适合当前电芯和温度/倍率假设，运行态已通过门控避免直接跳变，但上板仍需按实际电芯校准。
+- `0x2200` 写入的 SOC 表不持久化，重启后会回到默认表或当前表选择对应的内置表。
+- `SOC_Fixed` / `SOC_Zero` 是显示覆盖，不应作为真实 SOC 校准使用。
+- 当前静置 OCV 第一次 target 约在稳定 10min 后生成，久置低 OCV 第一次自动下修约在 40min 后发生，适合保守显示，不适合快速台架调参。
+
+后续如果要继续优化，应优先补充：
+
+- 实车放电到保护前的 `VCellMin/Idsg/SOC` 曲线。
+- 充满静置后的 `V100` 和回落曲线。
+- 不同温度下的 OCV 表偏差。
+- Type-C 大功率输出与 AFE 电流同时存在时的实测误差。
+- CAN 与 RS485 同步读取的一致性记录。

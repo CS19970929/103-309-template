@@ -33,7 +33,7 @@
 3. 中低压和低压都走 table-driven 上限约束，默认覆盖 `V0+700mV` 到 `V0-50mV`。
 4. 大电流 `Idsg > C/2` 触发 sag holdoff，未回弹且未到真实末端时阻断电压校准。
 5. 重载后关机再开机时，快照 `u16Flags bit0` 会带来 `5min` 回弹保护，避免未回弹电压把 SOC 校低。
-6. 运行态静置 OCV 不再按固定 `30min` 到点校准；电压稳定 `5min` 后只记录可信 OCV 目标，后续优先在充电/放电阶段按 `10min/1%` 消化差值，久置低 OCV 才允许静置下修。
+6. 运行态静置 OCV 不再按固定 `30min` 到点校准；电压稳定至少 `5min` 且 `10min` 刷新节拍到达后才记录可信 OCV 目标，后续优先在充电/放电阶段按 `10min/1%` 消化差值，久置低 OCV 才允许静置下修。
 7. 无 Flash 快照冷启动时，电压有效按 OCV 表；电压无效才默认 `60%`。
 8. 对外只有 `g_stCellInfoReport.SocElement`，RS485、CAN、LedBar 都读这里的平滑 SOC/SOH/容量。
 
@@ -222,23 +222,23 @@ OCV 表只用于冷启动、稳定静置/RTC，以及骑行中上限约束参考
 
 ### 4.9 静置/RTC OCV
 
-运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定”判断，不再按 `1800s` 到点强制校正。RTC 唤醒路径也使用稳定窗口：第一次 RTC 电压样本只建立参考值，后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才累计稳定时间；稳定累计达到 `5min` 后按 OCV 表计算可信目标，并按 `10min` 节拍刷新 deferred target。
+运行态静置 `RELAX` 按“最小静置时间 + 电压回弹稳定 + OCV 刷新节拍”判断，不再按 `1800s` 到点强制校正。RTC 唤醒路径也使用稳定窗口：第一次 RTC 电压样本只建立参考值，后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才累计稳定时间；稳定累计至少 `5min` 且 `10min` 节拍到达后，才按 OCV 表计算并刷新 deferred target。
 
 RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周期只影响通信探测频率，不再直接决定 SOC 校准频率。RTC OCV 仍会被电压合法性、故障和 sag/rebound holdoff 阻断。
 
 方向约束：
 
-- `RELAX`：通常只记录 deferred target，不直接向上修正；若稳定静置超过 `30min` 且 OCV 目标低于当前 SOC，允许按 `30min/1%` 慢速下修。
+- `RELAX`：通常只记录 deferred target，不直接向上修正；若稳定静置后已有低于当前 SOC 的 OCV 目标，允许按 `30min/1%` 慢速下修。当前默认首次下修约为 `10min target + 30min step`。
 - `CHG`：只允许向上消化 deferred target，节拍 `10min/1%`。
 - `DSG`：只允许向下消化 deferred target，节拍 `10min/1%`。
 - 每次最多 `1%`。
 
 稳定静置补偿：
 
-- `RELAX` 下电压稳定 `5min` 后建立可信 OCV 目标。
+- `RELAX` 下电压稳定至少 `5min`，且 `10min` 刷新节拍到达后建立可信 OCV 目标。
 - `VCellMin/VCellMax` 相对参考值波动 `<=30mV`。
 - 每累计 `10min` 刷新 deferred target；目标与当前方向不匹配时会清空，避免静置阶段直接把 SOC 快速拉到 OCV。
-- 长时间不用车且 OCV 目标明显低于当前 SOC 时，`RELAX/RTC` 可以按 `30min/1%` 下修，避免电池久置没电但 SOC 仍长期挂高。
+- 长时间不用车且 OCV 目标明显低于当前 SOC 时，`RELAX/RTC` 可以按 `30min/1%` 下修，避免电池久置没电但 SOC 仍长期挂高；默认首次下修约发生在稳定后约 `40min`。
 - 重新骑行、电压跳动、低压表活跃或 sag/rebound holdoff 会清空静置可信度。
 - 即使 `RELAX` 超过 `30min`，只要电压仍在回弹/跳动，也不会强行使用 OCV。
 

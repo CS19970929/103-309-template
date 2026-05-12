@@ -464,6 +464,7 @@ soc = soc_step(soc, 100, 1)
 无 sag/rebound holdoff
 VCellMin/VCellMax 相对参考值波动 <= 30mV
 稳定累计 >= 5min
+10min OCV 刷新节拍到达
 ```
 
 满足后只记录：
@@ -480,7 +481,7 @@ deferred_ocv_target
 | --- | --- |
 | target 高于当前 SOC | 只有后续 `CHG` 时按 `10min/1%` 上修 |
 | target 低于当前 SOC | 只有后续 `DSG` 时按 `10min/1%` 下修 |
-| 长时间不用车且 target 低于当前 SOC | `RELAX/RTC` 可按 `30min/1%` 慢速下修 |
+| 长时间不用车且 target 低于当前 SOC | `RELAX/RTC` 可按 `30min/1%` 慢速下修；当前默认首次约为 `10min target + 30min step` |
 
 如果电压继续回弹、跳动、重新骑行、低压表活跃或 sag/rebound holdoff 生效，会清空静置可信度。
 
@@ -643,7 +644,7 @@ SOC 按表逐步向低目标或 0 收敛
 ```text
 RELAX
 电压稳定 <=30mV
-累计 5min 后记录 deferred OCV target
+累计至少 5min 且 10min 刷新节拍到达后记录 deferred OCV target
 不立即改 SOC
 后续 CHG/DSG 方向匹配时按 10min/1% 消化
 ```
@@ -654,6 +655,7 @@ RELAX
 稳定久置
 OCV target 低于当前 SOC
 RELAX/RTC 下按 30min/1% 慢速下修
+当前默认首次下修约为 10min target + 30min step
 ```
 
 ## 20. 当前验证入口
