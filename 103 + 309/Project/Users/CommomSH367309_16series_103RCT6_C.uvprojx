@@ -18,7 +18,7 @@
           <Vendor>STMicroelectronics</Vendor>
           <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
-          <Cpu>IRAM(0x20000000,0x00005000) IROM(0x08000000,0x00010000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
+          <Cpu>IRAM(0x20000000,0x00005000) IROM(0x08004800,0x0001B800) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
           <StartupFile></StartupFile>
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0STM32F10x_128 -FS08000000 -FL020000 -FP0($$Device:STM32F103C8$Flash\STM32F10x_128.FLM))</FlashDriverDll>
@@ -37,7 +37,7 @@
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
           <BinPath></BinPath>
-          <IncludePath></IncludePath>
+          <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
           <LibPath></LibPath>
           <RegisterFilePath></RegisterFilePath>
           <DBRegisterFilePath></DBRegisterFilePath>
@@ -337,9 +337,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
+              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=0</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
+              <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -357,7 +357,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath></IncludePath>
+              <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
             </VariousControls>
           </Aads>
           <LDads>
@@ -367,7 +367,7 @@
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
             <useFile>0</useFile>
-            <TextAddressRange>0x08000000</TextAddressRange>
+            <TextAddressRange>0x08004800</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
             <ScatterFile></ScatterFile>
@@ -381,198 +381,77 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>Source</GroupName>
+          <GroupName>Rewrite Core</GroupName>
           <Files>
             <File>
-              <FileName>ADC.c</FileName>
+              <FileName>bms_app.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\ADC.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_app.c</FilePath>
             </File>
             <File>
-              <FileName>DataDeal.c</FileName>
+              <FileName>bms_comm.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\DataDeal.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_comm.c</FilePath>
             </File>
             <File>
-              <FileName>EEPROM.c</FileName>
+              <FileName>bms_firmware.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\EEPROM.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_firmware.c</FilePath>
             </File>
             <File>
-              <FileName>Fault.c</FileName>
+              <FileName>bms_power_can.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Fault.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_power_can.c</FilePath>
             </File>
             <File>
-              <FileName>Flash.c</FileName>
+              <FileName>bms_protection.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Flash.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_protection.c</FilePath>
             </File>
             <File>
-              <FileName>Flash64KAppTest.c</FileName>
+              <FileName>bms_soc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Flash64KAppTest.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_soc.c</FilePath>
             </File>
             <File>
-              <FileName>Heat_Cool.c</FileName>
+              <FileName>bms_storage.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Heat_Cool.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_storage.c</FilePath>
             </File>
             <File>
-              <FileName>I2C_AFE1.c</FileName>
+              <FileName>bms_ui_iap.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_ui_iap.c</FilePath>
             </File>
             <File>
-              <FileName>main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\main.c</FilePath>
+              <FileName>bms_app.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\include\bms_app.h</FilePath>
             </File>
             <File>
-              <FileName>PubFunc.c</FileName>
+              <FileName>bms_firmware.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\include\bms_firmware.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>STM32F1 Port</GroupName>
+          <Files>
+            <File>
+              <FileName>bms_main_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\PubFunc.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_main_stm32f1_spl.c</FilePath>
             </File>
             <File>
-              <FileName>RTC.c</FileName>
+              <FileName>bms_port_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\RTC.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.c</FilePath>
             </File>
             <File>
-              <FileName>Sci_Upper.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Sci_Upper.c</FilePath>
-            </File>
-            <File>
-              <FileName>SleepDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SleepDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SOC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SOC.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Init.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Init.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Monitor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Monitor.c</FilePath>
-            </File>
-            <File>
-              <FileName>ProductionID.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ProductionID.c</FilePath>
-            </File>
-            <File>
-              <FileName>Can_HDX.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>ChargerLoadFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ChargerLoadFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>LogRecord.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LogRecord.c</FilePath>
-            </File>
-            <File>
-              <FileName>LedBar.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LedBar.c</FilePath>
-              <FileOption>
-                <CommonProperty>
-                  <UseCPPCompiler>2</UseCPPCompiler>
-                  <RVCTCodeConst>0</RVCTCodeConst>
-                  <RVCTZI>0</RVCTZI>
-                  <RVCTOtherData>0</RVCTOtherData>
-                  <ModuleSelection>0</ModuleSelection>
-                  <IncludeInBuild>1</IncludeInBuild>
-                  <AlwaysBuild>2</AlwaysBuild>
-                  <GenerateAssemblyFile>2</GenerateAssemblyFile>
-                  <AssembleAssemblyFile>2</AssembleAssemblyFile>
-                  <PublicsOnly>2</PublicsOnly>
-                  <StopOnExitCode>11</StopOnExitCode>
-                  <CustomArgument></CustomArgument>
-                  <IncludeLibraryModules></IncludeLibraryModules>
-                  <ComprImg>1</ComprImg>
-                </CommonProperty>
-                <FileArmAds>
-                  <Cads>
-                    <interw>2</interw>
-                    <Optim>0</Optim>
-                    <oTime>2</oTime>
-                    <SplitLS>2</SplitLS>
-                    <OneElfS>2</OneElfS>
-                    <Strict>2</Strict>
-                    <EnumInt>2</EnumInt>
-                    <PlainCh>2</PlainCh>
-                    <Ropi>2</Ropi>
-                    <Rwpi>2</Rwpi>
-                    <wLevel>0</wLevel>
-                    <uThumb>2</uThumb>
-                    <uSurpInc>2</uSurpInc>
-                    <uC99>2</uC99>
-                    <uGnu>2</uGnu>
-                    <useXO>2</useXO>
-                    <v6Lang>0</v6Lang>
-                    <v6LangP>0</v6LangP>
-                    <vShortEn>2</vShortEn>
-                    <vShortWch>2</vShortWch>
-                    <v6Lto>2</v6Lto>
-                    <v6WtE>2</v6WtE>
-                    <v6Rtti>2</v6Rtti>
-                    <VariousControls>
-                      <MiscControls></MiscControls>
-                      <Define></Define>
-                      <Undefine></Undefine>
-                      <IncludePath></IncludePath>
-                    </VariousControls>
-                  </Cads>
-                </FileArmAds>
-              </FileOption>
-            </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IO_Control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IO_Control.c</FilePath>
-            </File>
-            <File>
-              <FileName>IODrivers.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IODrivers.c</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep.c</FilePath>
+              <FileName>bms_port_stm32f1_spl.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -861,66 +740,6 @@
             </File>
           </Files>
         </Group>
-        <Group>
-          <GroupName>conf</GroupName>
-          <Files>
-            <File>
-              <FileName>conf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\conf\conf.c</FilePath>
-            </File>
-            <File>
-              <FileName>conf.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\conf.h</FilePath>
-            </File>
-            <File>
-              <FileName>Project_Config.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\Project_Config.h</FilePath>
-            </File>
-            <File>
-              <FileName>Project_BuildGuard.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\Project_BuildGuard.h</FilePath>
-            </File>
-            <File>
-              <FileName>conf_gpio.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\conf_gpio.h</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>log</GroupName>
-          <Files>
-            <File>
-              <FileName>elog_port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\port\elog_port.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_async.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_async.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_buf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_buf.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_utils.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
-            </File>
-          </Files>
-        </Group>
       </Groups>
     </Target>
     <Target>
@@ -935,7 +754,7 @@
           <Vendor>STMicroelectronics</Vendor>
           <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
-          <Cpu>IRAM(0x20000000,0x00005000) IROM(0x08000000,0x00010000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
+          <Cpu>IRAM(0x20000000,0x00005000) IROM(0x08004800,0x0001B800) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
           <StartupFile></StartupFile>
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0STM32F10x_128 -FS08000000 -FL020000 -FP0($$Device:STM32F103C8$Flash\STM32F10x_128.FLM))</FlashDriverDll>
@@ -954,7 +773,7 @@
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
           <BinPath></BinPath>
-          <IncludePath></IncludePath>
+          <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
           <LibPath></LibPath>
           <RegisterFilePath></RegisterFilePath>
           <DBRegisterFilePath></DBRegisterFilePath>
@@ -1256,7 +1075,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_</Define>
               <Undefine></Undefine>
-              <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
+              <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1274,7 +1093,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath></IncludePath>
+              <IncludePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\..\..\firmware_rewrite\include;..\..\..\firmware_rewrite\ports\stm32f1_spl</IncludePath>
             </VariousControls>
           </Aads>
           <LDads>
@@ -1284,7 +1103,7 @@
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
             <useFile>0</useFile>
-            <TextAddressRange>0x08000000</TextAddressRange>
+            <TextAddressRange>0x08004800</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
             <ScatterFile></ScatterFile>
@@ -1298,198 +1117,77 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>Source</GroupName>
+          <GroupName>Rewrite Core</GroupName>
           <Files>
             <File>
-              <FileName>ADC.c</FileName>
+              <FileName>bms_app.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\ADC.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_app.c</FilePath>
             </File>
             <File>
-              <FileName>DataDeal.c</FileName>
+              <FileName>bms_comm.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\DataDeal.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_comm.c</FilePath>
             </File>
             <File>
-              <FileName>EEPROM.c</FileName>
+              <FileName>bms_firmware.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\EEPROM.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_firmware.c</FilePath>
             </File>
             <File>
-              <FileName>Fault.c</FileName>
+              <FileName>bms_power_can.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Fault.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_power_can.c</FilePath>
             </File>
             <File>
-              <FileName>Flash.c</FileName>
+              <FileName>bms_protection.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Flash.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_protection.c</FilePath>
             </File>
             <File>
-              <FileName>Flash64KAppTest.c</FileName>
+              <FileName>bms_soc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Flash64KAppTest.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_soc.c</FilePath>
             </File>
             <File>
-              <FileName>Heat_Cool.c</FileName>
+              <FileName>bms_storage.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\Heat_Cool.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_storage.c</FilePath>
             </File>
             <File>
-              <FileName>I2C_AFE1.c</FileName>
+              <FileName>bms_ui_iap.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\src\bms_ui_iap.c</FilePath>
             </File>
             <File>
-              <FileName>main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\main.c</FilePath>
+              <FileName>bms_app.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\include\bms_app.h</FilePath>
             </File>
             <File>
-              <FileName>PubFunc.c</FileName>
+              <FileName>bms_firmware.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\include\bms_firmware.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>STM32F1 Port</GroupName>
+          <Files>
+            <File>
+              <FileName>bms_main_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\PubFunc.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_main_stm32f1_spl.c</FilePath>
             </File>
             <File>
-              <FileName>RTC.c</FileName>
+              <FileName>bms_port_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\RTC.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.c</FilePath>
             </File>
             <File>
-              <FileName>Sci_Upper.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Sci_Upper.c</FilePath>
-            </File>
-            <File>
-              <FileName>SleepDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SleepDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SOC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SOC.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Init.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Init.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Monitor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Monitor.c</FilePath>
-            </File>
-            <File>
-              <FileName>ProductionID.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ProductionID.c</FilePath>
-            </File>
-            <File>
-              <FileName>Can_HDX.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>ChargerLoadFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ChargerLoadFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>LogRecord.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LogRecord.c</FilePath>
-            </File>
-            <File>
-              <FileName>LedBar.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LedBar.c</FilePath>
-              <FileOption>
-                <CommonProperty>
-                  <UseCPPCompiler>2</UseCPPCompiler>
-                  <RVCTCodeConst>0</RVCTCodeConst>
-                  <RVCTZI>0</RVCTZI>
-                  <RVCTOtherData>0</RVCTOtherData>
-                  <ModuleSelection>0</ModuleSelection>
-                  <IncludeInBuild>1</IncludeInBuild>
-                  <AlwaysBuild>2</AlwaysBuild>
-                  <GenerateAssemblyFile>2</GenerateAssemblyFile>
-                  <AssembleAssemblyFile>2</AssembleAssemblyFile>
-                  <PublicsOnly>2</PublicsOnly>
-                  <StopOnExitCode>11</StopOnExitCode>
-                  <CustomArgument></CustomArgument>
-                  <IncludeLibraryModules></IncludeLibraryModules>
-                  <ComprImg>1</ComprImg>
-                </CommonProperty>
-                <FileArmAds>
-                  <Cads>
-                    <interw>2</interw>
-                    <Optim>0</Optim>
-                    <oTime>2</oTime>
-                    <SplitLS>2</SplitLS>
-                    <OneElfS>2</OneElfS>
-                    <Strict>2</Strict>
-                    <EnumInt>2</EnumInt>
-                    <PlainCh>2</PlainCh>
-                    <Ropi>2</Ropi>
-                    <Rwpi>2</Rwpi>
-                    <wLevel>0</wLevel>
-                    <uThumb>2</uThumb>
-                    <uSurpInc>2</uSurpInc>
-                    <uC99>2</uC99>
-                    <uGnu>2</uGnu>
-                    <useXO>2</useXO>
-                    <v6Lang>0</v6Lang>
-                    <v6LangP>0</v6LangP>
-                    <vShortEn>2</vShortEn>
-                    <vShortWch>2</vShortWch>
-                    <v6Lto>2</v6Lto>
-                    <v6WtE>2</v6WtE>
-                    <v6Rtti>2</v6Rtti>
-                    <VariousControls>
-                      <MiscControls></MiscControls>
-                      <Define></Define>
-                      <Undefine></Undefine>
-                      <IncludePath></IncludePath>
-                    </VariousControls>
-                  </Cads>
-                </FileArmAds>
-              </FileOption>
-            </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IO_Control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IO_Control.c</FilePath>
-            </File>
-            <File>
-              <FileName>IODrivers.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IODrivers.c</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep.c</FilePath>
+              <FileName>bms_port_stm32f1_spl.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -1775,66 +1473,6 @@
               <FileName>stm32f10x_wwdg.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_wwdg.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>conf</GroupName>
-          <Files>
-            <File>
-              <FileName>conf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\conf\conf.c</FilePath>
-            </File>
-            <File>
-              <FileName>conf.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\conf.h</FilePath>
-            </File>
-            <File>
-              <FileName>Project_Config.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\Project_Config.h</FilePath>
-            </File>
-            <File>
-              <FileName>Project_BuildGuard.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\Project_BuildGuard.h</FilePath>
-            </File>
-            <File>
-              <FileName>conf_gpio.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Source\conf\conf_gpio.h</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>log</GroupName>
-          <Files>
-            <File>
-              <FileName>elog_port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\port\elog_port.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_async.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_async.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_buf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_buf.c</FilePath>
-            </File>
-            <File>
-              <FileName>elog_utils.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
             </File>
           </Files>
         </Group>

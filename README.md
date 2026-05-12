@@ -70,7 +70,7 @@
 | [System_Monitor 模块梳理](System_Monitor模块梳理.md) | 系统状态位、功能开关、错误标志使用关系 |
 | [项目宏定义梳理](项目宏定义梳理.md) | 编译宏、产品配置、硬件映射、参数地址、第三方库宏使用边界 |
 | [TODO](TODO.md) | 根目录待办事项 |
-| [Source/todo](<103 + 309/Project/Source/todo.md>) | 源码目录内临时待办记录 |
+| [旧 Source 退役说明](<103 + 309/Project/Source/README.md>) | 旧应用层删除后的目录边界说明 |
 
 ### LED / 数码管显示
 
@@ -136,7 +136,7 @@
 | [待测试清单](TEST_PENDING.md) | 当前主要待测试项 |
 | [待测试清单 copy](TEST_PENDING%20copy.md) | 历史/副本待测试项，建议后续合并后删除 |
 | [TODO](TODO.md) | 根目录 TODO |
-| [Source/todo](<103 + 309/Project/Source/todo.md>) | 源码目录局部 TODO |
+| [旧 Source 退役说明](<103 + 309/Project/Source/README.md>) | 旧应用层删除后的目录边界说明 |
 
 ## 文档维护约定
 

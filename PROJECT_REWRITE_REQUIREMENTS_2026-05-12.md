@@ -146,7 +146,7 @@ tools/run_rewrite_host_tests.py
 | `0xFFFD` IAP 请求 | 已实现并测试 |
 | 固件主循环入口 `bms_firmware_run_once()` | 已实现并测试 |
 | STM32 SPL 硬件 port | 已有可编译空壳，真实 AFE/Flash/CAN/RTC/LED 接线待上板阶段完成 |
-| Keil 工程集成 | 尚未接入，需后续新增独立 target |
+| Keil 工程集成 | 已替换现有 target 的源码列表和 App 起点，待 Windows/Keil 实编译 |
 | AFE/保护参数真实写入 | 尚未接入，需硬件 port 和参数 service |
 | LED Charlieplexing 真实扫描 | 尚未接入，当前先保留体验契约 |
 
@@ -172,7 +172,7 @@ python3 tools/run_rewrite_host_tests.py
 ## 8. 后续接板顺序
 
 1. 新增 `ports/stm32f1_spl/`，只写硬件适配，不改 core 业务逻辑。
-2. 新增独立 Keil target，例如 `FD_Rewrite_Debug` / `FD_Rewrite_Release`，不要直接替换旧 target。
+2. Keil 现有 target 已切到 rewrite 文件列表；上板前需在 Windows/Keil 重新编译并确认 map/scatter 仍为 `0x08004800` App 起点。
 3. 接入 AFE/ADC 采样，将真实 `200ms` 样本送入 `bms_app_process_sample()`。
 4. 接入 RS485/CAN，将协议解析结果调用 `bms_comm_*()`。
 5. 接入内部 Flash 双槽，把 `bms_storage_t` 映射到真实 Flash page，并做擦写读回验证。

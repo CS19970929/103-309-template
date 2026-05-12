@@ -2,6 +2,14 @@
 
 #include <string.h>
 
+#if defined(__CC_ARM)
+#define BMS_WEAK __weak
+#elif defined(__GNUC__)
+#define BMS_WEAK __attribute__((weak))
+#else
+#define BMS_WEAK
+#endif
+
 typedef struct {
     bms_sample_t last_sample;
     bool has_sample;
@@ -9,12 +17,85 @@ typedef struct {
 
 static bms_stm32f1_port_state_t s_port;
 
+BMS_WEAK bool bms_stm32f1_board_read_sample(bms_sample_t *sample)
+{
+    (void)sample;
+    return false;
+}
+
+BMS_WEAK bool bms_stm32f1_board_save_snapshot(const bms_snapshot_t *snapshot)
+{
+    (void)snapshot;
+    return false;
+}
+
+BMS_WEAK bool bms_stm32f1_board_load_snapshot(bms_snapshot_t *snapshot)
+{
+    (void)snapshot;
+    return false;
+}
+
+BMS_WEAK bool bms_stm32f1_board_can_send_probe(void)
+{
+    return false;
+}
+
+BMS_WEAK bool bms_stm32f1_board_can_send_status(const bms_soc_report_t *report)
+{
+    (void)report;
+    return false;
+}
+
+BMS_WEAK void bms_stm32f1_board_set_charge_mos(bool on)
+{
+    (void)on;
+}
+
+BMS_WEAK void bms_stm32f1_board_set_discharge_mos(bool on)
+{
+    (void)on;
+}
+
+BMS_WEAK void bms_stm32f1_board_set_display(bool on, uint8_t soc, bool charge_icon)
+{
+    (void)on;
+    (void)soc;
+    (void)charge_icon;
+}
+
+BMS_WEAK void bms_stm32f1_board_enter_rtc_stop(uint16_t seconds)
+{
+    (void)seconds;
+}
+
+BMS_WEAK void bms_stm32f1_board_request_iap_reset(void)
+{
+}
+
+BMS_WEAK bool bms_stm32f1_board_wait_tick(uint32_t tick_ms)
+{
+    (void)tick_ms;
+    return true;
+}
+
 static bool port_read_sample(void *ctx, bms_sample_t *sample)
 {
     bms_stm32f1_port_state_t *port = (bms_stm32f1_port_state_t *)ctx;
-    if (sample == NULL || !port->has_sample) {
+
+    if (sample == NULL) {
         return false;
     }
+
+    if (bms_stm32f1_board_read_sample(sample)) {
+        port->last_sample = *sample;
+        port->has_sample = true;
+        return true;
+    }
+
+    if (!port->has_sample) {
+        return false;
+    }
+
     *sample = port->last_sample;
     return true;
 }
@@ -22,59 +103,55 @@ static bool port_read_sample(void *ctx, bms_sample_t *sample)
 static bool port_save_snapshot(void *ctx, const bms_snapshot_t *snapshot)
 {
     (void)ctx;
-    (void)snapshot;
-    return false;
+    return bms_stm32f1_board_save_snapshot(snapshot);
 }
 
 static bool port_load_snapshot(void *ctx, bms_snapshot_t *snapshot)
 {
     (void)ctx;
-    (void)snapshot;
-    return false;
+    return bms_stm32f1_board_load_snapshot(snapshot);
 }
 
 static bool port_can_send_probe(void *ctx)
 {
     (void)ctx;
-    return false;
+    return bms_stm32f1_board_can_send_probe();
 }
 
 static bool port_can_send_status(void *ctx, const bms_soc_report_t *report)
 {
     (void)ctx;
-    (void)report;
-    return false;
+    return bms_stm32f1_board_can_send_status(report);
 }
 
 static void port_set_charge_mos(void *ctx, bool on)
 {
     (void)ctx;
-    (void)on;
+    bms_stm32f1_board_set_charge_mos(on);
 }
 
 static void port_set_discharge_mos(void *ctx, bool on)
 {
     (void)ctx;
-    (void)on;
+    bms_stm32f1_board_set_discharge_mos(on);
 }
 
 static void port_set_display(void *ctx, bool on, uint8_t soc, bool charge_icon)
 {
     (void)ctx;
-    (void)on;
-    (void)soc;
-    (void)charge_icon;
+    bms_stm32f1_board_set_display(on, soc, charge_icon);
 }
 
 static void port_enter_rtc_stop(void *ctx, uint16_t seconds)
 {
     (void)ctx;
-    (void)seconds;
+    bms_stm32f1_board_enter_rtc_stop(seconds);
 }
 
 static void port_request_iap_reset(void *ctx)
 {
     (void)ctx;
+    bms_stm32f1_board_request_iap_reset();
 }
 
 void bms_stm32f1_platform_init(void)
@@ -100,4 +177,9 @@ bms_platform_ops_t bms_stm32f1_platform_ops(void)
     ops.enter_rtc_stop = port_enter_rtc_stop;
     ops.request_iap_reset = port_request_iap_reset;
     return ops;
+}
+
+bool bms_stm32f1_wait_tick(uint32_t tick_ms)
+{
+    return bms_stm32f1_board_wait_tick(tick_ms);
 }

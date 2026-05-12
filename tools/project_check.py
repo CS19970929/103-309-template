@@ -18,11 +18,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REWRITE = ROOT / "firmware_rewrite"
 LEGACY_SOURCE = ROOT / "103 + 309" / "Project" / "Source"
+KEIL_PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "CommomSH367309_16series_103RCT6_C.uvprojx"
 
 REQUIRED_FILES = [
     ROOT / "README.md",
     ROOT / "PROJECT_REWRITE_REQUIREMENTS_2026-05-12.md",
     ROOT / "FIRMWARE_REWRITE_REPLACEMENT_REPORT_2026-05-12.md",
+    KEIL_PROJECT,
     REWRITE / "README.md",
     REWRITE / "CMakeLists.txt",
     REWRITE / "include" / "bms_app.h",
@@ -37,6 +39,7 @@ REQUIRED_FILES = [
     REWRITE / "src" / "bms_ui_iap.c",
     REWRITE / "tests" / "test_rewrite_core.c",
     REWRITE / "ports" / "stm32f1_spl" / "README.md",
+    REWRITE / "ports" / "stm32f1_spl" / "bms_main_stm32f1_spl.c",
     REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.c",
     REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.h",
     ROOT / "tools" / "run_rewrite_host_tests.py",
@@ -100,10 +103,22 @@ REQUIRED_FIRMWARE_TOKENS = [
 ]
 
 REQUIRED_PORT_TOKENS = [
+    "BMS_WEAK",
+    "bms_stm32f1_board_read_sample",
     "bms_stm32f1_platform_ops",
     "read_sample",
     "enter_rtc_stop",
     "request_iap_reset",
+    "bms_stm32f1_wait_tick",
+]
+
+REQUIRED_KEIL_TOKENS = [
+    "IROM(0x08004800,0x0001B800)",
+    "<TextAddressRange>0x08004800</TextAddressRange>",
+    "PROJECT_CFG_BUILD_PROFILE=0",
+    "firmware_rewrite\\src\\bms_app.c",
+    "firmware_rewrite\\src\\bms_soc.c",
+    "firmware_rewrite\\ports\\stm32f1_spl\\bms_main_stm32f1_spl.c",
 ]
 
 REQUIRED_PROTECTION_TOKENS = [
@@ -245,6 +260,30 @@ def check_script_uses_warnings(reporter):
             reporter.fail("rewrite host build missing {0}".format(flag))
 
 
+def check_keil_project(reporter):
+    if not KEIL_PROJECT.exists():
+        return
+    text = read_text(KEIL_PROJECT)
+    for token in REQUIRED_KEIL_TOKENS:
+        if token in text:
+            reporter.ok("Keil project contains {0}".format(token))
+        else:
+            reporter.fail("Keil project missing {0}".format(token))
+
+    legacy_patterns = [
+        r"\.\.\\Source\\",
+        "SocEnhance.c",
+        "Can_HDX.c",
+        "LedBar.c",
+        "rtc_sleep.c",
+    ]
+    for pattern in legacy_patterns:
+        if re.search(pattern, text):
+            reporter.fail("Keil project still references retired application path/token: {0}".format(pattern))
+        else:
+            reporter.ok("Keil project has no retired application token: {0}".format(pattern))
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="Check clean-room BMS rewrite consistency.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Only print warnings, errors, and summary.")
@@ -267,6 +306,7 @@ def main(argv):
     check_readme_index(reporter)
     check_no_legacy_truth_source(reporter)
     check_script_uses_warnings(reporter)
+    check_keil_project(reporter)
 
     return reporter.summary()
 

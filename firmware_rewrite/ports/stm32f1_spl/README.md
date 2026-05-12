@@ -16,4 +16,6 @@
 
 ## 当前状态
 
-当前文件提供可编译的空适配壳，避免硬件细节倒灌进 core。真正上板时只改本目录，不改 `firmware_rewrite/src` 的业务逻辑。
+当前文件提供可编译的适配壳和 `bms_main_stm32f1_spl.c` 入口。默认弱符号函数不会操作真实硬件，真正上板时由板级文件覆盖 `bms_stm32f1_board_*` 函数，不改 `firmware_rewrite/src` 的业务逻辑。
+
+Keil 工程 `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx` 已经引用本目录和 `firmware_rewrite/src`，并把 App 起点改为 `0x08004800`。

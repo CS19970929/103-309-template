@@ -26,7 +26,7 @@ src/bms_protection.c           基础保护和 MOS 输出
 src/bms_ui_iap.c               DI1/MCU_WK 显示体验和 IAP 请求
 src/bms_storage.c              SOC 双槽快照
 tests/test_rewrite_core.c      host 行为测试
-ports/stm32f1_spl/             STM32F1 SPL 硬件适配边界
+ports/stm32f1_spl/             STM32F1 SPL 硬件适配边界、Keil main 入口
 ```
 
 ## 验证
@@ -50,7 +50,7 @@ ctest --test-dir build/firmware_rewrite_cmake --output-on-failure
 
 ## 接板原则
 
-后续新增 `ports/stm32f1_spl/` 时，port 层只负责硬件输入输出：
+`ports/stm32f1_spl/` 的弱符号函数只负责硬件输入输出：
 
 - AFE/ADC 采样转成 `bms_sample_t`。
 - RS485/CAN 协议解析后调用 `bms_comm_*()`。
@@ -58,7 +58,7 @@ ctest --test-dir build/firmware_rewrite_cmake --output-on-failure
 - Flash driver 映射 `bms_storage_t` 双槽。
 - LED/DI1 按体验契约接入，不改变 SOC core。
 
-不要把旧 `main.c`、旧低功耗状态机或旧 CAN 调度写法搬进该目录。
+不要把旧 `main.c`、旧低功耗状态机或旧 CAN 调度写法搬进该目录。Keil 工程已经引用 rewrite core 和 STM32F1 port，App 起点保持 `0x08004800`。
 
 ## 旧代码边界
 

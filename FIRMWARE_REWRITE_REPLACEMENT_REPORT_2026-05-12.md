@@ -22,8 +22,9 @@ firmware_rewrite/
 - SOC 双槽快照：版本、序号、CRC、读回校验
 - 平台输出回调：MOS、显示、CAN、RTC、IAP
 - STM32F1 SPL port 边界：`firmware_rewrite/ports/stm32f1_spl`
+- Keil 工程文件已切到 rewrite 文件列表，两个 target 的 App 起始地址均为 `0x08004800`
 
-当前还没有做真实硬件接线和 Keil 烧录验证，因此不能声明“已完成上板出货验证”。但是从仓库结构上，旧应用层已经不再是实现来源。
+当前还没有在 Windows/Keil 上实际编译，也没有做真实硬件接线和烧录验证，因此不能声明“已完成上板出货验证”。但是从仓库结构和工程引用上，旧应用层已经不再是实现来源。
 
 ## 2. 删除范围
 
@@ -41,7 +42,7 @@ firmware_rewrite/
 保留内容：
 
 - `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0`：厂商 SPL / CMSIS / 启动文件
-- `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`：历史 Keil 工程文件，后续应新建 rewrite target 或替换工程文件
+- `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`：已替换为 rewrite core + STM32F1 port 文件列表，不再引用旧 `..\Source`
 - `tools/soc_flash_app_safe.ps1`：安全烧录脚本，继续保留 `0x08004800` App 地址检查
 - 根目录历史文档：作为需求和验收清单
 
@@ -58,7 +59,8 @@ firmware_rewrite/
 | 保护/MOS | `src/bms_protection.c` | 已完成基础保护 |
 | UI/IAP | `src/bms_ui_iap.c` | 已完成基础体验 |
 | 存储 | `src/bms_storage.c` | 已完成内存双槽模型 |
-| STM32F1 port | `ports/stm32f1_spl/*` | 已有可编译空壳，待硬件接线 |
+| STM32F1 port | `ports/stm32f1_spl/*` | 已有 Keil 入口与弱符号硬件边界，待真实板级覆盖 |
+| Keil 工程 | `103 + 309/Project/Users/*.uvprojx` | 已指向 rewrite 文件和 `0x08004800` App 起点，待 Windows/Keil 编译 |
 | Host 测试 | `tests/test_rewrite_core.c` | 已完成核心行为测试 |
 
 ## 4. 已验证行为
@@ -78,7 +80,8 @@ firmware_rewrite/
 11. 短按显示、`GPIO_MCU_WK` 持续显示、长按深睡请求。
 12. `0xFFFD` IAP 请求回调。
 13. `bms_firmware_run_once()` 统一主循环入口。
-14. STM32F1 SPL port 空壳可编译。
+14. STM32F1 SPL port 与 `bms_main_stm32f1_spl.c` 可编译。
+15. Keil `.uvprojx` 不再引用旧 `..\Source` 应用层。
 
 ## 5. 验证命令
 
@@ -101,7 +104,7 @@ git diff --check
 4. 接入 CAN 发送，按照 core 的 pending 状态发送状态帧或探测帧。
 5. 接入 RTC STOP，按 `bms_can_idle_rtc_period_seconds()` 给出的周期进入休眠。
 6. 接入 LED/DI1/`GPIO_MCU_WK`。
-7. 新建或替换 Keil target，输出 App 仍必须从 `0x08004800` 运行。
+7. 在 Windows/Keil 上打开现有 target 重新生成，确认输出 App 仍从 `0x08004800` 运行。
 8. 使用 `tools/soc_flash_app_safe.ps1` 烧录 App，禁止裸写 `0x08000000`。
 
 ## 7. 工程规则

@@ -27,6 +27,7 @@ add_executable(test_rewrite_core tests/test_rewrite_core.c)
 target_link_libraries(test_rewrite_core PRIVATE bms_rewrite_core)
 
 add_library(bms_stm32f1_spl_port
+    ports/stm32f1_spl/bms_main_stm32f1_spl.c
     ports/stm32f1_spl/bms_port_stm32f1_spl.c
 )
 target_include_directories(bms_stm32f1_spl_port PUBLIC include ports/stm32f1_spl)
