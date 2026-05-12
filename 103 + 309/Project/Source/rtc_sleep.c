@@ -621,7 +621,8 @@ static bool isException(void)
     }
 
     // todo read AFE status and to deal logi
-    if (isHaveCurrent() || rtc_monitor() || isVol_cuv() || isVol_cov() || (g_stCellInfoReport.u16VCellMin <= 2600))
+    // if (isHaveCurrent() || rtc_monitor() || isVol_cuv() || isVol_cov() || (g_stCellInfoReport.u16VCellMin <= 2750))
+    if (isHaveCurrent() || rtc_monitor() || (g_stCellInfoReport.u16VCellMin <= 2750))
     {
         return true;
     }
