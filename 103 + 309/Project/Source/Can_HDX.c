@@ -55,25 +55,71 @@ enum FEIDAO_CAN_POWER_STATE
 	FEIDAO_CAN_POWER_TX_WAIT
 };
 
-static UINT8 s_u8FeidaoCanPowerState = FEIDAO_CAN_POWER_IDLE;
-static UINT8 s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
-static UINT16 s_u16FeidaoCanPendingMask = 0U;
-static UINT32 s_u32FeidaoCanPowerTick = 0U;
-static UINT32 s_u32FeidaoCanTxTick = 0U;
-static UINT32 s_u32FeidaoCanLogicalTick = 0U;
-static UINT32 s_u32FeidaoCanLastHwTick = 0U;
-static UINT32 s_u32FeidaoCanLast1000msTick = 0U;
-static UINT32 s_u32FeidaoCanLast5000msTick = 0U;
-static UINT8 s_u8FeidaoCanHwTickValid = 0U;
-static UINT8 s_u8FeidaoCanScheduleInit = 0U;
-static UINT8 s_u8FeidaoCanBusActive = 1U;
-static UINT8 s_u8FeidaoCanNoAckCnt = 0U;
-static UINT8 s_u8FeidaoCanProbeActive = 0U;
-static UINT8 s_u8FeidaoCanRtcServiceActive = 0U;
-static UINT8 s_u8FeidaoCanTxCycleAcked = 0U;
-static UINT8 s_u8FeidaoCanTxCycleNoAckRecorded = 0U;
-static UINT8 s_u8FeidaoCanHostIapResetPending = 0U;
-static UINT16 s_u16FeidaoCanHostIapResetDelayTicks = 0U;
+typedef struct
+{
+	UINT8 power_state;
+	UINT8 tx_mailbox;
+	UINT16 pending_mask;
+	UINT32 power_tick;
+	UINT32 tx_tick;
+	UINT32 logical_tick;
+	UINT32 last_hw_tick;
+	UINT32 last_1000ms_tick;
+	UINT32 last_5000ms_tick;
+	UINT8 hw_tick_valid;
+	UINT8 schedule_init;
+	UINT8 bus_active;
+	UINT8 no_ack_cnt;
+	UINT8 probe_active;
+	UINT8 rtc_service_active;
+	UINT8 tx_cycle_acked;
+	UINT8 tx_cycle_no_ack_recorded;
+	UINT8 host_iap_reset_pending;
+	UINT16 host_iap_reset_delay_ticks;
+} FeidaoCanRuntime;
+
+static FeidaoCanRuntime s_feidao_can_runtime =
+{
+	FEIDAO_CAN_POWER_IDLE,
+	CAN_TxStatus_NoMailBox,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	1U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+};
+
+#define s_u8FeidaoCanPowerState (s_feidao_can_runtime.power_state)
+#define s_u8FeidaoCanTxMailbox (s_feidao_can_runtime.tx_mailbox)
+#define s_u16FeidaoCanPendingMask (s_feidao_can_runtime.pending_mask)
+#define s_u32FeidaoCanPowerTick (s_feidao_can_runtime.power_tick)
+#define s_u32FeidaoCanTxTick (s_feidao_can_runtime.tx_tick)
+#define s_u32FeidaoCanLogicalTick (s_feidao_can_runtime.logical_tick)
+#define s_u32FeidaoCanLastHwTick (s_feidao_can_runtime.last_hw_tick)
+#define s_u32FeidaoCanLast1000msTick (s_feidao_can_runtime.last_1000ms_tick)
+#define s_u32FeidaoCanLast5000msTick (s_feidao_can_runtime.last_5000ms_tick)
+#define s_u8FeidaoCanHwTickValid (s_feidao_can_runtime.hw_tick_valid)
+#define s_u8FeidaoCanScheduleInit (s_feidao_can_runtime.schedule_init)
+#define s_u8FeidaoCanBusActive (s_feidao_can_runtime.bus_active)
+#define s_u8FeidaoCanNoAckCnt (s_feidao_can_runtime.no_ack_cnt)
+#define s_u8FeidaoCanProbeActive (s_feidao_can_runtime.probe_active)
+#define s_u8FeidaoCanRtcServiceActive (s_feidao_can_runtime.rtc_service_active)
+#define s_u8FeidaoCanTxCycleAcked (s_feidao_can_runtime.tx_cycle_acked)
+#define s_u8FeidaoCanTxCycleNoAckRecorded (s_feidao_can_runtime.tx_cycle_no_ack_recorded)
+#define s_u8FeidaoCanHostIapResetPending (s_feidao_can_runtime.host_iap_reset_pending)
+#define s_u16FeidaoCanHostIapResetDelayTicks (s_feidao_can_runtime.host_iap_reset_delay_ticks)
 UINT8 CAN_Tx_Data(CanTxMsg *Msg);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
