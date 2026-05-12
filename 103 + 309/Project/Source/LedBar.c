@@ -702,7 +702,9 @@ static void LedBar_ServiceChargeFilter(uint8_t raw_active)
 
 static uint8_t LedBar_IsDisplayRequested(void)
 {
-#if !LEDBAR_SLEEP_ENABLE
+#if LEDBAR_TEST_ALWAYS_ON
+    return 1u;
+#elif !LEDBAR_SLEEP_ENABLE
     return 1u;
 #else
     if (LedBar_IsMcuWakeActive() != 0u)

@@ -289,6 +289,12 @@
 // <i> 长按 GPIO 翻转测试开关。仅调试硬件按键/灯条时开启。
 #define PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST 0
 
+// <q> LedBar test always-on display
+// <i> Keeps SOC display on during Debug/Factory testing. Release build must keep this disabled.
+#ifndef PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON
+#define PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON 0
+#endif
+
 // <o> SOC 显示时间，10ms tick <1-65535>
 // <i> SOC 显示保持时间，单位 10ms。500 表示 5 秒。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500

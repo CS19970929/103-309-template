@@ -14,6 +14,7 @@
 | 休眠中短按 | 显示 BKP 中保存的休眠前 SOC，超时后回到 STOP |
 | `GPIO_MCU_WK` 高电平 | 持续显示 SOC，并叠加充电图标 |
 | 充电电流有效 | 显示 `SOC + % + 充电图标` |
+| 测试常亮 | `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON=1` 时持续显示 SOC，不再按 5 秒/10 秒窗口自动熄屏 |
 | 无显示请求 | 熄屏、停止 TIM4、显示 GPIO 输出低电平 |
 
 显示 SOC 只读取 `g_stCellInfoReport.SocElement.u16Soc`，保证数码管、CAN、RS485 对外 SOC 口径一致。
@@ -47,7 +48,9 @@
 2. 新增显示触发条件时，只改 `LedBar_IsDisplayRequested()` 或 `APP_LedBar()` 的业务仲裁，不要改 TIM4 扫描逻辑。
 3. 新增闪烁、故障优先级、动画时，应作为独立显示模式处理，不要把特殊逻辑塞进 GPIO 输出函数。
 4. STOP 前必须经过 `LedBar_PrepareForStop()` 或 `LedBar_Clear()`，保证 TIM4 关闭、GPIO 进入低功耗安全态。
-5. 不再引入 `74HC595`、图样贴近、串亮评分等历史策略。
+5. 测试常亮只能通过 `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON` 打开，量产 Release 必须保持 0；`Project_BuildGuard.h` 和 `tools/project_check.py` 会拦截误开。
+6. 测试常亮只取消显示窗口超时，不阻止真实 STOP/休眠流程；如果 MCU 已进入低功耗，数码管扫描仍会按休眠入口关闭。
+7. 不再引入 `74HC595`、图样贴近、串亮评分等历史策略。
 
 ## 验收点
 
