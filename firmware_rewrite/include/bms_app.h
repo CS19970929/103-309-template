@@ -8,14 +8,17 @@
 #define BMS_MAX_CELLS 32u
 #define BMS_SOC_TABLE_POINTS 21u
 #define BMS_RO_D000_WORDS 63u
+#define BMS_RO_D300_WORDS 16u
 
 #define BMS_ADDR_SET_ONCE_SOC 0x1005u
 #define BMS_ADDR_SOC_TABLE_START 0x2200u
 #define BMS_ADDR_SOC_TABLE_END 0x2229u
 #define BMS_ADDR_SOC_PARAM_START 0x2318u
 #define BMS_ADDR_SOC_PARAM_END 0x231Bu
+#define BMS_ADDR_SOC_TEST_STATUS 0xD300u
 #define BMS_ADDR_IAP_CONNECT 0xFFFDu
 #define BMS_IAP_REQUEST_VALUE 0x00ABu
+#define BMS_SOC_TEST_UNSUPPORTED 1u
 
 #define BMS_FLASH_IAP_START 0x08000000ul
 #define BMS_FLASH_APP_START 0x08004800ul
@@ -262,5 +265,6 @@ void bms_app_apply_outputs(const bms_app_t *app, const bms_platform_ops_t *ops);
 bool bms_comm_write_single(bms_app_t *app, uint16_t address, uint16_t value);
 bool bms_comm_write_block(bms_app_t *app, uint16_t address, const uint16_t *values, size_t count);
 bool bms_comm_read_d000(const bms_app_t *app, uint16_t *words, size_t count);
+bool bms_comm_read_d300(const bms_app_t *app, uint16_t *words, size_t count);
 
 #endif

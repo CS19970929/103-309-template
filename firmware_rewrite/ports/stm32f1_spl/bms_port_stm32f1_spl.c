@@ -17,6 +17,10 @@ typedef struct {
 
 static bms_stm32f1_port_state_t s_port;
 
+BMS_WEAK void bms_stm32f1_board_init(void)
+{
+}
+
 BMS_WEAK bool bms_stm32f1_board_read_sample(bms_sample_t *sample)
 {
     (void)sample;
@@ -76,6 +80,23 @@ BMS_WEAK bool bms_stm32f1_board_wait_tick(uint32_t tick_ms)
 {
     (void)tick_ms;
     return true;
+}
+
+BMS_WEAK void bms_stm32f1_board_poll(bms_app_t *app)
+{
+    (void)app;
+}
+
+BMS_WEAK void bms_stm32f1_tick_isr(void)
+{
+}
+
+BMS_WEAK void bms_stm32f1_can_rx_isr(void)
+{
+}
+
+BMS_WEAK void bms_stm32f1_usart_rx_isr(void)
+{
 }
 
 static bool port_read_sample(void *ctx, bms_sample_t *sample)
@@ -157,6 +178,7 @@ static void port_request_iap_reset(void *ctx)
 void bms_stm32f1_platform_init(void)
 {
     memset(&s_port, 0, sizeof(s_port));
+    bms_stm32f1_board_init();
     s_port.last_sample = bms_sample_default();
     s_port.has_sample = true;
 }
@@ -182,4 +204,9 @@ bms_platform_ops_t bms_stm32f1_platform_ops(void)
 bool bms_stm32f1_wait_tick(uint32_t tick_ms)
 {
     return bms_stm32f1_board_wait_tick(tick_ms);
+}
+
+void bms_stm32f1_poll(bms_app_t *app)
+{
+    bms_stm32f1_board_poll(app);
 }

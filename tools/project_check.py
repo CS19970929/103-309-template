@@ -45,6 +45,7 @@ REQUIRED_FILES = [
     REWRITE / "ports" / "stm32f1_spl" / "bms_port_stm32f1_spl.h",
     ROOT / "tools" / "run_rewrite_host_tests.py",
     ROOT / "tools" / "run_rewrite_ci.py",
+    ROOT / "tools" / "build_rewrite_arm_gcc.py",
     ROOT / "tools" / "check_rewrite_keil_project.py",
     ROOT / "tools" / "build_rewrite_keil.ps1",
     ROOT / "tools" / "soc_flash_app_safe.ps1",
@@ -59,9 +60,11 @@ REQUIRED_HEADER_TOKENS = [
     "BMS_ADDR_SET_ONCE_SOC 0x1005u",
     "BMS_ADDR_SOC_TABLE_START 0x2200u",
     "BMS_ADDR_SOC_PARAM_START 0x2318u",
+    "BMS_ADDR_SOC_TEST_STATUS 0xD300u",
     "BMS_ADDR_IAP_CONNECT 0xFFFDu",
     "BMS_IAP_REQUEST_VALUE 0x00ABu",
     "BMS_RO_D000_WORDS 63u",
+    "BMS_RO_D300_WORDS 16u",
     "BMS_FAULT_CELL_OVP",
     "bms_platform_ops_t",
 ]
@@ -98,6 +101,7 @@ REQUIRED_TEST_TOKENS = [
     "test_ui_key_and_mcu_wake",
     "test_iap_and_rtc_outputs",
     "test_firmware_run_once_entry",
+    "bms_comm_read_d300",
 ]
 
 REQUIRED_FIRMWARE_TOKENS = [
@@ -123,6 +127,9 @@ REQUIRED_KEIL_TOKENS = [
     "firmware_rewrite\\src\\bms_app.c",
     "firmware_rewrite\\src\\bms_soc.c",
     "firmware_rewrite\\ports\\stm32f1_spl\\bms_main_stm32f1_spl.c",
+    "firmware_rewrite\\ports\\stm32f1_spl\\bms_board_stm32f1_spl.c",
+    "firmware_rewrite\\ports\\stm32f1_spl\\bms_it_stm32f1_spl.c",
+    "firmware_rewrite\\ports\\stm32f1_spl\\bms_system_stm32f1_spl.c",
 ]
 
 REQUIRED_PROTECTION_TOKENS = [
@@ -273,6 +280,7 @@ def check_rewrite_ci_script(reporter):
     required = [
         "tools/project_check.py",
         "tools/check_rewrite_keil_project.py",
+        "tools/build_rewrite_arm_gcc.py",
         "tools/run_rewrite_host_tests.py",
         "ctest",
     ]

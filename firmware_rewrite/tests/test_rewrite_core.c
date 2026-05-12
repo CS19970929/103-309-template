@@ -106,6 +106,7 @@ static void test_set_once_and_d000(void)
     bms_app_t app;
     bms_sample_t sample = sample_with_voltage(3700u, 3710u);
     uint16_t words[BMS_RO_D000_WORDS];
+    uint16_t test_words[BMS_RO_D300_WORDS];
 
     bms_storage_init(&storage);
     bms_app_init(&app, NULL, &storage);
@@ -115,6 +116,9 @@ static void test_set_once_and_d000(void)
     require_true(words[52] == 80u, "0xD000 offset 52 reports display SOC");
     require_true(words[53] == 100u, "0xD000 offset 53 reports SOH");
     require_true(words[55] == 2700u, "0xD000 offset 55 reports full capacity Ah*100");
+    require_true(bms_comm_read_d300(&app, test_words, BMS_RO_D300_WORDS), "read 0xD300 test status");
+    require_true(test_words[0] == 0u, "0xD300 reports production test mode unsupported");
+    require_true(test_words[15] == BMS_SOC_TEST_UNSUPPORTED, "0xD300 reports unsupported result");
 }
 
 static void test_full_reaches_100(void)

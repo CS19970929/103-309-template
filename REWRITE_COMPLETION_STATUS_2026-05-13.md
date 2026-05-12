@@ -9,8 +9,9 @@
 - 旧 `103 + 309/Project/Source` 应用层 C/H 源码删除。
 - 新业务代码集中在 `firmware_rewrite/src`。
 - Keil 工程文件已经引用 rewrite core 和 STM32F1 port，不再引用旧 `..\Source`。
+- Keil 工程文件已经替换旧 `stm32f10x_it.c` / `system_stm32f10x.c`，不再依赖旧 `main.h`。
 - App 起始地址保持 `0x08004800`，不覆盖 `0x08000000` IAP。
-- host 行为测试、CMake 构建、Keil 工程引用检查可以通过。
+- host 行为测试、CMake 构建、Keil 工程引用检查、ARM GCC Cortex-M3 只编译门禁可以通过。
 
 当前还不能声明：
 
@@ -18,7 +19,7 @@
 - 已经通过 Windows/Keil 实编译。
 - 已经通过真实 103 + 309 板端 AFE、Flash、CAN、RTC、LED、RS485 上板验证。
 
-原因是 `firmware_rewrite/ports/stm32f1_spl` 当前只有可编译硬件边界和弱符号函数，默认不会真的读 AFE、写 Flash、发 CAN、进 RTC STOP 或刷新 LED。真实板级接线必须覆盖 `bms_stm32f1_board_*` 函数。
+原因是 `firmware_rewrite/ports/stm32f1_spl` 现在已经有默认 STM32F1 board 实现，但 AFE/ADC 标定、MOS 控制极性、LED Charlieplexing、RTC Alarm 唤醒电流与时钟恢复、CAN ACK 行为和 RS485 电气方向仍必须上板实测确认。没有实测前，不能把“可编译”当作“量产等价”。
 
 ## 2. “port” 是什么意思
 
@@ -30,15 +31,17 @@ clean-room core 只处理业务逻辑：
 - 保护状态怎么判断。
 - CAN/RTC 策略怎么决策。
 - 通信地址怎么读写。
+- 量产 `0xD300 supported=0` 怎么保持测试入口隔离。
 - IAP 请求怎么进入状态。
 
 port 负责把真实硬件接到这些逻辑上：
 
+- `bms_stm32f1_board_*` 是当前 STM32F1 port 的板级函数前缀。
 - 从 AFE/ADC/DI1/`GPIO_MCU_WK` 生成 `bms_sample_t`。
 - 把 SOC 快照写入 `0x0801E000` / `0x0801E800`。
 - 把 core 的 MOS 状态输出到实际 GPIO 或 AFE 控制位。
 - 把 CAN status/probe 发送到真实 CAN 外设。
-- 按 core 给出的周期进入 RTC STOP。
+- 按 core 给出的周期配置 `RTC Alarm + EXTI17` 并进入 STOP。
 - 把显示状态刷新到真实 LED/数码管。
 - 收到 `0xFFFD` IAP 请求后写标志并复位。
 
@@ -59,16 +62,18 @@ python3 tools/run_rewrite_ci.py
 1. `git diff --check`
 2. `python3 tools/project_check.py --quiet`
 3. `python3 tools/check_rewrite_keil_project.py`
-4. `python3 tools/run_rewrite_host_tests.py`
-5. `cmake -S firmware_rewrite -B build/firmware_rewrite_cmake`
-6. `cmake --build build/firmware_rewrite_cmake`
-7. `ctest --test-dir build/firmware_rewrite_cmake --output-on-failure`
+4. `python3 tools/build_rewrite_arm_gcc.py`
+5. `python3 tools/run_rewrite_host_tests.py`
+6. `cmake -S firmware_rewrite -B build/firmware_rewrite_cmake`
+7. `cmake --build build/firmware_rewrite_cmake`
+8. `ctest --test-dir build/firmware_rewrite_cmake --output-on-failure`
 
 这些命令保证：
 
 - 旧 Source 不会重新混入。
 - 关键地址和通信契约不丢。
 - Keil 工程仍然指向 rewrite 文件。
+- rewrite core + STM32F1 port 可以被 `arm-none-eabi-gcc` 按 Cortex-M3 目标编译成 object。
 - host 行为测试通过。
 - CMake 可构建。
 
@@ -81,6 +86,7 @@ Windows/Keil 实编译不属于 Mac 本地 CI，因为 Keil MDK 需要 Windows�
 ## 4. Keil 编译状态
 
 仓库已完成 Keil 工程引用替换，并能通过 XML/路径/地址检查。
+仓库也已经用 `arm-none-eabi-gcc` 对 rewrite core、STM32F1 board、system、interrupt 文件做了只编译门禁。
 
 当前机器是 macOS，没有 `UV4.exe`、`ARMCC`、`ARMCLANG`、`fromelf`，所以不能在本机给出 Keil 实编译成功结论。
 
@@ -96,13 +102,13 @@ Windows 上的验收条件：
 
 要达到“板端完美替代”，还必须完成：
 
-1. 实现真实 `bms_stm32f1_board_read_sample()`。
-2. 实现真实 Flash 双槽保存和恢复。
-3. 实现 RS485 协议帧到 `bms_comm_*()` 的接入。
-4. 实现 CAN status/probe 发送与 ACK 反馈。
-5. 实现 RTC STOP 进入和唤醒后的 `bms_app_apply_rtc_wake()`。
-6. 实现 LED/DI1/`GPIO_MCU_WK` 刷新。
-7. 实现 MOS 输出到真实硬件控制位。
+1. 上板校准 `bms_stm32f1_board_read_sample()` 的电压分压、电流零点、温度和 AFE 接入。
+2. 上板确认 Flash 双槽保存和恢复。
+3. 上板确认 RS485 `0x03/0x06/0x10` 读写 `bms_comm_*()`。
+4. 上板确认 CAN status/probe 发送与 ACK 反馈。
+5. 上板确认 `RTC Alarm + EXTI17` STOP 进入、周期唤醒和 `bms_app_apply_rtc_wake()`。
+6. 上板确认 LED/DI1/`GPIO_MCU_WK` 刷新。
+7. 上板确认 MOS 输出到真实硬件控制位的极性。
 8. Windows/Keil 编译通过。
 9. 安全脚本烧录 App 到 `0x08004800`。
 10. 上板验证通信地址、SOC、保护、低功耗、IAP、显示体验。

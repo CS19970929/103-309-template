@@ -113,3 +113,27 @@ bool bms_comm_read_d000(const bms_app_t *app, uint16_t *words, size_t count)
     words[59] = (uint16_t)((app->protection.active_faults >> 16) & 0xFFFFu);
     return true;
 }
+
+bool bms_comm_read_d300(const bms_app_t *app, uint16_t *words, size_t count)
+{
+    bms_soc_report_t report;
+
+    if (words == NULL || count < BMS_RO_D300_WORDS) {
+        return false;
+    }
+
+    memset(words, 0, count * sizeof(words[0]));
+    words[0] = 0u;
+    words[2] = 200u;
+    words[3] = 5u;
+    words[4] = 300u;
+    words[15] = BMS_SOC_TEST_UNSUPPORTED;
+
+    if (app != NULL) {
+        report = bms_app_report(app);
+        words[12] = report.display_soc;
+        words[13] = report.soh;
+        words[14] = report.capacity_now_ah100;
+    }
+    return true;
+}

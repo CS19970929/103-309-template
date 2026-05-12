@@ -449,6 +449,11 @@
               <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.c</FilePath>
             </File>
             <File>
+              <FileName>bms_board_stm32f1_spl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_board_stm32f1_spl.c</FilePath>
+            </File>
+            <File>
               <FileName>bms_port_stm32f1_spl.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.h</FilePath>
@@ -484,9 +489,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_conf.h</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_it.c</FileName>
+              <FileName>bms_it_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_it.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_it_stm32f1_spl.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_it.h</FileName>
@@ -494,9 +499,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_it.h</FilePath>
             </File>
             <File>
-              <FileName>system_stm32f10x.c</FileName>
+              <FileName>bms_system_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\system_stm32f10x.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_system_stm32f1_spl.c</FilePath>
             </File>
             <File>
               <FileName>system_stm32f10x.h</FileName>
@@ -1185,6 +1190,11 @@
               <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.c</FilePath>
             </File>
             <File>
+              <FileName>bms_board_stm32f1_spl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_board_stm32f1_spl.c</FilePath>
+            </File>
+            <File>
               <FileName>bms_port_stm32f1_spl.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.h</FilePath>
@@ -1220,9 +1230,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_conf.h</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_it.c</FileName>
+              <FileName>bms_it_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_it.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_it_stm32f1_spl.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_it.h</FileName>
@@ -1230,9 +1240,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\stm32f10x_it.h</FilePath>
             </File>
             <File>
-              <FileName>system_stm32f10x.c</FileName>
+              <FileName>bms_system_stm32f1_spl.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\system_stm32f10x.c</FilePath>
+              <FilePath>..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_system_stm32f1_spl.c</FilePath>
             </File>
             <File>
               <FileName>system_stm32f10x.h</FileName>

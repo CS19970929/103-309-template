@@ -21,6 +21,7 @@ int main(void)
     for (;;) {
         if (bms_stm32f1_wait_tick(BMS_STM32F1_MAIN_TICK_MS)) {
             (void)bms_firmware_run_once(&s_app, &s_ops, BMS_STM32F1_MAIN_TICK_MS);
+            bms_stm32f1_poll(&s_app);
         }
     }
 }

@@ -45,16 +45,22 @@ cmake --build build/firmware_rewrite_cmake
 ctest --test-dir build/firmware_rewrite_cmake --output-on-failure
 ```
 
-当前 host 测试覆盖 `0x1005`、`0xD000`、满电到 `100%`、低压到 `0%`、静置 OCV deferred target、大电流 sag holdoff、CAN RTC 周期和 SOC 快照恢复。
+当前 host 测试覆盖 `0x1005`、`0xD000`、`0xD300 supported=0`、满电到 `100%`、低压到 `0%`、静置 OCV deferred target、大电流 sag holdoff、CAN RTC 周期和 SOC 快照恢复。
 同时覆盖基础保护/MOS、DI1 显示、`GPIO_MCU_WK`、长按深睡、`0xFFFD` IAP 请求和 `bms_firmware_run_once()` 主循环入口。
+
+STM32F1 port 的 C 级编译检查：
+
+```bash
+python3 tools/build_rewrite_arm_gcc.py
+```
 
 ## 接板原则
 
-`ports/stm32f1_spl/` 的弱符号函数只负责硬件输入输出：
+`ports/stm32f1_spl/` 只负责硬件输入输出：
 
 - AFE/ADC 采样转成 `bms_sample_t`。
 - RS485/CAN 协议解析后调用 `bms_comm_*()`。
-- RTC 唤醒后调用 `bms_app_apply_rtc_wake()`。
+- RTC STOP 由 port 配置 `RTC Alarm + EXTI17`，唤醒后由主循环调用 `bms_app_apply_rtc_wake()`。
 - Flash driver 映射 `bms_storage_t` 双槽。
 - LED/DI1 按体验契约接入，不改变 SOC core。
 

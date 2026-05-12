@@ -27,6 +27,7 @@ def main():
         ("git diff whitespace check", ["git", "diff", "--check"]),
         ("project consistency check", [sys.executable, "tools/project_check.py", "--quiet"]),
         ("Keil project wiring check", [sys.executable, "tools/check_rewrite_keil_project.py"]),
+        ("ARM GCC compile gate", [sys.executable, "tools/build_rewrite_arm_gcc.py"]),
         ("rewrite host tests", [sys.executable, "tools/run_rewrite_host_tests.py"]),
         ("CMake configure", ["cmake", "-S", "firmware_rewrite", "-B", "build/firmware_rewrite_cmake"]),
         ("CMake build", ["cmake", "--build", "build/firmware_rewrite_cmake"]),

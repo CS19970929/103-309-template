@@ -28,9 +28,15 @@ EXPECTED_FILES = (
     r"..\..\..\firmware_rewrite\src\bms_ui_iap.c",
     r"..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_main_stm32f1_spl.c",
     r"..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_port_stm32f1_spl.c",
+    r"..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_board_stm32f1_spl.c",
+    r"..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_it_stm32f1_spl.c",
+    r"..\..\..\firmware_rewrite\ports\stm32f1_spl\bms_system_stm32f1_spl.c",
 )
 RETIRED_TOKENS = (
     r"..\Source\\",
+    "main.h",
+    "stm32f10x_it.c",
+    "system_stm32f10x.c",
     "SocEnhance.c",
     "Can_HDX.c",
     "LedBar.c",
