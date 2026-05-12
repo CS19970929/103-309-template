@@ -64,6 +64,35 @@ typedef struct
     uint8_t length;
 } LedBarFrame;
 
+typedef struct
+{
+    uint8_t initialized;
+    uint8_t sleep;
+    uint8_t blank;
+    uint8_t number;
+    uint8_t indicator_mask;
+    uint8_t test_single_segment_enable;
+    uint8_t test_single_segment_id;
+    LedBarFrame frame;
+    uint8_t scan_index;
+    uint8_t scan_timer_initialized;
+    uint8_t scan_timer_enabled;
+    uint16_t soc_display_10ms;
+    uint8_t startup_display_armed;
+    uint32_t key_hold_10ms;
+    uint32_t key_press_start_10ms;
+    uint8_t key_last_pressed;
+    uint8_t key_long_handled;
+    uint8_t mcu_wk_filter_initialized;
+    uint8_t mcu_wk_active;
+    uint8_t mcu_wk_on_10ms;
+    uint8_t mcu_wk_off_10ms;
+    uint8_t charge_filter_initialized;
+    uint8_t charge_active;
+    uint8_t charge_on_100ms;
+    uint8_t charge_off_100ms;
+} LedBarRuntime;
+
 LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
 
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
@@ -120,31 +149,60 @@ static const uint8_t s_ledbar_digit_map[10] =
         LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
-static uint8_t s_ledbar_initialized = 0u;
-static uint8_t s_ledbar_sleep = 0u;
-static uint8_t s_ledbar_blank = 1u;
-static uint8_t s_ledbar_number = 0u;
-static uint8_t s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
-static uint8_t s_ledbar_test_single_segment_enable = 0u;
-static uint8_t s_ledbar_test_single_segment_id = 0u;
-static LedBarFrame s_ledbar_frame;
-static uint8_t s_ledbar_scan_index = 0u;
-static uint8_t s_ledbar_scan_timer_initialized = 0u;
-static uint8_t s_ledbar_scan_timer_enabled = 0u;
-static uint16_t s_ledbar_soc_display_10ms = 0u;
-static uint8_t s_ledbar_startup_display_armed = 0u;
-static uint32_t s_ledbar_key_hold_10ms = 0u;
-static uint32_t s_ledbar_key_press_start_10ms = 0u;
-static uint8_t s_ledbar_key_last_pressed = 0u;
-static uint8_t s_ledbar_key_long_handled = 0u;
-static uint8_t s_ledbar_mcu_wk_filter_initialized = 0u;
-static uint8_t s_ledbar_mcu_wk_active = 0u;
-static uint8_t s_ledbar_mcu_wk_on_10ms = 0u;
-static uint8_t s_ledbar_mcu_wk_off_10ms = 0u;
-static uint8_t s_ledbar_charge_filter_initialized = 0u;
-static uint8_t s_ledbar_charge_active = 0u;
-static uint8_t s_ledbar_charge_on_100ms = 0u;
-static uint8_t s_ledbar_charge_off_100ms = 0u;
+static LedBarRuntime s_ledbar_runtime =
+{
+    0u,
+    0u,
+    1u,
+    0u,
+    LEDBAR_ICON_PERCENT_MASK,
+    0u,
+    0u,
+    {{0u}, 0u},
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+};
+
+#define s_ledbar_initialized (s_ledbar_runtime.initialized)
+#define s_ledbar_sleep (s_ledbar_runtime.sleep)
+#define s_ledbar_blank (s_ledbar_runtime.blank)
+#define s_ledbar_number (s_ledbar_runtime.number)
+#define s_ledbar_indicator_mask (s_ledbar_runtime.indicator_mask)
+#define s_ledbar_test_single_segment_enable (s_ledbar_runtime.test_single_segment_enable)
+#define s_ledbar_test_single_segment_id (s_ledbar_runtime.test_single_segment_id)
+#define s_ledbar_frame (s_ledbar_runtime.frame)
+#define s_ledbar_scan_index (s_ledbar_runtime.scan_index)
+#define s_ledbar_scan_timer_initialized (s_ledbar_runtime.scan_timer_initialized)
+#define s_ledbar_scan_timer_enabled (s_ledbar_runtime.scan_timer_enabled)
+#define s_ledbar_soc_display_10ms (s_ledbar_runtime.soc_display_10ms)
+#define s_ledbar_startup_display_armed (s_ledbar_runtime.startup_display_armed)
+#define s_ledbar_key_hold_10ms (s_ledbar_runtime.key_hold_10ms)
+#define s_ledbar_key_press_start_10ms (s_ledbar_runtime.key_press_start_10ms)
+#define s_ledbar_key_last_pressed (s_ledbar_runtime.key_last_pressed)
+#define s_ledbar_key_long_handled (s_ledbar_runtime.key_long_handled)
+#define s_ledbar_mcu_wk_filter_initialized (s_ledbar_runtime.mcu_wk_filter_initialized)
+#define s_ledbar_mcu_wk_active (s_ledbar_runtime.mcu_wk_active)
+#define s_ledbar_mcu_wk_on_10ms (s_ledbar_runtime.mcu_wk_on_10ms)
+#define s_ledbar_mcu_wk_off_10ms (s_ledbar_runtime.mcu_wk_off_10ms)
+#define s_ledbar_charge_filter_initialized (s_ledbar_runtime.charge_filter_initialized)
+#define s_ledbar_charge_active (s_ledbar_runtime.charge_active)
+#define s_ledbar_charge_on_100ms (s_ledbar_runtime.charge_on_100ms)
+#define s_ledbar_charge_off_100ms (s_ledbar_runtime.charge_off_100ms)
 
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);
