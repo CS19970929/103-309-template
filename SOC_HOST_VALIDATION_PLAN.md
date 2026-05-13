@@ -22,6 +22,7 @@
 
 ```bash
 python3 tools/run_soc_host_c_test.py
+python3 tools/soc_visual_report.py
 python3 tools/soc_replay_test.py
 python3 tools/project_check.py
 git diff --check
@@ -42,6 +43,8 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 
 `tools/run_soc_host_c_test.py` 当前覆盖 `14` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照。
 
+`tools/soc_visual_report.py` 会编译 `tools/soc_host_visual_trace.c`，并把真实 `SOC.c` + `SocEnhance.c` 在城市骑行、爬坡、快变电流、低压截止、充电锚点五个场景中的运行轨迹输出成 `build/host_tests/soc_visual_trace.csv` 和 `build/host_tests/soc_visual_report.html`。这份报告用于人工直观看 SOC 曲线、显示曲线、电压和电流趋势，不替代 `tools/run_soc_host_c_test.py` 的断言门禁。
+
 `tools/soc_replay_test.py` 当前覆盖 `43` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 
 ## 3. 覆盖矩阵
@@ -49,6 +52,7 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 | 类别 | 已覆盖内容 |
 | --- | --- |
 | 真实 C 源码路径 | host 直接编译 `SOC.c` + `SocEnhance.c` + `PubFunc.c`，验证 `InitData_SOC()` / `App_SOC()` / `SOC_IntEnhance_Ctrl()` 的真实调用链 |
+| 可视化轨迹 | host 直接编译 `SOC.c` + `SocEnhance.c` 输出每秒 CSV，并生成 HTML 曲线，用于人工检查跳变、收敛和显示体验 |
 | 启动恢复 | 无快照默认 60%、无快照有效电压按 OCV、V2 快照恢复 SOC/容量/循环/SOH、重载回弹标志恢复 |
 | 安时积分 | 200ms/5Hz 积分、充电/放电方向、脉冲电流平均能量、容量边界、循环小数累计 |
 | SOH | 循环到 SOH 映射、80% 下限、SOH 变化后有效容量约束 |
@@ -78,12 +82,15 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 
 ```bash
 python3 tools/run_soc_host_c_test.py
+python3 tools/soc_visual_report.py
 python3 tools/soc_replay_test.py
 python3 tools/project_check.py
 git diff --check
 ```
 
-有 Windows + Keil 环境时，再补 `FD_Debug` 和 `FD_Release` 完整编译。有实物板时，使用 `tools/start_soc_test_ui.ps1` 启动 SOC 测试上位机做串口在线监控或 demo；Host C 测试本身是命令行门禁，没有 UI，因为它的目的不是展示，而是让 CI/提交前快速失败。
+执行 `tools/soc_visual_report.py` 后，直接打开 `build/host_tests/soc_visual_report.html`，先看汇总是否全 PASS，再逐个场景检查蓝线、橙线、绿线、电压线和电流线的趋势。蓝线是真实容量推算 SOC，橙线是真实 C 内部 SOC，绿线是对外显示 SOC。
+
+有 Windows + Keil 环境时，再补 `FD_Debug` 和 `FD_Release` 完整编译。有实物板时，使用 `tools/start_soc_test_ui.ps1` 启动 SOC 测试上位机做串口在线监控或 demo；Host C 测试本身是命令行门禁，HTML 可视化报告用于人工看趋势。
 
 ## 6. 无板验证边界
 
