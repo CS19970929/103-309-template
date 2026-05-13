@@ -40,7 +40,7 @@ static uint8_t s_ledbar_leds_output_enabled = 0u;
 static uint8_t s_ledbar_test_single_segment_enable = 0u;
 static uint8_t s_ledbar_test_single_segment_id = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
-static uint16_t s_ledbar_key_hold_10ms = 0u;
+static UINT32 s_ledbar_key_press_start_tick = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
 static uint16_t s_ledbar_power_on_display_10ms = 0u;
@@ -405,6 +405,8 @@ static void LedBar_ServiceSwitch(void)
 {
     uint8_t pressed = LedBar_IsSwitchPressed();
     uint8_t main_switch_closed = LedBar_IsMainSwitchClosed();
+    UINT32 tick_now = SysTime_Get10msTickCount();
+    UINT32 key_hold_10ms = 0u;
 
     if (main_switch_closed == 0u)
     {
@@ -424,6 +426,7 @@ static void LedBar_ServiceSwitch(void)
     if ((pressed != 0u) && (s_ledbar_key_last_pressed == 0u))
     {
         LedBar_RequestSocDisplayWindow();
+        s_ledbar_key_press_start_tick = tick_now;
     }
 
     if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
@@ -439,10 +442,10 @@ static void LedBar_ServiceSwitch(void)
 
     if (s_ledbar_wait_key_release_after_boot != 0u)
     {
-        s_ledbar_key_hold_10ms = 0u;
         s_ledbar_key_long_handled = 0u;
         if (pressed != 0u)
         {
+            s_ledbar_key_press_start_tick = tick_now;
             s_ledbar_key_last_pressed = pressed;
             return;
         }
@@ -451,11 +454,8 @@ static void LedBar_ServiceSwitch(void)
 
     if (pressed != 0u)
     {
-        if (s_ledbar_key_hold_10ms < LEDBAR_KEY_LONG_PRESS_10MS)
-        {
-            s_ledbar_key_hold_10ms++;
-        }
-        if ((s_ledbar_key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
+        key_hold_10ms = tick_now - s_ledbar_key_press_start_tick;
+        if ((key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
             (s_ledbar_key_long_handled == 0u))
         {
             s_ledbar_key_long_handled = 1u;
@@ -466,7 +466,7 @@ static void LedBar_ServiceSwitch(void)
     }
     else
     {
-        s_ledbar_key_hold_10ms = 0u;
+        s_ledbar_key_press_start_tick = tick_now;
         s_ledbar_key_long_handled = 0u;
         if (s_ledbar_soc_display_10ms != 0u)
         {
@@ -492,7 +492,7 @@ void LedBar_Init(void)
     s_ledbar_test_single_segment_enable = 0u;
     s_ledbar_test_single_segment_id = 0u;
     s_ledbar_soc_display_10ms = 0u;
-    s_ledbar_key_hold_10ms = 0u;
+    s_ledbar_key_press_start_tick = 0u;
     s_ledbar_key_last_pressed = 0u;
     s_ledbar_key_long_handled = 0u;
     s_ledbar_power_on_display_10ms = LEDBAR_POWER_ON_DISPLAY_10MS;
@@ -503,6 +503,7 @@ void LedBar_Init(void)
     LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
+    s_ledbar_key_press_start_tick = SysTime_Get10msTickCount();
     s_ledbar_key_last_pressed = LedBar_IsSwitchPressed();
     s_ledbar_wait_key_release_after_boot = s_ledbar_key_last_pressed;
     LedBar_OutputOff();

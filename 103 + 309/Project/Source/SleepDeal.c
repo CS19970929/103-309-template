@@ -33,12 +33,26 @@ static UINT8 RejectSleepWakeup(void)
 	return 0;
 }
 
+static UINT8 IsDirectSleepWakeupValid(void)
+{
+	if (IsChargerWakeupActive())
+	{
+		return 1;
+	}
+	if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
 static UINT8 IsSleepWakeupValid(void)
 {
 	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;
 
-	if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+	if (IsDirectSleepWakeupValid())
 	{
 		return 1;
 	}
@@ -48,14 +62,9 @@ static UINT8 IsSleepWakeupValid(void)
 		return RejectSleepWakeup();
 	}
 
-	if (IsChargerWakeupActive())
-	{
-		return 1;
-	}
-
 	while (1)
 	{
-		if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+		if (IsDirectSleepWakeupValid())
 		{
 			return 1;
 		}
@@ -63,28 +72,8 @@ static UINT8 IsSleepWakeupValid(void)
 		{
 			return RejectSleepWakeup();
 		}
-		if (!IsKeyPressed())
+		if ((g_irq_t != soc_key) && !IsKeyPressed())
 		{
-			return RejectSleepWakeup();
-		}
-		if (g_irq_t != soc_key)
-		{
-			while (IsKeyPressed())
-			{
-				if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
-				{
-					return 1;
-				}
-				if (!IsMainSwitchClosed())
-				{
-					return RejectSleepWakeup();
-				}
-				if (IsChargerWakeupActive())
-				{
-					return 1;
-				}
-				__delay_ms(10);
-			}
 			return RejectSleepWakeup();
 		}
 
@@ -92,7 +81,7 @@ static UINT8 IsSleepWakeupValid(void)
 		hold_cnt = 0;
 		while (IsKeyPressed())
 		{
-			if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+			if (IsDirectSleepWakeupValid())
 			{
 				return 1;
 			}
@@ -115,7 +104,7 @@ static UINT8 IsSleepWakeupValid(void)
 		display_cnt = 0;
 		while (display_cnt < LEDBAR_SLEEP_SOC_DISPLAY_10MS)
 		{
-			if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+			if (IsDirectSleepWakeupValid())
 			{
 				return 1;
 			}
