@@ -31,6 +31,9 @@ def project_config_int(name, default):
 TICKS_PER_SECOND = 5
 PERIOD_MS = 200
 CURRENT_ENTER_A10 = 2
+MA_PER_A10 = 100
+MAMS_PER_AS10 = 100000
+BOARD_SELF_CONSUMPTION_MA = project_config_int('PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA', 30)
 DEFAULT_SOC = 60
 CAP_A10 = 270
 CAP_FACTORY_AS10 = CAP_A10 * 3600
@@ -154,6 +157,7 @@ class SocModel:
     soh: int = 100
     mode: int = MODE_RELAX
     last_mode: int = MODE_RELAX
+    integrate_mode: int = MODE_RELAX
     remainder_ms: int = 0
     full_ticks: int = 0
     empty_ticks: int = 0
@@ -242,26 +246,36 @@ class SocModel:
         if self.soh != old_soh:
             self.soc = self.soc_from_cap()
 
-    def integrate(self, direction, current):
-        if direction != self.last_mode:
+    def integrate_current_ma(self, direction, ichg, idsg):
+        if direction == MODE_CHG:
+            return ichg * MA_PER_A10 - BOARD_SELF_CONSUMPTION_MA
+        if direction == MODE_DSG:
+            return -(idsg * MA_PER_A10 + BOARD_SELF_CONSUMPTION_MA)
+        return -BOARD_SELF_CONSUMPTION_MA
+
+    def integrate(self, direction, ichg, idsg):
+        current_ma = self.integrate_current_ma(direction, ichg, idsg)
+        integrate_mode = MODE_CHG if current_ma > 0 else MODE_DSG if current_ma < 0 else MODE_RELAX
+        if integrate_mode != self.integrate_mode:
             self.remainder_ms = 0
-            self.last_mode = direction
-        if direction == MODE_RELAX or current == 0:
+            self.integrate_mode = integrate_mode
+        self.last_mode = direction
+        if integrate_mode == MODE_RELAX:
             self.remainder_ms = 0
             return
-        acc_ms = current * PERIOD_MS + self.remainder_ms
-        delta = acc_ms // 1000
-        self.remainder_ms = acc_ms % 1000
+        acc_mams = abs(current_ma) * PERIOD_MS + self.remainder_ms
+        delta = acc_mams // MAMS_PER_AS10
+        self.remainder_ms = acc_mams % MAMS_PER_AS10
         if delta == 0:
             return
-        if direction == MODE_CHG:
+        if integrate_mode == MODE_CHG:
             self.cap_now = min(self.cap_full, self.cap_now + delta)
         else:
             self.full_anchor = False
             self.add_cycle_capacity(delta)
             self.cap_now = max(0, self.cap_now - delta)
         self.soc = self.soc_from_cap()
-        if direction == MODE_CHG and not self.full_anchor and self.soc >= 100:
+        if integrate_mode == MODE_CHG and not self.full_anchor and self.soc >= 100:
             self.soc = 99
             self.cap_now = self.cap_full * 99 // 100
 
@@ -552,7 +566,7 @@ class SocModel:
 
     def tick(self, vmax=3600, vmin=3600, ichg=0, idsg=0, fault=False):
         self.mode = self.direction(ichg, idsg)
-        self.integrate(self.mode, ichg if self.mode == MODE_CHG else idsg)
+        self.integrate(self.mode, ichg, idsg)
         self.update_sag_hold(self.mode, idsg)
         low_tail_active = self.low_tail_active(self.mode, vmax, vmin, idsg)
         mid_tail_active = self.mid_tail_active(self.mode, vmax, vmin, idsg)
@@ -717,16 +731,38 @@ def test_coulomb_counting_tick_is_200ms_5hz():
     assert start_cap - model.cap_now == 10
 
 
+def test_board_self_consumption_integrates_during_relax():
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    start_cap = model.cap_now
+    run_seconds(model, 600, vmax=3835, vmin=3835)
+    expected_delta = BOARD_SELF_CONSUMPTION_MA * 600 * 1000 // MAMS_PER_AS10
+    assert model.mode == MODE_RELAX
+    assert start_cap - model.cap_now == expected_delta
+
+
 def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
     model = SocModel.from_snapshot(Snapshot(soc=70, cap_now=CAP_FACTORY_AS10 * 70 // 100))
     start_cap = model.cap_now
+    expected_rem_mams = 0
+    expected_integrate_mode = MODE_RELAX
     expected_delta = 0
     currents = [30, 260, 80, 420, 0, 160, 320, 40]
     for index in range(120 * TICKS_PER_SECOND):
         idsg = currents[index % len(currents)]
         vmax, vmin = ride_voltage(model, idsg=idsg, imbalance=8 if idsg >= 260 else 4)
         model.tick(vmax=vmax, vmin=vmin, idsg=idsg)
-        expected_delta += idsg * PERIOD_MS // 1000
+        direction = model.direction(0, idsg)
+        signed_ma = model.integrate_current_ma(direction, 0, idsg)
+        integrate_mode = MODE_CHG if signed_ma > 0 else MODE_DSG if signed_ma < 0 else MODE_RELAX
+        if integrate_mode != expected_integrate_mode:
+            expected_rem_mams = 0
+            expected_integrate_mode = integrate_mode
+        if integrate_mode == MODE_RELAX:
+            expected_rem_mams = 0
+            continue
+        acc_mams = abs(signed_ma) * PERIOD_MS + expected_rem_mams
+        expected_delta += acc_mams // MAMS_PER_AS10
+        expected_rem_mams = acc_mams % MAMS_PER_AS10
     actual_delta = start_cap - model.cap_now
     assert abs(actual_delta - expected_delta) <= 1
     assert 66 <= model.soc <= 70
@@ -743,7 +779,8 @@ def test_direction_thresholds_and_conflict_resolution():
 
     model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10 + 1)
     assert model.mode == MODE_DSG
-    assert model.remainder_ms == ((CURRENT_ENTER_A10 + 1) * PERIOD_MS) % 1000
+    expected_ma = ((CURRENT_ENTER_A10 + 1) * MA_PER_A10) + BOARD_SELF_CONSUMPTION_MA
+    assert model.remainder_ms == (expected_ma * PERIOD_MS) % MAMS_PER_AS10
 
 
 def test_charge_integration_stops_display_before_full_confirm():
@@ -1252,6 +1289,7 @@ def main():
         test_set_soc_once_syncs_internal_capacity_and_display,
         test_discharge_integration_reduces_soc_and_counts_cycle_fraction,
         test_coulomb_counting_tick_is_200ms_5hz,
+        test_board_self_consumption_integrates_during_relax,
         test_fast_current_pulses_integrate_average_energy_at_sample_rate,
         test_direction_thresholds_and_conflict_resolution,
         test_charge_integration_stops_display_before_full_confirm,

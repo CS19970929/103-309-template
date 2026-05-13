@@ -32,6 +32,9 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_TICK_MS                  ((UINT32)200U)
 #define SOC_TICKS_PER_SECOND         ((UINT16)5U)
 #define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)
+#define SOC_MA_PER_A10               ((int32_t)100)
+#define SOC_MAMS_PER_AS10            ((UINT32)100000U)
+#define SOC_BOARD_SELF_CONSUMPTION_MA ((UINT16)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA)
 #define SOC_DEFAULT_CAP_A10          ((UINT16)270U)
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
@@ -105,6 +108,7 @@ typedef struct
 	UINT8 deferred_ocv_valid;
 	UINT8 mode;
 	UINT8 last_mode;
+	UINT8 integrate_mode;
 	UINT8 display_ready;
 	UINT8 full_anchor;
 } SOC_STATE;
@@ -292,6 +296,34 @@ static UINT8 soc_direction(void)
 		return SOC_MODE_CHG;
 	}
 	if (SOC_Enhance_Element.u16_Idsg >= SOC_CURRENT_ACTIVE_A10)
+	{
+		return SOC_MODE_DSG;
+	}
+	return SOC_MODE_RELAX;
+}
+
+static int32_t soc_integrate_current_ma(UINT8 mode)
+{
+	int32_t board_ma = (int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
+
+	if (mode == SOC_MODE_CHG)
+	{
+		return ((int32_t)SOC_Enhance_Element.u16_Ichg * SOC_MA_PER_A10) - board_ma;
+	}
+	if (mode == SOC_MODE_DSG)
+	{
+		return 0 - (((int32_t)SOC_Enhance_Element.u16_Idsg * SOC_MA_PER_A10) + board_ma);
+	}
+	return 0 - board_ma;
+}
+
+static UINT8 soc_integrate_mode_from_current(int32_t current_ma)
+{
+	if (current_ma > 0)
+	{
+		return SOC_MODE_CHG;
+	}
+	if (current_ma < 0)
 	{
 		return SOC_MODE_DSG;
 	}
@@ -679,30 +711,34 @@ static UINT8 soc_latch_rest_ocv_target(void)
 
 static void soc_integrate(UINT8 mode)
 {
-	UINT16 current = (mode == SOC_MODE_CHG) ? SOC_Enhance_Element.u16_Ichg :
-		SOC_Enhance_Element.u16_Idsg;
-	UINT32 acc_ms;
+	int32_t current_ma_signed = soc_integrate_current_ma(mode);
+	UINT8 integrate_mode = soc_integrate_mode_from_current(current_ma_signed);
+	UINT32 current_ma;
+	UINT32 acc_mams;
 	UINT32 delta_as10;
 	UINT8 old_soc = s_soc.soc;
 
-	if (mode != s_soc.last_mode)
+	if (integrate_mode != s_soc.integrate_mode)
 	{
 		s_soc.rem_ms = 0U;
-		s_soc.last_mode = mode;
+		s_soc.integrate_mode = integrate_mode;
 	}
-	if (mode == SOC_MODE_RELAX)
+	s_soc.last_mode = mode;
+	if (integrate_mode == SOC_MODE_RELAX)
 	{
 		s_soc.rem_ms = 0U;
 		return;
 	}
-	acc_ms = ((UINT32)current * SOC_TICK_MS) + s_soc.rem_ms;
-	delta_as10 = acc_ms / 1000U;
-	s_soc.rem_ms = acc_ms % 1000U;
+	current_ma = (current_ma_signed > 0) ?
+		(UINT32)current_ma_signed : (UINT32)(0 - current_ma_signed);
+	acc_mams = (current_ma * SOC_TICK_MS) + s_soc.rem_ms;
+	delta_as10 = acc_mams / SOC_MAMS_PER_AS10;
+	s_soc.rem_ms = acc_mams % SOC_MAMS_PER_AS10;
 	if (delta_as10 == 0U)
 	{
 		return;
 	}
-	if (mode == SOC_MODE_CHG)
+	if (integrate_mode == SOC_MODE_CHG)
 	{
 		s_soc.cap_now_as10 = ((s_soc.cap_full_as10 - s_soc.cap_now_as10) < delta_as10) ?
 			s_soc.cap_full_as10 : (s_soc.cap_now_as10 + delta_as10);
@@ -715,15 +751,17 @@ static void soc_integrate(UINT8 mode)
 			(s_soc.cap_now_as10 - delta_as10) : 0U;
 	}
 	s_soc.soc = soc_from_cap();
-	if ((mode == SOC_MODE_CHG) && (!s_soc.full_anchor) && (s_soc.soc >= 100U))
+	if ((integrate_mode == SOC_MODE_CHG) && (!s_soc.full_anchor) && (s_soc.soc >= 100U))
 	{
 		s_soc.soc = 99U;
 		s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * 99ULL) / 100ULL);
 	}
 	if (s_soc.soc != old_soc)
 	{
-		soc_watch_set_calib_source((mode == SOC_MODE_CHG) ?
-			SOC_WATCH_CALIB_INTEGRATE_CHG : SOC_WATCH_CALIB_INTEGRATE_DSG,
+		soc_watch_set_calib_source((integrate_mode == SOC_MODE_CHG) ?
+			SOC_WATCH_CALIB_INTEGRATE_CHG :
+			((mode == SOC_MODE_RELAX) ? SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION :
+			 SOC_WATCH_CALIB_INTEGRATE_DSG),
 			old_soc,
 			s_soc.soc);
 	}

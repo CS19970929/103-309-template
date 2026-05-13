@@ -274,6 +274,10 @@
 // <o> SOC auto calibration max step percent <1-10>
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 
+// <o> 板端自耗电流，mA <0-1000>
+// <i> SOC 积分时额外扣除 BMS 板自身耗电。默认 30mA，后续按实测电流修改。
+#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 30
+
 // <o> 低压尾段校准起始偏移，mV <0-1000>
 // <i> VCellMin <= V0 + 该偏移时才允许进入低压尾段表。调小可减少最后 20% 掉电过快。
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400

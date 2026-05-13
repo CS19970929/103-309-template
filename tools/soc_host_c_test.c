@@ -9,6 +9,7 @@
 #define HOST_CAP_FACTORY_AS10      ((UINT32)HOST_CAP_A10 * 3600U)
 #define HOST_REBOUND_FLAG          ((UINT16)0x0001U)
 #define HOST_TICKS_PER_SECOND      ((UINT16)5U)
+#define HOST_MAMS_PER_AS10         ((UINT32)100000U)
 #define HOST_SHORT_REST_STEP_SECONDS ((UINT16)PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS)
 #define HOST_LONG_REST_DOWN_STEP_SECONDS ((UINT16)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define HOST_REST_DOWN_START_SECONDS \
@@ -98,6 +99,11 @@ static void host_check_range_u32(UINT32 actual, UINT32 min_v, UINT32 max_v, cons
 static UINT32 host_cap_now_from_soc(UINT16 soc)
 {
 	return (UINT32)(((uint64_t)HOST_CAP_FACTORY_AS10 * (uint64_t)soc) / 100ULL);
+}
+
+static UINT16 host_cap_to_ah100(UINT32 cap_as10)
+{
+	return (UINT16)((cap_as10 + 180U) / 360U);
 }
 
 static void host_apply_default_config(void)
@@ -203,6 +209,25 @@ static void test_discharge_integration_uses_app_soc_path(void)
 	host_run_seconds(360U, 3835U, 3835U, 0U, 270U);
 	CHECK_RANGE_U32(host_internal_soc(), 49U, 51U);
 	CHECK_TRUE(g_stCellInfoReport.SocElement.u16Soc >= host_internal_soc());
+}
+
+static void test_board_self_consumption_integrates_during_relax(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(70U);
+	UINT32 expected_delta_as10 = ((UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA *
+		3600U * 1000U) / HOST_MAMS_PER_AS10;
+
+	host_reset_state();
+	host_set_snapshot(70U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds(3600U, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(SOC_Enhance_Element.u16_Idsg, 0U);
+	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
+		host_cap_to_ah100(start_cap_as10 - expected_delta_as10));
+	CHECK_EQ_U32(host_internal_soc(), 70U);
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	CHECK_EQ_U32(g_dbg_soc_watch->u8Mode, 0U);
+#endif
 }
 
 static void test_typec_output_current_converts_to_battery_equivalent(void)
@@ -397,6 +422,7 @@ int main(void)
 {
 	test_startup_ocv_uses_real_c_code();
 	test_discharge_integration_uses_app_soc_path();
+	test_board_self_consumption_integrates_during_relax();
 	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
@@ -415,6 +441,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 14\n");
+	printf("SOC host C tests passed: 15\n");
 	return 0;
 }
