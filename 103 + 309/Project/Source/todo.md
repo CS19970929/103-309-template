@@ -1,4 +1,4 @@
-todo
+Gtodo
 
 
 调研行业保护板bms soc逻辑，如何保证整个使用过程soc准确，例如电池休眠后，用户长期静止不使用也需要保证soc准确，梳理目前项目soc逻辑，并看可能会有哪些问题，该如何优化解决，或者完全重写soc模块，不在目前基础上改
@@ -230,3 +230,14 @@ typeC具体逻辑
 SOC_Enhance_Element
 g_stCellInfoReport
 s_soc
+
+直接对当前soc模块代码进行各种场景的测试，soc逻辑是否没问题，是否准确，各种校准是否有用，要直接对当前代码进行模拟测试
+
+
+soc不同场景校准测试
+
+高压 低soc
+低压 高soc
+评估目前项目flash磨损寿命
+
+修改PROJECT_CFG_SOC_REST_OCV_SECONDS 为60秒，超过60秒后，为什么没校准
