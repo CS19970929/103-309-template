@@ -1,6 +1,7 @@
 #include "main.h"
 
 #define LEDBAR_KEY_LONG_PRESS_10MS 300u
+#define LEDBAR_CHG_ANIMATION_PERIOD_10MS 20u
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
 #define LEDBAR_SLEEP_SOC_VALUE_MASK 0x00FFu
@@ -38,10 +39,14 @@ static uint16_t s_ledbar_soc_display_10ms = 0u;
 static uint16_t s_ledbar_key_hold_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
+static uint8_t s_ledbar_charge_animation_enable = 0u;
+static uint8_t s_ledbar_charge_animation_step = 0u;
+static uint16_t s_ledbar_charge_animation_10ms = 0u;
 
 static void LedBar_GpioInitForDisplay(void);
 static void LedBar_GpioPrepareForStop(void);
 static void LedBar_OutputOff(void);
+static void LedBar_StopChargeAnimation(void);
 static void LedBar_ApplyOutput(void);
 
 static void LedBar_EnableBackupAccess(void)
@@ -155,6 +160,17 @@ static void LedBar_OutputSoc(uint8_t value)
     }
 }
 
+static void LedBar_OutputChargeAnimation(void)
+{
+    uint8_t i;
+    uint8_t active_index = (uint8_t)(s_ledbar_charge_animation_step % LEDBAR_SOC_LED_COUNT);
+
+    for (i = 0u; i < LEDBAR_SOC_LED_COUNT; ++i)
+    {
+        LedBar_WriteLed(i, (uint8_t)(i == active_index));
+    }
+}
+
 static void LedBar_ApplyOutput(void)
 {
     if (s_ledbar_sleep != 0u)
@@ -168,6 +184,12 @@ static void LedBar_ApplyOutput(void)
     if (s_ledbar_force_blank != 0u)
     {
         LedBar_OutputOff();
+        return;
+    }
+
+    if (s_ledbar_charge_animation_enable != 0u)
+    {
+        LedBar_OutputChargeAnimation();
         return;
     }
 
@@ -194,6 +216,46 @@ static uint8_t LedBar_IsSwitchPressed(void)
 static void LedBar_RequestSocDisplayWindow(void)
 {
     s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
+}
+
+static void LedBar_StopChargeAnimation(void)
+{
+    s_ledbar_charge_animation_enable = 0u;
+    s_ledbar_charge_animation_step = 0u;
+    s_ledbar_charge_animation_10ms = 0u;
+}
+
+static uint8_t LedBar_IsChargeActive(void)
+{
+    return (g_stCellInfoReport.u16Ichg != 0u) ? 1u : 0u;
+}
+
+static void LedBar_RunChargeAnimation(void)
+{
+    if (s_ledbar_charge_animation_enable == 0u)
+    {
+        s_ledbar_charge_animation_step = 0u;
+        s_ledbar_charge_animation_10ms = 0u;
+    }
+
+    s_ledbar_charge_animation_enable = 1u;
+    s_ledbar_force_blank = 0u;
+    LedBar_Command = LED_BAR_CHG;
+    LedBar_SetSleep(0u);
+
+    if (g_st_SysTimeFlag.bits.b1Sys10msFlag != 0u)
+    {
+        if (++s_ledbar_charge_animation_10ms >= LEDBAR_CHG_ANIMATION_PERIOD_10MS)
+        {
+            s_ledbar_charge_animation_10ms = 0u;
+            if (++s_ledbar_charge_animation_step >= LEDBAR_SOC_LED_COUNT)
+            {
+                s_ledbar_charge_animation_step = 0u;
+            }
+        }
+    }
+
+    LedBar_ApplyOutput();
 }
 
 static uint8_t LedBar_IsSocDisplayRequested(void)
@@ -266,6 +328,7 @@ void LedBar_Init(void)
     s_ledbar_key_hold_10ms = 0u;
     s_ledbar_key_last_pressed = 0u;
     s_ledbar_key_long_handled = 0u;
+    LedBar_StopChargeAnimation();
     LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
@@ -281,6 +344,7 @@ void LedBar_Clear(void)
         LedBar_Init();
     }
 
+    LedBar_StopChargeAnimation();
     s_ledbar_force_blank = 1u;
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
@@ -294,6 +358,10 @@ void LedBar_SetSleep(uint8_t enable)
     }
 
     enable = (enable != 0u) ? 1u : 0u;
+    if (enable != 0u)
+    {
+        LedBar_StopChargeAnimation();
+    }
     if (s_ledbar_sleep == enable)
     {
         return;
@@ -328,6 +396,7 @@ void LedBar_EnableSingleSegmentTest(uint8_t enable)
     {
         s_ledbar_test_single_segment_id = 0u;
     }
+    LedBar_StopChargeAnimation();
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
 }
@@ -362,6 +431,7 @@ void LedBar_SetNumber(uint8_t value)
         value = 100u;
     }
 
+    LedBar_StopChargeAnimation();
     s_ledbar_number = value;
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
@@ -374,6 +444,7 @@ void LedBar_SetIndicators(uint8_t indicator_mask)
         LedBar_Init();
     }
 
+    LedBar_StopChargeAnimation();
     s_ledbar_indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
@@ -434,6 +505,7 @@ void LedBar_ShowSleepSocPreview(void)
 
     s_ledbar_sleep = 0u;
     s_ledbar_force_blank = 0u;
+    LedBar_StopChargeAnimation();
     s_ledbar_number = LedBar_LoadSleepSoc();
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_ApplyOutput();
@@ -448,6 +520,7 @@ void LedBar_PrepareForStop(void)
 
     s_ledbar_sleep = 1u;
     s_ledbar_force_blank = 1u;
+    LedBar_StopChargeAnimation();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
 }
@@ -460,6 +533,7 @@ void LedBar_Scan1ms(void)
 void APP_LedBar(void)
 {
     uint8_t display_value;
+    uint8_t charge_active;
 
     if (s_ledbar_initialized == 0u)
     {
@@ -490,6 +564,15 @@ void APP_LedBar(void)
         return;
     }
 
+    charge_active = LedBar_IsChargeActive();
+    if (charge_active != 0u)
+    {
+        LedBar_RunChargeAnimation();
+        return;
+    }
+
+    LedBar_StopChargeAnimation();
+
     if (LedBar_IsSocDisplayRequested() == 0u)
     {
         if (s_ledbar_force_blank == 0u)
@@ -508,7 +591,7 @@ void APP_LedBar(void)
     {
         LedBar_Command = LED_BAR_FAULT;
     }
-    else if (g_stCellInfoReport.u16Ichg != 0u)
+    else if (charge_active != 0u)
     {
         LedBar_Command = LED_BAR_CHG;
     }

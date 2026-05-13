@@ -268,6 +268,10 @@
 // <o> SOC 显示时间，10ms tick <1-65535>
 // <i> D010 socKey 单击后 SOC LED 保持显示时间，单位 10ms。500 表示 5 秒。
 #define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
+
+// <o> 休眠 SOC 预览时间，10ms tick <1-65535>
+// <i> D010 休眠状态下 socKey 短按后 SOC LED 保持显示时间，单位 10ms。300 表示 3 秒。
+#define PROJECT_CFG_LEDBAR_SLEEP_SOC_DISPLAY_10MS 300
 // </h>
 // <h>升级参数策略
 // <q> 使能升级参数策略

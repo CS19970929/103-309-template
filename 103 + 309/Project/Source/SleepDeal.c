@@ -56,7 +56,7 @@ static UINT8 IsSleepWakeupValid(void)
 		}
 
 		display_cnt = 0;
-		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
+		while (display_cnt < LEDBAR_SLEEP_SOC_DISPLAY_10MS)
 		{
 			if (IsChargerWakeupActive())
 			{
@@ -71,7 +71,7 @@ static UINT8 IsSleepWakeupValid(void)
 			display_cnt++;
 		}
 
-		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
+		if (display_cnt >= LEDBAR_SLEEP_SOC_DISPLAY_10MS)
 		{
 			LedBar_PrepareForStop();
 			return 0;
