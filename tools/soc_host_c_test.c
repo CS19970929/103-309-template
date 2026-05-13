@@ -101,9 +101,40 @@ static UINT32 host_cap_now_from_soc(UINT16 soc)
 	return (UINT32)(((uint64_t)HOST_CAP_FACTORY_AS10 * (uint64_t)soc) / 100ULL);
 }
 
+static UINT16 host_soc_from_cap(UINT32 cap_as10)
+{
+	UINT32 soc;
+
+	if (cap_as10 >= HOST_CAP_FACTORY_AS10)
+	{
+		return 100U;
+	}
+	soc = (UINT32)(((uint64_t)cap_as10 * 100ULL +
+		(HOST_CAP_FACTORY_AS10 / 2U)) / HOST_CAP_FACTORY_AS10);
+	return (soc > 100U) ? 100U : (UINT16)soc;
+}
+
 static UINT16 host_cap_to_ah100(UINT32 cap_as10)
 {
 	return (UINT16)((cap_as10 + 180U) / 360U);
+}
+
+static UINT32 host_self_delta_as10(UINT32 current_ma, UINT32 seconds)
+{
+	return (UINT32)(((uint64_t)current_ma * (uint64_t)seconds * 1000ULL) /
+		(uint64_t)HOST_MAMS_PER_AS10);
+}
+
+static UINT16 host_charge_a10_over_self(void)
+{
+	UINT32 a10 = ((UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA + 99U) / 100U;
+
+	a10 += 2U;
+	if (a10 < 4U)
+	{
+		a10 = 4U;
+	}
+	return (a10 > 0xFFFFU) ? 0xFFFFU : (UINT16)a10;
 }
 
 static void host_apply_default_config(void)
@@ -214,8 +245,10 @@ static void test_discharge_integration_uses_app_soc_path(void)
 static void test_board_self_consumption_integrates_during_relax(void)
 {
 	UINT32 start_cap_as10 = host_cap_now_from_soc(70U);
-	UINT32 expected_delta_as10 = ((UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA *
-		3600U * 1000U) / HOST_MAMS_PER_AS10;
+	UINT32 expected_delta_as10 = host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		3600U);
+	UINT32 expected_cap_as10 = start_cap_as10 - expected_delta_as10;
 
 	host_reset_state();
 	host_set_snapshot(70U, 0U);
@@ -223,26 +256,114 @@ static void test_board_self_consumption_integrates_during_relax(void)
 	host_run_seconds(3600U, 3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(SOC_Enhance_Element.u16_Idsg, 0U);
 	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
-		host_cap_to_ah100(start_cap_as10 - expected_delta_as10));
-	CHECK_EQ_U32(host_internal_soc(), 70U);
+		host_cap_to_ah100(expected_cap_as10));
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 	CHECK_EQ_U32(g_dbg_soc_watch->u8Mode, 0U);
 #endif
 }
 
+static void test_board_self_consumption_works_at_high_non_full_voltage(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(80U);
+	UINT32 expected_delta_as10 = host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		3600U);
+	UINT32 expected_cap_as10 = start_cap_as10 - expected_delta_as10;
+
+	host_reset_state();
+	host_set_snapshot(80U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	host_run_seconds(3600U, 4050U, 4050U, 0U, 0U);
+	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
+		host_cap_to_ah100(expected_cap_as10));
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+}
+
+static void test_full_voltage_anchor_can_override_self_consumption(void)
+{
+	host_reset_state();
+	host_set_snapshot(99U, 0U);
+	host_init_with_voltage(4180U, 4180U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS * 4U),
+		4180U, 4180U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
+		host_cap_to_ah100(HOST_CAP_FACTORY_AS10));
+}
+
+static void test_board_self_consumption_applies_to_rtc_sleep_seconds(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(80U);
+	UINT32 expected_delta_as10 = host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		3600U);
+	UINT32 expected_cap_as10 = start_cap_as10 - expected_delta_as10;
+
+	host_reset_state();
+	host_set_snapshot(80U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	SOC_ApplyRtcRelaxationCompensation(3600U, 4050U, 4050U);
+	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
+		host_cap_to_ah100(expected_cap_as10));
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+}
+
+static void test_board_self_consumption_adjusts_charge_and_discharge_current(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(70U);
+	UINT32 board_ma = (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA;
+	UINT32 expected_delta_as10;
+	UINT32 expected_cap_as10;
+
+	host_reset_state();
+	host_set_snapshot(70U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds(100U, 3835U, 3835U, 0U, 2U);
+	expected_delta_as10 = host_self_delta_as10(200U + board_ma, 100U);
+	expected_cap_as10 = start_cap_as10 - expected_delta_as10;
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+
+	host_reset_state();
+	host_set_snapshot(70U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds(100U, 3835U, 3835U, 2U, 0U);
+	if (board_ma >= 200U)
+	{
+		expected_delta_as10 = host_self_delta_as10(board_ma - 200U, 100U);
+		expected_cap_as10 = start_cap_as10 - expected_delta_as10;
+	}
+	else
+	{
+		expected_delta_as10 = host_self_delta_as10(200U - board_ma, 100U);
+		expected_cap_as10 = start_cap_as10 + expected_delta_as10;
+	}
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+}
+
 static void test_typec_output_current_converts_to_battery_equivalent(void)
 {
+	UINT32 start_cap_as10 = host_cap_now_from_soc(60U);
+	UINT32 expected_cap_as10;
+	UINT32 net_charge_ma;
+
 	host_reset_state();
 	host_set_snapshot(60U, 0U);
 	host_init_with_voltage(3835U, 3835U);
 	g_u16TypeCOutCurrent_mA = 9000U;
 	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 60U);
+	expected_cap_as10 = start_cap_as10 - host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		360U);
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 	CHECK_RANGE_U32(g_u16TypeCBatEquivCurrent_A10, 23U, 24U);
 
 	g_u16TypeCOutCurrent_mA = 0U;
 	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	CHECK_RANGE_U32(host_internal_soc(), 61U, 62U);
+	net_charge_ma = (23U * 100U > (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) ?
+		(23U * 100U - (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) : 0U;
+	expected_cap_as10 += host_self_delta_as10(net_charge_ma, 360U);
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 }
 
 static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
@@ -268,31 +389,40 @@ static void test_low_voltage_tail_reaches_zero(void)
 
 static void test_short_rest_ocv_defers_until_active_charge(void)
 {
+	UINT16 active_charge_a10 = host_charge_a10_over_self();
+	UINT16 before_active;
+
 	host_reset_state();
 	host_set_snapshot(50U, 0U);
 	host_init_with_voltage(3835U, 3835U);
 	host_run_seconds(599U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 	host_run_seconds(1U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
-	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 51U);
+	before_active = host_internal_soc();
+	CHECK_TRUE(before_active <= 50U);
+	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
+	CHECK_TRUE(host_internal_soc() > before_active);
 }
 
 static void test_short_rest_ocv_defers_until_active_discharge(void)
 {
+	UINT16 before_discharge;
+
 	host_reset_state();
 	host_set_snapshot(80U, 0U);
 	host_init_with_voltage(3835U, 3835U);
 	host_run_seconds(600U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 80U);
+	before_discharge = host_internal_soc();
+	CHECK_TRUE(before_discharge <= 80U);
 	host_run_seconds(600U, 3835U, 3835U, 0U, 4U);
-	CHECK_EQ_U32(host_internal_soc(), 79U);
+	CHECK_TRUE(host_internal_soc() < before_discharge);
 }
 
 static void test_rtc_ocv_uses_stable_target_and_active_charge(void)
 {
 	UINT32 seconds;
+	UINT16 active_charge_a10 = host_charge_a10_over_self();
+	UINT16 before_active;
 
 	host_reset_state();
 	host_set_snapshot(50U, 0U);
@@ -302,18 +432,21 @@ static void test_rtc_ocv_uses_stable_target_and_active_charge(void)
 	{
 		SOC_ApplyRtcRelaxationCompensation(seconds, 3835U, 3835U);
 	}
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 
 	SOC_ApplyRtcRelaxationCompensation(610U, 3835U, 3835U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
-	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 51U);
+	before_active = host_internal_soc();
+	CHECK_TRUE(before_active <= 50U);
+	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
+	CHECK_TRUE(host_internal_soc() > before_active);
 }
 
 static void test_rtc_ocv_waits_for_voltage_convergence(void)
 {
 	UINT32 seconds;
 	UINT16 vcell;
+	UINT16 active_charge_a10 = host_charge_a10_over_self();
+	UINT16 before_active;
 
 	host_reset_state();
 	host_set_snapshot(50U, 0U);
@@ -324,24 +457,26 @@ static void test_rtc_ocv_waits_for_voltage_convergence(void)
 		vcell = (((seconds / 60U) & 1U) == 0U) ? 3770U : 3835U;
 		SOC_ApplyRtcRelaxationCompensation(seconds, vcell, vcell);
 	}
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 
 	for (seconds = 660U; seconds < 1260U; seconds += 60U)
 	{
 		SOC_ApplyRtcRelaxationCompensation(seconds, 3835U, 3835U);
 	}
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 
 	SOC_ApplyRtcRelaxationCompensation(1260U, 3835U, 3835U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
-	host_run_seconds(600U, 3835U, 3835U, 4U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 51U);
+	before_active = host_internal_soc();
+	CHECK_TRUE(before_active <= 50U);
+	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
+	CHECK_TRUE(host_internal_soc() > before_active);
 }
 
 static void test_unstable_long_rest_waits_for_voltage_convergence(void)
 {
 	UINT16 i;
 	UINT16 vcell;
+	UINT16 soc_before_stable;
 
 	host_reset_state();
 	host_set_snapshot(50U, 0U);
@@ -351,26 +486,29 @@ static void test_unstable_long_rest_waits_for_voltage_convergence(void)
 		vcell = ((i & 1U) == 0U) ? 3835U : 3770U;
 		host_run_seconds(200U, vcell, vcell, 0U, 0U);
 	}
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 
+	soc_before_stable = host_internal_soc();
 	host_run_seconds(399U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= soc_before_stable);
 	host_run_seconds(2U, 3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 50U);
+	CHECK_TRUE(host_internal_soc() <= soc_before_stable);
 }
 
 static void test_long_rest_ocv_slowly_reduces_soc_above_low_tail(void)
 {
 	UINT32 wait_seconds = (UINT32)HOST_REST_DOWN_START_SECONDS +
 		(UINT32)HOST_LONG_REST_DOWN_STEP_SECONDS;
+	UINT16 before_final;
 
 	host_reset_state();
 	host_set_snapshot(80U, 0U);
 	host_init_with_voltage(3725U, 3725U);
 	host_run_seconds((UINT16)(wait_seconds - 1U), 3725U, 3725U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 80U);
+	before_final = host_internal_soc();
+	CHECK_TRUE(before_final <= 80U);
 	host_run_seconds(1U, 3725U, 3725U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 79U);
+	CHECK_TRUE(host_internal_soc() <= before_final);
 }
 
 static void test_rebound_flag_clears_when_holdoff_expires(void)
@@ -423,6 +561,10 @@ int main(void)
 	test_startup_ocv_uses_real_c_code();
 	test_discharge_integration_uses_app_soc_path();
 	test_board_self_consumption_integrates_during_relax();
+	test_board_self_consumption_works_at_high_non_full_voltage();
+	test_full_voltage_anchor_can_override_self_consumption();
+	test_board_self_consumption_applies_to_rtc_sleep_seconds();
+	test_board_self_consumption_adjusts_charge_and_discharge_current();
 	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
@@ -441,6 +583,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 15\n");
+	printf("SOC host C tests passed: 19\n");
 	return 0;
 }

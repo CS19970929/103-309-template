@@ -8,6 +8,7 @@ bindings so it can run in CI or during local review.
 
 import random
 import re
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,12 +29,18 @@ def project_config_int(name, default):
     return int(match.group(1)) if match else default
 
 
+def env_int(name, default):
+    value = os.environ.get(name)
+    return int(value) if value is not None else default
+
+
 TICKS_PER_SECOND = 5
 PERIOD_MS = 200
 CURRENT_ENTER_A10 = 2
 MA_PER_A10 = 100
 MAMS_PER_AS10 = 100000
-BOARD_SELF_CONSUMPTION_MA = project_config_int('PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA', 30)
+CONFIG_BOARD_SELF_CONSUMPTION_MA = project_config_int('PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA', 30)
+BOARD_SELF_CONSUMPTION_MA = env_int('SOC_TEST_BOARD_SELF_CONSUMPTION_MA', 30)
 DEFAULT_SOC = 60
 CAP_A10 = 270
 CAP_FACTORY_AS10 = CAP_A10 * 3600
@@ -177,6 +184,7 @@ class SocModel:
     full_anchor: bool = False
     fixed: bool = False
     zero: bool = False
+    board_self_consumption_ma: int = BOARD_SELF_CONSUMPTION_MA
 
     @classmethod
     def from_snapshot(cls, snapshot):
@@ -248,10 +256,10 @@ class SocModel:
 
     def integrate_current_ma(self, direction, ichg, idsg):
         if direction == MODE_CHG:
-            return ichg * MA_PER_A10 - BOARD_SELF_CONSUMPTION_MA
+            return ichg * MA_PER_A10 - self.board_self_consumption_ma
         if direction == MODE_DSG:
-            return -(idsg * MA_PER_A10 + BOARD_SELF_CONSUMPTION_MA)
-        return -BOARD_SELF_CONSUMPTION_MA
+            return -(idsg * MA_PER_A10 + self.board_self_consumption_ma)
+        return -self.board_self_consumption_ma
 
     def integrate(self, direction, ichg, idsg):
         current_ma = self.integrate_current_ma(direction, ichg, idsg)
@@ -589,6 +597,16 @@ def run_seconds(model, seconds, **kwargs):
         model.tick(**kwargs)
 
 
+def model_with_self_consumption(soc, self_ma):
+    model = SocModel.from_snapshot(Snapshot(soc=soc, cap_now=CAP_FACTORY_AS10 * soc // 100))
+    model.board_self_consumption_ma = self_ma
+    return model
+
+
+def self_consumption_delta_as10(self_ma, seconds):
+    return self_ma * seconds * 1000 // MAMS_PER_AS10
+
+
 def assert_model_invariants(model):
     assert 0 <= model.soc <= 100
     assert 0 <= model.display_soc <= 100
@@ -738,6 +756,41 @@ def test_board_self_consumption_integrates_during_relax():
     expected_delta = BOARD_SELF_CONSUMPTION_MA * 600 * 1000 // MAMS_PER_AS10
     assert model.mode == MODE_RELAX
     assert start_cap - model.cap_now == expected_delta
+
+
+def test_board_self_consumption_matrix_during_relax_high_voltage():
+    for self_ma in (0, 30, 1000, CONFIG_BOARD_SELF_CONSUMPTION_MA):
+        model = model_with_self_consumption(80, self_ma)
+        start_cap = model.cap_now
+        run_seconds(model, 3600, vmax=4050, vmin=4050)
+        expected_delta = self_consumption_delta_as10(self_ma, 3600)
+        assert model.mode == MODE_RELAX
+        assert start_cap - model.cap_now == expected_delta
+        if self_ma == 0:
+            assert model.soc == 80
+        elif self_ma >= 1000:
+            assert model.soc < 80
+
+
+def test_full_voltage_anchor_can_mask_self_consumption():
+    model = model_with_self_consumption(99, 1000)
+    run_seconds(model, FULL_FAST_SECONDS * 4, vmax=4180, vmin=4180)
+    assert model.soc == 100
+    assert model.cap_now == model.cap_full
+
+
+def test_board_self_consumption_applies_to_charge_and_discharge_current():
+    charge_model = model_with_self_consumption(70, 1000)
+    charge_start = charge_model.cap_now
+    run_seconds(charge_model, 100, vmax=3835, vmin=3835, ichg=2)
+    assert charge_model.mode == MODE_CHG
+    assert charge_start - charge_model.cap_now == self_consumption_delta_as10(800, 100)
+
+    discharge_model = model_with_self_consumption(70, 1000)
+    discharge_start = discharge_model.cap_now
+    run_seconds(discharge_model, 100, vmax=3835, vmin=3835, idsg=2)
+    assert discharge_model.mode == MODE_DSG
+    assert discharge_start - discharge_model.cap_now == self_consumption_delta_as10(1200, 100)
 
 
 def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
@@ -1290,6 +1343,9 @@ def main():
         test_discharge_integration_reduces_soc_and_counts_cycle_fraction,
         test_coulomb_counting_tick_is_200ms_5hz,
         test_board_self_consumption_integrates_during_relax,
+        test_board_self_consumption_matrix_during_relax_high_voltage,
+        test_full_voltage_anchor_can_mask_self_consumption,
+        test_board_self_consumption_applies_to_charge_and_discharge_current,
         test_fast_current_pulses_integrate_average_energy_at_sample_rate,
         test_direction_thresholds_and_conflict_resolution,
         test_charge_integration_stops_display_before_full_confirm,

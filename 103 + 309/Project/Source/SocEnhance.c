@@ -767,6 +767,47 @@ static void soc_integrate(UINT8 mode)
 	}
 }
 
+static UINT8 soc_apply_board_self_consumption_seconds(UINT32 seconds)
+{
+	uint64_t acc_mams;
+	uint64_t delta_as10_64;
+	UINT32 delta_as10;
+	UINT8 old_soc = s_soc.soc;
+
+	if ((SOC_BOARD_SELF_CONSUMPTION_MA == 0U) || (seconds == 0U))
+	{
+		return 0U;
+	}
+
+	if (s_soc.integrate_mode != SOC_MODE_DSG)
+	{
+		s_soc.rem_mams = 0U;
+		s_soc.integrate_mode = SOC_MODE_DSG;
+	}
+	s_soc.last_mode = SOC_MODE_RELAX;
+	acc_mams = ((uint64_t)SOC_BOARD_SELF_CONSUMPTION_MA * (uint64_t)seconds * 1000ULL) +
+		(uint64_t)s_soc.rem_mams;
+	delta_as10_64 = acc_mams / (uint64_t)SOC_MAMS_PER_AS10;
+	s_soc.rem_mams = (UINT32)(acc_mams % (uint64_t)SOC_MAMS_PER_AS10);
+	if (delta_as10_64 == 0ULL)
+	{
+		return 0U;
+	}
+	delta_as10 = (delta_as10_64 > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : (UINT32)delta_as10_64;
+	s_soc.full_anchor = 0U;
+	soc_add_discharge(delta_as10);
+	s_soc.cap_now_as10 = (s_soc.cap_now_as10 > delta_as10) ?
+		(s_soc.cap_now_as10 - delta_as10) : 0U;
+	s_soc.soc = soc_from_cap();
+	if (s_soc.soc != old_soc)
+	{
+		soc_watch_set_calib_source(SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION,
+			old_soc,
+			s_soc.soc);
+	}
+	return (UINT8)(s_soc.soc != old_soc);
+}
+
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 {
 	if ((rest_seconds < SOC_SHORT_REST_MIN_SECONDS) || !soc_calibration_allowed())
@@ -1403,13 +1444,14 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		return 0U;
 	}
 
+	changed = soc_apply_board_self_consumption_seconds(delta_seconds);
 	soc_add_rest_seconds(&s_soc.rest_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
 	has_rest_ref = (UINT8)((s_soc.rest_ref_vmin != 0U) && (s_soc.rest_ref_vmax != 0U));
 	if (soc_rest_voltage_stable())
 	{
 		if (!has_rest_ref)
 		{
-			return 0U;
+			return changed;
 		}
 		soc_add_rest_seconds(&s_soc.stable_rest_ticks, delta_seconds,
 			soc_rest_stable_limit_seconds());
@@ -1421,7 +1463,7 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		s_soc.short_rest_ticks = 0U;
 		s_soc.long_rest_down_ticks = 0U;
 		soc_clear_deferred_ocv();
-		return 0U;
+		return changed;
 	}
 
 	if ((s_soc.stable_rest_ticks >= short_min_ticks) &&
@@ -1430,7 +1472,7 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		(void)soc_latch_rest_ocv_target();
 		s_soc.short_rest_ticks = 0U;
 	}
-	changed = soc_apply_long_rest_down_step(soc_seconds_to_ticks(delta_seconds));
+	changed |= soc_apply_long_rest_down_step(soc_seconds_to_ticks(delta_seconds));
 	return changed;
 }
 
