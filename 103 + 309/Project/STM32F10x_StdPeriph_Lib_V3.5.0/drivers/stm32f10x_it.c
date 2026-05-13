@@ -163,6 +163,7 @@ void EXTI0_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line0);
+    set_irq_wksource(PA0_irq);
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
   }
 }
@@ -209,6 +210,7 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line6);
+    set_irq_wksource(soc_key);
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
@@ -217,6 +219,7 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line9);
+    set_irq_wksource(bms_keyirq);
   }
 }
 

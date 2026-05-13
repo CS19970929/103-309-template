@@ -54,6 +54,7 @@
 #define MCUO_RELAY_COOL 	PCout(6)		//�����̵���
 
 #define MCUI_ENI_DI1		PAin(6)		// D010 socKey PA6
+#define MCUI_MAIN_SW		PAin(9)		// D010 main switch PA9
 
 
 union SYS_TIME {

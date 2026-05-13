@@ -52,6 +52,13 @@
 #define SOC_KEY_EXTI_LINE        EXTI_Line6
 #define SOC_KEY_EXTI_IRQn        EXTI9_5_IRQn
 
+#define GPIO_MAIN_SW        GPIOA
+#define PIN_MAIN_SW         GPIO_Pin_9
+#define MAIN_SW_EXTI_PORT_SOURCE GPIO_PortSourceGPIOA
+#define MAIN_SW_EXTI_PIN_SOURCE  GPIO_PinSource9
+#define MAIN_SW_EXTI_LINE        EXTI_Line9
+#define MAIN_SW_EXTI_IRQn        EXTI9_5_IRQn
+
 #define GPIO_SW             GPIO_SOC_KEY
 #define PIN_SW              PIN_SOC_KEY
 

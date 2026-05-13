@@ -2,6 +2,7 @@
 
 #define LEDBAR_KEY_LONG_PRESS_10MS 300u
 #define LEDBAR_CHG_ANIMATION_PERIOD_10MS 20u
+#define LEDBAR_POWER_ON_DISPLAY_10MS 1000u
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
 #define LEDBAR_SLEEP_SOC_VALUE_MASK 0x00FFu
@@ -39,6 +40,9 @@ static uint16_t s_ledbar_soc_display_10ms = 0u;
 static uint16_t s_ledbar_key_hold_10ms = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
 static uint8_t s_ledbar_key_long_handled = 0u;
+static uint16_t s_ledbar_power_on_display_10ms = 0u;
+static uint8_t s_ledbar_wait_key_release_after_boot = 0u;
+static uint8_t s_ledbar_main_switch_sleep_handled = 0u;
 static uint8_t s_ledbar_charge_animation_enable = 0u;
 static uint8_t s_ledbar_charge_animation_step = 0u;
 static uint16_t s_ledbar_charge_animation_10ms = 0u;
@@ -80,6 +84,9 @@ static void LedBar_ConfigureKeyInput(void)
     gpio_init.GPIO_Pin = PIN_SOC_KEY;
     gpio_init.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_Init(GPIO_SOC_KEY, &gpio_init);
+
+    gpio_init.GPIO_Pin = PIN_MAIN_SW;
+    GPIO_Init(GPIO_MAIN_SW, &gpio_init);
 }
 
 static void LedBar_ConfigureLedsOutput(void)
@@ -160,14 +167,48 @@ static void LedBar_OutputSoc(uint8_t value)
     }
 }
 
+static uint8_t LedBar_GetChargeSolidCount(uint8_t value)
+{
+    if (value >= 100u)
+    {
+        return LEDBAR_SOC_LED_COUNT;
+    }
+    if (value >= 75u)
+    {
+        return 3u;
+    }
+    if (value >= 50u)
+    {
+        return 2u;
+    }
+    if (value >= 25u)
+    {
+        return 1u;
+    }
+
+    return 0u;
+}
+
 static void LedBar_OutputChargeAnimation(void)
 {
     uint8_t i;
-    uint8_t active_index = (uint8_t)(s_ledbar_charge_animation_step % LEDBAR_SOC_LED_COUNT);
+    uint8_t solid_count = LedBar_GetChargeSolidCount(s_ledbar_number);
+    uint8_t blink_on = (s_ledbar_charge_animation_step != 0u) ? 1u : 0u;
 
     for (i = 0u; i < LEDBAR_SOC_LED_COUNT; ++i)
     {
-        LedBar_WriteLed(i, (uint8_t)(i == active_index));
+        if (i < solid_count)
+        {
+            LedBar_WriteLed(i, 1u);
+        }
+        else if ((i == solid_count) && (solid_count < LEDBAR_SOC_LED_COUNT))
+        {
+            LedBar_WriteLed(i, blink_on);
+        }
+        else
+        {
+            LedBar_WriteLed(i, 0u);
+        }
     }
 }
 
@@ -213,6 +254,13 @@ static uint8_t LedBar_IsSwitchPressed(void)
     return (uint8_t)(raw == Bit_RESET);
 }
 
+static uint8_t LedBar_IsMainSwitchClosed(void)
+{
+    uint8_t raw = GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW);
+
+    return (uint8_t)(raw == Bit_RESET);
+}
+
 static void LedBar_RequestSocDisplayWindow(void)
 {
     s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
@@ -234,12 +282,13 @@ static void LedBar_RunChargeAnimation(void)
 {
     if (s_ledbar_charge_animation_enable == 0u)
     {
-        s_ledbar_charge_animation_step = 0u;
+        s_ledbar_charge_animation_step = 1u;
         s_ledbar_charge_animation_10ms = 0u;
     }
 
     s_ledbar_charge_animation_enable = 1u;
     s_ledbar_force_blank = 0u;
+    s_ledbar_number = LedBar_GetRuntimeSoc();
     LedBar_Command = LED_BAR_CHG;
     LedBar_SetSleep(0u);
 
@@ -248,10 +297,7 @@ static void LedBar_RunChargeAnimation(void)
         if (++s_ledbar_charge_animation_10ms >= LEDBAR_CHG_ANIMATION_PERIOD_10MS)
         {
             s_ledbar_charge_animation_10ms = 0u;
-            if (++s_ledbar_charge_animation_step >= LEDBAR_SOC_LED_COUNT)
-            {
-                s_ledbar_charge_animation_step = 0u;
-            }
+            s_ledbar_charge_animation_step ^= 1u;
         }
     }
 
@@ -260,7 +306,10 @@ static void LedBar_RunChargeAnimation(void)
 
 static uint8_t LedBar_IsSocDisplayRequested(void)
 {
-    if ((s_ledbar_soc_display_10ms != 0u) || (s_ledbar_key_last_pressed != 0u))
+    if ((s_ledbar_soc_display_10ms != 0u) ||
+        (s_ledbar_power_on_display_10ms != 0u) ||
+        (s_ledbar_key_last_pressed != 0u) ||
+        (s_ledbar_wait_key_release_after_boot != 0u))
     {
         return 1u;
     }
@@ -271,6 +320,22 @@ static uint8_t LedBar_IsSocDisplayRequested(void)
 static void LedBar_ServiceSwitch(void)
 {
     uint8_t pressed = LedBar_IsSwitchPressed();
+    uint8_t main_switch_closed = LedBar_IsMainSwitchClosed();
+
+    if (main_switch_closed == 0u)
+    {
+        if (s_ledbar_main_switch_sleep_handled == 0u)
+        {
+            s_ledbar_main_switch_sleep_handled = 1u;
+            LedBar_SaveSleepSoc();
+            LedBar_SetSleep(1u);
+            entersleep(DEEP_MODE);
+            SleepDeal_Continue();
+        }
+        return;
+    }
+
+    s_ledbar_main_switch_sleep_handled = 0u;
 
     if ((pressed != 0u) && (s_ledbar_key_last_pressed == 0u))
     {
@@ -281,6 +346,23 @@ static void LedBar_ServiceSwitch(void)
     {
         s_ledbar_key_last_pressed = pressed;
         return;
+    }
+
+    if (s_ledbar_power_on_display_10ms != 0u)
+    {
+        s_ledbar_power_on_display_10ms--;
+    }
+
+    if (s_ledbar_wait_key_release_after_boot != 0u)
+    {
+        s_ledbar_key_hold_10ms = 0u;
+        s_ledbar_key_long_handled = 0u;
+        if (pressed != 0u)
+        {
+            s_ledbar_key_last_pressed = pressed;
+            return;
+        }
+        s_ledbar_wait_key_release_after_boot = 0u;
     }
 
     if (pressed != 0u)
@@ -328,10 +410,15 @@ void LedBar_Init(void)
     s_ledbar_key_hold_10ms = 0u;
     s_ledbar_key_last_pressed = 0u;
     s_ledbar_key_long_handled = 0u;
+    s_ledbar_power_on_display_10ms = LEDBAR_POWER_ON_DISPLAY_10MS;
+    s_ledbar_wait_key_release_after_boot = 0u;
+    s_ledbar_main_switch_sleep_handled = 0u;
     LedBar_StopChargeAnimation();
     LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
+    s_ledbar_key_last_pressed = LedBar_IsSwitchPressed();
+    s_ledbar_wait_key_release_after_boot = s_ledbar_key_last_pressed;
     LedBar_OutputOff();
     s_ledbar_initialized = 1u;
     LedBar_GpioPrepareForStop();
@@ -545,8 +632,11 @@ void APP_LedBar(void)
     if (SystemStatus.bits.b1StartUpBMS != 0u)
     {
         LedBar_Command = LED_BAR_STARTUP;
-        LedBar_SetSleep(1u);
-        return;
+        if (LedBar_IsSocDisplayRequested() == 0u)
+        {
+            LedBar_SetSleep(1u);
+            return;
+        }
     }
 
     if (Sleep_Mode.bits.b1_ToSleepFlag != 0u)

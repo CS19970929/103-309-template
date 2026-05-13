@@ -15,16 +15,38 @@ static UINT8 IsChargerWakeupActive(void)
 	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
 }
 
+static UINT8 IsMainSwitchClosed(void)
+{
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW) == Bit_RESET);
+}
+
 static UINT8 IsKeyPressed(void)
 {
 	// PC13���رպ�Ϊ�͵�ƽ����EXTI13�½��ػ��ѱ���һ�£�
 	return (UINT8)(MCUI_ENI_DI1 == 0);
 }
 
+static UINT8 RejectSleepWakeup(void)
+{
+	LedBar_PrepareForStop();
+	set_irq_wksource(NO_IRQ);
+	return 0;
+}
+
 static UINT8 IsSleepWakeupValid(void)
 {
 	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;
+
+	if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+	{
+		return 1;
+	}
+
+	if (!IsMainSwitchClosed())
+	{
+		return RejectSleepWakeup();
+	}
 
 	if (IsChargerWakeupActive())
 	{
@@ -33,16 +55,51 @@ static UINT8 IsSleepWakeupValid(void)
 
 	while (1)
 	{
+		if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+		{
+			return 1;
+		}
+		if (!IsMainSwitchClosed())
+		{
+			return RejectSleepWakeup();
+		}
 		if (!IsKeyPressed())
 		{
-			LedBar_PrepareForStop();
-			return 0;
+			return RejectSleepWakeup();
+		}
+		if (g_irq_t != soc_key)
+		{
+			while (IsKeyPressed())
+			{
+				if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+				{
+					return 1;
+				}
+				if (!IsMainSwitchClosed())
+				{
+					return RejectSleepWakeup();
+				}
+				if (IsChargerWakeupActive())
+				{
+					return 1;
+				}
+				__delay_ms(10);
+			}
+			return RejectSleepWakeup();
 		}
 
 		LedBar_ShowSleepSocPreview();
 		hold_cnt = 0;
 		while (IsKeyPressed())
 		{
+			if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+			{
+				return 1;
+			}
+			if (!IsMainSwitchClosed())
+			{
+				return RejectSleepWakeup();
+			}
 			if (IsChargerWakeupActive())
 			{
 				return 1;
@@ -58,6 +115,14 @@ static UINT8 IsSleepWakeupValid(void)
 		display_cnt = 0;
 		while (display_cnt < LEDBAR_SLEEP_SOC_DISPLAY_10MS)
 		{
+			if ((g_irq_t == bms_keyirq) && IsMainSwitchClosed())
+			{
+				return 1;
+			}
+			if (!IsMainSwitchClosed())
+			{
+				return RejectSleepWakeup();
+			}
 			if (IsChargerWakeupActive())
 			{
 				return 1;
@@ -73,8 +138,7 @@ static UINT8 IsSleepWakeupValid(void)
 
 		if (display_cnt >= LEDBAR_SLEEP_SOC_DISPLAY_10MS)
 		{
-			LedBar_PrepareForStop();
-			return 0;
+			return RejectSleepWakeup();
 		}
 	}
 }

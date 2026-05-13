@@ -19,7 +19,7 @@ enum irqWakeup
   rs485_irq,
   NO_IRQ
 };
-extern enum irqWakeup g_irq_t;
+extern volatile enum irqWakeup g_irq_t;
 
 #define SET_BIT(REG, BIT)     ((REG) |= (BIT))
 

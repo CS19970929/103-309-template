@@ -16,6 +16,9 @@ static void InitSocKeyInput(void)
     gpio_init.GPIO_Pin = PIN_SOC_KEY;
     gpio_init.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_Init(GPIO_SOC_KEY, &gpio_init);
+
+    gpio_init.GPIO_Pin = PIN_MAIN_SW;
+    GPIO_Init(GPIO_MAIN_SW, &gpio_init);
 }
 
 static void InitSocLedOff(void)
@@ -156,6 +159,18 @@ void InitWakeUp_Base(void)
     exti_init.EXTI_LineCmd = ENABLE;
     EXTI_Init(&exti_init);
     nvic_init.NVIC_IRQChannel = SOC_KEY_EXTI_IRQn;
+    nvic_init.NVIC_IRQChannelPreemptionPriority = 0x01;
+    nvic_init.NVIC_IRQChannelSubPriority = 0x01;
+    nvic_init.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic_init);
+
+    GPIO_EXTILineConfig(MAIN_SW_EXTI_PORT_SOURCE, MAIN_SW_EXTI_PIN_SOURCE);
+    exti_init.EXTI_Line = MAIN_SW_EXTI_LINE;
+    exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti_init.EXTI_Trigger = EXTI_Trigger_Falling;
+    exti_init.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&exti_init);
+    nvic_init.NVIC_IRQChannel = MAIN_SW_EXTI_IRQn;
     nvic_init.NVIC_IRQChannelPreemptionPriority = 0x01;
     nvic_init.NVIC_IRQChannelSubPriority = 0x01;
     nvic_init.NVIC_IRQChannelCmd = ENABLE;

@@ -5,7 +5,7 @@
 
 
 
-enum irqWakeup g_irq_t = NO_IRQ;
+volatile enum irqWakeup g_irq_t = NO_IRQ;
 
 void rtc_sleep(void);
 void App_LowPowerProcess(void);
@@ -830,6 +830,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
     RTC_ITConfig(RTC_IT_ALR, DISABLE);
     exti_conf(SOC_KEY_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
+    exti_conf(MAIN_SW_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
 #endif
 
     if (is_rtc_wakekup)
