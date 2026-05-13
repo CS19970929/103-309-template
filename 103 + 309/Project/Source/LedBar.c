@@ -2,6 +2,8 @@
 
 #define LEDBAR_KEY_LONG_PRESS_10MS 300u
 #define LEDBAR_CHG_ANIMATION_PERIOD_10MS 20u
+#define LEDBAR_LOW_SOC_ALARM_PERIOD_10MS 50u
+#define LEDBAR_LOW_SOC_ALARM_THRESHOLD 10u
 #define LEDBAR_POWER_ON_DISPLAY_10MS 1000u
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
@@ -34,6 +36,7 @@ static uint8_t s_ledbar_number = 0u;
 static uint8_t s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
 static uint8_t s_ledbar_force_blank = 1u;
 static uint8_t s_ledbar_sleep = 0u;
+static uint8_t s_ledbar_leds_output_enabled = 0u;
 static uint8_t s_ledbar_test_single_segment_enable = 0u;
 static uint8_t s_ledbar_test_single_segment_id = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
@@ -46,11 +49,15 @@ static uint8_t s_ledbar_main_switch_sleep_handled = 0u;
 static uint8_t s_ledbar_charge_animation_enable = 0u;
 static uint8_t s_ledbar_charge_animation_step = 0u;
 static uint16_t s_ledbar_charge_animation_10ms = 0u;
+static uint8_t s_ledbar_low_soc_alarm_enable = 0u;
+static uint8_t s_ledbar_low_soc_alarm_blink_on = 0u;
+static uint16_t s_ledbar_low_soc_alarm_10ms = 0u;
 
 static void LedBar_GpioInitForDisplay(void);
 static void LedBar_GpioPrepareForStop(void);
 static void LedBar_OutputOff(void);
 static void LedBar_StopChargeAnimation(void);
+static void LedBar_StopLowSocAlarm(void);
 static void LedBar_ApplyOutput(void);
 
 static void LedBar_EnableBackupAccess(void)
@@ -93,16 +100,18 @@ static void LedBar_ConfigureLedsOutput(void)
 {
     GPIO_InitTypeDef gpio_init;
 
+    if (s_ledbar_leds_output_enabled != 0u)
+    {
+        return;
+    }
+
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-    GPIO_WriteBit(GPIO_SOC_LED_25, PIN_SOC_LED_25, LEDBAR_LED_OFF);
-    GPIO_WriteBit(GPIO_SOC_LED_50, PIN_SOC_LED_50, LEDBAR_LED_OFF);
-    GPIO_WriteBit(GPIO_SOC_LED_75, PIN_SOC_LED_75, LEDBAR_LED_OFF);
-    GPIO_WriteBit(GPIO_SOC_LED_100, PIN_SOC_LED_100, LEDBAR_LED_OFF);
 
     gpio_init.GPIO_Pin = LedBar_GetAllLedPins();
     gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
     gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &gpio_init);
+    s_ledbar_leds_output_enabled = 1u;
 }
 
 static void LedBar_ConfigureLedsAnalog(void)
@@ -115,6 +124,7 @@ static void LedBar_ConfigureLedsAnalog(void)
     gpio_init.GPIO_Mode = GPIO_Mode_AIN;
     gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(GPIOA, &gpio_init);
+    s_ledbar_leds_output_enabled = 0u;
 }
 
 static void LedBar_GpioInitForDisplay(void)
@@ -212,6 +222,16 @@ static void LedBar_OutputChargeAnimation(void)
     }
 }
 
+static void LedBar_OutputLowSocAlarm(void)
+{
+    uint8_t i;
+
+    for (i = 0u; i < LEDBAR_SOC_LED_COUNT; ++i)
+    {
+        LedBar_WriteLed(i, (uint8_t)((i == 0u) && (s_ledbar_low_soc_alarm_blink_on != 0u)));
+    }
+}
+
 static void LedBar_ApplyOutput(void)
 {
     if (s_ledbar_sleep != 0u)
@@ -231,6 +251,12 @@ static void LedBar_ApplyOutput(void)
     if (s_ledbar_charge_animation_enable != 0u)
     {
         LedBar_OutputChargeAnimation();
+        return;
+    }
+
+    if (s_ledbar_low_soc_alarm_enable != 0u)
+    {
+        LedBar_OutputLowSocAlarm();
         return;
     }
 
@@ -273,9 +299,66 @@ static void LedBar_StopChargeAnimation(void)
     s_ledbar_charge_animation_10ms = 0u;
 }
 
+static void LedBar_StopLowSocAlarm(void)
+{
+    s_ledbar_low_soc_alarm_enable = 0u;
+    s_ledbar_low_soc_alarm_blink_on = 0u;
+    s_ledbar_low_soc_alarm_10ms = 0u;
+}
+
 static uint8_t LedBar_IsChargeActive(void)
 {
     return (g_stCellInfoReport.u16Ichg != 0u) ? 1u : 0u;
+}
+
+static uint8_t LedBar_IsOverDischargeAlarmActive(void)
+{
+    if ((g_stCellInfoReport.unMdlFault_First.bits.b1CellUvp != 0u) ||
+        (g_stCellInfoReport.unMdlFault_First.bits.b1BatUvp != 0u) ||
+        (g_stCellInfoReport.unMdlFault_Second.bits.b1CellUvp != 0u) ||
+        (g_stCellInfoReport.unMdlFault_Second.bits.b1BatUvp != 0u) ||
+        (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp != 0u) ||
+        (g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp != 0u))
+    {
+        return 1u;
+    }
+
+    return 0u;
+}
+
+static uint8_t LedBar_IsLowSocAlarmActive(void)
+{
+    if (LedBar_GetRuntimeSoc() < LEDBAR_LOW_SOC_ALARM_THRESHOLD)
+    {
+        return 1u;
+    }
+
+    return LedBar_IsOverDischargeAlarmActive();
+}
+
+static void LedBar_RunLowSocAlarm(void)
+{
+    if (s_ledbar_low_soc_alarm_enable == 0u)
+    {
+        s_ledbar_low_soc_alarm_blink_on = 1u;
+        s_ledbar_low_soc_alarm_10ms = 0u;
+    }
+
+    s_ledbar_low_soc_alarm_enable = 1u;
+    s_ledbar_force_blank = 0u;
+    LedBar_Command = LED_BAR_FAULT;
+    LedBar_SetSleep(0u);
+
+    if (g_st_SysTimeFlag.bits.b1Sys10msFlag != 0u)
+    {
+        if (++s_ledbar_low_soc_alarm_10ms >= LEDBAR_LOW_SOC_ALARM_PERIOD_10MS)
+        {
+            s_ledbar_low_soc_alarm_10ms = 0u;
+            s_ledbar_low_soc_alarm_blink_on ^= 1u;
+        }
+    }
+
+    LedBar_ApplyOutput();
 }
 
 static void LedBar_RunChargeAnimation(void)
@@ -289,6 +372,7 @@ static void LedBar_RunChargeAnimation(void)
     s_ledbar_charge_animation_enable = 1u;
     s_ledbar_force_blank = 0u;
     s_ledbar_number = LedBar_GetRuntimeSoc();
+    LedBar_StopLowSocAlarm();
     LedBar_Command = LED_BAR_CHG;
     LedBar_SetSleep(0u);
 
@@ -404,6 +488,7 @@ void LedBar_Init(void)
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     s_ledbar_force_blank = 1u;
     s_ledbar_sleep = 0u;
+    s_ledbar_leds_output_enabled = 0u;
     s_ledbar_test_single_segment_enable = 0u;
     s_ledbar_test_single_segment_id = 0u;
     s_ledbar_soc_display_10ms = 0u;
@@ -414,6 +499,7 @@ void LedBar_Init(void)
     s_ledbar_wait_key_release_after_boot = 0u;
     s_ledbar_main_switch_sleep_handled = 0u;
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
@@ -432,6 +518,7 @@ void LedBar_Clear(void)
     }
 
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     s_ledbar_force_blank = 1u;
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
@@ -448,6 +535,7 @@ void LedBar_SetSleep(uint8_t enable)
     if (enable != 0u)
     {
         LedBar_StopChargeAnimation();
+        LedBar_StopLowSocAlarm();
     }
     if (s_ledbar_sleep == enable)
     {
@@ -484,6 +572,7 @@ void LedBar_EnableSingleSegmentTest(uint8_t enable)
         s_ledbar_test_single_segment_id = 0u;
     }
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
 }
@@ -519,6 +608,7 @@ void LedBar_SetNumber(uint8_t value)
     }
 
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     s_ledbar_number = value;
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
@@ -532,6 +622,7 @@ void LedBar_SetIndicators(uint8_t indicator_mask)
     }
 
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     s_ledbar_indicator_mask = (uint8_t)(indicator_mask & (LEDBAR_ICON_CHARGE_MASK | LEDBAR_ICON_PERCENT_MASK));
     s_ledbar_force_blank = 0u;
     LedBar_ApplyOutput();
@@ -593,6 +684,7 @@ void LedBar_ShowSleepSocPreview(void)
     s_ledbar_sleep = 0u;
     s_ledbar_force_blank = 0u;
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     s_ledbar_number = LedBar_LoadSleepSoc();
     s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_ApplyOutput();
@@ -608,6 +700,7 @@ void LedBar_PrepareForStop(void)
     s_ledbar_sleep = 1u;
     s_ledbar_force_blank = 1u;
     LedBar_StopChargeAnimation();
+    LedBar_StopLowSocAlarm();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
 }
@@ -662,6 +755,14 @@ void APP_LedBar(void)
     }
 
     LedBar_StopChargeAnimation();
+
+    if (LedBar_IsLowSocAlarmActive() != 0u)
+    {
+        LedBar_RunLowSocAlarm();
+        return;
+    }
+
+    LedBar_StopLowSocAlarm();
 
     if (LedBar_IsSocDisplayRequested() == 0u)
     {
