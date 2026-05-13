@@ -286,7 +286,57 @@ void IOstatus_Base(void)
 
 void IOstatus_RTCMode(void)
 {
-    IOstatus_Base();
+    GPIO_InitTypeDef gpio_init;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA |
+                               RCC_APB2Periph_GPIOB |
+                               RCC_APB2Periph_GPIOC |
+                               RCC_APB2Periph_GPIOD |
+                               RCC_APB2Periph_GPIOE,
+                           ENABLE);
+
+    LedBar_SetSleep(1u);
+    ADC_StopForLowPower();
+
+    gpio_init.GPIO_Pin = GPIO_Pin_All;
+    gpio_init.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &gpio_init);
+    gpio_init.GPIO_Pin = GPIO_Pin_All & (~PIN_AFE1_CTL);
+    gpio_init.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOB, &gpio_init);
+    gpio_init.GPIO_Pin = GPIO_Pin_All;
+    gpio_init.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOC, &gpio_init);
+    GPIO_Init(GPIOD, &gpio_init);
+    GPIO_Init(GPIOE, &gpio_init);
+
+    GPIO_ResetBits(GPIO_M_STB, PIN_M_STB);
+    GPIO_ResetBits(GPIO_AD_EN, PIN_AD_EN);
+    GPIO_SetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
+    GPIO_ResetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
+
+    gpio_init.GPIO_Pin = PIN_M_STB;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIO_M_STB, &gpio_init);
+
+    gpio_init.GPIO_Pin = PIN_AD_EN;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIO_AD_EN, &gpio_init);
+
+    gpio_init.GPIO_Pin = PIN_CMNT_EN;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIO_CMNT_EN, &gpio_init);
+
+    gpio_init.GPIO_Pin = PIN_ADC_BUS_EN;
+    gpio_init.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio_init.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIO_ADC_BUS_EN, &gpio_init);
+
+    InitSocKeyInput();
+    LedBar_PrepareForStop();
 }
 
 void IOstatus_NormalMode(void)
