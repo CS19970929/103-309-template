@@ -204,6 +204,12 @@
 #define PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC 30
 // </h>
 
+// <h>Flash 日志磨损保护
+// <o> 同类事件重复保存最小间隔，秒 <0-86400>
+// <i> 用于抑制故障抖动导致的事件日志反复写 Flash。默认 3600 秒；0 表示关闭限频；启动和睡眠事件不受限。
+#define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
+// </h>
+
 // <h>SOC 校准参数
 // <o> 满电确认最小电压余量，mV <0-500>
 // <i> 普通满电确认允许低于满电电压的余量。越大越容易到 100%。

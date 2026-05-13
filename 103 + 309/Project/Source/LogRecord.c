@@ -7,6 +7,46 @@ UINT8 BMS_LOG_RECORD[EVENT_RECORD_LENGTH][2];
 LOG_RECORD_FLAG LogRecord_Flag;
 UINT8 gu8_Reset_EventRecord = 0;
 UINT32 su32_Interval_S_Tcnt = 0;
+static UINT32 s_u32_LogRecord_UptimeSeconds = 0;
+static UINT32 s_u32_LogRecord_LastSaveSeconds[EVENT_NUM] = {0};
+static UINT8 s_u8_LogRecord_LastSaveValid[EVENT_NUM] = {0};
+
+static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
+{
+#if PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC > 0
+	UINT32 elapsed;
+
+	if ((event == BMS_START_UP) || (event == BMS_SLEEP))
+	{
+		return 1;
+	}
+
+	if (event >= EVENT_NUM)
+	{
+		return 0;
+	}
+
+	if (!s_u8_LogRecord_LastSaveValid[event])
+	{
+		return 1;
+	}
+
+	elapsed = s_u32_LogRecord_UptimeSeconds - s_u32_LogRecord_LastSaveSeconds[event];
+	return (elapsed >= (UINT32)PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC) ? 1U : 0U;
+#else
+	(void)event;
+	return 1;
+#endif
+}
+
+static void LogRecord_MarkEventSaved(LogEventArray event)
+{
+	if (event < EVENT_NUM)
+	{
+		s_u32_LogRecord_LastSaveSeconds[event] = s_u32_LogRecord_UptimeSeconds;
+		s_u8_LogRecord_LastSaveValid[event] = 1;
+	}
+}
 
 static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 {
@@ -46,6 +86,11 @@ UINT8 LogTime_Map(UINT32 *Time_S_Cnt)
 
 void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 {
+	if (!LogRecord_CanSaveEvent(event))
+	{
+		return;
+	}
+
 	if (BMS_LOG_POINT >= EVENT_RECORD_LENGTH)
 	{
 		BMS_LOG_POINT = 0;
@@ -59,7 +104,10 @@ void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 	}
 	++BMS_LOG_POINT;
 
-	StorageFlash_SaveLogData(BMS_LOG_POINT, BMS_LOG_RECORD);
+	if (StorageFlash_SaveLogData(BMS_LOG_POINT, (const UINT8 (*)[2])BMS_LOG_RECORD))
+	{
+		LogRecord_MarkEventSaved(event);
+	}
 }
 
 void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
@@ -127,6 +175,7 @@ void App_LogRecord(void)
 	}
 
 	++su32_Interval_S_Tcnt;
+	++s_u32_LogRecord_UptimeSeconds;
 
 	LogEvent_Record(LogRecord_Flag.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
 	LogEvent_Record(SystemStatus.bits.b1Status_Heat, HEAT_OPEN, &su32_Interval_S_Tcnt);
@@ -206,7 +255,7 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 	BMS_LOG_POINT = 0;
 	gu8_Reset_EventRecord = 0;
 
-	return StorageFlash_SaveLogData(BMS_LOG_POINT, BMS_LOG_RECORD);
+	return StorageFlash_SaveLogData(BMS_LOG_POINT, (const UINT8 (*)[2])BMS_LOG_RECORD);
 }
 
 void ReadEEPROM_EventRecord_Parameters(void)

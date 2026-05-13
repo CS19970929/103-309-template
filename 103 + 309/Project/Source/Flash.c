@@ -823,6 +823,7 @@ UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_REC
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
 {
 	STORAGE_FLASH_LOG_DATA data;
+	STORAGE_FLASH_LOG_DATA current_data;
 
 	if (records == 0)
 	{
@@ -833,6 +834,16 @@ UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LO
 	memset(&data, 0, sizeof(data));
 	data.point = point;
 	memcpy(data.records, records, sizeof(data.records));
+
+	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
+									 FLASH_ADDR_STORAGE_LOG_SLOT_B,
+									 FLASH_STORAGE_MAGIC_LOG,
+									 (UINT16)sizeof(STORAGE_FLASH_LOG_DATA),
+									 (UINT8 *)&current_data) &&
+		(memcmp(&current_data, &data, sizeof(data)) == 0))
+	{
+		return 1;
+	}
 
 	return StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
 										FLASH_ADDR_STORAGE_LOG_SLOT_B,
