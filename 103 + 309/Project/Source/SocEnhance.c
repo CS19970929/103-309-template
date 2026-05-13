@@ -87,7 +87,7 @@ typedef struct
 	UINT32 cap_now_as10;
 	UINT32 cycle_x100;
 	UINT32 dsg_acc_as10;
-	UINT32 rem_ms;
+	UINT32 rem_mams;
 	UINT32 rest_ticks;
 	UINT32 stable_rest_ticks;
 	UINT32 short_rest_ticks;
@@ -284,7 +284,7 @@ static void soc_set(UINT8 soc)
 	}
 	s_soc.soc = soc;
 	s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * soc) / 100ULL);
-	s_soc.rem_ms = 0U;
+	s_soc.rem_mams = 0U;
 	s_soc.full_anchor = (soc >= 100U) ? 1U : 0U;
 }
 
@@ -720,20 +720,20 @@ static void soc_integrate(UINT8 mode)
 
 	if (integrate_mode != s_soc.integrate_mode)
 	{
-		s_soc.rem_ms = 0U;
+		s_soc.rem_mams = 0U;
 		s_soc.integrate_mode = integrate_mode;
 	}
 	s_soc.last_mode = mode;
 	if (integrate_mode == SOC_MODE_RELAX)
 	{
-		s_soc.rem_ms = 0U;
+		s_soc.rem_mams = 0U;
 		return;
 	}
 	current_ma = (current_ma_signed > 0) ?
 		(UINT32)current_ma_signed : (UINT32)(0 - current_ma_signed);
-	acc_mams = (current_ma * SOC_TICK_MS) + s_soc.rem_ms;
+	acc_mams = (current_ma * SOC_TICK_MS) + s_soc.rem_mams;
 	delta_as10 = acc_mams / SOC_MAMS_PER_AS10;
-	s_soc.rem_ms = acc_mams % SOC_MAMS_PER_AS10;
+	s_soc.rem_mams = acc_mams % SOC_MAMS_PER_AS10;
 	if (delta_as10 == 0U)
 	{
 		return;
