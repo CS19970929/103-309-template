@@ -22,8 +22,10 @@ static bool rtc_monitor(void);
 static bool isException(void);
 static bool updataData_rtc(void);
 static void report_wkup_sig(void);
-static bool isErr_enterRTC(void);
+static UINT8 low_power_get_rtc_block_reason(void);
 static bool low_power_is_mcu_wake_active(void);
+static void low_power_delay_rtc(UINT8 reason);
+static void low_power_cancel_rtc(UINT8 reason);
 static void low_power_set_rtc_block_reason(UINT8 reason);
 static void low_power_update_rtc_status(void);
 
@@ -75,12 +77,27 @@ static bool low_power_is_mcu_wake_active(void)
 static void low_power_set_rtc_block_reason(UINT8 reason)
 {
     g_stLowPowerRtcStatus.u8BlockReason = reason;
-    g_stLowPowerRtcStatus.u8CanBlockReason = Can_GetSleepBlockReason();
+}
+
+static void low_power_delay_rtc(UINT8 reason)
+{
+    sys_time.enter_rtc_delay = 0;
+    low_power_set_rtc_block_reason(reason);
+    low_power_update_rtc_status();
+}
+
+static void low_power_cancel_rtc(UINT8 reason)
+{
+    low_power_delay_rtc(reason);
+    if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
+    {
+        LowPower_Request(NO_SLEEP);
+        low_power_update_rtc_status();
+    }
 }
 
 static void low_power_update_rtc_status(void)
 {
-    g_stLowPowerRtcStatus.u8CanBlockReason = Can_GetSleepBlockReason();
     g_stLowPowerRtcStatus.u8SleepModeSelect = (UINT8)g_sleepModeSelect;
     g_stLowPowerRtcStatus.u8StateSleep = state_sleep;
     g_stLowPowerRtcStatus.u8RtcWakeFlag = is_rtc_wakekup ? 1U : 0U;
@@ -88,6 +105,7 @@ static void low_power_update_rtc_status(void)
     g_stLowPowerRtcStatus.u16EnterRtcTarget = sys_time.time_enter_rtc;
     g_stLowPowerRtcStatus.u32RtcElapsedSeconds = s_u32RtcSleepElapsedSeconds;
 }
+
 void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
 {
     EXTI_InitTypeDef EXTI_InitStruct;
@@ -412,38 +430,24 @@ UINT8 AFE_SleepMode_Judge(void)
 UINT16 gu8_WakeUp_Type = 0;
 void BQ769x0_SleepMode_Ctrl(void)
 {
-    static UINT8 su8_StartUp_Flag = 0;
     static UINT8 su8_SleepExtComCnt = 0;
     static uint32_t deepsleep_cnt = 0;
     static uint16_t deepsleep_cnt_1min = 0;
-
-    UINT8 u8_CurComDelay_Flag = 0;
+    UINT8 block_reason;
 
     if (low_power_is_mcu_wake_active())
     {
-        sys_time.enter_rtc_delay = 0;
         deepsleep_cnt = 0;
         deepsleep_cnt_1min = 0;
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_MCU_WAKE);
-        if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
-        {
-            LowPower_Request(NO_SLEEP);
-        }
-        low_power_update_rtc_status();
+        low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_MCU_WAKE);
         return;
     }
 
     if (FactoryAging_IsActive() != 0U)
     {
-        sys_time.enter_rtc_delay = 0;
         deepsleep_cnt = 0;
         deepsleep_cnt_1min = 0;
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_FACTORY_AGING);
-        if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
-        {
-            LowPower_Request(NO_SLEEP);
-        }
-        low_power_update_rtc_status();
+        low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_FACTORY_AGING);
         return;
     }
 
@@ -454,18 +458,18 @@ void BQ769x0_SleepMode_Ctrl(void)
     {
         sys_time.enter_rtc_delay = 0;
         ++deepsleep_cnt_1min;
-        if (deepsleep_cnt_1min >= (60))
+        if (deepsleep_cnt_1min >= 60U)
         {
             entersleep(DEEP_MODE);
         }
         low_power_update_rtc_status();
         return;
     }
-    else if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
+
+    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
     {
         sys_time.enter_rtc_delay = 0;
-        // print_vcell();
-        if (++deepsleep_cnt >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60)
+        if (++deepsleep_cnt >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
         {
             entersleep(DEEP_MODE);
         }
@@ -473,57 +477,33 @@ void BQ769x0_SleepMode_Ctrl(void)
         low_power_update_rtc_status();
         return;
     }
-    else
+
+    deepsleep_cnt = 0;
+    deepsleep_cnt_1min = 0;
+
+    block_reason = low_power_get_rtc_block_reason();
+    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) && (su8_SleepExtComCnt != RTC_ExtComCnt))
     {
-        deepsleep_cnt = 0;
-        deepsleep_cnt_1min = 0;
+        su8_SleepExtComCnt = RTC_ExtComCnt;
+        block_reason = LOW_POWER_RTC_BLOCK_EXT_COMM;
+    }
+    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) && (AFE_SleepMode_Judge() != 0U))
+    {
+        block_reason = LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
     }
 
-    switch (su8_StartUp_Flag)
+    if (block_reason != LOW_POWER_RTC_BLOCK_NONE)
     {
-    case 0:
-        su8_StartUp_Flag = 1;
-        break;
-    case 1:
-        if (isErr_enterRTC())
-        {
-            u8_CurComDelay_Flag = 1;
-        }
-        else if (su8_SleepExtComCnt != RTC_ExtComCnt)
-        {
-            su8_SleepExtComCnt = RTC_ExtComCnt;
-            low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_EXT_COMM);
-            u8_CurComDelay_Flag = 1;
-        }
+        low_power_delay_rtc(block_reason);
+        return;
+    }
 
-        if (u8_CurComDelay_Flag)
-        {
-            sys_time.enter_rtc_delay = 0;
-        }
-        else
-        {
-            if (AFE_SleepMode_Judge() == 0)
-            {
-                low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
-                // if (++su16_RTC2_100msTCnt >= 30)
-                // if (++su16_RTC2_100msTCnt >= OtherElement.time_enter_rtc)
-                if (++sys_time.enter_rtc_delay >= sys_time.time_enter_rtc)
-                {
-                    sys_time.enter_rtc_delay = 0;
-                    entersleep(HICCUP_MODE);
-                    log_w("enter rtc mode 1\n");
-                }
-                // log_w("%d s enter rtc mode1", (OtherElement.time_enter_rtc - su16_RTC2_100msTCnt));
-            }
-            else
-            {
-                low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE);
-                log_a("err");
-            }
-        }
-        break;
-    default:
-        break;
+    low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
+    if (++sys_time.enter_rtc_delay >= sys_time.time_enter_rtc)
+    {
+        sys_time.enter_rtc_delay = 0;
+        entersleep(HICCUP_MODE);
+        log_w("enter rtc mode 1\n");
     }
 
     low_power_update_rtc_status();
@@ -796,13 +776,9 @@ static void rtc_sleep_prepare_rtc(void)
     if (sys_time.rtc_sleep_cnt == 0U)
     {
         s_u32RtcSleepElapsedSeconds = 0U;
-        Can_BeginRtcSleepSession();
-    }
-    else
-    {
-        Can_PrepareSleep();
     }
 
+    Can_PrepareSleep();
 	SOC_SaveSnapshotBeforeSleep();
 	FactoryAging_SaveProgressBeforeSleep();
 	before_rtcsleep();
@@ -818,13 +794,12 @@ static void rtc_sleep_prepare_rtc(void)
 
 static void rtc_sleep_dump_state(const char *stage)
 {
-    log_w("[rtc_sleep] %s wake=%d cnt=%d period=%lu can=%d cblk=%d rblk=%d",
+    log_w("[rtc_sleep] %s wake=%d cnt=%d period=%lu can=%d rblk=%d",
           stage,
           is_rtc_wakekup,
           sys_time.rtc_sleep_cnt,
           (unsigned long)Can_GetIdleRtcPeriodSeconds(),
           Can_IsBusActive(),
-          Can_GetSleepBlockReason(),
           g_stLowPowerRtcStatus.u8BlockReason);
 }
 
@@ -925,7 +900,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
-    Can_EndRtcSleepSession();
     low_power_guess_wakeup_source();
     report_wkup_sig();
     before_wakeup(&sys_time.rtc_sleep_cnt);
@@ -1039,25 +1013,25 @@ static void report_wkup_sig(void)
     g_irq_t = NO_IRQ;
 }
 
-static bool isErr_enterRTC(void)
+static UINT8 low_power_get_rtc_block_reason(void)
 {
     if ((g_stCellInfoReport.u16Ichg > 10) || (g_stCellInfoReport.u16IDischg > 10))
     {
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_CURRENT);
         log_e("CHG or DSG");
-        return true;
+        return LOW_POWER_RTC_BLOCK_CURRENT;
     }
-    else if (SystemStatus.bits.b1Status_Heat)
+
+    if (SystemStatus.bits.b1Status_Heat)
     {
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_HEAT);
         log_e("Heating");
-        return true;
+        return LOW_POWER_RTC_BLOCK_HEAT;
     }
+
 #ifdef __same_door__
-    else if (!SystemStatus.bits.b1Status_MOS_CHG || !SystemStatus.bits.b1Status_MOS_DSG)
+    if (!SystemStatus.bits.b1Status_MOS_CHG || !SystemStatus.bits.b1Status_MOS_DSG)
     {
         log_e("mos close");
-        return true;
+        return LOW_POWER_RTC_BLOCK_MOS_OFF;
     }
 #else
     // else if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == 1)
@@ -1066,16 +1040,13 @@ static bool isErr_enterRTC(void)
     //     return true;
     // }
 #endif
-    else if (low_power_is_mcu_wake_active())
+
+    if (low_power_is_mcu_wake_active())
     {
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_MCU_WAKE);
-        return true;
+        return LOW_POWER_RTC_BLOCK_MCU_WAKE;
     }
-    else
-    {
-        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
-        return false;
-    }
+
+    return LOW_POWER_RTC_BLOCK_NONE;
 }
 
 void rtc_sleep(void)
