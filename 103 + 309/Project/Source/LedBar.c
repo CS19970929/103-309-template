@@ -1,6 +1,5 @@
 #include "main.h"
 
-#define LEDBAR_KEY_LONG_PRESS_10MS 300u
 #define LEDBAR_CHG_ANIMATION_PERIOD_10MS 20u
 #define LEDBAR_LOW_SOC_ALARM_PERIOD_10MS 50u
 #define LEDBAR_LOW_SOC_ALARM_THRESHOLD 10u
@@ -40,9 +39,7 @@ static uint8_t s_ledbar_leds_output_enabled = 0u;
 static uint8_t s_ledbar_test_single_segment_enable = 0u;
 static uint8_t s_ledbar_test_single_segment_id = 0u;
 static uint16_t s_ledbar_soc_display_10ms = 0u;
-static UINT32 s_ledbar_key_press_start_tick = 0u;
 static uint8_t s_ledbar_key_last_pressed = 0u;
-static uint8_t s_ledbar_key_long_handled = 0u;
 static uint16_t s_ledbar_power_on_display_10ms = 0u;
 static uint8_t s_ledbar_wait_key_release_after_boot = 0u;
 static uint8_t s_ledbar_main_switch_sleep_handled = 0u;
@@ -308,7 +305,17 @@ static void LedBar_StopLowSocAlarm(void)
 
 static uint8_t LedBar_IsChargeActive(void)
 {
-    return (g_stCellInfoReport.u16Ichg != 0u) ? 1u : 0u;
+    return (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET) ? 1u : 0u;
+}
+
+static uint8_t LedBar_IsChargeKeepAwakeActive(void)
+{
+    if (LedBar_IsChargeActive() != 0u)
+    {
+        return 1u;
+    }
+
+    return 0u;
 }
 
 static uint8_t LedBar_IsOverDischargeAlarmActive(void)
@@ -405,12 +412,14 @@ static void LedBar_ServiceSwitch(void)
 {
     uint8_t pressed = LedBar_IsSwitchPressed();
     uint8_t main_switch_closed = LedBar_IsMainSwitchClosed();
-    UINT32 tick_now = SysTime_Get10msTickCount();
-    UINT32 key_hold_10ms = 0u;
 
     if (main_switch_closed == 0u)
     {
-        if (s_ledbar_main_switch_sleep_handled == 0u)
+        if (LedBar_IsChargeKeepAwakeActive() != 0u)
+        {
+            s_ledbar_main_switch_sleep_handled = 0u;
+        }
+        else if (s_ledbar_main_switch_sleep_handled == 0u)
         {
             s_ledbar_main_switch_sleep_handled = 1u;
             LedBar_SaveSleepSoc();
@@ -426,7 +435,6 @@ static void LedBar_ServiceSwitch(void)
     if ((pressed != 0u) && (s_ledbar_key_last_pressed == 0u))
     {
         LedBar_RequestSocDisplayWindow();
-        s_ledbar_key_press_start_tick = tick_now;
     }
 
     if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
@@ -442,32 +450,16 @@ static void LedBar_ServiceSwitch(void)
 
     if (s_ledbar_wait_key_release_after_boot != 0u)
     {
-        s_ledbar_key_long_handled = 0u;
         if (pressed != 0u)
         {
-            s_ledbar_key_press_start_tick = tick_now;
             s_ledbar_key_last_pressed = pressed;
             return;
         }
         s_ledbar_wait_key_release_after_boot = 0u;
     }
 
-    if (pressed != 0u)
+    if (pressed == 0u)
     {
-        key_hold_10ms = tick_now - s_ledbar_key_press_start_tick;
-        if ((key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
-            (s_ledbar_key_long_handled == 0u))
-        {
-            s_ledbar_key_long_handled = 1u;
-            LedBar_SaveSleepSoc();
-            entersleep(DEEP_MODE);
-            SleepDeal_Continue();
-        }
-    }
-    else
-    {
-        s_ledbar_key_press_start_tick = tick_now;
-        s_ledbar_key_long_handled = 0u;
         if (s_ledbar_soc_display_10ms != 0u)
         {
             s_ledbar_soc_display_10ms--;
@@ -492,9 +484,7 @@ void LedBar_Init(void)
     s_ledbar_test_single_segment_enable = 0u;
     s_ledbar_test_single_segment_id = 0u;
     s_ledbar_soc_display_10ms = 0u;
-    s_ledbar_key_press_start_tick = 0u;
     s_ledbar_key_last_pressed = 0u;
-    s_ledbar_key_long_handled = 0u;
     s_ledbar_power_on_display_10ms = LEDBAR_POWER_ON_DISPLAY_10MS;
     s_ledbar_wait_key_release_after_boot = 0u;
     s_ledbar_main_switch_sleep_handled = 0u;
@@ -503,7 +493,6 @@ void LedBar_Init(void)
     LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
-    s_ledbar_key_press_start_tick = SysTime_Get10msTickCount();
     s_ledbar_key_last_pressed = LedBar_IsSwitchPressed();
     s_ledbar_wait_key_release_after_boot = s_ledbar_key_last_pressed;
     LedBar_OutputOff();

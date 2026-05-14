@@ -34,6 +34,7 @@ static void low_power_guess_wakeup_source(void);
 static void rtc_sleep_prepare_rtc(void);
 static void rtc_sleep_dump_state(const char *stage);
 static bool rtc_sleep_run_hiccup_cycle(void);
+static bool low_power_is_charger_input_active(void);
 
 #if (AFE_TYPE == sh36xx)
 static bool isHaveCurrent_sh3x(void);
@@ -173,6 +174,11 @@ bool isHaveCurrent(void)
     return isCURR;
 }
 
+static bool low_power_is_charger_input_active(void)
+{
+    return (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET) ? true : false;
+}
+
 #if (AFE_TYPE == sh36xx)
 static bool isHaveCurrent_sh3x(void)
 {
@@ -283,6 +289,11 @@ static void low_power_log_and_commit_sleep(void)
 
 void LowPower_Request(enum _SLEEP_MODE mode)
 {
+    if ((mode != NO_SLEEP) && low_power_is_charger_input_active())
+    {
+        mode = NO_SLEEP;
+    }
+
     switch (mode)
     {
     case HICCUP_MODE:
@@ -325,7 +336,7 @@ UINT8 AFE_SleepMode_Judge(void)
 {
     UINT8 result = 0;
 
-    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && !g_stCellInfoReport.u16Ichg)
+    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && !low_power_is_charger_input_active())
     {
         result = 1;
         log_e("cuv sleep");
@@ -400,7 +411,7 @@ void BQ769x0_SleepMode_Ctrl(void)
     // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
     // if (AFE_SleepMode_Judge() == 1)
     //todo过充、充电管关了？进待机？
-    if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
+    if (g_stCellInfoReport.u16VCellMin <= 2600 && !low_power_is_charger_input_active())
     {
         sys_time.enter_rtc_delay = 0;
         ++deepsleep_cnt_1min;
@@ -410,7 +421,7 @@ void BQ769x0_SleepMode_Ctrl(void)
         }
         return;
     }
-    else if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
+    else if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && !low_power_is_charger_input_active())
     {
         sys_time.enter_rtc_delay = 0;
         // print_vcell();
@@ -976,7 +987,12 @@ static bool isErr_enterRTC(void)
 {
     extern enum BALANCE_STATE_E g_enBalanceState;
 
-    if ((g_stCellInfoReport.u16Ichg > 10) || (g_stCellInfoReport.u16IDischg > 10))
+    if (low_power_is_charger_input_active())
+    {
+        log_e("CHG_IN");
+        return true;
+    }
+    else if ((g_stCellInfoReport.u16Ichg > 10) || (g_stCellInfoReport.u16IDischg > 10))
     {
         log_e("CHG or DSG");
         return true;

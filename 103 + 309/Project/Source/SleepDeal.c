@@ -8,8 +8,6 @@ UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
 
-#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)300) // PC13����3��պϲ���Ϊ��Ч
-
 static UINT8 IsChargerWakeupActive(void)
 {
 	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
@@ -49,17 +47,11 @@ static UINT8 IsDirectSleepWakeupValid(void)
 
 static UINT8 IsSleepWakeupValid(void)
 {
-	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;
 
 	if (IsDirectSleepWakeupValid())
 	{
 		return 1;
-	}
-
-	if (!IsMainSwitchClosed())
-	{
-		return RejectSleepWakeup();
 	}
 
 	while (1)
@@ -68,26 +60,17 @@ static UINT8 IsSleepWakeupValid(void)
 		{
 			return 1;
 		}
-		if (!IsMainSwitchClosed())
-		{
-			return RejectSleepWakeup();
-		}
 		if ((g_irq_t != soc_key) && !IsKeyPressed())
 		{
 			return RejectSleepWakeup();
 		}
 
 		LedBar_ShowSleepSocPreview();
-		hold_cnt = 0;
 		while (IsKeyPressed())
 		{
 			if (IsDirectSleepWakeupValid())
 			{
 				return 1;
-			}
-			if (!IsMainSwitchClosed())
-			{
-				return RejectSleepWakeup();
 			}
 			if (IsChargerWakeupActive())
 			{
@@ -95,10 +78,6 @@ static UINT8 IsSleepWakeupValid(void)
 			}
 
 			__delay_ms(10);
-			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
-			{
-				return 1;
-			}
 		}
 
 		display_cnt = 0;
@@ -107,10 +86,6 @@ static UINT8 IsSleepWakeupValid(void)
 			if (IsDirectSleepWakeupValid())
 			{
 				return 1;
-			}
-			if (!IsMainSwitchClosed())
-			{
-				return RejectSleepWakeup();
 			}
 			if (IsChargerWakeupActive())
 			{
@@ -497,7 +472,7 @@ void SleepDeal_Normal_L1(void)
 		break;
 	}
 
-	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
+	if (IsChargerWakeupActive() || g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (s_u32SleepFirstCnt)
 			s_u32SleepFirstCnt = 0;
@@ -576,7 +551,7 @@ void SleepDeal_Normal_L2(void)
 		break;
 	}
 
-	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
+	if (IsChargerWakeupActive() || g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (s_u32SleepFirstCnt)
 			s_u32SleepFirstCnt = 0;
@@ -652,7 +627,7 @@ void SleepDeal_Normal_L3(void)
 		break;
 	}
 
-	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
+	if (IsChargerWakeupActive() || g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg || g_stCellInfoReport.u16IDischg > OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (s_u32SleepFirstCnt)
 			s_u32SleepFirstCnt = 0;
@@ -686,7 +661,7 @@ void SleepDeal_Normal_Select(void)
 		return;
 	}
 
-	if (g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Dsg)
+	if (!IsChargerWakeupActive() && g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (g_stCellInfoReport.u16VCellMin < OtherElement.u16Sleep_Vlow)
 		{
@@ -870,6 +845,20 @@ void App_SleepDeal(void)
 		return;
 	}
 
+	if (IsChargerWakeupActive())
+	{
+		force_sleep_delay = 0;
+		Sleep_Mode.bits.b1NormalSleep_L1 = 0;
+		Sleep_Mode.bits.b1NormalSleep_L2 = 0;
+		Sleep_Mode.bits.b1NormalSleep_L3 = 0;
+		Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
+		Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
+		Sleep_Mode.bits.b1ForceToSleep_L3 = 0;
+		Sleep_Mode.bits.b1_ToSleepFlag = 0;
+		Sleep_Status = SLEEP_HICCUP_NORMAL_SELECT;
+		return;
+	}
+
 	switch (Sleep_Status)
 	{
 	case SLEEP_HICCUP_NORMAL_SELECT:
@@ -898,7 +887,7 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2500 && !g_stCellInfoReport.u16Ichg)
+	if (g_stCellInfoReport.u16VCellMin < 2500 && !IsChargerWakeupActive())
 	{
 		++force_sleep_delay;
 		if (force_sleep_delay >= 60)
