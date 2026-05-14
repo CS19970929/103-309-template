@@ -11,7 +11,6 @@ void rtc_sleep(void);
 void App_LowPowerProcess(void);
 void test_dealError(void);
 void Fault_ChangeToMCU(void);
-void Init(void);
 void DataLoad_CellVolt(void);
 void DataLoad_CellVoltMaxMinFind(void);
 void DataLoad_Temperature(void);
@@ -37,7 +36,10 @@ static void low_power_prepare_reset_sleep(void);
 static void low_power_log_and_commit_sleep(void);
 static void low_power_guess_wakeup_source(void);
 static void rtc_sleep_prepare_rtc(void);
+static void rtc_sleep_disable_stop_wakeup(void);
 static void rtc_sleep_dump_state(const char *stage);
+static void rtc_sleep_restore_after_stop(void);
+static void rtc_sleep_restore_for_run(void);
 static bool rtc_sleep_run_hiccup_cycle(void);
 
 #if (AFE_TYPE == sh36xx)
@@ -104,18 +106,6 @@ static void low_power_update_rtc_status(void)
     g_stLowPowerRtcStatus.u16EnterRtcDelay = sys_time.enter_rtc_delay;
     g_stLowPowerRtcStatus.u16EnterRtcTarget = sys_time.time_enter_rtc;
     g_stLowPowerRtcStatus.u32RtcElapsedSeconds = s_u32RtcSleepElapsedSeconds;
-}
-
-void exti_conf(uint32_t Line, EXTITrigger_TypeDef Trigger, FunctionalState Cmd)
-{
-    EXTI_InitTypeDef EXTI_InitStruct;
-    //????
-    // SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
-    EXTI_InitStruct.EXTI_Line = Line;
-    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-    EXTI_InitStruct.EXTI_Trigger = Trigger; // ???????????????
-    EXTI_InitStruct.EXTI_LineCmd = Cmd;
-    EXTI_Init(&EXTI_InitStruct);
 }
 
 void print_vcell(void)
@@ -792,6 +782,33 @@ static void rtc_sleep_prepare_rtc(void)
     low_power_update_rtc_status();
 }
 
+static void rtc_sleep_disable_stop_wakeup(void)
+{
+    LowPower_DisableWakeupExti();
+    RTC_DisableStopWakeup();
+}
+
+static void rtc_sleep_restore_after_stop(void)
+{
+    if (is_rtc_wakekup)
+    {
+        InitRtcWakeupCheck();
+    }
+    else
+    {
+        InitRunAfterStopWakeup();
+    }
+}
+
+static void rtc_sleep_restore_for_run(void)
+{
+    if (is_rtc_wakekup)
+    {
+        is_rtc_wakekup = false;
+        InitRunAfterStopWakeup();
+    }
+}
+
 static void rtc_sleep_dump_state(const char *stage)
 {
     log_w("[rtc_sleep] %s wake=%d cnt=%d period=%lu can=%d rblk=%d",
@@ -853,25 +870,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     Sys_StopMode();
     Feed_IWatchDog;
 
-    // DISABLE_INT();
-    exti_conf(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
-#if 1
-#if defined(UART1_WAKEUP_ENABLE)
-    exti_conf(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(UART2_WAKEUP_ENABLE)
-    exti_conf(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(RS485_WAKEUP_ENABLE)
-    exti_conf(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
-#endif
-    // exti_conf(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
-    // exti_conf(EXTI_Line0, EXTI_Trigger_Rising, DISABLE);
-    // exti_conf(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
-    // RTC_AlarmCmd(RTC_Alarm_A, DISABLE);
-    RTC_ITConfig(RTC_IT_ALR, DISABLE);
-    exti_conf(EXTI_Line5, EXTI_Trigger_Falling, DISABLE);
-#endif
+    rtc_sleep_disable_stop_wakeup();
 
     if (is_rtc_wakekup)
     {
@@ -881,7 +880,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         rtc_sleep_dump_state("wake");
     }
 
-    Init();
+    rtc_sleep_restore_after_stop();
     log_w("cnt %d", sys_time.rtc_sleep_cnt);
     if (is_rtc_wakekup && !isException())
     {
@@ -891,12 +890,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         return true;
     }
 
-    if (is_rtc_wakekup)
-    {
-        is_rtc_wakekup = false;
-    }
-
-    Init();
+    rtc_sleep_restore_for_run();
     state_sleep = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);

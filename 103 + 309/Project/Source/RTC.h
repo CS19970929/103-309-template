@@ -64,6 +64,8 @@ extern volatile bool is_rtc_wakekup;
 UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
 void RTC_WKTimeConfig(void);
+void RTC_DisableStopWakeup(void);
+void RTC_RestoreRunInterrupts(void);
 void Init_RTC(void);
 void App_RTC(void);
 

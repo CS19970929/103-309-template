@@ -328,6 +328,14 @@ static void RTC_ClearAlarmPending(void)
 	EXTI_ClearITPendingBit(EXTI_Line17);
 }
 
+static void RTC_DisableSecondInterrupt(void)
+{
+	RTC_ITConfig(RTC_IT_SEC, DISABLE);
+	RTC_WaitForLastTaskSafe();
+	RTC_ClearITPendingBit(RTC_IT_SEC);
+	RTC_WaitForLastTaskSafe();
+}
+
 void RTC_TimeConfig(void)
 {
 	// GregorianDay(tm);			//计算星期
@@ -422,6 +430,7 @@ void RTC_WKTimeConfig(void)
 	UINT32 wake_seconds;
 
 	PWR_BackupAccessCmd(ENABLE); // 后备域解锁
+	RTC_DisableSecondInterrupt();
 	RTC_ITConfig(RTC_IT_ALR, DISABLE);
 	RTC_WaitForLastTaskSafe();
 	RTC_ClearAlarmPending();
@@ -430,6 +439,28 @@ void RTC_WKTimeConfig(void)
 	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
 	RTC_WaitForLastTaskSafe();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE); // 打开闹钟中断
+	RTC_WaitForLastTaskSafe();
+}
+
+void RTC_DisableStopWakeup(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+	RTC_ITConfig(RTC_IT_ALR, DISABLE);
+	RTC_WaitForLastTaskSafe();
+	RTC_ClearAlarmPending();
+}
+
+void RTC_RestoreRunInterrupts(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+	RTC_ITConfig(RTC_IT_ALR, DISABLE);
+	RTC_WaitForLastTaskSafe();
+	RTC_ClearAlarmPending();
+	RTC_ClearITPendingBit(RTC_IT_SEC);
+	RTC_WaitForLastTaskSafe();
+	RTC_ITConfig(RTC_IT_SEC, ENABLE);
 	RTC_WaitForLastTaskSafe();
 }
 

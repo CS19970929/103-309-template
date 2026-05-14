@@ -9,6 +9,56 @@ Time_T sys_time = {
     .power_on = false,
 };
 
+static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger, FunctionalState cmd)
+{
+    EXTI_InitTypeDef EXTI_InitStruct;
+
+    EXTI_InitStruct.EXTI_Line = line;
+    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStruct.EXTI_Trigger = trigger;
+    EXTI_InitStruct.EXTI_LineCmd = cmd;
+    EXTI_Init(&EXTI_InitStruct);
+}
+
+void LowPower_ClearWakeupPending(void)
+{
+    EXTI_ClearITPendingBit(EXTI_Line0);
+    EXTI_ClearITPendingBit(EXTI_Line9);
+    EXTI_ClearITPendingBit(EXTI_Line12);
+    EXTI_ClearITPendingBit(EXTI_Line13);
+
+#if defined(UART1_WAKEUP_ENABLE)
+    EXTI_ClearITPendingBit(EXTI_Line7);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+    EXTI_ClearITPendingBit(EXTI_Line3);
+#endif
+
+    NVIC_ClearPendingIRQ(EXTI0_IRQn);
+    NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
+    NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
+#if defined(UART2_WAKEUP_ENABLE)
+    NVIC_ClearPendingIRQ(EXTI3_IRQn);
+#endif
+}
+
+void LowPower_DisableWakeupExti(void)
+{
+    LowPower_ConfigWakeupExti(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line9, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
+
+#if defined(UART1_WAKEUP_ENABLE)
+    LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+    LowPower_ConfigWakeupExti(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
+#endif
+
+    LowPower_ClearWakeupPending();
+}
+
 void InitIO_rtc(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -557,6 +607,7 @@ void Sys_StopMode(void)
     TIM_Cmd(TIM3, DISABLE);
     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
+    LowPower_ClearWakeupPending();
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();
@@ -577,6 +628,7 @@ void InitRunAfterStopWakeup(void)
     is_wakeup = true;
 
     InitDelay();
+    RTC_RestoreRunInterrupts();
     // InitIO();
     InitIO_rtc();
 
