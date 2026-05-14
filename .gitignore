@@ -41,3 +41,6 @@ Users/CommomSH367309_16series_103RCT6_C.uvoptx
 build/
 dist/
 *.spec
+
+# Local workflow and monitor logs
+logs/
