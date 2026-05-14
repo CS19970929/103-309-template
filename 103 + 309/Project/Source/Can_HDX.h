@@ -101,6 +101,32 @@ struct CAN_ERROR_SNAPSHOT {
 
 extern volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 
+enum CAN_SLEEP_BLOCK_REASON {
+	CAN_SLEEP_BLOCK_NONE = 0,
+	CAN_SLEEP_BLOCK_POWER_STATE,
+	CAN_SLEEP_BLOCK_TRACKED_MAILBOX,
+	CAN_SLEEP_BLOCK_HW_MAILBOX
+};
+
+struct CAN_LOW_POWER_STATUS {
+	UINT8 u8PowerState;
+	UINT8 u8SleepBlockReason;
+	UINT8 u8BusActive;
+	UINT8 u8NoAckCnt;
+	UINT8 u8RtcForceActiveCycles;
+	UINT8 u8RtcServiceActive;
+	UINT8 u8ProbeActive;
+	UINT8 u8TxMailbox;
+	UINT16 u16PendingMask;
+	UINT16 u16RtcWakeServiceCnt;
+	UINT16 u16RtcWakeTxWindowCnt;
+	UINT16 u16PrepareSleepCnt;
+	UINT32 u32LogicalTick;
+	UINT32 u32LastRtcElapsedSeconds;
+};
+
+extern volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
+
 
 union MDLREPORTFAULT_REG {
     UINT16 all;
@@ -196,7 +222,10 @@ void App_Can(void);
 void App_CanTest(void);
 UINT8 Can_IsBusy(void);
 UINT8 Can_IsSleepBlocked(void);
+UINT8 Can_GetSleepBlockReason(void);
 void Can_PrepareSleep(void);
+void Can_BeginRtcSleepSession(void);
+void Can_EndRtcSleepSession(void);
 UINT8 Can_IsBusActive(void);
 UINT32 Can_GetIdleRtcPeriodSeconds(void);
 void Can_RtcWakeService(UINT32 elapsed_seconds);

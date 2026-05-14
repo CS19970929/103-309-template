@@ -1,7 +1,7 @@
 #ifndef __RTC_SLEEP__
 #define __RTC_SLEEP__
 
-// #include "stm32f0xx_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��
+// #include "stm32f0xx_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��?
 enum irqWakeup
 {
   uart1_irq = 1,
@@ -56,6 +56,29 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 extern bool is_wakeup;
 
 extern UINT16 gu8_WakeUp_Type;
+
+enum LOW_POWER_RTC_BLOCK_REASON {
+  LOW_POWER_RTC_BLOCK_NONE = 0,
+  LOW_POWER_RTC_BLOCK_CURRENT,
+  LOW_POWER_RTC_BLOCK_HEAT,
+  LOW_POWER_RTC_BLOCK_MCU_WAKE,
+  LOW_POWER_RTC_BLOCK_FACTORY_AGING,
+  LOW_POWER_RTC_BLOCK_EXT_COMM,
+  LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE
+};
+
+struct LOW_POWER_RTC_STATUS {
+  UINT8 u8BlockReason;
+  UINT8 u8CanBlockReason;
+  UINT8 u8SleepModeSelect;
+  UINT8 u8StateSleep;
+  UINT8 u8RtcWakeFlag;
+  UINT16 u16EnterRtcDelay;
+  UINT16 u16EnterRtcTarget;
+  UINT32 u32RtcElapsedSeconds;
+};
+
+extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 
 void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);
