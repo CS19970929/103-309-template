@@ -419,6 +419,11 @@
               <FilePath>..\Source\FactoryAging.c</FilePath>
             </File>
             <File>
+              <FileName>LowPowerSleep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LowPowerSleep.c</FilePath>
+            </File>
+            <File>
               <FileName>Heat_Cool.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Heat_Cool.c</FilePath>
@@ -1344,6 +1349,11 @@
               <FileName>FactoryAging.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\FactoryAging.c</FilePath>
+            </File>
+            <File>
+              <FileName>LowPowerSleep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
               <FileName>Heat_Cool.c</FileName>

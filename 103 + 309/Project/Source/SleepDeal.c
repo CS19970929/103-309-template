@@ -1,4 +1,5 @@
 #include "main.h"
+#include "LowPowerSleep.h"
 
 volatile union SLEEP_MODE Sleep_Mode; // 用于外部控制进入休眠标志�?
 enum SLEEP_STATUS Sleep_Status = SLEEP_HICCUP_SHIFT;
@@ -84,10 +85,7 @@ void SleepDeal_Continue(void)
 	UINT8 u8FlashWriteOK_flag = 0;
 	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
 
-	Can_PrepareSleep();
-	SOC_SaveSnapshotBeforeSleep();
-	FactoryAging_SaveProgressBeforeSleep();
-	LedBar_SaveSleepSoc();
+	LowPowerSleep_SaveResetState();
 
 	if (Sleep_Mode.bits.b1TestSleep)
 	{

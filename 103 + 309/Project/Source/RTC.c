@@ -18,6 +18,12 @@ UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
 
+static void RTC_EnableBackupAccess(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+}
+
 static UINT8 RTC_WaitForLastTaskSafe(void)
 {
 	UINT32 timeout = RTC_WAIT_TIMEOUT;
@@ -336,6 +342,21 @@ static void RTC_DisableSecondInterrupt(void)
 	RTC_WaitForLastTaskSafe();
 }
 
+static void RTC_DisableAlarmInterrupt(void)
+{
+	RTC_ITConfig(RTC_IT_ALR, DISABLE);
+	RTC_WaitForLastTaskSafe();
+	RTC_ClearAlarmPending();
+}
+
+static void RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
+{
+	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
+	RTC_WaitForLastTaskSafe();
+	RTC_ITConfig(RTC_IT_ALR, ENABLE);
+	RTC_WaitForLastTaskSafe();
+}
+
 void RTC_TimeConfig(void)
 {
 	// GregorianDay(tm);			//计算星期
@@ -429,35 +450,24 @@ void RTC_WKTimeConfig(void)
 {
 	UINT32 wake_seconds;
 
-	PWR_BackupAccessCmd(ENABLE); // 后备域解锁
+	RTC_EnableBackupAccess();
 	RTC_DisableSecondInterrupt();
-	RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	RTC_WaitForLastTaskSafe();
-	RTC_ClearAlarmPending();
+	RTC_DisableAlarmInterrupt();
 	wake_seconds = RTC_GetWakeupPeriodSeconds();
 	s_u32RtcLastWakeupPeriodSeconds = wake_seconds;
-	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
-	RTC_WaitForLastTaskSafe();
-	RTC_ITConfig(RTC_IT_ALR, ENABLE); // 打开闹钟中断
-	RTC_WaitForLastTaskSafe();
+	RTC_EnableAlarmAfterSeconds(wake_seconds);
 }
 
 void RTC_DisableStopWakeup(void)
 {
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-	PWR_BackupAccessCmd(ENABLE);
-	RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	RTC_WaitForLastTaskSafe();
-	RTC_ClearAlarmPending();
+	RTC_EnableBackupAccess();
+	RTC_DisableAlarmInterrupt();
 }
 
 void RTC_RestoreRunInterrupts(void)
 {
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-	PWR_BackupAccessCmd(ENABLE);
-	RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	RTC_WaitForLastTaskSafe();
-	RTC_ClearAlarmPending();
+	RTC_EnableBackupAccess();
+	RTC_DisableAlarmInterrupt();
 	RTC_ClearITPendingBit(RTC_IT_SEC);
 	RTC_WaitForLastTaskSafe();
 	RTC_ITConfig(RTC_IT_SEC, ENABLE);
@@ -469,8 +479,7 @@ void Init_RTC(void)
 	UINT8 need_full_init;
 	UINT8 clock_status;
 
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-	PWR_BackupAccessCmd(ENABLE);
+	RTC_EnableBackupAccess();
 
 	need_full_init = (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA) ? 1U : 0U;
 	clock_status = RTC_ClockConfig(need_full_init); // RTC时钟配置

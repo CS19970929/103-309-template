@@ -1,4 +1,5 @@
 #include "main.h"
+#include "LowPowerSleep.h"
 
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
@@ -768,9 +769,7 @@ static void rtc_sleep_prepare_rtc(void)
         s_u32RtcSleepElapsedSeconds = 0U;
     }
 
-    Can_PrepareSleep();
-	SOC_SaveSnapshotBeforeSleep();
-	FactoryAging_SaveProgressBeforeSleep();
+    LowPowerSleep_SaveCoreState();
 	before_rtcsleep();
 
     Init_RTC();
