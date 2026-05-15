@@ -1,20 +1,17 @@
 #include "main.h"
 
-volatile union Can_Status Can_Status_Flag;
-volatile union CanTxType_Status CanTxType_Flag;
-CanTxMsg TxMessage;
-CanRxMsg RxMessage;
 volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
+static UINT8 s_u8CanBusOff = 0U;
 
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
 #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
 
 #define FEIDAO_CAN_POWER_STABLE_TICKS ((UINT32)10U)     /* 100ms for transceiver wake */
-#define FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS ((UINT32)20U)  /* 200ms backstop after RTC wake */
+#define FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS ((UINT32)20U)  /* 200ms TX wait timeout */
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TICKS_PER_SECOND ((UINT32)100U)
@@ -34,20 +31,6 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
 #define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
 #define FEIDAO_CAN_ABORT_WAIT_LOOP ((UINT16)1000U)
-#define FEIDAO_CAN_HOST_MAGIC0 ((UINT8)0xA5U)
-#define FEIDAO_CAN_HOST_MAGIC1 ((UINT8)0x5AU)
-#define FEIDAO_CAN_HOST_ACK_MAGIC0 ((UINT8)0x5AU)
-#define FEIDAO_CAN_HOST_ACK_MAGIC1 ((UINT8)0xA5U)
-#define FEIDAO_CAN_HOST_CMD_GET_STATUS ((UINT8)0x01U)
-#define FEIDAO_CAN_HOST_CMD_ENTER_IAP ((UINT8)0x02U)
-#define FEIDAO_CAN_HOST_STATUS_OK ((UINT8)0x00U)
-#define FEIDAO_CAN_HOST_STATUS_CRC_ERROR ((UINT8)0x01U)
-#define FEIDAO_CAN_HOST_STATUS_CMD_INVALID ((UINT8)0x02U)
-#define FEIDAO_CAN_HOST_STATUS_KEY_INVALID ((UINT8)0x03U)
-#define FEIDAO_CAN_HOST_STATUS_FLASH_ERROR ((UINT8)0x04U)
-#define FEIDAO_CAN_HOST_IAP_KEY0 ((UINT8)0xC3U)
-#define FEIDAO_CAN_HOST_IAP_KEY1 ((UINT8)0x3CU)
-#define FEIDAO_CAN_HOST_IAP_RESET_DELAY_TICKS ((UINT16)20U)
 
 enum FEIDAO_CAN_POWER_STATE
 {
@@ -74,8 +57,6 @@ typedef struct
 	UINT8 probe_active;
 	UINT8 tx_cycle_acked;
 	UINT8 tx_cycle_no_ack_recorded;
-	UINT8 host_iap_reset_pending;
-	UINT16 host_iap_reset_delay_ticks;
 	UINT32 last_rtc_elapsed_seconds;
 	UINT16 rtc_wake_service_cnt;
 	UINT16 prepare_sleep_cnt;
@@ -102,10 +83,7 @@ static FeidaoCanRuntime s_feidao_can_runtime =
 	0U,
 	0U,
 	0U,
-	0U,
-	0U,
 };
-
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #endif
@@ -126,13 +104,11 @@ FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #define s_u8FeidaoCanProbeActive (s_feidao_can_runtime.probe_active)
 #define s_u8FeidaoCanTxCycleAcked (s_feidao_can_runtime.tx_cycle_acked)
 #define s_u8FeidaoCanTxCycleNoAckRecorded (s_feidao_can_runtime.tx_cycle_no_ack_recorded)
-#define s_u8FeidaoCanHostIapResetPending (s_feidao_can_runtime.host_iap_reset_pending)
-#define s_u16FeidaoCanHostIapResetDelayTicks (s_feidao_can_runtime.host_iap_reset_delay_ticks)
 #define s_u32FeidaoCanLastRtcElapsedSeconds (s_feidao_can_runtime.last_rtc_elapsed_seconds)
 #define s_u16FeidaoCanRtcWakeServiceCnt (s_feidao_can_runtime.rtc_wake_service_cnt)
 #define s_u16FeidaoCanPrepareSleepCnt (s_feidao_can_runtime.prepare_sleep_cnt)
-UINT8 CAN_Tx_Data(CanTxMsg *Msg);
-void Can_BusOFF_Monitor(void);
+static UINT8 CAN_Tx_Data(CanTxMsg *Msg);
+static void Can_BusOFF_Monitor(void);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
 static UINT32 feidao_can_update_logical_tick(UINT32 hw_tick);
@@ -170,11 +146,6 @@ static void feidao_can_begin_rtc_wake_service(UINT32 elapsed_seconds);
 static void feidao_can_queue_rtc_wake_frames(UINT8 was_bus_active, UINT32 elapsed_seconds);
 static void feidao_can_finish_rtc_wake_service(UINT8 was_bus_active);
 static void feidao_can_run_10ms_tasks(void);
-static void feidao_can_host_put_crc(CanTxMsg *msg);
-static UINT8 feidao_can_host_is_crc_valid(const CanRxMsg *msg);
-static void feidao_can_host_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1);
-static void feidao_can_host_process_cmd(const CanRxMsg *msg);
-static void feidao_can_host_service_iap_reset(void);
 static void feidao_put_u16_be(uint8_t *data, uint8_t offset, uint16_t value)
 {
 	data[offset] = (uint8_t)((value >> 8) & 0xFF);
@@ -194,7 +165,7 @@ static void feidao_put_i32_be(uint8_t *data, uint8_t offset, int32_t value)
 	feidao_put_u32_be(data, offset, (uint32_t)value);
 }
 
-UINT8 CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t length)
+static UINT8 CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t length)
 {
 	CanTxMsg tx_msg;
 
@@ -220,7 +191,7 @@ UINT8 CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t leng
 	return CAN_Tx_Data(&tx_msg);
 }
 
-UINT8 feidao_send_volage_current_1000ms(void)
+static UINT8 feidao_send_voltage_current_1000ms(void)
 {
 	uint8_t data[8] = {0};
 	int32_t current;
@@ -236,7 +207,7 @@ UINT8 feidao_send_volage_current_1000ms(void)
 	return CAN_Battery_SendData_feidao(0, data, 8);
 }
 
-UINT8 feidao_send_cap_5000ms(void)
+static UINT8 feidao_send_cap_5000ms(void)
 {
 	uint8_t data[8] = {0};
 	// uint32_t cap = g_stCellInfoReport.SocElement.u16CapacityNow / 100 * 1000 * (3.6 * SNum);
@@ -250,7 +221,7 @@ UINT8 feidao_send_cap_5000ms(void)
 	return CAN_Battery_SendData_feidao(1, data, 8);
 }
 
-UINT8 feidao_send_soc_1000ms(void)
+static UINT8 feidao_send_soc_1000ms(void)
 {
 	uint8_t data[8] = {0};
 	uint8_t chg_status, soc;
@@ -284,7 +255,7 @@ UINT8 feidao_send_soc_1000ms(void)
 	return CAN_Battery_SendData_feidao(2, data, 8);
 }
 
-UINT8 feidao_send_soh_5000ms(void)
+static UINT8 feidao_send_soh_5000ms(void)
 {
 	uint8_t data[8] = {0};
 	uint8_t soh = g_stCellInfoReport.SocElement.u16Soh;
@@ -295,7 +266,7 @@ UINT8 feidao_send_soh_5000ms(void)
 	return CAN_Battery_SendData_feidao(3, data, 8);
 }
 
-UINT8 feidao_send_version_5000ms(void)
+static UINT8 feidao_send_version_5000ms(void)
 {
 	uint8_t data[8] = {0};
 	uint8_t pro_version = 1;
@@ -306,7 +277,7 @@ UINT8 feidao_send_version_5000ms(void)
 	return CAN_Battery_SendData_feidao(4, data, 8);
 }
 
-UINT8 feidao_send_status_5000ms(void)
+static UINT8 feidao_send_status_5000ms(void)
 {
 	uint8_t data[8] = {0};
 	uint8_t work_status = 0;
@@ -360,7 +331,7 @@ UINT8 feidao_send_status_5000ms(void)
 	return CAN_Battery_SendData_feidao(5, data, 8);
 }
 
-UINT8 feidao_send_factory_time_5000ms(void)
+static UINT8 feidao_send_factory_time_5000ms(void)
 {
 	uint8_t data[8] = {0};
 
@@ -714,7 +685,7 @@ static UINT8 feidao_can_start_next_frame(void)
 	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS)
 	{
 		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS);
-		return feidao_send_volage_current_1000ms();
+		return feidao_send_voltage_current_1000ms();
 	}
 	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_SOC_1000MS)
 	{
@@ -906,48 +877,7 @@ static UINT8 feidao_can_service_until_idle(UINT32 timeout_ticks)
 	return Can_IsBusy() ? 0U : 1U;
 }
 
-void CAN_TX_Test(void)
-{
-	UINT8 TXCounter = 0, TXStatus = 0;
-	UINT8 u8MailBoxUsed;
-	TxMessage.StdId = CANID_TX_Test; // 标准标识符
-	TxMessage.ExtId = 0;			 // 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;		 // 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;	 // 为数据帧
-	TxMessage.DLC = 8;				 // 消息的数据长度为8个字节
-	TxMessage.Data[0] = 1;			 // 数据
-	TxMessage.Data[1] = 2;
-	TxMessage.Data[2] = 3;
-	TxMessage.Data[3] = 4;
-	TxMessage.Data[4] = 5;
-	TxMessage.Data[5] = 6;
-	TxMessage.Data[6] = 7;
-	TxMessage.Data[7] = 8;
-
-	/*
-	while((CAN_TxStatus_Ok!=CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage)))&&(++i<0xFFF));		//发送数据
-	if(i >= 0xFF) {
-		ERROR_UserCallback(CAN_ERROR);
-	}
-	*/
-	u8MailBoxUsed = CAN_Transmit(CAN1, &TxMessage);
-	// CAN_Transmit已集成Can发送流程代码，非常方便
-	// 这个++i和硬件的BusOFF是不冲突的，这个可以是在等邮箱空的次数，CAN_TxStatus_Pending和BusOFF分开
-	do
-	{
-		// 出现Can错误的原因就是这句话！连续执行导致连续mailbox0是满的！CAN_Transmit()地方都放错了！
-		// TXStatus = CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage));
-		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
-		TXCounter++;
-	} while ((TXStatus != CAN_TxStatus_Ok) && (TXCounter < 0xFF)); // Fail和OK不用管
-
-	if (TXCounter >= 0xFF)
-	{
-		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
-	}
-}
-
-UINT8 CAN_Tx_Data(CanTxMsg *Msg)
+static UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 {
 	UINT8 u8MailBoxUsed;
 
@@ -966,666 +896,7 @@ UINT8 CAN_Tx_Data(CanTxMsg *Msg)
 	return u8MailBoxUsed;
 }
 
-static void feidao_can_host_put_crc(CanTxMsg *msg)
-{
-	UINT16 crc;
-
-	crc = Sci_CRC16RTU(msg->Data, 6);
-	msg->Data[6] = (UINT8)((crc >> 8) & 0xFF);
-	msg->Data[7] = (UINT8)(crc & 0xFF);
-}
-
-static UINT8 feidao_can_host_is_crc_valid(const CanRxMsg *msg)
-{
-	UINT16 crc_expect;
-	UINT16 crc_actual;
-
-	if (msg->DLC != 8U)
-	{
-		return 0U;
-	}
-
-	crc_expect = (UINT16)(((UINT16)msg->Data[6] << 8) | msg->Data[7]);
-	crc_actual = Sci_CRC16RTU((UINT8 *)msg->Data, 6);
-	return (crc_expect == crc_actual) ? 1U : 0U;
-}
-
-static void feidao_can_host_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1)
-{
-	CanTxMsg ack_msg;
-
-	ack_msg.StdId = CANID_HOST_ACK;
-	ack_msg.ExtId = 0U;
-	ack_msg.IDE = CAN_ID_STD;
-	ack_msg.RTR = CAN_RTR_DATA;
-	ack_msg.DLC = 8U;
-	ack_msg.Data[0] = FEIDAO_CAN_HOST_ACK_MAGIC0;
-	ack_msg.Data[1] = FEIDAO_CAN_HOST_ACK_MAGIC1;
-	ack_msg.Data[2] = cmd;
-	ack_msg.Data[3] = status;
-	ack_msg.Data[4] = value0;
-	ack_msg.Data[5] = value1;
-	feidao_can_host_put_crc(&ack_msg);
-	(void)CAN_Tx_Data(&ack_msg);
-}
-
-static void feidao_can_host_process_cmd(const CanRxMsg *msg)
-{
-	UINT8 cmd;
-
-	cmd = msg->Data[2];
-	if ((msg->DLC != 8U) ||
-		(msg->Data[0] != FEIDAO_CAN_HOST_MAGIC0) ||
-		(msg->Data[1] != FEIDAO_CAN_HOST_MAGIC1))
-	{
-		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CMD_INVALID, 0U, 0U);
-		return;
-	}
-
-	if (!feidao_can_host_is_crc_valid(msg))
-	{
-		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CRC_ERROR, 0U, 0U);
-		return;
-	}
-
-	switch (cmd)
-	{
-	case FEIDAO_CAN_HOST_CMD_GET_STATUS:
-		feidao_can_host_send_ack(cmd,
-							 FEIDAO_CAN_HOST_STATUS_OK,
-							 (UINT8)g_stCellInfoReport.SocElement.u16Soc,
-							 (UINT8)g_stCellInfoReport.SocElement.u16Soh);
-		break;
-
-	case FEIDAO_CAN_HOST_CMD_ENTER_IAP:
-		if ((msg->Data[3] != FEIDAO_CAN_HOST_IAP_KEY0) ||
-			(msg->Data[4] != FEIDAO_CAN_HOST_IAP_KEY1) ||
-			(msg->Data[5] != (UINT8)CAN_ADRESS_STD_ID))
-		{
-			feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_KEY_INVALID, 0U, 0U);
-			break;
-		}
-
-		if (FLASH_COMPLETE != FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE))
-		{
-			feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_FLASH_ERROR, 0U, 0U);
-			break;
-		}
-
-		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_OK, 0x08U, 0x48U);
-		s_u8FeidaoCanHostIapResetPending = 1U;
-		s_u16FeidaoCanHostIapResetDelayTicks = FEIDAO_CAN_HOST_IAP_RESET_DELAY_TICKS;
-		break;
-
-	default:
-		feidao_can_host_send_ack(cmd, FEIDAO_CAN_HOST_STATUS_CMD_INVALID, 0U, 0U);
-		break;
-	}
-}
-
-static void feidao_can_host_service_iap_reset(void)
-{
-	if (0U == s_u8FeidaoCanHostIapResetPending)
-	{
-		return;
-	}
-
-	if (!g_st_SysTimeFlag.bits.b1Sys10msFlag)
-	{
-		return;
-	}
-
-	if (s_u16FeidaoCanHostIapResetDelayTicks > 0U)
-	{
-		s_u16FeidaoCanHostIapResetDelayTicks--;
-		return;
-	}
-
-	s_u8FeidaoCanHostIapResetPending = 0U;
-	u8FlashUpdateFlag = 1U;
-}
-
-void CAN_TX_0x00(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x00; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCellTotle; // 总压，10mV
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	if (g_stCellInfoReport.u16IDischg > 0)
-	{													 // 总电流，符号型，充电为正，放电为负
-		u16_tmp16a = g_stCellInfoReport.u16IDischg * 10; // 10mA
-		u16_tmp16a = (0x7FFF - u16_tmp16a + 1) | 0x8000;
-	}
-	else
-	{
-		u16_tmp16a = g_stCellInfoReport.u16Ichg * 10; // 电池总电流
-	}
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.SocElement.u16CapacityNow; // 剩余容量10mAh
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x01(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x01; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.SocElement.u16CapacityFull; // 满电容量10mAh
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.SocElement.u16Cycle_times; // 循环次数
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.SocElement.u16Soc;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x02(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x02; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16BalanceFlag1;
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16BalanceFlag2;
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.unMdlFault_Third.all;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x03(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x03; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	switch (OPEN)
-	{
-	case 0:
-		u16_tmp16a = ((~((UINT16)(SystemStatus.all & 0x000003FF))) & 0x00FE) | (((UINT16)(SystemStatus.all & 0x000003FF)) & 0xFF01);
-		break;
-	case 1:
-		u16_tmp16a = (UINT16)(SystemStatus.all & 0x000003FF);
-		break;
-	default:
-		u16_tmp16a = (UINT16)(SystemStatus.all & 0x000003FF);
-		break;
-	}
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0x1234; // 生产日期
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0x1234; // 软件版本
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x04(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x04; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	TxMessage.Data[0] = SeriesNum; // 电池串数
-	TxMessage.Data[1] = System_ErrFlag.u8ErrFlag_CBC_DSG > 0 ? 1 : 0;
-
-	u16_tmp16a = g_stCellInfoReport.u16TempMax;
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16TempMin;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x05(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x05; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.SocElement.u16Soh;
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0;
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x06(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x06; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = 0;
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0;
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x07(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x07; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[0];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[1];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[2];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x08(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x08; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[3];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[4];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[5];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x09(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x09; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[6];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[7];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[8];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0A(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0A; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[9];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[10];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[11];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0B(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0B; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[12];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[13];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[14];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0C(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0C; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[15];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[16];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[17];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0D(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0D; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[18];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[19];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[20];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0E(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0E; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[21];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[22];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[23];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x0F(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x0F; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[24];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[25];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[26];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x10(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x10; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[27];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[28];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[29];
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void CAN_TX_0x11(void)
-{
-	UINT16 u16_tmp16a;
-
-	TxMessage.StdId = CANID_CHECK_0x11; // 标准标识符
-	TxMessage.ExtId = 0;				// 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;			// 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;		// 为数据帧
-	TxMessage.DLC = 8;					// 消息的数据长度为8个字节
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[30];
-	TxMessage.Data[0] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[1] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = g_stCellInfoReport.u16VCell[31];
-	TxMessage.Data[2] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[3] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = 0;
-	TxMessage.Data[4] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[5] = (UINT8)(u16_tmp16a & 0xFF);
-
-	u16_tmp16a = Sci_CRC16RTU(TxMessage.Data, 6);
-	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
-	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
-
-	CAN_Tx_Data(&TxMessage);
-}
-
-void InitCan_GPIO(void)
+static void InitCan_GPIO(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 复用功能和GPIO端口时钟使能
@@ -1650,7 +921,7 @@ void InitCan_GPIO(void)
 	// GPIO_PinRemapConfig(GPIO_Remap2_CAN1, ENABLE);	 	//14:13位  //0：映射到PA11，PA12(默认)//1: 不用。
 }
 
-void InitCan_NVIC(void)
+static void InitCan_NVIC(void)
 {
 	NVIC_InitTypeDef NVIC_InitStructure;
 
@@ -1669,7 +940,7 @@ void InitCan_NVIC(void)
 	NVIC_Init(&NVIC_InitStructure);
 }
 
-void InitCan_Filter(void)
+static void InitCan_Filter(void)
 {
 	UINT16 u16CAN_FilterIdHigh;
 	UINT16 u16CAN_FilterIdLow;
@@ -1708,7 +979,7 @@ void InitCan_Filter(void)
 	CAN_FilterInit(&CAN_FilterInitStructure);								// 按上面的参数初始化过滤器
 }
 
-void InitCan_CAN1(void)
+static void InitCan_CAN1(void)
 {
 	CAN_InitTypeDef CAN_InitStructure;
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE); // CAN1 模块时钟使能
@@ -1742,301 +1013,81 @@ void InitCan_CAN1(void)
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // 使能FIFO0消息挂号中断
 }
 
-void Can_BusOFF_FaultTimeCtrl(void)
+static void Can_BusOFF_FaultTimeCtrl(void)
 {
-	if (TRUE == Can_Status_Flag.bits.b1Can_BusOFF)
+	if (s_u8CanBusOff != 0U)
 	{
-		g_u16BusOff_InitTestCnt++; // BUSOFF计时
+		g_u16BusOff_InitTestCnt++;
 	}
-	if ((FALSE == (CAN1->ESR & CAN_ESR_BOFF)) && (FALSE == Can_Status_Flag.bits.b1Can_BusOFF))
+	if (((CAN1->ESR & CAN_ESR_BOFF) == 0U) && (s_u8CanBusOff == 0U))
 	{
-		g_u16BusOff_RecoverCnt++; // BUSOFF清除计时
+		g_u16BusOff_RecoverCnt++;
 	}
 }
 
-void Can_BusOFF_FaultChk(void)
+static void Can_BusOFF_FaultChk(void)
 {
-	static UINT8 s_u8FlagBusOff = 0;
-	if (FALSE == Can_Status_Flag.bits.b1Can_BusOFF)
+	if ((s_u8CanBusOff == 0U) && ((CAN1->ESR & CAN_ESR_BOFF) != 0U))
 	{
-		if (CAN1->ESR & CAN_ESR_BOFF)
-		{											  // 检测到BusOff，总线进入离线状态，找不到相关函数，自己写
-			feidao_can_update_error_snapshot();
-			feidao_can_inc_u16(&g_stCanErrorSnapshot.u16BusOffCnt);
-			Can_Status_Flag.bits.b1Can_BusOFF = TRUE; // 找到了 --> CAN_GetFlagStatus(CAN1, CAN_FLAG_BOF)==SET
-			CAN1->MCR |= CAN_MCR_INRQ;				  // 置位，从正常模式转为初始化模式(一旦当前的CAN活动(发送或接收)结束，CAN就进入初始化模式)
-			s_u8FlagBusOff = 1;
-			g_u16BusOff_RecoverCnt = 0; // 时序计算初始化
-			g_u16BusOff_InitTestCnt = 0;
-			System_ERROR_UserCallback(ERROR_CAN);
-		}
-	}
-
-	if (1 == s_u8FlagBusOff)
-	{ // 下一轮过来置回环模式
-		s_u8FlagBusOff = 0;
-		// CAN1->BTR =	(UINT32)CAN_Mode_LoopBack<<30;    	//请求环回模式，不需要静默回环模式，收到需要发ACK到总线上。
-		// 真的需要改为回环模式吗，打个问号？软件INRQ位处理可在初始化模式和正常模式切换
+		feidao_can_update_error_snapshot();
+		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16BusOffCnt);
+		s_u8CanBusOff = 1U;
+		CAN1->MCR |= CAN_MCR_INRQ;
+		g_u16BusOff_RecoverCnt = 0U;
+		g_u16BusOff_InitTestCnt = 0U;
+		System_ERROR_UserCallback(ERROR_CAN);
 	}
 }
 
-void Can_BusOFF_Recover(void)
+static void Can_BusOFF_Recover(void)
 {
-	UINT16 u16BusOFF_InitCycleT;
-	static UINT8 s_u8BusOFF_InitCnt = 0;
-	if (TRUE == Can_Status_Flag.bits.b1Can_BusOFF)
+	UINT16 recover_cycle;
+	static UINT8 s_u8BusOffRecoverStep = 0U;
+
+	if (s_u8CanBusOff != 0U)
 	{
-		if (s_u8BusOFF_InitCnt < 10)
-		{											 // 快恢复计时10次
-			u16BusOFF_InitCycleT = DELAYB10MS_100MS; // 快恢复计时10次100ms
-		}
-		else
+		recover_cycle = (s_u8BusOffRecoverStep < 10U) ? DELAYB10MS_100MS : DELAYB10MS_1S;
+		if (g_u16BusOff_InitTestCnt >= recover_cycle)
 		{
-			s_u8BusOFF_InitCnt = 10;
-			u16BusOFF_InitCycleT = DELAYB10MS_1S; // 1s周期
-		}
-
-		if (g_u16BusOff_InitTestCnt >= u16BusOFF_InitCycleT)
-		{ // 周期初始化CAN，前10次为100ms，后面为1s
-			s_u8BusOFF_InitCnt++;
-			g_u16BusOff_InitTestCnt = 0;
-			Can_Status_Flag.bits.b1Can_BusOFF_TestSd = 1; // 时间到尝试发送Test报文
-			Can_Status_Flag.bits.b1Can_BusOFF = FALSE;
-			// CAN1->BTR =	(UINT32)CAN_Mode_Normal<<30;		//请求正常模式
-			CAN1->MCR &= ~CAN_MCR_INRQ; // 复位，从初始化模式转为正常模式(当CAN在接收引脚检测到连续的11个隐性位后，CAN就达到同步)
+			if (s_u8BusOffRecoverStep < 10U)
+			{
+				s_u8BusOffRecoverStep++;
+			}
+			g_u16BusOff_InitTestCnt = 0U;
+			s_u8CanBusOff = 0U;
+			CAN1->MCR &= ~CAN_MCR_INRQ;
 		}
 	}
 
 	if (g_u16BusOff_RecoverCnt > DELAYB10MS_500MS)
-	{ // 5S内未检测到BusOFF标志，则表示与外部通信恢复正常
+	{
 		g_u16BusOff_RecoverCnt = DELAYB10MS_500MS;
-		s_u8BusOFF_InitCnt = 0;
+		s_u8BusOffRecoverStep = 0U;
 	}
 }
 
-void Can_BusOFF_Monitor(void)
+static void Can_BusOFF_Monitor(void)
 {
 	Can_BusOFF_FaultChk();
 	Can_BusOFF_FaultTimeCtrl();
 	Can_BusOFF_Recover();
 }
 
-void Can_ReceiveDeal(void)
-{
-	if (!Can_Status_Flag.bits.b1Can_Received)
-	{
-		return;
-	}
-
-	if (RxMessage.IDE != CAN_ID_STD)
-	{
-		Can_Status_Flag.bits.b1Can_Received = 0;
-		return;
-	}
-
-	// ID已经过滤掉，不需要再判断ID是否为本机
-	if ((RxMessage.StdId >> 7) != CAN_ADRESS_STD_ID)
-	{
-		Can_Status_Flag.bits.b1Can_Received = 0;
-		return;
-	}
-
-	RTC_ExtComCnt++;
-
-	switch (RxMessage.StdId & 0x007F)
-	{ // 按照逻辑，是这个函数处理接受数据，然后处理数据，然后赋值标志位返回才对
-	case CANID_CHECK_0x00:
-		CanTxType_Flag.bits.b1CanTx_0x00 = 1;
-		break;
-	case CANID_CHECK_0x01:
-		CanTxType_Flag.bits.b1CanTx_0x01 = 1;
-		break;
-	case CANID_CHECK_0x02:
-		CanTxType_Flag.bits.b1CanTx_0x02 = 1;
-		break;
-	case CANID_CHECK_0x03:
-		CanTxType_Flag.bits.b1CanTx_0x03 = 1;
-		break;
-	case CANID_CHECK_0x04:
-		CanTxType_Flag.bits.b1CanTx_0x04 = 1;
-		break;
-	case CANID_CHECK_0x05:
-		CanTxType_Flag.bits.b1CanTx_0x05 = 1;
-		break;
-	case CANID_CHECK_0x06:
-		CanTxType_Flag.bits.b1CanTx_0x06 = 1;
-		break;
-	case CANID_CHECK_0x07:
-		CanTxType_Flag.bits.b1CanTx_0x07 = 1;
-		break;
-	case CANID_CHECK_0x08:
-		CanTxType_Flag.bits.b1CanTx_0x08 = 1;
-		break;
-	case CANID_CHECK_0x09:
-		CanTxType_Flag.bits.b1CanTx_0x09 = 1;
-		break;
-	case CANID_CHECK_0x0A:
-		CanTxType_Flag.bits.b1CanTx_0x0A = 1;
-		break;
-	case CANID_CHECK_0x0B:
-		CanTxType_Flag.bits.b1CanTx_0x0B = 1;
-		break;
-	case CANID_CHECK_0x0C:
-		CanTxType_Flag.bits.b1CanTx_0x0C = 1;
-		break;
-	case CANID_CHECK_0x0D:
-		CanTxType_Flag.bits.b1CanTx_0x0D = 1;
-		break;
-	case CANID_CHECK_0x0E:
-		CanTxType_Flag.bits.b1CanTx_0x0E = 1;
-		break;
-	case CANID_CHECK_0x0F:
-		CanTxType_Flag.bits.b1CanTx_0x0F = 1;
-		break;
-	case CANID_CHECK_0x10:
-		CanTxType_Flag.bits.b1CanTx_0x10 = 1;
-		break;
-	case CANID_CHECK_0x11:
-		CanTxType_Flag.bits.b1CanTx_0x11 = 1;
-		break;
-	case CANID_HOST_CMD:
-		feidao_can_host_process_cmd(&RxMessage);
-		break;
-
-	default:
-		break;
-	}
-
-	Can_Status_Flag.bits.b1Can_Received = 0;
-}
-
-void Can_TransmitDeal(void)
-{
-	if (CanTxType_Flag.all)
-	{
-		RTC_ExtComCnt++;
-	}
-
-	if (CanTxType_Flag.bits.b1CanTx_0x00)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x00 = 0;
-		CAN_TX_0x00();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x01)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x01 = 0;
-		CAN_TX_0x01();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x02)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x02 = 0;
-		CAN_TX_0x02();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x03)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x03 = 0;
-		CAN_TX_0x03();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x04)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x04 = 0;
-		CAN_TX_0x04();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x05)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x05 = 0;
-		CAN_TX_0x05();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x06)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x06 = 0;
-		CAN_TX_0x06();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x07)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x07 = 0;
-		CAN_TX_0x07();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x08)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x08 = 0;
-		CAN_TX_0x08();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x09)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x09 = 0;
-		CAN_TX_0x09();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0A)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0A = 0;
-		CAN_TX_0x0A();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0B)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0B = 0;
-		CAN_TX_0x0B();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0C)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0C = 0;
-		CAN_TX_0x0C();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0D)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0D = 0;
-		CAN_TX_0x0D();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0E)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0E = 0;
-		CAN_TX_0x0E();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0F)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0F = 0;
-		CAN_TX_0x0F();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x10)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x10 = 0;
-		CAN_TX_0x10();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x11)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x11 = 0;
-		CAN_TX_0x11();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_Test)
-	{
-		CanTxType_Flag.bits.b1CanTx_Test = 0;
-		CAN_TX_Test();
-	}
-}
-
 void InitCan(void)
 {
-#if 0
-	Can_Status_Flag.all = 0;
-	CanTxType_Flag.all = 0;
-	InitCan_GPIO();
-	InitCan_NVIC();
-	InitCan_Filter();
-	InitCan_CAN1();			//目前是回环模式，要改回普通模式,Test
-#endif
-	Can_Status_Flag.all = 0;
-	CanTxType_Flag.all = 0;
+	s_u8CanBusOff = 0U;
 	s_u16FeidaoCanPendingMask = 0U;
 	s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
 	s_u8FeidaoCanPowerState = FEIDAO_CAN_POWER_IDLE;
 	InitCan_GPIO();
 	InitCan_NVIC();
-	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
-	InitCan_Filter(); // 这个调到后面，RX也可以了
+	InitCan_CAN1();
+	InitCan_Filter();
 	feidao_can_power_off();
 	feidao_can_invalidate_hw_tick();
 	feidao_can_update_low_power_status();
 }
+
 UINT8 Can_IsBusy(void)
 {
 	if (s_u8FeidaoCanPowerState != FEIDAO_CAN_POWER_IDLE)
@@ -2092,33 +1143,20 @@ void Can_RtcWakeService(UINT32 elapsed_seconds)
 	feidao_can_finish_rtc_wake_service(was_bus_active);
 }
 
-// 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
 	UINT32 now_tick = feidao_can_update_logical_tick(SysTime_Get10msTickCount());
 
 	feidao_can_run_10ms_tasks();
-
-	Can_ReceiveDeal();
-	Can_TransmitDeal();
 	feidao_can_send(now_tick);
-	feidao_can_host_service_iap_reset();
 	feidao_can_update_low_power_status();
 }
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	sys_time.can_rcv_cnt++;
-	// CanRxMsg RxMessage;
-	RxMessage.StdId = 0x00;
-	RxMessage.ExtId = 0x00;
-	RxMessage.IDE = 0;
-	RxMessage.DLC = 0;
-	RxMessage.FMI = 0;
-	RxMessage.Data[0] = 0x00;
-	RxMessage.Data[1] = 0x00;
+	CanRxMsg rx_msg;
 
-	CAN_Receive(CAN1, CAN_FIFO0, &RxMessage); // 接收FIFO0中的数据
+	sys_time.can_rcv_cnt++;
+	CAN_Receive(CAN1, CAN_FIFO0, &rx_msg);
 	feidao_can_mark_bus_active();
-	Can_Status_Flag.bits.b1Can_Received = 1;
 }

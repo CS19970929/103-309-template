@@ -2,33 +2,6 @@
 #define CAN_HDX_H
 
 
-//·¢ËÍID
-#define CANID_TX_Test      	((UINT32)0x001)
-
-#define CANID_CHECK_0x00   ((UINT16)0x00)
-#define CANID_CHECK_0x01   ((UINT16)0x01)
-#define CANID_CHECK_0x02   ((UINT16)0x02)
-#define CANID_CHECK_0x03   ((UINT16)0x03)
-#define CANID_CHECK_0x04   ((UINT16)0x04)
-#define CANID_CHECK_0x05   ((UINT16)0x05)
-#define CANID_CHECK_0x06   ((UINT16)0x06)
-#define CANID_CHECK_0x07   ((UINT16)0x07)
-#define CANID_CHECK_0x08   ((UINT16)0x08)
-#define CANID_CHECK_0x09   ((UINT16)0x09)
-#define CANID_CHECK_0x0A   ((UINT16)0x0A)
-#define CANID_CHECK_0x0B   ((UINT16)0x0B)
-#define CANID_CHECK_0x0C   ((UINT16)0x0C)
-#define CANID_CHECK_0x0D   ((UINT16)0x0D)
-#define CANID_CHECK_0x0E   ((UINT16)0x0E)
-#define CANID_CHECK_0x0F   ((UINT16)0x0F)
-#define CANID_CHECK_0x10   ((UINT16)0x10)
-#define CANID_CHECK_0x11   ((UINT16)0x11)
-
-#define CANID_HOST_CMD    ((UINT16)0x60)
-#define CANID_HOST_ACK    ((UINT16)0x61)
-
-
-
 #define CAN_ADRESS_STD_ID				0x00
 #define CANID_RX_COMMON_MSG_FILTER   	((UINT16)0x0000|((UINT16)CAN_ADRESS_STD_ID<<7))
 //#define CANID_RX_COMMON_MSG_FILTER   	((UINT16)0x0000)
@@ -37,52 +10,6 @@
 #define CANID_RX_COMMON_MSG_MASK      	((UINT16)0x0780)
 
 
-union CanTxType_Status {
-    UINT32   all;
-    struct CanTxType_StatusBit {
-	    UINT8 b1CanTx_Test     	:1;
-		UINT8 b1CanTx_0x00		:1;
-		UINT8 b1CanTx_0x01		:1;
-    	UINT8 b1CanTx_0x02		:1;
-		
-        UINT8 b1CanTx_0x03     	:1;
-        UINT8 b1CanTx_0x04     	:1;
-        UINT8 b1CanTx_0x05     	:1;
-        UINT8 b1CanTx_0x06     	:1;
-		
-        UINT8 b1CanTx_0x07     	:1;
-        UINT8 b1CanTx_0x08    	:1;
-        UINT8 b1CanTx_0x09    	:1;
-        UINT8 b1CanTx_0x0A    	:1;
-		
-        UINT8 b1CanTx_0x0B    	:1;
-        UINT8 b1CanTx_0x0C     	:1;
-        UINT8 b1CanTx_0x0D    	:1;
-        UINT8 b1CanTx_0x0E    	:1;
-
-        UINT8 b1CanTx_0x0F    	:1;
-        UINT8 b1CanTx_0x10     	:1;
-        UINT8 b1CanTx_0x11    	:1;
-        UINT8 b1CanTx_0x12    	:1;
-		
-        UINT8 b1CanTx_Res1      :4;
-		UINT8 b1CanTx_Res2      :8;
-     }bits;	
-};
-
-
-union Can_Status {
-    UINT8   all;
-    struct Can_StatusBit {
-		UINT8 b1Can_BusOFF			:1;
-		UINT8 b1Can_Received 		:1;
-		UINT8 b1Can_Send            :1;
-		UINT8 b1Can_Fault           :1;
-
-		UINT8 b1Can_BusOFF_TestSd	:1;
-		UINT8 b1Rcved				:3;
-     }bits;
-};
 
 struct CAN_ERROR_SNAPSHOT {
 	UINT8 u8LastErrorCode;
@@ -208,7 +135,6 @@ union MOS_RELAY_REG {
 
 void InitCan(void);
 void App_Can(void);
-void App_CanTest(void);
 UINT8 Can_IsBusy(void);
 void Can_PrepareSleep(void);
 UINT8 Can_IsBusActive(void);
