@@ -26,6 +26,7 @@ static UINT8 low_power_get_rtc_block_reason(void);
 static bool low_power_is_mcu_wake_active(void);
 static void low_power_delay_rtc(UINT8 reason);
 static void low_power_cancel_rtc(UINT8 reason);
+static UINT8 low_power_is_idle_rtc_request(void);
 static void low_power_set_rtc_block_reason(UINT8 reason);
 static void low_power_update_rtc_status(void);
 
@@ -92,11 +93,17 @@ static void low_power_delay_rtc(UINT8 reason)
 static void low_power_cancel_rtc(UINT8 reason)
 {
     low_power_delay_rtc(reason);
-    if ((g_sleepModeSelect != NO_SLEEP) || (state_sleep != 0U) || (Sleep_Mode.bits.b1_ToSleepFlag != 0U))
+    if (low_power_is_idle_rtc_request() != 0U)
     {
         LowPower_Request(NO_SLEEP);
         low_power_update_rtc_status();
     }
+}
+
+static UINT8 low_power_is_idle_rtc_request(void)
+{
+    return (UINT8)((g_sleepModeSelect == HICCUP_MODE) ||
+                   (Sleep_Mode.bits.b1ForceToSleep_L1 != 0U));
 }
 
 static void low_power_update_rtc_status(void)

@@ -1203,8 +1203,7 @@ void APP_LedBar(void)
     LedBar_ServiceChargeFilter(charge_raw_active);
     discharge_mos_open = LedBar_IsDischargeMosOpen();
 
-    if ((s_ledbar_charge_active != 0u) ||
-        (discharge_mos_open != 0u))
+    if (discharge_mos_open != 0u)
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
     }
