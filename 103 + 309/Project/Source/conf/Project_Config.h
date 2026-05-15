@@ -368,7 +368,7 @@
 
 // <o> 充电接入滤波，100ms tick <0-255>
 // <i> 充电插入有效滤波时间，单位 100ms。
-#define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 1
+#define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 3
 
 // <o> 充电断开滤波，100ms tick <0-255>
 // <i> 充电拔出无效滤波时间，单位 100ms。
