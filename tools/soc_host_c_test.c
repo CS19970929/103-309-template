@@ -387,7 +387,7 @@ static void test_low_voltage_tail_reaches_zero(void)
 	CHECK_EQ_U32(host_internal_soc(), 0U);
 }
 
-static void test_short_rest_ocv_defers_until_active_charge(void)
+static void test_short_rest_ocv_ignores_upward_target_during_charge(void)
 {
 	UINT16 active_charge_a10 = host_charge_a10_over_self();
 	UINT16 before_active;
@@ -401,7 +401,7 @@ static void test_short_rest_ocv_defers_until_active_charge(void)
 	before_active = host_internal_soc();
 	CHECK_TRUE(before_active <= 50U);
 	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
-	CHECK_TRUE(host_internal_soc() > before_active);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 }
 
 static void test_short_rest_ocv_defers_until_active_discharge(void)
@@ -418,7 +418,7 @@ static void test_short_rest_ocv_defers_until_active_discharge(void)
 	CHECK_TRUE(host_internal_soc() < before_discharge);
 }
 
-static void test_rtc_ocv_uses_stable_target_and_active_charge(void)
+static void test_rtc_ocv_ignores_upward_stable_target(void)
 {
 	UINT32 seconds;
 	UINT16 active_charge_a10 = host_charge_a10_over_self();
@@ -438,18 +438,16 @@ static void test_rtc_ocv_uses_stable_target_and_active_charge(void)
 	before_active = host_internal_soc();
 	CHECK_TRUE(before_active <= 50U);
 	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
-	CHECK_TRUE(host_internal_soc() > before_active);
+	CHECK_TRUE(host_internal_soc() <= 50U);
 }
 
 static void test_rtc_ocv_waits_for_voltage_convergence(void)
 {
 	UINT32 seconds;
 	UINT16 vcell;
-	UINT16 active_charge_a10 = host_charge_a10_over_self();
-	UINT16 before_active;
 
 	host_reset_state();
-	host_set_snapshot(50U, 0U);
+	host_set_snapshot(80U, 0U);
 	host_init_with_voltage(3835U, 3835U);
 
 	for (seconds = 60U; seconds <= 600U; seconds += 60U)
@@ -457,19 +455,16 @@ static void test_rtc_ocv_waits_for_voltage_convergence(void)
 		vcell = (((seconds / 60U) & 1U) == 0U) ? 3770U : 3835U;
 		SOC_ApplyRtcRelaxationCompensation(seconds, vcell, vcell);
 	}
-	CHECK_TRUE(host_internal_soc() <= 50U);
+	CHECK_TRUE(host_internal_soc() <= 80U);
 
 	for (seconds = 660U; seconds < 1260U; seconds += 60U)
 	{
 		SOC_ApplyRtcRelaxationCompensation(seconds, 3835U, 3835U);
 	}
-	CHECK_TRUE(host_internal_soc() <= 50U);
+	CHECK_TRUE(host_internal_soc() <= 80U);
 
 	SOC_ApplyRtcRelaxationCompensation(1260U, 3835U, 3835U);
-	before_active = host_internal_soc();
-	CHECK_TRUE(before_active <= 50U);
-	host_run_seconds(600U, 3835U, 3835U, active_charge_a10, 0U);
-	CHECK_TRUE(host_internal_soc() > before_active);
+	CHECK_TRUE(host_internal_soc() <= 80U);
 }
 
 static void test_unstable_long_rest_waits_for_voltage_convergence(void)
@@ -568,9 +563,9 @@ int main(void)
 	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
-	test_short_rest_ocv_defers_until_active_charge();
+	test_short_rest_ocv_ignores_upward_target_during_charge();
 	test_short_rest_ocv_defers_until_active_discharge();
-	test_rtc_ocv_uses_stable_target_and_active_charge();
+	test_rtc_ocv_ignores_upward_stable_target();
 	test_rtc_ocv_waits_for_voltage_convergence();
 	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();

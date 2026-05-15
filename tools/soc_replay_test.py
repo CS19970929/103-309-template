@@ -294,7 +294,7 @@ class SocModel:
         self.long_rest_down_ticks = 0
 
     def set_deferred_ocv_target(self, target):
-        if target == self.soc:
+        if target >= self.soc:
             self.clear_deferred_ocv()
             return
         if not self.deferred_ocv_valid or self.deferred_ocv_target != target:
@@ -466,7 +466,7 @@ class SocModel:
         if self.deferred_ocv_target == self.soc:
             self.clear_deferred_ocv()
             return False
-        if ((self.deferred_ocv_target > self.soc and direction != MODE_CHG) or
+        if (self.deferred_ocv_target > self.soc or
                 (self.deferred_ocv_target < self.soc and direction != MODE_DSG)):
             self.clear_deferred_ocv()
             return False
@@ -499,7 +499,10 @@ class SocModel:
     def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX, fault=False):
         if rest_seconds < SHORT_REST_MIN_SECONDS:
             return False
-        return self.apply_ocv_step(vmax, vmin, direction=direction, fault=fault)
+        target = interp_soc(vmin)
+        if target >= self.soc:
+            return False
+        return self.apply_ocv_target_step(target, vmax, vmin, direction=direction, fault=fault)
 
     def reset_rest_confidence(self):
         self.rest_ticks = 0
@@ -958,25 +961,25 @@ def test_empty_anchor_limits_low_voltage_tail():
 
 
 def test_rtc_rest_ocv_applies_small_bounded_step():
-    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS - 1, vmax=3835, vmin=3835)
     changed = model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835)
     assert changed
-    assert model.soc == 51
+    assert model.soc == 79
     model.update_display()
-    assert model.display_soc == 50
+    assert model.display_soc == 80
     for _ in range(5 * TICKS_PER_SECOND - 1):
         model.update_display()
-    assert model.display_soc == 51
+    assert model.display_soc == 79
 
 
 def test_ocv_correction_fault_blocking_follows_config_and_direction_errors():
-    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
-    assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, direction=MODE_DSG)
-    assert model.soc == 50
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
+    assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, direction=MODE_CHG)
+    assert model.soc == 80
     changed = model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, fault=True)
     assert changed == (not BLOCK_CALIBRATION_PROTECTION_FAULT)
-    assert model.soc == (51 if not BLOCK_CALIBRATION_PROTECTION_FAULT else 50)
+    assert model.soc == (79 if not BLOCK_CALIBRATION_PROTECTION_FAULT else 80)
 
 
 def test_display_smoothing_charge_and_low_voltage_down():
@@ -1052,9 +1055,9 @@ def test_auto_calibration_never_steps_more_than_one_percent():
     run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
     assert model.soc == 99
 
-    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     assert model.apply_rest_ocv(21600, vmax=3835, vmin=3835)
-    assert model.soc == 51
+    assert model.soc == 79
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2950, vmin=2950)
@@ -1086,21 +1089,22 @@ def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
 
 
 def test_short_stable_rest_latches_ocv_without_immediate_soc_change():
-    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     run_seconds(model, SHORT_REST_STEP_SECONDS - 1, vmax=3835, vmin=3835)
-    assert model.soc == 50
+    assert model.soc == 80
     run_seconds(model, 1, vmax=3835, vmin=3835)
-    assert model.soc == 50
+    assert model.soc == 80
     assert model.deferred_ocv_valid
     assert model.deferred_ocv_target == 70
 
 
-def test_deferred_rest_ocv_upward_gap_is_consumed_during_charge():
+def test_deferred_rest_ocv_upward_gap_is_ignored_during_charge():
     model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
     run_seconds(model, SHORT_REST_STEP_SECONDS, vmax=3835, vmin=3835)
     assert model.soc == 50
+    assert not model.deferred_ocv_valid
     run_seconds(model, SHORT_REST_STEP_SECONDS, ichg=CURRENT_ENTER_A10, vmax=3835, vmin=3835)
-    assert model.soc == 51
+    assert model.soc == 50
 
 
 def test_deferred_rest_ocv_downward_gap_is_consumed_during_discharge():
@@ -1120,16 +1124,16 @@ def test_unstable_short_rest_does_not_ocv_calibrate():
 
 
 def test_unstable_long_rest_waits_for_voltage_convergence():
-    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     for index in range(9):
         vcell = 3835 if (index % 2) == 0 else 3770
         run_seconds(model, 200, vmax=vcell, vmin=vcell)
-    assert model.soc == 50
+    assert model.soc == 80
 
     run_seconds(model, 399, vmax=3835, vmin=3835)
-    assert model.soc == 50
+    assert model.soc == 80
     run_seconds(model, 2, vmax=3835, vmin=3835)
-    assert model.soc == 50
+    assert model.soc == 80
     assert model.deferred_ocv_valid
     assert model.deferred_ocv_target == 70
 
@@ -1365,7 +1369,7 @@ def main():
         test_auto_calibration_never_steps_more_than_one_percent,
         test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail,
         test_short_stable_rest_latches_ocv_without_immediate_soc_change,
-        test_deferred_rest_ocv_upward_gap_is_consumed_during_charge,
+        test_deferred_rest_ocv_upward_gap_is_ignored_during_charge,
         test_deferred_rest_ocv_downward_gap_is_consumed_during_discharge,
         test_unstable_short_rest_does_not_ocv_calibrate,
         test_unstable_long_rest_waits_for_voltage_convergence,

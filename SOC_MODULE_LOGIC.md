@@ -32,7 +32,7 @@
 3. 自动校正每次最多移动 `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT`，当前为 `1%`。
 4. 充电积分不能直接到 `100%`，必须通过满电电压确认后逐步锚定。
 5. 低压和中低压修正只会向下限制明显高估 SOC，不会把 SOC 向上拉高。
-6. 静置/RTC OCV 先生成 deferred target，不立即跳变；后续方向匹配的充/放电或久置低 OCV 才小步消化。
+6. 静置/RTC OCV 只接受低于当前 SOC 的 deferred target，不允许向上校准；后续放电阶段或久置低 OCV 才小步下修。
 7. 大电流压降会进入 sag/rebound holdoff，阻止把未回弹端电压当作真实 OCV。
 8. SOC 快照使用内部 Flash V2 journal，并兼容旧 V1 快照。
 9. 量产默认关闭 SOC 注入测试入口，`0xD300 supported=0` 是正常结果。
@@ -109,7 +109,7 @@
 | 校准最大压差 | `1000mV` | 通用电压校准门控 |
 | 中低压/静置最大压差 | `200mV` | 更严格的弱约束门控 |
 | 静置稳定波动 | `30mV` | `VCellMin/VCellMax` 相对参考值 |
-| 静置 OCV 配置时间 | `60s` | `PROJECT_CFG_SOC_REST_OCV_SECONDS`，当前不等于 OCV 立即生效时间 |
+| 静置 OCV 配置时间 | `30min` | `PROJECT_CFG_SOC_REST_OCV_SECONDS`，达到后才允许久置低 OCV 慢速下修 |
 | 静置 OCV 最小稳定 | `5min` | `SOC_SHORT_REST_MIN_SECONDS` |
 | OCV 目标刷新节拍 | `10min` | `SOC_SHORT_REST_STEP_SECONDS` |
 | 久置低 OCV 下修节拍 | `30min/1%` | `SOC_LONG_REST_DOWN_STEP_SECONDS` |
@@ -195,7 +195,7 @@ I_bat_A10 = round(I_bat_mA / 100)
 | `rest_ticks/stable_rest_ticks/short_rest_ticks` | 静置可信和 OCV 目标刷新计数 |
 | `long_rest_down_ticks` | 久置低 OCV 慢速下修计数 |
 | `sag_hold_ticks` | 大电流压降/重启回弹保护计数 |
-| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 静置/RTC 生成的待消化 OCV 目标 |
+| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 静置/RTC 生成的待下修 OCV 目标；目标高于或等于当前 SOC 时直接忽略 |
 | `rest_ref_vmin/rest_ref_vmax` | 静置稳定性参考电压 |
 | `snapshot_flags` | 需要持久化的状态标志，当前 bit0 为 rebound hold |
 | `full_anchor` | 是否已经通过满电锚定到 100% |

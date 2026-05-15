@@ -148,11 +148,13 @@ static void soc_watch_set_tail_state(UINT8 low_active, const SOC_TAIL_STEP *low_
 static void soc_watch_set_rest_voltage_stable(UINT8 stable);
 static void soc_watch_refresh(UINT8 force_display);
 #else
-#define soc_watch_set_block_reason(reason) ((void)0)
-#define soc_watch_set_calib_source(source, before, after) ((void)0)
-#define soc_watch_set_tail_state(low_active, low_step, mid_active, mid_step) ((void)0)
-#define soc_watch_set_rest_voltage_stable(stable) ((void)0)
-#define soc_watch_refresh(force_display) ((void)0)
+#define soc_watch_set_block_reason(reason) ((void)(reason))
+#define soc_watch_set_calib_source(source, before, after) \
+	((void)(source), (void)(before), (void)(after))
+#define soc_watch_set_tail_state(low_active, low_step, mid_active, mid_step) \
+	((void)(low_active), (void)(low_step), (void)(mid_active), (void)(mid_step))
+#define soc_watch_set_rest_voltage_stable(stable) ((void)(stable))
+#define soc_watch_refresh(force_display) ((void)(force_display))
 #endif
 
 static UINT8 soc_sag_hold_blocks_calibration(void);
@@ -679,7 +681,7 @@ static void soc_clear_deferred_ocv(void)
 
 static void soc_set_deferred_ocv_target(UINT8 target)
 {
-	if (target == s_soc.soc)
+	if (target >= s_soc.soc)
 	{
 		soc_clear_deferred_ocv();
 		return;
@@ -810,11 +812,18 @@ static UINT8 soc_apply_board_self_consumption_seconds(UINT32 seconds)
 
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 {
+	UINT8 target;
+
 	if ((rest_seconds < SOC_SHORT_REST_MIN_SECONDS) || !soc_calibration_allowed())
 	{
 		return 0U;
 	}
-	return soc_apply_ocv_target_step(soc_ocv_percent(), mode);
+	target = soc_ocv_percent();
+	if (target >= s_soc.soc)
+	{
+		return 0U;
+	}
+	return soc_apply_ocv_target_step(target, mode);
 }
 
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode)
@@ -850,7 +859,7 @@ static UINT8 soc_apply_deferred_ocv_step(UINT8 mode)
 		soc_clear_deferred_ocv();
 		return 0U;
 	}
-	if (((s_soc.deferred_ocv_target > s_soc.soc) && (mode != SOC_MODE_CHG)) ||
+	if ((s_soc.deferred_ocv_target > s_soc.soc) ||
 		((s_soc.deferred_ocv_target < s_soc.soc) && (mode != SOC_MODE_DSG)))
 	{
 		soc_clear_deferred_ocv();
