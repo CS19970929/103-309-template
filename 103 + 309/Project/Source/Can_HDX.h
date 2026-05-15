@@ -135,6 +135,7 @@ union MOS_RELAY_REG {
 
 void InitCan(void);
 void App_Can(void);
+UINT8 Can_HDX_Transmit(CanTxMsg *Msg);
 UINT8 Can_IsBusy(void);
 void Can_PrepareSleep(void);
 UINT8 Can_IsBusActive(void);

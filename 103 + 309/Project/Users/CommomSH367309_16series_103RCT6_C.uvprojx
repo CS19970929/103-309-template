@@ -489,6 +489,11 @@
               <FilePath>..\Source\Can_HDX.c</FilePath>
             </File>
             <File>
+              <FileName>CanFeidaoFrames.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
+            </File>
+            <File>
               <FileName>ChargerLoadFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ChargerLoadFunc.c</FilePath>
@@ -1419,6 +1424,11 @@
               <FileName>Can_HDX.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Can_HDX.c</FilePath>
+            </File>
+            <File>
+              <FileName>CanFeidaoFrames.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
               <FileName>ChargerLoadFunc.c</FileName>

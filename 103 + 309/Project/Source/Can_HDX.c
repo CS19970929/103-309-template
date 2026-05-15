@@ -1,4 +1,5 @@
 #include "main.h"
+#include "CanFeidaoFrames.h"
 
 volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
@@ -19,14 +20,7 @@ static UINT8 s_u8CanBusOff = 0U;
 #define FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS ((UINT32)10U)
 #define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
 #define FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT ((UINT8)6U)
-#define FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS ((UINT16)0x0001U)
-#define FEIDAO_CAN_MSG_SOC_1000MS ((UINT16)0x0002U)
-#define FEIDAO_CAN_MSG_CAP_5000MS ((UINT16)0x0004U)
-#define FEIDAO_CAN_MSG_SOH_5000MS ((UINT16)0x0008U)
-#define FEIDAO_CAN_MSG_VERSION_5000MS ((UINT16)0x0010U)
-#define FEIDAO_CAN_MSG_STATUS_5000MS ((UINT16)0x0020U)
-#define FEIDAO_CAN_MSG_FACTORY_TIME_5000MS ((UINT16)0x0040U)
-#define FEIDAO_CAN_RTC_PROBE_MSG_MASK (FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS | FEIDAO_CAN_MSG_SOC_1000MS)
+
 #define FEIDAO_CAN_TXMAILBOX_0 ((UINT8)0U)
 #define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
 #define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
@@ -107,7 +101,6 @@ FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #define s_u32FeidaoCanLastRtcElapsedSeconds (s_feidao_can_runtime.last_rtc_elapsed_seconds)
 #define s_u16FeidaoCanRtcWakeServiceCnt (s_feidao_can_runtime.rtc_wake_service_cnt)
 #define s_u16FeidaoCanPrepareSleepCnt (s_feidao_can_runtime.prepare_sleep_cnt)
-static UINT8 CAN_Tx_Data(CanTxMsg *Msg);
 static void Can_BusOFF_Monitor(void);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
@@ -136,7 +129,6 @@ static void feidao_can_record_tx_timeout(void);
 static void feidao_can_record_tx_no_mailbox(void);
 static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox);
 static void feidao_can_cancel_tx(UINT8 mailbox);
-static UINT8 feidao_can_start_next_frame(void);
 static void feidao_can_start_next_tx_or_power_off(UINT32 now_tick);
 static void feidao_can_schedule_period_frames(UINT32 now_tick);
 static void feidao_can_send(UINT32 now_tick);
@@ -146,203 +138,6 @@ static void feidao_can_begin_rtc_wake_service(UINT32 elapsed_seconds);
 static void feidao_can_queue_rtc_wake_frames(UINT8 was_bus_active, UINT32 elapsed_seconds);
 static void feidao_can_finish_rtc_wake_service(UINT8 was_bus_active);
 static void feidao_can_run_10ms_tasks(void);
-static void feidao_put_u16_be(uint8_t *data, uint8_t offset, uint16_t value)
-{
-	data[offset] = (uint8_t)((value >> 8) & 0xFF);
-	data[offset + 1] = (uint8_t)(value & 0xFF);
-}
-
-static void feidao_put_u32_be(uint8_t *data, uint8_t offset, uint32_t value)
-{
-	data[offset] = (uint8_t)((value >> 24) & 0xFF);
-	data[offset + 1] = (uint8_t)((value >> 16) & 0xFF);
-	data[offset + 2] = (uint8_t)((value >> 8) & 0xFF);
-	data[offset + 3] = (uint8_t)(value & 0xFF);
-}
-
-static void feidao_put_i32_be(uint8_t *data, uint8_t offset, int32_t value)
-{
-	feidao_put_u32_be(data, offset, (uint32_t)value);
-}
-
-static UINT8 CAN_Battery_SendData_feidao(uint8_t chd_index, uint8_t *data, uint8_t length)
-{
-	CanTxMsg tx_msg;
-
-	/* 设置CAN ID (扩展帧) */
-	tx_msg.StdId = 0;
-	tx_msg.RTR = CAN_RTR_DATA; // 为数据帧
-	tx_msg.IDE = CAN_ID_EXT;
-	tx_msg.ExtId = 0x14F80200 | chd_index;
-	// tx_msg.ExtId = (BATTERY_CAN_ID << 24) | (BROADCAST_CAN_ID << 19) |
-	//   (0x00 << 16) | (index << 8) | chd_index;
-
-	/* 设置数据长度 */
-	tx_msg.DLC = length;
-
-	/* 设置数据 */
-	for (uint8_t i = 0; i < length; i++)
-	{
-		tx_msg.Data[i] = data[i];
-	}
-
-	/* 发送CAN消息 */
-	// CAN_Transmit(&tx_msg);
-	return CAN_Tx_Data(&tx_msg);
-}
-
-static UINT8 feidao_send_voltage_current_1000ms(void)
-{
-	uint8_t data[8] = {0};
-	int32_t current;
-	uint32_t voltage = (uint32_t)g_stCellInfoReport.u16VCellTotle * 10;
-	if (g_stCellInfoReport.u16IDischg > 0)
-		current = -(uint32_t)g_stCellInfoReport.u16IDischg * 100;
-	else
-		current = (uint32_t)g_stCellInfoReport.u16Ichg * 100;
-
-	// 实时电压（32位，MSB first）
-	feidao_put_u32_be(data, 0, voltage);
-	feidao_put_i32_be(data, 4, current);
-	return CAN_Battery_SendData_feidao(0, data, 8);
-}
-
-static UINT8 feidao_send_cap_5000ms(void)
-{
-	uint8_t data[8] = {0};
-	// uint32_t cap = g_stCellInfoReport.SocElement.u16CapacityNow / 100 * 1000 * (3.6 * SNum);
-	uint32_t real_cap = g_stCellInfoReport.SocElement.u16CapacityNow * 10 * g_stCellInfoReport.u16VCellTotle / 100;
-	uint32_t design_cap = g_stCellInfoReport.SocElement.u16CapacityFactory * 10 * (36 * SNum) / 10;
-	if (real_cap >= design_cap)
-		real_cap = design_cap;
-
-	feidao_put_u32_be(data, 0, real_cap);	// 实际容量，MSB first
-	feidao_put_u32_be(data, 4, design_cap); // 设计容量，MSB first
-	return CAN_Battery_SendData_feidao(1, data, 8);
-}
-
-static UINT8 feidao_send_soc_1000ms(void)
-{
-	uint8_t data[8] = {0};
-	uint8_t chg_status, soc;
-	int8_t temp;
-	uint8_t bat_type;
-	uint16_t time_chg = 100;
-	uint16_t res = 0;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
-		chg_status = 2;
-	else if (g_stCellInfoReport.u16Ichg)
-		chg_status = 1;
-	else
-		chg_status = 0;
-	soc = g_stCellInfoReport.SocElement.u16Soc;
-	// soc = 66;
-	// if(g_stCellInfoReport.u16TempMax < 400)
-	temp = (int8_t)((int16_t)g_stCellInfoReport.u16TempMax / 10 - 40);
-
-	data[0] = chg_status;
-	data[1] = soc;
-	data[2] = (uint8_t)temp;
-	feidao_put_u16_be(data, 3, time_chg); // 剩余充电时间，MSB first
-
-#if (BAT_TYPE == BAT_MASTER)
-	bat_type = 0x00;
-#elif (BAT_TYPE == BAT_SLAVE)
-	bat_type = 0x01;
-#endif // BAT_TYPE == BAT_MASTER
-	data[5] = bat_type;
-	feidao_put_u16_be(data, 6, res); // 保留字段，MSB first
-	return CAN_Battery_SendData_feidao(2, data, 8);
-}
-
-static UINT8 feidao_send_soh_5000ms(void)
-{
-	uint8_t data[8] = {0};
-	uint8_t soh = g_stCellInfoReport.SocElement.u16Soh;
-	uint16_t cycles = g_stCellInfoReport.SocElement.u16Cycle_times;
-
-	data[0] = soh;
-	feidao_put_u16_be(data, 1, cycles); // 循环次数，MSB first
-	return CAN_Battery_SendData_feidao(3, data, 8);
-}
-
-static UINT8 feidao_send_version_5000ms(void)
-{
-	uint8_t data[8] = {0};
-	uint8_t pro_version = 1;
-	uint16_t soft_version = 1;
-
-	data[0] = pro_version;
-	data[1] = soft_version;
-	return CAN_Battery_SendData_feidao(4, data, 8);
-}
-
-static UINT8 feidao_send_status_5000ms(void)
-{
-	uint8_t data[8] = {0};
-	uint8_t work_status = 0;
-	uint8_t exception_status = 0;
-	uint16_t cap_fac, cap_now, cap_design;
-	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_DSG << 0);
-	work_status |= work_status | (SystemStatus.bits.b1Status_MOS_CHG << 1);
-	if (g_stCellInfoReport.u16Ichg)
-	{
-		work_status |= work_status | (1 << 2);
-		//todo 
-		work_status |= work_status | (1 << 3);
-	}
-	if (g_stCellInfoReport.u16IDischg)
-		work_status |= work_status | (1 << 4);
-
-	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp << 0);
-	// exception_status |= exception_status | (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp << 1);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp) << 2);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp | g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) << 3);
-	// exception_status |= exception_status | ((g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp | g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp) << 4);
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
-		exception_status = 0x02;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
-		exception_status = 0x03;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
-		exception_status = 0x04;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
-		exception_status = 0x05;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
-		exception_status = 0x06;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
-		exception_status = 0x07;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
-		exception_status = 0x08;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
-		exception_status = 0x09;
-	if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
-		exception_status = 0x0C;
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1VcellDeltaBig)
-		exception_status = 0x0D;
-	cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
-	cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10;
-	cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10;
-
-	data[0] = work_status;
-	data[1] = exception_status;
-	feidao_put_u16_be(data, 2, cap_fac);	// 完全充电容量，MSB first
-	feidao_put_u16_be(data, 4, cap_now);	// 当前剩余容量，MSB first
-	feidao_put_u16_be(data, 6, cap_design); // 设计容量，MSB first
-	return CAN_Battery_SendData_feidao(5, data, 8);
-}
-
-static UINT8 feidao_send_factory_time_5000ms(void)
-{
-	uint8_t data[8] = {0};
-
-	feidao_put_u16_be(data, 0, g_stCellInfoReport.SocElement.u16CapacityFactory * 10);	
-	data[5] = FD_YEAR;
-	data[6] = FD_MONTH;
-	data[7] = FD_DAY;
-	
-	return CAN_Battery_SendData_feidao(8, data, 8);
-}
-
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks)
 {
 	return (((UINT32)(now_tick - start_tick)) >= wait_ticks) ? 1U : 0U;
@@ -532,7 +327,7 @@ static void feidao_can_anchor_schedule(UINT32 now_tick)
 
 static void feidao_can_start_idle_probe(void)
 {
-	s_u16FeidaoCanPendingMask = FEIDAO_CAN_RTC_PROBE_MSG_MASK;
+	s_u16FeidaoCanPendingMask = CAN_FEIDAO_RTC_PROBE_MSG_MASK;
 	s_u8FeidaoCanProbeActive = 1U;
 }
 
@@ -680,47 +475,6 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 	feidao_can_clear_tx_done(mailbox);
 }
 
-static UINT8 feidao_can_start_next_frame(void)
-{
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS);
-		return feidao_send_voltage_current_1000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_SOC_1000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_SOC_1000MS);
-		return feidao_send_soc_1000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_CAP_5000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_CAP_5000MS);
-		return feidao_send_cap_5000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_SOH_5000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_SOH_5000MS);
-		return feidao_send_soh_5000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_VERSION_5000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_VERSION_5000MS);
-		return feidao_send_version_5000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_STATUS_5000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_STATUS_5000MS);
-		return feidao_send_status_5000ms();
-	}
-	if (s_u16FeidaoCanPendingMask & FEIDAO_CAN_MSG_FACTORY_TIME_5000MS)
-	{
-		s_u16FeidaoCanPendingMask &= (UINT16)(~FEIDAO_CAN_MSG_FACTORY_TIME_5000MS);
-		return feidao_send_factory_time_5000ms();
-	}
-
-	return CAN_TxStatus_NoMailBox;
-}
-
 static void feidao_can_start_next_tx_or_power_off(UINT32 now_tick)
 {
 	if (0U == s_u16FeidaoCanPendingMask)
@@ -736,7 +490,7 @@ static void feidao_can_start_next_tx_or_power_off(UINT32 now_tick)
 		return;
 	}
 
-	s_u8FeidaoCanTxMailbox = feidao_can_start_next_frame();
+	s_u8FeidaoCanTxMailbox = CanFeidao_SendNextPending(&s_u16FeidaoCanPendingMask);
 	if (CAN_TxStatus_NoMailBox == s_u8FeidaoCanTxMailbox)
 	{
 		feidao_can_abort_all_tx();
@@ -762,7 +516,7 @@ static void feidao_can_schedule_period_frames(UINT32 now_tick)
 		if (feidao_can_tick_elapsed(now_tick, s_u32FeidaoCanLast1000msTick, FEIDAO_CAN_PERIOD_1000MS_TICKS))
 		{
 			s_u32FeidaoCanLast1000msTick = now_tick;
-			s_u16FeidaoCanPendingMask |= FEIDAO_CAN_RTC_PROBE_MSG_MASK;
+			s_u16FeidaoCanPendingMask |= CAN_FEIDAO_RTC_PROBE_MSG_MASK;
 			s_u8FeidaoCanProbeActive = 1U;
 		}
 		return;
@@ -771,17 +525,13 @@ static void feidao_can_schedule_period_frames(UINT32 now_tick)
 	if (feidao_can_tick_elapsed(now_tick, s_u32FeidaoCanLast1000msTick, FEIDAO_CAN_PERIOD_1000MS_TICKS))
 	{
 		s_u32FeidaoCanLast1000msTick = now_tick;
-		s_u16FeidaoCanPendingMask |= (FEIDAO_CAN_MSG_VOLTAGE_CURRENT_1000MS | FEIDAO_CAN_MSG_SOC_1000MS);
+		s_u16FeidaoCanPendingMask |= CAN_FEIDAO_1000MS_MSG_MASK;
 	}
 
 	if (feidao_can_tick_elapsed(now_tick, s_u32FeidaoCanLast5000msTick, FEIDAO_CAN_PERIOD_5000MS_TICKS))
 	{
 		s_u32FeidaoCanLast5000msTick = now_tick;
-		s_u16FeidaoCanPendingMask |= (FEIDAO_CAN_MSG_CAP_5000MS |
-									  FEIDAO_CAN_MSG_SOH_5000MS |
-									  FEIDAO_CAN_MSG_VERSION_5000MS |
-									  FEIDAO_CAN_MSG_STATUS_5000MS |
-									  FEIDAO_CAN_MSG_FACTORY_TIME_5000MS);
+		s_u16FeidaoCanPendingMask |= CAN_FEIDAO_5000MS_MSG_MASK;
 	}
 }
 
@@ -877,7 +627,7 @@ static UINT8 feidao_can_service_until_idle(UINT32 timeout_ticks)
 	return Can_IsBusy() ? 0U : 1U;
 }
 
-static UINT8 CAN_Tx_Data(CanTxMsg *Msg)
+UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
 {
 	UINT8 u8MailBoxUsed;
 
