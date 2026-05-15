@@ -414,6 +414,11 @@
               <FilePath>..\Source\Flash64KAppTest.c</FilePath>
             </File>
             <File>
+              <FileName>FactoryAging.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\FactoryAging.c</FilePath>
+            </File>
+            <File>
               <FileName>Heat_Cool.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Heat_Cool.c</FilePath>
@@ -437,6 +442,11 @@
               <FileName>RTC.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\RTC.c</FilePath>
+            </File>
+            <File>
+              <FileName>Runtime.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Runtime.c</FilePath>
             </File>
             <File>
               <FileName>Sci_Upper.c</FileName>
@@ -1331,6 +1341,11 @@
               <FilePath>..\Source\Flash64KAppTest.c</FilePath>
             </File>
             <File>
+              <FileName>FactoryAging.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\FactoryAging.c</FilePath>
+            </File>
+            <File>
               <FileName>Heat_Cool.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Heat_Cool.c</FilePath>
@@ -1354,6 +1369,11 @@
               <FileName>RTC.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\RTC.c</FilePath>
+            </File>
+            <File>
+              <FileName>Runtime.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Runtime.c</FilePath>
             </File>
             <File>
               <FileName>Sci_Upper.c</FileName>
