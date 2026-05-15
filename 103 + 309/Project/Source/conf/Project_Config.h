@@ -14,7 +14,7 @@
 //   <2=> 工厂/测试 Factory/Test
 // <i> 构建用途选择。量产必须使用 Release，SOC 注入测试必须使用 Factory/Test。
 #ifndef PROJECT_CFG_BUILD_PROFILE
-#define PROJECT_CFG_BUILD_PROFILE 1
+#define PROJECT_CFG_BUILD_PROFILE 0
 #endif
 // </h>
 
@@ -71,7 +71,7 @@
 // <h>功能开关
 // <q> 使能 IWDG 看门狗
 // <i> 使能独立看门狗。量产建议开启，防止程序跑飞后长期无响应。
-#define PROJECT_CFG_WDOG_ENABLE 0
+#define PROJECT_CFG_WDOG_ENABLE 1
 
 // <q> 使能 RTC 功能
 // <i> 使能 RTC。用于低功耗计时、休眠唤醒和 SOC 休眠修正。

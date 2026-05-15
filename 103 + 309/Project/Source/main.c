@@ -105,7 +105,6 @@ void InitDevice(void)
 	InitAFE1();
 	InitCan();
 	InitADC();
-	InitSci();
 
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();

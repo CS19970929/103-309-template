@@ -599,8 +599,8 @@ py -3.9 tools\soc_replay_test.py
 
 结果：
 
-- `SOC host C tests passed: 14`
-- `SOC replay tests passed: 43`
+- `SOC host C tests passed: 19`
+- `SOC replay tests passed: 47`
 
 真实 C 源码主机测试直接编译 `SOC.c` 和 `SocEnhance.c`，覆盖：
 
@@ -617,7 +617,7 @@ py -3.9 tools\soc_replay_test.py
 - 显示覆盖不污染内部 SOC。
 - 设置一次 SOC 保存快照。
 
-Python 回放矩阵覆盖 43 个场景，包括：
+Python 回放矩阵覆盖 47 个场景，包括：
 
 - 快照有效/无效恢复。
 - OCV 表单调性和 C 源码表一致性。

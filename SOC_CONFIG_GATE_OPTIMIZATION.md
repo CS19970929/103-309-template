@@ -1,6 +1,6 @@
 # SOC 配置门控接入与调试记录
 
-> 说明：本文记录的是配置门控接入当时的阶段性变更和验证结果。当前 SOC 完整回归入口仍以 `tools/run_soc_host_c_test.py`、`tools/soc_replay_test.py`、`tools/project_check.py` 为准，最新主机 C 测试覆盖 `14` 项，回放测试覆盖 `43` 项。
+> 说明：本文记录的是配置门控接入当时的阶段性变更和验证结果。当前 SOC 完整回归入口仍以 `tools/run_soc_host_c_test.py`、`tools/soc_replay_test.py`、`tools/project_check.py` 为准，最新主机 C 测试每档覆盖 `19` 项，回放测试覆盖 `47` 项。
 
 ## 背景
 

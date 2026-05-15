@@ -228,4 +228,4 @@ cap_full = cap_factory * SOH / 100
 5. 台架验证：覆盖启动、满电、低压、RTC、SOC 设置、断电恢复、异常采样、稳定静置、重载关机后快速重启。
 6. 上板验证：确认 CAN、RS485、LED 和内部 `g_stCellInfoReport.SocElement` 显示一致。
 
-无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前覆盖 `14` 个关键 C 源码路径；`tools/soc_replay_test.py` 当前覆盖 `43` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵、静置不稳定超过 30min 仍不校准、deferred OCV 充/放电消化、久置低 OCV 慢速下修和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。
+无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前每档覆盖 `19` 个关键 C 源码路径，并覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置；`tools/soc_replay_test.py` 当前覆盖 `47` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵、静置不稳定超过 30min 仍不校准、deferred OCV 充/放电消化、久置低 OCV 慢速下修和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。

@@ -470,4 +470,4 @@ python3 tools/project_check.py
 git diff --check
 ```
 
-没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，覆盖 `14` 个关键 C 源码路径；`tools/soc_replay_test.py` 覆盖 `43` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、稳定静置、deferred OCV、静置超过 30min 但电压不稳定不校准、长时间不用车、回弹保护、异常输入和随机不变量。
+没有板子时，按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 做算法门禁。当前 `tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，每档覆盖 `19` 个关键 C 源码路径，并覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置；`tools/soc_replay_test.py` 覆盖 `47` 个场景，包含启动、积分、SOH、OCV、源码表格一致性、满电、中低压弱约束、低压表、稳定静置、deferred OCV、静置超过 30min 但电压不稳定不校准、长时间不用车、回弹保护、异常输入和随机不变量。
