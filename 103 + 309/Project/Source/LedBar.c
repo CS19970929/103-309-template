@@ -241,6 +241,11 @@ static uint8_t LedBar_ReadChargeRaw(void)
     return (uint8_t)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
 }
 
+static uint8_t LedBar_IsDischargeMosOpen(void)
+{
+    return (uint8_t)(SystemStatus.bits.b1Status_MOS_DSG != 0u);
+}
+
 static uint8_t LedBar_IsSwitchPressed(void)
 {
     return (uint8_t)(MCUI_ENI_DI1 == 0u);
@@ -1131,6 +1136,7 @@ void APP_LedBar(void)
     uint8_t display_requested;
     uint8_t mcu_wk_active;
     uint8_t charge_raw_active;
+    uint8_t discharge_mos_open;
 
     if (s_ledbar_initialized == 0u)
     {
@@ -1195,10 +1201,16 @@ void APP_LedBar(void)
     display_value = LedBar_GetRuntimeSoc();
     charge_raw_active = LedBar_ReadChargeRaw();
     LedBar_ServiceChargeFilter(charge_raw_active);
+    discharge_mos_open = LedBar_IsDischargeMosOpen();
+
+    if ((s_ledbar_charge_active != 0u) ||
+        (discharge_mos_open != 0u))
+    {
+        indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
+    }
 
     if (s_ledbar_charge_active != 0u)
     {
-        indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
         LedBar_Command = LED_BAR_CHG;
     }
     else if (g_stCellInfoReport.u16IDischg != 0u)

@@ -66,6 +66,11 @@ void charger_detect_and_keyLogi_200ms(void)
             state = 1;
             open_chg_close_dsg();
         }
+        else if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
+        {
+            LedBar_SaveSleepSoc();
+            entersleep(NORMAL_MODE);
+        }
         else
         {
         }
@@ -74,7 +79,15 @@ void charger_detect_and_keyLogi_200ms(void)
         if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
         {
             state = 0;
-            open_dsg_close_chg();
+            if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
+            {
+                LedBar_SaveSleepSoc();
+                entersleep(NORMAL_MODE);
+            }
+            else
+            {
+                open_dsg_close_chg();
+            }
         }
         else
         {

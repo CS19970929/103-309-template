@@ -8,6 +8,8 @@ UINT8 gu8_SleepStatus = 0;
 UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
+static UINT8 s_u8BootFromSleepChargerWakeup = 0U;
+static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)300) // PC13����3��պϲ���Ϊ��Ч
 
@@ -29,6 +31,7 @@ static UINT8 IsSleepWakeupValid(void)
 
 	if (IsChargerWakeupActive())
 	{
+		SleepDeal_MarkBootFromSleepChargerWakeup();
 		return 1;
 	}
 
@@ -46,6 +49,7 @@ static UINT8 IsSleepWakeupValid(void)
 		{
 			if (IsChargerWakeupActive())
 			{
+				SleepDeal_MarkBootFromSleepChargerWakeup();
 				return 1;
 			}
 
@@ -61,6 +65,7 @@ static UINT8 IsSleepWakeupValid(void)
 		{
 			if (IsChargerWakeupActive())
 			{
+				SleepDeal_MarkBootFromSleepChargerWakeup();
 				return 1;
 			}
 			if (IsKeyPressed())
@@ -720,6 +725,12 @@ void BootFlag_Write(UINT16 flag)
 	BKP_WriteBackupRegister(SLEEP_BKP_INV_REG, (UINT16)(~flag));
 }
 
+static void SleepDeal_MarkBootFromSleepChargerWakeup(void)
+{
+	s_u8BootFromSleepChargerWakeup = 1U;
+	BootFlag_Write(FLASH_SLEEP_CHARGER_WAKE_VALUE);
+}
+
 UINT16 BootFlag_Read(void)
 {
 	UINT16 flag;
@@ -738,6 +749,7 @@ UINT16 BootFlag_Read(void)
 	case FLASH_HICCUP_SLEEP_VALUE:
 	case FLASH_NORMAL_SLEEP_VALUE:
 	case FLASH_DEEP_SLEEP_VALUE:
+	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 	case FLASH_SLEEP_RESET_VALUE:
 		return flag;
 	default:
@@ -755,12 +767,24 @@ UINT8 SleepDeal_IsBootFromSleepStartup(void)
 	return s_u8BootFromSleepStartup;
 }
 
+UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
+{
+	if ((s_u8BootFromSleepChargerWakeup == 0U) &&
+		(BootFlag_Read() == FLASH_SLEEP_CHARGER_WAKE_VALUE))
+	{
+		s_u8BootFromSleepChargerWakeup = 1U;
+	}
+
+	return s_u8BootFromSleepChargerWakeup;
+}
+
 void IsSleepStartUp(void)
 {
 	UINT16 sleep_flag;
 
 	sleep_flag = BootFlag_Read();
 	s_u8BootFromSleepStartup = 0U;
+	s_u8BootFromSleepChargerWakeup = 0U;
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
@@ -799,6 +823,10 @@ void IsSleepStartUp(void)
 			Sys_StopMode();
 		} while (!IsSleepWakeupValid());
 		IORecover_DeepMode();
+		break;
+	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
+		s_u8BootFromSleepStartup = 1U;
+		s_u8BootFromSleepChargerWakeup = 1U;
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
 		// ????
