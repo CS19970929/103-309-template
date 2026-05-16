@@ -1231,5 +1231,7 @@ void App_AFEGet(void)
     App_SH367309();
     // App_MOS_Relay_Ctrl();
     new_todo_logi();
+#if PROJECT_FEATURE_SOC
     App_SOC();
+#endif
 }

@@ -21,11 +21,16 @@ PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "CommomSH367309_16series_10
 PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_Config.h"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
+PROJECT_FEATURES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Features.h"
+PROJECT_TYPES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Types.h"
+PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
+BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
+RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
 SCI_UPPER_H = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.h"
 SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
@@ -34,6 +39,7 @@ RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
+CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -46,6 +52,7 @@ FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\
 COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+PORTABILITY_DOC = ROOT / "PORTABILITY_DECOUPLING_FOUNDATION_2026-05-16.md"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -122,6 +129,15 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
+    "PROJECT_CFG_FEATURE_AFE",
+    "PROJECT_CFG_FEATURE_SOC",
+    "PROJECT_CFG_FEATURE_ANALOG_ADC",
+    "PROJECT_CFG_FEATURE_RS485",
+    "PROJECT_CFG_FEATURE_CAN",
+    "PROJECT_CFG_FEATURE_LEDBAR",
+    "PROJECT_CFG_FEATURE_STORAGE",
+    "PROJECT_CFG_FEATURE_LOG_RECORD",
+    "PROJECT_CFG_FEATURE_PRODUCTION_ID",
     "_DEBUG_",
     "_DEBUG_CODE",
     "FLASH64K_APP_QUICK_TEST_ENABLE",
@@ -238,7 +254,21 @@ def parse_header_defines(header_path):
 
 
 def check_required_files(reporter):
-    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
+    required = [
+        PROJECT,
+        PROJECT_CONFIG,
+        BUILD_GUARD,
+        CONF_H,
+        PROJECT_FEATURES_H,
+        PROJECT_TYPES_H,
+        PLATFORM_PORT_H,
+        BMS_MODEL_H,
+        ELOG_CFG_H,
+        GITIGNORE,
+        PRE_COMMIT,
+        PRE_PUSH,
+    ]
+    for path in required:
         if path.exists():
             reporter.ok("required file exists: {0}".format(path.relative_to(ROOT)))
         else:
@@ -603,6 +633,128 @@ def check_can_rtc_service_runtime(reporter):
         reporter.fail("CAN RTC wake service should expose ack/timeout status and avoid scheduling extra frames inside service window")
 
 
+def check_portability_foundation(reporter):
+    required_files = [
+        PROJECT_CONFIG,
+        PROJECT_FEATURES_H,
+        PROJECT_TYPES_H,
+        PLATFORM_PORT_H,
+        BMS_MODEL_H,
+        RUNTIME_C,
+        DATADEAL_C,
+        CAN_FEIDAO_FRAMES_C,
+        PORTABILITY_DOC,
+    ]
+    if any(not path.exists() for path in required_files):
+        missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
+        reporter.fail("portability foundation files missing: {0}".format(",".join(missing)))
+        return
+
+    project_config = read_text(PROJECT_CONFIG)
+    project_features = read_text(PROJECT_FEATURES_H)
+    project_types = read_text(PROJECT_TYPES_H)
+    platform_port = read_text(PLATFORM_PORT_H)
+    bms_model = read_text(BMS_MODEL_H)
+    runtime_c = read_text(RUNTIME_C)
+    datadeal_c = read_text(DATADEAL_C)
+    can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
+    doc = read_text(PORTABILITY_DOC)
+
+    feature_tokens = [
+        "PROJECT_CFG_FEATURE_AFE",
+        "PROJECT_CFG_FEATURE_SOC",
+        "PROJECT_CFG_FEATURE_ANALOG_ADC",
+        "PROJECT_CFG_FEATURE_RS485",
+        "PROJECT_CFG_FEATURE_CAN",
+        "PROJECT_CFG_FEATURE_LEDBAR",
+        "PROJECT_CFG_FEATURE_STORAGE",
+        "PROJECT_CFG_FEATURE_LOG_RECORD",
+        "PROJECT_CFG_FEATURE_PRODUCTION_ID",
+    ]
+    if "模块裁剪开关" in project_config and all(token in project_config for token in feature_tokens):
+        reporter.ok("Project_Config.h exposes module feature switches")
+    else:
+        reporter.fail("Project_Config.h should expose module feature switches")
+
+    feature_map_tokens = [
+        "PROJECT_FEATURE_AFE           PROJECT_CFG_FEATURE_AFE",
+        "PROJECT_FEATURE_SOC           PROJECT_CFG_FEATURE_SOC",
+        "PROJECT_FEATURE_ANALOG_ADC    PROJECT_CFG_FEATURE_ANALOG_ADC",
+        "PROJECT_FEATURE_RS485         PROJECT_CFG_FEATURE_RS485",
+        "PROJECT_FEATURE_CAN           PROJECT_CFG_FEATURE_CAN",
+        "PROJECT_FEATURE_LEDBAR        PROJECT_CFG_FEATURE_LEDBAR",
+        "PROJECT_FEATURE_STORAGE       PROJECT_CFG_FEATURE_STORAGE",
+        "PROJECT_FEATURE_LOG_RECORD    PROJECT_CFG_FEATURE_LOG_RECORD",
+        "PROJECT_FEATURE_PRODUCTION_ID PROJECT_CFG_FEATURE_PRODUCTION_ID",
+    ]
+    if all(token in project_features for token in feature_map_tokens):
+        reporter.ok("Project_Features.h maps config switches to runtime feature gates")
+    else:
+        reporter.fail("Project_Features.h should map config switches to runtime feature gates")
+
+    if "BMS_INLINE" in project_types and "typedef uint8_t bms_u8;" in project_types:
+        reporter.ok("Project_Types.h defines portable aliases without replacing legacy UINT types")
+    else:
+        reporter.fail("Project_Types.h should provide portable aliases and BMS_INLINE")
+
+    if (
+        "PROJECT_PLATFORM_STM32F1_SPL" in platform_port
+        and "Platform_FeedWatchdog" in platform_port
+        and "Platform_LatchTaskFlags" in platform_port
+        and "Platform_Get10msTick" in platform_port
+    ):
+        reporter.ok("Platform_Port.h exposes MCU platform wrappers")
+    else:
+        reporter.fail("Platform_Port.h should expose MCU platform wrappers")
+
+    if (
+        "BmsModel_CellInfoConst" in bms_model
+        and "BmsModel_GetSocPercent" in bms_model
+        and "BmsModel_SystemStatusConst" in bms_model
+        and "BmsModel_GetPackVoltageMv" in bms_model
+    ):
+        reporter.ok("BmsModel.h exposes central runtime model accessors")
+    else:
+        reporter.fail("BmsModel.h should expose central runtime model accessors")
+
+    runtime_tokens = [
+        '#include "Project_Features.h"',
+        '#include "Platform_Port.h"',
+        "#if PROJECT_FEATURE_AFE",
+        "#if PROJECT_FEATURE_RS485",
+        "#if PROJECT_FEATURE_RTC_LOW_POWER",
+        "#if PROJECT_FEATURE_CAN",
+        "#if PROJECT_FEATURE_LEDBAR",
+        "#if PROJECT_FEATURE_STORAGE",
+        "Platform_FeedWatchdog();",
+    ]
+    if all(token in runtime_c for token in runtime_tokens):
+        reporter.ok("Runtime.c dispatch uses feature gates and platform wrappers")
+    else:
+        reporter.fail("Runtime.c should dispatch through feature gates and platform wrappers")
+
+    if "#if PROJECT_FEATURE_SOC" in datadeal_c and "App_SOC();" in datadeal_c:
+        reporter.ok("DataDeal.c gates AFE-triggered SOC execution")
+    else:
+        reporter.fail("DataDeal.c should gate AFE-triggered SOC execution")
+
+    if '#include "BmsModel.h"' in can_frames_c and "g_stCellInfoReport" not in can_frames_c and "BmsModel_GetSocPercent" in can_frames_c:
+        reporter.ok("CAN Feidao frames read runtime data through BmsModel accessors")
+    else:
+        reporter.fail("CAN Feidao frames should read runtime data through BmsModel accessors")
+
+    if (
+        "STM32F0" in doc
+        and "Project_Features.h" in doc
+        and "Platform_Port.h" in doc
+        and "BmsModel.h" in doc
+        and "第一阶段" in doc
+    ):
+        reporter.ok("portability documentation describes the first-stage decoupling boundary")
+    else:
+        reporter.fail("portability documentation should describe the first-stage decoupling boundary")
+
+
 def check_runtime_docs(reporter):
     docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
     if any(not path.exists() for path in docs):
@@ -662,6 +814,7 @@ def main(argv):
     check_low_power_cleanup(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
+    check_portability_foundation(reporter)
     check_runtime_docs(reporter)
 
     return reporter.summary()

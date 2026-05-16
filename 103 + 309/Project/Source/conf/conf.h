@@ -4,6 +4,8 @@
 #include "stdio.h"
 #include "stdint.h"
 #include "stdbool.h"
+#include "Project_Types.h"
+#include "Project_Features.h"
 #include "stm32f10x.h"
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
@@ -46,15 +48,15 @@
 
 
 
-#if PROJECT_CFG_WDOG_ENABLE
+#if PROJECT_FEATURE_WATCHDOG
 #define wdog_enable
 #endif
 
-#if PROJECT_CFG_RTC_ENABLE
+#if PROJECT_FEATURE_RTC_LOW_POWER
 #define __FUNC_RTC__
 #endif
 
-#if PROJECT_CFG_HEAT_ENABLE
+#if PROJECT_FEATURE_HEAT
 #define __FUNC__HEAT__
 #endif
 

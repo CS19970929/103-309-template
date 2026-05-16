@@ -1,4 +1,5 @@
 #include "main.h"
+#include "BmsModel.h"
 #include "CanFeidaoFrames.h"
 
 #define CAN_FEIDAO_EXT_ID_BASE ((UINT32)0x14F80200U)
@@ -58,15 +59,17 @@ static UINT8 CanFeidao_SendVoltageCurrent1000ms(void)
 {
 	uint8_t data[8] = {0U};
 	int32_t current;
-	uint32_t voltage = (uint32_t)g_stCellInfoReport.u16VCellTotle * 10U;
+	uint16_t charge_a10 = BmsModel_GetChargeCurrentA10();
+	uint16_t discharge_a10 = BmsModel_GetDischargeCurrentA10();
+	uint32_t voltage = BmsModel_GetPackVoltageMv();
 
-	if (g_stCellInfoReport.u16IDischg > 0U)
+	if (discharge_a10 > 0U)
 	{
-		current = -(uint32_t)g_stCellInfoReport.u16IDischg * 100;
+		current = -((int32_t)discharge_a10 * 100);
 	}
 	else
 	{
-		current = (uint32_t)g_stCellInfoReport.u16Ichg * 100U;
+		current = (int32_t)charge_a10 * 100;
 	}
 
 	CanFeidao_PutU32Be(data, 0U, voltage);
@@ -77,8 +80,8 @@ static UINT8 CanFeidao_SendVoltageCurrent1000ms(void)
 static UINT8 CanFeidao_SendCap5000ms(void)
 {
 	uint8_t data[8] = {0U};
-	uint32_t real_cap = g_stCellInfoReport.SocElement.u16CapacityNow * 10U * g_stCellInfoReport.u16VCellTotle / 100U;
-	uint32_t design_cap = g_stCellInfoReport.SocElement.u16CapacityFactory * 10U * (36U * SNum) / 10U;
+	uint32_t real_cap = (uint32_t)BmsModel_GetCapacityNowAh100() * 10U * BmsModel_GetPackVoltage10mV() / 100U;
+	uint32_t design_cap = (uint32_t)BmsModel_GetCapacityFactoryAh100() * 10U * (36U * BmsModel_GetSeriesCount()) / 10U;
 
 	if (real_cap >= design_cap)
 	{
@@ -93,6 +96,7 @@ static UINT8 CanFeidao_SendCap5000ms(void)
 static UINT8 CanFeidao_SendSoc1000ms(void)
 {
 	uint8_t data[8] = {0U};
+	const struct stCell_Info *cell = BmsModel_CellInfoConst();
 	uint8_t chg_status;
 	uint8_t soc;
 	int8_t temp;
@@ -100,11 +104,11 @@ static UINT8 CanFeidao_SendSoc1000ms(void)
 	uint16_t time_chg = 100U;
 	uint16_t res = 0U;
 
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+	if (cell->unMdlFault_Third.bits.b1CellOvp || cell->unMdlFault_Third.bits.b1BatOvp)
 	{
 		chg_status = 2U;
 	}
-	else if (g_stCellInfoReport.u16Ichg)
+	else if (BmsModel_GetChargeCurrentA10())
 	{
 		chg_status = 1U;
 	}
@@ -113,8 +117,8 @@ static UINT8 CanFeidao_SendSoc1000ms(void)
 		chg_status = 0U;
 	}
 
-	soc = g_stCellInfoReport.SocElement.u16Soc;
-	temp = (int8_t)((int16_t)g_stCellInfoReport.u16TempMax / 10 - 40);
+	soc = BmsModel_GetSocPercent();
+	temp = (int8_t)((int16_t)BmsModel_GetMaxTemperatureT10Offset40() / 10 - 40);
 
 	data[0] = chg_status;
 	data[1] = soc;
@@ -134,8 +138,8 @@ static UINT8 CanFeidao_SendSoc1000ms(void)
 static UINT8 CanFeidao_SendSoh5000ms(void)
 {
 	uint8_t data[8] = {0U};
-	uint8_t soh = g_stCellInfoReport.SocElement.u16Soh;
-	uint16_t cycles = g_stCellInfoReport.SocElement.u16Cycle_times;
+	uint8_t soh = BmsModel_GetSohPercent();
+	uint16_t cycles = BmsModel_GetCycleTimes();
 
 	data[0] = soh;
 	CanFeidao_PutU16Be(data, 1U, cycles);
@@ -156,54 +160,56 @@ static UINT8 CanFeidao_SendVersion5000ms(void)
 static UINT8 CanFeidao_SendStatus5000ms(void)
 {
 	uint8_t data[8] = {0U};
+	const struct stCell_Info *cell = BmsModel_CellInfoConst();
+	const volatile union System_Status *status = BmsModel_SystemStatusConst();
 	uint8_t work_status = 0U;
 	uint8_t exception_status = 0U;
 	uint16_t cap_fac;
 	uint16_t cap_now;
 	uint16_t cap_design;
 
-	work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_DSG << 0);
-	work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_CHG << 1);
+	work_status |= (UINT8)(status->bits.b1Status_MOS_DSG << 0);
+	work_status |= (UINT8)(status->bits.b1Status_MOS_CHG << 1);
 
-	if (g_stCellInfoReport.u16Ichg)
+	if (BmsModel_GetChargeCurrentA10())
 	{
 		work_status |= (UINT8)(1U << 2);
 		work_status |= (UINT8)(1U << 3);
 	}
-	if (g_stCellInfoReport.u16IDischg)
+	if (BmsModel_GetDischargeCurrentA10())
 	{
 		work_status |= (UINT8)(1U << 4);
 	}
 
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
+	if (cell->unMdlFault_Third.bits.b1IdischgOcp)
 	{
 		exception_status = 0x02U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
+	if (cell->unMdlFault_Third.bits.b1CellChgUtp)
 	{
 		exception_status = 0x03U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp)
+	if (cell->unMdlFault_Third.bits.b1CellChgOtp)
 	{
 		exception_status = 0x04U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp)
+	if (cell->unMdlFault_Third.bits.b1CellDischgOtp)
 	{
 		exception_status = 0x05U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+	if (cell->unMdlFault_Third.bits.b1CellUvp || cell->unMdlFault_Third.bits.b1BatUvp)
 	{
 		exception_status = 0x06U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp)
+	if (cell->unMdlFault_Third.bits.b1CellOvp || cell->unMdlFault_Third.bits.b1BatOvp)
 	{
 		exception_status = 0x07U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp)
+	if (cell->unMdlFault_Third.bits.b1IchgOcp)
 	{
 		exception_status = 0x08U;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
+	if (cell->unMdlFault_Third.bits.b1CellDischgUtp)
 	{
 		exception_status = 0x09U;
 	}
@@ -211,14 +217,14 @@ static UINT8 CanFeidao_SendStatus5000ms(void)
 	{
 		exception_status = 0x0CU;
 	}
-	if (g_stCellInfoReport.unMdlFault_Third.bits.b1VcellDeltaBig)
+	if (cell->unMdlFault_Third.bits.b1VcellDeltaBig)
 	{
 		exception_status = 0x0DU;
 	}
 
-	cap_fac = g_stCellInfoReport.SocElement.u16CapacityFactory * 10U;
-	cap_now = g_stCellInfoReport.SocElement.u16CapacityNow * 10U;
-	cap_design = g_stCellInfoReport.SocElement.u16CapacityFactory * 10U;
+	cap_fac = BmsModel_GetCapacityFactoryAh100() * 10U;
+	cap_now = BmsModel_GetCapacityNowAh100() * 10U;
+	cap_design = BmsModel_GetCapacityFactoryAh100() * 10U;
 
 	data[0] = work_status;
 	data[1] = exception_status;
@@ -232,7 +238,7 @@ static UINT8 CanFeidao_SendFactoryTime5000ms(void)
 {
 	uint8_t data[8] = {0U};
 
-	CanFeidao_PutU16Be(data, 0U, g_stCellInfoReport.SocElement.u16CapacityFactory * 10U);
+	CanFeidao_PutU16Be(data, 0U, BmsModel_GetCapacityFactoryAh100() * 10U);
 	data[5] = FD_YEAR;
 	data[6] = FD_MONTH;
 	data[7] = FD_DAY;

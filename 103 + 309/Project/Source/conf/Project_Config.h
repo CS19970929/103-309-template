@@ -148,6 +148,44 @@
 #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 // </h>
 
+// <h>模块裁剪开关
+// <q> 使能 AFE 采样任务
+// <i> 关闭后主循环不再调用 AFE 采样入口。移植或裁剪时还需要同步处理底层驱动文件。
+#define PROJECT_CFG_FEATURE_AFE 1
+
+// <q> 使能 SOC 计算
+// <i> 关闭后 AFE 采样完成后不再触发 SOC 计算。
+#define PROJECT_CFG_FEATURE_SOC 1
+
+// <q> 使能板载 ADC 模拟量计算
+// <i> 关闭后主循环不再调用 App_AnlogCal()。
+#define PROJECT_CFG_FEATURE_ANALOG_ADC 1
+
+// <q> 使能 RS485/SCI 通信任务
+// <i> 关闭后主循环不再调用 App_Sci()。
+#define PROJECT_CFG_FEATURE_RS485 1
+
+// <q> 使能 CAN 通信任务
+// <i> 关闭后主循环不再调用 App_Can()。低功耗 RTC-CAN 探测也不会运行。
+#define PROJECT_CFG_FEATURE_CAN 1
+
+// <q> 使能 LedBar/数码管任务
+// <i> 关闭后主循环不再调用 APP_LedBar()。
+#define PROJECT_CFG_FEATURE_LEDBAR 1
+
+// <q> 使能 Flash 存储后台任务
+// <i> 关闭后主循环不再调用存储测试和参数升级后台入口。
+#define PROJECT_CFG_FEATURE_STORAGE 1
+
+// <q> 使能运行日志记录任务
+// <i> 关闭后主循环不再调用 App_LogRecord()。
+#define PROJECT_CFG_FEATURE_LOG_RECORD 1
+
+// <q> 使能 Production ID 处理任务
+// <i> 关闭后主循环不再调用 App_ProID_Deal()。
+#define PROJECT_CFG_FEATURE_PRODUCTION_ID 1
+// </h>
+
 // <h>串口角色
 // <o> SCI1 角色
 //   <0=> 禁用
