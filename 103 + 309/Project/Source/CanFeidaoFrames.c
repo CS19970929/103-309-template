@@ -1,6 +1,8 @@
-#include "main.h"
 #include "BmsModel.h"
 #include "CanFeidaoFrames.h"
+#include "Can_HDX.h"
+#include "System_Monitor.h"
+#include "conf.h"
 
 #define CAN_FEIDAO_EXT_ID_BASE ((UINT32)0x14F80200U)
 #define CAN_FEIDAO_FRAME_LEN_8 ((uint8_t)8U)

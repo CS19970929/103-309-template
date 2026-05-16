@@ -1,6 +1,6 @@
 # 可移植解耦基础层说明 2026-05-16
 
-本文记录本次独立分支对工程耦合关系的第一阶段收口。目标不是一次性把整套 F103 标准库工程改成通用框架，而是在不改变当前量产运行行为的前提下，先建立后续移植 STM32F0 或裁剪功能时必须具备的边界。
+本文记录本次独立分支对工程耦合关系的阶段性收口。目标不是一次性把整套 F103 标准库工程改成通用框架，而是在不改变当前量产运行行为的前提下，先建立后续移植 STM32F0 或裁剪功能时必须具备的边界。
 
 ## 1. 当前主要耦合点
 
@@ -69,13 +69,53 @@
 - `BmsModel_GetCapacityNowAh100()`
 - `BmsModel_GetCapacityFactoryAh100()`
 
-`CanFeidaoFrames.c` 已改为通过 `BmsModel.h` 读取运行数据，不再直接引用 `g_stCellInfoReport`。这只是第一处落点，后续可按模块逐步把 RS485、LedBar、低功耗等直接读全局的地方迁移过来。
+`CanFeidaoFrames.c` 已改为通过 `BmsModel.h` 读取运行数据，不再直接引用 `g_stCellInfoReport`。`LedBar.c` 也已把 SOC、fault、MOS 状态读取切到 `BmsModel.h`。后续可按模块逐步把 RS485、低功耗等直接读全局的地方继续迁移过来。
+
+### 2.5 `Project_AppTasks.h`
+
+新增应用层任务声明头，集中声明启动和主循环需要调用的业务入口：
+
+- `InitSci()`
+- `InitSystemWakeUp()`
+- `App_AFEGet()`
+- `App_Sci()`
+- `App_AnlogCal()`
+- `App_LowPowerProcess()`
+- `App_Can()`
+- `APP_LedBar()`
+- `App_FlashUpdate()`
+- `App_LogRecord()`
+- `App_ProID_Deal()`
+
+这样 `Runtime.c` 不再需要包含 `main.h` 这个总入口头，后续拆主循环、复用运行框架或移植到其他 MCU 时，不必把整套旧工程头文件一起带过去。
 
 ## 3. 运行流程变化
 
 当前默认配置全部保持开启，因此量产行为不应变化。
 
-`Runtime.c` 现在按模块开关分发：
+启动初始化和主循环现在都按同一套模块开关分发。
+
+### 3.1 启动初始化
+
+```c
+main()
+  -> InitDevice()
+       InitSci()        // PROJECT_FEATURE_RS485
+       InitAFE1()       // PROJECT_FEATURE_AFE
+       InitCan()        // PROJECT_FEATURE_CAN
+       InitADC()        // PROJECT_FEATURE_ANALOG_ADC
+       InitData_SOC()   // PROJECT_FEATURE_SOC
+       Init_IWDG()      // PROJECT_FEATURE_WATCHDOG
+  -> InitVar()
+  -> Init_RTC()         // PROJECT_FEATURE_RTC_LOW_POWER
+  -> while (1) Runtime_RunOnce()
+```
+
+`InitE2PROM()` 当前仍保留为基础参数加载入口，不随 `PROJECT_FEATURE_STORAGE` 关闭，因为保护参数、通信参数和 SOC 参数都依赖 EEPROM/RW 参数区。
+
+### 3.2 主循环调度
+
+`Runtime.c` 现在按模块开关分发，且不再包含 `main.h`：
 
 ```c
 Runtime_RunOnce()
@@ -100,6 +140,8 @@ Runtime_RunOnce()
 
 `DataDeal.c` 中 AFE 采样完成后的 `App_SOC()` 也受 `PROJECT_FEATURE_SOC` 控制。
 
+`Project_BuildGuard.h` 已增加约束：当前运行架构下 `PROJECT_CFG_FEATURE_SOC=1` 时必须保持 `PROJECT_CFG_FEATURE_AFE=1`。原因是现有 SOC 正常更新入口挂在 `App_AFEGet()` 采样完成之后；若关闭 AFE 但保留 SOC，SOC 不会得到新样本。
+
 ## 4. 如何裁剪功能
 
 在 `103 + 309/Project/Source/conf/Project_Config.h` 的“模块裁剪开关”中把对应宏改为 `0`：
@@ -109,12 +151,12 @@ Runtime_RunOnce()
 #define PROJECT_CFG_FEATURE_LEDBAR 0
 ```
 
-第一阶段效果是“不再从主运行循环调用该任务”。这适合快速验证、移植前裁剪、或构建轻功能版本。
+当前效果是“不再从启动初始化和主运行循环调用该任务”。这适合快速验证、移植前裁剪、或构建轻功能版本。
 
 需要注意：
 
 1. 关闭运行入口不等于完全删除编译单元。Keil 工程里仍可能编译对应 `.c` 文件。
-2. 如果要做到彻底移除某功能，还需要第二阶段增加 stub 或按 Keil target 排除对应源文件。
+2. 如果要做到彻底移除某功能，还需要继续增加 stub 或按 Keil target 排除对应源文件。
 3. 低功耗、SOC、通信之间仍共享运行数据，不能只删 `.c` 文件不处理接口。
 
 ## 5. 移植 STM32F0 的推荐路线
@@ -155,7 +197,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是重包含入口，后续需要逐步减少各模块对 `main.h` 的依赖。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c` 和 `CanFeidaoFrames.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
@@ -169,6 +211,9 @@ Runtime_RunOnce()
 3. 确认 `Runtime.c` 使用 feature gate 和 platform wrapper。
 4. 确认 `DataDeal.c` 的 SOC 触发受 `PROJECT_FEATURE_SOC` 控制。
 5. 确认 `CanFeidaoFrames.c` 通过 `BmsModel.h` 读取运行数据。
+6. 确认 `Runtime.c` 和 `CanFeidaoFrames.c` 不再包含 `main.h`。
+7. 确认 `main.c` 启动初始化也按 feature gate 裁剪。
+8. 确认 `LedBar.c` 不再直接读取 `g_stCellInfoReport` 或 `SystemStatus.bits`。
 
 建议每次做模块裁剪或移植前执行：
 

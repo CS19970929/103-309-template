@@ -25,12 +25,14 @@ PROJECT_FEATURES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Featur
 PROJECT_TYPES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Types.h"
 PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
+PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTasks.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
+MAIN_C = ROOT / "103 + 309" / "Project" / "Source" / "main.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
 SCI_UPPER_H = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.h"
 SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
@@ -40,6 +42,7 @@ RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
+FLASH64K_APP_TEST_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -263,6 +266,7 @@ def check_required_files(reporter):
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
+        PROJECT_APP_TASKS_H,
         ELOG_CFG_H,
         GITIGNORE,
         PRE_COMMIT,
@@ -640,9 +644,14 @@ def check_portability_foundation(reporter):
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
+        PROJECT_APP_TASKS_H,
         RUNTIME_C,
+        MAIN_C,
         DATADEAL_C,
         CAN_FEIDAO_FRAMES_C,
+        FLASH64K_APP_TEST_H,
+        LEDBAR_C,
+        BUILD_GUARD,
         PORTABILITY_DOC,
     ]
     if any(not path.exists() for path in required_files):
@@ -655,9 +664,14 @@ def check_portability_foundation(reporter):
     project_types = read_text(PROJECT_TYPES_H)
     platform_port = read_text(PLATFORM_PORT_H)
     bms_model = read_text(BMS_MODEL_H)
+    project_app_tasks = read_text(PROJECT_APP_TASKS_H)
     runtime_c = read_text(RUNTIME_C)
+    main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
+    flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
+    ledbar_c = read_text(LEDBAR_C)
+    build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
 
     feature_tokens = [
@@ -717,9 +731,20 @@ def check_portability_foundation(reporter):
     else:
         reporter.fail("BmsModel.h should expose central runtime model accessors")
 
+    if (
+        "void App_AFEGet(void);" in project_app_tasks
+        and "void App_Can(void);" in project_app_tasks
+        and "void InitSci(void);" in project_app_tasks
+        and "void InitSystemWakeUp(void);" in project_app_tasks
+    ):
+        reporter.ok("Project_AppTasks.h exposes runtime/init task prototypes without main.h")
+    else:
+        reporter.fail("Project_AppTasks.h should expose runtime/init task prototypes without main.h")
+
     runtime_tokens = [
         '#include "Project_Features.h"',
         '#include "Platform_Port.h"',
+        '#include "Project_AppTasks.h"',
         "#if PROJECT_FEATURE_AFE",
         "#if PROJECT_FEATURE_RS485",
         "#if PROJECT_FEATURE_RTC_LOW_POWER",
@@ -733,26 +758,66 @@ def check_portability_foundation(reporter):
     else:
         reporter.fail("Runtime.c should dispatch through feature gates and platform wrappers")
 
+    if '#include "main.h"' not in runtime_c:
+        reporter.ok("Runtime.c no longer depends on the main.h include umbrella")
+    else:
+        reporter.fail("Runtime.c should not include main.h")
+
+    init_tokens = [
+        "#if PROJECT_FEATURE_RTC_LOW_POWER",
+        "#if PROJECT_FEATURE_RS485",
+        "#if PROJECT_FEATURE_AFE",
+        "#if PROJECT_FEATURE_CAN",
+        "#if PROJECT_FEATURE_ANALOG_ADC",
+        "#if PROJECT_FEATURE_SOC",
+        "#if defined(wdog_enable) && PROJECT_FEATURE_WATCHDOG",
+    ]
+    if all(token in main_c for token in init_tokens):
+        reporter.ok("main.c initialization path follows feature gates")
+    else:
+        reporter.fail("main.c initialization path should follow feature gates")
+
     if "#if PROJECT_FEATURE_SOC" in datadeal_c and "App_SOC();" in datadeal_c:
         reporter.ok("DataDeal.c gates AFE-triggered SOC execution")
     else:
         reporter.fail("DataDeal.c should gate AFE-triggered SOC execution")
 
-    if '#include "BmsModel.h"' in can_frames_c and "g_stCellInfoReport" not in can_frames_c and "BmsModel_GetSocPercent" in can_frames_c:
-        reporter.ok("CAN Feidao frames read runtime data through BmsModel accessors")
+    if (
+        '#include "BmsModel.h"' in can_frames_c
+        and '#include "main.h"' not in can_frames_c
+        and "g_stCellInfoReport" not in can_frames_c
+        and "BmsModel_GetSocPercent" in can_frames_c
+    ):
+        reporter.ok("CAN Feidao frames read runtime data through BmsModel accessors without main.h")
     else:
-        reporter.fail("CAN Feidao frames should read runtime data through BmsModel accessors")
+        reporter.fail("CAN Feidao frames should read runtime data through BmsModel accessors without main.h")
+
+    if '#include "Flash.h"' in flash64k_app_test_h and '#include "stm32f10x.h"' in flash64k_app_test_h:
+        reporter.ok("Flash64KAppTest.h declares its own storage dependencies")
+    else:
+        reporter.fail("Flash64KAppTest.h should declare its own storage dependencies")
+
+    if '#include "BmsModel.h"' in ledbar_c and "g_stCellInfoReport" not in ledbar_c and "SystemStatus.bits" not in ledbar_c:
+        reporter.ok("LedBar.c reads SOC/fault/MOS status through BmsModel accessors")
+    else:
+        reporter.fail("LedBar.c should read SOC/fault/MOS status through BmsModel accessors")
+
+    if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
+        reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")
+    else:
+        reporter.fail("Project_BuildGuard.h should block SOC enabled while AFE runtime is disabled")
 
     if (
         "STM32F0" in doc
         and "Project_Features.h" in doc
         and "Platform_Port.h" in doc
         and "BmsModel.h" in doc
-        and "第一阶段" in doc
+        and "Project_AppTasks.h" in doc
+        and "第二阶段" in doc
     ):
         reporter.ok("portability documentation describes the first-stage decoupling boundary")
     else:
-        reporter.fail("portability documentation should describe the first-stage decoupling boundary")
+        reporter.fail("portability documentation should describe the current decoupling boundary")
 
 
 def check_runtime_docs(reporter):

@@ -1,4 +1,5 @@
 #include "main.h"
+#include "BmsModel.h"
 #include <string.h>
 
 #define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
@@ -228,7 +229,7 @@ static uint8_t LedBar_LimitSoc(uint16_t soc)
 
 static uint8_t LedBar_GetRuntimeSoc(void)
 {
-    return LedBar_LimitSoc(g_stCellInfoReport.SocElement.u16Soc);
+    return LedBar_LimitSoc(BmsModel_GetSocPercent());
 }
 
 static uint8_t LedBar_ReadMcuWakeRaw(void)
@@ -243,7 +244,9 @@ static uint8_t LedBar_ReadChargeRaw(void)
 
 static uint8_t LedBar_IsDischargeMosOpen(void)
 {
-    return (uint8_t)(SystemStatus.bits.b1Status_MOS_DSG != 0u);
+    const volatile union System_Status *status = BmsModel_SystemStatusConst();
+
+    return (uint8_t)(status->bits.b1Status_MOS_DSG != 0u);
 }
 
 static uint8_t LedBar_IsSwitchPressed(void)
@@ -835,7 +838,9 @@ static void LedBar_ServiceSwitch(void)
 
 static uint8_t LedBar_IsFaultActive(void)
 {
-    if ((g_stCellInfoReport.unMdlFault_Third.all & 0x3FFBu) != 0u)
+    const struct stCell_Info *cell = BmsModel_CellInfoConst();
+
+    if ((cell->unMdlFault_Third.all & 0x3FFBu) != 0u)
     {
         return 1u;
     }
@@ -1153,7 +1158,7 @@ void APP_LedBar(void)
     mcu_wk_active = LedBar_IsMcuWakeActive();
 
 #if LEDBAR_SLEEP_ENABLE
-    if (SystemStatus.bits.b1StartUpBMS != 0u)
+    if (BmsModel_SystemStatusConst()->bits.b1StartUpBMS != 0u)
     {
         LedBar_Command = LED_BAR_STARTUP;
         LedBar_SetSleep(1u);
@@ -1217,7 +1222,7 @@ void APP_LedBar(void)
     {
         LedBar_Command = LED_BAR_CHG;
     }
-    else if (g_stCellInfoReport.u16IDischg != 0u)
+    else if (BmsModel_GetDischargeCurrentA10() != 0u)
     {
         LedBar_Command = LED_BAR_DSG;
     }

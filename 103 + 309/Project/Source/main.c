@@ -1,5 +1,6 @@
 #include "main.h"
 #include "Flash64KAppTest.h"
+#include "Project_AppTasks.h"
 #include "Runtime.h"
 
 UINT8 SeriesNum = 10;
@@ -25,10 +26,6 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 
 void InitVar(void);
 void InitDevice(void);
-void InitSci(void);
-void App_Sci(void);
-void InitSystemWakeUp(void);
-
 void open_chg_close_dsg(void)
 {
 	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
@@ -67,7 +64,9 @@ int main(void)
 {
 	InitDevice();
 	InitVar();
+#if PROJECT_FEATURE_RTC_LOW_POWER
 	Init_RTC();
+#endif
 	/* RTC_WKTimeConfig(); */
 
 	while (1)
@@ -91,7 +90,9 @@ void InitDevice(void)
 
 	InitNVIC();
 	InitIO();
+#if PROJECT_FEATURE_RS485
 	InitSci();
+#endif
 #ifdef ELOG_OUTPUT_ENABLE
 	InitUSART_CommonUpper();
 	elogInit();
@@ -102,16 +103,24 @@ void InitDevice(void)
 	StorageFlash_RunAppQuickTest();
 #endif
 	InitE2PROM();
+#if PROJECT_FEATURE_AFE
 	InitAFE1();
+#endif
+#if PROJECT_FEATURE_CAN
 	InitCan();
+#endif
+#if PROJECT_FEATURE_ANALOG_ADC
 	InitADC();
+#endif
 
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
 	/* Init_ChargerLoad_Det(); */
 	/* InitMosRelay_DOx(); */
+#if PROJECT_FEATURE_SOC
 	InitData_SOC();
+#endif
 
 	InitTimer();
 	log_w("init over");
@@ -120,7 +129,7 @@ void InitDevice(void)
 	DBGMCU_Config(DBGMCU_STOP, ENABLE);
 #endif
 
-#ifdef wdog_enable
+#if defined(wdog_enable) && PROJECT_FEATURE_WATCHDOG
 	Init_IWDG();
 #endif
 

@@ -1,13 +1,11 @@
-#include "main.h"
 #include "FactoryAging.h"
 #include "Flash64KAppTest.h"
 #include "Platform_Port.h"
+#include "Project_AppTasks.h"
 #include "Project_Features.h"
 #include "Runtime.h"
 
-void App_Sci(void);
-
-#if (defined _DEBUG_CODE)
+#if defined(_DEBUG_CODE) || PROJECT_CFG_DEBUG_CODE_ENABLE
 static void Runtime_RunDebugOnce(void)
 {
 	App_AFEGet();
@@ -52,7 +50,7 @@ static void Runtime_RunBackgroundTasks(void)
 	StorageFlash_AppUseTest_Task();
 #endif
 
-#if defined(__FUNC__HEAT__) && PROJECT_FEATURE_HEAT
+#if PROJECT_FEATURE_HEAT
 	App_Heat_Cool_Ctrl();
 #endif
 
@@ -65,7 +63,7 @@ static void Runtime_RunBackgroundTasks(void)
 #if PROJECT_FEATURE_PRODUCTION_ID
 	App_ProID_Deal();
 #endif
-#if defined(wdog_enable) && PROJECT_FEATURE_WATCHDOG
+#if PROJECT_FEATURE_WATCHDOG
 	Platform_FeedWatchdog();
 #endif
 }
@@ -80,7 +78,7 @@ static void Runtime_RunNormalOnce(void)
 
 void Runtime_RunOnce(void)
 {
-#if (defined _DEBUG_CODE)
+#if defined(_DEBUG_CODE) || PROJECT_CFG_DEBUG_CODE_ENABLE
 	Runtime_RunDebugOnce();
 #else
 	Runtime_RunNormalOnce();
