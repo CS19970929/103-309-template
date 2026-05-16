@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Generate reusable SOC ride simulation reports.
 
 The simulator feeds the host-side SocModel with voltage/current generated from

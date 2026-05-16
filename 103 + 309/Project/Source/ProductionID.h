@@ -4,18 +4,18 @@
 #define PRODUCT_ID_LENGTH_MAX 32
 
 typedef struct {
-	//¾ùÎª°¢Ë¹¿ËÂë
-	UINT8 BMS_SerialNumber[PRODUCT_ID_LENGTH_MAX];			//BMSĞòÁĞºÅ
-	UINT8 BMS_HardWareVersion[PRODUCT_ID_LENGTH_MAX];		//BMSÓ²¼ş°æ±¾ºÅ
-	UINT8 BMS_SoftWareVersion[PRODUCT_ID_LENGTH_MAX];		//BMSÈí¼ş°æ±¾ºÅ
+	//å‡ä¸ºé˜¿æ–¯å…‹ç 
+	UINT8 BMS_SerialNumber[PRODUCT_ID_LENGTH_MAX];			//BMSåºåˆ—å·
+	UINT8 BMS_HardWareVersion[PRODUCT_ID_LENGTH_MAX];		//BMSç¡¬ä»¶ç‰ˆæœ¬å·
+	UINT8 BMS_SoftWareVersion[PRODUCT_ID_LENGTH_MAX];		//BMSè½¯ä»¶ç‰ˆæœ¬å·
 
-	UINT16 BMS_SerialNumberLength;			//BMSĞòÁĞºÅµØÖ·				//ÒâÒå²»´ó£¬Ä©¶ËÈ«²¿Ìî0£¬°¢Ë¹¿ËÂëÎª¿Õ
-	UINT16 BMS_HardWareVersionLength;		//BMSÓ²¼ş°æ±¾ºÅµØÖ·			//ÒâÒå²»´ó£¬Ä©¶ËÈ«²¿Ìî0£¬°¢Ë¹¿ËÂëÎª¿Õ
-	UINT16 BMS_SoftWareVersionLength;		//BMSÈí¼ş°æ±¾ºÅµØÖ·			//ÒâÒå²»´ó£¬Ä©¶ËÈ«²¿Ìî0£¬°¢Ë¹¿ËÂëÎª¿Õ
+	UINT16 BMS_SerialNumberLength;			//BMSåºåˆ—å·åœ°å€				//æ„ä¹‰ä¸å¤§ï¼Œæœ«ç«¯å…¨éƒ¨å¡«0ï¼Œé˜¿æ–¯å…‹ç ä¸ºç©º
+	UINT16 BMS_HardWareVersionLength;		//BMSç¡¬ä»¶ç‰ˆæœ¬å·åœ°å€			//æ„ä¹‰ä¸å¤§ï¼Œæœ«ç«¯å…¨éƒ¨å¡«0ï¼Œé˜¿æ–¯å…‹ç ä¸ºç©º
+	UINT16 BMS_SoftWareVersionLength;		//BMSè½¯ä»¶ç‰ˆæœ¬å·åœ°å€			//æ„ä¹‰ä¸å¤§ï¼Œæœ«ç«¯å…¨éƒ¨å¡«0ï¼Œé˜¿æ–¯å…‹ç ä¸ºç©º
 	
-	UINT16 BMS_SerialNumberHeadAdress;		//BMSĞòÁĞºÅµØÖ·
-	UINT16 BMS_HardWareVersionHeadAdress;	//BMSÓ²¼ş°æ±¾ºÅµØÖ·
-	UINT16 BMS_SoftWareVersionHeadAdress;	//BMSÈí¼ş°æ±¾ºÅµØÖ·
+	UINT16 BMS_SerialNumberHeadAdress;		//BMSåºåˆ—å·åœ°å€
+	UINT16 BMS_HardWareVersionHeadAdress;	//BMSç¡¬ä»¶ç‰ˆæœ¬å·åœ°å€
+	UINT16 BMS_SoftWareVersionHeadAdress;	//BMSè½¯ä»¶ç‰ˆæœ¬å·åœ°å€
 }PRODUCTION_ID_INFO;
 
 extern PRODUCTION_ID_INFO ProductionInfor;

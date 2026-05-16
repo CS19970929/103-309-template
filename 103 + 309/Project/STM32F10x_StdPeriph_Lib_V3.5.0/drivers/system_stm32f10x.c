@@ -1057,7 +1057,7 @@ static void SetSysClockTo72(void)
     /*  PLL configuration: PLLCLK = HSE * 9 = 72 MHz */
     RCC->CFGR &= (uint32_t)((uint32_t)~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE |
                                         RCC_CFGR_PLLMULL));
-    RCC->CFGR |= (uint32_t)(RCC_CFGR_PLLSRC_HSE | RCC_CFGR_PLLMULL9);	//��Ϊ12MHz�ⲿ����,9Ϊ8MHz
+    RCC->CFGR |= (uint32_t)(RCC_CFGR_PLLSRC_HSE | RCC_CFGR_PLLMULL9);	//改为12MHz外部晶振,9为8MHz
 #endif /* STM32F10X_CL */
 
     /* Enable PLL */
@@ -1082,8 +1082,8 @@ static void SetSysClockTo72(void)
          configuration. User can add here some code to deal with this error */
 	System_ERROR_UserCallback(ERROR_HSE);
 	SystemCoreClock = HSI_VALUE;
-	//��ΪHSI��ȥ��Ƶ��ΪHSI/2���ԣ����ֻ�ܱ�Ƶ��36MHz������һ�¾Ͳ����ˣ�ֱ��8MHz
-	//���������ȣ�8MHzƵ��̫�ͳ�����˵��
+	//因为HSI进去倍频区为HSI/2所以，最高只能倍频到36MHz，想了一下就不搞了，直接8MHz
+	//将就用着先，8MHz频率太低出事再说。
   }
 }
 #endif

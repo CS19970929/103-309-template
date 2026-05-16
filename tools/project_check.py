@@ -10,6 +10,7 @@ from __future__ import print_function
 
 import argparse
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -31,6 +32,8 @@ SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
 SLEEPDEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.h"
 RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
+CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
+CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -43,6 +46,19 @@ FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\
 COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+UTF8_TEXT_SUFFIXES = {
+    ".c",
+    ".h",
+    ".s",
+    ".S",
+    ".md",
+    ".py",
+    ".ps1",
+    ".uvprojx",
+    ".uvoptx",
+    ".sct",
+    ".txt",
+}
 
 
 COMMON_DEFINES = {"STM32F10X_MD", "USE_STDPERIPH_DRIVER"}
@@ -147,6 +163,20 @@ def read_text(path):
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def iter_git_tracked_files():
+    try:
+        output = subprocess.check_output(["git", "ls-files", "-z"], cwd=str(ROOT))
+    except (OSError, subprocess.CalledProcessError):
+        return []
+
+    result = []
+    for item in output.split(b"\0"):
+        if not item:
+            continue
+        result.append(ROOT / item.decode("utf-8", errors="surrogateescape"))
+    return result
+
+
 def define_tokens(text):
     result = set()
     for item in re.split(r"[,;\s]+", text or ""):
@@ -215,20 +245,47 @@ def check_required_files(reporter):
             reporter.fail("required file missing: {0}".format(path.relative_to(ROOT)))
 
 
+def check_utf8_text_files(reporter):
+    invalid = []
+    bom = []
+
+    for path in iter_git_tracked_files():
+        if path.suffix not in UTF8_TEXT_SUFFIXES:
+            continue
+        data = path.read_bytes()
+        if data.startswith(b"\xef\xbb\xbf"):
+            bom.append(str(path.relative_to(ROOT)))
+            continue
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            invalid.append("{0}: {1}".format(path.relative_to(ROOT), exc))
+
+    if invalid:
+        reporter.fail("tracked source/text files must be UTF-8: {0}".format("; ".join(invalid[:8])))
+    else:
+        reporter.ok("tracked source/text files are valid UTF-8")
+
+    if bom:
+        reporter.fail("tracked source/text files should use UTF-8 without BOM: {0}".format("; ".join(bom[:8])))
+    else:
+        reporter.ok("tracked source/text files do not contain UTF-8 BOM")
+
+
 def check_project_config_wizard_encoding(reporter):
     if not PROJECT_CONFIG.exists():
         return
 
     try:
-        text = PROJECT_CONFIG.read_bytes().decode("gbk")
+        text = PROJECT_CONFIG.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
-        reporter.fail("Project_Config.h must be saved as GBK/ANSI for Keil Configuration Wizard: {0}".format(exc))
+        reporter.fail("Project_Config.h must be saved as UTF-8 for shared editing and Keil use: {0}".format(exc))
         return
 
     if PROJECT_CONFIG_WIZARD_MARKER in text:
-        reporter.ok("Project_Config.h GBK/ANSI text is readable for Keil Configuration Wizard")
+        reporter.ok("Project_Config.h UTF-8 text is readable and keeps Keil Configuration Wizard marker")
     else:
-        reporter.fail("Project_Config.h GBK/ANSI text marker is missing or unreadable for Keil Configuration Wizard")
+        reporter.fail("Project_Config.h UTF-8 text marker is missing or unreadable for Keil Configuration Wizard")
 
 
 def check_keil_targets(reporter):
@@ -522,6 +579,30 @@ def check_fault_snapshot_mapping(reporter):
         reporter.fail("RS485 0xD200 should expose BKP fault snapshot and base words should be 98")
 
 
+def check_can_rtc_service_runtime(reporter):
+    required_files = [CAN_HDX_C, CAN_HDX_H]
+    if any(not path.exists() for path in required_files):
+        return
+
+    can_c = read_text(CAN_HDX_C)
+    can_h = read_text(CAN_HDX_H)
+
+    if (
+        "rtc_service_active" in can_c
+        and "last_rtc_wake_tx_acked" in can_c
+        and "last_rtc_wake_timeout" in can_c
+        and "s_u8FeidaoCanLastRtcWakeTxAcked = 1U" in can_c
+        and "s_u8FeidaoCanLastRtcWakeTimeout = 1U" in can_c
+        and "(0U == s_u8FeidaoCanRtcServiceActive)" in can_c
+        and "u8RtcServiceActive" in can_h
+        and "u8LastRtcWakeTxAcked" in can_h
+        and "u8LastRtcWakeTimeout" in can_h
+    ):
+        reporter.ok("CAN RTC wake service has bounded window and exposes ack/timeout status")
+    else:
+        reporter.fail("CAN RTC wake service should expose ack/timeout status and avoid scheduling extra frames inside service window")
+
+
 def check_runtime_docs(reporter):
     docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
     if any(not path.exists() for path in docs):
@@ -550,6 +631,8 @@ def check_runtime_docs(reporter):
         "CanFeidaoFrames" in can_runtime
         and "Can_RtcWakeService" in can_runtime
         and "Can_GetIdleRtcPeriodSeconds" in can_runtime
+        and "rtc_service_active" in can_runtime
+        and "last_rtc_wake_tx_acked" in can_runtime
         and "CanFeidaoFrames.c/.h" in can_simplify
     ):
         reporter.ok("CAN docs describe current runtime/frame/low-power boundaries")
@@ -566,6 +649,7 @@ def main(argv):
     print("Project check: {0}".format(ROOT))
 
     check_required_files(reporter)
+    check_utf8_text_files(reporter)
     check_project_config_wizard_encoding(reporter)
     check_keil_targets(reporter)
     check_release_defaults(reporter)
@@ -577,6 +661,7 @@ def main(argv):
     check_soc_current_and_typec_policy(reporter)
     check_low_power_cleanup(reporter)
     check_fault_snapshot_mapping(reporter)
+    check_can_rtc_service_runtime(reporter)
     check_runtime_docs(reporter)
 
     return reporter.summary()

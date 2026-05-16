@@ -4,8 +4,8 @@
 volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
 
-UINT16 g_u16BusOff_InitTestCnt = 0; // CAN×ÜÏß¹Ø±Õ¼ÆÊ±
-UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s¼ÆÊ±±êÖ¾Î»
+UINT16 g_u16BusOff_InitTestCnt = 0; // CANæ€»çº¿å…³é—­è®¡æ—¶
+UINT16 g_u16BusOff_RecoverCnt = 0;	// 5sè®¡æ—¶æ ‡å¿—ä½
 static UINT8 s_u8CanBusOff = 0U;
 
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
@@ -49,8 +49,11 @@ typedef struct
 	UINT8 bus_active;
 	UINT8 no_ack_cnt;
 	UINT8 probe_active;
+	UINT8 rtc_service_active;
 	UINT8 tx_cycle_acked;
 	UINT8 tx_cycle_no_ack_recorded;
+	UINT8 last_rtc_wake_tx_acked;
+	UINT8 last_rtc_wake_timeout;
 	UINT32 last_rtc_elapsed_seconds;
 	UINT16 rtc_wake_service_cnt;
 	UINT16 prepare_sleep_cnt;
@@ -77,6 +80,9 @@ static FeidaoCanRuntime s_feidao_can_runtime =
 	0U,
 	0U,
 	0U,
+	0U,
+	0U,
+	0U,
 };
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
@@ -96,8 +102,11 @@ FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #define s_u8FeidaoCanBusActive (s_feidao_can_runtime.bus_active)
 #define s_u8FeidaoCanNoAckCnt (s_feidao_can_runtime.no_ack_cnt)
 #define s_u8FeidaoCanProbeActive (s_feidao_can_runtime.probe_active)
+#define s_u8FeidaoCanRtcServiceActive (s_feidao_can_runtime.rtc_service_active)
 #define s_u8FeidaoCanTxCycleAcked (s_feidao_can_runtime.tx_cycle_acked)
 #define s_u8FeidaoCanTxCycleNoAckRecorded (s_feidao_can_runtime.tx_cycle_no_ack_recorded)
+#define s_u8FeidaoCanLastRtcWakeTxAcked (s_feidao_can_runtime.last_rtc_wake_tx_acked)
+#define s_u8FeidaoCanLastRtcWakeTimeout (s_feidao_can_runtime.last_rtc_wake_timeout)
 #define s_u32FeidaoCanLastRtcElapsedSeconds (s_feidao_can_runtime.last_rtc_elapsed_seconds)
 #define s_u16FeidaoCanRtcWakeServiceCnt (s_feidao_can_runtime.rtc_wake_service_cnt)
 #define s_u16FeidaoCanPrepareSleepCnt (s_feidao_can_runtime.prepare_sleep_cnt)
@@ -190,6 +199,9 @@ static void feidao_can_update_low_power_status(void)
 	g_stCanLowPowerStatus.u8NoAckCnt = s_u8FeidaoCanNoAckCnt;
 	g_stCanLowPowerStatus.u8ProbeActive = s_u8FeidaoCanProbeActive;
 	g_stCanLowPowerStatus.u8TxMailbox = s_u8FeidaoCanTxMailbox;
+	g_stCanLowPowerStatus.u8RtcServiceActive = s_u8FeidaoCanRtcServiceActive;
+	g_stCanLowPowerStatus.u8LastRtcWakeTxAcked = s_u8FeidaoCanLastRtcWakeTxAcked;
+	g_stCanLowPowerStatus.u8LastRtcWakeTimeout = s_u8FeidaoCanLastRtcWakeTimeout;
 	g_stCanLowPowerStatus.u16PendingMask = s_u16FeidaoCanPendingMask;
 	g_stCanLowPowerStatus.u16RtcWakeServiceCnt = s_u16FeidaoCanRtcWakeServiceCnt;
 	g_stCanLowPowerStatus.u16PrepareSleepCnt = s_u16FeidaoCanPrepareSleepCnt;
@@ -217,6 +229,10 @@ static void feidao_can_begin_rtc_wake_service(UINT32 elapsed_seconds)
 	feidao_can_inc_u16(&s_u16FeidaoCanRtcWakeServiceCnt);
 	feidao_can_invalidate_hw_tick();
 	InitCan();
+	s_u8FeidaoCanRtcServiceActive = 1U;
+	s_u8FeidaoCanLastRtcWakeTxAcked = 0U;
+	s_u8FeidaoCanLastRtcWakeTimeout = 0U;
+	feidao_can_update_low_power_status();
 }
 
 static void feidao_can_queue_rtc_wake_frames(UINT8 was_bus_active, UINT32 elapsed_seconds)
@@ -243,6 +259,8 @@ static void feidao_can_finish_rtc_wake_service(UINT8 was_bus_active)
 	}
 
 	Can_PrepareSleep();
+	s_u8FeidaoCanRtcServiceActive = 0U;
+	feidao_can_update_low_power_status();
 }
 
 static void feidao_can_run_10ms_tasks(void)
@@ -282,6 +300,10 @@ static void feidao_can_begin_tx_cycle(void)
 static void feidao_can_mark_tx_cycle_active(void)
 {
 	s_u8FeidaoCanTxCycleAcked = 1U;
+	if (s_u8FeidaoCanRtcServiceActive != 0U)
+	{
+		s_u8FeidaoCanLastRtcWakeTxAcked = 1U;
+	}
 	feidao_can_mark_bus_active();
 }
 
@@ -539,7 +561,7 @@ static void feidao_can_send(UINT32 now_tick)
 {
 	UINT8 tx_status;
 
-	if (0U == s_u8FeidaoCanProbeActive)
+	if ((0U == s_u8FeidaoCanProbeActive) && (0U == s_u8FeidaoCanRtcServiceActive))
 	{
 		feidao_can_schedule_period_frames(now_tick);
 	}
@@ -633,7 +655,7 @@ UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
 
 	if (CAN_ID_STD == Msg->IDE)
 	{
-		Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // µ¥»ú°æµØÖ·Ä¬ÈÏÎª0
+		Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // å•æœºç‰ˆåœ°å€é»˜è®¤ä¸º0
 	}
 
 	u8MailBoxUsed = CAN_Transmit(CAN1, Msg);
@@ -649,7 +671,7 @@ UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
 static void InitCan_GPIO(void)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // ¸´ÓÃ¹¦ÄÜºÍGPIO¶Ë¿ÚÊ±ÖÓÊ¹ÄÜ
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // å¤ç”¨åŠŸèƒ½å’ŒGPIOç«¯å£æ—¶é’Ÿä½¿èƒ½
 	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
 
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_OFF_LEVEL);
@@ -659,23 +681,23 @@ static void InitCan_GPIO(void)
 	GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;	  // Configure CAN pin: RX    // PD0
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // ÉÏÀ­ÊäÈë
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // ä¸Šæ‹‰è¾“å…¥
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;		// Configure CAN pin: TX    // PD1
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP; // ¸´ÓÃÍÆÍìÊä³ö
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP; // å¤ç”¨æŽ¨æŒ½è¾“å‡º
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-	// GPIO_PinRemapConfig(GPIO_Remap2_CAN1, ENABLE);	 	//14:13Î»  //0£ºÓ³Éäµ½PA11£¬PA12(Ä¬ÈÏ)//1: ²»ÓÃ¡£
+	// GPIO_PinRemapConfig(GPIO_Remap2_CAN1, ENABLE);	 	//14:13ä½  //0ï¼šæ˜ å°„åˆ°PA11ï¼ŒPA12(é»˜è®¤)//1: ä¸ç”¨ã€‚
 }
 
 static void InitCan_NVIC(void)
 {
 	NVIC_InitTypeDef NVIC_InitStructure;
 
-	/*²»ÓÃÉèÖÃÁË£¬systemInit()ÒÑ¾­×öÁËÏàÓ¦²Ù×÷
+	/*ä¸ç”¨è®¾ç½®äº†ï¼ŒsystemInit()å·²ç»åšäº†ç›¸åº”æ“ä½œ
 	#ifdef  VECT_TAB_RAM
 	  NVIC_SetVectorTable(NVIC_VectTab_RAM, 0x0);
 	#else
@@ -698,53 +720,53 @@ static void InitCan_Filter(void)
 	UINT16 u16CAN_FilterMaskIdLow;
 	CAN_FilterInitTypeDef CAN_FilterInitStructure;
 
-	// ÕâÁ½¾äÔõÃ´À´µÄ£¬ÏêÏ¸¿´½ØÍ¼¡ª¡ª¹ýÂËÆ÷ÅäÖÃ±í
-	// CAN_ID_STDÖ®ÀàµÄ²»ÐèÒªÒÆÎ»£¬¹Ù·½ÒÑ¾­¶¨ºÃ
-	// CAN_FilterMode_IdList£¬ÁÐ±íÄ£Ê½FBMx = 1
-	// CAN_FilterScale_16bit£¬¹ýÂËÆ÷×éµÄÎ»¿í£¬FSCx = 0
-	// ½áºÏÕâÁ½¸ö£¬¸ßÎ»µÄÆÁ±ÎÎ»Ò²×÷Îª±êÊ¶·ûÁÐ±í£¬¿ÉÒÔ¸ã4¸öCANID
-	// ±ðµÄÇé¿öÊÇ¸ßÎ»×÷ÎªµÍÎ»µÄÆÁ±ÎÎ»¡£
+	// è¿™ä¸¤å¥æ€Žä¹ˆæ¥çš„ï¼Œè¯¦ç»†çœ‹æˆªå›¾â€”â€”è¿‡æ»¤å™¨é…ç½®è¡¨
+	// CAN_ID_STDä¹‹ç±»çš„ä¸éœ€è¦ç§»ä½ï¼Œå®˜æ–¹å·²ç»å®šå¥½
+	// CAN_FilterMode_IdListï¼Œåˆ—è¡¨æ¨¡å¼FBMx = 1
+	// CAN_FilterScale_16bitï¼Œè¿‡æ»¤å™¨ç»„çš„ä½å®½ï¼ŒFSCx = 0
+	// ç»“åˆè¿™ä¸¤ä¸ªï¼Œé«˜ä½çš„å±è”½ä½ä¹Ÿä½œä¸ºæ ‡è¯†ç¬¦åˆ—è¡¨ï¼Œå¯ä»¥æž4ä¸ªCANID
+	// åˆ«çš„æƒ…å†µæ˜¯é«˜ä½ä½œä¸ºä½Žä½çš„å±è”½ä½ã€‚
 
-	// stm32 canµÄÆÁ±ÎÎ»Ä£Ê½£º
-	// Ò»¸öÊÇ±êÊ¶·û¼Ä´æÆ÷(¹ýÂËÆ÷Filter)£¬Ò»¸öÊÇÆÁ±ÎÎ»¼Ä´æÆ÷(Mask)¡£
-	// ·²ÊÇÆÁ±ÎÎ»¼Ä´æÆ÷ÀïÎª1µÄÎ»Ëù¶ÔÓ¦µÄ±êÊ¶·û¼Ä´æÆ÷µÄÎ»£¬ÕâÐ©Î»ÊÇ±ØÐëÆ¥ÅäµÄ
-	// Ò²¾ÍÊÇËµ£¬Äã½ÓÊÜµ½µÄMessageÀïÃæµÄ±êÊ¶·û£¨ID£©ÀïÃæ¶ÔÓ¦µÄÎ»±ØÐë¸ú±êÊ¶·û¼Ä´æÆ÷Àï¶ÔÓ¦µÄÎ»ÏàÍ¬£¬²ÅÄÜ±»½ÓÊÜ¡£
+	// stm32 cançš„å±è”½ä½æ¨¡å¼ï¼š
+	// ä¸€ä¸ªæ˜¯æ ‡è¯†ç¬¦å¯„å­˜å™¨(è¿‡æ»¤å™¨Filter)ï¼Œä¸€ä¸ªæ˜¯å±è”½ä½å¯„å­˜å™¨(Mask)ã€‚
+	// å‡¡æ˜¯å±è”½ä½å¯„å­˜å™¨é‡Œä¸º1çš„ä½æ‰€å¯¹åº”çš„æ ‡è¯†ç¬¦å¯„å­˜å™¨çš„ä½ï¼Œè¿™äº›ä½æ˜¯å¿…é¡»åŒ¹é…çš„
+	// ä¹Ÿå°±æ˜¯è¯´ï¼Œä½ æŽ¥å—åˆ°çš„Messageé‡Œé¢çš„æ ‡è¯†ç¬¦ï¼ˆIDï¼‰é‡Œé¢å¯¹åº”çš„ä½å¿…é¡»è·Ÿæ ‡è¯†ç¬¦å¯„å­˜å™¨é‡Œå¯¹åº”çš„ä½ç›¸åŒï¼Œæ‰èƒ½è¢«æŽ¥å—ã€‚
 
-	// Ô¶³ÌÖ¡¹ýÂËÆ÷
+	// è¿œç¨‹å¸§è¿‡æ»¤å™¨
 	u16CAN_FilterIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA;
 	u16CAN_FilterIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
 
-	u16CAN_FilterMaskIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA; // ÉèÖÃ³ÉÒ»Ñù
+	u16CAN_FilterMaskIdHigh = (CANID_RX_COMMON_MSG_MASK << 5) | CAN_ID_STD | CAN_RTR_DATA; // è®¾ç½®æˆä¸€æ ·
 	u16CAN_FilterMaskIdLow = (CANID_RX_COMMON_MSG_FILTER << 5) | CAN_ID_STD | CAN_RTR_DATA;
 
-	CAN_FilterInitStructure.CAN_FilterNumber = 0;							// Ö¸¶¨¹ýÂËÆ÷Îª0£¬Èç¹ûÏë½ÓÊÕ¶à¼¸¸ö£¬·¶Î§Îª0¡ª¡ª13
-	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;			// Ö¸¶¨¹ýÂËÆ÷ÎªÆÁ±ÎÄ£Ê½
-	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_16bit;		// ¹ýÂËÆ÷Î»¿íÎª16Î»£¬Ò²¼´2¸ö´øÆÁ±ÎÎ»µÄ±ê×¼Ö¡
-	CAN_FilterInitStructure.CAN_FilterIdHigh = u16CAN_FilterIdHigh;			// ¹ýÂËÆ÷±êÊ¶·ûµÄ¸ß16Î»Öµ
-	CAN_FilterInitStructure.CAN_FilterIdLow = u16CAN_FilterIdLow;			// ¹ýÂËÆ÷±êÊ¶·ûµÄµÍ16Î»Öµ
-	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = u16CAN_FilterMaskIdHigh; // ¹ýÂËÆ÷ÆÁ±Î±êÊ¶·ûµÄ¸ß16Î»Öµ
-	CAN_FilterInitStructure.CAN_FilterMaskIdLow = u16CAN_FilterMaskIdLow;	// ¹ýÂËÆ÷ÆÁ±Î±êÊ¶·ûµÄµÍ16Î»Öµ
-	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;	// Éè¶¨ÁËÖ¸Ïò¹ýÂËÆ÷µÄFIFOÎª0
-	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;					// Ê¹ÄÜ¹ýÂËÆ÷
-	CAN_FilterInit(&CAN_FilterInitStructure);								// °´ÉÏÃæµÄ²ÎÊý³õÊ¼»¯¹ýÂËÆ÷
+	CAN_FilterInitStructure.CAN_FilterNumber = 0;							// æŒ‡å®šè¿‡æ»¤å™¨ä¸º0ï¼Œå¦‚æžœæƒ³æŽ¥æ”¶å¤šå‡ ä¸ªï¼ŒèŒƒå›´ä¸º0â€”â€”13
+	CAN_FilterInitStructure.CAN_FilterMode = CAN_FilterMode_IdMask;			// æŒ‡å®šè¿‡æ»¤å™¨ä¸ºå±è”½æ¨¡å¼
+	CAN_FilterInitStructure.CAN_FilterScale = CAN_FilterScale_16bit;		// è¿‡æ»¤å™¨ä½å®½ä¸º16ä½ï¼Œä¹Ÿå³2ä¸ªå¸¦å±è”½ä½çš„æ ‡å‡†å¸§
+	CAN_FilterInitStructure.CAN_FilterIdHigh = u16CAN_FilterIdHigh;			// è¿‡æ»¤å™¨æ ‡è¯†ç¬¦çš„é«˜16ä½å€¼
+	CAN_FilterInitStructure.CAN_FilterIdLow = u16CAN_FilterIdLow;			// è¿‡æ»¤å™¨æ ‡è¯†ç¬¦çš„ä½Ž16ä½å€¼
+	CAN_FilterInitStructure.CAN_FilterMaskIdHigh = u16CAN_FilterMaskIdHigh; // è¿‡æ»¤å™¨å±è”½æ ‡è¯†ç¬¦çš„é«˜16ä½å€¼
+	CAN_FilterInitStructure.CAN_FilterMaskIdLow = u16CAN_FilterMaskIdLow;	// è¿‡æ»¤å™¨å±è”½æ ‡è¯†ç¬¦çš„ä½Ž16ä½å€¼
+	CAN_FilterInitStructure.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;	// è®¾å®šäº†æŒ‡å‘è¿‡æ»¤å™¨çš„FIFOä¸º0
+	CAN_FilterInitStructure.CAN_FilterActivation = ENABLE;					// ä½¿èƒ½è¿‡æ»¤å™¨
+	CAN_FilterInit(&CAN_FilterInitStructure);								// æŒ‰ä¸Šé¢çš„å‚æ•°åˆå§‹åŒ–è¿‡æ»¤å™¨
 }
 
 static void InitCan_CAN1(void)
 {
 	CAN_InitTypeDef CAN_InitStructure;
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE); // CAN1 Ä£¿éÊ±ÖÓÊ¹ÄÜ
-														 // APB1Ê±ÖÓ×î¸ß36MHz
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE); // CAN1 æ¨¡å—æ—¶é’Ÿä½¿èƒ½
+														 // APB1æ—¶é’Ÿæœ€é«˜36MHz
 
-	CAN_DeInit(CAN1);					// ½«ÍâÉèCANµÄÈ«²¿¼Ä´æÆ÷ÖØÉèÎªÈ±Ê¡Öµ
-	CAN_StructInit(&CAN_InitStructure); // °ÑCAN_InitStructÖÐµÄÃ¿Ò»¸ö²ÎÊý°´È±Ê¡ÖµÌîÈë
+	CAN_DeInit(CAN1);					// å°†å¤–è®¾CANçš„å…¨éƒ¨å¯„å­˜å™¨é‡è®¾ä¸ºç¼ºçœå€¼
+	CAN_StructInit(&CAN_InitStructure); // æŠŠCAN_InitStructä¸­çš„æ¯ä¸€ä¸ªå‚æ•°æŒ‰ç¼ºçœå€¼å¡«å…¥
 
-	CAN_InitStructure.CAN_TTCM = DISABLE;		  // Ã»ÓÐÊ¹ÄÜÊ±¼ä´¥·¢Ä£Ê½
-	CAN_InitStructure.CAN_ABOM = DISABLE;		  // Ã»ÓÐÊ¹ÄÜ×Ô¶¯ÀëÏß¹ÜÀí£¬BusOFF×Ô¶¯ÀëÏßÈ¡Ïû£¬ÐèÒªÊÖ¶¯´¦Àí
-	CAN_InitStructure.CAN_AWUM = DISABLE;		  // Ã»ÓÐÊ¹ÄÜ×Ô¶¯»½ÐÑÄ£Ê½
-	CAN_InitStructure.CAN_NART = ENABLE;           // no ACKÊ±²»×Ô¶¯ÖØ·¢£¬½µµÍÎ´½ÓÉè±¸Ê±µÄ·¢ËÍ¹¦ºÄ
-	CAN_InitStructure.CAN_RFLM = DISABLE;		  // Ã»ÓÐÊ¹ÄÜ½ÓÊÕFIFOËø¶¨Ä£Ê½
-	CAN_InitStructure.CAN_TXFP = DISABLE;		  // Ã»ÓÐÊ¹ÄÜ·¢ËÍFIFOÓÅÏÈ¼¶
-	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CANÉèÖÃÎªÕý³£Ä£Ê½
+	CAN_InitStructure.CAN_TTCM = DISABLE;		  // æ²¡æœ‰ä½¿èƒ½æ—¶é—´è§¦å‘æ¨¡å¼
+	CAN_InitStructure.CAN_ABOM = DISABLE;		  // æ²¡æœ‰ä½¿èƒ½è‡ªåŠ¨ç¦»çº¿ç®¡ç†ï¼ŒBusOFFè‡ªåŠ¨ç¦»çº¿å–æ¶ˆï¼Œéœ€è¦æ‰‹åŠ¨å¤„ç†
+	CAN_InitStructure.CAN_AWUM = DISABLE;		  // æ²¡æœ‰ä½¿èƒ½è‡ªåŠ¨å”¤é†’æ¨¡å¼
+	CAN_InitStructure.CAN_NART = ENABLE;           // no ACKæ—¶ä¸è‡ªåŠ¨é‡å‘ï¼Œé™ä½ŽæœªæŽ¥è®¾å¤‡æ—¶çš„å‘é€åŠŸè€—
+	CAN_InitStructure.CAN_RFLM = DISABLE;		  // æ²¡æœ‰ä½¿èƒ½æŽ¥æ”¶FIFOé”å®šæ¨¡å¼
+	CAN_InitStructure.CAN_TXFP = DISABLE;		  // æ²¡æœ‰ä½¿èƒ½å‘é€FIFOä¼˜å…ˆçº§
+	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CANè®¾ç½®ä¸ºæ­£å¸¸æ¨¡å¼
 												  // CAN_InitStructure.CAN_Mode = CAN_Mode_LoopBack;
 
 	/*
@@ -760,7 +782,7 @@ static void InitCan_CAN1(void)
 	CAN_Init(CAN1, &CAN_InitStructure);
 
 
-	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // Ê¹ÄÜFIFO0ÏûÏ¢¹ÒºÅÖÐ¶Ï
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // ä½¿èƒ½FIFO0æ¶ˆæ¯æŒ‚å·ä¸­æ–­
 }
 
 static void Can_BusOFF_FaultTimeCtrl(void)
@@ -885,11 +907,16 @@ UINT32 Can_GetIdleRtcPeriodSeconds(void)
 void Can_RtcWakeService(UINT32 elapsed_seconds)
 {
 	UINT8 was_bus_active = s_u8FeidaoCanBusActive;
+	UINT8 service_idle;
 
 	feidao_can_begin_rtc_wake_service(elapsed_seconds);
 	feidao_can_queue_rtc_wake_frames(was_bus_active, elapsed_seconds);
 	feidao_can_send(s_u32FeidaoCanLogicalTick);
-	(void)feidao_can_service_until_idle(FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS);
+	service_idle = feidao_can_service_until_idle(FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS);
+	if (service_idle == 0U)
+	{
+		s_u8FeidaoCanLastRtcWakeTimeout = 1U;
+	}
 	feidao_can_finish_rtc_wake_service(was_bus_active);
 }
 

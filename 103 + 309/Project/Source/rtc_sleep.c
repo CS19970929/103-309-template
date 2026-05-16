@@ -460,7 +460,7 @@ void BQ769x0_SleepMode_Ctrl(void)
         return;
     }
 
-    //todo���䡢���ܹ��ˣ���������
+    //todo过充、充电管关了？进待机？
     if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
     {
         sys_time.enter_rtc_delay = 0;
@@ -566,7 +566,7 @@ static bool rtc_monitor_sh367309(void)
 {
     // if (!sys_time.power_on)
     // {
-    //     // todo 冗余检�?
+    //     // todo 冗余检测
     //     return false;
     // }
 
@@ -621,7 +621,7 @@ static bool rtc_monitor_sh367309(void)
 
 static bool isException(void)
 {
-    // todo rtc起来读afe保护状�?2、ocv逻辑 大电�?延时ocv
+    // todo rtc起来读 AFE 保护状态2、OCV 逻辑，大电流延时 OCV
     if (!updataData_rtc())
     {
         return true;
@@ -656,7 +656,7 @@ static bool updataData_rtc(void)
 
 #else
 
-#error "error！！！�?
+#error "error!!!"
 
 #endif
 

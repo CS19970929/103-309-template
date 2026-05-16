@@ -6,7 +6,7 @@
 #define CANID_RX_COMMON_MSG_FILTER   	((UINT16)0x0000|((UINT16)CAN_ADRESS_STD_ID<<7))
 //#define CANID_RX_COMMON_MSG_FILTER   	((UINT16)0x0000)
 
-//µ¥»ú°æ£¬11Î»µÄ±ê×¼Ö¡£¬¸ßÎ»µÄ4Î»±ØÐëÆ¥ÅäÎª0bxxxx x000 0xxx xxxx
+//å•æœºç‰ˆï¼Œ11ä½çš„æ ‡å‡†å¸§ï¼Œé«˜ä½çš„4ä½å¿…é¡»åŒ¹é…ä¸º0bxxxx x000 0xxx xxxx
 #define CANID_RX_COMMON_MSG_MASK      	((UINT16)0x0780)
 
 
@@ -34,6 +34,9 @@ struct CAN_LOW_POWER_STATUS {
 	UINT8 u8NoAckCnt;
 	UINT8 u8ProbeActive;
 	UINT8 u8TxMailbox;
+	UINT8 u8RtcServiceActive;
+	UINT8 u8LastRtcWakeTxAcked;
+	UINT8 u8LastRtcWakeTimeout;
 	UINT16 u16PendingMask;
 	UINT16 u16RtcWakeServiceCnt;
 	UINT16 u16PrepareSleepCnt;
@@ -117,18 +120,18 @@ union SYS_LOSE_REG {
 union MOS_RELAY_REG {
     UINT16 all;
     struct MOS_RELAY_BITS {
-		UINT8 b1Status_MOS_CHG      :1;		//³äµçMOS¹Ü¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_MOS_DSG      :1;		//·ÅµçMOS¹Ü¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_MOS_PRE      :1;		//Ô¤³äMOS¹Ü¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Relay_CHG    :1;		//·Ö¿Ú³äµç¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
+		UINT8 b1Status_MOS_CHG      :1;		//å……ç”µMOSç®¡åŠŸèƒ½çŠ¶æ€
+		UINT8 b1Status_MOS_DSG      :1;		//æ”¾ç”µMOSç®¡åŠŸèƒ½çŠ¶æ€
+		UINT8 b1Status_MOS_PRE      :1;		//é¢„å……MOSç®¡åŠŸèƒ½çŠ¶æ€
+		UINT8 b1Status_Relay_CHG    :1;		//åˆ†å£å……ç”µç»§ç”µå™¨åŠŸèƒ½çŠ¶æ€
 		
-		UINT8 b1Status_Relay_DSG    :1;		//·Ö¿Ú·Åµç¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Relay_PRE    :1;		//Ô¤³ä¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
+		UINT8 b1Status_Relay_DSG    :1;		//åˆ†å£æ”¾ç”µç»§ç”µå™¨åŠŸèƒ½çŠ¶æ€
+		UINT8 b1Status_Relay_PRE    :1;		//é¢„å……ç»§ç”µå™¨åŠŸèƒ½çŠ¶æ€
 		UINT8 b1Status_Heat			:1; 	//
 		UINT8 b1Status_Cool			:1; 	//
 		
-		UINT8 b1Status_Relay_MAIN   :1;		//Í¬¿ÚÖ÷¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
-		UINT8 b1Status_Res   		:7;		//Í¬¿ÚÖ÷¼ÌµçÆ÷¹¦ÄÜ×´Ì¬
+		UINT8 b1Status_Relay_MAIN   :1;		//åŒå£ä¸»ç»§ç”µå™¨åŠŸèƒ½çŠ¶æ€
+		UINT8 b1Status_Res   		:7;		//åŒå£ä¸»ç»§ç”µå™¨åŠŸèƒ½çŠ¶æ€
      }bits;
 };
 

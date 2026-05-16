@@ -2,7 +2,7 @@
 
 CHARGERLOAD_FUNC ChargerLoad_Func;
 
-// ��ǹ���������ͣ�ȫϵ�ж��У�PA0�źţ��½���������
+// 电枪插入解除类型，全系列都有，PA0信号，下降沿起作用
 void AllSeriesDeal_Charger_ON(void)
 {
 	static UINT8 su8_ChargerON_All_WakeFlag = 0;
@@ -17,7 +17,7 @@ void AllSeriesDeal_Charger_ON(void)
 			break;
 
 		case 1:
-			// ��ǹ���룬����
+			// 电枪插入，则解除
 			if (ChargerLoad_Func.bits.b1ON_Charger_AllSeries)
 			{
 				ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 0;
@@ -26,7 +26,7 @@ void AllSeriesDeal_Charger_ON(void)
 			break;
 
 		case 2:
-			// ����������ʹ����������
+			// 作出操作，使能驱动功能
 			System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1;
 			ChargerLoad_Func.bits.b1OFFDriver_Uvp = 0;
 			ChargerLoad_Func.bits.b1OFFDriver_DsgOcp = 0;
@@ -41,7 +41,7 @@ void AllSeriesDeal_Charger_ON(void)
 	}
 }
 
-// ��ǹ�Ƴ����������
+// 电枪移除，解除类型
 void AllSeriesDeal_Charger_OFF(void)
 {
 #if 0
@@ -63,7 +63,7 @@ void AllSeriesDeal_Charger_OFF(void)
 				break;
 				
 			case 1:
-				//����������ʹ����������
+				//作出操作，使能驱动功能
 				System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1;
 				ChargerLoad_Func.bits.b1OFFDriver_Ovp = 0;
 				ChargerLoad_Func.bits.b1OFFDriver_ChgOcp = 0;
@@ -84,12 +84,12 @@ void AllSeriesDeal_Sleep_Or_None(void)
 
 	if (ChargerLoad_Func.bits.b1OFFDriver_UpperCom)
 	{
-		// ��λ��ǿ�ƹز�������
+		// 上位机强制关不作处理
 	}
 
 	if (ChargerLoad_Func.bits.b1OFFDriver_AFE_ERR || ChargerLoad_Func.bits.b1OFFDriver_EEPROM_ERR)
 	{
-		// ֱ�ӽ������ߣ����ﲻ����������һ�����˾ͺ�����
+		// 直接进入休眠，这里不作处理，万一起来了就好了呢
 	}
 
 	if (ChargerLoad_Func.bits.b1OFFDriver_Vdelta)
@@ -101,9 +101,9 @@ void AllSeriesDeal_Sleep_Or_None(void)
 		}
 	}
 
-	// ���Ӧ���Ǽ�⵽��ǹ�Ƴ���Ч���ģ�������ΪMOSû�������͵�ƽ(����ϵ��ŵ�ܣ���ô����ȱ��)��ֻ���и��½��ز���
-	// ����ȫϵ�п��ǣ�ֻ���ƶ������ߴ�����
-	// MOS���������ι�ѹ���󣬽Ӵ������С�
+	// 这个应该是检测到电枪移除有效果的，但是因为MOS没法产生低电平(必须断掉放电管，这么做有缺陷)，只能有个下降沿产生
+	// 基于全系列考虑，只能移动到休眠处理。
+	// MOS不会有三次过压现象，接触器都有。
 	if (ChargerLoad_Func.bits.b1OFFDriver_Ovp || ChargerLoad_Func.bits.b1OFFDriver_ChgOcp)
 	{
 		if (++su16_Sleep_Tcnt >= 300)
@@ -118,12 +118,12 @@ void Status_ChargerLoad(void)
 {
 	if (ChargerLoad_Func.bits.b1ON_Charger)
 	{
-		// �����ǹ���ߣ���������
+		// 如果电枪在线，作出处理
 	}
 
 	if (ChargerLoad_Func.bits.b1ON_Load)
 	{
-		// ����������ߣ���������
+		// 如果负载在线，作出处理
 	}
 }
 
@@ -147,10 +147,10 @@ void Init_Charger_AllSeries(void)
 	NVIC_InitTypeDef NVIC_InitStructure;
 	GPIO_InitTypeDef GPIO_InitStructure;
 
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ʹ��GPIOAʱ�ӣ���Ϊ�ǿ��������Ի���Ҫ
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // ��Ϊ�ǿ��������Ի���Ҫ
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟，因为是开机，所以还是要
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 因为是开机，所以还是要
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0; // ѡ��Ҫ�õ�GPIO����
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0; // 选择要用的GPIO引脚
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -172,7 +172,7 @@ void Init_Charger_AllSeries(void)
 	// GPIO_Init(GPIO_LOAD_OL, &GPIO_InitStructure);
 }
 
-// ��һ�����ڶ�����һ����û��ʱ����
+// 第一个，第二个不一定有没有时屏蔽
 void Init_ChargerLoad_Det(void)
 {
 #ifdef _CHARGER_LOAD
@@ -190,17 +190,17 @@ void App_ChargerLoad_Det(void)
 	{
 		return;
 	}
-	// ��ǹ���������ͣ�ȫϵ�ж��У�PA0�źţ��½���������
-	AllSeriesDeal_Charger_ON(); // �������ε�ѹ�����ηŵ������CBC
+	// 电枪插入解除类型，全系列都有，PA0信号，下降沿起作用
+	AllSeriesDeal_Charger_ON(); // 包括三次低压，三次放电过流，CBC
 
-	// ��ǹ�Ƴ���������ͣ�ȫϵ�ж��У�PA0�źţ��͵�ƽ������
-	AllSeriesDeal_Charger_OFF(); // �������ι�ѹ�����γ�����>>>>�ƶ�������
+	// 电枪移除，解除类型，全系列都有，PA0信号，低电平起作用
+	AllSeriesDeal_Charger_OFF(); // 包括三次过压，三次充电过流>>>>移动到休眠
 
-	// �����������߽�����������
-	AllSeriesDeal_Sleep_Or_None(); // AFE����EEPROM����ѹ����󱣻�(��Ϊ5min)Ϊ���ߣ���λ��ǿ�ƹز�������
+	// 不作处理或者进入休眠类型
+	AllSeriesDeal_Sleep_Or_None(); // AFE错误，EEPROM错误，压差过大保护(均为5min)为休眠，上位机强制关不作处理
 
 #ifdef _CHARGER_LOAD
-	// ѡͨ���ܣ���ǹ���ߺ͸������ߣ�����һ����ϵ��BMS��һ����
+	// 选通功能，电枪在线和负载在线，另外一套体系，BMS不一定有
 	Status_ChargerLoad();
 #endif
 }

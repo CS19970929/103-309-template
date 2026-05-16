@@ -23,8 +23,11 @@
 - `s_feidao_can_runtime.rtc_service_active`
 - `s_feidao_can_runtime.tx_cycle_acked`
 - `s_feidao_can_runtime.tx_cycle_no_ack_recorded`
-- `s_feidao_can_runtime.host_iap_reset_pending`
-- `s_feidao_can_runtime.host_iap_reset_delay_ticks`
+- `s_feidao_can_runtime.last_rtc_wake_tx_acked`
+- `s_feidao_can_runtime.last_rtc_wake_timeout`
+- `s_feidao_can_runtime.last_rtc_elapsed_seconds`
+- `s_feidao_can_runtime.rtc_wake_service_cnt`
+- `s_feidao_can_runtime.prepare_sleep_cnt`
 
 ## 兼容策略
 
@@ -52,6 +55,13 @@
 - `Can_RtcWakeService(elapsed_seconds)`：RTC 唤醒后重启 CAN、发送唤醒/探测帧，并在超时内等待发送结束。
 - `Can_IsBusActive()`：供 RTC 周期判断当前 CAN 总线是否活跃。
 - `Can_GetIdleRtcPeriodSeconds()`：供 RTC 选择 idle wake period。
+
+RTC 唤醒服务的内部边界：
+
+- `rtc_service_active` 仅在 `Can_RtcWakeService()` 窗口内置位。服务窗口内 `feidao_can_send()` 不再自动生成新一轮 1s/5s 周期帧，只发送本次 RTC 唤醒预加载的业务帧或探测帧。
+- `last_rtc_wake_tx_acked` 记录本次 RTC 唤醒窗口是否至少有一帧得到 bxCAN `CAN_TxStatus_Ok`，用于判断是否真正收到 ACK。
+- `last_rtc_wake_timeout` 记录本次 RTC 唤醒 CAN 服务是否超过 `FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS` 仍未空闲。
+- `g_stCanLowPowerStatus` 同步导出 `u8RtcServiceActive`、`u8LastRtcWakeTxAcked`、`u8LastRtcWakeTimeout`，便于 Keil Watch 或后续只读窗口观察。
 
 ## 后续建议
 

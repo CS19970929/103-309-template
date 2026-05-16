@@ -1,7 +1,7 @@
 #include "main.h"
 
 #if (AFE_TYPE == bq76xx_afe)
-const UINT16 AFE_SCV[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // ¶ÌÂ·±£»¤µçÑ¹£¬µ¥Î»mv
+const UINT16 AFE_SCV[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // çŸ­è·¯ä¿æŠ¤ç”µå‹ï¼Œå•ä½mv
 const UINT16 AFE_SCT[10] = {50, 100, 200, 400, 400, 400, 400, 400, 400, 400};
 
 UINT8 Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
@@ -20,12 +20,12 @@ UINT8 Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 
 
 #elif (AFE_TYPE == sh36xx)
-extern const UINT16 AFE_OCD1V_OCCV[16];                    // Ò»¼¶·Åµç¹ıÁ÷ºÍ³äµç¹ıÁ÷£¬µ¥Î»mv
-extern const UINT16 AFE_SCV[16];                    // ¶ÌÂ·±£»¤µçÑ¹£¬µ¥Î»mv
-extern const UINT16 AFE_OVT_UVT[16]; // ¹ıÑ¹µÍÑ¹ÑÓÊ±Ê±¼ä¡£µ¥Î»ms
-extern const UINT16 AFE_SCT[16];                      // ¶ÌÂ·ÑÓÊ±,µ¥Î»us¡£
-extern const UINT16 AFE_OCD1T[16];   // ·Åµç¹ıÁ÷1ÑÓÊ±¡£µ¥Î»ms
-extern const UINT16 AFE_OCCT_OCD2T[16];         // ·Åµç¹ıÁ÷2ºÍ³äµç¹ıÁ÷ÑÓÊ±¡£µ¥Î»ms
+extern const UINT16 AFE_OCD1V_OCCV[16];                    // ä¸€çº§æ”¾ç”µè¿‡æµå’Œå……ç”µè¿‡æµï¼Œå•ä½mv
+extern const UINT16 AFE_SCV[16];                    // çŸ­è·¯ä¿æŠ¤ç”µå‹ï¼Œå•ä½mv
+extern const UINT16 AFE_OVT_UVT[16]; // è¿‡å‹ä½å‹å»¶æ—¶æ—¶é—´ã€‚å•ä½ms
+extern const UINT16 AFE_SCT[16];                      // çŸ­è·¯å»¶æ—¶,å•ä½usã€‚
+extern const UINT16 AFE_OCD1T[16];   // æ”¾ç”µè¿‡æµ1å»¶æ—¶ã€‚å•ä½ms
+extern const UINT16 AFE_OCCT_OCD2T[16];         // æ”¾ç”µè¿‡æµ2å’Œå……ç”µè¿‡æµå»¶æ—¶ã€‚å•ä½ms
 
 
 extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
@@ -34,7 +34,7 @@ extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
 #endif
 
 
-// ÔÚ¿ª»ú£¬Sci(ÉèÖÃºÍ¸´Î»Á½¸öº¯Êı)£¬Èı´Îµ÷ÓÃ±ã¿É
+// åœ¨å¼€æœºï¼ŒSci(è®¾ç½®å’Œå¤ä½ä¸¤ä¸ªå‡½æ•°)ï¼Œä¸‰æ¬¡è°ƒç”¨ä¾¿å¯
 void InitShortCur(void)
 {
     UINT16 temp = 0;
@@ -43,19 +43,19 @@ void InitShortCur(void)
     OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
     OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
-    /* ¶ÌÂ·ÑÓÊ± */
+    /* çŸ­è·¯å»¶æ—¶ */
     temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
-    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // ĞŞ¸Ä×îÖÕÉèÖÃµÄÖµ£¬½Ó½üµÄÄÇ¸ö
+    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // ä¿®æ”¹æœ€ç»ˆè®¾ç½®çš„å€¼ï¼Œæ¥è¿‘çš„é‚£ä¸ª
 
     Registers_AFE1.Protect1.Protect1Bit.SCD_DELAY = temp >= 3 ? 3 : temp;
 
-    /* ¶ÌÂ·µçÑ¹ */
+    /* çŸ­è·¯ç”µå‹ */
     temp = OtherElement.u16CBC_Cur_DSG / 10;                                     // A
-    temp = temp * OtherElement.u16Sys_CS_Res / OtherElement.u16Sys_CS_Res_Num; // µ±Ç°¶ÔÓ¦¶àÉÙmV
+    temp = temp * OtherElement.u16Sys_CS_Res / OtherElement.u16Sys_CS_Res_Num; // å½“å‰å¯¹åº”å¤šå°‘mV
     temp = Choose_Right_Value(temp, AFE_SCV);
-    // ĞŞ¸Ä×îÖÕÉèÖÃµÄÖµ£¬½Ó½üµÄÄÇ¸ö
+    // ä¿®æ”¹æœ€ç»ˆè®¾ç½®çš„å€¼ï¼Œæ¥è¿‘çš„é‚£ä¸ª
     OtherElement.u16CBC_Cur_DSG = AFE_SCV[temp] * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-    OtherElement.u16CBC_Cur_DSG *= 10; // ·ÀÖ¹Êı¾İÒç³ö¡£
+    OtherElement.u16CBC_Cur_DSG *= 10; // é˜²æ­¢æ•°æ®æº¢å‡ºã€‚
 
     if (temp <= 1)
     {
@@ -68,14 +68,14 @@ void InitShortCur(void)
         Registers_AFE1.Protect1.Protect1Bit.SCD_THRESH = temp - 2;
     }
 
-    // Ó²¼ş¹ıÁ÷±£»¤À­µ½×î´ó
+    // ç¡¬ä»¶è¿‡æµä¿æŠ¤æ‹‰åˆ°æœ€å¤§
     Registers_AFE1.Protect2.Protect2Bit.OCD_DELAY = OCD_DELAY_1280ms;       // 8ms
     Registers_AFE1.Protect2.Protect2Bit.OCD_THRESH = OCD_THRESH_100mV_50mV; // 20A
 
     I2CWriteRegisterByteWithCRC(DEVICE_ADDR_AFE1, PROTECT1, Registers_AFE1.Protect1.Protect1Byte);
     I2CWriteRegisterByteWithCRC(DEVICE_ADDR_AFE1, PROTECT2, Registers_AFE1.Protect2.Protect2Byte);
 
-    // ÉèÖÃÖ®ºóĞèÒªÖØÆôÂğ£¿ÏÈÊÔÊÔ
+    // è®¾ç½®ä¹‹åéœ€è¦é‡å¯å—ï¼Ÿå…ˆè¯•è¯•
     // MCU_RESET();
 
 #elif (AFE_TYPE == sh36xx)
@@ -84,19 +84,19 @@ void InitShortCur(void)
     OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
     OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
-    /* ¶ÌÂ·ÑÓÊ± */
+    /* çŸ­è·¯å»¶æ—¶ */
     temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
     AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = temp;
-    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // ĞŞ¸Ä×îÖÕÉèÖÃµÄÖµ£¬½Ó½üµÄÄÇ¸ö
+    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // ä¿®æ”¹æœ€ç»ˆè®¾ç½®çš„å€¼ï¼Œæ¥è¿‘çš„é‚£ä¸ª
 
-    /* ¶ÌÂ·µçÑ¹ */
+    /* çŸ­è·¯ç”µå‹ */
     temp = OtherElement.u16CBC_Cur_DSG / 10; // A
-    temp = temp * 1000 / g_u32CS_Res_AFE;      // µ±Ç°¶ÔÓ¦¶àÉÙmv
+    temp = temp * 1000 / g_u32CS_Res_AFE;      // å½“å‰å¯¹åº”å¤šå°‘mv
     AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, AFE_SCV);
-    // ĞŞ¸Ä×îÖÕÉèÖÃµÄÖµ£¬½Ó½üµÄÄÇ¸ö
+    // ä¿®æ”¹æœ€ç»ˆè®¾ç½®çš„å€¼ï¼Œæ¥è¿‘çš„é‚£ä¸ª
 
-    OtherElement.u16CBC_Cur_DSG = AFE_SCV[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000; // ·ÀÖ¹Êı¾İÒç³ö¡£
-    OtherElement.u16CBC_Cur_DSG *= 10;                                                                // ·ÀÖ¹Êı¾İÒç³ö¡£
+    OtherElement.u16CBC_Cur_DSG = AFE_SCV[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000; // é˜²æ­¢æ•°æ®æº¢å‡ºã€‚
+    OtherElement.u16CBC_Cur_DSG *= 10;                                                                // é˜²æ­¢æ•°æ®æº¢å‡ºã€‚
 
 #else
 

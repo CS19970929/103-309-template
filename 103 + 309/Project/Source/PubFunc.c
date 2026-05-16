@@ -1,9 +1,9 @@
 #include "main.h"
 
-// Í¨¹ıwhileÑ­»·£¬Ã¿Ö´ĞĞÒ»´Î£¬vÖĞ1µÄÊıÄ¿¾Í»á¼õÉÙ1£¬Èç¹ûvÖĞ1µÄÊıÄ¿ÎªÆæÊı£¬Ôòparity=true£¬·ñÔòparity=false¡£
+// é€šè¿‡whileå¾ªç¯ï¼Œæ¯æ‰§è¡Œä¸€æ¬¡ï¼Œvä¸­1çš„æ•°ç›®å°±ä¼šå‡å°‘1ï¼Œå¦‚æœvä¸­1çš„æ•°ç›®ä¸ºå¥‡æ•°ï¼Œåˆ™parity=trueï¼Œå¦åˆ™parity=falseã€‚
 Parity OddEven_Check(UINT8 v)
 {
-	Parity parity = EVEN; // ³õÊ¼ÅĞ¶Ï±ê¼Ç
+	Parity parity = EVEN; // åˆå§‹åˆ¤æ–­æ ‡è®°
 	while (v)
 	{
 		parity = (Parity)(!parity);
@@ -12,7 +12,7 @@ Parity OddEven_Check(UINT8 v)
 	return parity;
 }
 
-// Ó²¼ş×Ô´øÆæÅ¼Ğ£Ñé£¬²»ĞèÒªÕâ¸öº¯ÊıÁË£¬Ä£Äâ´®¿Ú¿ÉÓÃ
+// ç¡¬ä»¶è‡ªå¸¦å¥‡å¶æ ¡éªŒï¼Œä¸éœ€è¦è¿™ä¸ªå‡½æ•°äº†ï¼Œæ¨¡æ‹Ÿä¸²å£å¯ç”¨
 UINT16 Usart_9bitOddEvenData_Frame(UINT8 data, Parity Parity_type)
 {
 	UINT16 result;
@@ -46,7 +46,7 @@ UINT16 Usart_9bitOddEvenData_Frame(UINT8 data, Parity Parity_type)
 
 /*=================================================================
  * FUNCTION: GetEndValue
- * PURPOSE : ²é±í
+ * PURPOSE : æŸ¥è¡¨
  * INPUT:    UINT16
  *
  * RETURN:   UINT16
@@ -161,10 +161,10 @@ UINT16 GetEndValue(const UINT16 *ptbl, UINT16 tblsize, UINT16 dat)
 
 /*=================================================================
  * FUNCTION: App_PubOPUPChk
- * PURPOSE : ¹ıÇ·ÅĞ¶Ï´¦Àí
- * INPUT:    *t_sPubOPChk£ºÅĞ¶ÏÕı¸ºÂß¼­¼°µ±Ç°ÅĞ¶ÏÖµ¡¢±È½ÏÖµ´«Èë *(t_sPubOPChk->i16ChkCnt)£º¼ÆÊ±ÀÛ¼ÓÆ÷µØÖ·
- *           t_sPubOPChk->u16TimeCntB£º´óÖµÊ±¼äÅĞ¶ÏÖµ t_sPubOPChk->u16TimeCntS£ºĞ¡ÖµÊ±¼äÅĞ¶ÏÖµ
- * RETURN:   0£ºÊıÖµÒì³£ 1£º´¦ÀíÍê³É
+ * PURPOSE : è¿‡æ¬ åˆ¤æ–­å¤„ç†
+ * INPUT:    *t_sPubOPChkï¼šåˆ¤æ–­æ­£è´Ÿé€»è¾‘åŠå½“å‰åˆ¤æ–­å€¼ã€æ¯”è¾ƒå€¼ä¼ å…¥ *(t_sPubOPChk->i16ChkCnt)ï¼šè®¡æ—¶ç´¯åŠ å™¨åœ°å€
+ *           t_sPubOPChk->u16TimeCntBï¼šå¤§å€¼æ—¶é—´åˆ¤æ–­å€¼ t_sPubOPChk->u16TimeCntSï¼šå°å€¼æ—¶é—´åˆ¤æ–­å€¼
+ * RETURN:   0ï¼šæ•°å€¼å¼‚å¸¸ 1ï¼šå¤„ç†å®Œæˆ
  *
  * CALLS:    void
  *
@@ -175,20 +175,20 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 {
 	if ((t_sPubOPChk->u8FlagLogic > 1) || (t_sPubOPChk->u16OPValB < t_sPubOPChk->u16OPValS))
 	{
-		return (0); // ÊıÖµÒì³£·µ»Ø0
+		return (0); // æ•°å€¼å¼‚å¸¸è¿”å›0
 	}
 
 	if (t_sPubOPChk->u8FlagBit == (1 - t_sPubOPChk->u8FlagLogic))
 	{
-		if (t_sPubOPChk->u16ChkVal >= t_sPubOPChk->u16OPValB) // µ±Ç°ÅĞ¶ÏÖµ³¬¹ı´óÖµ
+		if (t_sPubOPChk->u16ChkVal >= t_sPubOPChk->u16OPValB) // å½“å‰åˆ¤æ–­å€¼è¶…è¿‡å¤§å€¼
 		{
-			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntB) // µ±Ç°ÅĞ¶ÏÖµ³¬¹ı´óÖµt_sPubOPChk->u16TimeCntBÊ±¼äÖÃ±êÖ¾Î»Îªu8FlagLogic
+			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntB) // å½“å‰åˆ¤æ–­å€¼è¶…è¿‡å¤§å€¼t_sPubOPChk->u16TimeCntBæ—¶é—´ç½®æ ‡å¿—ä½ä¸ºu8FlagLogic
 			{
 				(*(t_sPubOPChk->i16ChkCnt)) = 0;
 				t_sPubOPChk->u8FlagBit = t_sPubOPChk->u8FlagLogic;
 			}
 		}
-		else // µÍÓÚ´óÖµÔò¼ÆÊ±Æ÷µİ¼õ
+		else // ä½äºå¤§å€¼åˆ™è®¡æ—¶å™¨é€’å‡
 		{
 			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
 			{
@@ -198,15 +198,15 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 	}
 	else
 	{
-		if (t_sPubOPChk->u16ChkVal <= t_sPubOPChk->u16OPValS) // µ±Ç°ÅĞ¶ÏÖµµÍÓÚĞ¡Öµ
+		if (t_sPubOPChk->u16ChkVal <= t_sPubOPChk->u16OPValS) // å½“å‰åˆ¤æ–­å€¼ä½äºå°å€¼
 		{
 			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntS)
 			{
 				(*(t_sPubOPChk->i16ChkCnt)) = 0;
-				t_sPubOPChk->u8FlagBit = 1 - t_sPubOPChk->u8FlagLogic; // µ±Ç°ÅĞ¶ÏÖµµÍÓÚĞ¡Öµt_sPubOPChk->u16TimeCntSÊ±¼äÖÃ±êÖ¾Î»Îª·Çu8FlagLogic
+				t_sPubOPChk->u8FlagBit = 1 - t_sPubOPChk->u8FlagLogic; // å½“å‰åˆ¤æ–­å€¼ä½äºå°å€¼t_sPubOPChk->u16TimeCntSæ—¶é—´ç½®æ ‡å¿—ä½ä¸ºéu8FlagLogic
 			}
 		}
-		else // ´óÓÚĞ¡ÖµÔò¼ÆÊ±Æ÷µİ¼õ
+		else // å¤§äºå°å€¼åˆ™è®¡æ—¶å™¨é€’å‡
 		{
 			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
 			{
@@ -215,7 +215,7 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 		}
 	}
 
-	return (1); // ´¦ÀíÍê³É·µ»Ø1
+	return (1); // å¤„ç†å®Œæˆè¿”å›1
 }
 
 UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
@@ -270,14 +270,14 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len, unsigned char key)
 	return (crc);
 }
 
-// Çó¾ø¶ÔÖµ
+// æ±‚ç»å¯¹å€¼
 UINT32 ModulusSub(UINT32 Data1, UINT32 Data2)
 {
 	return (UINT32)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
 }
 
-// ÒÔ10usÎªÊ±»ù£¬Èí¼şÑÓÊ±
-// 1msÒÔÄÚÎó²î 10%ÒÔÄÚ£¨¶øÇÒÊÇÆ«Ğ¡¡£10us´ó¸Å9.4us£©
+// ä»¥10usä¸ºæ—¶åŸºï¼Œè½¯ä»¶å»¶æ—¶
+// 1msä»¥å†…è¯¯å·® 10%ä»¥å†…ï¼ˆè€Œä¸”æ˜¯åå°ã€‚10uså¤§æ¦‚9.4usï¼‰
 void Delay_Base10us(int n)
 {
 	unsigned char a, b;
@@ -289,7 +289,7 @@ void Delay_Base10us(int n)
 	}
 }
 
-// Èí¼şÑÓÊ±º¯Êı
+// è½¯ä»¶å»¶æ—¶å‡½æ•°
 void Delay1ms(UINT8 delaycnt)
 {
 	UINT8 i, k;
@@ -306,7 +306,7 @@ void Delay1ms(UINT8 delaycnt)
 	for (i = 0; i < delaycnt; i++)
 	{
 		for (k = 0; k < 9; k++)
-		{ // 9±¶±ãÊÇ72MHz
+		{ // 9å€ä¾¿æ˜¯72MHz
 			for (j = 0; j < 560; j++)
 			{
 				// system clock = 8MHz
@@ -318,9 +318,9 @@ void Delay1ms(UINT8 delaycnt)
 /*******************************************************************************
 Function: MemoryCopy()
 Description:
-Input:	source--Ô´MemoryÖ¸Õë
-		target---Ä¿µÄMemoryÖ¸Õë
-		length---ĞèÒª¿½±´µÄÊı¾İ³¤¶È(Byres)
+Input:	source--æºMemoryæŒ‡é’ˆ
+		target---ç›®çš„MemoryæŒ‡é’ˆ
+		length---éœ€è¦æ‹·è´çš„æ•°æ®é•¿åº¦(Byres)
 Output:
 Others:
 *******************************************************************************/
@@ -335,7 +335,7 @@ void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length)
 	}
 }
 
-// ÄÜ²»ÄÜĞ´Ò»¸öº¯Êı£¬Ë³±ã°ÑÔ­Öµ¸Ä±äÄØ£¿¶ø²»ÊÇµ¥µ¥´«Öµ
+// èƒ½ä¸èƒ½å†™ä¸€ä¸ªå‡½æ•°ï¼Œé¡ºä¾¿æŠŠåŸå€¼æ”¹å˜å‘¢ï¼Ÿè€Œä¸æ˜¯å•å•ä¼ å€¼
 UINT16 *U16_SwapEndian_Adress(UINT16 *target)
 {
 #if 0
@@ -351,15 +351,15 @@ UINT16 *U16_SwapEndian_Adress(UINT16 *target)
 	return target;
 }
 
-// ´óĞ¡¶Ë×ª»»º¯Êı
+// å¤§å°ç«¯è½¬æ¢å‡½æ•°
 UINT16 U16_SwapEndian(UINT16 target)
 {
 	return (((uint16_t)target & 0xFF00) >> 8) | (((uint16_t)target & 0x00FF) << 8);
 }
 
-// 1:ÓĞÎÂ¶È¶ÏÏß£¬0£ºÕı³£
-// ÓĞÎÊÌâ£¬½ÓºÃÎÂ¶ÈÏß£¬ÖØÆôBMS²ÅÄÜÏû³ı±¨´í
-// Ìí¼Ó×Ô¶¯¸´Ô­¹¦ÄÜ£¬²»ĞèÒªÖØÆô
+// 1:æœ‰æ¸©åº¦æ–­çº¿ï¼Œ0ï¼šæ­£å¸¸
+// æœ‰é—®é¢˜ï¼Œæ¥å¥½æ¸©åº¦çº¿ï¼Œé‡å¯BMSæ‰èƒ½æ¶ˆé™¤æŠ¥é”™
+// æ·»åŠ è‡ªåŠ¨å¤åŸåŠŸèƒ½ï¼Œä¸éœ€è¦é‡å¯
 UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 {
 	static UINT8 su8_Recover_Cnt = 0;
@@ -377,7 +377,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 
 	switch (su8_StartUp_Flag)
 	{
-	case 0: // ¸Õ¿ª»ú£¬²»ÄÜÅĞ¶Ï£¬ÒòÎª²éÑ¯AFEº¯ÊıÒÑ¾­±»·Ö¸î£¬²»ÄÜÄÃµ½Êı¾İ£¬´ËÊ±ÅĞ¶Ï±ØÎª´í
+	case 0: // åˆšå¼€æœºï¼Œä¸èƒ½åˆ¤æ–­ï¼Œå› ä¸ºæŸ¥è¯¢AFEå‡½æ•°å·²ç»è¢«åˆ†å‰²ï¼Œä¸èƒ½æ‹¿åˆ°æ•°æ®ï¼Œæ­¤æ—¶åˆ¤æ–­å¿…ä¸ºé”™
 		if (++su8_Delay_Cnt >= 20)
 		{
 			su8_Delay_Cnt = 0;
@@ -389,7 +389,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 		if (*temp_AD < 110)
 		{
 			++result;
-			*temp_AD = 110; // ¶¨ËÀÔÚ-29ÉãÊÏ¶È¡£ÒÔ·ÀÉÏÎ»»úÏÔÊ¾NAÒÔÎªÃ»ÎÊÌâ
+			*temp_AD = 110; // å®šæ­»åœ¨-29æ‘„æ°åº¦ã€‚ä»¥é˜²ä¸Šä½æœºæ˜¾ç¤ºNAä»¥ä¸ºæ²¡é—®é¢˜
 			System_ERROR_UserCallback(ERROR_TEMP_BREAK);
 			su8_Recover_Cnt = 0;
 		}
@@ -398,7 +398,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 			if (System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK))
 			{
 				if (++su8_Recover_Cnt >= 50)
-				{ // ÅĞ¶Ï50´Î×Ô¶¯¸´Ô­£¬Ô¼Îª200*50=10s
+				{ // åˆ¤æ–­50æ¬¡è‡ªåŠ¨å¤åŸï¼Œçº¦ä¸º200*50=10s
 					su8_Recover_Cnt = 0;
 					System_ERROR_UserCallback(ERROR_REMOVE_TEMP_BREAK);
 				}
@@ -417,25 +417,25 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 void jtag_disableAndConfIO(void)
 {
 #if 1
-	/* ½ûÓÃ JTAG£¬PB3¡¢PB4¡¢PA15ÖØ¶¨ÒåÎªÆÕÍ¨IO */
+	/* ç¦ç”¨ JTAGï¼ŒPB3ã€PB4ã€PA15é‡å®šä¹‰ä¸ºæ™®é€šIO */
 	GPIO_InitTypeDef GPIO_InitStructure;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // Ê¹ÄÜPAºÍPB¶Ë¿ÚÊ±ÖÓ
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // ä½¿èƒ½PAå’ŒPBç«¯å£æ—¶é’Ÿ
 
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // ÅäÖÃ¸´ÓÃÊ±ÖÓ
-	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // ÆôÓÃSW£¬½ûÓÃJTAG£¬PA15¡¢PB3¡¢PB4¿ÉÓÃ
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // é…ç½®å¤ç”¨æ—¶é’Ÿ
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // å¯ç”¨SWï¼Œç¦ç”¨JTAGï¼ŒPA15ã€PB3ã€PB4å¯ç”¨
 
 #if 0
 	GPIO_ResetBits(GPIOB, GPIO_Pin_4);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_3; // ¶Ë¿ÚÅäÖÃ
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;	   // ÍÆÍìÊä³ö
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;	   // IO¿ÚËÙ¶ÈÎª50MHz
-	GPIO_Init(GPIOB, &GPIO_InitStructure);				   // ¸ù¾İÉè¶¨²ÎÊı³õÊ¼»¯
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_3; // ç«¯å£é…ç½®
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;	   // æ¨æŒ½è¾“å‡º
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;	   // IOå£é€Ÿåº¦ä¸º50MHz
+	GPIO_Init(GPIOB, &GPIO_InitStructure);				   // æ ¹æ®è®¾å®šå‚æ•°åˆå§‹åŒ–
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;		  // ¶Ë¿ÚÅäÖÃ
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // ÍÆÍìÊä³ö
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // IO¿ÚËÙ¶ÈÎª50MHz
-	GPIO_Init(GPIOA, &GPIO_InitStructure);			  // ¸ù¾İÉè¶¨²ÎÊı³õÊ¼»¯
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;		  // ç«¯å£é…ç½®
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // æ¨æŒ½è¾“å‡º
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // IOå£é€Ÿåº¦ä¸º50MHz
+	GPIO_Init(GPIOA, &GPIO_InitStructure);			  // æ ¹æ®è®¾å®šå‚æ•°åˆå§‹åŒ–
 #endif
 
 #endif

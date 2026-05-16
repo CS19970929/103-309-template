@@ -37,7 +37,7 @@ static UINT8 s_u8AfeCurrentStartupColdBoot = 1U;
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
-UINT16 CopperLoss[CompensateNUM]; // u¦¸
+UINT16 CopperLoss[CompensateNUM]; // uÎ©
 UINT16 CopperLoss_Num[CompensateNUM];
 
 UINT32 g_u32CS_Res_AFE = 0;
@@ -140,11 +140,11 @@ void DataLoad_CellVolt_Test(void)
     g_stCellInfoReport.u16VCell[31] = aaa11;
 }
 
-// ÕâÀïÅÅÁĞºÃ¾ÍĞĞ£¬²»ĞèÒªµç³ØÎ»ºÅÓ³Éä±í¡£>61000Îª²»ÓÃ
-// ¾­¹ıÑéËã£¬AFE1Ğ£×¼Ò»´Î£¬È»ºó±¾ÉíÔÙĞ£×¼Ò»´Îµş¼ÓÊÇ¿ÉÒÔµÄ¡£²»ĞèÒªÈ·¶¨Ä³Ò»¸öKBÖµµÄ×ö·¨¡£
-// ¼ÙÉèÏÈÈ·¶¨ÓÃAFE1»¹ÊÇ±¾ÉíµÄKBµÄ»°£¬»á³öÏÖÎÊÌâ¡£ÈçÏÂ£º
-// ¼ÙÉèĞèÒªÕûÌåĞ£×¼£¬ĞĞ£¬AFE1ÏÈĞĞ£¬È»ºó·¢ÏÖÄ³¼¸´®³öÎÊÌâ£¬¼ÌĞøÊ¹ÓÃ±¾ÉíKBÖµ£¬È»ºó±¾ÉíKBÖµĞèÒªÍ¬²½Ç°ÃæAFE1µÄKBÖµÒ»ÆğËã²ÅĞĞ
-// Èç¹ûÓÖ±ä³Éµ¥¶ÀÊ¹ÓÃ±¾ÉíKBÖµĞ£×¼£¬³öÏÖ´íÎó¡£
+// è¿™é‡Œæ’åˆ—å¥½å°±è¡Œï¼Œä¸éœ€è¦ç”µæ± ä½å·æ˜ å°„è¡¨ã€‚>61000ä¸ºä¸ç”¨
+// ç»è¿‡éªŒç®—ï¼ŒAFE1æ ¡å‡†ä¸€æ¬¡ï¼Œç„¶åæœ¬èº«å†æ ¡å‡†ä¸€æ¬¡å åŠ æ˜¯å¯ä»¥çš„ã€‚ä¸éœ€è¦ç¡®å®šæŸä¸€ä¸ªKBå€¼çš„åšæ³•ã€‚
+// å‡è®¾å…ˆç¡®å®šç”¨AFE1è¿˜æ˜¯æœ¬èº«çš„KBçš„è¯ï¼Œä¼šå‡ºç°é—®é¢˜ã€‚å¦‚ä¸‹ï¼š
+// å‡è®¾éœ€è¦æ•´ä½“æ ¡å‡†ï¼Œè¡Œï¼ŒAFE1å…ˆè¡Œï¼Œç„¶åå‘ç°æŸå‡ ä¸²å‡ºé—®é¢˜ï¼Œç»§ç»­ä½¿ç”¨æœ¬èº«KBå€¼ï¼Œç„¶åæœ¬èº«KBå€¼éœ€è¦åŒæ­¥å‰é¢AFE1çš„KBå€¼ä¸€èµ·ç®—æ‰è¡Œ
+// å¦‚æœåˆå˜æˆå•ç‹¬ä½¿ç”¨æœ¬èº«KBå€¼æ ¡å‡†ï¼Œå‡ºç°é”™è¯¯ã€‚
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
@@ -204,14 +204,14 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    // µ¥Æ¬»ú¶Á×ÜÑ¹
+    // å•ç‰‡æœºè¯»æ€»å‹
     // u32VCellTotle = ((g_i32ADCResult[ADC_VBC]*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // AFE¶Á×ÜÑ¹
+    // AFEè¯»æ€»å‹
     // u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // ËùÓĞµ¥½Úµç³ØµçÑ¹¼ÓÆğÀ´
+    // æ‰€æœ‰å•èŠ‚ç”µæ± ç”µå‹åŠ èµ·æ¥
     u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
 
-    g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // ³ıÒÔ10
+    g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // é™¤ä»¥10
     g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;                                 // max cell voltage
     g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;                                 // min cell voltage
     g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;           // delta cell voltage
@@ -219,10 +219,10 @@ void DataLoad_CellVoltMaxMinFind(void)
     g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;                  // min cell voltage
 }
 
-/*Õâ¸öÊÇÊı¾İÒç³öµÄÎÊÌâ£¬Æä´ÎÊÇ>>Õâ¸öµÄÓÅÏÈ¼¶ºÍ±ğµÄ·ûºÅÓÅÏÈ¼¶µÄÎÊÌâ
-  ÔËËã·ûÓÅÏÈ¼¶Ì«»ìÂÒµ¼ÖÂÊı¾İÒç³öµÄÎÊÌâ
-   (UINT16)(t_i32temp/100) ºÍ
-    (UINT16)(t_i32temp)/100²»Ò»Ñù
+/*è¿™ä¸ªæ˜¯æ•°æ®æº¢å‡ºçš„é—®é¢˜ï¼Œå…¶æ¬¡æ˜¯>>è¿™ä¸ªçš„ä¼˜å…ˆçº§å’Œåˆ«çš„ç¬¦å·ä¼˜å…ˆçº§çš„é—®é¢˜
+  è¿ç®—ç¬¦ä¼˜å…ˆçº§å¤ªæ··ä¹±å¯¼è‡´æ•°æ®æº¢å‡ºçš„é—®é¢˜
+   (UINT16)(t_i32temp/100) å’Œ
+    (UINT16)(t_i32temp)/100ä¸ä¸€æ ·
 */
 void DataLoad_Temperature(void)
 {
@@ -231,7 +231,7 @@ void DataLoad_Temperature(void)
     UINT8 Select;
 
     Select = 2;
-    // Ã»ÄÉÈëÍ³¼ÆµÄ£¬Ä¬ÈÏÖµ¾ÍÊÇ0ÁË
+    // æ²¡çº³å…¥ç»Ÿè®¡çš„ï¼Œé»˜è®¤å€¼å°±æ˜¯0äº†
     for (i = 0; i < Select; i++)
     {
         t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
@@ -243,30 +243,30 @@ void DataLoad_Temperature(void)
     g_stCellInfoReport.u16Temperature[2] = 0;
 
 #if 0
-	//»·¾³ÎÂ¶È1
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV1] / 10 - 40;		//·Å´ó1000±¶ºÍBÖµ¶ÔÓ¦µÄÒâË¼
+	//ç¯å¢ƒæ¸©åº¦1
+	t_i32temp = g_i32ADCResult[ADC_TEMP_EV1] / 10 - 40;		//æ”¾å¤§1000å€å’ŒBå€¼å¯¹åº”çš„æ„æ€
 	//t_i32temp =  - 40;
 	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1])>>10;
 	g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp*10 + 400);
 	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
 #endif
 
-    // »·¾³ÎÂ¶È2
-    // Èç¹ûÃ»ÓĞ£¬Õâ¸öÄ¬ÈÏ¾ÍÊÇ0(ADC.c²»»áµ÷ÓÃ)
+    // ç¯å¢ƒæ¸©åº¦2
+    // å¦‚æœæ²¡æœ‰ï¼Œè¿™ä¸ªé»˜è®¤å°±æ˜¯0(ADC.cä¸ä¼šè°ƒç”¨)
     t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
 
-    // »·¾³ÎÂ¶È3
+    // ç¯å¢ƒæ¸©åº¦3
     t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
 
 #if 1
-    // MOSÎÂ¶ÈÎªÉ¢ÈÈÆ¬ÎÂ¶È
-    // È¡Á½Õß×î´óÖµ
+    // MOSæ¸©åº¦ä¸ºæ•£çƒ­ç‰‡æ¸©åº¦
+    // å–ä¸¤è€…æœ€å¤§å€¼
     // t_i32temp = (g_i32ADCResult[ADC_TEMP_MOS1] > g_i32ADCResult[ADC_TEMP_MOS2] ? g_i32ADCResult[ADC_TEMP_MOS1]:g_i32ADCResult[ADC_TEMP_MOS2]);
     t_i32temp = g_i32ADCResult[ADC_TEMP_MOS1];
     t_i32temp = t_i32temp / 10 - 40;
@@ -285,13 +285,13 @@ void DataLoad_TemperatureMaxMinFind(void)
     t_u16VcellMaxTemp = 0;
     t_u16VcellMinTemp = 0x7FFF;
 
-    // Èç¹ûÊÇÁ½¸ö»·¾³ÎÂ¶È£¬Ôò¸ÄÎª8±ã¿É
+    // å¦‚æœæ˜¯ä¸¤ä¸ªç¯å¢ƒæ¸©åº¦ï¼Œåˆ™æ”¹ä¸º8ä¾¿å¯
     for (i = 0; i < 7; i++)
-    { // Ä¬ÈÏÖ»ÓĞÒ»¸ö»·¾³ÎÂ¶È£¬ÄÉÈë¼ÆËã
+    { // é»˜è®¤åªæœ‰ä¸€ä¸ªç¯å¢ƒæ¸©åº¦ï¼Œçº³å…¥è®¡ç®—
         if (g_stCellInfoReport.u16Temperature[i] == 0)
-        {             // Õâ¶Î´úÂëÊ²Ã´ÒâË¼£¬¶ÏÁË¾Í²»ÅĞ¶ÏÂğ£¿
-            continue; // ÓĞµÄ£¬Ôò±Ø¶¨»á±»¸³Öµ£¬ÒªÃ´-29ÉãÊÏ¶È¡£
-        } // ¿ÕµÄ£¬Ôò¾ÍÊÇÄ¬ÈÏ¸ÕÉÏµçµÄÖµ0
+        {             // è¿™æ®µä»£ç ä»€ä¹ˆæ„æ€ï¼Œæ–­äº†å°±ä¸åˆ¤æ–­å—ï¼Ÿ
+            continue; // æœ‰çš„ï¼Œåˆ™å¿…å®šä¼šè¢«èµ‹å€¼ï¼Œè¦ä¹ˆ-29æ‘„æ°åº¦ã€‚
+        } // ç©ºçš„ï¼Œåˆ™å°±æ˜¯é»˜è®¤åˆšä¸Šç”µçš„å€¼0
         t_u16VcellTemp = g_stCellInfoReport.u16Temperature[i];
         if (t_u16VcellMaxTemp < t_u16VcellTemp)
         {
@@ -1065,11 +1065,11 @@ void close_ctlc(void)
 {
     MCUO_AFE_CTLC = 0;
     g_stAfeCurrentObserve.u8CtlcState = 0U;
-    // todo »á²»»á´æÔÚ³åÍ»£¬Âß¼­Íê±¸£¿£¿£¿
+    // todo ä¼šä¸ä¼šå­˜åœ¨å†²çªï¼Œé€»è¾‘å®Œå¤‡ï¼Ÿï¼Ÿï¼Ÿ
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
-// todo ×ÜÑ¹¡¢typecÂß¼­¡¢µçÁ÷
+// todo æ€»å‹ã€typecé€»è¾‘ã€ç”µæµ
 void new_todo_logi(void)
 {
     static uint8_t mos_state = 0;
@@ -1077,11 +1077,11 @@ void new_todo_logi(void)
     charger_detect_and_keyLogi_200ms();
 
 #if 1
-    // // todo Ê²Ã´µçÆ½»½ĞÑ£¿
+    // // todo ä»€ä¹ˆç”µå¹³å”¤é†’ï¼Ÿ
     // if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
     // {
     // }
-    // // todo ´ıÈ·ÈÏ typec¹©µçÂß¼­
+    // // todo å¾…ç¡®è®¤ typecä¾›ç”µé€»è¾‘
     // GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
     {
 #ifdef DISP_VBAT_AND_TEMP_
@@ -1129,7 +1129,7 @@ void new_todo_logi(void)
             state_fuse = 0;
 
             close_ctlc();
-            // todo mcc¹ØÁË£¬when ¿ª
+            // todo mccå…³äº†ï¼Œwhen å¼€
             if (Vbat_mv >= 4280 * SeriesNum || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10)
             {
                 if (++rong_fuse_afe_err_cnt >= 10)
@@ -1168,7 +1168,7 @@ void new_todo_logi(void)
                         delay_cnt = 0;
                         state_fuse = 1;
                         close_ctlc();
-                        // ÊÇ·ñÓ¦¸ÃÇ¿ÖÆ¹Øµô·Åµç£¿£¿£¿
+                        // æ˜¯å¦åº”è¯¥å¼ºåˆ¶å…³æ‰æ”¾ç”µï¼Ÿï¼Ÿï¼Ÿ
                         FaultWarnRecord2(CellOvp_Third);
                         FaultWarnRecord2(BatOvp_Third);
                     }
@@ -1205,7 +1205,7 @@ void new_todo_logi(void)
 #endif
     }
 
-    // 74hc595 ¿ØÖÆ5pin 18 seg led ,´ıÍêÉÆspiÇı¶¯¡¢ÅäÖÃ
+    // 74hc595 æ§åˆ¶5pin 18 seg led ,å¾…å®Œå–„spié©±åŠ¨ã€é…ç½®
 #endif
 }
 

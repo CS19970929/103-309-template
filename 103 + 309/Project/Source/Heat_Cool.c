@@ -6,19 +6,19 @@ union HEAT_COOL_FAULT_FLAG Heat_Cool_FaultFlag;
 
 struct HEAT_COOL_ELEMENT Heat_Cool_Element;
 
-#define HEAT_CLOSE_CUR 0 // Ä¬ÈÏĞ´ËÀ1A¹Ø±Õ£¬³äµçµÄÊ±ºò£¬¿ªÆô¼ÓÈÈ»á¼õÉÙ³äµçµçÁ÷
-						 // ¸ÄÎª0A£¬ÒòÎª¼ÓÈÈÄ¤ÎüÊÕµçÁ÷Ö®ºó(Ğ¡¹¦ÂÊ³äµçÆ÷)£¬¿ÉÄÜ¾Í´Ó2.5A±ä³É0.5A£¬
-						 // È»ºó¹Ø±Õ£¬µçÁ÷ÓÖÆğÀ´£¬¼ÓÈÈÓÖ´ò¿ª£¬¾ÍÔÚÕâÀï·è¿ñ¿ª¹Ø¡£
-						 // ¸É´àÒ»ÁË°ÙÁË£¬Ö»Òª´ò¿ªÁË£¬¾ÍµÈÎÂ¶ÈÉÏÀ´ÔÙ¹Ø±Õ
+#define HEAT_CLOSE_CUR 0 // é»˜è®¤å†™æ­»1Aå…³é—­ï¼Œå……ç”µçš„æ—¶å€™ï¼Œå¼€å¯åŠ çƒ­ä¼šå‡å°‘å……ç”µç”µæµ
+						 // æ”¹ä¸º0Aï¼Œå› ä¸ºåŠ çƒ­è†œå¸æ”¶ç”µæµä¹‹å(å°åŠŸç‡å……ç”µå™¨)ï¼Œå¯èƒ½å°±ä»2.5Aå˜æˆ0.5Aï¼Œ
+						 // ç„¶åå…³é—­ï¼Œç”µæµåˆèµ·æ¥ï¼ŒåŠ çƒ­åˆæ‰“å¼€ï¼Œå°±åœ¨è¿™é‡Œç–¯ç‹‚å¼€å…³ã€‚
+						 // å¹²è„†ä¸€äº†ç™¾äº†ï¼Œåªè¦æ‰“å¼€äº†ï¼Œå°±ç­‰æ¸©åº¦ä¸Šæ¥å†å…³é—­
 
 void Cool_StartUp_SelfCheck(void)
 {
 	Heat_Cool_FaultFlag.bits.CoolErr_Normal = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Cool = 0; // Ã÷Ìì»ØÀ´²¹
+	System_Func_StartUp.bits.b1StartUpFlag_Cool = 0; // æ˜å¤©å›æ¥è¡¥
 	CoolCtrl_Command = ST_COOL_DET_NORMAL;
 }
 
-// ÀäÄı²ßÂÔºÜ¼òµ¥£¬Ö»ÒªÎÂ¶Èµ½ÁË¾Í´ò¿ª¾ÍĞĞ£¬ÒòÎªÕâ¸öÊ±ºò´ó¸ÅÂÊÔÚ´ó¹¦ÂÊÊ¹ÓÃ¡£
+// å†·å‡ç­–ç•¥å¾ˆç®€å•ï¼Œåªè¦æ¸©åº¦åˆ°äº†å°±æ‰“å¼€å°±è¡Œï¼Œå› ä¸ºè¿™ä¸ªæ—¶å€™å¤§æ¦‚ç‡åœ¨å¤§åŠŸç‡ä½¿ç”¨ã€‚
 void Cool_OnOFF_Det_Normal(void)
 {
 	if (g_stCellInfoReport.u16TempMax >= Heat_Cool_Element.u16Cool_OpenTemp)
@@ -56,14 +56,14 @@ void Cool_OnOFF_Err_RecoverDeal(void)
 {
 }
 
-// ÈıÌõÖ÷Ïß£º
-// A£¬¿ª»ú×Ô¼ìÃ»ÎÊÌâ¡ª¡ª½øÈënormal¼à¿Ø¡ª¡ªĞèÒª´¦ÀíÇÒ´¦Àí³É¹¦¡ª¡ª¼ÌĞøÌø»ØnormalÄ£Ê½¼à¿Ø
-// B£¬¿ª»ú×Ô¼ìÃ»ÎÊÌâ¡ª¡ª½øÈënormal¼à¿Ø¡ª¡ªĞèÒª´¦ÀíÇÒ´¦ÀíÊ§°Ü¡ª¡ª½øÈë´íÎó´¦Àíº¯Êı¡ª¡ª½øÈë¸´Ô­º¯Êı¡ª¡ª¸´Ô­Íê±Ï¡ª¡ª·µ»Ø×Ô¼ì
-// C£¬¿ª»ú×Ô¼ìÓĞÎÊÌâ¡ª¡ª½øÈë´íÎó´¦Àíº¯Êı¡ª¡ª½øÈë¸´Ô­º¯Êı¡ª¡ª¸´Ô­Íê±Ï¡ª¡ª·µ»Ø×Ô¼ì
+// ä¸‰æ¡ä¸»çº¿ï¼š
+// Aï¼Œå¼€æœºè‡ªæ£€æ²¡é—®é¢˜â€”â€”è¿›å…¥normalç›‘æ§â€”â€”éœ€è¦å¤„ç†ä¸”å¤„ç†æˆåŠŸâ€”â€”ç»§ç»­è·³å›normalæ¨¡å¼ç›‘æ§
+// Bï¼Œå¼€æœºè‡ªæ£€æ²¡é—®é¢˜â€”â€”è¿›å…¥normalç›‘æ§â€”â€”éœ€è¦å¤„ç†ä¸”å¤„ç†å¤±è´¥â€”â€”è¿›å…¥é”™è¯¯å¤„ç†å‡½æ•°â€”â€”è¿›å…¥å¤åŸå‡½æ•°â€”â€”å¤åŸå®Œæ¯•â€”â€”è¿”å›è‡ªæ£€
+// Cï¼Œå¼€æœºè‡ªæ£€æœ‰é—®é¢˜â€”â€”è¿›å…¥é”™è¯¯å¤„ç†å‡½æ•°â€”â€”è¿›å…¥å¤åŸå‡½æ•°â€”â€”å¤åŸå®Œæ¯•â€”â€”è¿”å›è‡ªæ£€
 void Cool_Control(void)
 {
 	if (!System_OnOFF_Func.bits.b1OnOFF_Cool)
-	{ // Ã»ÓĞÕâ¸ö¹¦ÄÜ£¬²»½øÀ´
+	{ // æ²¡æœ‰è¿™ä¸ªåŠŸèƒ½ï¼Œä¸è¿›æ¥
 		return;
 	}
 
@@ -99,18 +99,18 @@ void Cool_Control(void)
 void Heat_StartUp_SelfCheck(void)
 {
 	Heat_Cool_FaultFlag.bits.HeatErr_Normal = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Heat = 0; // Ã÷Ìì»ØÀ´²¹
+	System_Func_StartUp.bits.b1StartUpFlag_Heat = 0; // æ˜å¤©å›æ¥è¡¥
 	HeatCtrl_Command = ST_HEAT_DET_NORMAL;
 }
 
 /*
-¸ÄÎª¼òÒ×°æ
-1¡¢ÓĞµçÁ÷£¬»òÕßµçÁ÷Öµ´óÓÚÒ»¶¨µÄÖµ(¿ÉÉè)
-2¡¢ÎÂ¶ÈĞ¡ÓÚXÉãÊÏ¶È(¿ÉÉè)¡£
+æ”¹ä¸ºç®€æ˜“ç‰ˆ
+1ã€æœ‰ç”µæµï¼Œæˆ–è€…ç”µæµå€¼å¤§äºä¸€å®šçš„å€¼(å¯è®¾)
+2ã€æ¸©åº¦å°äºXæ‘„æ°åº¦(å¯è®¾)ã€‚
 */
 void Heat_OnOFF_Det_Normal(void)
 {
-	// Õı³£¼ÓÈÈÂß¼­£¬¼È¿Éµç³Ø¼ÓÈÈ£¬Ò²¿É³äµçÇ¹¼ÓÈÈ
+	// æ­£å¸¸åŠ çƒ­é€»è¾‘ï¼Œæ—¢å¯ç”µæ± åŠ çƒ­ï¼Œä¹Ÿå¯å……ç”µæªåŠ çƒ­
 	if (g_stCellInfoReport.u16TempMin <= Heat_Cool_Element.u16Heat_OpenTemp)
 	{
 		if (g_stCellInfoReport.u16Ichg >= Heat_Cool_Element.u16Heat_OpenCur || g_stCellInfoReport.u16IDischg >= Heat_Cool_Element.u16Heat_OpenCur)
@@ -120,7 +120,7 @@ void Heat_OnOFF_Det_Normal(void)
 		}
 	}
 
-	// ²¹³ä£¬Èç¹ûÊÇµÍÎÂ±£»¤£¬¿Ï¶¨ÊÇÇı¶¯¹Øµô£¬Õâ¸öÊ±ºòÖ±½Ó´ò¿ª¼ÓÈÈ½Ó´¥Æ÷µÈ´ı³äµçÇ¹²åÈë±ã¿É
+	// è¡¥å……ï¼Œå¦‚æœæ˜¯ä½æ¸©ä¿æŠ¤ï¼Œè‚¯å®šæ˜¯é©±åŠ¨å…³æ‰ï¼Œè¿™ä¸ªæ—¶å€™ç›´æ¥æ‰“å¼€åŠ çƒ­æ¥è§¦å™¨ç­‰å¾…å……ç”µæªæ’å…¥ä¾¿å¯
 	if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp || g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
 	{
 		SystemStatus.bits.b1Status_Heat = 1;
@@ -128,7 +128,7 @@ void Heat_OnOFF_Det_Normal(void)
 	}
 }
 
-// ¹Ø±ÕºÍµçÁ÷²»¹Ò¹³(Ö¤Ã÷¿ªÊ¼Ê¹ÓÃÁË)£¬´ò¿ª±ØĞë¹Ò¹³£¬²»È»¾Í³¤ÆÚÔÚÄÇÀïºÄ£¬°Ñµç³ØºÄµ½µÍÑ¹±£»¤¡£
+// å…³é—­å’Œç”µæµä¸æŒ‚é’©(è¯æ˜å¼€å§‹ä½¿ç”¨äº†)ï¼Œæ‰“å¼€å¿…é¡»æŒ‚é’©ï¼Œä¸ç„¶å°±é•¿æœŸåœ¨é‚£é‡Œè€—ï¼ŒæŠŠç”µæ± è€—åˆ°ä½å‹ä¿æŠ¤ã€‚
 void Heat_OnOFF_CONT(void)
 {
 	static UINT16 su16_HeatTime_Cnt = 0;
@@ -144,9 +144,9 @@ void Heat_OnOFF_CONT(void)
 		}
 	}
 	*/
-	// ÒòÎª¼ÓÈÈÄ¤ÎüÊÕµçÁ÷Ö®ºó(Ğ¡¹¦ÂÊ³äµçÆ÷)£¬¿ÉÄÜ¾Í´Ó2.5A±ä³É0.5A£¬
-	// È»ºó¹Ø±Õ£¬µçÁ÷ÓÖÆğÀ´£¬¼ÓÈÈÓÖ´ò¿ª£¬¾ÍÔÚÕâÀï·è¿ñ¿ª¹Ø¡£
-	// ¸É´àÒ»ÁË°ÙÁË£¬Ö»Òª´ò¿ªÁË£¬ÎÂ¶È±ØĞë»ØÀ´£¬²Å¹Ø±Õ£¬ºóĞøĞèÒªĞŞ¸Ä£¬ÔÙ×÷¶¨ÖÆ
+	// å› ä¸ºåŠ çƒ­è†œå¸æ”¶ç”µæµä¹‹å(å°åŠŸç‡å……ç”µå™¨)ï¼Œå¯èƒ½å°±ä»2.5Aå˜æˆ0.5Aï¼Œ
+	// ç„¶åå…³é—­ï¼Œç”µæµåˆèµ·æ¥ï¼ŒåŠ çƒ­åˆæ‰“å¼€ï¼Œå°±åœ¨è¿™é‡Œç–¯ç‹‚å¼€å…³ã€‚
+	// å¹²è„†ä¸€äº†ç™¾äº†ï¼Œåªè¦æ‰“å¼€äº†ï¼Œæ¸©åº¦å¿…é¡»å›æ¥ï¼Œæ‰å…³é—­ï¼Œåç»­éœ€è¦ä¿®æ”¹ï¼Œå†ä½œå®šåˆ¶
 	if (g_stCellInfoReport.u16TempMin > Heat_Cool_Element.u16Heat_CloseTemp)
 	{
 		if (++su16_HeatTime_Cnt > 3)
@@ -169,10 +169,10 @@ void Heat_OnOFF_CONT(void)
 	}
 }
 
-// µÍÎÂ±£»¤£¬È»ºó²åÈë³äµçÇ¹£¬¼ÓÈÈµ½µÍÎÂ±£»¤»Ö¸´£¬Õâ¸öÊ±ºò¶Ï¿ª¼ÓÈÈ½Ó´¥Æ÷£¬È»ºó½øÈëÕı³£¼ì²âÄ£Ê½
-// 1£¬Èç¹û²»¹ØÏëÖ±½Ó¼ÓÈÈµ½Í£Ö¹¼ÓÈÈµã£¬Èç¹û¼Ó×Å¼Ó×Å£¬È»ºó¶Ï¿ª³äµçÇ¹£¬Ôò»á±ä³Éµç³Ø·Åµç¼ÓÈÈ£¬Èç¹ûÕâ¸öÊ±ºòÎÂ¶È¶¯Ì¬Æ½ºâ£¬°Ñµç³ØµÄµçºÄÃ»ÁË
-// 2£¬Èç¹ûÊÇ¶Ïµô£¬½øÈëÕı³£Âß¼­ÅĞ¶Ï£¬¾Í»áÓĞµãÓÃ»§ÌåÑéµÄ²»ºÃ£¬¿Í»§ÏëÍ¨¹ı³äµçÇ¹°Ñ¼ÓÈÈµ½¸´Ô­£¬µ«ÊÇ²¢Ã»×öµ½¡£
-// »ùÓÚ2£¬Êµ¼ÊÉÏÎÊÌâÒ²²»´ó£¬¼ÓÈÈµ½µÍÎÂ±£»¤»Ö¸´ÁË£¬¾ÍÄÜÕı³£ÅÜÆğÀ´ÁË£¬ÅÜÆğÀ´¿Í»§¾ÍÈÏÎªÃ»ÎÊÌâ£¬Õâ¸öÊ±ºòÈç¹ûÓĞµçÁ÷ÔÙ½øĞĞ¼ÓÈÈ£¬ÎÊÌâ²»´ó¡£
+// ä½æ¸©ä¿æŠ¤ï¼Œç„¶åæ’å…¥å……ç”µæªï¼ŒåŠ çƒ­åˆ°ä½æ¸©ä¿æŠ¤æ¢å¤ï¼Œè¿™ä¸ªæ—¶å€™æ–­å¼€åŠ çƒ­æ¥è§¦å™¨ï¼Œç„¶åè¿›å…¥æ­£å¸¸æ£€æµ‹æ¨¡å¼
+// 1ï¼Œå¦‚æœä¸å…³æƒ³ç›´æ¥åŠ çƒ­åˆ°åœæ­¢åŠ çƒ­ç‚¹ï¼Œå¦‚æœåŠ ç€åŠ ç€ï¼Œç„¶åæ–­å¼€å……ç”µæªï¼Œåˆ™ä¼šå˜æˆç”µæ± æ”¾ç”µåŠ çƒ­ï¼Œå¦‚æœè¿™ä¸ªæ—¶å€™æ¸©åº¦åŠ¨æ€å¹³è¡¡ï¼ŒæŠŠç”µæ± çš„ç”µè€—æ²¡äº†
+// 2ï¼Œå¦‚æœæ˜¯æ–­æ‰ï¼Œè¿›å…¥æ­£å¸¸é€»è¾‘åˆ¤æ–­ï¼Œå°±ä¼šæœ‰ç‚¹ç”¨æˆ·ä½“éªŒçš„ä¸å¥½ï¼Œå®¢æˆ·æƒ³é€šè¿‡å……ç”µæªæŠŠåŠ çƒ­åˆ°å¤åŸï¼Œä½†æ˜¯å¹¶æ²¡åšåˆ°ã€‚
+// åŸºäº2ï¼Œå®é™…ä¸Šé—®é¢˜ä¹Ÿä¸å¤§ï¼ŒåŠ çƒ­åˆ°ä½æ¸©ä¿æŠ¤æ¢å¤äº†ï¼Œå°±èƒ½æ­£å¸¸è·‘èµ·æ¥äº†ï¼Œè·‘èµ·æ¥å®¢æˆ·å°±è®¤ä¸ºæ²¡é—®é¢˜ï¼Œè¿™ä¸ªæ—¶å€™å¦‚æœæœ‰ç”µæµå†è¿›è¡ŒåŠ çƒ­ï¼Œé—®é¢˜ä¸å¤§ã€‚
 void Heat_OnOFF_Det_Err(void)
 {
 	static UINT16 su16_Recovery_Tcnt = 0;
@@ -180,10 +180,10 @@ void Heat_OnOFF_Det_Err(void)
 	if (!g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp && !g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp)
 	{
 		if (++su16_Recovery_Tcnt > 10)
-		{ // ½â³ı±£»¤ºó£¬µÈ´ıÏµÍ³ÎÈ¶¨10s
+		{ // è§£é™¤ä¿æŠ¤åï¼Œç­‰å¾…ç³»ç»Ÿç¨³å®š10s
 			su16_Recovery_Tcnt = 0;
-			SystemStatus.bits.b1Status_Heat = 0;		 // ÏÈ¹Øµô¼ÓÈÈ½Ó´¥Æ÷£¬½øÈëÕı³£ÅĞ¶Ï¡£
-			HeatCtrl_Command = ST_HEAT_ERR_RECOVER_DEAL; // ½øÈë¸´Ô­´¦Àíº¯Êı
+			SystemStatus.bits.b1Status_Heat = 0;		 // å…ˆå…³æ‰åŠ çƒ­æ¥è§¦å™¨ï¼Œè¿›å…¥æ­£å¸¸åˆ¤æ–­ã€‚
+			HeatCtrl_Command = ST_HEAT_ERR_RECOVER_DEAL; // è¿›å…¥å¤åŸå¤„ç†å‡½æ•°
 		}
 	}
 }
@@ -195,14 +195,14 @@ void Heat_OnOFF_Err_RecoverDeal(void)
 
 void Heat_Control(void)
 {
-	static UINT8 heat_Flag = 0; // heat_Flag == 1£¬¼ÓÈÈ¹¦ÄÜ´ò¿ª
+	static UINT8 heat_Flag = 0; // heat_Flag == 1ï¼ŒåŠ çƒ­åŠŸèƒ½æ‰“å¼€
 	static UINT8 temp_Count = 0;
 	static UINT16 heat_Count = 0;
 	static UINT16 closeChgMosCount = 0;
-	static UINT8 dsg_Count = 0; // ·ÅµçÊ±¼ä¼ÆÊı
+	static UINT8 dsg_Count = 0; // æ”¾ç”µæ—¶é—´è®¡æ•°
 
 	if (!System_OnOFF_Func.bits.b1OnOFF_Heat)
-	{ // Ã»ÓĞÕâ¸ö¹¦ÄÜ£¬²»½øÀ´
+	{ // æ²¡æœ‰è¿™ä¸ªåŠŸèƒ½ï¼Œä¸è¿›æ¥
 		return;
 	}
 
@@ -211,7 +211,7 @@ void Heat_Control(void)
 		return;
 	}
 
-	/* ¼ÓÈÈµçÁ÷ÉèÖÃÎª50AµÄÊ±ºò¹Ø±Õ¼ÓÈÈ */
+	/* åŠ çƒ­ç”µæµè®¾ç½®ä¸º50Açš„æ—¶å€™å…³é—­åŠ çƒ­ */
 	if (Heat_Cool_Element.u16Heat_OpenCur == 500)
 	{
 		SystemStatus.bits.b1Status_Heat = 0;
@@ -228,14 +228,14 @@ void Heat_Control(void)
 
 	if (heat_Flag)
 	{
-		/* ¼ÓÈÈºóÎÂ¶È ´óÓÚ0 ÓÖĞ¡ÓÚ0 */
+		/* åŠ çƒ­åæ¸©åº¦ å¤§äº0 åˆå°äº0 */
 		if (g_stCellInfoReport.u16TempMin < Heat_Cool_Element.u16Heat_OpenTemp)
 		{
-			/* ´ò¿ª¼ÓÈÈ¼ÌµçÆ÷1s×óÓÒºó£¬²Å¹Ø±Õ³äµç¹Ü */
+			/* æ‰“å¼€åŠ çƒ­ç»§ç”µå™¨1så·¦å³åï¼Œæ‰å…³é—­å……ç”µç®¡ */
 			if (1 == closeChgMosCount++)
 			{
 				closeChgMosCount = 0;
-				/* Íâ²¿Ç¿ÖÆ¹Ø±Õ³äµç¹Ü */
+				/* å¤–éƒ¨å¼ºåˆ¶å…³é—­å……ç”µç®¡ */
 
 				// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
 				SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
@@ -244,37 +244,37 @@ void Heat_Control(void)
 
 		if (g_stCellInfoReport.u16TempMin > Heat_Cool_Element.u16Heat_OpenTemp)
 		{
-			/* Íâ²¿²»¿ØÖÆ³äµç¹Ü */
+			/* å¤–éƒ¨ä¸æ§åˆ¶å……ç”µç®¡ */
 			// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
 		}
 
-		/* ·ÅµçÊ±¼ä´óÓÚ 2A£¬Ê±¼ä´óÓÚ2s ¹Ø±Õ¼ÓÈÈ */
+		/* æ”¾ç”µæ—¶é—´å¤§äº 2Aï¼Œæ—¶é—´å¤§äº2s å…³é—­åŠ çƒ­ */
 		if (g_stCellInfoReport.u16IDischg > 20)
 		{
 			dsg_Count++;
 		}
 
-		/* ¼ÓÈÈÎÂ¶È´óÓÚ10¶È */ /* »òÕß ·ÅµçµçÁ÷´óÓÚ3A */
+		/* åŠ çƒ­æ¸©åº¦å¤§äº10åº¦ */ /* æˆ–è€… æ”¾ç”µç”µæµå¤§äº3A */
 		if ((g_stCellInfoReport.u16TempMin > Heat_Cool_Element.u16Heat_CloseTemp) || (dsg_Count == 2))
 		{
 			dsg_Count = 0;
 
-			/* Íâ²¿²»¿ØÖÆ³äµç¹Ü */
+			/* å¤–éƒ¨ä¸æ§åˆ¶å……ç”µç®¡ */
 			// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
 
-			/* Í£Ö¹¼ÓÈÈ */
+			/* åœæ­¢åŠ çƒ­ */
 			SystemStatus.bits.b1Status_Heat = 0;
 			heat_Flag = 0;
 			heat_Count = 0;
 			closeChgMosCount = 0;
 		}
 
-		/* ¼ÓÈÈÊ±¼ä³¬¹ı×î´ó¼ÓÈÈÊ±¼äÊ±¼ä */
+		/* åŠ çƒ­æ—¶é—´è¶…è¿‡æœ€å¤§åŠ çƒ­æ—¶é—´æ—¶é—´ */
 		if (++heat_Count >= (UINT16)(60U * 60U * 3U))
 		{
-			/* Íâ²¿²»¿ØÖÆ³äµç¹Ü */
+			/* å¤–éƒ¨ä¸æ§åˆ¶å……ç”µç®¡ */
 			// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
 
@@ -287,15 +287,15 @@ void Heat_Control(void)
 	}
 	else
 	{
-		/* µçÁ÷´óÓÚ5A²¢ÇÒÎÂ¶ÈµÍÓÚ0 */
+		/* ç”µæµå¤§äº5Aå¹¶ä¸”æ¸©åº¦ä½äº0 */
 		if ((g_stCellInfoReport.u16Ichg >= Heat_Cool_Element.u16Heat_OpenCur) && (g_stCellInfoReport.u16TempMin < Heat_Cool_Element.u16Heat_OpenTemp))
 		{
-			/* ÎÂ¶ÈÁ¬Ğø4ÃëµÍÓÚ0 */
+			/* æ¸©åº¦è¿ç»­4ç§’ä½äº0 */
 			if (++temp_Count == 2)
 			{
 				temp_Count = 0;
 
-				/* ¿ªÊ¼¼ÓÈÈ */
+				/* å¼€å§‹åŠ çƒ­ */
 				SystemStatus.bits.b1Status_Heat = 1;
 				heat_Flag = 1;
 				heat_Count = 0;
@@ -306,11 +306,11 @@ void Heat_Control(void)
 		else
 		{
 
-			/* Íâ²¿²»¿ØÖÆ³äµç¹Ü */
+			/* å¤–éƒ¨ä¸æ§åˆ¶å……ç”µç®¡ */
 			// Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 			SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
 
-			/* ¹Ø±Õ¼ÓÈÈ */
+			/* å…³é—­åŠ çƒ­ */
 			SystemStatus.bits.b1Status_Heat = 0;
 			temp_Count = 0;
 			heat_Count = 0;
@@ -328,12 +328,12 @@ void InitHeat_Cool(void)
 
 	// PC6_MCUO_RELAY_COOL
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // ÍÆÍìÊä³ö
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO¿ÚËÙ¶ÈÎª2MHz
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // æ¨æŒ½è¾“å‡º
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IOå£é€Ÿåº¦ä¸º2MHz
 	GPIO_Init(GPIOC, &GPIO_InitStructure);
 }
 
-// ¼ÓÈÈÀäÄıµçÁ÷¾ùÎŞ·¨¼ì²â
+// åŠ çƒ­å†·å‡ç”µæµå‡æ— æ³•æ£€æµ‹
 void App_Heat_Cool_Ctrl(void)
 {
 	Heat_Control();

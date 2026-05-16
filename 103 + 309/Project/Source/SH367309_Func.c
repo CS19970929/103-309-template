@@ -4,7 +4,7 @@ SH367309_REG_STORE SH367309_Reg_Store;
 
 UINT8 gu8_DriverStartUpFlag = 0;
 
-//-40µ½100µÄÊýÖµ
+//-40åˆ°100çš„æ•°å€¼
 UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
 								  11611, 11008, 10442, 9909, 9407, 8935, 8489, 8068, 7672, 7297,
 								  6943, 6608, 6292, 5993, 5710, 5442, 5188, 4948, 4720, 4504,
@@ -21,7 +21,7 @@ UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 1443
 								  127, 124, 120, 117, 114, 111, 108, 106, 103, 100,
 								  98};
 
-// Ç°26¸ö¼Ä´æÆ÷Ä¬ÈÏ²ÎÊý
+// å‰26ä¸ªå¯„å­˜å™¨é»˜è®¤å‚æ•°
 UINT8 ucMTPBuffer[26] = {
 	BYTE_00H_SCONF1, BYTE_01H_SCONF2, BYTE_02H_OVT_LDRT_OVH, BYTE_03H_OVL, BYTE_04H_UVT_OVRH,
 	BYTE_05H_OVRL, BYTE_06H_UV, BYTE_07H_UVR, BYTE_08H_BALV, BYTE_09H_PREV,
@@ -68,15 +68,15 @@ void AFE_Reset(void)
 	}
 }
 
-// ½øÈëÐÝÃßÄ£Ê½
+// è¿›å…¥ä¼‘çœ æ¨¡å¼
 void AFE_Sleep(void)
 {
 	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
-// ½øÈëIDLEÄ£Ê½
-// 1£¬ÓÐ´íÎó£¬²»ÄÜ½øÈë
+// è¿›å…¥IDLEæ¨¡å¼
+// 1ï¼Œæœ‰é”™è¯¯ï¼Œä¸èƒ½è¿›å…¥
 UINT8 AFE_IDLE_Old(void)
 {
 	UINT8 result = 0;
@@ -85,7 +85,7 @@ UINT8 AFE_IDLE_Old(void)
 	{
 		if (SH367309_Reg_Store.REG_BSTATUS1.all || SH367309_Reg_Store.REG_BSTATUS2.all || SH367309_Reg_Store.REG_BSTATUS3.bits.L0V || SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET)
 		{
-			// ²»ÄÜ½øÈëIDLE
+			// ä¸èƒ½è¿›å…¥IDLE
 			result = 1;
 			System_ERROR_UserCallback(ERROR_AFE1);
 		}
@@ -110,14 +110,14 @@ void AFE_IDLE(void)
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
-// ½øÈëÐÝÃßÄ£Ê½
+// è¿›å…¥ä¼‘çœ æ¨¡å¼
 void AFE_SHIP(void)
 {
 	// MCUO_AFE_SHIP = 0;
 }
 
-// 1£¬³öÎÊÌâ£¬Í¬Ê±ÉÏ±¨ÏµÍ³AFE´íÎó
-// 0£¬Ã»ÎÊÌâ
+// 1ï¼Œå‡ºé—®é¢˜ï¼ŒåŒæ—¶ä¸ŠæŠ¥ç³»ç»ŸAFEé”™è¯¯
+// 0ï¼Œæ²¡é—®é¢˜
 UINT8 AFE_IsReady(void)
 {
 	UINT8 TempCnt = 0, result = 0;
@@ -129,7 +129,7 @@ UINT8 AFE_IsReady(void)
 
 		TempVar = 0;
 		if (MTPRead(MTP_BFLAG2, 1, &TempVar))
-		{ // ¶ÁÈ¡BLFG2£¬²é¿´VADCÊÇ·ñ×ª»»Íê³É
+		{ // è¯»å–BLFG2ï¼ŒæŸ¥çœ‹VADCæ˜¯å¦è½¬æ¢å®Œæˆ
 			if ((TempVar & 0x10) == 0x10)
 			{
 				break;
@@ -154,7 +154,7 @@ UINT8 AFE_GetData(void)
 	return result;
 }
 
-// 1£º×´Ì¬²éÑ¯Ê§°Ü¡£0£º³É¹¦
+// 1ï¼šçŠ¶æ€æŸ¥è¯¢å¤±è´¥ã€‚0ï¼šæˆåŠŸ
 UINT8 AFE_CheckStatus(void)
 {
 	UINT8 result = 0;
@@ -168,27 +168,27 @@ UINT8 AFE_CheckStatus(void)
 
 /*******************************************************************************
 Function:EnableAFEWdtCadc()
-Description:Ê¹ÄÜCHG&DSG&PCHGÊä³ö£¬ÇÒÊ¹ÄÜWDTºÍCADCÄ£¿é
+Description:ä½¿èƒ½CHG&DSG&PCHGè¾“å‡ºï¼Œä¸”ä½¿èƒ½WDTå’ŒCADCæ¨¡å—
 Input:
 Output:
 Others:
 *******************************************************************************/
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
-	// ucMTP_CONF |= 0x04;						//¿ªÆô¿´ÃÅ¹·£¬²»¿ª¿´ÃÅ¹·ÐÐ²»ÐÐ
-	// ½áÂÛ£¬¿ÉÒÔ²»¿ªÆô¡£¿´ÃÅ¹·Òç³ö£¬²Ù×÷ÊÇ
-	// 1£¬¹Ø±Õ³ä·ÅµçMOSºÍÔ¤³äMOS
-	// 2£¬Çå³ý¾ùºâ
-	// Á½Õß¶ÔÓÚÄ¿Ç°Ê¹ÓÃÇé¿öÒâÒå²»´ó£¬ÐÝÃß´øµç²»ÔÊÐí¿ª£¬MCU¿ØÇý¶¯Ã»ÒâÒå
-	// 30xÊÇÐèÒª¿ªµÄ£¬ÒòÎªÊÇ×Ô¼ºµÄ±£»¤ÌåÏµ£¬Õâ¸ö309ÓÃµÄÊÇËû×Ô¼ºµÄÌåÏµ£¬ËùÒÔ¾ÍËã³öÎÊÌâ
-	// ¿´ÃÅ¹·²»¹Ø£¬Ëû×Ô¼ºµÄ±£»¤ÌåÏµÅÐ¶ÏÊÇ·ñ¹ØMOS£¬·çÏÕÒ²²»´ó¡£
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // ¿ªÆôCADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // ³äµçMOSÓÉAFEÓ²¼þ¿ØÖÆ
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // ·ÅµçMOSÓÉAFEÓ²¼þ¿ØÖÆ
+	// ucMTP_CONF |= 0x04;						//å¼€å¯çœ‹é—¨ç‹—ï¼Œä¸å¼€çœ‹é—¨ç‹—è¡Œä¸è¡Œ
+	// ç»“è®ºï¼Œå¯ä»¥ä¸å¼€å¯ã€‚çœ‹é—¨ç‹—æº¢å‡ºï¼Œæ“ä½œæ˜¯
+	// 1ï¼Œå…³é—­å……æ”¾ç”µMOSå’Œé¢„å……MOS
+	// 2ï¼Œæ¸…é™¤å‡è¡¡
+	// ä¸¤è€…å¯¹äºŽç›®å‰ä½¿ç”¨æƒ…å†µæ„ä¹‰ä¸å¤§ï¼Œä¼‘çœ å¸¦ç”µä¸å…è®¸å¼€ï¼ŒMCUæŽ§é©±åŠ¨æ²¡æ„ä¹‰
+	// 30xæ˜¯éœ€è¦å¼€çš„ï¼Œå› ä¸ºæ˜¯è‡ªå·±çš„ä¿æŠ¤ä½“ç³»ï¼Œè¿™ä¸ª309ç”¨çš„æ˜¯ä»–è‡ªå·±çš„ä½“ç³»ï¼Œæ‰€ä»¥å°±ç®—å‡ºé—®é¢˜
+	// çœ‹é—¨ç‹—ä¸å…³ï¼Œä»–è‡ªå·±çš„ä¿æŠ¤ä½“ç³»åˆ¤æ–­æ˜¯å¦å…³MOSï¼Œé£Žé™©ä¹Ÿä¸å¤§ã€‚
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // å¼€å¯CADC
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0; // å……ç”µMOSç”±AFEç¡¬ä»¶æŽ§åˆ¶
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // æ”¾ç”µMOSç”±AFEç¡¬ä»¶æŽ§åˆ¶
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
-// 1£ºÐÞ¸ÄÊ§°Ü¡£0£ºÐÞ¸Ä³É¹¦
+// 1ï¼šä¿®æ”¹å¤±è´¥ã€‚0ï¼šä¿®æ”¹æˆåŠŸ
 UINT8 SH367309_SC_DelayT_Set(void)
 {
 	UINT8 result = 0;
@@ -197,7 +197,7 @@ UINT8 SH367309_SC_DelayT_Set(void)
 	UINT8 u8temp_write = 0;
 
 	u8temp_now = SH367309_Reg_Store.u8_MTP_SCV_SCT & 0x0F;
-	u8temp_need = OtherElement.u16CBC_DelayT >> 6; // ³ýÒÔ64µÃ³öµÈ¼¶£¬Æä±í¸ñ¾ÍÊÇÒÔ64usÎªÒ»¸öµÈ¼¶µÄ
+	u8temp_need = OtherElement.u16CBC_DelayT >> 6; // é™¤ä»¥64å¾—å‡ºç­‰çº§ï¼Œå…¶è¡¨æ ¼å°±æ˜¯ä»¥64usä¸ºä¸€ä¸ªç­‰çº§çš„
 	if (u8temp_need > 15)
 		u8temp_need = 15;
 
@@ -212,14 +212,14 @@ UINT8 SH367309_SC_DelayT_Set(void)
 		}
 		else
 		{
-			// Ð´Ê§°Ü
+			// å†™å¤±è´¥
 			OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
 			result = 1;
 		}
 	}
 	else
 	{
-		// ÏàÍ¬£¬ÔòÐÞ¸ÄÉÏ´«²ÎÊý±ã¿É
+		// ç›¸åŒï¼Œåˆ™ä¿®æ”¹ä¸Šä¼ å‚æ•°ä¾¿å¯
 		OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
 	}
 
@@ -516,7 +516,7 @@ void App_SH367309_Monitor(void)
 			break;
 
 		case 1:
-			// ¸ºÔØ¶Ï¿ª(DSGD¹Ü½ÌµçÆ½µÍÓÚVDSGD)£¬³ÖÐøÊ±¼ä³¬¹ý¸ºÔØÊÍ·ÅÑÓÊ±tD1£¬ÏÖÔÚÉèÖÃÎª2s
+			// è´Ÿè½½æ–­å¼€(DSGDç®¡æ•™ç”µå¹³ä½ŽäºŽVDSGD)ï¼ŒæŒç»­æ—¶é—´è¶…è¿‡è´Ÿè½½é‡Šæ”¾å»¶æ—¶tD1ï¼ŒçŽ°åœ¨è®¾ç½®ä¸º2s
 			if (!SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
 			{
 				su8_SC_Flag = 0;
@@ -527,7 +527,7 @@ void App_SH367309_Monitor(void)
 			break;
 		}
 
-		// ¹Û²ìÀàÐÍ£¬²»ÄÜ±»ÖÃÎ»£¬ÖÃÎ»ËµÃ÷ÓÐÎÊÌâ£¬ÅäÖÃ²»¶Ô
+		// è§‚å¯Ÿç±»åž‹ï¼Œä¸èƒ½è¢«ç½®ä½ï¼Œç½®ä½è¯´æ˜Žæœ‰é—®é¢˜ï¼Œé…ç½®ä¸å¯¹
 		// SH367309_Reg_Store.REG_BSTATUS1.bits.PF;
 		// SH367309_Reg_Store.REG_BSTATUS1.bits.WDT;
 		// SH367309_Reg_Store.REG_BSTATUS3.bits.L0V;
@@ -543,7 +543,7 @@ void App_SH367309_Monitor(void)
 			break;
 
 		case 1:
-			// ¸ºÔØ¶Ï¿ª(DSGD¹Ü½ÌµçÆ½µÍÓÚVDSGD)£¬³ÖÐøÊ±¼ä³¬¹ý¸ºÔØÊÍ·ÅÑÓÊ±tD1£¬ÏÖÔÚÉèÖÃÎª2s
+			// è´Ÿè½½æ–­å¼€(DSGDç®¡æ•™ç”µå¹³ä½ŽäºŽVDSGD)ï¼ŒæŒç»­æ—¶é—´è¶…è¿‡è´Ÿè½½é‡Šæ”¾å»¶æ—¶tD1ï¼ŒçŽ°åœ¨è®¾ç½®ä¸º2s
 			if (!SH367309_Reg_Store.REG_BSTATUS3.bits.EEPR_WR)
 			{
 				su8_EEPR_WR_Flag = 0;
@@ -571,8 +571,8 @@ void App_SH367309_Monitor(void)
 	}
 	else
 	{
-		// ¶ÁÈ¡Ê§°Ü£¬Òª×öµãÊ²Ã´ÊÂÇé£¿
-		// ½øÈëÉî¶ÈÐÝÃß¿©£¿
+		// è¯»å–å¤±è´¥ï¼Œè¦åšç‚¹ä»€ä¹ˆäº‹æƒ…ï¼Ÿ
+		// è¿›å…¥æ·±åº¦ä¼‘çœ å’¯ï¼Ÿ
 	}
 }
 

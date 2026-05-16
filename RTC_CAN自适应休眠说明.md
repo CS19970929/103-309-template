@@ -99,9 +99,9 @@ CAN 发送调度保留原来的 10ms tick 状态机，并新增 CAN 内部逻辑
 
 处理：
 
-- 新增 `Can_IsSleepBlocked()`。
-- 低功耗入口只等待真实进行中的 CAN 动作：收发器上电等待、发送等待、硬件邮箱未空。
-- 尚未开始发送的周期 pending 不再阻止 RTC；进入睡眠前由 `Can_PrepareSleep()` 丢弃，RTC 唤醒后用逻辑 tick 补偿。
+- 当前源码不再保留单独的 `Can_IsSleepBlocked()` 判定。
+- 主循环顺序已经调整为先 `App_LowPowerProcess()`、后 `App_Can()`，避免 1 秒 tick 到来时 CAN 先启动发送窗口再阻断 RTC 入睡计时。
+- 即将进入 STOP 或 reset sleep 时统一调用 `Can_PrepareSleep()`，丢弃尚未开始发送的周期 pending、取消 mailbox、关闭收发器；RTC 唤醒后再用逻辑 tick 补偿调度。
 
 ### `FEIDAO_CAN_POWER_WAIT_STABLE` 阻止 RTC 入睡
 

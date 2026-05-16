@@ -134,15 +134,15 @@ Can_TransmitDeal()
 | 状态 | 行为 |
 | --- | --- |
 | `FEIDAO_CAN_POWER_IDLE` | 空闲；如果有待发报文，打开 transceiver 电源 |
-| `FEIDAO_CAN_POWER_WAIT_STABLE` | 等待 transceiver 上电稳定，当前等待 1 个 10ms tick |
+| `FEIDAO_CAN_POWER_WAIT_STABLE` | 等待 transceiver 上电稳定，当前等待 10 个 10ms tick |
 | `FEIDAO_CAN_POWER_TX_WAIT` | 等待当前 mailbox 发送完成、失败，或超时取消 |
 
 关键时间参数：
 
 | 宏 | 当前值 | 实际含义 |
 | --- | --- | --- |
-| `FEIDAO_CAN_POWER_STABLE_TICKS` | `1` | 上电后等待 10ms 再发第一帧 |
-| `FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS` | `2` | 单帧最多等待 20ms，超时取消发送 |
+| `FEIDAO_CAN_POWER_STABLE_TICKS` | `10` | 上电后等待 100ms 再发第一帧 |
+| `FEIDAO_CAN_TX_DONE_TIMEOUT_TICKS` | `20` | 单帧最多等待 200ms，超时取消发送 |
 | `FEIDAO_CAN_PERIOD_1000MS_TICKS` | `100` | 1000ms 周期 |
 | `FEIDAO_CAN_PERIOD_5000MS_TICKS` | `500` | 5000ms 周期 |
 
@@ -155,13 +155,13 @@ Can_TransmitDeal()
     ↓
 GPIO_CMNT_EN = Bit_RESET，上电
     ↓
-等待 10ms
+等待 100ms
     ↓
 取 pending mask 中优先级最高的一帧发送
     ↓
 轮询 CAN_TransmitStatus()
     ↓
-OK / Failed / 20ms timeout
+OK / Failed / 200ms timeout
     ↓
 还有 pending：继续发下一帧
 没有 pending：GPIO_CMNT_EN = Bit_SET，断电
@@ -323,7 +323,7 @@ DLC = length
 
 本次修复后，`Can_BusOFF_FaultChk()` 在首次检测到 `CAN_ESR_BOFF` 时会先刷新 `g_stCanErrorSnapshot`，并累加 `u16BusOffCnt`。这样现场调试时可以同时看到 BusOff 标志、最近 `LEC`、`TEC/REC` 和 BusOff 发生次数。
 
-从低功耗角度看，BusOff 路径不会无限阻塞发送流程。即使发送异常，`feidao_can_send()` 仍有 `Failed` 判断和 20ms 超时取消，最终会回到断电状态。
+从低功耗角度看，BusOff 路径不会无限阻塞发送流程。即使发送异常，`feidao_can_send()` 仍有 `Failed` 判断和 200ms 超时取消，最终会回到断电状态。
 
 ## 10. CAN 错误类型、判定与处理
 
@@ -418,7 +418,7 @@ struct CAN_ERROR_SNAPSHOT {
 | BusOff | 已处理并统计 | 10ms 轮询 `CAN_ESR_BOFF`，记录快照和 `u16BusOffCnt`，置 `ERROR_CAN`，进入初始化模式，按 100ms/1s 节奏尝试恢复 | 与 transceiver 断电策略耦合，需实测恢复期间 RX 是否能看到空闲总线 |
 | FIFO full/overrun | 未处理 | 只使能 `FMP0`，未使能 `FF0/FOV0` | 如果未来恢复接收，可能丢帧且无统计 |
 | No mailbox | 已处理并统计 | `CAN_Tx_Data()` 记录快照和 `u16TxNoMailboxCnt`，上报 `ERROR_CAN` | 当前批次可能丢帧 |
-| 发送 pending 过久 | 已处理并统计 | 20ms 超时后记录快照和 `u16TxTimeoutCnt`，再取消发送 | 超时阈值仍需结合实际 bus load 验证 |
+| 发送 pending 过久 | 已处理并统计 | 200ms 超时后记录快照和 `u16TxTimeoutCnt`，再取消发送 | 超时阈值仍需结合实际 bus load 验证 |
 | 仲裁失败 | 作为发送失败处理 | `CAN_TxStatus_Failed` 统一处理 | 多节点高负载时，`CAN_NART = ENABLE` 可能降低送达率 |
 
 ### 10.5 ACK error 当前处理方式
@@ -529,7 +529,7 @@ CAN 正常发送需要其他节点在 ACK slot 给出 dominant ACK。如果总�
 假设主循环及时运行，且 CAN 发送没有长时间 pending：
 
 - 每 1000ms 至少上电一次。
-- 每次上电固定等待 10ms。
+- 每次上电固定等待 100ms。
 - 1000ms 周期发送 2 帧。
 - 5000ms 周期和 1000ms 周期重合时发送 7 帧，但仍只上电一次。
 
@@ -537,21 +537,21 @@ CAN 正常发送需要其他节点在 ACK slot 给出 dominant ACK。如果总�
 
 ```text
 上电窗口数量 = 5 次
-固定稳定等待 = 5 * 10ms = 50ms
-CAN 帧发送时间 = 若干 ms 级，远小于固定 10ms 等待
-理论 duty 约等于 1% ~ 2%
+固定稳定等待 = 5 * 100ms = 500ms
+CAN 帧发送时间 = 若干 ms 级，通常小于固定 100ms 等待
+理论 duty 约等于 10% 左右
 ```
 
-如果总线异常导致每帧都走 20ms 超时，则最差 duty 会升高：
+如果总线异常导致每帧都走 200ms 超时，则最差 duty 会升高：
 
 ```text
-普通 1s 窗口：10ms + 2 * 20ms = 50ms
-5s 重合窗口：10ms + 7 * 20ms = 150ms
-5 秒内总上电时间约 4 * 50ms + 150ms = 350ms
-duty 约 7%
+普通 1s 窗口：100ms + 2 * 200ms = 500ms
+5s 重合窗口：100ms + 7 * 200ms = 1500ms
+5 秒内总上电时间约 4 * 500ms + 1500ms = 3500ms
+duty 约 70%
 ```
 
-即使按异常最坏路径估算，也比 transceiver 常上电低很多。但真实收益必须以实际 transceiver 型号、`GPIO_CMNT_EN` 控制的电源拓扑、总线负载和主循环调度延迟实测为准。
+异常最坏路径下 duty 会明显升高，因此无 ACK 判定、BusOff 恢复和 RTC 无设备 10 秒探测策略必须一起验证。真实收益必须以实际 transceiver 型号、`GPIO_CMNT_EN` 控制的电源拓扑、总线负载和主循环调度延迟实测为准。
 
 ## 13. 主要风险与边界
 
@@ -581,7 +581,7 @@ transceiver 断电期间无法接收 CAN 报文。当前旧接收处理也已被
 
 ### 13.3 上电稳定时间需要实测收敛
 
-当前 `FEIDAO_CAN_POWER_STABLE_TICKS = 1`，即等待 10ms。这个值保守但可能偏长。是否可以缩短取决于：
+当前 `FEIDAO_CAN_POWER_STABLE_TICKS = 10`，即等待 100ms。这个值用于保证 RTC 唤醒后收发器重新上电足够稳定，功耗上偏保守。是否可以缩短取决于：
 
 - transceiver VCC 上升时间。
 - EN 到 Normal mode 的启动时间。
@@ -598,7 +598,7 @@ CANH / CANL
 对端接收时间戳或 ACK
 ```
 
-从 10ms 开始向下收敛，例如 5ms、2ms、1ms，以第一帧稳定收到为准。
+从 100ms 开始向下收敛，例如 50ms、20ms、10ms，以第一帧稳定收到为准。
 
 ### 13.4 CAN bit rate 固定为 250 kbit/s
 
@@ -651,7 +651,7 @@ GPIO_CMNT_EN = Bit_SET，关闭 transceiver
 1. 验证 CAN bit rate：用 CAN analyzer 确认当前实际为目标 250 kbit/s。
 2. 测 `GPIO_CMNT_EN` 电平：确认 `Bit_RESET` 上电、`Bit_SET` 断电与硬件一致。
 3. 测 transceiver 电流：分别测常上电、当前状态机正常发送、无接收设备三种场景。
-4. 测第一帧可靠性：重点验证上电 10ms 后第一帧是否稳定收到。
+4. 测第一帧可靠性：重点验证上电 100ms 后第一帧是否稳定收到，并评估能否向 50ms/20ms 收敛。
 5. 测无 ACK 场景：断开对端，确认不会连续重发，`GPIO_CMNT_EN` 会按期断电。
 6. 测 BusOff 恢复：制造总线短路/错误帧，确认不会长时间保持 transceiver 上电。
 7. 确认接收需求：如果需要随时 CAN 接收，当前策略需要补通信唤醒或接收窗口设计。
@@ -666,7 +666,7 @@ GPIO_CMNT_EN = Bit_SET，关闭 transceiver
 | --- | --- | --- |
 | P0 | 验证 CAN bit rate | 目标固定为 250 kbit/s，需用 CAN analyzer 确认实测值与源码计算一致 |
 | P0 | 实测 `GPIO_CMNT_EN` 与 transceiver 电源拓扑 | 决定功耗收益是否真实成立 |
-| P1 | 测量上电稳定时间并收敛 `FEIDAO_CAN_POWER_STABLE_TICKS` | 当前 10ms 保守，缩短后可进一步降低 duty |
+| P1 | 测量上电稳定时间并收敛 `FEIDAO_CAN_POWER_STABLE_TICKS` | 当前 100ms 偏保守，缩短后可进一步降低 duty |
 | P1 | 明确是否需要随时接收 CAN | 当前策略偏广播，不适合实时请求应答 |
 | P1 | 扩展错误统计到 FIFO overrun 和连续错误趋势 | 当前快照已覆盖发送失败/超时/BusOff，但接收溢出和连续趋势仍不足 |
 | P2 | 非发送窗口关闭 CAN1 外设时钟或使用 CAN sleep | 可进一步降低 MCU 侧功耗，但需要处理恢复和错误状态 |

@@ -5,7 +5,7 @@ struct SH367309_Read SH367309_Read_AFE1;
 
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
-	// AD(k¦¸*100)		(Temp+40)*10
+	// AD(kÎ©*100)		(Temp+40)*10
 	11611,
 	100, //-30
 	8935,
@@ -64,7 +64,7 @@ const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	1450, // 105
 };
 
-// Õâ¸öcodeÊÇÉ¶
+// è¿™ä¸ªcodeæ˜¯å•¥
 // const UINT8 code CRC8Table[]=
 const UINT8 CRC8Table[] = { // 120424-1			CRC Table
 	0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15, 0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D,
@@ -106,7 +106,7 @@ void Delay4us(void)
 #endif
 
 #if 0
-	//µ±Îª5Ê±£¬6.7us
+	//å½“ä¸º5æ—¶ï¼Œ6.7us
 	for(i=0; i<5; i++) {
 		//system clock = 8MHz
 	}
@@ -514,12 +514,12 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 				{
 					*RdBuf = TempBuf[4 + i];
 					RdBuf++;
-// ÏÂÃæµÄÎÊÌâÔÚÓÚ£¬Èç¹û´«½øÀ´µÄÊıÖµ²»ÊÇ16Î»£¬ÊÇ8Î»£¬ÓÖÓĞÎÊÌâ¡£
-// »¹ÊÇÍâ²¿×Ô¼ºĞ´Ò»¸ö´óĞ¡¶Ë×ª»»º¯Êı×Ô¼º¿´Çé¿öÊÇ·ñ´¦Àí
+// ä¸‹é¢çš„é—®é¢˜åœ¨äºï¼Œå¦‚æœä¼ è¿›æ¥çš„æ•°å€¼ä¸æ˜¯16ä½ï¼Œæ˜¯8ä½ï¼Œåˆæœ‰é—®é¢˜ã€‚
+// è¿˜æ˜¯å¤–éƒ¨è‡ªå·±å†™ä¸€ä¸ªå¤§å°ç«¯è½¬æ¢å‡½æ•°è‡ªå·±çœ‹æƒ…å†µæ˜¯å¦å¤„ç†
 #if 0
-                    //ÎÊÌâÔÚÓÚ030µÄĞ¡¶Ë´æ´¢
+                    //é—®é¢˜åœ¨äº030çš„å°ç«¯å­˜å‚¨
 					if(i == Length - 1 && Length%2) {
-						*(RdBuf) = TempBuf[4+i];		//µ±È¡ÆæÊı¸öÊı¾İ£¬×îºóÒ»¸ö£¬Ã»ĞÎ³É¶ÔµÄÄÇ¸ö¹ÂÁãÁãµÄÊı¾İ
+						*(RdBuf) = TempBuf[4+i];		//å½“å–å¥‡æ•°ä¸ªæ•°æ®ï¼Œæœ€åä¸€ä¸ªï¼Œæ²¡å½¢æˆå¯¹çš„é‚£ä¸ªå­¤é›¶é›¶çš„æ•°æ®
 					}
 					else {
 	                    if(i%2) {
@@ -713,9 +713,9 @@ UINT8 TwiRead_old(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 
 #endif
 
-// RAMÀàĞÍ¼Ä´æÆ÷£¬ÓÃÕâ¸öº¯ÊıĞ´£¬´óÓÚ0x40µÄÀàĞÍ
-// Output: result:1--OK£¬0--Error
-// Õâ¸ö·µ»ØÖµ¾Í²»¸ÄÁË£¬ºÍÄ¿Ç°ÌåÏµÏà·´£¬±ğµÄº¯Êı·µ»ØÀ´¾ÍĞĞ
+// RAMç±»å‹å¯„å­˜å™¨ï¼Œç”¨è¿™ä¸ªå‡½æ•°å†™ï¼Œå¤§äº0x40çš„ç±»å‹
+// Output: result:1--OKï¼Œ0--Error
+// è¿™ä¸ªè¿”å›å€¼å°±ä¸æ”¹äº†ï¼Œå’Œç›®å‰ä½“ç³»ç›¸åï¼Œåˆ«çš„å‡½æ•°è¿”å›æ¥å°±è¡Œ
 UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
 	UINT8 result;
@@ -747,9 +747,9 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 	return result;
 }
 
-// 0x00----0x19£¬Ğ´EEPROM¼Ä´æÆ÷ÓÃÕâ¸öº¯Êı
-// Output: result:1--OK£¬0--Error
-// Õâ¸ö·µ»ØÖµ¾Í²»¸ÄÁË£¬ºÍÄ¿Ç°ÌåÏµÏà·´£¬±ğµÄº¯Êı·µ»ØÀ´¾ÍĞĞ
+// 0x00----0x19ï¼Œå†™EEPROMå¯„å­˜å™¨ç”¨è¿™ä¸ªå‡½æ•°
+// Output: result:1--OKï¼Œ0--Error
+// è¿™ä¸ªè¿”å›å€¼å°±ä¸æ”¹äº†ï¼Œå’Œç›®å‰ä½“ç³»ç›¸åï¼Œåˆ«çš„å‡½æ•°è¿”å›æ¥å°±è¡Œ
 UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
 	UINT8 result;
@@ -781,8 +781,8 @@ UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 	return result;
 }
 
-// Output: result:1--OK£¬0--Error
-// Õâ¸ö·µ»ØÖµ¾Í²»¸ÄÁË£¬ºÍÄ¿Ç°ÌåÏµÏà·´£¬±ğµÄº¯Êı·µ»ØÀ´¾ÍĞĞ
+// Output: result:1--OKï¼Œ0--Error
+// è¿™ä¸ªè¿”å›å€¼å°±ä¸æ”¹äº†ï¼Œå’Œç›®å‰ä½“ç³»ç›¸åï¼Œåˆ«çš„å‡½æ•°è¿”å›æ¥å°±è¡Œ
 UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 {
 	UINT8 result = 1;
@@ -814,7 +814,7 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 	return result;
 }
 
-// 0ÎªsleepÄ£Ê½£¬1ÎªidleÄ£Ê½
+// 0ä¸ºsleepæ¨¡å¼ï¼Œ1ä¸ºidleæ¨¡å¼
 void InitAFE1_Sleep(UINT8 mode)
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -823,11 +823,11 @@ void InitAFE1_Sleep(UINT8 mode)
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // Êä³ö¸ß
+	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // è¾“å‡ºé«˜
 
 	AFE_IsReady();
-	// ÒòÎªÒÑ¾­³õÊ¼»¯¹ıÁË£¬ĞİÃßµÄÊ±ºòµ÷ÓÃ£¬²»ĞèÒªÔÙ´Î³õÊ¼»¯²ÎÊı
-	// ÕâÍæÒâ»á¸´Î»Ä£ÄâÇ°¶Ë£¬µ¼ÖÂMOS¿ª¹Ø´ò¿ª¹Ø±Õ·´¸´
+	// å› ä¸ºå·²ç»åˆå§‹åŒ–è¿‡äº†ï¼Œä¼‘çœ çš„æ—¶å€™è°ƒç”¨ï¼Œä¸éœ€è¦å†æ¬¡åˆå§‹åŒ–å‚æ•°
+	// è¿™ç©æ„ä¼šå¤ä½æ¨¡æ‹Ÿå‰ç«¯ï¼Œå¯¼è‡´MOSå¼€å…³æ‰“å¼€å…³é—­åå¤
 	// SH367309_UpdataAfeConfig();
 
 	if (mode)
@@ -844,7 +844,7 @@ void initAFE1_IIC(void)
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // Êä³ö¸ß
+	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // è¾“å‡ºé«˜
 }
 
 /*******************************************************************************
@@ -888,17 +888,17 @@ void InitAFE1(void)
 	}
 }
 
-/*µ÷ÊÔĞÄµÃ
-1£¬I2CÃ»ÓĞÉÏÀ­£¬µ¼ÖÂAFE·¢ËÍÊı¾İ²¨ĞÎÒì³££¬ÉÏ²»µ½3.3V
-2£¬²¨ĞÎÕı³£ºó£¬·¢ÏÖ¶Á»ØÀ´µÄÊı¾İÓĞÎÊÌâ
-3£¬µÚÒ»Ê±¼äÓ¦¸ÃÊÇ¹Û²ì´æ´¢Êı¾İµÄÊı×éµÄÊµ¼ÊÖµºÍ×Ô´øÉÏÎ»»ú¶ÁÈ¡µÄÖµ×÷¶Ô±È£¬¶ø²»ÊÇÍ¨¹ı·ÖÎö²¨ĞÎ£¬ÔÙÂß¼­·ÖÎöÒÇ½âÎö²¨ĞÎ£¬ÕâÑùÌ«ÂıÁË¡£
-4£¬¹ûÈ»»¹ÊÇ030Ğ¡¶Ë´æ´¢µ¼ÖÂµÄÊı¾İÏà·´´íÎó
+/*è°ƒè¯•å¿ƒå¾—
+1ï¼ŒI2Cæ²¡æœ‰ä¸Šæ‹‰ï¼Œå¯¼è‡´AFEå‘é€æ•°æ®æ³¢å½¢å¼‚å¸¸ï¼Œä¸Šä¸åˆ°3.3V
+2ï¼Œæ³¢å½¢æ­£å¸¸åï¼Œå‘ç°è¯»å›æ¥çš„æ•°æ®æœ‰é—®é¢˜
+3ï¼Œç¬¬ä¸€æ—¶é—´åº”è¯¥æ˜¯è§‚å¯Ÿå­˜å‚¨æ•°æ®çš„æ•°ç»„çš„å®é™…å€¼å’Œè‡ªå¸¦ä¸Šä½æœºè¯»å–çš„å€¼ä½œå¯¹æ¯”ï¼Œè€Œä¸æ˜¯é€šè¿‡åˆ†ææ³¢å½¢ï¼Œå†é€»è¾‘åˆ†æä»ªè§£ææ³¢å½¢ï¼Œè¿™æ ·å¤ªæ…¢äº†ã€‚
+4ï¼Œæœç„¶è¿˜æ˜¯030å°ç«¯å­˜å‚¨å¯¼è‡´çš„æ•°æ®ç›¸åé”™è¯¯
 */
 
 /*
-1£¬&Registers_AFE1--Îª½á¹¹ÌåµÄÊ×µØÖ·£¬²»¹ı¸ÃµØÖ·ÀàĞÍÎª½á¹¹ÌåÀàĞÍ(Êµ¼ÊÉÏÒ²ÊÇ½á¹¹ÌåµÚÒ»¸ö×Ö½ÚµÄµØÖ·)
-2£¬(UINT8*)&Registers_AFE1--°Ñ¸Ã½á¹¹ÌåÀàĞÍµÄµØÖ·×ª»¯ÎªUINT8ÀàĞÍµÄµØÖ·(Êµ¼ÊÉÏÊıÖµÃ»±ä£¬Ò²ÊÇ½á¹¹ÌåµÚÒ»¸ö×Ö½ÚµÄµØÖ·£¬ÀàĞÍ±äÁË¶øÒÑ)
-3£¬(UINT8)&Registers_AFE1--°Ñ¸ÃµØÖ·Öµ(32Î»Êı¾İ)Ç¿ÖÆ×ª»¯Îª8Î»Êı¾İ£¬ÀıÈç0x2000 0A17×ªÎª0x17
+1ï¼Œ&Registers_AFE1--ä¸ºç»“æ„ä½“çš„é¦–åœ°å€ï¼Œä¸è¿‡è¯¥åœ°å€ç±»å‹ä¸ºç»“æ„ä½“ç±»å‹(å®é™…ä¸Šä¹Ÿæ˜¯ç»“æ„ä½“ç¬¬ä¸€ä¸ªå­—èŠ‚çš„åœ°å€)
+2ï¼Œ(UINT8*)&Registers_AFE1--æŠŠè¯¥ç»“æ„ä½“ç±»å‹çš„åœ°å€è½¬åŒ–ä¸ºUINT8ç±»å‹çš„åœ°å€(å®é™…ä¸Šæ•°å€¼æ²¡å˜ï¼Œä¹Ÿæ˜¯ç»“æ„ä½“ç¬¬ä¸€ä¸ªå­—èŠ‚çš„åœ°å€ï¼Œç±»å‹å˜äº†è€Œå·²)
+3ï¼Œ(UINT8)&Registers_AFE1--æŠŠè¯¥åœ°å€å€¼(32ä½æ•°æ®)å¼ºåˆ¶è½¬åŒ–ä¸º8ä½æ•°æ®ï¼Œä¾‹å¦‚0x2000 0A17è½¬ä¸º0x17
 */
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
@@ -906,7 +906,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT32 u32temp = 0;
 
 	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
-	{ // demo´úÂë·µ»Ø1ÎªOK£¬
+	{ // demoä»£ç è¿”å›1ä¸ºOKï¼Œ
 		for (i = 0; i < SeriesNum; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
@@ -922,7 +922,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
-		// µçÁ÷Òª²»Òª¼ÓÂË²¨1s³ıÒÔ4£¬demoÊÇÕâÑùµÄ£¬ÏÖÔÚÏÈ¹Û²ìÒ»ÏÂ
+		// ç”µæµè¦ä¸è¦åŠ æ»¤æ³¢1sé™¤ä»¥4ï¼Œdemoæ˜¯è¿™æ ·çš„ï¼Œç°åœ¨å…ˆè§‚å¯Ÿä¸€ä¸‹
 		// SH367309_Read_AFE1.i16Current = (UINT16)((UINT32)U16_SwapEndian(Registers_AFE1.Cadc)*200/(21470*RSENSE));		//TODO
 		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
 	}

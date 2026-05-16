@@ -2,18 +2,18 @@
 #include "FaultSnapshot.h"
 
 struct RS485MSG g_stCurrentMsgPtr_SCI1;
-UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCIÍ¨ĞÅÒì³£¼ÆÊı
+UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCIé€šä¿¡å¼‚å¸¸è®¡æ•°
 UINT8 gu8_TxEnable_SCI1 = 0;
 UINT8 gu8_TxFinishFlag_SCI1 = 0;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI2;
-UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCIÍ¨ĞÅÒì³£¼ÆÊı
+UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCIé€šä¿¡å¼‚å¸¸è®¡æ•°
 UINT8 gu8_TxEnable_SCI2 = 0;
 UINT8 gu8_TxFinishFlag_SCI2 = 0;
 
 #ifdef _COMMOM_UPPER_SCI3
 struct RS485MSG g_stCurrentMsgPtr_SCI3;
-UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCIÍ¨ĞÅÒì³£¼ÆÊı
+UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCIé€šä¿¡å¼‚å¸¸è®¡æ•°
 UINT8 gu8_TxEnable_SCI3 = 0;
 UINT8 gu8_TxFinishFlag_SCI3 = 0;
 #endif
@@ -334,7 +334,7 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_SetSocOnce(s);
 		break;
 
-	// ÖĞÓ±AFE²ÎÊı¿É¶Á¿ÉĞ´ĞÂÔö
+	// ä¸­é¢–AFEå‚æ•°å¯è¯»å¯å†™æ–°å¢
 	case RS485_CMD_ADDR_RESET_AFE_PARAMETERS:
 		Sci_WrReg_0x06_Reset_AFE_Parameters(s);
 		break;
@@ -703,7 +703,7 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	case RS485_CMD_ADDR_FLASH_CONNECT:
 		Sci_WrRegs_0x10_FlashConnect(s);
-		break; // ÉÙÁË¸öBREAKµ¼ÖÂOVER¡£
+		break; // å°‘äº†ä¸ªBREAKå¯¼è‡´OVERã€‚
 
 	default:
 		s->AckType = RS485_ACK_NEG;
@@ -750,7 +750,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 		break;
 
-	case 1: // ÉÏÎ»»úµÚÈı¼¶±£»¤£¬60+10=70¸ö
+	case 1: // ä¸Šä½æœºç¬¬ä¸‰çº§ä¿æŠ¤ï¼Œ60+10=70ä¸ª
 		for (j = 0; j < Record_len; j++)
 		{
 			k = FaultPoint_Third - 1 - j;
@@ -771,7 +771,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		}
 		break;
 
-	case 2: // ĞòÁĞºÅ£¬Ó²¼ş°æ±¾ºÅ£¬Èí¼ş°æ±¾ºÅ
+	case 2: // åºåˆ—å·ï¼Œç¡¬ä»¶ç‰ˆæœ¬å·ï¼Œè½¯ä»¶ç‰ˆæœ¬å·
 		for (j = 0; j < PRODUCT_ID_LENGTH_MAX; j++)
 		{
 			t_u8BuffTemp[i++] = ProductionInfor.BMS_SerialNumber[j];
@@ -873,7 +873,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
 	for (j = 0; j < 12; j++)
-	{ // 0xD002µ½ÕâÀï¡£
+	{ // 0xD002åˆ°è¿™é‡Œã€‚
 		u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
@@ -914,27 +914,27 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = Heat_Cool_FaultFlag.all; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = Heat_Cool_FaultFlag.all; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = 0; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = 0; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = 0; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = 0; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = 0; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = 0; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = 0; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = 0; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = 0; // ¿ÉÒÔ¼Ó¶àÒ»¸ö
+	u16SciTemp = 0; // å¯ä»¥åŠ å¤šä¸€ä¸ª
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
@@ -962,7 +962,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 /*=================================================================
  * FUNCTION: Sci_Tx_RW_Fun
- * PURPOSE : ½«ĞèÒª·¢ËÍµÄÊı¾İ½øĞĞ¸üĞÂ
+ * PURPOSE : å°†éœ€è¦å‘é€çš„æ•°æ®è¿›è¡Œæ›´æ–°
  * INPUT:    void
  *
  * RETURN:   void
@@ -973,7 +973,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
  *
  *=================================================================*/
 void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 65¸ö
+{ // 65ä¸ª
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
@@ -986,7 +986,7 @@ void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 94¸ö
+{ // 94ä¸ª
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
@@ -1007,7 +1007,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 i, j;
 	i = 0;
 	for (j = 0; j < SOC_Size_TableCanSet; j++)
-	{ // ÓÉÓÚGetEndValue()º¯ÊıµÄÎÊÌâ£¬Ö»ÄÜ»ìÔÚÒ»Æğ
+	{ // ç”±äºGetEndValue()å‡½æ•°çš„é—®é¢˜ï¼Œåªèƒ½æ··åœ¨ä¸€èµ·
 		switch (OtherElement.u16Soc_TableSelect)
 		{
 		case SOC_TABLE_TEST:
@@ -1054,7 +1054,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 32+24=56¸ö
+{ // 32+24=56ä¸ª
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
 
@@ -1140,11 +1140,11 @@ void Sci_ACK_0x03(struct RS485MSG *s)
 			{
 				Sci_ACK_0x03_RW_Data_Cali(s, g_u8SCITxBuff);
 			}
-			// Í·Âë£¬Ç°Èı¸ö×Ö½Ú±£³Ö²»±ä
+			// å¤´ç ï¼Œå‰ä¸‰ä¸ªå­—èŠ‚ä¿æŒä¸å˜
 			s->u16Buffer[0] = (s->u16Buffer[0] != 0) ? RS485_SLAVE_ADDR : s->u16Buffer[0];
 			s->u16Buffer[1] = s->enRs485CmdType;
 			s->u16Buffer[2] = s->u16RdRegByteNum;
-			// Êı¾İ
+			// æ•°æ®
 			for (i = 0; i < (s->u16RdRegByteNum); i++)
 			{
 				s->u16Buffer[i + 3] = g_u8SCITxBuff[i + ((s->u16RdRegStartAddr) << 1)];
@@ -1808,7 +1808,7 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 	}
 }
 
-// ½ÚÊ¡ÁËºÜ¶à´úÂëÁ¿°É£¿
+// èŠ‚çœäº†å¾ˆå¤šä»£ç é‡å§ï¼Ÿ
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 {
 	UINT16 offset;
@@ -2041,8 +2041,8 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	}
 }
 
-/* °ÑBMSĞòÁĞºÅ£¬Ó²¼ş°æ±¾ºÅ£¬ Èí¼ş°æ±¾ºÅĞ´Èë ohterInfor½á¹¹Ìå
- * startADDR  ÈçÆğÊ¼µØÖ·
+/* æŠŠBMSåºåˆ—å·ï¼Œç¡¬ä»¶ç‰ˆæœ¬å·ï¼Œ è½¯ä»¶ç‰ˆæœ¬å·å†™å…¥ ohterInforç»“æ„ä½“
+ * startADDR  å¦‚èµ·å§‹åœ°å€
  */
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 {
@@ -2316,9 +2316,9 @@ void Sci_WrReg_0x06_SwitchOFF(struct RS485MSG *s)
 	}
 }
 
-// ¹ØÓÚÕâ¸öº¯Êı
-// A:µÚÒ»´Î´ò¿ªÕâ¸ö¹¦ÄÜ£¬ÒÔÇ°´ÓÀ´Ã»´ò¿ª¹ı£¬ÔòÒòÎª¸÷ÖÖ±êÖ¾Î»±äÁ¿¶¼Ã»±ä¹ı(switch½á¹¹ÀïÃæµÄ)£¬ËùÒÔ»á½øĞĞ³õÊ¼»¯ÑéÖ¤
-// B:ÆäÖĞ¹Ø±ÕÁË£¬ÓÖ´ò¿ª£¬ÔòÒÑ¾­³õÊ¼»¯¹ıÒ»´Î£¬Õâ´Î´ò¿ª¾Í¼ÌĞø°´ÕÕÉÏÒ»´ÎµÄ½ø¶È¼ÌĞøÏÂÈ¥
+// å…³äºè¿™ä¸ªå‡½æ•°
+// A:ç¬¬ä¸€æ¬¡æ‰“å¼€è¿™ä¸ªåŠŸèƒ½ï¼Œä»¥å‰ä»æ¥æ²¡æ‰“å¼€è¿‡ï¼Œåˆ™å› ä¸ºå„ç§æ ‡å¿—ä½å˜é‡éƒ½æ²¡å˜è¿‡(switchç»“æ„é‡Œé¢çš„)ï¼Œæ‰€ä»¥ä¼šè¿›è¡Œåˆå§‹åŒ–éªŒè¯
+// B:å…¶ä¸­å…³é—­äº†ï¼Œåˆæ‰“å¼€ï¼Œåˆ™å·²ç»åˆå§‹åŒ–è¿‡ä¸€æ¬¡ï¼Œè¿™æ¬¡æ‰“å¼€å°±ç»§ç»­æŒ‰ç…§ä¸Šä¸€æ¬¡çš„è¿›åº¦ç»§ç»­ä¸‹å»
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
@@ -2326,8 +2326,8 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 	if (u16SciRegData >= 1 && u16SciRegData <= 32)
 	{
 		switch (u16SciRegData)
-		{		// Èç¹ûÊÇÒÔÏÂ¹¦ÄÜ±»´ò¿ª£¬ÔòĞèÒª³õÊ¼»¯ÑéÖ¤£¬±ğµÄ¹¦ÄÜÖ±½Ó¹Ø¾ÍºÃ
-		case 1: // ¾ùºâ
+		{		// å¦‚æœæ˜¯ä»¥ä¸‹åŠŸèƒ½è¢«æ‰“å¼€ï¼Œåˆ™éœ€è¦åˆå§‹åŒ–éªŒè¯ï¼Œåˆ«çš„åŠŸèƒ½ç›´æ¥å…³å°±å¥½
+		case 1: // å‡è¡¡
 			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Balance)
 			{
 				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Balance = 1;
@@ -2335,7 +2335,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			}
 			break;
 
-		case 3: // MOS»òÕß½Ó´¥Æ÷¹¦ÄÜ
+		case 3: // MOSæˆ–è€…æ¥è§¦å™¨åŠŸèƒ½
 			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_MOS_Relay)
 			{
 				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_MOS_Relay = 1;
@@ -2344,7 +2344,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			}
 			break;
 
-		case 6: // ¼ÓÈÈ¹¦ÄÜ
+		case 6: // åŠ çƒ­åŠŸèƒ½
 			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Heat)
 			{
 				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Heat = 1;
@@ -2352,7 +2352,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			}
 			break;
 
-		case 7: // ÀäÄı¹¦ÄÜ
+		case 7: // å†·å‡åŠŸèƒ½
 			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Cool)
 			{
 				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Cool = 1;
@@ -2360,10 +2360,10 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			}
 			break;
 
-		case 8: // ¼¤»îÄ£ÄâÇ°¶ËAFE1
+		case 8: // æ¿€æ´»æ¨¡æ‹Ÿå‰ç«¯AFE1
 			break;
 
-		case 0x0A: // Á¢¿Ì½øÈëĞİÃß
+		case 0x0A: // ç«‹åˆ»è¿›å…¥ä¼‘çœ 
 			entersleep(DEEP_MODE);
 			break;
 
@@ -2375,7 +2375,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		if (u16SciRegData == 0x0B)
 		{
 			// System_OnOFF_Func.bits.b1OnOFF_SOC_Zero
-			// Ä¬ÈÏÎª0£¬²»ĞèÒª±£´æ
+			// é»˜è®¤ä¸º0ï¼Œä¸éœ€è¦ä¿å­˜
 		}
 		else
 		{
@@ -2406,12 +2406,12 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	if (u16SciRegData >= 1 && u16SciRegData <= 32)
 	{
 		//*(&System_OnOFF_Func.bits.b1OnOFF_Balance+(u16SciRegData-1)) = 0;
-		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // ¹¦ÄÜÍ¾ÖĞ¹Ø±Õ²»ĞèÒª³õÊ¼»¯ÑéÖ¤
+		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // åŠŸèƒ½é€”ä¸­å…³é—­ä¸éœ€è¦åˆå§‹åŒ–éªŒè¯
 
 		if (u16SciRegData == 0x0B)
 		{
 			// System_OnOFF_Func.bits.b1OnOFF_SOC_Zero
-			// Ä¬ÈÏÎª0£¬²»ĞèÒª±£´æ
+			// é»˜è®¤ä¸º0ï¼Œä¸éœ€è¦ä¿å­˜
 		}
 		else
 		{
@@ -2481,17 +2481,17 @@ void App_CommonUpper(void)
 
 int fputc(int ch, FILE *f)
 {
-#if 0 /* ½«ĞèÒªprintfµÄ×Ö·ûÍ¨¹ı´®¿ÚÖĞ¶ÏFIFO·¢ËÍ³öÈ¥£¬printfº¯Êı»áÁ¢¼´·µ»Ø */
+#if 0 /* å°†éœ€è¦printfçš„å­—ç¬¦é€šè¿‡ä¸²å£ä¸­æ–­FIFOå‘é€å‡ºå»ï¼Œprintfå‡½æ•°ä¼šç«‹å³è¿”å› */
 	comSendChar(COM1, ch);
 
 	return ch;
-#else /* ²ÉÓÃ×èÈû·½Ê½·¢ËÍÃ¿¸ö×Ö·û,µÈ´ıÊı¾İ·¢ËÍÍê±Ï */
+#else /* é‡‡ç”¨é˜»å¡æ–¹å¼å‘é€æ¯ä¸ªå­—ç¬¦,ç­‰å¾…æ•°æ®å‘é€å®Œæ¯• */
 	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
 
-	/* Ğ´Ò»¸ö×Ö½Úµ½USART1 */
+	/* å†™ä¸€ä¸ªå­—èŠ‚åˆ°USART1 */
 	USART_SendData(debug_uart, (uint8_t)ch);
 
-	/* µÈ´ı·¢ËÍ½áÊø */
+	/* ç­‰å¾…å‘é€ç»“æŸ */
 	while ((USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET) && (wait_loop > 0U))
 	{
 		Feed_IWatchDog;

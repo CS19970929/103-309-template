@@ -17,14 +17,14 @@
 #define DELAYB10MS_30S ((UINT16)3000)	// 30s
 #define DELAYB10MS_2MIN ((UINT16)12000) // 30s
 
-// ´Ó10¸ÄÎª1£¬ÒòÎªÁ½¸öÍ¬Ê±´ò¿ª£¬100msÄÚÍ¬Ê±´ò¿ª£¬ÓĞ´óµçÁ÷µÄ»°»á²»»áÉÕ»µÔ¤³ä¡£
-#define PreRelayCLOSE_MODET 1  // ´ò¿ªÖ÷½Ó´¥Æ÷ºó£¬Ô¤³ä¼ÌµçÆ÷¹Ø±ÕÊ±¼ä
-#define PreDsgMOSCLOSE_MODET 1 // ´ò¿ªÖ÷·Åµç¹Üºó£¬Ô¤³ä·Åµç¹Ü¹Ø±ÕÊ±¼ä
+// ä»10æ”¹ä¸º1ï¼Œå› ä¸ºä¸¤ä¸ªåŒæ—¶æ‰“å¼€ï¼Œ100mså†…åŒæ—¶æ‰“å¼€ï¼Œæœ‰å¤§ç”µæµçš„è¯ä¼šä¸ä¼šçƒ§åé¢„å……ã€‚
+#define PreRelayCLOSE_MODET 1  // æ‰“å¼€ä¸»æ¥è§¦å™¨åï¼Œé¢„å……ç»§ç”µå™¨å…³é—­æ—¶é—´
+#define PreDsgMOSCLOSE_MODET 1 // æ‰“å¼€ä¸»æ”¾ç”µç®¡åï¼Œé¢„å……æ”¾ç”µç®¡å…³é—­æ—¶é—´
 
-// ÓÃÓÚÍ¬¿ÚMOS·½°¸£¬¹ı³ä·Å×´Ì¬£¬Èç¹ûµçÁ÷´óÓÚ2A£¬ÔòÍ¬Ê±¿ªÆôÁíÍâÒ»¸öMOS
-// Ô­À´ÊÇĞéµçÁ÷¹Ò¹³£¬µ«ÊÇ²»ºÏÀí£¬ÏÖÔÚ¸ÄÎªĞ´ËÀ
-// ÔÚÔ¤·ÅÆÚ¼ä£¬³äµçµçÁ÷´óÓÚÒ»¶¨µÄÖµ£¬Ò²Ö±½ÓÌø¹ıÔ¤·Å£¬Ö±½Ó´ò¿ª·ÅµçMOS
-// MOSÍ¬¿Ú·½°¸£¬¹ıÁ÷±£»¤Ö®ºó£¬ÀıÈç³äµç¹ıÁ÷£¬¹Ø±Õ³äµç¹Ü£¬´ËÊ±·ÅµçµçÁ÷´óÓÚ2A£¬²»µÈ30sÖ±½Ó´ò¿ª³äµçMOS
+// ç”¨äºåŒå£MOSæ–¹æ¡ˆï¼Œè¿‡å……æ”¾çŠ¶æ€ï¼Œå¦‚æœç”µæµå¤§äº2Aï¼Œåˆ™åŒæ—¶å¼€å¯å¦å¤–ä¸€ä¸ªMOS
+// åŸæ¥æ˜¯è™šç”µæµæŒ‚é’©ï¼Œä½†æ˜¯ä¸åˆç†ï¼Œç°åœ¨æ”¹ä¸ºå†™æ­»
+// åœ¨é¢„æ”¾æœŸé—´ï¼Œå……ç”µç”µæµå¤§äºä¸€å®šçš„å€¼ï¼Œä¹Ÿç›´æ¥è·³è¿‡é¢„æ”¾ï¼Œç›´æ¥æ‰“å¼€æ”¾ç”µMOS
+// MOSåŒå£æ–¹æ¡ˆï¼Œè¿‡æµä¿æŠ¤ä¹‹åï¼Œä¾‹å¦‚å……ç”µè¿‡æµï¼Œå…³é—­å……ç”µç®¡ï¼Œæ­¤æ—¶æ”¾ç”µç”µæµå¤§äº2Aï¼Œä¸ç­‰30sç›´æ¥æ‰“å¼€å……ç”µMOS
 #define CHG_MOS_OPEN_CUR 20
 #define DSG_MOS_OPEN_CUR 20
 
@@ -90,22 +90,22 @@ UINT8 PreChg_Ctrl(FUNC_STATUS FuncStatus);
 
 #ifdef _RELAY_SAME_DOOR_NO_PRECHG
 /*
-//Ô­À´ÊÇ·ÅÏÂÃæµÄ£¬Í»È»·¢ÏÖÁËÒ»¸öÎÊÌâ
-//¼ÙÉèÔÚ¹ıÑ¹±£»¤£¬È»ºó·Åµç£¬³öÏÖ¹ıÁ÷±£»¤(¶ÌÂ·³öÏÖ£¬»òÕß¿Í»§Ã»ÉèÖÃºÃ)
-//Õâ¸öÊ±ºò£¬Èç¹ûÎÒ²»¸Ä¶¯£¬Ôò³öÏÖ¹ıÁ÷±£»¤30s»Ö¸´ºó£¬½øÈë¹ıÑ¹±£»¤Ò»À¸Ñ­»·(Õâ¸öÊ±ºò±êÖ¾Î»Ã»»Ö¸´£¬ËùÒÔ»áÁ¢¿Ì´ò¿ª¹Ü×Ó)
-//µ«ÊÇ£¬ÏÂÃæÍ¨¹ısu8_FR_ChgOcp_FlagÖ´ĞĞµÄÒ»ÏµÁĞ´ÎÊı+1Ö®ÀàµÄ²Ù×÷±ãÃ»ÓĞ
-//ËùÒÔ¹ıÑ¹×´Ì¬»á³öÏÖÁ¬ĞøºÃ¶à´Î·Åµç¹ıÁ÷Ò²²»»áËøËÀ¹Ü×ÓµÄBUG¡£
-//Ö»»áÔÚ¹ıÑ¹±£»¤¸´Ô­Ö®ºó£¬²Å»á´ÎÊı¼ÆËã+1
-//²»¸ÄÎÊÌâÒ²²»´ó£¬±È½Ï¼«¶ËÊ¹ÓÃ¡£·Åµç¹ıÁ÷ºÍ³äµç¹ıÁ÷Êµ¼ÊÉÏ±È½ÏÉÙ´¥·¢£¬¶øÇÒ·Åµç¹ı´ó£¬¹ı¼¸ÏÂÒ»°ã¾Í»Ö¸´£¬²»ÔÙ¹ıÑ¹ÁË¡£
-//¼«¶Ë£¬´óÈİÁ¿£¬»Ö¸´µçÑ¹±È½ÏµÍ£¬²î¾à´ó£¬ÄÜ±£³Ö¹ıÑ¹×´Ì¬ºÜ¾Ã£¬ÔòÈİÒ×³öÏÖÕâ¸öÎÊÌâ¡£
-//½â¾öÕâ¸öÎÊÌâ£¬²ÉÓÃ¸ô¿ª·¨£¬°Ñ¹ıÁ÷±£»¤ÌáÉÏÀ´£¬ÏÈ´¦ÀíÍê£¬ÔÙ´¦Àí¹ıÑ¹±£»¤¡£²»Ïà»¥Ó°Ïì
+//åŸæ¥æ˜¯æ”¾ä¸‹é¢çš„ï¼Œçªç„¶å‘ç°äº†ä¸€ä¸ªé—®é¢˜
+//å‡è®¾åœ¨è¿‡å‹ä¿æŠ¤ï¼Œç„¶åæ”¾ç”µï¼Œå‡ºç°è¿‡æµä¿æŠ¤(çŸ­è·¯å‡ºç°ï¼Œæˆ–è€…å®¢æˆ·æ²¡è®¾ç½®å¥½)
+//è¿™ä¸ªæ—¶å€™ï¼Œå¦‚æœæˆ‘ä¸æ”¹åŠ¨ï¼Œåˆ™å‡ºç°è¿‡æµä¿æŠ¤30sæ¢å¤åï¼Œè¿›å…¥è¿‡å‹ä¿æŠ¤ä¸€æ å¾ªç¯(è¿™ä¸ªæ—¶å€™æ ‡å¿—ä½æ²¡æ¢å¤ï¼Œæ‰€ä»¥ä¼šç«‹åˆ»æ‰“å¼€ç®¡å­)
+//ä½†æ˜¯ï¼Œä¸‹é¢é€šè¿‡su8_FR_ChgOcp_Flagæ‰§è¡Œçš„ä¸€ç³»åˆ—æ¬¡æ•°+1ä¹‹ç±»çš„æ“ä½œä¾¿æ²¡æœ‰
+//æ‰€ä»¥è¿‡å‹çŠ¶æ€ä¼šå‡ºç°è¿ç»­å¥½å¤šæ¬¡æ”¾ç”µè¿‡æµä¹Ÿä¸ä¼šé”æ­»ç®¡å­çš„BUGã€‚
+//åªä¼šåœ¨è¿‡å‹ä¿æŠ¤å¤åŸä¹‹åï¼Œæ‰ä¼šæ¬¡æ•°è®¡ç®—+1
+//ä¸æ”¹é—®é¢˜ä¹Ÿä¸å¤§ï¼Œæ¯”è¾ƒæç«¯ä½¿ç”¨ã€‚æ”¾ç”µè¿‡æµå’Œå……ç”µè¿‡æµå®é™…ä¸Šæ¯”è¾ƒå°‘è§¦å‘ï¼Œè€Œä¸”æ”¾ç”µè¿‡å¤§ï¼Œè¿‡å‡ ä¸‹ä¸€èˆ¬å°±æ¢å¤ï¼Œä¸å†è¿‡å‹äº†ã€‚
+//æç«¯ï¼Œå¤§å®¹é‡ï¼Œæ¢å¤ç”µå‹æ¯”è¾ƒä½ï¼Œå·®è·å¤§ï¼Œèƒ½ä¿æŒè¿‡å‹çŠ¶æ€å¾ˆä¹…ï¼Œåˆ™å®¹æ˜“å‡ºç°è¿™ä¸ªé—®é¢˜ã€‚
+//è§£å†³è¿™ä¸ªé—®é¢˜ï¼Œé‡‡ç”¨éš”å¼€æ³•ï¼ŒæŠŠè¿‡æµä¿æŠ¤æä¸Šæ¥ï¼Œå…ˆå¤„ç†å®Œï¼Œå†å¤„ç†è¿‡å‹ä¿æŠ¤ã€‚ä¸ç›¸äº’å½±å“
 ......
 ......
 ......
->>ºóĞø£¬ÎªÁË½â¾öÒ»¶Ñ±¨´í³öÏÖµÄ¸÷ÖÖÎÊÌâµÄ¿ÉÄÜĞÔ£¬¾ö¶¨ĞŞ¸Ä´úÂë¼Ü¹¹£¬¸ÄÎª¸÷¸ö×ÓÄ£¿é¶ÀÁ¢ÅĞ¶Ï£¬×îºó¼ÓÈ¨¼¯ºÏÅĞ¶ÏµÄÄ£Ê½¡£
-1£¬ËäÈ»ÕâÖÖ¿ÉÄÜĞÔ±È½ÏĞ¡£¬ÀıÈç¹ıÑ¹µÍÑ¹´æÔÚµÄÇé¿ö(µç³Ø»òÕß°å×Ó»µÁË)£¬Ã»´¥·¢Ñ¹²î¹ı´ó£¬±ØĞë¹ØÁËÁ½¸ö¹Ü×Ó,
-   µ«Êµ¼Ê¹ØÁË¹ıÑ¹£¬µÍÑ¹Ã»¹Ø£¬»¹ÄÜ·Åµç¡££¬ÓÖ»òÕßÉÏÃæËµµÄ£¬¹ıÑ¹ºÍ¹ıÁ÷ÔÚÒ»¿é¡£
-2£¬¸ÄÁË¼Ü¹¹Ö®ºó£¬Âß¼­¸üÇåÎú£¬ºóĞøÎ¬»¤¸üÈİÒ×¡£ĞŞ¸ÄÌí¼ÓĞÂ¹¦ÄÜÒ²ÈİÒ×¡£
+>>åç»­ï¼Œä¸ºäº†è§£å†³ä¸€å †æŠ¥é”™å‡ºç°çš„å„ç§é—®é¢˜çš„å¯èƒ½æ€§ï¼Œå†³å®šä¿®æ”¹ä»£ç æ¶æ„ï¼Œæ”¹ä¸ºå„ä¸ªå­æ¨¡å—ç‹¬ç«‹åˆ¤æ–­ï¼Œæœ€ååŠ æƒé›†åˆåˆ¤æ–­çš„æ¨¡å¼ã€‚
+1ï¼Œè™½ç„¶è¿™ç§å¯èƒ½æ€§æ¯”è¾ƒå°ï¼Œä¾‹å¦‚è¿‡å‹ä½å‹å­˜åœ¨çš„æƒ…å†µ(ç”µæ± æˆ–è€…æ¿å­åäº†)ï¼Œæ²¡è§¦å‘å‹å·®è¿‡å¤§ï¼Œå¿…é¡»å…³äº†ä¸¤ä¸ªç®¡å­,
+   ä½†å®é™…å…³äº†è¿‡å‹ï¼Œä½å‹æ²¡å…³ï¼Œè¿˜èƒ½æ”¾ç”µã€‚ï¼Œåˆæˆ–è€…ä¸Šé¢è¯´çš„ï¼Œè¿‡å‹å’Œè¿‡æµåœ¨ä¸€å—ã€‚
+2ï¼Œæ”¹äº†æ¶æ„ä¹‹åï¼Œé€»è¾‘æ›´æ¸…æ™°ï¼Œåç»­ç»´æŠ¤æ›´å®¹æ˜“ã€‚ä¿®æ”¹æ·»åŠ æ–°åŠŸèƒ½ä¹Ÿå®¹æ˜“ã€‚
 */
 void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 {
@@ -132,7 +132,7 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	static UINT16 su16_OVPCLOSE_MODECnt = 0;
 	static UINT16 su16_UVPCLOSE_MODECnt = 0;
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_Main_Status_Normal = OPEN_MODE;
 	static DriversStatus s_Main_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_Main_Status_ChgOcp = OPEN_MODE;
@@ -141,7 +141,7 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_Main_Status_VolUvp = OPEN_MODE;
 	// static DriversStatus s_IO_Status_SocLow = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_Main_Status_Normal = OPEN_MODE;
 	s_Main_Status_Vdelta = OPEN_MODE;
 	s_Main_Status_ChgOcp = OPEN_MODE;
@@ -149,13 +149,13 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	s_Main_Status_VolOvp = OPEN_MODE;
 	s_Main_Status_VolUvp = OPEN_MODE;
 
-	// ÆÕÍ¨ÀàĞÍÃ»ÓĞ¸´Ô­»úÖÆ£¬Ö±½ÓÒ»¸öifÓï¾ä
+	// æ™®é€šç±»å‹æ²¡æœ‰å¤åŸæœºåˆ¶ï¼Œç›´æ¥ä¸€ä¸ªifè¯­å¥
 	if ((Driver_Element.Fault_Flag.all & 0x2800) || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE || !OnOFF_Ctrl)
 	{
 		s_Main_Status_Normal = CLOSE_MODE;
 	}
 
-	// Ñ¹²î¹ı´óÒ²²»ĞèÒªswitch£¬Ö±½Ó¹Ø
+	// å‹å·®è¿‡å¤§ä¹Ÿä¸éœ€è¦switchï¼Œç›´æ¥å…³
 	if (Driver_Element.Fault_Flag.bits.b1VcellDeltaBig)
 	{
 		s_Main_Status_Vdelta = CLOSE_MODE;
@@ -163,9 +163,9 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Vdelta = 1;
 	}
 
-	// Ë¼Ç°¿¼ºóÒ»´ó¶Ñ£¬¾ö¶¨¼ò»¯£¬ÓÅ»¯£¬¼ÈÈ»Íâ²¿ÄÜ×ÔĞĞÑÓÊ±30sÔÙÊÍ·Å±êÖ¾Î»£¬ÎÒ°ÑÈ¨Àû½»³öÈ¥
-	// ×ÔĞĞ²»ÔÙÑÓÊ±30s£¬¸úËæ±êÖ¾Î»±ä»¯£¬ÄÜ¼«´ó¼ò»¯´úÂë¸´ÔÓ¶È¡£
-	// Í¬Ê±Ò²°Ñµş¼Ó±£»¤µÄÎÊÌâÍ¬Ê±´¦Àíµô
+	// æ€å‰è€ƒåä¸€å¤§å †ï¼Œå†³å®šç®€åŒ–ï¼Œä¼˜åŒ–ï¼Œæ—¢ç„¶å¤–éƒ¨èƒ½è‡ªè¡Œå»¶æ—¶30så†é‡Šæ”¾æ ‡å¿—ä½ï¼Œæˆ‘æŠŠæƒåˆ©äº¤å‡ºå»
+	// è‡ªè¡Œä¸å†å»¶æ—¶30sï¼Œè·Ÿéšæ ‡å¿—ä½å˜åŒ–ï¼Œèƒ½æå¤§ç®€åŒ–ä»£ç å¤æ‚åº¦ã€‚
+	// åŒæ—¶ä¹ŸæŠŠå åŠ ä¿æŠ¤çš„é—®é¢˜åŒæ—¶å¤„ç†æ‰
 	switch (Driver_Element.Fault_Flag.bits.b1IchgOcp)
 	{
 	case 1:
@@ -175,11 +175,11 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 			su8_FR_ChgOcp_Flag = 1;
 			if (++su8_FR_ChgOcp_RecTimes >= 3)
 			{
-				su8_FR_ChgOcp_RecTimes = 0;			// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_ChgOcp_RecTimes = 0;			// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_ChgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_ChgOcp_RecNormalCnt)
@@ -188,9 +188,9 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 
 	case 0:
 		// s_Main_Status_DsgOcp = OPEN_MODE;
-		su8_FR_ChgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_ChgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_ChgOcp_RecTimes >= 1)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_ChgOcp_RecNormalCnt > (UINT32)(DELAYB10MS_2MIN))
 			{
 				su32_FR_ChgOcp_RecNormalCnt = 0;
@@ -237,11 +237,11 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		break;
 	}
 
-	// ÒÔÏÂÕâ¸öĞ´·¨ºÜÕıÈ·£¬Èç¹û³äµç²»ÄÜ»ØËİµ½¹ıÑ¹±£»¤ÏûÊ§£¬Ôò30s´ò¿ª£¬Èç¹û»ØËİµ½ÏûÊ§ÔòÁ¢¿Ì´ò¿ª
-	// Òª¼ÓÇ¿±êÖ¾Î»µÄ´¦Àí»¹ÓĞÕâ¸ö3´Î»Ö¸´Õı³£BUG
-	// ÌÖÂÛÍê±Ï£¬³öÏÖÌøµÄÇé¿öÖ»»áÔÚ¿ç¹ı»Ö¸´µãµÄµçÁ÷Öµ(´óµçÁ÷)£¬´ò¿ªºóÁ¢¿Ì³ä½ø´óµçÁ÷µçÑ¹ÓÖĞé¸ßÓÖÌø
-	// ×îºó½áÂÛÎ¬³Ö£¬A£ºÄ¿Ç°³¡¾°²»»á³öÏÖ´ò¿ªË²¼ä³öÏÖ´óµçÁ÷ÏÖÏó¡£B£¬ÏÖÔÚÃ»±£»¤Á¢¿Ì´ò¿ª¿Í»§ÓÃµÃÍ¦Ë¬µÄ£¬Èç¹ûÓĞ¸ö30s¿ÉÄÜÓÖÒªËµ¡£
-	// »Ö¸´µãÉè²î´óÒ»Ğ©
+	// ä»¥ä¸‹è¿™ä¸ªå†™æ³•å¾ˆæ­£ç¡®ï¼Œå¦‚æœå……ç”µä¸èƒ½å›æº¯åˆ°è¿‡å‹ä¿æŠ¤æ¶ˆå¤±ï¼Œåˆ™30sæ‰“å¼€ï¼Œå¦‚æœå›æº¯åˆ°æ¶ˆå¤±åˆ™ç«‹åˆ»æ‰“å¼€
+	// è¦åŠ å¼ºæ ‡å¿—ä½çš„å¤„ç†è¿˜æœ‰è¿™ä¸ª3æ¬¡æ¢å¤æ­£å¸¸BUG
+	// è®¨è®ºå®Œæ¯•ï¼Œå‡ºç°è·³çš„æƒ…å†µåªä¼šåœ¨è·¨è¿‡æ¢å¤ç‚¹çš„ç”µæµå€¼(å¤§ç”µæµ)ï¼Œæ‰“å¼€åç«‹åˆ»å……è¿›å¤§ç”µæµç”µå‹åˆè™šé«˜åˆè·³
+	// æœ€åç»“è®ºç»´æŒï¼ŒAï¼šç›®å‰åœºæ™¯ä¸ä¼šå‡ºç°æ‰“å¼€ç¬é—´å‡ºç°å¤§ç”µæµç°è±¡ã€‚Bï¼Œç°åœ¨æ²¡ä¿æŠ¤ç«‹åˆ»æ‰“å¼€å®¢æˆ·ç”¨å¾—æŒºçˆ½çš„ï¼Œå¦‚æœæœ‰ä¸ª30så¯èƒ½åˆè¦è¯´ã€‚
+	// æ¢å¤ç‚¹è®¾å·®å¤§ä¸€äº›
 	temp = (Driver_Element.Fault_Flag.bits.b1BatOvp || Driver_Element.Fault_Flag.bits.b1CellOvp || Driver_Element.Fault_Flag.bits.b1PackOvp);
 	temp |= (Driver_Element.Fault_Flag.bits.b1CellChgUtp || Driver_Element.Fault_Flag.bits.b1CellChgOtp);
 	switch (temp)
@@ -251,12 +251,12 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		if (++su16_FR_OVP_Tcnt >= DELAYB10MS_30S)
 		{
 			su16_FR_OVP_Tcnt = DELAYB10MS_30S;
-			s_Main_Status_VolOvp = OPEN_MODE; // Ç¿ÖÆ´ò¿ª¡£
+			s_Main_Status_VolOvp = OPEN_MODE; // å¼ºåˆ¶æ‰“å¼€ã€‚
 		}
 		if (Driver_Element.u16_CurChg > Driver_Element.u16_VirCur_Chg)
-		{ // ´ò¿ªÖ÷½Ó´¥Æ÷£¬ÕâÀï²Å»áÓĞµçÁ÷
+		{ // æ‰“å¼€ä¸»æ¥è§¦å™¨ï¼Œè¿™é‡Œæ‰ä¼šæœ‰ç”µæµ
 			if (++su16_OVPCLOSE_MODECnt > DELAYB10MS_5S)
-			{ // Èç¹ûÁ¢¿Ì¹Øµô£¬µ¼ÖÂSleepÒòÎª1sÈÎÎñµ½ÄÇÊ±ºòµçÁ÷ÒÑ¾­¼¸ºõÎª0ÁË
+			{ // å¦‚æœç«‹åˆ»å…³æ‰ï¼Œå¯¼è‡´Sleepå› ä¸º1sä»»åŠ¡åˆ°é‚£æ—¶å€™ç”µæµå·²ç»å‡ ä¹ä¸º0äº†
 				su16_OVPCLOSE_MODECnt = 0;
 				s_Main_Status_VolOvp = CLOSE_MODE;
 				if (su16_FR_OVP_Tcnt)
@@ -269,12 +269,12 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 				su16_OVPCLOSE_MODECnt = 0;
 		}
 
-		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE && Status_RelayMain == OPEN_MODE) {	//ÒòÎªÊÇÒ»´ÎÑ­»·¾Í»áCLOSE_MODE£¬ËùÒÔÏëÏÂ´ÎÀ´²»»áÔÙ±»¼ÆÊı
+		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE && Status_RelayMain == OPEN_MODE) {	//å› ä¸ºæ˜¯ä¸€æ¬¡å¾ªç¯å°±ä¼šCLOSE_MODEï¼Œæ‰€ä»¥æƒ³ä¸‹æ¬¡æ¥ä¸ä¼šå†è¢«è®¡æ•°
 		if (s_Main_Status_VolOvp == CLOSE_MODE && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_MAIN, Driver_GPIO.PinX_MAIN))
 		{
 			if (++su8_FR_OVP_RecTimes >= 3)
-			{							 // ¹ØÓÚ´ÎÊı¼ÆËã£¬×¥×¡Ò»¸öµã£¬ÔÚÖ÷½Ó´¥Æ÷´ò¿ªµÄÇé¿öÏÂ£¬½«ÒªÒª¹Ø±Õ£¬ËãÒ»´Î
-				su8_FR_OVP_RecTimes = 0; // Õâ¸öÏë·¨ÍêÃÀ±ÜÃâÈıÔªÀïºÍÁ×ËáÌúï®µÄ¹ØÓÚµçÑ¹»ØÂäÊÇ·ñ¸´Ô­£¬¼ÆÊı´ÎÊıÈçºÎÇåÁãµÄ¸´ÔÓ·ÖÀàÌÖÂÛ²Ù×÷
+			{							 // å…³äºæ¬¡æ•°è®¡ç®—ï¼ŒæŠ“ä½ä¸€ä¸ªç‚¹ï¼Œåœ¨ä¸»æ¥è§¦å™¨æ‰“å¼€çš„æƒ…å†µä¸‹ï¼Œå°†è¦è¦å…³é—­ï¼Œç®—ä¸€æ¬¡
+				su8_FR_OVP_RecTimes = 0; // è¿™ä¸ªæƒ³æ³•å®Œç¾é¿å…ä¸‰å…ƒé‡Œå’Œç£·é…¸é“é”‚çš„å…³äºç”µå‹å›è½æ˜¯å¦å¤åŸï¼Œè®¡æ•°æ¬¡æ•°å¦‚ä½•æ¸…é›¶çš„å¤æ‚åˆ†ç±»è®¨è®ºæ“ä½œ
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_OV = 1;
 			}
@@ -315,7 +315,7 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 			s_Main_Status_VolUvp = OPEN_MODE;
 		}
 		if (Driver_Element.u16_CurDsg > Driver_Element.u16_VirCur_Dsg)
-		{ // ´ò¿ªÖ÷½Ó´¥Æ÷£¬ÕâÀï²Å»áÓĞµçÁ÷
+		{ // æ‰“å¼€ä¸»æ¥è§¦å™¨ï¼Œè¿™é‡Œæ‰ä¼šæœ‰ç”µæµ
 			if (++su16_UVPCLOSE_MODECnt > DELAYB10MS_5S)
 			{
 				su16_UVPCLOSE_MODECnt = 0;
@@ -329,12 +329,12 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 			if (su16_UVPCLOSE_MODECnt)
 				su16_UVPCLOSE_MODECnt = 0;
 		}
-		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //ÒòÎªÊÇÒ»´ÎÑ­»·¾Í»áCLOSE_MODE£¬ËùÒÔÏëÏÂ´ÎÀ´²»»áÔÙ±»¼ÆÊı
+		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //å› ä¸ºæ˜¯ä¸€æ¬¡å¾ªç¯å°±ä¼šCLOSE_MODEï¼Œæ‰€ä»¥æƒ³ä¸‹æ¬¡æ¥ä¸ä¼šå†è¢«è®¡æ•°
 		if (s_Main_Status_VolUvp == CLOSE_MODE && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_MAIN, Driver_GPIO.PinX_MAIN))
 		{
 			if (++su8_FR_UVP_RecTimes >= 3)
-			{							 // ¹ØÓÚ´ÎÊı¼ÆËã£¬×¥×¡Ò»¸öµã£¬ÔÚÖ÷½Ó´¥Æ÷´ò¿ªµÄÇé¿öÏÂ£¬½«ÒªÒª¹Ø±Õ£¬ËãÒ»´Î
-				su8_FR_UVP_RecTimes = 0; // Õâ¸öÏë·¨ÍêÃÀ±ÜÃâÈıÔªÀïºÍÁ×ËáÌúï®µÄ¹ØÓÚµçÑ¹»ØÂäÊÇ·ñ¸´Ô­£¬¼ÆÊı´ÎÊıÈçºÎÇåÁãµÄ¸´ÔÓ·ÖÀàÌÖÂÛ²Ù×÷
+			{							 // å…³äºæ¬¡æ•°è®¡ç®—ï¼ŒæŠ“ä½ä¸€ä¸ªç‚¹ï¼Œåœ¨ä¸»æ¥è§¦å™¨æ‰“å¼€çš„æƒ…å†µä¸‹ï¼Œå°†è¦è¦å…³é—­ï¼Œç®—ä¸€æ¬¡
+				su8_FR_UVP_RecTimes = 0; // è¿™ä¸ªæƒ³æ³•å®Œç¾é¿å…ä¸‰å…ƒé‡Œå’Œç£·é…¸é“é”‚çš„å…³äºç”µå‹å›è½æ˜¯å¦å¤åŸï¼Œè®¡æ•°æ¬¡æ•°å¦‚ä½•æ¸…é›¶çš„å¤æ‚åˆ†ç±»è®¨è®ºæ“ä½œ
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_UV = 1;
 			}
@@ -363,10 +363,10 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		break;
 	}
 
-// Soc´¦ÀíºÍµÍÑ¹±£»¤´¦ÀíÒ»ÖÂ£¬Ö»ÊÇSocÒÔºó²»»áÔÙÌøÁË£¬Ò²¾ÍÊÇ´¥·¢ºó±Ø¶¨ĞèÒª30s´ò¿ª£¬Á¬Ğø3´ÎµÄ»°¾ÍÍêÈ«¹Øµô¼ÌµçÆ÷¡£
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+// Socå¤„ç†å’Œä½å‹ä¿æŠ¤å¤„ç†ä¸€è‡´ï¼Œåªæ˜¯Socä»¥åä¸ä¼šå†è·³äº†ï¼Œä¹Ÿå°±æ˜¯è§¦å‘åå¿…å®šéœ€è¦30sæ‰“å¼€ï¼Œè¿ç»­3æ¬¡çš„è¯å°±å®Œå…¨å…³æ‰ç»§ç”µå™¨ã€‚
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	else if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
-		if(++su16_FR_SocUp_Tcnt >= DELAYB10MS_30S && g_stCellInfoReport.u16IDischg <= Virtual_Dsg_C_Inverter) { //ÕâÀï²»ÓÃÂË²¨£¬ÒòÎª1AÒÔÄÚĞéµçÁ÷ÒÑ±»ºöÂÔ
+		if(++su16_FR_SocUp_Tcnt >= DELAYB10MS_30S && g_stCellInfoReport.u16IDischg <= Virtual_Dsg_C_Inverter) { //è¿™é‡Œä¸ç”¨æ»¤æ³¢ï¼Œå› ä¸º1Aä»¥å†…è™šç”µæµå·²è¢«å¿½ç•¥
 			su16_FR_SocUp_Tcnt = DELAYB10MS_30S;
 			RelayCtrl_Command = RELAY_PRE_OPEN_MODE;
 		}
@@ -384,7 +384,7 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 #endif
 
-	// ÅĞ¶Ï½á¹ûÍ³³ïÆğÀ´£¬È«²¿½á¹ûÎªOPEN²ÅÄÜOPEN
+	// åˆ¤æ–­ç»“æœç»Ÿç­¹èµ·æ¥ï¼Œå…¨éƒ¨ç»“æœä¸ºOPENæ‰èƒ½OPEN
 	temp = s_Main_Status_Normal & s_Main_Status_Vdelta & s_Main_Status_ChgOcp;
 	temp &= s_Main_Status_DsgOcp & s_Main_Status_VolOvp & s_Main_Status_VolUvp;
 	Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN = (DriversStatus)temp;
@@ -403,7 +403,7 @@ void RelayCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	// Status_RelayMain = Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN;
@@ -431,7 +431,7 @@ void Main_Relay_SameDoor_HavePreChg(DriversStatus IoStatus)
 	case CLOSE_MODE:
 		if (su8_IoStatus == OPEN_MODE)
 		{
-			Relay_Command_SameDoor_HavePreChg = RELAY_ALL_CLOSE_MODE; // Ô¤³äÆÚ¼ä»òÕßÔ¤³äÍê±Ï³öÏÖ±£»¤ÏÖÏó£¬¾ùÍ¬Ñù´¦Àí±ã¿É
+			Relay_Command_SameDoor_HavePreChg = RELAY_ALL_CLOSE_MODE; // é¢„å……æœŸé—´æˆ–è€…é¢„å……å®Œæ¯•å‡ºç°ä¿æŠ¤ç°è±¡ï¼Œå‡åŒæ ·å¤„ç†ä¾¿å¯
 			su8_IoStatus = CLOSE_MODE;
 		}
 		break;
@@ -535,7 +535,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	static UINT16 su16_OVPCLOSE_MODECnt = 0;
 	static UINT16 su16_UVPCLOSE_MODECnt = 0;
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_Main_Status_Normal = OPEN_MODE;
 	static DriversStatus s_Main_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_Main_Status_ChgOcp = OPEN_MODE;
@@ -544,7 +544,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_Main_Status_VolUvp = OPEN_MODE;
 	// static DriversStatus s_IO_Status_SocLow = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_Main_Status_Normal = OPEN_MODE;
 	s_Main_Status_Vdelta = OPEN_MODE;
 	s_Main_Status_ChgOcp = OPEN_MODE;
@@ -552,13 +552,13 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	s_Main_Status_VolOvp = OPEN_MODE;
 	s_Main_Status_VolUvp = OPEN_MODE;
 
-	// ÆÕÍ¨ÀàĞÍÃ»ÓĞ¸´Ô­»úÖÆ£¬Ö±½ÓÒ»¸öifÓï¾ä
+	// æ™®é€šç±»å‹æ²¡æœ‰å¤åŸæœºåˆ¶ï¼Œç›´æ¥ä¸€ä¸ªifè¯­å¥
 	if ((Driver_Element.Fault_Flag.all & 0x2800) || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE || !OnOFF_Ctrl)
 	{
 		s_Main_Status_Normal = CLOSE_MODE;
 	}
 
-	// Ñ¹²î¹ı´óÒ²²»ĞèÒªswitch£¬Ö±½Ó¹Ø
+	// å‹å·®è¿‡å¤§ä¹Ÿä¸éœ€è¦switchï¼Œç›´æ¥å…³
 	if (Driver_Element.Fault_Flag.bits.b1VcellDeltaBig)
 	{
 		s_Main_Status_Vdelta = CLOSE_MODE;
@@ -566,9 +566,9 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Vdelta = 1;
 	}
 
-	// Ë¼Ç°¿¼ºóÒ»´ó¶Ñ£¬¾ö¶¨¼ò»¯£¬ÓÅ»¯£¬¼ÈÈ»Íâ²¿ÄÜ×ÔĞĞÑÓÊ±30sÔÙÊÍ·Å±êÖ¾Î»£¬ÎÒ°ÑÈ¨Àû½»³öÈ¥
-	// ×ÔĞĞ²»ÔÙÑÓÊ±30s£¬¸úËæ±êÖ¾Î»±ä»¯£¬ÄÜ¼«´ó¼ò»¯´úÂë¸´ÔÓ¶È¡£
-	// Í¬Ê±Ò²°Ñµş¼Ó±£»¤µÄÎÊÌâÍ¬Ê±´¦Àíµô
+	// æ€å‰è€ƒåä¸€å¤§å †ï¼Œå†³å®šç®€åŒ–ï¼Œä¼˜åŒ–ï¼Œæ—¢ç„¶å¤–éƒ¨èƒ½è‡ªè¡Œå»¶æ—¶30så†é‡Šæ”¾æ ‡å¿—ä½ï¼Œæˆ‘æŠŠæƒåˆ©äº¤å‡ºå»
+	// è‡ªè¡Œä¸å†å»¶æ—¶30sï¼Œè·Ÿéšæ ‡å¿—ä½å˜åŒ–ï¼Œèƒ½æå¤§ç®€åŒ–ä»£ç å¤æ‚åº¦ã€‚
+	// åŒæ—¶ä¹ŸæŠŠå åŠ ä¿æŠ¤çš„é—®é¢˜åŒæ—¶å¤„ç†æ‰
 	switch (Driver_Element.Fault_Flag.bits.b1IchgOcp)
 	{
 	case 1:
@@ -578,11 +578,11 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 			su8_FR_ChgOcp_Flag = 1;
 			if (++su8_FR_ChgOcp_RecTimes >= 3)
 			{
-				su8_FR_ChgOcp_RecTimes = 0;			// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_ChgOcp_RecTimes = 0;			// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_ChgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_ChgOcp_RecNormalCnt)
@@ -591,9 +591,9 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 
 	case 0:
 		// s_Main_Status_DsgOcp = OPEN_MODE;
-		su8_FR_ChgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_ChgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_ChgOcp_RecTimes)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_ChgOcp_RecNormalCnt > (UINT32)(DELAYB10MS_2MIN))
 			{
 				su32_FR_ChgOcp_RecNormalCnt = 0;
@@ -640,11 +640,11 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		break;
 	}
 
-	// ÒÔÏÂÕâ¸öĞ´·¨ºÜÕıÈ·£¬Èç¹û³äµç²»ÄÜ»ØËİµ½¹ıÑ¹±£»¤ÏûÊ§£¬Ôò30s´ò¿ª£¬Èç¹û»ØËİµ½ÏûÊ§ÔòÁ¢¿Ì´ò¿ª
-	// Òª¼ÓÇ¿±êÖ¾Î»µÄ´¦Àí»¹ÓĞÕâ¸ö3´Î»Ö¸´Õı³£BUG
-	// ÌÖÂÛÍê±Ï£¬³öÏÖÌøµÄÇé¿öÖ»»áÔÚ¿ç¹ı»Ö¸´µãµÄµçÁ÷Öµ(´óµçÁ÷)£¬´ò¿ªºóÁ¢¿Ì³ä½ø´óµçÁ÷µçÑ¹ÓÖĞé¸ßÓÖÌø
-	// ×îºó½áÂÛÎ¬³Ö£¬A£ºÄ¿Ç°³¡¾°²»»á³öÏÖ´ò¿ªË²¼ä³öÏÖ´óµçÁ÷ÏÖÏó¡£B£¬ÏÖÔÚÃ»±£»¤Á¢¿Ì´ò¿ª¿Í»§ÓÃµÃÍ¦Ë¬µÄ£¬Èç¹ûÓĞ¸ö30s¿ÉÄÜÓÖÒªËµ¡£
-	// »Ö¸´µãÉè²î´óÒ»Ğ©
+	// ä»¥ä¸‹è¿™ä¸ªå†™æ³•å¾ˆæ­£ç¡®ï¼Œå¦‚æœå……ç”µä¸èƒ½å›æº¯åˆ°è¿‡å‹ä¿æŠ¤æ¶ˆå¤±ï¼Œåˆ™30sæ‰“å¼€ï¼Œå¦‚æœå›æº¯åˆ°æ¶ˆå¤±åˆ™ç«‹åˆ»æ‰“å¼€
+	// è¦åŠ å¼ºæ ‡å¿—ä½çš„å¤„ç†è¿˜æœ‰è¿™ä¸ª3æ¬¡æ¢å¤æ­£å¸¸BUG
+	// è®¨è®ºå®Œæ¯•ï¼Œå‡ºç°è·³çš„æƒ…å†µåªä¼šåœ¨è·¨è¿‡æ¢å¤ç‚¹çš„ç”µæµå€¼(å¤§ç”µæµ)ï¼Œæ‰“å¼€åç«‹åˆ»å……è¿›å¤§ç”µæµç”µå‹åˆè™šé«˜åˆè·³
+	// æœ€åç»“è®ºç»´æŒï¼ŒAï¼šç›®å‰åœºæ™¯ä¸ä¼šå‡ºç°æ‰“å¼€ç¬é—´å‡ºç°å¤§ç”µæµç°è±¡ã€‚Bï¼Œç°åœ¨æ²¡ä¿æŠ¤ç«‹åˆ»æ‰“å¼€å®¢æˆ·ç”¨å¾—æŒºçˆ½çš„ï¼Œå¦‚æœæœ‰ä¸ª30så¯èƒ½åˆè¦è¯´ã€‚
+	// æ¢å¤ç‚¹è®¾å·®å¤§ä¸€äº›
 	temp = (Driver_Element.Fault_Flag.bits.b1BatOvp || Driver_Element.Fault_Flag.bits.b1CellOvp || Driver_Element.Fault_Flag.bits.b1PackOvp);
 	temp |= (Driver_Element.Fault_Flag.bits.b1CellChgUtp || Driver_Element.Fault_Flag.bits.b1CellChgOtp);
 	switch (temp)
@@ -654,12 +654,12 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		if (++su16_FR_OVP_Tcnt >= DELAYB10MS_30S)
 		{
 			su16_FR_OVP_Tcnt = DELAYB10MS_30S;
-			s_Main_Status_VolOvp = OPEN_MODE; // Ç¿ÖÆ´ò¿ª¡£
+			s_Main_Status_VolOvp = OPEN_MODE; // å¼ºåˆ¶æ‰“å¼€ã€‚
 		}
 		if (Driver_Element.u16_CurChg > Driver_Element.u16_VirCur_Chg)
-		{ // ´ò¿ªÖ÷½Ó´¥Æ÷£¬ÕâÀï²Å»áÓĞµçÁ÷
+		{ // æ‰“å¼€ä¸»æ¥è§¦å™¨ï¼Œè¿™é‡Œæ‰ä¼šæœ‰ç”µæµ
 			if (++su16_OVPCLOSE_MODECnt > DELAYB10MS_5S)
-			{ // Èç¹ûÁ¢¿Ì¹Øµô£¬µ¼ÖÂSleepÒòÎª1sÈÎÎñµ½ÄÇÊ±ºòµçÁ÷ÒÑ¾­¼¸ºõÎª0ÁË
+			{ // å¦‚æœç«‹åˆ»å…³æ‰ï¼Œå¯¼è‡´Sleepå› ä¸º1sä»»åŠ¡åˆ°é‚£æ—¶å€™ç”µæµå·²ç»å‡ ä¹ä¸º0äº†
 				su16_OVPCLOSE_MODECnt = 0;
 				s_Main_Status_VolOvp = CLOSE_MODE;
 				if (su16_FR_OVP_Tcnt)
@@ -672,12 +672,12 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 				su16_OVPCLOSE_MODECnt = 0;
 		}
 
-		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE && Status_RelayMain == OPEN_MODE) {	//ÒòÎªÊÇÒ»´ÎÑ­»·¾Í»áCLOSE_MODE£¬ËùÒÔÏëÏÂ´ÎÀ´²»»áÔÙ±»¼ÆÊı
+		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE && Status_RelayMain == OPEN_MODE) {	//å› ä¸ºæ˜¯ä¸€æ¬¡å¾ªç¯å°±ä¼šCLOSE_MODEï¼Œæ‰€ä»¥æƒ³ä¸‹æ¬¡æ¥ä¸ä¼šå†è¢«è®¡æ•°
 		if (s_Main_Status_VolOvp == CLOSE_MODE && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_MAIN, Driver_GPIO.PinX_MAIN))
 		{
 			if (++su8_FR_OVP_RecTimes >= 3)
-			{							 // ¹ØÓÚ´ÎÊı¼ÆËã£¬×¥×¡Ò»¸öµã£¬ÔÚÖ÷½Ó´¥Æ÷´ò¿ªµÄÇé¿öÏÂ£¬½«ÒªÒª¹Ø±Õ£¬ËãÒ»´Î
-				su8_FR_OVP_RecTimes = 0; // Õâ¸öÏë·¨ÍêÃÀ±ÜÃâÈıÔªÀïºÍÁ×ËáÌúï®µÄ¹ØÓÚµçÑ¹»ØÂäÊÇ·ñ¸´Ô­£¬¼ÆÊı´ÎÊıÈçºÎÇåÁãµÄ¸´ÔÓ·ÖÀàÌÖÂÛ²Ù×÷
+			{							 // å…³äºæ¬¡æ•°è®¡ç®—ï¼ŒæŠ“ä½ä¸€ä¸ªç‚¹ï¼Œåœ¨ä¸»æ¥è§¦å™¨æ‰“å¼€çš„æƒ…å†µä¸‹ï¼Œå°†è¦è¦å…³é—­ï¼Œç®—ä¸€æ¬¡
+				su8_FR_OVP_RecTimes = 0; // è¿™ä¸ªæƒ³æ³•å®Œç¾é¿å…ä¸‰å…ƒé‡Œå’Œç£·é…¸é“é”‚çš„å…³äºç”µå‹å›è½æ˜¯å¦å¤åŸï¼Œè®¡æ•°æ¬¡æ•°å¦‚ä½•æ¸…é›¶çš„å¤æ‚åˆ†ç±»è®¨è®ºæ“ä½œ
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_OV = 1;
 			}
@@ -718,7 +718,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 			s_Main_Status_VolUvp = OPEN_MODE;
 		}
 		if (Driver_Element.u16_CurDsg > Driver_Element.u16_VirCur_Dsg)
-		{ // ´ò¿ªÖ÷½Ó´¥Æ÷£¬ÕâÀï²Å»áÓĞµçÁ÷
+		{ // æ‰“å¼€ä¸»æ¥è§¦å™¨ï¼Œè¿™é‡Œæ‰ä¼šæœ‰ç”µæµ
 			if (++su16_UVPCLOSE_MODECnt > DELAYB10MS_5S)
 			{
 				su16_UVPCLOSE_MODECnt = 0;
@@ -732,12 +732,12 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 			if (su16_UVPCLOSE_MODECnt)
 				su16_UVPCLOSE_MODECnt = 0;
 		}
-		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //ÒòÎªÊÇÒ»´ÎÑ­»·¾Í»áCLOSE_MODE£¬ËùÒÔÏëÏÂ´ÎÀ´²»»áÔÙ±»¼ÆÊı
+		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //å› ä¸ºæ˜¯ä¸€æ¬¡å¾ªç¯å°±ä¼šCLOSE_MODEï¼Œæ‰€ä»¥æƒ³ä¸‹æ¬¡æ¥ä¸ä¼šå†è¢«è®¡æ•°
 		if (s_Main_Status_VolUvp == CLOSE_MODE && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_MAIN, Driver_GPIO.PinX_MAIN))
 		{
 			if (++su8_FR_UVP_RecTimes >= 3)
-			{							 // ¹ØÓÚ´ÎÊı¼ÆËã£¬×¥×¡Ò»¸öµã£¬ÔÚÖ÷½Ó´¥Æ÷´ò¿ªµÄÇé¿öÏÂ£¬½«ÒªÒª¹Ø±Õ£¬ËãÒ»´Î
-				su8_FR_UVP_RecTimes = 0; // Õâ¸öÏë·¨ÍêÃÀ±ÜÃâÈıÔªÀïºÍÁ×ËáÌúï®µÄ¹ØÓÚµçÑ¹»ØÂäÊÇ·ñ¸´Ô­£¬¼ÆÊı´ÎÊıÈçºÎÇåÁãµÄ¸´ÔÓ·ÖÀàÌÖÂÛ²Ù×÷
+			{							 // å…³äºæ¬¡æ•°è®¡ç®—ï¼ŒæŠ“ä½ä¸€ä¸ªç‚¹ï¼Œåœ¨ä¸»æ¥è§¦å™¨æ‰“å¼€çš„æƒ…å†µä¸‹ï¼Œå°†è¦è¦å…³é—­ï¼Œç®—ä¸€æ¬¡
+				su8_FR_UVP_RecTimes = 0; // è¿™ä¸ªæƒ³æ³•å®Œç¾é¿å…ä¸‰å…ƒé‡Œå’Œç£·é…¸é“é”‚çš„å…³äºç”µå‹å›è½æ˜¯å¦å¤åŸï¼Œè®¡æ•°æ¬¡æ•°å¦‚ä½•æ¸…é›¶çš„å¤æ‚åˆ†ç±»è®¨è®ºæ“ä½œ
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_UV = 1;
 			}
@@ -766,10 +766,10 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		break;
 	}
 
-// Soc´¦ÀíºÍµÍÑ¹±£»¤´¦ÀíÒ»ÖÂ£¬Ö»ÊÇSocÒÔºó²»»áÔÙÌøÁË£¬Ò²¾ÍÊÇ´¥·¢ºó±Ø¶¨ĞèÒª30s´ò¿ª£¬Á¬Ğø3´ÎµÄ»°¾ÍÍêÈ«¹Øµô¼ÌµçÆ÷¡£
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+// Socå¤„ç†å’Œä½å‹ä¿æŠ¤å¤„ç†ä¸€è‡´ï¼Œåªæ˜¯Socä»¥åä¸ä¼šå†è·³äº†ï¼Œä¹Ÿå°±æ˜¯è§¦å‘åå¿…å®šéœ€è¦30sæ‰“å¼€ï¼Œè¿ç»­3æ¬¡çš„è¯å°±å®Œå…¨å…³æ‰ç»§ç”µå™¨ã€‚
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	else if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
-		if(++su16_FR_SocUp_Tcnt >= DELAYB10MS_30S && g_stCellInfoReport.u16IDischg <= Virtual_Dsg_C_Inverter) { //ÕâÀï²»ÓÃÂË²¨£¬ÒòÎª1AÒÔÄÚĞéµçÁ÷ÒÑ±»ºöÂÔ
+		if(++su16_FR_SocUp_Tcnt >= DELAYB10MS_30S && g_stCellInfoReport.u16IDischg <= Virtual_Dsg_C_Inverter) { //è¿™é‡Œä¸ç”¨æ»¤æ³¢ï¼Œå› ä¸º1Aä»¥å†…è™šç”µæµå·²è¢«å¿½ç•¥
 			su16_FR_SocUp_Tcnt = DELAYB10MS_30S;
 			RelayCtrl_Command = RELAY_PRE_OPEN_MODE;
 		}
@@ -787,7 +787,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 #endif
 
-	// ÅĞ¶Ï½á¹ûÍ³³ïÆğÀ´£¬È«²¿½á¹ûÎªOPEN²ÅÄÜOPEN
+	// åˆ¤æ–­ç»“æœç»Ÿç­¹èµ·æ¥ï¼Œå…¨éƒ¨ç»“æœä¸ºOPENæ‰èƒ½OPEN
 	temp = s_Main_Status_Normal & s_Main_Status_Vdelta & s_Main_Status_ChgOcp;
 	temp &= s_Main_Status_DsgOcp & s_Main_Status_VolOvp & s_Main_Status_VolUvp;
 	Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN = (DriversStatus)temp;
@@ -798,7 +798,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	*/
 
-	// ·ÅÕâÀï£¬Ç¿ÖÆ´ò¿ªºÍÇ¿ÖÆ¹Ø±Õ¶¼ºÍÔ¤³ä½áºÏÔÚÒ»ÆğÁË¡£
+	// æ”¾è¿™é‡Œï¼Œå¼ºåˆ¶æ‰“å¼€å’Œå¼ºåˆ¶å…³é—­éƒ½å’Œé¢„å……ç»“åˆåœ¨ä¸€èµ·äº†ã€‚
 	if (Driver_Element.DriverForceExt.bits.b2_Force_Relay_MAIN == FORCE_KEEP_MODE)
 	{
 		// KEEP
@@ -813,7 +813,7 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	Main_Relay_SameDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN);
@@ -821,12 +821,12 @@ void RelayOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 
 void RelayCtrl_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 {
-	RelayOnOFF_Det_SameDoor_HavePreChg(OnOFF_Ctrl); // ¼´Ê¹ÔÚÔ¤³ä¼ÌµçÆ÷¶¯×÷ÆÚ¼äÒ²³ÖĞø¼à¿Ø
+	RelayOnOFF_Det_SameDoor_HavePreChg(OnOFF_Ctrl); // å³ä½¿åœ¨é¢„å……ç»§ç”µå™¨åŠ¨ä½œæœŸé—´ä¹ŸæŒç»­ç›‘æ§
 
 	switch (Relay_Command_SameDoor_HavePreChg)
 	{
 	case RELAY_PRE_DET:
-		// RelayOnOFF_Det_SameDoor_HavePreChg();	//ÒÔÇ°ÄÇ¸ö·Å³öÈ¥²»ĞĞ£¬ÒÀ¾İMOSµÄ¾­Ñé¸Ä»ØÀ´
+		// RelayOnOFF_Det_SameDoor_HavePreChg();	//ä»¥å‰é‚£ä¸ªæ”¾å‡ºå»ä¸è¡Œï¼Œä¾æ®MOSçš„ç»éªŒæ”¹å›æ¥
 		break;
 
 	case RELAY_PRE_OPEN_MODE:
@@ -874,7 +874,7 @@ void RelayCtrl_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_Relay_PRE, GPIO_PreCHG);
@@ -891,17 +891,17 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 
 	static UINT8 su8_FR_IchgOcp_Flag = 0;
 	static UINT8 su8_FR_IchgOcp_RecTimes = 0;
-	static UINT32 su32_FR_IchgOcp_RecNormalCnt = 0; // ºÍÔ¤³äÎŞ¹Ø£¬µ«Ò²ÅäºÏÅäÒ»ÏÂ°É
+	static UINT32 su32_FR_IchgOcp_RecNormalCnt = 0; // å’Œé¢„å……æ— å…³ï¼Œä½†ä¹Ÿé…åˆé…ä¸€ä¸‹å§
 
 	static UINT8 su8_FR_IdsgOcp_Flag = 0;
 	static UINT8 su8_FR_IdsgOcp_RecTimes = 0;
-	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0; // Õâ¸öºÍÔ¤³äÏà¹Ø£¬Òª¸ÄÎª32Î»
+	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0; // è¿™ä¸ªå’Œé¢„å……ç›¸å…³ï¼Œè¦æ”¹ä¸º32ä½
 
-	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG = OPEN_MODE;		//ÕâÖÖÏë·¨ÏÈ»ºÒ»»º£¬ºÃÏñ¸üºÏÀí¸üÖ±¹ÛÒ»Ğ©
-	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = OPEN_MODE;		//»¹ÓĞ¹ØÓÚµçÁ÷±£»¤²»
-	// Õâ¸öÏë·¨×îºó»¹ÊÇ¸¶Ö®ĞĞ¶¯£¬º¦¡£
+	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG = OPEN_MODE;		//è¿™ç§æƒ³æ³•å…ˆç¼“ä¸€ç¼“ï¼Œå¥½åƒæ›´åˆç†æ›´ç›´è§‚ä¸€äº›
+	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = OPEN_MODE;		//è¿˜æœ‰å…³äºç”µæµä¿æŠ¤ä¸
+	// è¿™ä¸ªæƒ³æ³•æœ€åè¿˜æ˜¯ä»˜ä¹‹è¡ŒåŠ¨ï¼Œå®³ã€‚
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_RelayCHG_Status_Normal = OPEN_MODE;
 	static DriversStatus s_RelayCHG_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_RelayCHG_Status_ChgOcp = OPEN_MODE;
@@ -916,7 +916,7 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_RelayDSG_Status_VolOvp = OPEN_MODE;
 	static DriversStatus s_RelayDSG_Status_VolUvp = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_RelayCHG_Status_Normal = OPEN_MODE;
 	s_RelayCHG_Status_Vdelta = OPEN_MODE;
 	s_RelayCHG_Status_ChgOcp = OPEN_MODE;
@@ -941,7 +941,7 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	{
 		s_RelayCHG_Status_Vdelta = CLOSE_MODE;
 		s_RelayDSG_Status_Vdelta = CLOSE_MODE;
-		Driver_Element.u8_FuncOFF_Flag = 1; // Ö»ÄÜÖØÆô»òÕßÉÏÎ»»ú´ò¿ª¸Ã¹¦ÄÜ
+		Driver_Element.u8_FuncOFF_Flag = 1; // åªèƒ½é‡å¯æˆ–è€…ä¸Šä½æœºæ‰“å¼€è¯¥åŠŸèƒ½
 		Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Vdelta = 1;
 	}
 
@@ -949,19 +949,19 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	{
 	case 1:
 		s_RelayCHG_Status_ChgOcp = CLOSE_MODE;
-		s_RelayDSG_Status_ChgOcp = OPEN_MODE; // Õâ¾ä»°ÆäÊµ¿ÉÒÔÈ¥µô£¬µ«ÊÇÁô×Å
-		// su8_FR_IchgOcp_Flag = 1;					//¹Ø±ÕÁ¢¿ÌÃ»µçÁ÷£¬Ã»±£»¤£¬ËùÒÔµÃµ½ÏÂÃæ¼ÌĞø´¦Àí
-		// ²»»áÔÙ³öÏÖÉÏÃæÄÇÖÖÇé¿ö£¬ÒòÎªÍâ²¿»á×Ô¶¯Î¬³ÖÕâ¸ö±êÖ¾Î»30s
+		s_RelayDSG_Status_ChgOcp = OPEN_MODE; // è¿™å¥è¯å…¶å®å¯ä»¥å»æ‰ï¼Œä½†æ˜¯ç•™ç€
+		// su8_FR_IchgOcp_Flag = 1;					//å…³é—­ç«‹åˆ»æ²¡ç”µæµï¼Œæ²¡ä¿æŠ¤ï¼Œæ‰€ä»¥å¾—åˆ°ä¸‹é¢ç»§ç»­å¤„ç†
+		// ä¸ä¼šå†å‡ºç°ä¸Šé¢é‚£ç§æƒ…å†µï¼Œå› ä¸ºå¤–éƒ¨ä¼šè‡ªåŠ¨ç»´æŒè¿™ä¸ªæ ‡å¿—ä½30s
 		if (!su8_FR_IchgOcp_Flag)
 		{
 			su8_FR_IchgOcp_Flag = 1;
 			if (++su8_FR_IchgOcp_RecTimes >= 3)
 			{
-				su8_FR_IchgOcp_RecTimes = 0;		// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_IchgOcp_RecTimes = 0;		// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_IchgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_IchgOcp_RecNormalCnt)
@@ -969,9 +969,9 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		break;
 
 	case 0:
-		su8_FR_IchgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_IchgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_IchgOcp_RecTimes >= 1)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_IchgOcp_RecNormalCnt > DELAYB10MS_2MIN)
 			{
 				su32_FR_IchgOcp_RecNormalCnt = 0;
@@ -1036,7 +1036,7 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		s_RelayDSG_Status_VolUvp = CLOSE_MODE;
 	}
 
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
@@ -1066,7 +1066,7 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_Relay_DSG == FORCE_KEEP_MODE)
@@ -1083,7 +1083,7 @@ void RelayCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG, GPIO_CHG);
@@ -1103,7 +1103,7 @@ void CHG_Relay_DiffDoor_HavePreChg(DriversStatus IoStatus)
 	case OPEN_MODE:
 		if (su8_IoStatus == CLOSE_MODE)
 		{
-			// Ö±½Ó¿ØÖÆ£¬µ«ÊÇ·Åµ½ÏÂÃæÍ³Ò»¹ÜÀí
+			// ç›´æ¥æ§åˆ¶ï¼Œä½†æ˜¯æ”¾åˆ°ä¸‹é¢ç»Ÿä¸€ç®¡ç†
 			// DriversOnOFF(IoStatus, GPIO_CHG);
 			su8_IoStatus = OPEN_MODE;
 		}
@@ -1122,8 +1122,8 @@ void CHG_Relay_DiffDoor_HavePreChg(DriversStatus IoStatus)
 	}
 }
 
-// ·Ç³£ÇÉÃîµÄÏë·¨£¬°ÑÕû¸öÔ¤³ä¶¯×÷¿´³ÉÒ»¸ö´ò¿ª½Ó´¥µÄÂß¼­°üÂç£¬Ö»Ö´ĞĞÒ»´Î±ã¿É¡£
-// Õâ¸öË¼Î¬Âß¼­½«»á±»³¤ÆÚÊ¹ÓÃ¡£
+// éå¸¸å·§å¦™çš„æƒ³æ³•ï¼ŒæŠŠæ•´ä¸ªé¢„å……åŠ¨ä½œçœ‹æˆä¸€ä¸ªæ‰“å¼€æ¥è§¦çš„é€»è¾‘åŒ…ç»œï¼Œåªæ‰§è¡Œä¸€æ¬¡ä¾¿å¯ã€‚
+// è¿™ä¸ªæ€ç»´é€»è¾‘å°†ä¼šè¢«é•¿æœŸä½¿ç”¨ã€‚
 void DSG_Relay_DiffDoor_HavePreChg(DriversStatus IoStatus)
 {
 	static UINT8 su8_IoStatus = CLOSE_MODE;
@@ -1141,7 +1141,7 @@ void DSG_Relay_DiffDoor_HavePreChg(DriversStatus IoStatus)
 	case CLOSE_MODE:
 		if (su8_IoStatus == OPEN_MODE)
 		{
-			Relay_Command_DiffDoor_HavePreChg = RELAY_ALL_CLOSE_MODE; // Ô¤³äÆÚ¼ä»òÕßÔ¤³äÍê±Ï³öÏÖ±£»¤ÏÖÏó£¬¾ùÍ¬Ñù´¦Àí±ã¿É
+			Relay_Command_DiffDoor_HavePreChg = RELAY_ALL_CLOSE_MODE; // é¢„å……æœŸé—´æˆ–è€…é¢„å……å®Œæ¯•å‡ºç°ä¿æŠ¤ç°è±¡ï¼Œå‡åŒæ ·å¤„ç†ä¾¿å¯
 			su8_IoStatus = CLOSE_MODE;
 		}
 		break;
@@ -1158,7 +1158,7 @@ void PreRelay_OPEN_MODE_DiffDoor_HavePreChg(FUNC_STATUS FuncStatus)
 	switch (FuncStatus)
 	{
 	case CONT:
-		Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = CLOSE_MODE; // µÚÒ»´ÎÉÏµçÉÏÎ»»úÏÔÊ¾´íÎó£¬Êµ¼ÊÉÏÒ²ÒªÕâÃ´¸É²Å¶Ô
+		Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = CLOSE_MODE; // ç¬¬ä¸€æ¬¡ä¸Šç”µä¸Šä½æœºæ˜¾ç¤ºé”™è¯¯ï¼Œå®é™…ä¸Šä¹Ÿè¦è¿™ä¹ˆå¹²æ‰å¯¹
 		// Driver_Element.MosRelay_Status.bits.b1Status_Relay_PRE = OPEN_MODE;
 
 		result = PreChg_Ctrl(CONT);
@@ -1224,17 +1224,17 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 
 	static UINT8 su8_FR_IchgOcp_Flag = 0;
 	static UINT8 su8_FR_IchgOcp_RecTimes = 0;
-	static UINT32 su32_FR_IchgOcp_RecNormalCnt = 0; // ºÍÔ¤³äÎŞ¹Ø£¬µ«Ò²ÅäºÏÅäÒ»ÏÂ°É
+	static UINT32 su32_FR_IchgOcp_RecNormalCnt = 0; // å’Œé¢„å……æ— å…³ï¼Œä½†ä¹Ÿé…åˆé…ä¸€ä¸‹å§
 
 	static UINT8 su8_FR_IdsgOcp_Flag = 0;
 	static UINT8 su8_FR_IdsgOcp_RecTimes = 0;
-	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0; // Õâ¸öºÍÔ¤³äÏà¹Ø£¬Òª¸ÄÎª32Î»
+	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0; // è¿™ä¸ªå’Œé¢„å……ç›¸å…³ï¼Œè¦æ”¹ä¸º32ä½
 
-	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG = OPEN_MODE;		//ÕâÖÖÏë·¨ÏÈ»ºÒ»»º£¬ºÃÏñ¸üºÏÀí¸üÖ±¹ÛÒ»Ğ©
-	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = OPEN_MODE;		//»¹ÓĞ¹ØÓÚµçÁ÷±£»¤²»
-	// Õâ¸öÏë·¨×îºó»¹ÊÇ¸¶Ö®ĞĞ¶¯£¬º¦¡£
+	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG = OPEN_MODE;		//è¿™ç§æƒ³æ³•å…ˆç¼“ä¸€ç¼“ï¼Œå¥½åƒæ›´åˆç†æ›´ç›´è§‚ä¸€äº›
+	// Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = OPEN_MODE;		//è¿˜æœ‰å…³äºç”µæµä¿æŠ¤ä¸
+	// è¿™ä¸ªæƒ³æ³•æœ€åè¿˜æ˜¯ä»˜ä¹‹è¡ŒåŠ¨ï¼Œå®³ã€‚
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_RelayCHG_Status_Normal = OPEN_MODE;
 	static DriversStatus s_RelayCHG_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_RelayCHG_Status_ChgOcp = OPEN_MODE;
@@ -1249,7 +1249,7 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_RelayDSG_Status_VolOvp = OPEN_MODE;
 	static DriversStatus s_RelayDSG_Status_VolUvp = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_RelayCHG_Status_Normal = OPEN_MODE;
 	s_RelayCHG_Status_Vdelta = OPEN_MODE;
 	s_RelayCHG_Status_ChgOcp = OPEN_MODE;
@@ -1274,7 +1274,7 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	{
 		s_RelayCHG_Status_Vdelta = CLOSE_MODE;
 		s_RelayDSG_Status_Vdelta = CLOSE_MODE;
-		Driver_Element.u8_FuncOFF_Flag = 1; // Ö»ÄÜÖØÆô»òÕßÉÏÎ»»ú´ò¿ª¸Ã¹¦ÄÜ
+		Driver_Element.u8_FuncOFF_Flag = 1; // åªèƒ½é‡å¯æˆ–è€…ä¸Šä½æœºæ‰“å¼€è¯¥åŠŸèƒ½
 		Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Vdelta = 1;
 	}
 
@@ -1282,19 +1282,19 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	{
 	case 1:
 		s_RelayCHG_Status_ChgOcp = CLOSE_MODE;
-		s_RelayDSG_Status_ChgOcp = OPEN_MODE; // Õâ¾ä»°ÆäÊµ¿ÉÒÔÈ¥µô£¬µ«ÊÇÁô×Å
-		// su8_FR_IchgOcp_Flag = 1;					//¹Ø±ÕÁ¢¿ÌÃ»µçÁ÷£¬Ã»±£»¤£¬ËùÒÔµÃµ½ÏÂÃæ¼ÌĞø´¦Àí
-		// ²»»áÔÙ³öÏÖÉÏÃæÄÇÖÖÇé¿ö£¬ÒòÎªÍâ²¿»á×Ô¶¯Î¬³ÖÕâ¸ö±êÖ¾Î»30s
+		s_RelayDSG_Status_ChgOcp = OPEN_MODE; // è¿™å¥è¯å…¶å®å¯ä»¥å»æ‰ï¼Œä½†æ˜¯ç•™ç€
+		// su8_FR_IchgOcp_Flag = 1;					//å…³é—­ç«‹åˆ»æ²¡ç”µæµï¼Œæ²¡ä¿æŠ¤ï¼Œæ‰€ä»¥å¾—åˆ°ä¸‹é¢ç»§ç»­å¤„ç†
+		// ä¸ä¼šå†å‡ºç°ä¸Šé¢é‚£ç§æƒ…å†µï¼Œå› ä¸ºå¤–éƒ¨ä¼šè‡ªåŠ¨ç»´æŒè¿™ä¸ªæ ‡å¿—ä½30s
 		if (!su8_FR_IchgOcp_Flag)
 		{
 			su8_FR_IchgOcp_Flag = 1;
 			if (++su8_FR_IchgOcp_RecTimes >= 3)
 			{
-				su8_FR_IchgOcp_RecTimes = 0;		// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_IchgOcp_RecTimes = 0;		// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_IchgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_IchgOcp_RecNormalCnt)
@@ -1302,9 +1302,9 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		break;
 
 	case 0:
-		su8_FR_IchgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_IchgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_IchgOcp_RecTimes >= 1)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_IchgOcp_RecNormalCnt > DELAYB10MS_2MIN)
 			{
 				su32_FR_IchgOcp_RecNormalCnt = 0;
@@ -1369,7 +1369,7 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		s_RelayDSG_Status_VolUvp = CLOSE_MODE;
 	}
 
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
@@ -1385,7 +1385,7 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	temp &= s_RelayDSG_Status_DsgOcp & s_RelayDSG_Status_VolOvp & s_RelayDSG_Status_VolUvp;
 	Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG = (DriversStatus)temp;
 
-	// ·ÅÕâÀï£¬Ç¿ÖÆ´ò¿ªºÍÇ¿ÖÆ¹Ø±Õ¶¼ºÍÔ¤³ä½áºÏÔÚÒ»ÆğÁË¡£
+	// æ”¾è¿™é‡Œï¼Œå¼ºåˆ¶æ‰“å¼€å’Œå¼ºåˆ¶å…³é—­éƒ½å’Œé¢„å……ç»“åˆåœ¨ä¸€èµ·äº†ã€‚
 	if (Driver_Element.DriverForceExt.bits.b2_Force_Relay_DSG == FORCE_KEEP_MODE)
 	{
 		// KEEP
@@ -1400,16 +1400,16 @@ void RelayOnOFF_Det_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	CHG_Relay_DiffDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_Relay_CHG);
-	DSG_Relay_DiffDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG); // ¸Ãº¯Êı·Ç³£ÇÉÃî£¬¼ò½à´¦ÀíÁËÒÔÏÂ¸÷ÖÖ×´¿ö
+	DSG_Relay_DiffDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_Relay_DSG); // è¯¥å‡½æ•°éå¸¸å·§å¦™ï¼Œç®€æ´å¤„ç†äº†ä»¥ä¸‹å„ç§çŠ¶å†µ
 }
 
 void RelayCtrl_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 {
-	RelayOnOFF_Det_DiffDoor_HavePreChg(OnOFF_Ctrl); // ¼´Ê¹ÔÚÔ¤³ä¼ÌµçÆ÷¶¯×÷ÆÚ¼äÒ²³ÖĞø¼à¿Ø
+	RelayOnOFF_Det_DiffDoor_HavePreChg(OnOFF_Ctrl); // å³ä½¿åœ¨é¢„å……ç»§ç”µå™¨åŠ¨ä½œæœŸé—´ä¹ŸæŒç»­ç›‘æ§
 
 	switch (Relay_Command_DiffDoor_HavePreChg)
 	{
@@ -1462,7 +1462,7 @@ void RelayCtrl_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_Relay_CHG == FORCE_KEEP_MODE)
@@ -1479,7 +1479,7 @@ void RelayCtrl_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_Relay_PRE, GPIO_PreCHG);
@@ -1493,7 +1493,7 @@ void RelayCtrl_DiffDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 
 #ifdef _MOS_SAME_DOOR_NO_PRECHG
 
-// ¹ØÓÚMOS¿ØÖÆ
+// å…³äºMOSæ§åˆ¶
 void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 {
 	UINT8 temp = 0;
@@ -1506,10 +1506,10 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	static UINT8 su8_FR_IdsgOcp_RecTimes = 0;
 	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0;
 
-	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;		//ÕâÖÖÏë·¨ÏÈ»ºÒ»»º£¬ºÃÏñ¸üºÏÀí¸üÖ±¹ÛÒ»Ğ©
-	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;		//»¹ÓĞ¹ØÓÚµçÁ÷±£»¤²»
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;		//è¿™ç§æƒ³æ³•å…ˆç¼“ä¸€ç¼“ï¼Œå¥½åƒæ›´åˆç†æ›´ç›´è§‚ä¸€äº›
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;		//è¿˜æœ‰å…³äºç”µæµä¿æŠ¤ä¸
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_MosCHG_Status_Normal = OPEN_MODE;
 	static DriversStatus s_MosCHG_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_MosCHG_Status_ChgOcp = OPEN_MODE;
@@ -1524,7 +1524,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_MosDSG_Status_VolOvp = OPEN_MODE;
 	static DriversStatus s_MosDSG_Status_VolUvp = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_MosCHG_Status_Normal = OPEN_MODE;
 	s_MosCHG_Status_Vdelta = OPEN_MODE;
 	s_MosCHG_Status_ChgOcp = OPEN_MODE;
@@ -1565,8 +1565,8 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_CLOSE_MODE)
 	{
 		if (Driver_Element.u16_CurDsg > DSG_MOS_OPEN_CUR)
-		{ // Èç¹ûµçÁ÷´óÓÚ2A£¬Ôò±ØĞëÁ¢¿Ì´ò¿ª³äµçMOS
-			// s_MosCHG_Status_ChgOcp = OPEN_MODE; // ¼´Ê¹Ä¿Ç°»¹ÔÚ30sµÄ¹ıÁ÷±£»¤×´Ì¬
+		{ // å¦‚æœç”µæµå¤§äº2Aï¼Œåˆ™å¿…é¡»ç«‹åˆ»æ‰“å¼€å……ç”µMOS
+			// s_MosCHG_Status_ChgOcp = OPEN_MODE; // å³ä½¿ç›®å‰è¿˜åœ¨30sçš„è¿‡æµä¿æŠ¤çŠ¶æ€
 			su8_FR_IchgOcp_RecTimes = 0;
 			Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
 		}
@@ -1579,8 +1579,8 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		s_MosDSG_Status_ChgOcp = OPEN_MODE;
 
 		if (Driver_Element.u16_CurDsg > DSG_MOS_OPEN_CUR)
-		{										// Èç¹ûµçÁ÷´óÓÚ2A£¬Ôò±ØĞëÁ¢¿Ì´ò¿ª³äµçMOS
-			s_MosCHG_Status_ChgOcp = OPEN_MODE; // ¼´Ê¹Ä¿Ç°»¹ÔÚ30sµÄ¹ıÁ÷±£»¤×´Ì¬
+		{										// å¦‚æœç”µæµå¤§äº2Aï¼Œåˆ™å¿…é¡»ç«‹åˆ»æ‰“å¼€å……ç”µMOS
+			s_MosCHG_Status_ChgOcp = OPEN_MODE; // å³ä½¿ç›®å‰è¿˜åœ¨30sçš„è¿‡æµä¿æŠ¤çŠ¶æ€
 		}
 
 		if (!su8_FR_IchgOcp_Flag)
@@ -1593,7 +1593,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 				Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_IchgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_IchgOcp_RecNormalCnt)
@@ -1601,9 +1601,9 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		break;
 
 	case 0:
-		su8_FR_IchgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_IchgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_IchgOcp_RecTimes)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_IchgOcp_RecNormalCnt > DELAYB10MS_2MIN)
 			{
 				su32_FR_IchgOcp_RecNormalCnt = 0;
@@ -1687,7 +1687,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 		}
 	}
 
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
@@ -1717,7 +1717,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_KEEP_MODE)
@@ -1734,7 +1734,7 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG, GPIO_CHG);
@@ -1754,7 +1754,7 @@ void CHG_MOS_SameDoor_HavePreChg(DriversStatus IoStatus)
 	case OPEN_MODE:
 		if (su8_IoStatus == CLOSE_MODE)
 		{
-			// Ö±½Ó¿ØÖÆ£¬µ«ÊÇ·Åµ½ÏÂÃæÍ³Ò»¹ÜÀí
+			// ç›´æ¥æ§åˆ¶ï¼Œä½†æ˜¯æ”¾åˆ°ä¸‹é¢ç»Ÿä¸€ç®¡ç†
 			// DriversOnOFF(IoStatus, GPIO_CHG);
 			su8_IoStatus = OPEN_MODE;
 		}
@@ -1773,8 +1773,8 @@ void CHG_MOS_SameDoor_HavePreChg(DriversStatus IoStatus)
 	}
 }
 
-// ·Ç³£ÇÉÃîµÄÏë·¨£¬°ÑÕû¸öÔ¤³ä¶¯×÷¿´³ÉÒ»¸ö´ò¿ª½Ó´¥µÄÂß¼­°üÂç£¬Ö»Ö´ĞĞÒ»´Î±ã¿É¡£
-// Õâ¸öË¼Î¬Âß¼­½«»á±»³¤ÆÚÊ¹ÓÃ¡£
+// éå¸¸å·§å¦™çš„æƒ³æ³•ï¼ŒæŠŠæ•´ä¸ªé¢„å……åŠ¨ä½œçœ‹æˆä¸€ä¸ªæ‰“å¼€æ¥è§¦çš„é€»è¾‘åŒ…ç»œï¼Œåªæ‰§è¡Œä¸€æ¬¡ä¾¿å¯ã€‚
+// è¿™ä¸ªæ€ç»´é€»è¾‘å°†ä¼šè¢«é•¿æœŸä½¿ç”¨ã€‚
 void DSG_MOS_SameDoor_HavePreChg(DriversStatus IoStatus)
 {
 	static UINT8 su8_IoStatus = CLOSE_MODE;
@@ -1792,7 +1792,7 @@ void DSG_MOS_SameDoor_HavePreChg(DriversStatus IoStatus)
 	case CLOSE_MODE:
 		if (su8_IoStatus == OPEN_MODE)
 		{
-			MosCtrl_Command_SameDoor_HavePreChg = MOS_ALL_CLOSE_MODE; // Ô¤³äÆÚ¼ä»òÕßÔ¤³äÍê±Ï³öÏÖ±£»¤ÏÖÏó£¬¾ùÍ¬Ñù´¦Àí±ã¿É
+			MosCtrl_Command_SameDoor_HavePreChg = MOS_ALL_CLOSE_MODE; // é¢„å……æœŸé—´æˆ–è€…é¢„å……å®Œæ¯•å‡ºç°ä¿æŠ¤ç°è±¡ï¼Œå‡åŒæ ·å¤„ç†ä¾¿å¯
 			su8_IoStatus = CLOSE_MODE;
 		}
 		break;
@@ -1812,8 +1812,8 @@ void PreDsgMOS_OPEN_MODE_SameDoor_HavePreChg(FUNC_STATUS FuncStatus)
 	case CONT:
 		// if(Driver_Element.u16_CurChg < Driver_Element.u16_VirCur_Chg) {
 		if (Driver_Element.u16_CurChg < CHG_MOS_OPEN_CUR)
-		{																	   // ´óÓÚ2A£¬Ğ´ËÀ£¬ÒòÎªÎ´À´ĞéµçÂ·ÓĞ¿ÉÄÜÎª0
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // µÚÒ»´ÎÉÏµçÉÏÎ»»úÏÔÊ¾´íÎó£¬Êµ¼ÊÉÏÒ²ÒªÕâÃ´¸É²Å¶Ô
+		{																	   // å¤§äº2Aï¼Œå†™æ­»ï¼Œå› ä¸ºæœªæ¥è™šç”µè·¯æœ‰å¯èƒ½ä¸º0
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // ç¬¬ä¸€æ¬¡ä¸Šç”µä¸Šä½æœºæ˜¾ç¤ºé”™è¯¯ï¼Œå®é™…ä¸Šä¹Ÿè¦è¿™ä¹ˆå¹²æ‰å¯¹
 			// Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE = OPEN_MODE;
 
 			result = PreChg_Ctrl(CONT);
@@ -1838,12 +1838,12 @@ void PreDsgMOS_OPEN_MODE_SameDoor_HavePreChg(FUNC_STATUS FuncStatus)
 #endif
 		}
 		else
-		{																	   // ³äµçµçÁ÷¹ı´óÔòÌø¹ıÔ¤·Å»·½Ú
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // µÚÒ»´ÎÉÏµçÉÏÎ»»úÏÔÊ¾´íÎó£¬Êµ¼ÊÉÏÒ²ÒªÕâÃ´¸É²Å¶Ô
+		{																	   // å……ç”µç”µæµè¿‡å¤§åˆ™è·³è¿‡é¢„æ”¾ç¯èŠ‚
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // ç¬¬ä¸€æ¬¡ä¸Šç”µä¸Šä½æœºæ˜¾ç¤ºé”™è¯¯ï¼Œå®é™…ä¸Šä¹Ÿè¦è¿™ä¹ˆå¹²æ‰å¯¹
 			if (su32_PreMOSOPEN_MODE_Cnt)
 				su32_PreMOSOPEN_MODE_Cnt = 0;
-			MosCtrl_Command_SameDoor_HavePreChg = MOS_MAIN_OPEN_MODE; // Èç¹û´ÓÃ»´ò¿ª¹ıÔ¤·Å¹Ü×Ó£¬ÔÙÔËĞĞÒ»´Î¹Ø±ÕÔ¤·Å¹Ü×Ó´úÂëÒ²Ã»ÎÊÌâ
-		}															  // Èç¹ûÒÑ¾­´ò¿ªÔ¤·Å¹Ü×ÓÁË£¬±ØĞëÒªÔËĞĞ£¬ºÜºÏÀí¡£
+			MosCtrl_Command_SameDoor_HavePreChg = MOS_MAIN_OPEN_MODE; // å¦‚æœä»æ²¡æ‰“å¼€è¿‡é¢„æ”¾ç®¡å­ï¼Œå†è¿è¡Œä¸€æ¬¡å…³é—­é¢„æ”¾ç®¡å­ä»£ç ä¹Ÿæ²¡é—®é¢˜
+		}															  // å¦‚æœå·²ç»æ‰“å¼€é¢„æ”¾ç®¡å­äº†ï¼Œå¿…é¡»è¦è¿è¡Œï¼Œå¾ˆåˆç†ã€‚
 		break;
 
 	case RECOVER:
@@ -1895,10 +1895,10 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	static UINT8 su8_FR_IdsgOcp_RecTimes = 0;
 	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0;
 
-	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;		//ÕâÖÖÏë·¨ÏÈ»ºÒ»»º£¬ºÃÏñ¸üºÏÀí¸üÖ±¹ÛÒ»Ğ©
-	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;		//»¹ÓĞ¹ØÓÚµçÁ÷±£»¤²»
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;		//è¿™ç§æƒ³æ³•å…ˆç¼“ä¸€ç¼“ï¼Œå¥½åƒæ›´åˆç†æ›´ç›´è§‚ä¸€äº›
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;		//è¿˜æœ‰å…³äºç”µæµä¿æŠ¤ä¸
 
-	// ÖØÒªĞÔ´Ó¸ßµ½µÍ
+	// é‡è¦æ€§ä»é«˜åˆ°ä½
 	static DriversStatus s_MosCHG_Status_Normal = OPEN_MODE;
 	static DriversStatus s_MosCHG_Status_Vdelta = OPEN_MODE;
 	static DriversStatus s_MosCHG_Status_ChgOcp = OPEN_MODE;
@@ -1913,7 +1913,7 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	static DriversStatus s_MosDSG_Status_VolOvp = OPEN_MODE;
 	static DriversStatus s_MosDSG_Status_VolUvp = OPEN_MODE;
 
-	// Ä¬ÈÏ¶¼ÊÇÔÊĞí¿ªÆôµÄ¡£ºóÃæÈç¹û¼ì²âµ½´íÎó£¬×Ô¼ºĞŞ¸Ä±êÖ¾Î»Îª¹Ø±Õ
+	// é»˜è®¤éƒ½æ˜¯å…è®¸å¼€å¯çš„ã€‚åé¢å¦‚æœæ£€æµ‹åˆ°é”™è¯¯ï¼Œè‡ªå·±ä¿®æ”¹æ ‡å¿—ä½ä¸ºå…³é—­
 	s_MosCHG_Status_Normal = OPEN_MODE;
 	s_MosCHG_Status_Vdelta = OPEN_MODE;
 	s_MosCHG_Status_ChgOcp = OPEN_MODE;
@@ -1949,8 +1949,8 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		s_MosDSG_Status_ChgOcp = OPEN_MODE;
 
 		if (Driver_Element.u16_CurDsg > DSG_MOS_OPEN_CUR)
-		{										// Èç¹ûµçÁ÷´óÓÚ2A£¬Ôò±ØĞëÁ¢¿Ì´ò¿ª³äµçMOS
-			s_MosCHG_Status_ChgOcp = OPEN_MODE; // ¼´Ê¹Ä¿Ç°»¹ÔÚ30sµÄ¹ıÁ÷±£»¤×´Ì¬
+		{										// å¦‚æœç”µæµå¤§äº2Aï¼Œåˆ™å¿…é¡»ç«‹åˆ»æ‰“å¼€å……ç”µMOS
+			s_MosCHG_Status_ChgOcp = OPEN_MODE; // å³ä½¿ç›®å‰è¿˜åœ¨30sçš„è¿‡æµä¿æŠ¤çŠ¶æ€
 		}
 
 		if (!su8_FR_IchgOcp_Flag)
@@ -1962,7 +1962,7 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
 				su8_FR_IchgOcp_Flag = 0;
-				return; // ²»ÓÃÔÙÖ´ĞĞÏÂÃæµÄ´úÂë
+				return; // ä¸ç”¨å†æ‰§è¡Œä¸‹é¢çš„ä»£ç 
 			}
 		}
 		if (su32_FR_IchgOcp_RecNormalCnt)
@@ -1970,9 +1970,9 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		break;
 
 	case 0:
-		su8_FR_IchgOcp_Flag = 0; // ¸´Ô­
+		su8_FR_IchgOcp_Flag = 0; // å¤åŸ
 		if (su8_FR_IchgOcp_RecTimes)
-		{ // Èç¹û¼ÆÊı£¬Ôò2minÄÚ²»ÔÙ´¥·¢¹ıÁ÷±£»¤ÔòÇåÁã¼ÆËã
+		{ // å¦‚æœè®¡æ•°ï¼Œåˆ™2minå†…ä¸å†è§¦å‘è¿‡æµä¿æŠ¤åˆ™æ¸…é›¶è®¡ç®—
 			if (++su32_FR_IchgOcp_RecNormalCnt > DELAYB10MS_2MIN)
 			{
 				su32_FR_IchgOcp_RecNormalCnt = 0;
@@ -2050,7 +2050,7 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 		}
 	}
 
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
@@ -2066,7 +2066,7 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	temp &= s_MosDSG_Status_DsgOcp & s_MosDSG_Status_VolOvp & s_MosDSG_Status_VolUvp;
 	Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = (DriversStatus)temp;
 
-	// ·ÅÕâÀï£¬Ç¿ÖÆ´ò¿ªºÍÇ¿ÖÆ¹Ø±Õ¶¼ºÍÔ¤³ä½áºÏÔÚÒ»ÆğÁË¡£
+	// æ”¾è¿™é‡Œï¼Œå¼ºåˆ¶æ‰“å¼€å’Œå¼ºåˆ¶å…³é—­éƒ½å’Œé¢„å……ç»“åˆåœ¨ä¸€èµ·äº†ã€‚
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_KEEP_MODE)
 	{
 		// KEEP
@@ -2081,16 +2081,16 @@ void MosOnOFF_Det_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	CHG_MOS_SameDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
-	DSG_MOS_SameDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG); // ¸Ãº¯Êı·Ç³£ÇÉÃî£¬¼ò½à´¦ÀíÁËÒÔÏÂ¸÷ÖÖ×´¿ö
+	DSG_MOS_SameDoor_HavePreChg(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG); // è¯¥å‡½æ•°éå¸¸å·§å¦™ï¼Œç®€æ´å¤„ç†äº†ä»¥ä¸‹å„ç§çŠ¶å†µ
 }
 
 void MosCtrl_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 {
-	MosOnOFF_Det_SameDoor_HavePreChg(OnOFF_Ctrl); // ¼´Ê¹ÔÚÔ¤³ä¼ÌµçÆ÷¶¯×÷ÆÚ¼äÒ²³ÖĞø¼à¿Ø
+	MosOnOFF_Det_SameDoor_HavePreChg(OnOFF_Ctrl); // å³ä½¿åœ¨é¢„å……ç»§ç”µå™¨åŠ¨ä½œæœŸé—´ä¹ŸæŒç»­ç›‘æ§
 
 	switch (MosCtrl_Command_SameDoor_HavePreChg)
 	{
@@ -2143,7 +2143,7 @@ void MosCtrl_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_KEEP_MODE)
@@ -2160,7 +2160,7 @@ void MosCtrl_SameDoor_HavePreChg(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE, GPIO_PreCHG);
@@ -2180,7 +2180,7 @@ void CHG_MOS_BootStrap_Cir(DriversStatus IoStatus)
 	case OPEN_MODE:
 		if (su8_IoStatus == CLOSE_MODE)
 		{
-			// Ö±½Ó¿ØÖÆ£¬µ«ÊÇ·Åµ½ÏÂÃæÍ³Ò»¹ÜÀí
+			// ç›´æ¥æ§åˆ¶ï¼Œä½†æ˜¯æ”¾åˆ°ä¸‹é¢ç»Ÿä¸€ç®¡ç†
 			// DriversOnOFF(IoStatus, GPIO_CHG);
 			su8_IoStatus = OPEN_MODE;
 		}
@@ -2199,8 +2199,8 @@ void CHG_MOS_BootStrap_Cir(DriversStatus IoStatus)
 	}
 }
 
-// ·Ç³£ÇÉÃîµÄÏë·¨£¬°ÑÕû¸öÔ¤³ä¶¯×÷¿´³ÉÒ»¸ö´ò¿ª½Ó´¥µÄÂß¼­°üÂç£¬Ö»Ö´ĞĞÒ»´Î±ã¿É¡£
-// Õâ¸öË¼Î¬Âß¼­½«»á±»³¤ÆÚÊ¹ÓÃ¡£
+// éå¸¸å·§å¦™çš„æƒ³æ³•ï¼ŒæŠŠæ•´ä¸ªé¢„å……åŠ¨ä½œçœ‹æˆä¸€ä¸ªæ‰“å¼€æ¥è§¦çš„é€»è¾‘åŒ…ç»œï¼Œåªæ‰§è¡Œä¸€æ¬¡ä¾¿å¯ã€‚
+// è¿™ä¸ªæ€ç»´é€»è¾‘å°†ä¼šè¢«é•¿æœŸä½¿ç”¨ã€‚
 void DSG_MOS_BootStrap_Cir(DriversStatus IoStatus)
 {
 	static UINT8 su8_IoStatus = CLOSE_MODE;
@@ -2218,7 +2218,7 @@ void DSG_MOS_BootStrap_Cir(DriversStatus IoStatus)
 	case CLOSE_MODE:
 		if (su8_IoStatus == OPEN_MODE)
 		{
-			MosCtrl_Command_BootStrap_Cir = MOS_ALL_CLOSE_MODE; // Ô¤³äÆÚ¼ä»òÕßÔ¤³äÍê±Ï³öÏÖ±£»¤ÏÖÏó£¬¾ùÍ¬Ñù´¦Àí±ã¿É
+			MosCtrl_Command_BootStrap_Cir = MOS_ALL_CLOSE_MODE; // é¢„å……æœŸé—´æˆ–è€…é¢„å……å®Œæ¯•å‡ºç°ä¿æŠ¤ç°è±¡ï¼Œå‡åŒæ ·å¤„ç†ä¾¿å¯
 			su8_IoStatus = CLOSE_MODE;
 		}
 		break;
@@ -2237,8 +2237,8 @@ void PreDsgMOS_OPEN_MODE_BootStrap_Cir(FUNC_STATUS FuncStatus)
 	case CONT:
 		// if(Driver_Element.u16_CurChg < Driver_Element.u16_VirCur_Chg) {
 		if (Driver_Element.u16_CurChg < CHG_MOS_OPEN_CUR)
-		{																	   // ´óÓÚ2A£¬Ğ´ËÀ£¬ÒòÎªÎ´À´ĞéµçÂ·ÓĞ¿ÉÄÜÎª0
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // µÚÒ»´ÎÉÏµçÉÏÎ»»úÏÔÊ¾´íÎó£¬Êµ¼ÊÉÏÒ²ÒªÕâÃ´¸É²Å¶Ô
+		{																	   // å¤§äº2Aï¼Œå†™æ­»ï¼Œå› ä¸ºæœªæ¥è™šç”µè·¯æœ‰å¯èƒ½ä¸º0
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // ç¬¬ä¸€æ¬¡ä¸Šç”µä¸Šä½æœºæ˜¾ç¤ºé”™è¯¯ï¼Œå®é™…ä¸Šä¹Ÿè¦è¿™ä¹ˆå¹²æ‰å¯¹
 			// Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE = OPEN_MODE;
 			Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE = (DriversStatus)(!Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE);
 			if (Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE == OPEN_MODE)
@@ -2252,12 +2252,12 @@ void PreDsgMOS_OPEN_MODE_BootStrap_Cir(FUNC_STATUS FuncStatus)
 			}
 		}
 		else
-		{																	   // ³äµçµçÁ÷¹ı´óÔòÌø¹ıÔ¤·Å»·½Ú
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // µÚÒ»´ÎÉÏµçÉÏÎ»»úÏÔÊ¾´íÎó£¬Êµ¼ÊÉÏÒ²ÒªÕâÃ´¸É²Å¶Ô
+		{																	   // å……ç”µç”µæµè¿‡å¤§åˆ™è·³è¿‡é¢„æ”¾ç¯èŠ‚
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // ç¬¬ä¸€æ¬¡ä¸Šç”µä¸Šä½æœºæ˜¾ç¤ºé”™è¯¯ï¼Œå®é™…ä¸Šä¹Ÿè¦è¿™ä¹ˆå¹²æ‰å¯¹
 			if (su32_PreMOSOPEN_MODE_Cnt)
 				su32_PreMOSOPEN_MODE_Cnt = 0;
-			MosCtrl_Command_BootStrap_Cir = MOS_MAIN_OPEN_MODE; // Èç¹û´ÓÃ»´ò¿ª¹ıÔ¤·Å¹Ü×Ó£¬ÔÙÔËĞĞÒ»´Î¹Ø±ÕÔ¤·Å¹Ü×Ó´úÂëÒ²Ã»ÎÊÌâ
-		}														// Èç¹ûÒÑ¾­´ò¿ªÔ¤·Å¹Ü×ÓÁË£¬±ØĞëÒªÔËĞĞ£¬ºÜºÏÀí¡£
+			MosCtrl_Command_BootStrap_Cir = MOS_MAIN_OPEN_MODE; // å¦‚æœä»æ²¡æ‰“å¼€è¿‡é¢„æ”¾ç®¡å­ï¼Œå†è¿è¡Œä¸€æ¬¡å…³é—­é¢„æ”¾ç®¡å­ä»£ç ä¹Ÿæ²¡é—®é¢˜
+		}														// å¦‚æœå·²ç»æ‰“å¼€é¢„æ”¾ç®¡å­äº†ï¼Œå¿…é¡»è¦è¿è¡Œï¼Œå¾ˆåˆç†ã€‚
 		break;
 
 	case RECOVER:
@@ -2321,24 +2321,24 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
 		su8_FR_Flag = 1;
 	}
-	// ÒÔÏÂµÄÅÅĞò¾ÍÊÇÓÅÏÈ¼¶µÄÅÅĞòÎÊÌâ
+	// ä»¥ä¸‹çš„æ’åºå°±æ˜¯ä¼˜å…ˆçº§çš„æ’åºé—®é¢˜
 	else if (Driver_Element.Fault_Flag.bits.b1IchgOcp)
 	{
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
 		// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // Êµ¼ÊÉÏÕâ¸öÓ¦¸ÃÊÇOPEN²ÅºÏÀí£¬µ«ÊÇÒòÎª·ÅµçµÄÎÊÌâ£¬·½±ã£¬Í³Ò»´¦Àí
-		su8_FR_ChgOcp_Flag = 1;											   // ¹Ø±ÕÁ¢¿ÌÃ»µçÁ÷£¬Ã»±£»¤£¬ËùÒÔµÃµ½ÏÂÃæ¼ÌĞø´¦Àí
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE; // å®é™…ä¸Šè¿™ä¸ªåº”è¯¥æ˜¯OPENæ‰åˆç†ï¼Œä½†æ˜¯å› ä¸ºæ”¾ç”µçš„é—®é¢˜ï¼Œæ–¹ä¾¿ï¼Œç»Ÿä¸€å¤„ç†
+		su8_FR_ChgOcp_Flag = 1;											   // å…³é—­ç«‹åˆ»æ²¡ç”µæµï¼Œæ²¡ä¿æŠ¤ï¼Œæ‰€ä»¥å¾—åˆ°ä¸‹é¢ç»§ç»­å¤„ç†
 		su8_FR_Flag = 1;
 	}
-	// ×Ô¾ÙµçÂ·£¬·Åµç¹Ü¹Ø±Õ£¬³äµç¹Ü±ØĞë¹Ø±Õ
+	// è‡ªä¸¾ç”µè·¯ï¼Œæ”¾ç”µç®¡å…³é—­ï¼Œå……ç”µç®¡å¿…é¡»å…³é—­
 	else if (Driver_Element.Fault_Flag.bits.b1IdischgOcp)
 	{
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
-		su8_FR_DsgOcp_Flag = 1; // ¹Ø±ÕÁ¢¿ÌÃ»µçÁ÷£¬Ã»±£»¤£¬ËùÒÔµÃµ½ÏÂÃæ¼ÌĞø´¦Àí
+		su8_FR_DsgOcp_Flag = 1; // å…³é—­ç«‹åˆ»æ²¡ç”µæµï¼Œæ²¡ä¿æŠ¤ï¼Œæ‰€ä»¥å¾—åˆ°ä¸‹é¢ç»§ç»­å¤„ç†
 		su8_FR_Flag = 1;
 	}
-#if 1 // Ñ¹²î¹ı´ó±£»¤
+#if 1 // å‹å·®è¿‡å¤§ä¿æŠ¤
 	else if (Driver_Element.Fault_Flag.bits.b1VcellDeltaBig)
 	{
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
@@ -2358,7 +2358,7 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 		}
 		su8_FR_Flag = 1;
 	}
-#if 0 // È¥µôSOC±£»¤·â¹Ü×Ó
+#if 0 // å»æ‰SOCä¿æŠ¤å°ç®¡å­
 	else if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
@@ -2390,16 +2390,16 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 		}
 		else
 		{
-			// if(su16_FR_UVP_Tcnt)su16_FR_UVP_Tcnt = 0; 		//¾Ş´ó´íÎó£¬Õâ¸ö´íÎó»áµ¼ÖÂ´ò¿ª20msÓÖ¹Ø±Õ£¬µ«ÊÇ²â²»³öÀ´£¿Ã÷ÌìÊÔÊÔ¿´
+			// if(su16_FR_UVP_Tcnt)su16_FR_UVP_Tcnt = 0; 		//å·¨å¤§é”™è¯¯ï¼Œè¿™ä¸ªé”™è¯¯ä¼šå¯¼è‡´æ‰“å¼€20msåˆå…³é—­ï¼Œä½†æ˜¯æµ‹ä¸å‡ºæ¥ï¼Ÿæ˜å¤©è¯•è¯•çœ‹
 			if (su16_UVPCLOSE_MODECnt)
 				su16_UVPCLOSE_MODECnt = 0;
 		}
-		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //ÒòÎªÊÇÒ»´ÎÑ­»·¾Í»áCLOSE_MODE£¬ËùÒÔÏëÏÂ´ÎÀ´²»»áÔÙ±»¼ÆÊı
+		// if(Driver_Element.MosRelay_Status.bits.b1Status_Relay_MAIN == CLOSE_MODE\ && Status_RelayMain == OPEN_MODE) { //å› ä¸ºæ˜¯ä¸€æ¬¡å¾ªç¯å°±ä¼šCLOSE_MODEï¼Œæ‰€ä»¥æƒ³ä¸‹æ¬¡æ¥ä¸ä¼šå†è¢«è®¡æ•°
 		if (CLOSE_MODE == Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG && CLOSE_MODE == Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_CHG, Driver_GPIO.PinX_CHG) && OPEN_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_DSG, Driver_GPIO.PinX_DSG))
 		{
 			if (++su8_FR_UVP_RecTimes >= 3)
-			{							 // ¹ØÓÚ´ÎÊı¼ÆËã£¬×¥×¡Ò»¸öµã£¬ÔÚÖ÷½Ó´¥Æ÷´ò¿ªµÄÇé¿öÏÂ£¬½«ÒªÒª¹Ø±Õ£¬ËãÒ»´Î
-				su8_FR_UVP_RecTimes = 0; // Õâ¸öÏë·¨ÍêÃÀ±ÜÃâÈıÔªÀïºÍÁ×ËáÌúï®µÄ¹ØÓÚµçÑ¹»ØÂäÊÇ·ñ¸´Ô­£¬¼ÆÊı´ÎÊıÈçºÎÇåÁãµÄ¸´ÔÓ·ÖÀàÌÖÂÛ²Ù×÷
+			{							 // å…³äºæ¬¡æ•°è®¡ç®—ï¼ŒæŠ“ä½ä¸€ä¸ªç‚¹ï¼Œåœ¨ä¸»æ¥è§¦å™¨æ‰“å¼€çš„æƒ…å†µä¸‹ï¼Œå°†è¦è¦å…³é—­ï¼Œç®—ä¸€æ¬¡
+				su8_FR_UVP_RecTimes = 0; // è¿™ä¸ªæƒ³æ³•å®Œç¾é¿å…ä¸‰å…ƒé‡Œå’Œç£·é…¸é“é”‚çš„å…³äºç”µå‹å›è½æ˜¯å¦å¤åŸï¼Œè®¡æ•°æ¬¡æ•°å¦‚ä½•æ¸…é›¶çš„å¤æ‚åˆ†ç±»è®¨è®ºæ“ä½œ
 				Driver_Element.u8_FuncOFF_Flag = 1;
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_UV = 1;
 			}
@@ -2412,62 +2412,62 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 		su8_FR_Flag = 0;
 
 		if (su8_FR_ChgOcp_Flag)
-		{ // ¹ıÁ÷±£»¤¶Ï¿ª£¬È»ºó²»±£»¤£¬È»ºó½øÀ´ÕâÀï
+		{ // è¿‡æµä¿æŠ¤æ–­å¼€ï¼Œç„¶åä¸ä¿æŠ¤ï¼Œç„¶åè¿›æ¥è¿™é‡Œ
 			if (su8_FR_ChgOcp_RecTimes >= 3)
 			{
-				su8_FR_ChgOcp_RecTimes = 0;			// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_ChgOcp_RecTimes = 0;			// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
-				su8_FR_ChgOcp_Flag = 0;			 // ±ØĞëÇåÁã£¬Â©ÁËÕâ¸ö£¬Èç¹û²»ÊÇ¿ª»ú¸´Î»£¬Ôò»áÆ½°×ÎŞ¹Ê¶àÁË30sºÍÒ»´Î¼ÆÊı
-				su32_FR_ChgOcp_RecNormalCnt = 0; // Õâ¸öÊÇ·ñÇåÁã£¿ÇåÁãÒ²ÎŞ·Á
+				su8_FR_ChgOcp_Flag = 0;			 // å¿…é¡»æ¸…é›¶ï¼Œæ¼äº†è¿™ä¸ªï¼Œå¦‚æœä¸æ˜¯å¼€æœºå¤ä½ï¼Œåˆ™ä¼šå¹³ç™½æ— æ•…å¤šäº†30så’Œä¸€æ¬¡è®¡æ•°
+				su32_FR_ChgOcp_RecNormalCnt = 0; // è¿™ä¸ªæ˜¯å¦æ¸…é›¶ï¼Ÿæ¸…é›¶ä¹Ÿæ— å¦¨
 				return;
 			}
 			if (++su16_FR_ChgOcp_Tcnt >= DELAYB10MS_30S)
-			{ // 30sÔÙ´ò¿ª¹Ü×Ó
+			{ // 30så†æ‰“å¼€ç®¡å­
 				su16_FR_ChgOcp_Tcnt = 0;
 				su8_FR_ChgOcp_Flag = 0;
 				++su8_FR_ChgOcp_RecTimes;
 			}
-			// if(su16_FR_Ocp_RecNormalCnt)su16_FR_Ocp_RecNormalCnt = 0;	//±ØĞëÒªÇó´ò¿ª¹Ü×Ó5sÍêÈ«Ã»ÎÊÌâ
+			// if(su16_FR_Ocp_RecNormalCnt)su16_FR_Ocp_RecNormalCnt = 0;	//å¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­5så®Œå…¨æ²¡é—®é¢˜
 		}
 		else if (su8_FR_DsgOcp_Flag)
-		{ // ¹ıÁ÷±£»¤¶Ï¿ª£¬È»ºó²»±£»¤£¬È»ºó½øÀ´ÕâÀï
+		{ // è¿‡æµä¿æŠ¤æ–­å¼€ï¼Œç„¶åä¸ä¿æŠ¤ï¼Œç„¶åè¿›æ¥è¿™é‡Œ
 			if (su8_FR_DsgOcp_RecTimes >= 3)
 			{
-				su8_FR_DsgOcp_RecTimes = 0;			// ÓÖÂ©ÁËÕâ¾ä»°
-				Driver_Element.u8_FuncOFF_Flag = 1; // µÚÈı´Î´ò¿ªÈ»ºóÔÙ½øÀ´Á¢¿Ìover
+				su8_FR_DsgOcp_RecTimes = 0;			// åˆæ¼äº†è¿™å¥è¯
+				Driver_Element.u8_FuncOFF_Flag = 1; // ç¬¬ä¸‰æ¬¡æ‰“å¼€ç„¶åå†è¿›æ¥ç«‹åˆ»over
 				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Idsg = 1;
-				su8_FR_DsgOcp_Flag = 0;			 // ±ØĞëÇåÁã£¬Â©ÁËÕâ¸ö£¬Èç¹û²»ÊÇ¿ª»ú¸´Î»£¬Ôò»áÆ½°×ÎŞ¹Ê¶àÁË30sºÍÒ»´Î¼ÆÊı
-				su32_FR_DsgOcp_RecNormalCnt = 0; // Õâ¸öÊÇ·ñÇåÁã£¿ÇåÁãÒ²ÎŞ·Á
+				su8_FR_DsgOcp_Flag = 0;			 // å¿…é¡»æ¸…é›¶ï¼Œæ¼äº†è¿™ä¸ªï¼Œå¦‚æœä¸æ˜¯å¼€æœºå¤ä½ï¼Œåˆ™ä¼šå¹³ç™½æ— æ•…å¤šäº†30så’Œä¸€æ¬¡è®¡æ•°
+				su32_FR_DsgOcp_RecNormalCnt = 0; // è¿™ä¸ªæ˜¯å¦æ¸…é›¶ï¼Ÿæ¸…é›¶ä¹Ÿæ— å¦¨
 				return;
 			}
 			if (++su16_FR_DsgOcp_Tcnt >= DELAYB10MS_30S)
-			{ // 30sÔÙ´ò¿ª¹Ü×Ó
+			{ // 30så†æ‰“å¼€ç®¡å­
 				su16_FR_DsgOcp_Tcnt = 0;
 				su8_FR_DsgOcp_Flag = 0;
 				++su8_FR_DsgOcp_RecTimes;
 			}
-			// if(su16_FR_Ocp_RecNormalCnt)su16_FR_Ocp_RecNormalCnt = 0;	//±ØĞëÒªÇó´ò¿ª¹Ü×Ó5sÍêÈ«Ã»ÎÊÌâ
+			// if(su16_FR_Ocp_RecNormalCnt)su16_FR_Ocp_RecNormalCnt = 0;	//å¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­5så®Œå…¨æ²¡é—®é¢˜
 		}
 		else
 		{
 			if (su8_FR_ChgOcp_RecTimes >= 1)
-			{ // ÕâÃ´×öÊÇÎªÁË·ÀÖ¹²»ÊÇÁ¬ĞøµÄ¹ıÁ÷±£»¤µ¼ÖÂµÄ¹Ø±Õ¹¦ÄÜÎÊÌâ
+			{ // è¿™ä¹ˆåšæ˜¯ä¸ºäº†é˜²æ­¢ä¸æ˜¯è¿ç»­çš„è¿‡æµä¿æŠ¤å¯¼è‡´çš„å…³é—­åŠŸèƒ½é—®é¢˜
 				if (++su32_FR_ChgOcp_RecNormalCnt > DELAYB10MS_2MIN)
-				{									 // 10sÃëÖÓÕı³£ÔòÈ¥³ıµçÁ÷±£»¤Í³¼Æ´ÎÊı
-					su32_FR_ChgOcp_RecNormalCnt = 0; // Õâ¶ÎÊ±¼äÄÚ¾ÍËã³öÏÖ±ğµÄ±£»¤Ò²Ã»ÎÊÌâ£¬Ö»ÒªµÈ´ıÆäÕı³£´ò¿ª¹Ü×Ó10s±ã¿É
-					su8_FR_ChgOcp_RecTimes = 0;		 // ²»ÓÃµ£ÓÇ±ğµÄ±£»¤¾À²øµÄÎÊÌâ
-				}									 // »¹ÊÇÒªµ£ÓÇÕâ¸öÎÊÌâ£¬¼ÙÉè´ò¿ª¹Ü×Ó3s£¬È»ºó³öÏÖµÍÑ¹±£»¤¡£È»ºó»Ö¸´´ò¿ª£¬ÕâÒ»´ÎËã²»ËãÄØ
-			}										 // ÕâÑù£¬±ØĞëÒªÇó´ò¿ª¹Ü×Ó10sÍêÈ«Ã»ÎÊÌâÔÙÇå£¬ÕâÑù¾Í¿ÉÒÔÁË¡£
+				{									 // 10sç§’é’Ÿæ­£å¸¸åˆ™å»é™¤ç”µæµä¿æŠ¤ç»Ÿè®¡æ¬¡æ•°
+					su32_FR_ChgOcp_RecNormalCnt = 0; // è¿™æ®µæ—¶é—´å†…å°±ç®—å‡ºç°åˆ«çš„ä¿æŠ¤ä¹Ÿæ²¡é—®é¢˜ï¼Œåªè¦ç­‰å¾…å…¶æ­£å¸¸æ‰“å¼€ç®¡å­10sä¾¿å¯
+					su8_FR_ChgOcp_RecTimes = 0;		 // ä¸ç”¨æ‹…å¿§åˆ«çš„ä¿æŠ¤çº ç¼ çš„é—®é¢˜
+				}									 // è¿˜æ˜¯è¦æ‹…å¿§è¿™ä¸ªé—®é¢˜ï¼Œå‡è®¾æ‰“å¼€ç®¡å­3sï¼Œç„¶åå‡ºç°ä½å‹ä¿æŠ¤ã€‚ç„¶åæ¢å¤æ‰“å¼€ï¼Œè¿™ä¸€æ¬¡ç®—ä¸ç®—å‘¢
+			}										 // è¿™æ ·ï¼Œå¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­10så®Œå…¨æ²¡é—®é¢˜å†æ¸…ï¼Œè¿™æ ·å°±å¯ä»¥äº†ã€‚
 
 			if (su8_FR_DsgOcp_RecTimes >= 1)
-			{ // ÕâÃ´×öÊÇÎªÁË·ÀÖ¹²»ÊÇÁ¬ĞøµÄ¹ıÁ÷±£»¤µ¼ÖÂµÄ¹Ø±Õ¹¦ÄÜÎÊÌâ
+			{ // è¿™ä¹ˆåšæ˜¯ä¸ºäº†é˜²æ­¢ä¸æ˜¯è¿ç»­çš„è¿‡æµä¿æŠ¤å¯¼è‡´çš„å…³é—­åŠŸèƒ½é—®é¢˜
 				if (++su32_FR_DsgOcp_RecNormalCnt > DELAYB10MS_2MIN)
-				{									 // 10sÃëÖÓÕı³£ÔòÈ¥³ıµçÁ÷±£»¤Í³¼Æ´ÎÊı
-					su32_FR_DsgOcp_RecNormalCnt = 0; // Õâ¶ÎÊ±¼äÄÚ¾ÍËã³öÏÖ±ğµÄ±£»¤Ò²Ã»ÎÊÌâ£¬Ö»ÒªµÈ´ıÆäÕı³£´ò¿ª¹Ü×Ó10s±ã¿É
-					su8_FR_DsgOcp_RecTimes = 0;		 // ²»ÓÃµ£ÓÇ±ğµÄ±£»¤¾À²øµÄÎÊÌâ
-				}									 // »¹ÊÇÒªµ£ÓÇÕâ¸öÎÊÌâ£¬¼ÙÉè´ò¿ª¹Ü×Ó3s£¬È»ºó³öÏÖµÍÑ¹±£»¤¡£È»ºó»Ö¸´´ò¿ª£¬ÕâÒ»´ÎËã²»ËãÄØ
-			}										 // ÕâÑù£¬±ØĞëÒªÇó´ò¿ª¹Ü×Ó10sÍêÈ«Ã»ÎÊÌâÔÙÇå£¬ÕâÑù¾Í¿ÉÒÔÁË¡£
+				{									 // 10sç§’é’Ÿæ­£å¸¸åˆ™å»é™¤ç”µæµä¿æŠ¤ç»Ÿè®¡æ¬¡æ•°
+					su32_FR_DsgOcp_RecNormalCnt = 0; // è¿™æ®µæ—¶é—´å†…å°±ç®—å‡ºç°åˆ«çš„ä¿æŠ¤ä¹Ÿæ²¡é—®é¢˜ï¼Œåªè¦ç­‰å¾…å…¶æ­£å¸¸æ‰“å¼€ç®¡å­10sä¾¿å¯
+					su8_FR_DsgOcp_RecTimes = 0;		 // ä¸ç”¨æ‹…å¿§åˆ«çš„ä¿æŠ¤çº ç¼ çš„é—®é¢˜
+				}									 // è¿˜æ˜¯è¦æ‹…å¿§è¿™ä¸ªé—®é¢˜ï¼Œå‡è®¾æ‰“å¼€ç®¡å­3sï¼Œç„¶åå‡ºç°ä½å‹ä¿æŠ¤ã€‚ç„¶åæ¢å¤æ‰“å¼€ï¼Œè¿™ä¸€æ¬¡ç®—ä¸ç®—å‘¢
+			}										 // è¿™æ ·ï¼Œå¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­10så®Œå…¨æ²¡é—®é¢˜å†æ¸…ï¼Œè¿™æ ·å°±å¯ä»¥äº†ã€‚
 
 			Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
 			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;
@@ -2494,9 +2494,9 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 	if (su8_FR_Flag)
 	{
 		if (su32_FR_ChgOcp_RecNormalCnt)
-			su32_FR_ChgOcp_RecNormalCnt = 0; // ±ØĞëÒªÇó´ò¿ª¹Ü×Ó10sÍêÈ«Ã»ÎÊÌâ
+			su32_FR_ChgOcp_RecNormalCnt = 0; // å¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­10så®Œå…¨æ²¡é—®é¢˜
 		if (su32_FR_DsgOcp_RecNormalCnt)
-			su32_FR_DsgOcp_RecNormalCnt = 0; // ±ØĞëÒªÇó´ò¿ª¹Ü×Ó10sÍêÈ«Ã»ÎÊÌâ
+			su32_FR_DsgOcp_RecNormalCnt = 0; // å¿…é¡»è¦æ±‚æ‰“å¼€ç®¡å­10så®Œå…¨æ²¡é—®é¢˜
 	}
 	else
 	{
@@ -2506,23 +2506,23 @@ void MosOnOFF_Det_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 		}
 	}
 
-	// Èç¹ûÁ½¸ö¶¼¹Ø±Õ£¬³äµç¹ÜÒª´ò¿ªµÄÊ±ºò£¬±ØĞëÏÈ´ò¿ª·Åµç¹Ü10ms
+	// å¦‚æœä¸¤ä¸ªéƒ½å…³é—­ï¼Œå……ç”µç®¡è¦æ‰“å¼€çš„æ—¶å€™ï¼Œå¿…é¡»å…ˆæ‰“å¼€æ”¾ç”µç®¡10ms
 	if (CLOSE_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_CHG, Driver_GPIO.PinX_CHG) && CLOSE_MODE == GPIO_ReadOutputDataBit(Driver_GPIO.GPIOx_DSG, Driver_GPIO.PinX_DSG) && OPEN_MODE == Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG)
 	{
 
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE; // ÏÂ¸öÖÜÆÚÔÙ´ò¿ª£¬ºÜÇÉÃî£¬ÕâÀïÒÀÈ»¿ÉÒÔÓÃ
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE; // ä¸‹ä¸ªå‘¨æœŸå†æ‰“å¼€ï¼Œå¾ˆå·§å¦™ï¼Œè¿™é‡Œä¾ç„¶å¯ä»¥ç”¨
 	}
 
 	// DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG, GPIO_CHG);
 	// DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG, GPIO_DSG);
-	// Èç¹ûÒªµ÷ÓÃÔ¤³ä£¬Ã²ËÆÖ±½Ó¸´ÖÆÕ³Ìù£¬È»ºó¸ÄÏÂº¯ÊıÃûºÍMosCtrl_Command_BootStrap_CirÕâ¸öÃüÁîÃû×Ö±ã¿ÉÒÔÁË
+	// å¦‚æœè¦è°ƒç”¨é¢„å……ï¼Œè²Œä¼¼ç›´æ¥å¤åˆ¶ç²˜è´´ï¼Œç„¶åæ”¹ä¸‹å‡½æ•°åå’ŒMosCtrl_Command_BootStrap_Cirè¿™ä¸ªå‘½ä»¤åå­—ä¾¿å¯ä»¥äº†
 	CHG_MOS_BootStrap_Cir(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG);
-	DSG_MOS_BootStrap_Cir(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG); // ¸Ãº¯Êı·Ç³£ÇÉÃî£¬¼ò½à´¦ÀíÁËÒÔÏÂ¸÷ÖÖ×´¿ö
+	DSG_MOS_BootStrap_Cir(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG); // è¯¥å‡½æ•°éå¸¸å·§å¦™ï¼Œç®€æ´å¤„ç†äº†ä»¥ä¸‹å„ç§çŠ¶å†µ
 }
 
 void MosCtrl_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 {
-	MosOnOFF_Det_BootStrap_Cir(OnOFF_Ctrl); // ¼´Ê¹ÔÚÔ¤³ä¼ÌµçÆ÷¶¯×÷ÆÚ¼äÒ²³ÖĞø¼à¿Ø
+	MosOnOFF_Det_BootStrap_Cir(OnOFF_Ctrl); // å³ä½¿åœ¨é¢„å……ç»§ç”µå™¨åŠ¨ä½œæœŸé—´ä¹ŸæŒç»­ç›‘æ§
 
 	switch (MosCtrl_Command_BootStrap_Cir)
 	{
@@ -2575,7 +2575,7 @@ void MosCtrl_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_KEEP_MODE)
@@ -2592,7 +2592,7 @@ void MosCtrl_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_KEEP_MODE)
@@ -2609,7 +2609,7 @@ void MosCtrl_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 	}
 	else
 	{
-		// Wrong´íÁË
+		// Wrongé”™äº†
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_PRE, GPIO_PreCHG);
@@ -2619,8 +2619,8 @@ void MosCtrl_BootStrap_Cir(UINT8 OnOFF_Ctrl)
 
 #endif
 
-// 1£ºÍê³ÉÔ¤³ä¡£0£¬»¹Òª¼ÌĞø
-// ÕâÑùĞ´µÄ»°£¬Í¬Ê±´ò¿ªµÄ100ms¾ÍÃ»ÓÃÁË¡£
+// 1ï¼šå®Œæˆé¢„å……ã€‚0ï¼Œè¿˜è¦ç»§ç»­
+// è¿™æ ·å†™çš„è¯ï¼ŒåŒæ—¶æ‰“å¼€çš„100mså°±æ²¡ç”¨äº†ã€‚
 UINT8 PreChg_Ctrl(FUNC_STATUS FuncStatus)
 {
 	UINT8 DriversStatus_result = 0;
@@ -2640,10 +2640,10 @@ UINT8 PreChg_Ctrl(FUNC_STATUS FuncStatus)
 	switch (su8_StartUp)
 	{
 	case 0:
-		su16_Period_Tcnt = Driver_Element.u16_PreChg_Period * 10; // 10msµÄ×Ü´ÎÊı
-		UPDNLMT16(su16_On_Tcnt, 65000, 10);						  // ×îÉÙÊÇ10´Î
+		su16_Period_Tcnt = Driver_Element.u16_PreChg_Period * 10; // 10msçš„æ€»æ¬¡æ•°
+		UPDNLMT16(su16_On_Tcnt, 65000, 10);						  // æœ€å°‘æ˜¯10æ¬¡
 		su16_On_Tcnt = su16_Period_Tcnt * Driver_Element.u16_PreChg_Duty / 100;
-		UPDNLMT16(su16_On_Tcnt, 6500, 1); // ×îÉÙÊÇ1´Î
+		UPDNLMT16(su16_On_Tcnt, 6500, 1); // æœ€å°‘æ˜¯1æ¬¡
 		// su16_OFF_Tcnt = su16_Period_Tcnt - su16_On_Tcnt;
 
 		su8_StartUp++;
@@ -2652,22 +2652,22 @@ UINT8 PreChg_Ctrl(FUNC_STATUS FuncStatus)
 	case 1:
 		++su16_Cal_Cnt;
 		if (su16_Cal_Cnt <= su16_On_Tcnt)
-		{ // ´ò¿ª´ÎÊıÍ³¼Æ
+		{ // æ‰“å¼€æ¬¡æ•°ç»Ÿè®¡
 			DriversStatus_result = OPEN_MODE;
 		}
 		else if (su16_Cal_Cnt <= su16_Period_Tcnt)
-		{ // Ò»¸öÖÜÆÚÍ³¼Æ
+		{ // ä¸€ä¸ªå‘¨æœŸç»Ÿè®¡
 			DriversStatus_result = CLOSE_MODE;
 		}
 
 		if (su16_Cal_Cnt >= su16_Period_Tcnt)
-		{ // Ö´ĞĞÍêÒ»¸öÖÜÆÚµÄÏÂÒ»¸öÖÜÆÚ¿ª¶Ë»òÕß½áÊø¡£
+		{ // æ‰§è¡Œå®Œä¸€ä¸ªå‘¨æœŸçš„ä¸‹ä¸€ä¸ªå‘¨æœŸå¼€ç«¯æˆ–è€…ç»“æŸã€‚
 			su16_Cal_Cnt = 0;
 			if (++su16_Time_Cnt >= Driver_Element.u16_PreChg_Time)
 			{
 				su16_Time_Cnt = 0;
-				DriversStatus_result = 2; // Ô¤³ä½áÊø
-				su8_StartUp = 0;		  // ·µ»Ø
+				DriversStatus_result = 2; // é¢„å……ç»“æŸ
+				su8_StartUp = 0;		  // è¿”å›
 			}
 		}
 		break;
@@ -2756,7 +2756,7 @@ void DriversOnOFF(DriversStatus IoStatus, GPIO_Type GpioType)
 		break;
 
 	case 1:
-		// ²»×÷´¦Àí
+		// ä¸ä½œå¤„ç†
 		break;
 
 	default:
@@ -2764,7 +2764,7 @@ void DriversOnOFF(DriversStatus IoStatus, GPIO_Type GpioType)
 	}
 }
 
-// ÊÇ²»ÊÇÒªĞ´Ò»¸ö¾À´í¹¦ÄÜ½¡×³Ò»ÏÂ£¿
+// æ˜¯ä¸æ˜¯è¦å†™ä¸€ä¸ªçº é”™åŠŸèƒ½å¥å£®ä¸€ä¸‹ï¼Ÿ
 void InitDrivers_GPIO(GPIO_TypeDef *GPIOx, UINT16 GPIO_Pin_x, GPIO_Type GpioType)
 {
 
@@ -2778,9 +2778,9 @@ void InitDrivers_GPIO(GPIO_TypeDef *GPIOx, UINT16 GPIO_Pin_x, GPIO_Type GpioType
 }
 
 /*
-·Ö¿ÚÀàĞÍÇı¶¯£¬Æä¶ÔÓÚ±£»¤µãµÄÅĞ¶ÏÊÇ·Ö¿ªµÄ£¬¿ÉÒÔ²¢ÁĞ£¬ÀıÈçMOS·Ö¿Ú(Ó²¼şÉÏ½²»¹ÊÇÍ¬¿Ú)£¬½Ó´¥Æ÷·Ö¿Ú£¬ÒòÎªÓĞ¿ÉÄÜ±£»¤Ö»¹Ø¶ÔÓÚÄÇ¸ö¹Ü×Ó
-Í¬¿ÚÀàĞÍÇı¶¯£¬Æä¶ÔÓÚ±£»¤µãµÄÅĞ¶ÏÊÇ²¢ÁĞµÄ£¬Ö»ÄÜÑ¡ÆäÖĞÒ»¸ö£¬ÒòÎªÈÎºÎÒ»¸ö±£»¤µã¶¼ÊÇ¹ØÒ»¸ö¹Ü×Ó¡£
-µ«ÊÇ×Ô¾ÙµçÂ·µÍÑ¹µÄÎÊÌâ£¬°ÑÆä¹éÎªÍ¬¿ÚÀàĞÍ²¢ÁĞÇı¶¯¡£
+åˆ†å£ç±»å‹é©±åŠ¨ï¼Œå…¶å¯¹äºä¿æŠ¤ç‚¹çš„åˆ¤æ–­æ˜¯åˆ†å¼€çš„ï¼Œå¯ä»¥å¹¶åˆ—ï¼Œä¾‹å¦‚MOSåˆ†å£(ç¡¬ä»¶ä¸Šè®²è¿˜æ˜¯åŒå£)ï¼Œæ¥è§¦å™¨åˆ†å£ï¼Œå› ä¸ºæœ‰å¯èƒ½ä¿æŠ¤åªå…³å¯¹äºé‚£ä¸ªç®¡å­
+åŒå£ç±»å‹é©±åŠ¨ï¼Œå…¶å¯¹äºä¿æŠ¤ç‚¹çš„åˆ¤æ–­æ˜¯å¹¶åˆ—çš„ï¼Œåªèƒ½é€‰å…¶ä¸­ä¸€ä¸ªï¼Œå› ä¸ºä»»ä½•ä¸€ä¸ªä¿æŠ¤ç‚¹éƒ½æ˜¯å…³ä¸€ä¸ªç®¡å­ã€‚
+ä½†æ˜¯è‡ªä¸¾ç”µè·¯ä½å‹çš„é—®é¢˜ï¼ŒæŠŠå…¶å½’ä¸ºåŒå£ç±»å‹å¹¶åˆ—é©±åŠ¨ã€‚
 */
 void Drivers_Ctrl(UINT8 OnOFF_Ctrl, Driver_Select DriverSelect)
 {

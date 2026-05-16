@@ -1,7 +1,7 @@
 #ifndef __RTC_SLEEP__
 #define __RTC_SLEEP__
 
-// #include "stm32f0xx_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��?
+// #include "stm32f0xx_it.h"			//锟斤拷锟斤拷锟斤拷一些硬锟斤拷锟斤拷锟斤拷之锟斤拷锟斤拷卸希锟斤拷锟斤拷锟斤拷锟揭拷锟?
 enum irqWakeup
 {
   uart1_irq = 1,
