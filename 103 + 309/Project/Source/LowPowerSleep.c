@@ -1,6 +1,9 @@
-#include "main.h"
+#include "stm32f10x.h"
+#include "Can_HDX.h"
 #include "FactoryAging.h"
+#include "LedBar.h"
 #include "LowPowerSleep.h"
+#include "SocEnhance.h"
 
 void LowPowerSleep_SaveCoreState(void)
 {

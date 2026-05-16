@@ -46,6 +46,8 @@ FLASH64K_APP_TEST_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTe
 FLASH64K_APP_TEST_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.c"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
+LOW_POWER_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "LowPowerSleep.c"
+PRODUCTION_ID_C = ROOT / "103 + 309" / "Project" / "Source" / "ProductionID.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
 STM32F10X_IT_C = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0" / "drivers" / "stm32f10x_it.c"
 GITIGNORE = ROOT / ".gitignore"
@@ -655,6 +657,8 @@ def check_portability_foundation(reporter):
         FLASH64K_APP_TEST_C,
         LEDBAR_C,
         LOGRECORD_C,
+        LOW_POWER_SLEEP_C,
+        PRODUCTION_ID_C,
         BUILD_GUARD,
         PORTABILITY_DOC,
     ]
@@ -678,6 +682,8 @@ def check_portability_foundation(reporter):
     flash64k_app_test_c = read_text(FLASH64K_APP_TEST_C)
     ledbar_c = read_text(LEDBAR_C)
     logrecord_c = read_text(LOGRECORD_C)
+    low_power_sleep_c = read_text(LOW_POWER_SLEEP_C)
+    production_id_c = read_text(PRODUCTION_ID_C)
     build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
 
@@ -844,6 +850,25 @@ def check_portability_foundation(reporter):
         reporter.ok("LogRecord.c reads fault/status data through BmsModel accessors without main.h")
     else:
         reporter.fail("LogRecord.c should read fault/status data through BmsModel accessors without main.h")
+
+    if (
+        '#include "main.h"' not in low_power_sleep_c
+        and '#include "Can_HDX.h"' in low_power_sleep_c
+        and '#include "LowPowerSleep.h"' in low_power_sleep_c
+        and '#include "SocEnhance.h"' in low_power_sleep_c
+    ):
+        reporter.ok("LowPowerSleep.c declares sleep-save dependencies without main.h")
+    else:
+        reporter.fail("LowPowerSleep.c should declare sleep-save dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in production_id_c
+        and '#include "ProductionID.h"' in production_id_c
+        and '#include "DataDeal.h"' in production_id_c
+    ):
+        reporter.ok("ProductionID.c declares production data dependencies without main.h")
+    else:
+        reporter.fail("ProductionID.c should declare production data dependencies without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")

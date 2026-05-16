@@ -1,4 +1,6 @@
-#include "main.h"
+#include "DataDeal.h"
+#include "ProductionID.h"
+#include <string.h>
 
 PRODUCTION_ID_INFO ProductionInfor;
 

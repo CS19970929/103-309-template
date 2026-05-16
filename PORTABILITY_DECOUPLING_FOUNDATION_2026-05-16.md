@@ -107,6 +107,11 @@
 
 这样存储测试模块的真实依赖更清楚，后续要在移植工程里保留或删除该测试入口时，不需要把完整应用头文件一并拖入。
 
+`LowPowerSleep.c` 和 `ProductionID.c` 也已脱离 `main.h`：
+
+- `LowPowerSleep.c` 显式依赖 `Can_HDX.h`、`FactoryAging.h`、`LedBar.h`、`SocEnhance.h`。
+- `ProductionID.c` 显式依赖 `DataDeal.h`、`ProductionID.h` 和 `<string.h>`。
+
 ## 3. 运行流程变化
 
 当前默认配置全部保持开启，因此量产行为不应变化。
@@ -215,7 +220,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
@@ -235,6 +240,7 @@ Runtime_RunOnce()
 9. 确认 `SOC.c` 不再包含 `main.h`，且不直接读取核心全局模型对象。
 10. 确认 `Flash64KAppTest.c` 使用显式依赖而不是 `main.h`。
 11. 确认 `LogRecord.c` 不再包含 `main.h`，且通过 `BmsModel.h` 读取 fault/status。
+12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
 
 建议每次做模块裁剪或移植前执行：
 
