@@ -1,5 +1,12 @@
-#include "main.h"
+#include "BmsModel.h"
+#include "DataDeal.h"
+#include "Fault.h"
+#include "I2C_AFE1.h"
 #include "Project_Protection.h"
+#include "PubFunc.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -252,6 +259,7 @@ void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 
 void Fault_ChangeToMCU(void)
 {
+	struct stCell_Info *cell_info = BmsModel_CellInfo();
 	static UINT8 su8_CellOvp_Flag = 0;
 	static UINT8 su8_CellUvp_Flag = 0;
 	static UINT8 su8_IdischgOcp1_Flag = 0;
@@ -262,14 +270,14 @@ void Fault_ChangeToMCU(void)
 	static UINT8 su8_CellDsgUtp_Flag = 0;
 	static UINT8 su8_CellDsgOtp_Flag = 0;
 
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = SH367309_Reg_Store.REG_BSTATUS1.bits.OV;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = SH367309_Reg_Store.REG_BSTATUS1.bits.UV;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCC;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTC;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTC;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTD;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTD;
+	cell_info->unMdlFault_Third.bits.b1CellOvp = SH367309_Reg_Store.REG_BSTATUS1.bits.OV;
+	cell_info->unMdlFault_Third.bits.b1CellUvp = SH367309_Reg_Store.REG_BSTATUS1.bits.UV;
+	cell_info->unMdlFault_Third.bits.b1IdischgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2;
+	cell_info->unMdlFault_Third.bits.b1IchgOcp = SH367309_Reg_Store.REG_BSTATUS1.bits.OCC;
+	cell_info->unMdlFault_Third.bits.b1CellChgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTC;
+	cell_info->unMdlFault_Third.bits.b1CellChgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTC;
+	cell_info->unMdlFault_Third.bits.b1CellDischgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTD;
+	cell_info->unMdlFault_Third.bits.b1CellDischgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTD;
 	if (SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
 		System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
 	else

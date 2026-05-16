@@ -1120,13 +1120,17 @@ def check_portability_foundation(reporter):
         reporter.fail("IODrivers.c should not redefine shared timing/limit macros")
 
     if (
-        '#include "Project_Protection.h"' in sh367309_func_c
+        '#include "main.h"' not in sh367309_func_c
+        and '#include "BmsModel.h"' in sh367309_func_c
+        and '#include "Project_Protection.h"' in sh367309_func_c
         and "#if PROJECT_PROTECTION_USES_AFE_HARDWARE" in sh367309_func_c
         and "Fault_ChangeToMCU();" in sh367309_func_c
+        and "BmsModel_CellInfo()" in sh367309_func_c
+        and "g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp =" not in sh367309_func_c
     ):
-        reporter.ok("SH367309 hardware fault mirroring follows protection mode")
+        reporter.ok("SH367309_Func.c declares AFE fault mirror dependencies without main.h")
     else:
-        reporter.fail("SH367309 hardware fault mirroring should be gated by protection mode")
+        reporter.fail("SH367309_Func.c should gate fault mirroring by protection mode without main.h")
 
     if (
         '#include "main.h"' not in sh367309_datadeal_c

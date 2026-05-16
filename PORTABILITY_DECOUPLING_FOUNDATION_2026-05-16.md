@@ -250,7 +250,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_DataDeal.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 保护策略现在可一键切换，但 `Fault.c` 的软件保护阈值、滤波节拍和目标板 MOS 动作仍需按新 AFE/新产品重新上板验证。
@@ -274,7 +274,7 @@ Runtime_RunOnce()
 12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
 13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
 14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c`、`SH367309_Func.c` 和 `rtc_sleep.c` 都按保护模式调度软/硬件保护。
-15. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_DataDeal.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
+15. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
 
 建议每次做模块裁剪或移植前执行：
 
