@@ -26,9 +26,19 @@ BMS_INLINE struct OTHER_ELEMENT *BmsModel_Params(void)
 	return &OtherElement;
 }
 
+BMS_INLINE UINT32 BmsModel_GetAfeCurrentSampleSeq(void)
+{
+	return g_u32AfeCurrentSampleSeq;
+}
+
 BMS_INLINE const volatile union System_Status *BmsModel_SystemStatusConst(void)
 {
 	return &SystemStatus;
+}
+
+BMS_INLINE void BmsModel_ClearSocStartupFlag(void)
+{
+	System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
 }
 
 BMS_INLINE UINT16 BmsModel_GetPackVoltage10mV(void)
@@ -76,14 +86,27 @@ BMS_INLINE UINT16 BmsModel_GetCycleTimes(void)
 	return g_stCellInfoReport.SocElement.u16Cycle_times;
 }
 
-BMS_INLINE UINT16 BmsModel_GetMaxTemperatureT10Offset40(void)
-{
-	return g_stCellInfoReport.u16TempMax;
-}
-
 BMS_INLINE UINT16 BmsModel_GetSeriesCount(void)
 {
 	return (UINT16)SNum;
+}
+
+BMS_INLINE void BmsModel_SetSocInputSample(UINT16 vcell_max, UINT16 vcell_min,
+										   UINT16 ichg, UINT16 idsg)
+{
+	UINT32 total_mv = (UINT32)vcell_min * (UINT32)BmsModel_GetSeriesCount();
+
+	g_stCellInfoReport.u16VCellMax = vcell_max;
+	g_stCellInfoReport.u16VCellMin = vcell_min;
+	g_stCellInfoReport.u16VCellDelta = (UINT16)(vcell_max - vcell_min);
+	g_stCellInfoReport.u16VCellTotle = (UINT16)(total_mv / 10U);
+	g_stCellInfoReport.u16Ichg = ichg;
+	g_stCellInfoReport.u16IDischg = idsg;
+}
+
+BMS_INLINE UINT16 BmsModel_GetMaxTemperatureT10Offset40(void)
+{
+	return g_stCellInfoReport.u16TempMax;
 }
 
 #endif

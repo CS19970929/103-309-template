@@ -1,5 +1,8 @@
-#include "main.h"
 #include "Flash64KAppTest.h"
+#include "PubFunc.h"
+#include "System_Init.h"
+#include <stdio.h>
+#include <string.h>
 
 #define FLASH64K_SIZE_REG_ADDR          ((UINT32)0x1FFFF7E0)
 #define FLASH64K_TEST_SOC_SLOT_A        FLASH_ADDR_STORAGE_SOC_SLOT_A

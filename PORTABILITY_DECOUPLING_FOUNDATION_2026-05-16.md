@@ -69,7 +69,13 @@
 - `BmsModel_GetCapacityNowAh100()`
 - `BmsModel_GetCapacityFactoryAh100()`
 
-`CanFeidaoFrames.c` 已改为通过 `BmsModel.h` 读取运行数据，不再直接引用 `g_stCellInfoReport`。`LedBar.c` 也已把 SOC、fault、MOS 状态读取切到 `BmsModel.h`。后续可按模块逐步把 RS485、低功耗等直接读全局的地方继续迁移过来。
+`CanFeidaoFrames.c` 已改为通过 `BmsModel.h` 读取运行数据，不再直接引用 `g_stCellInfoReport`。`LedBar.c` 也已把 SOC、fault、MOS 状态读取切到 `BmsModel.h`。`LogRecord.c` 已把 fault/status 读取切到 `BmsModel.h`，并脱离 `main.h`。后续可按模块逐步把 RS485、低功耗等直接读全局的地方继续迁移过来。
+
+`SOC.c` 已脱离 `main.h`，并且不再直接引用 `g_stCellInfoReport`、`OtherElement`、`System_Func_StartUp` 和 `g_u32AfeCurrentSampleSeq`。SOC 入口现在显式依赖：
+
+- `SOC.h`：SOC 模块自身接口和增强算法声明。
+- `ADC.h`：Type-C 输出电流和总压 ADC fallback。
+- `BmsModel.h`：AFE 样本序号、运行数据、SOC 参数和启动标志访问。
 
 ### 2.5 `Project_AppTasks.h`
 
@@ -88,6 +94,18 @@
 - `App_ProID_Deal()`
 
 这样 `Runtime.c` 不再需要包含 `main.h` 这个总入口头，后续拆主循环、复用运行框架或移植到其他 MCU 时，不必把整套旧工程头文件一起带过去。
+
+### 2.6 测试模块依赖显式化
+
+`Flash64KAppTest.c` 已从 `main.h` 改为显式包含：
+
+- `Flash64KAppTest.h`
+- `PubFunc.h`
+- `System_Init.h`
+- `<stdio.h>`
+- `<string.h>`
+
+这样存储测试模块的真实依赖更清楚，后续要在移植工程里保留或删除该测试入口时，不需要把完整应用头文件一并拖入。
 
 ## 3. 运行流程变化
 
@@ -197,7 +215,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c` 和 `CanFeidaoFrames.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
@@ -214,6 +232,9 @@ Runtime_RunOnce()
 6. 确认 `Runtime.c` 和 `CanFeidaoFrames.c` 不再包含 `main.h`。
 7. 确认 `main.c` 启动初始化也按 feature gate 裁剪。
 8. 确认 `LedBar.c` 不再直接读取 `g_stCellInfoReport` 或 `SystemStatus.bits`。
+9. 确认 `SOC.c` 不再包含 `main.h`，且不直接读取核心全局模型对象。
+10. 确认 `Flash64KAppTest.c` 使用显式依赖而不是 `main.h`。
+11. 确认 `LogRecord.c` 不再包含 `main.h`，且通过 `BmsModel.h` 读取 fault/status。
 
 建议每次做模块裁剪或移植前执行：
 

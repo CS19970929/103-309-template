@@ -43,6 +43,7 @@ CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
 FLASH64K_APP_TEST_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.h"
+FLASH64K_APP_TEST_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.c"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -648,9 +649,12 @@ def check_portability_foundation(reporter):
         RUNTIME_C,
         MAIN_C,
         DATADEAL_C,
+        SOC_C,
         CAN_FEIDAO_FRAMES_C,
         FLASH64K_APP_TEST_H,
+        FLASH64K_APP_TEST_C,
         LEDBAR_C,
+        LOGRECORD_C,
         BUILD_GUARD,
         PORTABILITY_DOC,
     ]
@@ -668,9 +672,12 @@ def check_portability_foundation(reporter):
     runtime_c = read_text(RUNTIME_C)
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
+    soc_c = read_text(SOC_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
+    flash64k_app_test_c = read_text(FLASH64K_APP_TEST_C)
     ledbar_c = read_text(LEDBAR_C)
+    logrecord_c = read_text(LOGRECORD_C)
     build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
 
@@ -782,6 +789,22 @@ def check_portability_foundation(reporter):
     else:
         reporter.fail("DataDeal.c should gate AFE-triggered SOC execution")
 
+    soc_forbidden_tokens = [
+        '#include "main.h"',
+        "g_stCellInfoReport",
+        "OtherElement",
+        "System_Func_StartUp",
+        "g_u32AfeCurrentSampleSeq",
+    ]
+    if (
+        '#include "BmsModel.h"' in soc_c
+        and '#include "ADC.h"' in soc_c
+        and all(token not in soc_c for token in soc_forbidden_tokens)
+    ):
+        reporter.ok("SOC.c uses explicit inputs and BmsModel instead of main.h/global model access")
+    else:
+        reporter.fail("SOC.c should use explicit inputs and BmsModel instead of main.h/global model access")
+
     if (
         '#include "BmsModel.h"' in can_frames_c
         and '#include "main.h"' not in can_frames_c
@@ -797,10 +820,30 @@ def check_portability_foundation(reporter):
     else:
         reporter.fail("Flash64KAppTest.h should declare its own storage dependencies")
 
+    if (
+        '#include "main.h"' not in flash64k_app_test_c
+        and '#include "Flash64KAppTest.h"' in flash64k_app_test_c
+        and '#include "System_Init.h"' in flash64k_app_test_c
+        and '#include "PubFunc.h"' in flash64k_app_test_c
+    ):
+        reporter.ok("Flash64KAppTest.c declares specific dependencies instead of main.h")
+    else:
+        reporter.fail("Flash64KAppTest.c should declare specific dependencies instead of main.h")
+
     if '#include "BmsModel.h"' in ledbar_c and "g_stCellInfoReport" not in ledbar_c and "SystemStatus.bits" not in ledbar_c:
         reporter.ok("LedBar.c reads SOC/fault/MOS status through BmsModel accessors")
     else:
         reporter.fail("LedBar.c should read SOC/fault/MOS status through BmsModel accessors")
+
+    if (
+        '#include "main.h"' not in logrecord_c
+        and '#include "BmsModel.h"' in logrecord_c
+        and "g_stCellInfoReport" not in logrecord_c
+        and "SystemStatus.bits" not in logrecord_c
+    ):
+        reporter.ok("LogRecord.c reads fault/status data through BmsModel accessors without main.h")
+    else:
+        reporter.fail("LogRecord.c should read fault/status data through BmsModel accessors without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")

@@ -1,4 +1,6 @@
-#include "main.h"
+#include "SOC.h"
+#include "ADC.h"
+#include "BmsModel.h"
 #include <stdint.h>
 
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
@@ -71,15 +73,7 @@ static UINT8 SOC_TestMode_InputValid(UINT16 vcell_max, UINT16 vcell_min,
 static void SOC_TestMode_ApplyReportSample(UINT16 vcell_max, UINT16 vcell_min,
 										   UINT16 ichg, UINT16 idsg)
 {
-	UINT32 total_mv;
-
-	g_stCellInfoReport.u16VCellMax = vcell_max;
-	g_stCellInfoReport.u16VCellMin = vcell_min;
-	g_stCellInfoReport.u16VCellDelta = (UINT16)(vcell_max - vcell_min);
-	total_mv = (UINT32)vcell_min * (UINT32)SeriesNum;
-	g_stCellInfoReport.u16VCellTotle = (UINT16)(total_mv / 10U);
-	g_stCellInfoReport.u16Ichg = ichg;
-	g_stCellInfoReport.u16IDischg = idsg;
+	BmsModel_SetSocInputSample(vcell_max, vcell_min, ichg, idsg);
 }
 #endif
 
@@ -90,7 +84,7 @@ static UINT16 SOC_LimitA10(UINT32 current_a10)
 
 static UINT32 SOC_GetPackVoltageForTypeCMv(void)
 {
-	UINT32 pack_mv = (UINT32)g_stCellInfoReport.u16VCellTotle * 10U;
+	UINT32 pack_mv = BmsModel_GetPackVoltageMv();
 
 	if (pack_mv != 0U)
 	{
@@ -152,14 +146,15 @@ static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
 
 static void SOC_LoadConfigData(void)
 {
+	const struct OTHER_ELEMENT *params = BmsModel_ParamsConst();
 	UINT16 i;
 
-	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
-	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
+	SOC_Enhance_Element.u16_SOC_Ah = params->u16Soc_Ah;
+	SOC_Enhance_Element.u16_SOC_CycleT_Ever = params->u16Soc_Cycle_times;
 	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
-	SOC_Enhance_Element.u16_SOC_TableSelect = OtherElement.u16Soc_TableSelect;
-	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
-	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
+	SOC_Enhance_Element.u16_SOC_TableSelect = params->u16Soc_TableSelect;
+	SOC_Enhance_Element.u16_SOC_100_Vol = params->u16Soc_V_100;
+	SOC_Enhance_Element.u16_SOC_0_Vol = params->u16Soc_V_0;
 
 	for (i = 0; i < SOC_Size_TableCanSet; ++i)
 	{
@@ -177,6 +172,7 @@ void InitData_SOC(void)
 void App_SOC(void)
 {
 	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
+	const struct stCell_Info *cell = BmsModel_CellInfoConst();
 	UINT8 u8HasNewAfeSample;
 	UINT16 soc_ichg;
 	UINT16 soc_idsg;
@@ -187,22 +183,22 @@ void App_SOC(void)
 		SOC_PublishReportData();
 		if (SOC_Enhance_Element.u16_SOC_InitOver)
 		{
-			System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
+			BmsModel_ClearSocStartupFlag();
 		}
 		return;
 	}
 #endif
 
-	u8HasNewAfeSample = (g_u32AfeCurrentSampleSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
+	u8HasNewAfeSample = (BmsModel_GetAfeCurrentSampleSeq() != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
 	if (u8HasNewAfeSample)
 	{
-		s_u32LastAfeCurrentSampleSeq = g_u32AfeCurrentSampleSeq;
-		SOC_GetNetCurrentForCalc(g_stCellInfoReport.u16Ichg,
-								 g_stCellInfoReport.u16IDischg,
+		s_u32LastAfeCurrentSampleSeq = BmsModel_GetAfeCurrentSampleSeq();
+		SOC_GetNetCurrentForCalc(cell->u16Ichg,
+								 cell->u16IDischg,
 								 &soc_ichg,
 								 &soc_idsg);
-		SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
-							 g_stCellInfoReport.u16VCellMin,
+		SOC_UpdateSampleData(cell->u16VCellMax,
+							 cell->u16VCellMin,
 							 soc_ichg,
 							 soc_idsg);
 		SOC_IntEnhance_Ctrl();
@@ -214,7 +210,7 @@ void App_SOC(void)
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{
-		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
+		BmsModel_ClearSocStartupFlag();
 	}
 }
 
@@ -296,9 +292,9 @@ void SOC_TestMode_ReadStatus(UINT16 status_words[], UINT16 word_count)
 	status_words[9] = s_stSocTestMode.u16LastTicks;
 	status_words[10] = (UINT16)(s_stSocTestMode.u32TotalTicks >> 16);
 	status_words[11] = (UINT16)(s_stSocTestMode.u32TotalTicks & 0xFFFFU);
-	status_words[12] = (UINT16)g_stCellInfoReport.SocElement.u16Soc;
-	status_words[13] = (UINT16)g_stCellInfoReport.SocElement.u16Soh;
-	status_words[14] = (UINT16)g_stCellInfoReport.SocElement.u16CapacityNow;
+	status_words[12] = (UINT16)BmsModel_GetSocPercent();
+	status_words[13] = (UINT16)BmsModel_GetSohPercent();
+	status_words[14] = (UINT16)BmsModel_GetCapacityNowAh100();
 	status_words[15] = s_stSocTestMode.u16LastResult;
 #else
 	status_words[15] = SOC_TEST_MODE_RESULT_UNSUPPORTED;
