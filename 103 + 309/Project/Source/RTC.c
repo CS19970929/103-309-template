@@ -1,4 +1,5 @@
-#include "main.h"
+#include "RTC.h"
+#include "Can_HDX.h"
 
 // UINT8 RTC_Faultcnt = 0;
 __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
@@ -575,7 +576,6 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-
 
 
 

@@ -32,6 +32,8 @@ ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / 
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 SYSTEM_INIT_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Init.c"
 SYSTEM_INIT_H = ROOT / "103 + 309" / "Project" / "Source" / "System_Init.h"
+RTC_C = ROOT / "103 + 309" / "Project" / "Source" / "RTC.c"
+RTC_H = ROOT / "103 + 309" / "Project" / "Source" / "RTC.h"
 PUBFUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.c"
 PUBFUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.h"
 SYSTEM_MONITOR_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.c"
@@ -682,6 +684,8 @@ def check_portability_foundation(reporter):
         ADC_H,
         SYSTEM_INIT_C,
         SYSTEM_INIT_H,
+        RTC_C,
+        RTC_H,
         PUBFUNC_C,
         PUBFUNC_H,
         SYSTEM_MONITOR_C,
@@ -728,6 +732,7 @@ def check_portability_foundation(reporter):
     soc_c = read_text(SOC_C)
     system_init_c = read_text(SYSTEM_INIT_C)
     system_init_h = read_text(SYSTEM_INIT_H)
+    rtc_c = read_text(RTC_C)
     adc_c = read_text(ROOT / "103 + 309" / "Project" / "Source" / "ADC.c")
     adc_h = read_text(ADC_H)
     pubfunc_c = read_text(PUBFUNC_C)
@@ -1000,6 +1005,17 @@ def check_portability_foundation(reporter):
         reporter.ok("System_Init.c/h declare timing/platform dependencies without main.h")
     else:
         reporter.fail("System_Init.c/h should declare timing/platform dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in rtc_c
+        and '#include "RTC.h"' in rtc_c
+        and '#include "Can_HDX.h"' in rtc_c
+        and "RTC_EnableLsiClock" in rtc_c
+        and "RTC_GetWakeupPeriodSeconds" in rtc_c
+    ):
+        reporter.ok("RTC.c declares RTC/CAN wake dependencies without main.h")
+    else:
+        reporter.fail("RTC.c should declare RTC/CAN wake dependencies without main.h")
 
     if (
         "#define DELAYB10MS_5S" not in iodrivers_c
