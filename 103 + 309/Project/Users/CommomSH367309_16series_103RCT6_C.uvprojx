@@ -276,7 +276,7 @@
               <OCR_RVCT4>
                 <Type>1</Type>
                 <StartAddress>0x8004800</StartAddress>
-                <Size>0x20000</Size>
+                <Size>0x17800</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
@@ -437,6 +437,11 @@
               <FileName>AfeService.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\AfeService.c</FilePath>
+            </File>
+            <File>
+              <FileName>BoardControl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BoardControl.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>
@@ -1218,7 +1223,7 @@
               <OCR_RVCT4>
                 <Type>1</Type>
                 <StartAddress>0x8004800</StartAddress>
-                <Size>0x20000</Size>
+                <Size>0x17800</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
@@ -1379,6 +1384,11 @@
               <FileName>AfeService.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\AfeService.c</FilePath>
+            </File>
+            <File>
+              <FileName>BoardControl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BoardControl.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>

@@ -1,0 +1,301 @@
+#ifndef EEPROM_H
+#define EEPROM_H
+
+#include "Project_Template_Config.h"
+
+/*
+ * External EEPROM is abolished in this template.
+ *
+ * Existing EEPROM/E2P names are kept only as legacy logical parameter-map
+ * identifiers. New template code should use Storage_* APIs below; all reads
+ * and writes are backed by MCU internal Flash.
+ */
+
+#define EEPROM_ADDR_PASS           			((UINT16)0x1FC0)
+#define EEPROM_ADDR_SLEEP           		((UINT16)0x1FC2)
+#define EEPROM_ADDR_FLASHUPDATE     		((UINT16)0x1FC4)
+
+#define EEPROM_VALUE_BEGIN_FLAG				0x1228		//默锟斤拷0x1133锟斤拷锟斤拷锟斤拷约锟斤拷锟斤拷?刷一锟介，锟斤拷锟皆硷拷锟斤拷锟斤拷锟劫改伙拷0x1133
+#define EEPROM_VALUE_SLEEP    				((UINT16)0xABCD)
+#define EEPROM_VALUE_SLEEP_RESET    		((UINT16)0xFFFF)
+#define EEPROM_VALUE_FLASHUPDATE    		((UINT16)0xABCD)
+#define EEPROM_VALUE_FLASHUPDATE_RESET    	((UINT16)0xFFFF)
+
+
+//#define EEPROM_ADDR_SLEEPMODE     			2036	//取锟斤拷锟斤拷锟斤拷为FLASH
+#define EEPROM_ADDR_SWITCH_ONOFF     		2040
+#define EEPROM_ADDR_SYS_FUNC_SELECT     	2044
+
+
+#define E2P_PARA_NUM_VOLCUR_PROTECT 		30
+#define E2P_PARA_NUM_TEM_PROTECT 			25
+#define E2P_PARA_NUM_OTHER_PROTECT			10
+
+#define E2P_PARA_ALL_VOLCUR_PROTECT 		0x3FFFFFFF		//30锟斤拷
+#define E2P_PARA_ALL_TEM_PROTECT 			0x01FFFFFF		//25锟斤拷
+#define E2P_PARA_ALL_OTHER_PROTECT			0x000003FF		//10锟斤拷
+#define E2P_PARA_ALL_RTC_ELEMENT 			0x00000FFF		//12锟斤拷
+#define E2P_PARA_ALL_OTHER_ELEMENT1 		0xFFFFFFFF		//32锟斤拷
+#define E2P_PARA_ALL_HEAT_COOL_ELE 			0x00FFFFFF		//24锟斤拷锟斤拷锟斤拷RTC一锟斤拷锟斤拷锟斤拷要锟斤拷锟铰的分匡拷
+
+//VolCur_Protect_WriteFlag
+#define	EE_FLAG_VCELL_OVP_FIRST				0x00000001
+#define	EE_FLAG_VCELL_OVP_SECOND			0x00000002
+#define	EE_FLAG_VCELL_OVP_THIRD				0x00000004
+#define	EE_FLAG_VCELL_OVP_RCV				0x00000008
+#define	EE_FLAG_VCELL_OVP_FILTER			0x00000010
+
+#define	EE_FLAG_VCELL_UVP_FIRST				0x00000020
+#define	EE_FLAG_VCELL_UVP_SECOND			0x00000040
+#define	EE_FLAG_VCELL_UVP_THIRD				0x00000080
+#define	EE_FLAG_VCELL_UVP_RCV				0x00000100
+#define	EE_FLAG_VCELL_UVP_FILTER			0x00000200
+
+#define	EE_FLAG_VBUS_OVP_FIRST				0x00000400
+#define	EE_FLAG_VBUS_OVP_SECOND				0x00000800
+#define	EE_FLAG_VBUS_OVP_THIRD				0x00001000
+#define	EE_FLAG_VBUS_OVP_RCV				0x00002000
+#define	EE_FLAG_VBUS_OVP_FILTER				0x00004000
+
+#define	EE_FLAG_VBUS_UVP_FIRST				0x00008000
+#define	EE_FLAG_VBUS_UVP_SECOND				0x00010000
+#define	EE_FLAG_VBUS_UVP_THIRD				0x00020000
+#define	EE_FLAG_VBUS_UVP_RCV				0x00040000
+#define	EE_FLAG_VBUS_UVP_FILTER				0x00080000
+
+#define	EE_FLAG_ICHG_OCP_FIRST				0x00100000
+#define	EE_FLAG_ICHG_OCP_SECOND				0x00200000
+#define	EE_FLAG_ICHG_OCP_THIRD				0x00400000
+#define	EE_FLAG_ICHG_OCP_RCV				0x00800000
+#define	EE_FLAG_ICHG_OCP_FILTER				0x01000000
+
+#define	EE_FLAG_IDSG_OCP_FIRST				0x02000000
+#define	EE_FLAG_IDSG_OCP_SECOND				0x04000000
+#define	EE_FLAG_IDSG_OCP_THIRD				0x08000000
+#define	EE_FLAG_IDSG_OCP_RCV				0x10000000
+#define	EE_FLAG_IDSG_OCP_FILTER				0x20000000
+
+
+//Temp_Protect_WriteFlag
+#define	EE_FLAG_TCHG_OTP_FIRST				0x00000001
+#define	EE_FLAG_TCHG_OTP_SECOND				0x00000002
+#define	EE_FLAG_TCHG_OTP_THIRD				0x00000004
+#define	EE_FLAG_TCHG_OTP_RCV				0x00000008
+#define	EE_FLAG_TCHG_OTP_FILTER				0x00000010
+
+#define	EE_FLAG_TCHG_UTP_FIRST				0x00000020
+#define	EE_FLAG_TCHG_UTP_SECOND				0x00000040
+#define	EE_FLAG_TCHG_UTP_THIRD				0x00000080
+#define	EE_FLAG_TCHG_UTP_RCV				0x00000100
+#define	EE_FLAG_TCHG_UTP_FILTER				0x00000200
+
+#define	EE_FLAG_TDSG_OTP_FIRST				0x00000400
+#define	EE_FLAG_TDSG_OTP_SECOND				0x00000800
+#define	EE_FLAG_TDSG_OTP_THIRD				0x00001000
+#define	EE_FLAG_TDSG_OTP_RCV				0x00002000
+#define	EE_FLAG_TDSG_OTP_FILTER				0x00004000
+
+#define	EE_FLAG_TDSG_UTP_FIRST				0x00008000
+#define	EE_FLAG_TDSG_UTP_SECOND				0x00010000
+#define	EE_FLAG_TDSG_UTP_THIRD				0x00020000
+#define	EE_FLAG_TDSG_UTP_RCV				0x00040000
+#define	EE_FLAG_TDSG_UTP_FILTER				0x00080000
+
+#define	EE_FLAG_TMOS_OTP_FIRST			    0x00100000
+#define	EE_FLAG_TMOS_OTP_SECOND			    0x00200000
+#define	EE_FLAG_TMOS_OTP_THIRD			    0x00400000
+#define	EE_FLAG_TMOS_OTP_RCV				0x00800000
+#define	EE_FLAG_TMOS_OTP_FILTER			    0x01000000
+
+//Other_Protect_WriteFlag
+#define	EE_FLAG_VDELTA_OVP_FIRST			0x00000001
+#define	EE_FLAG_VDELTA_OVP_SECOND			0x00000002
+#define	EE_FLAG_VDELTA_OVP_THIRD			0x00000004
+#define	EE_FLAG_VDELTA_OVP_RCV				0x00000008
+#define	EE_FLAG_VDELTA_OVP_FILTER			0x00000010
+
+#define	EE_FLAG_SOC_UP_FIRST				0x00000020
+#define	EE_FLAG_SOC_UP_SECOND				0x00000040
+#define	EE_FLAG_SOC_UP_THIRD				0x00000080
+#define	EE_FLAG_SOC_UP_RCV					0x00000100
+#define	EE_FLAG_SOC_UP_FILTER				0x00000200
+
+//Other1_WriteFlag
+#define	EE_FLAG_OTHER1_BALANCE_OV			0x00000001
+#define	EE_FLAG_OTHER1_BALANCE_OW			0x00000002
+#define	EE_FLAG_OTHER1_BALANCE_CW1			0x00000004
+#define	EE_FLAG_OTHER1_BALANCE_CW2			0x00000008
+
+#define	EE_FLAG_OTHER1_OPENTIME_ODD			0x00000010
+#define	EE_FLAG_OTHER1_OPENTIME_EVEN		0x00000020
+#define	EE_FLAG_OTHER1_OPENTIME_MOS			0x00000040
+#define	EE_FLAG_OTHER1_RES					0x00000080
+
+#define	EE_FLAG_CS_CUR_CHGMAX				0x00000100
+#define	EE_FLAG_CS_CUR_DSGMAX				0x00000200
+#define	EE_FLAG_CBC_CUR_CHG					0x00000400
+#define	EE_FLAG_CBC_CUR_DSG					0x00000800
+
+#define	EE_FLAG_OTHER1_COOL_DSG_H			0x00001000
+#define	EE_FLAG_OTHER1_COOL_DSG_L			0x00002000
+#define	EE_FLAG_OTHER1_COOL_CHG_H			0x00004000
+#define	EE_FLAG_OTHER1_COOL_CHG_L			0x00008000
+
+#define	EE_FLAG_OTHER1_SLEEP_V_NORMAL		0x00010000
+#define	EE_FLAG_OTHER1_SLEEP_TIME_NORMAL	0x00020000
+#define	EE_FLAG_OTHER1_SLEEP_V_LOW			0x00040000
+#define	EE_FLAG_OTHER1_SLEEP_TIME_LOW		0x00080000
+
+#define	EE_FLAG_OTHER1_SLEEP_I_CHG			0x00100000
+#define	EE_FLAG_OTHER1_SLEEP_I_DSG			0x00200000
+#define	EE_FLAG_OTHER1_SLEEP_RES1			0x00400000
+#define	EE_FLAG_OTHER1_SLEEP_RES2			0x00800000
+
+#define	EE_FLAG_OTHER1_SOC_AH				0x01000000
+#define	EE_FLAG_OTHER1_SOC_CYCLE_TIME		0x02000000
+#define	EE_FLAG_OTHER1_SOC_RES1				0x04000000
+#define	EE_FLAG_OTHER1_SOC_RES2				0x08000000
+
+#define	EE_FLAG_OTHER1_SYS_SERIES_NUM		0x10000000
+#define	EE_FLAG_OTHER1_SYS_CS_RESIS			0x20000000
+#define	EE_FLAG_OTHER1_SYS_CS_NUM			0x40000000
+#define	EE_FLAG_OTHER1_SYS_PRECHG_TIME		0x80000000
+
+
+#if 0	//锟斤拷锟斤拷锟斤拷茫锟斤拷锟斤拷?锟斤拷一锟斤拷锟斤拷写锟斤拷
+//HeatCool_WriteFlag
+#define	EE_FLAG_HEAT_DSG_HIGH				0x00000001
+#define	EE_FLAG_HEAT_DSG_LOW				0x00000002
+#define	EE_FLAG_HEAT_CHG_HIGH				0x00000004
+#define	EE_FLAG_HEAT_CHG_LOW				0x00000008
+
+#define	EE_FLAG_HEAT_CUR_MAX				0x00000010
+#define	EE_FLAG_HEAT_CUR_MIN				0x00000020
+#define	EE_FLAG_HEAT_TIME_MAX				0x00000040
+#define	EE_FLAG_HEAT_RES1					0x00000080
+
+#define	EE_FLAG_HEAT_RES2					0x00000100
+#define	EE_FLAG_HEAT_RES3					0x00000200
+#define	EE_FLAG_HEAT_RES4					0x00000400
+#define	EE_FLAG_HEAT_RES5					0x00000800
+
+#define	EE_FLAG_HEAT_RES6					0x00001000
+#define	EE_FLAG_COOL_DSG_HIGH				0x00002000
+#define	EE_FLAG_COOL_DSG_LOW				0x00004000
+#define	EE_FLAG_COOL_CHG_HIGH				0x00008000
+
+#define	EE_FLAG_COOL_CHG_LOW				0x00010000
+#define	EE_FLAG_COOL_CUR_MAX				0x00020000
+#define	EE_FLAG_COOL_CUR_MIN				0x00040000
+#define	EE_FLAG_COOL_TIME_MAX				0x00080000
+
+#define	EE_FLAG_COOL_RES1					0x00100000
+#define	EE_FLAG_COOL_RES2					0x00200000
+#define	EE_FLAG_COOL_RES3					0x00400000
+#define	EE_FLAG_COOL_RES4					0x00800000
+#endif
+
+
+//锟斤拷锟斤拷为EEPROM锟斤拷锟斤拷锟斤拷锟捷碉拷顺锟斤拷透锟斤拷锟揭伙拷锟斤拷锟???
+#define E2P_PARA_NUM_PROTECT 		 		65				//为锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷樱锟斤拷?锟斤拷要锟街匡拷锟斤拷锟斤拷为锟斤拷锟???32位锟斤拷锟斤拷锟解，锟斤拷锟斤拷锟斤拷锟斤拷么实锟斤拷
+#define E2P_PARA_NUM_RTC		 			12
+#define E2P_PARA_NUM_CALIB_K 		 		KB_NUM			//47
+#define E2P_PARA_NUM_CALIB_B 		 		KB_NUM
+#define E2P_PARA_NUM_SOC_TABLE 		 		SOC_TABLE_SIZE	//42锟斤拷锟斤拷GetEndValue锟斤拷缘锟斤拷只锟杰猴拷锟斤拷一锟斤拷
+#define E2P_PARA_NUM_COPPERLOSS 		 	CompensateNUM	//16
+#define E2P_PARA_NUM_COPPERLOSS_NUM 		CompensateNUM
+#define E2P_PARA_NUM_FAULT_RECORD 		 	(3*Record_len+ 3 +Record_len*6)//为什么define锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟绞憋拷?锟斤拷锟斤拷锟斤拷锟截ｏ拷锟斤拷为锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷define锟斤拷锟斤拷锟饺硷拷锟竭就伙拷锟斤拷锟???
+#define E2P_PARA_NUM_OTHER_ELEMENT1 		32				//锟斤拷锟斤拷锟接ｏ拷锟劫达拷锟斤拷锟接憋拷注锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
+#define E2P_PARA_NUM_HEAT_COOL				24
+
+
+//锟结构锟斤拷锟斤拷锟酵憋拷锟斤拷锟斤拷锟斤拷锟???
+#define E2P_ADDR_E2POS_PROTECT 			{0,  2,  4,  6,  8,  10, 12, 14, 16, 18,\
+										 20, 22, 24, 26, 28, 30, 32, 34, 36, 38,\
+										 40, 42, 44, 46, 48, 50, 52, 54, 56, 58,\
+										 \
+										 60, 62, 64, 66, 68, 70, 72, 74, 76, 78,\
+										 80, 82, 84, 86, 88, 90, 92, 94, 96, 98,\
+										 100,102,104,106,108,\
+										 \
+										 110,112,114,116,118,120,122,124,126,128}
+
+#define E2P_ADDR_E2POS_RTC 				{130,132,134,136,138,140,\
+										 142,144,146,148,150,152}
+
+
+#define	E2P_ADDR_START_CALIB_K		    154    	//47锟斤拷锟斤拷
+#define	E2P_ADDR_START_CALIB_B		    248		//47锟斤拷锟斤拷
+#define	E2P_ADDR_START_SOC_TABLE		342    	//42锟斤拷锟斤拷
+#define	E2P_ADDR_START_COPPERLOSS		426    	//16锟斤拷锟斤拷
+#define	E2P_ADDR_START_COPPERLOSS_NUM	458    	//16锟斤拷锟斤拷
+
+#define E2P_ADDR_START_FAULT_RECORD 	490
+#define	E2P_ADDR_START_FR_FIRST 		E2P_ADDR_START_FAULT_RECORD				//10锟斤拷锟斤拷
+#define	E2P_ADDR_START_FR_SECOND  		(E2P_ADDR_START_FAULT_RECORD+20)		//10锟斤拷锟斤拷
+#define	E2P_ADDR_START_FR_THIRD  		(E2P_ADDR_START_FAULT_RECORD+40)		//10锟斤拷锟斤拷
+//锟斤拷锟斤拷2锟斤拷锟街节碉拷指锟诫保锟斤拷
+#define E2P_ADDR_E2POS_FR_TEMP_FIRST	(E2P_ADDR_START_FAULT_RECORD+60)		//2锟斤拷锟斤拷
+#define E2P_ADDR_E2POS_FR_TEMP_SECOND  	(E2P_ADDR_START_FAULT_RECORD+62)		//2锟斤拷锟斤拷
+#define E2P_ADDR_E2POS_FR_TEMP_THIRD	(E2P_ADDR_START_FAULT_RECORD+64)		//2锟斤拷锟斤拷
+#define E2P_ADDR_START_FR_THIRD_RTC 	(E2P_ADDR_START_FAULT_RECORD+66)		//锟节盒硷拷录锟斤拷60锟斤拷锟斤拷
+
+#define E2P_ADDR_START_OTHER_ELEMENT1	676		//E2P_ADDR_START_FR_THIRD_RTC + 120 = E2P_ADDR_START_FAULT_RECORD+66+120
+
+#define E2P_ADDR_E2POS_OTHER_ELEMENT1 	{676,678,680,682,684,686,688,690,\
+										 692,694,696,698,700,702,704,706,\
+										 708,710,712,714,716,718,720,722,\
+										 724,726,728,730,\
+										 732,734,736,738}
+
+#define E2P_ADDR_E2POS_HEAT_COOL 		{740,742,744,746,748,750,752,754,756,758,760,762,764,\
+										 766,768,770,772,774,776,778,780,782,784,788}
+#if 0
+#define E2P_ADDR_E2POS_ENHANCE_SOC 		{790,792,794,796,798,800,802,804,\
+										 806,808,810,812,814,816,818,820} 		//锟斤拷锟斤拷遣锟斤拷锟斤拷锟斤拷锟轿伙拷锟斤拷牡锟???
+#endif
+
+#define E2P_ADDR_E2POS_ENHANCE_SOC		790		//锟斤拷820
+
+#define E2P_ADDR_E2POS_SERIAL_NUM		830		//锟斤拷868
+#define E2P_ADDR_E2POS_HAEDWARE_VER		870		//锟斤拷908
+#define E2P_ADDR_E2POS_SOFTWARE_VER		910		//锟斤拷948
+
+#define E2P_ADDR_START_EVENT_RECORD 	1000	//锟斤拷1198		//100锟斤拷锟斤拷
+#define E2P_ADDR_E2POS_EVENT_POINT		1200	//锟斤拷一锟斤拷1202
+
+#define E2P_ADDR_SOC_RTC_CNT          	1202		//RTC锟斤拷锟斤拷统锟狡ｏ拷锟斤拷锟斤拷锟角凤拷锟斤拷锟絊OC
+
+
+extern UINT32 u32E2P_Pro_VolCur_WriteFlag;
+extern UINT32 u32E2P_Pro_Temp_WriteFlag;
+extern UINT32 u32E2P_Pro_Other_WriteFlag;
+extern UINT32 u32E2P_OtherElement1_WriteFlag;
+extern UINT32 u32E2P_HeatCool_WriteFlag;
+
+extern UINT32 u32E2P_RTC_Element_WriteFlag;
+extern UINT8 u8E2P_SocTable_WriteFlag;
+extern UINT8 u8E2P_CopperLoss_WriteFlag;
+extern UINT8 u8E2P_KB_WriteFlag;
+extern UINT8 u8E2P_KB_WritePos;
+
+UINT8 ReadEEPROM_Byte(UINT16 addr);
+UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val);
+UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);
+UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data);
+UINT16 ReadEEPROM_Word_WithZone(UINT16 addr);						//原锟斤拷锟较诧拷锟斤拷锟斤拷
+void WriteEEPROM_Word_WithZone(UINT16 addr, UINT16 data);
+
+UINT8 Storage_ReadByte(UINT16 addr);
+UINT8 Storage_WriteByte(UINT16 addr, UINT8 data);
+UINT16 Storage_ReadWord(UINT16 addr);
+UINT8 Storage_WriteWord(UINT16 addr, UINT16 data);
+void Storage_Init(void);
+void Storage_Task(void);
+
+void InitE2PROM(void);
+void App_E2promDeal(void);
+
+void EEPROM_test(void);
+
+#endif	/* EEPROM_H */

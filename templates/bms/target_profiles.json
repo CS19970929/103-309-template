@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "profiles": {
+    "fd_103_309": {
+      "description": "Canonical application-template baseline from the current STM32F103 + SH367309 project",
+      "template_role": "canonical_application_baseline",
+      "application_logic_source": "current_project",
+      "mcu_family": "stm32f103",
+      "mcu_driver": "stm32f10x_stdperiph",
+      "afe_type": "sh367309",
+      "board_profile": "FD_103_309",
+      "protection_mode": "afe_hardware_only",
+      "storage_backend": "internal_flash",
+      "keil_project": "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx",
+      "keil_targets": ["FD_Release", "FD_Debug"],
+      "flash": {
+        "flash_start": "0x08000000",
+        "flash_size": "0x00020000",
+        "iap_start": "0x08000000",
+        "app_start": "0x08004800",
+        "app_size": "0x00017800",
+        "storage_start": "0x0801C000",
+        "storage_size": "0x00004000"
+      }
+    },
+    "a002_f030_bq76940": {
+      "description": "Legacy STM32F030 + BQ76940 driver and Keil-address reference; application logic is not used as the generic template baseline",
+      "template_role": "mcu_afe_driver_reference",
+      "application_logic_source": "current_project",
+      "mcu_family": "stm32f030",
+      "mcu_driver": "stm32f0xx_stdperiph",
+      "afe_type": "bq76940",
+      "board_profile": "A002_F030_BQ76940",
+      "protection_mode": "mcu_software",
+      "storage_backend": "internal_flash",
+      "keil_project": "templates/bms/sources/a002_f030_bq76940/CommomBQ769x0_16series_030C8T6_C.uvprojx",
+      "keil_targets": ["Target 1"],
+      "scatter_file": "templates/bms/sources/a002_f030_bq76940/Objects/CommomBQ769x0_16series_030C8T6_C.sct",
+      "flash": {
+        "flash_start": "0x08000000",
+        "flash_size": "0x00010000",
+        "iap_start": "0x08000000",
+        "app_start": "0x08001C00",
+        "app_size": "0x0000C400",
+        "storage_start": "0x0800E000",
+        "storage_size": "0x00002000"
+      }
+    }
+  }
+}

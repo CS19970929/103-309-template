@@ -1,0 +1,45 @@
+#ifndef PROJECT_TEMPLATE_CONFIG_H
+#define PROJECT_TEMPLATE_CONFIG_H
+
+/*
+ * A002_F030_BQ76940 template profile.
+ *
+ * Keep board/product switches here instead of scattering one-off defines
+ * across application modules. The file is ASCII-only so it remains safe in
+ * Keil, VSCode, and Codex.
+ */
+
+#define PROJECT_TEMPLATE_NAME_A002_F030_BQ76940 1
+
+#define PROJECT_CFG_MCU_STM32F030_STD          1
+#define PROJECT_CFG_AFE_BQ769X0                1
+#define PROJECT_CFG_AFE_BQ76940                1
+
+#define PROJECT_CFG_PROTECTION_MCU_SOFTWARE    1
+#define PROJECT_CFG_PROTECTION_AFE_HARDWARE    0
+
+#define PROJECT_CFG_FEATURE_SOC                1
+#define PROJECT_CFG_FEATURE_LOW_POWER          1
+#define PROJECT_CFG_FEATURE_RTC                1
+#define PROJECT_CFG_FEATURE_RS485              1
+#define PROJECT_CFG_FEATURE_CAN                0
+#define PROJECT_CFG_FEATURE_LEDBAR             0
+#define PROJECT_CFG_FEATURE_HEAT               0
+
+#define PROJECT_CFG_STORAGE_INTERNAL_FLASH     1
+
+#define PROJECT_CFG_FLASH_PAGE_SIZE            1024U
+#define PROJECT_CFG_FLASH_IAP_START            0x08000000U
+#define PROJECT_CFG_FLASH_APP_START            0x08001C00U
+#define PROJECT_CFG_FLASH_APP_SIZE             0x0000C400U
+#define PROJECT_CFG_FLASH_STORAGE_START        0x0800E000U
+#define PROJECT_CFG_FLASH_STORAGE_SIZE         0x00002000U
+
+#define PROJECT_CFG_FLASH_VEEPROM_START        PROJECT_CFG_FLASH_STORAGE_START
+#define PROJECT_CFG_FLASH_VEEPROM_SIZE         PROJECT_CFG_FLASH_STORAGE_SIZE
+
+#define PROJECT_CFG_FLASH_FLAG_WAKE_TYPE       (PROJECT_CFG_FLASH_STORAGE_START + 0x1FF0U)
+#define PROJECT_CFG_FLASH_FLAG_UPDATE          (PROJECT_CFG_FLASH_STORAGE_START + 0x1FF2U)
+#define PROJECT_CFG_FLASH_FLAG_SLEEP           (PROJECT_CFG_FLASH_STORAGE_START + 0x1FF4U)
+
+#endif /* PROJECT_TEMPLATE_CONFIG_H */

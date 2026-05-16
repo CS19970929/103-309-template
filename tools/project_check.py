@@ -9,6 +9,7 @@ release/debug profile mistakes before commit, push, or manual release builds.
 from __future__ import print_function
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -29,6 +30,7 @@ PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
 PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTasks.h"
 BOARD_CONTROL_H = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.h"
+BOARD_CONTROL_C = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.c"
 AFE_SERVICE_C = ROOT / "103 + 309" / "Project" / "Source" / "AfeService.c"
 AFE_SERVICE_H = ROOT / "103 + 309" / "Project" / "Source" / "AfeService.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
@@ -94,6 +96,33 @@ CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 PORTABILITY_DOC = ROOT / "PORTABILITY_DECOUPLING_FOUNDATION_2026-05-16.md"
 PROTECTION_DOC = ROOT / "PROTECTION_STRATEGY_CONFIG_2026-05-16.md"
+TEMPLATE_TARGET_PROFILES = ROOT / "templates" / "bms" / "target_profiles.json"
+TEMPLATE_README = ROOT / "templates" / "bms" / "README.md"
+TEMPLATE_PROFILE_CONTRACT = ROOT / "templates" / "bms" / "PROFILE_CONTRACT.md"
+TEMPLATE_GENERIC_ARCH = ROOT / "templates" / "bms" / "GENERIC_TEMPLATE_ARCHITECTURE_2026-05-16.md"
+TEMPLATE_A002_PORT_REF = ROOT / "templates" / "bms" / "PORT_REFERENCE_A002_F030_BQ76940.md"
+TEMPLATE_SOURCES_README = ROOT / "templates" / "bms" / "sources" / "README.md"
+TEMPLATE_WORKLOG = ROOT / "BMS_TEMPLATE_LIBRARY_WORKLOG_2026-05-16.md"
+TEMPLATE_MIGRATION_PLAN = ROOT / "BMS_TEMPLATE_MIGRATION_PLAN_2026-05-16.md"
+BMS_TEMPLATE_CONFIGURATOR_PY = ROOT / "tools" / "bms_template_configurator.py"
+BMS_TEMPLATE_CONFIGURATOR_PS1 = ROOT / "tools" / "bms_template_configurator.ps1"
+A002_ROOT = ROOT / "templates" / "bms" / "sources" / "a002_f030_bq76940"
+A002_REFACTOR_STATUS = A002_ROOT / "docs" / "A002_REFACTOR_STATUS_2026-05-16.md"
+A002_PROJECT = A002_ROOT / "CommomBQ769x0_16series_030C8T6_C.uvprojx"
+A002_PROJECT_CONFIG = A002_ROOT / "Code" / "Include" / "Project_Template_Config.h"
+A002_PROJECT_TARGET = A002_ROOT / "Code" / "Include" / "Project_Target.h"
+A002_PROJECT_PROTECTION = A002_ROOT / "Code" / "Include" / "Project_Protection.h"
+A002_PROJECT_FEATURES = A002_ROOT / "Code" / "Include" / "Project_Features.h"
+A002_FLASH_H = A002_ROOT / "Code" / "Include" / "Flash.h"
+A002_EEPROM_H = A002_ROOT / "Code" / "Include" / "EEPROM.h"
+A002_MAIN_H = A002_ROOT / "Code" / "Include" / "main.h"
+A002_MAIN_C = A002_ROOT / "Code" / "Source" / "main.c"
+A002_FAULT_C = A002_ROOT / "Code" / "Source" / "Fault.c"
+A002_EEPROM_C = A002_ROOT / "Code" / "Source" / "EEPROM.c"
+A002_FLASH_C = A002_ROOT / "Code" / "Source" / "Flash.c"
+A002_SOC_ENHANCE_C = A002_ROOT / "Code" / "Source" / "SocEnhance.c"
+A002_SOC_ENHANCE_H = A002_ROOT / "Code" / "Source" / "SocEnhance.h"
+A002_SCT = A002_ROOT / "Objects" / "CommomBQ769x0_16series_030C8T6_C.sct"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -222,6 +251,136 @@ def read_text(path):
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def parse_int_literal(value):
+    if isinstance(value, int):
+        return value
+    text = str(value).strip()
+    text = text.replace("(", "").replace(")", "")
+    text = re.sub(r"[UuLl]+$", "", text)
+    return int(text, 0)
+
+
+def macro_value(text, name):
+    pattern = re.compile(r"^\s*#\s*define\s+" + re.escape(name) + r"\s+(.+?)\s*$", re.M)
+    match = pattern.search(text)
+    if not match:
+        return None
+    value = match.group(1).split("/*", 1)[0].split("//", 1)[0].strip()
+    return value
+
+
+def parse_sct_irom(path):
+    text = read_text(path)
+    match = re.search(r"LR_IROM1\s+(0x[0-9A-Fa-f]+)\s+(0x[0-9A-Fa-f]+)", text)
+    if not match:
+        return None
+    return parse_int_literal(match.group(1)), parse_int_literal(match.group(2))
+
+
+def normalize_keil_path(path):
+    normalized = (path or "").replace("\\", "/")
+    if normalized.startswith("./"):
+        return normalized[2:]
+    return normalized
+
+
+def load_template_profiles(reporter):
+    if not TEMPLATE_TARGET_PROFILES.exists():
+        reporter.fail("template target profile file missing: {0}".format(TEMPLATE_TARGET_PROFILES.relative_to(ROOT)))
+        return None
+
+    try:
+        data = json.loads(read_text(TEMPLATE_TARGET_PROFILES))
+    except ValueError as exc:
+        reporter.fail("template target profile JSON parse failed: {0}".format(exc))
+        return None
+
+    profiles = data.get("profiles")
+    if not isinstance(profiles, dict):
+        reporter.fail("template target profile JSON must contain object field: profiles")
+        return None
+
+    return profiles
+
+
+def get_flash_int(profile, key):
+    return parse_int_literal(profile.get("flash", {}).get(key))
+
+
+def check_profile_flash_layout(reporter, name, profile):
+    flash = profile.get("flash", {})
+    required_keys = [
+        "flash_start",
+        "flash_size",
+        "iap_start",
+        "app_start",
+        "app_size",
+        "storage_start",
+        "storage_size",
+    ]
+    missing = [key for key in required_keys if key not in flash]
+    if missing:
+        reporter.fail("{0} flash profile missing keys: {1}".format(name, ",".join(missing)))
+        return None
+
+    try:
+        flash_start = get_flash_int(profile, "flash_start")
+        flash_size = get_flash_int(profile, "flash_size")
+        iap_start = get_flash_int(profile, "iap_start")
+        app_start = get_flash_int(profile, "app_start")
+        app_size = get_flash_int(profile, "app_size")
+        storage_start = get_flash_int(profile, "storage_start")
+        storage_size = get_flash_int(profile, "storage_size")
+    except (TypeError, ValueError) as exc:
+        reporter.fail("{0} flash profile contains invalid integer: {1}".format(name, exc))
+        return None
+
+    flash_end = flash_start + flash_size
+    app_end = app_start + app_size
+    storage_end = storage_start + storage_size
+
+    if flash_start <= iap_start < app_start:
+        reporter.ok("{0} IAP starts before App".format(name))
+    else:
+        reporter.fail("{0} IAP/App layout invalid: iap=0x{1:08X}, app=0x{2:08X}".format(name, iap_start, app_start))
+
+    if app_start < app_end <= storage_start:
+        reporter.ok("{0} App region ends before storage".format(name))
+    else:
+        reporter.fail(
+            "{0} App/storage overlap: app=0x{1:08X}..0x{2:08X}, storage_start=0x{3:08X}".format(
+                name, app_start, app_end - 1, storage_start
+            )
+        )
+
+    if storage_start < storage_end <= flash_end:
+        reporter.ok("{0} storage region stays inside physical flash profile".format(name))
+    else:
+        reporter.fail(
+            "{0} storage outside flash: storage=0x{1:08X}..0x{2:08X}, flash=0x{3:08X}..0x{4:08X}".format(
+                name, storage_start, storage_end - 1, flash_start, flash_end - 1
+            )
+        )
+
+    if app_start % 0x400 == 0 and storage_start % 0x400 == 0:
+        reporter.ok("{0} App/storage starts are page aligned for STM32F0/F1 templates".format(name))
+    else:
+        reporter.fail("{0} App/storage starts should be 1KB aligned".format(name))
+
+    return {
+        "flash_start": flash_start,
+        "flash_size": flash_size,
+        "flash_end": flash_end,
+        "iap_start": iap_start,
+        "app_start": app_start,
+        "app_size": app_size,
+        "app_end": app_end,
+        "storage_start": storage_start,
+        "storage_size": storage_size,
+        "storage_end": storage_end,
+    }
+
+
 def iter_git_tracked_files():
     try:
         output = subprocess.check_output(["git", "ls-files", "-z"], cwd=str(ROOT))
@@ -268,14 +427,24 @@ def parse_project_targets(project_path):
         c_define_text = target.findtext("./TargetOption/TargetArmAds/Cads/VariousControls/Define") or ""
         output_name = target.findtext("./TargetOption/TargetCommonOption/OutputName") or ""
         output_dir = target.findtext("./TargetOption/TargetCommonOption/OutputDirectory") or ""
+        device = target.findtext("./TargetOption/TargetCommonOption/Device") or ""
+        use_file = target.findtext(".//useFile") or ""
+        scatter_file = target.findtext(".//ScatterFile") or ""
+        ocr_start = target.findtext(".//OCR_RVCT4/StartAddress") or ""
+        ocr_size = target.findtext(".//OCR_RVCT4/Size") or ""
         files = set()
         for file_path in target.findall("./Groups/Group/Files/File/FilePath"):
             if file_path.text:
-                files.add(file_path.text.replace("\\", "/"))
+                files.add(normalize_keil_path(file_path.text))
         targets[name] = {
             "defines": define_tokens(c_define_text),
             "output_name": output_name.strip(),
             "output_dir": output_dir.strip(),
+            "device": device.strip(),
+            "use_file": use_file.strip(),
+            "scatter_file": scatter_file.strip(),
+            "ocr_rvct4_start": ocr_start.strip(),
+            "ocr_rvct4_size": ocr_size.strip(),
             "files": files,
         }
 
@@ -310,12 +479,38 @@ def check_required_files(reporter):
         BMS_MODEL_H,
         PROJECT_APP_TASKS_H,
         BOARD_CONTROL_H,
+        BOARD_CONTROL_C,
         AFE_SERVICE_C,
         AFE_SERVICE_H,
         ELOG_CFG_H,
         GITIGNORE,
         PRE_COMMIT,
         PRE_PUSH,
+        TEMPLATE_TARGET_PROFILES,
+        TEMPLATE_README,
+        TEMPLATE_PROFILE_CONTRACT,
+        TEMPLATE_GENERIC_ARCH,
+        TEMPLATE_A002_PORT_REF,
+        TEMPLATE_SOURCES_README,
+        TEMPLATE_WORKLOG,
+        TEMPLATE_MIGRATION_PLAN,
+        BMS_TEMPLATE_CONFIGURATOR_PY,
+        BMS_TEMPLATE_CONFIGURATOR_PS1,
+        A002_REFACTOR_STATUS,
+        A002_PROJECT,
+        A002_PROJECT_CONFIG,
+        A002_PROJECT_TARGET,
+        A002_PROJECT_PROTECTION,
+        A002_PROJECT_FEATURES,
+        A002_FLASH_H,
+        A002_EEPROM_H,
+        A002_MAIN_H,
+        A002_FAULT_C,
+        A002_EEPROM_C,
+        A002_FLASH_C,
+        A002_SOC_ENHANCE_C,
+        A002_SOC_ENHANCE_H,
+        A002_SCT,
     ]
     for path in required:
         if path.exists():
@@ -417,6 +612,11 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Release includes AfeService.c")
 
+        if "../Source/BoardControl.c" not in release["files"]:
+            reporter.fail("FD_Release project tree does not include BoardControl.c")
+        else:
+            reporter.ok("FD_Release includes BoardControl.c")
+
     if debug is None:
         reporter.fail("Keil target FD_Debug is missing")
     else:
@@ -442,6 +642,11 @@ def check_keil_targets(reporter):
             reporter.fail("FD_Debug project tree does not include AfeService.c")
         else:
             reporter.ok("FD_Debug includes AfeService.c")
+
+        if "../Source/BoardControl.c" not in debug["files"]:
+            reporter.fail("FD_Debug project tree does not include BoardControl.c")
+        else:
+            reporter.ok("FD_Debug includes BoardControl.c")
 
         watch_value = find_define_value(debug["defines"], "PROJECT_CFG_DEBUG_WATCH_ENABLE")
         if watch_value != "1":
@@ -769,6 +974,7 @@ def check_portability_foundation(reporter):
     bms_model = read_text(BMS_MODEL_H)
     project_app_tasks = read_text(PROJECT_APP_TASKS_H)
     board_control = read_text(BOARD_CONTROL_H)
+    board_control_c = read_text(BOARD_CONTROL_C)
     afe_service_c = read_text(AFE_SERVICE_C)
     afe_service_h = read_text(AFE_SERVICE_H)
     runtime_c = read_text(RUNTIME_C)
@@ -927,6 +1133,19 @@ def check_portability_foundation(reporter):
         reporter.ok("BoardControl.h exposes board-level MOS/factory-mode controls")
     else:
         reporter.fail("BoardControl.h should expose board-level MOS/factory-mode controls")
+
+    if (
+        '#include "BoardControl.h"' in board_control_c
+        and '#include "SH367309_Func.h"' in board_control_c
+        and "void open_chg_close_dsg(void)" in board_control_c
+        and "void open_dsg_close_chg(void)" in board_control_c
+        and "void enter_fac_mode(bool on)" in board_control_c
+        and "void open_chg_close_dsg(void)" not in main_c
+        and "void enter_fac_mode(bool on)" not in main_c
+    ):
+        reporter.ok("BoardControl.c owns board-level MOS/factory-mode implementation outside main.c")
+    else:
+        reporter.fail("BoardControl.c should own board-level control implementation and keep main.c generic")
 
     runtime_tokens = [
         '#include "Project_Features.h"',
@@ -1390,6 +1609,386 @@ def check_portability_foundation(reporter):
         reporter.fail("portability documentation should describe the current decoupling boundary")
 
 
+def check_template_library_profiles(reporter):
+    profiles = load_template_profiles(reporter)
+    if profiles is None:
+        return
+
+    required_profiles = ["fd_103_309", "a002_f030_bq76940"]
+    for profile_name in required_profiles:
+        if profile_name in profiles:
+            reporter.ok("template profile exists: {0}".format(profile_name))
+        else:
+            reporter.fail("template profile missing: {0}".format(profile_name))
+            return
+
+    layouts = {}
+    for profile_name in required_profiles:
+        layout = check_profile_flash_layout(reporter, profile_name, profiles[profile_name])
+        if layout is not None:
+            layouts[profile_name] = layout
+
+    fd = profiles["fd_103_309"]
+    a002 = profiles["a002_f030_bq76940"]
+
+    if (
+        fd.get("mcu_family") == "stm32f103"
+        and fd.get("afe_type") == "sh367309"
+        and fd.get("protection_mode") == "afe_hardware_only"
+        and fd.get("storage_backend") == "internal_flash"
+        and fd.get("template_role") == "canonical_application_baseline"
+        and fd.get("application_logic_source") == "current_project"
+    ):
+        reporter.ok("fd_103_309 profile records current project as the canonical application baseline")
+    else:
+        reporter.fail("fd_103_309 profile must stay current-project application baseline with STM32F103 + SH367309")
+
+    if (
+        a002.get("mcu_family") == "stm32f030"
+        and a002.get("afe_type") == "bq76940"
+        and a002.get("protection_mode") == "mcu_software"
+        and a002.get("storage_backend") == "internal_flash"
+        and a002.get("template_role") == "mcu_afe_driver_reference"
+        and a002.get("application_logic_source") == "current_project"
+    ):
+        reporter.ok("a002_f030_bq76940 profile records F0/BQ76940 as a port reference, not an app baseline")
+    else:
+        reporter.fail("a002_f030_bq76940 profile must stay STM32F030 + BQ76940 port reference with current_project app logic")
+
+    fd_layout = layouts.get("fd_103_309")
+    if fd_layout:
+        if (
+            fd_layout["app_start"] == 0x08004800
+            and fd_layout["app_size"] == 0x00017800
+            and fd_layout["storage_start"] == 0x0801C000
+            and fd_layout["storage_size"] == 0x00004000
+        ):
+            reporter.ok("fd_103_309 profile keeps App/Storage addresses separated")
+        else:
+            reporter.fail("fd_103_309 profile addresses changed unexpectedly")
+
+        flash_h = read_text(FLASH_H) if FLASH_H.exists() else ""
+        if "FLASH_ADDR_APP_START             0x08004800" in flash_h and "0x0801C000" in flash_h:
+            reporter.ok("F103 Flash.h matches fd_103_309 App/Storage profile")
+        else:
+            reporter.fail("F103 Flash.h should keep App=0x08004800 and storage_start=0x0801C000")
+
+        try:
+            targets = parse_project_targets(PROJECT)
+        except ET.ParseError as exc:
+            reporter.fail("F103 uvprojx XML parse failed during template profile check: {0}".format(exc))
+            targets = {}
+
+        for target_name in fd.get("keil_targets", []):
+            target = targets.get(target_name)
+            if target is None:
+                reporter.fail("F103 template target missing from uvprojx: {0}".format(target_name))
+                continue
+            try:
+                ocr_start = parse_int_literal(target["ocr_rvct4_start"])
+                ocr_size = parse_int_literal(target["ocr_rvct4_size"])
+            except ValueError as exc:
+                reporter.fail("{0} OCR_RVCT4 address parse failed: {1}".format(target_name, exc))
+                continue
+            if ocr_start == fd_layout["app_start"] and ocr_size == fd_layout["app_size"]:
+                reporter.ok("{0} code region ends before F103 storage pages".format(target_name))
+            else:
+                reporter.fail(
+                    "{0} code region should be start=0x{1:08X}, size=0x{2:08X}; got start=0x{3:08X}, size=0x{4:08X}".format(
+                        target_name, fd_layout["app_start"], fd_layout["app_size"], ocr_start, ocr_size
+                    )
+                )
+            if target["use_file"] == "0":
+                reporter.ok("{0} uses Keil target memory map instead of an ignored scatter file".format(target_name))
+            else:
+                reporter.fail("{0} unexpectedly enables scatter file; update profile and scatter together".format(target_name))
+
+    a002_layout = layouts.get("a002_f030_bq76940")
+    if a002_layout:
+        if (
+            a002_layout["app_start"] == 0x08001C00
+            and a002_layout["app_size"] == 0x0000C400
+            and a002_layout["storage_start"] == 0x0800E000
+            and a002_layout["storage_size"] == 0x00002000
+        ):
+            reporter.ok("a002_f030_bq76940 profile keeps App/Storage addresses separated")
+        else:
+            reporter.fail("a002_f030_bq76940 profile addresses changed unexpectedly")
+
+        config_defines = parse_header_defines(A002_PROJECT_CONFIG) if A002_PROJECT_CONFIG.exists() else {}
+        expected_config = {
+            "PROJECT_CFG_FLASH_IAP_START": "0x08000000U",
+            "PROJECT_CFG_FLASH_APP_START": "0x08001C00U",
+            "PROJECT_CFG_FLASH_APP_SIZE": "0x0000C400U",
+            "PROJECT_CFG_FLASH_STORAGE_START": "0x0800E000U",
+            "PROJECT_CFG_FLASH_STORAGE_SIZE": "0x00002000U",
+            "PROJECT_CFG_STORAGE_INTERNAL_FLASH": "1",
+            "PROJECT_CFG_PROTECTION_MCU_SOFTWARE": "1",
+            "PROJECT_CFG_PROTECTION_AFE_HARDWARE": "0",
+        }
+        mismatches = []
+        for name, expected in sorted(expected_config.items()):
+            actual = config_defines.get(name)
+            if actual != expected:
+                mismatches.append("{0}={1}".format(name, actual))
+        if mismatches:
+            reporter.fail("A002 Project_Template_Config.h mismatch: {0}".format(",".join(mismatches)))
+        else:
+            reporter.ok("A002 Project_Template_Config.h matches profile addresses and protection/storage mode")
+
+        sct_irom = parse_sct_irom(A002_SCT) if A002_SCT.exists() else None
+        if sct_irom == (a002_layout["app_start"], a002_layout["app_size"]):
+            reporter.ok("A002 scatter file links App before storage pages")
+        else:
+            reporter.fail("A002 scatter file should use start=0x08001C00 size=0x0000C400")
+
+        try:
+            a002_targets = parse_project_targets(A002_PROJECT)
+        except ET.ParseError as exc:
+            reporter.fail("A002 uvprojx XML parse failed: {0}".format(exc))
+            a002_targets = {}
+
+        target = a002_targets.get("Target 1")
+        if target is None:
+            reporter.fail("A002 Keil target Target 1 is missing")
+        else:
+            expected_scatter = "Objects/CommomBQ769x0_16series_030C8T6_C.sct"
+            if target["use_file"] == "1" and normalize_keil_path(target["scatter_file"]) == expected_scatter:
+                reporter.ok("A002 Keil target uses the checked-in scatter file")
+            else:
+                reporter.fail("A002 Keil target should enable scatter file .\\Objects\\CommomBQ769x0_16series_030C8T6_C.sct")
+            if "Code/Include/Project_Template_Config.h" in target["files"]:
+                reporter.ok("A002 Keil project includes Project_Template_Config.h")
+            else:
+                reporter.fail("A002 Keil project should include Project_Template_Config.h for visible profile edits")
+            for header_name in ["Project_Target.h", "Project_Protection.h", "Project_Features.h"]:
+                header_path = "Code/Include/{0}".format(header_name)
+                if header_path in target["files"]:
+                    reporter.ok("A002 Keil project includes {0}".format(header_name))
+                else:
+                    reporter.fail("A002 Keil project should include {0}".format(header_name))
+
+        a002_flash_h = read_text(A002_FLASH_H)
+        a002_eeprom_h = read_text(A002_EEPROM_H)
+        a002_target_h = read_text(A002_PROJECT_TARGET)
+        a002_protection_h = read_text(A002_PROJECT_PROTECTION)
+        a002_features_h = read_text(A002_PROJECT_FEATURES)
+        a002_main_h = read_text(A002_MAIN_H)
+        a002_main_c = read_text(A002_MAIN_C)
+        a002_fault_c = read_text(A002_FAULT_C)
+        a002_eeprom_c = read_text(A002_EEPROM_C)
+        a002_flash_c = read_text(A002_FLASH_C)
+        a002_soc_enhance_c = read_text(A002_SOC_ENHANCE_C)
+        if (
+            "PROJECT_CFG_MCU_FAMILY           PROJECT_MCU_STM32F030_STD" in a002_target_h
+            and "PROJECT_CFG_AFE_TYPE             PROJECT_AFE_BQ769X0" in a002_target_h
+            and "PROJECT_CFG_BOARD_PROFILE        PROJECT_BOARD_A002_F030_BQ76940" in a002_target_h
+            and "PROJECT_PROTECTION_MODE_MCU_SOFTWARE" in a002_protection_h
+            and "PROJECT_PROTECTION_USES_MCU_SOFTWARE 1" in a002_protection_h
+            and "PROJECT_FEATURE_SOFTWARE_PROTECTION PROJECT_PROTECTION_USES_MCU_SOFTWARE" in a002_features_h
+            and '#include "Project_Target.h"' in a002_main_h
+            and '#include "Project_Features.h"' in a002_main_h
+            and "#if PROJECT_FEATURE_SOFTWARE_PROTECTION" in a002_fault_c
+        ):
+            reporter.ok("A002 profile headers define target, protection, and feature boundaries")
+        else:
+            reporter.fail("A002 profile headers should define target/protection/feature boundaries and gate software protection")
+
+        if (
+            "FLASH_ADDR_APP_START            PROJECT_CFG_FLASH_APP_START" in a002_flash_h
+            and "FLASH_ADDR_WAKE_TYPE            PROJECT_CFG_FLASH_FLAG_WAKE_TYPE" in a002_flash_h
+            and "EEPROM_ADDR_PASS" in a002_eeprom_h
+            and "0x1FC0" in a002_eeprom_h
+        ):
+            reporter.ok("A002 Flash/EEPROM headers use internal Flash address policy")
+        else:
+            reporter.fail("A002 Flash/EEPROM headers should use fixed internal Flash storage offsets")
+
+        if (
+            "Storage_Init();" in a002_main_c
+            and "Storage_Task();" in a002_main_c
+            and "#if PROJECT_FEATURE_SOC" in a002_main_c
+            and "#if PROJECT_FEATURE_LOW_POWER" in a002_main_c
+            and "#if PROJECT_FEATURE_RS485" in a002_main_c
+            and "#if PROJECT_FEATURE_RTC" in a002_main_c
+            and "#if PROJECT_FEATURE_HEAT" in a002_main_c
+            and "#if PROJECT_FEATURE_LEDBAR" in a002_main_c
+            and "App_E2promDeal();" not in a002_main_c
+            and "InitE2PROM();" not in a002_main_c
+        ):
+            reporter.ok("A002 main loop uses template feature gates and Storage facade")
+        else:
+            reporter.fail("A002 main loop should use PROJECT_FEATURE_* gates and Storage_Init/Storage_Task")
+
+        external_eeprom_tokens = [
+            "PROJECT_CFG_STORAGE_BACKEND_FLASH",
+            "PROJECT_CFG_EEPROM_HARDWARE_ENABLE",
+            "sEEAddress",
+            "sEE_I2C",
+            "IIC_Start_SEE",
+            "IIC_SCL_SEE",
+            "SDA_IN_SEE",
+            "MCUO_E2PR_WP",
+            "BZONE",
+            "CZONE",
+            "PARAM_SAVE_TO_EEPROM",
+            "bsp_i2c_eeprom_24xx",
+        ]
+        a002_storage_text = "\n".join([a002_eeprom_h, a002_eeprom_c, read_text(A002_PROJECT_CONFIG)])
+        stale_external_tokens = [token for token in external_eeprom_tokens if token in a002_storage_text]
+        if stale_external_tokens:
+            reporter.fail("A002 external EEPROM hardware path should be removed: {0}".format(",".join(stale_external_tokens)))
+        else:
+            reporter.ok("A002 external EEPROM hardware path is removed from active storage source")
+
+        if (
+            "s_u16PageBuffer[PROJECT_CFG_FLASH_PAGE_SIZE / 2U]" in a002_flash_c
+            and "FLASH_ErasePage(page_start)" in a002_flash_c
+            and "FlashWriteOneHalfWord" in a002_flash_c
+        ):
+            reporter.ok("A002 FlashWriteOneHalfWord preserves the full flash page")
+        else:
+            reporter.fail("A002 FlashWriteOneHalfWord should preserve untouched halfwords in the page")
+
+        if (
+            "PROJECT_CFG_FLASH_VEEPROM_START + (UINT32)addr" in a002_eeprom_c
+            and "ReadEEPROM_Word_WithZone(UINT16 addr)" in a002_eeprom_c
+            and "return ReadEEPROM_Word_NoZone(addr);" in a002_eeprom_c
+            and "result = WriteEEPROM_Word_NoZone(addr, data);" in a002_eeprom_c
+            and "void Storage_Init(void)" in a002_eeprom_c
+            and "void Storage_Task(void)" in a002_eeprom_c
+            and "UINT16 Storage_ReadWord(UINT16 addr)" in a002_eeprom_c
+            and "UINT8 Storage_WriteWord(UINT16 addr, UINT16 data)" in a002_eeprom_c
+            and "void Storage_Init(void);" in a002_eeprom_h
+            and "void Storage_Task(void);" in a002_eeprom_h
+            and "#if PROJECT_CFG_STORAGE_BACKEND_FLASH" not in a002_eeprom_c
+        ):
+            reporter.ok("A002 Storage facade maps logical parameter addresses to internal Flash")
+        else:
+            reporter.fail("A002 Storage facade should map byte/word APIs directly to internal Flash with no external EEPROM branch")
+
+        if (
+            "SOC_E2P_SOC_SLOT_COUNT" in a002_soc_enhance_c
+            and "SOC_E2P_DSG_SLOT_COUNT" in a002_soc_enhance_c
+            and "u16_SOC_Temp < SOC_E2P_SOC_SLOT_COUNT" in a002_soc_enhance_c
+            and "u16_DsgSOC_Temp < SOC_E2P_DSG_SLOT_COUNT" in a002_soc_enhance_c
+            and "u16_SOC_Temp < 5" not in a002_soc_enhance_c
+            and "u16_DsgSOC_Temp < 3" not in a002_soc_enhance_c
+        ):
+            reporter.ok("A002 SOC storage slot bounds are explicit and within the real ring size")
+        else:
+            reporter.fail("A002 SOC storage restore should not read past SOC/DSG ring slots")
+
+    ignored_suffixes = (".o", ".d", ".crf", ".axf", ".bin", ".hex", ".map", ".lst", ".lnp")
+    stale_files = []
+    for path in A002_ROOT.rglob("*"):
+        if not path.is_file():
+            continue
+        name = path.name
+        lower_name = name.lower()
+        if (
+            name == ".DS_Store"
+            or lower_name.startswith("old ")
+            or lower_name in ("bsp_i2c_eeprom_24xx.c", "bsp_i2c_eeprom_24xx.h", "param.c", "param.h", "todo.c")
+            or path.suffix.lower() in ignored_suffixes
+        ):
+            stale_files.append(str(path.relative_to(ROOT)))
+    if stale_files:
+        reporter.fail("A002 template source contains stale/build files: {0}".format(",".join(stale_files[:8])))
+    else:
+        reporter.ok("A002 template source excludes old files and Keil build artifacts")
+
+    template_readme = read_text(TEMPLATE_README) if TEMPLATE_README.exists() else ""
+    template_contract = read_text(TEMPLATE_PROFILE_CONTRACT) if TEMPLATE_PROFILE_CONTRACT.exists() else ""
+    template_generic_arch = read_text(TEMPLATE_GENERIC_ARCH) if TEMPLATE_GENERIC_ARCH.exists() else ""
+    template_a002_port_ref = read_text(TEMPLATE_A002_PORT_REF) if TEMPLATE_A002_PORT_REF.exists() else ""
+    template_sources_readme = read_text(TEMPLATE_SOURCES_README) if TEMPLATE_SOURCES_README.exists() else ""
+    template_worklog = read_text(TEMPLATE_WORKLOG) if TEMPLATE_WORKLOG.exists() else ""
+    migration_plan = read_text(TEMPLATE_MIGRATION_PLAN) if TEMPLATE_MIGRATION_PLAN.exists() else ""
+    docs_text = "\n".join([template_readme, template_contract, template_generic_arch, template_a002_port_ref, template_sources_readme, template_worklog, migration_plan])
+    required_doc_tokens = [
+        "0x08004800",
+        "0x08001C00",
+        "0x0801C000",
+        "0x0800E000",
+        "F0/F1 不能共用同一个 Keil Target",
+        "先稳定模板库，再做项目配置生成器",
+        "应用层逻辑以当前",
+        "旧 A002 项目只作为",
+        "禁止继承内容",
+        "外部 EEPROM 完全废除",
+        "软件保护",
+        "硬件保护",
+    ]
+    missing_doc_tokens = [token for token in required_doc_tokens if token not in docs_text]
+    if missing_doc_tokens:
+        reporter.fail("template docs missing required planning/address tokens: {0}".format(",".join(missing_doc_tokens)))
+    else:
+        reporter.ok("template docs record profile addresses, Target isolation, and protection strategy")
+
+    a002_doc_paths = [
+        A002_ROOT / "docs" / "README.md",
+        A002_REFACTOR_STATUS,
+        A002_ROOT / "docs" / "modules" / "02-main-flow.md",
+        A002_ROOT / "docs" / "modules" / "03-system-init-timebase.md",
+        A002_ROOT / "docs" / "modules" / "09-eeprom.md",
+        A002_ROOT / "docs" / "modules" / "17-sleep-deal.md",
+        A002_ROOT / "docs" / "modules" / "18-idle-sleep.md",
+    ]
+    a002_docs_text = "\n".join([read_text(path) if path.exists() else "" for path in a002_doc_paths])
+    if (
+        "当前源码只有 `SleepDeal` + `RTC` 路径" in a002_docs_text
+        and "当前 A002 模板源码没有 `IdleSleep.c`" in a002_docs_text
+        and "Storage_Init()" in a002_docs_text
+        and "Storage_Task()" in a002_docs_text
+        and "外部 EEPROM 已完全废除" in a002_docs_text
+        and "IDLE_SLEEP_ENABLE" not in a002_docs_text
+        and "IdleSleep_Init()` | 初始化" not in a002_docs_text
+    ):
+        reporter.ok("A002 docs match source: no external EEPROM and no active IdleSleep path")
+    else:
+        reporter.fail("A002 docs should describe internal Flash Storage and mark IdleSleep as obsolete")
+
+
+def check_template_configurator(reporter):
+    if not BMS_TEMPLATE_CONFIGURATOR_PY.exists() or not BMS_TEMPLATE_CONFIGURATOR_PS1.exists():
+        reporter.fail("BMS template configurator scripts are missing")
+        return
+
+    configurator_py = read_text(BMS_TEMPLATE_CONFIGURATOR_PY)
+    configurator_ps1 = read_text(BMS_TEMPLATE_CONFIGURATOR_PS1)
+    required_py_tokens = [
+        "PROFILES_PATH",
+        "APP_BASELINE",
+        "103 + 309/Project/Source",
+        "application_logic_source",
+        "current_project",
+        "storage_backend",
+        "internal_flash",
+        "dry-run",
+        "generate",
+        "PROJECT_TEMPLATE_ROOT",
+        "canonical_application_baseline",
+        "port reference, not a materialized application baseline",
+        "应用层从当前项目基线生成，不复制旧 A002 应用层。",
+        "python3 tools/project_check.py --quiet",
+    ]
+    missing_py_tokens = [token for token in required_py_tokens if token not in configurator_py]
+    if missing_py_tokens:
+        reporter.fail("BMS template configurator missing safety tokens: {0}".format(",".join(missing_py_tokens)))
+    else:
+        reporter.ok("BMS template configurator reads profiles and preserves current-project app baseline")
+
+    if (
+        "bms_template_configurator.py" in configurator_ps1
+        and "py -3" in configurator_ps1
+        and "Python not found" in configurator_ps1
+    ):
+        reporter.ok("BMS template configurator PowerShell wrapper is available for Windows workflow")
+    else:
+        reporter.fail("BMS template configurator PowerShell wrapper should call the Python configurator")
+
+
 def check_runtime_docs(reporter):
     docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
     if any(not path.exists() for path in docs):
@@ -1452,6 +2051,8 @@ def main(argv):
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
     check_portability_foundation(reporter)
+    check_template_library_profiles(reporter)
+    check_template_configurator(reporter)
     check_runtime_docs(reporter)
 
     return reporter.summary()
