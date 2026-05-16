@@ -65,6 +65,8 @@ rtc_sleep()
 
 运行态采样路径和 RTC 唤醒监测路径都受同一个 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。该路径只镜像和记录 AFE 已经判定的硬件保护状态，不再由 MCU 重新计算保护阈值；切到 `PROJECT_PROTECTION_MODE_MCU_SOFTWARE` 后，低功耗唤醒也不会继续调用 AFE fault mirror。
 
+`SH367309_DataDeal.c` 只负责 309 AFE 保护参数和 MTP 写入转换，已经改为显式依赖 `DataDeal.h`、`Flash.h`、`I2C_AFE1.h`、`SH367309_Func.h`、`Sci_Upper.h`、`System_Init.h` 和 `System_Monitor.h`，不再通过 `main.h` 间接获得全工程对象。后续替换为 bq769x0 等 AFE 时，这一层可以直接替换成新 AFE 的参数转换/寄存器写入模块。
+
 ### 3.2 MCU 软件保护路径
 
 ```text

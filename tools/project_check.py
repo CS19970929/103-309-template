@@ -48,6 +48,8 @@ IODRIVERS_C = ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
 SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
+SH367309_DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c"
+SH367309_DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.h"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
@@ -685,6 +687,8 @@ def check_portability_foundation(reporter):
         DATADEAL_C,
         DATADEAL_H,
         SH367309_FUNC_C,
+        SH367309_DATADEAL_C,
+        SH367309_DATADEAL_H,
         SLEEPDEAL_C,
         SLEEPDEAL_H,
         RTC_SLEEP_C,
@@ -741,6 +745,7 @@ def check_portability_foundation(reporter):
     datadeal_c = read_text(DATADEAL_C)
     datadeal_h = read_text(DATADEAL_H)
     sh367309_func_c = read_text(SH367309_FUNC_C)
+    sh367309_datadeal_c = read_text(SH367309_DATADEAL_C)
     sleepdeal_c = read_text(SLEEPDEAL_C)
     sleepdeal_h = read_text(SLEEPDEAL_H)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
@@ -1122,6 +1127,24 @@ def check_portability_foundation(reporter):
         reporter.ok("SH367309 hardware fault mirroring follows protection mode")
     else:
         reporter.fail("SH367309 hardware fault mirroring should be gated by protection mode")
+
+    if (
+        '#include "main.h"' not in sh367309_datadeal_c
+        and '#include "DataDeal.h"' in sh367309_datadeal_c
+        and '#include "Flash.h"' in sh367309_datadeal_c
+        and '#include "I2C_AFE1.h"' in sh367309_datadeal_c
+        and '#include "PubFunc.h"' in sh367309_datadeal_c
+        and '#include "Sci_Upper.h"' in sh367309_datadeal_c
+        and '#include "SH367309_DataDeal.h"' in sh367309_datadeal_c
+        and '#include "SH367309_Func.h"' in sh367309_datadeal_c
+        and '#include "System_Init.h"' in sh367309_datadeal_c
+        and '#include "System_Monitor.h"' in sh367309_datadeal_c
+        and "StorageFlash_SaveAfeData" in sh367309_datadeal_c
+        and "StorageFlash_LoadAfeData" in sh367309_datadeal_c
+    ):
+        reporter.ok("SH367309_DataDeal.c declares AFE parameter dependencies without main.h")
+    else:
+        reporter.fail("SH367309_DataDeal.c should declare AFE parameter dependencies without main.h")
 
     if (
         '#include "Project_Protection.h"' in rtc_sleep_c

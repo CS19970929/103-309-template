@@ -1,6 +1,13 @@
-#include "main.h"
+#include "DataDeal.h"
+#include "Flash.h"
+#include "I2C_AFE1.h"
+#include "PubFunc.h"
+#include "Sci_Upper.h"
 #include "SH367309_DataDeal.h"
-#include "string.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
+#include <string.h>
 
 int AFE_PARAM_WRITE_Flag = 1;
 int AFE_ResetFlag = 0;
