@@ -1,6 +1,8 @@
 #ifndef SLEEPDEAL_H
 #define SLEEPDEAL_H
 
+#include "Project_Types.h"
+
 extern UINT8 RTC_ExtComCnt;
 
 void SleepDeal_Continue(UINT8 sleep_mode);

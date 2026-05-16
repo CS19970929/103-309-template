@@ -1,5 +1,14 @@
-#include "main.h"
+#include "conf.h"
+#include "Flash.h"
+#include "I2C_AFE1.h"
+#include "LedBar.h"
 #include "LowPowerSleep.h"
+#include "Platform_Port.h"
+#include "RTC.h"
+#include "rtc_sleep.h"
+#include "SH367309_Func.h"
+#include "SleepDeal.h"
+#include "System_Init.h"
 
 UINT8 RTC_ExtComCnt = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
@@ -110,7 +119,7 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 	{
 		InitAFE1_Sleep(0);
 		AFE_Sleep();
-		MCU_RESET();
+		Platform_ResetMcu();
 	}
 }
 
@@ -253,7 +262,7 @@ void InitWakeUp_TestMode(void)
 
 void IORecover_TestMode(void)
 {
-	MCU_RESET();
+	Platform_ResetMcu();
 }
 
 void Sys_SleepOnExitMode(void)

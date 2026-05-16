@@ -679,6 +679,8 @@ def check_portability_foundation(reporter):
         MAIN_C,
         DATADEAL_C,
         SH367309_FUNC_C,
+        SLEEPDEAL_C,
+        SLEEPDEAL_H,
         RTC_SLEEP_C,
         SOC_C,
         ADC_H,
@@ -728,6 +730,8 @@ def check_portability_foundation(reporter):
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
     sh367309_func_c = read_text(SH367309_FUNC_C)
+    sleepdeal_c = read_text(SLEEPDEAL_C)
+    sleepdeal_h = read_text(SLEEPDEAL_H)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
     soc_c = read_text(SOC_C)
     system_init_c = read_text(SYSTEM_INIT_C)
@@ -1016,6 +1020,25 @@ def check_portability_foundation(reporter):
         reporter.ok("RTC.c declares RTC/CAN wake dependencies without main.h")
     else:
         reporter.fail("RTC.c should declare RTC/CAN wake dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in sleepdeal_c
+        and '#include "SleepDeal.h"' in sleepdeal_c
+        and '#include "LowPowerSleep.h"' in sleepdeal_c
+        and '#include "Platform_Port.h"' in sleepdeal_c
+        and '#include "Flash.h"' in sleepdeal_c
+        and '#include "LedBar.h"' in sleepdeal_c
+        and '#include "RTC.h"' in sleepdeal_c
+        and '#include "rtc_sleep.h"' in sleepdeal_c
+        and '#include "SH367309_Func.h"' in sleepdeal_c
+        and '#include "System_Init.h"' in sleepdeal_c
+        and "Platform_ResetMcu();" in sleepdeal_c
+        and "MCU_RESET();" not in sleepdeal_c
+        and '#include "Project_Types.h"' in sleepdeal_h
+    ):
+        reporter.ok("SleepDeal.c/h declare boot sleep dependencies without main.h")
+    else:
+        reporter.fail("SleepDeal.c/h should declare boot sleep dependencies without main.h")
 
     if (
         "#define DELAYB10MS_5S" not in iodrivers_c
