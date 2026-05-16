@@ -642,7 +642,7 @@ GPIO_CMNT_EN = Bit_SET，关闭 transceiver
 | --- | --- |
 | `low_power_log_and_commit_sleep()` | reset sleep 前调用 `Can_PrepareSleep()` |
 | `rtc_sleep_prepare_rtc()` | RTC sleep 配置 IO 前调用 `Can_PrepareSleep()` |
-| `SleepDeal_Continue()` | 旧路径或直接调用睡眠处理前兜底调用 `Can_PrepareSleep()` |
+| `SleepDeal_Continue(mode)` | 旧路径或直接调用睡眠处理前兜底调用 `Can_PrepareSleep()` |
 
 这样处理后，睡眠优先级高于周期广播：即将入睡时放弃未完成 CAN 批次，避免为了一个低优先级周期广播保持 transceiver 上电。
 

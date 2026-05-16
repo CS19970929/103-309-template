@@ -1,4 +1,5 @@
 #include "main.h"
+#include "FaultSnapshot.h"
 
 struct RS485MSG g_stCurrentMsgPtr_SCI1;
 UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
@@ -937,8 +938,13 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	// 0xD200_1
-	u16SciTemp = 0; // 可以加多一个
+	// 0xD200_2: last Cortex fault reason and inverse snapshot.
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_REG);
+	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
+	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 

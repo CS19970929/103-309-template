@@ -38,6 +38,21 @@
 
 这样可以保持原调用点和表达式行为不变，同时把运行时状态集中到一个结构体里，便于后续继续分阶段清理。
 
+## 当前模块边界
+
+后续源码已把飞道协议帧组包拆到 `CanFeidaoFrames.c/.h`：
+
+- `CanFeidaoFrames`：只负责飞道扩展帧字段组包、发送顺序和周期报文 mask。
+- `Can_HDX.c`：保留 CAN 初始化、收发器电源状态机、BusOff 监控、No-ACK 统计和低功耗服务。
+- `Can_HDX_Transmit()`：仍是协议帧模块唯一发送出口。
+
+低功耗相关对外 API 固定为：
+
+- `Can_PrepareSleep()`：进入 STOP 或 reset sleep 前关闭/整理 CAN 运行态。
+- `Can_RtcWakeService(elapsed_seconds)`：RTC 唤醒后重启 CAN、发送唤醒/探测帧，并在超时内等待发送结束。
+- `Can_IsBusActive()`：供 RTC 周期判断当前 CAN 总线是否活跃。
+- `Can_GetIdleRtcPeriodSeconds()`：供 RTC 选择 idle wake period。
+
 ## 后续建议
 
 后续如果继续重构，应按以下顺序推进：

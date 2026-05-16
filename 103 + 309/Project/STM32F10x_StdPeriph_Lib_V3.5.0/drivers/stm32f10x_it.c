@@ -24,6 +24,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f10x_it.h"
 #include "main.h" //在it的头文件可能会导致别的地方也能调用main的东西，不符合安全规范
+#include "FaultSnapshot.h"
 
 // #include "stm32_eval.h"
 
@@ -54,13 +55,6 @@
 void NMI_Handler(void)
 {
 }
-
-#define FAULT_BKP_REASON_REG BKP_DR11
-#define FAULT_BKP_REASON_INV_REG BKP_DR12
-#define FAULT_REASON_HARD ((UINT16)0x4846U)
-#define FAULT_REASON_MEM ((UINT16)0x4D46U)
-#define FAULT_REASON_BUS ((UINT16)0x4246U)
-#define FAULT_REASON_USAGE ((UINT16)0x5546U)
 
 __asm void wait()
 {

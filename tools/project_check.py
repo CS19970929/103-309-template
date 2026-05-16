@@ -26,10 +26,23 @@ DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
+SCI_UPPER_H = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.h"
+SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
+SLEEPDEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.h"
+RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
+RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
+LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
+LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
+FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
+STM32F10X_IT_C = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0" / "drivers" / "stm32f10x_it.c"
 GITIGNORE = ROOT / ".gitignore"
 PRE_COMMIT = ROOT / ".githooks" / "pre-commit"
 PRE_PUSH = ROOT / ".githooks" / "pre-push"
 PROJECT_CONFIG_WIZARD_MARKER = "\u9879\u76ee\u53ef\u89c6\u5316\u914d\u7f6e"
+FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\u7801\u68b3\u7406_2026-05-16.md"
+COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
+CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
+CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 
 
 COMMON_DEFINES = {"STM32F10X_MD", "USE_STDPERIPH_DRIVER"}
@@ -431,6 +444,119 @@ def check_soc_current_and_typec_policy(reporter):
         reporter.fail("SOC active current threshold and AFE output deadband must stay at 0.2A")
 
 
+def check_low_power_cleanup(reporter):
+    required_files = [SLEEPDEAL_C, SLEEPDEAL_H, RTC_SLEEP_C, RTC_SLEEP_H, LEDBAR_C, LOGRECORD_C]
+    if any(not path.exists() for path in required_files):
+        return
+
+    sleepdeal_c = read_text(SLEEPDEAL_C)
+    sleepdeal_h = read_text(SLEEPDEAL_H)
+    rtc_sleep_c = read_text(RTC_SLEEP_C)
+    rtc_sleep_h = read_text(RTC_SLEEP_H)
+    ledbar_c = read_text(LEDBAR_C)
+    logrecord_c = read_text(LOGRECORD_C)
+
+    removed_tokens = [
+        "App_SleepDeal",
+        "SleepDeal_SelectMode",
+        "SleepDeal_Normal",
+        "SleepDeal_Shift",
+        "Sleep_Mode",
+        "Sleep_Status",
+        "SLEEP_HICCUP",
+    ]
+    combined = "\n".join([sleepdeal_c, sleepdeal_h, rtc_sleep_c, ledbar_c, logrecord_c])
+    stale_tokens = [token for token in removed_tokens if token in combined]
+    if stale_tokens:
+        reporter.fail("low power cleanup still contains stale tokens: {0}".format(",".join(stale_tokens)))
+    else:
+        reporter.ok("legacy App_SleepDeal/Sleep_Mode state machine is removed from active source")
+
+    if (
+        "void LowPower_Request(enum _SLEEP_MODE mode)" in rtc_sleep_c
+        and "UINT8 LowPower_IsToSleepPending(void)" in rtc_sleep_c
+        and "LowPower_ClearToSleepFlag();" in logrecord_c
+        and "LowPower_IsToSleepPending() != 0u" in ledbar_c
+        and "void SleepDeal_Continue(UINT8 sleep_mode)" in sleepdeal_c
+        and "SleepDeal_Continue(sleep_mode);" in rtc_sleep_c
+        and "SleepDeal_Continue((UINT8)DEEP_MODE);" in ledbar_c
+        and "UINT8 LowPower_IsToSleepPending(void);" in rtc_sleep_h
+    ):
+        reporter.ok("low power mode ownership is centralized in LowPower runtime APIs")
+    else:
+        reporter.fail("low power mode ownership should use LowPower_Request/IsToSleepPending and explicit SleepDeal_Continue(mode)")
+
+
+def check_fault_snapshot_mapping(reporter):
+    required_files = [FAULT_SNAPSHOT_H, STM32F10X_IT_C, SCI_UPPER_C, SCI_UPPER_H]
+    if any(not path.exists() for path in required_files):
+        return
+
+    header = read_text(FAULT_SNAPSHOT_H)
+    it_c = read_text(STM32F10X_IT_C)
+    sci_c = read_text(SCI_UPPER_C)
+    sci_h = read_text(SCI_UPPER_H)
+
+    if (
+        "FAULT_BKP_REASON_REG BKP_DR11" in header
+        and "FAULT_BKP_REASON_INV_REG BKP_DR12" in header
+        and "FAULT_REASON_HARD" in header
+        and '#include "FaultSnapshot.h"' in it_c
+        and "Fault_SaveReason" in it_c
+        and "BKP_WriteBackupRegister(FAULT_BKP_REASON_REG" in it_c
+    ):
+        reporter.ok("fault handlers write shared BKP fault snapshot definitions")
+    else:
+        reporter.fail("fault handlers must use FaultSnapshot.h and write BKP fault reason/inverse")
+
+    if (
+        '#include "FaultSnapshot.h"' in sci_c
+        and "BKP_ReadBackupRegister(FAULT_BKP_REASON_REG)" in sci_c
+        and "BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG)" in sci_c
+        and "#define RS485_RO_BASE_WORDS" in sci_h
+        and "((UINT16)98U)" in sci_h
+        and "D200 reason, D201 inverse" in sci_h
+    ):
+        reporter.ok("RS485 0xD200 exposes fault snapshot and preserves 0xD300 SOC test offset")
+    else:
+        reporter.fail("RS485 0xD200 should expose BKP fault snapshot and base words should be 98")
+
+
+def check_runtime_docs(reporter):
+    docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
+    if any(not path.exists() for path in docs):
+        missing = [str(path.relative_to(ROOT)) for path in docs if not path.exists()]
+        reporter.fail("runtime documentation missing: {0}".format(",".join(missing)))
+        return
+
+    flow_doc = read_text(FLOW_DOC)
+    comm_doc = read_text(COMM_ADDRESS_INDEX)
+    can_runtime = read_text(CAN_RUNTIME_REFACTOR)
+    can_simplify = read_text(CAN_MODULE_SIMPLIFY)
+
+    if (
+        "LowPower_Request()" in flow_doc
+        and "LowPower_IsToSleepPending()" in flow_doc
+        and "SleepDeal_Continue(mode)" in flow_doc
+        and "D200" in comm_doc
+        and "fault reason" in comm_doc
+        and "D201" in comm_doc
+    ):
+        reporter.ok("runtime and communication docs describe current low-power and D200 mapping")
+    else:
+        reporter.fail("runtime/communication docs should describe LowPower APIs and D200 fault snapshot")
+
+    if (
+        "CanFeidaoFrames" in can_runtime
+        and "Can_RtcWakeService" in can_runtime
+        and "Can_GetIdleRtcPeriodSeconds" in can_runtime
+        and "CanFeidaoFrames.c/.h" in can_simplify
+    ):
+        reporter.ok("CAN docs describe current runtime/frame/low-power boundaries")
+    else:
+        reporter.fail("CAN docs should describe current runtime/frame/low-power boundaries")
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="Check Keil project release/debug configuration.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Only print warnings, errors, and summary.")
@@ -449,6 +575,9 @@ def main(argv):
     check_hooks(reporter)
     check_soc_parameter_side_effects(reporter)
     check_soc_current_and_typec_policy(reporter)
+    check_low_power_cleanup(reporter)
+    check_fault_snapshot_mapping(reporter)
+    check_runtime_docs(reporter)
 
     return reporter.summary()
 

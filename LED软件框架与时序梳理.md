@@ -197,7 +197,7 @@ MCUI_ENI_DI1 == 0u
 | 按键按下沿 | `s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS` | 立即打开 5 秒显示窗口 |
 | 按键保持 | `s_ledbar_key_last_pressed = 1`，显示持续有效 | 不递减 5 秒窗口 |
 | 按键释放 | 每个 10ms flag 递减一次 `s_ledbar_soc_display_10ms` | 500 * 10ms = 5s 后熄屏 |
-| 长按达到 `LEDBAR_KEY_LONG_PRESS_10MS` | 调用 `entersleep(DEEP_MODE)` 和 `SleepDeal_Continue()` | 300 * 10ms = 3s |
+| 长按达到 `LEDBAR_KEY_LONG_PRESS_10MS` | 调用 `entersleep(DEEP_MODE)` 和 `SleepDeal_Continue(DEEP_MODE)` | 300 * 10ms = 3s |
 
 所以正常短按行为是：按下后持续显示；松手后继续显示约 5 秒，然后 `LedBar_Clear()` 熄屏。
 
@@ -214,7 +214,7 @@ LED 侧逻辑：
 
 - `LedBar_IsSocDisplayRequested()` 中优先判断 `GPIO_MCU_WK`。
 - `GPIO_MCU_WK` 显示侧经过 10ms 级去抖，高电平稳定后返回“需要显示”。
-- `APP_LedBar()` 中即使 `Sleep_Mode.bits.b1_ToSleepFlag` 已经被置位，只要 `GPIO_MCU_WK` 高电平，也不会执行 LED 熄屏分支。
+- `APP_LedBar()` 通过 `LowPower_IsToSleepPending()` 判断是否存在待提交休眠；只要 `GPIO_MCU_WK` 高电平，就不会执行 LED 熄屏分支。
 - 显示内容仍为当前 SOC + `%`；同时叠加 charge 图标。
 - charge 图标经过 100ms 级保持滤波，短时间 `u16Ichg` 或 `GPIO_MCU_WK` 抖动不会立即闪灭。
 
@@ -235,7 +235,7 @@ GPIO_MCU_WK = 1
     -> LED 一直显示
     -> 不累计 10s RTC 自动休眠
     -> 不累计低压自动 DEEP 休眠
-    -> 已挂起的 Sleep_Mode.b1_ToSleepFlag 会被低功耗任务清掉
+    -> 已挂起的低功耗请求会被 LowPower_Request(NO_SLEEP) 清掉
 
 GPIO_MCU_WK = 0
     -> 恢复原逻辑：短按显示 5s，无请求则熄屏
@@ -264,7 +264,7 @@ LedBar_Clear();
 
 ### 休眠熄屏
 
-当 `Sleep_Mode.bits.b1_ToSleepFlag != 0` 且 `GPIO_MCU_WK` 不为高时：
+当 `LowPower_IsToSleepPending() != 0` 且 `GPIO_MCU_WK` 不为高时：
 
 ```c
 LedBar_SaveSleepSoc();
@@ -313,7 +313,7 @@ App_LowPowerProcess();
 rtc_sleep();
 ```
 
-`App_SleepDeal()` 目前在 `main.c` 中被注释，不是当前实际主路径。
+旧 `App_SleepDeal()` 状态机已从源码删除；当前实际主路径只有 `rtc_sleep()`。
 
 ### 运行期 RTC 打嗝休眠
 
@@ -388,7 +388,7 @@ RTC_GetWakeupPeriodSeconds() -> Can_GetIdleRtcPeriodSeconds()
 `NORMAL_MODE` 和 `DEEP_MODE` 当前不是原地 STOP，而是：
 
 1. `low_power_log_and_commit_sleep()`。
-2. `SleepDeal_Continue()`。
+2. `SleepDeal_Continue(mode)`。
 3. 写 BKP 休眠启动标志：
    - `FLASH_NORMAL_SLEEP_VALUE`
    - `FLASH_DEEP_SLEEP_VALUE`
@@ -398,20 +398,9 @@ RTC_GetWakeupPeriodSeconds() -> Can_GetIdleRtcPeriodSeconds()
 6. `MCU_RESET()`。
 7. 下次启动早期 `IsSleepStartUp()` 读取 BKP 标志并进入 STOP 循环。
 
-## 旧 App_SleepDeal 时序
+## 旧休眠状态机处理结论
 
-`App_SleepDeal()` 当前没有在主循环启用，但代码仍保留。若以后恢复，需要注意它也会写 `Sleep_Mode.bits.b1_ToSleepFlag` 并最终调用 `SleepDeal_Continue()`。
-
-主要时序：
-
-| 路径 | 触发条件 | 计时 |
-| --- | --- | --- |
-| `SleepDeal_Normal_L2()` | 低电流且电压不低于 `u16Sleep_Vlow` | `OtherElement.u16Sleep_TimeNormal * 60` 秒 |
-| `SleepDeal_Normal_L3()` | 低电流且 `VCellMin < u16Sleep_Vlow` | `OtherElement.u16Sleep_TimeVlow * 60` 秒 |
-| 强制休眠 | `b1ForceToSleep_Lx` | 基本立即进入 `SLEEP_HICCUP_CONTINUE` |
-| 极低电压兜底 | `VCellMin < 2500` 且无充电 | 60 秒后 `DEEP_MODE` |
-
-如果恢复这条路径，也建议同步加入 `GPIO_MCU_WK` 高电平阻断，否则会出现 RTC 主路径阻断了、旧路径仍可能置休眠标志的问题。
+旧 `App_SleepDeal()`、`Sleep_Mode` 位图和 `Sleep_Status` 状态机已删除。后续新增休眠入口必须走 `LowPower_Request(mode)`；显示侧只允许读取 `LowPower_IsToSleepPending()`；复位式休眠只允许调用 `SleepDeal_Continue(mode)`。
 
 ## 修改 LED 行为的入口
 
@@ -488,7 +477,7 @@ void BQ769x0_SleepMode_Ctrl(void)
 
 1. 确认 `LedBar.c` 的扫描周期、`GPIO_MCU_WK` 显示去抖、charge 图标保持、STOP 前 LED GPIO 全低逻辑符合预期。
 2. 确认 `rtc_sleep.c` 在低压分支之前阻断 `GPIO_MCU_WK`。
-3. 确认未改动 `SleepDeal_Continue()` 的复位休眠流程。
+3. 确认未改动 `SleepDeal_Continue(mode)` 的复位休眠流程。
 
 ### 上板验证
 
@@ -514,7 +503,6 @@ void BQ769x0_SleepMode_Ctrl(void)
 ## 风险与注意事项
 
 1. `GPIO_MCU_WK` 当前是浮空输入。显示侧已加软件去抖，但低功耗阻断仍按实时电平判断；如果外部没有可靠上下拉，仍可能误判高电平并阻断休眠。硬件上应确认 PB13 有确定电平，软件上可进一步考虑改为上拉/下拉。
-2. `GPIO_MCU_WK` 高电平现在会清除待休眠请求，包括已挂起的 `g_sleepModeSelect`。这是按“高电平不进入休眠”实现的。如果后续需要“只阻断自动休眠，不阻断上位机强制休眠”，需要把 `LowPower_Request(NO_SLEEP)` 改成只清自动计数。
+2. `GPIO_MCU_WK` 高电平现在会清除待休眠请求，包括 `s_stLowPowerRuntime.mode`。这是按“高电平不进入休眠”实现的。如果后续需要“只阻断自动休眠，不阻断上位机强制休眠”，需要把 `LowPower_Request(NO_SLEEP)` 改成只清自动计数。
 3. 当前故障状态只改 `LedBar_Command`，没有实际故障闪烁图案。如果产品定义要求故障显示优先级，应补充显示策略。
-4. `App_SleepDeal()` 未启用，但保留代码没有同步加入 `GPIO_MCU_WK` 阻断。若恢复旧路径，需要补齐。
-5. 主循环中的 `MainLoop_EnterIdleSleep()` 仍是注释状态；本文讨论的“不进入休眠”主要指 RTC/STOP 低功耗，不涉及这个空闲 `__WFI()`。
+4. 主循环中的 `MainLoop_EnterIdleSleep()` 仍是注释状态；本文讨论的“不进入休眠”主要指 RTC/STOP 低功耗，不涉及这个空闲 `__WFI()`。

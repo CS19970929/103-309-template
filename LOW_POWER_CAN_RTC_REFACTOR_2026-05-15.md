@@ -10,7 +10,7 @@ This round is a behavior-equivalent cleanup for CAN and RTC low-power paths. It 
   - `LowPowerSleep_SaveCoreState()` keeps the common pre-sleep save sequence:
     `Can_PrepareSleep -> SOC_SaveSnapshotBeforeSleep -> FactoryAging_SaveProgressBeforeSleep`.
   - `LowPowerSleep_SaveResetState()` keeps the reset-sleep sequence by calling the core save sequence and then `LedBar_SaveSleepSoc`.
-- Simplified `SleepDeal_Continue()` and `rtc_sleep_prepare_rtc()` by using the shared save helpers.
+- Simplified `SleepDeal_Continue(mode)` and `rtc_sleep_prepare_rtc()` by using the shared save helpers.
 - Simplified CAN RTC-wake flow inside `Can_HDX.c`:
   - `feidao_can_begin_rtc_wake_service()`
   - `feidao_can_queue_rtc_wake_frames()`

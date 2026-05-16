@@ -812,7 +812,7 @@ static void LedBar_ServiceSwitch(void)
 #else
             LedBar_SaveSleepSoc();
             entersleep(DEEP_MODE);
-            SleepDeal_Continue();
+            SleepDeal_Continue((UINT8)DEEP_MODE);
 #endif
         }
 #endif
@@ -1160,7 +1160,7 @@ void APP_LedBar(void)
         return;
     }
 
-    if ((Sleep_Mode.bits.b1_ToSleepFlag != 0u) && (mcu_wk_active == 0u))
+    if ((LowPower_IsToSleepPending() != 0u) && (mcu_wk_active == 0u))
     {
         LedBar_SaveSleepSoc();
         LedBar_SetSleep(1u);

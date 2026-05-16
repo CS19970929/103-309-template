@@ -141,12 +141,11 @@ struct RS485MSG {
 
 //0xD100�Ǵ�RTC��ʼ����β��������λ����21+12=33����
 #define RS485_ADDR_RO_START1			(UINT16)0xD100
-
-//0xD100��һ������λ��Ŀǰֻ��һ��
+//0xD200 maps fault snapshot: D200 reason, D201 inverse.
 #define RS485_ADDR_RO_START2			(UINT16)0xD200
 #define RS485_ADDR_RO_SOC_TEST			(UINT16)0xD300
 
-#define RS485_RO_BASE_WORDS				((UINT16)97U)
+#define RS485_RO_BASE_WORDS				((UINT16)98U)
 #define RS485_RO_SOC_TEST_WORDS			((UINT16)16U)
 #define RS485_RO_SOC_TEST_OFFSET		RS485_RO_BASE_WORDS
 #define RS485_RO_TOTAL_WORDS			((UINT16)(RS485_RO_BASE_WORDS + RS485_RO_SOC_TEST_WORDS))
@@ -556,4 +555,3 @@ void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
 
 #endif	/* SCI_H */
-

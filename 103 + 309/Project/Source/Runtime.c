@@ -27,7 +27,6 @@ static void Runtime_RunIoAndPowerTasks(void)
 	App_AnlogCal();
 	App_LowPowerProcess();
 	App_Can();
-	/* App_SleepDeal(); */
 	/* App_SOC(); */
 }
 

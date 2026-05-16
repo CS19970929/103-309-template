@@ -225,7 +225,6 @@ typedef struct
   uint64_t    test_main_cycle;
   uint32_t    App_AFEGet_cnt;
   uint32_t    App_SH367309_Monitor_cnt;
-  uint32_t    App_SleepDeal_cnt;
   uint32_t    App_beep_cnt;
 
   uint32_t    sci1_irq_cnt;

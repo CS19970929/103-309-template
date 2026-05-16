@@ -82,6 +82,8 @@ extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 
 void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);
+void LowPower_ClearToSleepFlag(void);
+UINT8 LowPower_IsToSleepPending(void);
 void rtc_sleep(void);
 void cpu_frequency_conf(void);
 

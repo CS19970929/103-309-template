@@ -46,12 +46,10 @@ void RefreshData_Drivers(void)
 
 			if (Driver_Element.MosRelay_Status.bits.b1_FuncOFF_OV)
 			{ // 具体是哪个出事了，留给后续使用
-				// Sleep_Mode.bits.b1VcellOVP = 1;		//艾阳动力旧版(深山老林无电枪在线检测功能)使用了
 				ChargerLoad_Func.bits.b1OFFDriver_Ovp = 1;
 			}
 			else if (Driver_Element.MosRelay_Status.bits.b1_FuncOFF_UV)
 			{
-				// Sleep_Mode.bits.b1VcellUVP = 1;		//艾阳动力使用了
 				ChargerLoad_Func.bits.b1OFFDriver_Uvp = 1;
 			}
 			else if (Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg)

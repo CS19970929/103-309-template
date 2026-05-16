@@ -573,7 +573,6 @@ void App_SH367309_Monitor(void)
 	{
 		// 读取失败，要做点什么事情？
 		// 进入深度休眠咯？
-		// Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
 	}
 }
 

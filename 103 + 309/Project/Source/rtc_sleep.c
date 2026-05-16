@@ -33,7 +33,7 @@ static void low_power_update_rtc_status(void);
 static void before_wakeup(uint32_t *_sleep_cnt);
 static void before_rtcsleep(void);
 static uint32_t rtc_sleep_get_period_seconds(void);
-static void low_power_clear_force_request(void);
+static UINT8 low_power_is_reset_sleep_mode(enum _SLEEP_MODE mode);
 static void low_power_prepare_reset_sleep(void);
 static void low_power_log_and_commit_sleep(void);
 static void low_power_guess_wakeup_source(void);
@@ -107,8 +107,7 @@ static void low_power_cancel_rtc(UINT8 reason)
 
 static UINT8 low_power_is_idle_rtc_request(void)
 {
-    return (UINT8)((s_stLowPowerRuntime.mode == HICCUP_MODE) ||
-                   (Sleep_Mode.bits.b1ForceToSleep_L1 != 0U));
+    return (UINT8)(s_stLowPowerRuntime.mode == HICCUP_MODE);
 }
 
 static void low_power_update_rtc_status(void)
@@ -294,25 +293,24 @@ static bool isHaveCurrent_bq7x(void)
 }
 #endif
 
-static void low_power_clear_force_request(void)
+static UINT8 low_power_is_reset_sleep_mode(enum _SLEEP_MODE mode)
 {
-    Sleep_Mode.bits.b1ForceToSleep_L1 = 0;
-    Sleep_Mode.bits.b1ForceToSleep_L2 = 0;
-    Sleep_Mode.bits.b1ForceToSleep_L3 = 0;
+    return (UINT8)((mode == NORMAL_MODE) || (mode == DEEP_MODE));
 }
 
 static void low_power_prepare_reset_sleep(void)
 {
-    Sleep_Mode.bits.b1_ToSleepFlag = 1;
     LogRecord_Flag.bits.Log_Sleep = 1;
     s_stLowPowerRuntime.armed = 1;
+    low_power_update_rtc_status();
 }
 
 static void low_power_log_and_commit_sleep(void)
 {
     extern UINT32 su32_Interval_S_Tcnt;
+    UINT8 sleep_mode = (UINT8)s_stLowPowerRuntime.mode;
 
-    if ((Sleep_Mode.all & 0x00ffU) == 0U)
+    if (low_power_is_reset_sleep_mode(s_stLowPowerRuntime.mode) == 0U)
     {
         LowPower_Request(NO_SLEEP);
         return;
@@ -321,7 +319,7 @@ static void low_power_log_and_commit_sleep(void)
     Can_PrepareSleep();
     LogRecord_Flag.bits.Log_Sleep = 1;
     LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
-    SleepDeal_Continue();
+    SleepDeal_Continue(sleep_mode);
 }
 
 void LowPower_Request(enum _SLEEP_MODE mode)
@@ -329,19 +327,16 @@ void LowPower_Request(enum _SLEEP_MODE mode)
     switch (mode)
     {
     case HICCUP_MODE:
-        low_power_clear_force_request();
-        Sleep_Mode.bits.b1ForceToSleep_L1 = 1;
         s_stLowPowerRuntime.mode = HICCUP_MODE;
+        s_stLowPowerRuntime.armed = 0;
         break;
     case NORMAL_MODE:
-        low_power_clear_force_request();
-        Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
         s_stLowPowerRuntime.mode = NORMAL_MODE;
+        s_stLowPowerRuntime.armed = 0;
         break;
     case DEEP_MODE:
-        low_power_clear_force_request();
-        Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
         s_stLowPowerRuntime.mode = DEEP_MODE;
+        s_stLowPowerRuntime.armed = 0;
 #ifdef __FUNC__LED__
         set_LED_state(LED_BAR_NORMAL, 4);
 #endif // DEBUG
@@ -349,14 +344,23 @@ void LowPower_Request(enum _SLEEP_MODE mode)
     case NO_SLEEP:
         s_stLowPowerRuntime.mode = NO_SLEEP;
         s_stLowPowerRuntime.armed = 0;
-        Sleep_Status = SLEEP_HICCUP_SHIFT;
-        Sleep_Mode.all = 0;
         break;
     default:
         break;
     }
 
     low_power_update_rtc_status();
+}
+
+void LowPower_ClearToSleepFlag(void)
+{
+    s_stLowPowerRuntime.armed = 0;
+    low_power_update_rtc_status();
+}
+
+UINT8 LowPower_IsToSleepPending(void)
+{
+    return (UINT8)(s_stLowPowerRuntime.armed != 0U);
 }
 
 void entersleep(enum _SLEEP_MODE mode)
@@ -456,8 +460,6 @@ void BQ769x0_SleepMode_Ctrl(void)
         return;
     }
 
-    // todo 统一rtc_sleep()和App_SleepDeal()过放休眠
-    // if (AFE_SleepMode_Judge() == 1)
     //todo过充、充电管关了？进待机？
     if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
     {
@@ -522,13 +524,6 @@ void App_LowPowerProcess(void)
 void sleep(void)
 {
     App_LowPowerProcess();
-#if 0
-    if (System_OnOFF_Func.bits.b1OnOFF_RTC)
-        rtc_sleep();
-    else
-        App_SleepDeal();
-
-#endif
 }
 
 static bool rtc_monitor(void)
@@ -1070,8 +1065,8 @@ void rtc_sleep(void)
     {
         if (s_stLowPowerRuntime.mode == HICCUP_MODE)
         {
-            Sleep_Mode.bits.b1_ToSleepFlag = 1;
             s_stLowPowerRuntime.armed = 1;
+            low_power_update_rtc_status();
         }
         else if ((s_stLowPowerRuntime.mode == NORMAL_MODE) || (s_stLowPowerRuntime.mode == DEEP_MODE))
         {

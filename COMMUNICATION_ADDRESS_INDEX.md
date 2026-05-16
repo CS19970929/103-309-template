@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 0xD000 | RS485_ADDR_RO_START0 | 主状态区，单体电压/总压/温度/电流/SOC 等 | Sci_ACK_0x03_ReadRegs_Data() |
 | 0xD100 | RS485_ADDR_RO_START1 | RTC、故障记录、错误状态、系统状态 | Sci_ACK_0x03_ReadRegs_Data() |
-| 0xD200 | RS485_ADDR_RO_START2 | 扩展只读区 | Sci_ACK_0x03_ReadRegs_Data() |
+| 0xD200 | RS485_ADDR_RO_START2 | Fault snapshot：`0xD200` reason，`0xD201` inverse | Sci_ACK_0x03_ReadRegs_Data() |
 | 0xC000 | RS485_ADDR_RO_LCD | LCD 汇总数据 | Sci_ACK_0x03_ReadRegs_LCD() |
 | 0xC001 | RS485_ADDR_RO_FA_RTC | RTC 快速读取 | Sci_ACK_0x03_ReadRegs_LCD() |
 | 0xC002 | RS485_ADDR_SN_READ | 序列号 / 硬件版本 / 软件版本 | Sci_ACK_0x03_ReadRegs_LCD() |
@@ -89,6 +89,26 @@
 ### 1.2.2 读区说明
 
 `0xD100` 区的用途不是只做一个单一数据块，而是把 RTC、三段历史故障、系统状态和开关机状态拼在一起，方便上位机一次性读完。
+
+### 1.3 `0xD200` Fault Snapshot
+
+`0xD200` 区当前用于读取 Cortex fault 复位前保存的 BKP 快照：
+
+| 地址 | 数据 | 来源 |
+|---|---|---|
+| 0xD200 | fault reason | `BKP_DR11` / `FAULT_BKP_REASON_REG` |
+| 0xD201 | fault reason inverse | `BKP_DR12` / `FAULT_BKP_REASON_INV_REG` |
+
+reason 取值：
+
+| 值 | 含义 |
+|---|---|
+| 0x4846 | HardFault |
+| 0x4D46 | MemManage Fault |
+| 0x4246 | BusFault |
+| 0x5546 | UsageFault |
+
+读取时应校验 `reason ^ inverse == 0xFFFF`。不满足时代表 BKP 数据无效或未发生可识别 fault。
 
 ## 2. `0x06` 单寄存器控制 / 复位
 
@@ -466,7 +486,22 @@
 - `0x10`：起始地址决定参数块，寄存器数量决定写入长度。
 - 当前工程已经取消大部分旧 EEPROM 后台写标志；保护参数、`OtherElement`、热管理等会写入内部 Flash RW 参数区，SOC 表、铜损、RTC 当前只写 RAM。
 
-## 6. 备注
+## 6. `0x10` 写入副作用清单
+
+| 写入范围 | 运行时副作用 | 持久化 |
+|---|---|---|
+| `0x2000~0x205D` 校准系数 | 更新校准 RAM，后续采样按新系数换算 | 校准参数区 |
+| `0x2100~0x2140` 保护参数 | 覆盖保护阈值；电压类保护变更会重新 `InitData_SOC()` | RW 参数区 |
+| `0x2200~0x2229` SOC OCV 表 | 更新 RAM SOC 表，`Sci_ApplyOtherElementSideEffects()` 触发 `InitData_SOC()` | 当前不独立跨重启保存 |
+| `0x222A~0x2239` 铜损表 | 更新 RAM 补偿表 | 当前不独立跨重启保存 |
+| `0x224A~0x2255` RTC 时间/闹钟 | 写 RTC 运行时字段 | 当前不独立跨重启保存 |
+| `0x2300~0x2307` 均衡参数 | 设置 `AFE_PARAM_WRITE_Flag`，触发 AFE 参数刷新 | RW 参数区 |
+| `0x2308~0x230F` 系统/热管理相关参数 | 设置 `AFE_PARAM_WRITE_Flag` 或热管理刷新 | RW 参数区 |
+| `0x2310~0x2317` 休眠参数 | 改变低功耗进入阈值和延时 | RW 参数区 |
+| `0x2318~0x231B` SOC 容量/循环参数 | `InitData_SOC()`，并把 `SOC_Enhance_Element.u16_RefreshData_Flag` 置为 `2` 重载容量 | RW 参数区 |
+| `0x231C~0x231F` 系统串数/采样电阻 | 刷新 `SeriesNum` / `g_u32CS_Res_AFE`，影响采样换算和保护 | RW 参数区 |
+
+## 7. 备注
 
 - `0x2000 ~ 0x205D` 为校准系数区。
 - `0x2100 ~ 0x2140` 为保护参数区。
