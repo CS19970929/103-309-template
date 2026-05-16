@@ -149,6 +149,7 @@
 - `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c` 已改为显式 include 自己需要的模块头，不再依赖 `main.h`。
 - `Project_Types.h` 已承接 10ms 延时常量、`BOOL`、`UPDNLMT16` 等 legacy 公共定义；`IODrivers.c` 不再重复定义这些宏。
 - `ADC.c` 的喂狗和 10ms tick 读取已改为 `Platform_Port.h` 包装，Type-C 观测值写入通过 `BmsModel.h` 访问运行模型。
+- `Can_HDX.c`、`rtc_sleep.c`、`IO_Control.c` 已改为显式 include 运行时、低功耗和驱动控制依赖，不再通过 `main.h` 间接获得全工程对象。
 
 ## 3. 运行流程变化
 
@@ -259,7 +260,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是少数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`Can_HDX.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`rtc_sleep.c`、`IO_Control.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`DataDeal.c`、`conf.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 保护策略现在可一键切换，但 `Fault.c` 的软件保护阈值、滤波节拍和目标板 MOS 动作仍需按新 AFE/新产品重新上板验证。
@@ -284,7 +285,7 @@ Runtime_RunOnce()
 13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
 14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c`、`SH367309_Func.c` 和 `rtc_sleep.c` 都按保护模式调度软/硬件保护。
 15. 确认 `I2C_AFE1.c` 不再直接依赖休眠、老化和 MOS 启动策略，`AfeService.c` 统一承接 startup zero 与启动 MOS 策略。
-16. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
+16. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c`、`Can_HDX.c`、`rtc_sleep.c`、`IO_Control.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
 
 建议每次做模块裁剪或移植前执行：
 

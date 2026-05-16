@@ -1,5 +1,8 @@
-#include "main.h"
+#include "conf.h"
+#include "Can_HDX.h"
 #include "CanFeidaoFrames.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;

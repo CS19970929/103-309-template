@@ -67,6 +67,7 @@ RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
+IO_CONTROL_C = ROOT / "103 + 309" / "Project" / "Source" / "IO_Control.c"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
 FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
 EEPROM_C = ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.c"
@@ -730,6 +731,9 @@ def check_portability_foundation(reporter):
         SHORT_FUNC_C,
         SHORT_FUNC_H,
         IODRIVERS_C,
+        IO_CONTROL_C,
+        CAN_HDX_C,
+        CAN_HDX_H,
         CAN_FEIDAO_FRAMES_C,
         FLASH_C,
         FLASH_H,
@@ -788,6 +792,8 @@ def check_portability_foundation(reporter):
     heat_cool_c = read_text(HEAT_COOL_C)
     short_func_c = read_text(SHORT_FUNC_C)
     iodrivers_c = read_text(IODRIVERS_C)
+    io_control_c = read_text(IO_CONTROL_C)
+    can_hdx_c = read_text(CAN_HDX_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash_c = read_text(FLASH_C)
     flash_h = read_text(FLASH_H)
@@ -1142,6 +1148,45 @@ def check_portability_foundation(reporter):
         reporter.ok("IODrivers.c reuses shared timing/limit macros from Project_Types.h")
     else:
         reporter.fail("IODrivers.c should not redefine shared timing/limit macros")
+
+    if (
+        '#include "main.h"' not in can_hdx_c
+        and '#include "Can_HDX.h"' in can_hdx_c
+        and '#include "CanFeidaoFrames.h"' in can_hdx_c
+        and '#include "System_Init.h"' in can_hdx_c
+        and '#include "System_Monitor.h"' in can_hdx_c
+    ):
+        reporter.ok("Can_HDX.c declares CAN runtime dependencies without main.h")
+    else:
+        reporter.fail("Can_HDX.c should declare CAN runtime dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in rtc_sleep_c
+        and '#include "Can_HDX.h"' in rtc_sleep_c
+        and '#include "LowPowerSleep.h"' in rtc_sleep_c
+        and '#include "Project_Protection.h"' in rtc_sleep_c
+        and '#include "RTC.h"' in rtc_sleep_c
+        and '#include "SleepDeal.h"' in rtc_sleep_c
+        and '#include "SocEnhance.h"' in rtc_sleep_c
+        and '#include "System_Init.h"' in rtc_sleep_c
+        and '#include "System_Monitor.h"' in rtc_sleep_c
+    ):
+        reporter.ok("rtc_sleep.c declares RTC low-power dependencies without main.h")
+    else:
+        reporter.fail("rtc_sleep.c should declare RTC low-power dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in io_control_c
+        and '#include "ChargerLoadFunc.h"' in io_control_c
+        and '#include "IO_Control.h"' in io_control_c
+        and '#include "Sci_Upper.h"' in io_control_c
+        and '#include "SH367309_Func.h"' in io_control_c
+        and '#include "System_Init.h"' in io_control_c
+        and '#include "System_Monitor.h"' in io_control_c
+    ):
+        reporter.ok("IO_Control.c declares driver-control dependencies without main.h")
+    else:
+        reporter.fail("IO_Control.c should declare driver-control dependencies without main.h")
 
     if (
         '#include "main.h"' not in sh367309_func_c

@@ -1,4 +1,11 @@
-#include "main.h"
+#include "ChargerLoadFunc.h"
+#include "DataDeal.h"
+#include "IO_Control.h"
+#include "Sci_Upper.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
+#include "elog.h"
 
 static bool isforceClose(void);
 
