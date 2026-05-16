@@ -1,5 +1,6 @@
 #include "main.h"
 #include "LowPowerSleep.h"
+#include "Project_Protection.h"
 
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
@@ -11,7 +12,9 @@ enum irqWakeup g_irq_t = NO_IRQ;
 void rtc_sleep(void);
 void App_LowPowerProcess(void);
 void test_dealError(void);
+#if PROJECT_PROTECTION_USES_AFE_HARDWARE
 void Fault_ChangeToMCU(void);
+#endif
 void DataLoad_CellVolt(void);
 void DataLoad_CellVoltMaxMinFind(void);
 void DataLoad_Temperature(void);
@@ -579,7 +582,9 @@ static bool rtc_monitor_sh367309(void)
         SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
         SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
 
+#if PROJECT_PROTECTION_USES_AFE_HARDWARE
         Fault_ChangeToMCU();
+#endif
 #if 0
 		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
 		{

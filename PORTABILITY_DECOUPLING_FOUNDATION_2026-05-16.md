@@ -57,7 +57,7 @@
 | `1` | `PROJECT_PROTECTION_MODE_MCU_SOFTWARE` | 主循环运行 `App_WarnCtrl()` 软件保护判断，适合 bq769x0 等移植项目 |
 | `2` | `PROJECT_PROTECTION_MODE_HYBRID` | AFE fault 镜像和 MCU 软件保护都启用 |
 
-当前 309 项目默认 `0`。`SH367309_Func.c` 中 `Fault_ChangeToMCU()` 受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制；`Runtime.c` 中 `App_WarnCtrl()` 受 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 控制。这样后续移植到其他 AFE 时，不需要搜索多个散落开关。
+当前 309 项目默认 `0`。`SH367309_Func.c` 和 `rtc_sleep.c` 中 `Fault_ChangeToMCU()` 受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制；`Runtime.c` 中 `App_WarnCtrl()` 受 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 控制。这样后续移植到其他 AFE 时，不需要搜索多个散落开关。
 
 ### 2.4 `Platform_Port.h`
 
@@ -273,7 +273,7 @@ Runtime_RunOnce()
 11. 确认 `LogRecord.c` 不再包含 `main.h`，且通过 `BmsModel.h` 读取 fault/status。
 12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
 13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
-14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c` 和 `SH367309_Func.c` 都按保护模式调度软/硬件保护。
+14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c`、`SH367309_Func.c` 和 `rtc_sleep.c` 都按保护模式调度软/硬件保护。
 15. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
 
 建议每次做模块裁剪或移植前执行：

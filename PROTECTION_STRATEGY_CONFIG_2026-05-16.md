@@ -55,9 +55,13 @@ App_AFEGet()
         -> Fault_ChangeToMCU() [PROJECT_PROTECTION_USES_AFE_HARDWARE]
            -> g_stCellInfoReport.unMdlFault_Third
            -> FaultWarnRecord2()
+
+rtc_sleep()
+  -> rtc_monitor_sh367309()
+     -> Fault_ChangeToMCU() [PROJECT_PROTECTION_USES_AFE_HARDWARE]
 ```
 
-该路径只镜像和记录 AFE 已经判定的硬件保护状态，不再由 MCU 重新计算保护阈值。
+运行态采样路径和 RTC 唤醒监测路径都受同一个 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。该路径只镜像和记录 AFE 已经判定的硬件保护状态，不再由 MCU 重新计算保护阈值；切到 `PROJECT_PROTECTION_MODE_MCU_SOFTWARE` 后，低功耗唤醒也不会继续调用 AFE fault mirror。
 
 ### 3.2 MCU 软件保护路径
 
@@ -116,4 +120,5 @@ Runtime_RunFrontTasks()
 2. `Project_Protection.h` 必须定义三种保护模式。
 3. `Runtime.c` 必须通过 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 调度 `App_WarnCtrl()`。
 4. `SH367309_Func.c` 的 `Fault_ChangeToMCU()` 必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
-5. Release 默认必须保持 `PROJECT_CFG_PROTECTION_MODE=0`，对应当前 309 AFE 硬件保护方案。
+5. `rtc_sleep.c` 的 RTC 唤醒故障镜像也必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
+6. Release 默认必须保持 `PROJECT_CFG_PROTECTION_MODE=0`，对应当前 309 AFE 硬件保护方案。

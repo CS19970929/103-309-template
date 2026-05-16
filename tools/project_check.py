@@ -669,6 +669,7 @@ def check_portability_foundation(reporter):
         MAIN_C,
         DATADEAL_C,
         SH367309_FUNC_C,
+        RTC_SLEEP_C,
         SOC_C,
         ADC_H,
         PUBFUNC_C,
@@ -707,6 +708,7 @@ def check_portability_foundation(reporter):
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
     sh367309_func_c = read_text(SH367309_FUNC_C)
+    rtc_sleep_c = read_text(RTC_SLEEP_C)
     soc_c = read_text(SOC_C)
     adc_c = read_text(ROOT / "103 + 309" / "Project" / "Source" / "ADC.c")
     adc_h = read_text(ADC_H)
@@ -981,6 +983,15 @@ def check_portability_foundation(reporter):
         reporter.ok("SH367309 hardware fault mirroring follows protection mode")
     else:
         reporter.fail("SH367309 hardware fault mirroring should be gated by protection mode")
+
+    if (
+        '#include "Project_Protection.h"' in rtc_sleep_c
+        and "#if PROJECT_PROTECTION_USES_AFE_HARDWARE" in rtc_sleep_c
+        and "Fault_ChangeToMCU();" in rtc_sleep_c
+    ):
+        reporter.ok("RTC wake fault mirroring follows protection mode")
+    else:
+        reporter.fail("RTC wake fault mirroring should be gated by protection mode")
 
     if (
         '#include "main.h"' not in logrecord_c
