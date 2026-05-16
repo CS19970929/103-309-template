@@ -120,7 +120,16 @@
 
 `FactoryAging.c` 已通过 `BoardControl.h` 调用老化模式开关，不再通过 `main.h` 间接获得这些入口。后续迁移到 STM32F0 时，这类“产品动作”可以保留接口，底层 MOS/AFe 写法再按目标板适配。
 
-### 2.8 测试模块依赖显式化
+### 2.8 `AfeService.h`
+
+新增 AFE 应用服务层，集中承接 AFE 启动策略：
+
+- `AfeService_Init()`：启动时完成 startup zero 准备、调用 `InitAFE1()`、按老化状态设置 MOS/factory mode、完成 startup zero 或打开 CTL。
+- `AfeService_Recover()`：运行中 AFE 恢复时复用同一启动策略。
+
+`I2C_AFE1.c` 现在只负责 SH367309 I2C/GPIO 初始化、`AFE_IsReady()` 和 `SH367309_UpdataAfeConfig()`，不再直接判断休眠启动、老化模式，也不直接调用 MOS/factory mode 控制。这样后续替换 AFE 或迁移 STM32F0 时，可以先复用 `AfeService` 的产品策略，再替换下层 AFE driver。
+
+### 2.9 测试模块依赖显式化
 
 `Flash64KAppTest.c` 已从 `main.h` 改为显式包含：
 
@@ -153,7 +162,7 @@
 main()
   -> InitDevice()
        InitSci()        // PROJECT_FEATURE_RS485
-       InitAFE1()       // PROJECT_FEATURE_AFE
+       AfeService_Init()// PROJECT_FEATURE_AFE
        InitCan()        // PROJECT_FEATURE_CAN
        InitADC()        // PROJECT_FEATURE_ANALOG_ADC
        InitData_SOC()   // PROJECT_FEATURE_SOC
@@ -250,7 +259,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 保护策略现在可一键切换，但 `Fault.c` 的软件保护阈值、滤波节拍和目标板 MOS 动作仍需按新 AFE/新产品重新上板验证。
@@ -274,7 +283,8 @@ Runtime_RunOnce()
 12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
 13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
 14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c`、`SH367309_Func.c` 和 `rtc_sleep.c` 都按保护模式调度软/硬件保护。
-15. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
+15. 确认 `I2C_AFE1.c` 不再直接依赖休眠、老化和 MOS 启动策略，`AfeService.c` 统一承接 startup zero 与启动 MOS 策略。
+16. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c`、`Fault.c`、`Heat_Cool.c`、`ShortFunc.c`、`System_Init.c`、`RTC.c`、`SleepDeal.c`、`Flash.c`、`EEPROM.c`、`SH367309_Func.c`、`SH367309_DataDeal.c`、`I2C_AFE1.c`、`AfeService.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
 
 建议每次做模块裁剪或移植前执行：
 

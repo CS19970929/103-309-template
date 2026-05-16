@@ -67,6 +67,8 @@ rtc_sleep()
 
 `SH367309_DataDeal.c` 只负责 309 AFE 保护参数和 MTP 写入转换，已经改为显式依赖 `DataDeal.h`、`Flash.h`、`I2C_AFE1.h`、`SH367309_Func.h`、`Sci_Upper.h`、`System_Init.h` 和 `System_Monitor.h`，不再通过 `main.h` 间接获得全工程对象。后续替换为 bq769x0 等 AFE 时，这一层可以直接替换成新 AFE 的参数转换/寄存器写入模块。
 
+`AfeService.c` 负责 AFE 启动策略，包含 startup zero、休眠唤醒冷/热启动判断、老化模式下的 MOS/factory mode 切换和运行中 AFE 恢复入口；`I2C_AFE1.c` 只保留 SH367309 I2C/寄存器初始化。这样保护参数转换、底层寄存器访问和产品启动策略三层分开，后续换 AFE 时优先替换 `I2C_AFE1.c` / `SH367309_*`，不需要把老化和休眠策略复制进新 driver。
+
 ### 3.2 MCU 软件保护路径
 
 ```text
@@ -127,3 +129,4 @@ Runtime_RunFrontTasks()
 5. `rtc_sleep.c` 的 RTC 唤醒故障镜像也必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
 6. `Fault.c` 必须使用显式依赖，不再通过 `main.h` 间接获得软件保护输入。
 7. Release 默认必须保持 `PROJECT_CFG_PROTECTION_MODE=0`，对应当前 309 AFE 硬件保护方案。
+8. `I2C_AFE1.c` 不允许直接依赖休眠、老化和 MOS 启动策略；这些产品策略必须集中在 `AfeService.c`。

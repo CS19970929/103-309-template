@@ -1,4 +1,11 @@
-#include "main.h"
+#include "conf.h"
+#include "DataDeal.h"
+#include "I2C_AFE1.h"
+#include "PubFunc.h"
+#include "SH367309_DataDeal.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 AFEDATA Registers_AFE1;
 struct SH367309_Read SH367309_Read_AFE1;
@@ -856,36 +863,10 @@ Others:
 *******************************************************************************/
 void InitAFE1(void)
 {
-	UINT8 do_startup_zero;
-
-	do_startup_zero = ((g_u32AfeCurrentSampleSeq == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
-
 	initAFE1_IIC();
-	if (do_startup_zero != 0U)
-	{
-		AfeCurrent_SetStartupColdBoot((SleepDeal_IsBootFromSleepStartup() != 0U) ? 0U : 1U);
-		AfeCurrent_PrepareStartupZero();
-	}
-
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	if (FactoryAging_IsActive() != 0U)
-	{
-		enter_fac_mode(true);
-	}
-	else
-	{
-		open_dsg_close_chg();
-	}
-	if (do_startup_zero != 0U)
-	{
-		AfeCurrent_StartupZeroCal();
-	}
-	else
-	{
-		open_ctlc();
-	}
 }
 
 /*调试心得

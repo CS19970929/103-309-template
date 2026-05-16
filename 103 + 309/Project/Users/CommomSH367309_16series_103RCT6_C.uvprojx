@@ -434,6 +434,11 @@
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
             </File>
             <File>
+              <FileName>AfeService.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\AfeService.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -1369,6 +1374,11 @@
               <FileName>I2C_AFE1.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
+            </File>
+            <File>
+              <FileName>AfeService.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\AfeService.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>

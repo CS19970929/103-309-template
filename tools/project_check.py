@@ -28,6 +28,8 @@ PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
 PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTasks.h"
 BOARD_CONTROL_H = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.h"
+AFE_SERVICE_C = ROOT / "103 + 309" / "Project" / "Source" / "AfeService.c"
+AFE_SERVICE_H = ROOT / "103 + 309" / "Project" / "Source" / "AfeService.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 SYSTEM_INIT_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Init.c"
@@ -50,6 +52,8 @@ DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
 SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
 SH367309_DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c"
 SH367309_DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.h"
+I2C_AFE1_C = ROOT / "103 + 309" / "Project" / "Source" / "I2C_AFE1.c"
+I2C_AFE1_H = ROOT / "103 + 309" / "Project" / "Source" / "I2C_AFE1.h"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
@@ -303,6 +307,8 @@ def check_required_files(reporter):
         BMS_MODEL_H,
         PROJECT_APP_TASKS_H,
         BOARD_CONTROL_H,
+        AFE_SERVICE_C,
+        AFE_SERVICE_H,
         ELOG_CFG_H,
         GITIGNORE,
         PRE_COMMIT,
@@ -403,6 +409,11 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Release includes Project_BuildGuard.h")
 
+        if "../Source/AfeService.c" not in release["files"]:
+            reporter.fail("FD_Release project tree does not include AfeService.c")
+        else:
+            reporter.ok("FD_Release includes AfeService.c")
+
     if debug is None:
         reporter.fail("Keil target FD_Debug is missing")
     else:
@@ -423,6 +434,11 @@ def check_keil_targets(reporter):
             reporter.fail("FD_Debug should define _DEBUG_")
         else:
             reporter.ok("FD_Debug defines _DEBUG_")
+
+        if "../Source/AfeService.c" not in debug["files"]:
+            reporter.fail("FD_Debug project tree does not include AfeService.c")
+        else:
+            reporter.ok("FD_Debug includes AfeService.c")
 
         watch_value = find_define_value(debug["defines"], "PROJECT_CFG_DEBUG_WATCH_ENABLE")
         if watch_value != "1":
@@ -682,6 +698,9 @@ def check_portability_foundation(reporter):
         PLATFORM_PORT_H,
         BMS_MODEL_H,
         PROJECT_APP_TASKS_H,
+        BOARD_CONTROL_H,
+        AFE_SERVICE_C,
+        AFE_SERVICE_H,
         RUNTIME_C,
         MAIN_C,
         DATADEAL_C,
@@ -689,6 +708,8 @@ def check_portability_foundation(reporter):
         SH367309_FUNC_C,
         SH367309_DATADEAL_C,
         SH367309_DATADEAL_H,
+        I2C_AFE1_C,
+        I2C_AFE1_H,
         SLEEPDEAL_C,
         SLEEPDEAL_H,
         RTC_SLEEP_C,
@@ -740,12 +761,15 @@ def check_portability_foundation(reporter):
     bms_model = read_text(BMS_MODEL_H)
     project_app_tasks = read_text(PROJECT_APP_TASKS_H)
     board_control = read_text(BOARD_CONTROL_H)
+    afe_service_c = read_text(AFE_SERVICE_C)
+    afe_service_h = read_text(AFE_SERVICE_H)
     runtime_c = read_text(RUNTIME_C)
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
     datadeal_h = read_text(DATADEAL_H)
     sh367309_func_c = read_text(SH367309_FUNC_C)
     sh367309_datadeal_c = read_text(SH367309_DATADEAL_C)
+    i2c_afe1_c = read_text(I2C_AFE1_C)
     sleepdeal_c = read_text(SLEEPDEAL_C)
     sleepdeal_h = read_text(SLEEPDEAL_H)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
@@ -1151,6 +1175,43 @@ def check_portability_foundation(reporter):
         reporter.fail("SH367309_DataDeal.c should declare AFE parameter dependencies without main.h")
 
     if (
+        '#include "main.h"' not in i2c_afe1_c
+        and '#include "conf.h"' in i2c_afe1_c
+        and '#include "DataDeal.h"' in i2c_afe1_c
+        and '#include "I2C_AFE1.h"' in i2c_afe1_c
+        and '#include "PubFunc.h"' in i2c_afe1_c
+        and '#include "SH367309_DataDeal.h"' in i2c_afe1_c
+        and '#include "SH367309_Func.h"' in i2c_afe1_c
+        and '#include "System_Init.h"' in i2c_afe1_c
+        and '#include "System_Monitor.h"' in i2c_afe1_c
+        and "FactoryAging_IsActive" not in i2c_afe1_c
+        and "SleepDeal_IsBootFromSleepStartup" not in i2c_afe1_c
+        and "enter_fac_mode" not in i2c_afe1_c
+        and "open_dsg_close_chg" not in i2c_afe1_c
+    ):
+        reporter.ok("I2C_AFE1.c keeps SH367309 bus init free of application startup policy")
+    else:
+        reporter.fail("I2C_AFE1.c should not depend on sleep/factory-aging/MOS startup policy")
+
+    if (
+        '#include "main.h"' not in afe_service_c
+        and '#include "AfeService.h"' in afe_service_c
+        and '#include "BoardControl.h"' in afe_service_c
+        and '#include "DataDeal.h"' in afe_service_c
+        and '#include "FactoryAging.h"' in afe_service_c
+        and '#include "I2C_AFE1.h"' in afe_service_c
+        and '#include "SleepDeal.h"' in afe_service_c
+        and "AfeService_Init" in afe_service_h
+        and "AfeService_Recover" in afe_service_h
+        and "AfeCurrent_PrepareStartupZero();" in afe_service_c
+        and "InitAFE1();" in afe_service_c
+        and "AfeService_ApplyStartupMosState();" in afe_service_c
+    ):
+        reporter.ok("AfeService.c owns AFE startup policy above SH367309 bus driver")
+    else:
+        reporter.fail("AfeService.c should own startup zero and MOS policy above I2C_AFE1.c")
+
+    if (
         '#include "Project_Protection.h"' in rtc_sleep_c
         and "#if PROJECT_PROTECTION_USES_AFE_HARDWARE" in rtc_sleep_c
         and "Fault_ChangeToMCU();" in rtc_sleep_c
@@ -1247,10 +1308,13 @@ def check_portability_foundation(reporter):
         and "BmsModel.h" in doc
         and "Project_AppTasks.h" in doc
         and "Project_Protection.h" in doc
+        and "AfeService.h" in doc
+        and "I2C_AFE1.c" in doc
         and "第二阶段" in doc
         and "PROJECT_CFG_PROTECTION_MODE" in protection_doc
         and "PROJECT_PROTECTION_MODE_AFE_HARDWARE_ONLY" in protection_doc
         and "PROJECT_PROTECTION_MODE_MCU_SOFTWARE" in protection_doc
+        and "AfeService.c" in protection_doc
     ):
         reporter.ok("portability documentation describes the first-stage decoupling boundary")
     else:

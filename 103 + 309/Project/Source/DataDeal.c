@@ -1,4 +1,5 @@
 #include "main.h"
+#include "AfeService.h"
 
 UINT8 u8IICFaultcnt1 = 0;
 UINT8 u8WakeCnt1 = 0;
@@ -907,7 +908,7 @@ static void MonitorAFE_Recover(UINT8 num)
     switch (num)
     {
     case 0:
-        InitAFE1();
+        AfeService_Recover();
         break;
     case 1:
         SH367309_Enable_AFE_Wdt_Cadc_Drivers();

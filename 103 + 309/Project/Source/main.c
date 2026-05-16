@@ -1,4 +1,5 @@
 #include "main.h"
+#include "AfeService.h"
 #include "Flash64KAppTest.h"
 #include "Project_AppTasks.h"
 #include "Runtime.h"
@@ -104,7 +105,7 @@ void InitDevice(void)
 #endif
 	InitE2PROM();
 #if PROJECT_FEATURE_AFE
-	InitAFE1();
+	AfeService_Init();
 #endif
 #if PROJECT_FEATURE_CAN
 	InitCan();
