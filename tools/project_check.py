@@ -38,6 +38,8 @@ CHARGER_LOAD_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFu
 CHARGER_LOAD_FUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.h"
 HEAT_COOL_C = ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.c"
 HEAT_COOL_H = ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.h"
+SHORT_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "ShortFunc.c"
+SHORT_FUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "ShortFunc.h"
 IODRIVERS_C = ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
@@ -684,6 +686,8 @@ def check_portability_foundation(reporter):
         CHARGER_LOAD_FUNC_H,
         HEAT_COOL_C,
         HEAT_COOL_H,
+        SHORT_FUNC_C,
+        SHORT_FUNC_H,
         IODRIVERS_C,
         CAN_FEIDAO_FRAMES_C,
         FLASH64K_APP_TEST_H,
@@ -727,6 +731,7 @@ def check_portability_foundation(reporter):
     charger_load_func_c = read_text(CHARGER_LOAD_FUNC_C)
     charger_load_func_h = read_text(CHARGER_LOAD_FUNC_H)
     heat_cool_c = read_text(HEAT_COOL_C)
+    short_func_c = read_text(SHORT_FUNC_C)
     iodrivers_c = read_text(IODRIVERS_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
@@ -1068,6 +1073,17 @@ def check_portability_foundation(reporter):
         reporter.ok("Heat_Cool.c declares optional heat/cool dependencies without main.h")
     else:
         reporter.fail("Heat_Cool.c should declare optional heat/cool dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in short_func_c
+        and '#include "ShortFunc.h"' in short_func_c
+        and '#include "DataDeal.h"' in short_func_c
+        and '#include "Sci_Upper.h"' in short_func_c
+        and '#include "SH367309_DataDeal.h"' in short_func_c
+    ):
+        reporter.ok("ShortFunc.c declares short-current dependencies without main.h")
+    else:
+        reporter.fail("ShortFunc.c should declare short-current dependencies without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")

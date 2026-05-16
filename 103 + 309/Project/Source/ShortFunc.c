@@ -1,4 +1,7 @@
-#include "main.h"
+#include "DataDeal.h"
+#include "Sci_Upper.h"
+#include "SH367309_DataDeal.h"
+#include "ShortFunc.h"
 
 #if (AFE_TYPE == bq76xx_afe)
 const UINT16 AFE_SCV[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // 短路保护电压，单位mv
