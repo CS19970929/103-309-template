@@ -1,4 +1,5 @@
 #include "main.h"
+#include "Project_Protection.h"
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -503,7 +504,9 @@ void App_SH367309_Monitor(void)
 		SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
 		SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
 
+#if PROJECT_PROTECTION_USES_AFE_HARDWARE
 		Fault_ChangeToMCU();
+#endif
 
 		switch (su8_SC_Flag)
 		{

@@ -22,6 +22,7 @@ PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_C
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 PROJECT_FEATURES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Features.h"
+PROJECT_PROTECTION_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Protection.h"
 PROJECT_TYPES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Types.h"
 PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
@@ -29,7 +30,15 @@ PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTa
 BOARD_CONTROL_H = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
+PUBFUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.c"
+PUBFUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.h"
+SYSTEM_MONITOR_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.c"
+SYSTEM_MONITOR_H = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.h"
+CHARGER_LOAD_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.c"
+CHARGER_LOAD_FUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.h"
+IODRIVERS_C = ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
+SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
@@ -61,6 +70,7 @@ COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 PORTABILITY_DOC = ROOT / "PORTABILITY_DECOUPLING_FOUNDATION_2026-05-16.md"
+PROTECTION_DOC = ROOT / "PROTECTION_STRATEGY_CONFIG_2026-05-16.md"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -98,6 +108,7 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY": "0",
     "PROJECT_CFG_FACTORY_AGING_ENABLE": "1",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS": "259200",
+    "PROJECT_CFG_PROTECTION_MODE": "0",
 }
 GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_WDOG_ENABLE",
@@ -137,6 +148,7 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
+    "PROJECT_CFG_PROTECTION_MODE",
     "PROJECT_CFG_FEATURE_AFE",
     "PROJECT_CFG_FEATURE_SOC",
     "PROJECT_CFG_FEATURE_ANALOG_ADC",
@@ -268,6 +280,7 @@ def check_required_files(reporter):
         BUILD_GUARD,
         CONF_H,
         PROJECT_FEATURES_H,
+        PROJECT_PROTECTION_H,
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
@@ -647,6 +660,7 @@ def check_portability_foundation(reporter):
     required_files = [
         PROJECT_CONFIG,
         PROJECT_FEATURES_H,
+        PROJECT_PROTECTION_H,
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
@@ -654,7 +668,16 @@ def check_portability_foundation(reporter):
         RUNTIME_C,
         MAIN_C,
         DATADEAL_C,
+        SH367309_FUNC_C,
         SOC_C,
+        ADC_H,
+        PUBFUNC_C,
+        PUBFUNC_H,
+        SYSTEM_MONITOR_C,
+        SYSTEM_MONITOR_H,
+        CHARGER_LOAD_FUNC_C,
+        CHARGER_LOAD_FUNC_H,
+        IODRIVERS_C,
         CAN_FEIDAO_FRAMES_C,
         FLASH64K_APP_TEST_H,
         FLASH64K_APP_TEST_C,
@@ -665,6 +688,7 @@ def check_portability_foundation(reporter):
         FACTORY_AGING_C,
         BUILD_GUARD,
         PORTABILITY_DOC,
+        PROTECTION_DOC,
     ]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
@@ -673,6 +697,7 @@ def check_portability_foundation(reporter):
 
     project_config = read_text(PROJECT_CONFIG)
     project_features = read_text(PROJECT_FEATURES_H)
+    project_protection = read_text(PROJECT_PROTECTION_H)
     project_types = read_text(PROJECT_TYPES_H)
     platform_port = read_text(PLATFORM_PORT_H)
     bms_model = read_text(BMS_MODEL_H)
@@ -681,7 +706,17 @@ def check_portability_foundation(reporter):
     runtime_c = read_text(RUNTIME_C)
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
+    sh367309_func_c = read_text(SH367309_FUNC_C)
     soc_c = read_text(SOC_C)
+    adc_c = read_text(ROOT / "103 + 309" / "Project" / "Source" / "ADC.c")
+    adc_h = read_text(ADC_H)
+    pubfunc_c = read_text(PUBFUNC_C)
+    pubfunc_h = read_text(PUBFUNC_H)
+    system_monitor_c = read_text(SYSTEM_MONITOR_C)
+    system_monitor_h = read_text(SYSTEM_MONITOR_H)
+    charger_load_func_c = read_text(CHARGER_LOAD_FUNC_C)
+    charger_load_func_h = read_text(CHARGER_LOAD_FUNC_H)
+    iodrivers_c = read_text(IODRIVERS_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
     flash64k_app_test_c = read_text(FLASH64K_APP_TEST_C)
@@ -692,9 +727,11 @@ def check_portability_foundation(reporter):
     factory_aging_c = read_text(FACTORY_AGING_C)
     build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
+    protection_doc = read_text(PROTECTION_DOC)
 
     feature_tokens = [
         "PROJECT_CFG_FEATURE_AFE",
+        "PROJECT_CFG_PROTECTION_MODE",
         "PROJECT_CFG_FEATURE_SOC",
         "PROJECT_CFG_FEATURE_ANALOG_ADC",
         "PROJECT_CFG_FEATURE_RS485",
@@ -711,6 +748,8 @@ def check_portability_foundation(reporter):
 
     feature_map_tokens = [
         "PROJECT_FEATURE_AFE           PROJECT_CFG_FEATURE_AFE",
+        "PROJECT_FEATURE_AFE_HARDWARE_PROTECTION PROJECT_PROTECTION_USES_AFE_HARDWARE",
+        "PROJECT_FEATURE_SOFTWARE_PROTECTION PROJECT_PROTECTION_USES_MCU_SOFTWARE",
         "PROJECT_FEATURE_SOC           PROJECT_CFG_FEATURE_SOC",
         "PROJECT_FEATURE_ANALOG_ADC    PROJECT_CFG_FEATURE_ANALOG_ADC",
         "PROJECT_FEATURE_RS485         PROJECT_CFG_FEATURE_RS485",
@@ -725,10 +764,26 @@ def check_portability_foundation(reporter):
     else:
         reporter.fail("Project_Features.h should map config switches to runtime feature gates")
 
-    if "BMS_INLINE" in project_types and "typedef uint8_t bms_u8;" in project_types:
-        reporter.ok("Project_Types.h defines portable aliases without replacing legacy UINT types")
+    if (
+        "PROJECT_PROTECTION_MODE_AFE_HARDWARE_ONLY" in project_protection
+        and "PROJECT_PROTECTION_MODE_MCU_SOFTWARE" in project_protection
+        and "PROJECT_PROTECTION_MODE_HYBRID" in project_protection
+        and "PROJECT_PROTECTION_USES_AFE_HARDWARE 1" in project_protection
+        and "PROJECT_PROTECTION_USES_MCU_SOFTWARE 1" in project_protection
+    ):
+        reporter.ok("Project_Protection.h defines one-switch hardware/software protection modes")
     else:
-        reporter.fail("Project_Types.h should provide portable aliases and BMS_INLINE")
+        reporter.fail("Project_Protection.h should define one-switch hardware/software protection modes")
+
+    if (
+        "BMS_INLINE" in project_types
+        and "typedef uint8_t bms_u8;" in project_types
+        and "DELAYB10MS_100MS" in project_types
+        and "typedef enum _BOOL" in project_types
+    ):
+        reporter.ok("Project_Types.h defines portable aliases and shared legacy constants")
+    else:
+        reporter.fail("Project_Types.h should provide portable aliases, BMS_INLINE, and shared legacy constants")
 
     if (
         "PROJECT_PLATFORM_STM32F1_SPL" in platform_port
@@ -753,6 +808,7 @@ def check_portability_foundation(reporter):
     if (
         "void App_AFEGet(void);" in project_app_tasks
         and "void App_Can(void);" in project_app_tasks
+        and "void App_WarnCtrl(void);" in project_app_tasks
         and "void InitSci(void);" in project_app_tasks
         and "void InitSystemWakeUp(void);" in project_app_tasks
     ):
@@ -774,8 +830,10 @@ def check_portability_foundation(reporter):
         "#if PROJECT_FEATURE_RTC_LOW_POWER",
         "#if PROJECT_FEATURE_CAN",
         "#if PROJECT_FEATURE_LEDBAR",
+        "#if PROJECT_FEATURE_SOFTWARE_PROTECTION",
         "#if PROJECT_FEATURE_STORAGE",
         "Platform_FeedWatchdog();",
+        "App_WarnCtrl();",
     ]
     if all(token in runtime_c for token in runtime_tokens):
         reporter.ok("Runtime.c dispatch uses feature gates and platform wrappers")
@@ -853,6 +911,78 @@ def check_portability_foundation(reporter):
         reporter.fail("LedBar.c should read SOC/fault/MOS status through BmsModel accessors")
 
     if (
+        '#include "main.h"' not in ledbar_c
+        and '#include "LedBar.h"' in ledbar_c
+        and '#include "System_Init.h"' in ledbar_c
+        and '#include "rtc_sleep.h"' in ledbar_c
+    ):
+        reporter.ok("LedBar.c declares display/runtime dependencies without main.h")
+    else:
+        reporter.fail("LedBar.c should declare display/runtime dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in pubfunc_c
+        and '#include "PubFunc.h"' in pubfunc_c
+        and '#include "System_Monitor.h"' in pubfunc_c
+        and '#include "conf.h"' in pubfunc_c
+        and '#include "stm32f10x.h"' in pubfunc_h
+    ):
+        reporter.ok("PubFunc.c/h declare utility dependencies without main.h")
+    else:
+        reporter.fail("PubFunc.c/h should declare utility dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in system_monitor_c
+        and '#include "System_Monitor.h"' in system_monitor_c
+        and '#include "EEPROM.h"' in system_monitor_c
+        and "SYSTEM_MONITOR_STATUS_CLOSE" in system_monitor_c
+        and '#include "stm32f10x.h"' in system_monitor_h
+    ):
+        reporter.ok("System_Monitor.c/h declare monitor/storage dependencies without main.h")
+    else:
+        reporter.fail("System_Monitor.c/h should declare monitor/storage dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in charger_load_func_c
+        and '#include "ChargerLoadFunc.h"' in charger_load_func_c
+        and '#include "System_Init.h"' in charger_load_func_c
+        and '#include "rtc_sleep.h"' in charger_load_func_c
+        and '#include "stm32f10x.h"' in charger_load_func_h
+    ):
+        reporter.ok("ChargerLoadFunc.c/h declare charger/load dependencies without main.h")
+    else:
+        reporter.fail("ChargerLoadFunc.c/h should declare charger/load dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in adc_c
+        and '#include "ADC.h"' in adc_c
+        and '#include "BmsModel.h"' in adc_c
+        and "Platform_FeedWatchdog();" in adc_c
+        and "Platform_Get10msTick()" in adc_c
+        and '#include "Project_Types.h"' in adc_h
+    ):
+        reporter.ok("ADC.c uses platform/model accessors instead of main.h")
+    else:
+        reporter.fail("ADC.c should use platform/model accessors instead of main.h")
+
+    if (
+        "#define DELAYB10MS_5S" not in iodrivers_c
+        and "#define UPDNLMT16" not in iodrivers_c
+    ):
+        reporter.ok("IODrivers.c reuses shared timing/limit macros from Project_Types.h")
+    else:
+        reporter.fail("IODrivers.c should not redefine shared timing/limit macros")
+
+    if (
+        '#include "Project_Protection.h"' in sh367309_func_c
+        and "#if PROJECT_PROTECTION_USES_AFE_HARDWARE" in sh367309_func_c
+        and "Fault_ChangeToMCU();" in sh367309_func_c
+    ):
+        reporter.ok("SH367309 hardware fault mirroring follows protection mode")
+    else:
+        reporter.fail("SH367309 hardware fault mirroring should be gated by protection mode")
+
+    if (
         '#include "main.h"' not in logrecord_c
         and '#include "BmsModel.h"' in logrecord_c
         and "g_stCellInfoReport" not in logrecord_c
@@ -902,7 +1032,11 @@ def check_portability_foundation(reporter):
         and "Platform_Port.h" in doc
         and "BmsModel.h" in doc
         and "Project_AppTasks.h" in doc
+        and "Project_Protection.h" in doc
         and "第二阶段" in doc
+        and "PROJECT_CFG_PROTECTION_MODE" in protection_doc
+        and "PROJECT_PROTECTION_MODE_AFE_HARDWARE_ONLY" in protection_doc
+        and "PROJECT_PROTECTION_MODE_MCU_SOFTWARE" in protection_doc
     ):
         reporter.ok("portability documentation describes the first-stage decoupling boundary")
     else:
@@ -925,6 +1059,8 @@ def check_runtime_docs(reporter):
         "LowPower_Request()" in flow_doc
         and "LowPower_IsToSleepPending()" in flow_doc
         and "SleepDeal_Continue(mode)" in flow_doc
+        and "PROJECT_CFG_PROTECTION_MODE" in flow_doc
+        and "App_WarnCtrl()" in flow_doc
         and "D200" in comm_doc
         and "fault reason" in comm_doc
         and "D201" in comm_doc

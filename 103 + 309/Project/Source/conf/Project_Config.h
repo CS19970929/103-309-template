@@ -153,6 +153,13 @@
 // <i> 关闭后主循环不再调用 AFE 采样入口。移植或裁剪时还需要同步处理底层驱动文件。
 #define PROJECT_CFG_FEATURE_AFE 1
 
+// <o> 保护策略模式
+//   <0=> AFE 硬件保护，仅镜像 AFE 故障状态
+//   <1=> MCU 软件保护，主循环调用 App_WarnCtrl()
+//   <2=> 混合保护，AFE 故障镜像 + MCU 软件保护
+// <i> 当前 SH367309 项目由 AFE 完成真实保护，默认 0。移植到 bq769x0 等需要 MCU 软件保护的项目时切到 1 或 2。
+#define PROJECT_CFG_PROTECTION_MODE 0
+
 // <q> 使能 SOC 计算
 // <i> 关闭后 AFE 采样完成后不再触发 SOC 计算。
 #define PROJECT_CFG_FEATURE_SOC 1

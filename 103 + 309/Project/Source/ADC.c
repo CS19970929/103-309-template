@@ -1,4 +1,9 @@
-#include "main.h"
+#include "ADC.h"
+#include "BmsModel.h"
+#include "Platform_Port.h"
+#include "PubFunc.h"
+#include "System_Monitor.h"
+#include "conf.h"
 
 __IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
 
@@ -186,7 +191,7 @@ static UINT8 ADC_WaitResetCalibrationDone(void)
 
     while (ADC_GetResetCalibrationStatus(ADC1) != RESET)
     {
-        Feed_IWatchDog;
+        Platform_FeedWatchdog();
         if (timeout-- == 0U)
         {
             return 0U;
@@ -202,7 +207,7 @@ static UINT8 ADC_WaitCalibrationDone(void)
 
     while (ADC_GetCalibrationStatus(ADC1) != RESET)
     {
-        Feed_IWatchDog;
+        Platform_FeedWatchdog();
         if (timeout-- == 0U)
         {
             return 0U;
@@ -262,7 +267,7 @@ void InitADC_ADC1(void)
 
 void ADC_ResetAnlogCalSchedule(void)
 {
-    s_u32AnlogCalLast10msTick = SysTime_Get10msTickCount();
+    s_u32AnlogCalLast10msTick = Platform_Get10msTick();
 }
 
 void ADC_StopForLowPower(void)
@@ -491,7 +496,7 @@ void App_AnlogCal(void)
     UINT32 u32Elapsed10msTick;
     UINT32 u32Process10msTick;
 
-    u32Now10msTick = SysTime_Get10msTickCount();
+    u32Now10msTick = Platform_Get10msTick();
     u32Elapsed10msTick = u32Now10msTick - s_u32AnlogCalLast10msTick;
     if (0U == u32Elapsed10msTick)
     {
@@ -512,6 +517,6 @@ void App_AnlogCal(void)
         ADC_Current_Smooth();
         u32Process10msTick--;
     }
-    g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
+    BmsModel_CellInfo()->u16VCell[31] = g_u16TypeCOutCurrent_mA;
     g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
 }

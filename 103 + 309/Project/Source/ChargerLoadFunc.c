@@ -1,4 +1,7 @@
-#include "main.h"
+#include "ChargerLoadFunc.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
+#include "rtc_sleep.h"
 
 CHARGERLOAD_FUNC ChargerLoad_Func;
 

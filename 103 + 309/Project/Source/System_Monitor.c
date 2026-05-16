@@ -1,4 +1,7 @@
-#include "main.h"
+#include "System_Monitor.h"
+#include "EEPROM.h"
+
+#define SYSTEM_MONITOR_STATUS_CLOSE ((UINT8)0U)
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
 volatile union System_OnOFF_Function System_OnOFF_Func;
@@ -38,13 +41,13 @@ void InitSystemMonitorData_EEPROM(void)
 	SystemStatus.all = 0;
 	// SystemStatus.bits.b1Status_SysLimits = 0;		//默认无密码，不限制
 	SystemStatus.bits.b1StartUpBMS = 1;			  // MOS或者接触器能打开意味着初始化完毕
-	SystemStatus.bits.b1Status_Relay_PRE = CLOSE; // 默认是不打开，但是CLOSE不一定是低电平
-	SystemStatus.bits.b1Status_Relay_CHG = CLOSE; // 全部写，方便上传给上位机，不需要选通再改
-	SystemStatus.bits.b1Status_Relay_DSG = CLOSE;
-	SystemStatus.bits.b1Status_Relay_MAIN = CLOSE;
-	SystemStatus.bits.b1Status_MOS_PRE = CLOSE;
-	SystemStatus.bits.b1Status_MOS_CHG = CLOSE;
-	SystemStatus.bits.b1Status_MOS_DSG = CLOSE;
+	SystemStatus.bits.b1Status_Relay_PRE = SYSTEM_MONITOR_STATUS_CLOSE; // 默认是不打开，但是CLOSE不一定是低电平
+	SystemStatus.bits.b1Status_Relay_CHG = SYSTEM_MONITOR_STATUS_CLOSE; // 全部写，方便上传给上位机，不需要选通再改
+	SystemStatus.bits.b1Status_Relay_DSG = SYSTEM_MONITOR_STATUS_CLOSE;
+	SystemStatus.bits.b1Status_Relay_MAIN = SYSTEM_MONITOR_STATUS_CLOSE;
+	SystemStatus.bits.b1Status_MOS_PRE = SYSTEM_MONITOR_STATUS_CLOSE;
+	SystemStatus.bits.b1Status_MOS_CHG = SYSTEM_MONITOR_STATUS_CLOSE;
+	SystemStatus.bits.b1Status_MOS_DSG = SYSTEM_MONITOR_STATUS_CLOSE;
 
 	// 总感觉，这个存在很麻烦，如果板子以前烧了代码，则这个关闭加热冷凝功能则没法处理。
 	// 但是屏蔽了，假设均衡关掉，再次启动又打开很麻烦(但是基本都是要求均衡的)

@@ -21,7 +21,9 @@ static void Runtime_RunFrontTasks(void)
 #if PROJECT_FEATURE_LEDBAR
 	APP_LedBar();
 #endif
-	/* App_WarnCtrl(); */
+#if PROJECT_FEATURE_SOFTWARE_PROTECTION
+	App_WarnCtrl();
+#endif
 #if PROJECT_FEATURE_AFE
 	App_AFEGet();
 #endif

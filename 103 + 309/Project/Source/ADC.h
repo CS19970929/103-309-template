@@ -1,6 +1,9 @@
 #ifndef ADC_H
 #define ADC_H
 
+#include "Project_Types.h"
+#include "stm32f10x.h"
+
 #define AD_Used_amount      3
 
 
@@ -68,4 +71,3 @@ UINT32 ADC_GetVbatMilliVolt(void);
 void App_AnlogCal(void);
 
 #endif	/* ADC_H */
-

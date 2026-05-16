@@ -1,5 +1,10 @@
-#include "main.h"
 #include "BmsModel.h"
+#include "LedBar.h"
+#include "SleepDeal.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
+#include "conf.h"
+#include "rtc_sleep.h"
 #include <string.h>
 
 #define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)

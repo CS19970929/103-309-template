@@ -1,4 +1,6 @@
-#include "main.h"
+#include "PubFunc.h"
+#include "System_Monitor.h"
+#include "conf.h"
 
 // 通过while循环，每执行一次，v中1的数目就会减少1，如果v中1的数目为奇数，则parity=true，否则parity=false。
 Parity OddEven_Check(UINT8 v)

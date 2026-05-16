@@ -1,6 +1,8 @@
 #ifndef SYSTEM_MONITOR_H
 #define SYSTEM_MONITOR_H
 
+#include "stm32f10x.h"
+
 //ϵͳ�����������
 typedef enum {STARTUP_CONT = 0, STARTUP_OVER = !STARTUP_CONT} StartUp_Status;
 
@@ -241,4 +243,3 @@ void SystemMonitorResetData_EEPROM(void);
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
 
 #endif	/* SYSTEM_MONITOR_H */
-

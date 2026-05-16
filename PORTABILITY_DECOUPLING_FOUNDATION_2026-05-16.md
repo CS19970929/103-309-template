@@ -9,7 +9,8 @@
 1. `main.h` 汇总包含大部分业务、驱动和协议头文件，很多 `.c` 文件通过它间接获得全部全局对象和硬件定义。
 2. `g_stCellInfoReport`、`OtherElement`、`SystemStatus` 等全局数据被通信、显示、SOC、保护和低功耗模块直接读取。
 3. `Runtime.c` 原本直接按固定顺序调用 AFE、RS485、低功耗、CAN、存储、日志、Production ID 等任务，模块是否启用不够集中。
-4. `stm32f10x.h`、`NVIC_SystemReset()`、`IWDG_Feed()`、`SysTime_Get10msTickCount()` 等 MCU/标准库接口散落在业务路径里，后续移植 STM32F0 时没有统一替换点。
+4. 保护策略没有显式模式区分：当前 309 项目依赖 AFE 硬件保护，但 `Fault.c` 中仍保留完整 MCU 软件保护轮询，容易误判为当前量产路径正在运行软件保护。
+5. `stm32f10x.h`、`NVIC_SystemReset()`、`IWDG_Feed()`、`SysTime_Get10msTickCount()` 等 MCU/标准库接口散落在业务路径里，后续移植 STM32F0 时没有统一替换点。
 
 这些问题不会必然导致死机，但会让“删掉某个功能”“移植到其他 MCU”“只保留 SOC/通信/采样的一部分”变得风险很高，容易出现编译依赖、运行顺序或全局数据遗漏。
 
@@ -33,6 +34,8 @@
 | 运行开关 | 配置来源 | 当前默认 |
 | --- | --- | --- |
 | `PROJECT_FEATURE_AFE` | `PROJECT_CFG_FEATURE_AFE` | 1 |
+| `PROJECT_FEATURE_AFE_HARDWARE_PROTECTION` | `PROJECT_CFG_PROTECTION_MODE` | 1 |
+| `PROJECT_FEATURE_SOFTWARE_PROTECTION` | `PROJECT_CFG_PROTECTION_MODE` | 0 |
 | `PROJECT_FEATURE_SOC` | `PROJECT_CFG_FEATURE_SOC` | 1 |
 | `PROJECT_FEATURE_ANALOG_ADC` | `PROJECT_CFG_FEATURE_ANALOG_ADC` | 1 |
 | `PROJECT_FEATURE_RS485` | `PROJECT_CFG_FEATURE_RS485` | 1 |
@@ -44,7 +47,19 @@
 
 现有 `PROJECT_CFG_WDOG_ENABLE`、`PROJECT_CFG_RTC_ENABLE`、`PROJECT_CFG_HEAT_ENABLE`、`PROJECT_CFG_FACTORY_AGING_ENABLE` 继续作为对应功能的来源，不另起第二套配置。
 
-### 2.3 `Platform_Port.h`
+### 2.3 `Project_Protection.h`
+
+新增保护策略模式头，提供一键切换软/硬件保护：
+
+| `PROJECT_CFG_PROTECTION_MODE` | 保护模式 | 当前含义 |
+| --- | --- | --- |
+| `0` | `PROJECT_PROTECTION_MODE_AFE_HARDWARE_ONLY` | SH367309 硬件保护为准，MCU 只镜像 AFE fault bit |
+| `1` | `PROJECT_PROTECTION_MODE_MCU_SOFTWARE` | 主循环运行 `App_WarnCtrl()` 软件保护判断，适合 bq769x0 等移植项目 |
+| `2` | `PROJECT_PROTECTION_MODE_HYBRID` | AFE fault 镜像和 MCU 软件保护都启用 |
+
+当前 309 项目默认 `0`。`SH367309_Func.c` 中 `Fault_ChangeToMCU()` 受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制；`Runtime.c` 中 `App_WarnCtrl()` 受 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 控制。这样后续移植到其他 AFE 时，不需要搜索多个散落开关。
+
+### 2.4 `Platform_Port.h`
 
 新增 MCU 平台边界，当前实现仍映射到 STM32F1 SPL：
 
@@ -55,7 +70,7 @@
 
 后续移植 STM32F0 时，优先替换这里以及更底层的 GPIO/CAN/RTC/Flash port，而不是在业务代码里到处替换标准库调用。
 
-### 2.4 `BmsModel.h`
+### 2.5 `BmsModel.h`
 
 新增运行数据访问入口，当前先把常用全局对象收口到 accessor：
 
@@ -77,7 +92,7 @@
 - `ADC.h`：Type-C 输出电流和总压 ADC fallback。
 - `BmsModel.h`：AFE 样本序号、运行数据、SOC 参数和启动标志访问。
 
-### 2.5 `Project_AppTasks.h`
+### 2.6 `Project_AppTasks.h`
 
 新增应用层任务声明头，集中声明启动和主循环需要调用的业务入口：
 
@@ -95,7 +110,7 @@
 
 这样 `Runtime.c` 不再需要包含 `main.h` 这个总入口头，后续拆主循环、复用运行框架或移植到其他 MCU 时，不必把整套旧工程头文件一起带过去。
 
-### 2.6 `BoardControl.h`
+### 2.7 `BoardControl.h`
 
 新增板级控制声明头，集中声明 MOS 和 factory mode 控制入口：
 
@@ -105,7 +120,7 @@
 
 `FactoryAging.c` 已通过 `BoardControl.h` 调用老化模式开关，不再通过 `main.h` 间接获得这些入口。后续迁移到 STM32F0 时，这类“产品动作”可以保留接口，底层 MOS/AFe 写法再按目标板适配。
 
-### 2.7 测试模块依赖显式化
+### 2.8 测试模块依赖显式化
 
 `Flash64KAppTest.c` 已从 `main.h` 改为显式包含：
 
@@ -122,6 +137,9 @@
 - `LowPowerSleep.c` 显式依赖 `Can_HDX.h`、`FactoryAging.h`、`LedBar.h`、`SocEnhance.h`。
 - `ProductionID.c` 显式依赖 `DataDeal.h`、`ProductionID.h` 和 `<string.h>`。
 - `FactoryAging.c` 显式依赖 `BoardControl.h`、`Flash.h`、`System_Init.h`、`System_Monitor.h` 和 `Project_Features.h`。
+- `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c` 已改为显式 include 自己需要的模块头，不再依赖 `main.h`。
+- `Project_Types.h` 已承接 10ms 延时常量、`BOOL`、`UPDNLMT16` 等 legacy 公共定义；`IODrivers.c` 不再重复定义这些宏。
+- `ADC.c` 的喂狗和 10ms tick 读取已改为 `Platform_Port.h` 包装，Type-C 观测值写入通过 `BmsModel.h` 访问运行模型。
 
 ## 3. 运行流程变化
 
@@ -157,6 +175,7 @@ Runtime_RunOnce()
        Platform_LatchTaskFlags()
        FactoryAging_Task()       // PROJECT_FEATURE_FACTORY_AGING
        APP_LedBar()              // PROJECT_FEATURE_LEDBAR
+       App_WarnCtrl()            // PROJECT_FEATURE_SOFTWARE_PROTECTION
        App_AFEGet()              // PROJECT_FEATURE_AFE
   -> Runtime_RunIoAndPowerTasks()
        App_Sci()                 // PROJECT_FEATURE_RS485
@@ -234,7 +253,8 @@ Runtime_RunOnce()
 1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
-4. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
+4. 保护策略现在可一键切换，但 `Fault.c` 的软件保护阈值、滤波节拍和目标板 MOS 动作仍需按新 AFE/新产品重新上板验证。
+5. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
 
 ## 7. 验收方式
 
@@ -253,6 +273,8 @@ Runtime_RunOnce()
 11. 确认 `LogRecord.c` 不再包含 `main.h`，且通过 `BmsModel.h` 读取 fault/status。
 12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
 13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
+14. 确认 `Project_Protection.h` 提供三种保护模式，`Runtime.c` 和 `SH367309_Func.c` 都按保护模式调度软/硬件保护。
+15. 确认 `PubFunc.c`、`System_Monitor.c`、`ChargerLoadFunc.c`、`LedBar.c`、`ADC.c` 已脱离 `main.h`，公共 legacy 宏统一在 `Project_Types.h`。
 
 建议每次做模块裁剪或移植前执行：
 

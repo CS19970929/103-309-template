@@ -1,6 +1,9 @@
 #ifndef CHARGERLOADFUNC_H
 #define CHARGERLOADFUNC_H
 
+#include "Project_Types.h"
+#include "stm32f10x.h"
+
 typedef union __CHARGERLOAD_FUNC {
     UINT16 all;
     struct _CHARGERLOAD_FUNC {
@@ -32,4 +35,3 @@ void Init_ChargerLoad_Det(void);
 void App_ChargerLoad_Det(void);
 
 #endif	/* CHARGERLOADFUNC_H */
-

@@ -12,11 +12,6 @@
 #define _MOS_BOOTSTRAP_CIR
 #define _MOS_BOOTSTRAP_CIR_NO_PRECHG
 
-#define DELAYB10MS_5S ((UINT16)500)		// 5s
-#define DELAYB10MS_10S ((UINT16)1000)	// 10s
-#define DELAYB10MS_30S ((UINT16)3000)	// 30s
-#define DELAYB10MS_2MIN ((UINT16)12000) // 30s
-
 // 从10改为1，因为两个同时打开，100ms内同时打开，有大电流的话会不会烧坏预充。
 #define PreRelayCLOSE_MODET 1  // 打开主接触器后，预充继电器关闭时间
 #define PreDsgMOSCLOSE_MODET 1 // 打开主放电管后，预充放电管关闭时间
@@ -78,12 +73,6 @@ MosCtrl_Command MosCtrl_Command_BootStrap_Cir = MOS_PRE_DET;
 DriverElement Driver_Element;
 DriverElement Driver_Element_last;
 DriverGPIO Driver_GPIO;
-
-#define UPDNLMT16(Var, Max, Min)                  \
-	{                                             \
-		(Var) = ((Var) >= (Max)) ? (Max) : (Var); \
-		(Var) = ((Var) <= (Min)) ? (Min) : (Var); \
-	}
 
 void DriversOnOFF(DriversStatus IoStatus, GPIO_Type GpioType);
 UINT8 PreChg_Ctrl(FUNC_STATUS FuncStatus);

@@ -1,6 +1,8 @@
 #ifndef PUBFUNC_H
 #define PUBFUNC_H
 
+#include "Project_Types.h"
+#include "stm32f10x.h"
 
 typedef enum {ODD = 0, EVEN = !ODD} Parity;
 
@@ -30,4 +32,3 @@ UINT8 Monitor_TempBreak(UINT16* temp_AD);
 void jtag_disableAndConfIO(void);
 
 #endif	/* PUBFUNC_H */
-

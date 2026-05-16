@@ -10,6 +10,7 @@ void App_LogRecord(void);
 void App_LowPowerProcess(void);
 void App_ProID_Deal(void);
 void App_Sci(void);
+void App_WarnCtrl(void);
 void APP_LedBar(void);
 
 void InitSci(void);
