@@ -3,6 +3,7 @@
 
 #include "Project_Config.h"
 #include "Project_Protection.h"
+#include "Project_Target.h"
 
 #ifndef PROJECT_CFG_FEATURE_AFE
 #define PROJECT_CFG_FEATURE_AFE 1

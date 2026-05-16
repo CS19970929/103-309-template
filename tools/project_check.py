@@ -23,6 +23,7 @@ BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_Buil
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 PROJECT_FEATURES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Features.h"
 PROJECT_PROTECTION_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Protection.h"
+PROJECT_TARGET_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Target.h"
 PROJECT_TYPES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Types.h"
 PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
@@ -303,6 +304,7 @@ def check_required_files(reporter):
         CONF_H,
         PROJECT_FEATURES_H,
         PROJECT_PROTECTION_H,
+        PROJECT_TARGET_H,
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
@@ -695,6 +697,7 @@ def check_portability_foundation(reporter):
         PROJECT_CONFIG,
         PROJECT_FEATURES_H,
         PROJECT_PROTECTION_H,
+        PROJECT_TARGET_H,
         PROJECT_TYPES_H,
         PLATFORM_PORT_H,
         BMS_MODEL_H,
@@ -760,6 +763,7 @@ def check_portability_foundation(reporter):
     project_config = read_text(PROJECT_CONFIG)
     project_features = read_text(PROJECT_FEATURES_H)
     project_protection = read_text(PROJECT_PROTECTION_H)
+    project_target = read_text(PROJECT_TARGET_H)
     project_types = read_text(PROJECT_TYPES_H)
     platform_port = read_text(PLATFORM_PORT_H)
     bms_model = read_text(BMS_MODEL_H)
@@ -813,6 +817,8 @@ def check_portability_foundation(reporter):
 
     feature_tokens = [
         "PROJECT_CFG_FEATURE_AFE",
+        "PROJECT_CFG_MCU_FAMILY",
+        "PROJECT_CFG_BOARD_PROFILE",
         "PROJECT_CFG_PROTECTION_MODE",
         "PROJECT_CFG_FEATURE_SOC",
         "PROJECT_CFG_FEATURE_ANALOG_ADC",
@@ -827,6 +833,24 @@ def check_portability_foundation(reporter):
         reporter.ok("Project_Config.h exposes module feature switches")
     else:
         reporter.fail("Project_Config.h should expose module feature switches")
+
+    if (
+        "PROJECT_MCU_STM32F103_STD" in project_target
+        and "PROJECT_MCU_STM32F030_STD" in project_target
+        and "PROJECT_AFE_SH367309" in project_target
+        and "PROJECT_AFE_BQ769X0" in project_target
+        and "PROJECT_BOARD_FD_103_309" in project_target
+        and "PROJECT_BOARD_A002_F030_BQ76940" in project_target
+        and "PROJECT_TARGET_BOARD_IS_FD_103_309" in project_target
+        and "PROJECT_TARGET_BOARD_IS_A002_F030_BQ76940" in project_target
+        and '#include "Project_Target.h"' in project_features
+        and '#include "Project_Target.h"' in build_guard
+        and "FD_103_309 board profile requires STM32F103 + SH367309" in build_guard
+        and "A002_F030_BQ76940 board profile requires STM32F030 + BQ769x0" in build_guard
+    ):
+        reporter.ok("Project_Target.h defines MCU/AFE/board profile matrix for template generation")
+    else:
+        reporter.fail("Project_Target.h should define MCU/AFE/board profile matrix and build guards")
 
     feature_map_tokens = [
         "PROJECT_FEATURE_AFE           PROJECT_CFG_FEATURE_AFE",

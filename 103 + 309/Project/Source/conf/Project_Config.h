@@ -19,6 +19,18 @@
 // </h>
 
 // <h>产品基础配置
+// <o> MCU 平台
+//   <103=> STM32F103 标准外设库
+//   <30=> STM32F030 标准外设库
+// <i> 当前母版为 STM32F103。后续生成器会按该值选择 MCU driver 和 Keil 工程模板。
+#define PROJECT_CFG_MCU_FAMILY 103
+
+// <o> 板级 profile
+//   <103309=> FD_103_309
+//   <30240=> A002_F030_BQ76940
+// <i> 当前母版为 FD_103_309。新项目生成时由生成器写入目标板 profile。
+#define PROJECT_CFG_BOARD_PROFILE 103309
+
 // <o> EEPROM 初始化标记 <0x0000-0xFFFF>
 // <i> Change this value only when field parameters must be reinitialized.
 // <i> EEPROM 参数初始化标记。只有需要强制重置现场参数时才修改。
@@ -62,8 +74,8 @@
 #define PROJECT_CFG_LEVEL_CURR 2
 
 // <o> AFE 类型
-//   <0=> bq76xx AFE
-//   <1=> sh36xx AFE
+//   <0=> BQ769x0 AFE
+//   <1=> SH367309 AFE
 // <i> AFE 芯片类型。必须与硬件实际焊接型号一致。
 #define PROJECT_CFG_AFE_TYPE 1
 // </h>
