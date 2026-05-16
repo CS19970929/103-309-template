@@ -67,8 +67,13 @@ typedef struct
 
 SOC_T g_Psoc;
 
-static enum _SLEEP_MODE g_sleepModeSelect = NO_SLEEP;
-static uint8_t state_sleep = 0;
+typedef struct
+{
+    enum _SLEEP_MODE mode;
+    UINT8 armed;
+} LOW_POWER_RUNTIME_STATE;
+
+static LOW_POWER_RUNTIME_STATE s_stLowPowerRuntime = { NO_SLEEP, 0U };
 static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
 bool is_wakeup = false;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
@@ -102,14 +107,14 @@ static void low_power_cancel_rtc(UINT8 reason)
 
 static UINT8 low_power_is_idle_rtc_request(void)
 {
-    return (UINT8)((g_sleepModeSelect == HICCUP_MODE) ||
+    return (UINT8)((s_stLowPowerRuntime.mode == HICCUP_MODE) ||
                    (Sleep_Mode.bits.b1ForceToSleep_L1 != 0U));
 }
 
 static void low_power_update_rtc_status(void)
 {
-    g_stLowPowerRtcStatus.u8SleepModeSelect = (UINT8)g_sleepModeSelect;
-    g_stLowPowerRtcStatus.u8StateSleep = state_sleep;
+    g_stLowPowerRtcStatus.u8SleepModeSelect = (UINT8)s_stLowPowerRuntime.mode;
+    g_stLowPowerRtcStatus.u8StateSleep = s_stLowPowerRuntime.armed;
     g_stLowPowerRtcStatus.u8RtcWakeFlag = is_rtc_wakekup ? 1U : 0U;
     g_stLowPowerRtcStatus.u16EnterRtcDelay = sys_time.enter_rtc_delay;
     g_stLowPowerRtcStatus.u16EnterRtcTarget = sys_time.time_enter_rtc;
@@ -300,7 +305,7 @@ static void low_power_prepare_reset_sleep(void)
 {
     Sleep_Mode.bits.b1_ToSleepFlag = 1;
     LogRecord_Flag.bits.Log_Sleep = 1;
-    state_sleep = 1;
+    s_stLowPowerRuntime.armed = 1;
 }
 
 static void low_power_log_and_commit_sleep(void)
@@ -326,30 +331,32 @@ void LowPower_Request(enum _SLEEP_MODE mode)
     case HICCUP_MODE:
         low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L1 = 1;
-        g_sleepModeSelect = HICCUP_MODE;
+        s_stLowPowerRuntime.mode = HICCUP_MODE;
         break;
     case NORMAL_MODE:
         low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L2 = 1;
-        g_sleepModeSelect = NORMAL_MODE;
+        s_stLowPowerRuntime.mode = NORMAL_MODE;
         break;
     case DEEP_MODE:
         low_power_clear_force_request();
         Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
-        g_sleepModeSelect = DEEP_MODE;
+        s_stLowPowerRuntime.mode = DEEP_MODE;
 #ifdef __FUNC__LED__
         set_LED_state(LED_BAR_NORMAL, 4);
 #endif // DEBUG
         break;
     case NO_SLEEP:
-        g_sleepModeSelect = NO_SLEEP;
-        state_sleep = 0;
+        s_stLowPowerRuntime.mode = NO_SLEEP;
+        s_stLowPowerRuntime.armed = 0;
         Sleep_Status = SLEEP_HICCUP_SHIFT;
         Sleep_Mode.all = 0;
         break;
     default:
         break;
     }
+
+    low_power_update_rtc_status();
 }
 
 void entersleep(enum _SLEEP_MODE mode)
@@ -897,7 +904,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
 
     rtc_sleep_restore_for_run();
-    state_sleep = 0;
+    s_stLowPowerRuntime.armed = 0;
     rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
     low_power_guess_wakeup_source();
@@ -1059,14 +1066,14 @@ void rtc_sleep(void)
 
     BQ769x0_SleepMode_Ctrl();
 
-    if (state_sleep == 0U)
+    if (s_stLowPowerRuntime.armed == 0U)
     {
-        if (g_sleepModeSelect == HICCUP_MODE)
+        if (s_stLowPowerRuntime.mode == HICCUP_MODE)
         {
             Sleep_Mode.bits.b1_ToSleepFlag = 1;
-            state_sleep = 1;
+            s_stLowPowerRuntime.armed = 1;
         }
-        else if ((g_sleepModeSelect == NORMAL_MODE) || (g_sleepModeSelect == DEEP_MODE))
+        else if ((s_stLowPowerRuntime.mode == NORMAL_MODE) || (s_stLowPowerRuntime.mode == DEEP_MODE))
         {
             low_power_prepare_reset_sleep();
         }
@@ -1076,12 +1083,12 @@ void rtc_sleep(void)
         }
     }
 
-    if (state_sleep != 1U)
+    if (s_stLowPowerRuntime.armed != 1U)
     {
         return;
     }
 
-    switch (g_sleepModeSelect)
+    switch (s_stLowPowerRuntime.mode)
     {
     case NORMAL_MODE:
         log_w("normal sleep\n");

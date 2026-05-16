@@ -55,13 +55,29 @@ void NMI_Handler(void)
 {
 }
 
+#define FAULT_BKP_REASON_REG BKP_DR11
+#define FAULT_BKP_REASON_INV_REG BKP_DR12
+#define FAULT_REASON_HARD ((UINT16)0x4846U)
+#define FAULT_REASON_MEM ((UINT16)0x4D46U)
+#define FAULT_REASON_BUS ((UINT16)0x4246U)
+#define FAULT_REASON_USAGE ((UINT16)0x5546U)
+
 __asm void wait()
 {
   BX lr
 }
 
-static void Fault_ResetOrHold(void)
+static void Fault_SaveReason(UINT16 reason)
 {
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+  PWR_BackupAccessCmd(ENABLE);
+  BKP_WriteBackupRegister(FAULT_BKP_REASON_REG, reason);
+  BKP_WriteBackupRegister(FAULT_BKP_REASON_INV_REG, (UINT16)(~reason));
+}
+
+static void Fault_ResetOrHold(UINT16 reason)
+{
+  Fault_SaveReason(reason);
 #ifdef _DEBUG_
   while (1)
   {
@@ -82,7 +98,7 @@ static void Fault_ResetOrHold(void)
  */
 void HardFault_Handler(void)
 {
-  Fault_ResetOrHold();
+  Fault_ResetOrHold(FAULT_REASON_HARD);
 }
 
 /**
@@ -92,7 +108,7 @@ void HardFault_Handler(void)
  */
 void MemManage_Handler(void)
 {
-  Fault_ResetOrHold();
+  Fault_ResetOrHold(FAULT_REASON_MEM);
 }
 
 /**
@@ -102,7 +118,7 @@ void MemManage_Handler(void)
  */
 void BusFault_Handler(void)
 {
-  Fault_ResetOrHold();
+  Fault_ResetOrHold(FAULT_REASON_BUS);
 }
 
 /**
@@ -112,7 +128,7 @@ void BusFault_Handler(void)
  */
 void UsageFault_Handler(void)
 {
-  Fault_ResetOrHold();
+  Fault_ResetOrHold(FAULT_REASON_USAGE);
 }
 
 /**

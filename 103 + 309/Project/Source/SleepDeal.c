@@ -13,6 +13,8 @@ static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)300) // PC13����3��պϲ���Ϊ��Ч
 
+static UINT8 SleepDeal_SelectMode(void);
+
 static UINT8 IsChargerWakeupActive(void)
 {
 	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
@@ -85,69 +87,69 @@ static UINT8 IsSleepWakeupValid(void)
 	}
 }
 
-void SleepDeal_Continue(void)
+static UINT8 SleepDeal_SelectMode(void)
 {
-	UINT8 u8FlashWriteOK_flag = 0;
-	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
-
-	LowPowerSleep_SaveResetState();
-
 	if (Sleep_Mode.bits.b1TestSleep)
 	{
-		s_u8SleepModeSelect = NORMAL_MODE;
+		return NORMAL_MODE;
 	}
 	else if (Sleep_Mode.bits.b1OverCurSleep)
 	{
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1OverVdeltaSleep)
 	{
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1CBCSleep)
 	{
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1ForceToSleep_L1)
 	{
-		s_u8SleepModeSelect = HICCUP_MODE;
+		return HICCUP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1ForceToSleep_L2)
 	{
-		s_u8SleepModeSelect = NORMAL_MODE;
+		return NORMAL_MODE;
 	}
 	else if (Sleep_Mode.bits.b1ForceToSleep_L3)
 	{
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1VcellOVP)
 	{
-		// s_u8SleepModeSelect = HICCUP_MODE;
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1VcellUVP)
 	{
-		// s_u8SleepModeSelect = HICCUP_MODE;
-		s_u8SleepModeSelect = DEEP_MODE;
+		return DEEP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1NormalSleep_L1)
 	{
-		s_u8SleepModeSelect = HICCUP_MODE;
+		return HICCUP_MODE;
 	}
 	else if (Sleep_Mode.bits.b1NormalSleep_L2)
 	{
-		s_u8SleepModeSelect = NORMAL_MODE;
+		return NORMAL_MODE;
 	}
 	else if (Sleep_Mode.bits.b1NormalSleep_L3)
 	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else
-	{
-		s_u8SleepModeSelect = NORMAL_MODE;
+		return DEEP_MODE;
 	}
 
-	switch (s_u8SleepModeSelect)
+	return NORMAL_MODE;
+}
+
+void SleepDeal_Continue(void)
+{
+	UINT8 u8FlashWriteOK_flag = 0;
+	UINT8 u8SleepModeSelect;
+
+	LowPowerSleep_SaveResetState();
+	u8SleepModeSelect = SleepDeal_SelectMode();
+
+	switch (u8SleepModeSelect)
 	{
 	case NORMAL_MODE:
 		BootFlag_Write(FLASH_NORMAL_SLEEP_VALUE);
