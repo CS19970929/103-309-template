@@ -30,6 +30,8 @@ PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTa
 BOARD_CONTROL_H = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
+SYSTEM_INIT_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Init.c"
+SYSTEM_INIT_H = ROOT / "103 + 309" / "Project" / "Source" / "System_Init.h"
 PUBFUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.c"
 PUBFUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "PubFunc.h"
 SYSTEM_MONITOR_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.c"
@@ -678,6 +680,8 @@ def check_portability_foundation(reporter):
         RTC_SLEEP_C,
         SOC_C,
         ADC_H,
+        SYSTEM_INIT_C,
+        SYSTEM_INIT_H,
         PUBFUNC_C,
         PUBFUNC_H,
         SYSTEM_MONITOR_C,
@@ -722,6 +726,8 @@ def check_portability_foundation(reporter):
     sh367309_func_c = read_text(SH367309_FUNC_C)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
     soc_c = read_text(SOC_C)
+    system_init_c = read_text(SYSTEM_INIT_C)
+    system_init_h = read_text(SYSTEM_INIT_H)
     adc_c = read_text(ROOT / "103 + 309" / "Project" / "Source" / "ADC.c")
     adc_h = read_text(ADC_H)
     pubfunc_c = read_text(PUBFUNC_C)
@@ -982,6 +988,18 @@ def check_portability_foundation(reporter):
         reporter.ok("ADC.c uses platform/model accessors instead of main.h")
     else:
         reporter.fail("ADC.c should use platform/model accessors instead of main.h")
+
+    if (
+        '#include "main.h"' not in system_init_c
+        and '#include "System_Init.h"' in system_init_c
+        and '#include "ADC.h"' in system_init_c
+        and '#include "conf.h"' in system_init_c
+        and '#include "Project_Types.h"' in system_init_h
+        and '#include "stm32f10x.h"' in system_init_h
+    ):
+        reporter.ok("System_Init.c/h declare timing/platform dependencies without main.h")
+    else:
+        reporter.fail("System_Init.c/h should declare timing/platform dependencies without main.h")
 
     if (
         "#define DELAYB10MS_5S" not in iodrivers_c
