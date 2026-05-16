@@ -1,4 +1,9 @@
-#include "main.h"
+#include "DataDeal.h"
+#include "Heat_Cool.h"
+#include "Sci_Upper.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 enum HEAT_COOL_CTRL_STATUS HeatCtrl_Command = ST_HEAT_DET_SELF;
 enum HEAT_COOL_CTRL_STATUS CoolCtrl_Command = ST_COOL_DET_SELF;

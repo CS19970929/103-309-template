@@ -36,6 +36,8 @@ SYSTEM_MONITOR_C = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.c
 SYSTEM_MONITOR_H = ROOT / "103 + 309" / "Project" / "Source" / "System_Monitor.h"
 CHARGER_LOAD_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.c"
 CHARGER_LOAD_FUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.h"
+HEAT_COOL_C = ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.c"
+HEAT_COOL_H = ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.h"
 IODRIVERS_C = ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
@@ -680,6 +682,8 @@ def check_portability_foundation(reporter):
         SYSTEM_MONITOR_H,
         CHARGER_LOAD_FUNC_C,
         CHARGER_LOAD_FUNC_H,
+        HEAT_COOL_C,
+        HEAT_COOL_H,
         IODRIVERS_C,
         CAN_FEIDAO_FRAMES_C,
         FLASH64K_APP_TEST_H,
@@ -722,6 +726,7 @@ def check_portability_foundation(reporter):
     system_monitor_h = read_text(SYSTEM_MONITOR_H)
     charger_load_func_c = read_text(CHARGER_LOAD_FUNC_C)
     charger_load_func_h = read_text(CHARGER_LOAD_FUNC_H)
+    heat_cool_c = read_text(HEAT_COOL_C)
     iodrivers_c = read_text(IODRIVERS_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
@@ -1050,6 +1055,19 @@ def check_portability_foundation(reporter):
         reporter.ok("Fault.c declares software protection dependencies without main.h")
     else:
         reporter.fail("Fault.c should declare software protection dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in heat_cool_c
+        and '#include "Heat_Cool.h"' in heat_cool_c
+        and '#include "DataDeal.h"' in heat_cool_c
+        and '#include "Sci_Upper.h"' in heat_cool_c
+        and '#include "SH367309_Func.h"' in heat_cool_c
+        and '#include "System_Init.h"' in heat_cool_c
+        and '#include "System_Monitor.h"' in heat_cool_c
+    ):
+        reporter.ok("Heat_Cool.c declares optional heat/cool dependencies without main.h")
+    else:
+        reporter.fail("Heat_Cool.c should declare optional heat/cool dependencies without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")
