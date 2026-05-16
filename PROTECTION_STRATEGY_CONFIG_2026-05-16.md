@@ -44,6 +44,8 @@ PROJECT_FEATURE_SOFTWARE_PROTECTION
 
 业务代码不直接判断 `PROJECT_CFG_PROTECTION_MODE`，只读派生 feature。
 
+如果 `PROJECT_CFG_PROTECTION_MODE` 填成非 `0/1/2` 的值，`Project_Protection.h` 会直接编译报错，不会静默回退到某个默认模式。
+
 ## 3. 当前源码运行关系
 
 ### 3.1 AFE 硬件保护路径
@@ -117,7 +119,7 @@ Runtime_RunFrontTasks()
 `tools/project_check.py` 已固化以下检查：
 
 1. `Project_Config.h` 必须有 `PROJECT_CFG_PROTECTION_MODE`。
-2. `Project_Protection.h` 必须定义三种保护模式。
+2. `Project_Protection.h` 必须定义三种保护模式，并对非法模式编译期报错。
 3. `Runtime.c` 必须通过 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 调度 `App_WarnCtrl()`。
 4. `SH367309_Func.c` 的 `Fault_ChangeToMCU()` 必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
 5. `rtc_sleep.c` 的 RTC 唤醒故障镜像也必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。

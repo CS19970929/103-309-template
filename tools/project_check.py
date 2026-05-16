@@ -777,6 +777,7 @@ def check_portability_foundation(reporter):
         and "PROJECT_PROTECTION_MODE_HYBRID" in project_protection
         and "PROJECT_PROTECTION_USES_AFE_HARDWARE 1" in project_protection
         and "PROJECT_PROTECTION_USES_MCU_SOFTWARE 1" in project_protection
+        and '#error "Invalid PROJECT_CFG_PROTECTION_MODE"' in project_protection
     ):
         reporter.ok("Project_Protection.h defines one-switch hardware/software protection modes")
     else:

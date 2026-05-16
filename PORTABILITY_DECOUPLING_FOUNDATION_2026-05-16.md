@@ -57,7 +57,7 @@
 | `1` | `PROJECT_PROTECTION_MODE_MCU_SOFTWARE` | 主循环运行 `App_WarnCtrl()` 软件保护判断，适合 bq769x0 等移植项目 |
 | `2` | `PROJECT_PROTECTION_MODE_HYBRID` | AFE fault 镜像和 MCU 软件保护都启用 |
 
-当前 309 项目默认 `0`。`SH367309_Func.c` 和 `rtc_sleep.c` 中 `Fault_ChangeToMCU()` 受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制；`Runtime.c` 中 `App_WarnCtrl()` 受 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 控制。这样后续移植到其他 AFE 时，不需要搜索多个散落开关。
+当前 309 项目默认 `0`。`SH367309_Func.c` 和 `rtc_sleep.c` 中 `Fault_ChangeToMCU()` 受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制；`Runtime.c` 中 `App_WarnCtrl()` 受 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 控制。非法保护模式会编译期报错。这样后续移植到其他 AFE 时，不需要搜索多个散落开关。
 
 ### 2.4 `Platform_Port.h`
 
