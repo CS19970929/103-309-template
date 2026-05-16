@@ -59,6 +59,8 @@ LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 LOW_POWER_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "LowPowerSleep.c"
 PRODUCTION_ID_C = ROOT / "103 + 309" / "Project" / "Source" / "ProductionID.c"
 FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
+FAULT_C = ROOT / "103 + 309" / "Project" / "Source" / "Fault.c"
+FAULT_H = ROOT / "103 + 309" / "Project" / "Source" / "Fault.h"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
 STM32F10X_IT_C = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0" / "drivers" / "stm32f10x_it.c"
 GITIGNORE = ROOT / ".gitignore"
@@ -687,6 +689,8 @@ def check_portability_foundation(reporter):
         LOW_POWER_SLEEP_C,
         PRODUCTION_ID_C,
         FACTORY_AGING_C,
+        FAULT_C,
+        FAULT_H,
         BUILD_GUARD,
         PORTABILITY_DOC,
         PROTECTION_DOC,
@@ -727,6 +731,7 @@ def check_portability_foundation(reporter):
     low_power_sleep_c = read_text(LOW_POWER_SLEEP_C)
     production_id_c = read_text(PRODUCTION_ID_C)
     factory_aging_c = read_text(FACTORY_AGING_C)
+    fault_c = read_text(FAULT_C)
     build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
     protection_doc = read_text(PROTECTION_DOC)
@@ -1031,6 +1036,19 @@ def check_portability_foundation(reporter):
         reporter.ok("FactoryAging.c declares board/storage/tick dependencies without main.h")
     else:
         reporter.fail("FactoryAging.c should declare board/storage/tick dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in fault_c
+        and '#include "Fault.h"' in fault_c
+        and '#include "DataDeal.h"' in fault_c
+        and '#include "PubFunc.h"' in fault_c
+        and '#include "Sci_Upper.h"' in fault_c
+        and '#include "System_Init.h"' in fault_c
+        and '#include "System_Monitor.h"' in fault_c
+    ):
+        reporter.ok("Fault.c declares software protection dependencies without main.h")
+    else:
+        reporter.fail("Fault.c should declare software protection dependencies without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")

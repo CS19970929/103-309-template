@@ -73,7 +73,7 @@ Runtime_RunFrontTasks()
         -> FaultWarnRecord2()
 ```
 
-该路径使用 `Fault.c` 内的软件比较、滤波和恢复逻辑，适合后续其他 AFE 只提供采样值、不承担完整硬件保护的项目。
+该路径使用 `Fault.c` 内的软件比较、滤波和恢复逻辑，适合后续其他 AFE 只提供采样值、不承担完整硬件保护的项目。`Fault.c` 已脱离 `main.h`，显式依赖 `DataDeal.h`、`Sci_Upper.h`、`System_Init.h`、`System_Monitor.h` 和 `PubFunc.h`，后续移植时可以按这些输入边界替换采样模型、10ms tick 和错误记录。
 
 ## 4. 移植建议
 
@@ -121,4 +121,5 @@ Runtime_RunFrontTasks()
 3. `Runtime.c` 必须通过 `PROJECT_FEATURE_SOFTWARE_PROTECTION` 调度 `App_WarnCtrl()`。
 4. `SH367309_Func.c` 的 `Fault_ChangeToMCU()` 必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
 5. `rtc_sleep.c` 的 RTC 唤醒故障镜像也必须受 `PROJECT_PROTECTION_USES_AFE_HARDWARE` 控制。
-6. Release 默认必须保持 `PROJECT_CFG_PROTECTION_MODE=0`，对应当前 309 AFE 硬件保护方案。
+6. `Fault.c` 必须使用显式依赖，不再通过 `main.h` 间接获得软件保护输入。
+7. Release 默认必须保持 `PROJECT_CFG_PROTECTION_MODE=0`，对应当前 309 AFE 硬件保护方案。

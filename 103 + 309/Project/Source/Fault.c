@@ -1,4 +1,9 @@
-#include "main.h"
+#include "DataDeal.h"
+#include "Fault.h"
+#include "PubFunc.h"
+#include "Sci_Upper.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 struct PRT_E2ROM_PARAS PRT_E2ROMParas;
 
