@@ -26,6 +26,7 @@ PROJECT_TYPES_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_Types.h"
 PLATFORM_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "Platform_Port.h"
 BMS_MODEL_H = ROOT / "103 + 309" / "Project" / "Source" / "BmsModel.h"
 PROJECT_APP_TASKS_H = ROOT / "103 + 309" / "Project" / "Source" / "Project_AppTasks.h"
+BOARD_CONTROL_H = ROOT / "103 + 309" / "Project" / "Source" / "BoardControl.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
@@ -48,6 +49,7 @@ LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 LOW_POWER_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "LowPowerSleep.c"
 PRODUCTION_ID_C = ROOT / "103 + 309" / "Project" / "Source" / "ProductionID.c"
+FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
 STM32F10X_IT_C = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0" / "drivers" / "stm32f10x_it.c"
 GITIGNORE = ROOT / ".gitignore"
@@ -270,6 +272,7 @@ def check_required_files(reporter):
         PLATFORM_PORT_H,
         BMS_MODEL_H,
         PROJECT_APP_TASKS_H,
+        BOARD_CONTROL_H,
         ELOG_CFG_H,
         GITIGNORE,
         PRE_COMMIT,
@@ -659,6 +662,7 @@ def check_portability_foundation(reporter):
         LOGRECORD_C,
         LOW_POWER_SLEEP_C,
         PRODUCTION_ID_C,
+        FACTORY_AGING_C,
         BUILD_GUARD,
         PORTABILITY_DOC,
     ]
@@ -673,6 +677,7 @@ def check_portability_foundation(reporter):
     platform_port = read_text(PLATFORM_PORT_H)
     bms_model = read_text(BMS_MODEL_H)
     project_app_tasks = read_text(PROJECT_APP_TASKS_H)
+    board_control = read_text(BOARD_CONTROL_H)
     runtime_c = read_text(RUNTIME_C)
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
@@ -684,6 +689,7 @@ def check_portability_foundation(reporter):
     logrecord_c = read_text(LOGRECORD_C)
     low_power_sleep_c = read_text(LOW_POWER_SLEEP_C)
     production_id_c = read_text(PRODUCTION_ID_C)
+    factory_aging_c = read_text(FACTORY_AGING_C)
     build_guard = read_text(BUILD_GUARD)
     doc = read_text(PORTABILITY_DOC)
 
@@ -753,6 +759,11 @@ def check_portability_foundation(reporter):
         reporter.ok("Project_AppTasks.h exposes runtime/init task prototypes without main.h")
     else:
         reporter.fail("Project_AppTasks.h should expose runtime/init task prototypes without main.h")
+
+    if "void enter_fac_mode(bool on);" in board_control and "open_chg_close_dsg" in board_control:
+        reporter.ok("BoardControl.h exposes board-level MOS/factory-mode controls")
+    else:
+        reporter.fail("BoardControl.h should expose board-level MOS/factory-mode controls")
 
     runtime_tokens = [
         '#include "Project_Features.h"',
@@ -869,6 +880,16 @@ def check_portability_foundation(reporter):
         reporter.ok("ProductionID.c declares production data dependencies without main.h")
     else:
         reporter.fail("ProductionID.c should declare production data dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in factory_aging_c
+        and '#include "BoardControl.h"' in factory_aging_c
+        and '#include "Flash.h"' in factory_aging_c
+        and '#include "System_Init.h"' in factory_aging_c
+    ):
+        reporter.ok("FactoryAging.c declares board/storage/tick dependencies without main.h")
+    else:
+        reporter.fail("FactoryAging.c should declare board/storage/tick dependencies without main.h")
 
     if "PROJECT_CFG_FEATURE_SOC && !PROJECT_CFG_FEATURE_AFE" in build_guard:
         reporter.ok("Project_BuildGuard.h blocks SOC enabled while AFE runtime is disabled")

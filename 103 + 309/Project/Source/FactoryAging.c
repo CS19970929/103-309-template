@@ -1,5 +1,10 @@
-#include "main.h"
+#include "BoardControl.h"
 #include "FactoryAging.h"
+#include "Flash.h"
+#include "Project_Features.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
+#include <string.h>
 
 #define FACTORY_AGING_STATE_UNINIT  ((UINT8)0U)
 #define FACTORY_AGING_STATE_RUNNING ((UINT8)1U)

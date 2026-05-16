@@ -95,7 +95,17 @@
 
 这样 `Runtime.c` 不再需要包含 `main.h` 这个总入口头，后续拆主循环、复用运行框架或移植到其他 MCU 时，不必把整套旧工程头文件一起带过去。
 
-### 2.6 测试模块依赖显式化
+### 2.6 `BoardControl.h`
+
+新增板级控制声明头，集中声明 MOS 和 factory mode 控制入口：
+
+- `open_chg_close_dsg()`
+- `open_dsg_close_chg()`
+- `enter_fac_mode(bool on)`
+
+`FactoryAging.c` 已通过 `BoardControl.h` 调用老化模式开关，不再通过 `main.h` 间接获得这些入口。后续迁移到 STM32F0 时，这类“产品动作”可以保留接口，底层 MOS/AFe 写法再按目标板适配。
+
+### 2.7 测试模块依赖显式化
 
 `Flash64KAppTest.c` 已从 `main.h` 改为显式包含：
 
@@ -111,6 +121,7 @@
 
 - `LowPowerSleep.c` 显式依赖 `Can_HDX.h`、`FactoryAging.h`、`LedBar.h`、`SocEnhance.h`。
 - `ProductionID.c` 显式依赖 `DataDeal.h`、`ProductionID.h` 和 `<string.h>`。
+- `FactoryAging.c` 显式依赖 `BoardControl.h`、`Flash.h`、`System_Init.h`、`System_Monitor.h` 和 `Project_Features.h`。
 
 ## 3. 运行流程变化
 
@@ -220,7 +231,7 @@ Runtime_RunOnce()
 
 本次改动属于“解耦基础设施”，不是完整架构重写。当前仍有这些风险：
 
-1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
+1. `main.h` 仍然是多数旧模块的重包含入口；本轮已先移除 `Runtime.c`、`CanFeidaoFrames.c`、`SOC.c`、`Flash64KAppTest.c`、`LogRecord.c`、`LowPowerSleep.c`、`ProductionID.c`、`FactoryAging.c` 对它的依赖，并把 `LedBar.c` 的运行数据读取切到 `BmsModel.h`，后续需要逐步推进到 `Sci_Upper.c`、`rtc_sleep.c` 等模块。
 2. 新增 feature gate 只保证运行入口可关闭，不保证所有依赖都能从 Keil 工程中直接删除。
 3. `BmsModel.h` 当前还是 inline accessor，底层仍读取原全局对象；它是迁移入口，不是最终数据模型重构。
 4. 移植 STM32F0 时，CAN、RTC、Flash、BKP、EXTI 和 GPIO AFIO 差异仍需要逐项实测。
@@ -241,6 +252,7 @@ Runtime_RunOnce()
 10. 确认 `Flash64KAppTest.c` 使用显式依赖而不是 `main.h`。
 11. 确认 `LogRecord.c` 不再包含 `main.h`，且通过 `BmsModel.h` 读取 fault/status。
 12. 确认 `LowPowerSleep.c` 和 `ProductionID.c` 使用显式依赖而不是 `main.h`。
+13. 确认 `FactoryAging.c` 通过 `BoardControl.h` 调用板级 MOS/factory mode 入口，不再包含 `main.h`。
 
 建议每次做模块裁剪或移植前执行：
 
