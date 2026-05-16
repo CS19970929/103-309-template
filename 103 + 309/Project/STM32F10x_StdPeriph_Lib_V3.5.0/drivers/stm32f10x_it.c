@@ -60,6 +60,21 @@ __asm void wait()
   BX lr
 }
 
+static void Fault_ResetOrHold(void)
+{
+#ifdef _DEBUG_
+  while (1)
+  {
+    wait();
+  }
+#else
+  NVIC_SystemReset();
+  while (1)
+  {
+  }
+#endif
+}
+
 /**
  * @brief  This function handles Hard Fault exception.
  * @param  None
@@ -67,11 +82,7 @@ __asm void wait()
  */
 void HardFault_Handler(void)
 {
-  /* Go to infinite loop when Hard Fault exception occurs */
-  while (1)
-  {
-    wait();
-  }
+  Fault_ResetOrHold();
 }
 
 /**
@@ -81,10 +92,7 @@ void HardFault_Handler(void)
  */
 void MemManage_Handler(void)
 {
-  /* Go to infinite loop when Memory Manage exception occurs */
-  while (1)
-  {
-  }
+  Fault_ResetOrHold();
 }
 
 /**
@@ -94,10 +102,7 @@ void MemManage_Handler(void)
  */
 void BusFault_Handler(void)
 {
-  /* Go to infinite loop when Bus Fault exception occurs */
-  while (1)
-  {
-  }
+  Fault_ResetOrHold();
 }
 
 /**
@@ -107,10 +112,7 @@ void BusFault_Handler(void)
  */
 void UsageFault_Handler(void)
 {
-  /* Go to infinite loop when Usage Fault exception occurs */
-  while (1)
-  {
-  }
+  Fault_ResetOrHold();
 }
 
 /**

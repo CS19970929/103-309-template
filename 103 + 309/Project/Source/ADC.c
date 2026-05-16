@@ -7,6 +7,8 @@ INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在
 INT32 g_i32ADCResult[ADC_NUM];     // ADC结果保存
 static UINT32 s_u32AnlogCalLast10msTick = 0U;
 #define TYPEC_CUR_ZERO_CONFIRM_CNT ((UINT8)3)
+#define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
+#define ADC_ANALOG_CAL_MAX_CATCHUP_TICKS ((UINT32)10U)
 
 UINT16 g_u16IoutOffsetAD;
 UINT16 g_u16TypeCOutCurrent_mA;
@@ -178,6 +180,38 @@ void InitADC_TIMER(void)
     TIM_OC2Init(TIM2, &TIM_OCInitStructure);
     TIM_Cmd(TIM2, ENABLE);
 }
+static UINT8 ADC_WaitResetCalibrationDone(void)
+{
+    UINT32 timeout = ADC_CALIBRATION_WAIT_LOOP;
+
+    while (ADC_GetResetCalibrationStatus(ADC1) != RESET)
+    {
+        Feed_IWatchDog;
+        if (timeout-- == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+static UINT8 ADC_WaitCalibrationDone(void)
+{
+    UINT32 timeout = ADC_CALIBRATION_WAIT_LOOP;
+
+    while (ADC_GetCalibrationStatus(ADC1) != RESET)
+    {
+        Feed_IWatchDog;
+        if (timeout-- == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
 void InitADC_ADC1(void)
 {
     ADC_InitTypeDef ADC_InitStruct;
@@ -205,11 +239,22 @@ void InitADC_ADC1(void)
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
 
     ADC_ResetCalibration(ADC1); // 初始化ADC 校准寄存器，果然要放在以上两句话后面才行
-    while (ADC_GetResetCalibrationStatus(ADC1))
-        ;                       // 等待校准寄存器初始化完成
+    if (!ADC_WaitResetCalibrationDone())
+    {
+        ADC_DMACmd(ADC1, DISABLE);
+        ADC_Cmd(ADC1, DISABLE);
+        System_ERROR_UserCallback(ERROR_ADC);
+        return;
+    }                       // 等待校准寄存器初始化完成
     ADC_StartCalibration(ADC1); // ADC开始校准
-    while (ADC_GetCalibrationStatus(ADC1))
-        ; // 等待校准完成
+    if (!ADC_WaitCalibrationDone())
+    {
+        ADC_DMACmd(ADC1, DISABLE);
+        ADC_Cmd(ADC1, DISABLE);
+        System_ERROR_UserCallback(ERROR_ADC);
+        return;
+    } // 等待校准完成
+    System_ERROR_UserCallback(ERROR_REMOVE_ADC);
 
     // ADC_SoftwareStartConvCmd(ADC1, ENABLE);		//由于没有采用外部触发，所以使用软件触发ADC转换
     ADC_ExternalTrigConvCmd(ADC1, ENABLE);
@@ -217,7 +262,7 @@ void InitADC_ADC1(void)
 
 void ADC_ResetAnlogCalSchedule(void)
 {
-    s_u32AnlogCalLast10msTick = 0U;
+    s_u32AnlogCalLast10msTick = SysTime_Get10msTickCount();
 }
 
 void ADC_StopForLowPower(void)
@@ -444,6 +489,7 @@ void App_AnlogCal(void)
 {
     UINT32 u32Now10msTick;
     UINT32 u32Elapsed10msTick;
+    UINT32 u32Process10msTick;
 
     u32Now10msTick = SysTime_Get10msTickCount();
     u32Elapsed10msTick = u32Now10msTick - s_u32AnlogCalLast10msTick;
@@ -451,14 +497,20 @@ void App_AnlogCal(void)
     {
         return;
     }
-    s_u32AnlogCalLast10msTick = u32Now10msTick;
 
-    while (u32Elapsed10msTick > 0U)
+    u32Process10msTick = u32Elapsed10msTick;
+    if (u32Process10msTick > ADC_ANALOG_CAL_MAX_CATCHUP_TICKS)
+    {
+        u32Process10msTick = ADC_ANALOG_CAL_MAX_CATCHUP_TICKS;
+    }
+    s_u32AnlogCalLast10msTick += u32Process10msTick;
+
+    while (u32Process10msTick > 0U)
     {
         ADC_TTC();
         ADC_Vbc();
         ADC_Current_Smooth();
-        u32Elapsed10msTick--;
+        u32Process10msTick--;
     }
     g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
     g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);

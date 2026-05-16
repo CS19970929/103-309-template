@@ -255,7 +255,12 @@ static uint8_t LedBar_GetPinIndex(uint16_t pin)
 {
     uint8_t index = 0u;
 
-    while (((pin >> index) & 0x1u) == 0u)
+    if (pin == 0u)
+    {
+        return 0u;
+    }
+
+    while ((((pin >> index) & 0x1u) == 0u) && (index < 15u))
     {
         index++;
     }

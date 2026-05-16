@@ -2471,6 +2471,7 @@ void App_CommonUpper(void)
 #else
 #define debug_uart USART2
 #endif
+#define SCI_DEBUG_UART_TX_WAIT_LOOP ((UINT32)100000U)
 
 int fputc(int ch, FILE *f)
 {
@@ -2479,12 +2480,16 @@ int fputc(int ch, FILE *f)
 
 	return ch;
 #else /* 采用阻塞方式发送每个字符,等待数据发送完毕 */
+	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
+
 	/* 写一个字节到USART1 */
 	USART_SendData(debug_uart, (uint8_t)ch);
 
 	/* 等待发送结束 */
-	while (USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET)
+	while ((USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET) && (wait_loop > 0U))
 	{
+		Feed_IWatchDog;
+		wait_loop--;
 	}
 
 	return ch;
