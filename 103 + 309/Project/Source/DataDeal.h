@@ -244,6 +244,7 @@ extern UINT16 CopperLoss[CompensateNUM];
 extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
+extern UINT8 SeriesNum;
 extern UINT32 g_u32AfeCurrentSampleSeq;
 extern AFE_CURRENT_OBSERVE g_stAfeCurrentObserve;
 extern INT32 g_i32AfeCurrentZeroOffsetRawQ4;

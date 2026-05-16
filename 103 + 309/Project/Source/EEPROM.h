@@ -1,6 +1,8 @@
 #ifndef EEPROM_H
 #define EEPROM_H
 
+#include "Project_Types.h"
+
 //Mini STM32������ʹ�õ���24c02
 //#define AT24C02
 #define DELAY_US_IIC_EEPROM		2	//4Ϊ100KHz��2Ϊ150KHz
@@ -108,8 +110,6 @@
 
 #define E2P_ADDR_SH367309_VALUE		1500	//��һ��1202
 
-UINT8 ReadEEPROM_Byte(UINT16 addr);
-UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val);
 UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);
 UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data);
 
@@ -118,11 +118,4 @@ void App_E2promDeal(void);
 UINT8 EEPROM_SaveRWParametersToFlash(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);
 
-void EEPROM_test(void);
-
-extern uint16_t curr_offset;
-extern UINT16 OffsetValue_CHG ;
-extern UINT16 OffsetValue_DSG;
-
 #endif	/* EEPROM_H */
-

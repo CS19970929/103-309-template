@@ -46,6 +46,7 @@ SHORT_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "ShortFunc.c"
 SHORT_FUNC_H = ROOT / "103 + 309" / "Project" / "Source" / "ShortFunc.h"
 IODRIVERS_C = ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
+DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
 SH367309_FUNC_C = ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
@@ -62,6 +63,8 @@ CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
 FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
+EEPROM_C = ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.c"
+EEPROM_H = ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.h"
 FLASH64K_APP_TEST_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.h"
 FLASH64K_APP_TEST_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.c"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
@@ -680,6 +683,7 @@ def check_portability_foundation(reporter):
         RUNTIME_C,
         MAIN_C,
         DATADEAL_C,
+        DATADEAL_H,
         SH367309_FUNC_C,
         SLEEPDEAL_C,
         SLEEPDEAL_H,
@@ -704,6 +708,8 @@ def check_portability_foundation(reporter):
         CAN_FEIDAO_FRAMES_C,
         FLASH_C,
         FLASH_H,
+        EEPROM_C,
+        EEPROM_H,
         FLASH64K_APP_TEST_H,
         FLASH64K_APP_TEST_C,
         LEDBAR_C,
@@ -733,6 +739,7 @@ def check_portability_foundation(reporter):
     runtime_c = read_text(RUNTIME_C)
     main_c = read_text(MAIN_C)
     datadeal_c = read_text(DATADEAL_C)
+    datadeal_h = read_text(DATADEAL_H)
     sh367309_func_c = read_text(SH367309_FUNC_C)
     sleepdeal_c = read_text(SLEEPDEAL_C)
     sleepdeal_h = read_text(SLEEPDEAL_H)
@@ -755,6 +762,8 @@ def check_portability_foundation(reporter):
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
     flash_c = read_text(FLASH_C)
     flash_h = read_text(FLASH_H)
+    eeprom_c = read_text(EEPROM_C)
+    eeprom_h = read_text(EEPROM_H)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
     flash64k_app_test_c = read_text(FLASH64K_APP_TEST_C)
     ledbar_c = read_text(LEDBAR_C)
@@ -955,6 +964,35 @@ def check_portability_foundation(reporter):
         reporter.ok("Flash.c/h declare storage dependencies without main.h")
     else:
         reporter.fail("Flash.c/h should declare storage dependencies without main.h")
+
+    if (
+        '#include "main.h"' not in eeprom_c
+        and '#include "DataDeal.h"' in eeprom_c
+        and '#include "EEPROM.h"' in eeprom_c
+        and '#include "Fault.h"' in eeprom_c
+        and '#include "Flash.h"' in eeprom_c
+        and '#include "Heat_Cool.h"' in eeprom_c
+        and '#include "LogRecord.h"' in eeprom_c
+        and '#include "SH367309_DataDeal.h"' in eeprom_c
+        and '#include "SOC.h"' in eeprom_c
+        and '#include "SocEnhance.h"' in eeprom_c
+        and '#include "System_Monitor.h"' in eeprom_c
+        and '#include "UpgradeParamPolicy.h"' in eeprom_c
+        and "ReadEEPROM_Byte" not in eeprom_c
+        and "WriteEEPROM_Byte" not in eeprom_c
+        and "curr_offset" not in eeprom_c
+        and "OffsetValue_" not in eeprom_c
+        and "WriteEEPROM_Word_NoZone" in eeprom_c
+        and '#include "Project_Types.h"' in eeprom_h
+        and "ReadEEPROM_Byte" not in eeprom_h
+        and "WriteEEPROM_Byte" not in eeprom_h
+        and "curr_offset" not in eeprom_h
+        and "OffsetValue_" not in eeprom_h
+        and "extern UINT8 SeriesNum;" in datadeal_h
+    ):
+        reporter.ok("EEPROM.c/h declare storage parameter dependencies without main.h or stale byte stubs")
+    else:
+        reporter.fail("EEPROM.c/h should declare dependencies without main.h and remove stale byte stubs")
 
     if (
         '#include "main.h"' not in flash64k_app_test_c

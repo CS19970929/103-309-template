@@ -1,10 +1,14 @@
-#include "main.h"
-#include "UpgradeParamPolicy.h"
+#include "DataDeal.h"
+#include "EEPROM.h"
+#include "Fault.h"
+#include "Flash.h"
+#include "Heat_Cool.h"
+#include "LogRecord.h"
+#include "SH367309_DataDeal.h"
+#include "SOC.h"
 #include "SocEnhance.h"
-
-uint16_t curr_offset = 0;
-UINT16 OffsetValue_CHG = 0;
-UINT16 OffsetValue_DSG = 0;
+#include "System_Monitor.h"
+#include "UpgradeParamPolicy.h"
 
 extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
 
@@ -218,10 +222,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultSocTable();
 	EEPROM_LoadDefaultCopperLoss();
 
-	curr_offset = 0;
-	OffsetValue_CHG = 0;
-	OffsetValue_DSG = 0;
-
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 }
@@ -331,19 +331,6 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 #endif
 }
 
-UINT8 ReadEEPROM_Byte(UINT16 addr)
-{
-	(void)addr;
-	return 0xFF;
-}
-
-UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
-{
-	(void)addr;
-	(void)val;
-	return 0;
-}
-
 UINT16 ReadEEPROM_Word_NoZone(UINT16 addr)
 {
 	(void)addr;
@@ -373,5 +360,4 @@ void InitE2PROM(void)
 void App_E2promDeal(void)
 {
 }
-
 
