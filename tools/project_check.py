@@ -60,6 +60,8 @@ RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
+FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
+FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
 FLASH64K_APP_TEST_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.h"
 FLASH64K_APP_TEST_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash64KAppTest.c"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
@@ -700,6 +702,8 @@ def check_portability_foundation(reporter):
         SHORT_FUNC_H,
         IODRIVERS_C,
         CAN_FEIDAO_FRAMES_C,
+        FLASH_C,
+        FLASH_H,
         FLASH64K_APP_TEST_H,
         FLASH64K_APP_TEST_C,
         LEDBAR_C,
@@ -749,6 +753,8 @@ def check_portability_foundation(reporter):
     short_func_c = read_text(SHORT_FUNC_C)
     iodrivers_c = read_text(IODRIVERS_C)
     can_frames_c = read_text(CAN_FEIDAO_FRAMES_C)
+    flash_c = read_text(FLASH_C)
+    flash_h = read_text(FLASH_H)
     flash64k_app_test_h = read_text(FLASH64K_APP_TEST_H)
     flash64k_app_test_c = read_text(FLASH64K_APP_TEST_C)
     ledbar_c = read_text(LEDBAR_C)
@@ -927,6 +933,28 @@ def check_portability_foundation(reporter):
         reporter.ok("Flash64KAppTest.h declares its own storage dependencies")
     else:
         reporter.fail("Flash64KAppTest.h should declare its own storage dependencies")
+
+    if (
+        '#include "main.h"' not in flash_c
+        and '#include "Flash.h"' in flash_c
+        and '#include "DataDeal.h"' in flash_c
+        and '#include "Flash64KAppTest.h"' in flash_c
+        and '#include "Platform_Port.h"' in flash_c
+        and '#include "PubFunc.h"' in flash_c
+        and '#include "Sci_Upper.h"' in flash_c
+        and '#include "SH367309_Func.h"' in flash_c
+        and '#include "System_Init.h"' in flash_c
+        and '#include "System_Monitor.h"' in flash_c
+        and "Platform_ResetMcu();" in flash_c
+        and "MCU_RESET();" not in flash_c
+        and "FlashTest" not in flash_c
+        and "FlashTest" not in flash_h
+        and '#include "Project_Types.h"' in flash_h
+        and '#include "stm32f10x.h"' in flash_h
+    ):
+        reporter.ok("Flash.c/h declare storage dependencies without main.h")
+    else:
+        reporter.fail("Flash.c/h should declare storage dependencies without main.h")
 
     if (
         '#include "main.h"' not in flash64k_app_test_c

@@ -1,5 +1,15 @@
-#include "main.h"
+#include <stdio.h>
+#include <string.h>
+
+#include "DataDeal.h"
+#include "Flash.h"
 #include "Flash64KAppTest.h"
+#include "Platform_Port.h"
+#include "PubFunc.h"
+#include "Sci_Upper.h"
+#include "SH367309_Func.h"
+#include "System_Init.h"
+#include "System_Monitor.h"
 
 typedef void (*pFunction)(void);
 pFunction Jump_To_Application;
@@ -669,11 +679,6 @@ UINT16 FlashReadOneHalfWord(UINT32 faddr)
 	return *(vu16 *)faddr;
 }
 
-void FlashTest(void)
-{
-	g_stCellInfoReport.u16VCell[2] = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
-}
-
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
 	STORAGE_FLASH_SOC_DATA_V1 legacy_data;
@@ -1041,7 +1046,7 @@ void App_FlashUpdate(void)
 		__delay_ms(10);
 		u8FlashUpdateFlag = 0;
 		__disable_fault_irq();
-		MCU_RESET();
+		Platform_ResetMcu();
 	}
 #endif
 }

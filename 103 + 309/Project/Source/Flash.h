@@ -1,6 +1,9 @@
 #ifndef PROJECT_STORAGE_FLASH_H
 #define PROJECT_STORAGE_FLASH_H
 
+#include "Project_Types.h"
+#include "stm32f10x.h"
+
 #define FLASH_ADDR_IAP_START             0x08000000
 #define FLASH_ADDR_APP_START             0x08004800
 
@@ -88,7 +91,6 @@ typedef struct
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
-void FlashTest(void);
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
