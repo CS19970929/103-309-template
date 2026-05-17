@@ -29,6 +29,11 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
+UINT8 MosStartup_Is5vChargeActive(void)
+{
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
+}
+
 void open_chg_close_dsg(void)
 {
 	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
@@ -51,11 +56,33 @@ void enter_fac_mode(bool on)
 {
 	if (on)
 	{
+		if (MosStartup_Is5vChargeActive() != 0U)
+		{
+			open_chg_close_dsg();
+			return;
+		}
+
 		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
 		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1;
 		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1;
 		MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 		GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_SET);
+	}
+	else
+	{
+		open_dsg_close_chg();
+	}
+}
+
+void MosStartup_ApplyInitialState(void)
+{
+	if (MosStartup_Is5vChargeActive() != 0U)
+	{
+		open_chg_close_dsg();
+	}
+	else if (FactoryAging_ShouldStartOnBoot() != 0U)
+	{
+		enter_fac_mode(true);
 	}
 	else
 	{

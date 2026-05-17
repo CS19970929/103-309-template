@@ -149,6 +149,19 @@ static UINT8 FactoryAging_IsDoneStored(void)
 			(data.u16State == FLASH_FACTORY_AGING_STATE_DONE)) ? 1U : 0U;
 }
 
+UINT8 FactoryAging_ShouldStartOnBoot(void)
+{
+#if PROJECT_CFG_FACTORY_AGING_ENABLE
+	UINT32 stored_elapsed = 0U;
+	UINT8 done = 0U;
+
+	(void)FactoryAging_LoadStoredProgress(&stored_elapsed, &done);
+	return (done == 0U) ? 1U : 0U;
+#else
+	return 0U;
+#endif
+}
+
 static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UINT8 force_bkp)
 {
 	STORAGE_FLASH_FACTORY_AGING_DATA data;
@@ -242,7 +255,14 @@ static void FactoryAging_Start(UINT32 now_tick)
 		return;
 	}
 
-	enter_fac_mode(true);
+	if (MosStartup_Is5vChargeActive() != 0U)
+	{
+		open_chg_close_dsg();
+	}
+	else
+	{
+		enter_fac_mode(true);
+	}
 	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 

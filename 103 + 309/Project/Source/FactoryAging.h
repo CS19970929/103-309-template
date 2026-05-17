@@ -5,6 +5,7 @@
 
 void FactoryAging_Task(void);
 UINT8 FactoryAging_IsActive(void);
+UINT8 FactoryAging_ShouldStartOnBoot(void);
 UINT8 FactoryAging_SaveProgressBeforeSleep(void);
 
 #endif

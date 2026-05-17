@@ -861,6 +861,7 @@ void InitAFE1(void)
 	do_startup_zero = ((g_u32AfeCurrentSampleSeq == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
 
 	initAFE1_IIC();
+	close_ctlc();
 	if (do_startup_zero != 0U)
 	{
 		AfeCurrent_SetStartupColdBoot((SleepDeal_IsBootFromSleepStartup() != 0U) ? 0U : 1U);
@@ -869,15 +870,7 @@ void InitAFE1(void)
 
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
-	// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	if (FactoryAging_IsActive() != 0U)
-	{
-		enter_fac_mode(true);
-	}
-	else
-	{
-		open_dsg_close_chg();
-	}
+	MosStartup_ApplyInitialState();
 	if (do_startup_zero != 0U)
 	{
 		AfeCurrent_StartupZeroCal();
