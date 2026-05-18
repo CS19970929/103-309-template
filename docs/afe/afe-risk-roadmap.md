@@ -23,11 +23,12 @@
 
 ## 2. 推荐整改顺序
 
-### 第 1 步：低风险修正
+### 第 1 步：低风险修正，已完成
 
-- 修正 `AFEDATA` 中 `BALANCEM/BALANCEL` 顺序。
-- 给 `sh36735_write_reg_u8()` 和 `sh36735_read_regs()` 增加地址/长度边界检查。
-- 增加 SPI 错误统计结构，至少记录最后一次失败的 `cmd/reg/len`。
+- 已修正 `AFEDATA` 中 `BALANCEM/BALANCEL` 顺序。
+- 已给 `sh36735_write_reg_u8()` 和 `sh36735_read_regs()` 增加地址/长度边界检查。
+- 已把 `FLAG2` 转换完成标志锁存到 `AFE1_LastFlag2ConversionFlags`。
+- SPI 最后失败命令/地址/长度的详细统计仍未做。
 
 验证：
 

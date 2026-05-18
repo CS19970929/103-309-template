@@ -6,13 +6,15 @@
 
 当前主工程的 AFE 通信链路已经不是最初那种“只发 SPI、不完整校验”的状态。底层 `sh36735_spi_proto.c` 已按官方例程补齐写回显、读回显、ACK、CRC8 和重试。软件 SPI 的时序也满足 SH36735XX 文档对 Mode 3、1 MHz 上限和 SCK 高低电平时间的要求。
 
-现在应优先处理的是 AFE 配置闭环和架构边界：
+2026-05-18 本轮已处理的 AFE 配置闭环和架构边界问题：
 
-- `AFEDATA` 结构体里 `BALANCEM/BALANCEL` 顺序与芯片寄存器顺序不一致。
-- `SNum`、`SeriesNum`、EEPROM 串数和 AFE `SCONF4.CN` 来源不统一。
-- AFE 初始化没有形成官方例程式的 `0x40..0x54` 配置表和读回校验。
-- SPI 读写 API 缺少寄存器地址、长度边界检查。
-- 旧 SH367309/I2C 命名与新 SH3673520/SPI 路径混在一起，维护成本高。
+- `AFEDATA` 结构体里 `BALANCEM/BALANCEL` 顺序已修正。
+- `SNum`、`SeriesNum`、EEPROM 串数和 AFE `SCONF4.CN` 已通过启动顺序和规范化函数统一。
+- AFE 初始化写寄存器后会逐项读回校验，不再只读回 `SCONF4`。
+- SPI 读写 API 已增加寄存器地址和长度边界检查。
+- `FLAG2` 的 `VADC/CADC` 自清标志已由采样模块锁存到 `AFE1_LastFlag2ConversionFlags`。
+
+仍需继续整理的是旧 SH367309/I2C 命名与新 SH3673520/SPI 路径混用的问题。
 
 ## 文档结构
 
@@ -22,6 +24,7 @@
 | [sh36735xx-register-config.md](sh36735xx-register-config.md) | SH36735XX 关键寄存器、当前主工程初始化值、配置风险 |
 | [main-project-afe-integration.md](main-project-afe-integration.md) | 主工程 AFE 入口、采样链路、保护清除、均衡、休眠关联 |
 | [afe-risk-roadmap.md](afe-risk-roadmap.md) | 风险分级、建议修改顺序、验证清单 |
+| [afe-risk-fixes-20260518.md](afe-risk-fixes-20260518.md) | 五项 AFE 风险的具体解释和本轮修复记录 |
 
 已有上层文档：
 

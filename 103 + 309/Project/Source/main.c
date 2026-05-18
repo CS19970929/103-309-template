@@ -2,6 +2,10 @@
 
 UINT8 SeriesNum = 16;
 
+#define AFE3520_SERIES_MIN         ((UINT8)4u)
+#define AFE3520_SERIES_MAX         ((UINT8)20u)
+#define AFE3520_SCONF6_PROTECT_EN  ((UINT8)0x7fu)
+
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1�?
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2�?
@@ -27,12 +31,16 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val);
+static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val);
 static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos);
+static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series);
+static void AFE3520_SyncSeriesNum(UINT16 series);
 
 int main(void)
 {
 	InitDevice(); // 初始化外�?
 	InitVar();	  // 初始化变�?
+	InitAFE3520_Registers(0, 0);
 	while (1)
 	{
 		App_SysTime();
@@ -72,14 +80,41 @@ static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val)
 		return 1;
 	}
 
-	return 0;
+	return AFE3520_ReadbackRegChecked(reg, val);
+}
+
+static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val)
+{
+	UINT8 readback = 0;
+
+	if (!sh36735_read_regs(reg, &readback, 1))
+	{
+		return 1;
+	}
+
+	return (readback == val) ? 0 : 1;
+}
+
+static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series)
+{
+	if ((series >= AFE3520_SERIES_MIN) && (series <= AFE3520_SERIES_MAX))
+	{
+		return (UINT8)series;
+	}
+
+	return (UINT8)SNum;
+}
+
+static void AFE3520_SyncSeriesNum(UINT16 series)
+{
+	SeriesNum = AFE3520_NormalizeSeriesNum(series);
+	OtherElement.u16Sys_SeriesNum = SeriesNum;
 }
 
 static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 {
 	UINT8 result = 0;
-	UINT8 mos_en = 0x7f;
-	UINT8 readback = 0;
+	UINT8 protect_en = AFE3520_SCONF6_PROTECT_EN;
 	UINT8 otc;
 	UINT8 utc;
 	UINT8 otd;
@@ -97,12 +132,13 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	Registers_AFE1.sonf2.bits.PUMP_EN = 0;
 	result |= AFE3520_WriteRegChecked(AFE_SCONF2, Registers_AFE1.sonf2.all);
 
-	Registers_AFE1.sonf4 = SNum;
+	AFE3520_SyncSeriesNum(SeriesNum);
+	Registers_AFE1.sonf4 = SeriesNum;
 	result |= AFE3520_WriteRegChecked(AFE_SCONF4, Registers_AFE1.sonf4);
 
 	Registers_AFE1.sonf3.bits.CRLD_EN = 0;
 	result |= AFE3520_WriteRegChecked(AFE_SCONF3, Registers_AFE1.sonf3.all);
-	result |= AFE3520_WriteRegChecked(AFE_SCONF6, mos_en);
+	result |= AFE3520_WriteRegChecked(AFE_SCONF6, protect_en);
 
 	result |= AFE3520_WriteRegChecked(AFE_OVT_OVH, 0x03);
 	result |= AFE3520_WriteRegChecked(AFE_OVL, 0x50);
@@ -126,10 +162,6 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	result |= AFE3520_WriteRegChecked(AFE_REG_OTD, otd);
 	result |= AFE3520_WriteRegChecked(AFE_REG_UTD, utd);
 
-	if (!sh36735_read_regs(AFE_SCONF4, &readback, 1) || readback != Registers_AFE1.sonf4)
-	{
-		result = 1;
-	}
 
 	if (result != 0)
 	{
@@ -176,7 +208,6 @@ void InitDevice(void)
 
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
-	InitAFE3520_Registers(0, 0);
 
 #ifdef wdog_enable
 	Init_IWDG();
@@ -190,7 +221,7 @@ void InitVar(void)
 {
 	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默认需求功能修改了，要修改EEPROM的上电标志位
 	InitSystemMonitorData_EEPROM();
-	SeriesNum = OtherElement.u16Sys_SeriesNum;
+	AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum);
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
 	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时�?

@@ -2,8 +2,10 @@
 
 AFEDATA Registers_AFE1;
 struct SH367309_Read SH367309_Read_AFE1;
+UINT8 AFE1_LastFlag2ConversionFlags;
 
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
+#define AFE3520_CELL_MAX ((UINT8)(sizeof(Registers_AFE1.Cell) / sizeof(Registers_AFE1.Cell[0])))
 const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	// AD(k¦¸*100)		(Temp+40)*10
 	11611,
@@ -891,6 +893,7 @@ void InitAFE1(void)
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
 	UINT8 i, result = 0;
+	UINT8 cell_count;
 	UINT32 u32temp = 0;
 
 	if (!sh36735_read_regs(0x40, (uint8_t *)&Registers_AFE1.sonf1, (0x46 - 0x40 + 1)))
@@ -905,6 +908,11 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	if (!sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1)))
 	{
 		result |= AFE_UPDATE_ERR_STATUS;
+	}
+	else
+	{
+		/* Reading FLAG2 clears VADC/CADC flags in the AFE. Latch them here. */
+		AFE1_LastFlag2ConversionFlags = Registers_AFE1.flag2.all & AFE_FLAG2_CONVERSION_MASK;
 	}
 #if 1
 	// sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x90 - 0x5D + 1));
@@ -929,9 +937,14 @@ extern void SH_AFE_GetProtectStatus(void);
 
 	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo´úÂë·µ»Ø1ÎªOK£¬
-		for (i = 0; i < SNum; i++)
+		cell_count = (SeriesNum > AFE3520_CELL_MAX) ? AFE3520_CELL_MAX : SeriesNum;
+		for (i = 0; i < cell_count; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
+		}
+		for (; i < AFE3520_CELL_MAX; i++)
+		{
+			SH367309_Read_AFE1.u16VCell[i] = 0;
 		}
 
 		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp1));

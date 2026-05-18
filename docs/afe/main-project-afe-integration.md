@@ -15,15 +15,15 @@ main()
       -> InitData_SOC()
       -> bsp_InitSPIBus()
       -> sh36735_spi_sw_init()
-      -> InitAFE3520_Registers(0, 0)
       -> Init_IWDG()
       -> InitTimer()
   -> InitVar()
       -> InitSystemMonitorData_EEPROM()
-      -> SeriesNum = OtherElement.u16Sys_SeriesNum
+      -> AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum)
+  -> InitAFE3520_Registers(0, 0)
 ```
 
-关键点：AFE 初始化早于 `InitVar()` 恢复 EEPROM 串数，因此 `SCONF4` 当前只能使用编译期 `SNum`，不能使用 EEPROM 中的 `SeriesNum`。
+关键点：AFE 初始化现在放在 `InitVar()` 之后，`SeriesNum` 会先从 EEPROM 参数恢复并经过 4..20 串范围规范化，再写入 AFE `SCONF4.CN`。
 
 ## 2. 采样链路
 
@@ -82,7 +82,7 @@ SH3673520 RAM 寄存器
 写 FLAG1 或 FLAG2 对应位为 0
 ```
 
-当前风险：
+当前剩余风险：
 
 - 写 `SCONF2` 的返回值未检查。
 - 没有清标志后的读回确认。

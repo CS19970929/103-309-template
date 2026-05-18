@@ -10,6 +10,11 @@
 #endif
 
 #define SH_SPI_READ_IDLE_BYTE 0xFFu
+#define SH_REG_WRITE_MIN      0x40u
+#define SH_REG_WRITE_MAX      0x59u
+#define SH_REG_READ_MIN       0x40u
+#define SH_REG_READ_MAX       0x99u
+#define SH_SPI_READ_MAX_LEN   ((uint8_t)(SH_REG_READ_MAX - SH_REG_READ_MIN + 1u))
 
 static uint8_t sh36735_crc8_update(uint8_t crc, uint8_t data)
 {
@@ -70,6 +75,27 @@ static uint8_t sh_crc8_write(uint8_t cmd, uint8_t reg, uint8_t val)
 #endif
 }
 
+static bool sh36735_write_addr_valid(uint8_t reg)
+{
+    return ((reg >= SH_REG_WRITE_MIN) && (reg <= SH_REG_WRITE_MAX));
+}
+
+static bool sh36735_read_range_valid(uint8_t reg, uint8_t n)
+{
+    uint16_t last_reg;
+
+    if ((n == 0u) || (n > SH_SPI_READ_MAX_LEN)) {
+        return false;
+    }
+
+    if ((reg < SH_REG_READ_MIN) || (reg > SH_REG_READ_MAX)) {
+        return false;
+    }
+
+    last_reg = (uint16_t)reg + (uint16_t)n - 1u;
+    return (last_reg <= SH_REG_READ_MAX);
+}
+
 static bool sh36735_write_reg_u8_once(uint8_t reg, uint8_t val)
 {
     uint8_t crc = sh_crc8_write(SH_SPI_CMD_WRITE_REG, reg, val);
@@ -100,6 +126,11 @@ bool sh36735_write_reg_u8(uint8_t reg, uint8_t val)
 {
     uint8_t retry;
 
+    if (!sh36735_write_addr_valid(reg)) {
+        sh_spi_set_error(true);
+        return false;
+    }
+
     for (retry = 0; retry < SH_SPI_RETRY_MAX; ++retry) {
         if (sh36735_write_reg_u8_once(reg, val)) {
             sh_spi_set_error(false);
@@ -120,7 +151,7 @@ static bool sh36735_read_regs_once(uint8_t reg, uint8_t *buf, uint8_t n)
     uint8_t rx3;
     uint8_t crc_rx;
     uint8_t crc;
-    uint8_t data[255];
+    uint8_t data[SH_SPI_READ_MAX_LEN];
     uint8_t i;
     bool frame_ok;
 
@@ -167,7 +198,7 @@ bool sh36735_read_regs(uint8_t reg, uint8_t *buf, uint8_t n)
 {
     uint8_t retry;
 
-    if (!buf || n == 0) {
+    if (!buf || !sh36735_read_range_valid(reg, n)) {
         sh_spi_set_error(true);
         return false;
     }

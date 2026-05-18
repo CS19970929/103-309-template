@@ -48,6 +48,10 @@
 #define MTP_BFLAG2			0x71
 #define MTP_RSTSTAT			0x72
 
+#define AFE_FLAG2_CADC_FLG          ((UINT8)0x01u)
+#define AFE_FLAG2_VADC_FLG          ((UINT8)0x02u)
+#define AFE_FLAG2_CONVERSION_MASK   ((UINT8)(AFE_FLAG2_CADC_FLG | AFE_FLAG2_VADC_FLG))
+
 typedef union __MTP_REG_sconf2 {
     UINT8 all;
     struct _MTP_REG_sconf2 {
@@ -206,8 +210,8 @@ typedef struct _AFEDATA_{
 	uint8_t UTC;
 	uint8_t UTD;
 	uint8_t BALANCEH;
-	uint8_t BALANCEL;
 	uint8_t BALANCEM;
+	uint8_t BALANCEL;
 	// uint8_t res[17];
 
 	reg_flag1 flag1;
@@ -282,6 +286,7 @@ struct SH367309_Read {			/* AD Read	*/
 
 extern struct SH367309_Read SH367309_Read_AFE1;
 extern AFEDATA Registers_AFE1;
+extern UINT8 AFE1_LastFlag2ConversionFlags;
 
 #define AFE_UPDATE_OK              ((UINT8)0x00)
 #define AFE_UPDATE_ERR_SCONF       ((UINT8)0x01)

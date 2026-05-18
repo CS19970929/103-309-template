@@ -7,7 +7,7 @@
 | `0x40` | `SCONF1` | 工作模式 | 初始化写 `0x00`，Normal |
 | `0x41` | `SCONF2` | MOS、Pump、Powerdown、清标志允许 | 初始化由 `Registers_AFE1.sonf2` 拼出 |
 | `0x42` | `SCONF3` | 唤醒、负载检测、断线检测 | 初始化清 `CRLD_EN` |
-| `0x43` | `SCONF4` | 串数 `CN` | 写编译期 `SNum=19` |
+| `0x43` | `SCONF4` | 串数 `CN` | 写规范化后的运行期 `SeriesNum` |
 | `0x44` | `SCONF5` | `MOS_EN/OCC_EN/CADC_EN/WDT` | 当前未显式写，依赖默认 `0x38` |
 | `0x45` | `SCONF6` | 温度、电流、电压保护使能 | 初始化写 `0x7F` |
 | `0x46` | `SCONF7` | 负载检测、IDLE CADC 周期 | 当前未显式写 |
@@ -36,7 +36,7 @@
 | `OCCV/OCCT` | `0x07` | 原始配置值，未在代码中解码 |
 | `OTC/UTC/OTD/UTD` | 由 NTC 阻值换算 | 使用固定浮点常量 |
 
-当前只读回 `SCONF4`，没有读回所有配置寄存器。
+当前每次写寄存器后都会读回同地址并比较写入值，不再只读回 `SCONF4`。
 
 ## 3. 与官方例程差异
 
@@ -51,7 +51,7 @@
 
 ## 4. 已确认的配置风险
 
-### 4.1 `BALANCEM/BALANCEL` 镜像顺序错
+### 4.1 `BALANCEM/BALANCEL` 镜像顺序错，已修复
 
 PDF 和官方例程顺序：
 
@@ -61,7 +61,7 @@ PDF 和官方例程顺序：
 0x57 BALANCEL
 ```
 
-主工程 `AFEDATA` 当前顺序：
+主工程 `AFEDATA` 原顺序：
 
 ```c
 uint8_t BALANCEH;
@@ -69,7 +69,7 @@ uint8_t BALANCEL;
 uint8_t BALANCEM;
 ```
 
-连续读取 `0x47..0x57` 后，中、低均衡字节镜像会互换。建议优先修正。
+连续读取 `0x47..0x57` 后，中、低均衡字节镜像会互换。本轮已修正为 `BALANCEH, BALANCEM, BALANCEL`。
 
 ### 4.2 `SCONF6=0x7F` 关闭 TS4
 
