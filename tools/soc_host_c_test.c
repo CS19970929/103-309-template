@@ -284,9 +284,9 @@ static void test_full_voltage_anchor_can_override_self_consumption(void)
 {
 	host_reset_state();
 	host_set_snapshot(99U, 0U);
-	host_init_with_voltage(4180U, 4180U);
+	host_init_with_voltage(4181U, 4181U);
 	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS * 4U),
-		4180U, 4180U, 0U, 0U);
+		4181U, 4181U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 100U);
 	CHECK_EQ_U32(SOC_Enhance_Element.u16_CapacityNow,
 		host_cap_to_ah100(HOST_CAP_FACTORY_AS10));
@@ -375,6 +375,9 @@ static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
 	CHECK_EQ_U32(host_internal_soc(), 99U);
 
 	host_run_seconds(15U, 4180U, 4100U, 270U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+
+	host_run_seconds(15U, 4181U, 4100U, 270U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 100U);
 }
 

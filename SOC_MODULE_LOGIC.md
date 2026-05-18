@@ -102,6 +102,7 @@
 | 满电普通确认 | `15s` | `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` |
 | 满电快速确认 | `5s` | `PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS` |
 | 满电普通最低 SOC | `95%` | 防止中低电量误锚定 100% |
+| 满电最高单体硬门槛 | `>4180mV` | `VCellMax` 必须严格大于 `4180mV` 才允许向 `100%` 锚定 |
 | 满电普通电压裕量 | `80mV` | `V100 - 80mV = 4100mV` |
 | 满电快速电压裕量 | `30mV` | `V100 - 30mV = 4150mV` |
 | 满电最大压差 | `120mV` | 单体压差门控 |
@@ -360,6 +361,7 @@ sag/rebound holdoff：
 基础条件：
 
 - 通用电压校准门控通过。
+- `VCellMax > 4180mV`，这是置 `100%` 的硬门槛；`4180mV` 本身不触发满电锚定。
 - `VCellMax >= V100 - 80mV`，当前为 `4100mV`。
 - 单体压差最终要求 `<=120mV`。
 

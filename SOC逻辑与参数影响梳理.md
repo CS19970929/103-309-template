@@ -163,7 +163,8 @@ OCV 表只用于冷启动、稳定静置/RTC，以及骑行中上限约束参考
 | 条件 | 当前默认 |
 | --- | --- |
 | 满电基准 | `V100 = OtherElement.u16Soc_V_100`，为 0 时默认 `4180mV` |
-| 基础门槛 | `VCellMax >= V100 - 80mV`，当前 `4100mV` |
+| 最高单体硬门槛 | `VCellMax > 4180mV`，`4180mV` 本身不触发置 `100%` |
+| 基础门槛 | `VCellMax >= V100 - 80mV`，当前 `4100mV`，但仍受最高单体硬门槛限制 |
 | 快速确认 | `VCellMin >= V100 - 30mV` 且压差 `<=120mV`，持续 `5s` |
 | 普通确认 | 内部 SOC `>=95%`，`VCellMin >= V100 - 80mV` 且压差 `<=120mV`，持续 `15s` |
 
@@ -278,7 +279,7 @@ RTC 唤醒周期可能是 CAN active 下 `1s` 或 idle 下 `10s`，但这个周�
 
 | 宏 | 默认 | BuildGuard 范围 | 影响什么 |
 | --- | ---: | --- | --- |
-| `PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV` | `80` | `0..500mV` | 普通满电确认和 `VCellMax` 基础门槛，越大越容易满电 |
+| `PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV` | `80` | `0..500mV` | 普通满电确认和 `VCellMax` 基础门槛，越大越容易满电；不能绕过 `VCellMax > 4180mV` 硬门槛 |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV` | `120` | `0..1000mV` | 满电允许的单体压差，越小越保守 |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` | `15` | `1..600s` | 普通满电确认持续时间 |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS` | `5` | `1..600s`，且 `<=` 普通时间 | 快速满电确认持续时间 |

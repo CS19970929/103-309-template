@@ -379,7 +379,7 @@ static void host_run_scenario(const HOST_SCENARIO *scenario)
 				else if ((strcmp(scenario->name, "charge_anchor") == 0) &&
 					(strcmp(segment->name, "near-full-confirm") == 0))
 				{
-					vmax = 4180U;
+					vmax = 4181U;
 					vmin = 4100U;
 				}
 				else

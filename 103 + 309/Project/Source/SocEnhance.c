@@ -42,6 +42,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_FULL_FAST_SECONDS        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS)
 #define SOC_FULL_MIN_SOC             ((UINT8)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT)
 #define SOC_DEFAULT_FULL_MV          ((UINT16)4180U)
+#define SOC_FULL_CONFIRM_MIN_VMAX_MV ((UINT16)4180U)
 #define SOC_FULL_FAST_MARGIN_MV      ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV)
 #define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
 #define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
@@ -896,6 +897,7 @@ static UINT16 soc_full_confirm_seconds(void)
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
+		(SOC_Enhance_Element.u16_VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
 		(SOC_Enhance_Element.u16_VCellMax < vmax_min))
 	{
 		return 0U;

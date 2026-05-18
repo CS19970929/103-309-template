@@ -154,7 +154,7 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
             if name == "charge_anchor" and segment.name == "bulk-charge":
                 vmax, vmin = 4100, 4050
             elif name == "charge_anchor" and segment.name == "near-full-confirm":
-                vmax, vmin = 4180, 4100
+                vmax, vmin = 4181, 4100
             else:
                 vmax, vmin = pack.voltage(
                     segment.idsg_a10, segment.ichg_a10, segment.imbalance_mv

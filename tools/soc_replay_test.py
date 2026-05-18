@@ -52,6 +52,7 @@ FULL_MIN_SOC = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT'
 FULL_CONFIRM_MARGIN_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV', 80)
 FULL_FAST_MARGIN_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV', 30)
 FULL_CONFIRM_MAX_DELTA_MV = project_config_int('PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV', 120)
+FULL_CONFIRM_MIN_VMAX_MV = 4180
 EMPTY_MV = 3000
 REST_OCV_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_OCV_SECONDS', 1800)
 EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
@@ -350,7 +351,7 @@ class SocModel:
     def full_confirm_seconds(self, vmax, vmin, v100=4180):
         vmin_min = max(0, v100 - FULL_CONFIRM_MARGIN_MV)
         vmin_fast = max(0, v100 - FULL_FAST_MARGIN_MV)
-        if not self.voltage_allowed(vmax, vmin) or vmax < vmin_min:
+        if not self.voltage_allowed(vmax, vmin) or vmax <= FULL_CONFIRM_MIN_VMAX_MV or vmax < vmin_min:
             return 0
         delta = vmax - vmin
         if vmin >= vmin_fast and delta <= FULL_CONFIRM_MAX_DELTA_MV:
@@ -777,7 +778,7 @@ def test_board_self_consumption_matrix_during_relax_high_voltage():
 
 def test_full_voltage_anchor_can_mask_self_consumption():
     model = model_with_self_consumption(99, 1000)
-    run_seconds(model, FULL_FAST_SECONDS * 4, vmax=4180, vmin=4180)
+    run_seconds(model, FULL_FAST_SECONDS * 4, vmax=4181, vmin=4181)
     assert model.soc == 100
     assert model.cap_now == model.cap_full
 
@@ -877,19 +878,24 @@ def test_python_model_tables_match_c_source():
 
 def test_full_confirm_is_voltage_based_and_tolerates_charge_current():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
-    run_seconds(model, FULL_SECONDS - 1, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS + 1, ichg=270, vmax=4180, vmin=4100)
     assert model.soc != 100
-    run_seconds(model, 1, ichg=270, vmax=4180, vmin=4100)
+    assert model.full_ticks == 0
+
+    model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
+    run_seconds(model, FULL_SECONDS - 1, ichg=270, vmax=4181, vmin=4100)
+    assert model.soc != 100
+    run_seconds(model, 1, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 99
-    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 100
 
     model = SocModel.from_snapshot(Snapshot(soc=99, cap_now=CAP_FACTORY_AS10 * 99 // 100))
-    run_seconds(model, FULL_SECONDS, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS, vmax=4181, vmin=4100)
     assert model.soc == 100
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
-    run_seconds(model, FULL_FAST_SECONDS, ichg=270, vmax=4180, vmin=4150)
+    run_seconds(model, FULL_FAST_SECONDS, ichg=270, vmax=4181, vmin=4150)
     assert model.soc == 61
 
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
@@ -905,21 +911,21 @@ def test_full_confirm_is_voltage_based_and_tolerates_charge_current():
     assert model.soc != 100
 
 
-def test_full_confirm_threshold_follows_configured_v100():
+def test_full_confirm_requires_vmax_above_4180_before_configured_v100():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
-    assert model.full_confirm_seconds(vmax=3570, vmin=3570, v100=3650) == FULL_SECONDS
-    assert model.full_confirm_seconds(vmax=3569, vmin=3569, v100=3650) == 0
-    assert model.full_confirm_seconds(vmax=3650, vmin=3520, v100=3650) == 0
+    assert model.full_confirm_seconds(vmax=4180, vmin=4180, v100=3650) == 0
+    assert model.full_confirm_seconds(vmax=4181, vmin=4181, v100=3650) == FULL_FAST_SECONDS
+    assert model.full_confirm_seconds(vmax=4181, vmin=3520, v100=3650) == 0
 
 
 def test_full_confirm_counter_decrements_instead_of_resetting():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
-    run_seconds(model, FULL_SECONDS - 1, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS - 1, ichg=270, vmax=4181, vmin=4100)
     assert model.full_ticks == (FULL_SECONDS - 1) * TICKS_PER_SECOND
 
     model.tick(ichg=270, vmax=4000, vmin=3990)
     assert model.full_ticks == (FULL_SECONDS - 1) * TICKS_PER_SECOND - 1
-    run_seconds(model, 2, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, 2, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 99
 
 
@@ -1052,7 +1058,7 @@ def test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull():
 
 def test_auto_calibration_never_steps_more_than_one_percent():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
-    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 99
 
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
@@ -1284,7 +1290,7 @@ def test_charge_after_ride_stays_below_full_until_voltage_anchor():
     run_seconds(model, 600, ichg=270, vmax=4100, vmin=4050)
     assert model.soc == 99
     assert model.display_soc < 100
-    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4180, vmin=4100)
+    run_seconds(model, FULL_SECONDS, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 100
 
 
@@ -1357,7 +1363,7 @@ def main():
         test_ocv_table_is_monotonic_and_exact_points_match,
         test_python_model_tables_match_c_source,
         test_full_confirm_is_voltage_based_and_tolerates_charge_current,
-        test_full_confirm_threshold_follows_configured_v100,
+        test_full_confirm_requires_vmax_above_4180_before_configured_v100,
         test_full_confirm_counter_decrements_instead_of_resetting,
         test_empty_anchor_limits_low_voltage_tail,
         test_rtc_rest_ocv_applies_small_bounded_step,

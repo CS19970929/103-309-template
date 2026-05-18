@@ -375,8 +375,11 @@ holdoff 期间：
 ```text
 mode != DSG
 soc_calibration_allowed() 通过
+VCellMax > 4180mV
 VCellMax >= V100 - 80mV
 ```
+
+`VCellMax > 4180mV` 是置 `100%` 的硬门槛，`4180mV` 本身不触发满电锚定。
 
 快速确认：
 
