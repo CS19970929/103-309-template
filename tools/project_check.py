@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "CommomSH367309_16series_103RCT6_C.uvprojx"
 PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_Config.h"
+PROJECT_CONFIG_ENCODING = "gbk"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
@@ -160,6 +161,8 @@ class Reporter(object):
 
 
 def read_text(path):
+    if path == PROJECT_CONFIG:
+        return path.read_text(encoding=PROJECT_CONFIG_ENCODING, errors="replace")
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -250,6 +253,8 @@ def check_utf8_text_files(reporter):
     bom = []
 
     for path in iter_git_tracked_files():
+        if path == PROJECT_CONFIG:
+            continue
         if path.suffix not in UTF8_TEXT_SUFFIXES:
             continue
         data = path.read_bytes()
@@ -262,9 +267,9 @@ def check_utf8_text_files(reporter):
             invalid.append("{0}: {1}".format(path.relative_to(ROOT), exc))
 
     if invalid:
-        reporter.fail("tracked source/text files must be UTF-8: {0}".format("; ".join(invalid[:8])))
+        reporter.fail("tracked source/text files except Project_Config.h must be UTF-8: {0}".format("; ".join(invalid[:8])))
     else:
-        reporter.ok("tracked source/text files are valid UTF-8")
+        reporter.ok("tracked source/text files except Project_Config.h are valid UTF-8")
 
     if bom:
         reporter.fail("tracked source/text files should use UTF-8 without BOM: {0}".format("; ".join(bom[:8])))
@@ -277,15 +282,15 @@ def check_project_config_wizard_encoding(reporter):
         return
 
     try:
-        text = PROJECT_CONFIG.read_bytes().decode("utf-8")
+        text = PROJECT_CONFIG.read_bytes().decode(PROJECT_CONFIG_ENCODING)
     except UnicodeDecodeError as exc:
-        reporter.fail("Project_Config.h must be saved as UTF-8 for shared editing and Keil use: {0}".format(exc))
+        reporter.fail("Project_Config.h must be saved as GBK/ANSI for Keil Configuration Wizard: {0}".format(exc))
         return
 
     if PROJECT_CONFIG_WIZARD_MARKER in text:
-        reporter.ok("Project_Config.h UTF-8 text is readable and keeps Keil Configuration Wizard marker")
+        reporter.ok("Project_Config.h GBK/ANSI text is readable and keeps Keil Configuration Wizard marker")
     else:
-        reporter.fail("Project_Config.h UTF-8 text marker is missing or unreadable for Keil Configuration Wizard")
+        reporter.fail("Project_Config.h GBK/ANSI text marker is missing or unreadable for Keil Configuration Wizard")
 
 
 def check_keil_targets(reporter):

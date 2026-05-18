@@ -181,7 +181,7 @@ struct OTHER_ELEMENT {
 #define  BMS_HARDWARE_VERDION_DEFAULT   "T3_27Ah"
 // #define  BMS_SOFTWARE_VERDION_DEFAULT   "FD-260429-T3MAX"  //32
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "D010"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	  "FD_20260511"
+#define  BMS_SERIAL_NUMBER_DEFAULT  	  "FD_20260518"
 
 #define SNum 		10
 
@@ -216,7 +216,7 @@ struct OTHER_ELEMENT {
 #define OtherElement_default 	{4160,	30,	20,		0,	0,		0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_TERNARYLI,	0,		1000,	30,\
-	                             3200,	7200,	3000,	10,		10,		10,	240,3,\
+	                             3200,	7200,	3000,	1440,		10,		10,	240,3,\
 	                             BMS_CAPCITY,	3,		4180,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))

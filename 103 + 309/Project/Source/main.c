@@ -20,8 +20,7 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 1, 2, 3, 4, 5, 6, 7, 9, 9, 10, 11, 12, 0, 0, 0},
 	{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0},
 	{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0},
-	{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-};
+	{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}};
 
 void InitVar(void);
 void InitDevice(void);
@@ -54,14 +53,14 @@ void open_dsg_close_chg(void)
 
 void enter_fac_mode(bool on)
 {
+	if (MosStartup_Is5vChargeActive() != 0U)
+	{
+		open_chg_close_dsg();
+		return;
+	}
+
 	if (on)
 	{
-		if (MosStartup_Is5vChargeActive() != 0U)
-		{
-			open_chg_close_dsg();
-			return;
-		}
-
 		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
 		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1;
 		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1;
@@ -141,6 +140,7 @@ void InitDevice(void)
 	InitData_SOC();
 
 	InitTimer();
+	__enable_irq();
 	log_w("init over");
 
 #ifdef _DEBUG_

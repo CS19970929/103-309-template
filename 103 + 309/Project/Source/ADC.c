@@ -512,6 +512,6 @@ void App_AnlogCal(void)
         ADC_Current_Smooth();
         u32Process10msTick--;
     }
-    g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
+    // g_stCellInfoReport.u16VCell[31] = g_u16TypeCOutCurrent_mA;
     g_u16TypeCOutCurrent_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
 }

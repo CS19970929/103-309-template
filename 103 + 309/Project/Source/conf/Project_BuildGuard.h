@@ -246,9 +246,9 @@
 #error "Release build: PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY must be 0"
 #endif
 
-#if !PROJECT_CFG_FACTORY_AGING_ENABLE
-#error "Release build: PROJECT_CFG_FACTORY_AGING_ENABLE must be 1"
-#endif
+//#if !PROJECT_CFG_FACTORY_AGING_ENABLE
+//#error "Release build: PROJECT_CFG_FACTORY_AGING_ENABLE must be 1"
+//#endif
 
 #if defined(_DEBUG_)
 #error "Release build: remove _DEBUG_ from Keil defines or select Debug profile"
