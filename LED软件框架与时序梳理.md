@@ -220,8 +220,11 @@ LED 侧逻辑：
 
 低功耗侧逻辑：
 
-- `BQ769x0_SleepMode_Ctrl()` 入口优先判断 `GPIO_MCU_WK`。
-- 高电平时清零：
+- `BQ769x0_SleepMode_Ctrl()` 入口第一优先级判断 `VCellMin <= 2800` 且 `u16Ichg <= 0`，连续 60 秒后必须 `entersleep(DEEP_MODE)`。
+- 随后判断参数低压 `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 0`，到达 `OtherElement.u16Sleep_TimeVlow * 60` 秒后必须 `entersleep(DEEP_MODE)`。
+- 这两条低压 DEEP 休眠不允许被 `GPIO_MCU_WK` 高电平、工厂老化/工厂模式、外部通信或普通 RTC 阻塞条件拦截。
+- 未触发低压 DEEP 休眠时，才继续判断 `GPIO_MCU_WK`。
+- `GPIO_MCU_WK` 高电平时清零：
   - `sys_time.enter_rtc_delay`
   - `deepsleep_cnt`
   - `deepsleep_cnt_1min`
@@ -234,7 +237,8 @@ LED 侧逻辑：
 GPIO_MCU_WK = 1
     -> LED 一直显示
     -> 不累计 10s RTC 自动休眠
-    -> 不累计低压自动 DEEP 休眠
+    -> 不阻断 VCellMin <= 2800 的硬性过放 DEEP 休眠
+    -> 不阻断 VCellMin <= OtherElement.u16Sleep_Vlow 的参数低压 DEEP 休眠
     -> 已挂起的低功耗请求会被 LowPower_Request(NO_SLEEP) 清掉
 
 GPIO_MCU_WK = 0
@@ -340,12 +344,12 @@ sys_time.time_enter_rtc = 10
 
 ### 低压 DEEP 休眠
 
-`BQ769x0_SleepMode_Ctrl()` 中低压分支优先级高于普通 RTC 休眠，但本次已在函数入口用 `GPIO_MCU_WK` 高电平阻断。
+`BQ769x0_SleepMode_Ctrl()` 中 `VCellMin <= 2800` 和 `VCellMin <= OtherElement.u16Sleep_Vlow` 都是低功耗优先级最高的 DEEP 休眠路径，必须先于 `GPIO_MCU_WK`、工厂老化/工厂模式、外部通信和普通 RTC 阻塞判断执行。
 
 | 条件 | 计时 | 动作 |
 | --- | --- | --- |
-| `VCellMin <= 2600` 且 `u16Ichg <= 0` | 60 秒 | `entersleep(DEEP_MODE)` |
-| `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 0` | `OtherElement.u16Sleep_TimeVlow * 60` 秒 | `entersleep(DEEP_MODE)` |
+| `VCellMin <= 2800` 且 `u16Ichg <= 0` | 60 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
+| `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 0` | `OtherElement.u16Sleep_TimeVlow * 60` 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
 
 ### HICCUP RTC STOP 周期
 

@@ -4,6 +4,9 @@
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
 
+#define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((UINT16)2800U)
+#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((UINT16)60U)
+
 
 
 enum irqWakeup g_irq_t = NO_IRQ;
@@ -444,6 +447,33 @@ void BQ769x0_SleepMode_Ctrl(void)
     static uint16_t deepsleep_cnt_1min = 0;
     UINT8 block_reason;
 
+    if ((g_stCellInfoReport.u16VCellMin <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
+        (g_stCellInfoReport.u16Ichg <= 0))
+    {
+        sys_time.enter_rtc_delay = 0;
+        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
+        ++deepsleep_cnt_1min;
+        if (deepsleep_cnt_1min >= LOW_POWER_FORCE_DEEP_SLEEP_SECONDS)
+        {
+            entersleep(DEEP_MODE);
+        }
+        low_power_update_rtc_status();
+        return;
+    }
+
+    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
+    {
+        sys_time.enter_rtc_delay = 0;
+        low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
+        if (++deepsleep_cnt >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
+        {
+            entersleep(DEEP_MODE);
+        }
+        log_w("%d s enter deep sleep", (60 * OtherElement.u16Sleep_TimeVlow - deepsleep_cnt));
+        low_power_update_rtc_status();
+        return;
+    }
+
     if (low_power_is_mcu_wake_active())
     {
         deepsleep_cnt = 0;
@@ -457,31 +487,6 @@ void BQ769x0_SleepMode_Ctrl(void)
         deepsleep_cnt = 0;
         deepsleep_cnt_1min = 0;
         low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_FACTORY_AGING);
-        return;
-    }
-
-    //todo过充、充电管关了？进待机？
-    if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
-    {
-        sys_time.enter_rtc_delay = 0;
-        ++deepsleep_cnt_1min;
-        if (deepsleep_cnt_1min >= 60U)
-        {
-            entersleep(DEEP_MODE);
-        }
-        low_power_update_rtc_status();
-        return;
-    }
-
-    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
-    {
-        sys_time.enter_rtc_delay = 0;
-        if (++deepsleep_cnt >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
-        {
-            entersleep(DEEP_MODE);
-        }
-        log_w("%d s enter deep sleep", (60 * OtherElement.u16Sleep_TimeVlow - deepsleep_cnt));
-        low_power_update_rtc_status();
         return;
     }
 
