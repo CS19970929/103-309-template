@@ -71,6 +71,7 @@ void AFE_Reset(void)
 // 进入休眠模式
 void AFE_Sleep(void)
 {
+	(void)CellBalance_ForceOff();
 	sh36735_write_reg_u8(AFE_SCONF1, 0xAA);
 }
 

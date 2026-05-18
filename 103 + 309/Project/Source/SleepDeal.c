@@ -7,6 +7,40 @@ UINT8 gu8_SleepStatus = 0;
 UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 
+#define SLEEP_CMD_MASK                ((UINT16)0x1FFFu)
+#define SLEEP_FORCE_DEEP_VCELL_MV     ((UINT16)2500u)
+#define SLEEP_FORCE_DEEP_DELAY_S      ((UINT32)(60u * 60u))
+
+static UINT8 SleepDeal_CellVoltageValid(void)
+{
+	return ((g_stCellInfoReport.u16VCellMin >= 1000u) && (g_stCellInfoReport.u16VCellMin <= 5000u)) ? 1u : 0u;
+}
+
+static UINT8 SleepDeal_ForceDeepRequired(void)
+{
+	if (0 == SleepDeal_CellVoltageValid())
+	{
+		return 0;
+	}
+
+	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg)
+	{
+		return 0;
+	}
+
+	if (g_stCellInfoReport.u16VCellMin < SLEEP_FORCE_DEEP_VCELL_MV)
+	{
+		return 1;
+	}
+
+	if (is_AFE_CUV || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
 void SleepDeal_Continue(void)
 {
 	UINT8 u8FlashWriteOK_flag = 0;
@@ -582,7 +616,7 @@ void SleepDeal_Normal_Select(void)
 		return;
 	}
 
-	if (g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Chg)
+	if (g_stCellInfoReport.u16Ichg <= OtherElement.u16Sleep_VirCur_Chg && g_stCellInfoReport.u16IDischg <= OtherElement.u16Sleep_VirCur_Dsg)
 	{
 		if (g_stCellInfoReport.u16VCellMin < OtherElement.u16Sleep_Vlow)
 		{
@@ -712,7 +746,7 @@ void IsSleepStartUp(void)
 
 void App_SleepDeal(void)
 {
-	static uint8_t force_sleep_delay = 0;
+	static UINT32 force_sleep_delay = 0;
 	// if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag1 && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	if (0 == gu8_1000msAccClock_Flag && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	{
@@ -761,11 +795,11 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2500)
+	if (SleepDeal_ForceDeepRequired())
 	{
-		++force_sleep_delay;
-		if (force_sleep_delay >= (60 * 60))
+		if (++force_sleep_delay >= SLEEP_FORCE_DEEP_DELAY_S)
 		{
+			force_sleep_delay = SLEEP_FORCE_DEEP_DELAY_S;
 			entersleep(DEEP_MODE);
 		}
 	}
@@ -774,7 +808,7 @@ void App_SleepDeal(void)
 		force_sleep_delay = 0;
 	}
 
-	if ((Sleep_Mode.all & 0x00ff))
+	if ((Sleep_Mode.all & SLEEP_CMD_MASK))
 	{
 		SleepDeal_Continue();
 	}

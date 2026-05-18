@@ -15,5 +15,6 @@ extern UINT8 g_u8CBn_StatusFlag;
 extern UINT8 g_u8CBn_AFECloseFlag;
 
 void App_CellBalance(void);
+UINT8 CellBalance_ForceOff(void);
 
 #endif

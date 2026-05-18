@@ -13,6 +13,12 @@ UINT16 g_u16CBnFLAG_ToUpper = 0;
 UINT8 g_u8CBn_StatusFlag = 0;
 UINT8 g_u8CBn_AFECloseFlag = 1;
 
+static UINT32 s_u32CB_ActiveMask = 0;
+static UINT8 s_u8CB_RefreshCnt = 0;
+static UINT8 s_u8CB_FilterCnt[CB_BALANCE_CELL_MAX] = {0};
+
+static UINT16 CB_GetBalanceCloseWindow(void);
+
 static UINT8 CB_GetCellCount(void)
 {
 	if (SeriesNum > CB_BALANCE_CELL_MAX)
@@ -21,6 +27,16 @@ static UINT8 CB_GetCellCount(void)
 	}
 
 	return SeriesNum;
+}
+
+static void CB_ResetFilter(void)
+{
+	UINT8 i;
+
+	for (i = 0; i < CB_BALANCE_CELL_MAX; ++i)
+	{
+		s_u8CB_FilterCnt[i] = 0;
+	}
 }
 
 static UINT32 CB_GetCellMask(UINT8 cell_index)
@@ -85,7 +101,33 @@ static void CB_UpdateSoftwareStatus(UINT32 active_mask)
 
 static UINT8 CB_IsBalanceAllowed(void)
 {
+	UINT8 cell_count = CB_GetCellCount();
+	UINT16 balance_window = (s_u32CB_ActiveMask != 0u) ? CB_GetBalanceCloseWindow() : OtherElement.u16Balance_OpenWindow;
+
 	if (0 == System_OnOFF_Func.bits.b1OnOFF_Balance)
+	{
+		return 0;
+	}
+
+	if (0 == cell_count)
+	{
+		return 0;
+	}
+
+	if ((g_stCellInfoReport.u16VCellMin < 1000u)
+		|| (g_stCellInfoReport.u16VCellMin > 5000u))
+	{
+		return 0;
+	}
+
+	if (g_stCellInfoReport.unMdlFault_Third.all != 0u)
+	{
+		return 0;
+	}
+
+	if (System_ERROR_UserCallback(ERROR_STATUS_AFE1)
+		|| System_ERROR_UserCallback(ERROR_STATUS_SPI)
+		|| System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
 	{
 		return 0;
 	}
@@ -101,7 +143,7 @@ static UINT8 CB_IsBalanceAllowed(void)
 		return 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellDelta < OtherElement.u16Balance_OpenWindow)
+	if (g_stCellInfoReport.u16VCellDelta < balance_window)
 	{
 		return 0;
 	}
@@ -109,49 +151,83 @@ static UINT8 CB_IsBalanceAllowed(void)
 	return 1;
 }
 
-static UINT32 CB_BuildTargetMask(UINT8 filter_cnt[])
+static UINT16 CB_GetBalanceCloseWindow(void)
+{
+	UINT16 close_window = OtherElement.u16Balance_CloseWindow;
+
+	if ((0u == close_window) || (close_window > OtherElement.u16Balance_OpenWindow))
+	{
+		close_window = OtherElement.u16Balance_OpenWindow;
+	}
+
+	return close_window;
+}
+
+static UINT32 CB_BuildTargetMask(UINT32 active_mask)
 {
 	UINT8 i;
 	UINT8 cell_count = CB_GetCellCount();
 	UINT16 vcell_min = g_stCellInfoReport.u16VCellMin;
+	UINT16 close_window = CB_GetBalanceCloseWindow();
 	UINT32 target_mask = 0;
+	UINT32 cell_mask;
+	UINT16 balance_window;
 
 	for (i = 0; i < cell_count; ++i)
 	{
+		cell_mask = CB_GetCellMask(i);
+		balance_window = ((active_mask & cell_mask) != 0u) ? close_window : OtherElement.u16Balance_OpenWindow;
+
 		if ((g_stCellInfoReport.u16VCell[i] >= OtherElement.u16Balance_OpenVoltage)
-			&& (g_stCellInfoReport.u16VCell[i] >= (UINT16)(vcell_min + OtherElement.u16Balance_OpenWindow)))
+			&& ((UINT32)g_stCellInfoReport.u16VCell[i] >= ((UINT32)vcell_min + balance_window)))
 		{
-			if (filter_cnt[i] < CB_BALANCE_FILTER_CNT)
+			if ((active_mask & cell_mask) != 0u)
 			{
-				++filter_cnt[i];
+				target_mask |= cell_mask;
+			}
+			else if (s_u8CB_FilterCnt[i] < CB_BALANCE_FILTER_CNT)
+			{
+				++s_u8CB_FilterCnt[i];
 			}
 
-			if (filter_cnt[i] >= CB_BALANCE_FILTER_CNT)
+			if (s_u8CB_FilterCnt[i] >= CB_BALANCE_FILTER_CNT)
 			{
-				target_mask |= CB_GetCellMask(i);
+				target_mask |= cell_mask;
 			}
 		}
 		else
 		{
-			filter_cnt[i] = 0;
+			s_u8CB_FilterCnt[i] = 0;
 		}
 	}
 
 	for (; i < CB_BALANCE_CELL_MAX; ++i)
 	{
-		filter_cnt[i] = 0;
+		s_u8CB_FilterCnt[i] = 0;
 	}
 
 	return target_mask;
 }
 
+UINT8 CellBalance_ForceOff(void)
+{
+	UINT8 result;
+
+	result = CB_AfeWriteBalanceMaskU24(0u);
+	if (0 == result)
+	{
+		CB_ResetFilter();
+		s_u8CB_RefreshCnt = 0;
+		s_u32CB_ActiveMask = 0;
+		CB_UpdateSoftwareStatus(0u);
+	}
+
+	return result;
+}
+
 void App_CellBalance(void)
 {
-	UINT8 i;
 	UINT32 target_mask;
-	static UINT32 active_mask = 0;
-	static UINT8 refresh_cnt = 0;
-	static UINT8 filter_cnt[CB_BALANCE_CELL_MAX] = {0};
 
 	if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag2)
 	{
@@ -160,30 +236,27 @@ void App_CellBalance(void)
 
 	if (0 == CB_IsBalanceAllowed())
 	{
-		for (i = 0; i < CB_BALANCE_CELL_MAX; ++i)
-		{
-			filter_cnt[i] = 0;
-		}
-		refresh_cnt = 0;
+		CB_ResetFilter();
+		s_u8CB_RefreshCnt = 0;
 		target_mask = 0;
 	}
 	else
 	{
-		target_mask = CB_BuildTargetMask(filter_cnt);
+		target_mask = CB_BuildTargetMask(s_u32CB_ActiveMask);
 	}
 
-	if ((target_mask != active_mask)
-		|| ((active_mask != 0u) && (++refresh_cnt >= CB_BALANCE_REFRESH_CNT)))
+	if ((target_mask != s_u32CB_ActiveMask)
+		|| ((s_u32CB_ActiveMask != 0u) && (++s_u8CB_RefreshCnt >= CB_BALANCE_REFRESH_CNT)))
 	{
-		refresh_cnt = 0;
+		s_u8CB_RefreshCnt = 0;
 		if (0 == CB_AfeWriteBalanceMaskU24(target_mask))
 		{
-			active_mask = target_mask;
-			CB_UpdateSoftwareStatus(active_mask);
+			s_u32CB_ActiveMask = target_mask;
+			CB_UpdateSoftwareStatus(s_u32CB_ActiveMask);
 		}
 	}
 	else
 	{
-		CB_UpdateSoftwareStatus(active_mask);
+		CB_UpdateSoftwareStatus(s_u32CB_ActiveMask);
 	}
 }
