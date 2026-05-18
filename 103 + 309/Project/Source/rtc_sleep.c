@@ -6,6 +6,7 @@
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((UINT16)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((UINT16)60U)
+#define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT    ((UINT16)5U)
 
 
 
@@ -448,7 +449,7 @@ void BQ769x0_SleepMode_Ctrl(void)
     UINT8 block_reason;
 
     if ((g_stCellInfoReport.u16VCellMin <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
-        (g_stCellInfoReport.u16Ichg <= 0))
+        (g_stCellInfoReport.u16Ichg <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
         sys_time.enter_rtc_delay = 0;
         low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
@@ -461,7 +462,8 @@ void BQ769x0_SleepMode_Ctrl(void)
         return;
     }
 
-    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow && (g_stCellInfoReport.u16Ichg <= 0))
+    if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow &&
+        (g_stCellInfoReport.u16Ichg <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
         sys_time.enter_rtc_delay = 0;
         low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);

@@ -220,8 +220,8 @@ LED 侧逻辑：
 
 低功耗侧逻辑：
 
-- `BQ769x0_SleepMode_Ctrl()` 入口第一优先级判断 `VCellMin <= 2800` 且 `u16Ichg <= 0`，连续 60 秒后必须 `entersleep(DEEP_MODE)`。
-- 随后判断参数低压 `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 0`，到达 `OtherElement.u16Sleep_TimeVlow * 60` 秒后必须 `entersleep(DEEP_MODE)`。
+- `BQ769x0_SleepMode_Ctrl()` 入口第一优先级判断 `VCellMin <= 2800` 且 `u16Ichg <= 5`，连续 60 秒后必须 `entersleep(DEEP_MODE)`。
+- 随后判断参数低压 `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 5`，到达 `OtherElement.u16Sleep_TimeVlow * 60` 秒后必须 `entersleep(DEEP_MODE)`。
 - 这两条低压 DEEP 休眠不允许被 `GPIO_MCU_WK` 高电平、工厂老化/工厂模式、外部通信或普通 RTC 阻塞条件拦截。
 - 未触发低压 DEEP 休眠时，才继续判断 `GPIO_MCU_WK`。
 - `GPIO_MCU_WK` 高电平时清零：
@@ -348,8 +348,8 @@ sys_time.time_enter_rtc = 10
 
 | 条件 | 计时 | 动作 |
 | --- | --- | --- |
-| `VCellMin <= 2800` 且 `u16Ichg <= 0` | 60 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
-| `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 0` | `OtherElement.u16Sleep_TimeVlow * 60` 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
+| `VCellMin <= 2800` 且 `u16Ichg <= 5` | 60 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
+| `VCellMin <= OtherElement.u16Sleep_Vlow` 且 `u16Ichg <= 5` | `OtherElement.u16Sleep_TimeVlow * 60` 秒 | 强制 `entersleep(DEEP_MODE)`，不受工厂模式和 `GPIO_MCU_WK` 阻断 |
 
 ### HICCUP RTC STOP 周期
 
