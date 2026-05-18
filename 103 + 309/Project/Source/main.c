@@ -5,6 +5,8 @@ UINT8 SeriesNum = 16;
 #define AFE3520_SERIES_MIN         ((UINT8)4u)
 #define AFE3520_SERIES_MAX         ((UINT8)20u)
 #define AFE3520_SCONF6_PROTECT_EN  ((UINT8)0x7fu)
+#define AFE3520_READBACK_MASK_ALL  ((UINT8)0xffu)
+#define AFE3520_SCONF2_CHECK_MASK  ((UINT8)0x7fu)
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1ä¸?
@@ -31,7 +33,8 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val);
-static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val);
+static UINT8 AFE3520_WriteRegMaskedChecked(UINT8 reg, UINT8 val, UINT8 mask);
+static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val, UINT8 mask);
 static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos);
 static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series);
 static void AFE3520_SyncSeriesNum(UINT16 series);
@@ -75,15 +78,20 @@ int main(void)
 
 static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val)
 {
+	return AFE3520_WriteRegMaskedChecked(reg, val, AFE3520_READBACK_MASK_ALL);
+}
+
+static UINT8 AFE3520_WriteRegMaskedChecked(UINT8 reg, UINT8 val, UINT8 mask)
+{
 	if (!sh36735_write_reg_u8(reg, val))
 	{
 		return 1;
 	}
 
-	return AFE3520_ReadbackRegChecked(reg, val);
+	return AFE3520_ReadbackRegChecked(reg, val, mask);
 }
 
-static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val)
+static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val, UINT8 mask)
 {
 	UINT8 readback = 0;
 
@@ -92,7 +100,7 @@ static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val)
 		return 1;
 	}
 
-	return (readback == val) ? 0 : 1;
+	return ((readback & mask) == (val & mask)) ? 0 : 1;
 }
 
 static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series)
@@ -130,7 +138,7 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	Registers_AFE1.sonf2.bits.CHGMOS = chgmos;
 	Registers_AFE1.sonf2.bits.DSGMOS = dsgmos;
 	Registers_AFE1.sonf2.bits.PUMP_EN = 0;
-	result |= AFE3520_WriteRegChecked(AFE_SCONF2, Registers_AFE1.sonf2.all);
+	result |= AFE3520_WriteRegMaskedChecked(AFE_SCONF2, Registers_AFE1.sonf2.all, AFE3520_SCONF2_CHECK_MASK);
 
 	AFE3520_SyncSeriesNum(SeriesNum);
 	Registers_AFE1.sonf4 = SeriesNum;
