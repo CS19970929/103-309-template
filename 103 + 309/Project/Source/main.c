@@ -3,8 +3,8 @@
 UINT8 SeriesNum = 16;
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1串
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2串
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1�?
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2�?
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 3
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 4
 	{0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 5
@@ -26,18 +26,15 @@ void InitDevice(void);
 void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
-
-// #define _DEBUG_CODESE
+static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val);
+static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos);
 
 int main(void)
 {
-	InitDevice(); // 初始化外设
-	InitVar();	  // 初始化变量
+	InitDevice(); // 初始化外�?
+	InitVar();	  // 初始化变�?
 	while (1)
 	{
-#if (defined _DEBUG_CODE)
-		App_SysTime();
-#else
 		App_SysTime();
 		App_AFEGet();
 		App_WarnCtrl();
@@ -49,7 +46,7 @@ int main(void)
 #ifdef __FUNC__CAN__
 		App_Can();
 #endif // __FUNC__CAN__
-		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏�?
 		// sleep();
 		App_SOC();
 
@@ -64,42 +61,92 @@ int main(void)
 		Feed_IWatchDog;
 #endif
 
-#endif
 	}
+}
+
+
+static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val)
+{
+	if (!sh36735_write_reg_u8(reg, val))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
+{
+	UINT8 result = 0;
+	UINT8 mos_en = 0x7f;
+	UINT8 readback = 0;
+	UINT8 otc;
+	UINT8 utc;
+	UINT8 otd;
+	UINT8 utd;
+	UINT16 ov_thd = 4250 / 5;
+	UINT16 uv_thd = 2500 / 5;
+	float Rt;
+
+	result |= AFE3520_WriteRegChecked(AFE_SCONF1, 0);
+
+	Registers_AFE1.sonf2.all |= 0x80;
+	Registers_AFE1.sonf2.bits.PD_EN = 0;
+	Registers_AFE1.sonf2.bits.CHGMOS = chgmos;
+	Registers_AFE1.sonf2.bits.DSGMOS = dsgmos;
+	Registers_AFE1.sonf2.bits.PUMP_EN = 0;
+	result |= AFE3520_WriteRegChecked(AFE_SCONF2, Registers_AFE1.sonf2.all);
+
+	Registers_AFE1.sonf4 = SNum;
+	result |= AFE3520_WriteRegChecked(AFE_SCONF4, Registers_AFE1.sonf4);
+
+	Registers_AFE1.sonf3.bits.CRLD_EN = 0;
+	result |= AFE3520_WriteRegChecked(AFE_SCONF3, Registers_AFE1.sonf3.all);
+	result |= AFE3520_WriteRegChecked(AFE_SCONF6, mos_en);
+
+	result |= AFE3520_WriteRegChecked(AFE_OVT_OVH, 0x03);
+	result |= AFE3520_WriteRegChecked(AFE_OVL, 0x50);
+	result |= AFE3520_WriteRegChecked(AFE_OVT_OVH, (UINT8)((ov_thd >> 8) & 0x3));
+	result |= AFE3520_WriteRegChecked(AFE_OVL, (UINT8)(ov_thd & 0xff));
+	result |= AFE3520_WriteRegChecked(AFE_UVT_UVH, (UINT8)((uv_thd >> 8) & 0x3));
+	result |= AFE3520_WriteRegChecked(AFE_UVL, (UINT8)(uv_thd & 0xff));
+	result |= AFE3520_WriteRegChecked(AFE_OCD2V_OCD2T, 3);
+	result |= AFE3520_WriteRegChecked(AFE_OCCV_OCCT, 7);
+
+	Rt = 3.55f;
+	otc = (UINT8)(Rt * 512 / (10 + Rt));
+	Rt = 27.513f;
+	utc = (UINT8)(Rt * 512 / (10 + Rt));
+	Rt = 1.935f;
+	otd = (UINT8)(Rt * 512 / (10 + Rt));
+	Rt = 116.11f;
+	utd = (UINT8)(Rt * 512 / (10 + Rt));
+	result |= AFE3520_WriteRegChecked(AFE_REG_OTC, otc);
+	result |= AFE3520_WriteRegChecked(AFE_REG_UTC, utc);
+	result |= AFE3520_WriteRegChecked(AFE_REG_OTD, otd);
+	result |= AFE3520_WriteRegChecked(AFE_REG_UTD, utd);
+
+	if (!sh36735_read_regs(AFE_SCONF4, &readback, 1) || readback != Registers_AFE1.sonf4)
+	{
+		result = 1;
+	}
+
+	if (result != 0)
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+	}
+	else
+	{
+		System_ERROR_UserCallback(ERROR_REMOVE_SPI);
+	}
+
+	return result;
 }
 
 void InitDevice(void)
 {
-	SystemInit(); // HSE默认倍频到72MHz，如果没HSE切回HSI怎么处理目前还没了解
+	SystemInit(); // HSE默认倍频�?2MHz，如果没HSE切回HSI怎么处理目前还没了解
 
-#if (defined _DEBUG_CODE)
-	InitDelay();
-	IsSleepStartUp();
-	jtag_disableAndConfIO();
-
-	InitNVIC();
-	InitIO();
-	InitSci();
-	// init_afe();
-	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
-
-	bsp_InitSPIBus();
-	sh36735_spi_sw_init();
-
-	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
-
-	InitMosRelay_DOx();
-	InitCan();
-
-	Registers_AFE1.sonf2.all |= 0x80;
-	Registers_AFE1.sonf2.bits.CHGMOS = 1;
-	Registers_AFE1.sonf2.bits.DSGMOS = 1;
-	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
-	Registers_AFE1.sonf4 = SNum;
-	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
-
-	InitTimer();
-#else
 	InitDelay();
 	IsSleepStartUp();
 
@@ -112,7 +159,7 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数据
+	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数�?
 				  // InitAFE1();
 #ifdef __FUNC__CAN__
 	InitCan();
@@ -129,60 +176,7 @@ void InitDevice(void)
 
 	bsp_InitSPIBus();
 	sh36735_spi_sw_init();
-
-	//todo check 上电通讯正常
-	sh36735_read_regs(0x6B, (uint8_t)&g_stCellInfoReport.u16VCell[1], 2);
-	sh36735_write_reg_u8(AFE_SCONF1, 0);
-	//todo 配置不主动pd
-
-	Registers_AFE1.sonf2.all |= 0x80;
-	//todo 测试, 2、spi crc校验
-	Registers_AFE1.sonf2.bits.PD_EN = 0;
-	Registers_AFE1.sonf2.bits.CHGMOS = 0;
-	Registers_AFE1.sonf2.bits.DSGMOS = 0;
-	Registers_AFE1.sonf2.bits.PUMP_EN = 0;
-	sh36735_write_reg_u8(AFE_SCONF2, Registers_AFE1.sonf2.all);
-	Registers_AFE1.sonf4 = SNum;
-	sh36735_write_reg_u8(AFE_SCONF4, Registers_AFE1.sonf4);
-	Registers_AFE1.sonf3.bits.CRLD_EN = 0;
-	sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
-
-	int8_t mos_en = 0x7f;
-	// uint8_t mos_en = 0xff;
-	sh36735_write_reg_u8(AFE_SCONF6, mos_en);
-
-	{
-		uint16_t ov_thd = 4250 / 5;
-		uint16_t uv_thd = 2500 / 5;
-		sh36735_write_reg_u8(AFE_OVT_OVH, 0x03);
-		sh36735_write_reg_u8(AFE_OVL, 0x50);
-		sh36735_write_reg_u8(AFE_OVT_OVH, (ov_thd >> 8) & 0x3);
-		sh36735_write_reg_u8(AFE_OVL, ov_thd & 0xff);
-		sh36735_write_reg_u8(AFE_UVT_UVH, (uv_thd >> 8) & 0x3);
-		sh36735_write_reg_u8(AFE_UVL, uv_thd & 0xff);
-		uint8_t ov_code = 0;
-		uint8_t ov_delay_code = 0;
-		// sh36735_write_reg_u8(AFE_OCD1V_OCD1T, 0);
-		sh36735_write_reg_u8(AFE_OCD2V_OCD2T, 3);
-		//目前分流器，step 5.5
-		// sh36735_write_reg_u8(AFE_OCCV_OCCT, 2);
-		sh36735_write_reg_u8(AFE_OCCV_OCCT, 7);
-
-		uint8_t otc, utc, otd, utd;
-		float Rt;
-		Rt = 3.55; //55du
-		otc = Rt * 512 / (10 + Rt);
-		Rt = 27.513; //0du
-		utc = Rt * 512 / (10 + Rt);
-		Rt = 1.935; //75du
-		otd = Rt * 512 / (10 + Rt);
-		Rt = 116.11; //-25du
-		utd = Rt * 512 / (10 + Rt);
-		sh36735_write_reg_u8(AFE_REG_OTC, otc);
-		sh36735_write_reg_u8(AFE_REG_UTC, utc);
-		sh36735_write_reg_u8(AFE_REG_OTD, otd);
-		sh36735_write_reg_u8(AFE_REG_UTD, utd);
-	}
+	InitAFE3520_Registers(0, 0);
 
 #ifdef wdog_enable
 	Init_IWDG();
@@ -190,7 +184,6 @@ void InitDevice(void)
 	InitTimer();
 	log_w("init over");
 
-#endif
 }
 
 void InitVar(void)
@@ -200,7 +193,7 @@ void InitVar(void)
 	SeriesNum = OtherElement.u16Sys_SeriesNum;
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时序
+	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时�?
 	SystemStatus.bits.b1Status_ToSleep = 1;
 
 	// SystemStatus.bits.b4Status_ProjectVer = 1;

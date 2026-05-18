@@ -4,10 +4,10 @@
 //#define USE_STDPERIPH_DRIVER	//û�������һ���assert_param()�����Ĵ���Ҫ�ڹ����ļ�������
 #include <math.h>
 #include "stm32f10x.h"
-#include "stm32f10x_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��
+#include "stm32f10x_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��?
 #include "string.h"
 
-#include "DataDeal.h"				//����Sci_Upper.hǰ�����
+#include "DataDeal.h"				//����Sci_Upper.hǰ�����?
 #include "Sci_Upper.h"
 #include "System_Init.h"
 #include "System_Monitor.h"
@@ -80,7 +80,6 @@ FALSE = 0, TRUE
 #define DELAYB10MS_2MIN      ((UINT16)12000)         //30s
 
 
-//#define _DEBUG_CODE
 #define _IAP					//��������ļ���ַ��Ļ��������������IAP��project����
 //#define _SLEEP_WITH_CURRENT
 
@@ -100,7 +99,7 @@ FALSE = 0, TRUE
 //#define _LCD_SCI2
 
 
-//����汾û�д���3
+//����汾û�д���?
 //#define _COMMOM_UPPER_SCI3
 //#define _CLIENT_SCI3
 //#define _LCD_SCI3

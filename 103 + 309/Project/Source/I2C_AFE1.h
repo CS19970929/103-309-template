@@ -283,6 +283,12 @@ struct SH367309_Read {			/* AD Read	*/
 extern struct SH367309_Read SH367309_Read_AFE1;
 extern AFEDATA Registers_AFE1;
 
+#define AFE_UPDATE_OK              ((UINT8)0x00)
+#define AFE_UPDATE_ERR_SCONF       ((UINT8)0x01)
+#define AFE_UPDATE_ERR_THRESHOLD   ((UINT8)0x02)
+#define AFE_UPDATE_ERR_STATUS      ((UINT8)0x04)
+#define AFE_UPDATE_ERR_ADC         ((UINT8)0x08)
+
 
 UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf);
 UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf);

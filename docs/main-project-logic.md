@@ -34,8 +34,8 @@
 ### 1.3 重要硬件假设
 
 - 应用起始地址：`FLASH_ADDR_APP_START = 0x08004800`。
-- Flash 运行区中还使用 `0x0801F800`、`0x0801FC00`、`0x0803E000`、`0x0803E800` 等地址保存休眠、升级、AFE 偏移等标志或参数。
-- 代码与工程命名指向 `STM32F103RCT6` 这类 256KB Flash 级别器件，但 Keil 工程设备配置存在 `STM32F103C8`、64KB IROM、128KB Flash 算法等不一致项，需要统一。
+- Flash 运行区中使用 `0x0801F000`、`0x0801F400`、`0x0801F800`、`0x0801FC00` 保存 AFE 偏移、标志、升级标志和休眠标志。
+- 代码与工程命名曾指向 `STM32F103RCT6` 这类 256KB Flash 级别器件，但 Keil 工程设备配置和 OpenOCD 实测均指向 `STM32F103C8/128 KiB Flash` 级别；本分支已把越界的 AFE Flash 参数地址从 `0x0803E000/0x0803E800` 收回到 128 KiB 顶部空页，但 MCU/IROM/启动文件配置仍建议后续统一。
 - 外部 EEPROM 通过软件 I2C 读写，主要保存校准、保护阈值、其他系统参数、SOC、事件记录等。
 
 ## 2. 总体运行模型
@@ -174,7 +174,7 @@ flowchart LR
 - `sh36735_write_regs(reg, buf, n)`：连续写寄存器。
 - `sh36735_read_regs(reg, buf, n)`：连续读寄存器。
 
-官方 SH3673520 例程的 SPI 帧包含命令回显、地址回显、长度回显、数据、CRC、ACK 等校验点。主项目低层驱动只实现了部分校验，当前还存在写 ACK 取错字节的高风险问题，见后文风险索引。
+官方 SH3673520 例程的 SPI 帧包含命令回显、地址回显、长度回显、数据、CRC、ACK 等校验点。原主项目低层驱动只实现了部分校验，并存在写 ACK 取错字节的高风险问题；本分支已按官方帧格式补齐写/读/软复位校验和重试。
 
 ### 6.2 寄存器读取
 
@@ -299,8 +299,8 @@ flowchart TD
 
 风险：
 
-- 均衡寄存器写入当前基本忽略 SPI 返回值。
-- 软件 SPI 写 ACK 已存在风险时，均衡开启/关闭是否真正到达 AFE 无法保证。
+- 均衡寄存器写入现在会检查 SPI 返回值并重试。
+- 软件状态只在 AFE 寄存器写入成功后更新；仍建议用实物或逻辑分析仪验证均衡通道动作。
 
 ## 10. SOC 链路
 
@@ -428,36 +428,36 @@ SOC 由 `SOC.c` 和 `SocEnhance.c` 负责。
 
 | 主题 | 官方例程 | 主项目现状 |
 | --- | --- | --- |
-| SPI 写帧校验 | 校验 ACK、回显和 CRC，ACK 位于完整帧固定位置 | 写 ACK 读取位置疑似错误，回显校验不足 |
-| SPI 读帧校验 | 命令、地址、长度、CRC、数据都有校验 | 当前主要校验 CRC，错误返回未被上层充分处理 |
-| 初始化封装 | `RegisterInit()`、`RegisterCheck()`、`SH_AFE_SPICheck()` 形成闭环 | `main.c` 直接写寄存器，缺少统一读回检查 |
-| 运行监控 | 周期调用 AFE monitor，并把 SPI/寄存器异常纳入错误路径 | `MonitorAFE()` 被注释，直接调用数据读取 |
+| SPI 写帧校验 | 校验 ACK、回显和 CRC，ACK 位于完整帧固定位置 | 已按官方回包校验 `0xFF/cmd/reg/data/0xA5` |
+| SPI 读帧校验 | 命令、地址、长度、CRC、数据都有校验 | 已校验完整读帧，失败不覆盖缓存 |
+| 初始化封装 | `RegisterInit()`、`RegisterCheck()`、`SH_AFE_SPICheck()` 形成闭环 | 已集中到 `InitAFE3520_Registers()` 并读回 `SCONF4`；仍可继续拆成 AFE 专用模块 |
+| 运行监控 | 周期调用 AFE monitor，并把 SPI/寄存器异常纳入错误路径 | 采样失败已上报 `ERROR_SPI` 并阻止业务继续使用半更新数据 |
 | 电流计算 | 使用增益、偏移和多次平均 | 主项目用旧公式和 K/B 校准，方向公式不完全对称 |
 | 错误传播 | 读取函数返回错误 bitmask | 主项目多处忽略返回值或返回固定 0 |
 | 硬件抽象 | 面向 SH3673520 命名和寄存器 | 主项目大量复用 SH367309 命名和旧 I2C/MTP 逻辑 |
 
-结论：主项目业务层比较完整，包括通讯、保护、SOC、EEPROM、均衡、休眠等，但 SH3673520 接入层仍处于迁移中间态。最需要优先完善的是 AFE SPI 可靠性、寄存器初始化校验、错误传播和串数配置一致性。
+结论：主项目业务层比较完整，包括通讯、保护、SOC、EEPROM、均衡、休眠等。本分支已优先补齐 AFE SPI 可靠性、寄存器初始化校验和错误传播；后续最需要继续统一的是 MCU/Flash 配置、串数配置、旧 SH367309 命名边界和长期台架测试。
 
 ## 15. 风险索引
 
 ### P0：会直接导致 AFE 写入判断错误或采样数据无效的风险
 
-1. `sh3520 driver/sh36735_spi_proto.c` 写寄存器 ACK 读取位置错误。当前代码在发送 CRC 后立刻取 `ack`，但官方例程中 ACK 是下一字节，期望值 `0xA5`。这会导致写成功/失败判断不可信，并影响 MOS、均衡、保护清除等所有 AFE 写操作。
-2. `main.c` 中主动读取 cell 数据时把 `&g_stCellInfoReport.u16VCell[1]` 强转为 `uint8_t`，应为 `uint8_t *`。当前 Keil 已给出 pointer-to-smaller-integer 和 pointer type warning，运行时会把指针截断成单字节地址，属于明确 bug。
-3. `I2C_AFE1.c` 中 `UpdateVoltageFromBqMaximo()` 忽略所有 `sh36735_read_regs()` 返回值，并固定返回 0。`DataDeal.c` 又直接使用该函数结果，导致 SPI 失败、CRC 失败、AFE 离线时仍可能消费旧数据或错误数据。
+1. 已修复：`sh3520 driver/sh36735_spi_proto.c` 原写寄存器 ACK 读取位置错误，现按官方完整写回包判断。
+2. 已修复：`main.c` 原启动测试读取存在 `uint8_t` 指针截断风险，现已移除测试读取并集中做 AFE 初始化读回。
+3. 已修复：`I2C_AFE1.c` 原 `UpdateVoltageFromBqMaximo()` 忽略 SPI 读返回值，现返回错误 bitmask，并由 `App_AFEGet()` 阻止半更新数据进入业务。
 
 ### P1：会造成参数、保护或硬件适配不一致的风险
 
-4. `EEPROM.c` 中 `WriteEEPROM_Word_NoZone()`、`ReadEEPROM_Word_NoZone()` 接口是 16bit EEPROM 地址，但调用处传入 `FLASH_ADDR_SH367309_VALUE` 这类 32bit Flash 地址，编译器已有截断 warning。大概率应改为 EEPROM 地址宏 `E2P_ADDR_SH367309_VALUE`。
-5. Keil 工程 MCU/Flash 配置不一致。工程中同时出现 `STM32F103C8`、64KB IROM、128KB Flash 算法、高密度启动文件、`103RCT6` 文件名、`0x0803E000` Flash 参数地址。若按 C8 或 64KB 器件烧录，会发生地址越界或运行异常。
-6. AFE 初始化在 `main.c` 中硬编码寄存器值，缺少官方例程里的 `RegisterInit/RegisterCheck/SPICheck` 闭环。AFE 配置写失败时系统仍继续运行。
+4. 已缓解：OpenOCD 实测 Flash 为 128 KiB，原 `0x0803E000/0x0803E800` 已越界；本分支改为 `0x0801F000/0x0801F400`。仍建议后续把 EEPROM 地址和 Flash 地址彻底分型命名。
+5. 仍存在：Keil 工程 MCU/Flash 配置不一致。工程中同时出现 `STM32F103C8`、64KB IROM、128KB Flash 算法、高密度启动文件、`103RCT6` 文件名，需要统一。
+6. 已缓解：AFE 初始化已集中封装并检查 SPI 写返回，且读回 `SCONF4`。仍建议后续迁入独立 AFE 初始化模块。
 7. 串数配置不统一。`SNum` 固定为 19，`SeriesNum` 上电默认 16 并从 EEPROM 参数覆盖，`OtherElement_default` 又使用 `SNum`，AFE `SCONF4` 也写 `SNum`。16 串和 19 串版本容易出现采样、保护、均衡通道不一致。
 8. `AFE_PROTECT_param.c` 中 `sh_decode_occ_occt()` 声明为非 void 但缺少 return，并且被采样链路周期调用。虽然未必立即崩溃，但属于未定义返回语义。
 
 ### P2：可靠性、维护性和长期演进风险
 
 9. 电流计算与官方例程不一致，当前充放电方向公式乘除顺序不对称，也没有采用官方 Gain/Offset 和多样本平均策略，电流精度需要用实测校准确认。
-10. `Cell_balance.c` 写 AFE 均衡寄存器时忽略返回值，重试逻辑被注释。若 SPI 写失败，系统可能误以为均衡已开启或已关闭。
+10. 已修复：`Cell_balance.c` 写 AFE 均衡寄存器现在会重试并检查返回值，写失败时不更新软件均衡状态。
 11. 当前启用软件 SPI，硬件 SPI 文件存在但未纳入构建。软件 SPI 文件注释说明更偏调试用途，生产版本建议确认时序裕量、抗干扰能力和 CPU 占用。
 12. SH367309 旧 I2C/MTP 代码与 SH3673520 新 SPI 代码混合在同一业务链路中，命名和职责容易误导后续维护。
 13. `todo.c` 中存在大量临时代码/记录，不应作为正式功能依据。建议后续把待办迁入文档或 issue，并保持源码目录干净。

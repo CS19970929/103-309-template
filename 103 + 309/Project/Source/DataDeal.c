@@ -82,19 +82,6 @@ void Init_Registers(UINT8 num)
 // UINT32 aaaaa1 = 0;
 // UINT32 aaaaa2 = 0;
 
-void DataLoad_CellVolt_Test(void)
-{
-//	g_stCellInfoReport.u16VCell[23] = SH367309_Reg_Store.REG_BSTATUS1.all;
-//	g_stCellInfoReport.u16VCell[24] = SH367309_Reg_Store.REG_BSTATUS2.all;
-//	g_stCellInfoReport.u16VCell[25] = SH367309_Reg_Store.REG_BSTATUS3.all;
-
-//	g_stCellInfoReport.u16VCell[27] = aaaaaa1;
-//	g_stCellInfoReport.u16VCell[28] = aaaaaa2;
-//	g_stCellInfoReport.u16VCell[29] = aaaaaa3;
-//	g_stCellInfoReport.u16VCell[30] = aaaaaa4;
-//	g_stCellInfoReport.u16VCell[31] = aaa11;
-}
-
 // 这里排列好就行，不需要电池位号映射表。>61000为不用
 // 经过验算，AFE1校准一次，然后本身再校准一次叠加是可以的。不需要确定某一个KB值的做法。
 // 假设先确定用AFE1还是本身的KB的话，会出现问题。如下：
@@ -533,84 +520,14 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 #endif
 }
 
-void test_Autocurrent_cycle(void)
-{
-	static uint8_t step = 0;
-#if 1
-	static uint16_t CHG_current = 200;
-	static uint16_t DSG_current = 400;
-#else
-	static uint16_t CHG_current = 200;
-	static uint16_t DSG_current = 400;
-#endif
-
-	switch (step)
-	{
-	case 0:
-		if (g_stCellInfoReport.SocElement.u16Soc < 99)
-		{
-			step = 1;
-			g_stCellInfoReport.u16Ichg = CHG_current;
-			g_stCellInfoReport.u16IDischg = 0;
-		}
-		else
-		{
-			step = 1;
-		}
-		break;
-	case 1:
-	{
-		if (g_stCellInfoReport.SocElement.u16Soc >= 99)
-		{
-			step = 2;
-			g_stCellInfoReport.u16Ichg = 0;
-			g_stCellInfoReport.u16IDischg = DSG_current;
-		}
-		break;
-	}
-	case 2:
-		if (g_stCellInfoReport.SocElement.u16Soc <= 1)
-		{
-			step = 0;
-		}
-		break;
-	default:
-		break;
-	}
-}
 // 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
 
 extern UINT8 gu8_200msAccClock_Flag2;
-// void App_AFEGet(void)
-// {
-// 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
-// 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
-// 	// if (0 == gu8_200msAccClock_Flag2 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2)
-// 	// if (0 == gu8_200msAccClock_Flag2)
-// 	{
-// 		return;
-// 	}
-// 	if (u32E2P_Pro_VolCur_WriteFlag != 0 || u32E2P_Pro_Temp_WriteFlag != 0 || u32E2P_Pro_Other_WriteFlag != 0 || u32E2P_OtherElement1_WriteFlag != 0 || u32E2P_RTC_Element_WriteFlag != 0 || u8E2P_SocTable_WriteFlag != 0 || u8E2P_CopperLoss_WriteFlag != 0 || u8E2P_KB_WriteFlag != 0)
-// 	{
-// 		return;
-// 	}
-
-// 	MonitorAFE(0, UpdateVoltageFromBqMaximo());
-
-// 	DataLoad_CellVolt();
-// 	DataLoad_CellVoltMaxMinFind();
-// 	DataLoad_Temperature();
-// 	DataLoad_TemperatureMaxMinFind();
-// 	DataLoad_Current();
-// 	// test_Autocurrent_cycle();
-// 	App_SH367309();
-// 	App_MOS_Relay_Ctrl();
-
-// 	gu8_200msAccClock_Flag2 = 0;
-// }
-
 void App_AFEGet(void)
 {
+	UINT8 afe_result;
+	uint8_t write;
+
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 	{
 		return;
@@ -622,7 +539,11 @@ void App_AFEGet(void)
 	}
 
 	// MonitorAFE(0, UpdateVoltageFromBqMaximo());
-	UpdateVoltageFromBqMaximo();
+	afe_result = UpdateVoltageFromBqMaximo();
+	if (afe_result != AFE_UPDATE_OK)
+	{
+		return;
+	}
 
 
 	DataLoad_CellVolt();
@@ -640,7 +561,7 @@ void App_AFEGet(void)
 		{
 		case 0:
 			Registers_AFE1.sonf3.bits.CRLD_EN = 2;
-			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
+			write = Registers_AFE1.sonf3.all | 0x08;
 			sh36735_write_reg_u8(AFE_SCONF3, write);
 			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
 			if (2 == Registers_AFE1.sonf3.bits.CRLD_EN)
@@ -683,7 +604,7 @@ void App_AFEGet(void)
 		{
 		case 0:
 			// Registers_AFE1.sonf3.bits.CRLD_EN = 2;
-			uint8_t write = Registers_AFE1.sonf3.all | 0x08;
+			write = Registers_AFE1.sonf3.all | 0x08;
 			sh36735_write_reg_u8(AFE_SCONF3, write);
 			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
 			if (Registers_AFE1.sonf3.bits.CRLD_EN = 2)

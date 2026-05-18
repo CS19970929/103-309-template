@@ -893,14 +893,34 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
 
-    sh36735_read_regs(0x40, (uint8_t *)&Registers_AFE1.sonf1, (0x46 - 0x40 + 1));
-	sh36735_read_regs(0x47, (uint8_t *)&Registers_AFE1.OWV_ALARMH, (0x57 - 0x47 + 1));
+	if (!sh36735_read_regs(0x40, (uint8_t *)&Registers_AFE1.sonf1, (0x46 - 0x40 + 1)))
+	{
+		result |= AFE_UPDATE_ERR_SCONF;
+	}
+	if (!sh36735_read_regs(0x47, (uint8_t *)&Registers_AFE1.OWV_ALARMH, (0x57 - 0x47 + 1)))
+	{
+		result |= AFE_UPDATE_ERR_THRESHOLD;
+	}
 	// sh36735_read_regs(0x5B, (uint8_t *)&Registers_AFE1.bstatus1, (0x5c - 0x5b + 1));
-	sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1));
+	if (!sh36735_read_regs(0x58, (uint8_t *)&Registers_AFE1.flag1, (0x5C - 0x58 + 1)))
+	{
+		result |= AFE_UPDATE_ERR_STATUS;
+	}
 #if 1
 	// sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x90 - 0x5D + 1));
-	sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x96 - 0x5D + 1));
+	if (!sh36735_read_regs(0x5D, (uint8_t *)&Registers_AFE1.Temp1, (0x96 - 0x5D + 1)))
+	{
+		result |= AFE_UPDATE_ERR_ADC;
+	}
 #endif
+	if (result != AFE_UPDATE_OK)
+	{
+		sys_time.crc_err = true;
+		System_ERROR_UserCallback(ERROR_SPI);
+		return result;
+	}
+	sys_time.crc_err = false;
+	System_ERROR_UserCallback(ERROR_REMOVE_SPI);
 	// sh36735_read_regs(0x40, (uint8_t *)Registers_AFE1.sonf1, (0x99 - 0x40 + 1));
 	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
 	SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
@@ -939,8 +959,6 @@ extern void SH_AFE_GetProtectStatus(void);
 		SH367309_Read_AFE1.vbatC = (((UINT32)U16_SwapEndian(Registers_AFE1.VCHGR) * 5 >> 5) * 25); ////Vcell*5/32
 	}
 
-void test_read_afe_param(void);
-	test_read_afe_param();
 	//	else
 	//	{
 	//		result = 1;
