@@ -336,11 +336,11 @@ void Drivers_External_Ctrl(void)
 		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
 		if (is_charger_online())
 		{
-			bms_status = S_DSG;
+			bms_status = S_CHG;
 		}
 		if (is_load_online())
 		{
-			bms_status = S_CHG;
+			bms_status = S_DSG;
 		}
 		break;
 	case S_DSG:
