@@ -2,11 +2,11 @@
 
 UINT8 SeriesNum = 16;
 
-#define AFE3520_SERIES_MIN         ((UINT8)4u)
-#define AFE3520_SERIES_MAX         ((UINT8)20u)
-#define AFE3520_SCONF6_PROTECT_EN  ((UINT8)0x7fu)
-#define AFE3520_READBACK_MASK_ALL  ((UINT8)0xffu)
-#define AFE3520_SCONF2_CHECK_MASK  ((UINT8)0x7fu)
+#define AFE3520_SERIES_MIN ((UINT8)4u)
+#define AFE3520_SERIES_MAX ((UINT8)20u)
+#define AFE3520_SCONF6_PROTECT_EN ((UINT8)0x7fu)
+#define AFE3520_READBACK_MASK_ALL ((UINT8)0xffu)
+#define AFE3520_SCONF2_CHECK_MASK ((UINT8)0x7fu)
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1�?
@@ -56,7 +56,7 @@ int main(void)
 		App_CellBalance();
 #ifdef __FUNC__CAN__
 		App_Can();
-#endif // __FUNC__CAN__
+#endif					 // __FUNC__CAN__
 		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏�?
 		// sleep();
 		App_SOC();
@@ -71,10 +71,8 @@ int main(void)
 #ifdef wdog_enable
 		Feed_IWatchDog;
 #endif
-
 	}
 }
-
 
 static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val)
 {
@@ -128,7 +126,7 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	UINT8 otd;
 	UINT8 utd;
 	UINT16 ov_thd = 4250 / 5;
-	UINT16 uv_thd = 2500 / 5;
+	UINT16 uv_thd = 2650 / 5;
 	float Rt;
 
 	result |= AFE3520_WriteRegChecked(AFE_SCONF1, 0);
@@ -170,7 +168,6 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	result |= AFE3520_WriteRegChecked(AFE_REG_OTD, otd);
 	result |= AFE3520_WriteRegChecked(AFE_REG_UTD, utd);
 
-
 	if (result != 0)
 	{
 		System_ERROR_UserCallback(ERROR_SPI);
@@ -179,6 +176,9 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	{
 		System_ERROR_UserCallback(ERROR_REMOVE_SPI);
 	}
+
+	SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
+	SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
 
 	return result;
 }
@@ -222,7 +222,6 @@ void InitDevice(void)
 #endif // !1
 	InitTimer();
 	log_w("init over");
-
 }
 
 void InitVar(void)

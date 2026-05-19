@@ -8,9 +8,9 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x1330		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x5330		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
-#define  wdog_enable
+// #define  wdog_enable
 // #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 #define __FUNC__CAN__
@@ -18,7 +18,7 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
@@ -81,13 +81,13 @@ typedef struct
   // uint16_t    Buv2_cnt;
   // uint16_t    Buv3_cnt;
 
-  uint16_t    occ1_cnt;
-  uint16_t    occ2_cnt;
-  uint16_t    occ3_cnt;
+  // uint16_t    occ1_cnt;
+  // uint16_t    occ2_cnt;
+  // uint16_t    occ3_cnt;
 
-  uint16_t    odc1_cnt;
-  uint16_t    odc2_cnt;
-  uint16_t    odc3_cnt;
+  // uint16_t    odc1_cnt;
+  // uint16_t    odc2_cnt;
+  // uint16_t    odc3_cnt;
 
   uint32_t    test_driver_cnt;
   uint64_t    test_main_cycle;
@@ -154,6 +154,9 @@ typedef struct
   uint16_t bal_time;
   bool crc_err;
 	uint32_t crc_err_cnt;
+  bool     can_enable;
+  bool     canPow_enable;
+  uint8_t  can_pow_sel;
   
 }Time_T;
 

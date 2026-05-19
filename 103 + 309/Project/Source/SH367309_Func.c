@@ -239,6 +239,7 @@ void SH_AFE_GetProtectStatus(void)
 
 bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect)
 {
+#if 1
 	bool is_flag2 = SH_AFE_IsFlag2Protect(AFE_Protect);
 	uint8_t flag_mask = SH_AFE_GetProtectMask(AFE_Protect);
 	uint8_t flag_reg = is_flag2 ? AFE_FLAG2 : AFE_FLAG1;
@@ -288,6 +289,7 @@ bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect)
 
 	System_ERROR_UserCallback(ERROR_REMOVE_SPI);
 	return true;
+#endif
 }
 
 #if 0

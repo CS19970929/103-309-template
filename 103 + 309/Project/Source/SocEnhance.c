@@ -68,7 +68,7 @@
 #define SOC_FULL_CALI_HOLD_S ((UINT16)30)
 #endif
 #ifndef SOC_EMPTY_CALI_HOLD_S
-#define SOC_EMPTY_CALI_HOLD_S ((UINT16)30)
+#define SOC_EMPTY_CALI_HOLD_S ((UINT16)10)
 #endif
 #define SOC_SECONDS_TO_200MS(sec) ((UINT16)(((UINT32)(sec) * 1000) / SOC_CONTROL_PERIOD_MS))
 #define SOC_TERMINAL_CAL_L1_200MS SOC_SECONDS_TO_200MS(SOC_TERMINAL_CAL_L1_S)
@@ -1212,7 +1212,8 @@ void soc_cali(void)
 			chg_soc100_delay = 0;
 		}
 	}
-	else if (isDSG())
+	// else if (isDSG())
+	else
 	{
 		chg_soc100_delay = 0;
 		if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= SOC_CELL_VOLTAGE_MIN_MV))
@@ -1228,11 +1229,6 @@ void soc_cali(void)
 		{
 			dsg_soc0_delay = 0;
 		}
-	}
-	else
-	{
-		dsg_soc0_delay = 0;
-		chg_soc100_delay = 0;
 	}
 }
 /*
