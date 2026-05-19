@@ -8,8 +8,8 @@ UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 
 #define SLEEP_CMD_MASK                ((UINT16)0x1FFFu)
-#define SLEEP_FORCE_DEEP_VCELL_MV     ((UINT16)2500u)
-#define SLEEP_FORCE_DEEP_DELAY_S      ((UINT32)(60u * 60u))
+#define SLEEP_FORCE_DEEP_VCELL_MV     ((UINT16)2750u)
+#define SLEEP_FORCE_DEEP_DELAY_S      ((UINT32)(60u * 3u))
 
 static UINT8 SleepDeal_ForceDeepRequired(void)
 {
@@ -23,10 +23,10 @@ static UINT8 SleepDeal_ForceDeepRequired(void)
 		return 1;
 	}
 
-	if (is_AFE_CUV || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
-	{
-		return 1;
-	}
+	// if (is_AFE_CUV || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
+	// {
+	// 	return 1;
+	// }
 
 	return 0;
 }

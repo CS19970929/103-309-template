@@ -321,7 +321,10 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 		System_ErrFlag.u8ErrFlag_Com_EEPROM++;
 		break;
 	case ERROR_SPI:
-		System_ErrFlag.u8ErrFlag_Com_SPI++;
+		if (System_ErrFlag.u8ErrFlag_Com_SPI < 0xFFu)
+		{
+			System_ErrFlag.u8ErrFlag_Com_SPI++;
+		}
 		break;
 	case ERROR_UPPER:
 		System_ErrFlag.u8ErrFlag_Com_Upper++;

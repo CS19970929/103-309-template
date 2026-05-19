@@ -18,6 +18,15 @@ struct OTHER_ELEMENT OtherElement;
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 
+#define AFE_UPDATE_PERIOD_MS             ((UINT16)200u)
+#define AFE_UPDATE_STALE_FAIL_CNT        ((UINT16)(5u * 1000u / AFE_UPDATE_PERIOD_MS))
+#define AFE_UPDATE_FORCE_SLEEP_FAIL_CNT  ((UINT16)(60u * 1000u / AFE_UPDATE_PERIOD_MS))
+#define AFE_LOAD_REMOVE_CRLD_DISABLE     ((UINT8)0u)
+#define AFE_LOAD_REMOVE_CRLD_ENABLE      ((UINT8)2u)
+#define AFE_LOAD_REMOVE_PROTECT_MASK     ((UINT16)(AFE_FLAG_OCD1 | AFE_FLAG_OCD2 | AFE_FLAG_SC))
+#define AFE_LOAD_REMOVE_RLD_500UA_MASK   ((UINT8)0x40u)
+#define AFE_LOAD_REMOVE_CONFIRM_CNT      ((UINT8)2u)
+
 // uint8_t Sh_GetCadcCurrent(uint32_t *current)
 uint8_t Sh_GetCadcCurrent(void)
 {
@@ -295,6 +304,55 @@ void DataLoad_CurrentCali(void)
 extern uint16_t time_chg;
 extern uint16_t time_dsg;
 extern uint16_t time_real;
+
+static UINT16 s_u16AfeUpdateFailCnt = 0;
+static UINT8 s_u8AfeLastUpdateErr = AFE_UPDATE_OK;
+
+static void AFE_ClearStaleRuntimeData(void)
+{
+	g_stCellInfoReport.u16Ichg = 0;
+	g_stCellInfoReport.u16IDischg = 0;
+	u32_ChgCur_mA = 0;
+	u32_DsgCur_mA = 0;
+	time_chg = 0xFFFF;
+	time_dsg = 0xFFFF;
+	time_real = 0xFFFF;
+	g_stCellInfoReport.balance_status = 0;
+	g_stCellInfoReport.u16BalanceFlag1 = 0;
+	g_stCellInfoReport.u16BalanceFlag2 = 0;
+}
+
+static void AFE_UpdateFailDeal(UINT8 result)
+{
+	if (s_u16AfeUpdateFailCnt < AFE_UPDATE_FORCE_SLEEP_FAIL_CNT)
+	{
+		s_u16AfeUpdateFailCnt++;
+	}
+
+	if (s_u8AfeLastUpdateErr != result)
+	{
+		s_u8AfeLastUpdateErr = result;
+	}
+
+	sys_time.crc_err = true;
+	if (s_u16AfeUpdateFailCnt >= AFE_UPDATE_STALE_FAIL_CNT)
+	{
+		AFE_ClearStaleRuntimeData();
+	}
+
+	if (s_u16AfeUpdateFailCnt >= AFE_UPDATE_FORCE_SLEEP_FAIL_CNT)
+	{
+		s_u16AfeUpdateFailCnt = AFE_UPDATE_FORCE_SLEEP_FAIL_CNT;
+		entersleep(DEEP_MODE);
+	}
+}
+
+static void AFE_UpdateOkDeal(void)
+{
+	s_u16AfeUpdateFailCnt = 0;
+	s_u8AfeLastUpdateErr = AFE_UPDATE_OK;
+}
+
 void DataLoad_Current(void)
 {
 	// if ((SH367309_Read_AFE1.u16Current & 0x1000) == 0)
@@ -521,12 +579,180 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 }
 
 // 030单片机的8M主频只能改为200ms，不然时基出问题。72M可以用50ms。
+static AFE_ProtectType AFE_GetLoadRemoveProtectFlags(void)
+{
+	UINT16 clear_flags = 0;
 
+	if (Registers_AFE1.flag1.bits.ocd1_flg)
+	{
+		clear_flags |= (UINT16)AFE_FLAG_OCD1;
+	}
+	if (Registers_AFE1.flag1.bits.ocd2_flg)
+	{
+		clear_flags |= (UINT16)AFE_FLAG_OCD2;
+	}
+	if (Registers_AFE1.flag1.bits.sc_flg)
+	{
+		clear_flags |= (UINT16)AFE_FLAG_SC;
+	}
+
+	return (AFE_ProtectType)clear_flags;
+}
+
+static UINT8 AFE_LoadRemoveSetCrld(UINT8 crld_en)
+{
+	if (crld_en == AFE_LOAD_REMOVE_CRLD_ENABLE)
+	{
+		Registers_AFE1.sonf7 &= (UINT8)(~AFE_LOAD_REMOVE_RLD_500UA_MASK);
+		if (!sh36735_write_reg_u8(AFE_SCONF7, Registers_AFE1.sonf7))
+		{
+			System_ERROR_UserCallback(ERROR_SPI);
+			return 0;
+		}
+	}
+
+	Registers_AFE1.sonf3.bits.CRLD_EN = crld_en;
+	if (!sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return 0;
+	}
+	if (!sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return 0;
+	}
+
+	return (Registers_AFE1.sonf3.bits.CRLD_EN == crld_en) ? 1u : 0u;
+}
+
+static UINT8 AFE_LoadRemoveRefreshStatus(void)
+{
+	if (!sh36735_read_regs(AFE_BSTATUS2, (uint8_t *)&Registers_AFE1.bstatus2.all, 1))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return 0;
+	}
+
+	return 1;
+}
+
+static UINT8 AFE_IsLoadRemoved(void)
+{
+	if ((Registers_AFE1.bstatus2.bits.LOADOFF != 0u) && (Registers_AFE1.bstatus2.bits.LOADON == 0u))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static UINT8 AFE_ClearLoadRemoveProtectFlags(UINT16 clear_flags)
+{
+	UINT8 result = 1u;
+
+	if ((clear_flags & (UINT16)AFE_FLAG_OCD1) != 0u)
+	{
+		result = (SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1) && result) ? 1u : 0u;
+	}
+	if ((clear_flags & (UINT16)AFE_FLAG_OCD2) != 0u)
+	{
+		result = (SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2) && result) ? 1u : 0u;
+	}
+	if ((clear_flags & (UINT16)AFE_FLAG_SC) != 0u)
+	{
+		result = (SH_AFE_ClearProtectFlag(AFE_FLAG_SC) && result) ? 1u : 0u;
+	}
+
+	return result;
+}
+
+UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
+{
+	static UINT8 state = 0;
+	static UINT8 load_removed_cnt = 0;
+	static AFE_ProtectType active_protect = (AFE_ProtectType)0;
+	UINT16 clear_flags = ((UINT16)clear_AFE_Protect_type & AFE_LOAD_REMOVE_PROTECT_MASK);
+
+	if (0u == clear_flags)
+	{
+		if ((state != 0u) || ((UINT16)active_protect != 0u))
+		{
+			(void)AFE_LoadRemoveSetCrld(AFE_LOAD_REMOVE_CRLD_DISABLE);
+		}
+		state = 0;
+		load_removed_cnt = 0;
+		active_protect = (AFE_ProtectType)0;
+		return 0;
+	}
+
+	if ((UINT16)active_protect != clear_flags)
+	{
+		state = 0;
+		load_removed_cnt = 0;
+		active_protect = (AFE_ProtectType)clear_flags;
+	}
+
+	switch (state)
+	{
+	case 0:
+		if (AFE_LoadRemoveSetCrld(AFE_LOAD_REMOVE_CRLD_ENABLE))
+		{
+			state = 1;
+		}
+		break;
+
+	case 1:
+		if (!AFE_LoadRemoveRefreshStatus())
+		{
+			load_removed_cnt = 0;
+			break;
+		}
+
+		if (AFE_IsLoadRemoved())
+		{
+			if (++load_removed_cnt >= AFE_LOAD_REMOVE_CONFIRM_CNT)
+			{
+				load_removed_cnt = AFE_LOAD_REMOVE_CONFIRM_CNT;
+				if (AFE_ClearLoadRemoveProtectFlags(clear_flags))
+				{
+					(void)AFE_LoadRemoveSetCrld(AFE_LOAD_REMOVE_CRLD_DISABLE);
+					state = 0;
+					load_removed_cnt = 0;
+					active_protect = (AFE_ProtectType)0;
+					return 1;
+				}
+			}
+		}
+		else
+		{
+			load_removed_cnt = 0;
+		}
+		break;
+
+	default:
+		state = 0;
+		load_removed_cnt = 0;
+		active_protect = (AFE_ProtectType)0;
+		break;
+	}
+
+	return 0;
+}
 extern UINT8 gu8_200msAccClock_Flag2;
 void App_AFEGet(void)
 {
+	static uint8_t cov1_flag = 0;
+	static uint8_t cuv1_flag = 0;
+	static uint8_t otc1_flag = 0;
+	static uint8_t utc1_flag = 0;
+	static uint8_t otd1_flag = 0;
+	static uint8_t utd1_flag = 0;
+	static uint8_t occ1_flag = 0;
+	static uint8_t ocd1_flag = 0;
+
 	UINT8 afe_result;
-	uint8_t write;
+	AFE_ProtectType load_remove_flags;
 
 	if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag3 || 1 == gu8_TxEnable_SCI1 || 1 == gu8_TxEnable_SCI2 || 1 == gu8_TxEnable_SCI3)
 	{
@@ -542,9 +768,10 @@ void App_AFEGet(void)
 	afe_result = UpdateVoltageFromBqMaximo();
 	if (afe_result != AFE_UPDATE_OK)
 	{
+		AFE_UpdateFailDeal(afe_result);
 		return;
 	}
-
+	AFE_UpdateOkDeal();
 
 	DataLoad_CellVolt();
 	DataLoad_CellVoltMaxMinFind();
@@ -553,40 +780,19 @@ void App_AFEGet(void)
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
 
-	if (IS_AFE_SC)
+	load_remove_flags = AFE_GetLoadRemoveProtectFlags();
+	if (((UINT16)load_remove_flags & (UINT16)AFE_FLAG_SC) != 0u)
 	{
 		System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
-		static uint8_t state = 0;
-		switch (state)
-		{
-		case 0:
-			Registers_AFE1.sonf3.bits.CRLD_EN = 2;
-			write = Registers_AFE1.sonf3.all | 0x08;
-			sh36735_write_reg_u8(AFE_SCONF3, write);
-			sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
-			if (2 == Registers_AFE1.sonf3.bits.CRLD_EN)
-				state = 1;
-			break;
-		case 1:
-			if (Registers_AFE1.bstatus2.bits.LOADOFF)
-			{
-				SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
-				state = 0;
-
-				Registers_AFE1.sonf3.bits.CRLD_EN = 0;
-				sh36735_write_reg_u8(AFE_SCONF3, Registers_AFE1.sonf3.all);
-				sh36735_read_regs(AFE_SCONF3, (uint8_t *)&Registers_AFE1.sonf3.all, 1);
-				if (0 == Registers_AFE1.sonf3.bits.CRLD_EN)
-					state = 0;
-			}
-			break;
-		default:
-
-			break;
-		}
 	}
 	else
+	{
 		System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
+	}
+	if (((UINT16)load_remove_flags & AFE_LOAD_REMOVE_PROTECT_MASK) == 0u)
+	{
+		(void)func_LoadRemove((AFE_ProtectType)0);
+	}
 
 	if (is_AFE_COV && g_stCellInfoReport.u16VCellMax < PRT_E2ROMParas.u16VcellOvp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
@@ -631,11 +837,11 @@ void App_AFEGet(void)
 	}
 	else if (is_AFE_ODC)
 	{
-		if (!is_load_online())
-		{
-			SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
-			SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
-		}
+		(void)func_LoadRemove(load_remove_flags);
+	}
+	else if (IS_AFE_SC)
+	{
+		(void)func_LoadRemove(load_remove_flags);
 	}
 	else if (is_AFE_OTC && g_stCellInfoReport.u16TempMax < PRT_E2ROMParas.u16TChgOTp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
@@ -645,6 +851,19 @@ void App_AFEGet(void)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
 	else if (is_AFE_UTD && g_stCellInfoReport.u16TempMin > PRT_E2ROMParas.u16TdischgUTp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_UTD);
+
+	if (is_AFE_COV || is_AFE_CUV || is_AFE_OCC || is_AFE_ODC || is_AFE_OTC || is_AFE_UTC || is_AFE_OTD || is_AFE_UTD || IS_AFE_SC)
+	{
+		fault_report(&cov1_flag, is_AFE_COV, CellOvp_Third);
+		fault_report(&cuv1_flag, is_AFE_CUV, CellUvp_Third);
+		fault_report(&otc1_flag, is_AFE_OTC, CellChgOTp_Third);
+		fault_report(&utc1_flag, is_AFE_UTC, CellChgUTp_Third);
+		fault_report(&otd1_flag, is_AFE_OTD, CellDsgOTp_Third);
+		fault_report(&utd1_flag, is_AFE_UTD, CellDsgUTp_Third);
+		fault_report(&occ1_flag, is_AFE_OCC, IchgOcp_Third);
+		fault_report(&ocd1_flag, is_AFE_ODC, IdischgOcp_Third);
+		return;
+	}
 
 	SH_AFE_GetProtectStatus();
 
@@ -670,7 +889,6 @@ void App_AFEGet(void)
 #endif
 
 #if 1
-	// App_SH367309();
 	App_MOS_Relay_Ctrl();
 #endif
 }
