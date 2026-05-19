@@ -646,6 +646,8 @@ void App_AFEGet(void)
 	else if (is_AFE_UTD && g_stCellInfoReport.u16TempMin > PRT_E2ROMParas.u16TdischgUTp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_UTD);
 
+	SH_AFE_GetProtectStatus();
+
 #if 0
 	if (sys_time.clear_cov)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);

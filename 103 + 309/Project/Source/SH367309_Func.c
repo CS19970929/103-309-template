@@ -186,40 +186,110 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 // #define isOTD
 // #define isUTD
 
+static bool SH_AFE_IsFlag2Protect(AFE_ProtectType AFE_Protect)
+{
+	return (((UINT16)AFE_Protect & (UINT16)AFE_REG_FLAG2) != 0u);
+}
+
+static UINT8 SH_AFE_GetProtectMask(AFE_ProtectType AFE_Protect)
+{
+	return (UINT8)((UINT16)AFE_Protect & 0xFFu);
+}
+
 void SH_AFE_GetProtectStatus(void)
 {
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = Registers_AFE1.flag1.bits.ov_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = Registers_AFE1.flag1.bits.uv_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = Registers_AFE1.flag1.bits.occ_flg;
-	System_ErrFlag.u8ErrFlag_CBC_DSG = Registers_AFE1.flag1.bits.sc_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg;
+	if (Registers_AFE1.flag1.bits.ov_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = 1;
+	}
+	if (Registers_AFE1.flag1.bits.uv_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = 1;
+	}
+	if (Registers_AFE1.flag1.bits.occ_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = 1;
+	}
+	if (Registers_AFE1.flag1.bits.ocd1_flg || Registers_AFE1.flag1.bits.ocd2_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = 1;
+	}
+	if (Registers_AFE1.flag1.bits.sc_flg)
+	{
+		System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
+	}
 
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = Registers_AFE1.flag2.bits.otc_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = Registers_AFE1.flag2.bits.utc_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = Registers_AFE1.flag2.bits.otd_flg;
-	g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = Registers_AFE1.flag2.bits.utd_flg;
+	if (Registers_AFE1.flag2.bits.otc_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = 1;
+	}
+	if (Registers_AFE1.flag2.bits.utc_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = 1;
+	}
+	if (Registers_AFE1.flag2.bits.otd_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = 1;
+	}
+	if (Registers_AFE1.flag2.bits.utd_flg)
+	{
+		g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = 1;
+	}
 }
 
 bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect)
 {
-	bool Result = false;
-	uint8_t Temp;
-	uint8_t write_reg = Registers_AFE1.sonf2.all | 0x80; // 配置LTCLR=1
-	sh36735_write_reg_u8(AFE_SCONF2, write_reg);
+	bool is_flag2 = SH_AFE_IsFlag2Protect(AFE_Protect);
+	uint8_t flag_mask = SH_AFE_GetProtectMask(AFE_Protect);
+	uint8_t flag_reg = is_flag2 ? AFE_FLAG2 : AFE_FLAG1;
+	uint8_t flag_value = is_flag2 ? Registers_AFE1.flag2.all : Registers_AFE1.flag1.all;
+	uint8_t write_reg = Registers_AFE1.sonf2.all | 0x80u;
+	uint8_t readback = 0;
 
-	if (AFE_Protect & 0xFF00)
+	if (0u == flag_mask)
 	{
-		Temp = (Registers_AFE1.flag2.all) & (uint8_t)(~(AFE_Protect | 0xFE)); // 将需要恢复的保护标志位清零
-		Result = sh36735_write_reg_u8(AFE_FLAG2, Temp);
+		return false;
+	}
+
+	if (!sh36735_write_reg_u8(AFE_SCONF2, write_reg))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return false;
+	}
+
+	flag_value &= (uint8_t)(~flag_mask);
+	if (!sh36735_write_reg_u8(flag_reg, flag_value))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return false;
+	}
+
+	if (!sh36735_read_regs(flag_reg, &readback, 1))
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return false;
+	}
+
+	if (is_flag2)
+	{
+		Registers_AFE1.flag2.all = readback;
+		AFE1_LastFlag2ConversionFlags |= (readback & AFE_FLAG2_CONVERSION_MASK);
 	}
 	else
 	{
-		Temp = (Registers_AFE1.flag1.all) & (uint8_t)(~AFE_Protect);
-		Result = sh36735_write_reg_u8(AFE_FLAG1, Temp);
+		Registers_AFE1.flag1.all = readback;
 	}
 
-	return Result;
+	if ((readback & flag_mask) != 0u)
+	{
+		System_ERROR_UserCallback(ERROR_SPI);
+		return false;
+	}
+
+	System_ERROR_UserCallback(ERROR_REMOVE_SPI);
+	return true;
 }
+
 #if 0
 void ProtectOV(void)
 {

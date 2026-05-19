@@ -3,15 +3,15 @@
 
 #include "conf.h"
 
-#define is_AFE_COV Registers_AFE1.flag1.bits.ov_flg
-#define is_AFE_CUV Registers_AFE1.flag1.bits.uv_flg
-#define is_AFE_OCC Registers_AFE1.flag1.bits.occ_flg
-#define is_AFE_ODC Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg
-#define is_AFE_OTC Registers_AFE1.flag2.bits.otc_flg
-#define is_AFE_UTC Registers_AFE1.flag2.bits.utc_flg
-#define is_AFE_OTD Registers_AFE1.flag2.bits.otd_flg
-#define is_AFE_UTD Registers_AFE1.flag2.bits.utd_flg
-#define IS_AFE_SC Registers_AFE1.flag1.bits.sc_flg
+#define is_AFE_COV (Registers_AFE1.flag1.bits.ov_flg)
+#define is_AFE_CUV (Registers_AFE1.flag1.bits.uv_flg)
+#define is_AFE_OCC (Registers_AFE1.flag1.bits.occ_flg)
+#define is_AFE_ODC (Registers_AFE1.flag1.bits.ocd1_flg | Registers_AFE1.flag1.bits.ocd2_flg)
+#define is_AFE_OTC (Registers_AFE1.flag2.bits.otc_flg)
+#define is_AFE_UTC (Registers_AFE1.flag2.bits.utc_flg)
+#define is_AFE_OTD (Registers_AFE1.flag2.bits.otd_flg)
+#define is_AFE_UTD (Registers_AFE1.flag2.bits.utd_flg)
+#define IS_AFE_SC (Registers_AFE1.flag1.bits.sc_flg)
 
 
 
@@ -295,6 +295,7 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void);
 
 
 void App_SH367309(void);
+void SH_AFE_GetProtectStatus(void);
 bool SH_AFE_ClearProtectFlag(AFE_ProtectType AFE_Protect);
 
 #endif	/* SH367309_FUNC_H */
