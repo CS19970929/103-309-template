@@ -43,18 +43,42 @@
 #define SOC_SELF_CONSUME_CURRENT_MA SOC_SELF_CONSUMPTION_CURRENT_MA
 #endif
 
-#define SOC_REST_OCV_START_DELAY_S ((UINT16)300)
-#define SOC_REST_OCV_STEP_PERIOD_S ((UINT16)60)
+#ifndef SOC_REST_OCV_START_DELAY_S
+#define SOC_REST_OCV_START_DELAY_S ((UINT16)1800)
+#endif
+#ifndef SOC_REST_OCV_STEP_PERIOD_S
+#define SOC_REST_OCV_STEP_PERIOD_S ((UINT16)600)
+#endif
+#ifndef SOC_REST_OCV_DEADBAND_PERCENT
 #define SOC_REST_OCV_DEADBAND_PERCENT ((UINT8)5)
+#endif
+#ifndef SOC_TERMINAL_CAL_L1_S
+#define SOC_TERMINAL_CAL_L1_S ((UINT16)60)
+#endif
+#ifndef SOC_TERMINAL_CAL_L2_S
+#define SOC_TERMINAL_CAL_L2_S ((UINT16)60)
+#endif
+#ifndef SOC_TERMINAL_CAL_L3_S
+#define SOC_TERMINAL_CAL_L3_S ((UINT16)30)
+#endif
+#ifndef SOC_TERMINAL_CAL_FORCE_S
+#define SOC_TERMINAL_CAL_FORCE_S ((UINT16)30)
+#endif
+#ifndef SOC_FULL_CALI_HOLD_S
+#define SOC_FULL_CALI_HOLD_S ((UINT16)30)
+#endif
+#ifndef SOC_EMPTY_CALI_HOLD_S
+#define SOC_EMPTY_CALI_HOLD_S ((UINT16)30)
+#endif
 #define SOC_SECONDS_TO_200MS(sec) ((UINT16)(((UINT32)(sec) * 1000) / SOC_CONTROL_PERIOD_MS))
-#define SOC_TERMINAL_CAL_L1_200MS SOC_SECONDS_TO_200MS(10)
-#define SOC_TERMINAL_CAL_L2_200MS SOC_SECONDS_TO_200MS(8)
-#define SOC_TERMINAL_CAL_L3_200MS SOC_SECONDS_TO_200MS(4)
-#define SOC_TERMINAL_CAL_FORCE_200MS SOC_SECONDS_TO_200MS(2)
+#define SOC_TERMINAL_CAL_L1_200MS SOC_SECONDS_TO_200MS(SOC_TERMINAL_CAL_L1_S)
+#define SOC_TERMINAL_CAL_L2_200MS SOC_SECONDS_TO_200MS(SOC_TERMINAL_CAL_L2_S)
+#define SOC_TERMINAL_CAL_L3_200MS SOC_SECONDS_TO_200MS(SOC_TERMINAL_CAL_L3_S)
+#define SOC_TERMINAL_CAL_FORCE_200MS SOC_SECONDS_TO_200MS(SOC_TERMINAL_CAL_FORCE_S)
 #define SOC_REST_OCV_START_DELAY_200MS SOC_SECONDS_TO_200MS(SOC_REST_OCV_START_DELAY_S)
 #define SOC_REST_OCV_STEP_PERIOD_200MS SOC_SECONDS_TO_200MS(SOC_REST_OCV_STEP_PERIOD_S)
-#define SOC_FULL_CALI_HOLD_200MS SOC_SECONDS_TO_200MS(5)
-#define SOC_EMPTY_CALI_HOLD_200MS SOC_SECONDS_TO_200MS(10)
+#define SOC_FULL_CALI_HOLD_200MS SOC_SECONDS_TO_200MS(SOC_FULL_CALI_HOLD_S)
+#define SOC_EMPTY_CALI_HOLD_200MS SOC_SECONDS_TO_200MS(SOC_EMPTY_CALI_HOLD_S)
 #define SOC_DIR_NONE ((UINT8)0)
 #define SOC_DIR_CHG ((UINT8)1)
 #define SOC_DIR_DSG ((UINT8)2)
@@ -590,7 +614,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			}
 		}
 
-		// 这是基于充电必须能达到100%的终极做法，2S + 1%
+		// 这是基于充电必须能达到100%的终极做法，时间由 SOC_TERMINAL_CAL_FORCE_S 控制
 		if (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol + 50 && SOC_Calculate_Element.u8SOC_Now < 100)
 		{
 			if (++su16_SocChgCal_L4_Tcnt >= SOC_TERMINAL_CAL_FORCE_200MS)
@@ -652,7 +676,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			}
 		}
 
-		// 这是基于放电必须能达到0%的终极做法，2S - 1%
+		// 这是基于放电必须能达到0%的终极做法，时间由 SOC_TERMINAL_CAL_FORCE_S 控制
 		// 但实际上放电要求没充电高
 		if (SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol - 50 && SOC_Calculate_Element.u8SOC_Now > 0)
 		{
@@ -899,31 +923,20 @@ static void SOC_RestOcvCorrectionTick(UINT8 enable)
 		return;
 	}
 
-	if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && (SOC_Enhance_Element.u16_VCellMin >= SOC_FULL_CELL_MIN_MV))
-	{
-		SOC_SetSocAndCapacity(SOC_PERCENT_MAX);
-		SOC_Calculate_Element.u32CapChange = 0;
-		return;
-	}
-	if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= SOC_CELL_VOLTAGE_MIN_MV))
+	// 静置 OCV 永远不允许向上校准，只允许低压锚点向下修正。
+	if ((SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol) && (SOC_Enhance_Element.u16_VCellMin >= SOC_CELL_VOLTAGE_MIN_MV) && (SOC_Calculate_Element.u8SOC_Now > 0))
 	{
 		SOC_SetSocAndCapacity(0);
 		SOC_Calculate_Element.u32CapChange = 0;
 		return;
 	}
-
 	if (++s_u16RestStepTicks < SOC_REST_OCV_STEP_PERIOD_200MS)
 	{
 		return;
 	}
 	s_u16RestStepTicks = 0;
 	ocv_soc = SOC_ClampPercent(Get_OpenCircuit_Value());
-	if ((UINT16)ocv_soc > ((UINT16)SOC_Calculate_Element.u8SOC_Now + SOC_REST_OCV_DEADBAND_PERCENT))
-	{
-		SOC_StepSocUp();
-		SOC_Calculate_Element.u32CapChange = 0;
-	}
-	else if (((UINT16)SOC_Calculate_Element.u8SOC_Now > (UINT16)ocv_soc + SOC_REST_OCV_DEADBAND_PERCENT) && (SOC_Calculate_Element.u8SOC_Now > 0))
+	if (((UINT16)SOC_Calculate_Element.u8SOC_Now > (UINT16)ocv_soc + SOC_REST_OCV_DEADBAND_PERCENT) && (SOC_Calculate_Element.u8SOC_Now > 0))
 	{
 		SOC_StepSocDown();
 		SOC_Calculate_Element.u32CapChange = 0;
