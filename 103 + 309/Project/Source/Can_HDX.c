@@ -5,6 +5,11 @@ volatile union CanTxType_Status CanTxType_Flag;
 CanTxMsg TxMessage;
 CanRxMsg RxMessage;
 
+#define CAN_0X02_SEND_PERIOD_TICKS      DELAYB10MS_1S
+#define CAN_TX_WAIT_COUNTER_MAX         ((UINT16)0x0FFF)
+
+static BOOL s_bCanLowPower = FALSE;
+
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 
@@ -49,23 +54,40 @@ void CAN_TX_Test(void)
 	}
 }
 
-void CAN_Tx_Data(CanTxMsg *Msg)
+BOOL CAN_Tx_Data(CanTxMsg *Msg)
 {
-	UINT8 TXCounter = 0, TXStatus = 0;
+	UINT16 TXCounter = 0;
+	UINT8 TXStatus = CAN_TxStatus_Failed;
 	UINT8 u8MailBoxUsed;
 
 	Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // 单机版地址默认为0
 	u8MailBoxUsed = CAN_Transmit(CAN1, Msg);
+	if (u8MailBoxUsed == CAN_TxStatus_NoMailBox)
+	{
+		return FALSE;
+	}
+
 	do
 	{
 		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
 		TXCounter++;
-	} while ((TXStatus == CAN_TxStatus_Failed) && (TXCounter < 0xFF)); // Fail和OK不用管
+	} while ((TXStatus == CAN_TxStatus_Pending) && (TXCounter < CAN_TX_WAIT_COUNTER_MAX));
 
-	if (TXCounter >= 0xFF)
+	if (TXStatus == CAN_TxStatus_Ok)
 	{
-		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
+		return TRUE;
 	}
+
+	if (TXStatus == CAN_TxStatus_Pending)
+	{
+		CAN_CancelTransmit(CAN1, u8MailBoxUsed);
+	}
+	else if (TXCounter >= CAN_TX_WAIT_COUNTER_MAX)
+	{
+		System_ERROR_UserCallback(ERROR_CAN);
+	}
+
+	return FALSE;
 }
 
 void CAN_TX_0x00(void)
@@ -134,7 +156,7 @@ void CAN_TX_0x01(void)
 	CAN_Tx_Data(&TxMessage);
 }
 
-void CAN_TX_0x02(void)
+BOOL CAN_TX_0x02(void)
 {
 	UINT16 u16_tmp16a;
 
@@ -161,7 +183,7 @@ void CAN_TX_0x02(void)
 	TxMessage.Data[6] = (UINT8)((u16_tmp16a >> 8) & 0xFF);
 	TxMessage.Data[7] = (UINT8)(u16_tmp16a & 0xFF);
 
-	CAN_Tx_Data(&TxMessage);
+	return CAN_Tx_Data(&TxMessage);
 }
 
 void CAN_TX_0x03(void)
@@ -697,7 +719,7 @@ void InitCan_CAN1(void)
 	CAN_InitStructure.CAN_TTCM = DISABLE;		  // 没有使能时间触发模式
 	CAN_InitStructure.CAN_ABOM = DISABLE;		  // 没有使能自动离线管理，BusOFF自动离线取消，需要手动处理
 	CAN_InitStructure.CAN_AWUM = DISABLE;		  // 没有使能自动唤醒模式
-	CAN_InitStructure.CAN_NART = DISABLE;		  // 没有使能非自动重传模式
+	CAN_InitStructure.CAN_NART = ENABLE;          // 单次发送，避免无ACK时自动重发拉高功耗
 	CAN_InitStructure.CAN_RFLM = DISABLE;		  // 没有使能接收FIFO锁定模式
 	CAN_InitStructure.CAN_TXFP = DISABLE;		  // 没有使能发送FIFO优先级
 	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CAN设置为正常模式
@@ -711,10 +733,10 @@ void InitCan_CAN1(void)
 	CAN_InitStructure.CAN_BS2 = CAN_BS2_1tq; // 时间段2为2个时间单位
 	CAN_InitStructure.CAN_Prescaler = 4;	 // 时间单位长度为60
 	CAN_Init(CAN1, &CAN_InitStructure);		 // 波特率为：72M/2/6/(1+8+3)=0.5 即500K，非PDF范例
-										// 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
-										// 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例
+											 // 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
+											 // 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例
 
-	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // 使能FIFO0消息挂号中断
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE); // RX uses polling in App_Can()
 }
 
 void Can_BusOFF_FaultTimeCtrl(void)
@@ -871,6 +893,25 @@ void Can_ReceiveDeal(void)
 	Can_Status_Flag.bits.b1Can_Received = 0;
 }
 
+static BOOL Can_PollReceive(void)
+{
+	UINT8 u8RxCount = 0;
+	BOOL bReceived = FALSE;
+
+	while ((CAN_MessagePending(CAN1, CAN_FIFO0) != 0) && (u8RxCount < 3))
+	{
+		u8RxCount++;
+		memset(&RxMessage, 0, sizeof(RxMessage));
+		CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);
+		Can_Status_Flag.bits.b1Can_Received = 1;
+		sys_time.can_rcv_cnt++;
+		Can_ReceiveDeal();
+		bReceived = TRUE;
+	}
+
+	return bReceived;
+}
+
 void Can_TransmitDeal(void)
 {
 	if (CanTxType_Flag.all)
@@ -975,6 +1016,42 @@ void Can_TransmitDeal(void)
 	}
 }
 
+static void Can_EnterLowPower(void)
+{
+	sys_time.canPow_enable = false;
+	if (s_bCanLowPower)
+	{
+		return;
+	}
+
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
+	CAN_CancelTransmit(CAN1, 0);
+	CAN_CancelTransmit(CAN1, 1);
+	CAN_CancelTransmit(CAN1, 2);
+	CAN_OperatingModeRequest(CAN1, CAN_OperatingMode_Sleep);
+	// GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
+	// GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_RESET);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, DISABLE);
+	s_bCanLowPower = TRUE;
+}
+
+static void Can_ExitLowPower(void)
+{
+	sys_time.canPow_enable = true;
+	if (FALSE == s_bCanLowPower)
+	{
+		return;
+	}
+
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+	// GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_SET);
+	// GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
+	CAN_WakeUp(CAN1);
+	CAN_OperatingModeRequest(CAN1, CAN_OperatingMode_Normal);
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
+	s_bCanLowPower = FALSE;
+}
+
 void InitCan(void)
 {
 #if 0
@@ -991,12 +1068,16 @@ void InitCan(void)
 	InitCan_NVIC();
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
 	InitCan_Filter(); // 这个调到后面，RX也可以了
+	s_bCanLowPower = FALSE;
+	Can_EnterLowPower();
 }
 
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
-	static uint16_t cnt_send_0x02 = 0;
+	static UINT16 cnt_send_0x02 = 0;
+	BOOL bTxOk;
+
 	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_CAN))
 	{
 		// return;
@@ -1007,16 +1088,20 @@ void App_Can(void)
 		return;
 	}
 
-	Can_BusOFF_Monitor();
-	Can_ReceiveDeal();
-	Can_TransmitDeal();
-
-	++cnt_send_0x02;
-	if(cnt_send_0x02 >= ((50)))
+	if (++cnt_send_0x02 < CAN_0X02_SEND_PERIOD_TICKS)
 	{
-		cnt_send_0x02 = 0;
-		CAN_TX_0x02();
+		Can_EnterLowPower();
+		return;
 	}
+	cnt_send_0x02 = 0;
+
+	Can_ExitLowPower();
+	Can_BusOFF_Monitor();
+	Can_PollReceive();
+	Can_TransmitDeal();
+	bTxOk = CAN_TX_0x02();
+	sys_time.can_enable = (bTxOk == TRUE) ? true : false;
+	Can_EnterLowPower();
 }
 
 void App_CanTest(void)
@@ -1030,7 +1115,6 @@ void App_CanTest(void)
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	sys_time.can_rcv_cnt++;
 	// CanRxMsg RxMessage;
 	RxMessage.StdId = 0x00;
 	RxMessage.ExtId = 0x00;

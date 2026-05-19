@@ -11,18 +11,8 @@ uint8_t reset_sleep_state = 0;
 #define SLEEP_FORCE_DEEP_VCELL_MV     ((UINT16)2500u)
 #define SLEEP_FORCE_DEEP_DELAY_S      ((UINT32)(60u * 60u))
 
-static UINT8 SleepDeal_CellVoltageValid(void)
-{
-	return ((g_stCellInfoReport.u16VCellMin >= 1000u) && (g_stCellInfoReport.u16VCellMin <= 5000u)) ? 1u : 0u;
-}
-
 static UINT8 SleepDeal_ForceDeepRequired(void)
 {
-	if (0 == SleepDeal_CellVoltageValid())
-	{
-		return 0;
-	}
-
 	if (g_stCellInfoReport.u16Ichg > OtherElement.u16Sleep_VirCur_Chg)
 	{
 		return 0;
