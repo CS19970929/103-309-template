@@ -25,6 +25,8 @@
 | [main-project-afe-integration.md](main-project-afe-integration.md) | 主工程 AFE 入口、采样链路、保护清除、均衡、休眠关联 |
 | [afe-risk-roadmap.md](afe-risk-roadmap.md) | 风险分级、建议修改顺序、验证清单 |
 | [afe-risk-fixes-20260518.md](afe-risk-fixes-20260518.md) | 五项 AFE 风险的具体解释和本轮修复记录 |
+| [sh36735xx-ai-reference-20260520.md](sh36735xx-ai-reference-20260520.md) | 基于 `SH36735XX CV0.2C.pdf` 的 AI 开发参考，覆盖工作模式、SPI 协议、完整寄存器表和换算规则 |
+| [current-project-afe-code-audit-20260520.md](current-project-afe-code-audit-20260520.md) | 当前主工程 AFE 代码拓扑、已确认正确点、Bug 和优化清单 |
 
 已有上层文档：
 
