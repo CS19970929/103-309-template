@@ -26,11 +26,12 @@
 #define SH_REG_OCCV_OCCT       0x50
 // ... 0x51~0x59 (温度阈值、均衡、负载检测等) 你按需补
 
-// ========== 常读寄存器（只读 RAM）：0x5A ~ 0x99 ==========
-#define SH_REG_BSTATUS1        0x5A
-#define SH_REG_BSTATUS2        0x5B
-#define SH_REG_FLAG1           0x5C
-#define SH_REG_FLAG2           0x5D  // 注：不同版本文档 FLAG2/温度寄存器起始可能不同，请以你的 PDF 为准
+// ========== 常读寄存器（只读 RAM）：0x58 ~ 0x99 ==========
+#define SH_REG_FLAG1           0x58
+#define SH_REG_FLAG2           0x59
+#define SH_REG_FLAG3           0x5A
+#define SH_REG_BSTATUS1        0x5B
+#define SH_REG_BSTATUS2        0x5C
 // 说明书中温度寄存器 0x5D~0x64，内部温度 0x65~0x66，电流 0x67~0x68 等
 // 为避免版本差异，这里不硬编码后续地址，建议你在工程中按你的 PDF 校对后补全。
 

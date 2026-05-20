@@ -2665,10 +2665,10 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_CS_RESIS;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_CS_NUM;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_PRECHG_TIME;
-		SeriesNum = OtherElement.u16Sys_SeriesNum;
+		AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum);
 		// CS，直接使用不需要再赋值，TODO
 		// 还是赋值吧，提高效率
-		g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+		AFE3520_UpdateSenseResScaleSafe();
 		AFE_PARAM_WRITE_Flag = 1; // CS检流电阻修改，则过流保护等要跟着修改。
 	}
 	else
@@ -2936,8 +2936,8 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 			*(&OtherElement.u16Balance_OpenVoltage + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
 		}
 		u32E2P_OtherElement1_WriteFlag = E2P_PARA_ALL_OTHER_ELEMENT1;
-		SeriesNum = OtherElement.u16Sys_SeriesNum;
-		g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+		AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum);
+		AFE3520_UpdateSenseResScaleSafe();
 		AFE_PARAM_WRITE_Flag = 1; // CS检流电阻修改，则过流保护等要跟着修改。
 
 		InitData_SOC();

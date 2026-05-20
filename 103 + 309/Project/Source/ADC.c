@@ -174,6 +174,8 @@ void ADC_Current_Smooth(void)
 	INT32 t_i32temp = 0;
 	UINT32 u32_ADC_CUR_AMP = 0;
 	UINT32 u32_AD_VREF_AD = 0;
+	UINT16 cs_res = 0;
+	UINT16 cs_res_num = 0;
 
 	if (su8_ADcnt++ < AD_CalNum_Cur)
 	{
@@ -188,11 +190,15 @@ void ADC_Current_Smooth(void)
 		g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
 		g_u32ADCValFilter2[AD_VREF_AD] = 0;
 
+		AFE3520_UpdateSenseResScaleSafe();
+		cs_res = OtherElement.u16Sys_CS_Res;
+		cs_res_num = OtherElement.u16Sys_CS_Res_Num;
+
 		u32_ADC_CUR_AMP = u32_ADC_CUR_AMP * 151 / 100;
 		if (u32_AD_VREF_AD > u32_ADC_CUR_AMP)
 		{
 			t_i32temp = ModulusSub(u32_AD_VREF_AD, u32_ADC_CUR_AMP) * 3300 / 4096;					  // mV
-			t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1; // A*10	//A*10/Gain = >>1
+			t_i32temp = t_i32temp * cs_res_num / cs_res >> 1; // A*10	//A*10/Gain = >>1
 			g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
 			gu16_BusCurr_DSG = (UINT16)g_u32ADCValFilter2[ADC_CURR];
 			gu16_BusCurr_CHG = 0;
@@ -200,7 +206,7 @@ void ADC_Current_Smooth(void)
 		else
 		{
 			t_i32temp = ModulusSub(u32_AD_VREF_AD, u32_ADC_CUR_AMP) * 3300 / 4096;					  // mV
-			t_i32temp = t_i32temp * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res >> 1; // A*10	//A*10/Gain = >>1
+			t_i32temp = t_i32temp * cs_res_num / cs_res >> 1; // A*10	//A*10/Gain = >>1
 			g_u32ADCValFilter2[ADC_CURR] = ((t_i32temp - g_u32ADCValFilter2[ADC_CURR]) >> 3) + g_u32ADCValFilter2[ADC_CURR];
 			gu16_BusCurr_DSG = 0;
 			gu16_BusCurr_CHG = (UINT16)g_u32ADCValFilter2[ADC_CURR];

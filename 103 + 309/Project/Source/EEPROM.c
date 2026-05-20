@@ -679,7 +679,7 @@ void InitData_E2prom(void)
 	{ // 第二次上电就会执行这个
 		ReadEEPROM_ByteData_StartUp();
 		{
-			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+			AFE3520_UpdateSenseResScaleSafe();
 			curr_offset = ReadEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE);
 			if ((curr_offset & 0x8000) == 0)
 			{

@@ -26,6 +26,59 @@ UINT32 u32_DsgCur_mA = 0;
 #define AFE_LOAD_REMOVE_PROTECT_MASK     ((UINT16)(AFE_FLAG_OCD1 | AFE_FLAG_OCD2 | AFE_FLAG_SC))
 #define AFE_LOAD_REMOVE_RLD_500UA_MASK   ((UINT8)0x40u)
 #define AFE_LOAD_REMOVE_CONFIRM_CNT      ((UINT8)2u)
+#define AFE_CADC_CURRENT_DENOMINATOR     ((UINT32)29127u)
+
+UINT8 AFE3520_NormalizeSeriesNum(UINT16 series)
+{
+	if ((series >= AFE3520_CELL_SERIES_MIN) && (series <= AFE3520_CELL_SERIES_MAX))
+	{
+		return (UINT8)series;
+	}
+
+#if (SNum >= 4) && (SNum <= 20)
+	return (UINT8)SNum;
+#else
+	return AFE3520_CELL_SERIES_MIN;
+#endif
+}
+
+void AFE3520_SyncSeriesNum(UINT16 series)
+{
+	SeriesNum = AFE3520_NormalizeSeriesNum(series);
+	OtherElement.u16Sys_SeriesNum = SeriesNum;
+}
+
+UINT32 AFE3520_UpdateSenseResScaleSafe(void)
+{
+	UINT16 cs_res = OtherElement.u16Sys_CS_Res;
+	UINT16 cs_res_num = OtherElement.u16Sys_CS_Res_Num;
+
+	if (cs_res == 0u)
+	{
+		cs_res = CS_Res;
+		OtherElement.u16Sys_CS_Res = cs_res;
+	}
+	if (cs_res_num == 0u)
+	{
+		cs_res_num = CS_Res_Num;
+		OtherElement.u16Sys_CS_Res_Num = cs_res_num;
+	}
+
+	g_u32CS_Res_AFE = ((UINT32)cs_res_num * 1000u) / cs_res;
+	if (g_u32CS_Res_AFE == 0u)
+	{
+		OtherElement.u16Sys_CS_Res = CS_Res;
+		OtherElement.u16Sys_CS_Res_Num = CS_Res_Num;
+		g_u32CS_Res_AFE = ((UINT32)CS_Res_Num * 1000u) / CS_Res;
+	}
+
+	return g_u32CS_Res_AFE;
+}
+
+static UINT32 AFE3520_CadcRawToCurrentMa(UINT16 raw)
+{
+	return (UINT32)(((uint64_t)raw * 100u * (uint64_t)g_u32CS_Res_AFE) / AFE_CADC_CURRENT_DENOMINATOR);
+}
 
 // uint8_t Sh_GetCadcCurrent(uint32_t *current)
 uint8_t Sh_GetCadcCurrent(void)
@@ -99,9 +152,11 @@ void Init_Registers(UINT8 num)
 void DataLoad_CellVolt(void)
 {
 	UINT8 i;
+	UINT8 cell_count;
 	INT32 t_i32temp;
 
-	for (i = 0; i < SeriesNum; ++i)
+	cell_count = AFE3520_NormalizeSeriesNum(SeriesNum);
+	for (i = 0; i < cell_count; ++i)
 	{
 		// t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
 		t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[i];
@@ -114,9 +169,9 @@ void DataLoad_CellVolt(void)
 		g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
 	}
 
-	if (SeriesNum < 32)
+	if (cell_count < 32)
 	{
-		for (i = SeriesNum; i < 32; ++i)
+		for (i = cell_count; i < 32; ++i)
 		{
 			g_stCellInfoReport.u16VCell[i] = 61001;
 		}
@@ -131,6 +186,7 @@ void DataLoad_CellVoltMaxMinFind(void)
 	UINT16 t_u16VcellMinTemp;
 	UINT8 t_u8VcellMaxPosition;
 	UINT8 t_u8VcellMinPosition;
+	UINT8 cell_count;
 	UINT32 u32VCellTotle;
 
 	t_u16VcellMaxTemp = 0;
@@ -138,8 +194,9 @@ void DataLoad_CellVoltMaxMinFind(void)
 	t_u8VcellMaxPosition = 0;
 	t_u8VcellMinPosition = 0;
 	u32VCellTotle = 0;
+	cell_count = AFE3520_NormalizeSeriesNum(SeriesNum);
 
-	for (i = 0; i < SeriesNum; i++)
+	for (i = 0; i < cell_count; i++)
 	{
 		t_u16VcellTemp = g_stCellInfoReport.u16VCell[i];
 		u32VCellTotle += g_stCellInfoReport.u16VCell[i];
@@ -359,7 +416,7 @@ void DataLoad_Current(void)
 	if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
 	{
 		// u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // 默认使用200mV的计算方式
-		u32_ChgCur_mA = (UINT32)SH367309_Read_AFE1.u16Current * 100 * g_u32CS_Res_AFE / (29127);
+		u32_ChgCur_mA = AFE3520_CadcRawToCurrentMa(SH367309_Read_AFE1.u16Current);
 		// t_i32temp = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (21470) * 200; // mA
 
 		log_i("******************************************\n");
@@ -371,7 +428,7 @@ void DataLoad_Current(void)
 	{
 		// u32_DsgCur_mA = (UINT32)(0xFFFF - (SH367309_Read_AFE1.u16Current | 0xE000) + 1) * 1000 * g_u32CS_Res_AFE / gu32_CurCoefficient; // mA
 		// u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * 200 * g_u32CS_Res_AFE / (21470); // mA
-		u32_DsgCur_mA = (UINT32)(0xFFFF - SH367309_Read_AFE1.u16Current + 1) * g_u32CS_Res_AFE / (29127) * 100; // mA
+		u32_DsgCur_mA = AFE3520_CadcRawToCurrentMa((UINT16)(0xFFFF - SH367309_Read_AFE1.u16Current + 1)); // mA
 
 		log_i("******************************************\n");
 		log_i("AFE value->%d\n", u32_DsgCur_mA);

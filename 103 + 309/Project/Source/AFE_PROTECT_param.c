@@ -131,26 +131,19 @@ static inline uint16_t sh_quantize_ov_mv_to_code(uint16_t ov_mv)
 }
 
 static inline void sh_encode_ovh_ovt(uint16_t ov_mv, uint8_t ovt_code,
-                                     uint8_t reg4A_reserved_keep,
+                                     uint8_t reg49_reserved_keep,
                                      uint8_t *out_reg49, uint8_t *out_reg4A)
 {
     uint16_t ov_code = sh_quantize_ov_mv_to_code(ov_mv);
+    uint8_t r = reg49_reserved_keep;
     ovt_code &= 0x07;
 
-    // reg49 = OV[7:0]
-    *out_reg49 = (uint8_t)(ov_code & 0xFFu);
-
-    // reg4A: 保留 reserved，再写入 OVT
-    uint8_t r = reg4A_reserved_keep;
-
-    // 清掉要写的位：6:4 和 1:0
     r &= (uint8_t)~((uint8_t)(0x07u << 4) | 0x03u);
-
-    // 写回
     r |= (uint8_t)(ovt_code << 4);
     r |= (uint8_t)((ov_code >> 8) & 0x03u);
 
-    *out_reg4A = r;
+    *out_reg49 = r;
+    *out_reg4A = (uint8_t)(ov_code & 0xFFu);
 }
 
 /* 可选：给你一个“按毫秒找最近OVT码”的工具（不想手填0..7时用） */
@@ -227,7 +220,7 @@ static inline sh_occ_occt_t sh_decode_occ_occt(uint8_t reg, bool idle_mode)
     // OV[9:0] = reg4A[1:0] << 8 | reg49[7:0]
     // out.ocd1_code = (uint16_t)(((uint8_t)(reg49 & 0x03) << 8) | reg4A);
     out.occ_code = (reg & 0x1f);
-    out.occ_mv   = (uint16_t)(out.occ_code * 1.375) + 1.375;
+    out.occ_mv   = (uint16_t)(((uint16_t)(out.occ_code + 1u) * 11u + 4u) / 8u);
 
     // OVT[2:0] = reg4A[6:4]
     out.occt_code = (uint8_t)((reg >> 5) & 0x07);
@@ -235,6 +228,8 @@ static inline sh_occ_occt_t sh_decode_occ_occt(uint8_t reg, bool idle_mode)
 
     // IDLE模式：延时为设定值的4倍
     if (idle_mode) out.occ_ms *= 4u;
+
+    return out;
 }
 
 void test_read_afe_param(void)

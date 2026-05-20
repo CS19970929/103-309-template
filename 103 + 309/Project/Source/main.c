@@ -2,8 +2,6 @@
 
 UINT8 SeriesNum = 16;
 
-#define AFE3520_SERIES_MIN ((UINT8)4u)
-#define AFE3520_SERIES_MAX ((UINT8)20u)
 #define AFE3520_SCONF6_PROTECT_EN ((UINT8)0x7fu)
 #define AFE3520_READBACK_MASK_ALL ((UINT8)0xffu)
 #define AFE3520_SCONF2_CHECK_MASK ((UINT8)0x7fu)
@@ -36,8 +34,6 @@ static UINT8 AFE3520_WriteRegChecked(UINT8 reg, UINT8 val);
 static UINT8 AFE3520_WriteRegMaskedChecked(UINT8 reg, UINT8 val, UINT8 mask);
 static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val, UINT8 mask);
 static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos);
-static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series);
-static void AFE3520_SyncSeriesNum(UINT16 series);
 
 int main(void)
 {
@@ -99,22 +95,6 @@ static UINT8 AFE3520_ReadbackRegChecked(UINT8 reg, UINT8 val, UINT8 mask)
 	}
 
 	return ((readback & mask) == (val & mask)) ? 0 : 1;
-}
-
-static UINT8 AFE3520_NormalizeSeriesNum(UINT16 series)
-{
-	if ((series >= AFE3520_SERIES_MIN) && (series <= AFE3520_SERIES_MAX))
-	{
-		return (UINT8)series;
-	}
-
-	return (UINT8)SNum;
-}
-
-static void AFE3520_SyncSeriesNum(UINT16 series)
-{
-	SeriesNum = AFE3520_NormalizeSeriesNum(series);
-	OtherElement.u16Sys_SeriesNum = SeriesNum;
 }
 
 static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
@@ -229,7 +209,7 @@ void InitVar(void)
 	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默认需求功能修改了，要修改EEPROM的上电标志位
 	InitSystemMonitorData_EEPROM();
 	AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum);
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+	AFE3520_UpdateSenseResScaleSafe();
 
 	SystemStatus.bits.b1StartUpBMS = 0; // 去掉开机时�?
 	SystemStatus.bits.b1Status_ToSleep = 1;

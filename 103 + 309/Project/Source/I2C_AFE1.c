@@ -6,6 +6,7 @@ UINT8 AFE1_LastFlag2ConversionFlags;
 
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 #define AFE3520_CELL_MAX ((UINT8)(sizeof(Registers_AFE1.Cell) / sizeof(Registers_AFE1.Cell[0])))
+#define AFE3520_TEMP_ADC_MAX ((UINT16)32768u)
 const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	// AD(k¦¸*100)		(Temp+40)*10
 	11611,
@@ -65,6 +66,16 @@ const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	86,
 	1450, // 105
 };
+
+static UINT32 AFE3520_TempCodeToNtcX100(UINT16 adc_code)
+{
+	if (adc_code >= AFE3520_TEMP_ADC_MAX)
+	{
+		return 65535u;
+	}
+
+	return ((UINT32)1000u * adc_code) / (AFE3520_TEMP_ADC_MAX - adc_code);
+}
 
 // Õâ¸öcodeÊÇÉ¶
 // const UINT8 code CRC8Table[]=
@@ -947,20 +958,20 @@ extern void SH_AFE_GetProtectStatus(void);
 			SH367309_Read_AFE1.u16VCell[i] = 0;
 		}
 
-		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp1)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp1));
+		u32temp = AFE3520_TempCodeToNtcX100(U16_SwapEndian(Registers_AFE1.Temp1));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[0] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp2)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp2));
+		u32temp = AFE3520_TempCodeToNtcX100(U16_SwapEndian(Registers_AFE1.Temp2));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp3)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp3));
+		u32temp = AFE3520_TempCodeToNtcX100(U16_SwapEndian(Registers_AFE1.Temp3));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.Temp4)) / (32768 - U16_SwapEndian(Registers_AFE1.Temp4));
+		u32temp = AFE3520_TempCodeToNtcX100(U16_SwapEndian(Registers_AFE1.Temp4));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[3] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
-		u32temp = ((UINT32)1000 * U16_SwapEndian(Registers_AFE1.TempI)) / (32768 - U16_SwapEndian(Registers_AFE1.TempI));
+		u32temp = AFE3520_TempCodeToNtcX100(U16_SwapEndian(Registers_AFE1.TempI));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[4] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
@@ -968,8 +979,8 @@ extern void SH_AFE_GetProtectStatus(void);
 		// SH367309_Read_AFE1.i16Current = (UINT16)((UINT32)U16_SwapEndian(Registers_AFE1.Cadc)*200/(21470*RSENSE));		//TODO
 		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
 		// SH367309_Read_AFE1.vbatB = ((uint32_t)U16_SwapEndian(Registers_AFE1.VTOP) *5 >> 5 * 25);
-		SH367309_Read_AFE1.vbatB = (((UINT32)U16_SwapEndian(Registers_AFE1.VTOP) * 5 >> 5) * 25);  ////Vcell*5/32
-		SH367309_Read_AFE1.vbatC = (((UINT32)U16_SwapEndian(Registers_AFE1.VCHGR) * 5 >> 5) * 25); ////Vcell*5/32
+		SH367309_Read_AFE1.vbatB = (((UINT32)U16_SwapEndian(Registers_AFE1.VTOP) * 125u) >> 5);  ////Vcell*5/32
+		SH367309_Read_AFE1.vbatC = (((UINT32)U16_SwapEndian(Registers_AFE1.VCHGR) * 125u) >> 5); ////Vcell*5/32
 	}
 
 	//	else

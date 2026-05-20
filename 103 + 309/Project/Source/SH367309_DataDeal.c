@@ -52,7 +52,7 @@ void Refresh_Parameters(void)
 		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
 	}
 
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+	AFE3520_UpdateSenseResScaleSafe();
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
 
@@ -127,7 +127,7 @@ void fac_sh367309_param_init(void)
 		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
 	}
 
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+	AFE3520_UpdateSenseResScaleSafe();
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
 	// AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = (0x00 >> 6);

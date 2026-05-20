@@ -38,10 +38,16 @@ extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
 void InitShortCur(void)
 {
     UINT16 temp = 0;
+    UINT16 cs_res = 0;
+    UINT16 cs_res_num = 0;
+
+    AFE3520_UpdateSenseResScaleSafe();
+    cs_res = OtherElement.u16Sys_CS_Res;
+    cs_res_num = OtherElement.u16Sys_CS_Res_Num;
 
 #if (AFE_TYPE == bq76xx_afe)
-    OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-    OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_CHGmax = 2000 * cs_res_num / cs_res;
+    OtherElement.u16CS_Cur_DSGmax = 2000 * cs_res_num / cs_res;
 
     /* 短路延时 */
     temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
@@ -51,10 +57,10 @@ void InitShortCur(void)
 
     /* 短路电压 */
     temp = OtherElement.u16CBC_Cur_DSG / 10;                                     // A
-    temp = temp * OtherElement.u16Sys_CS_Res / OtherElement.u16Sys_CS_Res_Num; // 当前对应多少mV
+    temp = temp * cs_res / cs_res_num; // 当前对应多少mV
     temp = Choose_Right_Value(temp, AFE_SCV);
     // 修改最终设置的值，接近的那个
-    OtherElement.u16CBC_Cur_DSG = AFE_SCV[temp] * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CBC_Cur_DSG = AFE_SCV[temp] * cs_res_num / cs_res;
     OtherElement.u16CBC_Cur_DSG *= 10; // 防止数据溢出。
 
     if (temp <= 1)
@@ -81,8 +87,8 @@ void InitShortCur(void)
 #elif (AFE_TYPE == sh36xx)
     extern AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction;
     // todo
-    OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-    OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CS_Cur_CHGmax = 2000 * cs_res_num / cs_res;
+    OtherElement.u16CS_Cur_DSGmax = 2000 * cs_res_num / cs_res;
 
     /* 短路延时 */
     temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);

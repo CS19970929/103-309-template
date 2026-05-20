@@ -147,6 +147,9 @@ struct OTHER_ELEMENT {
 #define CS_Res			2
 #define CS_Res_Num		8
 
+#define AFE3520_CELL_SERIES_MIN ((UINT8)4u)
+#define AFE3520_CELL_SERIES_MAX ((UINT8)20u)
+
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
 #define CBC_DelayT		2560
@@ -195,6 +198,9 @@ extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 
+UINT8 AFE3520_NormalizeSeriesNum(UINT16 series);
+void AFE3520_SyncSeriesNum(UINT16 series);
+UINT32 AFE3520_UpdateSenseResScaleSafe(void);
 void App_AFEGet(  void);
 
 #endif	/* DATADEAL_SYS_H */
