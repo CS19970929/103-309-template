@@ -27,6 +27,7 @@
 | [afe-risk-fixes-20260518.md](afe-risk-fixes-20260518.md) | 五项 AFE 风险的具体解释和本轮修复记录 |
 | [sh36735xx-ai-reference-20260520.md](sh36735xx-ai-reference-20260520.md) | 基于 `SH36735XX CV0.2C.pdf` 的 AI 开发参考，覆盖工作模式、SPI 协议、完整寄存器表和换算规则 |
 | [current-project-afe-code-audit-20260520.md](current-project-afe-code-audit-20260520.md) | 当前主工程 AFE 代码拓扑、已确认正确点、Bug 和优化清单 |
+| [source-cross-check-20260520.md](source-cross-check-20260520.md) | PDF、提取文档、官方 Demo 和主工程四源交叉对比，明确一致项、偏差和后续开发准则 |
 
 已有上层文档：
 
