@@ -18,15 +18,16 @@ struct OTHER_ELEMENT OtherElement;
 UINT32 u32_ChgCur_mA = 0;
 UINT32 u32_DsgCur_mA = 0;
 
-#define AFE_UPDATE_PERIOD_MS             ((UINT16)200u)
-#define AFE_UPDATE_STALE_FAIL_CNT        ((UINT16)(5u * 1000u / AFE_UPDATE_PERIOD_MS))
-#define AFE_UPDATE_FORCE_SLEEP_FAIL_CNT  ((UINT16)(60u * 1000u / AFE_UPDATE_PERIOD_MS))
-#define AFE_LOAD_REMOVE_CRLD_DISABLE     ((UINT8)0u)
-#define AFE_LOAD_REMOVE_CRLD_ENABLE      ((UINT8)2u)
-#define AFE_LOAD_REMOVE_PROTECT_MASK     ((UINT16)(AFE_FLAG_OCD1 | AFE_FLAG_OCD2 | AFE_FLAG_SC))
-#define AFE_LOAD_REMOVE_RLD_500UA_MASK   ((UINT8)0x40u)
-#define AFE_LOAD_REMOVE_CONFIRM_CNT      ((UINT8)2u)
-#define AFE_CADC_CURRENT_DENOMINATOR     ((UINT32)29127u)
+#define AFE_UPDATE_PERIOD_MS ((UINT16)200u)
+#define AFE_UPDATE_STALE_FAIL_CNT ((UINT16)(5u * 1000u / AFE_UPDATE_PERIOD_MS))
+#define AFE_UPDATE_FORCE_SLEEP_FAIL_CNT ((UINT16)(60u * 1000u / AFE_UPDATE_PERIOD_MS))
+#define AFE_LOAD_REMOVE_CRLD_DISABLE ((UINT8)0u)
+#define AFE_LOAD_REMOVE_CRLD_ENABLE ((UINT8)2u)
+#define AFE_LOAD_REMOVE_PROTECT_MASK ((UINT16)(AFE_FLAG_OCD1 | AFE_FLAG_OCD2 | AFE_FLAG_SC))
+#define AFE_LOAD_REMOVE_RLD_500UA_MASK ((UINT8)0x40u)
+#define AFE_LOAD_REMOVE_DELAY_MS ((UINT32)(5u * 60u * 1000u))
+#define AFE_LOAD_REMOVE_DELAY_CNT ((UINT16)(AFE_LOAD_REMOVE_DELAY_MS / AFE_UPDATE_PERIOD_MS))
+#define AFE_CADC_CURRENT_DENOMINATOR ((UINT32)29127u)
 
 UINT8 AFE3520_NormalizeSeriesNum(UINT16 series)
 {
@@ -720,14 +721,16 @@ static UINT8 AFE_ClearLoadRemoveProtectFlags(UINT16 clear_flags)
 	{
 		result = (SH_AFE_ClearProtectFlag(AFE_FLAG_SC) && result) ? 1u : 0u;
 	}
-
+	// SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+	// SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+	// SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
 	return result;
 }
 
 UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 {
 	static UINT8 state = 0;
-	static UINT8 load_removed_cnt = 0;
+	static UINT16 load_removed_delay_cnt = 0;
 	static AFE_ProtectType active_protect = (AFE_ProtectType)0;
 	UINT16 clear_flags = ((UINT16)clear_AFE_Protect_type & AFE_LOAD_REMOVE_PROTECT_MASK);
 
@@ -738,7 +741,7 @@ UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 			(void)AFE_LoadRemoveSetCrld(AFE_LOAD_REMOVE_CRLD_DISABLE);
 		}
 		state = 0;
-		load_removed_cnt = 0;
+		load_removed_delay_cnt = 0;
 		active_protect = (AFE_ProtectType)0;
 		return 0;
 	}
@@ -746,7 +749,7 @@ UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 	if ((UINT16)active_protect != clear_flags)
 	{
 		state = 0;
-		load_removed_cnt = 0;
+		load_removed_delay_cnt = 0;
 		active_protect = (AFE_ProtectType)clear_flags;
 	}
 
@@ -762,20 +765,23 @@ UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 	case 1:
 		if (!AFE_LoadRemoveRefreshStatus())
 		{
-			load_removed_cnt = 0;
+			load_removed_delay_cnt = 0;
 			break;
 		}
 
 		if (AFE_IsLoadRemoved())
 		{
-			if (++load_removed_cnt >= AFE_LOAD_REMOVE_CONFIRM_CNT)
+			if (load_removed_delay_cnt < AFE_LOAD_REMOVE_DELAY_CNT)
 			{
-				load_removed_cnt = AFE_LOAD_REMOVE_CONFIRM_CNT;
+				load_removed_delay_cnt++;
+			}
+			if (load_removed_delay_cnt >= AFE_LOAD_REMOVE_DELAY_CNT)
+			{
 				if (AFE_ClearLoadRemoveProtectFlags(clear_flags))
 				{
 					(void)AFE_LoadRemoveSetCrld(AFE_LOAD_REMOVE_CRLD_DISABLE);
 					state = 0;
-					load_removed_cnt = 0;
+					load_removed_delay_cnt = 0;
 					active_protect = (AFE_ProtectType)0;
 					return 1;
 				}
@@ -783,13 +789,13 @@ UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 		}
 		else
 		{
-			load_removed_cnt = 0;
+			load_removed_delay_cnt = 0;
 		}
 		break;
 
 	default:
 		state = 0;
-		load_removed_cnt = 0;
+		load_removed_delay_cnt = 0;
 		active_protect = (AFE_ProtectType)0;
 		break;
 	}
@@ -797,6 +803,7 @@ UINT8 func_LoadRemove(AFE_ProtectType clear_AFE_Protect_type)
 	return 0;
 }
 extern UINT8 gu8_200msAccClock_Flag2;
+extern void test_read_afe_param(void);
 void App_AFEGet(void)
 {
 	static uint8_t cov1_flag = 0;
@@ -924,28 +931,6 @@ void App_AFEGet(void)
 
 	SH_AFE_GetProtectStatus();
 
-#if 0
-	if (sys_time.clear_cov)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
-	else if (sys_time.clear_cuv)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
-	else if (sys_time.clear_odc1)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
-	else if (sys_time.clear_odc2)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
-	else if (sys_time.clear_otc)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
-	else if (sys_time.clear_otd)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
-	else if (sys_time.clear_occ)
-		SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
-	else if (sys_time.clear_short)
-	{
-		SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
-	}
-#endif
-
-#if 1
 	App_MOS_Relay_Ctrl();
-#endif
+	test_read_afe_param();
 }
