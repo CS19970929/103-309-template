@@ -7,8 +7,12 @@ CanRxMsg RxMessage;
 
 #define CAN_0X02_SEND_PERIOD_TICKS      DELAYB10MS_1S
 #define CAN_TX_WAIT_COUNTER_MAX         ((UINT16)0x0FFF)
+#define CAN_RX_FIFO_DRAIN_MAX           ((UINT8)8u)
+#define CAN_TX_FLAG_TEST                ((UINT32)0x00000001u)
+#define CAN_TX_FLAG_BY_ID(id)           ((UINT32)1u << ((UINT8)(id) + 1u))
 
 static BOOL s_bCanLowPower = FALSE;
+static BOOL s_bLastCanTxOk = FALSE;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -17,6 +21,7 @@ void CAN_TX_Test(void)
 {
 	UINT8 TXCounter = 0, TXStatus = 0;
 	UINT8 u8MailBoxUsed;
+	s_bLastCanTxOk = FALSE;
 	TxMessage.StdId = CANID_TX_Test; // 标准标识符
 	TxMessage.ExtId = 0;			 // 扩展标识符
 	TxMessage.IDE = CAN_ID_STD;		 // 使用标准标识符
@@ -48,6 +53,8 @@ void CAN_TX_Test(void)
 		TXCounter++;
 	} while ((TXStatus != CAN_TxStatus_Ok) && (TXCounter < 0xFF)); // Fail和OK不用管
 
+	s_bLastCanTxOk = (TXStatus == CAN_TxStatus_Ok) ? TRUE : FALSE;
+
 	if (TXCounter >= 0xFF)
 	{
 		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
@@ -60,6 +67,7 @@ BOOL CAN_Tx_Data(CanTxMsg *Msg)
 	UINT8 TXStatus = CAN_TxStatus_Failed;
 	UINT8 u8MailBoxUsed;
 
+	s_bLastCanTxOk = FALSE;
 	Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // 单机版地址默认为0
 	u8MailBoxUsed = CAN_Transmit(CAN1, Msg);
 	if (u8MailBoxUsed == CAN_TxStatus_NoMailBox)
@@ -75,6 +83,7 @@ BOOL CAN_Tx_Data(CanTxMsg *Msg)
 
 	if (TXStatus == CAN_TxStatus_Ok)
 	{
+		s_bLastCanTxOk = TRUE;
 		return TRUE;
 	}
 
@@ -717,7 +726,8 @@ void InitCan_CAN1(void)
 	CAN_StructInit(&CAN_InitStructure); // 把CAN_InitStruct中的每一个参数按缺省值填入
 
 	CAN_InitStructure.CAN_TTCM = DISABLE;		  // 没有使能时间触发模式
-	CAN_InitStructure.CAN_ABOM = DISABLE;		  // 没有使能自动离线管理，BusOFF自动离线取消，需要手动处理
+	// CAN_InitStructure.CAN_ABOM = DISABLE;		  // 没有使能自动离线管理，BusOFF自动离线取消，需要手动处理
+	CAN_InitStructure.CAN_ABOM = ENABLE;		  // 使能自动离线管理，BusOFF由硬件尝试恢复
 	CAN_InitStructure.CAN_AWUM = DISABLE;		  // 没有使能自动唤醒模式
 	CAN_InitStructure.CAN_NART = ENABLE;          // 单次发送，避免无ACK时自动重发拉高功耗
 	CAN_InitStructure.CAN_RFLM = DISABLE;		  // 没有使能接收FIFO锁定模式
@@ -736,7 +746,7 @@ void InitCan_CAN1(void)
 											 // 波特率为：72M/2/12/(1+3+2)=0.5 即500K，为DPF的范例
 											 // 波特率为：72M/2/24/(1+3+2)=0.25 即250K，为DPF的范例
 
-	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE); // RX uses polling in App_Can()
+	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE); // RX由App_Can轮询处理
 }
 
 void Can_BusOFF_FaultTimeCtrl(void)
@@ -816,6 +826,36 @@ void Can_BusOFF_Monitor(void)
 	Can_BusOFF_Recover();
 }
 
+static UINT32 Can_TxFlagFromRequestId(UINT16 request_id)
+{
+	if (request_id <= CANID_CHECK_0x11)
+	{
+		return CAN_TX_FLAG_BY_ID(request_id);
+	}
+
+	return 0u;
+}
+
+static void Can_QueueTxByRequestId(UINT16 request_id)
+{
+	UINT32 tx_flag = Can_TxFlagFromRequestId(request_id);
+
+	if (tx_flag != 0u)
+	{
+		CanTxType_Flag.all |= tx_flag;
+	}
+}
+
+static void Can_HandleRxMessage(const CanRxMsg *msg)
+{
+	if ((msg->StdId >> 7) != CAN_ADRESS_STD_ID)
+	{
+		return;
+	}
+
+	Can_QueueTxByRequestId((UINT16)(msg->StdId & 0x007F));
+}
+
 void Can_ReceiveDeal(void)
 {
 	if (!Can_Status_Flag.bits.b1Can_Received)
@@ -823,82 +863,16 @@ void Can_ReceiveDeal(void)
 		return;
 	}
 
-	// ID已经过滤掉，不需要再判断ID是否为本机
-	if ((RxMessage.StdId >> 7) != CAN_ADRESS_STD_ID)
-	{
-		return;
-	}
-
-	switch (RxMessage.StdId & 0x007F)
-	{ // 按照逻辑，是这个函数处理接受数据，然后处理数据，然后赋值标志位返回才对
-	case CANID_CHECK_0x00:
-		CanTxType_Flag.bits.b1CanTx_0x00 = 1;
-		break;
-	case CANID_CHECK_0x01:
-		CanTxType_Flag.bits.b1CanTx_0x01 = 1;
-		break;
-	case CANID_CHECK_0x02:
-		CanTxType_Flag.bits.b1CanTx_0x02 = 1;
-		break;
-	case CANID_CHECK_0x03:
-		CanTxType_Flag.bits.b1CanTx_0x03 = 1;
-		break;
-	case CANID_CHECK_0x04:
-		CanTxType_Flag.bits.b1CanTx_0x04 = 1;
-		break;
-	case CANID_CHECK_0x05:
-		CanTxType_Flag.bits.b1CanTx_0x05 = 1;
-		break;
-	case CANID_CHECK_0x06:
-		CanTxType_Flag.bits.b1CanTx_0x06 = 1;
-		break;
-	case CANID_CHECK_0x07:
-		CanTxType_Flag.bits.b1CanTx_0x07 = 1;
-		break;
-	case CANID_CHECK_0x08:
-		CanTxType_Flag.bits.b1CanTx_0x08 = 1;
-		break;
-	case CANID_CHECK_0x09:
-		CanTxType_Flag.bits.b1CanTx_0x09 = 1;
-		break;
-	case CANID_CHECK_0x0A:
-		CanTxType_Flag.bits.b1CanTx_0x0A = 1;
-		break;
-	case CANID_CHECK_0x0B:
-		CanTxType_Flag.bits.b1CanTx_0x0B = 1;
-		break;
-	case CANID_CHECK_0x0C:
-		CanTxType_Flag.bits.b1CanTx_0x0C = 1;
-		break;
-	case CANID_CHECK_0x0D:
-		CanTxType_Flag.bits.b1CanTx_0x0D = 1;
-		break;
-	case CANID_CHECK_0x0E:
-		CanTxType_Flag.bits.b1CanTx_0x0E = 1;
-		break;
-	case CANID_CHECK_0x0F:
-		CanTxType_Flag.bits.b1CanTx_0x0F = 1;
-		break;
-	case CANID_CHECK_0x10:
-		CanTxType_Flag.bits.b1CanTx_0x10 = 1;
-		break;
-	case CANID_CHECK_0x11:
-		CanTxType_Flag.bits.b1CanTx_0x11 = 1;
-		break;
-
-	default:
-		break;
-	}
-
 	Can_Status_Flag.bits.b1Can_Received = 0;
+	Can_HandleRxMessage(&RxMessage);
 }
 
-static BOOL Can_PollReceive(void)
+static BOOL Can_DrainRxFifo(UINT8 max_count)
 {
 	UINT8 u8RxCount = 0;
 	BOOL bReceived = FALSE;
 
-	while ((CAN_MessagePending(CAN1, CAN_FIFO0) != 0) && (u8RxCount < 3))
+	while ((CAN_MessagePending(CAN1, CAN_FIFO0) != 0) && (u8RxCount < max_count))
 	{
 		u8RxCount++;
 		memset(&RxMessage, 0, sizeof(RxMessage));
@@ -912,144 +886,140 @@ static BOOL Can_PollReceive(void)
 	return bReceived;
 }
 
-void Can_TransmitDeal(void)
+static BOOL Can_PollReceive(void)
 {
-	if (CanTxType_Flag.all)
-	{
-		RTC_ExtComCnt++;
-	}
-
-	if (CanTxType_Flag.bits.b1CanTx_0x00)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x00 = 0;
-		CAN_TX_0x00();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x01)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x01 = 0;
-		CAN_TX_0x01();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x02)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x02 = 0;
-		CAN_TX_0x02();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x03)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x03 = 0;
-		CAN_TX_0x03();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x04)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x04 = 0;
-		CAN_TX_0x04();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x05)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x05 = 0;
-		CAN_TX_0x05();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x06)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x06 = 0;
-		CAN_TX_0x06();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x07)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x07 = 0;
-		CAN_TX_0x07();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x08)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x08 = 0;
-		CAN_TX_0x08();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x09)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x09 = 0;
-		CAN_TX_0x09();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0A)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0A = 0;
-		CAN_TX_0x0A();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0B)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0B = 0;
-		CAN_TX_0x0B();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0C)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0C = 0;
-		CAN_TX_0x0C();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0D)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0D = 0;
-		CAN_TX_0x0D();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0E)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0E = 0;
-		CAN_TX_0x0E();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x0F)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x0F = 0;
-		CAN_TX_0x0F();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x10)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x10 = 0;
-		CAN_TX_0x10();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_0x11)
-	{
-		CanTxType_Flag.bits.b1CanTx_0x11 = 0;
-		CAN_TX_0x11();
-	}
-	else if (CanTxType_Flag.bits.b1CanTx_Test)
-	{
-		CanTxType_Flag.bits.b1CanTx_Test = 0;
-		CAN_TX_Test();
-	}
-}
-
-static void Can_EnterLowPower(void)
-{
-	sys_time.canPow_enable = false;
-	if (s_bCanLowPower)
-	{
-		return;
-	}
-
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
-	CAN_CancelTransmit(CAN1, 0);
-	CAN_CancelTransmit(CAN1, 1);
-	CAN_CancelTransmit(CAN1, 2);
-	CAN_OperatingModeRequest(CAN1, CAN_OperatingMode_Sleep);
-	// GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
-	// GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_RESET);
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, DISABLE);
-	s_bCanLowPower = TRUE;
+	return Can_DrainRxFifo(CAN_RX_FIFO_DRAIN_MAX);
 }
 
-static void Can_ExitLowPower(void)
+static UINT32 Can_GetNextTxFlag(void)
+{
+	UINT16 request_id;
+
+	for (request_id = CANID_CHECK_0x00; request_id <= CANID_CHECK_0x11; request_id++)
+	{
+		UINT32 tx_flag = CAN_TX_FLAG_BY_ID(request_id);
+
+		if ((CanTxType_Flag.all & tx_flag) != 0u)
+		{
+			return tx_flag;
+		}
+	}
+
+	if (CanTxType_Flag.bits.b1CanTx_Test)
+	{
+		return CAN_TX_FLAG_TEST;
+	}
+
+	return 0u;
+}
+
+static void Can_ClearTxFlag(UINT32 tx_flag)
+{
+	CanTxType_Flag.all &= ~tx_flag;
+}
+
+static void Can_SendByTxFlag(UINT32 tx_flag)
+{
+	s_bLastCanTxOk = FALSE;
+
+	switch (tx_flag)
+	{
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x00):
+		CAN_TX_0x00();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x01):
+		CAN_TX_0x01();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x02):
+		CAN_TX_0x02();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x03):
+		CAN_TX_0x03();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x04):
+		CAN_TX_0x04();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x05):
+		CAN_TX_0x05();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x06):
+		CAN_TX_0x06();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x07):
+		CAN_TX_0x07();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x08):
+		CAN_TX_0x08();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x09):
+		CAN_TX_0x09();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0A):
+		CAN_TX_0x0A();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0B):
+		CAN_TX_0x0B();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0C):
+		CAN_TX_0x0C();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0D):
+		CAN_TX_0x0D();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0E):
+		CAN_TX_0x0E();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x0F):
+		CAN_TX_0x0F();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x10):
+		CAN_TX_0x10();
+		break;
+	case CAN_TX_FLAG_BY_ID(CANID_CHECK_0x11):
+		CAN_TX_0x11();
+		break;
+	case CAN_TX_FLAG_TEST:
+		CAN_TX_Test();
+		break;
+	default:
+		break;
+	}
+}
+
+static BOOL Can_TransmitDeal(void)
+{
+	UINT32 tx_flag = Can_GetNextTxFlag();
+
+	if (tx_flag == 0u)
+	{
+		return FALSE;
+	}
+
+	RTC_ExtComCnt++;
+	Can_SendByTxFlag(tx_flag);
+
+	if (s_bLastCanTxOk)
+	{
+		Can_ClearTxFlag(tx_flag);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static void Can_EnsureNormalMode(void)
 {
 	sys_time.canPow_enable = true;
-	if (FALSE == s_bCanLowPower)
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+	if ((FALSE != s_bCanLowPower) || ((CAN1->MSR & (CAN_MSR_INAK | CAN_MSR_SLAK)) != 0u))
 	{
-		return;
+		CAN_WakeUp(CAN1);
+		CAN_OperatingModeRequest(CAN1, CAN_OperatingMode_Normal);
+		s_bCanLowPower = FALSE;
 	}
 
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
-	// GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_SET);
-	// GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
-	CAN_WakeUp(CAN1);
-	CAN_OperatingModeRequest(CAN1, CAN_OperatingMode_Normal);
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, DISABLE);
-	s_bCanLowPower = FALSE;
 }
 
 void InitCan(void)
@@ -1069,14 +1039,14 @@ void InitCan(void)
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
 	InitCan_Filter(); // 这个调到后面，RX也可以了
 	s_bCanLowPower = FALSE;
-	Can_EnterLowPower();
+	Can_EnsureNormalMode();
 }
 
 // 这个函数不能用Switch架构来解决，因为这个都是并行任务，不是串行。
 void App_Can(void)
 {
 	static UINT16 cnt_send_0x02 = 0;
-	BOOL bTxOk;
+	BOOL bTxOk = FALSE;
 
 	if (STARTUP_CONT == System_FUNC_StartUp(SYSTEM_FUNC_STARTUP_CAN))
 	{
@@ -1088,20 +1058,17 @@ void App_Can(void)
 		return;
 	}
 
-	if (++cnt_send_0x02 < CAN_0X02_SEND_PERIOD_TICKS)
-	{
-		Can_EnterLowPower();
-		return;
-	}
-	cnt_send_0x02 = 0;
+	Can_EnsureNormalMode();
+	// Can_BusOFF_Monitor();
+	(void)Can_PollReceive();
+	(void)Can_TransmitDeal();
 
-	Can_ExitLowPower();
-	Can_BusOFF_Monitor();
-	Can_PollReceive();
-	Can_TransmitDeal();
-	bTxOk = CAN_TX_0x02();
-	sys_time.can_enable = (bTxOk == TRUE) ? true : false;
-	Can_EnterLowPower();
+	if (++cnt_send_0x02 >= CAN_0X02_SEND_PERIOD_TICKS)
+	{
+		cnt_send_0x02 = 0;
+		bTxOk = CAN_TX_0x02();
+		sys_time.can_enable = (bTxOk == TRUE) ? true : false;
+	}
 }
 
 void App_CanTest(void)
@@ -1110,20 +1077,11 @@ void App_CanTest(void)
 	{
 		return;
 	}
+	Can_EnsureNormalMode();
 	CAN_TX_Test();
 }
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	// CanRxMsg RxMessage;
-	RxMessage.StdId = 0x00;
-	RxMessage.ExtId = 0x00;
-	RxMessage.IDE = 0;
-	RxMessage.DLC = 0;
-	RxMessage.FMI = 0;
-	RxMessage.Data[0] = 0x00;
-	RxMessage.Data[1] = 0x00;
-
-	CAN_Receive(CAN1, CAN_FIFO0, &RxMessage); // 接收FIFO0中的数据
-	Can_Status_Flag.bits.b1Can_Received = 1;
+	(void)Can_DrainRxFifo(CAN_RX_FIFO_DRAIN_MAX);
 }
