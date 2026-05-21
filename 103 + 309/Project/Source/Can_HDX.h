@@ -37,9 +37,12 @@ struct CAN_LOW_POWER_STATUS {
 	UINT8 u8RtcServiceActive;
 	UINT8 u8LastRtcWakeTxAcked;
 	UINT8 u8LastRtcWakeTimeout;
+	UINT8 u8PeripheralSleepRequested;
 	UINT16 u16PendingMask;
 	UINT16 u16RtcWakeServiceCnt;
 	UINT16 u16PrepareSleepCnt;
+	UINT16 u16PeripheralSleepCnt;
+	UINT16 u16PeripheralWakeCnt;
 	UINT32 u32LogicalTick;
 	UINT32 u32LastRtcElapsedSeconds;
 };

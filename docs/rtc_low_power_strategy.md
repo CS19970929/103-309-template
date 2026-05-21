@@ -251,6 +251,7 @@ static void LowPower_ClearWakePending(void)
 - 如果 fallback 到 LSI，记录状态位或日志，并适当降低 SOC 休眠补偿置信度。
 - RTC SOC 校准必须继续按稳定窗口和 `10min/step` 节拍执行，不能因为 RTC 唤醒周期是 `1s/10s` 就每次唤醒修正；普通 RTC OCV 目标与当前 SOC 误差 `<=3%` 时不校准，且永远不向上校准。
 - `DEEP_MODE` 现在也配置 RTC Alarm 周期唤醒。深睡循环只把 RTC 唤醒周期累计到 `BKP_DR13~BKP_DR17`，不在 SOC/AFE 未完整初始化时直接校准；真正按键或充电唤醒并完成正常初始化后，首个有效 AFE 样本达到 `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS` 才允许一次 OCV 小步校准。深睡 RTC OCV 不套普通 `3%` deadband，但仍只能按 OCV 向下校准 `1%`，不能跳变或向上校准。
+- CAN RTC 唤醒服务仍由 `Can_RtcWakeService()` 控制上电窗口；每个发送批次结束后会关闭收发器并请求 bxCAN sleep，下一次 RTC probe 或周期广播前再唤醒外设。
 - 后续可以在 Backup Register 记录 RTC 时钟源，便于售后诊断。
 
 ### 优先级 P3：Standby 暂不作为主路径

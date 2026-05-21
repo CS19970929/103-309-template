@@ -54,9 +54,12 @@ typedef struct
 	UINT8 tx_cycle_no_ack_recorded;
 	UINT8 last_rtc_wake_tx_acked;
 	UINT8 last_rtc_wake_timeout;
+	UINT8 peripheral_sleep_requested;
 	UINT32 last_rtc_elapsed_seconds;
 	UINT16 rtc_wake_service_cnt;
 	UINT16 prepare_sleep_cnt;
+	UINT16 peripheral_sleep_cnt;
+	UINT16 peripheral_wake_cnt;
 } FeidaoCanRuntime;
 
 static FeidaoCanRuntime s_feidao_can_runtime =
@@ -73,6 +76,9 @@ static FeidaoCanRuntime s_feidao_can_runtime =
 	0U,
 	0U,
 	1U,
+	0U,
+	0U,
+	0U,
 	0U,
 	0U,
 	0U,
@@ -107,15 +113,20 @@ FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #define s_u8FeidaoCanTxCycleNoAckRecorded (s_feidao_can_runtime.tx_cycle_no_ack_recorded)
 #define s_u8FeidaoCanLastRtcWakeTxAcked (s_feidao_can_runtime.last_rtc_wake_tx_acked)
 #define s_u8FeidaoCanLastRtcWakeTimeout (s_feidao_can_runtime.last_rtc_wake_timeout)
+#define s_u8FeidaoCanPeripheralSleepRequested (s_feidao_can_runtime.peripheral_sleep_requested)
 #define s_u32FeidaoCanLastRtcElapsedSeconds (s_feidao_can_runtime.last_rtc_elapsed_seconds)
 #define s_u16FeidaoCanRtcWakeServiceCnt (s_feidao_can_runtime.rtc_wake_service_cnt)
 #define s_u16FeidaoCanPrepareSleepCnt (s_feidao_can_runtime.prepare_sleep_cnt)
+#define s_u16FeidaoCanPeripheralSleepCnt (s_feidao_can_runtime.peripheral_sleep_cnt)
+#define s_u16FeidaoCanPeripheralWakeCnt (s_feidao_can_runtime.peripheral_wake_cnt)
 static void Can_BusOFF_Monitor(void);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
 static UINT32 feidao_can_update_logical_tick(UINT32 hw_tick);
 static void feidao_can_invalidate_hw_tick(void);
 static void feidao_can_update_low_power_status(void);
+static void feidao_can_request_peripheral_sleep(void);
+static void feidao_can_wake_peripheral(void);
 static void feidao_can_power_on(UINT32 now_tick);
 static void feidao_can_power_off(void);
 static void feidao_can_abort_all_tx(void);
@@ -202,11 +213,45 @@ static void feidao_can_update_low_power_status(void)
 	g_stCanLowPowerStatus.u8RtcServiceActive = s_u8FeidaoCanRtcServiceActive;
 	g_stCanLowPowerStatus.u8LastRtcWakeTxAcked = s_u8FeidaoCanLastRtcWakeTxAcked;
 	g_stCanLowPowerStatus.u8LastRtcWakeTimeout = s_u8FeidaoCanLastRtcWakeTimeout;
+	g_stCanLowPowerStatus.u8PeripheralSleepRequested = s_u8FeidaoCanPeripheralSleepRequested;
 	g_stCanLowPowerStatus.u16PendingMask = s_u16FeidaoCanPendingMask;
 	g_stCanLowPowerStatus.u16RtcWakeServiceCnt = s_u16FeidaoCanRtcWakeServiceCnt;
 	g_stCanLowPowerStatus.u16PrepareSleepCnt = s_u16FeidaoCanPrepareSleepCnt;
+	g_stCanLowPowerStatus.u16PeripheralSleepCnt = s_u16FeidaoCanPeripheralSleepCnt;
+	g_stCanLowPowerStatus.u16PeripheralWakeCnt = s_u16FeidaoCanPeripheralWakeCnt;
 	g_stCanLowPowerStatus.u32LogicalTick = s_u32FeidaoCanLogicalTick;
 	g_stCanLowPowerStatus.u32LastRtcElapsedSeconds = s_u32FeidaoCanLastRtcElapsedSeconds;
+}
+
+static void feidao_can_request_peripheral_sleep(void)
+{
+	if (s_u8FeidaoCanPeripheralSleepRequested != 0U)
+	{
+		return;
+	}
+	if ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME)
+	{
+		return;
+	}
+
+	(void)CAN_Sleep(CAN1);
+	s_u8FeidaoCanPeripheralSleepRequested = 1U;
+	feidao_can_inc_u16(&s_u16FeidaoCanPeripheralSleepCnt);
+}
+
+static void feidao_can_wake_peripheral(void)
+{
+	if ((s_u8FeidaoCanPeripheralSleepRequested == 0U) &&
+		((CAN1->MSR & CAN_MSR_SLAK) == 0U) &&
+		((CAN1->MCR & CAN_MCR_SLEEP) == 0U))
+	{
+		return;
+	}
+
+	(void)CAN_WakeUp(CAN1);
+	CAN1->MCR &= (UINT32)(~CAN_MCR_SLEEP);
+	s_u8FeidaoCanPeripheralSleepRequested = 0U;
+	feidao_can_inc_u16(&s_u16FeidaoCanPeripheralWakeCnt);
 }
 
 static void feidao_can_clear_sleep_runtime(void)
@@ -433,6 +478,7 @@ static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox)
 
 static void feidao_can_power_on(UINT32 now_tick)
 {
+	feidao_can_wake_peripheral();
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_ON_LEVEL);
 	s_u32FeidaoCanPowerTick = now_tick;
 	s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
@@ -448,6 +494,7 @@ static void feidao_can_power_off(void)
 	s_u8FeidaoCanTxCycleAcked = 0U;
 	s_u8FeidaoCanTxCycleNoAckRecorded = 0U;
 	s_u8FeidaoCanPowerState = FEIDAO_CAN_POWER_IDLE;
+	feidao_can_request_peripheral_sleep();
 }
 
 static void feidao_can_abort_all_tx(void)
@@ -653,6 +700,7 @@ UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
 {
 	UINT8 u8MailBoxUsed;
 
+	feidao_can_wake_peripheral();
 	if (CAN_ID_STD == Msg->IDE)
 	{
 		Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // 单机版地址默认为0
@@ -761,7 +809,7 @@ static void InitCan_CAN1(void)
 	CAN_StructInit(&CAN_InitStructure); // 把CAN_InitStruct中的每一个参数按缺省值填入
 
 	CAN_InitStructure.CAN_TTCM = DISABLE;		  // 没有使能时间触发模式
-	CAN_InitStructure.CAN_ABOM = DISABLE;		  // 没有使能自动离线管理，BusOFF自动离线取消，需要手动处理
+	CAN_InitStructure.CAN_ABOM = ENABLE;		  // BusOff由bxCAN硬件自动恢复，软件只做状态计数
 	CAN_InitStructure.CAN_AWUM = DISABLE;		  // 没有使能自动唤醒模式
 	CAN_InitStructure.CAN_NART = ENABLE;           // no ACK时不自动重发，降低未接设备时的发送功耗
 	CAN_InitStructure.CAN_RFLM = DISABLE;		  // 没有使能接收FIFO锁定模式
@@ -787,11 +835,12 @@ static void InitCan_CAN1(void)
 
 static void Can_BusOFF_FaultTimeCtrl(void)
 {
-	if (s_u8CanBusOff != 0U)
+	if ((CAN1->ESR & CAN_ESR_BOFF) != 0U)
 	{
 		g_u16BusOff_InitTestCnt++;
+		g_u16BusOff_RecoverCnt = 0U;
 	}
-	if (((CAN1->ESR & CAN_ESR_BOFF) == 0U) && (s_u8CanBusOff == 0U))
+	else if (s_u8CanBusOff != 0U)
 	{
 		g_u16BusOff_RecoverCnt++;
 	}
@@ -804,7 +853,6 @@ static void Can_BusOFF_FaultChk(void)
 		feidao_can_update_error_snapshot();
 		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16BusOffCnt);
 		s_u8CanBusOff = 1U;
-		CAN1->MCR |= CAN_MCR_INRQ;
 		g_u16BusOff_RecoverCnt = 0U;
 		g_u16BusOff_InitTestCnt = 0U;
 		System_ERROR_UserCallback(ERROR_CAN);
@@ -813,28 +861,15 @@ static void Can_BusOFF_FaultChk(void)
 
 static void Can_BusOFF_Recover(void)
 {
-	UINT16 recover_cycle;
-	static UINT8 s_u8BusOffRecoverStep = 0U;
-
-	if (s_u8CanBusOff != 0U)
+	if ((s_u8CanBusOff != 0U) && ((CAN1->ESR & CAN_ESR_BOFF) == 0U))
 	{
-		recover_cycle = (s_u8BusOffRecoverStep < 10U) ? DELAYB10MS_100MS : DELAYB10MS_1S;
-		if (g_u16BusOff_InitTestCnt >= recover_cycle)
+		if (g_u16BusOff_RecoverCnt >= DELAYB10MS_500MS)
 		{
-			if (s_u8BusOffRecoverStep < 10U)
-			{
-				s_u8BusOffRecoverStep++;
-			}
-			g_u16BusOff_InitTestCnt = 0U;
 			s_u8CanBusOff = 0U;
-			CAN1->MCR &= ~CAN_MCR_INRQ;
+			g_u16BusOff_InitTestCnt = 0U;
+			g_u16BusOff_RecoverCnt = DELAYB10MS_500MS;
+			feidao_can_update_error_snapshot();
 		}
-	}
-
-	if (g_u16BusOff_RecoverCnt > DELAYB10MS_500MS)
-	{
-		g_u16BusOff_RecoverCnt = DELAYB10MS_500MS;
-		s_u8BusOffRecoverStep = 0U;
 	}
 }
 
@@ -851,6 +886,7 @@ void InitCan(void)
 	s_u16FeidaoCanPendingMask = 0U;
 	s_u8FeidaoCanTxMailbox = CAN_TxStatus_NoMailBox;
 	s_u8FeidaoCanPowerState = FEIDAO_CAN_POWER_IDLE;
+	s_u8FeidaoCanPeripheralSleepRequested = 0U;
 	InitCan_GPIO();
 	InitCan_NVIC();
 	InitCan_CAN1();

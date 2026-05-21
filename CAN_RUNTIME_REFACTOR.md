@@ -25,9 +25,12 @@
 - `s_feidao_can_runtime.tx_cycle_no_ack_recorded`
 - `s_feidao_can_runtime.last_rtc_wake_tx_acked`
 - `s_feidao_can_runtime.last_rtc_wake_timeout`
+- `s_feidao_can_runtime.peripheral_sleep_requested`
 - `s_feidao_can_runtime.last_rtc_elapsed_seconds`
 - `s_feidao_can_runtime.rtc_wake_service_cnt`
 - `s_feidao_can_runtime.prepare_sleep_cnt`
+- `s_feidao_can_runtime.peripheral_sleep_cnt`
+- `s_feidao_can_runtime.peripheral_wake_cnt`
 
 ## 兼容策略
 
@@ -48,6 +51,10 @@
 - `CanFeidaoFrames`：只负责飞道扩展帧字段组包、发送顺序和周期报文 mask。
 - `Can_HDX.c`：保留 CAN 初始化、收发器电源状态机、BusOff 监控、No-ACK 统计和低功耗服务。
 - `Can_HDX_Transmit()`：仍是协议帧模块唯一发送出口。
+
+低功耗发送批次完成后，`feidao_can_power_off()` 会关闭 `GPIO_CMNT_EN` 并请求 bxCAN 外设进入 sleep；下一次发送前由 `feidao_can_power_on()` / `Can_HDX_Transmit()` 先唤醒外设，再等待收发器稳定窗口。该策略保留原有“发送前给收发器供电、发送完成后断电”的主收益，同时降低无发送窗口内 CAN 外设空转。
+
+BusOff 恢复改由 bxCAN `CAN_ABOM=ENABLE` 处理。`Can_BusOFF_Monitor()` 只做状态计数、错误快照和恢复后稳定窗口确认，不再通过 `CAN_MCR_INRQ` 做软件恢复。这样避免软件周期性拉初始化模式和硬件自动恢复机制相互抢状态。
 
 低功耗相关对外 API 固定为：
 
