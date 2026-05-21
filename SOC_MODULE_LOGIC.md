@@ -80,7 +80,7 @@
 | `Flash.c/.h` | SOC V2 快照 journal；V1 兼容读取；内部 Flash 地址定义 |
 | `Sci_Upper.c/.h` | RS485/Modbus-like 读写窗口；SOC 表、SOC 参数、一次 SOC、SOC 测试模式 |
 | `rtc_sleep.c` | RTC 周期唤醒后累计休眠秒数，调用 `SOC_ApplyRtcRelaxationCompensation()` |
-| `SleepDeal.c` | 正常休眠前保存 SOC 快照和灯条 SOC 备份 |
+| `SleepDeal.c` | 普通/深度休眠复位式流程；深睡中通过 RTC Alarm 周期唤醒计时，真正唤醒后触发 SOC 深睡 OCV 校准 |
 | `LedBar.c` | 读取 `SocElement.u16Soc` 做数码管/灯条显示；休眠前把显示 SOC 存到 BKP |
 | `Can_HDX.c` | CAN 对外上报 SOC、SOH、剩余容量、满电容量、循环次数 |
 
@@ -113,6 +113,7 @@
 | 静置 OCV 配置时间 | `30min` | `PROJECT_CFG_SOC_REST_OCV_SECONDS`，达到后才允许久置低 OCV 慢速下修 |
 | 静置 OCV 最小稳定 | `5min` | `SOC_SHORT_REST_MIN_SECONDS` |
 | OCV 目标刷新节拍 | `10min` | `SOC_SHORT_REST_STEP_SECONDS` |
+| RTC/深睡 OCV 校准门槛 | `10min` | `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS`，深睡必须由 RTC 唤醒累计到该时间后才允许 OCV 校准 |
 | 久置低 OCV 下修节拍 | `30min/1%` | `SOC_LONG_REST_DOWN_STEP_SECONDS` |
 | 大电流 holdoff | `30s` | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` |
 | holdoff 允许末端偏移 | `50mV` | `V0 + 50mV` 以下允许低压收敛 |
@@ -475,6 +476,16 @@ RTC 休眠路径：
 
 CAN active/idle 只影响 RTC 唤醒服务频率，不直接改变 SOC 校准速率。
 
+深度休眠路径：
+
+1. `DEEP_MODE` 进入后会先写 `FLASH_DEEP_SLEEP_VALUE`，随后 `MCU_RESET()` 进入复位式深睡流程。
+2. 复位启动早期的 `IsSleepStartUp()` 识别到 `FLASH_DEEP_SLEEP_VALUE` 后，初始化 RTC，并在每次进入 STOP 前调用 `RTC_WKTimeConfig()` 设置下一次 RTC Alarm。
+3. RTC Alarm 唤醒只用于计时和喂狗窗口，不在深睡循环里直接做 SOC/OCV；如果没有有效按键或充电唤醒，会继续回到 STOP。
+4. 每次 RTC Alarm 唤醒后，把 `RTC_GetLastWakeupPeriodSeconds()` 累加到 `BKP_DR13~BKP_DR17`，其中包含 magic、反码、累计秒数和 CRC，跨 `IORecover_DeepMode()` 的再次复位仍保留。
+5. 用户按键或充电真正唤醒后，系统重新初始化 AFE/SOC。首个有效 AFE 样本进入 `App_SOC()` 时调用 `SleepDeal_TryApplyDeepSleepSocCalibration()`。
+6. 累计深睡时间不足 `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS` 时不做 OCV 校准，BKP 计数保留给后续深睡继续累计。
+7. 累计达到门槛后，`SOC_ApplyDeepSleepRtcCompensation()` 先按累计秒数扣除板端自耗，再在电压有效且压差 `<=200mV` 时最多按 OCV 下修 `1%`；尝试完成后清除该累计窗口。
+
 ## 17. 显示与对外发布
 
 内部 SOC 和显示 SOC 分离：
@@ -601,7 +612,7 @@ py -3.9 tools\soc_replay_test.py
 
 结果：
 
-- `SOC host C tests passed: 19`
+- `SOC host C tests passed: 20`
 - `SOC replay tests passed: 47`
 
 真实 C 源码主机测试直接编译 `SOC.c` 和 `SocEnhance.c`，覆盖：
@@ -613,6 +624,7 @@ py -3.9 tools\soc_replay_test.py
 - 低压到 0。
 - 稳定静置 deferred target。
 - RTC 稳定窗口。
+- 深睡 RTC 累计门槛。
 - 久置低 OCV 慢速下修。
 - 电压不稳定时不校准。
 - 重载回弹标志清除。

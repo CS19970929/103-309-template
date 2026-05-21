@@ -5,6 +5,14 @@ UINT8 RTC_ExtComCnt = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
 static UINT8 s_u8BootFromSleepChargerWakeup = 0U;
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
+static void BootFlag_EnableAccess(void);
+static UINT16 SleepDeal_DeepSleepSocCrc(UINT32 elapsed_seconds);
+static UINT8 SleepDeal_LoadDeepSleepSocSeconds(UINT32 *elapsed_seconds);
+static void SleepDeal_WriteDeepSleepSocSeconds(UINT32 elapsed_seconds);
+static void SleepDeal_ClearDeepSleepSocSeconds(void);
+static void SleepDeal_AddDeepSleepSocSeconds(UINT32 add_seconds);
+static void SleepDeal_PrepareDeepSleepRtcWake(void);
+static void SleepDeal_RecordDeepSleepRtcWake(void);
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
 
@@ -123,6 +131,13 @@ static void BootFlag_EnableAccess(void)
 #define SLEEP_BKP_FLAG_REG BKP_DR2
 #define SLEEP_BKP_INV_REG  BKP_DR3
 
+#define DEEP_SLEEP_SOC_BKP_MAGIC     ((UINT16)0xD53CU)
+#define DEEP_SLEEP_SOC_BKP_MAGIC_REG BKP_DR13
+#define DEEP_SLEEP_SOC_BKP_INV_REG   BKP_DR14
+#define DEEP_SLEEP_SOC_BKP_LO_REG    BKP_DR15
+#define DEEP_SLEEP_SOC_BKP_HI_REG    BKP_DR16
+#define DEEP_SLEEP_SOC_BKP_CRC_REG   BKP_DR17
+
 void BootFlag_Write(UINT16 flag)
 {
 	BootFlag_EnableAccess();
@@ -165,6 +180,148 @@ UINT16 BootFlag_Read(void)
 void BootFlag_Clear(void)
 {
 	BootFlag_Write(BOOT_FLAG_RESET_VALUE);
+}
+
+static UINT16 SleepDeal_DeepSleepSocCrc(UINT32 elapsed_seconds)
+{
+	UINT16 lo = (UINT16)(elapsed_seconds & 0xFFFFU);
+	UINT16 hi = (UINT16)((elapsed_seconds >> 16) & 0xFFFFU);
+
+	return (UINT16)(lo ^ hi ^ DEEP_SLEEP_SOC_BKP_MAGIC ^ 0x6C3AU);
+}
+
+static UINT8 SleepDeal_LoadDeepSleepSocSeconds(UINT32 *elapsed_seconds)
+{
+	UINT16 magic;
+	UINT16 inverse_magic;
+	UINT16 lo;
+	UINT16 hi;
+	UINT32 seconds;
+
+	if (elapsed_seconds == 0)
+	{
+		return 0U;
+	}
+
+	BootFlag_EnableAccess();
+	magic = BKP_ReadBackupRegister(DEEP_SLEEP_SOC_BKP_MAGIC_REG);
+	inverse_magic = BKP_ReadBackupRegister(DEEP_SLEEP_SOC_BKP_INV_REG);
+	if ((magic != DEEP_SLEEP_SOC_BKP_MAGIC) ||
+		((UINT16)(magic ^ inverse_magic) != 0xFFFFU))
+	{
+		return 0U;
+	}
+
+	lo = BKP_ReadBackupRegister(DEEP_SLEEP_SOC_BKP_LO_REG);
+	hi = BKP_ReadBackupRegister(DEEP_SLEEP_SOC_BKP_HI_REG);
+	seconds = ((UINT32)hi << 16) | (UINT32)lo;
+	if (BKP_ReadBackupRegister(DEEP_SLEEP_SOC_BKP_CRC_REG) != SleepDeal_DeepSleepSocCrc(seconds))
+	{
+		return 0U;
+	}
+
+	*elapsed_seconds = seconds;
+	return 1U;
+}
+
+static void SleepDeal_WriteDeepSleepSocSeconds(UINT32 elapsed_seconds)
+{
+	BootFlag_EnableAccess();
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_MAGIC_REG, DEEP_SLEEP_SOC_BKP_MAGIC);
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_INV_REG, (UINT16)(~DEEP_SLEEP_SOC_BKP_MAGIC));
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_LO_REG, (UINT16)(elapsed_seconds & 0xFFFFU));
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_HI_REG, (UINT16)((elapsed_seconds >> 16) & 0xFFFFU));
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_CRC_REG, SleepDeal_DeepSleepSocCrc(elapsed_seconds));
+}
+
+static void SleepDeal_ClearDeepSleepSocSeconds(void)
+{
+	BootFlag_EnableAccess();
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_MAGIC_REG, 0U);
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_INV_REG, 0U);
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_LO_REG, 0U);
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_HI_REG, 0U);
+	BKP_WriteBackupRegister(DEEP_SLEEP_SOC_BKP_CRC_REG, 0U);
+}
+
+static void SleepDeal_AddDeepSleepSocSeconds(UINT32 add_seconds)
+{
+	UINT32 elapsed_seconds;
+
+	if (add_seconds == 0U)
+	{
+		return;
+	}
+	if (SleepDeal_LoadDeepSleepSocSeconds(&elapsed_seconds) == 0U)
+	{
+		elapsed_seconds = 0U;
+	}
+	if (elapsed_seconds > (0xFFFFFFFFU - add_seconds))
+	{
+		elapsed_seconds = 0xFFFFFFFFU;
+	}
+	else
+	{
+		elapsed_seconds += add_seconds;
+	}
+	SleepDeal_WriteDeepSleepSocSeconds(elapsed_seconds);
+}
+
+static void SleepDeal_PrepareDeepSleepRtcWake(void)
+{
+	is_rtc_wakekup = false;
+	RTC_WKTimeConfig();
+}
+
+static void SleepDeal_RecordDeepSleepRtcWake(void)
+{
+	UINT32 wake_seconds;
+
+	if (!is_rtc_wakekup)
+	{
+		return;
+	}
+	wake_seconds = RTC_GetLastWakeupPeriodSeconds();
+	if (wake_seconds == 0U)
+	{
+		wake_seconds = RTC_GetWakeupPeriodSeconds();
+	}
+	SleepDeal_AddDeepSleepSocSeconds(wake_seconds);
+	is_rtc_wakekup = false;
+}
+
+UINT8 SleepDeal_TryApplyDeepSleepSocCalibration(void)
+{
+	UINT32 elapsed_seconds;
+
+	if (SleepDeal_LoadDeepSleepSocSeconds(&elapsed_seconds) == 0U)
+	{
+		return 0U;
+	}
+	if (elapsed_seconds < (UINT32)PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS)
+	{
+		return 0U;
+	}
+	if (!SOC_Enhance_Element.u16_SOC_InitOver)
+	{
+		return 0U;
+	}
+	if ((g_stCellInfoReport.u16VCellMin == 0U) ||
+		(g_stCellInfoReport.u16VCellMax == 0U) ||
+		(g_stCellInfoReport.u16VCellMax < g_stCellInfoReport.u16VCellMin))
+	{
+		return 0U;
+	}
+
+	(void)SOC_ApplyDeepSleepRtcCompensation(elapsed_seconds,
+		g_stCellInfoReport.u16VCellMin,
+		g_stCellInfoReport.u16VCellMax);
+	SleepDeal_ClearDeepSleepSocSeconds();
+	log_w("deep sleep rtc rest %lu s, vmin %u, soc %u",
+		(unsigned long)elapsed_seconds,
+		(unsigned int)g_stCellInfoReport.u16VCellMin,
+		(unsigned int)SOC_Enhance_Element.u8_SOC);
+	return 1U;
 }
 
 UINT8 SleepDeal_IsBootFromSleepStartup(void)
@@ -220,13 +377,17 @@ void IsSleepStartUp(void)
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_u8BootFromSleepStartup = 1U;
 		BootFlag_Clear();
+		Init_RTC();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
 		// Sys_StandbyMode();		//??????IO???
 		do
 		{
+			SleepDeal_PrepareDeepSleepRtcWake();
 			Sys_StopMode();
+			SleepDeal_RecordDeepSleepRtcWake();
 		} while (!IsSleepWakeupValid());
+		RTC_DisableStopWakeup();
 		IORecover_DeepMode();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:

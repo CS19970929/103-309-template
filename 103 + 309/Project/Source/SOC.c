@@ -205,6 +205,7 @@ void App_SOC(void)
 							 g_stCellInfoReport.u16VCellMin,
 							 soc_ichg,
 							 soc_idsg);
+		(void)SleepDeal_TryApplyDeepSleepSocCalibration();
 		SOC_IntEnhance_Ctrl();
 	}
 	else

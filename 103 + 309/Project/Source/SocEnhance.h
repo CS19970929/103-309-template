@@ -137,6 +137,7 @@ extern struct SOC_DEBUG_WATCH * const g_dbg_soc_watch;
 
 void SOC_IntEnhance_Ctrl(void);
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
+UINT8 SOC_ApplyDeepSleepRtcCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
 void SOC_SaveSnapshotBeforeSleep(void);
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg);
 void SOC_PublishReportData(void);

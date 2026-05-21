@@ -9,6 +9,7 @@ UINT16 BootFlag_Read(void);
 void BootFlag_Clear(void);
 UINT8 SleepDeal_IsBootFromSleepStartup(void);
 UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void);
+UINT8 SleepDeal_TryApplyDeepSleepSocCalibration(void);
 void IsSleepStartUp(void);
 
 #endif	/* SLEEPDEAL_H */

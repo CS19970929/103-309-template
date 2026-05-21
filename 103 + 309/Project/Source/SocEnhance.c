@@ -54,6 +54,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
 #define SOC_SHORT_REST_MIN_SECONDS   ((UINT32)PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS)
 #define SOC_SHORT_REST_STEP_SECONDS  ((UINT32)PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS)
+#define SOC_RTC_CALIBRATION_MIN_SECONDS ((UINT32)PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS)
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
@@ -1733,4 +1734,44 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 		soc_save_current_snapshot();
 	}
 	soc_publish(0U);
+}
+
+UINT8 SOC_ApplyDeepSleepRtcCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max)
+{
+	UINT8 changed;
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	UINT8 old_soc;
+#endif
+
+	if (!SOC_Enhance_Element.u16_SOC_InitOver)
+	{
+		return 0U;
+	}
+	if (rest_seconds < SOC_RTC_CALIBRATION_MIN_SECONDS)
+	{
+		return 0U;
+	}
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	old_soc = s_soc.soc;
+#endif
+	SOC_Enhance_Element.u16_VCellMin = vcell_min;
+	SOC_Enhance_Element.u16_VCellMax = vcell_max;
+	changed = soc_apply_board_self_consumption_seconds(rest_seconds);
+	if (soc_cell_delta() > SOC_MID_MAX_DELTA_MV)
+	{
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_CELL_DELTA);
+	}
+	else if (soc_apply_rest_ocv(rest_seconds, SOC_MODE_RELAX))
+	{
+		changed = 1U;
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+		soc_watch_set_calib_source(SOC_WATCH_CALIB_RTC_REST, old_soc, s_soc.soc);
+#endif
+	}
+	if (changed)
+	{
+		soc_save_current_snapshot();
+	}
+	soc_publish(0U);
+	return changed;
 }

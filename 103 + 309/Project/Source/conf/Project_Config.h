@@ -273,6 +273,10 @@
 // <i> 达到稳定窗口后，每隔多久允许刷新或消化 1% OCV 修正。
 #define PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS 600
 
+// <o> RTC/deep sleep OCV calibration minimum rest time, seconds <60-43200>
+// <i> RTC/deep sleep rest must reach this time before SOC OCV calibration is allowed.
+#define PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS 600
+
 // <o> 久置低 OCV 静置下修节拍，秒 <60-43200>
 // <i> 长时间静置且 OCV 目标低于内部 SOC 时，每隔多久最多下修 1%。
 #define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800

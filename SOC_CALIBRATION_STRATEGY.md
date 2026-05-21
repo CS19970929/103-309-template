@@ -43,6 +43,7 @@
 | 久置低 OCV | 已有低于内部 SOC 的 OCV target，且继续稳定久置 | 静置阶段按 `30min/1%` 慢速下修；当前默认首次约 `10min target + 30min step` | 避免电池久置自放电后 SOC 长期虚高 |
 | 低压表 | 非充电下 `VCellMin <=3400mV~2950mV` | 按电压/电流表每次下修 `1%` | 低压区快速跟随 |
 | RTC OCV | RTC 唤醒后传入休眠时长和电压，连续唤醒电压稳定，且未被 rebound holdoff 阻断 | 稳定窗口按 `10min/step` 记录 deferred target；久置低 OCV 可按 `30min/1%` 下修 | 不随 `1s/10s` RTC 唤醒频率快速跳变 |
+| 深睡 RTC OCV | `DEEP_MODE` 复位式深睡中由 RTC Alarm 周期唤醒计时，累计达到 `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS` 后，真正按键/充电唤醒并拿到首个有效 AFE 样本 | 按累计深睡秒数扣除板端自耗；若电压有效且压差 `<=200mV`，最多按 OCV 下修 `1%`，随后清除该累计窗口 | 深睡期间不直接跳 SOC，用户真正唤醒后才做一次受限校准 |
 | 中低压弱约束 | `VCellMin <= V0 + 700mV` 且高于低压表范围 | 只向下限制明显高估 SOC，每次 `1%` | 扩大收敛区间但避免瞬态误校 |
 | 骑行中低压表修正 | `VCellMin <= V0 + 400mV` | 给内部 SOC 设置分电流档位上限 | 防止低压高估 |
 | 设置一次 SOC | 上位机 `0x1005` | 内部和显示同步到设定值 | 立即生效 |
@@ -212,6 +213,7 @@ cap_full = cap_factory * SOH / 100
 | --- | ---: | --- |
 | `SOC_SHORT_REST_MIN_SECONDS` | `300s` | 静置稳定可信度最短时间 |
 | `SOC_SHORT_REST_STEP_SECONDS` | `600s` | 稳定静置刷新 deferred target、充/放电消化 OCV 差值的节拍 |
+| `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS` | `600s` | RTC/深度休眠累计达到该时间后才允许 OCV 校准 |
 | `SOC_LONG_REST_DOWN_STEP_SECONDS` | `1800s` | 久置且 OCV target 低于内部 SOC 时的静置下修节拍 |
 | `SOC_REST_STABLE_DELTA_MV` | `30mV` | 静置电压回弹稳定判定窗口 |
 | RTC OCV 首次采样 | 建参考值，不累计稳定窗口 | 防止单次 RTC 唤醒电压直接触发校准 |
@@ -229,4 +231,4 @@ cap_full = cap_factory * SOH / 100
 5. 台架验证：覆盖启动、满电、低压、RTC、SOC 设置、断电恢复、异常采样、稳定静置、重载关机后快速重启。
 6. 上板验证：确认 CAN、RS485、LED 和内部 `g_stCellInfoReport.SocElement` 显示一致。
 
-无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前每档覆盖 `19` 个关键 C 源码路径，并覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置；`tools/soc_replay_test.py` 当前覆盖 `47` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵、静置不稳定超过 30min 仍不校准、deferred OCV 充/放电消化、久置低 OCV 慢速下修和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。
+无板时按 [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) 执行。`tools/run_soc_host_c_test.py` 直接编译真实 `SOC.c`、`SocEnhance.c` 和 `PubFunc.c`，当前每档覆盖 `20` 个关键 C 源码路径，并覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置；`tools/soc_replay_test.py` 当前覆盖 `47` 个场景，包含表格矩阵、源码表格一致性、异常输入矩阵、静置不稳定超过 30min 仍不校准、deferred OCV 充/放电消化、久置低 OCV 慢速下修和随机运行不变量。两者可以作为算法可靠性门禁，但不能替代 AFE 采样、Flash 擦写、通信电气和真实电芯回弹的台架验证。
