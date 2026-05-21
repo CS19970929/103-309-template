@@ -32,7 +32,7 @@
 3. 自动校正每次最多移动 `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT`，当前为 `1%`。
 4. 充电积分不能直接到 `100%`，必须通过满电电压确认后逐步锚定。
 5. 低压和中低压修正只会向下限制明显高估 SOC，不会把 SOC 向上拉高。
-6. 静置/RTC OCV 只接受低于当前 SOC 的 deferred target，不允许向上校准；后续放电阶段或久置低 OCV 才小步下修。
+6. 静置/RTC OCV 永远不允许向上校准；普通静置/RTC OCV 目标与当前 SOC 误差 `<=3%` 时忽略，只有差值明显且目标更低时才在后续放电阶段或久置低 OCV 中小步下修。
 7. 大电流压降会进入 sag/rebound holdoff，阻止把未回弹端电压当作真实 OCV。
 8. SOC 快照使用内部 Flash V2 journal，并兼容旧 V1 快照。
 9. 量产默认关闭 SOC 注入测试入口，`0xD300 supported=0` 是正常结果。
@@ -197,7 +197,7 @@ I_bat_A10 = round(I_bat_mA / 100)
 | `rest_ticks/stable_rest_ticks/short_rest_ticks` | 静置可信和 OCV 目标刷新计数 |
 | `long_rest_down_ticks` | 久置低 OCV 慢速下修计数 |
 | `sag_hold_ticks` | 大电流压降/重启回弹保护计数 |
-| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 静置/RTC 生成的待下修 OCV 目标；目标高于或等于当前 SOC 时直接忽略 |
+| `deferred_ocv_target/deferred_ocv_valid/deferred_ocv_ticks` | 静置/RTC 生成的待下修 OCV 目标；目标高于或等于当前 SOC、或普通 OCV 误差 `<=3%` 时直接忽略 |
 | `rest_ref_vmin/rest_ref_vmax` | 静置稳定性参考电压 |
 | `snapshot_flags` | 需要持久化的状态标志，当前 bit0 为 rebound hold |
 | `full_anchor` | 是否已经通过满电锚定到 100% |
@@ -454,10 +454,11 @@ SOC 低于目标时不动作；条件中断时 `mid_ticks` 清零。
 4. 后续 `VCellMin/VCellMax` 相对参考值波动 `<=30mV` 才继续累计稳定。
 5. 稳定至少 `5min` 且 `10min` 刷新节拍到达时，记录一次 OCV deferred target。
 6. 记录 target 不会立即修改内部 SOC。
-7. target 高于内部 SOC 时，只在后续 `CHG` 阶段按 `10min/1%` 上修。
-8. target 低于内部 SOC 时，只在后续 `DSG` 阶段按 `10min/1%` 下修。
-9. 如果后续方向与 target 不匹配，target 会被丢弃。
-10. 若 target 低于内部 SOC 且一直稳定久置，静置阶段也允许按 `30min/1%` 慢速下修。
+7. target 高于或等于内部 SOC 时直接忽略，静置/RTC OCV 永远不向上校准。
+8. 普通静置/RTC target 与当前 SOC 误差 `<=3%` 时直接忽略，避免小误差频繁修正造成显示体验波动。
+9. target 低于内部 SOC 且误差 `>3%` 时，只在后续 `DSG` 阶段按 `10min/1%` 下修。
+10. 如果后续方向与 target 不匹配，target 会被丢弃。
+11. 若 target 低于内部 SOC、误差 `>3%` 且一直稳定久置，静置阶段也允许按 `30min/1%` 慢速下修。
 
 当前默认配置下，第一次久置低 OCV 下修的有效时间约为：
 
@@ -484,7 +485,7 @@ CAN active/idle 只影响 RTC 唤醒服务频率，不直接改变 SOC 校准速
 4. 每次 RTC Alarm 唤醒后，把 `RTC_GetLastWakeupPeriodSeconds()` 累加到 `BKP_DR13~BKP_DR17`，其中包含 magic、反码、累计秒数和 CRC，跨 `IORecover_DeepMode()` 的再次复位仍保留。
 5. 用户按键或充电真正唤醒后，系统重新初始化 AFE/SOC。首个有效 AFE 样本进入 `App_SOC()` 时调用 `SleepDeal_TryApplyDeepSleepSocCalibration()`。
 6. 累计深睡时间不足 `PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS` 时不做 OCV 校准，BKP 计数保留给后续深睡继续累计。
-7. 累计达到门槛后，`SOC_ApplyDeepSleepRtcCompensation()` 先按累计秒数扣除板端自耗，再在电压有效且压差 `<=200mV` 时最多按 OCV 下修 `1%`；尝试完成后清除该累计窗口。
+7. 累计达到门槛后，`SOC_ApplyDeepSleepRtcCompensation()` 先按累计秒数扣除板端自耗，再在电压有效且压差 `<=200mV` 时按 OCV 最多下修 `1%`；深睡 RTC 不套普通 `3%` deadband，但仍禁止向上校准且不能一次跳变超过 `1%`。
 
 ## 17. 显示与对外发布
 
@@ -612,8 +613,8 @@ py -3.9 tools\soc_replay_test.py
 
 结果：
 
-- `SOC host C tests passed: 20`
-- `SOC replay tests passed: 47`
+- `SOC host C tests passed: 22`
+- `SOC replay tests passed: 49`
 
 真实 C 源码主机测试直接编译 `SOC.c` 和 `SocEnhance.c`，覆盖：
 
@@ -625,13 +626,14 @@ py -3.9 tools\soc_replay_test.py
 - 稳定静置 deferred target。
 - RTC 稳定窗口。
 - 深睡 RTC 累计门槛。
+- 普通静置/RTC OCV 小误差 `<=3%` 不校准、深睡 RTC 小误差仍只下修 `1%`。
 - 久置低 OCV 慢速下修。
 - 电压不稳定时不校准。
 - 重载回弹标志清除。
 - 显示覆盖不污染内部 SOC。
 - 设置一次 SOC 保存快照。
 
-Python 回放矩阵覆盖 47 个场景，包括：
+Python 回放矩阵覆盖 49 个场景，包括：
 
 - 快照有效/无效恢复。
 - OCV 表单调性和 C 源码表一致性。
@@ -671,7 +673,7 @@ SOC 测试固件：
 - SOC 表只适合当前电芯和温度/倍率假设，运行态已通过门控避免直接跳变，但上板仍需按实际电芯校准。
 - `0x2200` 写入的 SOC 表不持久化，重启后会回到默认表或当前表选择对应的内置表。
 - `SOC_Fixed` / `SOC_Zero` 是显示覆盖，不应作为真实 SOC 校准使用。
-- 当前静置 OCV 第一次 target 约在稳定 10min 后生成，久置低 OCV 第一次自动下修约在 40min 后发生，适合保守显示，不适合快速台架调参。
+- 当前静置 OCV 第一次 target 约在稳定 10min 后生成；普通 OCV 目标与当前 SOC 误差 `<=3%` 会忽略，久置低 OCV 第一次自动下修约在 40min 后发生，适合保守显示，不适合快速台架调参。
 
 后续如果要继续优化，应优先补充：
 

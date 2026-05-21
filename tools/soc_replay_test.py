@@ -58,6 +58,9 @@ REST_OCV_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_OCV_SECONDS', 1800)
 EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = project_config_int('PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT', 1)
+OCV_TARGET_DEADBAND_PERCENT = 3
+DEEP_SLEEP_RTC_OCV_STEP = 1
+RTC_CALIBRATION_MIN_SECONDS = project_config_int('PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS', 600)
 EMPTY_TAIL_START_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV', 400)
 EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT', 0)
 EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT', 100)
@@ -288,14 +291,41 @@ class SocModel:
             self.soc = 99
             self.cap_now = self.cap_full * 99 // 100
 
+    def apply_board_self_consumption_seconds(self, seconds):
+        if self.board_self_consumption_ma == 0 or seconds == 0:
+            return False
+        old = self.soc
+        if self.integrate_mode != MODE_DSG:
+            self.remainder_ms = 0
+            self.integrate_mode = MODE_DSG
+        self.last_mode = MODE_RELAX
+        acc_mams = self.board_self_consumption_ma * seconds * 1000 + self.remainder_ms
+        delta = acc_mams // MAMS_PER_AS10
+        self.remainder_ms = acc_mams % MAMS_PER_AS10
+        if delta == 0:
+            return False
+        self.full_anchor = False
+        self.add_cycle_capacity(delta)
+        self.cap_now = max(0, self.cap_now - delta)
+        self.soc = self.soc_from_cap()
+        return self.soc != old
+
     def clear_deferred_ocv(self):
         self.deferred_ocv_valid = False
         self.deferred_ocv_target = 0
         self.deferred_ocv_ticks = 0
         self.long_rest_down_ticks = 0
 
-    def set_deferred_ocv_target(self, target):
+    def ocv_target_in_deadband(self, target):
+        return abs(target - self.soc) <= OCV_TARGET_DEADBAND_PERCENT
+
+    def rest_ocv_target_blocked(self, target, ignore_deadband=False):
         if target >= self.soc:
+            return True
+        return (not ignore_deadband) and self.ocv_target_in_deadband(target)
+
+    def set_deferred_ocv_target(self, target):
+        if self.rest_ocv_target_blocked(target):
             self.clear_deferred_ocv()
             return
         if not self.deferred_ocv_valid or self.deferred_ocv_target != target:
@@ -445,7 +475,7 @@ class SocModel:
             self.mid_ticks = 0
         return self.soc != old
 
-    def apply_ocv_target_step(self, target, vmax, vmin, direction=MODE_RELAX, fault=False):
+    def apply_ocv_target_step(self, target, vmax, vmin, direction=MODE_RELAX, fault=False, step=CAL_STEP):
         if not self.voltage_allowed(vmax, vmin, fault):
             return False
         if self.sag_hold_blocks_calibration(vmax, vmin):
@@ -454,8 +484,10 @@ class SocModel:
             return False
         if direction == MODE_DSG and target >= self.soc:
             return False
+        if direction == MODE_RELAX and target >= self.soc:
+            return False
         old = self.soc
-        self.set_soc(step_toward(self.soc, target, CAL_STEP))
+        self.set_soc(step_toward(self.soc, target, max(1, step)))
         return self.soc != old
 
     def apply_ocv_step(self, vmax, vmin, direction=MODE_RELAX, fault=False):
@@ -465,6 +497,9 @@ class SocModel:
         if not self.deferred_ocv_valid or direction == MODE_RELAX:
             return False
         if self.deferred_ocv_target == self.soc:
+            self.clear_deferred_ocv()
+            return False
+        if self.ocv_target_in_deadband(self.deferred_ocv_target):
             self.clear_deferred_ocv()
             return False
         if (self.deferred_ocv_target > self.soc or
@@ -484,7 +519,12 @@ class SocModel:
     def apply_long_rest_down_step(self, vmax, vmin, delta_ticks=1):
         if (not self.deferred_ocv_valid or self.deferred_ocv_target >= self.soc or
                 self.rest_ticks < REST_OCV_SECONDS * TICKS_PER_SECOND):
+            if self.deferred_ocv_valid and self.deferred_ocv_target >= self.soc:
+                self.clear_deferred_ocv()
             self.long_rest_down_ticks = 0
+            return False
+        if self.ocv_target_in_deadband(self.deferred_ocv_target):
+            self.clear_deferred_ocv()
             return False
         limit = LONG_REST_DOWN_STEP_SECONDS * TICKS_PER_SECOND
         self.long_rest_down_ticks = min(limit, self.long_rest_down_ticks + delta_ticks)
@@ -497,13 +537,26 @@ class SocModel:
             self.clear_deferred_ocv()
         return changed
 
-    def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX, fault=False):
+    def apply_rest_ocv(self, rest_seconds, vmax, vmin, direction=MODE_RELAX,
+                       fault=False, ignore_deadband=False, step=CAL_STEP):
         if rest_seconds < SHORT_REST_MIN_SECONDS:
             return False
         target = interp_soc(vmin)
-        if target >= self.soc:
+        if self.rest_ocv_target_blocked(target, ignore_deadband):
             return False
-        return self.apply_ocv_target_step(target, vmax, vmin, direction=direction, fault=fault)
+        return self.apply_ocv_target_step(target, vmax, vmin, direction=direction,
+                                          fault=fault, step=step)
+
+    def apply_deep_sleep_rtc_compensation(self, rest_seconds, vmax, vmin):
+        if rest_seconds < RTC_CALIBRATION_MIN_SECONDS:
+            return False
+        old = self.soc
+        self.apply_board_self_consumption_seconds(rest_seconds)
+        if (vmax - vmin) > MID_MAX_DELTA_MV:
+            return self.soc != old
+        self.apply_rest_ocv(rest_seconds, vmax, vmin, direction=MODE_RELAX,
+                            ignore_deadband=True, step=DEEP_SLEEP_RTC_OCV_STEP)
+        return self.soc != old
 
     def reset_rest_confidence(self):
         self.rest_ticks = 0
@@ -979,6 +1032,25 @@ def test_rtc_rest_ocv_applies_small_bounded_step():
     assert model.display_soc == 79
 
 
+def test_rest_ocv_small_gap_is_ignored():
+    model = SocModel.from_snapshot(Snapshot(soc=72, cap_now=CAP_FACTORY_AS10 * 72 // 100))
+    assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835)
+    assert model.soc == 72
+    run_seconds(model, SHORT_REST_STEP_SECONDS, vmax=3835, vmin=3835)
+    assert model.soc == 72
+    assert not model.deferred_ocv_valid
+
+
+def test_deep_sleep_rtc_small_gap_still_steps_once():
+    model = model_with_self_consumption(72, 0)
+    changed = model.apply_deep_sleep_rtc_compensation(
+        RTC_CALIBRATION_MIN_SECONDS + 60,
+        vmax=3835,
+        vmin=3835)
+    assert changed
+    assert model.soc == 71
+
+
 def test_ocv_correction_fault_blocking_follows_config_and_direction_errors():
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
     assert not model.apply_rest_ocv(SHORT_REST_MIN_SECONDS, vmax=3835, vmin=3835, direction=MODE_CHG)
@@ -1367,6 +1439,8 @@ def main():
         test_full_confirm_counter_decrements_instead_of_resetting,
         test_empty_anchor_limits_low_voltage_tail,
         test_rtc_rest_ocv_applies_small_bounded_step,
+        test_rest_ocv_small_gap_is_ignored,
+        test_deep_sleep_rtc_small_gap_still_steps_once,
         test_ocv_correction_fault_blocking_follows_config_and_direction_errors,
         test_display_smoothing_charge_and_low_voltage_down,
         test_fixed_and_zero_overlay_do_not_change_internal_soc,

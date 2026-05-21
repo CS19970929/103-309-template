@@ -57,6 +57,8 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_RTC_CALIBRATION_MIN_SECONDS ((UINT32)PROJECT_CFG_SOC_RTC_CALIBRATION_MIN_SECONDS)
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
+#define SOC_OCV_DEADBAND_PERCENT     ((UINT8)3U)
+#define SOC_DEEP_SLEEP_RTC_OCV_STEP  ((UINT8)1U)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
 #define SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT ((UINT8)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT)
 #define SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT)
@@ -162,6 +164,7 @@ static void soc_watch_refresh(UINT8 force_display);
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode);
+static UINT8 soc_apply_ocv_target_step_limited(UINT8 target, UINT8 mode, UINT8 step_percent);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
@@ -681,9 +684,30 @@ static void soc_clear_deferred_ocv(void)
 	s_soc.long_rest_down_ticks = 0U;
 }
 
-static void soc_set_deferred_ocv_target(UINT8 target)
+static UINT8 soc_ocv_target_in_deadband(UINT8 target)
+{
+	return (UINT8)(soc_abs_diff_u16((UINT16)target, (UINT16)s_soc.soc) <=
+		SOC_OCV_DEADBAND_PERCENT);
+}
+
+static UINT8 soc_rest_ocv_target_blocked(UINT8 target, UINT8 ignore_deadband)
 {
 	if (target >= s_soc.soc)
+	{
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_DIRECTION);
+		return 1U;
+	}
+	if ((!ignore_deadband) && soc_ocv_target_in_deadband(target))
+	{
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_OCV_DEADBAND);
+		return 1U;
+	}
+	return 0U;
+}
+
+static void soc_set_deferred_ocv_target(UINT8 target)
+{
+	if (soc_rest_ocv_target_blocked(target, 0U))
 	{
 		soc_clear_deferred_ocv();
 		return;
@@ -812,7 +836,9 @@ static UINT8 soc_apply_board_self_consumption_seconds(UINT32 seconds)
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
-static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
+static UINT8 soc_apply_rest_ocv_ex(UINT32 rest_seconds, UINT8 mode,
+								   UINT8 ignore_deadband,
+								   UINT8 step_percent)
 {
 	UINT8 target;
 
@@ -821,14 +847,24 @@ static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
 		return 0U;
 	}
 	target = soc_ocv_percent();
-	if (target >= s_soc.soc)
+	if (soc_rest_ocv_target_blocked(target, ignore_deadband))
 	{
 		return 0U;
 	}
-	return soc_apply_ocv_target_step(target, mode);
+	return soc_apply_ocv_target_step_limited(target, mode, step_percent);
+}
+
+static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)
+{
+	return soc_apply_rest_ocv_ex(rest_seconds, mode, 0U, SOC_CAL_STEP);
 }
 
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode)
+{
+	return soc_apply_ocv_target_step_limited(target, mode, SOC_CAL_STEP);
+}
+
+static UINT8 soc_apply_ocv_target_step_limited(UINT8 target, UINT8 mode, UINT8 step_percent)
 {
 	UINT8 old_soc = s_soc.soc;
 
@@ -837,12 +873,17 @@ static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode)
 		return 0U;
 	}
 	if (((mode == SOC_MODE_CHG) && (target <= s_soc.soc)) ||
-		((mode == SOC_MODE_DSG) && (target >= s_soc.soc)))
+		((mode == SOC_MODE_DSG) && (target >= s_soc.soc)) ||
+		((mode == SOC_MODE_RELAX) && (target >= s_soc.soc)))
 	{
 		soc_watch_set_block_reason(SOC_WATCH_BLOCK_DIRECTION);
 		return 0U;
 	}
-	soc_set(soc_step(s_soc.soc, target, SOC_CAL_STEP));
+	if (step_percent == 0U)
+	{
+		step_percent = 1U;
+	}
+	soc_set(soc_step(s_soc.soc, target, step_percent));
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
@@ -861,10 +902,17 @@ static UINT8 soc_apply_deferred_ocv_step(UINT8 mode)
 		soc_clear_deferred_ocv();
 		return 0U;
 	}
+	if (soc_ocv_target_in_deadband(s_soc.deferred_ocv_target))
+	{
+		soc_clear_deferred_ocv();
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_OCV_DEADBAND);
+		return 0U;
+	}
 	if ((s_soc.deferred_ocv_target > s_soc.soc) ||
 		((s_soc.deferred_ocv_target < s_soc.soc) && (mode != SOC_MODE_DSG)))
 	{
 		soc_clear_deferred_ocv();
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_DIRECTION);
 		return 0U;
 	}
 	active_step_ticks = soc_seconds_to_ticks(SOC_SHORT_REST_STEP_SECONDS);
@@ -1311,7 +1359,18 @@ static UINT8 soc_apply_long_rest_down_step(UINT32 delta_ticks)
 		(s_soc.deferred_ocv_target >= s_soc.soc) ||
 		(s_soc.rest_ticks < rest_limit_ticks))
 	{
+		if (s_soc.deferred_ocv_valid && (s_soc.deferred_ocv_target >= s_soc.soc))
+		{
+			soc_clear_deferred_ocv();
+			soc_watch_set_block_reason(SOC_WATCH_BLOCK_DIRECTION);
+		}
 		s_soc.long_rest_down_ticks = 0U;
+		return 0U;
+	}
+	if (soc_ocv_target_in_deadband(s_soc.deferred_ocv_target))
+	{
+		soc_clear_deferred_ocv();
+		soc_watch_set_block_reason(SOC_WATCH_BLOCK_OCV_DEADBAND);
 		return 0U;
 	}
 	if (s_soc.long_rest_down_ticks < long_step_ticks)
@@ -1761,7 +1820,10 @@ UINT8 SOC_ApplyDeepSleepRtcCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	{
 		soc_watch_set_block_reason(SOC_WATCH_BLOCK_CELL_DELTA);
 	}
-	else if (soc_apply_rest_ocv(rest_seconds, SOC_MODE_RELAX))
+	else if (soc_apply_rest_ocv_ex(rest_seconds,
+								   SOC_MODE_RELAX,
+								   1U,
+								   SOC_DEEP_SLEEP_RTC_OCV_STEP))
 	{
 		changed = 1U;
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE

@@ -61,6 +61,8 @@ Recommended:
 ## Acceptance Rules
 
 - Runtime automatic SOC calibration must move internal SOC by at most `1%` per decision.
+- Rest/RTC/sleep OCV calibration must never raise SOC. Ignore or clear any OCV target that is greater than or equal to the current SOC.
+- Ordinary rest/RTC OCV calibration must ignore targets within `3%` of the current SOC. Deep-sleep RTC may bypass this `3%` deadband, but it still must only calibrate downward by at most `1%` per decision.
 - Charge should not publish unconfirmed `100%`; it should wait for full-voltage anchor.
 - Heavy discharge sag must not falsely force empty while voltage is above the configured tail region.
 - Near controller cutoff, SOC must converge to `0%` before or at protection.

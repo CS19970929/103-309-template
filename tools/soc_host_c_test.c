@@ -427,6 +427,25 @@ static void test_short_rest_ocv_defers_until_active_discharge(void)
 	CHECK_TRUE(host_internal_soc() < before_discharge);
 }
 
+static void test_small_rest_ocv_gap_is_ignored(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(72U);
+	UINT32 self_delta_as10 = host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		HOST_SHORT_REST_STEP_SECONDS);
+	UINT16 expected_soc = host_soc_from_cap(start_cap_as10 - self_delta_as10);
+
+	host_reset_state();
+	host_set_snapshot(72U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds(HOST_SHORT_REST_STEP_SECONDS, 3835U, 3835U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), expected_soc);
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	CHECK_EQ_U32(g_dbg_soc_watch->u8DeferredOcvValid, 0U);
+	CHECK_EQ_U32(g_dbg_soc_watch->u8LastBlockReason, SOC_WATCH_BLOCK_OCV_DEADBAND);
+#endif
+}
+
 static void test_rtc_ocv_ignores_upward_stable_target(void)
 {
 	UINT32 seconds;
@@ -496,6 +515,25 @@ static void test_deep_sleep_rtc_ocv_waits_for_configured_time(void)
 
 	(void)SOC_ApplyDeepSleepRtcCompensation(long_seconds, 3835U, 3835U);
 	CHECK_EQ_U32(host_internal_soc(), expected_deep_soc);
+}
+
+static void test_deep_sleep_rtc_small_gap_steps_once(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(72U);
+	UINT32 long_seconds = HOST_RTC_CALIBRATION_MIN_SECONDS + 60U;
+	UINT32 long_delta_as10 = host_self_delta_as10(
+		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
+		long_seconds);
+	UINT16 expected_self_soc = host_soc_from_cap(start_cap_as10 - long_delta_as10);
+	UINT16 expected_deep_soc = (expected_self_soc > 70U) ?
+		(UINT16)(expected_self_soc - 1U) : expected_self_soc;
+
+	host_reset_state();
+	host_set_snapshot(72U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	(void)SOC_ApplyDeepSleepRtcCompensation(long_seconds, 3835U, 3835U);
+	CHECK_EQ_U32(host_internal_soc(), expected_deep_soc);
+	CHECK_TRUE(host_internal_soc() >= 70U);
 }
 
 static void test_unstable_long_rest_waits_for_voltage_convergence(void)
@@ -596,9 +634,11 @@ int main(void)
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_ignores_upward_target_during_charge();
 	test_short_rest_ocv_defers_until_active_discharge();
+	test_small_rest_ocv_gap_is_ignored();
 	test_rtc_ocv_ignores_upward_stable_target();
 	test_rtc_ocv_waits_for_voltage_convergence();
 	test_deep_sleep_rtc_ocv_waits_for_configured_time();
+	test_deep_sleep_rtc_small_gap_steps_once();
 	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();
 	test_rebound_flag_clears_when_holdoff_expires();
@@ -610,6 +650,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 20\n");
+	printf("SOC host C tests passed: 22\n");
 	return 0;
 }

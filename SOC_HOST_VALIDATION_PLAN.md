@@ -41,11 +41,11 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
   "103 + 309/Project/Source/SocEnhance.c"
 ```
 
-`tools/run_soc_host_c_test.py` 当前每档覆盖 `20` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、充/放电阶段消化 OCV 差值、RTC 稳定窗口、深睡 RTC 累计门槛、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照，以及板端自耗补偿等边界。脚本会覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置。
+`tools/run_soc_host_c_test.py` 当前每档覆盖 `22` 个真实 C 源码场景：启动 OCV、放电积分、Type-C 输出侧电流换算为电池侧等效电流后抵消、满电确认、低压到 0、稳定静置 deferred target、普通静置 OCV 小误差死区、放电阶段消化 OCV 差值、RTC 稳定窗口、深睡 RTC 累计门槛、深睡 RTC 小误差仍单步下修、久置低 OCV 慢速下修、静置超过 30min 但电压不稳定时不校准、重载回弹标志清除、显示覆盖不污染内部 SOC、设置一次 SOC 保存快照，以及板端自耗补偿等边界。脚本会覆盖当前配置、debug watch 版以及 0mA/30mA/1000mA 板端自耗配置。
 
 `tools/soc_visual_report.py` 会编译 `tools/soc_host_visual_trace.c`，并把真实 `SOC.c` + `SocEnhance.c` 在城市骑行、爬坡、快变电流、低压截止、充电锚点五个场景中的运行轨迹输出成 `build/host_tests/soc_visual_trace.csv` 和 `build/host_tests/soc_visual_report.html`。这份报告用于人工直观看 SOC 曲线、显示曲线、电压和电流趋势，不替代 `tools/run_soc_host_c_test.py` 的断言门禁。
 
-`tools/soc_replay_test.py` 当前覆盖 `47` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
+`tools/soc_replay_test.py` 当前覆盖 `49` 个场景。该脚本用 Python 镜像 `SocEnhance.c` 的核心决策，适合快速跑完所有 SOC 软件等价类。
 
 ## 3. 覆盖矩阵
 
@@ -56,12 +56,12 @@ clang -fsyntax-only -std=c99 -Wall -Wextra \
 | 启动恢复 | 无快照默认 60%、无快照有效电压按 OCV、V2 快照恢复 SOC/容量/循环/SOH、重载回弹标志恢复 |
 | 安时积分 | 200ms/5Hz 积分、充电/放电方向、脉冲电流平均能量、容量边界、循环小数累计 |
 | SOH | 循环到 SOH 映射、80% 下限、SOH 变化后有效容量约束 |
-| OCV 表 | 表项精确命中、全电压范围单调性、与 C 源码表格一致性、静置/RTC deferred target、方向约束 |
+| OCV 表 | 表项精确命中、全电压范围单调性、与 C 源码表格一致性、静置/RTC deferred target、方向约束、普通 OCV 小误差死区、深睡 RTC 小误差例外单步 |
 | 满电 | 快速/普通确认、V100 参数影响、计数器递减而非清零、满电前不直接显示 100 |
 | 中低压弱约束 | `3500mV~3700mV` 全表目标/周期、重载禁用、压差门控、条件中断计数清零 |
 | 低压表 | `3400mV~2950mV` 全表目标/周期、四个电流档位、只下修不上拉、末端快速到 0 |
 | 大电流回弹 | `Idsg > C/2` sag holdoff、真实末端放行、跨重启 5min rebound holdoff、归零即清标志 |
-| 稳定静置 | 稳定至少 5min 且 10min/step 节拍到达后记录 OCV target，短静置不立即改 SOC；方向匹配的充/放电阶段再消化差值 |
+| 稳定静置 | 稳定至少 5min 且 10min/step 节拍到达后只记录低于当前 SOC 且误差 `>3%` 的 OCV target；短静置不立即改 SOC；后续仅放电阶段再消化差值 |
 | 长时间不用车 | 稳定电压长时间 RELAX 且 OCV target 低于内部 SOC 时，按 30min/1% 慢速下修；当前默认首次约 40min 下修 1%，如果电压超过 30min 仍不稳定，也不会到点强校准 |
 | 显示 | 内部 SOC 与显示 SOC 分离，普通 5s/1%，低压 1s/1%，Fixed/Zero 不破坏内部 SOC |
 | 异常输入 | 0mV、反向电压、超上限、压差过大等坏样本不触发电压校准 |
