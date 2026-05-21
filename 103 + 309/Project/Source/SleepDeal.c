@@ -6,7 +6,7 @@ static UINT8 s_u8BootFromSleepStartup = 0U;
 static UINT8 s_u8BootFromSleepChargerWakeup = 0U;
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 
-#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)300) // PC13����3��պϲ���Ϊ��Ч
+#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
 
 static UINT8 IsChargerWakeupActive(void)
 {

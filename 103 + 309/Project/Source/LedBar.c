@@ -7,7 +7,7 @@
 #define LEDBAR_MCU_WK_OFF_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS
 #define LEDBAR_CHARGE_ON_FILTER_100MS PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS
 #define LEDBAR_CHARGE_OFF_FILTER_100MS PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS
-#define LEDBAR_KEY_LONG_PRESS_10MS 300u
+#define LEDBAR_KEY_LONG_PRESS_10MS 50u
 
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
@@ -22,6 +22,8 @@
 #define LEDBAR_DIGIT_BIT_E (1u << 4)
 #define LEDBAR_DIGIT_BIT_F (1u << 5)
 #define LEDBAR_DIGIT_BIT_G (1u << 6)
+
+bool key_release_wakeup = false;
 
 typedef enum
 {
@@ -793,7 +795,11 @@ static void LedBar_ServiceSwitch(void)
     }
     s_ledbar_key_last_pressed = pressed;
 
-    if (pressed != 0u)
+    if (pressed == 0u )
+    {
+        key_release_wakeup = true;
+    }
+    if (pressed != 0u && key_release_wakeup)
     {
         s_ledbar_key_hold_10ms = now_10ms - s_ledbar_key_press_start_10ms;
 
