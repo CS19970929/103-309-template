@@ -19,8 +19,8 @@
 - `InitCan_CAN1()` 初始化后关闭 `CAN_IT_FMP0` 中断。
 - `App_Can()` 每 10ms 调用一次时，先确保 CAN 处于 Normal 模式，再轮询接收 FIFO。
 - 收到外部请求帧后，根据低 7 位请求 ID 映射到 `CanTxType_Flag` 对应应答标志。
-- `Can_TransmitDeal()` 每次处理一个待发应答，按 `0x00 -> 0x11 -> Test` 顺序发送。
-- 只有发送确认成功后才清除待发标志；无邮箱、无 ACK 或发送失败时保留标志，后续 10ms 周期继续重试。
+- `Can_TransmitDeal()` 每次处理一个待发应答，按轮询游标在 `0x00~0x11` 之间调度。
+- 只有发送确认成功后才清除待发标志；无邮箱、无 ACK 或发送失败时保留标志，但调度游标会继续前移，避免某个失败 ID 卡住后续应答。
 - 1s 到点时独立发送 `CAN_TX_0x02()` 主动广播，并用发送结果更新 `sys_time.can_enable`。
 
 这样外部请求不需要卡在广播后的短时间窗口内，只要系统处于普通运行状态，主循环轮询就可以接收和应答。
@@ -43,7 +43,7 @@
 2. `Can_PollReceive()` 通过 `Can_DrainRxFifo()` 最多连续读取 8 帧。
 3. `Can_ReceiveDeal()` 校验地址高位是否等于 `CAN_ADRESS_STD_ID`。
 4. 请求 ID `0x00~0x11` 被转换为 `CanTxType_Flag` 位。
-5. `Can_TransmitDeal()` 取出最小 ID 的待发标志并调用对应 `CAN_TX_0xXX()`。
+5. `Can_TransmitDeal()` 取出当前轮询游标命中的待发标志并调用对应 `CAN_TX_0xXX()`。
 6. `CAN_Tx_Data()` 等待硬件发送状态，成功后 `s_bLastCanTxOk = TRUE`。
 7. `Can_TransmitDeal()` 仅在成功时清除该应答标志。
 

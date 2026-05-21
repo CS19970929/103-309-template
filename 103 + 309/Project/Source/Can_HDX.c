@@ -13,6 +13,7 @@ CanRxMsg RxMessage;
 
 static BOOL s_bCanLowPower = FALSE;
 static BOOL s_bLastCanTxOk = FALSE;
+static UINT16 s_u16CanTxSearchId = CANID_CHECK_0x00;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -894,15 +895,22 @@ static BOOL Can_PollReceive(void)
 
 static UINT32 Can_GetNextTxFlag(void)
 {
-	UINT16 request_id;
+	UINT16 search_count;
+	UINT16 request_id = s_u16CanTxSearchId;
 
-	for (request_id = CANID_CHECK_0x00; request_id <= CANID_CHECK_0x11; request_id++)
+	for (search_count = 0; search_count <= CANID_CHECK_0x11; search_count++)
 	{
 		UINT32 tx_flag = CAN_TX_FLAG_BY_ID(request_id);
 
 		if ((CanTxType_Flag.all & tx_flag) != 0u)
 		{
 			return tx_flag;
+		}
+
+		request_id++;
+		if (request_id > CANID_CHECK_0x11)
+		{
+			request_id = CANID_CHECK_0x00;
 		}
 	}
 
@@ -912,6 +920,24 @@ static UINT32 Can_GetNextTxFlag(void)
 	}
 
 	return 0u;
+}
+
+static void Can_AdvanceTxSearchId(UINT32 tx_flag)
+{
+	UINT16 request_id;
+
+	for (request_id = CANID_CHECK_0x00; request_id <= CANID_CHECK_0x11; request_id++)
+	{
+		if (tx_flag == CAN_TX_FLAG_BY_ID(request_id))
+		{
+			s_u16CanTxSearchId = request_id + 1u;
+			if (s_u16CanTxSearchId > CANID_CHECK_0x11)
+			{
+				s_u16CanTxSearchId = CANID_CHECK_0x00;
+			}
+			return;
+		}
+	}
 }
 
 static void Can_ClearTxFlag(UINT32 tx_flag)
@@ -998,6 +1024,7 @@ static BOOL Can_TransmitDeal(void)
 
 	RTC_ExtComCnt++;
 	Can_SendByTxFlag(tx_flag);
+	Can_AdvanceTxSearchId(tx_flag);
 
 	if (s_bLastCanTxOk)
 	{
