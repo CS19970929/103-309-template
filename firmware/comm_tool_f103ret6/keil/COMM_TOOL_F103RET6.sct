@@ -1,0 +1,15 @@
+; Comm Tool STM32F103RET6 scatter file.
+; Program image is limited to the first 128 KB.
+; 0x08020000 and above is reserved for BMS firmware cache and metadata.
+
+LR_IROM1 0x08000000 0x00020000  {
+  ER_IROM1 0x08000000 0x00020000  {
+   *.o (RESET, +First)
+   *(InRoot$$Sections)
+   .ANY (+RO)
+   .ANY (+XO)
+  }
+  RW_IRAM1 0x20000000 0x00010000  {
+   .ANY (+RW +ZI)
+  }
+}
