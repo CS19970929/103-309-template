@@ -157,8 +157,18 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 		System_ERROR_UserCallback(ERROR_REMOVE_SPI);
 	}
 
-	SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
-	SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
+	{
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UV);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OCC);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTC);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UTC);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_OTD);
+		SH_AFE_ClearProtectFlag(AFE_FLAG_UTD);
+	}
 
 	return result;
 }

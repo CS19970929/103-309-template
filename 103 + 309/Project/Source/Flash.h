@@ -9,8 +9,6 @@
 #define FLASH_ADDR_IAP_START 			0x08000000
 #define FLASH_ADDR_APP_START 			0x08004800			//256-18-2-2=234K������ط�����һ�����⣬�޸ĺ����6K�����淴ӳ���������Zi-dataҲ��flash�Ķ���
 
-#define FLASH_ADDR_SH367309_VALUE 		0x0801F000			//���ߴ���ؼ�����(����ƫ��ֵ)��1K
-#define FLASH_ADDR_SH367309_FLAG 		0x0801F400			//�����Ƿ�����־λ��1K
 #define FLASH_ADDR_UPDATE_FLAG 			0x0801F800			//IAP=18K
 #define FLASH_ADDR_SLEEP_FLAG           0x0801FC00			//���߹ؼ�ָ�2K
 

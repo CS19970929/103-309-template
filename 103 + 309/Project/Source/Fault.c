@@ -1937,8 +1937,6 @@ void App_WarnCtrl(void)
 	App_CellChgOtp_ThirdCheck();
 	App_CellChgUtp_SecondCheck();
 	App_CellChgUtp_ThirdCheck();
-
-	SH_AFE_GetProtectStatus();
 }
 
 // 记录是按顺序记录下去，上传则是最新的在顶部

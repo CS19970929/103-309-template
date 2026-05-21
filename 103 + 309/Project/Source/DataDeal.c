@@ -309,56 +309,6 @@ void DataLoad_TemperatureMaxMinFind(void)
 	g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp; // min temp
 }
 
-void DataLoad_CurrentCali(void)
-{
-	static UINT8 su8_StartUpFlag = 4;
-
-	// todo 预留上位机校准接口，以防万一
-	// if (sci_cali_falg)
-	// 	DataLoad_CurrentCali_startup();
-
-	if (OffsetValue_CHG)
-	{
-		su8_StartUpFlag = 4;
-	}
-	else
-	{
-		su8_StartUpFlag = 5;
-	}
-
-	switch (su8_StartUpFlag)
-	{
-	// 充电偏置
-	case 4:
-		if (u32_ChgCur_mA > OffsetValue_CHG)
-		{
-			u32_ChgCur_mA = u32_ChgCur_mA - OffsetValue_CHG;
-		}
-		else
-		{
-			// u32_ChgCur_mA = 0;	//不能先置0啊，不然错了
-			u32_DsgCur_mA = u32_DsgCur_mA + OffsetValue_CHG - u32_ChgCur_mA;
-			u32_ChgCur_mA = 0;
-		}
-		break;
-	case 5:
-
-		if (u32_DsgCur_mA > OffsetValue_DSG)
-		{
-			u32_DsgCur_mA = u32_DsgCur_mA - OffsetValue_DSG;
-		}
-		else
-		{
-			// u32_DsgCur_mA = 0;
-			u32_ChgCur_mA = u32_ChgCur_mA + OffsetValue_DSG - u32_DsgCur_mA;
-			u32_DsgCur_mA = 0;
-		}
-		break;
-	default:
-		break;
-	}
-}
-
 extern uint16_t time_chg;
 extern uint16_t time_dsg;
 extern uint16_t time_real;
@@ -721,9 +671,9 @@ static UINT8 AFE_ClearLoadRemoveProtectFlags(UINT16 clear_flags)
 	{
 		result = (SH_AFE_ClearProtectFlag(AFE_FLAG_SC) && result) ? 1u : 0u;
 	}
-	// SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
-	// SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
-	// SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
+	SH_AFE_ClearProtectFlag(AFE_FLAG_OCD1);
+	SH_AFE_ClearProtectFlag(AFE_FLAG_OCD2);
+	SH_AFE_ClearProtectFlag(AFE_FLAG_SC);
 	return result;
 }
 
@@ -926,11 +876,10 @@ void App_AFEGet(void)
 		fault_report(&utd1_flag, is_AFE_UTD, CellDsgUTp_Third);
 		fault_report(&occ1_flag, is_AFE_OCC, IchgOcp_Third);
 		fault_report(&ocd1_flag, is_AFE_ODC, IdischgOcp_Third);
-		return;
 	}
 
 	SH_AFE_GetProtectStatus();
 
 	App_MOS_Relay_Ctrl();
-	test_read_afe_param();
+	// test_read_afe_param();
 }

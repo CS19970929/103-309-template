@@ -387,7 +387,6 @@ void Drivers_External_Ctrl(void)
 	}
 
 #endif
-	
 }
 // void Drivers_External_Ctrl(void)
 // {

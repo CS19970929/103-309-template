@@ -943,8 +943,6 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	// sh36735_read_regs(0x40, (uint8_t *)Registers_AFE1.sonf1, (0x99 - 0x40 + 1));
 	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
 	SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
-extern void SH_AFE_GetProtectStatus(void);
-	// SH_AFE_GetProtectStatus();
 
 	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo´úÂë·µ»Ø1ÎªOK£¬
