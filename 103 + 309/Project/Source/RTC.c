@@ -332,6 +332,7 @@ static void RTC_ClearAlarmPending(void)
 	RTC_ClearFlag(RTC_FLAG_ALR);
 	RTC_WaitForLastTaskSafe();
 	EXTI_ClearITPendingBit(EXTI_Line17);
+	NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
 }
 
 static void RTC_DisableSecondInterrupt(void)
@@ -351,10 +352,16 @@ static void RTC_DisableAlarmInterrupt(void)
 
 static void RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
 {
+	if (wake_seconds == 0U)
+	{
+		wake_seconds = 1U;
+	}
+	RTC_ClearAlarmPending();
 	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
 	RTC_WaitForLastTaskSafe();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE);
 	RTC_WaitForLastTaskSafe();
+	NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
 }
 
 void RTC_TimeConfig(void)
@@ -470,6 +477,7 @@ void RTC_RestoreRunInterrupts(void)
 	RTC_DisableAlarmInterrupt();
 	RTC_ClearITPendingBit(RTC_IT_SEC);
 	RTC_WaitForLastTaskSafe();
+	NVIC_ClearPendingIRQ(RTC_IRQn);
 	RTC_ITConfig(RTC_IT_SEC, ENABLE);
 	RTC_WaitForLastTaskSafe();
 }

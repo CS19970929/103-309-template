@@ -614,12 +614,7 @@ void Sys_StopMode(void)
 
 void InitRtcWakeupCheck(void)
 {
-    InitDelay();
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
-    InitSci();
-    initAFE1_IIC();
-    InitE2PROM_i2c();
+    InitRunAfterStopWakeup();
 }
 
 void InitRunAfterStopWakeup(void)
@@ -649,8 +644,9 @@ void InitRunAfterStopWakeup(void)
     InitCan();
     InitTimer();
 
-    sys_time.wakeup_rtc = true;
-    InitWakeUp_Base();
+    sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;
+    /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
+       run mode can leave stale pending bits for the next low-power cycle. */
 
     initAFE1_IIC();
     InitE2PROM_i2c();

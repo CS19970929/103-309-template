@@ -807,14 +807,7 @@ static void rtc_sleep_disable_stop_wakeup(void)
 
 static void rtc_sleep_restore_after_stop(void)
 {
-    if (is_rtc_wakekup)
-    {
-        InitRtcWakeupCheck();
-    }
-    else
-    {
-        InitRunAfterStopWakeup();
-    }
+    InitRunAfterStopWakeup();
 }
 
 static void rtc_sleep_restore_for_run(void)
@@ -822,7 +815,6 @@ static void rtc_sleep_restore_for_run(void)
     if (is_rtc_wakekup)
     {
         is_rtc_wakekup = false;
-        InitRunAfterStopWakeup();
     }
 }
 

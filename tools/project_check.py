@@ -22,6 +22,7 @@ PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_C
 PROJECT_CONFIG_ENCODING = "gbk"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
+CONF_C = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.c"
 RELEASE_MAP = ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
@@ -32,6 +33,7 @@ SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
 SCI_UPPER_H = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.h"
 SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
 SLEEPDEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.h"
+RTC_C = ROOT / "103 + 309" / "Project" / "Source" / "RTC.c"
 RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
@@ -48,6 +50,7 @@ FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\
 COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -796,6 +799,54 @@ def check_can_rtc_service_runtime(reporter):
         reporter.fail("CAN RTC wake service should expose ack/timeout status and avoid scheduling extra frames inside service window")
 
 
+def check_rtc_stop_sleep_contract(reporter):
+    required_files = [RTC_C, RTC_SLEEP_C, CONF_C, RTC_SLEEP_OPT_DOC]
+    if any(not path.exists() for path in required_files):
+        missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
+        reporter.fail("RTC low-power contract files missing: {0}".format(",".join(missing)))
+        return
+
+    rtc_c = read_text(RTC_C)
+    rtc_sleep_c = read_text(RTC_SLEEP_C)
+    conf_c = read_text(CONF_C)
+    doc = read_text(RTC_SLEEP_OPT_DOC)
+
+    if (
+        "void RTC_WKTimeConfig(void)" in rtc_c
+        and "RTC_DisableSecondInterrupt();" in rtc_c
+        and "RTC_DisableAlarmInterrupt();" in rtc_c
+        and "RTC_EnableAlarmAfterSeconds(wake_seconds);" in rtc_c
+        and "NVIC_ClearPendingIRQ(RTCAlarm_IRQn);" in rtc_c
+        and "NVIC_ClearPendingIRQ(RTC_IRQn);" in rtc_c
+    ):
+        reporter.ok("RTC STOP wakeup uses alarm-only path and clears RTC/EXTI/NVIC pending bits")
+    else:
+        reporter.fail("RTC STOP wakeup should disable SEC, arm ALR, and clear RTC/EXTI/NVIC pending bits")
+
+    if (
+        "static void rtc_sleep_restore_after_stop(void)" in rtc_sleep_c
+        and "InitRunAfterStopWakeup();" in rtc_sleep_c
+        and "void InitRtcWakeupCheck(void)" in conf_c
+        and "InitRunAfterStopWakeup();" in conf_c
+        and "sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;" in conf_c
+        and "InitWakeUp_Base();" not in conf_c[conf_c.find("void InitRunAfterStopWakeup"):conf_c.find("void Init(void)")]
+    ):
+        reporter.ok("STOP wakeup recovery is unified through InitRunAfterStopWakeup")
+    else:
+        reporter.fail("STOP wakeup recovery should use one full InitRunAfterStopWakeup path")
+
+    if (
+        "RTC_IT_ALR" in doc
+        and "RTC_IT_SEC" in doc
+        and "EXTI17" in doc
+        and "InitRunAfterStopWakeup" in doc
+        and "过放" in doc
+    ):
+        reporter.ok("RTC sleep optimization document describes state machine and wakeup contract")
+    else:
+        reporter.fail("RTC sleep optimization document should cover ALR/SEC, EXTI17, recovery, and over-discharge priority")
+
+
 def check_runtime_docs(reporter):
     docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
     if any(not path.exists() for path in docs):
@@ -857,6 +908,7 @@ def main(argv):
     check_low_power_cleanup(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
+    check_rtc_stop_sleep_contract(reporter)
     check_runtime_docs(reporter)
 
     return reporter.summary()
