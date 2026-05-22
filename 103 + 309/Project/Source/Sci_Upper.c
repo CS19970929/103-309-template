@@ -439,6 +439,16 @@ static void Sci_CopyProductIdBytes(UINT8 dst[],
 	*length = byte_count;
 }
 
+static void Sci_PutBytes(UINT8 buff[], UINT16 *index, const UINT8 src[], UINT16 count)
+{
+	UINT16 i;
+
+	for (i = 0; i < count; ++i)
+	{
+		buff[(*index)++] = src[i];
+	}
+}
+
 static void Sci_ResetCalibCoefIndex(UINT8 runtime_index, UINT8 store_index)
 {
 	g_u16CalibCoefK[runtime_index] = SYSKDEFAULT;
@@ -729,18 +739,9 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		break;
 
 	case 2: // 序列号，硬件版本号，软件版本号
-		for (j = 0; j < PRODUCT_ID_LENGTH_MAX; j++)
-		{
-			t_u8BuffTemp[i++] = ProductionInfor.BMS_SerialNumber[j];
-		}
-		for (j = 0; j < PRODUCT_ID_LENGTH_MAX; j++)
-		{
-			t_u8BuffTemp[i++] = ProductionInfor.BMS_HardWareVersion[j];
-		}
-		for (j = 0; j < PRODUCT_ID_LENGTH_MAX; j++)
-		{
-			t_u8BuffTemp[i++] = ProductionInfor.BMS_SoftWareVersion[j];
-		}
+		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
+		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
+		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
 		break;
 
 	case 8:
@@ -808,27 +809,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = (UINT16)(System_OnOFF_Func.all >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 3U);
-
-	u16SciTemp = 0; // 可以加多一个
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = 0; // 可以加多一个
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = 0; // 可以加多一个
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = 0; // 可以加多一个
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = 0; // 可以加多一个
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 8U);
 
 	// 0xD200_2: last Cortex fault reason and inverse snapshot.
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);

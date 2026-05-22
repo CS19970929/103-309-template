@@ -62,12 +62,13 @@ void InitIO_rtc(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
+                               RCC_APB2Periph_GPIOA |
+                               RCC_APB2Periph_GPIOB |
+                               RCC_APB2Periph_GPIOC |
+                               RCC_APB2Periph_GPIOD |
+                               RCC_APB2Periph_GPIOE,
+                           ENABLE);
 
     GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
@@ -158,12 +159,13 @@ void InitIO(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
+                               RCC_APB2Periph_GPIOA |
+                               RCC_APB2Periph_GPIOB |
+                               RCC_APB2Periph_GPIOC |
+                               RCC_APB2Periph_GPIOD |
+                               RCC_APB2Periph_GPIOE,
+                           ENABLE);
 
     {
         // GPIO_InitStructure.GPIO_Pin = PIN_AFE1_ALM | PIN_AFE1_MODE | PIN_AFE1_SHIP;

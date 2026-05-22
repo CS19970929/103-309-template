@@ -209,3 +209,53 @@ Project check summary:
 Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
+
+## 第四轮优化记录
+
+继续从 `FD_Release.map` 中选择低风险重复代码，避免触碰 AFE 采样、故障判定、SOC 估算等功能路径。
+
+修改内容：
+- `Sci_ACK_0x03_ReadRegs_LCD()` 中 SN、硬件版本、软件版本的 3 段固定长度拷贝收敛为 `Sci_PutBytes()`，输出顺序和每段 32 字节长度保持不变。
+- `Sci_ACK_0x03_ReadRegs_Data()` 中连续 8 个保留 word 统一使用 `Sci_PutZeroWordsBE()` 写入，仍然输出 16 个 0 字节，占位数量不变。
+- `InitIO()` 和 `InitIO_rtc()` 将 AFIO/GPIOA-GPIOE 的 APB2 时钟使能合并为一次位掩码调用。StdPeriph `RCC_APB2PeriphClockCmd()` 支持外设位掩码，初始化结果与逐个使能一致。
+
+第四轮构建结果：
+```text
+Program Size: Code=51456 RO-data=2768 RW-data=808 ZI-data=5256
+Total RO  Size: 54224
+Total RW  Size: 6064
+Total ROM Size: 54468
+FD_Release.bin: 54468 bytes
+```
+
+相对第三轮结果：
+- Code 继续减少 260 字节。
+- Total ROM 继续减少 260 字节。
+- RAM 仍为 6064 字节。
+
+关键函数尺寸：
+```text
+Sci_ACK_0x03_ReadRegs_Data: 546 -> 406 bytes
+Sci_ACK_0x03_ReadRegs_LCD: 200 -> 152 bytes
+Sci_PutBytes: 28 bytes
+InitIO: 456 bytes
+InitIO_rtc: 422 bytes
+```
+
+累计相对本次优化前基线：
+```text
+Code:      53676 -> 51456, -2220 bytes
+Total ROM: 56664 -> 54468, -2196 bytes
+RAM:       6064  -> 6064, unchanged
+```
+
+第四轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```
