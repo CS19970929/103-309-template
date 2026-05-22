@@ -48,7 +48,7 @@
 #define E2P_PARA_NUM_COPPERLOSS_NUM 		CompensateNUM
 #define E2P_PARA_NUM_FAULT_RECORD 		 	(3*Record_len+ 3 +Record_len*6)//Ϊʲôdefine�����������ʱҪ�������أ���Ϊ����������������define�����ȼ��߾ͻ����
 #define E2P_PARA_NUM_OTHER_ELEMENT1 		32				//�����ӣ��ٴ����ӱ�ע������������
-#define E2P_PARA_NUM_HEAT_COOL				24
+#define E2P_PARA_NUM_RESERVED_RW_PARAM		24
 
 
 //�ṹ�����ͱ��������
@@ -90,7 +90,7 @@
 									 	 724,726,728,730,\
 									 	 732,734,736,738}
 
-#define E2P_ADDR_E2POS_HEAT_COOL 		{740,742,744,746,748,750,752,754,756,758,760,762,764,\
+#define E2P_ADDR_E2POS_RESERVED_RW_PARAM {740,742,744,746,748,750,752,754,756,758,760,762,764,\
 										 766,768,770,772,774,776,778,780,782,784,788}
 #if 0
 #define E2P_ADDR_E2POS_ENHANCE_SOC 		{790,792,794,796,798,800,802,804,\

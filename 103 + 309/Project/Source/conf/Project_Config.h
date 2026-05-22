@@ -81,10 +81,6 @@
 // <i> 使能 RTC。用于低功耗计时、休眠唤醒和 SOC 休眠修正。
 #define PROJECT_CFG_RTC_ENABLE 1
 
-// <q> 使能加热功能
-// <i> 使能加热功能。仅硬件具备加热回路时开启。
-#define PROJECT_CFG_HEAT_ENABLE 0
-
 // <q> 使能负载移除短路恢复
 // <i> 使能负载移除短路恢复逻辑。按产品保护策略决定。
 #define PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE 0

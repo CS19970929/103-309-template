@@ -16,8 +16,8 @@ extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
 #if FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT != E2P_PARA_NUM_OTHER_ELEMENT1
 #error "RW parameter other word count mismatch"
 #endif
-#if FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT != E2P_PARA_NUM_HEAT_COOL
-#error "RW parameter heat/cool word count mismatch"
+#if FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT != E2P_PARA_NUM_RESERVED_RW_PARAM
+#error "RW parameter reserved word count mismatch"
 #endif
 
 static void EEPROM_UpdateOtherElementRuntime(void)
@@ -64,17 +64,6 @@ static void EEPROM_LoadDefaultOtherElement(void)
 	EEPROM_UpdateOtherElementRuntime();
 }
 
-static void EEPROM_LoadDefaultHeatCool(void)
-{
-	UINT8 i;
-	const struct HEAT_COOL_ELEMENT heatcool_default = HeatCoolElement_Default;
-
-	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-	{
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&heatcool_default.u16Heat_OpenTemp + i);
-	}
-}
-
 static void EEPROM_LoadDefaultSocTable(void)
 {
 #if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
@@ -110,9 +99,9 @@ static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		data->other[i] = *(&OtherElement.u16Balance_OpenVoltage + i);
 	}
-	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
+	for (i = 0; i < E2P_PARA_NUM_RESERVED_RW_PARAM; ++i)
 	{
-		data->heat_cool[i] = *(&Heat_Cool_Element.u16Heat_OpenTemp + i);
+		data->reserved[i] = 0xFFFFU;
 	}
 }
 
@@ -137,9 +126,6 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
 	const struct OTHER_ELEMENT other_min = OtherElement_min;
 	const struct OTHER_ELEMENT other_max = OtherElement_max;
-	const struct HEAT_COOL_ELEMENT heat_min = HeatCoolElement_Min;
-	const struct HEAT_COOL_ELEMENT heat_max = HeatCoolElement_Max;
-
 	if (!EEPROM_WordBlockInRange(data->protect,
 								 &protect_min.u16VcellOvp_First,
 								 &protect_max.u16VcellOvp_First,
@@ -154,14 +140,6 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		return 0;
 	}
-	if (!EEPROM_WordBlockInRange(data->heat_cool,
-								 &heat_min.u16Heat_OpenTemp,
-								 &heat_max.u16Heat_OpenTemp,
-								 E2P_PARA_NUM_HEAT_COOL))
-	{
-		return 0;
-	}
-
 	return 1;
 }
 
@@ -177,11 +155,6 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		*(&OtherElement.u16Balance_OpenVoltage + i) = data->other[i];
 	}
-	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-	{
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = data->heat_cool[i];
-	}
-
 	EEPROM_UpdateOtherElementRuntime();
 }
 
@@ -218,7 +191,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultProtect();
 	EEPROM_LoadDefaultCalib();
 	EEPROM_LoadDefaultOtherElement();
-	EEPROM_LoadDefaultHeatCool();
 	EEPROM_LoadDefaultSocTable();
 	EEPROM_LoadDefaultCopperLoss();
 

@@ -629,9 +629,6 @@ void InitRunAfterStopWakeup(void)
     ADC_StopForLowPower();
     InitADC();
 
-#ifdef __FUNC__HEAT__
-    InitHeat_Cool();
-#endif
 #ifdef __FUNC__LED__
     APP_LedBar();
     set_LED_state(LED_BAR_NORMAL, 4);

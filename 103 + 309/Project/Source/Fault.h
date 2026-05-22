@@ -247,15 +247,7 @@ struct PRT_E2ROM_PARAS {
 
 #define UTC_1           ((5 + 40) * 10)
 #define UTC_2           ((3 + 40) * 10)
-#ifdef __FUNC__HEAT__
-#if (AFE_TYPE == sh36xx)
-#define UTC_3           ((-20 + 40) * 10)
-#elif (AFE_TYPE == bq76xx_afe)
-#define UTC_3           ((-28 + 40) * 10)
-#endif
-#else
 #define UTC_3           ((0 + 40) * 10)
-#endif // DEBUG
 #define UTC_recover     ((3 + 40) * 10)
 #define UTC_filter1      100
 #define UTC_filter2      100

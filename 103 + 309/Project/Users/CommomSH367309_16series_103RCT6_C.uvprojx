@@ -424,11 +424,6 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>Heat_Cool.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Heat_Cool.c</FilePath>
-            </File>
-            <File>
               <FileName>I2C_AFE1.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
@@ -558,11 +553,6 @@
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IODrivers.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IODrivers.c</FilePath>
             </File>
             <File>
               <FileName>SocEnhance.c</FileName>
@@ -1351,11 +1341,6 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>Heat_Cool.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Heat_Cool.c</FilePath>
-            </File>
-            <File>
               <FileName>I2C_AFE1.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
@@ -1485,11 +1470,6 @@
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IODrivers.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IODrivers.c</FilePath>
             </File>
             <File>
               <FileName>SocEnhance.c</FileName>

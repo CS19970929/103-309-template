@@ -34,10 +34,6 @@ static void Runtime_RunBackgroundTasks(void)
 {
 	StorageFlash_AppUseTest_Task();
 
-#ifdef __FUNC__HEAT__
-	App_Heat_Cool_Ctrl();
-#endif
-
 	App_FlashUpdate();
 	App_LogRecord();
 	App_ProID_Deal();

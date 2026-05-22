@@ -54,10 +54,6 @@
 #define __FUNC_RTC__
 #endif
 
-#if PROJECT_CFG_HEAT_ENABLE
-#define __FUNC__HEAT__
-#endif
-
 #if PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE
 #define __LOAD_REMOVE_SHORT_FUNC__
 #endif
@@ -182,13 +178,8 @@
 #define   LEVEL_CURR     PROJECT_CFG_LEVEL_CURR
 #define   AFE_TYPE        PROJECT_CFG_AFE_TYPE
 
-#ifdef __FUNC__HEAT__
-#define CHG_LOWTEMP_PARAM   120
-#define HEAT_OPEN_CURR      50
-#else
 #define CHG_LOWTEMP_PARAM   380
 #define HEAT_OPEN_CURR      500
-#endif // DEBUG
 
 typedef enum GPIO_TYPE {
 	GPIO_PreCHG = 0,

@@ -153,7 +153,6 @@ void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s);
-void Sci_WrRegs_0x10_HeatCoolElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s);
@@ -162,7 +161,6 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s);
-void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s);
 void Sci_WrReg_0x06_SwitchON(struct RS485MSG *s);
 void Sci_WrReg_0x06_SwitchOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
@@ -314,10 +312,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_Reset_OtherCanAdd(s);
 		break;
 
-	case RS485_CMD_ADDR_RESET_HEAT_COOL:
-		Sci_WrReg_0x06_Reset_HeatCool(s);
-		break;
-
 	case RS485_CMD_ADDR_SWITCH_ON:
 		Sci_WrReg_0x06_SwitchON(s);
 		break;
@@ -432,7 +426,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	}
 	if (actual_addr >= RS485_ADDR_RW_OTHER_CANADD)
 	{
-		*word_count = (UINT16)(E2P_PARA_NUM_OTHER_ELEMENT1 + E2P_PARA_NUM_HEAT_COOL);
+		*word_count = E2P_PARA_NUM_OTHER_ELEMENT1;
 		return 1;
 	}
 	if (actual_addr >= RS485_ADDR_RW_OTHER)
@@ -588,13 +582,6 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 		return;
 	}
 
-	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_HEAT_DSG_HIGH) &&
-		(u16SciRegStartAddr < (UINT16)(RS485_CMD_ADDR_HEAT_DSG_HIGH + E2P_PARA_NUM_HEAT_COOL)))
-	{
-		Sci_WrRegs_0x10_HeatCoolElement(u16SciRegStartAddr, s);
-		return;
-	}
-
 	switch (u16SciRegStartAddr)
 	{
 	case RS485_CMD_ADDR_VC1CALIB_K:
@@ -693,10 +680,6 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	case RS485_CMD_ADDR_SYS_SERIES_NUM:
 		Sci_WrRegs_0x10_SystemElement(s);
-		break;
-
-	case RS485_CMD_ADDR_HEAT_DSG_HIGH:
-		Sci_WrRegs_0x10_HeatCoolElement(u16SciRegStartAddr, s);
 		break;
 
 	case RS485_ADDR_SN_SERIAL_NUM:
@@ -918,7 +901,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
-	u16SciTemp = Heat_Cool_FaultFlag.all; // 可以加多一个
+	u16SciTemp = 0;
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 
@@ -1066,7 +1049,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 32+24=56个
+{ // 32个
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
 
@@ -1077,12 +1060,6 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
 
-	for (j = 0; j < E2P_PARA_NUM_HEAT_COOL; j++)
-	{
-		u16SciTemp = *(&Heat_Cool_Element.u16Heat_OpenTemp + j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	}
 }
 
 void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
@@ -2001,45 +1978,6 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
 	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SYS_SERIES_NUM, s);
 }
 
-void Sci_WrRegs_0x10_HeatCoolElement(UINT16 u16Channel, struct RS485MSG *s)
-{
-	UINT16 offset;
-	UINT16 u16WrRegNum;
-	UINT16 snapshot[E2P_PARA_NUM_HEAT_COOL];
-	const struct HEAT_COOL_ELEMENT heat_min = HeatCoolElement_Min;
-	const struct HEAT_COOL_ELEMENT heat_max = HeatCoolElement_Max;
-	UINT16 *base = &Heat_Cool_Element.u16Heat_OpenTemp;
-
-	u16WrRegNum = Sci_GetWrRegNum(s);
-	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_HEAT_DSG_HIGH);
-	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
-		!Sci_RangeFits(offset, u16WrRegNum, E2P_PARA_NUM_HEAT_COOL))
-	{
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
-		return;
-	}
-
-	if (!Sci_WrValuesInRange(s,
-						   offset,
-						   u16WrRegNum,
-						   &heat_min.u16Heat_OpenTemp,
-						   &heat_max.u16Heat_OpenTemp))
-	{
-		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-		return;
-	}
-
-	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_HEAT_COOL);
-	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
-
-	if (!EEPROM_SaveRWParametersToFlash())
-	{
-		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_HEAT_COOL);
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
-		return;
-	}
-}
-
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
@@ -2272,37 +2210,6 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 			return;
 		}
 		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
-}
-
-void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s)
-{
-	UINT16 u16SciRegData;
-	UINT8 i;
-	UINT16 snapshot[E2P_PARA_NUM_HEAT_COOL];
-	UINT16 *base = &Heat_Cool_Element.u16Heat_OpenTemp;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Default = HeatCoolElement_Default;
-
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (0x0001 == u16SciRegData)
-	{
-		Sci_CopyWords(snapshot, base, E2P_PARA_NUM_HEAT_COOL);
-		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-		{
-			*(base + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
-		}
-
-		if (!EEPROM_SaveRWParametersToFlash())
-		{
-			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_HEAT_COOL);
-			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
-			return;
-		}
 	}
 	else
 	{

@@ -34,15 +34,7 @@
 #define AFE_OTC_recover     ((50 + 40) * 10)
 #define AFE_OTC_filter      100
 
-#ifdef __FUNC__HEAT__
-#if (AFE_TYPE == sh36xx)
-#define UTC_3           ((-20 + 40) * 10)
-#elif (AFE_TYPE == bq76xx_afe)
-#define UTC_3           ((-28 + 40) * 10)
-#endif
-#else
 #define AFE_UTC           ((-7 + 40) * 10)
-#endif // DEBUG
 #define AFE_UTC_recover     ((0 + 40) * 10)
 #define AFE_UTC_filter      100
 

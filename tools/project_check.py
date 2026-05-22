@@ -51,6 +51,7 @@ COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
+HEAT_COOL_REMOVE_DOC = ROOT / "HEAT_COOL_IODRIVERS_REMOVAL_2026-05-22.md"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -75,10 +76,16 @@ REMOVED_LEGACY_SOURCE_FILES = [
     ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.h",
     ROOT / "103 + 309" / "Project" / "Source" / "IO_Control.c",
     ROOT / "103 + 309" / "Project" / "Source" / "IO_Control.h",
+    ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.c",
+    ROOT / "103 + 309" / "Project" / "Source" / "Heat_Cool.h",
+    ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.c",
+    ROOT / "103 + 309" / "Project" / "Source" / "IODrivers.h",
 ]
 REMOVED_LEGACY_PROJECT_PATHS = {
     "../Source/ChargerLoadFunc.c",
     "../Source/IO_Control.c",
+    "../Source/Heat_Cool.c",
+    "../Source/IODrivers.c",
 }
 REMOVED_LEGACY_TOKENS = [
     "ChargerLoadFunc",
@@ -87,6 +94,14 @@ REMOVED_LEGACY_TOKENS = [
     "Init_ChargerLoad_Det",
     "App_ChargerLoad_Det",
     "App_DI1_Switch",
+    "Heat_Cool",
+    "HeatCool",
+    "Heat_Cool_Element",
+    "InitHeat_Cool",
+    "App_Heat_Cool_Ctrl",
+    "IODrivers",
+    "__FUNC__HEAT__",
+    "PROJECT_CFG_HEAT_ENABLE",
 ]
 RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_",
@@ -416,7 +431,7 @@ def check_removed_legacy_modules(reporter):
     if existing:
         reporter.fail("removed legacy modules should not exist: {0}".format("; ".join(existing)))
     else:
-        reporter.ok("removed legacy charger/load and IO modules are absent from source tree")
+        reporter.ok("removed legacy modules are absent from source tree")
 
     if PROJECT.exists():
         try:
@@ -458,6 +473,20 @@ def check_removed_legacy_modules(reporter):
         reporter.fail("source still references removed legacy modules: {0}".format("; ".join(stale_refs[:8])))
     else:
         reporter.ok("source has no removed legacy module references")
+
+    if HEAT_COOL_REMOVE_DOC.exists():
+        doc = read_text(HEAT_COOL_REMOVE_DOC)
+        if (
+            "0x2320 ~ 0x2337" in doc
+            and "reserved[24]" in doc
+            and "0x1004" in doc
+            and "project_check.py" in doc
+        ):
+            reporter.ok("Heat_Cool/IODrivers removal document covers protocol and Flash compatibility")
+        else:
+            reporter.fail("Heat_Cool/IODrivers removal document should cover protocol and Flash compatibility")
+    else:
+        reporter.fail("Heat_Cool/IODrivers removal document is missing")
 
 
 def check_release_defaults(reporter):

@@ -134,9 +134,6 @@ void InitDevice(void)
 	InitCan();
 	InitADC();
 
-#ifdef __FUNC__HEAT__
-	InitHeat_Cool();
-#endif
 	InitData_SOC();
 
 	InitTimer();

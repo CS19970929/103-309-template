@@ -22,7 +22,6 @@
 #include "I2C_AFE1.h"
 #include "Flash.h"
 #include "SleepDeal.h"
-#include "Heat_Cool.h"
 #include "ProductionID.h"
 #include "SH367309_Func.h"
 #include "SH367309_DataDeal.h"
