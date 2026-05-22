@@ -23,6 +23,7 @@ PC 不直接连接 BMS CAN。comm tool 负责串口协议解析、BMS CAN 读写
 | --- | --- | --- |
 | BMS IAP | `0x08000000` | Bootloader 起始地址 |
 | BMS App | `0x08004800` | 当前 `FD_Release` 链接地址 |
+| BMS App 写入上限 | `0x0801F800` | 预留升级标志页和睡眠标志页 |
 | BMS 升级标志 | `0x0801F800` | App 请求进入 IAP |
 | comm tool App | `0x08000000` | comm tool 自身程序 |
 | comm tool 固件缓存 | `0x08010000` 起 | F103RET6 后半段 Flash，用于缓存 BMS App bin |
@@ -65,4 +66,3 @@ PC 侧 dry-run：
 ```powershell
 .\tools\start_comm_tool_host.ps1 -Mode upgrade -Port COM4 -ConfirmUpgrade
 ```
-

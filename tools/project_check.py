@@ -60,6 +60,7 @@ COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.
 COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
 BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
+BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
@@ -1178,7 +1179,7 @@ def check_runtime_docs(reporter):
 
 
 def check_comm_tool_can_iap_contract(reporter):
-    docs = [COMM_TOOL_ARCH_DOC, COMM_TOOL_SERIAL_DOC, BMS_CAN_SERVICE_DOC, BMS_CAN_IAP_DOC]
+    docs = [COMM_TOOL_ARCH_DOC, COMM_TOOL_SERIAL_DOC, BMS_CAN_SERVICE_DOC, BMS_CAN_IAP_DOC, BMS_CAN_IAP_RELIABILITY_DOC]
     source_files = [
         COMM_TOOL_HOST,
         COMM_TOOL_HOST_START,
@@ -1199,6 +1200,7 @@ def check_comm_tool_can_iap_contract(reporter):
     serial_doc = read_text(COMM_TOOL_SERIAL_DOC)
     service_doc = read_text(BMS_CAN_SERVICE_DOC)
     iap_doc = read_text(BMS_CAN_IAP_DOC)
+    iap_reliability_doc = read_text(BMS_CAN_IAP_RELIABILITY_DOC)
     host_py = read_text(COMM_TOOL_HOST)
     start_ps1 = read_text(COMM_TOOL_HOST_START)
     config_h = read_text(COMM_TOOL_SOURCE / "ct_config.h")
@@ -1219,7 +1221,10 @@ def check_comm_tool_can_iap_contract(reporter):
         and "GET_STATUS" in service_doc
         and "ENTER_IAP" in service_doc
         and "0x14F8F000" in iap_doc
+        and "0x14000000" in iap_doc
         and "COMMIT" in iap_doc
+        and "0x0801F800" in iap_reliability_doc
+        and "VTOR" in iap_reliability_doc
     ):
         reporter.ok("comm tool architecture and protocol documents record UART/CAN/IAP rules")
     else:
@@ -1247,7 +1252,8 @@ def check_comm_tool_can_iap_contract(reporter):
         and "CtCan_IapSendCommit" in can_c
         and "CtCan_IapWaitAck" in can_c
         and "CtUpgrade_Start" in upgrade_c
-        and "CT_IAP_BLOCK_FRAMES" in upgrade_c
+        and "frames_this_block" in upgrade_c
+        and "frame_count = seq" in upgrade_c
         and "CT_CMD_FW_BEGIN" in app_c
         and "CT_CMD_UPGRADE" in app_c
     ):

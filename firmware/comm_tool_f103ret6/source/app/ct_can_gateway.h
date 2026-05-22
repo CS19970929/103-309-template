@@ -11,7 +11,7 @@
 
 #define CT_CAN_IAP_CTRL_BASE            0x14F8F000u
 #define CT_CAN_IAP_ACK_BASE             0x14F8F100u
-#define CT_CAN_IAP_DATA_BASE            0x14F90000u
+#define CT_CAN_IAP_DATA_BASE            0x14000000u
 
 #define CT_CAN_IAP_HELLO                0x01u
 #define CT_CAN_IAP_START                0x02u
@@ -31,4 +31,3 @@ int CtCan_IapSendEnd(uint8_t node, uint16_t frame_count, uint16_t crc16);
 int CtCan_IapWaitAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint32_t timeout_ms);
 
 #endif
-

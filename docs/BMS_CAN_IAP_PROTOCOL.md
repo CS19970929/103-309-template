@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | comm tool -> BMS IAP | `0x14F8F000 | node` | 控制帧 |
 | BMS IAP -> comm tool | `0x14F8F100 | node` | ACK/NACK |
-| comm tool -> BMS IAP | `0x14F90000 | (seq << 8) | node` | 数据帧 |
+| comm tool -> BMS IAP | `0x14000000 | (seq << 8) | node` | 数据帧 |
 
 默认 `node=1`，CAN 波特率第一阶段为 `250 kbit/s`。
 
@@ -48,4 +48,3 @@
 - 任意升级中断后，下次启动停留在 IAP。
 - 未通过 `END` 总校验时禁止跳 App。
 - 升级成功后再写 App 有效标志并跳转。
-

@@ -56,6 +56,7 @@ int CtUpgrade_Start(uint8_t node)
     uint16_t chunk_len;
     uint16_t block_crc;
     uint8_t i;
+    uint8_t frames_this_block;
 
     info = CtFlash_GetInfo();
     if ((info->valid == 0u) || (info->app_addr != CT_BMS_APP_BASE_ADDR) || (info->size == 0u))
@@ -99,7 +100,8 @@ int CtUpgrade_Start(uint8_t node)
             return 0;
         }
 
-        for (i = 0u; i < CT_IAP_BLOCK_FRAMES; ++i)
+        frames_this_block = (uint8_t)((chunk_len + 7u) / 8u);
+        for (i = 0u; i < frames_this_block; ++i)
         {
             memcpy(frame, &block[(uint16_t)i * 8u], 8u);
             if (!CtCan_IapSendData(node, seq, frame))
@@ -123,7 +125,7 @@ int CtUpgrade_Start(uint8_t node)
         block_seq++;
     }
 
-    frame_count = (uint16_t)((info->size + 7u) / 8u);
+    frame_count = seq;
     if (!CtCan_IapSendEnd(node, frame_count, info->crc16) ||
         !CtCan_IapWaitAck(node, CT_CAN_IAP_END, &s_status.expect_seq, 5000u))
     {
@@ -135,4 +137,3 @@ int CtUpgrade_Start(uint8_t node)
     s_status.state = CT_UPGRADE_DONE;
     return 1;
 }
-

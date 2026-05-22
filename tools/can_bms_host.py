@@ -20,7 +20,7 @@ FEIDAO_BROADCAST_BASE = 0x14F80200
 CAN_IAP_NODE_DEFAULT = 1
 CAN_IAP_HOST_CTRL_BASE = 0x14F8F000
 CAN_IAP_DEVICE_ACK_BASE = 0x14F8F100
-CAN_IAP_DATA_BASE = 0x14F90000
+CAN_IAP_DATA_BASE = 0x14000000
 CAN_IAP_PROTOCOL_VERSION = 1
 
 CAN_APP_CMD_ID = 0x60
@@ -32,6 +32,7 @@ CAN_APP_CMD_ENTER_IAP = 0x02
 
 CMD_HELLO = 0x01
 CMD_START = 0x02
+CMD_COMMIT = 0x03
 CMD_END = 0x04
 CMD_ABORT = 0x05
 CMD_ACK = 0x79
@@ -220,6 +221,33 @@ def iter_iap_data_frames(image: bytes, node_id: int) -> Iterable[tuple[int, byte
         yield iap_data_id(node_id, seq), chunk, seq
 
 
+def iter_iap_blocks(
+    image: bytes, node_id: int, block_size: int = 256
+) -> Iterable[tuple[list[tuple[int, bytes, int]], tuple[int, bytes, int]]]:
+    seq = 0
+    block_seq = 0
+    for offset in range(0, len(image), block_size):
+        block = image[offset : offset + block_size]
+        data_frames: list[tuple[int, bytes, int]] = []
+        for inner in range(math.ceil(len(block) / 8)):
+            chunk = block[inner * 8 : (inner + 1) * 8]
+            if len(chunk) < 8:
+                chunk = chunk + bytes([0xFF] * (8 - len(chunk)))
+            data_frames.append((iap_data_id(node_id, seq), chunk, seq))
+            seq += 1
+
+        block_crc = crc16_modbus(block)
+        commit_payload = (
+            bytes([CMD_COMMIT])
+            + block_seq.to_bytes(2, "big")
+            + len(block).to_bytes(2, "big")
+            + block_crc.to_bytes(2, "big")
+            + bytes([0xFF])
+        )
+        yield data_frames, (iap_ctrl_id(node_id), commit_payload, block_seq)
+        block_seq += 1
+
+
 def load_image(bin_path: Path, app_address: int) -> bytes:
     if app_address == IAP_BASE_ADDR:
         raise SystemExit("拒绝升级地址 0x08000000：该地址是 IAP/Bootloader 起始地址。")
@@ -393,11 +421,21 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
                 time.sleep(gap)
 
         sent = 0
-        for can_id, payload, seq in iter_iap_data_frames(image, args.node_id):
+        total_data_frames = math.ceil(len(image) / 8)
+        for data_frames, commit in iter_iap_blocks(image, args.node_id):
+            for can_id, payload, seq in data_frames:
+                bus.send(make_message(can_id, payload), timeout=args.timeout)
+                sent += 1
+                if sent % args.progress_every == 0:
+                    print(f"  data {sent}/{total_data_frames} seq={seq}")
+                if gap:
+                    time.sleep(gap)
+
+            can_id, payload, block_seq = commit
             bus.send(make_message(can_id, payload), timeout=args.timeout)
-            sent += 1
-            if sent % args.progress_every == 0:
-                print(f"  数据帧 {sent}/{math.ceil(len(image) / 8)} seq={seq}")
+            print(f"  COMMIT block={block_seq} data={format_bytes(payload)}")
+            if args.wait_ack:
+                wait_ack(bus, args.node_id, CMD_COMMIT, args.ack_timeout)
             if gap:
                 time.sleep(gap)
 
