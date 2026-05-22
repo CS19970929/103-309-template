@@ -669,6 +669,16 @@ UINT16 FlashReadOneHalfWord(UINT32 faddr)
 	return *(vu16 *)faddr;
 }
 
+UINT8 AppUpgrade_RequestIap(void)
+{
+	if (FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE) != FLASH_COMPLETE)
+	{
+		return 0U;
+	}
+
+	return (FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_IAP_VALUE) ? 1U : 0U;
+}
+
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
 	STORAGE_FLASH_SOC_DATA_V1 legacy_data;

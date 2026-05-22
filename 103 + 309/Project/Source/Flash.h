@@ -88,6 +88,7 @@ typedef struct
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
+UINT8 AppUpgrade_RequestIap(void);
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);

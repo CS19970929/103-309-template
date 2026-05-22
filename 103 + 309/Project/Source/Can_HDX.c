@@ -1021,7 +1021,7 @@ static void feidao_can_handle_app_cmd(const CanRxMsg *rx_msg)
 			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
 			break;
 		}
-		if (FLASH_COMPLETE != FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE))
+		if (AppUpgrade_RequestIap() == 0U)
 		{
 			status = FEIDAO_CAN_APP_ACK_FLASH_ERR;
 			break;

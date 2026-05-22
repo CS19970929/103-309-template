@@ -44,6 +44,8 @@ RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
+FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
+FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -61,6 +63,7 @@ COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
 BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
 BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
+BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
@@ -1265,12 +1268,46 @@ def check_comm_tool_can_iap_contract(reporter):
         "FEIDAO_CAN_APP_CMD_GET_STATUS" in bms_can_c
         and "FEIDAO_CAN_APP_CMD_ENTER_IAP" in bms_can_c
         and "FEIDAO_CAN_APP_RX_WINDOW_TICKS" in bms_can_c
-        and "FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE)" in bms_can_c
+        and "AppUpgrade_RequestIap() == 0U" in bms_can_c
         and "s_u8FeidaoCanEnterIapDelayTicks" in bms_can_c
     ):
         reporter.ok("BMS App exposes minimal CAN service for status and entering IAP")
     else:
         reporter.fail("BMS App should expose CAN GET_STATUS/ENTER_IAP and a bounded RX window")
+
+
+def check_serial_iap_refactor_contract(reporter):
+    required = [
+        BMS_SERIAL_IAP_REFACTOR_DOC,
+        FLASH_C,
+        FLASH_H,
+        SCI_UPPER_C,
+        CAN_HDX_C,
+    ]
+    if any(not path.exists() for path in required):
+        missing = [str(path.relative_to(ROOT)) for path in required if not path.exists()]
+        reporter.fail("serial IAP refactor files missing: {0}".format(",".join(missing)))
+        return
+
+    doc = read_text(BMS_SERIAL_IAP_REFACTOR_DOC)
+    flash_c = read_text(FLASH_C)
+    flash_h = read_text(FLASH_H)
+    sci_upper_c = read_text(SCI_UPPER_C)
+    can_hdx_c = read_text(CAN_HDX_C)
+
+    if (
+        "0xFFFD" in doc
+        and "0xFFFE" in doc
+        and "0xFFFF" in doc
+        and "0x0801F800" in doc
+        and "AppUpgrade_RequestIap" in flash_h
+        and "FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG)" in flash_c
+        and "AppUpgrade_RequestIap() == 0U" in sci_upper_c
+        and "AppUpgrade_RequestIap() == 0U" in can_hdx_c
+    ):
+        reporter.ok("serial IAP refactor keeps protocol entry and verifies App-to-IAP flag writes")
+    else:
+        reporter.fail("serial IAP refactor should document 0xFFFD/0xFFFE/0xFFFF and use AppUpgrade_RequestIap with readback")
 
 
 def main(argv):
@@ -1302,6 +1339,7 @@ def main(argv):
     check_app_architecture(reporter)
     check_runtime_docs(reporter)
     check_comm_tool_can_iap_contract(reporter)
+    check_serial_iap_refactor_contract(reporter)
 
     return reporter.summary()
 

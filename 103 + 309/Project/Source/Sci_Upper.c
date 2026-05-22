@@ -1872,7 +1872,7 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (u16WrRegNum == 1)
 	{
-		if (FLASH_COMPLETE != FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE))
+		if (AppUpgrade_RequestIap() == 0U)
 		{
 			// System_ERROR_UserCallback(ERROR_FLASH);
 			s->AckType = RS485_ACK_NEG;
