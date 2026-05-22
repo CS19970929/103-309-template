@@ -23,6 +23,10 @@ PROJECT_CONFIG_ENCODING = "gbk"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
 CONF_C = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.c"
+MAIN_C = ROOT / "103 + 309" / "Project" / "Source" / "main.c"
+MAIN_H = ROOT / "103 + 309" / "Project" / "Source" / "main.h"
+MOS_STARTUP_C = ROOT / "103 + 309" / "Project" / "Source" / "MosStartup.c"
+MOS_STARTUP_H = ROOT / "103 + 309" / "Project" / "Source" / "MosStartup.h"
 RELEASE_MAP = ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
@@ -51,6 +55,7 @@ COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
+APP_ARCH_REFACTOR_DOC = ROOT / "PROJECT_ARCH_REFACTOR_2026-05-22.md"
 HEAT_COOL_REMOVE_DOC = ROOT / "HEAT_COOL_IODRIVERS_REMOVAL_2026-05-22.md"
 UNUSED_SYMBOL_CLEANUP_DOC = ROOT / "UNUSED_SYMBOL_CLEANUP_2026-05-22.md"
 UTF8_TEXT_SUFFIXES = {
@@ -348,7 +353,7 @@ def parse_header_defines(header_path):
 
 
 def check_required_files(reporter):
-    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
+    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
         if path.exists():
             reporter.ok("required file exists: {0}".format(path.relative_to(ROOT)))
         else:
@@ -447,6 +452,11 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Release includes Project_BuildGuard.h")
 
+        if "../Source/MosStartup.c" not in release["files"]:
+            reporter.fail("FD_Release project tree does not include MosStartup.c")
+        else:
+            reporter.ok("FD_Release includes MosStartup.c")
+
     if debug is None:
         reporter.fail("Keil target FD_Debug is missing")
     else:
@@ -483,6 +493,11 @@ def check_keil_targets(reporter):
             reporter.fail("FD_Debug project tree does not include Project_BuildGuard.h")
         else:
             reporter.ok("FD_Debug includes Project_BuildGuard.h")
+
+        if "../Source/MosStartup.c" not in debug["files"]:
+            reporter.fail("FD_Debug project tree does not include MosStartup.c")
+        else:
+            reporter.ok("FD_Debug includes MosStartup.c")
 
     if release and debug:
         if release["output_name"] == debug["output_name"]:
@@ -957,6 +972,56 @@ def check_rtc_stop_sleep_contract(reporter):
         reporter.fail("RTC sleep optimization document should cover ALR/SEC, EXTI17, recovery, and over-discharge priority")
 
 
+def check_app_architecture(reporter):
+    required_files = [MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, CONF_C, APP_ARCH_REFACTOR_DOC]
+    if any(not path.exists() for path in required_files):
+        missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
+        reporter.fail("app architecture files missing: {0}".format(",".join(missing)))
+        return
+
+    main_c = read_text(MAIN_C)
+    main_h = read_text(MAIN_H)
+    mos_c = read_text(MOS_STARTUP_C)
+    mos_h = read_text(MOS_STARTUP_H)
+    conf_c = read_text(CONF_C)
+
+    if (
+        '#include "MosStartup.h"' in main_h
+        and "MosStartup_WriteMosState" in mos_c
+        and "void MosStartup_ApplyInitialState(void)" in mos_c
+        and "void MosStartup_ApplyInitialState(void)" not in main_c
+        and "void open_chg_close_dsg(void)" not in main_c
+        and "#define open_chg_close_dsg()" in mos_h
+        and "#define enter_fac_mode(on)" in mos_h
+    ):
+        reporter.ok("MOS startup and factory-mode switching are isolated in MosStartup module")
+    else:
+        reporter.fail("MOS startup control should stay out of main.c and be owned by MosStartup.c/.h")
+
+    if (
+        "static void Conf_InitRunSharedIo(void)" in conf_c
+        and conf_c.count("Conf_InitRunSharedIo();") == 2
+        and "static void Conf_InitMainPowerRails" in conf_c
+        and "static void Conf_PrepareStopEntry(void)" in conf_c
+        and "static void Conf_InitAllPortsAnalog(void)" in conf_c
+        and "Conf_InitMainPowerRails(Bit_RESET" in conf_c
+    ):
+        reporter.ok("GPIO run/STOP setup reuses shared conf.c helpers")
+    else:
+        reporter.fail("conf.c GPIO setup should keep duplicated run/STOP sequences in shared helpers")
+
+    doc = read_text(APP_ARCH_REFACTOR_DOC)
+    if (
+        "MosStartup.c" in doc
+        and "Conf_InitRunSharedIo" in doc
+        and "FD_Release" in doc
+        and "0x03/0x06/0x10" in doc
+    ):
+        reporter.ok("architecture refactor document records module boundary and follow-up split order")
+    else:
+        reporter.fail("architecture refactor document should cover MosStartup, conf helpers, checks, and next module split order")
+
+
 def check_runtime_docs(reporter):
     docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
     if any(not path.exists() for path in docs):
@@ -1019,6 +1084,7 @@ def main(argv):
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
     check_rtc_stop_sleep_contract(reporter)
+    check_app_architecture(reporter)
     check_runtime_docs(reporter)
 
     return reporter.summary()

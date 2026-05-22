@@ -67,6 +67,66 @@ static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger
     EXTI_Init(&EXTI_InitStruct);
 }
 
+static void Conf_InitMainPowerRails(BitAction m_stb,
+                                    BitAction ad_en,
+                                    BitAction cmnt_en,
+                                    BitAction adc_bus_en,
+                                    BitAction dc_en,
+                                    BitAction boost_en)
+{
+    GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, m_stb);
+    GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, ad_en);
+    GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, cmnt_en);
+    GPIO_WriteBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, adc_bus_en);
+    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, dc_en);
+    GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, boost_en);
+
+    Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
+}
+
+static void Conf_InitRunSharedIo(void)
+{
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
+
+    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
+    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+
+    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
+
+    Conf_InitMainPowerRails(Bit_SET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_SET,
+                            Bit_SET);
+
+    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+}
+
+static void Conf_PrepareStopEntry(void)
+{
+    LedBar_SetSleep(1u);
+    ADC_StopForLowPower();
+}
+
+static void Conf_InitAllPortsAnalog(void)
+{
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
+}
+
 void LowPower_ClearWakeupPending(void)
 {
     EXTI_ClearITPendingBit(EXTI_Line0);
@@ -110,51 +170,9 @@ void InitIO_rtc(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
-    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
-
-    // todo GPIO_INT_WK_CMNT
-    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
-    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
-
-    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
-
-    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
-
-    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
-    {
-        //???这个函数没起作用
-        // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
-        // GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
-        // GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, Bit_RESET);
-        // GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, Bit_RESET);
-        GPIO_SetBits(GPIO_M_STB, PIN_M_STB);
-        GPIO_SetBits(GPIO_AD_EN, PIN_AD_EN);
-        GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
-        GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
-
-        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
-
-        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
-
-        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
-    }
-
-    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+    Conf_InitRunSharedIo();
 }
 
-// void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
-// void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
-// GPIO_ResetBits(GPIOB, GPIO_Pin_15);
-// GPIO_SetBits(GPIOB, GPIO_Pin_15);
 void InitIO(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
@@ -169,52 +187,7 @@ void InitIO(void)
         MCUO_AFE_CTLC = 0;
     }
 
-    // GPIO_WriteBit(GPIOB, GPIO_Pin_15, Bit_RESET);
-    // GPIO_WriteBit(GPIOB, GPIO_Pin_15, Bit_SET);
-    // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
-    // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
-    // GPIO_ResetBits(GPIOB, GPIO_Pin_15);
-    // GPIO_SetBits(GPIOB, GPIO_Pin_15);
-    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
-
-    // todo GPIO_INT_WK_CMNT
-
-    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
-    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
-
-    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
-
-    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
-
-    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
-    {
-        //???这个函数没起作用
-        // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
-        // GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
-        // GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, Bit_RESET);
-        // GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, Bit_RESET);
-        GPIO_SetBits(GPIO_M_STB, PIN_M_STB);
-        GPIO_SetBits(GPIO_AD_EN, PIN_AD_EN);
-        GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
-        GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
-
-        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
-
-        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
-
-        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
-    }
-
-    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+    Conf_InitRunSharedIo();
 }
 
 void InitWakeUp_Base(void)
@@ -310,30 +283,14 @@ void IOstatus_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-    LedBar_SetSleep(1u);
-    ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
-
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
-
-    {
-        GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
-        GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, Bit_RESET);
-        GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET);
-        GPIO_WriteBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, Bit_RESET);
-        GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-        GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
-
-        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
-        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
-    }
+    Conf_PrepareStopEntry();
+    Conf_InitAllPortsAnalog();
+    Conf_InitMainPowerRails(Bit_RESET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_RESET,
+                            Bit_RESET);
 
     LedBar_PrepareForStop();
 }
@@ -342,8 +299,7 @@ void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-    LedBar_SetSleep(1u);
-    ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
+    Conf_PrepareStopEntry();
 
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_DC_EN) & (~PIN_2737_EN);

@@ -434,6 +434,11 @@
               <FilePath>..\Source\main.c</FilePath>
             </File>
             <File>
+              <FileName>MosStartup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\MosStartup.c</FilePath>
+            </File>
+            <File>
               <FileName>PubFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\PubFunc.c</FilePath>
@@ -1349,6 +1354,11 @@
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
+            </File>
+            <File>
+              <FileName>MosStartup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\MosStartup.c</FilePath>
             </File>
             <File>
               <FileName>PubFunc.c</FileName>

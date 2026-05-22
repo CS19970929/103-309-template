@@ -27,6 +27,7 @@
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
+#include "MosStartup.h"
 
 #include "ShortFunc.h"
 #include "conf.h"
@@ -74,11 +75,6 @@ FALSE = 0, TRUE
 /* Project feature switches and SCI roles are derived from conf/Project_Config.h. */
 
 void InitSystemWakeUp(void);
-void open_chg_close_dsg(void);
-void open_dsg_close_chg(void);
-void enter_fac_mode(bool on);
-UINT8 MosStartup_Is5vChargeActive(void);
-void MosStartup_ApplyInitialState(void);
 UINT8 FactoryAging_IsActive(void);
 UINT8 FactoryAging_ShouldStartOnBoot(void);
 UINT8 FactoryAging_SaveProgressBeforeSleep(void);
