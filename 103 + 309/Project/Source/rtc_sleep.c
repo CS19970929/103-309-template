@@ -62,17 +62,6 @@ static bool update_rtc_soc(uint32_t *_sleep_cnt);
 
 typedef struct
 {
-    uint8_t soc_disp;
-    uint8_t soc_real;
-    uint8_t soc_min;
-    uint8_t soc_max;
-    uint8_t soc_mean;
-} SOC_T;
-
-SOC_T g_Psoc;
-
-typedef struct
-{
     enum _SLEEP_MODE mode;
     UINT8 armed;
 } LOW_POWER_RUNTIME_STATE;
@@ -122,16 +111,6 @@ static void low_power_update_rtc_status(void)
     g_stLowPowerRtcStatus.u16EnterRtcDelay = sys_time.enter_rtc_delay;
     g_stLowPowerRtcStatus.u16EnterRtcTarget = sys_time.time_enter_rtc;
     g_stLowPowerRtcStatus.u32RtcElapsedSeconds = s_u32RtcSleepElapsedSeconds;
-}
-
-void print_vcell(void)
-{
-    uint8_t i;
-    for (i = 0; i < OtherElement.u16Sys_SeriesNum; i++)
-    {
-        log_i("cell%d  %d\n", i, g_stCellInfoReport.u16VCell[i]);
-    }
-    log_i("vcelltotle %d", g_stCellInfoReport.u16VCellTotle);
 }
 
 #if 0
@@ -725,10 +704,6 @@ static bool updataData_rtc_sh3x(void)
 }
 #endif
 
-void get_soc(SOC_T *soc, uint16_t vcell_min, uint16_t vcell_max, uint16_t vcell_mean)
-{
-}
-
 static void before_wakeup(uint32_t *_sleep_cnt)
 {
     // g_stCellInfoReport.SocElement.u16Soc =  get_rtc_soc();
@@ -1022,12 +997,6 @@ static UINT8 low_power_get_rtc_block_reason(void)
     {
         log_e("CHG or DSG");
         return LOW_POWER_RTC_BLOCK_CURRENT;
-    }
-
-    if (SystemStatus.bits.b1Status_Heat)
-    {
-        log_e("Heating");
-        return LOW_POWER_RTC_BLOCK_HEAT;
     }
 
 #ifdef __same_door__

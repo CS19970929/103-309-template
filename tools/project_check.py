@@ -52,6 +52,7 @@ CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
 HEAT_COOL_REMOVE_DOC = ROOT / "HEAT_COOL_IODRIVERS_REMOVAL_2026-05-22.md"
+UNUSED_SYMBOL_CLEANUP_DOC = ROOT / "UNUSED_SYMBOL_CLEANUP_2026-05-22.md"
 UTF8_TEXT_SUFFIXES = {
     ".c",
     ".h",
@@ -102,6 +103,70 @@ REMOVED_LEGACY_TOKENS = [
     "IODrivers",
     "__FUNC__HEAT__",
     "PROJECT_CFG_HEAT_ENABLE",
+    "CHG_LOWTEMP_PARAM",
+    "HEAT_OPEN_CURR",
+    "MCUO_RELAY_HEAT",
+    "MCUO_RELAY_COOL",
+    "HEAT_OPEN",
+    "COOL_OPEN",
+    "LOW_POWER_RTC_BLOCK_HEAT",
+    "ERROR_HEAT",
+    "ERROR_COOL",
+    "ERROR_REMOVE_HEAT",
+    "ERROR_REMOVE_COOL",
+    "ERROR_STATUS_HEAT",
+    "ERROR_STATUS_COOL",
+    "u8ErrFlag_Heat",
+    "u8ErrFlag_Cool",
+    "b1Status_Heat",
+    "b1Status_Cool",
+    "b1Status_HeatCloseIO",
+    "b1OnOFF_Heat",
+    "b1OnOFF_Cool",
+    "b1StartUpFlag_Heat",
+    "b1StartUpFlag_Cool",
+    "SystemMonitorResetData_EEPROM",
+    "RS485_CMD_ADDR_SWITCH_ON",
+    "RS485_CMD_ADDR_SWITCH_OFF",
+    "Sci_WrReg_0x06_SwitchON",
+    "Sci_WrReg_0x06_SwitchOFF",
+    "InitE2PROM_i2c",
+    "App_E2promDeal",
+    "EEPROM_test",
+    "EEPROM_ADDR_PASS",
+    "EEPROM_ADDR_SLEEP",
+    "EEPROM_ADDR_FLASHUPDATE",
+    "EEPROM_VALUE_SLEEP",
+    "EEPROM_VALUE_FLASHUPDATE",
+    "EEPROM_ADDR_SWITCH_ONOFF",
+    "E2P_ADDR_E2POS_PROTECT",
+    "E2P_ADDR_E2POS_RTC",
+    "E2P_ADDR_E2POS_OTHER_ELEMENT1",
+    "E2P_ADDR_E2POS_RESERVED_RW_PARAM",
+    "E2P_ADDR_E2POS_ENHANCE_SOC",
+    "E2P_ADDR_E2POS_SERIAL_NUM",
+    "E2P_ADDR_E2POS_HAEDWARE_VER",
+    "E2P_ADDR_E2POS_SOFTWARE_VER",
+    "E2P_ADDR_START_OTHER_ELEMENT1",
+    "E2P_ADDR_START_EVENT_RECORD",
+    "E2P_ADDR_E2POS_EVENT_POINT",
+    "E2P_ADDR_SH367309_VALUE",
+    "DataLoad_CellVolt_Test",
+    "test_Autocurrent_cycle",
+    "gu8_DriverStartUpFlag",
+    "aaaaaa1",
+    "aaa11",
+    "AFE_IDLE_Old",
+    "AFE_GetData",
+    "OddEven_Check",
+    "Usart_9bitOddEvenData_Frame",
+    "FlashTest",
+    "IOstatus_TestMode",
+    "InitWakeUp_TestMode",
+    "IORecover_TestMode",
+    "Sys_SleepOnExitMode",
+    "TwiWrite_old",
+    "TwiRead_old",
 ]
 RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_",
@@ -487,6 +552,22 @@ def check_removed_legacy_modules(reporter):
             reporter.fail("Heat_Cool/IODrivers removal document should cover protocol and Flash compatibility")
     else:
         reporter.fail("Heat_Cool/IODrivers removal document is missing")
+
+    if UNUSED_SYMBOL_CLEANUP_DOC.exists():
+        doc = read_text(UNUSED_SYMBOL_CLEANUP_DOC)
+        if (
+            "0x1100" in doc
+            and "0x1101" in doc
+            and "reserved" in doc
+            and "System_Monitor" in doc
+            and "TwiWrite_old" in doc
+            and "project_check.py" in doc
+        ):
+            reporter.ok("unused symbol cleanup document covers protocol, reserved layout, and guard checks")
+        else:
+            reporter.fail("unused symbol cleanup document should cover protocol, reserved layout, and guard checks")
+    else:
+        reporter.fail("unused symbol cleanup document is missing")
 
 
 def check_release_defaults(reporter):

@@ -2,7 +2,6 @@
 #include "main.h"
 
 void InitSci(void);
-void InitE2PROM_i2c(void);
 
 Time_T sys_time = {
     .time_enter_rtc = 10,
@@ -646,7 +645,6 @@ void InitRunAfterStopWakeup(void)
        run mode can leave stale pending bits for the next low-power cycle. */
 
     initAFE1_IIC();
-    InitE2PROM_i2c();
 }
 
 void Init(void)

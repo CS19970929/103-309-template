@@ -669,11 +669,6 @@ UINT16 FlashReadOneHalfWord(UINT32 faddr)
 	return *(vu16 *)faddr;
 }
 
-void FlashTest(void)
-{
-	g_stCellInfoReport.u16VCell[2] = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
-}
-
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
 	STORAGE_FLASH_SOC_DATA_V1 legacy_data;

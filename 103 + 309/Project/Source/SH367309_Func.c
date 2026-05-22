@@ -2,7 +2,6 @@
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
-UINT8 gu8_DriverStartUpFlag = 0;
 
 //-40到100的数值
 const UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
@@ -30,11 +29,6 @@ UINT8 ucMTPBuffer[26] = {
 	BYTE_14H_UTCR, BYTE_15H_OTD, BYTE_16H_OTDR, BYTE_17H_UTD, BYTE_18H_UTDR,
 	BYTE_19H_TR};
 
-UINT16 aaaaaa1 = 0;
-UINT16 aaaaaa2 = 0;
-UINT16 aaaaaa3 = 0;
-UINT16 aaaaaa4 = 0;
-UINT8 aaa11 = 0;
 
 /*******************************************************************************
 Function:ResetAFE()
@@ -77,33 +71,6 @@ void AFE_Sleep(void)
 
 // 进入IDLE模式
 // 1，有错误，不能进入
-UINT8 AFE_IDLE_Old(void)
-{
-	UINT8 result = 0;
-
-	if (MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all))
-	{
-		if (SH367309_Reg_Store.REG_BSTATUS1.all || SH367309_Reg_Store.REG_BSTATUS2.all || SH367309_Reg_Store.REG_BSTATUS3.bits.L0V || SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET)
-		{
-			// 不能进入IDLE
-			result = 1;
-			System_ERROR_UserCallback(ERROR_AFE1);
-		}
-		else
-		{
-			SH367309_Reg_Store.REG_MTP_CONF.bits.IDLE = 1;
-			MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
-		}
-	}
-	else
-	{
-		result = 1;
-		// System_ERROR_UserCallback(ERROR_AFE1);
-	}
-
-	return result;
-}
-
 void AFE_IDLE(void)
 {
 	SH367309_Reg_Store.REG_MTP_CONF.bits.IDLE = 1;
@@ -144,13 +111,6 @@ UINT8 AFE_IsReady(void)
 			break;
 		}
 	}
-	return result;
-}
-
-UINT8 AFE_GetData(void)
-{
-	UINT8 result;
-	result = MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1);
 	return result;
 }
 

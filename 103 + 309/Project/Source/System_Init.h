@@ -50,9 +50,6 @@
 #define MCUI_INT_WK_MCU		PAin(0)		//����MCU
 
 
-#define MCUO_RELAY_HEAT 	PCout(6)		//���ȼ̵���
-#define MCUO_RELAY_COOL 	PCout(6)		//�����̵���
-
 #define MCUI_ENI_DI1		PAin(9)		//I��1
 
 

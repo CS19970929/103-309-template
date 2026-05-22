@@ -328,10 +328,6 @@ UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data)
 	return 0;
 }
 
-void InitE2PROM_i2c(void)
-{
-}
-
 void InitE2PROM(void)
 {
 	EEPROM_LoadDefaultRuntimeData();
@@ -340,9 +336,4 @@ void InitE2PROM(void)
 	ReadEEPROM_EventRecord_Parameters();
 	UpgradeParamPolicy_ApplyOnce();
 }
-
-void App_E2promDeal(void)
-{
-}
-
 

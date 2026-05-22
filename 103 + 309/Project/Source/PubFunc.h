@@ -2,8 +2,6 @@
 #define PUBFUNC_H
 
 
-typedef enum {ODD = 0, EVEN = !ODD} Parity;
-
 typedef	struct{
 	UINT16	u16ChkVal;                      // ��ǰ�Ƚ�����С
 	UINT16	u16OPValB;                      // �Ƚϴ�ֵ

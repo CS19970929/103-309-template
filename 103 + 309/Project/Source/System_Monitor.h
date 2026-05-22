@@ -2,8 +2,6 @@
 #define SYSTEM_MONITOR_H
 
 //ϵͳ�����������
-typedef enum {STARTUP_CONT = 0, STARTUP_OVER = !STARTUP_CONT} StartUp_Status;
-
 enum SYSTEM_ERROR_COMMAND {
 	ERROR_AFE1 = 1,			//Ϊ�˷���ʹ�ú�������ֵ
 	ERROR_AFE2,
@@ -27,8 +25,8 @@ enum SYSTEM_ERROR_COMMAND {
 	ERROR_BALANCED,
 	ERROR_ADC,
 	ERROR_SOC_CAIL,
-	ERROR_HEAT,
-	ERROR_COOL,
+	ERROR_RESERVED_21,
+	ERROR_RESERVED_22,
 	ERROR_TEMP_BREAK,
 	ERROR_NUM = ERROR_TEMP_BREAK,
 
@@ -54,8 +52,8 @@ enum SYSTEM_ERROR_COMMAND {
 	
 	ERROR_REMOVE_BALANCED,
 	ERROR_REMOVE_ADC,
-	ERROR_REMOVE_HEAT,
-	ERROR_REMOVE_COOL,
+	ERROR_REMOVE_RESERVED_21,
+	ERROR_REMOVE_RESERVED_22,
 	ERROR_REMOVE_SOC_CAIL,
 	ERROR_REMOVE_TEMP_BREAK,
 
@@ -80,8 +78,8 @@ enum SYSTEM_ERROR_COMMAND {
 	
 	ERROR_STATUS_BALANCED,
 	ERROR_STATUS_ADC,
-	ERROR_STATUS_HEAT,
-	ERROR_STATUS_COOL,
+	ERROR_STATUS_RESERVED_21,
+	ERROR_STATUS_RESERVED_22,
 	ERROR_STATUS_SOC_CAIL,
 	ERROR_STATUS_TEMP_BREAK,
 };
@@ -110,8 +108,8 @@ struct SYSTEM_ERROR {
 	
 	UINT8 u8ErrFlag_Balanced;
 	UINT8 u8ErrFlag_ADC;
-	UINT8 u8ErrFlag_Heat;
-	UINT8 u8ErrFlag_Cool;
+	UINT8 u8ErrFlag_Reserved21;
+	UINT8 u8ErrFlag_Reserved22;
 	
 	UINT8 u8ErrFlag_CBC_DSG;
 	UINT8 u8ErrFlag_SOC_Cail;
@@ -121,19 +119,6 @@ struct SYSTEM_ERROR {
 
 
 //ϵͳ����ʱ���������
-enum SYSTEM_FUNC_STARTUP_COMMAND {
-	SYSTEM_FUNC_STARTUP_SOC = 1,			//Ϊ�˷���ʹ�ú�������ֵ
-	SYSTEM_FUNC_STARTUP_BALANCE,
-	SYSTEM_FUNC_STARTUP_PROTECT,
-	SYSTEM_FUNC_STARTUP_MOS,
-	SYSTEM_FUNC_STARTUP_RELAY,
-	SYSTEM_FUNC_STARTUP_ADC,
-	SYSTEM_FUNC_STARTUP_CAN,
-	SYSTEM_FUNC_STARTUP_HEAT,	
-	SYSTEM_FUNC_STARTUP_COOL,
-	SYSTEM_FUNC_STARTUP_NUM = SYSTEM_FUNC_STARTUP_COOL,
-};
-
 
 union System_Function_StartUp {				//���ܳ�ʼ��ͳһ����
     UINT32 all;
@@ -146,9 +131,9 @@ union System_Function_StartUp {				//���ܳ�ʼ��ͳһ����
 		UINT8 b1StartUpFlag_Relay   :1;		//�̵����ܳ�ʼ��
 		UINT8 b1StartUpFlag_ADC     :1;		//ADC��ʼ��
 		UINT8 b1StartUpFlag_CAN		:1;		//Can��ʼ��
-		UINT8 b1StartUpFlag_Cool	:1;		//�����������Լ�
+		UINT8 b1StartUpFlag_Reserved7	:1;		//�����������Լ�
 
-		UINT8 b1StartUpFlag_Heat	:1;		//ɢ�����������Լ�
+		UINT8 b1StartUpFlag_Reserved8	:1;		//ɢ�����������Լ�
 		UINT8 b1StartUpFlag_AFE1	:1;		//AFE1		//����AFE���ϵ绽�Ѻ���ʼ���꣬�����������Ҫ����Ȼ̫������
 		UINT8 b1StartUpFlag_AFE2	:1;		//AFE2
 		UINT8 b1StartUpFlag_BlueT	:1;		//���������Լ�
@@ -178,15 +163,15 @@ union System_Status {				//TODO�����⣬Heat��Cool��û��
 		UINT8 b1Status_Relay_DSG    :1;		//�ֿڷŵ�̵�������״̬
 		UINT8 b1Status_Relay_MAIN   :1;		//ͬ�����̵�������״̬
 
-		UINT8 b1Status_Heat         :1;		//���ȹ���״̬					//��һ��8λ
-		UINT8 b1Status_Cool         :1;		//���书��״̬
+		UINT8 b1Status_ReservedHeat         :1;		//���ȹ���״̬					//��һ��8λ
+		UINT8 b1Status_ReservedCool         :1;		//���书��״̬
 		UINT8 b1Status_AFE1         :1;		//AFE1״̬
 		UINT8 b1Status_AFE2	        :1;		//AFE2״̬
 
 		UINT8 b1Status_Balance		:1;		//���⹦��״̬
 		UINT8 b1Status_ToSleep		:1;		//������������״̬
 		UINT8 b1Status_BnCloseIO	:1;		//�������MOS�رձ�־λ
-		UINT8 b1Status_HeatCloseIO	:1;		//����ʱ�ر�MosRelay
+		UINT8 b1Status_ReservedHeatCloseIO	:1;		//����ʱ�ر�MosRelay
 		
 		UINT8 b1Status_SysLimits	:1;		//res						//���ĸ�8λ
 		UINT8 b1Status_CBCCloseIO	:1;		//��ǹ����ǿ�ƹر�����������ģ��ǿ�ƹر�����
@@ -211,8 +196,8 @@ union System_OnOFF_Function {				//TODO
 		UINT8 b1OnOFF_Relay_Rec     :1;		//�̵�������
 		
 		UINT8 b1OnOFF_SOC_Fixed     :1;		//Soc�̶�����
-		UINT8 b1OnOFF_Heat          :1;		//���ȹ���
-		UINT8 b1OnOFF_Cool          :1;		//���书��
+		UINT8 b1OnOFF_ReservedHeat          :1;		//���ȹ���
+		UINT8 b1OnOFF_ReservedCool          :1;		//���书��
 		UINT8 b1OnOFF_AFE1         	:1;		//AFE1״̬
 
 		UINT8 b1OnOFF_AFE2	        :1;		//AFE2״̬
@@ -236,8 +221,6 @@ extern volatile union System_OnOFF_Function System_OnOFF_Func;
 extern volatile union System_Status SystemStatus;
 
 void InitSystemMonitorData_EEPROM(void);
-void SystemMonitorResetData_EEPROM(void);
-
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
 
 #endif	/* SYSTEM_MONITOR_H */

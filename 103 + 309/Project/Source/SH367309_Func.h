@@ -241,12 +241,6 @@ typedef enum _FAULT_AFE_TO_MCU {
 
 extern SH367309_REG_STORE SH367309_Reg_Store;
 
-extern UINT16 aaaaaa1;
-extern UINT16 aaaaaa2;
-extern UINT16 aaaaaa3;
-extern UINT16 aaaaaa4;
-extern UINT8 aaa11;
-extern UINT8 gu8_DriverStartUpFlag;
 
 
 UINT8 AFE_CheckStatus(void);

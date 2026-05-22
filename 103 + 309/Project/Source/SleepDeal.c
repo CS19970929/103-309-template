@@ -241,24 +241,3 @@ void IsSleepStartUp(void)
 		break;
 	}
 }
-void IOstatus_TestMode(void)
-{
-	IOstatus_NormalMode();
-}
-
-void InitWakeUp_TestMode(void)
-{
-	InitWakeUp_NormalMode();
-}
-
-void IORecover_TestMode(void)
-{
-	MCU_RESET();
-}
-
-void Sys_SleepOnExitMode(void)
-{
-	NVIC_SystemLPConfig(NVIC_LP_SLEEPONEXIT, ENABLE); // 库函数版�?，�?�置SLEEP ON EXIT位为1
-	// SCB->SCR|=1<<1;//寄存器版�?，�?�置SLEEP ON EXIT位为1
-	__ASM volatile("wfi");
-}

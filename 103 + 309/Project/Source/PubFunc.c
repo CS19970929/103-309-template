@@ -1,49 +1,5 @@
 #include "main.h"
 
-// 通过while循环，每执行一次，v中1的数目就会减少1，如果v中1的数目为奇数，则parity=true，否则parity=false。
-Parity OddEven_Check(UINT8 v)
-{
-	Parity parity = EVEN; // 初始判断标记
-	while (v)
-	{
-		parity = (Parity)(!parity);
-		v = v & (v - 1);
-	}
-	return parity;
-}
-
-// 硬件自带奇偶校验，不需要这个函数了，模拟串口可用
-UINT16 Usart_9bitOddEvenData_Frame(UINT8 data, Parity Parity_type)
-{
-	UINT16 result;
-	switch (Parity_type)
-	{
-	case ODD:
-		if (OddEven_Check(data) == ODD)
-		{
-			result = ((UINT16)data) | ((UINT16)0 << 8);
-		}
-		else
-		{
-			result = ((UINT16)data) | ((UINT16)1 << 8);
-		}
-		break;
-	case EVEN:
-		if (OddEven_Check(data) == EVEN)
-		{
-			result = ((UINT16)data) | ((UINT16)0 << 8);
-		}
-		else
-		{
-			result = ((UINT16)data) | ((UINT16)1 << 8);
-		}
-		break;
-	default:
-		break;
-	}
-	return result;
-}
-
 /*=================================================================
  * FUNCTION: GetEndValue
  * PURPOSE : 查表

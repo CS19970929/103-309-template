@@ -178,9 +178,6 @@
 #define   LEVEL_CURR     PROJECT_CFG_LEVEL_CURR
 #define   AFE_TYPE        PROJECT_CFG_AFE_TYPE
 
-#define CHG_LOWTEMP_PARAM   380
-#define HEAT_OPEN_CURR      500
-
 typedef enum GPIO_TYPE {
 	GPIO_PreCHG = 0,
 	GPIO_CHG,

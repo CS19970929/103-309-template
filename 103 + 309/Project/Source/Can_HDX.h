@@ -127,8 +127,8 @@ union MOS_RELAY_REG {
 		
 		UINT8 b1Status_Relay_DSG    :1;		//分口放电继电器功能状态
 		UINT8 b1Status_Relay_PRE    :1;		//预充继电器功能状态
-		UINT8 b1Status_Heat			:1; 	//
-		UINT8 b1Status_Cool			:1; 	//
+		UINT8 b1Status_ReservedHeat			:1; 	//
+		UINT8 b1Status_ReservedCool			:1; 	//
 		
 		UINT8 b1Status_Relay_MAIN   :1;		//同口主继电器功能状态
 		UINT8 b1Status_Res   		:7;		//同口主继电器功能状态

@@ -17,8 +17,6 @@ void InitSystemMonitorData_EEPROM(void)
 	System_OnOFF_Func.bits.b1OnOFF_AFE1 = 1;
 	// System_OnOFF_Func.bits.b1OnOFF_AFE2 = 1;
 	System_OnOFF_Func.bits.b1OnOFF_Sleep = 1;
-	System_OnOFF_Func.bits.b1OnOFF_Heat = 1;
-	System_OnOFF_Func.bits.b1OnOFF_Cool = 0;
 	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 0;
 
 	// 系统开机时序控制类型
@@ -30,8 +28,6 @@ void InitSystemMonitorData_EEPROM(void)
 	System_Func_StartUp.bits.b1StartUpFlag_MOS = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_ADC = 1;
 	System_Func_StartUp.bits.b1StartUpFlag_CAN = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Cool = 1;
-	System_Func_StartUp.bits.b1StartUpFlag_Heat = 1;  // 原则上不用，先留着
 	System_Func_StartUp.bits.b1StartUpFlag_BlueT = 1; //
 
 	// 系统状态跟踪类型
@@ -55,10 +51,6 @@ void InitSystemMonitorData_EEPROM(void)
 	System_OnOFF_Func_StartUpRec.all = System_OnOFF_Func.all; // 如果某功能开机不打开，后续运行中途打开，则需要初始化，该位为记录位
 	if (!System_OnOFF_Func.bits.b1OnOFF_Balance)
 		System_Func_StartUp.bits.b1StartUpFlag_Balance = 0;
-	if (!System_OnOFF_Func.bits.b1OnOFF_Heat)
-		System_Func_StartUp.bits.b1StartUpFlag_Heat = 0;
-	if (!System_OnOFF_Func.bits.b1OnOFF_Cool)
-		System_Func_StartUp.bits.b1StartUpFlag_Cool = 0;
 	if (!System_OnOFF_Func.bits.b1OnOFF_MOS_Relay)
 	{ // 没打开MOS功能，则不会完成初始化，打开才能把SystemStatus.bits.b1StartUpBMS关掉同时打开MOS
 		System_Func_StartUp.bits.b1StartUpFlag_MOS = 0;
@@ -69,25 +61,6 @@ void InitSystemMonitorData_EEPROM(void)
 	// 这个没有
 }
 
-// 这个函数修改了，要修改EEPROM的上电标志位
-void SystemMonitorResetData_EEPROM(void)
-{
-	// 系统功能控制类型
-	System_OnOFF_Func.all = 0;
-	System_OnOFF_Func.bits.b1OnOFF_Balance = 1;
-	System_OnOFF_Func.bits.b1OnOFF_BMS_Source = 1;
-	System_OnOFF_Func.bits.b1OnOFF_MOS_Relay = 1; // 核心功能
-	// System_OnOFF_Func.bits.b1OnOFF_Relay_Rec = 1;
-	System_OnOFF_Func.bits.b1OnOFF_AFE1 = 1;
-	// System_OnOFF_Func.bits.b1OnOFF_AFE2 = 1;
-	System_OnOFF_Func.bits.b1OnOFF_Sleep = 1;
-	System_OnOFF_Func.bits.b1OnOFF_Heat = 1;
-	System_OnOFF_Func.bits.b1OnOFF_Cool = 1;
-	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 0;
-
-	WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT, (UINT16)(System_OnOFF_Func.all & 0x0000FFFF));
-	WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2, (UINT16)(System_OnOFF_Func.all >> 16));
-}
 
 // 0:没错误，X：有错误
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
@@ -156,12 +129,6 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 	case ERROR_SOC_CAIL:
 		System_ErrFlag.u8ErrFlag_SOC_Cail++;
 		break;
-	case ERROR_HEAT:
-		System_ErrFlag.u8ErrFlag_Heat++;
-		break;
-	case ERROR_COOL:
-		System_ErrFlag.u8ErrFlag_Cool++;
-		break;
 	case ERROR_TEMP_BREAK:
 		System_ErrFlag.u8ErrFlag_TempBreak = 1;
 		break;
@@ -222,12 +189,6 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 		break;
 	case ERROR_REMOVE_ADC:
 		System_ErrFlag.u8ErrFlag_ADC = 0;
-		break;
-	case ERROR_REMOVE_HEAT:
-		System_ErrFlag.u8ErrFlag_Heat = 0;
-		break;
-	case ERROR_REMOVE_COOL:
-		System_ErrFlag.u8ErrFlag_Cool = 0;
 		break;
 	case ERROR_REMOVE_SOC_CAIL:
 		System_ErrFlag.u8ErrFlag_SOC_Cail = 0;
@@ -295,12 +256,6 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 		break;
 	case ERROR_STATUS_SOC_CAIL:
 		result = System_ErrFlag.u8ErrFlag_SOC_Cail;
-		break;
-	case ERROR_STATUS_HEAT:
-		result = System_ErrFlag.u8ErrFlag_Heat;
-		break;
-	case ERROR_STATUS_COOL:
-		result = System_ErrFlag.u8ErrFlag_Cool;
 		break;
 	case ERROR_STATUS_TEMP_BREAK:
 		result = System_ErrFlag.u8ErrFlag_TempBreak;

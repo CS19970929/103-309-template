@@ -161,12 +161,27 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s);
-void Sci_WrReg_0x06_SwitchON(struct RS485MSG *s);
-void Sci_WrReg_0x06_SwitchOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
 
+static UINT8 Sci_BmsFunctionIdIsSupported(UINT16 id)
+{
+	switch (id)
+	{
+	case 1U:
+	case 2U:
+	case 3U:
+	case 5U:
+	case 8U:
+	case 9U:
+	case 10U:
+	case 11U:
+		return 1U;
+	default:
+		return 0U;
+	}
+}
 void Sci_DataInit(struct RS485MSG *s)
 {
 	UINT16 i;
@@ -312,13 +327,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_Reset_OtherCanAdd(s);
 		break;
 
-	case RS485_CMD_ADDR_SWITCH_ON:
-		Sci_WrReg_0x06_SwitchON(s);
-		break;
-
-	case RS485_CMD_ADDR_SWITCH_OFF:
-		Sci_WrReg_0x06_SwitchOFF(s);
-		break;
 
 	case RS485_CMD_ADDR_SYSTEM_FUNCTION_ON:
 		Sci_WrReg_0x06_BMS_FunctionON(s);
@@ -2218,34 +2226,6 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 	}
 }
 
-void Sci_WrReg_0x06_SwitchON(struct RS485MSG *s)
-{
-	UINT16 u16SciRegData;
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData >= 1 && u16SciRegData <= 32)
-	{
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
-}
-
-void Sci_WrReg_0x06_SwitchOFF(struct RS485MSG *s)
-{
-	UINT16 u16SciRegData;
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData >= 1 && u16SciRegData <= 32)
-	{
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
-}
-
 // 关于这个函数
 // A:第一次打开这个功能，以前从来没打开过，则因为各种标志位变量都没变过(switch结构里面的)，所以会进行初始化验证
 // B:其中关闭了，又打开，则已经初始化过一次，这次打开就继续按照上一次的进度继续下去
@@ -2253,7 +2233,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData >= 1 && u16SciRegData <= 32)
+	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		switch (u16SciRegData)
 		{		// 如果是以下功能被打开，则需要初始化验证，别的功能直接关就好
@@ -2271,22 +2251,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_MOS_Relay = 1;
 				System_Func_StartUp.bits.b1StartUpFlag_MOS = 1;
 				System_Func_StartUp.bits.b1StartUpFlag_Relay = 1;
-			}
-			break;
-
-		case 6: // 加热功能
-			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Heat)
-			{
-				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Heat = 1;
-				System_Func_StartUp.bits.b1StartUpFlag_Heat = 1;
-			}
-			break;
-
-		case 7: // 冷凝功能
-			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Cool)
-			{
-				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Cool = 1;
-				System_Func_StartUp.bits.b1StartUpFlag_Cool = 1;
 			}
 			break;
 
@@ -2333,7 +2297,7 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData >= 1 && u16SciRegData <= 32)
+	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		//*(&System_OnOFF_Func.bits.b1OnOFF_Balance+(u16SciRegData-1)) = 0;
 		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // 功能途中关闭不需要初始化验证
