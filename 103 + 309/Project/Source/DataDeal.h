@@ -96,7 +96,7 @@ enum tagInfoForKBArray {
 struct OTHER_ELEMENT {
     UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
     UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
+    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
     UINT16 u16Balance_Res1;			//����λ
     UINT16 u16Balance_Res2;			//����λ
     UINT16 u16Balance_Res3;			//����λ
@@ -135,13 +135,13 @@ struct OTHER_ELEMENT {
 
 
 #define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260204-c099v1p0"  //32
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260522-c099v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
 #define SNum 		19
 
-#define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
-// #define LIFEPO			//������﮵�أ���ѡ�?
+#define TERNARYLI		//��Ԫ﮵�أ���ѡ�?
+// #define LIFEPO			//������﮵�أ���ѡ�?
 
 
 #define CS_Res			2
