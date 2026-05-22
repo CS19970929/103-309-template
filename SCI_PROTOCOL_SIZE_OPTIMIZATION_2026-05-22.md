@@ -317,3 +317,46 @@ Project check summary:
 Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
+
+## 第六轮优化记录
+
+继续处理 CAN 飞道协议帧发送路径中低风险重复逻辑。本轮只调整 `CanFeidaoFrames.c` 内部实现，CAN ID、帧顺序、pending mask 语义和帧载荷格式保持不变。
+
+修改内容：
+- 删除 `CanFeidao_PutI32Be()` 薄包装，电流字段仍通过 `CanFeidao_PutU32Be()` 按补码大端写入，输出字节不变。
+- 将 `CanFeidao_SendNextPending()` 的 7 段重复 `if` 派发收敛为固定顺序派发表 `s_can_feidao_dispatch[]`。
+- 派发表顺序保持原优先级：电压电流、SOC、容量、SOH、版本、状态、出厂时间。
+
+第六轮构建结果：
+```text
+Program Size: Code=50392 RO-data=2824 RW-data=896 ZI-data=5416
+Total RO  Size: 53216
+Total RW  Size: 6312
+Total ROM Size: 53464
+FD_Release.bin: 53464 bytes
+```
+
+相对第五轮结果：
+- Code 减少 136 字节。
+- RO-data 增加 56 字节，用于 CAN 帧派发表。
+- Total ROM 减少 80 字节。
+- RAM 保持 6312 字节不变。
+
+关键函数尺寸：
+```text
+CanFeidao_PutI32Be: 20 -> removed
+CanFeidao_SendNextPending: 176 -> 56 bytes
+s_can_feidao_dispatch: 56 bytes
+CanFeidao_SendVoltageCurrent1000ms: 88 bytes, unchanged
+```
+
+第六轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```

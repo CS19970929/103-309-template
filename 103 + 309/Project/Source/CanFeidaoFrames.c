@@ -6,7 +6,6 @@
 
 static void CanFeidao_PutU16Be(uint8_t *data, uint8_t offset, uint16_t value);
 static void CanFeidao_PutU32Be(uint8_t *data, uint8_t offset, uint32_t value);
-static void CanFeidao_PutI32Be(uint8_t *data, uint8_t offset, int32_t value);
 static UINT8 CanFeidao_SendFrame(uint8_t chd_index, const uint8_t *data, uint8_t length);
 static UINT8 CanFeidao_SendVoltageCurrent1000ms(void);
 static UINT8 CanFeidao_SendCap5000ms(void);
@@ -15,6 +14,24 @@ static UINT8 CanFeidao_SendSoh5000ms(void);
 static UINT8 CanFeidao_SendVersion5000ms(void);
 static UINT8 CanFeidao_SendStatus5000ms(void);
 static UINT8 CanFeidao_SendFactoryTime5000ms(void);
+
+typedef UINT8 (*CanFeidao_SendHandler)(void);
+
+typedef struct
+{
+	UINT16 mask;
+	CanFeidao_SendHandler handler;
+} CanFeidao_FrameDispatch;
+
+static const CanFeidao_FrameDispatch s_can_feidao_dispatch[] = {
+	{CAN_FEIDAO_MSG_VOLTAGE_CURRENT_1000MS, CanFeidao_SendVoltageCurrent1000ms},
+	{CAN_FEIDAO_MSG_SOC_1000MS, CanFeidao_SendSoc1000ms},
+	{CAN_FEIDAO_MSG_CAP_5000MS, CanFeidao_SendCap5000ms},
+	{CAN_FEIDAO_MSG_SOH_5000MS, CanFeidao_SendSoh5000ms},
+	{CAN_FEIDAO_MSG_VERSION_5000MS, CanFeidao_SendVersion5000ms},
+	{CAN_FEIDAO_MSG_STATUS_5000MS, CanFeidao_SendStatus5000ms},
+	{CAN_FEIDAO_MSG_FACTORY_TIME_5000MS, CanFeidao_SendFactoryTime5000ms},
+};
 
 static void CanFeidao_PutU16Be(uint8_t *data, uint8_t offset, uint16_t value)
 {
@@ -28,11 +45,6 @@ static void CanFeidao_PutU32Be(uint8_t *data, uint8_t offset, uint32_t value)
 	data[offset + 1U] = (uint8_t)((value >> 16) & 0xFFU);
 	data[offset + 2U] = (uint8_t)((value >> 8) & 0xFFU);
 	data[offset + 3U] = (uint8_t)(value & 0xFFU);
-}
-
-static void CanFeidao_PutI32Be(uint8_t *data, uint8_t offset, int32_t value)
-{
-	CanFeidao_PutU32Be(data, offset, (uint32_t)value);
 }
 
 static UINT8 CanFeidao_SendFrame(uint8_t chd_index, const uint8_t *data, uint8_t length)
@@ -70,7 +82,7 @@ static UINT8 CanFeidao_SendVoltageCurrent1000ms(void)
 	}
 
 	CanFeidao_PutU32Be(data, 0U, voltage);
-	CanFeidao_PutI32Be(data, 4U, current);
+	CanFeidao_PutU32Be(data, 4U, (uint32_t)current);
 	return CanFeidao_SendFrame(0U, data, CAN_FEIDAO_FRAME_LEN_8);
 }
 
@@ -242,40 +254,15 @@ static UINT8 CanFeidao_SendFactoryTime5000ms(void)
 
 UINT8 CanFeidao_SendNextPending(UINT16 *pending_mask)
 {
-	if (*pending_mask & CAN_FEIDAO_MSG_VOLTAGE_CURRENT_1000MS)
+	UINT8 i;
+
+	for (i = 0U; i < (UINT8)(sizeof(s_can_feidao_dispatch) / sizeof(s_can_feidao_dispatch[0])); ++i)
 	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_VOLTAGE_CURRENT_1000MS);
-		return CanFeidao_SendVoltageCurrent1000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_SOC_1000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_SOC_1000MS);
-		return CanFeidao_SendSoc1000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_CAP_5000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_CAP_5000MS);
-		return CanFeidao_SendCap5000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_SOH_5000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_SOH_5000MS);
-		return CanFeidao_SendSoh5000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_VERSION_5000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_VERSION_5000MS);
-		return CanFeidao_SendVersion5000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_STATUS_5000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_STATUS_5000MS);
-		return CanFeidao_SendStatus5000ms();
-	}
-	if (*pending_mask & CAN_FEIDAO_MSG_FACTORY_TIME_5000MS)
-	{
-		*pending_mask &= (UINT16)(~CAN_FEIDAO_MSG_FACTORY_TIME_5000MS);
-		return CanFeidao_SendFactoryTime5000ms();
+		if (*pending_mask & s_can_feidao_dispatch[i].mask)
+		{
+			*pending_mask &= (UINT16)(~s_can_feidao_dispatch[i].mask);
+			return s_can_feidao_dispatch[i].handler();
+		}
 	}
 
 	return CAN_TxStatus_NoMailBox;
