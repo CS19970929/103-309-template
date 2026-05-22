@@ -1,6 +1,5 @@
 #include "main.h"
 
-// UINT8 RTC_Faultcnt = 0;
 __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
 
 struct RTC_ELEMENT RTC_time;
@@ -136,53 +135,6 @@ static UINT8 RTC_ReinitWithLsiClock(void)
 	}
 
 	return RTC_CLOCK_USE_LSI;
-}
-
-#ifdef _WEEK
-void GregorianDay(struct RTC_ELEMENT *tm)
-{
-	int leapsToDate;
-	int lastYear;
-	int day;
-	int MonthOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-
-	lastYear = tm->RTC_Time_Year - 1;
-	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // 计算从公元元年到计数的前一年之中一共经历了多少个闰年
-
-	if ((tm->RTC_Time_Year % 4 == 0) // 如若计数的这一年为闰年，且计数的月份在2月之后，则日数加1，否则不加1
-		&& ((tm->RTC_Time_Year % 100 != 0) || (tm->RTC_Time_Year % 400 == 0)) && (tm->RTC_Time_Month > 2))
-	{
-		day = 1;
-	}
-	else
-	{
-		day = 0;
-	}
-
-	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // 计算从公元元年元旦到计数日期一共有多少天
-
-	tm->tm_wday = day % 7;
-}
-
-#endif
-
-// 此函数为——Linux源码中的mktime算法
-UINT32 mktimev(struct RTC_ELEMENT *tm)
-{
-	if (0 >= (int)(tm->RTC_Time_Month -= 2))
-	{							  /* 1..12 -> 11,12,1..10 */
-		tm->RTC_Time_Month += 12; /* Puts Feb last since it has leap day */
-		tm->RTC_Time_Year -= 1;
-	}
-
-	return (((
-				 (UINT32)(tm->RTC_Time_Year / 4 - tm->RTC_Time_Year / 100 + tm->RTC_Time_Year / 400 + 367 * tm->RTC_Time_Month / 12 + tm->RTC_Time_Day) + tm->RTC_Time_Year * 365 - 719499) *
-				 24 +
-			 tm->RTC_Time_Hour /* now have hours */
-			 ) * 60 +
-			tm->RTC_Time_Minute /* now have minutes */
-			) * 60 +
-		   tm->RTC_Time_Second; /* finally seconds */
 }
 
 void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
@@ -420,29 +372,29 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 		wake_seconds = 1U;
 	}
 
-#if defined(wdog_enable)
-#if defined(__FUNC_RTC__)
-	{
-		const UINT32 watchdog_timeout_seconds = ((UINT32)0x0FFF * 256U) / 40000U;
-		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 5U) ? (watchdog_timeout_seconds - 5U) : 1U;
+// #if defined(wdog_enable)
+// #if defined(__FUNC_RTC__)
+// 	{
+// 		const UINT32 watchdog_timeout_seconds = ((UINT32)0x0FFF * 256U) / 40000U;
+// 		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 5U) ? (watchdog_timeout_seconds - 5U) : 1U;
 
-		if (wake_seconds > watchdog_safe_window)
-		{
-			wake_seconds = watchdog_safe_window;
-		}
-	}
-#else
-	{
-		const UINT32 watchdog_timeout_seconds = (800U * 64U) / 40000U;
-		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 1U) ? (watchdog_timeout_seconds - 1U) : 1U;
+// 		if (wake_seconds > watchdog_safe_window)
+// 		{
+// 			wake_seconds = watchdog_safe_window;
+// 		}
+// 	}
+// #else
+// 	{
+// 		const UINT32 watchdog_timeout_seconds = (800U * 64U) / 40000U;
+// 		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 1U) ? (watchdog_timeout_seconds - 1U) : 1U;
 
-		if (wake_seconds > watchdog_safe_window)
-		{
-			wake_seconds = watchdog_safe_window;
-		}
-	}
-#endif
-#endif
+// 		if (wake_seconds > watchdog_safe_window)
+// 		{
+// 			wake_seconds = watchdog_safe_window;
+// 		}
+// 	}
+// #endif
+// #endif
 
 	return wake_seconds;
 }

@@ -149,8 +149,8 @@ void DataLoad_CellVolt(void)
         // {
         // 	t_i32temp = ((t_i32temp * g_tParam.CalibCoefK[VOLT_AFE1]) >> 10) + g_tParam.CalibCoefB[VOLT_AFE1];
         // }
-        t_i32temp = ((t_i32temp * SYSKDEFAULT) >> 10) + SYSBDEFAULT;
-        t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
+        // t_i32temp = ((t_i32temp * SYSKDEFAULT) >> 10) + SYSBDEFAULT;
+        // t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 

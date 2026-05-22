@@ -25,10 +25,6 @@
 
 
 
-#define EEPROM_ADDR_SYS_FUNC_SELECT     	2044
-
-
-
 //����ΪEEPROM�������ݵ�˳��͸���һ����
 #define E2P_PARA_NUM_PROTECT 		 		65				//Ϊ����������ӣ�Ϊ��Ҫ�ֿ�����Ϊ���32λ�����⣬��������ôʵ��
 #define E2P_PARA_NUM_RTC		 			12

@@ -2122,8 +2122,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		}
 		else
 		{
-			WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT, (UINT16)(System_OnOFF_Func.all & 0x0000FFFF));
-			WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2, (UINT16)(System_OnOFF_Func.all >> 16));
 		}
 
 		if (System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
@@ -2158,8 +2156,6 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 		}
 		else
 		{
-			WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT, (UINT16)(System_OnOFF_Func.all & 0x0000FFFF));
-			WriteEEPROM_Word_NoZone(EEPROM_ADDR_SYS_FUNC_SELECT + 2, (UINT16)(System_OnOFF_Func.all >> 16));
 		}
 	}
 	else

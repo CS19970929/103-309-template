@@ -385,10 +385,7 @@ extern union FAULT_FLAG_FIRST Fault_Flag_Fisrt;
 extern union FAULT_FLAG_SECOND Fault_Flag_Second;
 extern union FAULT_FLAG_THIRD Fault_Flag_Third;
 
-extern UINT16 Fault_record_First[Record_len];
-extern UINT16 Fault_record_Second[Record_len];
 extern UINT16 Fault_record_Third[Record_len];
-extern UINT16 RTC_Fault_record_Third[Record_len][6];
 
 extern UINT16 Fault_record_First2[Record_len];
 extern UINT16 Fault_record_Second2[Record_len];
@@ -400,10 +397,6 @@ extern UINT8  FaultPoint_Third;
 extern UINT8  FaultPoint_First2;
 extern UINT8  FaultPoint_Second2;
 extern UINT8  FaultPoint_Third2;
-
-extern UINT16 FaultCnt_StartUp_First;
-extern UINT16 FaultCnt_StartUp_Second;
-extern UINT16 FaultCnt_StartUp_Third;
 
 void App_WarnCtrl(void);
 void FaultWarnRecord2(enum FaultFlag num);
