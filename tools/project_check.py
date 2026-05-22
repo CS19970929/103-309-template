@@ -22,6 +22,7 @@ PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_C
 PROJECT_CONFIG_ENCODING = "gbk"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
 CONF_H = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "conf.h"
+RELEASE_MAP = ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
@@ -63,6 +64,27 @@ UTF8_TEXT_SUFFIXES = {
 
 
 COMMON_DEFINES = {"STM32F10X_MD", "USE_STDPERIPH_DRIVER"}
+APP_FLASH_BASE = 0x08004800
+RELEASE_ROM_WARN_BYTES = 96 * 1024
+RELEASE_RAM_WARN_BYTES = 14 * 1024
+REMOVED_LEGACY_SOURCE_FILES = [
+    ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.c",
+    ROOT / "103 + 309" / "Project" / "Source" / "ChargerLoadFunc.h",
+    ROOT / "103 + 309" / "Project" / "Source" / "IO_Control.c",
+    ROOT / "103 + 309" / "Project" / "Source" / "IO_Control.h",
+]
+REMOVED_LEGACY_PROJECT_PATHS = {
+    "../Source/ChargerLoadFunc.c",
+    "../Source/IO_Control.c",
+}
+REMOVED_LEGACY_TOKENS = [
+    "ChargerLoadFunc",
+    "IO_Control",
+    "ChargerLoad_Func",
+    "Init_ChargerLoad_Det",
+    "App_ChargerLoad_Det",
+    "App_DI1_Switch",
+]
 RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_",
     "_DEBUG_CODE",
@@ -74,6 +96,7 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_BUILD_PROFILE": "0",
     "PROJECT_CFG_WDOG_ENABLE": "1",
     "PROJECT_CFG_DEBUG_CODE_ENABLE": "0",
+    "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE": "0",
     "PROJECT_CFG_DEBUG_WATCH_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE": "0",
@@ -88,6 +111,7 @@ RELEASE_SAFE_DEFAULTS = {
 GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_WDOG_ENABLE",
     "PROJECT_CFG_DEBUG_CODE_ENABLE",
+    "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE",
     "PROJECT_CFG_DEBUG_WATCH_ENABLE",
     "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE",
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
@@ -253,6 +277,8 @@ def check_utf8_text_files(reporter):
     bom = []
 
     for path in iter_git_tracked_files():
+        if not path.exists():
+            continue
         if path == PROJECT_CONFIG:
             continue
         if path.suffix not in UTF8_TEXT_SUFFIXES:
@@ -382,6 +408,55 @@ def check_keil_targets(reporter):
             reporter.ok("Keil targets use separate output names")
 
 
+def check_removed_legacy_modules(reporter):
+    existing = [str(path.relative_to(ROOT)) for path in REMOVED_LEGACY_SOURCE_FILES if path.exists()]
+    if existing:
+        reporter.fail("removed legacy modules should not exist: {0}".format("; ".join(existing)))
+    else:
+        reporter.ok("removed legacy charger/load and IO modules are absent from source tree")
+
+    if PROJECT.exists():
+        try:
+            targets = parse_project_targets(PROJECT)
+        except ET.ParseError:
+            targets = {}
+
+        stale_targets = []
+        for name, target in sorted(targets.items()):
+            stale = REMOVED_LEGACY_PROJECT_PATHS & target["files"]
+            if stale:
+                stale_targets.append("{0}: {1}".format(name, ",".join(sorted(stale))))
+        if stale_targets:
+            reporter.fail("Keil project still references removed legacy modules: {0}".format("; ".join(stale_targets)))
+        else:
+            reporter.ok("Keil project has no removed legacy module entries")
+
+    search_roots = [
+        ROOT / "103 + 309" / "Project" / "Source",
+        ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0" / "drivers",
+    ]
+    stale_refs = []
+    removed_paths = set(REMOVED_LEGACY_SOURCE_FILES)
+    for base in search_roots:
+        if not base.exists():
+            continue
+        for path in base.rglob("*"):
+            if path in removed_paths or path.suffix not in (".c", ".h"):
+                continue
+            try:
+                text = read_text(path)
+            except OSError:
+                continue
+            for token in REMOVED_LEGACY_TOKENS:
+                if token in text:
+                    stale_refs.append("{0}: {1}".format(path.relative_to(ROOT), token))
+                    break
+    if stale_refs:
+        reporter.fail("source still references removed legacy modules: {0}".format("; ".join(stale_refs[:8])))
+    else:
+        reporter.ok("source has no removed legacy module references")
+
+
 def check_release_defaults(reporter):
     if not PROJECT_CONFIG.exists():
         return
@@ -425,6 +500,66 @@ def check_build_guard(reporter):
         reporter.ok("Project_BuildGuard.h late macro checks are outside the include guard")
     else:
         reporter.fail("Project_BuildGuard.h late macro checks should stay outside the include guard")
+
+
+def check_release_map(reporter):
+    if not RELEASE_MAP.exists():
+        reporter.warn("release map is missing; build FD_Release before final release checks")
+        return
+
+    text = read_text(RELEASE_MAP)
+    load = re.search(r"Load Region LR_IROM1 \(Base: 0x([0-9a-fA-F]+),", text)
+    exec_region = re.search(r"Execution Region ER_IROM1 \(Exec base: 0x([0-9a-fA-F]+),", text)
+    if load and int(load.group(1), 16) == APP_FLASH_BASE:
+        reporter.ok("FD_Release map Load Region base is 0x{0:08X}".format(APP_FLASH_BASE))
+    else:
+        reporter.fail("FD_Release map Load Region must start at 0x{0:08X}".format(APP_FLASH_BASE))
+
+    if exec_region and int(exec_region.group(1), 16) == APP_FLASH_BASE:
+        reporter.ok("FD_Release map Execution Region base is 0x{0:08X}".format(APP_FLASH_BASE))
+    else:
+        reporter.fail("FD_Release map Execution Region must start at 0x{0:08X}".format(APP_FLASH_BASE))
+
+    rom = re.search(r"Total ROM Size \(Code \+ RO Data \+ RW Data\)\s+(\d+)", text)
+    ram = re.search(r"Total RW\s+Size \(RW Data \+ ZI Data\)\s+(\d+)", text)
+    if rom:
+        rom_size = int(rom.group(1))
+        if rom_size > RELEASE_ROM_WARN_BYTES:
+            reporter.warn("FD_Release ROM size is {0} bytes, above warning line {1}".format(rom_size, RELEASE_ROM_WARN_BYTES))
+        else:
+            reporter.ok("FD_Release ROM size is under warning line: {0} bytes".format(rom_size))
+    else:
+        reporter.warn("FD_Release map Total ROM Size line was not found")
+
+    if ram:
+        ram_size = int(ram.group(1))
+        if ram_size > RELEASE_RAM_WARN_BYTES:
+            reporter.warn("FD_Release RAM size is {0} bytes, above warning line {1}".format(ram_size, RELEASE_RAM_WARN_BYTES))
+        else:
+            reporter.ok("FD_Release RAM size is under warning line: {0} bytes".format(ram_size))
+    else:
+        reporter.warn("FD_Release map Total RW Size line was not found")
+
+    tracked_sources = [
+        PROJECT_CONFIG,
+        BUILD_GUARD,
+        CONF_H,
+        ROOT / "103 + 309" / "Project" / "Source" / "main.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "Flash.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c",
+    ]
+    newest_source = max((path.stat().st_mtime for path in tracked_sources if path.exists()), default=0)
+    if RELEASE_MAP.stat().st_mtime < newest_source:
+        reporter.warn("FD_Release map is older than recently changed source/config files; rebuild before trusting size numbers")
+    else:
+        reporter.ok("FD_Release map timestamp is newer than checked source/config files")
+
+    linked_printf = re.search(r"^\s*\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+printf", text, re.MULTILINE)
+    if linked_printf:
+        reporter.warn("FD_Release linked image still contains printf library members; keep disabled in production unless diagnostics require it")
+    else:
+        reporter.ok("FD_Release linked image does not contain printf library members")
 
 
 def check_gitignore(reporter):
@@ -657,9 +792,11 @@ def main(argv):
     check_utf8_text_files(reporter)
     check_project_config_wizard_encoding(reporter)
     check_keil_targets(reporter)
+    check_removed_legacy_modules(reporter)
     check_release_defaults(reporter)
     check_guard_includes(reporter)
     check_build_guard(reporter)
+    check_release_map(reporter)
     check_gitignore(reporter)
     check_hooks(reporter)
     check_soc_parameter_side_effects(reporter)

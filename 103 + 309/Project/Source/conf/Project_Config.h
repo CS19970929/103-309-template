@@ -125,6 +125,12 @@
 // <i> 使能调试代码。量产必须关闭。
 #define PROJECT_CFG_DEBUG_CODE_ENABLE 0
 
+// <q> Enable Flash boot diagnostic print
+// <i> Debug/Factory only. Release keeps this disabled to avoid pulling printf into the image.
+#ifndef PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE
+#define PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE 0
+#endif
+
 // <q> Export Keil Watch debug observation entries
 // <i> Debug only. Release build must keep this disabled. Exports g_dbg_* watch pointers.
 #ifndef PROJECT_CFG_DEBUG_WATCH_ENABLE

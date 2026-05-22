@@ -25,12 +25,10 @@
 #include "Heat_Cool.h"
 #include "ProductionID.h"
 #include "SH367309_Func.h"
-#include "ChargerLoadFunc.h"
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
 
-#include "IO_Control.h"
 #include "ShortFunc.h"
 #include "conf.h"
 #include "rtc_sleep.h"
@@ -45,9 +43,9 @@
 #define I2C_RW_W	0
 #define I2C_RW_R	1
 
-// typedef enum _IO_STATUS {
-// OPEN = 1, CLOSE = 0
-// }IO_STATUS;
+typedef enum _IO_STATUS {
+OPEN = 1, CLOSE = 0
+}IO_STATUS;
 
 typedef enum _BOOL {
 FALSE = 0, TRUE

@@ -5,7 +5,7 @@ SH367309_REG_STORE SH367309_Reg_Store;
 UINT8 gu8_DriverStartUpFlag = 0;
 
 //-40到100的数值
-UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
+const UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
 								  11611, 11008, 10442, 9909, 9407, 8935, 8489, 8068, 7672, 7297,
 								  6943, 6608, 6292, 5993, 5710, 5442, 5188, 4948, 4720, 4504,
 								  4300, 4105, 3921, 3746, 3580, 3422, 3272, 3130, 2994, 2866,
@@ -254,7 +254,6 @@ void Fault_ChangeToMCU(void)
 	static UINT8 su8_CellOvp_Flag = 0;
 	static UINT8 su8_CellUvp_Flag = 0;
 	static UINT8 su8_IdischgOcp1_Flag = 0;
-	static UINT8 su8_IdischgOcp2_Flag = 0;
 	static UINT8 su8_IchgOcp_Flag = 0;
 	static UINT8 su8_CellChgUtp_Flag = 0;
 	static UINT8 su8_CellChgOtp_Flag = 0;

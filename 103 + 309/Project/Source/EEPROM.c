@@ -250,16 +250,11 @@ static void EEPROM_LoadDefaultBalanceOpenVoltage(void)
 
 UINT8 UpgradeParamPolicy_ApplyOnce(void)
 {
-#if (!UPGRADE_PARAM_POLICY_ENABLE)
+#if (!UPGRADE_PARAM_POLICY_ENABLE) || (!UPGRADE_PARAM_POLICY_HAS_ACTION)
 	return 1;
 #else
 	UINT8 result;
 	UINT8 rw_param_dirty;
-
-	if (!UPGRADE_PARAM_POLICY_HAS_ACTION)
-	{
-		return 1;
-	}
 
 #if (!UPGRADE_PARAM_FORCE_REAPPLY)
 	if (FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG) == UPGRADE_PARAM_POLICY_VERSION)

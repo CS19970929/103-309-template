@@ -650,7 +650,7 @@ void InitRunAfterStopWakeup(void)
     InitTimer();
 
     sys_time.wakeup_rtc = true;
-    Init_ChargerLoad_Det();
+    InitWakeUp_Base();
 
     initAFE1_IIC();
     InitE2PROM_i2c();

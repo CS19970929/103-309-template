@@ -17,7 +17,7 @@ AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
 extern UINT8 ucMTPBuffer[26];
-extern UINT16 iSheldTemp_10K_NTC[141];
+extern const UINT16 iSheldTemp_10K_NTC[141];
 
 #define DSG_CHG_OCP_DELAY_TIME (30 * 100)
 #define OFF 0

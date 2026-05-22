@@ -494,11 +494,6 @@
               <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
-              <FileName>ChargerLoadFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ChargerLoadFunc.c</FilePath>
-            </File>
-            <File>
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
@@ -563,11 +558,6 @@
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IO_Control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IO_Control.c</FilePath>
             </File>
             <File>
               <FileName>IODrivers.c</FileName>
@@ -1431,11 +1421,6 @@
               <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
-              <FileName>ChargerLoadFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ChargerLoadFunc.c</FilePath>
-            </File>
-            <File>
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
@@ -1500,11 +1485,6 @@
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>IO_Control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IO_Control.c</FilePath>
             </File>
             <File>
               <FileName>IODrivers.c</FileName>

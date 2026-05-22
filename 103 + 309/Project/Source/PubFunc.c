@@ -418,7 +418,6 @@ void jtag_disableAndConfIO(void)
 {
 #if 1
 	/* 禁用 JTAG，PB3、PB4、PA15重定义为普通IO */
-	GPIO_InitTypeDef GPIO_InitStructure;
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 使能PA和PB端口时钟
 
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // 配置复用时钟

@@ -20,6 +20,7 @@ UINT8 u8WakeCnt2 = 0;
 #define AFE_CURRENT_CALIB_MIN_MA ((UINT32)2000U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)2U)
+#define AFE_CURRENT_KB_CALIB_ENABLE 0U
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -29,7 +30,6 @@ typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
     UINT16 u16IntervalMs;
 } AFE_CURRENT_STARTUP_ZERO_PARAM;
 
-static const UINT8 s_u8AfeCurrentKbCalibEnable = 0U;
 static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentColdStartupZeroParam = {4U, 32U, 6U, 800U, 25U};
 static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentWarmStartupZeroParam = {4U, 16U, 2U, 120U, 20U};
 static UINT8 s_u8AfeCurrentStartupColdBoot = 1U;
@@ -98,8 +98,6 @@ void charger_detect_and_keyLogi_200ms(void)
         state = 0;
         break;
     }
-
-    App_DI1_Switch();
 }
 
 void Init_Registers(UINT8 num)
@@ -180,7 +178,6 @@ void DataLoad_CellVoltMaxMinFind(void)
     UINT8 t_u8VcellMaxPosition;
     UINT8 t_u8VcellMinPosition;
     UINT32 u32VCellTotle;
-    INT32 i32VCellTotle;
 
     t_u16VcellMaxTemp = 0;
     t_u16VcellMinTemp = 0x7FFF;
@@ -397,7 +394,7 @@ static void AfeCurrent_ObserveReset(void)
     memset((void *)&g_stAfeCurrentObserve, 0, sizeof(g_stAfeCurrentObserve));
     g_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_IDLE;
     g_stAfeCurrentObserve.u8ZeroState = g_u8AfeCurrentZeroState;
-    g_stAfeCurrentObserve.u8KbCalibEnable = s_u8AfeCurrentKbCalibEnable;
+    g_stAfeCurrentObserve.u8KbCalibEnable = (UINT8)AFE_CURRENT_KB_CALIB_ENABLE;
     g_stAfeCurrentObserve.u8StartupColdBoot = s_u8AfeCurrentStartupColdBoot;
 }
 
@@ -740,15 +737,10 @@ static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
 
 static UINT32 DataLoad_CurrentApplyCalib(UINT32 current_mA, UINT8 calib_index)
 {
+#if AFE_CURRENT_KB_CALIB_ENABLE
     UINT16 calib_k;
     INT16 calib_b;
     int64_t current_q10;
-
-    if (s_u8AfeCurrentKbCalibEnable == 0U)
-    {
-        (void)calib_index;
-        return current_mA;
-    }
 
     if (current_mA <= AFE_CURRENT_CALIB_MIN_MA)
     {
@@ -779,6 +771,10 @@ static UINT32 DataLoad_CurrentApplyCalib(UINT32 current_mA, UINT8 calib_index)
     }
 
     return (UINT32)current_q10;
+#else
+    (void)calib_index;
+    return current_mA;
+#endif
 }
 
 static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
@@ -805,7 +801,7 @@ void DataLoad_Current(void)
     INT32 corrected_raw;
     UINT32 current_mA;
 
-    g_stAfeCurrentObserve.u8KbCalibEnable = s_u8AfeCurrentKbCalibEnable;
+    g_stAfeCurrentObserve.u8KbCalibEnable = (UINT8)AFE_CURRENT_KB_CALIB_ENABLE;
     g_stAfeCurrentObserve.u16RawCode = SH367309_Read_AFE1.u16Current;
 
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);

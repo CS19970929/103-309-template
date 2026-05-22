@@ -175,7 +175,6 @@ void EXTI0_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line0);
-    ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
   }
 }
 

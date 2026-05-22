@@ -123,7 +123,9 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
+#ifdef FLASH_BOOT_PRINT_ENABLE
 	StorageFlash_PrintBootCheck();
+#endif
 #ifdef FLASH64K_APP_QUICK_TEST_ENABLE
 	StorageFlash_RunAppQuickTest();
 #endif
@@ -135,8 +137,6 @@ void InitDevice(void)
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
-	/* Init_ChargerLoad_Det(); */
-	/* InitMosRelay_DOx(); */
 	InitData_SOC();
 
 	InitTimer();

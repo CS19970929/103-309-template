@@ -134,6 +134,7 @@ void print_vcell(void)
     log_i("vcelltotle %d", g_stCellInfoReport.u16VCellTotle);
 }
 
+#if 0
 static bool isVol_cuv(void)
 {
     uint8_t i;
@@ -195,6 +196,7 @@ static bool isVol_cov(void)
 
     return true;
 }
+#endif
 
 // void cpu_frequency_conf(uint8_t Mhz)
 void cpu_frequency_conf(void)
