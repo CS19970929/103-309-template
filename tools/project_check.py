@@ -58,6 +58,7 @@ CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
 APP_ARCH_REFACTOR_DOC = ROOT / "PROJECT_ARCH_REFACTOR_2026-05-22.md"
+REFACTOR_REQUIREMENTS_DOC = ROOT / "PROJECT_REFACTOR_REQUIREMENTS_2026-05-22.md"
 HEAT_COOL_REMOVE_DOC = ROOT / "HEAT_COOL_IODRIVERS_REMOVAL_2026-05-22.md"
 UNUSED_SYMBOL_CLEANUP_DOC = ROOT / "UNUSED_SYMBOL_CLEANUP_2026-05-22.md"
 UTF8_TEXT_SUFFIXES = {
@@ -985,7 +986,7 @@ def check_rtc_stop_sleep_contract(reporter):
 
 
 def check_app_architecture(reporter):
-    required_files = [MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, APP_INIT_C, APP_INIT_H, CONF_C, DATADEAL_C, APP_ARCH_REFACTOR_DOC]
+    required_files = [MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, APP_INIT_C, APP_INIT_H, CONF_C, DATADEAL_C, APP_ARCH_REFACTOR_DOC, REFACTOR_REQUIREMENTS_DOC]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
         reporter.fail("app architecture files missing: {0}".format(",".join(missing)))
@@ -1076,6 +1077,23 @@ def check_app_architecture(reporter):
         reporter.ok("architecture refactor document records module boundary, size optimization, and follow-up split order")
     else:
         reporter.fail("architecture refactor document should cover MosStartup, AppInit, compact cell mapping, checks, and next module split order")
+
+    requirements = read_text(REFACTOR_REQUIREMENTS_DOC)
+    required_terms = [
+        "不可破坏约束",
+        "目标架构",
+        "Code/ROM 优化方法",
+        "当前未提交改动判定",
+        "Fault.c/Fault.h",
+        "Sci_Upper.c",
+        "0x08004800",
+        "Project_Config.h",
+    ]
+    missing_terms = [term for term in required_terms if term not in requirements]
+    if missing_terms:
+        reporter.fail("refactor requirements document is missing: {0}".format(",".join(missing_terms)))
+    else:
+        reporter.ok("refactor requirements document records architecture goals, safety constraints, and size policy")
 
 
 def check_runtime_docs(reporter):
