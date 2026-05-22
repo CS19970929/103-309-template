@@ -424,6 +424,21 @@ static void Sci_PutLatestFaultWords(UINT8 buff[], UINT16 *index, const UINT16 re
 	Sci_PutWordBE(buff, index, value);
 }
 
+static void Sci_CopyProductIdBytes(UINT8 dst[],
+								   UINT16 *length,
+								   const struct RS485MSG *s,
+								   UINT16 byte_count)
+{
+	UINT8 i;
+
+	for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
+	{
+		dst[i] = (i < byte_count) ? (UINT8)s->u16Buffer[7 + i] : 0U;
+	}
+
+	*length = byte_count;
+}
+
 static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
 {
 	return (UINT8)(s->u16Buffer[6] == (UINT8)(reg_count << 1));
@@ -1878,7 +1893,6 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
  */
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 {
-	UINT8 i;
 	UINT16 u16WrSNlength;
 
 	u16WrSNlength = (UINT16)((UINT16)s->u16Buffer[5] + ((UINT16)s->u16Buffer[4] << 8)) << 1;
@@ -1886,48 +1900,24 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 	switch (startADDR - RS485_ADDR_SN_SERIAL_NUM)
 	{
 	case 0:
-		for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
-		{
-			if (i < u16WrSNlength)
-			{
-				ProductionInfor.BMS_SerialNumber[i] = s->u16Buffer[7 + i];
-			}
-			else
-			{
-				ProductionInfor.BMS_SerialNumber[i] = '\0';
-			}
-		}
-		ProductionInfor.BMS_SerialNumberLength = u16WrSNlength;
+		Sci_CopyProductIdBytes(ProductionInfor.BMS_SerialNumber,
+							   &ProductionInfor.BMS_SerialNumberLength,
+							   s,
+							   u16WrSNlength);
 		break;
 
 	case 1:
-		for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
-		{
-			if (i < u16WrSNlength)
-			{
-				ProductionInfor.BMS_HardWareVersion[i] = s->u16Buffer[7 + i];
-			}
-			else
-			{
-				ProductionInfor.BMS_HardWareVersion[i] = '\0';
-			}
-		}
-		ProductionInfor.BMS_HardWareVersionLength = u16WrSNlength;
+		Sci_CopyProductIdBytes(ProductionInfor.BMS_HardWareVersion,
+							   &ProductionInfor.BMS_HardWareVersionLength,
+							   s,
+							   u16WrSNlength);
 		break;
 
 	case 2:
-		for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
-		{
-			if (i < u16WrSNlength)
-			{
-				ProductionInfor.BMS_SoftWareVersion[i] = s->u16Buffer[7 + i];
-			}
-			else
-			{
-				ProductionInfor.BMS_SoftWareVersion[i] = '\0';
-			}
-		}
-		ProductionInfor.BMS_SoftWareVersionLength = u16WrSNlength;
+		Sci_CopyProductIdBytes(ProductionInfor.BMS_SoftWareVersion,
+							   &ProductionInfor.BMS_SoftWareVersionLength,
+							   s,
+							   u16WrSNlength);
 		break;
 
 	default:

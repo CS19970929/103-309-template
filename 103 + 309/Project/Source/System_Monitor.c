@@ -6,6 +6,38 @@ volatile union System_OnOFF_Function System_OnOFF_Func_StartUpRec;
 volatile union System_Status SystemStatus;
 volatile union System_Function_StartUp System_Func_StartUp;
 
+#define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
+
+static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
+	SYSTEM_ERROR_FIELD_INVALID,
+	0U,  1U,  2U,  3U,
+	4U,  5U,  6U,  7U,
+	8U,  9U,  10U, 11U,
+	20U, 12U, 13U, 14U,
+	15U, 16U, 17U, 21U,
+	SYSTEM_ERROR_FIELD_INVALID,
+	SYSTEM_ERROR_FIELD_INVALID,
+	22U
+};
+
+static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
+{
+	UINT8 offset;
+
+	if ((errorCode < ERROR_AFE1) || (errorCode > ERROR_NUM))
+	{
+		return 0;
+	}
+
+	offset = s_u8SystemErrorFieldOffset[(UINT8)errorCode];
+	if (offset == SYSTEM_ERROR_FIELD_INVALID)
+	{
+		return 0;
+	}
+
+	return &(((volatile UINT8 *)&System_ErrFlag)[offset]);
+}
+
 void InitSystemMonitorData_EEPROM(void)
 {
 	// 系统功能控制类型，原则上，关闭功能不用管下面的，只需要这个置零就好
@@ -66,203 +98,47 @@ void InitSystemMonitorData_EEPROM(void)
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	UINT8 result = 0;
+	volatile UINT8 *flag;
+	enum SYSTEM_ERROR_COMMAND baseError;
 
-	switch (errorCode)
+	if ((errorCode >= ERROR_AFE1) && (errorCode <= ERROR_NUM))
 	{
-	case ERROR_AFE1:
-		System_ErrFlag.u8ErrFlag_Com_AFE1++;
-		break;
-	case ERROR_AFE2:
-		System_ErrFlag.u8ErrFlag_Com_AFE2++;
-		break;
-	case ERROR_CAN:
-		System_ErrFlag.u8ErrFlag_Com_Can++;
-		break;
-	case ERROR_EEPROM_COM:
-		System_ErrFlag.u8ErrFlag_Com_EEPROM++;
-		break;
-	case ERROR_SPI:
-		System_ErrFlag.u8ErrFlag_Com_SPI++;
-		break;
-	case ERROR_UPPER:
-		System_ErrFlag.u8ErrFlag_Com_Upper++;
-		break;
-	case ERROR_CLIENT:
-		System_ErrFlag.u8ErrFlag_Com_Client++;
-		break;
-	case ERROR_SCREEN:
-		System_ErrFlag.u8ErrFlag_Com_Screen++;
-		break;
-	case ERROR_WIFI:
-		System_ErrFlag.u8ErrFlag_Com_Wifi++;
-		break;
-	case ERROR_BLUETOOTH:
-		System_ErrFlag.u8ErrFlag_Com_BlueTooth++;
-		break;
-	case ERROR_APP:
-		System_ErrFlag.u8ErrFlag_Com_App++;
-		break;
-	case ERROR_CBC_CHG:
-		System_ErrFlag.u8ErrFlag_CBC_CHG++;
-		break;
-	case ERROR_CBC_DSG:
-		System_ErrFlag.u8ErrFlag_CBC_DSG++;
-		break;
-	case ERROR_EEPROM_STORE:
-		// System_ErrFlag.u8ErrFlag_Store_EEPROM++;
-		break;
-	case ERROR_HSE:
-		System_ErrFlag.u8ErrFlag_HSE++;
-		break;
-	case ERROR_LSE:
-		System_ErrFlag.u8ErrFlag_LSE++;
-		break;
-	case ERROR_VDEATLE_OVER:
-		System_ErrFlag.u8ErrFlag_Vdelta_OVER++;
-		break;
-	case ERROR_BALANCED:
-		System_ErrFlag.u8ErrFlag_Balanced++;
-		break;
-	case ERROR_ADC:
-		System_ErrFlag.u8ErrFlag_ADC++;
-		break;
-	case ERROR_SOC_CAIL:
-		System_ErrFlag.u8ErrFlag_SOC_Cail++;
-		break;
-	case ERROR_TEMP_BREAK:
-		System_ErrFlag.u8ErrFlag_TempBreak = 1;
-		break;
+		flag = System_ErrorField(errorCode);
+		if (flag != 0)
+		{
+			if (errorCode == ERROR_TEMP_BREAK)
+			{
+				*flag = 1U;
+			}
+			else if (errorCode != ERROR_EEPROM_STORE)
+			{
+				++(*flag);
+			}
+		}
+		return result;
+	}
 
-	case ERROR_REMOVE_AFE1:
-		System_ErrFlag.u8ErrFlag_Com_AFE1 = 0;
-		break;
-	case ERROR_REMOVE_AFE2:
-		System_ErrFlag.u8ErrFlag_Com_AFE2 = 0;
-		break;
-	case ERROR_REMOVE_CAN:
-		System_ErrFlag.u8ErrFlag_Com_Can = 0;
-		break;
-	case ERROR_REMOVE_EEPROM_COM:
-		System_ErrFlag.u8ErrFlag_Com_EEPROM = 0;
-		break;
-	case ERROR_REMOVE_SPI:
-		System_ErrFlag.u8ErrFlag_Com_SPI = 0;
-		break;
-	case ERROR_REMOVE_UPPER:
-		System_ErrFlag.u8ErrFlag_Com_Upper = 0;
-		break;
-	case ERROR_REMOVE_CLIENT:
-		System_ErrFlag.u8ErrFlag_Com_Client = 0;
-		break;
-	case ERROR_REMOVE_SCREEN:
-		System_ErrFlag.u8ErrFlag_Com_Screen = 0;
-		break;
-	case ERROR_REMOVE_WIFI:
-		System_ErrFlag.u8ErrFlag_Com_Wifi = 0;
-		break;
-	case ERROR_REMOVE_BLUETOOTH:
-		System_ErrFlag.u8ErrFlag_Com_BlueTooth = 0;
-		break;
-	case ERROR_REMOVE_APP:
-		System_ErrFlag.u8ErrFlag_Com_App = 0;
-		break;
-	case ERROR_REMOVE_CBC_CHG:
-		System_ErrFlag.u8ErrFlag_CBC_CHG = 0;
-		break;
-	case ERROR_REMOVE_CBC_DSG:
-		System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
-		break;
-	case ERROR_REMOVE_EEPROM_STORE:
-		System_ErrFlag.u8ErrFlag_Store_EEPROM = 0;
-		break;
-	case ERROR_REMOVE_HSE:
-		System_ErrFlag.u8ErrFlag_HSE = 0;
-		break;
-	case ERROR_REMOVE_LSE:
-		System_ErrFlag.u8ErrFlag_LSE = 0;
-		break;
-	case ERROR_REMOVE_VDEATLE_OVER:
-		System_ErrFlag.u8ErrFlag_Vdelta_OVER = 0;
-		break;
-	case ERROR_REMOVE_BALANCED:
-		System_ErrFlag.u8ErrFlag_Balanced = 0;
-		break;
-	case ERROR_REMOVE_ADC:
-		System_ErrFlag.u8ErrFlag_ADC = 0;
-		break;
-	case ERROR_REMOVE_SOC_CAIL:
-		System_ErrFlag.u8ErrFlag_SOC_Cail = 0;
-		break;
-	case ERROR_REMOVE_TEMP_BREAK:
-		System_ErrFlag.u8ErrFlag_TempBreak = 0;
-		break;
+	if ((errorCode >= ERROR_REMOVE_AFE1) && (errorCode <= ERROR_REMOVE_TEMP_BREAK))
+	{
+		baseError = (enum SYSTEM_ERROR_COMMAND)((UINT16)ERROR_AFE1 +
+												((UINT16)errorCode - (UINT16)ERROR_REMOVE_AFE1));
+		flag = System_ErrorField(baseError);
+		if (flag != 0)
+		{
+			*flag = 0U;
+		}
+		return result;
+	}
 
-	case ERROR_STATUS_AFE1:
-		result = System_ErrFlag.u8ErrFlag_Com_AFE1;
-		break;
-	case ERROR_STATUS_AFE2:
-		result = System_ErrFlag.u8ErrFlag_Com_AFE2;
-		break;
-	case ERROR_STATUS_CAN:
-		result = System_ErrFlag.u8ErrFlag_Com_Can;
-		break;
-	case ERROR_STATUS_EEPROM_COM:
-		result = System_ErrFlag.u8ErrFlag_Com_EEPROM;
-		break;
-	case ERROR_STATUS_SPI:
-		result = System_ErrFlag.u8ErrFlag_Com_SPI;
-		break;
-	case ERROR_STATUS_UPPER:
-		result = System_ErrFlag.u8ErrFlag_Com_Upper;
-		break;
-	case ERROR_STATUS_CLIENT:
-		result = System_ErrFlag.u8ErrFlag_Com_Client;
-		break;
-	case ERROR_STATUS_SCREEN:
-		result = System_ErrFlag.u8ErrFlag_Com_Screen;
-		break;
-	case ERROR_STATUS_WIFI:
-		result = System_ErrFlag.u8ErrFlag_Com_Wifi;
-		break;
-	case ERROR_STATUS_BLUETOOTH:
-		result = System_ErrFlag.u8ErrFlag_Com_BlueTooth;
-		break;
-	case ERROR_STATUS_APP:
-		result = System_ErrFlag.u8ErrFlag_Com_App;
-		break;
-	case ERROR_STATUS_CBC_CHG:
-		result = System_ErrFlag.u8ErrFlag_CBC_CHG;
-		break;
-	case ERROR_STATUS_CBC_DSG:
-		result = System_ErrFlag.u8ErrFlag_CBC_DSG;
-		break;
-	case ERROR_STATUS_EEPROM_STORE:
-		result = System_ErrFlag.u8ErrFlag_Store_EEPROM;
-		break;
-	case ERROR_STATUS_HSE:
-		result = System_ErrFlag.u8ErrFlag_HSE;
-		break;
-	case ERROR_STATUS_LSE:
-		result = System_ErrFlag.u8ErrFlag_LSE;
-		break;
-	case ERROR_STATUS_VDEATLE_OVER:
-		result = System_ErrFlag.u8ErrFlag_Vdelta_OVER;
-		break;
-	case ERROR_STATUS_BALANCED:
-		result = System_ErrFlag.u8ErrFlag_Balanced;
-		break;
-	case ERROR_STATUS_ADC:
-		result = System_ErrFlag.u8ErrFlag_ADC;
-		break;
-	case ERROR_STATUS_SOC_CAIL:
-		result = System_ErrFlag.u8ErrFlag_SOC_Cail;
-		break;
-	case ERROR_STATUS_TEMP_BREAK:
-		result = System_ErrFlag.u8ErrFlag_TempBreak;
-		break;
-
-	default:
-		break;
+	if ((errorCode >= ERROR_STATUS_AFE1) && (errorCode <= ERROR_STATUS_TEMP_BREAK))
+	{
+		baseError = (enum SYSTEM_ERROR_COMMAND)((UINT16)ERROR_AFE1 +
+												((UINT16)errorCode - (UINT16)ERROR_STATUS_AFE1));
+		flag = System_ErrorField(baseError);
+		if (flag != 0)
+		{
+			result = *flag;
+		}
 	}
 
 	return result;

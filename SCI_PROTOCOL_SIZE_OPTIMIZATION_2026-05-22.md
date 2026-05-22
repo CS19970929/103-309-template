@@ -109,3 +109,54 @@ Execution Region ER_IROM1 Exec base: 0x08004800
 Total ROM Size: 55784
 Total RW Size: 6064
 ```
+
+## 第二轮优化记录
+
+继续基于最新 `FD_Release.map` 处理高占用函数，保持协议、错误码语义和量产配置不变。
+
+修改内容：
+- `System_ERROR_UserCallback()` 由三段重复 `switch` 改为错误码到 `System_ErrFlag` 字段偏移的表驱动逻辑。
+- 保留原语义：普通错误计数递增，`ERROR_TEMP_BREAK` 仍写 `1`，`ERROR_EEPROM_STORE` 上报入口仍不递增，remove/status 命令仍按原字段清零/读取。
+- `Sci_WrRegs_0x10_SN_Version()` 的 SN、硬件版本、软件版本写入循环合并到 `Sci_CopyProductIdBytes()`，长度字段和尾部补零规则不变。
+
+第二轮构建结果：
+```text
+Program Size: Code=52224 RO-data=2768 RW-data=808 ZI-data=5256
+Total RO  Size: 54992
+Total RW  Size: 6064
+Total ROM Size: 55236
+FD_Release.bin: 55236 bytes
+```
+
+相对第一轮结果：
+- Code 继续减少 572 字节。
+- RO-data 增加 24 字节，用于错误字段偏移表。
+- Total ROM 继续减少 548 字节。
+- RAM 仍为 6064 字节。
+
+关键函数尺寸：
+```text
+System_ERROR_UserCallback: 678 -> 114 bytes
+System_ErrorField: 32 bytes
+s_u8SystemErrorFieldOffset: 24 bytes
+Sci_WrRegs_0x10_SN_Version: 192 -> 106 bytes
+Sci_CopyProductIdBytes: 38 bytes
+```
+
+累计相对本次优化前基线：
+```text
+Code:      53676 -> 52224, -1452 bytes
+Total ROM: 56664 -> 55236, -1428 bytes
+RAM:       6064  -> 6064, unchanged
+```
+
+第二轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```
