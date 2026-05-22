@@ -160,3 +160,52 @@ Project check summary:
 Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
+
+## 第三轮优化记录
+
+继续处理 map 中剩余的高占用、低风险重复逻辑。
+
+修改内容：
+- `Sci_WrReg_0x06_Reset_CalibCoef()` 改为先解析复位命令对应的校准索引范围，再统一调用 `Sci_ResetCalibCoefIndex()` 完成 K/B 默认值恢复和 EEPROM 写入。
+- 0x55AA、0x55AB、0x55AC、0x55AD、0x55AF、0x55B0 的写入目标保持不变。
+- 0x55AE 温度校准复位保留历史行为：运行时温度 K/B 置默认值，EEPROM 写入仍使用原有同偏移源索引值，避免在体积优化中改变既有设备行为。
+- `InitSystemMonitorData_EEPROM()` 将默认开关、启动标志和系统状态的逐 bit 赋值收敛为命名默认掩码，并注明掩码需要与 `System_Monitor.h` 位序同步。
+
+第三轮构建结果：
+```text
+Program Size: Code=51716 RO-data=2768 RW-data=808 ZI-data=5256
+Total RO  Size: 54484
+Total RW  Size: 6064
+Total ROM Size: 54728
+FD_Release.bin: 54728 bytes
+```
+
+相对第二轮结果：
+- Code 继续减少 508 字节。
+- Total ROM 继续减少 508 字节。
+- RAM 仍为 6064 字节。
+
+关键函数尺寸：
+```text
+Sci_WrReg_0x06_Reset_CalibCoef: 432 -> 164 bytes
+Sci_ResetCalibCoefIndex: 60 bytes
+InitSystemMonitorData_EEPROM: 330 -> 32 bytes
+```
+
+累计相对本次优化前基线：
+```text
+Code:      53676 -> 51716, -1960 bytes
+Total ROM: 56664 -> 54728, -1936 bytes
+RAM:       6064  -> 6064, unchanged
+```
+
+第三轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```

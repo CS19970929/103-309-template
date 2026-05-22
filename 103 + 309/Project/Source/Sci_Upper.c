@@ -439,6 +439,16 @@ static void Sci_CopyProductIdBytes(UINT8 dst[],
 	*length = byte_count;
 }
 
+static void Sci_ResetCalibCoefIndex(UINT8 runtime_index, UINT8 store_index)
+{
+	g_u16CalibCoefK[runtime_index] = SYSKDEFAULT;
+	g_i16CalibCoefB[runtime_index] = SYSBDEFAULT;
+	WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (runtime_index << 1)),
+							g_u16CalibCoefK[store_index]);
+	WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (runtime_index << 1)),
+							g_i16CalibCoefB[store_index]);
+}
+
 static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
 {
 	return (UINT8)(s->u16Buffer[6] == (UINT8)(reg_count << 1));
@@ -1929,61 +1939,53 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
+	UINT16 u16SciRegData;
 	UINT8 i;
-	switch (s->u16Buffer[5] + (s->u16Buffer[4] << 8))
+	UINT8 first_index;
+	UINT8 store_index;
+	UINT8 count;
+
+	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	if (u16SciRegData == 0x55AA)
 	{
-	case 0x55AA:
-		for (i = 0; i < 32; i++)
-		{
-			g_u16CalibCoefK[i] = SYSKDEFAULT;
-			g_i16CalibCoefB[i] = SYSBDEFAULT;
-			WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (i << 1)), g_u16CalibCoefK[i]);
-			WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (i << 1)), g_i16CalibCoefB[i]);
-		}
-		break;
-	case 0x55AB:
-		g_u16CalibCoefK[VOLT_AFE1] = SYSKDEFAULT;
-		g_i16CalibCoefB[VOLT_AFE1] = SYSBDEFAULT;
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (VOLT_AFE1 << 1)), g_u16CalibCoefK[VOLT_AFE1]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (VOLT_AFE1 << 1)), g_i16CalibCoefB[VOLT_AFE1]);
-		break;
-	case 0x55AC:
-		g_u16CalibCoefK[VOLT_AFE2] = SYSKDEFAULT;
-		g_i16CalibCoefB[VOLT_AFE2] = SYSBDEFAULT;
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (VOLT_AFE2 << 1)), g_u16CalibCoefK[VOLT_AFE2]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (VOLT_AFE2 << 1)), g_i16CalibCoefB[VOLT_AFE2]);
-		break;
-	case 0x55AD:
-		g_u16CalibCoefK[VOLT_VBUS] = SYSKDEFAULT;
-		g_i16CalibCoefB[VOLT_VBUS] = SYSBDEFAULT;
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (VOLT_VBUS << 1)), g_u16CalibCoefK[VOLT_VBUS]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (VOLT_VBUS << 1)), g_i16CalibCoefB[VOLT_VBUS]);
-		break;
-	case 0x55AE:
-		for (i = 0; i < 10; i++)
-		{
-			g_u16CalibCoefK[MDL_TEMP1 + i] = SYSKDEFAULT;
-			g_i16CalibCoefB[MDL_TEMP1 + i] = SYSBDEFAULT;
-			WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + ((MDL_TEMP1 + i) << 1)), g_u16CalibCoefK[i]);
-			WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + ((MDL_TEMP1 + i) << 1)), g_i16CalibCoefB[i]);
-		}
-		break;
-	case 0x55AF:
-		g_u16CalibCoefK[MDL_IDSG] = SYSKDEFAULT;
-		g_i16CalibCoefB[MDL_IDSG] = SYSBDEFAULT;
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (MDL_IDSG << 1)), g_u16CalibCoefK[MDL_IDSG]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (MDL_IDSG << 1)), g_i16CalibCoefB[MDL_IDSG]);
-		break;
-	case 0x55B0:
-		g_u16CalibCoefK[MDL_ICHG] = SYSKDEFAULT;
-		g_i16CalibCoefB[MDL_ICHG] = SYSBDEFAULT;
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (MDL_ICHG << 1)), g_u16CalibCoefK[MDL_ICHG]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (MDL_ICHG << 1)), g_i16CalibCoefB[MDL_ICHG]);
-		break;
-	default:
+		first_index = VOLT_C1;
+		store_index = VOLT_C1;
+		count = 32U;
+	}
+	else if ((u16SciRegData >= 0x55AB) && (u16SciRegData <= 0x55AD))
+	{
+		first_index = (UINT8)(VOLT_AFE1 + (u16SciRegData - 0x55AB));
+		store_index = first_index;
+		count = 1U;
+	}
+	else if (u16SciRegData == 0x55AE)
+	{
+		first_index = MDL_TEMP1;
+		store_index = VOLT_C1;
+		count = 10U;
+	}
+	else if (u16SciRegData == 0x55AF)
+	{
+		first_index = MDL_IDSG;
+		store_index = MDL_IDSG;
+		count = 1U;
+	}
+	else if (u16SciRegData == 0x55B0)
+	{
+		first_index = MDL_ICHG;
+		store_index = MDL_ICHG;
+		count = 1U;
+	}
+	else
+	{
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
-		break;
+		return;
+	}
+
+	for (i = 0; i < count; ++i)
+	{
+		Sci_ResetCalibCoefIndex((UINT8)(first_index + i), (UINT8)(store_index + i));
 	}
 }
 
