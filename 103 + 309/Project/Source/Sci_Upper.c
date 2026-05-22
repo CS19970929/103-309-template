@@ -372,6 +372,58 @@ static UINT16 Sci_GetWrValue(const struct RS485MSG *s, UINT16 index)
 	return (UINT16)(s->u16Buffer[2 * index + 8] + (s->u16Buffer[2 * index + 7] << 8));
 }
 
+static UINT8 Sci_IsCalibPairStart(UINT16 addr)
+{
+	if ((addr < RS485_CMD_ADDR_VC1CALIB_K) || (addr > RS485_CMD_ADDR_TEMP_MOS_CALIB_K))
+	{
+		return 0;
+	}
+
+	return (UINT8)(((addr - RS485_CMD_ADDR_VC1CALIB_K) & 1U) == 0U);
+}
+
+static void Sci_PutWordBE(UINT8 buff[], UINT16 *index, UINT16 value)
+{
+	buff[(*index)++] = (UINT8)(value >> 8);
+	buff[(*index)++] = (UINT8)value;
+}
+
+static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
+{
+	while (count != 0U)
+	{
+		buff[(*index)++] = 0U;
+		buff[(*index)++] = 0U;
+		--count;
+	}
+}
+
+static UINT8 Sci_RecordBackIndex(UINT8 point, UINT16 back)
+{
+	INT16 index;
+
+	index = (INT16)point - 1 - (INT16)back;
+	if (index < 0)
+	{
+		index = (INT16)(index + Record_len);
+	}
+
+	return (UINT8)index;
+}
+
+static void Sci_PutLatestFaultWords(UINT8 buff[], UINT16 *index, const UINT16 record[], UINT8 point)
+{
+	UINT16 value;
+
+	value = (UINT16)((record[Sci_RecordBackIndex(point, 0U)] << 8) |
+					 record[Sci_RecordBackIndex(point, 1U)]);
+	Sci_PutWordBE(buff, index, value);
+
+	value = (UINT16)((record[Sci_RecordBackIndex(point, 2U)] << 8) |
+					 record[Sci_RecordBackIndex(point, 3U)]);
+	Sci_PutWordBE(buff, index, value);
+}
+
 static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
 {
 	return (UINT8)(s->u16Buffer[6] == (UINT8)(reg_count << 1));
@@ -497,6 +549,8 @@ static void Sci_WriteWordsFromRequest(struct RS485MSG *s, UINT16 *dst, UINT16 of
 	}
 }
 
+/* Kept beside the disabled protect-write path for quick restoration. */
+#if 0
 static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 {
 	if (Sci_RangeOverlaps(offset,
@@ -507,6 +561,7 @@ static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 		InitData_SOC();
 	}
 }
+#endif
 
 static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 {
@@ -590,74 +645,14 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 		return;
 	}
 
+	if (Sci_IsCalibPairStart(u16SciRegStartAddr))
+	{
+		Sci_WrRegs_0x10_CalibCoef(u16SciRegStartAddr, s);
+		return;
+	}
+
 	switch (u16SciRegStartAddr)
 	{
-	case RS485_CMD_ADDR_VC1CALIB_K:
-	case RS485_CMD_ADDR_VC2CALIB_K:
-	case RS485_CMD_ADDR_VC3CALIB_K:
-	case RS485_CMD_ADDR_VC4CALIB_K:
-	case RS485_CMD_ADDR_VC5CALIB_K:
-	case RS485_CMD_ADDR_VC6CALIB_K:
-	case RS485_CMD_ADDR_VC7CALIB_K:
-	case RS485_CMD_ADDR_VC8CALIB_K:
-	case RS485_CMD_ADDR_VC9CALIB_K:
-	case RS485_CMD_ADDR_VC10CALIB_K:
-	case RS485_CMD_ADDR_VC11CALIB_K:
-	case RS485_CMD_ADDR_VC12CALIB_K:
-	case RS485_CMD_ADDR_VC13CALIB_K:
-	case RS485_CMD_ADDR_VC14CALIB_K:
-	case RS485_CMD_ADDR_VC15CALIB_K:
-	case RS485_CMD_ADDR_VC16CALIB_K:
-	case RS485_CMD_ADDR_VC17CALIB_K:
-	case RS485_CMD_ADDR_VC18CALIB_K:
-	case RS485_CMD_ADDR_VC19CALIB_K:
-	case RS485_CMD_ADDR_VC20CALIB_K:
-	case RS485_CMD_ADDR_VC21CALIB_K:
-	case RS485_CMD_ADDR_VC22CALIB_K:
-	case RS485_CMD_ADDR_VC23CALIB_K:
-	case RS485_CMD_ADDR_VC24CALIB_K:
-	case RS485_CMD_ADDR_VC25CALIB_K:
-	case RS485_CMD_ADDR_VC26CALIB_K:
-	case RS485_CMD_ADDR_VC27CALIB_K:
-	case RS485_CMD_ADDR_VC28CALIB_K:
-	case RS485_CMD_ADDR_VC29CALIB_K:
-	case RS485_CMD_ADDR_VC30CALIB_K:
-	case RS485_CMD_ADDR_VC31CALIB_K:
-	case RS485_CMD_ADDR_VC32CALIB_K:
-	case RS485_CMD_ADDR_AFE1CALIB_K:
-	case RS485_CMD_ADDR_AFE2CALIB_K:
-	case RS485_CMD_ADDR_VBUSCALIB_K:
-	case RS485_CMD_ADDR_ICHGCALIB_K:
-	case RS485_CMD_ADDR_IDISCHGCALIB_K:
-	case RS485_CMD_ADDR_TEMP1_CALIB_K:
-	case RS485_CMD_ADDR_TEMP2_CALIB_K:
-	case RS485_CMD_ADDR_TEMP3_CALIB_K:
-	case RS485_CMD_ADDR_TEMP4_CALIB_K:
-	case RS485_CMD_ADDR_TEMP5_CALIB_K:
-	case RS485_CMD_ADDR_TEMP6_CALIB_K:
-	case RS485_CMD_ADDR_TEMP_ENV1_CALIB_K:
-	case RS485_CMD_ADDR_TEMP_ENV2_CALIB_K:
-	case RS485_CMD_ADDR_TEMP_ENV3_CALIB_K:
-	case RS485_CMD_ADDR_TEMP_MOS_CALIB_K:
-		Sci_WrRegs_0x10_CalibCoef(u16SciRegStartAddr, s);
-		break;
-
-	case RS485_CMD_ADDR_VCELL_OVP_FIRST:
-	case RS485_CMD_ADDR_VCELL_UVP_FIRST:
-	case RS485_CMD_ADDR_VBUS_OVP_FIRST:
-	case RS485_CMD_ADDR_VBUS_UVP_FIRST:
-	case RS485_CMD_ADDR_ICHG_OCP_FIRST:
-	case RS485_CMD_ADDR_IDSG_OCP_FIRST:
-	case RS485_CMD_ADDR_TCHG_OTP_FIRST:
-	case RS485_CMD_ADDR_TCHG_UTP_FIRST:
-	case RS485_CMD_ADDR_TDSG_OTP_FIRST:
-	case RS485_CMD_ADDR_TDSG_UTP_FIRST:
-	case RS485_CMD_ADDR_TMOS_OTP_FIRST:
-	case RS485_CMD_ADDR_VDELTA_OP_FIRST:
-	case RS485_CMD_ADDR_SOC_UP_FIRST:
-		Sci_WrRegs_0x10_Protect(u16SciRegStartAddr, s);
-		break;
-
 	case RS485_CMD_ADDR_SOC_VOLTAGE1:
 		Sci_WrRegs_0x10_SocTable(s);
 		break;
@@ -668,26 +663,6 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	case RS485_CMD_ADDR_RTC_TIME_YEAR:
 		Sci_WrRegs_0x10_RTC(s);
-		break;
-
-	case RS485_CMD_ADDR_BALANCE_OV:
-		Sci_WrRegs_0x10_Balance(s);
-		break;
-
-	case RS485_CMD_ADDR_CS_CUR_CHGMAX:
-		Sci_WrRegs_0x10_SysOther(s);
-		break;
-
-	case RS485_CMD_ADDR_SLEEP_V_NORMAL:
-		Sci_WrRegs_0x10_SleepElement(s);
-		break;
-
-	case RS485_CMD_ADDR_SOC_AH:
-		Sci_WrRegs_0x10_SocElement(s);
-		break;
-
-	case RS485_CMD_ADDR_SYS_SERIES_NUM:
-		Sci_WrRegs_0x10_SystemElement(s);
 		break;
 
 	case RS485_ADDR_SN_SERIAL_NUM:
@@ -711,58 +686,20 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
 	UINT16 i, j;
-	INT8 k, x;
+	INT8 k;
 
 	i = 0;
 	switch (s->u16RdRegStartAddr)
 	{
 	case 0: // LCD
-		u16SciTemp = 1;
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-		u16SciTemp = (g_stCellInfoReport.u16VCellTotle + 50) / 100;
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-		if (g_stCellInfoReport.u16Ichg > 0)
-		{
-			u16SciTemp = (g_stCellInfoReport.u16Ichg + 5005) / 10;
-		}
-		else
-		{
-			u16SciTemp = (5000 - g_stCellInfoReport.u16IDischg) / 10;
-		}
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-		u16SciTemp = (g_stCellInfoReport.u16TempMax + 5) / 10;
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-		u16SciTemp = g_stCellInfoReport.SocElement.u16Soc;
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 		break;
-
 	case 1: // 上位机第三级保护，60+10=70个
 		for (j = 0; j < Record_len; j++)
 		{
-			k = FaultPoint_Third - 1 - j;
-			if (k < 0)
-			{
-				k = Record_len + k;
-			}
+			k = (INT8)Sci_RecordBackIndex(FaultPoint_Third, j);
 			u16SciTemp = Fault_record_Third[k];
-			t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-			t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-			for (x = 0; x < 6; ++x)
-			{
-				u16SciTemp = RTC_Fault_record_Third[k][x];
-				t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-				t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-			}
+			Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
+			Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 6U);
 		}
 		break;
 
@@ -796,82 +733,31 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
-	INT8 k;
-	UINT8 a[4];
 
 	for (j = 0; j < 63; j++)
 	{ // 0xD000_63
 		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 	// 0xD100_33
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Month) | (RTC_time.RTC_Time_Year << 8);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Hour) | (RTC_time.RTC_Time_Day << 8);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	for (j = 0; j < 4; j++)
-	{
-		k = FaultPoint_First2 - 1 - j;
-		if (k < 0)
-		{
-			k = Record_len + k;
-		}
-		a[j] = k;
-	}
-	u16SciTemp = (Fault_record_First2[a[0]] << 8) | Fault_record_First2[a[1]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	u16SciTemp = (Fault_record_First2[a[2]] << 8) | Fault_record_First2[a[3]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	for (j = 0; j < 4; j++)
-	{
-		k = FaultPoint_Second2 - 1 - j;
-		if (k < 0)
-		{
-			k = Record_len + k;
-		}
-		a[j] = k;
-	}
-	u16SciTemp = (Fault_record_Second2[a[0]] << 8) | Fault_record_Second2[a[1]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	u16SciTemp = (Fault_record_Second2[a[2]] << 8) | Fault_record_Second2[a[3]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	for (j = 0; j < 4; j++)
-	{
-		k = FaultPoint_Third2 - 1 - j;
-		if (k < 0)
-		{
-			k = Record_len + k;
-		}
-		a[j] = k;
-	}
-	u16SciTemp = (Fault_record_Third2[a[0]] << 8) | Fault_record_Third2[a[1]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	u16SciTemp = (Fault_record_Third2[a[2]] << 8) | Fault_record_Third2[a[3]];
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_First2, FaultPoint_First2);
+	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Second2, FaultPoint_Second2);
+	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
 
 	for (j = 0; j < 12; j++)
 	{ // 0xD002到这里。
 		u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 	switch (OPEN)
@@ -886,32 +772,18 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		u16SciTemp = (UINT16)(SystemStatus.all & 0x0000FFFF);
 		break;
 	}
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	u16SciTemp = (UINT16)(SystemStatus.all >> 16);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	u16SciTemp = (UINT16)(System_OnOFF_Func.all & 0x0000FFFF);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	u16SciTemp = (UINT16)(System_OnOFF_Func.all >> 16);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	u16SciTemp = (UINT16)0;
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = (UINT16)0;
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-
-	u16SciTemp = 0;
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 3U);
 
 	u16SciTemp = 0; // 可以加多一个
 	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
@@ -937,11 +809,9 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
 	PWR_BackupAccessCmd(ENABLE);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_REG);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
-	t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-	t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	{
 		UINT16 status_words[RS485_RO_SOC_TEST_WORDS];
@@ -949,8 +819,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		for (j = 0; j < RS485_RO_SOC_TEST_WORDS; ++j)
 		{
 			u16SciTemp = status_words[j];
-			t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-			t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+			Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 		}
 	}
 }
@@ -975,8 +844,7 @@ void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < E2P_PARA_NUM_PROTECT; j++)
 	{
 		u16SciTemp = *(&PRT_E2ROMParas.u16VcellOvp_First + j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 }
 
@@ -988,11 +856,9 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < KB_NUM; j++)
 	{
 		u16SciTemp = g_u16CalibCoefK[j];
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 		u16SciTemp = g_i16CalibCoefB[j];
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 }
 
@@ -1030,29 +896,25 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < SOC_Size_TableCanSet; j++)
 	{ // 由于GetEndValue()函数的问题，只能混在一起
 		u16SciTemp = Sci_GetSocTableWord(j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 	for (j = 0; j < CompensateNUM; j++)
 	{
 		u16SciTemp = CopperLoss[j];
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 	for (j = 0; j < CompensateNUM; j++)
 	{
 		u16SciTemp = CopperLoss_Num[j];
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 	for (j = 0; j < E2P_PARA_NUM_RTC; j++)
 	{
 		u16SciTemp = *(&RTC_time.RTC_Time_Year + j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 }
 
@@ -1064,8 +926,7 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < E2P_PARA_NUM_OTHER_ELEMENT1; j++)
 	{
 		u16SciTemp = *(&OtherElement.u16Balance_OpenVoltage + j);
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
+		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
 }
@@ -1814,6 +1675,7 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 // 节省了很多代码量吧？
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 {
+#if 0
 	UINT16 offset;
 	UINT16 u16WrRegNum;
 	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
@@ -1852,6 +1714,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	}
 
 	Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
+#endif
 }
 
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
@@ -2163,6 +2026,7 @@ void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 {
+#if 0
 	UINT16 u16SciRegData;
 	UINT8 i;
 	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
@@ -2191,6 +2055,7 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
 	}
+#endif
 }
 
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
