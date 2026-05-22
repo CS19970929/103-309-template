@@ -11,6 +11,7 @@
 
 
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 struct CAN_ERROR_SNAPSHOT {
 	UINT8 u8LastErrorCode;
 	UINT8 u8ReceiveErrorCounter;
@@ -45,6 +46,7 @@ struct CAN_LOW_POWER_STATUS {
 };
 
 extern volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
+#endif
 
 
 union MDLREPORTFAULT_REG {

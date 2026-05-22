@@ -87,8 +87,6 @@ typedef struct
     uint8_t charge_off_100ms;
 } LedBarRuntime;
 
-LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
-
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
 {
     {3u, 2u},
@@ -818,7 +816,6 @@ void LedBar_Init(void)
     s_ledbar_charge_active = 0u;
     s_ledbar_charge_on_100ms = 0u;
     s_ledbar_charge_off_100ms = 0u;
-    LedBar_Command = LED_BAR_NORMAL;
 
     LedBar_GpioInitForDisplay();
     LedBar_OutputOff();
@@ -1084,7 +1081,6 @@ void APP_LedBar(void)
 #if LEDBAR_SLEEP_ENABLE
     if (SystemStatus.bits.b1StartUpBMS != 0u)
     {
-        LedBar_Command = LED_BAR_STARTUP;
         LedBar_SetSleep(1u);
         return;
     }
@@ -1105,7 +1101,6 @@ void APP_LedBar(void)
         {
             LedBar_Wakeup();
         }
-        LedBar_Command = LED_BAR_NORMAL;
         return;
     }
 
@@ -1144,20 +1139,16 @@ void APP_LedBar(void)
 
     if (s_ledbar_charge_active != 0u)
     {
-        LedBar_Command = LED_BAR_CHG;
     }
     else if (g_stCellInfoReport.u16IDischg != 0u)
     {
-        LedBar_Command = LED_BAR_DSG;
     }
     else
     {
-        LedBar_Command = LED_BAR_NORMAL;
     }
 
     if (LedBar_IsFaultActive() != 0u)
     {
-        LedBar_Command = LED_BAR_FAULT;
     }
 
     if ((s_ledbar_number != display_value) ||

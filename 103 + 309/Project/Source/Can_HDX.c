@@ -1,8 +1,13 @@
 #include "main.h"
 #include "CanFeidaoFrames.h"
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
 volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
+#define FEIDAO_CAN_ERROR_INC(field) feidao_can_inc_u16(&g_stCanErrorSnapshot.field)
+#else
+#define FEIDAO_CAN_ERROR_INC(field) do { } while (0)
+#endif
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -115,7 +120,11 @@ static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 
 static UINT32 feidao_can_seconds_to_ticks(UINT32 seconds);
 static UINT32 feidao_can_update_logical_tick(UINT32 hw_tick);
 static void feidao_can_invalidate_hw_tick(void);
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 static void feidao_can_update_low_power_status(void);
+#else
+#define feidao_can_update_low_power_status() do { } while (0)
+#endif
 static void feidao_can_power_on(UINT32 now_tick);
 static void feidao_can_power_off(void);
 static void feidao_can_abort_all_tx(void);
@@ -131,8 +140,13 @@ static void feidao_can_anchor_schedule(UINT32 now_tick);
 static void feidao_can_start_idle_probe(void);
 static void feidao_can_schedule_rtc_period_frames(UINT32 now_tick, UINT32 elapsed_seconds);
 static void feidao_can_inc_u16(volatile UINT16 *counter);
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 static void feidao_can_update_error_snapshot(void);
-static void feidao_can_record_ack_error_from_snapshot(void);
+static void feidao_can_record_ack_error(void);
+#else
+#define feidao_can_update_error_snapshot() do { } while (0)
+#define feidao_can_record_ack_error() do { } while (0)
+#endif
 static void feidao_can_record_tx_failed(void);
 static void feidao_can_record_tx_timeout(void);
 static void feidao_can_record_tx_no_mailbox(void);
@@ -192,6 +206,7 @@ static void feidao_can_invalidate_hw_tick(void)
 	s_u8FeidaoCanHwTickValid = 0U;
 }
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 static void feidao_can_update_low_power_status(void)
 {
 	g_stCanLowPowerStatus.u8PowerState = s_u8FeidaoCanPowerState;
@@ -208,6 +223,7 @@ static void feidao_can_update_low_power_status(void)
 	g_stCanLowPowerStatus.u32LogicalTick = s_u32FeidaoCanLogicalTick;
 	g_stCanLowPowerStatus.u32LastRtcElapsedSeconds = s_u32FeidaoCanLastRtcElapsedSeconds;
 }
+#endif
 
 static void feidao_can_clear_sleep_runtime(void)
 {
@@ -375,6 +391,7 @@ static void feidao_can_inc_u16(volatile UINT16 *counter)
 	}
 }
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 static void feidao_can_update_error_snapshot(void)
 {
 	UINT32 esr = CAN1->ESR;
@@ -387,33 +404,34 @@ static void feidao_can_update_error_snapshot(void)
 	g_stCanErrorSnapshot.u8BusOff = (UINT8)((esr & CAN_ESR_BOFF) ? 1U : 0U);
 }
 
-static void feidao_can_record_ack_error_from_snapshot(void)
+static void feidao_can_record_ack_error(void)
 {
 	if (CAN_ErrorCode_ACKErr == g_stCanErrorSnapshot.u8LastErrorCode)
 	{
-		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16AckErrorCnt);
+		FEIDAO_CAN_ERROR_INC(u16AckErrorCnt);
 	}
 }
+#endif
 
 static void feidao_can_record_tx_failed(void)
 {
 	feidao_can_update_error_snapshot();
-	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxFailedCnt);
-	feidao_can_record_ack_error_from_snapshot();
+	FEIDAO_CAN_ERROR_INC(u16TxFailedCnt);
+	feidao_can_record_ack_error();
 	feidao_can_record_tx_cycle_no_ack();
 }
 
 static void feidao_can_record_tx_timeout(void)
 {
 	feidao_can_update_error_snapshot();
-	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxTimeoutCnt);
+	FEIDAO_CAN_ERROR_INC(u16TxTimeoutCnt);
 	feidao_can_record_tx_cycle_no_ack();
 }
 
 static void feidao_can_record_tx_no_mailbox(void)
 {
 	feidao_can_update_error_snapshot();
-	feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxNoMailboxCnt);
+	FEIDAO_CAN_ERROR_INC(u16TxNoMailboxCnt);
 }
 
 static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox)
@@ -479,7 +497,7 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 		{
 			wait_cnt++;
 		}
-		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16TxAbortCnt);
+		FEIDAO_CAN_ERROR_INC(u16TxAbortCnt);
 	}
 
 	feidao_can_clear_tx_done(mailbox);
@@ -782,7 +800,7 @@ static void Can_BusOFF_Monitor(void)
 	if ((s_u8CanBusOff == 0U) && ((CAN1->ESR & CAN_ESR_BOFF) != 0U))
 	{
 		feidao_can_update_error_snapshot();
-		feidao_can_inc_u16(&g_stCanErrorSnapshot.u16BusOffCnt);
+		FEIDAO_CAN_ERROR_INC(u16BusOffCnt);
 		s_u8CanBusOff = 1U;
 		CAN1->MCR |= CAN_MCR_INRQ;
 		g_u16BusOff_RecoverCnt = 0U;

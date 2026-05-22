@@ -94,6 +94,7 @@ typedef enum _AFE_CURRENT_ZERO_STATE {
     AFE_CURRENT_ZERO_RANGE_FAIL = 5
 } AFE_CURRENT_ZERO_STATE;
 
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 typedef enum _AFE_CURRENT_DIR {
     AFE_CURRENT_DIR_ZERO = 0,
     AFE_CURRENT_DIR_CHG = 1,
@@ -126,7 +127,7 @@ typedef struct _AFE_CURRENT_OBSERVE {
     UINT8 u8Direction;
     UINT8 u8CtlcState;
 } AFE_CURRENT_OBSERVE;
-
+#endif
 
 #define SYSKMAX   		((UINT16)1536)      // 1.5
 #define SYSKDEFAULT		((UINT16)1024)      // 1
@@ -245,7 +246,9 @@ extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 extern UINT32 g_u32AfeCurrentSampleSeq;
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
 extern AFE_CURRENT_OBSERVE g_stAfeCurrentObserve;
+#endif
 
 void App_AFEGet(  void);
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);
