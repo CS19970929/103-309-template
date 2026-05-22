@@ -360,3 +360,44 @@ Project check summary:
 Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
+
+## 第七轮优化记录
+
+按 map 从大函数中筛选可读性收益明确的目标。本轮跳过 `Refresh_Parameters()`，因为它集中处理 AFE ROM 参数换算和硬件寄存器字段，强行表驱动会让硬件语义更难跟踪。选择第二大函数 `Fault_ChangeToMCU()`，其中多组普通故障 latch 状态机完全同形。
+
+修改内容：
+- 新增 `SH367309_RecordFaultOnActive()`，表达“故障 active 上升沿只记录一次，故障消失后清 latch”的通用语义。
+- 将过压、放电过流、充电过流、充放电温度保护等普通故障的重复 switch 收敛为命名 helper 调用。
+- 电芯欠压分支保留原地显式 switch，因为它同时控制 `GPIO_DC_EN` 和 `GPIO_2727_EN`，不把电源副作用藏进通用 helper。
+
+第七轮构建结果：
+```text
+Program Size: Code=50132 RO-data=2824 RW-data=896 ZI-data=5416
+Total RO  Size: 52956
+Total RW  Size: 6312
+Total ROM Size: 53204
+FD_Release.bin: 53204 bytes
+```
+
+相对第六轮结果：
+- Code 减少 260 字节。
+- Total ROM 减少 260 字节。
+- RAM 保持 6312 字节不变。
+
+关键函数尺寸：
+```text
+Fault_ChangeToMCU: 742 -> 450 bytes
+SH367309_RecordFaultOnActive: 32 bytes
+App_SH367309_Monitor: 234 bytes, unchanged
+```
+
+第七轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```

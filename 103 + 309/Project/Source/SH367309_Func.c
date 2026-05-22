@@ -209,6 +209,22 @@ void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
+static void SH367309_RecordFaultOnActive(UINT8 *latched, UINT8 active, enum FaultFlag fault)
+{
+	if (active)
+	{
+		if (*latched == 0U)
+		{
+			FaultWarnRecord2(fault);
+			*latched = 1U;
+		}
+	}
+	else
+	{
+		*latched = 0U;
+	}
+}
+
 void Fault_ChangeToMCU(void)
 {
 	static UINT8 su8_CellOvp_Flag = 0;
@@ -233,24 +249,7 @@ void Fault_ChangeToMCU(void)
 	else
 		System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
 
-	switch (su8_CellOvp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			FaultWarnRecord2(CellOvp_Third);
-			su8_CellOvp_Flag = 1;
-		}
-		break;
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
-		{
-			su8_CellOvp_Flag = 0;
-		}
-		break;
-	default:
-		break;
-	}
+	SH367309_RecordFaultOnActive(&su8_CellOvp_Flag, SH367309_Reg_Store.REG_BSTATUS1.bits.OV, CellOvp_Third);
 	switch (su8_CellUvp_Flag)
 	{
 	case 0:
@@ -276,29 +275,9 @@ void Fault_ChangeToMCU(void)
 		break;
 	}
 
-#if 1
-	switch (su8_IdischgOcp1_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2)
-		{
-			// FaultWarnRecord2(IdischgOcp_Second);
-			FaultWarnRecord2(IdischgOcp_Third);
-			su8_IdischgOcp1_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if ((!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1)&& (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2))
-		{
-			su8_IdischgOcp1_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-#endif
+	SH367309_RecordFaultOnActive(&su8_IdischgOcp1_Flag,
+								 SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2,
+								 IdischgOcp_Third);
 
 	// switch (su8_IdischgOcp2_Flag)
 	// {
@@ -318,134 +297,11 @@ void Fault_ChangeToMCU(void)
 	// default:
 	// 	break;
 	// }
-#if 1
-	switch (su8_IchgOcp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			FaultWarnRecord2(IchgOcp_Third);
-			su8_IchgOcp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.OCC)
-		{
-			su8_IchgOcp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-#else
-	// switch (su8_IchgOcp_Flag)
-	// {
-	// case 0:
-	// 	if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
-	// 	{
-	// 		FaultWarnRecord2(IchgOcp_Second);
-	// 		su8_IchgOcp_Flag = 1;
-	// 	}
-	// 	break;
-
-	// case 1:
-	// 	if (!g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
-	// 	{
-	// 		su8_IchgOcp_Flag = 0;
-	// 	}
-	// 	break;
-
-	// default:
-	// 	break;
-	// }
-#endif
-
-	switch (su8_CellChgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			FaultWarnRecord2(CellChgUTp_Third);
-			su8_CellChgUtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTC)
-		{
-			su8_CellChgUtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellChgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			FaultWarnRecord2(CellChgOTp_Third);
-			su8_CellChgOtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTC)
-		{
-			su8_CellChgOtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellDsgUtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			FaultWarnRecord2(CellDsgUTp_Third);
-			su8_CellDsgUtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.UTD)
-		{
-			su8_CellDsgUtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
-
-	switch (su8_CellDsgOtp_Flag)
-	{
-	case 0:
-		if (SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			FaultWarnRecord2(CellDsgOTp_Third);
-			su8_CellDsgOtp_Flag = 1;
-		}
-		break;
-
-	case 1:
-		if (!SH367309_Reg_Store.REG_BSTATUS2.bits.OTD)
-		{
-			su8_CellDsgOtp_Flag = 0;
-		}
-		break;
-
-	default:
-		break;
-	}
+	SH367309_RecordFaultOnActive(&su8_IchgOcp_Flag, SH367309_Reg_Store.REG_BSTATUS1.bits.OCC, IchgOcp_Third);
+	SH367309_RecordFaultOnActive(&su8_CellChgUtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.UTC, CellChgUTp_Third);
+	SH367309_RecordFaultOnActive(&su8_CellChgOtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.OTC, CellChgOTp_Third);
+	SH367309_RecordFaultOnActive(&su8_CellDsgUtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.UTD, CellDsgUTp_Third);
+	SH367309_RecordFaultOnActive(&su8_CellDsgOtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.OTD, CellDsgOTp_Third);
 }
 
 void App_SH367309_Monitor(void)
