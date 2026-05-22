@@ -561,6 +561,32 @@ def check_release_map(reporter):
     else:
         reporter.ok("FD_Release linked image does not contain printf library members")
 
+    defines = parse_header_defines(PROJECT_CONFIG) if PROJECT_CONFIG.exists() else {}
+    disabled_sci_symbols = {
+        "PROJECT_CFG_SCI2_ROLE": [
+            "g_stCurrentMsgPtr_SCI2",
+            "g_stSciPort2",
+            "gu16_CommuErrCnt_SCI2",
+            "gu8_TxEnable_SCI2",
+            "gu8_TxFinishFlag_SCI2",
+        ],
+        "PROJECT_CFG_SCI3_ROLE": [
+            "g_stCurrentMsgPtr_SCI3",
+            "g_stSciPort3",
+            "gu16_CommuErrCnt_SCI3",
+            "gu8_TxEnable_SCI3",
+            "gu8_TxFinishFlag_SCI3",
+        ],
+    }
+    for define_name, symbols in sorted(disabled_sci_symbols.items()):
+        if defines.get(define_name) != "0":
+            continue
+        leaked = [symbol for symbol in symbols if symbol in text]
+        if leaked:
+            reporter.fail("{0}=0 but FD_Release map still contains: {1}".format(define_name, ",".join(leaked)))
+        else:
+            reporter.ok("{0}=0 removes unused SCI runtime symbols".format(define_name))
+
 
 def check_gitignore(reporter):
     if not GITIGNORE.exists():

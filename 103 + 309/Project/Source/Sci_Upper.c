@@ -6,10 +6,12 @@ UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI1 = 0;
 UINT8 gu8_TxFinishFlag_SCI1 = 0;
 
+#ifdef _COMMOM_UPPER_SCI2
 struct RS485MSG g_stCurrentMsgPtr_SCI2;
 UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI2 = 0;
 UINT8 gu8_TxFinishFlag_SCI2 = 0;
+#endif
 
 #ifdef _COMMOM_UPPER_SCI3
 struct RS485MSG g_stCurrentMsgPtr_SCI3;
@@ -111,6 +113,7 @@ static struct SCI_PORT_RUNTIME g_stSciPort1 = {
 	0,
 	0};
 
+#ifdef _COMMOM_UPPER_SCI2
 static struct SCI_PORT_RUNTIME g_stSciPort2 = {
 	USART2,
 	&g_stCurrentMsgPtr_SCI2,
@@ -122,6 +125,7 @@ static struct SCI_PORT_RUNTIME g_stSciPort2 = {
 	0,
 	0,
 	0};
+#endif
 
 
 #ifdef _COMMOM_UPPER_SCI3
@@ -1695,8 +1699,10 @@ UINT8 Sci_IsAnyPortBusy(void)
 {
 	UINT8 busy;
 
-	busy = (UINT8)(Sci_PortIsBusy(&g_stSciPort1) ||
-				   Sci_PortIsBusy(&g_stSciPort2));
+	busy = (UINT8)Sci_PortIsBusy(&g_stSciPort1);
+#ifdef _COMMOM_UPPER_SCI2
+	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort2));
+#endif
 #ifdef _COMMOM_UPPER_SCI3
 	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort3));
 #endif
@@ -1710,7 +1716,9 @@ void Sci1_CommonUpper_IRQHandler(void)
 
 void Sci2_CommonUpper_IRQHandler(void)
 {
+#ifdef _COMMOM_UPPER_SCI2
 	Sci_PortIRQHandler(&g_stSciPort2);
+#endif
 }
 
 #ifdef _COMMOM_UPPER_SCI3
@@ -1735,6 +1743,7 @@ void InitSCI1_CommonUpper(void)
 
 void InitSCI2_CommonUpper(void)
 {
+#ifdef _COMMOM_UPPER_SCI2
 	Sci_InitCommonPort(&g_stSciPort2,
 					   USART2_IRQn,
 					   0U,
@@ -1744,6 +1753,7 @@ void InitSCI2_CommonUpper(void)
 					   GPIOA,
 					   GPIO_Pin_3,
 					   0U);
+#endif
 }
 
 #ifdef _COMMOM_UPPER_SCI3

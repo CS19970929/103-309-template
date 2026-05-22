@@ -141,6 +141,38 @@ iSheldTemp_10K_NTC  0x08012d46  Data  282  sh367309_func.o(.constdata)
 `printf` 库成员不再出现在最终 Library Totals 中。
 `chargerloadfunc.o` 和 `io_control.o` 不再出现在最新 `FD_Release.map` 中。
 
+## todo 优化补充 2026-05-22
+
+本轮继续处理 `todo.md` 中“todo优化”一节的低风险项，详细规划和取舍见 `TODO_OPTIMIZATION_PLAN_2026-05-22.md`。
+
+已落地内容：
+- `PROJECT_CFG_SCI2_ROLE == 0` 时，SCI2 的运行态缓存、发送状态、错误计数和端口运行结构不再进入 Release 镜像。
+- AFE 零电流校准的内部状态改为 `DataDeal.c` 文件内 `static`，从 `DataDeal.h` 删除外部暴露。
+- `u32_ChgCur_mA`、`u32_DsgCur_mA` 改为 `DataLoad_Current()` 内部局部变量。
+- `tools/project_check.py` 增加禁用 SCI2/SCI3 后运行态符号不得出现在 Release map 中的检查。
+
+最新 Release 结果：
+
+```text
+Program Size: Code=55392 RO-data=3584 RW-data=936 ZI-data=5632
+Total RO  Size    58976 bytes (57.59KB)
+Total RW  Size     6568 bytes ( 6.41KB)
+Total ROM Size    59236 bytes (57.85KB)
+```
+
+相对上一轮优化后的基线，继续减少：
+
+```text
+RO  32 bytes
+RAM 312 bytes
+ROM 48 bytes
+```
+
+保留说明：
+- `USART2_IRQHandler` 仍保留 2 字节空入口，因为启动向量强引用该符号，删除后禁用端口误触发中断可能落入启动文件默认死循环。
+- `SOC_Table_Set` / `SOC_Table_Default` 当前仍被 EEPROM 默认加载、上位机 0x03 读取、0x10 写入和 SOC 增强表选择路径使用，不能在未做协议和 EEPROM 布局隔离前直接删除。
+- 电压/温度 K/B 校准数组仍参与总压、温度和上位机校准寄存器路径；电流 K/B 当前已通过 `AFE_CURRENT_KB_CALIB_ENABLE 0U` 编译期关闭。
+
 ## 构建验证
 
 构建命令：

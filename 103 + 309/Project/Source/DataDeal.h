@@ -246,11 +246,6 @@ extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 extern UINT32 g_u32AfeCurrentSampleSeq;
 extern AFE_CURRENT_OBSERVE g_stAfeCurrentObserve;
-extern INT32 g_i32AfeCurrentZeroOffsetRawQ4;
-extern INT32 g_i32AfeCurrentLastRawSigned;
-extern UINT8 g_u8AfeCurrentZeroStableCnt;
-extern UINT8 g_u8AfeCurrentZeroReady;
-extern UINT8 g_u8AfeCurrentZeroState;
 
 void App_AFEGet(  void);
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);
