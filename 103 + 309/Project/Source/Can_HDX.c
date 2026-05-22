@@ -21,10 +21,10 @@ static UINT8 s_u8CanBusOff = 0U;
 #define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
 #define FEIDAO_CAN_NO_ACK_INACTIVE_LIMIT ((UINT8)6U)
 
-#define FEIDAO_CAN_TXMAILBOX_0 ((UINT8)0U)
-#define FEIDAO_CAN_TXMAILBOX_1 ((UINT8)1U)
-#define FEIDAO_CAN_TXMAILBOX_2 ((UINT8)2U)
+#define FEIDAO_CAN_TXMAILBOX_COUNT ((UINT8)3U)
 #define FEIDAO_CAN_ABORT_WAIT_LOOP ((UINT16)1000U)
+#define FEIDAO_CAN_TME_FLAG(mailbox) ((UINT32)(CAN_TSR_TME0 << (mailbox)))
+#define FEIDAO_CAN_RQCP_FLAG(mailbox) ((UINT32)(0x38000000U | (1UL << ((mailbox) * 8U))))
 
 enum FEIDAO_CAN_POWER_STATE
 {
@@ -418,17 +418,12 @@ static void feidao_can_record_tx_no_mailbox(void)
 
 static UINT8 feidao_can_mailbox_is_empty(UINT8 mailbox)
 {
-	switch (mailbox)
+	if (mailbox >= FEIDAO_CAN_TXMAILBOX_COUNT)
 	{
-	case FEIDAO_CAN_TXMAILBOX_0:
-		return ((CAN1->TSR & CAN_TSR_TME0) != 0U) ? 1U : 0U;
-	case FEIDAO_CAN_TXMAILBOX_1:
-		return ((CAN1->TSR & CAN_TSR_TME1) != 0U) ? 1U : 0U;
-	case FEIDAO_CAN_TXMAILBOX_2:
-		return ((CAN1->TSR & CAN_TSR_TME2) != 0U) ? 1U : 0U;
-	default:
 		return 1U;
 	}
+
+	return ((CAN1->TSR & FEIDAO_CAN_TME_FLAG(mailbox)) != 0U) ? 1U : 0U;
 }
 
 static void feidao_can_power_on(UINT32 now_tick)
@@ -452,26 +447,19 @@ static void feidao_can_power_off(void)
 
 static void feidao_can_abort_all_tx(void)
 {
-	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_0);
-	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_1);
-	feidao_can_cancel_tx(FEIDAO_CAN_TXMAILBOX_2);
+	UINT8 mailbox;
+
+	for (mailbox = 0U; mailbox < FEIDAO_CAN_TXMAILBOX_COUNT; ++mailbox)
+	{
+		feidao_can_cancel_tx(mailbox);
+	}
 }
 
 static void feidao_can_clear_tx_done(UINT8 mailbox)
 {
-	switch (mailbox)
+	if (mailbox < FEIDAO_CAN_TXMAILBOX_COUNT)
 	{
-	case FEIDAO_CAN_TXMAILBOX_0:
-		CAN_ClearFlag(CAN1, CAN_FLAG_RQCP0);
-		break;
-	case FEIDAO_CAN_TXMAILBOX_1:
-		CAN_ClearFlag(CAN1, CAN_FLAG_RQCP1);
-		break;
-	case FEIDAO_CAN_TXMAILBOX_2:
-		CAN_ClearFlag(CAN1, CAN_FLAG_RQCP2);
-		break;
-	default:
-		break;
+		CAN_ClearFlag(CAN1, FEIDAO_CAN_RQCP_FLAG(mailbox));
 	}
 }
 
@@ -479,7 +467,7 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 {
 	UINT16 wait_cnt = 0U;
 
-	if (mailbox > FEIDAO_CAN_TXMAILBOX_2)
+	if (mailbox >= FEIDAO_CAN_TXMAILBOX_COUNT)
 	{
 		return;
 	}

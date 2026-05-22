@@ -357,28 +357,28 @@ static UINT16 soc_voltage_with_margin(UINT16 base_mv, UINT16 margin_mv)
 	return (base_mv > margin_mv) ? (UINT16)(base_mv - margin_mv) : 0U;
 }
 
+#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT
 static UINT8 soc_protection_fault_blocks_calibration(void)
 {
-#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT
 	return (UINT8)(g_stCellInfoReport.unMdlFault_Third.all != 0U);
-#else
-	return 0U;
-#endif
 }
+#else
+#define soc_protection_fault_blocks_calibration() ((UINT8)0U)
+#endif
 
+#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT
 static UINT8 soc_system_fault_blocks_calibration(void)
 {
-#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT
 	return (UINT8)((System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U) ||
 		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) != 0U) ||
 		(System_ERROR_UserCallback(ERROR_STATUS_ADC) != 0U) ||
 		(System_ERROR_UserCallback(ERROR_STATUS_CBC_CHG) != 0U) ||
 		(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) != 0U) ||
 		(System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) != 0U));
-#else
-	return 0U;
-#endif
 }
+#else
+#define soc_system_fault_blocks_calibration() ((UINT8)0U)
+#endif
 
 static UINT8 soc_calibration_allowed(void)
 {
@@ -1141,6 +1141,8 @@ static UINT8 soc_tail_rule_lookup(const SOC_EMPTY_TAIL_RULE *rules,
 	return 0U;
 }
 
+#if (PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT != 0) || \
+	(PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT != 100)
 static void soc_apply_empty_tail_tuning(int16_t offset_mv, SOC_TAIL_STEP *step)
 {
 	UINT32 ticks;
@@ -1165,6 +1167,10 @@ static void soc_apply_empty_tail_tuning(int16_t offset_mv, SOC_TAIL_STEP *step)
 		step->ticks = (ticks > 0xFFFFU) ? 0xFFFFU : (UINT16)ticks;
 	}
 }
+#else
+#define soc_apply_empty_tail_tuning(offset_mv, step) \
+	((void)(offset_mv), (void)(step))
+#endif
 
 static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 {
