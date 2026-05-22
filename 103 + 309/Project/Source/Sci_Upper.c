@@ -62,6 +62,7 @@ struct SCI_PORT_RUNTIME {
 };
 
 static void Sci_ModbusResetMessage(struct RS485MSG *s);
+static void Sci_SetWrError(struct RS485MSG *s, UINT8 error);
 static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data);
 static void Sci_ModbusProcessFrame(void *pvProtocolCtx);
 static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx);
@@ -307,6 +308,7 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 }
 void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 {
+#if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegAddr;
 	u16SciRegAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	switch (u16SciRegAddr)
@@ -354,6 +356,9 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		s->ErrorType = RS485_ERROR_NO_PERMISSION;
 		break;
 	}
+#else
+	Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);
+#endif
 }
 
 static void Sci_SetWrError(struct RS485MSG *s, UINT8 error)
@@ -372,6 +377,7 @@ static UINT16 Sci_GetWrValue(const struct RS485MSG *s, UINT16 index)
 	return (UINT16)(s->u16Buffer[2 * index + 8] + (s->u16Buffer[2 * index + 7] << 8));
 }
 
+#if PROJECT_CFG_HOST_WRITE_ENABLE
 static UINT8 Sci_IsCalibPairStart(UINT16 addr)
 {
 	if ((addr < RS485_CMD_ADDR_VC1CALIB_K) || (addr > RS485_CMD_ADDR_TEMP_MOS_CALIB_K))
@@ -381,6 +387,7 @@ static UINT8 Sci_IsCalibPairStart(UINT16 addr)
 
 	return (UINT8)(((addr - RS485_CMD_ADDR_VC1CALIB_K) & 1U) == 0U);
 }
+#endif
 
 static void Sci_PutWordBE(UINT8 buff[], UINT16 *index, UINT16 value)
 {
@@ -652,6 +659,7 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 
 void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 {
+#if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegStartAddr;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 
@@ -715,6 +723,9 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
 		break;
 	}
+#else
+	Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);
+#endif
 }
 
 void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])

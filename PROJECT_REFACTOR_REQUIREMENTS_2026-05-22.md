@@ -85,3 +85,22 @@ Runtime
 - 自检：`py -3 tools/project_check.py -q` 必须通过。
 - 文档：大改动必须更新本文件或对应模块文档。
 - Git：提交信息必须说明“改了什么、为什么、体积/风险结果”。
+
+## SCI 写寄存器策略
+
+`PROJECT_CFG_HOST_WRITE_ENABLE` 统一控制 Modbus `0x06/0x10` 写寄存器入口：
+
+- `0`：量产默认，减小 Code；写请求返回 `RS485_ERROR_NO_PERMISSION`，不允许静默成功。
+- `1`：服务/调试固件可打开，恢复参数写入、SOC 表写入、RTC 写入、SN 写入和升级握手等路径。
+
+后续若只允许部分写操作，应继续拆分白名单，而不是回到裸 `#if 0`。
+
+本策略在干净 worktree 的 `FD_Release` 对比：
+
+```text
+开启写入口基线: Code=49640 RO-data=2568 RW-data=896 ZI-data=5416, ROM/bin=52456
+关闭写入口结果: Code=46620 RO-data=2568 RW-data=896 ZI-data=5416, ROM/bin=49436
+净减少: Code/ROM/bin 3020 bytes
+```
+
+关闭后 `Sci_Deal_WrReg_0x06()` 和 `Sci_Deal_WrRegs_0x10()` 仍保留 14 字节入口用于返回 no-permission；具体写处理函数由链接器移除。

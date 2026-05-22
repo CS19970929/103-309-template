@@ -40,6 +40,10 @@
 // <i> Default disabled. When disabled, SOC table is selected by PROJECT_CFG_BAT_CHEMISTRY at compile time; 0x2200 writes are rejected.
 #define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
 
+// <q> Enable host write registers
+// <i> Default disabled for smaller release image. When disabled, Modbus 0x06/0x10 write requests return no-permission.
+#define PROJECT_CFG_HOST_WRITE_ENABLE 0
+
 // <o> 固件年份 <0-99>
 // <i> 固件年份，两位数显示。
 #define PROJECT_CFG_FD_YEAR 26

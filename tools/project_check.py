@@ -195,6 +195,7 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST": "0",
     "PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON": "0",
     "PROJECT_CFG_SOC_TEST_MODE_ENABLE": "0",
+    "PROJECT_CFG_HOST_WRITE_ENABLE": "0",
     "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY": "0",
     "PROJECT_CFG_FACTORY_AGING_ENABLE": "1",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS": "259200",
@@ -208,6 +209,7 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
     "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST",
     "PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON",
+    "PROJECT_CFG_HOST_WRITE_ENABLE",
     "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY",
     "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS",
@@ -803,6 +805,41 @@ def check_soc_parameter_side_effects(reporter):
         reporter.fail("SOC table select/capacity side effects must refresh SOC runtime state")
 
 
+def check_sci_host_write_policy(reporter):
+    if not SCI_UPPER_C.exists():
+        return
+
+    sci_c = read_text(SCI_UPPER_C)
+    if (
+        "#if PROJECT_CFG_HOST_WRITE_ENABLE" in sci_c
+        and "Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);" in sci_c
+        and "Sci_IsCalibPairStart" in sci_c
+    ):
+        reporter.ok("SCI host write entry is controlled by PROJECT_CFG_HOST_WRITE_ENABLE and rejects disabled writes")
+    else:
+        reporter.fail("SCI 0x06/0x10 write entry should be controlled by PROJECT_CFG_HOST_WRITE_ENABLE")
+
+    defines = parse_header_defines(PROJECT_CONFIG) if PROJECT_CONFIG.exists() else {}
+    if defines.get("PROJECT_CFG_HOST_WRITE_ENABLE") == "0" and RELEASE_MAP.exists():
+        release_map = read_text(RELEASE_MAP)
+        write_symbols = [
+            "Sci_WrReg_0x06_Reset_CalibCoef",
+            "Sci_WrReg_0x06_BMS_FunctionON",
+            "Sci_WrRegs_0x10_CalibCoef",
+            "Sci_WrRegs_0x10_OtherElement",
+            "Sci_WrRegs_0x10_RTC",
+            "Sci_WrRegs_0x10_SN_Version",
+        ]
+        linked = [
+            symbol for symbol in write_symbols
+            if re.search(r"^\s*{0}\s+0x[0-9a-fA-F]+\s+Thumb Code".format(symbol), release_map, re.MULTILINE)
+        ]
+        if linked:
+            reporter.fail("PROJECT_CFG_HOST_WRITE_ENABLE=0 but FD_Release links write handlers: {0}".format(",".join(linked)))
+        else:
+            reporter.ok("PROJECT_CFG_HOST_WRITE_ENABLE=0 removes SCI write handlers from FD_Release")
+
+
 def check_soc_current_and_typec_policy(reporter):
     required_files = [ADC_H, DATADEAL_C, SOC_C, SOC_ENHANCE_C]
     if any(not path.exists() for path in required_files):
@@ -1153,6 +1190,7 @@ def main(argv):
     check_gitignore(reporter)
     check_hooks(reporter)
     check_soc_parameter_side_effects(reporter)
+    check_sci_host_write_policy(reporter)
     check_soc_current_and_typec_policy(reporter)
     check_low_power_cleanup(reporter)
     check_fault_snapshot_mapping(reporter)
