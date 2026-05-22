@@ -2,8 +2,12 @@
 #define SOCENHANCE_H
 
 #include "stm32f10x.h"
+#include "Project_Config.h"
 //#include "stm32f0xx.h"
 
+#ifndef PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+#define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
+#endif
 
 #define SOC_Size_TableCanSet 	(UINT16)42
 #define SOC_Size_LiFePO 		(UINT16)42
@@ -53,9 +57,15 @@ enum SOC_WATCH_BLOCK_REASON {
 	SOC_WATCH_BLOCK_REFRESH_ZERO
 };
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 1)
 extern const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO];
+#endif
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 0)
 extern const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi];
+#endif
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 extern const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2];
+#endif
 
 struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_SOC_Ah;                 // 10 * Ah
@@ -64,7 +74,9 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_SOC_TableSelect;        // enum SOC_TABLE_SELECT
 	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
 	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	UINT16 SOC_Table_CanSet[SOC_Size_TableCanSet];
+#endif
 	UINT8 u8_SetSocOnce;
 
 	UINT16 u16_VCellMax;               // mV

@@ -546,6 +546,8 @@ def check_release_map(reporter):
         CONF_H,
         ROOT / "103 + 309" / "Project" / "Source" / "main.c",
         ROOT / "103 + 309" / "Project" / "Source" / "Flash.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "SOC.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c",
     ]
@@ -586,6 +588,31 @@ def check_release_map(reporter):
             reporter.fail("{0}=0 but FD_Release map still contains: {1}".format(define_name, ",".join(leaked)))
         else:
             reporter.ok("{0}=0 removes unused SCI runtime symbols".format(define_name))
+
+    if defines.get("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE") == "0":
+        runtime_soc_table_symbols = [
+            "SOC_Table_Set",
+            "SOC_Table_Default",
+            "SOC_Table_CanSet",
+        ]
+        leaked = [symbol for symbol in runtime_soc_table_symbols if symbol in text]
+        if leaked:
+            reporter.fail("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0 but FD_Release map still contains: {0}".format(",".join(leaked)))
+        else:
+            reporter.ok("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0 removes runtime SOC table symbols")
+
+        chemistry = defines.get("PROJECT_CFG_BAT_CHEMISTRY")
+        if chemistry == "0":
+            fixed_table_leaks = ["SOC_Table_LiFePO", "SocTable_LiFePO2"]
+        elif chemistry == "1":
+            fixed_table_leaks = ["SocTable_TernaryLi", "SocTable_LiFePO2"]
+        else:
+            fixed_table_leaks = []
+        leaked = [symbol for symbol in fixed_table_leaks if symbol in text]
+        if leaked:
+            reporter.fail("fixed compile-time SOC table build still contains unused table symbols: {0}".format(",".join(leaked)))
+        elif fixed_table_leaks:
+            reporter.ok("fixed compile-time SOC table build keeps only the selected chemistry table")
 
 
 def check_gitignore(reporter):

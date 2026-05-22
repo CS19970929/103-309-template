@@ -14,6 +14,24 @@
 
 ## 本轮已完成
 
+### 0. SOC 表改为编译期固定表
+
+新增配置：
+
+```c
+PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+```
+
+当前默认值为 0。关闭后：
+
+- SOC OCV 表由 `PROJECT_CFG_BAT_CHEMISTRY` 在编译期决定。
+- 当前三元锂配置只保留 `SocTable_TernaryLi`。
+- `SOC_Table_Set`、`SOC_Table_Default`、`SOC_Table_CanSet` 不再进入 Release 镜像。
+- 0x2200 的 SOC 表读取仍返回当前编译期表，保持上位机可读。
+- 0x2200 的 0x10 写表返回否定应答，避免现场写入一个固件不再使用的运行时表。
+
+这一步兑现了 todo 中“SOC 校准表格在编译时确定，磷酸铁锂和三元锂宏定义决定”的方向，同时保留读表兼容，不改变默认三元锂量产 SOC 表。
+
 ### 1. SCI2 禁用后同步裁剪运行态变量
 
 当前量产配置：
@@ -91,24 +109,24 @@ g_u32AfeCurrentSampleSeq
 构建结果：
 
 ```text
-Program Size: Code=55392 RO-data=3584 RW-data=936 ZI-data=5632
+Program Size: Code=55040 RO-data=3332 RW-data=936 ZI-data=5464
 0 Error(s), 0 Warning(s)
 ```
 
 map 汇总：
 
 ```text
-Total RO  Size    58976 bytes (57.59KB)
-Total RW  Size     6568 bytes ( 6.41KB)
-Total ROM Size    59236 bytes (57.85KB)
+Total RO  Size    58372 bytes (57.00KB)
+Total RW  Size     6400 bytes ( 6.25KB)
+Total ROM Size    58632 bytes (57.26KB)
 ```
 
 相对上一轮优化后的基线：
 
 ```text
-RO  减少  32 bytes
-RAM 减少 312 bytes
-ROM 减少  48 bytes
+RO  减少 636 bytes
+RAM 减少 480 bytes
+ROM 减少 652 bytes
 ```
 
 自动检查：
@@ -122,32 +140,17 @@ Project check summary:
 
 ## 暂不直接删除的项
 
-### 1. SOC_Table_Set / SOC_Table_Default
+### 1. 运行时 SOC 写表功能
 
-当前引用链仍存在：
+已通过 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE` 隔离。默认关闭后，运行时表不再进入 Release 镜像。
 
-```text
-EEPROM_LoadDefaultSOC()
-Sci_ACK_0x03_RW_Data_SOC()
-Sci_WrRegs_0x10_SOC()
-SOC_LoadConfigData()
-SOC_Enhance_Element.SOC_Table_CanSet
-```
+保留的兼容行为：
+- 上位机仍可通过 0x03 读取 0x2200 的 SOC 表内容。
+- 读取内容来自当前编译期电芯体系表。
 
-直接删除会影响：
-
-- 上位机读取当前 SOC 表。
-- 上位机通过 0x10 写入 SOC 表。
-- EEPROM 默认参数加载。
-- `SOC_TABLE_CANSET` 分支。
-
-建议后续新增类似配置：
-
-```c
-PROJECT_CFG_SOC_TABLE_RUNTIME_SET_ENABLE
-```
-
-当量产固件确认不支持上位机动态写 SOC 表时，再同步裁剪 `SOC_Table_Set`、相关 0x03/0x10 寄存器响应和 EEPROM 默认加载路径。
+关闭后的变化：
+- 上位机 0x10 写 0x2200 SOC 表会返回否定应答。
+- 历史 Flash/EEPROM 中的 `OtherElement.u16Soc_TableSelect` 不再决定实际 OCV 表，实际表由 `PROJECT_CFG_BAT_CHEMISTRY` 决定。
 
 ### 2. 电压/温度 K/B 校准数组
 
@@ -164,6 +167,6 @@ PROJECT_CFG_SOC_TABLE_RUNTIME_SET_ENABLE
 ## 后续建议
 
 1. 串口协议继续按角色拆分：SCI1/SCI2/SCI3 的 common upper、bootloader、SOC 测试角色已经有宏基础，后续应继续把对应寄存器表和运行态按角色隔离。
-2. SOC 表裁剪应作为独立任务推进：先加配置，默认保持当前行为，再做固定电芯表构建，最后删除动态写表路径。
+2. SOC 表已完成默认固定表裁剪；如后续确需现场写表，可把 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE` 改为 1 并重新验证协议行为。
 3. K/B 校准裁剪应先确定产品策略：如果量产完全不允许现场校准，再统一裁剪数组、EEPROM 地址、0x03/0x06/0x10 处理。
 4. AFE 零电流后续优化应保持算法可观测：保留 `g_stAfeCurrentObserve`，不要为了少量 RAM 删除关键诊断字段。

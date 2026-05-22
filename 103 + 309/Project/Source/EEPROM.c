@@ -6,7 +6,9 @@ uint16_t curr_offset = 0;
 UINT16 OffsetValue_CHG = 0;
 UINT16 OffsetValue_DSG = 0;
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
+#endif
 
 #if FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
 #error "RW parameter protect word count mismatch"
@@ -75,12 +77,14 @@ static void EEPROM_LoadDefaultHeatCool(void)
 
 static void EEPROM_LoadDefaultSocTable(void)
 {
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	UINT8 i;
 
 	for (i = 0; i < SOC_TABLE_SIZE; ++i)
 	{
 		SOC_Table_Set[i] = SOC_Table_Default[i];
 	}
+#endif
 }
 
 static void EEPROM_LoadDefaultCopperLoss(void)
@@ -283,7 +287,7 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 	rw_param_dirty = 1;
 #endif
 
-#if UPGRADE_PARAM_RESET_SOC_TABLE
+#if UPGRADE_PARAM_RESET_SOC_TABLE && PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	EEPROM_LoadDefaultSocTable();
 #endif
 

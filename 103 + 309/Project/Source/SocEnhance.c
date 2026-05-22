@@ -181,26 +181,32 @@ static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
 	{700, {55U, 60U, SOC_MID_TARGET_DISABLED, SOC_MID_TARGET_DISABLED}, {900U, 900U, 0U, 0U}},
 };
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 1)
 const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO] = {
 	3336, 100, 3332, 90, 3330, 80, 3327, 75, 3316, 70, 3301, 65,
 	3294, 60, 3291, 55, 3290, 50, 3288, 45, 3286, 40, 3279, 35,
 	3266, 30, 3254, 25, 3236, 20, 3212, 15, 3198, 10, 3112, 5,
 	2526, 0, 1000, 0, 1000, 0,
 };
+#endif
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 0)
 const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi] = {
 	4160, 100, 4100, 95, 4050, 90, 3995, 85, 3935, 80, 3880, 75,
 	3835, 70, 3795, 65, 3760, 60, 3725, 55, 3695, 50, 3670, 45,
 	3645, 40, 3615, 35, 3585, 30, 3555, 25, 3525, 20, 3480, 15,
 	3400, 10, 3250, 5, 3000, 0,
 };
+#endif
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2] = {
 	3650, 100, 3600, 98, 3550, 95, 3500, 92, 3400, 90, 3350, 87,
 	3340, 85, 3335, 82, 3330, 80, 3325, 78, 3320, 75, 3300, 70,
 	3275, 65, 3250, 60, 3200, 50, 3150, 45, 3100, 30, 3000, 20,
 	2850, 10, 2750, 5, 2650, 0,
 };
+#endif
 
 static UINT16 soc_cell_delta(void)
 {
@@ -402,6 +408,16 @@ static UINT8 soc_calibration_allowed(void)
 
 static const UINT16 *soc_ocv_table(UINT16 *size)
 {
+#if !PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+	(void)SOC_Enhance_Element.u16_SOC_TableSelect;
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	*size = SOC_Size_LiFePO;
+	return SOC_Table_LiFePO;
+#else
+	*size = SOC_Size_TernaryLi;
+	return SocTable_TernaryLi;
+#endif
+#else
 	switch (SOC_Enhance_Element.u16_SOC_TableSelect)
 	{
 	case SOC_TABLE_TEST:
@@ -418,6 +434,7 @@ static const UINT16 *soc_ocv_table(UINT16 *size)
 		*size = SOC_Size_TernaryLi;
 		return SocTable_TernaryLi;
 	}
+#endif
 }
 
 static UINT8 soc_ocv_percent(void)

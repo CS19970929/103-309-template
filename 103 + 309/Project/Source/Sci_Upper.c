@@ -1005,6 +1005,32 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 }
 
+static UINT16 Sci_GetSocTableWord(UINT16 index)
+{
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+	switch (OtherElement.u16Soc_TableSelect)
+	{
+	case SOC_TABLE_TEST:
+		return SOC_Table_Set[index];
+	case SOC_TABLE_LIFEPO:
+		return SOC_Table_LiFePO[index];
+	case SOC_TABLE_TERNARYLI:
+		return SocTable_TernaryLi[index];
+	case SOC_TABLE_LIFEPO2:
+		return SocTable_LiFePO2[index];
+	default:
+		return SOC_Table_Set[index];
+	}
+#else
+	(void)OtherElement.u16Soc_TableSelect;
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	return SOC_Table_LiFePO[index];
+#else
+	return SocTable_TernaryLi[index];
+#endif
+#endif
+}
+
 void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 { // 86
 	UINT16 u16SciTemp;
@@ -1012,25 +1038,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	i = 0;
 	for (j = 0; j < SOC_Size_TableCanSet; j++)
 	{ // 由于GetEndValue()函数的问题，只能混在一起
-		switch (OtherElement.u16Soc_TableSelect)
-		{
-		case SOC_TABLE_TEST:
-			u16SciTemp = SOC_Table_Set[j];
-			break;
-		case SOC_TABLE_LIFEPO:
-			u16SciTemp = SOC_Table_LiFePO[j];
-			break;
-		case SOC_TABLE_TERNARYLI:
-			u16SciTemp = SocTable_TernaryLi[j];
-			break;
-		case SOC_TABLE_LIFEPO2:
-			u16SciTemp = SocTable_LiFePO2[j];
-			break;
-		default:
-			u16SciTemp = SOC_Table_Set[j];
-			break;
-		}
-		// u16SciTemp = SOC_Table_Set[j];
+		u16SciTemp = Sci_GetSocTableWord(j);
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -1863,6 +1871,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 {
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	UINT8 i;
 	UINT16 u16WrRegNum;
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
@@ -1880,6 +1889,10 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
 	}
+#else
+	s->AckType = RS485_ACK_NEG;
+	s->ErrorType = RS485_ERROR_CMD_INVALID;
+#endif
 }
 
 void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s)

@@ -36,6 +36,10 @@
 // <i> 电芯体系。影响电压平台、SOC 表和保护参数选择。
 #define PROJECT_CFG_BAT_CHEMISTRY 0
 
+// <q> Allow host runtime SOC table writes
+// <i> Default disabled. When disabled, SOC table is selected by PROJECT_CFG_BAT_CHEMISTRY at compile time; 0x2200 writes are rejected.
+#define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
+
 // <o> 固件年份 <0-99>
 // <i> 固件年份，两位数显示。
 #define PROJECT_CFG_FD_YEAR 26

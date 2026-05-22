@@ -1,6 +1,7 @@
 #include "main.h"
 #include <stdint.h>
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
 const UINT16 SOC_Table_Default[SOC_TABLE_SIZE] = {
@@ -26,6 +27,7 @@ const UINT16 SOC_Table_Default[SOC_TABLE_SIZE] = {
 	3250, 5,
 	3000, 0,
 };
+#endif
 
 #define SOC_TEST_MODE_STATUS_WORDS       ((UINT16)16U)
 #define SOC_TEST_MODE_TICK_MS            ((UINT16)200U)
@@ -132,6 +134,25 @@ static UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 	return g_u16TypeCBatEquivCurrent_A10;
 }
 
+static UINT16 SOC_GetCompileTimeTableSelect(void)
+{
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	return (UINT16)SOC_TABLE_LIFEPO;
+#else
+	return (UINT16)SOC_TABLE_TERNARYLI;
+#endif
+}
+
+static UINT16 SOC_GetEffectiveTableSelect(UINT16 table_select)
+{
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+	return table_select;
+#else
+	(void)table_select;
+	return SOC_GetCompileTimeTableSelect();
+#endif
+}
+
 static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
 									 UINT16 *soc_ichg, UINT16 *soc_idsg)
 {
@@ -157,14 +178,19 @@ static void SOC_LoadConfigData(void)
 	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
 	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
 	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
-	SOC_Enhance_Element.u16_SOC_TableSelect = OtherElement.u16Soc_TableSelect;
+	SOC_Enhance_Element.u16_SOC_TableSelect =
+		SOC_GetEffectiveTableSelect(OtherElement.u16Soc_TableSelect);
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
 	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
 
+#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	for (i = 0; i < SOC_Size_TableCanSet; ++i)
 	{
 		SOC_Enhance_Element.SOC_Table_CanSet[i] = SOC_Table_Set[i];
 	}
+#else
+	(void)i;
+#endif
 }
 
 void InitData_SOC(void)
