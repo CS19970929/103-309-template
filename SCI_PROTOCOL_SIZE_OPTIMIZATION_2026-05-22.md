@@ -259,3 +259,61 @@ Project check summary:
 Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
+
+## 第五轮优化记录
+
+继续扩展到 `conf.c` 的初始化和低功耗 IO 配置，处理 map 中较大的 `InitIO()`、`InitIO_rtc()`、`InitWakeUp_NormalMode()`、`IOstatus_Base()`。本轮不触碰 AFE、SOC、故障判定和 SCI 协议语义。
+
+修改内容：
+- 新增 `Conf_InitGpioMode()`，统一 GPIO 模式初始化入口，收敛大量重复的 `GPIO_InitStructure` 填充代码。
+- 新增 `Conf_InitWakeupInputExti()`，统一唤醒输入 GPIO、EXTI 和 NVIC 配置。触发沿、EXTI line、IRQ 通道和优先级保持原值。
+- 将 `InitIO()`、`InitIO_rtc()`、`IOstatus_Base()`、`IOstatus_RTCMode()` 的 GPIO 初始化改为共用入口；各管脚的置位/复位顺序保持不变。
+- 将 `InitWakeUp_Base()`、`InitWakeUp_NormalMode()` 中重复的唤醒中断配置改为共用入口。
+
+验证说明：
+- 当前主工作区存在未纳入本轮提交的外部 `Sci_Upper.c` 改动，会影响 `0x10` 写寄存器入口和 map 数字。
+- 为避免污染验证，本轮在 `.worktrees/conf-size-verify` 中从干净 `HEAD=6a0b055` 建立临时 worktree，只应用本轮 `conf.c` 差异后做全量重建对比。
+
+第五轮全量重建同环境基线：
+```text
+Program Size: Code=51488 RO-data=2768 RW-data=896 ZI-data=5416
+Total RO  Size: 54256
+Total RW  Size: 6312
+Total ROM Size: 54504
+```
+
+第五轮优化后全量重建：
+```text
+Program Size: Code=50528 RO-data=2768 RW-data=896 ZI-data=5416
+Total RO  Size: 53296
+Total RW  Size: 6312
+Total ROM Size: 53544
+FD_Release.bin: 53544 bytes
+```
+
+相对同环境全量重建基线：
+- Code 减少 960 字节。
+- Total ROM 减少 960 字节。
+- RAM 保持 6312 字节不变。
+
+关键函数尺寸：
+```text
+Conf_InitGpioMode: 32 bytes
+Conf_InitWakeupInputExti: 92 bytes
+IOstatus_Base: 390 -> 210 bytes
+InitIO: 456 -> 236 bytes
+InitIO_rtc: 422 -> 218 bytes
+InitWakeUp_Base: 208 -> 68 bytes
+InitWakeUp_NormalMode: 344 -> 104 bytes
+```
+
+第五轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```

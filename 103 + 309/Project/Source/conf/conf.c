@@ -8,6 +8,54 @@ Time_T sys_time = {
     .power_on = false,
 };
 
+#define CONF_APB2_GPIO_CLOCKS (RCC_APB2Periph_GPIOA | \
+                               RCC_APB2Periph_GPIOB | \
+                               RCC_APB2Periph_GPIOC | \
+                               RCC_APB2Periph_GPIOD | \
+                               RCC_APB2Periph_GPIOE)
+#define CONF_APB2_IO_CLOCKS (RCC_APB2Periph_AFIO | CONF_APB2_GPIO_CLOCKS)
+#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO | \
+                                 RCC_APB2Periph_GPIOA | \
+                                 RCC_APB2Periph_GPIOB | \
+                                 RCC_APB2Periph_GPIOC)
+
+static void Conf_InitGpioMode(GPIO_TypeDef *gpio, uint16_t pin, GPIOMode_TypeDef mode)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    GPIO_InitStructure.GPIO_Pin = pin;
+    GPIO_InitStructure.GPIO_Mode = mode;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(gpio, &GPIO_InitStructure);
+}
+
+static void Conf_InitWakeupInputExti(GPIO_TypeDef *gpio,
+                                     uint16_t pin,
+                                     uint8_t port_source,
+                                     uint8_t pin_source,
+                                     uint32_t exti_line,
+                                     EXTITrigger_TypeDef trigger,
+                                     uint8_t irq_channel)
+{
+    EXTI_InitTypeDef EXTI_InitStruct;
+    NVIC_InitTypeDef NVIC_InitStructure;
+
+    Conf_InitGpioMode(gpio, pin, GPIO_Mode_IN_FLOATING);
+    GPIO_EXTILineConfig(port_source, pin_source);
+
+    EXTI_InitStruct.EXTI_Line = exti_line;
+    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStruct.EXTI_Trigger = trigger;
+    EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStruct);
+
+    NVIC_InitStructure.NVIC_IRQChannel = irq_channel;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+
 static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger, FunctionalState cmd)
 {
     EXTI_InitTypeDef EXTI_InitStruct;
@@ -60,47 +108,23 @@ void LowPower_DisableWakeupExti(void)
 
 void InitIO_rtc(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
-                               RCC_APB2Periph_GPIOA |
-                               RCC_APB2Periph_GPIOB |
-                               RCC_APB2Periph_GPIOC |
-                               RCC_APB2Periph_GPIOD |
-                               RCC_APB2Periph_GPIOE,
-                           ENABLE);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
 
     // todo GPIO_INT_WK_CMNT
-    GPIO_InitStructure.GPIO_Pin = PIN_MCC_C;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_MCC_C, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_MCU_WK, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_SW;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_SW, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_RF_EN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_RF_EN, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
     {
         //???这个函数没起作用
         // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
@@ -112,43 +136,19 @@ void InitIO_rtc(void)
         GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
 
-        GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_M_STB, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_AD_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_AD_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_ADC_BUS_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
 
         GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
 
         GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
     }
 
-    GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_DBG_LED, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
 }
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -157,15 +157,7 @@ void InitIO_rtc(void)
 // GPIO_SetBits(GPIOB, GPIO_Pin_15);
 void InitIO(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
-                               RCC_APB2Periph_GPIOA |
-                               RCC_APB2Periph_GPIOB |
-                               RCC_APB2Periph_GPIOC |
-                               RCC_APB2Periph_GPIOD |
-                               RCC_APB2Periph_GPIOE,
-                           ENABLE);
+    RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
     {
         // GPIO_InitStructure.GPIO_Pin = PIN_AFE1_ALM | PIN_AFE1_MODE | PIN_AFE1_SHIP;
@@ -173,10 +165,7 @@ void InitIO(void)
         // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         // GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-        GPIO_InitStructure.GPIO_Pin = PIN_AFE1_PRO_EN | PIN_AFE1_CTL;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIOB, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIOB, PIN_AFE1_PRO_EN | PIN_AFE1_CTL, GPIO_Mode_Out_PP);
         MCUO_AFE_CTLC = 0;
     }
 
@@ -186,38 +175,22 @@ void InitIO(void)
     // void GPIO_ResetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
     // GPIO_ResetBits(GPIOB, GPIO_Pin_15);
     // GPIO_SetBits(GPIOB, GPIO_Pin_15);
-    GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
 
     // todo GPIO_INT_WK_CMNT
 
-    GPIO_InitStructure.GPIO_Pin = PIN_MCC_C;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_MCC_C, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_MCU_WK, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_SW;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIO_SW, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_RF_EN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_RF_EN, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
     {
         //???这个函数没起作用
         // GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
@@ -229,118 +202,57 @@ void InitIO(void)
         GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         GPIO_SetBits(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN);
 
-        GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_M_STB, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_AD_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_AD_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_ADC_BUS_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
 
         GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
 
         GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
-        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
     }
 
-    GPIO_InitStructure.GPIO_Pin = PIN_DBG_LED;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_DBG_LED, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
 }
 
 void InitWakeUp_Base(void)
 {
-    EXTI_InitTypeDef EXTI_InitStruct;
-    NVIC_InitTypeDef NVIC_InitStructure;
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??????????????
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // ??GPIOA??????????????
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // ??GPIOA??????????????
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // ???????????
+    RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
 
     jtag_disableAndConfIO();
 #if 1
-    {
-        GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line0;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
-    }
-
-    {
-        GPIO_InitStructure.GPIO_Pin = PIN_SW; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_SW, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource9);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line9;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
-    }
+    Conf_InitWakeupInputExti(GPIO_CHG_IN,
+                             PIN_CHG_IN,
+                             GPIO_PortSourceGPIOA,
+                             GPIO_PinSource0,
+                             EXTI_Line0,
+                             EXTI_Trigger_Falling,
+                             EXTI0_IRQn);
+    Conf_InitWakeupInputExti(GPIO_SW,
+                             PIN_SW,
+                             GPIO_PortSourceGPIOA,
+                             GPIO_PinSource9,
+                             EXTI_Line9,
+                             EXTI_Trigger_Falling,
+                             EXTI9_5_IRQn);
 #endif
 }
 
 void InitWakeUp_NormalMode(void)
 {
-    EXTI_InitTypeDef EXTI_InitStruct;
-    NVIC_InitTypeDef NVIC_InitStructure;
-    GPIO_InitTypeDef GPIO_InitStructure;
-
     InitWakeUp_Base();
 
     {
 #ifdef UART1_WAKEUP_ENABLE
-        GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line7;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
+        Conf_InitWakeupInputExti(GPIO_SCI1_RX,
+                                 PIN_SCI1_RX,
+                                 GPIO_PortSourceGPIOB,
+                                 GPIO_PinSource7,
+                                 EXTI_Line7,
+                                 EXTI_Trigger_Rising,
+                                 EXTI9_5_IRQn);
 #endif // UART1_WAKEUP_ENABLE
 
         // GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX; // ?????GPIO??,PA0?????
@@ -358,60 +270,27 @@ void InitWakeUp_NormalMode(void)
         // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
         // NVIC_Init(&NVIC_InitStructure);
     }
-    {
-        GPIO_InitStructure.GPIO_Pin = PIN_CHG_IN; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_CHG_IN, &GPIO_InitStructure);
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line0;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
-    }
-
-    {
-        GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_CMNT; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_INT_WK_CMNT, &GPIO_InitStructure);
-
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource12);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line12;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
-    }
-
-    {
-        GPIO_InitStructure.GPIO_Pin = PIN_MCU_WK; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        GPIO_Init(GPIO_MCU_WK, &GPIO_InitStructure);
-
-        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource13);
-        EXTI_InitStruct.EXTI_Line = EXTI_Line13;
-        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        EXTI_Init(&EXTI_InitStruct);
-
-        NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
-        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        NVIC_Init(&NVIC_InitStructure);
-    }
+    Conf_InitWakeupInputExti(GPIO_CHG_IN,
+                             PIN_CHG_IN,
+                             GPIO_PortSourceGPIOA,
+                             GPIO_PinSource0,
+                             EXTI_Line0,
+                             EXTI_Trigger_Falling,
+                             EXTI0_IRQn);
+    Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
+                             PIN_INT_WK_CMNT,
+                             GPIO_PortSourceGPIOB,
+                             GPIO_PinSource12,
+                             EXTI_Line12,
+                             EXTI_Trigger_Rising,
+                             EXTI15_10_IRQn);
+    Conf_InitWakeupInputExti(GPIO_MCU_WK,
+                             PIN_MCU_WK,
+                             GPIO_PortSourceGPIOB,
+                             GPIO_PinSource13,
+                             EXTI_Line13,
+                             EXTI_Trigger_Rising,
+                             EXTI15_10_IRQn);
 }
 
 void InitWakeUp_RTCMode(void)
@@ -429,36 +308,16 @@ void InitWakeUp_DeepMode(void)
 
 void IOstatus_Base(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // ??GPIOB??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // ??GPIOC??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
+    RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
     LedBar_SetSleep(1u);
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOE, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
     {
         GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, Bit_RESET);
@@ -468,35 +327,12 @@ void IOstatus_Base(void)
         GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
         GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
 
-        GPIO_InitStructure.GPIO_Pin = PIN_M_STB;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_M_STB, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_AD_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_AD_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_CMNT_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_ADC_BUS_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_ADC_BUS_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
-
-        GPIO_InitStructure.GPIO_Pin = PIN_2737_EN;
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-        GPIO_Init(GPIO_2727_EN, &GPIO_InitStructure);
+        Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
+        Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
     }
 
     LedBar_PrepareForStop();
@@ -504,31 +340,19 @@ void IOstatus_Base(void)
 
 void IOstatus_RTCMode(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // ??GPIOA??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // ??GPIOB??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // ??GPIOC??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
+    RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
     LedBar_SetSleep(1u);
     ADC_StopForLowPower(); // stop ADC/TIM2/DMA before STOP
 
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_DC_EN) & (~PIN_2737_EN);
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_2737_EN);
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN), GPIO_Mode_AIN);
 
     // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14);
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14), GPIO_Mode_AIN);
 #if 1
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
 #else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_4);
@@ -536,19 +360,11 @@ void IOstatus_RTCMode(void)
     GPIO_Init(GPIOC, &GPIO_InitStructure);
 #endif
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOE, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
     GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-    GPIO_InitStructure.GPIO_Pin = PIN_DC_EN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(GPIO_DC_EN, &GPIO_InitStructure);
+    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
 
     // ??????
     // ???
