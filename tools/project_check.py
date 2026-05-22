@@ -56,6 +56,13 @@ FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\
 COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
 CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
 CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.md"
+COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
+BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
+BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
+COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
+COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
+COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
 APP_ARCH_REFACTOR_DOC = ROOT / "PROJECT_ARCH_REFACTOR_2026-05-22.md"
 REFACTOR_REQUIREMENTS_DOC = ROOT / "PROJECT_REFACTOR_REQUIREMENTS_2026-05-22.md"
@@ -1170,6 +1177,96 @@ def check_runtime_docs(reporter):
         reporter.fail("CAN docs should describe current runtime/frame/low-power boundaries")
 
 
+def check_comm_tool_can_iap_contract(reporter):
+    docs = [COMM_TOOL_ARCH_DOC, COMM_TOOL_SERIAL_DOC, BMS_CAN_SERVICE_DOC, BMS_CAN_IAP_DOC]
+    source_files = [
+        COMM_TOOL_HOST,
+        COMM_TOOL_HOST_START,
+        COMM_TOOL_SOURCE / "ct_config.h",
+        COMM_TOOL_SOURCE / "ct_protocol.c",
+        COMM_TOOL_SOURCE / "ct_flash_store.c",
+        COMM_TOOL_SOURCE / "ct_can_gateway.c",
+        COMM_TOOL_SOURCE / "ct_upgrade_manager.c",
+        COMM_TOOL_SOURCE / "ct_app.c",
+    ]
+    required = docs + source_files
+    if any(not path.exists() for path in required):
+        missing = [str(path.relative_to(ROOT)) for path in required if not path.exists()]
+        reporter.fail("comm tool CAN-IAP files missing: {0}".format(",".join(missing)))
+        return
+
+    arch_doc = read_text(COMM_TOOL_ARCH_DOC)
+    serial_doc = read_text(COMM_TOOL_SERIAL_DOC)
+    service_doc = read_text(BMS_CAN_SERVICE_DOC)
+    iap_doc = read_text(BMS_CAN_IAP_DOC)
+    host_py = read_text(COMM_TOOL_HOST)
+    start_ps1 = read_text(COMM_TOOL_HOST_START)
+    config_h = read_text(COMM_TOOL_SOURCE / "ct_config.h")
+    protocol_c = read_text(COMM_TOOL_SOURCE / "ct_protocol.c")
+    flash_c = read_text(COMM_TOOL_SOURCE / "ct_flash_store.c")
+    can_c = read_text(COMM_TOOL_SOURCE / "ct_can_gateway.c")
+    upgrade_c = read_text(COMM_TOOL_SOURCE / "ct_upgrade_manager.c")
+    app_c = read_text(COMM_TOOL_SOURCE / "ct_app.c")
+    bms_can_c = read_text(CAN_HDX_C)
+
+    if (
+        "PC 上位机 <UART> comm tool" in arch_doc
+        and "0x08004800" in arch_doc
+        and "0x08010000" in arch_doc
+        and "FW_BEGIN" in serial_doc
+        and "FW_DATA" in serial_doc
+        and "ConfirmAppAddress 0x08004800" in serial_doc
+        and "GET_STATUS" in service_doc
+        and "ENTER_IAP" in service_doc
+        and "0x14F8F000" in iap_doc
+        and "COMMIT" in iap_doc
+    ):
+        reporter.ok("comm tool architecture and protocol documents record UART/CAN/IAP rules")
+    else:
+        reporter.fail("comm tool docs should record UART chain, 0x08004800, cache area, commands, and CAN-IAP commit protocol")
+
+    if (
+        "CMD_FW_BEGIN" in host_py
+        and "CMD_FW_DATA" in host_py
+        and "CMD_UPGRADE" in host_py
+        and "APP_BASE_ADDR = 0x08004800" in host_py
+        and "confirm_app_address" in host_py
+        and "pyserial" in host_py
+        and "comm_tool_host.py" in start_ps1
+        and "ConfirmAppAddress" in start_ps1
+    ):
+        reporter.ok("PC comm tool host enforces serial protocol and App address confirmation")
+    else:
+        reporter.fail("PC comm tool host should support firmware download, upgrade commands, pyserial, and 0x08004800 confirmation")
+
+    if (
+        "CT_FW_CACHE_BASE               0x08010000u" in config_h
+        and "CtProtocol_Encode" in protocol_c
+        and "CtFlash_Begin" in flash_c
+        and "CT_FW_CACHE_BASE" in flash_c
+        and "CtCan_IapSendCommit" in can_c
+        and "CtCan_IapWaitAck" in can_c
+        and "CtUpgrade_Start" in upgrade_c
+        and "CT_IAP_BLOCK_FRAMES" in upgrade_c
+        and "CT_CMD_FW_BEGIN" in app_c
+        and "CT_CMD_UPGRADE" in app_c
+    ):
+        reporter.ok("comm tool firmware source contains protocol, flash cache, CAN gateway, and upgrade manager")
+    else:
+        reporter.fail("comm tool firmware source should contain protocol parser, flash cache, CAN-IAP commit, ACK wait, and command dispatch")
+
+    if (
+        "FEIDAO_CAN_APP_CMD_GET_STATUS" in bms_can_c
+        and "FEIDAO_CAN_APP_CMD_ENTER_IAP" in bms_can_c
+        and "FEIDAO_CAN_APP_RX_WINDOW_TICKS" in bms_can_c
+        and "FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE)" in bms_can_c
+        and "s_u8FeidaoCanEnterIapDelayTicks" in bms_can_c
+    ):
+        reporter.ok("BMS App exposes minimal CAN service for status and entering IAP")
+    else:
+        reporter.fail("BMS App should expose CAN GET_STATUS/ENTER_IAP and a bounded RX window")
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="Check Keil project release/debug configuration.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Only print warnings, errors, and summary.")
@@ -1198,6 +1295,7 @@ def main(argv):
     check_rtc_stop_sleep_contract(reporter)
     check_app_architecture(reporter)
     check_runtime_docs(reporter)
+    check_comm_tool_can_iap_contract(reporter)
 
     return reporter.summary()
 

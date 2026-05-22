@@ -1,0 +1,66 @@
+# PC 与 comm tool 串口协议
+
+## 串口参数
+
+默认参数：`115200 8N1`，无流控。PC 端固定使用 Windows Python Launcher：
+
+```powershell
+py -3.9 tools\comm_tool_host.py ...
+```
+
+## 帧格式
+
+所有多字节字段为小端。
+
+| 字段 | 长度 | 说明 |
+| --- | --- | --- |
+| magic | 2 | 固定 `55 AA` |
+| version | 1 | 当前 `01` |
+| flags | 1 | bit0 为 ACK 帧 |
+| seq | 2 | PC 发起递增序号，响应沿用请求序号 |
+| cmd | 1 | 命令号 |
+| status | 1 | 请求固定 `00`，响应为状态码 |
+| length | 2 | payload 字节数 |
+| payload | N | 命令数据 |
+| crc16 | 2 | CRC16-Modbus，覆盖 crc 前所有字段 |
+
+最大 payload 第一阶段限制为 `512` 字节。固件下载分块推荐 `256` 字节。
+
+## 状态码
+
+| 状态码 | 含义 |
+| --- | --- |
+| `0x00` | 成功 |
+| `0x01` | CRC 错 |
+| `0x02` | 命令不支持 |
+| `0x03` | 参数错误 |
+| `0x04` | 状态不允许 |
+| `0x05` | Flash 错误 |
+| `0x06` | CAN 超时 |
+| `0x07` | BMS 返回错误 |
+
+## 命令
+
+| 命令 | 方向 | payload | 说明 |
+| --- | --- | --- | --- |
+| `0x01 GET_INFO` | PC -> comm | 空 | 读取 comm tool 版本、Flash 缓存能力、CAN 波特率 |
+| `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 reserved[3]` | 设置 CAN 参数 |
+| `0x10 BMS_READ` | PC -> comm | `addr:u16 count:u16` | 通过 CAN 读取 BMS 寄存器 |
+| `0x11 BMS_WRITE` | PC -> comm | `addr:u16 count:u16 words[count]` | 通过 CAN 写 BMS 寄存器 |
+| `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 到 comm tool |
+| `0x21 FW_DATA` | PC -> comm | `offset:u32 data[n]` | 写入固件缓存 |
+| `0x22 FW_END` | PC -> comm | `size:u32 crc16:u16 crc32:u32` | 结束下载并校验缓存 |
+| `0x23 FW_INFO` | PC -> comm | 空 | 查询缓存固件信息 |
+| `0x30 ENTER_IAP` | PC -> comm | 空 | 让 BMS App 写标志并复位进入 IAP |
+| `0x31 UPGRADE` | PC -> comm | 空 | 使用缓存固件给 BMS 一键升级 |
+| `0x32 UPGRADE_STATUS` | PC -> comm | 空 | 查询升级状态 |
+| `0x33 UPGRADE_ABORT` | PC -> comm | 空 | 终止当前升级 |
+| `0x40 RAW_CAN_TX` | PC -> comm | `id:u32 ide:u8 dlc:u8 data[8]` | 调试用原始 CAN 发送 |
+
+## 安全规则
+
+- `FW_BEGIN.app_addr` 第一阶段必须等于 `0x08004800`。
+- PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
+- comm tool 写缓存前必须擦除缓存页，不能覆盖自身程序区。
+- `FW_END` 校验失败时缓存固件无效，禁止执行 `UPGRADE`。
+
