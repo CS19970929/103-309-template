@@ -389,6 +389,11 @@
               <FilePath>..\Source\ADC.c</FilePath>
             </File>
             <File>
+              <FileName>AppInit.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\AppInit.c</FilePath>
+            </File>
+            <File>
               <FileName>DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\DataDeal.c</FilePath>
@@ -1309,6 +1314,11 @@
               <FileName>ADC.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ADC.c</FilePath>
+            </File>
+            <File>
+              <FileName>AppInit.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\AppInit.c</FilePath>
             </File>
             <File>
               <FileName>DataDeal.c</FileName>

@@ -1,7 +1,6 @@
 // #include "conf.h"
 #include "main.h"
-
-void InitSci(void);
+#include "AppInit.h"
 
 Time_T sys_time = {
     .time_enter_rtc = 10,
@@ -410,7 +409,7 @@ void InitRunAfterStopWakeup(void)
     USART_DeInit(USART1);
     USART_DeInit(USART2);
 
-    InitSci();
+    AppInit_InitSci();
     InitCan();
     InitTimer();
 

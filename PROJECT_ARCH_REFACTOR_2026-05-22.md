@@ -61,7 +61,7 @@ Conf_InitAllPortsAnalog()
 - `main.c` 不允许重新承载 `MosStartup_ApplyInitialState()` 或旧 MOS 控制函数实现。
 - `conf.c` 必须保留共享 GPIO helper，防止后续回退到复制粘贴式初始化。
 
-## 本轮未做的事
+## 第一轮未做的事
 
 - 未改动当前已有未提交变更的文件：`DataDeal.c`、`EEPROM.h`、`Fault.*`、`RTC.c`、`Sci_Upper.c`、`todo.md`。
 - 未调整 App 烧录地址、scatter、IAP 边界和 SOC 测试模式隔离规则。
@@ -92,6 +92,70 @@ Program Size: Code=46572 RO-data=2824 RW-data=808 ZI-data=5256
 - `FD_Release.bin` 输出大小为 49640 字节。
 - 仍有 1 个 `Sci_Upper.c(377)` 未引用静态函数警告；该文件本轮开始前已有未提交改动，本轮未混入处理。
 - `py -3 tools/project_check.py -q` 结果为 `Errors: 0, Warnings: 0`。
+
+## 第二轮：Code/ROM 体积优先
+
+### 1. 启动初始化边界
+
+新增：
+
+```text
+103 + 309/Project/Source/AppInit.c
+103 + 309/Project/Source/AppInit.h
+```
+
+调整后：
+
+- `main.c` 只保留 `AppInit_Boot()` 和 `Runtime_RunOnce()` 主循环。
+- `AppInit.c` 承载原 `InitDevice()`、`InitVar()` 以及 RTC 初始化入口。
+- `Runtime.c` 和 STOP 唤醒恢复路径继续通过 SCI 服务宏调用原 `InitUSART_CommonUpper()` / `App_CommonUpper()`，避免新增薄包装函数进入最终镜像。
+
+### 2. 删除 `SeriesSelect_AFE1` 大表
+
+原 `SeriesSelect_AFE1[16][16]` 常量表占用 256 字节 RO-data。当前代码改为在 `DataLoad_CellVolt()` 内按运行时 `SeriesNum` 做紧凑映射：
+
+- `SeriesNum` 仍由 EEPROM 默认值或上位机写 `OtherElement.u16Sys_SeriesNum` 后更新，不改串数配置入口。
+- 5-16 串默认按 AFE 顺序通道读取。
+- 保留原表特殊行为：`SeriesNum < 5` 时映射到 AFE index 0；`SeriesNum == 13` 且电芯 index 为 8 时映射到 AFE index 9。
+- `SeriesNum` 在函数入口缓存到局部变量，减少循环内全局变量访问，`DataLoad_CellVolt` 链接后为 78 字节。
+
+### 3. 自动检查补充
+
+`tools/project_check.py` 增加检查：
+
+- `FD_Release` 和 `FD_Debug` 必须包含 `AppInit.c`。
+- `main.c` 必须保持薄入口，不允许重新放回 `InitDevice()` / `InitVar()` / `InitSci()` / `App_Sci()`。
+- `SeriesSelect_AFE1` 不允许重新出现在源码或 `FD_Release.map` 中。
+- `DataLoad_CellVolt()` 必须保留 `<5` 串和 13 串特殊映射，避免为了省表误伤改串数逻辑。
+
+### 4. 第二轮验证结果
+
+完整 Release Rebuild 命令：
+
+```powershell
+& 'C:\Keil_v5\UV4\UV4.exe' `
+  -r 'E:\TODO\103 + 309 - 副本\103 + 309\Project\Users\CommomSH367309_16series_103RCT6_C.uvprojx' `
+  -t 'FD_Release' `
+  -j0 `
+  -o 'E:\TODO\103 + 309 - 副本\logs\build_fd_release_size_refactor.log'
+```
+
+构建结果：
+
+```text
+Program Size: Code=49640 RO-data=2568 RW-data=896 ZI-data=5416
+Total ROM Size: 52456 bytes
+FD_Release.bin: 52456 bytes
+0 Error(s), 0 Warning(s)
+```
+
+相对第一轮提交后的干净基线 `Code=49656 RO-data=2824 RW-data=896 ZI-data=5416`、`FD_Release.bin=52728`：
+
+- Code 减少 16 字节。
+- RO-data 减少 256 字节。
+- ROM/bin 总体减少 272 字节。
+
+说明：当前主工作区还叠加了本轮开始前已有的 `Fault.*`、`RTC.c`、`Sci_Upper.c`、`DataDeal.c` 等未提交改动，工作区本地构建会得到更小的数值；本节记录的是只包含本次提交内容的干净 worktree 对比，避免把其它未提交改动计入本轮收益。
 
 ## 后续重构顺序建议
 

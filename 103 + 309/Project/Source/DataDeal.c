@@ -128,11 +128,23 @@ void Init_Registers(UINT8 num)
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
+    UINT8 series_num = SeriesNum;
     INT32 t_i32temp;
 
-    for (i = 0; i < SeriesNum; ++i)
+    for (i = 0; i < series_num; ++i)
     {
-        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+        UINT8 afe_index = i;
+
+        if (series_num < 5U)
+        {
+            afe_index = 0U;
+        }
+        else if ((series_num == 13U) && (i == 8U))
+        {
+            afe_index = 9U;
+        }
+
+        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[afe_index];
         // if (g_tParam.CalibCoefK[VOLT_AFE1] != 1024 || g_tParam.CalibCoefB[VOLT_AFE1] != 0)
         // {
         // 	t_i32temp = ((t_i32temp * g_tParam.CalibCoefK[VOLT_AFE1]) >> 10) + g_tParam.CalibCoefB[VOLT_AFE1];
@@ -142,9 +154,9 @@ void DataLoad_CellVolt(void)
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 
-    if (SeriesNum < 32)
+    if (series_num < 32)
     {
-        for (i = SeriesNum; i < 31; ++i)
+        for (i = series_num; i < 31; ++i)
         {
             g_stCellInfoReport.u16VCell[i] = 61001;
         }

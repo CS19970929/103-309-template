@@ -27,6 +27,7 @@
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
+#include "AppInit.h"
 #include "MosStartup.h"
 
 #include "ShortFunc.h"
@@ -74,13 +75,11 @@ FALSE = 0, TRUE
 
 /* Project feature switches and SCI roles are derived from conf/Project_Config.h. */
 
-void InitSystemWakeUp(void);
 UINT8 FactoryAging_IsActive(void);
 UINT8 FactoryAging_ShouldStartOnBoot(void);
 UINT8 FactoryAging_SaveProgressBeforeSleep(void);
 
 
-extern const unsigned char SeriesSelect_AFE1[16][16];
 extern UINT8 SeriesNum;
 
 #endif	/* MAIN_H */

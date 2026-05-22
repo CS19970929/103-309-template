@@ -1,15 +1,14 @@
 #include "main.h"
+#include "AppInit.h"
 #include "FactoryAging.h"
 #include "Flash64KAppTest.h"
 #include "Runtime.h"
-
-void App_Sci(void);
 
 #if (defined _DEBUG_CODE)
 static void Runtime_RunDebugOnce(void)
 {
 	App_AFEGet();
-	App_Sci();
+	AppInit_ServiceSci();
 }
 #else
 static void Runtime_RunFrontTasks(void)
@@ -23,7 +22,7 @@ static void Runtime_RunFrontTasks(void)
 
 static void Runtime_RunIoAndPowerTasks(void)
 {
-	App_Sci();
+	AppInit_ServiceSci();
 	App_AnlogCal();
 	App_LowPowerProcess();
 	App_Can();
