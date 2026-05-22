@@ -673,6 +673,51 @@ static void LedBar_ServiceStartupDisplayWindow(void)
     }
 }
 
+static void LedBar_PrimeBinaryFilter(uint8_t raw_active,
+                                     uint8_t *active,
+                                     uint8_t *on_count,
+                                     uint8_t *off_count,
+                                     uint8_t on_limit,
+                                     uint8_t off_limit)
+{
+    *active = raw_active;
+    *on_count = (raw_active != 0u) ? on_limit : 0u;
+    *off_count = (raw_active == 0u) ? off_limit : 0u;
+}
+
+static void LedBar_UpdateBinaryFilter(uint8_t raw_active,
+                                      uint8_t *active,
+                                      uint8_t *on_count,
+                                      uint8_t *off_count,
+                                      uint8_t on_limit,
+                                      uint8_t off_limit)
+{
+    if (raw_active != 0u)
+    {
+        *off_count = 0u;
+        if (*on_count < on_limit)
+        {
+            (*on_count)++;
+        }
+        if (*on_count >= on_limit)
+        {
+            *active = 1u;
+        }
+    }
+    else
+    {
+        *on_count = 0u;
+        if (*off_count < off_limit)
+        {
+            (*off_count)++;
+        }
+        if (*off_count >= off_limit)
+        {
+            *active = 0u;
+        }
+    }
+}
+
 static void LedBar_ServiceMcuWakeFilter(void)
 {
     uint8_t raw_active = LedBar_ReadMcuWakeRaw();
@@ -680,9 +725,12 @@ static void LedBar_ServiceMcuWakeFilter(void)
     if (s_ledbar_mcu_wk_filter_initialized == 0u)
     {
         s_ledbar_mcu_wk_filter_initialized = 1u;
-        s_ledbar_mcu_wk_active = raw_active;
-        s_ledbar_mcu_wk_on_10ms = (raw_active != 0u) ? LEDBAR_MCU_WK_ON_FILTER_10MS : 0u;
-        s_ledbar_mcu_wk_off_10ms = (raw_active == 0u) ? LEDBAR_MCU_WK_OFF_FILTER_10MS : 0u;
+        LedBar_PrimeBinaryFilter(raw_active,
+                                 &s_ledbar_mcu_wk_active,
+                                 &s_ledbar_mcu_wk_on_10ms,
+                                 &s_ledbar_mcu_wk_off_10ms,
+                                 LEDBAR_MCU_WK_ON_FILTER_10MS,
+                                 LEDBAR_MCU_WK_OFF_FILTER_10MS);
         return;
     }
 
@@ -691,30 +739,12 @@ static void LedBar_ServiceMcuWakeFilter(void)
         return;
     }
 
-    if (raw_active != 0u)
-    {
-        s_ledbar_mcu_wk_off_10ms = 0u;
-        if (s_ledbar_mcu_wk_on_10ms < LEDBAR_MCU_WK_ON_FILTER_10MS)
-        {
-            s_ledbar_mcu_wk_on_10ms++;
-        }
-        if (s_ledbar_mcu_wk_on_10ms >= LEDBAR_MCU_WK_ON_FILTER_10MS)
-        {
-            s_ledbar_mcu_wk_active = 1u;
-        }
-    }
-    else
-    {
-        s_ledbar_mcu_wk_on_10ms = 0u;
-        if (s_ledbar_mcu_wk_off_10ms < LEDBAR_MCU_WK_OFF_FILTER_10MS)
-        {
-            s_ledbar_mcu_wk_off_10ms++;
-        }
-        if (s_ledbar_mcu_wk_off_10ms >= LEDBAR_MCU_WK_OFF_FILTER_10MS)
-        {
-            s_ledbar_mcu_wk_active = 0u;
-        }
-    }
+    LedBar_UpdateBinaryFilter(raw_active,
+                              &s_ledbar_mcu_wk_active,
+                              &s_ledbar_mcu_wk_on_10ms,
+                              &s_ledbar_mcu_wk_off_10ms,
+                              LEDBAR_MCU_WK_ON_FILTER_10MS,
+                              LEDBAR_MCU_WK_OFF_FILTER_10MS);
 }
 
 static uint8_t LedBar_IsMcuWakeActive(void)
@@ -727,9 +757,12 @@ static void LedBar_ServiceChargeFilter(uint8_t raw_active)
     if (s_ledbar_charge_filter_initialized == 0u)
     {
         s_ledbar_charge_filter_initialized = 1u;
-        s_ledbar_charge_active = 0u;
-        s_ledbar_charge_on_100ms = 0u;
-        s_ledbar_charge_off_100ms = LEDBAR_CHARGE_OFF_FILTER_100MS;
+        LedBar_PrimeBinaryFilter(0u,
+                                 &s_ledbar_charge_active,
+                                 &s_ledbar_charge_on_100ms,
+                                 &s_ledbar_charge_off_100ms,
+                                 LEDBAR_CHARGE_ON_FILTER_100MS,
+                                 LEDBAR_CHARGE_OFF_FILTER_100MS);
     }
 
     if (g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u)
@@ -737,30 +770,12 @@ static void LedBar_ServiceChargeFilter(uint8_t raw_active)
         return;
     }
 
-    if (raw_active != 0u)
-    {
-        s_ledbar_charge_off_100ms = 0u;
-        if (s_ledbar_charge_on_100ms < LEDBAR_CHARGE_ON_FILTER_100MS)
-        {
-            s_ledbar_charge_on_100ms++;
-        }
-        if (s_ledbar_charge_on_100ms >= LEDBAR_CHARGE_ON_FILTER_100MS)
-        {
-            s_ledbar_charge_active = 1u;
-        }
-    }
-    else
-    {
-        s_ledbar_charge_on_100ms = 0u;
-        if (s_ledbar_charge_off_100ms < LEDBAR_CHARGE_OFF_FILTER_100MS)
-        {
-            s_ledbar_charge_off_100ms++;
-        }
-        if (s_ledbar_charge_off_100ms >= LEDBAR_CHARGE_OFF_FILTER_100MS)
-        {
-            s_ledbar_charge_active = 0u;
-        }
-    }
+    LedBar_UpdateBinaryFilter(raw_active,
+                              &s_ledbar_charge_active,
+                              &s_ledbar_charge_on_100ms,
+                              &s_ledbar_charge_off_100ms,
+                              LEDBAR_CHARGE_ON_FILTER_100MS,
+                              LEDBAR_CHARGE_OFF_FILTER_100MS);
 }
 
 static uint8_t LedBar_IsDisplayRequested(void)

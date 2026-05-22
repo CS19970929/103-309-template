@@ -785,20 +785,12 @@ static void InitCan_CAN1(void)
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE); // 使能FIFO0消息挂号中断
 }
 
-static void Can_BusOFF_FaultTimeCtrl(void)
+static void Can_BusOFF_Monitor(void)
 {
-	if (s_u8CanBusOff != 0U)
-	{
-		g_u16BusOff_InitTestCnt++;
-	}
-	if (((CAN1->ESR & CAN_ESR_BOFF) == 0U) && (s_u8CanBusOff == 0U))
-	{
-		g_u16BusOff_RecoverCnt++;
-	}
-}
+	UINT16 recover_cycle;
+	static UINT8 s_u8BusOffRecoverStep = 0U;
 
-static void Can_BusOFF_FaultChk(void)
-{
+	/* Detect the bus-off rising edge before running the old 10 ms counters. */
 	if ((s_u8CanBusOff == 0U) && ((CAN1->ESR & CAN_ESR_BOFF) != 0U))
 	{
 		feidao_can_update_error_snapshot();
@@ -809,12 +801,16 @@ static void Can_BusOFF_FaultChk(void)
 		g_u16BusOff_InitTestCnt = 0U;
 		System_ERROR_UserCallback(ERROR_CAN);
 	}
-}
 
-static void Can_BusOFF_Recover(void)
-{
-	UINT16 recover_cycle;
-	static UINT8 s_u8BusOffRecoverStep = 0U;
+	/* Keep the original counter order: fault edge, counters, then recovery. */
+	if (s_u8CanBusOff != 0U)
+	{
+		g_u16BusOff_InitTestCnt++;
+	}
+	if (((CAN1->ESR & CAN_ESR_BOFF) == 0U) && (s_u8CanBusOff == 0U))
+	{
+		g_u16BusOff_RecoverCnt++;
+	}
 
 	if (s_u8CanBusOff != 0U)
 	{
@@ -836,13 +832,6 @@ static void Can_BusOFF_Recover(void)
 		g_u16BusOff_RecoverCnt = DELAYB10MS_500MS;
 		s_u8BusOffRecoverStep = 0U;
 	}
-}
-
-static void Can_BusOFF_Monitor(void)
-{
-	Can_BusOFF_FaultChk();
-	Can_BusOFF_FaultTimeCtrl();
-	Can_BusOFF_Recover();
 }
 
 void InitCan(void)

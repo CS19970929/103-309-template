@@ -689,6 +689,21 @@ static void soc_add_discharge(UINT32 delta_as10)
 	}
 }
 
+static UINT8 soc_apply_discharge_delta(UINT32 delta_as10, UINT8 watch_source, UINT8 old_soc)
+{
+	s_soc.full_anchor = 0U;
+	soc_add_discharge(delta_as10);
+	s_soc.cap_now_as10 = (s_soc.cap_now_as10 > delta_as10) ?
+		(s_soc.cap_now_as10 - delta_as10) : 0U;
+	s_soc.soc = soc_from_cap();
+	if (s_soc.soc != old_soc)
+	{
+		soc_watch_set_calib_source(watch_source, old_soc, s_soc.soc);
+		return 1U;
+	}
+	return 0U;
+}
+
 static void soc_clear_deferred_ocv(void)
 {
 	s_soc.deferred_ocv_valid = 0U;
@@ -765,10 +780,11 @@ static void soc_integrate(UINT8 mode)
 	}
 	else
 	{
-		s_soc.full_anchor = 0U;
-		soc_add_discharge(delta_as10);
-		s_soc.cap_now_as10 = (s_soc.cap_now_as10 > delta_as10) ?
-			(s_soc.cap_now_as10 - delta_as10) : 0U;
+		(void)soc_apply_discharge_delta(delta_as10,
+			(mode == SOC_MODE_RELAX) ? SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION :
+				SOC_WATCH_CALIB_INTEGRATE_DSG,
+			old_soc);
+		return;
 	}
 	s_soc.soc = soc_from_cap();
 	if ((integrate_mode == SOC_MODE_CHG) && (!s_soc.full_anchor) && (s_soc.soc >= 100U))
@@ -814,18 +830,7 @@ static UINT8 soc_apply_board_self_consumption_seconds(UINT32 seconds)
 		return 0U;
 	}
 	delta_as10 = (delta_as10_64 > 0xFFFFFFFFULL) ? 0xFFFFFFFFU : (UINT32)delta_as10_64;
-	s_soc.full_anchor = 0U;
-	soc_add_discharge(delta_as10);
-	s_soc.cap_now_as10 = (s_soc.cap_now_as10 > delta_as10) ?
-		(s_soc.cap_now_as10 - delta_as10) : 0U;
-	s_soc.soc = soc_from_cap();
-	if (s_soc.soc != old_soc)
-	{
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION,
-			old_soc,
-			s_soc.soc);
-	}
-	return (UINT8)(s_soc.soc != old_soc);
+	return soc_apply_discharge_delta(delta_as10, SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION, old_soc);
 }
 
 static UINT8 soc_apply_rest_ocv(UINT32 rest_seconds, UINT8 mode)

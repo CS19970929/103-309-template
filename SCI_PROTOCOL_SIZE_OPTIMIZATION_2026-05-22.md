@@ -161,6 +161,78 @@ Load Region LR_IROM1 Base: 0x08004800
 Execution Region ER_IROM1 Exec base: 0x08004800
 ```
 
+## 第八轮优化记录
+继续按 `FD_Release.map` 里占用较大的模块筛选目标，本轮只处理 SOC、LED、CAN 和工厂老化模式中重复语义清晰、可读性不会明显变差的代码。曾尝试把 CAN 发送邮箱收尾和工厂老化 Flash 保存标记抽成 helper，但 map 显示 CAN 反而增大、工厂模式无 aggregate 收益，因此未保留。
+
+修改内容：
+- `SocEnhance.c` 新增 `soc_apply_discharge_delta()`，把积分放电和板端自耗补偿中的“扣容量、刷新 SOC、记录 watch 来源”收敛到同一语义入口；满电锚点、充电 99% 限制和 OCV 校准逻辑不变。
+- `LedBar.c` 新增二值去抖初始化/更新 helper，复用 MCU_WAKE 与充电输入滤波逻辑；充电滤波首次仍按原逻辑从 inactive/off-limit 状态起步。
+- `Can_HDX.c` 合并 BusOFF 检测、计数与恢复的单点调用小函数，保留原执行顺序：故障上升沿、10ms 计数、恢复退避；CAN ID、ACK 判定、RTC 唤醒服务和发送调度不变。
+- `FactoryAging.c` 将单点 `FactoryAging_IsDoneStored()` 合入 `FactoryAging_MarkDone()`，并精简 BKP CRC 表达式；Flash/BKP 保存间隔、完成态判断和老化计时不变。
+
+本轮在临时干净 worktree `.worktrees/module-size-opt` 中从 `HEAD=06ba087` 验证，避免主工作区外部 `Sci_Upper.c` 改动污染 map。
+
+第八轮基线：
+```text
+Program Size: Code=50132 RO-data=2824 RW-data=896 ZI-data=5416
+Total RO  Size: 52956
+Total RW  Size: 6312
+Total ROM Size: 53204
+FD_Release.bin: 53204 bytes
+```
+
+第八轮优化后：
+```text
+Program Size: Code=49996 RO-data=2824 RW-data=896 ZI-data=5416
+Total RO  Size: 52820
+Total RW  Size: 6312
+Total ROM Size: 53068
+FD_Release.bin: 53068 bytes
+```
+
+相对第八轮基线：
+- Code 减少 136 字节。
+- Total ROM 减少 136 字节。
+- RAM 保持 6312 字节不变。
+
+模块 aggregate 变化：
+```text
+socenhance.o:    5696 -> 5692 bytes, -4
+ledbar.o:        3034 -> 2968 bytes, -66
+can_hdx.o:       2736 -> 2688 bytes, -48
+factoryaging.o:  1152 -> 1134 bytes, -18
+```
+
+关键函数尺寸：
+```text
+soc_integrate: 274 -> 258 bytes
+soc_apply_board_self_consumption_seconds: 234 -> 170 bytes
+soc_apply_discharge_delta: new 72 bytes
+
+LedBar_ServiceMcuWakeFilter: 176 -> 82 bytes
+LedBar_ServiceChargeFilter: 148 -> 80 bytes
+LedBar_PrimeBinaryFilter: new 30 bytes
+LedBar_UpdateBinaryFilter: new 64 bytes
+
+Can_BusOFF_FaultChk + Can_BusOFF_FaultTimeCtrl + Can_BusOFF_Recover + Can_BusOFF_Monitor:
+  68 + 44 + 92 + 16 -> 204 bytes
+
+FactoryAging_IsDoneStored: 30 -> removed
+FactoryAging_MarkDone: 32 -> 46 bytes
+FactoryAging_BkpCrc: 32 -> 28 bytes
+```
+
+第八轮验证：
+```text
+".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+Project check summary:
+  OK:       120
+  Warnings: 0
+  Errors:   0
+Load Region LR_IROM1 Base: 0x08004800
+Execution Region ER_IROM1 Exec base: 0x08004800
+```
+
 ## 第三轮优化记录
 
 继续处理 map 中剩余的高占用、低风险重复逻辑。

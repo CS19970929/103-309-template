@@ -36,10 +36,9 @@ static UINT32 FactoryAging_ClampElapsed(UINT32 elapsed10ms)
 
 static UINT16 FactoryAging_BkpCrc(UINT32 elapsed10ms)
 {
-	UINT16 lo = (UINT16)(elapsed10ms & 0xFFFFU);
-	UINT16 hi = (UINT16)((elapsed10ms >> 16) & 0xFFFFU);
-
-	return (UINT16)(lo ^ hi ^ FACTORY_AGING_BKP_MAGIC ^ 0x5A5AU);
+	return (UINT16)((UINT16)(elapsed10ms & 0xFFFFU) ^
+		(UINT16)((elapsed10ms >> 16) & 0xFFFFU) ^
+		FACTORY_AGING_BKP_MAGIC ^ 0x5A5AU);
 }
 
 static void FactoryAging_EnableBkpAccess(void)
@@ -141,14 +140,6 @@ static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done)
 	return has_progress;
 }
 
-static UINT8 FactoryAging_IsDoneStored(void)
-{
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
-
-	return ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
-			(data.u16State == FLASH_FACTORY_AGING_STATE_DONE)) ? 1U : 0U;
-}
-
 UINT8 FactoryAging_ShouldStartOnBoot(void)
 {
 #if PROJECT_CFG_FACTORY_AGING_ENABLE
@@ -208,7 +199,10 @@ static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UI
 
 static UINT8 FactoryAging_MarkDone(void)
 {
-	if (FactoryAging_IsDoneStored() != 0U)
+	STORAGE_FLASH_FACTORY_AGING_DATA data;
+
+	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
+		(data.u16State == FLASH_FACTORY_AGING_STATE_DONE))
 	{
 		return 1U;
 	}
