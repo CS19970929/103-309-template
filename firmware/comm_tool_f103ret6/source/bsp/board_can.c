@@ -215,6 +215,7 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
     {
         if ((uint32_t)(CtBoard_GetTickMs() - start) >= timeout_ms)
         {
+            CAN_CancelTransmit(CAN1, mailbox);
             s_diag.tx_timeout++;
             s_diag.last_tx_status = CAN_TxStatus_Pending;
             can_diag_latch_regs();
@@ -232,6 +233,7 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
     }
 
     s_diag.tx_fail++;
+    CAN_CancelTransmit(CAN1, mailbox);
     return 0;
 }
 

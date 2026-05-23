@@ -6,11 +6,14 @@
 #define CT_PROTOCOL_VERSION            1u
 #define CT_FW_VERSION_MAJOR            0u
 #define CT_FW_VERSION_MINOR            1u
-#define CT_FW_VERSION_PATCH            3u
+#define CT_FW_VERSION_PATCH            4u
 #define CT_UART_MAX_PAYLOAD            512u
 #define CT_UART_DEFAULT_BAUD           115200u
 #define CT_CAN_DEFAULT_BITRATE         250000u
 #define CT_NODE_ID_DEFAULT             1u
+
+#define CT_CAN_HEARTBEAT_STD_ID        0x05Eu
+#define CT_CAN_HEARTBEAT_PERIOD_MS     1000u
 
 #define CT_BMS_IAP_BASE_ADDR           0x08000000u
 #define CT_BMS_APP_BASE_ADDR           0x08004800u

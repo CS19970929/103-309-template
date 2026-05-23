@@ -173,6 +173,31 @@ def format_hex(data: bytes) -> str:
     return " ".join(f"{value:02X}" for value in data)
 
 
+def decode_can_esr(esr: int) -> str:
+    lec_text = {
+        0: "none",
+        1: "stuff",
+        2: "form",
+        3: "ack",
+        4: "bit-recessive",
+        5: "bit-dominant",
+        6: "crc",
+        7: "software",
+    }
+    lec = (esr >> 4) & 0x07
+    tec = (esr >> 16) & 0xFF
+    rec = (esr >> 24) & 0xFF
+    flags = []
+    if esr & 0x01:
+        flags.append("EWGF")
+    if esr & 0x02:
+        flags.append("EPVF")
+    if esr & 0x04:
+        flags.append("BOFF")
+    flag_text = ",".join(flags) if flags else "none"
+    return f"TEC={tec} REC={rec} LEC={lec_text.get(lec, str(lec))} flags={flag_text}"
+
+
 def load_image(path: Path, app_address: int) -> bytes:
     if app_address == IAP_BASE_ADDR:
         raise SystemExit("拒绝 App 地址 0x08000000，该地址是 IAP/Bootloader 起始地址。")
@@ -381,6 +406,7 @@ def cmd_can_diag(args) -> int:
         print(f"  tx: count={tx_count} ok={tx_ok} fail={tx_fail} timeout={tx_timeout}")
         print(f"  rx: count={rx_count} drop={rx_drop}")
         print(f"  regs: ESR=0x{last_esr:08X} TSR=0x{last_tsr:08X} MSR=0x{last_msr:08X} RF0R=0x{last_rf0r:08X}")
+        print(f"  esr decoded: {decode_can_esr(last_esr)}")
         print(
             f"  last tx: id=0x{last_tx_id:08X} ide={last_tx_ide} dlc={last_tx_dlc} "
             f"status=0x{last_tx_status:02X}"

@@ -23,6 +23,7 @@ int main(void)
                 CtApp_HandleFrame(&s_frame);
             }
         }
+        CtApp_Poll();
         Board_Poll();
     }
 }
