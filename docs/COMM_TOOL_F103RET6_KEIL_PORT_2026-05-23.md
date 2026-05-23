@@ -30,7 +30,7 @@ App 和 IAP 使用两个独立 Keil 工程，而不是同一个工程里的两�
 | CAN/通信驱动 | `PC12` | 正常运行置 0，对齐 `MCUO_DRV_CMNT=0` |
 | PWSV 控制 | `PC13` | 正常运行置 0，对齐 `MCUO_PWSV_CTR=0` |
 | PWSV 待机 | `PD2` | 正常运行置 1，对齐 `MCUO_PWSV_STB=1` |
-| Debug LED | `PB15` | 500ms 翻转 |
+| Debug LED | `PB15` | App 200ms 翻转；IAP 500ms 翻转 |
 
 comm tool 当前复用主仓库 `system_stm32f10x.c`，运行时 HSE 直连，`PCLK1=8 MHz`。CAN 位时序必须按该时钟计算：
 
@@ -83,6 +83,13 @@ comm tool 自身升级有两种入口：
 | --- | --- | --- |
 | PC 直连当前 comm tool 串口 | 复用旧 BMS 串口升级上位机 | USART3 `115200 8N1`，`0xFFFD/0xFFFE/0xFFFF` 旧 IAP 命令 |
 | 另一台 comm tool 通过 CAN 升级当前 comm tool | 批量升级 comm tool 或现场无线/隔离升级 | 当前 comm tool App 响应 BMS App `ENTER_IAP` 服务，进入 IAP 后复用 CAN-IAP 协议 |
+
+串口自升级保持旧 BMS 上位机协议不变，但 IAP 固件做了以下容错：
+
+- 旧协议 ACK 延迟 20ms 后发送，避开旧上位机每包 `Write()` 后立即 `DiscardInBuffer()` 造成的 ACK 丢失。
+- 串口收半帧超过 500ms 自动丢弃并重新找帧头，避免升级中断后卡在旧半帧状态。
+- IAP 写 App 区时按实际覆盖页擦除并记录已擦页，不再依赖每包都从 Flash 页边界开始，最后一包不足 1024 字节也能稳定写入。
+- UART 发送等待增加超时保护，串口状态异常时不会在 TXE/TC 等待里死循环。
 
 通过另一台 comm tool 升级当前 comm tool 的步骤：
 

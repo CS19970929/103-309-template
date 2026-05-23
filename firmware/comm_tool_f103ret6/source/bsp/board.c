@@ -4,6 +4,8 @@
 #include "ct_board_port.h"
 #include "ct_config.h"
 
+#define BOARD_APP_LED_PERIOD_MS 200u
+
 static volatile uint32_t s_tick_ms;
 
 static void board_gpio_init(void)
@@ -55,7 +57,7 @@ void Board_Poll(void)
     uint32_t now;
 
     now = Board_GetTickMs();
-    if ((uint32_t)(now - last_led_tick) >= 200u)
+    if ((uint32_t)(now - last_led_tick) >= BOARD_APP_LED_PERIOD_MS)
     {
         last_led_tick = now;
         Board_DebugLedToggle();

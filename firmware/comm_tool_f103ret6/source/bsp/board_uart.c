@@ -6,6 +6,7 @@
 #include "misc.h"
 
 #define BOARD_UART_RX_BUF_SIZE        1024u
+#define BOARD_UART_TX_TIMEOUT_LOOPS   60000u
 
 static volatile uint16_t s_rx_head;
 static volatile uint16_t s_rx_tail;
@@ -78,6 +79,7 @@ int BoardUart_ReadByte(uint8_t *byte)
 int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
 {
     uint16_t i;
+    uint32_t wait;
 
     if ((data == 0) || (length == 0u))
     {
@@ -86,13 +88,25 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
 
     for (i = 0u; i < length; ++i)
     {
-        while (USART_GetFlagStatus(USART3, USART_FLAG_TXE) == RESET)
+        wait = BOARD_UART_TX_TIMEOUT_LOOPS;
+        while ((wait > 0u) && (USART_GetFlagStatus(USART3, USART_FLAG_TXE) == RESET))
         {
+            wait--;
+        }
+        if (wait == 0u)
+        {
+            return 0;
         }
         USART_SendData(USART3, data[i]);
     }
-    while (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET)
+    wait = BOARD_UART_TX_TIMEOUT_LOOPS;
+    while ((wait > 0u) && (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET))
     {
+        wait--;
+    }
+    if (wait == 0u)
+    {
+        return 0;
     }
     return 1;
 }

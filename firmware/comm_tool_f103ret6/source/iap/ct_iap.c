@@ -12,6 +12,10 @@
 #define IAP_SERIAL_BAUD                  CT_UART_DEFAULT_BAUD
 #define IAP_SERIAL_RX_SIZE               1100u
 #define IAP_SERIAL_BLOCK_MAX             1024u
+#define IAP_SERIAL_FRAME_TIMEOUT_MS      500u
+#define IAP_SERIAL_RESPONSE_DELAY_MS     20u
+#define IAP_SERIAL_TX_TIMEOUT_LOOPS      60000u
+#define IAP_LED_PERIOD_MS                500u
 #define IAP_CAN_BLOCK_BYTES              256u
 #define IAP_CAN_PRESCALER_250K           4u
 #define IAP_CAN_HEARTBEAT_STD_ID         0x05Fu
@@ -53,6 +57,8 @@
 #define CAN_IAP_ERR_FLASH                0x06u
 #define CAN_IAP_ERR_APP_INVALID          0x07u
 
+#define IAP_FLASH_APP_PAGE_COUNT         (CT_SELF_APP_SIZE / CT_SELF_FLASH_PAGE_SIZE)
+
 typedef void (*pFunction)(void);
 
 typedef struct
@@ -68,6 +74,7 @@ typedef struct
 {
     uint8_t owner;
     uint16_t first_page_len;
+    uint8_t page_erased[IAP_FLASH_APP_PAGE_COUNT];
     uint8_t first_page[CT_SELF_FLASH_PAGE_SIZE];
 } IapFlashContext;
 
@@ -96,6 +103,7 @@ static uint16_t s_serial_index;
 static uint16_t s_serial_expect;
 static uint16_t s_serial_block_count;
 static uint32_t s_serial_written;
+static uint32_t s_serial_last_rx_ms;
 static uint8_t s_reset_pending;
 static uint32_t s_reset_time_ms;
 static uint8_t s_heartbeat_seq;
@@ -274,6 +282,28 @@ static uint8_t flash_range_valid(uint32_t offset, uint16_t length)
     return 1u;
 }
 
+static uint8_t iap_flash_ensure_page_erased(uint32_t page)
+{
+    uint32_t addr;
+
+    if (page >= IAP_FLASH_APP_PAGE_COUNT)
+    {
+        return 0u;
+    }
+    if (s_flash.page_erased[page] != 0u)
+    {
+        return 1u;
+    }
+
+    addr = CT_SELF_APP_BASE + (page * CT_SELF_FLASH_PAGE_SIZE);
+    if (flash_erase_page(addr) == 0u)
+    {
+        return 0u;
+    }
+    s_flash.page_erased[page] = 1u;
+    return 1u;
+}
+
 static uint8_t iap_flash_begin(uint8_t owner)
 {
     if ((owner == 0u) || ((s_flash.owner != 0u) && (s_flash.owner != owner)))
@@ -283,6 +313,7 @@ static uint8_t iap_flash_begin(uint8_t owner)
 
     s_flash.owner = owner;
     s_flash.first_page_len = 0u;
+    memset(s_flash.page_erased, 0, sizeof(s_flash.page_erased));
     memset(s_flash.first_page, 0xFF, sizeof(s_flash.first_page));
 
     FLASH_Unlock();
@@ -292,6 +323,7 @@ static uint8_t iap_flash_begin(uint8_t owner)
         s_flash.owner = 0u;
         return 0u;
     }
+    s_flash.page_erased[0] = 1u;
     FLASH_Lock();
     return 1u;
 }
@@ -299,20 +331,28 @@ static uint8_t iap_flash_begin(uint8_t owner)
 static uint8_t iap_flash_program_direct(uint32_t offset, const uint8_t *data, uint16_t length)
 {
     uint32_t addr = CT_SELF_APP_BASE + offset;
+    uint32_t page;
+    uint32_t last_page;
 
-    if ((data == 0) || (flash_range_valid(offset, length) == 0u))
+    if ((data == 0) ||
+        (flash_range_valid(offset, length) == 0u) ||
+        (offset < CT_SELF_FLASH_PAGE_SIZE))
     {
         return 0u;
     }
 
+    page = offset / CT_SELF_FLASH_PAGE_SIZE;
+    last_page = (offset + (uint32_t)length - 1u) / CT_SELF_FLASH_PAGE_SIZE;
+
     FLASH_Unlock();
-    if ((addr & (CT_SELF_FLASH_PAGE_SIZE - 1u)) == 0u)
+    while (page <= last_page)
     {
-        if (flash_erase_page(addr) == 0u)
+        if (iap_flash_ensure_page_erased(page) == 0u)
         {
             FLASH_Lock();
             return 0u;
         }
+        page++;
     }
     if (flash_program_bytes(addr, data, length) == 0u)
     {
@@ -433,6 +473,8 @@ static uint8_t iap_flash_finish(uint8_t owner, uint32_t image_size)
         return 0u;
     }
     s_flash.owner = 0u;
+    s_flash.first_page_len = 0u;
+    memset(s_flash.page_erased, 0, sizeof(s_flash.page_erased));
     return 1u;
 }
 
@@ -442,23 +484,47 @@ static void iap_flash_abort(uint8_t owner)
     {
         s_flash.owner = 0u;
         s_flash.first_page_len = 0u;
+        memset(s_flash.page_erased, 0, sizeof(s_flash.page_erased));
     }
 }
 
-static void serial_write(const uint8_t *data, uint16_t length)
+static void serial_delay_ms(uint32_t delay_ms)
+{
+    uint32_t start = s_tick_ms;
+
+    while ((uint32_t)(s_tick_ms - start) < delay_ms)
+    {
+    }
+}
+
+static uint8_t serial_wait_flag(uint16_t flag)
+{
+    uint32_t wait = IAP_SERIAL_TX_TIMEOUT_LOOPS;
+
+    while ((wait > 0u) && (USART_GetFlagStatus(USART3, flag) == RESET))
+    {
+        wait--;
+    }
+    return (wait > 0u) ? 1u : 0u;
+}
+
+static uint8_t serial_write(const uint8_t *data, uint16_t length)
 {
     uint16_t i;
 
     for (i = 0u; i < length; ++i)
     {
-        while (USART_GetFlagStatus(USART3, USART_FLAG_TXE) == RESET)
+        if (serial_wait_flag(USART_FLAG_TXE) == 0u)
         {
+            return 0u;
         }
         USART_SendData(USART3, data[i]);
     }
-    while (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET)
+    if (serial_wait_flag(USART_FLAG_TC) == 0u)
     {
+        return 0u;
     }
+    return 1u;
 }
 
 static void serial_send_ack(const uint8_t *request)
@@ -470,7 +536,8 @@ static void serial_send_ack(const uint8_t *request)
     crc = crc16_calc(ack, 6u);
     ack[6] = (uint8_t)crc;
     ack[7] = (uint8_t)(crc >> 8);
-    serial_write(ack, (uint16_t)sizeof(ack));
+    serial_delay_ms(IAP_SERIAL_RESPONSE_DELAY_MS);
+    (void)serial_write(ack, (uint16_t)sizeof(ack));
 }
 
 static void serial_send_error(const uint8_t *request, uint8_t error)
@@ -484,7 +551,8 @@ static void serial_send_error(const uint8_t *request, uint8_t error)
     crc = crc16_calc(ack, 3u);
     ack[3] = (uint8_t)crc;
     ack[4] = (uint8_t)(crc >> 8);
-    serial_write(ack, (uint16_t)sizeof(ack));
+    serial_delay_ms(IAP_SERIAL_RESPONSE_DELAY_MS);
+    (void)serial_write(ack, (uint16_t)sizeof(ack));
 }
 
 static uint8_t serial_connect(uint16_t count)
@@ -600,10 +668,20 @@ static void serial_reset_parser(void)
     s_serial_expect = 0u;
 }
 
+static void serial_check_frame_timeout(void)
+{
+    if ((s_serial_index != 0u) &&
+        ((uint32_t)(s_tick_ms - s_serial_last_rx_ms) >= IAP_SERIAL_FRAME_TIMEOUT_MS))
+    {
+        serial_reset_parser();
+    }
+}
+
 static void serial_feed(uint8_t byte)
 {
     uint16_t payload_len;
 
+    serial_check_frame_timeout();
     if (s_serial_index == 0u)
     {
         if ((byte != LEGACY_SLAVE_ADDR) && (byte != LEGACY_BROADCAST_ADDR))
@@ -626,6 +704,7 @@ static void serial_feed(uint8_t byte)
         return;
     }
     s_serial_rx[s_serial_index++] = byte;
+    s_serial_last_rx_ms = s_tick_ms;
 
     if (s_serial_index == 6u)
     {
@@ -1102,7 +1181,7 @@ static void iap_task_1ms(void)
 {
     static uint32_t last_led_ms;
 
-    if ((uint32_t)(s_tick_ms - last_led_ms) >= 200u)
+    if ((uint32_t)(s_tick_ms - last_led_ms) >= IAP_LED_PERIOD_MS)
     {
         last_led_ms = s_tick_ms;
         if (GPIO_ReadOutputDataBit(GPIOB, GPIO_Pin_15) != Bit_RESET)
@@ -1114,6 +1193,8 @@ static void iap_task_1ms(void)
             GPIO_SetBits(GPIOB, GPIO_Pin_15);
         }
     }
+
+    serial_check_frame_timeout();
 
     if ((uint32_t)(s_tick_ms - s_last_heartbeat_ms) >= IAP_CAN_HEARTBEAT_PERIOD_MS)
     {

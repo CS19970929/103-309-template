@@ -11,11 +11,14 @@
 #define CT_LEGACY_CMD_WRITE_REGS       0x10u
 #define CT_LEGACY_FLASH_CONNECT_ADDR   0xFFFDu
 #define CT_LEGACY_RX_BUF_SIZE          32u
+#define CT_LEGACY_FRAME_TIMEOUT_MS     500u
+#define CT_LEGACY_RESPONSE_DELAY_MS    20u
 #define CT_SELF_RESET_DELAY_MS         20u
 
 static uint8_t s_legacy_buf[CT_LEGACY_RX_BUF_SIZE];
 static uint8_t s_legacy_index;
 static uint8_t s_legacy_expect;
+static uint32_t s_legacy_last_rx_ms;
 static uint8_t s_reset_pending;
 static uint32_t s_reset_time_ms;
 
@@ -52,6 +55,24 @@ static void legacy_reset_parser(void)
     s_legacy_expect = 0u;
 }
 
+static void legacy_check_frame_timeout(void)
+{
+    if ((s_legacy_index != 0u) &&
+        ((uint32_t)(CtBoard_GetTickMs() - s_legacy_last_rx_ms) >= CT_LEGACY_FRAME_TIMEOUT_MS))
+    {
+        legacy_reset_parser();
+    }
+}
+
+static void legacy_delay_ms(uint32_t delay_ms)
+{
+    uint32_t start = CtBoard_GetTickMs();
+
+    while ((uint32_t)(CtBoard_GetTickMs() - start) < delay_ms)
+    {
+    }
+}
+
 static void legacy_send_write_ack(const uint8_t *request)
 {
     uint8_t ack[8];
@@ -61,6 +82,7 @@ static void legacy_send_write_ack(const uint8_t *request)
     crc = CtCrc16_Calc(ack, 6u);
     ack[6] = (uint8_t)crc;
     ack[7] = (uint8_t)(crc >> 8);
+    legacy_delay_ms(CT_LEGACY_RESPONSE_DELAY_MS);
     (void)CtBoard_UartWrite(ack, (uint16_t)sizeof(ack));
 }
 
@@ -106,6 +128,7 @@ void CtSelfIap_Init(void)
 
 void CtSelfIap_FeedUartByte(uint8_t byte)
 {
+    legacy_check_frame_timeout();
     if (s_legacy_index == 0u)
     {
         if ((byte != CT_LEGACY_SLAVE_ADDR) && (byte != CT_LEGACY_BROADCAST_ADDR))
@@ -129,6 +152,7 @@ void CtSelfIap_FeedUartByte(uint8_t byte)
     }
 
     s_legacy_buf[s_legacy_index++] = byte;
+    s_legacy_last_rx_ms = CtBoard_GetTickMs();
     if (s_legacy_index == 7u)
     {
         s_legacy_expect = (uint8_t)(9u + s_legacy_buf[6]);
@@ -235,6 +259,8 @@ void CtSelfIap_PollCan(void)
 
 void CtSelfIap_Task(void)
 {
+    legacy_check_frame_timeout();
+
     if ((s_reset_pending != 0u) &&
         ((int32_t)(CtBoard_GetTickMs() - s_reset_time_ms) >= 0))
     {
