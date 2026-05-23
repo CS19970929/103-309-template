@@ -44,3 +44,7 @@ dist/
 
 # Local workflow and monitor logs
 logs/
+
+# comm tool Keil generated files
+firmware/comm_tool_f103ret6/keil/DebugConfig/
+firmware/comm_tool_f103ret6/keil/build_logs/
