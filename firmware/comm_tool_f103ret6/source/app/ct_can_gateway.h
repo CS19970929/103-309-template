@@ -11,6 +11,9 @@
 #define CT_CAN_APP_READ_REG             0x03u
 #define CT_CAN_APP_WRITE_PREP           0x04u
 #define CT_CAN_APP_WRITE_COMMIT         0x05u
+#define CT_CAN_APP_READ_BLOCK           0x06u
+#define CT_CAN_APP_READ_BLOCK_DATA      0x86u
+#define CT_CAN_APP_READ_BLOCK_MAX_WORDS 120u
 
 #define CT_CAN_IAP_CTRL_BASE            0x14F8F000u
 #define CT_CAN_IAP_ACK_BASE             0x14F8F100u

@@ -8,6 +8,7 @@
 #define APP_GET_STATUS_TIMEOUT_MS       1000u
 #define APP_ENTER_IAP_TIMEOUT_MS        5000u
 #define APP_REG_CMD_TIMEOUT_MS          1000u
+#define APP_BLOCK_DATA_TIMEOUT_MS       3000u
 #define IAP_ACK_WAIT_SLICE_MS           20u
 
 enum
@@ -119,6 +120,55 @@ static int decode_app_ack(const CtCanFrame *frame, uint8_t can_addr, uint8_t cmd
     return ACK_MATCH_OK;
 }
 
+static int decode_app_word_frame(const CtCanFrame *frame, uint8_t can_addr, uint8_t *seq, uint16_t *value)
+{
+    uint16_t expect_crc;
+    uint16_t actual_crc;
+
+    if ((frame->ide != 0u) || (frame->id != app_ack_id(can_addr)))
+    {
+        return 0;
+    }
+    if ((frame->dlc != 8u) ||
+        (frame->data[0] != 0x5Au) ||
+        (frame->data[1] != 0xA5u) ||
+        (frame->data[2] != CT_CAN_APP_READ_BLOCK_DATA))
+    {
+        return 0;
+    }
+
+    expect_crc = rd_be16(&frame->data[6]);
+    actual_crc = CtCrc16_Calc(frame->data, 6u);
+    if (expect_crc != actual_crc)
+    {
+        return 0;
+    }
+
+    if (seq != 0)
+    {
+        *seq = frame->data[3];
+    }
+    if (value != 0)
+    {
+        *value = rd_be16(&frame->data[4]);
+    }
+    return 1;
+}
+
+static void drain_can_rx(void)
+{
+    CtCanFrame frame;
+    uint8_t limit;
+
+    for (limit = 0u; limit < 64u; ++limit)
+    {
+        if (!CtBoard_CanRecv(&frame, 0u))
+        {
+            break;
+        }
+    }
+}
+
 static int send_app_cmd_wait_ack(uint8_t can_addr, uint8_t cmd, uint8_t a0, uint8_t a1, uint8_t a2,
                                  uint8_t *v0, uint8_t *v1, uint32_t timeout_ms)
 {
@@ -193,32 +243,65 @@ int CtCan_AppEnterIap(uint8_t can_addr)
 
 int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t *words)
 {
-    uint16_t i;
-    uint8_t v0;
-    uint8_t v1;
+    CtCanFrame frame;
+    uint8_t received[CT_CAN_APP_READ_BLOCK_MAX_WORDS];
+    uint8_t ack_count;
+    uint8_t dummy;
+    uint8_t seq;
+    uint16_t value;
+    uint16_t received_count;
+    uint32_t start;
+    uint32_t wait_ms;
 
-    if ((words == 0) || (count == 0u))
+    if ((words == 0) || (count == 0u) || (count > CT_CAN_APP_READ_BLOCK_MAX_WORDS))
     {
         return 0;
     }
 
-    for (i = 0u; i < count; ++i)
+    drain_can_rx();
+    if (!send_app_cmd_wait_ack(can_addr,
+                               CT_CAN_APP_READ_BLOCK,
+                               (uint8_t)(addr >> 8),
+                               (uint8_t)addr,
+                               (uint8_t)count,
+                               &ack_count,
+                               &dummy,
+                               APP_REG_CMD_TIMEOUT_MS))
     {
-        if (!send_app_cmd_wait_ack(can_addr,
-                                   CT_CAN_APP_READ_REG,
-                                   (uint8_t)((addr + i) >> 8),
-                                   (uint8_t)(addr + i),
-                                   0u,
-                                   &v0,
-                                   &v1,
-                                   APP_REG_CMD_TIMEOUT_MS))
-        {
-            return 0;
-        }
-        words[i] = ((uint16_t)v0 << 8) | v1;
+        return 0;
+    }
+    if (ack_count != (uint8_t)count)
+    {
+        return 0;
     }
 
-    return 1;
+    memset(received, 0, sizeof(received));
+    received_count = 0u;
+    start = CtBoard_GetTickMs();
+    while (!timeout_expired(start, APP_BLOCK_DATA_TIMEOUT_MS) && (received_count < count))
+    {
+        wait_ms = timeout_left(start, APP_BLOCK_DATA_TIMEOUT_MS);
+        if (wait_ms > APP_CMD_WAIT_SLICE_MS)
+        {
+            wait_ms = APP_CMD_WAIT_SLICE_MS;
+        }
+        if ((wait_ms == 0u) || !CtBoard_CanRecv(&frame, wait_ms))
+        {
+            continue;
+        }
+        if (!decode_app_word_frame(&frame, can_addr, &seq, &value))
+        {
+            continue;
+        }
+        if (((uint16_t)seq < count) && (received[seq] == 0u))
+        {
+            words[seq] = value;
+            received[seq] = 1u;
+            received_count++;
+        }
+    }
+
+    return (received_count == count) ? 1 : 0;
 }
 
 int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const uint16_t *words)

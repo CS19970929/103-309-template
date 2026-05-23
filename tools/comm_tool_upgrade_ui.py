@@ -84,6 +84,211 @@ class UiEvent:
         self.payload = payload
 
 
+def _temp_c(raw: int) -> float:
+    return raw / 10.0 - 40.0
+
+
+def _read_bms_words_once(port: str, baud: int, addr: int, count: int) -> list[int]:
+    payload = struct.pack("<HH", addr, count)
+    with CommToolClient(port, baud, timeout=1.0) as client:
+        resp = client.command(CMD_BMS_READ, payload, timeout=max(10.0, count * 0.08 + 3.0))
+    if len(resp.payload) != count * 2:
+        raise RuntimeError(f"BMS_READ 响应长度错误: {len(resp.payload)}")
+    return list(struct.unpack("<" + "H" * count, resp.payload))
+
+
+class BmsMonitorWindow(tk.Toplevel):
+    def __init__(self, parent: "UpgradeUi"):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("BMS 实时监控")
+        self.geometry("900x660")
+        self.minsize(820, 580)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        self.events: "queue.Queue[UiEvent]" = queue.Queue()
+        self.worker: threading.Thread | None = None
+        self.running = False
+        self.closed = False
+        self.parent_paused = False
+        self.interval_var = tk.StringVar(value="1.0")
+        self.state_var = tk.StringVar(value="未开始")
+        self.summary_var = tk.StringVar(value="未读取")
+        self.detail_var = tk.StringVar(value="")
+
+        self._build_ui()
+        self.after(80, self._after_events)
+
+    def _build_ui(self) -> None:
+        root = ttk.Frame(self, padding=12)
+        root.pack(fill=tk.BOTH, expand=True)
+        root.columnconfigure(0, weight=2)
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(2, weight=1)
+
+        toolbar = ttk.Frame(root)
+        toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        ttk.Button(toolbar, text="开始", command=self.start).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(toolbar, text="暂停", command=self.stop).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(toolbar, text="刷新一次", command=self.refresh_once).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(toolbar, text="间隔(s)").pack(side=tk.LEFT)
+        ttk.Combobox(toolbar, textvariable=self.interval_var, values=["0.5", "1.0", "2.0", "5.0"], width=8).pack(
+            side=tk.LEFT, padx=(6, 16)
+        )
+        ttk.Label(toolbar, textvariable=self.state_var).pack(side=tk.LEFT)
+
+        ttk.Label(root, textvariable=self.summary_var, justify=tk.LEFT).grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 8)
+        )
+
+        cell_box = ttk.LabelFrame(root, text="单体电压")
+        cell_box.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
+        cell_box.rowconfigure(0, weight=1)
+        cell_box.columnconfigure(0, weight=1)
+        self.cell_tree = ttk.Treeview(cell_box, columns=("mv",), show="headings", height=18)
+        self.cell_tree.heading("mv", text="mV")
+        self.cell_tree.column("mv", anchor=tk.CENTER, width=100)
+        self.cell_tree.grid(row=0, column=0, sticky="nsew")
+        cell_scroll = ttk.Scrollbar(cell_box, orient=tk.VERTICAL, command=self.cell_tree.yview)
+        cell_scroll.grid(row=0, column=1, sticky="ns")
+        self.cell_tree.configure(yscrollcommand=cell_scroll.set)
+
+        right = ttk.Frame(root)
+        right.grid(row=2, column=1, sticky="nsew")
+        right.rowconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
+        right.columnconfigure(0, weight=1)
+
+        temp_box = ttk.LabelFrame(right, text="温度")
+        temp_box.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
+        temp_box.rowconfigure(0, weight=1)
+        temp_box.columnconfigure(0, weight=1)
+        self.temp_tree = ttk.Treeview(temp_box, columns=("value",), show="headings", height=10)
+        self.temp_tree.heading("value", text="℃")
+        self.temp_tree.column("value", anchor=tk.CENTER, width=100)
+        self.temp_tree.grid(row=0, column=0, sticky="nsew")
+
+        detail_box = ttk.LabelFrame(right, text="故障/均衡/容量")
+        detail_box.grid(row=1, column=0, sticky="nsew")
+        detail_box.columnconfigure(0, weight=1)
+        ttk.Label(detail_box, textvariable=self.detail_var, justify=tk.LEFT).grid(
+            row=0, column=0, sticky="nw", padx=10, pady=10
+        )
+
+        for index in range(32):
+            self.cell_tree.insert("", tk.END, iid=f"cell{index}", values=(f"{index + 1:02d}: --",))
+        for index in range(10):
+            self.temp_tree.insert("", tk.END, iid=f"temp{index}", values=(f"T{index + 1}: --",))
+
+    def set_paused_by_parent(self, paused: bool) -> None:
+        self.parent_paused = paused
+        if paused:
+            self.state_var.set("主任务执行中，监控暂停")
+        elif self.running:
+            self.state_var.set("监控中")
+            self._schedule_poll(100)
+
+    def start(self) -> None:
+        self.running = True
+        self.state_var.set("监控中")
+        self._schedule_poll(10)
+
+    def stop(self) -> None:
+        self.running = False
+        self.state_var.set("已暂停")
+
+    def refresh_once(self) -> None:
+        self._schedule_poll(10, force=True)
+
+    def _schedule_poll(self, delay_ms: int, force: bool = False) -> None:
+        if self.closed:
+            return
+        self.after(delay_ms, lambda: self._poll_if_needed(force))
+
+    def _poll_if_needed(self, force: bool = False) -> None:
+        if self.closed or self.parent_paused:
+            return
+        if not force and not self.running:
+            return
+        if self.worker and self.worker.is_alive():
+            return
+        self.worker = threading.Thread(target=self._worker_poll, daemon=True)
+        self.worker.start()
+
+    def _worker_poll(self) -> None:
+        try:
+            port = self.parent.port_var.get().strip()
+            baud = int(self.parent.baud_var.get().strip())
+            words = _read_bms_words_once(port, baud, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            self.events.put(UiEvent("snapshot", words))
+        except Exception as exc:
+            self.events.put(UiEvent("error", str(exc)))
+
+    def _interval_ms(self, minimum: float = 0.5) -> int:
+        try:
+            seconds = float(self.interval_var.get())
+        except ValueError:
+            seconds = 1.0
+            self.interval_var.set("1.0")
+        return int(max(minimum, seconds) * 1000)
+
+    def _after_events(self) -> None:
+        while True:
+            try:
+                event = self.events.get_nowait()
+            except queue.Empty:
+                break
+            if event.kind == "snapshot":
+                self._show_snapshot(event.payload)
+                self.state_var.set("监控中" if self.running else "刷新完成")
+                if self.running and not self.parent_paused:
+                    self._schedule_poll(self._interval_ms(0.5))
+            elif event.kind == "error":
+                self.state_var.set(f"读取失败: {event.payload}")
+                if self.running and not self.parent_paused:
+                    self._schedule_poll(self._interval_ms(1.0))
+        if not self.closed:
+            self.after(80, self._after_events)
+
+    def _show_snapshot(self, words: list[int]) -> None:
+        cells = words[0:32]
+        valid_cells = [value for value in cells if value != 0]
+        total_v = words[37] / 100.0
+        ichg = words[50] / 10.0
+        idsg = words[51] / 10.0
+        soc = words[52]
+        soh = words[53]
+        capacity_now = words[54] / 100.0
+        capacity_full = words[55] / 100.0
+
+        self.summary_var.set(
+            f"SOC {soc}%   SOH {soh}%   总压 {total_v:.2f}V   "
+            f"充电 {ichg:.1f}A   放电 {idsg:.1f}A\n"
+            f"单体 max {words[32]}mV({words[34]})   min {words[33]}mV({words[35]})   "
+            f"压差 {words[36]}mV   有效串数 {len(valid_cells)}   "
+            f"温度 max {_temp_c(words[48]):.1f}℃   min {_temp_c(words[49]):.1f}℃"
+        )
+        self.detail_var.set(
+            f"容量: {capacity_now:.2f}/{capacity_full:.2f}Ah\n"
+            f"出厂容量: {words[56] / 100.0:.2f}Ah\n"
+            f"循环次数: {words[57]}\n"
+            f"故障字: 0x{words[58]:04X}  0x{words[59]:04X}  0x{words[60]:04X}\n"
+            f"均衡: 0x{words[61]:04X}  0x{words[62]:04X}"
+        )
+
+        for index, value in enumerate(cells):
+            text = f"{index + 1:02d}: {value} mV" if value else f"{index + 1:02d}: --"
+            self.cell_tree.item(f"cell{index}", values=(text,))
+        for index, raw in enumerate(words[38:48]):
+            self.temp_tree.item(f"temp{index}", values=(f"T{index + 1}: {_temp_c(raw):.1f}",))
+
+    def _on_close(self) -> None:
+        self.running = False
+        self.closed = True
+        self.parent.monitor_window = None
+        self.destroy()
+
+
 class UpgradeUi(tk.Tk):
     def __init__(self, port: str, baud: int, bin_path: Path):
         super().__init__()
@@ -116,6 +321,7 @@ class UpgradeUi(tk.Tk):
         self.active_bms_addr = 0xD000
         self.active_bms_count = 2
         self.active_bms_words: list[int] = []
+        self.monitor_window: BmsMonitorWindow | None = None
 
         self._build_ui()
         self._refresh_ports()
@@ -169,7 +375,8 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="一键升级", command=self._upgrade_selected).grid(row=0, column=2, padx=(0, 8))
         ttk.Button(actions, text="使用缓存升级", command=self._upgrade_cached_selected).grid(row=0, column=3, padx=(0, 8))
         ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
-        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, sticky="w")
+        ttk.Button(actions, text="实时监控", command=self._open_monitor).grid(row=0, column=5, padx=(0, 8), sticky="w")
+        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=6, sticky="w")
 
         bms_box = ttk.LabelFrame(root, text="BMS 信息和参数")
         bms_box.grid(row=4, column=0, sticky="ew", pady=(0, 8))
@@ -236,6 +443,8 @@ class UpgradeUi(tk.Tk):
 
     def _set_busy(self, busy: bool) -> None:
         state = tk.DISABLED if busy else tk.NORMAL
+        if self.monitor_window is not None:
+            self.monitor_window.set_paused_by_parent(busy)
         for child in self.winfo_children():
             self._set_child_state(child, state)
         if busy:
@@ -365,6 +574,13 @@ class UpgradeUi(tk.Tk):
 
     def _can_diag(self) -> None:
         self._run_worker("CAN诊断", self._worker_can_diag)
+
+    def _open_monitor(self) -> None:
+        if self.monitor_window is not None and self.monitor_window.winfo_exists():
+            self.monitor_window.lift()
+            return
+        self.monitor_window = BmsMonitorWindow(self)
+        self.monitor_window.start()
 
     def _run_worker(self, name: str, target: Callable[[], None]) -> None:
         if self.worker and self.worker.is_alive():
@@ -686,9 +902,6 @@ class UpgradeUi(tk.Tk):
         if len(words) < BMS_OVERVIEW_WORDS:
             raise RuntimeError("BMS 信息长度不足")
 
-        def temp_c(raw: int) -> float:
-            return raw / 10.0 - 40.0
-
         cells = words[0:32]
         valid_cells = [value for value in cells if value != 0]
         cell_text = " ".join(f"{index + 1}:{value}" for index, value in enumerate(cells) if value != 0)
@@ -709,7 +922,7 @@ class UpgradeUi(tk.Tk):
             f"充电 {ichg:.1f}A  放电 {idsg:.1f}A\n"
             f"单体: max {words[32]}mV({words[34]})  min {words[33]}mV({words[35]})  "
             f"压差 {words[36]}mV  有效串数 {len(valid_cells)}\n"
-            f"温度: max {temp_c(words[48]):.1f}℃  min {temp_c(words[49]):.1f}℃  "
+            f"温度: max {_temp_c(words[48]):.1f}℃  min {_temp_c(words[49]):.1f}℃  "
             f"容量 {capacity_now:.2f}/{capacity_full:.2f}Ah  出厂 {capacity_factory:.2f}Ah  循环 {words[57]}\n"
             f"故障字: 0x{words[58]:04X} 0x{words[59]:04X} 0x{words[60]:04X}  "
             f"均衡: 0x{words[61]:04X} 0x{words[62]:04X}\n"

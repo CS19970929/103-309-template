@@ -19,17 +19,17 @@ try {
         }
     }
 
+    $Running = Get-Process -Name $AppName -ErrorAction SilentlyContinue
+    if ($Running) {
+        throw "请先关闭正在运行的 $AppName.exe 后再打包，否则 Windows 会锁定 dist\$AppName.exe"
+    }
+
     if ($Clean) {
         foreach ($Path in @("build\$AppName", "dist\$AppName.exe", "$AppName.spec")) {
             if (Test-Path -LiteralPath $Path) {
                 Remove-Item -LiteralPath $Path -Recurse -Force
             }
         }
-    }
-
-    $Running = Get-Process -Name $AppName -ErrorAction SilentlyContinue
-    if ($Running) {
-        throw "请先关闭正在运行的 $AppName.exe 后再打包，否则 Windows 会锁定 dist\$AppName.exe"
     }
 
     & $Py "-$PythonVersion" -m PyInstaller `

@@ -39,6 +39,9 @@ static UINT8 s_u8FeidaoCanWriteValueHi = 0U;
 #define FEIDAO_CAN_APP_CMD_READ_REG ((UINT8)0x03U)
 #define FEIDAO_CAN_APP_CMD_WRITE_PREP ((UINT8)0x04U)
 #define FEIDAO_CAN_APP_CMD_WRITE_COMMIT ((UINT8)0x05U)
+#define FEIDAO_CAN_APP_CMD_READ_BLOCK ((UINT8)0x06U)
+#define FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA ((UINT8)0x86U)
+#define FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS ((UINT8)120U)
 #define FEIDAO_CAN_APP_ACK_OK ((UINT8)0x00U)
 #define FEIDAO_CAN_APP_ACK_BAD_CMD ((UINT8)0x01U)
 #define FEIDAO_CAN_APP_ACK_BAD_PARAM ((UINT8)0x02U)
@@ -113,6 +116,11 @@ static FeidaoCanRuntime s_feidao_can_runtime =
 };
 static UINT32 s_u32FeidaoCanRxWindowTick = 0U;
 static UINT8 s_u8FeidaoCanEnterIapDelayTicks = 0U;
+static UINT16 s_u16FeidaoCanReadBlockWords[FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS];
+static UINT8 s_u8FeidaoCanReadBlockCount = 0U;
+static UINT8 s_u8FeidaoCanReadBlockIndex = 0U;
+static UINT8 s_u8FeidaoCanReadBlockActive = 0U;
+static UINT32 s_u32FeidaoCanReadBlockLastTick = 0U;
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 FeidaoCanRuntime * const g_dbg_feidao_can_runtime = &s_feidao_can_runtime;
 #endif
@@ -1000,6 +1008,67 @@ static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8
 	(void)Can_HDX_Transmit(&tx_msg);
 }
 
+static void feidao_can_app_send_word_frame(UINT8 seq, UINT16 value)
+{
+	CanTxMsg tx_msg;
+
+	memset(&tx_msg, 0, sizeof(tx_msg));
+	tx_msg.StdId = FEIDAO_CAN_APP_ACK_ID;
+	tx_msg.IDE = CAN_ID_STD;
+	tx_msg.RTR = CAN_RTR_DATA;
+	tx_msg.DLC = 8U;
+	tx_msg.Data[0] = 0x5AU;
+	tx_msg.Data[1] = 0xA5U;
+	tx_msg.Data[2] = FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA;
+	tx_msg.Data[3] = seq;
+	tx_msg.Data[4] = (UINT8)(value >> 8);
+	tx_msg.Data[5] = (UINT8)value;
+	feidao_can_app_fill_crc(tx_msg.Data);
+	(void)Can_HDX_Transmit(&tx_msg);
+}
+
+static void feidao_can_start_read_block_stream(UINT8 count)
+{
+	s_u8FeidaoCanReadBlockCount = count;
+	s_u8FeidaoCanReadBlockIndex = 0U;
+	s_u8FeidaoCanReadBlockActive = 1U;
+	s_u32FeidaoCanReadBlockLastTick = s_u32FeidaoCanLogicalTick;
+}
+
+static void feidao_can_stop_read_block_stream(void)
+{
+	s_u8FeidaoCanReadBlockActive = 0U;
+	s_u8FeidaoCanReadBlockCount = 0U;
+	s_u8FeidaoCanReadBlockIndex = 0U;
+}
+
+static void feidao_can_service_read_block_stream(UINT32 now_tick)
+{
+	if (s_u8FeidaoCanReadBlockActive == 0U)
+	{
+		return;
+	}
+	if (s_u32FeidaoCanReadBlockLastTick == now_tick)
+	{
+		return;
+	}
+	s_u32FeidaoCanReadBlockLastTick = now_tick;
+
+	if (s_u8FeidaoCanReadBlockIndex >= s_u8FeidaoCanReadBlockCount)
+	{
+		feidao_can_stop_read_block_stream();
+		return;
+	}
+
+	feidao_can_app_send_word_frame(s_u8FeidaoCanReadBlockIndex,
+								   s_u16FeidaoCanReadBlockWords[s_u8FeidaoCanReadBlockIndex]);
+	s_u8FeidaoCanReadBlockIndex++;
+	if (s_u8FeidaoCanReadBlockIndex >= s_u8FeidaoCanReadBlockCount)
+	{
+		feidao_can_stop_read_block_stream();
+	}
+}
+
 static UINT8 feidao_can_app_status_from_host_error(UINT8 error)
 {
 	switch (error)
@@ -1051,6 +1120,7 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 	UINT8 cmd;
 	UINT16 reg_addr;
 	UINT16 reg_value;
+	UINT8 reg_count;
 	UINT8 host_error;
 
 	if ((data[0] != 0xA5U) ||
@@ -1061,6 +1131,10 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 	}
 
 	cmd = data[2];
+	if (cmd != FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA)
+	{
+		feidao_can_stop_read_block_stream();
+	}
 	switch (cmd)
 	{
 	case FEIDAO_CAN_APP_CMD_GET_STATUS:
@@ -1094,6 +1168,26 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		{
 			value0 = (UINT8)(reg_value >> 8);
 			value1 = (UINT8)reg_value;
+		}
+		break;
+
+	case FEIDAO_CAN_APP_CMD_READ_BLOCK:
+		reg_addr = (UINT16)(((UINT16)data[3] << 8) | data[4]);
+		reg_count = data[5];
+		if ((reg_count == 0U) ||
+			(reg_count > FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS) ||
+			(((UINT32)reg_addr + (UINT32)reg_count - 1U) > (UINT32)0xFFFFU))
+		{
+			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		host_error = Sci_HostReadWords(reg_addr, reg_count, s_u16FeidaoCanReadBlockWords);
+		status = feidao_can_app_status_from_host_error(host_error);
+		if (status == FEIDAO_CAN_APP_ACK_OK)
+		{
+			value0 = reg_count;
+			value1 = 0U;
+			feidao_can_start_read_block_stream(reg_count);
 		}
 		break;
 
@@ -1175,6 +1269,7 @@ void App_Can(void)
 
 	feidao_can_run_10ms_tasks();
 	feidao_can_service_app_cmd();
+	feidao_can_service_read_block_stream(now_tick);
 	feidao_can_send(now_tick);
 	feidao_can_service_enter_iap_delay();
 	feidao_can_update_low_power_status();

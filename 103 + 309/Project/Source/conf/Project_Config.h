@@ -42,9 +42,7 @@
 
 // <q> Enable host write registers
 // <i> Default disabled for smaller release image. When disabled, Modbus 0x06/0x10 write requests return no-permission.
-#ifndef PROJECT_CFG_HOST_WRITE_ENABLE
 #define PROJECT_CFG_HOST_WRITE_ENABLE 0
-#endif
 
 // <o> 固件年份 <0-99>
 // <i> 固件年份，两位数显示。

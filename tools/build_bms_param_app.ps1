@@ -12,6 +12,9 @@ $projectDir = Split-Path -Parent $projectPath
 $tempProject = Join-Path $projectDir "codex_param_build.uvprojx"
 $logPath = Join-Path $projectDir "codex_param_build.log"
 $binPath = Join-Path $projectDir "Objects\$ParamTarget.bin"
+$configPath = (Resolve-Path (Join-Path $repoRoot "103 + 309\Project\Source\conf\Project_Config.h")).Path
+$configOriginalBytes = $null
+$configOriginalLastWriteTimeUtc = $null
 
 if (!(Test-Path -LiteralPath $Uv4Path)) {
     throw "Keil UV4.exe not found: $Uv4Path"
@@ -19,6 +22,18 @@ if (!(Test-Path -LiteralPath $Uv4Path)) {
 
 try {
     Write-Host "Preparing BMS parameter build..."
+    $configEncoding = [System.Text.Encoding]::Default
+    $configOriginalBytes = [System.IO.File]::ReadAllBytes($configPath)
+    $configOriginalLastWriteTimeUtc = (Get-Item -LiteralPath $configPath).LastWriteTimeUtc
+    $configText = $configEncoding.GetString($configOriginalBytes)
+    $configPattern = "(?m)^#define\s+PROJECT_CFG_HOST_WRITE_ENABLE\s+[01]\s*$"
+    if ($configText -notmatch $configPattern) {
+        throw "PROJECT_CFG_HOST_WRITE_ENABLE define not found in Project_Config.h"
+    }
+    $configRegex = [System.Text.RegularExpressions.Regex]::new($configPattern)
+    $configText = $configRegex.Replace($configText, "#define PROJECT_CFG_HOST_WRITE_ENABLE 1", 1)
+    [System.IO.File]::WriteAllText($configPath, $configText, $configEncoding)
+
     [xml]$xml = Get-Content -LiteralPath $projectPath -Raw -Encoding UTF8
     $target = $xml.SelectSingleNode("//Target[TargetName='$BaseTarget']")
     if ($null -eq $target) {
@@ -34,18 +49,6 @@ try {
     if ($null -ne $outputNode) {
         $outputNode.InnerText = $ParamTarget
     }
-
-    $defineNode = $target.SelectSingleNode(".//Cads/VariousControls/Define")
-    if ($null -eq $defineNode) {
-        throw "C define node not found"
-    }
-    $defines = @()
-    if (![string]::IsNullOrWhiteSpace($defineNode.InnerText)) {
-        $defines = $defineNode.InnerText.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-    }
-    $defines = @($defines | Where-Object { $_ -notmatch '^PROJECT_CFG_HOST_WRITE_ENABLE=' })
-    $defines += "PROJECT_CFG_HOST_WRITE_ENABLE=1"
-    $defineNode.InnerText = ($defines -join ",")
 
     $settings = New-Object System.Xml.XmlWriterSettings
     $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
@@ -75,5 +78,11 @@ try {
 finally {
     if (Test-Path -LiteralPath $tempProject) {
         Remove-Item -LiteralPath $tempProject -Force
+    }
+    if ($null -ne $configOriginalBytes) {
+        [System.IO.File]::WriteAllBytes($configPath, $configOriginalBytes)
+        if ($null -ne $configOriginalLastWriteTimeUtc) {
+            (Get-Item -LiteralPath $configPath).LastWriteTimeUtc = $configOriginalLastWriteTimeUtc
+        }
     }
 }
