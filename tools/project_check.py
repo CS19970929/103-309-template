@@ -973,19 +973,18 @@ def check_can_rtc_service_runtime(reporter):
     can_h = read_text(CAN_HDX_H)
 
     if (
-        "rtc_service_active" in can_c
-        and "last_rtc_wake_tx_acked" in can_c
-        and "last_rtc_wake_timeout" in can_c
-        and "s_u8FeidaoCanLastRtcWakeTxAcked = 1U" in can_c
-        and "s_u8FeidaoCanLastRtcWakeTimeout = 1U" in can_c
-        and "(0U == s_u8FeidaoCanRtcServiceActive)" in can_c
+        "FEIDAO_CAN_TX_QUEUE_SIZE" in can_c
+        and "feidao_can_service_tx" in can_c
+        and "s_u8RtcServiceActive" in can_c
+        and "s_u8LastRtcWakeTimeout" in can_c
+        and "CAN_ABOM = ENABLE" in can_c
+        and "Can_RtcWakeService" in can_c
         and "u8RtcServiceActive" in can_h
-        and "u8LastRtcWakeTxAcked" in can_h
         and "u8LastRtcWakeTimeout" in can_h
     ):
-        reporter.ok("CAN RTC wake service has bounded window and exposes ack/timeout status")
+        reporter.ok("CAN runtime uses always-on queued TX and keeps RTC service diagnostics")
     else:
-        reporter.fail("CAN RTC wake service should expose ack/timeout status and avoid scheduling extra frames inside service window")
+        reporter.fail("CAN runtime should use queued TX, automatic bus-off recovery, and keep RTC service diagnostics")
 
 
 def check_rtc_stop_sleep_contract(reporter):
@@ -1321,13 +1320,14 @@ def check_comm_tool_can_iap_contract(reporter):
     if (
         "FEIDAO_CAN_APP_CMD_GET_STATUS" in bms_can_c
         and "FEIDAO_CAN_APP_CMD_ENTER_IAP" in bms_can_c
-        and "FEIDAO_CAN_APP_RX_WINDOW_TICKS" in bms_can_c
+        and "FEIDAO_CAN_APP_CMD_READ_BLOCK" in bms_can_c
+        and "feidao_can_service_tx" in bms_can_c
         and "AppUpgrade_RequestIap() == 0U" in bms_can_c
-        and "s_u8FeidaoCanEnterIapDelayTicks" in bms_can_c
+        and "s_u8EnterIapDelayTicks" in bms_can_c
     ):
-        reporter.ok("BMS App exposes minimal CAN service for status and entering IAP")
+        reporter.ok("BMS App exposes queued CAN service for status, block read, and entering IAP")
     else:
-        reporter.fail("BMS App should expose CAN GET_STATUS/ENTER_IAP and a bounded RX window")
+        reporter.fail("BMS App should expose queued CAN GET_STATUS/READ_BLOCK/ENTER_IAP service")
 
 
 def check_serial_iap_refactor_contract(reporter):

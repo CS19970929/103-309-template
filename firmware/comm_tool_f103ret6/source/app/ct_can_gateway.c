@@ -8,7 +8,8 @@
 #define APP_GET_STATUS_TIMEOUT_MS       1000u
 #define APP_ENTER_IAP_TIMEOUT_MS        5000u
 #define APP_REG_CMD_TIMEOUT_MS          1000u
-#define APP_BLOCK_DATA_TIMEOUT_MS       3000u
+#define APP_BLOCK_DATA_TIMEOUT_MS       6000u
+#define APP_SINGLE_READ_FALLBACK_MAX    4u
 #define IAP_ACK_WAIT_SLICE_MS           20u
 
 enum
@@ -268,7 +269,30 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
                                &dummy,
                                APP_REG_CMD_TIMEOUT_MS))
     {
-        return 0;
+        uint16_t i;
+        uint8_t v0;
+        uint8_t v1;
+
+        if (count > APP_SINGLE_READ_FALLBACK_MAX)
+        {
+            return 0;
+        }
+        for (i = 0u; i < count; ++i)
+        {
+            if (!send_app_cmd_wait_ack(can_addr,
+                                       CT_CAN_APP_READ_REG,
+                                       (uint8_t)((addr + i) >> 8),
+                                       (uint8_t)(addr + i),
+                                       0u,
+                                       &v0,
+                                       &v1,
+                                       APP_REG_CMD_TIMEOUT_MS))
+            {
+                return 0;
+            }
+            words[i] = ((uint16_t)v0 << 8) | v1;
+        }
+        return 1;
     }
     if (ack_count != (uint8_t)count)
     {

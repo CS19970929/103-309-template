@@ -111,7 +111,7 @@ class BmsMonitorWindow(tk.Toplevel):
         self.running = False
         self.closed = False
         self.parent_paused = False
-        self.interval_var = tk.StringVar(value="1.0")
+        self.interval_var = tk.StringVar(value="2.0")
         self.state_var = tk.StringVar(value="未开始")
         self.summary_var = tk.StringVar(value="未读取")
         self.detail_var = tk.StringVar(value="")
