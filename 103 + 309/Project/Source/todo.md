@@ -381,3 +381,99 @@ soc.c和SocEnhance.c合并，同时优化，并去除没用的中间变量
 梳理数码管led、老化模式、soc、零电流校准、can各模块根本需求，目前都太复杂了，在不影响功能前提下，以减小code为第一优先级
 
 还是太复杂，code占用太大，逻辑太复杂,需要从根本上重构，例如去掉不必要的变量、函数
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+实现一个comm tool
+
+
+
+需要完全重构一版程序，需求：1、实现comm tool，能够和pc通过串口连接，通过can和当前项目bms连接，pc可以读、写bms信息，pc可以下载待升级bms程序到comm tool，comm tool可以通过can给bms升级。comm tool暂定使用stm32f1ret6，flash大可以直接存储待升级程序，通过comm tool可以一键给bms升级。
+2、需要完全重构目前bms，提取关键功能，不必要的功能、逻辑都可以去掉，保证bms程序简单、稳定、减小code大小，加入can升级功能，除了串口通信协议不变，其他iap地址等等都可以变，完全重构的一版，不需要考虑以前iap怎么实现，iap也要完全重构，支持can升级
+3、实现pc上位机工具，可以通过串口读取comm tool来读、写bms信息、保护参数等等，可以将bms升级程序写入comm tool
+mcu都使用标准库实现，要求简单、稳定，升级保证不死机，先规划，设计开发过程中都需要对应文档，比如串口协议、can升级协议等等
+
+
+
+
+
+
+需求：1、实现comm tool，能够和pc通过串口连接，通过can和当前项目bms连接，pc可以读、写bms信息，pc可以下载待升级bms程序到comm tool，comm tool可以通过can给bms升级。comm tool暂定使用stm32f1ret6，flash大可以直接存储待升级程序，通过comm tool可以一键给bms升级。
+2、bms中加入can升级功能，iap地址等等都可以变，不需要考虑以前iap怎么实现，iap也要完全重构，支持can升级，iap工程目录E:\work\a002\new 030\IAP 103CB ,单独开分支实现新的iap，重构iap实现can升级，保证升级稳定，不死机，pc和comm tool、comm tool和bms的can读写、升级协议你自己决定
+3、实现pc上位机工具，可以通过串口读取comm tool来读、写bms信息、保护参数等等，可以将bms升级程序写入comm tool
+mcu都使用标准库实现，要求简单、稳定，升级保证不死机，先规划，设计开发过程中都需要对应文档，比如串口协议、can升级协议等等
+
+
+
+
+
+
+Project_Config.h显示乱码了，keil工程中可视化也是
+
+
+
+
+
+
+comm tool建立keil工程了吗？全部需求都实现了吗，我可以测试？具体怎么用
+
+
+
+
+
+当前项目bms保护完全有afe硬件做的，能否优化一些地方，例如rtc待机逻辑，越简单越好，保证功能正常，soc准确
+
+bms app中需要加入can协议和comm tool通信，pc可以通过串口和comm tool读、写bms的信息、保护参数等等
+
+pc上位机实现了吗
+
+目前iap升级逻辑是什么？if ((FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_APP_VALUE) &&
+		(CanIap_IsValidAppVector(FLASH_ADDR_APP_START, CAN_IAP_APP_LIMIT_ADDR) != 0U))
+	{
+		IAP_To_APP_Jump(); // 跳回去不能开各种中断或者初始化，也即下面的初始化不能放上来
+	}这段逻辑是什么？需要串口升级和can都能升级。通过这种flash跳转逻辑感觉不好，能否使用其他方式，这是新项目，app和iap除了串口升级协议不能修改，其他跳转逻辑、方式都能修改
+
+
+# 查串口
+.\tools\start_comm_tool_host.ps1 -Mode list-ports
+
+# 读 comm tool 信息
+.\tools\start_comm_tool_host.ps1 -Mode info -Port COM4
+
+# 检查待升级 App bin
+.\tools\start_comm_tool_host.ps1 -Mode fw-dry-run -Bin "103 + 309\Project\Users\Objects\FD_Release.bin"
+
+# 下载 App bin 到 comm tool Flash 缓存，必须确认 App 地址
+.\tools\start_comm_tool_host.ps1 -Mode fw-download -Port COM4 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
+
+# 查询 comm tool 缓存固件信息
+.\tools\start_comm_tool_host.ps1 -Mode fw-info -Port COM4
+
+# 一键让 comm tool 通过 CAN 升级 BMS
+.\tools\start_comm_tool_host.ps1 -Mode upgrade -Port COM4 -ConfirmUpgrade
+
+# 查询升级状态
+.\tools\start_comm_tool_host.ps1 -Mode upgrade-status -Port COM4
+
+
+把comm tool补全keil工程，参考E:\TODO\code\c058 from c030工程，这个是ret6，串口默认使用串口3，把debug led也增加过来，其他不要加，串口、can驱动、供电配置配置过来就行。

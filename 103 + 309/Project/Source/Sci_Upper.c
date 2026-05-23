@@ -950,6 +950,7 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
 {
+#if 0
 	UINT16 reg_count = Sci_GetWrRegNum(s);
 	UINT8 enable;
 	UINT16 vcell_max;
@@ -978,6 +979,7 @@ void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
 		Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);
 #endif
 	}
+#endif
 }
 void Sci_ACK_0x03(struct RS485MSG *s)
 {
@@ -1644,6 +1646,7 @@ void InitSCI3_CommonUpper(void)
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
+#if 0
 	UINT16 t_u16K, t_u16B, t_u16Temp;
 	INT16 t_i16B;
 	UINT16 u16WrRegNum;
@@ -1687,6 +1690,7 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
 	}
+#endif
 }
 
 // 节省了很多代码量吧？
@@ -1762,41 +1766,11 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_COPPERLOSS * 2)
-	{
-		for (i = 0; i < E2P_PARA_NUM_COPPERLOSS; ++i)
-		{
-			CopperLoss[i] = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-			CopperLoss_Num[i] = (UINT16)(s->u16Buffer[2 * (i + 16) + 8] + (s->u16Buffer[2 * (i + 16) + 7] << 8));
-		}
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
 }
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_RTC)
-	{
-		for (i = 0; i < E2P_PARA_NUM_RTC; ++i)
-		{
-			*(&RTC_time.RTC_Time_Year + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
@@ -1931,6 +1905,7 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
+#if 0
 	UINT16 u16SciRegData;
 	UINT8 i;
 	UINT8 first_index;
@@ -1979,6 +1954,7 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 	{
 		Sci_ResetCalibCoefIndex((UINT8)(first_index + i), (UINT8)(store_index + i));
 	}
+#endif
 }
 
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
@@ -2087,29 +2063,14 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		switch (u16SciRegData)
 		{		// 如果是以下功能被打开，则需要初始化验证，别的功能直接关就好
 		case 1: // 均衡
-			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Balance)
-			{
-				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_Balance = 1;
-				System_Func_StartUp.bits.b1StartUpFlag_Balance = 1;
-			}
 			break;
-
 		case 3: // MOS或者接触器功能
-			if (!System_OnOFF_Func_StartUpRec.bits.b1OnOFF_MOS_Relay)
-			{
-				System_OnOFF_Func_StartUpRec.bits.b1OnOFF_MOS_Relay = 1;
-				System_Func_StartUp.bits.b1StartUpFlag_MOS = 1;
-				System_Func_StartUp.bits.b1StartUpFlag_Relay = 1;
-			}
 			break;
-
 		case 8: // 激活模拟前端AFE1
 			break;
-
 		case 0x0A: // 立刻进入休眠
 			entersleep(DEEP_MODE);
 			break;
-
 		default:
 			break;
 		}
@@ -2122,15 +2083,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		}
 		else
 		{
-		}
-
-		if (System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
-		{
-			SOC_Enhance_Element.u16_RefreshData_Flag = 1;
-		}
-		if (System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
-		{
-			SOC_Enhance_Element.u16_RefreshData_Flag = 2;
 		}
 	}
 	else
@@ -2146,17 +2098,7 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
-		//*(&System_OnOFF_Func.bits.b1OnOFF_Balance+(u16SciRegData-1)) = 0;
 		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // 功能途中关闭不需要初始化验证
-
-		if (u16SciRegData == 0x0B)
-		{
-			// System_OnOFF_Func.bits.b1OnOFF_SOC_Zero
-			// 默认为0，不需要保存
-		}
-		else
-		{
-		}
 	}
 	else
 	{

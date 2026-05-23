@@ -54,7 +54,7 @@ void Board_Poll(void)
     uint32_t now;
 
     now = Board_GetTickMs();
-    if ((uint32_t)(now - last_led_tick) >= 500u)
+    if ((uint32_t)(now - last_led_tick) >= 200u)
     {
         last_led_tick = now;
         Board_DebugLedToggle();
