@@ -48,7 +48,7 @@ STATUS_TEXT = {
     0x04: "BAD_STATE",
     0x05: "FLASH_ERROR",
     0x06: "CAN_TIMEOUT",
-    0x07: "BMS_ERROR(板端拒绝/地址无效/写权限关闭)",
+    0x07: "BMS_ERROR(板端拒绝/地址无效/参数越界/写权限关闭)",
 }
 
 HEADER_STRUCT = struct.Struct("<HBBHBBH")

@@ -37,7 +37,7 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x04` | 状态不允许 |
 | `0x05` | Flash 错误 |
 | `0x06` | CAN 超时 |
-| `0x07` | BMS 返回错误，常见原因是 BMS App 未响应、地址非法、写权限关闭或参数越界 |
+| `0x07` | BMS 返回错误，常见原因是 BMS App 未响应、地址非法、参数越界或写权限关闭 |
 
 `UPGRADE_STATUS.last_error` 为 comm tool 内部阶段码，常用值：
 
@@ -73,9 +73,9 @@ py -3.9 tools\comm_tool_host.py ...
 - `BMS_READ` 读取的是 BMS 原串口寄存器地址空间，不重新定义参数含义。
 - `BMS_READ` 响应 payload 为 `words[count]`，每个寄存器 16 位小端。
 - `BMS_WRITE` 请求 payload 为 `addr:u16 count:u16 words[count]`，每个寄存器 16 位小端。
-- comm tool 当前一次最多转发 `120` 个寄存器；读多个寄存器时内部使用 CAN App `READ_BLOCK` 块读，BMS App 每 10ms 返回一个寄存器数据帧。
-- BMS App 写入仍走 `Sci_Upper.c` 的地址、范围、副作用和权限检查。量产默认 `PROJECT_CFG_HOST_WRITE_ENABLE=0` 时会拒绝写入，这是预期保护。
-- UI 的 `读取BMS信息` 和 `实时监控` 使用 `0xD000` 起连续 `63` 个只读寄存器；`读取BMS状态` 使用 `0xD034/0xD035` 读取 SOC/SOH。
+- comm tool 当前一次最多转发 `120` 个寄存器；读多个寄存器时内部使用 CAN App `READ_BLOCK` 块读，BMS App 每 20ms 返回一个寄存器数据帧。
+- BMS App 写入仍走 `Sci_Upper.c` 的地址、范围、副作用和权限检查。当前 Release 默认 `PROJECT_CFG_HOST_WRITE_ENABLE=1`，允许 UI 写保护参数和其它参数。
+- UI 的 `读取BMS信息` 和 `实时监控` 使用 `0xD000` 起连续 `63` 个只读寄存器；`读取BMS状态` 使用 `0xD034/0xD035` 读取 SOC/SOH；`读取BMS日志` 使用 `0xC008` 起 `100` 个事件记录寄存器。
 
 ## 安全规则
 

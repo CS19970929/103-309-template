@@ -64,7 +64,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 | `0x01` | 命令不支持 |
 | `0x02` | 参数错误或寄存器地址非法 |
 | `0x05` | App 进入 IAP 请求失败 |
-| `0x07` | 无写权限，通常是量产固件 `PROJECT_CFG_HOST_WRITE_ENABLE=0` |
+| `0x07` | 无写权限。当前项目 Release 默认 `PROJECT_CFG_HOST_WRITE_ENABLE=1`，正常不应返回该状态 |
 | `0x08` | BMS 寄存器处理失败 |
 
 ## 寄存器读写规则

@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -59,23 +60,114 @@ POST_UPGRADE_APP_READY_INTERVAL = 1.0
 
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
-BMS_PARAM_PRESETS = {
-    "单体过压一级阈值": 0x2100,
-    "单体过压恢复阈值": 0x2103,
-    "单体欠压一级阈值": 0x2105,
-    "单体欠压恢复阈值": 0x2108,
-    "充电过流一级阈值": 0x2114,
-    "放电过流一级阈值": 0x2119,
-    "充电高温一级阈值": 0x211E,
-    "放电高温一级阈值": 0x2128,
-    "MOS高温一级阈值": 0x2132,
-    "压差保护一级阈值": 0x2137,
-    "均衡开启电压": 0x2300,
-    "均衡关闭压差": 0x2301,
-    "额定容量": 0x2318,
-    "串数": 0x231C,
-    "采样电阻": 0x231D,
-}
+CELL_VOLTAGE_NOT_PRESENT = 61001
+BMS_EVENT_RECORD_ADDR = 0xC008
+BMS_EVENT_RECORD_WORDS = 100
+BMS_EVENT_NAMES = [
+    "NA",
+    "BMS开机",
+    "BMS休眠",
+    "均衡开启",
+    "保留4",
+    "保留5",
+    "单节过压保护",
+    "总压过压保护",
+    "充电过流保护",
+    "单节低压保护",
+    "总压低压保护",
+    "放电过流保护",
+    "充电低温保护",
+    "放电低温保护",
+    "充电高温保护",
+    "放电高温保护",
+    "压差过大保护",
+    "短路保护",
+    "AFE1报错",
+    "AFE2报错",
+    "EEPROM报错",
+]
+
+
+@dataclass(frozen=True)
+class BmsParamDef:
+    key: str
+    group: str
+    name: str
+    addr: int
+    unit: str
+    kind: str = "u16"
+
+
+def _build_bms_param_defs() -> list[BmsParamDef]:
+    defs: list[BmsParamDef] = []
+    protect_groups = [
+        ("单体过压", "mV", "u16"),
+        ("单体欠压", "mV", "u16"),
+        ("总压过压", "mV", "u16"),
+        ("总压欠压", "mV", "u16"),
+        ("充电过流", "A", "u16"),
+        ("放电过流", "A", "u16"),
+        ("充电高温", "℃", "temp"),
+        ("充电低温", "℃", "temp"),
+        ("放电高温", "℃", "temp"),
+        ("放电低温", "℃", "temp"),
+        ("MOS高温", "℃", "temp"),
+        ("压差保护", "mV", "u16"),
+        ("SOC低电", "%", "u16"),
+    ]
+    fields = [("一级阈值", 0), ("二级阈值", 1), ("三级阈值", 2), ("恢复阈值", 3), ("延时", 4)]
+    for group_index, (group, unit, kind) in enumerate(protect_groups):
+        base = 0x2100 + group_index * 5
+        for field_name, offset in fields:
+            defs.append(
+                BmsParamDef(
+                    key=f"{group}/{field_name}",
+                    group=group,
+                    name=field_name,
+                    addr=base + offset,
+                    unit=unit if offset < 4 else "raw",
+                    kind=kind if offset < 4 else "u16",
+                )
+            )
+
+    other_defs = [
+        ("均衡参数", "开启电压", 0x2300, "mV", "u16"),
+        ("均衡参数", "开启压差", 0x2301, "mV", "u16"),
+        ("均衡参数", "关闭压差", 0x2302, "mV", "u16"),
+        ("短路参数", "充电短路范围", 0x2308, "A", "x10"),
+        ("短路参数", "放电短路范围", 0x2309, "A", "x10"),
+        ("短路参数", "短路延时", 0x230A, "raw", "u16"),
+        ("短路参数", "短路电流", 0x230B, "A", "x10"),
+        ("限流参数", "SOC曲线选择", 0x230C, "raw", "u16"),
+        ("限流参数", "永久密码", 0x230D, "raw", "u16"),
+        ("限流参数", "限流压差", 0x230E, "mV", "u16"),
+        ("限流参数", "限流电流", 0x230F, "A", "x10"),
+        ("休眠参数", "正常休眠电压", 0x2310, "mV", "u16"),
+        ("休眠参数", "正常休眠时间", 0x2311, "min", "u16"),
+        ("休眠参数", "过放休眠电压", 0x2312, "mV", "u16"),
+        ("休眠参数", "过放休眠时间", 0x2313, "min", "u16"),
+        ("休眠参数", "充电电流过滤", 0x2314, "A", "x10"),
+        ("休眠参数", "放电电流过滤", 0x2315, "A", "x10"),
+        ("休眠参数", "RTC唤醒时间", 0x2316, "min", "u16"),
+        ("休眠参数", "RTC休眠时间", 0x2317, "min", "u16"),
+        ("SOC参数", "容量", 0x2318, "Ah", "x10"),
+        ("SOC参数", "循环次数", 0x2319, "次", "u16"),
+        ("SOC参数", "SOC_100电压", 0x231A, "mV", "u16"),
+        ("SOC参数", "SOC_0电压", 0x231B, "mV", "u16"),
+        ("系统参数", "电池串数", 0x231C, "串", "u16"),
+        ("系统参数", "采样电阻", 0x231D, "mΩ", "u16"),
+        ("系统参数", "采样电阻数", 0x231E, "个", "u16"),
+        ("系统参数", "预充时间", 0x231F, "s", "u16"),
+    ]
+    for group, name, addr, unit, kind in other_defs:
+        defs.append(BmsParamDef(f"{group}/{name}", group, name, addr, unit, kind))
+    return defs
+
+
+BMS_PARAM_DEFS = _build_bms_param_defs()
+BMS_PARAM_BY_KEY = {param.key: param for param in BMS_PARAM_DEFS}
+BMS_PARAM_ADDR_TO_KEY = {param.addr: param.key for param in BMS_PARAM_DEFS}
+BMS_PARAM_PRESETS = {param.key: param.addr for param in BMS_PARAM_DEFS}
 
 
 class UiEvent:
@@ -86,6 +178,63 @@ class UiEvent:
 
 def _temp_c(raw: int) -> float:
     return raw / 10.0 - 40.0
+
+
+def _is_valid_cell_voltage(value: int) -> bool:
+    return value != 0 and value != CELL_VOLTAGE_NOT_PRESENT
+
+
+def _valid_cell_items(cells: list[int]) -> list[tuple[int, int]]:
+    return [(index, value) for index, value in enumerate(cells) if _is_valid_cell_voltage(value)]
+
+
+def _cell_stat_text(valid_cells: list[tuple[int, int]]) -> tuple[str, str, str]:
+    if not valid_cells:
+        return "--", "--", "--"
+    max_index, max_mv = max(valid_cells, key=lambda item: item[1])
+    min_index, min_mv = min(valid_cells, key=lambda item: item[1])
+    return f"{max_mv}mV({max_index + 1})", f"{min_mv}mV({min_index + 1})", f"{max_mv - min_mv}mV"
+
+
+def _format_number(value: float) -> str:
+    if math.isfinite(value) and abs(value - round(value)) < 0.0001:
+        return str(int(round(value)))
+    return f"{value:.1f}".rstrip("0").rstrip(".")
+
+
+def _param_display_value(param: BmsParamDef, raw: int) -> str:
+    if param.kind == "temp":
+        return _format_number(_temp_c(raw))
+    if param.kind == "x10":
+        return _format_number(raw / 10.0)
+    return str(raw)
+
+
+def _param_parse_display_value(param: BmsParamDef, text: str) -> int:
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError(f"{param.key} 不能为空")
+    if param.kind == "temp":
+        raw = int(round((float(stripped) + 40.0) * 10.0))
+    elif param.kind == "x10":
+        raw = int(round(float(stripped) * 10.0))
+    else:
+        raw = int(stripped, 0)
+    if raw < 0 or raw > 0xFFFF:
+        raise ValueError(f"{param.key} 超出 0..65535")
+    return raw
+
+
+def _event_interval_text(delta: int) -> str:
+    if delta == 0:
+        return "NA"
+    if delta == 171:
+        return "1min以内"
+    if delta <= 24:
+        return f"{delta}h"
+    if delta <= 168:
+        return f"{delta // 24}d_{delta % 24}h"
+    return "溢出"
 
 
 def _read_bms_words_once(port: str, baud: int, addr: int, count: int) -> list[int]:
@@ -252,7 +401,8 @@ class BmsMonitorWindow(tk.Toplevel):
 
     def _show_snapshot(self, words: list[int]) -> None:
         cells = words[0:32]
-        valid_cells = [value for value in cells if value != 0]
+        valid_cells = _valid_cell_items(cells)
+        max_cell_text, min_cell_text, delta_cell_text = _cell_stat_text(valid_cells)
         total_v = words[37] / 100.0
         ichg = words[50] / 10.0
         idsg = words[51] / 10.0
@@ -264,8 +414,8 @@ class BmsMonitorWindow(tk.Toplevel):
         self.summary_var.set(
             f"SOC {soc}%   SOH {soh}%   总压 {total_v:.2f}V   "
             f"充电 {ichg:.1f}A   放电 {idsg:.1f}A\n"
-            f"单体 max {words[32]}mV({words[34]})   min {words[33]}mV({words[35]})   "
-            f"压差 {words[36]}mV   有效串数 {len(valid_cells)}   "
+            f"单体 max {max_cell_text}   min {min_cell_text}   "
+            f"压差 {delta_cell_text}   有效串数 {len(valid_cells)}   "
             f"温度 max {_temp_c(words[48]):.1f}℃   min {_temp_c(words[49]):.1f}℃"
         )
         self.detail_var.set(
@@ -276,9 +426,10 @@ class BmsMonitorWindow(tk.Toplevel):
             f"均衡: 0x{words[61]:04X}  0x{words[62]:04X}"
         )
 
-        for index, value in enumerate(cells):
-            text = f"{index + 1:02d}: {value} mV" if value else f"{index + 1:02d}: --"
-            self.cell_tree.item(f"cell{index}", values=(text,))
+        for item in self.cell_tree.get_children():
+            self.cell_tree.delete(item)
+        for index, value in valid_cells:
+            self.cell_tree.insert("", tk.END, iid=f"cell{index}", values=(f"{index + 1:02d}: {value} mV",))
         for index, raw in enumerate(words[38:48]):
             self.temp_tree.item(f"temp{index}", values=(f"T{index + 1}: {_temp_c(raw):.1f}",))
 
@@ -287,6 +438,42 @@ class BmsMonitorWindow(tk.Toplevel):
         self.closed = True
         self.parent.monitor_window = None
         self.destroy()
+
+
+class BmsLogWindow(tk.Toplevel):
+    def __init__(self, parent: "UpgradeUi", records: list[tuple[int, int]]):
+        super().__init__(parent)
+        self.title("BMS 日志")
+        self.geometry("620x620")
+        self.minsize(560, 480)
+
+        root = ttk.Frame(self, padding=12)
+        root.pack(fill=tk.BOTH, expand=True)
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+
+        self.tree = ttk.Treeview(root, columns=("event", "interval", "raw"), show="headings", height=22)
+        self.tree.heading("event", text="事件")
+        self.tree.heading("interval", text="与上次间隔")
+        self.tree.heading("raw", text="原始值")
+        self.tree.column("event", width=240, anchor=tk.W)
+        self.tree.column("interval", width=120, anchor=tk.CENTER)
+        self.tree.column("raw", width=120, anchor=tk.CENTER)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+
+        scrollbar = ttk.Scrollbar(root, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        for index, (event, delta) in enumerate(records, start=1):
+            if event == 0 and delta == 0:
+                continue
+            name = BMS_EVENT_NAMES[event] if event < len(BMS_EVENT_NAMES) else f"未知事件{event}"
+            self.tree.insert(
+                "",
+                tk.END,
+                values=(f"{index:03d}. {name}", _event_interval_text(delta), f"0x{event:02X} 0x{delta:02X}"),
+            )
 
 
 class UpgradeUi(tk.Tk):
@@ -314,6 +501,8 @@ class UpgradeUi(tk.Tk):
         self.param_key_var = tk.StringVar(value=next(iter(BMS_PARAM_PRESETS)))
         self.param_value_var = tk.StringVar(value="")
         self.param_current_var = tk.StringVar(value="未读取")
+        self.param_selected_var = tk.StringVar(value="未选择")
+        self.param_edit_var = tk.StringVar(value="")
         self.progress_var = tk.DoubleVar(value=0.0)
         self.active_port = port
         self.active_baud = baud
@@ -321,6 +510,10 @@ class UpgradeUi(tk.Tk):
         self.active_bms_addr = 0xD000
         self.active_bms_count = 2
         self.active_bms_words: list[int] = []
+        self.param_values: dict[str, int] = {}
+        self.active_param_key = ""
+        self.active_param_raw = 0
+        self.active_param_range = ""
         self.monitor_window: BmsMonitorWindow | None = None
 
         self._build_ui()
@@ -376,7 +569,8 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="使用缓存升级", command=self._upgrade_cached_selected).grid(row=0, column=3, padx=(0, 8))
         ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
         ttk.Button(actions, text="实时监控", command=self._open_monitor).grid(row=0, column=5, padx=(0, 8), sticky="w")
-        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=6, sticky="w")
+        ttk.Button(actions, text="读取BMS日志", command=self._read_bms_log).grid(row=0, column=6, padx=(0, 8), sticky="w")
+        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=7, sticky="w")
 
         bms_box = ttk.LabelFrame(root, text="BMS 信息和参数")
         bms_box.grid(row=4, column=0, sticky="ew", pady=(0, 8))
@@ -391,20 +585,59 @@ class UpgradeUi(tk.Tk):
         )
 
         ttk.Separator(bms_box).grid(row=1, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
-        ttk.Label(bms_box, text="常用参数").grid(row=2, column=0, padx=(10, 6), pady=(0, 8))
-        self.param_combo = ttk.Combobox(
-            bms_box,
-            textvariable=self.param_key_var,
-            values=list(BMS_PARAM_PRESETS.keys()),
-            state="readonly",
-            width=24,
+        param_panel = ttk.Frame(bms_box)
+        param_panel.grid(row=2, column=0, columnspan=8, sticky="nsew", padx=10, pady=(0, 8))
+        param_panel.columnconfigure(0, weight=1)
+        param_panel.rowconfigure(0, weight=1)
+
+        table_frame = ttk.Frame(param_panel)
+        table_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
+        self.param_tree = ttk.Treeview(table_frame, columns=("addr", "value", "unit"), show="tree headings", height=8)
+        self.param_tree.heading("#0", text="保护/其它参数")
+        self.param_tree.heading("addr", text="地址")
+        self.param_tree.heading("value", text="当前值")
+        self.param_tree.heading("unit", text="单位")
+        self.param_tree.column("#0", width=220, anchor=tk.W)
+        self.param_tree.column("addr", width=80, anchor=tk.CENTER)
+        self.param_tree.column("value", width=100, anchor=tk.CENTER)
+        self.param_tree.column("unit", width=70, anchor=tk.CENTER)
+        self.param_tree.grid(row=0, column=0, sticky="nsew")
+        self.param_tree.bind("<<TreeviewSelect>>", self._on_param_select)
+        param_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.param_tree.yview)
+        param_scroll.grid(row=0, column=1, sticky="ns")
+        self.param_tree.configure(yscrollcommand=param_scroll.set)
+        self._populate_param_tree()
+
+        param_actions = ttk.Frame(param_panel)
+        param_actions.grid(row=0, column=1, sticky="nsew")
+        param_actions.columnconfigure(1, weight=1)
+        ttk.Label(param_actions, textvariable=self.param_selected_var, justify=tk.LEFT).grid(
+            row=0, column=0, columnspan=3, sticky="ew", pady=(0, 6)
         )
-        self.param_combo.grid(row=2, column=1, sticky="w", pady=(0, 8))
-        ttk.Button(bms_box, text="读取参数", command=self._read_selected_param).grid(row=2, column=2, padx=8, pady=(0, 8))
-        ttk.Label(bms_box, textvariable=self.param_current_var).grid(row=2, column=3, sticky="w", padx=(0, 12), pady=(0, 8))
-        ttk.Label(bms_box, text="新值").grid(row=2, column=4, padx=(8, 6), pady=(0, 8))
-        ttk.Entry(bms_box, textvariable=self.param_value_var, width=12).grid(row=2, column=5, sticky="w", pady=(0, 8))
-        ttk.Button(bms_box, text="写入参数", command=self._write_selected_param).grid(row=2, column=6, sticky="w", padx=8, pady=(0, 8))
+        ttk.Label(param_actions, text="写入值").grid(row=1, column=0, sticky="w", pady=(0, 6))
+        ttk.Entry(param_actions, textvariable=self.param_edit_var, width=14).grid(
+            row=1, column=1, sticky="ew", pady=(0, 6)
+        )
+        ttk.Button(param_actions, text="读取选中", command=self._read_selected_param).grid(
+            row=1, column=2, padx=(8, 0), pady=(0, 6)
+        )
+        ttk.Button(param_actions, text="写入选中", command=self._write_selected_param).grid(
+            row=2, column=0, columnspan=3, sticky="ew", pady=(0, 6)
+        )
+        ttk.Button(param_actions, text="读取保护参数", command=self._read_protect_params).grid(
+            row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6)
+        )
+        ttk.Button(param_actions, text="读取其它参数", command=self._read_other_params).grid(
+            row=4, column=0, columnspan=3, sticky="ew", pady=(0, 6)
+        )
+        ttk.Button(param_actions, text="读取全部参数", command=self._read_all_params).grid(
+            row=5, column=0, columnspan=3, sticky="ew", pady=(0, 6)
+        )
+        ttk.Label(param_actions, textvariable=self.param_current_var, justify=tk.LEFT).grid(
+            row=6, column=0, columnspan=3, sticky="ew"
+        )
 
         ttk.Separator(bms_box).grid(row=3, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
         ttk.Label(bms_box, text="高级地址").grid(row=4, column=0, padx=(10, 6), pady=(0, 8))
@@ -440,6 +673,49 @@ class UpgradeUi(tk.Tk):
         frame.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 8, 0))
         frame.columnconfigure(0, weight=1)
         ttk.Label(frame, textvariable=var, justify=tk.LEFT).grid(row=0, column=0, sticky="ew", padx=10, pady=8)
+
+    def _populate_param_tree(self) -> None:
+        group_iids: dict[str, str] = {}
+        for param in BMS_PARAM_DEFS:
+            if param.group not in group_iids:
+                iid = f"group:{param.group}"
+                group_iids[param.group] = iid
+                self.param_tree.insert("", tk.END, iid=iid, text=param.group, open=True, values=("", "", ""))
+            self.param_tree.insert(
+                group_iids[param.group],
+                tk.END,
+                iid=param.key,
+                text=param.name,
+                values=(f"0x{param.addr:04X}", "--", param.unit),
+            )
+
+    def _selected_param_key(self) -> str:
+        selection = self.param_tree.selection() if hasattr(self, "param_tree") else ()
+        if not selection:
+            return ""
+        key = selection[0]
+        return key if key in BMS_PARAM_BY_KEY else ""
+
+    def _on_param_select(self, _event=None) -> None:
+        key = self._selected_param_key()
+        if not key:
+            self.param_selected_var.set("未选择")
+            self.param_edit_var.set("")
+            return
+        param = BMS_PARAM_BY_KEY[key]
+        raw = self.param_values.get(key)
+        value_text = _param_display_value(param, raw) if raw is not None else ""
+        self.param_selected_var.set(f"{param.group} / {param.name}\n0x{param.addr:04X}")
+        self.param_edit_var.set(value_text)
+        if raw is None:
+            self.param_current_var.set("未读取")
+        else:
+            self.param_current_var.set(f"当前 {value_text} {param.unit}，原始值 {raw}")
+
+    def _update_param_row(self, key: str, raw: int) -> None:
+        param = BMS_PARAM_BY_KEY[key]
+        self.param_values[key] = raw
+        self.param_tree.item(key, values=(f"0x{param.addr:04X}", _param_display_value(param, raw), param.unit))
 
     def _set_busy(self, busy: bool) -> None:
         state = tk.DISABLED if busy else tk.NORMAL
@@ -527,24 +803,48 @@ class UpgradeUi(tk.Tk):
         self._run_worker("读取BMS信息", self._worker_read_bms_overview)
 
     def _read_selected_param(self) -> None:
+        key = self._selected_param_key()
+        if not key:
+            messagebox.showinfo("参数设置", "请先选择一个保护参数或其它参数。")
+            return
+        self.active_param_key = key
         self._run_worker("读取BMS参数", self._worker_read_selected_param)
 
     def _write_selected_param(self) -> None:
         try:
-            key = self.param_key_var.get()
-            if key not in BMS_PARAM_PRESETS:
-                raise ValueError("请选择有效的参数")
-            value = self._parse_u16(self.param_value_var.get(), "新值")
+            key = self._selected_param_key()
+            if not key:
+                raise ValueError("请先选择一个保护参数或其它参数")
+            param = BMS_PARAM_BY_KEY[key]
+            value = _param_parse_display_value(param, self.param_edit_var.get())
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
             return
+        self.active_param_key = key
+        self.active_param_raw = value
         if not messagebox.askyesno(
             "确认写入参数",
-            f"参数: {key}\n地址: 0x{BMS_PARAM_PRESETS[key]:04X}\n新值: {value} (0x{value:04X})\n\n"
+            f"参数: {param.group} / {param.name}\n地址: 0x{param.addr:04X}\n"
+            f"显示值: {self.param_edit_var.get().strip()} {param.unit}\n板端原始值: {value} (0x{value:04X})\n\n"
             "确认写入 BMS？",
         ):
             return
         self._run_worker("写入BMS参数", self._worker_write_selected_param)
+
+    def _read_protect_params(self) -> None:
+        self.active_param_range = "protect"
+        self._run_worker("读取保护参数", self._worker_read_param_range)
+
+    def _read_other_params(self) -> None:
+        self.active_param_range = "other"
+        self._run_worker("读取其它参数", self._worker_read_param_range)
+
+    def _read_all_params(self) -> None:
+        self.active_param_range = "all"
+        self._run_worker("读取全部参数", self._worker_read_param_range)
+
+    def _read_bms_log(self) -> None:
+        self._run_worker("读取BMS日志", self._worker_read_bms_log)
 
     def _read_bms_regs(self) -> None:
         try:
@@ -567,7 +867,7 @@ class UpgradeUi(tk.Tk):
             f"将通过 comm tool/CAN 写入 BMS。\n\n"
             f"起始地址: 0x{self.active_bms_addr:04X}\n"
             f"数量: {len(self.active_bms_words)}\n\n"
-            "量产固件默认关闭写权限，若板端拒绝会返回错误。",
+            "板端仍会做地址、范围和权限检查，若参数越界会返回错误。",
         ):
             return
         self._run_worker("写入BMS寄存器", self._worker_write_bms_regs)
@@ -689,24 +989,53 @@ class UpgradeUi(tk.Tk):
         self._emit("progress", 100)
 
     def _worker_read_selected_param(self) -> None:
-        key = self.param_key_var.get()
-        addr = BMS_PARAM_PRESETS[key]
+        key = self.active_param_key
+        param = BMS_PARAM_BY_KEY[key]
         with self._open_client() as client:
-            words = self._read_bms_words(client, addr, 1)
+            words = self._read_bms_words(client, param.addr, 1)
         value = words[0]
-        self._emit("param_value", (value, addr))
-        self._emit("log", f"参数读取完成: {key}=0x{value:04X} ({value})")
+        self._emit("param_value", (key, value))
+        self._emit("log", f"参数读取完成: {param.group}/{param.name}=0x{value:04X} ({value})")
         self._emit("progress", 100)
 
     def _worker_write_selected_param(self) -> None:
-        key = self.param_key_var.get()
-        addr = BMS_PARAM_PRESETS[key]
-        value = self._parse_u16(self.param_value_var.get(), "新值")
+        key = self.active_param_key
+        param = BMS_PARAM_BY_KEY[key]
+        value = self.active_param_raw
         with self._open_client() as client:
-            self._write_bms_words(client, addr, [value])
-            words = self._read_bms_words(client, addr, 1)
-        self._emit("param_value", (words[0], addr))
-        self._emit("log", f"参数写入完成: {key}=0x{words[0]:04X} ({words[0]})")
+            self._write_bms_words(client, param.addr, [value])
+            words = self._read_bms_words(client, param.addr, 1)
+        self._emit("param_value", (key, words[0]))
+        self._emit("log", f"参数写入完成: {param.group}/{param.name}=0x{words[0]:04X} ({words[0]})")
+        self._emit("progress", 100)
+
+    def _worker_read_param_range(self) -> None:
+        ranges: list[tuple[int, int]]
+        if self.active_param_range == "protect":
+            ranges = [(0x2100, 65)]
+        elif self.active_param_range == "other":
+            ranges = [(0x2300, 32)]
+        else:
+            ranges = [(0x2100, 65), (0x2300, 32)]
+        values: dict[str, int] = {}
+        with self._open_client() as client:
+            for addr, count in ranges:
+                words = self._read_bms_words(client, addr, count)
+                for index, raw in enumerate(words):
+                    key = BMS_PARAM_ADDR_TO_KEY.get(addr + index)
+                    if key:
+                        values[key] = raw
+        self._emit("param_values", values)
+        self._emit("log", f"参数读取完成: {len(values)} 项")
+        self._emit("progress", 100)
+
+    def _worker_read_bms_log(self) -> None:
+        with self._open_client() as client:
+            words = self._read_bms_words(client, BMS_EVENT_RECORD_ADDR, BMS_EVENT_RECORD_WORDS)
+        records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
+        valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
+        self._emit("bms_log", records)
+        self._emit("log", f"BMS 日志读取完成: {valid_count} 条")
         self._emit("progress", 100)
 
     def _worker_read_bms_regs(self) -> None:
@@ -903,8 +1232,9 @@ class UpgradeUi(tk.Tk):
             raise RuntimeError("BMS 信息长度不足")
 
         cells = words[0:32]
-        valid_cells = [value for value in cells if value != 0]
-        cell_text = " ".join(f"{index + 1}:{value}" for index, value in enumerate(cells) if value != 0)
+        valid_cells = _valid_cell_items(cells)
+        max_cell_text, min_cell_text, delta_cell_text = _cell_stat_text(valid_cells)
+        cell_text = " ".join(f"{index + 1}:{value}" for index, value in valid_cells)
         if not cell_text:
             cell_text = "无有效单体电压"
 
@@ -920,8 +1250,8 @@ class UpgradeUi(tk.Tk):
         return (
             f"SOC {soc}%  SOH {soh}%  总压 {total_v:.2f}V  "
             f"充电 {ichg:.1f}A  放电 {idsg:.1f}A\n"
-            f"单体: max {words[32]}mV({words[34]})  min {words[33]}mV({words[35]})  "
-            f"压差 {words[36]}mV  有效串数 {len(valid_cells)}\n"
+            f"单体: max {max_cell_text}  min {min_cell_text}  "
+            f"压差 {delta_cell_text}  有效串数 {len(valid_cells)}\n"
             f"温度: max {_temp_c(words[48]):.1f}℃  min {_temp_c(words[49]):.1f}℃  "
             f"容量 {capacity_now:.2f}/{capacity_full:.2f}Ah  出厂 {capacity_factory:.2f}Ah  循环 {words[57]}\n"
             f"故障字: 0x{words[58]:04X} 0x{words[59]:04X} 0x{words[60]:04X}  "
@@ -1014,9 +1344,20 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "bms_result":
             self.bms_result_var.set(str(event.payload))
         elif event.kind == "param_value":
-            value, addr = event.payload
-            self.param_current_var.set(f"当前 0x{addr:04X}=0x{value:04X} ({value})")
-            self.param_value_var.set(str(value))
+            key, value = event.payload
+            self._update_param_row(key, value)
+            param = BMS_PARAM_BY_KEY[key]
+            display = _param_display_value(param, value)
+            self.param_current_var.set(f"当前 {display} {param.unit}，原始值 {value}")
+            if self._selected_param_key() == key:
+                self.param_edit_var.set(display)
+        elif event.kind == "param_values":
+            for key, value in event.payload.items():
+                self._update_param_row(key, value)
+            self.param_current_var.set(f"已读取 {len(event.payload)} 项")
+            self._on_param_select()
+        elif event.kind == "bms_log":
+            BmsLogWindow(self, event.payload)
 
     def _log(self, text: str) -> None:
         now = time.strftime("%H:%M:%S")

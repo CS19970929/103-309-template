@@ -41,8 +41,8 @@
 #define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
 
 // <q> Enable host write registers
-// <i> Default disabled for smaller release image. When disabled, Modbus 0x06/0x10 write requests return no-permission.
-#define PROJECT_CFG_HOST_WRITE_ENABLE 0
+// <i> Default enabled. PC UI writes protection and other parameters through comm tool/CAN; board still checks address and range.
+#define PROJECT_CFG_HOST_WRITE_ENABLE 1
 
 // <o> 固件年份 <0-99>
 // <i> 固件年份，两位数显示。
