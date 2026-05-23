@@ -34,7 +34,7 @@
 //   <0=> 三元锂 TERNARYLI
 //   <1=> 磷酸铁锂 LIFEPO
 // <i> 电芯体系。影响电压平台、SOC 表和保护参数选择。
-#define PROJECT_CFG_BAT_CHEMISTRY 0
+#define PROJECT_CFG_BAT_CHEMISTRY 1
 
 // <q> Allow host runtime SOC table writes
 // <i> Default disabled. When disabled, SOC table is selected by PROJECT_CFG_BAT_CHEMISTRY at compile time; 0x2200 writes are rejected.
@@ -392,11 +392,11 @@
 
 // <o> 升级参数策略版本 <0x0000-0xFFFE>
 // <i> 升级参数策略版本。策略内容变化时递增，避免重复或漏执行。
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0001
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0003
 
 // <q> 重置 AFE 参数
 // <i> 升级时重置 AFE 参数。只在 AFE 默认参数必须覆盖现场值时开启。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
 // <q> 重置保护参数
 // <i> 升级时重置保护参数。会影响保护阈值，必须谨慎开启。
