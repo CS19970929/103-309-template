@@ -39,6 +39,12 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x06` | CAN 超时 |
 | `0x07` | BMS 返回错误，常见原因是 BMS App 未响应、地址非法、参数越界或写权限关闭 |
 
+## 设备目标
+
+comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IAP 节点 `1`。
+
+多设备总线中，读写和进入 IAP 先按 BMS App CAN 地址选择目标；只有被选中的 BMS App 会响应 `ENTER_IAP` 并复位进入 IAP。BMS 进入 IAP 后使用 IAP 节点帧升级。当前 IAP 默认节点为 `1`，因此如果总线上已有多个 BMS 同时停留在 IAP 且节点相同，comm tool 无法区分它们，禁止直接升级。
+
 `UPGRADE_STATUS.last_error` 为 comm tool 内部阶段码，常用值：
 
 | 阶段码 | 含义 |
@@ -53,8 +59,8 @@ py -3.9 tools\comm_tool_host.py ...
 
 | 命令 | 方向 | payload | 说明 |
 | --- | --- | --- | --- |
-| `0x01 GET_INFO` | PC -> comm | 空 | 读取 comm tool 版本、Flash 缓存能力、CAN 波特率 |
-| `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 reserved[3]` | 设置 CAN 参数 |
+| `0x01 GET_INFO` | PC -> comm | 空 | 读取 comm tool 版本、Flash 缓存能力、CAN 波特率、目标节点 |
+| `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 app_can_addr:u8 reserved:u16` | 设置 CAN 参数、IAP 节点和 BMS App CAN 地址 |
 | `0x10 BMS_READ` | PC -> comm | `addr:u16 count:u16` | 通过 CAN 读取 BMS 寄存器 |
 | `0x11 BMS_WRITE` | PC -> comm | `addr:u16 count:u16 words[count]` | 通过 CAN 写 BMS 寄存器 |
 | `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 到 comm tool |
@@ -62,11 +68,27 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x22 FW_END` | PC -> comm | `size:u32 crc16:u16 crc32:u32` | 结束下载并校验缓存 |
 | `0x23 FW_INFO` | PC -> comm | 空 | 查询缓存固件信息 |
 | `0x30 ENTER_IAP` | PC -> comm | 空 | 让 BMS App 写标志并复位进入 IAP |
-| `0x31 UPGRADE` | PC -> comm | 空 | 使用缓存固件给 BMS 一键升级 |
+| `0x31 UPGRADE` | PC -> comm | 空 | 启动使用缓存固件给 BMS 一键升级，命令返回后通过 `UPGRADE_STATUS` 查询进度 |
 | `0x32 UPGRADE_STATUS` | PC -> comm | 空 | 查询升级状态 |
 | `0x33 UPGRADE_ABORT` | PC -> comm | 空 | 终止当前升级 |
 | `0x40 RAW_CAN_TX` | PC -> comm | `id:u32 ide:u8 dlc:u8 data[8]` | 调试用原始 CAN 发送 |
 | `0x41 CAN_DIAG` | PC -> comm | `clear:u8` | 读取 comm tool CAN 发送、接收和错误寄存器诊断；`clear!=0` 表示读取前清零 |
+
+### GET_INFO / CAN_DIAG 扩展字段
+
+`GET_INFO` 前 20 字节保持兼容：
+
+| offset | 长度 | 含义 |
+| --- | --- | --- |
+| 0 | 4 | `proto, major, minor, patch` |
+| 4 | 4 | CAN 波特率 |
+| 8 | 4 | 固件缓存起始地址 |
+| 12 | 4 | 固件缓存大小 |
+| 16 | 4 | flags |
+| 20 | 1 | 当前 IAP 节点 |
+| 21 | 1 | 当前 BMS App CAN 地址 |
+
+`CAN_DIAG` 第 61 字节为 IAP 节点，第 62 字节为 BMS App CAN 地址。旧工具只解析前 62 字节时仍可工作。
 
 ### BMS_READ / BMS_WRITE 细节
 
@@ -83,3 +105,4 @@ py -3.9 tools\comm_tool_host.py ...
 - PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
 - comm tool 写缓存前必须擦除缓存页，不能覆盖自身程序区。
 - `FW_END` 校验失败时缓存固件无效，禁止执行 `UPGRADE`。
+- 多个 BMS 同时挂在 CAN 总线时，必须保证目标 BMS App CAN 地址唯一；多个相同地址或多个相同 IAP 节点同时在线会造成响应串扰。

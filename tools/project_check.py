@@ -1271,8 +1271,9 @@ def check_comm_tool_can_iap_contract(reporter):
         and "CtCan_IapSendCommit" in can_c
         and "CtCan_IapWaitAck" in can_c
         and "CtUpgrade_Start" in upgrade_c
+        and "CtUpgrade_Task" in upgrade_c
         and "frames_this_block" in upgrade_c
-        and "frame_count = seq" in upgrade_c
+        and "frame_count = s_ctx.seq" in upgrade_c
         and "CT_CMD_FW_BEGIN" in app_c
         and "CT_CMD_UPGRADE" in app_c
     ):

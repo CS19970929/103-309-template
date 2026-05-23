@@ -280,6 +280,21 @@ def cmd_info(args) -> int:
         print(f"  CAN 波特率: {bitrate}")
         print(f"  缓存区: 0x{cache_base:08X} + {cache_size} bytes")
         print(f"  flags: 0x{flags:08X}")
+        if len(payload) >= 22:
+            print(f"  IAP 节点: {payload[20]}")
+            print(f"  BMS App CAN 地址: {payload[21]}")
+    return 0
+
+
+def cmd_set_can(args) -> int:
+    if args.node_id <= 0 or args.node_id > 0x7F:
+        raise SystemExit("node-id 必须在 1..127 之间")
+    if args.app_can_addr < 0 or args.app_can_addr > 0x0F:
+        raise SystemExit("app-can-addr 必须在 0..15 之间")
+    payload = struct.pack("<IBBH", args.can_bitrate, args.node_id & 0xFF, args.app_can_addr & 0x0F, 0)
+    with open_client(args) as client:
+        client.command(CMD_SET_CAN, payload, timeout=args.long_timeout)
+    print(f"CAN 参数已设置: bitrate={args.can_bitrate} node_id={args.node_id} app_can_addr={args.app_can_addr}")
     return 0
 
 
@@ -368,8 +383,31 @@ def cmd_upgrade(args) -> int:
         raise SystemExit("一键升级会擦写 BMS App，请添加 -ConfirmUpgrade。")
     with open_client(args) as client:
         client.command(CMD_UPGRADE, timeout=args.long_timeout)
-    print("comm tool 已开始使用缓存固件升级 BMS。")
-    return 0
+        last_percent = -1
+        deadline = time.monotonic() + args.long_timeout
+        while time.monotonic() < deadline:
+            resp = client.command(CMD_UPGRADE_STATUS, timeout=2.0)
+            payload = resp.payload
+            if len(payload) < 13:
+                raise RuntimeError("UPGRADE_STATUS 响应长度不足")
+            state, percent, error = struct.unpack_from("<BBB", payload, 0)
+            written, total, expect_seq = struct.unpack_from("<IIH", payload, 3)
+            if percent != last_percent or state != 1:
+                print(
+                    f"  升级进度: state={state} percent={percent}% "
+                    f"written={written}/{total} expect_seq={expect_seq} error=0x{error:02X}"
+                )
+                last_percent = percent
+            if state == 2 and error == 0:
+                print("comm tool 已完成 CAN 升级。")
+                return 0
+            if state in (3, 4) or error != 0:
+                raise RuntimeError(
+                    f"升级失败: state={state} percent={percent}% error=0x{error:02X} "
+                    f"written={written}/{total} expect_seq={expect_seq}"
+                )
+            time.sleep(0.25)
+    raise TimeoutError("等待升级完成超时")
 
 
 def cmd_upgrade_status(args) -> int:
@@ -422,6 +460,8 @@ def cmd_can_diag(args) -> int:
             f"data={format_hex(last_rx_data)}"
         )
         print(f"  node_id={node_id}")
+        if len(data) >= 63:
+            print(f"  app_can_addr={data[62]}")
     return 0
 
 
@@ -455,6 +495,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_info = sub.add_parser("info", help="读取 comm tool 信息")
     add_serial_args(p_info)
     p_info.set_defaults(func=cmd_info)
+
+    p_set_can = sub.add_parser("set-can", help="设置 comm tool CAN 参数和目标 BMS 地址")
+    add_serial_args(p_set_can)
+    p_set_can.add_argument("--can-bitrate", type=int, default=250000)
+    p_set_can.add_argument("--node-id", type=lambda value: int(value, 0), default=1)
+    p_set_can.add_argument("--app-can-addr", type=lambda value: int(value, 0), default=0)
+    p_set_can.set_defaults(func=cmd_set_can)
 
     p_dry = sub.add_parser("fw-dry-run", help="检查 BMS App bin 和分块")
     add_fw_args(p_dry)

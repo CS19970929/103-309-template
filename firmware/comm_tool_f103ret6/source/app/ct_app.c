@@ -10,6 +10,7 @@
 static uint8_t s_tx[10u + CT_UART_MAX_PAYLOAD + 2u];
 static uint32_t s_can_bitrate = CT_CAN_DEFAULT_BITRATE;
 static uint8_t s_node_id = CT_NODE_ID_DEFAULT;
+static uint8_t s_app_can_addr = 0u;
 
 #define CT_BMS_MAX_REG_WORDS 120u
 
@@ -69,6 +70,8 @@ void CtApp_Poll(void)
     CtCanFrame frame;
     uint32_t now;
 
+    CtUpgrade_Task();
+
     now = CtBoard_GetTickMs();
     if ((uint32_t)(now - s_last_heartbeat_ms) < CT_CAN_HEARTBEAT_PERIOD_MS)
     {
@@ -94,8 +97,9 @@ void CtApp_Poll(void)
 
 static void handle_info(const CtFrame *req)
 {
-    uint8_t payload[20];
+    uint8_t payload[24];
 
+    memset(payload, 0, sizeof(payload));
     payload[0] = CT_PROTOCOL_VERSION;
     payload[1] = CT_FW_VERSION_MAJOR;
     payload[2] = CT_FW_VERSION_MINOR;
@@ -104,6 +108,8 @@ static void handle_info(const CtFrame *req)
     wr32(&payload[8], CT_FW_CACHE_BASE);
     wr32(&payload[12], CT_FW_CACHE_SIZE);
     wr32(&payload[16], 0u);
+    payload[20] = s_node_id;
+    payload[21] = s_app_can_addr;
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 
@@ -116,6 +122,12 @@ static void handle_set_can(const CtFrame *req)
     }
     s_can_bitrate = rd32(&req->payload[0]);
     s_node_id = req->payload[4];
+    s_app_can_addr = req->payload[5] & 0x0Fu;
+    if ((s_node_id == 0u) || (s_node_id > 0x7Fu))
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
     if (!CtBoard_SetCanBitrate(s_can_bitrate))
     {
         respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
@@ -224,7 +236,7 @@ static void handle_bms_read(const CtFrame *req)
         respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
         return;
     }
-    if (!CtCan_AppReadRegs(0u, addr, count, words))
+    if (!CtCan_AppReadRegs(s_app_can_addr, addr, count, words))
     {
         respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
         return;
@@ -265,7 +277,7 @@ static void handle_bms_write(const CtFrame *req)
         words[i] = rd16(&req->payload[4u + (i << 1)]);
     }
 
-    if (!CtCan_AppWriteRegs(0u, addr, count, words))
+    if (!CtCan_AppWriteRegs(s_app_can_addr, addr, count, words))
     {
         respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
         return;
@@ -276,7 +288,7 @@ static void handle_bms_write(const CtFrame *req)
 
 static void handle_enter_iap(const CtFrame *req)
 {
-    if (!CtCan_AppEnterIap(0u))
+    if (!CtCan_AppEnterIap(s_app_can_addr))
     {
         respond(req, CT_STATUS_CAN_TIMEOUT, 0, 0u);
         return;
@@ -286,7 +298,7 @@ static void handle_enter_iap(const CtFrame *req)
 
 static void handle_upgrade(const CtFrame *req)
 {
-    if (!CtUpgrade_Start(s_node_id))
+    if (!CtUpgrade_StartWithAppAddress(s_node_id, s_app_can_addr))
     {
         respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
         return;
@@ -312,7 +324,7 @@ static void handle_upgrade_status(const CtFrame *req)
 static void handle_can_diag(const CtFrame *req)
 {
     CtCanDiag diag;
-    uint8_t payload[62];
+    uint8_t payload[64];
 
     if ((req->length >= 1u) && (req->payload[0] != 0u))
     {
@@ -340,6 +352,7 @@ static void handle_can_diag(const CtFrame *req)
     payload[52] = diag.last_rx_dlc;
     memcpy(&payload[53], diag.last_rx_data, 8u);
     payload[61] = s_node_id;
+    payload[62] = s_app_can_addr;
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 

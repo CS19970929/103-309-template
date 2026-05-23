@@ -37,6 +37,7 @@ PC 不直接连接 BMS CAN。comm tool 负责串口协议解析、BMS CAN 读写
 - 升级中断、CRC 错误、CAN 超时、Flash 写失败后，BMS 重启必须停留在 IAP。
 - comm tool 缓存完整固件后再启动 BMS 升级；BMS 升级失败时可以不依赖 PC 重新一键刷入。
 - 所有串口/CAN/Flash 等待都必须有超时，禁止死等。
+- 多设备总线中必须先通过 BMS App CAN 地址锁定目标板，再让目标板进入 IAP；禁止多个相同 IAP 节点同时处于 IAP 后再发起升级。
 
 ## 实施阶段
 
@@ -59,6 +60,12 @@ PC 侧 dry-run：
 
 ```powershell
 .\tools\start_comm_tool_host.ps1 -Mode fw-download -Port COM4 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
+```
+
+设置目标 BMS 地址和 IAP 节点：
+
+```powershell
+.\tools\start_comm_tool_host.ps1 -Mode set-can -Port COM4 -CanBitrate 250000 -AppCanAddr 0 -NodeId 1
 ```
 
 一键升级 BMS：

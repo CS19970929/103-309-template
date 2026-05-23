@@ -29,6 +29,7 @@ from comm_tool_host import (
     CMD_FW_END,
     CMD_FW_INFO,
     CMD_GET_INFO,
+    CMD_SET_CAN,
     CMD_UPGRADE,
     CMD_UPGRADE_STATUS,
     CommToolClient,
@@ -605,6 +606,10 @@ class UpgradeUi(tk.Tk):
         self.cache_var = tk.StringVar(value="未读取")
         self.image_var = tk.StringVar(value="未选择")
         self.result_var = tk.StringVar(value="等待操作")
+        self.can_bitrate_var = tk.StringVar(value="250000")
+        self.node_id_var = tk.StringVar(value="1")
+        self.app_can_addr_var = tk.StringVar(value="0")
+        self.upgrade_stage_var = tk.StringVar(value="升级进度: --")
         self.bms_addr_var = tk.StringVar(value="0xD000")
         self.bms_count_var = tk.StringVar(value="2")
         self.bms_values_var = tk.StringVar(value="")
@@ -623,6 +628,9 @@ class UpgradeUi(tk.Tk):
         self.active_port = port
         self.active_baud = baud
         self.active_bin = bin_path
+        self.active_can_bitrate = 250000
+        self.active_node_id = 1
+        self.active_app_can_addr = 0
         self.active_bms_addr = 0xD000
         self.active_bms_count = 2
         self.active_bms_words: list[int] = []
@@ -639,6 +647,7 @@ class UpgradeUi(tk.Tk):
         self.param_dirty: set[str] = set()
         self.param_loading = False
         self.log_tree: ttk.Treeview | None = None
+        self.applied_target: tuple[int, int, int] | None = None
 
         self._build_ui()
         self._refresh_ports()
@@ -928,7 +937,7 @@ class UpgradeUi(tk.Tk):
 
     def _build_other_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(4, weight=1)
+        tab.rowconfigure(5, weight=1)
 
         file_box = ttk.LabelFrame(tab, text="升级文件")
         file_box.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -947,8 +956,30 @@ class UpgradeUi(tk.Tk):
         self._status_card(status, "当前文件", self.image_var, 1)
         self._status_card(status, "comm tool 缓存", self.cache_var, 2)
 
+        target = ttk.LabelFrame(tab, text="目标设备")
+        target.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        target.columnconfigure(8, weight=1)
+        ttk.Label(target, text="CAN波特率").grid(row=0, column=0, padx=(10, 6), pady=8)
+        ttk.Combobox(
+            target,
+            textvariable=self.can_bitrate_var,
+            values=("250000", "125000", "500000"),
+            width=10,
+            state="normal",
+        ).grid(row=0, column=1, sticky="w", pady=8)
+        ttk.Label(target, text="BMS地址").grid(row=0, column=2, padx=(14, 6), pady=8)
+        ttk.Entry(target, textvariable=self.app_can_addr_var, width=8).grid(row=0, column=3, sticky="w", pady=8)
+        ttk.Label(target, text="IAP节点").grid(row=0, column=4, padx=(14, 6), pady=8)
+        ttk.Entry(target, textvariable=self.node_id_var, width=8).grid(row=0, column=5, sticky="w", pady=8)
+        ttk.Button(target, text="应用设置", command=self._apply_can_settings).grid(row=0, column=6, padx=(14, 8), pady=8)
+        ttk.Label(
+            target,
+            text="多设备时必须保证目标 BMS 地址唯一；多个 BMS 同地址不要同时升级。",
+            foreground="#9a4d00",
+        ).grid(row=0, column=7, columnspan=2, sticky="w", padx=(6, 10), pady=8)
+
         actions = ttk.Frame(tab)
-        actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        actions.grid(row=3, column=0, sticky="ew", pady=(0, 8))
         ttk.Button(actions, text="读取缓存", command=self._read_cache).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(actions, text="写入缓存", command=self._download_only).grid(row=0, column=1, padx=(0, 8))
         ttk.Button(actions, text="一键升级", command=self._upgrade_selected).grid(row=0, column=2, padx=(0, 8))
@@ -957,7 +988,7 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, padx=(0, 8))
 
         advanced = ttk.LabelFrame(tab, text="高级寄存器")
-        advanced.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+        advanced.grid(row=4, column=0, sticky="ew", pady=(0, 8))
         advanced.columnconfigure(6, weight=1)
         ttk.Label(advanced, text="地址").grid(row=0, column=0, padx=(10, 6), pady=8)
         ttk.Entry(advanced, textvariable=self.bms_addr_var, width=12).grid(row=0, column=1, sticky="w", pady=8)
@@ -972,16 +1003,17 @@ class UpgradeUi(tk.Tk):
         )
 
         progress = ttk.Frame(tab)
-        progress.grid(row=4, column=0, sticky="nsew")
+        progress.grid(row=5, column=0, sticky="nsew")
         progress.columnconfigure(0, weight=1)
-        progress.rowconfigure(2, weight=1)
+        progress.rowconfigure(3, weight=1)
         ttk.Progressbar(progress, variable=self.progress_var, maximum=100).grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        ttk.Label(progress, text="运行日志").grid(row=1, column=0, sticky="w")
+        ttk.Label(progress, textvariable=self.upgrade_stage_var).grid(row=1, column=0, sticky="w", pady=(0, 4))
+        ttk.Label(progress, text="运行日志").grid(row=2, column=0, sticky="w")
         self.log_text = tk.Text(progress, height=16, wrap="word")
-        self.log_text.grid(row=2, column=0, sticky="nsew")
+        self.log_text.grid(row=3, column=0, sticky="nsew")
         self.log_text.configure(state="disabled")
         scrollbar = ttk.Scrollbar(progress, orient=tk.VERTICAL, command=self.log_text.yview)
-        scrollbar.grid(row=2, column=1, sticky="ns")
+        scrollbar.grid(row=3, column=1, sticky="ns")
         self.log_text.configure(yscrollcommand=scrollbar.set)
 
     def _make_scroll_area(self, parent: ttk.Frame) -> ttk.Frame:
@@ -1254,6 +1286,7 @@ class UpgradeUi(tk.Tk):
             return
         try:
             with self._open_client() as client:
+                self._set_can_target(client)
                 try:
                     words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
                 except Exception:
@@ -1512,6 +1545,9 @@ class UpgradeUi(tk.Tk):
     def _download_only(self) -> None:
         self._run_worker("写入缓存", self._worker_download_only)
 
+    def _apply_can_settings(self) -> None:
+        self._run_worker("应用目标设备设置", self._worker_apply_can_settings)
+
     def _upgrade_selected(self) -> None:
         path = Path(self.bin_var.get())
         if not path.exists():
@@ -1634,10 +1670,18 @@ class UpgradeUi(tk.Tk):
             self.active_port = self.port_var.get().strip()
             self.active_baud = int(self.baud_var.get().strip())
             self.active_bin = Path(self.bin_var.get()).resolve()
+            self.active_can_bitrate = int(self.can_bitrate_var.get().strip(), 0)
+            self.active_node_id = int(self.node_id_var.get().strip(), 0)
+            self.active_app_can_addr = int(self.app_can_addr_var.get().strip(), 0)
+            if self.active_node_id <= 0 or self.active_node_id > 0x7F:
+                raise ValueError("IAP节点必须是 1..127")
+            if self.active_app_can_addr < 0 or self.active_app_can_addr > 0x0F:
+                raise ValueError("BMS地址必须是 0..15")
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
             return
         self.progress_var.set(0)
+        self.upgrade_stage_var.set("升级进度: --")
         self._set_busy(True)
         self.worker = threading.Thread(target=self._worker_guard, args=(name, target), daemon=True)
         self.worker.start()
@@ -1684,7 +1728,17 @@ class UpgradeUi(tk.Tk):
             info = self._read_info(client)
             cache = self._read_cache_info(client)
         self._emit("info", info)
+        self._emit("target", info)
         self._emit("cache", cache)
+        self._emit("progress", 100)
+
+    def _worker_apply_can_settings(self) -> None:
+        with self._open_client() as client:
+            self._set_can_target(client, force=True)
+            info = self._read_info(client)
+        self._emit("info", info)
+        self._emit("target", info)
+        self._emit("log", f"目标设备已设置: BMS地址={self.active_app_can_addr} IAP节点={self.active_node_id}")
         self._emit("progress", 100)
 
     def _worker_read_cache(self) -> None:
@@ -1705,35 +1759,41 @@ class UpgradeUi(tk.Tk):
     def _worker_upgrade_selected(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            self._set_can_target(client, force=True)
             info = self._read_info(client)
             self._emit("info", info)
-            self._download_image(client, image)
+            self._emit("target", info)
+            self._download_image(client, image, progress_base=0, progress_span=45)
             cache = self._read_cache_info(client)
             self._assert_cache_matches(image, cache)
             self._emit("cache", cache)
-            self._upgrade_bms_from_verified_cache(client)
+            self._upgrade_bms_from_verified_cache(client, progress_base=50, progress_span=45)
         self._emit("progress", 100)
 
     def _worker_upgrade_cached_selected(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            self._set_can_target(client)
             info = self._read_info(client)
             self._emit("info", info)
+            self._emit("target", info)
             cache = self._read_cache_info(client)
             self._assert_cache_matches(image, cache)
             self._emit("cache", cache)
             self._emit("log", "缓存与当前文件一致，跳过串口下载")
-            self._upgrade_bms_from_verified_cache(client)
+            self._upgrade_bms_from_verified_cache(client, progress_base=5, progress_span=90)
         self._emit("progress", 100)
 
     def _worker_read_bms_status(self) -> None:
         with self._open_client() as client:
+            self._set_can_target(client)
             status = self._read_bms_app_status(client)
         self._emit("log", f"BMS App 状态: SOC={status[0]} SOH={status[1]}")
         self._emit("progress", 100)
 
     def _worker_read_bms_overview(self) -> None:
         with self._open_client() as client:
+            self._set_can_target(client)
             try:
                 words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
             except Exception:
@@ -1747,6 +1807,7 @@ class UpgradeUi(tk.Tk):
         key = self.active_param_key
         param = BMS_PARAM_BY_KEY[key]
         with self._open_client() as client:
+            self._set_can_target(client)
             words = self._read_bms_words(client, param.addr, 1)
         value = words[0]
         self._emit("param_value", (key, value))
@@ -1758,6 +1819,7 @@ class UpgradeUi(tk.Tk):
         param = BMS_PARAM_BY_KEY[key]
         value = self.active_param_raw
         with self._open_client() as client:
+            self._set_can_target(client)
             self._write_bms_words(client, param.addr, [value])
             words = self._read_bms_words(client, param.addr, 1)
         self._emit("param_value", (key, words[0]))
@@ -1768,6 +1830,7 @@ class UpgradeUi(tk.Tk):
         values = sorted(self.active_param_values.items(), key=lambda item: BMS_PARAM_BY_KEY[item[0]].addr)
         verified: dict[str, int] = {}
         with self._open_client() as client:
+            self._set_can_target(client)
             for key, value in values:
                 param = BMS_PARAM_BY_KEY[key]
                 self._write_bms_words(client, param.addr, [value])
@@ -1793,6 +1856,7 @@ class UpgradeUi(tk.Tk):
 
     def _worker_reset_sh309_protect_params(self) -> None:
         with self._open_client() as client:
+            self._set_can_target(client)
             self._write_bms_words(client, SH309_RESET_AFE_ADDR, [1])
             self._write_bms_words(client, SH309_RESET_PROTECT_ADDR, [1])
             values = self._read_sh309_param_values(client)
@@ -1814,6 +1878,7 @@ class UpgradeUi(tk.Tk):
             ]
         values: dict[str, int] = {}
         with self._open_client() as client:
+            self._set_can_target(client)
             for addr, count in ranges:
                 words = self._read_bms_words(client, addr, count)
                 for index, raw in enumerate(words):
@@ -1826,6 +1891,7 @@ class UpgradeUi(tk.Tk):
 
     def _worker_read_bms_log(self) -> None:
         with self._open_client() as client:
+            self._set_can_target(client)
             words = self._read_bms_words(client, BMS_EVENT_RECORD_ADDR, BMS_EVENT_RECORD_WORDS)
         records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
         valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
@@ -1837,6 +1903,7 @@ class UpgradeUi(tk.Tk):
         addr = self.active_bms_addr
         count = self.active_bms_count
         with self._open_client() as client:
+            self._set_can_target(client)
             words = self._read_bms_words(client, addr, count)
         text = self._format_bms_words(addr, words)
         self._emit("bms_result", text)
@@ -1847,6 +1914,7 @@ class UpgradeUi(tk.Tk):
         addr = self.active_bms_addr
         words = self.active_bms_words
         with self._open_client() as client:
+            self._set_can_target(client)
             self._write_bms_words(client, addr, words)
         text = self._format_bms_words(addr, words)
         self._emit("bms_result", "已写入:\n" + text)
@@ -1859,19 +1927,80 @@ class UpgradeUi(tk.Tk):
         self._emit("log", self._format_can_diag(resp.payload))
         self._emit("progress", 100)
 
-    def _upgrade_bms_from_verified_cache(self, client: CommToolClient) -> None:
+    def _set_can_target(self, client: CommToolClient, force: bool = False) -> None:
+        target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
+        if not force and self.applied_target == target:
+            return
+        payload = struct.pack(
+            "<IBBH",
+            self.active_can_bitrate,
+            self.active_node_id & 0xFF,
+            self.active_app_can_addr & 0x0F,
+            0,
+        )
+        client.command(CMD_SET_CAN, payload, timeout=2.0)
+        self.applied_target = target
+
+    def _upgrade_state_text(self, status: dict) -> str:
+        state_text = {
+            0: "空闲",
+            1: "升级中",
+            2: "完成",
+            3: "错误",
+            4: "已终止",
+        }.get(status["state"], f"状态{status['state']}")
+        return (
+            f"升级进度: {status['percent']}%  {status['written']}/{status['total']} bytes  "
+            f"{state_text}  error=0x{status['error']:02X}"
+        )
+
+    def _upgrade_bms_from_verified_cache(
+        self,
+        client: CommToolClient,
+        progress_base: int = 0,
+        progress_span: int = 95,
+    ) -> None:
         self._emit("log", "缓存校验通过，开始 CAN 升级 BMS")
+        self._emit("upgrade_stage", "升级进度: 正在启动 BMS CAN-IAP")
         client.command(CMD_CAN_DIAG, b"\x01", timeout=2.0)
-        client.command(CMD_UPGRADE, timeout=DEFAULT_LONG_TIMEOUT)
-        status = self._read_upgrade_status(client)
-        self._emit("log", self._format_upgrade_status(status))
-        if status["state"] != 2 or status["error"] != 0:
-            raise RuntimeError(self._format_upgrade_status(status))
+        client.command(CMD_UPGRADE, timeout=5.0)
+
+        deadline = time.monotonic() + DEFAULT_LONG_TIMEOUT
+        last_percent = -1
+        last_log_time = 0.0
+        status: dict | None = None
+        while time.monotonic() < deadline:
+            status = self._read_upgrade_status(client)
+            self._emit("upgrade_stage", self._upgrade_state_text(status))
+            self._emit("progress", min(99, progress_base + int(status["percent"] * progress_span / 100)))
+
+            now = time.monotonic()
+            if (
+                status["percent"] != last_percent
+                and (status["percent"] == 100 or status["percent"] - last_percent >= 5 or now - last_log_time >= 2.0)
+            ):
+                self._emit("log", self._format_upgrade_status(status))
+                last_percent = status["percent"]
+                last_log_time = now
+
+            if status["state"] == 2 and status["error"] == 0:
+                break
+            if status["state"] in (3, 4) or status["error"] != 0:
+                raise RuntimeError(self._format_upgrade_status(status))
+            time.sleep(0.25)
+        else:
+            raise TimeoutError("等待 CAN 升级完成超时")
+
+        if status is None or status["state"] != 2 or status["error"] != 0:
+            raise RuntimeError(self._format_upgrade_status(status or {"state": 0, "percent": 0, "error": 0xFF, "written": 0, "total": 0, "expect_seq": 0}))
+
+        self._emit("upgrade_stage", "升级进度: CAN升级完成，等待 BMS App 恢复")
         bms_status = self._wait_bms_status_after_upgrade(client)
         if bms_status is None:
             self._emit("log", "升级已完成，但 BMS App 状态暂未响应；请稍后点击“读取BMS状态”复核。")
         else:
             self._emit("log", f"BMS App 状态: SOC={bms_status[0]} SOH={bms_status[1]}")
+        self._emit("upgrade_stage", "升级进度: 完成")
 
     def _open_client(self) -> CommToolClient:
         port = self.active_port
@@ -1892,6 +2021,8 @@ class UpgradeUi(tk.Tk):
             "cache_base": cache_base,
             "cache_size": cache_size,
             "flags": flags,
+            "node_id": payload[20] if len(payload) >= 21 else self.active_node_id,
+            "app_can_addr": payload[21] if len(payload) >= 22 else self.active_app_can_addr,
         }
 
     def _read_cache_info(self, client: CommToolClient) -> dict:
@@ -1975,7 +2106,13 @@ class UpgradeUi(tk.Tk):
         self._emit("image", self._image_info_text(path, image))
         return image
 
-    def _download_image(self, client: CommToolClient, image: bytes) -> None:
+    def _download_image(
+        self,
+        client: CommToolClient,
+        image: bytes,
+        progress_base: int = 0,
+        progress_span: int = 90,
+    ) -> None:
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
         start_time = time.monotonic()
@@ -1985,7 +2122,7 @@ class UpgradeUi(tk.Tk):
             chunk = image[offset : offset + DEFAULT_CHUNK_SIZE]
             client.command(CMD_FW_DATA, struct.pack("<I", offset) + chunk, timeout=5.0)
             if index == total or index % 4 == 0:
-                self._emit("progress", min(90, int(index * 90 / total)))
+                self._emit("progress", min(99, progress_base + int(index * progress_span / total)))
                 self._emit("log", f"写入缓存: {index}/{total}")
         client.command(CMD_FW_END, struct.pack("<IHI", len(image), crc16, crc32), timeout=5.0)
         elapsed = max(0.001, time.monotonic() - start_time)
@@ -2081,10 +2218,13 @@ class UpgradeUi(tk.Tk):
             last_tx_id,
             last_rx_id,
         ) = struct.unpack_from("<IIIIIIIIIIII", data, 0)
+        node_id = data[61]
+        app_can_addr = data[62] if len(data) >= 63 else 0
         return (
             "CAN 诊断:\n"
             f"  tx={tx_count} ok={tx_ok} fail={tx_fail} timeout={tx_timeout}\n"
             f"  rx={rx_count} drop={rx_drop}\n"
+            f"  target: BMS地址={app_can_addr} IAP节点={node_id}\n"
             f"  ESR=0x{last_esr:08X} TSR=0x{last_tsr:08X} MSR=0x{last_msr:08X} RF0R=0x{last_rf0r:08X}\n"
             f"  last_tx=0x{last_tx_id:08X} last_rx=0x{last_rx_id:08X}"
         )
@@ -2094,6 +2234,7 @@ class UpgradeUi(tk.Tk):
             f"固件 {info['version']}\n"
             f"协议 {info['proto']}\n"
             f"CAN {info['bitrate']}\n"
+            f"BMS地址 {info.get('app_can_addr', 0)}  IAP节点 {info.get('node_id', 1)}\n"
             f"缓存 0x{info['cache_base']:08X} + {info['cache_size']}"
         )
 
@@ -2134,6 +2275,15 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "info":
             self.info_var.set(self._format_info(event.payload))
             self.comm_state_var.set("通信: 已连接")
+        elif event.kind == "target":
+            self.can_bitrate_var.set(str(event.payload.get("bitrate", self.active_can_bitrate)))
+            self.node_id_var.set(str(event.payload.get("node_id", self.active_node_id)))
+            self.app_can_addr_var.set(str(event.payload.get("app_can_addr", self.active_app_can_addr)))
+            self.applied_target = (
+                int(event.payload.get("bitrate", self.active_can_bitrate)),
+                int(event.payload.get("node_id", self.active_node_id)),
+                int(event.payload.get("app_can_addr", self.active_app_can_addr)),
+            )
         elif event.kind == "cache":
             self.cache_var.set(self._format_cache(event.payload))
         elif event.kind == "image":
@@ -2167,6 +2317,8 @@ class UpgradeUi(tk.Tk):
             self._schedule_live_monitor()
         elif event.kind == "comm_state":
             self.comm_state_var.set(str(event.payload))
+        elif event.kind == "upgrade_stage":
+            self.upgrade_stage_var.set(str(event.payload))
 
     def _log(self, text: str) -> None:
         now = time.strftime("%H:%M:%S")

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("list-ports", "info", "fw-dry-run", "fw-download", "fw-info", "bms-read", "bms-write", "enter-iap", "upgrade", "upgrade-status", "upgrade-abort")]
+    [ValidateSet("list-ports", "info", "set-can", "fw-dry-run", "fw-download", "fw-info", "bms-read", "bms-write", "enter-iap", "upgrade", "upgrade-status", "upgrade-abort")]
     [string]$Mode = "info",
     [string]$Port = "COM4",
     [int]$Baud = 115200,
@@ -8,6 +8,9 @@ param(
     [string]$Count = "",
     [string[]]$Values = @(),
     [string]$ConfirmAppAddress = "",
+    [int]$CanBitrate = 250000,
+    [int]$NodeId = 1,
+    [int]$AppCanAddr = 0,
     [string]$PythonVersion = "3.9",
     [switch]$ConfirmEnterIap,
     [switch]$ConfirmUpgrade
@@ -38,6 +41,10 @@ try {
 
     if ($Mode -eq "fw-download") {
         $ArgsList += @("--confirm-app-address", $ConfirmAppAddress)
+    }
+
+    if ($Mode -eq "set-can") {
+        $ArgsList += @("--can-bitrate", [string]$CanBitrate, "--node-id", [string]$NodeId, "--app-can-addr", [string]$AppCanAddr)
     }
 
     if ($Mode -eq "bms-read") {
@@ -81,4 +88,3 @@ $($_.Exception.Message)
 finally {
     Pop-Location
 }
-

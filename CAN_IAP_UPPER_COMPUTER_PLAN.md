@@ -108,7 +108,7 @@ App ACK 8 字节固定格式：
 | --- | --- | --- |
 | 上位机 -> IAP 控制帧 | `0x14F8F000 | node_id` | 握手、开始、结束、终止 |
 | IAP -> 上位机应答帧 | `0x14F8F100 | node_id` | ACK/NACK、错误码、期望序号 |
-| 上位机 -> IAP 数据帧 | `0x14F90000 | (seq << 8) | node_id` | App 固件数据，8 字节 payload |
+| 上位机 -> IAP 数据帧 | `0x14000000 | (seq << 8) | node_id` | App 固件数据，8 字节 payload |
 
 固定参数：
 

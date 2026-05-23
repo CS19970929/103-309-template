@@ -12,6 +12,8 @@
 
 默认 `node=1`，CAN 波特率第一阶段为 `250 kbit/s`。
 
+多设备总线中，IAP 节点必须在同一时刻唯一。当前流程推荐先用 BMS App CAN 地址选中目标板并发送 `ENTER_IAP`，使只有目标板进入 IAP；其它同总线 BMS 保持 App 运行时不会响应 CAN-IAP 扩展帧。如果多个 BMS 已经同时停留在 IAP 且节点相同，ACK/NACK ID 完全一致，comm tool 无法判断是哪一块板响应，禁止直接升级。
+
 ## 控制命令
 
 | 命令 | payload | 说明 |

@@ -15,13 +15,74 @@ enum
     CT_UPGRADE_ABORTED = 4u
 };
 
+enum
+{
+    CT_UPGRADE_PHASE_IDLE = 0u,
+    CT_UPGRADE_PHASE_HELLO_FAST_SEND,
+    CT_UPGRADE_PHASE_HELLO_FAST_WAIT,
+    CT_UPGRADE_PHASE_ENTER_APP_IAP,
+    CT_UPGRADE_PHASE_BOOT_DELAY,
+    CT_UPGRADE_PHASE_HELLO_IAP_SEND,
+    CT_UPGRADE_PHASE_HELLO_IAP_WAIT,
+    CT_UPGRADE_PHASE_START_SEND,
+    CT_UPGRADE_PHASE_START_WAIT,
+    CT_UPGRADE_PHASE_LOAD_BLOCK,
+    CT_UPGRADE_PHASE_SEND_DATA,
+    CT_UPGRADE_PHASE_SEND_COMMIT,
+    CT_UPGRADE_PHASE_COMMIT_WAIT,
+    CT_UPGRADE_PHASE_SEND_END,
+    CT_UPGRADE_PHASE_END_WAIT
+};
+
+typedef struct
+{
+    uint8_t phase;
+    uint8_t node;
+    uint8_t app_can_addr;
+    uint8_t frame_index;
+    uint8_t frames_this_block;
+    uint32_t phase_start_ms;
+    uint32_t offset;
+    uint16_t seq;
+    uint16_t block_seq;
+    uint16_t chunk_len;
+    uint16_t block_crc;
+    uint8_t block[CT_IAP_BLOCK_BYTES];
+} CtUpgradeContext;
+
 static CtUpgradeStatus s_status;
+static CtUpgradeContext s_ctx;
 static uint8_t s_abort;
+
+static int timeout_expired(uint32_t start, uint32_t timeout_ms)
+{
+    return ((uint32_t)(CtBoard_GetTickMs() - start) >= timeout_ms) ? 1 : 0;
+}
+
+static void set_error(uint8_t err)
+{
+    s_status.state = CT_UPGRADE_ERROR;
+    s_status.last_error = err;
+    s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+}
+
+static void set_phase(uint8_t phase)
+{
+    s_ctx.phase = phase;
+    s_ctx.phase_start_ms = CtBoard_GetTickMs();
+}
+
+static void reset_context(void)
+{
+    memset(&s_ctx, 0, sizeof(s_ctx));
+    s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+}
 
 void CtUpgrade_Init(void)
 {
     memset(&s_status, 0, sizeof(s_status));
     s_status.state = CT_UPGRADE_IDLE;
+    reset_context();
     s_abort = 0u;
 }
 
@@ -36,143 +97,273 @@ void CtUpgrade_Abort(void)
     if (s_status.state == CT_UPGRADE_RUNNING)
     {
         s_status.state = CT_UPGRADE_ABORTED;
+        s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
     }
 }
 
-static void set_error(uint8_t err)
-{
-    s_status.state = CT_UPGRADE_ERROR;
-    s_status.last_error = err;
-}
-
-static void wait_ms(uint32_t ms)
-{
-    uint32_t start;
-
-    start = CtBoard_GetTickMs();
-    while ((uint32_t)(CtBoard_GetTickMs() - start) < ms)
-    {
-    }
-}
-
-static int send_hello_wait_ack(uint8_t node, uint32_t timeout_ms)
-{
-    return (CtCan_IapSendHello(node) &&
-            CtCan_IapWaitAck(node, CT_CAN_IAP_HELLO, &s_status.expect_seq, timeout_ms));
-}
-
-static int ensure_iap_ready(uint8_t node)
-{
-    if (send_hello_wait_ack(node, 500u))
-    {
-        return 1;
-    }
-
-    if (!CtCan_AppEnterIap(0u))
-    {
-        set_error(0x21u);
-        return 0;
-    }
-
-    wait_ms(800u);
-    if (!send_hello_wait_ack(node, 3000u))
-    {
-        set_error(2u);
-        return 0;
-    }
-
-    return 1;
-}
-
-int CtUpgrade_Start(uint8_t node)
+int CtUpgrade_StartWithAppAddress(uint8_t node, uint8_t app_can_addr)
 {
     const CtFirmwareInfo *info;
-    uint8_t frame[8];
-    uint8_t block[CT_IAP_BLOCK_BYTES];
-    uint32_t offset;
-    uint16_t seq;
-    uint16_t block_seq;
-    uint16_t frame_count;
-    uint16_t chunk_len;
-    uint16_t block_crc;
-    uint8_t i;
-    uint8_t frames_this_block;
+
+    if (s_status.state == CT_UPGRADE_RUNNING)
+    {
+        return 0;
+    }
 
     info = CtFlash_GetInfo();
     if ((info->valid == 0u) || (info->app_addr != CT_BMS_APP_BASE_ADDR) || (info->size == 0u))
     {
+        memset(&s_status, 0, sizeof(s_status));
         set_error(1u);
         return 0;
     }
 
     memset(&s_status, 0, sizeof(s_status));
+    reset_context();
     s_status.state = CT_UPGRADE_RUNNING;
     s_status.total = info->size;
+    s_status.percent = 0u;
+    s_ctx.node = node;
+    if (s_ctx.node == 0u)
+    {
+        s_ctx.node = CT_NODE_ID_DEFAULT;
+    }
+    s_ctx.app_can_addr = app_can_addr & 0x0Fu;
     s_abort = 0u;
+    set_phase(CT_UPGRADE_PHASE_HELLO_FAST_SEND);
+    return 1;
+}
 
-    if (!ensure_iap_ready(node))
+int CtUpgrade_Start(uint8_t node)
+{
+    return CtUpgrade_StartWithAppAddress(node, 0u);
+}
+
+static uint8_t handle_ack_wait(uint8_t cmd, uint32_t timeout_ms, uint8_t ok_phase, uint8_t timeout_error)
+{
+    uint8_t code;
+    uint8_t match;
+
+    match = CtCan_IapPollAck(s_ctx.node, cmd, &s_status.expect_seq, &code);
+    if (match == CT_CAN_IAP_ACK_MATCH_OK)
     {
-        return 0;
+        set_phase(ok_phase);
+        return 1u;
     }
-    if (!CtCan_IapSendStart(node, info->size, info->crc16) ||
-        !CtCan_IapWaitAck(node, CT_CAN_IAP_START, &s_status.expect_seq, 2000u))
+    if (match == CT_CAN_IAP_ACK_MATCH_BAD)
     {
-        set_error(3u);
-        return 0;
+        set_error(code != 0u ? code : timeout_error);
+        return 2u;
+    }
+    if (timeout_expired(s_ctx.phase_start_ms, timeout_ms))
+    {
+        set_error(timeout_error);
+        return 2u;
+    }
+    return 0u;
+}
+
+static void handle_fast_hello_wait(void)
+{
+    uint8_t code;
+    uint8_t match;
+
+    match = CtCan_IapPollAck(s_ctx.node, CT_CAN_IAP_HELLO, &s_status.expect_seq, &code);
+    if (match == CT_CAN_IAP_ACK_MATCH_OK)
+    {
+        set_phase(CT_UPGRADE_PHASE_START_SEND);
+        return;
+    }
+    if ((match == CT_CAN_IAP_ACK_MATCH_BAD) || timeout_expired(s_ctx.phase_start_ms, 500u))
+    {
+        (void)code;
+        set_phase(CT_UPGRADE_PHASE_ENTER_APP_IAP);
+    }
+}
+
+static void load_next_block(void)
+{
+    const CtFirmwareInfo *info;
+
+    info = CtFlash_GetInfo();
+    s_ctx.chunk_len = (uint16_t)((info->size - s_ctx.offset) > CT_IAP_BLOCK_BYTES ?
+                                 CT_IAP_BLOCK_BYTES :
+                                 (info->size - s_ctx.offset));
+    memset(s_ctx.block, 0xFF, sizeof(s_ctx.block));
+    if (!CtFlash_Read(s_ctx.offset, s_ctx.block, s_ctx.chunk_len))
+    {
+        set_error(4u);
+        return;
     }
 
-    seq = 0u;
-    block_seq = 0u;
-    for (offset = 0u; offset < info->size; offset += CT_IAP_BLOCK_BYTES)
+    s_ctx.frames_this_block = (uint8_t)((s_ctx.chunk_len + 7u) / 8u);
+    s_ctx.frame_index = 0u;
+    s_ctx.block_crc = CtCrc16_Calc(s_ctx.block, s_ctx.chunk_len);
+    set_phase(CT_UPGRADE_PHASE_SEND_DATA);
+}
+
+static void send_data_frame(void)
+{
+    uint8_t frame[8];
+    uint16_t discard_seq;
+    uint8_t discard_code;
+
+    /* Drain one unrelated RX frame between data frames so other bus traffic cannot fill FIFO0. */
+    (void)CtCan_IapPollAck(s_ctx.node, 0xFFu, &discard_seq, &discard_code);
+    memcpy(frame, &s_ctx.block[(uint16_t)s_ctx.frame_index * 8u], 8u);
+    if (!CtCan_IapSendData(s_ctx.node, s_ctx.seq, frame))
     {
-        if (s_abort != 0u)
-        {
-            s_status.state = CT_UPGRADE_ABORTED;
-            return 0;
-        }
+        set_error(5u);
+        return;
+    }
 
-        chunk_len = (uint16_t)((info->size - offset) > CT_IAP_BLOCK_BYTES ? CT_IAP_BLOCK_BYTES : (info->size - offset));
-        memset(block, 0xFF, sizeof(block));
-        if (!CtFlash_Read(offset, block, chunk_len))
-        {
-            set_error(4u);
-            return 0;
-        }
+    s_ctx.seq++;
+    s_ctx.frame_index++;
+    if (s_ctx.frame_index >= s_ctx.frames_this_block)
+    {
+        set_phase(CT_UPGRADE_PHASE_SEND_COMMIT);
+    }
+}
 
-        frames_this_block = (uint8_t)((chunk_len + 7u) / 8u);
-        for (i = 0u; i < frames_this_block; ++i)
-        {
-            memcpy(frame, &block[(uint16_t)i * 8u], 8u);
-            if (!CtCan_IapSendData(node, seq, frame))
-            {
-                set_error(5u);
-                return 0;
-            }
-            seq++;
-        }
+static void finish_committed_block(void)
+{
+    s_ctx.offset += s_ctx.chunk_len;
+    s_status.written = s_ctx.offset;
+    if (s_status.total != 0u)
+    {
+        s_status.percent = (uint8_t)((s_status.written * 100u) / s_status.total);
+    }
+    s_ctx.block_seq++;
 
-        block_crc = CtCrc16_Calc(block, chunk_len);
-        if (!CtCan_IapSendCommit(node, block_seq, chunk_len, block_crc) ||
-            !CtCan_IapWaitAck(node, CT_CAN_IAP_COMMIT, &s_status.expect_seq, 2000u))
+    if (s_status.written >= s_status.total)
+    {
+        set_phase(CT_UPGRADE_PHASE_SEND_END);
+    }
+    else
+    {
+        set_phase(CT_UPGRADE_PHASE_LOAD_BLOCK);
+    }
+}
+
+void CtUpgrade_Task(void)
+{
+    const CtFirmwareInfo *info;
+    uint16_t frame_count;
+
+    if (s_status.state != CT_UPGRADE_RUNNING)
+    {
+        return;
+    }
+    if (s_abort != 0u)
+    {
+        s_status.state = CT_UPGRADE_ABORTED;
+        s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+        return;
+    }
+
+    info = CtFlash_GetInfo();
+    switch (s_ctx.phase)
+    {
+    case CT_UPGRADE_PHASE_HELLO_FAST_SEND:
+        if (!CtCan_IapSendHello(s_ctx.node))
+        {
+            set_phase(CT_UPGRADE_PHASE_ENTER_APP_IAP);
+            break;
+        }
+        set_phase(CT_UPGRADE_PHASE_HELLO_FAST_WAIT);
+        break;
+
+    case CT_UPGRADE_PHASE_HELLO_FAST_WAIT:
+        handle_fast_hello_wait();
+        break;
+
+    case CT_UPGRADE_PHASE_ENTER_APP_IAP:
+        if (!CtCan_AppEnterIap(s_ctx.app_can_addr))
+        {
+            set_error(0x21u);
+            break;
+        }
+        set_phase(CT_UPGRADE_PHASE_BOOT_DELAY);
+        break;
+
+    case CT_UPGRADE_PHASE_BOOT_DELAY:
+        if (timeout_expired(s_ctx.phase_start_ms, 800u))
+        {
+            set_phase(CT_UPGRADE_PHASE_HELLO_IAP_SEND);
+        }
+        break;
+
+    case CT_UPGRADE_PHASE_HELLO_IAP_SEND:
+        if (!CtCan_IapSendHello(s_ctx.node))
+        {
+            set_error(2u);
+            break;
+        }
+        set_phase(CT_UPGRADE_PHASE_HELLO_IAP_WAIT);
+        break;
+
+    case CT_UPGRADE_PHASE_HELLO_IAP_WAIT:
+        handle_ack_wait(CT_CAN_IAP_HELLO, 3000u, CT_UPGRADE_PHASE_START_SEND, 2u);
+        break;
+
+    case CT_UPGRADE_PHASE_START_SEND:
+        if (!CtCan_IapSendStart(s_ctx.node, info->size, info->crc16))
+        {
+            set_error(3u);
+            break;
+        }
+        set_phase(CT_UPGRADE_PHASE_START_WAIT);
+        break;
+
+    case CT_UPGRADE_PHASE_START_WAIT:
+        handle_ack_wait(CT_CAN_IAP_START, 2000u, CT_UPGRADE_PHASE_LOAD_BLOCK, 3u);
+        break;
+
+    case CT_UPGRADE_PHASE_LOAD_BLOCK:
+        load_next_block();
+        break;
+
+    case CT_UPGRADE_PHASE_SEND_DATA:
+        send_data_frame();
+        break;
+
+    case CT_UPGRADE_PHASE_SEND_COMMIT:
+        if (!CtCan_IapSendCommit(s_ctx.node, s_ctx.block_seq, s_ctx.chunk_len, s_ctx.block_crc))
         {
             set_error(6u);
-            return 0;
+            break;
         }
+        set_phase(CT_UPGRADE_PHASE_COMMIT_WAIT);
+        break;
 
-        s_status.written = offset + chunk_len;
-        s_status.percent = (uint8_t)((s_status.written * 100u) / s_status.total);
-        block_seq++;
+    case CT_UPGRADE_PHASE_COMMIT_WAIT:
+        if (handle_ack_wait(CT_CAN_IAP_COMMIT, 2000u, CT_UPGRADE_PHASE_COMMIT_WAIT, 6u) == 1u)
+        {
+            finish_committed_block();
+        }
+        break;
+
+    case CT_UPGRADE_PHASE_SEND_END:
+        frame_count = s_ctx.seq;
+        if (!CtCan_IapSendEnd(s_ctx.node, frame_count, info->crc16))
+        {
+            set_error(7u);
+            break;
+        }
+        set_phase(CT_UPGRADE_PHASE_END_WAIT);
+        break;
+
+    case CT_UPGRADE_PHASE_END_WAIT:
+        handle_ack_wait(CT_CAN_IAP_END, 5000u, CT_UPGRADE_PHASE_IDLE, 7u);
+        if ((s_status.state == CT_UPGRADE_RUNNING) && (s_ctx.phase == CT_UPGRADE_PHASE_IDLE))
+        {
+            s_status.percent = 100u;
+            s_status.state = CT_UPGRADE_DONE;
+        }
+        break;
+
+    default:
+        set_error(0x22u);
+        break;
     }
-
-    frame_count = seq;
-    if (!CtCan_IapSendEnd(node, frame_count, info->crc16) ||
-        !CtCan_IapWaitAck(node, CT_CAN_IAP_END, &s_status.expect_seq, 5000u))
-    {
-        set_error(7u);
-        return 0;
-    }
-
-    s_status.percent = 100u;
-    s_status.state = CT_UPGRADE_DONE;
-    return 1;
 }

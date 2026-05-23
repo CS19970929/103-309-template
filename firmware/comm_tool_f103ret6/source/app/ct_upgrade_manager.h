@@ -17,7 +17,8 @@ typedef struct
 void CtUpgrade_Init(void);
 const CtUpgradeStatus *CtUpgrade_GetStatus(void);
 int CtUpgrade_Start(uint8_t node);
+int CtUpgrade_StartWithAppAddress(uint8_t node, uint8_t app_can_addr);
+void CtUpgrade_Task(void);
 void CtUpgrade_Abort(void);
 
 #endif
-

@@ -27,6 +27,10 @@
 #define CT_CAN_IAP_ACK                  0x79u
 #define CT_CAN_IAP_NACK                 0x1Fu
 
+#define CT_CAN_IAP_ACK_MATCH_NONE       0u
+#define CT_CAN_IAP_ACK_MATCH_OK         1u
+#define CT_CAN_IAP_ACK_MATCH_BAD        2u
+
 int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh);
 int CtCan_AppEnterIap(uint8_t can_addr);
 int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t *words);
@@ -37,5 +41,6 @@ int CtCan_IapSendData(uint8_t node, uint16_t seq, const uint8_t data[8]);
 int CtCan_IapSendCommit(uint8_t node, uint16_t block_seq, uint16_t block_len, uint16_t block_crc);
 int CtCan_IapSendEnd(uint8_t node, uint16_t frame_count, uint16_t crc16);
 int CtCan_IapWaitAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint32_t timeout_ms);
+uint8_t CtCan_IapPollAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint8_t *code);
 
 #endif
