@@ -1,10 +1,6 @@
 #include "main.h"
 #include "Flash64KAppTest.h"
 
-typedef void (*pFunction)(void);
-pFunction Jump_To_Application;
-uint32_t JumpAddress;
-
 #define FLASH_STORAGE_MAGIC_SOC ((UINT32)0x534F4331)
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
 #define FLASH_STORAGE_MAGIC_RW_PARAM ((UINT32)0x52575031)
@@ -13,6 +9,9 @@ uint32_t JumpAddress;
 #define FLASH_STORAGE_VERSION   ((UINT16)0x0001)
 #define FLASH_SIZE_REG_ADDR     ((UINT32)0x1FFFF7E0)
 #define FLASH_ERASE_RETRY_MAX   ((UINT8)3)
+#define APP_UPGRADE_MAILBOX_ADDR ((UINT32)0x20004FE0)
+#define APP_UPGRADE_MAILBOX_MAGIC ((UINT32)0x49415031)
+#define APP_UPGRADE_MAILBOX_REQUEST ((UINT32)0x5AA55AA5)
 
 typedef struct
 {
@@ -37,6 +36,15 @@ typedef struct
 	UINT8 reserved;
 	UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2];
 } STORAGE_FLASH_LOG_DATA;
+
+typedef struct
+{
+	UINT32 magic;
+	UINT32 magic_inv;
+	UINT32 request;
+	UINT32 request_inv;
+	UINT32 crc;
+} APP_UPGRADE_MAILBOX;
 
 static UINT16 StorageFlash_CalcCrc(const UINT8 *data, UINT16 length)
 {
@@ -669,14 +677,45 @@ UINT16 FlashReadOneHalfWord(UINT32 faddr)
 	return *(vu16 *)faddr;
 }
 
-UINT8 AppUpgrade_RequestIap(void)
+static volatile APP_UPGRADE_MAILBOX *AppUpgrade_Mailbox(void)
 {
-	if (FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE) != FLASH_COMPLETE)
+	return (volatile APP_UPGRADE_MAILBOX *)APP_UPGRADE_MAILBOX_ADDR;
+}
+
+static UINT32 AppUpgrade_MailboxCrc(UINT32 magic, UINT32 request)
+{
+	return magic ^ request ^ 0xA5A55A5A;
+}
+
+static UINT8 AppUpgrade_IsIapRequested(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox;
+
+	mailbox = AppUpgrade_Mailbox();
+	if ((mailbox->magic != APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->magic_inv != (UINT32)~APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->request != APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->request_inv != (UINT32)~APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->crc != AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST)))
 	{
 		return 0U;
 	}
 
-	return (FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_IAP_VALUE) ? 1U : 0U;
+	return 1U;
+}
+
+UINT8 AppUpgrade_RequestIap(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox;
+
+	mailbox = AppUpgrade_Mailbox();
+	mailbox->magic = APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->magic_inv = (UINT32)~APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->request = APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->request_inv = (UINT32)~APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->crc = AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST);
+
+	return AppUpgrade_IsIapRequested();
 }
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
@@ -932,11 +971,11 @@ void StorageFlash_PrintBootCheck(void)
 	UINT32 soc_seq_b = 0;
 	UINT32 soc_next_a = FLASH_ADDR_STORAGE_SOC_SLOT_A;
 	UINT32 soc_next_b = FLASH_ADDR_STORAGE_SOC_SLOT_B;
-	UINT16 update_flag = 0xFFFF;
 	UINT16 upgrade_flag = 0xFFFF;
 	UINT16 aging_flag = 0xFFFF;
 	STORAGE_FLASH_FACTORY_AGING_DATA aging_data;
 	UINT8 aging_valid;
+	UINT8 iap_request_pending;
 
 	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu\r\n",
 		   flash_size_kb,
@@ -1022,12 +1061,12 @@ void StorageFlash_PrintBootCheck(void)
 		   (unsigned long)(soc_next_b - FLASH_ADDR_STORAGE_SOC_SLOT_B),
 		   StorageFlash_SelectLabel(soc_valid_a, soc_seq_a, soc_valid_b, soc_seq_b));
 
-	update_flag = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
+	iap_request_pending = AppUpgrade_IsIapRequested();
 	upgrade_flag = FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG);
 	aging_flag = FlashReadOneHalfWord(FLASH_ADDR_FACTORY_AGING_FLAG);
 	aging_valid = StorageFlash_LoadFactoryAgingData(&aging_data);
-	printf("[FLASH_BOOT] flag update=0x%04X upgrade_param=0x%04X factory_aging_raw=0x%04X\r\n",
-		   update_flag,
+	printf("[FLASH_BOOT] iap_mailbox=%u upgrade_param=0x%04X factory_aging_raw=0x%04X\r\n",
+		   iap_request_pending,
 		   upgrade_flag,
 		   aging_flag);
 	printf("[FLASH_BOOT] factory_aging valid=%u state=0x%04X elapsed10ms=%lu\r\n",
@@ -1053,19 +1092,18 @@ void App_FlashUpdate(void)
 
 void APP_To_IAP_Jump(void)
 {
-	if (((*(__IO uint32_t *)FLASH_ADDR_IAP_START) & 0x2FFE0000) == 0x20000000)
+	if (AppUpgrade_RequestIap() != 0U)
 	{
-		JumpAddress = *(__IO uint32_t *)(FLASH_ADDR_IAP_START + 4);
-		Jump_To_Application = (pFunction)JumpAddress;
-		__set_MSP(*(__IO uint32_t *)FLASH_ADDR_IAP_START);
-		Jump_To_Application();
+		__disable_fault_irq();
+		MCU_RESET();
 	}
 }
 
 void InitAreaSelect(void)
 {
-	if (FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_IAP_VALUE)
+	if (AppUpgrade_IsIapRequested() != 0U)
 	{
-		APP_To_IAP_Jump();
+		__disable_fault_irq();
+		MCU_RESET();
 	}
 }
