@@ -64,6 +64,25 @@ BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
+SH309_AFE_PARAM_ADDR = 0x2400
+SH309_AFE_PARAM_WORDS = 24
+SH309_TMOS_PARAM_ADDR = 0x2132
+SH309_TMOS_PARAM_WORDS = 5
+SH309_RESET_PROTECT_ADDR = 0x1002
+SH309_RESET_AFE_ADDR = 0x1006
+SH309_OV_UV_DELAY_MS = [100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000]
+SH309_CHG_SECOND_DELAY_MS = [10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000]
+SH309_DSG_SECOND_DELAY_MS = [50, 100, 200, 400, 600, 800, 1000, 2000, 4000, 6000, 8000, 10000, 15000, 20000, 30000, 40000]
+SH309_SHORT_DELAY_US = [0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960]
+SH309_COMMON_CURRENT_A = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200, 220, 260, 300, 400, 500]
+SH309_SHORT_CURRENT_A = [50, 80, 110, 140, 170, 200, 220, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000]
+SH309_TMOS_DEFAULT_DISPLAY = {
+    "SH309/MOS过温1(℃)": "75",
+    "SH309/MOS过温2(℃)": "85",
+    "SH309/MOS过温3(℃)": "95",
+    "SH309/MOS恢复(℃)": "80",
+    "SH309/延时(10ms)": "100",
+}
 BMS_EVENT_NAMES = [
     "NA",
     "BMS开机",
@@ -184,10 +203,57 @@ def _build_bms_param_defs() -> list[BmsParamDef]:
     return defs
 
 
+def _build_sh309_param_defs() -> list[BmsParamDef]:
+    afe_fields = [
+        ("单节过压(mv)", 0, "mV", "u16"),
+        ("过压恢复(mv)", 1, "mV", "u16"),
+        ("过压延时(ms)", 2, "ms", "ms10"),
+        ("单节低压(mv)", 3, "mV", "u16"),
+        ("低压恢复(mv)", 4, "mV", "u16"),
+        ("低压延时(ms)", 5, "ms", "ms10"),
+        ("一级充电过流(A)", 6, "A", "x10"),
+        ("一级充电过流延时(ms)", 7, "ms", "ms10"),
+        ("二级充电过流(A)", 8, "A", "x10"),
+        ("二级充电过流延时(ms)", 9, "ms", "ms10"),
+        ("一级放电过流(A)", 10, "A", "x10"),
+        ("一级放电过流延时(ms)", 11, "ms", "ms10"),
+        ("二级放电过流(A)", 12, "A", "x10"),
+        ("二级放电过流延时(ms)", 13, "ms", "ms10"),
+        ("充电高温(℃)", 14, "℃", "temp"),
+        ("充电高温恢复(℃)", 15, "℃", "temp"),
+        ("充电低温(℃)", 16, "℃", "temp"),
+        ("充电低温恢复(℃)", 17, "℃", "temp"),
+        ("放电高温(℃)", 18, "℃", "temp"),
+        ("放电高温恢复(℃)", 19, "℃", "temp"),
+        ("放电低温(℃)", 20, "℃", "temp"),
+        ("放电低温恢复(℃)", 21, "℃", "temp"),
+        ("短路电流(A)", 22, "A", "u16"),
+        ("短路延时(us)", 23, "us", "u16"),
+    ]
+    tmos_fields = [
+        ("MOS过温1(℃)", 0, "℃", "temp"),
+        ("MOS过温2(℃)", 1, "℃", "temp"),
+        ("MOS过温3(℃)", 2, "℃", "temp"),
+        ("MOS恢复(℃)", 3, "℃", "temp"),
+        ("延时(10ms)", 4, "10ms", "u16"),
+    ]
+    defs = [
+        BmsParamDef(f"SH309/{name}", "SH309", name, SH309_AFE_PARAM_ADDR + offset, unit, kind)
+        for name, offset, unit, kind in afe_fields
+    ]
+    defs.extend(
+        BmsParamDef(f"SH309/{name}", "SH309", name, SH309_TMOS_PARAM_ADDR + offset, unit, kind)
+        for name, offset, unit, kind in tmos_fields
+    )
+    return defs
+
+
 BMS_PARAM_DEFS = _build_bms_param_defs()
-BMS_PARAM_BY_KEY = {param.key: param for param in BMS_PARAM_DEFS}
-BMS_PARAM_ADDR_TO_KEY = {param.addr: param.key for param in BMS_PARAM_DEFS}
-BMS_PARAM_PRESETS = {param.key: param.addr for param in BMS_PARAM_DEFS}
+SH309_PARAM_DEFS = _build_sh309_param_defs()
+ALL_PARAM_DEFS = BMS_PARAM_DEFS + SH309_PARAM_DEFS
+BMS_PARAM_BY_KEY = {param.key: param for param in ALL_PARAM_DEFS}
+BMS_PARAM_ADDR_TO_KEY = {param.addr: param.key for param in ALL_PARAM_DEFS}
+BMS_PARAM_PRESETS = {param.key: param.addr for param in ALL_PARAM_DEFS}
 
 
 class UiEvent:
@@ -238,6 +304,8 @@ def _param_display_value(param: BmsParamDef, raw: int) -> str:
         return _format_number(_temp_c(raw))
     if param.kind == "x10":
         return _format_number(raw / 10.0)
+    if param.kind == "ms10":
+        return str(raw * 10)
     return str(raw)
 
 
@@ -249,6 +317,8 @@ def _param_parse_display_value(param: BmsParamDef, text: str) -> int:
         raw = int(round((float(stripped) + 40.0) * 10.0))
     elif param.kind == "x10":
         raw = int(round(float(stripped) * 10.0))
+    elif param.kind == "ms10":
+        raw = int(round(float(stripped) / 10.0))
     else:
         raw = int(stripped, 0)
     if raw < 0 or raw > 0xFFFF:
@@ -840,7 +910,7 @@ class UpgradeUi(tk.Tk):
 
         protect_inner = self._make_scroll_area(protect_tab)
         other_inner = self._make_scroll_area(other_tab)
-        self._build_param_groups(protect_inner, [p for p in BMS_PARAM_DEFS if 0x2100 <= p.addr < 0x2200], columns=3)
+        self._build_sh309_protect_page(protect_inner)
         self._build_param_groups(other_inner, [p for p in BMS_PARAM_DEFS if 0x2300 <= p.addr < 0x2400], columns=3)
 
     def _build_system_tab(self, tab: ttk.Frame) -> None:
@@ -953,6 +1023,116 @@ class UpgradeUi(tk.Tk):
                 ttk.Entry(frame, textvariable=var, width=12).grid(row=row, column=1, sticky="ew", pady=3)
                 ttk.Label(frame, text=param.unit, width=5).grid(row=row, column=2, sticky="w", padx=(4, 8), pady=3)
 
+    def _build_sh309_protect_page(self, parent: ttk.Frame) -> None:
+        frame = ttk.LabelFrame(parent, text="SH309")
+        frame.grid(row=0, column=0, sticky="nw", padx=6, pady=6)
+        parent.columnconfigure(0, weight=1)
+        for col in (1, 4):
+            frame.columnconfigure(col, minsize=112)
+
+        left_rows = [
+            ("单节过压(mv)", "SH309/单节过压(mv)"),
+            ("单节低压(mv)", "SH309/单节低压(mv)"),
+            ("一级充电过流(A)", "SH309/一级充电过流(A)"),
+            ("二级充电过流(A)", "SH309/二级充电过流(A)"),
+            ("一级放电过流(A)", "SH309/一级放电过流(A)"),
+            ("二级放电过流(A)", "SH309/二级放电过流(A)"),
+            ("充电高温(℃)", "SH309/充电高温(℃)"),
+            ("充电低温(℃)", "SH309/充电低温(℃)"),
+            ("放电高温(℃)", "SH309/放电高温(℃)"),
+            ("放电低温(℃)", "SH309/放电低温(℃)"),
+            ("短路电流(A)", "SH309/短路电流(A)"),
+            ("MOS过温1(℃)", "SH309/MOS过温1(℃)"),
+            ("MOS过温3(℃)", "SH309/MOS过温3(℃)"),
+            ("延时(10ms)", "SH309/延时(10ms)"),
+        ]
+        right_rows = [
+            ("过压恢复(mv)", "SH309/过压恢复(mv)"),
+            ("过压延时(ms)", "SH309/过压延时(ms)"),
+            ("低压恢复(mv)", "SH309/低压恢复(mv)"),
+            ("低压延时(ms)", "SH309/低压延时(ms)"),
+            ("一级充电过流延时(ms)", "SH309/一级充电过流延时(ms)"),
+            ("二级充电过流延时(ms)", "SH309/二级充电过流延时(ms)"),
+            ("一级放电过流延时(ms)", "SH309/一级放电过流延时(ms)"),
+            ("二级放电过流延时(ms)", "SH309/二级放电过流延时(ms)"),
+            ("充电高温恢复(℃)", "SH309/充电高温恢复(℃)"),
+            ("充电低温恢复(℃)", "SH309/充电低温恢复(℃)"),
+            ("放电高温恢复(℃)", "SH309/放电高温恢复(℃)"),
+            ("放电低温恢复(℃)", "SH309/放电低温恢复(℃)"),
+            ("短路延时(us)", "SH309/短路延时(us)"),
+            ("MOS过温2(℃)", "SH309/MOS过温2(℃)"),
+            ("MOS恢复(℃)", "SH309/MOS恢复(℃)"),
+        ]
+        for row, (label, key) in enumerate(left_rows):
+            self._add_sh309_param_field(frame, row, 0, label, key)
+        for row, (label, key) in enumerate(right_rows):
+            self._add_sh309_param_field(frame, row, 3, label, key)
+
+        bottom = max(len(left_rows), len(right_rows)) + 1
+        ttk.Button(frame, text="MOS过温重置", command=self._reset_sh309_tmos_defaults).grid(
+            row=bottom, column=0, columnspan=2, sticky="w", padx=10, pady=(14, 10)
+        )
+        ttk.Button(frame, text="保护点重置", command=self._reset_sh309_protect_params).grid(
+            row=bottom, column=2, columnspan=2, padx=18, pady=(14, 10)
+        )
+        ttk.Button(frame, text="读取", command=self._read_protect_params).grid(
+            row=bottom, column=4, sticky="e", padx=(0, 8), pady=(14, 10)
+        )
+        ttk.Button(frame, text="设置", command=self._write_dirty_params).grid(
+            row=bottom, column=5, sticky="e", padx=(0, 10), pady=(14, 10)
+        )
+
+    def _add_sh309_param_field(self, parent: ttk.Frame, row: int, column: int, label: str, key: str) -> None:
+        ttk.Label(parent, text=label).grid(row=row, column=column, sticky="w", padx=(10, 8), pady=6)
+        var = self.param_entry_vars.get(key)
+        if var is None:
+            var = tk.StringVar(value="")
+            var.trace_add("write", lambda *_args, item_key=key: self._mark_param_dirty(item_key))
+            self.param_entry_vars[key] = var
+        choices = self._sh309_field_choices(key)
+        if choices:
+            widget = ttk.Combobox(parent, textvariable=var, values=choices, width=12, state="normal")
+        else:
+            widget = ttk.Entry(parent, textvariable=var, width=14)
+        widget.grid(row=row, column=column + 1, sticky="ew", padx=(0, 16), pady=6)
+
+    def _sh309_field_choices(self, key: str) -> list[str]:
+        if key in {"SH309/单节过压(mv)", "SH309/过压恢复(mv)"}:
+            return [str(value) for value in range(1000, 5001, 5)]
+        if key in {"SH309/单节低压(mv)", "SH309/低压恢复(mv)"}:
+            return [str(value) for value in range(1000, 5001, 20)]
+        if key in {"SH309/过压延时(ms)", "SH309/低压延时(ms)"}:
+            return [str(value) for value in SH309_OV_UV_DELAY_MS]
+        if key in {"SH309/二级充电过流延时(ms)"}:
+            return [str(value) for value in SH309_CHG_SECOND_DELAY_MS]
+        if key in {"SH309/二级放电过流延时(ms)"}:
+            return [str(value) for value in SH309_DSG_SECOND_DELAY_MS]
+        if key in {"SH309/二级充电过流(A)", "SH309/二级放电过流(A)"}:
+            return [str(value) for value in SH309_COMMON_CURRENT_A]
+        if key == "SH309/短路电流(A)":
+            return [str(value) for value in SH309_SHORT_CURRENT_A]
+        if key == "SH309/短路延时(us)":
+            return [str(value) for value in SH309_SHORT_DELAY_US]
+        if key in {
+            "SH309/充电高温(℃)",
+            "SH309/充电高温恢复(℃)",
+            "SH309/放电高温(℃)",
+            "SH309/放电高温恢复(℃)",
+            "SH309/MOS过温1(℃)",
+            "SH309/MOS过温2(℃)",
+            "SH309/MOS过温3(℃)",
+            "SH309/MOS恢复(℃)",
+        }:
+            return [str(value) for value in range(0, 161)]
+        if key in {
+            "SH309/充电低温(℃)",
+            "SH309/充电低温恢复(℃)",
+            "SH309/放电低温(℃)",
+            "SH309/放电低温恢复(℃)",
+        }:
+            return [str(value) for value in range(-40, 41)]
+        return []
+
     def _mark_param_dirty(self, key: str) -> None:
         if self.param_loading:
             return
@@ -996,6 +1176,30 @@ class UpgradeUi(tk.Tk):
             return
         self.active_param_values = values
         self._run_worker("写入修改参数", self._worker_write_dirty_params)
+
+    def _reset_sh309_tmos_defaults(self) -> None:
+        if not messagebox.askyesno(
+            "确认重置MOS过温",
+            "将把 MOS 过温1/2/3、MOS恢复和延时写回当前项目默认值。\n\n确认继续？",
+        ):
+            return
+        values: dict[str, int] = {}
+        for key, display in SH309_TMOS_DEFAULT_DISPLAY.items():
+            param = BMS_PARAM_BY_KEY[key]
+            values[key] = _param_parse_display_value(param, display)
+            var = self.param_entry_vars.get(key)
+            if var is not None:
+                var.set(display)
+        self.active_param_values = values
+        self._run_worker("MOS过温重置", self._worker_write_dirty_params)
+
+    def _reset_sh309_protect_params(self) -> None:
+        if not messagebox.askyesno(
+            "确认保护点重置",
+            "将同时执行 AFE 参数重置(0x1006)和保护参数重置(0x1002)，然后重新读取 SH309 参数。\n\n确认继续？",
+        ):
+            return
+        self._run_worker("保护点重置", self._worker_reset_sh309_protect_params)
 
     def _toggle_live_monitor(self) -> None:
         if self.live_running:
@@ -1577,14 +1781,37 @@ class UpgradeUi(tk.Tk):
         self._emit("log", f"修改参数写入完成: {len(verified)} 项")
         self._emit("progress", 100)
 
+    def _read_sh309_param_values(self, client: CommToolClient) -> dict[str, int]:
+        values: dict[str, int] = {}
+        for addr, count in ((SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)):
+            words = self._read_bms_words(client, addr, count)
+            for index, raw in enumerate(words):
+                key = BMS_PARAM_ADDR_TO_KEY.get(addr + index)
+                if key:
+                    values[key] = raw
+        return values
+
+    def _worker_reset_sh309_protect_params(self) -> None:
+        with self._open_client() as client:
+            self._write_bms_words(client, SH309_RESET_AFE_ADDR, [1])
+            self._write_bms_words(client, SH309_RESET_PROTECT_ADDR, [1])
+            values = self._read_sh309_param_values(client)
+        self._emit("param_values", values)
+        self._emit("log", "SH309 保护点已重置并回读")
+        self._emit("progress", 100)
+
     def _worker_read_param_range(self) -> None:
         ranges: list[tuple[int, int]]
         if self.active_param_range == "protect":
-            ranges = [(0x2100, 65)]
+            ranges = [(SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)]
         elif self.active_param_range == "other":
             ranges = [(0x2300, 32)]
         else:
-            ranges = [(0x2100, 65), (0x2300, 32)]
+            ranges = [
+                (SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS),
+                (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS),
+                (0x2300, 32),
+            ]
         values: dict[str, int] = {}
         with self._open_client() as client:
             for addr, count in ranges:
@@ -1959,6 +2186,14 @@ def main() -> int:
     args = parse_args()
     if args.self_test:
         require_pyserial()
+        if len(SH309_PARAM_DEFS) != (SH309_AFE_PARAM_WORDS + SH309_TMOS_PARAM_WORDS):
+            raise RuntimeError("SH309 参数定义数量不正确")
+        for key in SH309_TMOS_DEFAULT_DISPLAY:
+            if key not in BMS_PARAM_BY_KEY:
+                raise RuntimeError(f"SH309 默认值键不存在: {key}")
+        for key in ("SH309/单节过压(mv)", "SH309/MOS过温1(℃)", "SH309/延时(10ms)"):
+            if key not in BMS_PARAM_BY_KEY:
+                raise RuntimeError(f"SH309 UI 参数键不存在: {key}")
         root = tk.Tk()
         root.withdraw()
         root.destroy()

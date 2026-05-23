@@ -591,8 +591,6 @@ static void Sci_WriteWordsFromRequest(struct RS485MSG *s, UINT16 *dst, UINT16 of
 	}
 }
 
-/* Kept beside the disabled protect-write path for quick restoration. */
-#if 0
 static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 {
 	if (Sci_RangeOverlaps(offset,
@@ -603,7 +601,6 @@ static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 		InitData_SOC();
 	}
 }
-#endif
 
 static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 {
@@ -1803,7 +1800,6 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 // 节省了很多代码量吧？
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 {
-#if 0
 	UINT16 offset;
 	UINT16 u16WrRegNum;
 	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
@@ -1842,7 +1838,6 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	}
 
 	Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
-#endif
 }
 
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
@@ -2093,7 +2088,6 @@ void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 {
-#if 0
 	UINT16 u16SciRegData;
 	UINT8 i;
 	UINT16 snapshot[E2P_PARA_NUM_PROTECT];
@@ -2122,7 +2116,6 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
 	}
-#endif
 }
 
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
