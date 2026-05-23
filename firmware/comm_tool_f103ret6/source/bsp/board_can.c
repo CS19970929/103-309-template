@@ -17,11 +17,11 @@ static uint16_t bitrate_to_prescaler(uint32_t bitrate)
     switch (bitrate)
     {
     case 125000u:
-        return 48u;
+        return 8u;
     case 250000u:
-        return 24u;
+        return 4u;
     case 500000u:
-        return 12u;
+        return 2u;
     default:
         return 0u;
     }
@@ -105,7 +105,7 @@ static int can_hw_init(uint32_t bitrate)
     can.CAN_TXFP = DISABLE;
     can.CAN_Mode = CAN_Mode_Normal;
     can.CAN_SJW = CAN_SJW_1tq;
-    can.CAN_BS1 = CAN_BS1_3tq;
+    can.CAN_BS1 = CAN_BS1_5tq;
     can.CAN_BS2 = CAN_BS2_2tq;
     can.CAN_Prescaler = prescaler;
     if (CAN_Init(CAN1, &can) != CAN_InitStatus_Success)

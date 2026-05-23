@@ -26,7 +26,15 @@ IROM 故意限制为 64KB，目的是让 comm tool 自身程序不能覆盖从 `
 | PWSV 待机 | `PD2` | 正常运行置 1，对齐 `MCUO_PWSV_STB=1` |
 | Debug LED | `PB15` | 500ms 翻转 |
 
-CAN 默认波特率为 `250 kbit/s`，同时保留 `125 kbit/s` 和 `500 kbit/s` 的运行时切换。
+comm tool 当前复用主仓库 `system_stm32f10x.c`，运行时 HSE 直连，`PCLK1=8 MHz`。CAN 位时序必须按该时钟计算：
+
+| CAN 波特率 | BS1 | BS2 | Prescaler |
+| --- | --- | --- | --- |
+| `125 kbit/s` | `5tq` | `2tq` | `8` |
+| `250 kbit/s` | `5tq` | `2tq` | `4` |
+| `500 kbit/s` | `5tq` | `2tq` | `2` |
+
+默认使用 `250 kbit/s`，和 BMS IAP 的 CAN1 位时序一致。不要按 36MHz PCLK1 计算 comm tool CAN 预分频，否则工具界面显示 250k，但实际总线速率会错误。
 
 ## 源码范围
 

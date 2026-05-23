@@ -64,9 +64,9 @@ static void handle_info(const CtFrame *req)
     uint8_t payload[20];
 
     payload[0] = CT_PROTOCOL_VERSION;
-    payload[1] = 0u;
-    payload[2] = 1u;
-    payload[3] = 0u;
+    payload[1] = CT_FW_VERSION_MAJOR;
+    payload[2] = CT_FW_VERSION_MINOR;
+    payload[3] = CT_FW_VERSION_PATCH;
     wr32(&payload[4], s_can_bitrate);
     wr32(&payload[8], CT_FW_CACHE_BASE);
     wr32(&payload[12], CT_FW_CACHE_SIZE);
@@ -285,4 +285,3 @@ void CtApp_HandleFrame(const CtFrame *frame)
         break;
     }
 }
-
