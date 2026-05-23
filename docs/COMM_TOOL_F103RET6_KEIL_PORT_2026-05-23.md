@@ -21,9 +21,9 @@ IROM 故意限制为 64KB，目的是让 comm tool 自身程序不能覆盖从 `
 | PC 串口 RX | `PC11` | `USART3_RX`，默认 `115200 8N1` |
 | CAN RX | `PA11` | `CAN1_RX` |
 | CAN TX | `PA12` | `CAN1_TX` |
-| CAN/通信供电 | `PC12` | 上电置 1 |
-| PWSV 控制 | `PC13` | 上电置 1 |
-| PWSV 待机 | `PD2` | 上电置 0 |
+| CAN/通信驱动 | `PC12` | 正常运行置 0，对齐 `MCUO_DRV_CMNT=0` |
+| PWSV 控制 | `PC13` | 正常运行置 0，对齐 `MCUO_PWSV_CTR=0` |
+| PWSV 待机 | `PD2` | 正常运行置 1，对齐 `MCUO_PWSV_STB=1` |
 | Debug LED | `PB15` | 500ms 翻转 |
 
 CAN 默认波特率为 `250 kbit/s`，同时保留 `125 kbit/s` 和 `500 kbit/s` 的运行时切换。
