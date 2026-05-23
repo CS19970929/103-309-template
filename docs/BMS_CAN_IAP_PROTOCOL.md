@@ -21,8 +21,10 @@
 | `0x03 COMMIT` | `03 block_seq:u16 block_len:u16 block_crc:u16 FF` | 提交一个块 |
 | `0x04 END` | `04 frame_count:u16 crc16:u16 FF FF FF` | 结束升级 |
 | `0x05 ABORT` | `05 reason FF FF FF FF FF FF` | 终止升级 |
-| `0x79 ACK` | `79 cmd status expect_seq:u16 code FF FF` | 成功响应 |
-| `0x1F NACK` | `1F cmd status expect_seq:u16 code FF FF` | 失败响应 |
+| `0x79 ACK` | `79 cmd state expect_seq:u16 code FF FF` | 成功响应，`code=0` 表示命令执行成功 |
+| `0x1F NACK` | `1F cmd code expect_seq:u16 code FF FF` | 失败响应，`code` 为错误原因 |
+
+ACK 中的第 3 字节是 IAP 当前状态，不是错误码。典型状态值为：`0=IDLE`、`1=RECEIVING`、`2=DONE`、`3=ERROR`。上位机或 comm tool 判断命令成功必须检查 ACK 命令字匹配且 `code=0`，不能要求 `state=0`。
 
 ## 数据与提交
 

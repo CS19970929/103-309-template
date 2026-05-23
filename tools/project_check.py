@@ -1355,13 +1355,14 @@ def check_serial_iap_refactor_contract(reporter):
         and "0xFFFF" in doc
         and "0x0801F800" in doc
         and "AppUpgrade_RequestIap" in flash_h
-        and "FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG)" in flash_c
+        and "APP_UPGRADE_MAILBOX_ADDR" in flash_c
+        and "AppUpgrade_IsIapRequested()" in flash_c
         and "AppUpgrade_RequestIap() == 0U" in sci_upper_c
         and "AppUpgrade_RequestIap() == 0U" in can_hdx_c
     ):
-        reporter.ok("serial IAP refactor keeps protocol entry and verifies App-to-IAP flag writes")
+        reporter.ok("serial IAP refactor keeps protocol entry and verifies App-to-IAP mailbox writes")
     else:
-        reporter.fail("serial IAP refactor should document 0xFFFD/0xFFFE/0xFFFF and use AppUpgrade_RequestIap with readback")
+        reporter.fail("serial IAP refactor should document 0xFFFD/0xFFFE/0xFFFF and use AppUpgrade_RequestIap mailbox readback")
 
 
 def main(argv):

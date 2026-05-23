@@ -6,7 +6,7 @@
 
 | 地址 | 命令 | 说明 |
 | --- | --- | --- |
-| `0xFFFD` | `0x10` | App 写升级标志后复位进入 IAP；IAP 侧初始化升级会话 |
+| `0xFFFD` | `0x10` | App 写 SRAM mailbox 后复位进入 IAP；IAP 侧初始化升级会话 |
 | `0xFFFE` | `0x10` | IAP 写入 App 数据块 |
 | `0xFFFF` | `0x10` | IAP 完成升级 |
 
@@ -23,6 +23,7 @@
 
 ## App 侧新逻辑
 
-- 新增 `AppUpgrade_RequestIap()`，串口和 CAN 进入 IAP 请求统一走写标志+回读校验。
+- 新增 `AppUpgrade_RequestIap()`，串口和 CAN 进入 IAP 请求统一写入 `0x20004FE0` 的 SRAM mailbox，并立即读回 `magic/request/crc` 校验。
 - 串口 ACK 发送完成后才置复位标志，避免上位机收不到 ACK。
-- CAN 进入 IAP 保持原握手参数 `C3 3C can_addr`，但也复用同一个写标志校验函数。
+- CAN 进入 IAP 保持原握手参数 `C3 3C can_addr`，但也复用同一个 mailbox 校验函数。
+- 不再使用 `0x0801F800` 的 Flash 半字作为 App 跳 IAP 请求；该页保留给 IAP 断电安全和 App 有效性边界，避免每次升级入口擦写 Flash。

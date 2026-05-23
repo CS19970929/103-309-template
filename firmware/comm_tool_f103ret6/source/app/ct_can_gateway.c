@@ -3,6 +3,19 @@
 #include "ct_crc16.h"
 #include <string.h>
 
+#define APP_CMD_RETRY_INTERVAL_MS       100u
+#define APP_CMD_WAIT_SLICE_MS           20u
+#define APP_GET_STATUS_TIMEOUT_MS       1000u
+#define APP_ENTER_IAP_TIMEOUT_MS        5000u
+#define IAP_ACK_WAIT_SLICE_MS           20u
+
+enum
+{
+    ACK_MATCH_NONE = 0,
+    ACK_MATCH_OK = 1,
+    ACK_MATCH_BAD = 2
+};
+
 static uint16_t rd_be16(const uint8_t *p)
 {
     return ((uint16_t)p[0] << 8) | p[1];
@@ -53,39 +66,101 @@ static int send_app_cmd(uint8_t can_addr, uint8_t cmd, uint8_t a0, uint8_t a1, u
     return CtBoard_CanSend(&frame, 200u);
 }
 
-static int wait_app_ack(uint8_t can_addr, uint8_t cmd, uint8_t *v0, uint8_t *v1)
+static int timeout_expired(uint32_t start, uint32_t timeout_ms)
 {
-    CtCanFrame frame;
+    return ((uint32_t)(CtBoard_GetTickMs() - start) >= timeout_ms) ? 1 : 0;
+}
+
+static uint32_t timeout_left(uint32_t start, uint32_t timeout_ms)
+{
+    uint32_t elapsed;
+
+    elapsed = (uint32_t)(CtBoard_GetTickMs() - start);
+    if (elapsed >= timeout_ms)
+    {
+        return 0u;
+    }
+    return timeout_ms - elapsed;
+}
+
+static int decode_app_ack(const CtCanFrame *frame, uint8_t can_addr, uint8_t cmd, uint8_t *v0, uint8_t *v1)
+{
     uint16_t expect_crc;
     uint16_t actual_crc;
 
-    if (!CtBoard_CanRecv(&frame, 1000u))
+    if ((frame->ide != 0u) || (frame->id != app_ack_id(can_addr)))
     {
-        return 0;
+        return ACK_MATCH_NONE;
     }
-    if ((frame.ide != 0u) || (frame.id != app_ack_id(can_addr)) || (frame.dlc != 8u))
+    if ((frame->dlc != 8u) ||
+        (frame->data[0] != 0x5Au) ||
+        (frame->data[1] != 0xA5u) ||
+        (frame->data[2] != cmd))
     {
-        return 0;
+        return ACK_MATCH_NONE;
     }
-    if ((frame.data[0] != 0x5Au) || (frame.data[1] != 0xA5u) || (frame.data[2] != cmd))
+
+    expect_crc = rd_be16(&frame->data[6]);
+    actual_crc = CtCrc16_Calc(frame->data, 6u);
+    if ((expect_crc != actual_crc) || (frame->data[3] != 0u))
     {
-        return 0;
+        return ACK_MATCH_BAD;
     }
-    expect_crc = rd_be16(&frame.data[6]);
-    actual_crc = CtCrc16_Calc(frame.data, 6u);
-    if ((expect_crc != actual_crc) || (frame.data[3] != 0u))
-    {
-        return 0;
-    }
+
     if (v0 != 0)
     {
-        *v0 = frame.data[4];
+        *v0 = frame->data[4];
     }
     if (v1 != 0)
     {
-        *v1 = frame.data[5];
+        *v1 = frame->data[5];
     }
-    return 1;
+    return ACK_MATCH_OK;
+}
+
+static int send_app_cmd_wait_ack(uint8_t can_addr, uint8_t cmd, uint8_t a0, uint8_t a1, uint8_t a2,
+                                 uint8_t *v0, uint8_t *v1, uint32_t timeout_ms)
+{
+    CtCanFrame frame;
+    uint32_t start;
+    uint32_t last_send;
+    uint32_t wait_ms;
+    int match;
+
+    start = CtBoard_GetTickMs();
+    last_send = start - APP_CMD_RETRY_INTERVAL_MS;
+
+    while (!timeout_expired(start, timeout_ms))
+    {
+        if ((uint32_t)(CtBoard_GetTickMs() - last_send) >= APP_CMD_RETRY_INTERVAL_MS)
+        {
+            if (!send_app_cmd(can_addr, cmd, a0, a1, a2))
+            {
+                return 0;
+            }
+            last_send = CtBoard_GetTickMs();
+        }
+
+        wait_ms = timeout_left(start, timeout_ms);
+        if (wait_ms > APP_CMD_WAIT_SLICE_MS)
+        {
+            wait_ms = APP_CMD_WAIT_SLICE_MS;
+        }
+        if ((wait_ms != 0u) && CtBoard_CanRecv(&frame, wait_ms))
+        {
+            match = decode_app_ack(&frame, can_addr, cmd, v0, v1);
+            if (match == ACK_MATCH_OK)
+            {
+                return 1;
+            }
+            if (match == ACK_MATCH_BAD)
+            {
+                return 0;
+            }
+        }
+    }
+
+    return 0;
 }
 
 int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh)
@@ -93,11 +168,8 @@ int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh)
     uint8_t v0;
     uint8_t v1;
 
-    if (!send_app_cmd(can_addr, CT_CAN_APP_GET_STATUS, 0u, 0u, 0u))
-    {
-        return 0;
-    }
-    if (!wait_app_ack(can_addr, CT_CAN_APP_GET_STATUS, &v0, &v1))
+    if (!send_app_cmd_wait_ack(can_addr, CT_CAN_APP_GET_STATUS, 0u, 0u, 0u,
+                               &v0, &v1, APP_GET_STATUS_TIMEOUT_MS))
     {
         return 0;
     }
@@ -114,11 +186,8 @@ int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh)
 
 int CtCan_AppEnterIap(uint8_t can_addr)
 {
-    if (!send_app_cmd(can_addr, CT_CAN_APP_ENTER_IAP, 0xC3u, 0x3Cu, can_addr))
-    {
-        return 0;
-    }
-    return wait_app_ack(can_addr, CT_CAN_APP_ENTER_IAP, 0, 0);
+    return send_app_cmd_wait_ack(can_addr, CT_CAN_APP_ENTER_IAP, 0xC3u, 0x3Cu, can_addr,
+                                 0, 0, APP_ENTER_IAP_TIMEOUT_MS);
 }
 
 static uint32_t iap_ctrl_id(uint8_t node)
@@ -203,27 +272,48 @@ int CtCan_IapSendEnd(uint8_t node, uint16_t frame_count, uint16_t crc16)
 int CtCan_IapWaitAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint32_t timeout_ms)
 {
     CtCanFrame frame;
+    uint32_t start;
+    uint32_t wait_ms;
 
-    if (!CtBoard_CanRecv(&frame, timeout_ms))
+    start = CtBoard_GetTickMs();
+    while (!timeout_expired(start, timeout_ms))
     {
-        return 0;
+        wait_ms = timeout_left(start, timeout_ms);
+        if (wait_ms > IAP_ACK_WAIT_SLICE_MS)
+        {
+            wait_ms = IAP_ACK_WAIT_SLICE_MS;
+        }
+        if ((wait_ms == 0u) || !CtBoard_CanRecv(&frame, wait_ms))
+        {
+            continue;
+        }
+
+        if ((frame.ide == 0u) || (frame.id != iap_ack_id(node)))
+        {
+            continue;
+        }
+        if (frame.dlc < 6u)
+        {
+            return 0;
+        }
+        if ((frame.data[0] == CT_CAN_IAP_NACK) && (frame.data[1] == cmd))
+        {
+            return 0;
+        }
+        if ((frame.data[0] != CT_CAN_IAP_ACK) || (frame.data[1] != cmd))
+        {
+            continue;
+        }
+        if (frame.data[5] != 0u)
+        {
+            return 0;
+        }
+        if (expect_seq != 0)
+        {
+            *expect_seq = rd_be16(&frame.data[3]);
+        }
+        return 1;
     }
-    if ((frame.ide == 0u) || (frame.id != iap_ack_id(node)) || (frame.dlc < 6u))
-    {
-        return 0;
-    }
-    if ((frame.data[0] == CT_CAN_IAP_NACK) && (frame.data[1] == cmd))
-    {
-        return 0;
-    }
-    if ((frame.data[0] != CT_CAN_IAP_ACK) || (frame.data[1] != cmd) || (frame.data[2] != 0u))
-    {
-        return 0;
-    }
-    if (expect_seq != 0)
-    {
-        *expect_seq = rd_be16(&frame.data[3]);
-    }
-    return 1;
+
+    return 0;
 }
-
