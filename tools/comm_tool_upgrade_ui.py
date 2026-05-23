@@ -397,9 +397,15 @@ class BmsMonitorWindow(tk.Toplevel):
 
     def _worker_poll(self) -> None:
         try:
-            port = self.parent.port_var.get().strip()
-            baud = int(self.parent.baud_var.get().strip())
-            words = _read_bms_words_once(port, baud, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            if not self.parent.serial_lock.acquire(blocking=False):
+                self.events.put(UiEvent("busy", "串口忙，等待主任务结束"))
+                return
+            try:
+                port = self.parent.port_var.get().strip()
+                baud = int(self.parent.baud_var.get().strip())
+                words = _read_bms_words_once(port, baud, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            finally:
+                self.parent.serial_lock.release()
             self.events.put(UiEvent("snapshot", words))
         except Exception as exc:
             self.events.put(UiEvent("error", str(exc)))
@@ -425,6 +431,10 @@ class BmsMonitorWindow(tk.Toplevel):
                     self._schedule_poll(self._interval_ms(0.5))
             elif event.kind == "error":
                 self.state_var.set(f"读取失败: {event.payload}")
+                if self.running and not self.parent_paused:
+                    self._schedule_poll(self._interval_ms(1.0))
+            elif event.kind == "busy":
+                self.state_var.set(str(event.payload))
                 if self.running and not self.parent_paused:
                     self._schedule_poll(self._interval_ms(1.0))
         if not self.closed:
@@ -516,6 +526,7 @@ class UpgradeUi(tk.Tk):
 
         self.events: "queue.Queue[UiEvent]" = queue.Queue()
         self.worker: threading.Thread | None = None
+        self.serial_lock = threading.Lock()
 
         self.port_var = tk.StringVar(value=port)
         self.baud_var = tk.StringVar(value=str(baud))
@@ -1033,6 +1044,10 @@ class UpgradeUi(tk.Tk):
         self.live_worker.start()
 
     def _worker_live_guard(self) -> None:
+        if not self.serial_lock.acquire(blocking=False):
+            self._emit("comm_state", "通信: 忙，等待当前任务")
+            self._emit("live_done")
+            return
         try:
             with self._open_client() as client:
                 try:
@@ -1045,6 +1060,7 @@ class UpgradeUi(tk.Tk):
             self._emit("log", f"实时监控读取失败: {exc}")
             self._emit("comm_state", "通信: 异常")
         finally:
+            self.serial_lock.release()
             self._emit("live_done")
 
     def _draw_battery(self, soc: int) -> None:
@@ -1443,13 +1459,20 @@ class UpgradeUi(tk.Tk):
         return [self._parse_u16(part, "写入值") for part in parts]
 
     def _worker_guard(self, name: str, target: Callable[[], None]) -> None:
+        locked = False
         try:
             self._emit("log", f"开始: {name}")
+            if not self.serial_lock.acquire(blocking=False):
+                self._emit("log", "串口正在被实时监控占用，等待当前读数结束")
+                self.serial_lock.acquire()
+            locked = True
             target()
             self._emit("result", f"{name} 完成")
         except Exception as exc:
             self._emit("error", f"{name} 失败: {exc}")
         finally:
+            if locked:
+                self.serial_lock.release()
             self._emit("busy", False)
 
     def _worker_check_connection(self) -> None:
