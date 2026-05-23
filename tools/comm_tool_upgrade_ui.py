@@ -65,10 +65,8 @@ BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
-BMS_EVENT_RECORD_READ_CHUNK_WORDS = 20
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
-BMS_LOG_CHUNK_GAP_SECONDS = 0.12
 SH309_AFE_PARAM_ADDR = 0x2400
 SH309_AFE_PARAM_WORDS = 24
 SH309_TMOS_PARAM_ADDR = 0x2132
@@ -1894,19 +1892,15 @@ class UpgradeUi(tk.Tk):
         self._emit("progress", 100)
 
     def _worker_read_bms_log(self) -> None:
-        words: list[int] = []
         with self._open_client() as client:
             self._set_can_target(client)
-            for offset in range(0, BMS_EVENT_RECORD_WORDS, BMS_EVENT_RECORD_READ_CHUNK_WORDS):
-                count = min(BMS_EVENT_RECORD_READ_CHUNK_WORDS, BMS_EVENT_RECORD_WORDS - offset)
-                addr = BMS_EVENT_RECORD_ADDR + offset
-                label = f"BMS日志 {offset + 1}-{offset + count}"
-                chunk = self._read_bms_words_with_retry(client, addr, count, label)
-                words.extend(chunk)
-                self._emit("progress", int(len(words) * 100 / BMS_EVENT_RECORD_WORDS))
-                self._emit("log", f"读取BMS日志: {len(words)}/{BMS_EVENT_RECORD_WORDS}")
-                if len(words) < BMS_EVENT_RECORD_WORDS:
-                    time.sleep(BMS_LOG_CHUNK_GAP_SECONDS)
+            self._emit("log", "读取BMS日志: 读取 0xC008 完整事件记录窗口")
+            words = self._read_bms_words_with_retry(
+                client,
+                BMS_EVENT_RECORD_ADDR,
+                BMS_EVENT_RECORD_WORDS,
+                "BMS日志完整窗口",
+            )
         records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
         valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
         self._emit("bms_log", records)
