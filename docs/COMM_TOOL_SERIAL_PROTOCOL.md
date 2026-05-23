@@ -97,6 +97,7 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 - `BMS_WRITE` 请求 payload 为 `addr:u16 count:u16 words[count]`，每个寄存器 16 位小端。
 - comm tool 当前一次最多转发 `120` 个寄存器；读多个寄存器时内部使用 CAN App `READ_BLOCK` 块读，BMS App 每 10ms 返回一个寄存器数据帧。
 - BMS App 写入仍走 `Sci_Upper.c` 的地址、范围、副作用和权限检查。当前 Release 默认 `PROJECT_CFG_HOST_WRITE_ENABLE=1`，允许 UI 写保护参数和其它参数。
+- UI 写 SH309 AFE 保护参数时不会逐个地址直接覆盖。`0x2400..0x2417` 会先读取整块、合并修改项、一次写回 24 个寄存器并回读校验；`0x2132..0x2136` MOS 过温参数同理整块写入。二级过流和短路电流列表由 BMS 当前 `0x231D` 采样电阻、`0x231E` 采样电阻数换算生成。
 - UI 的 `读取BMS信息` 和 `实时监控` 使用 `0xD000` 起连续 `63` 个只读寄存器；`读取BMS状态` 使用 `0xD034/0xD035` 读取 SOC/SOH；`读取BMS日志` 使用 `0xC008` 完整事件记录窗口，数量固定为 `100` 个寄存器。`0xC008` 是旧串口协议特殊窗口，不能按 `0xC008 + offset` 拆分读取；UI 对完整窗口读取最多重试 3 次。
 
 ## 安全规则

@@ -77,8 +77,27 @@ SH309_OV_UV_DELAY_MS = [100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 60
 SH309_CHG_SECOND_DELAY_MS = [10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000]
 SH309_DSG_SECOND_DELAY_MS = [50, 100, 200, 400, 600, 800, 1000, 2000, 4000, 6000, 8000, 10000, 15000, 20000, 30000, 40000]
 SH309_SHORT_DELAY_US = [0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960]
-SH309_COMMON_CURRENT_A = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200, 220, 260, 300, 400, 500]
-SH309_SHORT_CURRENT_A = [50, 80, 110, 140, 170, 200, 220, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000]
+SH309_AFE_OCD1V_OCCV_MV = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200]
+SH309_AFE_SCV_MV = [50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000]
+SH309_DEFAULT_CS_RES_MOHM = 2
+SH309_DEFAULT_CS_RES_NUM = 4
+SH309_SYS_CS_RES_KEY = "系统参数/采样电阻"
+SH309_SYS_CS_RES_NUM_KEY = "系统参数/采样电阻数"
+SH309_SECOND_CURRENT_KEYS = {
+    "SH309/二级充电过流(A)",
+    "SH309/二级放电过流(A)",
+}
+SH309_SHORT_CURRENT_KEY = "SH309/短路电流(A)"
+SH309_HIGH_TEMP_KEYS = {
+    "SH309/充电高温(℃)",
+    "SH309/充电高温恢复(℃)",
+    "SH309/放电高温(℃)",
+    "SH309/放电高温恢复(℃)",
+}
+SH309_LOW_CHG_TEMP_KEY = "SH309/充电低温(℃)"
+SH309_LOW_CHG_TEMP_RCV_KEY = "SH309/充电低温恢复(℃)"
+SH309_LOW_DSG_TEMP_KEY = "SH309/放电低温(℃)"
+SH309_LOW_DSG_TEMP_RCV_KEY = "SH309/放电低温恢复(℃)"
 SH309_TMOS_DEFAULT_DISPLAY = {
     "SH309/MOS过温1(℃)": "75",
     "SH309/MOS过温2(℃)": "85",
@@ -178,7 +197,7 @@ def _build_bms_param_defs() -> list[BmsParamDef]:
         ("均衡参数", "关闭压差", 0x2302, "mV", "u16"),
         ("短路参数", "充电短路范围", 0x2308, "A", "x10"),
         ("短路参数", "放电短路范围", 0x2309, "A", "x10"),
-        ("短路参数", "短路延时", 0x230A, "raw", "u16"),
+        ("短路参数", "短路延时", 0x230A, "ms", "x10"),
         ("短路参数", "短路电流", 0x230B, "A", "x10"),
         ("限流参数", "SOC曲线选择", 0x230C, "raw", "u16"),
         ("限流参数", "永久密码", 0x230D, "raw", "u16"),
@@ -253,6 +272,12 @@ def _build_sh309_param_defs() -> list[BmsParamDef]:
 
 BMS_PARAM_DEFS = _build_bms_param_defs()
 SH309_PARAM_DEFS = _build_sh309_param_defs()
+SH309_AFE_PARAM_KEYS = {
+    param.key for param in SH309_PARAM_DEFS if SH309_AFE_PARAM_ADDR <= param.addr < SH309_AFE_PARAM_ADDR + SH309_AFE_PARAM_WORDS
+}
+SH309_TMOS_PARAM_KEYS = {
+    param.key for param in SH309_PARAM_DEFS if SH309_TMOS_PARAM_ADDR <= param.addr < SH309_TMOS_PARAM_ADDR + SH309_TMOS_PARAM_WORDS
+}
 ALL_PARAM_DEFS = BMS_PARAM_DEFS + SH309_PARAM_DEFS
 BMS_PARAM_BY_KEY = {param.key: param for param in ALL_PARAM_DEFS}
 BMS_PARAM_ADDR_TO_KEY = {param.addr: param.key for param in ALL_PARAM_DEFS}
@@ -646,6 +671,7 @@ class UpgradeUi(tk.Tk):
         self.live_after_id: str | None = None
         self.live_worker: threading.Thread | None = None
         self.param_entry_vars: dict[str, tk.StringVar] = {}
+        self.param_widgets: dict[str, tk.Widget] = {}
         self.param_dirty: set[str] = set()
         self.param_loading = False
         self.log_tree: ttk.Treeview | None = None
@@ -1125,9 +1151,10 @@ class UpgradeUi(tk.Tk):
             self.param_entry_vars[key] = var
         choices = self._sh309_field_choices(key)
         if choices:
-            widget = ttk.Combobox(parent, textvariable=var, values=choices, width=12, state="normal")
+            widget = ttk.Combobox(parent, textvariable=var, values=choices, width=12, state="readonly")
         else:
             widget = ttk.Entry(parent, textvariable=var, width=14)
+        self.param_widgets[key] = widget
         widget.grid(row=row, column=column + 1, sticky="ew", padx=(0, 16), pady=6)
 
     def _sh309_field_choices(self, key: str) -> list[str]:
@@ -1141,31 +1168,49 @@ class UpgradeUi(tk.Tk):
             return [str(value) for value in SH309_CHG_SECOND_DELAY_MS]
         if key in {"SH309/二级放电过流延时(ms)"}:
             return [str(value) for value in SH309_DSG_SECOND_DELAY_MS]
-        if key in {"SH309/二级充电过流(A)", "SH309/二级放电过流(A)"}:
-            return [str(value) for value in SH309_COMMON_CURRENT_A]
-        if key == "SH309/短路电流(A)":
-            return [str(value) for value in SH309_SHORT_CURRENT_A]
+        if key in SH309_SECOND_CURRENT_KEYS:
+            return self._sh309_current_choices(SH309_AFE_OCD1V_OCCV_MV)
+        if key == SH309_SHORT_CURRENT_KEY:
+            return self._sh309_current_choices(SH309_AFE_SCV_MV)
         if key == "SH309/短路延时(us)":
             return [str(value) for value in SH309_SHORT_DELAY_US]
-        if key in {
-            "SH309/充电高温(℃)",
-            "SH309/充电高温恢复(℃)",
-            "SH309/放电高温(℃)",
-            "SH309/放电高温恢复(℃)",
-            "SH309/MOS过温1(℃)",
-            "SH309/MOS过温2(℃)",
-            "SH309/MOS过温3(℃)",
-            "SH309/MOS恢复(℃)",
-        }:
-            return [str(value) for value in range(0, 161)]
-        if key in {
-            "SH309/充电低温(℃)",
-            "SH309/充电低温恢复(℃)",
-            "SH309/放电低温(℃)",
-            "SH309/放电低温恢复(℃)",
-        }:
-            return [str(value) for value in range(-40, 41)]
+        if key in SH309_HIGH_TEMP_KEYS:
+            return [str(value) for value in range(40, 81)]
+        if key == SH309_LOW_CHG_TEMP_KEY:
+            return [str(value) for value in range(-20, 11)]
+        if key == SH309_LOW_CHG_TEMP_RCV_KEY:
+            return [str(value) for value in range(-20, 16)]
+        if key == SH309_LOW_DSG_TEMP_KEY:
+            return [str(value) for value in range(-40, 11)]
+        if key == SH309_LOW_DSG_TEMP_RCV_KEY:
+            return [str(value) for value in range(-40, 16)]
         return []
+
+    def _sh309_cs_factor(self) -> float:
+        return self._sh309_cs_factor_from_values(self.param_values)
+
+    def _sh309_cs_factor_from_values(self, values: dict[str, int]) -> float:
+        cs_res = values.get(SH309_SYS_CS_RES_KEY, SH309_DEFAULT_CS_RES_MOHM)
+        cs_num = values.get(SH309_SYS_CS_RES_NUM_KEY, SH309_DEFAULT_CS_RES_NUM)
+        if cs_res <= 0 or cs_num <= 0:
+            cs_res = SH309_DEFAULT_CS_RES_MOHM
+            cs_num = SH309_DEFAULT_CS_RES_NUM
+        return float(cs_num) * 1000.0 / float(cs_res)
+
+    def _sh309_current_choices(self, threshold_mv: list[int]) -> list[str]:
+        factor = self._sh309_cs_factor()
+        values: list[int] = []
+        for mv in threshold_mv:
+            current = int(mv * factor / 1000.0)
+            if current not in values:
+                values.append(current)
+        return [str(value) for value in values]
+
+    def _refresh_sh309_dynamic_choices(self) -> None:
+        for key in SH309_SECOND_CURRENT_KEYS | {SH309_SHORT_CURRENT_KEY}:
+            widget = self.param_widgets.get(key)
+            if isinstance(widget, ttk.Combobox):
+                widget.configure(values=self._sh309_field_choices(key))
 
     def _mark_param_dirty(self, key: str) -> None:
         if self.param_loading:
@@ -1184,6 +1229,54 @@ class UpgradeUi(tk.Tk):
         self.param_dirty.clear()
         self._update_param_dirty_label()
 
+    def _validate_sh309_param_values(self, changed: dict[str, int]) -> None:
+        if not changed:
+            return
+        needs_afe = any(key in SH309_AFE_PARAM_KEYS for key in changed)
+        needs_tmos = any(key in SH309_TMOS_PARAM_KEYS for key in changed)
+        if not (needs_afe or needs_tmos):
+            return
+        if needs_afe and ({SH309_SYS_CS_RES_KEY, SH309_SYS_CS_RES_NUM_KEY} & set(changed)):
+            raise ValueError("采样电阻/采样电阻数不能和 SH309 AFE 过流、短路参数同批写入；请先写系统参数，再重新读取保护参数")
+
+        merged = dict(self.param_values)
+        merged.update(changed)
+        missing: list[str] = []
+        if needs_afe:
+            missing.extend(key for key in SH309_AFE_PARAM_KEYS if key not in merged)
+            if SH309_SYS_CS_RES_KEY not in merged:
+                missing.append(SH309_SYS_CS_RES_KEY)
+            if SH309_SYS_CS_RES_NUM_KEY not in merged:
+                missing.append(SH309_SYS_CS_RES_NUM_KEY)
+        if needs_tmos:
+            missing.extend(key for key in SH309_TMOS_PARAM_KEYS if key not in merged)
+        if missing:
+            raise ValueError("请先点击“读取”读取完整 SH309 参数后再写入，缺少: " + "、".join(sorted(set(missing))[:6]))
+
+        checks = [
+            ("单节过压必须大于等于过压恢复", "SH309/单节过压(mv)", "SH309/过压恢复(mv)", ">="),
+            ("单节低压必须小于等于低压恢复", "SH309/单节低压(mv)", "SH309/低压恢复(mv)", "<="),
+            ("充电高温必须大于等于充电高温恢复", "SH309/充电高温(℃)", "SH309/充电高温恢复(℃)", ">="),
+            ("充电低温必须小于等于充电低温恢复", "SH309/充电低温(℃)", "SH309/充电低温恢复(℃)", "<="),
+            ("放电高温必须大于等于放电高温恢复", "SH309/放电高温(℃)", "SH309/放电高温恢复(℃)", ">="),
+            ("放电低温必须小于等于放电低温恢复", "SH309/放电低温(℃)", "SH309/放电低温恢复(℃)", "<="),
+        ]
+        for message, left, right, op in checks:
+            if op == ">=" and merged[left] < merged[right]:
+                raise ValueError(message)
+            if op == "<=" and merged[left] > merged[right]:
+                raise ValueError(message)
+
+        factor = self._sh309_cs_factor_from_values(merged)
+        second_raw_choices = {int(mv * factor / 1000.0) * 10 for mv in SH309_AFE_OCD1V_OCCV_MV}
+        short_raw_choices = {int(mv * factor / 1000.0) for mv in SH309_AFE_SCV_MV}
+        for key in SH309_SECOND_CURRENT_KEYS:
+            if key in changed and changed[key] not in second_raw_choices:
+                param = BMS_PARAM_BY_KEY[key]
+                raise ValueError(f"{param.name} 必须从当前采样电阻换算列表中选择")
+        if SH309_SHORT_CURRENT_KEY in changed and changed[SH309_SHORT_CURRENT_KEY] not in short_raw_choices:
+            raise ValueError("短路电流必须从当前采样电阻换算列表中选择")
+
     def _write_dirty_params(self) -> None:
         if not self.param_dirty:
             messagebox.showinfo("参数设置", "没有检测到已修改的参数。")
@@ -1196,6 +1289,7 @@ class UpgradeUi(tk.Tk):
                 if var is None:
                     continue
                 values[key] = _param_parse_display_value(param, var.get())
+            self._validate_sh309_param_values(values)
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
             return
@@ -1599,6 +1693,7 @@ class UpgradeUi(tk.Tk):
                 raise ValueError("请先选择一个保护参数或其它参数")
             param = BMS_PARAM_BY_KEY[key]
             value = _param_parse_display_value(param, self.param_edit_var.get())
+            self._validate_sh309_param_values({key: value})
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
             return
@@ -1611,7 +1706,8 @@ class UpgradeUi(tk.Tk):
             "确认写入 BMS？",
         ):
             return
-        self._run_worker("写入BMS参数", self._worker_write_selected_param)
+        self.active_param_values = {key: value}
+        self._run_worker("写入BMS参数", self._worker_write_dirty_params)
 
     def _read_protect_params(self) -> None:
         self.active_param_range = "protect"
@@ -1828,12 +1924,48 @@ class UpgradeUi(tk.Tk):
         self._emit("log", f"参数写入完成: {param.group}/{param.name}=0x{words[0]:04X} ({words[0]})")
         self._emit("progress", 100)
 
+    def _write_param_block(
+        self,
+        client: CommToolClient,
+        pending: dict[str, int],
+        base_addr: int,
+        word_count: int,
+    ) -> dict[str, int]:
+        block_keys = [
+            key
+            for key in pending
+            if base_addr <= BMS_PARAM_BY_KEY[key].addr < base_addr + word_count
+        ]
+        if not block_keys:
+            return {}
+
+        words = self._read_bms_words(client, base_addr, word_count)
+        for key in block_keys:
+            param = BMS_PARAM_BY_KEY[key]
+            words[param.addr - base_addr] = pending[key]
+
+        self._write_bms_words(client, base_addr, words)
+        readback = self._read_bms_words(client, base_addr, word_count)
+        verified: dict[str, int] = {}
+        for key in block_keys:
+            param = BMS_PARAM_BY_KEY[key]
+            value = pending.pop(key)
+            actual = readback[param.addr - base_addr]
+            verified[key] = actual
+            if actual != value:
+                raise RuntimeError(
+                    f"{param.group}/{param.name} 写入后回读不一致: 写0x{value:04X} 回读0x{actual:04X}"
+                )
+        return verified
+
     def _worker_write_dirty_params(self) -> None:
-        values = sorted(self.active_param_values.items(), key=lambda item: BMS_PARAM_BY_KEY[item[0]].addr)
+        pending = dict(self.active_param_values)
         verified: dict[str, int] = {}
         with self._open_client() as client:
             self._set_can_target(client)
-            for key, value in values:
+            verified.update(self._write_param_block(client, pending, SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS))
+            verified.update(self._write_param_block(client, pending, SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS))
+            for key, value in sorted(pending.items(), key=lambda item: BMS_PARAM_BY_KEY[item[0]].addr):
                 param = BMS_PARAM_BY_KEY[key]
                 self._write_bms_words(client, param.addr, [value])
                 words = self._read_bms_words(client, param.addr, 1)
@@ -1848,7 +1980,7 @@ class UpgradeUi(tk.Tk):
 
     def _read_sh309_param_values(self, client: CommToolClient) -> dict[str, int]:
         values: dict[str, int] = {}
-        for addr, count in ((SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)):
+        for addr, count in ((0x231D, 2), (SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)):
             words = self._read_bms_words(client, addr, count)
             for index, raw in enumerate(words):
                 key = BMS_PARAM_ADDR_TO_KEY.get(addr + index)
@@ -1869,7 +2001,7 @@ class UpgradeUi(tk.Tk):
     def _worker_read_param_range(self) -> None:
         ranges: list[tuple[int, int]]
         if self.active_param_range == "protect":
-            ranges = [(SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)]
+            ranges = [(0x231D, 2), (SH309_AFE_PARAM_ADDR, SH309_AFE_PARAM_WORDS), (SH309_TMOS_PARAM_ADDR, SH309_TMOS_PARAM_WORDS)]
         elif self.active_param_range == "other":
             ranges = [(0x2300, 32)]
         else:
@@ -2319,6 +2451,7 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "param_value":
             key, value = event.payload
             self._update_param_row(key, value)
+            self._refresh_sh309_dynamic_choices()
             self.param_dirty.discard(key)
             self._update_param_dirty_label()
             param = BMS_PARAM_BY_KEY[key]
@@ -2330,6 +2463,7 @@ class UpgradeUi(tk.Tk):
             for key, value in event.payload.items():
                 self._update_param_row(key, value)
                 self.param_dirty.discard(key)
+            self._refresh_sh309_dynamic_choices()
             self._update_param_dirty_label()
             self.param_current_var.set(f"已读取 {len(event.payload)} 项")
             self._on_param_select()
@@ -2373,6 +2507,16 @@ def main() -> int:
         for key in ("SH309/单节过压(mv)", "SH309/MOS过温1(℃)", "SH309/延时(10ms)"):
             if key not in BMS_PARAM_BY_KEY:
                 raise RuntimeError(f"SH309 UI 参数键不存在: {key}")
+        if _param_display_value(BMS_PARAM_BY_KEY["SH309/过压延时(ms)"], 10) != "100":
+            raise RuntimeError("SH309 过压延时显示换算错误")
+        if _param_parse_display_value(BMS_PARAM_BY_KEY["SH309/充电高温(℃)"], "60") != 1000:
+            raise RuntimeError("SH309 温度写入换算错误")
+        if BMS_PARAM_BY_KEY["SH309/短路电流(A)"].kind != "u16":
+            raise RuntimeError("SH309 短路电流 raw 单位应为 A")
+        if BMS_PARAM_BY_KEY["SH309/二级充电过流(A)"].kind != "x10":
+            raise RuntimeError("SH309 二级过流 raw 单位应为 A*10")
+        if BMS_PARAM_BY_KEY["短路参数/短路延时"].kind != "x10":
+            raise RuntimeError("短路延时应按 10ms raw 和 ms 显示换算")
         root = tk.Tk()
         root.withdraw()
         root.destroy()
