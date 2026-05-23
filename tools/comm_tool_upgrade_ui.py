@@ -116,13 +116,14 @@ class UpgradeUi(tk.Tk):
 
         actions = ttk.Frame(root)
         actions.grid(row=3, column=0, sticky="ew", pady=(0, 8))
-        actions.columnconfigure(4, weight=1)
+        actions.columnconfigure(5, weight=1)
 
         ttk.Button(actions, text="读取缓存", command=self._read_cache).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(actions, text="写入缓存", command=self._download_only).grid(row=0, column=1, padx=(0, 8))
         ttk.Button(actions, text="一键升级", command=self._upgrade_selected).grid(row=0, column=2, padx=(0, 8))
-        ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=3, padx=(0, 8))
-        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=4, sticky="w")
+        ttk.Button(actions, text="使用缓存升级", command=self._upgrade_cached_selected).grid(row=0, column=3, padx=(0, 8))
+        ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
+        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, sticky="w")
 
         progress = ttk.Frame(root)
         progress.grid(row=4, column=0, sticky="nsew")
@@ -204,6 +205,20 @@ class UpgradeUi(tk.Tk):
             return
         self._run_worker("一键升级", self._worker_upgrade_selected)
 
+    def _upgrade_cached_selected(self) -> None:
+        path = Path(self.bin_var.get())
+        if not path.exists():
+            messagebox.showerror("文件不存在", "请选择有效的 BMS App bin 文件。")
+            return
+        if not messagebox.askyesno(
+            "确认使用缓存升级",
+            "将跳过写入 comm tool 缓存，仅在缓存大小和 CRC 与当前选择的 bin 完全一致时升级 BMS。\n\n"
+            f"文件: {path}\n\n"
+            "确认继续？",
+        ):
+            return
+        self._run_worker("使用缓存升级", self._worker_upgrade_cached_selected)
+
     def _read_bms_status(self) -> None:
         self._run_worker("读取BMS状态", self._worker_read_bms_status)
 
@@ -268,18 +283,19 @@ class UpgradeUi(tk.Tk):
             cache = self._read_cache_info(client)
             self._assert_cache_matches(image, cache)
             self._emit("cache", cache)
-            self._emit("log", "缓存校验通过，开始 CAN 升级 BMS")
-            client.command(CMD_CAN_DIAG, b"\x01", timeout=2.0)
-            client.command(CMD_UPGRADE, timeout=DEFAULT_LONG_TIMEOUT)
-            status = self._read_upgrade_status(client)
-            self._emit("log", self._format_upgrade_status(status))
-            if status["state"] != 2 or status["error"] != 0:
-                raise RuntimeError(self._format_upgrade_status(status))
-            bms_status = self._wait_bms_status_after_upgrade(client)
-            if bms_status is None:
-                self._emit("log", "升级已完成，但 BMS App 状态暂未响应；请稍后点击“读取BMS状态”复核。")
-            else:
-                self._emit("log", f"BMS App 状态: SOC={bms_status[0]} SOH={bms_status[1]}")
+            self._upgrade_bms_from_verified_cache(client)
+        self._emit("progress", 100)
+
+    def _worker_upgrade_cached_selected(self) -> None:
+        image = self._load_selected_image()
+        with self._open_client() as client:
+            info = self._read_info(client)
+            self._emit("info", info)
+            cache = self._read_cache_info(client)
+            self._assert_cache_matches(image, cache)
+            self._emit("cache", cache)
+            self._emit("log", "缓存与当前文件一致，跳过串口下载")
+            self._upgrade_bms_from_verified_cache(client)
         self._emit("progress", 100)
 
     def _worker_read_bms_status(self) -> None:
@@ -293,6 +309,20 @@ class UpgradeUi(tk.Tk):
             resp = client.command(CMD_CAN_DIAG, b"\x00", timeout=2.0)
         self._emit("log", self._format_can_diag(resp.payload))
         self._emit("progress", 100)
+
+    def _upgrade_bms_from_verified_cache(self, client: CommToolClient) -> None:
+        self._emit("log", "缓存校验通过，开始 CAN 升级 BMS")
+        client.command(CMD_CAN_DIAG, b"\x01", timeout=2.0)
+        client.command(CMD_UPGRADE, timeout=DEFAULT_LONG_TIMEOUT)
+        status = self._read_upgrade_status(client)
+        self._emit("log", self._format_upgrade_status(status))
+        if status["state"] != 2 or status["error"] != 0:
+            raise RuntimeError(self._format_upgrade_status(status))
+        bms_status = self._wait_bms_status_after_upgrade(client)
+        if bms_status is None:
+            self._emit("log", "升级已完成，但 BMS App 状态暂未响应；请稍后点击“读取BMS状态”复核。")
+        else:
+            self._emit("log", f"BMS App 状态: SOC={bms_status[0]} SOH={bms_status[1]}")
 
     def _open_client(self) -> CommToolClient:
         port = self.active_port
