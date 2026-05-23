@@ -454,26 +454,106 @@ pc上位机实现了吗
 	}这段逻辑是什么？需要串口升级和can都能升级。通过这种flash跳转逻辑感觉不好，能否使用其他方式，这是新项目，app和iap除了串口升级协议不能修改，其他跳转逻辑、方式都能修改
 
 
-# 查串口
-.\tools\start_comm_tool_host.ps1 -Mode list-ports
-
-# 读 comm tool 信息
-.\tools\start_comm_tool_host.ps1 -Mode info -Port COM4
-
-# 检查待升级 App bin
-.\tools\start_comm_tool_host.ps1 -Mode fw-dry-run -Bin "103 + 309\Project\Users\Objects\FD_Release.bin"
-
-# 下载 App bin 到 comm tool Flash 缓存，必须确认 App 地址
-.\tools\start_comm_tool_host.ps1 -Mode fw-download -Port COM4 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
-
-# 查询 comm tool 缓存固件信息
-.\tools\start_comm_tool_host.ps1 -Mode fw-info -Port COM4
-
-# 一键让 comm tool 通过 CAN 升级 BMS
-.\tools\start_comm_tool_host.ps1 -Mode upgrade -Port COM4 -ConfirmUpgrade
-
-# 查询升级状态
-.\tools\start_comm_tool_host.ps1 -Mode upgrade-status -Port COM4
-
-
+[已完成]
 把comm tool补全keil工程，参考E:\TODO\code\c058 from c030工程，这个是ret6，串口默认使用串口3，把debug led也增加过来，其他不要加，串口、can驱动、供电配置配置过来就行。
+
+
+1、app跳转iap升级必须通过flash吗？这样浪费1Kflash，不太好，是否有其他更好的方法，要求稳定、不死机。2、之前的串口和现在的can需要单独能够升级
+
+[todo]
+全部需求完成了吗，我先测试一下comm tool给bms升级，给出具体使用步骤
+
+iap和app的升级逻辑是怎样的，对比主流方式，给出你的评价，根据你对我的需求了解，能否优化，保证稳定好用
+
+
+"App 请求进 IAP 改成 SRAM mailbox，不再擦 0x0801F800；IAP 的断电保护改成“擦首页、缓存首页、首页最后写、MSP 最后写”。我现在做静态检查和 Keil 编译，重点确认串口和 CAN 两条升级路径都能独立编译通过。"这句话什么意思，sram mailbox是什么
+
+先确认下iap和comm tool的can配置是否有问题，iap和comm tool都加一个心跳报文是否可以，我总线上有can通讯盒，可以监测
+
+py -3.9 tools\comm_tool_host.py info --port COM4 --baud 115200
+py -3.9 tools\comm_tool_host.py can-diag --port COM4 --baud 115200 --clear
+py -3.9 tools\comm_tool_host.py upgrade --port COM4 --baud 115200 --long-timeout 60 --confirm-upgrade
+py -3.9 tools\comm_tool_host.py upgrade-status --port COM4 --baud 115200
+py -3.9 tools\comm_tool_host.py can-diag --port COM4 --baud 115200
+
+当前电脑有创芯科技的usb can tool，已经打开了
+
+
+
+py -3.9 tools\comm_tool_host.py info --port COM4 --baud 115200
+py -3.9 tools\comm_tool_host.py fw-info --port COM4 --baud 115200
+py -3.9 tools\comm_tool_host.py can-diag --port COM4 --baud 115200 --clear
+py -3.9 tools\comm_tool_host.py upgrade --port COM4 --baud 115200 --long-timeout 120 --confirm-upgrade
+py -3.9 tools\comm_tool_host.py upgrade-status --port COM4 --baud 115200
+py -3.9 tools\comm_tool_host.py bms-read --port COM4 --baud 115200 --address 0xD000 --count 2 --long-timeout 10
+
+
+进行不同状态升级测试
+
+comm tool也要加入iap升级功能，可以给comm tool升级，串口协议共用目前的bms，可这样可以复用之前的串口上位机，也可以通过其他的comm tool给当前comm tool升级
+
+加入读、写bms功能
+根据文档，加入适配飞道协议
+
+每次给bms一键升级，都需要先把程序下载烧录到comm tool？那我批量升级，这样效率是否太低了
+
+
+分析这个ui日志“[13:40:36] 开始: 连接检测
+[13:40:36] 连接检测 完成
+[13:40:38] 开始: 使用缓存升级
+[13:40:38] 缓存与当前文件一致，跳过串口下载
+[13:40:38] 缓存校验通过，开始 CAN 升级 BMS
+[13:40:46] 升级状态: state=2 percent=100% error=0x00 written=49132/49132 expect_seq=6142
+[13:40:48] 等待 BMS App 恢复响应: 第 1 次未响应
+[13:40:49] BMS App 第 2 次确认成功
+[13:40:49] BMS App 状态: SOC=14 SOH=100
+[13:40:49] 使用缓存升级 完成14:11:22] 写入缓存: 204/204
+[14:11:23] 缓存校验通过，开始 CAN 升级 BMS
+[14:11:29] 升级状态: state=2 percent=100% error=0x00 written=51988/51988 expect_seq=6499
+[14:11:31] 等待 BMS App 恢复响应: 第 1 次未响应
+[14:11:32] BMS App 第 2 次确认成功
+[14:11:32] BMS App 状态: SOC=60 SOH=100
+[14:11:32] 一键升级 完成
+[14:11:35] 开始: 读取BMS信息
+[14:11:37] 读取BMS信息 失败: comm tool 返回错误: BMS_ERROR(板端拒绝/地址无效/写权限关闭)
+
+”
+能否优化升级速度、流程，同时完整进行不同状态、模式进行升级测试，保证comm tool、bms iap、app升级可靠性,用户可以傻瓜使用而不出问题,Project_Config.h每次你修改后都会乱码，keil可视化配置也乱码
+ui上位机需要实时查看bms信息，每串电压、电流、soc、温度等等信息，可以单独开一个界面
+
+bms app debug和release有什么区别
+给bms app加入完整、重要的日志，用于debug长期检测，使用什么方式来显示日志？串口？效率太低了，是否有其他办法稳定、长期检测
+
+1、完整review bms iap各种情况下是否会有bug，必须保证升级可靠性，iap绝对不能有问题。
+2、comm tool加入iap，可以通过串口、can升级，串口使用和bms同样协议，可以复用之前的上位机升级，can协议可以使用目前通用协议，可以用其他comm tool给当前comm tool来升级
+
+can总线上有多个设备，是否会有问题,ui上位机优化用户体验，例如升级过程加入升级进度等等
+
+上位机单独加入一页，用于测试飞道can协议是否正确，对照飞道can文档，review bms app中的can协议实现是否有问题，同时实现上位机和comm tool
+
+
+
+先不考虑can低功耗相关，完全重构can模块程序，先保证各功能正常、架构清晰简单、稳定，方便阅读
+
+
+PROJECT_CFG_HOST_WRITE_ENABLE默认要为1，release也需要
+
+
+帮我快速熟悉iap、app、comm tool三者架构、代码
+
+
+review下目前的soc模块代码，怎么现在静置状态soc疯狂往下掉
+
+
+同时重新看之前的串口上位机逻辑，保护参数界面有两种，不同afe的保护参数界面、逻辑不一样，目前是sh367309，界面是我截图这种，目前上位机界面是ti bq系列的界面
+
+
+在不影响功能的前提下，保持功能稳定，能否优化整体的通讯速度、升级速度、用户体验等等，目前的速度限制在哪儿
+
+仔细看一下串口上位机中的309参数列表怎么生成的，目前上位机有些参数列表生成的是错的同时要对应和bms app读写协议、单位等等是否正确，保证整个参数读、写不能出问题
+
+comm tool的iap和app是两个独立的keil工程吗？怎么管理更好
+
+上位机加入功能：电池信息长期监控记录到excel文件，参考之前的串口上位机
+
+comm tool的iap闪灯频率设置500ms,app为200ms，方便看是什么状态，还有目前给comm tool串口升级会卡到中途停止
