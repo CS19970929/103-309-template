@@ -38,6 +38,7 @@ CMD_UPGRADE = 0x31
 CMD_UPGRADE_STATUS = 0x32
 CMD_UPGRADE_ABORT = 0x33
 CMD_RAW_CAN_TX = 0x40
+CMD_CAN_DIAG = 0x41
 
 STATUS_TEXT = {
     0x00: "OK",
@@ -353,6 +354,45 @@ def cmd_upgrade_status(args) -> int:
     return 0
 
 
+def cmd_can_diag(args) -> int:
+    payload = b"\x01" if args.clear else b"\x00"
+    with open_client(args) as client:
+        resp = client.command(CMD_CAN_DIAG, payload)
+    data = resp.payload
+    print(f"CAN_DIAG raw: {format_hex(data)}")
+    if len(data) >= 62:
+        (
+            tx_count,
+            tx_ok,
+            tx_fail,
+            tx_timeout,
+            rx_count,
+            rx_drop,
+            last_esr,
+            last_tsr,
+            last_msr,
+            last_rf0r,
+            last_tx_id,
+            last_rx_id,
+        ) = struct.unpack_from("<IIIIIIIIIIII", data, 0)
+        last_tx_ide, last_tx_dlc, last_tx_status, last_rx_ide, last_rx_dlc = struct.unpack_from("<BBBBB", data, 48)
+        last_rx_data = data[53:61]
+        node_id = data[61]
+        print(f"  tx: count={tx_count} ok={tx_ok} fail={tx_fail} timeout={tx_timeout}")
+        print(f"  rx: count={rx_count} drop={rx_drop}")
+        print(f"  regs: ESR=0x{last_esr:08X} TSR=0x{last_tsr:08X} MSR=0x{last_msr:08X} RF0R=0x{last_rf0r:08X}")
+        print(
+            f"  last tx: id=0x{last_tx_id:08X} ide={last_tx_ide} dlc={last_tx_dlc} "
+            f"status=0x{last_tx_status:02X}"
+        )
+        print(
+            f"  last rx: id=0x{last_rx_id:08X} ide={last_rx_ide} dlc={last_rx_dlc} "
+            f"data={format_hex(last_rx_data)}"
+        )
+        print(f"  node_id={node_id}")
+    return 0
+
+
 def cmd_abort(args) -> int:
     with open_client(args) as client:
         client.command(CMD_UPGRADE_ABORT)
@@ -429,6 +469,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_serial_args(p_abort)
     p_abort.set_defaults(func=cmd_abort)
 
+    p_diag = sub.add_parser("can-diag", help="读取 comm tool CAN 诊断计数")
+    add_serial_args(p_diag)
+    p_diag.add_argument("--clear", action="store_true", help="读取前先清空诊断计数")
+    p_diag.set_defaults(func=cmd_can_diag)
+
     return parser
 
 
@@ -440,4 +485,3 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

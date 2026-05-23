@@ -234,6 +234,40 @@ static void handle_upgrade_status(const CtFrame *req)
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 
+static void handle_can_diag(const CtFrame *req)
+{
+    CtCanDiag diag;
+    uint8_t payload[62];
+
+    if ((req->length >= 1u) && (req->payload[0] != 0u))
+    {
+        CtBoard_CanClearDiag();
+    }
+
+    memset(payload, 0, sizeof(payload));
+    CtBoard_CanGetDiag(&diag);
+    wr32(&payload[0], diag.tx_count);
+    wr32(&payload[4], diag.tx_ok);
+    wr32(&payload[8], diag.tx_fail);
+    wr32(&payload[12], diag.tx_timeout);
+    wr32(&payload[16], diag.rx_count);
+    wr32(&payload[20], diag.rx_drop);
+    wr32(&payload[24], diag.last_esr);
+    wr32(&payload[28], diag.last_tsr);
+    wr32(&payload[32], diag.last_msr);
+    wr32(&payload[36], diag.last_rf0r);
+    wr32(&payload[40], diag.last_tx_id);
+    wr32(&payload[44], diag.last_rx_id);
+    payload[48] = diag.last_tx_ide;
+    payload[49] = diag.last_tx_dlc;
+    payload[50] = diag.last_tx_status;
+    payload[51] = diag.last_rx_ide;
+    payload[52] = diag.last_rx_dlc;
+    memcpy(&payload[53], diag.last_rx_data, 8u);
+    payload[61] = s_node_id;
+    respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
+}
+
 void CtApp_HandleFrame(const CtFrame *frame)
 {
     if (frame == 0)
@@ -279,6 +313,9 @@ void CtApp_HandleFrame(const CtFrame *frame)
     case CT_CMD_UPGRADE_ABORT:
         CtUpgrade_Abort();
         respond(frame, CT_STATUS_OK, 0, 0u);
+        break;
+    case CT_CMD_CAN_DIAG:
+        handle_can_diag(frame);
         break;
     default:
         respond(frame, CT_STATUS_UNSUPPORTED, 0, 0u);

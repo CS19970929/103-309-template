@@ -21,6 +21,7 @@
 #define CT_CMD_UPGRADE_STATUS          0x32u
 #define CT_CMD_UPGRADE_ABORT           0x33u
 #define CT_CMD_RAW_CAN_TX              0x40u
+#define CT_CMD_CAN_DIAG                0x41u
 
 typedef struct
 {
@@ -54,4 +55,3 @@ uint16_t CtProtocol_Encode(uint16_t seq,
                            uint16_t out_size);
 
 #endif
-

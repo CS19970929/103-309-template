@@ -39,6 +39,16 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x06` | CAN 超时 |
 | `0x07` | BMS 返回错误 |
 
+`UPGRADE_STATUS.last_error` 为 comm tool 内部阶段码，常用值：
+
+| 阶段码 | 含义 |
+| --- | --- |
+| `0x02` | IAP `HELLO` 未收到 ACK |
+| `0x03` | IAP `START` 未收到 ACK 或被拒绝 |
+| `0x06` | IAP `COMMIT` 未收到 ACK 或被拒绝 |
+| `0x07` | IAP `END` 未收到 ACK 或被拒绝 |
+| `0x21` | 一键升级自动发送 App `ENTER_IAP` 未收到 ACK |
+
 ## 命令
 
 | 命令 | 方向 | payload | 说明 |
@@ -56,6 +66,7 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x32 UPGRADE_STATUS` | PC -> comm | 空 | 查询升级状态 |
 | `0x33 UPGRADE_ABORT` | PC -> comm | 空 | 终止当前升级 |
 | `0x40 RAW_CAN_TX` | PC -> comm | `id:u32 ide:u8 dlc:u8 data[8]` | 调试用原始 CAN 发送 |
+| `0x41 CAN_DIAG` | PC -> comm | `clear:u8` | 读取 comm tool CAN 发送、接收和错误寄存器诊断；`clear!=0` 表示读取前清零 |
 
 ## 安全规则
 
@@ -63,4 +74,3 @@ py -3.9 tools\comm_tool_host.py ...
 - PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
 - comm tool 写缓存前必须擦除缓存页，不能覆盖自身程序区。
 - `FW_END` 校验失败时缓存固件无效，禁止执行 `UPGRADE`。
-

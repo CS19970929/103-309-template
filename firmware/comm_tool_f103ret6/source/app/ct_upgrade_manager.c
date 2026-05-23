@@ -1,4 +1,5 @@
 #include "ct_upgrade_manager.h"
+#include "ct_board_port.h"
 #include "ct_can_gateway.h"
 #include "ct_config.h"
 #include "ct_crc16.h"
@@ -44,6 +45,45 @@ static void set_error(uint8_t err)
     s_status.last_error = err;
 }
 
+static void wait_ms(uint32_t ms)
+{
+    uint32_t start;
+
+    start = CtBoard_GetTickMs();
+    while ((uint32_t)(CtBoard_GetTickMs() - start) < ms)
+    {
+    }
+}
+
+static int send_hello_wait_ack(uint8_t node, uint32_t timeout_ms)
+{
+    return (CtCan_IapSendHello(node) &&
+            CtCan_IapWaitAck(node, CT_CAN_IAP_HELLO, &s_status.expect_seq, timeout_ms));
+}
+
+static int ensure_iap_ready(uint8_t node)
+{
+    if (send_hello_wait_ack(node, 500u))
+    {
+        return 1;
+    }
+
+    if (!CtCan_AppEnterIap(0u))
+    {
+        set_error(0x21u);
+        return 0;
+    }
+
+    wait_ms(800u);
+    if (!send_hello_wait_ack(node, 3000u))
+    {
+        set_error(2u);
+        return 0;
+    }
+
+    return 1;
+}
+
 int CtUpgrade_Start(uint8_t node)
 {
     const CtFirmwareInfo *info;
@@ -70,9 +110,8 @@ int CtUpgrade_Start(uint8_t node)
     s_status.total = info->size;
     s_abort = 0u;
 
-    if (!CtCan_IapSendHello(node) || !CtCan_IapWaitAck(node, CT_CAN_IAP_HELLO, &s_status.expect_seq, 1000u))
+    if (!ensure_iap_ready(node))
     {
-        set_error(2u);
         return 0;
     }
     if (!CtCan_IapSendStart(node, info->size, info->crc16) ||

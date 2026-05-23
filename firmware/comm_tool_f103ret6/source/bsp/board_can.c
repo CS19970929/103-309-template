@@ -11,6 +11,15 @@
 static volatile uint8_t s_rx_head;
 static volatile uint8_t s_rx_tail;
 static CtCanFrame s_rx_queue[BOARD_CAN_RX_QUEUE_SIZE];
+static CtCanDiag s_diag;
+
+static void can_diag_latch_regs(void)
+{
+    s_diag.last_esr = CAN1->ESR;
+    s_diag.last_tsr = CAN1->TSR;
+    s_diag.last_msr = CAN1->MSR;
+    s_diag.last_rf0r = CAN1->RF0R;
+}
 
 static uint16_t bitrate_to_prescaler(uint32_t bitrate)
 {
@@ -36,6 +45,8 @@ static void can_rx_push(const CanRxMsg *msg)
     next = (uint8_t)((s_rx_head + 1u) % BOARD_CAN_RX_QUEUE_SIZE);
     if (next == s_rx_tail)
     {
+        s_diag.rx_drop++;
+        can_diag_latch_regs();
         return;
     }
 
@@ -49,6 +60,12 @@ static void can_rx_push(const CanRxMsg *msg)
         slot->data[i] = msg->Data[i];
     }
     s_rx_head = next;
+    s_diag.rx_count++;
+    s_diag.last_rx_id = slot->id;
+    s_diag.last_rx_ide = slot->ide;
+    s_diag.last_rx_dlc = slot->dlc;
+    memcpy(s_diag.last_rx_data, slot->data, sizeof(s_diag.last_rx_data));
+    can_diag_latch_regs();
 }
 
 static int can_rx_pop(CtCanFrame *frame)
@@ -96,6 +113,8 @@ static int can_hw_init(uint32_t bitrate)
 
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
     CAN_DeInit(CAN1);
+    s_rx_head = 0u;
+    s_rx_tail = 0u;
     CAN_StructInit(&can);
     can.CAN_TTCM = DISABLE;
     can.CAN_ABOM = ENABLE;
@@ -151,11 +170,19 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
     uint8_t mailbox;
     uint8_t i;
     uint32_t start;
+    uint8_t tx_status;
 
     if ((frame == 0) || (frame->dlc > 8u))
     {
         return 0;
     }
+
+    s_diag.tx_count++;
+    s_diag.last_tx_id = frame->id;
+    s_diag.last_tx_ide = frame->ide;
+    s_diag.last_tx_dlc = frame->dlc;
+    s_diag.last_tx_status = 0u;
+    can_diag_latch_regs();
 
     memset(&msg, 0, sizeof(msg));
     msg.IDE = (frame->ide != 0u) ? CAN_ID_EXT : CAN_ID_STD;
@@ -177,6 +204,9 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
     mailbox = CAN_Transmit(CAN1, &msg);
     if (mailbox == CAN_TxStatus_NoMailBox)
     {
+        s_diag.tx_fail++;
+        s_diag.last_tx_status = CAN_TxStatus_NoMailBox;
+        can_diag_latch_regs();
         return 0;
     }
 
@@ -185,11 +215,24 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
     {
         if ((uint32_t)(CtBoard_GetTickMs() - start) >= timeout_ms)
         {
+            s_diag.tx_timeout++;
+            s_diag.last_tx_status = CAN_TxStatus_Pending;
+            can_diag_latch_regs();
             return 0;
         }
     }
 
-    return (CAN_TransmitStatus(CAN1, mailbox) == CAN_TxStatus_Ok) ? 1 : 0;
+    tx_status = CAN_TransmitStatus(CAN1, mailbox);
+    s_diag.last_tx_status = tx_status;
+    can_diag_latch_regs();
+    if (tx_status == CAN_TxStatus_Ok)
+    {
+        s_diag.tx_ok++;
+        return 1;
+    }
+
+    s_diag.tx_fail++;
+    return 0;
 }
 
 int CtBoard_CanRecv(CtCanFrame *frame, uint32_t timeout_ms)
@@ -217,4 +260,21 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
         CAN_Receive(CAN1, CAN_FIFO0, &msg);
         can_rx_push(&msg);
     }
+}
+
+void CtBoard_CanGetDiag(CtCanDiag *diag)
+{
+    if (diag == 0)
+    {
+        return;
+    }
+
+    can_diag_latch_regs();
+    *diag = s_diag;
+}
+
+void CtBoard_CanClearDiag(void)
+{
+    memset(&s_diag, 0, sizeof(s_diag));
+    can_diag_latch_regs();
 }
