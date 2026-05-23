@@ -54,7 +54,7 @@ def resolve_repo_root() -> Path:
 REPO_ROOT = resolve_repo_root()
 DEFAULT_BIN = REPO_ROOT / "103 + 309" / "Project" / "Users" / "Objects" / "FD_Release.bin"
 DEFAULT_LONG_TIMEOUT = 180.0
-DEFAULT_CHUNK_SIZE = 256
+DEFAULT_CHUNK_SIZE = 496
 POST_UPGRADE_APP_READY_TIMEOUT = 15.0
 POST_UPGRADE_APP_READY_INTERVAL = 1.0
 
@@ -1978,6 +1978,7 @@ class UpgradeUi(tk.Tk):
     def _download_image(self, client: CommToolClient, image: bytes) -> None:
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
+        start_time = time.monotonic()
         total = math.ceil(len(image) / DEFAULT_CHUNK_SIZE)
         client.command(CMD_FW_BEGIN, struct.pack("<IIHI", APP_BASE_ADDR, len(image), crc16, crc32), timeout=5.0)
         for index, offset in enumerate(range(0, len(image), DEFAULT_CHUNK_SIZE), start=1):
@@ -1987,6 +1988,8 @@ class UpgradeUi(tk.Tk):
                 self._emit("progress", min(90, int(index * 90 / total)))
                 self._emit("log", f"写入缓存: {index}/{total}")
         client.command(CMD_FW_END, struct.pack("<IHI", len(image), crc16, crc32), timeout=5.0)
+        elapsed = max(0.001, time.monotonic() - start_time)
+        self._emit("log", f"写入缓存完成: {len(image)} bytes, {elapsed:.1f}s, {len(image) / 1024.0 / elapsed:.1f} KiB/s")
 
     def _assert_cache_matches(self, image: bytes, cache: dict) -> None:
         crc16 = crc16_modbus(image)

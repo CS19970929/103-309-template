@@ -18,6 +18,8 @@ MAGIC = 0xAA55
 VERSION = 1
 FLAG_ACK = 0x01
 MAX_PAYLOAD = 512
+FW_DATA_MAX_CHUNK = MAX_PAYLOAD - 4
+FW_DATA_DEFAULT_CHUNK = 496
 
 APP_BASE_ADDR = 0x08004800
 IAP_BASE_ADDR = 0x08000000
@@ -225,6 +227,8 @@ def vector_summary(image: bytes) -> tuple[int, int, bool, bool]:
 
 
 def print_image_plan(path: Path, image: bytes, app_address: int, chunk_size: int) -> None:
+    if chunk_size <= 0 or chunk_size > FW_DATA_MAX_CHUNK:
+        raise ValueError(f"chunk-size 必须在 1..{FW_DATA_MAX_CHUNK} 之间")
     crc16 = crc16_modbus(image)
     crc32 = zlib.crc32(image) & 0xFFFFFFFF
     msp, reset, msp_ok, reset_ok = vector_summary(image)
@@ -300,6 +304,7 @@ def cmd_fw_download(args) -> int:
     begin_payload = struct.pack("<IIHI", args.app_address, len(image), crc16, crc32)
 
     with open_client(args) as client:
+        start_time = time.monotonic()
         client.command(CMD_FW_BEGIN, begin_payload, timeout=args.long_timeout)
         total = math.ceil(len(image) / args.chunk_size)
         for index, (offset, chunk) in enumerate(iter_chunks(image, args.chunk_size), 1):
@@ -307,7 +312,8 @@ def cmd_fw_download(args) -> int:
             if index == total or index % args.progress_every == 0:
                 print(f"  下载进度: {index}/{total} offset=0x{offset:08X}")
         client.command(CMD_FW_END, struct.pack("<IHI", len(image), crc16, crc32), timeout=args.long_timeout)
-    print("固件已写入 comm tool 缓存并完成校验。")
+    elapsed = max(0.001, time.monotonic() - start_time)
+    print(f"固件已写入 comm tool 缓存并完成校验。耗时 {elapsed:.1f}s，速度 {len(image) / 1024.0 / elapsed:.1f} KiB/s")
     return 0
 
 
@@ -436,7 +442,7 @@ def add_serial_args(parser: argparse.ArgumentParser) -> None:
 def add_fw_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--bin", required=True, help="BMS App bin 文件")
     parser.add_argument("--app-address", type=lambda value: int(value, 0), default=APP_BASE_ADDR)
-    parser.add_argument("--chunk-size", type=int, default=256)
+    parser.add_argument("--chunk-size", type=int, default=FW_DATA_DEFAULT_CHUNK)
 
 
 def build_parser() -> argparse.ArgumentParser:
