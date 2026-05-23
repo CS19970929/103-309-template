@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import math
 import queue
 import struct
@@ -12,6 +13,7 @@ import threading
 import time
 import zlib
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -54,10 +56,13 @@ def resolve_repo_root() -> Path:
 
 REPO_ROOT = resolve_repo_root()
 DEFAULT_BIN = REPO_ROOT / "103 + 309" / "Project" / "Users" / "Objects" / "FD_Release.bin"
+DEFAULT_LOG_DIR = REPO_ROOT / "logs"
 DEFAULT_LONG_TIMEOUT = 180.0
 DEFAULT_CHUNK_SIZE = 496
 POST_UPGRADE_APP_READY_TIMEOUT = 15.0
 POST_UPGRADE_APP_READY_INTERVAL = 1.0
+LOG_MIN_INTERVAL_SECONDS = 2.0
+LOG_MAX_INTERVAL_SECONDS = 3600.0
 
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
@@ -651,6 +656,10 @@ class UpgradeUi(tk.Tk):
         self.comm_state_var = tk.StringVar(value="通信: 未连接")
         self.live_interval_var = tk.StringVar(value="2.0")
         self.live_button_var = tk.StringVar(value="开始监控")
+        self.log_interval_var = tk.StringVar(value="5")
+        self.log_file_var = tk.StringVar(value="")
+        self.log_status_var = tk.StringVar(value="记录: 已停止")
+        self.log_button_var = tk.StringVar(value="开始记录")
         self.progress_var = tk.DoubleVar(value=0.0)
         self.active_port = port
         self.active_baud = baud
@@ -670,6 +679,11 @@ class UpgradeUi(tk.Tk):
         self.live_running = False
         self.live_after_id: str | None = None
         self.live_worker: threading.Thread | None = None
+        self.log_running = False
+        self.log_path: Path | None = None
+        self.log_count = 0
+        self.log_started_monotonic = 0.0
+        self.log_next_due_monotonic = 0.0
         self.param_entry_vars: dict[str, tk.StringVar] = {}
         self.param_widgets: dict[str, tk.Widget] = {}
         self.param_dirty: set[str] = set()
@@ -881,6 +895,15 @@ class UpgradeUi(tk.Tk):
         )
         ttk.Label(parent, text="间隔(s)").grid(row=1, column=3, sticky="w", padx=(0, 4), pady=(4, 8))
         ttk.Entry(parent, textvariable=self.live_interval_var, width=5).grid(row=1, column=4, sticky="w", padx=(0, 10), pady=(4, 8))
+        ttk.Label(parent, text="记录间隔(s)").grid(row=2, column=0, padx=(10, 6), pady=(0, 4), sticky="w")
+        ttk.Entry(parent, textvariable=self.log_interval_var, width=10).grid(row=2, column=1, sticky="w", pady=(0, 4))
+        ttk.Button(parent, text="选择文件", command=self._choose_log_file).grid(row=2, column=2, padx=6, pady=(0, 4))
+        ttk.Button(parent, textvariable=self.log_button_var, command=self._toggle_data_log).grid(
+            row=2, column=3, padx=(0, 10), pady=(0, 4)
+        )
+        ttk.Label(parent, textvariable=self.log_status_var).grid(
+            row=3, column=0, columnspan=5, sticky="w", padx=10, pady=(0, 8)
+        )
 
     def _build_data_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
@@ -1341,6 +1364,8 @@ class UpgradeUi(tk.Tk):
     def _stop_live_monitor(self) -> None:
         self.live_running = False
         self.live_button_var.set("开始监控")
+        if self.log_running:
+            self._stop_data_log("监控停止，日志记录已停止")
         if self.live_after_id is not None:
             try:
                 self.after_cancel(self.live_after_id)
@@ -1362,6 +1387,199 @@ class UpgradeUi(tk.Tk):
             seconds = 2.0
         seconds = max(1.0, min(seconds, 60.0))
         return int(seconds * 1000)
+
+    def _log_interval_seconds(self) -> float:
+        try:
+            seconds = float(self.log_interval_var.get())
+        except ValueError as exc:
+            raise RuntimeError("记录间隔必须是数字") from exc
+        if seconds < LOG_MIN_INTERVAL_SECONDS or seconds > LOG_MAX_INTERVAL_SECONDS:
+            raise RuntimeError("记录间隔范围为 2 - 3600 秒")
+        return seconds
+
+    def _default_log_path(self) -> Path:
+        return DEFAULT_LOG_DIR / f"BMS_{datetime.now():%Y%m%d_%H%M%S}_log.csv"
+
+    def _choose_log_file(self) -> None:
+        initial = Path(self.log_file_var.get()).parent if self.log_file_var.get() else DEFAULT_LOG_DIR
+        target = filedialog.asksaveasfilename(
+            title="保存长期监控记录",
+            initialdir=str(initial),
+            initialfile=f"BMS_{datetime.now():%Y%m%d_%H%M%S}_log.csv",
+            defaultextension=".csv",
+            filetypes=[("Excel CSV", "*.csv"), ("All files", "*.*")],
+        )
+        if target:
+            self.log_file_var.set(str(Path(target).resolve()))
+
+    def _toggle_data_log(self) -> None:
+        if self.log_running:
+            self._stop_data_log("日志记录已停止")
+        else:
+            self._start_data_log()
+
+    def _start_data_log(self) -> None:
+        try:
+            interval = self._log_interval_seconds()
+            path = Path(self.log_file_var.get()).resolve() if self.log_file_var.get() else self._default_log_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_header = (not path.exists()) or path.stat().st_size == 0
+            with path.open("a", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.writer(handle)
+                if write_header:
+                    writer.writerow(self._battery_log_headers())
+        except Exception as exc:
+            messagebox.showerror("日志记录失败", str(exc))
+            return
+
+        self.log_path = path
+        self.log_file_var.set(str(path))
+        self.log_running = True
+        self.log_count = 0
+        self.log_started_monotonic = time.monotonic()
+        self.log_next_due_monotonic = 0.0
+        self.log_button_var.set("停止记录")
+        self.log_status_var.set(f"记录: 运行中 0 条  {path.name}")
+        self._log(f"长期监控记录开始: {path}")
+
+        try:
+            live_interval = float(self.live_interval_var.get())
+        except ValueError:
+            live_interval = interval
+        if live_interval > interval:
+            self.live_interval_var.set(f"{interval:g}")
+        if not self.live_running:
+            self.live_running = True
+            self.live_button_var.set("停止监控")
+            self.comm_state_var.set("通信: 监控中")
+            self._schedule_live_monitor(0)
+        else:
+            if self.live_after_id is not None:
+                try:
+                    self.after_cancel(self.live_after_id)
+                except tk.TclError:
+                    pass
+                self.live_after_id = None
+            self._schedule_live_monitor(0)
+
+    def _stop_data_log(self, message: str) -> None:
+        self.log_running = False
+        self.log_next_due_monotonic = 0.0
+        self.log_button_var.set("开始记录")
+        name = self.log_path.name if self.log_path is not None else "--"
+        self.log_status_var.set(f"记录: 已停止 {self.log_count} 条  {name}")
+        self._log(message)
+
+    def _battery_log_headers(self) -> list[str]:
+        headers = [
+            "时间",
+            "记录序号",
+            "运行秒",
+            "串口",
+            "总压(V)",
+            "充电电流(A)",
+            "放电电流(A)",
+            "电流(A)",
+            "SOC(%)",
+            "SOH(%)",
+            "剩余容量(mAh)",
+            "满电容量(mAh)",
+            "出厂容量(mAh)",
+            "循环次数",
+            "最高单体(mV)",
+            "最高单体序号",
+            "最低单体(mV)",
+            "最低单体序号",
+            "平均单体(mV)",
+            "最大压差(mV)",
+            "最高温度(℃)",
+            "最低温度(℃)",
+        ]
+        headers.extend(f"温度{index}(℃)" for index in range(1, 11))
+        headers.extend(
+            [
+                "一级告警字",
+                "二级告警字",
+                "三级保护字",
+                "均衡低字",
+                "均衡高字",
+                "系统状态字",
+                "功能字",
+            ]
+        )
+        headers.extend(f"单体{index:02d}(mV)" for index in range(1, 33))
+        return headers
+
+    def _battery_log_row(self, words: list[int]) -> list[str]:
+        valid_cells = _valid_cell_items(words[0:32])
+        if valid_cells:
+            max_index, max_mv = max(valid_cells, key=lambda item: item[1])
+            min_index, min_mv = min(valid_cells, key=lambda item: item[1])
+            avg_mv = sum(value for _, value in valid_cells) / len(valid_cells)
+            cell_stats = [str(max_mv), str(max_index + 1), str(min_mv), str(min_index + 1), f"{avg_mv:.2f}", str(max_mv - min_mv)]
+        else:
+            cell_stats = ["", "", "", "", "", ""]
+
+        ichg = words[50] / 10.0
+        idsg = words[51] / 10.0
+        net_current = ichg if ichg > 0 else -idsg
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            str(self.log_count + 1),
+            f"{time.monotonic() - self.log_started_monotonic:.1f}",
+            self.active_port,
+            f"{words[37] / 100.0:.2f}",
+            f"{ichg:.1f}",
+            f"{idsg:.1f}",
+            f"{net_current:.1f}",
+            str(words[52]),
+            str(words[53]),
+            str(words[54] * 10),
+            str(words[55] * 10),
+            str(words[56] * 10),
+            str(words[57]),
+            *cell_stats,
+            self._temp_display(words[48]),
+            self._temp_display(words[49]),
+        ]
+        row.extend(self._temp_display(raw) for raw in words[38:48])
+        row.extend(
+            [
+                f"0x{words[58]:04X}",
+                f"0x{words[59]:04X}",
+                f"0x{words[60]:04X}",
+                f"0x{words[61]:04X}",
+                f"0x{words[62]:04X}",
+                f"0x{words[84]:04X}" if len(words) > 84 else "",
+                f"0x{words[86]:04X}" if len(words) > 86 else "",
+            ]
+        )
+        row.extend(str(value) if _is_valid_cell_voltage(value) else "" for value in words[0:32])
+        return row
+
+    def _maybe_record_snapshot(self, words: list[int]) -> None:
+        if not self.log_running:
+            return
+        if len(words) < BMS_OVERVIEW_WORDS:
+            return
+        now = time.monotonic()
+        if self.log_next_due_monotonic != 0.0 and now < self.log_next_due_monotonic:
+            return
+        try:
+            interval = self._log_interval_seconds()
+            if self.log_path is None:
+                raise RuntimeError("日志文件未设置")
+            with self.log_path.open("a", encoding="utf-8-sig", newline="") as handle:
+                csv.writer(handle).writerow(self._battery_log_row(words))
+        except Exception as exc:
+            self._stop_data_log("日志记录已停止")
+            messagebox.showerror("日志记录失败", f"写入日志失败，请确认文件未被 Excel 打开。\n\n{exc}")
+            return
+
+        self.log_count += 1
+        self.log_next_due_monotonic = now + interval
+        if self.log_path is not None:
+            self.log_status_var.set(f"记录: 运行中 {self.log_count} 条  {self.log_path.name}")
 
     def _poll_live_monitor(self) -> None:
         self.live_after_id = None
@@ -1489,6 +1707,7 @@ class UpgradeUi(tk.Tk):
         self.bms_info_var.set(self._format_bms_overview(words[:BMS_OVERVIEW_WORDS]))
         self.comm_state_var.set("通信: 正在通讯" if self.live_running else "通信: 已响应")
         self._update_data_tree(words)
+        self._maybe_record_snapshot(words)
 
     def _update_data_tree(self, words: list[int]) -> None:
         tree = getattr(self, "data_tree", None)
@@ -2519,6 +2738,33 @@ def main() -> int:
             raise RuntimeError("SH309 二级过流 raw 单位应为 A*10")
         if BMS_PARAM_BY_KEY["短路参数/短路延时"].kind != "x10":
             raise RuntimeError("短路延时应按 10ms raw 和 ms 显示换算")
+        probe = object.__new__(UpgradeUi)
+        probe.log_count = 0
+        probe.log_started_monotonic = time.monotonic()
+        probe.active_port = "COM_TEST"
+        words = [0] * BMS_LIVE_WORDS
+        for index in range(10):
+            words[index] = 3300 + index
+        words[10] = CELL_VOLTAGE_NOT_PRESENT
+        words[37] = 3350
+        words[38] = 640
+        words[39] = 650
+        words[48] = 650
+        words[49] = 640
+        words[50] = 12
+        words[51] = 0
+        words[52] = 80
+        words[53] = 100
+        words[54] = 1200
+        words[55] = 1800
+        words[56] = 1800
+        words[57] = 3
+        headers = UpgradeUi._battery_log_headers(probe)
+        row = UpgradeUi._battery_log_row(probe, words)
+        if len(headers) != len(row):
+            raise RuntimeError("长期监控 CSV 表头和数据列数不一致")
+        if "61001" in row[-32:]:
+            raise RuntimeError("不存在的单体电压不应写入 CSV")
         root = tk.Tk()
         root.withdraw()
         root.destroy()
