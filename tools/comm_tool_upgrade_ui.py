@@ -60,6 +60,7 @@ POST_UPGRADE_APP_READY_INTERVAL = 1.0
 
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
+BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
@@ -85,6 +86,25 @@ BMS_EVENT_NAMES = [
     "AFE1报错",
     "AFE2报错",
     "EEPROM报错",
+]
+
+FAULT_BIT_NAMES = [
+    "单体过压",
+    "单体欠压",
+    "总压过压",
+    "总压欠压",
+    "充电过流",
+    "放电过流",
+    "充电高温",
+    "放电高温",
+    "充电低温",
+    "放电低温",
+    "压差过大",
+    "温差过大",
+    "SOC低",
+    "MOS过温",
+    "保留1",
+    "保留2",
 ]
 
 
@@ -194,6 +214,17 @@ def _cell_stat_text(valid_cells: list[tuple[int, int]]) -> tuple[str, str, str]:
     max_index, max_mv = max(valid_cells, key=lambda item: item[1])
     min_index, min_mv = min(valid_cells, key=lambda item: item[1])
     return f"{max_mv}mV({max_index + 1})", f"{min_mv}mV({min_index + 1})", f"{max_mv - min_mv}mV"
+
+
+def _fault_text(word: int) -> str:
+    names = [name for index, name in enumerate(FAULT_BIT_NAMES) if (word & (1 << index)) != 0]
+    return "、".join(names) if names else "无"
+
+
+def _onoff_text(enabled: bool | None) -> str:
+    if enabled is None:
+        return "--"
+    return "on" if enabled else "off"
 
 
 def _format_number(value: float) -> str:
@@ -479,9 +510,9 @@ class BmsLogWindow(tk.Toplevel):
 class UpgradeUi(tk.Tk):
     def __init__(self, port: str, baud: int, bin_path: Path):
         super().__init__()
-        self.title("BMS comm tool 上位机")
-        self.geometry("980x760")
-        self.minsize(920, 700)
+        self.title("BMS_V1.13.1 - CAN用户上位机")
+        self.geometry("1180x760")
+        self.minsize(1100, 700)
 
         self.events: "queue.Queue[UiEvent]" = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -503,6 +534,10 @@ class UpgradeUi(tk.Tk):
         self.param_current_var = tk.StringVar(value="未读取")
         self.param_selected_var = tk.StringVar(value="未选择")
         self.param_edit_var = tk.StringVar(value="")
+        self.param_dirty_var = tk.StringVar(value="未修改")
+        self.comm_state_var = tk.StringVar(value="通信: 未连接")
+        self.live_interval_var = tk.StringVar(value="2.0")
+        self.live_button_var = tk.StringVar(value="开始监控")
         self.progress_var = tk.DoubleVar(value=0.0)
         self.active_port = port
         self.active_baud = baud
@@ -513,8 +548,16 @@ class UpgradeUi(tk.Tk):
         self.param_values: dict[str, int] = {}
         self.active_param_key = ""
         self.active_param_raw = 0
+        self.active_param_values: dict[str, int] = {}
         self.active_param_range = ""
         self.monitor_window: BmsMonitorWindow | None = None
+        self.live_running = False
+        self.live_after_id: str | None = None
+        self.live_worker: threading.Thread | None = None
+        self.param_entry_vars: dict[str, tk.StringVar] = {}
+        self.param_dirty: set[str] = set()
+        self.param_loading = False
+        self.log_tree: ttk.Treeview | None = None
 
         self._build_ui()
         self._refresh_ports()
@@ -522,151 +565,622 @@ class UpgradeUi(tk.Tk):
         self._describe_selected_bin()
 
     def _build_ui(self) -> None:
-        root = ttk.Frame(self, padding=12)
+        self._configure_styles()
+
+        root = ttk.Frame(self, padding=4)
         root.pack(fill=tk.BOTH, expand=True)
         root.columnconfigure(0, weight=1)
-        root.rowconfigure(5, weight=1)
+        root.rowconfigure(0, weight=1)
 
-        conn = ttk.LabelFrame(root, text="连接")
-        conn.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        conn.columnconfigure(1, weight=1)
-        conn.columnconfigure(4, weight=1)
+        notebook = ttk.Notebook(root)
+        notebook.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(conn, text="串口").grid(row=0, column=0, padx=(10, 6), pady=10)
-        self.port_combo = ttk.Combobox(conn, textvariable=self.port_var, width=18)
-        self.port_combo.grid(row=0, column=1, sticky="w", pady=10)
-        ttk.Button(conn, text="刷新", command=self._refresh_ports).grid(row=0, column=2, padx=6, pady=10)
-        ttk.Label(conn, text="波特率").grid(row=0, column=3, padx=(18, 6), pady=10)
-        ttk.Entry(conn, textvariable=self.baud_var, width=12).grid(row=0, column=4, sticky="w", pady=10)
-        ttk.Button(conn, text="连接检测", command=self._check_connection).grid(row=0, column=5, padx=10, pady=10)
+        monitor_tab = ttk.Frame(notebook, padding=6)
+        data_tab = ttk.Frame(notebook, padding=6)
+        storage_tab = ttk.Frame(notebook, padding=6)
+        params_tab = ttk.Frame(notebook, padding=6)
+        system_tab = ttk.Frame(notebook, padding=6)
+        other_tab = ttk.Frame(notebook, padding=6)
 
-        file_box = ttk.LabelFrame(root, text="升级文件")
-        file_box.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        notebook.add(monitor_tab, text="实时监控")
+        notebook.add(data_tab, text="实时数据")
+        notebook.add(storage_tab, text="存储信息")
+        notebook.add(params_tab, text="参数设置")
+        notebook.add(system_tab, text="系统状态")
+        notebook.add(other_tab, text="其它功能")
+
+        self._build_monitor_tab(monitor_tab)
+        self._build_data_tab(data_tab)
+        self._build_storage_tab(storage_tab)
+        self._build_params_tab(params_tab)
+        self._build_system_tab(system_tab)
+        self._build_other_tab(other_tab)
+
+        bottom = ttk.Frame(root)
+        bottom.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        bottom.columnconfigure(1, weight=1)
+        ttk.Label(bottom, textvariable=self.result_var).grid(row=0, column=0, sticky="w")
+        ttk.Label(bottom, textvariable=self.comm_state_var).grid(row=0, column=1, sticky="e", padx=(8, 0))
+
+    def _configure_styles(self) -> None:
+        self.style = ttk.Style(self)
+        try:
+            self.style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.style.configure("TNotebook.Tab", padding=(12, 4))
+        self.style.configure("Small.TLabel", font=("TkDefaultFont", 8))
+        self.style.configure("Value.TLabel", font=("TkDefaultFont", 10, "bold"))
+
+    def _build_monitor_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=3)
+        tab.columnconfigure(1, weight=2)
+        tab.columnconfigure(2, weight=3)
+        tab.rowconfigure(0, weight=1)
+
+        left = ttk.LabelFrame(tab, text="单体电压(mV)")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(1, weight=1)
+
+        stat = ttk.Frame(left)
+        stat.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 2))
+        for col in range(4):
+            stat.columnconfigure(col, weight=1)
+        self.cell_stat_vars = {
+            "max": tk.StringVar(value="最高电压 --"),
+            "min": tk.StringVar(value="最低电压 --"),
+            "avg": tk.StringVar(value="平均电压 --"),
+            "delta": tk.StringVar(value="最大压差 --"),
+        }
+        ttk.Label(stat, textvariable=self.cell_stat_vars["max"], foreground="red").grid(row=0, column=0, sticky="w")
+        ttk.Label(stat, textvariable=self.cell_stat_vars["min"], foreground="green").grid(row=0, column=1, sticky="w")
+        ttk.Label(stat, textvariable=self.cell_stat_vars["avg"]).grid(row=1, column=0, sticky="w", pady=(3, 0))
+        ttk.Label(stat, textvariable=self.cell_stat_vars["delta"]).grid(row=1, column=1, sticky="w", pady=(3, 0))
+
+        cells_frame = ttk.Frame(left)
+        cells_frame.grid(row=1, column=0, sticky="nsew", padx=8, pady=6)
+        for col in range(4):
+            cells_frame.columnconfigure(col, weight=1)
+        self.cell_slots: list[tuple[ttk.Frame, int, int]] = []
+        self.cell_value_vars: list[tk.StringVar] = []
+        for index in range(32):
+            row = index % 16
+            col = (index // 16) * 2
+            cell = ttk.Frame(cells_frame, borderwidth=1, relief="ridge", padding=(2, 2))
+            number = tk.Label(cell, text=f"{index + 1:02d}", width=4, bg="#32f020", fg="red")
+            number.grid(row=0, column=0, padx=(0, 4))
+            value_var = tk.StringVar(value="--")
+            ttk.Label(cell, textvariable=value_var, width=7, anchor="e").grid(row=0, column=1)
+            cell.grid(row=row, column=col, sticky="w", padx=(0, 14), pady=3)
+            self.cell_slots.append((cell, row, col))
+            self.cell_value_vars.append(value_var)
+
+        center = ttk.Frame(tab)
+        center.grid(row=0, column=1, sticky="nsew", padx=6)
+        center.columnconfigure(0, weight=1)
+        center.rowconfigure(1, weight=1)
+
+        basic = ttk.LabelFrame(center, text="基础信息")
+        basic.grid(row=0, column=0, sticky="ew")
+        basic.columnconfigure(1, weight=1)
+        self.basic_vars = {
+            "total_v": tk.StringVar(value="--"),
+            "current": tk.StringVar(value="--"),
+            "soh": tk.StringVar(value="--"),
+            "cap_now": tk.StringVar(value="--"),
+            "cap_full": tk.StringVar(value="--"),
+            "cycle": tk.StringVar(value="--"),
+            "soc": tk.StringVar(value="SOC:--"),
+            "state": tk.StringVar(value="--"),
+        }
+        for row, (label, key, unit) in enumerate(
+            [
+                ("总压", "total_v", "V"),
+                ("电流", "current", "A"),
+                ("SOH", "soh", "%"),
+                ("剩余容量", "cap_now", "mAh"),
+                ("满电容量", "cap_full", "mAh"),
+                ("循环次数", "cycle", ""),
+            ]
+        ):
+            ttk.Label(basic, text=label).grid(row=row, column=0, sticky="w", padx=(12, 6), pady=7)
+            ttk.Label(basic, textvariable=self.basic_vars[key], style="Value.TLabel").grid(row=row, column=1, sticky="w", pady=7)
+            ttk.Label(basic, text=unit).grid(row=row, column=2, sticky="w", padx=(4, 10), pady=7)
+        ttk.Label(basic, textvariable=self.basic_vars["soc"], font=("TkDefaultFont", 13, "bold")).grid(
+            row=0, column=3, columnspan=2, sticky="s", padx=(12, 12)
+        )
+        self.battery_canvas = tk.Canvas(basic, width=84, height=170, highlightthickness=0)
+        self.battery_canvas.grid(row=1, column=3, rowspan=5, padx=(10, 14), pady=(4, 10))
+        ttk.Label(basic, textvariable=self.basic_vars["state"]).grid(row=6, column=3, sticky="n", pady=(0, 8))
+        self._draw_battery(0)
+
+        temp = ttk.LabelFrame(center, text="温度(℃)")
+        temp.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
+        temp.columnconfigure(1, weight=1)
+        self.temp_vars = {
+            "max": tk.StringVar(value="--"),
+            "min": tk.StringVar(value="--"),
+            "t1": tk.StringVar(value="--"),
+            "t2": tk.StringVar(value="--"),
+            "mos": tk.StringVar(value="--"),
+        }
+        for row, (label, key, color) in enumerate(
+            [("最高温度", "max", "red"), ("最低温度", "min", "green"), ("温度1", "t1", ""), ("温度2", "t2", ""), ("MOS温度", "mos", "")]
+        ):
+            ttk.Label(temp, text=label).grid(row=row, column=0, sticky="w", padx=(12, 8), pady=13)
+            value_label = ttk.Label(temp, textvariable=self.temp_vars[key])
+            if color:
+                value_label.configure(foreground=color)
+            value_label.grid(row=row, column=1, sticky="w", pady=13)
+            ttk.Label(temp, text="℃").grid(row=row, column=2, sticky="w", padx=(4, 12), pady=13)
+
+        right = ttk.Frame(tab)
+        right.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(3, weight=1)
+        right.rowconfigure(4, weight=1)
+        right.rowconfigure(5, weight=1)
+
+        comm = ttk.LabelFrame(right, text="通信设置")
+        comm.grid(row=0, column=0, sticky="ew")
+        self._build_connection_panel(comm)
+
+        sys_box = ttk.LabelFrame(right, text="系统状态")
+        sys_box.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        self.status_badges: dict[str, tk.Label] = {}
+        for col, name in enumerate(["充电MOS", "放电MOS", "加热", "冷凝"]):
+            ttk.Label(sys_box, text=name).grid(row=0, column=col, sticky="n", padx=7, pady=(7, 2))
+            badge = tk.Label(sys_box, text="--", width=8, relief="ridge", bg="#b0b0b0", fg="white")
+            badge.grid(row=1, column=col, padx=7, pady=(0, 7))
+            self.status_badges[name] = badge
+
+        self.fault_vars = {
+            "first": tk.StringVar(value="--"),
+            "second": tk.StringVar(value="--"),
+            "third": tk.StringVar(value="--"),
+            "monitor": tk.StringVar(value="--"),
+        }
+        for row, (title, key) in enumerate([("一级告警", "first"), ("二级告警", "second"), ("三级保护", "third"), ("系统监控信息", "monitor")], start=2):
+            box = ttk.LabelFrame(right, text=title)
+            box.grid(row=row, column=0, sticky="nsew", pady=(8, 0))
+            box.columnconfigure(0, weight=1)
+            ttk.Label(box, textvariable=self.fault_vars[key], justify=tk.LEFT, wraplength=360).grid(
+                row=0, column=0, sticky="nw", padx=8, pady=8
+            )
+
+    def _build_connection_panel(self, parent: ttk.LabelFrame) -> None:
+        parent.columnconfigure(1, weight=1)
+        ttk.Label(parent, text="串口").grid(row=0, column=0, padx=(10, 6), pady=(8, 4), sticky="w")
+        self.port_combo = ttk.Combobox(parent, textvariable=self.port_var, width=12)
+        self.port_combo.grid(row=0, column=1, sticky="w", pady=(8, 4))
+        ttk.Button(parent, text="刷新", command=self._refresh_ports).grid(row=0, column=2, padx=6, pady=(8, 4))
+        ttk.Button(parent, text="连接检测", command=self._check_connection).grid(row=0, column=3, padx=(0, 10), pady=(8, 4))
+        ttk.Label(parent, text="波特率").grid(row=1, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
+        ttk.Entry(parent, textvariable=self.baud_var, width=10).grid(row=1, column=1, sticky="w", pady=(4, 8))
+        ttk.Button(parent, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(
+            row=1, column=2, padx=6, pady=(4, 8)
+        )
+        ttk.Label(parent, text="间隔(s)").grid(row=1, column=3, sticky="w", padx=(0, 4), pady=(4, 8))
+        ttk.Entry(parent, textvariable=self.live_interval_var, width=5).grid(row=1, column=4, sticky="w", padx=(0, 10), pady=(4, 8))
+
+    def _build_data_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(1, weight=1)
+        top = ttk.Frame(tab)
+        top.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Button(top, text="读取一次", command=self._read_bms_overview).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(top, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(row=0, column=1, padx=(0, 8))
+        ttk.Label(top, textvariable=self.bms_info_var).grid(row=0, column=2, sticky="w")
+
+        self.data_tree = ttk.Treeview(tab, columns=("name", "value", "unit"), show="headings")
+        self.data_tree.heading("name", text="项目")
+        self.data_tree.heading("value", text="数值")
+        self.data_tree.heading("unit", text="单位")
+        self.data_tree.column("name", width=220, anchor=tk.W)
+        self.data_tree.column("value", width=140, anchor=tk.CENTER)
+        self.data_tree.column("unit", width=80, anchor=tk.CENTER)
+        self.data_tree.grid(row=1, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.data_tree.yview)
+        scroll.grid(row=1, column=1, sticky="ns")
+        self.data_tree.configure(yscrollcommand=scroll.set)
+
+    def _build_storage_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(1, weight=1)
+        actions = ttk.Frame(tab)
+        actions.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Button(actions, text="读取BMS日志", command=self._read_bms_log).grid(row=0, column=0, padx=(0, 8))
+        ttk.Label(actions, text="显示板端存储的事件记录").grid(row=0, column=1, sticky="w")
+
+        self.log_tree = ttk.Treeview(tab, columns=("index", "event", "interval", "raw"), show="headings")
+        for col, title, width in [
+            ("index", "序号", 70),
+            ("event", "事件", 260),
+            ("interval", "距离上次", 120),
+            ("raw", "原始值", 120),
+        ]:
+            self.log_tree.heading(col, text=title)
+            self.log_tree.column(col, width=width, anchor=tk.CENTER if col != "event" else tk.W)
+        self.log_tree.grid(row=1, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.log_tree.yview)
+        scroll.grid(row=1, column=1, sticky="ns")
+        self.log_tree.configure(yscrollcommand=scroll.set)
+
+    def _build_params_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(1, weight=1)
+        actions = ttk.Frame(tab)
+        actions.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(actions, text="SH309").grid(row=0, column=0, padx=(0, 16))
+        ttk.Button(actions, text="读取保护参数", command=self._read_protect_params).grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(actions, text="读取其它参数", command=self._read_other_params).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(actions, text="一键读取", command=self._read_all_params).grid(row=0, column=3, padx=(0, 8))
+        ttk.Button(actions, text="写入修改", command=self._write_dirty_params).grid(row=0, column=4, padx=(0, 8))
+        ttk.Button(actions, text="清除修改标记", command=self._clear_param_dirty).grid(row=0, column=5, padx=(0, 8))
+        ttk.Label(actions, textvariable=self.param_dirty_var, foreground="#b35c00").grid(row=0, column=6, sticky="w")
+
+        param_tabs = ttk.Notebook(tab)
+        param_tabs.grid(row=1, column=0, sticky="nsew")
+        protect_tab = ttk.Frame(param_tabs)
+        other_tab = ttk.Frame(param_tabs)
+        param_tabs.add(protect_tab, text="保护参数")
+        param_tabs.add(other_tab, text="其它参数")
+
+        protect_inner = self._make_scroll_area(protect_tab)
+        other_inner = self._make_scroll_area(other_tab)
+        self._build_param_groups(protect_inner, [p for p in BMS_PARAM_DEFS if 0x2100 <= p.addr < 0x2200], columns=3)
+        self._build_param_groups(other_inner, [p for p in BMS_PARAM_DEFS if 0x2300 <= p.addr < 0x2400], columns=3)
+
+    def _build_system_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.columnconfigure(1, weight=1)
+        tab.rowconfigure(1, weight=1)
+        ttk.Button(tab, text="读取BMS信息", command=self._read_bms_overview).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ttk.Button(tab, text="CAN诊断", command=self._can_diag).grid(row=0, column=1, sticky="w", pady=(0, 8))
+        cards = ttk.Frame(tab)
+        cards.grid(row=1, column=0, columnspan=2, sticky="nsew")
+        cards.columnconfigure(0, weight=1)
+        cards.columnconfigure(1, weight=1)
+        self._status_card(cards, "comm tool", self.info_var, 0)
+        self._status_card(cards, "comm tool 缓存", self.cache_var, 1)
+
+    def _build_other_tab(self, tab: ttk.Frame) -> None:
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(4, weight=1)
+
+        file_box = ttk.LabelFrame(tab, text="升级文件")
+        file_box.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         file_box.columnconfigure(1, weight=1)
+        ttk.Label(file_box, text="BMS App bin").grid(row=0, column=0, padx=(10, 6), pady=8)
+        ttk.Entry(file_box, textvariable=self.bin_var).grid(row=0, column=1, sticky="ew", pady=8)
+        ttk.Button(file_box, text="选择", command=self._choose_bin).grid(row=0, column=2, padx=6, pady=8)
+        ttk.Button(file_box, text="校验文件", command=self._describe_selected_bin).grid(row=0, column=3, padx=(0, 10), pady=8)
 
-        ttk.Label(file_box, text="BMS App bin").grid(row=0, column=0, padx=(10, 6), pady=10)
-        ttk.Entry(file_box, textvariable=self.bin_var).grid(row=0, column=1, sticky="ew", pady=10)
-        ttk.Button(file_box, text="选择", command=self._choose_bin).grid(row=0, column=2, padx=6, pady=10)
-        ttk.Button(file_box, text="校验文件", command=self._describe_selected_bin).grid(row=0, column=3, padx=(0, 10), pady=10)
-
-        status = ttk.Frame(root)
-        status.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        status = ttk.Frame(tab)
+        status.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         status.columnconfigure(0, weight=1)
         status.columnconfigure(1, weight=1)
         status.columnconfigure(2, weight=1)
-
         self._status_card(status, "comm tool", self.info_var, 0)
         self._status_card(status, "当前文件", self.image_var, 1)
         self._status_card(status, "comm tool 缓存", self.cache_var, 2)
 
-        actions = ttk.Frame(root)
-        actions.grid(row=3, column=0, sticky="ew", pady=(0, 8))
-        actions.columnconfigure(5, weight=1)
-
+        actions = ttk.Frame(tab)
+        actions.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         ttk.Button(actions, text="读取缓存", command=self._read_cache).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(actions, text="写入缓存", command=self._download_only).grid(row=0, column=1, padx=(0, 8))
         ttk.Button(actions, text="一键升级", command=self._upgrade_selected).grid(row=0, column=2, padx=(0, 8))
         ttk.Button(actions, text="使用缓存升级", command=self._upgrade_cached_selected).grid(row=0, column=3, padx=(0, 8))
         ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
-        ttk.Button(actions, text="实时监控", command=self._open_monitor).grid(row=0, column=5, padx=(0, 8), sticky="w")
-        ttk.Button(actions, text="读取BMS日志", command=self._read_bms_log).grid(row=0, column=6, padx=(0, 8), sticky="w")
-        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=7, sticky="w")
+        ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, padx=(0, 8))
 
-        bms_box = ttk.LabelFrame(root, text="BMS 信息和参数")
-        bms_box.grid(row=4, column=0, sticky="ew", pady=(0, 8))
-        bms_box.columnconfigure(1, weight=1)
-        bms_box.columnconfigure(6, weight=1)
-
-        ttk.Button(bms_box, text="读取BMS信息", command=self._read_bms_overview).grid(
-            row=0, column=0, padx=(10, 8), pady=10, sticky="nw"
-        )
-        ttk.Label(bms_box, textvariable=self.bms_info_var, justify=tk.LEFT).grid(
-            row=0, column=1, columnspan=7, sticky="ew", padx=(0, 10), pady=10
-        )
-
-        ttk.Separator(bms_box).grid(row=1, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
-        param_panel = ttk.Frame(bms_box)
-        param_panel.grid(row=2, column=0, columnspan=8, sticky="nsew", padx=10, pady=(0, 8))
-        param_panel.columnconfigure(0, weight=1)
-        param_panel.rowconfigure(0, weight=1)
-
-        table_frame = ttk.Frame(param_panel)
-        table_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        table_frame.columnconfigure(0, weight=1)
-        table_frame.rowconfigure(0, weight=1)
-        self.param_tree = ttk.Treeview(table_frame, columns=("addr", "value", "unit"), show="tree headings", height=8)
-        self.param_tree.heading("#0", text="保护/其它参数")
-        self.param_tree.heading("addr", text="地址")
-        self.param_tree.heading("value", text="当前值")
-        self.param_tree.heading("unit", text="单位")
-        self.param_tree.column("#0", width=220, anchor=tk.W)
-        self.param_tree.column("addr", width=80, anchor=tk.CENTER)
-        self.param_tree.column("value", width=100, anchor=tk.CENTER)
-        self.param_tree.column("unit", width=70, anchor=tk.CENTER)
-        self.param_tree.grid(row=0, column=0, sticky="nsew")
-        self.param_tree.bind("<<TreeviewSelect>>", self._on_param_select)
-        param_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.param_tree.yview)
-        param_scroll.grid(row=0, column=1, sticky="ns")
-        self.param_tree.configure(yscrollcommand=param_scroll.set)
-        self._populate_param_tree()
-
-        param_actions = ttk.Frame(param_panel)
-        param_actions.grid(row=0, column=1, sticky="nsew")
-        param_actions.columnconfigure(1, weight=1)
-        ttk.Label(param_actions, textvariable=self.param_selected_var, justify=tk.LEFT).grid(
-            row=0, column=0, columnspan=3, sticky="ew", pady=(0, 6)
-        )
-        ttk.Label(param_actions, text="写入值").grid(row=1, column=0, sticky="w", pady=(0, 6))
-        ttk.Entry(param_actions, textvariable=self.param_edit_var, width=14).grid(
-            row=1, column=1, sticky="ew", pady=(0, 6)
-        )
-        ttk.Button(param_actions, text="读取选中", command=self._read_selected_param).grid(
-            row=1, column=2, padx=(8, 0), pady=(0, 6)
-        )
-        ttk.Button(param_actions, text="写入选中", command=self._write_selected_param).grid(
-            row=2, column=0, columnspan=3, sticky="ew", pady=(0, 6)
-        )
-        ttk.Button(param_actions, text="读取保护参数", command=self._read_protect_params).grid(
-            row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6)
-        )
-        ttk.Button(param_actions, text="读取其它参数", command=self._read_other_params).grid(
-            row=4, column=0, columnspan=3, sticky="ew", pady=(0, 6)
-        )
-        ttk.Button(param_actions, text="读取全部参数", command=self._read_all_params).grid(
-            row=5, column=0, columnspan=3, sticky="ew", pady=(0, 6)
-        )
-        ttk.Label(param_actions, textvariable=self.param_current_var, justify=tk.LEFT).grid(
-            row=6, column=0, columnspan=3, sticky="ew"
+        advanced = ttk.LabelFrame(tab, text="高级寄存器")
+        advanced.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+        advanced.columnconfigure(6, weight=1)
+        ttk.Label(advanced, text="地址").grid(row=0, column=0, padx=(10, 6), pady=8)
+        ttk.Entry(advanced, textvariable=self.bms_addr_var, width=12).grid(row=0, column=1, sticky="w", pady=8)
+        ttk.Label(advanced, text="数量").grid(row=0, column=2, padx=(12, 6), pady=8)
+        ttk.Entry(advanced, textvariable=self.bms_count_var, width=8).grid(row=0, column=3, sticky="w", pady=8)
+        ttk.Button(advanced, text="读取", command=self._read_bms_regs).grid(row=0, column=4, padx=(12, 8), pady=8)
+        ttk.Label(advanced, text="写入值").grid(row=0, column=5, padx=(12, 6), pady=8)
+        ttk.Entry(advanced, textvariable=self.bms_values_var).grid(row=0, column=6, sticky="ew", pady=8)
+        ttk.Button(advanced, text="写入", command=self._write_bms_regs).grid(row=0, column=7, padx=(8, 10), pady=8)
+        ttk.Label(advanced, textvariable=self.bms_result_var, justify=tk.LEFT).grid(
+            row=1, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8)
         )
 
-        ttk.Separator(bms_box).grid(row=3, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
-        ttk.Label(bms_box, text="高级地址").grid(row=4, column=0, padx=(10, 6), pady=(0, 8))
-        ttk.Entry(bms_box, textvariable=self.bms_addr_var, width=12).grid(row=4, column=1, sticky="w", pady=(0, 8))
-        ttk.Label(bms_box, text="数量").grid(row=4, column=2, padx=(12, 6), pady=(0, 8))
-        ttk.Entry(bms_box, textvariable=self.bms_count_var, width=8).grid(row=4, column=3, sticky="w", pady=(0, 8))
-        ttk.Button(bms_box, text="读取", command=self._read_bms_regs).grid(row=4, column=4, padx=(12, 8), pady=(0, 8))
-        ttk.Label(bms_box, text="写入值").grid(row=4, column=5, padx=(12, 6), pady=(0, 8))
-        ttk.Entry(bms_box, textvariable=self.bms_values_var).grid(row=4, column=6, sticky="ew", pady=(0, 8))
-        ttk.Button(bms_box, text="写入", command=self._write_bms_regs).grid(row=4, column=7, padx=(8, 10), pady=(0, 8))
-        ttk.Label(bms_box, textvariable=self.bms_result_var, justify=tk.LEFT).grid(
-            row=5, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 10)
-        )
-
-        progress = ttk.Frame(root)
-        progress.grid(row=5, column=0, sticky="nsew")
+        progress = ttk.Frame(tab)
+        progress.grid(row=4, column=0, sticky="nsew")
         progress.columnconfigure(0, weight=1)
         progress.rowconfigure(2, weight=1)
-
-        ttk.Label(progress, textvariable=self.result_var).grid(row=0, column=0, sticky="w")
-        ttk.Progressbar(progress, variable=self.progress_var, maximum=100).grid(row=1, column=0, sticky="ew", pady=(6, 8))
-
-        self.log_text = tk.Text(progress, height=18, wrap="word")
+        ttk.Progressbar(progress, variable=self.progress_var, maximum=100).grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(progress, text="运行日志").grid(row=1, column=0, sticky="w")
+        self.log_text = tk.Text(progress, height=16, wrap="word")
         self.log_text.grid(row=2, column=0, sticky="nsew")
         self.log_text.configure(state="disabled")
-
         scrollbar = ttk.Scrollbar(progress, orient=tk.VERTICAL, command=self.log_text.yview)
         scrollbar.grid(row=2, column=1, sticky="ns")
         self.log_text.configure(yscrollcommand=scrollbar.set)
+
+    def _make_scroll_area(self, parent: ttk.Frame) -> ttk.Frame:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+        canvas = tk.Canvas(parent, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_configure(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure(window_id, width=canvas.winfo_width())
+
+        inner.bind("<Configure>", _on_configure)
+        canvas.bind("<Configure>", _on_configure)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        return inner
+
+    def _build_param_groups(self, parent: ttk.Frame, params: list[BmsParamDef], columns: int) -> None:
+        grouped: dict[str, list[BmsParamDef]] = {}
+        for param in params:
+            grouped.setdefault(param.group, []).append(param)
+        for col in range(columns):
+            parent.columnconfigure(col, weight=1)
+        for index, (group, group_params) in enumerate(grouped.items()):
+            frame = ttk.LabelFrame(parent, text=group)
+            frame.grid(row=index // columns, column=index % columns, sticky="nsew", padx=6, pady=6)
+            frame.columnconfigure(1, weight=1)
+            for row, param in enumerate(group_params):
+                ttk.Label(frame, text=param.name).grid(row=row, column=0, sticky="w", padx=(8, 6), pady=3)
+                var = self.param_entry_vars.get(param.key)
+                if var is None:
+                    var = tk.StringVar(value="")
+                    var.trace_add("write", lambda *_args, key=param.key: self._mark_param_dirty(key))
+                    self.param_entry_vars[param.key] = var
+                ttk.Entry(frame, textvariable=var, width=12).grid(row=row, column=1, sticky="ew", pady=3)
+                ttk.Label(frame, text=param.unit, width=5).grid(row=row, column=2, sticky="w", padx=(4, 8), pady=3)
+
+    def _mark_param_dirty(self, key: str) -> None:
+        if self.param_loading:
+            return
+        if key in BMS_PARAM_BY_KEY:
+            self.param_dirty.add(key)
+            self._update_param_dirty_label()
+
+    def _update_param_dirty_label(self) -> None:
+        if not self.param_dirty:
+            self.param_dirty_var.set("未修改")
+            return
+        self.param_dirty_var.set(f"已修改 {len(self.param_dirty)} 项，未写入")
+
+    def _clear_param_dirty(self) -> None:
+        self.param_dirty.clear()
+        self._update_param_dirty_label()
+
+    def _write_dirty_params(self) -> None:
+        if not self.param_dirty:
+            messagebox.showinfo("参数设置", "没有检测到已修改的参数。")
+            return
+        try:
+            values: dict[str, int] = {}
+            for key in sorted(self.param_dirty, key=lambda item: BMS_PARAM_BY_KEY[item].addr):
+                param = BMS_PARAM_BY_KEY[key]
+                var = self.param_entry_vars.get(key)
+                if var is None:
+                    continue
+                values[key] = _param_parse_display_value(param, var.get())
+        except Exception as exc:
+            messagebox.showerror("参数错误", str(exc))
+            return
+        preview = "\n".join(
+            f"{BMS_PARAM_BY_KEY[key].group}/{BMS_PARAM_BY_KEY[key].name}: "
+            f"{self.param_entry_vars[key].get().strip()} {BMS_PARAM_BY_KEY[key].unit}"
+            for key in list(values)[:8]
+        )
+        if len(values) > 8:
+            preview += f"\n... 共 {len(values)} 项"
+        if not messagebox.askyesno("确认写入参数", f"确认写入以下已修改参数？\n\n{preview}"):
+            return
+        self.active_param_values = values
+        self._run_worker("写入修改参数", self._worker_write_dirty_params)
+
+    def _toggle_live_monitor(self) -> None:
+        if self.live_running:
+            self._stop_live_monitor()
+        else:
+            self.live_running = True
+            self.live_button_var.set("停止监控")
+            self.comm_state_var.set("通信: 监控中")
+            self._schedule_live_monitor(0)
+
+    def _stop_live_monitor(self) -> None:
+        self.live_running = False
+        self.live_button_var.set("开始监控")
+        if self.live_after_id is not None:
+            try:
+                self.after_cancel(self.live_after_id)
+            except tk.TclError:
+                pass
+            self.live_after_id = None
+
+    def _schedule_live_monitor(self, delay_ms: int | None = None) -> None:
+        if not self.live_running:
+            return
+        if self.live_after_id is not None:
+            return
+        self.live_after_id = self.after(self._live_interval_ms() if delay_ms is None else delay_ms, self._poll_live_monitor)
+
+    def _live_interval_ms(self) -> int:
+        try:
+            seconds = float(self.live_interval_var.get())
+        except ValueError:
+            seconds = 2.0
+        seconds = max(1.0, min(seconds, 60.0))
+        return int(seconds * 1000)
+
+    def _poll_live_monitor(self) -> None:
+        self.live_after_id = None
+        if not self.live_running:
+            return
+        if (self.worker is not None and self.worker.is_alive()) or (
+            self.live_worker is not None and self.live_worker.is_alive()
+        ):
+            self._schedule_live_monitor(500)
+            return
+        self.live_worker = threading.Thread(target=self._worker_live_guard, daemon=True)
+        self.live_worker.start()
+
+    def _worker_live_guard(self) -> None:
+        try:
+            with self._open_client() as client:
+                try:
+                    words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+                except Exception:
+                    words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            self._emit("live_snapshot", words)
+            self._emit("progress", 100)
+        except Exception as exc:
+            self._emit("log", f"实时监控读取失败: {exc}")
+            self._emit("comm_state", "通信: 异常")
+        finally:
+            self._emit("live_done")
+
+    def _draw_battery(self, soc: int) -> None:
+        soc = max(0, min(100, int(soc)))
+        canvas = self.battery_canvas
+        canvas.delete("all")
+        canvas.create_rectangle(30, 4, 54, 14, outline="#666666", fill="#666666")
+        canvas.create_rectangle(18, 14, 66, 160, outline="#666666", width=3)
+        canvas.create_rectangle(23, 19, 61, 155, outline="#dddddd", fill="#f7f7f7")
+        fill_height = int(132 * soc / 100)
+        top = 151 - fill_height
+        color = "#30c85a" if soc >= 20 else "#d93025"
+        canvas.create_rectangle(27, top, 57, 151, outline=color, fill=color)
+
+    def _set_badge(self, name: str, enabled: bool | None) -> None:
+        badge = self.status_badges.get(name)
+        if badge is None:
+            return
+        if enabled is None:
+            badge.configure(text="--", bg="#b0b0b0", fg="white")
+        elif enabled:
+            badge.configure(text="on", bg="#36c85a", fg="white")
+        else:
+            badge.configure(text="off", bg="#d93025", fg="white")
+
+    def _temp_display(self, raw: int) -> str:
+        if raw == 0:
+            return "--"
+        return f"{_temp_c(raw):.1f}"
+
+    def _show_main_snapshot(self, words: list[int]) -> None:
+        if len(words) < BMS_OVERVIEW_WORDS:
+            return
+        cells = words[0:32]
+        valid_cells = _valid_cell_items(cells)
+        for index, (frame, row, col) in enumerate(self.cell_slots):
+            if _is_valid_cell_voltage(cells[index]):
+                self.cell_value_vars[index].set(str(cells[index]))
+                frame.grid(row=row, column=col, sticky="w", padx=(0, 14), pady=3)
+            else:
+                frame.grid_remove()
+
+        if valid_cells:
+            max_index, max_mv = max(valid_cells, key=lambda item: item[1])
+            min_index, min_mv = min(valid_cells, key=lambda item: item[1])
+            avg_mv = sum(value for _, value in valid_cells) / len(valid_cells)
+            self.cell_stat_vars["max"].set(f"最高电压 {max_mv}  {max_index + 1}")
+            self.cell_stat_vars["min"].set(f"最低电压 {min_mv}  {min_index + 1}")
+            self.cell_stat_vars["avg"].set(f"平均电压 {avg_mv:.2f}")
+            self.cell_stat_vars["delta"].set(f"最大压差 {max_mv - min_mv}")
+        else:
+            for var in self.cell_stat_vars.values():
+                var.set("--")
+
+        ichg = words[50] / 10.0
+        idsg = words[51] / 10.0
+        net_current = ichg if ichg > 0 else -idsg
+        soc = words[52]
+        self.basic_vars["total_v"].set(f"{words[37] / 100.0:.2f}")
+        self.basic_vars["current"].set(f"{net_current:.1f}")
+        self.basic_vars["soh"].set(str(words[53]))
+        self.basic_vars["cap_now"].set(str(words[54] * 10))
+        self.basic_vars["cap_full"].set(str(words[55] * 10))
+        self.basic_vars["cycle"].set(str(words[57]))
+        self.basic_vars["soc"].set(f"SOC:{soc}%")
+        self.basic_vars["state"].set("充电" if ichg > 0 else ("放电" if idsg > 0 else "静置"))
+        self._draw_battery(soc)
+
+        temp_values = words[38:48]
+        self.temp_vars["max"].set(self._temp_display(words[48]))
+        self.temp_vars["min"].set(self._temp_display(words[49]))
+        self.temp_vars["t1"].set(self._temp_display(temp_values[0] if len(temp_values) > 0 else 0))
+        self.temp_vars["t2"].set(self._temp_display(temp_values[1] if len(temp_values) > 1 else 0))
+        self.temp_vars["mos"].set(self._temp_display(temp_values[3] if len(temp_values) > 3 else 0))
+
+        status_low = words[84] if len(words) > 84 else None
+        func_low = words[86] if len(words) > 86 else None
+        self._set_badge("充电MOS", None if status_low is None else bool(status_low & (1 << 2)))
+        self._set_badge("放电MOS", None if status_low is None else bool(status_low & (1 << 3)))
+        self._set_badge("加热", None if status_low is None else bool(status_low & (1 << 8)))
+        self._set_badge("冷凝", None if status_low is None else bool(status_low & (1 << 9)))
+
+        self.fault_vars["first"].set(f"0x{words[58]:04X}  {_fault_text(words[58])}")
+        self.fault_vars["second"].set(f"0x{words[59]:04X}  {_fault_text(words[59])}")
+        self.fault_vars["third"].set(f"0x{words[60]:04X}  {_fault_text(words[60])}")
+        monitor = f"均衡: 0x{words[61]:04X} 0x{words[62]:04X}"
+        if status_low is not None:
+            monitor += f"\n系统字: 0x{status_low:04X}"
+        if func_low is not None:
+            monitor += f"\n功能字: 0x{func_low:04X}"
+        self.fault_vars["monitor"].set(monitor)
+
+        self.bms_info_var.set(self._format_bms_overview(words[:BMS_OVERVIEW_WORDS]))
+        self.comm_state_var.set("通信: 正在通讯" if self.live_running else "通信: 已响应")
+        self._update_data_tree(words)
+
+    def _update_data_tree(self, words: list[int]) -> None:
+        tree = getattr(self, "data_tree", None)
+        if tree is None:
+            return
+        for item in tree.get_children():
+            tree.delete(item)
+        rows: list[tuple[str, str, str]] = [
+            ("总压", f"{words[37] / 100.0:.2f}", "V"),
+            ("充电电流", f"{words[50] / 10.0:.1f}", "A"),
+            ("放电电流", f"{words[51] / 10.0:.1f}", "A"),
+            ("SOC", str(words[52]), "%"),
+            ("SOH", str(words[53]), "%"),
+            ("剩余容量", str(words[54] * 10), "mAh"),
+            ("满电容量", str(words[55] * 10), "mAh"),
+            ("循环次数", str(words[57]), "次"),
+            ("一级告警字", f"0x{words[58]:04X}", ""),
+            ("二级告警字", f"0x{words[59]:04X}", ""),
+            ("三级保护字", f"0x{words[60]:04X}", ""),
+        ]
+        rows.extend((f"单体{index + 1:02d}", str(value), "mV") for index, value in _valid_cell_items(words[0:32]))
+        for index, raw in enumerate(words[38:48]):
+            if raw != 0:
+                rows.append((f"温度{index + 1}", f"{_temp_c(raw):.1f}", "℃"))
+        for name, value, unit in rows:
+            tree.insert("", tk.END, values=(name, value, unit))
+
+    def _update_log_tree(self, records: list[tuple[int, int]]) -> None:
+        if self.log_tree is None:
+            return
+        for item in self.log_tree.get_children():
+            self.log_tree.delete(item)
+        for index, (event, delta) in enumerate(records, start=1):
+            if event == 0 and delta == 0:
+                continue
+            name = BMS_EVENT_NAMES[event] if event < len(BMS_EVENT_NAMES) else f"未知事件{event}"
+            self.log_tree.insert(
+                "",
+                tk.END,
+                values=(f"{index:03d}", name, _event_interval_text(delta), f"0x{event:02X} 0x{delta:02X}"),
+            )
 
     def _status_card(self, parent: ttk.Frame, title: str, var: tk.StringVar, column: int) -> None:
         frame = ttk.LabelFrame(parent, text=title)
@@ -715,7 +1229,17 @@ class UpgradeUi(tk.Tk):
     def _update_param_row(self, key: str, raw: int) -> None:
         param = BMS_PARAM_BY_KEY[key]
         self.param_values[key] = raw
-        self.param_tree.item(key, values=(f"0x{param.addr:04X}", _param_display_value(param, raw), param.unit))
+        display = _param_display_value(param, raw)
+        if hasattr(self, "param_tree"):
+            self.param_tree.item(key, values=(f"0x{param.addr:04X}", display, param.unit))
+        var = self.param_entry_vars.get(key)
+        if var is not None:
+            old_loading = self.param_loading
+            self.param_loading = True
+            try:
+                var.set(display)
+            finally:
+                self.param_loading = old_loading
 
     def _set_busy(self, busy: bool) -> None:
         state = tk.DISABLED if busy else tk.NORMAL
@@ -983,8 +1507,12 @@ class UpgradeUi(tk.Tk):
 
     def _worker_read_bms_overview(self) -> None:
         with self._open_client() as client:
-            words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
-        self._emit("bms_info", self._format_bms_overview(words))
+            try:
+                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+            except Exception:
+                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+        self._emit("live_snapshot", words)
+        self._emit("bms_info", self._format_bms_overview(words[:BMS_OVERVIEW_WORDS]))
         self._emit("log", "BMS 信息读取完成")
         self._emit("progress", 100)
 
@@ -1007,6 +1535,23 @@ class UpgradeUi(tk.Tk):
             words = self._read_bms_words(client, param.addr, 1)
         self._emit("param_value", (key, words[0]))
         self._emit("log", f"参数写入完成: {param.group}/{param.name}=0x{words[0]:04X} ({words[0]})")
+        self._emit("progress", 100)
+
+    def _worker_write_dirty_params(self) -> None:
+        values = sorted(self.active_param_values.items(), key=lambda item: BMS_PARAM_BY_KEY[item[0]].addr)
+        verified: dict[str, int] = {}
+        with self._open_client() as client:
+            for key, value in values:
+                param = BMS_PARAM_BY_KEY[key]
+                self._write_bms_words(client, param.addr, [value])
+                words = self._read_bms_words(client, param.addr, 1)
+                verified[key] = words[0]
+                if words[0] != value:
+                    raise RuntimeError(
+                        f"{param.group}/{param.name} 写入后回读不一致: 写0x{value:04X} 回读0x{words[0]:04X}"
+                    )
+        self._emit("param_values", verified)
+        self._emit("log", f"修改参数写入完成: {len(verified)} 项")
         self._emit("progress", 100)
 
     def _worker_read_param_range(self) -> None:
@@ -1335,6 +1880,7 @@ class UpgradeUi(tk.Tk):
             self.progress_var.set(float(event.payload))
         elif event.kind == "info":
             self.info_var.set(self._format_info(event.payload))
+            self.comm_state_var.set("通信: 已连接")
         elif event.kind == "cache":
             self.cache_var.set(self._format_cache(event.payload))
         elif event.kind == "image":
@@ -1346,6 +1892,8 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "param_value":
             key, value = event.payload
             self._update_param_row(key, value)
+            self.param_dirty.discard(key)
+            self._update_param_dirty_label()
             param = BMS_PARAM_BY_KEY[key]
             display = _param_display_value(param, value)
             self.param_current_var.set(f"当前 {display} {param.unit}，原始值 {value}")
@@ -1354,10 +1902,18 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "param_values":
             for key, value in event.payload.items():
                 self._update_param_row(key, value)
+                self.param_dirty.discard(key)
+            self._update_param_dirty_label()
             self.param_current_var.set(f"已读取 {len(event.payload)} 项")
             self._on_param_select()
         elif event.kind == "bms_log":
-            BmsLogWindow(self, event.payload)
+            self._update_log_tree(event.payload)
+        elif event.kind == "live_snapshot":
+            self._show_main_snapshot(event.payload)
+        elif event.kind == "live_done":
+            self._schedule_live_monitor()
+        elif event.kind == "comm_state":
+            self.comm_state_var.set(str(event.payload))
 
     def _log(self, text: str) -> None:
         now = time.strftime("%H:%M:%S")
