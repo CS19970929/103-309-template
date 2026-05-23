@@ -7,6 +7,7 @@ import argparse
 import math
 import queue
 import struct
+import sys
 import threading
 import time
 import zlib
@@ -35,7 +36,20 @@ from comm_tool_host import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+def resolve_repo_root() -> Path:
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        if exe_dir.name.lower() == "dist":
+            return exe_dir.parent
+        if (exe_dir / "103 + 309").exists():
+            return exe_dir
+        if (Path.cwd() / "103 + 309").exists():
+            return Path.cwd()
+        return exe_dir
+    return Path(__file__).resolve().parents[1]
+
+
+REPO_ROOT = resolve_repo_root()
 DEFAULT_BIN = REPO_ROOT / "103 + 309" / "Project" / "Users" / "Objects" / "FD_Release.bin"
 DEFAULT_LONG_TIMEOUT = 180.0
 DEFAULT_CHUNK_SIZE = 256

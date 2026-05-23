@@ -8,6 +8,20 @@
 .\tools\start_comm_tool_upgrade_ui.ps1 -Port COM4 -Baud 115200
 ```
 
+给用户使用的 exe 打包命令：
+
+```powershell
+.\tools\build_comm_tool_upgrade_ui_exe.ps1 -Clean
+```
+
+生成位置：
+
+```text
+dist\BMS_CommTool_Upgrade_UI.exe
+```
+
+如果 exe 保持在仓库的 `dist` 目录下运行，会默认选择仓库内的 `103 + 309\Project\Users\Objects\FD_Release.bin`。如果复制到其他目录给用户使用，需要用户在界面里手动选择 BMS App bin。
+
 默认升级文件为：
 
 ```text
