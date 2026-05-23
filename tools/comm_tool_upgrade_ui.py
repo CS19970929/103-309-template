@@ -21,6 +21,7 @@ from comm_tool_host import (
     APP_BASE_ADDR,
     APP_FLASH_LIMIT,
     CMD_BMS_READ,
+    CMD_BMS_WRITE,
     CMD_CAN_DIAG,
     CMD_FW_BEGIN,
     CMD_FW_DATA,
@@ -56,6 +57,26 @@ DEFAULT_CHUNK_SIZE = 256
 POST_UPGRADE_APP_READY_TIMEOUT = 15.0
 POST_UPGRADE_APP_READY_INTERVAL = 1.0
 
+BMS_OVERVIEW_ADDR = 0xD000
+BMS_OVERVIEW_WORDS = 63
+BMS_PARAM_PRESETS = {
+    "单体过压一级阈值": 0x2100,
+    "单体过压恢复阈值": 0x2103,
+    "单体欠压一级阈值": 0x2105,
+    "单体欠压恢复阈值": 0x2108,
+    "充电过流一级阈值": 0x2114,
+    "放电过流一级阈值": 0x2119,
+    "充电高温一级阈值": 0x211E,
+    "放电高温一级阈值": 0x2128,
+    "MOS高温一级阈值": 0x2132,
+    "压差保护一级阈值": 0x2137,
+    "均衡开启电压": 0x2300,
+    "均衡关闭压差": 0x2301,
+    "额定容量": 0x2318,
+    "串数": 0x231C,
+    "采样电阻": 0x231D,
+}
+
 
 class UiEvent:
     def __init__(self, kind: str, payload=None):
@@ -66,9 +87,9 @@ class UiEvent:
 class UpgradeUi(tk.Tk):
     def __init__(self, port: str, baud: int, bin_path: Path):
         super().__init__()
-        self.title("BMS CAN 升级工具")
-        self.geometry("920x680")
-        self.minsize(860, 620)
+        self.title("BMS comm tool 上位机")
+        self.geometry("980x760")
+        self.minsize(920, 700)
 
         self.events: "queue.Queue[UiEvent]" = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -80,10 +101,21 @@ class UpgradeUi(tk.Tk):
         self.cache_var = tk.StringVar(value="未读取")
         self.image_var = tk.StringVar(value="未选择")
         self.result_var = tk.StringVar(value="等待操作")
+        self.bms_addr_var = tk.StringVar(value="0xD000")
+        self.bms_count_var = tk.StringVar(value="2")
+        self.bms_values_var = tk.StringVar(value="")
+        self.bms_result_var = tk.StringVar(value="未读取")
+        self.bms_info_var = tk.StringVar(value="未读取")
+        self.param_key_var = tk.StringVar(value=next(iter(BMS_PARAM_PRESETS)))
+        self.param_value_var = tk.StringVar(value="")
+        self.param_current_var = tk.StringVar(value="未读取")
         self.progress_var = tk.DoubleVar(value=0.0)
         self.active_port = port
         self.active_baud = baud
         self.active_bin = bin_path
+        self.active_bms_addr = 0xD000
+        self.active_bms_count = 2
+        self.active_bms_words: list[int] = []
 
         self._build_ui()
         self._refresh_ports()
@@ -94,7 +126,7 @@ class UpgradeUi(tk.Tk):
         root = ttk.Frame(self, padding=12)
         root.pack(fill=tk.BOTH, expand=True)
         root.columnconfigure(0, weight=1)
-        root.rowconfigure(4, weight=1)
+        root.rowconfigure(5, weight=1)
 
         conn = ttk.LabelFrame(root, text="连接")
         conn.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -139,8 +171,49 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
         ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, sticky="w")
 
+        bms_box = ttk.LabelFrame(root, text="BMS 信息和参数")
+        bms_box.grid(row=4, column=0, sticky="ew", pady=(0, 8))
+        bms_box.columnconfigure(1, weight=1)
+        bms_box.columnconfigure(6, weight=1)
+
+        ttk.Button(bms_box, text="读取BMS信息", command=self._read_bms_overview).grid(
+            row=0, column=0, padx=(10, 8), pady=10, sticky="nw"
+        )
+        ttk.Label(bms_box, textvariable=self.bms_info_var, justify=tk.LEFT).grid(
+            row=0, column=1, columnspan=7, sticky="ew", padx=(0, 10), pady=10
+        )
+
+        ttk.Separator(bms_box).grid(row=1, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
+        ttk.Label(bms_box, text="常用参数").grid(row=2, column=0, padx=(10, 6), pady=(0, 8))
+        self.param_combo = ttk.Combobox(
+            bms_box,
+            textvariable=self.param_key_var,
+            values=list(BMS_PARAM_PRESETS.keys()),
+            state="readonly",
+            width=24,
+        )
+        self.param_combo.grid(row=2, column=1, sticky="w", pady=(0, 8))
+        ttk.Button(bms_box, text="读取参数", command=self._read_selected_param).grid(row=2, column=2, padx=8, pady=(0, 8))
+        ttk.Label(bms_box, textvariable=self.param_current_var).grid(row=2, column=3, sticky="w", padx=(0, 12), pady=(0, 8))
+        ttk.Label(bms_box, text="新值").grid(row=2, column=4, padx=(8, 6), pady=(0, 8))
+        ttk.Entry(bms_box, textvariable=self.param_value_var, width=12).grid(row=2, column=5, sticky="w", pady=(0, 8))
+        ttk.Button(bms_box, text="写入参数", command=self._write_selected_param).grid(row=2, column=6, sticky="w", padx=8, pady=(0, 8))
+
+        ttk.Separator(bms_box).grid(row=3, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 8))
+        ttk.Label(bms_box, text="高级地址").grid(row=4, column=0, padx=(10, 6), pady=(0, 8))
+        ttk.Entry(bms_box, textvariable=self.bms_addr_var, width=12).grid(row=4, column=1, sticky="w", pady=(0, 8))
+        ttk.Label(bms_box, text="数量").grid(row=4, column=2, padx=(12, 6), pady=(0, 8))
+        ttk.Entry(bms_box, textvariable=self.bms_count_var, width=8).grid(row=4, column=3, sticky="w", pady=(0, 8))
+        ttk.Button(bms_box, text="读取", command=self._read_bms_regs).grid(row=4, column=4, padx=(12, 8), pady=(0, 8))
+        ttk.Label(bms_box, text="写入值").grid(row=4, column=5, padx=(12, 6), pady=(0, 8))
+        ttk.Entry(bms_box, textvariable=self.bms_values_var).grid(row=4, column=6, sticky="ew", pady=(0, 8))
+        ttk.Button(bms_box, text="写入", command=self._write_bms_regs).grid(row=4, column=7, padx=(8, 10), pady=(0, 8))
+        ttk.Label(bms_box, textvariable=self.bms_result_var, justify=tk.LEFT).grid(
+            row=5, column=0, columnspan=8, sticky="ew", padx=10, pady=(0, 10)
+        )
+
         progress = ttk.Frame(root)
-        progress.grid(row=4, column=0, sticky="nsew")
+        progress.grid(row=5, column=0, sticky="nsew")
         progress.columnconfigure(0, weight=1)
         progress.rowconfigure(2, weight=1)
 
@@ -170,7 +243,12 @@ class UpgradeUi(tk.Tk):
 
     def _set_child_state(self, widget, state: str) -> None:
         for child in widget.winfo_children():
-            if isinstance(child, (ttk.Button, ttk.Entry, ttk.Combobox)):
+            if isinstance(child, ttk.Combobox):
+                if state == tk.NORMAL and child is getattr(self, "param_combo", None):
+                    child.configure(state="readonly")
+                else:
+                    child.configure(state=state)
+            elif isinstance(child, (ttk.Button, ttk.Entry)):
                 child.configure(state=state)
             self._set_child_state(child, state)
 
@@ -236,6 +314,55 @@ class UpgradeUi(tk.Tk):
     def _read_bms_status(self) -> None:
         self._run_worker("读取BMS状态", self._worker_read_bms_status)
 
+    def _read_bms_overview(self) -> None:
+        self._run_worker("读取BMS信息", self._worker_read_bms_overview)
+
+    def _read_selected_param(self) -> None:
+        self._run_worker("读取BMS参数", self._worker_read_selected_param)
+
+    def _write_selected_param(self) -> None:
+        try:
+            key = self.param_key_var.get()
+            if key not in BMS_PARAM_PRESETS:
+                raise ValueError("请选择有效的参数")
+            value = self._parse_u16(self.param_value_var.get(), "新值")
+        except Exception as exc:
+            messagebox.showerror("参数错误", str(exc))
+            return
+        if not messagebox.askyesno(
+            "确认写入参数",
+            f"参数: {key}\n地址: 0x{BMS_PARAM_PRESETS[key]:04X}\n新值: {value} (0x{value:04X})\n\n"
+            "确认写入 BMS？",
+        ):
+            return
+        self._run_worker("写入BMS参数", self._worker_write_selected_param)
+
+    def _read_bms_regs(self) -> None:
+        try:
+            self.active_bms_addr = self._parse_u16(self.bms_addr_var.get(), "地址")
+            self.active_bms_count = self._parse_count(self.bms_count_var.get())
+        except Exception as exc:
+            messagebox.showerror("参数错误", str(exc))
+            return
+        self._run_worker("读取BMS寄存器", self._worker_read_bms_regs)
+
+    def _write_bms_regs(self) -> None:
+        try:
+            self.active_bms_addr = self._parse_u16(self.bms_addr_var.get(), "地址")
+            self.active_bms_words = self._parse_words(self.bms_values_var.get())
+        except Exception as exc:
+            messagebox.showerror("参数错误", str(exc))
+            return
+        if not messagebox.askyesno(
+            "确认写入",
+            f"将通过 comm tool/CAN 写入 BMS。\n\n"
+            f"起始地址: 0x{self.active_bms_addr:04X}\n"
+            f"数量: {len(self.active_bms_words)}\n\n"
+            "量产固件默认关闭写权限，若板端拒绝会返回错误。",
+        ):
+            return
+        self._run_worker("写入BMS寄存器", self._worker_write_bms_regs)
+
     def _can_diag(self) -> None:
         self._run_worker("CAN诊断", self._worker_can_diag)
 
@@ -254,6 +381,26 @@ class UpgradeUi(tk.Tk):
         self._set_busy(True)
         self.worker = threading.Thread(target=self._worker_guard, args=(name, target), daemon=True)
         self.worker.start()
+
+    def _parse_u16(self, text: str, name: str) -> int:
+        value = int(text.strip(), 0)
+        if value < 0 or value > 0xFFFF:
+            raise ValueError(f"{name} 超出 0x0000..0xFFFF")
+        return value
+
+    def _parse_count(self, text: str) -> int:
+        value = int(text.strip(), 0)
+        if value <= 0 or value > 120:
+            raise ValueError("数量必须是 1..120")
+        return value
+
+    def _parse_words(self, text: str) -> list[int]:
+        parts = text.replace(",", " ").replace(";", " ").split()
+        if not parts:
+            raise ValueError("请填写至少一个写入值")
+        if len(parts) > 120:
+            raise ValueError("一次最多写入 120 个寄存器")
+        return [self._parse_u16(part, "写入值") for part in parts]
 
     def _worker_guard(self, name: str, target: Callable[[], None]) -> None:
         try:
@@ -314,8 +461,56 @@ class UpgradeUi(tk.Tk):
 
     def _worker_read_bms_status(self) -> None:
         with self._open_client() as client:
-            status = self._read_bms_status(client)
+            status = self._read_bms_app_status(client)
         self._emit("log", f"BMS App 状态: SOC={status[0]} SOH={status[1]}")
+        self._emit("progress", 100)
+
+    def _worker_read_bms_overview(self) -> None:
+        with self._open_client() as client:
+            words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+        self._emit("bms_info", self._format_bms_overview(words))
+        self._emit("log", "BMS 信息读取完成")
+        self._emit("progress", 100)
+
+    def _worker_read_selected_param(self) -> None:
+        key = self.param_key_var.get()
+        addr = BMS_PARAM_PRESETS[key]
+        with self._open_client() as client:
+            words = self._read_bms_words(client, addr, 1)
+        value = words[0]
+        self._emit("param_value", (value, addr))
+        self._emit("log", f"参数读取完成: {key}=0x{value:04X} ({value})")
+        self._emit("progress", 100)
+
+    def _worker_write_selected_param(self) -> None:
+        key = self.param_key_var.get()
+        addr = BMS_PARAM_PRESETS[key]
+        value = self._parse_u16(self.param_value_var.get(), "新值")
+        with self._open_client() as client:
+            self._write_bms_words(client, addr, [value])
+            words = self._read_bms_words(client, addr, 1)
+        self._emit("param_value", (words[0], addr))
+        self._emit("log", f"参数写入完成: {key}=0x{words[0]:04X} ({words[0]})")
+        self._emit("progress", 100)
+
+    def _worker_read_bms_regs(self) -> None:
+        addr = self.active_bms_addr
+        count = self.active_bms_count
+        with self._open_client() as client:
+            words = self._read_bms_words(client, addr, count)
+        text = self._format_bms_words(addr, words)
+        self._emit("bms_result", text)
+        self._emit("log", "BMS 寄存器读取完成")
+        self._emit("progress", 100)
+
+    def _worker_write_bms_regs(self) -> None:
+        addr = self.active_bms_addr
+        words = self.active_bms_words
+        with self._open_client() as client:
+            self._write_bms_words(client, addr, words)
+        text = self._format_bms_words(addr, words)
+        self._emit("bms_result", "已写入:\n" + text)
+        self._emit("log", f"BMS 寄存器写入完成: addr=0x{addr:04X} count={len(words)}")
         self._emit("progress", 100)
 
     def _worker_can_diag(self) -> None:
@@ -387,12 +582,21 @@ class UpgradeUi(tk.Tk):
             "expect_seq": expect_seq,
         }
 
-    def _read_bms_status(self, client: CommToolClient) -> tuple[int, int]:
-        payload = struct.pack("<HH", 0xD000, 2)
-        resp = client.command(CMD_BMS_READ, payload, timeout=10.0)
-        if len(resp.payload) < 4:
-            raise RuntimeError("BMS_READ 响应长度不足")
-        return struct.unpack_from("<HH", resp.payload, 0)
+    def _read_bms_app_status(self, client: CommToolClient) -> tuple[int, int]:
+        words = self._read_bms_words(client, 0xD034, 2)
+        return words[0], words[1]
+
+    def _read_bms_words(self, client: CommToolClient, addr: int, count: int) -> list[int]:
+        payload = struct.pack("<HH", addr, count)
+        resp = client.command(CMD_BMS_READ, payload, timeout=max(10.0, count * 1.5))
+        if len(resp.payload) != count * 2:
+            raise RuntimeError(f"BMS_READ 响应长度错误: {len(resp.payload)}")
+        return list(struct.unpack("<" + "H" * count, resp.payload))
+
+    def _write_bms_words(self, client: CommToolClient, addr: int, words: list[int]) -> None:
+        payload = struct.pack("<HH", addr, len(words))
+        payload += struct.pack("<" + "H" * len(words), *words)
+        client.command(CMD_BMS_WRITE, payload, timeout=max(10.0, len(words) * 2.5))
 
     def _wait_bms_status_after_upgrade(self, client: CommToolClient) -> Optional[tuple[int, int]]:
         deadline = time.monotonic() + POST_UPGRADE_APP_READY_TIMEOUT
@@ -403,7 +607,7 @@ class UpgradeUi(tk.Tk):
         while time.monotonic() < deadline:
             attempt += 1
             try:
-                status = self._read_bms_status(client)
+                status = self._read_bms_app_status(client)
                 if attempt > 1:
                     self._emit("log", f"BMS App 第 {attempt} 次确认成功")
                 return status
@@ -473,6 +677,43 @@ class UpgradeUi(tk.Tk):
             f"CRC16=0x{crc16:04X} CRC32=0x{crc32:08X}\n"
             f"MSP=0x{msp:08X} {'OK' if msp_ok else 'BAD'}\n"
             f"Reset=0x{reset:08X} {'OK' if reset_ok else 'BAD'}"
+        )
+
+    def _format_bms_words(self, addr: int, words: list[int]) -> str:
+        return "  ".join(f"0x{addr + index:04X}=0x{value:04X}({value})" for index, value in enumerate(words))
+
+    def _format_bms_overview(self, words: list[int]) -> str:
+        if len(words) < BMS_OVERVIEW_WORDS:
+            raise RuntimeError("BMS 信息长度不足")
+
+        def temp_c(raw: int) -> float:
+            return raw / 10.0 - 40.0
+
+        cells = words[0:32]
+        valid_cells = [value for value in cells if value != 0]
+        cell_text = " ".join(f"{index + 1}:{value}" for index, value in enumerate(cells) if value != 0)
+        if not cell_text:
+            cell_text = "无有效单体电压"
+
+        total_v = words[37] / 100.0
+        ichg = words[50] / 10.0
+        idsg = words[51] / 10.0
+        soc = words[52]
+        soh = words[53]
+        capacity_now = words[54] / 100.0
+        capacity_full = words[55] / 100.0
+        capacity_factory = words[56] / 100.0
+
+        return (
+            f"SOC {soc}%  SOH {soh}%  总压 {total_v:.2f}V  "
+            f"充电 {ichg:.1f}A  放电 {idsg:.1f}A\n"
+            f"单体: max {words[32]}mV({words[34]})  min {words[33]}mV({words[35]})  "
+            f"压差 {words[36]}mV  有效串数 {len(valid_cells)}\n"
+            f"温度: max {temp_c(words[48]):.1f}℃  min {temp_c(words[49]):.1f}℃  "
+            f"容量 {capacity_now:.2f}/{capacity_full:.2f}Ah  出厂 {capacity_factory:.2f}Ah  循环 {words[57]}\n"
+            f"故障字: 0x{words[58]:04X} 0x{words[59]:04X} 0x{words[60]:04X}  "
+            f"均衡: 0x{words[61]:04X} 0x{words[62]:04X}\n"
+            f"单体电压(mV): {cell_text}"
         )
 
     def _format_upgrade_status(self, status: dict) -> str:
@@ -555,6 +796,14 @@ class UpgradeUi(tk.Tk):
             self.cache_var.set(self._format_cache(event.payload))
         elif event.kind == "image":
             self.image_var.set(str(event.payload))
+        elif event.kind == "bms_info":
+            self.bms_info_var.set(str(event.payload))
+        elif event.kind == "bms_result":
+            self.bms_result_var.set(str(event.payload))
+        elif event.kind == "param_value":
+            value, addr = event.payload
+            self.param_current_var.set(f"当前 0x{addr:04X}=0x{value:04X} ({value})")
+            self.param_value_var.set(str(value))
 
     def _log(self, text: str) -> None:
         now = time.strftime("%H:%M:%S")

@@ -37,7 +37,7 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x04` | 状态不允许 |
 | `0x05` | Flash 错误 |
 | `0x06` | CAN 超时 |
-| `0x07` | BMS 返回错误 |
+| `0x07` | BMS 返回错误，常见原因是 BMS App 未响应、地址非法、写权限关闭或参数越界 |
 
 `UPGRADE_STATUS.last_error` 为 comm tool 内部阶段码，常用值：
 
@@ -67,6 +67,15 @@ py -3.9 tools\comm_tool_host.py ...
 | `0x33 UPGRADE_ABORT` | PC -> comm | 空 | 终止当前升级 |
 | `0x40 RAW_CAN_TX` | PC -> comm | `id:u32 ide:u8 dlc:u8 data[8]` | 调试用原始 CAN 发送 |
 | `0x41 CAN_DIAG` | PC -> comm | `clear:u8` | 读取 comm tool CAN 发送、接收和错误寄存器诊断；`clear!=0` 表示读取前清零 |
+
+### BMS_READ / BMS_WRITE 细节
+
+- `BMS_READ` 读取的是 BMS 原串口寄存器地址空间，不重新定义参数含义。
+- `BMS_READ` 响应 payload 为 `words[count]`，每个寄存器 16 位小端。
+- `BMS_WRITE` 请求 payload 为 `addr:u16 count:u16 words[count]`，每个寄存器 16 位小端。
+- comm tool 当前一次最多转发 `120` 个寄存器；内部通过 CAN App 服务逐字读写。
+- BMS App 写入仍走 `Sci_Upper.c` 的地址、范围、副作用和权限检查。量产默认 `PROJECT_CFG_HOST_WRITE_ENABLE=0` 时会拒绝写入，这是预期保护。
+- UI 的 `读取BMS信息` 使用 `0xD000` 起连续 `63` 个只读寄存器；`读取BMS状态` 使用 `0xD034/0xD035` 读取 SOC/SOH。
 
 ## 安全规则
 

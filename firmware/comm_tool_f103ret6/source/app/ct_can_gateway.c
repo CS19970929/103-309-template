@@ -7,6 +7,7 @@
 #define APP_CMD_WAIT_SLICE_MS           20u
 #define APP_GET_STATUS_TIMEOUT_MS       1000u
 #define APP_ENTER_IAP_TIMEOUT_MS        5000u
+#define APP_REG_CMD_TIMEOUT_MS          1000u
 #define IAP_ACK_WAIT_SLICE_MS           20u
 
 enum
@@ -188,6 +189,78 @@ int CtCan_AppEnterIap(uint8_t can_addr)
 {
     return send_app_cmd_wait_ack(can_addr, CT_CAN_APP_ENTER_IAP, 0xC3u, 0x3Cu, can_addr,
                                  0, 0, APP_ENTER_IAP_TIMEOUT_MS);
+}
+
+int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t *words)
+{
+    uint16_t i;
+    uint8_t v0;
+    uint8_t v1;
+
+    if ((words == 0) || (count == 0u))
+    {
+        return 0;
+    }
+
+    for (i = 0u; i < count; ++i)
+    {
+        if (!send_app_cmd_wait_ack(can_addr,
+                                   CT_CAN_APP_READ_REG,
+                                   (uint8_t)((addr + i) >> 8),
+                                   (uint8_t)(addr + i),
+                                   0u,
+                                   &v0,
+                                   &v1,
+                                   APP_REG_CMD_TIMEOUT_MS))
+        {
+            return 0;
+        }
+        words[i] = ((uint16_t)v0 << 8) | v1;
+    }
+
+    return 1;
+}
+
+int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const uint16_t *words)
+{
+    uint16_t i;
+    uint16_t reg_addr;
+    uint16_t value;
+
+    if ((words == 0) || (count == 0u))
+    {
+        return 0;
+    }
+
+    for (i = 0u; i < count; ++i)
+    {
+        reg_addr = (uint16_t)(addr + i);
+        value = words[i];
+        if (!send_app_cmd_wait_ack(can_addr,
+                                   CT_CAN_APP_WRITE_PREP,
+                                   (uint8_t)(reg_addr >> 8),
+                                   (uint8_t)reg_addr,
+                                   (uint8_t)(value >> 8),
+                                   0,
+                                   0,
+                                   APP_REG_CMD_TIMEOUT_MS))
+        {
+            return 0;
+        }
+        if (!send_app_cmd_wait_ack(can_addr,
+                                   CT_CAN_APP_WRITE_COMMIT,
+                                   (uint8_t)(reg_addr >> 8),
+                                   (uint8_t)reg_addr,
+                                   (uint8_t)value,
+                                   0,
+                                   0,
+                                   APP_REG_CMD_TIMEOUT_MS))
+        {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 static uint32_t iap_ctrl_id(uint8_t node)

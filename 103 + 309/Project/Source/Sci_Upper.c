@@ -1069,6 +1069,113 @@ void Sci_ACK_0x06_0x10(struct RS485MSG *s)
 	s->csr = RS485_STA_TX_COMPLETE;
 }
 
+UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words)
+{
+	struct RS485MSG stMsg;
+	UINT16 i;
+
+	if ((pu16Words == 0) ||
+		(u16Count == 0U) ||
+		((u16Count << 1) > (UINT16)(RS485_MAX_BUFFER_SIZE - 5U)))
+	{
+		return RS485_ERROR_DATA_INVALID;
+	}
+	if (Sci_IsAnyPortBusy() != 0U)
+	{
+		return RS485_ERROR_CMD_INVALID;
+	}
+
+	memset(&stMsg, 0, sizeof(stMsg));
+	stMsg.AckType = RS485_ACK_POS;
+	stMsg.ErrorType = RS485_ERROR_NULL;
+	stMsg.enRs485CmdType = RS485_CMD_READ_REGS;
+	stMsg.u16Buffer[0] = RS485_SLAVE_ADDR;
+	stMsg.u16Buffer[1] = RS485_CMD_READ_REGS;
+	stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+	stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+	stMsg.u16Buffer[4] = (UINT8)(u16Count >> 8);
+	stMsg.u16Buffer[5] = (UINT8)u16Count;
+
+	Sci_Deal_ReadRegs_0x03(&stMsg);
+	if (stMsg.AckType != RS485_ACK_POS)
+	{
+		return stMsg.ErrorType;
+	}
+
+	Sci_ACK_0x03(&stMsg);
+	if ((stMsg.AckType != RS485_ACK_POS) ||
+		(stMsg.AckLenth < (UINT8)(5U + (u16Count << 1))) ||
+		(stMsg.u16Buffer[1] != RS485_CMD_READ_REGS) ||
+		(stMsg.u16Buffer[2] != (UINT8)(u16Count << 1)))
+	{
+		return (stMsg.ErrorType != RS485_ERROR_NULL) ? stMsg.ErrorType : RS485_ERROR_DATA_INVALID;
+	}
+
+	for (i = 0; i < u16Count; ++i)
+	{
+		pu16Words[i] = (UINT16)(((UINT16)stMsg.u16Buffer[3U + (i << 1)] << 8) |
+								stMsg.u16Buffer[4U + (i << 1)]);
+	}
+
+	return 0U;
+}
+
+UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count)
+{
+	struct RS485MSG stMsg;
+	UINT16 i;
+
+	if ((pu16Words == 0) ||
+		(u16Count == 0U) ||
+		((u16Count << 1) > (UINT16)(RS485_MAX_BUFFER_SIZE - 9U)))
+	{
+		return RS485_ERROR_DATA_INVALID;
+	}
+	if (Sci_IsAnyPortBusy() != 0U)
+	{
+		return RS485_ERROR_CMD_INVALID;
+	}
+
+	memset(&stMsg, 0, sizeof(stMsg));
+	stMsg.AckType = RS485_ACK_POS;
+	stMsg.ErrorType = RS485_ERROR_NULL;
+	stMsg.u16Buffer[0] = RS485_SLAVE_ADDR;
+
+	if ((u16Count == 1U) && (u16StartAddr < RS485_ADDR_RW_CALIB))
+	{
+		stMsg.enRs485CmdType = RS485_CMD_WRITE_REG;
+		stMsg.u16Buffer[1] = RS485_CMD_WRITE_REG;
+		stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+		stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+		stMsg.u16Buffer[4] = (UINT8)(pu16Words[0] >> 8);
+		stMsg.u16Buffer[5] = (UINT8)pu16Words[0];
+		Sci_Deal_WrReg_0x06(&stMsg);
+	}
+	else
+	{
+		stMsg.enRs485CmdType = RS485_CMD_WRITE_REGS;
+		stMsg.u16Buffer[1] = RS485_CMD_WRITE_REGS;
+		stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+		stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+		stMsg.u16Buffer[4] = (UINT8)(u16Count >> 8);
+		stMsg.u16Buffer[5] = (UINT8)u16Count;
+		stMsg.u16Buffer[6] = (UINT8)(u16Count << 1);
+		for (i = 0; i < u16Count; ++i)
+		{
+			stMsg.u16Buffer[7U + (i << 1)] = (UINT8)(pu16Words[i] >> 8);
+			stMsg.u16Buffer[8U + (i << 1)] = (UINT8)pu16Words[i];
+		}
+		Sci_Deal_WrRegs_0x10(&stMsg);
+	}
+
+	if (stMsg.AckType != RS485_ACK_POS)
+	{
+		return stMsg.ErrorType;
+	}
+
+	return 0U;
+}
+
 static void Sci_ModbusResetMessage(struct RS485MSG *s)
 {
 	s->ptr_no = 0;

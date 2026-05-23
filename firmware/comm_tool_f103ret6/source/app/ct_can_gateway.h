@@ -8,6 +8,9 @@
 #define CT_CAN_APP_ACK_BASE             0x061u
 #define CT_CAN_APP_GET_STATUS           0x01u
 #define CT_CAN_APP_ENTER_IAP            0x02u
+#define CT_CAN_APP_READ_REG             0x03u
+#define CT_CAN_APP_WRITE_PREP           0x04u
+#define CT_CAN_APP_WRITE_COMMIT         0x05u
 
 #define CT_CAN_IAP_CTRL_BASE            0x14F8F000u
 #define CT_CAN_IAP_ACK_BASE             0x14F8F100u
@@ -23,6 +26,8 @@
 
 int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh);
 int CtCan_AppEnterIap(uint8_t can_addr);
+int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t *words);
+int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const uint16_t *words);
 int CtCan_IapSendHello(uint8_t node);
 int CtCan_IapSendStart(uint8_t node, uint32_t size, uint16_t crc16);
 int CtCan_IapSendData(uint8_t node, uint16_t seq, const uint8_t data[8]);

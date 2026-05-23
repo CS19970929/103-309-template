@@ -11,6 +11,8 @@ static uint8_t s_tx[10u + CT_UART_MAX_PAYLOAD + 2u];
 static uint32_t s_can_bitrate = CT_CAN_DEFAULT_BITRATE;
 static uint8_t s_node_id = CT_NODE_ID_DEFAULT;
 
+#define CT_BMS_MAX_REG_WORDS 120u
+
 static uint16_t rd16(const uint8_t *p)
 {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
@@ -202,11 +204,11 @@ static void handle_fw_info(const CtFrame *req)
 
 static void handle_bms_read(const CtFrame *req)
 {
-    uint8_t soc;
-    uint8_t soh;
-    uint8_t payload[4];
+    uint16_t words[CT_BMS_MAX_REG_WORDS];
+    uint8_t payload[CT_BMS_MAX_REG_WORDS * 2u];
     uint16_t addr;
     uint16_t count;
+    uint16_t i;
 
     if (req->length < 4u)
     {
@@ -215,19 +217,61 @@ static void handle_bms_read(const CtFrame *req)
     }
     addr = rd16(&req->payload[0]);
     count = rd16(&req->payload[2]);
-    if ((addr == 0xD000u) && (count >= 2u))
+    if ((count == 0u) ||
+        (count > CT_BMS_MAX_REG_WORDS) ||
+        (((uint32_t)addr + (uint32_t)count - 1u) > 0xFFFFu))
     {
-        if (!CtCan_AppGetStatus(0u, &soc, &soh))
-        {
-            respond(req, CT_STATUS_CAN_TIMEOUT, 0, 0u);
-            return;
-        }
-        wr16(&payload[0], soc);
-        wr16(&payload[2], soh);
-        respond(req, CT_STATUS_OK, payload, 4u);
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
         return;
     }
-    respond(req, CT_STATUS_UNSUPPORTED, 0, 0u);
+    if (!CtCan_AppReadRegs(0u, addr, count, words))
+    {
+        respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
+        return;
+    }
+
+    for (i = 0u; i < count; ++i)
+    {
+        wr16(&payload[i << 1], words[i]);
+    }
+    respond(req, CT_STATUS_OK, payload, (uint16_t)(count << 1));
+}
+
+static void handle_bms_write(const CtFrame *req)
+{
+    uint16_t words[CT_BMS_MAX_REG_WORDS];
+    uint16_t addr;
+    uint16_t count;
+    uint16_t i;
+
+    if (req->length < 4u)
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+    addr = rd16(&req->payload[0]);
+    count = rd16(&req->payload[2]);
+    if ((count == 0u) ||
+        (count > CT_BMS_MAX_REG_WORDS) ||
+        (((uint32_t)addr + (uint32_t)count - 1u) > 0xFFFFu) ||
+        (req->length != (uint16_t)(4u + (count << 1))))
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    for (i = 0u; i < count; ++i)
+    {
+        words[i] = rd16(&req->payload[4u + (i << 1)]);
+    }
+
+    if (!CtCan_AppWriteRegs(0u, addr, count, words))
+    {
+        respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
+        return;
+    }
+
+    respond(req, CT_STATUS_OK, 0, 0u);
 }
 
 static void handle_enter_iap(const CtFrame *req)
@@ -330,7 +374,7 @@ void CtApp_HandleFrame(const CtFrame *frame)
         handle_bms_read(frame);
         break;
     case CT_CMD_BMS_WRITE:
-        respond(frame, CT_STATUS_UNSUPPORTED, 0, 0u);
+        handle_bms_write(frame);
         break;
     case CT_CMD_ENTER_IAP:
         handle_enter_iap(frame);
