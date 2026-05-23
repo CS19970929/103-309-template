@@ -41,6 +41,7 @@ static void board_gpio_init(void)
 void Board_Init(void)
 {
     SystemCoreClockUpdate();
+    SCB->VTOR = CT_SELF_APP_BASE;
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     board_gpio_init();
     BoardUart_Init(CT_UART_DEFAULT_BAUD);

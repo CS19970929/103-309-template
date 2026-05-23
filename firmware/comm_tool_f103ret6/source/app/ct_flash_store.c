@@ -27,6 +27,23 @@ static int range_in_cache(uint32_t offset, uint32_t length)
     return 1;
 }
 
+static int app_addr_supported(uint32_t app_addr, uint32_t size)
+{
+    if ((app_addr == CT_BMS_APP_BASE_ADDR) &&
+        (size <= (CT_BMS_APP_LIMIT_ADDR - CT_BMS_APP_BASE_ADDR)))
+    {
+        return 1;
+    }
+
+    if ((app_addr == CT_SELF_APP_BASE) &&
+        (size <= CT_SELF_APP_SIZE))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
 static int erase_pages(uint32_t start, uint32_t length)
 {
     uint32_t addr;
@@ -121,7 +138,7 @@ int CtFlash_Begin(uint32_t app_addr, uint32_t size, uint16_t crc16, uint32_t crc
 {
     uint32_t erase_len;
 
-    if ((app_addr != CT_BMS_APP_BASE_ADDR) || (size == 0u) || (size > CT_FW_CACHE_SIZE))
+    if ((size == 0u) || (size > CT_FW_CACHE_SIZE) || !app_addr_supported(app_addr, size))
     {
         return 0;
     }
@@ -183,4 +200,3 @@ int CtFlash_Read(uint32_t offset, uint8_t *data, uint16_t length)
     memcpy(data, (const void *)(CT_FW_CACHE_BASE + offset), length);
     return 1;
 }
-

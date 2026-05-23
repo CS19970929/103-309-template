@@ -5,8 +5,8 @@
 
 #define CT_PROTOCOL_VERSION            1u
 #define CT_FW_VERSION_MAJOR            0u
-#define CT_FW_VERSION_MINOR            1u
-#define CT_FW_VERSION_PATCH            8u
+#define CT_FW_VERSION_MINOR            2u
+#define CT_FW_VERSION_PATCH            0u
 #define CT_UART_MAX_PAYLOAD            512u
 #define CT_UART_DEFAULT_BAUD           115200u
 #define CT_CAN_DEFAULT_BITRATE         250000u
@@ -17,13 +17,23 @@
 
 #define CT_BMS_IAP_BASE_ADDR           0x08000000u
 #define CT_BMS_APP_BASE_ADDR           0x08004800u
+#define CT_BMS_APP_LIMIT_ADDR          0x08020000u
 
 #define CT_SELF_FLASH_BASE             0x08000000u
 #define CT_SELF_FLASH_SIZE             0x00080000u
 #define CT_SELF_FLASH_END              (CT_SELF_FLASH_BASE + CT_SELF_FLASH_SIZE)
 #define CT_SELF_FLASH_PAGE_SIZE        0x800u
+#define CT_SELF_IAP_BASE               0x08000000u
+#define CT_SELF_IAP_SIZE               0x00008000u
+#define CT_SELF_APP_BASE               0x08008000u
+#define CT_SELF_APP_SIZE               0x00010000u
+#define CT_SELF_APP_LIMIT              (CT_SELF_APP_BASE + CT_SELF_APP_SIZE)
+#define CT_SELF_CAN_APP_ADDR           0x0Eu
+#define CT_BOOT_MAILBOX_ADDR           0x2000FFE0u
+#define CT_BOOT_MAILBOX_MAGIC          0x43544950u
+#define CT_BOOT_MAILBOX_REQUEST        0x0000A501u
 
-#define CT_FW_CACHE_BASE               0x08010000u
+#define CT_FW_CACHE_BASE               0x08018000u
 #define CT_FW_META_PAGE                0x0807F800u
 #define CT_FW_CACHE_LIMIT              CT_FW_META_PAGE
 #define CT_FW_CACHE_SIZE               (CT_FW_CACHE_LIMIT - CT_FW_CACHE_BASE)

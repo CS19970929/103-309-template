@@ -4,6 +4,7 @@ param(
     [string]$Port = "COM4",
     [int]$Baud = 115200,
     [string]$Bin = "",
+    [string]$AppAddress = "",
     [string]$Address = "",
     [string]$Count = "",
     [string[]]$Values = @(),
@@ -37,6 +38,9 @@ try {
             throw "Mode=$Mode 需要提供 -Bin"
         }
         $ArgsList += @("--bin", $Bin)
+        if (-not [string]::IsNullOrWhiteSpace($AppAddress)) {
+            $ArgsList += @("--app-address", $AppAddress)
+        }
     }
 
     if ($Mode -eq "fw-download") {

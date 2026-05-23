@@ -2,6 +2,7 @@
 #include "board_uart.h"
 #include "ct_app.h"
 #include "ct_protocol.h"
+#include "ct_self_iap.h"
 
 static CtProtocolParser s_parser;
 static CtFrame s_frame;
@@ -18,6 +19,7 @@ int main(void)
     {
         while (BoardUart_ReadByte(&byte))
         {
+            CtSelfIap_FeedUartByte(byte);
             if (CtProtocol_Feed(&s_parser, byte, &s_frame) != 0u)
             {
                 CtApp_HandleFrame(&s_frame);

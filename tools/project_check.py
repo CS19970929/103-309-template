@@ -70,6 +70,7 @@ COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
 COMM_TOOL_BSP_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "bsp"
 COMM_TOOL_KEIL_PROJECT = ROOT / "firmware" / "comm_tool_f103ret6" / "keil" / "COMM_TOOL_F103RET6.uvprojx"
+COMM_TOOL_IAP_PROJECT = ROOT / "firmware" / "comm_tool_f103ret6" / "keil" / "COMM_TOOL_IAP.uvprojx"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
 APP_ARCH_REFACTOR_DOC = ROOT / "PROJECT_ARCH_REFACTOR_2026-05-22.md"
 REFACTOR_REQUIREMENTS_DOC = ROOT / "PROJECT_REFACTOR_REQUIREMENTS_2026-05-22.md"
@@ -1198,11 +1199,16 @@ def check_comm_tool_can_iap_contract(reporter):
         COMM_TOOL_SOURCE / "ct_flash_store.c",
         COMM_TOOL_SOURCE / "ct_can_gateway.c",
         COMM_TOOL_SOURCE / "ct_upgrade_manager.c",
+        COMM_TOOL_SOURCE / "ct_boot_control.c",
+        COMM_TOOL_SOURCE / "ct_self_iap.c",
         COMM_TOOL_SOURCE / "ct_app.c",
+        ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "iap" / "ct_iap.c",
+        ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "iap" / "ct_iap_main.c",
         COMM_TOOL_BSP_SOURCE / "board.c",
         COMM_TOOL_BSP_SOURCE / "board_uart.c",
         COMM_TOOL_BSP_SOURCE / "board_can.c",
         COMM_TOOL_KEIL_PROJECT,
+        COMM_TOOL_IAP_PROJECT,
     ]
     required = docs + source_files
     if any(not path.exists() for path in required):
@@ -1228,15 +1234,18 @@ def check_comm_tool_can_iap_contract(reporter):
     board_uart_c = read_text(COMM_TOOL_BSP_SOURCE / "board_uart.c")
     board_can_c = read_text(COMM_TOOL_BSP_SOURCE / "board_can.c")
     comm_tool_uvprojx = read_text(COMM_TOOL_KEIL_PROJECT)
+    comm_tool_iap_uvprojx = read_text(COMM_TOOL_IAP_PROJECT)
     bms_can_c = read_text(CAN_HDX_C)
 
     if (
         "PC 上位机 <UART> comm tool" in arch_doc
         and "0x08004800" in arch_doc
-        and "0x08010000" in arch_doc
+        and "0x08008000" in arch_doc
+        and "0x08018000" in arch_doc
         and "FW_BEGIN" in serial_doc
         and "FW_DATA" in serial_doc
         and "ConfirmAppAddress 0x08004800" in serial_doc
+        and "ConfirmAppAddress 0x08008000" in serial_doc
         and "GET_STATUS" in service_doc
         and "ENTER_IAP" in service_doc
         and "0x14F8F000" in iap_doc
@@ -1253,8 +1262,10 @@ def check_comm_tool_can_iap_contract(reporter):
         "CMD_FW_BEGIN" in host_py
         and "CMD_FW_DATA" in host_py
         and "CMD_UPGRADE" in host_py
-        and "APP_BASE_ADDR = 0x08004800" in host_py
+        and "BMS_APP_BASE_ADDR = 0x08004800" in host_py
+        and "COMM_TOOL_APP_BASE_ADDR = 0x08008000" in host_py
         and "confirm_app_address" in host_py
+        and "AppAddress" in start_ps1
         and "pyserial" in host_py
         and "comm_tool_host.py" in start_ps1
         and "ConfirmAppAddress" in start_ps1
@@ -1264,7 +1275,8 @@ def check_comm_tool_can_iap_contract(reporter):
         reporter.fail("PC comm tool host should support firmware download, upgrade commands, pyserial, and 0x08004800 confirmation")
 
     if (
-        "CT_FW_CACHE_BASE               0x08010000u" in config_h
+        "CT_SELF_APP_BASE               0x08008000u" in config_h
+        and "CT_FW_CACHE_BASE               0x08018000u" in config_h
         and "CtProtocol_Encode" in protocol_c
         and "CtFlash_Begin" in flash_c
         and "CT_FW_CACHE_BASE" in flash_c
@@ -1276,6 +1288,7 @@ def check_comm_tool_can_iap_contract(reporter):
         and "frame_count = s_ctx.seq" in upgrade_c
         and "CT_CMD_FW_BEGIN" in app_c
         and "CT_CMD_UPGRADE" in app_c
+        and "CtSelfIap_PollCan" in app_c
     ):
         reporter.ok("comm tool firmware source contains protocol, flash cache, CAN gateway, and upgrade manager")
     else:
@@ -1283,6 +1296,7 @@ def check_comm_tool_can_iap_contract(reporter):
 
     if (
         "COMM_TOOL_F103RET6.uvprojx" in keil_doc
+        and "COMM_TOOL_IAP.uvprojx" in keil_doc
         and "USART3" in keil_doc
         and "PC10" in keil_doc
         and "PC11" in keil_doc
@@ -1292,12 +1306,17 @@ def check_comm_tool_can_iap_contract(reporter):
         and "PC12" in keil_doc
         and "PC13" in keil_doc
         and "PD2" in keil_doc
-        and "0x08010000" in keil_doc
+        and "0x08008000" in keil_doc
+        and "0x08018000" in keil_doc
         and "STM32F103RE" in comm_tool_uvprojx
         and "COMM_TOOL_Release" in comm_tool_uvprojx
-        and "IROM(0x08000000,0x10000)" in comm_tool_uvprojx
+        and "IROM(0x08008000,0x10000)" in comm_tool_uvprojx
         and "ct_app.c" in comm_tool_uvprojx
         and "board_uart.c" in comm_tool_uvprojx
+        and "COMM_TOOL_IAP" in comm_tool_iap_uvprojx
+        and "IROM(0x08000000,0x8000)" in comm_tool_iap_uvprojx
+        and "ct_iap.c" in comm_tool_iap_uvprojx
+        and "ct_iap_main.c" in comm_tool_iap_uvprojx
         and "GPIO_PartialRemap_USART3" in board_uart_c
         and "USART3" in board_uart_c
         and "GPIO_Pin_10" in board_uart_c
@@ -1314,7 +1333,7 @@ def check_comm_tool_can_iap_contract(reporter):
     ):
         reporter.ok("comm tool Keil/BSP contract records RET6 USART3, CAN, power, LED, and cache boundary")
     else:
-        reporter.fail("comm tool Keil/BSP should fix RET6 project, USART3 PC10/PC11, CAN PA11/PA12, power pins, PB15 LED, and 0x08010000 cache boundary")
+        reporter.fail("comm tool Keil/BSP should fix RET6 App/IAP projects, USART3 PC10/PC11, CAN PA11/PA12, power pins, PB15 LED, and 0x08018000 cache boundary")
 
     if (
         "FEIDAO_CAN_APP_CMD_GET_STATUS" in bms_can_c

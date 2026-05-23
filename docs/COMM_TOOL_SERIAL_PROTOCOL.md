@@ -41,7 +41,7 @@ py -3.9 tools\comm_tool_host.py ...
 
 ## 设备目标
 
-comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IAP 节点 `1`。
+comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IAP 节点 `1`。comm tool 自身 App 的 CAN 服务地址固定为 `14`，用于另一台 comm tool 触发它进入自身 IAP。
 
 多设备总线中，读写和进入 IAP 先按 BMS App CAN 地址选择目标；只有被选中的 BMS App 会响应 `ENTER_IAP` 并复位进入 IAP。BMS 进入 IAP 后使用 IAP 节点帧升级。当前 IAP 默认节点为 `1`，因此如果总线上已有多个 BMS 同时停留在 IAP 且节点相同，comm tool 无法区分它们，禁止直接升级。
 
@@ -63,7 +63,7 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 | `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 app_can_addr:u8 reserved:u16` | 设置 CAN 参数、IAP 节点和 BMS App CAN 地址 |
 | `0x10 BMS_READ` | PC -> comm | `addr:u16 count:u16` | 通过 CAN 读取 BMS 寄存器 |
 | `0x11 BMS_WRITE` | PC -> comm | `addr:u16 count:u16 words[count]` | 通过 CAN 写 BMS 寄存器 |
-| `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 到 comm tool |
+| `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 或 comm tool App 到 comm tool 缓存 |
 | `0x21 FW_DATA` | PC -> comm | `offset:u32 data[n]` | 写入固件缓存 |
 | `0x22 FW_END` | PC -> comm | `size:u32 crc16:u16 crc32:u32` | 结束下载并校验缓存 |
 | `0x23 FW_INFO` | PC -> comm | 空 | 查询缓存固件信息 |
@@ -102,8 +102,18 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 
 ## 安全规则
 
-- `FW_BEGIN.app_addr` 第一阶段必须等于 `0x08004800`。
-- PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
+- 下载 BMS App 时 `FW_BEGIN.app_addr` 必须等于 `0x08004800`，PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
+- 下载 comm tool App 给另一台 comm tool 自升级时，`FW_BEGIN.app_addr` 必须等于 `0x08008000`，PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08008000`。
+- comm tool App 不能裸写到 `0x08000000`；该地址是 comm tool 自身 IAP。
 - comm tool 写缓存前必须擦除缓存页，不能覆盖自身程序区。
 - `FW_END` 校验失败时缓存固件无效，禁止执行 `UPGRADE`。
 - 多个 BMS 同时挂在 CAN 总线时，必须保证目标 BMS App CAN 地址唯一；多个相同地址或多个相同 IAP 节点同时在线会造成响应串扰。
+
+## comm tool 自升级兼容协议
+
+comm tool IAP 同时支持旧 BMS 串口升级协议和当前 CAN-IAP 协议：
+
+- 串口：USART3 `115200 8N1`，旧 BMS `0x10` 写多个寄存器命令，地址仍为 `0xFFFD` 连接、`0xFFFE` 数据块、`0xFFFF` 完成。App 运行时收到 `0xFFFD` 后会用 SRAM mailbox 请求复位进入 IAP，并先 ACK 再复位，旧串口上位机可复用。
+- CAN：目标 comm tool App 地址固定 `14`，收到 App 服务 `ENTER_IAP` 后复位进入 IAP；IAP 使用扩展帧 `0x14F8F000/0x14F8F100/0x14000000` 的 CAN-IAP 协议，节点默认 `1`。
+
+另一台 comm tool 升级当前 comm tool 时，PC 先把 `COMM_TOOL_Release.bin` 以 `app_addr=0x08008000` 下载到主控 comm tool 缓存，然后设置 `app-can-addr=14`、`node-id=1`，执行 `enter-iap` 和 `upgrade`。目标 IAP 收到完整镜像并校验后才写入 App 首页向量，升级中断会停留在 IAP。

@@ -25,8 +25,9 @@ PC 不直接连接 BMS CAN。comm tool 负责串口协议解析、BMS CAN 读写
 | BMS App | `0x08004800` | 当前 `FD_Release` 链接地址 |
 | BMS App 写入上限 | `0x0801F800` | 预留升级标志页和睡眠标志页 |
 | BMS 升级标志 | `0x0801F800` | App 请求进入 IAP |
-| comm tool App | `0x08000000` | comm tool 自身程序 |
-| comm tool 固件缓存 | `0x08010000` 起 | F103RET6 后半段 Flash，用于缓存 BMS App bin |
+| comm tool IAP | `0x08000000..0x08007FFF` | comm tool 自身 Bootloader，支持旧串口 IAP 和 CAN-IAP |
+| comm tool App | `0x08008000..0x08017FFF` | comm tool 自身程序 |
+| comm tool 固件缓存 | `0x08018000` 起 | F103RET6 后半段 Flash，用于缓存 BMS App 或 comm tool App bin |
 
 如果重构后的 IAP 超过 `0x4800` 字节，必须整体切换到新 App 地址，例如 `0x08008000`，并同步更新 scatter、烧录脚本、检查脚本和本文档。
 
@@ -38,6 +39,7 @@ PC 不直接连接 BMS CAN。comm tool 负责串口协议解析、BMS CAN 读写
 - comm tool 缓存完整固件后再启动 BMS 升级；BMS 升级失败时可以不依赖 PC 重新一键刷入。
 - 所有串口/CAN/Flash 等待都必须有超时，禁止死等。
 - 多设备总线中必须先通过 BMS App CAN 地址锁定目标板，再让目标板进入 IAP；禁止多个相同 IAP 节点同时处于 IAP 后再发起升级。
+- comm tool 自升级时，App 镜像地址必须是 `0x08008000`，IAP 与 App 使用独立 Keil 工程，禁止把 App bin 裸写到 `0x08000000`。
 
 ## 实施阶段
 

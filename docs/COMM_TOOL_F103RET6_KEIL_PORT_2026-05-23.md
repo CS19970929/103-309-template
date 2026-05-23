@@ -2,14 +2,20 @@
 
 ## 工程入口
 
-- Keil 工程：`firmware/comm_tool_f103ret6/keil/COMM_TOOL_F103RET6.uvprojx`
-- Target：`COMM_TOOL_Release`
+- App Keil 工程：`firmware/comm_tool_f103ret6/keil/COMM_TOOL_F103RET6.uvprojx`
+  - Target：`COMM_TOOL_Release`，固定链接到 `0x08008000`
+- IAP Keil 工程：`firmware/comm_tool_f103ret6/keil/COMM_TOOL_IAP.uvprojx`
+  - Target：`COMM_TOOL_IAP`，固定烧录到 `0x08000000`
 - MCU：`STM32F103RET6`，Keil 设备选择 `STM32F103RE`
-- 代码区：`0x08000000` 起，IROM 限制 `0x00010000`
-- BMS App 缓存区：`0x08010000` 起
+- IAP 区：`0x08000000..0x08007FFF`，32KB
+- comm tool App 区：`0x08008000..0x08017FFF`，64KB
+- BMS/comm tool 待升级固件缓存区：`0x08018000` 起
 - 缓存元数据页：`0x0807F800`
+- SRAM mailbox：`0x2000FFE0`，App 复位进入 IAP 使用；Keil RAM 上限保留 32 字节，不给栈和全局变量使用
 
-IROM 故意限制为 64KB，目的是让 comm tool 自身程序不能覆盖从 `0x08010000` 开始的 BMS 固件缓存区。
+IAP 独立保留 32KB。App IROM 仍限制为 64KB，目的是让 comm tool 自身程序不能覆盖从 `0x08018000` 开始的固件缓存区。升级中 IAP 会先擦 App 首页，但把第一页内容暂存在 RAM，完成校验后最后写入 MSP/Reset 向量；如果中途断电，向量表保持无效，重启后继续停在 IAP，不会跳入半个 App。
+
+App 和 IAP 使用两个独立 Keil 工程，而不是同一个工程里的两个 Target。这样源码集合、链接地址和下载产物完全隔离，避免 μVision 的 Target/Layer 本地缓存把 App 与 IAP 文件混编。两个工程仍放在同一个 `keil/` 目录，源码和公共配置共用，便于维护。
 
 ## 板级引脚
 
@@ -34,25 +40,32 @@ comm tool 当前复用主仓库 `system_stm32f10x.c`，运行时 HSE 直连，`P
 | `250 kbit/s` | `5tq` | `2tq` | `4` |
 | `500 kbit/s` | `5tq` | `2tq` | `2` |
 
-默认使用 `250 kbit/s`，和 BMS IAP 的 CAN1 位时序一致。不要按 36MHz PCLK1 计算 comm tool CAN 预分频，否则工具界面显示 250k，但实际总线速率会错误。
+默认使用 `250 kbit/s`，和 BMS IAP、comm tool IAP 的 CAN1 位时序一致。不要按 36MHz PCLK1 计算 comm tool CAN 预分频，否则工具界面显示 250k，但实际总线速率会错误。
 
 ## 源码范围
 
 - `source/app/`：comm tool 协议、Flash 缓存、CAN-IAP 业务逻辑。
+- `source/iap/`：comm tool 自身 IAP，支持旧 BMS 串口 IAP 协议和 CAN-IAP 协议。
 - `source/bsp/`：本次新增的 RET6 板级适配。
 - 标准库复用仓库已有 `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0`，没有拷贝无关业务代码。
 
 ## 构建命令
 
 ```powershell
+& 'C:\Keil_v5\UV4\UV4.exe' -b "firmware\comm_tool_f103ret6\keil\COMM_TOOL_IAP.uvprojx" -t "COMM_TOOL_IAP" -o "firmware\comm_tool_f103ret6\keil\build_logs\COMM_TOOL_IAP.log"
 & 'C:\Keil_v5\UV4\UV4.exe' -b "firmware\comm_tool_f103ret6\keil\COMM_TOOL_F103RET6.uvprojx" -t "COMM_TOOL_Release" -o "firmware\comm_tool_f103ret6\keil\build_logs\COMM_TOOL_Release.log"
 ```
 
 构建产物：
 
+- `firmware/comm_tool_f103ret6/keil/Objects/IAP/COMM_TOOL_IAP.axf`
+- `firmware/comm_tool_f103ret6/keil/Objects/IAP/COMM_TOOL_IAP.hex`
+- `firmware/comm_tool_f103ret6/keil/Objects/IAP/COMM_TOOL_IAP.bin`
 - `firmware/comm_tool_f103ret6/keil/Objects/Release/COMM_TOOL_Release.axf`
 - `firmware/comm_tool_f103ret6/keil/Objects/Release/COMM_TOOL_Release.hex`
 - `firmware/comm_tool_f103ret6/keil/Objects/Release/COMM_TOOL_Release.bin`
+
+首次生产烧录必须同时烧 `COMM_TOOL_IAP.hex` 和 `COMM_TOOL_Release.hex`，或先烧 IAP 再通过 IAP 升级 App。禁止把 `COMM_TOOL_Release.bin` 裸写到 `0x08000000`，否则会覆盖 comm tool IAP。
 
 ## PC 联调
 
@@ -61,3 +74,30 @@ comm tool 当前复用主仓库 `system_stm32f10x.c`，运行时 HSE 直连，`P
 .\tools\start_comm_tool_host.ps1 -Mode fw-download -Port COM4 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -ConfirmAppAddress 0x08004800
 .\tools\start_comm_tool_host.ps1 -Mode upgrade -Port COM4 -ConfirmUpgrade
 ```
+
+## comm tool 自升级
+
+comm tool 自身升级有两种入口：
+
+| 入口 | 使用场景 | 协议 |
+| --- | --- | --- |
+| PC 直连当前 comm tool 串口 | 复用旧 BMS 串口升级上位机 | USART3 `115200 8N1`，`0xFFFD/0xFFFE/0xFFFF` 旧 IAP 命令 |
+| 另一台 comm tool 通过 CAN 升级当前 comm tool | 批量升级 comm tool 或现场无线/隔离升级 | 当前 comm tool App 响应 BMS App `ENTER_IAP` 服务，进入 IAP 后复用 CAN-IAP 协议 |
+
+通过另一台 comm tool 升级当前 comm tool 的步骤：
+
+```powershell
+# 1. 把待升级 comm tool App 下载到“主控 comm tool”的缓存，注意地址是 0x08008000
+.\tools\start_comm_tool_host.ps1 -Mode fw-download -Port COM4 -Bin "firmware\comm_tool_f103ret6\keil\Objects\Release\COMM_TOOL_Release.bin" -AppAddress 0x08008000 -ConfirmAppAddress 0x08008000
+
+# 2. 设置目标 comm tool 的 CAN App 地址。默认自升级地址是 14，IAP 节点默认 1
+py -3.9 tools\comm_tool_host.py set-can --port COM4 --app-can-addr 14 --node-id 1
+
+# 3. 让目标 comm tool App 进入 IAP
+py -3.9 tools\comm_tool_host.py enter-iap --port COM4 --confirm-enter-iap
+
+# 4. 使用缓存通过 CAN-IAP 写目标 comm tool App
+py -3.9 tools\comm_tool_host.py upgrade --port COM4 --confirm-upgrade --long-timeout 120
+```
+
+目标 comm tool IAP 心跳为标准帧 `0x05F`，数据前两字节为 `43 49`。如果能看到心跳但升级失败，先确认总线上只有一个 IAP 节点为 `1` 的目标设备在线。

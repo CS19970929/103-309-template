@@ -4,7 +4,7 @@
   <Header>### uVision Project, (C) Keil Software</Header>
   <Targets>
     <Target>
-      <TargetName>COMM_TOOL_Release</TargetName>
+      <TargetName>COMM_TOOL_IAP</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pCCUsed>5060960::V5.06 update 7 (build 960)::.\ARMCC</pCCUsed>
@@ -15,7 +15,7 @@
           <Vendor>STMicroelectronics</Vendor>
           <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
-          <Cpu>IRAM(0x20000000,0xFFE0) IROM(0x08008000,0x10000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
+          <Cpu>IRAM(0x20000000,0xFFE0) IROM(0x08000000,0x8000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
           <StartupFile></StartupFile>
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0STM32F10x_512 -FS08000000 -FL080000 -FP0($$Device:STM32F103RE$Flash\STM32F10x_512.FLM))</FlashDriverDll>
@@ -45,14 +45,14 @@
             <NotGenerated>0</NotGenerated>
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
-          <OutputDirectory>.\Objects\Release\</OutputDirectory>
-          <OutputName>COMM_TOOL_Release</OutputName>
+          <OutputDirectory>.\Objects\IAP\</OutputDirectory>
+          <OutputName>COMM_TOOL_IAP</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
           <DebugInformation>1</DebugInformation>
           <BrowseInformation>0</BrowseInformation>
-          <ListingPath>.\Listings\Release\</ListingPath>
+          <ListingPath>.\Listings\IAP\</ListingPath>
           <HexFormatSelection>1</HexFormatSelection>
           <Merge32K>0</Merge32K>
           <CreateBatchFile>0</CreateBatchFile>
@@ -247,8 +247,8 @@
               </IRAM>
               <IROM>
                 <Type>1</Type>
-                <StartAddress>0x8008000</StartAddress>
-                <Size>0x10000</Size>
+                <StartAddress>0x8000000</StartAddress>
+                <Size>0x8000</Size>
               </IROM>
               <XRAM>
                 <Type>0</Type>
@@ -272,8 +272,8 @@
               </OCR_RVCT3>
               <OCR_RVCT4>
                 <Type>1</Type>
-                <StartAddress>0x8008000</StartAddress>
-                <Size>0x10000</Size>
+                <StartAddress>0x8000000</StartAddress>
+                <Size>0x8000</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
@@ -364,7 +364,7 @@
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
             <useFile>0</useFile>
-            <TextAddressRange>0x08008000</TextAddressRange>
+            <TextAddressRange>0x08000000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
             <ScatterFile></ScatterFile>
@@ -378,72 +378,17 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>App</GroupName>
+          <GroupName>IAP</GroupName>
           <Files>
             <File>
-              <FileName>main.c</FileName>
+              <FileName>ct_iap_main.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\source\main.c</FilePath>
+              <FilePath>..\source\iap\ct_iap_main.c</FilePath>
             </File>
             <File>
-              <FileName>ct_app.c</FileName>
+              <FileName>ct_iap.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\source\app\ct_app.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_protocol.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_protocol.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_crc16.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_crc16.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_flash_store.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_flash_store.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_can_gateway.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_can_gateway.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_upgrade_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_upgrade_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_boot_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_boot_control.c</FilePath>
-            </File>
-            <File>
-              <FileName>ct_self_iap.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\app\ct_self_iap.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>BSP</GroupName>
-          <Files>
-            <File>
-              <FileName>board.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\bsp\board.c</FilePath>
-            </File>
-            <File>
-              <FileName>board_uart.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\bsp\board_uart.c</FilePath>
-            </File>
-            <File>
-              <FileName>board_can.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\source\bsp\board_can.c</FilePath>
+              <FilePath>..\source\iap\ct_iap.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_it.c</FileName>
@@ -511,9 +456,9 @@
           <GroupName>Headers</GroupName>
           <Files>
             <File>
-              <FileName>ct_board_port.h</FileName>
+              <FileName>ct_iap.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\source\app\ct_board_port.h</FilePath>
+              <FilePath>..\source\iap\ct_iap.h</FilePath>
             </File>
             <File>
               <FileName>ct_config.h</FileName>
@@ -521,39 +466,9 @@
               <FilePath>..\source\app\ct_config.h</FilePath>
             </File>
             <File>
-              <FileName>main.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\main.h</FilePath>
-            </File>
-            <File>
-              <FileName>board.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\bsp\board.h</FilePath>
-            </File>
-            <File>
-              <FileName>board_uart.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\bsp\board_uart.h</FilePath>
-            </File>
-            <File>
-              <FileName>board_can.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\bsp\board_can.h</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_it.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\source\stm32f10x_it.h</FilePath>
-            </File>
-            <File>
-              <FileName>ct_boot_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\app\ct_boot_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>ct_self_iap.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\source\app\ct_self_iap.h</FilePath>
             </File>
           </Files>
         </Group>

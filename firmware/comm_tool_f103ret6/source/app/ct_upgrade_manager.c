@@ -111,7 +111,14 @@ int CtUpgrade_StartWithAppAddress(uint8_t node, uint8_t app_can_addr)
     }
 
     info = CtFlash_GetInfo();
-    if ((info->valid == 0u) || (info->app_addr != CT_BMS_APP_BASE_ADDR) || (info->size == 0u))
+    if ((info->valid == 0u) || (info->size == 0u) ||
+        ((info->app_addr != CT_BMS_APP_BASE_ADDR) && (info->app_addr != CT_SELF_APP_BASE)))
+    {
+        memset(&s_status, 0, sizeof(s_status));
+        set_error(1u);
+        return 0;
+    }
+    if ((info->app_addr == CT_SELF_APP_BASE) && ((app_can_addr & 0x0Fu) != CT_SELF_CAN_APP_ADDR))
     {
         memset(&s_status, 0, sizeof(s_status));
         set_error(1u);

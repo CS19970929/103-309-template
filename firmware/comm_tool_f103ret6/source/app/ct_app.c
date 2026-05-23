@@ -3,6 +3,7 @@
 #include "ct_can_gateway.h"
 #include "ct_config.h"
 #include "ct_flash_store.h"
+#include "ct_self_iap.h"
 #include "ct_status.h"
 #include "ct_upgrade_manager.h"
 #include <string.h>
@@ -60,6 +61,7 @@ void CtApp_Init(void)
 {
     CtFlash_Init();
     CtUpgrade_Init();
+    CtSelfIap_Init();
 }
 
 void CtApp_Poll(void)
@@ -71,6 +73,12 @@ void CtApp_Poll(void)
     uint32_t now;
 
     CtUpgrade_Task();
+    status = CtUpgrade_GetStatus();
+    if (status->state != 1u)
+    {
+        CtSelfIap_PollCan();
+    }
+    CtSelfIap_Task();
 
     now = CtBoard_GetTickMs();
     if ((uint32_t)(now - s_last_heartbeat_ms) < CT_CAN_HEARTBEAT_PERIOD_MS)
@@ -79,7 +87,6 @@ void CtApp_Poll(void)
     }
     s_last_heartbeat_ms = now;
 
-    status = CtUpgrade_GetStatus();
     memset(&frame, 0, sizeof(frame));
     frame.id = CT_CAN_HEARTBEAT_STD_ID;
     frame.ide = 0u;

@@ -19,8 +19,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from comm_tool_host import (
-    APP_BASE_ADDR,
-    APP_FLASH_LIMIT,
+    BMS_APP_BASE_ADDR as APP_BASE_ADDR,
+    BMS_APP_FLASH_LIMIT as APP_FLASH_LIMIT,
     CMD_BMS_READ,
     CMD_BMS_WRITE,
     CMD_CAN_DIAG,
@@ -2256,7 +2256,8 @@ class UpgradeUi(tk.Tk):
             raise RuntimeError("bin 文件太小，缺少向量表")
         if APP_BASE_ADDR + len(image) > APP_FLASH_LIMIT:
             raise RuntimeError(f"bin 超出 App 区: end=0x{APP_BASE_ADDR + len(image):08X}")
-        msp, reset, msp_ok, reset_ok = vector_summary(image)
+        msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
         if not msp_ok or not reset_ok:
             raise RuntimeError(f"App 向量表非法: MSP=0x{msp:08X}, Reset=0x{reset:08X}")
         self._emit("image", self._image_info_text(path, image))
@@ -2306,7 +2307,8 @@ class UpgradeUi(tk.Tk):
     def _image_info_text(self, path: Path, image: bytes) -> str:
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
-        msp, reset, msp_ok, reset_ok = vector_summary(image)
+        msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
         return (
             f"{path.name}\n"
             f"{len(image)} bytes\n"
