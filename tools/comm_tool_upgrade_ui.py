@@ -65,6 +65,10 @@ BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
+BMS_EVENT_RECORD_READ_CHUNK_WORDS = 20
+BMS_READ_RETRY_COUNT = 3
+BMS_READ_RETRY_DELAY_SECONDS = 0.3
+BMS_LOG_CHUNK_GAP_SECONDS = 0.12
 SH309_AFE_PARAM_ADDR = 0x2400
 SH309_AFE_PARAM_WORDS = 24
 SH309_TMOS_PARAM_ADDR = 0x2132
@@ -1890,9 +1894,19 @@ class UpgradeUi(tk.Tk):
         self._emit("progress", 100)
 
     def _worker_read_bms_log(self) -> None:
+        words: list[int] = []
         with self._open_client() as client:
             self._set_can_target(client)
-            words = self._read_bms_words(client, BMS_EVENT_RECORD_ADDR, BMS_EVENT_RECORD_WORDS)
+            for offset in range(0, BMS_EVENT_RECORD_WORDS, BMS_EVENT_RECORD_READ_CHUNK_WORDS):
+                count = min(BMS_EVENT_RECORD_READ_CHUNK_WORDS, BMS_EVENT_RECORD_WORDS - offset)
+                addr = BMS_EVENT_RECORD_ADDR + offset
+                label = f"BMS日志 {offset + 1}-{offset + count}"
+                chunk = self._read_bms_words_with_retry(client, addr, count, label)
+                words.extend(chunk)
+                self._emit("progress", int(len(words) * 100 / BMS_EVENT_RECORD_WORDS))
+                self._emit("log", f"读取BMS日志: {len(words)}/{BMS_EVENT_RECORD_WORDS}")
+                if len(words) < BMS_EVENT_RECORD_WORDS:
+                    time.sleep(BMS_LOG_CHUNK_GAP_SECONDS)
         records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
         valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
         self._emit("bms_log", records)
@@ -2063,6 +2077,22 @@ class UpgradeUi(tk.Tk):
         if len(resp.payload) != count * 2:
             raise RuntimeError(f"BMS_READ 响应长度错误: {len(resp.payload)}")
         return list(struct.unpack("<" + "H" * count, resp.payload))
+
+    def _read_bms_words_with_retry(self, client: CommToolClient, addr: int, count: int, label: str) -> list[int]:
+        last_error: Exception | None = None
+        for attempt in range(1, BMS_READ_RETRY_COUNT + 1):
+            try:
+                return self._read_bms_words(client, addr, count)
+            except Exception as exc:
+                last_error = exc
+                if attempt >= BMS_READ_RETRY_COUNT:
+                    break
+                self._emit(
+                    "log",
+                    f"{label} 第 {attempt} 次失败，{BMS_READ_RETRY_DELAY_SECONDS:.1f}s 后重试: {exc}",
+                )
+                time.sleep(BMS_READ_RETRY_DELAY_SECONDS)
+        raise RuntimeError(f"{label} 重试 {BMS_READ_RETRY_COUNT} 次仍失败: {last_error}") from last_error
 
     def _write_bms_words(self, client: CommToolClient, addr: int, words: list[int]) -> None:
         payload = struct.pack("<HH", addr, len(words))
