@@ -557,3 +557,515 @@ comm tool的iap和app是两个独立的keil工程吗？怎么管理更好
 上位机加入功能：电池信息长期监控记录到excel文件，参考之前的串口上位机
 
 comm tool的iap闪灯频率设置500ms,app为200ms，方便看是什么状态，还有目前给comm tool串口升级会卡到中途停止
+
+
+你现在作为我的嵌入式 AI 工程架构助手，请基于当前项目，为我设计并落地一套适合 BMS/STM32 项目的：
+
+Codex + Skill + MCP + ST-Link 自动化开发/烧录/测试体系。
+
+我的背景和偏好：
+- 我是嵌入式/BMS 软件工程师。
+- 常用 STM32F0/F1，尤其 STM32F103、STM32F0 系列。
+- 优先使用 STM32 标准外设库 StdPeriph，不使用 HAL，除非当前项目已经使用 HAL。
+- 常用 Keil、VS Code、Git、Codex。
+- 项目常涉及 BMS、SOC、ADC、CAN、Modbus、RS485、低功耗、IAP/APP 升级、日志、LED、保护逻辑等模块。
+- 我希望 AI 不只是写零散代码，而是可以逐步接管工程分析、修改、编译、烧录、测试、文档记录。
+- 所有关键修改都必须同步生成文档，包括设计说明、变更记录、测试记录、风险说明。
+- 不希望为了 AI 工程化而制造复杂度。
+- 一切必须以当前项目源码和实际目录结构为准。
+
+本次任务目标：
+请你完整分析当前项目，并设计/创建一套可落地的 AI 工程化结构，使 Codex 可以通过 Skill 固化工作流，通过 MCP 或 Shell 调用外部工具，最终支持 ST-Link 烧录、复位、读芯片信息、读取 Flash、基础硬件验证和文档生成。
+
+重要边界：
+1. 不要直接大规模修改业务代码。
+2. 不要默认执行擦全片、写 Option Bytes、修改 RDP 读保护、量产板烧录等高风险动作。
+3. 所有危险动作必须设计为“需要人工确认”。
+4. 本阶段优先生成架构、配置、Skill、文档、脚本框架。
+5. 如果当前环境无法实际连接 ST-Link，也要生成可执行的本地脚本和使用说明。
+
+请按以下步骤执行。
+
+============================================================
+一、先分析项目
+============================================================
+
+请先扫描当前项目目录，识别：
+
+1. 源码结构
+   - APP 代码
+   - IAP/Bootloader 代码
+   - BSP
+   - Driver
+   - Module
+   - Communication
+   - SOC
+   - CAN
+   - ADC
+   - LED
+   - LowPower
+   - Storage/Flash
+   - Log
+   - Modbus/RS485
+
+2. 构建方式
+   - 是否是 Keil 工程
+   - 是否有 .uvprojx / .uvoptx
+   - 是否有 Makefile / CMakeLists.txt
+   - 是否已有 build 输出目录
+   - 是否已有 hex/bin/elf 输出文件
+
+3. 文档结构
+   - 是否已有 docs
+   - 是否已有变更记录
+   - 是否已有测试记录
+   - 是否已有协议文档
+   - 是否已有模块设计文档
+
+4. AI 工程化文件
+   - 是否已有 AGENTS.md
+   - 是否已有 .codex/config.toml
+   - 是否已有 .codex/skills
+   - 是否已有 MCP 配置
+   - 是否已有自动化脚本
+
+分析完成后，先输出一份：
+docs/ai_workflow/project_ai_readiness_report.md
+
+内容包括：
+- 当前项目结构概览
+- 当前是否适合引入 Skill
+- 当前是否适合引入 MCP
+- 当前是否适合接入 ST-Link 自动烧录
+- 当前主要风险
+- 建议的第一阶段落地范围
+
+============================================================
+二、明确 MCP、Skill、ST-Link 的分工
+============================================================
+
+请在文档中明确：
+
+1. Skill 的作用
+Skill 用来沉淀固定工作流，例如：
+- BMS 架构审查
+- SOC 模块修改
+- CAN 协议修改
+- ADC 采样扩展
+- LED 显示修改
+- 低功耗检查
+- IAP/APP 升级检查
+- ST-Link 烧录测试流程
+- 文档同步流程
+
+2. MCP 的作用
+MCP 用来连接外部工具和系统，例如：
+- filesystem
+- git
+- shell
+- build tool
+- STM32_Programmer_CLI
+- OpenOCD
+- pyOCD
+- serial tool
+- CAN tool
+- NAS
+- 测试台
+
+3. ST-Link 的作用
+ST-Link 只作为实际硬件调试/烧录接口，不是 Skill，也不是 MCP。
+它应由 MCP 或 Shell 工具间接调用。
+
+推荐关系：
+
+Codex
+  ├─ Skill：定义流程、规范、风险控制、文档输出
+  ├─ MCP/Shell：调用外部命令和设备工具
+  └─ ST-Link：连接 STM32 硬件，执行烧录/复位/读取
+
+请把这部分写入：
+docs/ai_workflow/mcp_skill_stlink_design.md
+
+============================================================
+三、创建或更新 AGENTS.md
+============================================================
+
+请创建或更新项目根目录下的 AGENTS.md。
+
+AGENTS.md 必须包含以下规则：
+
+1. 项目定位
+- 本项目是 STM32/BMS 嵌入式项目。
+- 修改必须以稳定性、安全性、可维护性为优先。
+
+2. 代码风格
+- 优先遵循现有代码风格。
+- 不要无依据引入复杂抽象。
+- 不要把简单逻辑过度框架化。
+- 模块应保持高内聚、低耦合。
+
+3. STM32 约束
+- 优先使用标准外设库 StdPeriph。
+- 不主动引入 HAL。
+- 避免破坏中断、定时器、低功耗、通信时序。
+- 修改 SysTick、TIM、RTC、IWDG、CAN、USART、I2C、Flash 等底层模块时必须说明风险。
+
+4. BMS 约束
+- SOC、保护逻辑、MOS 控制、AFE 通信、CAN、Modbus、低功耗、日志是关键模块。
+- 修改关键模块前必须先梳理现有逻辑。
+- 保护逻辑不能只看单点代码，必须考虑状态机、滤波时间、恢复条件、通信上报、日志记录。
+
+5. 文档要求
+每次关键修改必须同步更新：
+- docs/change_log/
+- docs/module_design/
+- docs/test_record/
+- docs/risk_review/
+
+6. ST-Link 安全要求
+- 默认禁止擦全片。
+- 默认禁止写 Option Bytes。
+- 默认禁止修改 RDP。
+- 默认禁止对量产板执行自动烧录。
+- 烧录前必须确认目标芯片、固件路径、地址。
+- 烧录后必须校验并复位。
+- 每次烧录必须生成测试记录。
+
+7. Codex 行为要求
+- 不要直接大规模重构。
+- 先分析，再提出方案，再局部修改。
+- 修改后必须说明影响范围。
+- 如果无法编译或无法连接硬件，必须如实说明，不得假装成功。
+
+============================================================
+四、设计 .codex 目录结构
+============================================================
+
+请创建以下结构，若已有则合并更新：
+
+.codex/
+  README.md
+  config.example.toml
+  prompts/
+    project_review.md
+    module_refactor.md
+    stlink_flash_test.md
+    doc_sync.md
+  skills/
+    bms-architecture-review/
+      SKILL.md
+    bms-module-refactor/
+      SKILL.md
+    bms-doc-sync/
+      SKILL.md
+    bms-communication/
+      SKILL.md
+    bms-iap-bootloader/
+      SKILL.md
+    bms-low-power/
+      SKILL.md
+    bms-stlink-flash-test/
+      SKILL.md
+  mcp/
+    README.md
+    recommended_servers.md
+    stlink_mcp_design.md
+
+注意：
+- 不要强行写死与当前项目不匹配的路径。
+- 如果项目已有类似结构，优先兼容。
+- 所有文档用中文。
+
+============================================================
+五、创建 bms-stlink-flash-test Skill
+============================================================
+
+请重点创建：
+
+.codex/skills/bms-stlink-flash-test/SKILL.md
+
+这个 Skill 用来指导 Codex 进行 ST-Link 烧录和基础硬件验证。
+
+内容必须包括：
+
+1. 适用场景
+- 编译后烧录 STM32F0/F1/F103 固件
+- 读取芯片 ID
+- 校验 Flash
+- 复位目标板
+- 生成烧录测试记录
+- 结合串口/CAN 做基础验证
+
+2. 默认工具优先级
+优先使用：
+- STM32_Programmer_CLI
+
+备选：
+- OpenOCD
+- pyOCD
+- ST-LINK_CLI，旧工具，仅在项目已有依赖时使用
+
+3. 推荐命令模板
+请生成跨平台示例，但不要假设路径一定存在。
+
+示例一：连接 ST-Link
+STM32_Programmer_CLI -c port=SWD
+
+示例二：读取芯片信息
+STM32_Programmer_CLI -c port=SWD -r32 0x1FFFF7E8 3
+
+示例三：烧录 hex
+STM32_Programmer_CLI -c port=SWD -w <firmware.hex> -v -rst
+
+示例四：烧录 bin 到指定地址
+STM32_Programmer_CLI -c port=SWD -w <firmware.bin> 0x08000000 -v -rst
+
+示例五：读取 Flash 前 256 字节
+STM32_Programmer_CLI -c port=SWD -r8 0x08000000 256
+
+4. 风险动作
+以下动作默认禁止，除非我明确要求：
+- 全片擦除
+- 写 Option Bytes
+- 修改 RDP
+- 写保护/解除写保护
+- 对量产板烧录
+- 自动批量烧录多块板
+
+5. 烧录前检查清单
+- 当前 Git 状态
+- 当前分支
+- 固件路径
+- 固件类型 hex/bin
+- 固件目标地址
+- 目标芯片型号
+- 是否测试板
+- 是否已备份重要参数
+- 是否涉及 IAP/APP 地址偏移
+
+6. 烧录后检查清单
+- CLI 返回结果
+- 是否 verify 通过
+- 是否 reset 成功
+- 是否能重新连接
+- 是否能通过串口/CAN看到启动日志或心跳
+- 是否需要读取版本号
+- 是否需要记录芯片 UID
+
+7. 文档输出
+每次烧录后生成：
+docs/test_record/YYYY-MM-DD_stlink_flash_test.md
+
+内容包括：
+- 时间
+- 操作者
+- 项目
+- Git commit
+- 固件路径
+- 固件大小
+- 固件类型
+- 芯片型号/UID
+- 烧录命令
+- 烧录结果
+- 校验结果
+- 复位结果
+- 串口/CAN基础验证结果
+- 问题和风险
+
+============================================================
+六、创建 ST-Link 脚本框架
+============================================================
+
+请根据当前项目情况创建 scripts/stlink/ 目录。
+
+建议包含：
+
+scripts/stlink/
+  README.md
+  stlink_flash.py
+  stlink_read_id.py
+  stlink_read_flash.py
+  stlink_reset.py
+  stlink_config.example.json
+
+要求：
+
+1. 使用 Python 编写跨平台脚本。
+2. 不直接依赖固定安装路径。
+3. 优先从环境变量或配置文件读取 STM32_Programmer_CLI 路径。
+4. 支持 Windows/macOS/Linux。
+5. 默认只执行低风险操作。
+6. 高风险操作只生成提示，不自动执行。
+7. 输出必须清晰，方便 Codex 解析。
+8. 如果找不到 STM32_Programmer_CLI，应给出明确提示。
+
+stlink_config.example.json 内容示例：
+{
+  "programmer_cli": "STM32_Programmer_CLI",
+  "interface": "SWD",
+  "default_address": "0x08000000",
+  "firmware_dir": "build",
+  "allow_mass_erase": false,
+  "allow_option_bytes": false,
+  "allow_rdp_change": false
+}
+
+stlink_flash.py 应支持：
+- --firmware <path>
+- --address <addr>
+- --verify
+- --reset
+- --dry-run
+
+示例：
+python scripts/stlink/stlink_flash.py --firmware build/app.hex --verify --reset
+
+如果是 bin 文件，必须要求地址参数；如果是 hex 文件，可以不要求地址。
+
+============================================================
+七、设计 MCP 落地方案
+============================================================
+
+请在：
+.codex/mcp/stlink_mcp_design.md
+
+中设计未来的 stlink-mcp-server，但本阶段可以不实现。
+
+内容包括：
+
+1. 为什么需要 ST-Link MCP
+- 让 Codex 可以通过结构化工具调用烧录、复位、读取芯片信息。
+- 避免 Codex 直接拼接危险命令。
+- 统一做权限控制、参数校验、日志记录。
+
+2. 建议工具接口
+- stlink.connect
+- stlink.read_chip_id
+- stlink.read_uid
+- stlink.flash_firmware
+- stlink.verify_firmware
+- stlink.reset_target
+- stlink.read_memory
+- stlink.generate_test_record
+
+3. 不建议开放或必须强确认的接口
+- stlink.mass_erase
+- stlink.write_option_bytes
+- stlink.set_rdp
+- stlink.unlock_chip
+- stlink.batch_flash
+
+4. 权限策略
+- 默认只读 + 单板烧录
+- 高风险动作必须人工确认
+- 所有写操作必须记录
+- 所有失败必须保留日志
+
+5. 第一阶段不做 MCP 的原因
+- 先用 Skill + Shell/Python 脚本验证流程
+- 等流程稳定后再封装 MCP
+- 避免一开始过度设计
+
+============================================================
+八、设计其他 BMS Skill
+============================================================
+
+请分别创建以下 Skill：
+
+1. bms-architecture-review
+用途：
+- 完整梳理项目架构
+- 分析模块依赖
+- 找潜在 bug
+- 给出不影响功能的简化建议
+- 输出架构审查文档
+
+2. bms-module-refactor
+用途：
+- 重构 SOC、ADC、CAN、LED 等模块
+- 保持功能不变
+- 降低耦合
+- 改善命名和模块边界
+- 每次只做小步修改
+
+3. bms-doc-sync
+用途：
+- 每次关键修改后同步生成文档
+- 包括变更记录、设计说明、测试记录、风险清单
+
+4. bms-communication
+用途：
+- 检查 CAN、Modbus、RS485、BLE 协议
+- 生成协议映射表
+- 检查周期帧、状态位、故障位、升级帧
+
+5. bms-iap-bootloader
+用途：
+- 检查 APP/IAP 地址分区
+- 检查升级流程
+- 检查 SRAM mailbox
+- 检查断电保护
+- 检查向量表/MSP/复位逻辑
+
+6. bms-low-power
+用途：
+- 检查 RTC、STOP/STANDBY、SysTick、TIM、IWDG、CAN 唤醒
+- 分析低功耗风险
+- 给出可测试方案
+
+每个 SKILL.md 都必须包含：
+- 适用场景
+- 输入要求
+- 执行步骤
+- 禁止事项
+- 输出文档路径
+- 检查清单
+
+============================================================
+九、生成 Codex 日常使用 Prompt
+============================================================
+
+请创建：
+
+.codex/prompts/stlink_flash_test.md
+
+内容是我以后可以直接对 Codex 说的话，例如：
+
+“请使用 bms-stlink-flash-test Skill，检查当前工程是否已经成功编译，找到最新 hex/bin 固件，使用 ST-Link 下载到 STM32F103 测试板。烧录前先 dry-run 并列出命令，确认固件路径和地址。不要擦全片，不要写 Option Bytes，不要修改 RDP。烧录后校验、复位，并生成 docs/test_record 下的测试记录。如果无法连接 ST-Link，请输出排查步骤。”
+
+也请创建：
+
+.codex/prompts/full_bms_review.md
+
+内容是：
+
+“请使用 bms-architecture-review Skill，完整梳理当前 BMS 项目，以源码为准，分析 SOC、ADC、CAN、LED、保护、低功耗、IAP、日志等模块，找潜在 bug 和复杂度问题，给出不影响功能的简化建议，并输出 docs/architecture 和 docs/risk_review 文档。不要直接大改代码。”
+
+============================================================
+十、最后输出总结
+============================================================
+
+完成后请输出总结，必须包含：
+
+1. 创建或修改了哪些文件。
+2. 每个文件的作用。
+3. 当前已经能做什么。
+4. 当前还不能做什么。
+5. 后续如何接入真实 ST-Link。
+6. 后续如何从 Skill + Shell 升级到 MCP。
+7. 我以后怎么使用 Codex 来完成：
+   - 项目审查
+   - 模块重构
+   - 编译
+   - ST-Link 烧录
+   - 串口/CAN 测试
+   - 文档生成
+
+执行原则：
+- 先分析，后创建。
+- 不确定的地方写入 TODO，不要编造。
+- 不要假装硬件已连接。
+- 不要假装烧录成功。
+- 所有路径以当前项目实际结构为准。
+- 所有文档用中文。
+- 所有关键操作必须可追溯。

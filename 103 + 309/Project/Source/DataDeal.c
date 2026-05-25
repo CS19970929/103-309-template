@@ -1037,6 +1037,51 @@ void close_ctlc(void)
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
+void test_Autocurrent_cycle(void)
+{
+    static uint8_t step = 0;
+#if 1
+    static uint16_t CHG_current = 270;
+    static uint16_t DSG_current = 270;
+#else
+    static uint16_t CHG_current = 200;
+    static uint16_t DSG_current = 400;
+#endif
+
+    switch (step)
+    {
+    case 0:
+        if (g_stCellInfoReport.SocElement.u16Soc < 99)
+        {
+            step = 1;
+            g_stCellInfoReport.u16Ichg = CHG_current;
+            g_stCellInfoReport.u16IDischg = 0;
+        }
+        else
+        {
+            step = 1;
+        }
+        break;
+    case 1:
+    {
+        if (g_stCellInfoReport.SocElement.u16Soc >= 99)
+        {
+            step = 2;
+            g_stCellInfoReport.u16Ichg = 0;
+            g_stCellInfoReport.u16IDischg = DSG_current;
+        }
+        break;
+    }
+    case 2:
+        if (g_stCellInfoReport.SocElement.u16Soc <= 1)
+        {
+            step = 0;
+        }
+        break;
+    default:
+        break;
+    }
+}
 // todo 总压、typec逻辑、电流
 void new_todo_logi(void)
 {
@@ -1190,7 +1235,8 @@ void App_AFEGet(void)
     DataLoad_CellVoltMaxMinFind();
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    DataLoad_Current();
+    // DataLoad_Current();
+    test_Autocurrent_cycle();
     if (++g_u32AfeCurrentSampleSeq == 0U)
     {
         ++g_u32AfeCurrentSampleSeq;
