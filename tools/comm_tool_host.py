@@ -34,6 +34,8 @@ CMD_GET_INFO = 0x01
 CMD_SET_CAN = 0x02
 CMD_BMS_READ = 0x10
 CMD_BMS_WRITE = 0x11
+CMD_BMS_AGING_CTRL = 0x12
+CMD_BMS_AGING_STATUS = 0x13
 CMD_FW_BEGIN = 0x20
 CMD_FW_DATA = 0x21
 CMD_FW_END = 0x22
@@ -44,6 +46,11 @@ CMD_UPGRADE_STATUS = 0x32
 CMD_UPGRADE_ABORT = 0x33
 CMD_RAW_CAN_TX = 0x40
 CMD_CAN_DIAG = 0x41
+
+APP_SET_ONCE_SOC_ADDR = 0x1005
+APP_AGING_ACTION_START = 0x51
+APP_AGING_ACTION_STOP = 0x50
+APP_AGING_ACTION_RESET_TIME = 0x5A
 
 STATUS_TEXT = {
     0x00: "OK",
@@ -392,6 +399,64 @@ def cmd_bms_write(args) -> int:
     return 0
 
 
+def cmd_bms_write_soc(args) -> int:
+    if args.soc < 0 or args.soc > 100:
+        raise SystemExit("soc 必须在 0..100 之间")
+    payload = struct.pack("<HHH", APP_SET_ONCE_SOC_ADDR, 1, args.soc)
+    with open_client(args) as client:
+        client.command(CMD_BMS_WRITE, payload, timeout=args.long_timeout)
+    print(f"已写入 BMS SOC={args.soc}%")
+    return 0
+
+
+def aging_state_name(value: int) -> str:
+    return {
+        0: "停止",
+        1: "运行",
+        2: "完成",
+    }.get(value, f"未知({value})")
+
+
+def format_remaining_minutes(minutes: int) -> str:
+    hours, mins = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{mins:02d}min"
+    return f"{mins}min"
+
+
+def cmd_bms_aging(args) -> int:
+    action_map = {
+        "start": APP_AGING_ACTION_START,
+        "stop": APP_AGING_ACTION_STOP,
+        "reset-time": APP_AGING_ACTION_RESET_TIME,
+    }
+    action = action_map[args.action]
+    with open_client(args) as client:
+        resp = client.command(CMD_BMS_AGING_CTRL, bytes([action]), timeout=args.long_timeout)
+    if len(resp.payload) < 2:
+        raise RuntimeError("BMS_AGING_CTRL 响应长度不足")
+    state = resp.payload[0]
+    remaining_hours = resp.payload[1]
+    print(f"老化动作完成: action={args.action} state={aging_state_name(state)} remaining≈{remaining_hours}h")
+    return 0
+
+
+def cmd_bms_aging_status(args) -> int:
+    with open_client(args) as client:
+        resp = client.command(CMD_BMS_AGING_STATUS, timeout=args.long_timeout)
+    if len(resp.payload) < 3:
+        raise RuntimeError("BMS_AGING_STATUS 响应长度不足")
+    state = resp.payload[0]
+    remaining_minutes = struct.unpack_from("<H", resp.payload, 1)[0]
+    print(
+        "老化时间: "
+        f"state={aging_state_name(state)} "
+        f"remaining={format_remaining_minutes(remaining_minutes)} "
+        f"({remaining_minutes}min)"
+    )
+    return 0
+
+
 def cmd_enter_iap(args) -> int:
     if not args.confirm_enter_iap:
         raise SystemExit("进入 IAP 会让 BMS App 复位，请添加 -ConfirmEnterIap。")
@@ -552,6 +617,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_write.add_argument("--address", type=lambda value: int(value, 0), required=True)
     p_write.add_argument("values", nargs="+")
     p_write.set_defaults(func=cmd_bms_write)
+
+    p_write_soc = sub.add_parser("bms-write-soc", help="常用功能：写入一次 BMS SOC")
+    add_serial_args(p_write_soc)
+    p_write_soc.add_argument("--soc", type=int, required=True)
+    p_write_soc.set_defaults(func=cmd_bms_write_soc)
+
+    p_aging = sub.add_parser("bms-aging", help="常用功能：开启/关闭/重置 BMS 老化模式")
+    add_serial_args(p_aging)
+    p_aging.add_argument("action", choices=("start", "stop", "reset-time"))
+    p_aging.set_defaults(func=cmd_bms_aging)
+
+    p_aging_status = sub.add_parser("bms-aging-status", help="读取 BMS 老化模式剩余时间广播")
+    add_serial_args(p_aging_status)
+    p_aging_status.set_defaults(func=cmd_bms_aging_status)
 
     p_enter = sub.add_parser("enter-iap", help="让 BMS App 进入 IAP")
     add_serial_args(p_enter)

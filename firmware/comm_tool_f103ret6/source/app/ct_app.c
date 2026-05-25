@@ -293,6 +293,44 @@ static void handle_bms_write(const CtFrame *req)
     respond(req, CT_STATUS_OK, 0, 0u);
 }
 
+static void handle_bms_aging_ctrl(const CtFrame *req)
+{
+    uint8_t payload[2];
+    uint8_t action;
+
+    if (req->length < 1u)
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    action = req->payload[0];
+    if (!CtCan_AppAgingControl(s_app_can_addr, action, &payload[0], &payload[1]))
+    {
+        respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
+        return;
+    }
+
+    respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
+}
+
+static void handle_bms_aging_status(const CtFrame *req)
+{
+    uint8_t payload[3];
+    uint8_t state;
+    uint16_t remaining_minutes;
+
+    if (!CtCan_ReadFactoryAgingBroadcast(&state, &remaining_minutes, 6500u))
+    {
+        respond(req, CT_STATUS_CAN_TIMEOUT, 0, 0u);
+        return;
+    }
+
+    payload[0] = state;
+    wr16(&payload[1], remaining_minutes);
+    respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
+}
+
 static void handle_enter_iap(const CtFrame *req)
 {
     if (!CtCan_AppEnterIap(s_app_can_addr))
@@ -395,6 +433,12 @@ void CtApp_HandleFrame(const CtFrame *frame)
         break;
     case CT_CMD_BMS_WRITE:
         handle_bms_write(frame);
+        break;
+    case CT_CMD_BMS_AGING_CTRL:
+        handle_bms_aging_ctrl(frame);
+        break;
+    case CT_CMD_BMS_AGING_STATUS:
+        handle_bms_aging_status(frame);
         break;
     case CT_CMD_ENTER_IAP:
         handle_enter_iap(frame);

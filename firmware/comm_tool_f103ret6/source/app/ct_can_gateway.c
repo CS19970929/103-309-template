@@ -8,6 +8,8 @@
 #define APP_GET_STATUS_TIMEOUT_MS       1000u
 #define APP_ENTER_IAP_TIMEOUT_MS        5000u
 #define APP_REG_CMD_TIMEOUT_MS          1000u
+#define APP_AGING_CMD_TIMEOUT_MS        2000u
+#define APP_AGING_BROADCAST_SLICE_MS    20u
 #define APP_BLOCK_DATA_TIMEOUT_MS       6000u
 #define APP_SINGLE_READ_FALLBACK_MAX    4u
 #define IAP_ACK_WAIT_SLICE_MS           20u
@@ -368,6 +370,71 @@ int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const ui
     }
 
     return 1;
+}
+
+int CtCan_AppAgingControl(uint8_t can_addr, uint8_t action, uint8_t *state, uint8_t *remaining_hours)
+{
+    uint8_t cmd;
+
+    switch (action)
+    {
+    case CT_CAN_APP_AGING_ACTION_START:
+        cmd = CT_CAN_APP_AGING_START;
+        break;
+    case CT_CAN_APP_AGING_ACTION_STOP:
+        cmd = CT_CAN_APP_AGING_STOP;
+        break;
+    case CT_CAN_APP_AGING_ACTION_RESET:
+        cmd = CT_CAN_APP_AGING_RESET_TIME;
+        break;
+    default:
+        return 0;
+    }
+
+    return send_app_cmd_wait_ack(can_addr,
+                                 cmd,
+                                 CT_CAN_APP_AGING_GUARD,
+                                 action,
+                                 can_addr,
+                                 state,
+                                 remaining_hours,
+                                 APP_AGING_CMD_TIMEOUT_MS);
+}
+
+int CtCan_ReadFactoryAgingBroadcast(uint8_t *state, uint16_t *remaining_minutes, uint32_t timeout_ms)
+{
+    CtCanFrame frame;
+    uint32_t start;
+    uint32_t wait_ms;
+
+    start = CtBoard_GetTickMs();
+    while (!timeout_expired(start, timeout_ms))
+    {
+        wait_ms = timeout_left(start, timeout_ms);
+        if (wait_ms > APP_AGING_BROADCAST_SLICE_MS)
+        {
+            wait_ms = APP_AGING_BROADCAST_SLICE_MS;
+        }
+        if ((wait_ms != 0u) && CtBoard_CanRecv(&frame, wait_ms))
+        {
+            if ((frame.ide != 0u) &&
+                (frame.id == CT_CAN_FEIDAO_FACTORY_TIME_ID) &&
+                (frame.dlc >= 5u))
+            {
+                if (state != 0)
+                {
+                    *state = frame.data[2];
+                }
+                if (remaining_minutes != 0)
+                {
+                    *remaining_minutes = rd_be16(&frame.data[3]);
+                }
+                return 1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 static uint32_t iap_ctrl_id(uint8_t node)

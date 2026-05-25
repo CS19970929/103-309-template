@@ -18,28 +18,31 @@ CAN 上位机需要把写 SOC 作为常用功能单独展示，同时支持老�
 用户版 exe 固定生成在：
 
 ```text
-dist\BMS_CAN_Host_UI.exe
+dist\BMS_CommTool_Upgrade_UI.exe
 ```
 
-只要更新 CAN 用户上位机代码，必须重新编译 exe：
+CAN 用户上位机必须在原 `BMS_CommTool_Upgrade_UI.exe` 基础上改，软件名字不变，不要另起新的 exe 名称。只要更新用户上位机代码，必须重新编译 exe 并直接覆盖原文件：
 
 ```powershell
-.\tools\build_can_bms_host_ui_exe.ps1 -Clean
+.\tools\build_comm_tool_upgrade_ui_exe.ps1 -Clean
 ```
 
 写 SOC 是单独常用功能，不要求用户输入寄存器地址：
 
 ```powershell
-.\tools\start_can_bms_host.ps1 -Mode app-write-soc -Soc 80 -ConfirmWriteSoc
+其它功能 -> 常用功能 -> 写SOC
 ```
 
-老化模式三个动作必须单独调用：
+老化模式三个动作必须是原 UI 里的独立按钮：
 
-```powershell
-.\tools\start_can_bms_host.ps1 -Mode app-aging-start -ConfirmAgingStart
-.\tools\start_can_bms_host.ps1 -Mode app-aging-stop -ConfirmAgingStop
-.\tools\start_can_bms_host.ps1 -Mode app-aging-reset-time -ConfirmAgingResetTime
-```
+- 开启老化模式
+- 关闭老化模式
+- 重置老化时间
+
+老化剩余时间必须在原 UI 里单独可见：
+
+- `其它功能 -> 常用功能 -> 读取老化时间`
+- 该按钮通过 comm tool 串口协议 `0x13 BMS_AGING_STATUS` 等待 `0x14F80208` 广播，并显示老化状态和剩余分钟。
 
 监听广播时，上位机会在 `ch=8` 输出老化状态和剩余时间：
 
@@ -51,4 +54,6 @@ dist\BMS_CAN_Host_UI.exe
 
 - 写 SOC 底层固定写 `0x1005 RS485_CMD_ADDR_SET_ONCE_SOC`，范围 `0..100`。
 - 老化控制命令带 `0xA9` 防误触发字节，并校验 `CAN_ADRESS_STD_ID`。
+- PC 到 comm tool 串口协议新增 `0x12 BMS_AGING_CTRL`，由 comm tool 转发到 BMS App CAN 服务。
+- PC 到 comm tool 串口协议新增 `0x13 BMS_AGING_STATUS`，由 comm tool 等待并解析 `0x14F80208` 广播，供原 UI 显示老化剩余时间。
 - CAN App 服务仍在主循环中调用 `Sci_HostWriteWords()`，不在 CAN 中断里写 Flash 或修改业务状态。

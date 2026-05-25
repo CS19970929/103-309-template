@@ -65,7 +65,6 @@ COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.
 COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
 BMS_CAN_AGING_SOC_DOC = ROOT / "docs" / "CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md"
-BMS_CAN_HOST_UI_EXE_DOC = ROOT / "docs" / "CAN_BMS_HOST_UI_EXE_2026-05-25.md"
 BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
 BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
 BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
@@ -73,10 +72,10 @@ COMM_TOOL_KEIL_DOC = ROOT / "docs" / "COMM_TOOL_F103RET6_KEIL_PORT_2026-05-23.md
 COMM_TOOL_UART_SELECT_DOC = ROOT / "docs" / "COMM_TOOL_UART_SELECT_2026-05-25.md"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
+COMM_TOOL_UPGRADE_UI = ROOT / "tools" / "comm_tool_upgrade_ui.py"
+COMM_TOOL_UPGRADE_UI_BUILD = ROOT / "tools" / "build_comm_tool_upgrade_ui_exe.ps1"
 CAN_BMS_HOST = ROOT / "tools" / "can_bms_host.py"
 CAN_BMS_HOST_START = ROOT / "tools" / "start_can_bms_host.ps1"
-CAN_BMS_HOST_UI = ROOT / "tools" / "can_bms_host_ui.py"
-CAN_BMS_HOST_UI_BUILD = ROOT / "tools" / "build_can_bms_host_ui_exe.ps1"
 COMM_TOOL_UART_SELECT_SCRIPT = ROOT / "tools" / "set_comm_tool_uart.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
 COMM_TOOL_BSP_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "bsp"
@@ -1015,11 +1014,16 @@ def check_can_aging_soc_service(reporter):
         FLASH_H,
         CAN_BMS_HOST,
         CAN_BMS_HOST_START,
-        CAN_BMS_HOST_UI,
-        CAN_BMS_HOST_UI_BUILD,
+        COMM_TOOL_HOST,
+        COMM_TOOL_UPGRADE_UI,
+        COMM_TOOL_UPGRADE_UI_BUILD,
+        COMM_TOOL_SOURCE / "ct_protocol.h",
+        COMM_TOOL_SOURCE / "ct_can_gateway.c",
+        COMM_TOOL_SOURCE / "ct_can_gateway.h",
+        COMM_TOOL_SOURCE / "ct_app.c",
+        COMM_TOOL_SERIAL_DOC,
         BMS_CAN_SERVICE_DOC,
         BMS_CAN_AGING_SOC_DOC,
-        BMS_CAN_HOST_UI_EXE_DOC,
     ]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
@@ -1033,11 +1037,16 @@ def check_can_aging_soc_service(reporter):
     flash_h = read_text(FLASH_H)
     host_py = read_text(CAN_BMS_HOST)
     host_ps1 = read_text(CAN_BMS_HOST_START)
-    host_ui = read_text(CAN_BMS_HOST_UI)
-    build_ui = read_text(CAN_BMS_HOST_UI_BUILD)
+    comm_host = read_text(COMM_TOOL_HOST)
+    upgrade_ui = read_text(COMM_TOOL_UPGRADE_UI)
+    build_ui = read_text(COMM_TOOL_UPGRADE_UI_BUILD)
+    comm_protocol_h = read_text(COMM_TOOL_SOURCE / "ct_protocol.h")
+    comm_can_c = read_text(COMM_TOOL_SOURCE / "ct_can_gateway.c")
+    comm_can_h = read_text(COMM_TOOL_SOURCE / "ct_can_gateway.h")
+    comm_app_c = read_text(COMM_TOOL_SOURCE / "ct_app.c")
+    serial_doc = read_text(COMM_TOOL_SERIAL_DOC)
     service_doc = read_text(BMS_CAN_SERVICE_DOC)
     aging_doc = read_text(BMS_CAN_AGING_SOC_DOC)
-    ui_doc = read_text(BMS_CAN_HOST_UI_EXE_DOC)
 
     if (
         "FEIDAO_CAN_APP_CMD_AGING_START" in can_c
@@ -1085,21 +1094,36 @@ def check_can_aging_soc_service(reporter):
         reporter.fail("CAN host should expose app-write-soc and separate aging action modes")
 
     if (
-        "BMS CAN 上位机" in host_ui
-        and "写入 SOC" in host_ui
-        and "开启老化模式" in host_ui
-        and "关闭老化模式" in host_ui
-        and "重置老化时间" in host_ui
-        and "开始监听" in host_ui
-        and "BMS_CAN_Host_UI" in build_ui
+        "CMD_BMS_AGING_CTRL = 0x12" in comm_host
+        and "CMD_BMS_AGING_STATUS = 0x13" in comm_host
+        and "APP_SET_ONCE_SOC_ADDR = 0x1005" in comm_host
+        and "cmd_bms_write_soc" in comm_host
+        and "cmd_bms_aging" in comm_host
+        and "cmd_bms_aging_status" in comm_host
+        and "CT_CMD_BMS_AGING_CTRL" in comm_protocol_h
+        and "CT_CMD_BMS_AGING_STATUS" in comm_protocol_h
+        and "CtCan_AppAgingControl" in comm_can_c
+        and "CtCan_ReadFactoryAgingBroadcast" in comm_can_c
+        and "CT_CAN_APP_AGING_ACTION_RESET" in comm_can_h
+        and "CT_CAN_FEIDAO_FACTORY_TIME_ID" in comm_can_h
+        and "handle_bms_aging_ctrl" in comm_app_c
+        and "handle_bms_aging_status" in comm_app_c
+        and "BMS_V1.13.1 - CAN用户上位机" in upgrade_ui
+        and "写SOC" in upgrade_ui
+        and "开启老化模式" in upgrade_ui
+        and "关闭老化模式" in upgrade_ui
+        and "重置老化时间" in upgrade_ui
+        and "读取老化时间" in upgrade_ui
+        and "CMD_BMS_AGING_CTRL" in upgrade_ui
+        and "CMD_BMS_AGING_STATUS" in upgrade_ui
+        and "BMS_CommTool_Upgrade_UI" in build_ui
         and "--windowed" in build_ui
         and "--onefile" in build_ui
-        and "python-can" in build_ui
         and "pyinstaller" in build_ui
     ):
-        reporter.ok("CAN user host has GUI and PyInstaller EXE build script")
+        reporter.ok("comm tool upgrade UI keeps original EXE name and exposes SOC/aging common controls")
     else:
-        reporter.fail("CAN user host should provide GUI and build_can_bms_host_ui_exe.ps1")
+        reporter.fail("comm tool upgrade UI should keep BMS_CommTool_Upgrade_UI.exe and expose SOC/aging controls")
 
     if (
         "0x1005" in service_doc
@@ -1108,18 +1132,18 @@ def check_can_aging_soc_service(reporter):
         and "0x08 AGING_STOP" in service_doc
         and "0x09 AGING_RESET_TIME" in service_doc
         and "老化剩余分钟" in service_doc
-        and "app-write-soc" in aging_doc
-        and "app-aging-start" in aging_doc
-        and "app-aging-stop" in aging_doc
-        and "app-aging-reset-time" in aging_doc
+        and "BMS_AGING_CTRL" in serial_doc
+        and "BMS_AGING_STATUS" in serial_doc
+        and "读取老化时间" in aging_doc
+        and "BMS_CommTool_Upgrade_UI.exe" in aging_doc
+        and "build_comm_tool_upgrade_ui_exe.ps1 -Clean" in aging_doc
+        and "其它功能 -> 常用功能 -> 写SOC" in aging_doc
+        and "不要另起新的 exe 名称" in aging_doc
         and "0x14F80208" in aging_doc
-        and "dist\\BMS_CAN_Host_UI.exe" in ui_doc
-        and "build_can_bms_host_ui_exe.ps1 -Clean" in ui_doc
-        and "必须同步编译最新 exe" in ui_doc
     ):
-        reporter.ok("CAN aging/SOC documentation records standalone host functions and broadcast layout")
+        reporter.ok("CAN aging/SOC documentation records standalone host functions, aging time display, and broadcast layout")
     else:
-        reporter.fail("CAN aging/SOC docs should record app-write-soc, aging commands, ch8 remaining minutes, and EXE build rule")
+        reporter.fail("CAN aging/SOC docs should record original EXE, SOC/aging controls, UI aging time display, ch8 remaining minutes, and EXE overwrite rule")
 
 
 def check_rtc_stop_sleep_contract(reporter):

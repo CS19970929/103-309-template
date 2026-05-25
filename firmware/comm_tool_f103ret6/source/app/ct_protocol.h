@@ -12,6 +12,8 @@
 #define CT_CMD_SET_CAN                 0x02u
 #define CT_CMD_BMS_READ                0x10u
 #define CT_CMD_BMS_WRITE               0x11u
+#define CT_CMD_BMS_AGING_CTRL          0x12u
+#define CT_CMD_BMS_AGING_STATUS        0x13u
 #define CT_CMD_FW_BEGIN                0x20u
 #define CT_CMD_FW_DATA                 0x21u
 #define CT_CMD_FW_END                  0x22u

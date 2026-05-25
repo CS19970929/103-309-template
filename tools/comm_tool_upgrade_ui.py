@@ -25,6 +25,8 @@ from comm_tool_host import (
     BMS_APP_FLASH_LIMIT as APP_FLASH_LIMIT,
     CMD_BMS_READ,
     CMD_BMS_WRITE,
+    CMD_BMS_AGING_CTRL,
+    CMD_BMS_AGING_STATUS,
     CMD_CAN_DIAG,
     CMD_FW_BEGIN,
     CMD_FW_DATA,
@@ -35,6 +37,10 @@ from comm_tool_host import (
     CMD_UPGRADE,
     CMD_UPGRADE_STATUS,
     CommToolClient,
+    APP_SET_ONCE_SOC_ADDR,
+    APP_AGING_ACTION_START,
+    APP_AGING_ACTION_STOP,
+    APP_AGING_ACTION_RESET_TIME,
     crc16_modbus,
     require_pyserial,
     vector_summary,
@@ -646,6 +652,8 @@ class UpgradeUi(tk.Tk):
         self.bms_count_var = tk.StringVar(value="2")
         self.bms_values_var = tk.StringVar(value="")
         self.bms_result_var = tk.StringVar(value="未读取")
+        self.bms_soc_write_var = tk.StringVar(value="80")
+        self.bms_aging_var = tk.StringVar(value="老化状态: 未读取")
         self.bms_info_var = tk.StringVar(value="未读取")
         self.param_key_var = tk.StringVar(value=next(iter(BMS_PARAM_PRESETS)))
         self.param_value_var = tk.StringVar(value="")
@@ -670,6 +678,9 @@ class UpgradeUi(tk.Tk):
         self.active_bms_addr = 0xD000
         self.active_bms_count = 2
         self.active_bms_words: list[int] = []
+        self.active_soc_write = 80
+        self.active_aging_action = 0
+        self.active_aging_name = ""
         self.param_values: dict[str, int] = {}
         self.active_param_key = ""
         self.active_param_raw = 0
@@ -988,7 +999,7 @@ class UpgradeUi(tk.Tk):
 
     def _build_other_tab(self, tab: ttk.Frame) -> None:
         tab.columnconfigure(0, weight=1)
-        tab.rowconfigure(5, weight=1)
+        tab.rowconfigure(6, weight=1)
 
         file_box = ttk.LabelFrame(tab, text="升级文件")
         file_box.grid(row=0, column=0, sticky="ew", pady=(0, 8))
@@ -1029,8 +1040,22 @@ class UpgradeUi(tk.Tk):
             foreground="#9a4d00",
         ).grid(row=0, column=7, columnspan=2, sticky="w", padx=(6, 10), pady=8)
 
+        common = ttk.LabelFrame(tab, text="常用功能")
+        common.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+        common.columnconfigure(9, weight=1)
+        ttk.Label(common, text="SOC(%)").grid(row=0, column=0, padx=(10, 6), pady=8)
+        ttk.Entry(common, textvariable=self.bms_soc_write_var, width=8).grid(row=0, column=1, sticky="w", pady=8)
+        ttk.Button(common, text="写SOC", command=self._write_bms_soc).grid(row=0, column=2, padx=(8, 16), pady=8)
+        ttk.Button(common, text="开启老化模式", command=self._aging_start).grid(row=0, column=3, padx=(0, 8), pady=8)
+        ttk.Button(common, text="关闭老化模式", command=self._aging_stop).grid(row=0, column=4, padx=(0, 8), pady=8)
+        ttk.Button(common, text="重置老化时间", command=self._aging_reset_time).grid(row=0, column=5, padx=(0, 12), pady=8)
+        ttk.Button(common, text="读取老化时间", command=self._read_aging_status).grid(row=0, column=6, padx=(0, 12), pady=8)
+        ttk.Label(common, textvariable=self.bms_aging_var, foreground="#004b8d").grid(
+            row=0, column=7, columnspan=3, sticky="w", padx=(0, 10), pady=8
+        )
+
         actions = ttk.Frame(tab)
-        actions.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+        actions.grid(row=4, column=0, sticky="ew", pady=(0, 8))
         ttk.Button(actions, text="读取缓存", command=self._read_cache).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(actions, text="写入缓存", command=self._download_only).grid(row=0, column=1, padx=(0, 8))
         ttk.Button(actions, text="一键升级", command=self._upgrade_selected).grid(row=0, column=2, padx=(0, 8))
@@ -1039,7 +1064,7 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, padx=(0, 8))
 
         advanced = ttk.LabelFrame(tab, text="高级寄存器")
-        advanced.grid(row=4, column=0, sticky="ew", pady=(0, 8))
+        advanced.grid(row=5, column=0, sticky="ew", pady=(0, 8))
         advanced.columnconfigure(6, weight=1)
         ttk.Label(advanced, text="地址").grid(row=0, column=0, padx=(10, 6), pady=8)
         ttk.Entry(advanced, textvariable=self.bms_addr_var, width=12).grid(row=0, column=1, sticky="w", pady=8)
@@ -1054,7 +1079,7 @@ class UpgradeUi(tk.Tk):
         )
 
         progress = ttk.Frame(tab)
-        progress.grid(row=5, column=0, sticky="nsew")
+        progress.grid(row=6, column=0, sticky="nsew")
         progress.columnconfigure(0, weight=1)
         progress.rowconfigure(3, weight=1)
         ttk.Progressbar(progress, variable=self.progress_var, maximum=100).grid(row=0, column=0, sticky="ew", pady=(0, 6))
@@ -1969,6 +1994,43 @@ class UpgradeUi(tk.Tk):
             return
         self._run_worker("写入BMS寄存器", self._worker_write_bms_regs)
 
+    def _write_bms_soc(self) -> None:
+        try:
+            soc = int(self.bms_soc_write_var.get().strip(), 0)
+            if soc < 0 or soc > 100:
+                raise ValueError("SOC 必须是 0..100")
+        except Exception as exc:
+            messagebox.showerror("SOC 参数错误", str(exc))
+            return
+        if not messagebox.askyesno(
+            "确认写SOC",
+            f"将通过 comm tool/CAN 写入一次 SOC={soc}%。\n\n"
+            f"底层固定写寄存器 0x{APP_SET_ONCE_SOC_ADDR:04X}，用户不需要手动填写寄存器地址。\n\n"
+            "确认继续？",
+        ):
+            return
+        self.active_soc_write = soc
+        self._run_worker("写SOC", self._worker_write_bms_soc)
+
+    def _aging_start(self) -> None:
+        self._aging_control("开启老化模式", APP_AGING_ACTION_START)
+
+    def _aging_stop(self) -> None:
+        self._aging_control("关闭老化模式", APP_AGING_ACTION_STOP)
+
+    def _aging_reset_time(self) -> None:
+        self._aging_control("重置老化时间", APP_AGING_ACTION_RESET_TIME)
+
+    def _read_aging_status(self) -> None:
+        self._run_worker("读取老化时间", self._worker_read_aging_status)
+
+    def _aging_control(self, name: str, action: int) -> None:
+        if not messagebox.askyesno("确认老化模式操作", f"确认{name}？"):
+            return
+        self.active_aging_action = action
+        self.active_aging_name = name
+        self._run_worker(name, self._worker_aging_control)
+
     def _can_diag(self) -> None:
         self._run_worker("CAN诊断", self._worker_can_diag)
 
@@ -2280,6 +2342,49 @@ class UpgradeUi(tk.Tk):
         self._emit("log", f"BMS 寄存器写入完成: addr=0x{addr:04X} count={len(words)}")
         self._emit("progress", 100)
 
+    def _worker_write_bms_soc(self) -> None:
+        soc = self.active_soc_write
+        with self._open_client() as client:
+            self._set_can_target(client)
+            self._write_bms_words(client, APP_SET_ONCE_SOC_ADDR, [soc])
+        self._emit("bms_result", f"已写入SOC: {soc}%\n地址: 0x{APP_SET_ONCE_SOC_ADDR:04X}")
+        self._emit("log", f"写SOC完成: {soc}%")
+        self._emit("progress", 100)
+
+    def _worker_read_aging_status(self) -> None:
+        with self._open_client() as client:
+            self._set_can_target(client)
+            resp = client.command(CMD_BMS_AGING_STATUS, timeout=8.0)
+        if len(resp.payload) < 3:
+            raise RuntimeError("老化时间响应长度不足")
+        state = resp.payload[0]
+        remaining_minutes = struct.unpack_from("<H", resp.payload, 1)[0]
+        text = (
+            "老化时间: "
+            f"状态={self._aging_state_name(state)} "
+            f"剩余={self._format_aging_remaining_minutes(remaining_minutes)}"
+        )
+        self._emit("aging_status", text)
+        self._emit("bms_result", text)
+        self._emit("log", text)
+        self._emit("progress", 100)
+
+    def _worker_aging_control(self) -> None:
+        action = self.active_aging_action
+        name = self.active_aging_name
+        with self._open_client() as client:
+            self._set_can_target(client)
+            resp = client.command(CMD_BMS_AGING_CTRL, bytes([action]), timeout=10.0)
+        if len(resp.payload) < 2:
+            raise RuntimeError("老化模式响应长度不足")
+        state = resp.payload[0]
+        remaining_hours = resp.payload[1]
+        text = f"{name}: 状态={self._aging_state_name(state)} 剩余约={remaining_hours}h"
+        self._emit("aging_status", text)
+        self._emit("bms_result", text)
+        self._emit("log", text)
+        self._emit("progress", 100)
+
     def _worker_can_diag(self) -> None:
         with self._open_client() as client:
             resp = client.command(CMD_CAN_DIAG, b"\x00", timeout=2.0)
@@ -2539,6 +2644,19 @@ class UpgradeUi(tk.Tk):
     def _format_bms_words(self, addr: int, words: list[int]) -> str:
         return "  ".join(f"0x{addr + index:04X}=0x{value:04X}({value})" for index, value in enumerate(words))
 
+    def _aging_state_name(self, value: int) -> str:
+        return {
+            0: "停止",
+            1: "运行",
+            2: "完成",
+        }.get(value, f"未知({value})")
+
+    def _format_aging_remaining_minutes(self, minutes: int) -> str:
+        hours, mins = divmod(minutes, 60)
+        if hours:
+            return f"{hours}h{mins:02d}min ({minutes}min)"
+        return f"{mins}min"
+
     def _format_bms_overview(self, words: list[int]) -> str:
         if len(words) < BMS_OVERVIEW_WORDS:
             raise RuntimeError("BMS 信息长度不足")
@@ -2669,6 +2787,8 @@ class UpgradeUi(tk.Tk):
             self.bms_info_var.set(str(event.payload))
         elif event.kind == "bms_result":
             self.bms_result_var.set(str(event.payload))
+        elif event.kind == "aging_status":
+            self.bms_aging_var.set(str(event.payload))
         elif event.kind == "param_value":
             key, value = event.payload
             self._update_param_row(key, value)

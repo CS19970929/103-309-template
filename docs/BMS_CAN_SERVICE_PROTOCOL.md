@@ -61,9 +61,10 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 
 ## 常用上位机功能
 
-- 写 SOC 必须在 CAN 上位机里作为单独常用功能展示，命令行为 `app-write-soc`，PowerShell 包装为 `.\tools\start_can_bms_host.ps1 -Mode app-write-soc -Soc 80 -ConfirmWriteSoc`。
+- 写 SOC 必须在原 `BMS_CommTool_Upgrade_UI.exe` 里作为单独常用功能展示，位置为 `其它功能 -> 常用功能 -> 写SOC`；命令行调试入口可使用 `app-write-soc`。
 - 写 SOC 底层复用 `WRITE_PREP/WRITE_COMMIT` 写寄存器 `0x1005 RS485_CMD_ADDR_SET_ONCE_SOC`，范围固定 `0..100`，不要求用户手动输入寄存器地址。
-- 老化模式三个动作必须独立实现和展示：`app-aging-start`、`app-aging-stop`、`app-aging-reset-time`，不能合并成一个带 action 参数的通用入口。
+- 老化模式三个动作必须在原 UI 里独立实现和展示：`开启老化模式`、`关闭老化模式`、`重置老化时间`，不能合并成一个带 action 参数的通用入口。
+- 原 UI 必须单独提供 `读取老化时间`，通过 comm tool 串口命令 `0x13 BMS_AGING_STATUS` 等待并解析 `0x14F80208` 周期广播，把 `ch=8` 的老化状态和剩余分钟显示给用户。
 - 老化控制命令使用 `A9 + action + can_addr` 防误触发；`can_addr` 必须等于板端 `CAN_ADRESS_STD_ID`。
 
 ## 周期广播补充

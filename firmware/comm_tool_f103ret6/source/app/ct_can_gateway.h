@@ -12,8 +12,17 @@
 #define CT_CAN_APP_WRITE_PREP           0x04u
 #define CT_CAN_APP_WRITE_COMMIT         0x05u
 #define CT_CAN_APP_READ_BLOCK           0x06u
+#define CT_CAN_APP_AGING_START          0x07u
+#define CT_CAN_APP_AGING_STOP           0x08u
+#define CT_CAN_APP_AGING_RESET_TIME     0x09u
 #define CT_CAN_APP_READ_BLOCK_DATA      0x86u
 #define CT_CAN_APP_READ_BLOCK_MAX_WORDS 120u
+#define CT_CAN_APP_AGING_GUARD          0xA9u
+#define CT_CAN_APP_AGING_ACTION_START   0x51u
+#define CT_CAN_APP_AGING_ACTION_STOP    0x50u
+#define CT_CAN_APP_AGING_ACTION_RESET   0x5Au
+#define CT_CAN_FEIDAO_BROADCAST_BASE    0x14F80200u
+#define CT_CAN_FEIDAO_FACTORY_TIME_ID   0x14F80208u
 
 #define CT_CAN_IAP_CTRL_BASE            0x14F8F000u
 #define CT_CAN_IAP_ACK_BASE             0x14F8F100u
@@ -35,6 +44,8 @@ int CtCan_AppGetStatus(uint8_t can_addr, uint8_t *soc, uint8_t *soh);
 int CtCan_AppEnterIap(uint8_t can_addr);
 int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t *words);
 int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const uint16_t *words);
+int CtCan_AppAgingControl(uint8_t can_addr, uint8_t action, uint8_t *state, uint8_t *remaining_hours);
+int CtCan_ReadFactoryAgingBroadcast(uint8_t *state, uint16_t *remaining_minutes, uint32_t timeout_ms);
 int CtCan_IapSendHello(uint8_t node);
 int CtCan_IapSendStart(uint8_t node, uint32_t size, uint16_t crc16);
 int CtCan_IapSendData(uint8_t node, uint16_t seq, const uint8_t data[8]);
