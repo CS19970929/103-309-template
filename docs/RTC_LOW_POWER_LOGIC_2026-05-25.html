@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RTC 低功耗逻辑梳理</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #59636f;
+      --line: #c9d2dc;
+      --paper: #f6f8fa;
+      --panel: #ffffff;
+      --accent: #1f6feb;
+      --ok: #1a7f37;
+      --warn: #9a6700;
+      --danger: #cf222e;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.55;
+    }
+    header {
+      padding: 28px 36px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 28px 48px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 20px;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+    p {
+      margin: 8px 0;
+    }
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #edf2f7;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+    .step {
+      position: relative;
+      min-height: 100px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .step::after {
+      content: ">";
+      position: absolute;
+      right: -12px;
+      top: 40%;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .step:last-child::after {
+      content: "";
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef4fb;
+    }
+    .tag {
+      display: inline-block;
+      margin: 2px 4px 2px 0;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+    }
+    .ok {
+      color: var(--ok);
+    }
+    .warn {
+      color: var(--warn);
+    }
+    .danger {
+      color: var(--danger);
+    }
+    @media (max-width: 760px) {
+      header {
+        padding: 22px 20px 14px;
+      }
+      main {
+        padding: 18px 16px 36px;
+      }
+      .flow {
+        grid-template-columns: 1fr;
+      }
+      .step::after {
+        content: "v";
+        right: 50%;
+        top: auto;
+        bottom: -14px;
+      }
+      .step:last-child::after {
+        content: "";
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RTC 低功耗逻辑梳理</h1>
+    <div class="meta">适用工程：103 + 309 / STM32F103 / SH367309；日期：2026-05-25</div>
+  </header>
+  <main>
+    <section>
+      <h2>结论</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>状态源收敛</h3>
+          <p><code>g_stLowPowerRtcStatus</code> 是低功耗请求的唯一状态源，<code>mode</code> 表示请求模式，<code>readyToSleep</code> 表示已经通过入口判断、准备执行休眠。</p>
+        </div>
+        <div class="card">
+          <h3>诊断字段独立</h3>
+          <p><code>rtcWake</code>、<code>delaySeconds</code>、<code>delayTargetSeconds</code>、<code>elapsedSeconds</code> 只作为运行诊断字段刷新，不再镜像另一个运行态结构。</p>
+        </div>
+        <div class="card">
+          <h3>STOP 唤醒源</h3>
+          <p>周期唤醒继续使用 <code>RTC_IT_ALR + EXTI_Line17 + RTCAlarm_IRQn</code>，运行态秒中断进入 STOP 前关闭，醒来恢复运行态中断。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>主流程</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>1. 运行态入口</strong>
+          <p><code>App_LowPowerProcess()</code> 每轮调用 <code>rtc_sleep()</code>。只有 1s 标志到达时执行低功耗判断。</p>
+        </div>
+        <div class="step">
+          <strong>2. 条件判断</strong>
+          <p><code>BQ769x0_SleepMode_Ctrl()</code> 先处理低压强制深睡，再检查 MCU 唤醒、老化、外部通信、电流和 AFE 状态。</p>
+        </div>
+        <div class="step">
+          <strong>3. 请求落地</strong>
+          <p>满足 RTC 空闲条件后设置 <code>mode = HICCUP_MODE</code>；满足正常/深睡请求后设置对应 <code>mode</code>。</p>
+        </div>
+        <div class="step">
+          <strong>4. 执行休眠</strong>
+          <p><code>readyToSleep = 1</code> 后按 <code>mode</code> 进入 RTC STOP 周期或写 BootFlag 后复位休眠。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>RTC STOP 周期</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>函数</th>
+            <th>关键动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>准备进入 STOP</td>
+            <td><code>rtc_sleep_prepare_rtc()</code></td>
+            <td>保存 CAN/SOC/老化状态，初始化 RTC，切 IO 到 RTC 低功耗状态，设置下一次 RTC Alarm。</td>
+          </tr>
+          <tr>
+            <td>配置唤醒</td>
+            <td><code>RTC_WKTimeConfig()</code></td>
+            <td>关闭秒中断和旧 Alarm，清 <code>RTC_FLAG_ALR</code> 与 <code>EXTI17</code>，按 CAN 空闲策略设置 1s/10s Alarm。</td>
+          </tr>
+          <tr>
+            <td>进入 STOP</td>
+            <td><code>Sys_StopMode()</code></td>
+            <td>停 TIM3，清 GPIO EXTI pending，执行 <code>PWR_EnterSTOPMode()</code>，醒来后恢复系统时钟。</td>
+          </tr>
+          <tr>
+            <td>RTC 唤醒服务</td>
+            <td><code>rtc_sleep_run_hiccup_cycle()</code></td>
+            <td>累计 RTC 休眠秒数，更新 SOC 休眠补偿，调用 <code>Can_RtcWakeService()</code> 执行 CAN 探测/发送。</td>
+          </tr>
+          <tr>
+            <td>退出低功耗</td>
+            <td><code>isException()</code> / <code>report_wkup_sig()</code></td>
+            <td>检测电流、AFE 故障、低压和外部唤醒；异常或按键/充电唤醒后退出 RTC 周期并恢复运行态。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>阻塞优先级</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>优先级</th>
+            <th>条件</th>
+            <th>处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="danger">最高</td>
+            <td>单体低于 <code>2800mV</code> 且充电电流不超过 <code>5mA</code></td>
+            <td>累计 60s 后请求 <code>DEEP_MODE</code>，不被普通 RTC 延时阻塞。</td>
+          </tr>
+          <tr>
+            <td class="danger">高</td>
+            <td>单体低于 <code>OtherElement.u16Sleep_Vlow</code></td>
+            <td>按配置低压休眠时间累计后请求 <code>DEEP_MODE</code>。</td>
+          </tr>
+          <tr>
+            <td class="warn">中</td>
+            <td>MCU 唤醒脚、工厂老化、外部通信、充放电电流、AFE 非空闲</td>
+            <td>刷新 <code>blockReason</code> 并清 RTC 进入倒计时，防止误进 STOP。</td>
+          </tr>
+          <tr>
+            <td class="ok">低</td>
+            <td>无阻塞且达到 <code>sys_time.time_enter_rtc</code></td>
+            <td>请求 <code>HICCUP_MODE</code>，进入 RTC STOP 周期唤醒。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>变量职责</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>变量</th>
+            <th>职责</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.mode</code></td>
+            <td>当前请求的休眠模式</td>
+            <td><span class="tag">唯一控制源</span>取代旧 <code>s_stLowPowerRuntime.mode</code> 与 <code>u8SleepModeSelect</code> 双写。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.readyToSleep</code></td>
+            <td>休眠请求是否已准备执行</td>
+            <td><span class="tag">唯一控制源</span>取代旧 <code>s_stLowPowerRuntime.armed</code> 与 <code>u8StateSleep</code> 双写；命名含义是“准备执行休眠”。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.blockReason</code></td>
+            <td>最近一次阻止 RTC 的原因</td>
+            <td>用于现场诊断，如电流、MCU 唤醒、老化、通信、AFE 非空闲。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.rtcWake</code></td>
+            <td>最近一次 STOP 是否由 RTC Alarm 唤醒</td>
+            <td>由 <code>is_rtc_wakekup</code> 派生，便于调试观察。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.delaySeconds</code></td>
+            <td>当前进入 RTC 的空闲累计秒数</td>
+            <td>来自 <code>sys_time.enter_rtc_delay</code>。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.delayTargetSeconds</code></td>
+            <td>进入 RTC 的目标空闲秒数</td>
+            <td>来自 <code>sys_time.time_enter_rtc</code>。</td>
+          </tr>
+          <tr>
+            <td><code>g_stLowPowerRtcStatus.elapsedSeconds</code></td>
+            <td>本轮 RTC STOP 累计睡眠秒数</td>
+            <td>用于 SOC 休眠补偿和 CAN RTC 唤醒服务节拍。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>涉及源码</h2>
+      <p><code>103 + 309/Project/Source/rtc_sleep.c</code>：低功耗请求、RTC STOP 周期、SOC/CAN 唤醒服务。</p>
+      <p><code>103 + 309/Project/Source/rtc_sleep.h</code>：低功耗状态结构与对外 API。</p>
+      <p><code>103 + 309/Project/Source/RTC.c</code>：RTC 时钟、Alarm、EXTI17、运行态秒中断恢复。</p>
+      <p><code>103 + 309/Project/Source/conf/conf.c</code>：STOP 前 IO 低功耗配置、唤醒 EXTI 和 STOP 后外设恢复。</p>
+      <p><code>103 + 309/Project/Source/SleepDeal.c</code>：正常/深睡 BootFlag、复位后休眠保持和按键/充电唤醒确认。</p>
+    </section>
+  </main>
+</body>
+</html>

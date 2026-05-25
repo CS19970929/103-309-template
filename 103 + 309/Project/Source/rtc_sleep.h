@@ -69,13 +69,13 @@ enum LOW_POWER_RTC_BLOCK_REASON {
 };
 
 struct LOW_POWER_RTC_STATUS {
-  UINT8 u8BlockReason;
-  UINT8 u8SleepModeSelect;
-  UINT8 u8StateSleep;
-  UINT8 u8RtcWakeFlag;
-  UINT16 u16EnterRtcDelay;
-  UINT16 u16EnterRtcTarget;
-  UINT32 u32RtcElapsedSeconds;
+  UINT8 mode;
+  UINT8 readyToSleep;
+  UINT8 blockReason;
+  UINT8 rtcWake;
+  UINT16 delaySeconds;
+  UINT16 delayTargetSeconds;
+  UINT32 elapsedSeconds;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
