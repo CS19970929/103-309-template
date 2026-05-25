@@ -42,6 +42,10 @@ SLEEPDEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.h"
 RTC_C = ROOT / "103 + 309" / "Project" / "Source" / "RTC.c"
 RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
+RTC_SLEEP_PORT_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_port.c"
+RTC_SLEEP_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_port.h"
+RTC_SLEEP_AFE_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_afe_port.h"
+RTC_SLEEP_AFE_SH367309_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_afe_sh367309.c"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
@@ -82,6 +86,7 @@ COMM_TOOL_BSP_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "bs
 COMM_TOOL_KEIL_PROJECT = ROOT / "firmware" / "comm_tool_f103ret6" / "keil" / "COMM_TOOL_F103RET6.uvprojx"
 COMM_TOOL_IAP_PROJECT = ROOT / "firmware" / "comm_tool_f103ret6" / "keil" / "COMM_TOOL_IAP.uvprojx"
 RTC_SLEEP_OPT_DOC = ROOT / "RTC_STANDBY_SLEEP_OPTIMIZATION_2026-05-22.md"
+RTC_SLEEP_PORT_REFACTOR_DOC = ROOT / "docs" / "RTC_SLEEP_PORT_REFACTOR_2026-05-25.md"
 APP_ARCH_REFACTOR_DOC = ROOT / "PROJECT_ARCH_REFACTOR_2026-05-22.md"
 REFACTOR_REQUIREMENTS_DOC = ROOT / "PROJECT_REFACTOR_REQUIREMENTS_2026-05-22.md"
 HEAT_COOL_REMOVE_DOC = ROOT / "HEAT_COOL_IODRIVERS_REMOVAL_2026-05-22.md"
@@ -905,7 +910,18 @@ def check_soc_current_and_typec_policy(reporter):
 
 
 def check_low_power_cleanup(reporter):
-    required_files = [SLEEPDEAL_C, SLEEPDEAL_H, RTC_SLEEP_C, RTC_SLEEP_H, LEDBAR_C, LOGRECORD_C]
+    required_files = [
+        SLEEPDEAL_C,
+        SLEEPDEAL_H,
+        RTC_SLEEP_C,
+        RTC_SLEEP_H,
+        RTC_SLEEP_PORT_C,
+        RTC_SLEEP_PORT_H,
+        RTC_SLEEP_AFE_PORT_H,
+        RTC_SLEEP_AFE_SH367309_C,
+        LEDBAR_C,
+        LOGRECORD_C,
+    ]
     if any(not path.exists() for path in required_files):
         return
 
@@ -913,6 +929,11 @@ def check_low_power_cleanup(reporter):
     sleepdeal_h = read_text(SLEEPDEAL_H)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
     rtc_sleep_h = read_text(RTC_SLEEP_H)
+    rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
+    rtc_sleep_port_h = read_text(RTC_SLEEP_PORT_H)
+    rtc_sleep_afe_port_h = read_text(RTC_SLEEP_AFE_PORT_H)
+    rtc_sleep_afe_sh367309_c = read_text(RTC_SLEEP_AFE_SH367309_C)
+    project = read_text(PROJECT)
     ledbar_c = read_text(LEDBAR_C)
     logrecord_c = read_text(LOGRECORD_C)
 
@@ -934,17 +955,56 @@ def check_low_power_cleanup(reporter):
 
     if (
         "void LowPower_Request(enum _SLEEP_MODE mode)" in rtc_sleep_c
-        and "UINT8 LowPower_IsToSleepPending(void)" in rtc_sleep_c
+        and "uint8_t LowPower_IsToSleepPending(void)" in rtc_sleep_c
         and "LowPower_ClearToSleepFlag();" in logrecord_c
         and "LowPower_IsToSleepPending() != 0u" in ledbar_c
         and "void SleepDeal_Continue(UINT8 sleep_mode)" in sleepdeal_c
-        and "SleepDeal_Continue(sleep_mode);" in rtc_sleep_c
+        and "RtcSleep_PortCommitResetSleep(sleep_mode);" in rtc_sleep_c
+        and "SleepDeal_Continue(sleep_mode);" in rtc_sleep_port_c
         and "SleepDeal_Continue((UINT8)DEEP_MODE);" in ledbar_c
-        and "UINT8 LowPower_IsToSleepPending(void);" in rtc_sleep_h
+        and "uint8_t LowPower_IsToSleepPending(void);" in rtc_sleep_h
     ):
         reporter.ok("low power mode ownership is centralized in LowPower runtime APIs")
     else:
         reporter.fail("low power mode ownership should use LowPower_Request/IsToSleepPending and explicit SleepDeal_Continue(mode)")
+
+    forbidden_core_tokens = [
+        "AFE_TYPE",
+        "bq76xx_afe",
+        "sh36xx",
+        "MTPRead(",
+        "UpdateVoltageFromBqMaximo(",
+        "SH367309_",
+        "GPIO_ReadInputDataBit(",
+        "Sys_StopMode(",
+        "Init_RTC(",
+        "Can_RtcWakeService(",
+        "SOC_ApplyRtcRelaxationCompensation(",
+        "SleepDeal_Continue(",
+    ]
+    leaked_tokens = [token for token in forbidden_core_tokens if token in rtc_sleep_c]
+    if leaked_tokens:
+        reporter.fail("rtc_sleep.c still depends on low-level MCU/AFE tokens: {0}".format(",".join(leaked_tokens)))
+    else:
+        reporter.ok("rtc_sleep.c stays independent from low-level MCU/AFE drivers")
+
+    if (
+        '#include "rtc_sleep_afe_port.h"' in rtc_sleep_port_c
+        and "RtcSleep_AfePortIsSleepBlocked();" in rtc_sleep_port_c
+        and "RtcSleep_AfePortUpdateRtcData();" in rtc_sleep_port_c
+        and "RtcSleep_AfePortHasCurrentWake(source);" in rtc_sleep_port_c
+        and "RtcSleep_AfePortHasAfeWake(source);" in rtc_sleep_port_c
+        and "uint8_t RtcSleep_AfePortIsSleepBlocked(void);" in rtc_sleep_afe_port_h
+        and "UINT8 RtcSleep_AfePortIsSleepBlocked(void)" in rtc_sleep_afe_sh367309_c
+        and "AFE_TYPE" not in rtc_sleep_port_c
+        and "AFE_TYPE" not in rtc_sleep_afe_sh367309_c
+        and "rtc_sleep_port.c" in project
+        and "rtc_sleep_afe_sh367309.c" in project
+        and "uint8_t RtcSleep_PortIsAfeSleepBlocked(void);" in rtc_sleep_port_h
+    ):
+        reporter.ok("RTC sleep port layer selects MCU/AFE adapters by file boundary instead of AFE_TYPE branches")
+    else:
+        reporter.fail("RTC sleep port layer should keep AFE details in a separate source file selected by the project")
 
 
 def check_fault_snapshot_mapping(reporter):
@@ -1147,7 +1207,7 @@ def check_can_aging_soc_service(reporter):
 
 
 def check_rtc_stop_sleep_contract(reporter):
-    required_files = [RTC_C, RTC_SLEEP_C, CONF_C, RTC_SLEEP_OPT_DOC]
+    required_files = [RTC_C, RTC_SLEEP_C, RTC_SLEEP_PORT_C, CONF_C, RTC_SLEEP_OPT_DOC, RTC_SLEEP_PORT_REFACTOR_DOC]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
         reporter.fail("RTC low-power contract files missing: {0}".format(",".join(missing)))
@@ -1155,8 +1215,10 @@ def check_rtc_stop_sleep_contract(reporter):
 
     rtc_c = read_text(RTC_C)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
+    rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
     conf_c = read_text(CONF_C)
     doc = read_text(RTC_SLEEP_OPT_DOC)
+    port_doc = read_text(RTC_SLEEP_PORT_REFACTOR_DOC)
 
     if (
         "void RTC_WKTimeConfig(void)" in rtc_c
@@ -1171,8 +1233,9 @@ def check_rtc_stop_sleep_contract(reporter):
         reporter.fail("RTC STOP wakeup should disable SEC, arm ALR, and clear RTC/EXTI/NVIC pending bits")
 
     if (
-        "static void rtc_sleep_restore_after_stop(void)" in rtc_sleep_c
-        and "InitRunAfterStopWakeup();" in rtc_sleep_c
+        "RtcSleep_PortRestoreAfterStop();" in rtc_sleep_c
+        and "void RtcSleep_PortRestoreAfterStop(void)" in rtc_sleep_port_c
+        and "InitRunAfterStopWakeup();" in rtc_sleep_port_c
         and "void InitRtcWakeupCheck(void)" in conf_c
         and "InitRunAfterStopWakeup();" in conf_c
         and "sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;" in conf_c
@@ -1187,11 +1250,14 @@ def check_rtc_stop_sleep_contract(reporter):
         and "RTC_IT_SEC" in doc
         and "EXTI17" in doc
         and "InitRunAfterStopWakeup" in doc
+        and "rtc_sleep_port.c" in port_doc
+        and "rtc_sleep_afe_sh367309.c" in port_doc
+        and "rtc_sleep.c" in port_doc
         and "过放" in doc
     ):
-        reporter.ok("RTC sleep optimization document describes state machine and wakeup contract")
+        reporter.ok("RTC sleep documents describe state machine, wakeup contract, and port boundary")
     else:
-        reporter.fail("RTC sleep optimization document should cover ALR/SEC, EXTI17, recovery, and over-discharge priority")
+        reporter.fail("RTC sleep documents should cover ALR/SEC, EXTI17, recovery, over-discharge priority, and port boundary")
 
 
 def check_app_architecture(reporter):

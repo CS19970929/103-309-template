@@ -580,9 +580,19 @@
               <FilePath>..\Source\SH367309_Func.c</FilePath>
             </File>
             <File>
+              <FileName>rtc_sleep_afe_sh367309.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
+            </File>
+            <File>
               <FileName>rtc_sleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1507,9 +1517,19 @@
               <FilePath>..\Source\SH367309_Func.c</FilePath>
             </File>
             <File>
+              <FileName>rtc_sleep_afe_sh367309.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
+            </File>
+            <File>
               <FileName>rtc_sleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
             </File>
           </Files>
         </Group>

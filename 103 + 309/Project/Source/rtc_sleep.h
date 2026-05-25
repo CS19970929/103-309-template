@@ -1,6 +1,9 @@
 #ifndef __RTC_SLEEP__
 #define __RTC_SLEEP__
 
+#include <stdint.h>
+#include <stdbool.h>
+
 // #include "stm32f0xx_it.h"			//锟斤拷锟斤拷锟斤拷一些硬锟斤拷锟斤拷锟斤拷之锟斤拷锟斤拷卸希锟斤拷锟斤拷锟斤拷锟揭拷锟?
 enum irqWakeup
 {
@@ -21,30 +24,6 @@ enum irqWakeup
 };
 extern enum irqWakeup g_irq_t;
 
-#define SET_BIT(REG, BIT)     ((REG) |= (BIT))
-
-#define CLEAR_BIT(REG, BIT)   ((REG) &= ~(BIT))
-
-#define READ_BIT(REG, BIT)    ((REG) & (BIT))
-
-#define CLEAR_REG(REG)        ((REG) = (0x0))
-
-#define WRITE_REG(REG, VAL)   ((REG) = (VAL))
-
-#define READ_REG(REG)         ((REG))
-
-#define MODIFY_REG(REG, CLEARMASK, SETMASK)  WRITE_REG((REG), (((READ_REG(REG)) & (~(CLEARMASK))) | (SETMASK)))
-
-#define POSITION_VAL(VAL)     (__CLZ(__RBIT(VAL)))
-
-
-//todo
-#define VcellMin    g_stCellInfoReport.u16VCellMin
-#define VcellMax    g_stCellInfoReport.u16VCellMax
-
-#define SOC_DISP    g_stCellInfoReport.SocElement.u16Soc
-#define sOC_REAL    g_stCellInfoReport.soc_real
-
 typedef enum _SLEEP_MODE {
 NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 }SLEEP_MODE;
@@ -55,7 +34,7 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 
 extern bool is_wakeup;
 
-extern UINT16 gu8_WakeUp_Type;
+extern uint16_t gu8_WakeUp_Type;
 
 enum LOW_POWER_RTC_BLOCK_REASON {
   LOW_POWER_RTC_BLOCK_NONE = 0,
@@ -69,13 +48,13 @@ enum LOW_POWER_RTC_BLOCK_REASON {
 };
 
 struct LOW_POWER_RTC_STATUS {
-  UINT8 mode;
-  UINT8 readyToSleep;
-  UINT8 blockReason;
-  UINT8 rtcWake;
-  UINT16 delaySeconds;
-  UINT16 delayTargetSeconds;
-  UINT32 elapsedSeconds;
+  uint8_t mode;
+  uint8_t readyToSleep;
+  uint8_t blockReason;
+  uint8_t rtcWake;
+  uint16_t delaySeconds;
+  uint16_t delayTargetSeconds;
+  uint32_t elapsedSeconds;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
@@ -83,7 +62,7 @@ extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);
 void LowPower_ClearToSleepFlag(void);
-UINT8 LowPower_IsToSleepPending(void);
+uint8_t LowPower_IsToSleepPending(void);
 void rtc_sleep(void);
 void cpu_frequency_conf(void);
 
@@ -94,7 +73,6 @@ void set_rtc_soc(uint8_t _soc);
 void set_irq_wksource(uint8_t irq);
 
 
-bool isVol_low_sleep(void);
 void entersleep(enum _SLEEP_MODE mode);
 
 void sleep(void);
