@@ -20,10 +20,6 @@ static void AppInit_InitDevice(void)
 	InitNVIC();
 	InitIO();
 	AppInit_InitSci();
-#ifdef ELOG_OUTPUT_ENABLE
-	InitUSART_CommonUpper();
-	elogInit();
-#endif
 #ifdef FLASH_BOOT_PRINT_ENABLE
 	StorageFlash_PrintBootCheck();
 #endif
@@ -39,6 +35,11 @@ static void AppInit_InitDevice(void)
 
 	InitTimer();
 	__enable_irq();
+
+#ifdef ELOG_OUTPUT_ENABLE
+	elogInit();
+	log_w("debug serial log enabled profile=%u", (unsigned int)PROJECT_CFG_BUILD_PROFILE);
+#endif
 	log_w("init over");
 
 #ifdef _DEBUG_

@@ -74,6 +74,7 @@ BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_20
 BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
 COMM_TOOL_KEIL_DOC = ROOT / "docs" / "COMM_TOOL_F103RET6_KEIL_PORT_2026-05-23.md"
 COMM_TOOL_UART_SELECT_DOC = ROOT / "docs" / "COMM_TOOL_UART_SELECT_2026-05-25.md"
+COMM_TOOL_BMS_REVIEW_HTML = ROOT / "docs" / "COMM_TOOL_BMS_APP_REVIEW_LOGGING_2026-05-25.html"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
 COMM_TOOL_UPGRADE_UI = ROOT / "tools" / "comm_tool_upgrade_ui.py"
@@ -221,6 +222,7 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_DEBUG_CODE_ENABLE": "0",
     "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE": "0",
     "PROJECT_CFG_DEBUG_WATCH_ENABLE": "0",
+    "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE": "0",
     "PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE": "0",
@@ -237,6 +239,7 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_DEBUG_CODE_ENABLE",
     "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE",
     "PROJECT_CFG_DEBUG_WATCH_ENABLE",
+    "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE",
     "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE",
     "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
     "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST",
@@ -1417,6 +1420,7 @@ def check_comm_tool_can_iap_contract(reporter):
         BMS_CAN_IAP_RELIABILITY_DOC,
         COMM_TOOL_KEIL_DOC,
         COMM_TOOL_UART_SELECT_DOC,
+        COMM_TOOL_BMS_REVIEW_HTML,
     ]
     source_files = [
         COMM_TOOL_HOST,
@@ -1424,6 +1428,8 @@ def check_comm_tool_can_iap_contract(reporter):
         COMM_TOOL_UART_SELECT_SCRIPT,
         COMM_TOOL_SOURCE / "ct_config.h",
         COMM_TOOL_SOURCE / "ct_protocol.c",
+        COMM_TOOL_SOURCE / "ct_debug_log.c",
+        COMM_TOOL_SOURCE / "ct_debug_log.h",
         COMM_TOOL_SOURCE / "ct_flash_store.c",
         COMM_TOOL_SOURCE / "ct_can_gateway.c",
         COMM_TOOL_SOURCE / "ct_upgrade_manager.c",
@@ -1437,6 +1443,10 @@ def check_comm_tool_can_iap_contract(reporter):
         COMM_TOOL_BSP_SOURCE / "board_can.c",
         COMM_TOOL_KEIL_PROJECT,
         COMM_TOOL_IAP_PROJECT,
+        APP_INIT_C,
+        ELOG_CFG_H,
+        PROJECT_CONFIG,
+        BUILD_GUARD,
     ]
     required = docs + source_files
     if any(not path.exists() for path in required):
@@ -1451,11 +1461,14 @@ def check_comm_tool_can_iap_contract(reporter):
     iap_reliability_doc = read_text(BMS_CAN_IAP_RELIABILITY_DOC)
     keil_doc = read_text(COMM_TOOL_KEIL_DOC)
     uart_select_doc = read_text(COMM_TOOL_UART_SELECT_DOC)
+    review_html = read_text(COMM_TOOL_BMS_REVIEW_HTML)
     host_py = read_text(COMM_TOOL_HOST)
     start_ps1 = read_text(COMM_TOOL_HOST_START)
     uart_select_ps1 = read_text(COMM_TOOL_UART_SELECT_SCRIPT)
     config_h = read_text(COMM_TOOL_SOURCE / "ct_config.h")
     protocol_c = read_text(COMM_TOOL_SOURCE / "ct_protocol.c")
+    debug_log_c = read_text(COMM_TOOL_SOURCE / "ct_debug_log.c")
+    debug_log_h = read_text(COMM_TOOL_SOURCE / "ct_debug_log.h")
     flash_c = read_text(COMM_TOOL_SOURCE / "ct_flash_store.c")
     can_c = read_text(COMM_TOOL_SOURCE / "ct_can_gateway.c")
     upgrade_c = read_text(COMM_TOOL_SOURCE / "ct_upgrade_manager.c")
@@ -1466,6 +1479,10 @@ def check_comm_tool_can_iap_contract(reporter):
     board_can_c = read_text(COMM_TOOL_BSP_SOURCE / "board_can.c")
     comm_tool_uvprojx = read_text(COMM_TOOL_KEIL_PROJECT)
     comm_tool_iap_uvprojx = read_text(COMM_TOOL_IAP_PROJECT)
+    app_init_c = read_text(APP_INIT_C)
+    elog_cfg_h = read_text(ELOG_CFG_H)
+    project_config_h = read_text(PROJECT_CONFIG)
+    build_guard_h = read_text(BUILD_GUARD)
     bms_can_c = read_text(CAN_HDX_C)
 
     if (
@@ -1509,6 +1526,7 @@ def check_comm_tool_can_iap_contract(reporter):
         "CT_SELF_APP_BASE               0x08008000u" in config_h
         and "CT_FW_CACHE_BASE               0x08018000u" in config_h
         and "CtProtocol_Encode" in protocol_c
+        and "CtDebugLog_Record" in protocol_c
         and "CtFlash_Begin" in flash_c
         and "CT_FW_CACHE_BASE" in flash_c
         and "CtCan_IapSendCommit" in can_c
@@ -1524,6 +1542,44 @@ def check_comm_tool_can_iap_contract(reporter):
         reporter.ok("comm tool firmware source contains protocol, flash cache, CAN gateway, and upgrade manager")
     else:
         reporter.fail("comm tool firmware source should contain protocol parser, flash cache, CAN-IAP commit, ACK wait, and command dispatch")
+
+    if (
+        "CT_BUILD_PROFILE_RELEASE" in config_h
+        and "CT_DEBUG_LOG_ENABLE" in config_h
+        and "CT_DEBUG_LOG_CAPACITY" in config_h
+        and "CMD_DEBUG_LOG" in host_py
+        and "debug-log" in host_py
+        and "CT_CMD_DEBUG_LOG" in app_c
+        and "handle_debug_log" in app_c
+        and "CtDebugLog_EncodeLatest" in app_c
+        and "CtDebugLog_Record" in debug_log_h
+        and "CT_DEBUG_LOG_ENABLE" in debug_log_c
+        and "CT_LOG_EVT_CMD_RX" in debug_log_h
+        and "ct_debug_log.c" in comm_tool_uvprojx
+        and "ct_debug_log.h" in comm_tool_uvprojx
+        and "串口" in review_html
+        and "环形结构化日志" in review_html
+        and "Release" in review_html
+        and "Debug" in review_html
+    ):
+        reporter.ok("comm tool debug logging is structured, protocol-readable, and release gated")
+    else:
+        reporter.fail("comm tool debug logging should use CT_CMD_DEBUG_LOG ring records and stay disabled in Release")
+
+    if (
+        "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in project_config_h
+        and "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in build_guard_h
+        and "Release build: PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE must be 0" in build_guard_h
+        and "#if PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in elog_cfg_h
+        and "#define ELOG_OUTPUT_ENABLE" in elog_cfg_h
+        and "elogInit();" in app_init_c
+        and "debug serial log enabled" in app_init_c
+        and "InitUSART_CommonUpper();" not in app_init_c[app_init_c.find("AppInit_InitSci();"):app_init_c.find("#ifdef FLASH_BOOT_PRINT_ENABLE")]
+        and "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in review_html
+    ):
+        reporter.ok("BMS App serial logs are debug-profile gated and release forbidden")
+    else:
+        reporter.fail("BMS App logs should enable EasyLogger only for Debug profile and forbid serial logs in Release")
 
     if (
         "COMM_TOOL_F103RET6.uvprojx" in keil_doc

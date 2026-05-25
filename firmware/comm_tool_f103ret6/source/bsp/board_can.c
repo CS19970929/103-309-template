@@ -1,5 +1,6 @@
 #include "board_can.h"
 #include "board.h"
+#include "ct_debug_log.h"
 #include "stm32f10x_can.h"
 #include "stm32f10x_gpio.h"
 #include "stm32f10x_rcc.h"
@@ -161,7 +162,17 @@ void BoardCan_Init(uint32_t bitrate)
 
 int CtBoard_SetCanBitrate(uint32_t bitrate)
 {
-    return can_hw_init(bitrate);
+    int result;
+
+    result = can_hw_init(bitrate);
+    if (result == 0)
+    {
+        CtDebugLog_Record(CT_LOG_MOD_CAN,
+                          CT_LOG_EVT_CAN_TX_FAIL,
+                          (uint16_t)(bitrate / 1000u),
+                          0u);
+    }
+    return result;
 }
 
 int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
@@ -207,6 +218,10 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
         s_diag.tx_fail++;
         s_diag.last_tx_status = CAN_TxStatus_NoMailBox;
         can_diag_latch_regs();
+        CtDebugLog_Record(CT_LOG_MOD_CAN,
+                          CT_LOG_EVT_CAN_TX_FAIL,
+                          (uint16_t)(frame->id & 0xFFFFu),
+                          CAN_TxStatus_NoMailBox);
         return 0;
     }
 
@@ -219,6 +234,10 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
             s_diag.tx_timeout++;
             s_diag.last_tx_status = CAN_TxStatus_Pending;
             can_diag_latch_regs();
+            CtDebugLog_Record(CT_LOG_MOD_CAN,
+                              CT_LOG_EVT_CAN_TX_TIMEOUT,
+                              (uint16_t)(frame->id & 0xFFFFu),
+                              mailbox);
             return 0;
         }
     }
@@ -234,6 +253,10 @@ int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms)
 
     s_diag.tx_fail++;
     CAN_CancelTransmit(CAN1, mailbox);
+    CtDebugLog_Record(CT_LOG_MOD_CAN,
+                      CT_LOG_EVT_CAN_TX_FAIL,
+                      (uint16_t)(frame->id & 0xFFFFu),
+                      tx_status);
     return 0;
 }
 

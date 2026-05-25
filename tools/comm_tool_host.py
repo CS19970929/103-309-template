@@ -46,6 +46,7 @@ CMD_UPGRADE_STATUS = 0x32
 CMD_UPGRADE_ABORT = 0x33
 CMD_RAW_CAN_TX = 0x40
 CMD_CAN_DIAG = 0x41
+CMD_DEBUG_LOG = 0x42
 
 APP_SET_ONCE_SOC_ADDR = 0x1005
 APP_AGING_ACTION_START = 0x51
@@ -61,6 +62,31 @@ STATUS_TEXT = {
     0x05: "FLASH_ERROR",
     0x06: "CAN_TIMEOUT",
     0x07: "BMS_ERROR(板端拒绝/地址无效/参数越界/写权限关闭)",
+}
+
+DEBUG_LOG_MODULES = {
+    1: "APP",
+    2: "UART",
+    3: "CAN",
+    4: "FLASH",
+    5: "UPGRADE",
+    6: "PROTOCOL",
+}
+
+DEBUG_LOG_EVENTS = {
+    1: "BOOT",
+    2: "CMD_RX",
+    3: "CMD_TX",
+    4: "BAD_FRAME",
+    5: "CAN_SET",
+    6: "CAN_TX_FAIL",
+    7: "CAN_TX_TIMEOUT",
+    8: "FW_BEGIN",
+    9: "FW_END",
+    10: "UPGRADE_START",
+    11: "UPGRADE_PHASE",
+    12: "UPGRADE_ERROR",
+    13: "UPGRADE_ABORT",
 }
 
 HEADER_STRUCT = struct.Struct("<HBBHBBH")
@@ -553,6 +579,47 @@ def cmd_can_diag(args) -> int:
     return 0
 
 
+def cmd_debug_log(args) -> int:
+    payload = bytes([args.count & 0xFF, 1 if args.clear else 0])
+    with open_client(args) as client:
+        resp = client.command(CMD_DEBUG_LOG, payload)
+    data = resp.payload
+    print(f"DEBUG_LOG raw: {format_hex(data)}")
+    if len(data) < 6:
+        raise RuntimeError("DEBUG_LOG response too short")
+
+    enabled = data[0]
+    count = data[1]
+    capacity = data[2]
+    entry_size = data[3]
+    dropped = struct.unpack_from("<H", data, 4)[0]
+    print(f"  enabled={enabled} count={count} capacity={capacity} entry_size={entry_size} dropped={dropped}")
+    if enabled == 0:
+        print("  debug log is disabled in this firmware build")
+        return 0
+    if entry_size != 12:
+        raise RuntimeError(f"unsupported DEBUG_LOG entry size: {entry_size}")
+
+    offset = 6
+    for _ in range(count):
+        if offset + entry_size > len(data):
+            break
+        seq = struct.unpack_from("<H", data, offset)[0]
+        tick_ms = struct.unpack_from("<I", data, offset + 2)[0]
+        module = data[offset + 6]
+        event = data[offset + 7]
+        value0 = struct.unpack_from("<H", data, offset + 8)[0]
+        value1 = struct.unpack_from("<H", data, offset + 10)[0]
+        module_text = DEBUG_LOG_MODULES.get(module, f"MOD_{module}")
+        event_text = DEBUG_LOG_EVENTS.get(event, f"EVT_{event}")
+        print(
+            f"  #{seq:05d} {tick_ms:10d}ms {module_text:<8} {event_text:<16} "
+            f"v0=0x{value0:04X} v1=0x{value1:04X}"
+        )
+        offset += entry_size
+    return 0
+
+
 def cmd_abort(args) -> int:
     with open_client(args) as client:
         client.command(CMD_UPGRADE_ABORT)
@@ -654,6 +721,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_serial_args(p_diag)
     p_diag.add_argument("--clear", action="store_true", help="读取前先清空诊断计数")
     p_diag.set_defaults(func=cmd_can_diag)
+
+    p_debug_log = sub.add_parser("debug-log", help="read comm tool debug ring log")
+    add_serial_args(p_debug_log)
+    p_debug_log.add_argument("--count", type=int, default=32, help="max latest records to read")
+    p_debug_log.add_argument("--clear", action="store_true", help="clear debug log after reading")
+    p_debug_log.set_defaults(func=cmd_debug_log)
 
     return parser
 

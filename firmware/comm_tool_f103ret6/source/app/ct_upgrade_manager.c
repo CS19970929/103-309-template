@@ -3,6 +3,7 @@
 #include "ct_can_gateway.h"
 #include "ct_config.h"
 #include "ct_crc16.h"
+#include "ct_debug_log.h"
 #include "ct_flash_store.h"
 #include <string.h>
 
@@ -64,12 +65,20 @@ static void set_error(uint8_t err)
     s_status.state = CT_UPGRADE_ERROR;
     s_status.last_error = err;
     s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+    CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                      CT_LOG_EVT_UPGRADE_ERROR,
+                      err,
+                      s_status.percent);
 }
 
 static void set_phase(uint8_t phase)
 {
     s_ctx.phase = phase;
     s_ctx.phase_start_ms = CtBoard_GetTickMs();
+    CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                      CT_LOG_EVT_UPGRADE_PHASE,
+                      phase,
+                      s_status.percent);
 }
 
 static void reset_context(void)
@@ -98,6 +107,10 @@ void CtUpgrade_Abort(void)
     {
         s_status.state = CT_UPGRADE_ABORTED;
         s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+        CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                          CT_LOG_EVT_UPGRADE_ABORT,
+                          s_status.percent,
+                          s_status.last_error);
     }
 }
 
@@ -137,6 +150,10 @@ int CtUpgrade_StartWithAppAddress(uint8_t node, uint8_t app_can_addr)
     }
     s_ctx.app_can_addr = app_can_addr & 0x0Fu;
     s_abort = 0u;
+    CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                      CT_LOG_EVT_UPGRADE_START,
+                      (uint16_t)(((uint16_t)s_ctx.node << 8) | s_ctx.app_can_addr),
+                      (uint16_t)(s_status.total / 1024u));
     set_phase(CT_UPGRADE_PHASE_HELLO_FAST_SEND);
     return 1;
 }
@@ -265,6 +282,10 @@ void CtUpgrade_Task(void)
     {
         s_status.state = CT_UPGRADE_ABORTED;
         s_ctx.phase = CT_UPGRADE_PHASE_IDLE;
+        CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                          CT_LOG_EVT_UPGRADE_ABORT,
+                          s_status.percent,
+                          s_status.last_error);
         return;
     }
 

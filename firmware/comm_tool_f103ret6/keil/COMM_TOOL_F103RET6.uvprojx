@@ -404,6 +404,11 @@
               <FilePath>..\source\app\ct_crc16.c</FilePath>
             </File>
             <File>
+              <FileName>ct_debug_log.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\source\app\ct_debug_log.c</FilePath>
+            </File>
+            <File>
               <FileName>ct_flash_store.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\source\app\ct_flash_store.c</FilePath>
@@ -522,6 +527,11 @@
               <FileName>ct_config.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\source\app\ct_config.h</FilePath>
+            </File>
+            <File>
+              <FileName>ct_debug_log.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\source\app\ct_debug_log.h</FilePath>
             </File>
             <File>
               <FileName>main.h</FileName>

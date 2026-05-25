@@ -140,6 +140,15 @@
 #ifndef PROJECT_CFG_DEBUG_WATCH_ENABLE
 #define PROJECT_CFG_DEBUG_WATCH_ENABLE 0
 #endif
+// <q> Enable serial debug logs
+// <i> Debug profile defaults to enabled. Release must keep this disabled to avoid printf/log output on the communication UART.
+#ifndef PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE
+#if (PROJECT_CFG_BUILD_PROFILE == 1)
+#define PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE 1
+#else
+#define PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE 0
+#endif
+#endif
 
 // <q> 允许带电流休眠
 // <i> 允许带电流进入休眠。通常保持关闭，避免带载误休眠。

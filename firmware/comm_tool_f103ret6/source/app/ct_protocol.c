@@ -1,5 +1,6 @@
 #include "ct_protocol.h"
 #include "ct_crc16.h"
+#include "ct_debug_log.h"
 
 enum
 {
@@ -76,6 +77,10 @@ uint8_t CtProtocol_Feed(CtProtocolParser *parser, uint8_t byte, CtFrame *out_fra
         payload_len = rd16(&raw[8]);
         if ((raw[2] != CT_PROTOCOL_VERSION) || (payload_len > CT_UART_MAX_PAYLOAD))
         {
+            CtDebugLog_Record(CT_LOG_MOD_PROTOCOL,
+                              CT_LOG_EVT_BAD_FRAME,
+                              raw[2],
+                              payload_len);
             CtProtocol_Init(parser);
             return 0u;
         }
@@ -98,6 +103,10 @@ uint8_t CtProtocol_Feed(CtProtocolParser *parser, uint8_t byte, CtFrame *out_fra
     actual_crc = CtCrc16_Calc(raw, (size_t)(CT_PROTO_HEADER_SIZE + parser->payload_length));
     if (expect_crc != actual_crc)
     {
+        CtDebugLog_Record(CT_LOG_MOD_PROTOCOL,
+                          CT_LOG_EVT_BAD_FRAME,
+                          expect_crc,
+                          actual_crc);
         CtProtocol_Init(parser);
         return 0u;
     }

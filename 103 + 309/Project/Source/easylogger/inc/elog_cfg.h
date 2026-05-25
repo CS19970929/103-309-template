@@ -28,12 +28,18 @@
 
 #ifndef _ELOG_CFG_H_
 #define _ELOG_CFG_H_
+#include "Project_BuildGuard.h"
 // /*---------------------------------------------------------------------------*/
 /* enable log output. */
-// #define ELOG_OUTPUT_ENABLE
+#if PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE
+#define ELOG_OUTPUT_ENABLE
+#endif
 /* setting static output log level. range: from ELOG_LVL_ASELOG_LVL_WARNSERT to ELOG_LVL_VERBOSE */
-// #define ELOG_OUTPUT_LVL                          ELOG_LVL_DEBUG
+#if PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE
+#define ELOG_OUTPUT_LVL                          ELOG_LVL_DEBUG
+#else
 #define ELOG_OUTPUT_LVL                          ELOG_LVL_WARN
+#endif
 /* enable assert check */
 #define ELOG_ASSERT_ENABLE
 /* buffer size for every line's log */
@@ -74,7 +80,5 @@
 // #define ELOG_BUF_OUTPUT_ENABLE
 /* buffer size for buffered output mode */
 #define ELOG_BUF_OUTPUT_BUF_SIZE                 (ELOG_LINE_BUF_SIZE * 10)
-
-#include "Project_BuildGuard.h"
 
 #endif /* _ELOG_CFG_H_ */

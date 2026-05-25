@@ -2,6 +2,7 @@
 #include "ct_board_port.h"
 #include "ct_can_gateway.h"
 #include "ct_config.h"
+#include "ct_debug_log.h"
 #include "ct_flash_store.h"
 #include "ct_self_iap.h"
 #include "ct_status.h"
@@ -53,6 +54,10 @@ static void respond(const CtFrame *req, uint8_t status, const uint8_t *payload, 
                                   (uint16_t)sizeof(s_tx));
     if (frame_len != 0u)
     {
+        CtDebugLog_Record(CT_LOG_MOD_UART,
+                          CT_LOG_EVT_CMD_TX,
+                          (uint16_t)(((uint16_t)req->cmd << 8) | status),
+                          length);
         CtBoard_UartWrite(s_tx, frame_len);
     }
 }
@@ -62,6 +67,10 @@ void CtApp_Init(void)
     CtFlash_Init();
     CtUpgrade_Init();
     CtSelfIap_Init();
+    CtDebugLog_Record(CT_LOG_MOD_APP,
+                      CT_LOG_EVT_BOOT,
+                      (uint16_t)(((uint16_t)CT_FW_VERSION_MAJOR << 8) | CT_FW_VERSION_MINOR),
+                      (uint16_t)(((uint16_t)CT_FW_VERSION_PATCH << 8) | CT_DEBUG_LOG_ENABLE));
 }
 
 void CtApp_Poll(void)
@@ -114,7 +123,7 @@ static void handle_info(const CtFrame *req)
     wr32(&payload[4], s_can_bitrate);
     wr32(&payload[8], CT_FW_CACHE_BASE);
     wr32(&payload[12], CT_FW_CACHE_SIZE);
-    wr32(&payload[16], 0u);
+    wr32(&payload[16], CtDebugLog_IsEnabled() ? 1u : 0u);
     payload[20] = s_node_id;
     payload[21] = s_app_can_addr;
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
@@ -140,6 +149,10 @@ static void handle_set_can(const CtFrame *req)
         respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
         return;
     }
+    CtDebugLog_Record(CT_LOG_MOD_CAN,
+                      CT_LOG_EVT_CAN_SET,
+                      (uint16_t)(s_can_bitrate / 1000u),
+                      (uint16_t)(((uint16_t)s_node_id << 8) | s_app_can_addr));
     respond(req, CT_STATUS_OK, 0, 0u);
 }
 
@@ -164,6 +177,10 @@ static void handle_fw_begin(const CtFrame *req)
         respond(req, CT_STATUS_FLASH_ERROR, 0, 0u);
         return;
     }
+    CtDebugLog_Record(CT_LOG_MOD_FLASH,
+                      CT_LOG_EVT_FW_BEGIN,
+                      (uint16_t)(app_addr >> 16),
+                      (uint16_t)(size & 0xFFFFu));
     respond(req, CT_STATUS_OK, 0, 0u);
 }
 
@@ -204,6 +221,10 @@ static void handle_fw_end(const CtFrame *req)
         respond(req, CT_STATUS_FLASH_ERROR, 0, 0u);
         return;
     }
+    CtDebugLog_Record(CT_LOG_MOD_FLASH,
+                      CT_LOG_EVT_FW_END,
+                      (uint16_t)(size & 0xFFFFu),
+                      crc16);
     respond(req, CT_STATUS_OK, 0, 0u);
 }
 
@@ -314,6 +335,29 @@ static void handle_bms_aging_ctrl(const CtFrame *req)
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 
+static void handle_debug_log(const CtFrame *req)
+{
+    uint8_t payload[CT_UART_MAX_PAYLOAD];
+    uint8_t max_entries = 0u;
+    uint8_t clear_after_read = 0u;
+    uint16_t length;
+
+    if (req->length >= 1u)
+    {
+        max_entries = req->payload[0];
+    }
+    if (req->length >= 2u)
+    {
+        clear_after_read = req->payload[1];
+    }
+
+    length = CtDebugLog_EncodeLatest(max_entries,
+                                     clear_after_read,
+                                     payload,
+                                     (uint16_t)sizeof(payload));
+    respond(req, CT_STATUS_OK, payload, length);
+}
+
 static void handle_bms_aging_status(const CtFrame *req)
 {
     uint8_t payload[3];
@@ -408,6 +452,11 @@ void CtApp_HandleFrame(const CtFrame *frame)
         return;
     }
 
+    CtDebugLog_Record(CT_LOG_MOD_UART,
+                      CT_LOG_EVT_CMD_RX,
+                      frame->cmd,
+                      frame->length);
+
     switch (frame->cmd)
     {
     case CT_CMD_GET_INFO:
@@ -455,6 +504,9 @@ void CtApp_HandleFrame(const CtFrame *frame)
         break;
     case CT_CMD_CAN_DIAG:
         handle_can_diag(frame);
+        break;
+    case CT_CMD_DEBUG_LOG:
+        handle_debug_log(frame);
         break;
     default:
         respond(frame, CT_STATUS_UNSUPPORTED, 0, 0u);
