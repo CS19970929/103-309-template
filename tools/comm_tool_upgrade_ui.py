@@ -76,6 +76,9 @@ BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
+BMS_PRODUCT_INFO_ADDR = 0xC002
+BMS_PRODUCT_INFO_FIELD_LEN = 32
+BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
 SH309_AFE_PARAM_ADDR = 0x2400
@@ -386,6 +389,44 @@ def _read_bms_words_once(port: str, baud: int, addr: int, count: int) -> list[in
     return list(struct.unpack("<" + "H" * count, resp.payload))
 
 
+def _words_to_be_bytes(words: list[int]) -> bytes:
+    data = bytearray()
+    for word in words:
+        data.append((word >> 8) & 0xFF)
+        data.append(word & 0xFF)
+    return bytes(data)
+
+
+def _decode_product_field(data: bytes) -> str:
+    text = data.rstrip(b"\x00\xff ").decode("ascii", errors="ignore").strip()
+    return text if text else "--"
+
+
+def _decode_product_info_words(words: list[int]) -> dict[str, str]:
+    if len(words) < BMS_PRODUCT_INFO_WORDS:
+        raise RuntimeError("BMS 产品信息长度不足")
+    data = _words_to_be_bytes(words[:BMS_PRODUCT_INFO_WORDS])
+    field_len = BMS_PRODUCT_INFO_FIELD_LEN
+    return {
+        "serial": _decode_product_field(data[0:field_len]),
+        "hardware": _decode_product_field(data[field_len : field_len * 2]),
+        "software": _decode_product_field(data[field_len * 2 : field_len * 3]),
+    }
+
+
+def _format_product_info(info: dict[str, str]) -> str:
+    return (
+        f"软件版本: {info.get('software', '--')}    "
+        f"硬件版本: {info.get('hardware', '--')}    "
+        f"BMS序列号: {info.get('serial', '--')}"
+    )
+
+
+def _read_product_info_once(port: str, baud: int) -> dict[str, str]:
+    words = _read_bms_words_once(port, baud, BMS_PRODUCT_INFO_ADDR, BMS_PRODUCT_INFO_WORDS)
+    return _decode_product_info_words(words)
+
+
 class BmsMonitorWindow(tk.Toplevel):
     def __init__(self, parent: "UpgradeUi"):
         super().__init__(parent)
@@ -404,6 +445,7 @@ class BmsMonitorWindow(tk.Toplevel):
         self.state_var = tk.StringVar(value="未开始")
         self.summary_var = tk.StringVar(value="未读取")
         self.detail_var = tk.StringVar(value="")
+        self.product_info_var = tk.StringVar(value=_format_product_info({}))
 
         self._build_ui()
         self.after(80, self._after_events)
@@ -464,6 +506,13 @@ class BmsMonitorWindow(tk.Toplevel):
             row=0, column=0, sticky="nw", padx=10, pady=10
         )
 
+        product_box = ttk.LabelFrame(root, text="BMS 版本/序列号")
+        product_box.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
+        product_box.columnconfigure(0, weight=1)
+        ttk.Label(product_box, textvariable=self.product_info_var, justify=tk.LEFT).grid(
+            row=0, column=0, sticky="w", padx=10, pady=8
+        )
+
         for index in range(32):
             self.cell_tree.insert("", tk.END, iid=f"cell{index}", values=(f"{index + 1:02d}: --",))
         for index in range(10):
@@ -510,12 +559,22 @@ class BmsMonitorWindow(tk.Toplevel):
                 self.events.put(UiEvent("busy", "串口忙，等待主任务结束"))
                 return
             try:
-                port = self.parent.port_var.get().strip()
-                baud = int(self.parent.baud_var.get().strip())
-                words = _read_bms_words_once(port, baud, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+                self.parent.active_port = self.parent.port_var.get().strip()
+                self.parent.active_baud = int(self.parent.baud_var.get().strip())
+                self.parent.active_can_bitrate = int(self.parent.can_bitrate_var.get().strip(), 0)
+                self.parent.active_node_id = int(self.parent.node_id_var.get().strip(), 0)
+                self.parent.active_app_can_addr = int(self.parent.app_can_addr_var.get().strip(), 0)
+                with self.parent._open_client() as client:
+                    self.parent._set_can_target(client)
+                    words = self.parent._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+                    try:
+                        product_info = self.parent._read_bms_product_info(client)
+                    except Exception as exc:
+                        product_info = {"error": str(exc)}
             finally:
                 self.parent.serial_lock.release()
             self.events.put(UiEvent("snapshot", words))
+            self.events.put(UiEvent("product_info", product_info))
         except Exception as exc:
             self.events.put(UiEvent("error", str(exc)))
 
@@ -538,6 +597,11 @@ class BmsMonitorWindow(tk.Toplevel):
                 self.state_var.set("监控中" if self.running else "刷新完成")
                 if self.running and not self.parent_paused:
                     self._schedule_poll(self._interval_ms(0.5))
+            elif event.kind == "product_info":
+                if isinstance(event.payload, dict) and "error" in event.payload:
+                    self.product_info_var.set(f"软件版本: --    硬件版本: --    BMS序列号: --    读取失败: {event.payload['error']}")
+                else:
+                    self.product_info_var.set(_format_product_info(event.payload))
             elif event.kind == "error":
                 self.state_var.set(f"读取失败: {event.payload}")
                 if self.running and not self.parent_paused:
@@ -654,6 +718,7 @@ class UpgradeUi(tk.Tk):
         self.bms_result_var = tk.StringVar(value="未读取")
         self.bms_soc_write_var = tk.StringVar(value="80")
         self.bms_aging_var = tk.StringVar(value="老化状态: 未读取")
+        self.product_info_var = tk.StringVar(value=_format_product_info({}))
         self.bms_info_var = tk.StringVar(value="未读取")
         self.param_key_var = tk.StringVar(value=next(iter(BMS_PARAM_PRESETS)))
         self.param_value_var = tk.StringVar(value="")
@@ -760,6 +825,7 @@ class UpgradeUi(tk.Tk):
         tab.columnconfigure(1, weight=2)
         tab.columnconfigure(2, weight=3)
         tab.rowconfigure(0, weight=1)
+        tab.rowconfigure(1, weight=0)
 
         left = ttk.LabelFrame(tab, text="单体电压(mV)")
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
@@ -891,6 +957,13 @@ class UpgradeUi(tk.Tk):
             ttk.Label(box, textvariable=self.fault_vars[key], justify=tk.LEFT, wraplength=360).grid(
                 row=0, column=0, sticky="nw", padx=8, pady=8
             )
+
+        product_box = ttk.LabelFrame(tab, text="BMS 版本/序列号")
+        product_box.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        product_box.columnconfigure(0, weight=1)
+        ttk.Label(product_box, textvariable=self.product_info_var, justify=tk.LEFT).grid(
+            row=0, column=0, sticky="w", padx=10, pady=8
+        )
 
     def _build_connection_panel(self, parent: ttk.LabelFrame) -> None:
         parent.columnconfigure(1, weight=1)
@@ -1630,7 +1703,12 @@ class UpgradeUi(tk.Tk):
                     words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
                 except Exception:
                     words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+                try:
+                    product_info = self._read_bms_product_info(client)
+                except Exception as exc:
+                    product_info = {"error": str(exc)}
             self._emit("live_snapshot", words)
+            self._emit("product_info", product_info)
             self._emit("progress", 100)
         except Exception as exc:
             self._emit("log", f"实时监控读取失败: {exc}")
@@ -2177,7 +2255,12 @@ class UpgradeUi(tk.Tk):
                 words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
             except Exception:
                 words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            try:
+                product_info = self._read_bms_product_info(client)
+            except Exception as exc:
+                product_info = {"error": str(exc)}
         self._emit("live_snapshot", words)
+        self._emit("product_info", product_info)
         self._emit("bms_info", self._format_bms_overview(words[:BMS_OVERVIEW_WORDS]))
         self._emit("log", "BMS 信息读取完成")
         self._emit("progress", 100)
@@ -2521,6 +2604,10 @@ class UpgradeUi(tk.Tk):
         words = self._read_bms_words(client, 0xD034, 2)
         return words[0], words[1]
 
+    def _read_bms_product_info(self, client: CommToolClient) -> dict[str, str]:
+        words = self._read_bms_words(client, BMS_PRODUCT_INFO_ADDR, BMS_PRODUCT_INFO_WORDS)
+        return _decode_product_info_words(words)
+
     def _read_bms_words(self, client: CommToolClient, addr: int, count: int) -> list[int]:
         payload = struct.pack("<HH", addr, count)
         resp = client.command(CMD_BMS_READ, payload, timeout=max(10.0, count * 1.5))
@@ -2789,6 +2876,13 @@ class UpgradeUi(tk.Tk):
             self.bms_result_var.set(str(event.payload))
         elif event.kind == "aging_status":
             self.bms_aging_var.set(str(event.payload))
+        elif event.kind == "product_info":
+            if isinstance(event.payload, dict) and "error" in event.payload:
+                self.product_info_var.set(
+                    f"软件版本: --    硬件版本: --    BMS序列号: --    读取失败: {event.payload['error']}"
+                )
+            else:
+                self.product_info_var.set(_format_product_info(event.payload))
         elif event.kind == "param_value":
             key, value = event.payload
             self._update_param_row(key, value)

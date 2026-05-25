@@ -69,6 +69,7 @@ COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.
 COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
 BMS_CAN_AGING_SOC_DOC = ROOT / "docs" / "CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md"
+COMM_TOOL_UPGRADE_UI_DOC = ROOT / "docs" / "COMM_TOOL_UPGRADE_UI_2026-05-23.md"
 BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
 BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
 BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
@@ -1087,6 +1088,7 @@ def check_can_aging_soc_service(reporter):
         COMM_TOOL_SERIAL_DOC,
         BMS_CAN_SERVICE_DOC,
         BMS_CAN_AGING_SOC_DOC,
+        COMM_TOOL_UPGRADE_UI_DOC,
     ]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
@@ -1110,6 +1112,7 @@ def check_can_aging_soc_service(reporter):
     serial_doc = read_text(COMM_TOOL_SERIAL_DOC)
     service_doc = read_text(BMS_CAN_SERVICE_DOC)
     aging_doc = read_text(BMS_CAN_AGING_SOC_DOC)
+    upgrade_doc = read_text(COMM_TOOL_UPGRADE_UI_DOC)
 
     if (
         "FEIDAO_CAN_APP_CMD_AGING_START" in can_c
@@ -1179,14 +1182,19 @@ def check_can_aging_soc_service(reporter):
         and "读取老化时间" in upgrade_ui
         and "CMD_BMS_AGING_CTRL" in upgrade_ui
         and "CMD_BMS_AGING_STATUS" in upgrade_ui
+        and "BMS_PRODUCT_INFO_ADDR = 0xC002" in upgrade_ui
+        and "BMS_PRODUCT_INFO_WORDS" in upgrade_ui
+        and "_decode_product_info_words" in upgrade_ui
+        and "product_info_var" in upgrade_ui
+        and "BMS 版本/序列号" in upgrade_ui
         and "BMS_CommTool_Upgrade_UI" in build_ui
         and "--windowed" in build_ui
         and "--onefile" in build_ui
         and "pyinstaller" in build_ui
     ):
-        reporter.ok("comm tool upgrade UI keeps original EXE name and exposes SOC/aging common controls")
+        reporter.ok("comm tool upgrade UI keeps original EXE name and exposes SOC/aging/product-info common controls")
     else:
-        reporter.fail("comm tool upgrade UI should keep BMS_CommTool_Upgrade_UI.exe and expose SOC/aging controls")
+        reporter.fail("comm tool upgrade UI should keep BMS_CommTool_Upgrade_UI.exe and expose SOC/aging/product-info controls")
 
     if (
         "0x1005" in service_doc
@@ -1198,15 +1206,17 @@ def check_can_aging_soc_service(reporter):
         and "BMS_AGING_CTRL" in serial_doc
         and "BMS_AGING_STATUS" in serial_doc
         and "读取老化时间" in aging_doc
+        and "0xC002" in service_doc
+        and "BMS 版本/序列号" in upgrade_doc
         and "BMS_CommTool_Upgrade_UI.exe" in aging_doc
         and "build_comm_tool_upgrade_ui_exe.ps1 -Clean" in aging_doc
         and "其它功能 -> 常用功能 -> 写SOC" in aging_doc
         and "不要另起新的 exe 名称" in aging_doc
         and "0x14F80208" in aging_doc
     ):
-        reporter.ok("CAN aging/SOC documentation records standalone host functions, aging time display, and broadcast layout")
+        reporter.ok("CAN aging/SOC documentation records standalone host functions, product info display, aging time display, and broadcast layout")
     else:
-        reporter.fail("CAN aging/SOC docs should record original EXE, SOC/aging controls, UI aging time display, ch8 remaining minutes, and EXE overwrite rule")
+        reporter.fail("CAN aging/SOC docs should record original EXE, SOC/aging controls, product info display, UI aging time display, ch8 remaining minutes, and EXE overwrite rule")
 
 
 def check_rtc_stop_sleep_contract(reporter):
