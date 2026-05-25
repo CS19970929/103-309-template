@@ -1,5 +1,6 @@
 #include "main.h"
 #include "CanFeidaoFrames.h"
+#include "FactoryAging.h"
 #include <string.h>
 
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
@@ -32,9 +33,16 @@ UINT16 g_u16BusOff_RecoverCnt = 0U;
 #define FEIDAO_CAN_APP_CMD_WRITE_PREP ((UINT8)0x04U)
 #define FEIDAO_CAN_APP_CMD_WRITE_COMMIT ((UINT8)0x05U)
 #define FEIDAO_CAN_APP_CMD_READ_BLOCK ((UINT8)0x06U)
+#define FEIDAO_CAN_APP_CMD_AGING_START ((UINT8)0x07U)
+#define FEIDAO_CAN_APP_CMD_AGING_STOP ((UINT8)0x08U)
+#define FEIDAO_CAN_APP_CMD_AGING_RESET_TIME ((UINT8)0x09U)
 #define FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA ((UINT8)0x86U)
 #define FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS ((UINT8)120U)
 #define FEIDAO_CAN_APP_READ_BLOCK_FRAME_INTERVAL_TICKS ((UINT32)1U)
+#define FEIDAO_CAN_APP_AGING_GUARD ((UINT8)0xA9U)
+#define FEIDAO_CAN_APP_AGING_ACTION_START ((UINT8)0x51U)
+#define FEIDAO_CAN_APP_AGING_ACTION_STOP ((UINT8)0x50U)
+#define FEIDAO_CAN_APP_AGING_ACTION_RESET_TIME ((UINT8)0x5AU)
 #define FEIDAO_CAN_APP_ACK_OK ((UINT8)0x00U)
 #define FEIDAO_CAN_APP_ACK_BAD_CMD ((UINT8)0x01U)
 #define FEIDAO_CAN_APP_ACK_BAD_PARAM ((UINT8)0x02U)
@@ -103,6 +111,9 @@ static void feidao_can_busoff_monitor(void);
 static UINT8 feidao_can_app_crc_ok(const UINT8 data[8]);
 static void feidao_can_app_fill_crc(UINT8 data[8]);
 static UINT8 feidao_can_u16_to_percent(UINT16 value);
+static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action);
+static UINT8 feidao_can_aging_remaining_hours(void);
+static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1);
 static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1);
 static void feidao_can_app_send_word_frame(UINT8 seq, UINT16 value);
 static UINT8 feidao_can_app_status_from_host_error(UINT8 error);
@@ -415,6 +426,32 @@ static UINT8 feidao_can_u16_to_percent(UINT16 value)
 	return (value > 100U) ? 100U : (UINT8)value;
 }
 
+static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action)
+{
+	return ((data[3] == FEIDAO_CAN_APP_AGING_GUARD) &&
+			(data[4] == action) &&
+			(data[5] == (UINT8)CAN_ADRESS_STD_ID)) ? 1U : 0U;
+}
+
+static UINT8 feidao_can_aging_remaining_hours(void)
+{
+	UINT32 hours = (FactoryAging_GetRemainingSeconds() + 3599U) / 3600U;
+
+	return (hours > 0xFFU) ? 0xFFU : (UINT8)hours;
+}
+
+static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1)
+{
+	if (value0 != 0)
+	{
+		*value0 = FactoryAging_GetState();
+	}
+	if (value1 != 0)
+	{
+		*value1 = feidao_can_aging_remaining_hours();
+	}
+}
+
 static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1)
 {
 	CanTxMsg tx_msg;
@@ -642,6 +679,48 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		s_u8WritePending = 0U;
 		host_error = Sci_HostWriteWords(reg_addr, &reg_value, 1U);
 		status = feidao_can_app_status_from_host_error(host_error);
+		break;
+
+	case FEIDAO_CAN_APP_CMD_AGING_START:
+		if (feidao_can_aging_guard_ok(data, FEIDAO_CAN_APP_AGING_ACTION_START) == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		if (FactoryAging_StartByHost() == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BMS_ERROR;
+			break;
+		}
+		feidao_can_fill_aging_ack(&value0, &value1);
+		break;
+
+	case FEIDAO_CAN_APP_CMD_AGING_STOP:
+		if (feidao_can_aging_guard_ok(data, FEIDAO_CAN_APP_AGING_ACTION_STOP) == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		if (FactoryAging_StopByHost() == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BMS_ERROR;
+			break;
+		}
+		feidao_can_fill_aging_ack(&value0, &value1);
+		break;
+
+	case FEIDAO_CAN_APP_CMD_AGING_RESET_TIME:
+		if (feidao_can_aging_guard_ok(data, FEIDAO_CAN_APP_AGING_ACTION_RESET_TIME) == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		if (FactoryAging_ResetTimeByHost() == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BMS_ERROR;
+			break;
+		}
+		feidao_can_fill_aging_ack(&value0, &value1);
 		break;
 
 	default:

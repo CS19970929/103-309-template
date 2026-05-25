@@ -44,6 +44,9 @@ RTC_SLEEP_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.c"
 RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
+CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
+FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
+FACTORY_AGING_H = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.h"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
 FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
@@ -61,6 +64,7 @@ CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
 COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.md"
 COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
+BMS_CAN_AGING_SOC_DOC = ROOT / "docs" / "CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md"
 BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
 BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
 BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
@@ -68,6 +72,8 @@ COMM_TOOL_KEIL_DOC = ROOT / "docs" / "COMM_TOOL_F103RET6_KEIL_PORT_2026-05-23.md
 COMM_TOOL_UART_SELECT_DOC = ROOT / "docs" / "COMM_TOOL_UART_SELECT_2026-05-25.md"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
+CAN_BMS_HOST = ROOT / "tools" / "can_bms_host.py"
+CAN_BMS_HOST_START = ROOT / "tools" / "start_can_bms_host.ps1"
 COMM_TOOL_UART_SELECT_SCRIPT = ROOT / "tools" / "set_comm_tool_uart.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
 COMM_TOOL_BSP_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "bsp"
@@ -997,6 +1003,96 @@ def check_can_rtc_service_runtime(reporter):
         reporter.fail("CAN runtime should use queued TX, automatic bus-off recovery, and keep RTC service diagnostics")
 
 
+def check_can_aging_soc_service(reporter):
+    required_files = [
+        CAN_HDX_C,
+        CAN_FEIDAO_FRAMES_C,
+        FACTORY_AGING_C,
+        FACTORY_AGING_H,
+        FLASH_H,
+        CAN_BMS_HOST,
+        CAN_BMS_HOST_START,
+        BMS_CAN_SERVICE_DOC,
+        BMS_CAN_AGING_SOC_DOC,
+    ]
+    if any(not path.exists() for path in required_files):
+        missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
+        reporter.fail("CAN aging/SOC service files missing: {0}".format(",".join(missing)))
+        return
+
+    can_c = read_text(CAN_HDX_C)
+    frames_c = read_text(CAN_FEIDAO_FRAMES_C)
+    aging_c = read_text(FACTORY_AGING_C)
+    aging_h = read_text(FACTORY_AGING_H)
+    flash_h = read_text(FLASH_H)
+    host_py = read_text(CAN_BMS_HOST)
+    host_ps1 = read_text(CAN_BMS_HOST_START)
+    service_doc = read_text(BMS_CAN_SERVICE_DOC)
+    aging_doc = read_text(BMS_CAN_AGING_SOC_DOC)
+
+    if (
+        "FEIDAO_CAN_APP_CMD_AGING_START" in can_c
+        and "FEIDAO_CAN_APP_CMD_AGING_STOP" in can_c
+        and "FEIDAO_CAN_APP_CMD_AGING_RESET_TIME" in can_c
+        and "FactoryAging_StartByHost" in can_c
+        and "FactoryAging_StopByHost" in can_c
+        and "FactoryAging_ResetTimeByHost" in can_c
+        and "FEIDAO_CAN_APP_AGING_GUARD" in can_c
+    ):
+        reporter.ok("CAN App service exposes separate guarded aging start/stop/reset commands")
+    else:
+        reporter.fail("CAN App service should expose separate guarded aging start/stop/reset commands")
+
+    if (
+        "FactoryAging_GetState" in frames_c
+        and "FactoryAging_GetRemainingSeconds" in frames_c
+        and "CanFeidao_PutU16Be(data, 3U" in frames_c
+        and "FLASH_FACTORY_AGING_STATE_STOPPED" in flash_h
+        and "FactoryAging_StartByHost" in aging_h
+        and "FactoryAging_StopByHost" in aging_h
+        and "FactoryAging_ResetTimeByHost" in aging_h
+        and "FACTORY_AGING_PUBLIC_STATE_RUNNING" in aging_h
+        and "FACTORY_AGING_STATE_STOPPED" in aging_c
+    ):
+        reporter.ok("factory aging module reports remaining time and keeps stopped state persistent")
+    else:
+        reporter.fail("factory aging module should report remaining time and persist stopped state")
+
+    if (
+        "APP_SET_ONCE_SOC_ADDR = 0x1005" in host_py
+        and "app-write-soc" in host_py
+        and "cmd_app_write_soc" in host_py
+        and "app-aging-start" in host_py
+        and "app-aging-stop" in host_py
+        and "app-aging-reset-time" in host_py
+        and "app-write-soc" in host_ps1
+        and "ConfirmWriteSoc" in host_ps1
+        and "ConfirmAgingStart" in host_ps1
+        and "ConfirmAgingStop" in host_ps1
+        and "ConfirmAgingResetTime" in host_ps1
+    ):
+        reporter.ok("CAN host exposes SOC write as a common standalone feature and aging actions separately")
+    else:
+        reporter.fail("CAN host should expose app-write-soc and separate aging action modes")
+
+    if (
+        "0x1005" in service_doc
+        and "app-write-soc" in service_doc
+        and "0x07 AGING_START" in service_doc
+        and "0x08 AGING_STOP" in service_doc
+        and "0x09 AGING_RESET_TIME" in service_doc
+        and "老化剩余分钟" in service_doc
+        and "app-write-soc" in aging_doc
+        and "app-aging-start" in aging_doc
+        and "app-aging-stop" in aging_doc
+        and "app-aging-reset-time" in aging_doc
+        and "0x14F80208" in aging_doc
+    ):
+        reporter.ok("CAN aging/SOC documentation records standalone host functions and broadcast layout")
+    else:
+        reporter.fail("CAN aging/SOC docs should record app-write-soc, aging commands, and ch8 remaining minutes")
+
+
 def check_rtc_stop_sleep_contract(reporter):
     required_files = [RTC_C, RTC_SLEEP_C, CONF_C, RTC_SLEEP_OPT_DOC]
     if any(not path.exists() for path in required_files):
@@ -1439,6 +1535,7 @@ def main(argv):
     check_low_power_cleanup(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
+    check_can_aging_soc_service(reporter)
     check_rtc_stop_sleep_contract(reporter)
     check_app_architecture(reporter)
     check_runtime_docs(reporter)

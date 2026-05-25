@@ -29,6 +29,16 @@ CAN_APP_MAGIC = bytes([0xA5, 0x5A])
 CAN_APP_ACK_MAGIC = bytes([0x5A, 0xA5])
 CAN_APP_CMD_GET_STATUS = 0x01
 CAN_APP_CMD_ENTER_IAP = 0x02
+CAN_APP_CMD_WRITE_PREP = 0x04
+CAN_APP_CMD_WRITE_COMMIT = 0x05
+CAN_APP_CMD_AGING_START = 0x07
+CAN_APP_CMD_AGING_STOP = 0x08
+CAN_APP_CMD_AGING_RESET_TIME = 0x09
+CAN_APP_AGING_GUARD = 0xA9
+CAN_APP_AGING_ACTION_START = 0x51
+CAN_APP_AGING_ACTION_STOP = 0x50
+CAN_APP_AGING_ACTION_RESET_TIME = 0x5A
+APP_SET_ONCE_SOC_ADDR = 0x1005
 
 CMD_HELLO = 0x01
 CMD_START = 0x02
@@ -65,6 +75,21 @@ def be_i32(data: bytes, offset: int) -> int:
 
 def signed_i8(value: int) -> int:
     return value - 256 if value & 0x80 else value
+
+
+def aging_state_name(value: int) -> str:
+    return {
+        0: "停止",
+        1: "运行",
+        2: "完成",
+    }.get(value, f"未知({value})")
+
+
+def format_remaining_minutes(minutes: int) -> str:
+    hours, mins = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{mins:02d}min"
+    return f"{mins}min"
 
 
 def require_python_can():
@@ -138,7 +163,13 @@ def decode_feidao_broadcast(arbitration_id: int, data: bytes) -> Optional[str]:
         )
     if ch == 8 and len(data) >= 8:
         factory_cap = be_u16(data, 0)
-        return f"出厂容量raw={factory_cap} 日期=20{data[5]:02d}-{data[6]:02d}-{data[7]:02d}"
+        aging_state = data[2]
+        aging_remaining_min = be_u16(data, 3)
+        return (
+            f"出厂容量raw={factory_cap} "
+            f"老化={aging_state_name(aging_state)} 剩余={format_remaining_minutes(aging_remaining_min)} "
+            f"日期=20{data[5]:02d}-{data[6]:02d}-{data[7]:02d}"
+        )
 
     return f"广播通道={ch} 原始={format_bytes(data)}"
 
@@ -375,6 +406,76 @@ def cmd_app_enter_iap(args: argparse.Namespace) -> int:
     return 0
 
 
+def send_app_write_word(args: argparse.Namespace, addr: int, value: int) -> bytes:
+    prep = build_app_command(
+        CAN_APP_CMD_WRITE_PREP,
+        (addr >> 8) & 0xFF,
+        addr & 0xFF,
+        (value >> 8) & 0xFF,
+    )
+    send_app_command(args, CAN_APP_CMD_WRITE_PREP, prep)
+    commit = build_app_command(
+        CAN_APP_CMD_WRITE_COMMIT,
+        (addr >> 8) & 0xFF,
+        addr & 0xFF,
+        value & 0xFF,
+    )
+    return send_app_command(args, CAN_APP_CMD_WRITE_COMMIT, commit)
+
+
+def cmd_app_write_soc(args: argparse.Namespace) -> int:
+    if not args.confirm_write_soc:
+        raise SystemExit("写 SOC 是常用但有副作用的功能，请显式添加 --confirm-write-soc 或 PowerShell -ConfirmWriteSoc")
+    if args.soc < 0 or args.soc > 100:
+        raise SystemExit("--soc 必须在 0..100 范围内")
+
+    data = send_app_write_word(args, APP_SET_ONCE_SOC_ADDR, args.soc)
+    validate_app_ack(data)
+    print(f"已通过 CAN App 常用功能写 SOC: {args.soc}% (寄存器 0x{APP_SET_ONCE_SOC_ADDR:04X})")
+    return 0
+
+
+def send_app_aging_command(args: argparse.Namespace, cmd: int, action: int, title: str) -> int:
+    payload = build_app_command(cmd, CAN_APP_AGING_GUARD, action, args.can_address)
+    data = send_app_command(args, cmd, payload)
+    _cmd, _status, state, remaining_hours = validate_app_ack(data)
+    print(f"{title}: 老化状态={aging_state_name(state)} 剩余约={remaining_hours}h")
+    return 0
+
+
+def cmd_app_aging_start(args: argparse.Namespace) -> int:
+    if not args.confirm_aging_start:
+        raise SystemExit("开启老化模式会切换 MOS 状态，请显式添加 --confirm-aging-start 或 PowerShell -ConfirmAgingStart")
+    return send_app_aging_command(
+        args,
+        CAN_APP_CMD_AGING_START,
+        CAN_APP_AGING_ACTION_START,
+        "已开启老化模式",
+    )
+
+
+def cmd_app_aging_stop(args: argparse.Namespace) -> int:
+    if not args.confirm_aging_stop:
+        raise SystemExit("关闭老化模式会持久化停止状态，请显式添加 --confirm-aging-stop 或 PowerShell -ConfirmAgingStop")
+    return send_app_aging_command(
+        args,
+        CAN_APP_CMD_AGING_STOP,
+        CAN_APP_AGING_ACTION_STOP,
+        "已关闭老化模式",
+    )
+
+
+def cmd_app_aging_reset_time(args: argparse.Namespace) -> int:
+    if not args.confirm_aging_reset_time:
+        raise SystemExit("重置老化时间会清零已累计时间，请显式添加 --confirm-aging-reset-time 或 PowerShell -ConfirmAgingResetTime")
+    return send_app_aging_command(
+        args,
+        CAN_APP_CMD_AGING_RESET_TIME,
+        CAN_APP_AGING_ACTION_RESET_TIME,
+        "已重置老化模式时间",
+    )
+
+
 def cmd_upgrade_dry_run(args: argparse.Namespace) -> int:
     bin_path = Path(args.bin).resolve()
     image = load_image(bin_path, args.app_address)
@@ -474,6 +575,31 @@ def build_parser() -> argparse.ArgumentParser:
     add_app_args(p_app_iap)
     p_app_iap.add_argument("--confirm-enter-iap", action="store_true", help="确认让 App 复位进入 IAP")
     p_app_iap.set_defaults(func=cmd_app_enter_iap)
+
+    p_app_write_soc = sub.add_parser("app-write-soc", help="常用功能：通过 CAN App 单独写入一次 SOC")
+    add_can_args(p_app_write_soc)
+    add_app_args(p_app_write_soc)
+    p_app_write_soc.add_argument("--soc", type=int, required=True, help="目标 SOC 百分比，范围 0..100")
+    p_app_write_soc.add_argument("--confirm-write-soc", action="store_true", help="确认写入一次 SOC")
+    p_app_write_soc.set_defaults(func=cmd_app_write_soc)
+
+    p_aging_start = sub.add_parser("app-aging-start", help="单独开启老化模式")
+    add_can_args(p_aging_start)
+    add_app_args(p_aging_start)
+    p_aging_start.add_argument("--confirm-aging-start", action="store_true", help="确认开启老化模式")
+    p_aging_start.set_defaults(func=cmd_app_aging_start)
+
+    p_aging_stop = sub.add_parser("app-aging-stop", help="单独关闭老化模式")
+    add_can_args(p_aging_stop)
+    add_app_args(p_aging_stop)
+    p_aging_stop.add_argument("--confirm-aging-stop", action="store_true", help="确认关闭老化模式")
+    p_aging_stop.set_defaults(func=cmd_app_aging_stop)
+
+    p_aging_reset = sub.add_parser("app-aging-reset-time", help="单独重置老化模式累计时间")
+    add_can_args(p_aging_reset)
+    add_app_args(p_aging_reset)
+    p_aging_reset.add_argument("--confirm-aging-reset-time", action="store_true", help="确认清零老化累计时间")
+    p_aging_reset.set_defaults(func=cmd_app_aging_reset_time)
 
     p_dry = sub.add_parser("upgrade-dry-run", help="检查 App bin 并生成 CAN-IAP 分包计划")
     add_upgrade_args(p_dry)

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("detect", "listen", "app-read-status", "app-enter-iap", "upgrade-dry-run", "upgrade")]
+    [ValidateSet("detect", "listen", "app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time", "upgrade-dry-run", "upgrade")]
     [string]$Mode = "detect",
     [string]$Interface = "pcan",
     [string]$Channel = "PCAN_USBBUS1",
@@ -8,10 +8,15 @@ param(
     [string]$Bin = "",
     [int]$NodeId = 1,
     [int]$CanAddress = 0,
+    [int]$Soc = -1,
     [string]$ConfirmAppAddress = "",
     [string]$PythonVersion = "3.9",
     [switch]$WaitAck,
-    [switch]$ConfirmEnterIap
+    [switch]$ConfirmEnterIap,
+    [switch]$ConfirmWriteSoc,
+    [switch]$ConfirmAgingStart,
+    [switch]$ConfirmAgingStop,
+    [switch]$ConfirmAgingResetTime
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,7 +31,9 @@ try {
         $Mode
     )
 
-    if ($Mode -eq "listen" -or $Mode -eq "upgrade" -or $Mode -eq "app-read-status" -or $Mode -eq "app-enter-iap") {
+    $AppModes = @("app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time")
+
+    if ($Mode -eq "listen" -or $Mode -eq "upgrade" -or ($AppModes -contains $Mode)) {
         $CommonArgs += @(
             "--interface", $Interface,
             "--channel", $Channel,
@@ -38,13 +45,41 @@ try {
         $CommonArgs += @("--duration", [string]$Duration)
     }
 
-    if ($Mode -eq "app-read-status" -or $Mode -eq "app-enter-iap") {
+    if ($AppModes -contains $Mode) {
         $CommonArgs += @("--can-address", [string]$CanAddress)
     }
 
     if ($Mode -eq "app-enter-iap") {
         if ($ConfirmEnterIap) {
             $CommonArgs += "--confirm-enter-iap"
+        }
+    }
+
+    if ($Mode -eq "app-write-soc") {
+        if ($Soc -lt 0 -or $Soc -gt 100) {
+            throw "Mode=app-write-soc 需要 -Soc 0..100"
+        }
+        $CommonArgs += @("--soc", [string]$Soc)
+        if ($ConfirmWriteSoc) {
+            $CommonArgs += "--confirm-write-soc"
+        }
+    }
+
+    if ($Mode -eq "app-aging-start") {
+        if ($ConfirmAgingStart) {
+            $CommonArgs += "--confirm-aging-start"
+        }
+    }
+
+    if ($Mode -eq "app-aging-stop") {
+        if ($ConfirmAgingStop) {
+            $CommonArgs += "--confirm-aging-stop"
+        }
+    }
+
+    if ($Mode -eq "app-aging-reset-time") {
+        if ($ConfirmAgingResetTime) {
+            $CommonArgs += "--confirm-aging-reset-time"
         }
     }
 
