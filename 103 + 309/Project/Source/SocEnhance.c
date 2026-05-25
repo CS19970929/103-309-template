@@ -1517,11 +1517,11 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 
 static UINT8 soc_display_target(void)
 {
-	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
+	if (SystemFeature_IsSocZero())
 	{
 		return 0U;
 	}
-	if (System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
+	if (SystemFeature_IsSocFixed())
 	{
 		return 60U;
 	}
@@ -1536,8 +1536,8 @@ static void soc_publish(UINT8 force_display)
 	UINT32 cycles = s_soc.cycle_x100 / 100U;
 
 	if (force_display || !s_soc.display_ready ||
-		System_OnOFF_Func.bits.b1OnOFF_SOC_Zero ||
-		System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
+		SystemFeature_IsSocZero() ||
+		SystemFeature_IsSocFixed())
 	{
 		s_soc.display_soc = target;
 		s_soc.display_ready = 1U;
@@ -1597,7 +1597,7 @@ static void soc_handle_command(void)
 	switch (SOC_Enhance_Element.u16_RefreshData_Flag)
 	{
 	case 1:
-		if (!System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed)
+		if (!SystemFeature_IsSocFixed())
 		{
 			save = soc_apply_rest_ocv(SOC_REST_OCV_SECONDS, soc_direction());
 			if (save)
@@ -1611,7 +1611,7 @@ static void soc_handle_command(void)
 		}
 		break;
 	case 2:
-		if (!System_OnOFF_Func.bits.b1OnOFF_SOC_Zero)
+		if (!SystemFeature_IsSocZero())
 		{
 			s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
 			s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;

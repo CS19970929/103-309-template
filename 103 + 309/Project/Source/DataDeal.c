@@ -875,10 +875,10 @@ static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
     switch (num)
     {
     case 0:
-        SystemStatus.bits.b1Status_AFE1 = is_ok;
+        SystemRuntime_SetAfeStatus(0U, is_ok);
         break;
     case 1:
-        SystemStatus.bits.b1Status_AFE2 = is_ok;
+        SystemRuntime_SetAfeStatus(1U, is_ok);
         break;
     default:
         break;

@@ -214,14 +214,20 @@ union System_OnOFF_Function {				//TODO
 
 
 extern volatile struct SYSTEM_ERROR System_ErrFlag;
-extern volatile union System_Function_StartUp System_Func_StartUp;
-extern volatile union System_OnOFF_Function System_OnOFF_Func_StartUpRec;
-
-extern volatile union System_OnOFF_Function System_OnOFF_Func;
-extern volatile union System_Status SystemStatus;
 
 void InitSystemMonitorData_EEPROM(void);
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
+void SystemRuntime_MarkBootReady(void);
+void SystemRuntime_SetProjectVersion(UINT8 project_version);
+void SystemRuntime_SetAfeStatus(UINT8 afe_index, UINT8 is_ok);
+void SystemRuntime_SetMosStatus(UINT8 charge_on, UINT8 discharge_on);
+UINT8 SystemRuntime_IsChargeMosOpen(void);
+UINT8 SystemRuntime_IsDischargeMosOpen(void);
+UINT32 SystemRuntime_GetStatusSnapshot(void);
+UINT32 SystemFeature_GetMask(void);
+void SystemFeature_SetById(UINT16 function_id, UINT8 enable);
+UINT8 SystemFeature_IsSocFixed(void);
+UINT8 SystemFeature_IsSocZero(void);
 
 #endif	/* SYSTEM_MONITOR_H */
 

@@ -767,6 +767,8 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
+	UINT32 status_snapshot;
+	UINT32 feature_mask;
 
 	for (j = 0; j < 63; j++)
 	{ // 0xD000_63
@@ -794,27 +796,29 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
+	status_snapshot = SystemRuntime_GetStatusSnapshot();
+	feature_mask = SystemFeature_GetMask();
 	switch (OPEN)
 	{
 	case 0:
-		u16SciTemp = ((~((UINT16)(SystemStatus.all & 0x0000FFFF))) & 0x00FE) | (((UINT16)(SystemStatus.all & 0x0000FFFF)) & 0xFF01);
+		u16SciTemp = ((~((UINT16)(status_snapshot & 0x0000FFFF))) & 0x00FE) | (((UINT16)(status_snapshot & 0x0000FFFF)) & 0xFF01);
 		break;
 	case 1:
-		u16SciTemp = (UINT16)(SystemStatus.all & 0x0000FFFF);
+		u16SciTemp = (UINT16)(status_snapshot & 0x0000FFFF);
 		break;
 	default:
-		u16SciTemp = (UINT16)(SystemStatus.all & 0x0000FFFF);
+		u16SciTemp = (UINT16)(status_snapshot & 0x0000FFFF);
 		break;
 	}
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	u16SciTemp = (UINT16)(SystemStatus.all >> 16);
+	u16SciTemp = (UINT16)(status_snapshot >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	u16SciTemp = (UINT16)(System_OnOFF_Func.all & 0x0000FFFF);
+	u16SciTemp = (UINT16)(feature_mask & 0x0000FFFF);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	u16SciTemp = (UINT16)(System_OnOFF_Func.all >> 16);
+	u16SciTemp = (UINT16)(feature_mask >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 8U);
@@ -2175,10 +2179,10 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 		}
 
-		System_OnOFF_Func.all |= ((UINT32)1 << (u16SciRegData - 1));
+		SystemFeature_SetById(u16SciRegData, 1U);
 		if (u16SciRegData == 0x0B)
 		{
-			// System_OnOFF_Func.bits.b1OnOFF_SOC_Zero
+			// SOC zero overlay defaults to off and is not persisted.
 			// 默认为0，不需要保存
 		}
 		else
@@ -2198,7 +2202,7 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
-		System_OnOFF_Func.all &= ~((UINT32)1 << (u16SciRegData - 1)); // 功能途中关闭不需要初始化验证
+		SystemFeature_SetById(u16SciRegData, 0U);
 	}
 	else
 	{

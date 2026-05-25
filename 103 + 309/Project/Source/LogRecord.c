@@ -4,7 +4,7 @@
 
 UINT8 BMS_LOG_POINT = 0;
 UINT8 BMS_LOG_RECORD[EVENT_RECORD_LENGTH][2];
-LOG_RECORD_FLAG LogRecord_Flag;
+static LOG_RECORD_FLAG s_log_record_flag;
 UINT8 gu8_Reset_EventRecord = 0;
 UINT32 su32_Interval_S_Tcnt = 0;
 static UINT32 s_u32_LogRecord_UptimeSeconds = 0;
@@ -63,6 +63,16 @@ static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 	return 1;
 }
 
+void LogRecord_RequestStartup(void)
+{
+	s_log_record_flag.bits.Log_StartUp = 1U;
+}
+
+void LogRecord_RequestSleep(void)
+{
+	s_log_record_flag.bits.Log_Sleep = 1U;
+}
+
 UINT8 LogTime_Map(UINT32 *Time_S_Cnt)
 {
 	UINT8 result = 0;
@@ -117,18 +127,18 @@ void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 
 	if (BMS_START_UP == event)
 	{
-		if (LogRecord_Flag.bits.Log_StartUp)
+		if (s_log_record_flag.bits.Log_StartUp)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
-			LogRecord_Flag.bits.Log_StartUp = 0;
+			s_log_record_flag.bits.Log_StartUp = 0U;
 		}
 	}
 	else if (BMS_SLEEP == event)
 	{
-		if (LogRecord_Flag.bits.Log_Sleep)
+		if (s_log_record_flag.bits.Log_Sleep)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
-			LogRecord_Flag.bits.Log_Sleep = 0;
+			s_log_record_flag.bits.Log_Sleep = 0U;
 			LowPower_ClearToSleepFlag();
 		}
 	}
@@ -177,7 +187,7 @@ void App_LogRecord(void)
 	++su32_Interval_S_Tcnt;
 	++s_u32_LogRecord_UptimeSeconds;
 
-	LogEvent_Record(LogRecord_Flag.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
+	LogEvent_Record(s_log_record_flag.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
 
 	LogEvent_Record(g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp, VCELL_OVP, &su32_Interval_S_Tcnt);
 	LogEvent_Record(g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp, VBUS_OVP, &su32_Interval_S_Tcnt);

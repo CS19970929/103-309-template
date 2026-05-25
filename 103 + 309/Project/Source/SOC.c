@@ -211,10 +211,6 @@ void App_SOC(void)
 	if (s_stSocTestMode.u8Enabled)
 	{
 		SOC_PublishReportData();
-		if (SOC_Enhance_Element.u16_SOC_InitOver)
-		{
-			System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
-		}
 		return;
 	}
 #endif
@@ -238,10 +234,6 @@ void App_SOC(void)
 		SOC_PublishReportData();
 	}
 
-	if (SOC_Enhance_Element.u16_SOC_InitOver)
-	{
-		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0;
-	}
 }
 
 UINT8 SOC_TestMode_RunSample(UINT8 enable, UINT16 vcell_max, UINT16 vcell_min,

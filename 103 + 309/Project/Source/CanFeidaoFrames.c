@@ -175,8 +175,8 @@ static UINT8 CanFeidao_SendStatus5000ms(void)
 	uint16_t cap_now;
 	uint16_t cap_design;
 
-	work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_DSG << 0);
-	work_status |= (UINT8)(SystemStatus.bits.b1Status_MOS_CHG << 1);
+	work_status |= (UINT8)(SystemRuntime_IsDischargeMosOpen() << 0);
+	work_status |= (UINT8)(SystemRuntime_IsChargeMosOpen() << 1);
 
 	if (g_stCellInfoReport.u16Ichg)
 	{

@@ -67,10 +67,10 @@ typedef struct
     uint8_t indicator_mask;
     uint8_t test_single_segment_enable;
     uint8_t test_single_segment_id;
-    uint32_t frame_mask;
-    uint8_t scan_route;
-    uint8_t scan_timer_initialized;
-    uint8_t scan_timer_enabled;
+    volatile uint32_t frame_mask;
+    volatile uint8_t scan_route;
+    volatile uint8_t scan_timer_initialized;
+    volatile uint8_t scan_timer_enabled;
     uint16_t soc_display_10ms;
     uint8_t startup_display_armed;
     uint32_t key_hold_10ms;
@@ -141,7 +141,7 @@ static const uint8_t s_ledbar_digit_map[10] =
         LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
-static LedBarRuntime s_ledbar_runtime =
+static LedBarRuntime s_ledbar =
 {
     0u,
     0u,
@@ -151,37 +151,19 @@ static LedBarRuntime s_ledbar_runtime =
 };
 
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
-LedBarRuntime * const g_dbg_ledbar_runtime = &s_ledbar_runtime;
+LedBarRuntime * const g_dbg_ledbar_runtime = &s_ledbar;
 #endif
-
-#define s_ledbar_initialized (s_ledbar_runtime.initialized)
-#define s_ledbar_sleep (s_ledbar_runtime.sleep)
-#define s_ledbar_blank (s_ledbar_runtime.blank)
-#define s_ledbar_number (s_ledbar_runtime.number)
-#define s_ledbar_indicator_mask (s_ledbar_runtime.indicator_mask)
-#define s_ledbar_test_single_segment_enable (s_ledbar_runtime.test_single_segment_enable)
-#define s_ledbar_test_single_segment_id (s_ledbar_runtime.test_single_segment_id)
-#define s_ledbar_frame_mask (s_ledbar_runtime.frame_mask)
-#define s_ledbar_scan_route (s_ledbar_runtime.scan_route)
-#define s_ledbar_scan_timer_initialized (s_ledbar_runtime.scan_timer_initialized)
-#define s_ledbar_scan_timer_enabled (s_ledbar_runtime.scan_timer_enabled)
-#define s_ledbar_soc_display_10ms (s_ledbar_runtime.soc_display_10ms)
-#define s_ledbar_startup_display_armed (s_ledbar_runtime.startup_display_armed)
-#define s_ledbar_key_hold_10ms (s_ledbar_runtime.key_hold_10ms)
-#define s_ledbar_key_press_start_10ms (s_ledbar_runtime.key_press_start_10ms)
-#define s_ledbar_key_last_pressed (s_ledbar_runtime.key_last_pressed)
-#define s_ledbar_key_long_handled (s_ledbar_runtime.key_long_handled)
-#define s_ledbar_mcu_wk_filter_initialized (s_ledbar_runtime.mcu_wk_filter_initialized)
-#define s_ledbar_mcu_wk_active (s_ledbar_runtime.mcu_wk_active)
-#define s_ledbar_mcu_wk_on_10ms (s_ledbar_runtime.mcu_wk_on_10ms)
-#define s_ledbar_mcu_wk_off_10ms (s_ledbar_runtime.mcu_wk_off_10ms)
-#define s_ledbar_charge_filter_initialized (s_ledbar_runtime.charge_filter_initialized)
-#define s_ledbar_charge_active (s_ledbar_runtime.charge_active)
-#define s_ledbar_charge_on_100ms (s_ledbar_runtime.charge_on_100ms)
-#define s_ledbar_charge_off_100ms (s_ledbar_runtime.charge_off_100ms)
 
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);
+
+static void LedBar_EnsureInit(void)
+{
+    if (s_ledbar.initialized == 0u)
+    {
+        LedBar_Init();
+    }
+}
 
 static void LedBar_EnableBackupAccess(void)
 {
@@ -215,7 +197,7 @@ static uint8_t LedBar_ReadChargeRaw(void)
 
 static uint8_t LedBar_IsDischargeMosOpen(void)
 {
-    return (uint8_t)(SystemStatus.bits.b1Status_MOS_DSG != 0u);
+    return (uint8_t)(SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET != 0u);
 }
 
 static uint8_t LedBar_IsSwitchPressed(void)
@@ -365,7 +347,7 @@ static void LedBar_ScanTimerInit(void)
     TIM_TimeBaseInitTypeDef timer_init;
     NVIC_InitTypeDef nvic_init;
 
-    if (s_ledbar_scan_timer_initialized != 0u)
+    if (s_ledbar.scan_timer_initialized != 0u)
     {
         return;
     }
@@ -388,7 +370,7 @@ static void LedBar_ScanTimerInit(void)
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
 
-    s_ledbar_scan_timer_initialized = 1u;
+    s_ledbar.scan_timer_initialized = 1u;
 }
 
 static void LedBar_StartScanTimer(void)
@@ -398,18 +380,18 @@ static void LedBar_StartScanTimer(void)
 
     TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
     NVIC_EnableIRQ(TIM4_IRQn);
-    if (s_ledbar_scan_timer_enabled == 0u)
+    if (s_ledbar.scan_timer_enabled == 0u)
     {
         TIM_SetCounter(TIM4, 0U);
         TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
         TIM_Cmd(TIM4, ENABLE);
-        s_ledbar_scan_timer_enabled = 1u;
+        s_ledbar.scan_timer_enabled = 1u;
     }
 }
 
 static void LedBar_StopScanTimer(void)
 {
-    if (s_ledbar_scan_timer_initialized != 0u)
+    if (s_ledbar.scan_timer_initialized != 0u)
     {
         TIM_Cmd(TIM4, DISABLE);
         TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
@@ -417,9 +399,9 @@ static void LedBar_StopScanTimer(void)
         NVIC_DisableIRQ(TIM4_IRQn);
         NVIC_ClearPendingIRQ(TIM4_IRQn);
         RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
-        s_ledbar_scan_timer_initialized = 0u;
+        s_ledbar.scan_timer_initialized = 0u;
     }
-    s_ledbar_scan_timer_enabled = 0u;
+    s_ledbar.scan_timer_enabled = 0u;
 }
 
 static void LedBar_AddDigitRoutes(uint32_t *target_mask,
@@ -492,27 +474,27 @@ static uint8_t LedBar_NextRouteFromMask(uint32_t mask, uint8_t start_route)
 
 static uint32_t LedBar_BuildCurrentFrameMask(void)
 {
-    if ((s_ledbar_blank != 0u) || (s_ledbar_sleep != 0u))
+    if ((s_ledbar.blank != 0u) || (s_ledbar.sleep != 0u))
     {
         return 0u;
     }
 
-    if (s_ledbar_test_single_segment_enable != 0u)
+    if (s_ledbar.test_single_segment_enable != 0u)
     {
-        return (1UL << (uint8_t)(s_ledbar_test_single_segment_id %
+        return (1UL << (uint8_t)(s_ledbar.test_single_segment_id %
                                  (uint8_t)LEDBAR_ROUTE_COUNT));
     }
 
-    return LedBar_BuildTargetMask(s_ledbar_number,
-                                  (uint8_t)(s_ledbar_indicator_mask &
+    return LedBar_BuildTargetMask(s_ledbar.number,
+                                  (uint8_t)(s_ledbar.indicator_mask &
                                             (LEDBAR_ICON_CHARGE_MASK |
                                              LEDBAR_ICON_PERCENT_MASK)));
 }
 
 static void LedBar_ApplyFrameMask(uint32_t frame_mask)
 {
-    uint8_t same_frame = (s_ledbar_frame_mask == frame_mask) ? 1u : 0u;
-    uint8_t scan_was_enabled = s_ledbar_scan_timer_enabled;
+    uint8_t same_frame = (s_ledbar.frame_mask == frame_mask) ? 1u : 0u;
+    uint8_t scan_was_enabled = s_ledbar.scan_timer_enabled;
     uint8_t route_id;
 
     if ((same_frame != 0u) &&
@@ -529,14 +511,13 @@ static void LedBar_ApplyFrameMask(uint32_t frame_mask)
         TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
     }
 
-    s_ledbar_frame_mask = frame_mask;
-    s_ledbar_scan_route = 0u;
+    s_ledbar.frame_mask = frame_mask;
+    s_ledbar.scan_route = 0u;
 
-    if (s_ledbar_frame_mask == 0u)
+    if (s_ledbar.frame_mask == 0u)
     {
         LedBar_StopScanTimer();
         LedBar_OutputOff();
-        LedBar_GpioPrepareForStop();
         return;
     }
 
@@ -545,9 +526,9 @@ static void LedBar_ApplyFrameMask(uint32_t frame_mask)
         LedBar_StartScanTimer();
     }
 
-    route_id = LedBar_NextRouteFromMask(s_ledbar_frame_mask, 0u);
+    route_id = LedBar_NextRouteFromMask(s_ledbar.frame_mask, 0u);
     LedBar_OutputRoute(route_id);
-    s_ledbar_scan_route = LedBar_NextRouteFromMask(s_ledbar_frame_mask,
+    s_ledbar.scan_route = LedBar_NextRouteFromMask(s_ledbar.frame_mask,
                                                    (uint8_t)(route_id + 1u));
 
     if (scan_was_enabled != 0u)
@@ -564,25 +545,25 @@ static void LedBar_RefreshOutput(void)
 
 static void LedBar_RequestSocDisplayWindow(void)
 {
-    if (s_ledbar_soc_display_10ms < LEDBAR_SOC_DISPLAY_10MS)
+    if (s_ledbar.soc_display_10ms < LEDBAR_SOC_DISPLAY_10MS)
     {
-        s_ledbar_soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
+        s_ledbar.soc_display_10ms = LEDBAR_SOC_DISPLAY_10MS;
     }
 }
 
 static void LedBar_RequestStartupDisplayWindow(void)
 {
-    if (s_ledbar_soc_display_10ms < LEDBAR_STARTUP_DISPLAY_10MS)
+    if (s_ledbar.soc_display_10ms < LEDBAR_STARTUP_DISPLAY_10MS)
     {
-        s_ledbar_soc_display_10ms = LEDBAR_STARTUP_DISPLAY_10MS;
+        s_ledbar.soc_display_10ms = LEDBAR_STARTUP_DISPLAY_10MS;
     }
 }
 
 static void LedBar_ServiceStartupDisplayWindow(void)
 {
-    if (s_ledbar_startup_display_armed == 0u)
+    if (s_ledbar.startup_display_armed == 0u)
     {
-        s_ledbar_startup_display_armed = 1u;
+        s_ledbar.startup_display_armed = 1u;
         LedBar_RequestStartupDisplayWindow();
     }
 }
@@ -636,13 +617,13 @@ static void LedBar_ServiceMcuWakeFilter(void)
 {
     uint8_t raw_active = LedBar_ReadMcuWakeRaw();
 
-    if (s_ledbar_mcu_wk_filter_initialized == 0u)
+    if (s_ledbar.mcu_wk_filter_initialized == 0u)
     {
-        s_ledbar_mcu_wk_filter_initialized = 1u;
+        s_ledbar.mcu_wk_filter_initialized = 1u;
         LedBar_PrimeBinaryFilter(raw_active,
-                                 &s_ledbar_mcu_wk_active,
-                                 &s_ledbar_mcu_wk_on_10ms,
-                                 &s_ledbar_mcu_wk_off_10ms,
+                                 &s_ledbar.mcu_wk_active,
+                                 &s_ledbar.mcu_wk_on_10ms,
+                                 &s_ledbar.mcu_wk_off_10ms,
                                  LEDBAR_MCU_WK_ON_FILTER_10MS,
                                  LEDBAR_MCU_WK_OFF_FILTER_10MS);
         return;
@@ -654,27 +635,27 @@ static void LedBar_ServiceMcuWakeFilter(void)
     }
 
     LedBar_UpdateBinaryFilter(raw_active,
-                              &s_ledbar_mcu_wk_active,
-                              &s_ledbar_mcu_wk_on_10ms,
-                              &s_ledbar_mcu_wk_off_10ms,
+                              &s_ledbar.mcu_wk_active,
+                              &s_ledbar.mcu_wk_on_10ms,
+                              &s_ledbar.mcu_wk_off_10ms,
                               LEDBAR_MCU_WK_ON_FILTER_10MS,
                               LEDBAR_MCU_WK_OFF_FILTER_10MS);
 }
 
 static uint8_t LedBar_IsMcuWakeActive(void)
 {
-    return s_ledbar_mcu_wk_active;
+    return s_ledbar.mcu_wk_active;
 }
 
 static void LedBar_ServiceChargeFilter(uint8_t raw_active)
 {
-    if (s_ledbar_charge_filter_initialized == 0u)
+    if (s_ledbar.charge_filter_initialized == 0u)
     {
-        s_ledbar_charge_filter_initialized = 1u;
+        s_ledbar.charge_filter_initialized = 1u;
         LedBar_PrimeBinaryFilter(0u,
-                                 &s_ledbar_charge_active,
-                                 &s_ledbar_charge_on_100ms,
-                                 &s_ledbar_charge_off_100ms,
+                                 &s_ledbar.charge_active,
+                                 &s_ledbar.charge_on_100ms,
+                                 &s_ledbar.charge_off_100ms,
                                  LEDBAR_CHARGE_ON_FILTER_100MS,
                                  LEDBAR_CHARGE_OFF_FILTER_100MS);
     }
@@ -685,9 +666,9 @@ static void LedBar_ServiceChargeFilter(uint8_t raw_active)
     }
 
     LedBar_UpdateBinaryFilter(raw_active,
-                              &s_ledbar_charge_active,
-                              &s_ledbar_charge_on_100ms,
-                              &s_ledbar_charge_off_100ms,
+                              &s_ledbar.charge_active,
+                              &s_ledbar.charge_on_100ms,
+                              &s_ledbar.charge_off_100ms,
                               LEDBAR_CHARGE_ON_FILTER_100MS,
                               LEDBAR_CHARGE_OFF_FILTER_100MS);
 }
@@ -703,7 +684,7 @@ static uint8_t LedBar_IsDisplayRequested(void)
     {
         return 1u;
     }
-    if ((s_ledbar_soc_display_10ms != 0u) || (s_ledbar_key_last_pressed != 0u))
+    if ((s_ledbar.soc_display_10ms != 0u) || (s_ledbar.key_last_pressed != 0u))
     {
         return 1u;
     }
@@ -716,13 +697,13 @@ static void LedBar_ServiceSwitch(void)
     uint8_t pressed = LedBar_IsSwitchPressed();
     uint32_t now_10ms = SysTime_Get10msTickCount();
 
-    if ((pressed != 0u) && (s_ledbar_key_last_pressed == 0u))
+    if ((pressed != 0u) && (s_ledbar.key_last_pressed == 0u))
     {
         LedBar_RequestSocDisplayWindow();
-        s_ledbar_key_press_start_10ms = now_10ms;
-        s_ledbar_key_hold_10ms = 0u;
+        s_ledbar.key_press_start_10ms = now_10ms;
+        s_ledbar.key_hold_10ms = 0u;
     }
-    s_ledbar_key_last_pressed = pressed;
+    s_ledbar.key_last_pressed = pressed;
 
     if (pressed == 0u )
     {
@@ -730,13 +711,13 @@ static void LedBar_ServiceSwitch(void)
     }
     if (pressed != 0u && key_release_wakeup)
     {
-        s_ledbar_key_hold_10ms = now_10ms - s_ledbar_key_press_start_10ms;
+        s_ledbar.key_hold_10ms = now_10ms - s_ledbar.key_press_start_10ms;
 
 #ifdef _DI_SWITCH_longKEY_ONOFF
-        if ((s_ledbar_key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
-            (s_ledbar_key_long_handled == 0u))
+        if ((s_ledbar.key_hold_10ms >= LEDBAR_KEY_LONG_PRESS_10MS) &&
+            (s_ledbar.key_long_handled == 0u))
         {
-            s_ledbar_key_long_handled = 1u;
+            s_ledbar.key_long_handled = 1u;
 #if LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST
             {
                 BitAction dc_state = (GPIO_ReadOutputDataBit(GPIO_DC_EN, PIN_DC_EN) == Bit_RESET) ? Bit_SET : Bit_RESET;
@@ -754,16 +735,16 @@ static void LedBar_ServiceSwitch(void)
     }
     else
     {
-        s_ledbar_key_hold_10ms = 0u;
-        s_ledbar_key_press_start_10ms = now_10ms;
-        s_ledbar_key_long_handled = 0u;
+        s_ledbar.key_hold_10ms = 0u;
+        s_ledbar.key_press_start_10ms = now_10ms;
+        s_ledbar.key_long_handled = 0u;
         if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
         {
             return;
         }
-        if (s_ledbar_soc_display_10ms != 0u)
+        if (s_ledbar.soc_display_10ms != 0u)
         {
-            s_ledbar_soc_display_10ms--;
+            s_ledbar.soc_display_10ms--;
         }
     }
 }
@@ -787,59 +768,53 @@ static uint8_t LedBar_IsFaultActive(void)
 
 void LedBar_Init(void)
 {
-    if (s_ledbar_initialized != 0u)
+    if (s_ledbar.initialized != 0u)
     {
         return;
     }
 
-    s_ledbar_sleep = 0u;
-    s_ledbar_blank = 1u;
-    s_ledbar_number = 0u;
-    s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
-    s_ledbar_test_single_segment_enable = 0u;
-    s_ledbar_test_single_segment_id = 0u;
-    s_ledbar_frame_mask = 0u;
-    s_ledbar_scan_route = 0u;
-    s_ledbar_scan_timer_initialized = 0u;
-    s_ledbar_scan_timer_enabled = 0u;
-    s_ledbar_soc_display_10ms = 0u;
-    s_ledbar_startup_display_armed = 0u;
-    s_ledbar_key_hold_10ms = 0u;
-    s_ledbar_key_press_start_10ms = 0u;
-    s_ledbar_key_last_pressed = 0u;
-    s_ledbar_key_long_handled = 0u;
-    s_ledbar_mcu_wk_filter_initialized = 0u;
-    s_ledbar_mcu_wk_active = 0u;
-    s_ledbar_mcu_wk_on_10ms = 0u;
-    s_ledbar_mcu_wk_off_10ms = 0u;
-    s_ledbar_charge_filter_initialized = 0u;
-    s_ledbar_charge_active = 0u;
-    s_ledbar_charge_on_100ms = 0u;
-    s_ledbar_charge_off_100ms = 0u;
+    s_ledbar.sleep = 0u;
+    s_ledbar.blank = 1u;
+    s_ledbar.number = 0u;
+    s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
+    s_ledbar.test_single_segment_enable = 0u;
+    s_ledbar.test_single_segment_id = 0u;
+    s_ledbar.frame_mask = 0u;
+    s_ledbar.scan_route = 0u;
+    s_ledbar.scan_timer_initialized = 0u;
+    s_ledbar.scan_timer_enabled = 0u;
+    s_ledbar.soc_display_10ms = 0u;
+    s_ledbar.startup_display_armed = 0u;
+    s_ledbar.key_hold_10ms = 0u;
+    s_ledbar.key_press_start_10ms = 0u;
+    s_ledbar.key_last_pressed = 0u;
+    s_ledbar.key_long_handled = 0u;
+    s_ledbar.mcu_wk_filter_initialized = 0u;
+    s_ledbar.mcu_wk_active = 0u;
+    s_ledbar.mcu_wk_on_10ms = 0u;
+    s_ledbar.mcu_wk_off_10ms = 0u;
+    s_ledbar.charge_filter_initialized = 0u;
+    s_ledbar.charge_active = 0u;
+    s_ledbar.charge_on_100ms = 0u;
+    s_ledbar.charge_off_100ms = 0u;
 
     LedBar_GpioInitForDisplay();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
-    s_ledbar_initialized = 1u;
+    s_ledbar.initialized = 1u;
 }
 
 void LedBar_Clear(void)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
-    s_ledbar_blank = 1u;
+    s_ledbar.blank = 1u;
     LedBar_RefreshOutput();
 }
 
 void LedBar_SetSleep(uint8_t enable)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
 #if !LEDBAR_SLEEP_ENABLE
     enable = 0u;
@@ -847,13 +822,17 @@ void LedBar_SetSleep(uint8_t enable)
     enable = (enable != 0u) ? 1u : 0u;
 #endif
 
-    if (s_ledbar_sleep == enable)
+    if (s_ledbar.sleep == enable)
     {
         return;
     }
 
-    s_ledbar_sleep = enable;
+    s_ledbar.sleep = enable;
     LedBar_RefreshOutput();
+    if (enable != 0u)
+    {
+        LedBar_GpioPrepareForStop();
+    }
 }
 
 void LedBar_Wakeup(void)
@@ -863,44 +842,38 @@ void LedBar_Wakeup(void)
 
 void LedBar_EnableSingleSegmentTest(uint8_t enable)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     enable = (enable != 0u) ? 1u : 0u;
-    if (s_ledbar_test_single_segment_enable == enable)
+    if (s_ledbar.test_single_segment_enable == enable)
     {
         return;
     }
 
-    s_ledbar_test_single_segment_enable = enable;
+    s_ledbar.test_single_segment_enable = enable;
     if (enable == 0u)
     {
-        s_ledbar_test_single_segment_id = 0u;
+        s_ledbar.test_single_segment_id = 0u;
     }
-    s_ledbar_blank = 0u;
+    s_ledbar.blank = 0u;
     LedBar_RefreshOutput();
 }
 
 void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     if (segment_id > LEDBAR_SINGLE_SEG_ID_MAX)
     {
         segment_id = LEDBAR_SINGLE_SEG_ID_MAX;
     }
-    if (s_ledbar_test_single_segment_id == segment_id)
+    if (s_ledbar.test_single_segment_id == segment_id)
     {
         return;
     }
 
-    s_ledbar_test_single_segment_id = segment_id;
-    if (s_ledbar_test_single_segment_enable != 0u)
+    s_ledbar.test_single_segment_id = segment_id;
+    if (s_ledbar.test_single_segment_enable != 0u)
     {
         LedBar_RefreshOutput();
     }
@@ -908,39 +881,33 @@ void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
 
 void LedBar_SetNumber(uint8_t value)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     value = LedBar_LimitSoc(value);
-    if ((s_ledbar_number == value) && (s_ledbar_blank == 0u))
+    if ((s_ledbar.number == value) && (s_ledbar.blank == 0u))
     {
         return;
     }
 
-    s_ledbar_number = value;
-    s_ledbar_blank = 0u;
+    s_ledbar.number = value;
+    s_ledbar.blank = 0u;
     LedBar_RefreshOutput();
 }
 
 void LedBar_SetIndicators(uint8_t indicator_mask)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     indicator_mask = (uint8_t)(indicator_mask &
                                (LEDBAR_ICON_CHARGE_MASK |
                                 LEDBAR_ICON_PERCENT_MASK));
-    if ((s_ledbar_indicator_mask == indicator_mask) && (s_ledbar_blank == 0u))
+    if ((s_ledbar.indicator_mask == indicator_mask) && (s_ledbar.blank == 0u))
     {
         return;
     }
 
-    s_ledbar_indicator_mask = indicator_mask;
-    s_ledbar_blank = 0u;
+    s_ledbar.indicator_mask = indicator_mask;
+    s_ledbar.blank = 0u;
     LedBar_RefreshOutput();
 }
 
@@ -948,21 +915,18 @@ void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable)
 {
     uint8_t new_mask;
 
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     indicator_mask = (uint8_t)(indicator_mask &
                                (LEDBAR_ICON_CHARGE_MASK |
                                 LEDBAR_ICON_PERCENT_MASK));
     if (enable != 0u)
     {
-        new_mask = (uint8_t)(s_ledbar_indicator_mask | indicator_mask);
+        new_mask = (uint8_t)(s_ledbar.indicator_mask | indicator_mask);
     }
     else
     {
-        new_mask = (uint8_t)(s_ledbar_indicator_mask & (uint8_t)(~indicator_mask));
+        new_mask = (uint8_t)(s_ledbar.indicator_mask & (uint8_t)(~indicator_mask));
     }
 
     LedBar_SetIndicators(new_mask);
@@ -1004,29 +968,24 @@ uint8_t LedBar_LoadSleepSoc(void)
 
 void LedBar_ShowSleepSocPreview(void)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
-    s_ledbar_sleep = 0u;
-    s_ledbar_blank = 0u;
-    s_ledbar_number = LedBar_LoadSleepSoc();
-    s_ledbar_indicator_mask = LEDBAR_ICON_PERCENT_MASK;
+    s_ledbar.sleep = 0u;
+    s_ledbar.blank = 0u;
+    s_ledbar.number = LedBar_LoadSleepSoc();
+    s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_RefreshOutput();
 }
 
 void LedBar_PrepareForStop(void)
 {
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
 #if LEDBAR_SLEEP_ENABLE
-    s_ledbar_sleep = 1u;
-    s_ledbar_blank = 1u;
+    s_ledbar.sleep = 1u;
+    s_ledbar.blank = 1u;
     LedBar_RefreshOutput();
+    LedBar_GpioPrepareForStop();
 #else
     LedBar_Clear();
 #endif
@@ -1034,21 +993,21 @@ void LedBar_PrepareForStop(void)
 
 void LedBar_Scan1ms(void)
 {
-    if (s_ledbar_initialized == 0u)
+    if (s_ledbar.initialized == 0u)
     {
-        LedBar_Init();
-    }
-
-    if ((s_ledbar_sleep != 0u) || (s_ledbar_frame_mask == 0u))
-    {
-        LedBar_OutputOff();
-        s_ledbar_scan_route = 0u;
         return;
     }
 
-    LedBar_OutputRoute(s_ledbar_scan_route);
-    s_ledbar_scan_route = LedBar_NextRouteFromMask(s_ledbar_frame_mask,
-                                                   (uint8_t)(s_ledbar_scan_route + 1u));
+    if ((s_ledbar.sleep != 0u) || (s_ledbar.frame_mask == 0u))
+    {
+        LedBar_OutputOff();
+        s_ledbar.scan_route = 0u;
+        return;
+    }
+
+    LedBar_OutputRoute(s_ledbar.scan_route);
+    s_ledbar.scan_route = LedBar_NextRouteFromMask(s_ledbar.frame_mask,
+                                                   (uint8_t)(s_ledbar.scan_route + 1u));
 }
 
 void TIM4_IRQHandler(void)
@@ -1069,22 +1028,13 @@ void APP_LedBar(void)
     uint8_t charge_raw_active;
     uint8_t discharge_mos_open;
 
-    if (s_ledbar_initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_EnsureInit();
 
     LedBar_ServiceMcuWakeFilter();
     LedBar_ServiceSwitch();
     mcu_wk_active = LedBar_IsMcuWakeActive();
 
 #if LEDBAR_SLEEP_ENABLE
-    if (SystemStatus.bits.b1StartUpBMS != 0u)
-    {
-        LedBar_SetSleep(1u);
-        return;
-    }
-
     if ((LowPower_IsToSleepPending() != 0u) && (mcu_wk_active == 0u))
     {
         LedBar_SaveSleepSoc();
@@ -1095,9 +1045,9 @@ void APP_LedBar(void)
 
     LedBar_ServiceStartupDisplayWindow();
 
-    if (s_ledbar_test_single_segment_enable != 0u)
+    if (s_ledbar.test_single_segment_enable != 0u)
     {
-        if (s_ledbar_sleep != 0u)
+        if (s_ledbar.sleep != 0u)
         {
             LedBar_Wakeup();
         }
@@ -1107,22 +1057,22 @@ void APP_LedBar(void)
     display_requested = LedBar_IsDisplayRequested();
     if (display_requested == 0u)
     {
-        if ((s_ledbar_blank == 0u) ||
-            (s_ledbar_frame_mask != 0u) ||
-            (s_ledbar_scan_timer_enabled != 0u))
+        if ((s_ledbar.blank == 0u) ||
+            (s_ledbar.frame_mask != 0u) ||
+            (s_ledbar.scan_timer_enabled != 0u))
         {
             LedBar_Clear();
         }
         return;
     }
 
-    if (s_ledbar_sleep != 0u)
+    if (s_ledbar.sleep != 0u)
     {
         LedBar_Wakeup();
     }
 
     if ((g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u) &&
-        (s_ledbar_blank == 0u))
+        (s_ledbar.blank == 0u))
     {
         return;
     }
@@ -1137,7 +1087,7 @@ void APP_LedBar(void)
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
     }
 
-    if (s_ledbar_charge_active != 0u)
+    if (s_ledbar.charge_active != 0u)
     {
     }
     else if (g_stCellInfoReport.u16IDischg != 0u)
@@ -1151,13 +1101,13 @@ void APP_LedBar(void)
     {
     }
 
-    if ((s_ledbar_number != display_value) ||
-        (s_ledbar_indicator_mask != indicator_mask) ||
-        (s_ledbar_blank != 0u))
+    if ((s_ledbar.number != display_value) ||
+        (s_ledbar.indicator_mask != indicator_mask) ||
+        (s_ledbar.blank != 0u))
     {
-        s_ledbar_number = display_value;
-        s_ledbar_indicator_mask = indicator_mask;
-        s_ledbar_blank = 0u;
+        s_ledbar.number = display_value;
+        s_ledbar.indicator_mask = indicator_mask;
+        s_ledbar.blank = 0u;
         LedBar_RefreshOutput();
     }
 }

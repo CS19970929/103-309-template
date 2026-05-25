@@ -57,11 +57,9 @@ static void AppInit_InitRuntimeState(void)
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	SystemStatus.bits.b1StartUpBMS = 0;
-	SystemStatus.bits.b1Status_ToSleep = 1;
-
-	SystemStatus.bits.b4Status_ProjectVer = 1;
-	LogRecord_Flag.bits.Log_StartUp = 1;
+	SystemRuntime_MarkBootReady();
+	SystemRuntime_SetProjectVersion(1U);
+	LogRecord_RequestStartup();
 }
 
 void AppInit_Boot(void)

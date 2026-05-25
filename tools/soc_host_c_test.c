@@ -19,10 +19,6 @@
 struct OTHER_ELEMENT OtherElement;
 struct stCell_Info g_stCellInfoReport;
 volatile struct SYSTEM_ERROR System_ErrFlag;
-volatile union System_Function_StartUp System_Func_StartUp;
-volatile union System_OnOFF_Function System_OnOFF_Func_StartUpRec;
-volatile union System_OnOFF_Function System_OnOFF_Func;
-volatile union System_Status SystemStatus;
 
 UINT8 SeriesNum = 10U;
 UINT16 g_u16TypeCOutCurrent_mA;
@@ -35,6 +31,7 @@ UINT32 g_u32AfeCurrentSampleSeq;
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
 static unsigned s_failures;
+static volatile union System_OnOFF_Function s_host_feature;
 
 #define CHECK_TRUE(expr) host_check((expr) ? 1 : 0, #expr, __LINE__)
 #define CHECK_EQ_U32(actual, expected) host_check_u32((UINT32)(actual), (UINT32)(expected), #actual, __LINE__)
@@ -65,6 +62,41 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	(void)errorCode;
 	return 0U;
+}
+
+UINT32 SystemFeature_GetMask(void)
+{
+	return s_host_feature.all;
+}
+
+void SystemFeature_SetById(UINT16 function_id, UINT8 enable)
+{
+	UINT32 mask;
+
+	if ((function_id == 0U) || (function_id > 32U))
+	{
+		return;
+	}
+
+	mask = ((UINT32)1U << (function_id - 1U));
+	if (enable != 0U)
+	{
+		s_host_feature.all |= mask;
+	}
+	else
+	{
+		s_host_feature.all &= ~mask;
+	}
+}
+
+UINT8 SystemFeature_IsSocFixed(void)
+{
+	return s_host_feature.bits.b1OnOFF_SOC_Fixed;
+}
+
+UINT8 SystemFeature_IsSocZero(void)
+{
+	return s_host_feature.bits.b1OnOFF_SOC_Zero;
 }
 
 static void host_check(int ok, const char *expr, int line)
@@ -153,13 +185,10 @@ static void host_reset_state(void)
 {
 	memset(&g_stCellInfoReport, 0, sizeof(g_stCellInfoReport));
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
-	memset((void *)&System_Func_StartUp, 0, sizeof(System_Func_StartUp));
-	memset((void *)&System_OnOFF_Func_StartUpRec, 0, sizeof(System_OnOFF_Func_StartUpRec));
-	memset((void *)&System_OnOFF_Func, 0, sizeof(System_OnOFF_Func));
-	memset((void *)&SystemStatus, 0, sizeof(SystemStatus));
 	memset(&SOC_Enhance_Element, 0, sizeof(SOC_Enhance_Element));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
+	memset((void *)&s_host_feature, 0, sizeof(s_host_feature));
 	g_u16TypeCOutCurrent_mA = 0U;
 	g_u16TypeCOutCurrent_A10 = 0U;
 	g_u16TypeCBatEquivCurrent_mA = 0U;
@@ -530,13 +559,13 @@ static void test_display_overlays_do_not_modify_internal_soc(void)
 	host_set_snapshot(72U, 0U);
 	host_init_with_voltage(3835U, 3835U);
 
-	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 1U;
+	SystemFeature_SetById(5U, 1U);
 	host_tick(3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 60U);
 	CHECK_EQ_U32(host_internal_soc(), 72U);
 
-	System_OnOFF_Func.bits.b1OnOFF_SOC_Fixed = 0U;
-	System_OnOFF_Func.bits.b1OnOFF_SOC_Zero = 1U;
+	SystemFeature_SetById(5U, 0U);
+	SystemFeature_SetById(0x0BU, 1U);
 	host_tick(3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 72U);
