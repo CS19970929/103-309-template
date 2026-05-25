@@ -15,6 +15,18 @@ CAN 上位机需要把写 SOC 作为常用功能单独展示，同时支持老�
 
 ## 上位机入口
 
+用户版 exe 固定生成在：
+
+```text
+dist\BMS_CAN_Host_UI.exe
+```
+
+只要更新 CAN 用户上位机代码，必须重新编译 exe：
+
+```powershell
+.\tools\build_can_bms_host_ui_exe.ps1 -Clean
+```
+
 写 SOC 是单独常用功能，不要求用户输入寄存器地址：
 
 ```powershell
