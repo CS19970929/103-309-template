@@ -616,6 +616,7 @@ static void LedBar_UpdateBinaryFilter(uint8_t raw_active,
 static void LedBar_ServiceMcuWakeFilter(void)
 {
     uint8_t raw_active = LedBar_ReadMcuWakeRaw();
+    uint8_t was_active;
 
     if (s_ledbar.mcu_wk_filter_initialized == 0u)
     {
@@ -634,12 +635,17 @@ static void LedBar_ServiceMcuWakeFilter(void)
         return;
     }
 
+    was_active = s_ledbar.mcu_wk_active;
     LedBar_UpdateBinaryFilter(raw_active,
                               &s_ledbar.mcu_wk_active,
                               &s_ledbar.mcu_wk_on_10ms,
                               &s_ledbar.mcu_wk_off_10ms,
                               LEDBAR_MCU_WK_ON_FILTER_10MS,
                               LEDBAR_MCU_WK_OFF_FILTER_10MS);
+    if ((was_active == 0u) && (s_ledbar.mcu_wk_active != 0u))
+    {
+        LedBar_RequestSocDisplayWindow();
+    }
 }
 
 static uint8_t LedBar_IsMcuWakeActive(void)
@@ -680,10 +686,6 @@ static uint8_t LedBar_IsDisplayRequested(void)
 #elif !LEDBAR_SLEEP_ENABLE
     return 1u;
 #else
-    if (LedBar_IsMcuWakeActive() != 0u)
-    {
-        return 1u;
-    }
     if ((s_ledbar.soc_display_10ms != 0u) || (s_ledbar.key_last_pressed != 0u))
     {
         return 1u;

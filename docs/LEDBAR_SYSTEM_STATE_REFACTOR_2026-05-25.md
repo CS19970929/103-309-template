@@ -90,4 +90,4 @@ py -3.9 tools\run_soc_host_c_test.py
 
 - 下一轮继续把 `System_Monitor.h` 中旧 union 类型重命名为协议快照类型，降低旧变量名的误导。
 - 重新整理 `tools/run_soc_host_c_test.py` 的电芯体系配置，使 host C 测试与 `PROJECT_CFG_BAT_CHEMISTRY` 保持一致。
-- 上板观察短按显示窗口结束、MCU_WK 保持显示、STOP 前后预览三种场景，重点确认数码管不再出现整屏短闪。
+- 上板观察短按显示窗口结束、MCU_WK 上升沿触发后到时熄屏、STOP 前后预览三种场景，重点确认数码管不再出现整屏短闪。
