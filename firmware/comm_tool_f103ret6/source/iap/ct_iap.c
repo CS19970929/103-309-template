@@ -23,6 +23,18 @@
 #define IAP_CAN_RX_TIMEOUT_MS            5000u
 #define IAP_RESET_DELAY_MS               20u
 
+#if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
+#define IAP_SERIAL_USART                 USART1
+#define IAP_SERIAL_IRQn                  USART1_IRQn
+#define IAP_SERIAL_IRQHandler            USART1_IRQHandler
+#elif (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART3)
+#define IAP_SERIAL_USART                 USART3
+#define IAP_SERIAL_IRQn                  USART3_IRQn
+#define IAP_SERIAL_IRQHandler            USART3_IRQHandler
+#else
+#error "Unsupported CT_COMM_UART_PORT"
+#endif
+
 #define LEGACY_SLAVE_ADDR                0x01u
 #define LEGACY_BROADCAST_ADDR            0x00u
 #define LEGACY_CMD_READ_REGS             0x03u
@@ -215,11 +227,11 @@ static void jump_to_app(void)
     jump = (pFunction)jump_addr;
     __disable_irq();
     SysTick->CTRL = 0u;
-    USART_Cmd(USART3, DISABLE);
+    USART_Cmd(IAP_SERIAL_USART, DISABLE);
     CAN_DeInit(CAN1);
-    NVIC_DisableIRQ(USART3_IRQn);
+    NVIC_DisableIRQ(IAP_SERIAL_IRQn);
     NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
-    NVIC_ClearPendingIRQ(USART3_IRQn);
+    NVIC_ClearPendingIRQ(IAP_SERIAL_IRQn);
     NVIC_ClearPendingIRQ(USB_LP_CAN1_RX0_IRQn);
     SCB->VTOR = CT_SELF_APP_BASE;
     __set_CONTROL(0u);
@@ -501,7 +513,7 @@ static uint8_t serial_wait_flag(uint16_t flag)
 {
     uint32_t wait = IAP_SERIAL_TX_TIMEOUT_LOOPS;
 
-    while ((wait > 0u) && (USART_GetFlagStatus(USART3, flag) == RESET))
+    while ((wait > 0u) && (USART_GetFlagStatus(IAP_SERIAL_USART, flag) == RESET))
     {
         wait--;
     }
@@ -518,7 +530,7 @@ static uint8_t serial_write(const uint8_t *data, uint16_t length)
         {
             return 0u;
         }
-        USART_SendData(USART3, data[i]);
+        USART_SendData(IAP_SERIAL_USART, data[i]);
     }
     if (serial_wait_flag(USART_FLAG_TC) == 0u)
     {
@@ -1106,6 +1118,24 @@ static void iap_uart_init(void)
     GPIO_InitTypeDef gpio;
     USART_InitTypeDef usart;
 
+#if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
+                           RCC_APB2Periph_GPIOB |
+                           RCC_APB2Periph_USART1,
+                           ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE);
+
+    GPIO_StructInit(&gpio);
+    gpio.GPIO_Pin = GPIO_Pin_6;
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio);
+
+    gpio.GPIO_Pin = GPIO_Pin_7;
+    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOB, &gpio);
+
+#elif (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART3)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOC, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
     GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
@@ -1119,6 +1149,7 @@ static void iap_uart_init(void)
     gpio.GPIO_Pin = GPIO_Pin_11;
     gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIOC, &gpio);
+#endif
 
     USART_StructInit(&usart);
     usart.USART_BaudRate = IAP_SERIAL_BAUD;
@@ -1127,8 +1158,8 @@ static void iap_uart_init(void)
     usart.USART_Parity = USART_Parity_No;
     usart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     usart.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-    USART_Init(USART3, &usart);
-    USART_Cmd(USART3, ENABLE);
+    USART_Init(IAP_SERIAL_USART, &usart);
+    USART_Cmd(IAP_SERIAL_USART, ENABLE);
 }
 
 static void iap_can_init(void)
@@ -1240,15 +1271,15 @@ void CtIap_Run(void)
     iap_init();
     while (1)
     {
-        while (USART_GetFlagStatus(USART3, USART_FLAG_RXNE) != RESET)
+        while (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_RXNE) != RESET)
         {
-            byte = (uint8_t)USART_ReceiveData(USART3);
+            byte = (uint8_t)USART_ReceiveData(IAP_SERIAL_USART);
             serial_feed(byte);
         }
-        if (USART_GetFlagStatus(USART3, USART_FLAG_ORE) != RESET)
+        if (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_ORE) != RESET)
         {
-            (void)USART3->SR;
-            (void)USART3->DR;
+            (void)IAP_SERIAL_USART->SR;
+            (void)IAP_SERIAL_USART->DR;
         }
         can_poll();
         iap_task_1ms();
@@ -1260,7 +1291,7 @@ void SysTick_Handler(void)
     s_tick_ms++;
 }
 
-void USART3_IRQHandler(void)
+void IAP_SERIAL_IRQHandler(void)
 {
 }
 

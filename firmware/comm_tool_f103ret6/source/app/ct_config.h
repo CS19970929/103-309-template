@@ -9,6 +9,13 @@
 #define CT_FW_VERSION_PATCH            0u
 #define CT_UART_MAX_PAYLOAD            512u
 #define CT_UART_DEFAULT_BAUD           115200u
+#define CT_COMM_UART_PORT_USART1       1u
+#define CT_COMM_UART_PORT_USART3       3u
+
+#ifndef CT_COMM_UART_PORT
+#define CT_COMM_UART_PORT              CT_COMM_UART_PORT_USART1
+#endif
+
 #define CT_CAN_DEFAULT_BITRATE         250000u
 #define CT_NODE_ID_DEFAULT             1u
 

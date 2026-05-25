@@ -119,3 +119,6 @@ comm tool IAP 同时支持旧 BMS 串口升级协议和当前 CAN-IAP 协议：
 另一台 comm tool 升级当前 comm tool 时，PC 先把 `COMM_TOOL_Release.bin` 以 `app_addr=0x08008000` 下载到主控 comm tool 缓存，然后设置 `app-can-addr=14`、`node-id=1`，执行 `enter-iap` 和 `upgrade`。目标 IAP 收到完整镜像并校验后才写入 App 首页向量，升级中断会停留在 IAP。
 
 旧串口上位机的数据块帧中，`0xFFFE` 每包最大 1024 字节，`byte_count` 字段可能为 0，真实数据长度使用寄存器数量字段表示。comm tool IAP 按这个旧行为解析，不要求改旧上位机。为了避免旧上位机每包发送后立刻清空接收缓存导致 ACK 被清掉，comm tool App 进入 IAP ACK 和 IAP 写块 ACK 都延迟 20ms 后发送；同时 IAP 对半帧接收增加 500ms 超时重同步，UART TX 等待增加超时，Flash 写入改为按页范围自动擦除。
+## 2026-05-25 串口选择补充
+
+COMM TOOL 串口不再在 App 或 IAP 里分散写死。当前统一由 `firmware/comm_tool_f103ret6/source/app/ct_config.h` 的 `CT_COMM_UART_PORT` 控制，默认 `CT_COMM_UART_PORT_USART1`，对应 USART1 重映射 `PB6/TX`、`PB7/RX`，波特率仍为 `115200 8N1`。后续需要切换回 USART3 时，使用 `.\tools\set_comm_tool_uart.ps1 -Port USART3`，不要手工只改 App 或只改 IAP。

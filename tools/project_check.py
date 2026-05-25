@@ -65,8 +65,10 @@ BMS_CAN_IAP_DOC = ROOT / "docs" / "BMS_CAN_IAP_PROTOCOL.md"
 BMS_CAN_IAP_RELIABILITY_DOC = ROOT / "docs" / "BMS_CAN_IAP_RELIABILITY_STATUS_2026-05-22.md"
 BMS_SERIAL_IAP_REFACTOR_DOC = ROOT / "docs" / "BMS_SERIAL_IAP_REFACTOR_2026-05-22.md"
 COMM_TOOL_KEIL_DOC = ROOT / "docs" / "COMM_TOOL_F103RET6_KEIL_PORT_2026-05-23.md"
+COMM_TOOL_UART_SELECT_DOC = ROOT / "docs" / "COMM_TOOL_UART_SELECT_2026-05-25.md"
 COMM_TOOL_HOST = ROOT / "tools" / "comm_tool_host.py"
 COMM_TOOL_HOST_START = ROOT / "tools" / "start_comm_tool_host.ps1"
+COMM_TOOL_UART_SELECT_SCRIPT = ROOT / "tools" / "set_comm_tool_uart.ps1"
 COMM_TOOL_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "app"
 COMM_TOOL_BSP_SOURCE = ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "bsp"
 COMM_TOOL_KEIL_PROJECT = ROOT / "firmware" / "comm_tool_f103ret6" / "keil" / "COMM_TOOL_F103RET6.uvprojx"
@@ -175,7 +177,6 @@ REMOVED_LEGACY_TOKENS = [
     "E2P_ADDR_E2POS_EVENT_POINT",
     "E2P_ADDR_SH367309_VALUE",
     "DataLoad_CellVolt_Test",
-    "test_Autocurrent_cycle",
     "gu8_DriverStartUpFlag",
     "aaaaaa1",
     "aaa11",
@@ -190,6 +191,9 @@ REMOVED_LEGACY_TOKENS = [
     "Sys_SleepOnExitMode",
     "TwiWrite_old",
     "TwiRead_old",
+]
+RETAINED_FACTORY_TEST_TOKENS = [
+    "test_Autocurrent_cycle",
 ]
 RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_",
@@ -583,6 +587,13 @@ def check_removed_legacy_modules(reporter):
         reporter.fail("source still references removed legacy modules: {0}".format("; ".join(stale_refs[:8])))
     else:
         reporter.ok("source has no removed legacy module references")
+
+    datadeal_text = read_text(DATADEAL_C) if DATADEAL_C.exists() else ""
+    missing_retained = [token for token in RETAINED_FACTORY_TEST_TOKENS if token not in datadeal_text]
+    if missing_retained:
+        reporter.fail("retained factory/test hooks are missing: {0}".format(",".join(missing_retained)))
+    else:
+        reporter.ok("retained factory/test hooks remain available")
 
     if HEAT_COOL_REMOVE_DOC.exists():
         doc = read_text(HEAT_COOL_REMOVE_DOC)
@@ -1190,10 +1201,12 @@ def check_comm_tool_can_iap_contract(reporter):
         BMS_CAN_IAP_DOC,
         BMS_CAN_IAP_RELIABILITY_DOC,
         COMM_TOOL_KEIL_DOC,
+        COMM_TOOL_UART_SELECT_DOC,
     ]
     source_files = [
         COMM_TOOL_HOST,
         COMM_TOOL_HOST_START,
+        COMM_TOOL_UART_SELECT_SCRIPT,
         COMM_TOOL_SOURCE / "ct_config.h",
         COMM_TOOL_SOURCE / "ct_protocol.c",
         COMM_TOOL_SOURCE / "ct_flash_store.c",
@@ -1222,14 +1235,17 @@ def check_comm_tool_can_iap_contract(reporter):
     iap_doc = read_text(BMS_CAN_IAP_DOC)
     iap_reliability_doc = read_text(BMS_CAN_IAP_RELIABILITY_DOC)
     keil_doc = read_text(COMM_TOOL_KEIL_DOC)
+    uart_select_doc = read_text(COMM_TOOL_UART_SELECT_DOC)
     host_py = read_text(COMM_TOOL_HOST)
     start_ps1 = read_text(COMM_TOOL_HOST_START)
+    uart_select_ps1 = read_text(COMM_TOOL_UART_SELECT_SCRIPT)
     config_h = read_text(COMM_TOOL_SOURCE / "ct_config.h")
     protocol_c = read_text(COMM_TOOL_SOURCE / "ct_protocol.c")
     flash_c = read_text(COMM_TOOL_SOURCE / "ct_flash_store.c")
     can_c = read_text(COMM_TOOL_SOURCE / "ct_can_gateway.c")
     upgrade_c = read_text(COMM_TOOL_SOURCE / "ct_upgrade_manager.c")
     app_c = read_text(COMM_TOOL_SOURCE / "ct_app.c")
+    iap_c = read_text(ROOT / "firmware" / "comm_tool_f103ret6" / "source" / "iap" / "ct_iap.c")
     board_c = read_text(COMM_TOOL_BSP_SOURCE / "board.c")
     board_uart_c = read_text(COMM_TOOL_BSP_SOURCE / "board_uart.c")
     board_can_c = read_text(COMM_TOOL_BSP_SOURCE / "board_can.c")
@@ -1297,6 +1313,10 @@ def check_comm_tool_can_iap_contract(reporter):
     if (
         "COMM_TOOL_F103RET6.uvprojx" in keil_doc
         and "COMM_TOOL_IAP.uvprojx" in keil_doc
+        and "CT_COMM_UART_PORT" in keil_doc
+        and "USART1" in keil_doc
+        and "PB6" in keil_doc
+        and "PB7" in keil_doc
         and "USART3" in keil_doc
         and "PC10" in keil_doc
         and "PC11" in keil_doc
@@ -1317,10 +1337,21 @@ def check_comm_tool_can_iap_contract(reporter):
         and "IROM(0x08000000,0x8000)" in comm_tool_iap_uvprojx
         and "ct_iap.c" in comm_tool_iap_uvprojx
         and "ct_iap_main.c" in comm_tool_iap_uvprojx
+        and "CT_COMM_UART_PORT              CT_COMM_UART_PORT_USART1" in config_h
+        and "CT_COMM_UART_PORT_USART3" in config_h
+        and "BOARD_UART_INSTANCE" in board_uart_c
+        and "BOARD_UART_IRQHandler" in board_uart_c
+        and "GPIO_Remap_USART1" in board_uart_c
         and "GPIO_PartialRemap_USART3" in board_uart_c
+        and "USART1_IRQHandler" in board_uart_c
         and "USART3" in board_uart_c
-        and "GPIO_Pin_10" in board_uart_c
-        and "GPIO_Pin_11" in board_uart_c
+        and "IAP_SERIAL_USART" in iap_c
+        and "IAP_SERIAL_IRQHandler" in iap_c
+        and "GPIO_Remap_USART1" in iap_c
+        and "GPIO_PartialRemap_USART3" in iap_c
+        and "-Port USART1" in uart_select_doc
+        and "-Port USART3" in uart_select_doc
+        and "ValidateSet('USART1', 'USART3')" in uart_select_ps1
         and "USB_LP_CAN1_RX0_IRQHandler" in board_can_c
         and "CAN_FilterScale_32bit" in board_can_c
         and "GPIO_Pin_11" in board_can_c
@@ -1331,9 +1362,9 @@ def check_comm_tool_can_iap_contract(reporter):
         and "BOARD_PWSV_STB_PIN" in board_c
         and "SysTick_Config" in board_c
     ):
-        reporter.ok("comm tool Keil/BSP contract records RET6 USART3, CAN, power, LED, and cache boundary")
+        reporter.ok("comm tool Keil/BSP contract records RET6 UART selection, CAN, power, LED, and cache boundary")
     else:
-        reporter.fail("comm tool Keil/BSP should fix RET6 App/IAP projects, USART3 PC10/PC11, CAN PA11/PA12, power pins, PB15 LED, and 0x08018000 cache boundary")
+        reporter.fail("comm tool Keil/BSP should fix RET6 App/IAP projects, UART selection, CAN PA11/PA12, power pins, PB15 LED, and 0x08018000 cache boundary")
 
     if (
         "FEIDAO_CAN_APP_CMD_GET_STATUS" in bms_can_c

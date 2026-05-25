@@ -1,5 +1,6 @@
 #include "board_uart.h"
 #include "ct_board_port.h"
+#include "ct_config.h"
 #include "stm32f10x_gpio.h"
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_usart.h"
@@ -11,6 +12,18 @@
 static volatile uint16_t s_rx_head;
 static volatile uint16_t s_rx_tail;
 static uint8_t s_rx_buf[BOARD_UART_RX_BUF_SIZE];
+
+#if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
+#define BOARD_UART_INSTANCE            USART1
+#define BOARD_UART_IRQn                USART1_IRQn
+#define BOARD_UART_IRQHandler          USART1_IRQHandler
+#elif (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART3)
+#define BOARD_UART_INSTANCE            USART3
+#define BOARD_UART_IRQn                USART3_IRQn
+#define BOARD_UART_IRQHandler          USART3_IRQHandler
+#else
+#error "Unsupported CT_COMM_UART_PORT"
+#endif
 
 static void rx_push(uint8_t byte)
 {
@@ -24,15 +37,30 @@ static void rx_push(uint8_t byte)
     }
 }
 
-void BoardUart_Init(uint32_t baudrate)
+static void board_uart_gpio_init(void)
 {
     GPIO_InitTypeDef gpio;
-    USART_InitTypeDef usart;
-    NVIC_InitTypeDef nvic;
 
+#if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
+                           RCC_APB2Periph_GPIOB |
+                           RCC_APB2Periph_USART1,
+                           ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE);
+
+    GPIO_StructInit(&gpio);
+    gpio.GPIO_Pin = GPIO_Pin_6;
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio);
+
+    gpio.GPIO_Pin = GPIO_Pin_7;
+    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOB, &gpio);
+
+#elif (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART3)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOC, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
-
     GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
 
     GPIO_StructInit(&gpio);
@@ -44,6 +72,18 @@ void BoardUart_Init(uint32_t baudrate)
     gpio.GPIO_Pin = GPIO_Pin_11;
     gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIOC, &gpio);
+#endif
+}
+
+void BoardUart_Init(uint32_t baudrate)
+{
+    USART_InitTypeDef usart;
+    NVIC_InitTypeDef nvic;
+
+    s_rx_head = 0u;
+    s_rx_tail = 0u;
+
+    board_uart_gpio_init();
 
     USART_StructInit(&usart);
     usart.USART_BaudRate = baudrate;
@@ -52,16 +92,16 @@ void BoardUart_Init(uint32_t baudrate)
     usart.USART_Parity = USART_Parity_No;
     usart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     usart.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-    USART_Init(USART3, &usart);
+    USART_Init(BOARD_UART_INSTANCE, &usart);
 
-    nvic.NVIC_IRQChannel = USART3_IRQn;
+    nvic.NVIC_IRQChannel = BOARD_UART_IRQn;
     nvic.NVIC_IRQChannelPreemptionPriority = 1u;
     nvic.NVIC_IRQChannelSubPriority = 0u;
     nvic.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic);
 
-    USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
-    USART_Cmd(USART3, ENABLE);
+    USART_ITConfig(BOARD_UART_INSTANCE, USART_IT_RXNE, ENABLE);
+    USART_Cmd(BOARD_UART_INSTANCE, ENABLE);
 }
 
 int BoardUart_ReadByte(uint8_t *byte)
@@ -89,7 +129,7 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
     for (i = 0u; i < length; ++i)
     {
         wait = BOARD_UART_TX_TIMEOUT_LOOPS;
-        while ((wait > 0u) && (USART_GetFlagStatus(USART3, USART_FLAG_TXE) == RESET))
+        while ((wait > 0u) && (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_TXE) == RESET))
         {
             wait--;
         }
@@ -97,10 +137,10 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
         {
             return 0;
         }
-        USART_SendData(USART3, data[i]);
+        USART_SendData(BOARD_UART_INSTANCE, data[i]);
     }
     wait = BOARD_UART_TX_TIMEOUT_LOOPS;
-    while ((wait > 0u) && (USART_GetFlagStatus(USART3, USART_FLAG_TC) == RESET))
+    while ((wait > 0u) && (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_TC) == RESET))
     {
         wait--;
     }
@@ -111,16 +151,16 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
     return 1;
 }
 
-void USART3_IRQHandler(void)
+void BOARD_UART_IRQHandler(void)
 {
-    if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
+    if (USART_GetITStatus(BOARD_UART_INSTANCE, USART_IT_RXNE) != RESET)
     {
-        rx_push((uint8_t)USART_ReceiveData(USART3));
-        USART_ClearITPendingBit(USART3, USART_IT_RXNE);
+        rx_push((uint8_t)USART_ReceiveData(BOARD_UART_INSTANCE));
+        USART_ClearITPendingBit(BOARD_UART_INSTANCE, USART_IT_RXNE);
     }
-    if (USART_GetFlagStatus(USART3, USART_FLAG_ORE) != RESET)
+    if (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_ORE) != RESET)
     {
-        (void)USART3->SR;
-        (void)USART3->DR;
+        (void)BOARD_UART_INSTANCE->SR;
+        (void)BOARD_UART_INSTANCE->DR;
     }
 }
