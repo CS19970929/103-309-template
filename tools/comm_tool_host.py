@@ -36,6 +36,7 @@ CMD_BMS_READ = 0x10
 CMD_BMS_WRITE = 0x11
 CMD_BMS_AGING_CTRL = 0x12
 CMD_BMS_AGING_STATUS = 0x13
+CMD_BMS_AGING_SET_HOURS = 0x14
 CMD_FW_BEGIN = 0x20
 CMD_FW_DATA = 0x21
 CMD_FW_END = 0x22
@@ -483,6 +484,26 @@ def cmd_bms_aging_status(args) -> int:
     return 0
 
 
+def cmd_bms_aging_set_hours(args) -> int:
+    if args.hours < 1 or args.hours > 168:
+        raise SystemExit("--hours 必须在 1..168 范围内")
+    payload = struct.pack("<H", args.hours)
+    with open_client(args) as client:
+        resp = client.command(CMD_BMS_AGING_SET_HOURS, payload, timeout=args.long_timeout)
+    if len(resp.payload) < 4:
+        raise RuntimeError("BMS_AGING_SET_HOURS 响应长度不足")
+    state = resp.payload[0]
+    remaining_hours = resp.payload[1]
+    applied_hours = struct.unpack_from("<H", resp.payload, 2)[0]
+    print(
+        "老化时长修改完成: "
+        f"duration={applied_hours}h "
+        f"state={aging_state_name(state)} "
+        f"remaining≈{remaining_hours}h"
+    )
+    return 0
+
+
 def cmd_enter_iap(args) -> int:
     if not args.confirm_enter_iap:
         raise SystemExit("进入 IAP 会让 BMS App 复位，请添加 -ConfirmEnterIap。")
@@ -698,6 +719,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_aging_status = sub.add_parser("bms-aging-status", help="读取 BMS 老化模式剩余时间广播")
     add_serial_args(p_aging_status)
     p_aging_status.set_defaults(func=cmd_bms_aging_status)
+
+    p_aging_set_hours = sub.add_parser("bms-aging-set-hours", help="常用功能：修改 BMS 老化时长，单位小时，并重置老化时间")
+    add_serial_args(p_aging_set_hours)
+    p_aging_set_hours.add_argument("--hours", type=int, required=True)
+    p_aging_set_hours.set_defaults(func=cmd_bms_aging_set_hours)
 
     p_enter = sub.add_parser("enter-iap", help="让 BMS App 进入 IAP")
     add_serial_args(p_enter)

@@ -58,6 +58,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 | `0x07 AGING_START` | `A9 51 can_addr` | `aging_state, remaining_hours` | 单独开启老化模式 |
 | `0x08 AGING_STOP` | `A9 50 can_addr` | `aging_state, remaining_hours` | 单独关闭老化模式，并持久化停止状态 |
 | `0x09 AGING_RESET_TIME` | `A9 5A can_addr` | `aging_state, remaining_hours` | 单独重置老化模式累计时间 |
+| `0x0A AGING_SET_HOURS` | `A9 hours can_addr` | `aging_state, remaining_hours` | 修改老化总时长，单位小时，范围 `1..168`；修改成功后自动重置累计老化时间 |
 
 ## 常用上位机功能
 
@@ -65,7 +66,8 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 - 写 SOC 底层复用 `WRITE_PREP/WRITE_COMMIT` 写寄存器 `0x1005 RS485_CMD_ADDR_SET_ONCE_SOC`，范围固定 `0..100`，不要求用户手动输入寄存器地址。
 - 老化模式三个动作必须在原 UI 里独立实现和展示：`开启老化模式`、`关闭老化模式`、`重置老化时间`，不能合并成一个带 action 参数的通用入口。
 - 原 UI 必须单独提供 `读取老化时间`，通过 comm tool 串口命令 `0x13 BMS_AGING_STATUS` 等待并解析 `0x14F80208` 周期广播，把 `ch=8` 的老化状态和剩余分钟显示给用户。
-- 老化控制命令使用 `A9 + action + can_addr` 防误触发；`can_addr` 必须等于板端 `CAN_ADRESS_STD_ID`。
+- 原 UI 必须单独提供 `修改老化时间`，用户输入单位为小时；底层通过 comm tool 串口命令 `0x14 BMS_AGING_SET_HOURS` 转成 CAN App `0x0A AGING_SET_HOURS`，板端持久化新时长并清零已累计时间。
+- 老化启停/重置命令使用 `A9 + action + can_addr` 防误触发；修改老化时长使用 `A9 + hours + can_addr`；`can_addr` 必须等于板端 `CAN_ADRESS_STD_ID`。
 - 原 UI 的实时监控界面最底部必须显示 BMS 序列号、硬件版本、软件版本。读取来源是现有 `BMS_READ` 读 `0xC002`，长度 48 个寄存器，数据布局为 32 字节序列号、32 字节硬件版本、32 字节软件版本。
 
 ## 周期广播补充

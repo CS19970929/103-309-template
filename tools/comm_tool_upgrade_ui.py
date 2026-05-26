@@ -27,6 +27,7 @@ from comm_tool_host import (
     CMD_BMS_WRITE,
     CMD_BMS_AGING_CTRL,
     CMD_BMS_AGING_STATUS,
+    CMD_BMS_AGING_SET_HOURS,
     CMD_CAN_DIAG,
     CMD_FW_BEGIN,
     CMD_FW_DATA,
@@ -717,6 +718,7 @@ class UpgradeUi(tk.Tk):
         self.bms_values_var = tk.StringVar(value="")
         self.bms_result_var = tk.StringVar(value="未读取")
         self.bms_soc_write_var = tk.StringVar(value="80")
+        self.bms_aging_hours_var = tk.StringVar(value="72")
         self.bms_aging_var = tk.StringVar(value="老化状态: 未读取")
         self.product_info_var = tk.StringVar(value=_format_product_info({}))
         self.bms_info_var = tk.StringVar(value="未读取")
@@ -744,6 +746,7 @@ class UpgradeUi(tk.Tk):
         self.active_bms_count = 2
         self.active_bms_words: list[int] = []
         self.active_soc_write = 80
+        self.active_aging_hours = 72
         self.active_aging_action = 0
         self.active_aging_name = ""
         self.param_values: dict[str, int] = {}
@@ -1123,8 +1126,11 @@ class UpgradeUi(tk.Tk):
         ttk.Button(common, text="关闭老化模式", command=self._aging_stop).grid(row=0, column=4, padx=(0, 8), pady=8)
         ttk.Button(common, text="重置老化时间", command=self._aging_reset_time).grid(row=0, column=5, padx=(0, 12), pady=8)
         ttk.Button(common, text="读取老化时间", command=self._read_aging_status).grid(row=0, column=6, padx=(0, 12), pady=8)
+        ttk.Label(common, text="老化时长(h)").grid(row=1, column=0, padx=(10, 6), pady=(0, 8))
+        ttk.Entry(common, textvariable=self.bms_aging_hours_var, width=8).grid(row=1, column=1, sticky="w", pady=(0, 8))
+        ttk.Button(common, text="修改老化时间", command=self._aging_set_hours).grid(row=1, column=2, padx=(8, 16), pady=(0, 8))
         ttk.Label(common, textvariable=self.bms_aging_var, foreground="#004b8d").grid(
-            row=0, column=7, columnspan=3, sticky="w", padx=(0, 10), pady=8
+            row=1, column=3, columnspan=7, sticky="w", padx=(0, 10), pady=(0, 8)
         )
 
         actions = ttk.Frame(tab)
@@ -2102,6 +2108,22 @@ class UpgradeUi(tk.Tk):
     def _read_aging_status(self) -> None:
         self._run_worker("读取老化时间", self._worker_read_aging_status)
 
+    def _aging_set_hours(self) -> None:
+        try:
+            hours = int(self.bms_aging_hours_var.get().strip(), 0)
+            if hours < 1 or hours > 168:
+                raise ValueError("老化时长必须是 1..168 小时")
+        except Exception as exc:
+            messagebox.showerror("老化时间参数错误", str(exc))
+            return
+        if not messagebox.askyesno(
+            "确认修改老化时间",
+            f"将老化总时长修改为 {hours} 小时，并重置已累计老化时间。\n\n确认继续？",
+        ):
+            return
+        self.active_aging_hours = hours
+        self._run_worker("修改老化时间", self._worker_aging_set_hours)
+
     def _aging_control(self, name: str, action: int) -> None:
         if not messagebox.askyesno("确认老化模式操作", f"确认{name}？"):
             return
@@ -2463,6 +2485,25 @@ class UpgradeUi(tk.Tk):
         state = resp.payload[0]
         remaining_hours = resp.payload[1]
         text = f"{name}: 状态={self._aging_state_name(state)} 剩余约={remaining_hours}h"
+        self._emit("aging_status", text)
+        self._emit("bms_result", text)
+        self._emit("log", text)
+        self._emit("progress", 100)
+
+    def _worker_aging_set_hours(self) -> None:
+        hours = self.active_aging_hours
+        with self._open_client() as client:
+            self._set_can_target(client)
+            resp = client.command(CMD_BMS_AGING_SET_HOURS, struct.pack("<H", hours), timeout=10.0)
+        if len(resp.payload) < 4:
+            raise RuntimeError("老化时间设置响应长度不足")
+        state = resp.payload[0]
+        remaining_hours = resp.payload[1]
+        applied_hours = struct.unpack_from("<H", resp.payload, 2)[0]
+        text = (
+            f"修改老化时间: 时长={applied_hours}h "
+            f"状态={self._aging_state_name(state)} 剩余约={remaining_hours}h"
+        )
         self._emit("aging_status", text)
         self._emit("bms_result", text)
         self._emit("log", text)

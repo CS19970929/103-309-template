@@ -1118,14 +1118,16 @@ def check_can_aging_soc_service(reporter):
         "FEIDAO_CAN_APP_CMD_AGING_START" in can_c
         and "FEIDAO_CAN_APP_CMD_AGING_STOP" in can_c
         and "FEIDAO_CAN_APP_CMD_AGING_RESET_TIME" in can_c
+        and "FEIDAO_CAN_APP_CMD_AGING_SET_HOURS" in can_c
         and "FactoryAging_StartByHost" in can_c
         and "FactoryAging_StopByHost" in can_c
         and "FactoryAging_ResetTimeByHost" in can_c
+        and "FactoryAging_SetDurationHoursByHost" in can_c
         and "FEIDAO_CAN_APP_AGING_GUARD" in can_c
     ):
-        reporter.ok("CAN App service exposes separate guarded aging start/stop/reset commands")
+        reporter.ok("CAN App service exposes separate guarded aging start/stop/reset/set-hours commands")
     else:
-        reporter.fail("CAN App service should expose separate guarded aging start/stop/reset commands")
+        reporter.fail("CAN App service should expose separate guarded aging start/stop/reset/set-hours commands")
 
     if (
         "FactoryAging_GetState" in frames_c
@@ -1135,6 +1137,8 @@ def check_can_aging_soc_service(reporter):
         and "FactoryAging_StartByHost" in aging_h
         and "FactoryAging_StopByHost" in aging_h
         and "FactoryAging_ResetTimeByHost" in aging_h
+        and "FactoryAging_SetDurationHoursByHost" in aging_h
+        and "u16DurationHours" in flash_h
         and "FACTORY_AGING_PUBLIC_STATE_RUNNING" in aging_h
         and "FACTORY_AGING_STATE_STOPPED" in aging_c
     ):
@@ -1149,11 +1153,13 @@ def check_can_aging_soc_service(reporter):
         and "app-aging-start" in host_py
         and "app-aging-stop" in host_py
         and "app-aging-reset-time" in host_py
+        and "app-aging-set-hours" in host_py
         and "app-write-soc" in host_ps1
         and "ConfirmWriteSoc" in host_ps1
         and "ConfirmAgingStart" in host_ps1
         and "ConfirmAgingStop" in host_ps1
         and "ConfirmAgingResetTime" in host_ps1
+        and "ConfirmAgingSetHours" in host_ps1
     ):
         reporter.ok("CAN host exposes SOC write as a common standalone feature and aging actions separately")
     else:
@@ -1162,18 +1168,24 @@ def check_can_aging_soc_service(reporter):
     if (
         "CMD_BMS_AGING_CTRL = 0x12" in comm_host
         and "CMD_BMS_AGING_STATUS = 0x13" in comm_host
+        and "CMD_BMS_AGING_SET_HOURS = 0x14" in comm_host
         and "APP_SET_ONCE_SOC_ADDR = 0x1005" in comm_host
         and "cmd_bms_write_soc" in comm_host
         and "cmd_bms_aging" in comm_host
         and "cmd_bms_aging_status" in comm_host
+        and "cmd_bms_aging_set_hours" in comm_host
         and "CT_CMD_BMS_AGING_CTRL" in comm_protocol_h
         and "CT_CMD_BMS_AGING_STATUS" in comm_protocol_h
+        and "CT_CMD_BMS_AGING_SET_HOURS" in comm_protocol_h
         and "CtCan_AppAgingControl" in comm_can_c
+        and "CtCan_AppSetAgingHours" in comm_can_c
         and "CtCan_ReadFactoryAgingBroadcast" in comm_can_c
         and "CT_CAN_APP_AGING_ACTION_RESET" in comm_can_h
+        and "CT_CAN_APP_AGING_SET_HOURS" in comm_can_h
         and "CT_CAN_FEIDAO_FACTORY_TIME_ID" in comm_can_h
         and "handle_bms_aging_ctrl" in comm_app_c
         and "handle_bms_aging_status" in comm_app_c
+        and "handle_bms_aging_set_hours" in comm_app_c
         and "BMS_V1.13.1 - CAN用户上位机" in upgrade_ui
         and "写SOC" in upgrade_ui
         and "开启老化模式" in upgrade_ui
@@ -1182,6 +1194,7 @@ def check_can_aging_soc_service(reporter):
         and "读取老化时间" in upgrade_ui
         and "CMD_BMS_AGING_CTRL" in upgrade_ui
         and "CMD_BMS_AGING_STATUS" in upgrade_ui
+        and "CMD_BMS_AGING_SET_HOURS" in upgrade_ui
         and "BMS_PRODUCT_INFO_ADDR = 0xC002" in upgrade_ui
         and "BMS_PRODUCT_INFO_WORDS" in upgrade_ui
         and "_decode_product_info_words" in upgrade_ui
@@ -1202,9 +1215,11 @@ def check_can_aging_soc_service(reporter):
         and "0x07 AGING_START" in service_doc
         and "0x08 AGING_STOP" in service_doc
         and "0x09 AGING_RESET_TIME" in service_doc
+        and "0x0A AGING_SET_HOURS" in service_doc
         and "老化剩余分钟" in service_doc
         and "BMS_AGING_CTRL" in serial_doc
         and "BMS_AGING_STATUS" in serial_doc
+        and "BMS_AGING_SET_HOURS" in serial_doc
         and "读取老化时间" in aging_doc
         and "0xC002" in service_doc
         and "BMS 版本/序列号" in upgrade_doc

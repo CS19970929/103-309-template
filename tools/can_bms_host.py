@@ -34,6 +34,7 @@ CAN_APP_CMD_WRITE_COMMIT = 0x05
 CAN_APP_CMD_AGING_START = 0x07
 CAN_APP_CMD_AGING_STOP = 0x08
 CAN_APP_CMD_AGING_RESET_TIME = 0x09
+CAN_APP_CMD_AGING_SET_HOURS = 0x0A
 CAN_APP_AGING_GUARD = 0xA9
 CAN_APP_AGING_ACTION_START = 0x51
 CAN_APP_AGING_ACTION_STOP = 0x50
@@ -476,6 +477,27 @@ def cmd_app_aging_reset_time(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_app_aging_set_hours(args: argparse.Namespace) -> int:
+    if not args.confirm_aging_set_hours:
+        raise SystemExit("修改老化时长会持久化新时长并清零累计时间，请显式添加 --confirm-aging-set-hours 或 PowerShell -ConfirmAgingSetHours")
+    if args.aging_hours < 1 or args.aging_hours > 168:
+        raise SystemExit("--aging-hours 必须在 1..168 范围内")
+
+    payload = build_app_command(
+        CAN_APP_CMD_AGING_SET_HOURS,
+        CAN_APP_AGING_GUARD,
+        args.aging_hours,
+        args.can_address,
+    )
+    data = send_app_command(args, CAN_APP_CMD_AGING_SET_HOURS, payload)
+    _cmd, _status, state, remaining_hours = validate_app_ack(data)
+    print(
+        f"已修改老化时长: {args.aging_hours}h "
+        f"老化状态={aging_state_name(state)} 剩余约={remaining_hours}h"
+    )
+    return 0
+
+
 def cmd_upgrade_dry_run(args: argparse.Namespace) -> int:
     bin_path = Path(args.bin).resolve()
     image = load_image(bin_path, args.app_address)
@@ -600,6 +622,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_app_args(p_aging_reset)
     p_aging_reset.add_argument("--confirm-aging-reset-time", action="store_true", help="确认清零老化累计时间")
     p_aging_reset.set_defaults(func=cmd_app_aging_reset_time)
+
+    p_aging_set_hours = sub.add_parser("app-aging-set-hours", help="修改老化时长，单位小时，并清零累计时间")
+    add_can_args(p_aging_set_hours)
+    add_app_args(p_aging_set_hours)
+    p_aging_set_hours.add_argument("--aging-hours", type=int, required=True, help="老化时长小时数，范围 1..168")
+    p_aging_set_hours.add_argument("--confirm-aging-set-hours", action="store_true", help="确认修改老化时长并清零累计时间")
+    p_aging_set_hours.set_defaults(func=cmd_app_aging_set_hours)
 
     p_dry = sub.add_parser("upgrade-dry-run", help="检查 App bin 并生成 CAN-IAP 分包计划")
     add_upgrade_args(p_dry)

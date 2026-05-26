@@ -332,6 +332,34 @@ static void handle_bms_aging_ctrl(const CtFrame *req)
         return;
     }
 
+	respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
+}
+
+static void handle_bms_aging_set_hours(const CtFrame *req)
+{
+    uint8_t payload[4];
+    uint16_t hours;
+
+    if (req->length < 2u)
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    hours = rd16(req->payload);
+    if ((hours == 0u) || (hours > 168u))
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    if (!CtCan_AppSetAgingHours(s_app_can_addr, hours, &payload[0], &payload[1]))
+    {
+        respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
+        return;
+    }
+
+    wr16(&payload[2], hours);
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 
@@ -488,6 +516,9 @@ void CtApp_HandleFrame(const CtFrame *frame)
         break;
     case CT_CMD_BMS_AGING_STATUS:
         handle_bms_aging_status(frame);
+        break;
+    case CT_CMD_BMS_AGING_SET_HOURS:
+        handle_bms_aging_set_hours(frame);
         break;
     case CT_CMD_ENTER_IAP:
         handle_enter_iap(frame);

@@ -10,6 +10,7 @@ CAN 上位机需要把写 SOC 作为常用功能单独展示，同时支持老�
 - 字节 2 为老化状态：`0` 停止/未运行，`1` 运行中，`2` 已完成。
 - 字节 3~4 为老化剩余分钟，高字节在前。当前默认 3 天老化为 `4320` 分钟。
 - `AGING_START 0x07`、`AGING_STOP 0x08`、`AGING_RESET_TIME 0x09` 是三个独立 App CAN 命令。
+- `AGING_SET_HOURS 0x0A` 用于修改老化总时长，单位小时，范围 `1..168`；设置成功后会持久化新时长并重置累计老化时间。
 - 关闭老化模式会保存停止状态，后续上电不会自动恢复老化；需要再次发送开启命令。
 - 重置老化时间只清零累计时间。如果当前正在老化，清零后继续运行；如果已经停止或完成，则保持停止状态。
 - 升级包需要自动重置老化时间时，通过 `Project_Config.h` 的 `PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME` 控制；默认关闭，开启时必须同步递增 `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION`。
@@ -40,6 +41,8 @@ CAN 用户上位机必须在原 `BMS_CommTool_Upgrade_UI.exe` 基础上改，软
 - 关闭老化模式
 - 重置老化时间
 
+修改老化时间也必须在原 UI 常用功能里单独展示，用户输入单位为小时。点击后通过 comm tool 串口协议 `0x14 BMS_AGING_SET_HOURS` 下发，板端持久化新时长并自动重置老化累计时间。
+
 老化剩余时间必须在原 UI 里单独可见：
 
 - `其它功能 -> 常用功能 -> 读取老化时间`
@@ -57,4 +60,5 @@ CAN 用户上位机必须在原 `BMS_CommTool_Upgrade_UI.exe` 基础上改，软
 - 老化控制命令带 `0xA9` 防误触发字节，并校验 `CAN_ADRESS_STD_ID`。
 - PC 到 comm tool 串口协议新增 `0x12 BMS_AGING_CTRL`，由 comm tool 转发到 BMS App CAN 服务。
 - PC 到 comm tool 串口协议新增 `0x13 BMS_AGING_STATUS`，由 comm tool 等待并解析 `0x14F80208` 广播，供原 UI 显示老化剩余时间。
+- PC 到 comm tool 串口协议新增 `0x14 BMS_AGING_SET_HOURS`，payload 为 `hours:u16_le`，由 comm tool 转发为 BMS App `0x0A AGING_SET_HOURS`。
 - CAN App 服务仍在主循环中调用 `Sci_HostWriteWords()`，不在 CAN 中断里写 Flash 或修改业务状态。

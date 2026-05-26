@@ -401,6 +401,23 @@ int CtCan_AppAgingControl(uint8_t can_addr, uint8_t action, uint8_t *state, uint
                                  APP_AGING_CMD_TIMEOUT_MS);
 }
 
+int CtCan_AppSetAgingHours(uint8_t can_addr, uint16_t hours, uint8_t *state, uint8_t *remaining_hours)
+{
+    if ((hours == 0u) || (hours > 168u))
+    {
+        return 0;
+    }
+
+    return send_app_cmd_wait_ack(can_addr,
+                                 CT_CAN_APP_AGING_SET_HOURS,
+                                 CT_CAN_APP_AGING_GUARD,
+                                 (uint8_t)hours,
+                                 can_addr,
+                                 state,
+                                 remaining_hours,
+                                 APP_AGING_CMD_TIMEOUT_MS);
+}
+
 int CtCan_ReadFactoryAgingBroadcast(uint8_t *state, uint16_t *remaining_minutes, uint32_t timeout_ms)
 {
     CtCanFrame frame;
