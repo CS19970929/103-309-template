@@ -7,11 +7,15 @@
 #include "misc.h"
 
 #define BOARD_UART_RX_BUF_SIZE        1024u
+#define BOARD_UART_TX_BUF_SIZE        1024u
 #define BOARD_UART_TX_TIMEOUT_LOOPS   60000u
 
 static volatile uint16_t s_rx_head;
 static volatile uint16_t s_rx_tail;
 static uint8_t s_rx_buf[BOARD_UART_RX_BUF_SIZE];
+static volatile uint16_t s_tx_head;
+static volatile uint16_t s_tx_tail;
+static uint8_t s_tx_buf[BOARD_UART_TX_BUF_SIZE];
 
 #if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
 #define BOARD_UART_INSTANCE            USART1
@@ -35,6 +39,62 @@ static void rx_push(uint8_t byte)
         s_rx_buf[s_rx_head] = byte;
         s_rx_head = next;
     }
+}
+
+static uint16_t tx_next(uint16_t index)
+{
+    index++;
+    if (index >= BOARD_UART_TX_BUF_SIZE)
+    {
+        index = 0u;
+    }
+    return index;
+}
+
+static int tx_empty(void)
+{
+    return (s_tx_head == s_tx_tail) ? 1 : 0;
+}
+
+static int tx_full(void)
+{
+    return (tx_next(s_tx_head) == s_tx_tail) ? 1 : 0;
+}
+
+static void tx_start(void)
+{
+    USART_ITConfig(BOARD_UART_INSTANCE, USART_IT_TXE, ENABLE);
+}
+
+static int tx_push(uint8_t byte)
+{
+    uint32_t wait = BOARD_UART_TX_TIMEOUT_LOOPS;
+
+    while (tx_full() != 0)
+    {
+        if (wait == 0u)
+        {
+            return 0;
+        }
+        wait--;
+    }
+
+    s_tx_buf[s_tx_head] = byte;
+    s_tx_head = tx_next(s_tx_head);
+    tx_start();
+    return 1;
+}
+
+static void tx_irq_service(void)
+{
+    if (s_tx_tail == s_tx_head)
+    {
+        USART_ITConfig(BOARD_UART_INSTANCE, USART_IT_TXE, DISABLE);
+        return;
+    }
+
+    USART_SendData(BOARD_UART_INSTANCE, s_tx_buf[s_tx_tail]);
+    s_tx_tail = tx_next(s_tx_tail);
 }
 
 static void board_uart_gpio_init(void)
@@ -82,6 +142,8 @@ void BoardUart_Init(uint32_t baudrate)
 
     s_rx_head = 0u;
     s_rx_tail = 0u;
+    s_tx_head = 0u;
+    s_tx_tail = 0u;
 
     board_uart_gpio_init();
 
@@ -128,19 +190,15 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length)
 
     for (i = 0u; i < length; ++i)
     {
-        wait = BOARD_UART_TX_TIMEOUT_LOOPS;
-        while ((wait > 0u) && (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_TXE) == RESET))
-        {
-            wait--;
-        }
-        if (wait == 0u)
+        if (tx_push(data[i]) == 0)
         {
             return 0;
         }
-        USART_SendData(BOARD_UART_INSTANCE, data[i]);
     }
     wait = BOARD_UART_TX_TIMEOUT_LOOPS;
-    while ((wait > 0u) && (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_TC) == RESET))
+    while ((wait > 0u) &&
+           ((tx_empty() == 0) ||
+            (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_TC) == RESET)))
     {
         wait--;
     }
@@ -157,6 +215,10 @@ void BOARD_UART_IRQHandler(void)
     {
         rx_push((uint8_t)USART_ReceiveData(BOARD_UART_INSTANCE));
         USART_ClearITPendingBit(BOARD_UART_INSTANCE, USART_IT_RXNE);
+    }
+    if (USART_GetITStatus(BOARD_UART_INSTANCE, USART_IT_TXE) != RESET)
+    {
+        tx_irq_service();
     }
     if (USART_GetFlagStatus(BOARD_UART_INSTANCE, USART_FLAG_ORE) != RESET)
     {

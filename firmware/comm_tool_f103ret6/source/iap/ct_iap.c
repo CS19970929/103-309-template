@@ -11,6 +11,8 @@
 
 #define IAP_SERIAL_BAUD                  CT_UART_DEFAULT_BAUD
 #define IAP_SERIAL_RX_SIZE               1100u
+#define IAP_SERIAL_IRQ_RX_SIZE           2048u
+#define IAP_SERIAL_IRQ_TX_SIZE           256u
 #define IAP_SERIAL_BLOCK_MAX             1024u
 #define IAP_SERIAL_FRAME_TIMEOUT_MS      500u
 #define IAP_SERIAL_RESPONSE_DELAY_MS     20u
@@ -119,6 +121,12 @@ static uint16_t s_serial_block_count;
 static uint32_t s_serial_written;
 static uint32_t s_serial_last_rx_ms;
 static uint8_t s_serial_fault_count;
+static volatile uint8_t s_serial_irq_rx[IAP_SERIAL_IRQ_RX_SIZE];
+static volatile uint16_t s_serial_irq_head;
+static volatile uint16_t s_serial_irq_tail;
+static volatile uint8_t s_serial_irq_tx[IAP_SERIAL_IRQ_TX_SIZE];
+static volatile uint16_t s_serial_tx_head;
+static volatile uint16_t s_serial_tx_tail;
 static uint8_t s_reset_pending;
 static uint32_t s_reset_time_ms;
 static uint8_t s_heartbeat_seq;
@@ -503,6 +511,95 @@ static void iap_flash_abort(uint8_t owner)
     }
 }
 
+static void serial_record_fault(void)
+{
+    if (s_serial_fault_count < 0xFFu)
+    {
+        s_serial_fault_count++;
+    }
+}
+
+static uint16_t serial_tx_next(uint16_t index)
+{
+    index++;
+    if (index >= IAP_SERIAL_IRQ_TX_SIZE)
+    {
+        index = 0u;
+    }
+    return index;
+}
+
+static void serial_irq_tx_reset(void)
+{
+    s_serial_tx_head = 0u;
+    s_serial_tx_tail = 0u;
+}
+
+static uint8_t serial_irq_tx_empty(void)
+{
+    return (s_serial_tx_head == s_serial_tx_tail) ? 1u : 0u;
+}
+
+static uint8_t serial_irq_tx_full(void)
+{
+    return (serial_tx_next(s_serial_tx_head) == s_serial_tx_tail) ? 1u : 0u;
+}
+
+static void serial_irq_tx_start(void)
+{
+    USART_ITConfig(IAP_SERIAL_USART, USART_IT_TXE, ENABLE);
+}
+
+static uint8_t serial_irq_tx_push(uint8_t byte)
+{
+    uint32_t wait = IAP_SERIAL_TX_TIMEOUT_LOOPS;
+
+    while (serial_irq_tx_full() != 0u)
+    {
+        if (wait == 0u)
+        {
+            serial_record_fault();
+            return 0u;
+        }
+        wait--;
+    }
+
+    s_serial_irq_tx[s_serial_tx_head] = byte;
+    s_serial_tx_head = serial_tx_next(s_serial_tx_head);
+    serial_irq_tx_start();
+    return 1u;
+}
+
+static void serial_irq_tx_service(void)
+{
+    if (s_serial_tx_tail == s_serial_tx_head)
+    {
+        USART_ITConfig(IAP_SERIAL_USART, USART_IT_TXE, DISABLE);
+        return;
+    }
+
+    USART_SendData(IAP_SERIAL_USART, s_serial_irq_tx[s_serial_tx_tail]);
+    s_serial_tx_tail = serial_tx_next(s_serial_tx_tail);
+}
+
+static uint8_t serial_wait_tx_done(void)
+{
+    uint32_t wait = IAP_SERIAL_TX_TIMEOUT_LOOPS;
+
+    while ((wait > 0u) &&
+           ((serial_irq_tx_empty() == 0u) ||
+            (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_TC) == RESET)))
+    {
+        wait--;
+    }
+    if (wait == 0u)
+    {
+        serial_record_fault();
+        return 0u;
+    }
+    return 1u;
+}
+
 static void serial_delay_ms(uint32_t delay_ms)
 {
     uint32_t start = s_tick_ms;
@@ -512,34 +609,18 @@ static void serial_delay_ms(uint32_t delay_ms)
     }
 }
 
-static uint8_t serial_wait_flag(uint16_t flag)
-{
-    uint32_t wait = IAP_SERIAL_TX_TIMEOUT_LOOPS;
-
-    while ((wait > 0u) && (USART_GetFlagStatus(IAP_SERIAL_USART, flag) == RESET))
-    {
-        wait--;
-    }
-    return (wait > 0u) ? 1u : 0u;
-}
-
 static uint8_t serial_write(const uint8_t *data, uint16_t length)
 {
     uint16_t i;
 
     for (i = 0u; i < length; ++i)
     {
-        if (serial_wait_flag(USART_FLAG_TXE) == 0u)
+        if (serial_irq_tx_push(data[i]) == 0u)
         {
             return 0u;
         }
-        USART_SendData(IAP_SERIAL_USART, data[i]);
     }
-    if (serial_wait_flag(USART_FLAG_TC) == 0u)
-    {
-        return 0u;
-    }
-    return 1u;
+    return serial_wait_tx_done();
 }
 
 static void serial_send_ack(const uint8_t *request)
@@ -757,6 +838,59 @@ static void serial_reset_parser(void)
 {
     s_serial_index = 0u;
     s_serial_expect = 0u;
+}
+
+static void serial_irq_rx_reset(void)
+{
+    s_serial_irq_head = 0u;
+    s_serial_irq_tail = 0u;
+}
+
+static void serial_irq_rx_push(uint8_t byte)
+{
+    uint16_t next = (uint16_t)(s_serial_irq_head + 1u);
+
+    if (next >= IAP_SERIAL_IRQ_RX_SIZE)
+    {
+        next = 0u;
+    }
+    if (next == s_serial_irq_tail)
+    {
+        serial_record_fault();
+        return;
+    }
+
+    s_serial_irq_rx[s_serial_irq_head] = byte;
+    s_serial_irq_head = next;
+}
+
+static uint8_t serial_irq_rx_pop(uint8_t *byte)
+{
+    uint16_t next;
+
+    if ((byte == 0) || (s_serial_irq_tail == s_serial_irq_head))
+    {
+        return 0u;
+    }
+
+    *byte = s_serial_irq_rx[s_serial_irq_tail];
+    next = (uint16_t)(s_serial_irq_tail + 1u);
+    if (next >= IAP_SERIAL_IRQ_RX_SIZE)
+    {
+        next = 0u;
+    }
+    s_serial_irq_tail = next;
+    return 1u;
+}
+
+static void serial_clear_overrun(void)
+{
+    if (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_ORE) != RESET)
+    {
+        (void)IAP_SERIAL_USART->SR;
+        (void)IAP_SERIAL_USART->DR;
+        serial_record_fault();
+    }
 }
 
 static void serial_check_frame_timeout(void)
@@ -1196,6 +1330,7 @@ static void iap_uart_init(void)
 {
     GPIO_InitTypeDef gpio;
     USART_InitTypeDef usart;
+    NVIC_InitTypeDef nvic;
 
 #if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO |
@@ -1238,6 +1373,15 @@ static void iap_uart_init(void)
     usart.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     usart.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
     USART_Init(IAP_SERIAL_USART, &usart);
+    serial_irq_rx_reset();
+    serial_irq_tx_reset();
+    NVIC_ClearPendingIRQ(IAP_SERIAL_IRQn);
+    nvic.NVIC_IRQChannel = IAP_SERIAL_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 1u;
+    nvic.NVIC_IRQChannelSubPriority = 0u;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+    USART_ITConfig(IAP_SERIAL_USART, USART_IT_RXNE, ENABLE);
     USART_Cmd(IAP_SERIAL_USART, ENABLE);
 }
 
@@ -1350,16 +1494,11 @@ void CtIap_Run(void)
     iap_init();
     while (1)
     {
-        while (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_RXNE) != RESET)
+        while (serial_irq_rx_pop(&byte) != 0u)
         {
-            byte = (uint8_t)USART_ReceiveData(IAP_SERIAL_USART);
             serial_feed(byte);
         }
-        if (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_ORE) != RESET)
-        {
-            (void)IAP_SERIAL_USART->SR;
-            (void)IAP_SERIAL_USART->DR;
-        }
+        serial_clear_overrun();
         can_poll();
         iap_task_1ms();
     }
@@ -1372,6 +1511,15 @@ void SysTick_Handler(void)
 
 void IAP_SERIAL_IRQHandler(void)
 {
+    if (USART_GetITStatus(IAP_SERIAL_USART, USART_IT_RXNE) != RESET)
+    {
+        serial_irq_rx_push((uint8_t)USART_ReceiveData(IAP_SERIAL_USART));
+    }
+    if (USART_GetITStatus(IAP_SERIAL_USART, USART_IT_TXE) != RESET)
+    {
+        serial_irq_tx_service();
+    }
+    serial_clear_overrun();
 }
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
