@@ -7,6 +7,11 @@
 #include "ct_flash_store.h"
 #include <string.h>
 
+#define CT_UPGRADE_FAST_HELLO_TIMEOUT_MS       700u
+#define CT_UPGRADE_BOOT_DELAY_MS               1200u
+#define CT_UPGRADE_IAP_HELLO_TIMEOUT_MS        8000u
+#define CT_UPGRADE_HELLO_RETRY_INTERVAL_MS     250u
+
 enum
 {
     CT_UPGRADE_IDLE = CT_UPGRADE_STATE_IDLE,
@@ -48,6 +53,7 @@ typedef struct
     uint16_t block_seq;
     uint16_t chunk_len;
     uint16_t block_crc;
+    uint32_t last_tx_ms;
     uint8_t block[CT_IAP_BLOCK_BYTES];
 } CtUpgradeContext;
 
@@ -187,10 +193,21 @@ static uint8_t handle_ack_wait(uint8_t cmd, uint32_t timeout_ms, uint8_t ok_phas
     return 0u;
 }
 
+static uint8_t send_hello_and_mark(void)
+{
+    if (!CtCan_IapSendHello(s_ctx.node))
+    {
+        return 0u;
+    }
+    s_ctx.last_tx_ms = CtBoard_GetTickMs();
+    return 1u;
+}
+
 static void handle_fast_hello_wait(void)
 {
     uint8_t code;
     uint8_t match;
+    uint32_t now;
 
     match = CtCan_IapPollAck(s_ctx.node, CT_CAN_IAP_HELLO, &s_status.expect_seq, &code);
     if (match == CT_CAN_IAP_ACK_MATCH_OK)
@@ -198,10 +215,50 @@ static void handle_fast_hello_wait(void)
         set_phase(CT_UPGRADE_PHASE_START_SEND);
         return;
     }
-    if ((match == CT_CAN_IAP_ACK_MATCH_BAD) || timeout_expired(s_ctx.phase_start_ms, 500u))
+    now = CtBoard_GetTickMs();
+    if ((match == CT_CAN_IAP_ACK_MATCH_BAD) ||
+        ((uint32_t)(now - s_ctx.phase_start_ms) >= CT_UPGRADE_FAST_HELLO_TIMEOUT_MS))
     {
         (void)code;
         set_phase(CT_UPGRADE_PHASE_ENTER_APP_IAP);
+        return;
+    }
+    if ((uint32_t)(now - s_ctx.last_tx_ms) >= CT_UPGRADE_HELLO_RETRY_INTERVAL_MS)
+    {
+        (void)send_hello_and_mark();
+    }
+}
+
+static void handle_iap_hello_wait(void)
+{
+    uint8_t code;
+    uint8_t match;
+    uint32_t now;
+
+    match = CtCan_IapPollAck(s_ctx.node, CT_CAN_IAP_HELLO, &s_status.expect_seq, &code);
+    if (match == CT_CAN_IAP_ACK_MATCH_OK)
+    {
+        set_phase(CT_UPGRADE_PHASE_START_SEND);
+        return;
+    }
+    if (match == CT_CAN_IAP_ACK_MATCH_BAD)
+    {
+        set_error(code != 0u ? code : 2u);
+        return;
+    }
+
+    now = CtBoard_GetTickMs();
+    if ((uint32_t)(now - s_ctx.phase_start_ms) >= CT_UPGRADE_IAP_HELLO_TIMEOUT_MS)
+    {
+        set_error(2u);
+        return;
+    }
+    if ((uint32_t)(now - s_ctx.last_tx_ms) >= CT_UPGRADE_HELLO_RETRY_INTERVAL_MS)
+    {
+        if (!send_hello_and_mark())
+        {
+            set_error(2u);
+        }
     }
 }
 
@@ -293,7 +350,7 @@ void CtUpgrade_Task(void)
     switch (s_ctx.phase)
     {
     case CT_UPGRADE_PHASE_HELLO_FAST_SEND:
-        if (!CtCan_IapSendHello(s_ctx.node))
+        if (!send_hello_and_mark())
         {
             set_phase(CT_UPGRADE_PHASE_ENTER_APP_IAP);
             break;
@@ -315,14 +372,14 @@ void CtUpgrade_Task(void)
         break;
 
     case CT_UPGRADE_PHASE_BOOT_DELAY:
-        if (timeout_expired(s_ctx.phase_start_ms, 800u))
+        if (timeout_expired(s_ctx.phase_start_ms, CT_UPGRADE_BOOT_DELAY_MS))
         {
             set_phase(CT_UPGRADE_PHASE_HELLO_IAP_SEND);
         }
         break;
 
     case CT_UPGRADE_PHASE_HELLO_IAP_SEND:
-        if (!CtCan_IapSendHello(s_ctx.node))
+        if (!send_hello_and_mark())
         {
             set_error(2u);
             break;
@@ -331,7 +388,7 @@ void CtUpgrade_Task(void)
         break;
 
     case CT_UPGRADE_PHASE_HELLO_IAP_WAIT:
-        handle_ack_wait(CT_CAN_IAP_HELLO, 3000u, CT_UPGRADE_PHASE_START_SEND, 2u);
+        handle_iap_hello_wait();
         break;
 
     case CT_UPGRADE_PHASE_START_SEND:
