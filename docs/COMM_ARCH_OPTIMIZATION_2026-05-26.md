@@ -29,6 +29,7 @@
 - CAN 升级进行中，只允许 `GET_INFO`、`FW_INFO`、`UPGRADE_STATUS`、`UPGRADE_ABORT`、`CAN_DIAG`、`DEBUG_LOG`。
 - 升级进行中收到普通 BMS 读写、老化控制、进入 IAP、改 CAN 参数等命令时返回 `BAD_STATE`，避免普通命令阻塞升级状态机。
 - BMS 块读 ACK 已收到但数据帧未收齐时，返回 `CAN_TIMEOUT`，不再泛化成 `BMS_ERROR`，并清理 CAN RX 队列，降低迟到数据帧污染下一次块读的风险。
+- CAN-IAP 启动握手阶段不再只发送一次 `HELLO`；App 复位进入 IAP 后，comm tool 会在 8 秒窗口内每 250ms 重发 `HELLO`，并且 ACK 轮询会连续扫描 CAN RX 队列，降低普通广播或迟到帧挡住 IAP ACK 的概率。
 
 ### BMS App
 

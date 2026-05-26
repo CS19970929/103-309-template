@@ -604,60 +604,67 @@ int CtCan_IapWaitAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint32_t t
 uint8_t CtCan_IapPollAck(uint8_t node, uint8_t cmd, uint16_t *expect_seq, uint8_t *code)
 {
     CtCanFrame frame;
+    uint8_t scanned = 0u;
 
     if (code != 0)
     {
         *code = 0u;
     }
 
-    if (!CtBoard_CanRecv(&frame, 0u))
+    while (scanned < 16u)
     {
-        return CT_CAN_IAP_ACK_MATCH_NONE;
+        if (!CtBoard_CanRecv(&frame, 0u))
+        {
+            break;
+        }
+        scanned++;
+
+        if ((frame.ide == 0u) || (frame.id != iap_ack_id(node)))
+        {
+            continue;
+        }
+        if (frame.dlc < 6u)
+        {
+            if (code != 0)
+            {
+                *code = 0xFEu;
+            }
+            return CT_CAN_IAP_ACK_MATCH_BAD;
+        }
+        if ((frame.data[0] == CT_CAN_IAP_NACK) && (frame.data[1] == cmd))
+        {
+            if (expect_seq != 0)
+            {
+                *expect_seq = rd_be16(&frame.data[3]);
+            }
+            if (code != 0)
+            {
+                *code = frame.data[5];
+            }
+            return CT_CAN_IAP_ACK_MATCH_BAD;
+        }
+        if ((frame.data[0] != CT_CAN_IAP_ACK) || (frame.data[1] != cmd))
+        {
+            continue;
+        }
+        if (frame.data[5] != 0u)
+        {
+            if (expect_seq != 0)
+            {
+                *expect_seq = rd_be16(&frame.data[3]);
+            }
+            if (code != 0)
+            {
+                *code = frame.data[5];
+            }
+            return CT_CAN_IAP_ACK_MATCH_BAD;
+        }
+        if (expect_seq != 0)
+        {
+            *expect_seq = rd_be16(&frame.data[3]);
+        }
+        return CT_CAN_IAP_ACK_MATCH_OK;
     }
 
-    if ((frame.ide == 0u) || (frame.id != iap_ack_id(node)))
-    {
-        return CT_CAN_IAP_ACK_MATCH_NONE;
-    }
-    if (frame.dlc < 6u)
-    {
-        if (code != 0)
-        {
-            *code = 0xFEu;
-        }
-        return CT_CAN_IAP_ACK_MATCH_BAD;
-    }
-    if ((frame.data[0] == CT_CAN_IAP_NACK) && (frame.data[1] == cmd))
-    {
-        if (expect_seq != 0)
-        {
-            *expect_seq = rd_be16(&frame.data[3]);
-        }
-        if (code != 0)
-        {
-            *code = frame.data[5];
-        }
-        return CT_CAN_IAP_ACK_MATCH_BAD;
-    }
-    if ((frame.data[0] != CT_CAN_IAP_ACK) || (frame.data[1] != cmd))
-    {
-        return CT_CAN_IAP_ACK_MATCH_NONE;
-    }
-    if (frame.data[5] != 0u)
-    {
-        if (expect_seq != 0)
-        {
-            *expect_seq = rd_be16(&frame.data[3]);
-        }
-        if (code != 0)
-        {
-            *code = frame.data[5];
-        }
-        return CT_CAN_IAP_ACK_MATCH_BAD;
-    }
-    if (expect_seq != 0)
-    {
-        *expect_seq = rd_be16(&frame.data[3]);
-    }
-    return CT_CAN_IAP_ACK_MATCH_OK;
+    return CT_CAN_IAP_ACK_MATCH_NONE;
 }

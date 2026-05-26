@@ -55,6 +55,8 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 | `0x07` | IAP `END` 未收到 ACK 或被拒绝 |
 | `0x21` | 一键升级自动发送 App `ENTER_IAP` 未收到 ACK |
 
+`0x02` 出现在写入前，表示还没有收到 BMS IAP 的 `HELLO` ACK。comm tool 固件会在 App 复位进入 IAP 后等待启动窗口，并在 8 秒内每 250ms 重发 `HELLO`；如果仍失败，应优先检查 BMS IAP 是否真正运行、CAN 位时序、IAP 节点是否唯一，以及总线上是否已有其它相同节点的 IAP 设备。
+
 ## 命令
 
 | 命令 | 方向 | payload | 说明 |
