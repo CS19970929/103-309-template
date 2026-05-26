@@ -1,5 +1,6 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
+#include "FactoryAging.h"
 #include "SocEnhance.h"
 
 uint16_t curr_offset = 0;
@@ -282,6 +283,13 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 
 #if UPGRADE_PARAM_RESET_EVENT_RECORD
 	if (result && !EEPROM_ResetData_EventRecord_ToDefault())
+	{
+		result = 0;
+	}
+#endif
+
+#if UPGRADE_PARAM_RESET_FACTORY_AGING_TIME
+	if (result && !FactoryAging_ResetTimeByHost())
 	{
 		result = 0;
 	}

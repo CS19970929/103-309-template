@@ -12,6 +12,7 @@ CAN 上位机需要把写 SOC 作为常用功能单独展示，同时支持老�
 - `AGING_START 0x07`、`AGING_STOP 0x08`、`AGING_RESET_TIME 0x09` 是三个独立 App CAN 命令。
 - 关闭老化模式会保存停止状态，后续上电不会自动恢复老化；需要再次发送开启命令。
 - 重置老化时间只清零累计时间。如果当前正在老化，清零后继续运行；如果已经停止或完成，则保持停止状态。
+- 升级包需要自动重置老化时间时，通过 `Project_Config.h` 的 `PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME` 控制；默认关闭，开启时必须同步递增 `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION`。
 
 ## 上位机入口
 

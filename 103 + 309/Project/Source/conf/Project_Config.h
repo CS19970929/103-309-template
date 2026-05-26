@@ -431,6 +431,10 @@
 // <i> 升级时清除事件记录。售后需要保留历史故障时必须关闭。
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
 
+// <q> 重置老化时间
+// <i> 升级后首次启动清零老化累计时间。需要随升级重新开始老化时开启，并同步递增策略版本。
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
+
 // <q> 强制重复执行策略，仅测试
 // <i> 强制重复执行升级参数策略。只用于测试，量产必须关闭。
 #define PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY 0
