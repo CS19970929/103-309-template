@@ -847,7 +847,7 @@ static UINT8 feidao_can_app_status_from_host_error(UINT8 error)
 
 static UINT8 feidao_can_request_iap(void)
 {
-	return (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE)) ? 1U : 0U;
+	return AppUpgrade_RequestIap();
 }
 
 static UINT8 feidao_can_take_app_cmd(UINT8 data[8])

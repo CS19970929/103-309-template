@@ -52,7 +52,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 | 命令 | 参数 | 返回 | 说明 |
 | --- | --- | --- | --- |
 | `0x01 GET_STATUS` | `00 00 00` | `SOC, SOH` | 读取基础状态，兼容早期 comm tool |
-| `0x02 ENTER_IAP` | `C3 3C can_addr` | `08 48` | 写升级标志并延时复位进入 IAP |
+| `0x02 ENTER_IAP` | `C3 3C can_addr` | `08 48` | 写 `0x20004FE0` SRAM mailbox 并延时复位进入 IAP |
 | `0x03 READ_REG` | `addr_hi addr_lo 00` | `value_hi value_lo` | 读取一个 BMS 串口寄存器 |
 | `0x04 WRITE_PREP` | `addr_hi addr_lo value_hi` | `addr_hi addr_lo` | 写单个寄存器第一帧，暂存地址和高字节 |
 | `0x05 WRITE_COMMIT` | `addr_hi addr_lo value_lo` | `00 00` | 写单个寄存器第二帧，校验地址一致后提交 |

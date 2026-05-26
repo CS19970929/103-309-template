@@ -11,6 +11,9 @@ uint32_t JumpAddress;
 #define FLASH_STORAGE_MAGIC_LOG ((UINT32)0x4C4F4731)
 #define FLASH_STORAGE_VERSION   ((UINT16)0x0001)
 #define FLASH_SIZE_REG_ADDR     ((UINT32)0x1FFFF7E0)
+#define APP_UPGRADE_MAILBOX_ADDR ((UINT32)0x20004FE0)
+#define APP_UPGRADE_MAILBOX_MAGIC ((UINT32)0x49415031)
+#define APP_UPGRADE_MAILBOX_REQUEST ((UINT32)0x5AA55AA5)
 
 typedef struct
 {
@@ -35,6 +38,15 @@ typedef struct
 	UINT8 reserved;
 	UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2];
 } STORAGE_FLASH_LOG_DATA;
+
+typedef struct
+{
+	UINT32 magic;
+	UINT32 magic_inv;
+	UINT32 request;
+	UINT32 request_inv;
+	UINT32 crc;
+} APP_UPGRADE_MAILBOX;
 
 static UINT16 StorageFlash_CalcCrc(const UINT8 *data, UINT16 length)
 {
@@ -580,6 +592,47 @@ void FlashTest(void)
 	g_stCellInfoReport.u16VCell[2] = FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG);
 }
 
+static volatile APP_UPGRADE_MAILBOX *AppUpgrade_Mailbox(void)
+{
+	return (volatile APP_UPGRADE_MAILBOX *)APP_UPGRADE_MAILBOX_ADDR;
+}
+
+static UINT32 AppUpgrade_MailboxCrc(UINT32 magic, UINT32 request)
+{
+	return magic ^ request ^ 0xA5A55A5A;
+}
+
+static UINT8 AppUpgrade_IsIapRequested(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox;
+
+	mailbox = AppUpgrade_Mailbox();
+	if ((mailbox->magic != APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->magic_inv != (UINT32)~APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->request != APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->request_inv != (UINT32)~APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->crc != AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST)))
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+UINT8 AppUpgrade_RequestIap(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox;
+
+	mailbox = AppUpgrade_Mailbox();
+	mailbox->magic = APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->magic_inv = (UINT32)~APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->request = APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->request_inv = (UINT32)~APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->crc = AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST);
+
+	return AppUpgrade_IsIapRequested();
+}
+
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
 	STORAGE_FLASH_SOC_DATA_V1 legacy_data;
@@ -892,19 +945,18 @@ void App_FlashUpdate(void)
 
 void APP_To_IAP_Jump(void)
 {
-	if (((*(__IO uint32_t *)FLASH_ADDR_IAP_START) & 0x2FFE0000) == 0x20000000)
+	if (AppUpgrade_RequestIap() != 0U)
 	{
-		JumpAddress = *(__IO uint32_t *)(FLASH_ADDR_IAP_START + 4);
-		Jump_To_Application = (pFunction)JumpAddress;
-		__set_MSP(*(__IO uint32_t *)FLASH_ADDR_IAP_START);
-		Jump_To_Application();
+		__disable_fault_irq();
+		MCU_RESET();
 	}
 }
 
 void InitAreaSelect(void)
 {
-	if (FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_IAP_VALUE)
+	if (AppUpgrade_IsIapRequested() != 0U)
 	{
-		APP_To_IAP_Jump();
+		__disable_fault_irq();
+		MCU_RESET();
 	}
 }

@@ -69,7 +69,7 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 | `0x21 FW_DATA` | PC -> comm | `offset:u32 data[n]` | 写入固件缓存 |
 | `0x22 FW_END` | PC -> comm | `size:u32 crc16:u16 crc32:u32` | 结束下载并校验缓存 |
 | `0x23 FW_INFO` | PC -> comm | 空 | 查询缓存固件信息 |
-| `0x30 ENTER_IAP` | PC -> comm | 空 | 让 BMS App 写标志并复位进入 IAP |
+| `0x30 ENTER_IAP` | PC -> comm | 空 | 让 BMS App 写 SRAM mailbox 并复位进入 IAP |
 | `0x31 UPGRADE` | PC -> comm | 空 | 启动使用缓存固件给 BMS 一键升级，命令返回后通过 `UPGRADE_STATUS` 查询进度 |
 | `0x32 UPGRADE_STATUS` | PC -> comm | 空 | 查询升级状态 |
 | `0x33 UPGRADE_ABORT` | PC -> comm | 空 | 终止当前升级 |
