@@ -6,6 +6,7 @@
 #define LOG_TAG "rtc_sleep"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((uint16_t)2800U)
+//todo  待测试确认，更新时间，同步更新文档
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT    ((uint16_t)5U)
 

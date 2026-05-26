@@ -4,9 +4,9 @@ __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时
 
 struct RTC_ELEMENT RTC_time;
 
-struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
+static struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
 
-UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 #define Days_in_month(a) (month_days[(a)-1])
 
 #define RTC_CLOCK_OK             0U
@@ -548,7 +548,6 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-
 
 
 
