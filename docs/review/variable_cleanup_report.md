@@ -55,7 +55,7 @@
 
 | 变量组 | 位置 | 重复形态 | 风险 | 建议 |
 |---|---|---|---|---|
-| Type-C 输出电流 | `ADC.c:14-25`, `ADC.c:410-416`, `ADC.c:516` | `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10`、`g_i32ADCResult[ADC_CURR]`、`gu16_BusCurr_DSG` 同时表达同一路 Type-C 电流 | 任一镜像更新遗漏都会造成 SOC、调试显示、旧兼容变量口径不一致 | 建议定义一个 `ADC_TypeCState`，统一保存原始 AD、mV、mA、A10，再用 getter 或兼容宏导出 |
+| Type-C 输出电流 | `ADC.c:14-25`, `ADC.c:410-416`, `ADC.c:516` | 原先 `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10`、`g_i32ADCResult[ADC_CURR]`、`gu16_BusCurr_DSG` 同时表达同一路 Type-C 电流；本轮已删除 `A10` 和 legacy mirror，只保留 mA 源和 ADC 对外结果 | 状态源已减少，后续只需避免重新增加等价镜像 | 保持 `ADC_GetTypeCOutCurrentMilliAmp()` + `g_i32ADCResult[ADC_CURR]` 两个明确出口 |
 | Type-C 电池侧等效电流 | `SOC.c:111-134` | `g_u16TypeCBatEquivCurrent_mA` 与 `g_u16TypeCBatEquivCurrent_A10` 同时保存，当前只返回 A10 | mA 镜像可能只是调试量，长期容易误认为业务输入 | 若保留，注明只作观察；否则删除 mA 镜像 |
 | RTC 唤醒状态 | `RTC.c:505`, `rtc_sleep.c:13-16`, `conf/conf.c:394-416`, `conf/conf.h:250-251` | `is_rtc_wakekup`、`is_wakeup`、`g_irq_t`、`gu8_WakeUp_Type`、`g_stLowPowerRtcStatus.rtcWake`、`sys_time.wakeup_rtc` 同时描述唤醒 | STOP 唤醒、RTC Alarm、运行期 sleep 状态容易不同步 | 短期不要动；中期合并为 `RTC_WAKE_CONTEXT`，只保留一个真相源，其他字段由快照生成 |
 | 故障记录 | `Fault.c:9-21`, `Sci_Upper.c:762-812` | 旧 `Fault_record_Third/FaultPoint_Third` 与新 `Fault_record_First2/Second2/Third2` 并存 | 协议读旧窗口时可能读不到当前真实故障 | 先确认上位机使用哪个窗口，再决定迁移或保留兼容空洞 |
@@ -72,13 +72,13 @@
 |---|---|---|---|
 | `g_u16ADCValFilter` | `ADC.c:3` | 无 C 文件外部读取；DMA 地址在 `ADC.c` 内配置 | 可改为 `static __IO`，保持类型和位宽不变 |
 | `g_u32ADCValFilter2` | `ADC.c:5` | 仅 `ADC.c` 使用 | 可改为 `static`；类型 `INT32` 不能随便改 |
-| `g_u16TypeCOutCurrent_A10` | `ADC.c:15`, `ADC.h:51` | 仅 `ADC.c` 写和读 | 可隐藏，若上位机不直接读该变量则去掉 `extern` |
+| `g_u16TypeCOutCurrent_A10` | `ADC.c:15`, `ADC.h:51` | 原先仅 `ADC.c` 写和读 | 已删除，改为 `ADC_Current_Smooth()` 内局部 `typec_current_A10` |
 | `g_u16TypeCOutOffsetAD` | `ADC.c:18`, `ADC.h:54` | 仅 `ADC.c` 使用 | 可 `static`，或与零点逻辑一起删除 |
-| `g_u16TypeCOutStableAD` | `ADC.c:19`, `ADC.h:55` | 仅 `ADC.c` 使用 | 可 `static` |
-| `g_u16TypeCOutDelta_mV` | `ADC.c:20`, `ADC.h:56` | 仅 `ADC.c` 使用 | 可 `static` |
-| `g_u16VbcStableAD` | `ADC.c:21`, `ADC.h:57` | 仅 `ADC.c` 使用 | 可 `static` |
-| `g_u16VbcAdc_mV` | `ADC.c:22`, `ADC.h:58` | 仅 `ADC.c` 使用 | 可 `static` |
-| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `ADC.c:24-25`, `ADC.h:60-61` | 仅 `ADC.c` 使用 | 若只是 legacy mirror，优先确认是否还能删除；否则 `static` |
+| `g_u16TypeCOutStableAD` | `ADC.c:19`, `ADC.h:55` | 原先仅写不读 | 已删除 |
+| `g_u16TypeCOutDelta_mV` | `ADC.c:20`, `ADC.h:56` | 原先仅作为同函数换算中间量 | 已局部化 |
+| `g_u16VbcStableAD` | `ADC.c:21`, `ADC.h:57` | 原先仅写不读 | 已删除 |
+| `g_u16VbcAdc_mV` | `ADC.c:22`, `ADC.h:58` | 原先仅作为同函数换算中间量 | 已局部化 |
+| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `ADC.c:24-25`, `ADC.h:60-61` | 原先仅写不读 | 已删除 |
 | `iSheldTemp_10K` | `ADC.c:28` | 仅 `ADC.c` 使用 | 可改为 `static const` |
 | `g_u16BusOff_InitTestCnt` / `g_u16BusOff_RecoverCnt` | `Can_HDX.c:14-15` | 仅 `Can_HDX.c` 使用 | 可 `static`，更好是并入 CAN runtime/status |
 | `u8IICFaultcnt1/2`, `u8WakeCnt1/2` | `DataDeal.c:3-6` | 仅 `DataDeal.c` 使用 | 可 `static`，后续合并为 AFE channel runtime 数组 |
@@ -240,10 +240,10 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `g_u16ADCValFilter` | `103 + 309/Project/Source/ADC.c` | 已改为 `static __IO` | DMA/滤波读写均在 `ADC.c` 内，保留 `__IO` 和位宽 |
 | `g_u32ADCValFilter2` | `103 + 309/Project/Source/ADC.c` | 已改为 `static` | 仅 ADC 内部缓存，未改 `INT32` 类型 |
 | `g_u16IoutOffsetAD`、`g_u16TypeCOutOffsetAD` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | 原逻辑每次置 0 且无读取 |
-| `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h` | 已隐藏为 `static`，新增 `ADC_GetTypeCOutCurrentMilliAmp()` | SOC 通过 getter 读取 mA 值，避免裸全局暴露 |
+| `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h` | `g_u16TypeCOutCurrent_mA` 已隐藏为 `static` 并通过 `ADC_GetTypeCOutCurrentMilliAmp()` 读取；`A10` 镜像已改为局部变量 | SOC 通过 getter 读取 mA 值，避免裸全局暴露和重复状态源 |
 | `g_u16TypeCBatEquivCurrent_mA`、`g_u16TypeCBatEquivCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h`, `SOC.c` | 已删除全局镜像，`SOC_GetTypeCBatEquivCurrentA10()` 直接返回计算结果 | 保留 Type-C 输出电流换算为电池侧等效电流的行为 |
-| `g_u16TypeCOutStableAD`、`g_u16TypeCOutDelta_mV`、`g_u16VbcStableAD`、`g_u16VbcAdc_mV` | `103 + 309/Project/Source/ADC.c/.h` | 已改为 `static` 并删除 extern | 仅 ADC 内部换算中间态 |
-| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `103 + 309/Project/Source/ADC.c/.h` | 已改为 `static` 并删除 extern | legacy mirror 仅在 ADC 内部维护 |
+| `g_u16TypeCOutStableAD`、`g_u16TypeCOutDelta_mV`、`g_u16VbcStableAD`、`g_u16VbcAdc_mV` | `103 + 309/Project/Source/ADC.c/.h` | 已删除或局部化 | 仅 ADC 内部换算中间态，不再保留跨调用镜像 |
+| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | legacy mirror 无读取方，删除后 ADC 对外结果仍由 `g_i32ADCResult[ADC_CURR]` 提供 |
 | `u8IICFaultcnt1/2`、`u8WakeCnt1/2` | `103 + 309/Project/Source/DataDeal.c` | 已改为 `static` | 仅 AFE monitor 内部计数 |
 | `AFE_ResetFlag` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已删除定义、extern 和唯一赋值 | 仅写不读，未参与 AFE reset 后续流程 |
 | `AFE_Parameters_RS485_Struction` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已改为 `static`，删除 extern | 参数读写仍通过本文件函数完成，未改结构体内容 |
