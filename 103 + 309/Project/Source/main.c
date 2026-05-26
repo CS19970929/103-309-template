@@ -1,5 +1,6 @@
 #include "main.h"
 #include "Flash64KAppTest.h"
+#include "FactoryAging.h"
 
 UINT8 SeriesNum = 10;
 
@@ -119,6 +120,7 @@ int main(void)
 		App_Sci();
 #else
 		SysTime_LatchTaskFlags();
+		FactoryAging_Task();
 		APP_LedBar();
 		// App_WarnCtrl();
 		App_AFEGet();

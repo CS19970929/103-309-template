@@ -8,6 +8,7 @@
 #define FLASH_ADDR_SH367309_VALUE        0x0801E000
 #define FLASH_ADDR_SH367309_FLAG         0x0801E800
 #define FLASH_ADDR_UPGRADE_PARAM_FLAG    ((UINT32)0x0801F000)
+#define FLASH_ADDR_FACTORY_AGING_FLAG    ((UINT32)0x0801F400)
 #define FLASH_ADDR_UPDATE_FLAG           0x0801F800
 #define FLASH_ADDR_SLEEP_FLAG            0x0801FC00
 
@@ -42,6 +43,11 @@
 #define FLASH_TO_IAP_VALUE               ((UINT16)0x00AB)
 #define FLASH_TO_APP_VALUE               ((UINT16)0xFFFF)
 #define FLASH_UPGRADE_PARAM_FLAG_RESET   ((UINT16)0xFFFF)
+#define FLASH_FACTORY_AGING_DONE_VALUE   ((UINT16)0xA93D)
+#define FLASH_FACTORY_AGING_RESET_VALUE  ((UINT16)0xFFFF)
+#define FLASH_FACTORY_AGING_STATE_RUNNING ((UINT16)0xA931)
+#define FLASH_FACTORY_AGING_STATE_STOPPED ((UINT16)0xA930)
+#define FLASH_FACTORY_AGING_STATE_DONE   FLASH_FACTORY_AGING_DONE_VALUE
 
 #define FLASH_NORMAL_SLEEP_VALUE         ((UINT16)0x1234)
 #define FLASH_DEEP_SLEEP_VALUE           ((UINT16)0x1235)
@@ -74,6 +80,13 @@ typedef struct
 	UINT16 heat_cool[FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT];
 } STORAGE_FLASH_RW_PARAM_DATA;
 
+typedef struct
+{
+	UINT32 u32Elapsed10ms;
+	UINT16 u16State;
+	UINT16 u16Reserved;
+} STORAGE_FLASH_FACTORY_AGING_DATA;
+
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);
@@ -87,6 +100,8 @@ UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
+UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
+UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data);
 
 void StorageFlash_PrintBootCheck(void);
 void App_FlashUpdate(void);

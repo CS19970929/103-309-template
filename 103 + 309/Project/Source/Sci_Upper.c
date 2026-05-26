@@ -1180,10 +1180,6 @@ UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words)
 	{
 		return RS485_ERROR_DATA_INVALID;
 	}
-	if (Sci_IsAnyPortBusy() != 0U)
-	{
-		return RS485_ERROR_CMD_INVALID;
-	}
 
 	memset(&stMsg, 0, sizeof(stMsg));
 	stMsg.AckType = RS485_ACK_POS;
@@ -1230,10 +1226,6 @@ UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u1
 		((u16Count << 1) > (UINT16)(RS485_MAX_BUFFER_SIZE - 9U)))
 	{
 		return RS485_ERROR_DATA_INVALID;
-	}
-	if (Sci_IsAnyPortBusy() != 0U)
-	{
-		return RS485_ERROR_CMD_INVALID;
 	}
 
 	memset(&stMsg, 0, sizeof(stMsg));

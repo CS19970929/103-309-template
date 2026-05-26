@@ -10,13 +10,14 @@
 
 ## 未适配项
 
-- D009 分支没有 `FactoryAging` 模块，本次不迁移老化模式开启、关闭、重置时间逻辑。
+- D009 分支已补齐 `FactoryAging` 模块，CAN App 服务支持 `0x07` 开启老化、`0x08` 关闭老化、`0x09` 重置老化时间，`0x14F80208` 的 `ch=8` 会带老化状态和剩余分钟。
 - `test_Autocurrent_cycle()` 保留，不在本次 CAN 适配中删除或改名。
 
 ## 升级安全
 
 - BMS App 正常起始地址仍为 `0x08004800`。
 - 当前实物使用的 BMS IAP 工程固定为 `E:\work\a002\new 030\IAP 103CB`，不要再按其它临时 IAP 工程判断协议。
+- `Project_Config.h` 里 `PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME` 默认关闭；需要通过升级包重置老化时间时才开启，并同步递增 `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION`。
 - 该 IAP 与 `can-upgrade-host` 分支一致，进入 IAP 的门闩是 SRAM mailbox `0x20004FE0`，字段为 `magic=0x49415031`、`request=0x5AA55AA5`、`crc=magic ^ request ^ 0xA5A55A5A`。
 - App RAM 必须预留 `0x20004FE0-0x20004FFF`，Keil IRAM 长度固定为 `0x00004FE0`；禁止改回 `0x00005000`，否则 mailbox 可能被栈或变量覆盖。
 - 串口 `0xFFFD` 和 CAN App `ENTER_IAP` 都必须调用 `AppUpgrade_RequestIap()` 写 SRAM mailbox，再延时复位。`FLASH_ADDR_UPDATE_FLAG/FLASH_TO_IAP_VALUE` 只保留为旧协议兼容常量，不再作为实际 IAP 进入门闩。

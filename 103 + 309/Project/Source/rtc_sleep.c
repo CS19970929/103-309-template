@@ -1,4 +1,5 @@
 #include "main.h"
+#include "FactoryAging.h"
 
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
@@ -282,6 +283,7 @@ static void low_power_log_and_commit_sleep(void)
     }
 
     Can_PrepareSleep();
+    (void)FactoryAging_SaveProgressBeforeSleep();
     LogRecord_Flag.bits.Log_Sleep = 1;
     LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
     SleepDeal_Continue();
@@ -436,6 +438,12 @@ void BQ769x0_SleepMode_Ctrl(void)
     {
         deepsleep_cnt = 0;
         deepsleep_cnt_1min = 0;
+    }
+
+    if (FactoryAging_IsActive() != 0U)
+    {
+        sys_time.enter_rtc_delay = 0;
+        return;
     }
 
     switch (su8_StartUp_Flag)
@@ -752,6 +760,7 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     Can_PrepareSleep();
+    (void)FactoryAging_SaveProgressBeforeSleep();
     before_rtcsleep();
 
     Init_RTC();
