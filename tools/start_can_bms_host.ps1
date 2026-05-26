@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("detect", "listen", "app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time", "upgrade-dry-run", "upgrade")]
+    [ValidateSet("detect", "listen", "app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time", "app-aging-set-hours", "upgrade-dry-run", "upgrade")]
     [string]$Mode = "detect",
     [string]$Interface = "pcan",
     [string]$Channel = "PCAN_USBBUS1",
@@ -9,6 +9,7 @@ param(
     [int]$NodeId = 1,
     [int]$CanAddress = 0,
     [int]$Soc = -1,
+    [int]$AgingHours = -1,
     [string]$ConfirmAppAddress = "",
     [string]$PythonVersion = "3.9",
     [switch]$WaitAck,
@@ -16,7 +17,8 @@ param(
     [switch]$ConfirmWriteSoc,
     [switch]$ConfirmAgingStart,
     [switch]$ConfirmAgingStop,
-    [switch]$ConfirmAgingResetTime
+    [switch]$ConfirmAgingResetTime,
+    [switch]$ConfirmAgingSetHours
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,7 +33,7 @@ try {
         $Mode
     )
 
-    $AppModes = @("app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time")
+    $AppModes = @("app-read-status", "app-enter-iap", "app-write-soc", "app-aging-start", "app-aging-stop", "app-aging-reset-time", "app-aging-set-hours")
 
     if ($Mode -eq "listen" -or $Mode -eq "upgrade" -or ($AppModes -contains $Mode)) {
         $CommonArgs += @(
@@ -80,6 +82,16 @@ try {
     if ($Mode -eq "app-aging-reset-time") {
         if ($ConfirmAgingResetTime) {
             $CommonArgs += "--confirm-aging-reset-time"
+        }
+    }
+
+    if ($Mode -eq "app-aging-set-hours") {
+        if ($AgingHours -lt 1 -or $AgingHours -gt 168) {
+            throw "Mode=app-aging-set-hours 需要 -AgingHours 1..168"
+        }
+        $CommonArgs += @("--aging-hours", [string]$AgingHours)
+        if ($ConfirmAgingSetHours) {
+            $CommonArgs += "--confirm-aging-set-hours"
         }
     }
 

@@ -84,7 +84,7 @@ typedef struct
 {
 	UINT32 u32Elapsed10ms;
 	UINT16 u16State;
-	UINT16 u16Reserved;
+	UINT16 u16DurationHours;
 } STORAGE_FLASH_FACTORY_AGING_DATA;
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);

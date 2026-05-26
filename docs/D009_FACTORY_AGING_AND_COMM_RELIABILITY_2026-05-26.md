@@ -17,7 +17,9 @@
   - `0x07 AGING_START`
   - `0x08 AGING_STOP`
   - `0x09 AGING_RESET_TIME`
+  - `0x0A AGING_SET_HOURS`
 - 老化控制命令 payload 固定为 `0xA9 action CAN_ADRESS_STD_ID`，第三字节校验板端 CAN 地址；comm tool 和 `tools/can_bms_host.py` 都按该格式发送。
+- `AGING_SET_HOURS` payload 为 `0xA9 hours CAN_ADRESS_STD_ID`，小时数范围 `1..168`；板端会持久化新老化总时长并重置累计老化时间。
 - 老化运行中阻塞普通 RTC 睡眠；低压/过放 deep sleep 判断仍在老化判断前，优先级不变。
 
 ## 升级后是否重置老化时间

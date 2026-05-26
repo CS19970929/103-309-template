@@ -48,6 +48,7 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_APP_CMD_AGING_START ((UINT8)0x07U)
 #define FEIDAO_CAN_APP_CMD_AGING_STOP ((UINT8)0x08U)
 #define FEIDAO_CAN_APP_CMD_AGING_RESET_TIME ((UINT8)0x09U)
+#define FEIDAO_CAN_APP_CMD_AGING_SET_HOURS ((UINT8)0x0AU)
 #define FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA ((UINT8)0x86U)
 #define FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS ((UINT8)120U)
 #define FEIDAO_CAN_APP_READ_BLOCK_FRAME_INTERVAL_TICKS ((UINT32)1U)
@@ -1190,6 +1191,23 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		if (FactoryAging_ResetTimeByHost() == 0U)
 		{
 			status = FEIDAO_CAN_APP_ACK_BMS_ERROR;
+		}
+		feidao_can_fill_aging_ack(&value0, &value1);
+		break;
+
+	case FEIDAO_CAN_APP_CMD_AGING_SET_HOURS:
+		if ((data[3] != FEIDAO_CAN_APP_AGING_GUARD) ||
+			(data[5] != (UINT8)CAN_ADRESS_STD_ID) ||
+			(data[4] < (UINT8)FACTORY_AGING_DURATION_HOURS_MIN) ||
+			(data[4] > (UINT8)FACTORY_AGING_DURATION_HOURS_MAX))
+		{
+			status = FEIDAO_CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		if (FactoryAging_SetDurationHoursByHost((UINT16)data[4]) == 0U)
+		{
+			status = FEIDAO_CAN_APP_ACK_BMS_ERROR;
+			break;
 		}
 		feidao_can_fill_aging_ack(&value0, &value1);
 		break;
