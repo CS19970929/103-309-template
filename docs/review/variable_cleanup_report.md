@@ -234,6 +234,10 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `key_release_wakeup` | `103 + 309/Project/Source/LedBar.c` | 已改为 `static` | 仅在 `LedBar.c` 内部使用，只收窄链接可见性 |
 | `g_u16BusOff_InitTestCnt` | `103 + 309/Project/Source/Can_HDX.c` | 已改为 `static` | 仅在 `Can_HDX.c` bus-off monitor 内计数，不改变 CAN 帧或协议输出 |
 | `g_u16BusOff_RecoverCnt` | `103 + 309/Project/Source/Can_HDX.c` | 已改为 `static` | 同上，仅收窄文件外可见性 |
+| `iSheldTemp_10K` | `103 + 309/Project/Source/ADC.c` | 已改为 `static const` | 只读 NTC 查表常量，未修改表值或 ADC 计算逻辑 |
+| `iSheldTemp_10K_AFE` | `103 + 309/Project/Source/I2C_AFE1.c` | 已改为 `static const` | 只读 AFE NTC 查表常量，未修改表值或采样逻辑 |
+| `CRC8Table` | `103 + 309/Project/Source/I2C_AFE1.c` | 已改为 `static const` | 只读 CRC 查表常量，未修改 CRC 算法 |
+| `AFE_OCD2V` | `103 + 309/Project/Source/SH367309_DataDeal.c` | 已改为 `static const` | 只读 OCD2V 档位查表常量，未修改保护档位值或参数映射逻辑 |
 
 ### 12.2 本轮刻意跳过项
 
@@ -250,7 +254,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 ### 12.3 本轮验证结果
 
-- `clang -fsyntax-only`：`RTC.c`、`LedBar.c`、`Can_HDX.c` 均通过；保留既有 warning：
+- `clang -fsyntax-only`：`RTC.c`、`LedBar.c`、`Can_HDX.c`、`ADC.c`、`I2C_AFE1.c`、`SH367309_DataDeal.c` 均通过；保留既有 warning：
   - `LedBar.c:144`：结构体缺少 `test_single_segment_id` 初始化字段。
 - `python3 tools/project_check.py`：147 OK / 1 warning / 0 errors；warning 为 release map 缺失。
 - `python3 tools/soc_replay_test.py`：47 项通过。

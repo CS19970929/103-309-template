@@ -25,7 +25,7 @@ UINT16 gu16_BusCurr_CHG; // legacy mirror, A*10
 UINT16 gu16_BusCurr_DSG; // legacy mirror, A*10
 
 // 12位，4096最大
-const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
+static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
     // AD		(Temp+40)*10
     3771,
     100, //-30
