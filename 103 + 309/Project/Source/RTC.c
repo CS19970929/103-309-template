@@ -4,10 +4,7 @@ __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时
 
 struct RTC_ELEMENT RTC_time;
 
-static struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
-
-static UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-#define Days_in_month(a) (month_days[(a)-1])
+static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 #define RTC_CLOCK_OK             0U
 #define RTC_CLOCK_USE_LSI        1U
@@ -19,6 +16,16 @@ static UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
 static UINT32 s_u32RtcWakeupPeriodOverrideSeconds = 0U;
+
+static UINT8 RTC_GetMonthDays(UINT32 month, UINT8 is_leap_year)
+{
+	if ((month == 2U) && (is_leap_year != 0U))
+	{
+		return 29U;
+	}
+
+	return month_days[month - 1U];
+}
 
 static void RTC_EnableBackupAccess(void)
 {
@@ -145,6 +152,7 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 
 	UINT32 i;
 	UINT32 Second_res, Day;
+	UINT8 is_leap_year;
 
 	Day = AllSecond / SEC_DAY;		  /* 有多少天 */
 	Second_res = AllSecond % SEC_DAY; /* 今天的时间，单位s */
@@ -161,15 +169,11 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	i %= 100; // 只保留后两位
 	RTCtime->RTC_Time_Year = (UINT8)i;
 
-	if (Leapyear(RTCtime->RTC_Time_Year))
-	{ // 计算当前的月份
-		Days_in_month(2) = 29;
-	}
-	for (i = 1; Day >= Days_in_month(i); i++)
+	is_leap_year = Leapyear(RTCtime->RTC_Time_Year);
+	for (i = 1; Day >= RTC_GetMonthDays(i, is_leap_year); i++)
 	{
-		Day -= Days_in_month(i);
+		Day -= RTC_GetMonthDays(i, is_leap_year);
 	}
-	Days_in_month(2) = 28;
 	RTCtime->RTC_Time_Month = (UINT8)i;
 
 	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // 计算当前日期
@@ -321,6 +325,8 @@ static void RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
 
 void RTC_TimeConfig(void)
 {
+	struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30, 0, 0, 0, 0, 0, 0};
+
 	// GregorianDay(tm);			//计算星期
 	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // 由日期计算时间戳并写入到RTC计数寄存器
 	RTC_WaitForLastTaskSafe();
@@ -548,8 +554,6 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-
-
 
 
 

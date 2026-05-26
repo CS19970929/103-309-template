@@ -19,7 +19,7 @@
 #define LEDBAR_DIGIT_BIT_F (1u << 5)
 #define LEDBAR_DIGIT_BIT_G (1u << 6)
 
-bool key_release_wakeup = false;
+static bool key_release_wakeup = false;
 
 typedef enum
 {

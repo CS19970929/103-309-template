@@ -11,8 +11,8 @@ volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
 #define FEIDAO_CAN_ERROR_INC(field) do { } while (0)
 #endif
 
-UINT16 g_u16BusOff_InitTestCnt = 0U;
-UINT16 g_u16BusOff_RecoverCnt = 0U;
+static UINT16 g_u16BusOff_InitTestCnt = 0U;
+static UINT16 g_u16BusOff_RecoverCnt = 0U;
 
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
 #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
