@@ -14,8 +14,11 @@ UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 #define RTC_CLOCK_NEED_REINIT    2U
 #define RTC_CLOCK_INIT_FAILED    3U
 #define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
+#define RTC_WAKEUP_MIN_SECONDS   ((UINT32)1U)
+#define RTC_WAKEUP_IWDG_SAFE_SECONDS ((UINT32)10U)
 
 static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
+static UINT32 s_u32RtcWakeupPeriodOverrideSeconds = 0U;
 
 static void RTC_EnableBackupAccess(void)
 {
@@ -365,36 +368,27 @@ void RTC_NVIC_Config(void)
 
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
-	UINT32 wake_seconds = Can_GetIdleRtcPeriodSeconds();
+	UINT32 wake_seconds;
 
+	if (s_u32RtcWakeupPeriodOverrideSeconds != 0U)
+	{
+		wake_seconds = s_u32RtcWakeupPeriodOverrideSeconds;
+	}
+	else
+	{
+		wake_seconds = Can_GetIdleRtcPeriodSeconds();
+	}
 	if (wake_seconds == 0U)
 	{
-		wake_seconds = 1U;
+		wake_seconds = RTC_WAKEUP_MIN_SECONDS;
 	}
 
-// #if defined(wdog_enable)
-// #if defined(__FUNC_RTC__)
-// 	{
-// 		const UINT32 watchdog_timeout_seconds = ((UINT32)0x0FFF * 256U) / 40000U;
-// 		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 5U) ? (watchdog_timeout_seconds - 5U) : 1U;
-
-// 		if (wake_seconds > watchdog_safe_window)
-// 		{
-// 			wake_seconds = watchdog_safe_window;
-// 		}
-// 	}
-// #else
-// 	{
-// 		const UINT32 watchdog_timeout_seconds = (800U * 64U) / 40000U;
-// 		const UINT32 watchdog_safe_window = (watchdog_timeout_seconds > 1U) ? (watchdog_timeout_seconds - 1U) : 1U;
-
-// 		if (wake_seconds > watchdog_safe_window)
-// 		{
-// 			wake_seconds = watchdog_safe_window;
-// 		}
-// 	}
-// #endif
-// #endif
+#if defined(wdog_enable)
+	if (wake_seconds > RTC_WAKEUP_IWDG_SAFE_SECONDS)
+	{
+		wake_seconds = RTC_WAKEUP_IWDG_SAFE_SECONDS;
+	}
+#endif
 
 	return wake_seconds;
 }
@@ -402,6 +396,25 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 {
 	return s_u32RtcLastWakeupPeriodSeconds;
+}
+
+void RTC_SetWakeupPeriodSeconds(UINT32 seconds)
+{
+	s_u32RtcWakeupPeriodOverrideSeconds = seconds;
+}
+
+UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds)
+{
+	if (seconds == 0U)
+	{
+		return 0U;
+	}
+
+#if defined(wdog_enable)
+	return (seconds <= RTC_WAKEUP_IWDG_SAFE_SECONDS) ? 1U : 0U;
+#else
+	return 1U;
+#endif
 }
 
 // RTC唤醒时间设置，

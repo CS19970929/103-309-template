@@ -3,6 +3,7 @@
 #include "FactoryAging.h"
 #include "Flash64KAppTest.h"
 #include "Runtime.h"
+#include "app_lowpower.h"
 
 #if (defined _DEBUG_CODE)
 static void Runtime_RunDebugOnce(void)
@@ -24,7 +25,7 @@ static void Runtime_RunIoAndPowerTasks(void)
 {
 	AppInit_ServiceSci();
 	App_AnlogCal();
-	App_LowPowerProcess();
+	LP_Task();
 	App_Can();
 	/* App_SOC(); */
 }

@@ -46,6 +46,23 @@ typedef struct
 	UINT32 crc;
 } APP_UPGRADE_MAILBOX;
 
+static volatile UINT8 s_u8StorageFlashBusy = 0U;
+
+static void StorageFlash_BeginWrite(void)
+{
+	s_u8StorageFlashBusy = 1U;
+}
+
+static void StorageFlash_EndWrite(void)
+{
+	s_u8StorageFlashBusy = 0U;
+}
+
+UINT8 StorageFlash_IsBusy(void)
+{
+	return s_u8StorageFlashBusy;
+}
+
 static UINT16 StorageFlash_CalcCrc(const UINT8 *data, UINT16 length)
 {
 	if ((data == 0) || (length == 0))
@@ -652,6 +669,7 @@ FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 	FLASH_Status result;
 	UINT8 retry;
 
+	StorageFlash_BeginWrite();
 	FLASH_Unlock();
 	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
 	result = FLASH_ERROR_PG;
@@ -669,6 +687,7 @@ FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 		result = FlashProgramHalfWordVerified(StartAddr, Buffer);
 	}
 	FLASH_Lock();
+	StorageFlash_EndWrite();
 	return result;
 }
 
@@ -770,11 +789,13 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 
 	save_data = *data;
 	save_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	StorageFlash_BeginWrite();
 	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 										  FLASH_ADDR_STORAGE_SOC_SLOT_B,
 										  FLASH_STORAGE_MAGIC_SOC,
 										  (const UINT8 *)&save_data,
 										  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA));
+	StorageFlash_EndWrite();
 	StorageFlash_AppUseTest_OnSocSaved(&save_data, result);
 	return result;
 }
@@ -803,11 +824,13 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 		return 0;
 	}
 
+	StorageFlash_BeginWrite();
 	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_AFE_SLOT_A,
 								   FLASH_ADDR_STORAGE_AFE_SLOT_B,
 								   FLASH_STORAGE_MAGIC_AFE,
 								   (const UINT8 *)values,
 								   (UINT16)(word_count * sizeof(UINT16)));
+	StorageFlash_EndWrite();
 	StorageFlash_AppUseTest_OnAfeSaved(values, word_count, result);
 	return result;
 }
@@ -828,17 +851,22 @@ UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 {
+	UINT8 result;
+
 	if (data == 0)
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0;
 	}
 
-	return StorageFlash_SavePair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
-								 FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
-								 FLASH_STORAGE_MAGIC_RW_PARAM,
-								 (const UINT8 *)data,
-								 (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA));
+	StorageFlash_BeginWrite();
+	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
+								   FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
+								   FLASH_STORAGE_MAGIC_RW_PARAM,
+								   (const UINT8 *)data,
+								   (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA));
+	StorageFlash_EndWrite();
+	return result;
 }
 
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
@@ -868,6 +896,7 @@ UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LO
 {
 	STORAGE_FLASH_LOG_DATA data;
 	STORAGE_FLASH_LOG_DATA current_data;
+	UINT8 result;
 
 	if (records == 0)
 	{
@@ -889,11 +918,14 @@ UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LO
 		return 1;
 	}
 
-	return StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
-										FLASH_ADDR_STORAGE_LOG_SLOT_B,
-										FLASH_STORAGE_MAGIC_LOG,
-										(const UINT8 *)&data,
-										(UINT16)sizeof(STORAGE_FLASH_LOG_DATA));
+	StorageFlash_BeginWrite();
+	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
+										  FLASH_ADDR_STORAGE_LOG_SLOT_B,
+										  FLASH_STORAGE_MAGIC_LOG,
+										  (const UINT8 *)&data,
+										  (UINT16)sizeof(STORAGE_FLASH_LOG_DATA));
+	StorageFlash_EndWrite();
+	return result;
 }
 
 UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
@@ -925,16 +957,21 @@ UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
 
 UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
 {
+	UINT8 result;
+
 	if (data == 0)
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0;
 	}
 
-	return StorageFlash_SaveJournalPage(FLASH_ADDR_FACTORY_AGING_FLAG,
-										FLASH_STORAGE_MAGIC_FACTORY_AGING,
-										(const UINT8 *)data,
-										(UINT16)sizeof(STORAGE_FLASH_FACTORY_AGING_DATA));
+	StorageFlash_BeginWrite();
+	result = StorageFlash_SaveJournalPage(FLASH_ADDR_FACTORY_AGING_FLAG,
+										  FLASH_STORAGE_MAGIC_FACTORY_AGING,
+										  (const UINT8 *)data,
+										  (UINT16)sizeof(STORAGE_FLASH_FACTORY_AGING_DATA));
+	StorageFlash_EndWrite();
+	return result;
 }
 
 static char StorageFlash_SelectLabel(UINT8 valid_a, UINT32 seq_a, UINT8 valid_b, UINT32 seq_b)

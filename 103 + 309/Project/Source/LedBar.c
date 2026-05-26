@@ -993,6 +993,30 @@ void LedBar_PrepareForStop(void)
 #endif
 }
 
+uint8_t LedBar_IsActiveForLowPower(void)
+{
+    if (s_ledbar.initialized == 0u)
+    {
+        return 0u;
+    }
+
+    if (s_ledbar.sleep != 0u)
+    {
+        return 0u;
+    }
+
+    if ((s_ledbar.test_single_segment_enable != 0u) ||
+        (s_ledbar.soc_display_10ms != 0u) ||
+        (s_ledbar.startup_display_armed != 0u) ||
+        (s_ledbar.frame_mask != 0u) ||
+        (s_ledbar.scan_timer_enabled != 0u))
+    {
+        return 1u;
+    }
+
+    return 0u;
+}
+
 void LedBar_Scan1ms(void)
 {
     if (s_ledbar.initialized == 0u)

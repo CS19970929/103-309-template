@@ -1,5 +1,6 @@
 #include "rtc_sleep_port.h"
 #include "elog.h"
+#include "app_lowpower.h"
 
 #undef LOG_TAG
 #define LOG_TAG "rtc_sleep"
@@ -210,6 +211,11 @@ static void low_power_select_sleep_mode(void)
     {
         block_reason = LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
     }
+    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
+        (LP_CanSleep() == 0U))
+    {
+        block_reason = LOW_POWER_RTC_BLOCK_FRAMEWORK;
+    }
 
     if (block_reason != LOW_POWER_RTC_BLOCK_NONE)
     {
@@ -339,6 +345,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
     report_wkup_sig();
 
+    LP_RecordLastSleepSeconds(s_u32RtcSleepElapsedSeconds);
     RtcSleep_PortAddRuntimeSeconds(s_u32RtcSleepElapsedSeconds);
     s_u32RtcWakeCycles = 0U;
     s_u32RtcSleepElapsedSeconds = 0U;
@@ -441,6 +448,14 @@ void rtc_sleep(void)
 
     if (g_stLowPowerRtcStatus.readyToSleep != 1U)
     {
+        return;
+    }
+
+    if ((g_stLowPowerRtcStatus.mode == HICCUP_MODE) &&
+        (LP_CanSleep() == 0U))
+    {
+        low_power_delay_rtc(LOW_POWER_RTC_BLOCK_FRAMEWORK);
+        LowPower_Request(NO_SLEEP);
         return;
     }
 

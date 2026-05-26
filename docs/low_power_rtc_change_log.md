@@ -120,6 +120,80 @@ P2：
 - 已更新：`docs/design/low_power_phase2_design_summary.md`
 - 已更新：`docs/low_power_rtc_change_log.md`
 
+## 2026-05-26 第三阶段最小实现
+
+### 变更类型
+
+- 源码
+- 文档
+- 构建
+
+### 修改文件
+
+- `103 + 309/Project/Source/app_lowpower.c`
+- `103 + 309/Project/Source/app_lowpower.h`
+- `103 + 309/Project/Source/bsp_rtc.c`
+- `103 + 309/Project/Source/bsp_rtc.h`
+- `103 + 309/Project/Source/bsp_power.c`
+- `103 + 309/Project/Source/bsp_power.h`
+- `103 + 309/Project/Source/bsp_clock.c`
+- `103 + 309/Project/Source/bsp_clock.h`
+- `103 + 309/Project/Source/AppInit.c`
+- `103 + 309/Project/Source/Runtime.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep.h`
+- `103 + 309/Project/Source/RTC.c`
+- `103 + 309/Project/Source/RTC.h`
+- `103 + 309/Project/Source/Flash.c`
+- `103 + 309/Project/Source/Flash.h`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/LedBar.h`
+- `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`
+- `docs/implementation/low_power_phase3_minimal_implementation.md`
+- `docs/low_power_rtc_change_log.md`
+
+### 变更摘要
+
+1. 新增 `app_lowpower`、`bsp_rtc`、`bsp_power`、`bsp_clock` 四组最小框架模块。
+2. `AppInit_Boot()` 在现有 `Init_RTC()` 后初始化低功耗框架。
+3. `Runtime_RunIoAndPowerTasks()` 使用 `LP_Task()` 承接原低功耗周期任务。
+4. 原 `rtc_sleep()` 保留，仅通过 `LP_CanSleep()` 增加通信、Flash、升级、LED、故障、IWDG 等阻塞约束。
+5. RTC 唤醒周期增加框架覆盖接口，并在 IWDG 开启时限制到 10 秒安全窗口。
+6. Flash 增加同步写入 busy 标志，LED 增加低功耗活跃状态查询。
+7. Keil `FD_Release` 和 `FD_Debug` 两个 target 均加入新增 C 文件。
+
+### 风险影响
+
+- P0：IWDG 误复位风险降低，RTC 周期被限制到 10 秒安全窗口。
+- P0：通信半包入睡风险降低，`Sci_IsAnyPortBusy()`、`Can_IsBusy()`、`Can_IsBusActive()` 会阻塞 Stop。
+- P0：Flash 写入窗口入睡风险降低，新增 `StorageFlash_IsBusy()` 与升级 pending 阻塞。
+- P1：LED 显示窗口入睡风险降低，新增 `LedBar_IsActiveForLowPower()`。
+- 剩余风险：仍需上板验证 Stop 电流、RTC 唤醒、外设恢复和 CAN/Modbus 通信连续性。
+
+### 验证结果
+
+- 编译：通过。
+- 工程：`103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`
+- Target：`FD_Release`
+- 编译器：ARMCC `V5.06 update 7 build 960`
+- 结果：`0 Error(s), 0 Warning(s)`
+- 大小：`Code=51076 RO-data=2964 RW-data=816 ZI-data=6040`
+- BIN：`103 + 309/Project/Users/Objects/FD_Release.bin`
+- 烧录：未执行。
+- Modbus：未上板验证。
+- CAN：未上板验证。
+- RTC Stop：未上板验证。
+- IWDG：未上板验证。
+- Flash：仅编译验证，未做掉电/擦写实测。
+- AFE/MOS：未上板验证。
+- SOC：未上板验证。
+- LED/按键：未上板验证。
+
+### 文档同步
+
+- 已新增：`docs/implementation/low_power_phase3_minimal_implementation.md`
+- 已更新：`docs/low_power_rtc_change_log.md`
+
 ## 后续变更记录模板
 
 后续每次代码或文档变更按此模板追加：
