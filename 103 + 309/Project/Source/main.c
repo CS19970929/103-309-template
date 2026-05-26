@@ -89,6 +89,12 @@ void open_dsg_close_chg(void)
 void enter_fac_mode(bool on)
 {
 #if 1
+	if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET)
+	{
+		open_chg_close_dsg();
+		return;
+	}
+
 	if (on)
 	{
 		SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // å¯?¿½éšç–ŒADC
