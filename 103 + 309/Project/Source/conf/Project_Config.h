@@ -401,11 +401,11 @@
 
 // <o> 升级参数策略版本 <0x0000-0xFFFE>
 // <i> 升级参数策略版本。策略内容变化时递增，避免重复或漏执行。
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0003
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0004
 
 // <q> 重置 AFE 参数
 // <i> 升级时重置 AFE 参数。只在 AFE 默认参数必须覆盖现场值时开启。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> 重置保护参数
 // <i> 升级时重置保护参数。会影响保护阈值，必须谨慎开启。
@@ -425,11 +425,11 @@
 
 // <q> 重置 SOC 快照
 // <i> 升级时清除 SOC 快照。开启后首次启动可能重新按 OCV 估算 SOC。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
 
 // <q> 重置事件记录
 // <i> 升级时清除事件记录。售后需要保留历史故障时必须关闭。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> 重置老化时间
 // <i> 升级后首次启动清零老化累计时间。需要随升级重新开始老化时开启，并同步递增策略版本。
