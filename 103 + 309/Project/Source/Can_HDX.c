@@ -20,7 +20,15 @@ UINT16 g_u16BusOff_RecoverCnt = 0U;
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TX_TIMEOUT_TICKS ((UINT32)20U)
-#define FEIDAO_CAN_RTC_PERIOD_SECONDS ((UINT32)1U)
+#ifndef PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS
+#define PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS 1
+#endif
+#ifndef PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS
+#define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10
+#endif
+#define FEIDAO_CAN_RTC_PERIOD_SECONDS ((UINT32)PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS)
+#define FEIDAO_CAN_BUS_ACTIVE_HOLD_TICKS \
+	((UINT32)PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS * FEIDAO_CAN_PERIOD_1000MS_TICKS)
 #define FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS ((UINT32)150U)
 
 #define FEIDAO_CAN_TX_QUEUE_SIZE ((UINT8)32U)
@@ -72,7 +80,8 @@ static UINT32 s_u32CanTick = 0U;
 static UINT32 s_u32Last1000msTick = 0U;
 static UINT32 s_u32Last5000msTick = 0U;
 static UINT8 s_u8ScheduleInit = 0U;
-static UINT8 s_u8BusActive = 0U;
+static volatile UINT8 s_u8BusActive = 0U;
+static volatile UINT32 s_u32LastBusActivityTick = 0U;
 static UINT8 s_u8CanBusOff = 0U;
 static volatile UINT8 s_u8RtcServiceActive = 0U;
 static volatile UINT8 s_u8LastRtcWakeTimeout = 0U;
@@ -147,6 +156,23 @@ static void feidao_can_inc_u16(volatile UINT16 *counter)
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks)
 {
 	return (((UINT32)(now_tick - start_tick)) >= wait_ticks) ? 1U : 0U;
+}
+
+static void feidao_can_mark_bus_active(UINT32 now_tick)
+{
+	s_u8BusActive = 1U;
+	s_u32LastBusActivityTick = now_tick;
+}
+
+static void feidao_can_update_bus_active_timeout(UINT32 now_tick)
+{
+	if ((s_u8BusActive != 0U) &&
+		(feidao_can_tick_elapsed(now_tick,
+								 s_u32LastBusActivityTick,
+								 FEIDAO_CAN_BUS_ACTIVE_HOLD_TICKS) != 0U))
+	{
+		s_u8BusActive = 0U;
+	}
 }
 
 static void feidao_can_update_error_snapshot(void)
@@ -296,7 +322,7 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		status = CAN_TransmitStatus(CAN1, s_u8TxMailbox);
 		if (status == CAN_TxStatus_Ok)
 		{
-			s_u8BusActive = 1U;
+			feidao_can_mark_bus_active(now_tick);
 			feidao_can_clear_tx_done(s_u8TxMailbox);
 			s_u8TxMailbox = CAN_TxStatus_NoMailBox;
 		}
@@ -808,7 +834,7 @@ static void feidao_can_handle_rx_msg(const CanRxMsg *rx_msg)
 		return;
 	}
 
-	s_u8BusActive = 1U;
+	feidao_can_mark_bus_active(SysTime_Get10msTickCount());
 	if (((UINT16)rx_msg->StdId == expect_std_id) && (rx_msg->DLC == 8U))
 	{
 		feidao_can_queue_app_cmd(rx_msg->Data);
@@ -894,6 +920,7 @@ void InitCan(void)
 	s_u8TxMailbox = CAN_TxStatus_NoMailBox;
 	s_u8ScheduleInit = 0U;
 	s_u8BusActive = 0U;
+	s_u32LastBusActivityTick = 0U;
 	s_u8RtcServiceActive = 0U;
 	s_u8LastRtcWakeTimeout = 0U;
 	s_u8EnterIapDelayTicks = 0U;
@@ -941,12 +968,13 @@ void Can_PrepareSleep(void)
 
 UINT8 Can_IsBusActive(void)
 {
+	feidao_can_update_bus_active_timeout(SysTime_Get10msTickCount());
 	return s_u8BusActive;
 }
 
 UINT32 Can_GetIdleRtcPeriodSeconds(void)
 {
-	return FEIDAO_CAN_RTC_PERIOD_SECONDS;
+	return (FEIDAO_CAN_RTC_PERIOD_SECONDS == 0U) ? 1U : FEIDAO_CAN_RTC_PERIOD_SECONDS;
 }
 
 void Can_RtcWakeService(UINT32 elapsed_seconds)
@@ -983,6 +1011,7 @@ void App_Can(void)
 	UINT32 now_tick = SysTime_Get10msTickCount();
 
 	s_u32CanTick = now_tick;
+	feidao_can_update_bus_active_timeout(now_tick);
 	feidao_can_busoff_monitor();
 	feidao_can_schedule_periodic(now_tick);
 	feidao_can_service_app_cmd();

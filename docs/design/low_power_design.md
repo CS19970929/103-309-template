@@ -3,8 +3,8 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`app_lowpower.c`, `rtc_sleep.c`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
-最后更新时间：2026-05-26
-未确认事项：RTC 休眠中是否必须周期 CAN 广播、IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep。
+最后更新时间：2026-05-27
+未确认事项：IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep、`PROJECT_CFG_IDLE_SLEEP_ENABLE` 打开后是否通过硬件实测。
 
 ## 1. 当前低功耗入口
 
@@ -57,6 +57,8 @@ RTC 优先 LSE，失败后 LSI fallback。F1 使用 RTC counter + Alarm 唤醒 S
 
 IWDG 开启时，RTC wake period 最大被限制为 10s。
 
+CAN RTC 唤醒广播周期由 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置，默认 `1s`，用于保留当前客户可见的周期广播行为。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；超时后允许低功耗判断不再被历史 CAN active 状态永久阻塞。
+
 ## 5. IWDG 使用
 
 IWDG 默认开启：
@@ -76,11 +78,26 @@ HICCUP STOP 醒来后：
 4. 运行 CAN RTC wake service。
 5. 如果出现电流/AFE/按键/充电等异常唤醒，则退出 RTC sleep loop。
 
-## 7. 风险和建议
+## 7. 运行态 idle sleep
+
+`Runtime_RunNormalOnce()` 预留 `PROJECT_CFG_IDLE_SLEEP_ENABLE`。默认 `0`，不改变当前量产运行行为。
+
+打开后，主循环在完成本轮任务后检查：
+
+- 无待处理系统 tick。
+- SCI 不 busy。
+- CAN 不 busy。
+- Flash 不 busy。
+- 无 IAP / 参数写入 pending。
+
+条件满足时仅进入 STM32 Sleep (`WFI`)，不进入 STOP，不关闭 CAN/USART/TIM3/EXTI。该模式主要降低运行态 CPU 空转功耗，不能替代 RTC STOP、CAN 收发器 standby、DC/DC/AFE/LED 电源控制。
+
+## 8. 风险和建议
 
 | 风险 | 建议 |
 |---|---|
-| CAN bus active 可能长期阻塞 sleep | 确认低功耗时是否要求 CAN 在线 |
+| CAN bus active 可能长期阻塞 sleep | 已改为配置化保持时间，默认 10s，需实测 CAN 在线/离线切换 |
 | IWDG 10s 周期导致功耗偏高 | 实测后决定是否调整 IWDG/RTC 策略 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |
 | LedBar active 阻塞 sleep 影响用户显示和功耗 | 确认显示窗口时长 |
+| STM32 idle sleep 打开后可能影响现场调试节奏 | 默认关闭，硬件回归后再决定是否量产打开 |

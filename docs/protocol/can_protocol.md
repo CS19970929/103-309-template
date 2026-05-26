@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/Can_HDX.c`, `103 + 309/Project/Source/Can_HDX.h`, `103 + 309/Project/Source/CanFeidaoFrames.c`, `103 + 309/Project/Source/CanFeidaoFrames.h`, `tools/can_bms_host.py`
-最后更新时间：2026-05-26
+最后更新时间：2026-05-27
 未确认事项：飞道协议字段单位和客户最终版本仍需用户确认；本文以当前源码发送内容和 App 命令为准。
 
 ## 1. CAN 初始化
@@ -63,10 +63,14 @@
 
 - `Can_PrepareSleep()` 会取消当前发送、清空发送队列、清空 App 命令队列、停止 block stream，并关闭 CAN 收发器电源。
 - `Can_RtcWakeService()` 会短时打开 CAN 电源并发送 1000ms 探测帧，过程中持续喂 IWDG。
-- 当前低功耗是否保留 CAN 周期广播属于需求确认项，不能只按旧文档判断。
+- `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置 RTC 唤醒 CAN 广播周期，默认 `1s`，保留当前客户可见行为。
+- `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 配置 CAN active 保持时间，默认 `10s`。最后一次 TX ACK 或 RX 帧后保持 active，超时后允许低功耗判断继续，不再永久阻塞 STOP。
+
+当前策略：必须保留 CAN RTC 周期广播，默认周期为 `1s`；CAN active 保持时间可配置，默认 `10s`。
 
 ## 5. 兼容风险
 
 1. 周期帧 ID、字段单位和字节序属于客户协议兼容面。
 2. App 命令 `READ_REG`/`WRITE_COMMIT` 直接桥接 Modbus 寄存器，任何寄存器权限变更都会影响 CAN 上位机。
 3. 老化、写 SOC、IAP 都是外部可见命令，后续必须先回归 `tools/can_bms_host.py` 和 `tools/comm_tool_upgrade_ui.py`。
+4. 低功耗优化不得改变默认 `1s` RTC CAN 广播，也不得改变外部可见 CAN ID、payload 或 App 命令语义。

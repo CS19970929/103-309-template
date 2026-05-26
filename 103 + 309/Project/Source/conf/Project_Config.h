@@ -85,6 +85,24 @@
 // <i> 使能 RTC。用于低功耗计时、休眠唤醒和 SOC 休眠修正。
 #define PROJECT_CFG_RTC_ENABLE 1
 
+// <o> CAN RTC wake broadcast period seconds <1-10>
+// <i> Default 1s keeps current customer-visible CAN broadcast behavior.
+#ifndef PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS
+#define PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS 1
+#endif
+
+// <o> CAN active hold time seconds <1-600>
+// <i> After the last CAN TX ACK or RX frame, keep CAN active for this period before allowing low-power checks.
+#ifndef PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS
+#define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10
+#endif
+
+// <q> Enable STM32 run-mode idle sleep
+// <i> CPU enters Sleep with WFI only when main-loop services are idle; TIM3/CAN/USART/EXTI wake it.
+#ifndef PROJECT_CFG_IDLE_SLEEP_ENABLE
+#define PROJECT_CFG_IDLE_SLEEP_ENABLE 0
+#endif
+
 // <q> 使能负载移除短路恢复
 // <i> 使能负载移除短路恢复逻辑。按产品保护策略决定。
 #define PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE 0

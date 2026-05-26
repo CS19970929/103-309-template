@@ -6,6 +6,28 @@
 最后更新时间：2026-05-27
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-05-27 CAN 低功耗配置与 idle sleep 预留
+
+### 本次源码修改
+
+- `Can_HDX.c`：将 RTC 唤醒 CAN 广播周期改为 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS`，默认 `1s`，保持当前客户可见行为。
+- `Can_HDX.c`：新增 CAN active 超时保持，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；最后一次 TX ACK 或 RX 帧后超时清除 active，避免历史 CAN active 永久阻塞低功耗。
+- `Can_HDX.c`：CAN active 标志和时间戳按中断/主循环共享状态处理。
+- `Runtime.c`：预留 STM32 运行态 idle sleep (`WFI`) 入口，只在系统 tick、SCI、CAN、Flash、IAP/参数写入均空闲时进入。
+- `Project_Config.h`：新增 CAN 低功耗和 idle sleep 配置项；`PROJECT_CFG_IDLE_SLEEP_ENABLE` 默认 `0`，待硬件实测后再决定是否量产打开。
+
+### 本次文档更新
+
+- `docs/protocol/can_protocol.md`
+- `docs/design/low_power_design.md`
+- `docs/changelog/change_log.md`
+
+### 兼容性说明
+
+- 未修改 CAN ID、payload、App 命令、Modbus 桥接语义、IAP 入口。
+- 未修改保护逻辑、MOS 控制、AFE 配置、参数存储格式。
+- CAN RTC 周期广播默认仍为 `1s`。
+
 ## 2026-05-27 文档清理与合并
 
 ### 本次删除
