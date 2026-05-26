@@ -18,6 +18,10 @@
 #define CT_CAN_APP_AGING_SET_HOURS      0x0Au
 #define CT_CAN_APP_READ_BLOCK_DATA      0x86u
 #define CT_CAN_APP_READ_BLOCK_MAX_WORDS 120u
+
+#define CT_CAN_GATEWAY_ERR_NONE         0u
+#define CT_CAN_GATEWAY_ERR_BMS          1u
+#define CT_CAN_GATEWAY_ERR_TIMEOUT      2u
 #define CT_CAN_APP_AGING_GUARD          0xA9u
 #define CT_CAN_APP_AGING_ACTION_START   0x51u
 #define CT_CAN_APP_AGING_ACTION_STOP    0x50u
@@ -48,6 +52,7 @@ int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const ui
 int CtCan_AppAgingControl(uint8_t can_addr, uint8_t action, uint8_t *state, uint8_t *remaining_hours);
 int CtCan_AppSetAgingHours(uint8_t can_addr, uint16_t hours, uint8_t *state, uint8_t *remaining_hours);
 int CtCan_ReadFactoryAgingBroadcast(uint8_t *state, uint16_t *remaining_minutes, uint32_t timeout_ms);
+uint8_t CtCan_GetLastGatewayError(void);
 int CtCan_IapSendHello(uint8_t node);
 int CtCan_IapSendStart(uint8_t node, uint32_t size, uint16_t crc16);
 int CtCan_IapSendData(uint8_t node, uint16_t seq, const uint8_t data[8]);

@@ -275,6 +275,11 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	if ((u16ActualAddr >= RS485_ADDR_RO_LCD) && (u16ActualAddr < RS485_ADDR_RO_START0))
 	{
 		u16ValidateOffset = 0U;
+		if ((u16ActualAddr >= RS485_ADDR_EVENT_RECORD) &&
+			(u16ActualAddr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+		{
+			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_EVENT_RECORD);
+		}
 	}
 
 	if ((!Sci_GetReadWindowWordCount(u16ActualAddr, &u16WindowWords)) ||
@@ -402,6 +407,12 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	}
 	if (actual_addr >= RS485_ADDR_RO_LCD)
 	{
+		if ((actual_addr >= RS485_ADDR_EVENT_RECORD) &&
+			(actual_addr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+		{
+			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
+			return 1;
+		}
 		switch (actual_addr)
 		{
 		case RS485_ADDR_RO_LCD:
@@ -698,9 +709,18 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
 	UINT16 i, j;
+	UINT16 u16SourceOffset = 0U;
 	INT8 k, x;
 
 	i = 0;
+	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
+		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+	{
+		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD));
+		Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
+	}
+	else
+	{
 	switch (s->u16RdRegStartAddr)
 	{
 	case 0: // LCD
@@ -776,7 +796,8 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		s->u16RdRegStartAddr = 0;
 		break;
 	}
-	s->u16RdRegStartAddr = 0;
+	}
+	s->u16RdRegStartAddr = u16SourceOffset;
 }
 
 void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
