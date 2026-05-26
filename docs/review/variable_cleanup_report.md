@@ -221,7 +221,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 ## 12. 本轮低风险清理执行记录
 
-> 状态：已按“只处理明确低风险变量”的边界执行；未触碰 `volatile`、中断共享变量、协议字段、SOC/ADC/AFE/保护/低功耗关键状态、Flash 持久化变量、上位机可见变量。
+> 状态：已按“只清理明确低风险变量”的边界完成第二轮收口。处理原则是：不改协议寄存器和结构体布局，不改表值，不改 Flash 存储格式，不改保护阈值语义；对 `__IO` / `volatile` 变量仅在确认所有读写都在同一 `.c` 文件内后收窄链接可见性，保留原类型和读写路径。
 >
 > 日期：2026-05-27
 
@@ -229,90 +229,103 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 | 变量 | 文件 | 本轮处理 | 风险说明 |
 |---|---|---|---|
-| `Systmtime` | `103 + 309/Project/Source/RTC.c` | 已局部化到 `RTC_TimeConfig()` | 仅作为首次 RTC 默认时间使用，不改变 RTC 对外结构 `RTC_time` |
-| `month_days` | `103 + 309/Project/Source/RTC.c` | 已改为 `static const`，并用 `RTC_GetMonthDays()` 处理闰年 2 月 | 去掉运行时改写月份表的副作用，保持原闰年计算口径 |
-| `key_release_wakeup` | `103 + 309/Project/Source/LedBar.c` | 已改为 `static` | 仅在 `LedBar.c` 内部使用，只收窄链接可见性 |
-| `g_u16BusOff_InitTestCnt` | `103 + 309/Project/Source/Can_HDX.c` | 已改为 `static` | 仅在 `Can_HDX.c` bus-off monitor 内计数，不改变 CAN 帧或协议输出 |
-| `g_u16BusOff_RecoverCnt` | `103 + 309/Project/Source/Can_HDX.c` | 已改为 `static` | 同上，仅收窄文件外可见性 |
-| `iSheldTemp_10K` | `103 + 309/Project/Source/ADC.c` | 已改为 `static const` | 只读 NTC 查表常量，未修改表值或 ADC 计算逻辑 |
-| `iSheldTemp_10K_AFE` | `103 + 309/Project/Source/I2C_AFE1.c` | 已改为 `static const` | 只读 AFE NTC 查表常量，未修改表值或采样逻辑 |
-| `CRC8Table` | `103 + 309/Project/Source/I2C_AFE1.c` | 已改为 `static const` | 只读 CRC 查表常量，未修改 CRC 算法 |
-| `AFE_OCD2V` | `103 + 309/Project/Source/SH367309_DataDeal.c` | 已改为 `static const` | 只读 OCD2V 档位查表常量，未修改保护档位值或参数映射逻辑 |
+| `BMS_LOG_POINT` / `BMS_LOG_RECORD` | `103 + 309/Project/Source/LogRecord.c` | 已改为 `static`，删除头文件旧注释 extern | 日志仍通过 `StorageFlash_SaveLogData()` / `StorageFlash_LoadLogData()` 读写，未改存储格式和 API |
+| `gu8_Reset_EventRecord` | `103 + 309/Project/Source/LogRecord.c/.h` | 已删除定义、extern 和唯一清零点 | 仅写不读，未参与事件记录复位行为 |
+| `g_u8SCITxBuff` | `103 + 309/Project/Source/Sci_Upper.c` | 已改为 `static` | 仅 SCI 模块内部组包使用，不改变帧格式 |
+| `g_stCurrentMsgPtr_SCI1/2/3` | `103 + 309/Project/Source/Sci_Upper.c/.h` | 已改为 `static` 并删除 extern | 端口绑定仍在 `Sci_Upper.c` 内完成，外部无直接引用 |
+| `gu16_CommuErrCnt_SCI1/2/3`、`gu8_TxEnable_SCI1/2/3`、`gu8_TxFinishFlag_SCI1/2/3` | `103 + 309/Project/Source/Sci_Upper.c/.h` | 已改为 `static`，删除无外部引用的 extern | 仅收窄链接可见性，不改变 RS485 方向控制逻辑 |
+| `Sci_ResetCalibCoefIndex()` | `103 + 309/Project/Source/Sci_Upper.c` | 已删除未使用静态函数 | 不是变量；同步清理 `clang` 报出的未使用遗留函数 |
+| `Sci_ACK_0x03()` 局部 `i` | `103 + 309/Project/Source/Sci_Upper.c` | 已初始化为 `0U` | 修复条件路径未初始化后参与 CRC 的风险 |
+| `TimeDisplay` | `103 + 309/Project/Source/RTC.c` | 已改为 `static __IO` | `RTC_IRQHandler()` 与消费点均在同文件，保留 `__IO` 语义 |
+| `g_u16ADCValFilter` | `103 + 309/Project/Source/ADC.c` | 已改为 `static __IO` | DMA/滤波读写均在 `ADC.c` 内，保留 `__IO` 和位宽 |
+| `g_u32ADCValFilter2` | `103 + 309/Project/Source/ADC.c` | 已改为 `static` | 仅 ADC 内部缓存，未改 `INT32` 类型 |
+| `g_u16IoutOffsetAD`、`g_u16TypeCOutOffsetAD` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | 原逻辑每次置 0 且无读取 |
+| `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h` | 已隐藏为 `static`，新增 `ADC_GetTypeCOutCurrentMilliAmp()` | SOC 通过 getter 读取 mA 值，避免裸全局暴露 |
+| `g_u16TypeCBatEquivCurrent_mA`、`g_u16TypeCBatEquivCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h`, `SOC.c` | 已删除全局镜像，`SOC_GetTypeCBatEquivCurrentA10()` 直接返回计算结果 | 保留 Type-C 输出电流换算为电池侧等效电流的行为 |
+| `g_u16TypeCOutStableAD`、`g_u16TypeCOutDelta_mV`、`g_u16VbcStableAD`、`g_u16VbcAdc_mV` | `103 + 309/Project/Source/ADC.c/.h` | 已改为 `static` 并删除 extern | 仅 ADC 内部换算中间态 |
+| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `103 + 309/Project/Source/ADC.c/.h` | 已改为 `static` 并删除 extern | legacy mirror 仅在 ADC 内部维护 |
+| `u8IICFaultcnt1/2`、`u8WakeCnt1/2` | `103 + 309/Project/Source/DataDeal.c` | 已改为 `static` | 仅 AFE monitor 内部计数 |
+| `AFE_ResetFlag` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已删除定义、extern 和唯一赋值 | 仅写不读，未参与 AFE reset 后续流程 |
+| `AFE_Parameters_RS485_Struction` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已改为 `static`，删除 extern | 参数读写仍通过本文件函数完成，未改结构体内容 |
+| `AFE_OCD1V_OCCV`、`AFE_OCD2V`、`AFE_OVT_UVT`、`AFE_OCD1T`、`AFE_OCCT_OCD2T` | `103 + 309/Project/Source/SH367309_DataDeal.c` | 已改为文件内 `static const` 并统一命名 | 只读 AFE 档位表，未改表值 |
+| `AFE_SCV` / `AFE_SCT` | `SH367309_DataDeal.c`, `ShortFunc.c` | 已拆成 `g_u16ShAfeScvTable` / `g_u16ShAfeSctTable` 与 `s_bq_afe_scv` / `s_bq_afe_sct` | 避免不同 AFE 配置下同名表冲突；SH 表仍供 `ShortFunc.c` 只读使用 |
+| `g_irq_t` | `103 + 309/Project/Source/rtc_sleep.c/.h` | 已改为 `static` 并删除 extern | 仅低功耗模块内部使用，未改 wake source 枚举语义 |
+| `g_stLowPowerRtcStatus` | `103 + 309/Project/Source/rtc_sleep.c/.h` | 已改为 `static volatile` 并删除 extern | 保留 `volatile`，所有读写在 `rtc_sleep.c` 内 |
+| `is_wakeup`、`gu8_WakeUp_Type` | `rtc_sleep.c/.h`, `conf/conf.c` | 已删除变量、extern 和唯一置位 | 仅写不读，STOP 恢复仍走 `InitRunAfterStopWakeup()` |
+| `curr_offset`、`OffsetValue_CHG`、`OffsetValue_DSG` | `103 + 309/Project/Source/EEPROM.c/.h` | 已删除定义、extern 和默认清零 | 仅写不读，不影响 Flash 默认参数装载 |
+| `CBC_Element` | `103 + 309/Project/Source/System_Init.c/.h` | 已删除定义和 extern | 仅定义未使用 |
+| `FaultPoint_First` / `FaultPoint_Second` | `103 + 309/Project/Source/Fault.c/.h` | 已删除定义和 extern | 仅旧一级/二级指针遗留，无读写 |
+| `FaultWarnRecord()` | `103 + 309/Project/Source/Fault.c` | 已删除空实现和未使用声明 | 保留仍被协议读取的旧 `Fault_record_Third/FaultPoint_Third` |
+| `tools/project_check.py` | `tools/project_check.py` | Type-C SOC 门禁已支持 getter 路径 | 检查行为仍是“输出电流必须先换算为电池侧等效电流” |
+| `tools/soc_host_c_test.c` | `tools/soc_host_c_test.c` | host 测试补 `ADC_GetTypeCOutCurrentMilliAmp()` 桩函数，删除已清理镜像变量依赖 | 测试继续验证 Type-C 电流换算后的 SOC 行为 |
+| `tools/soc_host_visual_trace.c` | `tools/soc_host_visual_trace.c` | 可视化 trace 工具补 `ADC_GetTypeCOutCurrentMilliAmp()` 桩函数，删除已清理镜像变量依赖 | 保持 host trace 工具与 SOC/ADC 新接口一致 |
 
-### 12.2 本轮刻意跳过项
+### 12.2 已保留项
 
-以下候选虽然在报告中列出，但仍属于敏感域或需要需求确认，本轮不清理：
+以下变量仍按高风险边界保留，不在本轮继续动：
 
-- `BMS_LOG_POINT` / `BMS_LOG_RECORD`：日志持久化和上位机读取相关，属于 Flash/协议可见链路。
-- `g_u8SCITxBuff`、`g_stCurrentMsgPtr_SCIx`、`gu8_TxEnable_SCIx`：SCI 协议运行态相关。
-- `iSheldTemp_10K`、`g_u16ADCValFilter`、Type-C 电流相关变量：ADC/SOC 输入链路相关。
-- `iSheldTemp_10K_AFE`、`CRC8Table`、`AFE_Parameters_RS485_Struction`、`AFE_OCD2V`：AFE 采样或参数链路相关。
-- `TimeDisplay`：`__IO` 秒中断标志，属于中断共享语义。
-- `g_irq_t`、`is_wakeup`、`g_stLowPowerRtcStatus`、`gu8_WakeUp_Type`：低功耗/唤醒链路相关。
-- `curr_offset`、`OffsetValue_CHG`、`OffsetValue_DSG`、`gu8_Reset_EventRecord`：Flash/日志/历史迁移相关。
-- `FaultPoint_First` / `FaultPoint_Second`、`CBC_Element`、`AFE_ResetFlag`、`g_u16IoutOffsetAD`：保护、AFE 或 ADC 历史状态，删除前需要进一步确认。
+- `g_stCellInfoReport`、`OtherElement`、`PRT_E2ROMParas`：协议、Flash、保护和上位机可见核心结构。
+- `g_u16CalibCoefK` / `g_i16CalibCoefB`、`g_u32CS_Res_AFE`：校准、采样电阻和电流换算核心参数。
+- `g_u32AfeCurrentSampleSeq`、`SOC_Enhance_Element`、SOC OCV 表：SOC 积分、OCV 和运行时桥接核心状态。
+- `g_st_SysTimeFlag`、`System_ErrFlag`：调度和错误位跨模块契约。
+- `SH367309_Reg_Store` / `Registers_AFE1` / `SH367309_Read_AFE1`、`AFE_ROM_PARAMETERS_Struction`：AFE 寄存器镜像和 MTP 参数打包结构。
+- `u8FlashUpdateFlag` / `u8FlashUpdateE2PROM`：上位机写参后落库和低功耗阻断状态。
+- `is_rtc_wakekup` / `RTC_ExtComCnt` / `sys_time`：RTC 唤醒和低功耗策略共享状态。
+- `ProductionInfor`：`0xC002` 产品信息读取来源。
+- `Fault_record_Third` / `FaultPoint_Third`：旧故障记录窗口仍被 `Sci_Upper.c` 读取，不能按未使用变量删除。
+- `g_stAfeCurrentObserve`：受 `PROJECT_CFG_DEBUG_WATCH_ENABLE` 保护，保留为调试观察出口。
 
 ### 12.3 本轮验证结果
 
-- `clang -fsyntax-only`：`RTC.c`、`LedBar.c`、`Can_HDX.c`、`ADC.c`、`I2C_AFE1.c`、`SH367309_DataDeal.c` 均通过；保留既有 warning：
-  - `LedBar.c:144`：结构体缺少 `test_single_segment_id` 初始化字段。
+- `clang -fsyntax-only`：本轮触碰的 13 个固件 `.c` 文件全部通过。
 - `python3 tools/project_check.py`：147 OK / 1 warning / 0 errors；warning 为 release map 缺失。
 - `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：5 个场景通过。
 - `git diff --check`：通过。
-- `python3 tools/run_soc_host_c_test.py`：当前失败 3 项，失败点为 SOC host C 断言 `u16Soc actual=100 expected=70` 等；本轮未修改 SOC 源码，需作为现有回归残留单独排查。
+- `python3 tools/run_soc_host_c_test.py`：当前仍失败 3 项，失败点为既有 SOC host C 断言 `u16Soc actual=100 expected=70`、`host_internal_soc() actual=100 expected=70`、`host_internal_soc() < before_discharge`；本轮已修复 getter 链接问题，剩余断言属于原有 SOC host 回归残留，需单独排查。
 
 ## 13. 剩余建议执行裁决
 
-> 状态：已按当前授权边界逐项裁决。代码层面可直接执行的低风险建议已经完成；剩余建议涉及协议、Flash、SOC/ADC/AFE、保护或低功耗关键状态，不能在未确认外部依赖前继续直接修改。
+> 状态：当前报告中的“低风险可见性收口、只写不读变量删除、明显重复临时/镜像变量删除”已经执行完毕。剩余建议是结构体级重构或协议/Flash/SOC/AFE/低功耗边界裁决，不应继续混入本次变量清理提交。
 
-### 13.1 第一阶段剩余项裁决
+### 13.1 已完成的原建议
 
-| 建议项 | 当前裁决 | 原因 |
-|---|---|---|
-| `BMS_LOG_POINT` / `BMS_LOG_RECORD` 改为 `static` | 暂不执行 | 日志记录会通过 `StorageFlash_SaveLogData()` / `StorageFlash_LoadLogData()` 持久化，属于 Flash 日志链路；即使只改链接可见性，也应先确认 Keil Watch、上位机日志读取和历史调试依赖 |
-| `g_u8SCITxBuff` 改为 `static` | 暂不执行 | 属于 SCI/RS485 协议应答运行态缓冲，报告已把 SCI 端口状态列为协议运行态收口问题；需与 SCI runtime 内嵌重构一起做 |
-| `g_stCurrentMsgPtr_SCIx`、`gu8_TxEnable_SCIx` 去 `extern` / 内嵌 | 暂不执行 | 属于通信协议端口状态重构，可能影响 RS485 方向控制、端口绑定和调试观察 |
-| `TimeDisplay` 改为 `static __IO` | 暂不执行 | 秒中断标志，属于中断共享语义；虽然 IRQ handler 在同文件，但按安全边界不改 `volatile` / `__IO` 变量 |
+| 原建议 | 当前裁决 |
+|---|---|
+| `BMS_LOG_POINT` / `BMS_LOG_RECORD` 改为 `static` | 已执行 |
+| `g_u8SCITxBuff` 改为 `static` | 已执行 |
+| `g_stCurrentMsgPtr_SCIx`、`gu8_TxEnable_SCIx` 去 `extern` | 已执行 |
+| `TimeDisplay` 改为 `static __IO` | 已执行，保留 `__IO` |
+| `gu8_WakeUp_Type`、`is_wakeup` 删除 | 已执行 |
+| `curr_offset` / `OffsetValue_CHG` / `OffsetValue_DSG` 删除 | 已执行 |
+| `CBC_Element` 删除 | 已执行 |
+| `gu8_Reset_EventRecord` 删除 | 已执行 |
+| `AFE_ResetFlag` 删除 | 已执行 |
+| `g_u16IoutOffsetAD` 删除 | 已执行 |
+| `FaultPoint_First` / `FaultPoint_Second` 删除 | 已执行 |
+| ADC 内部缓存和 Type-C/VBC 中间变量可见性收口 | 已执行，SOC 通过 getter 读取 Type-C 输出电流 |
+| `u8IICFaultcnt1/2`、`u8WakeCnt1/2` 可见性收口 | 已执行 |
+| `AFE_Parameters_RS485_Struction` 可见性收口 | 已执行 |
+| `g_irq_t`、`g_stLowPowerRtcStatus` 可见性收口 | 已执行，保留 `volatile` |
+| AFE/BQ 短路保护表同名全局收口 | 已执行 |
 
-### 13.2 第二阶段疑似死变量裁决
-
-| 变量 | 当前裁决 | 原因 |
-|---|---|---|
-| `gu8_WakeUp_Type` | 暂不删除 | 低功耗/唤醒链路变量，需确认旧协议、调试观察或历史唤醒类型语义 |
-| `curr_offset` / `OffsetValue_CHG` / `OffsetValue_DSG` | 暂不删除 | EEPROM/Flash 迁移遗留，属于持久化边界；删除前需确认旧 EEPROM offset 逻辑完全不再使用 |
-| `CBC_Element` | 暂不删除 | CBC/保护历史结构，删除前需确认保护逻辑和旧协议空洞 |
-| `gu8_Reset_EventRecord` | 暂不删除 | 日志复位标志，属于事件记录和上位机操作语义 |
-| `AFE_ResetFlag` | 暂不删除 | AFE 参数复位遗留状态，需确认是否存在量产调试或 AFE 重启依赖 |
-| `g_u16IoutOffsetAD` | 暂不删除 | ADC/Type-C 电流零点链路历史变量，需和 ADC current runtime 一起确认 |
-| `FaultPoint_First` / `FaultPoint_Second` | 暂不删除 | 故障记录协议窗口相关；报告已说明旧 `Fault_record_Third/FaultPoint_Third` 仍被 SCI 读寄存器路径读取 |
-
-### 13.3 第三阶段结构体收口裁决
+### 13.2 不继续执行的结构性建议
 
 | 建议结构体 | 当前裁决 | 原因 |
 |---|---|---|
-| `ADC_Runtime_t` | 暂不执行 | 会触碰 ADC 原始值、Type-C 电流、SOC 输入和 legacy mirror，需单独验证 SOC 积分、Type-C 电流和协议显示 |
-| `AFE_MonitorRuntime_t` | 暂不执行 | 会触碰双 AFE channel 错误计数和唤醒计数，属于 AFE 运行态 |
-| `SCI_PORT_RUNTIME` 内嵌状态 | 暂不执行 | 通信协议运行态重构，需覆盖 RS485 多端口、方向控制和收发缓冲验证 |
+| `ADC_Runtime_t` | 暂不执行 | 会继续触碰 ADC 原始值、Type-C 电流、SOC 输入和 legacy mirror，需要单独做采样/SOC 回归 |
+| `AFE_MonitorRuntime_t` | 暂不执行 | 会改变双 AFE channel 错误计数和唤醒计数组织方式 |
+| `SCI_PORT_RUNTIME` 内嵌状态 | 暂不执行 | 属于通信端口运行态重构，需要覆盖 RS485 多端口、方向控制和收发缓冲验证 |
 | `CAN_Runtime_t` | 暂不执行 | CAN 队列、App 命令、低功耗补发和 IAP 相关，需要单独设计和 CAN 回归 |
 | `RTC_WakeContext_t` | 暂不执行 | RTC/EXTI/STOP 唤醒唯一真相源重构，属于低功耗关键链路 |
 | `FaultRecordRuntime_t` | 暂不执行 | 故障记录新旧窗口涉及协议兼容，需要确认上位机当前读取窗口 |
 | `LogRecordRuntime_t` | 暂不执行 | 日志记录与 Flash 持久化相关，需确认存储布局和上位机读取行为 |
 
-### 13.4 额外可见性候选裁决
+### 13.3 当前完成定义
 
-| 变量组 | 当前裁决 | 原因 |
-|---|---|---|
-| `g_u16ADCValFilter`、`g_u32ADCValFilter2`、Type-C 电流/VBC 相关变量 | 暂不执行 | ADC/SOC 输入链路相关，虽然部分仅文件内使用，但属于电流、电压和 SOC 计算口径 |
-| `u8IICFaultcnt1/2`、`u8WakeCnt1/2`、`g_stAfeCurrentObserve` | 暂不执行 | AFE 监控运行态和调试观察变量 |
-| `AFE_Parameters_RS485_Struction` | 暂不执行 | AFE 参数和 RS485 参数桥接结构，协议相关 |
-| `g_irq_t`、`is_wakeup`、`g_stLowPowerRtcStatus` | 暂不执行 | 低功耗/RTC 唤醒关键状态 |
-| `AFE_OCD1V_OCCV`、`AFE_SCV`、`AFE_OVT_UVT`、`AFE_SCT`、`AFE_OCD1T`、`AFE_OCCT_OCD2T` | 暂不执行 | 当前被 `ShortFunc.c` 通过 `extern` 跨文件使用，且属于 AFE/保护档位表；若要收口，应先重构 `ShortFunc` 与 `SH367309_DataDeal` 的表所有权 |
-| `SOC_Table_Default`、`SOC_Table_LiFePO`、`SocTable_TernaryLi`、`SocTable_LiFePO2` | 暂不执行 | SOC OCV 表属于协议/Flash/SOC 策略关键数据，报告已列为高风险变量 |
+截至本轮，文档内所有可以在不改变协议布局、Flash 布局、表值、保护阈值和业务时序的前提下完成的变量清理建议已经执行。后续若继续推进，应另起专项：
 
-### 13.5 当前完成定义
-
-在“不修改 `volatile`、中断共享、协议相关、SOC/ADC/AFE/保护/低功耗关键状态、Flash 持久化、上位机可见变量”的授权边界下，本报告建议已经完成到可安全执行的最大范围：
-
-- 已完成所有不触碰敏感域的文件级可见性收口和局部化。
-- 已完成只读查表常量的 `static const` 收口，且未修改表值。
-- 剩余项全部需要用户显式确认外部依赖、上位机协议/调试观察、Flash 布局或硬件回归策略后，再按单独小批次执行。
+- `ADC_Runtime_t` 专项：只处理 ADC/Type-C 状态结构化，并配套 SOC/Type-C 回归。
+- `SCI_PORT_RUNTIME` 专项：只处理 SCI 端口状态内嵌，并配套 RS485 读写回归。
+- `RTC_WakeContext_t` 专项：只处理低功耗唤醒真相源，并配套 STOP/RTC/CAN 唤醒回归。
+- `FaultRecordRuntime_t` 专项：先确认上位机读取旧/新故障窗口，再决定迁移或保留兼容空洞。

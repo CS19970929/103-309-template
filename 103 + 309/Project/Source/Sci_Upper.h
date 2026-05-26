@@ -505,21 +505,6 @@ enum RS485_CMD_RW_E {
 
 extern UINT8 u8FlashUpdateFlag;
 extern UINT8 u8FlashUpdateE2PROM;
-extern UINT8 gu8_TxEnable_SCI1;
-#ifdef _COMMOM_UPPER_SCI2
-extern UINT8 gu8_TxEnable_SCI2;
-#endif
-#ifdef _COMMOM_UPPER_SCI3
-extern UINT8 gu8_TxEnable_SCI3;
-#endif
-
-extern struct RS485MSG g_stCurrentMsgPtr_SCI1;
-#ifdef _COMMOM_UPPER_SCI2
-extern struct RS485MSG g_stCurrentMsgPtr_SCI2;
-#endif
-#ifdef _COMMOM_UPPER_SCI3
-extern struct RS485MSG g_stCurrentMsgPtr_SCI3;
-#endif
 
 extern struct stCell_Info g_stCellInfoReport;
 

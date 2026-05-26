@@ -16,9 +16,6 @@ volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
 UINT16 g_u16TypeCOutCurrent_mA;
-UINT16 g_u16TypeCOutCurrent_A10;
-UINT16 g_u16TypeCBatEquivCurrent_mA;
-UINT16 g_u16TypeCBatEquivCurrent_A10;
 UINT32 g_u32Vbat_mV;
 UINT32 g_u32AfeCurrentSampleSeq;
 
@@ -161,6 +158,11 @@ UINT8 SystemFeature_IsSocZero(void)
 	return s_host_feature.bits.b1OnOFF_SOC_Zero;
 }
 
+UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
+{
+	return g_u16TypeCOutCurrent_mA;
+}
+
 static UINT32 host_cap_now_from_soc(UINT16 soc)
 {
 	return (UINT32)((HOST_CAP_FACTORY_AS10 * (double)soc) / 100.0);
@@ -187,9 +189,6 @@ static void host_reset_state(void)
 	s_flash_soc_valid = 0U;
 	memset((void *)&s_host_feature, 0, sizeof(s_host_feature));
 	g_u16TypeCOutCurrent_mA = 0U;
-	g_u16TypeCOutCurrent_A10 = 0U;
-	g_u16TypeCBatEquivCurrent_mA = 0U;
-	g_u16TypeCBatEquivCurrent_A10 = 0U;
 	g_u32Vbat_mV = 0U;
 	g_u32AfeCurrentSampleSeq = 0U;
 	host_apply_default_config();

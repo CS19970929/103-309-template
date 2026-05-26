@@ -2,10 +2,9 @@
 
 #define EVENT_RECORD_LENGTH 100
 
-UINT8 BMS_LOG_POINT = 0;
-UINT8 BMS_LOG_RECORD[EVENT_RECORD_LENGTH][2];
+static UINT8 BMS_LOG_POINT = 0;
+static UINT8 BMS_LOG_RECORD[EVENT_RECORD_LENGTH][2];
 static LOG_RECORD_FLAG s_log_record_flag;
-UINT8 gu8_Reset_EventRecord = 0;
 UINT32 su32_Interval_S_Tcnt = 0;
 static UINT32 s_u32_LogRecord_UptimeSeconds = 0;
 static UINT32 s_u32_LogRecord_LastSaveSeconds[EVENT_NUM] = {0};
@@ -261,7 +260,6 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 		BMS_LOG_RECORD[i][1] = 0;
 	}
 	BMS_LOG_POINT = 0;
-	gu8_Reset_EventRecord = 0;
 
 	return StorageFlash_SaveLogData(BMS_LOG_POINT, (const UINT8 (*)[2])BMS_LOG_RECORD);
 }

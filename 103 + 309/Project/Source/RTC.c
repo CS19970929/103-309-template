@@ -1,6 +1,6 @@
 #include "main.h"
 
-__IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
+static __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
 
 struct RTC_ELEMENT RTC_time;
 
@@ -554,6 +554,5 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-
 
 

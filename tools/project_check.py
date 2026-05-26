@@ -891,13 +891,26 @@ def check_soc_current_and_typec_policy(reporter):
     soc_c = read_text(SOC_C)
     soc_enhance_c = read_text(SOC_ENHANCE_C)
 
+    legacy_typec_current_path = (
+        "g_u16TypeCBatEquivCurrent_A10" in adc_h
+        and "g_u16TypeCOutCurrent_mA" in soc_c
+    )
+    getter_typec_current_path = (
+        "UINT16 ADC_GetTypeCOutCurrentMilliAmp(void);" in adc_h
+        and "ADC_GetTypeCOutCurrentMilliAmp()" in soc_c
+    )
+    typec_current_not_added_directly = (
+        "report_idsg + (UINT32)g_u16TypeCOutCurrent_A10" not in soc_c
+        and "report_idsg + (UINT32)g_u16TypeCOutCurrent_mA" not in soc_c
+        and "report_idsg + (UINT32)ADC_GetTypeCOutCurrentMilliAmp()" not in soc_c
+    )
+
     if (
         "TYPEC_OUT_VOLTAGE_MV" in adc_h
         and "TYPEC_DCDC_EFFICIENCY_PERMILLE" in adc_h
-        and "g_u16TypeCBatEquivCurrent_A10" in adc_h
         and "SOC_GetTypeCBatEquivCurrentA10" in soc_c
-        and "g_u16TypeCOutCurrent_mA" in soc_c
-        and "report_idsg + (UINT32)g_u16TypeCOutCurrent_A10" not in soc_c
+        and (legacy_typec_current_path or getter_typec_current_path)
+        and typec_current_not_added_directly
     ):
         reporter.ok("Type-C SOC path uses battery-side equivalent current")
     else:

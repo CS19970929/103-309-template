@@ -1,9 +1,9 @@
 #include "main.h"
 
-UINT8 u8IICFaultcnt1 = 0;
-UINT8 u8WakeCnt1 = 0;
-UINT8 u8IICFaultcnt2 = 0;
-UINT8 u8WakeCnt2 = 0;
+static UINT8 u8IICFaultcnt1 = 0;
+static UINT8 u8WakeCnt1 = 0;
+static UINT8 u8IICFaultcnt2 = 0;
+static UINT8 u8WakeCnt2 = 0;
 
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)

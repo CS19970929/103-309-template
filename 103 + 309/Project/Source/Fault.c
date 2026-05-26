@@ -12,20 +12,13 @@ UINT16 Fault_record_First2[Record_len];
 UINT16 Fault_record_Second2[Record_len];
 UINT16 Fault_record_Third2[Record_len];
 
-UINT8 FaultPoint_First;
-UINT8 FaultPoint_Second;
 UINT8 FaultPoint_Third;
 
 UINT8 FaultPoint_First2;
 UINT8 FaultPoint_Second2;
 UINT8 FaultPoint_Third2;
 
-void FaultWarnRecord(enum FaultFlag num);
 void FaultWarnRecord2(enum FaultFlag num);
-
-void FaultWarnRecord(enum FaultFlag num)
-{
-}
 
 void FaultWarnRecord2(enum FaultFlag num)
 {

@@ -246,8 +246,5 @@ void ReadEEPROM_AFE_Parameters(void);
 
 
 extern int AFE_PARAM_WRITE_Flag;
-extern int AFE_ResetFlag;
-extern AFE_Parameters_RS485_Typedef  AFE_Parameters_RS485_Struction;
 
 #endif
-

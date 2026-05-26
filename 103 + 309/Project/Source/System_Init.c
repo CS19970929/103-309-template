@@ -3,7 +3,6 @@
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
 static volatile UINT32 s_u32Sys10msTickCount = 0U;
-struct CBC_ELEMENT CBC_Element;
 
 static UINT8 s_u8Cnt50ms = 0;
 static UINT8 s_u8Cnt100ms = 0;

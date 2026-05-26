@@ -107,10 +107,9 @@ static UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 	uint64_t denominator;
 	uint64_t current_mA;
 	UINT32 pack_mv = SOC_GetPackVoltageForTypeCMv();
+	UINT16 typec_out_current_mA = ADC_GetTypeCOutCurrentMilliAmp();
 
-	g_u16TypeCBatEquivCurrent_mA = 0U;
-	g_u16TypeCBatEquivCurrent_A10 = 0U;
-	if ((g_u16TypeCOutCurrent_mA == 0U) ||
+	if ((typec_out_current_mA == 0U) ||
 		(pack_mv == 0U) ||
 		(TYPEC_OUT_VOLTAGE_MV == 0U) ||
 		(TYPEC_DCDC_EFFICIENCY_PERMILLE == 0U))
@@ -118,7 +117,7 @@ static UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 		return 0U;
 	}
 
-	numerator = (uint64_t)g_u16TypeCOutCurrent_mA *
+	numerator = (uint64_t)typec_out_current_mA *
 		(uint64_t)TYPEC_OUT_VOLTAGE_MV * 1000ULL;
 	denominator = (uint64_t)pack_mv *
 		(uint64_t)TYPEC_DCDC_EFFICIENCY_PERMILLE;
@@ -128,10 +127,7 @@ static UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 		current_mA = 0xFFFFULL;
 	}
 
-	g_u16TypeCBatEquivCurrent_mA = (UINT16)current_mA;
-	g_u16TypeCBatEquivCurrent_A10 =
-		SOC_LimitA10((UINT32)((current_mA + 50ULL) / 100ULL));
-	return g_u16TypeCBatEquivCurrent_A10;
+	return SOC_LimitA10((UINT32)((current_mA + 50ULL) / 100ULL));
 }
 
 static UINT16 SOC_GetCompileTimeTableSelect(void)

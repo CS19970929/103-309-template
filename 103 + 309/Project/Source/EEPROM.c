@@ -3,10 +3,6 @@
 #include "FactoryAging.h"
 #include "SocEnhance.h"
 
-uint16_t curr_offset = 0;
-UINT16 OffsetValue_CHG = 0;
-UINT16 OffsetValue_DSG = 0;
-
 #if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
 #endif
@@ -195,10 +191,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultSocTable();
 	EEPROM_LoadDefaultCopperLoss();
 
-	curr_offset = 0;
-	OffsetValue_CHG = 0;
-	OffsetValue_DSG = 0;
-
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 }
@@ -344,4 +336,3 @@ void InitE2PROM(void)
 	ReadEEPROM_EventRecord_Parameters();
 	UpgradeParamPolicy_ApplyOnce();
 }
-

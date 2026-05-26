@@ -47,25 +47,14 @@ enum tagInfoForADCArray {
 
 extern INT32 g_i32ADCResult[ADC_NUM];             //ADC���ݻ���
 //extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//���λ�����ܸ�
-extern UINT16 g_u16TypeCOutCurrent_mA;
-extern UINT16 g_u16TypeCOutCurrent_A10;
-extern UINT16 g_u16TypeCBatEquivCurrent_mA;
-extern UINT16 g_u16TypeCBatEquivCurrent_A10;
-extern UINT16 g_u16TypeCOutOffsetAD;
-extern UINT16 g_u16TypeCOutStableAD;
-extern UINT16 g_u16TypeCOutDelta_mV;
-extern UINT16 g_u16VbcStableAD;
-extern UINT16 g_u16VbcAdc_mV;
 extern UINT32 g_u32Vbat_mV;
-extern UINT16 gu16_BusCurr_CHG;
-extern UINT16 gu16_BusCurr_DSG;
 
 
 void InitADC(void);
 void ADC_StopForLowPower(void);
 void ADC_ResetAnlogCalSchedule(void);
 UINT32 ADC_GetVbatMilliVolt(void);
+UINT16 ADC_GetTypeCOutCurrentMilliAmp(void);
 void App_AnlogCal(void);
 
 #endif	/* ADC_H */
-

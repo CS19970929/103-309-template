@@ -1,28 +1,24 @@
 #include "main.h"
 
-__IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
+static __IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
 
-INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在计算过程出错了！
-                                   // 不能改UINT32
+static INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在计算过程出错了！
+                                          // 不能改UINT32
 INT32 g_i32ADCResult[ADC_NUM];     // ADC结果保存
 static UINT32 s_u32AnlogCalLast10msTick = 0U;
 #define TYPEC_CUR_ZERO_CONFIRM_CNT ((UINT8)3)
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
 #define ADC_ANALOG_CAL_MAX_CATCHUP_TICKS ((UINT32)10U)
 
-UINT16 g_u16IoutOffsetAD;
-UINT16 g_u16TypeCOutCurrent_mA;
-UINT16 g_u16TypeCOutCurrent_A10;
-UINT16 g_u16TypeCBatEquivCurrent_mA;
-UINT16 g_u16TypeCBatEquivCurrent_A10;
-UINT16 g_u16TypeCOutOffsetAD;
-UINT16 g_u16TypeCOutStableAD;
-UINT16 g_u16TypeCOutDelta_mV;
-UINT16 g_u16VbcStableAD;
-UINT16 g_u16VbcAdc_mV;
+static UINT16 g_u16TypeCOutCurrent_mA;
+static UINT16 g_u16TypeCOutCurrent_A10;
+static UINT16 g_u16TypeCOutStableAD;
+static UINT16 g_u16TypeCOutDelta_mV;
+static UINT16 g_u16VbcStableAD;
+static UINT16 g_u16VbcAdc_mV;
 UINT32 g_u32Vbat_mV;
-UINT16 gu16_BusCurr_CHG; // legacy mirror, A*10
-UINT16 gu16_BusCurr_DSG; // legacy mirror, A*10
+static UINT16 gu16_BusCurr_CHG; // legacy mirror, A*10
+static UINT16 gu16_BusCurr_DSG; // legacy mirror, A*10
 
 // 12位，4096最大
 static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
@@ -301,11 +297,9 @@ static UINT8 ADC_IsTypeCZeroSample(UINT32 ad_value)
 
 static void ADC_ClearTypeCOutCurrent(void)
 {
-    g_u16TypeCOutCurrent_mA = 0;
-    g_u16TypeCOutCurrent_A10 = 0;
-    g_u16TypeCBatEquivCurrent_mA = 0;
-    g_u16TypeCBatEquivCurrent_A10 = 0;
-    g_u16TypeCOutDelta_mV = 0;
+	g_u16TypeCOutCurrent_mA = 0;
+	g_u16TypeCOutCurrent_A10 = 0;
+	g_u16TypeCOutDelta_mV = 0;
     g_u32ADCValFilter2[ADC_CURR] = 0;
     g_i32ADCResult[ADC_CURR] = 0;
     gu16_BusCurr_CHG = 0;
@@ -364,14 +358,16 @@ UINT32 ADC_GetVbatMilliVolt(void)
     return g_u32Vbat_mV;
 }
 
+UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
+{
+    return g_u16TypeCOutCurrent_mA;
+}
+
 void ADC_Current_Smooth(void)
 {
     static UINT8 su8_ADcnt = 0;
     static UINT8 su8_ZeroCnt = 0;
     UINT32 u32TypeCAdAvg = 0;
-
-    g_u16TypeCOutOffsetAD = 0;
-    g_u16IoutOffsetAD = 0;
 
     if (ADC_IsTypeCZeroSample((UINT32)g_u16ADCValFilter[ADC_CUR_AMP]))
     {

@@ -1,8 +1,8 @@
 #include "main.h"
 
 #if (AFE_TYPE == bq76xx_afe)
-const UINT16 AFE_SCV[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // 短路保护电压，单位mv
-const UINT16 AFE_SCT[10] = {50, 100, 200, 400, 400, 400, 400, 400, 400, 400};
+static const UINT16 s_bq_afe_scv[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // 短路保护电压，单位mv
+static const UINT16 s_bq_afe_sct[10] = {50, 100, 200, 400, 400, 400, 400, 400, 400, 400};
 
 UINT8 Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 {
@@ -20,12 +20,8 @@ UINT8 Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 
 
 #elif (AFE_TYPE == sh36xx)
-extern const UINT16 AFE_OCD1V_OCCV[16];                    // 一级放电过流和充电过流，单位mv
-extern const UINT16 AFE_SCV[16];                    // 短路保护电压，单位mv
-extern const UINT16 AFE_OVT_UVT[16]; // 过压低压延时时间。单位ms
-extern const UINT16 AFE_SCT[16];                      // 短路延时,单位us。
-extern const UINT16 AFE_OCD1T[16];   // 放电过流1延时。单位ms
-extern const UINT16 AFE_OCCT_OCD2T[16];         // 放电过流2和充电过流延时。单位ms
+extern const UINT16 g_u16ShAfeScvTable[16]; // 短路保护电压，单位mv
+extern const UINT16 g_u16ShAfeSctTable[16]; // 短路延时,单位us。
 
 
 extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
@@ -44,17 +40,17 @@ void InitShortCur(void)
     OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
     /* 短路延时 */
-    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
-    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // 修改最终设置的值，接近的那个
+    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, s_bq_afe_sct);
+    OtherElement.u16CBC_DelayT = s_bq_afe_sct[temp] * 10; // 修改最终设置的值，接近的那个
 
     Registers_AFE1.Protect1.Protect1Bit.SCD_DELAY = temp >= 3 ? 3 : temp;
 
     /* 短路电压 */
     temp = OtherElement.u16CBC_Cur_DSG / 10;                                     // A
     temp = temp * OtherElement.u16Sys_CS_Res / OtherElement.u16Sys_CS_Res_Num; // 当前对应多少mV
-    temp = Choose_Right_Value(temp, AFE_SCV);
+    temp = Choose_Right_Value(temp, s_bq_afe_scv);
     // 修改最终设置的值，接近的那个
-    OtherElement.u16CBC_Cur_DSG = AFE_SCV[temp] * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+    OtherElement.u16CBC_Cur_DSG = s_bq_afe_scv[temp] * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
     OtherElement.u16CBC_Cur_DSG *= 10; // 防止数据溢出。
 
     if (temp <= 1)
@@ -85,17 +81,17 @@ void InitShortCur(void)
     OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
     /* 短路延时 */
-    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, AFE_SCT);
+    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, g_u16ShAfeSctTable);
     AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = temp;
-    OtherElement.u16CBC_DelayT = AFE_SCT[temp] * 10; // 修改最终设置的值，接近的那个
+    OtherElement.u16CBC_DelayT = g_u16ShAfeSctTable[temp] * 10; // 修改最终设置的值，接近的那个
 
     /* 短路电压 */
     temp = OtherElement.u16CBC_Cur_DSG / 10; // A
     temp = temp * 1000 / g_u32CS_Res_AFE;      // 当前对应多少mv
-    AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, AFE_SCV);
+    AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
     // 修改最终设置的值，接近的那个
 
-    OtherElement.u16CBC_Cur_DSG = AFE_SCV[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000; // 防止数据溢出。
+    OtherElement.u16CBC_Cur_DSG = g_u16ShAfeScvTable[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000; // 防止数据溢出。
     OtherElement.u16CBC_Cur_DSG *= 10;                                                                // 防止数据溢出。
 
 #else

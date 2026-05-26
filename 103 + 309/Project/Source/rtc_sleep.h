@@ -22,8 +22,6 @@ enum irqWakeup
   rs485_irq,
   NO_IRQ
 };
-extern enum irqWakeup g_irq_t;
-
 typedef enum _SLEEP_MODE {
 NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 }SLEEP_MODE;
@@ -31,10 +29,6 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 
 
 #define enumToStr(WEEK)    #WEEK
-
-extern bool is_wakeup;
-
-extern uint16_t gu8_WakeUp_Type;
 
 enum LOW_POWER_RTC_BLOCK_REASON {
   LOW_POWER_RTC_BLOCK_NONE = 0,
@@ -57,8 +51,6 @@ struct LOW_POWER_RTC_STATUS {
   uint16_t delayTargetSeconds;
   uint32_t elapsedSeconds;
 };
-
-extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 
 void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);

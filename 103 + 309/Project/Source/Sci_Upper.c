@@ -1,26 +1,26 @@
 #include "main.h"
 #include "FaultSnapshot.h"
 
-struct RS485MSG g_stCurrentMsgPtr_SCI1;
-UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
-UINT8 gu8_TxEnable_SCI1 = 0;
-UINT8 gu8_TxFinishFlag_SCI1 = 0;
+static struct RS485MSG g_stCurrentMsgPtr_SCI1;
+static UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
+static UINT8 gu8_TxEnable_SCI1 = 0;
+static UINT8 gu8_TxFinishFlag_SCI1 = 0;
 
 #ifdef _COMMOM_UPPER_SCI2
-struct RS485MSG g_stCurrentMsgPtr_SCI2;
-UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
-UINT8 gu8_TxEnable_SCI2 = 0;
-UINT8 gu8_TxFinishFlag_SCI2 = 0;
+static struct RS485MSG g_stCurrentMsgPtr_SCI2;
+static UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
+static UINT8 gu8_TxEnable_SCI2 = 0;
+static UINT8 gu8_TxFinishFlag_SCI2 = 0;
 #endif
 
 #ifdef _COMMOM_UPPER_SCI3
-struct RS485MSG g_stCurrentMsgPtr_SCI3;
-UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCI通信异常计数
-UINT8 gu8_TxEnable_SCI3 = 0;
-UINT8 gu8_TxFinishFlag_SCI3 = 0;
+static struct RS485MSG g_stCurrentMsgPtr_SCI3;
+static UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCI通信异常计数
+static UINT8 gu8_TxEnable_SCI3 = 0;
+static UINT8 gu8_TxFinishFlag_SCI3 = 0;
 #endif
 
-UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
+static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 
 struct stCell_Info g_stCellInfoReport;
 UINT8 u8FlashUpdateFlag = 0;
@@ -459,16 +459,6 @@ static void Sci_PutBytes(UINT8 buff[], UINT16 *index, const UINT8 src[], UINT16 
 	{
 		buff[(*index)++] = src[i];
 	}
-}
-
-static void Sci_ResetCalibCoefIndex(UINT8 runtime_index, UINT8 store_index)
-{
-	g_u16CalibCoefK[runtime_index] = SYSKDEFAULT;
-	g_i16CalibCoefB[runtime_index] = SYSBDEFAULT;
-	WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (runtime_index << 1)),
-							g_u16CalibCoefK[store_index]);
-	WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (runtime_index << 1)),
-							g_i16CalibCoefB[store_index]);
 }
 
 static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
@@ -1005,7 +995,7 @@ void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
 }
 void Sci_ACK_0x03(struct RS485MSG *s)
 {
-	UINT8 i;
+	UINT8 i = 0U;
 	UINT16 u16SciTemp;
 	if (s->AckType == RS485_ACK_POS)
 	{

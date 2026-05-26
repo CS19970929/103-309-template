@@ -44,13 +44,7 @@ typedef union __LOG_RECORD_FLAG {
 }LOG_RECORD_FLAG;
 
 
-extern UINT8 gu8_Reset_EventRecord;
 extern UINT32 su32_Interval_S_Tcnt ;
-
-//����ɾ��
-//extern UINT8 BMS_LOG_POINT;
-//extern UINT8 BMS_LOG_RECORD[100][2];
-
 
 void App_LogRecord(void);
 void LogRecord_RequestStartup(void);
@@ -62,4 +56,3 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void);
 void ReadEEPROM_EventRecord_Parameters(void);
 
 #endif	/* LOG_RECORD_H */
-

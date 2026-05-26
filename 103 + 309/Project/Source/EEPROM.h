@@ -70,9 +70,4 @@ UINT8 EEPROM_SaveRWParametersToFlash(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);
 
 
-extern uint16_t curr_offset;
-extern UINT16 OffsetValue_CHG ;
-extern UINT16 OffsetValue_DSG;
-
 #endif	/* EEPROM_H */
-

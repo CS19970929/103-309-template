@@ -22,9 +22,6 @@ volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
 UINT16 g_u16TypeCOutCurrent_mA;
-UINT16 g_u16TypeCOutCurrent_A10;
-UINT16 g_u16TypeCBatEquivCurrent_mA;
-UINT16 g_u16TypeCBatEquivCurrent_A10;
 UINT32 g_u32Vbat_mV;
 UINT32 g_u32AfeCurrentSampleSeq;
 
@@ -97,6 +94,11 @@ UINT8 SystemFeature_IsSocFixed(void)
 UINT8 SystemFeature_IsSocZero(void)
 {
 	return s_host_feature.bits.b1OnOFF_SOC_Zero;
+}
+
+UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
+{
+	return g_u16TypeCOutCurrent_mA;
 }
 
 static void host_check(int ok, const char *expr, int line)
@@ -190,9 +192,6 @@ static void host_reset_state(void)
 	s_flash_soc_valid = 0U;
 	memset((void *)&s_host_feature, 0, sizeof(s_host_feature));
 	g_u16TypeCOutCurrent_mA = 0U;
-	g_u16TypeCOutCurrent_A10 = 0U;
-	g_u16TypeCBatEquivCurrent_mA = 0U;
-	g_u16TypeCBatEquivCurrent_A10 = 0U;
 	g_u32Vbat_mV = 0U;
 	host_apply_default_config();
 }
@@ -385,7 +384,6 @@ static void test_typec_output_current_converts_to_battery_equivalent(void)
 		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
 		360U);
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
-	CHECK_RANGE_U32(g_u16TypeCBatEquivCurrent_A10, 23U, 24U);
 
 	g_u16TypeCOutCurrent_mA = 0U;
 	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);

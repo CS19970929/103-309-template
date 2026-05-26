@@ -391,8 +391,6 @@ void InitRtcWakeupCheck(void)
 
 void InitRunAfterStopWakeup(void)
 {
-    is_wakeup = true;
-
     InitDelay();
     RTC_RestoreRunInterrupts();
     // InitIO();
