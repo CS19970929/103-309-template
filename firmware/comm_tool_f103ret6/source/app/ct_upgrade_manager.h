@@ -14,6 +14,12 @@ typedef struct
     uint16_t expect_seq;
 } CtUpgradeStatus;
 
+#define CT_UPGRADE_STATE_IDLE       0u
+#define CT_UPGRADE_STATE_RUNNING    1u
+#define CT_UPGRADE_STATE_DONE       2u
+#define CT_UPGRADE_STATE_ERROR      3u
+#define CT_UPGRADE_STATE_ABORTED    4u
+
 void CtUpgrade_Init(void);
 const CtUpgradeStatus *CtUpgrade_GetStatus(void);
 int CtUpgrade_Start(uint8_t node);
