@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source` 当前主工程源码
-最后更新时间：2026-05-26
+最后更新时间：2026-05-27
 未确认事项：电流真实路径、均衡需求、老化保留策略、Host 写权限、实际 Flash 容量、低功耗 CAN 广播策略仍需用户确认。
 
 ## 1. 使用原则
@@ -25,6 +25,11 @@
 | `docs/design/soc_design.md` | SOC 输入、输出、算法流程、持久化和风险 |
 | `docs/design/adc_afe_design.md` | ADC/AFE 数据流、采样、校准和当前问题 |
 | `docs/design/low_power_design.md` | RTC/STOP/IWDG/唤醒/低功耗阻塞 |
+| `docs/design/led_display_design.md` | LedBar/Charlieplexing 显示、按键、sleep SOC 和风险 |
+| `docs/design/bootloader_iap_design.md` | Bootloader/IAP 地址、进入 IAP 触发路径和烧录安全 |
+| `docs/protocol/modbus_register_map.md` | Modbus 地址窗口和高风险寄存器入口 |
+| `docs/protocol/can_protocol.md` | CAN 周期广播和 App 命令当前实现 |
+| `docs/protocol/uart_protocol.md` | UART/RS485 串口协议入口和低功耗关系 |
 | `docs/test/test_plan.md` | 编译、协议、存储、SOC、低功耗和硬件实测计划 |
 | `docs/changelog/change_log.md` | 文档整理和后续变更记录 |
 
@@ -45,7 +50,9 @@
 
 ## 4. 历史文档边界
 
-旧文档暂不删除、不移动。建议后续在用户确认后，把过时或重复文档移动到 `docs/archive/old_docs/`，并保留索引。
+旧文档不作为当前结论。本轮按用户最新要求，已经删除确认被合并、过时、重复、临时或旧方案性质的文档；删除清单和保留原因见 `docs/review/document_cleanup_report.md`。
+
+仍有一批旧文档被 `tools/project_check.py` 固定引用，暂时保留原路径，避免破坏现有验证脚本。后续如要彻底收口，需要先把检查脚本依赖迁移到新的权威文档。
 
 当前已识别的高重复主题：
 
@@ -54,6 +61,13 @@
 - CAN/Modbus/comm tool/IAP 文档。
 - EEPROM/Flash/后 64K 存储文档。
 - LedBar/数码管显示文档。
+
+清理原则：
+
+1. 已合并、过时、重复、临时和旧方案文档删除，不长期归档。
+2. 当前结论以 `docs/design/*`, `docs/protocol/*`, `docs/review/*` 为准。
+3. 若需要找回已删除旧文档，从 Git 历史恢复。
+4. 不确定业务价值的文档列为 `NEED_CONFIRM`，暂不删除。
 
 ## 5. 维护规则
 
