@@ -8,8 +8,12 @@
 
 #define CT_LEGACY_SLAVE_ADDR           0x01u
 #define CT_LEGACY_BROADCAST_ADDR       0x00u
+#define CT_LEGACY_CMD_READ_REGS        0x03u
 #define CT_LEGACY_CMD_WRITE_REGS       0x10u
 #define CT_LEGACY_FLASH_CONNECT_ADDR   0xFFFDu
+#define CT_LEGACY_RO_START             0xD000u
+#define CT_LEGACY_RO_STATUS_ADDR       0xD050u
+#define CT_LEGACY_READ_WORDS_MAX       64u
 #define CT_LEGACY_RX_BUF_SIZE          32u
 #define CT_LEGACY_FRAME_TIMEOUT_MS     500u
 #define CT_LEGACY_RESPONSE_DELAY_MS    20u
@@ -31,6 +35,11 @@ static void wr_be16(uint8_t *data, uint16_t value)
 {
     data[0] = (uint8_t)(value >> 8);
     data[1] = (uint8_t)value;
+}
+
+static uint16_t legacy_crc16(const uint8_t *data, uint16_t length)
+{
+    return CtCrc16_Calc(data, length);
 }
 
 static uint32_t app_req_id(uint8_t can_addr)
@@ -86,6 +95,73 @@ static void legacy_send_write_ack(const uint8_t *request)
     (void)CtBoard_UartWrite(ack, (uint16_t)sizeof(ack));
 }
 
+static uint16_t legacy_status_word(uint16_t addr)
+{
+    uint16_t offset;
+
+    if (addr >= CT_LEGACY_RO_STATUS_ADDR)
+    {
+        offset = (uint16_t)(addr - CT_LEGACY_RO_STATUS_ADDR);
+    }
+    else if (addr >= CT_LEGACY_RO_START)
+    {
+        offset = (uint16_t)(addr - CT_LEGACY_RO_START);
+    }
+    else
+    {
+        return 0u;
+    }
+
+    switch (offset)
+    {
+    case 0u:
+        return 0u;
+    case 1u:
+        return 0u;
+    case 2u:
+        return 0u;
+    case 3u:
+        return 0u;
+    default:
+        return 0u;
+    }
+}
+
+static void legacy_send_read_ack(const uint8_t *request)
+{
+    uint8_t ack[3u + (CT_LEGACY_READ_WORDS_MAX * 2u) + 2u];
+    uint16_t addr;
+    uint16_t count;
+    uint16_t value;
+    uint16_t crc;
+    uint16_t i;
+    uint16_t pos;
+
+    addr = rd_be16(&request[2]);
+    count = rd_be16(&request[4]);
+    if ((count == 0u) || (count > CT_LEGACY_READ_WORDS_MAX) || (addr < CT_LEGACY_RO_START))
+    {
+        return;
+    }
+
+    ack[0] = request[0];
+    ack[1] = CT_LEGACY_CMD_READ_REGS;
+    ack[2] = (uint8_t)(count * 2u);
+    pos = 3u;
+    for (i = 0u; i < count; ++i)
+    {
+        value = legacy_status_word((uint16_t)(addr + i));
+        wr_be16(&ack[pos], value);
+        pos = (uint16_t)(pos + 2u);
+    }
+
+    crc = legacy_crc16(ack, pos);
+    ack[pos++] = (uint8_t)crc;
+    ack[pos++] = (uint8_t)(crc >> 8);
+    legacy_delay_ms(CT_LEGACY_RESPONSE_DELAY_MS);
+    (void)CtBoard_UartWrite(ack, pos);
+}
+
 static void legacy_handle_frame(void)
 {
     uint16_t addr;
@@ -93,15 +169,20 @@ static void legacy_handle_frame(void)
     uint16_t expect_crc;
     uint16_t actual_crc;
 
-    if (s_legacy_expect < 9u)
+    expect_crc = (uint16_t)s_legacy_buf[s_legacy_expect - 2u] |
+                 ((uint16_t)s_legacy_buf[s_legacy_expect - 1u] << 8);
+    actual_crc = legacy_crc16(s_legacy_buf, (uint16_t)(s_legacy_expect - 2u));
+    if (expect_crc != actual_crc)
     {
         return;
     }
 
-    expect_crc = (uint16_t)s_legacy_buf[s_legacy_expect - 2u] |
-                 ((uint16_t)s_legacy_buf[s_legacy_expect - 1u] << 8);
-    actual_crc = CtCrc16_Calc(s_legacy_buf, (uint16_t)(s_legacy_expect - 2u));
-    if (expect_crc != actual_crc)
+    if (s_legacy_buf[1] == CT_LEGACY_CMD_READ_REGS)
+    {
+        legacy_send_read_ack(s_legacy_buf);
+        return;
+    }
+    if (s_legacy_expect < 9u)
     {
         return;
     }
@@ -138,7 +219,7 @@ void CtSelfIap_FeedUartByte(uint8_t byte)
     }
     else if (s_legacy_index == 1u)
     {
-        if (byte != CT_LEGACY_CMD_WRITE_REGS)
+        if ((byte != CT_LEGACY_CMD_WRITE_REGS) && (byte != CT_LEGACY_CMD_READ_REGS))
         {
             legacy_reset_parser();
             return;
@@ -153,7 +234,11 @@ void CtSelfIap_FeedUartByte(uint8_t byte)
 
     s_legacy_buf[s_legacy_index++] = byte;
     s_legacy_last_rx_ms = CtBoard_GetTickMs();
-    if (s_legacy_index == 7u)
+    if ((s_legacy_index == 6u) && (s_legacy_buf[1] == CT_LEGACY_CMD_READ_REGS))
+    {
+        s_legacy_expect = 8u;
+    }
+    else if ((s_legacy_index == 7u) && (s_legacy_buf[1] == CT_LEGACY_CMD_WRITE_REGS))
     {
         s_legacy_expect = (uint8_t)(9u + s_legacy_buf[6]);
         if ((s_legacy_expect > CT_LEGACY_RX_BUF_SIZE) || (s_legacy_expect < 9u))

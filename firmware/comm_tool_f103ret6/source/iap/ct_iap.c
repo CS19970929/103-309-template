@@ -43,6 +43,8 @@
 #define LEGACY_FLASH_UPGRADE_ADDR        0xFFFEu
 #define LEGACY_FLASH_COMPLETE_ADDR       0xFFFFu
 #define LEGACY_RO_START                  0xD000u
+#define LEGACY_RO_STATUS_ADDR            0xD050u
+#define LEGACY_READ_WORDS_MAX            64u
 #define LEGACY_ERR_ADDR_INVALID          0x01u
 #define LEGACY_ERR_CRC                   0x02u
 #define LEGACY_ERR_CMD_INVALID           0x04u
@@ -116,6 +118,7 @@ static uint16_t s_serial_expect;
 static uint16_t s_serial_block_count;
 static uint32_t s_serial_written;
 static uint32_t s_serial_last_rx_ms;
+static uint8_t s_serial_fault_count;
 static uint8_t s_reset_pending;
 static uint32_t s_reset_time_ms;
 static uint8_t s_heartbeat_seq;
@@ -552,11 +555,87 @@ static void serial_send_ack(const uint8_t *request)
     (void)serial_write(ack, (uint16_t)sizeof(ack));
 }
 
+static void serial_send_error(const uint8_t *request, uint8_t error);
+
+static uint16_t serial_status_word(uint16_t addr)
+{
+    uint16_t offset;
+
+    if (addr >= LEGACY_RO_STATUS_ADDR)
+    {
+        offset = (uint16_t)(addr - LEGACY_RO_STATUS_ADDR);
+    }
+    else if (addr >= LEGACY_RO_START)
+    {
+        offset = (uint16_t)(addr - LEGACY_RO_START);
+    }
+    else
+    {
+        return 0u;
+    }
+
+    switch (offset)
+    {
+    case 0u:
+        return s_serial_block_count;
+    case 1u:
+        return (uint16_t)(s_serial_written & 0xFFFFu);
+    case 2u:
+        return (uint16_t)(s_serial_written >> 16);
+    case 3u:
+        return (uint16_t)s_serial_fault_count;
+    case 4u:
+        return (uint16_t)s_flash.owner;
+    default:
+        return 0u;
+    }
+}
+
+static void serial_send_read_regs(const uint8_t *request)
+{
+    uint8_t ack[3u + (LEGACY_READ_WORDS_MAX * 2u) + 2u];
+    uint16_t addr;
+    uint16_t count;
+    uint16_t value;
+    uint16_t crc;
+    uint16_t i;
+    uint16_t pos;
+
+    addr = rd_be16(&request[2]);
+    count = rd_be16(&request[4]);
+    if ((count == 0u) || (count > LEGACY_READ_WORDS_MAX) || (addr < LEGACY_RO_START))
+    {
+        serial_send_error(request, LEGACY_ERR_ADDR_INVALID);
+        return;
+    }
+
+    ack[0] = request[0];
+    ack[1] = LEGACY_CMD_READ_REGS;
+    ack[2] = (uint8_t)(count * 2u);
+    pos = 3u;
+    for (i = 0u; i < count; ++i)
+    {
+        value = serial_status_word((uint16_t)(addr + i));
+        wr_be16(&ack[pos], value);
+        pos = (uint16_t)(pos + 2u);
+    }
+
+    crc = crc16_calc(ack, pos);
+    ack[pos++] = (uint8_t)crc;
+    ack[pos++] = (uint8_t)(crc >> 8);
+    serial_delay_ms(IAP_SERIAL_RESPONSE_DELAY_MS);
+    (void)serial_write(ack, pos);
+}
+
 static void serial_send_error(const uint8_t *request, uint8_t error)
 {
     uint8_t ack[5];
     uint16_t crc;
 
+    if (s_serial_fault_count < 0xFFu)
+    {
+        s_serial_fault_count++;
+    }
     ack[0] = request[0];
     ack[1] = request[1] | 0x80u;
     ack[2] = error;
@@ -633,7 +712,7 @@ static void serial_handle_frame(void)
 
     if (s_serial_rx[1] == LEGACY_CMD_READ_REGS)
     {
-        serial_send_error(s_serial_rx, LEGACY_ERR_ADDR_INVALID);
+        serial_send_read_regs(s_serial_rx);
         return;
     }
     if (s_serial_rx[1] != LEGACY_CMD_WRITE_REGS)
