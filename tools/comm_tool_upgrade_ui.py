@@ -77,6 +77,7 @@ BMS_LIVE_WORDS = 88
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
+BMS_EVENT_RECORD_CHUNK_WORDS = 20
 BMS_PRODUCT_INFO_ADDR = 0xC002
 BMS_PRODUCT_INFO_FIELD_LEN = 32
 BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
@@ -2479,18 +2480,28 @@ class UpgradeUi(tk.Tk):
     def _worker_read_bms_log(self) -> None:
         with self._open_client() as client:
             self._set_can_target(client)
-            self._emit("log", "读取BMS日志: 读取 0xC008 完整事件记录窗口")
-            words = self._read_bms_words_with_retry(
-                client,
-                BMS_EVENT_RECORD_ADDR,
-                BMS_EVENT_RECORD_WORDS,
-                "BMS日志完整窗口",
-            )
+            self._emit("log", "读取BMS日志: 分段读取 0xC008 事件记录窗口")
+            words = self._read_bms_log_words(client)
         records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
         valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
         self._emit("bms_log", records)
         self._emit("log", f"BMS 日志读取完成: {valid_count} 条")
         self._emit("progress", 100)
+
+    def _read_bms_log_words(self, client: CommToolClient) -> list[int]:
+        words: list[int] = []
+        for offset in range(0, BMS_EVENT_RECORD_WORDS, BMS_EVENT_RECORD_CHUNK_WORDS):
+            count = min(BMS_EVENT_RECORD_CHUNK_WORDS, BMS_EVENT_RECORD_WORDS - offset)
+            label = f"BMS日志窗口 0x{BMS_EVENT_RECORD_ADDR + offset:04X}+{count}"
+            words.extend(
+                self._read_bms_words_with_retry(
+                    client,
+                    BMS_EVENT_RECORD_ADDR + offset,
+                    count,
+                    label,
+                )
+            )
+        return words
 
     def _worker_read_bms_regs(self) -> None:
         addr = self.active_bms_addr

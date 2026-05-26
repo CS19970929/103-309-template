@@ -21,6 +21,13 @@ enum
     ACK_MATCH_BAD = 2
 };
 
+static uint8_t s_last_gateway_error;
+
+uint8_t CtCan_GetLastGatewayError(void)
+{
+    return s_last_gateway_error;
+}
+
 static uint16_t rd_be16(const uint8_t *p)
 {
     return ((uint16_t)p[0] << 8) | p[1];
@@ -256,8 +263,10 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
     uint32_t start;
     uint32_t wait_ms;
 
+    s_last_gateway_error = CT_CAN_GATEWAY_ERR_NONE;
     if ((words == 0) || (count == 0u) || (count > CT_CAN_APP_READ_BLOCK_MAX_WORDS))
     {
+        s_last_gateway_error = CT_CAN_GATEWAY_ERR_BMS;
         return 0;
     }
 
@@ -277,6 +286,7 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
 
         if (count > APP_SINGLE_READ_FALLBACK_MAX)
         {
+            s_last_gateway_error = CT_CAN_GATEWAY_ERR_BMS;
             return 0;
         }
         for (i = 0u; i < count; ++i)
@@ -290,6 +300,7 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
                                        &v1,
                                        APP_REG_CMD_TIMEOUT_MS))
             {
+                s_last_gateway_error = CT_CAN_GATEWAY_ERR_BMS;
                 return 0;
             }
             words[i] = ((uint16_t)v0 << 8) | v1;
@@ -298,6 +309,7 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
     }
     if (ack_count != (uint8_t)count)
     {
+        s_last_gateway_error = CT_CAN_GATEWAY_ERR_BMS;
         return 0;
     }
 
@@ -327,7 +339,14 @@ int CtCan_AppReadRegs(uint8_t can_addr, uint16_t addr, uint16_t count, uint16_t 
         }
     }
 
-    return (received_count == count) ? 1 : 0;
+    if (received_count != count)
+    {
+        s_last_gateway_error = CT_CAN_GATEWAY_ERR_TIMEOUT;
+        drain_can_rx();
+        return 0;
+    }
+
+    return 1;
 }
 
 int CtCan_AppWriteRegs(uint8_t can_addr, uint16_t addr, uint16_t count, const uint16_t *words)

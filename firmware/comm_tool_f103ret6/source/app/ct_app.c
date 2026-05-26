@@ -282,7 +282,11 @@ static void handle_bms_read(const CtFrame *req)
     }
     if (!CtCan_AppReadRegs(s_app_can_addr, addr, count, words))
     {
-        respond(req, CT_STATUS_BMS_ERROR, 0, 0u);
+        respond(req,
+                (CtCan_GetLastGatewayError() == CT_CAN_GATEWAY_ERR_TIMEOUT) ?
+                    CT_STATUS_CAN_TIMEOUT : CT_STATUS_BMS_ERROR,
+                0,
+                0u);
         return;
     }
 
