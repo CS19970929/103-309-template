@@ -116,12 +116,12 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 
 comm tool IAP 同时支持旧 BMS 串口升级协议和当前 CAN-IAP 协议：
 
-- 串口：USART3 `115200 8N1`，旧 BMS `0x10` 写多个寄存器命令，地址仍为 `0xFFFD` 连接、`0xFFFE` 数据块、`0xFFFF` 完成。App 运行时收到 `0xFFFD` 后会用 SRAM mailbox 请求复位进入 IAP，并先 ACK 再复位，旧串口上位机可复用。
+- 串口：由 `CT_COMM_UART_PORT` 统一选择，当前默认 USART1 `PB6/TX`、`PB7/RX`，`115200 8N1`。旧 BMS `0x10` 写多个寄存器命令地址仍为 `0xFFFD` 连接、`0xFFFE` 数据块、`0xFFFF` 完成。App 运行时收到 `0xFFFD` 后会用 SRAM mailbox 请求复位进入 IAP，并先 ACK 再复位，旧串口上位机可复用。
 - CAN：目标 comm tool App 地址固定 `14`，收到 App 服务 `ENTER_IAP` 后复位进入 IAP；IAP 使用扩展帧 `0x14F8F000/0x14F8F100/0x14000000` 的 CAN-IAP 协议，节点默认 `1`。
 
 另一台 comm tool 升级当前 comm tool 时，PC 先把 `COMM_TOOL_Release.bin` 以 `app_addr=0x08008000` 下载到主控 comm tool 缓存，然后设置 `app-can-addr=14`、`node-id=1`，执行 `enter-iap` 和 `upgrade`。目标 IAP 收到完整镜像并校验后才写入 App 首页向量，升级中断会停留在 IAP。
 
-旧串口上位机的数据块帧中，`0xFFFE` 每包最大 1024 字节，`byte_count` 字段可能为 0，真实数据长度使用寄存器数量字段表示。comm tool IAP 按这个旧行为解析，不要求改旧上位机。为了避免旧上位机每包发送后立刻清空接收缓存导致 ACK 被清掉，comm tool App 进入 IAP ACK 和 IAP 写块 ACK 都延迟 20ms 后发送；同时 IAP 对半帧接收增加 500ms 超时重同步，UART TX 等待增加超时，Flash 写入改为按页范围自动擦除。
+旧串口上位机的数据块帧中，`0xFFFE` 每包最大 1024 字节，`byte_count` 字段可能为 0，真实数据长度使用寄存器数量字段表示。comm tool IAP 按这个旧行为解析，不要求改旧上位机。旧 BMS 上位机还可能用 `0x03` 读取 `0xD000` 或 `0xD050` 状态；comm tool App 和 IAP 均返回兼容状态帧，避免上位机等待状态读时卡住。为了避免旧上位机每包发送后立刻清空接收缓存导致 ACK 被清掉，comm tool App 进入 IAP ACK 和 IAP 写块 ACK 都延迟 20ms 后发送；同时 IAP 对半帧接收增加 500ms 超时重同步，UART TX 等待增加超时，Flash 写入改为按页范围自动擦除。
 ## 2026-05-25 串口选择补充
 
 COMM TOOL 串口不再在 App 或 IAP 里分散写死。当前统一由 `firmware/comm_tool_f103ret6/source/app/ct_config.h` 的 `CT_COMM_UART_PORT` 控制，默认 `CT_COMM_UART_PORT_USART1`，对应 USART1 重映射 `PB6/TX`、`PB7/RX`，波特率仍为 `115200 8N1`。后续需要切换回 USART3 时，使用 `.\tools\set_comm_tool_uart.ps1 -Port USART3`，不要手工只改 App 或只改 IAP。
