@@ -1,6 +1,6 @@
 # 当前项目变量清理审查报告
 
-> 状态：按当前源码只读分析，未修改 `.c/.h` 源码。
+> 状态：已完成源码分析与低风险清理执行闭环；初版报告为只读分析，后续已按“只处理明确低风险变量”的边界完成代码收口。
 >
 > 日期：2026-05-27
 >
@@ -260,3 +260,59 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 - `python3 tools/soc_replay_test.py`：47 项通过。
 - `git diff --check`：通过。
 - `python3 tools/run_soc_host_c_test.py`：当前失败 3 项，失败点为 SOC host C 断言 `u16Soc actual=100 expected=70` 等；本轮未修改 SOC 源码，需作为现有回归残留单独排查。
+
+## 13. 剩余建议执行裁决
+
+> 状态：已按当前授权边界逐项裁决。代码层面可直接执行的低风险建议已经完成；剩余建议涉及协议、Flash、SOC/ADC/AFE、保护或低功耗关键状态，不能在未确认外部依赖前继续直接修改。
+
+### 13.1 第一阶段剩余项裁决
+
+| 建议项 | 当前裁决 | 原因 |
+|---|---|---|
+| `BMS_LOG_POINT` / `BMS_LOG_RECORD` 改为 `static` | 暂不执行 | 日志记录会通过 `StorageFlash_SaveLogData()` / `StorageFlash_LoadLogData()` 持久化，属于 Flash 日志链路；即使只改链接可见性，也应先确认 Keil Watch、上位机日志读取和历史调试依赖 |
+| `g_u8SCITxBuff` 改为 `static` | 暂不执行 | 属于 SCI/RS485 协议应答运行态缓冲，报告已把 SCI 端口状态列为协议运行态收口问题；需与 SCI runtime 内嵌重构一起做 |
+| `g_stCurrentMsgPtr_SCIx`、`gu8_TxEnable_SCIx` 去 `extern` / 内嵌 | 暂不执行 | 属于通信协议端口状态重构，可能影响 RS485 方向控制、端口绑定和调试观察 |
+| `TimeDisplay` 改为 `static __IO` | 暂不执行 | 秒中断标志，属于中断共享语义；虽然 IRQ handler 在同文件，但按安全边界不改 `volatile` / `__IO` 变量 |
+
+### 13.2 第二阶段疑似死变量裁决
+
+| 变量 | 当前裁决 | 原因 |
+|---|---|---|
+| `gu8_WakeUp_Type` | 暂不删除 | 低功耗/唤醒链路变量，需确认旧协议、调试观察或历史唤醒类型语义 |
+| `curr_offset` / `OffsetValue_CHG` / `OffsetValue_DSG` | 暂不删除 | EEPROM/Flash 迁移遗留，属于持久化边界；删除前需确认旧 EEPROM offset 逻辑完全不再使用 |
+| `CBC_Element` | 暂不删除 | CBC/保护历史结构，删除前需确认保护逻辑和旧协议空洞 |
+| `gu8_Reset_EventRecord` | 暂不删除 | 日志复位标志，属于事件记录和上位机操作语义 |
+| `AFE_ResetFlag` | 暂不删除 | AFE 参数复位遗留状态，需确认是否存在量产调试或 AFE 重启依赖 |
+| `g_u16IoutOffsetAD` | 暂不删除 | ADC/Type-C 电流零点链路历史变量，需和 ADC current runtime 一起确认 |
+| `FaultPoint_First` / `FaultPoint_Second` | 暂不删除 | 故障记录协议窗口相关；报告已说明旧 `Fault_record_Third/FaultPoint_Third` 仍被 SCI 读寄存器路径读取 |
+
+### 13.3 第三阶段结构体收口裁决
+
+| 建议结构体 | 当前裁决 | 原因 |
+|---|---|---|
+| `ADC_Runtime_t` | 暂不执行 | 会触碰 ADC 原始值、Type-C 电流、SOC 输入和 legacy mirror，需单独验证 SOC 积分、Type-C 电流和协议显示 |
+| `AFE_MonitorRuntime_t` | 暂不执行 | 会触碰双 AFE channel 错误计数和唤醒计数，属于 AFE 运行态 |
+| `SCI_PORT_RUNTIME` 内嵌状态 | 暂不执行 | 通信协议运行态重构，需覆盖 RS485 多端口、方向控制和收发缓冲验证 |
+| `CAN_Runtime_t` | 暂不执行 | CAN 队列、App 命令、低功耗补发和 IAP 相关，需要单独设计和 CAN 回归 |
+| `RTC_WakeContext_t` | 暂不执行 | RTC/EXTI/STOP 唤醒唯一真相源重构，属于低功耗关键链路 |
+| `FaultRecordRuntime_t` | 暂不执行 | 故障记录新旧窗口涉及协议兼容，需要确认上位机当前读取窗口 |
+| `LogRecordRuntime_t` | 暂不执行 | 日志记录与 Flash 持久化相关，需确认存储布局和上位机读取行为 |
+
+### 13.4 额外可见性候选裁决
+
+| 变量组 | 当前裁决 | 原因 |
+|---|---|---|
+| `g_u16ADCValFilter`、`g_u32ADCValFilter2`、Type-C 电流/VBC 相关变量 | 暂不执行 | ADC/SOC 输入链路相关，虽然部分仅文件内使用，但属于电流、电压和 SOC 计算口径 |
+| `u8IICFaultcnt1/2`、`u8WakeCnt1/2`、`g_stAfeCurrentObserve` | 暂不执行 | AFE 监控运行态和调试观察变量 |
+| `AFE_Parameters_RS485_Struction` | 暂不执行 | AFE 参数和 RS485 参数桥接结构，协议相关 |
+| `g_irq_t`、`is_wakeup`、`g_stLowPowerRtcStatus` | 暂不执行 | 低功耗/RTC 唤醒关键状态 |
+| `AFE_OCD1V_OCCV`、`AFE_SCV`、`AFE_OVT_UVT`、`AFE_SCT`、`AFE_OCD1T`、`AFE_OCCT_OCD2T` | 暂不执行 | 当前被 `ShortFunc.c` 通过 `extern` 跨文件使用，且属于 AFE/保护档位表；若要收口，应先重构 `ShortFunc` 与 `SH367309_DataDeal` 的表所有权 |
+| `SOC_Table_Default`、`SOC_Table_LiFePO`、`SocTable_TernaryLi`、`SocTable_LiFePO2` | 暂不执行 | SOC OCV 表属于协议/Flash/SOC 策略关键数据，报告已列为高风险变量 |
+
+### 13.5 当前完成定义
+
+在“不修改 `volatile`、中断共享、协议相关、SOC/ADC/AFE/保护/低功耗关键状态、Flash 持久化、上位机可见变量”的授权边界下，本报告建议已经完成到可安全执行的最大范围：
+
+- 已完成所有不触碰敏感域的文件级可见性收口和局部化。
+- 已完成只读查表常量的 `static const` 收口，且未修改表值。
+- 剩余项全部需要用户显式确认外部依赖、上位机协议/调试观察、Flash 布局或硬件回归策略后，再按单独小批次执行。
