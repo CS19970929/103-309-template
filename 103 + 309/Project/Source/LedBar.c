@@ -3,8 +3,6 @@
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS
 #define LEDBAR_MCU_WK_ON_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS
 #define LEDBAR_MCU_WK_OFF_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS
-#define LEDBAR_CHARGE_ON_FILTER_100MS PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS
-#define LEDBAR_CHARGE_OFF_FILTER_100MS PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
 
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
@@ -65,7 +63,6 @@ typedef struct
     uint8_t blank;
     uint8_t number;
     uint8_t indicator_mask;
-    uint8_t test_single_segment_enable;
     uint8_t test_single_segment_id;
     volatile uint32_t frame_mask;
     volatile uint8_t scan_route;
@@ -81,10 +78,6 @@ typedef struct
     uint8_t mcu_wk_active;
     uint8_t mcu_wk_on_10ms;
     uint8_t mcu_wk_off_10ms;
-    uint8_t charge_filter_initialized;
-    uint8_t charge_active;
-    uint8_t charge_on_100ms;
-    uint8_t charge_off_100ms;
 } LedBarRuntime;
 
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
@@ -188,11 +181,6 @@ static uint8_t LedBar_GetRuntimeSoc(void)
 static uint8_t LedBar_ReadMcuWakeRaw(void)
 {
     return (uint8_t)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
-}
-
-static uint8_t LedBar_ReadChargeRaw(void)
-{
-    return (uint8_t)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
 }
 
 static uint8_t LedBar_IsDischargeMosOpen(void)
@@ -479,12 +467,6 @@ static uint32_t LedBar_BuildCurrentFrameMask(void)
         return 0u;
     }
 
-    if (s_ledbar.test_single_segment_enable != 0u)
-    {
-        return (1UL << (uint8_t)(s_ledbar.test_single_segment_id %
-                                 (uint8_t)LEDBAR_ROUTE_COUNT));
-    }
-
     return LedBar_BuildTargetMask(s_ledbar.number,
                                   (uint8_t)(s_ledbar.indicator_mask &
                                             (LEDBAR_ICON_CHARGE_MASK |
@@ -653,32 +635,6 @@ static uint8_t LedBar_IsMcuWakeActive(void)
     return s_ledbar.mcu_wk_active;
 }
 
-static void LedBar_ServiceChargeFilter(uint8_t raw_active)
-{
-    if (s_ledbar.charge_filter_initialized == 0u)
-    {
-        s_ledbar.charge_filter_initialized = 1u;
-        LedBar_PrimeBinaryFilter(0u,
-                                 &s_ledbar.charge_active,
-                                 &s_ledbar.charge_on_100ms,
-                                 &s_ledbar.charge_off_100ms,
-                                 LEDBAR_CHARGE_ON_FILTER_100MS,
-                                 LEDBAR_CHARGE_OFF_FILTER_100MS);
-    }
-
-    if (g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u)
-    {
-        return;
-    }
-
-    LedBar_UpdateBinaryFilter(raw_active,
-                              &s_ledbar.charge_active,
-                              &s_ledbar.charge_on_100ms,
-                              &s_ledbar.charge_off_100ms,
-                              LEDBAR_CHARGE_ON_FILTER_100MS,
-                              LEDBAR_CHARGE_OFF_FILTER_100MS);
-}
-
 static uint8_t LedBar_IsDisplayRequested(void)
 {
 #if LEDBAR_TEST_ALWAYS_ON
@@ -720,18 +676,9 @@ static void LedBar_ServiceSwitch(void)
             (s_ledbar.key_long_handled == 0u))
         {
             s_ledbar.key_long_handled = 1u;
-#if LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST
-            {
-                BitAction dc_state = (GPIO_ReadOutputDataBit(GPIO_DC_EN, PIN_DC_EN) == Bit_RESET) ? Bit_SET : Bit_RESET;
-                BitAction en2727_state = (GPIO_ReadOutputDataBit(GPIO_2727_EN, PIN_2737_EN) == Bit_RESET) ? Bit_SET : Bit_RESET;
-                GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, dc_state);
-                GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, en2727_state);
-            }
-#else
             LedBar_SaveSleepSoc();
             entersleep(DEEP_MODE);
             SleepDeal_Continue((UINT8)DEEP_MODE);
-#endif
         }
 #endif
     }
@@ -740,6 +687,7 @@ static void LedBar_ServiceSwitch(void)
         s_ledbar.key_hold_10ms = 0u;
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_long_handled = 0u;
+        //todo ???
         if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
         {
             return;
@@ -779,7 +727,6 @@ void LedBar_Init(void)
     s_ledbar.blank = 1u;
     s_ledbar.number = 0u;
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
-    s_ledbar.test_single_segment_enable = 0u;
     s_ledbar.test_single_segment_id = 0u;
     s_ledbar.frame_mask = 0u;
     s_ledbar.scan_route = 0u;
@@ -795,11 +742,6 @@ void LedBar_Init(void)
     s_ledbar.mcu_wk_active = 0u;
     s_ledbar.mcu_wk_on_10ms = 0u;
     s_ledbar.mcu_wk_off_10ms = 0u;
-    s_ledbar.charge_filter_initialized = 0u;
-    s_ledbar.charge_active = 0u;
-    s_ledbar.charge_on_100ms = 0u;
-    s_ledbar.charge_off_100ms = 0u;
-
     LedBar_GpioInitForDisplay();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
@@ -842,25 +784,6 @@ void LedBar_Wakeup(void)
     LedBar_SetSleep(0u);
 }
 
-void LedBar_EnableSingleSegmentTest(uint8_t enable)
-{
-    LedBar_EnsureInit();
-
-    enable = (enable != 0u) ? 1u : 0u;
-    if (s_ledbar.test_single_segment_enable == enable)
-    {
-        return;
-    }
-
-    s_ledbar.test_single_segment_enable = enable;
-    if (enable == 0u)
-    {
-        s_ledbar.test_single_segment_id = 0u;
-    }
-    s_ledbar.blank = 0u;
-    LedBar_RefreshOutput();
-}
-
 void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
 {
     LedBar_EnsureInit();
@@ -875,10 +798,6 @@ void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
     }
 
     s_ledbar.test_single_segment_id = segment_id;
-    if (s_ledbar.test_single_segment_enable != 0u)
-    {
-        LedBar_RefreshOutput();
-    }
 }
 
 void LedBar_SetNumber(uint8_t value)
@@ -1005,8 +924,7 @@ uint8_t LedBar_IsActiveForLowPower(void)
         return 0u;
     }
 
-    if ((s_ledbar.test_single_segment_enable != 0u) ||
-        (s_ledbar.soc_display_10ms != 0u) ||
+    if ((s_ledbar.soc_display_10ms != 0u) ||
         (s_ledbar.startup_display_armed != 0u) ||
         (s_ledbar.frame_mask != 0u) ||
         (s_ledbar.scan_timer_enabled != 0u))
@@ -1051,7 +969,6 @@ void APP_LedBar(void)
     uint8_t indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     uint8_t display_requested;
     uint8_t mcu_wk_active;
-    uint8_t charge_raw_active;
     uint8_t discharge_mos_open;
 
     LedBar_EnsureInit();
@@ -1070,15 +987,6 @@ void APP_LedBar(void)
 #endif
 
     LedBar_ServiceStartupDisplayWindow();
-
-    if (s_ledbar.test_single_segment_enable != 0u)
-    {
-        if (s_ledbar.sleep != 0u)
-        {
-            LedBar_Wakeup();
-        }
-        return;
-    }
 
     display_requested = LedBar_IsDisplayRequested();
     if (display_requested == 0u)
@@ -1104,23 +1012,11 @@ void APP_LedBar(void)
     }
 
     display_value = LedBar_GetRuntimeSoc();
-    charge_raw_active = LedBar_ReadChargeRaw();
-    LedBar_ServiceChargeFilter(charge_raw_active);
     discharge_mos_open = LedBar_IsDischargeMosOpen();
 
     if (discharge_mos_open != 0u)
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
-    }
-
-    if (s_ledbar.charge_active != 0u)
-    {
-    }
-    else if (g_stCellInfoReport.u16IDischg != 0u)
-    {
-    }
-    else
-    {
     }
 
     if (LedBar_IsFaultActive() != 0u)

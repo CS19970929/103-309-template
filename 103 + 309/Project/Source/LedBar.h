@@ -8,7 +8,6 @@
 
 #define LEDBAR_SLEEP_ENABLE PROJECT_CFG_LEDBAR_SLEEP_ENABLE
 
-#define LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST
 #define LEDBAR_TEST_ALWAYS_ON PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON
 
 /* GPIO Charlieplexing pins. LedBar.c owns the physical scan order. */
@@ -39,7 +38,6 @@ void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable);
 void LedBar_Clear(void);
 void LedBar_SetSleep(uint8_t enable);
 void LedBar_Wakeup(void);
-void LedBar_EnableSingleSegmentTest(uint8_t enable);
 void LedBar_SetSingleSegmentIndex(uint8_t segment_id);
 void LedBar_SaveSleepSoc(void);
 uint8_t LedBar_LoadSleepSoc(void);

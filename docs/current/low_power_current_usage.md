@@ -150,7 +150,7 @@
 - LED/灯条配置启用休眠 SOC 备份，见 `Project_Config.h:354-356`。
 - `APP_LedBar()` 在低功耗 pending 且 MCU_WAKE 不活跃时保存 SOC 并置 sleep，见 `103 + 309/Project/Source/LedBar.c:1039-1045`。
 - 按键长按路径会保存 SOC 并直接 `entersleep(DEEP_MODE)` + `SleepDeal_Continue(DEEP_MODE)`，见 `LedBar.c:718-734`。
-- 灯条显示窗口、按键滤波、充电滤波依赖 10ms/100ms tick，见 `LedBar.c:620-680`。
+- 灯条显示窗口、按键滤波和 `MCU_WK` 滤波依赖 10ms/100ms tick；充电图标只由放电 MOS 状态决定，不再依赖 `GPIO_CHG_IN` 滤波。
 
 结论：LED 已参与低功耗，但“LED 正在显示窗口”当前不是通用阻塞位；后续建议将 `soc_display_10ms` 或公开 API 接入 `LP_BLOCK_LED_ACTIVE`。
 

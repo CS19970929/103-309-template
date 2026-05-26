@@ -210,7 +210,7 @@
   <section id="led">
     <h2>7. LED / LedBar 模块</h2>
     <p>LedBar 是 5 GPIO Charlieplexing 扫描方案。<code>LedBarRuntime</code> 保存显示状态，TIM4 默认 0.5ms 扫描 tick，<code>APP_LedBar()</code> 处理 MCU_WK、按键、休眠、开机窗口、测试显示和 SOC 显示窗口。</p>
-    <p>疑点：charge/discharge/fault 有空分支；<code>LEDBAR_ICON_CHARGE_MASK</code> 由 <code>discharge_mos_open</code> 点亮；长按依赖文件级 <code>key_release_wakeup</code>；<code>LedBar_Scan1ms()</code> 名称和 0.5ms tick 不一致。</p>
+    <p>更新：充电图标语义已确认，<code>LEDBAR_ICON_CHARGE_MASK</code> 仅由 <code>discharge_mos_open</code> 点亮；<code>GPIO_CHG_IN</code> 和充电滤波不再参与显示。剩余疑点是长按依赖文件级 <code>key_release_wakeup</code>，以及 <code>LedBar_Scan1ms()</code> 名称和 0.5ms tick 不一致。</p>
     <p>建议收敛为三层：输入采集、显示模型、扫描输出。</p>
   </section>
 
@@ -246,7 +246,7 @@
       <thead><tr><th>优先级</th><th>位置</th><th>现象</th><th>建议</th></tr></thead>
       <tbody>
         <tr><td class="priority-p1">P1</td><td><code>DataDeal.c/new_todo_logi()</code></td><td>数据装载中混入 power policy</td><td>拆为独立 service，先移动不改逻辑</td></tr>
-        <tr><td class="priority-p1">P1</td><td><code>LedBar_UpdateIndicators()</code></td><td>charge icon 由 discharge MOS 驱动，语义疑似错误</td><td>确认产品定义后修正或重命名</td></tr>
+        <tr><td class="priority-p1">P1</td><td><code>LedBar_UpdateIndicators()</code></td><td>charge icon 已确认由 discharge MOS 驱动</td><td>保持该产品定义，不再引入 <code>GPIO_CHG_IN</code> 滤波路径</td></tr>
         <tr><td>P2</td><td><code>CanFeidaoFrames.c</code></td><td>放电电流 unsigned 负号表达式</td><td>改为显式 signed 乘法取负</td></tr>
         <tr><td>P2</td><td><code>CanFeidaoFrames.c</code></td><td>版本帧硬编码 <code>1</code></td><td>使用真实版本字段</td></tr>
         <tr><td>P2</td><td><code>Can_HDX.c</code></td><td>app 命令 pending 满时可能静默丢弃</td><td>增加 busy/NACK 或 drop counter</td></tr>

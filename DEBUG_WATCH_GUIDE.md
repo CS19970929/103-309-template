@@ -35,7 +35,6 @@ g_dbg_ledbar_runtime->scan_index
 g_dbg_ledbar_runtime->soc_display_10ms
 g_dbg_ledbar_runtime->key_hold_10ms
 g_dbg_ledbar_runtime->mcu_wk_active
-g_dbg_ledbar_runtime->charge_active
 ```
 
 ### 飞道 CAN

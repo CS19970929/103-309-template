@@ -1,5 +1,7 @@
 # LED 数码管稳定性优化记录 - 2026-05-15
 
+> 当前规则更新：充电图标已确认只由 `SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET` 放电 MOS 状态决定；`GPIO_CHG_IN`、充电电流和 `MCU_WK` 不再参与充电图标判断，`LedBar_ServiceChargeFilter()` 相关滤波路径已删除。
+
 ## 目标
 
 本轮聚焦 `LedBar.c` 的可读性和显示稳定性，处理两个现场现象：
@@ -14,23 +16,21 @@
 - `APP_LedBar()` 仍是主循环入口。
 - `TIM4_IRQHandler()` 仍负责 Charlieplexing 扫描。
 - `GPIO_MCU_WK` 仍只表示需要保持显示，不再参与充电图标判断。
-- 充电图标只由 `GPIO_CHG_IN` 触发，不再用瞬时电流或 MCU_WK 兜底。
+- 当前充电图标只由 `SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET` 放电 MOS 状态触发，不再用 `GPIO_CHG_IN`、瞬时电流或 MCU_WK 兜底。
 
 ## 本轮变化
 
 - `LedBar_ApplyFrame()` 不再在每次非空帧刷新时停止 TIM4、重配 GPIO、再重启扫描。
 - 非空帧更新改为短暂屏蔽 TIM4 中断后替换当前帧，减少业务刷新造成的可见空窗。
 - 新增 `LedBar_FrameEquals()`，相同帧不重复刷新，避免无意义的扫描扰动。
-- 新增 `LedBar_ReadChargeRaw()`，把充电来源收口到充电检测 GPIO。
-- `LedBar_ServiceChargeFilter()` 首次初始化不再直接采用瞬时 raw 状态，必须经过 100ms 节拍滤波后才更新充电图标。
-- `PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS` 从 `1` 调整为 `3`，单次 100ms 毛刺不会点亮充电图标。
+- 已删除 `LedBar_ReadChargeRaw()`、`LedBar_ServiceChargeFilter()` 和充电滤波配置项，避免保留无效的 `GPIO_CHG_IN` 显示路径。
 
 ## 保留行为
 
 - 按键显示窗口仍为 `PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS`。
 - 启动/唤醒显示窗口仍为 `PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS`。
 - MCU_WK 高电平仍保持 SOC 显示。
-- 充电断开滤波仍为 `PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS=5`。
+- 充电图标状态跟随放电 MOS 状态，不再保留充电断开滤波。
 - 熄屏/休眠时仍关闭 TIM4，并将 LED 引脚置为低功耗确定状态。
 
 ## 验证
@@ -46,8 +46,8 @@ py -3.9 tools\run_soc_host_c_test.py
 
 板端复测建议：
 
-- 未接充电器，仅触发 MCU_WK/按键显示，确认充电图标不亮。
-- 接入充电器后观察约 300ms 内充电图标稳定点亮。
+- 仅触发 MCU_WK/按键显示，确认不会额外点亮充电图标。
+- 切换放电 MOS 状态，确认充电图标跟随 `DSG_FET` 状态变化。
 - SOC 数值变化或图标变化时，确认数码管没有明显整屏闪一下。
 - 进入 RTC/STOP 前后确认无残留段位误亮。
 

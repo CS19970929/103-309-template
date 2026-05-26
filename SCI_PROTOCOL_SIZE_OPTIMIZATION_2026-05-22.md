@@ -166,7 +166,7 @@ Execution Region ER_IROM1 Exec base: 0x08004800
 
 修改内容：
 - `SocEnhance.c` 新增 `soc_apply_discharge_delta()`，把积分放电和板端自耗补偿中的“扣容量、刷新 SOC、记录 watch 来源”收敛到同一语义入口；满电锚点、充电 99% 限制和 OCV 校准逻辑不变。
-- `LedBar.c` 新增二值去抖初始化/更新 helper，复用 MCU_WAKE 与充电输入滤波逻辑；充电滤波首次仍按原逻辑从 inactive/off-limit 状态起步。
+- `LedBar.c` 二值去抖 helper 当前只服务 MCU_WAKE 滤波；充电图标已确认只由放电 MOS 状态决定，充电输入滤波路径已删除。
 - `Can_HDX.c` 合并 BusOFF 检测、计数与恢复的单点调用小函数，保留原执行顺序：故障上升沿、10ms 计数、恢复退避；CAN ID、ACK 判定、RTC 唤醒服务和发送调度不变。
 - `FactoryAging.c` 将单点 `FactoryAging_IsDoneStored()` 合入 `FactoryAging_MarkDone()`，并精简 BKP CRC 表达式；Flash/BKP 保存间隔、完成态判断和老化计时不变。
 
@@ -210,7 +210,7 @@ soc_apply_board_self_consumption_seconds: 234 -> 170 bytes
 soc_apply_discharge_delta: new 72 bytes
 
 LedBar_ServiceMcuWakeFilter: 176 -> 82 bytes
-LedBar_ServiceChargeFilter: 148 -> 80 bytes
+LedBar_ServiceChargeFilter: 已删除，充电图标不再做 `GPIO_CHG_IN` 滤波
 LedBar_PrimeBinaryFilter: new 30 bytes
 LedBar_UpdateBinaryFilter: new 64 bytes
 

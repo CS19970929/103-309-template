@@ -385,13 +385,6 @@
 // <i> MCU_WK 无效滤波时间，单位 10ms。用于消抖。
 #define PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS 3
 
-// <o> 充电接入滤波，100ms tick <0-255>
-// <i> 充电插入有效滤波时间，单位 100ms。
-#define PROJECT_CFG_LEDBAR_CHARGE_ON_FILTER_100MS 3
-
-// <o> 充电断开滤波，100ms tick <0-255>
-// <i> 充电拔出无效滤波时间，单位 100ms。
-#define PROJECT_CFG_LEDBAR_CHARGE_OFF_FILTER_100MS 5
 // </h>
 
 // <h>升级参数策略

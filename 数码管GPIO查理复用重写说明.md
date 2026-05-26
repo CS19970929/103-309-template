@@ -12,8 +12,8 @@
 | DI1 短按 | 显示当前 SOC，松手后约 5 秒熄灭 |
 | DI1 长按约 3 秒 | 保存休眠前 SOC，并进入深度休眠流程 |
 | 休眠中短按 | 显示 BKP 中保存的休眠前 SOC，超时后回到 STOP |
-| `GPIO_MCU_WK` 高电平 | 持续显示 SOC，并叠加充电图标 |
-| 充电电流有效 | 显示 `SOC + % + 充电图标` |
+| `GPIO_MCU_WK` 高电平 | 持续显示 SOC，不参与充电图标判断 |
+| 放电 MOS 打开 | 显示 `SOC + % + 充电图标` |
 | 测试常亮 | `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON=1` 时持续显示 SOC，不再按 5 秒/10 秒窗口自动熄屏 |
 | 无显示请求 | 熄屏、停止 TIM4、显示 GPIO 输出低电平 |
 
@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | GPIO/TIM4 驱动层 | 管脚高阻、目标段高低电平输出、TIM4 扫描开关 | `LedBar_GpioInitForDisplay()`、`LedBar_OutputRoute()`、`LedBar_StartScanTimer()` |
 | 显示构建层 | `SOC + icons` 转成 route frame | `LedBar_BuildTargetMask()`、`LedBar_BuildFrameFromMask()` |
-| 业务服务层 | 按键窗口、启动窗口、`MCU_WK` 滤波、充电图标滤波 | `LedBar_ServiceSwitch()`、`LedBar_ServiceMcuWakeFilter()`、`LedBar_ServiceChargeFilter()` |
+| 业务服务层 | 按键窗口、启动窗口、`MCU_WK` 滤波、充电图标状态组合 | `LedBar_ServiceSwitch()`、`LedBar_ServiceMcuWakeFilter()`、`LedBar_IsDischargeMosOpen()` |
 | 对外入口层 | 保持旧 API，供主循环、休眠、测试入口调用 | `APP_LedBar()`、`LedBar_Clear()`、`LedBar_PrepareForStop()` |
 
 `LedBar.c` 不再包含显示驱动双路径条件编译。量产路径只有一套：每次扫描一个 route，一根 GPIO 输出高电平，一根 GPIO 输出低电平，其余 GPIO 保持高阻。
@@ -37,7 +37,7 @@
 | `LedBar_Init()` | 初始化显示模块和 GPIO 安全态 |
 | `LedBar_Scan1ms()` | TIM4 中断扫描入口 |
 | `LedBar_SetNumber()` / `LedBar_SetIndicators()` | 保留手动显示/后续调试扩展入口 |
-| `LedBar_EnableSingleSegmentTest()` / `LedBar_SetSingleSegmentIndex()` | 上板逐段确认 `0~17` 段位 |
+| `LedBar_SetSingleSegmentIndex()` | 保留段位索引设置入口 |
 | `LedBar_SaveSleepSoc()` / `LedBar_LoadSleepSoc()` | 休眠前 SOC 预览 |
 | `LedBar_PrepareForStop()` | STOP 前关闭扫描和显示 GPIO |
 | `APP_LedBar()` | 主循环业务入口 |
@@ -58,7 +58,7 @@
 | --- | --- |
 | 单段测试 | `0~17` 段位逐段点亮，与实物丝印一致 |
 | SOC 显示 | 重点检查 `0, 1, 8, 10, 11, 31, 41, 47, 99, 100` |
-| 图标 | `%` 常亮；充电或 `MCU_WK` 有效时充电图标亮 |
+| 图标 | `%` 常亮；放电 MOS 打开时充电图标亮，`MCU_WK` 和 `GPIO_CHG_IN` 不参与图标判断 |
 | 按键 | DI1 短按 5 秒显示；长按约 3 秒进入深度休眠 |
 | 启动 | 上电、复位、休眠唤醒后显示约 10 秒 |
 | 低功耗 | 无显示请求时 TIM4 关闭，显示 GPIO 输出低电平 |
