@@ -850,7 +850,7 @@ static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action)
 {
 	return ((data[3] == FEIDAO_CAN_APP_AGING_GUARD) &&
 			(data[4] == action) &&
-			(data[5] == (UINT8)(FEIDAO_CAN_APP_AGING_GUARD ^ action))) ? 1U : 0U;
+			(data[5] == (UINT8)CAN_ADRESS_STD_ID)) ? 1U : 0U;
 }
 
 static UINT8 feidao_can_aging_remaining_hours(void)

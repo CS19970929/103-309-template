@@ -17,6 +17,7 @@
   - `0x07 AGING_START`
   - `0x08 AGING_STOP`
   - `0x09 AGING_RESET_TIME`
+- 老化控制命令 payload 固定为 `0xA9 action CAN_ADRESS_STD_ID`，第三字节校验板端 CAN 地址；comm tool 和 `tools/can_bms_host.py` 都按该格式发送。
 - 老化运行中阻塞普通 RTC 睡眠；低压/过放 deep sleep 判断仍在老化判断前，优先级不变。
 
 ## 升级后是否重置老化时间
@@ -36,3 +37,7 @@
 CAN 上位机通过 comm tool 读写 BMS 寄存器时，板端走 `Sci_HostReadWords()` / `Sci_HostWriteWords()` 复用 Modbus 寄存器表。原实现会在本机任一串口短暂忙时直接返回 `RS485_ERROR_CMD_INVALID`，CAN 应答映射成 `BMS_ERROR`，表现为实时监控偶发读取失败。
 
 本次改为：CAN 内部寄存器读写不再因为本机串口收发状态而拒绝；地址、参数、权限仍由原寄存器表校验。
+
+## D009 老化控制失败修正
+
+2026-05-26 现场日志里 `开启老化模式`、`重置老化时间` 返回 `BMS_ERROR`，根因是 D009 板端老化控制校验仍按旧格式要求第三字节等于 `0xA9 ^ action`，而 comm tool 和 CAN host 实际发送的是 `CAN_ADRESS_STD_ID`。已统一为 `0xA9 action CAN_ADRESS_STD_ID`，后续只需要保持上位机、comm tool、板端协议一致。
