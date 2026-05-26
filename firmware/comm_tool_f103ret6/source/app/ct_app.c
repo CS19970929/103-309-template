@@ -62,6 +62,22 @@ static void respond(const CtFrame *req, uint8_t status, const uint8_t *payload, 
     }
 }
 
+static uint8_t command_allowed_during_upgrade(uint8_t cmd)
+{
+    switch (cmd)
+    {
+    case CT_CMD_GET_INFO:
+    case CT_CMD_FW_INFO:
+    case CT_CMD_UPGRADE_STATUS:
+    case CT_CMD_UPGRADE_ABORT:
+    case CT_CMD_CAN_DIAG:
+    case CT_CMD_DEBUG_LOG:
+        return 1u;
+    default:
+        return 0u;
+    }
+}
+
 void CtApp_Init(void)
 {
     CtFlash_Init();
@@ -484,6 +500,13 @@ void CtApp_HandleFrame(const CtFrame *frame)
                       CT_LOG_EVT_CMD_RX,
                       frame->cmd,
                       frame->length);
+
+    if ((CtUpgrade_GetStatus()->state == CT_UPGRADE_STATE_RUNNING) &&
+        (command_allowed_during_upgrade(frame->cmd) == 0u))
+    {
+        respond(frame, CT_STATUS_BAD_STATE, 0, 0u);
+        return;
+    }
 
     switch (frame->cmd)
     {

@@ -51,6 +51,7 @@ UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 #define FEIDAO_CAN_APP_CMD_AGING_SET_HOURS ((UINT8)0x0AU)
 #define FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA ((UINT8)0x86U)
 #define FEIDAO_CAN_APP_READ_BLOCK_MAX_WORDS ((UINT8)120U)
+#define FEIDAO_CAN_APP_CMD_QUEUE_SIZE ((UINT8)4U)
 #define FEIDAO_CAN_APP_READ_BLOCK_FRAME_INTERVAL_TICKS ((UINT32)1U)
 #define FEIDAO_CAN_APP_ACK_OK ((UINT8)0x00U)
 #define FEIDAO_CAN_APP_ACK_BAD_CMD ((UINT8)0x01U)
@@ -88,8 +89,10 @@ static UINT8 s_u8FeidaoCanProbeActive = 0U;
 static UINT8 s_u8FeidaoCanRtcServiceActive = 0U;
 static UINT8 s_u8FeidaoCanTxCycleAcked = 0U;
 static UINT8 s_u8FeidaoCanTxCycleNoAckRecorded = 0U;
-static volatile UINT8 s_u8AppCmdPending = 0U;
-static UINT8 s_u8AppCmdData[8];
+static volatile UINT8 s_u8AppCmdQueueHead = 0U;
+static volatile UINT8 s_u8AppCmdQueueTail = 0U;
+static volatile UINT8 s_u8AppCmdQueueCount = 0U;
+static UINT8 s_u8AppCmdQueue[FEIDAO_CAN_APP_CMD_QUEUE_SIZE][8];
 static UINT8 s_u8WritePending = 0U;
 static UINT16 s_u16WriteAddr = 0U;
 static UINT8 s_u8WriteValueHi = 0U;
@@ -143,6 +146,7 @@ static UINT8 feidao_can_aging_remaining_hours(void);
 static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1);
 static UINT8 feidao_can_app_status_from_host_error(UINT8 error);
 static UINT8 feidao_can_request_iap(void);
+static void feidao_can_clear_app_cmd_queue(void);
 static UINT8 feidao_can_take_app_cmd(UINT8 data[8]);
 static void feidao_can_queue_app_cmd(const UINT8 data[8]);
 static UINT8 feidao_can_app_queue_tx(const CanTxMsg *frame);
@@ -896,15 +900,29 @@ static UINT8 feidao_can_request_iap(void)
 	return AppUpgrade_RequestIap();
 }
 
+static void feidao_can_clear_app_cmd_queue(void)
+{
+	__disable_irq();
+	s_u8AppCmdQueueHead = 0U;
+	s_u8AppCmdQueueTail = 0U;
+	s_u8AppCmdQueueCount = 0U;
+	__enable_irq();
+}
+
 static UINT8 feidao_can_take_app_cmd(UINT8 data[8])
 {
 	UINT8 has_cmd = 0U;
 
 	__disable_irq();
-	if (s_u8AppCmdPending != 0U)
+	if (s_u8AppCmdQueueCount != 0U)
 	{
-		memcpy(data, s_u8AppCmdData, 8U);
-		s_u8AppCmdPending = 0U;
+		memcpy(data, s_u8AppCmdQueue[s_u8AppCmdQueueHead], 8U);
+		s_u8AppCmdQueueHead++;
+		if (s_u8AppCmdQueueHead >= FEIDAO_CAN_APP_CMD_QUEUE_SIZE)
+		{
+			s_u8AppCmdQueueHead = 0U;
+		}
+		s_u8AppCmdQueueCount--;
 		has_cmd = 1U;
 	}
 	__enable_irq();
@@ -914,13 +932,20 @@ static UINT8 feidao_can_take_app_cmd(UINT8 data[8])
 
 static void feidao_can_queue_app_cmd(const UINT8 data[8])
 {
-	if (s_u8AppCmdPending == 0U)
+	if (s_u8AppCmdQueueCount >= FEIDAO_CAN_APP_CMD_QUEUE_SIZE)
 	{
-		memcpy(s_u8AppCmdData, data, 8U);
-		s_u8AppCmdPending = 1U;
+		feidao_can_record_tx_no_mailbox();
+		return;
 	}
-}
 
+	memcpy(s_u8AppCmdQueue[s_u8AppCmdQueueTail], data, 8U);
+	s_u8AppCmdQueueTail++;
+	if (s_u8AppCmdQueueTail >= FEIDAO_CAN_APP_CMD_QUEUE_SIZE)
+	{
+		s_u8AppCmdQueueTail = 0U;
+	}
+	s_u8AppCmdQueueCount++;
+}
 static UINT8 feidao_can_app_queue_tx(const CanTxMsg *frame)
 {
 	if ((frame == 0) || (s_u8AppTxPending != 0U) || (s_u8AppTxMailbox != CAN_TxStatus_NoMailBox))
@@ -2244,6 +2269,7 @@ void InitCan(void)
 #if 0
 	Can_Status_Flag.all = 0;
 	CanTxType_Flag.all = 0;
+	feidao_can_clear_app_cmd_queue();
 	InitCan_GPIO();
 	InitCan_NVIC();
 	InitCan_Filter();
@@ -2251,6 +2277,7 @@ void InitCan(void)
 #endif
 	Can_Status_Flag.all = 0;
 	CanTxType_Flag.all = 0;
+	feidao_can_clear_app_cmd_queue();
 	InitCan_GPIO();
 	InitCan_NVIC();
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
@@ -2318,7 +2345,7 @@ void Can_PrepareSleep(void)
 	s_u16FeidaoCanPendingMask = 0U;
 	feidao_can_stop_read_block_stream();
 	s_u8AppTxPending = 0U;
-	s_u8AppCmdPending = 0U;
+	feidao_can_clear_app_cmd_queue();
 	if (s_u8AppTxMailbox != CAN_TxStatus_NoMailBox)
 	{
 		feidao_can_cancel_tx(s_u8AppTxMailbox);

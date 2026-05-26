@@ -80,6 +80,7 @@ BMS_EVENT_RECORD_WORDS = 100
 BMS_PRODUCT_INFO_ADDR = 0xC002
 BMS_PRODUCT_INFO_FIELD_LEN = 32
 BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
+PRODUCT_INFO_REFRESH_SECONDS = 30.0
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
 SH309_AFE_PARAM_ADDR = 0x2400
@@ -549,6 +550,15 @@ class BmsMonitorWindow(tk.Toplevel):
             return
         if not force and not self.running:
             return
+        if self.parent.live_running:
+            if self.parent.live_snapshot_cache is not None:
+                self._show_snapshot(self.parent.live_snapshot_cache)
+                self.state_var.set("监控中(复用主界面)")
+            if self.parent.product_info_cache is not None:
+                self.product_info_var.set(_format_product_info(self.parent.product_info_cache))
+            if self.running:
+                self._schedule_poll(self._interval_ms(1.0))
+            return
         if self.worker and self.worker.is_alive():
             return
         self.worker = threading.Thread(target=self._worker_poll, daemon=True)
@@ -567,9 +577,9 @@ class BmsMonitorWindow(tk.Toplevel):
                 self.parent.active_app_can_addr = int(self.parent.app_can_addr_var.get().strip(), 0)
                 with self.parent._open_client() as client:
                     self.parent._set_can_target(client)
-                    words = self.parent._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+                    words = self.parent._read_live_words(client)
                     try:
-                        product_info = self.parent._read_bms_product_info(client)
+                        product_info = self.parent._read_bms_product_info_cached(client)
                     except Exception as exc:
                         product_info = {"error": str(exc)}
             finally:
@@ -769,6 +779,11 @@ class UpgradeUi(tk.Tk):
         self.param_loading = False
         self.log_tree: ttk.Treeview | None = None
         self.applied_target: tuple[int, int, int] | None = None
+        self.live_word_count: int | None = None
+        self.live_snapshot_cache: list[int] | None = None
+        self.product_info_cache: dict[str, str] | None = None
+        self.product_info_cache_target: tuple[int, int, int] | None = None
+        self.product_info_next_due_monotonic = 0.0
 
         self._build_ui()
         self._refresh_ports()
@@ -1574,6 +1589,62 @@ class UpgradeUi(tk.Tk):
         self.log_status_var.set(f"记录: 已停止 {self.log_count} 条  {name}")
         self._log(message)
 
+    def _prepare_exclusive_upgrade(self) -> None:
+        if self.live_running:
+            self._stop_live_monitor()
+        if self.log_running:
+            self._stop_data_log("升级开始，实时监控记录已暂停")
+
+    def _reset_live_capability_cache(self) -> None:
+        self.live_word_count = None
+        self.live_snapshot_cache = None
+
+    def _reset_product_info_cache(self) -> None:
+        self.product_info_cache = None
+        self.product_info_cache_target = None
+        self.product_info_next_due_monotonic = 0.0
+
+    def _read_live_words(self, client: CommToolClient) -> list[int]:
+        if self.live_word_count == BMS_OVERVIEW_WORDS:
+            return self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+        if self.live_word_count == BMS_LIVE_WORDS:
+            try:
+                return self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+            except Exception:
+                self.live_word_count = None
+
+        try:
+            words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+            self.live_word_count = BMS_LIVE_WORDS
+            return words
+        except Exception:
+            words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            self.live_word_count = BMS_OVERVIEW_WORDS
+            return words
+
+    def _read_bms_product_info_cached(self, client: CommToolClient, force: bool = False) -> dict[str, str]:
+        target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
+        now = time.monotonic()
+        if (
+            not force
+            and self.product_info_cache is not None
+            and self.product_info_cache_target == target
+            and now < self.product_info_next_due_monotonic
+        ):
+            return self.product_info_cache
+
+        try:
+            info = self._read_bms_product_info(client)
+        except Exception:
+            if not force and self.product_info_cache is not None and self.product_info_cache_target == target:
+                return self.product_info_cache
+            raise
+
+        self.product_info_cache = info
+        self.product_info_cache_target = target
+        self.product_info_next_due_monotonic = now + PRODUCT_INFO_REFRESH_SECONDS
+        return info
+
     def _battery_log_headers(self) -> list[str]:
         headers = [
             "时间",
@@ -1705,12 +1776,9 @@ class UpgradeUi(tk.Tk):
         try:
             with self._open_client() as client:
                 self._set_can_target(client)
+                words = self._read_live_words(client)
                 try:
-                    words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
-                except Exception:
-                    words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
-                try:
-                    product_info = self._read_bms_product_info(client)
+                    product_info = self._read_bms_product_info_cached(client)
                 except Exception as exc:
                     product_info = {"error": str(exc)}
             self._emit("live_snapshot", words)
@@ -1984,6 +2052,7 @@ class UpgradeUi(tk.Tk):
             "确认继续？",
         ):
             return
+        self._prepare_exclusive_upgrade()
         self._run_worker("一键升级", self._worker_upgrade_selected)
 
     def _upgrade_cached_selected(self) -> None:
@@ -1998,6 +2067,7 @@ class UpgradeUi(tk.Tk):
             "确认继续？",
         ):
             return
+        self._prepare_exclusive_upgrade()
         self._run_worker("使用缓存升级", self._worker_upgrade_cached_selected)
 
     def _read_bms_status(self) -> None:
@@ -2273,12 +2343,9 @@ class UpgradeUi(tk.Tk):
     def _worker_read_bms_overview(self) -> None:
         with self._open_client() as client:
             self._set_can_target(client)
+            words = self._read_live_words(client)
             try:
-                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
-            except Exception:
-                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
-            try:
-                product_info = self._read_bms_product_info(client)
+                product_info = self._read_bms_product_info_cached(client, force=True)
             except Exception as exc:
                 product_info = {"error": str(exc)}
         self._emit("live_snapshot", words)
@@ -2528,6 +2595,8 @@ class UpgradeUi(tk.Tk):
         )
         client.command(CMD_SET_CAN, payload, timeout=2.0)
         self.applied_target = target
+        self._reset_live_capability_cache()
+        self._reset_product_info_cache()
 
     def _upgrade_state_text(self, status: dict) -> str:
         state_text = {
@@ -2902,11 +2971,15 @@ class UpgradeUi(tk.Tk):
             self.can_bitrate_var.set(str(event.payload.get("bitrate", self.active_can_bitrate)))
             self.node_id_var.set(str(event.payload.get("node_id", self.active_node_id)))
             self.app_can_addr_var.set(str(event.payload.get("app_can_addr", self.active_app_can_addr)))
-            self.applied_target = (
+            target = (
                 int(event.payload.get("bitrate", self.active_can_bitrate)),
                 int(event.payload.get("node_id", self.active_node_id)),
                 int(event.payload.get("app_can_addr", self.active_app_can_addr)),
             )
+            if self.applied_target != target:
+                self._reset_live_capability_cache()
+                self._reset_product_info_cache()
+            self.applied_target = target
         elif event.kind == "cache":
             self.cache_var.set(self._format_cache(event.payload))
         elif event.kind == "image":
@@ -2923,7 +2996,12 @@ class UpgradeUi(tk.Tk):
                     f"软件版本: --    硬件版本: --    BMS序列号: --    读取失败: {event.payload['error']}"
                 )
             else:
+                self.product_info_cache = event.payload
+                self.product_info_cache_target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
+                self.product_info_next_due_monotonic = time.monotonic() + PRODUCT_INFO_REFRESH_SECONDS
                 self.product_info_var.set(_format_product_info(event.payload))
+                if self.monitor_window is not None and self.monitor_window.winfo_exists():
+                    self.monitor_window.product_info_var.set(_format_product_info(event.payload))
         elif event.kind == "param_value":
             key, value = event.payload
             self._update_param_row(key, value)
@@ -2946,7 +3024,10 @@ class UpgradeUi(tk.Tk):
         elif event.kind == "bms_log":
             self._update_log_tree(event.payload)
         elif event.kind == "live_snapshot":
+            self.live_snapshot_cache = event.payload
             self._show_main_snapshot(event.payload)
+            if self.monitor_window is not None and self.monitor_window.winfo_exists():
+                self.monitor_window._show_snapshot(event.payload)
         elif event.kind == "live_done":
             self._schedule_live_monitor()
         elif event.kind == "comm_state":
