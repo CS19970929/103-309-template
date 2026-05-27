@@ -56,6 +56,26 @@
 | Q-MIS-002 | 老化计时 | 老化只累计 MCU 运行时间，STOP 不计 | `FactoryAging.c:345-357` | 睡眠时间不计老化 | UNKNOWN | 工厂时长偏差 | 老化要求自然时间还是运行通电时间？ | A/C/F | |
 | Q-MIS-003 | Type-C 电流 | PA2 Type-C 输出电流并入 SOC | `SOC.c:104-172` | 输出侧折算为电池侧放电 | UNKNOWN | SOC 偏差 | Type-C 输出是否一定来自电池，应不应该扣 SOC？ | A/C/F | |
 
+## 5.1 BMS App IO 与 RTC 低功耗专项确认问题
+
+状态：部分验证
+
+参考源码：
+
+- `103 + 309/Project/Source/conf/conf.c`
+- `103 + 309/Project/Source/conf/conf_gpio.h`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+- `103 + 309/Project/Source/RTC.c`
+- `103 + 309/Project/Source/Can_HDX.c`
+
+| ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
+|---|---|---|---|---|---|---|---|---|---|
+| Q-RTC-IO-001 | IO/AFE | `PB0 / AFE1_PRO_EN` 是否需要在 RTC STOP 唤醒后显式恢复 | `conf.c:InitIO()`, `conf.c:InitIO_rtc()` | 正常初始化配置 PB0，唤醒恢复未显式配置 | UNKNOWN | AFE 保护/供电状态可能不确定 | PB0 的真实硬件功能是什么，唤醒后必须置成什么状态？ | F. 补充原理图；B. 确认后补恢复代码；E. 暂不改继续实测 | |
+| Q-RTC-IO-002 | IO/低功耗 | `PA3 / 2737_EN` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOA 模拟化时排除 PA3 | UNKNOWN | 可能增加休眠电流或影响硬件保持 | PA3 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
+| Q-RTC-IO-003 | IO/AFE | `PB14 / AFE1_CTL` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOB 模拟化时排除 PB14 | UNKNOWN | 可能影响 AFE 控制或漏电 | PB14 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
+| Q-RTC-CAN-001 | CAN/低功耗 | RTC 周期唤醒后是否必须短时上电 CAN 广播 | `Can_HDX.c`, `rtc_sleep.c` | 当前保留 RTC wake CAN 服务策略 | UNKNOWN | 提高功耗，但增强休眠通信可见性 | 休眠中需要周期 CAN 可见，还是只在外部唤醒后通信？ | A. 保留；C. 改为更省电；E. 暂保留待实测 | |
+
 ## 6. 高风险需求
 
 | ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |

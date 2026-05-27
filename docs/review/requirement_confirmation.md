@@ -114,3 +114,29 @@
 | REQ-CUST-001 | 工厂老化默认 3 天，仅累计 MCU 运行态时间，睡眠时间不计入 | `Project_Config.h:163-167`, `FactoryAging.c:345-357` | `FactoryAging.c`, `Project_Config.h` | TIM3 10ms tick 累计，STOP 后 delta=0 | 是 | 是 | 间接 | 是 | 未知 | UNKNOWN；是否当前客户仍需要 |
 | REQ-CUST-002 | 老化剩余时间必须通过 CAN 广播和上位机可读 | `CanFeidaoFrames.c:244-260`, `Can_HDX.c:441-457` | `CanFeidaoFrames.c`, `Can_HDX.c`, `FactoryAging.c` | `0x14F80208` 广播分钟，ack 返回小时 | 是 | 是 | 否 | 是 | 是 | MUST_KEEP if 老化保留 |
 | REQ-CUST-003 | 产品 ID 当前有默认硬件/软件/SN 字符串，运行态处理后供 `0xC002` 读取 | `DataDeal.h:182-187`, `ProductionID.c`, `Sci_Upper.c:769-773` | `ProductionID.c`, `DataDeal.h`, `Sci_Upper.c` | 默认字符串 + host 写入缓存 | 是 | 是 | 否 | 否 | 是 | CHANGE_NEEDED；默认 `"cs-666-8888"` 不能用于量产 |
+
+## 9. BMS App IO 与 RTC 低功耗专项确认（2026-05-27）
+
+状态：部分验证
+
+专项文档：`docs/review/bms_app_io_low_power_compare_2026-05-27.md`
+
+参考源码：
+
+- `103 + 309/Project/Source/conf/conf.c`
+- `103 + 309/Project/Source/conf/conf_gpio.h`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+- `103 + 309/Project/Source/RTC.c`
+- `103 + 309/Project/Source/Can_HDX.c`
+
+| Requirement ID | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 用户决策 |
+|---|---|---|---|---|---|
+| REQ-IO-RTC-001 | 正常模式 IO 映射必须保持现有硬件定义 | `conf_gpio.h`, `conf.c:InitIO()` | 相对基准 commit 未发现明显 IO 映射错配 | MUST_KEEP | 待确认 |
+| REQ-IO-RTC-002 | RTC STOP 前应关闭 ADC/TIM2/DMA、CAN、LedBar、TIM3 并设置 GPIO 低漏电状态 | `ADC.c`, `conf.c:IOstatus_RTCMode()`, `Can_HDX.c`, `LedBar.c` | 已有 STOP 前关闭路径 | MUST_KEEP | 待确认 |
+| REQ-IO-RTC-003 | `PA3 / 2737_EN` 在 RTC 模式下排除模拟输入 | `conf.c:IOstatus_RTCMode()` | GPIOA 模拟化时排除 PA3 | UNKNOWN | 待确认 |
+| REQ-IO-RTC-004 | `PB14 / AFE1_CTL` 在 RTC 模式下排除模拟输入 | `conf.c:IOstatus_RTCMode()` | GPIOB 模拟化时排除 PB14 | UNKNOWN | 待确认 |
+| REQ-IO-RTC-005 | `PB0 / AFE1_PRO_EN` 唤醒后是否需要显式恢复 | `conf.c:InitIO()`, `conf.c:InitIO_rtc()` | 正常初始化有 PB0，RTC 唤醒恢复未显式恢复 | UNKNOWN | 待确认 |
+| REQ-IO-RTC-006 | RTC 唤醒后必须恢复 ADC、USART、CAN、TIM3、AFE I2C | `conf.c:InitRunAfterStopWakeup()` | 当前统一恢复这些外设 | MUST_KEEP | 待确认 |
+| REQ-IO-RTC-007 | IWDG 开启时 RTC 唤醒周期不得超过 10 秒 | `RTC.c` | 当前限制为 10 秒 | CONFLICT | 待确认 |
+| REQ-IO-RTC-008 | RTC 唤醒后 CAN 可短时上电服务广播 | `Can_HDX.c`, `rtc_sleep.c` | 当前有 RTC wake CAN 服务策略 | UNKNOWN | 待确认 |
