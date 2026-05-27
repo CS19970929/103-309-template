@@ -91,11 +91,7 @@ void CtApp_Init(void)
 
 void CtApp_Poll(void)
 {
-    static uint32_t s_last_heartbeat_ms;
-    static uint8_t s_heartbeat_seq;
     const CtUpgradeStatus *status;
-    CtCanFrame frame;
-    uint32_t now;
 
     CtUpgrade_Task();
     status = CtUpgrade_GetStatus();
@@ -104,27 +100,6 @@ void CtApp_Poll(void)
         CtSelfIap_PollCan();
     }
     CtSelfIap_Task();
-
-    now = CtBoard_GetTickMs();
-    if ((uint32_t)(now - s_last_heartbeat_ms) < CT_CAN_HEARTBEAT_PERIOD_MS)
-    {
-        return;
-    }
-    s_last_heartbeat_ms = now;
-
-    memset(&frame, 0, sizeof(frame));
-    frame.id = CT_CAN_HEARTBEAT_STD_ID;
-    frame.ide = 0u;
-    frame.dlc = 8u;
-    frame.data[0] = 0x43u; /* 'C' */
-    frame.data[1] = 0x54u; /* 'T' */
-    frame.data[2] = CT_PROTOCOL_VERSION;
-    frame.data[3] = s_node_id;
-    frame.data[4] = status->state;
-    frame.data[5] = status->last_error;
-    frame.data[6] = s_heartbeat_seq++;
-    frame.data[7] = CT_FW_VERSION_PATCH;
-    (void)CtBoard_CanSend(&frame, 5u);
 }
 
 static void handle_info(const CtFrame *req)

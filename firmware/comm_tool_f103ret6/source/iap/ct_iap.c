@@ -20,8 +20,6 @@
 #define IAP_LED_PERIOD_MS                500u
 #define IAP_CAN_BLOCK_BYTES              256u
 #define IAP_CAN_PRESCALER_250K           4u
-#define IAP_CAN_HEARTBEAT_STD_ID         0x05Fu
-#define IAP_CAN_HEARTBEAT_PERIOD_MS      1000u
 #define IAP_CAN_RX_TIMEOUT_MS            5000u
 #define IAP_RESET_DELAY_MS               20u
 
@@ -129,8 +127,6 @@ static volatile uint16_t s_serial_tx_head;
 static volatile uint16_t s_serial_tx_tail;
 static uint8_t s_reset_pending;
 static uint32_t s_reset_time_ms;
-static uint8_t s_heartbeat_seq;
-static uint32_t s_last_heartbeat_ms;
 
 static uint16_t rd_be16(const uint8_t *data)
 {
@@ -1273,26 +1269,6 @@ static void can_poll(void)
     }
 }
 
-static void can_send_heartbeat(void)
-{
-    CanTxMsg tx;
-
-    memset(&tx, 0, sizeof(tx));
-    tx.StdId = IAP_CAN_HEARTBEAT_STD_ID;
-    tx.IDE = CAN_ID_STD;
-    tx.RTR = CAN_RTR_DATA;
-    tx.DLC = 8u;
-    tx.Data[0] = 0x43u;
-    tx.Data[1] = 0x49u;
-    tx.Data[2] = CAN_IAP_PROTOCOL_VERSION;
-    tx.Data[3] = s_can.node;
-    tx.Data[4] = s_can.state;
-    tx.Data[5] = s_can.last_cmd;
-    tx.Data[6] = s_can.last_error;
-    tx.Data[7] = s_heartbeat_seq++;
-    (void)can_transmit(&tx);
-}
-
 static void iap_gpio_init(void)
 {
     GPIO_InitTypeDef gpio;
@@ -1449,12 +1425,6 @@ static void iap_task_1ms(void)
     }
 
     serial_check_frame_timeout();
-
-    if ((uint32_t)(s_tick_ms - s_last_heartbeat_ms) >= IAP_CAN_HEARTBEAT_PERIOD_MS)
-    {
-        s_last_heartbeat_ms = s_tick_ms;
-        can_send_heartbeat();
-    }
 
     if ((s_can.state == 1u) && ((uint32_t)(s_tick_ms - s_can.last_rx_ms) >= IAP_CAN_RX_TIMEOUT_MS))
     {

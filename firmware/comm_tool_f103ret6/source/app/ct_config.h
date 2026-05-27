@@ -37,9 +37,6 @@
 #define CT_CAN_DEFAULT_BITRATE         250000u
 #define CT_NODE_ID_DEFAULT             1u
 
-#define CT_CAN_HEARTBEAT_STD_ID        0x05Eu
-#define CT_CAN_HEARTBEAT_PERIOD_MS     1000u
-
 #define CT_BMS_IAP_BASE_ADDR           0x08000000u
 #define CT_BMS_APP_BASE_ADDR           0x08004800u
 #define CT_BMS_APP_LIMIT_ADDR          0x08020000u
