@@ -41,10 +41,10 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_KEY;
     }
 
-    if (RtcSleep_PortIsAfeSleepBlocked() != 0U)
-    {
-        reason |= LP_BLOCK_AFE_BUSY;
-    }
+    // if (RtcSleep_PortIsAfeSleepBlocked() != 0U)
+    // {
+    //     reason |= LP_BLOCK_AFE_BUSY;
+    // }
 
     if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
     {
