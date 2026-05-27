@@ -43,6 +43,10 @@
 - `ReleaseProxy -Count 1` 可正常输出 `LOW_POWER_OR_DBG_OFF` 或 `TIMEOUT_LOW_POWER_OR_DBG_OFF` 并生成 CSV/summary。
 - `DebugProbe -Count 1 -DebugPrepareAttempts 1` 在板子已处于 Release STOP 时不会卡死，会提示需要唤醒/复位后再接入诊断监控。
 
+### 后续增强
+
+- attach 成功时额外读取 MCU ID、RCC/PWR/SCB fault 寄存器、BMS 电压/电流/SOC/SOH/fault、Type-C 电流、AFE 采样序号、Flash 写入标志、老化状态和低功耗参数。
+
 ## 2026-05-27 App_Can 低功耗优化
 
 ### 本次源码修改

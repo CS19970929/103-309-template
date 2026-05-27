@@ -80,12 +80,26 @@ CSV 重点字段：
 | `LedSocWindow10ms` | LED/SOC 显示窗口剩余 10ms tick |
 | `LedStartupArmed` | 启动显示是否已触发 |
 | `DbgmcuCr` | `DBGMCU_CR` 当前值 |
+| `McuDevId` / `McuRevId` | STM32 DBGMCU IDCODE 解析出的 MCU 型号和修订 |
+| `RccCr` / `RccCfgr` / `PwrCr` / `PwrCsr` | MCU 时钟和电源控制关键寄存器 |
+| `ScbIcsr` / `ScbCfsr` / `ScbHfsr` | Cortex-M 异常和 fault 状态寄存器 |
+| `CellVMax_mV` / `CellVMin_mV` / `CellVDelta_mV` | BMS 单体最高、最低和压差 |
+| `PackVoltage_10mV` | BMS 总压，单位 10mV |
+| `Ichg_A10` / `Idsg_A10` | 充/放电电流，单位 0.1A |
+| `SocPercent` / `SohPercent` | SOC/SOH 百分比 |
+| `FaultThird` | 当前保护 fault bitmask |
+| `TypeCOutCurrent_mA` / `Vbat_mV` | Type-C 输出电流和 ADC 总压路径 |
+| `AfeSampleSeq` | AFE 电流采样序号 |
+| `FlashUpdateFlag` / `FlashUpdateE2prom` | Flash/IAP/参数写入活动标志 |
+| `FactoryAgingState` | 老化状态 |
+| `SleepVNormal_mV` / `SleepVLow_mV` / `SleepTimeRtc_min` | 低功耗相关参数 |
 
 ## 判断规则
 
 - `ReleaseProxy` 下长时间出现 `LOW_POWER_OR_DBG_OFF` 或 `TIMEOUT_LOW_POWER_OR_DBG_OFF`，通常说明 MCU 已在 STOP 或调试域关闭，符合 Release 低功耗预期。
 - `ReleaseProxy` 下频繁出现 `ATTACH_OK_RUN_OR_WAKE`，需要检查是否有通信、LED、Flash、故障、按键、充放电等阻塞。
 - `DebugProbe` 下出现 `ATTACH_OK_DEBUG_HOLD`，说明当前已经进入调试保持状态，可以读取 RTC/LP/LedBar RAM 状态，但不能使用此时的电流作为功耗结果。
+- MCU/BMS 详细字段只有 attach 成功时才有值；Release 已经停在 RTC STOP 且 DBG_STOP 关闭时，这些字段会为空。
 
 ## 已验证
 
@@ -93,3 +107,4 @@ CSV 重点字段：
 
 - `ReleaseProxy -Count 1` 在当前已进入 STOP 的板子上输出 `LOW_POWER_OR_DBG_OFF` 或 `TIMEOUT_LOW_POWER_OR_DBG_OFF`，脚本正常汇总。
 - `DebugProbe -Count 1 -DebugPrepareAttempts 1` 在当前已进入 Release STOP 的板子上提示准备失败并继续记录 `LOW_POWER_OR_DBG_OFF`，不会卡死。
+- 2026-05-27 后续增强：attach 成功时可额外读取 MCU 寄存器、BMS 电压/电流/SOC/fault、AFE 采样序号、Flash 写入标志、老化状态和低功耗参数。

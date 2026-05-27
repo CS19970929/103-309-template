@@ -142,20 +142,38 @@ function Invoke-OpenOcdOnce {
     }
 }
 
+function Get-MemValues {
+    param(
+        [string]$Text,
+        [string]$Address,
+        [int]$HexDigits
+    )
+
+    $addrPattern = [regex]::Escape($Address.ToLowerInvariant())
+    $valuePattern = "^[0-9a-fA-F]{$HexDigits}$"
+    foreach ($line in ($Text -split "`r?`n")) {
+        $lower = $line.ToLowerInvariant()
+        if ($lower -match "^$addrPattern\s*:\s*(.+)$") {
+            return ($Matches[1].Trim() -split "\s+") | Where-Object { $_ -match $valuePattern }
+        }
+    }
+    return @()
+}
+
 function Get-MdwWords {
     param(
         [string]$Text,
         [string]$Address
     )
+    return Get-MemValues -Text $Text -Address $Address -HexDigits 8
+}
 
-    $addrPattern = [regex]::Escape($Address.ToLowerInvariant())
-    foreach ($line in ($Text -split "`r?`n")) {
-        $lower = $line.ToLowerInvariant()
-        if ($lower -match "^$addrPattern\s*:\s*(.+)$") {
-            return ($Matches[1].Trim() -split "\s+") | Where-Object { $_ -match "^[0-9a-fA-F]{8}$" }
-        }
-    }
-    return @()
+function Get-MdhWords {
+    param(
+        [string]$Text,
+        [string]$Address
+    )
+    return Get-MemValues -Text $Text -Address $Address -HexDigits 4
 }
 
 function Convert-HexWord {
@@ -187,6 +205,21 @@ function Decode-Sample {
     $lpWords = Get-MdwWords -Text $Text -Address $Symbols["s_lp_runtime"]
     $ledWords = Get-MdwWords -Text $Text -Address $Symbols["s_ledbar"]
     $dbgWords = Get-MdwWords -Text $Text -Address $DBGMCU_CR
+    $mcuWords = Get-MdwWords -Text $Text -Address "0xE0042000"
+    $rccWords = Get-MdwWords -Text $Text -Address "0x40021000"
+    $pwrWords = Get-MdwWords -Text $Text -Address "0x40007000"
+    $faultWords = Get-MdwWords -Text $Text -Address "0xE000ED04"
+    $faultStatusWords = Get-MdwWords -Text $Text -Address "0xE000ED24"
+    $cellHalf = if ($Symbols.ContainsKey("g_stCellInfoReport")) { Get-MdhWords -Text $Text -Address $Symbols["g_stCellInfoReport"] } else { @() }
+    $otherHalf = if ($Symbols.ContainsKey("OtherElement")) { Get-MdhWords -Text $Text -Address $Symbols["OtherElement"] } else { @() }
+    $typeCWords = if ($Symbols.ContainsKey("g_u16TypeCOutCurrent_mA")) { Get-MdwWords -Text $Text -Address $Symbols["g_u16TypeCOutCurrent_mA"] } else { @() }
+    $vbatWords = if ($Symbols.ContainsKey("g_u32Vbat_mV")) { Get-MdwWords -Text $Text -Address $Symbols["g_u32Vbat_mV"] } else { @() }
+    $afeSeqWords = if ($Symbols.ContainsKey("g_u32AfeCurrentSampleSeq")) { Get-MdwWords -Text $Text -Address $Symbols["g_u32AfeCurrentSampleSeq"] } else { @() }
+    $flashWords = if ($Symbols.ContainsKey("u8FlashUpdateFlag")) { Get-MdwWords -Text $Text -Address $Symbols["u8FlashUpdateFlag"] } else { @() }
+    $factoryWords = if ($Symbols.ContainsKey("s_u8FactoryAgingState")) { Get-MdwWords -Text $Text -Address $Symbols["s_u8FactoryAgingState"] } else { @() }
+    $sysTimeWords = if ($Symbols.ContainsKey("sys_time")) { Get-MdwWords -Text $Text -Address $Symbols["sys_time"] } else { @() }
+    $socEnhanceWords = if ($Symbols.ContainsKey("SOC_Enhance_Element")) { Get-MdwWords -Text $Text -Address $Symbols["SOC_Enhance_Element"] } else { @() }
+    $systemErrWords = if ($Symbols.ContainsKey("System_ErrFlag")) { Get-MdwWords -Text $Text -Address $Symbols["System_ErrFlag"] } else { @() }
 
     $rtc0 = Convert-HexWord (Get-WordAt $rtcWords 0)
     $rtc1 = Convert-HexWord (Get-WordAt $rtcWords 1)
@@ -198,6 +231,14 @@ function Decode-Sample {
     $led2 = Convert-HexWord (Get-WordAt $ledWords 2)
     $led3 = Convert-HexWord (Get-WordAt $ledWords 3)
     $led4 = Convert-HexWord (Get-WordAt $ledWords 4)
+    $mcuId = Convert-HexWord (Get-WordAt $mcuWords 0)
+    $rccCr = Convert-HexWord (Get-WordAt $rccWords 0)
+    $rccCfgr = Convert-HexWord (Get-WordAt $rccWords 1)
+    $pwrCr = Convert-HexWord (Get-WordAt $pwrWords 0)
+    $pwrCsr = Convert-HexWord (Get-WordAt $pwrWords 1)
+    $typeCWord = Convert-HexWord (Get-WordAt $typeCWords 0)
+    $flashWord = Convert-HexWord (Get-WordAt $flashWords 0)
+    $factoryWord = Convert-HexWord (Get-WordAt $factoryWords 0)
 
     $rtcMode = if ($null -ne $rtc0) { $rtc0 -band 0xff } else { $null }
     $rtcReady = if ($null -ne $rtc0) { ($rtc0 -shr 8) -band 0xff } else { $null }
@@ -226,6 +267,48 @@ function Decode-Sample {
         LedSocWindow10ms = if ($null -ne $led4) { $led4 -band 0xffff } else { $null }
         LedStartupArmed = if ($null -ne $led4) { ($led4 -shr 16) -band 0xff } else { $null }
         DbgmcuCr = if (($null -ne $dbgWords) -and ($dbgWords.Count -gt 0)) { "0x$($dbgWords[0])" } else { "" }
+        McuDevId = if ($null -ne $mcuId) { ("0x{0:x3}" -f ($mcuId -band 0xfff)) } else { "" }
+        McuRevId = if ($null -ne $mcuId) { ("0x{0:x4}" -f (($mcuId -shr 16) -band 0xffff)) } else { "" }
+        RccCr = if ($null -ne $rccCr) { ("0x{0:x8}" -f $rccCr) } else { "" }
+        RccCfgr = if ($null -ne $rccCfgr) { ("0x{0:x8}" -f $rccCfgr) } else { "" }
+        PwrCr = if ($null -ne $pwrCr) { ("0x{0:x8}" -f $pwrCr) } else { "" }
+        PwrCsr = if ($null -ne $pwrCsr) { ("0x{0:x8}" -f $pwrCsr) } else { "" }
+        ScbIcsr = "0x$(Get-WordAt $faultWords 0)"
+        ScbCfsr = "0x$(Get-WordAt $faultStatusWords 1)"
+        ScbHfsr = "0x$(Get-WordAt $faultStatusWords 2)"
+        CellVMax_mV = Convert-HexWord (Get-WordAt $cellHalf 32)
+        CellVMin_mV = Convert-HexWord (Get-WordAt $cellHalf 33)
+        CellVDelta_mV = Convert-HexWord (Get-WordAt $cellHalf 36)
+        PackVoltage_10mV = Convert-HexWord (Get-WordAt $cellHalf 37)
+        TempMax_Plus40C_x10 = Convert-HexWord (Get-WordAt $cellHalf 48)
+        TempMin_Plus40C_x10 = Convert-HexWord (Get-WordAt $cellHalf 49)
+        Ichg_A10 = Convert-HexWord (Get-WordAt $cellHalf 50)
+        Idsg_A10 = Convert-HexWord (Get-WordAt $cellHalf 51)
+        SocPercent = Convert-HexWord (Get-WordAt $cellHalf 52)
+        SohPercent = Convert-HexWord (Get-WordAt $cellHalf 53)
+        CapacityNow_Ah100 = Convert-HexWord (Get-WordAt $cellHalf 54)
+        CapacityFull_Ah100 = Convert-HexWord (Get-WordAt $cellHalf 55)
+        CapacityFactory_Ah100 = Convert-HexWord (Get-WordAt $cellHalf 56)
+        CycleTimes = Convert-HexWord (Get-WordAt $cellHalf 57)
+        FaultThird = if ($cellHalf.Count -gt 60) { "0x$(Get-WordAt $cellHalf 60)" } else { "" }
+        TypeCOutCurrent_mA = if ($null -ne $typeCWord) { $typeCWord -band 0xffff } else { $null }
+        Vbat_mV = Convert-HexWord (Get-WordAt $vbatWords 0)
+        AfeSampleSeq = Convert-HexWord (Get-WordAt $afeSeqWords 0)
+        FlashUpdateFlag = if ($null -ne $flashWord) { $flashWord -band 0xff } else { $null }
+        FlashUpdateE2prom = if ($null -ne $flashWord) { ($flashWord -shr 8) -band 0xff } else { $null }
+        FactoryAgingState = if ($null -ne $factoryWord) { $factoryWord -band 0xff } else { $null }
+        SleepVNormal_mV = Convert-HexWord (Get-WordAt $otherHalf 16)
+        SleepTimeNormal_min = Convert-HexWord (Get-WordAt $otherHalf 17)
+        SleepVLow_mV = Convert-HexWord (Get-WordAt $otherHalf 18)
+        SleepTimeVLow_min = Convert-HexWord (Get-WordAt $otherHalf 19)
+        SleepRtcWakeTime_min = Convert-HexWord (Get-WordAt $otherHalf 22)
+        SleepTimeRtc_min = Convert-HexWord (Get-WordAt $otherHalf 23)
+        ConfigSeriesNum = Convert-HexWord (Get-WordAt $otherHalf 28)
+        ConfigCsRes_mOhm = Convert-HexWord (Get-WordAt $otherHalf 29)
+        ConfigCsResNum = Convert-HexWord (Get-WordAt $otherHalf 30)
+        SysTimeRaw0 = "0x$(Get-WordAt $sysTimeWords 0)"
+        SocEnhanceRaw0 = "0x$(Get-WordAt $socEnhanceWords 0)"
+        SystemErrRaw0 = "0x$(Get-WordAt $systemErrWords 0)"
     }
 }
 
@@ -319,16 +402,32 @@ $index = 1
 try {
     while ($true) {
         $now = Get-Date
-        $run = Invoke-OpenOcdOnce -OpenOcdExe $openOcdExe -Commands @(
-            "init",
-            "halt",
-            "mdw $($symbols["g_stLowPowerRtcStatus"]) 4",
-            "mdw $($symbols["s_lp_runtime"]) 3",
-            "mdw $($symbols["s_ledbar"]) 9",
-            "mdw $DBGMCU_CR 1",
-            "resume",
-            "shutdown"
-        ) -TimeoutSeconds $AttachTimeoutSeconds -Index $index
+        $sampleCommands = New-Object System.Collections.Generic.List[string]
+        $sampleCommands.Add("init")
+        $sampleCommands.Add("halt")
+        $sampleCommands.Add("mdw $($symbols["g_stLowPowerRtcStatus"]) 4")
+        $sampleCommands.Add("mdw $($symbols["s_lp_runtime"]) 3")
+        $sampleCommands.Add("mdw $($symbols["s_ledbar"]) 9")
+        $sampleCommands.Add("mdw $DBGMCU_CR 1")
+        $sampleCommands.Add("mdw 0xE0042000 2")
+        $sampleCommands.Add("mdw 0x40021000 2")
+        $sampleCommands.Add("mdw 0x40007000 2")
+        $sampleCommands.Add("mdw 0xE000ED04 1")
+        $sampleCommands.Add("mdw 0xE000ED24 4")
+        if ($symbols.ContainsKey("g_stCellInfoReport")) { $sampleCommands.Add("mdh $($symbols["g_stCellInfoReport"]) 64") }
+        if ($symbols.ContainsKey("OtherElement")) { $sampleCommands.Add("mdh $($symbols["OtherElement"]) 32") }
+        if ($symbols.ContainsKey("g_u16TypeCOutCurrent_mA")) { $sampleCommands.Add("mdw $($symbols["g_u16TypeCOutCurrent_mA"]) 1") }
+        if ($symbols.ContainsKey("g_u32Vbat_mV")) { $sampleCommands.Add("mdw $($symbols["g_u32Vbat_mV"]) 1") }
+        if ($symbols.ContainsKey("g_u32AfeCurrentSampleSeq")) { $sampleCommands.Add("mdw $($symbols["g_u32AfeCurrentSampleSeq"]) 1") }
+        if ($symbols.ContainsKey("u8FlashUpdateFlag")) { $sampleCommands.Add("mdw $($symbols["u8FlashUpdateFlag"]) 1") }
+        if ($symbols.ContainsKey("s_u8FactoryAgingState")) { $sampleCommands.Add("mdw $($symbols["s_u8FactoryAgingState"]) 1") }
+        if ($symbols.ContainsKey("sys_time")) { $sampleCommands.Add("mdw $($symbols["sys_time"]) 18") }
+        if ($symbols.ContainsKey("SOC_Enhance_Element")) { $sampleCommands.Add("mdw $($symbols["SOC_Enhance_Element"]) 12") }
+        if ($symbols.ContainsKey("System_ErrFlag")) { $sampleCommands.Add("mdw $($symbols["System_ErrFlag"]) 6") }
+        $sampleCommands.Add("resume")
+        $sampleCommands.Add("shutdown")
+
+        $run = Invoke-OpenOcdOnce -OpenOcdExe $openOcdExe -Commands $sampleCommands.ToArray() -TimeoutSeconds $AttachTimeoutSeconds -Index $index
 
         $decoded = Decode-Sample -Text $run.Text -Symbols $symbols
         $kind = Get-ResultKind -Run $run -Decoded $decoded
@@ -356,14 +455,57 @@ try {
             LedFrameMask = $decoded.LedFrameMask
             LedScanEnabled = $decoded.LedScanEnabled
             DbgmcuCr = $decoded.DbgmcuCr
+            McuDevId = $decoded.McuDevId
+            McuRevId = $decoded.McuRevId
+            RccCr = $decoded.RccCr
+            RccCfgr = $decoded.RccCfgr
+            PwrCr = $decoded.PwrCr
+            PwrCsr = $decoded.PwrCsr
+            ScbIcsr = $decoded.ScbIcsr
+            ScbCfsr = $decoded.ScbCfsr
+            ScbHfsr = $decoded.ScbHfsr
+            CellVMax_mV = $decoded.CellVMax_mV
+            CellVMin_mV = $decoded.CellVMin_mV
+            CellVDelta_mV = $decoded.CellVDelta_mV
+            PackVoltage_10mV = $decoded.PackVoltage_10mV
+            TempMax_Plus40C_x10 = $decoded.TempMax_Plus40C_x10
+            TempMin_Plus40C_x10 = $decoded.TempMin_Plus40C_x10
+            Ichg_A10 = $decoded.Ichg_A10
+            Idsg_A10 = $decoded.Idsg_A10
+            SocPercent = $decoded.SocPercent
+            SohPercent = $decoded.SohPercent
+            CapacityNow_Ah100 = $decoded.CapacityNow_Ah100
+            CapacityFull_Ah100 = $decoded.CapacityFull_Ah100
+            CapacityFactory_Ah100 = $decoded.CapacityFactory_Ah100
+            CycleTimes = $decoded.CycleTimes
+            FaultThird = $decoded.FaultThird
+            TypeCOutCurrent_mA = $decoded.TypeCOutCurrent_mA
+            Vbat_mV = $decoded.Vbat_mV
+            AfeSampleSeq = $decoded.AfeSampleSeq
+            FlashUpdateFlag = $decoded.FlashUpdateFlag
+            FlashUpdateE2prom = $decoded.FlashUpdateE2prom
+            FactoryAgingState = $decoded.FactoryAgingState
+            SleepVNormal_mV = $decoded.SleepVNormal_mV
+            SleepTimeNormal_min = $decoded.SleepTimeNormal_min
+            SleepVLow_mV = $decoded.SleepVLow_mV
+            SleepTimeVLow_min = $decoded.SleepTimeVLow_min
+            SleepRtcWakeTime_min = $decoded.SleepRtcWakeTime_min
+            SleepTimeRtc_min = $decoded.SleepTimeRtc_min
+            ConfigSeriesNum = $decoded.ConfigSeriesNum
+            ConfigCsRes_mOhm = $decoded.ConfigCsRes_mOhm
+            ConfigCsResNum = $decoded.ConfigCsResNum
+            SysTimeRaw0 = $decoded.SysTimeRaw0
+            SocEnhanceRaw0 = $decoded.SocEnhanceRaw0
+            SystemErrRaw0 = $decoded.SystemErrRaw0
         }
         $rows.Add($row)
         $row | Export-Csv -LiteralPath $csv -Append -NoTypeInformation -Encoding UTF8
         $row | ConvertTo-Json | Set-Content -LiteralPath $lastStatus -Encoding UTF8
 
-        Write-Host ("[{0}] #{1} {2} rtcMode={3} rtcBlock={4} lpBlock={5} ledWin={6} dbg={7}" -f `
+        Write-Host ("[{0}] #{1} {2} rtcMode={3} rtcBlock={4} lpBlock={5} ledWin={6} soc={7} vmin={8} vmax={9} dbg={10}" -f `
             $row.Time, $row.Attempt, $row.Result, $row.RtcMode, $row.RtcBlock, `
-            $row.LpBlockReason, $row.LedSocWindow10ms, $row.DbgmcuCr)
+            $row.LpBlockReason, $row.LedSocWindow10ms, $row.SocPercent, `
+            $row.CellVMin_mV, $row.CellVMax_mV, $row.DbgmcuCr)
 
         if (($Count -gt 0) -and ($index -ge $Count)) {
             break
