@@ -131,4 +131,4 @@ py -3.9 tools\comm_tool_host.py enter-iap --port COM4 --confirm-enter-iap
 py -3.9 tools\comm_tool_host.py upgrade --port COM4 --confirm-upgrade --long-timeout 120
 ```
 
-目标 COMM TOOL IAP 心跳为标准帧 `0x05F`，数据前两个字节为 `43 49`。如果能看到心跳但升级失败，先确认总线上只有一个 IAP 节点为 `1` 的目标设备在线。
+COMM TOOL App/IAP 的周期诊断心跳帧已停用，不再主动发送 `0x05E` 或 `0x05F`。排查升级失败时改用 `CAN_DIAG`、`DEBUG_LOG` 和 CAN-IAP ACK/NACK，仍需确认总线上只有一个 IAP 节点为 `1` 的目标设备在线。
