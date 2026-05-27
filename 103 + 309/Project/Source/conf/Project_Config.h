@@ -34,7 +34,7 @@
 //   <0=> 三元锂 TERNARYLI
 //   <1=> 磷酸铁锂 LIFEPO
 // <i> 电芯体系。影响电压平台、SOC 表和保护参数选择。
-#define PROJECT_CFG_BAT_CHEMISTRY 1
+#define PROJECT_CFG_BAT_CHEMISTRY 0
 
 // <q> Allow host runtime SOC table writes
 // <i> Default disabled. When disabled, SOC table is selected by PROJECT_CFG_BAT_CHEMISTRY at compile time; 0x2200 writes are rejected.
@@ -412,15 +412,15 @@
 
 // <o> 升级参数策略版本 <0x0000-0xFFFE>
 // <i> 升级参数策略版本。策略内容变化时递增，避免重复或漏执行。
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0004
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0005
 
 // <q> 重置 AFE 参数
 // <i> 升级时重置 AFE 参数。只在 AFE 默认参数必须覆盖现场值时开启。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
 // <q> 重置保护参数
 // <i> 升级时重置保护参数。会影响保护阈值，必须谨慎开启。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
 
 // <q> 重置均衡开启电压
 // <i> 升级时重置均衡开启电压。用于修正现场旧版本均衡参数。
@@ -428,11 +428,11 @@
 
 // <q> 重置 SOC 表
 // <i> 升级时重置 SOC OCV 表。电芯曲线或默认表变化时开启。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 1
 
 // <q> 重置 SOC 配置
 // <i> 升级时重置 SOC 容量、电压锚点等配置。会影响用户可见电量。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
 
 // <q> 重置 SOC 快照
 // <i> 升级时清除 SOC 快照。开启后首次启动可能重新按 OCV 估算 SOC。
@@ -444,7 +444,7 @@
 
 // <q> 重置老化时间
 // <i> 升级后首次启动清零老化累计时间。需要随升级重新开始老化时开启，并同步递增策略版本。
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
 // <q> 强制重复执行策略，仅测试
 // <i> 强制重复执行升级参数策略。只用于测试，量产必须关闭。
