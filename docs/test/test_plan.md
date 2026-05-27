@@ -73,6 +73,8 @@
 - 启动/唤醒 SOC 显示窗口结束后，`LP_BLOCK_LED_ACTIVE` 必须释放，不能被 `startup_display_armed` 永久阻塞。
 - Release 构建必须清除 `DBGMCU_CR_DBG_STOP`；功耗实测时不能用 Debug STOP 保持位。
 - ST-Link 调试 STOP 只能作为逻辑定位手段，带 DBG_STOP 的功耗数据无效。
+- 使用 `tools/stlink_bms_monitor.ps1 -Mode ReleaseProxy` 做真实低功耗长期监控。
+- 使用 `tools/stlink_bms_monitor.ps1 -Mode DebugProbe` 做 RTC STOP 内部状态诊断，测试结果必须标注“非功耗实测”。
 - RTC 周期唤醒恢复。
 - IWDG 长稳。
 - 过放 deep sleep 和接充恢复。

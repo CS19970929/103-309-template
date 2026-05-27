@@ -26,6 +26,23 @@
 - 未修改 Modbus/CAN 协议、CAN ID、payload、IAP 入口、AFE 保护配置和参数存储格式。
 - 未关闭启动/唤醒 SOC 显示窗口，只修复窗口结束后的低功耗释放。
 
+## 2026-05-27 ST-Link BMS 长期监控工具
+
+### 本次新增
+
+- `tools/stlink_bms_monitor.ps1`：长期监控板子、MCU 和 BMS 低功耗状态，支持 `ReleaseProxy` 和 `DebugProbe` 两种模式。
+- `docs/STLINK_BMS_MONITOR_2026-05-27.md`：记录工具用途、命令、输出字段和 RTC STOP 检测限制。
+
+### 设计说明
+
+- `ReleaseProxy` 不打开 DBG_STOP，适合真实功耗监控，通过 ST-Link attach 失败判断目标大概率处于 STOP 或调试域关闭。
+- `DebugProbe` 会尝试临时打开 `DBGMCU_CR_DBG_STOP`，用于在 RTC STOP 中读取 RAM 状态，但不适合作为功耗实测依据。
+
+### 本次验证
+
+- `ReleaseProxy -Count 1` 可正常输出 `LOW_POWER_OR_DBG_OFF` 或 `TIMEOUT_LOW_POWER_OR_DBG_OFF` 并生成 CSV/summary。
+- `DebugProbe -Count 1 -DebugPrepareAttempts 1` 在板子已处于 Release STOP 时不会卡死，会提示需要唤醒/复位后再接入诊断监控。
+
 ## 2026-05-27 App_Can 低功耗优化
 
 ### 本次源码修改
