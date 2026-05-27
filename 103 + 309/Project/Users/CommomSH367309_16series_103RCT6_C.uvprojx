@@ -545,6 +545,21 @@
               </FileOption>
             </File>
             <File>
+              <FileName>PowerUi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\PowerUi.c</FilePath>
+            </File>
+            <File>
+              <FileName>LedSnapshot.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LedSnapshot.c</FilePath>
+            </File>
+            <File>
+              <FileName>SleepWakeFastUi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\SleepWakeFastUi.c</FilePath>
+            </File>
+            <File>
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>

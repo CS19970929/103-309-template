@@ -128,7 +128,10 @@ UINT8 RTC_ClockConfig(void)
 	__IO UINT16 StartUpCounter = 0, HSEStatus = 0;
 	INT8 result = 0;
 	PWR_BackupAccessCmd(ENABLE); // 允许访问RTC
-	BKP_DeInit();				 // 好像少了这句话导致各种wait函数卡死
+	if (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA)
+	{
+		BKP_DeInit();				 // 仅首次初始化时清备份域，保留LED快显快照
+	}
 	RCC_LSEConfig(RCC_LSE_ON);	 // 使能外部LSE晶振，RCC_LSE_Bypass旁路的意思应该是使能这个LSE时钟，但是单片机不用，外围电路用?
 	do
 	{

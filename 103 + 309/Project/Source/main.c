@@ -42,6 +42,7 @@ int main(void)
 #else
 		App_SysTime();
 		App_AFEGet();
+		PowerUi_ProcessRequests();
 		App_Sci();
 		App_AnlogCal();
 		App_E2promDeal();
@@ -104,9 +105,7 @@ void InitDevice(void)
 	InitData_SOC(); // 必须放在读完eeprom数据后面
 	extern void LedBar_Init(void);
 	LedBar_Init();
-	//???充电
-	Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
-	Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
+	PowerUi_ApplyInitialMosForce();
 
 #ifdef wdog_enable
 	Init_IWDG();

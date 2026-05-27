@@ -1,4 +1,6 @@
 #include "main.h"
+#include "LedSnapshot.h"
+#include "SleepWakeFastUi.h"
 
 volatile union SLEEP_MODE Sleep_Mode; // 用于外部控制进入休眠标志�?
 enum SLEEP_STATUS Sleep_Status = SLEEP_HICCUP_SHIFT;
@@ -11,6 +13,8 @@ void SleepDeal_Continue(void)
 {
 	UINT8 u8FlashWriteOK_flag = 0;
 	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
+
+	LedSnapshot_SaveRuntime();
 
 	if (Sleep_Mode.bits.b1TestSleep)
 	{
@@ -606,6 +610,56 @@ void SleepDeal_Test(void)
 	}
 }
 
+static UINT8 SleepDeal_RunStopWake(UINT8 mode)
+{
+	UINT8 fast_ui_result;
+
+	while (1)
+	{
+		if (mode == HICCUP_MODE)
+		{
+			IOstatus_RTCMode();
+			InitWakeUp_RTCMode();
+		}
+		else if (mode == NORMAL_MODE)
+		{
+			IOstatus_NormalMode();
+			InitWakeUp_NormalMode();
+		}
+		else
+		{
+			IOstatus_DeepMode();
+			InitWakeUp_DeepMode();
+		}
+
+		Sys_StopMode();
+		fast_ui_result = SleepWakeFastUi_ServiceAfterStop();
+
+		if (fast_ui_result == SLEEP_WAKE_FAST_TIMEOUT)
+		{
+			continue;
+		}
+		if (fast_ui_result == SLEEP_WAKE_FAST_BOOT || fast_ui_result == SLEEP_WAKE_FAST_CHARGE)
+		{
+			return 1;
+		}
+
+		if (mode == HICCUP_MODE)
+		{
+			IORecover_RTCMode();
+		}
+		else if (mode == NORMAL_MODE)
+		{
+			IORecover_NormalMode();
+		}
+		else
+		{
+			IORecover_DeepMode();
+		}
+		return 0;
+	}
+}
+
 void IsSleepStartUp(void)
 {
 	switch (FlashReadOneHalfWord(FLASH_ADDR_SLEEP_FLAG))
@@ -613,40 +667,27 @@ void IsSleepStartUp(void)
 	case FLASH_HICCUP_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			IOstatus_RTCMode();
-			InitWakeUp_RTCMode();
-
-			Sys_StopMode();
-			IORecover_RTCMode();
+			(void)SleepDeal_RunStopWake(HICCUP_MODE);
 		}
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			IOstatus_NormalMode();
-			InitWakeUp_NormalMode();
-			Sys_StopMode();
-			IORecover_NormalMode();
+			(void)SleepDeal_RunStopWake(NORMAL_MODE);
 		}
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
 		{
-			IOstatus_DeepMode();
-			InitWakeUp_DeepMode();
-			// Sys_StandbyMode();		//不能掌控外部IO，弃�?
-			Sys_StopMode();
-			IORecover_DeepMode();
+			(void)SleepDeal_RunStopWake(DEEP_MODE);
 		}
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
-		// 不作处理
 		break;
 	default:
 		break;
 	}
 }
-
 void App_SleepDeal(void)
 {
 	static uint8_t force_sleep_delay = 0;

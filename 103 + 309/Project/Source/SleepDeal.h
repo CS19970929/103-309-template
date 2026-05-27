@@ -73,6 +73,7 @@ extern uint8_t reset_sleep_state;
 void App_NormalSleepTest(void);
 void App_SleepDeal(void);
 void App_SleepTest(void);
+void SleepDeal_Continue(void);
 void IsSleepStartUp(void);
 
 #endif	/* SLEEPDEAL_H */

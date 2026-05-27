@@ -1,677 +1,476 @@
 #include "main.h"
+#include "PowerUi.h"
 
-LEDBAR_COMMAND LedBar_Command = LED_BAR_STARTUP;
+#define LED_UI_TIMEOUT_TICKS       ((UINT16)800)
+#define LED_UI_CONFIRM_TICKS       DELAYB10MS_3S
+#define LED_UI_BLINK_TICKS         DELAYB10MS_500MS
+#define LED_UI_ANIM_STEP_TICKS     DELAYB10MS_200MS
+
+typedef enum _LED_UI_STATE {
+    LED_UI_OFF_IDLE = 0,
+    LED_UI_BOOT_PREVIEW,
+    LED_UI_BOOT_ANIM,
+    LED_UI_WORK,
+    LED_UI_CHARGE,
+    LED_UI_SHUTDOWN_CONFIRM,
+    LED_UI_SHUTDOWN_ANIM,
+} LED_UI_STATE;
+
+typedef struct _LED_UI_RUNTIME {
+    LED_UI_STATE state;
+    UINT8 key_last;
+    UINT8 blink_on;
+    UINT8 anim_step;
+    UINT16 hold_ticks;
+    UINT16 timeout_ticks;
+    UINT16 blink_ticks;
+    UINT16 anim_ticks;
+} LED_UI_RUNTIME;
+
+LEDBAR_COMMAND LedBar_Command = LED_BAR_NORMAL;
+static LED_UI_RUNTIME s_led_ui;
+
+static void LedBar_GpioInitForDisplay(void);
+static void LedBar_OutputFrame(LEDBAR_L1_COLOR l1, UINT8 l2, UINT8 l3, UINT8 l4, UINT8 l5);
+static UINT8 LedBar_KeyPressed(void);
+static UINT8 LedBar_KeyDownEdge(UINT8 pressed);
+static UINT8 LedBar_IsChargeActive(void);
+static UINT8 LedBar_IsAlarmActive(UINT8 soc);
+static UINT8 LedBar_WorkLevel(UINT8 soc);
+static UINT8 LedBar_ChargeStableLevel(UINT8 soc);
+static void LedBar_ServiceBlink(void);
+static void LedBar_RenderSoc(UINT8 soc, UINT8 alarm);
+static void LedBar_RenderWork(void);
+static void LedBar_RenderCharge(void);
+static void LedBar_EnterState(LED_UI_STATE state);
+static void LedBar_ServiceOffIdle(UINT8 key_down);
+static void LedBar_ServiceBootPreview(UINT8 pressed);
+static void LedBar_ServiceBootAnim(void);
+static void LedBar_ServiceWork(UINT8 key_down);
+static void LedBar_ServiceShutdownConfirm(UINT8 pressed);
+static void LedBar_ServiceShutdownAnim(void);
 
 void LedBar_gpio_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // 选择要用的GPIO引脚,PA0也可以唤醒
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
 }
 
-static uint8_t GetSocLevel(uint16_t soc)
+void LedBar_FastInit(void)
 {
-    if (soc >= 100)
-        return 4;
-    else if (soc >= 75)
-        return 3;
-    else if (soc >= 50)
-        return 2;
-    else if (soc >= 25)
-        return 1;
-    else if (soc >= 20)
-        return 0;
-    else
-        return -1; // 20% 以下
-}
-
-static uint8_t LedBar_Blink(void)
-{
-    static uint16_t cnt = 0;
-
-    cnt++;
-    if (cnt < 50)
-        return 1; // 亮
-    else if (cnt < 100)
-        return 0; // 灭
-    else
-        cnt = 0;
-
-    return 1;
+    LedBar_GpioInitForDisplay();
 }
 
 void LedBar_Init(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
+    LedBar_GpioInitForDisplay();
+    memset(&s_led_ui, 0, sizeof(s_led_ui));
+    s_led_ui.blink_on = 1;
+    s_led_ui.state = PowerUi_IsPowerOnConfirmed() ? LED_UI_WORK : LED_UI_OFF_IDLE;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_SOC_25 | PIN_SOC_Y | PIN_SOC_G | PIN_SOC_50 | PIN_SOC_75;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
-    GPIO_Init(PORT_SOC_25, &GPIO_InitStructure);
-    GPIO_InitStructure.GPIO_Pin = PIN_SOC_100;
-    GPIO_Init(PORT_SOC_100, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY; // 选择要用的GPIO引脚,PA0也可以唤醒
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
-
-    // if (g_stCellInfoReport.SocElement.u16Soc >= 20)
-    // {
-    //     MCUO_SOC_G = 1;
-    //     MCUO_SOC_25 = 1;
-    //     // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-    //     MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-    //     MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-    //     MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-    // }
-    // else
-    // {
-    //     MCUO_SOC_Y = 1;
-    // }
-
-    // if (g_irq_t == CHG_IRQ)
-    // {
-    //     LedBar_Command = LED_BAR_CHG;
-    // }
-    // else
-    {
-        LedBar_Command = LED_BAR_STARTUP;
-    }
-}
-
-static uint16_t cnt_100ms = 0;
-static uint16_t key_cnt = 0;
-static uint8_t led_start_state = 0;
-void LedBar_StartUp_var_init(void)
-{
-    // cnt_100ms = 0;
-    // key_cnt = 0;
-    // LedBar_Command = LED_BAR_STARTUP;
-    // sys_time.power_on = false;
-    // led_start_state = 0;
-}
-
-void LedBar_StartUp(void)
-{
-    if (0 == MCUI_SOC_KEY)
-    {
-        sys_time.enter_rtc_delay = 0;
-    }
-    // static uint8_t toggle_cnt = 0;
-    // if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
-    // {
-    //     if (++toggle_cnt >= (10 * 2))
-    //     {
-    //         toggle_cnt = 0;
-    //         MCUO_SOC_Y = !MCUO_SOC_Y;
-    //     }
-    // }
-    // else
-    // {
-    //     toggle_cnt = 0;
-    // }
-    if (led_start_state == 0)
-    {
-    }
-
-    switch (led_start_state)
-    {
-    case 0:
-        if (g_irq_t == CHG_IRQ)
-        {
-        }
-        else if (g_irq_t == soc_key)
-        {
-        }
-        if (g_stCellInfoReport.SocElement.u16Soc > 20)
-        {
-            MCUO_SOC_Y = 0;
-            MCUO_SOC_G = 0;
-            MCUO_SOC_25 = 1;
-            // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-            MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-        }
-        else
-        {
-            MCUO_SOC_Y = 1;
-            MCUO_SOC_G = 0;
-        }
-        led_start_state = 1;
-        break;
-    case 1:
-        if (!sys_time.power_on)
-        {
-            // if (g_irq_t == CHG_IRQ || )
-            if (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU))
-            {
-                // todo 测试优化逻辑
-                sys_time.power_on = true;
-                MCUO_SOC_G = 0;
-                MCUO_SOC_25 = 0;
-                MCUO_SOC_50 = 0;
-                MCUO_SOC_75 = 0;
-                MCUO_SOC_100 = 0;
-                // OPEN_DSG();
-                Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
-                Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
-            }
-
-            if (0 == MCUI_SOC_KEY)
-            {
-                ++key_cnt;
-                cnt_100ms = 0;
-                if (key_cnt >= (100 * 4))
-                {
-                    sys_time.power_on = true;
-                    MCUO_SOC_G = 0;
-                    MCUO_SOC_25 = 0;
-                    MCUO_SOC_50 = 0;
-                    MCUO_SOC_75 = 0;
-                    MCUO_SOC_100 = 0;
-                    // OPEN_DSG();
-                    Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_KEEP_MODE;
-                    Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_KEEP_MODE;
-                }
-            }
-            else
-            {
-                key_cnt = 0;
-                ++cnt_100ms;
-            }
-
-            if (cnt_100ms >= (100 * 9))
-            {
-                // led_start_state = 2;
-                entersleep(DEEP_MODE);
-            }
-        }
-        else
-        {
-            static uint16_t cnt = 0;
-            ++cnt;
-            if (cnt >= 100)
-            {
-                // MCUO_SOC_G = 1;
-                // MCUO_SOC_25 = 1;
-                // // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-                // MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-                // MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-                // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-                LedBar_Command = LED_BAR_NORMAL;
-            }
-            else if (cnt >= 80)
-                MCUO_SOC_100 = 1;
-            else if (cnt >= 60)
-                MCUO_SOC_75 = 1;
-            else if (cnt >= 40)
-                MCUO_SOC_50 = 1;
-            else if (cnt >= 20)
-            {
-                MCUO_SOC_25 = 1;
-            }
-        }
-        break;
-    case 2:
-        // entersleep(HICCUP_MODE);
-        MCUO_SOC_Y = 0;
-        MCUO_SOC_G = 0;
-        MCUO_SOC_25 = 0;
-        MCUO_SOC_50 = 0;
-        MCUO_SOC_75 = 0;
-        MCUO_SOC_100 = 0;
-        // LedBar_StartUp_var_init();
-        if (0 == MCUI_SOC_KEY)
-        {
-            led_start_state = 0;
-        }
-        break;
-
-    default:
-        led_start_state = 2;
-        break;
-    }
-
-#if 0
-    if (++cnt_100ms <= (10 * 8) || power_on)
-    {
-        if (MCUI_SOC_KEY == 0)
-        {
-            key_cnt++;
-            if (key_cnt >= ())
-        }
-
-        LedBar_Command = LED_BAR_NORMAL;
-    }
-    else
-    {
-        // entersleep(DEEP_MODE);
-    }
-#endif
-}
-
-void LedBar_sleep(void)
-{
-    static uint16_t cnt_100ms = 0;
-    static bool sleep_on = false;
-    static uint16_t key_cnt = 0;
-    static uint16_t cnt_10ms_toggle = 0;
-
-    if (!sleep_on)
-    {
-        if (++cnt_10ms_toggle >= (50))
-        {
-            cnt_10ms_toggle = 0;
-            MCUO_SOC_G = 0;
-            MCUO_SOC_Y = 0;
-
-            MCUO_SOC_25 = !MCUO_SOC_25;
-            MCUO_SOC_50 = !MCUO_SOC_50;
-            MCUO_SOC_75 = !MCUO_SOC_75;
-            MCUO_SOC_100 = !MCUO_SOC_100;
-        }
-    }
-
-    if (!sleep_on)
-    {
-        if (0 == MCUI_SOC_KEY)
-        {
-            ++key_cnt;
-            cnt_100ms = 0;
-            if (key_cnt >= (100 * 4))
-            {
-                sleep_on = true;
-                // MCUO_SOC_G = 1;
-                MCUO_SOC_25 = 1;
-                MCUO_SOC_50 = 1;
-                MCUO_SOC_75 = 1;
-                MCUO_SOC_100 = 1;
-                // OPEN_DSG();
-                CLOSE_DSG();
-            }
-        }
-        else
-        {
-            key_cnt = 0;
-            ++cnt_100ms;
-        }
-
-        if (cnt_100ms >= (100 * 9))
-        {
-            LedBar_Command = LED_BAR_NORMAL;
-        }
-    }
-    else
-    {
-        static uint16_t cnt = 0;
-        ++cnt;
-        if (cnt >= 100)
-        {
-            cnt = 0;
-            MCUO_SOC_G = 0;
-            entersleep(DEEP_MODE);
-        }
-        else if (cnt >= 80)
-            MCUO_SOC_25 = 0;
-        else if (cnt >= 60)
-            MCUO_SOC_50 = 0;
-        else if (cnt >= 40)
-            MCUO_SOC_75 = 0;
-        else if (cnt >= 20)
-        {
-            MCUO_SOC_100 = 0;
-            // MCUO_SOC_25 = 1;
-            // // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            // MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            // MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-            // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-            // LedBar_Command = LED_BAR_NORMAL;
-        }
-    }
-
-#if 0
-    if (++cnt_100ms <= (10 * 8) || power_on)
-    {
-        if (MCUI_SOC_KEY == 0)
-        {
-            key_cnt++;
-            if (key_cnt >= ())
-        }
-
-        LedBar_Command = LED_BAR_NORMAL;
-    }
-    else
-    {
-        // entersleep(DEEP_MODE);
-    }
-#endif
-}
-void LedBar_Show_Normal(void)
-{
-    static UINT8 su8_ShowStatus = 0; // 开机亮5s
-    static UINT16 su16_ShowDelay_Tcnt = 0;
-    static uint8_t delay_cnt = 0;
-
-    switch (su8_ShowStatus)
-    {
-    case 0:
-
-        if (g_stCellInfoReport.u16Ichg)
-        {
-            LedBar_Command = LED_BAR_CHG;
-        }
-
-        static uint8_t toggle_cnt = 0;
-        if ((g_stCellInfoReport.SocElement.u16Soc < 20) || g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp == 1)
-        {
-            if (++toggle_cnt >= (10 * 2))
-            {
-                toggle_cnt = 0;
-                MCUO_SOC_G = 0;
-                MCUO_SOC_Y = !MCUO_SOC_Y;
-                MCUO_SOC_25 = 0;
-                MCUO_SOC_50 = 0;
-                MCUO_SOC_75 = 0;
-                MCUO_SOC_100 = 0;
-            }
-        }
-        else
-        {
-            toggle_cnt = 0;
-
-            MCUO_SOC_Y = 0;
-            MCUO_SOC_G = 1;
-            MCUO_SOC_25 = 1;
-            // MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-            MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0;
-        }
-        if (MCUI_SOC_KEY == 0)
-        {
-            // su8_ShowStatus = 1;
-            LedBar_Command = LED_BAR_SLEEP;
-            // MCUO_DO1_EN = !MCUO_DO1_EN;
-            MCUO_SOC_G = 0;
-            MCUO_SOC_25 = 1;
-            MCUO_SOC_50 = 1;
-            MCUO_SOC_75 = 1;
-            MCUO_SOC_100 = 1;
-        }
-        // if (g_stCellInfoReport.u16IDischg)
-        // {
-        //     LedBar_Command = LED_BAR_DSG;
-        // }
-        break;
-    case 1:
-#if 0
-        // 5s
-        if (++su16_ShowDelay_Tcnt <= 10 * 5)
-        {
-            // MCUO_SOC_RUN = 1;
-            MCUO_SOC_20 = g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0;
-            // if (g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0)
-            //     MCUO_SOC_20_ON;
-            // else
-            //     MCUO_SOC_20_OFF;
-            MCUO_SOC_40 = g_stCellInfoReport.SocElement.u16Soc >= 20 ? 1 : 0;
-            MCUO_SOC_60 = g_stCellInfoReport.SocElement.u16Soc >= 40 ? 1 : 0;
-            MCUO_SOC_80 = g_stCellInfoReport.SocElement.u16Soc >= 60 ? 1 : 0;
-            MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
-
-            // MCUO_SOC_RUN = 1;
-            // MCUO_SOC_20 = 1;
-            // // if (g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0)
-            // //     MCUO_SOC_20_ON;
-            // // else
-            // //     MCUO_SOC_20_OFF;
-            // MCUO_SOC_40 = 1;
-            // MCUO_SOC_60 = 1;
-            // MCUO_SOC_80 = 1;
-            // MCUO_SOC_100 = 1;
-        }
-        else
-        {
-            // MCUO_SOC_RUN = 0;
-            MCUO_SOC_20 = 0;
-            MCUO_SOC_40 = 0;
-            MCUO_SOC_60 = 0;
-            MCUO_SOC_80 = 0;
-            MCUO_SOC_100 = 0;
-            su16_ShowDelay_Tcnt = 0;
-            su8_ShowStatus = 0;
-        }
-
-        // 一直按着
-        if (!MCUI_SOC_KEY)
-            su16_ShowDelay_Tcnt = 0;
-#else
-
-        if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp || g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp)
-        {
-            if (++delay_cnt >= 5)
-            {
-                delay_cnt = 0;
-                MCUO_SOC_Y = MCUO_SOC_Y;
-                MCUO_SOC_25 = 0;
-                MCUO_SOC_50 = 0;
-                MCUO_SOC_75 = 0;
-                MCUO_SOC_100 = 0;
-            }
-        }
-        else
-        {
-            delay_cnt = 0;
-            MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc >= 0 ? 1 : 0;
-            MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0;
-            MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0;
-            MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
-        }
-        // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
-
-#endif
-        break;
-
-    default:
-        break;
-    }
-}
-
-void LedBar_Show_CHG(void)
-{
-    int8_t soc_level;
-    uint8_t blink;
-
-    soc_level = GetSocLevel(g_stCellInfoReport.SocElement.u16Soc);
-    blink = LedBar_Blink();
-
-    /* 1. 已达到的 SOC 灯：常亮 */
-    MCUO_SOC_Y = 0;
-    MCUO_SOC_G = (soc_level >= 0);
-    MCUO_SOC_25 = (soc_level >= 1);
-    MCUO_SOC_50 = (soc_level >= 2);
-    MCUO_SOC_75 = (soc_level >= 3);
-    MCUO_SOC_100 = (soc_level >= 4);
-
-    /* 2. 正在充电的下一档灯：闪烁 */
-    if (g_stCellInfoReport.u16Ichg > 0)
-    {
-        switch (soc_level + 1)
-        {
-        case 0:
-            MCUO_SOC_G = blink;
-            break;
-        case 1:
-            MCUO_SOC_25 = blink;
-            break;
-        case 2:
-            MCUO_SOC_50 = blink;
-            break;
-        case 3:
-            MCUO_SOC_75 = blink;
-            break;
-        case 4:
-            MCUO_SOC_100 = blink;
-            break;
-        default:
-            break;
-        }
-    }
-    else
-    {
-        LedBar_Command = LED_BAR_NORMAL;
-    }
-}
-
-#if 0
-
-void LedBar_Show_CHG(void)
-{
-    static UINT8 su8_temp = 0;
-    static UINT16 su16_ShowDelay = 0;
-
-    if (++su16_ShowDelay <= 5)
-    {
-        su8_temp = ~(1 << (g_stCellInfoReport.SocElement.u16Soc / 25)); // 充电的灭
-    }
-    else if (++su16_ShowDelay <= 10)
-    {
-        su8_temp = 0xFF; // 全亮
-    }
-    else
-    {
-        su16_ShowDelay = 0;
-    }
-    // SOC =100的时候，为0x20，运算结果相当于全亮，不会有闪的
-    // SOC =0的时候，也要闪
-    // MCUO_SOC_RUN = 1;
-    MCUO_SOC_G = (g_stCellInfoReport.SocElement.u16Soc >= 20 ? 1 : 0) && (su8_temp & 0x01); // 这里的三目运算符为>=，而不是>，因为这个灯一定要亮
-    MCUO_SOC_25 = (g_stCellInfoReport.SocElement.u16Soc >= 25 ? 1 : 0) && (su8_temp & 0x01); // 这里的三目运算符为>=，而不是>，因为这个灯一定要亮
-    MCUO_SOC_50 = (g_stCellInfoReport.SocElement.u16Soc >= 50 ? 1 : 0) && (su8_temp & 0x02);
-    MCUO_SOC_75 = (g_stCellInfoReport.SocElement.u16Soc >= 75 ? 1 : 0) && (su8_temp & 0x04);
-    MCUO_SOC_100 = (g_stCellInfoReport.SocElement.u16Soc >= 100 ? 1 : 0) && (su8_temp & 0x08);
-
-    if (g_stCellInfoReport.u16Ichg == 0)
-    {
-        // MCUO_SOC_RUN = 0;
-        // MCUO_SOC_20 = 0;
-        // MCUO_SOC_40 = 0;
-        // MCUO_SOC_60 = 0;
-        // MCUO_SOC_80 = 0;
-        // MCUO_SOC_100 = 0;
-        LedBar_Command = LED_BAR_NORMAL;
-    }
-}
-#endif
-
-void LedBar_Show_DSG(void)
-{
-    // MCUO_SOC_RUN = 1;
-    MCUO_SOC_25 = g_stCellInfoReport.SocElement.u16Soc > 0 ? 1 : 0;
-    MCUO_SOC_50 = g_stCellInfoReport.SocElement.u16Soc >= 20 ? 1 : 0;
-    MCUO_SOC_75 = g_stCellInfoReport.SocElement.u16Soc >= 40 ? 1 : 0;
-    MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 60 ? 1 : 0;
-    // MCUO_SOC_100 = g_stCellInfoReport.SocElement.u16Soc >= 80 ? 1 : 0;
-
-    if (g_stCellInfoReport.u16IDischg == 0)
-    {
-        // MCUO_SOC_RUN = 0;
-        // MCUO_SOC_20 = 0;
-        // MCUO_SOC_40 = 0;
-        // MCUO_SOC_60 = 0;
-        // MCUO_SOC_80 = 0;
-        // MCUO_SOC_100 = 0;
-
-        LedBar_Command = LED_BAR_NORMAL;
-    }
-}
-
-void LedBar_Show_Fault(void)
-{
-    if (g_stCellInfoReport.unMdlFault_Third.all & 0x3FFB ||
-        System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) ||
-        System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG))
-    {
-        // MCUO_SOC_ALARM = !MCUO_SOC_ALARM;
-    }
-    else
-    {
-        // MCUO_SOC_ALARM = 0;
-    }
-}
-
-void LedBar_Show_Sleep(void)
-{
-    static UINT16 su16_SleepDelay_Tcnt = 0;
-
-    if (!MCUI_SOC_KEY)
-    {
-        if (++su16_SleepDelay_Tcnt >= 20)
-        {
-            Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
-        }
-    }
-    else
-    {
-        su16_SleepDelay_Tcnt = 0;
+    if (s_led_ui.state == LED_UI_WORK) {
+        LedBar_RenderWork();
+    } else {
+        LedBar_OutputOff();
     }
 }
 
 void APP_LedBar(void)
 {
-    // if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
-    // {
-    //     return;
-    // }
-    if (SystemStatus.bits.b1StartUpBMS)
-    {
+    UINT8 pressed;
+    UINT8 key_down;
+    UINT8 charge_active;
+
+    LedBar_ServiceBlink();
+
+    pressed = LedBar_KeyPressed();
+    key_down = LedBar_KeyDownEdge(pressed);
+    charge_active = LedBar_IsChargeActive();
+
+    if (charge_active) {
+        if (!PowerUi_IsPowerOnConfirmed()) {
+            PowerUi_ConfirmPowerOn();
+        }
+        if (s_led_ui.state != LED_UI_CHARGE) {
+            LedBar_EnterState(LED_UI_CHARGE);
+        }
+    } else if (s_led_ui.state == LED_UI_CHARGE) {
+        LedBar_EnterState(PowerUi_IsPowerOnConfirmed() ? LED_UI_WORK : LED_UI_OFF_IDLE);
+    }
+
+    switch (s_led_ui.state) {
+    case LED_UI_OFF_IDLE:
+        LedBar_ServiceOffIdle(key_down);
+        break;
+    case LED_UI_BOOT_PREVIEW:
+        LedBar_ServiceBootPreview(pressed);
+        break;
+    case LED_UI_BOOT_ANIM:
+        LedBar_ServiceBootAnim();
+        break;
+    case LED_UI_WORK:
+        LedBar_ServiceWork(key_down);
+        break;
+    case LED_UI_CHARGE:
+        LedBar_RenderCharge();
+        break;
+    case LED_UI_SHUTDOWN_CONFIRM:
+        LedBar_ServiceShutdownConfirm(pressed);
+        break;
+    case LED_UI_SHUTDOWN_ANIM:
+        LedBar_ServiceShutdownAnim();
+        break;
+    default:
+        LedBar_EnterState(PowerUi_IsPowerOnConfirmed() ? LED_UI_WORK : LED_UI_OFF_IDLE);
+        break;
+    }
+}
+
+void LedBar_OutputOff(void)
+{
+    LedBar_OutputFrame(LEDBAR_L1_OFF, 0, 0, 0, 0);
+}
+
+void LedBar_ShowSocImmediate(UINT8 soc, UINT8 alarm, UINT8 blink_on)
+{
+    if (alarm || soc < 20) {
+        LedBar_OutputFrame(blink_on ? LEDBAR_L1_YELLOW : LEDBAR_L1_OFF, 0, 0, 0, 0);
+    } else {
+        UINT8 level;
+        level = LedBar_WorkLevel(soc);
+        LedBar_OutputFrame(LEDBAR_L1_GREEN, level >= 2, level >= 3, level >= 4, level >= 5);
+    }
+}
+
+void LedBar_ShowBootAnimationStep(UINT8 step)
+{
+    if (step > 5) {
+        step = 5;
+    }
+    LedBar_OutputFrame(step >= 1 ? LEDBAR_L1_GREEN : LEDBAR_L1_OFF,
+                       step >= 2,
+                       step >= 3,
+                       step >= 4,
+                       step >= 5);
+}
+
+void LedBar_ShowShutdownConfirmFrame(UINT8 blink_on)
+{
+    LedBar_OutputFrame(LEDBAR_L1_OFF, blink_on, blink_on, blink_on, blink_on);
+}
+
+void LedBar_ShowShutdownAnimationStep(UINT8 highest_on)
+{
+    if (highest_on > 5) {
+        highest_on = 5;
+    }
+    LedBar_OutputFrame(LEDBAR_L1_OFF,
+                       highest_on >= 2,
+                       highest_on >= 3,
+                       highest_on >= 4,
+                       highest_on >= 5);
+}
+
+static void LedBar_GpioInitForDisplay(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_25 | PIN_SOC_Y | PIN_SOC_G | PIN_SOC_50 | PIN_SOC_75;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(PORT_SOC_25, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_100;
+    GPIO_Init(PORT_SOC_100, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
+}
+
+static void LedBar_OutputFrame(LEDBAR_L1_COLOR l1, UINT8 l2, UINT8 l3, UINT8 l4, UINT8 l5)
+{
+    MCUO_SOC_Y = (l1 == LEDBAR_L1_YELLOW) ? 1 : 0;
+    MCUO_SOC_G = (l1 == LEDBAR_L1_GREEN) ? 1 : 0;
+    MCUO_SOC_25 = l2 ? 1 : 0;
+    MCUO_SOC_50 = l3 ? 1 : 0;
+    MCUO_SOC_75 = l4 ? 1 : 0;
+    MCUO_SOC_100 = l5 ? 1 : 0;
+}
+
+static UINT8 LedBar_KeyPressed(void)
+{
+    return (MCUI_SOC_KEY == 0) ? 1 : 0;
+}
+
+static UINT8 LedBar_KeyDownEdge(UINT8 pressed)
+{
+    UINT8 edge;
+
+    edge = (pressed && !s_led_ui.key_last) ? 1 : 0;
+    s_led_ui.key_last = pressed;
+    return edge;
+}
+
+static UINT8 LedBar_IsChargeActive(void)
+{
+    if (g_stCellInfoReport.u16Ichg > 0) {
+        return 1;
+    }
+
+    if (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static UINT8 LedBar_IsAlarmActive(UINT8 soc)
+{
+    if (soc < 20) {
+        return 1;
+    }
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp) {
+        return 1;
+    }
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1BatUvp) {
+        return 1;
+    }
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow) {
+        return 1;
+    }
+    return 0;
+}
+
+static UINT8 LedBar_WorkLevel(UINT8 soc)
+{
+    if (soc >= 80) {
+        return 5;
+    }
+    if (soc >= 60) {
+        return 4;
+    }
+    if (soc >= 40) {
+        return 3;
+    }
+    if (soc >= 20) {
+        return 2;
+    }
+    return 0;
+}
+
+static UINT8 LedBar_ChargeStableLevel(UINT8 soc)
+{
+    if (soc >= 100) {
+        return 5;
+    }
+    if (soc > 80) {
+        return 4;
+    }
+    if (soc > 60) {
+        return 3;
+    }
+    if (soc > 40) {
+        return 2;
+    }
+    if (soc > 20) {
+        return 1;
+    }
+    return 0;
+}
+
+static void LedBar_ServiceBlink(void)
+{
+    if (++s_led_ui.blink_ticks >= LED_UI_BLINK_TICKS) {
+        s_led_ui.blink_ticks = 0;
+        s_led_ui.blink_on = s_led_ui.blink_on ? 0 : 1;
+    }
+}
+
+static void LedBar_RenderSoc(UINT8 soc, UINT8 alarm)
+{
+    LedBar_ShowSocImmediate(soc, alarm, s_led_ui.blink_on);
+}
+
+static void LedBar_RenderWork(void)
+{
+    UINT8 soc;
+    UINT8 alarm;
+
+    soc = (UINT8)g_stCellInfoReport.SocElement.u16Soc;
+    alarm = LedBar_IsAlarmActive(soc);
+    LedBar_RenderSoc(soc, alarm);
+}
+
+static void LedBar_RenderCharge(void)
+{
+    UINT8 soc;
+    UINT8 level;
+    UINT8 blink_index;
+    UINT8 l1;
+    UINT8 l2;
+    UINT8 l3;
+    UINT8 l4;
+    UINT8 l5;
+
+    soc = (UINT8)g_stCellInfoReport.SocElement.u16Soc;
+    level = LedBar_ChargeStableLevel(soc);
+    blink_index = (level < 5) ? (UINT8)(level + 1) : 0;
+
+    l1 = (level >= 1) ? 1 : 0;
+    l2 = (level >= 2) ? 1 : 0;
+    l3 = (level >= 3) ? 1 : 0;
+    l4 = (level >= 4) ? 1 : 0;
+    l5 = (level >= 5) ? 1 : 0;
+
+    if (blink_index == 1) {
+        l1 = s_led_ui.blink_on;
+    } else if (blink_index == 2) {
+        l2 = s_led_ui.blink_on;
+    } else if (blink_index == 3) {
+        l3 = s_led_ui.blink_on;
+    } else if (blink_index == 4) {
+        l4 = s_led_ui.blink_on;
+    } else if (blink_index == 5) {
+        l5 = s_led_ui.blink_on;
+    }
+
+    LedBar_OutputFrame(l1 ? LEDBAR_L1_GREEN : LEDBAR_L1_OFF, l2, l3, l4, l5);
+}
+
+static void LedBar_EnterState(LED_UI_STATE state)
+{
+    s_led_ui.state = state;
+    s_led_ui.hold_ticks = 0;
+    s_led_ui.anim_ticks = 0;
+    s_led_ui.timeout_ticks = LED_UI_TIMEOUT_TICKS;
+    s_led_ui.anim_step = 0;
+
+    if (state == LED_UI_OFF_IDLE) {
+        LedBar_OutputOff();
+    } else if (state == LED_UI_BOOT_PREVIEW) {
+        LedBar_RenderWork();
+    } else if (state == LED_UI_BOOT_ANIM) {
+        s_led_ui.anim_step = 1;
+        LedBar_ShowBootAnimationStep(s_led_ui.anim_step);
+    } else if (state == LED_UI_WORK) {
+        LedBar_RenderWork();
+    } else if (state == LED_UI_CHARGE) {
+        LedBar_RenderCharge();
+    } else if (state == LED_UI_SHUTDOWN_CONFIRM) {
+        LedBar_ShowShutdownConfirmFrame(s_led_ui.blink_on);
+    } else if (state == LED_UI_SHUTDOWN_ANIM) {
+        s_led_ui.anim_step = 4;
+        LedBar_ShowShutdownAnimationStep(s_led_ui.anim_step);
+    }
+}
+
+static void LedBar_ServiceOffIdle(UINT8 key_down)
+{
+    if (key_down) {
+        LedBar_EnterState(LED_UI_BOOT_PREVIEW);
+    } else {
+        LedBar_OutputOff();
+    }
+}
+
+static void LedBar_ServiceBootPreview(UINT8 pressed)
+{
+    LedBar_RenderWork();
+
+    if (pressed) {
+        if (s_led_ui.hold_ticks < LED_UI_CONFIRM_TICKS) {
+            ++s_led_ui.hold_ticks;
+        }
+        if (s_led_ui.hold_ticks >= LED_UI_CONFIRM_TICKS) {
+            LedBar_EnterState(LED_UI_BOOT_ANIM);
+            return;
+        }
+    } else {
+        s_led_ui.hold_ticks = 0;
+    }
+
+    if (s_led_ui.timeout_ticks > 0) {
+        --s_led_ui.timeout_ticks;
+    }
+    if (s_led_ui.timeout_ticks == 0) {
+        LedBar_EnterState(LED_UI_OFF_IDLE);
+    }
+}
+
+static void LedBar_ServiceBootAnim(void)
+{
+    if (++s_led_ui.anim_ticks < LED_UI_ANIM_STEP_TICKS) {
         return;
     }
 
-    if (g_stCellInfoReport.u16Ichg)
-    {
-        LedBar_Command = LED_BAR_CHG;
+    s_led_ui.anim_ticks = 0;
+    if (s_led_ui.anim_step < 5) {
+        ++s_led_ui.anim_step;
+        LedBar_ShowBootAnimationStep(s_led_ui.anim_step);
+    } else {
+        PowerUi_ConfirmPowerOn();
+        LedBar_EnterState(LED_UI_WORK);
+    }
+}
+
+static void LedBar_ServiceWork(UINT8 key_down)
+{
+    if (!PowerUi_IsPowerOnConfirmed()) {
+        LedBar_EnterState(LED_UI_OFF_IDLE);
+        return;
     }
 
-#if 1
-    switch (LedBar_Command)
-    {
-    case LED_BAR_STARTUP:
-        LedBar_StartUp();
-        break;
-
-    case LED_BAR_NORMAL:
-        LedBar_Show_Normal();
-        break;
-    case LED_BAR_CHG:
-        LedBar_Show_CHG();
-        break;
-    // case LED_BAR_DSG:
-    //     LedBar_Show_DSG();
-    //     break;
-    case LED_BAR_SLEEP:
-        LedBar_sleep();
-        break;
-    case LED_BAR_FAULT:
-        // 下面长期监控
-        break;
-
-    default:
-        break;
+    if (key_down) {
+        LedBar_EnterState(LED_UI_SHUTDOWN_CONFIRM);
+    } else {
+        LedBar_RenderWork();
     }
-#endif
+}
 
-    // LedBar_Show_Fault();
-    // 好像有问题
-    // LedBar_Show_Sleep();
+static void LedBar_ServiceShutdownConfirm(UINT8 pressed)
+{
+    LedBar_ShowShutdownConfirmFrame(s_led_ui.blink_on);
 
-    // if (BlueToothFlag)
-    // {
-    //     MCUO_SOC_BLE = 1;
-    // }
-    // else
-    //     MCUO_SOC_BLE = 0;
+    if (pressed) {
+        if (s_led_ui.hold_ticks < LED_UI_CONFIRM_TICKS) {
+            ++s_led_ui.hold_ticks;
+        }
+        if (s_led_ui.hold_ticks >= LED_UI_CONFIRM_TICKS) {
+            LedBar_EnterState(LED_UI_SHUTDOWN_ANIM);
+            return;
+        }
+    } else {
+        s_led_ui.hold_ticks = 0;
+    }
+
+    if (s_led_ui.timeout_ticks > 0) {
+        --s_led_ui.timeout_ticks;
+    }
+    if (s_led_ui.timeout_ticks == 0) {
+        LedBar_EnterState(LED_UI_WORK);
+    }
+}
+
+static void LedBar_ServiceShutdownAnim(void)
+{
+    if (++s_led_ui.anim_ticks < LED_UI_ANIM_STEP_TICKS) {
+        return;
+    }
+
+    s_led_ui.anim_ticks = 0;
+    if (s_led_ui.anim_step > 2) {
+        --s_led_ui.anim_step;
+        LedBar_ShowShutdownAnimationStep(s_led_ui.anim_step);
+    } else {
+        LedBar_OutputOff();
+        PowerUi_RequestShutdown();
+        LedBar_EnterState(LED_UI_OFF_IDLE);
+    }
 }

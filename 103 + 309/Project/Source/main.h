@@ -30,6 +30,9 @@
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
+#include "PowerUi.h"
+#include "LedSnapshot.h"
+#include "SleepWakeFastUi.h"
 
 #include "rtc_sleep.h"
 #include "IO_Control.h"
