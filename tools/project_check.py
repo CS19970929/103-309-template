@@ -1155,9 +1155,9 @@ def check_can_aging_soc_service(reporter):
         and "FACTORY_AGING_PUBLIC_STATE_RUNNING" in aging_h
         and "FACTORY_AGING_STATE_STOPPED" in aging_c
     ):
-        reporter.ok("factory aging module reports remaining time and keeps stopped state persistent")
+        reporter.ok("factory aging module reports remaining time and supports host-controlled aging restart/finish")
     else:
-        reporter.fail("factory aging module should report remaining time and persist stopped state")
+        reporter.fail("factory aging module should report remaining time and support host-controlled aging restart/finish")
 
     if (
         "APP_SET_ONCE_SOC_ADDR = 0x1005" in host_py

@@ -55,7 +55,7 @@
 | `WRITE_PREP` | `0x04` | 暂存寄存器地址和值高字节 |
 | `WRITE_COMMIT` | `0x05` | 与 prep 地址匹配后通过 `Sci_HostWriteWords()` 写 1 个 word |
 | `READ_BLOCK` | `0x06` | 读取最多 120 words，并用 `0x86` 数据帧分包返回 |
-| `AGING_START` | `0x07` | guard 通过后调用 `FactoryAging_StartByHost()` |
+| `AGING_START` | `0x07` | guard 通过后调用 `FactoryAging_StartByHost()`；完成态下清零累计时间并开启新一轮 |
 | `AGING_STOP` | `0x08` | guard 通过后调用 `FactoryAging_StopByHost()`，提前结束本轮老化时间并清零剩余时间 |
 | `AGING_RESET_TIME` | `0x09` | guard 通过后调用 `FactoryAging_ResetTimeByHost()` |
 | `AGING_SET_HOURS` | `0x0A` | guard 通过并检查小时范围后写老化时长 |

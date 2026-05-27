@@ -509,14 +509,10 @@ UINT8 FactoryAging_StartByHost(void)
 	UINT32 now_tick = SysTime_Get10msTickCount();
 
 	FactoryAging_LoadRuntimeStateForHost(now_tick);
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_DONE)
+	if ((s_u8FactoryAgingState == FACTORY_AGING_STATE_DONE) ||
+		(s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS))
 	{
-		return 0U;
-	}
-	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
-	{
-		(void)FactoryAging_Finish();
-		return 0U;
+		s_u32FactoryAgingElapsed10ms = 0U;
 	}
 
 	return FactoryAging_EnterRunningFromHost(now_tick);

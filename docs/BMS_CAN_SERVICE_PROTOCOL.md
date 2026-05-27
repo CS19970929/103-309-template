@@ -55,7 +55,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 | `0x04 WRITE_PREP` | `addr_hi addr_lo value_hi` | `addr_hi addr_lo` | 写单个寄存器第一帧，暂存地址和高字节 |
 | `0x05 WRITE_COMMIT` | `addr_hi addr_lo value_lo` | `00 00` | 写单个寄存器第二帧，校验地址一致后提交 |
 | `0x06 READ_BLOCK` | `addr_hi addr_lo count` | `count, 00` 后续 `0x86` 数据帧 | 一次读取 `1..120` 个连续寄存器，供 UI 状态页和实时监控使用 |
-| `0x07 AGING_START` | `A9 51 can_addr` | `aging_state, remaining_hours` | 单独开启老化模式 |
+| `0x07 AGING_START` | `A9 51 can_addr` | `aging_state, remaining_hours` | 单独开启老化模式；若当前已完成，则清零累计时间并开启新一轮 |
 | `0x08 AGING_STOP` | `A9 50 can_addr` | `aging_state, remaining_hours` | 单独关闭老化模式，并提前结束本轮老化时间；板端持久化完成状态，剩余时间清零 |
 | `0x09 AGING_RESET_TIME` | `A9 5A can_addr` | `aging_state, remaining_hours` | 单独重置老化模式累计时间 |
 | `0x0A AGING_SET_HOURS` | `A9 hours can_addr` | `aging_state, remaining_hours` | 修改老化总时长，单位小时，范围 `1..168`；修改成功后自动重置累计老化时间 |
