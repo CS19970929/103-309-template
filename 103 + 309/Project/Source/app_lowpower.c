@@ -30,8 +30,7 @@ static uint32_t LP_BuildBlockReason(void)
     }
 
     if ((Sci_IsAnyPortBusy() != 0U) ||
-        (Can_IsBusy() != 0U) ||
-        (Can_IsBusActive() != 0U))
+        (Can_IsBusy() != 0U))
     {
         reason |= LP_BLOCK_COMM;
     }

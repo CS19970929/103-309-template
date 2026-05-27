@@ -63,11 +63,14 @@
 ## 4. 低功耗关系
 
 - `Can_PrepareSleep()` 会取消当前发送、清空发送队列、清空 App 命令队列、停止 block stream，并关闭 CAN 收发器电源。
-- `Can_RtcWakeService()` 会短时打开 CAN 电源并发送 1000ms 探测帧，过程中持续喂 IWDG。
-- `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置 RTC 唤醒 CAN 广播周期，默认 `1s`，保留当前客户可见行为。
+- `Can_RtcWakeService()` 会短时打开 CAN 电源；active 总线发送到期的 1000ms/5000ms 业务帧，idle 总线只发送轻量探测帧，过程中持续喂 IWDG。
+- `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置 active 总线 RTC 唤醒 CAN 广播周期，默认 `1s`，保留客户可见周期广播。
+- `PROJECT_CFG_CAN_RTC_IDLE_PERIOD_SECONDS` 配置 idle 总线 RTC 探测周期，默认 `10s`。
 - `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 配置 CAN active 保持时间，默认 `10s`。最后一次 TX ACK 或 RX 帧后保持 active，超时后允许低功耗判断继续，不再永久阻塞 STOP。
+- `CAN_NART = ENABLE`，无 ACK 时不做硬件自动重发，避免无对端时持续重发导致功耗升高。
+- `GPIO_CMNT_EN` 在发送前上电，等待 `PROJECT_CFG_CAN_POWER_STABLE_TICKS` 个 10ms tick；无 active 总线且 TX/read-block 空闲后断电。
 
-当前策略：必须保留 CAN RTC 周期广播，默认周期为 `1s`；CAN active 保持时间可配置，默认 `10s`。
+当前策略：有 CAN 对端时保持完整周期广播；无对端时切换为 10s 轻量探测，探测 ACK 或 RX 报文会恢复完整广播。
 
 ## 5. 兼容风险
 

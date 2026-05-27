@@ -6,6 +6,25 @@
 最后更新时间：2026-05-27
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-05-27 App_Can 低功耗优化
+
+### 本次源码修改
+
+- `Can_HDX.c`：关闭 bxCAN 自动重发，`CAN_NART = ENABLE`，避免无 ACK 时持续重发。
+- `Can_HDX.c`：新增 CAN 收发器按需上电/断电，发送前等待 `PROJECT_CFG_CAN_POWER_STABLE_TICKS`，空闲后关闭 `GPIO_CMNT_EN`。
+- `Can_HDX.c`：新增 no-ACK 退避；连续失败或超时达到阈值后停止完整业务广播，只保留轻量探测。
+- `CanFeidaoFrames.h`：RTC/idle probe 探测帧缩减为单帧 `CAN_FEIDAO_MSG_VOLTAGE_CURRENT_1000MS`。
+- `app_lowpower.c`：低功耗框架不再因 CAN bus active 永久阻塞 RTC STOP，只在 CAN busy 时阻塞。
+
+### 本次文档更新
+
+- `docs/CAN_APP_LOW_POWER_OPTIMIZATION_2026-05-27.md`
+
+### 兼容性说明
+
+- 未修改 CAN ID、payload、App 命令、Modbus 桥接、IAP 入口和老化时间广播含义。
+- active 总线仍保持 1000 ms / 5000 ms 完整周期广播；idle 总线默认 10 s 轻量探测。
+
 ## 2026-05-27 CAN 低功耗配置与 idle sleep 预留
 
 ### 本次源码修改
