@@ -58,7 +58,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 | `0x05 WRITE_COMMIT` | `addr_hi addr_lo value_lo` | `00 00` | 写单个寄存器第二帧，校验地址一致后提交 |
 | `0x06 READ_BLOCK` | `addr_hi addr_lo count` | `count, 00` 后续 `0x86` 数据帧 | 一次读取 `1..120` 个连续寄存器，供 UI 状态页和实时监控使用 |
 | `0x07 AGING_START` | `A9 51 can_addr` | `aging_state, remaining_hours` | 单独开启老化模式 |
-| `0x08 AGING_STOP` | `A9 50 can_addr` | `aging_state, remaining_hours` | 单独关闭老化模式，并持久化停止状态 |
+| `0x08 AGING_STOP` | `A9 50 can_addr` | `aging_state, remaining_hours` | 单独关闭老化模式，并提前结束本轮老化时间；板端持久化完成状态，剩余时间清零 |
 | `0x09 AGING_RESET_TIME` | `A9 5A can_addr` | `aging_state, remaining_hours` | 单独重置老化模式累计时间 |
 | `0x0A AGING_SET_HOURS` | `A9 hours can_addr` | `aging_state, remaining_hours` | 修改老化总时长，单位小时，范围 `1..168`；修改成功后自动重置累计老化时间 |
 
@@ -66,7 +66,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 
 - 写 SOC 必须在原 `BMS_CommTool_Upgrade_UI.exe` 里作为单独常用功能展示，位置为 `其它功能 -> 常用功能 -> 写SOC`；命令行调试入口可使用 `app-write-soc`。
 - 写 SOC 底层复用 `WRITE_PREP/WRITE_COMMIT` 写寄存器 `0x1005 RS485_CMD_ADDR_SET_ONCE_SOC`，范围固定 `0..100`，不要求用户手动输入寄存器地址。
-- 老化模式三个动作必须在原 UI 里独立实现和展示：`开启老化模式`、`关闭老化模式`、`重置老化时间`，不能合并成一个带 action 参数的通用入口。
+- 老化模式三个动作必须在原 UI 里独立实现和展示：`开启老化模式`、`关闭老化模式`、`重置老化时间`，不能合并成一个带 action 参数的通用入口；其中 `关闭老化模式` 的语义是提前结束本轮老化时间，返回状态应为完成且剩余时间为 0。
 - 原 UI 必须单独提供 `读取老化时间`，通过 comm tool 串口命令 `0x13 BMS_AGING_STATUS` 等待并解析 `0x14F80208` 周期广播，把 `ch=8` 的老化状态和剩余分钟显示给用户。
 - 原 UI 必须单独提供 `修改老化时间`，用户输入单位为小时；底层通过 comm tool 串口命令 `0x14 BMS_AGING_SET_HOURS` 转成 CAN App `0x0A AGING_SET_HOURS`，板端持久化新时长并清零已累计时间。
 - 老化启停/重置命令使用 `A9 + action + can_addr` 防误触发；修改老化时长使用 `A9 + hours + can_addr`；`can_addr` 必须等于板端 `CAN_ADRESS_STD_ID`。

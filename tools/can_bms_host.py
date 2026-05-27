@@ -457,12 +457,12 @@ def cmd_app_aging_start(args: argparse.Namespace) -> int:
 
 def cmd_app_aging_stop(args: argparse.Namespace) -> int:
     if not args.confirm_aging_stop:
-        raise SystemExit("关闭老化模式会持久化停止状态，请显式添加 --confirm-aging-stop 或 PowerShell -ConfirmAgingStop")
+        raise SystemExit("关闭老化模式会提前结束本轮老化时间并将剩余时间清零，请显式添加 --confirm-aging-stop 或 PowerShell -ConfirmAgingStop")
     return send_app_aging_command(
         args,
         CAN_APP_CMD_AGING_STOP,
         CAN_APP_AGING_ACTION_STOP,
-        "已关闭老化模式",
+        "已提前结束老化模式",
     )
 
 
@@ -611,10 +611,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_aging_start.add_argument("--confirm-aging-start", action="store_true", help="确认开启老化模式")
     p_aging_start.set_defaults(func=cmd_app_aging_start)
 
-    p_aging_stop = sub.add_parser("app-aging-stop", help="单独关闭老化模式")
+    p_aging_stop = sub.add_parser("app-aging-stop", help="提前结束本轮老化模式时间")
     add_can_args(p_aging_stop)
     add_app_args(p_aging_stop)
-    p_aging_stop.add_argument("--confirm-aging-stop", action="store_true", help="确认关闭老化模式")
+    p_aging_stop.add_argument("--confirm-aging-stop", action="store_true", help="确认提前结束老化时间")
     p_aging_stop.set_defaults(func=cmd_app_aging_stop)
 
     p_aging_reset = sub.add_parser("app-aging-reset-time", help="单独重置老化模式累计时间")
