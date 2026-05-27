@@ -65,7 +65,7 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 | `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 app_can_addr:u8 reserved:u16` | 设置 CAN 参数、IAP 节点和 BMS App CAN 地址 |
 | `0x10 BMS_READ` | PC -> comm | `addr:u16 count:u16` | 通过 CAN 读取 BMS 寄存器 |
 | `0x11 BMS_WRITE` | PC -> comm | `addr:u16 count:u16 words[count]` | 通过 CAN 写 BMS 寄存器 |
-| `0x12 BMS_AGING_CTRL` | PC -> comm | `action:u8` | 通过 CAN 单独控制 BMS 老化模式，`0x51` 开启，`0x50` 关闭，`0x5A` 重置时间 |
+| `0x12 BMS_AGING_CTRL` | PC -> comm | `action:u8` | 通过 CAN 单独控制 BMS 老化模式，`0x51` 开启，`0x50` 关闭并提前结束本轮老化时间，`0x5A` 重置时间 |
 | `0x13 BMS_AGING_STATUS` | PC -> comm | 空 | 等待并解析 BMS `0x14F80208` 广播，返回 `state:u8 remaining_minutes:u16_le`，用于 UI 显示老化剩余时间 |
 | `0x14 BMS_AGING_SET_HOURS` | PC -> comm | `hours:u16_le` | 修改 BMS 老化总时长，单位小时，范围 `1..168`；成功后返回 `state:u8 remaining_hours:u8 applied_hours:u16_le`，板端会同步重置累计老化时间 |
 | `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 或 comm tool App 到 comm tool 缓存 |

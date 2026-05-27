@@ -56,7 +56,7 @@
 | `WRITE_COMMIT` | `0x05` | 与 prep 地址匹配后通过 `Sci_HostWriteWords()` 写 1 个 word |
 | `READ_BLOCK` | `0x06` | 读取最多 120 words，并用 `0x86` 数据帧分包返回 |
 | `AGING_START` | `0x07` | guard 通过后调用 `FactoryAging_StartByHost()` |
-| `AGING_STOP` | `0x08` | guard 通过后调用 `FactoryAging_StopByHost()` |
+| `AGING_STOP` | `0x08` | guard 通过后调用 `FactoryAging_StopByHost()`，提前结束本轮老化时间并清零剩余时间 |
 | `AGING_RESET_TIME` | `0x09` | guard 通过后调用 `FactoryAging_ResetTimeByHost()` |
 | `AGING_SET_HOURS` | `0x0A` | guard 通过并检查小时范围后写老化时长 |
 

@@ -711,7 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_write_soc.add_argument("--soc", type=int, required=True)
     p_write_soc.set_defaults(func=cmd_bms_write_soc)
 
-    p_aging = sub.add_parser("bms-aging", help="常用功能：开启/关闭/重置 BMS 老化模式")
+    p_aging = sub.add_parser("bms-aging", help="常用功能：开启/提前结束/重置 BMS 老化模式")
     add_serial_args(p_aging)
     p_aging.add_argument("action", choices=("start", "stop", "reset-time"))
     p_aging.set_defaults(func=cmd_bms_aging)

@@ -2196,7 +2196,10 @@ class UpgradeUi(tk.Tk):
         self._run_worker("修改老化时间", self._worker_aging_set_hours)
 
     def _aging_control(self, name: str, action: int) -> None:
-        if not messagebox.askyesno("确认老化模式操作", f"确认{name}？"):
+        prompt = f"确认{name}？"
+        if action == APP_AGING_ACTION_STOP:
+            prompt = "关闭老化模式会提前结束本轮老化时间，剩余时间将变为 0。\n\n确认继续？"
+        if not messagebox.askyesno("确认老化模式操作", prompt):
             return
         self.active_aging_action = action
         self.active_aging_name = name
