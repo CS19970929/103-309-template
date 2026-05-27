@@ -3,6 +3,8 @@
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS
 #define LEDBAR_MCU_WK_ON_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS
 #define LEDBAR_MCU_WK_OFF_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS
+#define LEDBAR_KEY_ON_FILTER_10MS 3u
+#define LEDBAR_KEY_OFF_FILTER_10MS 3u
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
 
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
@@ -18,8 +20,6 @@
 #define LEDBAR_DIGIT_BIT_E (1u << 4)
 #define LEDBAR_DIGIT_BIT_F (1u << 5)
 #define LEDBAR_DIGIT_BIT_G (1u << 6)
-
-static bool key_release_wakeup = false;
 
 typedef enum
 {
@@ -74,6 +74,10 @@ typedef struct
     uint32_t key_press_start_10ms;
     uint8_t key_last_pressed;
     uint8_t key_long_handled;
+    uint8_t key_filter_initialized;
+    uint8_t key_active;
+    uint8_t key_on_10ms;
+    uint8_t key_off_10ms;
     uint8_t mcu_wk_filter_initialized;
     uint8_t mcu_wk_active;
     uint8_t mcu_wk_on_10ms;
@@ -188,9 +192,9 @@ static uint8_t LedBar_IsDischargeMosOpen(void)
     return (uint8_t)(SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET != 0u);
 }
 
-static uint8_t LedBar_IsSwitchPressed(void)
+static uint8_t LedBar_ReadSwitchRaw(void)
 {
-    return (uint8_t)(MCUI_ENI_DI1 == 0u);
+    return (uint8_t)(GPIO_ReadInputDataBit(GPIO_SW, PIN_SW) == Bit_RESET);
 }
 
 static uint8_t LedBar_GetPinIndex(uint16_t pin)
@@ -642,7 +646,7 @@ static uint8_t LedBar_IsDisplayRequested(void)
 #elif !LEDBAR_SLEEP_ENABLE
     return 1u;
 #else
-    if ((s_ledbar.soc_display_10ms != 0u) || (s_ledbar.key_last_pressed != 0u))
+    if (s_ledbar.soc_display_10ms != 0u)
     {
         return 1u;
     }
@@ -652,22 +656,45 @@ static uint8_t LedBar_IsDisplayRequested(void)
 
 static void LedBar_ServiceSwitch(void)
 {
-    uint8_t pressed = LedBar_IsSwitchPressed();
+    uint8_t raw_pressed = LedBar_ReadSwitchRaw();
+    uint8_t was_pressed;
     uint32_t now_10ms = SysTime_Get10msTickCount();
 
-    if ((pressed != 0u) && (s_ledbar.key_last_pressed == 0u))
+    if (s_ledbar.key_filter_initialized == 0u)
+    {
+        s_ledbar.key_filter_initialized = 1u;
+        LedBar_PrimeBinaryFilter(raw_pressed,
+                                 &s_ledbar.key_active,
+                                 &s_ledbar.key_on_10ms,
+                                 &s_ledbar.key_off_10ms,
+                                 LEDBAR_KEY_ON_FILTER_10MS,
+                                 LEDBAR_KEY_OFF_FILTER_10MS);
+        s_ledbar.key_last_pressed = s_ledbar.key_active;
+        return;
+    }
+
+    if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
+    {
+        return;
+    }
+
+    was_pressed = s_ledbar.key_active;
+    LedBar_UpdateBinaryFilter(raw_pressed,
+                              &s_ledbar.key_active,
+                              &s_ledbar.key_on_10ms,
+                              &s_ledbar.key_off_10ms,
+                              LEDBAR_KEY_ON_FILTER_10MS,
+                              LEDBAR_KEY_OFF_FILTER_10MS);
+
+    if ((was_pressed == 0u) && (s_ledbar.key_active != 0u))
     {
         LedBar_RequestSocDisplayWindow();
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_hold_10ms = 0u;
+        s_ledbar.key_long_handled = 0u;
     }
-    s_ledbar.key_last_pressed = pressed;
 
-    if (pressed == 0u )
-    {
-        key_release_wakeup = true;
-    }
-    if (pressed != 0u && key_release_wakeup)
+    if (s_ledbar.key_active != 0u)
     {
         s_ledbar.key_hold_10ms = now_10ms - s_ledbar.key_press_start_10ms;
 
@@ -687,15 +714,13 @@ static void LedBar_ServiceSwitch(void)
         s_ledbar.key_hold_10ms = 0u;
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_long_handled = 0u;
-        //todo ???
-        if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
-        {
-            return;
-        }
-        if (s_ledbar.soc_display_10ms != 0u)
-        {
-            s_ledbar.soc_display_10ms--;
-        }
+    }
+
+    s_ledbar.key_last_pressed = s_ledbar.key_active;
+
+    if (s_ledbar.soc_display_10ms != 0u)
+    {
+        s_ledbar.soc_display_10ms--;
     }
 }
 
@@ -738,6 +763,10 @@ void LedBar_Init(void)
     s_ledbar.key_press_start_10ms = 0u;
     s_ledbar.key_last_pressed = 0u;
     s_ledbar.key_long_handled = 0u;
+    s_ledbar.key_filter_initialized = 0u;
+    s_ledbar.key_active = 0u;
+    s_ledbar.key_on_10ms = 0u;
+    s_ledbar.key_off_10ms = 0u;
     s_ledbar.mcu_wk_filter_initialized = 0u;
     s_ledbar.mcu_wk_active = 0u;
     s_ledbar.mcu_wk_on_10ms = 0u;
@@ -896,6 +925,13 @@ void LedBar_ShowSleepSocPreview(void)
     s_ledbar.number = LedBar_LoadSleepSoc();
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_RefreshOutput();
+}
+
+void LedBar_RequestSocDisplay(void)
+{
+    LedBar_EnsureInit();
+
+    LedBar_RequestSocDisplayWindow();
 }
 
 void LedBar_PrepareForStop(void)

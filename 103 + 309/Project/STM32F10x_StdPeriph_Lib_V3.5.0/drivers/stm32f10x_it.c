@@ -227,6 +227,7 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
+    set_irq_wksource((uint8_t)soc_key);
     EXTI_ClearITPendingBit(EXTI_Line9);
   }
 }

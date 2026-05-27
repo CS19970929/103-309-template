@@ -204,6 +204,15 @@ enum irqWakeup RtcSleep_PortGuessWakeupSource(void)
     return NO_IRQ;
 }
 
+void RtcSleep_PortOnWakeupSource(enum irqWakeup source)
+{
+    if (source == soc_key)
+    {
+        LedBar_RequestSocDisplay();
+        APP_LedBar();
+    }
+}
+
 void cpu_frequency_conf(void)
 {
     SystemInit();

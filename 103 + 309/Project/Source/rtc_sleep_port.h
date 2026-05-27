@@ -43,6 +43,7 @@ void RtcSleep_PortRunCanRtcWakeService(uint32_t rtc_elapsed_seconds);
 uint8_t RtcSleep_PortApplySocRtcRest(uint32_t rest_seconds);
 void RtcSleep_PortAddRuntimeSeconds(uint32_t seconds);
 enum irqWakeup RtcSleep_PortGuessWakeupSource(void);
+void RtcSleep_PortOnWakeupSource(enum irqWakeup source);
 
 void cpu_frequency_conf(void);
 

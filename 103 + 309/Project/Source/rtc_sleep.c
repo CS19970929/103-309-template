@@ -342,6 +342,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     {
         g_irq_t = RtcSleep_PortGuessWakeupSource();
     }
+    RtcSleep_PortOnWakeupSource(g_irq_t);
     report_wkup_sig();
 
     LP_RecordLastSleepSeconds(s_u32RtcSleepElapsedSeconds);

@@ -49,3 +49,38 @@
 8. 唤醒后读取 Modbus `0xD000`、`0xD300`，确认 App 运行状态和 SOC 测试入口隔离状态。
 9. 唤醒后确认 ADC 采样、AFE 电流/电压、CAN 周期帧、LedBar 显示恢复。
 10. CAN 无设备场景确认 `PB4 / CMNT_EN` 不会长期打开；CAN 有设备场景确认 RTC 唤醒短时广播可被接收。
+
+## RTC GPIO_SW 唤醒数码管显示
+
+状态：部分验证
+
+参考源码：
+
+- `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x_it.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+- `103 + 309/Project/Source/LedBar.c`
+
+验证步骤：
+
+1. 正常运行后等待进入 RTC STOP 休眠。
+2. 短按 `GPIO_SW / PA9` 唤醒，确认数码管立即显示当前 SOC。
+3. 快速短按并马上松开，确认仍然显示 SOC。
+4. 等待显示窗口结束，确认数码管熄灭且系统允许再次进入 RTC STOP。
+5. 用 RTC Alarm 周期唤醒验证不会误触发数码管显示。
+
+## 充电时数码管闪烁优化
+
+状态：部分验证
+
+参考源码：
+
+- `103 + 309/Project/Source/LedBar.c`
+
+验证步骤：
+
+1. 正常模式短按按键显示 SOC，确认显示窗口结束后熄灭。
+2. 接入 5V 充电，不按键时确认数码管不会常亮。
+3. 充电时短按 `GPIO_SW / PA9`，确认显示 SOC，窗口结束后熄灭。
+4. 快速短按、长按、松手分别测试，确认不会因为按键输入保持低电平而一直显示。
+5. 充电时观察是否仍有闪烁；若仍闪烁，抓 `GPIO_SW / PA9` 和 LedBar 扫描 GPIO 波形确认硬件干扰或扫描问题。

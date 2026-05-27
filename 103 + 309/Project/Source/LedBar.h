@@ -42,6 +42,7 @@ void LedBar_SetSingleSegmentIndex(uint8_t segment_id);
 void LedBar_SaveSleepSoc(void);
 uint8_t LedBar_LoadSleepSoc(void);
 void LedBar_ShowSleepSocPreview(void);
+void LedBar_RequestSocDisplay(void);
 void LedBar_PrepareForStop(void);
 uint8_t LedBar_IsActiveForLowPower(void);
 void APP_LedBar(void);
