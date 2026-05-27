@@ -15,6 +15,7 @@
 - FIFO0 接收中断 `USB_LP_CAN1_RX0_IRQn`。
 - 发送侧使用 `FEIDAO_CAN_TX_QUEUE_SIZE = 32` 的软件队列。
 - CAN 收发和低功耗状态会更新 debug watch 结构。
+- `Can_HDX.c` 内部状态按职责收口为 `s_tx`、`s_runtime`、`s_app` 三类文件级 `static` runtime；`g_stCanLowPowerStatus` 只作为诊断快照，由运行态刷新，不作为控制真相源。
 
 ## 2. 周期广播
 

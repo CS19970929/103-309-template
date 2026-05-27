@@ -286,7 +286,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 ## 13. 剩余建议执行裁决
 
-> 状态：当前报告中的“低风险可见性收口、只写不读变量删除、明显重复临时/镜像变量删除”已经执行完毕。剩余建议是结构体级重构或协议/Flash/SOC/AFE/低功耗边界裁决，不应继续混入本次变量清理提交。
+> 状态：当前报告中的“低风险可见性收口、只写不读变量删除、明显重复临时/镜像变量删除”已经执行完毕。CAN runtime 已作为单独小专项完成内部状态收口；剩余建议是协议/Flash/SOC/AFE/低功耗边界更强的结构化重构，不应继续混入本次 CAN 清理提交。
 
 ### 13.1 已完成的原建议
 
@@ -308,6 +308,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `AFE_Parameters_RS485_Struction` 可见性收口 | 已执行 |
 | `g_irq_t`、`g_stLowPowerRtcStatus` 可见性收口 | 已执行，保留 `volatile` |
 | AFE/BQ 短路保护表同名全局收口 | 已执行 |
+| `CAN_Runtime_t` / CAN 文件级状态收口 | 已执行，`Can_HDX.c` 内部合并为 `s_tx`、`s_runtime`、`s_app`，同时删除 header 遗留未使用宏和旧 union |
 
 ### 13.2 不继续执行的结构性建议
 
@@ -316,7 +317,6 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `ADC_Runtime_t` | 暂不执行 | 会继续触碰 ADC 原始值、Type-C 电流、SOC 输入和 legacy mirror，需要单独做采样/SOC 回归 |
 | `AFE_MonitorRuntime_t` | 暂不执行 | 会改变双 AFE channel 错误计数和唤醒计数组织方式 |
 | `SCI_PORT_RUNTIME` 内嵌状态 | 暂不执行 | 属于通信端口运行态重构，需要覆盖 RS485 多端口、方向控制和收发缓冲验证 |
-| `CAN_Runtime_t` | 暂不执行 | CAN 队列、App 命令、低功耗补发和 IAP 相关，需要单独设计和 CAN 回归 |
 | `RTC_WakeContext_t` | 暂不执行 | RTC/EXTI/STOP 唤醒唯一真相源重构，属于低功耗关键链路 |
 | `FaultRecordRuntime_t` | 暂不执行 | 故障记录新旧窗口涉及协议兼容，需要确认上位机当前读取窗口 |
 | `LogRecordRuntime_t` | 暂不执行 | 日志记录与 Flash 持久化相关，需确认存储布局和上位机读取行为 |

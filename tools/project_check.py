@@ -1070,8 +1070,8 @@ def check_can_rtc_service_runtime(reporter):
     if (
         "FEIDAO_CAN_TX_QUEUE_SIZE" in can_c
         and "feidao_can_service_tx" in can_c
-        and "s_u8RtcServiceActive" in can_c
-        and "s_u8LastRtcWakeTimeout" in can_c
+        and "s_runtime.rtc_service_active" in can_c
+        and "s_runtime.last_rtc_wake_timeout" in can_c
         and "CAN_ABOM = ENABLE" in can_c
         and "Can_RtcWakeService" in can_c
         and "u8RtcServiceActive" in can_h
@@ -1681,7 +1681,7 @@ def check_comm_tool_can_iap_contract(reporter):
         and "FEIDAO_CAN_APP_CMD_READ_BLOCK" in bms_can_c
         and "feidao_can_service_tx" in bms_can_c
         and "AppUpgrade_RequestIap() == 0U" in bms_can_c
-        and "s_u8EnterIapDelayTicks" in bms_can_c
+        and "s_app.enter_iap_delay_ticks" in bms_can_c
     ):
         reporter.ok("BMS App exposes queued CAN service for status, block read, and entering IAP")
     else:
