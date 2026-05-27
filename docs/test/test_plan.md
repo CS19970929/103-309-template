@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`Runtime.c`, `Sci_Upper.c`, `Can_HDX.c`, `Flash.c`, `SOC.c`, `SocEnhance.c`, `ADC.c`, `SH367309_*`, `rtc_sleep.c`, `LedBar.c`
-最后更新时间：2026-05-26
+最后更新时间：2026-05-27
 未确认事项：硬件平台、COM 口、CAN 适配器、ST-Link、实际 Flash 容量和客户协议版本。
 
 ## 1. 编译测试
@@ -70,6 +70,9 @@
 
 - 空闲进入 HICCUP STOP。
 - 通信/Flash/fault/LED 阻塞 sleep。
+- 启动/唤醒 SOC 显示窗口结束后，`LP_BLOCK_LED_ACTIVE` 必须释放，不能被 `startup_display_armed` 永久阻塞。
+- Release 构建必须清除 `DBGMCU_CR_DBG_STOP`；功耗实测时不能用 Debug STOP 保持位。
+- ST-Link 调试 STOP 只能作为逻辑定位手段，带 DBG_STOP 的功耗数据无效。
 - RTC 周期唤醒恢复。
 - IWDG 长稳。
 - 过放 deep sleep 和接充恢复。

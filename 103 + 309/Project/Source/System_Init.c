@@ -17,14 +17,18 @@ static UINT16 fac_ms = 0;
 static volatile UINT8 s_u8Sys200msPendingPeriods = 0U;
 static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 
+#define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP | \
+							  DBGMCU_CR_DBG_STOP | \
+							  DBGMCU_CR_DBG_STANDBY | \
+							  DBGMCU_CR_DBG_IWDG_STOP | \
+							  DBGMCU_CR_DBG_WWDG_STOP)
+
 void EnableLowPowerDebug(void)
 {
 #ifdef _DEBUG_
-	DBGMCU->CR |= DBGMCU_CR_DBG_SLEEP;
-	DBGMCU->CR |= DBGMCU_CR_DBG_STOP;
-	DBGMCU->CR |= DBGMCU_CR_DBG_STANDBY;
-	DBGMCU->CR |= DBGMCU_CR_DBG_IWDG_STOP;
-	DBGMCU->CR |= DBGMCU_CR_DBG_WWDG_STOP;
+	DBGMCU->CR |= LOW_POWER_DEBUG_MASK;
+#else
+	DBGMCU->CR &= (UINT32)(~LOW_POWER_DEBUG_MASK);
 #endif
 }
 

@@ -925,7 +925,6 @@ uint8_t LedBar_IsActiveForLowPower(void)
     }
 
     if ((s_ledbar.soc_display_10ms != 0u) ||
-        (s_ledbar.startup_display_armed != 0u) ||
         (s_ledbar.frame_mask != 0u) ||
         (s_ledbar.scan_timer_enabled != 0u))
     {

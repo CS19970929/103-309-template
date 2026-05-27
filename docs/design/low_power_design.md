@@ -6,6 +6,13 @@
 最后更新时间：2026-05-27
 未确认事项：IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep、`PROJECT_CFG_IDLE_SLEEP_ENABLE` 打开后是否通过硬件实测。
 
+## 2026-05-27 RTC/STOP 修复补充
+
+- `LedBar_IsActiveForLowPower()` 只允许真实显示活动阻塞低功耗：`soc_display_10ms`、`frame_mask`、`scan_timer_enabled`。
+- `startup_display_armed` 只表示启动显示窗口已经触发，不能作为持续 active 条件，否则窗口结束后会永久 `LP_BLOCK_LED_ACTIVE`，导致 `rtc_sleep` 无法进入 STOP。
+- Release 构建启动时必须清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`，避免调试器残留状态抬高功耗。
+- Debug 或临时 ST-Link 长期观察可以打开 DBG_STOP，但该状态只用于定位，不能用于功耗实测。
+
 ## 1. 当前低功耗入口
 
 运行态入口：

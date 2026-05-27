@@ -6,6 +6,26 @@
 最后更新时间：2026-05-27
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-05-27 RTC/STOP 低功耗进不去修复
+
+### 本次源码修改
+
+- `LedBar.c`：修复 `LedBar_IsActiveForLowPower()`，`startup_display_armed` 只作为启动显示已触发标志，不再作为低功耗阻塞条件；真实显示窗口、帧扫描和扫描定时器仍会阻塞 STOP，保留用户显示体验。
+- `System_Init.c` / `System_Init.h`：`EnableLowPowerDebug()` 在 Debug 构建打开低功耗调试保持，在 Release 构建显式清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`。
+- `AppInit.c`：启动阶段统一调用 `EnableLowPowerDebug()`，避免 Release 继承调试器残留的 DBGMCU 低功耗调试位。
+
+### 本次验证
+
+- Keil `FD_Release` rebuild：`0 Error(s), 0 Warning(s)`。
+- 安全脚本烧录 App 到 `0x08004800`，未覆盖 IAP。
+- ST-Link 读取确认 Release 下 `DBGMCU_CR = 0x00000000`。
+- Release 继续运行后普通 ST-Link attach 失败，符合目标进入 STOP 且 DBG_STOP 关闭后的预期。
+
+### 兼容性说明
+
+- 未修改 Modbus/CAN 协议、CAN ID、payload、IAP 入口、AFE 保护配置和参数存储格式。
+- 未关闭启动/唤醒 SOC 显示窗口，只修复窗口结束后的低功耗释放。
+
 ## 2026-05-27 App_Can 低功耗优化
 
 ### 本次源码修改

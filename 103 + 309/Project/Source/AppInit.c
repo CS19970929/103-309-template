@@ -43,9 +43,7 @@ static void AppInit_InitDevice(void)
 #endif
 	log_w("init over");
 
-#ifdef _DEBUG_
-	DBGMCU_Config(DBGMCU_STOP, ENABLE);
-#endif
+	EnableLowPowerDebug();
 
 #ifdef wdog_enable
 	Init_IWDG();

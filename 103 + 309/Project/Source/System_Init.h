@@ -86,6 +86,7 @@ void __delay_us(UINT32 nus);
 void InitTimer(void);
 void InitNVIC(void);
 void Init_IWDG(void);
+void EnableLowPowerDebug(void);
 void App_CBC(void);
 void SysTime_LatchTaskFlags(void);
 UINT8 SysTime_HasPendingTaskFlags(void);
