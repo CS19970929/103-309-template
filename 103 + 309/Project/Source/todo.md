@@ -235,3 +235,252 @@ can通信是大端模式还是小端模式，BAT_MASTER和BAT_SLAVE对can通信�
 充电使用5V，而不是
 
 问题1：休眠后，单击soc开关就退出休眠了，需要实现的是休眠后，单击soc开关，看soc但不退出休眠，长按才退出休眠，CHG_IN充电可以直接退出休眠。问题2：长按soc开关休眠的时间太长了，不像3s，是不是有什么影响导致变慢
+
+
+
+
+
+
+
+
+
+
+
+
+
+请使用 subagent 工作流，围绕当前 STM32 BMS 项目调研 RTC 低功耗相关资料、行业/官方推荐架构，并对比当前项目用法，最后给出优化方案。
+
+背景：
+我是 BMS/嵌入式软件工程师，项目常用 STM32F0/F1，优先使用标准外设库或寄存器，不使用 HAL。项目涉及 AFE 采样、SOC、保护、均衡、CAN、Modbus、RS485、Flash 参数/日志存储、LED/Charlieplexing 显示、IWDG、RTC、低功耗和任务调度。
+
+当前目标：
+为当前项目设计并逐步实现一个可复用的 RTC 低功耗框架，适合 BMS 保护板使用，后续可移植到不同 STM32F0/F1 项目。
+
+重要要求：
+1. 第一阶段只读分析，不要修改代码。
+2. 先查资料，再看当前项目代码，再做差异对比。
+3. 所有结论必须有依据：要么引用官方资料/手册/应用笔记，要么引用当前项目的具体文件和函数。
+4. 不允许泛泛而谈。
+5. 不要一开始追求最低电流，先追求稳定睡眠、稳定唤醒、通信不乱、保护不丢、IWDG 不误复位。
+6. 不破坏现有 Modbus/CAN 协议。
+7. 不破坏现有 SOC、保护、AFE、Flash、LED 功能。
+8. 所有关键分析和修改都必须生成文档。
+
+请 Spawn 以下 subagents：
+
+1. ResearchAgent
+   任务：
+   - 查 STM32F0/F1 RTC、Stop、Standby、Sleep、IWDG、SysTick、LSE/LSI、Wakeup/Alarm 相关官方资料。
+   - 优先查 ST 官方 Reference Manual、Application Note、Datasheet。
+   - 整理和当前 BMS 项目相关的规则，不要全文总结。
+   输出：
+   - docs/research/stm32_low_power_research.md
+   - docs/research/rtc_stop_standby_rules.md
+
+2. IndustryArchitectureAgent
+   任务：
+   - 总结嵌入式低功耗固件的常见架构。
+   - 总结 BMS 保护板低功耗推荐架构。
+   - 重点分析状态机、外设休眠恢复、RTC 周期唤醒、IWDG 兼容、通信禁止休眠、Flash 写入禁止休眠。
+   输出：
+   - docs/architecture/low_power_industry_architecture.md
+
+3. CurrentProjectAgent
+   任务：
+   - 扫描当前项目中和低功耗相关的代码。
+   - 包括但不限于：RTC、PWR、RCC、SysTick、TIM、IWDG、ADC、CAN、UART、Modbus、AFE、SOC、Flash、LED。
+   - 找出当前项目是否已有低功耗逻辑、RTC 初始化、IWDG 初始化、SysTick 定时框架、任务调度框架。
+   输出：
+   - docs/current/low_power_current_usage.md
+   - docs/current/mcu_resource_related_to_low_power.md
+
+4. RtcAgent
+   任务：
+   - 分析当前项目 RTC 是否使用。
+   - 判断当前 MCU 是 F0 还是 F1，分别说明 RTC 实现方式。
+   - 如果是 STM32F1，重点检查 RTC Alarm、EXTI Line17、Backup Domain、LSE/LSI、RTC_WaitForSynchro 是否可能卡死。
+   - 如果是 STM32F0，重点检查 RTC Wakeup Timer、Alarm、EXTI、LSE/LSI。
+   输出：
+   - docs/current/rtc_usage_analysis.md
+   - docs/design/rtc_wakeup_design.md
+
+5. ClockAgent
+   任务：
+   - 分析当前项目系统时钟初始化。
+   - 判断 Stop 唤醒后是否需要恢复 HSE/PLL/SYSCLK/AHB/APB。
+   - 找出当前项目是否已有 SystemClock_Config、SystemInit 或自定义 Clock_ReConfigAfterStop。
+   输出：
+   - docs/current/clock_usage_analysis.md
+   - docs/design/clock_restore_after_stop.md
+
+6. IwdgAgent
+   任务：
+   - 分析当前项目 IWDG 使用方式。
+   - 判断 IWDG 超时时间、喂狗位置、低功耗期间是否会导致误复位。
+   - 给出 RTC 唤醒周期与 IWDG 超时时间的安全关系。
+   输出：
+   - docs/current/iwdg_usage_analysis.md
+   - docs/design/iwdg_low_power_strategy.md
+
+7. PeripheralAgent
+   任务：
+   - 分析 SysTick、TIM、ADC、UART、CAN、LED、AFE 在休眠前和唤醒后的处理。
+   - 判断哪些外设需要关闭，哪些需要保持，哪些需要重新初始化。
+   - 判断通信活跃时是否应该禁止进入 Stop。
+   输出：
+   - docs/current/peripheral_sleep_analysis.md
+   - docs/design/peripheral_sleep_resume_plan.md
+
+8. BmsLogicAgent
+   任务：
+   - 分析 BMS 业务层对低功耗的约束。
+   - 包括保护状态、MOS 状态、AFE 状态、SOC 静置校准、Flash 参数保存、日志保存、过放深度休眠。
+   - 判断哪些状态禁止休眠，哪些状态应该进入深度低功耗。
+   输出：
+   - docs/design/bms_low_power_state_machine.md
+   - docs/design/low_power_block_reason.md
+
+9. RiskAgent
+   任务：
+   - 汇总低功耗改造风险。
+   - 包括唤醒失败、时钟未恢复、通信异常、IWDG 误复位、Flash 写入中断、SOC 时间丢失、AFE 状态不同步、MOS 状态错误。
+   - 按 P0/P1/P2 排序。
+   输出：
+   - docs/risk/low_power_risk_list.md
+
+10. TestAgent
+    任务：
+    - 生成低功耗测试矩阵。
+    - 必须覆盖：RTC 唤醒、Stop 进入退出、IWDG、SysTick、CAN、Modbus、ADC、AFE、SOC、Flash、LED、过放保护、充电唤醒、通信活跃禁止休眠。
+    输出：
+    - docs/test/low_power_test_matrix.md
+    - docs/test/low_power_manual_test_steps.md
+
+11. DocsAgent
+    任务：
+    - 汇总所有 subagent 结果。
+    - 生成最终设计文档、迁移计划、变更记录。
+    输出：
+    - docs/low_power_rtc_final_report.md
+    - docs/low_power_rtc_migration_plan.md
+    - docs/low_power_rtc_change_log.md
+
+阶段划分：
+
+第一阶段：只读分析
+- 不修改任何源码。
+- 输出当前项目用法、官方资料要点、差异分析、风险清单。
+
+第二阶段：设计方案
+- 给出最小可行架构。
+- 明确新增哪些模块、修改哪些文件、不修改哪些文件。
+- 输出接口设计和状态机设计。
+
+第三阶段：最小实现
+在我确认后，再允许修改代码。
+优先新增以下模块：
+- bsp_rtc.c / bsp_rtc.h
+- bsp_power.c / bsp_power.h
+- bsp_clock.c / bsp_clock.h
+- app_lowpower.c / app_lowpower.h
+
+建议接口：
+- void LP_Init(void);
+- void LP_Task(void);
+- uint8_t LP_CanSleep(void);
+- uint32_t LP_GetBlockReason(void);
+- void LP_SetWakeupPeriod(uint32_t seconds);
+- void LP_EnterStop(uint32_t seconds);
+- void LP_BeforeSleep(void);
+- void LP_AfterWakeup(void);
+- uint32_t LP_GetLastSleepSeconds(void);
+
+低功耗状态机建议：
+- LP_STATE_RUN
+- LP_STATE_IDLE_CHECK
+- LP_STATE_PREPARE_SLEEP
+- LP_STATE_STOP_SLEEP
+- LP_STATE_WAKEUP_RESTORE
+- LP_STATE_DEEP_STANDBY
+- LP_STATE_ERROR
+
+禁止休眠原因位图建议：
+- LP_BLOCK_CHARGE
+- LP_BLOCK_DISCHARGE
+- LP_BLOCK_COMM
+- LP_BLOCK_KEY
+- LP_BLOCK_AFE_BUSY
+- LP_BLOCK_FLASH_BUSY
+- LP_BLOCK_UPGRADE
+- LP_BLOCK_FAULT
+- LP_BLOCK_LED_ACTIVE
+- LP_BLOCK_IWDG_UNSAFE
+
+优化原则：
+1. 先做 Stop + RTC 周期唤醒。
+2. 第一版不做 CAN/USART Stop 唤醒。
+3. 通信活跃时禁止休眠。
+4. Flash 擦写或参数保存未完成时禁止休眠。
+5. RTC 唤醒周期必须小于 IWDG 超时时间，除非明确进入复位式 Standby 策略。
+6. 唤醒后必须恢复系统时钟，再恢复 SysTick、TIM、ADC、UART、CAN、LED。
+7. SOC 要记录休眠时间，用于静置时间和 OCV 校准。
+8. AFE/MOS/保护状态唤醒后必须重新同步。
+9. 每一步修改后必须更新文档。
+10. 不要大规模重构无关模块。
+
+最终输出请包含：
+1. 官方资料结论摘要
+2. 当前项目低功耗相关代码位置
+3. 当前项目和推荐架构的差异
+4. P0/P1/P2 风险清单
+5. 最小优化方案
+6. 后续增强方案
+7. 测试矩阵
+8. 建议修改文件清单
+9. 不建议现在修改的内容
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+comm tool用串口升级，会卡住，升级不成功,串口升级用的协议和上位机是和bms app一样的，就是波特率改成115200了
+
+
+老化模式定义：老化模式剩余时间未到时，enter_fac_mode(true)自动打开充放电，不需要GPIO_CHG_IN 5V识别信号，有5V充电信号时，打开充电关闭放电，冲洗重新梳理需求，并实现逻辑，顺便看能否简化FactoryAging模块
+
+
+[16:37:40] 缓存校验通过，开始 CAN 升级 BMS
+[16:37:40] 升级状态: state=1 percent=0% error=0x00 written=0/63212 expect_seq=0
+[16:37:45] 一键升级 失败: 升级状态: state=3 percent=0% error=0x02 written=0/63212 expect_seq=0
