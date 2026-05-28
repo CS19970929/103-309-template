@@ -3,6 +3,9 @@
 
 #define BMS_EUAVCAN_PAYLOAD_LEN           ((UINT8)64)
 #define BMS_EUAVCAN_PERIOD_10MS           ((UINT8)25)
+#define BMS_EUAVCAN_TX_FAILS_BEFORE_BACKOFF ((UINT8)3)
+#define BMS_EUAVCAN_NO_ACK_BACKOFF_10MS   ((UINT16)100)
+#define BMS_EUAVCAN_BUSOFF_BACKOFF_10MS   ((UINT16)500)
 #define BMS_EUAVCAN_FIRST_PAYLOAD_LEN     ((UINT8)5)
 #define BMS_EUAVCAN_FRAME_PAYLOAD_MAX     ((UINT8)7)
 #define BMS_EUAVCAN_FRAME_COUNT           ((UINT8)10)
@@ -18,6 +21,8 @@ typedef struct
 	UINT8 frameIndex;
 	UINT8 transferId;
 	UINT8 txActive;
+	UINT8 txFailCount;
+	UINT16 backoff10ms;
 	UINT16 crc;
 } BMS_EUAVCAN_TX_STATE;
 
@@ -234,11 +239,10 @@ static UINT8 BmsEUavcan_TailByte(UINT8 frameIndex)
 	return tail;
 }
 
-static BOOL BmsEUavcan_SendCanFrame(const UINT8 *data, UINT8 dlc)
+static CAN_HDX_TX_RESULT BmsEUavcan_SendCanFrame(const UINT8 *data, UINT8 dlc)
 {
 	CanTxMsg msg;
 	UINT8 i;
-	UINT8 mailbox;
 
 	memset(&msg, 0, sizeof(msg));
 	msg.ExtId = (UINT32)BMS_EUAVCAN_CAN_ID;
@@ -251,8 +255,30 @@ static BOOL BmsEUavcan_SendCanFrame(const UINT8 *data, UINT8 dlc)
 		msg.Data[i] = data[i];
 	}
 
-	mailbox = CAN_Transmit(CAN1, &msg);
-	return (mailbox == CAN_TxStatus_NoMailBox) ? FALSE : TRUE;
+	return Can_HDX_Transmit(&msg);
+}
+
+static void BmsEUavcan_HandleTxFailure(CAN_HDX_TX_RESULT result)
+{
+	if (s_stBmsEUavcanTx.txFailCount < 0xFF)
+	{
+		s_stBmsEUavcanTx.txFailCount++;
+	}
+
+	if (result == CAN_HDX_TX_BUS_OFF)
+	{
+		s_stBmsEUavcanTx.txActive = 0;
+		s_stBmsEUavcanTx.backoff10ms = BMS_EUAVCAN_BUSOFF_BACKOFF_10MS;
+		s_stBmsEUavcanTx.period10ms = (UINT8)(BMS_EUAVCAN_PERIOD_10MS - 1);
+		return;
+	}
+
+	if (s_stBmsEUavcanTx.txFailCount >= BMS_EUAVCAN_TX_FAILS_BEFORE_BACKOFF)
+	{
+		s_stBmsEUavcanTx.txActive = 0;
+		s_stBmsEUavcanTx.backoff10ms = BMS_EUAVCAN_NO_ACK_BACKOFF_10MS;
+		s_stBmsEUavcanTx.period10ms = (UINT8)(BMS_EUAVCAN_PERIOD_10MS - 1);
+	}
 }
 
 static void BmsEUavcan_SendCurrentFrame(void)
@@ -261,6 +287,7 @@ static void BmsEUavcan_SendCurrentFrame(void)
 	UINT8 i;
 	UINT8 payloadOffset;
 	UINT8 payloadLen;
+	CAN_HDX_TX_RESULT txResult;
 
 	memset(frame, 0, sizeof(frame));
 
@@ -293,8 +320,10 @@ static void BmsEUavcan_SendCurrentFrame(void)
 		payloadLen = (UINT8)(payloadLen + 1);
 	}
 
-	if (BmsEUavcan_SendCanFrame(frame, payloadLen))
+	txResult = BmsEUavcan_SendCanFrame(frame, payloadLen);
+	if (txResult == CAN_HDX_TX_OK)
 	{
+		s_stBmsEUavcanTx.txFailCount = 0;
 		s_stBmsEUavcanTx.frameIndex++;
 		if (s_stBmsEUavcanTx.frameIndex >= BMS_EUAVCAN_FRAME_COUNT)
 		{
@@ -302,6 +331,10 @@ static void BmsEUavcan_SendCurrentFrame(void)
 			s_stBmsEUavcanTx.txActive = 0;
 			s_stBmsEUavcanTx.transferId = (UINT8)((s_stBmsEUavcanTx.transferId + 1) & 0x1FU);
 		}
+	}
+	else if ((txResult == CAN_HDX_TX_FAILED) || (txResult == CAN_HDX_TX_BUS_OFF))
+	{
+		BmsEUavcan_HandleTxFailure(txResult);
 	}
 }
 
@@ -315,6 +348,13 @@ void App_BmsEUavcan(void)
 {
 	if (0 == g_st_SysTimeFlag.bits.b1Sys10msFlag1)
 	{
+		return;
+	}
+
+	Can_HDX_Service10ms();
+	if (s_stBmsEUavcanTx.backoff10ms > 0)
+	{
+		s_stBmsEUavcanTx.backoff10ms--;
 		return;
 	}
 

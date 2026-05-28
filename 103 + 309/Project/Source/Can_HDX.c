@@ -8,16 +8,115 @@ CanRxMsg RxMessage;
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
 
+#define CAN_HDX_TX_POLL_LIMIT      ((UINT16)0x0FFF)
+#define CAN_HDX_LEGACY_RETRY_COUNT ((UINT8)2)
+
+static UINT8 s_u8CanHdxConsecutiveFail = 0;
+
+static void Can_HDX_RecordTxOk(void)
+{
+	Can_Status_Flag.bits.b1Can_Send = 1;
+	Can_Status_Flag.bits.b1Can_Fault = 0;
+	s_u8CanHdxConsecutiveFail = 0;
+}
+
+static void Can_HDX_RecordTxFailed(void)
+{
+	Can_Status_Flag.bits.b1Can_Fault = 1;
+	if (s_u8CanHdxConsecutiveFail < 0xFF)
+	{
+		s_u8CanHdxConsecutiveFail++;
+	}
+}
+
+static CAN_HDX_TX_RESULT Can_HDX_PollTxMailbox(UINT8 mailbox)
+{
+	UINT16 i;
+	UINT8 txStatus;
+
+	for (i = 0; i < CAN_HDX_TX_POLL_LIMIT; i++)
+	{
+		txStatus = CAN_TransmitStatus(CAN1, mailbox);
+		if (txStatus == CAN_TxStatus_Ok)
+		{
+			return CAN_HDX_TX_OK;
+		}
+		if (txStatus == CAN_TxStatus_Failed)
+		{
+			return CAN_HDX_TX_FAILED;
+		}
+	}
+
+	return CAN_HDX_TX_BUSY;
+}
+
+CAN_HDX_TX_RESULT Can_HDX_Transmit(CanTxMsg *Msg)
+{
+	UINT8 mailbox;
+	CAN_HDX_TX_RESULT result;
+
+	if (Can_Status_Flag.bits.b1Can_BusOFF || (CAN1->ESR & CAN_ESR_BOFF))
+	{
+		Can_HDX_RecordTxFailed();
+		return CAN_HDX_TX_BUS_OFF;
+	}
+
+	mailbox = CAN_Transmit(CAN1, Msg);
+	if (mailbox == CAN_TxStatus_NoMailBox)
+	{
+		return CAN_HDX_TX_BUSY;
+	}
+
+	result = Can_HDX_PollTxMailbox(mailbox);
+	if (result == CAN_HDX_TX_BUSY)
+	{
+		CAN_CancelTransmit(CAN1, mailbox);
+		return CAN_HDX_TX_BUSY;
+	}
+	if (result == CAN_HDX_TX_OK)
+	{
+		Can_HDX_RecordTxOk();
+	}
+	else
+	{
+		Can_HDX_RecordTxFailed();
+	}
+
+	return result;
+}
+
+CAN_HDX_TX_RESULT Can_HDX_TransmitRetry(CanTxMsg *Msg, UINT8 retryCount)
+{
+	UINT16 attempts;
+	CAN_HDX_TX_RESULT result;
+
+	attempts = (UINT16)retryCount + 1U;
+	result = CAN_HDX_TX_FAILED;
+	while (attempts > 0U)
+	{
+		attempts--;
+		result = Can_HDX_Transmit(Msg);
+		if (result == CAN_HDX_TX_OK)
+		{
+			return result;
+		}
+		if ((result == CAN_HDX_TX_BUSY) || (result == CAN_HDX_TX_BUS_OFF))
+		{
+			return result;
+		}
+	}
+
+	return result;
+}
+
 void CAN_TX_Test(void)
 {
-	UINT8 TXCounter = 0, TXStatus = 0;
-	UINT8 u8MailBoxUsed;
 	TxMessage.StdId = CANID_TX_Test; // 标准标识符
-	TxMessage.ExtId = 0;			 // 扩展标识符
-	TxMessage.IDE = CAN_ID_STD;		 // 使用标准标识符
-	TxMessage.RTR = CAN_RTR_DATA;	 // 为数据帧
-	TxMessage.DLC = 8;				 // 消息的数据长度为8个字节
-	TxMessage.Data[0] = 1;			 // 数据
+	TxMessage.ExtId = 0;             // 扩展标识符
+	TxMessage.IDE = CAN_ID_STD;      // 使用标准标识符
+	TxMessage.RTR = CAN_RTR_DATA;    // 为数据帧
+	TxMessage.DLC = 8;               // 消息的数据长度为8个字节
+	TxMessage.Data[0] = 1;           // 数据
 	TxMessage.Data[1] = 2;
 	TxMessage.Data[2] = 3;
 	TxMessage.Data[3] = 4;
@@ -26,48 +125,23 @@ void CAN_TX_Test(void)
 	TxMessage.Data[6] = 7;
 	TxMessage.Data[7] = 8;
 
-	/*
-	while((CAN_TxStatus_Ok!=CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage)))&&(++i<0xFFF));		//发送数据
-	if(i >= 0xFF) {
-		ERROR_UserCallback(CAN_ERROR);
-	}
-	*/
-	u8MailBoxUsed = CAN_Transmit(CAN1, &TxMessage);
-	// CAN_Transmit已集成Can发送流程代码，非常方便
-	// 这个++i和硬件的BusOFF是不冲突的，这个可以是在等邮箱空的次数，CAN_TxStatus_Pending和BusOFF分开
-	do
+	if (CAN_HDX_TX_OK != Can_HDX_TransmitRetry(&TxMessage, CAN_HDX_LEGACY_RETRY_COUNT))
 	{
-		// 出现Can错误的原因就是这句话！连续执行导致连续mailbox0是满的！CAN_Transmit()地方都放错了！
-		// TXStatus = CAN_TransmitStatus(CAN1,CAN_Transmit(CAN1,&TxMessage));
-		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
-		TXCounter++;
-	} while ((TXStatus != CAN_TxStatus_Ok) && (TXCounter < 0xFF)); // Fail和OK不用管
-
-	if (TXCounter >= 0xFF)
-	{
-		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
+		System_ERROR_UserCallback(ERROR_CAN);
 	}
 }
 
 void CAN_Tx_Data(CanTxMsg *Msg)
 {
-	UINT8 TXCounter = 0, TXStatus = 0;
-	UINT8 u8MailBoxUsed;
+	CAN_HDX_TX_RESULT txResult;
 
 	Msg->StdId += ((UINT32)CAN_ADRESS_STD_ID << 7); // 单机版地址默认为0
-	u8MailBoxUsed = CAN_Transmit(CAN1, Msg);
-	do
+	txResult = Can_HDX_TransmitRetry(Msg, CAN_HDX_LEGACY_RETRY_COUNT);
+	if (txResult == CAN_HDX_TX_BUS_OFF)
 	{
-		TXStatus = CAN_TransmitStatus(CAN1, u8MailBoxUsed);
-		TXCounter++;
-	} while ((TXStatus == CAN_TxStatus_Failed) && (TXCounter < 0xFF)); // Fail和OK不用管
-
-	if (TXCounter >= 0xFF)
-	{
-		System_ERROR_UserCallback(ERROR_CAN); // 这里应该是一个Pending_Error但是Can模块不可能需要等这么久吧。
+		System_ERROR_UserCallback(ERROR_CAN);
 	}
 }
-
 void CAN_TX_0x00(void)
 {
 	UINT16 u16_tmp16a;
@@ -696,7 +770,7 @@ void InitCan_CAN1(void)
 	CAN_InitStructure.CAN_TTCM = DISABLE;		  // 没有使能时间触发模式
 	CAN_InitStructure.CAN_ABOM = DISABLE;		  // 没有使能自动离线管理，BusOFF自动离线取消，需要手动处理
 	CAN_InitStructure.CAN_AWUM = DISABLE;		  // 没有使能自动唤醒模式
-	CAN_InitStructure.CAN_NART = DISABLE;		  // 没有使能非自动重传模式
+	CAN_InitStructure.CAN_NART = ENABLE;		  // 使能非自动重传模式，避免无 ACK 时硬件持续重发
 	CAN_InitStructure.CAN_RFLM = DISABLE;		  // 没有使能接收FIFO锁定模式
 	CAN_InitStructure.CAN_TXFP = DISABLE;		  // 没有使能发送FIFO优先级
 	CAN_InitStructure.CAN_Mode = CAN_Mode_Normal; // CAN设置为正常模式
@@ -791,6 +865,11 @@ void Can_BusOFF_Monitor(void)
 	Can_BusOFF_Recover();
 }
 
+void Can_HDX_Service10ms(void)
+{
+	Can_BusOFF_Monitor();
+}
+
 void Can_ReceiveDeal(void)
 {
 	if (!Can_Status_Flag.bits.b1Can_Received)
@@ -801,6 +880,7 @@ void Can_ReceiveDeal(void)
 	// ID已经过滤掉，不需要再判断ID是否为本机
 	if ((RxMessage.StdId >> 7) != CAN_ADRESS_STD_ID)
 	{
+		Can_Status_Flag.bits.b1Can_Received = 0;
 		return;
 	}
 
@@ -977,6 +1057,7 @@ void InitCan(void)
 #if 0
 	Can_Status_Flag.all = 0;
 	CanTxType_Flag.all = 0;
+	s_u8CanHdxConsecutiveFail = 0;
 	InitCan_GPIO();
 	InitCan_NVIC();
 	InitCan_Filter();
@@ -984,6 +1065,7 @@ void InitCan(void)
 #endif
 	Can_Status_Flag.all = 0;
 	CanTxType_Flag.all = 0;
+	s_u8CanHdxConsecutiveFail = 0;
 	InitCan_GPIO();
 	InitCan_NVIC();
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
@@ -1003,7 +1085,7 @@ void App_Can(void)
 		return;
 	}
 
-	Can_BusOFF_Monitor();
+	Can_HDX_Service10ms();
 	Can_ReceiveDeal();
 	Can_TransmitDeal();
 }

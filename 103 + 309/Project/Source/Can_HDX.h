@@ -81,6 +81,13 @@ union Can_Status {
      }bits;
 };
 
+typedef enum
+{
+	CAN_HDX_TX_OK = 0,
+	CAN_HDX_TX_BUSY,
+	CAN_HDX_TX_FAILED,
+	CAN_HDX_TX_BUS_OFF
+} CAN_HDX_TX_RESULT;
 
 union MDLREPORTFAULT_REG {
     UINT16 all;
@@ -174,5 +181,8 @@ union MOS_RELAY_REG {
 void InitCan(void);
 void App_Can(void);
 void App_CanTest(void);
+void Can_HDX_Service10ms(void);
+CAN_HDX_TX_RESULT Can_HDX_Transmit(CanTxMsg *Msg);
+CAN_HDX_TX_RESULT Can_HDX_TransmitRetry(CanTxMsg *Msg, UINT8 retryCount);
 
 #endif
