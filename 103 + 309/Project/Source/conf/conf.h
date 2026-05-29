@@ -14,7 +14,7 @@
 #define  wdog_enable
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
-#define __FUNC_RTC__
+// #define __FUNC_RTC__
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
