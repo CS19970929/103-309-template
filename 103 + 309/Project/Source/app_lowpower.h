@@ -28,7 +28,9 @@ typedef enum
 void LP_Init(void);
 void LP_Task(void);
 uint8_t LP_CanSleep(void);
+uint8_t LP_CanEnterRtcSleep(void);
 uint32_t LP_GetBlockReason(void);
+uint32_t LP_GetRtcBlockReason(void);
 void LP_SetWakeupPeriod(uint32_t seconds);
 void LP_EnterStop(uint32_t seconds);
 void LP_BeforeSleep(void);

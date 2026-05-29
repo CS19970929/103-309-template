@@ -14,7 +14,7 @@ typedef struct
 
 static LP_Runtime_t s_lp_runtime;
 
-static uint32_t LP_BuildBlockReason(void)
+static uint32_t LP_BuildBlockReason(uint8_t include_software_fault)
 {
     uint32_t reason = 0U;
     uint32_t requested_period;
@@ -36,10 +36,10 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_COMM;
     }
 
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        reason |= LP_BLOCK_KEY;
-    }
+    // if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    // {
+    //     reason |= LP_BLOCK_KEY;
+    // }
 
     // if (RtcSleep_PortIsAfeSleepBlocked() != 0U)
     // {
@@ -56,7 +56,8 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_UPGRADE;
     }
 
-    if ((g_stCellInfoReport.unMdlFault_Third.all != 0U) ||
+    if (((include_software_fault != 0U) &&
+         (g_stCellInfoReport.unMdlFault_Third.all != 0U)) ||
         (RtcSleep_PortIsHeatActive() != 0U))
     {
         reason |= LP_BLOCK_FAULT;
@@ -74,7 +75,7 @@ static uint32_t LP_BuildBlockReason(void)
 
 static void LP_UpdateBlockReason(void)
 {
-    s_lp_runtime.block_reason = LP_BuildBlockReason();
+    s_lp_runtime.block_reason = LP_BuildBlockReason(1U);
 }
 
 void LP_Init(void)
@@ -98,10 +99,20 @@ uint8_t LP_CanSleep(void)
     return (s_lp_runtime.block_reason == 0U) ? 1U : 0U;
 }
 
+uint8_t LP_CanEnterRtcSleep(void)
+{
+    return (LP_BuildBlockReason(0U) == 0U) ? 1U : 0U;
+}
+
 uint32_t LP_GetBlockReason(void)
 {
     LP_UpdateBlockReason();
     return s_lp_runtime.block_reason;
+}
+
+uint32_t LP_GetRtcBlockReason(void)
+{
+    return LP_BuildBlockReason(0U);
 }
 
 void LP_SetWakeupPeriod(uint32_t seconds)

@@ -1,5 +1,26 @@
 # Test Plan
 
+## D009 RTC blockReason=8 修复补充验证
+
+状态：部分验证
+
+参考源码：
+
+- `103 + 309/Project/Source/app_lowpower.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep.h`
+- `103 + 309/Project/Source/main.c`
+
+验证步骤：
+
+1. 空闲、无充放电、无外部通信时，确认 `g_stLowPowerRtcStatus.blockReason` 不再长期停留在 `LOW_POWER_RTC_BLOCK_FRAMEWORK(8)`。
+2. 若仍被低功耗框架阻塞，同时读取 `g_stLowPowerRtcStatus.frameworkBlockReason`：`0x00000004` 表示通信忙，`0x00000020` 表示 Flash 忙，`0x00000040` 表示升级写入，`0x00000080` 表示系统故障/加热，`0x00000200` 表示 IWDG 周期不安全。
+3. 保持 `g_stCellInfoReport.unMdlFault_Third` 中非 AFE 硬件类历史/软故障置位，确认 RTC 轻休眠入口仍可按空闲计时进入；若 AFE `BSTATUS` 仍有硬件异常，应保持 `LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE` 阻塞。
+
+已验证：
+
+- `FD_Release` Keil 编译通过：0 error / 1 warning。剩余 warning 为 `MainLoop_EnterIdleSleep` 未引用，和本修复无关。
+
 ## D009 RTC 休眠 CAN 1s 通信
 
 状态：部分验证

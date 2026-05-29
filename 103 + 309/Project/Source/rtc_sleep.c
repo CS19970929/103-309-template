@@ -19,6 +19,7 @@ static volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U,
     0U,
+    0U,
     0U
 };
 
@@ -40,6 +41,58 @@ static void low_power_refresh_rtc_status(void)
 static void low_power_set_rtc_block_reason(uint8_t reason)
 {
     g_stLowPowerRtcStatus.blockReason = reason;
+    if (reason != LOW_POWER_RTC_BLOCK_FRAMEWORK)
+    {
+        g_stLowPowerRtcStatus.frameworkBlockReason = 0U;
+    }
+}
+
+static uint8_t low_power_map_framework_block(uint32_t lp_reason)
+{
+    if ((lp_reason & LP_BLOCK_CHARGE) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_CHARGE_INPUT;
+    }
+    if ((lp_reason & LP_BLOCK_DISCHARGE) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_CURRENT;
+    }
+    if ((lp_reason & LP_BLOCK_COMM) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_EXT_COMM;
+    }
+    if ((lp_reason & LP_BLOCK_KEY) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_MCU_WAKE;
+    }
+    if ((lp_reason & LP_BLOCK_AFE_BUSY) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
+    }
+    if ((lp_reason & LP_BLOCK_FLASH_BUSY) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_FLASH_BUSY;
+    }
+    if ((lp_reason & LP_BLOCK_UPGRADE) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_UPGRADE;
+    }
+    if ((lp_reason & LP_BLOCK_FAULT) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_SYSTEM_FAULT;
+    }
+    if ((lp_reason & LP_BLOCK_IWDG_UNSAFE) != 0U)
+    {
+        return LOW_POWER_RTC_BLOCK_IWDG_UNSAFE;
+    }
+
+    return LOW_POWER_RTC_BLOCK_FRAMEWORK;
+}
+
+static void low_power_set_framework_block_reason(uint32_t lp_reason)
+{
+    g_stLowPowerRtcStatus.frameworkBlockReason = lp_reason;
+    g_stLowPowerRtcStatus.blockReason = low_power_map_framework_block(lp_reason);
 }
 
 static uint8_t low_power_is_idle_rtc_request(void)
@@ -51,6 +104,13 @@ static void low_power_delay_rtc(uint8_t reason)
 {
     s_u16IdleDelaySeconds = 0U;
     low_power_set_rtc_block_reason(reason);
+    low_power_refresh_rtc_status();
+}
+
+static void low_power_delay_framework(uint32_t lp_reason)
+{
+    s_u16IdleDelaySeconds = 0U;
+    low_power_set_framework_block_reason(lp_reason);
     low_power_refresh_rtc_status();
 }
 
@@ -130,7 +190,7 @@ uint8_t LowPower_IsToSleepPending(void)
 
 uint8_t LowPower_CanSleepNow(void)
 {
-    return LP_CanSleep();
+    return LP_CanEnterRtcSleep();
 }
 
 void entersleep(enum _SLEEP_MODE mode)
@@ -147,10 +207,10 @@ static uint8_t low_power_get_rtc_block_reason(void)
         return LOW_POWER_RTC_BLOCK_CURRENT;
     }
 
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        return LOW_POWER_RTC_BLOCK_MCU_WAKE;
-    }
+    // if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    // {
+    //     return LOW_POWER_RTC_BLOCK_MCU_WAKE;
+    // }
 
     return LOW_POWER_RTC_BLOCK_NONE;
 }
@@ -160,6 +220,7 @@ static void low_power_select_sleep_mode(void)
     static uint8_t last_ext_comm_count = 0U;
     static uint32_t deep_sleep_delay_seconds = 0U;
     static uint16_t force_deep_delay_seconds = 0U;
+    uint32_t lp_block_reason;
     uint8_t block_reason;
 
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
@@ -190,13 +251,13 @@ static void low_power_select_sleep_mode(void)
         return;
     }
 
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        deep_sleep_delay_seconds = 0U;
-        force_deep_delay_seconds = 0U;
-        low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_MCU_WAKE);
-        return;
-    }
+    // if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    // {
+    //     deep_sleep_delay_seconds = 0U;
+    //     force_deep_delay_seconds = 0U;
+    //     low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_MCU_WAKE);
+    //     return;
+    // }
 
     if (RtcSleep_PortIsFactoryAgingActive() != 0U)
     {
@@ -221,10 +282,15 @@ static void low_power_select_sleep_mode(void)
     {
         block_reason = LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
     }
-    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
-        (LP_CanSleep() == 0U))
+    lp_block_reason = 0U;
+    if (block_reason == LOW_POWER_RTC_BLOCK_NONE)
     {
-        block_reason = LOW_POWER_RTC_BLOCK_FRAMEWORK;
+        lp_block_reason = LP_GetRtcBlockReason();
+        if (lp_block_reason != 0U)
+        {
+            low_power_delay_framework(lp_block_reason);
+            return;
+        }
     }
 
     if (block_reason != LOW_POWER_RTC_BLOCK_NONE)
@@ -293,13 +359,14 @@ static void rtc_sleep_prepare_rtc(void)
 
 static void rtc_sleep_dump_state(const char *stage)
 {
-    log_w("[rtc_sleep] %s wake=%d cnt=%lu period=%lu can=%d rblk=%d",
+    log_w("[rtc_sleep] %s wake=%d cnt=%lu period=%lu can=%d rblk=%d lp=0x%08lx",
           stage,
           RtcSleep_PortIsRtcWake(),
           (unsigned long)s_u32RtcWakeCycles,
           (unsigned long)RtcSleep_PortGetCanRtcPeriodSeconds(),
           RtcSleep_PortIsCanBusActive(),
-          g_stLowPowerRtcStatus.blockReason);
+          g_stLowPowerRtcStatus.blockReason,
+          (unsigned long)g_stLowPowerRtcStatus.frameworkBlockReason);
 }
 
 static bool update_rtc_soc(uint32_t *sleep_cnt)
@@ -463,9 +530,9 @@ void rtc_sleep(void)
     }
 
     if ((g_stLowPowerRtcStatus.mode == HICCUP_MODE) &&
-        (LP_CanSleep() == 0U))
+        (LP_CanEnterRtcSleep() == 0U))
     {
-        low_power_delay_rtc(LOW_POWER_RTC_BLOCK_FRAMEWORK);
+        low_power_delay_framework(LP_GetRtcBlockReason());
         LowPower_Request(NO_SLEEP);
         return;
     }
