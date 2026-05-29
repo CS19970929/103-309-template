@@ -289,7 +289,11 @@ void IOstatus_DeepMode(void);
 void IORecover_RTCMode(void);
 void IORecover_NormalMode(void);
 void IORecover_DeepMode(void);
+void LowPower_ClearWakeupPending(void);
+void LowPower_DisableWakeupExti(void);
 void Sys_StopMode(void);
+void InitRtcWakeupCheck(void);
+void InitRunAfterStopWakeup(void);
 // void Init(void);
 
 #include "Project_BuildGuard.h"

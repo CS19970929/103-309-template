@@ -177,6 +177,53 @@ void InitWakeUp_Base(void)
     NVIC_Init(&nvic_init);
 }
 
+static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger, FunctionalState cmd)
+{
+    EXTI_InitTypeDef exti_init;
+
+    exti_init.EXTI_Line = line;
+    exti_init.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti_init.EXTI_Trigger = trigger;
+    exti_init.EXTI_LineCmd = cmd;
+    EXTI_Init(&exti_init);
+}
+
+void LowPower_ClearWakeupPending(void)
+{
+    EXTI_ClearITPendingBit(EXTI_Line0);
+    EXTI_ClearITPendingBit(SOC_KEY_EXTI_LINE);
+    EXTI_ClearITPendingBit(MAIN_SW_EXTI_LINE);
+#if defined(UART1_WAKEUP_ENABLE)
+    EXTI_ClearITPendingBit(EXTI_Line7);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+    EXTI_ClearITPendingBit(EXTI_Line3);
+#endif
+#if defined(RS485_WAKEUP_ENABLE)
+    EXTI_ClearITPendingBit(EXTI_Line12);
+#endif
+    NVIC_ClearPendingIRQ(EXTI0_IRQn);
+    NVIC_ClearPendingIRQ(SOC_KEY_EXTI_IRQn);
+    NVIC_ClearPendingIRQ(MAIN_SW_EXTI_IRQn);
+}
+
+void LowPower_DisableWakeupExti(void)
+{
+    LowPower_ConfigWakeupExti(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
+#if defined(UART1_WAKEUP_ENABLE)
+    LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(UART2_WAKEUP_ENABLE)
+    LowPower_ConfigWakeupExti(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
+#endif
+#if defined(RS485_WAKEUP_ENABLE)
+    LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
+#endif
+    LowPower_ConfigWakeupExti(SOC_KEY_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(MAIN_SW_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ClearWakeupPending();
+}
+
 void InitWakeUp_NormalMode(void)
 {
     EXTI_InitTypeDef exti_init;
@@ -371,6 +418,7 @@ void Sys_StopMode(void)
     TIM_Cmd(TIM3, DISABLE);
     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
+    LowPower_ClearWakeupPending();
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();
@@ -379,6 +427,7 @@ void Sys_StopMode(void)
 void InitRtcWakeupCheck(void)
 {
     InitDelay();
+    RTC_RestoreRunInterrupts();
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
     InitSci();
@@ -391,6 +440,7 @@ void InitRunAfterStopWakeup(void)
     is_wakeup = true;
 
     InitDelay();
+    RTC_RestoreRunInterrupts();
     InitIO_rtc();
 
     ADC_StopForLowPower();
@@ -407,7 +457,7 @@ void InitRunAfterStopWakeup(void)
     InitCan();
     InitTimer();
 
-    sys_time.wakeup_rtc = true;
+    sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;
     Init_ChargerLoad_Det();
 
     initAFE1_IIC();

@@ -191,6 +191,7 @@ union MOS_RELAY_REG {
 void InitCan(void);
 void App_Can(void);
 void App_CanTest(void);
+void Can_BusOFF_Monitor(void);
 UINT8 Can_IsBusy(void);
 UINT8 Can_IsSleepBlocked(void);
 void Can_PrepareSleep(void);

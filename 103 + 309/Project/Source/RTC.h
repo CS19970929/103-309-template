@@ -7,7 +7,7 @@
 #define RTC_BKP_DATA        0xA5A5
 #define LSE_START_TIMEOUT   ((uint16_t)0x5000) /*!< Time out for LSE start up */
 #define LSE_FREQUENT		32767
-#define TIME_ZOOM			(8*60*60)			//�����ʱ���ı���ʱ��
+#define TIME_ZOOM			(8*60*60)			//�����ʱ���ı���ʱ��?
 #define	UNIX_TIME_YEAR		1970				//��Ԫʱ��
 #define SEC_DAY				86400L          	//һ���ж���s 
 
@@ -18,7 +18,7 @@
 
 /*
 struct RTC_TIME {
-	UINT16 RTC_year;		//Ϊʲô���Ϊ16λ����Ϊ��������Ҫ16λ�����ϴ�����Ҫ
+	UINT16 RTC_year;		//Ϊʲô����?6λ����Ϊ��������Ҫ16λ�����ϴ�����Ҫ
 	UINT8 RTC_mon;
 	UINT8 RTC_day;
 	UINT8 RTC_hour;
@@ -63,7 +63,11 @@ extern volatile bool is_rtc_wakekup;
 
 UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
+void RTC_SetWakeupPeriodSeconds(UINT32 seconds);
+UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds);
 void RTC_WKTimeConfig(void);
+void RTC_DisableStopWakeup(void);
+void RTC_RestoreRunInterrupts(void);
 void Init_RTC(void);
 void App_RTC(void);
 

@@ -444,6 +444,31 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
+              <FileName>bsp_clock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_clock.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_power.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_rtc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_rtc.c</FilePath>
+            </File>
+            <File>
+              <FileName>LowPowerSleep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LowPowerSleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_lowpower.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\app_lowpower.c</FilePath>
+            </File>
+            <File>
               <FileName>Sci_Upper.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Sci_Upper.c</FilePath>
@@ -578,6 +603,16 @@
               <FileName>rtc_sleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_afe_sh367309.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1366,6 +1401,31 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
+              <FileName>bsp_clock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_clock.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_power.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_rtc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\bsp_rtc.c</FilePath>
+            </File>
+            <File>
+              <FileName>LowPowerSleep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\LowPowerSleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_lowpower.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\app_lowpower.c</FilePath>
+            </File>
+            <File>
               <FileName>Sci_Upper.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Sci_Upper.c</FilePath>
@@ -1500,6 +1560,16 @@
               <FileName>rtc_sleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_afe_sh367309.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
             </File>
           </Files>
         </Group>

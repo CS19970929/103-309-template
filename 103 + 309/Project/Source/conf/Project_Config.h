@@ -78,6 +78,30 @@
 // <i> 使能 RTC。用于低功耗计时、休眠唤醒和 SOC 休眠修正。
 #define PROJECT_CFG_RTC_ENABLE 1
 
+// <o> CAN 活跃总线 RTC 唤醒周期(秒)
+// <i> 低功耗下检测到外部 CAN 设备后，RTC 按该周期唤醒并发送对外通信帧。
+#define PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS 1
+
+// <o> CAN 空闲总线 RTC 探测周期(秒)
+// <i> 低功耗下连续无 ACK 后，RTC 按该周期做低频探测以降低待机功耗。
+#define PROJECT_CFG_CAN_RTC_IDLE_PERIOD_SECONDS 10
+
+// <o> CAN 总线活跃保持时间(秒)
+// <i> 最近一次收到帧或发送被 ACK 后，在该时间内保持 1s RTC 唤醒通信。
+#define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10
+
+// <o> CAN 收发器上电稳定等待(10ms tick)
+// <i> PB4 使能 CAN 收发器后等待的时间。D009 使用普通 LED 硬件，保持 CAN 供电窗口独立。
+#define PROJECT_CFG_CAN_POWER_STABLE_TICKS 2
+
+// <o> CAN 无 ACK 回退阈值
+// <i> 连续发送无 ACK 达到阈值后判定外部设备不在线，切到低频 RTC 探测。
+#define PROJECT_CFG_CAN_NO_ACK_BACKOFF_THRESHOLD 3
+
+// <o> CAN 运行态空闲探测周期(秒)
+// <i> 运行态外部设备不在线时的低频 CAN 探测周期。
+#define PROJECT_CFG_CAN_PROBE_PERIOD_SECONDS 10
+
 // <q> 使能加热功能
 // <i> 使能加热功能。仅硬件具备加热回路时开启。
 #define PROJECT_CFG_HEAT_ENABLE 0

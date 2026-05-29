@@ -1,5 +1,24 @@
 # Change Log
 
+## 2026-05-29
+
+- 完成 D009 CAN/RTC 休眠逻辑移植：有 CAN ACK 对端时 RTC STOP 休眠按 1s 周期唤醒并发送飞道 1s 周期帧；无 ACK 连续回退后进入 10s 低频探测。
+- 按当前参考分支拆分 RTC 低功耗模块，新增 `bsp_rtc`、`bsp_clock`、`bsp_power`、`app_lowpower`、`LowPowerSleep`、`rtc_sleep_port`、`rtc_sleep_afe_sh367309`，并保留 D009 普通 SOC LED/socKey 硬件适配。
+- 修正 RTC STOP alarm 清理/恢复流程：进入 STOP 前关闭 alarm 并清 EXTI/NVIC pending，STOP 后恢复 RTC 秒中断，避免 RTC pending 残留影响下一轮休眠。
+- Keil 工程新增 RTC 拆分模块源文件，工程文件保持无 BOM UTF-8；`FD_Release` 编译通过，0 error / 8 warning，生成 `FD_Release.axf` 和 `FD_Release.bin`。
+
+参考源码：
+
+- `103 + 309/Project/Source/Can_HDX.c`
+- `103 + 309/Project/Source/RTC.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+- `103 + 309/Project/Source/rtc_sleep_afe_sh367309.c`
+- `103 + 309/Project/Source/app_lowpower.c`
+- `103 + 309/Project/Source/bsp_rtc.c`
+- `103 + 309/Project/Source/conf/conf.c`
+- `103 + 309/Project/Source/LedBar.c`
+
 状态：部分验证
 
 ## 2026-05-27
