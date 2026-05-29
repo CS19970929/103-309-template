@@ -68,12 +68,16 @@ DEFAULT_LONG_TIMEOUT = 180.0
 DEFAULT_CHUNK_SIZE = 496
 POST_UPGRADE_APP_READY_TIMEOUT = 15.0
 POST_UPGRADE_APP_READY_INTERVAL = 1.0
+UPGRADE_CACHE_KEEPALIVE_INTERVAL = 2.0
+UPGRADE_CACHE_KEEPALIVE_TIMEOUT = 3.0
 LOG_MIN_INTERVAL_SECONDS = 2.0
 LOG_MAX_INTERVAL_SECONDS = 3600.0
 
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
 BMS_LIVE_WORDS = 88
+BMS_STATUS_ADDR = 0xD034
+BMS_STATUS_WORDS = 2
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
@@ -2316,7 +2320,7 @@ class UpgradeUi(tk.Tk):
             info = self._read_info(client)
             self._emit("info", info)
             self._emit("target", info)
-            self._download_image(client, image, progress_base=0, progress_span=45)
+            self._download_image(client, image, progress_base=0, progress_span=45, keep_bms_awake=True)
             cache = self._read_cache_info(client)
             self._assert_cache_matches(image, cache)
             self._emit("cache", cache)
@@ -2725,7 +2729,7 @@ class UpgradeUi(tk.Tk):
         }
 
     def _read_bms_app_status(self, client: CommToolClient) -> tuple[int, int]:
-        words = self._read_bms_words(client, 0xD034, 2)
+        words = self._read_bms_words(client, BMS_STATUS_ADDR, BMS_STATUS_WORDS)
         return words[0], words[1]
 
     def _read_bms_product_info(self, client: CommToolClient) -> dict[str, str]:
@@ -2804,21 +2808,46 @@ class UpgradeUi(tk.Tk):
         image: bytes,
         progress_base: int = 0,
         progress_span: int = 90,
+        keep_bms_awake: bool = False,
     ) -> None:
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
         start_time = time.monotonic()
+        next_keepalive_time = start_time
         total = math.ceil(len(image) / DEFAULT_CHUNK_SIZE)
+        if keep_bms_awake:
+            self._emit("log", "写入 comm tool 缓存期间启用 BMS 保活，防止 BMS 进入 RTC")
+            self._keep_bms_awake_during_cache(client, "开始写入缓存")
+            next_keepalive_time = time.monotonic() + UPGRADE_CACHE_KEEPALIVE_INTERVAL
         client.command(CMD_FW_BEGIN, struct.pack("<IIHI", APP_BASE_ADDR, len(image), crc16, crc32), timeout=5.0)
         for index, offset in enumerate(range(0, len(image), DEFAULT_CHUNK_SIZE), start=1):
             chunk = image[offset : offset + DEFAULT_CHUNK_SIZE]
             client.command(CMD_FW_DATA, struct.pack("<I", offset) + chunk, timeout=5.0)
+            if keep_bms_awake and time.monotonic() >= next_keepalive_time:
+                self._keep_bms_awake_during_cache(client, f"缓存写入 {index}/{total}")
+                next_keepalive_time = time.monotonic() + UPGRADE_CACHE_KEEPALIVE_INTERVAL
             if index == total or index % 4 == 0:
                 self._emit("progress", min(99, progress_base + int(index * progress_span / total)))
                 self._emit("log", f"写入缓存: {index}/{total}")
         client.command(CMD_FW_END, struct.pack("<IHI", len(image), crc16, crc32), timeout=5.0)
+        if keep_bms_awake:
+            self._keep_bms_awake_during_cache(client, "缓存写入完成")
         elapsed = max(0.001, time.monotonic() - start_time)
         self._emit("log", f"写入缓存完成: {len(image)} bytes, {elapsed:.1f}s, {len(image) / 1024.0 / elapsed:.1f} KiB/s")
+
+    def _keep_bms_awake_during_cache(self, client: CommToolClient, stage: str) -> None:
+        payload = struct.pack("<HH", BMS_STATUS_ADDR, BMS_STATUS_WORDS)
+        try:
+            resp = client.command(CMD_BMS_READ, payload, timeout=UPGRADE_CACHE_KEEPALIVE_TIMEOUT)
+        except Exception as exc:
+            raise RuntimeError(
+                f"写入 comm tool 缓存期间 BMS 保活失败（{stage}），BMS 可能已进入 RTC；"
+                "请先唤醒 BMS 或检查 CAN 连接后重试。"
+            ) from exc
+        if len(resp.payload) != BMS_STATUS_WORDS * 2:
+            raise RuntimeError(f"BMS 保活响应长度错误: {len(resp.payload)}")
+        soc, soh = struct.unpack("<HH", resp.payload)
+        self._emit("log", f"BMS 保活: {stage} SOC={soc} SOH={soh}")
 
     def _assert_cache_matches(self, image: bytes, cache: dict) -> None:
         crc16 = crc16_modbus(image)

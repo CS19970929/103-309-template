@@ -1,5 +1,26 @@
 # Test Plan
 
+## CAN 一键升级缓存写入阶段 BMS 保活
+
+状态：部分验证
+
+参考源码：
+
+- `tools/comm_tool_upgrade_ui.py`
+- `tools/comm_tool_host.py`
+
+验证步骤：
+
+1. 打开 `dist/BMS_CommTool_Upgrade_UI.exe`，选择 D009 BMS App bin，执行“一键升级”。
+2. 在日志中确认写入缓存前出现“写入 comm tool 缓存期间启用 BMS 保活”，并在缓存写入期间周期出现 `BMS 保活` 日志。
+3. 用调试器或日志观察 BMS 侧 `g_stLowPowerRtcStatus.blockReason`，缓存写入期间不应因空闲计时进入 RTC。
+4. 缓存校验完成后应正常进入“开始 CAN 升级 BMS”，不再出现 BMS 已睡眠导致的 0% 超时/错误。
+
+已验证：
+
+- `py -3.9 tools\comm_tool_upgrade_ui.py --self-test` 通过。
+- 已执行 `tools\build_comm_tool_upgrade_ui_exe.ps1 -Clean`，覆盖生成 `dist\BMS_CommTool_Upgrade_UI.exe`。
+
 ## D009 RTC blockReason=8 修复补充验证
 
 状态：部分验证

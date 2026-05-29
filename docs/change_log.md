@@ -2,6 +2,9 @@
 
 ## 2026-05-29
 
+- 修正 CAN 用户上位机一键升级在“写入 comm tool 缓存”期间 BMS 可能进入 RTC 的问题：一键升级下载缓存阶段每 2s 通过 comm tool 读取一次 BMS `0xD034` 状态寄存器作为保活，保持 BMS 外部通信活动，避免后续启动 CAN-IAP 时目标已睡眠。
+- 已重新打包覆盖 `dist/BMS_CommTool_Upgrade_UI.exe`，保持固定 exe 名称。
+
 - 修正 D009 RTC 轻休眠入口经常显示 `g_stLowPowerRtcStatus.blockReason = 8` 的问题：将框架层 `LP_BLOCK_*` 原始 bitmask 记录到 `frameworkBlockReason`，并把通信忙、Flash 忙、升级、系统故障、IWDG 窗口等映射为更具体的 RTC 阻塞原因。
 - RTC 轻休眠入口不再直接被 `g_stCellInfoReport.unMdlFault_Third` 的软件/历史故障统一挡住；真正的 AFE 硬件异常仍由 `RtcSleep_PortIsAfeSleepBlocked()` 检查并以 `LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE` 阻塞。
 - 修正主循环调用 `LP_Task()` 时缺少 `app_lowpower.h` 导致的 Keil 隐式声明 warning。
