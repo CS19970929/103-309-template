@@ -44,18 +44,18 @@ UINT16 RtcSleep_PortGetLowVoltageSleepMinutes(void)
     return OtherElement.u16Sleep_TimeVlow;
 }
 
-UINT8 RtcSleep_PortIsMcuWakeActive(void)
-{
-    if (GPIO_ReadInputDataBit(GPIO_SOC_KEY, PIN_SOC_KEY) == Bit_RESET)
-    {
-        return 1U;
-    }
-    if (GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW) == Bit_RESET)
-    {
-        return 1U;
-    }
-    return 0U;
-}
+// UINT8 RtcSleep_PortIsMcuWakeActive(void)
+// {
+//     if (GPIO_ReadInputDataBit(GPIO_SOC_KEY, PIN_SOC_KEY) == Bit_RESET)
+//     {
+//         return 1U;
+//     }
+//     if (GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW) == Bit_RESET)
+//     {
+//         return 1U;
+//     }
+//     return 0U;
+// }
 
 UINT8 RtcSleep_PortIsChargerInputActive(void)
 {
@@ -107,16 +107,24 @@ void RtcSleep_PortRequestSleepLog(void)
     LogRecord_Flag.bits.Log_Sleep = 1U;
 }
 
-void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
+void RtcSleep_PortClearLegacySleepRequest(void)
 {
-    extern UINT32 su32_Interval_S_Tcnt;
-
-    Can_PrepareSleep();
-    LogRecord_Flag.bits.Log_Sleep = 1U;
-    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+    Sleep_Mode.bits.b1TestSleep = 0U;
+    Sleep_Mode.bits.b1NormalSleep_L1 = 0U;
+    Sleep_Mode.bits.b1NormalSleep_L2 = 0U;
+    Sleep_Mode.bits.b1NormalSleep_L3 = 0U;
     Sleep_Mode.bits.b1ForceToSleep_L1 = 0U;
     Sleep_Mode.bits.b1ForceToSleep_L2 = 0U;
     Sleep_Mode.bits.b1ForceToSleep_L3 = 0U;
+    Sleep_Mode.bits.b1ForceToSleep_L1_Out = 0U;
+    Sleep_Mode.bits.b1_ToSleepFlag = 0U;
+}
+
+void RtcSleep_PortSelectLegacyResetSleep(UINT8 sleep_mode)
+{
+    RtcSleep_PortClearLegacySleepRequest();
+    Sleep_Mode.bits.b1_ToSleepFlag = 1U;
+
     if (sleep_mode == HICCUP_MODE)
     {
         Sleep_Mode.bits.b1ForceToSleep_L1 = 1U;
@@ -129,6 +137,20 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
     {
         Sleep_Mode.bits.b1ForceToSleep_L3 = 1U;
     }
+    else
+    {
+        Sleep_Mode.bits.b1_ToSleepFlag = 0U;
+    }
+}
+
+void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
+{
+    extern UINT32 su32_Interval_S_Tcnt;
+
+    Can_PrepareSleep();
+    LogRecord_Flag.bits.Log_Sleep = 1U;
+    LogEvent_Record(LogRecord_Flag.bits.Log_Sleep, BMS_SLEEP, &su32_Interval_S_Tcnt);
+    RtcSleep_PortSelectLegacyResetSleep(sleep_mode);
     SleepDeal_Continue();
 }
 

@@ -2,6 +2,9 @@
 
 ## 2026-05-29
 
+- 修复 D009 `MAIN_SW` 断开后强制休眠被旧 `SleepDeal_Continue()` 默认路径落成 `NORMAL_MODE` 的问题：`LowPower_Request(NORMAL_MODE/DEEP_MODE)` 现在会同步旧 `Sleep_Mode` 强制休眠标志，`RtcSleep_PortCommitResetSleep()` 提交前会清理旧 test/normal/force 残留标志，确保 forced normal/deep 休眠模式一致落地。
+- 统一排查 `entersleep()` 调用点：`LedBar` 的 `MAIN_SW` 断开、上位机立即休眠命令、AFE/EEPROM/Vdelta/OVP/OCP 等强制休眠路径都会通过同一套新旧休眠模式同步逻辑处理，避免后续再因混用新低功耗状态和旧 `Sleep_Mode` 默认值导致休眠模式跑偏。
+
 - 修正 CAN 用户上位机一键升级在“写入 comm tool 缓存”期间 BMS 可能进入 RTC 的问题：一键升级下载缓存阶段每 2s 通过 comm tool 读取一次 BMS `0xD034` 状态寄存器作为保活，保持 BMS 外部通信活动，避免后续启动 CAN-IAP 时目标已睡眠。
 - 已重新打包覆盖 `dist/BMS_CommTool_Upgrade_UI.exe`，保持固定 exe 名称。
 

@@ -159,9 +159,18 @@ void LowPower_Request(enum _SLEEP_MODE mode)
     switch (mode)
     {
     case HICCUP_MODE:
+        RtcSleep_PortClearLegacySleepRequest();
+        g_stLowPowerRtcStatus.mode = (uint8_t)mode;
+        g_stLowPowerRtcStatus.readyToSleep = 0U;
+        break;
     case NORMAL_MODE:
     case DEEP_MODE:
+        RtcSleep_PortSelectLegacyResetSleep((uint8_t)mode);
+        g_stLowPowerRtcStatus.mode = (uint8_t)mode;
+        g_stLowPowerRtcStatus.readyToSleep = 0U;
+        break;
     case NO_SLEEP:
+        RtcSleep_PortClearLegacySleepRequest();
         g_stLowPowerRtcStatus.mode = (uint8_t)mode;
         g_stLowPowerRtcStatus.readyToSleep = 0U;
         break;

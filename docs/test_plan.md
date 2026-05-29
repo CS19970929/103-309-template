@@ -1,5 +1,26 @@
 # Test Plan
 
+## D009 MAIN_SW 断开强制深度休眠
+
+状态：部分验证
+
+参考源码：
+
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/ChargerLoadFunc.c`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/Sci_Upper.c`
+
+验证步骤：
+
+1. 无充电、无放电、`MAIN_SW` 闭合状态启动，确认系统正常运行。
+2. 断开 `MAIN_SW`，确认写入睡眠启动标志为 `FLASH_DEEP_SLEEP_VALUE`，重启后进入 `DEEP_MODE` 对应的 STOP 休眠流程。
+3. `MAIN_SW` 断开休眠后，通过 UART/RS485/CAN 发送通信帧，系统不应被通信持续唤醒；只有充电输入或重新闭合 `MAIN_SW` 才应作为有效唤醒。
+4. 通过上位机“立刻进入休眠”命令触发 `entersleep(DEEP_MODE)`，确认同样落地为 deep sleep，不再受旧 `Sleep_Mode` 默认 normal 路径影响。
+5. 触发 AFE/EEPROM/Vdelta/OVP/OCP 等 `entersleep(NORMAL_MODE)` 路径，确认 normal/deep 模式按请求或保护优先级一致落地，没有旧 test/normal/force 残留导致模式跑偏。
+
 ## CAN 一键升级缓存写入阶段 BMS 保活
 
 状态：部分验证

@@ -14,7 +14,7 @@ uint16_t RtcSleep_PortGetDischargeCurrentMa(void);
 uint16_t RtcSleep_PortGetLowVoltageSleepMv(void);
 uint16_t RtcSleep_PortGetLowVoltageSleepMinutes(void);
 
-uint8_t RtcSleep_PortIsMcuWakeActive(void);
+// uint8_t RtcSleep_PortIsMcuWakeActive(void);
 uint8_t RtcSleep_PortIsChargerInputActive(void);
 uint8_t RtcSleep_PortIsHeatActive(void);
 uint8_t RtcSleep_PortIsFactoryAgingActive(void);
@@ -27,6 +27,8 @@ uint8_t RtcSleep_PortHasAfeWake(enum irqWakeup *source);
 uint8_t RtcSleep_PortIsEmergencyWakeVoltage(void);
 
 void RtcSleep_PortRequestSleepLog(void);
+void RtcSleep_PortClearLegacySleepRequest(void);
+void RtcSleep_PortSelectLegacyResetSleep(uint8_t sleep_mode);
 void RtcSleep_PortCommitResetSleep(uint8_t sleep_mode);
 void RtcSleep_PortOnDeepSleepRequest(void);
 
