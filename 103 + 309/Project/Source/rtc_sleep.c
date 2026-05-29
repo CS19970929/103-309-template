@@ -1288,10 +1288,7 @@ void rtc_sleep(void)
         switch (g_sleepModeSelect)
         {
         case NORMAL_MODE:
-            if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_NORMAL_SLEEP_VALUE))
-            {
-                ;
-            }
+            (void)SleepDeal_SaveSleepModeFlag(FLASH_NORMAL_SLEEP_VALUE);
             break;
         case HICCUP_MODE:
         {
@@ -1389,7 +1386,7 @@ void rtc_sleep(void)
         break;
         case DEEP_MODE:
         DEEP_SLEEP:
-            // if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
+            // if (SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE))
             // {
             //     log_w("deep sleep\n");
             //     if ((Sleep_Mode.all & 0x00ff))

@@ -79,7 +79,9 @@ void InitDevice(void)
 #else
 	InitDelay();
 
-	IsSleepStartUp();
+	if (!SleepWakeFastUi_ServiceStartupPreview()) {
+		IsSleepStartUp();
+	}
 
 	InitIO();
 #ifdef ELOG_OUTPUT_ENABLE

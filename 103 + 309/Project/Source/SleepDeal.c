@@ -9,9 +9,67 @@ UINT8 gu8_SleepStatus = 0;
 UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 
+// use BKP instead of Flash for the one-shot sleep resume flag.
+#define SLEEP_BKP_FLAG_REG      BKP_DR6
+#define SLEEP_BKP_FLAG_INV_REG  BKP_DR7
+
+static UINT8 SleepDeal_IsValidSleepFlag(UINT16 flag)
+{
+	return (flag == FLASH_NORMAL_SLEEP_VALUE) ||
+		   (flag == FLASH_HICCUP_SLEEP_VALUE) ||
+		   (flag == FLASH_DEEP_SLEEP_VALUE) ||
+		   (flag == FLASH_SLEEP_RESET_VALUE);
+}
+
+static void SleepDeal_EnableBackupAccess(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+}
+
+UINT8 SleepDeal_SaveSleepModeFlag(UINT16 flag)
+{
+	UINT16 flag_inv;
+	UINT16 read_flag;
+	UINT16 read_flag_inv;
+
+	flag_inv = (UINT16)(~flag);
+	SleepDeal_EnableBackupAccess();
+	BKP_WriteBackupRegister(SLEEP_BKP_FLAG_REG, flag);
+	BKP_WriteBackupRegister(SLEEP_BKP_FLAG_INV_REG, flag_inv);
+
+	read_flag = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_REG);
+	read_flag_inv = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_INV_REG);
+
+	return (UINT8)((read_flag == flag) && (read_flag_inv == flag_inv));
+}
+
+UINT16 SleepDeal_LoadSleepModeFlag(void)
+{
+	UINT16 flag;
+	UINT16 flag_inv;
+
+	SleepDeal_EnableBackupAccess();
+	flag = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_REG);
+	flag_inv = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_INV_REG);
+
+	if ((flag != (UINT16)(~flag_inv)) || (!SleepDeal_IsValidSleepFlag(flag)))
+	{
+		(void)SleepDeal_SaveSleepModeFlag(FLASH_SLEEP_RESET_VALUE);
+		return FLASH_SLEEP_RESET_VALUE;
+	}
+
+	return flag;
+}
+
+void SleepDeal_ClearSleepModeFlag(void)
+{
+	(void)SleepDeal_SaveSleepModeFlag(FLASH_SLEEP_RESET_VALUE);
+}
+
 void SleepDeal_Continue(void)
 {
-	UINT8 u8FlashWriteOK_flag = 0;
+	UINT8 u8SleepFlagWriteOK_flag = 0;
 	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
 
 	LedSnapshot_SaveRuntime();
@@ -74,29 +132,29 @@ void SleepDeal_Continue(void)
 	switch (s_u8SleepModeSelect)
 	{
 	case NORMAL_MODE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_NORMAL_SLEEP_VALUE))
+		if (SleepDeal_SaveSleepModeFlag(FLASH_NORMAL_SLEEP_VALUE))
 		{
-			u8FlashWriteOK_flag = 1;
+			u8SleepFlagWriteOK_flag = 1;
 		}
 		break;
 	case HICCUP_MODE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_HICCUP_SLEEP_VALUE))
+		if (SleepDeal_SaveSleepModeFlag(FLASH_HICCUP_SLEEP_VALUE))
 		{
-			u8FlashWriteOK_flag = 1;
+			u8SleepFlagWriteOK_flag = 1;
 		}
 
 		break;
 	case DEEP_MODE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_DEEP_SLEEP_VALUE))
+		if (SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE))
 		{
-			u8FlashWriteOK_flag = 1;
+			u8SleepFlagWriteOK_flag = 1;
 		}
 		break;
 	default:
 		break;
 	}
 
-	if (u8FlashWriteOK_flag)
+	if (u8SleepFlagWriteOK_flag)
 	{
 		InitAFE1_Sleep(0);
 		AFE_Sleep();
@@ -612,8 +670,6 @@ void SleepDeal_Test(void)
 
 static UINT8 SleepDeal_RunStopWake(UINT8 mode)
 {
-	UINT8 fast_ui_result;
-
 	while (1)
 	{
 		if (mode == HICCUP_MODE)
@@ -633,54 +689,23 @@ static UINT8 SleepDeal_RunStopWake(UINT8 mode)
 		}
 
 		Sys_StopMode();
-		fast_ui_result = SleepWakeFastUi_ServiceAfterStop();
-
-		if (fast_ui_result == SLEEP_WAKE_FAST_TIMEOUT)
-		{
-			continue;
-		}
-		if (fast_ui_result == SLEEP_WAKE_FAST_BOOT || fast_ui_result == SLEEP_WAKE_FAST_CHARGE)
-		{
-			return 1;
-		}
-
-		if (mode == HICCUP_MODE)
-		{
-			IORecover_RTCMode();
-		}
-		else if (mode == NORMAL_MODE)
-		{
-			IORecover_NormalMode();
-		}
-		else
-		{
-			IORecover_DeepMode();
-		}
-		return 0;
+		(void)SleepWakeFastUi_ServiceAfterStop(mode);
 	}
+	return 0;
 }
 
 void IsSleepStartUp(void)
 {
-	switch (FlashReadOneHalfWord(FLASH_ADDR_SLEEP_FLAG))
+	switch (SleepDeal_LoadSleepModeFlag())
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
-		{
-			(void)SleepDeal_RunStopWake(HICCUP_MODE);
-		}
+		(void)SleepDeal_RunStopWake(HICCUP_MODE);
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
-		{
-			(void)SleepDeal_RunStopWake(NORMAL_MODE);
-		}
+		(void)SleepDeal_RunStopWake(NORMAL_MODE);
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
-		if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, FLASH_SLEEP_RESET_VALUE))
-		{
-			(void)SleepDeal_RunStopWake(DEEP_MODE);
-		}
+		(void)SleepDeal_RunStopWake(DEEP_MODE);
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
 		break;
@@ -690,7 +715,7 @@ void IsSleepStartUp(void)
 }
 void App_SleepDeal(void)
 {
-	static uint8_t force_sleep_delay = 0;
+	static UINT16 force_sleep_delay = 0;
 	// if (0 == g_st_SysTimeFlag.bits.b1Sys1000msFlag1 && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	if (0 == gu8_1000msAccClock_Flag && !Sleep_Mode.bits.b1ForceToSleep_L1 && !Sleep_Mode.bits.b1ForceToSleep_L2 && !Sleep_Mode.bits.b1ForceToSleep_L3)
 	{
@@ -726,10 +751,10 @@ void App_SleepDeal(void)
 		Sleep_Mode.bits.b1_ToSleepFlag = 0;
 	}
 
-	if (g_stCellInfoReport.u16VCellMin < 2600 && !g_stCellInfoReport.u16Ichg)
+	if (g_stCellInfoReport.u16VCellMin < 2800 && !g_stCellInfoReport.u16Ichg)
 	{
 		++force_sleep_delay;
-		if (force_sleep_delay >= 60)
+		if (force_sleep_delay >= (60 * 10))
 		{
 			entersleep(DEEP_MODE);
 		}

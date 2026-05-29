@@ -49,6 +49,7 @@ void PowerUi_ProcessRequests(void)
         Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
         SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
         SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
+        GPIO_ResetBits(GPIO_CMNT_EN, PIN_CMNT_EN);
         LedBar_OutputOff();
         entersleep(DEEP_MODE);
         SleepDeal_Continue();

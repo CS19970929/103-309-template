@@ -12,7 +12,6 @@
 #define FLASH_ADDR_SH367309_VALUE 		0x0803E000			//���ߴ���ؼ�����(����ƫ��ֵ)��1K
 #define FLASH_ADDR_SH367309_FLAG 		0x0803E800			//�����Ƿ�����־λ��1K
 #define FLASH_ADDR_UPDATE_FLAG 			0x0801F800			//IAP=18K
-#define FLASH_ADDR_SLEEP_FLAG           0x0801FC00			//���߹ؼ�ָ�2K
 
 #define FLASH_309_RTC_RTC_VALUE			((UINT16)0x1222)	//RTC���ߣ�RTC���ѣ�ֻ��RTC���ߣ����п���RTC���ѡ�
 #define FLASH_309_RTC_NORMAL_VALUE		((UINT16)0x2333)	//RTC���ߣ������ʽ����(ͨѶ����ť�ȵ�)

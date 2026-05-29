@@ -47,6 +47,30 @@ typedef enum _LEDBAR_L1_COLOR {
 
 extern LEDBAR_COMMAND LedBar_Command;
 
+#ifndef LED_UI_TICK_MS
+#define LED_UI_TICK_MS                 ((UINT16)10)
+#endif
+#ifndef LED_BOOT_CONFIRM_HOLD_MS
+#define LED_BOOT_CONFIRM_HOLD_MS       ((UINT16)1000)
+#endif
+#ifndef LED_SHUTDOWN_CONFIRM_HOLD_MS
+#define LED_SHUTDOWN_CONFIRM_HOLD_MS   ((UINT16)1000)
+#endif
+#ifndef LED_BOOT_PREVIEW_TIMEOUT_MS
+#define LED_BOOT_PREVIEW_TIMEOUT_MS    ((UINT16)8000)
+#endif
+#ifndef LED_SHUTDOWN_CONFIRM_TIMEOUT_MS
+#define LED_SHUTDOWN_CONFIRM_TIMEOUT_MS ((UINT16)8000)
+#endif
+#ifndef LED_ANIM_STEP_MS
+#define LED_ANIM_STEP_MS               ((UINT16)200)
+#endif
+#ifndef LED_BLINK_PERIOD_MS
+#define LED_BLINK_PERIOD_MS            ((UINT16)500)
+#endif
+
+#define LED_MS_TO_TICKS(ms)            ((UINT16)(((UINT32)(ms) + ((UINT32)LED_UI_TICK_MS - 1U)) / (UINT32)LED_UI_TICK_MS))
+
 void LedBar_gpio_Init(void);
 void LedBar_Init(void);
 void LedBar_FastInit(void);
@@ -54,7 +78,7 @@ void LedBar_OutputOff(void);
 void LedBar_ShowSocImmediate(UINT8 soc, UINT8 alarm, UINT8 blink_on);
 void LedBar_ShowBootAnimationStep(UINT8 step);
 void LedBar_ShowShutdownConfirmFrame(UINT8 blink_on);
-void LedBar_ShowShutdownAnimationStep(UINT8 highest_on);
+void LedBar_ShowShutdownAnimationStep(UINT8 step);
 void APP_LedBar(void);
 
 #endif

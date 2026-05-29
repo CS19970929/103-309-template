@@ -1,10 +1,12 @@
 #include "main.h"
 #include "PowerUi.h"
 
-#define LED_UI_TIMEOUT_TICKS       ((UINT16)800)
-#define LED_UI_CONFIRM_TICKS       DELAYB10MS_3S
-#define LED_UI_BLINK_TICKS         DELAYB10MS_500MS
-#define LED_UI_ANIM_STEP_TICKS     DELAYB10MS_200MS
+#define LED_BOOT_CONFIRM_TICKS       LED_MS_TO_TICKS(LED_BOOT_CONFIRM_HOLD_MS)
+#define LED_SHUTDOWN_CONFIRM_TICKS   LED_MS_TO_TICKS(LED_SHUTDOWN_CONFIRM_HOLD_MS)
+#define LED_BOOT_PREVIEW_TICKS       LED_MS_TO_TICKS(LED_BOOT_PREVIEW_TIMEOUT_MS)
+#define LED_SHUTDOWN_CONFIRM_TIMEOUT_TICKS LED_MS_TO_TICKS(LED_SHUTDOWN_CONFIRM_TIMEOUT_MS)
+#define LED_UI_BLINK_TICKS           LED_MS_TO_TICKS(LED_BLINK_PERIOD_MS)
+#define LED_UI_ANIM_STEP_TICKS       LED_MS_TO_TICKS(LED_ANIM_STEP_MS)
 
 typedef enum _LED_UI_STATE {
     LED_UI_OFF_IDLE = 0,
@@ -151,11 +153,11 @@ void LedBar_ShowBootAnimationStep(UINT8 step)
     if (step > 5) {
         step = 5;
     }
-    LedBar_OutputFrame(step >= 1 ? LEDBAR_L1_GREEN : LEDBAR_L1_OFF,
+    LedBar_OutputFrame(step >= 5 ? LEDBAR_L1_GREEN : LEDBAR_L1_OFF,
+                       step >= 1,
                        step >= 2,
                        step >= 3,
-                       step >= 4,
-                       step >= 5);
+                       step >= 4);
 }
 
 void LedBar_ShowShutdownConfirmFrame(UINT8 blink_on)
@@ -163,16 +165,16 @@ void LedBar_ShowShutdownConfirmFrame(UINT8 blink_on)
     LedBar_OutputFrame(LEDBAR_L1_OFF, blink_on, blink_on, blink_on, blink_on);
 }
 
-void LedBar_ShowShutdownAnimationStep(UINT8 highest_on)
+void LedBar_ShowShutdownAnimationStep(UINT8 step)
 {
-    if (highest_on > 5) {
-        highest_on = 5;
+    if (step > 4) {
+        step = 4;
     }
     LedBar_OutputFrame(LEDBAR_L1_OFF,
-                       highest_on >= 2,
-                       highest_on >= 3,
-                       highest_on >= 4,
-                       highest_on >= 5);
+                       step < 4,
+                       step < 3,
+                       step < 2,
+                       step < 1);
 }
 
 static void LedBar_GpioInitForDisplay(void)
@@ -349,12 +351,12 @@ static void LedBar_EnterState(LED_UI_STATE state)
     s_led_ui.state = state;
     s_led_ui.hold_ticks = 0;
     s_led_ui.anim_ticks = 0;
-    s_led_ui.timeout_ticks = LED_UI_TIMEOUT_TICKS;
     s_led_ui.anim_step = 0;
 
     if (state == LED_UI_OFF_IDLE) {
         LedBar_OutputOff();
     } else if (state == LED_UI_BOOT_PREVIEW) {
+        s_led_ui.timeout_ticks = LED_BOOT_PREVIEW_TICKS;
         LedBar_RenderWork();
     } else if (state == LED_UI_BOOT_ANIM) {
         s_led_ui.anim_step = 1;
@@ -364,9 +366,10 @@ static void LedBar_EnterState(LED_UI_STATE state)
     } else if (state == LED_UI_CHARGE) {
         LedBar_RenderCharge();
     } else if (state == LED_UI_SHUTDOWN_CONFIRM) {
+        s_led_ui.timeout_ticks = LED_SHUTDOWN_CONFIRM_TIMEOUT_TICKS;
         LedBar_ShowShutdownConfirmFrame(s_led_ui.blink_on);
     } else if (state == LED_UI_SHUTDOWN_ANIM) {
-        s_led_ui.anim_step = 4;
+        s_led_ui.anim_step = 0;
         LedBar_ShowShutdownAnimationStep(s_led_ui.anim_step);
     }
 }
@@ -385,10 +388,10 @@ static void LedBar_ServiceBootPreview(UINT8 pressed)
     LedBar_RenderWork();
 
     if (pressed) {
-        if (s_led_ui.hold_ticks < LED_UI_CONFIRM_TICKS) {
+        if (s_led_ui.hold_ticks < LED_BOOT_CONFIRM_TICKS) {
             ++s_led_ui.hold_ticks;
         }
-        if (s_led_ui.hold_ticks >= LED_UI_CONFIRM_TICKS) {
+        if (s_led_ui.hold_ticks >= LED_BOOT_CONFIRM_TICKS) {
             LedBar_EnterState(LED_UI_BOOT_ANIM);
             return;
         }
@@ -439,10 +442,10 @@ static void LedBar_ServiceShutdownConfirm(UINT8 pressed)
     LedBar_ShowShutdownConfirmFrame(s_led_ui.blink_on);
 
     if (pressed) {
-        if (s_led_ui.hold_ticks < LED_UI_CONFIRM_TICKS) {
+        if (s_led_ui.hold_ticks < LED_SHUTDOWN_CONFIRM_TICKS) {
             ++s_led_ui.hold_ticks;
         }
-        if (s_led_ui.hold_ticks >= LED_UI_CONFIRM_TICKS) {
+        if (s_led_ui.hold_ticks >= LED_SHUTDOWN_CONFIRM_TICKS) {
             LedBar_EnterState(LED_UI_SHUTDOWN_ANIM);
             return;
         }
@@ -465,8 +468,8 @@ static void LedBar_ServiceShutdownAnim(void)
     }
 
     s_led_ui.anim_ticks = 0;
-    if (s_led_ui.anim_step > 2) {
-        --s_led_ui.anim_step;
+    if (s_led_ui.anim_step < 4) {
+        ++s_led_ui.anim_step;
         LedBar_ShowShutdownAnimationStep(s_led_ui.anim_step);
     } else {
         LedBar_OutputOff();

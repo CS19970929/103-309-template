@@ -69,6 +69,9 @@ extern UINT8 RTC_ExtComCnt;
 
 extern uint8_t reset_sleep_state;
 
+UINT16 SleepDeal_LoadSleepModeFlag(void);
+UINT8 SleepDeal_SaveSleepModeFlag(UINT16 flag);
+void SleepDeal_ClearSleepModeFlag(void);
 
 void App_NormalSleepTest(void);
 void App_SleepDeal(void);
