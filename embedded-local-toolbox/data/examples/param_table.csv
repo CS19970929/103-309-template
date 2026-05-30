@@ -1,0 +1,5 @@
+group,name,c_name,modbus_addr,data_type,scale,unit,min,max,default,access,save_policy,description
+protection,Cell OVP,cell_ovp_mv,0x2100,u16,1,mV,3000,4500,4200,rw,flash,单体过压保护阈值
+protection,Cell UVP,cell_uvp_mv,0x2101,u16,1,mV,1800,3300,2500,rw,flash,单体欠压保护阈值
+soc,Rated capacity,rated_capacity_mah,0x2200,u32,1,mAh,1000,300000,100000,rw,flash,额定容量
+system,Device address,device_modbus_addr,0x2400,u8,1,addr,1,247,1,rw,flash,Modbus 从站地址

@@ -1,0 +1,5 @@
+{
+  "capacity_mah": 100000,
+  "initial_soc": 60,
+  "display_step_pct": 1
+}

@@ -1,0 +1,6 @@
+time_s,voltage_mv,current_a,state
+0,51200,0,rest
+60,51100,-10,discharge
+120,51000,-10,discharge
+180,50900,20,charge
+240,51050,20,charge

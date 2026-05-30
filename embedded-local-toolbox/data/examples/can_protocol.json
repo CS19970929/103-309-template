@@ -1,0 +1,19 @@
+{
+  "messages": {
+    "0x180": {
+      "name": "BMS_STATUS",
+      "signals": [
+        {"name": "pack_voltage", "byte": 0, "length": 2, "scale": 0.1, "unit": "V"},
+        {"name": "current", "byte": 2, "length": 2, "scale": 0.1, "offset": -3200, "unit": "A"},
+        {"name": "soc", "byte": 4, "length": 1, "scale": 1, "unit": "%"}
+      ]
+    },
+    "0x181": {
+      "name": "BMS_TEMP",
+      "signals": [
+        {"name": "temp1", "byte": 0, "length": 1, "scale": 1, "offset": -40, "unit": "C"},
+        {"name": "temp2", "byte": 1, "length": 1, "scale": 1, "offset": -40, "unit": "C"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+time,event_code,raw
+0.000,0x0020,mos=on
+12.500,0x0001,cell=4210
+18.000,0x0010,current=55.0
+25.000,0x0020,mos=off

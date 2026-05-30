@@ -1,0 +1,8 @@
+{
+  "events": {
+    "0x0001": {"name": "CELL_OVP", "level": "FAULT"},
+    "0x0002": {"name": "CELL_UVP", "level": "FAULT"},
+    "0x0010": {"name": "CHG_OCP", "level": "FAULT"},
+    "0x0020": {"name": "MOS_RECOVER", "level": "INFO"}
+  }
+}

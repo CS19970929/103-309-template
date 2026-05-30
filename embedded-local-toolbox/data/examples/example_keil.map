@@ -1,0 +1,10 @@
+Program Size: Code=4096 RO-data=512 RW-data=128 ZI-data=2048
+
+    0x08000100 0x000000A0 Code main main.o
+    0x080001A0 0x00000050 Code App_MosControl main.o
+    0x080001F0 0x00000140 Code Soc_Calc soc.o
+    0x08000330 0x00000080 Code Can_Process can.o
+    0x080003B0 0x00000030 Code USART1_IRQHandler main.o
+    0x20000000 0x00000004 Data g_ms_tick main.o
+    0x20000004 0x00000040 Data g_cell_voltage afe.o
+    0x20000044 0x00000100 ZI g_log_buffer log.o

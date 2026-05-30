@@ -1,0 +1,7 @@
+{
+  "cell_ovp_mv": 4200,
+  "cell_uvp_mv": 2500,
+  "chg_ocp_a": 50,
+  "dsg_ocp_a": 100,
+  "pack_otp_c": 60
+}

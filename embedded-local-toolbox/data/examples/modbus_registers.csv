@@ -1,0 +1,5 @@
+name,addr,data_type,scale,unit,access,description
+cell_ovp_mv,0x2100,u16,1,mV,rw,单体过压阈值
+cell_uvp_mv,0x2101,u16,1,mV,rw,单体欠压阈值
+rated_capacity_mah,0x2200,u16,1,mAh,rw,额定容量低 16 位示例
+pack_voltage_mv,0xD000,u16,1,mV,ro,实时总压
