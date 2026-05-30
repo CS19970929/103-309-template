@@ -6,7 +6,16 @@
 
 ## 文件变更
 
-未发现 diff。
+| 文件 | 新增行 | 删除行 | 分类 |
+|---|---|---|---|
+| embedded-local-toolbox/README.md | 14 | 0 | 文档 |
+| embedded-local-toolbox/data/examples/README.md | 4 | 0 | 文档 |
+| embedded-local-toolbox/docs/01_usage.md | 11 | 0 | 文档 |
+| embedded-local-toolbox/docs/02_tool_list.md | 5 | 0 | 文档 |
+| embedded-local-toolbox/docs/03_data_format.md | 42 | 0 | 文档 |
+| embedded-local-toolbox/docs/04_safety_rules.md | 30 | 0 | 文档 |
+| embedded-local-toolbox/docs/05_roadmap.md | 3 | 0 | 文档 |
+| embedded-local-toolbox/tools/elt_common.py | 42 | 0 | 其他 |
 
 ## 回归建议
 

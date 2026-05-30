@@ -10,6 +10,11 @@
 | `modbus_param_diff.py` | 对比两份参数 dump | `modbus_dump_a.csv`、`modbus_dump_b.csv` | 本文 |
 | `can_decode.py` | 按 JSON 协议离线解码 CAN 日志 | `can_protocol.json`、`can_log.txt` | 本文 |
 | `can_log_analyze.py` | 分析 CAN ID 帧数和周期 | `can_log.txt` | 本文 |
+| `serial_live_monitor.py` | 串口实时监控，支持日志保存、关键字标记、Modbus RTU 帧识别、CSV/Markdown 输出 | `serial_live_log.txt` | 本文、`docs/04_safety_rules.md` |
+| `bms_live_dashboard.py` | 周期读取 BMS 基本寄存器并输出命令行表格 | `bms_dashboard_registers.csv`、`bms_dashboard_values.csv` | 本文 |
+| `openocd_probe.py` | 检查 OpenOCD/STLink，可选只读读取 DBGMCU IDCODE | `openocd_probe_output.txt` | 本文、`docs/04_safety_rules.md` |
+| `stlink_flash_size_check.py` | 通过 OpenOCD 只读读取 STM32 flash size 寄存器 | `stlink_flash_size_output.txt` | 本文、`docs/04_safety_rules.md` |
+| `firmware_artifact_report.py` | 根据 hex/bin/elf/map 生成固件发布报告，包含大小、CRC、构建时间 | `firmware_demo.*`、`example_keil.map` | 本文 |
 | `bms_log_decode.py` | 按事件码 JSON 解码 BMS 事件日志 | `bms_events.json`、`bms_event_log.csv` | 本文 |
 | `bms_event_report.py` | 统计 BMS 事件等级和次数 | `bms_events.json`、`bms_event_log.csv` | 本文 |
 | `param_table_check.py` | 检查参数表地址、类型、默认值、权限、保存策略 | `param_table.csv` | 本文 |

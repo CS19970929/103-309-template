@@ -1,0 +1,6 @@
+time_s,payload,keywords,modbus
+0.0,BOOT BMS demo firmware v1.2.3,,
+0.1,WARN cell voltage near threshold,WARN,
+0.2,010321000002CE37,,RTU slave=1 func=0x03 len=8 crc=ok
+0.3,FAULT CELL_OVP set,FAULT,
+0.4,INFO loop alive,,

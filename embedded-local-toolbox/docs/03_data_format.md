@@ -54,6 +54,48 @@ time_s can_id data_hex
 }
 ```
 
+## 串口实时日志文本
+
+每行可以带时间戳，也可以只写 payload：
+
+```text
+0.200 010321000002CE37
+0.300 FAULT CELL_OVP set
+```
+
+`serial_live_monitor.py` 会尝试把十六进制 payload 识别为 Modbus RTU 帧，并校验 CRC。
+
+## BMS Dashboard 寄存器表 CSV
+
+字段：
+
+`name,addr,scale,offset,unit,description`
+
+`bms_live_dashboard.py` 读取 raw register 后按 `value = raw x scale + offset` 计算显示值。
+
+## OpenOCD 只读输出
+
+`openocd_probe.py` 默认读取 `DBGMCU_IDCODE` 地址 `0xE0042000`。
+
+`stlink_flash_size_check.py` 按 MCU 系列读取 flash size 地址：
+
+| MCU | Flash size 地址 |
+|---|---|
+| `stm32f0` | `0x1FFFF7CC` |
+| `stm32f1` | `0x1FFFF7E0` |
+| `stm32f4` | `0x1FFF7A22` |
+
+## 固件产物
+
+`firmware_artifact_report.py` 支持读取：
+
+- `.bin`
+- `.hex`
+- `.elf`
+- `.map`
+
+报告包含文件大小、CRC32、SHA256 前 16 位、构建时间；`.map` 会额外输出 Flash/RAM 估算。
+
 ## 保护仿真时间序列 CSV
 
 字段：

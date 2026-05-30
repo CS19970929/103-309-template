@@ -1,0 +1,5 @@
+Open On-Chip Debugger 0.12.0
+Info : STLINK V2J37M26
+Info : stm32f1x.cpu: hardware has 6 breakpoints, 4 watchpoints
+0x1ffff7e0: 0x00000080
+shutdown command invoked

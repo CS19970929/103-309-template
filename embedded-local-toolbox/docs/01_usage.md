@@ -20,6 +20,11 @@ python3 tools/modbus_param_dump.py --csv-out generated/modbus_dump.csv --out rep
 python3 tools/modbus_param_diff.py data/examples/modbus_dump_a.csv data/examples/modbus_dump_b.csv --out reports/modbus_param_diff.md --force
 python3 tools/can_decode.py --out reports/can_decode.md --force
 python3 tools/can_log_analyze.py --out reports/can_log_analyze.md --force
+python3 tools/serial_live_monitor.py --md-out reports/serial_live_monitor.md --csv-out generated/serial_live_monitor.csv --raw-log generated/serial_live_monitor.log --force
+python3 tools/bms_live_dashboard.py --cycles 1 --out reports/bms_live_dashboard.md --force
+python3 tools/openocd_probe.py --out reports/openocd_probe.md --force
+python3 tools/stlink_flash_size_check.py --mcu stm32f1 --out reports/stlink_flash_size_check.md --force
+python3 tools/firmware_artifact_report.py --out reports/firmware_artifact_report.md --force
 python3 tools/bms_log_decode.py --out reports/bms_log_decode.md --force
 python3 tools/bms_event_report.py --out reports/bms_event_report.md --force
 python3 tools/param_table_check.py data/examples/param_table.csv
@@ -39,3 +44,9 @@ python3 tools/change_log_gen.py --repo .. --base HEAD --out reports/change_log.m
 2. 不让工具自动改源码。
 3. 每次生成 Markdown 报告后先人工确认。
 4. 对 Flash、MOS、通信写入、IAP、参数区相关结论必须回到板端验证。
+
+## 真实硬件连接
+
+串口工具传入 `--port` 后会访问真实串口；不传 `--port` 时只使用离线示例数据。
+
+OpenOCD/STLink 工具默认不连接硬件，只检查本机环境或使用示例输出。传入 `--connect` 后才会调用 OpenOCD 访问调试探针，命令只包含 `init`、只读 `mdw` 和 `shutdown`，不包含 `erase`、`program`、`reset`。

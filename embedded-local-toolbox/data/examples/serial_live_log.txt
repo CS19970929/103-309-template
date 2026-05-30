@@ -1,0 +1,6 @@
+# time_s payload
+0.000 BOOT BMS demo firmware v1.2.3
+0.100 WARN cell voltage near threshold
+0.200 010321000002CE37
+0.300 FAULT CELL_OVP set
+0.400 INFO loop alive

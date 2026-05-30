@@ -11,6 +11,7 @@
 - BMS 保护逻辑和 SOC PC 仿真。
 - Cortex-M HardFault 解析。
 - git diff 变更记录生成。
+- 串口实时监控、BMS 命令行 dashboard、OpenOCD/STLink 只读探测和固件产物报告。
 
 ## 第二阶段：工程适配增强
 
@@ -19,6 +20,8 @@
 - Modbus 支持批量读窗口合并、异常码统计和寄存器快照归档。
 - CAN 支持 DBC 子集导入或 JSON 自动转换。
 - SOC 仿真增加 OCV 校准、静置判定、低压保持和显示平滑策略。
+- OpenOCD/JLink 增加更多只读寄存器解码，例如 CPUID、UID、option bytes 只读快照。
+- 串口 dashboard 增加寄存器窗口合并读取和异常码统计。
 
 ## 第三阶段：团队/项目资产化
 

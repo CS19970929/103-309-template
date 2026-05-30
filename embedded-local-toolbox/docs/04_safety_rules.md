@@ -9,6 +9,7 @@
 - 不自动改源码。
 - 不自动覆盖报告或生成文件，覆盖必须显式加 `--force`。
 - 所有报告使用 Markdown，便于审查和归档。
+- 硬件连接必须由命令行参数显式触发。
 
 ## 危险操作
 
@@ -33,6 +34,35 @@
 ### Git diff
 
 `change_log_gen.py` 只读取本地 git diff，不执行 commit、reset、checkout、clean、push。
+
+### 串口监控
+
+`serial_live_monitor.py` 不传 `--port` 时只读取示例日志。传入 `--port` 后只打开串口读取数据，不发送命令。
+
+`bms_live_dashboard.py` 传入 `--port` 后会周期读取 Modbus holding registers，不执行写寄存器。
+
+### OpenOCD/STLink
+
+`openocd_probe.py` 和 `stlink_flash_size_check.py` 默认不访问硬件。只有显式传入 `--connect` 才会调用 OpenOCD。
+
+当前实现只允许以下只读意图：
+
+- 检查 OpenOCD 是否安装。
+- 连接 STLink。
+- 读取 `DBGMCU_IDCODE`。
+- 读取 STM32 flash size 系统存储器地址。
+
+工具命令不包含：
+
+- `erase`
+- `program`
+- `flash write`
+- `reset`
+- `reset halt`
+- `unlock`
+- `lock`
+
+如果后续新增任何擦写、解锁、复位或寄存器写入功能，必须增加二次确认参数，并在报告中记录确认信息。
 
 ## 嵌入式人工复核清单
 

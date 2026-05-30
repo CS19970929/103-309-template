@@ -1,0 +1,7 @@
+name,addr,scale,offset,unit,description
+pack_voltage,0xD000,1,0,mV,电池包总压
+pack_current,0xD001,0.1,-320,A,电池包电流
+soc,0xD002,1,0,%,SOC
+cell_max_mv,0xD003,1,0,mV,最高单体电压
+cell_min_mv,0xD004,1,0,mV,最低单体电压
+fault_word,0xD005,1,0,flags,故障字

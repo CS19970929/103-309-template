@@ -10,6 +10,8 @@ write reports as Markdown.
 from __future__ import annotations
 
 import csv
+import shutil
+import subprocess
 import json
 import re
 from pathlib import Path
@@ -103,3 +105,43 @@ def auto_note(source: str) -> str:
 
 def format_hex(value: int, width: int = 4) -> str:
     return f"0x{value:0{width}X}"
+
+
+def command_exists(name: str) -> str | None:
+    return shutil.which(name)
+
+
+def run_command(args: Sequence[str], timeout: float = 10.0) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)
+
+
+def crc16_modbus(data: bytes) -> int:
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 1:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc & 0xFFFF
+
+
+def crc32_file(path: str | Path) -> int:
+    import zlib
+
+    crc = 0
+    with Path(path).open("rb") as fp:
+        for chunk in iter(lambda: fp.read(65536), b""):
+            crc = zlib.crc32(chunk, crc)
+    return crc & 0xFFFFFFFF
+
+
+def file_sha256(path: str | Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as fp:
+        for chunk in iter(lambda: fp.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

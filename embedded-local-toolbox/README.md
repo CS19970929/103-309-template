@@ -11,6 +11,7 @@
 - 所有工具支持 `--help`。
 - 所有报告输出 Markdown。
 - 危险操作默认 dry-run，不自动删除、不自动覆盖、不自动改源码。
+- 硬件调试工具默认只读；OpenOCD/STLink 工具不包含烧录、擦除、复位命令。
 
 ## 目录
 
@@ -38,6 +39,9 @@ python3 tools/modbus_cli.py --help
 python3 tools/embedded_project_doctor.py data/examples/example_c_project --out reports/project_doctor.md --force
 python3 tools/map_analyze.py data/examples/example_keil.map --out reports/map_analyze.md --force
 python3 tools/can_decode.py --out reports/can_decode.md --force
+python3 tools/serial_live_monitor.py --md-out reports/serial_live_monitor.md --force
+python3 tools/openocd_probe.py --out reports/openocd_probe.md --force
+python3 tools/firmware_artifact_report.py --out reports/firmware_artifact_report.md --force
 ```
 
 3. 将自己的项目数据复制为 CSV/JSON 输入，不直接修改源码。
@@ -45,6 +49,16 @@ python3 tools/can_decode.py --out reports/can_decode.md --force
 4. 输出 Markdown 报告到 `reports/`，人工审查后再决定是否进入项目变更。
 
 说明：工具默认不覆盖已有文件；重复运行示例时需要显式加 `--force`。
+
+真实硬件连接示例：
+
+```bash
+python3 tools/serial_live_monitor.py --port COM4 --baud 19200 --duration 10 --md-out reports/serial_live_monitor.md
+python3 tools/bms_live_dashboard.py --port COM4 --baud 19200 --slave 1 --cycles 10
+python3 tools/openocd_probe.py --connect --target target/stm32f1x.cfg --out reports/openocd_probe.md
+```
+
+这些命令仍然不执行烧录、擦除或源码修改；涉及真实串口/探针连接前，请先确认端口和目标板供电状态。
 
 ## 第一阶段工具
 
