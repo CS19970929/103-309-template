@@ -41,9 +41,11 @@
 1. [通信逻辑与地址整理文档](COMMUNICATION_LAYOUT_REPORT.md)
 2. [通信完整地址索引](COMMUNICATION_ADDRESS_INDEX.md)
 3. [0x10 子地址完整清单](COMMUNICATION_WRITE_DETAIL.md)
-4. [EEPROM 地址与读写逻辑梳理](EEPROM_LAYOUT_OPTIMIZATION.md)
-5. [存储布局说明](STORAGE_LAYOUT_REPORT.md)
-6. [升级参数策略说明](升级参数策略说明.md)
+4. [BMS 参数表生成工具说明](data/param_tables/README.md)
+5. [自动生成 Modbus 参数寄存器映射](docs/generated/modbus_register_map.md)
+6. [EEPROM 地址与读写逻辑梳理](EEPROM_LAYOUT_OPTIMIZATION.md)
+7. [存储布局说明](STORAGE_LAYOUT_REPORT.md)
+8. [升级参数策略说明](升级参数策略说明.md)
 
 ### 修改 SOC / ADC / AFE 监控
 
@@ -119,6 +121,9 @@
 | [存储布局说明](STORAGE_LAYOUT_REPORT.md) | EEPROM、Flash、BKP 等存储布局 |
 | [可读写运行参数持久化说明](RW_PARAMETER_FLASH_STORAGE.md) | 运行参数 Flash 持久化策略 |
 | [升级参数策略说明](升级参数策略说明.md) | 升级参数策略和兼容处理 |
+| [BMS 参数表生成工具说明](data/param_tables/README.md) | 用 CSV/JSON 维护参数表，检查地址/类型/默认值并生成 C 文件与 Markdown 文档 |
+| [自动生成参数表](docs/generated/param_table.md) | 从 `data/param_tables/example_bms_params.csv` 生成的参数明细与默认值视图 |
+| [自动生成 Modbus 参数寄存器映射](docs/generated/modbus_register_map.md) | 从参数表生成的 Modbus 起始地址、寄存器数量和访问权限映射 |
 
 ### SOC / ADC / AFE / 监控
 
