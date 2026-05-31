@@ -6,7 +6,7 @@
 #include "stm32f10x_it.h"
 #include "string.h"
 
-#include "DataDeal.h"               /* must precede Sci_Upper.h */
+#include "data_model.h"               /* must precede Sci_Upper.h */
 #include "Sci_Upper.h"
 #include "System_Init.h"
 #include "System_Monitor.h"
@@ -21,7 +21,6 @@
 #include "Flash.h"
 #include "SleepDeal.h"
 #include "ProductionID.h"
-#include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
 #include "AppInit.h"
