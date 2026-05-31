@@ -9,7 +9,6 @@
 #include "data_model.h"               /* must precede Sci_Upper.h */
 #include "Sci_Upper.h"
 #include "system.h"
-#include "EEPROM.h"
 #include "Fault.h"
 #include "SOC.h"
 #include "ADC.h"
@@ -24,10 +23,8 @@
 #include "AppInit.h"
 #include "MosStartup.h"
 #include "utils.h"
-
 #include "conf.h"
 #include "low_power.h"
-
 #include "elog.h"
 
 /* ── Utility macros ── */
