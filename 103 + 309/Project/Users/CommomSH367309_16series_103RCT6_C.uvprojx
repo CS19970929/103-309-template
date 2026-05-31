@@ -519,6 +519,11 @@
               <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
+              <FileName>can_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\can_app.c</FilePath>
+            </File>
+            <File>
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
@@ -1474,6 +1479,11 @@
               <FileName>CanFeidaoFrames.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_app.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\can_app.c</FilePath>
             </File>
             <File>
               <FileName>LogRecord.c</FileName>
