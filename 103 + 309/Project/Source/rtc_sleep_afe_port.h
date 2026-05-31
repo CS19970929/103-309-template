@@ -2,7 +2,7 @@
 #define RTC_SLEEP_AFE_PORT_H
 
 #include <stdint.h>
-#include "rtc_sleep.h"
+#include "low_power.h"
 
 uint8_t RtcSleep_AfePortIsSleepBlocked(void);
 uint8_t RtcSleep_AfePortUpdateRtcData(void);

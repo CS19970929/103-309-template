@@ -429,9 +429,9 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>app_lowpower.c</FileName>
+              <FileName>low_power.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\app_lowpower.c</FilePath>
+              <FilePath>..\Source\low_power.c</FilePath>
             </File>
             <File>
               <FileName>bsp_rtc.c</FileName>
@@ -608,11 +608,6 @@
               <FileName>rtc_sleep_afe_sh367309.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep.c</FilePath>
             </File>
             <File>
               <FileName>rtc_sleep_port.c</FileName>
@@ -1391,9 +1386,9 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>app_lowpower.c</FileName>
+              <FileName>low_power.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Source\app_lowpower.c</FilePath>
+              <FilePath>..\Source\low_power.c</FilePath>
             </File>
             <File>
               <FileName>bsp_rtc.c</FileName>
@@ -1570,11 +1565,6 @@
               <FileName>rtc_sleep_afe_sh367309.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep.c</FilePath>
             </File>
             <File>
               <FileName>rtc_sleep_port.c</FileName>

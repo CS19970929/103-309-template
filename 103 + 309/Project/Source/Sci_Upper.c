@@ -1479,7 +1479,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 	{
 		UINT8 u8RxData;
 
-		RTC_ExtComCnt++;
+		LP_NotifyExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
 
 		if ((pstPort->pstProtocolOps != 0) &&
@@ -2176,7 +2176,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		case 8: // 激活模拟前端AFE1
 			break;
 		case 0x0A: // 立刻进入休眠
-			entersleep(DEEP_MODE);
+			LP_RequestSleep(DEEP_MODE);
 			break;
 		default:
 			break;

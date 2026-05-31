@@ -53,11 +53,6 @@ UINT8 RtcSleep_PortIsFactoryAgingActive(void)
     return FactoryAging_IsActive();
 }
 
-UINT8 RtcSleep_PortGetExternalCommCounter(void)
-{
-    return RTC_ExtComCnt;
-}
-
 UINT8 RtcSleep_PortIsAfeSleepBlocked(void)
 {
     return RtcSleep_AfePortIsSleepBlocked();

@@ -94,7 +94,7 @@ void charger_detect_and_keyLogi_200ms(void)
             // {
             //     open_dsg_close_chg();
             // }
-                entersleep(DEEP_MODE);
+                LP_RequestSleep(DEEP_MODE);
         }
         else
         {
@@ -988,7 +988,7 @@ static void MonitorAFE_UpdateSleepDelay(UINT8 is_error, UINT16 *delay_tick)
         if (++(*delay_tick) >= MONITOR_AFE_SLEEP_DELAY_TICKS)
         {
             *delay_tick = 0;
-            entersleep(NORMAL_MODE);
+            LP_RequestSleep(NORMAL_MODE);
         }
     }
     else

@@ -3,7 +3,6 @@
 #include "FactoryAging.h"
 #include "Flash64KAppTest.h"
 #include "Runtime.h"
-#include "app_lowpower.h"
 
 #if (defined _DEBUG_CODE)
 static void Runtime_RunDebugOnce(void)

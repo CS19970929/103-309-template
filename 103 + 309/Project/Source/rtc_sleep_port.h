@@ -2,7 +2,7 @@
 #define RTC_SLEEP_PORT_H
 
 #include <stdint.h>
-#include "rtc_sleep.h"
+#include "low_power.h"
 
 uint8_t RtcSleep_PortIsOneSecondTick(void);
 uint16_t RtcSleep_PortGetIdleDelayTargetSeconds(void);
@@ -16,7 +16,6 @@ uint16_t RtcSleep_PortGetLowVoltageSleepMinutes(void);
 
 uint8_t RtcSleep_PortIsMcuWakeActive(void);
 uint8_t RtcSleep_PortIsFactoryAgingActive(void);
-uint8_t RtcSleep_PortGetExternalCommCounter(void);
 uint8_t RtcSleep_PortIsAfeSleepBlocked(void);
 
 uint8_t RtcSleep_PortUpdateRtcData(void);

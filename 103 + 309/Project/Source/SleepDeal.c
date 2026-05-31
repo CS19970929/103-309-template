@@ -1,7 +1,6 @@
 #include "main.h"
 #include "LowPowerSleep.h"
 
-UINT8 RTC_ExtComCnt = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
 static UINT8 s_u8BootFromSleepChargerWakeup = 0U;
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);

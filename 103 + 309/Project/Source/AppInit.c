@@ -1,7 +1,6 @@
 #include "main.h"
 #include "AppInit.h"
 #include "Flash64KAppTest.h"
-#include "app_lowpower.h"
 
 UINT8 SeriesNum = 10;
 
