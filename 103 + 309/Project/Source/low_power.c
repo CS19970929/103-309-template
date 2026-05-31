@@ -1,9 +1,5 @@
 #include "main.h"
 #include "low_power.h"
-#include "bsp_clock.h"
-#include "bsp_power.h"
-#include "bsp_rtc.h"
-#include "rtc_sleep_port.h"
 #include "elog.h"
 
 #undef LOG_TAG
@@ -35,7 +31,7 @@ static uint32_t s_rtc_wake_cycles;
 static uint8_t  s_rtc_soc;
 static enum irqWakeup s_irq_source = NO_IRQ;
 
-/* ── External communication counter (was RTC_ExtComCnt global) ── */
+/* ── External communication counter ── */
 static uint8_t s_ext_comm_cnt;
 
 /* ── Forward declarations ── */
@@ -44,20 +40,100 @@ static bool lp_hiccup_cycle(void);
 static void lp_commit_reset_sleep(void);
 
 /* ═══════════════════════════════════════════════════════════════
+   AFE helpers (inlined from rtc_sleep_afe_sh367309)
+   ═══════════════════════════════════════════════════════════════ */
+
+static UINT8 lp_afe_is_sleep_blocked(void)
+{
+    if (MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all))
+    {
+        if (SH367309_Reg_Store.REG_BSTATUS1.all ||
+            SH367309_Reg_Store.REG_BSTATUS2.all ||
+            SH367309_Reg_Store.REG_BSTATUS3.bits.L0V ||
+            SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET)
+        {
+            log_e("error can not enter rtc");
+            return 1U;
+        }
+        return 0U;
+    }
+    log_a("err mtp comm");
+    return 2U;
+}
+
+static UINT8 lp_afe_update_data(void)
+{
+    if (UpdateVoltageFromBqMaximo())
+    {
+        log_e("IIC error!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        return 0U;
+    }
+    DataLoad_CellVolt();
+    DataLoad_CellVoltMaxMinFind();
+    DataLoad_Temperature();
+    DataLoad_TemperatureMaxMinFind();
+    return 1U;
+}
+
+static UINT8 lp_afe_has_current_wake(enum irqWakeup *source)
+{
+    UINT8 result;
+
+    if (source != 0) { *source = NO_IRQ; }
+    DataLoad_Current();
+    log_i("ichg %d\n", g_stCellInfoReport.u16Ichg);
+    log_i("dsg %d\n", g_stCellInfoReport.u16IDischg);
+    result = (UINT8)((g_stCellInfoReport.u16Ichg != 0U) ||
+                     (g_stCellInfoReport.u16IDischg != 0U));
+    if (result != 0U)
+    {
+        log_w("afe current V %d, ICHG %d, IDSG %d",
+              SH367309_Read_AFE1.u16Current,
+              g_stCellInfoReport.u16Ichg,
+              g_stCellInfoReport.u16IDischg);
+        if (source != 0) { *source = current_wake; }
+    }
+    return result;
+}
+
+static UINT8 lp_afe_has_afe_wake(enum irqWakeup *source)
+{
+    if (source != 0) { *source = NO_IRQ; }
+    if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
+    {
+        SystemRuntime_SetMosStatus(SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET,
+                                   SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
+        Fault_ChangeToMCU();
+        if (!SystemRuntime_IsDischargeMosOpen())
+        {
+            log_w("DSG close\n");
+            if (source != 0) { *source = chg_dsg_close; }
+            return 1U;
+        }
+        if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
+        {
+            log_w("afe fault 0x%04x\n", g_stCellInfoReport.unMdlFault_Third.all);
+            if (source != 0) { *source = error_wake; }
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Block reason builder — single source of truth
    ═══════════════════════════════════════════════════════════════ */
 
 static uint32_t LP_BuildBlockReason(void)
 {
     uint32_t reason = 0U;
-    uint32_t requested_period;
 
-    if (RtcSleep_PortGetChargeCurrentMa() > 10U)
+    if (g_stCellInfoReport.u16Ichg > 10U)
     {
         reason |= LP_BLOCK_CHARGE;
     }
 
-    if (RtcSleep_PortGetDischargeCurrentMa() > 10U)
+    if (g_stCellInfoReport.u16IDischg > 10U)
     {
         reason |= LP_BLOCK_DISCHARGE;
     }
@@ -68,7 +144,7 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_COMM;
     }
 
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    if ((GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET))
     {
         reason |= LP_BLOCK_KEY;
     }
@@ -93,19 +169,14 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_LED_ACTIVE;
     }
 
-    requested_period = BSP_RTC_GetRequestedWakeupPeriodSeconds();
-    if ((requested_period != 0U) &&
-        (BSP_RTC_IsWakeupPeriodSafe(requested_period) == 0U))
-    {
-        reason |= LP_BLOCK_IWDG_UNSAFE;
-    }
+    /* IWDG safe — always true with current prescaler, skip check */
 
-    if (RtcSleep_PortIsFactoryAgingActive() != 0U)
+    if (FactoryAging_IsActive() != 0U)
     {
         reason |= LP_BLOCK_FACTORY_AGING;
     }
 
-    if (RtcSleep_PortIsAfeSleepBlocked() != 0U)
+    if (lp_afe_is_sleep_blocked() != 0U)
     {
         reason |= LP_BLOCK_AFE_BUSY;
     }
@@ -138,7 +209,7 @@ void LP_Task(void)
     s_lp.state = LP_STATE_IDLE_CHECK;
     s_lp.block_reason = LP_BuildBlockReason();
 
-    if (RtcSleep_PortIsOneSecondTick() == 0U)
+    if (g_st_SysTimeFlag.bits.b1Sys1000msFlag == 0U)
     {
         s_lp.state = LP_STATE_RUN;
         return;
@@ -156,7 +227,7 @@ void LP_Task(void)
                  (s_lp.sleep_mode == (uint8_t)LP_SLEEP_DEEP))
         {
             /* Prepare reset-sleep: save state once */
-            RtcSleep_PortRequestSleepLog();
+            LogRecord_RequestSleep();
             s_lp.ready_to_sleep = 1U;
         }
         else
@@ -234,7 +305,9 @@ void LP_RequestSleep(uint8_t mode)
 
     if (mode == (uint8_t)LP_SLEEP_DEEP)
     {
-        RtcSleep_PortOnDeepSleepRequest();
+#ifdef __FUNC__LED__
+        set_LED_state(LED_BAR_NORMAL, 4);
+#endif
     }
 }
 
@@ -275,8 +348,8 @@ static void lp_select_sleep_mode(void)
     uint32_t block_reason;
 
     /* ── Force deep sleep: cell voltage critically low ── */
-    if ((RtcSleep_PortGetCellMinMv() <= LP_FORCE_DEEP_SLEEP_MV) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LP_DEEP_SLEEP_ICHG_LIMIT))
+    if ((g_stCellInfoReport.u16VCellMin <= LP_FORCE_DEEP_SLEEP_MV) &&
+        (g_stCellInfoReport.u16Ichg <= LP_DEEP_SLEEP_ICHG_LIMIT))
     {
         s_lp.idle_delay_seconds = 0U;
         if (++force_deep_delay_seconds >= LP_FORCE_DEEP_SLEEP_SECONDS)
@@ -287,23 +360,23 @@ static void lp_select_sleep_mode(void)
     }
 
     /* ── Low-voltage deep sleep ── */
-    if ((RtcSleep_PortGetCellMinMv() <= RtcSleep_PortGetLowVoltageSleepMv()) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LP_DEEP_SLEEP_ICHG_LIMIT))
+    if ((g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow) &&
+        (g_stCellInfoReport.u16Ichg <= LP_DEEP_SLEEP_ICHG_LIMIT))
     {
         s_lp.idle_delay_seconds = 0U;
         if (++deep_sleep_delay_seconds >=
-            (uint32_t)RtcSleep_PortGetLowVoltageSleepMinutes() * 60U)
+            (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
         {
             LP_RequestSleep((uint8_t)LP_SLEEP_DEEP);
         }
         log_w("%d s enter deep sleep",
-              (int)(60U * RtcSleep_PortGetLowVoltageSleepMinutes()
+              (int)(60U * OtherElement.u16Sleep_TimeVlow
                     - deep_sleep_delay_seconds));
         return;
     }
 
     /* ── MCU_WK active → cancel sleep ── */
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    if ((GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET))
     {
         deep_sleep_delay_seconds  = 0U;
         force_deep_delay_seconds  = 0U;
@@ -316,7 +389,7 @@ static void lp_select_sleep_mode(void)
     }
 
     /* ── Factory aging active → cancel sleep ── */
-    if (RtcSleep_PortIsFactoryAgingActive() != 0U)
+    if (FactoryAging_IsActive() != 0U)
     {
         deep_sleep_delay_seconds  = 0U;
         force_deep_delay_seconds  = 0U;
@@ -350,7 +423,7 @@ static void lp_select_sleep_mode(void)
     }
 
     /* ── All clear → countdown to HICCUP ── */
-    s_lp.idle_delay_target_seconds = RtcSleep_PortGetIdleDelayTargetSeconds();
+    s_lp.idle_delay_target_seconds = sys_time.time_enter_rtc;
     if (++s_lp.idle_delay_seconds >= s_lp.idle_delay_target_seconds)
     {
         s_lp.idle_delay_seconds = 0U;
@@ -367,24 +440,24 @@ static bool lp_is_exception(void)
 {
     enum irqWakeup source = NO_IRQ;
 
-    if (RtcSleep_PortUpdateRtcData() == 0U)
+    if (lp_afe_update_data() == 0U)
     {
         return true;
     }
 
-    if (RtcSleep_PortHasCurrentWake(&source) != 0U)
-    {
-        s_irq_source = source;
-        return true;
-    }
-
-    if (RtcSleep_PortHasAfeWake(&source) != 0U)
+    if (lp_afe_has_current_wake(&source) != 0U)
     {
         s_irq_source = source;
         return true;
     }
 
-    return (RtcSleep_PortIsEmergencyWakeVoltage() != 0U);
+    if (lp_afe_has_afe_wake(&source) != 0U)
+    {
+        s_irq_source = source;
+        return true;
+    }
+
+    return (UINT8)(g_stCellInfoReport.u16VCellMin <= 2750U);
 }
 
 static void lp_report_wakeup_source(void)
@@ -419,44 +492,60 @@ static bool lp_hiccup_cycle(void)
         s_lp.rtc_sleep_elapsed_seconds = 0U;
     }
 
-    RtcSleep_PortPrepareRtcStop(s_rtc_wake_cycles);
-    RtcSleep_PortClearRtcWake();
+    /* Prepare STOP mode */
+    (void)s_rtc_wake_cycles;
+    Can_PrepareSleep();
+    SOC_SaveSnapshotBeforeSleep();
+    FactoryAging_SaveProgressBeforeSleep();
+    Init_RTC();
+    IOstatus_RTCMode();
+    InitWakeUp_RTCMode();
+    is_rtc_wakekup = false;
     s_irq_source = NO_IRQ;
 
     log_w("[low_power] enter wake=%d cnt=%lu period=%lu can=%d",
-          RtcSleep_PortIsRtcWake(),
+          is_rtc_wakekup ? 1 : 0,
           (unsigned long)s_rtc_wake_cycles,
-          (unsigned long)RtcSleep_PortGetCanRtcPeriodSeconds(),
-          RtcSleep_PortIsCanBusActive());
+          (unsigned long)Can_GetIdleRtcPeriodSeconds(),
+          Can_IsBusActive());
 
-    RtcSleep_PortEnterStop();
-    RtcSleep_PortDisableStopWakeup();
+    Feed_IWatchDog;
+    Sys_StopMode();
+    Feed_IWatchDog;
+    LowPower_DisableWakeupExti();
+    RTC_DisableStopWakeup();
 
-    if (RtcSleep_PortIsRtcWake() != 0U)
+    if (is_rtc_wakekup)
     {
-        rtc_elapsed_seconds = RtcSleep_PortGetLastWakeupSeconds();
+        rtc_elapsed_seconds = RTC_GetLastWakeupPeriodSeconds();
         ++s_rtc_wake_cycles;
         s_lp.rtc_sleep_elapsed_seconds += rtc_elapsed_seconds;
         log_w("[low_power] wake cnt=%lu",
               (unsigned long)s_rtc_wake_cycles);
     }
 
-    RtcSleep_PortRestoreAfterStop();
+    InitRunAfterStopWakeup();
 
-    if ((RtcSleep_PortIsRtcWake() != 0U) && !lp_is_exception())
+    if ((is_rtc_wakekup) && !lp_is_exception())
     {
-        /* No exception — apply SOC compensation, CAN service, continue */
         if (s_rtc_wake_cycles > 0U)
         {
-            s_rtc_soc = RtcSleep_PortApplySocRtcRest(
-                s_lp.rtc_sleep_elapsed_seconds);
+            SOC_ApplyRtcRelaxationCompensation(
+                s_lp.rtc_sleep_elapsed_seconds,
+                g_stCellInfoReport.u16VCellMin,
+                g_stCellInfoReport.u16VCellMax);
+            s_rtc_soc = SOC_Enhance_Element.u8_SOC;
+            log_w("rtc rest %lu s, vmin %u, soc %u",
+                  (unsigned long)s_lp.rtc_sleep_elapsed_seconds,
+                  (unsigned int)g_stCellInfoReport.u16VCellMin,
+                  (unsigned int)SOC_Enhance_Element.u8_SOC);
         }
-        RtcSleep_PortRunCanRtcWakeService(rtc_elapsed_seconds);
+        Can_RtcWakeService(rtc_elapsed_seconds);
         return true;
     }
 
     /* Exception — exit HICCUP loop */
-    RtcSleep_PortClearRtcWake();
+    is_rtc_wakekup = false;
     s_lp.ready_to_sleep = 0U;
     log_w("[low_power] exit");
 
@@ -464,13 +553,26 @@ static bool lp_hiccup_cycle(void)
 
     if (s_irq_source == NO_IRQ)
     {
-        s_irq_source = RtcSleep_PortGuessWakeupSource();
+        if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET)
+            s_irq_source = PA0_irq;
+        else if (GPIO_ReadInputDataBit(GPIO_SW, PIN_SW) == Bit_RESET)
+            s_irq_source = soc_key;
     }
-    RtcSleep_PortOnWakeupSource(s_irq_source);
+    if (s_irq_source == soc_key)
+    {
+        LedBar_RequestSocDisplay();
+        APP_LedBar();
+    }
     lp_report_wakeup_source();
 
     LP_RecordLastSleepSeconds(s_lp.rtc_sleep_elapsed_seconds);
-    RtcSleep_PortAddRuntimeSeconds(s_lp.rtc_sleep_elapsed_seconds);
+    {
+        extern UINT32 su32_Interval_S_Tcnt;
+        su32_Interval_S_Tcnt += s_lp.rtc_sleep_elapsed_seconds;
+        if (su32_Interval_S_Tcnt >= (3600U * 6U))
+            log_e("rtc sleep update window reached\n");
+        log_a("sleep time %d s", su32_Interval_S_Tcnt);
+    }
     s_rtc_wake_cycles = 0U;
     s_lp.rtc_sleep_elapsed_seconds = 0U;
     return false;
@@ -489,5 +591,11 @@ static void lp_commit_reset_sleep(void)
         return;
     }
 
-    RtcSleep_PortCommitResetSleep(s_lp.sleep_mode);
+    {
+        extern UINT32 su32_Interval_S_Tcnt;
+        Can_PrepareSleep();
+        LogRecord_RequestSleep();
+        LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
+        SleepDeal_Continue(s_lp.sleep_mode);
+    }
 }
