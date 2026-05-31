@@ -24,6 +24,8 @@ Keil section 放置规则：
 
 ## GCC linker 目标
 
+已新增 linker script：`linker/stm32f103_app_0x08004800.ld`。
+
 | 配置项 | Keil 原值 | GCC `.ld` 目标 | 说明 |
 |---|---|---|---|
 | App 起始 | `0x08004800` | `FLASH ORIGIN = 0x08004800` | 与 IAP 安全规则一致 |
@@ -58,5 +60,5 @@ Keil section 放置规则：
 ## 风险和 TODO
 
 - 高风险：Keil `.uvprojx` 设备为 `STM32F103C8`，但 scatter/App/参数区使用到 `0x0801FFFF`，需要确认实际 MCU Flash 容量。
-- 高风险：Keil scatter 没有显式保护 `0x0801C000` 后持久化区，GCC linker 必须补上。
+- 高风险：Keil scatter 没有显式保护 `0x0801C000` 后持久化区；GCC linker 已显式预留该区，后续需通过构建和 map 文件验证。
 - 中风险：如果后续发现业务使用自定义 section，需要同步更新 `.ld`。

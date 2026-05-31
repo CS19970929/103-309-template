@@ -19,7 +19,7 @@
 
 ## 统一兼容层要求
 
-新增 `compiler_port.h`，集中定义：
+已新增 `cmake/compat/compiler_port.h`，集中定义：
 
 - `COMPILER_WEAK`
 - `COMPILER_PACKED`
@@ -33,7 +33,7 @@
 
 ## 当前阻塞
 
-- `stm32f10x_it.c` 的 `__asm void wait()` 是 GCC 构建阻塞项。建议最小修改为：
+- `stm32f10x_it.c` 的 `__asm void wait()` 仍是 GCC 构建阻塞项。建议最小修改为：
   - ARMCC 保留原实现。
   - GCC 使用 `COMPILER_NAKED void wait(void)` 加 `__asm volatile("bx lr");`。
 - `printf` 输出在 GCC 下必须验证。若 `nosys.specs` 导致 `_write` 默认失败，需要新增 GCC 专用 retarget 源文件，不修改通信协议。

@@ -1,0 +1,45 @@
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+set(ARM_GNU_TOOLCHAIN_PATH "$ENV{ARM_GNU_TOOLCHAIN_PATH}" CACHE PATH "Optional ARM GNU Toolchain root directory")
+
+set(_ARM_TOOLCHAIN_HINTS)
+if(ARM_GNU_TOOLCHAIN_PATH)
+    list(APPEND _ARM_TOOLCHAIN_HINTS
+        "${ARM_GNU_TOOLCHAIN_PATH}"
+        "${ARM_GNU_TOOLCHAIN_PATH}/bin"
+    )
+endif()
+
+find_program(CMAKE_C_COMPILER
+    NAMES arm-none-eabi-gcc
+    HINTS ${_ARM_TOOLCHAIN_HINTS}
+    REQUIRED
+)
+find_program(CMAKE_ASM_COMPILER
+    NAMES arm-none-eabi-gcc
+    HINTS ${_ARM_TOOLCHAIN_HINTS}
+    REQUIRED
+)
+find_program(CMAKE_OBJCOPY
+    NAMES arm-none-eabi-objcopy
+    HINTS ${_ARM_TOOLCHAIN_HINTS}
+    REQUIRED
+)
+find_program(CMAKE_SIZE
+    NAMES arm-none-eabi-size
+    HINTS ${_ARM_TOOLCHAIN_HINTS}
+    REQUIRED
+)
+find_program(CMAKE_GDB
+    NAMES arm-none-eabi-gdb
+    HINTS ${_ARM_TOOLCHAIN_HINTS}
+)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
+set(CMAKE_EXECUTABLE_SUFFIX_C ".elf")
+set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")

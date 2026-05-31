@@ -14,17 +14,19 @@
 
 ## GCC startup 必须满足
 
+已新增 GCC startup：`startup/startup_stm32f10x_hd_gcc.s`。
+
 | 检查项 | GCC startup 目标 | 状态 |
 |---|---|---|
-| 向量表地址 | `.isr_vector` 放在 `FLASH ORIGIN=0x08004800` | 待实现 |
-| 初始栈 | 第一项为 `_estack` | 待实现 |
-| `Reset_Handler` | 全局导出 | 待实现 |
-| `SystemInit` | 复位后先调用 | 待实现 |
-| `.data` 拷贝 | 从 `_sidata` 拷贝到 `_sdata.._edata` | 待实现 |
-| `.bss` 清零 | 清 `_sbss.._ebss` | 待实现 |
-| C runtime | 调用 `__libc_init_array` | 待实现 |
-| `main` | 调用 `main`，返回后进入死循环 | 待实现 |
-| 弱中断 | 未实现 ISR weak alias 到 `Default_Handler` | 待实现 |
+| 向量表地址 | `.isr_vector` 放在 `FLASH ORIGIN=0x08004800` | 已实现，待构建验证 |
+| 初始栈 | 第一项为 `_estack` | 已实现，待构建验证 |
+| `Reset_Handler` | 全局导出 | 已实现，待构建验证 |
+| `SystemInit` | 复位后先调用 | 已实现，待构建验证 |
+| `.data` 拷贝 | 从 `_sidata` 拷贝到 `_sdata.._edata` | 已实现，待构建验证 |
+| `.bss` 清零 | 清 `_sbss.._ebss` | 已实现，待构建验证 |
+| C runtime | 调用 `__libc_init_array` | 已实现，待构建验证 |
+| `main` | 调用 `main`，返回后进入死循环 | 已实现，待构建验证 |
+| 弱中断 | 未实现 ISR weak alias 到 `Default_Handler` | 已实现，待构建验证 |
 
 ## ISR 名称对照
 
