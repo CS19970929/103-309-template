@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug STM32 with JLink",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/gcc-debug/firmware.elf",
+      "request": "launch",
+      "type": "cortex-debug",
+      "servertype": "jlink",
+      "device": "STM32F103C8",
+      "interface": "swd",
+      "runToEntryPoint": "main",
+      "preLaunchTask": "Build Debug",
+      "postLaunchCommands": [
+        "monitor reset halt"
+      ]
+    },
+    {
+      "name": "Debug STM32 with STLINK",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/gcc-debug/firmware.elf",
+      "request": "launch",
+      "type": "cortex-debug",
+      "servertype": "openocd",
+      "device": "STM32F103C8",
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32f1x.cfg"
+      ],
+      "runToEntryPoint": "main",
+      "preLaunchTask": "Build Debug",
+      "postLaunchCommands": [
+        "monitor reset halt"
+      ]
+    }
+  ]
+}

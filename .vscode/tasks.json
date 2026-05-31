@@ -1,0 +1,77 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Check Environment",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/check_env.py"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Debug",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/build.py",
+        "--config",
+        "Debug"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "Build Release",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/build.py",
+        "--config",
+        "Release"
+      ],
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "Size Debug",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/size.py",
+        "--config",
+        "Debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash Debug JLink Dry Run",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/flash.py",
+        "--method",
+        "jlink",
+        "--config",
+        "Debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash Debug STLINK Dry Run",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/flash.py",
+        "--method",
+        "stlink",
+        "--config",
+        "Debug"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

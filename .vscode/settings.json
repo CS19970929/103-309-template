@@ -1,0 +1,12 @@
+{
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": false,
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "python.defaultInterpreterPath": "python",
+  "cortex-debug.gdbPath": "arm-none-eabi-gdb",
+  "files.associations": {
+    "stm32f10x_conf.h": "c",
+    "stm32f10x.h": "c",
+    "*.s": "arm"
+  }
+}
