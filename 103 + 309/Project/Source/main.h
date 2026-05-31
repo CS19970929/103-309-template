@@ -8,8 +8,7 @@
 
 #include "data_model.h"               /* must precede Sci_Upper.h */
 #include "Sci_Upper.h"
-#include "System_Init.h"
-#include "System_Monitor.h"
+#include "system.h"
 #include "EEPROM.h"
 #include "Fault.h"
 #include "SOC.h"
