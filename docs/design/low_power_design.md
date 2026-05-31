@@ -3,8 +3,8 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`app_lowpower.c`, `rtc_sleep.c`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
-最后更新时间：2026-05-27
-未确认事项：IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep、`PROJECT_CFG_IDLE_SLEEP_ENABLE` 打开后是否通过硬件实测。
+最后更新时间：2026-05-31
+未确认事项：reset-sleep 下 UART1/CMNT/MCU_WK 是否应进入正常运行、IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep、CAN RTC 服务是否满足功耗和通信在线目标、`PROJECT_CFG_IDLE_SLEEP_ENABLE` 打开后是否通过硬件实测。
 
 ## 2026-05-27 RTC/STOP 修复补充
 
@@ -49,7 +49,8 @@ SleepDeal_Continue()
 当前 `LP_BuildBlockReason()` 会阻塞 sleep 的条件：
 
 - 充/放电电流 > 10mA。
-- SCI/CAN busy 或 CAN bus active。
+- SCI/CAN busy。
+- CAN bus active 当前不作为永久 STOP block；它主要影响 RTC wake period 和 CAN RTC wake service 策略。
 - MCU_WK/key active。
 - AFE 不允许 sleep。
 - Flash busy 或待写参数。
@@ -64,7 +65,13 @@ RTC 优先 LSE，失败后 LSI fallback。F1 使用 RTC counter + Alarm 唤醒 S
 
 IWDG 开启时，RTC wake period 最大被限制为 10s。
 
-CAN RTC 唤醒广播周期由 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置，默认 `1s`，用于保留当前客户可见的周期广播行为。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；超时后允许低功耗判断不再被历史 CAN active 状态永久阻塞。
+CAN RTC 唤醒广播周期由 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置，默认 `1s`，用于保留当前客户可见的周期广播行为。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；当前源码中 CAN busy 会阻塞进入 STOP，CAN active 主要决定 RTC wake 采用 active 周期还是 idle probe 周期，不作为永久 STOP block。
+
+## 4.1 reset-sleep 唤醒源补充
+
+当前 reset-sleep 启动路径中，`conf.c` 会把 UART1 RX、CHG_IN、INT_WK_CMNT、MCU_WK 等配置为唤醒 EXTI，但 `SleepDeal.c` 的合法唤醒判断只接受 charger active 和 key hold。也就是说，UART1/CMNT/MCU_WK 可以唤醒 STOP，但如果没有 charger/key 条件，当前会再次进入 STOP。
+
+该行为必须由产品需求确认后才能修改。当前详细确认表和执行门禁见 `docs/review/low_power_comm_wake_gate_plan_2026-05-31.md`。
 
 ## 5. IWDG 使用
 
@@ -103,7 +110,7 @@ HICCUP STOP 醒来后：
 
 | 风险 | 建议 |
 |---|---|
-| CAN bus active 可能长期阻塞 sleep | 已改为配置化保持时间，默认 10s，需实测 CAN 在线/离线切换 |
+| CAN bus active 口径容易被误读 | 当前 CAN busy 阻塞 STOP，CAN active 调整 RTC 服务周期；需实测 CAN 在线/离线切换 |
 | IWDG 10s 周期导致功耗偏高 | 实测后决定是否调整 IWDG/RTC 策略 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |
 | LedBar active 阻塞 sleep 影响用户显示和功耗 | 确认显示窗口时长 |

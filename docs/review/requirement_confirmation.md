@@ -28,7 +28,7 @@
 | REQ-FLASH-004 | AFE 参数必须能从 Flash 加载，必要时恢复默认并写入 AFE MTP/寄存器 | `SH367309_DataDeal.c:251-375`, `Flash.c:803-835` | `SH367309_DataDeal.c`, `Flash.c` | 24 words AFE 参数双槽保存 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP，但生产现场写 AFE 参数需权限确认 |
 | REQ-FLASH-005 | 事件/故障记录必须持久化，且重复记录有最小间隔 | `Project_Config.h:229`, `Flash.c:872-929`, `LogRecord.c` | `LogRecord.c`, `Flash.c` | 事件环形记录 + Flash journal | 是 | 是 | 间接 | 否 | 是 | MUST_KEEP；日志粒度可后续整理 |
 | REQ-FLASH-006 | 工厂老化状态和已运行时间必须掉电保持 | `FactoryAging.c:129-182`, `FactoryAging.c:199-243`, `Flash.c:931-975` | `FactoryAging.c`, `Flash.c` | BKP 每秒级保存，Flash 每 2 小时/关键动作保存 | 是 | 是 | 间接 | 是 | 是 | UNKNOWN；需确认老化需求是否长期保留 |
-| REQ-FLASH-007 | 升级后可一次性执行参数重置策略 | `Project_Config.h:393-433`, `EEPROM.c:228-310` | `UpgradeParamPolicy.h`, `EEPROM.c` | 版本 flag `0x0004`，当前重置 SOC snapshot 和事件记录 | 是 | 是 | 是 | 间接 | 是 | KEEP_BUT_REFACTOR；每次策略必须写文档 |
+| REQ-FLASH-007 | 升级后可一次性执行参数重置策略 | `Project_Config.h:411-447`, `EEPROM.c:228-310` | `UpgradeParamPolicy.h`, `EEPROM.c` | 版本 flag `0x0005`，当前重置 AFE、保护、SOC 表、SOC 配置、SOC snapshot、事件记录和老化时间，不重置 balance open voltage | 是 | 是 | 是 | 间接 | 是 | KEEP_BUT_REFACTOR；每次策略必须写文档 |
 | REQ-FLASH-008 | 内部 Flash 持久化区域固定使用后 64K 地址 | `Flash.h:7-30`, `Flash.c:1017-1025` | `Flash.h`, `Flash.c` | `0x0801C000` 以后作为存储区 | 否 | 间接 | 是 | 是 | 是 | UNKNOWN；必须确认实际芯片容量/量产型号 |
 
 ## 3. ADC / AFE / 采集需求
@@ -43,7 +43,7 @@
 | REQ-AFE-002 | 启动时必须初始化 AFE、写保护配置、执行启动零点/初始 MOS 策略 | `I2C_AFE1.c:688-714` | `I2C_AFE1.c`, `MosStartup.c` | reset AFE，更新配置，应用初始 MOS 状态 | 是 | 否 | 是 | 否 | 是 | MUST_KEEP |
 | REQ-AFE-003 | AFE 配置由保护参数和 OtherElement 转换为 ROM 寄存器并写入 | `SH367309_DataDeal.c:39-113`, `SH367309_DataDeal.c:182-249` | `SH367309_DataDeal.c` | 比较 ROM，差异写入，reset AFE，再打开驱动 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP，但硬编码项需确认 |
 | REQ-AFE-004 | AFE 状态/故障必须映射到 BMS fault flags 和日志 | `SH367309_Func.c:228-305`, `SH367309_Func.c:307-390` | `SH367309_Func.c`, `System_Monitor.h` | 读 status，映射 OVP/UVP/OCP/CBC/MOS 状态 | 是 | 是 | 是 | 间接 | 是 | MUST_KEEP |
-| REQ-AFE-005 | AFE 当前采样必须驱动 SOC 更新序号 | `DataDeal.c:807-871`, `DataDeal.c:1225-1249`, `SOC.c:203-237` | `DataDeal.c`, `SOC.c` | 200ms 更新一次并递增 `g_u32AfeCurrentSampleSeq` | 是 | 是 | 是 | 间接 | 是 | CHANGE_NEEDED；当前实际电流路径疑似错误 |
+| REQ-AFE-005 | AFE 当前采样必须驱动 SOC 更新序号 | `DataDeal.c:807-850`, `DataDeal.c:1225-1249`, `SOC.c:203-237` | `DataDeal.c`, `SOC.c` | 200ms 调用 `DataLoad_Current()` 并递增 `g_u32AfeCurrentSampleSeq`；debug 状态仍可覆盖电流 | 是 | 是 | 是 | 间接 | 是 | KEEP_BUT_REFACTOR；真实电流主路径已恢复，虚拟电流入口需隔离确认 |
 | REQ-AFE-006 | AFE 在低功耗前必须进入 sleep，并在唤醒后恢复 I2C/配置 | `SleepDeal.c:109-114`, `rtc_sleep_afe_sh367309.c`, `conf.c:392-421` | `SleepDeal.c`, `rtc_sleep_afe_sh367309.c`, `conf.c` | sleep/reset 或 STOP 恢复后重新初始化接口 | 是 | 否 | 是 | 是 | 是 | MUST_KEEP |
 
 ## 4. 电压、电流、温度采集需求
@@ -53,8 +53,8 @@
 | REQ-MEAS-001 | 电芯电压按实际串数映射，未使用电芯填 61001 | `DataDeal.c:137-173` | `DataDeal.c`, `DataDeal.h` | 从 AFE cell 数组映射到 `u16VCell[]`，13 串有特殊跳位 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP；13 串跳位需硬件确认 |
 | REQ-MEAS-002 | 最高/最低单体和总压必须根据串数、K/B 校准计算 | `DataDeal.c:175-220` | `DataDeal.c` | 遍历 `SeriesNum`，计算 max/min/total | 是 | 是 | 是 | 否 | 是 | MUST_KEEP |
 | REQ-MEAS-003 | 温度包含 AFE 两路温度、MOS ADC 温度，ENV2/ENV3 当前强制 -40 | `DataDeal.c:227-277` | `DataDeal.c`, `ADC.c` | 两路 AFE temp + MOS temp，两个环境温度占位 | 是 | 是 | 是 | 间接 | 是 | UNKNOWN；需确认温度探头数量和上位机显示预期 |
-| REQ-MEAS-004 | 充电/放电电流分别上报，并支持启动零点和死区 | `DataDeal.c:807-871` | `DataDeal.c`, `I2C_AFE1.c` | AFE CADC raw -> 充/放电 mA/0.1A | 是 | 是 | 是 | 否 | 是 | MUST_KEEP，但当前调用被虚拟电流替代 |
-| REQ-MEAS-005 | 调试虚拟电流可在特定 debug 状态下注入 | `Project_Config.h:110`, `DataDeal.c:856-868`, `DataDeal.c:1040-1084` | `DataDeal.c`, `conf.h` | `__VIRTURE_CURRENT__` 和 test loop | 是 | 是 | 是 | 否 | 否 | CHANGE_NEEDED；必须编译隔离，不能混入量产主路径 |
+| REQ-MEAS-004 | 充电/放电电流分别上报，并支持启动零点和死区 | `DataDeal.c:807-850` | `DataDeal.c`, `I2C_AFE1.c` | AFE CADC raw -> 充/放电 mA/0.1A；debug 状态可覆盖输出 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP；虚拟电流覆盖需隔离确认 |
+| REQ-MEAS-005 | 调试虚拟电流可在特定 debug 状态下注入 | `Project_Config.h:128`, `conf.h:77-78`, `DataDeal.c:844-850`, `DataDeal.c:1040-1084`, `DataDeal.c:1238-1239` | `DataDeal.c`, `conf.h` | `__VIRTURE_CURRENT__` 下 `sys_time.isdebugenable` 可覆盖电流；`test_Autocurrent_cycle()` 当前未接入主路径 | 是 | 是 | 是 | 否 | 否 | CHANGE_NEEDED；必须编译隔离，不能混入量产主路径 |
 
 ## 5. 保护逻辑、均衡、MOS 控制需求
 

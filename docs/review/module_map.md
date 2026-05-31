@@ -50,13 +50,13 @@ Keil 工程列入的业务源码主要包括：
 | RTC | 开启 | `Project_Config.h:86` | 支持 STOP/RTC 唤醒/SOC 休眠补偿 |
 | UART1 唤醒 | 开启 | `Project_Config.h:94` | PB7 可作为唤醒源 |
 | RS485 唤醒 | 开启 | `Project_Config.h:102` | PB12 作为通信唤醒源 |
-| 虚拟电流 | 开启 | `Project_Config.h:110` | 调试入口存在；当前 AFE 主路径还实际调用虚拟电流循环 |
+| 虚拟电流 | 开启 | `Project_Config.h:128`, `DataDeal.c:844-850`, `DataDeal.c:1238-1239` | 当前 AFE 主路径调用 `DataLoad_Current()`，`test_Autocurrent_cycle()` 已注释；但 debug 状态仍可覆盖电流 |
 | 长按关机 | 开启 | `Project_Config.h:122` | LED/按键模块可进入 DEEP_MODE |
 | IAP 跳转 | 开启 | `Project_Config.h:159` | 上位机/CAN 可请求进 IAP |
 | 工厂老化 | 开启 | `Project_Config.h:163` | 默认 3 天运行时老化 |
 | SOC 测试模式 | 关闭 | `Project_Config.h:340` | `0xD300 supported=0` 是量产预期 |
 | LedBar 睡眠 | 开启 | `Project_Config.h:356` | 睡眠前需要保存/显示 SOC |
-| 升级参数策略 | 开启，版本 `0x0004` | `Project_Config.h:393-433` | 当前会重置 SOC snapshot 和事件记录 |
+| 升级参数策略 | 开启，版本 `0x0005` | `Project_Config.h:411-447` | 当前会重置 AFE、保护、SOC 表、SOC 配置、SOC snapshot、事件记录和老化时间，不重置 balance open voltage |
 
 ## 4. main 主循环逻辑
 
@@ -225,7 +225,7 @@ InitE2PROM()
 AFE/ADC/参数
   DataLoad_CellVolt()
   DataLoad_Temperature()
-  DataLoad_Current() 或 test_Autocurrent_cycle()
+  DataLoad_Current()
   g_u32AfeCurrentSampleSeq++
 App_SOC()
   SOC_UpdateSampleData()
@@ -251,7 +251,7 @@ App_SOC()
 
 重大确认点：
 
-- 当前 `App_AFEGet()` 中 `DataLoad_Current()` 被注释，实际调用 `test_Autocurrent_cycle()`，见 `DataDeal.c:1238-1239`。这会直接影响 SOC、CAN 电流、保护显示和老化行为，必须确认是否为误留测试代码。
+- 当前 `App_AFEGet()` 中实际调用 `DataLoad_Current()`，`test_Autocurrent_cycle()` 为注释状态，见 `DataDeal.c:1238-1239`。旧文档中“量产主路径运行虚拟电流”的结论已过期；剩余问题是该测试函数是否仍需要保留。
 
 ## 12. ADC / AFE 数据流
 
@@ -340,9 +340,9 @@ rtc_sleep()
 阻塞睡眠条件包括：
 
 - 充/放电电流大于 10mA。
-- 任意 SCI/CAN 忙，CAN bus active。
+- SCI/CAN busy。CAN bus active 当前不直接作为 STOP block，只影响 RTC wake period 和 CAN RTC wake service 策略。
 - MCU_WK/key active。
-- AFE 不允许 sleep。
+- AFE 不允许 sleep（在 `rtc_sleep.c` 的 RTC sleep selection 中判断，`app_lowpower.c` 内对应 block 当前仍是注释状态）。
 - Flash busy 或待写参数。
 - IAP pending。
 - fault active。
@@ -426,4 +426,4 @@ TIM4_IRQHandler()
 | RTC 参数写入 | `Sci_WrRegs_0x10_RTC()` 空函数 | 地址存在但写入无效 |
 | 铜损表写入 | `Sci_WrRegs_0x10_CopperLoss()` 空函数 | 地址存在但写入无效 |
 | 故障 LED 显示 | `LedBar_IsFaultActive()` 存在，`APP_LedBar()` fault 分支为空 | 可能是未完成需求 |
-| 虚拟电流循环 | `DataLoad_Current()` 被注释，`test_Autocurrent_cycle()` 运行 | 量产高风险，必须确认 |
+| 虚拟电流循环 | `DataLoad_Current()` 运行，`test_Autocurrent_cycle()` 当前只作为残留测试函数存在 | 非当前主路径风险；需确认是否删除或隔离到测试 profile |

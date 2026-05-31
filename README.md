@@ -4,22 +4,34 @@
 
 ## 推荐阅读路径
 
-### 快速熟悉整机架构
+### 当前 source-first 权威入口
+
+1. [docs/README.md](docs/README.md)：当前权威文档入口，旧文档只作历史参考。
+2. [当前目标与源码事实闭环](docs/review/current_goal_fact_sync_2026-05-31.md)：本轮意图、当前源码事实、过期文档冲突、需求确认焦点和分阶段执行计划。
+3. [后续分阶段重构计划](docs/review/refactor_plan.md)：进入源码阶段前的可执行、可验证、可回滚计划。
+4. [需求合理性判断与确认问题表](docs/review/requirement_questions.md)：修改源码前必须逐条确认的 P0/P1 问题。
+5. [风险清单](docs/review/risk_list.md)：当前 P0/P1 风险和验证缺口。
+
+### 修改高风险边界前必须阅读
+
+1. [App/IAP/Flash 地址门禁方案](docs/review/flash_iap_address_gate_plan_2026-05-31.md)
+2. [S1 App/IAP/Flash 用户确认包](docs/review/s1_flash_iap_user_confirmation_2026-05-31.md)
+3. [AFE 安全门禁方案](docs/review/afe_safety_gate_plan_2026-05-31.md)
+4. [S2/S3 AFE 用户确认包](docs/review/s2_s3_afe_user_confirmation_2026-05-31.md)
+5. [低功耗通信唤醒门禁方案](docs/review/low_power_comm_wake_gate_plan_2026-05-31.md)
+6. [S4 低功耗通信用户确认包](docs/review/s4_low_power_comm_user_confirmation_2026-05-31.md)
+7. [协议写入口 ACK 门禁方案](docs/review/protocol_write_ack_gate_plan_2026-05-31.md)
+8. [S5 协议写入口 ACK 用户确认包](docs/review/s5_protocol_ack_user_confirmation_2026-05-31.md)
+9. [存储失败与升级清参门禁方案](docs/review/storage_upgrade_gate_plan_2026-05-31.md)
+10. [S7 存储失败与升级清参用户确认包](docs/review/s7_storage_upgrade_user_confirmation_2026-05-31.md)
+
+### 日常协作和发布入口
 
 1. [项目协作与发布检查清单](项目协作与发布检查清单.md)
 2. [BMS 日常开发工作流](BMS_DAILY_DEV_WORKFLOW.md)
 3. [项目自动化检查与发布流程](项目自动化检查与发布流程.md)
-4. [项目逻辑完整梳理与架构简化建议](项目逻辑完整梳理与架构简化建议_2026-05-24.md)
-5. [项目全模块、外设、功能、驱动审计](项目全模块外设功能驱动审计_2026-05-17.md)
-6. [项目级代码与文档审查记录](PROJECT_REVIEW_2026-05-09.md)
-7. [项目运行流程与时序源码梳理](项目运行流程与时序源码梳理_2026-05-16.md)
-8. [MCU 资源分布与架构优化评估](MCU资源分布与架构优化评估.md)
-9. [系统时钟系统梳理](系统时钟系统梳理.md)
-10. [运行架构与时基重构方案](运行架构与时基重构方案.md)
-11. [System_Monitor 模块梳理](System_Monitor模块梳理.md)
-12. [项目宏定义梳理](项目宏定义梳理.md)
-13. [休眠低功耗逻辑梳理与优化建议](休眠低功耗逻辑梳理与优化建议.md)
-14. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
+
+根目录旧审计文档保留为历史资料。若旧文档与 `docs/README.md`、`docs/design/*`、`docs/protocol/*`、`docs/review/*` 冲突，以当前源码和 `docs/review/document_source_consistency.md` 标记的结论为准。
 
 ### 修改 LED / 数码管显示
 

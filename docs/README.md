@@ -3,8 +3,8 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source` 当前主工程源码
-最后更新时间：2026-05-27
-未确认事项：电流真实路径、均衡需求、老化保留策略、Host 写权限、实际 Flash 容量、低功耗 CAN 广播策略仍需用户确认。
+最后更新时间：2026-05-31
+未确认事项：虚拟电流调试入口隔离、均衡需求、老化保留策略、Host 写权限、实际 Flash 容量、低功耗 CAN 广播策略、存储失败可见性和升级清参策略仍需用户确认。
 
 ## 1. 使用原则
 
@@ -38,6 +38,18 @@
 | 文档 | 用途 |
 |---|---|
 | `docs/review/module_map.md` | 本轮源码扫描细节 |
+| `docs/review/current_goal_fact_sync_2026-05-31.md` | 当前目标、源码事实、过期文档冲突、需求确认焦点和分阶段执行计划 |
+| `docs/review/current_goal_completion_audit_2026-05-31.md` | 当前长期目标完成度审计、证据矩阵、未完成项和验证边界 |
+| `docs/review/flash_iap_address_gate_plan_2026-05-31.md` | App/IAP/Flash 存储/SRAM mailbox 地址门禁方案 |
+| `docs/review/s1_flash_iap_user_confirmation_2026-05-31.md` | S1 App 结束地址、IAP SRAM mailbox、Release map 和 MCU Flash 容量的用户确认包 |
+| `docs/review/afe_safety_gate_plan_2026-05-31.md` | AFE 参数写入、通信失败和 watchdog 安全门禁方案 |
+| `docs/review/s2_s3_afe_user_confirmation_2026-05-31.md` | S2/S3 AFE 写参权限、非法参数响应、fail-safe、watchdog 和虚拟电流隔离的用户确认包 |
+| `docs/review/low_power_comm_wake_gate_plan_2026-05-31.md` | reset-sleep 唤醒源、通信活跃和 CAN RTC 服务门禁方案 |
+| `docs/review/s4_low_power_comm_user_confirmation_2026-05-31.md` | S4 reset-sleep 唤醒源、通信活跃、CAN RTC service 和 IWDG 取舍的用户确认包 |
+| `docs/review/protocol_write_ack_gate_plan_2026-05-31.md` | Modbus/CAN App 写入口空实现、`#if 0` 和 ACK 语义门禁方案 |
+| `docs/review/s5_protocol_ack_user_confirmation_2026-05-31.md` | S5 协议空实现/`#if 0` 写入口、错误码和 CAN App 复用语义的用户确认包 |
+| `docs/review/storage_upgrade_gate_plan_2026-05-31.md` | Flash/EEPROM 存储失败可见性和升级清参策略门禁方案 |
+| `docs/review/s7_storage_upgrade_user_confirmation_2026-05-31.md` | S7 存储失败可见性、低功耗阻塞和 upgrade policy `0x0005` 清参策略的用户确认包 |
 | `docs/review/requirement_confirmation.md` | 从源码反推的需求清单 |
 | `docs/review/requirement_questions.md` | 需要用户确认的问题表 |
 | `docs/review/full_project_review.md` | 全项目 review 结论 |

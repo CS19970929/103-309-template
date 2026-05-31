@@ -1,0 +1,37 @@
+# BMS 项目管理面板配置示例
+
+# 扫描入口。可以配置为多个项目父目录，也可以直接指向单个项目目录。
+scan_roots:
+  - "/Users/cs/Downloads/work/todo"
+
+# 扫描深度越大越容易扫到历史 build 目录，默认建议 3~4。
+max_depth: 3
+
+# 扫描时跳过的目录名。
+ignore_dirs:
+  - ".git"
+  - ".venv"
+  - "__pycache__"
+  - "build"
+  - "dist"
+  - "node_modules"
+  - ".idea"
+  - ".vscode"
+
+# Git 分支名包含这些关键词时，面板标记为临时分支。
+temporary_branch_keywords:
+  - "tmp"
+  - "temp"
+  - "wip"
+  - "debug"
+  - "test"
+  - "codex"
+
+# 最近修改文件数量。
+recent_files_limit: 8
+
+# 打开 VS Code 使用的命令。若本机没有 code 命令，可改成完整路径。
+vscode_command: "code"
+
+# SQLite 数据库路径。相对路径以应用目录为基准。
+database_path: "data/dashboard.sqlite3"

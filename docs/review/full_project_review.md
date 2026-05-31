@@ -31,7 +31,7 @@
 
 | 风险 ID | 内容 | 源码证据 | 影响 | 建议 |
 |---|---|---|---|---|
-| R-P0-001 | 量产 profile 下 AFE 200ms 主路径没有调用真实 `DataLoad_Current()`，而是调用 `test_Autocurrent_cycle()` | `DataDeal.c:1238-1239`, `Project_Config.h:17` | SOC、CAN 电流、保护显示、老化和低功耗判定可能全部基于虚拟电流 | 必须先确认；通常应恢复真实电流并把虚拟电流隔离到测试 profile |
+| R-P0-001 | 旧文档曾记录量产 AFE 200ms 主路径使用虚拟电流，当前源码已恢复真实 `DataLoad_Current()` | `DataDeal.c:1238-1239`, `Project_Config.h:17` | 若继续按旧结论推进，会误判当前 SOC/AFE 风险；残留 `test_Autocurrent_cycle()` 仍需确认删除或测试 profile 隔离 | 按当前源码更新文档，后续只确认虚拟电流入口归属 |
 | R-P0-002 | App/IAP/Flash 地址口径需要最终 map 验证 | `Flash.h:4-30`, `tools/soc_flash_app_safe.ps1:17-20`, Keil XML 中同时有 `0x08000000` 与 `0x8004800` | 错烧可能覆盖 IAP；后 64K 写入可能越界 | 所有烧录必须走安全脚本；后续增加 map/bin 地址门禁 |
 | R-P0-003 | 均衡参数存在但主动均衡入口未确认 | `DataDeal.h:141-149`, `Sci_Upper.c:1937-1940`, 未见主循环主动均衡任务 | 若产品需要均衡，则功能缺失；若不需要，协议残留误导 | 必须确认均衡需求归属 |
 | R-P0-004 | Host 写权限在量产开启，且可能触发 AFE/Flash/IAP | `PROJECT_CFG_HOST_WRITE_ENABLE 1`, `Sci_Upper.c:314-737`, `SH367309_DataDeal.c:145-249` | 现场误写可能改变保护阈值或进入 IAP | 需求确认前不要改协议；后续考虑工装权限层 |
@@ -96,7 +96,7 @@
 
 | ID | 严重度 | 描述 | 证据 | 当前判断 |
 |---|---|---|---|---|
-| BUG-001 | P0 | 量产主路径使用虚拟电流循环 | `DataDeal.c:1238-1239` | 高度疑似误留测试逻辑 |
+| BUG-001 | P1 | 虚拟电流测试函数残留，旧文档对主路径描述过期 | `DataDeal.c:1238-1239`, `DataDeal.c:1040+` | 当前主路径为真实 `DataLoad_Current()`；需确认 `test_Autocurrent_cycle()` 是否删除或隔离 |
 | BUG-002 | P1 | 均衡开压参数被硬编码 4160 覆盖 | `SH367309_DataDeal.c:58-59` | 需确认是固定需求还是 bug |
 | BUG-003 | P1 | CAN 版本字段固定 1 | `CanFeidaoFrames.c:158-166` | 可能不符合上位机/客户诊断 |
 | BUG-004 | P1 | LedBar fault 分支为空 | `LedBar.c:1022-1024` | 可能未完成故障显示 |

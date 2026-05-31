@@ -3,8 +3,8 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/Sci_Upper.h`, `103 + 309/Project/Source/Sci_Upper.c`, `tools/soc_online_monitor.py`, `tools/comm_tool_upgrade_ui.py`
-最后更新时间：2026-05-26
-未确认事项：完整逐寄存器语义仍需从 `RS485_CMD_RW_E`、参数结构体和上位机读写表继续展开；本文先固定当前源码已确认的地址窗口和高风险入口。
+最后更新时间：2026-05-31
+未确认事项：完整逐寄存器语义仍需从 `RS485_CMD_RW_E`、参数结构体和上位机读写表继续展开；校准、铜损、RTC、SOC 注入测试写入口是否废弃、占位或恢复仍需用户确认。
 
 ## 1. 协议入口
 
@@ -35,6 +35,20 @@
 | `0xD200` | Cortex fault snapshot | `RS485_ADDR_RO_START2` | `D200` reason, `D201` inverse |
 | `0xD300` | SOC 测试状态只读窗口 | `RS485_ADDR_RO_SOC_TEST` | 16 words；量产固件读到 unsupported 是正常隔离结果 |
 | `0xFFFD` | Flash/IAP 连接命令 | `RS485_CMD_ADDR_FLASH_CONNECT`, `Sci_WrRegs_0x10_FlashConnect()` | 调用 `AppUpgrade_RequestIap()` 后触发进入 IAP |
+
+## 2.1 写入口 ACK 语义缺口
+
+`Sci_ModbusProcessFrame()` 在处理帧前默认 `AckType=RS485_ACK_POS`，因此任何写 handler 如果没有实际动作、也没有显式设置 `RS485_ACK_NEG`，都会返回正响应。当前源码已确认的高风险入口：
+
+| 地址/入口 | 当前行为 | 风险 |
+|---|---|---|
+| `0x2500` / `Sci_WrRegs_0x10_SocTestMode()` | 主体 `#if 0`，默认正 ACK | 量产测试注入可能被误判成功 |
+| 校准 K/B / `Sci_WrRegs_0x10_CalibCoef()` | 主体 `#if 0`，默认正 ACK | 工装校准写入可能无动作但显示成功 |
+| `0x1000` / `Sci_WrReg_0x06_Reset_CalibCoef()` | 主体 `#if 0`，默认正 ACK | 校准 reset 可能无动作但显示成功 |
+| 铜损 / `Sci_WrRegs_0x10_CopperLoss()` | 空函数，默认正 ACK | 铜损写入可能无动作 |
+| RTC / `Sci_WrRegs_0x10_RTC()` | 空函数，默认正 ACK | RTC 写入可能无动作 |
+
+后续门禁见 `docs/review/protocol_write_ack_gate_plan_2026-05-31.md`。在用户确认前，不修改地址、长度、读窗口或上位机数据含义。
 
 ## 3. 当前读窗口规则
 

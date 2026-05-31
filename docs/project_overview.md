@@ -54,7 +54,7 @@
 
 最关键风险：
 
-1. 当前量产 profile 下 `App_AFEGet()` 调用 `test_Autocurrent_cycle()`，未调用真实 `DataLoad_Current()`。
+1. 旧文档曾记录量产 profile 下 `App_AFEGet()` 调用 `test_Autocurrent_cycle()`；当前源码已恢复调用真实 `DataLoad_Current()`，剩余风险是虚拟电流测试入口是否删除或隔离。
 2. 均衡参数存在，但主动均衡任务入口未确认。
 3. `SH367309_DataDeal.c` 中均衡开压硬编码 `4160`。
 4. Host 写权限在量产开启。

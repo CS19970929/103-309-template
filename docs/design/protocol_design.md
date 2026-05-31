@@ -3,8 +3,8 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`Sci_Upper.c/.h`, `Can_HDX.c/.h`, `CanFeidaoFrames.c/.h`, `ProductionID.c`, `Flash.c`, `FactoryAging.c`
-最后更新时间：2026-05-26
-未确认事项：Host 写权限、CAN 版本字段来源、老化和 SOC 控制是否长期保留。
+最后更新时间：2026-05-31
+未确认事项：Host 写权限、CAN 版本字段来源、老化和 SOC 控制是否长期保留；校准、铜损、RTC、SOC 注入测试写入口是否废弃、占位或恢复。
 
 ## 1. 通信架构
 
@@ -31,7 +31,7 @@ CAN App 服务会复用 Modbus 寄存器读写函数，因此 Modbus 寄存器�
 - `0xD000/0xD100/0xD200/0xD300`：只读状态窗口。
 - `0xC002`：SN/HW/SW，各 16 bytes，共 48 寄存器数据来源。
 - `0x2100`：保护参数。
-- `0x2200`：SOC 表/铜损/RTC，部分写入口当前关闭或空实现。
+- `0x2200`：SOC 表/铜损/RTC，其中 SOC table 写入口当前显式拒绝，铜损/RTC 写入口为空实现。
 - `0x2300`：OtherElement、均衡、睡眠、SOC、系统参数。
 - `0xFFFD`：进入 IAP / Flash connect。
 
@@ -77,6 +77,7 @@ CAN App 服务会复用 Modbus 寄存器读写函数，因此 Modbus 寄存器�
 3. `0xC002` 是上位机实时监控底栏依赖，不能随意改字段长度。
 4. `0xD300 supported=0` 是量产 SOC 测试隔离约定。
 5. 老化剩余时间 UI 依赖 `0x14F80208`。
+6. `Sci_ModbusProcessFrame()` 默认正 ACK，空 handler 或 `#if 0` handler 若不显式设置 NEG，会让上位机或 CAN App 误判写入成功；详细门禁见 `docs/review/protocol_write_ack_gate_plan_2026-05-31.md`。
 
 ## 6. 后续建议
 
