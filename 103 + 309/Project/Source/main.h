@@ -16,7 +16,7 @@
 #include "ADC.h"
 #include "RTC.h"
 #include "PubFunc.h"
-#include "Can_HDX.h"
+#include "can.h"
 #include "afe_driver.h"
 #include "Flash.h"
 #include "SleepDeal.h"
