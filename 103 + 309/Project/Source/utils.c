@@ -1,16 +1,12 @@
 #include "main.h"
 
+/* ═══════════════════════════════════════════════════════════════
+ * PubFunc.c merged with ShortFunc.c → utils.c
+ * ═══════════════════════════════════════════════════════════════ */
+
 /*=================================================================
  * FUNCTION: GetEndValue
  * PURPOSE : 查表
- * INPUT:    UINT16
- *
- * RETURN:   UINT16
- *
- * CALLS:    void
- *
- * CALLED BY:Adc_AnlogCal()
- *
  *=================================================================*/
 UINT16 GetEndValue(const UINT16 *ptbl, UINT16 tblsize, UINT16 dat)
 {
@@ -118,33 +114,25 @@ UINT16 GetEndValue(const UINT16 *ptbl, UINT16 tblsize, UINT16 dat)
 /*=================================================================
  * FUNCTION: App_PubOPUPChk
  * PURPOSE : 过欠判断处理
- * INPUT:    *t_sPubOPChk：判断正负逻辑及当前判断值、比较值传入 *(t_sPubOPChk->i16ChkCnt)：计时累加器地址
- *           t_sPubOPChk->u16TimeCntB：大值时间判断值 t_sPubOPChk->u16TimeCntS：小值时间判断值
- * RETURN:   0：数值异常 1：处理完成
- *
- * CALLS:    void
- *
- * CALLED BY:
- *
  *=================================================================*/
 UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 {
 	if ((t_sPubOPChk->u8FlagLogic > 1) || (t_sPubOPChk->u16OPValB < t_sPubOPChk->u16OPValS))
 	{
-		return (0); // 数值异常返回0
+		return (0);
 	}
 
 	if (t_sPubOPChk->u8FlagBit == (1 - t_sPubOPChk->u8FlagLogic))
 	{
-		if (t_sPubOPChk->u16ChkVal >= t_sPubOPChk->u16OPValB) // 当前判断值超过大值
+		if (t_sPubOPChk->u16ChkVal >= t_sPubOPChk->u16OPValB)
 		{
-			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntB) // 当前判断值超过大值t_sPubOPChk->u16TimeCntB时间置标志位为u8FlagLogic
+			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntB)
 			{
 				(*(t_sPubOPChk->i16ChkCnt)) = 0;
 				t_sPubOPChk->u8FlagBit = t_sPubOPChk->u8FlagLogic;
 			}
 		}
-		else // 低于大值则计时器递减
+		else
 		{
 			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
 			{
@@ -154,15 +142,15 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 	}
 	else
 	{
-		if (t_sPubOPChk->u16ChkVal <= t_sPubOPChk->u16OPValS) // 当前判断值低于小值
+		if (t_sPubOPChk->u16ChkVal <= t_sPubOPChk->u16OPValS)
 		{
 			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntS)
 			{
 				(*(t_sPubOPChk->i16ChkCnt)) = 0;
-				t_sPubOPChk->u8FlagBit = 1 - t_sPubOPChk->u8FlagLogic; // 当前判断值低于小值t_sPubOPChk->u16TimeCntS时间置标志位为非u8FlagLogic
+				t_sPubOPChk->u8FlagBit = 1 - t_sPubOPChk->u8FlagLogic;
 			}
 		}
-		else // 大于小值则计时器递减
+		else
 		{
 			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
 			{
@@ -171,7 +159,7 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
 		}
 	}
 
-	return (1); // 处理完成返回1
+	return (1);
 }
 
 UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
@@ -226,14 +214,11 @@ unsigned char CRC8(unsigned char *ptr, unsigned char len, unsigned char key)
 	return (crc);
 }
 
-// 求绝对值
 UINT32 ModulusSub(UINT32 Data1, UINT32 Data2)
 {
 	return (UINT32)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
 }
 
-// 以10us为时基，软件延时
-// 1ms以内误差 10%以内（而且是偏小。10us大概9.4us）
 void Delay_Base10us(int n)
 {
 	unsigned char a, b;
@@ -245,41 +230,22 @@ void Delay_Base10us(int n)
 	}
 }
 
-// 软件延时函数
 void Delay1ms(UINT8 delaycnt)
 {
 	UINT8 i, k;
 	UINT16 j;
 
-#if 0
-	for(i=0; i<delaycnt; i++) {
-		for(j=0; j<1670; j++) {
-			//system clock = 24MHz
-		}
-	}
-#endif
-
 	for (i = 0; i < delaycnt; i++)
 	{
 		for (k = 0; k < 9; k++)
-		{ // 9倍便是72MHz
+		{
 			for (j = 0; j < 560; j++)
 			{
-				// system clock = 8MHz
 			}
 		}
 	}
 }
 
-/*******************************************************************************
-Function: MemoryCopy()
-Description:
-Input:	source--源Memory指针
-		target---目的Memory指针
-		length---需要拷贝的数据长度(Byres)
-Output:
-Others:
-*******************************************************************************/
 void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length)
 {
 	UINT8 i;
@@ -291,31 +257,16 @@ void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length)
 	}
 }
 
-// 能不能写一个函数，顺便把原值改变呢？而不是单单传值
 UINT16 *U16_SwapEndian_Adress(UINT16 *target)
 {
-#if 0
-	UINT8* temp1,temp2;
-	UINT8 value1;
-	
-	*temp1 = (UINT8*)target;
-	*temp2 = ++(*temp1);
-	value1 = **temp1;
-	**temp1 = **temp2;
-	**temp2 = value1;
-#endif
 	return target;
 }
 
-// 大小端转换函数
 UINT16 U16_SwapEndian(UINT16 target)
 {
 	return (((uint16_t)target & 0xFF00) >> 8) | (((uint16_t)target & 0x00FF) << 8);
 }
 
-// 1:有温度断线，0：正常
-// 有问题，接好温度线，重启BMS才能消除报错
-// 添加自动复原功能，不需要重启
 UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 {
 	static UINT8 su8_Recover_Cnt = 0;
@@ -333,7 +284,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 
 	switch (su8_StartUp_Flag)
 	{
-	case 0: // 刚开机，不能判断，因为查询AFE函数已经被分割，不能拿到数据，此时判断必为错
+	case 0:
 		if (++su8_Delay_Cnt >= 20)
 		{
 			su8_Delay_Cnt = 0;
@@ -345,7 +296,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 		if (*temp_AD < 110)
 		{
 			++result;
-			*temp_AD = 110; // 定死在-29摄氏度。以防上位机显示NA以为没问题
+			*temp_AD = 110;
 			System_ERROR_UserCallback(ERROR_TEMP_BREAK);
 			su8_Recover_Cnt = 0;
 		}
@@ -354,7 +305,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 			if (System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK))
 			{
 				if (++su8_Recover_Cnt >= 50)
-				{ // 判断50次自动复原，约为200*50=10s
+				{
 					su8_Recover_Cnt = 0;
 					System_ERROR_UserCallback(ERROR_REMOVE_TEMP_BREAK);
 				}
@@ -372,26 +323,42 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 
 void jtag_disableAndConfIO(void)
 {
-#if 1
-	/* 禁用 JTAG，PB3、PB4、PA15重定义为普通IO */
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 使能PA和PB端口时钟
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // 配置复用时钟
-	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // 启用SW，禁用JTAG，PA15、PB3、PB4可用
-
-#if 0
-	GPIO_ResetBits(GPIOB, GPIO_Pin_4);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_3; // 端口配置
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;	   // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;	   // IO口速度为50MHz
-	GPIO_Init(GPIOB, &GPIO_InitStructure);				   // 根据设定参数初始化
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;		  // 端口配置
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // IO口速度为50MHz
-	GPIO_Init(GPIOA, &GPIO_InitStructure);			  // 根据设定参数初始化
-#endif
-
-#endif
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+ * ShortFunc.c — short circuit parameter init (SH367309 path)
+ * ═══════════════════════════════════════════════════════════════ */
+
+#if (AFE_TYPE == sh36xx)
+
+extern const UINT16 g_u16ShAfeScvTable[16];
+extern const UINT16 g_u16ShAfeSctTable[16];
+
+void InitShortCur(void)
+{
+	UINT16 temp = 0;
+	extern AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction;
+
+	OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+	OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
+
+	/* 短路延时 */
+	temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, g_u16ShAfeSctTable);
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = temp;
+	OtherElement.u16CBC_DelayT = g_u16ShAfeSctTable[temp] * 10;
+
+	/* 短路电压 */
+	temp = OtherElement.u16CBC_Cur_DSG / 10;
+	temp = temp * 1000 / g_u32CS_Res_AFE;
+	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
+
+	OtherElement.u16CBC_Cur_DSG = g_u16ShAfeScvTable[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000;
+	OtherElement.u16CBC_Cur_DSG *= 10;
+}
+
+#else
+#error "Only sh36xx AFE type is supported"
+#endif

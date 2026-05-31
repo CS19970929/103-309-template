@@ -27,8 +27,8 @@
 #include "LedBar.h"
 #include "AppInit.h"
 #include "MosStartup.h"
+#include "utils.h"
 
-#include "ShortFunc.h"
 #include "conf.h"
 #include "low_power.h"
 
