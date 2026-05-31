@@ -1,6 +1,7 @@
 #include "main.h"
 #include "FactoryAging.h"
 #include "MosStartup.h"
+#include "System_Monitor.h"
 
 static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAction mcc_level)
 {
@@ -9,6 +10,9 @@ static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAct
 	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = discharge_on;
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 	GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, mcc_level);
+
+	/* Keep MCU-side cache in sync with AFE register */
+	SystemRuntime_SetMosStatus(charge_on, discharge_on);
 }
 
 UINT8 MosStartup_Is5vChargeActive(void)

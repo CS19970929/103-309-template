@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m 'fix\\(MosStartup\\): sync MCU MOS cache with AFE register on every write *)"
+    ]
+  }
+}
