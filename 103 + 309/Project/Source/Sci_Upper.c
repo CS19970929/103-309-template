@@ -797,9 +797,9 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_First2, FaultPoint_First2);
-	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Second2, FaultPoint_Second2);
-	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
+	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third, FaultPoint_Third);
+	Sci_PutWordBE(t_u8BuffTemp, &i, 0U);
+	Sci_PutWordBE(t_u8BuffTemp, &i, 0U);
 
 	for (j = 0; j < 12; j++)
 	{ // 0xD002到这里。
@@ -2075,13 +2075,9 @@ void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
 	{
 		for (i = 0; i < Record_len; ++i)
 		{
-			Fault_record_First2[i] = 0;
-			Fault_record_Second2[i] = 0;
-			Fault_record_Third2[i] = 0;
+			Fault_record_Third[i] = 0;
 		}
-		FaultPoint_First2 = 0;
-		FaultPoint_Second2 = 0;
-		FaultPoint_Third2 = 0;
+		FaultPoint_Third = 0;
 		Fault_Flag_Fisrt.all = 0;
 		Fault_Flag_Second.all = 0;
 		Fault_Flag_Third.all = 0;
