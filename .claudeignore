@@ -1,0 +1,43 @@
+# Build artifacts
+build/
+*.o
+*.d
+*.hex
+*.bin
+*.elf
+*.map
+*.lst
+
+# Python virtual env & cache
+.venv/
+__pycache__/
+*.pyc
+
+# Generated code
+generated/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Embedded toolboxes (large)
+embedded-local-toolbox/
+
+# Large docs (read on demand via explicit command)
+docs/
+
+# Other project reference code (not related to this project)
+103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/
+103 + 309/Project/Users/Objects/
+SH3673520+STM32F072CBT6 DemoCode V1.2_20241227/
+tools/codex-skills/

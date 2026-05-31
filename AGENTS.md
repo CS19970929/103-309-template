@@ -97,8 +97,8 @@
 - `docs/review/requirement_questions.md`
 - `docs/review/risk_list.md`
 - `docs/review/refactor_plan.md`
-- `docs/change_log.md`
-- `docs/test_plan.md`
+- `docs/changelog/change_log.md`
+- `docs/test/test_plan.md`
 
 ## 文档整理规则
 

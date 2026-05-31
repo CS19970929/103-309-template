@@ -3,15 +3,16 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source` 当前主工程源码
-最后更新时间：2026-05-31
+最后更新时间：2026-05-31（目录整理后）
 未确认事项：虚拟电流调试入口隔离、均衡需求、老化保留策略、Host 写权限、实际 Flash 容量、低功耗 CAN 广播策略、存储失败可见性和升级清参策略仍需用户确认。
 
 ## 1. 使用原则
 
 1. 源码是第一可信来源。
-2. 本目录下新增的权威文档只描述“当前源码已验证行为”和“待确认事项”。
-3. 根目录大量旧文档和阶段记录只能作为历史参考，不能直接当成当前需求。
+2. 本目录下新增的权威文档只描述”当前源码已验证行为”和”待确认事项”。
+3. 已归档旧文档（`docs/archive/`）只能作为历史参考，不能直接当成当前需求。
 4. 文档与源码冲突时，以源码为准，并把冲突记录到 `docs/review/document_source_consistency.md`。
+5. 根目录只保留 AGENTS.md（协作规则）、CLAUDE.md（项目简介）、README.md（导航）、TODO.md（待办）。其余文档已移入 `docs/` 子目录。
 
 ## 2. 当前权威文档
 
@@ -30,7 +31,12 @@
 | `docs/protocol/modbus_register_map.md` | Modbus 地址窗口和高风险寄存器入口 |
 | `docs/protocol/can_protocol.md` | CAN 周期广播和 App 命令当前实现 |
 | `docs/protocol/uart_protocol.md` | UART/RS485 串口协议入口和低功耗关系 |
+| `docs/protocol/COMMUNICATION_ADDRESS_INDEX.md` | 通信地址索引表（来自根目录重定位） |
 | `docs/test/test_plan.md` | 编译、协议、存储、SOC、低功耗和硬件实测计划 |
+| `docs/test/TEST_PENDING.md` | 待测试清单（来自根目录重定位） |
+| `docs/workflow/BMS_DAILY_DEV_WORKFLOW.md` | 日常开发工作流（来自根目录重定位） |
+| `docs/workflow/项目协作与发布检查清单.md` | 协作与发布检查清单（来自根目录重定位） |
+| `docs/workflow/项目自动化检查与发布流程.md` | 自动化检查与发布流程（来自根目录重定位） |
 | `docs/changelog/change_log.md` | 文档整理和后续变更记录 |
 
 ## 3. Review 与需求确认文档

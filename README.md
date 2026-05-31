@@ -1,170 +1,39 @@
-# 项目文档入口
+# 103-309 BMS 项目文档入口
 
-本文是当前工程的文档导航入口，用于快速定位架构、模块、低功耗、通信、存储、测试等说明文档。后续新增长期有效的技术文档时，优先补充到本文对应分类。
+> 源码是第一可信来源。文档与源码冲突时以源码为准。
 
-## 推荐阅读路径
+## 快速入口
 
-### 当前 source-first 权威入口
+| 用途 | 文档 |
+|------|------|
+| **项目概览** | [docs/README.md](docs/README.md) — 权威文档总入口 |
+| **协作规则** | [AGENTS.md](AGENTS.md) — 仓库协作、烧录安全、SOC 测试隔离 |
+| **项目简介** | [CLAUDE.md](CLAUDE.md) — 项目性质、目录结构、使用约定 |
+| **待办事项** | [TODO.md](TODO.md) — 当前待办任务 |
+| **架构** | [docs/architecture.md](docs/architecture.md) — 软件分层、主循环、任务调度 |
+| **模块地图** | [docs/module_map.md](docs/module_map.md) — 源码文件与模块对应关系 |
+| **设计文档** | [docs/design/](docs/design/) — 各模块设计说明 |
+| **通信协议** | [docs/protocol/](docs/protocol/) — Modbus/CAN/UART 协议说明 |
+| **测试计划** | [docs/test/test_plan.md](docs/test/test_plan.md) — 全项目测试计划 |
 
-1. [docs/README.md](docs/README.md)：当前权威文档入口，旧文档只作历史参考。
-2. [当前目标与源码事实闭环](docs/review/current_goal_fact_sync_2026-05-31.md)：本轮意图、当前源码事实、过期文档冲突、需求确认焦点和分阶段执行计划。
-3. [后续分阶段重构计划](docs/review/refactor_plan.md)：进入源码阶段前的可执行、可验证、可回滚计划。
-4. [需求合理性判断与确认问题表](docs/review/requirement_questions.md)：修改源码前必须逐条确认的 P0/P1 问题。
-5. [风险清单](docs/review/risk_list.md)：当前 P0/P1 风险和验证缺口。
+## 高风险修改前必读
 
-### 修改高风险边界前必须阅读
+修改烧录地址、APP/IAP、AFE 参数、协议写入口、低功耗唤醒、存储策略前，请先阅读 `docs/review/` 下对应的门禁方案和用户确认包。
 
-1. [App/IAP/Flash 地址门禁方案](docs/review/flash_iap_address_gate_plan_2026-05-31.md)
-2. [S1 App/IAP/Flash 用户确认包](docs/review/s1_flash_iap_user_confirmation_2026-05-31.md)
-3. [AFE 安全门禁方案](docs/review/afe_safety_gate_plan_2026-05-31.md)
-4. [S2/S3 AFE 用户确认包](docs/review/s2_s3_afe_user_confirmation_2026-05-31.md)
-5. [低功耗通信唤醒门禁方案](docs/review/low_power_comm_wake_gate_plan_2026-05-31.md)
-6. [S4 低功耗通信用户确认包](docs/review/s4_low_power_comm_user_confirmation_2026-05-31.md)
-7. [协议写入口 ACK 门禁方案](docs/review/protocol_write_ack_gate_plan_2026-05-31.md)
-8. [S5 协议写入口 ACK 用户确认包](docs/review/s5_protocol_ack_user_confirmation_2026-05-31.md)
-9. [存储失败与升级清参门禁方案](docs/review/storage_upgrade_gate_plan_2026-05-31.md)
-10. [S7 存储失败与升级清参用户确认包](docs/review/s7_storage_upgrade_user_confirmation_2026-05-31.md)
+## 文档结构
 
-### 日常协作和发布入口
-
-1. [项目协作与发布检查清单](项目协作与发布检查清单.md)
-2. [BMS 日常开发工作流](BMS_DAILY_DEV_WORKFLOW.md)
-3. [项目自动化检查与发布流程](项目自动化检查与发布流程.md)
-
-根目录旧审计文档保留为历史资料。若旧文档与 `docs/README.md`、`docs/design/*`、`docs/protocol/*`、`docs/review/*` 冲突，以当前源码和 `docs/review/document_source_consistency.md` 标记的结论为准。
-
-### 修改 LED / 数码管显示
-
-1. [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md)
-2. [LED 软件框架与时序梳理](LED软件框架与时序梳理.md)
-3. [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md)
-4. [休眠唤醒数码管显示 10 秒说明](休眠唤醒数码管显示10秒说明.md)
-
-### 修改低功耗 / RTC / CAN 唤醒
-
-1. [休眠低功耗逻辑梳理与优化建议](休眠低功耗逻辑梳理与优化建议.md)
-2. [RTC CAN 自适应休眠说明](RTC_CAN自适应休眠说明.md)
-3. [CAN 低功耗发送调度说明](CAN低功耗发送调度说明.md)
-4. [CAN 通信逻辑与低功耗策略分析](CAN通信逻辑与低功耗策略分析.md)
-5. [CAN 通信回退到 9ec9f26 说明](CAN_RTC低功耗广播修复说明.md)
-
-### 修改通信地址 / EEPROM / 参数升级
-
-1. [通信逻辑与地址整理文档](COMMUNICATION_LAYOUT_REPORT.md)
-2. [通信完整地址索引](COMMUNICATION_ADDRESS_INDEX.md)
-3. [0x10 子地址完整清单](COMMUNICATION_WRITE_DETAIL.md)
-4. [BMS 参数表生成工具说明](data/param_tables/README.md)
-5. [自动生成 Modbus 参数寄存器映射](docs/generated/modbus_register_map.md)
-6. [EEPROM 地址与读写逻辑梳理](EEPROM_LAYOUT_OPTIMIZATION.md)
-7. [存储布局说明](STORAGE_LAYOUT_REPORT.md)
-8. [升级参数策略说明](升级参数策略说明.md)
-
-### 修改 SOC / ADC / AFE 监控
-
-1. [主流 BMS SOC 策略对比与本工程取舍](BMS_SOC_STRATEGY_COMPARISON.md)
-2. [SOC 完整运行流程说明](SOC完整运行流程说明.md)
-3. [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md)
-4. [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md)
-5. [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md)
-6. [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md)
-7. [ADC 总压分压计算说明](ADC总压分压计算说明.md)
-8. [App_AnlogCal 时基修改影响说明](App_AnlogCal时基修改影响说明.md)
-9. [MonitorAFE 逻辑优化说明](MONITOR_AFE_LOGIC_OPTIMIZATION.md)
-10. [后 64K SOC/AFE 参数快速测试说明](后64K_SOC_AFE快速测试说明.md)
-
-## 文档分类索引
-
-### 系统架构与基础设施
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [项目协作与发布检查清单](项目协作与发布检查清单.md) | AI 协作、任务分类、修改前后检查、安全烧录、SOC 测试隔离、发布门禁和长期资产建设总入口 |
-| [BMS 日常开发工作流](BMS_DAILY_DEV_WORKFLOW.md) | 日常开发、快速测试、ST-Link 快照、安全烧录和 AI 日志包入口 |
-| [项目自动化检查与发布流程](项目自动化检查与发布流程.md) | Keil Target、发布保护、`tools/project_check.py`、Git Hook 和发布检查流程 |
-| [项目逻辑完整梳理与架构简化建议](项目逻辑完整梳理与架构简化建议_2026-05-24.md) | 以当前源码为准梳理启动、时基、AFE/ADC/SOC/CAN/LED/RTC/存储链路，汇总疑似 bug、ADC 新增一路建议和架构简化路线 |
-| [项目全模块、外设、功能、驱动审计](项目全模块外设功能驱动审计_2026-05-17.md) | 按模块、STM32 外设、功能链路和驱动逐项审计，并汇总关键风险与优化路线 |
-| [项目级代码与文档审查记录](PROJECT_REVIEW_2026-05-09.md) | 本轮项目级 bug 修复、架构风险、验证结果和后续优先级 |
-| [项目运行流程与时序源码梳理](项目运行流程与时序源码梳理_2026-05-16.md) | 以当前源码为准的启动、主循环、时基、AFE/SOC、通信、CAN/RTC、低功耗、显示和存储全链路说明 |
-| [MCU 资源分布与架构优化评估](MCU资源分布与架构优化评估.md) | MCU 外设、资源占用、架构优化方向 |
-| [系统时钟系统梳理](系统时钟系统梳理.md) | TIM3 系统节拍、任务 flag、时基关系 |
-| [运行架构与时基重构方案](运行架构与时基重构方案.md) | 主循环、任务调度、时基所有权、低功耗和 CAN 服务化重构路线 |
-| [System_Monitor 模块梳理](System_Monitor模块梳理.md) | 系统状态位、功能开关、错误标志使用关系 |
-| [项目宏定义梳理](项目宏定义梳理.md) | 编译宏、产品配置、硬件映射、参数地址、第三方库宏使用边界 |
-| [TODO](TODO.md) | 根目录待办事项 |
-| [Source/todo](<103 + 309/Project/Source/todo.md>) | 源码目录内临时待办记录 |
-
-### LED / 数码管显示
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [数码管 GPIO Charlie 重写说明](数码管GPIO查理复用重写说明.md) | 当前量产数码管代码边界、需求、扩展规则和验收点 |
-| [LED 软件框架与时序梳理](LED软件框架与时序梳理.md) | 当前 LED 软件架构、刷新时序、休眠交互、`GPIO_MCU_WK` 持续显示逻辑 |
-| [LedBar GPIO Charlieplexing 显示方案](LEDBAR_GPIO_CHARLIE_DISPLAY_PLAN.md) | GPIO Charlieplexing 方案设计 |
-| [休眠唤醒数码管显示 10 秒说明](休眠唤醒数码管显示10秒说明.md) | 上电、复位、休眠唤醒后的显示窗口规则 |
-
-### 低功耗 / RTC / CAN
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [休眠低功耗逻辑梳理与优化建议](休眠低功耗逻辑梳理与优化建议.md) | 主低功耗框架、RTC STOP、普通/深度休眠路径 |
-| [RTC CAN 自适应休眠说明](RTC_CAN自适应休眠说明.md) | RTC 周期与 CAN 对端检测自适应策略 |
-| [CAN 低功耗发送调度说明](CAN低功耗发送调度说明.md) | 低功耗唤醒后的 CAN 发送调度 |
-| [CAN 通信逻辑与低功耗策略分析](CAN通信逻辑与低功耗策略分析.md) | CAN 通信与休眠策略整体分析 |
-| [CAN 通信回退到 9ec9f26 说明](CAN_RTC低功耗广播修复说明.md) | CAN/RTC 低功耗回退与修复记录 |
-| [出厂老化模式与系统时基说明](出厂老化模式与时基说明.md) | 出厂老化 3 天计时、进度持久化、RTC 阻断和充放电管状态边界 |
-
-### 通信 / 地址 / EEPROM
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [通信逻辑与地址整理文档](COMMUNICATION_LAYOUT_REPORT.md) | 通信寄存器、读写逻辑、地址布局总览 |
-| [通信完整地址索引](COMMUNICATION_ADDRESS_INDEX.md) | 通信地址索引表 |
-| [0x10 子地址完整清单](COMMUNICATION_WRITE_DETAIL.md) | 0x10 写寄存器子地址明细 |
-| [参数修改方式与可修改性梳理](参数修改方式与可修改性梳理.md) | 当前可修改参数、修改方式、持久化状态与不可修改边界 |
-| [通信写 EEPROM 标志位映射表](COMMUNICATION_EEPROM_FLAG_MAPPING.md) | 写 EEPROM 标志位与参数区映射 |
-| [通信写 EEPROM 标志位收敛与 Keil 调试方案](COMMUNICATION_EEPROM_FLAG_REFACTOR_DEBUG.md) | EEPROM 写标志收敛和调试方法 |
-| [EEPROM 地址与读写逻辑梳理](EEPROM_LAYOUT_OPTIMIZATION.md) | EEPROM 地址规划和读写流程 |
-| [EEPROM 写标志清理说明](EEPROM_WRITEFLAG_CLEANUP.md) | EEPROM 写标志清理记录 |
-
-### 存储 / 参数 / 升级
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [存储布局说明](STORAGE_LAYOUT_REPORT.md) | EEPROM、Flash、BKP 等存储布局 |
-| [可读写运行参数持久化说明](RW_PARAMETER_FLASH_STORAGE.md) | 运行参数 Flash 持久化策略 |
-| [升级参数策略说明](升级参数策略说明.md) | 升级参数策略和兼容处理 |
-| [BMS 参数表生成工具说明](data/param_tables/README.md) | 用 CSV/JSON 维护参数表，检查地址/类型/默认值并生成 C 文件与 Markdown 文档 |
-| [自动生成参数表](docs/generated/param_table.md) | 从 `data/param_tables/example_bms_params.csv` 生成的参数明细与默认值视图 |
-| [自动生成 Modbus 参数寄存器映射](docs/generated/modbus_register_map.md) | 从参数表生成的 Modbus 起始地址、寄存器数量和访问权限映射 |
-
-### SOC / ADC / AFE / 监控
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [主流 BMS SOC 策略对比与本工程取舍](BMS_SOC_STRATEGY_COMPARISON.md) | 对比 OCV、安时积分、IR 修正、高级 fuel gauge 思路，并说明本工程用户体验优先的中等增强方案 |
-| [SOC 完整运行流程说明](SOC完整运行流程说明.md) | 按源码运行顺序说明 SOC 输入、调度、Type-C 等效电流、积分、校准、保存、显示和验证 |
-| [SOC 模块完整逻辑说明与首次烧录默认值](SOC_MODULE_LOGIC.md) | SOC 入口、状态机、积分、静置/RTC OCV 小步校正、快照、通信配置和真实 C/回放测试 |
-| [SOC 校准策略与参数调优说明](SOC_CALIBRATION_STRATEGY.md) | SOC 校准策略、异常不校准门控、低压表、可配置参数和调优建议 |
-| [SOC 无板主机验证方案](SOC_HOST_VALIDATION_PLAN.md) | 没有实物板时的 SOC 真实 C 源码主机测试、回放矩阵、随机不变量和台架边界 |
-| [STM32F103 ADC 配置调研与当前工程方案](ADC_配置调研与当前方案.md) | ADC 配置、采样、低功耗关联 |
-| [Type-C ADC 电流采样与计算说明](TypeC_ADC电流采样与计算说明.md) | PA2 直接采 10mΩ 分流器压降、Type-C 输出电流稳定值、电池侧等效电流换算与 SOC 接入口径 |
-| [ADC 总压分压计算说明](ADC总压分压计算说明.md) | PA1 总压分压采样、电阻参数调整、AFE 上报总压来源说明 |
-| [App_AnlogCal 时基修改影响说明](App_AnlogCal时基修改影响说明.md) | 模拟校准任务时基调整影响 |
-| [MonitorAFE 逻辑优化说明](MONITOR_AFE_LOGIC_OPTIMIZATION.md) | AFE 监控和恢复逻辑优化 |
-| [后 64K SOC/AFE 参数快速测试说明](后64K_SOC_AFE快速测试说明.md) | 后 64K 参数区快速测试 |
-
-### 测试与待办
-
-| 文档 | 内容定位 |
-| --- | --- |
-| [待测试清单](TEST_PENDING.md) | 当前主要待测试项 |
-| [待测试清单 copy](TEST_PENDING%20copy.md) | 历史/副本待测试项，建议后续合并后删除 |
-| [TODO](TODO.md) | 根目录 TODO |
-| [Source/todo](<103 + 309/Project/Source/todo.md>) | 源码目录局部 TODO |
-
-## 文档维护约定
-
-- 长期有效的模块说明、设计决策、调试结论放在根目录 Markdown 文档中，并补充到本文索引。
-- 临时问题、短期任务、未验证猜想放入 `TODO.md` 或 `TEST_PENDING.md`，验证完成后再沉淀为模块文档。
-- 新增文档优先使用中文标题和中文说明，函数名、寄存器名、协议名保持英文原文。
-- 避免继续新增 `copy` 类副本文档；需要保留历史时，在原文档中新增“历史记录”或“变更记录”章节。
+```
+docs/
+├── README.md                  ← 文档入口（起点）
+├── project_overview.md        ← 项目总览
+├── architecture.md            ← 软件架构
+├── module_map.md              ← 模块与文件映射
+├── design/                    ← 各模块设计
+├── protocol/                  ← 通信协议
+├── test/                      ← 测试计划
+├── workflow/                  ← 开发工作流
+├── review/                    ← 审查与门禁方案
+├── changelog/                 ← 变更记录
+├── generated/                 ← 自动生成文档
+└── archive/                   ← 归档旧文档（不作为当前参考）
+```
