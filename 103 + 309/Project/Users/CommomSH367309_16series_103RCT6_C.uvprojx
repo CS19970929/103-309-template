@@ -580,6 +580,11 @@
               </FileOption>
             </File>
             <File>
+              <FileName>led_scan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\led_scan.c</FilePath>
+            </File>
+            <File>
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
@@ -1535,6 +1540,11 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>led_scan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\led_scan.c</FilePath>
             </File>
             <File>
               <FileName>ShortFunc.c</FileName>
