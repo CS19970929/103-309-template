@@ -1,7 +1,7 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
 #include "FactoryAging.h"
-#include "SocEnhance.h"
+#include "SOC.h"
 
 #if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
