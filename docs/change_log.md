@@ -26,6 +26,8 @@
 - `scripts/`：跨平台环境检查、构建、清理、size、烧录脚本。
 - `.vscode/`：插件推荐、CMake/调试 settings、tasks、launch 配置。
 - `cmake/compat/syscalls_gcc.c`：GCC/newlib-nano 最小 syscall 和 `_write` retarget。
+- `scripts/debug_smoke.py`：OpenOCD + GDB 到 `main` 的 ST-LINK 冒烟调试脚本。
+- `docs/stlink_debug_report.md`：ST-LINK 上板烧录与调试记录。
 
 ## 修改
 
@@ -37,13 +39,15 @@
 - `core_cm3.c`：修正 GCC 12 对旧 CMSIS `strex` inline asm 的寄存器约束。
 - `linker/stm32f103_app_0x08004800.ld`：增加 PHDRS，避免 RWX LOAD segment。
 - `scripts/flash.py`：dry-run 不再依赖烧录工具存在，且地址错误输出更清晰。
+- `scripts/flash.py`：OpenOCD 路径使用正斜杠和花括号引用，修复 Windows 路径转义导致的烧录失败。
+- `.vscode/tasks.json`：新增 `Debug Smoke STLINK` 任务。
 
 ## 未完成
 
-- J-Link、STM32CubeProgrammer、OpenOCD 当前未安装，无法实际烧录/调试。
-- 实际 MCU 型号和 Flash 容量仍需硬件/BOM/读芯片确认。
+- J-Link、STM32CubeProgrammer 当前未安装，未验证对应流程。
+- 当前板子已读出 128KB Flash，但具体芯片订货型号/丝印仍需硬件/BOM确认。
 - GCC Debug/Release 已构建成功，但仍需上板验证 ARMCC/GCC 行为一致性。
-- 尚未完成上板烧录、调试和 BMS 功能回归。
+- 已完成 ST-LINK/OpenOCD 烧录和 GDB 到 `main`；尚未完成 BMS 功能回归。
 
 ## 已提交记录
 

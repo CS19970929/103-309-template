@@ -136,3 +136,15 @@ ST-LINK 调试配置默认走 OpenOCD：
 - `target/stm32f1x.cfg`
 
 如果现场使用 ST-LINK GDB Server，可在本地另行添加 Cortex-Debug 配置，不要删除现有 OpenOCD 配置。
+
+## ST-LINK 冒烟调试
+
+当前已验证 OpenOCD + ST-LINK 路径：
+
+```powershell
+py -3.9 scripts\debug_smoke.py --config Release
+```
+
+脚本会复位目标、断点到 `main`、输出寄存器和 backtrace，然后 `reset run` 让板子继续运行。
+
+本次上板报告见 `docs/stlink_debug_report.md`。

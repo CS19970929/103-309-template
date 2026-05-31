@@ -72,6 +72,17 @@
         "Debug"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "Debug Smoke STLINK",
+      "type": "process",
+      "command": "${config:python.defaultInterpreterPath}",
+      "args": [
+        "${workspaceFolder}/scripts/debug_smoke.py",
+        "--config",
+        "Release"
+      ],
+      "problemMatcher": []
     }
   ]
 }

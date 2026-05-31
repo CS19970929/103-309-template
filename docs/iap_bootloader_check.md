@@ -33,6 +33,8 @@
 - `scripts/flash.py` 默认 raw bin 地址为 `0x08004800`。
 - `scripts/flash.py --address 0x08000000` 会拒绝执行并提示覆盖 IAP 风险。
 - dry-run 不要求本机已安装烧录工具，便于先审查命令和地址。
+- ST-LINK 实烧 Release 后，`0x08000000` 向量保持不变，`0x08004800` 向量更新，`0x0801C000` 参数区头部保持不变。
+- GDB 复位后可以从 IAP 继续运行并命中 App `main`。
 
 ## 风险
 

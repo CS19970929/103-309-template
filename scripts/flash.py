@@ -44,6 +44,10 @@ def print_or_run(command: list[str], do_flash: bool) -> None:
         print("dry-run only; pass --flash to execute")
 
 
+def openocd_path(path: Path) -> str:
+    return "{" + path.as_posix() + "}"
+
+
 def flash_stlink(args: argparse.Namespace, image: Path) -> None:
     tool = find_tool("STM32_Programmer_CLI") or "STM32_Programmer_CLI"
     if args.flash and not Path(tool).exists() and find_tool("STM32_Programmer_CLI") is None:
@@ -59,7 +63,7 @@ def flash_openocd(args: argparse.Namespace, image: Path) -> None:
     tool = find_tool("openocd") or "openocd"
     if args.flash and not Path(tool).exists() and find_tool("openocd") is None:
         raise FileNotFoundError("openocd not found")
-    program = f"program {image}"
+    program = f"program {openocd_path(image)}"
     if image.suffix.lower() == ".bin":
         program += f" 0x{args.address:08X}"
     program += " verify reset exit"
@@ -132,3 +136,6 @@ if __name__ == "__main__":
     except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}")
         raise SystemExit(1) from exc
+    except subprocess.CalledProcessError as exc:
+        print(f"error: command failed with exit code {exc.returncode}")
+        raise SystemExit(exc.returncode) from exc

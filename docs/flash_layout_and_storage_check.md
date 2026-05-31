@@ -33,7 +33,9 @@
 - 烧录脚本默认不得全片擦除参数区；全片擦除必须显式参数确认。
 - 已验证 GCC 构建尺寸：Debug `64284` bytes、Release `54396` bytes，均未进入 `0x0801C000` 后的持久化区。
 - 已验证 `scripts/flash.py` 默认不实现全片擦除，并在 dry-run 中输出 `0x08004800` 写入地址。
+- ST-LINK 实烧 Release 时 OpenOCD 只额外擦除到 `0x08011FFF`，未触及 `0x0801C000` 参数区。
 
 ## TODO
 
-- TODO：确认实际 MCU Flash 容量是否支持 `0x0801FFFF`。若实际是 STM32F103C8 标称 64KB，则当前后 64K 存储布局不成立。
+- 已通过 OpenOCD/Flash size register 确认当前连接板子的 Flash size 为 128KB，可覆盖 `0x0801FFFF`。
+- TODO：仍需从 BOM 或芯片丝印确认具体订货型号，解释 Keil 设备名 `STM32F103C8` 与 128KB 实测容量不一致的问题。

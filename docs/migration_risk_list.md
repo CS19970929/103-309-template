@@ -6,9 +6,9 @@
 
 | 风险 | 影响 | 当前处理 |
 |---|---|---|
-| 实际 MCU 容量未确认 | `.uvprojx` 是 `STM32F103C8`，但工程使用到 `0x0801FFFF`，可能涉及 64K/128K 标识不一致 | linker 暂按现有 Flash 使用边界保护；要求硬件确认 |
+| 实际 MCU 订货型号未确认 | `.uvprojx` 是 `STM32F103C8`，但板端实测 Flash size 为 128KB | linker 按现有 Flash 使用边界保护；仍需记录 BOM/丝印 |
 | IAP 覆盖风险 | App bin 写到 `0x08000000` 会覆盖 IAP | `scripts/flash.py` 拒绝 `0x08000000`，默认 dry-run |
-| GCC 产物尚未上板验证 | Debug/Release 已构建成功，但还不能证明 GCC 产物与 Keil 功能一致 | 继续做烧录、调试和 BMS 功能回归 |
+| GCC 产物功能尚未完整验证 | Release 已通过 ST-LINK 烧录和 GDB 到 `main`，但还不能证明 BMS 功能与 Keil 完全一致 | 继续做串口、CAN、SOC、低功耗和参数区回归 |
 | ARMCC/GCC 条件编译适配 | `wait()`、CMSIS inline asm、syscalls 已做 GCC 适配 | 已通过 GCC 构建；需确认 Keil ARMCC 构建不受影响 |
 | Flash 参数区覆盖 | 参数、日志、SOC/AFE 数据使用 `0x0801C000-0x0801FFFF` | GCC linker 显式预留，不默认全片擦除 |
 

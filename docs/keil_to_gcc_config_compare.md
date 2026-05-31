@@ -9,7 +9,7 @@
 | 配置项 | Keil 原值 | GCC/CMake 新值 | 是否一致 | 风险等级 | 处理结果 |
 |---|---|---|---|---|---|
 | 工程目标 | `FD_Release`、`FD_Debug` | `firmware`，通过 `CMAKE_BUILD_TYPE=Release/Debug` 区分 | 行为等价 | 低 | 保留 Keil 目标，不改旧工程 |
-| 芯片型号 | `STM32F103C8` | 先按 `STM32F103xB/STM32F10X_MD` 兼容配置 | 待确认 | 高 | TODO：实物/BOM/Keil Pack 需确认；项目文件名和 Flash 地址显示可能不是 64KB C8 |
+| 芯片型号 | `STM32F103C8` | 先按 `STM32F103xB/STM32F10X_MD` 兼容配置 | 部分一致 | 中 | ST-LINK/OpenOCD 已读出 Flash size 128KB；具体订货型号/丝印仍需确认 |
 | 内核 | `Cortex-M3` | `-mcpu=cortex-m3` | 是 | 低 | 可迁移 |
 | Thumb | Keil ARMCC Cortex-M 默认 Thumb | `-mthumb` | 是 | 低 | 必须启用 |
 | FPU | Cortex-M3 无 FPU | 不启用 FPU，`-mfloat-abi=soft` | 是 | 低 | 可迁移 |
@@ -20,7 +20,7 @@
 | Startup | `startup_stm32f10x_hd.s`，ARMASM 语法 | 新增 GCC startup，不覆盖旧文件 | 目标一致 | 高 | 需确认 HD startup 与 `STM32F10X_MD` 的历史组合 |
 | Reset_Handler | ARMASM 中调用 `SystemInit` 后跳转 `__main` | GCC startup 调用 `SystemInit`、拷贝 `.data`、清 `.bss`、调用 `__libc_init_array` 和 `main` | 行为等价 | 中 | 新增 startup 检查文档 |
 | Flash 起始 | `.uvprojx` IROM `0x08000000`；实际 sct App 为 `0x08004800` | App linker `ORIGIN=0x08004800` | 使用实际 App 值 | 高 | 以 IAP 安全规则和实际 sct 为准 |
-| Flash 大小 | `.uvprojx` IROM `0x10000`；实际 sct `0x20000` | GCC App 代码区先限制到 `0x0801C000` 前 | 不完全一致 | 高 | 为保护参数区，GCC 不允许代码覆盖 `0x0801C000+` |
+| Flash 大小 | `.uvprojx` IROM `0x10000`；实际 sct `0x20000` | GCC App 代码区先限制到 `0x0801C000` 前 | 按实测 128KB 可用 | 中 | ST-LINK 实测 Flash size 128KB；GCC 仍保护 `0x0801C000+` |
 | RAM | `0x20000000` 长度 `0x5000` | `RAM ORIGIN=0x20000000 LENGTH=0x5000` | 是 | 低 | 可迁移 |
 | IAP/Bootloader | IAP 起始 `0x08000000`，App 起始 `0x08004800` | 保留 `0x08004800`，烧录脚本默认禁止写 `0x08000000` | 是 | 高 | 必须保持 dry-run 和地址检查 |
 | VTOR | `system_stm32f10x.c` 中 `_IAP` 时 `FLASH_BASE | 0x4800` | 保持 `_IAP` 来源于 `Project_Config.h`/`conf.h` | 是 | 高 | 构建必须保留 include/macro 传递链 |
@@ -38,6 +38,7 @@
 
 ## 当前结论
 
-- GCC/CMake 并行骨架已通过 Debug/Release 构建；“芯片实际 Flash 容量”仍是上板前必须确认的高风险 TODO。
+- GCC/CMake 并行骨架已通过 Debug/Release 构建，并已通过 ST-LINK/OpenOCD 上板烧录与 GDB 到 `main`。
+- 当前板子实测 Flash size 为 128KB；仍需记录具体订货型号/丝印，解释 Keil 设备名与实测容量不一致。
 - GCC linker 应以 `0x08004800` 为 App 起点，并显式预留 `0x0801C000` 起的持久化区域。
 - 在 GCC 构建成功前不删除 Keil 工程；在功能验证完成前不修改业务逻辑。

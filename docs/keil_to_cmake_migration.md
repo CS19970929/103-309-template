@@ -22,6 +22,8 @@
 | Debug 构建 | 已通过 | 已生成 `firmware.elf/.hex/.bin/.map`，size 已输出 |
 | Release 构建 | 已通过 | 已生成 `firmware.elf/.hex/.bin/.map`，size 已输出 |
 | 烧录 dry-run | 已通过 | J-Link、ST-LINK、OpenOCD dry-run 可输出命令；`0x08000000` 地址拒绝生效 |
+| ST-LINK 上板烧录 | 已通过 | OpenOCD 按 `0x08004800` 写入 Release bin，verify OK，IAP 和参数区保持不变 |
+| ST-LINK GDB 调试 | 已通过 | OpenOCD + GDB 命中 `main.c:94`，PC/SP/xPSR 正常 |
 
 ## 首次环境检查结果
 
@@ -89,7 +91,8 @@ py -3.9 scripts\check_env.py
 - `JLinkGDBServer`
 - `JLinkGDBServerCL`
 - `STM32_Programmer_CLI`
-- `openocd`
+
+OpenOCD 已在后续步骤通过 winget 安装并验证。
 
 ## GCC 构建修复记录
 
@@ -102,6 +105,8 @@ py -3.9 scripts\check_env.py
 | ELF 出现 RWX LOAD segment 警告 | linker script 增加 PHDRS，并将 heap/stack 预留段排除出 LOAD program header |
 | dry-run 依赖烧录工具存在 | `scripts/flash.py` 改为 dry-run 不要求工具存在，实际 `--flash` 时才强制检查 |
 | `0x08000000` 安全检查输出 traceback | `scripts/flash.py` 改为简洁 `error:` 输出，并明确提示会覆盖 IAP |
+| OpenOCD Windows 路径反斜杠导致烧录失败 | `scripts/flash.py` 对 OpenOCD program 路径使用正斜杠并加花括号引用 |
+| ST-LINK 调试流程需要可重复执行 | 新增 `scripts/debug_smoke.py`，固化 OpenOCD + GDB 到 `main` 的冒烟调试 |
 
 ## 构建产物与尺寸
 
@@ -109,6 +114,22 @@ py -3.9 scripts\check_env.py
 |---|---:|---:|---:|---:|---:|
 | Debug | 63368 | 916 | 6852 | 71136 | 64284 |
 | Release | 53488 | 908 | 6716 | 61112 | 54396 |
+
+## ST-LINK 上板验证摘要
+
+| 项目 | 结果 |
+|---|---|
+| ST-LINK | `VID:PID 0483:3748`，`STLINK V2J37S7` |
+| Target voltage | 约 `3.29V` |
+| Device ID | `0x20036410` |
+| Flash size | `128 KiB` |
+| 烧录 | `py -3.9 scripts\flash.py --method openocd --config Release --flash`，verify OK |
+| IAP 区 | `0x08000000` 向量烧录前后不变 |
+| App 区 | `0x08004800` 向量已更新为 GCC Release |
+| 参数区 | `0x0801C000` 头部烧录前后不变 |
+| GDB | 命中 `main.c:94`，`pc=0x08007590`，`sp=0x20005000` |
+
+详细记录见 `docs/stlink_debug_report.md`。
 
 产物路径：
 
@@ -143,7 +164,7 @@ py -3.9 scripts\check_env.py
 
 ## 后续必须继续验证
 
-- 安装 J-Link Software、STM32CubeProgrammer 或 OpenOCD 后，重新运行 `scripts/check_env.py`。
-- 使用真实硬件验证 J-Link/ST-LINK 烧录与调试。
+- 如需要 STM32CubeProgrammer 流程，安装后补充 ST-LINK CLI 验证。
+- 如需要 J-Link 流程，安装 J-Link Software 后补充 J-Link 烧录/调试验证。
 - 上板后验证 UART 日志、IAP 跳转、Flash 参数区保护、BMS 保护、SOC、CAN、低功耗。
 - 每修复一类问题必须更新本文档和对应对照文档。

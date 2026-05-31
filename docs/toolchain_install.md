@@ -59,6 +59,7 @@ winget install --id Python.Python.3.9 -e --silent --accept-package-agreements --
 winget install --id Kitware.CMake -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
 winget install --id Ninja-build.Ninja -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
 winget install --id Arm.ArmGnuToolchain -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+winget install --id xpack-dev-tools.openocd-xpack -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
 ```
 
 验证版本：
@@ -69,6 +70,7 @@ winget install --id Arm.ArmGnuToolchain -e --silent --accept-package-agreements 
 | CMake | `4.3.3` |
 | Ninja | `1.13.2` |
 | Arm GNU Toolchain | `12.2.1 20230214` |
+| xPack OpenOCD | `0.12.0-7` |
 
 winget 安装后旧终端可能不会立即继承 PATH，需重新打开终端。
 
