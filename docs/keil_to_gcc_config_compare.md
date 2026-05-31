@@ -31,13 +31,13 @@
 | 优化等级 Debug | Keil `Optim=1` + Debug 宏 | `-Og -g3` | 不一致 | 中 | Debug 可调试优先，行为验证后再评估 |
 | 单文件优化 | `LedBar.c` 文件级 `Optim=0` | `LedBar.c` 文件级 `-O0` | 是 | 中 | 迁移保留，降低 LED 时序风险 |
 | 链接 GC | Keil 移除未用 section | `-ffunction-sections -fdata-sections -Wl,--gc-sections` | 行为近似 | 中 | 必须用 `KEEP` 保护向量表/初始化数组 |
-| C 库 | Keil microlib | `--specs=nano.specs --specs=nosys.specs` | 不完全一致 | 中 | printf/retarget 需验证 |
+| C 库 | Keil microlib | `--specs=nano.specs --specs=nosys.specs` + `syscalls_gcc.c` | 不完全一致 | 中 | 已通过 `_write` 转接现有 `fputc`，仍需上板验证 UART 输出 |
 | semihosting | 未见启用 | 不使用 semihosting，使用 `nosys.specs` | 是 | 中 | 调试不默认依赖 semihosting |
-| ARMCC 语法 | 存在 `__asm void wait()` | 需要 `compiler_port.h` + 极小条件编译适配 | 否 | 高 | GCC 构建前必须修复 |
+| ARMCC 语法 | 存在 `__asm void wait()` | `compiler_port.h` + 单点条件编译适配 | 行为等价 | 中 | 已修复并通过 Debug/Release GCC 构建 |
 | 业务逻辑 | Keil 编译业务源码 | GCC 只并行构建，不改协议/BMS/SOC/低功耗逻辑 | 是 | 高 | 修改仅限构建、启动、兼容层 |
 
 ## 当前结论
 
-- 可以安全开始 GCC/CMake 并行骨架，但必须把“芯片实际 Flash 容量”和“GCC 兼容语法”列为阻塞项跟踪。
+- GCC/CMake 并行骨架已通过 Debug/Release 构建；“芯片实际 Flash 容量”仍是上板前必须确认的高风险 TODO。
 - GCC linker 应以 `0x08004800` 为 App 起点，并显式预留 `0x0801C000` 起的持久化区域。
 - 在 GCC 构建成功前不删除 Keil 工程；在功能验证完成前不修改业务逻辑。

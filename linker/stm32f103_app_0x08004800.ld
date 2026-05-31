@@ -14,6 +14,12 @@ MEMORY
   RAM (xrw)          : ORIGIN = 0x20000000, LENGTH = 0x00005000
 }
 
+PHDRS
+{
+  text PT_LOAD FLAGS(5);
+  data PT_LOAD FLAGS(6);
+}
+
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 _Min_Heap_Size = 0x00000200;
 _Min_Stack_Size = 0x00000C00;
@@ -25,7 +31,7 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.isr_vector))
     . = ALIGN(4);
-  } > FLASH
+  } > FLASH :text
 
   .text :
   {
@@ -39,7 +45,7 @@ SECTIONS
     KEEP(*(.fini))
     . = ALIGN(4);
     _etext = .;
-  } > FLASH
+  } > FLASH :text
 
   .rodata :
   {
@@ -47,26 +53,26 @@ SECTIONS
     *(.rodata)
     *(.rodata*)
     . = ALIGN(4);
-  } > FLASH
+  } > FLASH :text
 
   .ARM.extab :
   {
     *(.ARM.extab* .gnu.linkonce.armextab.*)
-  } > FLASH
+  } > FLASH :text
 
   .ARM.exidx :
   {
     __exidx_start = .;
     KEEP(*(.ARM.exidx* .gnu.linkonce.armexidx.*))
     __exidx_end = .;
-  } > FLASH
+  } > FLASH :text
 
   .preinit_array :
   {
     PROVIDE_HIDDEN(__preinit_array_start = .);
     KEEP(*(.preinit_array*))
     PROVIDE_HIDDEN(__preinit_array_end = .);
-  } > FLASH
+  } > FLASH :text
 
   .init_array :
   {
@@ -74,7 +80,7 @@ SECTIONS
     KEEP(*(SORT(.init_array.*)))
     KEEP(*(.init_array*))
     PROVIDE_HIDDEN(__init_array_end = .);
-  } > FLASH
+  } > FLASH :text
 
   .fini_array :
   {
@@ -82,7 +88,7 @@ SECTIONS
     KEEP(*(SORT(.fini_array.*)))
     KEEP(*(.fini_array*))
     PROVIDE_HIDDEN(__fini_array_end = .);
-  } > FLASH
+  } > FLASH :text
 
   _sidata = LOADADDR(.data);
 
@@ -94,7 +100,7 @@ SECTIONS
     *(.data*)
     . = ALIGN(4);
     _edata = .;
-  } > RAM AT> FLASH
+  } > RAM AT> FLASH :data
 
   .bss (NOLOAD) :
   {
@@ -107,7 +113,7 @@ SECTIONS
     . = ALIGN(4);
     _ebss = .;
     __bss_end__ = _ebss;
-  } > RAM
+  } > RAM :data
 
   ._user_heap_stack (NOLOAD) :
   {
@@ -117,5 +123,5 @@ SECTIONS
     . = . + _Min_Heap_Size;
     . = . + _Min_Stack_Size;
     . = ALIGN(8);
-  } > RAM
+  } > RAM :NONE
 }

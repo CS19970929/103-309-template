@@ -18,15 +18,15 @@
 
 | 检查项 | GCC startup 目标 | 状态 |
 |---|---|---|
-| 向量表地址 | `.isr_vector` 放在 `FLASH ORIGIN=0x08004800` | 已实现，待构建验证 |
-| 初始栈 | 第一项为 `_estack` | 已实现，待构建验证 |
-| `Reset_Handler` | 全局导出 | 已实现，待构建验证 |
-| `SystemInit` | 复位后先调用 | 已实现，待构建验证 |
-| `.data` 拷贝 | 从 `_sidata` 拷贝到 `_sdata.._edata` | 已实现，待构建验证 |
-| `.bss` 清零 | 清 `_sbss.._ebss` | 已实现，待构建验证 |
-| C runtime | 调用 `__libc_init_array` | 已实现，待构建验证 |
-| `main` | 调用 `main`，返回后进入死循环 | 已实现，待构建验证 |
-| 弱中断 | 未实现 ISR weak alias 到 `Default_Handler` | 已实现，待构建验证 |
+| 向量表地址 | `.isr_vector` 放在 `FLASH ORIGIN=0x08004800` | 已实现，Debug/Release 链接通过 |
+| 初始栈 | 第一项为 `_estack` | 已实现，Debug/Release 链接通过 |
+| `Reset_Handler` | 全局导出 | 已实现，Debug/Release 链接通过 |
+| `SystemInit` | 复位后先调用 | 已实现，Debug/Release 链接通过 |
+| `.data` 拷贝 | 从 `_sidata` 拷贝到 `_sdata.._edata` | 已实现，Debug/Release 链接通过 |
+| `.bss` 清零 | 清 `_sbss.._ebss` | 已实现，Debug/Release 链接通过 |
+| C runtime | 调用 `__libc_init_array` | 已实现，Debug/Release 链接通过 |
+| `main` | 调用 `main`，返回后进入死循环 | 已实现，Debug/Release 链接通过 |
+| 弱中断 | 未实现 ISR weak alias 到 `Default_Handler` | 已实现，Debug/Release 链接通过 |
 
 ## ISR 名称对照
 
@@ -60,5 +60,5 @@ GCC startup 的向量表名称必须与以上名称完全一致，未实现的�
 ## 迁移风险
 
 - 高风险：当前 Keil 设备宏为 `STM32F10X_MD`，但 startup 文件是 `startup_stm32f10x_hd.s`。这是历史工程现状，GCC 先按原文件向量表迁移，后续必须结合实际芯片确认是否应换成 MD startup。
-- 高风险：`stm32f10x_it.c` 中存在 `__asm void wait()`，GCC 不能直接编译；需要统一兼容层并做极小条件编译修复。
+- 已处理：`stm32f10x_it.c` 中的 `__asm void wait()` 已增加 GCC 条件编译实现，ARMCC 原实现不变。
 - 中风险：`SystemInit` 是否设置 `SCB->VTOR = FLASH_BASE | 0x4800` 依赖 `_IAP`，而 `_IAP` 由 `conf.h` 经 `main.h` 间接进入 `system_stm32f10x.c`。GCC include 路径必须保持该传递链。

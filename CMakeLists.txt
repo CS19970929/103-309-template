@@ -83,6 +83,7 @@ target_sources(firmware PRIVATE
     "${STDPERIPH_ROOT}/src/stm32f10x_usart.c"
     "${STDPERIPH_ROOT}/src/stm32f10x_wwdg.c"
     "${PROJECT_ROOT}/startup/startup_stm32f10x_hd_gcc.s"
+    "${PROJECT_ROOT}/cmake/compat/syscalls_gcc.c"
 )
 
 target_include_directories(firmware PRIVATE
@@ -111,11 +112,11 @@ set_source_files_properties("${SOURCE_ROOT}/LedBar.c" PROPERTIES
 target_arm_none_eabi_options(firmware)
 
 add_custom_command(TARGET firmware POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:firmware> "$<TARGET_FILE_DIR:firmware>/firmware.hex"
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:firmware> "$<TARGET_FILE_DIR:firmware>/firmware.bin"
+    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:firmware> "${CMAKE_CURRENT_BINARY_DIR}/firmware.hex"
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:firmware> "${CMAKE_CURRENT_BINARY_DIR}/firmware.bin"
     COMMAND ${CMAKE_SIZE} $<TARGET_FILE:firmware>
     BYPRODUCTS
-        "$<TARGET_FILE_DIR:firmware>/firmware.hex"
-        "$<TARGET_FILE_DIR:firmware>/firmware.bin"
+        "${CMAKE_CURRENT_BINARY_DIR}/firmware.hex"
+        "${CMAKE_CURRENT_BINARY_DIR}/firmware.bin"
     COMMENT "Generating firmware.hex/firmware.bin and printing size"
 )

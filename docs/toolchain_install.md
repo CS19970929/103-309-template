@@ -50,6 +50,28 @@ python scripts\check_env.py
 
 如果 `python` 指向 WindowsApps 占位程序，需要安装正式 Python 或在 VS Code 的 `.vscode/settings.json` 中把 `python.defaultInterpreterPath` 改成本机真实解释器路径。
 
+### 本机已验证安装
+
+本机已使用 winget 安装并验证：
+
+```powershell
+winget install --id Python.Python.3.9 -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity --scope user
+winget install --id Kitware.CMake -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+winget install --id Ninja-build.Ninja -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+winget install --id Arm.ArmGnuToolchain -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+```
+
+验证版本：
+
+| 工具 | 版本 |
+|---|---|
+| Python | `3.9.13` |
+| CMake | `4.3.3` |
+| Ninja | `1.13.2` |
+| Arm GNU Toolchain | `12.2.1 20230214` |
+
+winget 安装后旧终端可能不会立即继承 PATH，需重新打开终端。
+
 ## macOS
 
 可使用 Homebrew 安装通用构建工具：

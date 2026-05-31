@@ -42,6 +42,7 @@ Keil section 放置规则：
 | `.data` | RW load 在 Flash、run 在 RAM | `> RAM AT> FLASH`，定义 `_sidata/_sdata/_edata` | startup 拷贝 |
 | `.bss` | ZI in RAM | `NOLOAD`，定义 `_sbss/_ebss` | startup 清零 |
 | heap/stack | ARMASM startup 中定义 | `. _user_heap_stack` + `_end` | newlib/nosys 兼容 |
+| ELF program headers | Keil 不适用 | `PHDRS` 将 Flash 段设为 `R E`、RAM 段设为 `RW` | 避免 GCC ld 产生 RWX LOAD segment |
 
 ## 自定义 section 审查
 
@@ -62,3 +63,4 @@ Keil section 放置规则：
 - 高风险：Keil `.uvprojx` 设备为 `STM32F103C8`，但 scatter/App/参数区使用到 `0x0801FFFF`，需要确认实际 MCU Flash 容量。
 - 高风险：Keil scatter 没有显式保护 `0x0801C000` 后持久化区；GCC linker 已显式预留该区，后续需通过构建和 map 文件验证。
 - 中风险：如果后续发现业务使用自定义 section，需要同步更新 `.ld`。
+- 已验证：Debug/Release `arm-none-eabi-readelf -l` 未出现 `RWE` LOAD segment。

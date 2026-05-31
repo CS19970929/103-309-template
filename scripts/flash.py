@@ -30,10 +30,10 @@ def default_file(config: str, suffix: str) -> Path:
 
 
 def validate_address(path: Path, address: int) -> None:
-    if path.suffix.lower() == ".bin" and address != APP_ADDRESS:
-        raise ValueError(f"refuse to flash raw bin at 0x{address:08X}; expected 0x{APP_ADDRESS:08X}")
     if address == 0x08000000:
         raise ValueError("refuse to flash App image at 0x08000000; this would overwrite IAP")
+    if path.suffix.lower() == ".bin" and address != APP_ADDRESS:
+        raise ValueError(f"refuse to flash raw bin at 0x{address:08X}; expected 0x{APP_ADDRESS:08X}")
 
 
 def print_or_run(command: list[str], do_flash: bool) -> None:
@@ -45,8 +45,8 @@ def print_or_run(command: list[str], do_flash: bool) -> None:
 
 
 def flash_stlink(args: argparse.Namespace, image: Path) -> None:
-    tool = find_tool("STM32_Programmer_CLI")
-    if not tool:
+    tool = find_tool("STM32_Programmer_CLI") or "STM32_Programmer_CLI"
+    if args.flash and not Path(tool).exists() and find_tool("STM32_Programmer_CLI") is None:
         raise FileNotFoundError("STM32_Programmer_CLI not found")
     command = [tool, "-c", f"port={args.port}", "-w", str(image)]
     if image.suffix.lower() == ".bin":
@@ -56,8 +56,8 @@ def flash_stlink(args: argparse.Namespace, image: Path) -> None:
 
 
 def flash_openocd(args: argparse.Namespace, image: Path) -> None:
-    tool = find_tool("openocd")
-    if not tool:
+    tool = find_tool("openocd") or "openocd"
+    if args.flash and not Path(tool).exists() and find_tool("openocd") is None:
         raise FileNotFoundError("openocd not found")
     program = f"program {image}"
     if image.suffix.lower() == ".bin":
@@ -68,8 +68,8 @@ def flash_openocd(args: argparse.Namespace, image: Path) -> None:
 
 
 def flash_jlink(args: argparse.Namespace, image: Path) -> None:
-    tool = find_tool("JLinkExe", "JLink", "JLink.exe")
-    if not tool:
+    tool = find_tool("JLinkExe", "JLink", "JLink.exe") or "JLinkExe"
+    if args.flash and not Path(tool).exists() and find_tool("JLinkExe", "JLink", "JLink.exe") is None:
         raise FileNotFoundError("JLinkExe/JLink not found")
     with tempfile.NamedTemporaryFile("w", suffix=".jlink", delete=False) as script:
         script_path = Path(script.name)
@@ -127,4 +127,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}")
+        raise SystemExit(1) from exc

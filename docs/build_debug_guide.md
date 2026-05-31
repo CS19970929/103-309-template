@@ -16,12 +16,18 @@ macOS：
 python3 scripts/check_env.py
 ```
 
-当前机器验证结果：`cmake`、`ninja`、`arm-none-eabi-*` 未发现，需先按 `docs/toolchain_install.md` 安装。
+当前机器验证结果：必需工具已通过；可选的 `JLinkGDBServer`、`STM32_Programmer_CLI`、`openocd` 尚未安装。
 
 ## 构建 Debug
 
 ```powershell
 python scripts\build.py --config Debug
+```
+
+当前机器也可明确使用：
+
+```powershell
+py -3.9 scripts\build.py --config Debug
 ```
 
 等价 CMake 命令：
@@ -44,6 +50,12 @@ cmake --build --preset gcc-debug
 python scripts\build.py --config Release
 ```
 
+当前机器也可明确使用：
+
+```powershell
+py -3.9 scripts\build.py --config Release
+```
+
 等价 CMake 命令：
 
 ```powershell
@@ -61,6 +73,13 @@ python scripts\size.py --config Release
 ```
 
 CMake 构建后也会自动执行 `arm-none-eabi-size`。
+
+当前已验证尺寸：
+
+| 配置 | text | data | bss | dec | bin 大小 |
+|---|---:|---:|---:|---:|---:|
+| Debug | 63368 | 916 | 6852 | 71136 | 64284 |
+| Release | 53488 | 908 | 6716 | 61112 | 54396 |
 
 ## 安全烧录
 
@@ -83,6 +102,18 @@ python scripts\flash.py --method openocd --config Release --flash
 ```
 
 raw `.bin` 烧录地址默认是 `0x08004800`。脚本会拒绝 `0x08000000`，且不提供默认全片擦除。
+
+已验证安全检查：
+
+```powershell
+python scripts\flash.py --method stlink --config Release --address 0x08000000
+```
+
+会输出：
+
+```text
+error: refuse to flash App image at 0x08000000; this would overwrite IAP
+```
 
 现有 Keil 产物仍优先使用仓库既有安全脚本：
 

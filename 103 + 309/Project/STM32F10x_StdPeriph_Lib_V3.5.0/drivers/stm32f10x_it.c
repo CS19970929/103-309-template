@@ -56,10 +56,17 @@ void NMI_Handler(void)
 {
 }
 
+#if defined(__GNUC__)
+COMPILER_NAKED void wait(void)
+{
+  __asm volatile("bx lr");
+}
+#else
 __asm void wait()
 {
   BX lr
 }
+#endif
 
 static void Fault_SaveReason(UINT16 reason)
 {

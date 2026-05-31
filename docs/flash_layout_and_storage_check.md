@@ -31,6 +31,8 @@
 - Keil scatter 未显式隔离 `0x0801C000` 后的存储区，当前 Keil Release ROM size `63952` bytes 尚未覆盖该区。
 - GCC linker 必须把 App 代码区限制到 `0x0801C000` 前，避免未来固件变大时静默覆盖参数区。
 - 烧录脚本默认不得全片擦除参数区；全片擦除必须显式参数确认。
+- 已验证 GCC 构建尺寸：Debug `64284` bytes、Release `54396` bytes，均未进入 `0x0801C000` 后的持久化区。
+- 已验证 `scripts/flash.py` 默认不实现全片擦除，并在 dry-run 中输出 `0x08004800` 写入地址。
 
 ## TODO
 

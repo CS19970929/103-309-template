@@ -27,6 +27,13 @@
 - `.hex` 应由 ELF 地址生成，保留 `0x08004800` 装载地址。
 - 默认烧录不得写 `0x08000000`，不得默认全片擦除。
 
+## 已验证项
+
+- Debug/Release GCC ELF 均已从 `0x08004800` 生成。
+- `scripts/flash.py` 默认 raw bin 地址为 `0x08004800`。
+- `scripts/flash.py --address 0x08000000` 会拒绝执行并提示覆盖 IAP 风险。
+- dry-run 不要求本机已安装烧录工具，便于先审查命令和地址。
+
 ## 风险
 
 - 高风险：如果 CMake 宏/include 导致 `_IAP` 未定义，VTOR 会被设置到 `0x08000000`，App 中断会异常。
