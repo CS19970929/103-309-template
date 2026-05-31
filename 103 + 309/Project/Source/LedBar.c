@@ -309,8 +309,8 @@ static void LedBar_OutputRoute(uint8_t route_id)
     }
 
     route = &s_ledbar_routes[route_id];
-    LedBar_PinToOutput(route->low_pin, Bit_RESET);
     LedBar_PinToOutput(route->high_pin, Bit_SET);
+    LedBar_PinToOutput(route->low_pin, Bit_RESET);
 }
 
 static void LedBar_OutputOff(void)
