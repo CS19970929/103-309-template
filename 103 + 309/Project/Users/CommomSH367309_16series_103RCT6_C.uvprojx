@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<?xml version='1.0' encoding='UTF-8'?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_projx.xsd">
 
   <SchemaVersion>2.1</SchemaVersion>
@@ -19,28 +19,28 @@
           <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
           <Cpu>IRAM(0x20000000,0x00004FE0) IROM(0x08000000,0x00010000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
-          <FlashUtilSpec></FlashUtilSpec>
-          <StartupFile></StartupFile>
+          <FlashUtilSpec />
+          <StartupFile />
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0STM32F10x_128 -FS08000000 -FL020000 -FP0($$Device:STM32F103C8$Flash\STM32F10x_128.FLM))</FlashDriverDll>
           <DeviceId>0</DeviceId>
           <RegisterFile>$$Device:STM32F103C8$Device\Include\stm32f10x.h</RegisterFile>
-          <MemoryEnv></MemoryEnv>
-          <Cmp></Cmp>
-          <Asm></Asm>
-          <Linker></Linker>
-          <OHString></OHString>
-          <InfinionOptionDll></InfinionOptionDll>
-          <SLE66CMisc></SLE66CMisc>
-          <SLE66AMisc></SLE66AMisc>
-          <SLE66LinkerMisc></SLE66LinkerMisc>
+          <MemoryEnv />
+          <Cmp />
+          <Asm />
+          <Linker />
+          <OHString />
+          <InfinionOptionDll />
+          <SLE66CMisc />
+          <SLE66AMisc />
+          <SLE66LinkerMisc />
           <SFDFile>$$Device:STM32F103C8$SVD\STM32F103xx.svd</SFDFile>
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
-          <BinPath></BinPath>
-          <IncludePath></IncludePath>
-          <LibPath></LibPath>
-          <RegisterFilePath></RegisterFilePath>
-          <DBRegisterFilePath></DBRegisterFilePath>
+          <BinPath />
+          <IncludePath />
+          <LibPath />
+          <RegisterFilePath />
+          <DBRegisterFilePath />
           <TargetStatus>
             <Error>0</Error>
             <ExitCodeStop>0</ExitCodeStop>
@@ -62,8 +62,8 @@
           <BeforeCompile>
             <RunUserProg1>0</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg1Name />
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopU1X>0</nStopU1X>
@@ -72,8 +72,8 @@
           <BeforeMake>
             <RunUserProg1>0</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg1Name />
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopB1X>0</nStopB1X>
@@ -83,14 +83,14 @@
             <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
             <UserProg1Name>fromelf.exe --bin -o "$L@L.bin" "#L"</UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopA1X>0</nStopA1X>
             <nStopA2X>0</nStopA2X>
           </AfterMake>
           <SelectedForBatchBuild>0</SelectedForBatchBuild>
-          <SVCSIdString></SVCSIdString>
+          <SVCSIdString />
         </TargetCommonOption>
         <CommonProperty>
           <UseCPPCompiler>0</UseCPPCompiler>
@@ -104,8 +104,8 @@
           <AssembleAssemblyFile>0</AssembleAssemblyFile>
           <PublicsOnly>0</PublicsOnly>
           <StopOnExitCode>3</StopOnExitCode>
-          <CustomArgument></CustomArgument>
-          <IncludeLibraryModules></IncludeLibraryModules>
+          <CustomArgument />
+          <IncludeLibraryModules />
           <ComprImg>1</ComprImg>
         </CommonProperty>
         <DllOption>
@@ -114,7 +114,7 @@
           <SimDlgDll>DCM.DLL</SimDlgDll>
           <SimDlgDllArguments>-pCM3</SimDlgDllArguments>
           <TargetDllName>SARMCM3.DLL</TargetDllName>
-          <TargetDllArguments></TargetDllArguments>
+          <TargetDllArguments />
           <TargetDlgDll>TCM.DLL</TargetDlgDll>
           <TargetDlgDllArguments>-pCM3</TargetDlgDllArguments>
         </DllOption>
@@ -138,11 +138,11 @@
           </Flash1>
           <bUseTDR>1</bUseTDR>
           <Flash2>BIN\UL2CM3.DLL</Flash2>
-          <Flash3></Flash3>
-          <Flash4></Flash4>
-          <pFcarmOut></pFcarmOut>
-          <pFcarmGrp></pFcarmGrp>
-          <pFcArmRoot></pFcArmRoot>
+          <Flash3 />
+          <Flash4 />
+          <pFcarmOut />
+          <pFcarmGrp />
+          <pFcArmRoot />
           <FcArmLst>0</FcArmLst>
         </Utilities>
         <TargetArmAds>
@@ -175,7 +175,7 @@
             <RvctClst>0</RvctClst>
             <GenPPlst>0</GenPPlst>
             <AdsCpuType>"Cortex-M3"</AdsCpuType>
-            <RvctDeviceName></RvctDeviceName>
+            <RvctDeviceName />
             <mOS>0</mOS>
             <uocRom>0</uocRom>
             <uocRam>0</uocRam>
@@ -309,7 +309,7 @@
                 <Size>0x0</Size>
               </OCR_RVCT10>
             </OnChipMemories>
-            <RvctStartVector></RvctStartVector>
+            <RvctStartVector />
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
@@ -336,9 +336,9 @@
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls />
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
-              <Undefine></Undefine>
+              <Undefine />
               <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
           </Cads>
@@ -354,10 +354,10 @@
             <useXO>0</useXO>
             <ClangAsOpt>4</ClangAsOpt>
             <VariousControls>
-              <MiscControls></MiscControls>
-              <Define></Define>
-              <Undefine></Undefine>
-              <IncludePath></IncludePath>
+              <MiscControls />
+              <Define />
+              <Undefine />
+              <IncludePath />
             </VariousControls>
           </Aads>
           <LDads>
@@ -369,13 +369,13 @@
             <useFile>0</useFile>
             <TextAddressRange>0x08000000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
-            <pXoBase></pXoBase>
-            <ScatterFile></ScatterFile>
-            <IncludeLibs></IncludeLibs>
-            <IncludeLibsPath></IncludeLibsPath>
-            <Misc></Misc>
-            <LinkerInputFile></LinkerInputFile>
-            <DisabledWarnings></DisabledWarnings>
+            <pXoBase />
+            <ScatterFile />
+            <IncludeLibs />
+            <IncludeLibsPath />
+            <Misc />
+            <LinkerInputFile />
+            <DisabledWarnings />
           </LDads>
         </TargetArmAds>
       </TargetOption>
@@ -392,16 +392,6 @@
               <FileName>AppInit.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\AppInit.c</FilePath>
-            </File>
-            <File>
-              <FileName>DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>EEPROM.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\EEPROM.c</FilePath>
             </File>
             <File>
               <FileName>Fault.c</FileName>
@@ -424,36 +414,6 @@
               <FilePath>..\Source\FactoryAging.c</FilePath>
             </File>
             <File>
-              <FileName>LowPowerSleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LowPowerSleep.c</FilePath>
-            </File>
-            <File>
-              <FileName>low_power.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\low_power.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_rtc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_rtc.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_power.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_power.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_clock.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_clock.c</FilePath>
-            </File>
-            <File>
-              <FileName>I2C_AFE1.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -462,16 +422,6 @@
               <FileName>MosStartup.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\MosStartup.c</FilePath>
-            </File>
-            <File>
-              <FileName>PubFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\PubFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>RTC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
               <FileName>Runtime.c</FileName>
@@ -494,29 +444,9 @@
               <FilePath>..\Source\SOC.c</FilePath>
             </File>
             <File>
-              <FileName>System_Init.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Init.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Monitor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Monitor.c</FilePath>
-            </File>
-            <File>
               <FileName>ProductionID.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ProductionID.c</FilePath>
-            </File>
-            <File>
-              <FileName>Can_HDX.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>CanFeidaoFrames.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
               <FileName>can_app.c</FileName>
@@ -545,8 +475,8 @@
                   <AssembleAssemblyFile>2</AssembleAssemblyFile>
                   <PublicsOnly>2</PublicsOnly>
                   <StopOnExitCode>11</StopOnExitCode>
-                  <CustomArgument></CustomArgument>
-                  <IncludeLibraryModules></IncludeLibraryModules>
+                  <CustomArgument />
+                  <IncludeLibraryModules />
                   <ComprImg>1</ComprImg>
                 </CommonProperty>
                 <FileArmAds>
@@ -575,10 +505,10 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
-                      <Define></Define>
-                      <Undefine></Undefine>
-                      <IncludePath></IncludePath>
+                      <MiscControls />
+                      <Define />
+                      <Undefine />
+                      <IncludePath />
                     </VariousControls>
                   </Cads>
                 </FileArmAds>
@@ -589,37 +519,7 @@
               <FileType>1</FileType>
               <FilePath>..\Source\led_scan.c</FilePath>
             </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_afe_sh367309.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
-            </File>
-          </Files>
+            <File><FileName>afe_driver.c</FileName><FileType>1</FileType><FilePath>..\Source\afe_driver.c</FilePath></File><File><FileName>can.c</FileName><FileType>1</FileType><FilePath>..\Source\can.c</FilePath></File><File><FileName>utils.c</FileName><FileType>1</FileType><FilePath>..\Source\utils.c</FilePath></File><File><FileName>low_power.c</FileName><FileType>1</FileType><FilePath>..\Source\low_power.c</FilePath></File><File><FileName>EEPROM.c</FileName><FileType>1</FileType><FilePath>..\Source\EEPROM.c</FilePath></File><File><FileName>RTC.c</FileName><FileType>1</FileType><FilePath>..\Source\RTC.c</FilePath></File></Files>
         </Group>
         <Group>
           <GroupName>Drivers</GroupName>
@@ -981,28 +881,28 @@
           <PackID>Keil.STM32F1xx_DFP.2.3.0</PackID>
           <PackURL>http://www.keil.com/pack/</PackURL>
           <Cpu>IRAM(0x20000000,0x00004FE0) IROM(0x08000000,0x00010000) CPUTYPE("Cortex-M3") CLOCK(12000000) ELITTLE</Cpu>
-          <FlashUtilSpec></FlashUtilSpec>
-          <StartupFile></StartupFile>
+          <FlashUtilSpec />
+          <StartupFile />
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0STM32F10x_128 -FS08000000 -FL020000 -FP0($$Device:STM32F103C8$Flash\STM32F10x_128.FLM))</FlashDriverDll>
           <DeviceId>0</DeviceId>
           <RegisterFile>$$Device:STM32F103C8$Device\Include\stm32f10x.h</RegisterFile>
-          <MemoryEnv></MemoryEnv>
-          <Cmp></Cmp>
-          <Asm></Asm>
-          <Linker></Linker>
-          <OHString></OHString>
-          <InfinionOptionDll></InfinionOptionDll>
-          <SLE66CMisc></SLE66CMisc>
-          <SLE66AMisc></SLE66AMisc>
-          <SLE66LinkerMisc></SLE66LinkerMisc>
+          <MemoryEnv />
+          <Cmp />
+          <Asm />
+          <Linker />
+          <OHString />
+          <InfinionOptionDll />
+          <SLE66CMisc />
+          <SLE66AMisc />
+          <SLE66LinkerMisc />
           <SFDFile>$$Device:STM32F103C8$SVD\STM32F103xx.svd</SFDFile>
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
-          <BinPath></BinPath>
-          <IncludePath></IncludePath>
-          <LibPath></LibPath>
-          <RegisterFilePath></RegisterFilePath>
-          <DBRegisterFilePath></DBRegisterFilePath>
+          <BinPath />
+          <IncludePath />
+          <LibPath />
+          <RegisterFilePath />
+          <DBRegisterFilePath />
           <TargetStatus>
             <Error>0</Error>
             <ExitCodeStop>0</ExitCodeStop>
@@ -1024,8 +924,8 @@
           <BeforeCompile>
             <RunUserProg1>0</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg1Name />
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopU1X>0</nStopU1X>
@@ -1034,8 +934,8 @@
           <BeforeMake>
             <RunUserProg1>0</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg1Name />
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopB1X>0</nStopB1X>
@@ -1045,14 +945,14 @@
             <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
             <UserProg1Name>fromelf.exe --bin -o "$L@L.bin" "#L"</UserProg1Name>
-            <UserProg2Name></UserProg2Name>
+            <UserProg2Name />
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
             <nStopA1X>0</nStopA1X>
             <nStopA2X>0</nStopA2X>
           </AfterMake>
           <SelectedForBatchBuild>0</SelectedForBatchBuild>
-          <SVCSIdString></SVCSIdString>
+          <SVCSIdString />
         </TargetCommonOption>
         <CommonProperty>
           <UseCPPCompiler>0</UseCPPCompiler>
@@ -1066,8 +966,8 @@
           <AssembleAssemblyFile>0</AssembleAssemblyFile>
           <PublicsOnly>0</PublicsOnly>
           <StopOnExitCode>3</StopOnExitCode>
-          <CustomArgument></CustomArgument>
-          <IncludeLibraryModules></IncludeLibraryModules>
+          <CustomArgument />
+          <IncludeLibraryModules />
           <ComprImg>1</ComprImg>
         </CommonProperty>
         <DllOption>
@@ -1076,7 +976,7 @@
           <SimDlgDll>DCM.DLL</SimDlgDll>
           <SimDlgDllArguments>-pCM3</SimDlgDllArguments>
           <TargetDllName>SARMCM3.DLL</TargetDllName>
-          <TargetDllArguments></TargetDllArguments>
+          <TargetDllArguments />
           <TargetDlgDll>TCM.DLL</TargetDlgDll>
           <TargetDlgDllArguments>-pCM3</TargetDlgDllArguments>
         </DllOption>
@@ -1100,11 +1000,11 @@
           </Flash1>
           <bUseTDR>1</bUseTDR>
           <Flash2>BIN\UL2CM3.DLL</Flash2>
-          <Flash3></Flash3>
-          <Flash4></Flash4>
-          <pFcarmOut></pFcarmOut>
-          <pFcarmGrp></pFcarmGrp>
-          <pFcArmRoot></pFcArmRoot>
+          <Flash3 />
+          <Flash4 />
+          <pFcarmOut />
+          <pFcarmGrp />
+          <pFcArmRoot />
           <FcArmLst>0</FcArmLst>
         </Utilities>
         <TargetArmAds>
@@ -1137,7 +1037,7 @@
             <RvctClst>0</RvctClst>
             <GenPPlst>0</GenPPlst>
             <AdsCpuType>"Cortex-M3"</AdsCpuType>
-            <RvctDeviceName></RvctDeviceName>
+            <RvctDeviceName />
             <mOS>0</mOS>
             <uocRom>0</uocRom>
             <uocRam>0</uocRam>
@@ -1271,7 +1171,7 @@
                 <Size>0x0</Size>
               </OCR_RVCT10>
             </OnChipMemories>
-            <RvctStartVector></RvctStartVector>
+            <RvctStartVector />
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
@@ -1298,9 +1198,9 @@
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls />
               <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_</Define>
-              <Undefine></Undefine>
+              <Undefine />
               <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
           </Cads>
@@ -1316,10 +1216,10 @@
             <useXO>0</useXO>
             <ClangAsOpt>4</ClangAsOpt>
             <VariousControls>
-              <MiscControls></MiscControls>
-              <Define></Define>
-              <Undefine></Undefine>
-              <IncludePath></IncludePath>
+              <MiscControls />
+              <Define />
+              <Undefine />
+              <IncludePath />
             </VariousControls>
           </Aads>
           <LDads>
@@ -1331,13 +1231,13 @@
             <useFile>0</useFile>
             <TextAddressRange>0x08000000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
-            <pXoBase></pXoBase>
-            <ScatterFile></ScatterFile>
-            <IncludeLibs></IncludeLibs>
-            <IncludeLibsPath></IncludeLibsPath>
-            <Misc></Misc>
-            <LinkerInputFile></LinkerInputFile>
-            <DisabledWarnings></DisabledWarnings>
+            <pXoBase />
+            <ScatterFile />
+            <IncludeLibs />
+            <IncludeLibsPath />
+            <Misc />
+            <LinkerInputFile />
+            <DisabledWarnings />
           </LDads>
         </TargetArmAds>
       </TargetOption>
@@ -1354,16 +1254,6 @@
               <FileName>AppInit.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\AppInit.c</FilePath>
-            </File>
-            <File>
-              <FileName>DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>EEPROM.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\EEPROM.c</FilePath>
             </File>
             <File>
               <FileName>Fault.c</FileName>
@@ -1386,36 +1276,6 @@
               <FilePath>..\Source\FactoryAging.c</FilePath>
             </File>
             <File>
-              <FileName>LowPowerSleep.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\LowPowerSleep.c</FilePath>
-            </File>
-            <File>
-              <FileName>low_power.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\low_power.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_rtc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_rtc.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_power.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_power.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_clock.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\bsp_clock.c</FilePath>
-            </File>
-            <File>
-              <FileName>I2C_AFE1.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -1424,16 +1284,6 @@
               <FileName>MosStartup.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\MosStartup.c</FilePath>
-            </File>
-            <File>
-              <FileName>PubFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\PubFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>RTC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
               <FileName>Runtime.c</FileName>
@@ -1456,29 +1306,9 @@
               <FilePath>..\Source\SOC.c</FilePath>
             </File>
             <File>
-              <FileName>System_Init.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Init.c</FilePath>
-            </File>
-            <File>
-              <FileName>System_Monitor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\System_Monitor.c</FilePath>
-            </File>
-            <File>
               <FileName>ProductionID.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ProductionID.c</FilePath>
-            </File>
-            <File>
-              <FileName>Can_HDX.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>CanFeidaoFrames.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
               <FileName>can_app.c</FileName>
@@ -1507,8 +1337,8 @@
                   <AssembleAssemblyFile>2</AssembleAssemblyFile>
                   <PublicsOnly>2</PublicsOnly>
                   <StopOnExitCode>11</StopOnExitCode>
-                  <CustomArgument></CustomArgument>
-                  <IncludeLibraryModules></IncludeLibraryModules>
+                  <CustomArgument />
+                  <IncludeLibraryModules />
                   <ComprImg>1</ComprImg>
                 </CommonProperty>
                 <FileArmAds>
@@ -1537,10 +1367,10 @@
                     <v6WtE>2</v6WtE>
                     <v6Rtti>2</v6Rtti>
                     <VariousControls>
-                      <MiscControls></MiscControls>
-                      <Define></Define>
-                      <Undefine></Undefine>
-                      <IncludePath></IncludePath>
+                      <MiscControls />
+                      <Define />
+                      <Undefine />
+                      <IncludePath />
                     </VariousControls>
                   </Cads>
                 </FileArmAds>
@@ -1551,37 +1381,7 @@
               <FileType>1</FileType>
               <FilePath>..\Source\led_scan.c</FilePath>
             </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_afe_sh367309.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_port.c</FilePath>
-            </File>
-          </Files>
+            <File><FileName>afe_driver.c</FileName><FileType>1</FileType><FilePath>..\Source\afe_driver.c</FilePath></File><File><FileName>can.c</FileName><FileType>1</FileType><FilePath>..\Source\can.c</FilePath></File><File><FileName>utils.c</FileName><FileType>1</FileType><FilePath>..\Source\utils.c</FilePath></File><File><FileName>low_power.c</FileName><FileType>1</FileType><FilePath>..\Source\low_power.c</FilePath></File><File><FileName>EEPROM.c</FileName><FileType>1</FileType><FilePath>..\Source\EEPROM.c</FilePath></File><File><FileName>RTC.c</FileName><FileType>1</FileType><FilePath>..\Source\RTC.c</FilePath></File></Files>
         </Group>
         <Group>
           <GroupName>Drivers</GroupName>
@@ -1933,9 +1733,9 @@
   </Targets>
 
   <RTE>
-    <apis/>
-    <components/>
-    <files/>
+    <apis />
+    <components />
+    <files />
   </RTE>
 
   <LayerInfo>
