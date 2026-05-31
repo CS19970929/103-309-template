@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,8 +24,15 @@ def with_toolchain_path() -> dict[str, str]:
 
 
 def run(command: list[str]) -> None:
+    env = with_toolchain_path()
+    executable = shutil.which(command[0], path=env.get("PATH"))
+    if not executable:
+        raise FileNotFoundError(
+            f"{command[0]} not found. Run scripts/check_env.py and install missing tools."
+        )
+    resolved = [executable, *command[1:]]
     print("+ " + " ".join(command))
-    subprocess.run(command, cwd=REPO_ROOT, env=with_toolchain_path(), check=True)
+    subprocess.run(resolved, cwd=REPO_ROOT, env=env, check=True)
 
 
 def main() -> int:
@@ -59,3 +67,6 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except subprocess.CalledProcessError as exc:
         raise SystemExit(exc.returncode) from exc
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
