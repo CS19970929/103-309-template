@@ -15,7 +15,6 @@
 #include "SOC.h"
 #include "ADC.h"
 #include "RTC.h"
-#include "PubFunc.h"
 #include "can.h"
 #include "afe_driver.h"
 #include "Flash.h"
