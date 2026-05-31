@@ -1,5 +1,4 @@
 #include "main.h"
-#include "LowPowerSleep.h"
 
 static UINT8 s_u8BootFromSleepStartup = 0U;
 static UINT8 s_u8BootFromSleepChargerWakeup = 0U;
@@ -83,7 +82,10 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 {
 	UINT8 u8FlashWriteOK_flag = 0;
 
-	LowPowerSleep_SaveResetState();
+	Can_PrepareSleep();
+	SOC_SaveSnapshotBeforeSleep();
+	FactoryAging_SaveProgressBeforeSleep();
+	LedBar_SaveSleepSoc();
 
 	switch (sleep_mode)
 	{

@@ -1,5 +1,4 @@
 #include "main.h"
-#include "LowPowerSleep.h"
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"
 
@@ -103,7 +102,9 @@ void RtcSleep_PortOnDeepSleepRequest(void)
 void RtcSleep_PortPrepareRtcStop(UINT32 rtc_cycle_count)
 {
     (void)rtc_cycle_count;
-    LowPowerSleep_SaveCoreState();
+    Can_PrepareSleep();
+    SOC_SaveSnapshotBeforeSleep();
+    FactoryAging_SaveProgressBeforeSleep();
 
     Init_RTC();
     IOstatus_RTCMode();
