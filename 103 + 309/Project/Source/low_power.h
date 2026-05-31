@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* ── Sleep mode (value-compatible with old SLEEP_MODE enum) ── */
+/* ── Sleep mode ── */
 typedef enum {
     LP_SLEEP_NORMAL  = 0,
     LP_SLEEP_HICCUP  = 1,
@@ -12,13 +12,12 @@ typedef enum {
     LP_SLEEP_NONE    = 3
 } LP_SleepMode;
 
-/* Backward-compat aliases for SleepDeal.c */
 #define NORMAL_MODE  LP_SLEEP_NORMAL
 #define HICCUP_MODE  LP_SLEEP_HICCUP
 #define DEEP_MODE    LP_SLEEP_DEEP
 #define NO_SLEEP     LP_SLEEP_NONE
 
-/* ── Wakeup source (used by port layer) ── */
+/* ── Wakeup source ── */
 enum irqWakeup {
     uart1_irq = 1,
     uart2_irq,
@@ -40,14 +39,10 @@ enum irqWakeup {
 typedef enum {
     LP_STATE_RUN = 0,
     LP_STATE_IDLE_CHECK,
-    LP_STATE_PREPARE_SLEEP,
-    LP_STATE_STOP_SLEEP,
-    LP_STATE_WAKEUP_RESTORE,
-    LP_STATE_DEEP_STANDBY,
-    LP_STATE_ERROR
+    LP_STATE_STOP_SLEEP
 } LP_State;
 
-/* ── Block reason bitmap (single source of truth) ── */
+/* ── Block reason bitmap ── */
 #define LP_BLOCK_CHARGE        (1UL << 0)
 #define LP_BLOCK_DISCHARGE     (1UL << 1)
 #define LP_BLOCK_COMM          (1UL << 2)
@@ -57,9 +52,7 @@ typedef enum {
 #define LP_BLOCK_UPGRADE       (1UL << 6)
 #define LP_BLOCK_FAULT         (1UL << 7)
 #define LP_BLOCK_LED_ACTIVE    (1UL << 8)
-#define LP_BLOCK_IWDG_UNSAFE   (1UL << 9)
-#define LP_BLOCK_FACTORY_AGING (1UL << 10)
-#define LP_BLOCK_EXT_COMM      (1UL << 11)
+#define LP_BLOCK_FACTORY_AGING (1UL << 9)
 
 /* ── Public API ── */
 void     LP_Init(void);

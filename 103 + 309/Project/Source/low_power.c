@@ -18,9 +18,7 @@ typedef struct {
     uint32_t  last_sleep_seconds;
     uint8_t   sleep_mode;       /* LP_SleepMode */
     uint8_t   ready_to_sleep;
-    uint8_t   rtc_wake;
     uint16_t  idle_delay_seconds;
-    uint16_t  idle_delay_target_seconds;
     uint32_t  rtc_sleep_elapsed_seconds;
 } LP_Runtime;
 
@@ -195,7 +193,6 @@ void LP_Init(void)
     s_lp.last_sleep_seconds   = 0U;
     s_lp.sleep_mode           = (uint8_t)LP_SLEEP_NONE;
     s_lp.ready_to_sleep       = 0U;
-    s_lp.rtc_wake             = 0U;
     s_lp.idle_delay_seconds   = 0U;
     s_lp.rtc_sleep_elapsed_seconds = 0U;
     s_rtc_wake_cycles         = 0U;
@@ -423,8 +420,7 @@ static void lp_select_sleep_mode(void)
     }
 
     /* ── All clear → countdown to HICCUP ── */
-    s_lp.idle_delay_target_seconds = sys_time.time_enter_rtc;
-    if (++s_lp.idle_delay_seconds >= s_lp.idle_delay_target_seconds)
+    if (++s_lp.idle_delay_seconds >= (UINT16)sys_time.time_enter_rtc)
     {
         s_lp.idle_delay_seconds = 0U;
         LP_RequestSleep((uint8_t)LP_SLEEP_HICCUP);
