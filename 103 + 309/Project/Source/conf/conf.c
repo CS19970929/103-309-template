@@ -136,7 +136,6 @@ void LowPower_ClearWakeupPending(void)
 #if defined(UART1_WAKEUP_ENABLE)
     EXTI_ClearITPendingBit(EXTI_Line7);
 #endif
-
     NVIC_ClearPendingIRQ(EXTI0_IRQn);
     NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
     NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
@@ -152,7 +151,6 @@ void LowPower_DisableWakeupExti(void)
 #if defined(UART1_WAKEUP_ENABLE)
     LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
 #endif
-
     LowPower_ClearWakeupPending();
 }
 
@@ -170,7 +168,7 @@ void InitIO(void)
     {
         // GPIO_InitStructure.GPIO_Pin = PIN_AFE1_ALM | PIN_AFE1_MODE | PIN_AFE1_SHIP;
         // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-        // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
+        // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口�度�2MHz
         // GPIO_Init(GPIOA, &GPIO_InitStructure);
 
         Conf_InitGpioMode(GPIOB, PIN_AFE1_PRO_EN | PIN_AFE1_CTL, GPIO_Mode_Out_PP);
@@ -218,20 +216,7 @@ void InitWakeUp_NormalMode(void)
                                  EXTI9_5_IRQn);
 #endif // UART1_WAKEUP_ENABLE
 
-        // GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIO_SCI2_RX, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource3);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line3;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
+
     }
     Conf_InitWakeupInputExti(GPIO_CHG_IN,
                              PIN_CHG_IN,
@@ -314,7 +299,6 @@ void IOstatus_RTCMode(void)
 
     // ??????
     // ???
-
     LedBar_PrepareForStop();
 }
 
@@ -371,3 +355,28 @@ void InitRunAfterStopWakeup(void)
     ADC_StopForLowPower();
     InitADC();
 
+    USART_DeInit(USART1);
+    USART_DeInit(USART2);
+
+    AppInit_InitSci();
+    InitCan();
+    InitTimer();
+
+    sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;
+    /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
+       run mode can leave stale pending bits for the next low-power cycle. */
+
+    initAFE1_IIC();
+}
+
+void Init(void)
+{
+    if (is_rtc_wakekup)
+    {
+        InitRtcWakeupCheck();
+    }
+    else
+    {
+        InitRunAfterStopWakeup();
+    }
+}

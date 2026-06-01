@@ -1,4 +1,5 @@
 #include "main.h"
+#include "FactoryAging.h"
 #include "LowPowerSleep.h"
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"

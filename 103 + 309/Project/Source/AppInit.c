@@ -1,4 +1,5 @@
 #include "main.h"
+#include "app_lowpower.h"
 #include "AppInit.h"
 
 UINT8 SeriesNum = 10;
@@ -25,7 +26,6 @@ static void AppInit_InitDevice(void)
 	InitTimer();
 	__enable_irq();
 
-	log_w("init over");
 
 	EnableLowPowerDebug();
 

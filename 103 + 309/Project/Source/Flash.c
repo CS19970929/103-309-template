@@ -1,5 +1,4 @@
 #include "main.h"
-#include "Flash64KAppTest.h"
 
 #define FLASH_STORAGE_MAGIC_SOC ((UINT32)0x534F4331)
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
@@ -796,8 +795,7 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 										  (const UINT8 *)&save_data,
 										  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA));
 	StorageFlash_EndWrite();
-	StorageFlash_AppUseTest_OnSocSaved(&save_data, result);
-	return result;
+		return result;
 }
 
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
@@ -831,8 +829,7 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 								   (const UINT8 *)values,
 								   (UINT16)(word_count * sizeof(UINT16)));
 	StorageFlash_EndWrite();
-	StorageFlash_AppUseTest_OnAfeSaved(values, word_count, result);
-	return result;
+		return result;
 }
 
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)

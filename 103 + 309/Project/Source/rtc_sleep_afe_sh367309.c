@@ -22,7 +22,6 @@ UINT8 RtcSleep_AfePortIsSleepBlocked(void)
         return 0U;
     }
 
-    log_a("err mtp comm");
     return 2U;
 }
 
@@ -50,8 +49,6 @@ UINT8 RtcSleep_AfePortHasCurrentWake(enum irqWakeup *source)
 
     DataLoad_Current();
 
-    log_i("ichg %d\n", g_stCellInfoReport.u16Ichg);
-    log_i("dsg %d\n", g_stCellInfoReport.u16IDischg);
     result = (UINT8)((g_stCellInfoReport.u16Ichg != 0U) ||
                      (g_stCellInfoReport.u16IDischg != 0U));
     if (result != 0U)

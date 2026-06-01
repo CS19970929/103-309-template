@@ -119,6 +119,7 @@ typedef struct
   uint32_t    rtc_alm_cnt;
   uint32_t    rtc_irq_cnt;
 
+  uint8_t     isdebugenable;
   uint16_t    typc_curr;
 }Time_T;
 

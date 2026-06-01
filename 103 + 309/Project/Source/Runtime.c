@@ -1,4 +1,5 @@
 #include "main.h"
+#include "app_lowpower.h"
 #include "AppInit.h"
 #include "FactoryAging.h"
 #include "Runtime.h"
