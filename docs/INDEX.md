@@ -22,6 +22,7 @@
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
+| 了解量产分支变更 | [量产变更报告](changelog/production_release_changelog.md) |
 | 了解量产需清理什么 | [量产清理分析](reference/production_cleanup_analysis.md) |
 
 ---
