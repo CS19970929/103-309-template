@@ -1293,3 +1293,22 @@ bms app进入rtc sleep后，能否通过can通信唤醒bms app，不通过中断
 输出本次修改的文档细节，然后提交git，并给出未来规划
 
 调用keil，现在编译报错
+
+Project_Config.h在keil中不能可视化了
+
+目前发现本次删除修改后问题：1、Project_Config.h在keil中不能可视化了
+2、上位机报错，实际上System_ErrFlag没有报错，应该是修改、删除Sci_Upper.c，导致协议匹配不上
+
+Project_Config.h在keil可视化中，需要增加中文注释
+
+放电mos开着，上位机显示却显示关着的，s_system_status,应该还是和Sci_Upper有关，仔细看下是否还有类似问题，一起解决
+
+rtc是否能更新soc
+
+codex审核从a53e77ef2dc72bdfdc0130abb8ec8f0287b1df9f到029907543e64966916c0bc0ddf1fb1839a8b0b06这些commit
+
+充电的时候数码管又会闪了？充电时，闪电图标不亮，显示45%时，个位b段会偶尔闪一下
+
+测试参数读写，升级更新参数等等
+
+建立完整的log和系统状态，包含所有细节，例如每一个io的状态，每一个功能的状态，方便调试，先给出方案
