@@ -158,9 +158,9 @@ void SystemDebug_Snapshot(void)
 	g_dbg.can.last_tx_id = 0U;
 
 	/* ===== RTC / Low Power ===== */
-	g_dbg.lp.mode         = g_stLowPowerRtcStatus.mode;
+	g_dbg.lp.mode         = (DBG_LP_MODE)g_stLowPowerRtcStatus.mode;
 	g_dbg.lp.ready        = g_stLowPowerRtcStatus.readyToSleep;
-	g_dbg.lp.block_reason = g_stLowPowerRtcStatus.blockReason;
+	g_dbg.lp.block_reason = (DBG_LP_BLOCK)g_stLowPowerRtcStatus.blockReason;
 	g_dbg.lp.block_mask   = LP_GetBlockReason();
 	g_dbg.lp.sleep_sec    = LP_GetLastSleepSeconds();
 	g_dbg.lp.elapsed_sec  = g_stLowPowerRtcStatus.elapsedSeconds;
@@ -216,7 +216,7 @@ void SystemDebug_Snapshot(void)
 	g_dbg.fault.mdl3  = g_stCellInfoReport.unMdlFault_Third.all;
 
 	/* ===== Factory Aging ===== */
-	g_dbg.aging.state      = FactoryAging_GetState();
+	g_dbg.aging.state      = (DBG_AGING_STATE)FactoryAging_GetState();
 	g_dbg.aging.remain_sec = FactoryAging_GetRemainingSeconds();
 
 	/* ===== Flash ===== */
@@ -283,16 +283,16 @@ static void dbg_put_dec16(uint16_t v)
 	while (i > 0) dbg_uart_putc(buf[--i]);
 }
 
-static const char *dbg_lp_mode_name(uint8_t m)
+static const char *dbg_lp_mode_name(DBG_LP_MODE m)
 {
 	static const char *names[] = {"NORMAL","HICCUP","DEEP","NO_SLP"};
-	return (m < 4) ? names[m] : "???";
+	return (m <= DBG_LP_MODE_NO_SLP) ? names[m] : "???";
 }
 
-static const char *dbg_aging_state_name(uint8_t s)
+static const char *dbg_aging_state_name(DBG_AGING_STATE s)
 {
 	static const char *names[] = {"STOP","RUN","DONE"};
-	return (s < 3) ? names[s] : "???";
+	return (s <= DBG_AGING_DONE) ? names[s] : "???";
 }
 
 static const char *dbg_event_type_name(uint8_t t)

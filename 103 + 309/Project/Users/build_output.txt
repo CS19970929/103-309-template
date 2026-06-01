@@ -1,8 +1,16 @@
 *** Using Compiler 'V5.06 update 7 (build 960)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'FD_Release'
-compiling LedBar.c...
+compiling Runtime.c...
+compiling SystemDebug.c...
+..\Source\SystemDebug.c(53): warning:  #550-D: variable "s_dbg_fault_snap"  was set but never used
+  static struct SYSTEM_DEBUG s_dbg_fault_snap;
+..\Source\SystemDebug.c(54): warning:  #550-D: variable "s_dbg_fault_valid"  was set but never used
+  static uint8_t s_dbg_fault_valid;
+..\Source\SystemDebug.c(74): warning:  #177-D: function "SystemDebug_ReadEventRing"  was declared but never referenced
+  static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
+..\Source\SystemDebug.c: 3 warnings, 0 errors
 linking...
 Program Size: Code=54244 RO-data=3064 RW-data=1352 ZI-data=6232  
 After Build - User command #1: fromelf.exe --bin -o "E:\TODO\103 + 309 - 副本\103 + 309\Project\Users\Objects\FD_Release.bin" "E:\TODO\103 + 309 - 副本\103 + 309\Project\Users\Objects\FD_Release.axf"
-".\Objects\FD_Release.axf" - 0 Error(s), 0 Warning(s).
+".\Objects\FD_Release.axf" - 0 Error(s), 3 Warning(s).
 Build Time Elapsed:  00:00:01
