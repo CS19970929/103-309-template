@@ -1534,7 +1534,7 @@
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep_port.c</FilePath>
             </File>
-          <File><FileName>SystemDebug.c</FileName><FileType>1</FileType><FilePath>..\Source\SystemDebug.c</FilePath></File></Files>
+          </Files>
         </Group>
         <Group>
           <GroupName>Drivers</GroupName>

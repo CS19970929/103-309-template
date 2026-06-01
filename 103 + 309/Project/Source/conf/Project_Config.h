@@ -79,7 +79,7 @@
 // <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
 // <i> Release must keep disabled.
 #ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
-#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 0
+#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 1
 #endif
 // </h>
 

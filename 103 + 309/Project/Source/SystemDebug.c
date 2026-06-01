@@ -90,10 +90,10 @@ void SystemDebug_Snapshot(void)
 	g_dbg.soc_vtotal    = g_stCellInfoReport.u16VCellTotle;
 
 	/* --- AFE --- */
-	g_dbg.afe_bstatus1    = SH367309_Reg_Store.REG_BSTATUS1;
-	g_dbg.afe_bstatus3    = SH367309_Reg_Store.REG_BSTATUS3;
-	g_dbg.afe_fault1      = SH367309_Reg_Store.REG_BFLAG1;
-	g_dbg.afe_cur_raw     = (uint16_t)SH367309_Reg_Store.REG_CUR;
+	g_dbg.afe_bstatus1    = SH367309_Reg_Store.REG_BSTATUS1.all;
+	g_dbg.afe_bstatus3    = SH367309_Reg_Store.REG_BSTATUS3.all;
+	g_dbg.afe_fault1      = SH367309_Reg_Store.REG_BSTATUS1.all;
+	g_dbg.afe_cur_raw     = SH367309_Read_AFE1.u16Current;
 	g_dbg.afe_pec_err     = sys_time.pec_err_cnt;
 	g_dbg.afe_cell_min_mv = g_stCellInfoReport.u16VCellMin;
 	g_dbg.afe_cell_max_mv = g_stCellInfoReport.u16VCellMax;

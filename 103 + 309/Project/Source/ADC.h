@@ -46,7 +46,7 @@ enum tagInfoForADCArray {
 
 
 extern INT32 g_i32ADCResult[ADC_NUM];             //ADC���ݻ���
-//extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//���λ�����ܸ�
+extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];   // DMA raw		//���λ�����ܸ�
 extern UINT32 g_u32Vbat_mV;
 extern UINT16 g_u16TypeCOutCurrent_mA;
 

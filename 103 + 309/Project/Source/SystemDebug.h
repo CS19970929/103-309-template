@@ -79,9 +79,9 @@ struct SYSTEM_DEBUG {
 	uint16_t soc_vtotal;
 
 	/* --- AFE --- */
-	uint16_t afe_bstatus1;
-	uint16_t afe_bstatus3;
-	uint16_t afe_fault1;
+	uint8_t  afe_bstatus1;
+	uint8_t  afe_bstatus3;
+	uint8_t  afe_fault1;
 	uint16_t afe_cur_raw;
 	uint16_t afe_pec_err;
 	uint16_t afe_cell_min_mv;
