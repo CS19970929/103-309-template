@@ -3,16 +3,6 @@
 
 #include "conf.h"
 
-#define CompensateNUM 			16
-
-#define CopperLoss_Min 			(UINT16)0
-#define CopperLoss_Default 		(UINT16)0
-#define CopperLoss_Max 			(UINT16)10000
-
-#define CopperLossNum_Min 		(UINT16)0
-#define CopperLossNum_Default 	(UINT16)0
-#define CopperLossNum_Max 		(UINT16)32
-
 typedef enum _CUR {
 CurCHG = 0, CurDSG
 }_Cur;
@@ -93,41 +83,6 @@ typedef enum _AFE_CURRENT_ZERO_STATE {
     AFE_CURRENT_ZERO_IIC_FAIL = 4,
     AFE_CURRENT_ZERO_RANGE_FAIL = 5
 } AFE_CURRENT_ZERO_STATE;
-
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-typedef enum _AFE_CURRENT_DIR {
-    AFE_CURRENT_DIR_ZERO = 0,
-    AFE_CURRENT_DIR_CHG = 1,
-    AFE_CURRENT_DIR_DSG = 2
-} AFE_CURRENT_DIR;
-
-typedef struct _AFE_CURRENT_OBSERVE {
-    UINT16 u16RawCode;
-    INT32 i32RawSigned;
-    INT32 i32ZeroOffsetRaw;
-    INT32 i32CorrectedRaw;
-    UINT32 u32AbsRaw;
-    UINT32 u32Current_mA;
-    UINT32 u32ChgCurrent_mA;
-    UINT32 u32DsgCurrent_mA;
-    UINT16 u16Ichg_A10;
-    UINT16 u16IDsg_A10;
-    UINT16 u16ZeroLimitRaw;
-    UINT16 u16ZeroDeadbandRaw;
-    UINT16 u16ZeroDeltaRaw;
-    UINT8 u8ZeroState;
-    UINT8 u8ZeroReady;
-    UINT8 u8StableCnt;
-    UINT8 u8StartupSampleCnt;
-    UINT8 u8StartupColdBoot;
-    UINT8 u8StartupDiscardCnt;
-    UINT8 u8StartupFailCnt;
-    UINT8 u8StartupRangeFailCnt;
-    UINT8 u8KbCalibEnable;
-    UINT8 u8Direction;
-    UINT8 u8CtlcState;
-} AFE_CURRENT_OBSERVE;
-#endif
 
 #define SYSKMAX   		((UINT16)1536)      // 1.5
 #define SYSKDEFAULT		((UINT16)1024)      // 1
@@ -243,14 +198,9 @@ struct OTHER_ELEMENT {
 
 extern UINT16 g_u16CalibCoefK[KB_NUM];
 extern INT16  g_i16CalibCoefB[KB_NUM];
-extern UINT16 CopperLoss[CompensateNUM];
-extern UINT16 CopperLoss_Num[CompensateNUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 extern UINT32 g_u32AfeCurrentSampleSeq;
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-extern AFE_CURRENT_OBSERVE g_stAfeCurrentObserve;
-#endif
 
 void App_AFEGet(  void);
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);

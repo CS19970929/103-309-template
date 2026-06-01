@@ -1,8 +1,6 @@
 #ifndef FAULT_H
 #define FAULT_H
 
-#define CurOverFaultDelay 3000		//30s��10msʱ��
-
 enum FaultFlag {
 	CellOvp_First = 1,
 	CellUvp_First,
@@ -387,16 +385,11 @@ extern union FAULT_FLAG_THIRD Fault_Flag_Third;
 
 extern UINT16 Fault_record_Third[Record_len];
 
-extern UINT16 Fault_record_First2[Record_len];
-extern UINT16 Fault_record_Second2[Record_len];
 extern UINT16 Fault_record_Third2[Record_len];
 
 extern UINT8  FaultPoint_Third;
-extern UINT8  FaultPoint_First2;
-extern UINT8  FaultPoint_Second2;
 extern UINT8  FaultPoint_Third2;
 
-void App_WarnCtrl(void);
 void FaultWarnRecord2(enum FaultFlag num);
 
 #endif	/* FAULT_H */

@@ -165,10 +165,6 @@ static LedBarRuntime s_ledbar =
     LEDBAR_ICON_PERCENT_MASK,
 };
 
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-LedBarRuntime * const g_dbg_ledbar_runtime = &s_ledbar;
-#endif
-
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);
 

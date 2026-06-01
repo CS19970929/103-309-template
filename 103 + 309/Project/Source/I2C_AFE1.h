@@ -87,21 +87,7 @@ struct SH367309_Read {			/* AD Read	*/
 #define TWI_RD_DAT		(PBin(9))  //����SDA
 #endif
 
-//����������Ǹ���ѡһ
-#if 0
-#define TWI_CLK_OUT		F_TWI_CLK_OUT()
-#define TWI_CLK_IN      F_TWI_CLK_IN()
-#define TWI_CLK_HIGH	F_TWI_CLK_HIGH()
-#define TWI_CLK_LOW	    F_TWI_CLK_LOW()
 
-#define TWI_DAT_OUT		F_TWI_DAT_OUT()
-#define TWI_DAT_IN      F_TWI_DAT_IN()
-#define TWI_DAT_HIGH	F_TWI_DAT_HIGH()
-#define TWI_DAT_LOW	    F_TWI_DAT_LOW()
-
-#define TWI_RD_CLK		F_TWI_RD_CLK()
-#define TWI_RD_DAT		F_TWI_RD_DAT()
-#endif
 
 
 extern struct SH367309_Read SH367309_Read_AFE1;

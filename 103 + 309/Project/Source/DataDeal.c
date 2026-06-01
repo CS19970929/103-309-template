@@ -37,20 +37,11 @@ static UINT8 s_u8AfeCurrentStartupColdBoot = 1U;
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
-UINT16 CopperLoss[CompensateNUM]; // uΩ
-UINT16 CopperLoss_Num[CompensateNUM];
-
 UINT32 g_u32CS_Res_AFE;
 UINT32 g_u32AfeCurrentSampleSeq;
 
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-AFE_CURRENT_OBSERVE g_stAfeCurrentObserve = {0};
-#define AFE_CURRENT_OBS_SET(field, value) do { g_stAfeCurrentObserve.field = (value); } while (0)
-#define AFE_CURRENT_OBS_CLEAR() memset((void *)&g_stAfeCurrentObserve, 0, sizeof(g_stAfeCurrentObserve))
-#else
 #define AFE_CURRENT_OBS_SET(field, value) do { } while (0)
 #define AFE_CURRENT_OBS_CLEAR() do { } while (0)
-#endif
 
 static INT32 s_i32AfeCurrentZeroOffsetRawQ4;
 static INT32 s_i32AfeCurrentLastRawSigned;
@@ -392,17 +383,6 @@ static INT32 DataLoad_CurrentClampZeroOffset(INT32 offset_raw)
     return offset_raw;
 }
 
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-static void AfeCurrent_ObserveReset(void)
-{
-    AFE_CURRENT_OBS_CLEAR();
-    s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_IDLE;
-    AFE_CURRENT_OBS_SET(u8ZeroState, s_u8AfeCurrentZeroState);
-    AFE_CURRENT_OBS_SET(u8KbCalibEnable, (UINT8)AFE_CURRENT_KB_CALIB_ENABLE);
-    AFE_CURRENT_OBS_SET(u8StartupColdBoot, s_u8AfeCurrentStartupColdBoot);
-}
-#endif
-
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
 {
     UINT16 raw_be;
@@ -449,9 +429,6 @@ static void DataLoad_CurrentMarkZeroPending(UINT8 zero_state)
     s_u8AfeCurrentZeroState = zero_state;
 
     AFE_CURRENT_OBS_SET(i32ZeroOffsetRaw, 0);
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-    AFE_CURRENT_OBS_SET(i32CorrectedRaw, g_stAfeCurrentObserve.i32RawSigned);
-#endif
     AFE_CURRENT_OBS_SET(u8ZeroReady, 0U);
     AFE_CURRENT_OBS_SET(u8StableCnt, 0U);
     AFE_CURRENT_OBS_SET(u8ZeroState, zero_state);
@@ -478,9 +455,6 @@ void AfeCurrent_PrepareStartupZero(void)
     s_u8AfeCurrentZeroStableCnt = 0U;
     s_u8AfeCurrentZeroReady = 0U;
 
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-    AfeCurrent_ObserveReset();
-#endif
     s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
     AFE_CURRENT_OBS_SET(u8ZeroState, s_u8AfeCurrentZeroState);
     close_ctlc();
@@ -848,26 +822,6 @@ void DataLoad_Current(void)
         g_stCellInfoReport.u16IDischg = sys_time.DSG;
     }
 #endif
-
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-    AFE_CURRENT_OBS_SET(u32AbsRaw, DataLoad_CurrentAbsI32(corrected_raw));
-    AFE_CURRENT_OBS_SET(u32Current_mA, current_mA);
-    AFE_CURRENT_OBS_SET(u16Ichg_A10, g_stCellInfoReport.u16Ichg);
-    AFE_CURRENT_OBS_SET(u16IDsg_A10, g_stCellInfoReport.u16IDischg);
-
-    if (g_stCellInfoReport.u16Ichg != 0U)
-    {
-        AFE_CURRENT_OBS_SET(u8Direction, (UINT8)AFE_CURRENT_DIR_CHG);
-    }
-    else if (g_stCellInfoReport.u16IDischg != 0U)
-    {
-        AFE_CURRENT_OBS_SET(u8Direction, (UINT8)AFE_CURRENT_DIR_DSG);
-    }
-    else
-    {
-        AFE_CURRENT_OBS_SET(u8Direction, (UINT8)AFE_CURRENT_DIR_ZERO);
-    }
-#endif
 }
 
 static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
@@ -1037,51 +991,6 @@ void close_ctlc(void)
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
-void test_Autocurrent_cycle(void)
-{
-    static uint8_t step = 0;
-#if 1
-    static uint16_t CHG_current = 270;
-    static uint16_t DSG_current = 270;
-#else
-    static uint16_t CHG_current = 200;
-    static uint16_t DSG_current = 400;
-#endif
-
-    switch (step)
-    {
-    case 0:
-        if (g_stCellInfoReport.SocElement.u16Soc < 99)
-        {
-            step = 1;
-            g_stCellInfoReport.u16Ichg = CHG_current;
-            g_stCellInfoReport.u16IDischg = 0;
-        }
-        else
-        {
-            step = 1;
-        }
-        break;
-    case 1:
-    {
-        if (g_stCellInfoReport.SocElement.u16Soc >= 99)
-        {
-            step = 2;
-            g_stCellInfoReport.u16Ichg = 0;
-            g_stCellInfoReport.u16IDischg = DSG_current;
-        }
-        break;
-    }
-    case 2:
-        if (g_stCellInfoReport.SocElement.u16Soc <= 1)
-        {
-            step = 0;
-        }
-        break;
-    default:
-        break;
-    }
-}
 // todo 总压、typec逻辑、电流
 void new_todo_logi(void)
 {
@@ -1236,7 +1145,6 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
-    // test_Autocurrent_cycle();
     if (++g_u32AfeCurrentSampleSeq == 0U)
     {
         ++g_u32AfeCurrentSampleSeq;

@@ -337,13 +337,6 @@ void RTC_AlarmConfig(void)
 	NVIC_InitTypeDef NVIC_InitStructure;
 	EXTI_InitTypeDef EXTI_InitStructure;
 
-#if 0 // 不在这里初始化
-	PWR_BackupAccessCmd(ENABLE);											//后备域解锁
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);										//禁止实时时钟秒中断
-	RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
-  	RTC_WaitForLastTask();
-  	RTC_ITConfig(RTC_IT_ALR, ENABLE);										//打开闹钟中断
-#endif
 
 	//------------EXTI17 配置 -------------------
 	EXTI_InitStructure.EXTI_Line = EXTI_Line17;

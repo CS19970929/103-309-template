@@ -136,16 +136,10 @@ void LowPower_ClearWakeupPending(void)
 #if defined(UART1_WAKEUP_ENABLE)
     EXTI_ClearITPendingBit(EXTI_Line7);
 #endif
-#if defined(UART2_WAKEUP_ENABLE)
-    EXTI_ClearITPendingBit(EXTI_Line3);
-#endif
 
     NVIC_ClearPendingIRQ(EXTI0_IRQn);
     NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
     NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
-#if defined(UART2_WAKEUP_ENABLE)
-    NVIC_ClearPendingIRQ(EXTI3_IRQn);
-#endif
 }
 
 void LowPower_DisableWakeupExti(void)
@@ -157,9 +151,6 @@ void LowPower_DisableWakeupExti(void)
 
 #if defined(UART1_WAKEUP_ENABLE)
     LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
-#endif
-#if defined(UART2_WAKEUP_ENABLE)
-    LowPower_ConfigWakeupExti(EXTI_Line3, EXTI_Trigger_Rising, DISABLE);
 #endif
 
     LowPower_ClearWakeupPending();
@@ -323,25 +314,6 @@ void IOstatus_RTCMode(void)
 
     // ??????
     // ???
-#if 0
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-#endif
 
     LedBar_PrepareForStop();
 }
@@ -399,33 +371,3 @@ void InitRunAfterStopWakeup(void)
     ADC_StopForLowPower();
     InitADC();
 
-#ifdef __FUNC__LED__
-    APP_LedBar();
-    set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-
-    USART_DeInit(USART1);
-    USART_DeInit(USART2);
-
-    AppInit_InitSci();
-    InitCan();
-    InitTimer();
-
-    sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;
-    /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
-       run mode can leave stale pending bits for the next low-power cycle. */
-
-    initAFE1_IIC();
-}
-
-void Init(void)
-{
-    if (is_rtc_wakekup)
-    {
-        InitRtcWakeupCheck();
-    }
-    else
-    {
-        InitRunAfterStopWakeup();
-    }
-}

@@ -100,9 +100,6 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
 
 void RtcSleep_PortOnDeepSleepRequest(void)
 {
-#ifdef __FUNC__LED__
-    set_LED_state(LED_BAR_NORMAL, 4);
-#endif
 }
 
 void RtcSleep_PortPrepareRtcStop(UINT32 rtc_cycle_count)
@@ -169,11 +166,6 @@ UINT8 RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
                                        g_stCellInfoReport.u16VCellMin,
                                        g_stCellInfoReport.u16VCellMax);
 
-    log_w("rtc rest %lu s, vmin %u, soc %u",
-          (unsigned long)rest_seconds,
-          (unsigned int)g_stCellInfoReport.u16VCellMin,
-          (unsigned int)SOC_Enhance_Element.u8_SOC);
-
     return SOC_Enhance_Element.u8_SOC;
 }
 
@@ -182,11 +174,6 @@ void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
     extern UINT32 su32_Interval_S_Tcnt;
 
     su32_Interval_S_Tcnt += seconds;
-    if (su32_Interval_S_Tcnt >= (3600U * 6U))
-    {
-        log_e("rtc sleep update window reached\n");
-    }
-    log_a("sleep time %d s", su32_Interval_S_Tcnt);
 }
 
 enum irqWakeup RtcSleep_PortGuessWakeupSource(void)

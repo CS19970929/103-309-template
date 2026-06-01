@@ -3,13 +3,6 @@
 #include "FactoryAging.h"
 #include <string.h>
 
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot;
-volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus;
-#define FEIDAO_CAN_ERROR_INC(field) feidao_can_inc_u16(&g_stCanErrorSnapshot.field)
-#else
-#define FEIDAO_CAN_ERROR_INC(field) do { } while (0)
-#endif
 
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
 #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
@@ -147,11 +140,9 @@ static FeidaoCanAppRuntime s_app;
 
 static void feidao_can_inc_u16(volatile UINT16 *counter);
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
-static void feidao_can_update_error_snapshot(void);
 static void feidao_can_record_tx_failed(void);
 static void feidao_can_record_tx_timeout(void);
 static void feidao_can_record_tx_no_mailbox(void);
-static void feidao_can_update_debug_status(void);
 static void feidao_can_power_on(UINT32 now_tick);
 static void feidao_can_power_off(void);
 static UINT8 feidao_can_power_ready(UINT32 now_tick);
@@ -276,35 +267,13 @@ static void feidao_can_update_bus_active_timeout(UINT32 now_tick)
 	}
 }
 
-static void feidao_can_update_error_snapshot(void)
-{
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-	UINT32 esr = CAN1->ESR;
-	g_stCanErrorSnapshot.u8LastErrorCode = (UINT8)(esr & CAN_ESR_LEC);
-	g_stCanErrorSnapshot.u8ReceiveErrorCounter = (UINT8)((esr & CAN_ESR_REC) >> 24);
-	g_stCanErrorSnapshot.u8TransmitErrorCounter = (UINT8)((esr & CAN_ESR_TEC) >> 16);
-	g_stCanErrorSnapshot.u8ErrorWarning = (UINT8)((esr & CAN_ESR_EWGF) ? 1U : 0U);
-	g_stCanErrorSnapshot.u8ErrorPassive = (UINT8)((esr & CAN_ESR_EPVF) ? 1U : 0U);
-	g_stCanErrorSnapshot.u8BusOff = (UINT8)((esr & CAN_ESR_BOFF) ? 1U : 0U);
-#endif
-}
 
 static void feidao_can_record_tx_failed(void)
 {
-	feidao_can_update_error_snapshot();
-	FEIDAO_CAN_ERROR_INC(u16TxFailedCnt);
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-	if (CAN_ErrorCode_ACKErr == g_stCanErrorSnapshot.u8LastErrorCode)
-	{
-		FEIDAO_CAN_ERROR_INC(u16AckErrorCnt);
-	}
-#endif
 }
 
 static void feidao_can_record_tx_timeout(void)
 {
-	feidao_can_update_error_snapshot();
-	FEIDAO_CAN_ERROR_INC(u16TxTimeoutCnt);
 }
 
 static void feidao_can_record_no_ack(void)
@@ -324,31 +293,8 @@ static void feidao_can_record_no_ack(void)
 
 static void feidao_can_record_tx_no_mailbox(void)
 {
-	feidao_can_update_error_snapshot();
-	FEIDAO_CAN_ERROR_INC(u16TxNoMailboxCnt);
 }
 
-static void feidao_can_update_debug_status(void)
-{
-#if PROJECT_CFG_DEBUG_WATCH_ENABLE
-	g_stCanLowPowerStatus.u8PowerState = s_runtime.power_on;
-	g_stCanLowPowerStatus.u8BusActive = s_runtime.bus_active;
-	g_stCanLowPowerStatus.u8NoAckCnt = s_runtime.no_ack_cnt;
-	g_stCanLowPowerStatus.u8ProbeActive = s_runtime.probe_active;
-	g_stCanLowPowerStatus.u8TxMailbox = s_tx.mailbox;
-	g_stCanLowPowerStatus.u8RtcServiceActive = s_runtime.rtc_service_active;
-	g_stCanLowPowerStatus.u8LastRtcWakeTxAcked = s_runtime.last_rtc_wake_tx_acked;
-	g_stCanLowPowerStatus.u8LastRtcWakeTimeout = s_runtime.last_rtc_wake_timeout;
-	g_stCanLowPowerStatus.u16PendingMask = s_tx.count;
-	g_stCanLowPowerStatus.u16RtcWakeServiceCnt = s_runtime.rtc_wake_service_cnt;
-	g_stCanLowPowerStatus.u16PrepareSleepCnt = s_runtime.prepare_sleep_cnt;
-	g_stCanLowPowerStatus.u32LogicalTick = s_runtime.tick;
-	g_stCanLowPowerStatus.u32LastRtcElapsedSeconds = s_runtime.last_rtc_elapsed_seconds;
-#else
-	(void)s_runtime.rtc_service_active;
-	(void)s_runtime.last_rtc_wake_timeout;
-#endif
-}
 
 static void feidao_can_clear_tx_done(UINT8 mailbox)
 {
@@ -373,7 +319,7 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 		wait_cnt++;
 	}
 	feidao_can_clear_tx_done(mailbox);
-	FEIDAO_CAN_ERROR_INC(u16TxAbortCnt);
+	do { } while (0);
 }
 
 static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame)
@@ -555,8 +501,7 @@ static void feidao_can_busoff_monitor(void)
 	{
 		s_runtime.bus_off = 1U;
 		s_runtime.busoff_enter_cnt++;
-		feidao_can_update_error_snapshot();
-		FEIDAO_CAN_ERROR_INC(u16BusOffCnt);
+		do { } while (0);
 		if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
 		{
 			feidao_can_cancel_tx(s_tx.mailbox);
@@ -1070,7 +1015,6 @@ void InitCan(void)
 	{
 		s_runtime.last_probe_tick = now_tick - FEIDAO_CAN_PROBE_PERIOD_TICKS;
 	}
-	feidao_can_update_debug_status();
 }
 
 UINT8 Can_IsBusy(void)
@@ -1106,7 +1050,6 @@ void Can_PrepareSleep(void)
 	feidao_can_clear_app_cmd_queue();
 	feidao_can_stop_read_block_stream();
 	feidao_can_power_off();
-	feidao_can_update_debug_status();
 }
 
 UINT8 Can_IsBusActive(void)
@@ -1178,7 +1121,6 @@ void Can_RtcWakeService(UINT32 elapsed_seconds)
 	}
 	s_runtime.rtc_service_active = 0U;
 	feidao_can_power_down_if_idle();
-	feidao_can_update_debug_status();
 }
 
 void App_Can(void)
@@ -1197,7 +1139,6 @@ void App_Can(void)
 	feidao_can_service_read_block_stream(now_tick);
 	feidao_can_service_tx(now_tick);
 	feidao_can_service_enter_iap_delay();
-	feidao_can_update_debug_status();
 }
 
 void USB_LP_CAN1_RX0_IRQHandler(void)

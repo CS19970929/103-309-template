@@ -1,7 +1,5 @@
 #include "main.h"
 #include "AppInit.h"
-#include "Flash64KAppTest.h"
-#include "app_lowpower.h"
 
 UINT8 SeriesNum = 10;
 
@@ -9,10 +7,6 @@ static void AppInit_InitDevice(void)
 {
 	SystemInit();
 
-#if (defined _DEBUG_CODE)
-	InitDelay();
-	InitIO();
-#else
 	InitDelay();
 	IsSleepStartUp();
 
@@ -21,12 +15,6 @@ static void AppInit_InitDevice(void)
 	InitNVIC();
 	InitIO();
 	AppInit_InitSci();
-#ifdef FLASH_BOOT_PRINT_ENABLE
-	StorageFlash_PrintBootCheck();
-#endif
-#ifdef FLASH64K_APP_QUICK_TEST_ENABLE
-	StorageFlash_RunAppQuickTest();
-#endif
 	InitE2PROM();
 	InitAFE1();
 	InitCan();
@@ -37,19 +25,11 @@ static void AppInit_InitDevice(void)
 	InitTimer();
 	__enable_irq();
 
-#ifdef ELOG_OUTPUT_ENABLE
-	elogInit();
-	log_w("debug serial log enabled profile=%u", (unsigned int)PROJECT_CFG_BUILD_PROFILE);
-#endif
 	log_w("init over");
 
 	EnableLowPowerDebug();
 
-#ifdef wdog_enable
 	Init_IWDG();
-#endif
-
-#endif
 }
 
 static void AppInit_InitRuntimeState(void)

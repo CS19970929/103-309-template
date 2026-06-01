@@ -73,17 +73,6 @@ static void EEPROM_LoadDefaultSocTable(void)
 #endif
 }
 
-static void EEPROM_LoadDefaultCopperLoss(void)
-{
-	UINT8 i;
-
-	for (i = 0; i < CompensateNUM; ++i)
-	{
-		CopperLoss[i] = CopperLoss_Default;
-		CopperLoss_Num[i] = CopperLossNum_Default;
-	}
-}
-
 static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 {
 	UINT16 i;
@@ -189,7 +178,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultCalib();
 	EEPROM_LoadDefaultOtherElement();
 	EEPROM_LoadDefaultSocTable();
-	EEPROM_LoadDefaultCopperLoss();
 
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);

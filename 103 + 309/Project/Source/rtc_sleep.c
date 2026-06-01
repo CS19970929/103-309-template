@@ -1,9 +1,4 @@
 #include "rtc_sleep_port.h"
-#include "elog.h"
-#include "app_lowpower.h"
-
-#undef LOG_TAG
-#define LOG_TAG "rtc_sleep"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((uint16_t)2800U)
 //todo  待测试确认，更新时间，同步更新文档
@@ -25,8 +20,6 @@ static uint16_t s_u16IdleDelaySeconds = 0U;
 static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
 static uint32_t s_u32RtcWakeCycles = 0U;
 static uint8_t s_u8RtcSoc = 0U;
-
-static void report_wkup_sig(void);
 
 static void low_power_refresh_rtc_status(void)
 {
@@ -132,7 +125,6 @@ static uint8_t low_power_get_rtc_block_reason(void)
     if ((RtcSleep_PortGetChargeCurrentMa() > 10U) ||
         (RtcSleep_PortGetDischargeCurrentMa() > 10U))
     {
-        log_e("CHG or DSG");
         return LOW_POWER_RTC_BLOCK_CURRENT;
     }
 
@@ -173,8 +165,6 @@ static void low_power_select_sleep_mode(void)
         {
             entersleep(DEEP_MODE);
         }
-        log_w("%d s enter deep sleep",
-              (60U * RtcSleep_PortGetLowVoltageSleepMinutes() - deep_sleep_delay_seconds));
         low_power_refresh_rtc_status();
         return;
     }
@@ -227,7 +217,6 @@ static void low_power_select_sleep_mode(void)
     {
         s_u16IdleDelaySeconds = 0U;
         entersleep(HICCUP_MODE);
-        log_w("enter rtc mode 1\n");
     }
 
     low_power_refresh_rtc_status();
@@ -280,17 +269,6 @@ static void rtc_sleep_prepare_rtc(void)
     low_power_refresh_rtc_status();
 }
 
-static void rtc_sleep_dump_state(const char *stage)
-{
-    log_w("[rtc_sleep] %s wake=%d cnt=%lu period=%lu can=%d rblk=%d",
-          stage,
-          RtcSleep_PortIsRtcWake(),
-          (unsigned long)s_u32RtcWakeCycles,
-          (unsigned long)RtcSleep_PortGetCanRtcPeriodSeconds(),
-          RtcSleep_PortIsCanBusActive(),
-          g_stLowPowerRtcStatus.blockReason);
-}
-
 static bool update_rtc_soc(uint32_t *sleep_cnt)
 {
     uint32_t rest_seconds;
@@ -310,7 +288,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     uint32_t rtc_elapsed_seconds = 0U;
 
     rtc_sleep_prepare_rtc();
-    rtc_sleep_dump_state("enter");
 
     RtcSleep_PortEnterStop();
     RtcSleep_PortDisableStopWakeup();
@@ -320,11 +297,9 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         rtc_elapsed_seconds = RtcSleep_PortGetLastWakeupSeconds();
         ++s_u32RtcWakeCycles;
         s_u32RtcSleepElapsedSeconds += rtc_elapsed_seconds;
-        rtc_sleep_dump_state("wake");
     }
 
     RtcSleep_PortRestoreAfterStop();
-    log_w("cnt %lu", (unsigned long)s_u32RtcWakeCycles);
     if ((RtcSleep_PortIsRtcWake() != 0U) && !isException())
     {
         update_rtc_soc(&s_u32RtcWakeCycles);
@@ -335,7 +310,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     RtcSleep_PortClearRtcWake();
     g_stLowPowerRtcStatus.readyToSleep = 0U;
-    rtc_sleep_dump_state("exit");
     entersleep(NO_SLEEP);
 
     if (g_irq_t == NO_IRQ)
@@ -343,7 +317,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         g_irq_t = RtcSleep_PortGuessWakeupSource();
     }
     RtcSleep_PortOnWakeupSource(g_irq_t);
-    report_wkup_sig();
 
     LP_RecordLastSleepSeconds(s_u32RtcSleepElapsedSeconds);
     RtcSleep_PortAddRuntimeSeconds(s_u32RtcSleepElapsedSeconds);
@@ -365,57 +338,6 @@ void set_rtc_soc(uint8_t soc)
 void set_irq_wksource(uint8_t irq)
 {
     g_irq_t = (enum irqWakeup)irq;
-}
-
-static void report_wkup_sig(void)
-{
-    switch (g_irq_t)
-    {
-    case uart1_irq:
-        log_e(enumToStr(uart1_irq));
-        break;
-    case uart2_irq:
-        log_e(enumToStr(uart2_irq));
-        break;
-    case uart3_irq:
-        log_e(enumToStr(uart3_irq));
-        break;
-    case PA0_irq:
-        log_e(enumToStr(PA0_irq));
-        break;
-    case bms_keyirq:
-        log_e(enumToStr(bms_keyirq));
-        break;
-    case soc_key:
-        log_e(enumToStr(soc_key));
-        break;
-    case CHG_IRQ:
-        log_e(enumToStr(CHG_IRQ));
-        break;
-    case current_wake:
-        log_e(enumToStr(current_wake));
-        break;
-    case chg_dsg_close:
-        log_e(enumToStr(chg_dsg_close));
-        break;
-    case error_wake:
-        log_e(enumToStr(error_wake));
-        break;
-    case cuv_wake:
-        log_e(enumToStr(cuv_wake));
-        break;
-    case cov_wake:
-        log_e(enumToStr(cov_wake));
-        break;
-    case rs485_irq:
-        log_e(enumToStr(rs485_irq));
-        break;
-    default:
-        log_e("no def");
-        break;
-    }
-
-    g_irq_t = NO_IRQ;
 }
 
 void rtc_sleep(void)
@@ -462,7 +384,6 @@ void rtc_sleep(void)
     switch (g_stLowPowerRtcStatus.mode)
     {
     case NORMAL_MODE:
-        log_w("normal sleep\n");
         low_power_log_and_commit_sleep();
         break;
     case HICCUP_MODE:
@@ -471,7 +392,6 @@ void rtc_sleep(void)
         }
         break;
     case DEEP_MODE:
-        log_w("deep sleep\n");
         low_power_log_and_commit_sleep();
         break;
     default:

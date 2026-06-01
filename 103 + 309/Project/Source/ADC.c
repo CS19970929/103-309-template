@@ -126,13 +126,6 @@ void InitADC_GPIO(void)
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 
-#if 0 // 无效
-	GPIO_PinRemapConfig(GPIO_PartialRemap1_TIM2, ENABLE);		//部分重映射1——CH2/PB3
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-#endif
 }
 
 void InitADC_TIMER(void)

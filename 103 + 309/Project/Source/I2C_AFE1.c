@@ -105,12 +105,6 @@ void Delay4us(void)
 	}
 #endif
 
-#if 0
-	//当为5时，6.7us
-	for(i=0; i<5; i++) {
-		//system clock = 8MHz
-	}
-#endif
 }
 
 #ifdef _TWI_COM
@@ -516,21 +510,6 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 					RdBuf++;
 // 下面的问题在于，如果传进来的数值不是16位，是8位，又有问题。
 // 还是外部自己写一个大小端转换函数自己看情况是否处理
-#if 0
-                    //问题在于030的小端存储
-					if(i == Length - 1 && Length%2) {
-						*(RdBuf) = TempBuf[4+i];		//当取奇数个数据，最后一个，没形成对的那个孤零零的数据
-					}
-					else {
-	                    if(i%2) {
-							*(--RdBuf) = TempBuf[4+i];
-							RdBuf += 2;
-	                    }
-						else {
-							*(++RdBuf) = TempBuf[4+i];
-						}
-					}
-#endif
 				}
 			}
 		}

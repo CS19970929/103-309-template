@@ -251,13 +251,6 @@ void Delay1ms(UINT8 delaycnt)
 	UINT8 i, k;
 	UINT16 j;
 
-#if 0
-	for(i=0; i<delaycnt; i++) {
-		for(j=0; j<1670; j++) {
-			//system clock = 24MHz
-		}
-	}
-#endif
 
 	for (i = 0; i < delaycnt; i++)
 	{
@@ -294,16 +287,6 @@ void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length)
 // 能不能写一个函数，顺便把原值改变呢？而不是单单传值
 UINT16 *U16_SwapEndian_Adress(UINT16 *target)
 {
-#if 0
-	UINT8* temp1,temp2;
-	UINT8 value1;
-	
-	*temp1 = (UINT8*)target;
-	*temp2 = ++(*temp1);
-	value1 = **temp1;
-	**temp1 = **temp2;
-	**temp2 = value1;
-#endif
 	return target;
 }
 
@@ -379,19 +362,6 @@ void jtag_disableAndConfIO(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // 配置复用时钟
 	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // 启用SW，禁用JTAG，PA15、PB3、PB4可用
 
-#if 0
-	GPIO_ResetBits(GPIOB, GPIO_Pin_4);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_3; // 端口配置
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;	   // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;	   // IO口速度为50MHz
-	GPIO_Init(GPIOB, &GPIO_InitStructure);				   // 根据设定参数初始化
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;		  // 端口配置
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;  // 推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz; // IO口速度为50MHz
-	GPIO_Init(GPIOA, &GPIO_InitStructure);			  // 根据设定参数初始化
-#endif
 
 #endif
 }
