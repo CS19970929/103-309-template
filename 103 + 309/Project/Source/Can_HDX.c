@@ -1157,7 +1157,9 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 void Can_GetDebugSnapshot(uint8_t *bus_active, uint8_t *power_on,
                           uint8_t *bus_off,  uint8_t *no_ack_cnt,
                           uint8_t *tx_queue, uint8_t *probe,
-                          uint8_t *rtc_svc,  uint16_t *esr)
+                          uint8_t *rtc_svc,  uint16_t *esr,
+                          uint16_t *tx_ok,   uint16_t *tx_fail,
+                          uint16_t *boff_in, uint16_t *boff_out)
 {
 	if (bus_active != 0)  *bus_active  = s_runtime.bus_active;
 	if (power_on  != 0)   *power_on    = s_runtime.power_on;
@@ -1167,5 +1169,9 @@ void Can_GetDebugSnapshot(uint8_t *bus_active, uint8_t *power_on,
 	if (probe     != 0)   *probe       = s_runtime.probe_active;
 	if (rtc_svc  != 0)    *rtc_svc     = s_runtime.rtc_service_active;
 	if (esr       != 0)   *esr         = (uint16_t)(CAN1->ESR & 0xFFFFU);
+	if (tx_ok     != 0)   *tx_ok       = s_runtime.rtc_wake_service_cnt;
+	if (tx_fail   != 0)   *tx_fail     = 0U;
+	if (boff_in   != 0)   *boff_in     = s_runtime.busoff_enter_cnt;
+	if (boff_out  != 0)   *boff_out    = s_runtime.busoff_recover_cnt;
 }
 #endif

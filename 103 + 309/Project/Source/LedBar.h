@@ -47,4 +47,11 @@ void LedBar_PrepareForStop(void);
 uint8_t LedBar_IsActiveForLowPower(void);
 void APP_LedBar(void);
 
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+void LedBar_GetDebugSnapshot(uint8_t *sleep, uint8_t *blank,
+                             uint8_t *number, uint8_t *indicators,
+                             uint16_t *disp_10ms, uint8_t *frame_len,
+                             uint8_t *scan_idx, uint8_t *key_active);
+#endif
+
 #endif

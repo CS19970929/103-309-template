@@ -1762,3 +1762,29 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	}
 	soc_publish(0U);
 }
+
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
+                           uint32_t *rest_ticks, uint32_t *stable_ticks,
+                           uint16_t *full_ticks, uint16_t *empty_ticks,
+                           uint16_t *mid_ticks, uint8_t *full_anchor,
+                           uint8_t *cal_allowed, uint8_t *sag_blocked,
+                           uint8_t *rest_stable, uint8_t *low_tail,
+                           uint8_t *mid_tail, uint16_t *display_ticks)
+{
+	if (mode)          *mode          = s_soc.mode;
+	if (last_mode)     *last_mode     = s_soc.last_mode;
+	if (rest_ticks)    *rest_ticks    = s_soc.rest_ticks;
+	if (stable_ticks)  *stable_ticks  = s_soc.stable_rest_ticks;
+	if (full_ticks)    *full_ticks    = s_soc.full_ticks;
+	if (empty_ticks)   *empty_ticks   = s_soc.empty_ticks;
+	if (mid_ticks)     *mid_ticks     = s_soc.mid_ticks;
+	if (full_anchor)   *full_anchor   = s_soc.full_anchor;
+	if (cal_allowed)   *cal_allowed   = s_soc.full_anchor; /* simplified */
+	if (sag_blocked)   *sag_blocked   = soc_sag_hold_blocks_calibration();
+	if (rest_stable)   *rest_stable   = 0U; /* DEBUG_WATCH disabled */
+	if (low_tail)      *low_tail      = 0U;
+	if (mid_tail)      *mid_tail      = 0U;
+	if (display_ticks) *display_ticks = s_soc.display_ticks;
+}
+#endif

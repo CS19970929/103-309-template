@@ -1366,3 +1366,21 @@ void APP_LedBar(void)
         LedBar_RefreshOutput();
     }
 }
+
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+void LedBar_GetDebugSnapshot(uint8_t *sleep, uint8_t *blank,
+                             uint8_t *number, uint8_t *indicators,
+                             uint16_t *disp_10ms, uint8_t *frame_len,
+                             uint8_t *scan_idx, uint8_t *key_active)
+{
+	LedBar_EnsureInit();
+	if (sleep)      *sleep      = s_ledbar.sleep;
+	if (blank)      *blank      = s_ledbar.blank;
+	if (number)     *number     = s_ledbar.number;
+	if (indicators) *indicators = s_ledbar.indicator_mask;
+	if (disp_10ms)  *disp_10ms  = s_ledbar.soc_display_10ms;
+	if (frame_len)  *frame_len  = s_ledbar.frame.length;
+	if (scan_idx)   *scan_idx   = s_ledbar.scan_index;
+	if (key_active) *key_active = s_ledbar.key_active;
+}
+#endif

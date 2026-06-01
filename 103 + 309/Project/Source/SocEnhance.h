@@ -155,4 +155,15 @@ void SOC_PublishReportData(void);
 
 void soc_param_lib_init(void);
 UINT8 SOC_ResetStoredSnapshotToDefault(void);
+
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
+                           uint32_t *rest_ticks, uint32_t *stable_ticks,
+                           uint16_t *full_ticks, uint16_t *empty_ticks,
+                           uint16_t *mid_ticks, uint8_t *full_anchor,
+                           uint8_t *cal_allowed, uint8_t *sag_blocked,
+                           uint8_t *rest_stable, uint8_t *low_tail,
+                           uint8_t *mid_tail, uint16_t *display_ticks);
+#endif
+
 #endif	/* SOCENHANCE_H */
