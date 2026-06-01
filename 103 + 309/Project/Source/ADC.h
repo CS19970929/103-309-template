@@ -4,10 +4,10 @@
 #define AD_Used_amount      3
 
 
-#define AD_CalNum			8		//������λ�ƴ���>>2������������Ҹ�
+#define AD_CalNum			8		//������λ�ƴ���>>2������������Ҹ�
 #define AD_CalNum_2			3		//2^3 = 8�������Ǹ�����2�Ķ��ٴη�������λ��
 
-#define AD_CalNum_Cur		32		//������λ�ƴ���>>5������������Ҹ�
+#define AD_CalNum_Cur		32		//������λ�ƴ���>>5������������Ҹ�
 #define AD_CalNum_Cur_2		5		//2^5 = 32�������Ǹ�����2�Ķ��ٴη�������λ��
 
 #define AD_CurOffsetCalNum  16
@@ -33,8 +33,8 @@ enum tagInfoForADCArray {
     AD_VREF_AD,			//̧����ѹ
 	ADC_TEMP_EV2,		// �ⲿ�¶�
 	ADC_TEMP_EV3,		// �ⲿ�¶�
-    ADC_EXT_C1,         // ��1�ڵ�ص�ѹ
-    ADC_EXT_C2,         // ��2�ڵ�ص�ѹ
+    ADC_EXT_C1,         // ��1�ڵ�ص��
+    ADC_EXT_C2,         // ��2�ڵ�ص��
 	ADC_CURR,
 
 	ADC_NUM		        // ADC number
@@ -46,8 +46,9 @@ enum tagInfoForADCArray {
 
 
 extern INT32 g_i32ADCResult[ADC_NUM];             //ADC���ݻ���
-//extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//���λ�����ܸ�
+//extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];		//���λ�����ܸ�
 extern UINT32 g_u32Vbat_mV;
+extern UINT16 g_u16TypeCOutCurrent_mA;
 
 
 void InitADC(void);

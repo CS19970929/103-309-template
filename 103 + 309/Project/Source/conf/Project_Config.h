@@ -74,6 +74,13 @@
 
 // <q> Enable long-key power switch
 #define PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE 1
+
+// <q> Enable debug system monitor
+// <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
+// <i> Release must keep disabled.
+#ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
+#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 0
+#endif
 // </h>
 
 // <h>Wakeup Sources

@@ -3,6 +3,7 @@
 #include "AppInit.h"
 #include "FactoryAging.h"
 #include "Runtime.h"
+#include "SystemDebug.h"
 
 static void Runtime_RunFrontTasks(void)
 {
@@ -10,6 +11,7 @@ static void Runtime_RunFrontTasks(void)
 	FactoryAging_Task();
 	APP_LedBar();
 	App_AFEGet();
+	SystemDebug_Snapshot();
 }
 
 static void Runtime_RunIoAndPowerTasks(void)

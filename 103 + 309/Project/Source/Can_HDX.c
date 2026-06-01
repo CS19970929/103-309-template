@@ -1152,3 +1152,20 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 		feidao_can_handle_rx_msg(&rx_msg);
 	}
 }
+
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+void Can_GetDebugSnapshot(uint8_t *bus_active, uint8_t *power_on,
+                          uint8_t *bus_off,  uint8_t *no_ack_cnt,
+                          uint8_t *tx_queue, uint8_t *probe,
+                          uint8_t *rtc_svc,  uint16_t *esr)
+{
+	if (bus_active != 0)  *bus_active  = s_runtime.bus_active;
+	if (power_on  != 0)   *power_on    = s_runtime.power_on;
+	if (bus_off   != 0)   *bus_off     = s_runtime.bus_off;
+	if (no_ack_cnt!= 0)   *no_ack_cnt  = s_runtime.no_ack_cnt;
+	if (tx_queue  != 0)   *tx_queue    = s_tx.count;
+	if (probe     != 0)   *probe       = s_runtime.probe_active;
+	if (rtc_svc  != 0)    *rtc_svc     = s_runtime.rtc_service_active;
+	if (esr       != 0)   *esr         = (uint16_t)(CAN1->ESR & 0xFFFFU);
+}
+#endif
