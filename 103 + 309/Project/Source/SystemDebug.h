@@ -9,14 +9,14 @@
 
 /* ---- debug enums for Keil Watch readable state names ---- */
 
-typedef enum {
+enum DBG_LP_MODE {
 	DBG_LP_MODE_NORMAL  = 0,
 	DBG_LP_MODE_HICCUP  = 1,
 	DBG_LP_MODE_DEEP    = 2,
 	DBG_LP_MODE_NO_SLP  = 3
-} DBG_LP_MODE;
+};
 
-typedef enum {
+enum DBG_LP_BLOCK {
 	DBG_LP_BLOCK_NONE          = 0,
 	DBG_LP_BLOCK_CURRENT       = 1,
 	DBG_LP_BLOCK_RESERVED_2    = 2,
@@ -26,9 +26,9 @@ typedef enum {
 	DBG_LP_BLOCK_EXT_COMM      = 6,
 	DBG_LP_BLOCK_AFE_NOT_IDLE  = 7,
 	DBG_LP_BLOCK_FRAMEWORK     = 8
-} DBG_LP_BLOCK;
+};
 
-typedef enum {
+enum DBG_WAKE_SRC {
 	DBG_WAKE_SRC_UART1   = 1,
 	DBG_WAKE_SRC_UART2   = 2,
 	DBG_WAKE_SRC_UART3   = 3,
@@ -39,13 +39,13 @@ typedef enum {
 	DBG_WAKE_SRC_CURRENT = 8,
 	DBG_WAKE_SRC_RS485   = 12,
 	DBG_WAKE_SRC_NO_IRQ  = 14
-} DBG_WAKE_SRC;
+};
 
-typedef enum {
+enum DBG_AGING_STATE {
 	DBG_AGING_STOPPED = 0,
 	DBG_AGING_RUNNING = 1,
 	DBG_AGING_DONE    = 2
-} DBG_AGING_STATE;
+};
 
 /* ---- sub-structs for Keil Watch hierarchical browsing ---- */
 
