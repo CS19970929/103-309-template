@@ -341,7 +341,7 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_SetSocOnce(s);
 		break;
 
-	// �颖AFE参数�读可写新�
+	// �颖AFE参数�读可写新�
 	case RS485_CMD_ADDR_RESET_AFE_PARAMETERS:
 		Sci_WrReg_0x06_Reset_AFE_Parameters(s);
 		break;
@@ -698,7 +698,7 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	case RS485_CMD_ADDR_FLASH_CONNECT:
 		Sci_WrRegs_0x10_FlashConnect(s);
-		break; // 少了个BREAK导致OVER�
+		break; // 少了个BREAK导致OVER�
 
 	default:
 		s->AckType = RS485_ACK_NEG;
@@ -730,7 +730,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	{
 	case 0: // LCD
 		break;
-	case 1: // 上位机�三级保护�60+10=70�
+	case 1: // 上位机�三级保护�60+10=70�
 		for (j = 0; j < Record_len; j++)
 		{
 			k = (INT8)Sci_RecordBackIndex(FaultPoint_Third, j);
@@ -740,7 +740,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		}
 		break;
 
-	case 2: // 序列号，�件版�号，�件版��
+	case 2: // 序列号，�件版�号，�件版��
 		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
 		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
 		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
@@ -784,7 +784,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
 
 	for (j = 0; j < 12; j++)
-	{ // 0xD002到这里�
+	{ // 0xD002到这里�
 		u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
@@ -827,7 +827,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 /*=================================================================
  * FUNCTION: Sci_Tx_RW_Fun
- * PURPOSE : 将需要发送的数据进�更�
+ * PURPOSE : 将需要发送的数据进�更�
  * INPUT:    void
  *
  * RETURN:   void
@@ -838,7 +838,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
  *
  *=================================================================*/
 void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 65�
+{ // 65�
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
@@ -850,7 +850,7 @@ void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 94�
+{ // 94�
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
@@ -895,9 +895,15 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 i, j;
 	i = 0;
 	for (j = 0; j < SOC_Size_TableCanSet; j++)
-	{ // 由于GetEndValue()函数的问题，�能混在一�
+	{ // 由于GetEndValue()函数的问题，�能混在一�
 		u16SciTemp = Sci_GetSocTableWord(j);
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
+	}
+
+	/* CopperLoss + CopperLoss_Num slots (32 words) — retained for protocol compatibility */
+	for (j = 0; j < 32U; j++)
+	{
+		Sci_PutWordBE(t_u8BuffTemp, &i, 0U);
 	}
 
 	for (j = 0; j < E2P_PARA_NUM_RTC; j++)
@@ -908,7 +914,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 32�
+{ // 32�
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
 
@@ -1852,8 +1858,8 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	}
 }
 
-/* 把BMS序列号，�件版�号， �件版�号写� ohterInfor结构�
- * startADDR  如起始地�
+/* 把BMS序列号，�件版�号， �件版�号写� ohterInfor结构�
+ * startADDR  如起始地�
  */
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 {
@@ -1984,8 +1990,8 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 }
 
 // 关于这个函数
-// A:��次打�这个功能，以前从来没打开过，则因为各种标志位变量都没变过(switch结构里面�)，所以会进�初始化验证
-// B:其中关闭了，又打�，则已经初�化过一次，这�打�就继�按照上一次的进度继续下去
+// A:��次打�这个功能，以前从来没打开过，则因为各种标志位变量都没变过(switch结构里面�)，所以会进�初始化验证
+// B:其中关闭了，又打�，则已经初�化过一次，这�打�就继�按照上一次的进度继续下去
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
@@ -1993,12 +1999,12 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		switch (u16SciRegData)
-		{		// 如果�以下功能�打开，则�要初始化验证，别的功能直接关就好
+		{		// 如果�以下功能�打开，则�要初始化验证，别的功能直接关就好
 		case 1: // 均衡
 			break;
-		case 3: // MOS或�接触器功能
+		case 3: // MOS或�接触器功能
 			break;
-		case 8: // �活模拟前端AFE1
+		case 8: // �活模拟前端AFE1
 			break;
 		case 0x0A: // 立刻进入休眠
 			entersleep(DEEP_MODE);
@@ -2011,7 +2017,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		if (u16SciRegData == 0x0B)
 		{
 			// SOC zero overlay defaults to off and is not persisted.
-			// 默�为0，不�要保�
+			// 默�为0，不�要保�
 		}
 		else
 		{
@@ -2096,10 +2102,10 @@ int fputc(int ch, FILE *f)
 {
 	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
 
-	/* 写一�字节到USART1 */
+	/* 写一�字节到USART1 */
 	USART_SendData(debug_uart, (uint8_t)ch);
 
-	/* 等待发�结� */
+	/* 等待发�结� */
 	while ((USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET) && (wait_loop > 0U))
 	{
 		Feed_IWatchDog;

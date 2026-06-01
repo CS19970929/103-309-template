@@ -258,8 +258,6 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 // </h>
 
-// </h>
-
 // <<< end of configuration section >>>
 
 #endif
