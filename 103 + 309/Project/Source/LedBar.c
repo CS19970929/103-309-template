@@ -1,11 +1,21 @@
 #include "main.h"
+#include <string.h>
 
+#define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS
 #define LEDBAR_MCU_WK_ON_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS
 #define LEDBAR_MCU_WK_OFF_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS
 #define LEDBAR_KEY_ON_FILTER_10MS 3u
 #define LEDBAR_KEY_OFF_FILTER_10MS 3u
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
+
+#define LEDBAR_GPIOA_CRL_MASK ((0xFUL << 16u) | (0xFUL << 20u) | (0xFUL << 24u))
+#define LEDBAR_GPIOB_CRH_MASK ((0xFUL << 8u) | (0xFUL << 12u))
+#define LEDBAR_TRANSITION_OFF_GHOST_COST 8u
+#define LEDBAR_TRANSITION_ON_GHOST_COST 1u
+#define LEDBAR_TRANSITION_NO_SHARED_PIN_COST 2u
+#define LEDBAR_TRANSITION_MAX_COST 0xFFFFu
+#define LEDBAR_ORDER_IMPROVE_MAX_PASSES LEDBAR_FRAME_ROUTE_COUNT
 
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
@@ -58,16 +68,22 @@ typedef struct
 
 typedef struct
 {
+    uint8_t routes[LEDBAR_FRAME_ROUTE_COUNT];
+    uint8_t length;
+} LedBarFrame;
+
+typedef struct
+{
     uint8_t initialized;
     uint8_t sleep;
     uint8_t blank;
     uint8_t number;
     uint8_t indicator_mask;
     uint8_t test_single_segment_id;
-    volatile uint32_t frame_mask;
-    volatile uint8_t scan_route;
-    volatile uint8_t scan_timer_initialized;
-    volatile uint8_t scan_timer_enabled;
+    LedBarFrame frame;
+    uint8_t scan_index;
+    uint8_t scan_timer_initialized;
+    uint8_t scan_timer_enabled;
     uint16_t soc_display_10ms;
     uint8_t startup_display_armed;
     uint32_t key_hold_10ms;
@@ -234,19 +250,10 @@ static void LedBar_PinModeF1(GPIO_TypeDef *port, uint32_t pin_index, uint32_t mo
     *config_reg |= (mode_bits << shift);
 }
 
-static void LedBar_PinToInput(uint8_t pin_id)
-{
-    GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
-    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_pins[pin_id].pin);
-
-    LedBar_PinModeF1(port, pin_index, 0x4u);
-}
-
-static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
+static void LedBar_PinWrite(uint8_t pin_id, BitAction level)
 {
     GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
     uint16_t pin = s_ledbar_pins[pin_id].pin;
-    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(pin);
 
     if (level != Bit_RESET)
     {
@@ -256,18 +263,30 @@ static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
     {
         port->BRR = pin;
     }
+}
+
+static void LedBar_PinToOutput(uint8_t pin_id, BitAction level)
+{
+    GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
+    uint16_t pin = s_ledbar_pins[pin_id].pin;
+    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(pin);
+
+    LedBar_PinWrite(pin_id, level);
+    LedBar_PinModeF1(port, pin_index, 0x2u);
+}
+
+static void LedBar_PinToOutputMode(uint8_t pin_id)
+{
+    GPIO_TypeDef *port = s_ledbar_pins[pin_id].port;
+    uint32_t pin_index = (uint32_t)LedBar_GetPinIndex(s_ledbar_pins[pin_id].pin);
 
     LedBar_PinModeF1(port, pin_index, 0x2u);
 }
 
 static void LedBar_AllPinsHiZ(void)
 {
-    uint8_t pin_id;
-
-    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
-    {
-        LedBar_PinToInput(pin_id);
-    }
+    GPIOA->CRL &= (uint32_t)(~LEDBAR_GPIOA_CRL_MASK);
+    GPIOB->CRH &= (uint32_t)(~LEDBAR_GPIOB_CRH_MASK);
 }
 
 static void LedBar_AllPinsOutputLow(void)
@@ -309,8 +328,10 @@ static void LedBar_OutputRoute(uint8_t route_id)
     }
 
     route = &s_ledbar_routes[route_id];
-    LedBar_PinToOutput(route->low_pin, Bit_RESET);
-    LedBar_PinToOutput(route->high_pin, Bit_SET);
+    LedBar_PinWrite(route->low_pin, Bit_RESET);
+    LedBar_PinWrite(route->high_pin, Bit_SET);
+    LedBar_PinToOutputMode(route->low_pin);
+    LedBar_PinToOutputMode(route->high_pin);
 }
 
 static void LedBar_OutputOff(void)
@@ -443,49 +464,316 @@ static uint32_t LedBar_BuildTargetMask(uint8_t value, uint8_t indicator_mask)
     return target_mask;
 }
 
-static uint8_t LedBar_NextRouteFromMask(uint32_t mask, uint8_t start_route)
+static void LedBar_FrameClear(LedBarFrame *frame)
+{
+    memset(frame->routes, 0, sizeof(frame->routes));
+    frame->length = 0u;
+}
+
+static void LedBar_FrameAddRoute(LedBarFrame *frame, uint8_t route_id)
+{
+    if (frame->length >= LEDBAR_FRAME_ROUTE_COUNT)
+    {
+        return;
+    }
+    frame->routes[frame->length] = route_id;
+    frame->length++;
+}
+
+static uint8_t LedBar_FindRouteByPins(uint8_t low_pin, uint8_t high_pin)
 {
     uint8_t route_id;
 
-    for (route_id = start_route; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+    for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
     {
-        if ((mask & (1UL << route_id)) != 0u)
+        if ((s_ledbar_routes[route_id].low_pin == low_pin) &&
+            (s_ledbar_routes[route_id].high_pin == high_pin))
         {
             return route_id;
         }
     }
-    for (route_id = 0u; route_id < start_route; ++route_id)
-    {
-        if ((mask & (1UL << route_id)) != 0u)
-        {
-            return route_id;
-        }
-    }
-    return 0u;
+
+    return (uint8_t)LEDBAR_ROUTE_COUNT;
 }
 
-static uint32_t LedBar_BuildCurrentFrameMask(void)
+static uint16_t LedBar_TransitionCost(uint8_t prev_route_id,
+                                      uint8_t next_route_id,
+                                      uint32_t target_mask)
 {
-    if ((s_ledbar.blank != 0u) || (s_ledbar.sleep != 0u))
+    const LedBarRoute *prev_route = &s_ledbar_routes[prev_route_id];
+    const LedBarRoute *next_route = &s_ledbar_routes[next_route_id];
+    uint8_t ghost_route;
+    uint16_t cost = 0u;
+
+    /*
+     * Charlieplexing line changes can momentarily combine one pin from the
+     * previous route with one pin from the next route. Prefer scan orders
+     * that do not create an off-target route during that transition.
+     */
+    if ((prev_route->low_pin != next_route->low_pin) &&
+        (prev_route->low_pin != next_route->high_pin))
+    {
+        ghost_route = LedBar_FindRouteByPins(prev_route->low_pin,
+                                             next_route->high_pin);
+        if ((ghost_route < (uint8_t)LEDBAR_ROUTE_COUNT) &&
+            (ghost_route != next_route_id))
+        {
+            cost = (uint16_t)(cost +
+                              (((target_mask & (1UL << ghost_route)) == 0u)
+                                   ? LEDBAR_TRANSITION_OFF_GHOST_COST
+                                   : LEDBAR_TRANSITION_ON_GHOST_COST));
+        }
+    }
+
+    if ((prev_route->high_pin != next_route->low_pin) &&
+        (prev_route->high_pin != next_route->high_pin))
+    {
+        ghost_route = LedBar_FindRouteByPins(next_route->low_pin,
+                                             prev_route->high_pin);
+        if ((ghost_route < (uint8_t)LEDBAR_ROUTE_COUNT) &&
+            (ghost_route != prev_route_id))
+        {
+            cost = (uint16_t)(cost +
+                              (((target_mask & (1UL << ghost_route)) == 0u)
+                                   ? LEDBAR_TRANSITION_OFF_GHOST_COST
+                                   : LEDBAR_TRANSITION_ON_GHOST_COST));
+        }
+    }
+
+    if ((prev_route->low_pin != next_route->low_pin) &&
+        (prev_route->low_pin != next_route->high_pin) &&
+        (prev_route->high_pin != next_route->low_pin) &&
+        (prev_route->high_pin != next_route->high_pin))
+    {
+        cost = (uint16_t)(cost + LEDBAR_TRANSITION_NO_SHARED_PIN_COST);
+    }
+
+    return cost;
+}
+
+static uint16_t LedBar_FrameTransitionCost(const LedBarFrame *frame,
+                                           uint32_t target_mask)
+{
+    uint8_t index;
+    uint8_t next_index;
+    uint16_t cost = 0u;
+
+    if (frame->length < 2u)
     {
         return 0u;
     }
 
-    return LedBar_BuildTargetMask(s_ledbar.number,
-                                  (uint8_t)(s_ledbar.indicator_mask &
-                                            (LEDBAR_ICON_CHARGE_MASK |
-                                             LEDBAR_ICON_PERCENT_MASK)));
+    for (index = 0u; index < frame->length; ++index)
+    {
+        next_index = (uint8_t)(index + 1u);
+        if (next_index >= frame->length)
+        {
+            next_index = 0u;
+        }
+        cost = (uint16_t)(cost +
+                          LedBar_TransitionCost(frame->routes[index],
+                                                frame->routes[next_index],
+                                                target_mask));
+    }
+
+    return cost;
 }
 
-static void LedBar_ApplyFrameMask(uint32_t frame_mask)
+static void LedBar_BuildGreedyFrameFromStart(LedBarFrame *frame,
+                                             uint32_t target_mask,
+                                             uint8_t start_route)
 {
-    uint8_t same_frame = (s_ledbar.frame_mask == frame_mask) ? 1u : 0u;
-    uint8_t scan_was_enabled = s_ledbar.scan_timer_enabled;
+    uint32_t remaining_mask = target_mask;
     uint8_t route_id;
+    uint8_t prev_route;
+    uint8_t best_route;
+    uint16_t route_cost;
+    uint16_t best_cost;
+
+    LedBar_FrameClear(frame);
+    LedBar_FrameAddRoute(frame, start_route);
+    remaining_mask &= (uint32_t)(~(1UL << start_route));
+
+    while (remaining_mask != 0u)
+    {
+        prev_route = frame->routes[frame->length - 1u];
+        best_route = (uint8_t)LEDBAR_ROUTE_COUNT;
+        best_cost = LEDBAR_TRANSITION_MAX_COST;
+
+        for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+        {
+            if ((remaining_mask & (1UL << route_id)) == 0u)
+            {
+                continue;
+            }
+
+            route_cost = LedBar_TransitionCost(prev_route,
+                                               route_id,
+                                               target_mask);
+            if ((best_route >= (uint8_t)LEDBAR_ROUTE_COUNT) ||
+                (route_cost < best_cost))
+            {
+                best_route = route_id;
+                best_cost = route_cost;
+            }
+        }
+
+        if (best_route >= (uint8_t)LEDBAR_ROUTE_COUNT)
+        {
+            break;
+        }
+        LedBar_FrameAddRoute(frame, best_route);
+        remaining_mask &= (uint32_t)(~(1UL << best_route));
+    }
+}
+
+static void LedBar_SwapFrameRoutes(LedBarFrame *frame,
+                                   uint8_t left_index,
+                                   uint8_t right_index)
+{
+    uint8_t temp_route = frame->routes[left_index];
+
+    frame->routes[left_index] = frame->routes[right_index];
+    frame->routes[right_index] = temp_route;
+}
+
+static void LedBar_ImproveFrameOrder(LedBarFrame *frame, uint32_t target_mask)
+{
+    uint8_t pass;
+    uint8_t left_index;
+    uint8_t right_index;
+    uint8_t improved;
+    uint16_t best_cost;
+    uint16_t candidate_cost;
+
+    if (frame->length < 3u)
+    {
+        return;
+    }
+
+    best_cost = LedBar_FrameTransitionCost(frame, target_mask);
+    for (pass = 0u; pass < LEDBAR_ORDER_IMPROVE_MAX_PASSES; ++pass)
+    {
+        improved = 0u;
+        for (left_index = 0u; left_index < frame->length; ++left_index)
+        {
+            for (right_index = (uint8_t)(left_index + 1u);
+                 right_index < frame->length;
+                 ++right_index)
+            {
+                LedBar_SwapFrameRoutes(frame, left_index, right_index);
+                candidate_cost = LedBar_FrameTransitionCost(frame,
+                                                            target_mask);
+                if (candidate_cost < best_cost)
+                {
+                    best_cost = candidate_cost;
+                    improved = 1u;
+                }
+                else
+                {
+                    LedBar_SwapFrameRoutes(frame, left_index, right_index);
+                }
+            }
+        }
+
+        if (improved == 0u)
+        {
+            break;
+        }
+    }
+}
+
+static void LedBar_BuildFrameFromMask(LedBarFrame *frame, uint32_t target_mask)
+{
+    uint8_t route_id;
+    uint8_t start_route;
+    uint16_t best_cost = LEDBAR_TRANSITION_MAX_COST;
+    uint16_t candidate_cost;
+    LedBarFrame candidate_frame;
+    LedBarFrame best_frame;
+
+    LedBar_FrameClear(frame);
+    for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
+    {
+        if ((target_mask & (1UL << route_id)) != 0u)
+        {
+            break;
+        }
+    }
+    if (route_id >= (uint8_t)LEDBAR_ROUTE_COUNT)
+    {
+        return;
+    }
+
+    LedBar_FrameClear(&best_frame);
+    for (start_route = 0u; start_route < (uint8_t)LEDBAR_ROUTE_COUNT; ++start_route)
+    {
+        if ((target_mask & (1UL << start_route)) == 0u)
+        {
+            continue;
+        }
+
+        LedBar_BuildGreedyFrameFromStart(&candidate_frame,
+                                         target_mask,
+                                         start_route);
+        candidate_cost = LedBar_FrameTransitionCost(&candidate_frame,
+                                                    target_mask);
+        if ((best_frame.length == 0u) || (candidate_cost < best_cost))
+        {
+            best_frame = candidate_frame;
+            best_cost = candidate_cost;
+        }
+    }
+
+    LedBar_ImproveFrameOrder(&best_frame, target_mask);
+    *frame = best_frame;
+}
+
+static uint8_t LedBar_FrameEquals(const LedBarFrame *left, const LedBarFrame *right)
+{
+    uint8_t index;
+
+    if (left->length != right->length)
+    {
+        return 0u;
+    }
+
+    for (index = 0u; index < left->length; ++index)
+    {
+        if (left->routes[index] != right->routes[index])
+        {
+            return 0u;
+        }
+    }
+
+    return 1u;
+}
+
+static void LedBar_BuildCurrentFrame(LedBarFrame *frame)
+{
+    uint32_t target_mask;
+
+    if ((s_ledbar.blank != 0u) || (s_ledbar.sleep != 0u))
+    {
+        LedBar_FrameClear(frame);
+        return;
+    }
+
+    target_mask = LedBar_BuildTargetMask(s_ledbar.number,
+                                         (uint8_t)(s_ledbar.indicator_mask &
+                                                   (LEDBAR_ICON_CHARGE_MASK |
+                                                    LEDBAR_ICON_PERCENT_MASK)));
+    LedBar_BuildFrameFromMask(frame, target_mask);
+}
+
+static void LedBar_ApplyFrame(const LedBarFrame *frame)
+{
+    uint8_t same_frame = LedBar_FrameEquals(&s_ledbar.frame, frame);
+    uint8_t scan_was_enabled = s_ledbar.scan_timer_enabled;
 
     if ((same_frame != 0u) &&
-        (((frame_mask == 0u) && (scan_was_enabled == 0u)) ||
-         ((frame_mask != 0u) && (scan_was_enabled != 0u))))
+        (((frame->length == 0u) && (scan_was_enabled == 0u)) ||
+         ((frame->length != 0u) && (scan_was_enabled != 0u))))
     {
         return;
     }
@@ -497,13 +785,14 @@ static void LedBar_ApplyFrameMask(uint32_t frame_mask)
         TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
     }
 
-    s_ledbar.frame_mask = frame_mask;
-    s_ledbar.scan_route = 0u;
+    s_ledbar.frame = *frame;
+    s_ledbar.scan_index = 0u;
 
-    if (s_ledbar.frame_mask == 0u)
+    if (s_ledbar.frame.length == 0u)
     {
         LedBar_StopScanTimer();
         LedBar_OutputOff();
+        LedBar_GpioPrepareForStop();
         return;
     }
 
@@ -512,10 +801,8 @@ static void LedBar_ApplyFrameMask(uint32_t frame_mask)
         LedBar_StartScanTimer();
     }
 
-    route_id = LedBar_NextRouteFromMask(s_ledbar.frame_mask, 0u);
-    LedBar_OutputRoute(route_id);
-    s_ledbar.scan_route = LedBar_NextRouteFromMask(s_ledbar.frame_mask,
-                                                   (uint8_t)(route_id + 1u));
+    LedBar_OutputRoute(s_ledbar.frame.routes[0]);
+    s_ledbar.scan_index = (s_ledbar.frame.length > 1u) ? 1u : 0u;
 
     if (scan_was_enabled != 0u)
     {
@@ -526,7 +813,10 @@ static void LedBar_ApplyFrameMask(uint32_t frame_mask)
 
 static void LedBar_RefreshOutput(void)
 {
-    LedBar_ApplyFrameMask(LedBar_BuildCurrentFrameMask());
+    LedBarFrame frame;
+
+    LedBar_BuildCurrentFrame(&frame);
+    LedBar_ApplyFrame(&frame);
 }
 
 static void LedBar_RequestSocDisplayWindow(void)
@@ -641,6 +931,7 @@ static uint8_t LedBar_IsMcuWakeActive(void)
 
 static uint8_t LedBar_IsDisplayRequested(void)
 {
+    // return 1;
 #if LEDBAR_TEST_ALWAYS_ON
     return 1u;
 #elif !LEDBAR_SLEEP_ENABLE
@@ -753,8 +1044,8 @@ void LedBar_Init(void)
     s_ledbar.number = 0u;
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     s_ledbar.test_single_segment_id = 0u;
-    s_ledbar.frame_mask = 0u;
-    s_ledbar.scan_route = 0u;
+    LedBar_FrameClear(&s_ledbar.frame);
+    s_ledbar.scan_index = 0u;
     s_ledbar.scan_timer_initialized = 0u;
     s_ledbar.scan_timer_enabled = 0u;
     s_ledbar.soc_display_10ms = 0u;
@@ -961,7 +1252,7 @@ uint8_t LedBar_IsActiveForLowPower(void)
     }
 
     if ((s_ledbar.soc_display_10ms != 0u) ||
-        (s_ledbar.frame_mask != 0u) ||
+        (s_ledbar.frame.length != 0u) ||
         (s_ledbar.scan_timer_enabled != 0u))
     {
         return 1u;
@@ -977,16 +1268,24 @@ void LedBar_Scan1ms(void)
         return;
     }
 
-    if ((s_ledbar.sleep != 0u) || (s_ledbar.frame_mask == 0u))
+    if ((s_ledbar.sleep != 0u) || (s_ledbar.frame.length == 0u))
     {
         LedBar_OutputOff();
-        s_ledbar.scan_route = 0u;
+        s_ledbar.scan_index = 0u;
         return;
     }
 
-    LedBar_OutputRoute(s_ledbar.scan_route);
-    s_ledbar.scan_route = LedBar_NextRouteFromMask(s_ledbar.frame_mask,
-                                                   (uint8_t)(s_ledbar.scan_route + 1u));
+    if (s_ledbar.scan_index >= s_ledbar.frame.length)
+    {
+        s_ledbar.scan_index = 0u;
+    }
+
+    LedBar_OutputRoute(s_ledbar.frame.routes[s_ledbar.scan_index]);
+    s_ledbar.scan_index++;
+    if (s_ledbar.scan_index >= s_ledbar.frame.length)
+    {
+        s_ledbar.scan_index = 0u;
+    }
 }
 
 void TIM4_IRQHandler(void)
@@ -1027,7 +1326,7 @@ void APP_LedBar(void)
     if (display_requested == 0u)
     {
         if ((s_ledbar.blank == 0u) ||
-            (s_ledbar.frame_mask != 0u) ||
+            (s_ledbar.frame.length != 0u) ||
             (s_ledbar.scan_timer_enabled != 0u))
         {
             LedBar_Clear();
