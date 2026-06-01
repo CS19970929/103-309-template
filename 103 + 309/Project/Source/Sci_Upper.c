@@ -486,7 +486,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 
 	if (actual_addr >= RS485_ADDR_RO_START0)
 	{
-		*word_count = RS485_RO_BASE_WORDS;
+		*word_count = RS485_RO_TOTAL_WORDS;
 		return 1;
 	}
 	if (actual_addr >= RS485_ADDR_RO_LCD)
@@ -781,6 +781,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 20U);
 	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
 
 	for (j = 0; j < 12; j++)
@@ -823,6 +824,9 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
+
+	/* SOC_TEST status padding (16 words) — retained for protocol compatibility */
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 16U);
 }
 
 /*=================================================================

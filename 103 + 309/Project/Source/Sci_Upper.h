@@ -135,6 +135,9 @@ struct RS485MSG {
 #define RS485_ADDR_RO_START2			(UINT16)0xD200
 
 #define RS485_RO_BASE_WORDS				((UINT16)98U)
+/* SOC_TEST padding retained for protocol compatibility */
+#define RS485_RO_SOC_TEST_PAD_WORDS		((UINT16)16U)
+#define RS485_RO_TOTAL_WORDS			((UINT16)(RS485_RO_BASE_WORDS + RS485_RO_SOC_TEST_PAD_WORDS))
 
 
 
