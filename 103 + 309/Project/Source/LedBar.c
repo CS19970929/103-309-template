@@ -1,6 +1,8 @@
 #include "main.h"
 #include <string.h>
 
+bool key_release_wakeup = false;
+
 #define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS
 #define LEDBAR_MCU_WK_ON_FILTER_10MS PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS
@@ -979,13 +981,14 @@ static void LedBar_ServiceSwitch(void)
 
     if ((was_pressed == 0u) && (s_ledbar.key_active != 0u))
     {
+        key_release_wakeup = true;
         LedBar_RequestSocDisplayWindow();
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_hold_10ms = 0u;
         s_ledbar.key_long_handled = 0u;
     }
 
-    if (s_ledbar.key_active != 0u)
+    if (s_ledbar.key_active != 0u && key_release_wakeup)
     {
         s_ledbar.key_hold_10ms = now_10ms - s_ledbar.key_press_start_10ms;
 
