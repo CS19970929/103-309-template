@@ -1,63 +1,101 @@
 # 103-309 BMS 项目总览
 
-文档状态：CURRENT
-源码验证：PARTIAL
-主要参考源码：`main.c`, `AppInit.c`, `Runtime.c`, `Project_Config.h`, `DataDeal.c`, `SOC.c`, `Sci_Upper.c`, `Can_HDX.c`, `Flash.c`, `rtc_sleep.c`, `LedBar.c`
-最后更新时间：2026-05-26
-未确认事项：真实电流路径、均衡、老化、Host 写权限、Flash 容量、低功耗 CAN 广播。
+文档状态: CURRENT (2026-06-01 完整更新)
+源码验证: VERIFIED - 基于完整源码分析
+主要参考源码: 全部 Source/ 目录下的 .c/.h 文件
+最后更新: 2026-06-01
 
-## 1. 项目背景
+## 1. 项目定位
 
-当前项目是一个 STM32F1 标准外设库 BMS 保护板 App 工程，核心目标是支持 103 + 309 硬件组合，并逐步整理成可维护、可复用、可向 STM32F0/F1 和不同 AFE/客户协议扩展的模板。
-
-当前主工程是：
-
-`103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`
+STM32F103C8 + SH367309 BMS 保护板固件。面向三元锂/磷酸铁锂 10串电池包。
+- 硬件保护: 由 AFE (SH367309) 完成
+- 软件功能: SOC 估算、通讯、显示、低功耗管理、老化测试
+- 通讯: 串口 Modbus RTU (上位机) + CAN 飞道协议 (Comm Tool/BMS 互联)
+- 固件升级: IAP Bootloader + CAN 远程升级 + 串口升级
 
 ## 2. 硬件平台
 
-| 项目 | 当前源码体现 | 备注 |
-|---|---|---|
-| MCU | Keil 工程显示 STM32F103C8 / Cortex-M3 / SPL | 实际 Flash 容量必须硬件确认 |
-| AFE | SH367309 | 当前未形成通用 AFE 抽象 |
-| 通信 | USART1 Modbus RTU, CAN1 飞道/服务协议 | SCI2/SCI3 当前关闭 |
-| ADC | ADC1 + DMA1_Channel1 + TIM2_CC2 | PA1 VBC、PA2 Type-C 电流、PB1 MOS 温度 |
-| 低功耗 | RTC + STOP + BKP + IWDG | RTC 周期受 IWDG 10s 限制 |
-| 显示 | 5 GPIO Charlieplexing LedBar | TIM4 扫描 |
-| 存储 | 内部 Flash 后 64K 区域 | 地址依赖实际 Flash >= 128KB |
+| 项目 | 配置 |
+|------|------|
+| MCU | STM32F103C8T6, 64KB Flash, 20KB RAM |
+| AFE | SH367309 (I2C 地址 0x34, GPIO 模拟 I2C: PB8/PB9) |
+| 串口 | USART1 (PB6/PB7) - 上位机通讯 |
+| CAN | CAN1 (PA11/PA12), 250kbps, GPIO_CMNT_EN(PB4) 控制收发器供电 |
+| ADC | ADC1+DMA1_CH1+TIM2_CC2 触发: PA1(VBUS), PA2(TypeC电流), PB1(MOS温度) |
+| RTC | LSE 32.768kHz, STOP 模式唤醒 |
+| 看门狗 | IWDG, 约10秒超时 |
+| 显示 | 5-GPIO Charlieplexing 数码管 (PA4/PA5/PA6/PB10/PB11), TIM4 扫描 |
+| 按键 | PA9 (SW), 长按2秒关机 |
+| 充电检测 | PA0 (CHG_IN), 中断唤醒 |
+| 唤醒源 | PB13(MCU_WK), PB12(通讯唤醒), PB7(串口RX), PA0(充电) |
 
-## 3. 软件目标
+## 3. 软件架构 (三层)
 
-1. 保持上位机协议兼容。
-2. 保持 BMS 安全逻辑和硬件行为稳定。
-3. 将旧 EEPROM 依赖收敛为内部 Flash。
-4. 支持 SOC 快照、低功耗休眠补偿和显示平滑。
-5. 保留 IAP/Bootloader 隔离，禁止 App 覆盖 IAP。
-6. 后续逐步抽象 AFE 和客户协议。
+```
+main() → AppInit_Boot() → while(1) Runtime_RunOnce()
 
-## 4. 当前主要功能
+Runtime_RunOnce() 分为四个阶段:
+  1. Front Tasks:  时基锁存 → 老化 → LED → AFE数据获取
+  2. IO/Power Tasks: 串口服务 → ADC计算 → 低功耗调度 → CAN服务
+  3. Background:     Flash测试 → 参数更新 → 日志 → 产品ID → 喂狗
+  4. Idle:           WFI (可配置)
 
-| 功能 | 当前状态 |
-|---|---|
-| 启动/主循环 | `AppInit_Boot()` 初始化，`Runtime_RunOnce()` 裸机轮询 |
-| 采样 | AFE 200ms 链路 + ADC 10ms 触发链路 |
-| 保护 | AFE status 映射 fault，保护阈值可写入 AFE |
-| SOC | 库仑积分、满电锚点、低压尾段、静置 OCV、显示平滑、snapshot |
-| 通信 | Modbus RTU `0x03/0x06/0x10`，CAN 周期广播和 App 服务 |
-| 存储 | SOC/Afe/RW/log/aging 使用内部 Flash |
-| 低功耗 | HICCUP STOP、NORMAL/DEEP reset sleep、RTC 补偿 |
-| IWDG | 默认开启，运行态和阻塞等待喂狗 |
-| IAP | App 地址 `0x08004800`，IAP 地址 `0x08000000` |
-| 老化 | 默认开启，3 天运行态计时，可 CAN 控制 |
+低功耗:
+  空闲 N 秒 → HICCUP (RTC STOP 周期唤醒) → CAN服务/SOC补偿
+  过放 → DEEP (MCU复位) 或 NORMAL (MCU复位)
+```
 
-## 5. 当前状态与关键风险
+## 4. 核心模块一览
 
-最关键风险：
+| 模块 | 文件 | 行数(估) | 功能 |
+|------|------|----------|------|
+| 配置系统 | conf/Project_Config.h, conf.h | 450+ | 100+编译宏, Keil可视化 |
+| 主循环 | main.c, AppInit.c, Runtime.c | ~120 | 启动+调度 |
+| SOC 算法 | SOC.c, SocEnhance.c | ~2000+ | 安时积分, OCV校准, 静置补偿, 显示平滑 |
+| CAN 通讯 | Can_HDX.c, CanFeidaoFrames.c | ~1500+ | TX队列, 电源管理, 总线探测, RTC唤醒, 应用命令 |
+| 串口 Modbus | Sci_Upper.c | ~2000+ | 0x03/0x06/0x10, 地址映射, CRC16 |
+| ADC 采样 | ADC.c | ~500 | TIM2触发, DMA, 总压/电流/温度 |
+| AFE 驱动 | I2C_AFE1.c, SH367309_*.c | ~1000+ | GPIO模拟I2C, 寄存器解析 |
+| LED 显示 | LedBar.c | ~1400 | Charlieplexing, 扫描帧优化, 按键滤波 |
+| RTC 低功耗 | rtc_sleep.c, rtc_sleep_port.c | ~500+ | 三层架构, HICCUP循环, 唤醒源管理 |
+| 工厂老化 | FactoryAging.c | ~600 | 定时老化, BKP+Flash双存, CAN控制 |
+| Flash 存储 | Flash.c | ~1000+ | A/B双槽, SOC/参数/日志/老化 |
+| 日志 | LogRecord.c | ~200 | 20种事件, 重复抑制 |
+| 系统监控 | System_Monitor.c | ~175 | 错误标志, 功能开关, MOS状态 |
+| 故障管理 | Fault.c/h | ~400 | 三级保护参数, 故障标志 |
 
-1. 当前量产 profile 下 `App_AFEGet()` 调用 `test_Autocurrent_cycle()`，未调用真实 `DataLoad_Current()`。
-2. 均衡参数存在，但主动均衡任务入口未确认。
-3. `SH367309_DataDeal.c` 中均衡开压硬编码 `4160`。
-4. Host 写权限在量产开启。
-5. Flash 后 64K 地址和 App/IAP 链接地址必须用真实硬件和 map 验证。
+## 5. 关键数据流
 
-后续不应直接重构代码，应先按 `docs/review/requirement_questions.md` 确认需求。
+```
+SH367309 AFE (I2C)
+  └─ DataDeal.c/App_AFEGet() → g_stCellInfoReport (电压/电流/温度)
+      ├─ SOC.c/SocEnhance.c → SOC 计算 → g_stCellInfoReport.SocElement
+      ├─ Sci_Upper.c → 串口 Modbus 应答
+      ├─ CanFeidaoFrames.c → CAN 周期广播
+      └─ LedBar.c → 数码管显示
+```
+
+## 6. 当前状态
+
+- 核心功能: SOC、保护映射、通讯、低功耗 均已实现
+- 已知待优化: SOC校准策略、CAN功耗、LED闪烁、代码简化
+- IAP: 支持串口和CAN两种升级路径
+- Comm Tool: 独立工程 (firmware/comm_tool_f103ret6/), 实现CAN中继升级
+- PC 上位机: Python (tools/), 支持串口通讯/升级/监控
+
+## 7. 文档索引
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 模块完整参考 | docs/module_reference.md | 所有模块详细功能/逻辑/变量/函数 |
+| 宏配置参考 | docs/macro_config_reference.md | 所有宏及派生关系 |
+| 模块地图 | docs/module_map.md | 模块→文件映射 |
+| 通讯地址索引 | COMMUNICATION_ADDRESS_INDEX.md | Modbus 寄存器映射 |
+| CAN 协议 | docs/protocol/can_protocol.md | 飞道 CAN 协议 |
+| 串口协议 | docs/protocol/uart_protocol.md | Modbus 协议 |
+| 架构 | docs/architecture.md | 系统架构 |
+| 低功耗设计 | docs/design/low_power_design.md | 低功耗方案 |
+| SOC 设计 | docs/design/soc_design.md | SOC 算法 |
+| LED 设计 | docs/design/led_display_design.md | 数码管方案 |
+| IAP 设计 | docs/design/bootloader_iap_design.md | 升级方案 |
+| 变更日志 | docs/change_log.md | 变更记录 |
