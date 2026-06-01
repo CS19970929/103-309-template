@@ -2108,4 +2108,3 @@ int fputc(int ch, FILE *f)
 
 	return ch;
 }
-}
