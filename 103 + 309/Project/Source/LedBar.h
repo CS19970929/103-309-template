@@ -51,7 +51,8 @@ void APP_LedBar(void);
 void LedBar_GetDebugSnapshot(uint8_t *sleep, uint8_t *blank,
                              uint8_t *number, uint8_t *indicators,
                              uint16_t *disp_10ms, uint8_t *frame_len,
-                             uint8_t *scan_idx, uint8_t *key_active);
+                             uint8_t *scan_idx, uint8_t *key_active,
+                             uint8_t *charge_icon, uint8_t *percent_icon);
 #endif
 
 #endif

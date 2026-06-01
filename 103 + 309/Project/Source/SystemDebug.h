@@ -2,141 +2,160 @@
 #define SYSTEM_DEBUG_H
 
 #include "Project_Config.h"
-#include "stm32f10x.h"
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 
 #include <stdint.h>
 
-struct SYSTEM_DEBUG {
-	/* ========== GPIO (16 fields) ========== */
-	uint16_t gpioA_in;
-	uint16_t gpioB_in;
-	uint16_t gpioA_out;
-	uint16_t gpioB_out;
+/* ---- sub-structs for Keil Watch hierarchical browsing ---- */
 
-	uint8_t  chg_in;         /* PA0  */
-	uint8_t  sw_key;         /* PA9  */
-	uint8_t  mcu_wk;         /* PB13 */
-	uint8_t  cmnt_en;        /* PB4  */
-	uint8_t  dc_en;          /* PA10 */
-	uint8_t  dbg_led;        /* PB15 */
-	uint8_t  afe_ctlc;       /* PB14 */
-	uint8_t  afe_pro_en;     /* PB0  */
-	uint8_t  m_stb;          /* PA15 */
-	uint8_t  ad_en;          /* PB3  */
-	uint8_t  adc_bus_en;     /* PB5  */
-	uint8_t  _2727_en;       /* PA3  */
+struct DBG_GPIO {
+	uint16_t a_in;           /* GPIOA IDR */
+	uint16_t b_in;           /* GPIOB IDR */
+	uint16_t a_out;          /* GPIOA ODR */
+	uint16_t b_out;          /* GPIOB ODR */
+	uint8_t  chg_in;         /* PA0 充电检测 (1=插入) */
+	uint8_t  sw_key;         /* PA9 按键 (1=按下, 低有效) */
+	uint8_t  mcu_wk;         /* PB13 MCU唤醒 */
+	uint8_t  cmnt_en;        /* PB4 CAN收发器供电 */
+	uint8_t  dc_en;          /* PA10 DC使能 */
+	uint8_t  dbg_led;        /* PB15 调试LED */
+	uint8_t  afe_ctlc;       /* PB14 AFE CTLC */
+	uint8_t  afe_pro_en;     /* PB0  AFE保护使能 */
+	uint8_t  m_stb;          /* PA15 主电源待机 */
+	uint8_t  ad_en;          /* PB3  AD使能 */
+	uint8_t  adc_bus_en;     /* PB5  ADC总线使能 */
+	uint8_t  _2727_en;       /* PA3  升压使能 */
+};
 
-	/* ========== MOS (4 fields) ========== */
-	uint8_t  mos_chg;
-	uint8_t  mos_dsg;
-	uint8_t  afe_dsg_fet;
-	uint8_t  afe_chg_fet;
+struct DBG_MOS {
+	uint8_t  sw_chg;         /* 软件充电MOS */
+	uint8_t  sw_dsg;         /* 软件放电MOS */
+	uint8_t  hw_dsg_fet;     /* AFE DSG_FET 硬件 */
+	uint8_t  hw_chg_fet;     /* AFE CHG_FET 硬件 */
+};
 
-	/* ========== System (4 fields) ========== */
-	uint32_t sys_status;
-	uint32_t sys_feature;
-	uint16_t sys_err_lo;
-	uint16_t sys_err_hi;
+struct DBG_SYS {
+	uint32_t status;         /* SystemRuntime_GetStatusSnapshot() */
+	uint32_t feature;        /* SystemFeature_GetMask() */
+	uint16_t err_lo;         /* System_ErrFlag 低16字节 */
+	uint16_t err_hi;         /* System_ErrFlag 高16字节 */
+};
 
-	/* ========== CAN (12 fields) ========== */
-	uint8_t  can_bus_active;
-	uint8_t  can_power_on;
-	uint8_t  can_bus_off;
-	uint8_t  can_no_ack_cnt;
-	uint8_t  can_tx_queue;
-	uint8_t  can_probe;
-	uint8_t  can_rtc_svc;
-	uint16_t can_esr;
-	uint16_t can_tx_ok_cnt;
-	uint16_t can_tx_fail_cnt;
-	uint16_t can_busoff_cnt;
-	uint16_t can_busoff_rec_cnt;
+struct DBG_CAN {
+	uint8_t  bus_active;
+	uint8_t  power_on;
+	uint8_t  bus_off;
+	uint8_t  no_ack_cnt;
+	uint8_t  tx_queue;
+	uint8_t  probe;
+	uint8_t  rtc_svc;
+	uint16_t esr;
+	uint16_t tx_ok_cnt;
+	uint16_t tx_fail_cnt;
+	uint16_t busoff_in_cnt;
+	uint16_t busoff_out_cnt;
+	uint16_t last_tx_id;     /* 最后发送的CAN ID */
+};
 
-	/* ========== RTC / Low Power (6 fields) ========== */
-	uint8_t  lp_mode;
-	uint8_t  lp_ready;
-	uint8_t  lp_block_reason;
-	uint32_t lp_block_mask;
-	uint32_t lp_sleep_sec;
-	uint32_t lp_elapsed_sec;
+struct DBG_LP {
+	uint8_t  mode;           /* 0=NORMAL 1=HICCUP 2=DEEP 3=NO_SLP */
+	uint8_t  ready;
+	uint8_t  block_reason;
+	uint32_t block_mask;
+	uint32_t sleep_sec;
+	uint32_t elapsed_sec;
+	uint32_t hiccup_cycles;  /* HICCUP 唤醒轮次 */
+	uint8_t  last_wake_src;  /* 上次唤醒源 */
+};
 
-	/* ========== ADC (6 fields) ========== */
-	uint16_t adc_mos_temp;
-	uint16_t adc_typec_cur_ma;
-	uint32_t adc_vbat_mv;
-	uint16_t adc_raw_vbus;
-	uint16_t adc_raw_cur;
-	uint16_t adc_raw_mos;
+struct DBG_ADC {
+	uint16_t mos_temp;
+	uint16_t typec_cur_ma;
+	uint32_t vbat_mv;
+	uint16_t raw_vbus;
+	uint16_t raw_cur;
+	uint16_t raw_mos;
+};
 
-	/* ========== SOC basic (10 fields) ========== */
-	uint8_t  soc_pct;
-	uint8_t  soh_pct;
-	uint16_t soc_cap_now;
-	uint16_t soc_vmax;
-	uint16_t soc_vmin;
-	uint16_t soc_ichg;
-	uint16_t soc_idsg;
-	uint8_t  soc_init_over;
-	uint8_t  soc_ocv_cali;
-	uint16_t soc_vtotal;
+struct DBG_SOC {
+	/* basic */
+	uint8_t  pct;
+	uint8_t  soh;
+	uint16_t cap_now;
+	uint16_t vmax;
+	uint16_t vmin;
+	uint16_t ichg;
+	uint16_t idsg;
+	uint8_t  init_over;
+	uint8_t  ocv_cali;
+	uint16_t vtotal;
+	/* calibration internals */
+	uint8_t  mode;           /* CHG/DSG/RELAX */
+	uint8_t  last_mode;
+	uint32_t rest_ticks;
+	uint32_t stable_ticks;
+	uint16_t full_ticks;
+	uint16_t empty_ticks;
+	uint16_t mid_ticks;
+	uint8_t  full_anchor;
+	uint8_t  cal_allowed;
+	uint8_t  sag_blocked;
+	uint8_t  rest_stable;
+	uint8_t  low_tail;
+	uint8_t  mid_tail;
+	uint16_t display_ticks;
+	uint8_t  ocv_target;     /* OCV校准目标 SOC% */
+	uint8_t  last_calib_soc; /* 上次校准前 SOC% */
+};
 
-	/* ========== SOC calibration internals (14 fields) ========== */
-	uint8_t  soc_mode;          /* SOC_MODE_CHG/DSG/RELAX */
-	uint8_t  soc_last_mode;
-	uint32_t soc_rest_ticks;    /* rest counter */
-	uint32_t soc_stable_ticks;  /* stable rest counter */
-	uint16_t soc_full_ticks;    /* full confirm counter */
-	uint16_t soc_empty_ticks;   /* empty tail counter */
-	uint16_t soc_mid_ticks;     /* mid tail counter */
-	uint8_t  soc_full_anchor;   /* full-anchored flag */
-	uint8_t  soc_cal_allowed;   /* calibration allowed */
-	uint8_t  soc_sag_blocked;   /* sag hold blocking */
-	uint8_t  soc_rest_stable;   /* voltage stable flag */
-	uint8_t  soc_low_tail;      /* low tail active */
-	uint8_t  soc_mid_tail;      /* mid tail active */
-	uint16_t soc_display_ticks; /* display smooth counter */
+struct DBG_AFE {
+	uint8_t  bstatus1;
+	uint8_t  bstatus3;
+	uint8_t  fault1;
+	uint16_t cur_raw;
+	uint16_t pec_err;
+	uint16_t cell_min_mv;
+	uint16_t cell_max_mv;
+};
 
-	/* ========== AFE (8 fields) ========== */
-	uint8_t  afe_bstatus1;
-	uint8_t  afe_bstatus3;
-	uint8_t  afe_fault1;
-	uint16_t afe_cur_raw;
-	uint16_t afe_pec_err;
-	uint16_t afe_cell_min_mv;
-	uint16_t afe_cell_max_mv;
+struct DBG_FAULT {
+	uint16_t first;
+	uint16_t third;
+	uint16_t mdl1;
+	uint16_t mdl3;
+};
 
-	/* ========== Fault (4 fields) ========== */
-	uint16_t fault_first;
-	uint16_t fault_third;
-	uint16_t fault_mdl1;
-	uint16_t fault_mdl3;
+struct DBG_AGING {
+	uint8_t  state;
+	uint32_t remain_sec;
+};
 
-	/* ========== Factory Aging (2 fields) ========== */
-	uint8_t  aging_state;
-	uint32_t aging_remain_sec;
+struct DBG_FLASH {
+	uint8_t  update_flag;
+	uint8_t  e2prom_flag;
+	uint8_t  busy;
+};
 
-	/* ========== Flash (3 fields) ========== */
-	uint8_t  flash_update_flag;
-	uint8_t  flash_e2prom_flag;
-	uint8_t  flash_busy;
+struct DBG_LED {
+	uint8_t  sleep;
+	uint8_t  blank;
+	uint8_t  number;
+	uint8_t  indicators;
+	uint16_t disp_10ms;
+	uint8_t  frame_len;
+	uint8_t  scan_idx;
+	uint8_t  key_active;
+	uint8_t  charge_icon;    /* 充电图标 (1=亮) */
+	uint8_t  percent_icon;   /* % 图标 (1=亮) */
+};
 
-	/* ========== LED display (8 fields) ========== */
-	uint8_t  led_sleep;
-	uint8_t  led_blank;
-	uint8_t  led_number;
-	uint8_t  led_indicators;
-	uint16_t led_disp_10ms;
-	uint8_t  led_frame_len;
-	uint8_t  led_scan_idx;
-	uint8_t  led_key_active;
-
-	/* ========== Loop timing (2 fields) ========== */
+struct DBG_TIMING {
 	uint32_t loop_last_us;
 	uint32_t loop_max_us;
+};
 
-	/* ========== Runtime counters (10 fields) ========== */
+struct DBG_COUNTER {
 	uint32_t main_cycle;
 	uint32_t afe_get_cnt;
 	uint32_t can_rcv_cnt;
@@ -147,6 +166,23 @@ struct SYSTEM_DEBUG {
 	uint16_t pa0_irq_cnt;
 	uint16_t key_irq_cnt;
 	uint32_t tick_10ms;
+};
+
+struct SYSTEM_DEBUG {
+	struct DBG_GPIO    gpio;
+	struct DBG_MOS     mos;
+	struct DBG_SYS     sys;
+	struct DBG_CAN     can;
+	struct DBG_LP      lp;
+	struct DBG_ADC     adc;
+	struct DBG_SOC     soc;
+	struct DBG_AFE     afe;
+	struct DBG_FAULT   fault;
+	struct DBG_AGING   aging;
+	struct DBG_FLASH   flash;
+	struct DBG_LED     led;
+	struct DBG_TIMING  timing;
+	struct DBG_COUNTER ctr;
 };
 
 /* ---- public interface ---- */
@@ -160,18 +196,22 @@ void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra)
 /* ---- printf helpers (UART1, _DEBUG_ only) ---- */
 
 #if defined(_DEBUG_)
-void DbgPrint_Summary(void);   /* one-line: SOC Vmax Vmin Imax MOS LP */
-void DbgPrint_IO(void);        /* all GPIO states */
-void DbgPrint_LP(void);        /* low-power block details */
-void DbgPrint_CAN(void);       /* CAN state */
-void DbgPrint_SOC(void);       /* SOC calibration state */
-void DbgPrint_EventRing(void); /* last 32 events */
+void DbgPrint_Summary(void);
+void DbgPrint_All(void);
+void DbgPrint_IO(void);
+void DbgPrint_LP(void);
+void DbgPrint_CAN(void);
+void DbgPrint_SOC(void);
+void DbgPrint_Wakeup(void);
+void DbgPrint_EventRing(void);
 #else
 #define DbgPrint_Summary()    do{}while(0)
+#define DbgPrint_All()        do{}while(0)
 #define DbgPrint_IO()         do{}while(0)
 #define DbgPrint_LP()         do{}while(0)
 #define DbgPrint_CAN()        do{}while(0)
 #define DbgPrint_SOC()        do{}while(0)
+#define DbgPrint_Wakeup()     do{}while(0)
 #define DbgPrint_EventRing()  do{}while(0)
 #endif
 
@@ -181,10 +221,12 @@ void DbgPrint_EventRing(void); /* last 32 events */
 #define SystemDebug_LoopEnter(cnt)      do{}while(0)
 #define SystemDebug_Event(t,v0,v1,e)    do{}while(0)
 #define DbgPrint_Summary()              do{}while(0)
+#define DbgPrint_All()                  do{}while(0)
 #define DbgPrint_IO()                   do{}while(0)
 #define DbgPrint_LP()                   do{}while(0)
 #define DbgPrint_CAN()                  do{}while(0)
 #define DbgPrint_SOC()                  do{}while(0)
+#define DbgPrint_Wakeup()               do{}while(0)
 #define DbgPrint_EventRing()            do{}while(0)
 
 #endif /* PROJECT_CFG_DEBUG_MONITOR_ENABLE */

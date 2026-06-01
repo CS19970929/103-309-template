@@ -1371,16 +1371,19 @@ void APP_LedBar(void)
 void LedBar_GetDebugSnapshot(uint8_t *sleep, uint8_t *blank,
                              uint8_t *number, uint8_t *indicators,
                              uint16_t *disp_10ms, uint8_t *frame_len,
-                             uint8_t *scan_idx, uint8_t *key_active)
+                             uint8_t *scan_idx, uint8_t *key_active,
+                             uint8_t *charge_icon, uint8_t *percent_icon)
 {
 	LedBar_EnsureInit();
-	if (sleep)      *sleep      = s_ledbar.sleep;
-	if (blank)      *blank      = s_ledbar.blank;
-	if (number)     *number     = s_ledbar.number;
-	if (indicators) *indicators = s_ledbar.indicator_mask;
-	if (disp_10ms)  *disp_10ms  = s_ledbar.soc_display_10ms;
-	if (frame_len)  *frame_len  = s_ledbar.frame.length;
-	if (scan_idx)   *scan_idx   = s_ledbar.scan_index;
-	if (key_active) *key_active = s_ledbar.key_active;
+	if (sleep)        *sleep        = s_ledbar.sleep;
+	if (blank)        *blank        = s_ledbar.blank;
+	if (number)       *number       = s_ledbar.number;
+	if (indicators)   *indicators   = s_ledbar.indicator_mask;
+	if (disp_10ms)    *disp_10ms    = s_ledbar.soc_display_10ms;
+	if (frame_len)    *frame_len    = s_ledbar.frame.length;
+	if (scan_idx)     *scan_idx     = s_ledbar.scan_index;
+	if (key_active)   *key_active   = s_ledbar.key_active;
+	if (charge_icon)  *charge_icon  = (s_ledbar.indicator_mask & LEDBAR_ICON_CHARGE_MASK)  ? 1U : 0U;
+	if (percent_icon) *percent_icon = (s_ledbar.indicator_mask & LEDBAR_ICON_PERCENT_MASK) ? 1U : 0U;
 }
 #endif
