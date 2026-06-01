@@ -920,39 +920,6 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 }
 
-void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s)
-{
-#if 0
-	UINT16 reg_count = Sci_GetWrRegNum(s);
-	UINT8 enable;
-	UINT16 vcell_max;
-	UINT16 vcell_min;
-	UINT16 ichg;
-	UINT16 idsg;
-	UINT16 ticks;
-
-	if ((reg_count != 6U) || (!Sci_WrRegsByteCountValid(s, reg_count)))
-	{
-		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-		return;
-	}
-
-	enable = (Sci_GetWrValue(s, 0) != 0U) ? 1U : 0U;
-	vcell_max = Sci_GetWrValue(s, 1);
-	vcell_min = Sci_GetWrValue(s, 2);
-	ichg = Sci_GetWrValue(s, 3);
-	idsg = Sci_GetWrValue(s, 4);
-	ticks = Sci_GetWrValue(s, 5);
-	if (!SOC_TestMode_RunSample(enable, vcell_max, vcell_min, ichg, idsg, ticks))
-	{
-#if PROJECT_CFG_SOC_TEST_MODE_ENABLE
-		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-#else
-		Sci_SetWrError(s, RS485_ERROR_NO_PERMISSION);
-#endif
-	}
-#endif
-}
 void Sci_ACK_0x03(struct RS485MSG *s)
 {
 	UINT8 i = 0U;
@@ -1717,51 +1684,6 @@ void InitSCI3_CommonUpper(void)
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
-#if 0
-	UINT16 t_u16K, t_u16B, t_u16Temp;
-	INT16 t_i16B;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-
-	if (u16WrRegNum == 2)
-	{
-		t_u16K = s->u16Buffer[8] + (s->u16Buffer[7] << 8);
-		t_u16B = s->u16Buffer[10] + (s->u16Buffer[9] << 8);
-
-		t_u16Temp = t_u16B & 0x8000;
-		if (t_u16Temp == 0)
-		{
-			t_i16B = t_u16B & 0x7FFF;
-		}
-		else
-		{
-			t_i16B = -(t_u16B & 0x7FFF);
-		}
-
-		if ((t_u16K < SYSKMIN) || (t_u16K > SYSKMAX))
-		{
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_DATA_INVALID;
-			return;
-		}
-
-		if ((t_i16B < SYSBMIN) || (t_i16B > SYSBMAX))
-		{
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_DATA_INVALID;
-			return;
-		}
-
-		t_u16Temp = (u16Channel - RS485_CMD_ADDR_VC1CALIB_K) >> 1;
-		g_u16CalibCoefK[t_u16Temp] = t_u16K;
-		g_i16CalibCoefB[t_u16Temp] = t_i16B;
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
-#endif
 }
 
 // 节省了很多代码量吧？
@@ -1833,9 +1755,6 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 #endif
 }
 
-void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s)
-{
-}
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
@@ -1974,56 +1893,6 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
-#if 0
-	UINT16 u16SciRegData;
-	UINT8 i;
-	UINT8 first_index;
-	UINT8 store_index;
-	UINT8 count;
-
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData == 0x55AA)
-	{
-		first_index = VOLT_C1;
-		store_index = VOLT_C1;
-		count = 32U;
-	}
-	else if ((u16SciRegData >= 0x55AB) && (u16SciRegData <= 0x55AD))
-	{
-		first_index = (UINT8)(VOLT_AFE1 + (u16SciRegData - 0x55AB));
-		store_index = first_index;
-		count = 1U;
-	}
-	else if (u16SciRegData == 0x55AE)
-	{
-		first_index = MDL_TEMP1;
-		store_index = VOLT_C1;
-		count = 10U;
-	}
-	else if (u16SciRegData == 0x55AF)
-	{
-		first_index = MDL_IDSG;
-		store_index = MDL_IDSG;
-		count = 1U;
-	}
-	else if (u16SciRegData == 0x55B0)
-	{
-		first_index = MDL_ICHG;
-		store_index = MDL_ICHG;
-		count = 1U;
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-		return;
-	}
-
-	for (i = 0; i < count; ++i)
-	{
-		Sci_ResetCalibCoefIndex((UINT8)(first_index + i), (UINT8)(store_index + i));
-	}
-#endif
 }
 
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
@@ -2225,11 +2094,6 @@ void App_CommonUpper(void)
 
 int fputc(int ch, FILE *f)
 {
-#if 0 /* 将需要printf的字符通过串口中断FIFO发送出去，printf函数会立即返回 */
-	comSendChar(COM1, ch);
-
-	return ch;
-#else /* 采用阻塞方式发送每个字符,等待数据发送完毕 */
 	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
 
 	/* 写一个字节到USART1 */
@@ -2243,5 +2107,5 @@ int fputc(int ch, FILE *f)
 	}
 
 	return ch;
-#endif
+}
 }

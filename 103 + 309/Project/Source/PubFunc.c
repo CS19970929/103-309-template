@@ -115,65 +115,6 @@ UINT16 GetEndValue(const UINT16 *ptbl, UINT16 tblsize, UINT16 dat)
 	}
 }
 
-/*=================================================================
- * FUNCTION: App_PubOPUPChk
- * PURPOSE : 过欠判断处理
- * INPUT:    *t_sPubOPChk：判断正负逻辑及当前判断值、比较值传入 *(t_sPubOPChk->i16ChkCnt)：计时累加器地址
- *           t_sPubOPChk->u16TimeCntB：大值时间判断值 t_sPubOPChk->u16TimeCntS：小值时间判断值
- * RETURN:   0：数值异常 1：处理完成
- *
- * CALLS:    void
- *
- * CALLED BY:
- *
- *=================================================================*/
-UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk)
-{
-	if ((t_sPubOPChk->u8FlagLogic > 1) || (t_sPubOPChk->u16OPValB < t_sPubOPChk->u16OPValS))
-	{
-		return (0); // 数值异常返回0
-	}
-
-	if (t_sPubOPChk->u8FlagBit == (1 - t_sPubOPChk->u8FlagLogic))
-	{
-		if (t_sPubOPChk->u16ChkVal >= t_sPubOPChk->u16OPValB) // 当前判断值超过大值
-		{
-			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntB) // 当前判断值超过大值t_sPubOPChk->u16TimeCntB时间置标志位为u8FlagLogic
-			{
-				(*(t_sPubOPChk->i16ChkCnt)) = 0;
-				t_sPubOPChk->u8FlagBit = t_sPubOPChk->u8FlagLogic;
-			}
-		}
-		else // 低于大值则计时器递减
-		{
-			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
-			{
-				(*(t_sPubOPChk->i16ChkCnt))--;
-			}
-		}
-	}
-	else
-	{
-		if (t_sPubOPChk->u16ChkVal <= t_sPubOPChk->u16OPValS) // 当前判断值低于小值
-		{
-			if ((++(*(t_sPubOPChk->i16ChkCnt))) >= t_sPubOPChk->u16TimeCntS)
-			{
-				(*(t_sPubOPChk->i16ChkCnt)) = 0;
-				t_sPubOPChk->u8FlagBit = 1 - t_sPubOPChk->u8FlagLogic; // 当前判断值低于小值t_sPubOPChk->u16TimeCntS时间置标志位为非u8FlagLogic
-			}
-		}
-		else // 大于小值则计时器递减
-		{
-			if ((*(t_sPubOPChk->i16ChkCnt)) > 0)
-			{
-				(*(t_sPubOPChk->i16ChkCnt))--;
-			}
-		}
-	}
-
-	return (1); // 处理完成返回1
-}
-
 UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
 {
 	UINT16 CRCC = 0XFFFF;
@@ -202,49 +143,6 @@ UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
 	return CRCC;
 }
 
-unsigned char CRC8(unsigned char *ptr, unsigned char len, unsigned char key)
-{
-	unsigned char i;
-	unsigned char crc = 0;
-	while (len-- != 0)
-	{
-		for (i = 0x80; i != 0; i /= 2)
-		{
-			if ((crc & 0x80) != 0)
-			{
-				crc *= 2;
-				crc ^= key;
-			}
-			else
-				crc *= 2;
-
-			if ((*ptr & i) != 0)
-				crc ^= key;
-		}
-		ptr++;
-	}
-	return (crc);
-}
-
-// 求绝对值
-UINT32 ModulusSub(UINT32 Data1, UINT32 Data2)
-{
-	return (UINT32)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
-}
-
-// 以10us为时基，软件延时
-// 1ms以内误差 10%以内（而且是偏小。10us大概9.4us）
-void Delay_Base10us(int n)
-{
-	unsigned char a, b;
-	while (n--)
-	{
-		for (b = 3; b > 0; b--)
-			for (a = 22; a > 0; a--)
-				;
-	}
-}
-
 // 软件延时函数
 void Delay1ms(UINT8 delaycnt)
 {
@@ -264,33 +162,6 @@ void Delay1ms(UINT8 delaycnt)
 	}
 }
 
-/*******************************************************************************
-Function: MemoryCopy()
-Description:
-Input:	source--源Memory指针
-		target---目的Memory指针
-		length---需要拷贝的数据长度(Byres)
-Output:
-Others:
-*******************************************************************************/
-void MemoryCopy(UINT8 *source, UINT8 *target, UINT8 length)
-{
-	UINT8 i;
-	for (i = 0; i < length; i++)
-	{
-		*target = *source;
-		target++;
-		source++;
-	}
-}
-
-// 能不能写一个函数，顺便把原值改变呢？而不是单单传值
-UINT16 *U16_SwapEndian_Adress(UINT16 *target)
-{
-	return target;
-}
-
-// 大小端转换函数
 UINT16 U16_SwapEndian(UINT16 target)
 {
 	return (((uint16_t)target & 0xFF00) >> 8) | (((uint16_t)target & 0x00FF) << 8);
@@ -355,13 +226,10 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 
 void jtag_disableAndConfIO(void)
 {
-#if 1
 	/* 禁用 JTAG，PB3、PB4、PA15重定义为普通IO */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 使能PA和PB端口时钟
 
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // 配置复用时钟
 	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // 启用SW，禁用JTAG，PA15、PB3、PB4可用
 
-
-#endif
 }
