@@ -146,7 +146,6 @@ static struct SCI_PORT_RUNTIME g_stSciPort3 = {
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s);
-void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s);
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s);
 void Sci_WrRegs_0x10_Balance(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s);
@@ -156,7 +155,6 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
-void Sci_WrRegs_0x10_SocTestMode(struct RS485MSG *s);
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
@@ -232,11 +230,7 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	u16ActualAddr = t_u16Temp;
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
-	if (t_u16Temp >= RS485_ADDR_RO_SOC_TEST)
-	{
-		t_u16Temp -= (RS485_ADDR_RO_SOC_TEST - RS485_RO_SOC_TEST_OFFSET);
-	}
-	else if (t_u16Temp >= RS485_ADDR_RO_START2)
+	if (t_u16Temp >= RS485_ADDR_RO_START2)
 	{ // D200 offset maps to combined RO buffer
 		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
 	}
@@ -492,7 +486,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 
 	if (actual_addr >= RS485_ADDR_RO_START0)
 	{
-		*word_count = RS485_RO_TOTAL_WORDS;
+		*word_count = RS485_RO_BASE_WORDS;
 		return 1;
 	}
 	if (actual_addr >= RS485_ADDR_RO_LCD)
@@ -661,12 +655,6 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	UINT16 u16SciRegStartAddr;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 
-	if (u16SciRegStartAddr == RS485_CMD_ADDR_SOC_TEST_SAMPLE)
-	{
-		Sci_WrRegs_0x10_SocTestMode(s);
-		return;
-	}
-
 	if (Sci_WrRegs_0x10_AFE_Parameters(u16SciRegStartAddr, s))
 	{
 		return;
@@ -696,10 +684,6 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	{
 	case RS485_CMD_ADDR_SOC_VOLTAGE1:
 		Sci_WrRegs_0x10_SocTable(s);
-		break;
-
-	case RS485_CMD_ADDR_COPPERLOSS1:
-		Sci_WrRegs_0x10_CopperLoss(s);
 		break;
 
 	case RS485_CMD_ADDR_RTC_TIME_YEAR:
@@ -839,16 +823,6 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
-	{
-		UINT16 status_words[RS485_RO_SOC_TEST_WORDS];
-		SOC_TestMode_ReadStatus(status_words, RS485_RO_SOC_TEST_WORDS);
-		for (j = 0; j < RS485_RO_SOC_TEST_WORDS; ++j)
-		{
-			u16SciTemp = status_words[j];
-			Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-		}
-	}
 }
 
 /*=================================================================
@@ -923,18 +897,6 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < SOC_Size_TableCanSet; j++)
 	{ // 由于GetEndValue()函数的问题，只能混在一起
 		u16SciTemp = Sci_GetSocTableWord(j);
-		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-	}
-
-	for (j = 0; j < CompensateNUM; j++)
-	{
-		u16SciTemp = CopperLoss[j];
-		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-	}
-
-	for (j = 0; j < CompensateNUM; j++)
-	{
-		u16SciTemp = CopperLoss_Num[j];
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
