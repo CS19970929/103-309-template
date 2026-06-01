@@ -21,6 +21,7 @@
 | 查看某模块的设计方案 | [设计文档](#6-设计文档-design) |
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
+| 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
 | 了解量产分支变更 | [量产变更报告](changelog/production_release_changelog.md) |
 | 了解量产需清理什么 | [量产清理分析](reference/production_cleanup_analysis.md) |
@@ -250,6 +251,7 @@ docs/
 | [TEST_PENDING.md](guides/TEST_PENDING.md) | 待测试项清单 |
 | [项目协作与发布检查清单.md](guides/项目协作与发布检查清单.md) | 协作与发布检查 |
 | [项目自动化检查与发布流程.md](guides/项目自动化检查与发布流程.md) | 自动化检查与发布 |
+| [SYSTEM_DEBUG_GUIDE.md](guides/SYSTEM_DEBUG_GUIDE.md) | SystemDebug Keil Watch 调试监控 |
 
 ---
 
