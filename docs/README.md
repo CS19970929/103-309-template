@@ -1,77 +1,37 @@
-# 103-309 BMS 文档入口
+# BMS 项目文档
 
-文档状态：CURRENT
-源码验证：PARTIAL
-主要参考源码：`103 + 309/Project/Source` 当前主工程源码
-最后更新时间：2026-05-27
-未确认事项：电流真实路径、均衡需求、老化保留策略、Host 写权限、实际 Flash 容量、低功耗 CAN 广播策略仍需用户确认。
+> 项目: 103-309 BMS (STM32F103 + SH367309)
+> 最后更新: 2026-06-01
 
-## 1. 使用原则
+---
+
+## 入口
+
+📖 **[INDEX.md](INDEX.md)** — 文档总索引，链接到所有分文档。
+
+---
+
+## 目录结构
+
+```
+docs/
+├── INDEX.md         ← 主入口，链接所有文档
+├── README.md        ← 你在这里
+├── reference/       ← 核心参考（长期维护）
+├── design/          ← 模块设计文档
+├── protocol/        ← 协议文档
+├── changelog/       ← 变更记录
+├── devlog/          ← 历史开发日志
+├── guides/          ← 使用指南
+├── review/          ← 审查文档
+├── test/            ← 测试
+└── archive/         ← 归档
+```
+
+## 使用原则
 
 1. 源码是第一可信来源。
-2. 本目录下新增的权威文档只描述“当前源码已验证行为”和“待确认事项”。
-3. 根目录大量旧文档和阶段记录只能作为历史参考，不能直接当成当前需求。
-4. 文档与源码冲突时，以源码为准，并把冲突记录到 `docs/review/document_source_consistency.md`。
-
-## 2. 当前权威文档
-
-| 文档 | 用途 |
-|---|---|
-| `docs/project_overview.md` | 项目背景、硬件平台、主要功能、当前状态 |
-| `docs/architecture.md` | 软件分层、主循环、任务调度、数据流、控制流 |
-| `docs/module_map.md` | 模块和源码文件对应关系 |
-| `docs/design/storage_design.md` | Flash/EEPROM 兼容层/参数存储设计 |
-| `docs/design/protocol_design.md` | Modbus/CAN/UART 通信设计和兼容风险 |
-| `docs/design/soc_design.md` | SOC 输入、输出、算法流程、持久化和风险 |
-| `docs/design/adc_afe_design.md` | ADC/AFE 数据流、采样、校准和当前问题 |
-| `docs/design/low_power_design.md` | RTC/STOP/IWDG/唤醒/低功耗阻塞 |
-| `docs/design/led_display_design.md` | LedBar/Charlieplexing 显示、按键、sleep SOC 和风险 |
-| `docs/design/bootloader_iap_design.md` | Bootloader/IAP 地址、进入 IAP 触发路径和烧录安全 |
-| `docs/protocol/modbus_register_map.md` | Modbus 地址窗口和高风险寄存器入口 |
-| `docs/protocol/can_protocol.md` | CAN 周期广播和 App 命令当前实现 |
-| `docs/protocol/uart_protocol.md` | UART/RS485 串口协议入口和低功耗关系 |
-| `docs/test/test_plan.md` | 编译、协议、存储、SOC、低功耗和硬件实测计划 |
-| `docs/changelog/change_log.md` | 文档整理和后续变更记录 |
-
-## 3. Review 与需求确认文档
-
-| 文档 | 用途 |
-|---|---|
-| `docs/review/module_map.md` | 本轮源码扫描细节 |
-| `docs/review/requirement_confirmation.md` | 从源码反推的需求清单 |
-| `docs/review/requirement_questions.md` | 需要用户确认的问题表 |
-| `docs/review/full_project_review.md` | 全项目 review 结论 |
-| `docs/review/refactor_plan.md` | 后续分阶段重构计划 |
-| `docs/review/document_inventory.md` | 文档盘点 |
-| `docs/review/document_source_consistency.md` | 文档与源码一致性检查 |
-| `docs/review/document_duplicate_analysis.md` | 重复文档分析 |
-| `docs/review/document_structure_plan.md` | 新文档结构方案 |
-| `docs/review/document_merge_plan.md` | 文档合并计划 |
-
-## 4. 历史文档边界
-
-旧文档不作为当前结论。本轮按用户最新要求，已经删除确认被合并、过时、重复、临时或旧方案性质的文档；删除清单和保留原因见 `docs/review/document_cleanup_report.md`。
-
-仍有一批旧文档被 `tools/project_check.py` 固定引用，暂时保留原路径，避免破坏现有验证脚本。后续如要彻底收口，需要先把检查脚本依赖迁移到新的权威文档。
-
-当前已识别的高重复主题：
-
-- RTC/低功耗阶段设计。
-- SOC 策略、测试、上位机需求。
-- CAN/Modbus/comm tool/IAP 文档。
-- EEPROM/Flash/后 64K 存储文档。
-- LedBar/数码管显示文档。
-
-清理原则：
-
-1. 已合并、过时、重复、临时和旧方案文档删除，不长期归档。
-2. 当前结论以 `docs/design/*`, `docs/protocol/*`, `docs/review/*` 为准。
-3. 若需要找回已删除旧文档，从 Git 历史恢复。
-4. 不确定业务价值的文档列为 `NEED_CONFIRM`，暂不删除。
-
-## 5. 维护规则
-
-1. 修改源码前，先确认需求表中的相关项。
-2. 修改协议、地址、Flash 布局、IAP、低功耗、SOC、AFE/MOS 时，必须同步更新对应设计文档和测试计划。
-3. 新文档开头必须包含：文档状态、源码验证、主要参考源码、最后更新时间、未确认事项。
-4. 临时记录可以保留，但不能放在权威文档入口中作为当前结论。
+2. 文档与源码冲突时，以源码为准。
+3. 修改关键模块（协议、Flash、IAP、低功耗、SOC、AFE）时，同步更新 `reference/` 和 `design/` 下对应文档。
+4. `devlog/` 下为历史记录，完成后不再更新。
+5. 新文档开头标注：状态、源码验证、参考源码、更新时间、未确认事项。
