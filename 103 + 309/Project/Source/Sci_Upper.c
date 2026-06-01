@@ -781,7 +781,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 20U);
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 4U);
 	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
 
 	for (j = 0; j < 12; j++)
