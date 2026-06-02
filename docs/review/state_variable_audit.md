@@ -92,6 +92,7 @@ main()
 | SV-DATA-001 | `charger_detect_and_keyLogi_200ms()` 内 `state` | `DataDeal.c:51-95` | 充电器插拔状态机，拔 5V 后请求 deep sleep | UNKNOWN | 产品交互未确认，不能删；先确认拔 5V 行为 |
 | SV-DATA-002 | `u8IICFaultcnt*`, `u8WakeCnt*`, `su16_Sleep_DelayT*` | `DataDeal.c:3-6`, `DataDeal.c:825-917` | AFE 通信错误计数、恢复重试和持续故障后休眠 | MUST_KEEP | 保护/恢复相关历史状态，保留 |
 | SV-DATA-003 | `new_todo_logi()` 内 `mos_state/state_fuse/rong_fuse/err_afe/delay_cnt` | `DataDeal.c:930-1055` | MOS 过温、UL 认证、RF_EN 熔断类客户逻辑状态 | UNKNOWN | 需求不清，不能删；先把客户逻辑归属确认后再拆模块 |
+| SV-DATA-004 | `s_u8AfeCurrentStartupColdBoot`、`s_i32AfeCurrentZeroOffsetRawQ4`、`s_i32AfeCurrentLastRawSigned`、`s_u8AfeCurrentZeroStableCnt`、`s_u8AfeCurrentZeroReady`、`s_u8AfeCurrentZeroState` | `DataDeal.c` | AFE 电流启动零点、自学习零点、稳定计数和状态机 | 已处理 | 已在 SV-STRUCT-03 中收口为 `AFE_CURRENT_RUNTIME s_afe_current`；不改变电流换算公式、CADC 读取、200ms sample seq 和 SOC 积分触发 |
 | SV-SOC-001 | `s_u32LastAfeCurrentSampleSeq` | `SOC.c:116-142` | 防止 SOC 在无新 AFE 电流样本时重复积分 | MUST_KEEP | 关键算法状态，保留 |
 | SV-RTC-001 | `TimeDisplay` | `RTC.c:3`, `RTC.c:494-501`, `RTC.c:537-541` | RTC 秒中断置位、`App_RTC()` 消费后清零 | MUST_KEEP | ISR 到主循环的秒更新 pending 标志，保留；可后续改名为 `s_rtc_second_pending` |
 
@@ -107,6 +108,7 @@ main()
 | SV-CLEAN-04 | `g_stLowPowerRtcStatus` 中纯 debug 镜像字段 | 把 `rtcWake/delay/elapsed` 转为 debug 快照或只读状态，减少控制状态结构 | 确认上位机/调试工具是否直接依赖这些字段 | `SystemDebug`、Modbus `0xD000/0xD300`、ST-Link monitor |
 | SV-STRUCT-01 | `FactoryAging.c` 模块私有运行态变量 | 把同生命周期的老化状态集中成 `s_factory_aging`，便于 Keil Watch，不改变业务行为 | 已按用户“开始”执行 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；老化 CAN/上位机仍需实测 |
 | SV-STRUCT-02 | `LogRecord.c` 模块私有运行态变量 | 把日志记录点、记录数组、请求 flag、重复保存抑制和事件边沿状态集中成 `s_log_record` | 已按用户“1、2、3 都做”执行 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；日志读写和 sleep/startup 事件仍需实测 |
+| SV-STRUCT-03 | `DataDeal.c` AFE current zero 运行态变量 | 把启动零点和自学习零点状态集中成 `s_afe_current`，便于 Keil Watch，不改变电流算法 | 已按用户“1、2、3 都做”执行 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；真实充/放电 CADC 和 SOC sample seq 仍需实测 |
 
 ## 5. 明确不建议第一批处理
 
@@ -142,6 +144,7 @@ main()
 | REQ-SV-006 | `DataDeal.c` 中客户逻辑状态必须先确认需求归属，不能直接按“变量多”删除 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类逻辑混在 200ms 链路 | 直接删除可能改变安全输出和客户认证行为 | UNKNOWN | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 内这些状态是当前产品需求、认证需求，还是历史残留？ | 先列入需求确认，不进第一批删除 | 待确认 |
 | REQ-SV-007 | 同一模块、同一生命周期、同一调试视角的私有运行态变量应优先收口到模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 老化模块原有 10 个文件级静态变量分别保存 state、elapsed、last tick、保存状态、retry 和 MOS mode | 若结构体字段初值或替换错误，会影响老化进度和完成保存；但本批次不改持久化格式 | 已处理 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已按低风险结构体收口批次执行 | 已执行 |
 | REQ-SV-008 | 日志模块私有运行态应集中管理，同时保留外部补偿时间符号 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 日志记录点、记录数组、请求 flag、重复记录抑制和事件 latch 已收口到 `LogRecordRuntime s_log_record`；`su32_Interval_S_Tcnt` 仍由低功耗端口引用 | 若误搬外部符号会影响 RTC 睡眠秒数补偿；若误清 latch 会影响事件去重 | 已处理 | 是否允许先收口私有状态，保留跨模块时间累计符号？ | 已执行；不改日志格式、Flash 保存格式和低功耗补偿接口 | 已执行 |
+| REQ-SV-009 | AFE 电流零点运行态应集中管理，但不改变电流算法和 SOC 样本序号 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 启动零点 cold/warm 参数选择、零点 offset、last raw、stable count、ready 和 zero state 已收口到 `AFE_CURRENT_RUNTIME s_afe_current`；`g_u32AfeCurrentSampleSeq` 保留 | 替换错误会影响电流方向、零点、自学习和 SOC 积分；因此本批次只做字段替换 | 已处理 | 是否允许对 AFE current zero 私有状态做结构体收口，保留算法和跨模块变量？ | 已执行；不改 CADC、换算公式、deadband、sample seq | 已执行 |
 
 ## 7. 下一步执行边界
 

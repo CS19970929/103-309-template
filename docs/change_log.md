@@ -84,3 +84,24 @@
 - `clang -fsyntax-only` 检查 `LogRecord.c`：通过。
 - `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
 - 未执行 Keil `FD_Release` 编译、真板 startup/sleep/fault 日志、事件读取或 reset event record 测试。
+
+## 2026-06-02 SV-STRUCT-03 AFE current zero 运行态结构体收口
+
+本批次只处理 `DataDeal.c` 中 AFE current zero 私有状态，不修改 CADC 读取、mA/A10 换算公式、自动零点学习算法、输出 deadband、200ms 采样节拍、`g_u32AfeCurrentSampleSeq`、SOC 积分触发和 Modbus/CAN 电流字段。
+
+源码修改：
+
+- `DataDeal.c`：新增 `AFE_CURRENT_RUNTIME`。
+- `DataDeal.c`：将启动冷/热零点参数选择、zero offset Q4、last raw、stable count、ready 和 zero state 收口为 `s_afe_current`。
+
+文档修改：
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md` 和 `docs/test_plan.md`，补充 `SV-STRUCT-03 / REQ-SV-009`。
+
+验证：
+
+- `rg -n "s_i32AfeCurrent|s_u8AfeCurrent" "103 + 309/Project/Source/DataDeal.c"`：源码无旧私有符号残留。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `DataDeal.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板冷/热启动零点、真实充放电方向、`0xD000` 电流或 SOC sample seq 实测。

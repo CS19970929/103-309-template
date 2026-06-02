@@ -121,6 +121,7 @@
 | Q-SV-006 | DataDeal/客户逻辑 | `DataDeal.c` 中充电器、MOS 过温、UL 认证、RF_EN 熔断类状态是否仍是当前产品需求 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 多个静态状态混在 200ms 业务链路里 | UNKNOWN | 直接删除可能改变安全输出、认证动作或客户体验 | 这些逻辑是当前产品需求、认证需求，还是历史残留？ | F. 先补产品/认证背景，不进第一批删除 | |
 | Q-SV-007 | 老化/状态收口 | `FactoryAging.c` 中同生命周期私有变量是否可集中为模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 已把老化 state、elapsed、last tick、保存节流、finish retry、duration hours 和 MOS mode 收口到 `FactoryAgingRuntime s_factory_aging` | 已处理 | 替换错误会影响老化剩余时间、保存进度、完成重试或 MOS 模式缓存 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已执行；不改状态机和持久化格式 | 已执行 |
 | Q-SV-008 | 日志/状态收口 | `LogRecord.c` 中私有日志运行态是否可集中为模块 runtime 结构体 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 已把日志 point、records、startup/sleep flag、uptime、重复保存抑制和事件 latch 收口到 `LogRecordRuntime s_log_record`；保留外部 `su32_Interval_S_Tcnt` | 已处理 | 误搬外部时间符号会影响 RTC 睡眠补偿；误改 latch 会改变事件去重 | 是否允许先收口私有状态，保留跨模块时间累计符号？ | 已执行；不改日志格式、Flash 保存格式和低功耗补偿接口 | 已执行 |
+| Q-SV-009 | AFE/电流 | `DataDeal.c` 中 AFE current zero 私有状态是否可集中为 runtime 结构体 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 已把启动零点 cold/warm 参数选择、zero offset、last raw、stable count、ready 和 zero state 收口到 `AFE_CURRENT_RUNTIME s_afe_current`；保留 `g_u32AfeCurrentSampleSeq` | 已处理 | 替换错误会影响零点、自学习、电流方向和 SOC 积分 | 是否允许对 AFE current zero 私有状态做结构体收口，保留 CADC/换算公式/deadband/sample seq？ | 已执行；不改算法和跨模块变量 | 已执行 |
 
 ## 6. 高风险需求
 

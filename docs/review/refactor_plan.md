@@ -140,6 +140,7 @@
 | SV-01 | 已完成低风险试点 | 把产品信息初始化从 `ProductionID.c` 的 `su8_StartUpFlag` 收口到启动流程，并保留 PROID heartbeat hook | `AppInit.c`, `ProductionID.c/.h`, 文档 | 用户确认“先只做低风险” | `0xC002` 默认信息读取、编译、`rg su8_StartUpFlag` |
 | SV-STRUCT-01 | 已完成结构体收口 | 把 `FactoryAging.c` 中同生命周期的老化私有运行态变量收口到 `FactoryAgingRuntime s_factory_aging` | `FactoryAging.c`, 文档 | 用户确认“开始”执行低风险结构体收口 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；老化 CAN/上位机仍需实测 |
 | SV-STRUCT-02 | 已完成结构体收口 | 把 `LogRecord.c` 中日志记录点、记录数组、请求 flag、重复保存抑制和事件 latch 收口到 `LogRecordRuntime s_log_record`；保留外部 `su32_Interval_S_Tcnt` | `LogRecord.c`, 文档 | 用户确认“1、2、3 都做” | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；日志读写和 sleep/startup 事件仍需实测 |
+| SV-STRUCT-03 | 已完成结构体收口 | 把 `DataDeal.c` 中 AFE current zero 私有运行态收口到 `AFE_CURRENT_RUNTIME s_afe_current`；保留 `g_u32AfeCurrentSampleSeq` | `DataDeal.c`, 文档 | 用户确认“1、2、3 都做” | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；真实充放电、零点和 SOC sample seq 仍需实测 |
 | SV-02 | 初始化收口 | 显式调用 `LedBar_Init()`，减少分散 `LedBar_EnsureInit()` | `AppInit.c`, `LedBar.c/.h`, 文档 | 用户确认 `Q-SV-001`；确认 TIM4 ISR 使能顺序 | LED 启动显示、按键显示、TIM4 扫描、STOP 前 GPIO、低功耗释放 |
 | SV-03 | 低功耗提交收口 | 将 `readyToSleep` 改成本地提交决策或明确 commit pending，收口 LED/日志 sleep 前动作 | `rtc_sleep.c/.h`, `LedBar.c`, `LogRecord.c`, `Runtime.c`, 文档 | 用户确认 `Q-SV-002`；画出 sleep commit 顺序 | HICCUP/NORMAL/DEEP、BMS_SLEEP 日志、sleep SOC、`SystemDebug` 低功耗快照 |
 | SV-04 | debug mirror 收口 | 从控制结构里移出纯展示字段，或标记为 debug mirror | `rtc_sleep.c/.h`, `SystemDebug.c/.h`, 文档 | 用户确认 `Q-SV-003`；确认工具/上位机依赖 | `SystemDebug`、ST-Link 监控、Modbus debug 窗口 |

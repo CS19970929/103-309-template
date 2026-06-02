@@ -32,19 +32,24 @@ typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 
 static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentColdStartupZeroParam = {4U, 32U, 6U, 800U, 25U};
 static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentWarmStartupZeroParam = {4U, 16U, 2U, 120U, 20U};
-static UINT8 s_u8AfeCurrentStartupColdBoot = 1U;
+
+typedef struct _AFE_CURRENT_RUNTIME
+{
+    UINT8 startupColdBoot;
+    INT32 zeroOffsetRawQ4;
+    INT32 lastRawSigned;
+    UINT8 zeroStableCnt;
+    UINT8 zeroReady;
+    UINT8 zeroState;
+} AFE_CURRENT_RUNTIME;
+
+static AFE_CURRENT_RUNTIME s_afe_current = {1U, 0, 0, 0U, 0U, (UINT8)AFE_CURRENT_ZERO_IDLE};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
 UINT32 g_u32CS_Res_AFE;
 UINT32 g_u32AfeCurrentSampleSeq;
-
-static INT32 s_i32AfeCurrentZeroOffsetRawQ4;
-static INT32 s_i32AfeCurrentLastRawSigned;
-static UINT8 s_u8AfeCurrentZeroStableCnt;
-static UINT8 s_u8AfeCurrentZeroReady;
-static UINT8 s_u8AfeCurrentZeroState;
 
 struct OTHER_ELEMENT OtherElement;
 
@@ -397,29 +402,29 @@ static void DataLoad_CurrentSetZeroOffset(INT32 offset_raw, UINT8 zero_state)
 {
     offset_raw = DataLoad_CurrentClampZeroOffset(offset_raw);
 
-    s_i32AfeCurrentZeroOffsetRawQ4 = offset_raw * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-    s_i32AfeCurrentLastRawSigned = offset_raw;
-    s_u8AfeCurrentZeroStableCnt = AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT;
-    s_u8AfeCurrentZeroReady = 1U;
-    s_u8AfeCurrentZeroState = zero_state;
+    s_afe_current.zeroOffsetRawQ4 = offset_raw * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+    s_afe_current.lastRawSigned = offset_raw;
+    s_afe_current.zeroStableCnt = AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT;
+    s_afe_current.zeroReady = 1U;
+    s_afe_current.zeroState = zero_state;
 }
 
 static void DataLoad_CurrentMarkZeroPending(UINT8 zero_state)
 {
-    s_i32AfeCurrentZeroOffsetRawQ4 = 0;
-    s_i32AfeCurrentLastRawSigned = 0;
-    s_u8AfeCurrentZeroStableCnt = 0U;
-    s_u8AfeCurrentZeroReady = 0U;
-    s_u8AfeCurrentZeroState = zero_state;
+    s_afe_current.zeroOffsetRawQ4 = 0;
+    s_afe_current.lastRawSigned = 0;
+    s_afe_current.zeroStableCnt = 0U;
+    s_afe_current.zeroReady = 0U;
+    s_afe_current.zeroState = zero_state;
 }
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot)
 {
-    s_u8AfeCurrentStartupColdBoot = (cold_boot != 0U) ? 1U : 0U;
+    s_afe_current.startupColdBoot = (cold_boot != 0U) ? 1U : 0U;
 }
 
 static const AFE_CURRENT_STARTUP_ZERO_PARAM *AfeCurrent_GetStartupZeroParam(void)
 {
-    if (s_u8AfeCurrentStartupColdBoot != 0U)
+    if (s_afe_current.startupColdBoot != 0U)
     {
         return &s_stAfeCurrentColdStartupZeroParam;
     }
@@ -428,21 +433,21 @@ static const AFE_CURRENT_STARTUP_ZERO_PARAM *AfeCurrent_GetStartupZeroParam(void
 }
 void AfeCurrent_PrepareStartupZero(void)
 {
-    s_i32AfeCurrentZeroOffsetRawQ4 = 0;
-    s_i32AfeCurrentLastRawSigned = 0;
-    s_u8AfeCurrentZeroStableCnt = 0U;
-    s_u8AfeCurrentZeroReady = 0U;
+    s_afe_current.zeroOffsetRawQ4 = 0;
+    s_afe_current.lastRawSigned = 0;
+    s_afe_current.zeroStableCnt = 0U;
+    s_afe_current.zeroReady = 0U;
 
-    s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
+    s_afe_current.zeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
     close_ctlc();
 }
 
 UINT8 AfeCurrent_IsStartupZeroDone(void)
 {
-    if ((s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_READY) ||
-        (s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_TIMEOUT) ||
-        (s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_IIC_FAIL) ||
-        (s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_RANGE_FAIL))
+    if ((s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_READY) ||
+        (s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_TIMEOUT) ||
+        (s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_IIC_FAIL) ||
+        (s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_RANGE_FAIL))
     {
         return 1U;
     }
@@ -482,7 +487,7 @@ void AfeCurrent_StartupZeroCal(void)
     limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
 
     close_ctlc();
-    s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
+    s_afe_current.zeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
 
     if (param->u16SettleMs > 0U)
     {
@@ -601,13 +606,13 @@ static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
     UINT32 delta_abs;
     UINT8 can_learn;
 
-    current_offset_raw = s_i32AfeCurrentZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+    current_offset_raw = s_afe_current.zeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
     limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
     deadband_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_OUTPUT_DEADBAND_MA);
-    delta_abs = DataLoad_CurrentAbsI32(raw_signed - s_i32AfeCurrentLastRawSigned);
+    delta_abs = DataLoad_CurrentAbsI32(raw_signed - s_afe_current.lastRawSigned);
     can_learn = 0U;
 
-    if (s_u8AfeCurrentZeroReady == 0U)
+    if (s_afe_current.zeroReady == 0U)
     {
         learn_abs = DataLoad_CurrentAbsI32(raw_signed);
         if ((limit_raw > 0U) && (learn_abs <= (UINT32)limit_raw))
@@ -626,40 +631,40 @@ static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
 
     if ((can_learn != 0U) && (delta_abs <= (UINT32)AFE_CURRENT_AUTO_ZERO_STABLE_RAW))
     {
-        if (s_u8AfeCurrentZeroStableCnt < AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
+        if (s_afe_current.zeroStableCnt < AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
         {
-            ++s_u8AfeCurrentZeroStableCnt;
+            ++s_afe_current.zeroStableCnt;
         }
 
-        if (s_u8AfeCurrentZeroStableCnt >= AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
+        if (s_afe_current.zeroStableCnt >= AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
         {
             target_q4 = DataLoad_CurrentClampZeroOffset(raw_signed) * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-            if (s_u8AfeCurrentZeroReady == 0U)
+            if (s_afe_current.zeroReady == 0U)
             {
-                s_i32AfeCurrentZeroOffsetRawQ4 = target_q4;
-                s_u8AfeCurrentZeroReady = 1U;
-                s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_READY;
+                s_afe_current.zeroOffsetRawQ4 = target_q4;
+                s_afe_current.zeroReady = 1U;
+                s_afe_current.zeroState = (UINT8)AFE_CURRENT_ZERO_READY;
             }
             else
             {
-                s_i32AfeCurrentZeroOffsetRawQ4 += (target_q4 - s_i32AfeCurrentZeroOffsetRawQ4) / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+                s_afe_current.zeroOffsetRawQ4 += (target_q4 - s_afe_current.zeroOffsetRawQ4) / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
             }
         }
     }
     else
     {
-        s_u8AfeCurrentZeroStableCnt = 0U;
+        s_afe_current.zeroStableCnt = 0U;
     }
 
-    s_i32AfeCurrentLastRawSigned = raw_signed;
-    current_offset_raw = s_i32AfeCurrentZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
+    s_afe_current.lastRawSigned = raw_signed;
+    current_offset_raw = s_afe_current.zeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
     corrected_raw = raw_signed - current_offset_raw;
 
-    if ((s_u8AfeCurrentZeroReady != 0U) &&
-        ((s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_IDLE) ||
-         (s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_STARTUP)))
+    if ((s_afe_current.zeroReady != 0U) &&
+        ((s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_IDLE) ||
+         (s_afe_current.zeroState == (UINT8)AFE_CURRENT_ZERO_STARTUP)))
     {
-        s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_READY;
+        s_afe_current.zeroState = (UINT8)AFE_CURRENT_ZERO_READY;
     }
 
     return corrected_raw;
