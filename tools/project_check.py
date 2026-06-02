@@ -976,18 +976,21 @@ def check_low_power_cleanup(reporter):
 
     if (
         "void LowPower_Request(enum _SLEEP_MODE mode)" in rtc_sleep_c
-        and "uint8_t LowPower_IsToSleepPending(void)" in rtc_sleep_c
-        and "LowPower_ClearToSleepFlag();" in logrecord_c
-        and "LowPower_IsToSleepPending() != 0u" in ledbar_c
+        and "uint8_t sleep_mode;" in rtc_sleep_c
+        and "sleep_mode = g_stLowPowerRtcStatus.mode;" in rtc_sleep_c
+        and "low_power_log_and_commit_sleep(sleep_mode);" in rtc_sleep_c
+        and "LowPower_IsToSleepPending" not in rtc_sleep_c
+        and "LowPower_IsToSleepPending" not in rtc_sleep_h
+        and "LowPower_ClearToSleepFlag" not in logrecord_c
+        and "LowPower_IsToSleepPending" not in ledbar_c
         and "void SleepDeal_Continue(UINT8 sleep_mode)" in sleepdeal_c
         and "RtcSleep_PortCommitResetSleep(sleep_mode);" in rtc_sleep_c
         and "SleepDeal_Continue(sleep_mode);" in rtc_sleep_port_c
         and "SleepDeal_Continue((UINT8)DEEP_MODE);" in ledbar_c
-        and "uint8_t LowPower_IsToSleepPending(void);" in rtc_sleep_h
     ):
-        reporter.ok("low power mode ownership is centralized in LowPower runtime APIs")
+        reporter.ok("low power sleep commit uses local sleep_mode without readyToSleep cross-module state")
     else:
-        reporter.fail("low power mode ownership should use LowPower_Request/IsToSleepPending and explicit SleepDeal_Continue(mode)")
+        reporter.fail("low power sleep commit should remove LowPower_IsToSleepPending/ClearToSleepFlag and use local sleep_mode")
 
     forbidden_core_tokens = [
         "AFE_TYPE",
@@ -1514,7 +1517,7 @@ def check_runtime_docs(reporter):
 
     if (
         "LowPower_Request()" in flow_doc
-        and "LowPower_IsToSleepPending()" in flow_doc
+        and "sleep_mode" in flow_doc
         and "SleepDeal_Continue(mode)" in flow_doc
         and "D200" in comm_doc
         and "fault reason" in comm_doc

@@ -242,9 +242,9 @@ function Decode-Sample {
     $factoryWord = Convert-HexWord (Get-WordAt $factoryWords 0)
 
     $rtcMode = if ($null -ne $rtc0) { $rtc0 -band 0xff } else { $null }
-    $rtcReady = if ($null -ne $rtc0) { ($rtc0 -shr 8) -band 0xff } else { $null }
-    $rtcBlock = if ($null -ne $rtc0) { ($rtc0 -shr 16) -band 0xff } else { $null }
-    $rtcWake = if ($null -ne $rtc0) { ($rtc0 -shr 24) -band 0xff } else { $null }
+    $rtcReady = if ($null -ne $rtcMode) { if ($rtcMode -ne 3) { 1 } else { 0 } } else { $null }
+    $rtcBlock = if ($null -ne $rtc0) { ($rtc0 -shr 8) -band 0xff } else { $null }
+    $rtcWake = if ($null -ne $rtc0) { ($rtc0 -shr 16) -band 0xff } else { $null }
     $rtcDelay = if ($null -ne $rtc1) { $rtc1 -band 0xffff } else { $null }
     $rtcTarget = if ($null -ne $rtc1) { ($rtc1 -shr 16) -band 0xffff } else { $null }
 

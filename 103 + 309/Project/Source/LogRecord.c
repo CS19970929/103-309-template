@@ -142,7 +142,6 @@ void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
 			s_log_record.flags.bits.Log_Sleep = 0U;
-			LowPower_ClearToSleepFlag();
 		}
 	}
 	else if (CBC_ERR == event)

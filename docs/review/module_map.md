@@ -424,4 +424,4 @@ TIM4_IRQHandler()
 | 铜损表写入 | `Sci_WrRegs_0x10_CopperLoss()` 空函数 | 地址存在但写入无效 |
 | 故障 LED 显示 | `LedBar_IsFaultActive()` 存在，`APP_LedBar()` fault 分支为空 | 可能是未完成需求 |
 | 虚拟电流循环 | 当前 `App_AFEGet()` 主路径已调用 `DataLoad_Current()`；旧虚拟电流主路径描述已过期 | 量产必须保持真实电流主路径，测试注入只能在测试 profile/测试固件中使用 |
-| 状态变量复杂度 | `s_ledbar.initialized`、`g_stLowPowerRtcStatus.readyToSleep`、`ProductionID.c` 的 `su8_StartUpFlag` 等 | 详见 `docs/review/state_variable_audit.md`，需用户确认后分批净删减 |
+| 状态变量复杂度 | `s_ledbar.initialized` 主循环懒初始化、`g_stLowPowerRtcStatus.readyToSleep`、`ProductionID.c` 的 `su8_StartUpFlag` 等已分批收口；剩余状态见专项文档 | 详见 `docs/review/state_variable_audit.md`，后续继续按确认项分批净删减 |

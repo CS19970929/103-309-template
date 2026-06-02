@@ -1308,15 +1308,6 @@ void APP_LedBar(void)
     LedBar_ServiceSwitch();
     mcu_wk_active = LedBar_IsMcuWakeActive();
 
-#if LEDBAR_SLEEP_ENABLE
-    if ((LowPower_IsToSleepPending() != 0u) && (mcu_wk_active == 0u))
-    {
-        LedBar_SaveSleepSoc();
-        LedBar_SetSleep(1u);
-        return;
-    }
-#endif
-
     LedBar_ServiceStartupDisplayWindow();
 
     display_requested = LedBar_IsDisplayRequested();

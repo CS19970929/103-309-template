@@ -773,8 +773,8 @@ enum irqWakeup {
 
 - `struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus` - RTC 休眠状态
   - `mode` - 当前模式
-  - `readyToSleep` - 准备休眠标志
   - `blockReason` - 阻塞原因
+  - `rtcWake` - RTC 唤醒标志
   - `delaySeconds/elapsedSeconds` - 延迟/经过时间
 
 ### 8.9 函数
@@ -785,7 +785,7 @@ enum irqWakeup {
 | `LowPower_Request(mode)` | 请求切换休眠模式 |
 | `entersleep(mode)` | 同上 |
 | `rtc_sleep_run_hiccup_cycle()` | HICCUP 单次 STOP 循环 |
-| `LowPower_IsToSleepPending()` | 检查是否待休眠 |
+| `RtcSleep_PortCommitResetSleep(mode)` | NORMAL/DEEP reset sleep 提交点 |
 | RTC SOC rest | 由 `RtcSleep_PortApplySocRtcRest()` 直接触发 SOC 休眠补偿 |
 
 ---
@@ -1203,7 +1203,7 @@ UNINIT → RUNNING → DONE
 Runtime_RunOnce() -> rtc_sleep()
 ```
 
-`rtc_sleep.c/h` 同时承载运行态低功耗入口、框架层 block reason bitmask 和最近一次睡眠秒数。真实低功耗模式、ready、RTC wake、block reason 由 `g_stLowPowerRtcStatus` 观察。
+`rtc_sleep.c/h` 同时承载运行态低功耗入口、框架层 block reason bitmask 和最近一次睡眠秒数。真实低功耗模式、RTC wake、block reason 由 `g_stLowPowerRtcStatus` 观察；ready 只由 debug/ST-Link 按 `mode != NO_SLEEP` 派生，不再是控制字段。
 
 ### 17.3 框架层阻塞原因位掩码
 

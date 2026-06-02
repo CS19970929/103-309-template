@@ -36,7 +36,7 @@ static void Runtime_RunIoAndPowerTasks(void)
 	rtc_sleep();
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_LOW_POWER,
 		(uint8_t)(DBG_MODULE_STATE_READY |
-		((g_stLowPowerRtcStatus.readyToSleep != 0U) ? DBG_MODULE_STATE_BUSY : 0U)));
+		((g_stLowPowerRtcStatus.mode != (uint8_t)NO_SLEEP) ? DBG_MODULE_STATE_BUSY : 0U)));
 
 	App_Can();
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_CAN,

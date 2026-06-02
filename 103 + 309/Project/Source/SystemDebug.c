@@ -534,7 +534,7 @@ void SystemDebug_Snapshot(void)
 
 	/* ===== RTC / Low Power ===== */
 	g_dbg.lp.mode         = (enum DBG_LP_MODE)g_stLowPowerRtcStatus.mode;
-	g_dbg.lp.ready        = g_stLowPowerRtcStatus.readyToSleep;
+	g_dbg.lp.ready        = (uint8_t)(g_stLowPowerRtcStatus.mode != (uint8_t)NO_SLEEP);
 	g_dbg.lp.block_reason = (enum DBG_LP_BLOCK)g_stLowPowerRtcStatus.blockReason;
 	g_dbg.lp.block_mask   = LP_GetBlockReason();
 	g_dbg.lp.sleep_sec    = LP_GetLastSleepSeconds();

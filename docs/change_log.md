@@ -132,3 +132,29 @@
 - `clang -fsyntax-only` 检查 `AppInit.c` 和 `LedBar.c`：通过。
 - `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
 - 未执行 Keil `FD_Release` 编译、真板 LED 启动/按键/TIM4 扫描、STOP 电流或 RTC 唤醒恢复实测。
+
+## 2026-06-02 SV-CLEAN-03 readyToSleep 低功耗提交收口
+
+本批次处理 `g_stLowPowerRtcStatus.readyToSleep` 全局阶段变量，不修改 HICCUP STOP 执行器、reset sleep 提交点、BMS_SLEEP 日志格式、sleep SOC 保存、CAN/AFE/ADC/TIM 恢复顺序、协议寄存器和 IAP/App 地址。
+
+源码修改：
+
+- `rtc_sleep.h`：删除 `LOW_POWER_RTC_STATUS.readyToSleep` 字段，删除 `LowPower_IsToSleepPending()` 和 `LowPower_ClearToSleepFlag()` 声明。
+- `rtc_sleep.c`：删除 ready 置位/二次判断/清除流程；`rtc_sleep()` 改为读取本地 `sleep_mode = g_stLowPowerRtcStatus.mode` 后直接提交 HICCUP/NORMAL/DEEP。
+- `LedBar.c`：删除 `APP_LedBar()` 中对 `LowPower_IsToSleepPending()` 的分支；reset sleep 的 SOC 保存仍由 `SleepDeal_Continue()` -> `LowPowerSleep_SaveResetState()` 完成，HICCUP STOP 前 GPIO 仍由 `LedBar_PrepareForStop()` 完成。
+- `LogRecord.c`：删除 `BMS_SLEEP` 日志保存后清低功耗 ready 的跨模块副作用。
+- `Runtime.c` / `SystemDebug.c`：低功耗 busy/`g_dbg.lp.ready` 改为由 `mode != NO_SLEEP` 派生。
+- `tools/stlink_bms_monitor.ps1`：按新 `LOW_POWER_RTC_STATUS` 布局解析 `mode/blockReason/rtcWake`，`RtcReady` 改为由 `mode != NO_SLEEP` 派生。
+- `tools/project_check.py`：门禁改为检查旧 ready API 消失、`rtc_sleep()` 使用本地 `sleep_mode` 提交。
+
+文档修改：
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/review/low_power_requirement_alignment_2026-06-02.md`、`docs/review/full_project_review.md`、`docs/review/module_map.md`、`docs/reference/module_reference.md`、`docs/reference/global_variables.md` 和 `docs/test_plan.md`，将 `SV-CLEAN-03 / REQ-SV-002 / Q-SV-002` 标记为已执行。
+
+验证：
+
+- `rg -n "readyToSleep|LowPower_IsToSleepPending|LowPower_ClearToSleepFlag" "103 + 309/Project/Source" tools`：源码旧 ready 字段/API 无残留；`todo.md` 用户记录和 project_check 规则说明除外。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `rtc_sleep.c`、`LedBar.c`、`LogRecord.c`、`Runtime.c`、`SystemDebug.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和旧文档引用，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板 HICCUP/NORMAL/DEEP、STOP 电流、BMS_SLEEP 日志读取、sleep SOC 读取或 ST-Link 监控实测。

@@ -49,7 +49,6 @@ enum LOW_POWER_RTC_BLOCK_REASON {
 
 struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
-  uint8_t readyToSleep;
   uint8_t blockReason;
   uint8_t rtcWake;
   uint16_t delaySeconds;
@@ -61,8 +60,6 @@ extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 extern enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);
-void LowPower_ClearToSleepFlag(void);
-uint8_t LowPower_IsToSleepPending(void);
 uint32_t LP_GetBlockReason(void);
 uint32_t LP_GetLastSleepSeconds(void);
 void LP_RecordLastSleepSeconds(uint32_t seconds);

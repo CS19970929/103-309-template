@@ -287,7 +287,6 @@ static uint32_t s_u32LastSleepSeconds;  // 最近一次 RTC sleep 累计秒数
 | 字段 | 说明 |
 |------|------|
 | mode | 当前模式 (NORMAL/HICCUP/DEEP/NO_SLEEP) |
-| readyToSleep | 准备休眠 |
 | blockReason | 阻塞原因 |
 | rtcWake | RTC唤醒标志 |
 | delaySeconds | 延迟秒数 |

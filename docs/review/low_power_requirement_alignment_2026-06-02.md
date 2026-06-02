@@ -5,7 +5,7 @@
 日期：2026-06-02
 范围：先只读梳理低功耗需求、当前实现、风险和简化方向；后续按已确认需求执行第一批低风险源码净删减。
 
-更新说明：2026-06-02 后续按官方/行业调研和已确认需求执行低风险优化：Release 默认关闭 DBGMCU 低功耗调试保持；删除未使用 STOP wrapper、`app_lowpower.c/h` 模块、无消费者状态缓存、无调用 RTC SOC 访问 API 和无效 port 参数/返回值。`LP_GetBlockReason()` 现已收口到 `rtc_sleep.c/h`。调研见 `docs/review/low_power_official_industry_research_2026-06-02.md`。
+更新说明：2026-06-02 后续按官方/行业调研和已确认需求执行低风险优化：Release 默认关闭 DBGMCU 低功耗调试保持；删除未使用 STOP wrapper、`app_lowpower.c/h` 模块、无消费者状态缓存、无调用 RTC SOC 访问 API、无效 port 参数/返回值和 `readyToSleep` 全局阶段变量。`LP_GetBlockReason()` 现已收口到 `rtc_sleep.c/h`，低功耗提交由 `rtc_sleep()` 本地 `sleep_mode` 决策完成。调研见 `docs/review/low_power_official_industry_research_2026-06-02.md`。
 
 ## 参考源码
 
@@ -36,7 +36,7 @@
 2. `HICCUP_MODE` 在当前运行态内反复进入 `PWR_EnterSTOPMode()`，RTC alarm 周期唤醒后恢复外设；如果没有异常唤醒，则继续 STOP。
 3. `NORMAL_MODE` 和 `DEEP_MODE` 走 reset sleep：写 BKP sleep flag、保存状态、让 AFE sleep、`MCU_RESET()`，再由启动早期 `IsSleepStartUp()` 进入 STOP 等有效唤醒。
 
-复杂度主要来自两套 sleep 执行路径都在处理保存状态、CAN 电源、AFE、LED、唤醒合法性和日志；此前还有一层 `app_lowpower.c` bitmask、一层 `rtc_sleep.c` 8 位 block reason，以及若干当前无真实调用的 wrapper。本轮已删除 `app_lowpower.c/h`，详细 bitmask 和粗粒度 block reason 都收口在 `rtc_sleep.c/h`。
+复杂度主要来自两套 sleep 执行路径都在处理保存状态、CAN 电源、AFE、LED、唤醒合法性和日志；此前还有一层 `app_lowpower.c` bitmask、一层 `rtc_sleep.c` 8 位 block reason、一个 `readyToSleep` 全局阶段变量，以及若干当前无真实调用的 wrapper。本轮已删除 `app_lowpower.c/h` 和 `readyToSleep` 控制字段，详细 bitmask 和粗粒度 block reason 都收口在 `rtc_sleep.c/h`。
 
 从“BMS 越简单越好”的目标看，后续简化应优先做净删减和口径统一，不应新增复杂状态机。已先处理 Release DBGMCU 回归和无调用 wrapper；剩余涉及产品行为的项目仍需按表确认。
 
@@ -86,6 +86,7 @@ Runtime_RunOnce()
 
 - `APP_LedBar()` 在 `rtc_sleep()` 前执行，因此 LED 显示窗口会影响本轮能否进入低功耗。
 - 运行态低功耗入口已从一行 wrapper 收敛为直接调用 `rtc_sleep()`。
+- `rtc_sleep()` 不再先设置全局 `readyToSleep` 再消费；本轮使用局部 `sleep_mode` 直接执行 HICCUP/NORMAL/DEEP。
 - `App_Can()` 在 `rtc_sleep()` 后执行，低功耗检查看到的是上一轮或当前队列状态；CAN 接收中断会更新 `sys_time.can_rcv_cnt`。
 
 ## 当前低功耗模式
@@ -111,6 +112,16 @@ Runtime_RunOnce()
   - `RTC_ExtComCnt` 变化，代表 RS485/USART 有接收。
   - `LP_GetBlockReason() != 0`，代表框架层有阻塞。
 - 无阻塞时，`s_u16IdleDelaySeconds` 达到 `sys_time.time_enter_rtc` 后请求 `HICCUP_MODE`。
+
+### Sleep 提交口径
+
+`rtc_sleep()` 当前不再维护独立 `readyToSleep` 阶段变量：
+
+- `low_power_select_sleep_mode()` 只负责更新 `g_stLowPowerRtcStatus.mode` 和 `blockReason`。
+- 本轮 `rtc_sleep()` 读取局部 `sleep_mode = g_stLowPowerRtcStatus.mode`。
+- `sleep_mode == HICCUP_MODE` 时直接进入 `rtc_sleep_run_hiccup_cycle()`。
+- `sleep_mode == NORMAL_MODE/DEEP_MODE` 时直接进入 `RtcSleep_PortCommitResetSleep()`，同步完成 `BMS_SLEEP` 日志和 `SleepDeal_Continue()`。
+- `SystemDebug.g_dbg.lp.ready` 和 ST-Link `RtcReady` 只是由 `mode != NO_SLEEP` 派生的观察值，不再是控制字段。
 
 ### 框架层阻塞
 

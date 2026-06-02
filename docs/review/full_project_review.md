@@ -123,7 +123,7 @@
 2. 同时把文档体系收敛到 `docs/README.md` 指向的权威文档。
 3. 在不改源码的前提下，先补协议地址表、Flash 地址门禁说明、低功耗测试矩阵。
 4. 当前状态变量净删减专项见 `docs/review/state_variable_audit.md`；第一批建议从 `ProductionID.c` 一次性 flag 或 LedBar 显式初始化这种低风险项开始。
-5. `readyToSleep` 是高价值候选，但必须先确认 sleep commit 顺序，不能直接删除。
+5. `readyToSleep` 已按 sleep commit 顺序收口为 `rtc_sleep()` 局部 `sleep_mode` 决策；debug/ST-Link ready 改为派生观察值。
 
 ## 15. 状态变量净删减专项补充（2026-06-02）
 
@@ -133,7 +133,7 @@
 
 | 类型 | 代表变量 | 判断 |
 |---|---|---|
-| 可收口候选 | `s_ledbar.initialized`, `g_stLowPowerRtcStatus.readyToSleep`, `ProductionID.c` 的 `su8_StartUpFlag` | 可以分批净删减，但必须先确认初始化/低功耗提交时序 |
+| 已处理收口候选 | `s_ledbar.initialized` 主循环懒初始化、`g_stLowPowerRtcStatus.readyToSleep`, `ProductionID.c` 的 `su8_StartUpFlag` | 已分批净删减；剩余项仍需按状态变量专项文档继续确认 |
 | 需要保留的真实历史状态 | 按键防抖、`MCU_WK` 防抖、`scan_index`、`s_u32LastAfeCurrentSampleSeq`、AFE fault 计数、RTC elapsed | 不能因为主循环时序固定而删除 |
 | 需求不清的客户逻辑状态 | `DataDeal.c` 中充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类状态 | 必须先确认客户/认证需求归属 |
 | debug/status mirror | `g_stLowPowerRtcStatus` 中 `rtcWake/delay/elapsed` 等展示字段 | 可考虑从控制结构迁移到 debug 快照 |
