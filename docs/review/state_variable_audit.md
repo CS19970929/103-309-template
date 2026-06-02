@@ -3,7 +3,7 @@
 文档状态：部分验证
 源码验证：已按当前源码只读核对
 最后更新时间：2026-06-02
-修改范围：本阶段只审查和写文档，不修改 `.c/.h`、Keil 工程、编译宏、协议和烧录脚本
+修改范围：本文记录审计和已执行的低风险小批次；除已标记“已处理/已执行”的项外，不修改 `.c/.h`、Keil 工程、编译宏、协议和烧录脚本
 未确认事项：所有 `REMOVE_CANDIDATE` 和 `KEEP_BUT_REFACTOR` 项必须由用户确认后才能进入源码修改
 
 ## 1. 审计目标
@@ -88,6 +88,7 @@ main()
 | SV-SYS-002 | `s_system_onoff_func` | `System_Monitor.c:4`, `System_Monitor.c:166-201`, `Sci_Upper.c:2020/2043` | 上位机可写功能开关，SOC fixed/zero 依赖 | KEEP_BUT_REFACTOR | 需要确认 `SystemFeature_SetById()` 是否仍是客户需求；未确认前不能删 |
 | SV-RUN-001 | `s_last_fault`, `s_last_lp_mode` | `Runtime.c:88-108` | debug event 边沿检测 | MUST_KEEP | 调试边沿状态，保留；可后续移入 `SystemDebug` 统一管理 |
 | SV-PROD-001 | `su8_StartUpFlag` | `ProductionID.c:32-40` | 让 `App_ProID_Deal()` 只初始化一次产品信息 | 已处理 | 已在 SV-CLEAN-01 中把 `InitProID()` 收口到 `AppInit_InitRuntimeState()`，`App_ProID_Deal()` 只保留 runtime heartbeat hook |
+| SV-AGING-001 | `s_u8FactoryAgingState`、`s_u32FactoryAgingElapsed10ms`、`s_u32FactoryAgingLastTick`、`s_u32FactoryAgingLastBkpSave10ms`、`s_u32FactoryAgingLastFlashSave10ms`、`s_u32FactoryAgingNextFinishRetry10ms`、`s_u16FactoryAgingDurationHours`、`s_u8FactoryAgingBkpSaveValid`、`s_u8FactoryAgingFlashSaveValid`、`s_u8FactoryAgingMosMode` | `FactoryAging.c:28-37` | 老化模块运行态、进度、保存节流、完成重试和 MOS 模式缓存 | 已处理 | 已在 SV-STRUCT-01 中收口为单个 `FactoryAgingRuntime s_factory_aging`；不改变老化状态机、BKP/Flash 保存格式、CAN/Modbus 可见状态 |
 | SV-DATA-001 | `charger_detect_and_keyLogi_200ms()` 内 `state` | `DataDeal.c:51-95` | 充电器插拔状态机，拔 5V 后请求 deep sleep | UNKNOWN | 产品交互未确认，不能删；先确认拔 5V 行为 |
 | SV-DATA-002 | `u8IICFaultcnt*`, `u8WakeCnt*`, `su16_Sleep_DelayT*` | `DataDeal.c:3-6`, `DataDeal.c:825-917` | AFE 通信错误计数、恢复重试和持续故障后休眠 | MUST_KEEP | 保护/恢复相关历史状态，保留 |
 | SV-DATA-003 | `new_todo_logi()` 内 `mos_state/state_fuse/rong_fuse/err_afe/delay_cnt` | `DataDeal.c:930-1055` | MOS 过温、UL 认证、RF_EN 熔断类客户逻辑状态 | UNKNOWN | 需求不清，不能删；先把客户逻辑归属确认后再拆模块 |
@@ -104,6 +105,7 @@ main()
 | SV-CLEAN-02 | `s_ledbar.initialized` 的分散懒初始化 | 明确 LedBar 初始化时序，减少 `LedBar_EnsureInit()` | 确认 `LedBar_Init()` 可放入 `AppInit_Boot()`，且 TIM4 不会早于初始化触发 | LED 启动显示、按键显示、TIM4 扫描、STOP 前 GPIO、编译 |
 | SV-CLEAN-03 | `readyToSleep` 阶段变量 | 让低功耗提交流程变成局部决策，不再用全局 ready 标志绕 LED/日志 | 确认睡前 SOC 保存和 sleep 日志写入时序 | `rtc_sleep()` host 静态检查、LED sleep SOC、日志 `BMS_SLEEP`、HICCUP/DEEP/NORMAL 回归 |
 | SV-CLEAN-04 | `g_stLowPowerRtcStatus` 中纯 debug 镜像字段 | 把 `rtcWake/delay/elapsed` 转为 debug 快照或只读状态，减少控制状态结构 | 确认上位机/调试工具是否直接依赖这些字段 | `SystemDebug`、Modbus `0xD000/0xD300`、ST-Link monitor |
+| SV-STRUCT-01 | `FactoryAging.c` 模块私有运行态变量 | 把同生命周期的老化状态集中成 `s_factory_aging`，便于 Keil Watch，不改变业务行为 | 已按用户“开始”执行 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；老化 CAN/上位机仍需实测 |
 
 ## 5. 明确不建议第一批处理
 
@@ -137,13 +139,14 @@ main()
 | REQ-SV-004 | 产品信息初始化不应依赖主循环内的一次性 `static flag` | `ProductionID.c:32-40`, `Runtime.c:57`, `AppInit.c:34-42` | `InitProID()` 已在启动运行态初始化中调用；`App_ProID_Deal()` 保留为空 hook，维持 `DBG_MODULE_PROID` heartbeat | 仍需上板/上位机读取 `0xC002` 确认默认信息 | 已处理 | 是否允许把 `InitProID()` 放到启动初始化，主循环只保留真实后台处理？ | 已按低风险批次执行 | 已执行 |
 | REQ-SV-005 | 按键、`MCU_WK`、SOC sample seq、AFE fault 计数等真实历史状态必须保留 | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 这些状态用于防抖、边沿、去重积分、持续故障判断 | 误删会造成误唤醒、重复积分、故障恢复失效 | MUST_KEEP | 是否接受“不是所有状态变量都删，只删重复事实/残留阶段”的边界？ | 保留这些历史状态，只做命名和职责整理 | 待确认 |
 | REQ-SV-006 | `DataDeal.c` 中客户逻辑状态必须先确认需求归属，不能直接按“变量多”删除 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类逻辑混在 200ms 链路 | 直接删除可能改变安全输出和客户认证行为 | UNKNOWN | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 内这些状态是当前产品需求、认证需求，还是历史残留？ | 先列入需求确认，不进第一批删除 | 待确认 |
+| REQ-SV-007 | 同一模块、同一生命周期、同一调试视角的私有运行态变量应优先收口到模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 老化模块原有 10 个文件级静态变量分别保存 state、elapsed、last tick、保存状态、retry 和 MOS mode | 若结构体字段初值或替换错误，会影响老化进度和完成保存；但本批次不改持久化格式 | 已处理 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已按低风险结构体收口批次执行 | 已执行 |
 
 ## 7. 下一步执行边界
 
 进入源码修改前必须满足：
 
 1. 用户确认 `REQ-SV-001` 到 `REQ-SV-006` 的方向。
-2. 第一批只允许处理 `SV-CLEAN-01` 或 `SV-CLEAN-02` 这种低风险小范围项。
+2. 第一批只允许处理 `SV-CLEAN-01`、`SV-STRUCT-01` 或 `SV-CLEAN-02` 这种低风险小范围项。
 3. 每批必须同步更新本文、`requirement_confirmation.md`、`risk_list.md`、`refactor_plan.md` 和 `test_plan.md`。
 4. 每批必须至少跑 `git diff --check`；涉及源码时再跑仓库检查脚本和可用编译/静态检查。
 5. 未经确认，不修改 `.c/.h` 源码。

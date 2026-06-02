@@ -13,9 +13,10 @@
 | 测试项 | 入口 | 通过标准 |
 |---|---|---|
 | 文档一致性 | `rg "Q-SV-|REQ-SV-|SV-CLEAN" docs/review` | 审计、确认、风险、计划、测试文档都有入口 |
+| 产品信息初始化收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | `0xC002` 48 个寄存器读取不变 |
+| FactoryAging 结构体收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 旧 `s_u*FactoryAging*` 符号无残留；老化状态、剩余时间、BKP/Flash 保存和 `0x14F80208` 行为不变 |
 | LedBar 初始化收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 上电显示、按键显示、TIM4 扫描、STOP 前 GPIO 行为不变 |
 | `readyToSleep` 收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | HICCUP/NORMAL/DEEP、sleep SOC、`BMS_SLEEP` 日志行为不变 |
-| 产品信息初始化收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | `0xC002` 48 个寄存器读取不变 |
 | 基础静态检查 | `git diff --check`、仓库脚本、可用编译 | 结果与基线对比清楚，不把旧失败当成本次失败 |
 
 硬件实测项仍以 `docs/review/test_plan.md` 为准。

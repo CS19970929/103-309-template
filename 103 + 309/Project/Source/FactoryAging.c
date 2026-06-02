@@ -25,16 +25,32 @@
 #define FACTORY_AGING_BKP_HI_REG     BKP_DR9
 #define FACTORY_AGING_BKP_CRC_REG    BKP_DR10
 
-static UINT8 s_u8FactoryAgingState = FACTORY_AGING_STATE_UNINIT;
-static UINT32 s_u32FactoryAgingElapsed10ms = 0U;
-static UINT32 s_u32FactoryAgingLastTick = 0U;
-static UINT32 s_u32FactoryAgingLastBkpSave10ms = 0U;
-static UINT32 s_u32FactoryAgingLastFlashSave10ms = 0U;
-static UINT32 s_u32FactoryAgingNextFinishRetry10ms = 0U;
-static UINT16 s_u16FactoryAgingDurationHours = 0U;
-static UINT8 s_u8FactoryAgingBkpSaveValid = 0U;
-static UINT8 s_u8FactoryAgingFlashSaveValid = 0U;
-static UINT8 s_u8FactoryAgingMosMode = FACTORY_AGING_MOS_MODE_UNKNOWN;
+typedef struct
+{
+	UINT8 state;
+	UINT32 elapsed10ms;
+	UINT32 lastTick;
+	UINT32 lastBkpSave10ms;
+	UINT32 lastFlashSave10ms;
+	UINT32 nextFinishRetry10ms;
+	UINT16 durationHours;
+	UINT8 bkpSaveValid;
+	UINT8 flashSaveValid;
+	UINT8 mosMode;
+} FactoryAgingRuntime;
+
+static FactoryAgingRuntime s_factory_aging = {
+	FACTORY_AGING_STATE_UNINIT,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	0U,
+	FACTORY_AGING_MOS_MODE_UNKNOWN
+};
 
 static UINT8 FactoryAging_DurationHoursValid(UINT16 hours)
 {
@@ -44,9 +60,9 @@ static UINT8 FactoryAging_DurationHoursValid(UINT16 hours)
 
 static UINT32 FactoryAging_GetDuration10ms(void)
 {
-	if (FactoryAging_DurationHoursValid(s_u16FactoryAgingDurationHours) != 0U)
+	if (FactoryAging_DurationHoursValid(s_factory_aging.durationHours) != 0U)
 	{
-		return (UINT32)s_u16FactoryAgingDurationHours * 3600U * FACTORY_AGING_10MS_PER_SEC;
+		return (UINT32)s_factory_aging.durationHours * 3600U * FACTORY_AGING_10MS_PER_SEC;
 	}
 	return FACTORY_AGING_DEFAULT_DURATION_10MS;
 }
@@ -56,7 +72,7 @@ static void FactoryAging_LoadDurationFromData(const STORAGE_FLASH_FACTORY_AGING_
 	if ((data != 0) &&
 		(FactoryAging_DurationHoursValid(data->u16DurationHours) != 0U))
 	{
-		s_u16FactoryAgingDurationHours = data->u16DurationHours;
+		s_factory_aging.durationHours = data->u16DurationHours;
 	}
 }
 
@@ -88,8 +104,8 @@ static void FactoryAging_SaveBkp(UINT32 elapsed10ms)
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_LO_REG, (UINT16)(elapsed10ms & 0xFFFFU));
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_HI_REG, (UINT16)((elapsed10ms >> 16) & 0xFFFFU));
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_CRC_REG, FactoryAging_BkpCrc(elapsed10ms));
-	s_u32FactoryAgingLastBkpSave10ms = elapsed10ms;
-	s_u8FactoryAgingBkpSaveValid = 1U;
+	s_factory_aging.lastBkpSave10ms = elapsed10ms;
+	s_factory_aging.bkpSaveValid = 1U;
 }
 
 static UINT8 FactoryAging_LoadBkp(UINT32 *elapsed10ms)
@@ -148,22 +164,22 @@ static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done, U
 		{
 			*elapsed10ms = FACTORY_AGING_DURATION_10MS;
 			*done = 1U;
-			s_u32FactoryAgingLastFlashSave10ms = FACTORY_AGING_DURATION_10MS;
-			s_u8FactoryAgingFlashSaveValid = 1U;
+			s_factory_aging.lastFlashSave10ms = FACTORY_AGING_DURATION_10MS;
+			s_factory_aging.flashSaveValid = 1U;
 			return 1U;
 		}
 		if (data.u16State == FLASH_FACTORY_AGING_STATE_RUNNING)
 		{
 			flash_elapsed = FactoryAging_ClampElapsed(data.u32Elapsed10ms);
-			s_u32FactoryAgingLastFlashSave10ms = flash_elapsed;
-			s_u8FactoryAgingFlashSaveValid = 1U;
+			s_factory_aging.lastFlashSave10ms = flash_elapsed;
+			s_factory_aging.flashSaveValid = 1U;
 			has_progress = 1U;
 		}
 		else if (data.u16State == FLASH_FACTORY_AGING_STATE_STOPPED)
 		{
 			flash_elapsed = FactoryAging_ClampElapsed(data.u32Elapsed10ms);
-			s_u32FactoryAgingLastFlashSave10ms = flash_elapsed;
-			s_u8FactoryAgingFlashSaveValid = 1U;
+			s_factory_aging.lastFlashSave10ms = flash_elapsed;
+			s_factory_aging.flashSaveValid = 1U;
 			*stopped = 1U;
 			has_progress = 1U;
 		}
@@ -202,19 +218,19 @@ static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UI
 	UINT8 save_flash = force_flash;
 
 	if ((force_bkp != 0U) ||
-		(s_u8FactoryAgingBkpSaveValid == 0U) ||
-		((s_u32FactoryAgingElapsed10ms - s_u32FactoryAgingLastBkpSave10ms) >= FACTORY_AGING_BKP_SAVE_INTERVAL_10MS))
+		(s_factory_aging.bkpSaveValid == 0U) ||
+		((s_factory_aging.elapsed10ms - s_factory_aging.lastBkpSave10ms) >= FACTORY_AGING_BKP_SAVE_INTERVAL_10MS))
 	{
-		FactoryAging_SaveBkp(s_u32FactoryAgingElapsed10ms);
+		FactoryAging_SaveBkp(s_factory_aging.elapsed10ms);
 	}
 
 	if (save_flash == 0U)
 	{
-		if (s_u8FactoryAgingFlashSaveValid == 0U)
+		if (s_factory_aging.flashSaveValid == 0U)
 		{
 			save_flash = 1U;
 		}
-		else if ((s_u32FactoryAgingElapsed10ms - s_u32FactoryAgingLastFlashSave10ms) >=
+		else if ((s_factory_aging.elapsed10ms - s_factory_aging.lastFlashSave10ms) >=
 				 FACTORY_AGING_FLASH_SAVE_INTERVAL_10MS)
 		{
 			save_flash = 1U;
@@ -227,18 +243,18 @@ static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UI
 	}
 
 	memset(&data, 0, sizeof(data));
-	data.u32Elapsed10ms = FactoryAging_ClampElapsed(s_u32FactoryAgingElapsed10ms);
+	data.u32Elapsed10ms = FactoryAging_ClampElapsed(s_factory_aging.elapsed10ms);
 	data.u16State = state;
 	data.u16DurationHours =
-		(FactoryAging_DurationHoursValid(s_u16FactoryAgingDurationHours) != 0U) ?
-			s_u16FactoryAgingDurationHours : FACTORY_AGING_DURATION_HOURS_RESET_VALUE;
+		(FactoryAging_DurationHoursValid(s_factory_aging.durationHours) != 0U) ?
+			s_factory_aging.durationHours : FACTORY_AGING_DURATION_HOURS_RESET_VALUE;
 	if (StorageFlash_SaveFactoryAgingData(&data) == 0U)
 	{
 		return 0U;
 	}
 
-	s_u32FactoryAgingLastFlashSave10ms = data.u32Elapsed10ms;
-	s_u8FactoryAgingFlashSaveValid = 1U;
+	s_factory_aging.lastFlashSave10ms = data.u32Elapsed10ms;
+	s_factory_aging.flashSaveValid = 1U;
 	return 1U;
 }
 
@@ -249,11 +265,11 @@ static UINT8 FactoryAging_MarkDone(void)
 	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
 		(data.u16State == FLASH_FACTORY_AGING_STATE_DONE))
 	{
-		s_u32FactoryAgingElapsed10ms = FACTORY_AGING_DURATION_10MS;
+		s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
 		return 1U;
 	}
 
-	s_u32FactoryAgingElapsed10ms = FACTORY_AGING_DURATION_10MS;
+	s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
 	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_DONE, 1U, 1U);
 }
 
@@ -271,7 +287,7 @@ static UINT8 FactoryAging_ResolveStoredState(UINT32 *elapsed, UINT8 *was_done, U
 
 static void FactoryAging_ResetMosCache(void)
 {
-	s_u8FactoryAgingMosMode = FACTORY_AGING_MOS_MODE_UNKNOWN;
+	s_factory_aging.mosMode = FACTORY_AGING_MOS_MODE_UNKNOWN;
 }
 
 static void FactoryAging_ApplyStoppedMos(void)
@@ -285,20 +301,20 @@ static void FactoryAging_ApplyRunningMos(void)
 	UINT8 next_mode = (MosStartup_Is5vChargeActive() != 0U) ?
 		FACTORY_AGING_MOS_MODE_5V_CHARGE : FACTORY_AGING_MOS_MODE_FACTORY;
 
-	if (s_u8FactoryAgingMosMode == next_mode)
+	if (s_factory_aging.mosMode == next_mode)
 	{
 		return;
 	}
 
 	enter_fac_mode(true);
-	s_u8FactoryAgingMosMode = next_mode;
+	s_factory_aging.mosMode = next_mode;
 }
 
 static UINT8 FactoryAging_EnterRunningFromHost(UINT32 now_tick)
 {
-	s_u8FactoryAgingState = FACTORY_AGING_STATE_RUNNING;
-	s_u32FactoryAgingLastTick = now_tick;
-	s_u32FactoryAgingNextFinishRetry10ms = 0U;
+	s_factory_aging.state = FACTORY_AGING_STATE_RUNNING;
+	s_factory_aging.lastTick = now_tick;
+	s_factory_aging.nextFinishRetry10ms = 0U;
 	FactoryAging_ResetMosCache();
 	FactoryAging_ApplyRunningMos();
 	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 1U, 1U);
@@ -313,8 +329,8 @@ static UINT8 FactoryAging_Finish(void)
 		return 0U;
 	}
 
-	s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;
-	s_u32FactoryAgingNextFinishRetry10ms = 0U;
+	s_factory_aging.state = FACTORY_AGING_STATE_DONE;
+	s_factory_aging.nextFinishRetry10ms = 0U;
 	return 1U;
 }
 
@@ -325,25 +341,25 @@ static void FactoryAging_Start(UINT32 now_tick)
 	UINT8 stopped = 0U;
 
 	(void)FactoryAging_ResolveStoredState(&stored_elapsed, &done, &stopped);
-	s_u32FactoryAgingElapsed10ms = stored_elapsed;
-	s_u32FactoryAgingLastTick = now_tick;
-	s_u32FactoryAgingNextFinishRetry10ms = 0U;
+	s_factory_aging.elapsed10ms = stored_elapsed;
+	s_factory_aging.lastTick = now_tick;
+	s_factory_aging.nextFinishRetry10ms = 0U;
 
 	if (done != 0U)
 	{
 		FactoryAging_ApplyStoppedMos();
-		s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;
+		s_factory_aging.state = FACTORY_AGING_STATE_DONE;
 		return;
 	}
 
 	if (stopped != 0U)
 	{
 		FactoryAging_ApplyStoppedMos();
-		s_u8FactoryAgingState = FACTORY_AGING_STATE_STOPPED;
+		s_factory_aging.state = FACTORY_AGING_STATE_STOPPED;
 		return;
 	}
 
-	s_u8FactoryAgingState = FACTORY_AGING_STATE_RUNNING;
+	s_factory_aging.state = FACTORY_AGING_STATE_RUNNING;
 	if (stored_elapsed >= FACTORY_AGING_DURATION_10MS)
 	{
 		(void)FactoryAging_Finish();
@@ -359,9 +375,9 @@ static void FactoryAging_AddRunningTicks(UINT32 now_tick)
 {
 	UINT32 delta;
 
-	if (now_tick >= s_u32FactoryAgingLastTick)
+	if (now_tick >= s_factory_aging.lastTick)
 	{
-		delta = now_tick - s_u32FactoryAgingLastTick;
+		delta = now_tick - s_factory_aging.lastTick;
 	}
 	else
 	{
@@ -369,20 +385,20 @@ static void FactoryAging_AddRunningTicks(UINT32 now_tick)
 		delta = 0U;
 	}
 
-	s_u32FactoryAgingLastTick = now_tick;
+	s_factory_aging.lastTick = now_tick;
 
-	if ((delta == 0U) || (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS))
+	if ((delta == 0U) || (s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS))
 	{
 		return;
 	}
 
-	if (delta >= (FACTORY_AGING_DURATION_10MS - s_u32FactoryAgingElapsed10ms))
+	if (delta >= (FACTORY_AGING_DURATION_10MS - s_factory_aging.elapsed10ms))
 	{
-		s_u32FactoryAgingElapsed10ms = FACTORY_AGING_DURATION_10MS;
+		s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
 	}
 	else
 	{
-		s_u32FactoryAgingElapsed10ms += delta;
+		s_factory_aging.elapsed10ms += delta;
 	}
 }
 
@@ -392,43 +408,43 @@ static void FactoryAging_LoadRuntimeStateForHost(UINT32 now_tick)
 	UINT8 done = 0U;
 	UINT8 stopped = 0U;
 
-	if (s_u8FactoryAgingState != FACTORY_AGING_STATE_UNINIT)
+	if (s_factory_aging.state != FACTORY_AGING_STATE_UNINIT)
 	{
 		return;
 	}
 
 	(void)FactoryAging_ResolveStoredState(&stored_elapsed, &done, &stopped);
-	s_u32FactoryAgingElapsed10ms = stored_elapsed;
-	s_u32FactoryAgingLastTick = now_tick;
-	s_u32FactoryAgingNextFinishRetry10ms = 0U;
+	s_factory_aging.elapsed10ms = stored_elapsed;
+	s_factory_aging.lastTick = now_tick;
+	s_factory_aging.nextFinishRetry10ms = 0U;
 
 	if ((done != 0U) || (stored_elapsed >= FACTORY_AGING_DURATION_10MS))
 	{
 		FactoryAging_ApplyStoppedMos();
-		s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;
+		s_factory_aging.state = FACTORY_AGING_STATE_DONE;
 		return;
 	}
 
 	if (stopped != 0U)
 	{
 		FactoryAging_ApplyStoppedMos();
-		s_u8FactoryAgingState = FACTORY_AGING_STATE_STOPPED;
+		s_factory_aging.state = FACTORY_AGING_STATE_STOPPED;
 		return;
 	}
 
-	s_u8FactoryAgingState = FACTORY_AGING_STATE_STOPPED;
+	s_factory_aging.state = FACTORY_AGING_STATE_STOPPED;
 }
 
 UINT8 FactoryAging_SaveProgressBeforeSleep(void)
 {
 #if PROJECT_CFG_FACTORY_AGING_ENABLE
-	if (s_u8FactoryAgingState != FACTORY_AGING_STATE_RUNNING)
+	if (s_factory_aging.state != FACTORY_AGING_STATE_RUNNING)
 	{
 		return 1U;
 	}
 
 	FactoryAging_AddRunningTicks(SysTime_Get10msTickCount());
-	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	if (s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS)
 	{
 		return FactoryAging_Finish();
 	}
@@ -442,7 +458,7 @@ UINT8 FactoryAging_SaveProgressBeforeSleep(void)
 UINT8 FactoryAging_IsActive(void)
 {
 #if PROJECT_CFG_FACTORY_AGING_ENABLE
-	return (s_u8FactoryAgingState == FACTORY_AGING_STATE_RUNNING) ? 1U : 0U;
+	return (s_factory_aging.state == FACTORY_AGING_STATE_RUNNING) ? 1U : 0U;
 #else
 	return 0U;
 #endif
@@ -455,7 +471,7 @@ UINT8 FactoryAging_GetState(void)
 	UINT8 done = 0U;
 	UINT8 stopped = 0U;
 
-	switch (s_u8FactoryAgingState)
+	switch (s_factory_aging.state)
 	{
 	case FACTORY_AGING_STATE_RUNNING:
 		return FACTORY_AGING_PUBLIC_STATE_RUNNING;
@@ -483,12 +499,12 @@ UINT8 FactoryAging_GetState(void)
 UINT32 FactoryAging_GetRemainingSeconds(void)
 {
 #if PROJECT_CFG_FACTORY_AGING_ENABLE
-	UINT32 elapsed10ms = s_u32FactoryAgingElapsed10ms;
+	UINT32 elapsed10ms = s_factory_aging.elapsed10ms;
 	UINT32 remain10ms;
 	UINT8 done = 0U;
 	UINT8 stopped = 0U;
 
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_UNINIT)
+	if (s_factory_aging.state == FACTORY_AGING_STATE_UNINIT)
 	{
 		(void)FactoryAging_LoadStoredProgress(&elapsed10ms, &done, &stopped);
 		(void)stopped;
@@ -497,7 +513,7 @@ UINT32 FactoryAging_GetRemainingSeconds(void)
 			return 0U;
 		}
 	}
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_DONE)
+	if (s_factory_aging.state == FACTORY_AGING_STATE_DONE)
 	{
 		return 0U;
 	}
@@ -521,10 +537,10 @@ UINT8 FactoryAging_StartByHost(void)
 	UINT32 now_tick = SysTime_Get10msTickCount();
 
 	FactoryAging_LoadRuntimeStateForHost(now_tick);
-	if ((s_u8FactoryAgingState == FACTORY_AGING_STATE_DONE) ||
-		(s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS))
+	if ((s_factory_aging.state == FACTORY_AGING_STATE_DONE) ||
+		(s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS))
 	{
-		s_u32FactoryAgingElapsed10ms = 0U;
+		s_factory_aging.elapsed10ms = 0U;
 	}
 
 	return FactoryAging_EnterRunningFromHost(now_tick);
@@ -539,17 +555,17 @@ UINT8 FactoryAging_StopByHost(void)
 	UINT32 now_tick = SysTime_Get10msTickCount();
 
 	FactoryAging_LoadRuntimeStateForHost(now_tick);
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_DONE)
+	if (s_factory_aging.state == FACTORY_AGING_STATE_DONE)
 	{
 		return 1U;
 	}
 
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_RUNNING)
+	if (s_factory_aging.state == FACTORY_AGING_STATE_RUNNING)
 	{
 		FactoryAging_AddRunningTicks(now_tick);
 	}
 
-	s_u32FactoryAgingElapsed10ms = FACTORY_AGING_DURATION_10MS;
+	s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
 	return FactoryAging_Finish();
 #else
 	return 0U;
@@ -563,7 +579,7 @@ UINT8 FactoryAging_ResetTimeByHost(void)
 
 	FactoryAging_LoadRuntimeStateForHost(now_tick);
 
-	s_u32FactoryAgingElapsed10ms = 0U;
+	s_factory_aging.elapsed10ms = 0U;
 	return FactoryAging_EnterRunningFromHost(now_tick);
 #else
 	return 0U;
@@ -583,8 +599,8 @@ UINT8 FactoryAging_SetDurationHoursByHost(UINT16 hours)
 	now_tick = SysTime_Get10msTickCount();
 	FactoryAging_LoadRuntimeStateForHost(now_tick);
 
-	s_u16FactoryAgingDurationHours = hours;
-	s_u32FactoryAgingElapsed10ms = 0U;
+	s_factory_aging.durationHours = hours;
+	s_factory_aging.elapsed10ms = 0U;
 	return FactoryAging_EnterRunningFromHost(now_tick);
 #else
 	(void)hours;
@@ -597,26 +613,26 @@ void FactoryAging_Task(void)
 #if PROJECT_CFG_FACTORY_AGING_ENABLE
 	UINT32 now_tick = SysTime_Get10msTickCount();
 
-	if (s_u8FactoryAgingState == FACTORY_AGING_STATE_UNINIT)
+	if (s_factory_aging.state == FACTORY_AGING_STATE_UNINIT)
 	{
 		FactoryAging_Start(now_tick);
 		return;
 	}
 
-	if (s_u8FactoryAgingState != FACTORY_AGING_STATE_RUNNING)
+	if (s_factory_aging.state != FACTORY_AGING_STATE_RUNNING)
 	{
 		return;
 	}
 
 	FactoryAging_AddRunningTicks(now_tick);
-	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	if (s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS)
 	{
-		if ((s_u32FactoryAgingNextFinishRetry10ms == 0U) ||
-			(now_tick >= s_u32FactoryAgingNextFinishRetry10ms))
+		if ((s_factory_aging.nextFinishRetry10ms == 0U) ||
+			(now_tick >= s_factory_aging.nextFinishRetry10ms))
 		{
 			if (FactoryAging_Finish() == 0U)
 			{
-				s_u32FactoryAgingNextFinishRetry10ms =
+				s_factory_aging.nextFinishRetry10ms =
 					now_tick + FACTORY_AGING_FINISH_RETRY_10MS;
 			}
 		}

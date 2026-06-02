@@ -47,6 +47,30 @@
 - `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
 - 未执行 Keil `FD_Release` 编译、真板运行或上位机 `0xC002` 读取。
 
+## 2026-06-02 SV-STRUCT-01 FactoryAging 运行态结构体收口
+
+### 本次源码修改
+
+- `FactoryAging.c`：新增 `FactoryAgingRuntime`，将老化模块原有 10 个文件级静态变量收口为 `s_factory_aging` 字段。
+- 字段覆盖老化状态、累计 10ms、最近 tick、BKP/Flash 保存节流、完成失败重试、用户配置时长和 MOS 模式缓存。
+
+### 本次文档修改
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/test_plan.md` 和 `docs/change_log.md`，补充 `SV-AGING-001 / SV-STRUCT-01 / REQ-SV-007`。
+
+### 安全边界
+
+- 未修改老化状态机、BKP/Flash 持久化格式、CAN/Modbus 协议、`0x14F80208` 广播字段、低功耗策略、MOS 控制函数、Flash/IAP 地址和配置宏。
+- 本批次只是变量所有权收口，便于 Keil Watch 观察 `s_factory_aging`。
+
+### 本次验证
+
+- `rg -n "s_u8FactoryAging|s_u16FactoryAging|s_u32FactoryAging" "103 + 309/Project/Source/FactoryAging.c"`：源码无旧符号残留。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `FactoryAging.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板老化 start/stop/reset/set hours、CAN `0x14F80208` 广播或上位机老化时间读取。
+
 ## 2026-06-02 低功耗 review 问题修复
 
 ### 本次源码修改

@@ -108,6 +108,7 @@
 - `103 + 309/Project/Source/DataDeal.c`
 - `103 + 309/Project/Source/SOC.c`
 - `103 + 309/Project/Source/ProductionID.c`
+- `103 + 309/Project/Source/FactoryAging.c`
 
 | ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -117,6 +118,7 @@
 | Q-SV-004 | 产品信息 | `ProductionID.c` 的 `su8_StartUpFlag` 是否可由启动流程替代 | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | 已把 `InitProID()` 收口到启动运行态初始化；后台 `App_ProID_Deal()` 不再依赖一次性 flag | 已处理 | 仍需上位机/真板确认 `0xC002` 默认信息读取 | 是否允许把 `InitProID()` 收口到 `AppInit_Boot()`，删除主循环一次性 flag？ | 已执行；保留 PROID heartbeat hook | 已执行 |
 | Q-SV-005 | 状态保留边界 | 按键防抖、`MCU_WK` 防抖、SOC sample seq、AFE fault 计数是否作为真实历史状态保留 | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 这些变量承担边沿检测、去重积分、故障持续时间判断 | MUST_KEEP | 误删会导致误唤醒、重复积分、故障恢复失败 | 是否接受本轮净删减边界：只删重复事实和阶段残留，不删真实历史状态？ | A. 保留这些状态，只优化命名/边界 | |
 | Q-SV-006 | DataDeal/客户逻辑 | `DataDeal.c` 中充电器、MOS 过温、UL 认证、RF_EN 熔断类状态是否仍是当前产品需求 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 多个静态状态混在 200ms 业务链路里 | UNKNOWN | 直接删除可能改变安全输出、认证动作或客户体验 | 这些逻辑是当前产品需求、认证需求，还是历史残留？ | F. 先补产品/认证背景，不进第一批删除 | |
+| Q-SV-007 | 老化/状态收口 | `FactoryAging.c` 中同生命周期私有变量是否可集中为模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 已把老化 state、elapsed、last tick、保存节流、finish retry、duration hours 和 MOS mode 收口到 `FactoryAgingRuntime s_factory_aging` | 已处理 | 替换错误会影响老化剩余时间、保存进度、完成重试或 MOS 模式缓存 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已执行；不改状态机和持久化格式 | 已执行 |
 
 ## 6. 高风险需求
 

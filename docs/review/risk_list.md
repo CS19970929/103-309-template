@@ -50,5 +50,6 @@
 | RISK-SV-LP-001 | `readyToSleep` 同时被低功耗、LED、日志、debug 使用，直接删除会丢提交前动作 | `rtc_sleep.c:304-353`, `LedBar.c:1314-1318`, `LogRecord.c:135-142`, `Runtime.c:36-39` | 可能漏 sleep SOC 保存、`BMS_SLEEP` 日志、低功耗 busy 状态或 deep sleep 提交 | REMOVE_CANDIDATE | 先画出 sleep commit 顺序，把 LED/日志收尾放到明确提交点 |
 | RISK-SV-DBG-001 | 控制状态和 debug mirror 混在 `g_stLowPowerRtcStatus` 中 | `rtc_sleep.h:50-58`, `rtc_sleep.c:86-92`, `SystemDebug.c:536-541` | 后续维护者可能把展示字段误认为控制字段，增加低功耗理解成本 | KEEP_BUT_REFACTOR | 文档标记后，单独批次迁移纯展示字段 |
 | RISK-SV-PROD-001 | `ProductionID.c` 曾依赖主循环一次性 flag 初始化产品信息 | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | 已减少主循环一次性状态；仍需确认 `0xC002` 默认信息读取 | 已处理 | `InitProID()` 已收口到启动运行态初始化；`App_ProID_Deal()` 保留为空 hook 维持 PROID heartbeat |
+| RISK-SV-AGING-001 | `FactoryAging.c` 的多个私有运行态变量已收口为结构体字段 | `FactoryAging.c` | 若字段初值或替换错误，会影响老化状态、剩余时间、BKP/Flash 保存节流、完成重试和 MOS 模式缓存 | 已处理，需老化回归 | 本批次只改变变量组织方式，不改状态机、BKP/Flash 存储格式、CAN/Modbus 可见接口；后续用老化 start/stop/reset/set hours 和 `0x14F80208` 广播回归 |
 | RISK-SV-DATA-001 | `DataDeal.c` 中多个静态状态混合客户逻辑、保护逻辑和认证逻辑 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 变量看似可删，但可能影响 MOS、RF_EN、过温、拔 5V 行为和认证 | UNKNOWN | 未确认产品/认证背景前只做文档归类，不改源码 |
 | RISK-SV-KEEP-001 | 把真实历史状态误判为“不必要变量” | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 会导致误唤醒、重复积分、故障恢复失败、通信状态丢失 | MUST_KEEP | 明确边界：防抖、边沿、累计延时、ISR 队列、SOC sample seq 第一批不删 |
