@@ -6,7 +6,7 @@
 
 | ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
 |---|---|---|---|---|---|---|---|---|---|
-| Q-CRIT-001 | AFE/电流/SOC | 量产固件应使用真实 AFE CADC 电流，还是允许测试虚拟电流 | `DataDeal.c:1238-1239` 注释 `DataLoad_Current()`，调用 `test_Autocurrent_cycle()`；`Project_Config.h:17` 为 profile 0 | 200ms 主路径实际跑虚拟充放电循环，仍递增 `g_u32AfeCurrentSampleSeq` | CHANGE_NEEDED | P0：SOC、CAN 电流、保护状态和老化行为都可能虚假 | 当前量产是否必须恢复 `DataLoad_Current()` 并把虚拟电流放入测试 profile？ | C. 修改需求，按真实电流实现；E. 暂时保留但禁止出货；F. 补充背景 | |
+| Q-CRIT-001 | AFE/电流/SOC | 量产固件应使用真实 AFE CADC 电流，测试虚拟电流必须隔离 | `DataDeal.c:1063-1085` 当前 200ms 主路径调用 `DataLoad_Current()` 并递增 `g_u32AfeCurrentSampleSeq`；`Project_Config.h:17` 为 profile 0 | 当前源码主路径已是 `DataLoad_Current()`，旧文档中“主路径跑虚拟电流”的描述已过期；仍需确认测试注入入口是否完全隔离 | MUST_KEEP | P0：若虚拟电流再次混入量产，会影响 SOC、CAN 电流、保护状态和老化行为 | 是否确认量产必须保持 `DataLoad_Current()`，虚拟电流只能在测试 profile/测试固件使用？ | A. 保持当前真实电流主路径；B. 保留测试入口但加门禁；F. 补充背景 | |
 | Q-CRIT-002 | 均衡 | 当前产品是否需要主动均衡 | 仅找到 `OtherElement.u16Balance_*`、`MTP_BALANCEH/L`、CBC status；未见 `App_CellBalance()` 进入 `Runtime_RunOnce()` | 有均衡参数和状态位，但未确认主动控制 | UNKNOWN | P0/P1：若客户要求均衡，当前实现可能缺功能；若不要求，协议残留增加复杂度 | 均衡是当前客户需求、未来模板需求，还是历史残留？ | A. 保留原需求；B. 保留并重构；D. 删除业务但保留协议占位；F. 补充背景 | |
 | Q-CRIT-003 | AFE 参数 | 均衡开启电压是否应使用可写参数 | `SH367309_DataDeal.c:58-59` 注释参数计算，实际硬编码 `4160` | 上位机写 `u16Balance_OpenVoltage` 可能不影响 AFE ROM 对应字段 | MISUNDERSTOOD | P1：上位机参数和硬件行为不一致 | `u16Balance_OpenVoltage` 是否必须驱动 AFE 均衡开压？ | B. 保留需求但修实现；C. 修改为固定 4160 并文档化；F. 补充背景 | |
 | Q-CRIT-004 | Flash/IAP | 当前真实硬件 Flash 容量和 App 链接地址是什么 | `Flash.h:4-30` 使用 `0x08004800` App 和 `0x0801C000+` 存储；Keil XML 同时有 `0x08000000` 和 `0x8004800`，`ScatterFile` 为空 | 安全脚本约束 App 烧录 `0x08004800`，但 Keil 工程显示不够单一 | UNKNOWN | P0：地址错会覆盖 IAP 或越界写 Flash | 实际量产芯片是 64KB、128KB 还是 C8 兼容大 Flash？Keil 最终链接地址以哪个文件为准？ | A. 保留现有地址并补 map 验证；C. 修改地址策略；F. 补充硬件/BOM | |
@@ -89,6 +89,34 @@
 | Q-RTC-LP-008 | 低功耗/交互 | 运行态长按约 500ms 是否直接 DEEP_MODE 关机 | `LedBar.c:987-999` | 长按后直接 `SleepDeal_Continue(DEEP_MODE)` | UNKNOWN | 可能误关机 | 运行态长按关机时间和行为是否正确？ | B. 保留但把时间参数化/文档化；C. 修改 | |
 | Q-RTC-LP-009 | 低功耗/充电 | 充电器拔除后是否直接进入 DEEP_MODE | `DataDeal.c:51-95` | `CHG_IN` 释放后请求 `DEEP_MODE` | UNKNOWN | 拔 5V 后关机/待机/继续运行体验不同 | 当前产品拔 5V 后目标行为是什么？ | F. 需要产品定义 | |
 | Q-RTC-LP-010 | 低功耗/简化 | 未使用的 `LP_EnterStop/LP_BeforeSleep/LP_AfterWakeup/LP_SetWakeupPeriod/LP_Task` 是否可删除 | `rg` 仅见旧文档引用，源码主路径实际走 `Runtime_RunOnce()->rtc_sleep()` | 已删除未使用 wrapper、`LP_State_t` 和无消费者状态缓存 | 已处理 | 若外部工具依赖旧 API，需要同步工具；源码主路径不变 | 是否允许后续继续按“无调用、无协议、无硬件行为影响”净删减？ | D. 删除或改 static，保持主路径不变 | 本轮已处理 |
+
+## 5.2 状态变量净删减专项确认问题
+
+状态：部分验证，2026-06-02 按当前源码新增
+
+专项文档：`docs/review/state_variable_audit.md`
+
+参考源码：
+
+- `103 + 309/Project/Source/main.c`
+- `103 + 309/Project/Source/AppInit.c`
+- `103 + 309/Project/Source/Runtime.c`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/LogRecord.c`
+- `103 + 309/Project/Source/System_Monitor.c`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/SOC.c`
+- `103 + 309/Project/Source/ProductionID.c`
+
+| ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
+|---|---|---|---|---|---|---|---|---|---|
+| Q-SV-001 | LedBar/初始化 | `s_ledbar.initialized` 是否改为显式初始化后删除大部分懒初始化判断 | `AppInit.c:44-49`, `LedBar.c:171-177`, `LedBar.c:1034-1067`, `Runtime.c:18` | 当前 `APP_LedBar()` 首次运行时懒初始化，多个 API 分散调用 `LedBar_EnsureInit()` | KEEP_BUT_REFACTOR | 删除不当会导致 LED 重复初始化、TIM4 ISR 未初始化访问或 STOP 前 GPIO 状态异常 | 是否允许把 `LedBar_Init()` 放入启动流程，先保留 ISR 保护，再分批删除 `LedBar_EnsureInit()`？ | B. 保留需求但简化实现 | |
+| Q-SV-002 | 低功耗 | `readyToSleep` 是否作为重复阶段变量删除/收口 | `rtc_sleep.c:107-134`, `rtc_sleep.c:304-353`, `LedBar.c:1314-1318`, `LogRecord.c:135-142` | `readyToSleep` 在 `rtc_sleep()` 内置位后同次消费，又被 LED 和日志路径读取/清除 | REMOVE_CANDIDATE | 删除不当会漏 sleep SOC 保存、BMS_SLEEP 日志或 debug busy 状态 | 是否允许把 `readyToSleep` 改成本地提交决策，并把 LED/日志收尾统一到 sleep commit？ | D. 删除重复变量，但先重建提交链 | |
+| Q-SV-003 | 低功耗/debug | `g_stLowPowerRtcStatus` 中展示字段是否迁到 debug 快照或明确标记为 mirror | `rtc_sleep.h:50-58`, `rtc_sleep.c:86-92`, `SystemDebug.c:536-541` | 控制状态和展示状态混在同一个全局结构体 | KEEP_BUT_REFACTOR | 维护者容易误以为 `rtcWake/delay/elapsed` 参与控制 | 是否允许先文档标记，后续把纯展示字段从控制结构里移出？ | B. 保留可观测性但降低控制耦合 | |
+| Q-SV-004 | 产品信息 | `ProductionID.c` 的 `su8_StartUpFlag` 是否可由启动流程替代 | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | 已把 `InitProID()` 收口到启动运行态初始化；后台 `App_ProID_Deal()` 不再依赖一次性 flag | 已处理 | 仍需上位机/真板确认 `0xC002` 默认信息读取 | 是否允许把 `InitProID()` 收口到 `AppInit_Boot()`，删除主循环一次性 flag？ | 已执行；保留 PROID heartbeat hook | 已执行 |
+| Q-SV-005 | 状态保留边界 | 按键防抖、`MCU_WK` 防抖、SOC sample seq、AFE fault 计数是否作为真实历史状态保留 | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 这些变量承担边沿检测、去重积分、故障持续时间判断 | MUST_KEEP | 误删会导致误唤醒、重复积分、故障恢复失败 | 是否接受本轮净删减边界：只删重复事实和阶段残留，不删真实历史状态？ | A. 保留这些状态，只优化命名/边界 | |
+| Q-SV-006 | DataDeal/客户逻辑 | `DataDeal.c` 中充电器、MOS 过温、UL 认证、RF_EN 熔断类状态是否仍是当前产品需求 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 多个静态状态混在 200ms 业务链路里 | UNKNOWN | 直接删除可能改变安全输出、认证动作或客户体验 | 这些逻辑是当前产品需求、认证需求，还是历史残留？ | F. 先补产品/认证背景，不进第一批删除 | |
 
 ## 6. 高风险需求
 

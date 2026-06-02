@@ -20,6 +20,7 @@
 | 查看 CAN/Modbus 协议 | [协议文档](#7-协议文档-protocol) |
 | 查看某模块的设计方案 | [设计文档](#6-设计文档-design) |
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
+| 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
@@ -112,6 +113,7 @@ docs/
 │   ├── document_merge_plan.md      文档合并计划
 │   ├── document_source_consistency.md 文档源码一致性
 │   ├── variable_cleanup_report.md  变量清理报告
+│   ├── state_variable_audit.md     状态变量净删减专项审计
 │   ├── bms_app_io_low_power_compare_2026-05-27.md  IO 低功耗对比
 │   ├── rtc_sleep_low_power_requirement_confirmation_2026-05-27.md
 │   └── rtc_sleep_low_power_research_2026-05-27.md

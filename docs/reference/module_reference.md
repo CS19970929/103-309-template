@@ -318,7 +318,7 @@ Runtime_RunOnce()
       │   ├─ StorageFlash_AppUseTest_Task()
       │   ├─ App_FlashUpdate()           - Flash更新
       │   ├─ App_LogRecord()             - 日志记录
-      │   ├─ App_ProID_Deal()            - 产品ID处理
+      │   ├─ App_ProID_Deal()            - 产品ID heartbeat hook
       │   └─ Feed_IWatchDog              - 喂狗
       └─ Runtime_TryIdleSleep()          - 空闲时 WFI (可配置)
 ```

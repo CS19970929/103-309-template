@@ -50,7 +50,7 @@ Keil 工程列入的业务源码主要包括：
 | RTC | 开启 | `Project_Config.h:86` | 支持 STOP/RTC 唤醒/SOC 休眠补偿 |
 | UART1 唤醒 | 开启 | `Project_Config.h:94` | PB7 可作为唤醒源 |
 | RS485 唤醒 | 开启 | `Project_Config.h:102` | PB12 作为通信唤醒源 |
-| 虚拟电流 | 开启 | `Project_Config.h:110` | 调试入口存在；当前 AFE 主路径还实际调用虚拟电流循环 |
+| 虚拟电流 | 开启 | `Project_Config.h:110` | 调试入口存在；当前 `App_AFEGet()` 主路径调用 `DataLoad_Current()`，测试电流必须保持隔离 |
 | 长按关机 | 开启 | `Project_Config.h:122` | LED/按键模块可进入 DEEP_MODE |
 | IAP 跳转 | 开启 | `Project_Config.h:159` | 上位机/CAN 可请求进 IAP |
 | 工厂老化 | 开启 | `Project_Config.h:163` | 默认 3 天运行时老化 |
@@ -98,15 +98,15 @@ AppInit_Boot()
   AppInit_InitRuntimeState()
     InitSystemMonitorData_EEPROM()
     g_u32CS_Res_AFE = ...
-    system boot ready flag/version/log
+    system boot ready flag/version/product id/log
   Init_RTC()
 ```
 
 证据：
 
 - `AppInit.c:10-38` 初始化外设和任务依赖。
-- `AppInit.c:57-65` 初始化系统运行状态。
-- `AppInit.c:67-73` 启动 RTC；低功耗运行态入口在主循环内调用。
+- `AppInit.c:34-42` 初始化系统运行状态、产品信息和启动日志请求。
+- `AppInit.c:44-52` 启动 RTC；低功耗运行态入口在主循环内调用。
 
 ## 6. 任务调度逻辑
 
@@ -116,7 +116,7 @@ AppInit_Boot()
 |---|---|---|---|
 | 前台快任务 | `SysTime_LatchTaskFlags()` -> `FactoryAging_Task()` -> `APP_LedBar()` -> `App_AFEGet()` | 锁存时基、老化、LED、AFE/SOC 200ms 数据链 | `Runtime.c:15-22` |
 | IO 和电源任务 | `AppInit_ServiceSci()` -> `App_AnlogCal()` -> `rtc_sleep()` -> `App_Can()` | UART/Modbus、ADC、低功耗、CAN | `Runtime.c:24-31` |
-| 后台任务 | `StorageFlash_AppUseTest_Task()` -> `App_FlashUpdate()` -> `App_LogRecord()` -> `App_ProID_Deal()` -> `Feed_IWatchDog` | Flash 测试钩子、IAP 复位、日志、产品信息、喂狗 | `Runtime.c:33-42` |
+| 后台任务 | `App_FlashUpdate()` -> `App_LogRecord()` -> `App_ProID_Deal()` -> `Feed_IWatchDog` | IAP 复位、日志、PROID heartbeat hook、喂狗 | `Runtime.c:47-60` |
 
 关键事实：
 
@@ -224,7 +224,7 @@ InitE2PROM()
 AFE/ADC/参数
   DataLoad_CellVolt()
   DataLoad_Temperature()
-  DataLoad_Current() 或 test_Autocurrent_cycle()
+  DataLoad_Current()
   g_u32AfeCurrentSampleSeq++
 App_SOC()
   SOC_UpdateSampleData()
@@ -242,15 +242,15 @@ App_SOC()
 
 关键证据：
 
-- SOC 初始化：`SOC.c:196-201`。
-- SOC 更新只在 AFE sample sequence 变化时执行：`SOC.c:203-237`。
+- SOC 初始化：`SOC.c:109-114`。
+- SOC 更新只在 AFE sample sequence 变化时执行：`SOC.c:116-142`。
 - 休眠前保存 snapshot：`SocEnhance.c:1678-1685`。
 - RTC 休眠补偿：`SocEnhance.c:1739-1764`。
 - Type-C 等效电流并入 SOC：`SOC.c:104-172`。
 
 重大确认点：
 
-- 当前 `App_AFEGet()` 中 `DataLoad_Current()` 被注释，实际调用 `test_Autocurrent_cycle()`，见 `DataDeal.c:1238-1239`。这会直接影响 SOC、CAN 电流、保护显示和老化行为，必须确认是否为误留测试代码。
+- 当前 `App_AFEGet()` 中已调用 `DataLoad_Current()`，见 `DataDeal.c:1063-1085`。旧文档中“实际调用 `test_Autocurrent_cycle()`”的结论已过期；后续必须保持测试电流入口和量产主路径隔离。
 
 ## 12. ADC / AFE 数据流
 
@@ -292,7 +292,7 @@ App_AFEGet() every 200ms
     Registers_AFE1 -> SH367309_Read_AFE1
   DataLoad_CellVolt()
   DataLoad_Temperature()
-  current path
+  DataLoad_Current()
   App_SH367309()
   new_todo_logi()
   App_SOC()
@@ -423,4 +423,5 @@ TIM4_IRQHandler()
 | RTC 参数写入 | `Sci_WrRegs_0x10_RTC()` 空函数 | 地址存在但写入无效 |
 | 铜损表写入 | `Sci_WrRegs_0x10_CopperLoss()` 空函数 | 地址存在但写入无效 |
 | 故障 LED 显示 | `LedBar_IsFaultActive()` 存在，`APP_LedBar()` fault 分支为空 | 可能是未完成需求 |
-| 虚拟电流循环 | `DataLoad_Current()` 被注释，`test_Autocurrent_cycle()` 运行 | 量产高风险，必须确认 |
+| 虚拟电流循环 | 当前 `App_AFEGet()` 主路径已调用 `DataLoad_Current()`；旧虚拟电流主路径描述已过期 | 量产必须保持真实电流主路径，测试注入只能在测试 profile/测试固件中使用 |
+| 状态变量复杂度 | `s_ledbar.initialized`、`g_stLowPowerRtcStatus.readyToSleep`、`ProductionID.c` 的 `su8_StartUpFlag` 等 | 详见 `docs/review/state_variable_audit.md`，需用户确认后分批净删减 |

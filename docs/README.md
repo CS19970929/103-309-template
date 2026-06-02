@@ -9,6 +9,12 @@
 
 📖 **[INDEX.md](INDEX.md)** — 文档总索引，链接到所有分文档。
 
+当前专项入口：
+
+- [状态变量净删减专项审计](review/state_variable_audit.md)
+- [顶层变更记录](change_log.md)
+- [顶层测试计划](test_plan.md)
+
 ---
 
 ## 目录结构

@@ -31,11 +31,5 @@ void WriteProID_Default(void)
 
 void App_ProID_Deal(void)
 {
-	static UINT8 su8_StartUpFlag = 0;
-
-	if (!su8_StartUpFlag)
-	{
-		InitProID();
-		su8_StartUpFlag = 1;
-	}
+	/* Production ID is initialized during boot; keep this hook for runtime heartbeat. */
 }

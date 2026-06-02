@@ -37,3 +37,18 @@
 | RISK-RTC-AFE-001 | AFE sleep block 主判断未接入 | `rtc_sleep.c`, `rtc_sleep_afe_sh367309.c` | AFE 异常、PCHG、保护状态下可能进入 STOP | UNKNOWN | 确认 SH367309 状态和 HICCUP sleep 关系，再决定接入 RTC block 或删除保留 reason |
 | RISK-RTC-PARAM-001 | 上位机可写的普通休眠/RTC 参数当前未进入主策略 | `DataDeal.h`, `Sci_Upper.c`, `rtc_sleep.c`, `RTC.c` | 参数读写与真实行为不一致，维护和调试误导 | CHANGE_NEEDED | 确认保留/接入/删除，不要继续保留“看似有效”的参数 |
 | RISK-RTC-WRAPPER-001 | `app_lowpower.c` 曾暴露多组非主路径 wrapper | `Runtime.c`, `rtc_sleep.c`, `rtc_sleep.h` | 增加低功耗入口数量和阅读成本 | 已处理 | 已删除未使用 wrapper 和 `app_lowpower.c/h`，只保留真实 `Runtime_RunOnce()->rtc_sleep()` 主路径 |
+
+## 状态变量净删减专项风险
+
+状态：部分验证，2026-06-02 按当前源码新增
+
+专项文档：`docs/review/state_variable_audit.md`
+
+| 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
+|---|---|---|---|---|---|
+| RISK-SV-LED-001 | 直接删除 `s_ledbar.initialized` 会重现 LED 初始化回归风险 | `LedBar.c:171-177`, `LedBar.c:1034-1067`, `Runtime.c:18` | LED 每轮重置、启动显示窗口异常、低功耗阻塞、TIM4 ISR 未初始化访问 | KEEP_BUT_REFACTOR | 先显式 `LedBar_Init()`，再小步删除懒初始化；保留 ISR 安全保护直到验证 |
+| RISK-SV-LP-001 | `readyToSleep` 同时被低功耗、LED、日志、debug 使用，直接删除会丢提交前动作 | `rtc_sleep.c:304-353`, `LedBar.c:1314-1318`, `LogRecord.c:135-142`, `Runtime.c:36-39` | 可能漏 sleep SOC 保存、`BMS_SLEEP` 日志、低功耗 busy 状态或 deep sleep 提交 | REMOVE_CANDIDATE | 先画出 sleep commit 顺序，把 LED/日志收尾放到明确提交点 |
+| RISK-SV-DBG-001 | 控制状态和 debug mirror 混在 `g_stLowPowerRtcStatus` 中 | `rtc_sleep.h:50-58`, `rtc_sleep.c:86-92`, `SystemDebug.c:536-541` | 后续维护者可能把展示字段误认为控制字段，增加低功耗理解成本 | KEEP_BUT_REFACTOR | 文档标记后，单独批次迁移纯展示字段 |
+| RISK-SV-PROD-001 | `ProductionID.c` 曾依赖主循环一次性 flag 初始化产品信息 | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | 已减少主循环一次性状态；仍需确认 `0xC002` 默认信息读取 | 已处理 | `InitProID()` 已收口到启动运行态初始化；`App_ProID_Deal()` 保留为空 hook 维持 PROID heartbeat |
+| RISK-SV-DATA-001 | `DataDeal.c` 中多个静态状态混合客户逻辑、保护逻辑和认证逻辑 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 变量看似可删，但可能影响 MOS、RF_EN、过温、拔 5V 行为和认证 | UNKNOWN | 未确认产品/认证背景前只做文档归类，不改源码 |
+| RISK-SV-KEEP-001 | 把真实历史状态误判为“不必要变量” | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 会导致误唤醒、重复积分、故障恢复失败、通信状态丢失 | MUST_KEEP | 明确边界：防抖、边沿、累计延时、ISR 队列、SOC sample seq 第一批不删 |

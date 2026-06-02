@@ -21,9 +21,9 @@ typedef struct {
 extern PRODUCTION_ID_INFO ProductionInfor;
 
 
+void InitProID(void);
 void WriteProID_Default(void);
 void App_ProID_Deal(void);
 
 
 #endif	/* PRODUCTIONID_H */
-

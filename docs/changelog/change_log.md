@@ -6,6 +6,47 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 状态变量净删减专项审计
+
+### 本次文档修改
+
+- 新增 `docs/review/state_variable_audit.md`，按当前源码梳理状态变量职责、可删候选、必须保留历史状态和第一批建议批次。
+- 更新 `docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`，新增 `REQ-SV-*` / `Q-SV-*` 状态变量净删减确认、风险和测试项。
+- 更新 `docs/review/full_project_review.md`、`docs/review/module_map.md`、`docs/design/soc_design.md`、`docs/design/adc_afe_design.md`、`docs/review/document_source_consistency.md`，修正旧的 AFE/SOC 电流主路径描述；当前 `App_AFEGet()` 已调用 `DataLoad_Current()`。
+- 新增顶层入口 `docs/change_log.md` 和 `docs/test_plan.md`，用于满足仓库协作规则并指向长期文档。
+- 更新 `docs/README.md` 和 `docs/INDEX.md`，加入状态变量专项入口。
+
+### 边界说明
+
+- 本次未修改 `.c/.h`、Keil 工程、编译宏、协议、Flash/IAP 地址和烧录脚本。
+- 后续源码净删减前必须先确认 `REQ-SV-*` 或 `Q-SV-*`。
+- 第一批建议只处理 `ProductionID.c` 一次性 flag 或 LedBar 显式初始化这类低风险项；`readyToSleep` 需先确认 sleep commit 顺序。
+
+## 2026-06-02 SV-01 产品信息初始化低风险净删减
+
+### 本次源码修改
+
+- `AppInit.c`：在启动运行态初始化阶段显式调用 `InitProID()`，让 `0xC002` 默认产品信息在进入主循环前准备好。
+- `ProductionID.h`：补充 `InitProID()` 声明。
+- `ProductionID.c`：删除 `App_ProID_Deal()` 内部 `su8_StartUpFlag` 和懒初始化逻辑；保留空 hook，维持 `Runtime.c` 中 `DBG_MODULE_PROID` heartbeat。
+
+### 本次文档修改
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/review/module_map.md`、`docs/reference/module_reference.md` 和 `docs/change_log.md`，将 `Q-SV-004 / SV-01` 标记为已执行，并同步 PROID heartbeat hook 口径。
+
+### 安全边界
+
+- 未修改 `0xC002` 寄存器地址、SN/HW/SW 字段顺序、默认字符串、Modbus/CAN 协议、Flash/IAP 地址、SOC、低功耗、LED 和 AFE。
+- 真板/上位机 `0xC002` 读取仍需后续实测确认。
+
+### 本次验证
+
+- `rg -n "su8_StartUpFlag" "103 + 309/Project/Source"`：源码无残留。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `AppInit.c` 和 `ProductionID.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板运行或上位机 `0xC002` 读取。
+
 ## 2026-06-02 低功耗 review 问题修复
 
 ### 本次源码修改

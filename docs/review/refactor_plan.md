@@ -119,3 +119,37 @@
 | 验证方法 | 编译、Modbus、CAN、存储、SOC、ADC/AFE、保护、MOS、低功耗、IAP、LED、老化 |
 | 需要确认 | 出货标准、客户协议版本、硬件测试清单 |
 | 回滚方式 | 每阶段都有独立 commit 和文档记录，失败回滚到上一个已验证阶段 |
+
+## 阶段 11：状态变量净删减专项阶段
+
+专项文档：`docs/review/state_variable_audit.md`
+
+| 项目 | 内容 |
+|---|---|
+| 修改范围 | 只处理当前源码中“重复事实、阶段残留、一次性初始化 flag、纯 debug mirror”等状态变量 |
+| 不能改什么 | 未确认前不改保护阈值、SOC 算法、CAN/Modbus 协议、IAP/App 地址、Flash 布局、AFE sleep/唤醒时序、客户认证逻辑 |
+| 验证方法 | 每批先 `rg` 确认调用链，再 `git diff --check`；涉及源码时执行仓库脚本、能用的静态检查/编译、对应模块实测 |
+| 需要确认 | `Q-SV-001` 到 `Q-SV-006`，尤其是 LedBar 显式初始化、`readyToSleep` 收口、DataDeal 客户逻辑归属 |
+| 回滚方式 | 每个候选独立小 commit；出现 LED/低功耗/日志异常时只回滚该批 |
+
+### 阶段 11 推荐小批次
+
+| 批次 | 类型 | 内容 | 允许修改文件 | 前置条件 | 验证 |
+|---|---|---|---|---|---|
+| SV-00 | 文档确认 | 维护 `state_variable_audit.md`、需求确认表、风险和测试计划 | `docs/review/*`, `docs/change_log.md`, `docs/test_plan.md` | 本阶段已开始 | 文档链接和源码证据自洽 |
+| SV-01 | 已完成低风险试点 | 把产品信息初始化从 `ProductionID.c` 的 `su8_StartUpFlag` 收口到启动流程，并保留 PROID heartbeat hook | `AppInit.c`, `ProductionID.c/.h`, 文档 | 用户确认“先只做低风险” | `0xC002` 默认信息读取、编译、`rg su8_StartUpFlag` |
+| SV-02 | 初始化收口 | 显式调用 `LedBar_Init()`，减少分散 `LedBar_EnsureInit()` | `AppInit.c`, `LedBar.c/.h`, 文档 | 用户确认 `Q-SV-001`；确认 TIM4 ISR 使能顺序 | LED 启动显示、按键显示、TIM4 扫描、STOP 前 GPIO、低功耗释放 |
+| SV-03 | 低功耗提交收口 | 将 `readyToSleep` 改成本地提交决策或明确 commit pending，收口 LED/日志 sleep 前动作 | `rtc_sleep.c/.h`, `LedBar.c`, `LogRecord.c`, `Runtime.c`, 文档 | 用户确认 `Q-SV-002`；画出 sleep commit 顺序 | HICCUP/NORMAL/DEEP、BMS_SLEEP 日志、sleep SOC、`SystemDebug` 低功耗快照 |
+| SV-04 | debug mirror 收口 | 从控制结构里移出纯展示字段，或标记为 debug mirror | `rtc_sleep.c/.h`, `SystemDebug.c/.h`, 文档 | 用户确认 `Q-SV-003`；确认工具/上位机依赖 | `SystemDebug`、ST-Link 监控、Modbus debug 窗口 |
+| SV-05 | DataDeal 需求拆分 | 先只把 `charger_detect_and_keyLogi_200ms()`、`new_todo_logi()` 中状态需求归类，不先删除 | 文档优先，源码另批 | 用户确认 `Q-SV-006` | 需求表通过后再决定是否拆模块 |
+
+### 阶段 11 明确保留项
+
+以下变量不是第一批净删减目标：
+
+- 按键和 `MCU_WK` 防抖/边沿状态。
+- `scan_index`、LED frame 和 TIM4 扫描状态。
+- SOC 的 `s_u32LastAfeCurrentSampleSeq`。
+- AFE fault/recover 计数和低压/强制低压累计计数。
+- CAN/Sci RX/TX 队列、pending、busy、read block 状态。
+- Flash busy、日志边沿去重、BKP sleep flag 和 RTC elapsed 秒数。

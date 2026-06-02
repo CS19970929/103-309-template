@@ -131,3 +131,20 @@
 - VBC 分压、Type-C PA2 电流换算、MOS NTC 温度换算。
 - RTC LSE/LSI fallback，STOP 电流，IWDG 最坏情况。
 - CAN 250k 位时序、周期广播、上位机实时监控和升级链路。
+
+## 13. 状态变量净删减专项测试
+
+专项文档：`docs/review/state_variable_audit.md`
+
+| ID | 测试项 | 方法 | 通过标准 |
+|---|---|---|---|
+| T-SV-001 | 文档阶段一致性 | `rg "Q-SV-|REQ-SV-|SV-CLEAN" docs/review` | 状态变量专项在审计、确认、风险、计划和测试文档中都有入口 |
+| T-SV-002 | 产品信息初始化收口 | 读 Modbus `0xC002` 48 个寄存器，并 `rg "su8_StartUpFlag|InitProID\\(|App_ProID_Deal"` | SN/HW/SW 默认或写入信息不丢失；源码中 `App_ProID_Deal()` 不再依赖一次性 flag |
+| T-SV-003 | LedBar 显式初始化 | 源码阶段执行后观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | 不重复初始化，不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
+| T-SV-004 | LedBar STOP 前 GPIO | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流 | LED 引脚进入低漏电安全态，STOP 前无残留扫描 |
+| T-SV-005 | `readyToSleep` 收口 | 源码阶段执行后覆盖 HICCUP、NORMAL、DEEP 三类 sleep | sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
+| T-SV-006 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | 移出纯展示字段后，调试仍能看到 mode/block/elapsed 等必要信息 |
+| T-SV-007 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |
+| T-SV-008 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
+| T-SV-009 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
+| T-SV-010 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |

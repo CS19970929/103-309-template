@@ -31,7 +31,7 @@
 
 | 风险 ID | 内容 | 源码证据 | 影响 | 建议 |
 |---|---|---|---|---|
-| R-P0-001 | 量产 profile 下 AFE 200ms 主路径没有调用真实 `DataLoad_Current()`，而是调用 `test_Autocurrent_cycle()` | `DataDeal.c:1238-1239`, `Project_Config.h:17` | SOC、CAN 电流、保护显示、老化和低功耗判定可能全部基于虚拟电流 | 必须先确认；通常应恢复真实电流并把虚拟电流隔离到测试 profile |
+| R-P0-001 | 量产 profile 下 AFE 200ms 主路径必须保持真实 `DataLoad_Current()`，测试虚拟电流不能回流 | `DataDeal.c:1063-1085`, `Project_Config.h:17` | 若测试虚拟电流再次混入量产，会影响 SOC、CAN 电流、保护显示、老化和低功耗判定 | 当前源码主路径已调用 `DataLoad_Current()`；后续必须把虚拟电流隔离规则作为门禁保留 |
 | R-P0-002 | App/IAP/Flash 地址口径需要最终 map 验证 | `Flash.h:4-30`, `tools/soc_flash_app_safe.ps1:17-20`, Keil XML 中同时有 `0x08000000` 与 `0x8004800` | 错烧可能覆盖 IAP；后 64K 写入可能越界 | 所有烧录必须走安全脚本；后续增加 map/bin 地址门禁 |
 | R-P0-003 | 均衡参数存在但主动均衡入口未确认 | `DataDeal.h:141-149`, `Sci_Upper.c:1937-1940`, 未见主循环主动均衡任务 | 若产品需要均衡，则功能缺失；若不需要，协议残留误导 | 必须确认均衡需求归属 |
 | R-P0-004 | Host 写权限在量产开启，且可能触发 AFE/Flash/IAP | `PROJECT_CFG_HOST_WRITE_ENABLE 1`, `Sci_Upper.c:314-737`, `SH367309_DataDeal.c:145-249` | 现场误写可能改变保护阈值或进入 IAP | 需求确认前不要改协议；后续考虑工装权限层 |
@@ -96,7 +96,7 @@
 
 | ID | 严重度 | 描述 | 证据 | 当前判断 |
 |---|---|---|---|---|
-| BUG-001 | P0 | 量产主路径使用虚拟电流循环 | `DataDeal.c:1238-1239` | 高度疑似误留测试逻辑 |
+| BUG-001 | P0 | 旧文档曾记录量产主路径使用虚拟电流循环；当前源码已复核为 `DataLoad_Current()` | `DataDeal.c:1063-1085` | 当前不再按 bug 处理，但必须防止测试入口回流量产 |
 | BUG-002 | P1 | 均衡开压参数被硬编码 4160 覆盖 | `SH367309_DataDeal.c:58-59` | 需确认是固定需求还是 bug |
 | BUG-003 | P1 | CAN 版本字段固定 1 | `CanFeidaoFrames.c:158-166` | 可能不符合上位机/客户诊断 |
 | BUG-004 | P1 | LedBar fault 分支为空 | `LedBar.c:1022-1024` | 可能未完成故障显示 |
@@ -122,4 +122,20 @@
 1. 先按 `requirement_questions.md` 逐条确认 P0/P1 需求。
 2. 同时把文档体系收敛到 `docs/README.md` 指向的权威文档。
 3. 在不改源码的前提下，先补协议地址表、Flash 地址门禁说明、低功耗测试矩阵。
-4. 第一轮代码重构建议从“恢复真实电流路径/隔离虚拟电流”或“只读文档化 DataDeal 职责拆分”开始，但必须等你确认。
+4. 当前状态变量净删减专项见 `docs/review/state_variable_audit.md`；第一批建议从 `ProductionID.c` 一次性 flag 或 LedBar 显式初始化这种低风险项开始。
+5. `readyToSleep` 是高价值候选，但必须先确认 sleep commit 顺序，不能直接删除。
+
+## 15. 状态变量净删减专项补充（2026-06-02）
+
+状态：部分验证
+
+当前项目确实存在一类“因为入口和阶段没收口而产生的状态变量”，但不能把所有状态变量都视为复杂度来源。按当前源码审计：
+
+| 类型 | 代表变量 | 判断 |
+|---|---|---|
+| 可收口候选 | `s_ledbar.initialized`, `g_stLowPowerRtcStatus.readyToSleep`, `ProductionID.c` 的 `su8_StartUpFlag` | 可以分批净删减，但必须先确认初始化/低功耗提交时序 |
+| 需要保留的真实历史状态 | 按键防抖、`MCU_WK` 防抖、`scan_index`、`s_u32LastAfeCurrentSampleSeq`、AFE fault 计数、RTC elapsed | 不能因为主循环时序固定而删除 |
+| 需求不清的客户逻辑状态 | `DataDeal.c` 中充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类状态 | 必须先确认客户/认证需求归属 |
+| debug/status mirror | `g_stLowPowerRtcStatus` 中 `rtcWake/delay/elapsed` 等展示字段 | 可考虑从控制结构迁移到 debug 快照 |
+
+后续源码修改必须先确认 `REQ-SV-*` 或 `Q-SV-*` 条目。

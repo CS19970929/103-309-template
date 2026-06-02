@@ -3,15 +3,15 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`SOC.c`, `SOC.h`, `SocEnhance.c`, `SocEnhance.h`, `DataDeal.c`, `Flash.c`, `rtc_sleep_port.c`, `Project_Config.h`
-最后更新时间：2026-05-26
-未确认事项：当前主路径是否应恢复真实 `DataLoad_Current()`；Type-C 电流是否必须计入 SOC；初始 SOC 默认值策略。
+最后更新时间：2026-06-02
+未确认事项：测试虚拟电流入口必须继续和量产主路径隔离；Type-C 电流是否必须计入 SOC；初始 SOC 默认值策略。
 
 ## 1. SOC 输入
 
 | 输入 | 来源 |
 |---|---|
 | 单体最大/最小电压 | `DataLoad_CellVolt()` -> `g_stCellInfoReport` |
-| 充/放电电流 | 理论来自 `DataLoad_Current()`，当前主路径实际调用 `test_Autocurrent_cycle()` |
+| 充/放电电流 | 当前 `App_AFEGet()` 主路径调用 `DataLoad_Current()`，并通过 `g_u32AfeCurrentSampleSeq` 驱动 SOC 更新 |
 | Type-C 等效电流 | `SOC_GetTypeCBatEquivCurrentA10()` |
 | 电池容量/串数/V0/V100 | `OtherElement` |
 | 保护/系统状态 | `System_ERROR_UserCallback()` 等 |
@@ -68,13 +68,13 @@ SOC snapshot 使用 Flash journal pair，支持 V1 -> V2 兼容。休眠前通�
 
 ## 6. 当前问题
 
-1. P0：真实电流路径被虚拟电流循环替代，需要立即确认。
+1. P0：必须保持真实 `DataLoad_Current()` 作为量产主路径；测试虚拟电流只能在测试 profile/测试固件中使用。
 2. SOC runtime table 当前关闭，上位机写表会被拒绝。
 3. 量产 `0xD300 supported=0` 是正常隔离，但测试固件规则必须保持文档化。
 4. Type-C 输出电流是否扣 SOC 需要产品确认。
 
 ## 7. 后续重构建议
 
-1. 先修正/隔离电流路径，再谈算法优化。
+1. 先固化真实电流路径和测试电流隔离门禁，再谈算法优化。
 2. 保持 1% 校准硬约束、满电/低压/静置策略不变。
 3. 建立 SOC host 回放 + 上板实测双轨验证。

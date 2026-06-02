@@ -140,3 +140,32 @@
 | REQ-IO-RTC-006 | RTC 唤醒后必须恢复 ADC、USART、CAN、TIM3、AFE I2C | `conf.c:InitRunAfterStopWakeup()` | 当前统一恢复这些外设 | MUST_KEEP | 待确认 |
 | REQ-IO-RTC-007 | IWDG 开启时 RTC 唤醒周期不得超过 10 秒 | `RTC.c` | 当前限制为 10 秒 | CONFLICT | 待确认 |
 | REQ-IO-RTC-008 | RTC 唤醒后不主动运行 CAN 周期广播 | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 当前删除 RTC wake CAN 服务；恢复后由运行态 `InitCan()` 打开 CMNT 并通信 | CHANGE_NEEDED | 已确认 |
+
+## 10. 状态变量净删减专项确认（2026-06-02）
+
+状态：部分验证
+
+专项文档：`docs/review/state_variable_audit.md`
+
+参考源码：
+
+- `103 + 309/Project/Source/main.c`
+- `103 + 309/Project/Source/AppInit.c`
+- `103 + 309/Project/Source/Runtime.c`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep.h`
+- `103 + 309/Project/Source/LogRecord.c`
+- `103 + 309/Project/Source/System_Monitor.c`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/SOC.c`
+- `103 + 309/Project/Source/ProductionID.c`
+
+| Requirement ID | Requirement description | Evidence from code | Current behavior | Risk | Codex judgment | Question for user | Suggested decision | User decision placeholder |
+|---|---|---|---|---|---|---|---|---|
+| REQ-SV-001 | LedBar 初始化应由固定启动顺序显式完成，而不是由每个 API 懒初始化兜底 | `AppInit.c:44-49`, `LedBar.c:171-177`, `Runtime.c:18` | `APP_LedBar()` 首次运行时自动 `LedBar_Init()`，多个外部 API 都调用 `LedBar_EnsureInit()` | 删除不当会重现 LED 重复初始化/闪烁，或 TIM4 ISR 访问未初始化状态 | KEEP_BUT_REFACTOR | 是否允许把 `LedBar_Init()` 显式加入启动流程，并逐步删除分散懒初始化？ | 同意先做小批次，保留 ISR 安全保护直到验证完成 | 待确认 |
+| REQ-SV-002 | 低功耗提交流程应只保留一个清晰状态源，避免 `readyToSleep` 同时服务提交、LED、日志和 debug | `rtc_sleep.c:107-134`, `rtc_sleep.c:304-353`, `LedBar.c:1314-1318`, `LogRecord.c:135-142` | `readyToSleep` 在 `rtc_sleep()` 内置位后同次消费，又被 LED 和日志清除路径读取 | 删除不当会丢 sleep SOC 保存、BMS_SLEEP 日志或低功耗 heartbeat busy 状态 | REMOVE_CANDIDATE | 是否允许把 `readyToSleep` 改成本地提交决策，并把 LED/日志收尾放入明确的 sleep commit 流程？ | 同意作为第二批高价值净删减，先画调用链再改 | 待确认 |
+| REQ-SV-003 | 纯 debug/status 镜像字段不应混入控制状态结构 | `rtc_sleep.h:50-58`, `rtc_sleep.c:86-92`, `SystemDebug.c:536-541` | `g_stLowPowerRtcStatus` 同时保存控制状态和展示字段 | 继续混用会让维护者误以为展示字段参与低功耗控制 | KEEP_BUT_REFACTOR | 是否允许把只读展示字段迁移到 `SystemDebug` 或明确标记为 debug mirror？ | 同意先文档标记，源码阶段单独处理 | 待确认 |
+| REQ-SV-004 | 产品信息初始化不应依赖主循环内的一次性 `static flag` | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | `InitProID()` 已收口到启动运行态初始化；`App_ProID_Deal()` 保留为空 hook，维持 `DBG_MODULE_PROID` heartbeat | 仍需上位机读 `0xC002` 48 个寄存器确认默认信息 | 已处理 | 是否允许把 `InitProID()` 放到启动初始化，主循环只保留真实后台处理？ | 已按低风险批次执行 | 已执行 |
+| REQ-SV-005 | 按键、`MCU_WK`、SOC sample seq、AFE fault 计数等真实历史状态必须保留 | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 这些状态用于防抖、边沿、去重积分、持续故障判断 | 误删会造成误唤醒、重复积分、故障恢复失效 | MUST_KEEP | 是否接受“不是所有状态变量都删，只删重复事实/残留阶段”的边界？ | 保留这些历史状态，只做命名和职责整理 | 待确认 |
+| REQ-SV-006 | `DataDeal.c` 中客户逻辑状态必须先确认需求归属，不能直接按“变量多”删除 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类逻辑混在 200ms 链路 | 直接删除可能改变安全输出和客户认证行为 | UNKNOWN | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 内这些状态是当前产品需求、认证需求，还是历史残留？ | 先列入需求确认，不进第一批删除 | 待确认 |

@@ -43,7 +43,7 @@
 
 | 缺失项 | 对照源码文件 | 一致性状态 | 不一致内容 | 源码真实行为 | 风险 | 建议处理 |
 |---|---|---|---|---|---|---|
-| 量产主路径虚拟电流 | `DataDeal.c:1238-1239` | CONFLICT | 多数 SOC/AFE 文档默认真实电流路径有效 | 当前主路径调用 `test_Autocurrent_cycle()` | 高 | 在所有权威文档列为 P0 待确认 |
+| 量产主路径虚拟电流 | `DataDeal.c:1063-1085` | 已按当前源码修正 | 旧文档曾记录主路径调用 `test_Autocurrent_cycle()` | 当前主路径调用 `DataLoad_Current()`，测试电流入口必须保持隔离 | 高 | 已在当前权威 review 文档中修正；后续做门禁防止回流 |
 | `0xC002` 产品信息固定 48 寄存器 | `Sci_Upper.c:769-773` | PARTIAL | 上位机文档有要求，固件权威 docs 缺少统一说明 | 当前读取 SN/HW/SW 各 16 bytes | 中 | 合并到 `protocol_design.md` |
 | CAN RTC wake service | `Can_HDX.c:952-979` | PARTIAL | 多份旧 CAN/低功耗文档互相冲突 | RTC 唤醒可短时发 CAN 周期帧 | 中 | 合并到 `low_power_design.md` 并标待确认 |
 | AFE 均衡开压硬编码 | `SH367309_DataDeal.c:58-59` | CONFLICT | 均衡参数文档默认可写即生效 | 源码硬编码 4160 | 高 | 列入待确认 |
