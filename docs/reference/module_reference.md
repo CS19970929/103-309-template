@@ -229,7 +229,7 @@ _COMMOM_UPPER_SCI3   上位机通讯 SCI3
 __VIRTURE_CURRENT__  虚拟电流
 FLASH64K_APP_QUICK_TEST_ENABLE  64K Flash 快速测试
 FLASH64K_APP_USE_TEST_ENABLE    64K Flash 应用测试
-SOC_TEST_MODE_ENABLE            SOC 测试模式
+SOC_TEST padding                兼容占位，当前无活动 SOC 测试模式宏
 ```
 
 ### 2.3 conf_gpio.h - GPIO 引脚定义
@@ -363,16 +363,20 @@ Runtime_RunOnce()
 ### 4.1 架构
 
 SOC 模块分为两层:
-- **SOC.c** - 顶层调度, 数据输入, 测试模式
-- **SocEnhance.c** - 核心算法: 安时积分, OCV 校准, SOC 显示平滑
+- **SOC.c** - 顶层调度、配置装载、Type-C 电流折算、AFE sample seq 触发
+- **SocEnhance.c** - 核心算法：容量积分、满电/低压/中段/静置/RTC 校准、SOC 显示平滑和 snapshot 保存
+
+当前完整逻辑和校准条件以 `docs/review/soc_current_logic_2026-06-02.md` 为准；后续只改写法、不改功能的候选见 `docs/review/soc_simplification_candidates_2026-06-02.md`。
 
 ### 4.2 SOC.c - 顶层
 
 **文件**: `SOC.c/h`
 
-**全局变量**:
-- `UINT16 SOC_Table_Set[42]` (仅 runtime_table 使能时)
-- `const UINT16 SOC_Table_Default[42]` - 默认三元锂 OCV 表
+**当前关键事实**:
+
+- `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE = 0` 时，上位机运行时 SOC 表不参与量产算法。
+- 当前 `PROJECT_CFG_BAT_CHEMISTRY = 0`，编译期使用 `SocTable_TernaryLi`。
+- `SOC.c` 不直接持有当前 SOC 表；OCV 表选择在 `SocEnhance.c` 中完成。
 
 **函数**:
 
@@ -380,8 +384,6 @@ SOC 模块分为两层:
 |------|------|
 | `InitData_SOC()` | SOC 初始化: 加载配置→初始化参数库→发布报告数据 |
 | `App_SOC()` | SOC 主任务: 检测新 AFE 采样→计算净电流→调用核心算法→发布 |
-| `SOC_TestMode_RunSample()` | SOC 测试模式: 注入模拟数据加速测试 |
-| `SOC_TestMode_ReadStatus()` | 读取测试模式状态 |
 
 **TypeC 电流折算**:
 ```c
@@ -413,8 +415,7 @@ SOC 模块分为两层:
 | `u8_SetSocOnce` | UINT8 | 一次性设置 SOC |
 | `u16_VCellMax/Min` | UINT16 | 电芯最高/最低电压 |
 | `u16_Ichg/Idsg` | UINT16 | 充/放电电流 (A×10) |
-| `u16_SOC_InitOver` | UINT16 | SOC 初始化完成标志 |
-| `u8_SOC` | UINT8 | 当前 SOC (%) |
+| `u8_SOC` | UINT8 | 当前对外显示 SOC (%)，来自内部 `display_soc` |
 | `u8_SOH` | UINT8 | 当前 SOH (%) |
 | `u16_CapacityNow` | UINT16 | 当前容量 (Ah×100) |
 | `u16_CapacityFull` | UINT16 | 满充容量 |
@@ -426,10 +427,10 @@ SOC 模块分为两层:
 | 函数 | 功能 |
 |------|------|
 | `soc_param_lib_init()` | 初始化 SOC 参数库 (容量, 表, 快照恢复等) |
-| `SOC_UpdateSampleData(vmax,vmin,ichg,idsg)` | 更新采样数据, 执行安时积分 |
+| `SOC_UpdateSampleData(vmax,vmin,ichg,idsg)` | 更新 SOC 采样输入 |
 | `SOC_IntEnhance_Ctrl()` | SOC 核心控制: OCV 校准检查, 静置检测, 尾端处理, 显示平滑 |
-| `SOC_PublishReportData()` | 将内部 SOC 发布到 `g_stCellInfoReport` |
-| `SOC_ApplyRtcRelaxationCompensation()` | RTC 休眠期间静置 SOC 补偿 |
+| `SOC_PublishReportData()` | 将显示 SOC 和容量字段发布到 `g_stCellInfoReport` |
+| `SOC_ApplyRtcRelaxationCompensation()` | HICCUP RTC STOP 周期内休眠补偿 |
 | `SOC_SaveSnapshotBeforeSleep()` | 休眠前保存 SOC 快照 |
 | `SOC_ResetStoredSnapshotToDefault()` | 复位 SOC 快照到默认值 |
 
@@ -437,12 +438,21 @@ SOC 模块分为两层:
 - `INTEGRATE_CHG/DSG` - 安时积分
 - `FULL_ANCHOR` - 满电锚定 (充满确认)
 - `EMPTY_TAIL` - 低压尾端
+- `MID_TAIL` - 中段尾端
 - `REST_TARGET` - 静置目标接近
 - `DEFERRED_OCV` - 延迟 OCV 校准
 - `LONG_REST_DOWN` - 长时间静置下调
 - `RTC_REST` - RTC 休眠静置补偿
 - `BOARD_SELF_CONSUMPTION` - 自耗电补偿
 - `STARTUP_SNAPSHOT/OCV/DEFAULT` - 启动时恢复
+- `MANUAL_OCV/PARAM_RESET/SET_ONCE` - 上位机命令校准
+
+**发布口径**:
+
+- 内部估算值是 `s_soc.soc`。
+- 用户显示和通信发布值是 `s_soc.display_soc`。
+- `g_stCellInfoReport.SocElement.u16Soc` 当前发布 `display_soc`，不是直接发布内部估算值。
+- `NORMAL/DEEP` reset sleep 快显读取 BKP 中睡前保存的显示 SOC；`HICCUP_MODE` RTC STOP 周期会先做 SOC 休眠补偿，最终按键唤醒后才请求 LedBar 显示。
 
 **SOC 阻塞原因** (enum SOC_WATCH_BLOCK_REASON):
 - `VOLTAGE_INVALID` - 电压无效
@@ -971,12 +981,12 @@ UNINIT → RUNNING → DONE
 | `0x2100-0x21FF` | 保护参数 (读写) |
 | `0x2200-0x22FF` | SOC/其他参数 (读写, 可禁用) |
 | `0x2300-0x23FF` | 均衡/系统参数 (读写) |
-| `0x2500` | SOC 测试模式 |
+| `0x2500` | 历史 SOC 测试命令；当前源码未见独立处理 |
 | `0xC000-0xC0FF` | LCD/SN/事件记录 (只读) |
 | `0xD000-0xD0FF` | 实时数据 (只读, 98字) |
 | `0xD100-0xD1FF` | RTC 实时数据 |
 | `0xD200-0xD2FF` | 故障快照 |
-| `0xD300-0xD3FF` | SOC 测试状态 |
+| `0xD300-0xD3FF` | SOC_TEST 兼容 padding；当前填充 16 word 0 |
 | `0xFFF0-0xFFFF` | 序列号/版本 |
 
 ### 12.3 全局变量
@@ -1295,7 +1305,7 @@ struct stCell_Info g_stCellInfoReport; // 核心上报数据
 
 ```c
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
-UINT16 SOC_Table_Set[42];          // (仅 runtime_table)
+UINT16 SOC_Table_Set[42];          // 仅 runtime table 宏路径引用，当前量产关闭
 ```
 
 ### 18.7 Fault

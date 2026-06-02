@@ -3,6 +3,7 @@
 状态：部分验证
 
 本文以当前源码为第一可信来源，记录本轮 BMS App IO 与 RTC 低功耗配置审查发现的风险。未修改源码，未做上板实测。2026-06-02 追加低功耗需求对齐风险，详见 `docs/review/low_power_requirement_alignment_2026-06-02.md`。
+2026-06-02 追加 SOC 当前逻辑与源码简化风险，详见 `docs/review/soc_current_logic_2026-06-02.md` 和 `docs/review/soc_simplification_candidates_2026-06-02.md`。
 
 ## 参考源码
 
@@ -20,6 +21,18 @@
 - `103 + 309/Project/Source/LedBar.c`
 - `103 + 309/Project/Source/FactoryAging.c`
 - `103 + 309/Project/Source/DataDeal.h`
+
+## SOC 文档合并与源码简化风险
+
+状态：已按源码部分验证，2026-06-02 新增
+
+| 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
+|---|---|---|---|---|---|
+| RISK-SOC-DOC-001 | 旧 SOC 文档和当前源码事实混用 | `docs/design/soc_design.md`, `docs/review/soc_current_logic_2026-06-02.md`, `SocEnhance.c` | 后续优化可能基于旧阶段结论，误改校准条件或休眠显示体验 | 已处理文档入口，仍需维护 | `soc_design.md` 只做入口；完整事实以当前逻辑详表为准；devlog 只作历史追溯 |
+| RISK-SOC-UX-001 | 把内部 `s_soc.soc` 和对外 `display_soc` 混为一谈 | `SocEnhance.c:1513-1584`, `SOC_PublishReportData()` | 自动校准和用户显示节奏被误改，可能出现跳变或显示不一致 | KEEP_BUT_REFACTOR | 后续源码简化不得改变 `display_soc` 发布口径；调试可暴露 real/display 双值 |
+| RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep.c:247-286`, `LowPowerSleep.c:5-15`, `LedBar.c:1175-1218` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | CHANGE_NEEDED 但需确认 | 先文档化；若要补 reset sleep 秒数，必须另立功能变更确认 |
+| RISK-SOC-SIM-001 | “只改写法”时改变了 SOC 状态机顺序 | `SocEnhance.c:1677-1722` | 满电、低压、中段、deferred OCV、静置计时优先级变化，影响用户体验和低端安全 | MUST_KEEP | 源码简化只允许小步，保持调用顺序不变，用回放和上板验证守住 |
+| RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SocEnhance.h:80-95`, `Sci_Upper.c:600-640`, `Sci_Upper.c:2052-2066` | `SetSocOnce`、手动 OCV、容量重算 ACK 或显示行为改变 | KEEP_BUT_REFACTOR | 先加请求接口，不立即改变 public struct 布局；单独验证 Modbus 写命令 |
 
 ## BMS App IO 与 RTC 低功耗风险
 

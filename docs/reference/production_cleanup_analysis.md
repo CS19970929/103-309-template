@@ -96,21 +96,18 @@
 
 **操作**: 删除所有 `#if PROJECT_CFG_DEBUG_WATCH_ENABLE` 保护的代码块
 
-### 6. PROJECT_CFG_SOC_TEST_MODE_ENABLE=0 → SOC 测试模式
+### 6. SOC 测试模式历史残留
+
+> 2026-06-02 SOC 复核：当前源码未看到活动的 `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 注入式测试状态机；`SOC.c` 仅保留 `#if 0` 包裹的 `SOC_TestMode_RunSample()` / `SOC_TestMode_ReadStatus()` 空壳。`Sci_Upper.c` 中 `0xD300` 兼容区当前填充 16 个 0，保留协议长度，不再调用 SOC 测试状态函数。
 
 **影响范围**:
 | 文件 | 行号 | 内容 |
 |------|------|------|
-| SOC.c | 32-38 | 7个 SOC_TEST_MODE 宏定义 |
-| SOC.c | 40-86 | `SOC_TEST_MODE_STATE` 结构体 + `s_stSocTestMode` + 辅助函数 |
-| SOC.c | 206-212 | App_SOC() 中测试模式分支 |
-| SOC.c | 238-282 | SOC_TestMode_RunSample() 测试模式函数体 |
-| SOC.c | 300-318 | SOC_TestMode_ReadStatus() 测试模式返回 |
-| Sci_Upper.c | 988 | SOC_TEST 地址处理 |
-| conf.h | 123-124 | SOC_TEST_MODE_ENABLE 宏 |
-| Project_BuildGuard.h | 259-262 | 测试模式限制为 Factory 构建 |
+| SOC.c | 144-162 | `#if 0` 包裹的 `SOC_TestMode_RunSample()` / `SOC_TestMode_ReadStatus()` 空壳 |
+| Sci_Upper.c | 828-829 | `SOC_TEST status padding`，16 word 置 0，用于保持协议长度 |
+| Sci_Upper.c | 1742-1765 | SOC 表写入入口；`PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0` 时返回写入错误 |
 
-**操作**: 删除所有 SOC_TEST_MODE 相关代码块
+**操作**: 可作为低风险候选进一步确认是否删除 `SOC.c` 中 `#if 0` 空壳；不要删除 `Sci_Upper.c` 的 padding 或改变协议长度。
 
 ### 7. PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE=0
 
@@ -239,7 +236,7 @@ PROJECT_CFG_DEBUG_WATCH_ENABLE (仅debug)
 PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE (仅debug)
 PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE (仅debug)
 PROJECT_CFG_FACTORY_AGING_ENABLE (看是否需要保留)
-PROJECT_CFG_SOC_TEST_MODE_ENABLE (仅factory)
+SOC_TEST_MODE_ENABLE 旧宏/旧路径（当前 Project_Config/conf 未见定义，仅 SOC.c 保留 #if 0 空壳）
 PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE (仅debug)
 PROJECT_CFG_FLASH64K_USE_TEST_ENABLE (仅debug)
 PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE (仅debug)
@@ -279,7 +276,7 @@ PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS (需确认)
 2. [ ] Flash64KAppTest.c/h → 删除?
 3. [ ] CopperLoss 铜损补偿功能（变量+DATAFLASH读写+Modbus地址）→ 删除?
 4. [ ] Fault_record_First2/Second2（二级故障记录）→ 只保留 Third?
-5. [ ] SOC_TEST_MODE 全部代码 → 删除?
+5. [ ] `SOC.c` 中 `#if 0` 的 `SOC_TestMode_*` 空壳 → 删除?（不要删除 `Sci_Upper.c` 的 SOC_TEST padding）
 6. [ ] DEBUG_WATCH 全部 struct 和全局变量 → 删除?
 7. [ ] DEBUG_CODE 分支 → 删除，只保留 Release 路径?
 8. [ ] test_Autocurrent_cycle() 函数 → 删除?

@@ -75,7 +75,7 @@ CAN App 服务会复用 Modbus 寄存器读写函数，因此 Modbus 寄存器�
 1. CAN 写寄存器会调用 `Sci_HostWriteWords()`，可能触发 Flash、SOC、AFE 和 IAP 副作用。
 2. `PROJECT_CFG_HOST_WRITE_ENABLE 1` 表示量产当前允许写关键参数。
 3. `0xC002` 是上位机实时监控底栏依赖，不能随意改字段长度。
-4. `0xD300 supported=0` 是量产 SOC 测试隔离约定。
+4. SOC_TEST 兼容 padding 当前填充 16 word 0，协议长度不能随意改变。
 5. 老化剩余时间 UI 依赖 `0x14F80208`。
 
 ## 6. 后续建议

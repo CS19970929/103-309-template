@@ -82,7 +82,7 @@
 2. `CanFeidaoFrames.c`：周期帧 ID、字段单位、老化剩余时间 `0x14F80208`。
 3. `Can_HDX.c`：App 服务命令 `0x60/0x61`、IAP ack、读块流。
 4. `ProductionID.c` + `0xC002`：上位机实时监控底栏依赖。
-5. SOC 测试窗口 `0xD300`：量产 `supported=0` 是兼容约定。
+5. SOC_TEST 兼容 padding：当前填充 16 word 0，协议长度不能随意改变。
 
 ## 10. 最容易破坏硬件行为的模块
 

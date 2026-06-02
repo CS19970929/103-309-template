@@ -6,6 +6,26 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 SOC 文档合并与源码简化候选
+
+### 本次文档修改
+
+- 新增 `docs/review/soc_current_logic_2026-06-02.md`，按当前源码梳理 SOC 主链路、输入输出、所有校准策略、具体条件、时间参数、RTC 休眠补偿和显示平滑。
+- 重写 `docs/design/soc_design.md` 为 SOC 长期设计入口，避免旧阶段方案与当前源码事实混用。
+- 新增 `docs/review/soc_simplification_candidates_2026-06-02.md`，列出只改写法、不改功能的源码简化候选、风险排序和最低验证。
+- 更新 `docs/README.md`、`docs/INDEX.md`、`docs/review/document_merge_plan.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/test_plan.md` 和顶层 `docs/change_log.md`。
+
+### 安全边界
+
+- 未修改 `.c/.h`、Keil 工程、编译宏、协议、Flash/IAP 地址、SOC 表、校准阈值、时间参数、低功耗顺序和显示策略。
+- 后续源码简化必须按 `SOC-SIM-*` 小批次执行，优先做重复发布、注释/命名、命令请求接口这类行为不变项。
+- `NORMAL/DEEP` reset sleep 是否补 RTC 秒数属于功能行为变更，本次只记录现状，不进入源码修改。
+
+### 本次验证
+
+- 本轮为文档合并，后续执行 `git diff --check` 和文档链接/关键字一致性检查。
+- 未执行 Keil 编译、SOC 回放、上板充放电、RTC STOP 或 Modbus/CAN 在线验证。
+
 ## 2026-06-02 状态变量净删减专项审计
 
 ### 本次文档修改

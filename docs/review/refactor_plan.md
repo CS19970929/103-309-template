@@ -71,13 +71,30 @@
 
 ## 阶段 7：SOC 阶段
 
+专项文档：
+
+- `docs/design/soc_design.md`
+- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_simplification_candidates_2026-06-02.md`
+
 | 项目 | 内容 |
 |---|---|
-| 修改范围 | 先补测试，再整理状态命名/输入输出边界 |
-| 不能改什么 | 不改 1% 校准硬约束、不改满电/低压锚点、不改 `0xD300` 隔离 |
-| 验证方法 | 主机回放、真实充放电、RTC rest、snapshot 断电恢复、上位机读取 |
-| 需要确认 | 初始 SOC、OCV 表、Type-C 电流、测试模式策略 |
-| 回滚方式 | 算法参数与结构调整分离，先保留旧字段 |
+| 修改范围 | 先整理文档和当前逻辑，再只做不改变功能的软件写法简化 |
+| 不能改什么 | 不改 SOC 表、不改 1% 校准硬约束、不改满电/低压/中段/静置/RTC 阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
+| 验证方法 | 主机回放、真实充放电、RTC rest、snapshot 断电恢复、上位机读取、CAN SOC 帧、Keil watch |
+| 需要确认 | 初始 SOC、OCV 表、Type-C 电流、测试模式策略、reset sleep 是否需要 RTC 秒数补偿、命令校准是否允许立即跳变 |
+| 回滚方式 | 每个源码简化候选独立小 commit；先做 `SOC-SIM-01/04/05` 这类低风险写法项，再评估命令接口和 public struct 收口 |
+
+### 阶段 7 推荐小批次
+
+| 批次 | 类型 | 内容 | 风险 | 验证 |
+|---|---|---|---|---|
+| SOC-DOC-01 | 已完成文档合并 | `soc_design.md` 收口为入口，当前逻辑详表和源码简化候选独立成文 | 低 | 文档链接、自洽性、`git diff --check` |
+| SOC-SIM-01 | 低风险源码候选 | 删除 `InitData_SOC()` 初始化阶段重复发布 | 低 | SOC 回放、`0xD000` 读取 |
+| SOC-SIM-05 | 低风险源码候选 | 给低压/中段尾端表补极短说明，不改表值 | 低 | `git diff --check` |
+| SOC-SIM-04 | 低风险源码候选 | 秒/tick 命名和注释整理，不改换算 | 低 | SOC 回放 |
+| SOC-SIM-02 | 小接口收口 | 用请求接口替代外部直接写 `u16_RefreshData_Flag/u8_SetSocOnce` | 低到中 | Modbus 手动 OCV、容量重算、SetSocOnce |
+| SOC-SIM-06 | 暂缓 | 整理 `soc_publish()` 职责 | 中 | 显示、CAN、Modbus、debug watch 全回归 |
 
 ## 阶段 8：RTC 低功耗 / IWDG 阶段
 

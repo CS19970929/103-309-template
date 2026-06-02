@@ -54,7 +54,7 @@ Keil 工程列入的业务源码主要包括：
 | 长按关机 | 开启 | `Project_Config.h:122` | LED/按键模块可进入 DEEP_MODE |
 | IAP 跳转 | 开启 | `Project_Config.h:159` | 上位机/CAN 可请求进 IAP |
 | 工厂老化 | 开启 | `Project_Config.h:163` | 默认 3 天运行时老化 |
-| SOC 测试模式 | 关闭 | `Project_Config.h:340` | `0xD300 supported=0` 是量产预期 |
+| SOC_TEST 兼容占位 | 保留 padding | `Sci_Upper.c:828-829`, `Sci_Upper.h:138-140` | 当前无活动 SOC 注入式测试模式；16 word 0 仅保留协议长度 |
 | LedBar 睡眠 | 开启 | `Project_Config.h:356` | 睡眠前需要保存/显示 SOC |
 | 升级参数策略 | 开启，版本 `0x0004` | `Project_Config.h:393-433` | 当前会重置 SOC snapshot 和事件记录 |
 

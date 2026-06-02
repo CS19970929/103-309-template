@@ -209,8 +209,7 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 | u8_SetSocOnce | 一次性SOC设置 |
 | u16_VCellMax/Min | 电芯电压 |
 | u16_Ichg/Idsg | 充放电电流 |
-| u16_SOC_InitOver | 初始化完成标志 |
-| u8_SOC | 当前SOC(%) |
+| u8_SOC | 当前对外显示 SOC(%)，由 `display_soc` 发布 |
 | u8_SOH | 当前SOH(%) |
 | u16_CapacityNow | 当前容量(Ah×100) |
 | u16_CapacityFull | 满充容量 |

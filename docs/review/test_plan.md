@@ -19,7 +19,7 @@
 |---|---|---|---|
 | T-MODBUS-001 | 实时状态读 | `COM4/19200/slave=1` 读 `0xD000` | 电压、电流、SOC、故障字字段稳定 |
 | T-MODBUS-002 | 产品信息读 | 读 `0xC002` 48 个寄存器 | SN/HW/SW 各 16 bytes，原 UI 底栏可显示 |
-| T-MODBUS-003 | SOC 测试状态 | 读 `0xD300` | 量产返回 `supported=0` |
+| T-MODBUS-003 | SOC_TEST 兼容占位 | 读 `0xD300` 相关窗口 | 当前返回 16 word 0，占位长度不变 |
 | T-MODBUS-004 | 写保护参数 | 在工装条件下写保护阈值并读回 | 范围检查正确，写失败可回滚 |
 | T-MODBUS-005 | 只读/非法地址 | 读写非法地址 | 返回正确异常码，不写 Flash |
 
@@ -53,14 +53,24 @@
 
 ## 6. SOC 测试
 
+专项文档：
+
+- `docs/design/soc_design.md`
+- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_simplification_candidates_2026-06-02.md`
+
 | ID | 测试项 | 方法 | 通过标准 |
 |---|---|---|---|
 | T-SOC-001 | 主机回放 | 使用 SOC host 测试脚本 | 满电/低压/静置/骑行用例通过 |
 | T-SOC-002 | 真实电流积分 | 上板充放电 | SOC 方向、速率符合电流 |
 | T-SOC-003 | 满电锚点 | 充至阈值并保持 | 逐步到 100%，未确认前不提前 100 |
 | T-SOC-004 | 低压尾段 | 模拟 Vmin 靠近 V0 | SOC 不虚高，显示可快速下降 |
-| T-SOC-005 | RTC 休眠补偿 | 空闲 STOP 后唤醒 | SOC 小步补偿，不大跳 |
-| T-SOC-006 | 量产隔离 | 读写 `0xD300/0x2500` | 量产不支持注入式测试 |
+| T-SOC-005 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 RTC 周期唤醒时 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内先补偿再继续 STOP，最终按键显示不出现“先旧值后校准”跳变 |
+| T-SOC-006 | 量产隔离 | 读 SOC_TEST padding、尝试历史测试命令地址 | 当前无注入式测试副作用；padding 长度保持不变 |
+| T-SOC-007 | real/display SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`s_soc.display_soc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布保持 `display_soc`；自动校准不强制显示跳变 |
+| T-SOC-008 | reset sleep 快显口径 | NORMAL/DEEP reset sleep 后按键唤醒，观察 BKP sleep SOC 和启动后 SOC | 早期快显来自睡前保存显示 SOC；若后续要补 RTC 秒数必须另立功能确认 |
+| T-SOC-009 | 命令校准 | Modbus 手动 OCV、容量重算、`SetSocOnce` | ACK/NEG、SOC 保存、显示是否强制刷新与当前源码一致 |
+| T-SOC-010 | 源码简化回归 | 按 `SOC-SIM-*` 批次执行 `git diff --check`、`clang -fsyntax-only`、`tools/soc_replay_test.py` | 不改变校准顺序、阈值、时间参数、发布口径和上位机字段 |
 
 ## 7. ADC / AFE 通信测试
 

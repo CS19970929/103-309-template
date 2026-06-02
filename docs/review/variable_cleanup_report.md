@@ -133,7 +133,7 @@
 | `g_u32CS_Res_AFE` | AFE 电流换算核心参数，由 `OtherElement` 派生 | 电流方向、mA/A10 单位、SOC 积分、保护阈值 |
 | `g_u32AfeCurrentSampleSeq` | SOC 通过它判断 AFE 电流样本是否更新 | 200ms 采样节拍、SOC 是否漏算或重复积分 |
 | `SOC_Enhance_Element` | SOC 模块对外参数和运行结果桥接结构 | SOC 单步校准、显示 SOC、RTC 补偿、上位机一次设 SOC |
-| `SOC_Table_Set` / `SOC_Table_Default` / `SOC_Table_LiFePO` / `SocTable_TernaryLi` / `SocTable_LiFePO2` | OCV 表与上位机 SOC 表、默认表、化学体系选择相关 | 当前 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE`、Flash 恢复、协议写表策略 |
+| `SOC_Table_Set` / `SOC_Table_Default` / `SOC_Table_LiFePO` / `SocTable_TernaryLi` / `SocTable_LiFePO2` | OCV 表与上位机 SOC 表、化学体系选择相关；`SOC_Table_Set/Default` 只在 runtime table 宏路径下有引用，当前量产宏关闭 | 当前 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE`、编译期化学体系选择、协议写表策略；若重新启用 runtime table，先补齐定义并编译验证 |
 | `g_st_SysTimeFlag` | TIM3 10ms tick 锁存后驱动主循环任务 | 中断-主循环同步、任务周期、低功耗恢复 |
 | `System_ErrFlag` | 系统错误位集合，被保护、通信、上位机读取 | 错误位序、保留位、旧 Heat/Cool 清理后的 reserved 兼容 |
 | `SH367309_Reg_Store` / `Registers_AFE1` / `SH367309_Read_AFE1` | AFE 寄存器和采样值镜像 | AFE 通信、故障解析、温度/电压/电流装载 |

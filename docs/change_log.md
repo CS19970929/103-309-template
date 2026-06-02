@@ -4,6 +4,19 @@
 最后更新时间：2026-06-02
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-02 SOC 文档合并与源码简化候选
+
+本次只整理 SOC 相关文档，不修改 `.c/.h`、Keil 工程、编译宏、协议、SOC 表、校准阈值、休眠顺序和显示策略。
+
+更新内容：
+
+- 新增 `docs/review/soc_current_logic_2026-06-02.md`，按当前源码梳理 SOC 主链路、输入输出、11 类校准策略、具体条件、时间参数、RTC 休眠补偿和显示平滑口径。
+- 重写 `docs/design/soc_design.md` 为 SOC 长期设计入口，指向当前逻辑详表和源码简化候选，避免旧 devlog 与当前源码事实混用。
+- 新增 `docs/review/soc_simplification_candidates_2026-06-02.md`，列出只改写法、不改功能的低风险/中风险候选和验证边界。
+- 更新 `docs/README.md`、`docs/INDEX.md`、`docs/review/document_merge_plan.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/test_plan.md`，同步 SOC 文档入口、风险和测试项。
+
+后续源码简化前必须以 `docs/review/soc_simplification_candidates_2026-06-02.md` 为批次边界，不允许顺手改变 SOC 功能。
+
 ## 2026-06-02 状态变量净删减专项审计
 
 本次只做文档和源码只读审查，未修改 `.c/.h`、Keil 工程、编译宏、协议、IAP/App 地址和烧录脚本。

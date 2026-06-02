@@ -2,8 +2,8 @@
 
 > 文档状态：CURRENT
 > 源码验证：PARTIAL
-> 最后更新时间：2026-05-26
-> 未确认事项：本轮只执行低风险新增/更新权威文档，不删除、不移动旧文档。
+> 最后更新时间：2026-06-02
+> 未确认事项：本轮只执行 SOC 文档合并和权威入口更新，不删除、不移动旧文档。
 
 | 操作 ID | 操作类型 | 源文档 | 目标文档 | 操作说明 | 是否需要用户确认 | 风险 |
 |---|---|---|---|---|---|---|
@@ -13,7 +13,7 @@
 | DOC-004 | REWRITE_FROM_SOURCE | 源码 + `requirement_confirmation.md` | `docs/project_overview.md` | 项目总览按源码现状描述 | 否 | 低 |
 | DOC-005 | MERGE | `EEPROM_*`, `RW_PARAMETER_FLASH_STORAGE.md`, `STORAGE_LAYOUT_REPORT.md`, `Flash磨损寿命*.md`, `升级参数策略说明.md` | `docs/design/storage_design.md` | 只合并当前内部 Flash 实现；外部 EEPROM 旧布局标历史 | 否 | 中 |
 | DOC-006 | MERGE | `COMMUNICATION_*`, `docs/BMS_CAN_SERVICE_PROTOCOL.md`, `docs/CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md` | `docs/design/protocol_design.md` | 合并 Modbus/CAN/UART 当前行为和风险 | 否 | 中 |
-| DOC-007 | MERGE | `SOC_*.md`, `SOC完整运行流程说明.md`, `SOC逻辑与参数影响梳理.md` | `docs/design/soc_design.md` | 以 `SocEnhance.c` 当前实现为准重写 SOC 设计 | 否 | 中 |
+| DOC-007 | MERGE_DONE | `docs/design/soc_design.md`, `docs/review/soc_current_logic_2026-06-02.md`, SOC 历史 devlog | `docs/design/soc_design.md` + `docs/review/soc_current_logic_2026-06-02.md` + `docs/review/soc_simplification_candidates_2026-06-02.md` | `soc_design.md` 已收口为长期入口；当前完整逻辑和校准条件放入 review 详表；源码简化候选单独成文；旧 devlog 保留为历史追溯，不作为当前事实 | 否 | 低 |
 | DOC-008 | MERGE | `ADC*.md`, `AFE*.md`, `TypeC_ADC*.md` | `docs/design/adc_afe_design.md` | 合并 ADC/AFE 当前数据流和 P0 电流问题 | 否 | 中 |
 | DOC-009 | MERGE | `docs/current/*.md`, `docs/design/low_power_*.md`, `RTC_*.md`, `休眠*.md` | `docs/design/low_power_design.md` | 合并当前低功耗源码行为，旧阶段设计不再作为结论 | 否 | 中 |
 | DOC-010 | MERGE | `docs/review/test_plan.md`, `docs/test/low_power_test_matrix.md`, `SOC_TEST*.md` | `docs/test/test_plan.md` | 生成统一测试总计划 | 否 | 低 |

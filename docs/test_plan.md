@@ -8,6 +8,24 @@
 
 专项审计文档：`docs/review/state_variable_audit.md`
 
+## SOC 文档合并与源码简化测试入口
+
+专项文档：
+
+- `docs/design/soc_design.md`
+- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_simplification_candidates_2026-06-02.md`
+
+后续 SOC 源码简化必须先确认“不改功能”边界，并至少覆盖：
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 当前逻辑文档一致性 | `docs/review/soc_current_logic_2026-06-02.md` | 校准策略、时间参数、RTC/显示边界均有源码证据 |
+| 源码简化候选 | `docs/review/soc_simplification_candidates_2026-06-02.md` | 候选只涉及写法/状态所有权/重复发布，不改阈值和协议 |
+| SOC 回放 | `python3 tools/soc_replay_test.py` | 结果与基线一致 |
+| 发布口径 | `docs/review/test_plan.md#6-soc-测试` | `g_stCellInfoReport.SocElement.u16Soc` 保持 display SOC |
+| RTC 休眠补偿 | `docs/review/test_plan.md#6-soc-测试` | HICCUP STOP 周期先补偿，最终按键显示不出现校准跳变 |
+
 当前阶段未修改源码，因此只执行文档和静态一致性检查。进入源码净删减后，必须至少覆盖：
 
 | 测试项 | 入口 | 通过标准 |

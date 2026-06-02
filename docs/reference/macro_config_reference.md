@@ -12,7 +12,7 @@
 | `PROJECT_CFG_BUILD_PROFILE` | 0 | 0=Release,1=Debug,2=Factory/Test |
 | `PROJECT_BUILD_PROFILE_RELEASE` | 0 | Release 禁止所有 debug 功能 |
 | `PROJECT_BUILD_PROFILE_DEBUG` | 1 | Debug 允许串口日志 |
-| `PROJECT_BUILD_PROFILE_FACTORY_TEST` | 2 | Factory 允许 SOC 测试模式 |
+| `PROJECT_BUILD_PROFILE_FACTORY_TEST` | 2 | 历史 Factory/Test 档位；当前 `Project_Config.h` 未见活动 SOC 测试模式宏 |
 
 ## 2. 硬件产品配置
 
@@ -113,8 +113,8 @@
 | `PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS` | 1 | 低压显示秒/1% |
 | `PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV` | 50 | 低压边界偏移 |
 | `PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV` | 50 | 空电快速下降偏移 |
-| `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | 0 | SOC 测试模式 |
-| `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX` | 300 | 测试加速 tick 上限 |
+| `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | 当前未定义 | 历史 SOC 测试模式宏，当前源码未见活动定义 |
+| `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX` | 当前未定义 | 历史测试加速 tick 上限，当前源码未见活动定义 |
 
 ## 8. LED/LedBar 配置
 
@@ -228,5 +228,5 @@ Project_BuildGuard.h 确保 Release 构建：
 | `PROJECT_CFG_DEBUG_CODE_ENABLE=0/1` | `_DEBUG_CODE` |
 | `PROJECT_CFG_LED_FUNC_ENABLE=0/1` | `__FUNC__LED__` |
 | `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE=0/1` | `FLASH_BOOT_PRINT_ENABLE` |
-| `PROJECT_CFG_SOC_TEST_MODE_ENABLE=0/1` | `SOC_TEST_MODE_ENABLE` |
+| `PROJECT_CFG_SOC_TEST_MODE_ENABLE=0/1` | 历史映射；当前 `Project_Config.h`/`conf.h` 未见活动定义 |
 | `PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE=0/1` | `_SLEEP_WITH_CURRENT` |
