@@ -206,19 +206,10 @@ struct DBG_RESET {
 };
 
 struct DBG_CAN {
-	uint8_t  bus_active;
 	uint8_t  power_on;
 	uint8_t  bus_off;
-	uint8_t  no_ack_cnt;
 	uint8_t  tx_queue;
-	uint8_t  probe;
-	uint8_t  rtc_svc;
 	uint16_t esr;
-	uint16_t tx_ok_cnt;
-	uint16_t tx_fail_cnt;
-	uint16_t busoff_in_cnt;
-	uint16_t busoff_out_cnt;
-	uint16_t last_tx_id;     /* 最后发送的CAN ID */
 };
 
 struct DBG_LP {

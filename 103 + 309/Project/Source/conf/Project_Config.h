@@ -92,14 +92,6 @@
 #define PROJECT_CFG_RS485_WAKEUP_ENABLE 1
 // </h>
 
-// <h>CAN Configuration
-
-// <o> CAN active hold time seconds <1-600>
-#ifndef PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS
-#define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10
-#endif
-// </h>
-
 // <h>Serial Port Roles
 
 // <o> SCI1 role

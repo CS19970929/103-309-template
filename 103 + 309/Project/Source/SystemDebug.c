@@ -528,13 +528,10 @@ void SystemDebug_Snapshot(void)
 	SystemDebug_SnapshotMcuResources();
 
 	/* ===== CAN ===== */
-	Can_GetDebugSnapshot(&g_dbg.can.bus_active, &g_dbg.can.power_on,
-	                     &g_dbg.can.bus_off, &g_dbg.can.no_ack_cnt,
-	                     &g_dbg.can.tx_queue, &g_dbg.can.probe,
-	                     &g_dbg.can.rtc_svc, &g_dbg.can.esr,
-	                     &g_dbg.can.tx_ok_cnt, &g_dbg.can.tx_fail_cnt,
-	                     &g_dbg.can.busoff_in_cnt, &g_dbg.can.busoff_out_cnt);
-	g_dbg.can.last_tx_id = 0U;
+	Can_GetDebugSnapshot(&g_dbg.can.power_on,
+	                     &g_dbg.can.bus_off,
+	                     &g_dbg.can.tx_queue,
+	                     &g_dbg.can.esr);
 
 	/* ===== RTC / Low Power ===== */
 	g_dbg.lp.mode         = (enum DBG_LP_MODE)g_stLowPowerRtcStatus.mode;
@@ -705,7 +702,7 @@ void DbgPrint_Summary(void)
 	dbg_puts(" |LP="); dbg_puts(dbg_lp_mode_name(g_dbg.lp.mode));
 	dbg_puts(" blk="); dbg_put_hex8(g_dbg.lp.block_reason);
 	dbg_puts(" |CAN=");
-	dbg_uart_putc(g_dbg.can.bus_active ? 'A' : '-');
+	dbg_uart_putc(g_dbg.can.power_on ? 'P' : '-');
 	dbg_uart_putc(g_dbg.can.bus_off ? 'B' : '-');
 	dbg_puts(" |AGE="); dbg_puts(dbg_aging_state_name(g_dbg.aging.state));
 	dbg_puts(" |loop="); dbg_put_dec16((uint16_t)g_dbg.timing.loop_last_us);
@@ -775,19 +772,10 @@ void DbgPrint_LP(void)
 
 void DbgPrint_CAN(void)
 {
-	dbg_puts("\r\n[DBG-CAN] act="); dbg_put_hex8(g_dbg.can.bus_active);
-	dbg_puts(" pwr="); dbg_put_hex8(g_dbg.can.power_on);
+	dbg_puts("\r\n[DBG-CAN] pwr="); dbg_put_hex8(g_dbg.can.power_on);
 	dbg_puts(" boff="); dbg_put_hex8(g_dbg.can.bus_off);
-	dbg_puts(" noAck="); dbg_put_hex8(g_dbg.can.no_ack_cnt);
 	dbg_puts(" q="); dbg_put_hex8(g_dbg.can.tx_queue);
-	dbg_puts(" prb="); dbg_put_hex8(g_dbg.can.probe);
-	dbg_puts(" rtc="); dbg_put_hex8(g_dbg.can.rtc_svc);
 	dbg_puts(" ESR="); dbg_put_hex16(g_dbg.can.esr);
-	dbg_puts(" lastID=0x"); dbg_put_hex16(g_dbg.can.last_tx_id);
-	dbg_puts("\r\nTX ok="); dbg_put_dec16(g_dbg.can.tx_ok_cnt);
-	dbg_puts(" fail="); dbg_put_dec16(g_dbg.can.tx_fail_cnt);
-	dbg_puts(" boff_in="); dbg_put_dec16(g_dbg.can.busoff_in_cnt);
-	dbg_puts(" boff_out="); dbg_put_dec16(g_dbg.can.busoff_out_cnt);
 	dbg_puts("\r\n");
 }
 

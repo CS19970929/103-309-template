@@ -10,20 +10,6 @@
 #define FEIDAO_CAN_PERIOD_1000MS_TICKS ((UINT32)100U)
 #define FEIDAO_CAN_PERIOD_5000MS_TICKS ((UINT32)500U)
 #define FEIDAO_CAN_TX_TIMEOUT_TICKS ((UINT32)20U)
-#ifndef PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS
-#define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10
-#endif
-#ifndef PROJECT_CFG_CAN_NO_ACK_BACKOFF_THRESHOLD
-#define PROJECT_CFG_CAN_NO_ACK_BACKOFF_THRESHOLD 3
-#endif
-#ifndef PROJECT_CFG_CAN_PROBE_PERIOD_SECONDS
-#define PROJECT_CFG_CAN_PROBE_PERIOD_SECONDS 10
-#endif
-#define FEIDAO_CAN_BUS_ACTIVE_HOLD_TICKS \
-	((UINT32)PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS * FEIDAO_CAN_PERIOD_1000MS_TICKS)
-#define FEIDAO_CAN_NO_ACK_BACKOFF_THRESHOLD ((UINT8)PROJECT_CFG_CAN_NO_ACK_BACKOFF_THRESHOLD)
-#define FEIDAO_CAN_PROBE_PERIOD_TICKS \
-	((UINT32)PROJECT_CFG_CAN_PROBE_PERIOD_SECONDS * FEIDAO_CAN_PERIOD_1000MS_TICKS)
 
 #define FEIDAO_CAN_TX_QUEUE_SIZE ((UINT8)32U)
 #define FEIDAO_CAN_APP_CMD_QUEUE_SIZE ((UINT8)4U)
@@ -79,11 +65,6 @@ typedef struct
 	UINT32 last_1000ms_tick;
 	UINT32 last_5000ms_tick;
 	UINT8 schedule_init;
-	volatile UINT8 bus_active;
-	volatile UINT32 last_bus_activity_tick;
-	UINT8 no_ack_cnt;
-	UINT8 probe_active;
-	UINT32 last_probe_tick;
 } FeidaoCanRuntime;
 
 typedef struct
@@ -123,7 +104,6 @@ static void feidao_can_abort_tx(void);
 static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame);
 static UINT8 feidao_can_dequeue_tx(CanTxMsg *frame);
 static void feidao_can_clear_tx_queue(void);
-static void feidao_can_handle_no_ack(void);
 static void feidao_can_service_tx(UINT32 now_tick);
 static void feidao_can_queue_periodic_mask(UINT16 mask);
 static void feidao_can_schedule_periodic(UINT32 now_tick);
@@ -163,41 +143,6 @@ static void feidao_can_power_on(void)
 static void feidao_can_power_off(void)
 {
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_OFF_LEVEL);
-}
-
-static void feidao_can_mark_bus_active(UINT32 now_tick)
-{
-	s_runtime.bus_active = 1U;
-	s_runtime.last_bus_activity_tick = now_tick;
-	s_runtime.no_ack_cnt = 0U;
-	s_runtime.probe_active = 0U;
-}
-
-static void feidao_can_update_bus_active_timeout(UINT32 now_tick)
-{
-	if ((s_runtime.bus_active != 0U) &&
-		(feidao_can_tick_elapsed(now_tick,
-								 s_runtime.last_bus_activity_tick,
-								 FEIDAO_CAN_BUS_ACTIVE_HOLD_TICKS) != 0U))
-	{
-		s_runtime.bus_active = 0U;
-	}
-}
-
-
-static void feidao_can_handle_no_ack(void)
-{
-	if (s_runtime.no_ack_cnt < (UINT8)0xFFU)
-	{
-		s_runtime.no_ack_cnt++;
-	}
-	if (s_runtime.no_ack_cnt >= FEIDAO_CAN_NO_ACK_BACKOFF_THRESHOLD)
-	{
-		s_runtime.bus_active = 0U;
-		s_runtime.probe_active = 0U;
-		feidao_can_abort_tx();
-		feidao_can_stop_read_block_stream();
-	}
 }
 
 static void feidao_can_clear_tx_done(UINT8 mailbox)
@@ -286,19 +231,16 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		status = CAN_TransmitStatus(CAN1, s_tx.mailbox);
 		if (status == CAN_TxStatus_Ok)
 		{
-			feidao_can_mark_bus_active(now_tick);
 			feidao_can_clear_tx_done(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
 		}
 		else if (status == CAN_TxStatus_Failed)
 		{
-			feidao_can_handle_no_ack();
 			feidao_can_clear_tx_done(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
 		}
 		else if (feidao_can_tick_elapsed(now_tick, s_tx.start_tick, FEIDAO_CAN_TX_TIMEOUT_TICKS))
 		{
-			feidao_can_handle_no_ack();
 			feidao_can_cancel_tx(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
 		}
@@ -361,20 +303,6 @@ static void feidao_can_schedule_periodic(UINT32 now_tick)
 		s_runtime.schedule_init = 1U;
 		s_runtime.last_1000ms_tick = now_tick;
 		s_runtime.last_5000ms_tick = now_tick;
-		s_runtime.last_probe_tick = now_tick - FEIDAO_CAN_PROBE_PERIOD_TICKS;
-	}
-
-	if (s_runtime.bus_active == 0U)
-	{
-		if (feidao_can_tick_elapsed(now_tick,
-								 s_runtime.last_probe_tick,
-								 FEIDAO_CAN_PROBE_PERIOD_TICKS) != 0U)
-		{
-			s_runtime.last_probe_tick = now_tick;
-			s_runtime.probe_active = 1U;
-			feidao_can_queue_periodic_mask(CAN_FEIDAO_RTC_PROBE_MSG_MASK);
-		}
-		return;
 	}
 
 	if (feidao_can_tick_elapsed(now_tick, s_runtime.last_1000ms_tick, FEIDAO_CAN_PERIOD_1000MS_TICKS))
@@ -768,7 +696,6 @@ static void feidao_can_handle_rx_msg(const CanRxMsg *rx_msg)
 		return;
 	}
 
-	feidao_can_mark_bus_active(SysTime_Get10msTickCount());
 	if (((UINT16)rx_msg->StdId == expect_std_id) && (rx_msg->DLC == 8U))
 	{
 		feidao_can_queue_app_cmd(rx_msg->Data);
@@ -851,12 +778,8 @@ static void InitCan_CAN1(void)
 
 void InitCan(void)
 {
-	UINT32 now_tick = SysTime_Get10msTickCount();
-
 	s_tx.mailbox = CAN_TxStatus_NoMailBox;
 	s_runtime.schedule_init = 0U;
-	/* bus_active and last_bus_activity_tick preserved (selective init, no bulk-zero) */
-	s_runtime.probe_active = 0U;
 	s_app.enter_iap_delay_ticks = 0U;
 	s_app.read_block_active = 0U;
 	feidao_can_clear_tx_queue();
@@ -866,10 +789,6 @@ void InitCan(void)
 	InitCan_CAN1();
 	InitCan_Filter();
 	feidao_can_power_on();
-	if (s_runtime.bus_active == 0U)
-	{
-		s_runtime.last_probe_tick = now_tick - FEIDAO_CAN_PROBE_PERIOD_TICKS;
-	}
 }
 
 UINT8 Can_IsBusy(void)
@@ -912,7 +831,6 @@ void App_Can(void)
 	UINT8 app_cmd_data[8];
 
 	s_runtime.tick = now_tick;
-	feidao_can_update_bus_active_timeout(now_tick);
 	feidao_can_schedule_periodic(now_tick);
 	if (feidao_can_take_app_cmd(app_cmd_data) != 0U)
 	{
@@ -936,24 +854,14 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 }
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-void Can_GetDebugSnapshot(uint8_t *bus_active, uint8_t *power_on,
-                          uint8_t *bus_off,  uint8_t *no_ack_cnt,
-                          uint8_t *tx_queue, uint8_t *probe,
-                          uint8_t *rtc_svc,  uint16_t *esr,
-                          uint16_t *tx_ok,   uint16_t *tx_fail,
-                          uint16_t *boff_in, uint16_t *boff_out)
+void Can_GetDebugSnapshot(uint8_t *power_on,
+                          uint8_t *bus_off,
+                          uint8_t *tx_queue,
+                          uint16_t *esr)
 {
-	if (bus_active != 0)  *bus_active  = s_runtime.bus_active;
 	if (power_on  != 0)   *power_on    = (uint8_t)(GPIO_ReadOutputDataBit(GPIO_CMNT_EN, PIN_CMNT_EN) == FEIDAO_CAN_POWER_ON_LEVEL);
 	if (bus_off   != 0)   *bus_off     = (uint8_t)((CAN1->ESR & CAN_ESR_BOFF) != 0U);
-	if (no_ack_cnt!= 0)   *no_ack_cnt  = s_runtime.no_ack_cnt;
 	if (tx_queue  != 0)   *tx_queue    = s_tx.count;
-	if (probe     != 0)   *probe       = s_runtime.probe_active;
-	if (rtc_svc  != 0)    *rtc_svc     = 0U;
 	if (esr       != 0)   *esr         = (uint16_t)(CAN1->ESR & 0xFFFFU);
-	if (tx_ok     != 0)   *tx_ok       = 0U;
-	if (tx_fail   != 0)   *tx_fail     = 0U;
-	if (boff_in   != 0)   *boff_in     = 0U;
-	if (boff_out  != 0)   *boff_out    = 0U;
 }
 #endif

@@ -6,6 +6,23 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 CAN 运行态调度和 debug 快照继续简化
+
+### 本次源码修改
+
+- `Can_HDX.c`：删除运行态 `bus_active/no_ack_cnt/probe_active/last_probe_tick` 及相关 active/probe/no-ACK 软件退避逻辑。
+- `Can_HDX.c`：运行态固定按 1000ms/5000ms 周期调度飞道广播；发送成功、失败和超时只释放 mailbox/queue，不再切换探测模式。
+- `CanFeidaoFrames.h`：删除 `CAN_FEIDAO_RTC_PROBE_MSG_MASK`，保留 1000ms/5000ms 周期 mask。
+- `SystemDebug.h/.c`、`Can_HDX.h/.c`：`g_dbg.can` 和 `Can_GetDebugSnapshot()` 收敛为 `power_on/bus_off/tx_queue/esr` 四个字段。
+- `Project_Config.h`：删除不再使用的 CAN active hold 配置块。
+- `tools/project_check.py`：新增旧 active/probe/no-ACK 状态和 debug 占位字段回流检查。
+
+### 兼容性说明
+
+- 未修改 CAN ID、payload、App `0x60/0x61` 命令、Modbus 寄存器桥接和 IAP/App 地址。
+- `CAN_NART = ENABLE` 仍关闭硬件自动重发；无 ACK 时不做软件退避，只按固定周期继续尝试。
+- `CAN_ABOM = ENABLE` 保留；bus-off 当前状态仍可通过 `CAN1->ESR` 和 `g_dbg.can.bus_off` 观察。
+
 ## 2026-06-02 CAN 电源、RTC 休眠和 bus-off 简化
 
 ### 本次源码修改

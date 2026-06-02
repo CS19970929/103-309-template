@@ -76,12 +76,9 @@
 | 宏 | 默认值 | 说明 |
 |----|--------|------|
 | `CAN_ADRESS_STD_ID` | 0x00 | CAN 标准 ID 偏移 |
-| `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` | 10 | CAN 活跃保持时间 |
 | `FEIDAO_CAN_TX_QUEUE_SIZE` | 32 | 发送队列大小 |
 | `FEIDAO_CAN_APP_CMD_QUEUE_SIZE` | 4 | 应用命令队列 |
 | `FEIDAO_CAN_TX_TIMEOUT_TICKS` | 20 | 发送超时 (200ms) |
-| `FEIDAO_CAN_NO_ACK_BACKOFF_THRESHOLD` | 3 | 无应答退避阈值 |
-| `FEIDAO_CAN_PROBE_PERIOD_SECONDS` | 10 | 探测帧周期 |
 
 ## 7. SOC 配置
 

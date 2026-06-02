@@ -340,7 +340,7 @@ rtc_sleep()
 阻塞睡眠条件包括：
 
 - 充/放电电流大于 10mA。
-- 任意 SCI/CAN 忙，CAN bus active。
+- 任意 SCI/CAN 忙。
 - MCU_WK/key active。
 - AFE 不允许 sleep。
 - Flash busy 或待写参数。

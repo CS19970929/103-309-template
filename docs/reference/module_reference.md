@@ -163,9 +163,8 @@ main()
 | `PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE` | 1 | 长按键开关 |
 
 #### CAN 配置
-| 宏定义 | 默认值 | 说明 |
-|--------|--------|------|
-| `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` | 10 | CAN 总线活跃保持时间 |
+
+当前 CAN 运行态已删除 active/probe/no-ACK 软件退避配置；周期广播按固定 1000ms/5000ms 调度。
 
 #### SOC 配置
 | 宏定义 | 默认值 | 说明 |
@@ -541,7 +540,7 @@ CAN 模块实现:
 - 软件 TX 队列 (32条)
 - 应用层命令队列 (4条)
 - CAN 收发器电源管理 (GPIO_CMNT_EN)
-- 总线活跃检测与探测
+- 运行态固定周期广播调度
 - RTC 睡前关闭 CMNT，唤醒恢复后重新打开
 
 ### 6.2 诊断入口
@@ -562,9 +561,10 @@ CAN 模块实现:
 **FeidaoCanRuntime** (CAN 状态):
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
-| `bus_active` | 0 | 总线是否有其他设备 |
-| `no_ack_cnt` | 0 | 连续无应答计数 |
-| `probe_active` | 0 | 探测模式激活 |
+| `tick` | 0 | 当前 10ms tick |
+| `last_1000ms_tick` | 0 | 上次 1000ms 周期帧调度 tick |
+| `last_5000ms_tick` | 0 | 上次 5000ms 周期帧调度 tick |
+| `schedule_init` | 0 | 周期调度初始化标志 |
 
 ### 6.4 CAN 配置
 
@@ -581,12 +581,11 @@ CAN 模块实现:
 
 运行态 `InitCan()` 打开 CMNT；`Can_PrepareSleep()` 在进入 RTC STOP 或 reset sleep 前关闭 CMNT；唤醒恢复后 `InitCan()` 重新打开。
 
-### 6.6 总线活跃检测
+### 6.6 运行态周期调度
 
-- **活跃**: CAN TX 成功 ACK 或 RX 收到报文
-- **超时**: 10秒无活动 → bus_active=0
-- **无应答退避**: 连续3次无 ACK → bus_active=0, 清 TX 队列
-- **探测**: bus_active=0 时每10秒发送探测帧
+- `App_Can()` 按 10ms tick 服务 TX queue、App 命令和 read-block stream。
+- 运行态固定检查 `CAN_FEIDAO_1000MS_MSG_MASK` 和 `CAN_FEIDAO_5000MS_MSG_MASK`，不再根据 ACK/RX 判断 active 或 probe。
+- `CAN_NART = ENABLE` 关闭硬件自动重发，无 ACK 时发送状态较快失败；软件只释放 mailbox，不再维护 no-ACK 退避状态。
 
 ### 6.7 RTC 休眠关系
 

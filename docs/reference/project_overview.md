@@ -41,7 +41,7 @@ Runtime_RunOnce() 分为四个阶段:
   4. Idle:           WFI (可配置)
 
 低功耗:
-  空闲 N 秒 → HICCUP (RTC STOP 周期唤醒) → CAN服务/SOC补偿
+  空闲 N 秒 → HICCUP (RTC STOP 周期唤醒) → SOC补偿/状态刷新
   过放 → DEEP (MCU复位) 或 NORMAL (MCU复位)
 ```
 
@@ -52,7 +52,7 @@ Runtime_RunOnce() 分为四个阶段:
 | 配置系统 | conf/Project_Config.h, conf.h | 450+ | 100+编译宏, Keil可视化 |
 | 主循环 | main.c, AppInit.c, Runtime.c | ~120 | 启动+调度 |
 | SOC 算法 | SOC.c, SocEnhance.c | ~2000+ | 安时积分, OCV校准, 静置补偿, 显示平滑 |
-| CAN 通讯 | Can_HDX.c, CanFeidaoFrames.c | ~1500+ | TX队列, 电源管理, 总线探测, RTC唤醒, 应用命令 |
+| CAN 通讯 | Can_HDX.c, CanFeidaoFrames.c | ~1500+ | TX队列, 运行态周期广播, 睡前CMNT关闭, 应用命令 |
 | 串口 Modbus | Sci_Upper.c | ~2000+ | 0x03/0x06/0x10, 地址映射, CRC16 |
 | ADC 采样 | ADC.c | ~500 | TIM2触发, DMA, 总压/电流/温度 |
 | AFE 驱动 | I2C_AFE1.c, SH367309_*.c | ~1000+ | GPIO模拟I2C, 寄存器解析 |

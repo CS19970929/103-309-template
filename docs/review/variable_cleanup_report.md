@@ -117,7 +117,7 @@
 | `ADC_Runtime_t` | `g_u16ADCValFilter`, `g_u32ADCValFilter2`, `g_i32ADCResult`, Type-C current 相关变量、VBC 中间变量 | 把 ADC 原始值、滤波值、物理量和兼容镜像集中管理 |
 | `AFE_MonitorRuntime_t` | `u8IICFaultcnt1/2`, `u8WakeCnt1/2` | 用数组按 AFE channel 管理，避免双 AFE 复制变量 |
 | `SCI_PORT_RUNTIME` 内嵌状态 | `g_stCurrentMsgPtr_SCIx`, `gu16_CommuErrCnt_SCIx`, `gu8_TxEnable_SCIx`, `gu8_TxFinishFlag_SCIx` | 当前已经用结构体指针组合，下一步可把实际存储也内嵌 |
-| `CAN_Runtime_t` | Tx 队列、App cmd 队列、read block 状态、write pending 状态、bus active/bus off 计数 | 当前 `Can_HDX.c` 文件级状态很多，合并后更容易做低功耗和 IAP 审计 |
+| `CAN_Runtime_t` | Tx 队列、App cmd 队列、read block 状态、write pending 状态 | 当前 `Can_HDX.c` 文件级状态仍较多，后续只在确有收益时继续收口 |
 | `RTC_WakeContext_t` | `is_rtc_wakekup`, `g_irq_t`, `g_stLowPowerRtcStatus.rtcWake`, `sys_time.wakeup_rtc`, `sys_time.wakeup_reason` | 建立 RTC/EXTI/STOP 唤醒唯一真相源 |
 | `FaultRecordRuntime_t` | `Fault_record_*`, `FaultPoint_*`, `Fault_record_*2`, `FaultPoint_*2` | 明确旧记录窗口和当前记录窗口，避免协议读错 |
 | `LogRecordRuntime_t` | `BMS_LOG_POINT`, `BMS_LOG_RECORD`, `s_log_record_flag`, 日志保存节流状态 | 日志模块内部状态收口，方便持久化和复位 |

@@ -26,7 +26,7 @@
 - 运行态 CAN：保持 1000ms/5000ms 周期广播和 CAN App 服务。
 - RTC STOP 中：CMNT 关闭，周期醒来不主动发送 CAN。
 - 外部唤醒后：恢复时钟、IO、ADC、USART、CAN、TIM3、AFE I2C，随后由主循环继续 CAN 通信。
-- 软件不再统计 bus-off 进入/恢复次数；异常分析看 `CAN1->ESR` 和 no-ACK 计数。
+- 软件不再统计 bus-off 进入/恢复次数，也不再维护 no-ACK 退避；异常分析看 `CAN1->ESR`、`tx_queue` 和总线波形。
 
 ## 验证要求
 

@@ -49,6 +49,9 @@ RTC_SLEEP_AFE_SH367309_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_slee
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
+CAN_FEIDAO_FRAMES_H = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.h"
+SYSTEM_DEBUG_C = ROOT / "103 + 309" / "Project" / "Source" / "SystemDebug.c"
+SYSTEM_DEBUG_H = ROOT / "103 + 309" / "Project" / "Source" / "SystemDebug.h"
 FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
 FACTORY_AGING_H = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.h"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
@@ -1061,19 +1064,44 @@ def check_fault_snapshot_mapping(reporter):
 
 
 def check_can_rtc_service_runtime(reporter):
-    required_files = [CAN_HDX_C, CAN_HDX_H, RTC_C, RTC_SLEEP_C, RTC_SLEEP_PORT_C, RTC_SLEEP_PORT_H, PROJECT_CONFIG]
+    required_files = [
+        CAN_HDX_C,
+        CAN_HDX_H,
+        CAN_FEIDAO_FRAMES_H,
+        RTC_C,
+        RTC_SLEEP_C,
+        RTC_SLEEP_PORT_C,
+        RTC_SLEEP_PORT_H,
+        PROJECT_CONFIG,
+        SYSTEM_DEBUG_C,
+        SYSTEM_DEBUG_H,
+    ]
     if any(not path.exists() for path in required_files):
         return
 
     can_c = read_text(CAN_HDX_C)
     can_h = read_text(CAN_HDX_H)
+    frames_h = read_text(CAN_FEIDAO_FRAMES_H)
     rtc_c = read_text(RTC_C)
     rtc_sleep_c = read_text(RTC_SLEEP_C)
     rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
     rtc_sleep_port_h = read_text(RTC_SLEEP_PORT_H)
     project_config = read_text(PROJECT_CONFIG)
+    system_debug_c = read_text(SYSTEM_DEBUG_C)
+    system_debug_h = read_text(SYSTEM_DEBUG_H)
 
-    combined = "\n".join([can_c, can_h, rtc_c, rtc_sleep_c, rtc_sleep_port_c, rtc_sleep_port_h, project_config])
+    combined = "\n".join([
+        can_c,
+        can_h,
+        frames_h,
+        rtc_c,
+        rtc_sleep_c,
+        rtc_sleep_port_c,
+        rtc_sleep_port_h,
+        project_config,
+        system_debug_c,
+        system_debug_h,
+    ])
     removed_tokens = [
         "Can_RtcWakeService",
         "Can_GetIdleRtcPeriodSeconds",
@@ -1087,25 +1115,58 @@ def check_can_rtc_service_runtime(reporter):
         "s_runtime.rtc_service_active",
         "s_runtime.bus_off",
         "feidao_can_busoff_monitor",
+        "PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS",
+        "PROJECT_CFG_CAN_NO_ACK_BACKOFF_THRESHOLD",
+        "PROJECT_CFG_CAN_PROBE_PERIOD_SECONDS",
+        "FEIDAO_CAN_BUS_ACTIVE_HOLD_TICKS",
+        "FEIDAO_CAN_NO_ACK_BACKOFF_THRESHOLD",
+        "FEIDAO_CAN_PROBE_PERIOD_TICKS",
+        "CAN_FEIDAO_RTC_PROBE_MSG_MASK",
+        "s_runtime.bus_active",
+        "s_runtime.no_ack_cnt",
+        "s_runtime.probe_active",
+        "last_probe_tick",
+        "feidao_can_mark_bus_active",
+        "feidao_can_handle_no_ack",
+        "feidao_can_update_bus_active_timeout",
+        "rtc_svc",
+        "tx_ok_cnt",
+        "tx_fail_cnt",
+        "busoff_in_cnt",
+        "busoff_out_cnt",
+        "last_tx_id",
     ]
     stale_tokens = [token for token in removed_tokens if token in combined]
+    snapshot_ok = (
+        "void Can_GetDebugSnapshot(uint8_t *power_on" in can_h
+        and "Can_GetDebugSnapshot(&g_dbg.can.power_on" in system_debug_c
+        and "uint8_t  power_on;" in system_debug_h
+        and "uint8_t  bus_off;" in system_debug_h
+        and "uint8_t  tx_queue;" in system_debug_h
+        and "uint16_t esr;" in system_debug_h
+    )
 
     if (
         "FEIDAO_CAN_TX_QUEUE_SIZE" in can_c
         and "feidao_can_service_tx" in can_c
         and "CAN_ABOM = ENABLE" in can_c
         and "CAN_NART = ENABLE" in can_c
+        and "CAN_FEIDAO_1000MS_MSG_MASK" in can_c
+        and "CAN_FEIDAO_5000MS_MSG_MASK" in can_c
         and "Can_PrepareSleep" in can_c
         and "feidao_can_power_off();" in can_c
         and "RTC_WAKEUP_DEFAULT_SECONDS" in rtc_c
+        and snapshot_ok
         and not stale_tokens
     ):
-        reporter.ok("CAN runtime keeps queued TX, disables RTC periodic CAN service, and relies on ABOM bus-off recovery")
+        reporter.ok("CAN runtime uses queued TX, fixed run-mode periodic schedule, no RTC CAN service, no active/probe/no-ack state, and ABOM bus-off recovery")
     else:
         if stale_tokens:
             reporter.fail("CAN RTC/bus-off simplification still contains stale tokens: {0}".format(",".join(stale_tokens)))
+        elif not snapshot_ok:
+            reporter.fail("CAN debug snapshot should only expose power_on, bus_off, tx_queue, and esr")
         else:
-            reporter.fail("CAN runtime should keep queued TX, turn CMNT off before RTC sleep, remove RTC CAN service, and keep ABOM enabled")
+            reporter.fail("CAN runtime should keep queued TX, fixed run-mode periodic schedule, CMNT off before RTC sleep, remove RTC CAN service, remove active/probe/no-ack state, and keep ABOM enabled")
 
 
 def check_can_aging_soc_service(reporter):

@@ -23,7 +23,7 @@
 | CAN-REQ-003 | RTC 休眠中是否周期广播 CAN | CHANGE_NEEDED | 已删除 `Can_RtcWakeService()`，RTC 周期唤醒后不主动广播 CAN |
 | CAN-REQ-004 | CAN 收发器电源 | KEEP_BUT_REFACTOR | 运行态 `InitCan()` 打开 CMNT；`Can_PrepareSleep()` 关闭 CMNT；唤醒恢复后重新打开 |
 | CAN-REQ-005 | bus-off 处理 | CHANGE_NEEDED | 已删除软件 bus-off 状态机，保留 `CAN_ABOM = ENABLE` 自动恢复 |
-| CAN-REQ-006 | low-risk cleanup | KEEP_BUT_REFACTOR | 删除未用变量、旧 RTC CAN 接口和过期配置宏，简化 read-block 旧特殊判断 |
+| CAN-REQ-006 | low-risk cleanup | KEEP_BUT_REFACTOR | 删除未用变量、旧 RTC CAN 接口、运行态 active/probe/no-ACK 状态和 debug 占位字段 |
 
 ## 2. 当前 CAN 行为
 
@@ -32,7 +32,7 @@
 - `InitCan()` 初始化 GPIO/NVIC/CAN/filter，并打开 `GPIO_CMNT_EN/PIN_CMNT_EN`。
 - `App_Can()` 在主循环中调度 1000ms/5000ms 周期帧、处理 CAN App 命令、服务 TX queue 和 read-block stream。
 - `Can_HDX_Transmit()` 只负责入队；返回 `0` 表示入队成功，不代表硬件已经 ACK。
-- `CAN_NART = ENABLE`，无 ACK 时不做硬件无限重发；软件仍保留 no-ACK 计数和退避。
+- `CAN_NART = ENABLE`，无 ACK 时不做硬件无限重发；软件不再维护 no-ACK 计数、active 状态或 probe 退避。
 
 ### 2.2 RTC 休眠关系
 
@@ -59,6 +59,10 @@
 - `RtcSleep_PortIsCanBusActive()`
 - `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS`
 - 软件 `feidao_can_busoff_monitor()` 和 `s_runtime.bus_off`
+- 运行态 `bus_active/no_ack_cnt/probe_active/last_probe_tick`
+- `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS`
+- `CAN_FEIDAO_RTC_PROBE_MSG_MASK`
+- debug snapshot 保留占位字段 `rtc_svc/tx_ok_cnt/tx_fail_cnt/busoff_in_cnt/busoff_out_cnt/last_tx_id`
 
 保留：
 
@@ -67,7 +71,7 @@
 - `READ_BLOCK` 分包返回。
 - `ENTER_IAP` guard 和 ACK 后延迟复位。
 - `Can_IsBusy()` 作为低功耗阻塞条件，避免命令/块读/发送被 STOP 打断。
-- `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS`，用于运行态 active 超时和 no-ACK 退避判断。
+- 运行态固定 1000ms/5000ms 周期调度。
 
 ## 4. 验证重点
 

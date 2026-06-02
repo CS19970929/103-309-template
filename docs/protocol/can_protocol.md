@@ -65,7 +65,7 @@
 - `InitCan()` / STOP 唤醒恢复会打开 `GPIO_CMNT_EN`，运行态 CAN 供电保持打开。
 - `Can_PrepareSleep()` 会取消当前发送、清空发送队列、清空 App 命令队列、停止 block stream，并关闭 CAN 收发器电源。
 - RTC HICCUP 周期唤醒后不再主动广播 CAN；唤醒恢复后回到主循环，再按运行态调度通信。
-- `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 配置 CAN active 保持时间，默认 `10s`。最后一次 TX ACK 或 RX 帧后保持 active，超时后允许低功耗判断继续，不再永久阻塞 STOP。
+- 运行态不再维护 CAN active/probe/no-ACK 退避状态，固定按 1000ms/5000ms 周期调度飞道广播。
 - `CAN_NART = ENABLE`，无 ACK 时不做硬件自动重发，避免无对端时持续重发导致功耗升高。
 - `CAN_ABOM = ENABLE`，bus-off 恢复交给 bxCAN 自动处理，软件不再维护 bus-off 状态机。
 

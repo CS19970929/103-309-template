@@ -49,7 +49,7 @@ SleepDeal_Continue()
 当前 `LP_BuildBlockReason()` 会阻塞 sleep 的条件：
 
 - 充/放电电流 > 10mA。
-- SCI/CAN busy 或 CAN bus active。
+- SCI/CAN busy。
 - MCU_WK/key active。
 - AFE 不允许 sleep。
 - Flash busy 或待写参数。
@@ -64,7 +64,7 @@ RTC 优先 LSE，失败后 LSI fallback。F1 使用 RTC counter + Alarm 唤醒 S
 
 IWDG 开启时，RTC wake period 最大被限制为 10s。
 
-RTC 默认 wake period 为 10s，IWDG 开启时仍限制最大 10s。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；超时后允许低功耗判断不再被历史 CAN active 状态永久阻塞。RTC STOP 周期唤醒后不再主动广播 CAN。
+RTC 默认 wake period 为 10s，IWDG 开启时仍限制最大 10s。CAN 不再使用 active/probe 状态参与 RTC 周期判断；RTC STOP 前关闭 CMNT，周期唤醒后不主动广播 CAN，真正唤醒恢复后再由主循环通信。
 
 ## 5. IWDG 使用
 
@@ -102,7 +102,7 @@ HICCUP STOP 醒来后：
 
 | 风险 | 建议 |
 |---|---|
-| CAN bus active 可能长期阻塞 sleep | 已改为配置化保持时间，默认 10s，需实测 CAN 在线/离线切换 |
+| CAN busy 被打断导致协议半包 | 保留 `Can_IsBusy()` 阻塞 STOP，确认 TX queue、App 命令和 read-block stream 结束后再睡 |
 | IWDG 10s 周期导致功耗偏高 | 实测后决定是否调整 IWDG/RTC 策略 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |
 | LedBar active 阻塞 sleep 影响用户显示和功耗 | 确认显示窗口时长 |
