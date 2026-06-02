@@ -195,6 +195,8 @@ docs/
 ## 4. 变更日志 (changelog/)
 
 - [change_log.md](changelog/change_log.md) — 2026-05-26 至今的文档/源码变更
+- [simplification_changelog.md](changelog/simplification_changelog.md) — 2026-06-01 项目优化简化 (删 6 文件, 9 函数, 12 字段)
+- [production_release_changelog.md](changelog/production_release_changelog.md) — 量产分支清理 (~5500 行删除)
 
 ---
 
