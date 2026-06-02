@@ -10,9 +10,6 @@ void App_Can(void);
 UINT8 Can_HDX_Transmit(CanTxMsg *Msg);
 UINT8 Can_IsBusy(void);
 void Can_PrepareSleep(void);
-UINT8 Can_IsBusActive(void);
-UINT32 Can_GetIdleRtcPeriodSeconds(void);
-void Can_RtcWakeService(UINT32 elapsed_seconds);
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 void Can_GetDebugSnapshot(uint8_t *bus_active, uint8_t *power_on,

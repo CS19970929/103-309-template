@@ -127,21 +127,6 @@ UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
     return RTC_GetLastWakeupPeriodSeconds();
 }
 
-UINT32 RtcSleep_PortGetCanRtcPeriodSeconds(void)
-{
-    return Can_GetIdleRtcPeriodSeconds();
-}
-
-UINT8 RtcSleep_PortIsCanBusActive(void)
-{
-    return Can_IsBusActive();
-}
-
-void RtcSleep_PortRunCanRtcWakeService(UINT32 rtc_elapsed_seconds)
-{
-    Can_RtcWakeService(rtc_elapsed_seconds);
-}
-
 UINT8 RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
 {
     SOC_ApplyRtcRelaxationCompensation(rest_seconds,

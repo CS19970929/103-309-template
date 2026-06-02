@@ -32,7 +32,7 @@
 | T-CAN-003 | CAN App 状态 | 发 `0x60 GET_STATUS` | `0x61` ack 返回 SOC/SOH |
 | T-CAN-004 | READ_BLOCK | 通过 CAN App 读 `0xD000` 块 | 多帧 `0x86` 顺序返回，不丢帧 |
 | T-CAN-005 | ENTER_IAP | 工装环境发进入 IAP | ack 后延迟复位，App 不覆盖 IAP |
-| T-CAN-006 | BusOff 恢复 | 模拟 CAN 异常 | 队列清理，恢复计数增加 |
+| T-CAN-006 | BusOff 恢复 | 模拟 CAN 异常后恢复总线 | `CAN_ABOM` 自动恢复，恢复后周期帧继续发送；debug 可只读 ESR BOFF |
 
 ## 4. 参数读写测试
 
@@ -89,7 +89,8 @@
 | T-LP-002 | 通信阻塞 | 连续 Modbus/CAN | 不进入 STOP |
 | T-LP-003 | Flash busy 阻塞 | 写参数期间 | 不进入 STOP |
 | T-LP-004 | IWDG 10s 限制 | 设置更长 wake period | 被限制或阻塞，系统不复位 |
-| T-LP-005 | RTC 唤醒恢复 | STOP 周期唤醒 | 时钟、ADC、USART、CAN、AFE 恢复 |
+| T-LP-005 | RTC 唤醒恢复 | STOP 周期唤醒 | 时钟、ADC、USART、CAN、AFE 恢复；周期唤醒中不主动广播 CAN |
+| T-LP-006 | CMNT 睡眠电源 | 示波器/万用表测 `GPIO_CMNT_EN` | `Can_PrepareSleep()` 后关闭，唤醒恢复 `InitCan()` 后打开 |
 | T-IWDG-001 | 主循环喂狗 | 正常运行 8h | 无异常复位 |
 | T-IWDG-002 | 阻塞等待喂狗 | CAN RTC service/延时 | 无 IWDG 复位 |
 

@@ -32,10 +32,6 @@ void RtcSleep_PortRestoreAfterStop(void);
 uint8_t RtcSleep_PortIsRtcWake(void);
 uint32_t RtcSleep_PortGetLastWakeupSeconds(void);
 
-uint32_t RtcSleep_PortGetCanRtcPeriodSeconds(void);
-uint8_t RtcSleep_PortIsCanBusActive(void);
-void RtcSleep_PortRunCanRtcWakeService(uint32_t rtc_elapsed_seconds);
-
 uint8_t RtcSleep_PortApplySocRtcRest(uint32_t rest_seconds);
 void RtcSleep_PortAddRuntimeSeconds(uint32_t seconds);
 enum irqWakeup RtcSleep_PortGuessWakeupSource(void);

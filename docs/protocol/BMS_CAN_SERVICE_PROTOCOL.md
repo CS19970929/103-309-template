@@ -101,6 +101,6 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 - CAN 接收中断只缓存请求帧；真正寄存器处理在 `App_Can()` 主循环中执行，避免在中断里操作 Flash/EEPROM 或串口缓存。
 - 如果任一串口通道正在收发，`Sci_HostReadWords()` / `Sci_HostWriteWords()` 会拒绝本次 CAN 寄存器访问，避免和原串口响应缓存冲突。
 
-## 接收窗口
+## 低功耗关系
 
-现有 BMS CAN 会对收发器做低功耗开关。App 服务必须在 BMS 周期广播后的短窗口内接收命令；第一阶段保留短接收窗口，避免长期打开 CAN 收发器。
+运行态 `InitCan()` 打开 CAN 收发器，App 服务命令不依赖周期广播后的短窗口。进入 RTC STOP 前 `Can_PrepareSleep()` 会关闭 CMNT，RTC 周期唤醒期间不主动广播 CAN；外部唤醒或退出低功耗恢复后，`InitCan()` 重新打开 CMNT，再恢复 CAN App 服务。

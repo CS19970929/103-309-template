@@ -63,8 +63,9 @@ PRE_PUSH = ROOT / ".githooks" / "pre-push"
 PROJECT_CONFIG_WIZARD_MARKER = "\u9879\u76ee\u53ef\u89c6\u5316\u914d\u7f6e"
 FLOW_DOC = ROOT / "\u9879\u76ee\u8fd0\u884c\u6d41\u7a0b\u4e0e\u65f6\u5e8f\u6e90\u7801\u68b3\u7406_2026-05-16.md"
 COMM_ADDRESS_INDEX = ROOT / "COMMUNICATION_ADDRESS_INDEX.md"
-CAN_RUNTIME_REFACTOR = ROOT / "CAN_RUNTIME_REFACTOR.md"
-CAN_MODULE_SIMPLIFY = ROOT / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+CAN_RUNTIME_REFACTOR = ROOT / "docs" / "devlog" / "CAN_RUNTIME_REFACTOR.md"
+CAN_MODULE_SIMPLIFY = ROOT / "docs" / "devlog" / "CAN_MODULE_SIMPLIFY_2026-05-15.md"
+CAN_POWER_RTC_SIMPLIFY = ROOT / "docs" / "devlog" / "CAN_POWER_RTC_SIMPLIFY_2026-06-02.md"
 COMM_TOOL_ARCH_DOC = ROOT / "docs" / "COMM_TOOL_CAN_IAP_ARCHITECTURE_2026-05-22.md"
 COMM_TOOL_SERIAL_DOC = ROOT / "docs" / "COMM_TOOL_SERIAL_PROTOCOL.md"
 BMS_CAN_SERVICE_DOC = ROOT / "docs" / "BMS_CAN_SERVICE_PROTOCOL.md"
@@ -1060,26 +1061,51 @@ def check_fault_snapshot_mapping(reporter):
 
 
 def check_can_rtc_service_runtime(reporter):
-    required_files = [CAN_HDX_C, CAN_HDX_H]
+    required_files = [CAN_HDX_C, CAN_HDX_H, RTC_C, RTC_SLEEP_C, RTC_SLEEP_PORT_C, RTC_SLEEP_PORT_H, PROJECT_CONFIG]
     if any(not path.exists() for path in required_files):
         return
 
     can_c = read_text(CAN_HDX_C)
     can_h = read_text(CAN_HDX_H)
+    rtc_c = read_text(RTC_C)
+    rtc_sleep_c = read_text(RTC_SLEEP_C)
+    rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
+    rtc_sleep_port_h = read_text(RTC_SLEEP_PORT_H)
+    project_config = read_text(PROJECT_CONFIG)
+
+    combined = "\n".join([can_c, can_h, rtc_c, rtc_sleep_c, rtc_sleep_port_c, rtc_sleep_port_h, project_config])
+    removed_tokens = [
+        "Can_RtcWakeService",
+        "Can_GetIdleRtcPeriodSeconds",
+        "Can_IsBusActive",
+        "RtcSleep_PortRunCanRtcWakeService",
+        "RtcSleep_PortGetCanRtcPeriodSeconds",
+        "RtcSleep_PortIsCanBusActive",
+        "PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS",
+        "FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS",
+        "FEIDAO_CAN_POWER_STABLE_TICKS",
+        "s_runtime.rtc_service_active",
+        "s_runtime.bus_off",
+        "feidao_can_busoff_monitor",
+    ]
+    stale_tokens = [token for token in removed_tokens if token in combined]
 
     if (
         "FEIDAO_CAN_TX_QUEUE_SIZE" in can_c
         and "feidao_can_service_tx" in can_c
-        and "s_runtime.rtc_service_active" in can_c
-        and "s_runtime.last_rtc_wake_timeout" in can_c
         and "CAN_ABOM = ENABLE" in can_c
-        and "Can_RtcWakeService" in can_c
-        and "u8RtcServiceActive" in can_h
-        and "u8LastRtcWakeTimeout" in can_h
+        and "CAN_NART = ENABLE" in can_c
+        and "Can_PrepareSleep" in can_c
+        and "feidao_can_power_off();" in can_c
+        and "RTC_WAKEUP_DEFAULT_SECONDS" in rtc_c
+        and not stale_tokens
     ):
-        reporter.ok("CAN runtime uses always-on queued TX and keeps RTC service diagnostics")
+        reporter.ok("CAN runtime keeps queued TX, disables RTC periodic CAN service, and relies on ABOM bus-off recovery")
     else:
-        reporter.fail("CAN runtime should use queued TX, automatic bus-off recovery, and keep RTC service diagnostics")
+        if stale_tokens:
+            reporter.fail("CAN RTC/bus-off simplification still contains stale tokens: {0}".format(",".join(stale_tokens)))
+        else:
+            reporter.fail("CAN runtime should keep queued TX, turn CMNT off before RTC sleep, remove RTC CAN service, and keep ABOM enabled")
 
 
 def check_can_aging_soc_service(reporter):
@@ -1413,7 +1439,7 @@ def check_app_architecture(reporter):
 
 
 def check_runtime_docs(reporter):
-    docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY]
+    docs = [FLOW_DOC, COMM_ADDRESS_INDEX, CAN_RUNTIME_REFACTOR, CAN_MODULE_SIMPLIFY, CAN_POWER_RTC_SIMPLIFY]
     if any(not path.exists() for path in docs):
         missing = [str(path.relative_to(ROOT)) for path in docs if not path.exists()]
         reporter.fail("runtime documentation missing: {0}".format(",".join(missing)))
@@ -1423,6 +1449,7 @@ def check_runtime_docs(reporter):
     comm_doc = read_text(COMM_ADDRESS_INDEX)
     can_runtime = read_text(CAN_RUNTIME_REFACTOR)
     can_simplify = read_text(CAN_MODULE_SIMPLIFY)
+    can_power_rtc = read_text(CAN_POWER_RTC_SIMPLIFY)
 
     if (
         "LowPower_Request()" in flow_doc
@@ -1438,11 +1465,12 @@ def check_runtime_docs(reporter):
 
     if (
         "CanFeidaoFrames" in can_runtime
-        and "Can_RtcWakeService" in can_runtime
-        and "Can_GetIdleRtcPeriodSeconds" in can_runtime
-        and "rtc_service_active" in can_runtime
-        and "last_rtc_wake_tx_acked" in can_runtime
+        and "RTC 周期 CAN 服务已删除" in can_runtime
+        and "ABOM" in can_runtime
         and "CanFeidaoFrames.c/.h" in can_simplify
+        and "Can_PrepareSleep()" in can_power_rtc
+        and "Can_RtcWakeService()" in can_power_rtc
+        and "已删除" in can_power_rtc
     ):
         reporter.ok("CAN docs describe current runtime/frame/low-power boundaries")
     else:

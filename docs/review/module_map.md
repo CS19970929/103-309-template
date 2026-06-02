@@ -330,7 +330,7 @@ rtc_sleep()
     Sys_StopMode()
     InitRunAfterStopWakeup()
     SOC_ApplyRtcRelaxationCompensation()
-    Can_RtcWakeService()
+    low_power_refresh_rtc_status()
   NORMAL/DEEP:
     RtcSleep_PortCommitResetSleep()
     SleepDeal_Continue()
@@ -348,6 +348,8 @@ rtc_sleep()
 - fault active。
 - LedBar active。
 - RTC 周期超过 IWDG 安全范围。
+
+当前 CAN 策略：`Can_PrepareSleep()` 在进入睡眠前关闭 CMNT；RTC 周期唤醒后不主动广播 CAN；真正唤醒恢复后 `InitCan()` 重新打开 CMNT，再由主循环通信。
 - 工厂老化运行中。
 
 证据：`app_lowpower.c:17-76`, `rtc_sleep.c:148-235`, `rtc_sleep.c:421-481`。

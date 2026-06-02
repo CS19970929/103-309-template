@@ -94,11 +94,6 @@
 
 // <h>CAN Configuration
 
-// <o> CAN RTC wake period seconds <1-10>
-#ifndef PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS
-#define PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS 1
-#endif
-
 // <o> CAN active hold time seconds <1-600>
 #ifndef PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS
 #define PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS 10

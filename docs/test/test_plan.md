@@ -26,11 +26,11 @@
 - 抓取 `0x14F80200+index` 周期广播。
 - 抓取 `0x14F80208` 老化状态和剩余分钟。
 - 测试 CAN App `GET_STATUS`, `READ_REG`, `READ_BLOCK`, `WRITE_PREP/COMMIT`, `ENTER_IAP`, 老化控制。
-- 模拟 bus-off 或 no-ack，确认恢复和队列清理。
-- 不接 CAN 设备时，确认 `GPIO_CMNT_EN` 只在 10 s 探测窗口短时上电，且不持续发送完整 1 s/5 s 业务广播。
-- 接入 CAN 设备后，确认任一 TX ACK 或 RX 报文会恢复 active 状态，并恢复完整 1 s/5 s 周期广播。
-- 运行中断开 CAN 设备后，确认连续无 ACK/发送超时达到阈值后切换回 idle probe。
-- RTC HICCUP STOP 下，active 总线确认 1 s 唤醒广播，idle 总线确认 10 s 轻量探测。
+- 模拟 bus-off 或 no-ack，确认 ABOM 自动恢复后运行态周期帧可继续发送。
+- 不接 CAN 设备时，确认 `CAN_NART=ENABLE` 下不会硬件持续重发，no-ACK 退避后队列可释放。
+- 接入 CAN 设备后，确认任一 TX ACK 或 RX 报文会刷新 active 状态，并维持完整 1 s/5 s 周期广播。
+- RTC HICCUP STOP 前后测 `GPIO_CMNT_EN`：睡前关闭，唤醒恢复后重新打开。
+- RTC HICCUP 周期唤醒期间确认不主动发送 CAN 周期广播；退出低功耗恢复运行态后再通信。
 
 ## 4. 参数存储测试
 

@@ -11,7 +11,7 @@
 | Q-CRIT-003 | AFE 参数 | 均衡开启电压是否应使用可写参数 | `SH367309_DataDeal.c:58-59` 注释参数计算，实际硬编码 `4160` | 上位机写 `u16Balance_OpenVoltage` 可能不影响 AFE ROM 对应字段 | MISUNDERSTOOD | P1：上位机参数和硬件行为不一致 | `u16Balance_OpenVoltage` 是否必须驱动 AFE 均衡开压？ | B. 保留需求但修实现；C. 修改为固定 4160 并文档化；F. 补充背景 | |
 | Q-CRIT-004 | Flash/IAP | 当前真实硬件 Flash 容量和 App 链接地址是什么 | `Flash.h:4-30` 使用 `0x08004800` App 和 `0x0801C000+` 存储；Keil XML 同时有 `0x08000000` 和 `0x8004800`，`ScatterFile` 为空 | 安全脚本约束 App 烧录 `0x08004800`，但 Keil 工程显示不够单一 | UNKNOWN | P0：地址错会覆盖 IAP 或越界写 Flash | 实际量产芯片是 64KB、128KB 还是 C8 兼容大 Flash？Keil 最终链接地址以哪个文件为准？ | A. 保留现有地址并补 map 验证；C. 修改地址策略；F. 补充硬件/BOM | |
 | Q-CRIT-005 | Host 写权限 | 量产固件是否允许上位机写保护/Other/AFE/IAP/SOC | `PROJECT_CFG_HOST_WRITE_ENABLE 1`；`Sci_Upper.c:1818-1984` | 当前量产宏下可写多个关键参数和 IAP 请求 | UNKNOWN | P0/P1：现场误写会影响保护阈值、AFE MTP、IAP 进入 | 量产版本是否需要密码/工装模式/只读模式？ | A. 保留原写权限；B. 保留但加权限层；C. 按新逻辑收紧；F. 补充工厂流程 | |
-| Q-CRIT-006 | 低功耗/IWDG | RTC 周期唤醒是否必须兼顾 CAN 周期广播 | `RTC.c:386-390` 限制 10s；`Can_HDX.c:952-979` RTC wake 服务 CAN | STOP 中因 IWDG 最大 10s 频繁醒来，并可短时上 CAN 服务 | CONFLICT | P1：低功耗目标与通信在线需求冲突 | 休眠时是否必须周期发 CAN，还是只在唤醒源触发后通信？ | A. 保留；C. 修改为更省电策略；E. 暂保留后续实测 | |
+| Q-CRIT-006 | 低功耗/IWDG | RTC 周期唤醒是否必须兼顾 CAN 周期广播 | `RTC.c`, `rtc_sleep.c`, `Can_HDX.c` | 已确认改为 RTC 周期唤醒不主动发 CAN；睡前关闭 CMNT，唤醒恢复后重新打开 | CHANGE_NEEDED | P1：需要上板确认睡前/唤醒后 CMNT 电平和 CAN 恢复 | 是否接受当前“休眠不广播，唤醒后通信”的策略作为量产默认？ | C. 已按更省电策略修改；后续只做实测验证 | 已确认：RTC 休眠中不周期广播 CAN |
 | Q-CRIT-007 | 低功耗/MOS | 充电器拔除是否应直接进入 deep sleep | `DataDeal.c:63-107` | CHG_IN 状态会影响 MOS，拔除后调用 deep sleep 路径 | UNKNOWN | P1：影响用户体验和安全输出状态 | 当前产品拔 5V 后是关机、待机还是继续运行？ | A. 保留；C. 修改；F. 补充产品行为 | |
 | Q-CRIT-008 | 老化模式 | 出厂老化是否仍为当前量产需求 | `PROJECT_CFG_FACTORY_AGING_ENABLE 1`；`FactoryAging.c:587-620` | 默认上电可能自动进入/恢复老化，CAN 可控制 | UNKNOWN | P1：若误保留会影响 MOS、低功耗和出货流程 | 老化是每台板必跑、工厂专用固件，还是旧客户需求？ | A. 保留；B. 保留但工装隔离；D. 删除业务；F. 补充背景 | |
 | Q-CRIT-009 | 产品信息 | 默认 SN/硬件/软件版本是否可进入量产 | `DataDeal.h:182-187` 默认 `"T3_27Ah"`, `"D010"`, `"cs-666-8888"`；`Sci_Upper.c:769-773` | `0xC002` 会读出默认/写入后的产品信息 | CHANGE_NEEDED | P1：上位机显示和客户追溯错误 | 量产 SN/HW/SW 来源是烧录、上位机写入、还是固定编译？ | C. 修改为明确量产写入流程；F. 补充生产规则 | |
@@ -74,7 +74,7 @@
 | Q-RTC-IO-001 | IO/AFE | `PB0 / AFE1_PRO_EN` 是否需要在 RTC STOP 唤醒后显式恢复 | `conf.c:InitIO()`, `conf.c:InitIO_rtc()` | 正常初始化配置 PB0，唤醒恢复未显式配置 | UNKNOWN | AFE 保护/供电状态可能不确定 | PB0 的真实硬件功能是什么，唤醒后必须置成什么状态？ | F. 补充原理图；B. 确认后补恢复代码；E. 暂不改继续实测 | |
 | Q-RTC-IO-002 | IO/低功耗 | `PA3 / 2737_EN` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOA 模拟化时排除 PA3 | UNKNOWN | 可能增加休眠电流或影响硬件保持 | PA3 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
 | Q-RTC-IO-003 | IO/AFE | `PB14 / AFE1_CTL` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOB 模拟化时排除 PB14 | UNKNOWN | 可能影响 AFE 控制或漏电 | PB14 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
-| Q-RTC-CAN-001 | CAN/低功耗 | RTC 周期唤醒后是否必须短时上电 CAN 广播 | `Can_HDX.c`, `rtc_sleep.c` | 当前保留 RTC wake CAN 服务策略 | UNKNOWN | 提高功耗，但增强休眠通信可见性 | 休眠中需要周期 CAN 可见，还是只在外部唤醒后通信？ | A. 保留；C. 改为更省电；E. 暂保留待实测 | |
+| Q-RTC-CAN-001 | CAN/低功耗 | RTC 周期唤醒后是否必须短时上电 CAN 广播 | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 已删除 RTC wake CAN 服务；CMNT 睡前关闭，唤醒恢复后打开 | CHANGE_NEEDED | 休眠中 CAN 不再周期可见，但功耗更低 | 休眠中需要周期 CAN 可见，还是只在外部唤醒后通信？ | C. 改为更省电 | 已确认：只在唤醒恢复后通信 |
 
 ## 6. 高风险需求
 

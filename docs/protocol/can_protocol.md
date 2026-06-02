@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/Can_HDX.c`, `103 + 309/Project/Source/Can_HDX.h`, `103 + 309/Project/Source/CanFeidaoFrames.c`, `103 + 309/Project/Source/CanFeidaoFrames.h`, `tools/can_bms_host.py`
-最后更新时间：2026-05-27
+最后更新时间：2026-06-02
 未确认事项：飞道协议字段单位和客户最终版本仍需用户确认；本文以当前源码发送内容和 App 命令为准。
 
 ## 1. CAN 初始化
@@ -14,8 +14,8 @@
 - `CAN_ABOM = ENABLE`，允许自动 bus-off 恢复。
 - FIFO0 接收中断 `USB_LP_CAN1_RX0_IRQn`。
 - 发送侧使用 `FEIDAO_CAN_TX_QUEUE_SIZE = 32` 的软件队列。
-- CAN 收发和低功耗状态会更新 debug watch 结构。
-- `Can_HDX.c` 内部状态按职责收口为 `s_tx`、`s_runtime`、`s_app` 三类文件级 `static` runtime；`g_stCanLowPowerStatus` 只作为诊断快照，由运行态刷新，不作为控制真相源。
+- CAN 诊断通过 `Can_GetDebugSnapshot()` 填充 debug 结构；bus-off 位从 `CAN1->ESR` 只读获取。
+- `Can_HDX.c` 内部状态按职责收口为 `s_tx`、`s_runtime`、`s_app` 三类文件级 `static` runtime。
 
 ## 2. 周期广播
 
@@ -62,19 +62,18 @@
 
 ## 4. 低功耗关系
 
+- `InitCan()` / STOP 唤醒恢复会打开 `GPIO_CMNT_EN`，运行态 CAN 供电保持打开。
 - `Can_PrepareSleep()` 会取消当前发送、清空发送队列、清空 App 命令队列、停止 block stream，并关闭 CAN 收发器电源。
-- `Can_RtcWakeService()` 会短时打开 CAN 电源；active 总线发送到期的 1000ms/5000ms 业务帧，idle 总线只发送轻量探测帧，过程中持续喂 IWDG。
-- `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置 active 总线 RTC 唤醒 CAN 广播周期，默认 `1s`，保留客户可见周期广播。
-- `PROJECT_CFG_CAN_RTC_IDLE_PERIOD_SECONDS` 配置 idle 总线 RTC 探测周期，默认 `10s`。
+- RTC HICCUP 周期唤醒后不再主动广播 CAN；唤醒恢复后回到主循环，再按运行态调度通信。
 - `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 配置 CAN active 保持时间，默认 `10s`。最后一次 TX ACK 或 RX 帧后保持 active，超时后允许低功耗判断继续，不再永久阻塞 STOP。
 - `CAN_NART = ENABLE`，无 ACK 时不做硬件自动重发，避免无对端时持续重发导致功耗升高。
-- `GPIO_CMNT_EN` 在发送前上电，等待 `PROJECT_CFG_CAN_POWER_STABLE_TICKS` 个 10ms tick；无 active 总线且 TX/read-block 空闲后断电。
+- `CAN_ABOM = ENABLE`，bus-off 恢复交给 bxCAN 自动处理，软件不再维护 bus-off 状态机。
 
-当前策略：有 CAN 对端时保持完整周期广播；无对端时切换为 10s 轻量探测，探测 ACK 或 RX 报文会恢复完整广播。
+当前策略：运行态保持完整周期广播；RTC STOP 中关闭 CMNT，不做周期 CAN 服务；真正唤醒恢复后再通信。
 
 ## 5. 兼容风险
 
 1. 周期帧 ID、字段单位和字节序属于客户协议兼容面。
 2. App 命令 `READ_REG`/`WRITE_COMMIT` 直接桥接 Modbus 寄存器，任何寄存器权限变更都会影响 CAN 上位机。
 3. 老化、写 SOC、IAP 都是外部可见命令，后续必须先回归 `tools/can_bms_host.py` 和 `tools/comm_tool_upgrade_ui.py`。
-4. 低功耗优化不得改变默认 `1s` RTC CAN 广播，也不得改变外部可见 CAN ID、payload 或 App 命令语义。
+4. 低功耗优化不得改变外部可见 CAN ID、payload 或 App 命令语义；RTC STOP 中已确认不再周期广播 CAN。

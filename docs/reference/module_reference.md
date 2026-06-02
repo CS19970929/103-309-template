@@ -165,7 +165,6 @@ main()
 #### CAN 配置
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
-| `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` | 1 | CAN 活跃时 RTC 唤醒周期 |
 | `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` | 10 | CAN 总线活跃保持时间 |
 
 #### SOC 配置
@@ -543,12 +542,12 @@ CAN 模块实现:
 - 应用层命令队列 (4条)
 - CAN 收发器电源管理 (GPIO_CMNT_EN)
 - 总线活跃检测与探测
-- RTC 唤醒 CAN 服务
+- RTC 睡前关闭 CMNT，唤醒恢复后重新打开
 
-### 6.2 全局变量 (仅 DEBUG_WATCH)
+### 6.2 诊断入口
 
-- `volatile struct CAN_ERROR_SNAPSHOT g_stCanErrorSnapshot` - CAN 错误快照
-- `volatile struct CAN_LOW_POWER_STATUS g_stCanLowPowerStatus` - CAN 低功耗状态
+- `Can_GetDebugSnapshot()` - 填充 debug CAN 快照。
+- `bus_off` 从 `CAN1->ESR & CAN_ESR_BOFF` 只读获取。
 
 ### 6.3 静态运行时结构
 
@@ -564,12 +563,8 @@ CAN 模块实现:
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
 | `bus_active` | 0 | 总线是否有其他设备 |
-| `power_on` | 0 | CAN 收发器供电状态 |
 | `no_ack_cnt` | 0 | 连续无应答计数 |
 | `probe_active` | 0 | 探测模式激活 |
-| `rtc_service_active` | 0 | RTC 唤醒服务中 |
-| `bus_off` | 0 | BUS-OFF 状态 |
-| `busoff_enter_cnt` | 0 | BUS-OFF 进入次数 |
 
 ### 6.4 CAN 配置
 
@@ -584,7 +579,7 @@ CAN 模块实现:
 断电: GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, Bit_SET)
 ```
 
-**自动断电条件**: bus_active==0 && 无 TX && 无 RTC 服务 && 无 read_block_stream
+运行态 `InitCan()` 打开 CMNT；`Can_PrepareSleep()` 在进入 RTC STOP 或 reset sleep 前关闭 CMNT；唤醒恢复后 `InitCan()` 重新打开。
 
 ### 6.6 总线活跃检测
 
@@ -593,16 +588,11 @@ CAN 模块实现:
 - **无应答退避**: 连续3次无 ACK → bus_active=0, 清 TX 队列
 - **探测**: bus_active=0 时每10秒发送探测帧
 
-### 6.7 RTC 唤醒服务
+### 6.7 RTC 休眠关系
 
-```
-Can_RtcWakeService(elapsed_seconds):
-  1. 上电 CAN 收发器
-  2. 根据总线活跃发送1000ms/5000ms/探测帧
-  3. 等待发送完成 (最多150 ticks ≈ 1.5s)
-  4. 超时标记 last_rtc_wake_timeout
-  5. 断电
-```
+- `Can_PrepareSleep()` 清 TX、清 App 命令、停止 block stream，并关闭 CMNT。
+- RTC HICCUP 周期唤醒后不主动发送 CAN。
+- 唤醒恢复后由 `InitRunAfterStopWakeup()` 调 `InitCan()` 重新打开 CMNT，通信回到运行态。
 
 ### 6.8 应用层 CAN 命令 (0x60→0x61)
 
@@ -627,10 +617,7 @@ Can_RtcWakeService(elapsed_seconds):
 | `App_Can()` | CAN 主服务: 超时检测→调度周期帧→处理应用命令→服务TX→流式读取→IAP延时 |
 | `Can_HDX_Transmit()` | 外部发送接口, 入队 |
 | `Can_IsBusy()` | 检查 CAN 是否忙 (TX队列/邮箱/流式/命令) |
-| `Can_IsBusActive()` | 检查总线是否活跃 (含超时更新) |
-| `Can_GetIdleRtcPeriodSeconds()` | 获取 RTC 周期 (活跃1s / 空闲10s) |
 | `Can_PrepareSleep()` | 休眠前清理 |
-| `Can_RtcWakeService()` | RTC 唤醒后 CAN 服务 |
 
 ---
 

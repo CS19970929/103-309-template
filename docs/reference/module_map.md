@@ -16,7 +16,7 @@
 | 数据处理 | DataDeal.c/h | ~300 | AFE数据加载, 零电流校准, 校准系数 |
 | SOC | SOC.c/h, SocEnhance.c/h | ~2000+ | 安时积分, OCV校准, 满电锚定, 尾端, 静置补偿, 显示平滑, 快照 |
 | Modbus | Sci_Upper.c/h | ~2000+ | 0x03/0x06/0x10, 地址映射, CRC16 |
-| CAN | Can_HDX.c/h, CanFeidaoFrames.c/h | ~1500+ | TX队列32, 电源管理, 总线探测, RTC服务, 应用命令处理 |
+| CAN | Can_HDX.c/h, CanFeidaoFrames.c/h | ~1100+ | TX队列32, 运行态周期广播, 睡前CMNT关闭, 应用命令处理 |
 | 存储 | Flash.c/h, EEPROM.c/h (废弃) | ~1000+ | A/B双槽, SOC/AFE/参数/日志/老化 |
 | 升级策略 | UpgradeParamPolicy.h | ~200 | 升级时参数重置策略 |
 | 低功耗核心 | rtc_sleep.c/h | ~480 | 三层架构: core→port→afe |

@@ -272,7 +272,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     {
         // todo
         update_rtc_soc(&s_u32RtcWakeCycles);
-        RtcSleep_PortRunCanRtcWakeService(rtc_elapsed_seconds);
         low_power_refresh_rtc_status();
         return true;
     }

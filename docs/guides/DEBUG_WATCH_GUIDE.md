@@ -39,18 +39,16 @@ g_dbg_ledbar_runtime->mcu_wk_active
 
 ### 飞道 CAN
 
-开启 `PROJECT_CFG_DEBUG_WATCH_ENABLE` 后，Keil Watch 可添加：
+当前 CAN 诊断优先看 `SystemDebug` 的 `g_dbg.can`；旧的 `g_dbg_feidao_can_runtime` 指针不再作为当前入口。
 
 ```c
-g_dbg_feidao_can_runtime
-g_dbg_feidao_can_runtime->power_state
-g_dbg_feidao_can_runtime->tx_mailbox
-g_dbg_feidao_can_runtime->pending_mask
-g_dbg_feidao_can_runtime->logical_tick
-g_dbg_feidao_can_runtime->bus_active
-g_dbg_feidao_can_runtime->no_ack_cnt
-g_dbg_feidao_can_runtime->rtc_service_active
-g_dbg_feidao_can_runtime->host_iap_reset_pending
+g_dbg.can.bus_active
+g_dbg.can.power_on
+g_dbg.can.bus_off
+g_dbg.can.no_ack_cnt
+g_dbg.can.tx_queue
+g_dbg.can.probe
+g_dbg.can.esr
 ```
 
 ## 后续扩展原则

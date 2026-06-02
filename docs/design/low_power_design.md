@@ -64,7 +64,7 @@ RTC 优先 LSE，失败后 LSI fallback。F1 使用 RTC counter + Alarm 唤醒 S
 
 IWDG 开启时，RTC wake period 最大被限制为 10s。
 
-CAN RTC 唤醒广播周期由 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` 配置，默认 `1s`，用于保留当前客户可见的周期广播行为。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；超时后允许低功耗判断不再被历史 CAN active 状态永久阻塞。
+RTC 默认 wake period 为 10s，IWDG 开启时仍限制最大 10s。CAN active 状态由最后一次 TX ACK 或 RX 帧刷新，`PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` 默认 `10s`；超时后允许低功耗判断不再被历史 CAN active 状态永久阻塞。RTC STOP 周期唤醒后不再主动广播 CAN。
 
 ## 5. IWDG 使用
 
@@ -72,7 +72,6 @@ IWDG 默认开启：
 
 - 主循环末尾喂狗。
 - `__delay_ms()` 中喂狗。
-- CAN RTC wake service 等待期间喂狗。
 - STOP 前后喂狗。
 
 ## 6. 唤醒流程
@@ -82,8 +81,8 @@ HICCUP STOP 醒来后：
 1. 判断是否 RTC wake。
 2. 恢复时钟、IO、ADC、USART、CAN、TIM3、AFE I2C。
 3. 如果没有异常唤醒，进行 SOC RTC rest 补偿。
-4. 运行 CAN RTC wake service。
-5. 如果出现电流/AFE/按键/充电等异常唤醒，则退出 RTC sleep loop。
+4. 刷新低功耗状态，不主动运行 CAN 周期广播。
+5. 如果出现电流/AFE/按键/充电等异常唤醒，则退出 RTC sleep loop，恢复后由运行态 CAN 通信。
 
 ## 7. 运行态 idle sleep
 

@@ -12,6 +12,7 @@ static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30,
 #define RTC_CLOCK_INIT_FAILED    3U
 #define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
 #define RTC_WAKEUP_MIN_SECONDS   ((UINT32)1U)
+#define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)10U)
 #define RTC_WAKEUP_IWDG_SAFE_SECONDS ((UINT32)10U)
 
 static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
@@ -375,7 +376,7 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 	}
 	else
 	{
-		wake_seconds = Can_GetIdleRtcPeriodSeconds();
+		wake_seconds = RTC_WAKEUP_DEFAULT_SECONDS;
 	}
 	if (wake_seconds == 0U)
 	{
@@ -546,5 +547,4 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-
 

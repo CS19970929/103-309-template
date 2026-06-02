@@ -27,7 +27,7 @@
 |---|---|---|---|---|---|---|
 | `CAN通信逻辑与低功耗策略分析.md` | `Can_HDX.c` | CONFLICT | 文档称当前 CAN “基本不处理请求帧” | 当前 `Can_HDX.c:609-775` 已处理 App command：status/IAP/read/write/read_block/aging | 中 | 归档候选；不要作为当前 CAN 行为引用 |
 | `CAN低功耗发送调度说明.md` | `Can_HDX.c` | OUTDATED | 文档描述发送前上电、发送后断电状态机 | 当前 CAN 使用队列、周期调度、`GPIO_CMNT_EN` sleep prepare；不再是旧非阻塞上电窗口描述 | 中 | 归档候选 |
-| `CAN_RTC低功耗重构说明_2026-05-14.md` | `app_lowpower.c`, `Can_HDX.c` | CONFLICT | 文档称 RTC 不再因 CAN 状态机忙推迟入睡 | 当前 `LP_BuildBlockReason()` 会因 `Sci_IsAnyPortBusy()/Can_IsBusy()/Can_IsBusActive()` 置 `LP_BLOCK_COMM` | 中 | 归档或标注旧结论 |
+| `CAN_RTC低功耗重构说明_2026-05-14.md` | `app_lowpower.c`, `Can_HDX.c` | OUTDATED | 文档称 RTC 周期唤醒仍有 CAN 状态机服务 | 当前低功耗阻塞只看 `Sci_IsAnyPortBusy()/Can_IsBusy()`；RTC 周期唤醒不再主动广播 CAN | 中 | 归档或标注旧结论 |
 | `COMMUNICATION_LAYOUT_REPORT.md` | `Can_HDX.c`, `Sci_Upper.c` | OUTDATED | 文档称 CAN 不承担 EEPROM 地址映射 | 当前 CAN App read/write 复用 `Sci_HostReadWords/WriteWords`，可桥接 Modbus 寄存器 | 中 | 归档候选；当前协议以 `protocol_design.md` 为准 |
 | `EEPROM_LAYOUT_OPTIMIZATION.md` | `EEPROM.c`, `Flash.c` | PARTIAL | 文档已自标历史 EEPROM 布局 | 当前外部 EEPROM API 基本空实现，参数走内部 Flash | 低 | 保留为历史，当前实现合并到 `storage_design.md` |
 | `STORAGE_LAYOUT_REPORT.md` | `EEPROM.c`, `Flash.c` | OUTDATED | 以外部 EEPROM 地址布局为主 | 当前 RW/Afe/SOC/log/aging 走 `StorageFlash_*` | 中 | 归档候选 |

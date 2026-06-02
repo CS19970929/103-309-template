@@ -6,6 +6,23 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 CAN 电源、RTC 休眠和 bus-off 简化
+
+### 本次源码修改
+
+- `Can_HDX.c/.h`：删除 `Can_RtcWakeService()`、`Can_GetIdleRtcPeriodSeconds()`、`Can_IsBusActive()` 和软件 bus-off monitor。
+- `Can_HDX.c`：运行态初始化打开 `GPIO_CMNT_EN`；`Can_PrepareSleep()` 睡前关闭 CMNT；debug 的 bus-off 位改为只读 `CAN1->ESR`。
+- `RTC.c`：默认 RTC wake period 固定为 10s，不再向 CAN 查询 active/idle 周期。
+- `rtc_sleep.c` / `rtc_sleep_port.c/.h`：RTC HICCUP 周期唤醒后不再调用 CAN 周期服务。
+- `Project_Config.h`：删除 `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS`。
+- `tools/project_check.py`：门禁改为检查 RTC CAN 服务已删除、ABOM 保留、CMNT 睡前关闭。
+
+### 兼容性说明
+
+- 未修改 CAN ID、payload、App `0x60/0x61` 命令、Modbus 寄存器桥接和 IAP/App 地址。
+- RTC STOP 中不再周期广播 CAN；唤醒恢复后由 `InitCan()` 打开 CMNT 并恢复运行态通信。
+- bus-off 恢复依赖 `CAN_ABOM = ENABLE`，软件不再统计进入/恢复次数。
+
 ## 2026-06-02 SystemDebug 模块健康总览增强
 
 ### 本次源码修改

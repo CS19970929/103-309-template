@@ -189,12 +189,12 @@
 | `no_ack_cnt` | uint8 | 连续无ACK数 |
 | `tx_queue` | uint8 | TX队列长度 |
 | `probe` | uint8 | 探测模式 |
-| `rtc_svc` | uint8 | RTC唤醒服务中 |
+| `rtc_svc` | uint8 | 保留字段；当前 RTC 周期 CAN 服务已删除，固定为 0 |
 | `esr` | uint16 | CAN ESR寄存器 |
-| `tx_ok_cnt` | uint16 | 发送成功计数 |
-| `tx_fail_cnt` | uint16 | 发送失败计数 |
-| `busoff_in_cnt` | uint16 | BUS-OFF进入次数 |
-| `busoff_out_cnt` | uint16 | BUS-OFF恢复次数 |
+| `tx_ok_cnt` | uint16 | 保留字段；当前未统计，固定为 0 |
+| `tx_fail_cnt` | uint16 | 保留字段；当前未统计，固定为 0 |
+| `busoff_in_cnt` | uint16 | 保留字段；软件 bus-off 计数已删除，固定为 0 |
+| `busoff_out_cnt` | uint16 | 保留字段；软件 bus-off 计数已删除，固定为 0 |
 | `last_tx_id` | uint16 | 最后发送的CAN ID |
 
 ### g_dbg.lp — 低功耗 (8 fields)
@@ -381,7 +381,7 @@ mode=3 (NO_SLP) 且 block_mask != 0 → DbgPrint_LP() 看逐位解析
 
 ```
 展开 g_dbg.can → 看 bus_off/no_ack_cnt/tx_queue/power_on
-bus_off=1 → 看 esr/busoff_in_cnt
+bus_off=1 → 看 esr；恢复由 CAN_ABOM 自动处理
 power_on=0, tx_queue>0 → 收发器供电问题
 last_tx_id=0 → 无任何发送
 ```

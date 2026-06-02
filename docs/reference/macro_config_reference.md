@@ -76,16 +76,12 @@
 | 宏 | 默认值 | 说明 |
 |----|--------|------|
 | `CAN_ADRESS_STD_ID` | 0x00 | CAN 标准 ID 偏移 |
-| `PROJECT_CFG_CAN_RTC_WAKE_PERIOD_SECONDS` | 1 | CAN 活跃 RTC 唤醒周期 |
 | `PROJECT_CFG_CAN_BUS_ACTIVE_HOLD_SECONDS` | 10 | CAN 活跃保持时间 |
-| `FEIDAO_CAN_RTC_IDLE_PERIOD_SECONDS` | 10 | 空闲 RTC 周期 |
 | `FEIDAO_CAN_TX_QUEUE_SIZE` | 32 | 发送队列大小 |
 | `FEIDAO_CAN_APP_CMD_QUEUE_SIZE` | 4 | 应用命令队列 |
 | `FEIDAO_CAN_TX_TIMEOUT_TICKS` | 20 | 发送超时 (200ms) |
 | `FEIDAO_CAN_NO_ACK_BACKOFF_THRESHOLD` | 3 | 无应答退避阈值 |
 | `FEIDAO_CAN_PROBE_PERIOD_SECONDS` | 10 | 探测帧周期 |
-| `FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS` | 150 | RTC 服务超时 |
-| `FEIDAO_CAN_POWER_STABLE_TICKS` | 2 | 收发器上电稳定时间 |
 
 ## 7. SOC 配置
 

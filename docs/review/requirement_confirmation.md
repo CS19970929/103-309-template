@@ -95,8 +95,8 @@
 | REQ-UART-005 | Host 写参数在当前量产宏下开启 | `Project_Config.h:45`, `Sci_Upper.c:314-367`, `Sci_Upper.c:668-737` | `Project_Config.h`, `Sci_Upper.c` | 保护/Other/SN/IAP 等地址可写 | 是 | 是 | 是 | 是 | 是 | UNKNOWN；量产权限策略必须确认 |
 | REQ-CAN-001 | CAN 必须周期广播飞道协议扩展帧 `0x14F80200+index` | `CanFeidaoFrames.c:5-35` | `CanFeidaoFrames.c`, `Can_HDX.c` | 1000ms/5000ms frame dispatch | 是 | 是 | 是 | 是 | 是 | MUST_KEEP；协议字段需锁定 |
 | REQ-CAN-002 | CAN 应用命令必须支持读写 Modbus 寄存器、状态查询、IAP、老化控制 | `Can_HDX.c:29-54`, `Can_HDX.c:609-775` | `Can_HDX.c`, `Sci_Upper.c` | 标准帧 0x60/0x61，A5/5A + CRC | 是 | 是 | 是 | 是 | 是 | MUST_KEEP；写权限与 IAP 必须受控 |
-| REQ-CAN-003 | CAN 低功耗 RTC 唤醒时需要短时间上电服务周期帧 | `Can_HDX.c:947-979`, `rtc_sleep.c:329-333` | `Can_HDX.c`, `rtc_sleep.c` | RTC wake 后发送 1000ms mask，等待 1.5s 或完成 | 是 | 是 | 否 | 是 | 是 | UNKNOWN；需确认待机广播需求 |
-| REQ-CAN-004 | CAN bus-off 需要监控、清队列、恢复计数 | `Can_HDX.c:390-412` | `Can_HDX.c` | ESR BOFF 检测，清 mailbox/queue | 是 | 是 | 间接 | 否 | 是 | MUST_KEEP |
+| REQ-CAN-003 | RTC 休眠中不再周期广播 CAN | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 睡前 `Can_PrepareSleep()` 关闭 CMNT；RTC 周期唤醒不调用 CAN 服务；唤醒恢复后 `InitCan()` 打开 CMNT | 是 | 是 | 否 | 是 | 是 | CHANGE_NEEDED；用户已确认 |
+| REQ-CAN-004 | CAN bus-off 恢复交给 bxCAN ABOM | `Can_HDX.c`, `InitCan_CAN1()` | `Can_HDX.c` | `CAN_ABOM=ENABLE`；软件 bus-off 状态机已删除；debug 只读 ESR BOFF | 是 | 是 | 间接 | 否 | 是 | CHANGE_NEEDED；用户已确认 |
 
 ## 8. LED / RTC 低功耗 / IWDG / IAP / 客户需求
 
@@ -139,4 +139,4 @@
 | REQ-IO-RTC-005 | `PB0 / AFE1_PRO_EN` 唤醒后是否需要显式恢复 | `conf.c:InitIO()`, `conf.c:InitIO_rtc()` | 正常初始化有 PB0，RTC 唤醒恢复未显式恢复 | UNKNOWN | 待确认 |
 | REQ-IO-RTC-006 | RTC 唤醒后必须恢复 ADC、USART、CAN、TIM3、AFE I2C | `conf.c:InitRunAfterStopWakeup()` | 当前统一恢复这些外设 | MUST_KEEP | 待确认 |
 | REQ-IO-RTC-007 | IWDG 开启时 RTC 唤醒周期不得超过 10 秒 | `RTC.c` | 当前限制为 10 秒 | CONFLICT | 待确认 |
-| REQ-IO-RTC-008 | RTC 唤醒后 CAN 可短时上电服务广播 | `Can_HDX.c`, `rtc_sleep.c` | 当前有 RTC wake CAN 服务策略 | UNKNOWN | 待确认 |
+| REQ-IO-RTC-008 | RTC 唤醒后不主动运行 CAN 周期广播 | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 当前删除 RTC wake CAN 服务；恢复后由运行态 `InitCan()` 打开 CMNT 并通信 | CHANGE_NEEDED | 已确认 |

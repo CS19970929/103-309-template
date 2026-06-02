@@ -1,74 +1,36 @@
 # CAN 运行时状态收口说明
 
-## 背景
-
-`Can_HDX.c` 原先使用多组 `s_u8FeidaoCan*`、`s_u16FeidaoCan*` 和 `s_u32FeidaoCan*` 文件内静态变量维护飞道 CAN 的低功耗发送、周期调度、ACK 判定和上位机 IAP 复位状态。变量数量较多，后续排查时很难判断哪些状态属于同一个运行时上下文。
-
-本次重构将这些文件内状态收口到 `FeidaoCanRuntime`：
-
-- `s_feidao_can_runtime.power_state`
-- `s_feidao_can_runtime.tx_mailbox`
-- `s_feidao_can_runtime.pending_mask`
-- `s_feidao_can_runtime.power_tick`
-- `s_feidao_can_runtime.tx_tick`
-- `s_feidao_can_runtime.logical_tick`
-- `s_feidao_can_runtime.last_hw_tick`
-- `s_feidao_can_runtime.last_1000ms_tick`
-- `s_feidao_can_runtime.last_5000ms_tick`
-- `s_feidao_can_runtime.hw_tick_valid`
-- `s_feidao_can_runtime.schedule_init`
-- `s_feidao_can_runtime.bus_active`
-- `s_feidao_can_runtime.no_ack_cnt`
-- `s_feidao_can_runtime.probe_active`
-- `s_feidao_can_runtime.rtc_service_active`
-- `s_feidao_can_runtime.tx_cycle_acked`
-- `s_feidao_can_runtime.tx_cycle_no_ack_recorded`
-- `s_feidao_can_runtime.last_rtc_wake_tx_acked`
-- `s_feidao_can_runtime.last_rtc_wake_timeout`
-- `s_feidao_can_runtime.last_rtc_elapsed_seconds`
-- `s_feidao_can_runtime.rtc_wake_service_cnt`
-- `s_feidao_can_runtime.prepare_sleep_cnt`
-
-## 兼容策略
-
-为降低风险，本次没有改动 `Can_HDX.c` 中既有函数逻辑，也没有改动对外接口、CAN 报文格式、Flash 参数结构或 IAP 地址规则。
-
-旧变量名通过文件内宏映射到 `s_feidao_can_runtime` 字段，例如：
-
-```c
-#define s_u8FeidaoCanPowerState (s_feidao_can_runtime.power_state)
-```
-
-这样可以保持原调用点和表达式行为不变，同时把运行时状态集中到一个结构体里，便于后续继续分阶段清理。
+文档状态：已按源码验证
+最后更新时间：2026-06-02
 
 ## 当前模块边界
 
-后续源码已把飞道协议帧组包拆到 `CanFeidaoFrames.c/.h`：
+- `CanFeidaoFrames.c/.h`：只负责飞道扩展帧字段组包、发送顺序和周期报文 mask。
+- `Can_HDX.c`：负责 CAN 初始化、TX queue、周期调度、no-ACK 退避、App 命令、read-block stream、IAP 延迟入口和睡前 CMNT 关闭。
+- `Can_HDX_Transmit()`：协议帧模块唯一发送出口；返回 `0` 只表示入队成功，硬件 ACK 在后续 `feidao_can_service_tx()` 中判断。
 
-- `CanFeidaoFrames`：只负责飞道扩展帧字段组包、发送顺序和周期报文 mask。
-- `Can_HDX.c`：保留 CAN 初始化、收发器电源状态机、BusOff 监控、No-ACK 统计和低功耗服务。
-- `Can_HDX_Transmit()`：仍是协议帧模块唯一发送出口。
+## 当前运行态字段
 
-低功耗相关对外 API 固定为：
+`Can_HDX.c` 现在按职责保留三组文件级 runtime：
 
-- `Can_PrepareSleep()`：进入 STOP 或 reset sleep 前关闭/整理 CAN 运行态。
-- `Can_RtcWakeService(elapsed_seconds)`：RTC 唤醒后重启 CAN、发送唤醒/探测帧，并在超时内等待发送结束。
-- `Can_IsBusActive()`：供 RTC 周期判断当前 CAN 总线是否活跃。
-- `Can_GetIdleRtcPeriodSeconds()`：供 RTC 选择 idle wake period。
+- `s_tx`：TX 环形队列、当前 mailbox、发送起始 tick。
+- `s_runtime`：周期调度 tick、bus active、last bus activity、no-ACK、probe 状态。
+- `s_app`：CAN App 命令队列、两阶段写寄存器、read-block stream、IAP 延迟。
 
-RTC 唤醒服务的内部边界：
+已删除旧的 RTC 周期 CAN 服务字段和软件 bus-off 状态字段：
 
-- `rtc_service_active` 仅在 `Can_RtcWakeService()` 窗口内置位。服务窗口内 `feidao_can_send()` 不再自动生成新一轮 1s/5s 周期帧，只发送本次 RTC 唤醒预加载的业务帧或探测帧。
-- `last_rtc_wake_tx_acked` 记录本次 RTC 唤醒窗口是否至少有一帧得到 bxCAN `CAN_TxStatus_Ok`，用于判断是否真正收到 ACK。
-- `last_rtc_wake_timeout` 记录本次 RTC 唤醒 CAN 服务是否超过 `FEIDAO_CAN_RTC_SERVICE_TIMEOUT_TICKS` 仍未空闲。
-- `g_stCanLowPowerStatus` 同步导出 `u8RtcServiceActive`、`u8LastRtcWakeTxAcked`、`u8LastRtcWakeTimeout`，便于 Keil Watch 或后续只读窗口观察。
+- RTC 周期 CAN 服务已删除：不再保留 `rtc_service_active`、RTC wake timeout、RTC wake ACK 和 RTC service 计数。
+- bus-off 软件状态机已删除：不再保留 `bus_off`、bus-off enter/recover 计数。
+- 收发器电源不再用运行态缓存字段判断，debug 需要时直接读 `GPIO_CMNT_EN` 输出电平。
 
-## 后续建议
+## 低功耗边界
 
-后续如果继续重构，应按以下顺序推进：
+- `Can_PrepareSleep()`：进入 RTC STOP 或 reset sleep 前清理 CAN 发送/命令状态，并关闭 `GPIO_CMNT_EN`。
+- RTC HICCUP 周期唤醒：只做硬件恢复、SOC 休眠补偿和状态刷新，不再主动发送 CAN。
+- 正常唤醒后：`InitRunAfterStopWakeup()` 调 `InitCan()`，CAN 重新初始化并打开 CMNT，通信回到主循环运行态。
 
-1. 先为 `FeidaoCanRuntime` 增加只在 `Can_HDX.c` 内使用的 reset/init helper。
-2. 再把宏调用点分批替换为 `s_feidao_can_runtime.xxx`。
-3. 最后删除兼容宏。
+## bus-off 边界
 
-每一步都应保持 CAN 上位机 IAP 命令、RTC 低功耗 CAN 服务和周期报文调度行为不变。
+- `CAN_ABOM = ENABLE` 保留，由 bxCAN 自动完成 bus-off 恢复。
+- 软件不再因 BOFF 清队列或统计恢复次数。
+- debug snapshot 仍可通过 `CAN1->ESR & CAN_ESR_BOFF` 观察当前硬件 bus-off 位。
