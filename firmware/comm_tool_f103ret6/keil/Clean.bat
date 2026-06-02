@@ -2,6 +2,8 @@
 @echo.
 echo ÇåÀíÖÐ¡­¡­
 
+pushd "%~dp0" || exit /b 1
+
 copy Objects\output.hex ..\output(mdk).hex
 copy Objects\output.bin ..\output(mdk).bin
 
@@ -35,4 +37,5 @@ del>nul 2>nul *.uvoptx   /s /q
 Echo ok!!!!
 @echo. 
 
-exit
+popd
+exit /b 0
