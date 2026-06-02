@@ -1,10 +1,13 @@
 #include "rtc_sleep_port.h"
 #include "app_lowpower.h"
+#include "DataDeal.h"
+#include "conf.h"
+#include "Sci_Upper.h"
+#include "RTC.h"
 
-#define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((uint16_t)2800U)
-//todo  待测试确认，更新时间，同步更新文�
+#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
-#define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT    ((uint16_t)5U)
+#define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
 enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
@@ -14,8 +17,7 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U,
     0U,
-    0U
-};
+    0U};
 
 static uint16_t s_u16IdleDelaySeconds = 0U;
 static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
@@ -26,7 +28,7 @@ static void low_power_refresh_rtc_status(void)
 {
     g_stLowPowerRtcStatus.rtcWake = RtcSleep_PortIsRtcWake();
     g_stLowPowerRtcStatus.delaySeconds = s_u16IdleDelaySeconds;
-    g_stLowPowerRtcStatus.delayTargetSeconds = RtcSleep_PortGetIdleDelayTargetSeconds();
+    g_stLowPowerRtcStatus.delayTargetSeconds = sys_time.time_enter_rtc;
     g_stLowPowerRtcStatus.elapsedSeconds = s_u32RtcSleepElapsedSeconds;
 }
 
@@ -97,11 +99,6 @@ void LowPower_Request(enum _SLEEP_MODE mode)
         break;
     }
 
-    if (mode == DEEP_MODE)
-    {
-        RtcSleep_PortOnDeepSleepRequest();
-    }
-
     low_power_refresh_rtc_status();
 }
 
@@ -157,27 +154,11 @@ static void low_power_select_sleep_mode(void)
     {
         s_u16IdleDelaySeconds = 0U;
         low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
-        if (++deep_sleep_delay_seconds >= (uint32_t)RtcSleep_PortGetLowVoltageSleepMinutes() * 60U)
+        if (++deep_sleep_delay_seconds >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
         {
             LowPower_Request(DEEP_MODE);
         }
         low_power_refresh_rtc_status();
-        return;
-    }
-
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        deep_sleep_delay_seconds = 0U;
-        force_deep_delay_seconds = 0U;
-        low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_MCU_WAKE);
-        return;
-    }
-
-    if (RtcSleep_PortIsFactoryAgingActive() != 0U)
-    {
-        deep_sleep_delay_seconds = 0U;
-        force_deep_delay_seconds = 0U;
-        low_power_cancel_rtc(LOW_POWER_RTC_BLOCK_FACTORY_AGING);
         return;
     }
 
@@ -191,11 +172,11 @@ static void low_power_select_sleep_mode(void)
         last_ext_comm_count = RtcSleep_PortGetExternalCommCounter();
         block_reason = LOW_POWER_RTC_BLOCK_EXT_COMM;
     }
-    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
-        (RtcSleep_PortIsAfeSleepBlocked() != 0U))
-    {
-        block_reason = LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
-    }
+    // if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
+    //     (RtcSleep_PortIsAfeSleepBlocked() != 0U))
+    // {
+    //     block_reason = LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE;
+    // }
     if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
         (LP_CanSleep() == 0U))
     {
@@ -209,7 +190,7 @@ static void low_power_select_sleep_mode(void)
     }
 
     low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
-    if (++s_u16IdleDelaySeconds >= RtcSleep_PortGetIdleDelayTargetSeconds())
+    if (++s_u16IdleDelaySeconds >= sys_time.time_enter_rtc)
     {
         s_u16IdleDelaySeconds = 0U;
         LowPower_Request(HICCUP_MODE);
@@ -250,7 +231,7 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     RtcSleep_PortPrepareRtcStop(s_u32RtcWakeCycles);
-    RtcSleep_PortClearRtcWake();
+    is_rtc_wakekup = false;
     g_irq_t = NO_IRQ;
     low_power_refresh_rtc_status();
 }
@@ -286,15 +267,17 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
 
     RtcSleep_PortRestoreAfterStop();
+
     if ((RtcSleep_PortIsRtcWake() != 0U) && !isException())
     {
+        // todo
         update_rtc_soc(&s_u32RtcWakeCycles);
         RtcSleep_PortRunCanRtcWakeService(rtc_elapsed_seconds);
         low_power_refresh_rtc_status();
         return true;
     }
 
-    RtcSleep_PortClearRtcWake();
+    is_rtc_wakekup = false;
     g_stLowPowerRtcStatus.readyToSleep = 0U;
     LowPower_Request(NO_SLEEP);
 
@@ -348,17 +331,8 @@ void rtc_sleep(void)
             return;
         }
     }
-
     if (g_stLowPowerRtcStatus.readyToSleep != 1U)
     {
-        return;
-    }
-
-    if ((g_stLowPowerRtcStatus.mode == HICCUP_MODE) &&
-        (LP_CanSleep() == 0U))
-    {
-        low_power_delay_rtc(LOW_POWER_RTC_BLOCK_FRAMEWORK);
-        LowPower_Request(NO_SLEEP);
         return;
     }
 

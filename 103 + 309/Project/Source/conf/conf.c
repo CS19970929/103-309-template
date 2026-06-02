@@ -3,7 +3,7 @@
 #include "AppInit.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 30,
     .power_on = false,
 };
 
@@ -276,29 +276,15 @@ void IOstatus_RTCMode(void)
 
     Conf_PrepareStopEntry();
 
-    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~PIN_DC_EN) & (~PIN_2737_EN);
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN), GPIO_Mode_AIN);
-
-    // GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14), GPIO_Mode_AIN);
-#if 1
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
-#else
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_4);
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-#endif
-
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
     GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
     Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
 
-    // ??????
-    // ???
     LedBar_PrepareForStop();
 }
 

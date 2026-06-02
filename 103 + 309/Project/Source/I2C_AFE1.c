@@ -709,6 +709,9 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
 
+	// if(sys_time.enbale_afe_err_test)
+	// 	return 1;
+
 	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo代码返回1为OK，
 		for (i = 0; i < SeriesNum; i++)

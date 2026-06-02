@@ -40,9 +40,6 @@ INT16 g_i16CalibCoefB[KB_NUM];
 UINT32 g_u32CS_Res_AFE;
 UINT32 g_u32AfeCurrentSampleSeq;
 
-#define AFE_CURRENT_OBS_SET(field, value) do { } while (0)
-#define AFE_CURRENT_OBS_CLEAR() do { } while (0)
-
 static INT32 s_i32AfeCurrentZeroOffsetRawQ4;
 static INT32 s_i32AfeCurrentLastRawSigned;
 static UINT8 s_u8AfeCurrentZeroStableCnt;
@@ -85,7 +82,7 @@ void charger_detect_and_keyLogi_200ms(void)
             // {
             //     open_dsg_close_chg();
             // }
-                LowPower_Request(DEEP_MODE);
+            LowPower_Request(DEEP_MODE);
         }
         else
         {
@@ -119,7 +116,6 @@ void Init_Registers(UINT8 num)
     // DSG_OFF;
 }
 
-
 // 这里排列好就行，不需要电池位号映射表。>61000为不用
 // 经过验算，AFE1校准一次，然后本身再校准一次叠加是可以的。不需要确定某一个KB值的做法。
 // 假设先确定用AFE1还是本身的KB的话，会出现问题。如下：
@@ -145,18 +141,12 @@ void DataLoad_CellVolt(void)
         }
 
         t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[afe_index];
-        // if (g_tParam.CalibCoefK[VOLT_AFE1] != 1024 || g_tParam.CalibCoefB[VOLT_AFE1] != 0)
-        // {
-        // 	t_i32temp = ((t_i32temp * g_tParam.CalibCoefK[VOLT_AFE1]) >> 10) + g_tParam.CalibCoefB[VOLT_AFE1];
-        // }
-        // t_i32temp = ((t_i32temp * SYSKDEFAULT) >> 10) + SYSBDEFAULT;
-        // t_i32temp = t_i32temp > 0 ? t_i32temp : 0;
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 
     if (series_num < 32)
     {
-        for (i = series_num; i < 31; ++i)
+        for (i = series_num; i < 25; ++i)
         {
             g_stCellInfoReport.u16VCell[i] = 61001;
         }
@@ -412,12 +402,6 @@ static void DataLoad_CurrentSetZeroOffset(INT32 offset_raw, UINT8 zero_state)
     s_u8AfeCurrentZeroStableCnt = AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT;
     s_u8AfeCurrentZeroReady = 1U;
     s_u8AfeCurrentZeroState = zero_state;
-
-    AFE_CURRENT_OBS_SET(i32ZeroOffsetRaw, offset_raw);
-    AFE_CURRENT_OBS_SET(i32CorrectedRaw, 0);
-    AFE_CURRENT_OBS_SET(u8ZeroReady, 1U);
-    AFE_CURRENT_OBS_SET(u8StableCnt, s_u8AfeCurrentZeroStableCnt);
-    AFE_CURRENT_OBS_SET(u8ZeroState, zero_state);
 }
 
 static void DataLoad_CurrentMarkZeroPending(UINT8 zero_state)
@@ -427,16 +411,10 @@ static void DataLoad_CurrentMarkZeroPending(UINT8 zero_state)
     s_u8AfeCurrentZeroStableCnt = 0U;
     s_u8AfeCurrentZeroReady = 0U;
     s_u8AfeCurrentZeroState = zero_state;
-
-    AFE_CURRENT_OBS_SET(i32ZeroOffsetRaw, 0);
-    AFE_CURRENT_OBS_SET(u8ZeroReady, 0U);
-    AFE_CURRENT_OBS_SET(u8StableCnt, 0U);
-    AFE_CURRENT_OBS_SET(u8ZeroState, zero_state);
 }
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot)
 {
     s_u8AfeCurrentStartupColdBoot = (cold_boot != 0U) ? 1U : 0U;
-    AFE_CURRENT_OBS_SET(u8StartupColdBoot, s_u8AfeCurrentStartupColdBoot);
 }
 
 static const AFE_CURRENT_STARTUP_ZERO_PARAM *AfeCurrent_GetStartupZeroParam(void)
@@ -456,7 +434,6 @@ void AfeCurrent_PrepareStartupZero(void)
     s_u8AfeCurrentZeroReady = 0U;
 
     s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
-    AFE_CURRENT_OBS_SET(u8ZeroState, s_u8AfeCurrentZeroState);
     close_ctlc();
 }
 
@@ -506,13 +483,6 @@ void AfeCurrent_StartupZeroCal(void)
 
     close_ctlc();
     s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
-    AFE_CURRENT_OBS_SET(u8ZeroState, s_u8AfeCurrentZeroState);
-    AFE_CURRENT_OBS_SET(u16ZeroLimitRaw, limit_raw);
-    AFE_CURRENT_OBS_SET(u8StartupSampleCnt, 0U);
-    AFE_CURRENT_OBS_SET(u8StartupColdBoot, s_u8AfeCurrentStartupColdBoot);
-    AFE_CURRENT_OBS_SET(u8StartupDiscardCnt, 0U);
-    AFE_CURRENT_OBS_SET(u8StartupFailCnt, 0U);
-    AFE_CURRENT_OBS_SET(u8StartupRangeFailCnt, 0U);
 
     if (param->u16SettleMs > 0U)
     {
@@ -528,15 +498,9 @@ void AfeCurrent_StartupZeroCal(void)
             raw_signed = DataLoad_CurrentRawToSigned(raw_code);
             raw_abs = DataLoad_CurrentAbsI32(raw_signed);
 
-            AFE_CURRENT_OBS_SET(u16RawCode, raw_code);
-            AFE_CURRENT_OBS_SET(i32RawSigned, raw_signed);
-            AFE_CURRENT_OBS_SET(u32AbsRaw, raw_abs);
-            AFE_CURRENT_OBS_SET(u8StartupSampleCnt, (UINT8)(i + 1U));
-
             if (discard_cnt < param->u8DiscardCnt)
             {
                 ++discard_cnt;
-                AFE_CURRENT_OBS_SET(u8StartupDiscardCnt, discard_cnt);
                 last_raw_signed = raw_signed;
                 valid_cnt = 0U;
                 stable_cnt = 0U;
@@ -574,7 +538,6 @@ void AfeCurrent_StartupZeroCal(void)
                 }
 
                 last_raw_signed = raw_signed;
-                AFE_CURRENT_OBS_SET(u8StableCnt, stable_cnt);
 
                 if (stable_cnt >= param->u8ConfirmCnt)
                 {
@@ -589,12 +552,10 @@ void AfeCurrent_StartupZeroCal(void)
                 {
                     ++range_fail_cnt;
                 }
-                AFE_CURRENT_OBS_SET(u8StartupRangeFailCnt, range_fail_cnt);
                 last_raw_signed = raw_signed;
                 valid_cnt = 0U;
                 stable_cnt = 0U;
                 sum_raw_signed = 0;
-                AFE_CURRENT_OBS_SET(u8StableCnt, 0U);
             }
         }
         else
@@ -603,7 +564,6 @@ void AfeCurrent_StartupZeroCal(void)
             {
                 ++fail_cnt;
             }
-            AFE_CURRENT_OBS_SET(u8StartupFailCnt, fail_cnt);
         }
 
         if ((i + 1U) < param->u8MaxCnt)
@@ -611,10 +571,6 @@ void AfeCurrent_StartupZeroCal(void)
             __delay_ms(param->u16IntervalMs);
         }
     }
-
-    AFE_CURRENT_OBS_SET(u8StartupDiscardCnt, discard_cnt);
-    AFE_CURRENT_OBS_SET(u8StartupFailCnt, fail_cnt);
-    AFE_CURRENT_OBS_SET(u8StartupRangeFailCnt, range_fail_cnt);
 
     if (zero_done == 0U)
     {
@@ -699,21 +655,12 @@ static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
     current_offset_raw = s_i32AfeCurrentZeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
     corrected_raw = raw_signed - current_offset_raw;
 
-    AFE_CURRENT_OBS_SET(i32RawSigned, raw_signed);
-    AFE_CURRENT_OBS_SET(i32ZeroOffsetRaw, current_offset_raw);
-    AFE_CURRENT_OBS_SET(i32CorrectedRaw, corrected_raw);
-    AFE_CURRENT_OBS_SET(u16ZeroLimitRaw, limit_raw);
-    AFE_CURRENT_OBS_SET(u16ZeroDeadbandRaw, deadband_raw);
-    AFE_CURRENT_OBS_SET(u16ZeroDeltaRaw, (delta_abs > 0xFFFFU) ? 0xFFFFU : (UINT16)delta_abs);
-    AFE_CURRENT_OBS_SET(u8StableCnt, s_u8AfeCurrentZeroStableCnt);
-    AFE_CURRENT_OBS_SET(u8ZeroReady, s_u8AfeCurrentZeroReady);
     if ((s_u8AfeCurrentZeroReady != 0U) &&
         ((s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_IDLE) ||
          (s_u8AfeCurrentZeroState == (UINT8)AFE_CURRENT_ZERO_STARTUP)))
     {
         s_u8AfeCurrentZeroState = (UINT8)AFE_CURRENT_ZERO_READY;
     }
-    AFE_CURRENT_OBS_SET(u8ZeroState, s_u8AfeCurrentZeroState);
 
     return corrected_raw;
 }
@@ -785,9 +732,6 @@ void DataLoad_Current(void)
     UINT32 current_mA;
     UINT32 report_current_mA;
 
-    AFE_CURRENT_OBS_SET(u8KbCalibEnable, (UINT8)AFE_CURRENT_KB_CALIB_ENABLE);
-    AFE_CURRENT_OBS_SET(u16RawCode, SH367309_Read_AFE1.u16Current);
-
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
     corrected_raw = DataLoad_CurrentApplyAutoZero(raw_signed);
     current_mA = DataLoad_CurrentRawToMilliAmp(DataLoad_CurrentAbsI32(corrected_raw));
@@ -799,20 +743,14 @@ void DataLoad_Current(void)
     {
         report_current_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_ICHG);
         g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(report_current_mA);
-        AFE_CURRENT_OBS_SET(u32ChgCurrent_mA, report_current_mA);
-        AFE_CURRENT_OBS_SET(u32DsgCurrent_mA, 0U);
     }
     else if (corrected_raw < 0)
     {
         report_current_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_IDSG);
         g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(report_current_mA);
-        AFE_CURRENT_OBS_SET(u32ChgCurrent_mA, 0U);
-        AFE_CURRENT_OBS_SET(u32DsgCurrent_mA, report_current_mA);
     }
     else
     {
-        AFE_CURRENT_OBS_SET(u32ChgCurrent_mA, 0U);
-        AFE_CURRENT_OBS_SET(u32DsgCurrent_mA, 0U);
     }
 
 #ifdef __VIRTURE_CURRENT__
@@ -981,17 +919,14 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 void open_ctlc(void)
 {
     MCUO_AFE_CTLC = 1;
-    AFE_CURRENT_OBS_SET(u8CtlcState, 1U);
 }
 void close_ctlc(void)
 {
     MCUO_AFE_CTLC = 0;
-    AFE_CURRENT_OBS_SET(u8CtlcState, 0U);
     // todo 会不会存在冲突，逻辑完备？？？
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
-// todo 总压、typec逻辑、电流
 void new_todo_logi(void)
 {
     static uint8_t mos_state = 0;
@@ -999,19 +934,13 @@ void new_todo_logi(void)
     charger_detect_and_keyLogi_200ms();
 
 #if 1
-    // // todo 什么电平唤醒？
-    // if (GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK))
-    // {
-    // }
-    // // todo 待确认 typec供电逻辑
-    // GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
     {
 #ifdef DISP_VBAT_AND_TEMP_
-        g_stCellInfoReport.u16VCell[29] = bat_temp_mv;
-        g_stCellInfoReport.u16VCell[30] = mos_temp_mv;
-        g_stCellInfoReport.u16VCell[31] = Vbat_mv;
+        extern UINT16 SOC_GetTypeCBatEquivCurrentA10(void);
+        g_stCellInfoReport.u16VCell[29] = SOC_GetTypeCBatEquivCurrentA10();
+        g_stCellInfoReport.u16VCell[30] = g_u32Vbat_mV;
+        // g_stCellInfoReport.u16VCell[31] = Vbat_mv;
 #endif // ! FAC_TEST
-       // g_stCellInfoReport.u16VCell[30] = g_u32Vbat_mV;
         UINT32 Vbat_mv = g_u32Vbat_mV;
 #ifdef _UL_RENZHENG_ENABLE_
         static uint8_t state_fuse = 0;
@@ -1151,7 +1080,6 @@ void App_AFEGet(void)
     }
 
     App_SH367309();
-    // App_MOS_Relay_Ctrl();
     new_todo_logi();
     App_SOC();
 }

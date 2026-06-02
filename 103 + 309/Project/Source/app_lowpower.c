@@ -83,7 +83,6 @@ void LP_Init(void)
 void LP_Task(void)
 {
     s_lp_runtime.state = LP_STATE_IDLE_CHECK;
-    LP_UpdateBlockReason();
     rtc_sleep();
     s_lp_runtime.state = LP_STATE_RUN;
 }
@@ -124,7 +123,6 @@ void LP_AfterWakeup(void)
 void LP_EnterStop(uint32_t seconds)
 {
     LP_SetWakeupPeriod(seconds);
-    LP_BeforeSleep();
     if (s_lp_runtime.block_reason != 0U)
     {
         s_lp_runtime.state = LP_STATE_RUN;

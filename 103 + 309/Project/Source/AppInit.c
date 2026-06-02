@@ -49,4 +49,6 @@ void AppInit_Boot(void)
 	Init_RTC();
 	LP_Init();
 	/* RTC_WKTimeConfig(); */
+	 
+	
 }

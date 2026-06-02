@@ -26,7 +26,7 @@ static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 
 void EnableLowPowerDebug(void)
 {
-#ifdef _DEBUG_
+#ifdef __EnableLowPowerDebug__
 	DBGMCU->CR |= LOW_POWER_DEBUG_MASK;
 #else
 	DBGMCU->CR &= (UINT32)(~LOW_POWER_DEBUG_MASK);

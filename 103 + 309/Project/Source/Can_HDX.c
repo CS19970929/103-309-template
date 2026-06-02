@@ -988,6 +988,8 @@ void InitCan(void)
 
 UINT8 Can_IsBusy(void)
 {
+	static uint8_t last_ext_comm_count = 0U;
+
 	if (s_tx.count != 0U)
 	{
 		return 1U;
@@ -1003,6 +1005,11 @@ UINT8 Can_IsBusy(void)
 	if (s_app.cmd_count != 0U)
 	{
 		return 1U;
+	}
+	if(sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt)
+	{
+		sys_time.last_ext_comm_cnt_can = sys_time.can_rcv_cnt;
+		return 1U;	
 	}
 	return ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME) ? 1U : 0U;
 }

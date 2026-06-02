@@ -1,10 +1,10 @@
 #include "main.h"
 
-__IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能�
+__IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个佝数丝能�
 
-static INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数据缓存2，问题解决了，原来是UINT32，在计算过程出错了！
-                                          // 不能改UINT32
-INT32 g_i32ADCResult[ADC_NUM];     // ADC结果保存
+static INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数杮缓存2，问题解决了，原来是UINT32，在计算过程出错了＝
+                                          // 丝能改UINT32
+INT32 g_i32ADCResult[ADC_NUM];            // ADC结果保存
 static UINT32 s_u32AnlogCalLast10msTick = 0U;
 #define TYPEC_CUR_ZERO_CONFIRM_CNT ((UINT8)3)
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
@@ -13,7 +13,7 @@ static UINT32 s_u32AnlogCalLast10msTick = 0U;
 UINT16 g_u16TypeCOutCurrent_mA;
 UINT32 g_u32Vbat_mV;
 
-// 12位，4096��
+// 12佝，4096��
 static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
     // AD		(Temp+40)*10
     3771,
@@ -80,39 +80,39 @@ void InitADC_DMA(void)
 {
     DMA_InitTypeDef DMA_InitStruct;
     // NVIC_InitTypeDef  		 NVIC_InitStructure;
-    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE); // �启DMA1外�时钟，用于读取ADC1
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE); // �坯DMA1外�时钟，用于读坖ADC1
 
     /*
-    //DMA��配置
-    NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel1_IRQn;       //选择DMA1通道��
+    //DMA��酝置
+    NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel1_IRQn;       //选择DMA1通靓��
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;                //��使能
     NVIC_InitStructure.NVIC_IRQChannelPriority = 0;                //优先级�为0
     NVIC_Init(&NVIC_InitStructure);
-    DMA_ITConfig(DMA1_Channel1, DMA_IT_TC, ENABLE);		//使能DMA��，后面看看是否需要，�人感觉不��
+    DMA_ITConfig(DMA1_Channel1, DMA_IT_TC, ENABLE);		//使能DMA��，坎面看看是坦需覝，�人感觉丝��
     */
 
     // DMA初�化
-    // 按道理SYSCFG_CFGR1的ADC_DMA_RMP位置�0，ADC才和Channel1连在�起，�1时和Channel2连在��(ADC要么Channel1要么2)
-    // 而这�东西我没配置过，reset值为0，所以不用�
-    DMA_DeInit(DMA1_Channel1);                                               // 选择频道
+    // 按靓睆SYSCFG_CFGR1的ADC_DMA_RMP佝置�0，ADC扝和Channel1连在�起，�1时和Channel2连在��(ADC覝么Channel1覝么2)
+    // 而这�东西我没酝置过，reset值为0，所以丝用�
+    DMA_DeInit(DMA1_Channel1);                                               // 选择频靓
     DMA_StructInit(&DMA_InitStruct);                                         // 初�化DMA结构�
-    DMA_InitStruct.DMA_PeripheralBaseAddr = (UINT32)(&(ADC1->DR));           // 配置外�地�
+    DMA_InitStruct.DMA_PeripheralBaseAddr = (UINT32)(&(ADC1->DR));           // 酝置外�地�
     DMA_InitStruct.DMA_MemoryBaseAddr = (UINT32)(&g_u16ADCValFilter[0]);     // 设置内存映射地址
-    DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;                          // 数据传输方向�0：从外���1：从存储器�
-    DMA_InitStruct.DMA_BufferSize = AD_Used_amount;                          // 传输次数，DMA缓存数组大小设置
-    DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;            // 外�地�不变，这�不太懂是��外�地�
+    DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;                          // 数杮传输方坑�0：从外���1：从存储器�
+    DMA_InitStruct.DMA_BufferSize = AD_Used_amount;                          // 传输次数，DMA缓存数组大尝设置
+    DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;            // 外�地�丝坘，这�丝太懂是��外�地�
     DMA_InitStruct.DMA_MemoryInc = DMA_MemoryInc_Enable;                     // 内存地址增加
-    DMA_InitStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord; // 外�半字传�16�
-    DMA_InitStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;         // 内存半字传输16�
-    DMA_InitStruct.DMA_Mode = DMA_Mode_Circular;                             // ��模式
-    DMA_InitStruct.DMA_Priority = DMA_Priority_High;                         // 高优先级，当使用�个DMA通道时，优先级�置不影�
+    DMA_InitStruct.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord; // 外�坊字传�16�
+    DMA_InitStruct.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;         // 内存坊字传输16�
+    DMA_InitStruct.DMA_Mode = DMA_Mode_Circular;                             // ��模弝
+    DMA_InitStruct.DMA_Priority = DMA_Priority_High;                         // 高优先级，当使用�个DMA通靓时，优先级�置丝影�
     DMA_InitStruct.DMA_M2M = DMA_M2M_Disable;                                // 非内存到内存传输
     DMA_Init(DMA1_Channel1, &DMA_InitStruct);
     DMA_Cmd(DMA1_Channel1, ENABLE);
 }
 
-// 初�化PC5，则会出�485串口2没法通�的情况，�以不初�化PC5，实际上又不影响采样
-// 这是个BUG，后�观察
+// 初�化PC5，则会出�485串坣2没法通�的情况，�以丝初�化PC5，实际上坈丝影哝采样
+// 这是个BUG，坎�观察
 void InitADC_GPIO(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -125,7 +125,6 @@ void InitADC_GPIO(void)
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
-
 }
 
 void InitADC_TIMER(void)
@@ -197,37 +196,37 @@ static UINT8 ADC_WaitCalibrationDone(void)
 void InitADC_ADC1(void)
 {
     ADC_InitTypeDef ADC_InitStruct;
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE); // �启ADC1外�时�
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE); // �坯ADC1外�时�
 
     // ADC初�化
-    ADC_DeInit(ADC1);                // ADC恢�默认�置
+    ADC_DeInit(ADC1);                // ADC杢�默认�置
     ADC_StructInit(&ADC_InitStruct); // 初�化ADC结构�
 
     ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;                    // �立模�
-    ADC_InitStruct.ADC_ScanConvMode = ENABLE;                          // �描模�
-    ADC_InitStruct.ADC_ContinuousConvMode = DISABLE;                   // 连续�换模�
-    ADC_InitStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T2_CC2; // T2_CC2触发
-    ADC_InitStruct.ADC_DataAlign = ADC_DataAlign_Right;                // �换结果右对齐
-    ADC_InitStruct.ADC_NbrOfChannel = AD_Used_amount;                  // �换�道��
+    ADC_InitStruct.ADC_ScanConvMode = ENABLE;                          // �杝模�
+    ADC_InitStruct.ADC_ContinuousConvMode = DISABLE;                   // 连续�杢模�
+    ADC_InitStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T2_CC2; // T2_CC2触坑
+    ADC_InitStruct.ADC_DataAlign = ADC_DataAlign_Right;                // �杢结果坳对齝
+    ADC_InitStruct.ADC_NbrOfChannel = AD_Used_amount;                  // �杢�靓��
     ADC_Init(ADC1, &ADC_InitStruct);                                   // 初�化ADC
 
-    RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 配置ADC时钟PCLK2�8分�，�9MHz
+    RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 酝置ADC时钟PCLK2�8分�，�9MHz
 
     ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5); // PB1: GPIO_ADC_NMOS
     ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
     ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_239Cycles5); // PA1: GPIO_ADC_VBUS
 
-    ADC_Cmd(ADC1, ENABLE);    // �启ADC，并�始转�
+    ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
 
-    ADC_ResetCalibration(ADC1); // 初�化ADC 校准寄存�，果然�放在以上两句话后面才�
+    ADC_ResetCalibration(ADC1); // 初�化ADC 校准寄存�，果然�放在以上两坥话坎面扝�
     if (!ADC_WaitResetCalibrationDone())
     {
         ADC_DMACmd(ADC1, DISABLE);
         ADC_Cmd(ADC1, DISABLE);
         System_ERROR_UserCallback(ERROR_ADC);
         return;
-    }                       // 等待校准寄存器初始化完成
+    } // 等待校准寄存器初始化完戝
     ADC_StartCalibration(ADC1); // ADC�始校�
     if (!ADC_WaitCalibrationDone())
     {
@@ -235,10 +234,10 @@ void InitADC_ADC1(void)
         ADC_Cmd(ADC1, DISABLE);
         System_ERROR_UserCallback(ERROR_ADC);
         return;
-    } // 等待校准完成
+    } // 等待校准完戝
     System_ERROR_UserCallback(ERROR_REMOVE_ADC);
 
-    // ADC_SoftwareStartConvCmd(ADC1, ENABLE);		//由于没有采用外部触发，所以使用软件触发ADC��
+    // ADC_SoftwareStartConvCmd(ADC1, ENABLE);		//由于没有采用外部触坑，所以使用软件触坑ADC��
     ADC_ExternalTrigConvCmd(ADC1, ENABLE);
 }
 
@@ -342,6 +341,9 @@ UINT32 ADC_GetVbatMilliVolt(void)
 
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
 {
+    if (sys_time.typec_curr_sim)
+        return sys_time.typc_curr;
+
     return g_u16TypeCOutCurrent_mA;
 }
 
@@ -398,7 +400,7 @@ void ADC_TTC(void)
     INT32 t_i32temp = 0;
 
     //-------------MOS1温度(+40)-------------
-    t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS1]; // 读取AD�
+    t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS1]; // 读坖AD�
     t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
     g_u32ADCValFilter2[ADC_TEMP_MOS1] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_MOS1]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_MOS1];
     g_i32ADCResult[ADC_TEMP_MOS1] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_MOS1] + 512) >> 10);
@@ -422,8 +424,7 @@ void ADC_Vbc(void)
 
         u32VbatCalc_mV = ADC_VbcAdcMvToBatteryMv(ADC_VbcAdToMilliVolt(u32AdAvg));
 
-        g_i32ADCResult[ADC_VBC] = (((INT32)u32VbatCalc_mV - g_i32ADCResult[ADC_VBC]) >> 3)
-                                 + g_i32ADCResult[ADC_VBC];
+        g_i32ADCResult[ADC_VBC] = (((INT32)u32VbatCalc_mV - g_i32ADCResult[ADC_VBC]) >> 3) + g_i32ADCResult[ADC_VBC];
         if (g_i32ADCResult[ADC_VBC] < 0)
         {
             g_i32ADCResult[ADC_VBC] = 0;
@@ -432,8 +433,8 @@ void ADC_Vbc(void)
     }
 }
 
-// VDDA和VSSA为AD采样专门供电，VREF+和VREF-为AD采样的参加电压，不需要再配置�(�以会发现没相关�句配�)
-// 关于那个�，因为为12位分辨率，所以最大输入为4096�
+// VDDA和VSSA为AD采样专门供电，VREF+和VREF-为AD采样的坂加电压，丝需覝冝酝置�(�以会坑现没相关�坥酝�)
+// 关于那个�，因为为12佝分辨率，所以最大输入为4096�
 void InitADC(void)
 {
     UINT8 i;
@@ -455,7 +456,6 @@ void InitADC(void)
     InitADC_ADC1();
 }
 
-// 延时类型初�化�不需要return�
 void App_AnlogCal(void)
 {
     UINT32 u32Now10msTick;

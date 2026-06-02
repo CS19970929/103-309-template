@@ -416,7 +416,6 @@ UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds)
 #endif
 }
 
-// RTC唤醒时间设置，
 void RTC_WKTimeConfig(void)
 {
 	UINT32 wake_seconds;

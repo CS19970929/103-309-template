@@ -9,6 +9,8 @@
 #include "Project_Config.h"
 
 #define _UL_RENZHENG_ENABLE_
+#define DISP_VBAT_AND_TEMP_
+#define __EnableLowPowerDebug__
 
 #define EEPROM_VALUE_BEGIN_FLAG PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG
 
@@ -89,6 +91,8 @@ typedef enum GPIO_TYPE {
 
 typedef struct
 {
+  uint32_t    can_rcv_cnt_test;
+  uint32_t    last_ext_comm_cnt_can;
   uint32_t    can_rcv_cnt;
   uint64_t    test_main_cycle;
   uint32_t    App_AFEGet_cnt;
@@ -120,6 +124,7 @@ typedef struct
   uint32_t    rtc_irq_cnt;
 
   uint8_t     isdebugenable;
+  bool        typec_curr_sim;
   uint16_t    typc_curr;
 }Time_T;
 

@@ -9,11 +9,6 @@ UINT8 RtcSleep_PortIsOneSecondTick(void)
     return g_st_SysTimeFlag.bits.b1Sys1000msFlag;
 }
 
-UINT16 RtcSleep_PortGetIdleDelayTargetSeconds(void)
-{
-    return sys_time.time_enter_rtc;
-}
-
 UINT16 RtcSleep_PortGetCellMinMv(void)
 {
     return g_stCellInfoReport.u16VCellMin;
@@ -37,11 +32,6 @@ UINT16 RtcSleep_PortGetDischargeCurrentMa(void)
 UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 {
     return OtherElement.u16Sleep_Vlow;
-}
-
-UINT16 RtcSleep_PortGetLowVoltageSleepMinutes(void)
-{
-    return OtherElement.u16Sleep_TimeVlow;
 }
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
@@ -99,10 +89,6 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
     SleepDeal_Continue(sleep_mode);
 }
 
-void RtcSleep_PortOnDeepSleepRequest(void)
-{
-}
-
 void RtcSleep_PortPrepareRtcStop(UINT32 rtc_cycle_count)
 {
     (void)rtc_cycle_count;
@@ -134,11 +120,6 @@ void RtcSleep_PortRestoreAfterStop(void)
 UINT8 RtcSleep_PortIsRtcWake(void)
 {
     return is_rtc_wakekup ? 1U : 0U;
-}
-
-void RtcSleep_PortClearRtcWake(void)
-{
-    is_rtc_wakekup = false;
 }
 
 UINT32 RtcSleep_PortGetLastWakeupSeconds(void)

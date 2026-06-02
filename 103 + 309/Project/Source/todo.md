@@ -1384,3 +1384,30 @@ todo 完整测试
 
 先梳理低功耗rtc模块，然后优化、简化低功耗rtc模块，
 测试低功耗rtc唤醒后，adc采样是否正常,typec电流、总压、温度
+
+
+Can_RtcWakeService()
+
+删掉PROJECT_CFG_DEBUG_WATCH_ENABLE，是否有用
+梳理soc_apply_rtc_rest_ocv逻辑
+
+升级时还是容易进入rtc 导致升级失败
+
+NVIC_ClearPendingIRQ
+
+static uint16_t s_u16IdleDelaySeconds = 0U;
+static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
+static uint32_t s_u32RtcWakeCycles = 0U;
+static uint8_t s_u8RtcSoc = 0U;
+
+自适应rtc时间
+
+adc逻辑为什么这么复杂，adc计算逻辑是怎么样的，能去掉滤波吗
+
+SOC_GetTypeCBatEquivCurrentA10是否对时序有影响
+
+加入System_ErrFlag.u8ErrFlag_Com_AFE1 afe通信异常恢复（本身就可以自动恢复)
+
+加入typec soc测试 宏
+
+rtc情况下，能否通过can唤醒

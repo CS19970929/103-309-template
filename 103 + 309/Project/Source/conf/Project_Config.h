@@ -225,6 +225,7 @@
 // <o> Scan timer period 100kHz <1-1000>
 #define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
 
+//todo 是否有用
 // <o> MCU_WK on filter 10ms <0-255>
 #define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
 
@@ -238,31 +239,31 @@
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0005
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0603
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
 
 // <q> Reset balance open voltage on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
 
 // <q> Reset SOC table on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 0
 
 // <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
 
 // <q> Reset SOC snapshot on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
 // <q> Reset event record on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
 // </h>
 
 // <<< end of configuration section >>>
