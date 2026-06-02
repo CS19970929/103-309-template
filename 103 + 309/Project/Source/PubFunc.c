@@ -162,11 +162,6 @@ void Delay1ms(UINT8 delaycnt)
 	}
 }
 
-UINT16 U16_SwapEndian(UINT16 target)
-{
-	return (((uint16_t)target & 0xFF00) >> 8) | (((uint16_t)target & 0x00FF) << 8);
-}
-
 // 1:有温度断线，0：正常
 // 有问题，接好温度线，重启BMS才能消除报错
 // 添加自动复原功能，不需要重启

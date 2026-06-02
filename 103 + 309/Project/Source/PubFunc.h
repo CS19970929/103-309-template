@@ -5,7 +5,6 @@
 UINT16 Sci_CRC16RTU( UINT8 * pszBuf, UINT8 unLength);
 UINT16 GetEndValue(const UINT16 * ptbl,UINT16 tblsize,UINT16 dat);
 void Delay1ms(UINT8 delaycnt);
-UINT16 U16_SwapEndian(UINT16 target);
 UINT8 Monitor_TempBreak(UINT16* temp_AD);
 void jtag_disableAndConfIO(void);
 

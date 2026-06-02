@@ -53,8 +53,8 @@ struct LOW_POWER_RTC_STATUS {
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
+extern enum irqWakeup g_irq_t;
 
-void App_LowPowerProcess(void);
 void LowPower_Request(enum _SLEEP_MODE mode);
 void LowPower_ClearToSleepFlag(void);
 uint8_t LowPower_IsToSleepPending(void);
@@ -64,13 +64,9 @@ void cpu_frequency_conf(void);
 uint8_t get_rtc_soc(void);
 void set_rtc_soc(uint8_t _soc);
 
-// void set_irq_wksource(enum irqWakeup irq);
-void set_irq_wksource(uint8_t irq);
 
 
-void entersleep(enum _SLEEP_MODE mode);
 
-void sleep(void);
 
 
 

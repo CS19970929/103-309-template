@@ -35,6 +35,7 @@
 
 #define UPDNLMT16(Var,Max,Min)	{(Var)=((Var)>=(Max))?(Max):(Var);(Var)=((Var)<=(Min))?(Min):(Var);}
 #define S2U(x)   (*((volatile UINT16*)(&(x))))
+#define U16_SwapEndian(target)  ((((target) & 0xFFU) << 8) | (((target) >> 8) & 0xFFU))
 #define MCU_RESET()	NVIC_SystemReset()
 
 typedef enum _IO_STATUS {

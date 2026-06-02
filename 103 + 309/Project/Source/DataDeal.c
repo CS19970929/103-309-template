@@ -66,7 +66,7 @@ void charger_detect_and_keyLogi_200ms(void)
         // else if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
         // {
         //     LedBar_SaveSleepSoc();
-        //     entersleep(DEEP_MODE);
+        //     LowPower_Request(DEEP_MODE);
         // }
         // else
         // {
@@ -79,13 +79,13 @@ void charger_detect_and_keyLogi_200ms(void)
             // if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
             // {
             //     LedBar_SaveSleepSoc();
-            //     entersleep(DEEP_MODE);
+            //     LowPower_Request(DEEP_MODE);
             // }
             // else
             // {
             //     open_dsg_close_chg();
             // }
-                entersleep(DEEP_MODE);
+                LowPower_Request(DEEP_MODE);
         }
         else
         {
@@ -942,7 +942,7 @@ static void MonitorAFE_UpdateSleepDelay(UINT8 is_error, UINT16 *delay_tick)
         if (++(*delay_tick) >= MONITOR_AFE_SLEEP_DELAY_TICKS)
         {
             *delay_tick = 0;
-            entersleep(NORMAL_MODE);
+            LowPower_Request(NORMAL_MODE);
         }
     }
     else

@@ -5,7 +5,7 @@
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT    ((uint16_t)5U)
 
-static enum irqWakeup g_irq_t = NO_IRQ;
+enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
     0U,
@@ -115,11 +115,6 @@ uint8_t LowPower_IsToSleepPending(void)
     return (uint8_t)(g_stLowPowerRtcStatus.readyToSleep != 0U);
 }
 
-void entersleep(enum _SLEEP_MODE mode)
-{
-    LowPower_Request(mode);
-}
-
 static uint8_t low_power_get_rtc_block_reason(void)
 {
     if ((RtcSleep_PortGetChargeCurrentMa() > 10U) ||
@@ -150,7 +145,7 @@ static void low_power_select_sleep_mode(void)
         low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
         if (++force_deep_delay_seconds >= LOW_POWER_FORCE_DEEP_SLEEP_SECONDS)
         {
-            entersleep(DEEP_MODE);
+            LowPower_Request(DEEP_MODE);
         }
         low_power_refresh_rtc_status();
         return;
@@ -163,7 +158,7 @@ static void low_power_select_sleep_mode(void)
         low_power_set_rtc_block_reason(LOW_POWER_RTC_BLOCK_NONE);
         if (++deep_sleep_delay_seconds >= (uint32_t)RtcSleep_PortGetLowVoltageSleepMinutes() * 60U)
         {
-            entersleep(DEEP_MODE);
+            LowPower_Request(DEEP_MODE);
         }
         low_power_refresh_rtc_status();
         return;
@@ -216,20 +211,10 @@ static void low_power_select_sleep_mode(void)
     if (++s_u16IdleDelaySeconds >= RtcSleep_PortGetIdleDelayTargetSeconds())
     {
         s_u16IdleDelaySeconds = 0U;
-        entersleep(HICCUP_MODE);
+        LowPower_Request(HICCUP_MODE);
     }
 
     low_power_refresh_rtc_status();
-}
-
-void App_LowPowerProcess(void)
-{
-    rtc_sleep();
-}
-
-void sleep(void)
-{
-    App_LowPowerProcess();
 }
 
 static bool isException(void)
@@ -310,7 +295,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     RtcSleep_PortClearRtcWake();
     g_stLowPowerRtcStatus.readyToSleep = 0U;
-    entersleep(NO_SLEEP);
+    LowPower_Request(NO_SLEEP);
 
     if (g_irq_t == NO_IRQ)
     {
@@ -333,11 +318,6 @@ uint8_t get_rtc_soc(void)
 void set_rtc_soc(uint8_t soc)
 {
     s_u8RtcSoc = soc;
-}
-
-void set_irq_wksource(uint8_t irq)
-{
-    g_irq_t = (enum irqWakeup)irq;
 }
 
 void rtc_sleep(void)

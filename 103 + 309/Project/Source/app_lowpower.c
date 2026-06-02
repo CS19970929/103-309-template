@@ -1,15 +1,14 @@
 #include "main.h"
 #include "app_lowpower.h"
-#include "bsp_clock.h"
-#include "bsp_power.h"
-#include "bsp_rtc.h"
 #include "rtc_sleep_port.h"
+#include "RTC.h"
 
 typedef struct
 {
     LP_State_t state;
     uint32_t block_reason;
     uint32_t last_sleep_seconds;
+    uint32_t requested_wakeup_seconds;
 } LP_Runtime_t;
 
 static LP_Runtime_t s_lp_runtime;
@@ -17,7 +16,6 @@ static LP_Runtime_t s_lp_runtime;
 static uint32_t LP_BuildBlockReason(void)
 {
     uint32_t reason = 0U;
-    uint32_t requested_period;
 
     if (RtcSleep_PortGetChargeCurrentMa() > 10U)
     {
@@ -40,11 +38,6 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_KEY;
     }
 
-    // if (RtcSleep_PortIsAfeSleepBlocked() != 0U)
-    // {
-    //     reason |= LP_BLOCK_AFE_BUSY;
-    // }
-
     if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
     {
         reason |= LP_BLOCK_FLASH_BUSY;
@@ -65,9 +58,8 @@ static uint32_t LP_BuildBlockReason(void)
         reason |= LP_BLOCK_LED_ACTIVE;
     }
 
-    requested_period = BSP_RTC_GetRequestedWakeupPeriodSeconds();
-    if ((requested_period != 0U) &&
-        (BSP_RTC_IsWakeupPeriodSafe(requested_period) == 0U))
+    if ((s_lp_runtime.requested_wakeup_seconds != 0U) &&
+        (RTC_IsWakeupPeriodSafe(s_lp_runtime.requested_wakeup_seconds) == 0U))
     {
         reason |= LP_BLOCK_IWDG_UNSAFE;
     }
@@ -85,6 +77,7 @@ void LP_Init(void)
     s_lp_runtime.state = LP_STATE_RUN;
     s_lp_runtime.block_reason = 0U;
     s_lp_runtime.last_sleep_seconds = 0U;
+    s_lp_runtime.requested_wakeup_seconds = 0U;
 }
 
 void LP_Task(void)
@@ -109,7 +102,8 @@ uint32_t LP_GetBlockReason(void)
 
 void LP_SetWakeupPeriod(uint32_t seconds)
 {
-    BSP_RTC_SetWakeupPeriodSeconds(seconds);
+    s_lp_runtime.requested_wakeup_seconds = seconds;
+    RTC_SetWakeupPeriodSeconds(seconds);
 }
 
 void LP_BeforeSleep(void)
@@ -121,9 +115,9 @@ void LP_BeforeSleep(void)
 void LP_AfterWakeup(void)
 {
     s_lp_runtime.state = LP_STATE_WAKEUP_RESTORE;
-    BSP_Clock_RestoreAfterStop();
-    BSP_Power_RestoreAfterStop();
-    s_lp_runtime.last_sleep_seconds = BSP_RTC_GetLastWakeupPeriodSeconds();
+    cpu_frequency_conf();
+    RtcSleep_PortRestoreAfterStop();
+    s_lp_runtime.last_sleep_seconds = RTC_GetLastWakeupPeriodSeconds();
     s_lp_runtime.state = LP_STATE_RUN;
 }
 
@@ -137,10 +131,10 @@ void LP_EnterStop(uint32_t seconds)
         return;
     }
 
-    BSP_Power_PrepareStop(0U);
+    RtcSleep_PortPrepareRtcStop(0U);
     s_lp_runtime.state = LP_STATE_STOP_SLEEP;
-    BSP_Power_EnterStop();
-    BSP_Power_DisableStopWakeup();
+    RtcSleep_PortEnterStop();
+    RtcSleep_PortDisableStopWakeup();
     LP_AfterWakeup();
 }
 

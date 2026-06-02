@@ -257,6 +257,18 @@ static UINT8 FactoryAging_MarkDone(void)
 	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_DONE, 1U, 1U);
 }
 
+static UINT8 FactoryAging_ResolveStoredState(UINT32 *elapsed, UINT8 *was_done, UINT8 *was_stopped)
+{
+	UINT32 stored = 0U;
+	UINT8 done = 0U;
+	UINT8 stopped = 0U;
+	if (!FactoryAging_LoadStoredProgress(&stored, &done, &stopped)) return 0U;
+	*elapsed = FactoryAging_ClampElapsed(stored);
+	*was_done = done;
+	*was_stopped = stopped;
+	return 1U;
+}
+
 static void FactoryAging_ResetMosCache(void)
 {
 	s_u8FactoryAgingMosMode = FACTORY_AGING_MOS_MODE_UNKNOWN;
@@ -312,8 +324,8 @@ static void FactoryAging_Start(UINT32 now_tick)
 	UINT8 done = 0U;
 	UINT8 stopped = 0U;
 
-	(void)FactoryAging_LoadStoredProgress(&stored_elapsed, &done, &stopped);
-	s_u32FactoryAgingElapsed10ms = FactoryAging_ClampElapsed(stored_elapsed);
+	(void)FactoryAging_ResolveStoredState(&stored_elapsed, &done, &stopped);
+	s_u32FactoryAgingElapsed10ms = stored_elapsed;
 	s_u32FactoryAgingLastTick = now_tick;
 	s_u32FactoryAgingNextFinishRetry10ms = 0U;
 
@@ -332,7 +344,7 @@ static void FactoryAging_Start(UINT32 now_tick)
 	}
 
 	s_u8FactoryAgingState = FACTORY_AGING_STATE_RUNNING;
-	if (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	if (stored_elapsed >= FACTORY_AGING_DURATION_10MS)
 	{
 		(void)FactoryAging_Finish();
 		return;
@@ -385,12 +397,12 @@ static void FactoryAging_LoadRuntimeStateForHost(UINT32 now_tick)
 		return;
 	}
 
-	(void)FactoryAging_LoadStoredProgress(&stored_elapsed, &done, &stopped);
-	s_u32FactoryAgingElapsed10ms = FactoryAging_ClampElapsed(stored_elapsed);
+	(void)FactoryAging_ResolveStoredState(&stored_elapsed, &done, &stopped);
+	s_u32FactoryAgingElapsed10ms = stored_elapsed;
 	s_u32FactoryAgingLastTick = now_tick;
 	s_u32FactoryAgingNextFinishRetry10ms = 0U;
 
-	if ((done != 0U) || (s_u32FactoryAgingElapsed10ms >= FACTORY_AGING_DURATION_10MS))
+	if ((done != 0U) || (stored_elapsed >= FACTORY_AGING_DURATION_10MS))
 	{
 		FactoryAging_ApplyStoppedMos();
 		s_u8FactoryAgingState = FACTORY_AGING_STATE_DONE;

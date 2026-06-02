@@ -205,7 +205,7 @@ void SystemDebug_Snapshot(void)
 	g_dbg.afe.bstatus3    = SH367309_Reg_Store.REG_BSTATUS3.all;
 	g_dbg.afe.fault1      = SH367309_Reg_Store.REG_BSTATUS1.all;
 	g_dbg.afe.cur_raw     = SH367309_Read_AFE1.u16Current;
-	g_dbg.afe.pec_err     = sys_time.pec_err_cnt;
+	g_dbg.afe.pec_err     = 0; /* was sys_time.pec_err_cnt */
 	g_dbg.afe.cell_min_mv = g_stCellInfoReport.u16VCellMin;
 	g_dbg.afe.cell_max_mv = g_stCellInfoReport.u16VCellMax;
 
@@ -232,9 +232,7 @@ void SystemDebug_Snapshot(void)
 	                        &g_dbg.led.charge_icon, &g_dbg.led.percent_icon);
 
 	/* ===== Runtime counters ===== */
-	g_dbg.ctr.main_cycle    = (uint32_t)sys_time.test_main_cycle;
-	g_dbg.ctr.afe_get_cnt   = sys_time.App_AFEGet_cnt;
-	g_dbg.ctr.can_rcv_cnt   = (uint32_t)sys_time.can_rcv_cnt;
+			g_dbg.ctr.can_rcv_cnt   = (uint32_t)sys_time.can_rcv_cnt;
 	g_dbg.ctr.rtc_sleep_cnt = sys_time.rtc_sleep_cnt;
 	g_dbg.ctr.rtc_sec_cnt   = sys_time.rtc_sec_cnt;
 	g_dbg.ctr.rtc_alm_cnt   = sys_time.rtc_alm_cnt;
