@@ -174,6 +174,7 @@ static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 
+/* offset_mv is relative to V0; target limits SOC, ticks are 200ms SOC ticks per 1%. */
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
 	{-25, {0U, 0U, 0U, 0U}, {5U, 5U, 1U, 1U}},
@@ -185,6 +186,7 @@ static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
 };
 
+/* Mid-tail table limits high SOC above V0; SOC_MID_TARGET_DISABLED skips a load band. */
 static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
 	{500, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {450U, 450U, 600U, 0U}},
 	{600, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {600U, 600U, 750U, 0U}},
