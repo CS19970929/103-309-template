@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`Runtime.c`, `Sci_Upper.c`, `Can_HDX.c`, `Flash.c`, `SOC.c`, `SocEnhance.c`, `ADC.c`, `SH367309_*`, `rtc_sleep.c`, `LedBar.c`
-最后更新时间：2026-05-27
+最后更新时间：2026-06-02
 未确认事项：硬件平台、COM 口、CAN 适配器、ST-Link、实际 Flash 容量和客户协议版本。
 
 ## 1. 编译测试
@@ -84,6 +84,10 @@
 
 - 0/1/9/10/99/100 显示。
 - 上电显示窗口。
+- 上电后确认 `APP_LedBar()` 主循环运行期间不会重复初始化导致持续闪烁。
+- 启动显示窗口结束后应熄屏，并释放 `LP_BLOCK_LED_ACTIVE`。
+- 单击按键显示 SOC 后，显示窗口应按 10 ms tick 递减，到时熄屏。
+- `MCU_WK` 和按键首次滤波应以当前电平预置，不能把开机已有电平误判为新边沿。
 - 睡眠 SOC 预览。
 - 长按进入 deep sleep。
 - STOP 前 GPIO 泄漏。

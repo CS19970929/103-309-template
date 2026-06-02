@@ -6,6 +6,21 @@
 
 ---
 
+## 2026-06-02 回归修复说明
+
+`02bb091` 继续删除 init-done 类变量时，误删了 LedBar 必要的运行态保护。该保护不是死字段：`APP_LedBar()` 每轮主循环都会调用，必须防止重复执行 `LedBar_Init()`。
+
+已恢复：
+
+- `LedBarRuntime.initialized`
+- `LedBarRuntime.scan_timer_initialized`
+- `LedBarRuntime.key_filter_initialized`
+- `LedBarRuntime.mcu_wk_filter_initialized`
+
+这些字段用于保持显示窗口、扫描定时器和输入滤波状态，不属于可删除的无效变量。
+
+---
+
 ## 删除清单
 
 ### 整文件删除 (6 个)

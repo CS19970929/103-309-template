@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/LedBar.c`, `103 + 309/Project/Source/LedBar.h`, `103 + 309/Project/Source/DataDeal.c`, `103 + 309/Project/Source/conf/Project_Config.h`
-最后更新时间：2026-05-26
+最后更新时间：2026-06-02
 未确认事项：充电图标真实含义、故障显示策略、长按休眠目标时长仍需用户确认。
 
 ## 1. 当前硬件模型
@@ -49,6 +49,8 @@
 10. 当前代码在放电 MOS 打开时置位 `LEDBAR_ICON_CHARGE_MASK`，这个命名和行为需要确认。
 11. 故障检测函数存在，但当前 `if (LedBar_IsFaultActive() != 0u) { }` 分支为空。
 
+`LedBar_Init()` 必须只执行一次。`APP_LedBar()` 是主循环前台任务，每轮都会被调用；如果无条件重新初始化，会清空 `startup_display_armed`、`soc_display_10ms`、扫描帧和按键滤波状态，导致数码管持续闪烁并可能阻塞低功耗。
+
 ## 4. 按键和低功耗
 
 当前长按阈值：
@@ -82,3 +84,4 @@
 | 故障显示未实现 | `LedBar_IsFaultActive()` 分支为空 | 确认是否需要故障闪烁/错误码 |
 | 长按时长和旧文档冲突 | 当前约 500 ms，旧文档写 3 秒 | 必须用户确认后再改 |
 | TIM4 实际扫描周期与函数名不一致 | 函数名 `Scan1ms`，配置约 0.5 ms | 文档保留事实，后续可重命名但不改行为 |
+| 重复初始化导致闪烁 | `APP_LedBar()` 每轮调用，运行态必须保持 | 保留 `initialized`、扫描定时器和滤波首次预置保护 |

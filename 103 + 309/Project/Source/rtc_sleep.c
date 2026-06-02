@@ -1,4 +1,5 @@
 #include "rtc_sleep_port.h"
+#include "app_lowpower.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV      ((uint16_t)2800U)
 //todo  待测试确认，更新时间，同步更新文�

@@ -50,11 +50,11 @@ struct DBG_EVENT {
 	uint16_t extra;
 };
 
-static struct DBG_EVENT s_dbg_events[DBG_EVENT_RING_SIZE];
+static volatile struct DBG_EVENT s_dbg_events[DBG_EVENT_RING_SIZE];
 static uint8_t s_dbg_event_head;
 static uint8_t s_dbg_event_count;
-static struct SYSTEM_DEBUG s_dbg_fault_snap;
-static uint8_t s_dbg_fault_valid;
+static volatile struct SYSTEM_DEBUG s_dbg_fault_snap;
+static volatile uint8_t s_dbg_fault_valid;
 
 void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra)
 {
@@ -69,11 +69,13 @@ void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra)
 		s_dbg_event_count++;
 	}
 	if ((type == 0x01) || (type == 0x02)) {
-		s_dbg_fault_snap = g_dbg;
+		struct SYSTEM_DEBUG snapshot = g_dbg;
+		s_dbg_fault_snap = snapshot;
 		s_dbg_fault_valid = 1U;
 	}
 }
 
+#if defined(_DEBUG_)
 static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 										   uint8_t *type, uint8_t *val0,
 										   uint8_t *val1, uint16_t *extra)
@@ -92,6 +94,7 @@ static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 	if (extra) *extra = s_dbg_events[idx].extra;
 	return 1U;
 }
+#endif
 
 /* ===== snapshot ===== */
 
@@ -184,6 +187,7 @@ void SystemDebug_Snapshot(void)
 	g_dbg.soc.vmin      = SOC_Enhance_Element.u16_VCellMin;
 	g_dbg.soc.ichg      = SOC_Enhance_Element.u16_Ichg;
 	g_dbg.soc.idsg      = SOC_Enhance_Element.u16_Idsg;
+	g_dbg.soc.init_over = 1U;
 	g_dbg.soc.ocv_cali  = SOC_Enhance_Element.u8_SOC_OCV_Cali;
 	g_dbg.soc.vtotal    = g_stCellInfoReport.u16VCellTotle;
 

@@ -3,8 +3,33 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：当前主工程源码和 `docs/review/*`
-最后更新时间：2026-05-27
+最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
+
+## 2026-06-02 LedBar 初始化回归修复
+
+### 本次源码修改
+
+- `LedBar.c`：恢复 `LedBar_Init()` 的一次性初始化保护，避免 `APP_LedBar()` 每轮主循环重置显示窗口、按键滤波、扫描帧和 TIM4 状态。
+- `LedBar.c`：恢复 TIM4 扫描定时器初始化状态保护，非空显示帧更新时不重复重配 TIM4，空帧/STOP 前仍会关闭扫描定时器和 GPIO。
+- `LedBar.c`：恢复按键和 `MCU_WK` 二值滤波的首次采样预置，避免启动时把已有电平误判为新边沿。
+- `SystemDebug.c`：保留 `g_dbg.soc.init_over` 调试字段布局，并在当前运行快照中固定填充为 1，避免打印未更新的旧值。
+
+### 问题根因
+
+`02bb091` 删除初始化完成类变量时，把 LedBar 运行态保护一并删除，导致 `Runtime_RunOnce()` 每轮调用 `APP_LedBar()` 时都会重新执行 `LedBar_Init()`。这会让 `startup_display_armed` 和 `soc_display_10ms` 无法自然保持/归零，表现为数码管持续闪烁，并可能让 `LP_BLOCK_LED_ACTIVE` 长时间阻塞低功耗。
+
+### 本次验证
+
+- Keil `FD_Release` rebuild：`0 Error(s), 0 Warning(s)`。
+- 生成 `103 + 309/Project/Users/Objects/FD_Release.bin`，大小 58360 bytes。
+- 上电后数码管只在启动显示窗口内显示，不应因为主循环重复初始化而持续闪烁。
+- 单击/唤醒显示 SOC 后，显示窗口结束应熄屏并释放 `LP_BLOCK_LED_ACTIVE`。
+
+### 兼容性说明
+
+- 未修改 Modbus/CAN 协议、寄存器地址、CAN ID、payload、IAP 地址、AFE 参数和 SOC 算法。
+- 未改变启动/按键/唤醒显示窗口时长，只恢复运行态保持。
 
 ## 2026-05-27 RTC/STOP 低功耗进不去修复
 
