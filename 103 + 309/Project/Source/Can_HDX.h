@@ -8,6 +8,7 @@
 void InitCan(void);
 void App_Can(void);
 UINT8 Can_HDX_Transmit(CanTxMsg *Msg);
+UINT8 Can_PeekBusy(void);
 UINT8 Can_IsBusy(void);
 void Can_PrepareSleep(void);
 

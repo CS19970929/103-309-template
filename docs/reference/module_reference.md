@@ -613,7 +613,8 @@ CAN 模块实现:
 | `InitCan()` | CAN 硬件+GPIO+NVIC+过滤器全部重新初始化 |
 | `App_Can()` | CAN 主服务: 超时检测→调度周期帧→处理应用命令→服务TX→流式读取→IAP延时 |
 | `Can_HDX_Transmit()` | 外部发送接口, 入队 |
-| `Can_IsBusy()` | 检查 CAN 是否忙 (TX队列/邮箱/流式/命令) |
+| `Can_PeekBusy()` | 无副作用检查 CAN 是否忙，供 debug/heartbeat 使用 |
+| `Can_IsBusy()` | 检查 CAN 是否忙；低功耗路径用它确认并消费 CAN 接收活动 |
 | `Can_PrepareSleep()` | 休眠前清理 |
 
 ---

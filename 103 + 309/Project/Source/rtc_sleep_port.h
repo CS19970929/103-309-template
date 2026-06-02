@@ -19,7 +19,6 @@ uint8_t RtcSleep_PortHasCurrentWake(enum irqWakeup *source);
 uint8_t RtcSleep_PortHasAfeWake(enum irqWakeup *source);
 uint8_t RtcSleep_PortIsEmergencyWakeVoltage(void);
 
-void RtcSleep_PortRequestSleepLog(void);
 void RtcSleep_PortCommitResetSleep(uint8_t sleep_mode);
 
 void RtcSleep_PortPrepareRtcStop(void);

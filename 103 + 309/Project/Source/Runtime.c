@@ -41,7 +41,7 @@ static void Runtime_RunIoAndPowerTasks(void)
 	App_Can();
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_CAN,
 		(uint8_t)(DBG_MODULE_STATE_READY |
-		((Can_IsBusy() != 0U) ? DBG_MODULE_STATE_BUSY : 0U)));
+		((Can_PeekBusy() != 0U) ? DBG_MODULE_STATE_BUSY : 0U)));
 }
 
 static void Runtime_RunBackgroundTasks(void)

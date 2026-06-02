@@ -55,7 +55,7 @@
 // <h>Feature Switches
 
 // <q> Enable IWDG
-#define PROJECT_CFG_WDOG_ENABLE 0
+#define PROJECT_CFG_WDOG_ENABLE 1
 
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1

@@ -4,12 +4,12 @@
 源码验证：PARTIAL
 主要参考源码：`rtc_sleep.c`, `rtc_sleep.h`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
 最后更新时间：2026-06-02
-未确认事项：IWDG 宏与实际启用是否一致、factory aging / AFE not idle 是否阻塞 sleep、`OtherElement` 普通休眠和 RTC 参数是否仍为有效需求。
+未确认事项：factory aging / AFE not idle 是否阻塞 sleep、`OtherElement` 普通休眠和 RTC 参数是否仍为有效需求。
 
 ## 2026-06-02 源码复核补充
 
 - 当前源码已删除 `conf.h` 中无条件 `__EnableLowPowerDebug__`；`EnableLowPowerDebug()` 在未显式定义该宏时会清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`，符合 Release 功耗实测边界。
-- 当前 `PROJECT_CFG_WDOG_ENABLE` 为 `0`，但 `AppInit_InitDevice()` 仍无条件调用 `Init_IWDG()`，`Init_IWDG()` 内部没有用该宏直接门控返回；IWDG 需求与 RTC wake period 安全窗口需要重新对齐。
+- 当前 `PROJECT_CFG_WDOG_ENABLE` 默认为 `1`；`Init_IWDG()` 和 `IWDG_Feed()` 已按该宏门控，RTC wake period 安全窗口与实际 IWDG 行为一致。
 - `rtc_sleep()` 只实际使用 `OtherElement.u16Sleep_Vlow` 和 `OtherElement.u16Sleep_TimeVlow`；`u16Sleep_VNormal`、`u16Sleep_TimeNormal`、`u16Sleep_RTC_WakeUpTime`、`u16Sleep_TimeRTC` 当前未进入主判断。
 - `RtcSleep_PortIsFactoryAgingActive()`、`RtcSleep_PortIsAfeSleepBlocked()` 这类未使用 wrapper 已删除；FactoryAging active 已按确认只阻塞 HICCUP RTC STOP，不影响 `DEEP_MODE/NORMAL_MODE` reset sleep；AFE not idle 是否阻塞 STOP 仍需确认。
 - 新的需求对齐文档见 `docs/review/low_power_requirement_alignment_2026-06-02.md`；官方/行业调研见 `docs/review/low_power_official_industry_research_2026-06-02.md`。
@@ -56,7 +56,7 @@ SleepDeal_Continue()
 当前 `LP_GetBlockReason()` 在 `rtc_sleep.c` 内现算，会阻塞 sleep 的条件：
 
 - 充/放电电流 > 10mA。
-- SCI/CAN busy。
+- SCI/CAN busy。低功耗判断使用会确认 CAN 接收活动的 `Can_IsBusy()`，debug/heartbeat 使用无副作用的 `Can_PeekBusy()`。
 - MCU_WK/key active。
 - Flash busy 或待写参数。
 - IAP pending。
@@ -76,14 +76,9 @@ RTC 默认 wake period 为 10s，IWDG 开启时仍限制最大 10s。CAN 不再�
 
 当前源码事实：
 
-- `Project_Config.h` 中 `PROJECT_CFG_WDOG_ENABLE` 当前为 `0`。
-- `conf.h` 只有在 `PROJECT_CFG_WDOG_ENABLE` 为 1 时才定义 `wdog_enable`，因此 `RTC_GetWakeupPeriodSeconds()` 的 10 秒限制只在该宏有效时启用。
-- `AppInit_InitDevice()` 仍无条件调用 `Init_IWDG()`，`Init_IWDG()` 内部当前没有按 `PROJECT_CFG_WDOG_ENABLE` 直接返回。
-
-待确认需求：
-
-- 如果量产必须启用 IWDG，则 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()`、`RTC_IsWakeupPeriodSafe()` 必须统一。
-- 如果调试阶段允许关闭 IWDG，则必须明确写入构建 profile，不允许宏显示关闭但实际仍开启。
+- `Project_Config.h` 中 `PROJECT_CFG_WDOG_ENABLE` 默认为 `1`，符合量产安全门禁。
+- `conf.h` 只有在 `PROJECT_CFG_WDOG_ENABLE` 为 1 时才定义 `wdog_enable`，因此 `RTC_GetWakeupPeriodSeconds()` 的 10 秒限制只在 IWDG 启用时生效。
+- `Init_IWDG()` 和 `IWDG_Feed()` 均受 `PROJECT_CFG_WDOG_ENABLE` 门控；若调试阶段关闭该宏，IWDG 不启动、不喂狗，RTC wake 安全判断也同步放开。
 
 ## 6. 唤醒流程
 
@@ -113,8 +108,8 @@ HICCUP STOP 醒来后：
 
 | 风险 | 建议 |
 |---|---|
-| CAN busy 被打断导致协议半包 | 保留 `Can_IsBusy()` 阻塞 STOP，确认 TX queue、App 命令和 read-block stream 结束后再睡 |
-| IWDG 宏和实际启用不一致 | 先确认量产 IWDG 策略，再统一 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()` 和 RTC wake 安全窗口 |
+| CAN busy 被打断导致协议半包 | 保留 `Can_IsBusy()` 阻塞 STOP；debug 和 heartbeat 使用 `Can_PeekBusy()`，不能消费 CAN 接收活动 |
+| IWDG 开启后 RTC 周期最多 10 秒 | 当前以稳定优先，量产默认启用 IWDG；若后续为极低功耗拉长 RTC 周期，必须同步评估 IWDG 策略 |
 | DBGMCU 低功耗调试保持只能显式打开 | 量产功耗实测必须确认 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP 为 0；调试 STOP 时再临时打开 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |
 | LedBar active 阻塞 sleep 影响用户显示和功耗 | 确认显示窗口时长 |

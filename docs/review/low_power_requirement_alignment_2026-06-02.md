@@ -63,7 +63,7 @@ main()
 - `IsSleepStartUp()` 在完整 IO/AFE/CAN 初始化之前执行，用 BKP_DR2/DR3 判断是否是 sleep reset 启动。
 - `Init_RTC()` 使用 BKP_DR1 判断 RTC 是否已初始化；若首次初始化会 `BKP_DeInit()`，因此 BKP 寄存器分配必须固定，不能随意复用。
 - `EnableLowPowerDebug()` 当前仍在启动阶段调用；`conf.h` 已不再无条件定义 `__EnableLowPowerDebug__`，Release 默认清除 DBGMCU 低功耗调试保持位，调试时可通过显式宏打开。
-- `PROJECT_CFG_WDOG_ENABLE` 当前为 0，但 `AppInit_InitDevice()` 仍无条件调用 `Init_IWDG()`，`Init_IWDG()` 内部没有用该宏直接返回。
+- `PROJECT_CFG_WDOG_ENABLE` 当前默认为 1；`Init_IWDG()` 和 `IWDG_Feed()` 已按该宏门控，RTC wake period 安全窗口与实际 IWDG 行为一致。
 
 ### 主循环链路
 
@@ -118,7 +118,7 @@ Runtime_RunOnce()
 
 - 充电电流 `> 10`。
 - 放电电流 `> 10`。
-- `Sci_IsAnyPortBusy()` 或 `Can_IsBusy()`。
+- `Sci_IsAnyPortBusy()` 或 `Can_IsBusy()`。低功耗路径使用 `Can_IsBusy()` 消费并确认 CAN 接收活动；debug/heartbeat 只使用 `Can_PeekBusy()`。
 - `GPIO_MCU_WK` active。
 - `StorageFlash_IsBusy()` 或 `u8FlashUpdateE2PROM != 0`。
 - `u8FlashUpdateFlag != 0`。
@@ -204,7 +204,7 @@ IsSleepStartUp()
 | TIM4/LED | LED display active 阻塞低功耗；睡前 `LedBar_PrepareForStop()` 拉低 Charlieplexing 引脚 | MUST_KEEP，但显示窗口策略需确认 |
 | AFE | Reset sleep 前执行 `InitAFE1_Sleep(0)` 和 `AFE_Sleep()`；HICCUP STOP 前当前未直接调用 `AFE_Sleep()` | UNKNOWN，需要确认 HICCUP 下 AFE 是否也应进入 sleep |
 | DBGMCU | Release 默认清除低功耗调试保持位；调试可显式定义 `__EnableLowPowerDebug__` | 已按确认修复 |
-| IWDG | 当前配置宏为 0，但实际 `Init_IWDG()` 无条件开启；IWDG 安全窗口只受 `wdog_enable` 编译宏影响 | CONFLICT，需要确认真实策略 |
+| IWDG | 当前配置宏默认为 1；`Init_IWDG()` 和 `IWDG_Feed()` 已按宏门控；IWDG 开启时 RTC wake period 限制为 10 秒 | 已处理，需构建/长稳验证 |
 
 ## BKP 寄存器分配
 
@@ -230,7 +230,7 @@ IsSleepStartUp()
 | 冲突 ID | 现有文档口径 | 当前源码事实 | 风险 | 建议 |
 |---|---|---|---|---|
 | LP-CONFLICT-001 | Release 应清除 DBGMCU 低功耗调试位 | 已删除 `conf.h` 中无条件 `__EnableLowPowerDebug__`；`EnableLowPowerDebug()` 在未显式定义宏时清除 DBGMCU mask | 调试时若需要 STOP 内 attach，必须显式打开宏，不能用于功耗实测 | 已按确认修复 |
-| LP-CONFLICT-002 | `PROJECT_CFG_WDOG_ENABLE` 表示 IWDG 开关 | 当前配置为 0，但 `Init_IWDG()` 无条件开启 | 看门狗与 RTC 周期策略不一致 | 确认量产是否必须开 IWDG；再决定宏和函数行为 |
+| LP-CONFLICT-002 | `PROJECT_CFG_WDOG_ENABLE` 表示 IWDG 开关 | 当前默认 1，且 `Init_IWDG()` / `IWDG_Feed()` 已按宏门控 | IWDG 开启时 RTC wake 周期最多 10 秒，功耗和稳定性仍需实测取舍 | 已按量产稳定优先处理；后续若拉长 RTC 周期必须重新评估 IWDG |
 | LP-CONFLICT-003 | `OtherElement` 中普通休眠/RTC 参数代表低功耗策略 | 当前 `rtc_sleep()` 只使用 `u16Sleep_Vlow/u16Sleep_TimeVlow`，未使用 `u16Sleep_VNormal/u16Sleep_TimeNormal/u16Sleep_RTC_WakeUpTime/u16Sleep_TimeRTC` | 上位机参数与真实行为不一致 | 明确这些参数是保留、删除还是重新接入 |
 | LP-CONFLICT-004 | 工厂老化会阻塞 sleep | 已按确认接入：`FactoryAging_IsActive()` 只阻塞 HICCUP idle 进入 RTC STOP，不阻塞低压或外部请求的 `DEEP_MODE/NORMAL_MODE` reset sleep | 若误扩展为阻塞 deep，会影响保护/关机路径 | 保持当前窄范围实现，上板验证老化 running 时不进 HICCUP |
 | LP-CONFLICT-005 | AFE not idle 会阻塞 sleep | 当前主 sleep 判断不检查 AFE not idle，框架层未触发的 `LP_BLOCK_AFE_BUSY` 和未使用 AFE block wrapper 已删除 | AFE 状态与低功耗安全边界不清 | 确认 SH367309 哪些状态必须阻塞 HICCUP，再决定接入或删除 RTC reason |
@@ -263,7 +263,7 @@ IsSleepStartUp()
 | LP-REQ-010 | HICCUP STOP 前是否也让 AFE 进入 sleep | `rtc_sleep_port.c:92-100`, `SleepDeal.c:109-114`, `SH367309_Func.c:65-70` | Reset sleep 调 `AFE_Sleep()`，HICCUP STOP 当前未直接调 | AFE 功耗可能偏高，但休眠周期读 AFE 更简单 | UNKNOWN | HICCUP 期间 AFE 应低功耗测量，还是保持当前可快速读取？ | 结合 SH367309 手册/实测确认 | |
 | LP-REQ-011 | `OtherElement` 普通休眠和 RTC 参数是否仍有效 | `DataDeal.h:116-123`, `rtc_sleep.c:152-159`, `RTC.c:369-393` | 当前只用低压阈值/低压时间；RTC wake 固定默认 10 秒 | 上位机参数与真实行为不一致 | CHANGE_NEEDED | `u16Sleep_VNormal/TimeNormal/RTC_WakeUpTime/TimeRTC` 是保留、接入还是删除？ | 没有真实需求则文档化为保留占位，后续删除未使用逻辑 | |
 | LP-REQ-012 | Release 是否必须关闭 DBGMCU 低功耗调试保持 | `System_Init.c:21-34`, `docs/review/rtc_sleep_low_power_requirement_confirmation_2026-05-27.md` | 当前 Release 未定义 `__EnableLowPowerDebug__` 时会清除 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP | 调试 STOP 时需显式打开宏，不能用于功耗实测 | MUST_KEEP | 是否继续保持 Release 关闭低功耗调试保持？ | 保持当前修复 | 已确认 |
-| LP-REQ-013 | `PROJECT_CFG_WDOG_ENABLE` 是否必须真实门控 IWDG | `Project_Config.h:57-59`, `AppInit.c:32`, `System_Init.c:37-52` | 宏为 0，但 IWDG 仍无条件开启 | 看门狗策略和 RTC 周期策略冲突 | CHANGE_NEEDED | 量产是否必须启用 IWDG？若启用，宏应为 1；若禁用，函数应不启动 | 建议量产启用，并让宏/门禁一致 | |
+| LP-REQ-013 | `PROJECT_CFG_WDOG_ENABLE` 是否必须真实门控 IWDG | `Project_Config.h:57-59`, `AppInit.c:32`, `System_Init.c:37-52` | 当前默认 1；`Init_IWDG()` 和 `IWDG_Feed()` 已按宏门控；RTC wake 安全窗口与宏一致 | IWDG 开启会限制 RTC 周期，影响极低功耗目标 | KEEP_BUT_REFACTOR | 是否接受量产稳定优先、默认启用 IWDG？ | 接受当前处理；后续只在实测功耗不足时重新评估 | 本轮已处理 |
 | LP-REQ-014 | sleep 阻塞原因是否需要保留 bitmask 可观测性 | `rtc_sleep.h`, `rtc_sleep.c`, `SystemDebug.c:537-542` | `g_dbg.lp.block_mask` 由 `LP_GetBlockReason()` 现算，`g_stLowPowerRtcStatus.blockReason` 保留粗粒度映射；老化使用粗粒度 `LOW_POWER_RTC_BLOCK_FACTORY_AGING`，不加入通用 bitmask，避免被误解为阻塞所有 sleep | 排查“为什么不睡”仍有详细 bitmask，老化原因看 `blockReason` | KEEP_BUT_REFACTOR | 后续是否允许进一步删除粗粒度未触发 reason？ | 保留当前 bitmask，未确认的 AFE reason 确认后再删或接入 | 本轮已合并到 `rtc_sleep.c/h` |
 | LP-REQ-015 | `LP_EnterStop/LP_BeforeSleep/LP_AfterWakeup/LP_Task` 这组 wrapper 是否保留 | `rg` 仅见旧文档引用，源码主路径不调用 | 已删除这些 wrapper，只保留真实 `Runtime_RunOnce()->rtc_sleep()` 路径 | 主路径更直接；若外部工具依赖旧 API 需同步改工具 | 已执行净删减 | 是否接受后续继续按“无调用、无协议、无硬件行为影响”净删减？ | 接受当前处理，后续继续白名单小批次 | 本轮已处理 |
 | LP-REQ-016 | RTC SOC 临时缓存和访问 API 是否保留 | `rg` 仅见旧文档引用，源码无 `get_rtc_soc()/set_rtc_soc()` 消费者 | 已删除 `s_u8RtcSoc`、`get_rtc_soc()`、`set_rtc_soc()`；保留 `SOC_ApplyRtcRelaxationCompensation()` 调用 | 不再保存无消费者返回值，SOC 休眠补偿行为不变 | 已执行净删减 | 是否接受后续删除“只保存返回值但没有消费者”的变量？ | 接受，前提是保留真实副作用 | 本轮已处理 |
@@ -287,7 +287,7 @@ IsSleepStartUp()
 ### 第三批：需求确认后的小步行为修复
 
 1. 已让 DBGMCU 低功耗调试保持只在显式宏下打开，Release 默认关闭。
-2. 如果确认量产必须 IWDG，则把 `PROJECT_CFG_WDOG_ENABLE` 默认值、`Init_IWDG()`、`RTC_IsWakeupPeriodSafe()` 三者统一。
+2. 已按量产稳定优先统一 `PROJECT_CFG_WDOG_ENABLE` 默认值、`Init_IWDG()`、`IWDG_Feed()` 和 `RTC_IsWakeupPeriodSafe()` 语义。
 3. 老化期间已按确认阻塞 HICCUP RTC STOP，但不加入 `LP_GetBlockReason()` 通用 bitmask，避免影响 deep/reset sleep 语义。
 4. 如果确认 AFE not idle 不能 STOP，则恢复最小 AFE block，但不能在睡前做重型 MTP 操作。
 5. 如果确认 `OtherElement` sleep 参数需要有效，则只接入真实用到的参数；若不需要，文档化并逐步删除上位机可写误导。
@@ -304,4 +304,4 @@ IsSleepStartUp()
 
 已执行的本机检查：
 
-- `tools/project_check.py --quiet` 当前基线为 87 OK / 1 warning / 41 errors。错误主要来自历史固定路径、编码、缺宏、`PROJECT_CFG_WDOG_ENABLE=0` 等当前仓库基线问题。
+- `tools/project_check.py --quiet` 上一轮基线为 87 OK / 1 warning / 41 errors。IWDG 默认值已修正，剩余错误需以本轮检查结果为准。

@@ -86,7 +86,7 @@
 | 修改范围 | 先统一低功耗需求、当前实现、阻塞原因、RTC 周期策略、IWDG/DBGMCU/AFE/老化边界，再做小批次净删减 |
 | 不能改什么 | 未确认前不改唤醒源电平、不改协议、不改 IAP/Flash busy 阻塞、不改 AFE sleep 行为、不改量产/测试隔离 |
 | 验证方法 | STOP 电流、唤醒源、通信恢复、IWDG 长稳、过放深睡、老化运行、AFE fault、参数写入后策略变化 |
-| 需要确认 | IWDG 宏真实含义、Release DBGMCU 位、工厂老化是否阻塞 STOP、AFE not idle 是否阻塞、HICCUP 前 AFE 是否 sleep、Sleep 参数哪些对外有效 |
+| 需要确认 | 工厂老化是否阻塞 STOP、AFE not idle 是否阻塞、HICCUP 前 AFE 是否 sleep、Sleep 参数哪些对外有效；IWDG 已按量产稳定优先统一，但功耗取舍仍需实测 |
 | 回滚方式 | 每个净删减批次单独提交；保留旧 `rtc_sleep()` 执行器直到上板验证完成，失败可回退单个批次 |
 
 ### 阶段 8 推荐小批次
@@ -97,7 +97,7 @@
 | LP-02 | 删除未使用入口 | 已删除未被主路径调用的 `LP_EnterStop()`、`LP_BeforeSleep()`、`LP_AfterWakeup()`、`LP_SetWakeupPeriod()` wrapper、无消费者 `LP_State_t` 缓存，以及独立 `app_lowpower.c/h` 模块 | `rg` 确认源码无外部调用，低功耗主路径不变；仍需 Keil 编译 |
 | LP-03 | 统一阻塞原因 | 让 `LOW_POWER_RTC_BLOCK_*` 与 `LP_BLOCK_*` 保持一致，删除不会产生的 reason 或补齐真实触发点 | 主机静态检查，通信/Flash/LED/fault 阻塞回归 |
 | LP-04 | DBGMCU Release 门控 | 已删除无条件 `__EnableLowPowerDebug__`，Release 默认清除低功耗调试位，Debug/定位时显式打开 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP | ST-Link 读 `DBGMCU->CR`，STOP 电流对比 |
-| LP-05 | IWDG 策略统一 | 统一 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()` 和 RTC wake 安全窗口含义 | `PROJECT_CFG_WDOG_ENABLE=0/1` 分别构建和长稳测试 |
+| LP-05 | IWDG 策略统一 | 已统一 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()`、`IWDG_Feed()` 和 RTC wake 安全窗口含义 | `PROJECT_CFG_WDOG_ENABLE=0/1` 分别构建和长稳测试 |
 | LP-06 | 老化/AFE 阻塞确认后实现 | 按确认结果处理 FactoryAging 和 AFE not idle 的 STOP 阻塞或文档化不阻塞 | 老化 running、AFE fault/PCHG/MOS 状态下实测 |
 
 ## 阶段 9：LED / 显示阶段

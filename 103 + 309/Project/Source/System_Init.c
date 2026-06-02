@@ -36,6 +36,7 @@ void EnableLowPowerDebug(void)
 // 使用LSI
 void Init_IWDG(void)
 {
+#if PROJECT_CFG_WDOG_ENABLE
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE); // 使能PWR外设时钟，待机模式，RTC，看门狗
 	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// 打开独立看门狗寄存器操作权限
 #ifndef __FUNC_RTC__
@@ -46,9 +47,10 @@ void Init_IWDG(void)
 	IWDG_SetReload(0x0FFF);				   // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
 										   // 800——1.28s，80——128ms
 #endif					  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-						  // 800——1.28s，80——128ms
+							  // 800——1.28s，80——128ms
 	IWDG_ReloadCounter(); // 喂狗
 	IWDG_Enable();		  // 使能IWDG
+#endif
 }
 
 // 关于NVIC_PriorityGroupConfig这个函数
@@ -291,8 +293,10 @@ static void SysTime_Post10msTick(void)
 }
 void IWDG_Feed(void)
 {
+#if PROJECT_CFG_WDOG_ENABLE
 	IWDG_ReloadCounter();
 	SystemDebug_RecordWatchdogFeed((UINT8)DBG_WDG_SRC_FEED);
+#endif
 }
 
 void TIM3_IRQHandler(void)

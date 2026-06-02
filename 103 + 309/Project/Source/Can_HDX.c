@@ -791,7 +791,7 @@ void InitCan(void)
 	feidao_can_power_on();
 }
 
-UINT8 Can_IsBusy(void)
+static UINT8 can_has_pending_work(void)
 {
 	if (s_tx.count != 0U)
 	{
@@ -809,12 +809,30 @@ UINT8 Can_IsBusy(void)
 	{
 		return 1U;
 	}
+	return ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME) ? 1U : 0U;
+}
+
+UINT8 Can_PeekBusy(void)
+{
+	if (can_has_pending_work() != 0U)
+	{
+		return 1U;
+	}
+	return (sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt) ? 1U : 0U;
+}
+
+UINT8 Can_IsBusy(void)
+{
+	if (can_has_pending_work() != 0U)
+	{
+		return 1U;
+	}
 	if(sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt)
 	{
 		sys_time.last_ext_comm_cnt_can = sys_time.can_rcv_cnt;
 		return 1U;	
 	}
-	return ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME) ? 1U : 0U;
+	return 0U;
 }
 
 void Can_PrepareSleep(void)

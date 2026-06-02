@@ -282,7 +282,7 @@ static void SystemDebug_RefreshModuleStates(void)
 	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_LOW_POWER, state);
 
 	state = DBG_MODULE_STATE_READY;
-	if (Can_IsBusy() != 0U)
+	if (Can_PeekBusy() != 0U)
 	{
 		state |= DBG_MODULE_STATE_BUSY;
 	}

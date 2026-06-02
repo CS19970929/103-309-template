@@ -91,13 +91,6 @@ static void low_power_refresh_rtc_status(void)
     g_stLowPowerRtcStatus.elapsedSeconds = s_u32RtcSleepElapsedSeconds;
 }
 
-static void low_power_prepare_reset_sleep(void)
-{
-    RtcSleep_PortRequestSleepLog();
-    g_stLowPowerRtcStatus.readyToSleep = 1U;
-    low_power_refresh_rtc_status();
-}
-
 static void low_power_log_and_commit_sleep(void)
 {
     uint8_t sleep_mode = g_stLowPowerRtcStatus.mode;
@@ -328,7 +321,8 @@ void rtc_sleep(void)
         else if ((g_stLowPowerRtcStatus.mode == NORMAL_MODE) ||
                  (g_stLowPowerRtcStatus.mode == DEEP_MODE))
         {
-            low_power_prepare_reset_sleep();
+            g_stLowPowerRtcStatus.readyToSleep = 1U;
+            low_power_refresh_rtc_status();
         }
         else
         {

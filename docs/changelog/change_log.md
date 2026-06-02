@@ -6,6 +6,19 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 低功耗 review 问题修复
+
+### 本次源码修改
+
+- `Can_HDX.c/.h`：新增无副作用 `Can_PeekBusy()`；`Can_IsBusy()` 保留给低功耗路径，用于确认并消费 CAN 接收活动。
+- `SystemDebug.c` / `Runtime.c`：debug 状态刷新和 CAN heartbeat 改用 `Can_PeekBusy()`，避免在 `rtc_sleep()` 前消耗 CAN RX 变化。
+- `Project_Config.h` / `System_Init.c`：`PROJECT_CFG_WDOG_ENABLE` 默认改回 `1`；`Init_IWDG()` 和 `IWDG_Feed()` 都按该宏门控，和 RTC wake 安全窗口保持一致。
+- `rtc_sleep.c` / `rtc_sleep_port.c/.h`：删除 `RtcSleep_PortRequestSleepLog()` 和 reset sleep prepare helper；reset sleep 日志请求、事件记录和 `SleepDeal_Continue()` 收口到一个提交点，避免重复准备动作。
+
+### 本次文档修改
+
+- 更新 `docs/design/low_power_design.md`、`docs/review/low_power_requirement_alignment_2026-06-02.md`、`docs/review/risk_list.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/test_plan.md`、`docs/reference/module_reference.md`，同步 CAN busy 语义、IWDG 门控和 reset sleep 提交边界。
+
 ## 2026-06-02 低功耗官方调研与第一批源码简化
 
 ### 本次源码修改

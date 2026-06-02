@@ -58,16 +58,10 @@ UINT8 RtcSleep_PortIsEmergencyWakeVoltage(void)
     return (UINT8)(g_stCellInfoReport.u16VCellMin <= 2750U);
 }
 
-void RtcSleep_PortRequestSleepLog(void)
-{
-    LogRecord_RequestSleep();
-}
-
 void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
 {
     extern UINT32 su32_Interval_S_Tcnt;
 
-    Can_PrepareSleep();
     LogRecord_RequestSleep();
     LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
     SleepDeal_Continue(sleep_mode);
