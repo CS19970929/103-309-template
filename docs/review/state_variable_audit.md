@@ -57,7 +57,7 @@ main()
 | 事实 | 源码证据 |
 |---|---|
 | 主入口只有 `AppInit_Boot()` 和 `Runtime_RunOnce()` | `main.c:5-12` |
-| 启动初始化没有显式 `LedBar_Init()` | `AppInit.c:44-49` |
+| 启动运行态初始化已显式 `LedBar_Init()` | `AppInit.c:36-45` |
 | LED 在前台任务中先于低功耗运行 | `Runtime.c:7-26` |
 | `rtc_sleep()` 在 IO/电源段、`App_LogRecord()` 在后台段 | `Runtime.c:28-61` |
 | AFE/SOC 200ms 主链路是 `App_AFEGet()` 内部执行 | `DataDeal.c:1063-1085` |
@@ -66,7 +66,7 @@ main()
 
 | ID | 变量/字段 | 文件 | 当前作用 | 分类 | 初步处理建议 |
 |---|---|---|---|---|---|
-| SV-LED-001 | `s_ledbar.initialized` | `LedBar.c:79`, `LedBar.c:171-177`, `LedBar.c:1034-1067` | LedBar 懒初始化和 TIM4 ISR 早到保护 | KEEP_BUT_REFACTOR | 候选第一批。先把 `LedBar_Init()` 显式放入 `AppInit_Boot()` 合适位置，确认 TIM4 只在初始化后使能，再删除分散 `LedBar_EnsureInit()` 或只保留 ISR 保护 |
+| SV-LED-001 | `s_ledbar.initialized` | `AppInit.c:36-45`, `LedBar.c:171-177`, `LedBar.c:1034-1067`, `LedBar.c:1263-1288` | LedBar 启动一次性初始化完成标志，同时保护外部 API 和 TIM4 ISR 早到访问 | 已处理，保留安全保护 | 已在 SV-CLEAN-02 中把 `LedBar_Init()` 收口到启动运行态初始化，并移除 `APP_LedBar()` 入口懒初始化；`LedBar_EnsureInit()` 仍保留给外部 API、STOP 前 GPIO 和 ISR/debug 防护 |
 | SV-LED-002 | `s_ledbar.scan_timer_initialized` | `LedBar.c:87`, `LedBar.c:356-412` | 避免重复初始化 TIM4，记录扫描定时器硬件配置状态 | MUST_KEEP | 与硬件定时器启停相关，不能直接删；可在 LED 初始化收口后复核是否能和 `scan_timer_enabled` 合并 |
 | SV-LED-003 | `s_ledbar.scan_timer_enabled` | `LedBar.c:88`, `LedBar.c:387-412`, `LedBar.c:1241-1258` | 记录 TIM4 当前是否运行，并作为低功耗阻塞条件 | MUST_KEEP | 当前是硬件运行状态缓存，影响 STOP 前判断，先保留 |
 | SV-LED-004 | `s_ledbar.key_filter_initialized`, `key_active`, `key_on_10ms`, `key_off_10ms` | `LedBar.c:95-98`, `LedBar.c:946-1009` | 按键首次采样预置、防抖、边沿和长按判断 | MUST_KEEP | 真实历史状态，不能因为主循环固定而删除 |
@@ -103,7 +103,7 @@ main()
 | 批次 | 候选 | 目标 | 前置确认 | 验证 |
 |---|---|---|---|---|
 | SV-CLEAN-01 | `ProductionID.c` 的 `su8_StartUpFlag` | 产品信息初始化从主循环一次性 flag 收口到启动阶段 | 已按“先只做低风险”执行 | `rg InitProID/App_ProID_Deal`、Modbus `0xC002` 读取、编译 |
-| SV-CLEAN-02 | `s_ledbar.initialized` 的分散懒初始化 | 明确 LedBar 初始化时序，减少 `LedBar_EnsureInit()` | 确认 `LedBar_Init()` 可放入 `AppInit_Boot()`，且 TIM4 不会早于初始化触发 | LED 启动显示、按键显示、TIM4 扫描、STOP 前 GPIO、编译 |
+| SV-CLEAN-02 | `s_ledbar.initialized` 的分散懒初始化 | 已显式初始化 LedBar，并移除 `APP_LedBar()` 的懒初始化入口 | 已按用户“1、2、3 都做”执行；确认 `LedBar_Init()` 不启动 TIM4，TIM4 只由 `LedBar_StartScanTimer()` 打开 | `rg` 调用点、`git diff --check`、`clang -fsyntax-only`；LED 启动/按键/TIM4/STOP GPIO 仍需实测 |
 | SV-CLEAN-03 | `readyToSleep` 阶段变量 | 让低功耗提交流程变成局部决策，不再用全局 ready 标志绕 LED/日志 | 确认睡前 SOC 保存和 sleep 日志写入时序 | `rtc_sleep()` host 静态检查、LED sleep SOC、日志 `BMS_SLEEP`、HICCUP/DEEP/NORMAL 回归 |
 | SV-CLEAN-04 | `g_stLowPowerRtcStatus` 中纯 debug 镜像字段 | 把 `rtcWake/delay/elapsed` 转为 debug 快照或只读状态，减少控制状态结构 | 确认上位机/调试工具是否直接依赖这些字段 | `SystemDebug`、Modbus `0xD000/0xD300`、ST-Link monitor |
 | SV-STRUCT-01 | `FactoryAging.c` 模块私有运行态变量 | 把同生命周期的老化状态集中成 `s_factory_aging`，便于 Keil Watch，不改变业务行为 | 已按用户“开始”执行 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；老化 CAN/上位机仍需实测 |
@@ -136,7 +136,7 @@ main()
 
 | Requirement ID | Requirement description | Evidence from code | Current behavior | Risk | Codex judgment | Question for user | Suggested decision | User decision placeholder |
 |---|---|---|---|---|---|---|---|---|
-| REQ-SV-001 | LedBar 初始化应由固定启动顺序显式完成，而不是由每个 API 懒初始化兜底 | `AppInit.c:44-49`, `LedBar.c:171-177`, `Runtime.c:18` | `APP_LedBar()` 首次运行时自动 `LedBar_Init()`，多个外部 API 都调用 `LedBar_EnsureInit()` | 删除不当会重现 LED 重复初始化/闪烁，或 TIM4 ISR 访问未初始化状态 | KEEP_BUT_REFACTOR | 是否允许把 `LedBar_Init()` 显式加入启动流程，并逐步删除分散懒初始化？ | 同意先做小批次，保留 ISR 安全保护直到验证完成 | 待确认 |
+| REQ-SV-001 | LedBar 初始化应由固定启动顺序显式完成，而不是由每个 API 懒初始化兜底 | `AppInit.c:36-45`, `LedBar.c:171-177`, `LedBar.c:1034-1067`, `LedBar.c:1299-1368`, `conf/conf.c:273-349` | `LedBar_Init()` 已在启动运行态初始化阶段显式调用；`APP_LedBar()` 不再懒初始化；外部 API、STOP 前 GPIO、TIM4 ISR/debug 仍保留 `LedBar_EnsureInit()`/`initialized` 防护 | 若误删 `initialized` 或在 RTC STOP 唤醒恢复中重复 `LedBar_Init()`，仍可能导致显示窗口、防抖状态或扫描状态被重置 | 已处理，保留安全保护 | 是否允许把 `LedBar_Init()` 显式加入启动流程，并逐步删除分散懒初始化？ | 已执行；本批不改 RTC 睡前/唤醒后恢复链，不把 `LedBar_Init()` 加入 `InitRunAfterStopWakeup()` | 已执行 |
 | REQ-SV-002 | 低功耗提交流程应只保留一个清晰状态源，避免 `readyToSleep` 同时服务提交、LED、日志和 debug | `rtc_sleep.c:107-134`, `rtc_sleep.c:304-353`, `LedBar.c:1314-1318`, `LogRecord.c:135-142` | `readyToSleep` 在 `rtc_sleep()` 内置位后同次消费，又被 LED 和日志清除路径读取 | 删除不当会丢 sleep SOC 保存、BMS_SLEEP 日志或低功耗 heartbeat busy 状态 | REMOVE_CANDIDATE | 是否允许把 `readyToSleep` 改成本地提交决策，并把 LED/日志收尾放入明确的 sleep commit 流程？ | 同意作为第二批高价值净删减，先画调用链再改 | 待确认 |
 | REQ-SV-003 | 纯 debug/status 镜像字段不应混入控制状态结构 | `rtc_sleep.h:50-58`, `rtc_sleep.c:86-92`, `SystemDebug.c:536-541` | `g_stLowPowerRtcStatus` 同时保存控制状态和展示字段 | 继续混用会让维护者误以为展示字段参与低功耗控制 | KEEP_BUT_REFACTOR | 是否允许把只读展示字段迁移到 `SystemDebug` 或明确标记为 debug mirror？ | 同意先文档标记，源码阶段单独处理 | 待确认 |
 | REQ-SV-004 | 产品信息初始化不应依赖主循环内的一次性 `static flag` | `ProductionID.c:32-40`, `Runtime.c:57`, `AppInit.c:34-42` | `InitProID()` 已在启动运行态初始化中调用；`App_ProID_Deal()` 保留为空 hook，维持 `DBG_MODULE_PROID` heartbeat | 仍需上板/上位机读取 `0xC002` 确认默认信息 | 已处理 | 是否允许把 `InitProID()` 放到启动初始化，主循环只保留真实后台处理？ | 已按低风险批次执行 | 已执行 |
@@ -150,7 +150,7 @@ main()
 
 进入源码修改前必须满足：
 
-1. 用户确认 `REQ-SV-001` 到 `REQ-SV-006` 的方向。
+1. 用户确认剩余 `REQ-SV-002` 到 `REQ-SV-006` 的方向。
 2. 第一批只允许处理 `SV-CLEAN-01`、`SV-STRUCT-01` 或 `SV-CLEAN-02` 这种低风险小范围项。
 3. 每批必须同步更新本文、`requirement_confirmation.md`、`risk_list.md`、`refactor_plan.md` 和 `test_plan.md`。
 4. 每批必须至少跑 `git diff --check`；涉及源码时再跑仓库检查脚本和可用编译/静态检查。

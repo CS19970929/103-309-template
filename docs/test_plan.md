@@ -17,7 +17,7 @@
 | FactoryAging 结构体收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 旧 `s_u*FactoryAging*` 符号无残留；老化状态、剩余时间、BKP/Flash 保存和 `0x14F80208` 行为不变 |
 | LogRecord 结构体收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 旧日志私有状态符号无残留；startup/sleep/fault 日志和事件读取不变 |
 | AFE current zero 结构体收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 旧 AFE current zero 私有状态符号无残留；零点、充放电方向和 SOC sample seq 行为不变 |
-| LedBar 初始化收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 上电显示、按键显示、TIM4 扫描、STOP 前 GPIO 行为不变 |
+| LedBar 初始化收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | 启动阶段显式初始化；`APP_LedBar()` 不再懒初始化；上电显示、按键显示、TIM4 扫描、STOP 前 GPIO 和 RTC 唤醒恢复行为不变 |
 | `readyToSleep` 收口 | `docs/review/test_plan.md#13-状态变量净删减专项测试` | HICCUP/NORMAL/DEEP、sleep SOC、`BMS_SLEEP` 日志行为不变 |
 | 基础静态检查 | `git diff --check`、仓库脚本、可用编译 | 结果与基线对比清楚，不把旧失败当成本次失败 |
 

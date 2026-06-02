@@ -146,8 +146,8 @@
 | T-SV-006 | LogRecord 日志功能回归 | 触发 startup/sleep/fault/CBC 日志，读事件记录并执行 reset event record | startup/sleep 日志、fault 边沿去重、CBC 变化记录、读取顺序和清空行为不变 |
 | T-SV-007 | AFE current zero 结构体收口 | `rg "s_i32AfeCurrent|s_u8AfeCurrent" "103 + 309/Project/Source/DataDeal.c"`，并检查 `s_afe_current` 字段 | 旧 AFE current zero 私有状态无残留；`g_u32AfeCurrentSampleSeq` 保留；电流算法入口不变 |
 | T-SV-008 | AFE current zero 功能回归 | 冷启动/热启动零点、真实充放电方向、`0xD000` 电流、SOC sample seq | 零点状态可完成，充/放电方向正确，deadband 不变，SOC 不重复积分或漏积分 |
-| T-SV-009 | LedBar 显式初始化 | 源码阶段执行后观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | 不重复初始化，不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
-| T-SV-010 | LedBar STOP 前 GPIO | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流 | LED 引脚进入低漏电安全态，STOP 前无残留扫描 |
+| T-SV-009 | LedBar 显式初始化 | `rg -n "LedBar_Init\\(|LedBar_EnsureInit\\(|void APP_LedBar" AppInit.c/LedBar.c`，并观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | `AppInit_InitRuntimeState()` 显式初始化；`APP_LedBar()` 不再懒初始化；不重复初始化、不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
+| T-SV-010 | LedBar STOP 前 GPIO / RTC 唤醒恢复 | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流；RTC STOP 唤醒后确认 `InitRunAfterStopWakeup()` 恢复外设但不完整重置 LedBar runtime | LED 引脚进入低漏电安全态，STOP 前无残留扫描；唤醒后显示请求、防抖和扫描状态不被 `LedBar_Init()` 重置 |
 | T-SV-011 | `readyToSleep` 收口 | 源码阶段执行后覆盖 HICCUP、NORMAL、DEEP 三类 sleep | sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
 | T-SV-012 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | 移出纯展示字段后，调试仍能看到 mode/block/elapsed 等必要信息 |
 | T-SV-013 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |

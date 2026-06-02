@@ -105,3 +105,30 @@
 - `clang -fsyntax-only` 检查 `DataDeal.c`：通过。
 - `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
 - 未执行 Keil `FD_Release` 编译、真板冷/热启动零点、真实充放电方向、`0xD000` 电流或 SOC sample seq 实测。
+
+## 2026-06-02 SV-CLEAN-02 LedBar 显式初始化收口
+
+本批次只处理 LedBar 主调度入口的初始化时序，不删除 `s_ledbar.initialized`，不修改 Charlieplexing 路由、显示窗口、防抖、TIM4 扫描、STOP 前 GPIO、RTC 睡前/唤醒后恢复链和低功耗判定。
+
+源码修改：
+
+- `AppInit.c`：在启动运行态初始化阶段显式调用 `LedBar_Init()`。
+- `LedBar.c`：删除 `APP_LedBar()` 入口的 `LedBar_EnsureInit()` 懒初始化调用。
+- `LedBar.c`：保留 `LedBar_EnsureInit()`、`s_ledbar.initialized`、外部 API 和 TIM4 ISR 防护；`LedBar_Init()` 不启动 TIM4，TIM4 仍只由 `LedBar_StartScanTimer()` 打开。
+
+低功耗边界：
+
+- RTC STOP 前仍走 `RtcSleep_PortPrepareRtcStop()` -> `IOstatus_RTCMode()` -> `LedBar_PrepareForStop()`，负责关扫描、灭灯和 GPIO 低漏电准备。
+- RTC STOP 唤醒后仍走 `RtcSleep_PortRestoreAfterStop()` -> `InitRunAfterStopWakeup()`，恢复时钟、IO、ADC、USART/SCI、CAN、TIM3 和 AFE IIC；本批次不在唤醒恢复中调用 `LedBar_Init()`，避免周期唤醒重置显示窗口、防抖和扫描运行态。
+
+文档修改：
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md` 和 `docs/test_plan.md`，将 `SV-CLEAN-02 / REQ-SV-001 / Q-SV-001` 标记为已执行，并补充 RTC 睡前/唤醒后不完整重置 LedBar runtime 的边界。
+
+验证：
+
+- `rg -n "LedBar_Init\\(|LedBar_EnsureInit\\(|void APP_LedBar" "103 + 309/Project/Source/AppInit.c" "103 + 309/Project/Source/LedBar.c"`：确认启动阶段显式初始化，`APP_LedBar()` 不再懒初始化，外部 API/ISR 防护保留。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `AppInit.c` 和 `LedBar.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板 LED 启动/按键/TIM4 扫描、STOP 电流或 RTC 唤醒恢复实测。

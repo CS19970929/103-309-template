@@ -1304,8 +1304,6 @@ void APP_LedBar(void)
     uint8_t mcu_wk_active;
     uint8_t discharge_mos_open;
 
-    LedBar_EnsureInit();
-
     LedBar_ServiceMcuWakeFilter();
     LedBar_ServiceSwitch();
     mcu_wk_active = LedBar_IsMcuWakeActive();

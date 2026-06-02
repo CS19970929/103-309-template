@@ -38,6 +38,7 @@ static void AppInit_InitRuntimeState(void)
 
 	SystemRuntime_MarkBootReady();
 	SystemRuntime_SetProjectVersion(1U);
+	LedBar_Init();
 	InitProID();
 	LogRecord_RequestStartup();
 }
