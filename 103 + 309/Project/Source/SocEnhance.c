@@ -118,7 +118,9 @@ typedef struct
 	UINT8 deferred_ocv_target;
 	UINT8 deferred_ocv_valid;
 	UINT8 mode;
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	UINT8 last_mode;
+#endif
 	UINT8 integrate_mode;
 	UINT8 display_ready;
 	UINT8 full_anchor;
@@ -763,7 +765,9 @@ static void soc_integrate(UINT8 mode)
 		s_soc.rem_mams = 0U;
 		s_soc.integrate_mode = integrate_mode;
 	}
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	s_soc.last_mode = mode;
+#endif
 	if (integrate_mode == SOC_MODE_RELAX)
 	{
 		s_soc.rem_mams = 0U;
@@ -825,7 +829,9 @@ static UINT8 soc_apply_board_self_consumption_seconds(UINT32 seconds)
 		s_soc.rem_mams = 0U;
 		s_soc.integrate_mode = SOC_MODE_DSG;
 	}
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	s_soc.last_mode = SOC_MODE_RELAX;
+#endif
 	acc_mams = ((uint64_t)SOC_BOARD_SELF_CONSUMPTION_MA * (uint64_t)seconds * 1000ULL) +
 		(uint64_t)s_soc.rem_mams;
 	delta_as10_64 = acc_mams / (uint64_t)SOC_MAMS_PER_AS10;

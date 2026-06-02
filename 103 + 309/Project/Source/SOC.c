@@ -140,6 +140,7 @@ void App_SOC(void)
 
 }
 
+#if 0
 UINT8 SOC_TestMode_RunSample(UINT8 enable, UINT16 vcell_max, UINT16 vcell_min,
 							 UINT16 ichg, UINT16 idsg, UINT16 ticks)
 {
@@ -157,3 +158,4 @@ void SOC_TestMode_ReadStatus(UINT16 status_words[], UINT16 word_count)
 	(void)status_words;
 	(void)word_count;
 }
+#endif
