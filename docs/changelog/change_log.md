@@ -6,6 +6,54 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 SystemDebug 模块健康总览增强
+
+### 本次源码修改
+
+- `SystemDebug.h`：新增 `DBG_MODULE_ID`、`DBG_MODULE_STATE_*` 和 `g_dbg.module`，用于按模块观察运行心跳、ready、busy、error 和 stale 状态。
+- `SystemDebug.c`：新增 `SystemDebug_ModuleHeartbeat()`，记录每个模块的 `last_tick/max_gap_ticks/run_cnt`，并维护 `alive_mask/ready_mask/busy_mask/error_mask/stale_mask`。
+- `Runtime.c`：在主循环任务执行后接入模块心跳，覆盖 `systime/aging/led/afe/soc/snapshot/sci/adc/low_power/can/flash/log/proid/watchdog/runtime` 等模块。
+- `SystemDebug.c`：根据已有系统错误、CAN busoff、Flash busy、低功耗 ready、保护 fault 等状态刷新模块 `busy_mask` 和 `error_mask`。
+
+### 安全约束
+
+- 未修改业务流程、协议寄存器、CAN ID、CAN payload、IAP/App 地址和 SOC/AFE 参数。
+- `PROJECT_CFG_DEBUG_MONITOR_ENABLE=0` 时 `SystemDebug_ModuleHeartbeat()` 为空实现。
+- `stale_mask` 仅基于心跳 tick 判断，阈值为 200 个 10ms tick，约 2s。
+
+### 本次验证
+
+- Keil `FD_Release` build：`0 Error(s), 0 Warning(s)`。
+- 生成 `103 + 309/Project/Users/Objects/FD_Release.bin`，大小 61100 bytes。
+
+## 2026-06-02 SystemDebug MCU 资源、耗时和喂狗快照增强
+
+### 本次源码修改
+
+- `SystemDebug.h`：新增 `g_dbg.rcc`、`g_dbg.irq`、`g_dbg.periph`、`g_dbg.reset` 四个子结构体，用于 Keil Watch 展开查看 MCU 时钟、中断、外设寄存器和复位来源。
+- `SystemDebug.h` / `Runtime.c`：新增 `g_dbg.profile`，记录整轮主循环、前台任务、IO/低功耗/CAN 任务、后台任务和 Debug 打印的 `last_us/max_us/call_cnt`。
+- `SystemDebug.h` / `System_Init.c`：新增 `g_dbg.watchdog`，记录 `IWDG_Feed()` 次数、最近喂狗 tick、最近/最大喂狗间隔、IWDG PR/RLR/SR 和 IWDG reset 标志。
+- `SystemDebug.c`：新增 `SystemDebug_SnapshotMcuResources()`，在 `SystemDebug_Snapshot()` 中只读采集 RCC、NVIC/SCB/SysTick、EXTI、USART、CAN、ADC、DMA1、TIM3/TIM4、FLASH、PWR 关键寄存器。
+- `SystemDebug.c`：外设寄存器读取前先检查 RCC 对应时钟使能；未使能时字段填 0，避免把“外设未开”和“状态为 0”混淆。
+- `System_Monitor.c`：修复删除 `ERROR_CAN` 后基础错误 offset 表未同步的问题，并将 `ERROR_REMOVE_*` / `ERROR_STATUS_*` 改为显式映射，避免枚举顺序变化导致错误位错读/错清。
+
+### 安全约束
+
+- 未读 USART `DR`、CAN FIFO 数据寄存器等有副作用的寄存器。
+- 未清除 pending、reset、错误标志；`RCC->CSR` 仅做快照，复位来源仍保留给调试观察。
+- 仅在 `PROJECT_CFG_DEBUG_MONITOR_ENABLE` 下生效，关闭该宏时 `SystemDebug` 为空实现。
+- `ERROR_REMOVE_CAN` / `ERROR_STATUS_CAN` 当前不映射到任何基础错误位，符合去掉 CAN 通信错误位的方向，不会错映射到 EEPROM。
+
+### 本次验证
+
+- Keil `FD_Release` build：`0 Error(s), 0 Warning(s)`。
+- 生成 `103 + 309/Project/Users/Objects/FD_Release.bin`，大小 59768 bytes。
+
+### 兼容性说明
+
+- 未修改 Modbus/CAN 协议、寄存器地址、CAN ID、payload、IAP 地址、AFE 参数和 SOC 算法。
+- `g_dbg` 结构体布局发生扩展，仅用于调试 Watch；不作为对外通信协议。
+
 ## 2026-06-02 LedBar 初始化回归修复
 
 ### 本次源码修改

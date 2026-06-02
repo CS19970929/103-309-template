@@ -1,14 +1,14 @@
-# SystemDebug 调试监控使用指南 v2.0
+# SystemDebug 调试监控使用指南 v2.2
 
 > 功能: `SystemDebug` — Keil Watch 全局状态快照
-> 版本: v2.0 2026-06-01 (子结构体重组 + printf 完善)
+> 版本: v2.2 2026-06-02 (增加模块健康总览)
 > 控制宏: `PROJECT_CFG_DEBUG_MONITOR_ENABLE` (0=Release, 1=Debug)
 
 ## 1. 概述
 
 `g_dbg` 是一个全局结构体，200ms 更新一次，把所有 IO 状态、外设状态、功能状态、运行计数器拍成快照。
 
-**v2.0 改进**: 14 个子结构体替代 108 个平铺字段。Keil Watch 中按需展开目标分组，无需在百级字段中翻找。
+**v2.2 改进**: 21 个子结构体替代平铺字段。Keil Watch 中按需展开目标分组，无需在百级字段中翻找。新增 `module`，用于观察各模块是否运行、是否 ready、是否 busy、是否 error、是否超过 2s 未刷新。
 
 **零开销**: `PROJECT_CFG_DEBUG_MONITOR_ENABLE=0` 时，整个模块编译为空，不占 Flash/RAM。
 
@@ -19,7 +19,7 @@
 3. Keil → Debug → Watch 窗口 → 添加 `g_dbg`
 4. 展开子结构体查看，例如 `g_dbg.gpio` → 展开看所有 IO
 
-## 3. 结构体层级（14 组）
+## 3. 结构体层级（21 组）
 
 ### g_dbg.gpio — GPIO 状态 (16 fields)
 
@@ -61,6 +61,123 @@
 | `feature` | uint32 | 功能开关掩码 |
 | `err_lo` | uint16 | 错误标志前16字节 |
 | `err_hi` | uint16 | 错误标志后16字节 |
+
+### g_dbg.module — 模块健康总览
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `alive_mask` | uint32 | 已经打过心跳的模块 bit |
+| `ready_mask` | uint32 | 当前 ready 的模块 bit |
+| `busy_mask` | uint32 | 当前 busy 的模块 bit |
+| `error_mask` | uint32 | 当前 error 的模块 bit |
+| `stale_mask` | uint32 | 超过 200 个 10ms tick 未刷新的模块 bit |
+| `last_id` | uint8 | 最近一次打心跳的模块 ID |
+| `last_tick` | uint32 | 最近一次模块心跳 tick |
+
+每个模块子项包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `last_tick` | uint32 | 最近一次运行 tick |
+| `max_gap_ticks` | uint32 | 两次运行之间的最大间隔，单位 10ms |
+| `run_cnt` | uint32 | 运行次数，饱和到 `0xFFFFFFFF` |
+
+模块 ID / bit 对照：
+
+| ID | bit | 子项 | 模块 |
+|----|-----|------|------|
+| 0 | `0x00000001` | `runtime` | 主循环 |
+| 1 | `0x00000002` | `systime` | `SysTime_LatchTaskFlags()` |
+| 2 | `0x00000004` | `aging` | 老化任务 |
+| 3 | `0x00000008` | `led` | 灯板显示 |
+| 4 | `0x00000010` | `afe` | AFE 采样/处理 |
+| 5 | `0x00000020` | `snapshot` | `SystemDebug_Snapshot()` |
+| 6 | `0x00000040` | `sci` | 上位机串口协议 |
+| 7 | `0x00000080` | `adc` | MCU ADC 计算 |
+| 8 | `0x00000100` | `low_power` | 低功耗任务 |
+| 9 | `0x00000200` | `can` | CAN 任务 |
+| 10 | `0x00000400` | `flash` | Flash 更新/存储 |
+| 11 | `0x00000800` | `log` | 日志记录 |
+| 12 | `0x00001000` | `proid` | 生产 ID |
+| 13 | `0x00002000` | `watchdog` | IWDG 喂狗 |
+| 14 | `0x00004000` | `debug_print` | Debug 串口打印 |
+| 15 | `0x00008000` | `protect` | 保护/故障状态 |
+| 16 | `0x00010000` | `soc` | SOC 计算 |
+
+使用方法：
+
+- 先看 `error_mask`：非 0 时按 bit 对照定位异常模块。
+- 再看 `busy_mask`：判断是否卡在 CAN、Flash、老化、低功耗准备等状态。
+- 再看 `stale_mask`：非 0 时说明对应模块超过约 2s 没有刷新。
+- 展开对应子项，看 `last_tick/max_gap_ticks/run_cnt` 判断是偶发延迟还是任务彻底停跑。
+
+### g_dbg.rcc — MCU 时钟资源 (11 fields)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `cr` | uint32 | RCC CR 原始寄存器 |
+| `cfgr` | uint32 | RCC CFGR 原始寄存器 |
+| `ahbenr` | uint32 | AHB 外设时钟使能 |
+| `apb1enr` | uint32 | APB1 外设时钟使能 |
+| `apb2enr` | uint32 | APB2 外设时钟使能 |
+| `bdcr` | uint32 | 备份域/RTC 时钟配置 |
+| `csr` | uint32 | LSI 与复位标志 |
+| `sysclk_src` | uint8 | 0=HSI 1=HSE 2=PLL |
+| `hse_ready` | uint8 | HSE ready |
+| `pll_ready` | uint8 | PLL ready |
+| `lsi_ready` | uint8 | LSI ready |
+
+用途：确认 STOP/RTC 唤醒后 CAN、ADC、USART、GPIO、AFIO、PWR、BKP、RTC 等资源时钟是否恢复。
+
+### g_dbg.irq — MCU 中断资源 (9 fields)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `iser0` | uint32 | NVIC IRQ0-31 使能位 |
+| `ispr0` | uint32 | NVIC IRQ0-31 pending 位 |
+| `iabr0` | uint32 | NVIC IRQ0-31 active 位 |
+| `scb_icsr` | uint32 | 当前/挂起异常状态 |
+| `scb_shcsr` | uint32 | 系统异常 active/pending/enable |
+| `systick_ctrl` | uint32 | SysTick CTRL |
+| `systick_val` | uint32 | SysTick 当前计数 |
+| `exti_imr` | uint32 | EXTI 中断屏蔽状态 |
+| `exti_pr` | uint32 | EXTI pending 状态 |
+
+用途：确认 RTC/EXTI/CAN/USART/ADC/TIM 中断是否打开，是否存在 pending 未清或 active 卡住。
+
+### g_dbg.periph — MCU 外设寄存器快照 (13 fields)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `usart1_sr` | uint16 | USART1 SR |
+| `usart2_sr` | uint16 | USART2 SR |
+| `usart3_sr` | uint16 | USART3 SR |
+| `can_msr` | uint16 | CAN MSR |
+| `can_tsr` | uint32 | CAN TSR |
+| `can_rf0r` | uint32 | CAN FIFO0 状态 |
+| `can_esr` | uint32 | CAN 错误状态 |
+| `adc1_sr` | uint16 | ADC1 SR |
+| `dma1_isr` | uint32 | DMA1 ISR |
+| `tim3_sr` | uint16 | TIM3 SR |
+| `tim4_sr` | uint16 | TIM4 SR |
+| `flash_sr` | uint16 | Flash SR |
+| `pwr_csr` | uint16 | PWR CSR |
+
+注意：这些字段只读快照；不会读 USART DR、CAN FIFO 数据寄存器，也不会清除 pending/reset/错误标志。对应外设时钟未使能时字段填 0。
+
+### g_dbg.reset — MCU 复位来源 (7 fields)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `rcc_csr` | uint32 | RCC CSR 原始寄存器 |
+| `pin` | uint8 | PIN reset |
+| `por` | uint8 | POR/PDR reset |
+| `software` | uint8 | software reset |
+| `iwdg` | uint8 | independent watchdog reset |
+| `wwdg` | uint8 | window watchdog reset |
+| `low_power` | uint8 | low-power reset |
+
+用途：确认异常重启是看门狗、掉电、外部 NRST、软件复位还是低功耗复位导致。
 
 ### g_dbg.can — CAN 状态 (13 fields)
 
@@ -197,6 +314,36 @@
 | `ctr.sci1_irq_cnt` | uint32 | 串口1中断 |
 | `ctr.pa0/key_irq_cnt` | uint16 | 按键中断 |
 | `ctr.tick_10ms` | uint32 | 10ms tick |
+
+### g_dbg.profile — 主循环分段耗时 (5 groups)
+
+每个分组包含 `last_us`、`max_us`、`call_cnt`：
+
+| 分组 | 说明 |
+|------|------|
+| `loop` | 整轮 `Runtime_RunOnce()` 耗时 |
+| `front` | `SysTime_LatchTaskFlags`、老化、LED、AFE、SystemDebug 快照 |
+| `io_power` | SCI、ADC 计算、低功耗任务、CAN |
+| `background` | Flash、日志、生产 ID、喂狗 |
+| `debug_print` | Debug 构建下的周期串口打印 |
+
+用途：当 `timing.loop_max_us` 偏大时，展开 `g_dbg.profile` 判断是 AFE、通信/低功耗、Flash/日志还是 Debug 打印拖慢主循环。
+
+### g_dbg.watchdog — IWDG 喂狗监控 (9 fields)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `feed_cnt` | uint32 | `IWDG_Feed()` 调用次数 |
+| `last_feed_tick` | uint32 | 最近喂狗 10ms tick |
+| `last_gap_ticks` | uint32 | 最近两次喂狗间隔 |
+| `max_gap_ticks` | uint32 | 历史最大喂狗间隔 |
+| `pr` | uint16 | IWDG PR |
+| `rlr` | uint16 | IWDG RLR |
+| `sr` | uint16 | IWDG SR |
+| `last_source` | uint8 | 2=普通喂狗 |
+| `iwdg_reset` | uint8 | RCC CSR 中 IWDG reset 标志 |
+
+用途：排查主循环或长阻塞流程是否导致喂狗间隔过大；`max_gap_ticks` 单位为 10ms。
 
 ---
 

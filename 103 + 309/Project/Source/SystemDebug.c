@@ -99,17 +99,391 @@ static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 /* ===== snapshot ===== */
 
 struct SYSTEM_DEBUG g_dbg;
-static uint32_t s_dbg_loop_max_cycles;
+
+static uint32_t SystemDebug_ModuleMask(uint8_t module)
+{
+	if (module >= (uint8_t)DBG_MODULE_COUNT)
+	{
+		return 0U;
+	}
+	return (uint32_t)1U << module;
+}
+
+static struct DBG_MODULE_ITEM *SystemDebug_ModuleItem(uint8_t module)
+{
+	switch (module)
+	{
+	case DBG_MODULE_RUNTIME:
+		return &g_dbg.module.runtime;
+	case DBG_MODULE_SYSTIME:
+		return &g_dbg.module.systime;
+	case DBG_MODULE_AGING:
+		return &g_dbg.module.aging;
+	case DBG_MODULE_LED:
+		return &g_dbg.module.led;
+	case DBG_MODULE_AFE:
+		return &g_dbg.module.afe;
+	case DBG_MODULE_SNAPSHOT:
+		return &g_dbg.module.snapshot;
+	case DBG_MODULE_SCI:
+		return &g_dbg.module.sci;
+	case DBG_MODULE_ADC:
+		return &g_dbg.module.adc;
+	case DBG_MODULE_LOW_POWER:
+		return &g_dbg.module.low_power;
+	case DBG_MODULE_CAN:
+		return &g_dbg.module.can;
+	case DBG_MODULE_FLASH:
+		return &g_dbg.module.flash;
+	case DBG_MODULE_LOG:
+		return &g_dbg.module.log;
+	case DBG_MODULE_PROID:
+		return &g_dbg.module.proid;
+	case DBG_MODULE_WATCHDOG:
+		return &g_dbg.module.watchdog;
+	case DBG_MODULE_DEBUG_PRINT:
+		return &g_dbg.module.debug_print;
+	case DBG_MODULE_PROTECT:
+		return &g_dbg.module.protect;
+	case DBG_MODULE_SOC:
+		return &g_dbg.module.soc;
+	default:
+		return 0;
+	}
+}
+
+static void SystemDebug_ModuleApplyState(uint8_t module, uint8_t state_flags)
+{
+	uint32_t mask = SystemDebug_ModuleMask(module);
+
+	if (mask == 0U)
+	{
+		return;
+	}
+
+	if ((state_flags & DBG_MODULE_STATE_READY) != 0U)
+	{
+		g_dbg.module.ready_mask |= mask;
+	}
+	else
+	{
+		g_dbg.module.ready_mask &= ~mask;
+	}
+
+	if ((state_flags & DBG_MODULE_STATE_BUSY) != 0U)
+	{
+		g_dbg.module.busy_mask |= mask;
+	}
+	else
+	{
+		g_dbg.module.busy_mask &= ~mask;
+	}
+
+	if ((state_flags & DBG_MODULE_STATE_ERROR) != 0U)
+	{
+		g_dbg.module.error_mask |= mask;
+	}
+	else
+	{
+		g_dbg.module.error_mask &= ~mask;
+	}
+}
+
+void SystemDebug_ModuleHeartbeat(uint8_t module, uint8_t state_flags)
+{
+	struct DBG_MODULE_ITEM *item = SystemDebug_ModuleItem(module);
+	uint32_t mask = SystemDebug_ModuleMask(module);
+	uint32_t now_tick;
+	uint32_t gap_ticks;
+
+	if ((item == 0) || (mask == 0U))
+	{
+		return;
+	}
+
+	now_tick = SysTime_Get10msTickCount();
+	if (item->run_cnt != 0U)
+	{
+		gap_ticks = (uint32_t)(now_tick - item->last_tick);
+		if (gap_ticks > item->max_gap_ticks)
+		{
+			item->max_gap_ticks = gap_ticks;
+		}
+	}
+
+	if (item->run_cnt < (uint32_t)0xFFFFFFFFU)
+	{
+		item->run_cnt++;
+	}
+	item->last_tick = now_tick;
+
+	g_dbg.module.alive_mask |= mask;
+	g_dbg.module.last_id = module;
+	g_dbg.module.last_tick = now_tick;
+	SystemDebug_ModuleApplyState(module, state_flags);
+}
+
+static uint32_t SystemDebug_ModuleBuildStaleMask(uint32_t now_tick)
+{
+	uint8_t module;
+	uint32_t stale_mask = 0U;
+	struct DBG_MODULE_ITEM *item;
+
+	for (module = 0U; module < (uint8_t)DBG_MODULE_COUNT; module++)
+	{
+		item = SystemDebug_ModuleItem(module);
+		if ((item != 0) && (item->run_cnt != 0U) &&
+			((uint32_t)(now_tick - item->last_tick) > (uint32_t)200U))
+		{
+			stale_mask |= SystemDebug_ModuleMask(module);
+		}
+	}
+
+	return stale_mask;
+}
+
+static void SystemDebug_RefreshModuleStates(void)
+{
+	uint8_t state;
+
+	state = DBG_MODULE_STATE_READY;
+	if (FactoryAging_GetState() == (uint8_t)DBG_AGING_RUNNING)
+	{
+		state |= DBG_MODULE_STATE_BUSY;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_AGING, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if ((g_dbg.led.blank == 0U) || (g_dbg.led.key_active != 0U))
+	{
+		state |= DBG_MODULE_STATE_BUSY;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_LED, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if ((System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) != 0U))
+	{
+		state |= DBG_MODULE_STATE_ERROR;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_AFE, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if (System_ERROR_UserCallback(ERROR_STATUS_ADC) != 0U)
+	{
+		state |= DBG_MODULE_STATE_ERROR;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_ADC, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if (g_dbg.lp.ready != 0U)
+	{
+		state |= DBG_MODULE_STATE_BUSY;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_LOW_POWER, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if (Can_IsBusy() != 0U)
+	{
+		state |= DBG_MODULE_STATE_BUSY;
+	}
+	if (g_dbg.can.bus_off != 0U)
+	{
+		state |= DBG_MODULE_STATE_ERROR;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_CAN, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if ((StorageFlash_IsBusy() != 0U) ||
+		(g_dbg.flash.update_flag != 0U) ||
+		(g_dbg.flash.e2prom_flag != 0U))
+	{
+		state |= DBG_MODULE_STATE_BUSY;
+	}
+	if ((System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) != 0U) ||
+		(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE) != 0U))
+	{
+		state |= DBG_MODULE_STATE_ERROR;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_FLASH, state);
+
+	state = DBG_MODULE_STATE_READY;
+	if ((g_dbg.fault.first != 0U) || (g_dbg.fault.third != 0U) ||
+		(g_dbg.fault.mdl1 != 0U) || (g_dbg.fault.mdl3 != 0U))
+	{
+		state |= DBG_MODULE_STATE_ERROR;
+	}
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_PROTECT, state);
+
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_SOC, DBG_MODULE_STATE_READY);
+	SystemDebug_ModuleApplyState((uint8_t)DBG_MODULE_SNAPSHOT, DBG_MODULE_STATE_READY);
+	g_dbg.module.stale_mask = SystemDebug_ModuleBuildStaleMask(SysTime_Get10msTickCount());
+}
+
+static struct DBG_PROFILE_ITEM *SystemDebug_ProfileItem(uint8_t slot)
+{
+	switch (slot)
+	{
+	case DBG_PROFILE_LOOP:
+		return &g_dbg.profile.loop;
+	case DBG_PROFILE_FRONT:
+		return &g_dbg.profile.front;
+	case DBG_PROFILE_IO_POWER:
+		return &g_dbg.profile.io_power;
+	case DBG_PROFILE_BACKGROUND:
+		return &g_dbg.profile.background;
+	case DBG_PROFILE_DEBUG_PRINT:
+		return &g_dbg.profile.debug_print;
+	default:
+		return 0;
+	}
+}
+
+static uint16_t SystemDebug_ReadUartSr(USART_TypeDef *uart, uint32_t clk_mask, uint8_t apb2)
+{
+	uint8_t enabled;
+
+	if (apb2 != 0U)
+	{
+		enabled = ((RCC->APB2ENR & clk_mask) != 0U) ? 1U : 0U;
+	}
+	else
+	{
+		enabled = ((RCC->APB1ENR & clk_mask) != 0U) ? 1U : 0U;
+	}
+	return (enabled != 0U) ? uart->SR : 0U;
+}
+
+static void SystemDebug_SnapshotMcuResources(void)
+{
+	uint32_t cfgr;
+	uint32_t csr;
+
+	g_dbg.rcc.cr     = RCC->CR;
+	g_dbg.rcc.cfgr   = RCC->CFGR;
+	g_dbg.rcc.ahbenr = RCC->AHBENR;
+	g_dbg.rcc.apb1enr = RCC->APB1ENR;
+	g_dbg.rcc.apb2enr = RCC->APB2ENR;
+	g_dbg.rcc.bdcr   = RCC->BDCR;
+	g_dbg.rcc.csr    = RCC->CSR;
+
+	cfgr = g_dbg.rcc.cfgr;
+	g_dbg.rcc.sysclk_src = (uint8_t)((cfgr & RCC_CFGR_SWS) >> 2);
+	g_dbg.rcc.hse_ready = ((g_dbg.rcc.cr & RCC_CR_HSERDY) != 0U) ? 1U : 0U;
+	g_dbg.rcc.pll_ready = ((g_dbg.rcc.cr & RCC_CR_PLLRDY) != 0U) ? 1U : 0U;
+	g_dbg.rcc.lsi_ready = ((g_dbg.rcc.csr & RCC_CSR_LSIRDY) != 0U) ? 1U : 0U;
+
+	g_dbg.irq.iser0 = NVIC->ISER[0];
+	g_dbg.irq.ispr0 = NVIC->ISPR[0];
+	g_dbg.irq.iabr0 = NVIC->IABR[0];
+	g_dbg.irq.scb_icsr = SCB->ICSR;
+	g_dbg.irq.scb_shcsr = SCB->SHCSR;
+	g_dbg.irq.systick_ctrl = SysTick->CTRL;
+	g_dbg.irq.systick_val = SysTick->VAL;
+	g_dbg.irq.exti_imr = EXTI->IMR;
+	g_dbg.irq.exti_pr = EXTI->PR;
+
+	g_dbg.periph.usart1_sr = SystemDebug_ReadUartSr(USART1, RCC_APB2ENR_USART1EN, 1U);
+	g_dbg.periph.usart2_sr = SystemDebug_ReadUartSr(USART2, RCC_APB1ENR_USART2EN, 0U);
+	g_dbg.periph.usart3_sr = SystemDebug_ReadUartSr(USART3, RCC_APB1ENR_USART3EN, 0U);
+	if ((RCC->APB1ENR & RCC_APB1ENR_CAN1EN) != 0U)
+	{
+		g_dbg.periph.can_msr = (uint16_t)(CAN1->MSR & 0xFFFFU);
+		g_dbg.periph.can_tsr = CAN1->TSR;
+		g_dbg.periph.can_rf0r = CAN1->RF0R;
+		g_dbg.periph.can_esr = CAN1->ESR;
+	}
+	else
+	{
+		g_dbg.periph.can_msr = 0U;
+		g_dbg.periph.can_tsr = 0U;
+		g_dbg.periph.can_rf0r = 0U;
+		g_dbg.periph.can_esr = 0U;
+	}
+	g_dbg.periph.adc1_sr = ((RCC->APB2ENR & RCC_APB2ENR_ADC1EN) != 0U) ? ADC1->SR : 0U;
+	g_dbg.periph.dma1_isr = ((RCC->AHBENR & RCC_AHBENR_DMA1EN) != 0U) ?
+		DMA1->ISR : 0U;
+	g_dbg.periph.tim3_sr = ((RCC->APB1ENR & RCC_APB1ENR_TIM3EN) != 0U) ? TIM3->SR : 0U;
+	g_dbg.periph.tim4_sr = ((RCC->APB1ENR & RCC_APB1ENR_TIM4EN) != 0U) ? TIM4->SR : 0U;
+	g_dbg.periph.flash_sr = FLASH->SR;
+	g_dbg.periph.pwr_csr = ((RCC->APB1ENR & RCC_APB1ENR_PWREN) != 0U) ? PWR->CSR : 0U;
+	g_dbg.watchdog.pr = (uint16_t)(IWDG->PR & 0xFFFFU);
+	g_dbg.watchdog.rlr = (uint16_t)(IWDG->RLR & 0xFFFFU);
+	g_dbg.watchdog.sr = (uint16_t)(IWDG->SR & 0xFFFFU);
+
+	csr = g_dbg.rcc.csr;
+	g_dbg.reset.rcc_csr = csr;
+	g_dbg.reset.pin = ((csr & RCC_CSR_PINRSTF) != 0U) ? 1U : 0U;
+	g_dbg.reset.por = ((csr & RCC_CSR_PORRSTF) != 0U) ? 1U : 0U;
+	g_dbg.reset.software = ((csr & RCC_CSR_SFTRSTF) != 0U) ? 1U : 0U;
+	g_dbg.reset.iwdg = ((csr & RCC_CSR_IWDGRSTF) != 0U) ? 1U : 0U;
+	g_dbg.reset.wwdg = ((csr & RCC_CSR_WWDGRSTF) != 0U) ? 1U : 0U;
+	g_dbg.reset.low_power = ((csr & RCC_CSR_LPWRRSTF) != 0U) ? 1U : 0U;
+	g_dbg.watchdog.iwdg_reset = g_dbg.reset.iwdg;
+}
+
+uint32_t SystemDebug_GetCycleCount(void)
+{
+	SystemDebug_InitCycCnt();
+	return DWT_CYCCNT;
+}
+
+void SystemDebug_ProfileRecord(uint8_t slot, uint32_t start_cyccnt)
+{
+	struct DBG_PROFILE_ITEM *item = SystemDebug_ProfileItem(slot);
+	uint32_t elapsed;
+	uint32_t elapsed_us;
+
+	if (item == 0)
+	{
+		return;
+	}
+
+	elapsed = (uint32_t)(DWT_CYCCNT - start_cyccnt);
+	elapsed_us = SystemDebug_CycCntToUs(elapsed);
+	item->last_us = elapsed_us;
+	if (elapsed_us > item->max_us)
+	{
+		item->max_us = elapsed_us;
+	}
+	if (item->call_cnt < (uint32_t)0xFFFFFFFFU)
+	{
+		item->call_cnt++;
+	}
+}
+
+void SystemDebug_RecordWatchdogFeed(uint8_t source)
+{
+	uint32_t now_tick = SysTime_Get10msTickCount();
+	uint32_t gap_ticks = 0U;
+
+	if (g_dbg.watchdog.feed_cnt != 0U)
+	{
+		gap_ticks = (uint32_t)(now_tick - g_dbg.watchdog.last_feed_tick);
+	}
+	if (g_dbg.watchdog.feed_cnt < (uint32_t)0xFFFFFFFFU)
+	{
+		g_dbg.watchdog.feed_cnt++;
+	}
+	g_dbg.watchdog.last_feed_tick = now_tick;
+	g_dbg.watchdog.last_gap_ticks = gap_ticks;
+	if (gap_ticks > g_dbg.watchdog.max_gap_ticks)
+	{
+		g_dbg.watchdog.max_gap_ticks = gap_ticks;
+	}
+	g_dbg.watchdog.last_source = source;
+	g_dbg.watchdog.pr = (uint16_t)(IWDG->PR & 0xFFFFU);
+	g_dbg.watchdog.rlr = (uint16_t)(IWDG->RLR & 0xFFFFU);
+	g_dbg.watchdog.sr = (uint16_t)(IWDG->SR & 0xFFFFU);
+	g_dbg.watchdog.iwdg_reset = ((RCC->CSR & RCC_CSR_IWDGRSTF) != 0U) ? 1U : 0U;
+	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_WATCHDOG, DBG_MODULE_STATE_READY);
+}
 
 void SystemDebug_LoopEnter(uint32_t start_cyccnt)
 {
-	uint32_t now = DWT_CYCCNT;
-	uint32_t elapsed = (now >= start_cyccnt) ? (now - start_cyccnt) : 0U;
-	g_dbg.timing.loop_last_us = SystemDebug_CycCntToUs(elapsed);
-	if (elapsed > s_dbg_loop_max_cycles) {
-		s_dbg_loop_max_cycles = elapsed;
-	}
-	g_dbg.timing.loop_max_us = SystemDebug_CycCntToUs(s_dbg_loop_max_cycles);
+	SystemDebug_ProfileRecord((uint8_t)DBG_PROFILE_LOOP, start_cyccnt);
+	g_dbg.timing.loop_last_us = g_dbg.profile.loop.last_us;
+	g_dbg.timing.loop_max_us = g_dbg.profile.loop.max_us;
 }
 
 void SystemDebug_Snapshot(void)
@@ -149,6 +523,9 @@ void SystemDebug_Snapshot(void)
 		g_dbg.sys.err_lo = (uint16_t)(((uint16_t)p[1] << 8) | p[0]);
 		g_dbg.sys.err_hi = (uint16_t)(((uint16_t)p[3] << 8) | p[2]);
 	}
+
+	/* ===== MCU resources ===== */
+	SystemDebug_SnapshotMcuResources();
 
 	/* ===== CAN ===== */
 	Can_GetDebugSnapshot(&g_dbg.can.bus_active, &g_dbg.can.power_on,
@@ -242,6 +619,9 @@ void SystemDebug_Snapshot(void)
 	g_dbg.ctr.pa0_irq_cnt   = sys_time.cnt_PA0_irq;
 	g_dbg.ctr.key_irq_cnt   = sys_time.cnt_bms1_keyirq;
 	g_dbg.ctr.tick_10ms     = SysTime_Get10msTickCount();
+
+	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_SNAPSHOT, DBG_MODULE_STATE_READY);
+	SystemDebug_RefreshModuleStates();
 }
 
 /* ===== printf helpers ===== */

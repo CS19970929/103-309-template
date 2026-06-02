@@ -11,15 +11,88 @@ static volatile union System_Status s_system_status;
 
 static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 	SYSTEM_ERROR_FIELD_INVALID,
-	0U,  1U,  2U,  3U,
-	4U,  5U,  6U,  7U,
-	8U,  9U,  10U, 11U,
-	20U, 12U, 13U, 14U,
-	15U, 16U, 17U, 21U,
-	SYSTEM_ERROR_FIELD_INVALID,
-	SYSTEM_ERROR_FIELD_INVALID,
-	22U
+	0U,  1U,  3U,  4U,
+	5U,  6U,  7U,  8U,
+	9U,  10U, 11U, 20U,
+	12U, 13U, 14U, 15U,
+	16U, 17U, 21U, 18U,
+	19U, 22U
 };
+
+static enum SYSTEM_ERROR_COMMAND System_ErrorControlBase(enum SYSTEM_ERROR_COMMAND errorCode)
+{
+	switch (errorCode)
+	{
+	case ERROR_REMOVE_AFE1:
+	case ERROR_STATUS_AFE1:
+		return ERROR_AFE1;
+	case ERROR_REMOVE_AFE2:
+	case ERROR_STATUS_AFE2:
+		return ERROR_AFE2;
+	case ERROR_REMOVE_EEPROM_COM:
+	case ERROR_STATUS_EEPROM_COM:
+		return ERROR_EEPROM_COM;
+	case ERROR_REMOVE_SPI:
+	case ERROR_STATUS_SPI:
+		return ERROR_SPI;
+	case ERROR_REMOVE_UPPER:
+	case ERROR_STATUS_UPPER:
+		return ERROR_UPPER;
+	case ERROR_REMOVE_CLIENT:
+	case ERROR_STATUS_CLIENT:
+		return ERROR_CLIENT;
+	case ERROR_REMOVE_SCREEN:
+	case ERROR_STATUS_SCREEN:
+		return ERROR_SCREEN;
+	case ERROR_REMOVE_WIFI:
+	case ERROR_STATUS_WIFI:
+		return ERROR_WIFI;
+	case ERROR_REMOVE_BLUETOOTH:
+	case ERROR_STATUS_BLUETOOTH:
+		return ERROR_BLUETOOTH;
+	case ERROR_REMOVE_APP:
+	case ERROR_STATUS_APP:
+		return ERROR_APP;
+	case ERROR_REMOVE_CBC_CHG:
+	case ERROR_STATUS_CBC_CHG:
+		return ERROR_CBC_CHG;
+	case ERROR_REMOVE_CBC_DSG:
+	case ERROR_STATUS_CBC_DSG:
+		return ERROR_CBC_DSG;
+	case ERROR_REMOVE_EEPROM_STORE:
+	case ERROR_STATUS_EEPROM_STORE:
+		return ERROR_EEPROM_STORE;
+	case ERROR_REMOVE_HSE:
+	case ERROR_STATUS_HSE:
+		return ERROR_HSE;
+	case ERROR_REMOVE_LSE:
+	case ERROR_STATUS_LSE:
+		return ERROR_LSE;
+	case ERROR_REMOVE_VDEATLE_OVER:
+	case ERROR_STATUS_VDEATLE_OVER:
+		return ERROR_VDEATLE_OVER;
+	case ERROR_REMOVE_BALANCED:
+	case ERROR_STATUS_BALANCED:
+		return ERROR_BALANCED;
+	case ERROR_REMOVE_ADC:
+	case ERROR_STATUS_ADC:
+		return ERROR_ADC;
+	case ERROR_REMOVE_SOC_CAIL:
+	case ERROR_STATUS_SOC_CAIL:
+		return ERROR_SOC_CAIL;
+	case ERROR_REMOVE_RESERVED_21:
+	case ERROR_STATUS_RESERVED_21:
+		return ERROR_RESERVED_21;
+	case ERROR_REMOVE_RESERVED_22:
+	case ERROR_STATUS_RESERVED_22:
+		return ERROR_RESERVED_22;
+	case ERROR_REMOVE_TEMP_BREAK:
+	case ERROR_STATUS_TEMP_BREAK:
+		return ERROR_TEMP_BREAK;
+	default:
+		return (enum SYSTEM_ERROR_COMMAND)0;
+	}
+}
 
 static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
 {
@@ -150,8 +223,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 
 	if ((errorCode >= ERROR_REMOVE_AFE1) && (errorCode <= ERROR_REMOVE_TEMP_BREAK))
 	{
-		baseError = (enum SYSTEM_ERROR_COMMAND)((UINT16)ERROR_AFE1 +
-												((UINT16)errorCode - (UINT16)ERROR_REMOVE_AFE1));
+		baseError = System_ErrorControlBase(errorCode);
 		flag = System_ErrorField(baseError);
 		if (flag != 0)
 		{
@@ -162,8 +234,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 
 	if ((errorCode >= ERROR_STATUS_AFE1) && (errorCode <= ERROR_STATUS_TEMP_BREAK))
 	{
-		baseError = (enum SYSTEM_ERROR_COMMAND)((UINT16)ERROR_AFE1 +
-												((UINT16)errorCode - (UINT16)ERROR_STATUS_AFE1));
+		baseError = System_ErrorControlBase(errorCode);
 		flag = System_ErrorField(baseError);
 		if (flag != 0)
 		{

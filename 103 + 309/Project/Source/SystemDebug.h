@@ -2,10 +2,48 @@
 #define SYSTEM_DEBUG_H
 
 #include "Project_Config.h"
+#include <stdint.h>
+
+enum DBG_PROFILE_SLOT {
+	DBG_PROFILE_LOOP = 0,
+	DBG_PROFILE_FRONT,
+	DBG_PROFILE_IO_POWER,
+	DBG_PROFILE_BACKGROUND,
+	DBG_PROFILE_DEBUG_PRINT,
+	DBG_PROFILE_COUNT
+};
+
+enum DBG_WDG_SOURCE {
+	DBG_WDG_SRC_INIT = 1,
+	DBG_WDG_SRC_FEED = 2
+};
+
+enum DBG_MODULE_ID {
+	DBG_MODULE_RUNTIME = 0,
+	DBG_MODULE_SYSTIME,
+	DBG_MODULE_AGING,
+	DBG_MODULE_LED,
+	DBG_MODULE_AFE,
+	DBG_MODULE_SNAPSHOT,
+	DBG_MODULE_SCI,
+	DBG_MODULE_ADC,
+	DBG_MODULE_LOW_POWER,
+	DBG_MODULE_CAN,
+	DBG_MODULE_FLASH,
+	DBG_MODULE_LOG,
+	DBG_MODULE_PROID,
+	DBG_MODULE_WATCHDOG,
+	DBG_MODULE_DEBUG_PRINT,
+	DBG_MODULE_PROTECT,
+	DBG_MODULE_SOC,
+	DBG_MODULE_COUNT
+};
+
+#define DBG_MODULE_STATE_READY ((uint8_t)0x01U)
+#define DBG_MODULE_STATE_BUSY  ((uint8_t)0x02U)
+#define DBG_MODULE_STATE_ERROR ((uint8_t)0x04U)
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-
-#include <stdint.h>
 
 /* ---- debug enums for Keil Watch readable state names ---- */
 
@@ -80,6 +118,91 @@ struct DBG_SYS {
 	uint32_t feature;        /* SystemFeature_GetMask() */
 	uint16_t err_lo;         /* System_ErrFlag 低16字节 */
 	uint16_t err_hi;         /* System_ErrFlag 高16字节 */
+};
+
+struct DBG_MODULE_ITEM {
+	uint32_t last_tick;
+	uint32_t max_gap_ticks;
+	uint32_t run_cnt;
+};
+
+struct DBG_MODULE {
+	uint32_t alive_mask;
+	uint32_t ready_mask;
+	uint32_t busy_mask;
+	uint32_t error_mask;
+	uint32_t stale_mask;
+	uint8_t  last_id;
+	uint32_t last_tick;
+	struct DBG_MODULE_ITEM runtime;
+	struct DBG_MODULE_ITEM systime;
+	struct DBG_MODULE_ITEM aging;
+	struct DBG_MODULE_ITEM led;
+	struct DBG_MODULE_ITEM afe;
+	struct DBG_MODULE_ITEM snapshot;
+	struct DBG_MODULE_ITEM sci;
+	struct DBG_MODULE_ITEM adc;
+	struct DBG_MODULE_ITEM low_power;
+	struct DBG_MODULE_ITEM can;
+	struct DBG_MODULE_ITEM flash;
+	struct DBG_MODULE_ITEM log;
+	struct DBG_MODULE_ITEM proid;
+	struct DBG_MODULE_ITEM watchdog;
+	struct DBG_MODULE_ITEM debug_print;
+	struct DBG_MODULE_ITEM protect;
+	struct DBG_MODULE_ITEM soc;
+};
+
+struct DBG_RCC {
+	uint32_t cr;
+	uint32_t cfgr;
+	uint32_t ahbenr;
+	uint32_t apb1enr;
+	uint32_t apb2enr;
+	uint32_t bdcr;
+	uint32_t csr;
+	uint8_t  sysclk_src;     /* 0=HSI 1=HSE 2=PLL */
+	uint8_t  hse_ready;
+	uint8_t  pll_ready;
+	uint8_t  lsi_ready;
+};
+
+struct DBG_IRQ {
+	uint32_t iser0;
+	uint32_t ispr0;
+	uint32_t iabr0;
+	uint32_t scb_icsr;
+	uint32_t scb_shcsr;
+	uint32_t systick_ctrl;
+	uint32_t systick_val;
+	uint32_t exti_imr;
+	uint32_t exti_pr;
+};
+
+struct DBG_PERIPH {
+	uint16_t usart1_sr;
+	uint16_t usart2_sr;
+	uint16_t usart3_sr;
+	uint16_t can_msr;
+	uint32_t can_tsr;
+	uint32_t can_rf0r;
+	uint32_t can_esr;
+	uint16_t adc1_sr;
+	uint32_t dma1_isr;
+	uint16_t tim3_sr;
+	uint16_t tim4_sr;
+	uint16_t flash_sr;
+	uint16_t pwr_csr;
+};
+
+struct DBG_RESET {
+	uint32_t rcc_csr;
+	uint8_t  pin;
+	uint8_t  por;
+	uint8_t  software;
+	uint8_t  iwdg;
+	uint8_t  wwdg;
+	uint8_t  low_power;
 };
 
 struct DBG_CAN {
@@ -195,6 +318,32 @@ struct DBG_TIMING {
 	uint32_t loop_max_us;
 };
 
+struct DBG_PROFILE_ITEM {
+	uint32_t last_us;
+	uint32_t max_us;
+	uint32_t call_cnt;
+};
+
+struct DBG_PROFILE {
+	struct DBG_PROFILE_ITEM loop;
+	struct DBG_PROFILE_ITEM front;
+	struct DBG_PROFILE_ITEM io_power;
+	struct DBG_PROFILE_ITEM background;
+	struct DBG_PROFILE_ITEM debug_print;
+};
+
+struct DBG_WATCHDOG {
+	uint32_t feed_cnt;
+	uint32_t last_feed_tick;
+	uint32_t last_gap_ticks;
+	uint32_t max_gap_ticks;
+	uint16_t pr;
+	uint16_t rlr;
+	uint16_t sr;
+	uint8_t  last_source;
+	uint8_t  iwdg_reset;
+};
+
 struct DBG_COUNTER {
 	uint32_t main_cycle;
 	uint32_t afe_get_cnt;
@@ -212,6 +361,11 @@ struct SYSTEM_DEBUG {
 	struct DBG_GPIO    gpio;
 	struct DBG_MOS     mos;
 	struct DBG_SYS     sys;
+	struct DBG_MODULE  module;
+	struct DBG_RCC     rcc;
+	struct DBG_IRQ     irq;
+	struct DBG_PERIPH  periph;
+	struct DBG_RESET   reset;
 	struct DBG_CAN     can;
 	struct DBG_LP      lp;
 	struct DBG_ADC     adc;
@@ -222,6 +376,8 @@ struct SYSTEM_DEBUG {
 	struct DBG_FLASH   flash;
 	struct DBG_LED     led;
 	struct DBG_TIMING  timing;
+	struct DBG_PROFILE profile;
+	struct DBG_WATCHDOG watchdog;
 	struct DBG_COUNTER ctr;
 };
 
@@ -230,6 +386,10 @@ struct SYSTEM_DEBUG {
 extern struct SYSTEM_DEBUG g_dbg;
 
 void SystemDebug_Snapshot(void);
+uint32_t SystemDebug_GetCycleCount(void);
+void SystemDebug_ModuleHeartbeat(uint8_t module, uint8_t state_flags);
+void SystemDebug_ProfileRecord(uint8_t slot, uint32_t start_cyccnt);
+void SystemDebug_RecordWatchdogFeed(uint8_t source);
 void SystemDebug_LoopEnter(uint32_t start_cyccnt);
 void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra);
 
@@ -258,6 +418,10 @@ void DbgPrint_EventRing(void);
 #else
 
 #define SystemDebug_Snapshot()          do{}while(0)
+#define SystemDebug_GetCycleCount()     ((uint32_t)0U)
+#define SystemDebug_ModuleHeartbeat(m,s) do{}while(0)
+#define SystemDebug_ProfileRecord(s,c)  do{}while(0)
+#define SystemDebug_RecordWatchdogFeed(s) do{}while(0)
 #define SystemDebug_LoopEnter(cnt)      do{}while(0)
 #define SystemDebug_Event(t,v0,v1,e)    do{}while(0)
 #define DbgPrint_Summary()              do{}while(0)

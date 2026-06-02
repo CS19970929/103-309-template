@@ -1,4 +1,5 @@
 #include "main.h"
+#include "SystemDebug.h"
 
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
@@ -291,6 +292,7 @@ static void SysTime_Post10msTick(void)
 void IWDG_Feed(void)
 {
 	IWDG_ReloadCounter();
+	SystemDebug_RecordWatchdogFeed((UINT8)DBG_WDG_SRC_FEED);
 }
 
 void TIM3_IRQHandler(void)
