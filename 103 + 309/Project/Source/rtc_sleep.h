@@ -26,9 +26,14 @@ typedef enum _SLEEP_MODE {
 NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 }SLEEP_MODE;
 
-
-
-#define enumToStr(WEEK)    #WEEK
+#define LP_BLOCK_CHARGE       (1UL << 0)
+#define LP_BLOCK_DISCHARGE    (1UL << 1)
+#define LP_BLOCK_COMM         (1UL << 2)
+#define LP_BLOCK_KEY          (1UL << 3)
+#define LP_BLOCK_FLASH_BUSY   (1UL << 5)
+#define LP_BLOCK_UPGRADE      (1UL << 6)
+#define LP_BLOCK_FAULT        (1UL << 7)
+#define LP_BLOCK_LED_ACTIVE   (1UL << 8)
 
 enum LOW_POWER_RTC_BLOCK_REASON {
   LOW_POWER_RTC_BLOCK_NONE = 0,
@@ -58,16 +63,10 @@ extern enum irqWakeup g_irq_t;
 void LowPower_Request(enum _SLEEP_MODE mode);
 void LowPower_ClearToSleepFlag(void);
 uint8_t LowPower_IsToSleepPending(void);
+uint32_t LP_GetBlockReason(void);
+uint32_t LP_GetLastSleepSeconds(void);
+void LP_RecordLastSleepSeconds(uint32_t seconds);
 void rtc_sleep(void);
 void cpu_frequency_conf(void);
-
-uint8_t get_rtc_soc(void);
-void set_rtc_soc(uint8_t _soc);
-
-
-
-
-
-
 
 #endif

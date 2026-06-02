@@ -1,5 +1,4 @@
 #include "main.h"
-#include "app_lowpower.h"
 #include "AppInit.h"
 
 UINT8 SeriesNum = 10;
@@ -47,7 +46,6 @@ void AppInit_Boot(void)
 	AppInit_InitDevice();
 	AppInit_InitRuntimeState();
 	Init_RTC();
-	LP_Init();
 	/* RTC_WKTimeConfig(); */
 	 
 	

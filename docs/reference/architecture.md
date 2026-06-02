@@ -44,7 +44,7 @@ main()
 
 | 周期/触发 | 任务 | 说明 |
 |---|---|---|
-| 每轮主循环 | `App_CommonUpper()`, `LP_Task()`, `App_Can()` | 通信和低功耗持续服务 |
+| 每轮主循环 | `App_CommonUpper()`, `rtc_sleep()`, `App_Can()` | 通信和低功耗持续服务 |
 | TIM3 10ms | `SysTime_Post10msTick()` | 产生软件标志 |
 | 约 200ms | `App_AFEGet()` | AFE 采样、DataLoad、SOC、保护辅助 |
 | ADC TIM2 触发 | `ADC1 + DMA` | PA1/PA2/PB1 模拟采样 |
@@ -69,7 +69,7 @@ SH367309 / ADC / Flash 参数
 | AFE 配置 | `SH367309_UpdataAfeConfig()` | 参数变化后写 AFE ROM/寄存器并 reset AFE |
 | MOS | `SH367309_DriverMos_Ctrl()`, `MosStartup_*`, `new_todo_logi()` | 启动、保护、老化和客户逻辑都可能影响 MOS |
 | IAP | `AppUpgrade_RequestIap()`, `App_FlashUpdate()` | SRAM mailbox + reset |
-| 低功耗 | `LP_Task()`, `rtc_sleep()`, `SleepDeal_Continue()` | HICCUP STOP 或 reset sleep |
+| 低功耗 | `rtc_sleep()`, `SleepDeal_Continue()` | HICCUP STOP 或 reset sleep |
 | 上位机写 | `Sci_Deal_WrReg_0x06()`, `Sci_Deal_WrRegs_0x10()` | 写参数、保存 Flash、触发副作用 |
 
 ## 6. 当前架构问题

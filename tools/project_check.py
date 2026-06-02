@@ -1011,21 +1011,21 @@ def check_low_power_cleanup(reporter):
 
     if (
         '#include "rtc_sleep_afe_port.h"' in rtc_sleep_port_c
-        and "RtcSleep_AfePortIsSleepBlocked();" in rtc_sleep_port_c
         and "RtcSleep_AfePortUpdateRtcData();" in rtc_sleep_port_c
         and "RtcSleep_AfePortHasCurrentWake(source);" in rtc_sleep_port_c
         and "RtcSleep_AfePortHasAfeWake(source);" in rtc_sleep_port_c
-        and "uint8_t RtcSleep_AfePortIsSleepBlocked(void);" in rtc_sleep_afe_port_h
-        and "UINT8 RtcSleep_AfePortIsSleepBlocked(void)" in rtc_sleep_afe_sh367309_c
+        and "RtcSleep_AfePortIsSleepBlocked" not in rtc_sleep_afe_port_h
+        and "RtcSleep_AfePortIsSleepBlocked" not in rtc_sleep_afe_sh367309_c
+        and "RtcSleep_PortIsAfeSleepBlocked" not in rtc_sleep_port_h
+        and "RtcSleep_PortIsAfeSleepBlocked" not in rtc_sleep_port_c
         and "AFE_TYPE" not in rtc_sleep_port_c
         and "AFE_TYPE" not in rtc_sleep_afe_sh367309_c
         and "rtc_sleep_port.c" in project
         and "rtc_sleep_afe_sh367309.c" in project
-        and "uint8_t RtcSleep_PortIsAfeSleepBlocked(void);" in rtc_sleep_port_h
     ):
         reporter.ok("RTC sleep port layer selects MCU/AFE adapters by file boundary instead of AFE_TYPE branches")
     else:
-        reporter.fail("RTC sleep port layer should keep AFE details in a separate source file selected by the project")
+        reporter.fail("RTC sleep port layer should keep AFE details in a separate source file and avoid unused AFE sleep-block wrappers")
 
 
 def check_fault_snapshot_mapping(reporter):

@@ -32,7 +32,7 @@ Keil 工程列入的业务源码主要包括：
 | 参数与 Flash | `EEPROM.c/.h`, `Flash.c/.h`, `Flash64KAppTest.c/.h`, `UpgradeParamPolicy.h` |
 | UART/Modbus 上位机协议 | `Sci_Upper.c/.h` |
 | CAN | `Can_HDX.c/.h`, `CanFeidaoFrames.c/.h` |
-| RTC/低功耗 | `RTC.c/.h`, `app_lowpower.c/.h`, `rtc_sleep.c/.h`, `rtc_sleep_port.c/.h`, `SleepDeal.c/.h`, `LowPowerSleep.c/.h`, `bsp_clock.c/.h`, `bsp_power.c/.h`, `bsp_rtc.c/.h` |
+| RTC/低功耗 | `RTC.c/.h`, `rtc_sleep.c/.h`, `rtc_sleep_port.c/.h`, `SleepDeal.c/.h`, `LowPowerSleep.c/.h`, `bsp_clock.c/.h`, `bsp_power.c/.h`, `bsp_rtc.c/.h` |
 | LED / 按键显示 | `LedBar.c/.h` |
 | 日志/事件/产品信息 | `LogRecord.c/.h`, `ProductionID.c/.h`, `easylogger/*` |
 | 工厂老化 | `FactoryAging.c/.h` |
@@ -100,14 +100,13 @@ AppInit_Boot()
     g_u32CS_Res_AFE = ...
     system boot ready flag/version/log
   Init_RTC()
-  LP_Init()
 ```
 
 证据：
 
 - `AppInit.c:10-38` 初始化外设和任务依赖。
 - `AppInit.c:57-65` 初始化系统运行状态。
-- `AppInit.c:67-73` 启动 RTC 与低功耗框架。
+- `AppInit.c:67-73` 启动 RTC；低功耗运行态入口在主循环内调用。
 
 ## 6. 任务调度逻辑
 
@@ -116,7 +115,7 @@ AppInit_Boot()
 | 调度段 | 调用顺序 | 主要功能 | 代码证据 |
 |---|---|---|---|
 | 前台快任务 | `SysTime_LatchTaskFlags()` -> `FactoryAging_Task()` -> `APP_LedBar()` -> `App_AFEGet()` | 锁存时基、老化、LED、AFE/SOC 200ms 数据链 | `Runtime.c:15-22` |
-| IO 和电源任务 | `AppInit_ServiceSci()` -> `App_AnlogCal()` -> `LP_Task()` -> `App_Can()` | UART/Modbus、ADC、低功耗、CAN | `Runtime.c:24-31` |
+| IO 和电源任务 | `AppInit_ServiceSci()` -> `App_AnlogCal()` -> `rtc_sleep()` -> `App_Can()` | UART/Modbus、ADC、低功耗、CAN | `Runtime.c:24-31` |
 | 后台任务 | `StorageFlash_AppUseTest_Task()` -> `App_FlashUpdate()` -> `App_LogRecord()` -> `App_ProID_Deal()` -> `Feed_IWatchDog` | Flash 测试钩子、IAP 复位、日志、产品信息、喂狗 | `Runtime.c:33-42` |
 
 关键事实：
@@ -312,9 +311,8 @@ App_AFEGet() every 200ms
 
 ```text
 Runtime_RunIoAndPowerTasks()
-  LP_Task()
-    LP_BuildBlockReason()
-    rtc_sleep()
+  rtc_sleep()
+    LP_GetBlockReason()
 ```
 
 睡眠路径：
@@ -347,12 +345,10 @@ rtc_sleep()
 - IAP pending。
 - fault active。
 - LedBar active。
-- RTC 周期超过 IWDG 安全范围。
 
 当前 CAN 策略：`Can_PrepareSleep()` 在进入睡眠前关闭 CMNT；RTC 周期唤醒后不主动广播 CAN；真正唤醒恢复后 `InitCan()` 重新打开 CMNT，再由主循环通信。
-- 工厂老化运行中。
 
-证据：`app_lowpower.c:17-76`, `rtc_sleep.c:148-235`, `rtc_sleep.c:421-481`。
+证据：`rtc_sleep.c`, `rtc_sleep_port.c`, `LowPowerSleep.c`, `SleepDeal.c`。
 
 ## 14. IWDG 喂狗路径
 
@@ -361,7 +357,6 @@ rtc_sleep()
 | 初始化 | `System_Init.c:33-48` | LSI + prescaler/reload；RTC 开启时 reload 更大 |
 | 主循环末尾 | `Runtime.c:40-42` | 每轮后台任务后喂狗 |
 | 阻塞延时 | `System_Init.c:160-173` | `__delay_ms()` 内喂狗 |
-| CAN RTC wake service | `Can_HDX.c:963-971` | 等 CAN 发送完成时喂狗 |
 | STOP 前后 | `rtc_sleep_port.c:118-123` | 进入/退出 STOP 前后喂狗 |
 | RTC 周期保护 | `RTC.c:386-390`, `RTC.c:406-417` | IWDG 开启时 wakeup period 被限制到 10s |
 

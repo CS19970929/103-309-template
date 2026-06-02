@@ -58,7 +58,7 @@
 
 ## 5.1 BMS App IO 与 RTC 低功耗专项确认问题
 
-状态：部分验证
+状态：部分验证，2026-06-02 已按当前源码追加低功耗简化确认项
 
 参考源码：
 
@@ -68,6 +68,10 @@
 - `103 + 309/Project/Source/rtc_sleep_port.c`
 - `103 + 309/Project/Source/RTC.c`
 - `103 + 309/Project/Source/Can_HDX.c`
+- `103 + 309/Project/Source/System_Init.c`
+- `103 + 309/Project/Source/SleepDeal.c`
+- `103 + 309/Project/Source/LedBar.c`
+- `103 + 309/Project/Source/FactoryAging.c`
 
 | ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -75,6 +79,16 @@
 | Q-RTC-IO-002 | IO/低功耗 | `PA3 / 2737_EN` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOA 模拟化时排除 PA3 | UNKNOWN | 可能增加休眠电流或影响硬件保持 | PA3 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
 | Q-RTC-IO-003 | IO/AFE | `PB14 / AFE1_CTL` 休眠时是否必须保持非模拟状态 | `conf.c:IOstatus_RTCMode()` | RTC 模式 GPIOB 模拟化时排除 PB14 | UNKNOWN | 可能影响 AFE 控制或漏电 | PB14 休眠时应保持输出、拉低，还是模拟输入？ | F. 补充硬件要求；B. 保持并文档化；C. 改休眠状态 | |
 | Q-RTC-CAN-001 | CAN/低功耗 | RTC 周期唤醒后是否必须短时上电 CAN 广播 | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 已删除 RTC wake CAN 服务；CMNT 睡前关闭，唤醒恢复后打开 | CHANGE_NEEDED | 休眠中 CAN 不再周期可见，但功耗更低 | 休眠中需要周期 CAN 可见，还是只在外部唤醒后通信？ | C. 改为更省电 | 已确认：只在唤醒恢复后通信 |
+| Q-RTC-LP-001 | 低功耗/IWDG | `PROJECT_CFG_WDOG_ENABLE` 是否必须真实控制 IWDG | `Project_Config.h:58`, `AppInit.c:32`, `System_Init.c:37-52` | 宏为 0，但 `Init_IWDG()` 仍无条件启动 IWDG | CONFLICT | RTC 唤醒周期、安全窗口和功耗目标口径不一致 | 量产固件是否必须启用 IWDG？若是，宏应为 1；若否，函数必须尊重宏 | B. 统一宏和实际行为，建议量产启用 | |
+| Q-RTC-LP-002 | 低功耗/调试 | Release 是否必须关闭 DBGMCU 低功耗调试保持 | `conf.h`, `System_Init.c:21-34`, `docs/review/rtc_sleep_low_power_requirement_confirmation_2026-05-27.md` | 已删除无条件 `__EnableLowPowerDebug__`，Release 默认清除 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP | 已处理 | STOP 功耗实测必须避免调试保持位 | 是否继续保持量产构建关闭 DBGMCU 低功耗调试保持？ | C. Release 关闭，只允许 Debug/显式宏打开 | 已确认并已处理 |
+| Q-RTC-LP-003 | 低功耗/老化 | 工厂老化 active 是否阻塞 STOP | `FactoryAging.c:422-436`, `rtc_sleep.c`, `rtc_sleep.h` | 已按确认接入：老化 running 只阻塞 HICCUP idle 进入 RTC STOP，不阻塞低压或外部请求的 `DEEP_MODE/NORMAL_MODE` reset sleep | 已处理 | 老化计时不会被 RTC STOP 打断，同时不影响深睡/保护路径 | 是否保持“老化只不允许进入 RTC”？ | B. 保持当前窄范围实现 | 已确认：只是不允许进入 RTC |
+| Q-RTC-LP-004 | 低功耗/AFE | AFE not idle 是否阻塞 HICCUP STOP | `rtc_sleep.c`, `rtc_sleep_afe_sh367309.c`, `rtc_sleep.h` | 当前主判断不检查 AFE not idle；框架层未触发的 `LP_BLOCK_AFE_BUSY` 和未使用 wrapper 已删除 | CONFLICT | AFE 异常、保护或 PCHG 状态下可能进入 STOP | SH367309 哪些状态必须禁止 HICCUP STOP？ | B. 确认后恢复最小 RTC block 或删除保留 reason | |
+| Q-RTC-LP-005 | 低功耗/AFE | HICCUP STOP 前是否需要让 AFE 进入 sleep | `rtc_sleep_port.c:92-100`, `SleepDeal.c:109-114`, `SH367309_Func.c:65-70` | Reset sleep 前调 `AFE_Sleep()`；HICCUP STOP 前当前未直接调 | UNKNOWN | 可能影响 STOP 电流，也可能影响周期测量恢复 | HICCUP 期间 AFE 应保持可快速测量，还是进入 AFE sleep？ | F. 结合 SH367309 手册和实测确认 | |
+| Q-RTC-LP-006 | 低功耗/参数 | `OtherElement` 普通休眠和 RTC 参数是否仍有效 | `DataDeal.h:116-123`, `rtc_sleep.c:152-159`, `RTC.c:369-393` | 当前只用低压阈值/低压时间；RTC 周期默认 10 秒 | CHANGE_NEEDED | 上位机写入参数可能不影响真实低功耗行为 | `u16Sleep_VNormal/TimeNormal/RTC_WakeUpTime/TimeRTC` 是保留、接入还是删除？ | C. 无真实需求则文档化占位，后续删除误导 | |
+| Q-RTC-LP-007 | 低功耗/交互 | 睡眠中短按显示 SOC、长按约 500ms 开机是否是产品定义 | `SleepDeal.c:22-80`, `LedBar.c:1209-1218` | 短按只预览，充电或长按才退出 sleep | UNKNOWN | 用户体验不清，可能误以为按键无效 | 睡眠中按键行为是否确认？ | A. 保留；C. 调整按键时长/逻辑；F. 补充产品定义 | |
+| Q-RTC-LP-008 | 低功耗/交互 | 运行态长按约 500ms 是否直接 DEEP_MODE 关机 | `LedBar.c:987-999` | 长按后直接 `SleepDeal_Continue(DEEP_MODE)` | UNKNOWN | 可能误关机 | 运行态长按关机时间和行为是否正确？ | B. 保留但把时间参数化/文档化；C. 修改 | |
+| Q-RTC-LP-009 | 低功耗/充电 | 充电器拔除后是否直接进入 DEEP_MODE | `DataDeal.c:51-95` | `CHG_IN` 释放后请求 `DEEP_MODE` | UNKNOWN | 拔 5V 后关机/待机/继续运行体验不同 | 当前产品拔 5V 后目标行为是什么？ | F. 需要产品定义 | |
+| Q-RTC-LP-010 | 低功耗/简化 | 未使用的 `LP_EnterStop/LP_BeforeSleep/LP_AfterWakeup/LP_SetWakeupPeriod/LP_Task` 是否可删除 | `rg` 仅见旧文档引用，源码主路径实际走 `Runtime_RunOnce()->rtc_sleep()` | 已删除未使用 wrapper、`LP_State_t` 和无消费者状态缓存 | 已处理 | 若外部工具依赖旧 API，需要同步工具；源码主路径不变 | 是否允许后续继续按“无调用、无协议、无硬件行为影响”净删减？ | D. 删除或改 static，保持主路径不变 | 本轮已处理 |
 
 ## 6. 高风险需求
 
@@ -82,5 +96,5 @@
 |---|---|---|---|---|---|---|---|---|---|
 | Q-RISK-001 | IAP | 禁止裸写 App bin 到 `0x08000000` | `Flash.h:4-5`, `tools/soc_flash_app_safe.ps1:17-20` | 安全脚本强制 `0x08004800` | MUST_KEEP | P0 覆盖 IAP | 后续是否把所有烧录文档只指向安全脚本？ | A/B | |
 | Q-RISK-002 | AFE MTP | 上位机写参数可能触发 AFE MTP/ROM 写入 | `SH367309_DataDeal.c:145-249` | 差异写入并 reset AFE | MUST_KEEP/UNKNOWN | P0/P1 | 是否需要工装模式保护？ | B/C/F | |
-| Q-RISK-003 | 低功耗 | fault active 阻塞 sleep | `app_lowpower.c:59-61` | 有 fault 不进 STOP | MUST_KEEP | P1 | 是否所有 fault 都阻塞低功耗，还是过放必须允许 deep sleep？ | A/C/F | |
+| Q-RISK-003 | 低功耗 | fault active 阻塞 sleep | `rtc_sleep.c:LP_GetBlockReason()` | 有 fault 不进 STOP | MUST_KEEP | P1 | 是否所有 fault 都阻塞低功耗，还是过放必须允许 deep sleep？ | A/C/F | |
 | Q-RISK-004 | App 地址 | 工程 XML 地址口径不单一 | `uvprojx` 搜索 `IROM` 结果 | 需要 map/bin 验证 | UNKNOWN | P0 | 后续是否把链接地址检查做进脚本门禁？ | B/C | |

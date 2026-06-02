@@ -424,11 +424,6 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>app_lowpower.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\app_lowpower.c</FilePath>
-            </File>
-            <File>
               <FileName>I2C_AFE1.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\I2C_AFE1.c</FilePath>
@@ -1337,11 +1332,6 @@
               <FileName>LowPowerSleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
-            </File>
-            <File>
-              <FileName>app_lowpower.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\app_lowpower.c</FilePath>
             </File>
             <File>
               <FileName>I2C_AFE1.c</FileName>

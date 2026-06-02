@@ -91,6 +91,15 @@
 | T-LP-004 | IWDG 10s 限制 | 设置更长 wake period | 被限制或阻塞，系统不复位 |
 | T-LP-005 | RTC 唤醒恢复 | STOP 周期唤醒 | 时钟、ADC、USART、CAN、AFE 恢复；周期唤醒中不主动广播 CAN |
 | T-LP-006 | CMNT 睡眠电源 | 示波器/万用表测 `GPIO_CMNT_EN` | `Can_PrepareSleep()` 后关闭，唤醒恢复 `InitCan()` 后打开 |
+| T-LP-007 | DBGMCU Release 低功耗位 | Release 运行后读 `DBGMCU->CR` | Release 不置位 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP；Debug 可显式打开 |
+| T-LP-008 | IWDG 宏与实际行为 | 分别构建 `PROJECT_CFG_WDOG_ENABLE=0/1` | 宏值、`Init_IWDG()` 行为、RTC wake 安全窗口一致 |
+| T-LP-009 | 工厂老化阻塞 RTC 策略 | 老化 running 时观察低功耗状态，再触发低压或外部 `DEEP_MODE` | 老化 running 时不进入 HICCUP RTC STOP；低压 deep 和外部 deep/reset sleep 请求仍能执行 |
+| T-LP-010 | AFE not idle 阻塞策略 | 构造 AFE fault/PCHG/MOS 状态 | 按用户确认：需要阻塞时必须不进入 HICCUP STOP |
+| T-LP-011 | Sleep 参数有效性 | 通过上位机写 `0x2310-0x2317` 后观察策略 | 写入的有效参数必须改变对应行为；无效/占位参数必须文档化或拒绝 |
+| T-LP-012 | HICCUP 前 AFE 功耗状态 | STOP 前后读 SH367309 状态并测整机电流 | 符合确认后的 AFE sleep/保持测量策略 |
+| T-LP-013 | `app_lowpower` 主路径净删减 | `rg "LP_EnterStop|LP_BeforeSleep|LP_AfterWakeup|LP_SetWakeupPeriod|LP_Task|LP_STATE_"` | 源码无旧 wrapper/状态缓存引用；主路径为 `Runtime_RunOnce()->rtc_sleep()` |
+| T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request"` | 源码无无消费者缓存/未调用 helper；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
+| T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 不要求 `s_lp_runtime` 符号，仍能读取 `g_stLowPowerRtcStatus`、LED、DBGMCU |
 | T-IWDG-001 | 主循环喂狗 | 正常运行 8h | 无异常复位 |
 | T-IWDG-002 | 阻塞等待喂狗 | CAN RTC service/延时 | 无 IWDG 复位 |
 

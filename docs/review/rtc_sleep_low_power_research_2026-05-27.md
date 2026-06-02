@@ -35,7 +35,7 @@
 
 - `Runtime_RunOnce()` 每轮先执行 `APP_LedBar()`，再执行 `LP_Task()`。
 - `LP_Task()` 调用 `rtc_sleep()`。
-- `rtc_sleep()` 每秒检查一次空闲条件，`LP_CanSleep() == 0` 时标记 `LOW_POWER_RTC_BLOCK_FRAMEWORK`。
+- `rtc_sleep()` 每秒检查一次空闲条件，`LP_GetBlockReason() != 0` 时映射到当前粗粒度阻塞原因；无法归入电流/按键/外部通信的 bit 标记为 `LOW_POWER_RTC_BLOCK_FRAMEWORK`。
 - `LP_BuildBlockReason()` 当前会因为 `LedBar_IsActiveForLowPower() != 0` 设置 `LP_BLOCK_LED_ACTIVE`。
 
 ## ST-Link 现场快照
@@ -53,7 +53,7 @@
 
 - `g_stLowPowerRtcStatus.mode = NO_SLEEP`
 - `g_stLowPowerRtcStatus.blockReason = LOW_POWER_RTC_BLOCK_FRAMEWORK`
-- `s_lp_runtime.block_reason = 0x100 = LP_BLOCK_LED_ACTIVE`
+- `LP_GetBlockReason()` 可现算得到 `0x100 = LP_BLOCK_LED_ACTIVE`
 - 启动显示窗口倒计时阶段，`soc_display_10ms` 会递减。
 - 窗口归零后，`frame_mask = 0`、`scan_timer_enabled = 0`，但 `startup_display_armed = 1` 仍保持。
 - `LedBar_IsActiveForLowPower()` 当前把 `startup_display_armed != 0` 也当作活跃条件，因此窗口结束后仍永久阻塞低功耗。

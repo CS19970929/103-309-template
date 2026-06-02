@@ -8,23 +8,6 @@ void DataLoad_Temperature(void);
 void DataLoad_TemperatureMaxMinFind(void);
 void DataLoad_Current(void);
 
-UINT8 RtcSleep_AfePortIsSleepBlocked(void)
-{
-    if (MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all))
-    {
-        if (SH367309_Reg_Store.REG_BSTATUS1.all ||
-            SH367309_Reg_Store.REG_BSTATUS2.all ||
-            SH367309_Reg_Store.REG_BSTATUS3.bits.L0V ||
-            SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET)
-        {
-            return 1U;
-        }
-        return 0U;
-    }
-
-    return 2U;
-}
-
 UINT8 RtcSleep_AfePortUpdateRtcData(void)
 {
     if (UpdateVoltageFromBqMaximo())

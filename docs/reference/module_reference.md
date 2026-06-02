@@ -56,7 +56,6 @@
 ├── rtc_sleep.c/h         - RTC 低功耗休眠核心逻辑
 ├── rtc_sleep_port.c/h    - RTC 休眠硬件抽象层 (port)
 ├── rtc_sleep_afe_sh367309.c/h - SH367309 AFE 的 port 实现
-├── app_lowpower.c/h      - 低功耗调度框架
 ├── SleepDeal.c/h         - 深度休眠处理
 ├── LowPowerSleep.c/h     - 低功耗进入/退出
 ├── bsp_clock.c/h         - 时钟配置
@@ -99,8 +98,7 @@ main()
  │   ├─ InitTimer()                     - TIM3 10ms 时基启动
  │   ├─ Init_IWDG()                     - 看门狗初始化
  │   ├─ InitSystemMonitorData_EEPROM()  - 系统状态初始化
- │   ├─ Init_RTC()                      - RTC 初始化
- │   └─ LP_Init()                       - 低功耗框架初始化
+ │   └─ Init_RTC()                      - RTC 初始化
  │
  └─ Runtime_RunOnce() [主循环]
      ├─ SysTime_LatchTaskFlags()        - 锁存时基标志
@@ -109,7 +107,7 @@ main()
      ├─ App_AFEGet()                    - AFE 数据获取
      ├─ AppInit_ServiceSci()            - 串口服务
      ├─ App_AnlogCal()                  - ADC 模拟量计算
-     ├─ LP_Task()                       - 低功耗调度
+     ├─ rtc_sleep()                     - 低功耗调度
      │   └─ rtc_sleep()                 - RTC 休眠核心
      │       └─ rtc_sleep_run_hiccup_cycle() - STOP 模式循环
      ├─ App_Can()                       - CAN 服务
@@ -295,7 +293,7 @@ int main(void) {
 |------|------|
 | `AppInit_InitDevice()` | 硬件初始化: SystemInit→InitDelay→IsSleepStartUp→jtag_disable→InitNVIC→InitIO→串口→FlashBootPrint→FlashQuickTest→InitE2PROM→InitAFE1→InitCan→InitADC→InitData_SOC→InitTimer→__enable_irq→elog→EnableLowPowerDebug→Init_IWDG |
 | `AppInit_InitRuntimeState()` | 运行时状态初始化: 加载 SystemMonitor 参数, 设置 CS 电阻比, 标记启动完成 |
-| `AppInit_Boot()` | 总启动入口: 设备初始化 → 运行时状态 → Init_RTC → LP_Init |
+| `AppInit_Boot()` | 总启动入口: 设备初始化 → 运行时状态 → Init_RTC |
 
 ### 3.3 Runtime.c - 主循环调度
 
@@ -314,7 +312,7 @@ Runtime_RunOnce()
       ├─ Runtime_RunIoAndPowerTasks()
       │   ├─ AppInit_ServiceSci()        - 串口服务
       │   ├─ App_AnlogCal()              - ADC计算
-      │   ├─ LP_Task()                   - 低功耗调度
+      │   ├─ rtc_sleep()                 - 低功耗调度
       │   └─ App_Can()                   - CAN服务
       ├─ Runtime_RunBackgroundTasks()
       │   ├─ StorageFlash_AppUseTest_Task()
@@ -704,7 +702,7 @@ RTC 休眠系统由 4 层组成:
 - **rtc_sleep.c/h** - 核心休眠逻辑 (与硬件无关)
 - **rtc_sleep_port.c/h** - 硬件抽象层接口
 - **rtc_sleep_afe_sh367309.c/h** - SH367309 AFE 的具体实现
-- **app_lowpower.c/h** - 低功耗调度框架
+- **SleepDeal.c/h / LowPowerSleep.c/h** - reset sleep 提交、睡前保存和启动早期唤醒处理
 
 ### 8.2 休眠模式
 
@@ -721,7 +719,7 @@ RTC 休眠系统由 4 层组成:
 |------|------|
 | `LOW_POWER_RTC_BLOCK_CURRENT` | 充放电电流 >10mA |
 | `LOW_POWER_RTC_BLOCK_MCU_WAKE` | MCU_WK 引脚高 |
-| `LOW_POWER_RTC_BLOCK_FACTORY_AGING` | 工厂老化模式激活 |
+| `LOW_POWER_RTC_BLOCK_FACTORY_AGING` | 工厂老化 running，只阻塞 HICCUP RTC STOP |
 | `LOW_POWER_RTC_BLOCK_EXT_COMM` | 有外部通讯 |
 | `LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE` | AFE 忙 |
 | `LOW_POWER_RTC_BLOCK_FRAMEWORK` | 框架层面阻塞 (CAN/LED/Flash等) |
@@ -730,12 +728,10 @@ RTC 休眠系统由 4 层组成:
 
 1. 无充放电 (>10mA)
 2. MCU_WK 不为高
-3. 无工厂老化
-4. 无外部通讯计数变化
-5. AFE 不忙
-6. 框架允许 (LP_CanSleep: CAN/LED/Flash/升级/故障)
+3. 无外部通讯计数变化
+4. 框架阻塞位为 0 (`LP_GetBlockReason() == 0`)
 
-空闲延迟: `RtcSleep_PortGetIdleDelayTargetSeconds()` 秒后进入 HICCUP
+空闲延迟: `sys_time.time_enter_rtc` 秒后进入 HICCUP
 
 ### 8.5 HICCUP 模式循环
 
@@ -747,8 +743,7 @@ rtc_sleep_run_hiccup_cycle():
   4. Restore: 恢复时钟, IO, 外设
   5. Check exception: 电流/故障唤醒 → 退出 HICCUP
   6. Update SOC: RTC 静置 SOC 补偿
-  7. Run CAN service: 发送周期帧
-  8. Return true → 继续下一轮 HICCUP
+  7. Return true → 继续下一轮 HICCUP
 ```
 
 ### 8.6 唤醒源
@@ -785,13 +780,12 @@ enum irqWakeup {
 
 | 函数 | 功能 |
 |------|------|
-| `App_LowPowerProcess()` / `sleep()` | 别名, 调用 rtc_sleep() |
 | `rtc_sleep()` | 休眠主逻辑: 1s tick→模式选择→执行休眠 |
 | `LowPower_Request(mode)` | 请求切换休眠模式 |
 | `entersleep(mode)` | 同上 |
 | `rtc_sleep_run_hiccup_cycle()` | HICCUP 单次 STOP 循环 |
 | `LowPower_IsToSleepPending()` | 检查是否待休眠 |
-| `get_rtc_soc()` / `set_rtc_soc()` | RTC SOC 访问 |
+| RTC SOC rest | 由 `RtcSleep_PortApplySocRtcRest()` 直接触发 SOC 休眠补偿 |
 
 ---
 
@@ -1200,15 +1194,17 @@ UNINIT → RUNNING → DONE
 
 ## 17. 低功耗调度模块
 
-### 17.1 文件: `app_lowpower.c/h`
+### 17.1 文件: `rtc_sleep.c/h`
 
-### 17.2 状态机
+### 17.2 主路径
 
 ```
-LP_STATE_RUN → LP_STATE_IDLE_CHECK → LP_STATE_PREPARE_SLEEP → LP_STATE_STOP_SLEEP → LP_STATE_WAKEUP_RESTORE
+Runtime_RunOnce() -> rtc_sleep()
 ```
 
-### 17.3 阻塞原因位掩码
+`rtc_sleep.c/h` 同时承载运行态低功耗入口、框架层 block reason bitmask 和最近一次睡眠秒数。真实低功耗模式、ready、RTC wake、block reason 由 `g_stLowPowerRtcStatus` 观察。
+
+### 17.3 框架层阻塞原因位掩码
 
 | 位 | 说明 |
 |----|------|
@@ -1216,23 +1212,20 @@ LP_STATE_RUN → LP_STATE_IDLE_CHECK → LP_STATE_PREPARE_SLEEP → LP_STATE_STO
 | LP_BLOCK_DISCHARGE | 放电中 |
 | LP_BLOCK_COMM | 通讯忙 |
 | LP_BLOCK_KEY | 按键活动 |
-| LP_BLOCK_AFE_BUSY | AFE 忙 |
 | LP_BLOCK_FLASH_BUSY | Flash 操作中 |
 | LP_BLOCK_UPGRADE | 升级中 |
 | LP_BLOCK_FAULT | 有故障 |
 | LP_BLOCK_LED_ACTIVE | LED 显示中 |
-| LP_BLOCK_IWDG_UNSAFE | 唤醒周期超过 IWDG 安全范围 |
+
+说明：工厂老化 running 使用粗粒度 `LOW_POWER_RTC_BLOCK_FACTORY_AGING` 表示，不加入 `LP_BLOCK_*` 通用 bitmask，避免误解为阻塞 `DEEP_MODE/NORMAL_MODE` reset sleep。
 
 ### 17.4 函数
 
 | 函数 | 功能 |
 |------|------|
-| `LP_Init()` | 初始化 |
-| `LP_Task()` | 低功耗任务 |
-| `LP_CanSleep()` | 检查是否可休眠 |
-| `LP_GetBlockReason()` | 获取阻塞原因 |
-| `LP_EnterStop()` | 进入 STOP 模式 |
-| `LP_AfterWakeup()` | 唤醒后恢复 |
+| `LP_GetBlockReason()` | 获取框架层阻塞 bitmask；返回 0 表示框架允许休眠 |
+| `LP_GetLastSleepSeconds()` | 获取最近一次 RTC sleep 累计秒数 |
+| `LP_RecordLastSleepSeconds()` | 记录最近一次 RTC sleep 累计秒数 |
 
 ---
 

@@ -1,5 +1,4 @@
 #include "main.h"
-#include "app_lowpower.h"
 #include "AppInit.h"
 #include "FactoryAging.h"
 #include "Runtime.h"
@@ -34,7 +33,7 @@ static void Runtime_RunIoAndPowerTasks(void)
 	App_AnlogCal();
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_ADC, DBG_MODULE_STATE_READY);
 
-	LP_Task();
+	rtc_sleep();
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_LOW_POWER,
 		(uint8_t)(DBG_MODULE_STATE_READY |
 		((g_stLowPowerRtcStatus.readyToSleep != 0U) ? DBG_MODULE_STATE_BUSY : 0U)));

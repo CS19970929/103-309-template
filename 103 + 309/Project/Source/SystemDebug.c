@@ -9,7 +9,6 @@
 #include "System_Monitor.h"
 #include "Can_HDX.h"
 #include "rtc_sleep.h"
-#include "app_lowpower.h"
 #include "FactoryAging.h"
 #include "Flash.h"
 #include "I2C_AFE1.h"
@@ -762,7 +761,6 @@ void DbgPrint_LP(void)
 	if (g_dbg.lp.block_mask & (1<<1))  dbg_puts("DSG ");
 	if (g_dbg.lp.block_mask & (1<<2))  dbg_puts("COMM ");
 	if (g_dbg.lp.block_mask & (1<<3))  dbg_puts("KEY ");
-	if (g_dbg.lp.block_mask & (1<<4))  dbg_puts("AFE ");
 	if (g_dbg.lp.block_mask & (1<<5))  dbg_puts("FLASH ");
 	if (g_dbg.lp.block_mask & (1<<6))  dbg_puts("UPG ");
 	if (g_dbg.lp.block_mask & (1<<7))  dbg_puts("FAULT ");

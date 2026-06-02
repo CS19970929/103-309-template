@@ -202,7 +202,8 @@ function Decode-Sample {
     )
 
     $rtcWords = Get-MdwWords -Text $Text -Address $Symbols["g_stLowPowerRtcStatus"]
-    $lpWords = Get-MdwWords -Text $Text -Address $Symbols["s_lp_runtime"]
+    $lpWords = if ($Symbols.ContainsKey("s_lp_runtime")) { Get-MdwWords -Text $Text -Address $Symbols["s_lp_runtime"] } else { @() }
+    $lastSleepWords = if ($Symbols.ContainsKey("s_u32LastSleepSeconds")) { Get-MdwWords -Text $Text -Address $Symbols["s_u32LastSleepSeconds"] } else { @() }
     $ledWords = Get-MdwWords -Text $Text -Address $Symbols["s_ledbar"]
     $dbgWords = Get-MdwWords -Text $Text -Address $DBGMCU_CR
     $mcuWords = Get-MdwWords -Text $Text -Address "0xE0042000"
@@ -226,7 +227,7 @@ function Decode-Sample {
     $rtc2 = Convert-HexWord (Get-WordAt $rtcWords 2)
     $lp0 = Convert-HexWord (Get-WordAt $lpWords 0)
     $lp1 = Convert-HexWord (Get-WordAt $lpWords 1)
-    $lp2 = Convert-HexWord (Get-WordAt $lpWords 2)
+    $lastSleep0 = Convert-HexWord (Get-WordAt $lastSleepWords 0)
     $led0 = Convert-HexWord (Get-WordAt $ledWords 0)
     $led2 = Convert-HexWord (Get-WordAt $ledWords 2)
     $led3 = Convert-HexWord (Get-WordAt $ledWords 3)
@@ -255,9 +256,9 @@ function Decode-Sample {
         RtcDelaySeconds = $rtcDelay
         RtcTargetSeconds = $rtcTarget
         RtcElapsedSeconds = $rtc2
-        LpState = $lp0
-        LpBlockReason = if ($null -ne $lp1) { ("0x{0:x8}" -f $lp1) } else { "" }
-        LpLastSleepSeconds = $lp2
+        LpState = ""
+        LpBlockReason = if ($null -ne $lp0) { ("0x{0:x8}" -f $lp0) } else { "" }
+        LpLastSleepSeconds = if ($null -ne $lastSleep0) { $lastSleep0 } else { $lp1 }
         LedInitialized = if ($null -ne $led0) { $led0 -band 0xff } else { $null }
         LedSleep = if ($null -ne $led0) { ($led0 -shr 8) -band 0xff } else { $null }
         LedBlank = if ($null -ne $led0) { ($led0 -shr 16) -band 0xff } else { $null }
@@ -347,7 +348,7 @@ $nmExe = Resolve-Tool -Explicit $Nm -Name "arm-none-eabi-nm" -Fallbacks @(
 )
 $elfPath = Resolve-RepoPath $Elf
 $symbols = Get-SymbolTable -NmExe $nmExe -ElfPath $elfPath
-foreach ($required in @("g_stLowPowerRtcStatus", "s_lp_runtime", "s_ledbar")) {
+foreach ($required in @("g_stLowPowerRtcStatus", "s_ledbar")) {
     if (-not $symbols.ContainsKey($required)) {
         throw "Required symbol not found in ELF: $required"
     }
@@ -367,7 +368,9 @@ Write-Host "  interval:  $IntervalSeconds s"
 Write-Host "  count:     $Count (0 means until DurationMinutes or Ctrl+C)"
 Write-Host "  duration:  $DurationMinutes min (0 means no duration limit)"
 Write-Host "  csv:       $csv"
-Write-Host "  symbols:   rtc=$($symbols["g_stLowPowerRtcStatus"]) lp=$($symbols["s_lp_runtime"]) led=$($symbols["s_ledbar"])"
+$lpSymbol = if ($symbols.ContainsKey("s_lp_runtime")) { $symbols["s_lp_runtime"] } else { "n/a" }
+$lastSleepSymbol = if ($symbols.ContainsKey("s_u32LastSleepSeconds")) { $symbols["s_u32LastSleepSeconds"] } else { "n/a" }
+Write-Host "  symbols:   rtc=$($symbols["g_stLowPowerRtcStatus"]) lp=$lpSymbol lastSleep=$lastSleepSymbol led=$($symbols["s_ledbar"])"
 
 if ($Mode -eq "DebugProbe") {
     Write-Warning "DebugProbe will set DBGMCU low-power debug bits. This is for logic monitoring only, not current measurement."
@@ -406,7 +409,8 @@ try {
         $sampleCommands.Add("init")
         $sampleCommands.Add("halt")
         $sampleCommands.Add("mdw $($symbols["g_stLowPowerRtcStatus"]) 4")
-        $sampleCommands.Add("mdw $($symbols["s_lp_runtime"]) 3")
+        if ($symbols.ContainsKey("s_lp_runtime")) { $sampleCommands.Add("mdw $($symbols["s_lp_runtime"]) 2") }
+        if ($symbols.ContainsKey("s_u32LastSleepSeconds")) { $sampleCommands.Add("mdw $($symbols["s_u32LastSleepSeconds"]) 1") }
         $sampleCommands.Add("mdw $($symbols["s_ledbar"]) 9")
         $sampleCommands.Add("mdw $DBGMCU_CR 1")
         $sampleCommands.Add("mdw 0xE0042000 2")

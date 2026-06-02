@@ -6,6 +6,60 @@
 最后更新时间：2026-06-02
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-02 低功耗官方调研与第一批源码简化
+
+### 本次源码修改
+
+- `conf/conf.h`：删除无条件 `__EnableLowPowerDebug__`，Release 默认由 `EnableLowPowerDebug()` 清除 DBGMCU 低功耗调试保持位；需要 STOP 内调试时必须显式定义该宏。
+- `app_lowpower.c/.h`：删除未被主路径调用的 `LP_SetWakeupPeriod()`、`LP_BeforeSleep()`、`LP_AfterWakeup()`、`LP_EnterStop()`。
+- `app_lowpower.c/.h`：删除无消费者的 `LP_State_t`、`LP_GetState()` 和 `s_lp_runtime.state` 缓存。
+- `app_lowpower.c/.h`：删除整个独立 wrapper 模块；`LP_BLOCK_*`、`LP_GetBlockReason()`、`LP_GetLastSleepSeconds()`、`LP_RecordLastSleepSeconds()` 收口到 `rtc_sleep.c/h`，Keil 工程同步移除 `app_lowpower.c`。
+- `rtc_sleep.c`：删除无源码调用的 `LP_CanSleep()`，直接用 `LP_GetBlockReason()` 映射粗粒度 block reason，避免电流/按键判断写两遍。
+- `Runtime.c`：删除一行 wrapper `LP_Task()`，运行态低功耗主路径收敛为 `Runtime_RunOnce()` 直接调用 `rtc_sleep()`。
+- `SystemDebug.c`：删除已不存在的 `LP_BLOCK_AFE_BUSY` bit4 打印分支。
+- `rtc_sleep.h`：删除当前不会触发的 `LP_BLOCK_AFE_BUSY` 和 `LP_BLOCK_IWDG_UNSAFE`，保留真实使用的 block bit。
+- `rtc_sleep.c/.h`：删除未调用的 `low_power_cancel_rtc()`、`low_power_is_idle_rtc_request()`、`get_rtc_soc()`、`set_rtc_soc()` 和无消费者 `s_u8RtcSoc`。
+- `rtc_sleep_port.c/.h`、`rtc_sleep_afe_port.h`、`rtc_sleep_afe_sh367309.c`：删除未使用的 `RtcSleep_PortGetCellMaxMv()`、`RtcSleep_PortIsFactoryAgingActive()`、`RtcSleep_PortIsAfeSleepBlocked()` 和 `RtcSleep_AfePortIsSleepBlocked()`。
+- `rtc_sleep.c` / `rtc_sleep_port.c/.h`：`RtcSleep_PortPrepareRtcStop()` 删除未使用参数；`RtcSleep_PortApplySocRtcRest()` 改为 `void`，只保留 SOC 休眠补偿副作用。
+- `rtc_sleep.c`：按用户确认接入老化阻塞 RTC 策略，`FactoryAging_IsActive()` 只阻止空闲进入 `HICCUP_MODE` RTC STOP，不阻止低压或外部请求的 `DEEP_MODE/NORMAL_MODE` reset sleep。
+- `tools/stlink_bms_monitor.ps1`：不再强制依赖旧 `s_lp_runtime` 符号；旧 ELF 存在该符号时只读两个 word，新 ELF 没有该符号时继续运行。
+
+### 本次文档修改
+
+- 新增 `docs/review/low_power_official_industry_research_2026-06-02.md`，汇总 STM32 官方低功耗逻辑、BMS 行业低功耗分层和当前项目映射。
+- 更新 `docs/review/low_power_requirement_alignment_2026-06-02.md`、`docs/design/low_power_design.md`、`docs/review/requirement_questions.md`、`docs/review/risk_list.md`、`docs/review/refactor_plan.md`、`docs/review/test_plan.md`、`docs/reference/module_reference.md`，同步第一批已处理项和剩余待确认风险。
+
+### 安全边界
+
+- 未修改 Modbus/CAN 协议、CAN ID、寄存器地址、IAP/App 地址、AFE sleep 行为、老化逻辑、按键/拔 5V 产品交互和 Flash/EEPROM 存储格式。
+- 低功耗主路径为 `Runtime_RunOnce()` -> `rtc_sleep()`。
+- AFE not idle、`OtherElement` 普通休眠/RTC 参数仍需确认后再决定接入或删除；FactoryAging active 已确认并按“只阻塞 RTC、不阻塞 deep/reset sleep”接入。
+
+### 本次验证
+
+- `rg` 确认源码和 Keil 工程中无 `app_lowpower.c/h`、`LP_SetWakeupPeriod`、`LP_EnterStop`、`LP_BeforeSleep`、`LP_AfterWakeup`、`LP_GetState`、`LP_CanSleep`、`LP_Task`、`LP_STATE_*`、`LP_BLOCK_AFE_BUSY`、`LP_BLOCK_IWDG_UNSAFE`、`get_rtc_soc`、`set_rtc_soc`、`s_u8RtcSoc`、`s_lp_runtime` 残留引用。
+- `git diff --check` 在本次白名单源码、Keil 工程、工具和文档范围通过；全仓检查仍受用户已有 `todo.md` trailing whitespace 影响。
+- `clang -fsyntax-only` 检查 `rtc_sleep.c`、`rtc_sleep_port.c`、`rtc_sleep_afe_sh367309.c`、`System_Init.c`、`SystemDebug.c`、`Runtime.c`、`AppInit.c` 通过，使用 `STM32F10X_MD`、`USE_STDPERIPH_DRIVER`、当前 StdPeriph include 路径。
+- `tools/project_check.py --quiet` 仍是当前仓库基线失败：`87 OK / 1 warning / 41 errors`，主要来自缺历史固定文件、编码和配置宏/BuildGuard 检查。
+- 未执行 Keil `FD_Release` 编译、烧录、STOP 电流、ST-Link `DBGMCU->CR` 读取和 COM/CAN 实测。
+
+## 2026-06-02 低功耗需求与实现对齐
+
+### 本次文档修改
+
+- 新增 `docs/review/low_power_requirement_alignment_2026-06-02.md`，按当前源码梳理低功耗启动链路、运行态 HICCUP STOP、reset sleep、唤醒恢复、BKP 分配、当前电源控制和需求确认表。
+- 更新 `docs/design/low_power_design.md`，标记当前源码与旧设计口径的差异，包括 DBGMCU Release 位、IWDG 宏与实际启用、FactoryAging/AFE not idle 阻塞、Sleep 参数有效性。
+- 更新 `docs/review/requirement_questions.md`，新增低功耗简化前必须确认的问题。
+- 更新 `docs/review/risk_list.md`，新增 IWDG、DBGMCU、老化、AFE、Sleep 参数和未使用 wrapper 风险。
+- 更新 `docs/review/test_plan.md`，补充 DBGMCU、IWDG、老化、AFE、Sleep 参数和 HICCUP 前 AFE 功耗状态测试项。
+- 更新 `docs/review/refactor_plan.md`，把 RTC 低功耗/IWDG 阶段拆成先确认、再小批次净删减的计划。
+
+### 边界说明
+
+- 本次未修改源码、协议、Keil 工程、编译宏、IAP/App 地址和烧录脚本。
+- 当前目标是需求对齐，不做低功耗行为修复；后续任何源码简化必须先逐条确认需求表。
+- `tools/project_check.py --quiet` 当前仍是仓库基线失败：`87 OK / 1 warning / 41 errors`，主要是缺历史固定文档、缺 `easylogger/inc/elog_cfg.h`、编码/宏检查等，不是本次文档整理引入。
+
 ## 2026-06-02 CAN 运行态调度和 debug 快照继续简化
 
 ### 本次源码修改

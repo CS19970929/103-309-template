@@ -17,7 +17,7 @@
 | 保护参数 | ~70+ | PRT_E2ROMParas, Fault_Flag_* |
 | ADC | ~4 | g_i32ADCResult, g_u32Vbat_mV |
 | CAN | ~2 | g_stCanErrorSnapshot, g_stCanLowPowerStatus |
-| 低功耗 | ~6 | g_stLowPowerRtcStatus, RTC_ExtComCnt |
+| 低功耗 | ~5 | g_stLowPowerRtcStatus, RTC_ExtComCnt |
 | LED | ~1 | key_release_wakeup |
 | Flash/升级 | ~2 | u8FlashUpdateFlag, u8FlashUpdateE2PROM |
 | 日志 | ~1 | su32_Interval_S_Tcnt |
@@ -278,8 +278,8 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 // SleepDeal.c
 UINT8 RTC_ExtComCnt;  // 外部通讯计数
 
-// app_lowpower.c (static)
-static LP_Runtime_t s_lp_runtime;  // 低功耗运行时状态
+// rtc_sleep.c (static)
+static uint32_t s_u32LastSleepSeconds;  // 最近一次 RTC sleep 累计秒数
 ```
 
 ### LOW_POWER_RTC_STATUS

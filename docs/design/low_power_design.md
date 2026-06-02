@@ -2,9 +2,17 @@
 
 文档状态：CURRENT
 源码验证：PARTIAL
-主要参考源码：`app_lowpower.c`, `rtc_sleep.c`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
-最后更新时间：2026-05-27
-未确认事项：IWDG 10s 唤醒周期是否满足功耗目标、fault 是否全部阻塞 sleep、`PROJECT_CFG_IDLE_SLEEP_ENABLE` 打开后是否通过硬件实测。
+主要参考源码：`rtc_sleep.c`, `rtc_sleep.h`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
+最后更新时间：2026-06-02
+未确认事项：IWDG 宏与实际启用是否一致、factory aging / AFE not idle 是否阻塞 sleep、`OtherElement` 普通休眠和 RTC 参数是否仍为有效需求。
+
+## 2026-06-02 源码复核补充
+
+- 当前源码已删除 `conf.h` 中无条件 `__EnableLowPowerDebug__`；`EnableLowPowerDebug()` 在未显式定义该宏时会清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`，符合 Release 功耗实测边界。
+- 当前 `PROJECT_CFG_WDOG_ENABLE` 为 `0`，但 `AppInit_InitDevice()` 仍无条件调用 `Init_IWDG()`，`Init_IWDG()` 内部没有用该宏直接门控返回；IWDG 需求与 RTC wake period 安全窗口需要重新对齐。
+- `rtc_sleep()` 只实际使用 `OtherElement.u16Sleep_Vlow` 和 `OtherElement.u16Sleep_TimeVlow`；`u16Sleep_VNormal`、`u16Sleep_TimeNormal`、`u16Sleep_RTC_WakeUpTime`、`u16Sleep_TimeRTC` 当前未进入主判断。
+- `RtcSleep_PortIsFactoryAgingActive()`、`RtcSleep_PortIsAfeSleepBlocked()` 这类未使用 wrapper 已删除；FactoryAging active 已按确认只阻塞 HICCUP RTC STOP，不影响 `DEEP_MODE/NORMAL_MODE` reset sleep；AFE not idle 是否阻塞 STOP 仍需确认。
+- 新的需求对齐文档见 `docs/review/low_power_requirement_alignment_2026-06-02.md`；官方/行业调研见 `docs/review/low_power_official_industry_research_2026-06-02.md`。
 
 ## 2026-05-27 RTC/STOP 修复补充
 
@@ -19,9 +27,8 @@
 
 ```text
 Runtime_RunIoAndPowerTasks()
-  LP_Task()
-    LP_BuildBlockReason()
-    rtc_sleep()
+  rtc_sleep()
+    LP_GetBlockReason()
 ```
 
 Reset 式 sleep 入口：
@@ -46,17 +53,16 @@ SleepDeal_Continue()
 
 ## 3. 阻塞原因
 
-当前 `LP_BuildBlockReason()` 会阻塞 sleep 的条件：
+当前 `LP_GetBlockReason()` 在 `rtc_sleep.c` 内现算，会阻塞 sleep 的条件：
 
 - 充/放电电流 > 10mA。
 - SCI/CAN busy。
 - MCU_WK/key active。
-- AFE 不允许 sleep。
 - Flash busy 或待写参数。
 - IAP pending。
 - fault active。
 - LedBar active。
-- RTC 周期不满足 IWDG 安全窗口。
+- 工厂老化 running 只阻塞 HICCUP RTC STOP；低压 deep 和外部 deep/reset sleep 请求不受此条件阻塞。
 
 ## 4. RTC 使用
 
@@ -68,11 +74,16 @@ RTC 默认 wake period 为 10s，IWDG 开启时仍限制最大 10s。CAN 不再�
 
 ## 5. IWDG 使用
 
-IWDG 默认开启：
+当前源码事实：
 
-- 主循环末尾喂狗。
-- `__delay_ms()` 中喂狗。
-- STOP 前后喂狗。
+- `Project_Config.h` 中 `PROJECT_CFG_WDOG_ENABLE` 当前为 `0`。
+- `conf.h` 只有在 `PROJECT_CFG_WDOG_ENABLE` 为 1 时才定义 `wdog_enable`，因此 `RTC_GetWakeupPeriodSeconds()` 的 10 秒限制只在该宏有效时启用。
+- `AppInit_InitDevice()` 仍无条件调用 `Init_IWDG()`，`Init_IWDG()` 内部当前没有按 `PROJECT_CFG_WDOG_ENABLE` 直接返回。
+
+待确认需求：
+
+- 如果量产必须启用 IWDG，则 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()`、`RTC_IsWakeupPeriodSafe()` 必须统一。
+- 如果调试阶段允许关闭 IWDG，则必须明确写入构建 profile，不允许宏显示关闭但实际仍开启。
 
 ## 6. 唤醒流程
 
@@ -103,7 +114,8 @@ HICCUP STOP 醒来后：
 | 风险 | 建议 |
 |---|---|
 | CAN busy 被打断导致协议半包 | 保留 `Can_IsBusy()` 阻塞 STOP，确认 TX queue、App 命令和 read-block stream 结束后再睡 |
-| IWDG 10s 周期导致功耗偏高 | 实测后决定是否调整 IWDG/RTC 策略 |
+| IWDG 宏和实际启用不一致 | 先确认量产 IWDG 策略，再统一 `PROJECT_CFG_WDOG_ENABLE`、`Init_IWDG()` 和 RTC wake 安全窗口 |
+| DBGMCU 低功耗调试保持只能显式打开 | 量产功耗实测必须确认 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP 为 0；调试 STOP 时再临时打开 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |
 | LedBar active 阻塞 sleep 影响用户显示和功耗 | 确认显示窗口时长 |
 | STM32 idle sleep 打开后可能影响现场调试节奏 | 默认关闭，硬件回归后再决定是否量产打开 |

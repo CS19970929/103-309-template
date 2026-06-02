@@ -1,5 +1,4 @@
 #include "main.h"
-#include "FactoryAging.h"
 #include "LowPowerSleep.h"
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"
@@ -12,11 +11,6 @@ UINT8 RtcSleep_PortIsOneSecondTick(void)
 UINT16 RtcSleep_PortGetCellMinMv(void)
 {
     return g_stCellInfoReport.u16VCellMin;
-}
-
-UINT16 RtcSleep_PortGetCellMaxMv(void)
-{
-    return g_stCellInfoReport.u16VCellMax;
 }
 
 UINT16 RtcSleep_PortGetChargeCurrentMa(void)
@@ -39,19 +33,9 @@ UINT8 RtcSleep_PortIsMcuWakeActive(void)
     return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
 }
 
-UINT8 RtcSleep_PortIsFactoryAgingActive(void)
-{
-    return FactoryAging_IsActive();
-}
-
 UINT8 RtcSleep_PortGetExternalCommCounter(void)
 {
     return RTC_ExtComCnt;
-}
-
-UINT8 RtcSleep_PortIsAfeSleepBlocked(void)
-{
-    return RtcSleep_AfePortIsSleepBlocked();
 }
 
 UINT8 RtcSleep_PortUpdateRtcData(void)
@@ -89,9 +73,8 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
     SleepDeal_Continue(sleep_mode);
 }
 
-void RtcSleep_PortPrepareRtcStop(UINT32 rtc_cycle_count)
+void RtcSleep_PortPrepareRtcStop(void)
 {
-    (void)rtc_cycle_count;
     LowPowerSleep_SaveCoreState();
 
     Init_RTC();
@@ -127,13 +110,11 @@ UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
     return RTC_GetLastWakeupPeriodSeconds();
 }
 
-UINT8 RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
+void RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
 {
     SOC_ApplyRtcRelaxationCompensation(rest_seconds,
                                        g_stCellInfoReport.u16VCellMin,
                                        g_stCellInfoReport.u16VCellMax);
-
-    return SOC_Enhance_Element.u8_SOC;
 }
 
 void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
