@@ -593,10 +593,6 @@ static void soc_save_current_snapshot(void)
 
 static void soc_save_if_needed(void)
 {
-	if (!SOC_Enhance_Element.u16_SOC_InitOver)
-	{
-		return;
-	}
 	if ((s_soc.soc != s_saved_soc.soc) ||
 		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
 		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
@@ -1654,7 +1650,6 @@ void soc_param_lib_init(void)
 						 g_stCellInfoReport.u16Ichg,
 						 g_stCellInfoReport.u16IDischg);
 	soc_load_or_default();
-	SOC_Enhance_Element.u16_SOC_InitOver = 1U;
 	soc_publish(1U);
 }
 
@@ -1677,10 +1672,6 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 
 void SOC_SaveSnapshotBeforeSleep(void)
 {
-	if (!SOC_Enhance_Element.u16_SOC_InitOver)
-	{
-		return;
-	}
 	soc_save_if_needed();
 }
 
@@ -1692,10 +1683,6 @@ void SOC_IntEnhance_Ctrl(void)
 	UINT8 low_tail_active;
 	UINT8 mid_tail_active;
 
-	if (!SOC_Enhance_Element.u16_SOC_InitOver)
-	{
-		return;
-	}
 	if (SOC_Enhance_Element.u16_RefreshData_Flag != 0U)
 	{
 		soc_handle_command();
@@ -1742,11 +1729,6 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 	UINT8 old_soc;
 #endif
-
-	if (!SOC_Enhance_Element.u16_SOC_InitOver)
-	{
-		return;
-	}
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 	old_soc = s_soc.soc;
 #endif

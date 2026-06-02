@@ -84,7 +84,6 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_Ichg;                   // A * 10
 	UINT16 u16_Idsg;                   // A * 10
 
-	UINT16 u16_SOC_InitOver;
 	UINT8 u8_SOC;
 	UINT8 u8_SOH;
 	UINT16 u16_CapacityNow;            // Ah * 100

@@ -76,7 +76,6 @@ typedef struct
 
 typedef struct
 {
-    uint8_t initialized;
     uint8_t sleep;
     uint8_t blank;
     uint8_t number;
@@ -84,7 +83,6 @@ typedef struct
     uint8_t test_single_segment_id;
     LedBarFrame frame;
     uint8_t scan_index;
-    uint8_t scan_timer_initialized;
     uint8_t scan_timer_enabled;
     uint16_t soc_display_10ms;
     uint8_t startup_display_armed;
@@ -92,11 +90,9 @@ typedef struct
     uint32_t key_press_start_10ms;
     uint8_t key_last_pressed;
     uint8_t key_long_handled;
-    uint8_t key_filter_initialized;
     uint8_t key_active;
     uint8_t key_on_10ms;
     uint8_t key_off_10ms;
-    uint8_t mcu_wk_filter_initialized;
     uint8_t mcu_wk_active;
     uint8_t mcu_wk_on_10ms;
     uint8_t mcu_wk_off_10ms;
@@ -170,10 +166,7 @@ static void LedBar_RefreshOutput(void);
 
 static void LedBar_EnsureInit(void)
 {
-    if (s_ledbar.initialized == 0u)
-    {
-        LedBar_Init();
-    }
+    LedBar_Init();
 }
 
 static void LedBar_EnableBackupAccess(void)
@@ -358,11 +351,6 @@ static void LedBar_ScanTimerInit(void)
     TIM_TimeBaseInitTypeDef timer_init;
     NVIC_InitTypeDef nvic_init;
 
-    if (s_ledbar.scan_timer_initialized != 0u)
-    {
-        return;
-    }
-
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     TIM_Cmd(TIM4, DISABLE);
 
@@ -381,7 +369,6 @@ static void LedBar_ScanTimerInit(void)
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
 
-    s_ledbar.scan_timer_initialized = 1u;
 }
 
 static void LedBar_StartScanTimer(void)
@@ -402,16 +389,12 @@ static void LedBar_StartScanTimer(void)
 
 static void LedBar_StopScanTimer(void)
 {
-    if (s_ledbar.scan_timer_initialized != 0u)
-    {
-        TIM_Cmd(TIM4, DISABLE);
-        TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
-        TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
-        NVIC_DisableIRQ(TIM4_IRQn);
-        NVIC_ClearPendingIRQ(TIM4_IRQn);
-        RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
-        s_ledbar.scan_timer_initialized = 0u;
-    }
+    TIM_Cmd(TIM4, DISABLE);
+    TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
+    TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+    NVIC_DisableIRQ(TIM4_IRQn);
+    NVIC_ClearPendingIRQ(TIM4_IRQn);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
     s_ledbar.scan_timer_enabled = 0u;
 }
 
@@ -892,18 +875,6 @@ static void LedBar_ServiceMcuWakeFilter(void)
     uint8_t raw_active = LedBar_ReadMcuWakeRaw();
     uint8_t was_active;
 
-    if (s_ledbar.mcu_wk_filter_initialized == 0u)
-    {
-        s_ledbar.mcu_wk_filter_initialized = 1u;
-        LedBar_PrimeBinaryFilter(raw_active,
-                                 &s_ledbar.mcu_wk_active,
-                                 &s_ledbar.mcu_wk_on_10ms,
-                                 &s_ledbar.mcu_wk_off_10ms,
-                                 LEDBAR_MCU_WK_ON_FILTER_10MS,
-                                 LEDBAR_MCU_WK_OFF_FILTER_10MS);
-        return;
-    }
-
     if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
     {
         return;
@@ -948,19 +919,6 @@ static void LedBar_ServiceSwitch(void)
     uint8_t raw_pressed = LedBar_ReadSwitchRaw();
     uint8_t was_pressed;
     uint32_t now_10ms = SysTime_Get10msTickCount();
-
-    if (s_ledbar.key_filter_initialized == 0u)
-    {
-        s_ledbar.key_filter_initialized = 1u;
-        LedBar_PrimeBinaryFilter(raw_pressed,
-                                 &s_ledbar.key_active,
-                                 &s_ledbar.key_on_10ms,
-                                 &s_ledbar.key_off_10ms,
-                                 LEDBAR_KEY_ON_FILTER_10MS,
-                                 LEDBAR_KEY_OFF_FILTER_10MS);
-        s_ledbar.key_last_pressed = s_ledbar.key_active;
-        return;
-    }
 
     if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
     {
@@ -1033,11 +991,6 @@ static uint8_t LedBar_IsFaultActive(void)
 
 void LedBar_Init(void)
 {
-    if (s_ledbar.initialized != 0u)
-    {
-        return;
-    }
-
     s_ledbar.sleep = 0u;
     s_ledbar.blank = 1u;
     s_ledbar.number = 0u;
@@ -1045,7 +998,6 @@ void LedBar_Init(void)
     s_ledbar.test_single_segment_id = 0u;
     LedBar_FrameClear(&s_ledbar.frame);
     s_ledbar.scan_index = 0u;
-    s_ledbar.scan_timer_initialized = 0u;
     s_ledbar.scan_timer_enabled = 0u;
     s_ledbar.soc_display_10ms = 0u;
     s_ledbar.startup_display_armed = 0u;
@@ -1053,18 +1005,16 @@ void LedBar_Init(void)
     s_ledbar.key_press_start_10ms = 0u;
     s_ledbar.key_last_pressed = 0u;
     s_ledbar.key_long_handled = 0u;
-    s_ledbar.key_filter_initialized = 0u;
     s_ledbar.key_active = 0u;
     s_ledbar.key_on_10ms = 0u;
     s_ledbar.key_off_10ms = 0u;
-    s_ledbar.mcu_wk_filter_initialized = 0u;
     s_ledbar.mcu_wk_active = 0u;
     s_ledbar.mcu_wk_on_10ms = 0u;
     s_ledbar.mcu_wk_off_10ms = 0u;
     LedBar_GpioInitForDisplay();
+    LedBar_ScanTimerInit();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
-    s_ledbar.initialized = 1u;
 }
 
 void LedBar_Clear(void)
@@ -1240,11 +1190,6 @@ void LedBar_PrepareForStop(void)
 
 uint8_t LedBar_IsActiveForLowPower(void)
 {
-    if (s_ledbar.initialized == 0u)
-    {
-        return 0u;
-    }
-
     if (s_ledbar.sleep != 0u)
     {
         return 0u;
@@ -1262,11 +1207,6 @@ uint8_t LedBar_IsActiveForLowPower(void)
 
 void LedBar_Scan1ms(void)
 {
-    if (s_ledbar.initialized == 0u)
-    {
-        return;
-    }
-
     if ((s_ledbar.sleep != 0u) || (s_ledbar.frame.length == 0u))
     {
         LedBar_OutputOff();

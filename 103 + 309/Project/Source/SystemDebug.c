@@ -24,9 +24,12 @@
 
 static void SystemDebug_InitCycCnt(void)
 {
-	DEMCR |= (1U << 24);
-	DWT_CYCCNT = 0;
-	DWT_CONTROL |= 1U;
+	/* self-check: only init if DWT counter not yet running */
+	if ((DWT_CONTROL & 1U) == 0U) {
+		DEMCR |= (1U << 24);
+		DWT_CYCCNT = 0;
+		DWT_CONTROL |= 1U;
+	}
 }
 
 static uint32_t SystemDebug_CycCntToUs(uint32_t cycles)
@@ -108,11 +111,7 @@ void SystemDebug_LoopEnter(uint32_t start_cyccnt)
 
 void SystemDebug_Snapshot(void)
 {
-	static uint8_t s_init_done = 0U;
-	if (s_init_done == 0U) {
-		SystemDebug_InitCycCnt();
-		s_init_done = 1U;
-	}
+	SystemDebug_InitCycCnt();
 
 	/* ===== GPIO ===== */
 	g_dbg.gpio.a_in  = GPIO_ReadInputData(GPIOA);
@@ -185,7 +184,6 @@ void SystemDebug_Snapshot(void)
 	g_dbg.soc.vmin      = SOC_Enhance_Element.u16_VCellMin;
 	g_dbg.soc.ichg      = SOC_Enhance_Element.u16_Ichg;
 	g_dbg.soc.idsg      = SOC_Enhance_Element.u16_Idsg;
-	g_dbg.soc.init_over = (uint8_t)SOC_Enhance_Element.u16_SOC_InitOver;
 	g_dbg.soc.ocv_cali  = SOC_Enhance_Element.u8_SOC_OCV_Cali;
 	g_dbg.soc.vtotal    = g_stCellInfoReport.u16VCellTotle;
 
