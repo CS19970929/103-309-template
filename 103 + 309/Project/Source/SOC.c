@@ -110,7 +110,6 @@ void InitData_SOC(void)
 {
 	SOC_LoadConfigData();
 	soc_param_lib_init();
-	SOC_PublishReportData();
 }
 
 void App_SOC(void)
