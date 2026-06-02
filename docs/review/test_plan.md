@@ -142,11 +142,13 @@
 | T-SV-002 | 产品信息初始化收口 | 读 Modbus `0xC002` 48 个寄存器，并 `rg "su8_StartUpFlag|InitProID\\(|App_ProID_Deal"` | SN/HW/SW 默认或写入信息不丢失；源码中 `App_ProID_Deal()` 不再依赖一次性 flag |
 | T-SV-003 | FactoryAging 结构体收口 | `rg "s_u8FactoryAging|s_u16FactoryAging|s_u32FactoryAging" "103 + 309/Project/Source/FactoryAging.c"`，并检查 `s_factory_aging` 字段 | 旧散落静态变量无残留；`state/elapsed10ms/lastTick/saveValid/retry/mosMode` 集中在 `s_factory_aging` |
 | T-SV-004 | FactoryAging 老化功能回归 | 通过 CAN/上位机执行 start/stop/reset/set hours，抓 `0x14F80208` 老化状态和剩余分钟 | 结构体收口后老化状态、剩余时间、BKP/Flash 保存和 MOS 模式行为不变 |
-| T-SV-005 | LedBar 显式初始化 | 源码阶段执行后观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | 不重复初始化，不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
-| T-SV-006 | LedBar STOP 前 GPIO | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流 | LED 引脚进入低漏电安全态，STOP 前无残留扫描 |
-| T-SV-007 | `readyToSleep` 收口 | 源码阶段执行后覆盖 HICCUP、NORMAL、DEEP 三类 sleep | sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
-| T-SV-008 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | 移出纯展示字段后，调试仍能看到 mode/block/elapsed 等必要信息 |
-| T-SV-009 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |
-| T-SV-010 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
-| T-SV-011 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
-| T-SV-012 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |
+| T-SV-005 | LogRecord 结构体收口 | `rg "BMS_LOG_POINT|BMS_LOG_RECORD|s_log_record_flag|s_u32_LogRecord|s_u8_LogRecord|su8_Event|su8_CBC_Temp" "103 + 309/Project/Source/LogRecord.c"`，并检查 `s_log_record` 字段 | 旧私有日志状态无残留；外部 `su32_Interval_S_Tcnt` 保留；日志格式和 Flash 保存接口不变 |
+| T-SV-006 | LogRecord 日志功能回归 | 触发 startup/sleep/fault/CBC 日志，读事件记录并执行 reset event record | startup/sleep 日志、fault 边沿去重、CBC 变化记录、读取顺序和清空行为不变 |
+| T-SV-007 | LedBar 显式初始化 | 源码阶段执行后观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | 不重复初始化，不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
+| T-SV-008 | LedBar STOP 前 GPIO | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流 | LED 引脚进入低漏电安全态，STOP 前无残留扫描 |
+| T-SV-009 | `readyToSleep` 收口 | 源码阶段执行后覆盖 HICCUP、NORMAL、DEEP 三类 sleep | sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
+| T-SV-010 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | 移出纯展示字段后，调试仍能看到 mode/block/elapsed 等必要信息 |
+| T-SV-011 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |
+| T-SV-012 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
+| T-SV-013 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
+| T-SV-014 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |

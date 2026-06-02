@@ -71,6 +71,30 @@
 - `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
 - 未执行 Keil `FD_Release` 编译、真板老化 start/stop/reset/set hours、CAN `0x14F80208` 广播或上位机老化时间读取。
 
+## 2026-06-02 SV-STRUCT-02 LogRecord 运行态结构体收口
+
+### 本次源码修改
+
+- `LogRecord.c`：新增 `LogRecordRuntime`，将日志模块私有运行态收口到 `s_log_record`。
+- 收口字段包括事件记录点、事件记录数组、startup/sleep 请求 flag、运行秒计数、重复保存抑制数组、普通事件 latch 和 CBC 温度变化缓存。
+- 保留 `su32_Interval_S_Tcnt` 外部符号，因为 `rtc_sleep_port.c` 仍通过它补偿 RTC sleep 秒数。
+
+### 本次文档修改
+
+- 更新 `docs/review/state_variable_audit.md`、`docs/review/requirement_confirmation.md`、`docs/review/requirement_questions.md`、`docs/review/refactor_plan.md`、`docs/review/risk_list.md`、`docs/review/test_plan.md`、`docs/test_plan.md` 和 `docs/change_log.md`，补充 `SV-STRUCT-02 / REQ-SV-008`。
+
+### 安全边界
+
+- 未修改日志事件编码、事件记录格式、Flash 保存格式、Modbus 事件读取接口、低功耗 sleep 日志触发接口、`su32_Interval_S_Tcnt` 跨模块补偿语义、Flash/IAP 地址和配置宏。
+
+### 本次验证
+
+- `rg -n "BMS_LOG_POINT|BMS_LOG_RECORD|s_log_record_flag|s_u32_LogRecord|s_u8_LogRecord|su8_Event|su8_CBC_Temp" "103 + 309/Project/Source/LogRecord.c"`：源码无旧私有符号残留。
+- `git diff --check`：通过。
+- `clang -fsyntax-only` 检查 `LogRecord.c`：通过。
+- `python3 tools/project_check.py --quiet`：仍为仓库历史基线失败，本次结果 `88 OK / 1 warning / 40 errors`，失败项主要是历史缺文件、编码、配置宏/BuildGuard 检查和缺 `test_Autocurrent_cycle` 等，不是本批次新增问题。
+- 未执行 Keil `FD_Release` 编译、真板 startup/sleep/fault 日志、事件读取或 reset event record 测试。
+
 ## 2026-06-02 低功耗 review 问题修复
 
 ### 本次源码修改

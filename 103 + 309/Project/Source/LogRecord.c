@@ -2,13 +2,20 @@
 
 #define EVENT_RECORD_LENGTH 100
 
-static UINT8 BMS_LOG_POINT = 0;
-static UINT8 BMS_LOG_RECORD[EVENT_RECORD_LENGTH][2];
-static LOG_RECORD_FLAG s_log_record_flag;
+typedef struct
+{
+	UINT8 point;
+	UINT8 records[EVENT_RECORD_LENGTH][2];
+	LOG_RECORD_FLAG flags;
+	UINT32 uptimeSeconds;
+	UINT32 lastSaveSeconds[EVENT_NUM];
+	UINT8 lastSaveValid[EVENT_NUM];
+	UINT8 eventLatch[EVENT_NUM];
+	UINT8 cbcTemp;
+} LogRecordRuntime;
+
+static LogRecordRuntime s_log_record;
 UINT32 su32_Interval_S_Tcnt = 0;
-static UINT32 s_u32_LogRecord_UptimeSeconds = 0;
-static UINT32 s_u32_LogRecord_LastSaveSeconds[EVENT_NUM] = {0};
-static UINT8 s_u8_LogRecord_LastSaveValid[EVENT_NUM] = {0};
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
 {
@@ -25,12 +32,12 @@ static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
 		return 0;
 	}
 
-	if (!s_u8_LogRecord_LastSaveValid[event])
+	if (!s_log_record.lastSaveValid[event])
 	{
 		return 1;
 	}
 
-	elapsed = s_u32_LogRecord_UptimeSeconds - s_u32_LogRecord_LastSaveSeconds[event];
+	elapsed = s_log_record.uptimeSeconds - s_log_record.lastSaveSeconds[event];
 	return (elapsed >= (UINT32)PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC) ? 1U : 0U;
 #else
 	(void)event;
@@ -42,8 +49,8 @@ static void LogRecord_MarkEventSaved(LogEventArray event)
 {
 	if (event < EVENT_NUM)
 	{
-		s_u32_LogRecord_LastSaveSeconds[event] = s_u32_LogRecord_UptimeSeconds;
-		s_u8_LogRecord_LastSaveValid[event] = 1;
+		s_log_record.lastSaveSeconds[event] = s_log_record.uptimeSeconds;
+		s_log_record.lastSaveValid[event] = 1;
 	}
 }
 
@@ -64,12 +71,12 @@ static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 
 void LogRecord_RequestStartup(void)
 {
-	s_log_record_flag.bits.Log_StartUp = 1U;
+	s_log_record.flags.bits.Log_StartUp = 1U;
 }
 
 void LogRecord_RequestSleep(void)
 {
-	s_log_record_flag.bits.Log_Sleep = 1U;
+	s_log_record.flags.bits.Log_Sleep = 1U;
 }
 
 UINT8 LogTime_Map(UINT32 *Time_S_Cnt)
@@ -100,20 +107,20 @@ void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 		return;
 	}
 
-	if (BMS_LOG_POINT >= EVENT_RECORD_LENGTH)
+	if (s_log_record.point >= EVENT_RECORD_LENGTH)
 	{
-		BMS_LOG_POINT = 0;
+		s_log_record.point = 0;
 	}
 
-	BMS_LOG_RECORD[BMS_LOG_POINT][0] = event;
-	BMS_LOG_RECORD[BMS_LOG_POINT][1] = LogTime_Map(Time_S_Cnt);
+	s_log_record.records[s_log_record.point][0] = event;
+	s_log_record.records[s_log_record.point][1] = LogTime_Map(Time_S_Cnt);
 	if (event == BMS_START_UP)
 	{
-		BMS_LOG_RECORD[BMS_LOG_POINT][1] = 0;
+		s_log_record.records[s_log_record.point][1] = 0;
 	}
-	++BMS_LOG_POINT;
+	++s_log_record.point;
 
-	if (StorageFlash_SaveLogData(BMS_LOG_POINT, (const UINT8 (*)[2])BMS_LOG_RECORD))
+	if (StorageFlash_SaveLogData(s_log_record.point, (const UINT8 (*)[2])s_log_record.records))
 	{
 		LogRecord_MarkEventSaved(event);
 	}
@@ -121,50 +128,47 @@ void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 
 void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 {
-	static UINT8 su8_Event[EVENT_NUM] = {0};
-	static UINT8 su8_CBC_Temp = 0;
-
 	if (BMS_START_UP == event)
 	{
-		if (s_log_record_flag.bits.Log_StartUp)
+		if (s_log_record.flags.bits.Log_StartUp)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
-			s_log_record_flag.bits.Log_StartUp = 0U;
+			s_log_record.flags.bits.Log_StartUp = 0U;
 		}
 	}
 	else if (BMS_SLEEP == event)
 	{
-		if (s_log_record_flag.bits.Log_Sleep)
+		if (s_log_record.flags.bits.Log_Sleep)
 		{
 			LogEvent_EEPROM(event, Time_S_Cnt);
-			s_log_record_flag.bits.Log_Sleep = 0U;
+			s_log_record.flags.bits.Log_Sleep = 0U;
 			LowPower_ClearToSleepFlag();
 		}
 	}
 	else if (CBC_ERR == event)
 	{
-		if (su8_CBC_Temp != temp)
+		if (s_log_record.cbcTemp != temp)
 		{
-			su8_CBC_Temp = temp;
+			s_log_record.cbcTemp = temp;
 			LogEvent_EEPROM(event, Time_S_Cnt);
 		}
 	}
 	else
 	{
-		switch (su8_Event[event])
+		switch (s_log_record.eventLatch[event])
 		{
 		case 0:
 			if (temp)
 			{
 				LogEvent_EEPROM(event, Time_S_Cnt);
-				su8_Event[event] = 1;
+				s_log_record.eventLatch[event] = 1;
 			}
 			break;
 
 		case 1:
 			if (!temp)
 			{
-				su8_Event[event] = 0;
+				s_log_record.eventLatch[event] = 0;
 			}
 			break;
 
@@ -184,9 +188,9 @@ void App_LogRecord(void)
 	}
 
 	++su32_Interval_S_Tcnt;
-	++s_u32_LogRecord_UptimeSeconds;
+	++s_log_record.uptimeSeconds;
 
-	LogEvent_Record(s_log_record_flag.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
+	LogEvent_Record(s_log_record.flags.bits.Log_StartUp, BMS_START_UP, &su32_Interval_S_Tcnt);
 
 	LogEvent_Record(g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp, VCELL_OVP, &su32_Interval_S_Tcnt);
 	LogEvent_Record(g_stCellInfoReport.unMdlFault_Third.bits.b1BatOvp, VBUS_OVP, &su32_Interval_S_Tcnt);
@@ -216,13 +220,13 @@ void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 t_u8BuffTemp[])
 
 	for (j = 0; j < EVENT_RECORD_LENGTH; j++)
 	{
-		k = (INT8)(BMS_LOG_POINT - 1 - j);
+		k = (INT8)(s_log_record.point - 1 - j);
 		if (k < 0)
 		{
 			k = EVENT_RECORD_LENGTH + k;
 		}
-		t_u8BuffTemp[i++] = BMS_LOG_RECORD[k][0];
-		t_u8BuffTemp[i++] = BMS_LOG_RECORD[k][1];
+		t_u8BuffTemp[i++] = s_log_record.records[k][0];
+		t_u8BuffTemp[i++] = s_log_record.records[k][1];
 	}
 }
 
@@ -256,12 +260,12 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 
 	for (i = 0; i < EVENT_RECORD_LENGTH; ++i)
 	{
-		BMS_LOG_RECORD[i][0] = 0;
-		BMS_LOG_RECORD[i][1] = 0;
+		s_log_record.records[i][0] = 0;
+		s_log_record.records[i][1] = 0;
 	}
-	BMS_LOG_POINT = 0;
+	s_log_record.point = 0;
 
-	return StorageFlash_SaveLogData(BMS_LOG_POINT, (const UINT8 (*)[2])BMS_LOG_RECORD);
+	return StorageFlash_SaveLogData(s_log_record.point, (const UINT8 (*)[2])s_log_record.records);
 }
 
 void ReadEEPROM_EventRecord_Parameters(void)
@@ -270,7 +274,7 @@ void ReadEEPROM_EventRecord_Parameters(void)
 	UINT8 point = 0;
 	UINT8 invalid = 0;
 
-	if (!StorageFlash_LoadLogData(&point, BMS_LOG_RECORD))
+	if (!StorageFlash_LoadLogData(&point, s_log_record.records))
 	{
 		invalid = 1;
 	}
@@ -282,7 +286,7 @@ void ReadEEPROM_EventRecord_Parameters(void)
 	{
 		for (i = 0; i < EVENT_RECORD_LENGTH; ++i)
 		{
-			if (!LogRecord_IsEntryValid(BMS_LOG_RECORD[i][0], BMS_LOG_RECORD[i][1]))
+			if (!LogRecord_IsEntryValid(s_log_record.records[i][0], s_log_record.records[i][1]))
 			{
 				invalid = 1;
 				break;
@@ -297,5 +301,5 @@ void ReadEEPROM_EventRecord_Parameters(void)
 		return;
 	}
 
-	BMS_LOG_POINT = point;
+	s_log_record.point = point;
 }
