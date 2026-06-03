@@ -929,7 +929,6 @@ static uint8_t LedBar_IsMcuWakeActive(void)
 
 static uint8_t LedBar_IsDisplayRequested(void)
 {
-    // return 1;
 #if LEDBAR_TEST_ALWAYS_ON
     return 1u;
 #elif !LEDBAR_SLEEP_ENABLE
@@ -1310,6 +1309,7 @@ void APP_LedBar(void)
 
     LedBar_ServiceStartupDisplayWindow();
 
+    // display_requested = 1;
     display_requested = LedBar_IsDisplayRequested();
     if (display_requested == 0u)
     {

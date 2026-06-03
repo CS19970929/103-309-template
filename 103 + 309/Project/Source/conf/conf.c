@@ -147,6 +147,7 @@ void LowPower_DisableWakeupExti(void)
     LowPower_ConfigWakeupExti(EXTI_Line9, EXTI_Trigger_Falling, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
 
 #if defined(UART1_WAKEUP_ENABLE)
     LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
@@ -267,7 +268,7 @@ void IOstatus_Base(void)
                             Bit_RESET,
                             Bit_RESET);
 
-    LedBar_PrepareForStop();
+    // LedBar_PrepareForStop();
 }
 
 void IOstatus_RTCMode(void)

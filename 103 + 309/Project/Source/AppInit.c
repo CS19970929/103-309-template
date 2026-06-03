@@ -28,7 +28,7 @@ static void AppInit_InitDevice(void)
 
 	EnableLowPowerDebug();
 
-	Init_IWDG();
+	// Init_IWDG();
 }
 
 static void AppInit_InitRuntimeState(void)

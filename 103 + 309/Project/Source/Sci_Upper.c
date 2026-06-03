@@ -37,7 +37,8 @@ typedef void (*SCI_PROTOCOL_RESET_FN)(void *pvProtocolCtx);
 typedef void (*SCI_PROTOCOL_RX_IDLE_FN)(void *pvProtocolCtx);
 typedef void (*SCI_PROTOCOL_TX_COMPLETE_FN)(void *pvProtocolCtx);
 
-struct SCI_PROTOCOL_OPS {
+struct SCI_PROTOCOL_OPS
+{
 	SCI_PROTOCOL_RESET_FN pfReset;
 	SCI_PROTOCOL_RX_FEED_FN pfRxFeed;
 	SCI_PROTOCOL_PROCESS_FN pfProcessFrame;
@@ -48,7 +49,8 @@ struct SCI_PROTOCOL_OPS {
 	SCI_PROTOCOL_TX_COMPLETE_FN pfOnTxComplete;
 };
 
-struct SCI_PORT_RUNTIME {
+struct SCI_PORT_RUNTIME
+{
 	USART_TypeDef *pstUsart;
 	void *pvProtocolCtx;
 	const struct SCI_PROTOCOL_OPS *pstProtocolOps;
@@ -128,7 +130,6 @@ static struct SCI_PORT_RUNTIME g_stSciPort2 = {
 	0};
 #endif
 
-
 #ifdef _COMMOM_UPPER_SCI3
 static struct SCI_PORT_RUNTIME g_stSciPort3 = {
 	USART3,
@@ -172,6 +173,7 @@ static UINT8 Sci_BmsFunctionIdIsSupported(UINT16 id)
 	case 2U:
 	case 3U:
 	case 5U:
+	case 7U:
 	case 8U:
 	case 9U:
 	case 10U:
@@ -327,7 +329,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	case RS485_CMD_ADDR_RESET_OTHER_CANADD:
 		Sci_WrReg_0x06_Reset_OtherCanAdd(s);
 		break;
-
 
 	case RS485_CMD_ADDR_SYSTEM_FUNCTION_ON:
 		Sci_WrReg_0x06_BMS_FunctionON(s);
@@ -589,9 +590,9 @@ static void Sci_WriteWordsFromRequest(struct RS485MSG *s, UINT16 *dst, UINT16 of
 static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 {
 	if (Sci_RangeOverlaps(offset,
-						count,
-						0,
-						(UINT16)(RS485_CMD_ADDR_TCHG_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST)))
+						  count,
+						  0,
+						  (UINT16)(RS485_CMD_ADDR_TCHG_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST)))
 	{
 		InitData_SOC();
 	}
@@ -726,34 +727,34 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 	else
 	{
-	switch (s->u16RdRegStartAddr)
-	{
-	case 0: // LCD
-		break;
-	case 1: // 上位机�三级保护�60+10=70�
-		for (j = 0; j < Record_len; j++)
+		switch (s->u16RdRegStartAddr)
 		{
-			k = (INT8)Sci_RecordBackIndex(FaultPoint_Third, j);
-			u16SciTemp = Fault_record_Third[k];
-			Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-			Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 6U);
+		case 0: // LCD
+			break;
+		case 1: // 上位机�三级保护�60+10=70�
+			for (j = 0; j < Record_len; j++)
+			{
+				k = (INT8)Sci_RecordBackIndex(FaultPoint_Third, j);
+				u16SciTemp = Fault_record_Third[k];
+				Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
+				Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 6U);
+			}
+			break;
+
+		case 2: // 序列号，�件版�号，�件版��
+			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
+			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
+			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
+			break;
+
+		case 8:
+			Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
+			break;
+
+		default:
+			s->u16RdRegStartAddr = 0;
+			break;
 		}
-		break;
-
-	case 2: // 序列号，�件版�号，�件版��
-		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
-		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
-		Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
-		break;
-
-	case 8:
-		Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
-		break;
-
-	default:
-		s->u16RdRegStartAddr = 0;
-		break;
-	}
 	}
 	s->u16RdRegStartAddr = u16SourceOffset;
 }
@@ -927,7 +928,6 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		u16SciTemp = *(&OtherElement.u16Balance_OpenVoltage + j);
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
-
 }
 
 void Sci_ACK_0x03(struct RS485MSG *s)
@@ -1314,7 +1314,7 @@ static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort)
 	u16Dummy = pstPort->pstUsart->DR;
 	(void)u16Dummy;
 	pstPort->pstUsart->CR1 |= (USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
-	pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_TXEIE | USART_CR1_TCIE);
+	pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_TXEIE | USART_CR1_TCIE);
 }
 
 static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort)
@@ -1352,7 +1352,7 @@ static void Sci_PortStartTx(struct SCI_PORT_RUNTIME *pstPort)
 		*pstPort->pu8TxFinishFlag = 0;
 	}
 
-	pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_TCIE);
+	pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_TCIE);
 	pstPort->pstUsart->CR1 |= (USART_CR1_TE | USART_CR1_TXEIE);
 }
 
@@ -1424,7 +1424,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 			(pstPort->pstProtocolOps->pfRxFeed(pstPort->pvProtocolCtx, u8RxData) != 0U))
 		{
 			pstPort->u8FramePending = 1;
-			pstPort->pstUsart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
+			pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
 		}
 	}
 
@@ -1716,10 +1716,10 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	}
 
 	if (!Sci_WrValuesInRange(s,
-						   offset,
-						   u16WrRegNum,
-						   &protect_min.u16VcellOvp_First,
-						   &protect_max.u16VcellOvp_First))
+							 offset,
+							 u16WrRegNum,
+							 &protect_min.u16VcellOvp_First,
+							 &protect_max.u16VcellOvp_First))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
@@ -1765,10 +1765,8 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 #endif
 }
 
-
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
-	
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
@@ -1790,10 +1788,10 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	}
 
 	if (!Sci_WrValuesInRange(s,
-						   offset,
-						   u16WrRegNum,
-						   &other_min.u16Balance_OpenVoltage,
-						   &other_max.u16Balance_OpenVoltage))
+							 offset,
+							 u16WrRegNum,
+							 &other_min.u16Balance_OpenVoltage,
+							 &other_max.u16Balance_OpenVoltage))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
@@ -2016,6 +2014,9 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		default:
 			break;
 		}
+		
+		if (u16SciRegData == 7)
+			FactoryAging_StartByHost();
 
 		SystemFeature_SetById(u16SciRegData, 1U);
 		if (u16SciRegData == 0x0B)
@@ -2041,6 +2042,8 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		SystemFeature_SetById(u16SciRegData, 0U);
+		if (u16SciRegData == 7)
+			FactoryAging_StopByHost();
 	}
 	else
 	{
