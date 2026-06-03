@@ -144,7 +144,8 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
 static SOC_STATE s_saved_soc;
-static UINT32 s_u32RtcRestCursorSeconds;
+/* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
+static UINT32 s_u32SocRtcRestAppliedSeconds;
 
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 #if defined(__GNUC__) || defined(__CC_ARM)
@@ -1483,15 +1484,15 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	UINT8 has_rest_ref;
 	UINT8 changed = 0U;
 
-	if (rest_seconds < s_u32RtcRestCursorSeconds)
+	if (rest_seconds < s_u32SocRtcRestAppliedSeconds)
 	{
 		soc_reset_rest_confidence();
 		soc_clear_deferred_ocv();
-		s_u32RtcRestCursorSeconds = 0U;
+		s_u32SocRtcRestAppliedSeconds = 0U;
 	}
 
-	delta_seconds = rest_seconds - s_u32RtcRestCursorSeconds;
-	s_u32RtcRestCursorSeconds = rest_seconds;
+	delta_seconds = rest_seconds - s_u32SocRtcRestAppliedSeconds;
+	s_u32SocRtcRestAppliedSeconds = rest_seconds;
 	if (delta_seconds == 0U)
 	{
 		return 0U;
@@ -1671,7 +1672,7 @@ void soc_param_lib_init(void)
 	memset(&s_soc, 0, sizeof(s_soc));
 	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
 	s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
-	s_u32RtcRestCursorSeconds = 0U;
+	s_u32SocRtcRestAppliedSeconds = 0U;
 	soc_refresh_capacity_base();
 	SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
 						 g_stCellInfoReport.u16VCellMin,
