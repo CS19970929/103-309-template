@@ -3,8 +3,35 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：当前主工程源码和 `docs/review/*`
-最后更新时间：2026-06-02
+最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
+
+## 2026-06-03 SOC 源码简化候选执行
+
+### 本次源码修改
+
+- `33ad214`：删除 `InitData_SOC()` 初始化阶段重复发布。
+- `8018abf`：给低压尾端和中段尾端表补充字段/单位说明。
+- `aeac2e1`：将内部静置计数字段改成 `*_soc_ticks`，明确 200ms SOC tick 口径。
+- `6c672db`：增加 `SOC_Request*` 命令请求接口，`Sci_Upper.c` 改为调用接口；同步 `tools/project_check.py` 门禁。
+- `23c9275`：整理 `SOC_IntEnhance_Ctrl()` 局部命名和顺序注释。
+- `215badd`：将 `soc_publish()` 拆成显示更新和 public 字段导出两个内部函数。
+- `15f95ac`：标注 `SOC_Enhance_Element` 字段角色，结构体布局不变。
+- `38e550e`：明确 RTC SOC 补偿内部游标为“已应用秒数”。
+
+### 安全边界
+
+- 未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义。
+- `SOC_Enhance_Element` 命令字段仍保留在 public struct 中，避免影响 Keil watch 和结构体布局；本轮只把外部写入收口到请求接口。
+- `NORMAL/DEEP` reset sleep 是否增加 RTC 秒数补偿仍属于功能行为变更，本轮未做。
+
+### 本次验证
+
+- `git diff --check`：每批通过。
+- `clang -fsyntax-only`：每批涉及源码通过。
+- `python3 tools/soc_replay_test.py`：每批 47 项通过。
+- `python3 tools/project_check.py`：每批保持当前仓库既有 `88 OK / 1 warning / 40 errors` 基线。
+- 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP 功耗、CAN/Modbus 在线读取和 Keil watch 实测。
 
 ## 2026-06-02 SOC 文档合并与源码简化候选
 

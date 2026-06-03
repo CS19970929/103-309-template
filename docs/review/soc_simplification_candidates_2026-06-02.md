@@ -1,10 +1,38 @@
 # SOC 源码简化候选
 
-文档状态：已按源码部分验证
-源码验证日期：2026-06-02
-修改状态：只读分析，未修改源码
+文档状态：已执行源码简化
+源码验证日期：2026-06-03
+修改状态：`SOC-SIM-01/02/03/04/05/06/07/08` 已按小步源码提交完成；未执行暂不建议候选
 主要参考源码：`103 + 309/Project/Source/SOC.c`、`SocEnhance.c`、`SocEnhance.h`、`DataDeal.c`、`Sci_Upper.c`、`rtc_sleep.c`、`rtc_sleep_port.c`、`LowPowerSleep.c`、`LedBar.c`、`Flash.c`、`conf/Project_Config.h`
 目标：只优化软件实现和写法，方便阅读、维护和 Keil watch 调试；不改变功能、协议、时间参数、校准阈值、休眠顺序和用户可见行为。
+
+## 0. 执行结果
+
+执行日期：2026-06-03
+
+| 批次 | 提交 | 执行结果 |
+|---|---|---|
+| `SOC-SIM-01` | `33ad214` | 删除 `InitData_SOC()` 初始化阶段重复发布 |
+| `SOC-SIM-05` | `8018abf` | 给低压/中段尾端表补充字段和单位说明 |
+| `SOC-SIM-04` | `aeac2e1` | 将内部静置计数字段改成 `*_soc_ticks`，明确 200ms SOC tick 口径 |
+| `SOC-SIM-02` | `6c672db` | 增加 `SOC_Request*` 命令请求接口，`Sci_Upper.c` 不再直接写命令 shadow |
+| `SOC-SIM-07` | `23c9275` | 整理 `SOC_IntEnhance_Ctrl()` 局部命名并标注顺序约束 |
+| `SOC-SIM-06` | `215badd` | 将 `soc_publish()` 拆成显示更新和 public 字段导出两个内部函数 |
+| `SOC-SIM-03` | `15f95ac` | 在 `SOC_Enhance_Element` 中标注 config/input/output/command 字段角色，结构体布局不变 |
+| `SOC-SIM-08` | `38e550e` | 将 RTC 补偿内部游标改名为已应用秒数口径 |
+
+本轮未做：
+
+- 未修改 SOC 表、校准阈值、时间参数、`display_soc` 平滑策略、RTC STOP/reset sleep 时序和 Modbus/CAN 对外字段。
+- 未把 `SOC_Enhance_Element` 的命令字段移入私有结构，保留 Keil watch 和结构体布局稳定性。
+- 未处理“暂不建议做的候选”。
+
+验证结果：
+
+- 每个源码批次均执行 `git diff --check`、`clang -fsyntax-only`、`python3 tools/soc_replay_test.py` 和 `python3 tools/project_check.py`。
+- `python3 tools/soc_replay_test.py` 每批均通过 47 项。
+- `python3 tools/project_check.py` 仍为当前仓库既有基线：`88 OK / 1 warning / 40 errors`；失败项为历史缺文件、编码、配置宏/BuildGuard 等，与本轮 SOC 简化无新增失败。
+- 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP 功耗、CAN/Modbus 在线读取和 Keil watch 实测。
 
 ## 1. 总原则
 
@@ -236,19 +264,20 @@ SOC 模块可以继续简化，但必须从低风险、小步、可回滚开始�
 | 删除 Type-C 等效电流 | 产品语义未确认，不能作为写法优化处理 |
 | 删除 low/mid tail 表 | 会改变低端安全和骑行体验，不能做 |
 
-## 5. 推荐执行顺序
+## 5. 原推荐执行顺序和当前状态
 
-建议后续如果进入源码阶段，按以下顺序小步提交：
+本轮已按以下顺序小步提交；`SOC-SIM-03` 只执行低风险字段角色注释，字段迁移仍保持暂缓。
 
-| 顺序 | 批次 | 风险 | 是否建议先做 |
+| 顺序 | 批次 | 风险 | 当前状态 |
 |---:|---|---|---|
-| 1 | `SOC-SIM-01` 删除初始化重复发布 | 低 | 是 |
-| 2 | `SOC-SIM-05` 表格短注释 | 低 | 是 |
-| 3 | `SOC-SIM-04` 秒/tick 命名和注释 | 低 | 是 |
-| 4 | `SOC-SIM-02` SOC 命令请求接口第一步 | 低到中 | 是 |
-| 5 | `SOC-SIM-07` 主流程局部整理 | 中低 | 视前四步结果 |
-| 6 | `SOC-SIM-06` `soc_publish()` 职责整理 | 中 | 暂缓到回放测试稳定后 |
-| 7 | `SOC-SIM-03` public struct 字段迁移 | 中 | 只在 watch/协议依赖确认后做 |
+| 1 | `SOC-SIM-01` 删除初始化重复发布 | 低 | 已完成 |
+| 2 | `SOC-SIM-05` 表格短注释 | 低 | 已完成 |
+| 3 | `SOC-SIM-04` 秒/tick 命名和注释 | 低 | 已完成 |
+| 4 | `SOC-SIM-02` SOC 命令请求接口第一步 | 低到中 | 已完成 |
+| 5 | `SOC-SIM-07` 主流程局部整理 | 中低 | 已完成 |
+| 6 | `SOC-SIM-06` `soc_publish()` 职责整理 | 中 | 已完成 |
+| 7 | `SOC-SIM-03` public struct 字段角色注释 | 低 | 已完成 |
+| 8 | `SOC-SIM-03` public struct 字段迁移 | 中 | 暂缓，需确认 watch/协议依赖 |
 
 ## 6. 源码阶段最低验证
 

@@ -1,8 +1,31 @@
 # 变更记录
 
 文档状态：已按源码部分验证
-最后更新时间：2026-06-02
+最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
+
+## 2026-06-03 SOC 源码简化候选执行
+
+本次按 `docs/review/soc_simplification_candidates_2026-06-02.md` 执行 `SOC-SIM-01/02/03/04/05/06/07/08`，每个源码批次单独提交，不修改 SOC 功能、协议、时间参数、校准阈值、SOC 表、休眠顺序和用户可见显示策略。
+
+源码修改：
+
+- `SOC.c`：删除 `InitData_SOC()` 初始化后的重复 `SOC_PublishReportData()`。
+- `SocEnhance.c/.h`：补尾端表注释；统一内部静置计数 `*_soc_ticks` 口径；增加 `SOC_RequestManualOcvRefresh()`、`SOC_RequestCapacityReset()`、`SOC_RequestSetOnce()`；整理 `SOC_IntEnhance_Ctrl()` 局部命名；拆分 `soc_publish()` 内部职责；明确 RTC 补偿游标含义。
+- `Sci_Upper.c`：容量重算和一次性设置 SOC 改为调用 `SOC_Request*` 接口，不再直接写命令 shadow。
+- `tools/project_check.py`：同步门禁检查，使其接受新的 `SOC_RequestCapacityReset()` 入口。
+
+文档修改：
+
+- 更新 `docs/review/soc_simplification_candidates_2026-06-02.md`，记录已执行批次、提交号、未做项和验证结果。
+
+验证：
+
+- 每批 `git diff --check`：通过。
+- 每批 `clang -fsyntax-only`：通过。
+- 每批 `python3 tools/soc_replay_test.py`：47 项通过。
+- 每批 `python3 tools/project_check.py`：保持既有 `88 OK / 1 warning / 40 errors` 基线，失败项不是本轮 SOC 简化新增。
+- 未执行 Keil 编译、真板、RTC STOP、CAN/Modbus 在线读取和 Keil watch 实测。
 
 ## 2026-06-02 SOC 文档合并与源码简化候选
 
