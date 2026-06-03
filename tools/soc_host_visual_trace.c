@@ -15,9 +15,9 @@ struct stCell_Info g_stCellInfoReport;
 volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
-UINT16 g_u16TypeCOutCurrent_mA;
-UINT32 g_u32Vbat_mV;
-UINT32 g_u32AfeCurrentSampleSeq;
+static UINT16 s_host_typec_out_current_mA;
+static UINT32 s_host_vbat_mV;
+static UINT32 s_host_afe_current_sample_seq;
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
@@ -160,7 +160,17 @@ UINT8 SystemFeature_IsSocZero(void)
 
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
 {
-	return g_u16TypeCOutCurrent_mA;
+	return s_host_typec_out_current_mA;
+}
+
+UINT32 ADC_GetVbatMilliVolt(void)
+{
+	return s_host_vbat_mV;
+}
+
+UINT32 AfeCurrent_GetSeq(void)
+{
+	return s_host_afe_current_sample_seq;
 }
 
 static UINT32 host_cap_now_from_soc(UINT16 soc)
@@ -188,9 +198,9 @@ static void host_reset_state(void)
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
 	memset((void *)&s_host_feature, 0, sizeof(s_host_feature));
-	g_u16TypeCOutCurrent_mA = 0U;
-	g_u32Vbat_mV = 0U;
-	g_u32AfeCurrentSampleSeq = 0U;
+	s_host_typec_out_current_mA = 0U;
+	s_host_vbat_mV = 0U;
+	s_host_afe_current_sample_seq = 0U;
 	host_apply_default_config();
 }
 
@@ -308,9 +318,10 @@ static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 	g_stCellInfoReport.u16VCellMin = vmin;
 	g_stCellInfoReport.u16VCellDelta = (UINT16)(vmax - vmin);
 	g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)vmin * (UINT32)SeriesNum) / 10U);
+	s_host_vbat_mV = (UINT32)vmin * (UINT32)SeriesNum;
 	g_stCellInfoReport.u16Ichg = ichg;
 	g_stCellInfoReport.u16IDischg = idsg;
-	++g_u32AfeCurrentSampleSeq;
+	++s_host_afe_current_sample_seq;
 	App_SOC();
 }
 

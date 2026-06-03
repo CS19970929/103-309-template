@@ -55,8 +55,8 @@
 
 | 变量组 | 位置 | 重复形态 | 风险 | 建议 |
 |---|---|---|---|---|
-| Type-C 输出电流 | `ADC.c:14-25`, `ADC.c:410-416`, `ADC.c:516` | 原先 `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10`、`g_i32ADCResult[ADC_CURR]`、`gu16_BusCurr_DSG` 同时表达同一路 Type-C 电流；本轮已删除 `A10` 和 legacy mirror，只保留 mA 源和 ADC 对外结果 | 状态源已减少，后续只需避免重新增加等价镜像 | 保持 `ADC_GetTypeCOutCurrentMilliAmp()` + `g_i32ADCResult[ADC_CURR]` 两个明确出口 |
-| Type-C 电池侧等效电流 | `SOC.c:111-134` | `g_u16TypeCBatEquivCurrent_mA` 与 `g_u16TypeCBatEquivCurrent_A10` 同时保存，当前只返回 A10 | mA 镜像可能只是调试量，长期容易误认为业务输入 | 若保留，注明只作观察；否则删除 mA 镜像 |
+| Type-C 输出电流 | `ADC.c`, `ADC.h`, `SOC.c` | 原先多个全局/镜像同时表达 Type-C 电流；当前收口为 `s_adc.typec`，外部通过 `ADC_GetTypeCOutCurrentMilliAmp()` 读取 | 状态源已减少，后续只需避免重新增加等价镜像 | 保持 `ADC_GetTypeCOutCurrentMilliAmp()` 作为 mA 出口，SOC.c 负责折算电池侧等效放电电流 |
+| Type-C 电池侧等效电流 | `SOC.c` | 原全局镜像已删除，`SOC_GetTypeCBatEquivCurrentA10()` 直接按 Type-C 输出功率、pack voltage 和效率计算 A10 | 不能把 Type-C 输出 mA 直接加到 SOC 放电 A10 | 保持当前直接计算返回，不新增 mA/A10 镜像状态 |
 | RTC 唤醒状态 | `RTC.c:505`, `rtc_sleep.c:13-16`, `conf/conf.c:394-416`, `conf/conf.h:250-251` | `is_rtc_wakekup`、`is_wakeup`、`g_irq_t`、`gu8_WakeUp_Type`、`g_stLowPowerRtcStatus.rtcWake`、`sys_time.wakeup_rtc` 同时描述唤醒 | STOP 唤醒、RTC Alarm、运行期 sleep 状态容易不同步 | 短期不要动；中期合并为 `RTC_WAKE_CONTEXT`，只保留一个真相源，其他字段由快照生成 |
 | 故障记录 | `Fault.c:9-21`, `Sci_Upper.c:762-812` | 旧 `Fault_record_Third/FaultPoint_Third` 与新 `Fault_record_First2/Second2/Third2` 并存 | 协议读旧窗口时可能读不到当前真实故障 | 先确认上位机使用哪个窗口，再决定迁移或保留兼容空洞 |
 | SOC 对外发布 | `SocEnhance.c:130`, `SocEnhance.c:545-558`, `Sci_Upper.c:25` | `SOC_Enhance_Element` 是 SOC 内外桥，`g_stCellInfoReport.SocElement` 是通信上报快照 | 两套 SOC 字段必须按固定顺序同步，不能随意删一套 | 保持现状，后续只可通过明确的 publish 函数收口 |
@@ -131,7 +131,7 @@
 | `PRT_E2ROMParas` | 保护阈值参数集合 | 上位机保护参数读写、保护动作、Flash RW_PARAM 数据布局 |
 | `g_u16CalibCoefK` / `g_i16CalibCoefB` | ADC/AFE/温度校准参数，协议可写、Flash 保存 | 校准索引、默认值、写入地址、量产校准流程 |
 | `g_u32CS_Res_AFE` | AFE 电流换算核心参数，由 `OtherElement` 派生 | 电流方向、mA/A10 单位、SOC 积分、保护阈值 |
-| `g_u32AfeCurrentSampleSeq` | SOC 通过它判断 AFE 电流样本是否更新 | 200ms 采样节拍、SOC 是否漏算或重复积分 |
+| `AfeCurrent_GetSeq()` / `s_data.afeSeq` | SOC 通过它判断 AFE 电流样本是否更新 | 200ms 采样节拍、SOC 是否漏算或重复积分 |
 | `SOC_Enhance_Element` | SOC 模块对外参数和运行结果桥接结构 | SOC 单步校准、显示 SOC、RTC 补偿、上位机一次设 SOC |
 | `SOC_Table_Set` / `SOC_Table_Default` / `SOC_Table_LiFePO` / `SocTable_TernaryLi` / `SocTable_LiFePO2` | OCV 表与上位机 SOC 表、化学体系选择相关；`SOC_Table_Set/Default` 只在 runtime table 宏路径下有引用，当前量产宏关闭 | 当前 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE`、编译期化学体系选择、协议写表策略；若重新启用 runtime table，先补齐定义并编译验证 |
 | `g_st_SysTimeFlag` | TIM3 10ms tick 锁存后驱动主循环任务 | 中断-主循环同步、任务周期、低功耗恢复 |
@@ -240,10 +240,10 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `g_u16ADCValFilter` | `103 + 309/Project/Source/ADC.c` | 已改为 `static __IO` | DMA/滤波读写均在 `ADC.c` 内，保留 `__IO` 和位宽 |
 | `g_u32ADCValFilter2` | `103 + 309/Project/Source/ADC.c` | 已改为 `static` | 仅 ADC 内部缓存，未改 `INT32` 类型 |
 | `g_u16IoutOffsetAD`、`g_u16TypeCOutOffsetAD` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | 原逻辑每次置 0 且无读取 |
-| `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h` | `g_u16TypeCOutCurrent_mA` 已隐藏为 `static` 并通过 `ADC_GetTypeCOutCurrentMilliAmp()` 读取；`A10` 镜像已改为局部变量 | SOC 通过 getter 读取 mA 值，避免裸全局暴露和重复状态源 |
+| `g_u16TypeCOutCurrent_mA`、`g_u16TypeCOutCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h` | 已删除全局镜像；当前 Type-C 输出电流保存在 `s_adc.typec`，通过 `ADC_GetTypeCOutCurrentMilliAmp()` 读取 | SOC 通过 getter 读取 mA 值，避免裸全局暴露和重复状态源 |
 | `g_u16TypeCBatEquivCurrent_mA`、`g_u16TypeCBatEquivCurrent_A10` | `103 + 309/Project/Source/ADC.c/.h`, `SOC.c` | 已删除全局镜像，`SOC_GetTypeCBatEquivCurrentA10()` 直接返回计算结果 | 保留 Type-C 输出电流换算为电池侧等效电流的行为 |
 | `g_u16TypeCOutStableAD`、`g_u16TypeCOutDelta_mV`、`g_u16VbcStableAD`、`g_u16VbcAdc_mV` | `103 + 309/Project/Source/ADC.c/.h` | 已删除或局部化 | 仅 ADC 内部换算中间态，不再保留跨调用镜像 |
-| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | legacy mirror 无读取方，删除后 ADC 对外结果仍由 `g_i32ADCResult[ADC_CURR]` 提供 |
+| `gu16_BusCurr_CHG` / `gu16_BusCurr_DSG` | `103 + 309/Project/Source/ADC.c/.h` | 已删除 | legacy mirror 无读取方；ADC 对外读取统一走 `ADC_GetResult()` 和专用 getter |
 | `u8IICFaultcnt1/2`、`u8WakeCnt1/2` | `103 + 309/Project/Source/DataDeal.c` | 已改为 `static` | 仅 AFE monitor 内部计数 |
 | `AFE_ResetFlag` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已删除定义、extern 和唯一赋值 | 仅写不读，未参与 AFE reset 后续流程 |
 | `AFE_Parameters_RS485_Struction` | `103 + 309/Project/Source/SH367309_DataDeal.c/.h` | 已改为 `static`，删除 extern | 参数读写仍通过本文件函数完成，未改结构体内容 |
@@ -257,8 +257,8 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 | `FaultPoint_First` / `FaultPoint_Second` | `103 + 309/Project/Source/Fault.c/.h` | 已删除定义和 extern | 仅旧一级/二级指针遗留，无读写 |
 | `FaultWarnRecord()` | `103 + 309/Project/Source/Fault.c` | 已删除空实现和未使用声明 | 保留仍被协议读取的旧 `Fault_record_Third/FaultPoint_Third` |
 | `tools/project_check.py` | `tools/project_check.py` | Type-C SOC 门禁已支持 getter 路径 | 检查行为仍是“输出电流必须先换算为电池侧等效电流” |
-| `tools/soc_host_c_test.c` | `tools/soc_host_c_test.c` | host 测试补 `ADC_GetTypeCOutCurrentMilliAmp()` 桩函数，删除已清理镜像变量依赖 | 测试继续验证 Type-C 电流换算后的 SOC 行为 |
-| `tools/soc_host_visual_trace.c` | `tools/soc_host_visual_trace.c` | 可视化 trace 工具补 `ADC_GetTypeCOutCurrentMilliAmp()` 桩函数，删除已清理镜像变量依赖 | 保持 host trace 工具与 SOC/ADC 新接口一致 |
+| `tools/soc_host_c_test.c` | `tools/soc_host_c_test.c` | host 测试补 `ADC_GetTypeCOutCurrentMilliAmp()`、`ADC_GetVbatMilliVolt()`、`AfeCurrent_GetSeq()` 桩函数，测试侧假变量改为 `s_host_*` | 测试继续验证 Type-C 电流换算、Vbat fallback 和新样本触发 |
+| `tools/soc_host_visual_trace.c` | `tools/soc_host_visual_trace.c` | 可视化 trace 工具补 `ADC_GetTypeCOutCurrentMilliAmp()`、`ADC_GetVbatMilliVolt()`、`AfeCurrent_GetSeq()` 桩函数，测试侧假变量改为 `s_host_*` | 保持 host trace 工具与 SOC/ADC 新接口一致 |
 
 ### 12.2 已保留项
 
@@ -266,7 +266,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 - `g_stCellInfoReport`、`OtherElement`、`PRT_E2ROMParas`：协议、Flash、保护和上位机可见核心结构。
 - `g_u16CalibCoefK` / `g_i16CalibCoefB`、`g_u32CS_Res_AFE`：校准、采样电阻和电流换算核心参数。
-- `g_u32AfeCurrentSampleSeq`、`SOC_Enhance_Element`、SOC OCV 表：SOC 积分、OCV 和运行时桥接核心状态。
+- `AfeCurrent_GetSeq()` / `s_data.afeSeq`、`SOC_Enhance_Element`、SOC OCV 表：SOC 积分、OCV 和运行时桥接核心状态。
 - `g_st_SysTimeFlag`、`System_ErrFlag`：调度和错误位跨模块契约。
 - `SH367309_Reg_Store` / `Registers_AFE1` / `SH367309_Read_AFE1`、`AFE_ROM_PARAMETERS_Struction`：AFE 寄存器镜像和 MTP 参数打包结构。
 - `u8FlashUpdateFlag` / `u8FlashUpdateE2PROM`：上位机写参后落库和低功耗阻断状态。
@@ -277,12 +277,7 @@ find '103 + 309/Project/Source' -maxdepth 2 -type f -name '*.c' ! -path '*/easyl
 
 ### 12.3 本轮验证结果
 
-- `clang -fsyntax-only`：本轮触碰的 13 个固件 `.c` 文件全部通过。
-- `python3 tools/project_check.py`：147 OK / 1 warning / 0 errors；warning 为 release map 缺失。
-- `python3 tools/soc_replay_test.py`：47 项通过。
-- `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：5 个场景通过。
-- `git diff --check`：通过。
-- `python3 tools/run_soc_host_c_test.py`：当前仍失败 3 项，失败点为既有 SOC host C 断言 `u16Soc actual=100 expected=70`、`host_internal_soc() actual=100 expected=70`、`host_internal_soc() < before_discharge`；本轮已修复 getter 链接问题，剩余断言属于原有 SOC host 回归残留，需单独排查。
+最新 SOC 专项验证结果以 `docs/design/soc_design.md` 和 `docs/review/test_plan.md` 为准；本文件只保留变量清理脉络，避免重复维护测试结论。
 
 ## 13. 剩余建议执行裁决
 

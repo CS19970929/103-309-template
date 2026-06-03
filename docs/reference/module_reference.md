@@ -366,7 +366,7 @@ SOC 模块分为两层:
 - **SOC.c** - 顶层调度、配置装载、Type-C 电流折算、AFE sample seq 触发
 - **SocEnhance.c** - 核心算法：容量积分、满电/低压/中段/静置/RTC 校准、SOC 显示平滑和 snapshot 保存
 
-当前完整逻辑和校准条件以 `docs/review/soc_current_logic_2026-06-02.md` 为准；后续只改写法、不改功能的候选见 `docs/review/soc_simplification_candidates_2026-06-02.md`。
+当前完整逻辑、源码 review、校准条件和验证边界以 `docs/design/soc_design.md` 为准；无放电快降专题见 `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`。
 
 ### 4.2 SOC.c - 顶层
 
@@ -382,7 +382,7 @@ SOC 模块分为两层:
 
 | 函数 | 功能 |
 |------|------|
-| `InitData_SOC()` | SOC 初始化: 加载配置→初始化参数库→发布报告数据 |
+| `InitData_SOC()` | SOC 初始化: 加载配置→初始化参数库；内部由 `soc_param_lib_init()` 完成强制发布 |
 | `App_SOC()` | SOC 主任务: 检测新 AFE 采样→计算净电流→调用核心算法→发布 |
 
 **TypeC 电流折算**:
@@ -392,7 +392,7 @@ SOC 模块分为两层:
 ```
 
 **关键逻辑**:
-- 通过 `g_u32AfeCurrentSampleSeq` 检测是否有新 AFE 采样
+- 通过 `AfeCurrent_GetSeq()` 检测是否有新 AFE 采样
 - 净电流 = 报告充电电流 - (报告放电电流 + TypeC折算电流)
 - 每次新采样调用 `SOC_UpdateSampleData()` 和 `SOC_IntEnhance_Ctrl()`
 
@@ -405,22 +405,12 @@ SOC 模块分为两层:
 - `struct SOC_DEBUG_WATCH * const g_dbg_soc_watch` - 调试观察 (仅 DEBUG_WATCH)
 
 **SOC_ENHANCE_ELEMENT 结构体**:
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `u16_SOC_Ah` | UINT16 | 电池容量 (10×Ah) |
-| `u16_SOC_CycleT_Ever` | UINT16 | 循环次数 |
-| `u16_SOC_TableSelect` | UINT16 | OCV 表选择 |
-| `u16_SOC_0_Vol` | UINT16 | SOC=0% 电压 (mV) |
-| `u16_SOC_100_Vol` | UINT16 | SOC=100% 电压 (mV) |
-| `u8_SetSocOnce` | UINT8 | 一次性设置 SOC |
-| `u16_VCellMax/Min` | UINT16 | 电芯最高/最低电压 |
-| `u16_Ichg/Idsg` | UINT16 | 充/放电电流 (A×10) |
-| `u8_SOC` | UINT8 | 当前对外显示 SOC (%)，来自内部 `display_soc` |
-| `u8_SOH` | UINT8 | 当前 SOH (%) |
-| `u16_CapacityNow` | UINT16 | 当前容量 (Ah×100) |
-| `u16_CapacityFull` | UINT16 | 满充容量 |
-| `u16_CapacityFactory` | UINT16 | 出厂容量 |
-| `u16_Cycle_times` | UINT16 | 循环计数 |
+| 字段组 | 字段 | 说明 |
+|---|---|---|
+| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_TableSelect/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载 |
+| 命令 payload | `u8_SetSocOnce/u16_RefreshData_Flag` | 由 `SOC_Request*()` 写入，`soc_handle_command()` 消费 |
+| 输入采样 | `u16_VCellMax/u16_VCellMin/u16_Ichg/u16_Idsg` | SOC 计算输入 |
+| 发布输出 | `u8_SOC/u8_SOH/u16_CapacityNow/u16_CapacityFull/u16_CapacityFactory/u16_Cycle_times` | 对外显示 SOC、SOH、容量、循环次数 |
 
 **核心函数**:
 
@@ -428,9 +418,9 @@ SOC 模块分为两层:
 |------|------|
 | `soc_param_lib_init()` | 初始化 SOC 参数库 (容量, 表, 快照恢复等) |
 | `SOC_UpdateSampleData(vmax,vmin,ichg,idsg)` | 更新 SOC 采样输入 |
-| `SOC_IntEnhance_Ctrl()` | SOC 核心控制: OCV 校准检查, 静置检测, 尾端处理, 显示平滑 |
+| `SOC_IntEnhance_Ctrl()` | SOC 核心控制: 命令、积分、tail/full/deferred/rest、保存、发布 |
 | `SOC_PublishReportData()` | 将显示 SOC 和容量字段发布到 `g_stCellInfoReport` |
-| `SOC_ApplyRtcRelaxationCompensation()` | HICCUP RTC STOP 周期内休眠补偿 |
+| `SOC_ApplyRtcRelaxationCompensation()` | HICCUP RTC STOP 周期内静置 OCV 补偿；当前不额外扣 RTC 自耗 |
 | `SOC_SaveSnapshotBeforeSleep()` | 休眠前保存 SOC 快照 |
 | `SOC_ResetStoredSnapshotToDefault()` | 复位 SOC 快照到默认值 |
 
@@ -443,9 +433,14 @@ SOC 模块分为两层:
 - `DEFERRED_OCV` - 延迟 OCV 校准
 - `LONG_REST_DOWN` - 长时间静置下调
 - `RTC_REST` - RTC 休眠静置补偿
-- `BOARD_SELF_CONSUMPTION` - 自耗电补偿
+- `BOARD_SELF_CONSUMPTION` - 正常运行 RELAX 自耗积分
 - `STARTUP_SNAPSHOT/OCV/DEFAULT` - 启动时恢复
 - `MANUAL_OCV/PARAM_RESET/SET_ONCE` - 上位机命令校准
+
+**自耗与 RTC 口径**:
+
+- 正常运行 `RELAX/CHG/DSG` 都会把 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` 计入容量积分。
+- RTC STOP 补偿当前不额外扣自耗，只按休眠秒数推进静置 OCV 计数和下修。
 
 **发布口径**:
 
@@ -454,14 +449,11 @@ SOC 模块分为两层:
 - `g_stCellInfoReport.SocElement.u16Soc` 当前发布 `display_soc`，不是直接发布内部估算值。
 - `NORMAL/DEEP` reset sleep 快显读取 BKP 中睡前保存的显示 SOC；`HICCUP_MODE` RTC STOP 周期会先做 SOC 休眠补偿，最终按键唤醒后才请求 LedBar 显示。
 
-**SOC 阻塞原因** (enum SOC_WATCH_BLOCK_REASON):
-- `VOLTAGE_INVALID` - 电压无效
-- `CELL_DELTA` - 电芯压差大
-- `PROTECTION_FAULT` - 保护故障
-- `SYSTEM_FAULT` - 系统故障
-- `SAG_HOLD` - 电压跌落抑制
-- `NOT_RELAX` - 未静置
-- `REST_UNSTABLE` - 静置不稳定
+**调试观察**:
+
+- `SOC_WATCH_BLOCK_REASON` 和 `u8LastBlockReason` 已删除。
+- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive/u8MidTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32LongRestDownTicks`。
+- debug monitor 中删除了固定 0 或伪造派生字段，保留真实内部计数和 `display_ticks`。
 
 **OCV 表** (42 个条目, 21对电压-SOC):
 - 三元锂: 4160mV(100%) → 3000mV(0%)
@@ -482,14 +474,10 @@ SOC 模块分为两层:
 | `ADC_CUR_AMP` | PA2(ADC2) | TypeC 充电电流检测 |
 | `ADC_VBC` | PA1(ADC1) | 电池总压 (分压) |
 
-**全局变量**:
-- `INT32 g_i32ADCResult[ADC_NUM]` - ADC 计算结果
-- `UINT32 g_u32Vbat_mV` - 电池总压 (mV)
-- `UINT16 g_u16TypeCOutCurrent_mA` - TypeC 输出电流 (mA)
+**模块内运行态**:
+- `static ADC_RUNTIME s_adc` - 保存 DMA raw、滤波值、计算结果、电池总压、Type-C 输出电流和调度计数
 
-**静态全局**:
-- `__IO UINT16 g_u16ADCValFilter[ADC_NUM]` - DMA 直接写入的 ADC 原始值
-- `INT32 g_u32ADCValFilter2[ADC_NUM]` - 累加/滤波中间值
+ADC 结果不再作为跨文件全局变量暴露。外部通过 `ADC_GetResult()`、`ADC_GetRaw()`、`ADC_GetVbatMilliVolt()`、`ADC_GetTypeCOutCurrentMilliAmp()` 读取。
 
 ### 5.2 ADC 配置
 
@@ -1290,8 +1278,9 @@ UINT16 CopperLoss[16];             // 铜损补偿
 UINT16 CopperLoss_Num[16];         // 铜损数量
 struct OTHER_ELEMENT OtherElement;  // 其他可配置参数
 UINT32 g_u32CS_Res_AFE;            // AFE 电流采样电阻比
-UINT32 g_u32AfeCurrentSampleSeq;   // AFE 电流采样序号
 ```
+
+AFE 电流采样序号当前通过 `AfeCurrent_GetSeq()` 读取，不再暴露 `g_u32AfeCurrentSampleSeq` extern。
 
 ### 18.5 Sci_Upper - 通讯
 
@@ -1329,10 +1318,10 @@ AFEDATA Registers_AFE1;                    // AFE 寄存器缓存
 ### 18.9 ADC
 
 ```c
-INT32 g_i32ADCResult[ADC_NUM];     // ADC 计算结果
-UINT32 g_u32Vbat_mV;               // 电池总压
-UINT16 g_u16TypeCOutCurrent_mA;    // TypeC 电流 (静态)
+static ADC_RUNTIME s_adc;          // ADC.c 模块内运行态
 ```
+
+对外接口为 `ADC_GetResult()`、`ADC_GetRaw()`、`ADC_GetVbatMilliVolt()` 和 `ADC_GetTypeCOutCurrentMilliAmp()`。
 
 ### 18.10 LedBar
 

@@ -6,6 +6,28 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 SOC 模块复审、净删减与文档合并
+
+本次按当前源码完整复审 SOC 模块，并把 SOC 相关文档合并到 `docs/design/soc_design.md` 作为唯一权威入口。
+
+源码变更：
+- `SocEnhance.c`：恢复 low/mid tail 计算和 mid-tail 应用，修复此前局部变量未初始化风险。
+- `SocEnhance.c`：删除 `soc_run_cycle_calibration()`、`soc_update_rest_after_cycle()`，让 `SOC_IntEnhance_Ctrl()` 直线表达核心顺序。
+- `SocEnhance.c/.h`、`SOC.c`：删除 `u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason`、空测试 stub 和相关调用。
+- `SocEnhance.c`：RTC STOP 补偿不再额外扣板载自耗；正常运行 `RELAX/CHG/DSG` 自耗积分保持。
+- `SystemDebug.c/.h`：删除固定 0 或误导性的 SOC debug monitor 字段。
+- `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表、自耗口径和 RTC 不扣自耗行为。
+
+文档变更：
+- 重写 `docs/design/soc_design.md`。
+- 归档 `docs/review/soc_current_logic_2026-06-02.md`。
+- 更新 `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`、`docs/review/soc_simplification_candidates_2026-06-02.md`、模块参考、风险清单、测试计划和文档索引。
+
+验证：
+- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/run_soc_host_c_test.py`：`30mA/0mA/1000mA` 和 debug-watch 组合均通过。
+- Keil、真板、RTC STOP、CAN/Modbus 在线验证仍未执行。
+
 ## 2026-06-03 DataDeal/AFE 运行状态结构体化第 3 阶段
 
 本次执行全局状态结构体化第 3 阶段，范围限定为 `DataDeal` 内部运行态和 AFE 电流采样序号，不迁移校准参数、协议镜像、保护参数或 Flash 持久化结构。

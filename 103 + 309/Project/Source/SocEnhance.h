@@ -42,21 +42,6 @@ enum SOC_WATCH_CALIB_SOURCE {
 	SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION
 };
 
-enum SOC_WATCH_BLOCK_REASON {
-	SOC_WATCH_BLOCK_NONE = 0,
-	SOC_WATCH_BLOCK_VOLTAGE_INVALID,
-	SOC_WATCH_BLOCK_CELL_DELTA,
-	SOC_WATCH_BLOCK_PROTECTION_FAULT,
-	SOC_WATCH_BLOCK_SYSTEM_FAULT,
-	SOC_WATCH_BLOCK_SAG_HOLD,
-	SOC_WATCH_BLOCK_DIRECTION,
-	SOC_WATCH_BLOCK_NOT_RELAX,
-	SOC_WATCH_BLOCK_LOW_TAIL,
-	SOC_WATCH_BLOCK_REST_UNSTABLE,
-	SOC_WATCH_BLOCK_REFRESH_FIXED,
-	SOC_WATCH_BLOCK_REFRESH_ZERO
-};
-
 #if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 1)
 extern const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO];
 #endif
@@ -71,7 +56,6 @@ struct SOC_ENHANCE_ELEMENT {
 	/* Config snapshot loaded from OtherElement. */
 	UINT16 u16_SOC_Ah;                 // 10 * Ah
 	UINT16 u16_SOC_CycleT_Ever;        // cycle count loaded from config
-	UINT16 u16_SOC_CycleT_Limit;       // cycle limit
 	UINT16 u16_SOC_TableSelect;        // enum SOC_TABLE_SELECT
 	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
 	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
@@ -95,7 +79,6 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_CapacityFull;           // Ah * 100
 	UINT16 u16_CapacityFactory;        // Ah * 100
 	UINT16 u16_Cycle_times;
-	UINT8 u8_SOC_OCV_Cali;
 
 	/* Command selector consumed by soc_handle_command(). */
 	UINT16 u16_RefreshData_Flag;       // 1: OCV refresh, 2: capacity reset, 3: set SOC once
@@ -143,7 +126,6 @@ struct SOC_DEBUG_WATCH {
 	UINT8 u8SagHoldBlocksCalibration;
 	UINT8 u8RestVoltageStable;
 	UINT8 u8LastCalibSource;
-	UINT8 u8LastBlockReason;
 	UINT8 u8LastSocBefore;
 	UINT8 u8LastSocAfter;
 	UINT8 u8LastPublishForce;
@@ -169,9 +151,7 @@ void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
                            uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
                            uint16_t *mid_ticks, uint8_t *full_anchor,
-                           uint8_t *cal_allowed, uint8_t *sag_blocked,
-                           uint8_t *rest_stable, uint8_t *low_tail,
-                           uint8_t *mid_tail, uint16_t *display_ticks);
+                           uint16_t *display_ticks);
 #endif
 
 #endif	/* SOCENHANCE_H */

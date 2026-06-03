@@ -43,7 +43,7 @@
 | REQ-AFE-002 | 启动时必须初始化 AFE、写保护配置、执行启动零点/初始 MOS 策略 | `I2C_AFE1.c:688-714` | `I2C_AFE1.c`, `MosStartup.c` | reset AFE，更新配置，应用初始 MOS 状态 | 是 | 否 | 是 | 否 | 是 | MUST_KEEP |
 | REQ-AFE-003 | AFE 配置由保护参数和 OtherElement 转换为 ROM 寄存器并写入 | `SH367309_DataDeal.c:39-113`, `SH367309_DataDeal.c:182-249` | `SH367309_DataDeal.c` | 比较 ROM，差异写入，reset AFE，再打开驱动 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP，但硬编码项需确认 |
 | REQ-AFE-004 | AFE 状态/故障必须映射到 BMS fault flags 和日志 | `SH367309_Func.c:228-305`, `SH367309_Func.c:307-390` | `SH367309_Func.c`, `System_Monitor.h` | 读 status，映射 OVP/UVP/OCP/CBC/MOS 状态 | 是 | 是 | 是 | 间接 | 是 | MUST_KEEP |
-| REQ-AFE-005 | AFE 当前采样必须驱动 SOC 更新序号 | `DataDeal.c:807-871`, `DataDeal.c:1225-1249`, `SOC.c:203-237` | `DataDeal.c`, `SOC.c` | 200ms 更新一次并递增 `g_u32AfeCurrentSampleSeq` | 是 | 是 | 是 | 间接 | 是 | CHANGE_NEEDED；当前实际电流路径疑似错误 |
+| REQ-AFE-005 | AFE 当前采样必须驱动 SOC 更新序号 | `DataDeal.c`, `SOC.c` | `DataDeal.c`, `SOC.c` | 200ms 更新一次并通过 `AfeCurrent_GetSeq()` 暴露采样序号 | 是 | 是 | 是 | 间接 | 是 | MUST_KEEP；当前主路径由真实 AFE 电流采样驱动 |
 | REQ-AFE-006 | AFE 在低功耗前必须进入 sleep，并在唤醒后恢复 I2C/配置 | `SleepDeal.c:109-114`, `rtc_sleep_afe_sh367309.c`, `conf.c:392-421` | `SleepDeal.c`, `rtc_sleep_afe_sh367309.c`, `conf.c` | sleep/reset 或 STOP 恢复后重新初始化接口 | 是 | 否 | 是 | 是 | 是 | MUST_KEEP |
 
 ## 4. 电压、电流、温度采集需求
@@ -173,4 +173,4 @@
 | REQ-SV-006 | `DataDeal.c` 中客户逻辑状态必须先确认需求归属，不能直接按“变量多”删除 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 充电器插拔、MOS 过温、UL 认证、RF_EN 熔断类逻辑混在 200ms 链路 | 直接删除可能改变安全输出和客户认证行为 | UNKNOWN | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 内这些状态是当前产品需求、认证需求，还是历史残留？ | 先列入需求确认，不进第一批删除 | 待确认 |
 | REQ-SV-007 | 同一模块、同一生命周期、同一调试视角的私有运行态变量应优先收口到模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 老化模块原有 10 个文件级静态变量分别保存 state、elapsed、last tick、BKP/Flash 保存节流、finish retry 和 MOS mode | 替换错误会影响老化进度、完成保存或 MOS 模式缓存；本批次不改持久化格式和对外接口 | 已处理 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已按低风险结构体收口批次执行 | 已执行 |
 | REQ-SV-008 | 日志模块私有运行态应集中管理，同时保留外部补偿时间符号 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 日志记录点、记录数组、startup/sleep 请求 flag、重复记录抑制和事件边沿 latch 已收口到 `LogRecordRuntime s_log_record`；`su32_Interval_S_Tcnt` 仍保留为外部符号 | 误搬 `su32_Interval_S_Tcnt` 会影响 RTC 睡眠秒数补偿；误清事件 latch 会影响日志去重 | 已处理 | 是否允许先收口私有状态，保留跨模块时间累计符号？ | 已执行；不改日志格式、Flash 保存格式和低功耗补偿接口 | 已执行 |
-| REQ-SV-009 | AFE 电流零点运行态应集中管理，但不改变电流算法和 SOC 样本序号 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 启动零点 cold/warm 参数选择、零点 offset、last raw、stable count、ready 和 zero state 已收口到 `AFE_CURRENT_RUNTIME s_afe_current`；`g_u32AfeCurrentSampleSeq` 保留 | 替换错误会影响电流方向、零点、自学习和 SOC 积分；本批次只做字段替换 | 已处理 | 是否允许对 AFE current zero 私有状态做结构体收口，保留算法和跨模块变量？ | 已执行；不改 CADC、换算公式、deadband、sample seq | 已执行 |
+| REQ-SV-009 | AFE 电流零点运行态应集中管理，但不改变电流算法和 SOC 样本序号 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 启动零点、零点 offset、last raw、stable count、ready、zero state 和采样序号已收口到 `DATA_RUNTIME s_data`；外部通过 `AfeCurrent_GetSeq()` 读取 | 替换错误会影响电流方向、零点、自学习和 SOC 积分；本批次只做字段替换 | 已处理 | 是否允许对 AFE current zero 私有状态做结构体收口，保留算法和采样序号接口？ | 已执行；不改 CADC、换算公式、deadband、sample seq | 已执行 |

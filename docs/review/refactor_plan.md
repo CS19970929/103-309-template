@@ -74,27 +74,26 @@
 专项文档：
 
 - `docs/design/soc_design.md`
-- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`
 - `docs/review/soc_simplification_candidates_2026-06-02.md`
 
 | 项目 | 内容 |
 |---|---|
-| 修改范围 | 先整理文档和当前逻辑，再只做不改变功能的软件写法简化 |
-| 不能改什么 | 不改 SOC 表、不改 1% 校准硬约束、不改满电/低压/中段/静置/RTC 阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
-| 验证方法 | 主机回放、真实充放电、RTC rest、snapshot 断电恢复、上位机读取、CAN SOC 帧、Keil watch |
-| 需要确认 | 初始 SOC、OCV 表、Type-C 电流、测试模式策略、reset sleep 是否需要 RTC 秒数补偿、命令校准是否允许立即跳变 |
-| 回滚方式 | 每个源码简化候选独立小 commit；先做 `SOC-SIM-01/04/05` 这类低风险写法项，再评估命令接口和 public struct 收口 |
+| 修改范围 | 当前已完成文档合并和一轮净删减；后续只做小步、可回滚的行为保持型简化 |
+| 不能改什么 | 不改两个 tail 表、不改 1% 校准硬约束、不改满电/低压/中段/静置阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
+| 验证方法 | SOC replay、host C、真实充放电、RTC rest、snapshot 断电恢复、上位机读取、CAN SOC 帧、Keil watch |
+| 需要确认 | tail 体验策略、初始 SOC、OCV 表、Type-C 电流产品语义、reset sleep 是否需要 RTC 秒数补偿、命令校准是否允许立即跳变 |
+| 回滚方式 | 每个源码简化批次独立 commit；涉及体验或 tail 策略必须单独确认 |
 
 ### 阶段 7 推荐小批次
 
 | 批次 | 类型 | 内容 | 风险 | 验证 |
 |---|---|---|---|---|
-| SOC-DOC-01 | 已完成文档合并 | `soc_design.md` 收口为入口，当前逻辑详表和源码简化候选独立成文 | 低 | 文档链接、自洽性、`git diff --check` |
-| SOC-SIM-01 | 低风险源码候选 | 删除 `InitData_SOC()` 初始化阶段重复发布 | 低 | SOC 回放、`0xD000` 读取 |
-| SOC-SIM-05 | 低风险源码候选 | 给低压/中段尾端表补极短说明，不改表值 | 低 | `git diff --check` |
-| SOC-SIM-04 | 低风险源码候选 | 秒/tick 命名和注释整理，不改换算 | 低 | SOC 回放 |
-| SOC-SIM-02 | 小接口收口 | 用请求接口替代外部直接写 `u16_RefreshData_Flag/u8_SetSocOnce` | 低到中 | Modbus 手动 OCV、容量重算、SetSocOnce |
-| SOC-SIM-06 | 暂缓 | 整理 `soc_publish()` 职责 | 中 | 显示、CAN、Modbus、debug watch 全回归 |
+| SOC-DOC-01 | 已完成文档合并 | `docs/design/soc_design.md` 成为唯一权威入口，旧逻辑文档归档 | 低 | 文档链接、自洽性、`git diff --check` |
+| SOC-SIM-01 | 已完成源码净删减 | 删除无用字段、block reason、死代码和误导性 debug 字段 | 低 | SOC replay、host C |
+| SOC-SIM-02 | 已完成主流程直线化 | 恢复 tail 主流程，删除过多 helper，让 `SOC_IntEnhance_Ctrl()` 直接表达顺序 | 中 | SOC replay、host C、后续 Keil |
+| SOC-SIM-03 | 已完成 RTC 口径调整 | RTC STOP 补偿不再额外扣自耗；正常运行自耗仍积分 | 中 | 自耗矩阵 host C、RTC 测试仍需上板 |
+| SOC-NEXT-01 | 待确认 | 是否调整 RELAX 下 tail 生效条件或速度 | 高 | 必须先用 Keil watch/实测确认快降来源 |
 
 ## 阶段 8：RTC 低功耗 / IWDG 阶段
 
@@ -157,7 +156,7 @@
 | SV-01 | 已完成低风险试点 | 把产品信息初始化从 `ProductionID.c` 的 `su8_StartUpFlag` 收口到启动流程，并保留 PROID heartbeat hook | `AppInit.c`, `ProductionID.c/.h`, 文档 | 用户确认“先只做低风险” | `0xC002` 默认信息读取、编译、`rg su8_StartUpFlag` |
 | SV-STRUCT-01 | 已完成结构体收口 | 把 `FactoryAging.c` 中同生命周期的老化私有运行态变量收口到 `FactoryAgingRuntime s_factory_aging` | `FactoryAging.c`, 文档 | 用户确认“开始”执行低风险结构体收口 | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；老化 CAN/上位机仍需实测 |
 | SV-STRUCT-02 | 已完成结构体收口 | 把 `LogRecord.c` 中日志记录点、记录数组、请求 flag、重复保存抑制和事件 latch 收口到 `LogRecordRuntime s_log_record`；保留外部 `su32_Interval_S_Tcnt` | `LogRecord.c`, 文档 | 用户确认“1、2、3 都做” | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；日志读写和 sleep/startup 事件仍需实测 |
-| SV-STRUCT-03 | 已完成结构体收口 | 把 `DataDeal.c` 中 AFE current zero 私有运行态收口到 `AFE_CURRENT_RUNTIME s_afe_current`；保留 `g_u32AfeCurrentSampleSeq` | `DataDeal.c`, 文档 | 用户确认“1、2、3 都做” | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；真实充放电、零点和 SOC sample seq 仍需实测 |
+| SV-STRUCT-03 | 已完成结构体收口 | 把 `DataDeal.c` 中 AFE current zero 私有运行态收口到 `DATA_RUNTIME s_data.cur`；采样序号通过 `AfeCurrent_GetSeq()` 暴露 | `DataDeal.c`, 文档 | 用户确认“1、2、3 都做” | `rg` 旧符号、`git diff --check`、`clang -fsyntax-only`；真实充放电、零点和 SOC sample seq 仍需实测 |
 | SV-02 | 已完成初始化收口 | 在启动运行态初始化显式调用 `LedBar_Init()`，移除 `APP_LedBar()` 入口懒初始化；保留外部 API、STOP 前 GPIO、TIM4 ISR/debug 防护 | `AppInit.c`, `LedBar.c`, 文档 | 已按用户“1、2、3 都做”执行；确认 `LedBar_Init()` 不启动 TIM4，STOP 唤醒后不完整重置 LedBar runtime | `rg` 调用点、`git diff --check`、`clang -fsyntax-only`；LED 启动/按键/TIM4/STOP GPIO/低功耗释放仍需实测 |
 | SV-03 | 已完成低功耗提交收口 | 删除 `readyToSleep` 字段和 `LowPower_IsToSleepPending()/LowPower_ClearToSleepFlag()`，用本地 `sleep_mode` 提交 HICCUP/NORMAL/DEEP；debug/ST-Link ready 改为派生值 | `rtc_sleep.c/.h`, `LedBar.c`, `LogRecord.c`, `Runtime.c`, `SystemDebug.c`, `tools/stlink_bms_monitor.ps1`, 文档 | 已按用户“直到这部分全部完成”执行；sleep commit 顺序已按源码确认 | `rg` 旧 API/字段、`git diff --check`、`clang -fsyntax-only`、`project_check.py`；HICCUP/NORMAL/DEEP、BMS_SLEEP、sleep SOC、ST-Link 仍需实测 |
 | SV-04 | debug mirror 收口 | 从控制结构里移出纯展示字段，或标记为 debug mirror | `rtc_sleep.c/.h`, `SystemDebug.c/.h`, 文档 | 用户确认 `Q-SV-003`；确认工具/上位机依赖 | `SystemDebug`、ST-Link 监控、Modbus debug 窗口 |
@@ -169,7 +168,7 @@
 
 - 按键和 `MCU_WK` 防抖/边沿状态。
 - `scan_index`、LED frame 和 TIM4 扫描状态。
-- SOC 的 `s_u32LastAfeCurrentSampleSeq`。
+- SOC 的 `s_u32LastAfeCurrentSampleSeq` 以及 `AfeCurrent_GetSeq()` 新样本判断。
 - AFE fault/recover 计数和低压/强制低压累计计数。
 - CAN/Sci RX/TX 队列、pending、busy、read block 状态。
 - Flash busy、日志边沿去重、BKP sleep flag 和 RTC elapsed 秒数。

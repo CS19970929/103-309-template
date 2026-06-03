@@ -90,7 +90,6 @@ static void SOC_LoadConfigData(void)
 
 	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
 	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
-	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000;
 	SOC_Enhance_Element.u16_SOC_TableSelect =
 		SOC_GetEffectiveTableSelect(OtherElement.u16Soc_TableSelect);
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
@@ -141,23 +140,3 @@ void App_SOC(void)
 	}
 
 }
-
-#if 0
-UINT8 SOC_TestMode_RunSample(UINT8 enable, UINT16 vcell_max, UINT16 vcell_min,
-							 UINT16 ichg, UINT16 idsg, UINT16 ticks)
-{
-	(void)enable;
-	(void)vcell_max;
-	(void)vcell_min;
-	(void)ichg;
-	(void)idsg;
-	(void)ticks;
-	return 0U;
-}
-
-void SOC_TestMode_ReadStatus(UINT16 status_words[], UINT16 word_count)
-{
-	(void)status_words;
-	(void)word_count;
-}
-#endif

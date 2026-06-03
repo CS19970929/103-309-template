@@ -21,9 +21,9 @@
 | 查看某模块的设计方案 | [设计文档](#6-设计文档-design) |
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
-| 查看当前 SOC 完整逻辑和校准条件 | [SOC 当前逻辑](review/soc_current_logic_2026-06-02.md) |
+| 查看当前 SOC 完整逻辑和校准条件 | [SOC 模块设计与源码审查](design/soc_design.md) |
 | 排查无放电静置 SOC 快降 | [SOC 无放电静置快降分析](review/soc_rest_fast_drop_analysis_2026-06-03.md) |
-| 查看 SOC 源码简化候选 | [SOC 简化候选](review/soc_simplification_candidates_2026-06-02.md) |
+| 查看 SOC 源码简化执行记录 | [SOC 简化执行记录](review/soc_simplification_candidates_2026-06-02.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
@@ -117,9 +117,9 @@ docs/
 │   ├── document_source_consistency.md 文档源码一致性
 │   ├── variable_cleanup_report.md  变量清理报告
 │   ├── state_variable_audit.md     状态变量净删减专项审计
-│   ├── soc_current_logic_2026-06-02.md SOC 当前逻辑与校准策略
+│   ├── soc_current_logic_2026-06-02.md SOC 当前逻辑历史归档，已合并至 design/soc_design.md
 │   ├── soc_rest_fast_drop_analysis_2026-06-03.md SOC 无放电静置快降分析
-│   ├── soc_simplification_candidates_2026-06-02.md SOC 源码简化候选
+│   ├── soc_simplification_candidates_2026-06-02.md SOC 源码简化执行记录
 │   ├── bms_app_io_low_power_compare_2026-05-27.md  IO 低功耗对比
 │   ├── rtc_sleep_low_power_requirement_confirmation_2026-05-27.md
 │   └── rtc_sleep_low_power_research_2026-05-27.md
@@ -176,7 +176,7 @@ docs/
 
 | 文档 | 模块 | 内容 |
 |------|------|------|
-| [soc_design.md](design/soc_design.md) | SOC | SOC 长期设计入口，指向当前逻辑详表和源码简化候选 |
+| [soc_design.md](design/soc_design.md) | SOC | SOC 当前权威设计、源码 review、校准策略、风险和测试入口 |
 | [adc_afe_design.md](design/adc_afe_design.md) | ADC/AFE | 数据流、采样、校准 |
 | [low_power_design.md](design/low_power_design.md) | 低功耗 | RTC/STOP/IWDG/唤醒/阻塞逻辑 |
 | [storage_design.md](design/storage_design.md) | 存储 | Flash/EEPROM 兼容层/参数存储 |

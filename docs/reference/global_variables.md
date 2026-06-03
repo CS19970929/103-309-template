@@ -1,7 +1,7 @@
 # BMS 项目全局变量总览
 
 > 基于完整源码分析, 列出所有跨文件的全局变量
-> 更新日期: 2026-06-01
+> 更新日期: 2026-06-03
 
 ---
 
@@ -15,7 +15,7 @@
 | 电池数据与校准 | ~100+ | g_stCellInfoReport, g_u16CalibCoefK/B |
 | SOC 核心 | ~35 | SOC_Enhance_Element |
 | 保护参数 | ~70+ | PRT_E2ROMParas, Fault_Flag_* |
-| ADC | ~4 | g_i32ADCResult, g_u32Vbat_mV |
+| ADC | 1 个模块内运行态 | `static ADC_RUNTIME s_adc`，对外通过 `ADC_Get*()` 读取 |
 | CAN | ~2 | g_stCanErrorSnapshot, g_stCanLowPowerStatus |
 | 低功耗 | ~5 | g_stLowPowerRtcStatus, RTC_ExtComCnt |
 | LED | ~1 | key_release_wakeup |
@@ -123,10 +123,15 @@ UINT16 CopperLoss[CompensateNUM];      // 铜损补偿值 (16个)
 UINT16 CopperLoss_Num[CompensateNUM];  // 铜损补偿数量 (16个)
 struct OTHER_ELEMENT OtherElement;     // 其他可配置参数 (32个字段)
 UINT32 g_u32CS_Res_AFE;               // AFE电流采样电阻比
-UINT32 g_u32AfeCurrentSampleSeq;      // AFE电流采样序号
-UINT16 g_u16TypeCOutCurrent_mA;       // TypeC输出电流 (static)
-UINT32 g_u32Vbat_mV;                  // 电池总压
 ```
+
+AFE 电流采样序号和 ADC 结果当前通过接口读取：
+
+| 接口 | 说明 |
+|---|---|
+| `AfeCurrent_GetSeq()` | AFE 电流采样序号，供 SOC 判断是否有新样本 |
+| `ADC_GetTypeCOutCurrentMilliAmp()` | Type-C 输出电流 |
+| `ADC_GetVbatMilliVolt()` | 电池总压 fallback |
 
 ### OtherElement 字段说明
 
@@ -202,7 +207,7 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 | 字段 | 说明 |
 |------|------|
 | u16_SOC_Ah | 电池容量(10×Ah) |
-| u16_SOC_CycleT_Ever/Limit | 循环次数/上限 |
+| u16_SOC_CycleT_Ever | 循环次数 |
 | u16_SOC_TableSelect | OCV表选择 |
 | u16_SOC_0_Vol/100_Vol | 0%/100%电压 |
 | SOC_Table_CanSet[42] | 运行时OCV表 |
@@ -215,8 +220,8 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 | u16_CapacityFull | 满充容量 |
 | u16_CapacityFactory | 出厂容量 |
 | u16_Cycle_times | 循环次数 |
-| u8_SOC_OCV_Cali | OCV校准标志 |
 | u16_RefreshData_Flag | 刷新数据标志 |
+| u8_SetSocOnce | 一次性设置 SOC 命令 payload |
 
 ### SOC调试观察 (仅 DEBUG_WATCH)
 
@@ -251,11 +256,17 @@ UINT8  FaultPoint_Third2;
 
 ```c
 // ADC.c
-INT32  g_i32ADCResult[ADC_NUM];       // ADC计算结果 (全局)
-UINT32 g_u32Vbat_mV;                  // 电池总压(mV)
-
-static UINT16 g_u16TypeCOutCurrent_mA; // TypeC输出电流 (模块内)
+static ADC_RUNTIME s_adc;
 ```
+
+`s_adc` 内部保存 DMA raw、滤波值、计算结果、电池总压和 Type-C 输出电流。外部模块不直接读取 ADC 全局变量：
+
+| 接口 | 说明 |
+|---|---|
+| `ADC_GetResult(index)` | 读取 ADC 计算结果 |
+| `ADC_GetRaw(index)` | 读取 DMA raw 采样 |
+| `ADC_GetVbatMilliVolt()` | 读取电池总压，供 SOC fallback 和诊断使用 |
+| `ADC_GetTypeCOutCurrentMilliAmp()` | 读取 Type-C 输出电流，供 SOC 折算放电电流使用 |
 
 ---
 

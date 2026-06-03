@@ -43,8 +43,8 @@ Keil 工程列入的业务源码主要包括：
 |---|---:|---|---|
 | 构建档位 | `PROJECT_CFG_BUILD_PROFILE 0` | `Project_Config.h:17` | 量产档位 |
 | 电池类型 | `PROJECT_CFG_BAT_TYPE 1` | `Project_Config.h:31` | 代码中对应 BAT_SLAVE |
-| 电芯体系 | `PROJECT_CFG_BAT_CHEMISTRY 1` | `Project_Config.h:37` | LiFePO OCV 表 |
-| SOC 运行时表 | 关闭 | `Project_Config.h:41` | 上位机写 SOC 表应被拒绝 |
+| 电芯体系 | `PROJECT_CFG_BAT_CHEMISTRY 0` | `Project_Config.h` | 三元锂 OCV 表 |
+| SOC 运行时表 | 关闭 | `Project_Config.h` | 上位机写 SOC 表不参与量产算法 |
 | Host 写参数 | 开启 | `Project_Config.h:45` | 上位机可写保护/OtherElement/AFE 参数 |
 | IWDG | 开启 | `Project_Config.h:82` | 低功耗 RTC 周期被限制 |
 | RTC | 开启 | `Project_Config.h:86` | 支持 STOP/RTC 唤醒/SOC 休眠补偿 |
@@ -225,8 +225,9 @@ AFE/ADC/参数
   DataLoad_CellVolt()
   DataLoad_Temperature()
   DataLoad_Current()
-  g_u32AfeCurrentSampleSeq++
+  s_data.afeSeq++
 App_SOC()
+  AfeCurrent_GetSeq()
   SOC_UpdateSampleData()
   SOC_IntEnhance_Ctrl()
     coulomb integration
@@ -245,8 +246,8 @@ App_SOC()
 - SOC 初始化：`SOC.c:109-114`。
 - SOC 更新只在 AFE sample sequence 变化时执行：`SOC.c:116-142`。
 - 休眠前保存 snapshot：`SocEnhance.c:1678-1685`。
-- RTC 休眠补偿：`SocEnhance.c:1739-1764`。
-- Type-C 等效电流并入 SOC：`SOC.c:104-172`。
+- RTC 休眠补偿：`SOC_ApplyRtcRelaxationCompensation()`；当前只推进静置 OCV，不额外扣 RTC 自耗。
+- Type-C 等效电流并入 SOC：`SOC_GetNetCurrentForCalc()`。
 
 重大确认点：
 
@@ -412,7 +413,7 @@ TIM4_IRQHandler()
 | `System_ErrFlag` | `System_Monitor.c`, AFE/ADC/Flash/Log | Modbus/CAN/LED/低功耗 | 系统错误和状态桥 |
 | `RTC_time` / `su32_Interval_S_Tcnt` | `RTC.c`, `rtc_sleep_port.c` | Modbus、日志、老化 | 时间和累计运行时间 |
 | `SOC_Enhance_Element` | `SocEnhance.c` | SOC publish、低功耗补偿、调试 | SOC 内部状态 |
-| `g_u32AfeCurrentSampleSeq` | `DataDeal.c` | `SOC.c` | SOC 更新触发条件 |
+| `AfeCurrent_GetSeq()` | `DataDeal.c` | `SOC.c` | SOC 新样本触发条件 |
 
 ## 18. 当前疑似未落地或历史残留入口
 

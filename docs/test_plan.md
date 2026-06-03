@@ -86,20 +86,22 @@
 专项文档：
 
 - `docs/design/soc_design.md`
-- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`
 - `docs/review/soc_simplification_candidates_2026-06-02.md`
 
 后续 SOC 源码简化必须先确认“不改功能”边界，并至少覆盖：
 
 | 测试项 | 入口 | 通过标准 |
 |---|---|---|
-| 当前逻辑文档一致性 | `docs/review/soc_current_logic_2026-06-02.md` | 校准策略、时间参数、RTC/显示边界均有源码证据 |
-| 源码简化候选 | `docs/review/soc_simplification_candidates_2026-06-02.md` | 候选只涉及写法/状态所有权/重复发布，不改阈值和协议 |
-| SOC 回放 | `python3 tools/soc_replay_test.py` | 结果与基线一致 |
+| 当前逻辑文档一致性 | `docs/design/soc_design.md` | 校准策略、时间参数、正常自耗、RTC 不扣自耗、tail 当前表和显示边界均有源码证据 |
+| 源码简化记录 | `docs/review/soc_simplification_candidates_2026-06-02.md` | 只记录净删减和当前执行结果，不再保留已撤销 helper 方案 |
+| SOC 回放 | `python3 tools/soc_replay_test.py` | 47 项通过，Python 表解析与 C 活动表一致 |
+| SOC host C | `python3 tools/run_soc_host_c_test.py` | `30mA/0mA/1000mA` 和 debug-watch 组合通过 |
+| SOC visual trace | `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv` | 5 个场景通过 |
 | 发布口径 | `docs/review/test_plan.md#6-soc-测试` | `g_stCellInfoReport.SocElement.u16Soc` 保持 display SOC |
-| RTC 休眠补偿 | `docs/review/test_plan.md#6-soc-测试` | HICCUP STOP 周期先补偿，最终按键显示不出现校准跳变 |
+| RTC 休眠补偿 | `docs/review/test_plan.md#6-soc-测试` | HICCUP STOP 周期只推进静置 OCV，不额外扣 RTC 自耗 |
 
-当前阶段未修改源码，因此只执行文档和静态一致性检查。进入源码净删减后，必须至少覆盖：
+SOC 源码净删减后，必须至少覆盖：
 
 | 测试项 | 入口 | 通过标准 |
 |---|---|---|

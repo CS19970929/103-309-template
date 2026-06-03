@@ -56,21 +56,24 @@
 专项文档：
 
 - `docs/design/soc_design.md`
-- `docs/review/soc_current_logic_2026-06-02.md`
+- `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`
 - `docs/review/soc_simplification_candidates_2026-06-02.md`
 
 | ID | 测试项 | 方法 | 通过标准 |
 |---|---|---|---|
-| T-SOC-001 | 主机回放 | 使用 SOC host 测试脚本 | 满电/低压/静置/骑行用例通过 |
-| T-SOC-002 | 真实电流积分 | 上板充放电 | SOC 方向、速率符合电流 |
-| T-SOC-003 | 满电锚点 | 充至阈值并保持 | 逐步到 100%，未确认前不提前 100 |
-| T-SOC-004 | 低压尾段 | 模拟 Vmin 靠近 V0 | SOC 不虚高，显示可快速下降 |
-| T-SOC-005 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 RTC 周期唤醒时 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内先补偿再继续 STOP，最终按键显示不出现“先旧值后校准”跳变 |
-| T-SOC-006 | 量产隔离 | 读 SOC_TEST padding、尝试历史测试命令地址 | 当前无注入式测试副作用；padding 长度保持不变 |
-| T-SOC-007 | real/display SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`s_soc.display_soc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布保持 `display_soc`；自动校准不强制显示跳变 |
-| T-SOC-008 | reset sleep 快显口径 | NORMAL/DEEP reset sleep 后按键唤醒，观察 BKP sleep SOC 和启动后 SOC | 早期快显来自睡前保存显示 SOC；若后续要补 RTC 秒数必须另立功能确认 |
-| T-SOC-009 | 命令校准 | Modbus 手动 OCV、容量重算、`SetSocOnce` | ACK/NEG、SOC 保存、显示是否强制刷新与当前源码一致 |
-| T-SOC-010 | 源码简化回归 | 按 `SOC-SIM-*` 批次执行 `git diff --check`、`clang -fsyntax-only`、`tools/soc_replay_test.py` | 不改变校准顺序、阈值、时间参数、发布口径和上位机字段 |
+| T-SOC-001 | Python 回放 | `python3 tools/soc_replay_test.py` | 47 项通过，OCV/tail 表从活动 C 源码解析一致 |
+| T-SOC-002 | Host C 回归 | `python3 tools/run_soc_host_c_test.py` | `30mA/0mA/1000mA` 和 debug-watch 组合均通过 |
+| T-SOC-003 | Visual trace | `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv` | city/hill/pulse/deep/charge 5 个场景通过 |
+| T-SOC-004 | 真实电流积分 | 上板充放电 | SOC 方向、速率符合电流 |
+| T-SOC-005 | 满电锚点 | 充至阈值并保持 | 逐步到 100%，未确认前不提前 100 |
+| T-SOC-006 | 低压/中段 tail | 模拟 Vmin 靠近 V0 和 V0+450..600mV | 两个 tail 表保持当前测试值；每次最多 1%，显示可快速追赶 |
+| T-SOC-007 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内推进静置 OCV，不额外扣 RTC 自耗 |
+| T-SOC-008 | 量产隔离 | 读 SOC_TEST padding、尝试历史测试命令地址 | 当前无注入式测试副作用；padding 长度保持不变 |
+| T-SOC-009 | real/display SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`s_soc.display_soc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布保持 `display_soc`；自动校准不强制显示跳变 |
+| T-SOC-010 | reset sleep 快显口径 | NORMAL/DEEP reset sleep 后按键唤醒，观察 BKP sleep SOC 和启动后 SOC | 早期快显来自睡前保存显示 SOC；若后续要补 RTC 秒数必须另立功能确认 |
+| T-SOC-011 | 命令校准 | Modbus 手动 OCV、容量重算、`SetSocOnce` | ACK/NEG、SOC 保存、显示是否强制刷新与当前源码一致 |
+| T-SOC-012 | 正常自耗口径 | host C 覆盖 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA=0/30/1000` | 正常 RELAX 自耗被积分；RTC STOP 不额外扣自耗 |
+| T-SOC-013 | 源码简化回归 | 执行 `git diff --check`、SOC replay、host C、仓库检查 | 不改变校准顺序、阈值、时间参数、发布口径和上位机字段；`project_check.py` 若为历史基线失败需说明 |
 
 ## 7. ADC / AFE 通信测试
 
@@ -154,7 +157,7 @@
 | T-SV-004 | FactoryAging 老化功能回归 | 通过 CAN/上位机执行 start/stop/reset/set hours，抓 `0x14F80208` 老化状态和剩余分钟 | 结构体收口后老化状态、剩余时间、BKP/Flash 保存和 MOS 模式行为不变 |
 | T-SV-005 | LogRecord 结构体收口 | `rg "BMS_LOG_POINT|BMS_LOG_RECORD|s_log_record_flag|s_u32_LogRecord|s_u8_LogRecord|su8_Event|su8_CBC_Temp" "103 + 309/Project/Source/LogRecord.c"`，并检查 `s_log_record` 字段 | 旧私有日志状态无残留；外部 `su32_Interval_S_Tcnt` 保留；日志格式和 Flash 保存接口不变 |
 | T-SV-006 | LogRecord 日志功能回归 | 触发 startup/sleep/fault/CBC 日志，读事件记录并执行 reset event record | startup/sleep 日志、fault 边沿去重、CBC 变化记录、读取顺序和清空行为不变 |
-| T-SV-007 | AFE current zero 结构体收口 | `rg "s_i32AfeCurrent|s_u8AfeCurrent" "103 + 309/Project/Source/DataDeal.c"`，并检查 `s_afe_current` 字段 | 旧 AFE current zero 私有状态无残留；`g_u32AfeCurrentSampleSeq` 保留；电流算法入口不变 |
+| T-SV-007 | AFE current zero 结构体收口 | `rg "s_i32AfeCurrent|s_u8AfeCurrent" "103 + 309/Project/Source/DataDeal.c"`，并检查 `s_data.cur` 字段 | 旧 AFE current zero 私有状态无残留；采样序号通过 `AfeCurrent_GetSeq()` 暴露；电流算法入口不变 |
 | T-SV-008 | AFE current zero 功能回归 | 冷启动/热启动零点、真实充放电方向、`0xD000` 电流、SOC sample seq | 零点状态可完成，充/放电方向正确，deadband 不变，SOC 不重复积分或漏积分 |
 | T-SV-009 | LedBar 显式初始化 | `rg -n "LedBar_Init\\(|LedBar_EnsureInit\\(|void APP_LedBar" AppInit.c/LedBar.c`，并观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | `AppInit_InitRuntimeState()` 显式初始化；`APP_LedBar()` 不再懒初始化；不重复初始化、不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
 | T-SV-010 | LedBar STOP 前 GPIO / RTC 唤醒恢复 | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流；RTC STOP 唤醒后确认 `InitRunAfterStopWakeup()` 恢复外设但不完整重置 LedBar runtime | LED 引脚进入低漏电安全态，STOP 前无残留扫描；唤醒后显示请求、防抖和扫描状态不被 `LedBar_Init()` 重置 |

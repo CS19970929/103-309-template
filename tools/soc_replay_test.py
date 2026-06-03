@@ -87,22 +87,22 @@ EMPTY_BAND_MID = 2
 EMPTY_BAND_HEAVY = 3
 
 EMPTY_TAIL_TABLE = [
-    (-50, (0, 0, 0, 0), (1, 1, 1, 1)),
-    (-25, (0, 0, 0, 0), (5, 5, 1, 1)),
-    (0, (0, 0, 0, 0), (10, 5, 5, 5)),
-    (50, (4, 5, 8, 12), (20, 15, 10, 8)),
-    (100, (8, 10, 14, 18), (35, 30, 25, 20)),
-    (200, (12, 14, 20, 25), (60, 50, 40, 30)),
-    (300, (14, 18, 25, 32), (90, 75, 60, 45)),
-    (400, (18, 22, 30, 40), (120, 100, 80, 60)),
+    (-50, (0, 0, 0, 0), (5, 5, 5, 5)),
+    (-25, (0, 0, 0, 0), (5, 5, 5, 5)),
+    (0, (0, 0, 0, 0), (5, 5, 5, 5)),
+    (50, (4, 5, 8, 12), (5, 5, 5, 5)),
+    (100, (8, 10, 14, 18), (5, 5, 5, 5)),
+    (200, (12, 14, 20, 25), (5, 5, 5, 5)),
+    (300, (14, 18, 25, 32), (5, 5, 5, 5)),
+    (400, (18, 22, 30, 40), (5, 5, 5, 5)),
 ]
 
 MID_TARGET_DISABLED = None
 MID_TAIL_TABLE = [
-    (500, (25, 32, 42, MID_TARGET_DISABLED), (450, 450, 600, 0)),
-    (600, (35, 42, 50, MID_TARGET_DISABLED), (600, 600, 750, 0)),
-    (650, (45, 50, 58, MID_TARGET_DISABLED), (750, 750, 900, 0)),
-    (700, (55, 60, MID_TARGET_DISABLED, MID_TARGET_DISABLED), (900, 900, 0, 0)),
+    (450, (25, 32, 42, MID_TARGET_DISABLED), (5, 5, 5, 5)),
+    (500, (35, 42, 50, MID_TARGET_DISABLED), (5, 5, 5, 5)),
+    (550, (45, 50, 58, MID_TARGET_DISABLED), (5, 5, 5, 5)),
+    (600, (50, 55, MID_TARGET_DISABLED, MID_TARGET_DISABLED), (5, 5, 5, 5)),
 ]
 
 MODE_RELAX = 0
@@ -643,17 +643,29 @@ def c_source_text():
     return SOC_ENHANCE_SOURCE.read_text(encoding='utf-8')
 
 
+def active_c_source_text():
+    text = c_source_text()
+    text = re.sub(r'#if\s+0\b.*?#else', '', text, flags=re.S)
+    text = re.sub(r'^\s*#endif\s*$', '', text, flags=re.MULTILINE)
+    return text
+
+
 def parse_c_number(token):
     token = token.strip()
     if token == 'SOC_MID_TARGET_DISABLED':
         return MID_TARGET_DISABLED
+    macro = re.search(r'^\s*#define\s+{0}\s+\(?(\d+)[Uu]?\)?\s*$'.format(re.escape(token)),
+                      active_c_source_text(),
+                      re.MULTILINE)
+    if macro:
+        return int(macro.group(1), 0)
     token = re.sub(r'[()A-Za-z_]+', '', token)
     return int(token, 0)
 
 
 def parse_c_tail_table(name):
     match = re.search(r'static const SOC_EMPTY_TAIL_RULE\s+' + name +
-                      r'\[\]\s*=\s*\{(.*?)\};', c_source_text(), re.S)
+                      r'\[\]\s*=\s*\{(.*?)\};', active_c_source_text(), re.S)
     assert match, name
     rows = []
     for offset, targets, ticks in re.findall(r'\{\s*([^,]+),\s*\{([^}]*)\},\s*\{([^}]*)\}\s*\}',
@@ -936,11 +948,11 @@ def test_empty_anchor_limits_low_voltage_tail():
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
     run_seconds(model, 500, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3400, vmin=3400)
-    assert model.soc == 30
+    assert model.soc == 27
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
     run_seconds(model, 300, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3300, vmin=3300)
-    assert 35 <= model.soc <= 36
+    assert model.soc == 23
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 80, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3100, vmin=3100)
@@ -952,18 +964,18 @@ def test_empty_anchor_limits_low_voltage_tail():
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=40, vmax=2750, vmin=2750)
-    assert model.soc == 29
+    assert model.soc == 30
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=40, vmax=2500, vmin=2500)
-    assert model.soc == 29
+    assert model.soc == 30
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 15, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3000, vmin=3000)
     assert model.soc == 15
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 29
+    assert model.soc == 30
     run_seconds(model, 6, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 0
+    assert model.soc == 24
 
 
 def test_rtc_rest_ocv_applies_small_bounded_step():
@@ -1019,18 +1031,21 @@ def test_fixed_and_zero_overlay_do_not_change_internal_soc():
 
 def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
-    run_seconds(model, 19, idsg=20, vmax=3400, vmin=3400)
+    assert model.empty_tail_config(MODE_DSG, 3400, 20) == (22, 5)
+    for _ in range(4):
+        model.tick(idsg=20, vmax=3400, vmin=3400)
     assert model.soc == 40
-    run_seconds(model, 1, idsg=20, vmax=3400, vmin=3400)
+    model.tick(idsg=20, vmax=3400, vmin=3400)
     assert model.soc == 39
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
-    run_seconds(model, 16, idsg=EMPTY_LIGHT_CURRENT_A10 + 1, vmax=3400, vmin=3400)
+    run_seconds(model, 1, idsg=EMPTY_LIGHT_CURRENT_A10 + 1, vmax=3400, vmin=3400)
     assert model.soc == 39
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
-    run_seconds(model, 60, idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=3400, vmin=3400)
-    assert model.soc == 39
+    run_seconds(model, 1, idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=3400, vmin=3400)
+    assert model.soc == 40
+    assert model.sag_hold_ticks > 0
 
 
 def test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull():
@@ -1057,6 +1072,8 @@ def test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull():
 
 
 def test_auto_calibration_never_steps_more_than_one_percent():
+    previous_soc: int
+
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
     run_seconds(model, FULL_SECONDS, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 99
@@ -1066,15 +1083,14 @@ def test_auto_calibration_never_steps_more_than_one_percent():
     assert model.soc == 79
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    model.tick(idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 29
-
-    model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    model.tick(idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2500, vmin=2500)
-    assert model.soc == 29
+    previous_soc = model.soc
+    for _ in range(30):
+        model.tick(idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
+        assert previous_soc - model.soc in (0, 1)
+        previous_soc = model.soc
 
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    run_seconds(model, 150, idsg=20, vmax=3650, vmin=3650)
+    run_seconds(model, 1, idsg=20, vmax=3500, vmin=3500)
     assert model.soc == 79
 
 
@@ -1091,7 +1107,7 @@ def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 6, idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 0
+    assert model.soc == 24
 
 
 def test_short_stable_rest_latches_ocv_without_immediate_soc_change():
@@ -1146,19 +1162,22 @@ def test_unstable_long_rest_waits_for_voltage_convergence():
 
 def test_mid_voltage_light_load_weakly_limits_high_soc():
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    run_seconds(model, 149, idsg=20, vmax=3650, vmin=3650)
+    for _ in range(4):
+        model.tick(idsg=20, vmax=3500, vmin=3500)
     assert model.soc == 80
-    run_seconds(model, 1, idsg=20, vmax=3650, vmin=3650)
+    model.tick(idsg=20, vmax=3500, vmin=3500)
     assert model.soc == 79
 
 
 def test_mid_voltage_counter_resets_when_condition_breaks():
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    run_seconds(model, 149, vmax=3650, vmin=3650)
-    run_seconds(model, 1, vmax=3900, vmin=3900)
-    run_seconds(model, 149, vmax=3650, vmin=3650)
+    for _ in range(4):
+        model.tick(vmax=3500, vmin=3500)
+    model.tick(vmax=3900, vmin=3900)
+    for _ in range(4):
+        model.tick(vmax=3500, vmin=3500)
     assert model.soc == 80
-    run_seconds(model, 1, vmax=3650, vmin=3650)
+    model.tick(vmax=3500, vmin=3500)
     assert model.soc == 79
 
 
@@ -1173,11 +1192,11 @@ def test_mid_voltage_tail_table_matrix_and_guards():
             assert model.mid_tail_config(direction, vcell, vcell, idsg) == expected
 
     model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    assert model.mid_tail_config(MODE_CHG, 3650, 3650, 0) is None
+    assert model.mid_tail_config(MODE_CHG, 3500, 3500, 0) is None
     assert model.mid_tail_config(MODE_RELAX, 3400, 3400, 0) is None
     assert model.mid_tail_config(MODE_RELAX, 3851, 3650, 0) is None
     model.sag_hold_ticks = SAG_HOLDOFF_SECONDS * TICKS_PER_SECOND
-    assert model.mid_tail_config(MODE_RELAX, 3650, 3650, 0) is None
+    assert model.mid_tail_config(MODE_RELAX, 3500, 3500, 0) is None
 
 
 def test_short_rest_rejects_imbalance_and_restarts_after_voltage_jump():
@@ -1211,9 +1230,8 @@ def test_rebound_hold_expires_then_allows_voltage_correction():
 
     run_seconds(model, 1, vmax=3500, vmin=3500)
     assert not model.rebound_hold
-
     run_seconds(model, 90, vmax=3500, vmin=3500)
-    assert model.soc == 79
+    assert model.soc == 35
 
 
 def test_long_storage_stable_voltage_converges_gradually_without_jump():

@@ -3,7 +3,7 @@
 状态：部分验证
 
 本文以当前源码为第一可信来源，记录本轮 BMS App IO 与 RTC 低功耗配置审查发现的风险。未修改源码，未做上板实测。2026-06-02 追加低功耗需求对齐风险，详见 `docs/review/low_power_requirement_alignment_2026-06-02.md`。
-2026-06-02 追加 SOC 当前逻辑与源码简化风险，详见 `docs/review/soc_current_logic_2026-06-02.md` 和 `docs/review/soc_simplification_candidates_2026-06-02.md`。
+2026-06-03 追加 SOC 源码复审、文档合并与源码简化风险，详见 `docs/design/soc_design.md`、`docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` 和 `docs/review/soc_simplification_candidates_2026-06-02.md`。
 2026-06-03 追加中断计数实现风险，详见 `docs/review/interrupt_counter_plan_2026-06-03.md`。
 
 ## 参考源码
@@ -29,15 +29,17 @@
 
 ## SOC 文档合并与源码简化风险
 
-状态：已按源码部分验证，2026-06-02 新增
+状态：已按源码和 host 测试部分验证，2026-06-03 更新
 
 | 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
 |---|---|---|---|---|---|
-| RISK-SOC-DOC-001 | 旧 SOC 文档和当前源码事实混用 | `docs/design/soc_design.md`, `docs/review/soc_current_logic_2026-06-02.md`, `SocEnhance.c` | 后续优化可能基于旧阶段结论，误改校准条件或休眠显示体验 | 已处理文档入口，仍需维护 | `soc_design.md` 只做入口；完整事实以当前逻辑详表为准；devlog 只作历史追溯 |
-| RISK-SOC-UX-001 | 把内部 `s_soc.soc` 和对外 `display_soc` 混为一谈 | `SocEnhance.c:1513-1584`, `SOC_PublishReportData()` | 自动校准和用户显示节奏被误改，可能出现跳变或显示不一致 | KEEP_BUT_REFACTOR | 后续源码简化不得改变 `display_soc` 发布口径；调试可暴露 real/display 双值 |
-| RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep.c:247-286`, `LowPowerSleep.c:5-15`, `LedBar.c:1175-1218` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | CHANGE_NEEDED 但需确认 | 先文档化；若要补 reset sleep 秒数，必须另立功能变更确认 |
-| RISK-SOC-SIM-001 | “只改写法”时改变了 SOC 状态机顺序 | `SocEnhance.c:1677-1722` | 满电、低压、中段、deferred OCV、静置计时优先级变化，影响用户体验和低端安全 | MUST_KEEP | 源码简化只允许小步，保持调用顺序不变，用回放和上板验证守住 |
-| RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SocEnhance.h:80-95`, `Sci_Upper.c:600-640`, `Sci_Upper.c:2052-2066` | `SetSocOnce`、手动 OCV、容量重算 ACK 或显示行为改变 | KEEP_BUT_REFACTOR | 先加请求接口，不立即改变 public struct 布局；单独验证 Modbus 写命令 |
+| RISK-SOC-DOC-001 | 旧 SOC 文档和当前源码事实混用 | `docs/design/soc_design.md`, `docs/review/soc_current_logic_2026-06-02.md`, `SocEnhance.c` | 后续优化可能基于旧结论误改自耗、RTC 或 tail | 已处理 | `docs/design/soc_design.md` 为唯一权威入口；旧逻辑文档已归档 |
+| RISK-SOC-UX-001 | 把内部 `s_soc.soc` 和对外 `display_soc` 混为一谈 | `soc_publish()`, `SOC_PublishReportData()` | 自动校准和用户显示节奏被误改 | MUST_KEEP | 后续源码简化不得改变 `display_soc` 发布口径；调试看 internal/display 双值 |
+| RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep_port.c`, `LowPowerSleep.c`, `LedBar.c` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | 需确认 | 若要补 reset sleep 秒数，必须另立功能变更确认 |
+| RISK-SOC-SELF-001 | 混淆正常自耗和 RTC 自耗 | `soc_integrate_current_ma()`, `soc_apply_rtc_rest_ocv()` | 可能重复扣自耗或误删正常自耗 | MUST_KEEP | 保持正常运行自耗积分；RTC STOP 不额外扣自耗；host C 自耗矩阵持续覆盖 |
+| RISK-SOC-TAIL-001 | 当前 tail 测试表速度较快 | `s_empty_tail_table`, `s_mid_tail_table`, `DELAY_SOC_TEST` | RELAX/低压场景可能出现快降体验 | KEEP_BUT_REFACTOR | 本轮不动两个 tail 表；上板用 tail active 和 last calib source 确认后再决定 |
+| RISK-SOC-SIM-001 | “只改写法”时改变 SOC 状态机顺序 | `SOC_IntEnhance_Ctrl()` | 满电、低压、中段、deferred OCV、静置计时优先级变化 | MUST_KEEP | 保持当前直线顺序，用 SOC replay 和 host C 守住 |
+| RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SOC_Request*()`, `Sci_Upper.c` | `SetSocOnce`、手动 OCV、容量重算 ACK 或显示行为改变 | KEEP_BUT_REFACTOR | 请求 API 已建立；后续若私有化字段必须单独验证 Modbus 写命令 |
 
 ## 中断计数专项风险
 
@@ -83,6 +85,6 @@
 | RISK-SV-PROD-001 | `ProductionID.c` 曾依赖主循环一次性 flag 初始化产品信息 | `ProductionID.c`, `ProductionID.h`, `AppInit.c`, `Runtime.c:57` | 已减少主循环一次性状态；仍需确认 `0xC002` 默认信息读取 | 已处理 | `InitProID()` 已收口到启动运行态初始化；`App_ProID_Deal()` 保留为空 hook 维持 PROID heartbeat |
 | RISK-SV-AGING-001 | `FactoryAging.c` 的多个私有运行态变量已收口为结构体字段 | `FactoryAging.c` | 若字段初值或替换错误，会影响老化状态、剩余时间、BKP/Flash 保存节流、完成重试和 MOS 模式缓存 | 已处理，需老化回归 | 本批次只改变变量组织方式，不改状态机、BKP/Flash 存储格式、CAN/Modbus 可见接口；后续用老化 start/stop/reset/set hours 和 `0x14F80208` 广播回归 |
 | RISK-SV-LOG-001 | `LogRecord.c` 私有运行态已收口为结构体字段，但 `su32_Interval_S_Tcnt` 仍是跨模块符号 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 如果误搬 `su32_Interval_S_Tcnt`，RTC 睡眠补偿会丢；如果误清事件 latch，日志去重会改变 | 已处理，需日志回归 | 本批次只收口私有状态，保留外部时间累计符号；后续用 startup/sleep/fault 日志、事件读取和 reset event record 回归 |
-| RISK-SV-AFE-CUR-001 | `DataDeal.c` AFE current zero 私有运行态已收口为结构体字段 | `DataDeal.c`, `SOC.c` | 若字段替换错误，会影响启动零点、自动零点学习、电流方向、deadband 输出和 SOC sample seq 驱动 | 已处理，需电流/SOC 回归 | 本批次不改 CADC 读取、换算公式、deadband、`g_u32AfeCurrentSampleSeq`；后续用真实充/放电方向、零点、`0xD000` 电流和 SOC 回归 |
+| RISK-SV-AFE-CUR-001 | `DataDeal.c` AFE current zero 私有运行态已收口为结构体字段 | `DataDeal.c`, `SOC.c` | 若字段替换错误，会影响启动零点、自动零点学习、电流方向、deadband 输出和 SOC sample seq 驱动 | 已处理，需电流/SOC 回归 | 本批次不改 CADC 读取、换算公式、deadband 和 `AfeCurrent_GetSeq()` 口径；后续用真实充/放电方向、零点、`0xD000` 电流和 SOC 回归 |
 | RISK-SV-DATA-001 | `DataDeal.c` 中多个静态状态混合客户逻辑、保护逻辑和认证逻辑 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 变量看似可删，但可能影响 MOS、RF_EN、过温、拔 5V 行为和认证 | UNKNOWN | 未确认产品/认证背景前只做文档归类，不改源码 |
 | RISK-SV-KEEP-001 | 把真实历史状态误判为“不必要变量” | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 会导致误唤醒、重复积分、故障恢复失败、通信状态丢失 | MUST_KEEP | 明确边界：防抖、边沿、累计延时、ISR 队列、SOC sample seq 第一批不删 |

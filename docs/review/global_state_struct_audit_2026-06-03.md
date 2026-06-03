@@ -53,8 +53,8 @@
 
 | 模块 | 代表变量 | 建议处理 |
 |---|---|---|
-| ADC | `g_u16ADCValFilter[]`、`g_i32ADCResult[]`、`g_u32ADCValFilter2[]`、`s_u32AnlogCalLast10msTick`、`g_u16TypeCOutCurrent_mA`、`g_u32Vbat_mV` | 建议新增 `ADC_RUNTIME s_adc`；对外先保留读取函数，暂不直接破坏 extern 兼容 |
-| DataDeal | `u8IICFaultcnt1`、`u8WakeCnt1`、`u8IICFaultcnt2`、`u8WakeCnt2`、`g_u16CalibCoefK[]`、`g_i16CalibCoefB[]`、`g_u32CS_Res_AFE`、`g_u32AfeCurrentSampleSeq` | 计数器进 `DATA_RUNTIME s_data`；校准参数和采样序号先确认协议/保存关系后再动 |
+| ADC | `ADC_RUNTIME s_adc` | 已收口 DMA raw、滤波、result、Vbat、Type-C 和调度计数；外部通过 `ADC_GetResult()`、`ADC_GetRaw()`、`ADC_GetVbatMilliVolt()`、`ADC_GetTypeCOutCurrentMilliAmp()` 读取 |
+| DataDeal | `DATA_RUNTIME s_data`、`g_u16CalibCoefK[]`、`g_i16CalibCoefB[]`、`g_u32CS_Res_AFE` | AFE 电流零点、AFE 通信监控计数、sleep delay 和 sample seq 已进 `s_data`；校准参数/采样电阻仍按协议和 Flash 边界保留 |
 | DataDeal 函数内静态变量 | `su16_Sleep_DelayT1/T2/T3`、`mos_state`、`state_fuse`、`rong_fuse*`、`delay_cnt` | 建议按功能拆进 `DATA_RUNTIME` 子结构，减少隐藏状态 |
 | Sci_Upper | `g_stCurrentMsgPtr_SCI1/2/3`、`gu16_CommuErrCnt_SCI1/2/3`、`gu8_TxEnable_SCI1/2/3`、`gu8_TxFinishFlag_SCI1/2/3`、`g_u8SCITxBuff[]`、`u8FlashUpdateFlag`、`u8FlashUpdateE2PROM` | 已有 `SCI_PORT_RUNTIME`，建议把旧 per-port 散变量继续并入端口结构；升级标志另建 `SCI_RUNTIME` 或 `FLASH_UPDATE_STATE` |
 | System_Init | `s_st_SysTimePending`、`s_u32Sys10msTickCount`、`s_u8Cnt50ms/100ms/200ms/1000ms`、`fac_us`、`fac_ms`、`s_u8Sys200msPendingPeriods`、`s_u16Sys200msOverflowCnt` | 建议新增 `SYS_RUNTIME s_sys`；`g_st_SysTimeFlag` 作为 ISR 对外旗标先保留 |
@@ -184,7 +184,7 @@ extern const struct APP_WATCH g_watch;
 
 - `git diff --check`。
 - `rg "g_u16ADCValFilter|g_i32ADCResult|g_u32Vbat_mV|g_u16TypeCOutCurrent_mA" "103 + 309/Project/Source"` 无命中。
-- `py -3.9 tools/project_check.py --quiet` 新增 ADC 门禁通过。
+- `python3 tools/project_check.py --quiet` ADC 门禁通过；若全仓有历史 warning/fail，应按当前基线解读。
 - Keil `FD_Release` 编译。
 - 上板确认 ADC DMA raw 更新、MOS 温度、VBC、电流方向和 Type-C 电流显示/上报行为不变。
 

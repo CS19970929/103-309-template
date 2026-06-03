@@ -6,7 +6,7 @@
 
 | ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
 |---|---|---|---|---|---|---|---|---|---|
-| Q-CRIT-001 | AFE/电流/SOC | 量产固件应使用真实 AFE CADC 电流，测试虚拟电流必须隔离 | `DataDeal.c:1063-1085` 当前 200ms 主路径调用 `DataLoad_Current()` 并递增 `g_u32AfeCurrentSampleSeq`；`Project_Config.h:17` 为 profile 0 | 当前源码主路径已是 `DataLoad_Current()`，旧文档中“主路径跑虚拟电流”的描述已过期；仍需确认测试注入入口是否完全隔离 | MUST_KEEP | P0：若虚拟电流再次混入量产，会影响 SOC、CAN 电流、保护状态和老化行为 | 是否确认量产必须保持 `DataLoad_Current()`，虚拟电流只能在测试 profile/测试固件使用？ | A. 保持当前真实电流主路径；B. 保留测试入口但加门禁；F. 补充背景 | |
+| Q-CRIT-001 | AFE/电流/SOC | 量产固件应使用真实 AFE CADC 电流，测试虚拟电流必须隔离 | 当前 200ms 主路径调用 `DataLoad_Current()`，采样序号通过 `AfeCurrent_GetSeq()` 暴露；`Project_Config.h` 为 profile 0 | 当前源码主路径已是 `DataLoad_Current()`，旧文档中“主路径跑虚拟电流”的描述已过期；仍需确认测试注入入口是否完全隔离 | MUST_KEEP | P0：若虚拟电流再次混入量产，会影响 SOC、CAN 电流、保护状态和老化行为 | 是否确认量产必须保持 `DataLoad_Current()`，虚拟电流只能在测试 profile/测试固件使用？ | A. 保持当前真实电流主路径；B. 保留测试入口但加门禁；F. 补充背景 | |
 | Q-CRIT-002 | 均衡 | 当前产品是否需要主动均衡 | 仅找到 `OtherElement.u16Balance_*`、`MTP_BALANCEH/L`、CBC status；未见 `App_CellBalance()` 进入 `Runtime_RunOnce()` | 有均衡参数和状态位，但未确认主动控制 | UNKNOWN | P0/P1：若客户要求均衡，当前实现可能缺功能；若不要求，协议残留增加复杂度 | 均衡是当前客户需求、未来模板需求，还是历史残留？ | A. 保留原需求；B. 保留并重构；D. 删除业务但保留协议占位；F. 补充背景 | |
 | Q-CRIT-003 | AFE 参数 | 均衡开启电压是否应使用可写参数 | `SH367309_DataDeal.c:58-59` 注释参数计算，实际硬编码 `4160` | 上位机写 `u16Balance_OpenVoltage` 可能不影响 AFE ROM 对应字段 | MISUNDERSTOOD | P1：上位机参数和硬件行为不一致 | `u16Balance_OpenVoltage` 是否必须驱动 AFE 均衡开压？ | B. 保留需求但修实现；C. 修改为固定 4160 并文档化；F. 补充背景 | |
 | Q-CRIT-004 | Flash/IAP | 当前真实硬件 Flash 容量和 App 链接地址是什么 | `Flash.h:4-30` 使用 `0x08004800` App 和 `0x0801C000+` 存储；Keil XML 同时有 `0x08000000` 和 `0x8004800`，`ScatterFile` 为空 | 安全脚本约束 App 烧录 `0x08004800`，但 Keil 工程显示不够单一 | UNKNOWN | P0：地址错会覆盖 IAP 或越界写 Flash | 实际量产芯片是 64KB、128KB 还是 C8 兼容大 Flash？Keil 最终链接地址以哪个文件为准？ | A. 保留现有地址并补 map 验证；C. 修改地址策略；F. 补充硬件/BOM | |
@@ -121,7 +121,7 @@
 | Q-SV-006 | DataDeal/客户逻辑 | `DataDeal.c` 中充电器、MOS 过温、UL 认证、RF_EN 熔断类状态是否仍是当前产品需求 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 多个静态状态混在 200ms 业务链路里 | UNKNOWN | 直接删除可能改变安全输出、认证动作或客户体验 | 这些逻辑是当前产品需求、认证需求，还是历史残留？ | F. 先补产品/认证背景，不进第一批删除 | |
 | Q-SV-007 | 老化/状态收口 | `FactoryAging.c` 中同生命周期私有变量是否可集中为模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 已把老化 state、elapsed、last tick、保存节流、finish retry、duration hours 和 MOS mode 收口到 `FactoryAgingRuntime s_factory_aging` | 已处理 | 替换错误会影响老化剩余时间、保存进度、完成重试或 MOS 模式缓存 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已执行；不改状态机和持久化格式 | 已执行 |
 | Q-SV-008 | 日志/状态收口 | `LogRecord.c` 中私有日志运行态是否可集中为模块 runtime 结构体 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 已把日志 point、records、startup/sleep flag、uptime、重复保存抑制和事件 latch 收口到 `LogRecordRuntime s_log_record`；保留外部 `su32_Interval_S_Tcnt` | 已处理 | 误搬外部时间符号会影响 RTC 睡眠补偿；误改 latch 会改变事件去重 | 是否允许先收口私有状态，保留跨模块时间累计符号？ | 已执行；不改日志格式、Flash 保存格式和低功耗补偿接口 | 已执行 |
-| Q-SV-009 | AFE/电流 | `DataDeal.c` 中 AFE current zero 私有状态是否可集中为 runtime 结构体 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 已把启动零点 cold/warm 参数选择、zero offset、last raw、stable count、ready 和 zero state 收口到 `AFE_CURRENT_RUNTIME s_afe_current`；保留 `g_u32AfeCurrentSampleSeq` | 已处理 | 替换错误会影响零点、自学习、电流方向和 SOC 积分 | 是否允许对 AFE current zero 私有状态做结构体收口，保留 CADC/换算公式/deadband/sample seq？ | 已执行；不改算法和跨模块变量 | 已执行 |
+| Q-SV-009 | AFE/电流 | `DataDeal.c` 中 AFE current zero 私有状态是否可集中为 runtime 结构体 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 已把启动零点、zero offset、last raw、stable count、ready、zero state 和采样序号收口到 `DATA_RUNTIME s_data`；外部通过 `AfeCurrent_GetSeq()` 读取 | 已处理 | 替换错误会影响零点、自学习、电流方向和 SOC 积分 | 是否允许对 AFE current zero 私有状态做结构体收口，保留 CADC/换算公式/deadband/sample seq？ | 已执行；不改算法和采样序号接口 | 已执行 |
 
 ## 6. 高风险需求
 

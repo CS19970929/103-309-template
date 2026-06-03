@@ -579,7 +579,6 @@ void SystemDebug_Snapshot(void)
 	g_dbg.soc.ichg      = SOC_Enhance_Element.u16_Ichg;
 	g_dbg.soc.idsg      = SOC_Enhance_Element.u16_Idsg;
 	g_dbg.soc.init_over = 1U;
-	g_dbg.soc.ocv_cali  = SOC_Enhance_Element.u8_SOC_OCV_Cali;
 	g_dbg.soc.vtotal    = g_stCellInfoReport.u16VCellTotle;
 
 	/* ===== SOC calibration internals ===== */
@@ -587,11 +586,7 @@ void SystemDebug_Snapshot(void)
 	                      &g_dbg.soc.rest_ticks, &g_dbg.soc.stable_ticks,
 	                      &g_dbg.soc.full_ticks, &g_dbg.soc.empty_ticks,
 	                      &g_dbg.soc.mid_ticks, &g_dbg.soc.full_anchor,
-	                      &g_dbg.soc.cal_allowed, &g_dbg.soc.sag_blocked,
-	                      &g_dbg.soc.rest_stable, &g_dbg.soc.low_tail,
-	                      &g_dbg.soc.mid_tail, &g_dbg.soc.display_ticks);
-	g_dbg.soc.ocv_target    = 0U;
-	g_dbg.soc.last_calib_soc = 0U;
+	                      &g_dbg.soc.display_ticks);
 
 	/* ===== AFE ===== */
 	g_dbg.afe.bstatus1    = SH367309_Reg_Store.REG_BSTATUS1.all;
@@ -806,7 +801,6 @@ void DbgPrint_SOC(void)
 	dbg_puts("mV I="); dbg_put_dec16(g_dbg.soc.ichg / 10U);
 	dbg_puts("/"); dbg_put_dec16(g_dbg.soc.idsg / 10U);
 	dbg_puts("A init="); dbg_put_hex8(g_dbg.soc.init_over);
-	dbg_puts(" cali="); dbg_put_hex8(g_dbg.soc.ocv_cali);
 	dbg_puts("\r\nmode="); dbg_put_hex8(g_dbg.soc.mode);
 	dbg_puts(" restT="); dbg_put_dec16((uint16_t)g_dbg.soc.rest_ticks);
 	dbg_puts(" stableT="); dbg_put_dec16((uint16_t)g_dbg.soc.stable_ticks);
@@ -814,11 +808,7 @@ void DbgPrint_SOC(void)
 	dbg_puts("\r\nemptyT="); dbg_put_dec16(g_dbg.soc.empty_ticks);
 	dbg_puts(" midT="); dbg_put_dec16(g_dbg.soc.mid_ticks);
 	dbg_puts(" fullAnc="); dbg_put_hex8(g_dbg.soc.full_anchor);
-	dbg_puts(" calOk="); dbg_put_hex8(g_dbg.soc.cal_allowed);
-	dbg_puts("\r\nsagBlk="); dbg_put_hex8(g_dbg.soc.sag_blocked);
-	dbg_puts(" stable="); dbg_put_hex8(g_dbg.soc.rest_stable);
-	dbg_puts(" lowTail="); dbg_put_hex8(g_dbg.soc.low_tail);
-	dbg_puts(" midTail="); dbg_put_hex8(g_dbg.soc.mid_tail);
+	dbg_puts(" dispT="); dbg_put_dec16(g_dbg.soc.display_ticks);
 	dbg_puts("\r\n");
 }
 

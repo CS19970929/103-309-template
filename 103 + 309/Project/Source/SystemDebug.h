@@ -243,7 +243,6 @@ struct DBG_SOC {
 	uint16_t ichg;
 	uint16_t idsg;
 	uint8_t  init_over;
-	uint8_t  ocv_cali;
 	uint16_t vtotal;
 	/* calibration internals */
 	uint8_t  mode;           /* CHG/DSG/RELAX */
@@ -254,14 +253,7 @@ struct DBG_SOC {
 	uint16_t empty_ticks;
 	uint16_t mid_ticks;
 	uint8_t  full_anchor;
-	uint8_t  cal_allowed;
-	uint8_t  sag_blocked;
-	uint8_t  rest_stable;
-	uint8_t  low_tail;
-	uint8_t  mid_tail;
 	uint16_t display_ticks;
-	uint8_t  ocv_target;     /* OCV校准目标 SOC% */
-	uint8_t  last_calib_soc; /* 上次校准前 SOC% */
 };
 
 struct DBG_AFE {
