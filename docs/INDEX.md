@@ -24,6 +24,7 @@
 | 查看当前 SOC 完整逻辑和校准条件 | [SOC 模块设计与源码审查](design/soc_design.md) |
 | 排查无放电静置 SOC 快降 | [SOC 无放电静置快降分析](review/soc_rest_fast_drop_analysis_2026-06-03.md) |
 | 查看 SOC 源码简化执行记录 | [SOC 简化执行记录](review/soc_simplification_candidates_2026-06-02.md) |
+| 查看 SOC 测试脚本用途和调用边界 | [SOC 测试脚本用途与调用边界](review/soc_test_script_usage_2026-06-03.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
@@ -120,6 +121,7 @@ docs/
 │   ├── soc_current_logic_2026-06-02.md SOC 当前逻辑历史归档，已合并至 design/soc_design.md
 │   ├── soc_rest_fast_drop_analysis_2026-06-03.md SOC 无放电静置快降分析
 │   ├── soc_simplification_candidates_2026-06-02.md SOC 源码简化执行记录
+│   ├── soc_test_script_usage_2026-06-03.md SOC 测试脚本用途与调用边界
 │   ├── bms_app_io_low_power_compare_2026-05-27.md  IO 低功耗对比
 │   ├── rtc_sleep_low_power_requirement_confirmation_2026-05-27.md
 │   └── rtc_sleep_low_power_research_2026-05-27.md

@@ -6,14 +6,16 @@
 
 ## 2026-06-03 SOC 模块复审、净删减与文档合并
 
-本次按“减少无用代码、降低阅读成本、不动两个 tail 表”的边界复审 SOC 模块，保留当前 tail 测试状态。
+本次按“减少无用代码、降低阅读成本、不动两个 tail 表、体验更稳定”的边界复审 SOC 模块，保留当前 tail 测试状态。
 
 源码变更：
-- `SocEnhance.c`：恢复 low/mid tail 主流程和 `soc_apply_mid_tail()`，修复局部变量未初始化风险；删除过多 helper，使 `SOC_IntEnhance_Ctrl()` 直线表达命令、积分、tail/full/deferred、rest、保存、发布顺序。
+- `SocEnhance.c`：保留 low-tail/full/rest 主流程，关闭 mid-tail 运行链路；两个 mid-tail 表仍保留，`u8MidTailActive` 固定为 0。
+- `SocEnhance.c`：删除短静置 deferred OCV 自动路径，自动静置只保留长静置慢速下修。
+- `SocEnhance.c`：删除过多 helper，使 `SOC_IntEnhance_Ctrl()` 直线表达命令、积分、low-tail/full、rest、保存、发布顺序。
 - `SocEnhance.c/.h`、`SOC.c`：删除无用 `u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason`、`soc_watch_set_block_reason()` 和空测试 stub。
 - `SocEnhance.c`：删除 RTC 秒级板载自耗扣减；正常运行 `RELAX/CHG/DSG` 仍按 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` 计入容量积分。
 - `SystemDebug.c/.h`：删除固定 0 或误导性的 SOC debug 字段，保留真实内部计数和 `display_ticks`。
-- `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表和自耗/RTC 口径，补齐 host stub。
+- `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表、mid-tail 关闭、长静置慢下修和自耗/RTC 口径，补齐 host stub。
 
 文档变更：
 - 重写 `docs/design/soc_design.md` 为 SOC 当前唯一权威入口。
@@ -161,7 +163,7 @@
 核心结论：
 
 - 普通静置 OCV 在当前配置下不是秒级/分钟级快降主因。
-- 无放电快降更可能来自 `RELAX` 模式下的 `EMPTY_TAIL` / `MID_TAIL`、低压显示快速追赶，或 RTC 休眠期间已提前补偿。
+- 无放电快降当前更可能来自 `RELAX` 模式下的 `EMPTY_TAIL`、低压显示快速追赶，或 RTC 休眠期间已提前推进长静置 OCV；`MID_TAIL` 运行链路已关闭。
 - 是否调整 RELAX tail 属于功能体验变更，需先用 `u8LastCalibSource` 上板确认。
 
 ## 2026-06-03 SOC 源码简化候选执行

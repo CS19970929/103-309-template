@@ -418,7 +418,7 @@ SOC 模块分为两层:
 |------|------|
 | `soc_param_lib_init()` | 初始化 SOC 参数库 (容量, 表, 快照恢复等) |
 | `SOC_UpdateSampleData(vmax,vmin,ichg,idsg)` | 更新 SOC 采样输入 |
-| `SOC_IntEnhance_Ctrl()` | SOC 核心控制: 命令、积分、tail/full/deferred/rest、保存、发布 |
+| `SOC_IntEnhance_Ctrl()` | SOC 核心控制: 命令、积分、low-tail/full/rest、保存、发布 |
 | `SOC_PublishReportData()` | 将显示 SOC 和容量字段发布到 `g_stCellInfoReport` |
 | `SOC_ApplyRtcRelaxationCompensation()` | HICCUP RTC STOP 周期内静置 OCV 补偿；当前不额外扣 RTC 自耗 |
 | `SOC_SaveSnapshotBeforeSleep()` | 休眠前保存 SOC 快照 |
@@ -428,9 +428,9 @@ SOC 模块分为两层:
 - `INTEGRATE_CHG/DSG` - 安时积分
 - `FULL_ANCHOR` - 满电锚定 (充满确认)
 - `EMPTY_TAIL` - 低压尾端
-- `MID_TAIL` - 中段尾端
-- `REST_TARGET` - 静置目标接近
-- `DEFERRED_OCV` - 延迟 OCV 校准
+- `MID_TAIL` - 中段尾端，当前运行路径已关闭，仅保留枚举值兼容
+- `REST_TARGET` - 静置目标接近，当前自动短静置锁存已删除，仅保留枚举值兼容
+- `DEFERRED_OCV` - 延迟 OCV 校准，当前自动 deferred 路径已删除，仅保留枚举值兼容
 - `LONG_REST_DOWN` - 长时间静置下调
 - `RTC_REST` - RTC 休眠静置补偿
 - `BOARD_SELF_CONSUMPTION` - 正常运行 RELAX 自耗积分
@@ -440,7 +440,7 @@ SOC 模块分为两层:
 **自耗与 RTC 口径**:
 
 - 正常运行 `RELAX/CHG/DSG` 都会把 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` 计入容量积分。
-- RTC STOP 补偿当前不额外扣自耗，只按休眠秒数推进静置 OCV 计数和下修。
+- RTC STOP 补偿当前不额外扣自耗，只按休眠秒数推进长静置 OCV 慢速下修。
 
 **发布口径**:
 
@@ -452,7 +452,7 @@ SOC 模块分为两层:
 **调试观察**:
 
 - `SOC_WATCH_BLOCK_REASON` 和 `u8LastBlockReason` 已删除。
-- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive/u8MidTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32LongRestDownTicks`。
+- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive/u8MidTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestDownValid/u8RestDownTarget`。
 - debug monitor 中删除了固定 0 或伪造派生字段，保留真实内部计数和 `display_ticks`。
 
 **OCV 表** (42 个条目, 21对电压-SOC):

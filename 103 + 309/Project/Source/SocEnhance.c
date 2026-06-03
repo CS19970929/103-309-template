@@ -53,7 +53,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_SAG_ALLOW_OFFSET_MV      ((int16_t)PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV)
 #define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
 #define SOC_SHORT_REST_MIN_SECONDS   ((UINT32)PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS)
-#define SOC_SHORT_REST_STEP_SECONDS  ((UINT32)PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS)
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
@@ -83,12 +82,8 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 
 /* Compile-time tick equivalents of time-based config */
 #define SOC_SEC_TO_TICKS(sec)               ((UINT32)(sec) * (UINT32)SOC_TICKS_PER_SECOND)
-#define SOC_REST_STABLE_LIMIT_SECS          ((SOC_REST_OCV_SECONDS) < (SOC_SHORT_REST_MIN_SECONDS) ? \
-                                             (SOC_SHORT_REST_MIN_SECONDS) : (SOC_REST_OCV_SECONDS))
 #define SOC_REST_LIMIT_TICKS                SOC_SEC_TO_TICKS(SOC_REST_OCV_SECONDS)
-#define SOC_STABLE_LIMIT_TICKS              SOC_SEC_TO_TICKS(SOC_REST_STABLE_LIMIT_SECS)
-#define SOC_SHORT_MIN_TICKS                 SOC_SEC_TO_TICKS(SOC_SHORT_REST_MIN_SECONDS)
-#define SOC_SHORT_STEP_TICKS                SOC_SEC_TO_TICKS(SOC_SHORT_REST_STEP_SECONDS)
+#define SOC_STABLE_LIMIT_TICKS              SOC_REST_LIMIT_TICKS
 #define SOC_LONG_REST_DOWN_STEP_TICKS       SOC_SEC_TO_TICKS(SOC_LONG_REST_DOWN_STEP_SECONDS)
 
 typedef struct
@@ -102,22 +97,20 @@ typedef struct
 	/* SOC rest counters below use 200ms SOC ticks, not RTC seconds. */
 	UINT32 rest_soc_ticks;
 	UINT32 stable_rest_soc_ticks;
-	UINT32 short_rest_soc_ticks;
 	UINT32 long_rest_down_soc_ticks;
 	UINT16 full_ticks;
 	UINT16 empty_ticks;
 	UINT16 mid_ticks;
 	UINT16 display_ticks;
 	UINT16 sag_hold_ticks;
-	UINT16 deferred_ocv_ticks;
 	UINT16 rest_ref_vmin;
 	UINT16 rest_ref_vmax;
 	UINT16 snapshot_flags;
 	UINT8 soc;
 	UINT8 soh;
 	UINT8 display_soc;
-	UINT8 deferred_ocv_target;
-	UINT8 deferred_ocv_valid;
+	UINT8 rest_down_target;
+	UINT8 rest_down_valid;
 	UINT8 mode;
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	UINT8 last_mode;
@@ -214,6 +207,7 @@ static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{300, {14U, 18U, 25U, 32U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
 	{400, {18U, 22U, 30U, 40U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
 };
+/* Kept for tail testing comparison. Runtime SOC no longer applies mid-tail. */
 static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
 	{450, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
 	{500, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
@@ -765,44 +759,26 @@ static UINT8 soc_apply_discharge_delta(UINT32 delta_as10, UINT8 watch_source, UI
 	return 0U;
 }
 
-static void soc_clear_deferred_ocv(void)
+static void soc_clear_rest_down_target(void)
 {
-	s_soc.deferred_ocv_valid = 0U;
-	s_soc.deferred_ocv_target = 0U;
-	s_soc.deferred_ocv_ticks = 0U;
+	s_soc.rest_down_valid = 0U;
+	s_soc.rest_down_target = 0U;
 	s_soc.long_rest_down_soc_ticks = 0U;
 }
 
-static void soc_set_deferred_ocv_target(UINT8 target)
+static void soc_set_rest_down_target(UINT8 target)
 {
 	if (target >= s_soc.soc)
 	{
-		soc_clear_deferred_ocv();
+		soc_clear_rest_down_target();
 		return;
 	}
-	if ((!s_soc.deferred_ocv_valid) || (s_soc.deferred_ocv_target != target))
+	if ((!s_soc.rest_down_valid) || (s_soc.rest_down_target != target))
 	{
-		s_soc.deferred_ocv_target = target;
-		s_soc.deferred_ocv_valid = 1U;
-		s_soc.deferred_ocv_ticks = 0U;
+		s_soc.rest_down_target = target;
+		s_soc.rest_down_valid = 1U;
 		s_soc.long_rest_down_soc_ticks = 0U;
 	}
-}
-
-static UINT8 soc_latch_rest_ocv_target(void)
-{
-	UINT8 before = s_soc.soc;
-
-	if (!soc_calibration_allowed() || soc_sag_hold_blocks_calibration())
-	{
-		return 0U;
-	}
-	soc_set_deferred_ocv_target(soc_ocv_percent());
-	if (s_soc.deferred_ocv_valid)
-	{
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_REST_TARGET, before, s_soc.soc);
-	}
-	return s_soc.deferred_ocv_valid;
 }
 
 static void soc_integrate(UINT8 mode)
@@ -897,49 +873,6 @@ static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode)
 	}
 	soc_set(soc_step(s_soc.soc, target, SOC_CAL_STEP));
 	return (UINT8)(s_soc.soc != old_soc);
-}
-
-static UINT8 soc_apply_deferred_ocv_step(UINT8 mode)
-{
-	UINT8 changed;
-	UINT32 active_step_ticks;
-	UINT8 old_soc = s_soc.soc;
-
-	if ((!s_soc.deferred_ocv_valid) || (mode == SOC_MODE_RELAX))
-	{
-		return 0U;
-	}
-	if (s_soc.deferred_ocv_target == s_soc.soc)
-	{
-		soc_clear_deferred_ocv();
-		return 0U;
-	}
-	if ((s_soc.deferred_ocv_target > s_soc.soc) ||
-		((s_soc.deferred_ocv_target < s_soc.soc) && (mode != SOC_MODE_DSG)))
-	{
-		soc_clear_deferred_ocv();
-		return 0U;
-	}
-	active_step_ticks = SOC_SHORT_STEP_TICKS;
-	if (s_soc.deferred_ocv_ticks < active_step_ticks)
-	{
-		++s_soc.deferred_ocv_ticks;
-	}
-	if (s_soc.deferred_ocv_ticks < active_step_ticks)
-	{
-		return 0U;
-	}
-	changed = soc_apply_ocv_target_step(s_soc.deferred_ocv_target, mode);
-	s_soc.deferred_ocv_ticks = 0U;
-	if (changed)
-	{
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_DEFERRED_OCV, old_soc, s_soc.soc);
-	}
-	if (s_soc.deferred_ocv_target == s_soc.soc)
-	{
-		soc_clear_deferred_ocv();
-	}
-	return changed;
 }
 
 static UINT16 soc_full_confirm_seconds(void)
@@ -1077,7 +1010,6 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u32DsgAccAs10 = s_soc.dsg_acc_as10;
 	s_soc_debug_watch.u32RestTicks = s_soc.rest_soc_ticks;
 	s_soc_debug_watch.u32StableRestTicks = s_soc.stable_rest_soc_ticks;
-	s_soc_debug_watch.u32ShortRestTicks = s_soc.short_rest_soc_ticks;
 	s_soc_debug_watch.u32LongRestDownTicks = s_soc.long_rest_down_soc_ticks;
 	s_soc_debug_watch.u16VCellMax = SOC_Enhance_Element.u16_VCellMax;
 	s_soc_debug_watch.u16VCellMin = SOC_Enhance_Element.u16_VCellMin;
@@ -1089,7 +1021,6 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u16MidTicks = s_soc.mid_ticks;
 	s_soc_debug_watch.u16DisplayTicks = s_soc.display_ticks;
 	s_soc_debug_watch.u16SagHoldTicks = s_soc.sag_hold_ticks;
-	s_soc_debug_watch.u16DeferredOcvTicks = s_soc.deferred_ocv_ticks;
 	s_soc_debug_watch.u16RestRefVmin = s_soc.rest_ref_vmin;
 	s_soc_debug_watch.u16RestRefVmax = s_soc.rest_ref_vmax;
 	s_soc_debug_watch.u16SnapshotFlags = s_soc.snapshot_flags;
@@ -1098,8 +1029,8 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u8InternalSoc = s_soc.soc;
 	s_soc_debug_watch.u8DisplaySoc = s_soc.display_soc;
 	s_soc_debug_watch.u8Soh = s_soc.soh;
-	s_soc_debug_watch.u8DeferredOcvValid = s_soc.deferred_ocv_valid;
-	s_soc_debug_watch.u8DeferredOcvTarget = s_soc.deferred_ocv_target;
+	s_soc_debug_watch.u8RestDownValid = s_soc.rest_down_valid;
+	s_soc_debug_watch.u8RestDownTarget = s_soc.rest_down_target;
 	s_soc_debug_watch.u8FullAnchor = s_soc.full_anchor;
 	s_soc_debug_watch.u8CalibrationAllowed = cal_allowed;
 	s_soc_debug_watch.u8SagHoldBlocksCalibration = sag_blocked;
@@ -1231,47 +1162,6 @@ static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 	return soc_empty_tail_config(mode, step);
 }
 
-static UINT8 soc_mid_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
-{
-	UINT8 band = soc_empty_current_band(mode);
-	UINT16 vmin = SOC_Enhance_Element.u16_VCellMin;
-
-	if ((mode == SOC_MODE_CHG) ||
-		!soc_voltage_valid() ||
-		(soc_cell_delta() > SOC_MID_MAX_DELTA_MV) ||
-		soc_sag_hold_blocks_calibration() ||
-		(vmin <= soc_empty_threshold_mv(400)))
-	{
-		return 0U;
-	}
-
-	return soc_tail_rule_lookup(s_mid_tail_table,
-		(UINT16)(sizeof(s_mid_tail_table) / sizeof(s_mid_tail_table[0])),
-		band,
-		SOC_MID_TARGET_DISABLED,
-		0U,
-		step,
-		0);
-}
-
-static UINT8 soc_apply_mid_tail(const SOC_TAIL_STEP *step)
-{
-	UINT8 old_soc = s_soc.soc;
-	UINT8 changed;
-
-	if (s_soc.soc <= step->target)
-	{
-		s_soc.mid_ticks = 0U;
-		return 0U;
-	}
-	changed = soc_apply_tail_step(step, &s_soc.mid_ticks);
-	if (changed)
-	{
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_MID_TAIL, old_soc, s_soc.soc);
-	}
-	return changed;
-}
-
 static UINT8 soc_apply_full_empty(UINT8 mode,
 								  UINT8 empty_active,
 								  const SOC_TAIL_STEP *empty_step)
@@ -1330,8 +1220,7 @@ static void soc_reset_rest_confidence(void)
 {
 	s_soc.rest_soc_ticks = 0U;
 	s_soc.stable_rest_soc_ticks = 0U;
-	s_soc.short_rest_soc_ticks = 0U;
-	s_soc.long_rest_down_soc_ticks = 0U;
+	soc_clear_rest_down_target();
 	s_soc.rest_ref_vmin = 0U;
 	s_soc.rest_ref_vmax = 0U;
 }
@@ -1341,8 +1230,8 @@ static UINT8 soc_apply_long_rest_down_step(UINT32 delta_soc_ticks)
 	UINT8 changed;
 	UINT8 old_soc = s_soc.soc;
 
-	if ((!s_soc.deferred_ocv_valid) ||
-		(s_soc.deferred_ocv_target >= s_soc.soc) ||
+	if ((!s_soc.rest_down_valid) ||
+		(s_soc.rest_down_target >= s_soc.soc) ||
 		(s_soc.rest_soc_ticks < SOC_REST_LIMIT_TICKS))
 	{
 		s_soc.long_rest_down_soc_ticks = 0U;
@@ -1363,15 +1252,15 @@ static UINT8 soc_apply_long_rest_down_step(UINT32 delta_soc_ticks)
 	{
 		return 0U;
 	}
-	changed = soc_apply_ocv_target_step(s_soc.deferred_ocv_target, SOC_MODE_RELAX);
+	changed = soc_apply_ocv_target_step(s_soc.rest_down_target, SOC_MODE_RELAX);
 	s_soc.long_rest_down_soc_ticks = 0U;
 	if (changed)
 	{
 		soc_watch_set_calib_source(SOC_WATCH_CALIB_LONG_REST_DOWN, old_soc, s_soc.soc);
 	}
-	if (s_soc.deferred_ocv_target == s_soc.soc)
+	if (s_soc.rest_down_target == s_soc.soc)
 	{
-		soc_clear_deferred_ocv();
+		soc_clear_rest_down_target();
 	}
 	return changed;
 }
@@ -1422,23 +1311,16 @@ static void soc_update_rest_timer(UINT8 mode)
 		{
 			++s_soc.stable_rest_soc_ticks;
 		}
-		if (s_soc.short_rest_soc_ticks < SOC_SHORT_STEP_TICKS)
-		{
-			++s_soc.short_rest_soc_ticks;
-		}
 	}
 	else
 	{
 		s_soc.stable_rest_soc_ticks = 0U;
-		s_soc.short_rest_soc_ticks = 0U;
-		s_soc.long_rest_down_soc_ticks = 0U;
-		soc_clear_deferred_ocv();
+		soc_clear_rest_down_target();
 	}
-	if ((s_soc.stable_rest_soc_ticks >= SOC_SHORT_MIN_TICKS) &&
-		(s_soc.short_rest_soc_ticks >= SOC_SHORT_STEP_TICKS))
+	if ((s_soc.rest_soc_ticks >= SOC_REST_LIMIT_TICKS) &&
+		(s_soc.stable_rest_soc_ticks >= SOC_STABLE_LIMIT_TICKS))
 	{
-		(void)soc_latch_rest_ocv_target();
-		s_soc.short_rest_soc_ticks = 0U;
+		soc_set_rest_down_target(soc_ocv_percent());
 	}
 	(void)soc_apply_long_rest_down_step(1U);
 }
@@ -1471,7 +1353,6 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	if (rest_seconds < s_u32SocRtcRestAppliedSeconds)
 	{
 		soc_reset_rest_confidence();
-		soc_clear_deferred_ocv();
 		s_u32SocRtcRestAppliedSeconds = 0U;
 	}
 
@@ -1491,23 +1372,19 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 			return changed;
 		}
 		soc_add_rest_seconds(&s_soc.stable_rest_soc_ticks, delta_seconds,
-			SOC_REST_STABLE_LIMIT_SECS);
-		soc_add_rest_seconds(&s_soc.short_rest_soc_ticks, delta_seconds, SOC_SHORT_REST_STEP_SECONDS);
+			SOC_REST_OCV_SECONDS);
 	}
 	else
 	{
 		s_soc.stable_rest_soc_ticks = 0U;
-		s_soc.short_rest_soc_ticks = 0U;
-		s_soc.long_rest_down_soc_ticks = 0U;
-		soc_clear_deferred_ocv();
+		soc_clear_rest_down_target();
 		return changed;
 	}
 
-	if ((s_soc.stable_rest_soc_ticks >= SOC_SHORT_MIN_TICKS) &&
-		(s_soc.short_rest_soc_ticks >= SOC_SHORT_STEP_TICKS))
+	if ((s_soc.rest_soc_ticks >= SOC_REST_LIMIT_TICKS) &&
+		(s_soc.stable_rest_soc_ticks >= SOC_STABLE_LIMIT_TICKS))
 	{
-		(void)soc_latch_rest_ocv_target();
-		s_soc.short_rest_soc_ticks = 0U;
+		soc_set_rest_down_target(soc_ocv_percent());
 	}
 	changed |= soc_apply_long_rest_down_step(SOC_SEC_TO_TICKS(delta_seconds));
 	return changed;
@@ -1644,6 +1521,7 @@ static void soc_handle_command(void)
 void soc_param_lib_init(void)
 {
 	memset(&s_soc, 0, sizeof(s_soc));
+	(void)s_mid_tail_table;
 	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
 	s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
 	s_u32SocRtcRestAppliedSeconds = 0U;
@@ -1681,10 +1559,8 @@ void SOC_SaveSnapshotBeforeSleep(void)
 void SOC_IntEnhance_Ctrl(void)
 {
 	SOC_TAIL_STEP low_tail_step;
-	SOC_TAIL_STEP mid_tail_step;
 	UINT8 calibration_applied;
 	UINT8 low_tail_active;
-	UINT8 mid_tail_active;
 	UINT8 sag_hold_blocked;
 
 	if (SOC_Enhance_Element.u16_RefreshData_Flag != 0U)
@@ -1693,29 +1569,16 @@ void SOC_IntEnhance_Ctrl(void)
 		return;
 	}
 
-	/* Keep the calibration order stable: integrate, tail/full, deferred/rest, save, publish. */
+	/* Keep the calibration order stable: integrate, low-tail/full, rest, save, publish. */
 	s_soc.mode = soc_direction();
 	soc_integrate(s_soc.mode);
 	soc_update_sag_hold(s_soc.mode);
 
 	low_tail_active = soc_low_tail_config(s_soc.mode, &low_tail_step);
-	mid_tail_active = soc_mid_tail_config(s_soc.mode, &mid_tail_step);
-	soc_watch_set_tail_state(low_tail_active, &low_tail_step,
-		mid_tail_active, &mid_tail_step);
+	soc_watch_set_tail_state(low_tail_active, &low_tail_step, 0U, 0);
 
 	calibration_applied = soc_apply_full_empty(s_soc.mode, low_tail_active, &low_tail_step);
-	if (!mid_tail_active)
-	{
-		s_soc.mid_ticks = 0U;
-	}
-	if (!calibration_applied && !low_tail_active && mid_tail_active)
-	{
-		calibration_applied = soc_apply_mid_tail(&mid_tail_step);
-	}
-	if (!calibration_applied && !low_tail_active)
-	{
-		calibration_applied = soc_apply_deferred_ocv_step(s_soc.mode);
-	}
+	s_soc.mid_ticks = 0U;
 
 	sag_hold_blocked = soc_sag_hold_blocks_calibration();
 	if (!low_tail_active && !calibration_applied && !sag_hold_blocked)

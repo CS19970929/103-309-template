@@ -444,7 +444,7 @@ static void test_short_rest_ocv_ignores_upward_target_during_charge(void)
 	CHECK_TRUE(host_internal_soc() <= 50U);
 }
 
-static void test_short_rest_ocv_defers_until_active_discharge(void)
+static void test_short_rest_ocv_is_not_consumed_during_active_discharge(void)
 {
 	UINT16 before_discharge;
 
@@ -455,7 +455,7 @@ static void test_short_rest_ocv_defers_until_active_discharge(void)
 	before_discharge = host_internal_soc();
 	CHECK_TRUE(before_discharge <= 80U);
 	host_run_seconds(600U, 3835U, 3835U, 0U, 4U);
-	CHECK_TRUE(host_internal_soc() < before_discharge);
+	CHECK_EQ_U32(host_internal_soc(), before_discharge);
 }
 
 static void test_rtc_ocv_ignores_upward_stable_target(void)
@@ -558,7 +558,7 @@ static void test_rebound_flag_clears_when_holdoff_expires(void)
 	CHECK_TRUE((s_flash_soc.u16Flags & HOST_REBOUND_FLAG) == 0U);
 
 	host_run_seconds(90U, 3500U, 3500U, 0U, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 35U);
+	CHECK_EQ_U32(host_internal_soc(), 80U);
 }
 
 static void test_display_overlays_do_not_modify_internal_soc(void)
@@ -604,7 +604,7 @@ int main(void)
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_ignores_upward_target_during_charge();
-	test_short_rest_ocv_defers_until_active_discharge();
+	test_short_rest_ocv_is_not_consumed_during_active_discharge();
 	test_rtc_ocv_ignores_upward_stable_target();
 	test_rtc_ocv_waits_for_voltage_convergence();
 	test_unstable_long_rest_waits_for_voltage_convergence();

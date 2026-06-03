@@ -211,7 +211,7 @@
 | `raw_cur` | uint16 | TypeC DMA原始值 |
 | `raw_mos` | uint16 | MOS温 DMA原始值 |
 
-### g_dbg.soc — SOC (26 fields)
+### g_dbg.soc — SOC (18 fields)
 
 **基础值**:
 
@@ -225,7 +225,6 @@
 | `ichg` | uint16 | 充电电流 A×10 |
 | `idsg` | uint16 | 放电电流 A×10 |
 | `init_over` | uint8 | 初始化完成 |
-| `ocv_cali` | uint8 | OCV校准标志 |
 | `vtotal` | uint16 | 总压 V×100 |
 
 **校准内部状态**:
@@ -238,16 +237,18 @@
 | `stable_ticks` | uint32 | 稳定计数 |
 | `full_ticks` | uint16 | 满电确认计数 |
 | `empty_ticks` | uint16 | 尾端计数 |
-| `mid_ticks` | uint16 | 中段计数 |
+| `mid_ticks` | uint16 | 中段计数；当前 mid-tail 运行关闭，通常为 0 |
 | `full_anchor` | uint8 | 已满电锚定 |
-| `cal_allowed` | uint8 | 校准允许 |
-| `sag_blocked` | uint8 | SAG阻塞 |
-| `rest_stable` | uint8 | 电压稳定 |
-| `low_tail` | uint8 | 低压尾部激活 |
-| `mid_tail` | uint8 | 中段尾部激活 |
 | `display_ticks` | uint16 | 显示平滑计数 |
-| `ocv_target` | uint8 | OCV目标 SOC% |
-| `last_calib_soc` | uint8 | 上次校准前 SOC% |
+
+更细的 SOC 内部观察使用 `g_dbg_soc_watch`：
+
+- `u8LastCalibSource/u8LastSocBefore/u8LastSocAfter`
+- `u8LowTailActive/u8MidTailActive`
+- `u8InternalSoc/u8DisplaySoc`
+- `u32RestTicks/u32StableRestTicks/u32LongRestDownTicks`
+- `u8RestDownValid/u8RestDownTarget`
+- `u8RestVoltageStable/u8SagHoldBlocksCalibration`
 
 ### g_dbg.afe — AFE (7 fields)
 
@@ -379,10 +380,10 @@ tx_queue 长时间不降 → 看总线 ACK、bus-off、主循环 App_Can() 是�
 ### SOC 不校准
 
 ```
-展开 g_dbg.soc → 看 cal_allowed/sag_blocked/rest_stable/rest_ticks
-cal_allowed=0 → 逐个检查阻塞条件
-rest_ticks 很小 → 电池一直在充放电
-sag_blocked=1 → 电压跌落抑制中
+展开 g_dbg.soc → 先看 mode/rest_ticks/stable_ticks/full_ticks/empty_ticks
+展开 g_dbg_soc_watch → 再看 u8LastCalibSource/u8LowTailActive/u8RestVoltageStable/u8SagHoldBlocksCalibration
+rest_ticks 很小 → 电池一直在充放电或被 low-tail/sag hold 打断
+u8SagHoldBlocksCalibration=1 → 电压跌落抑制中
 ```
 
 ### LED 闪烁

@@ -28,9 +28,9 @@ enum SOC_WATCH_CALIB_SOURCE {
 	SOC_WATCH_CALIB_INTEGRATE_DSG,
 	SOC_WATCH_CALIB_FULL_ANCHOR,
 	SOC_WATCH_CALIB_EMPTY_TAIL,
-	SOC_WATCH_CALIB_MID_TAIL,
-	SOC_WATCH_CALIB_REST_TARGET,
-	SOC_WATCH_CALIB_DEFERRED_OCV,
+	SOC_WATCH_CALIB_MID_TAIL,      /* Reserved: runtime mid-tail is disabled. */
+	SOC_WATCH_CALIB_REST_TARGET,   /* Reserved: short rest target latch is disabled. */
+	SOC_WATCH_CALIB_DEFERRED_OCV,  /* Reserved: active deferred OCV is disabled. */
 	SOC_WATCH_CALIB_LONG_REST_DOWN,
 	SOC_WATCH_CALIB_MANUAL_OCV,
 	SOC_WATCH_CALIB_PARAM_RESET,
@@ -92,7 +92,6 @@ struct SOC_DEBUG_WATCH {
 	UINT32 u32DsgAccAs10;
 	UINT32 u32RestTicks;
 	UINT32 u32StableRestTicks;
-	UINT32 u32ShortRestTicks;
 	UINT32 u32LongRestDownTicks;
 	UINT16 u16VCellMax;
 	UINT16 u16VCellMin;
@@ -104,7 +103,6 @@ struct SOC_DEBUG_WATCH {
 	UINT16 u16MidTicks;
 	UINT16 u16DisplayTicks;
 	UINT16 u16SagHoldTicks;
-	UINT16 u16DeferredOcvTicks;
 	UINT16 u16RestRefVmin;
 	UINT16 u16RestRefVmax;
 	UINT16 u16EmptyTailTarget;
@@ -117,8 +115,8 @@ struct SOC_DEBUG_WATCH {
 	UINT8 u8InternalSoc;
 	UINT8 u8DisplaySoc;
 	UINT8 u8Soh;
-	UINT8 u8DeferredOcvValid;
-	UINT8 u8DeferredOcvTarget;
+	UINT8 u8RestDownValid;
+	UINT8 u8RestDownTarget;
 	UINT8 u8FullAnchor;
 	UINT8 u8LowTailActive;
 	UINT8 u8MidTailActive;

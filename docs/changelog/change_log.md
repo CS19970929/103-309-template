@@ -11,12 +11,13 @@
 本次按当前源码完整复审 SOC 模块，并把 SOC 相关文档合并到 `docs/design/soc_design.md` 作为唯一权威入口。
 
 源码变更：
-- `SocEnhance.c`：恢复 low/mid tail 计算和 mid-tail 应用，修复此前局部变量未初始化风险。
+- `SocEnhance.c`：保留 low-tail/full/rest 主流程，关闭 mid-tail 运行链路；两个 mid-tail 表仍保留，`u8MidTailActive` 固定为 0。
+- `SocEnhance.c`：删除短静置 deferred OCV 自动路径，自动静置只保留长静置慢速下修。
 - `SocEnhance.c`：删除 `soc_run_cycle_calibration()`、`soc_update_rest_after_cycle()`，让 `SOC_IntEnhance_Ctrl()` 直线表达核心顺序。
 - `SocEnhance.c/.h`、`SOC.c`：删除 `u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason`、空测试 stub 和相关调用。
 - `SocEnhance.c`：RTC STOP 补偿不再额外扣板载自耗；正常运行 `RELAX/CHG/DSG` 自耗积分保持。
 - `SystemDebug.c/.h`：删除固定 0 或误导性的 SOC debug monitor 字段。
-- `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表、自耗口径和 RTC 不扣自耗行为。
+- `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表、mid-tail 关闭、长静置慢下修、自耗口径和 RTC 不扣自耗行为。
 
 文档变更：
 - 重写 `docs/design/soc_design.md`。
@@ -164,7 +165,7 @@
 ### 核心结论
 
 - 普通静置 OCV 在当前配置下不是秒级/分钟级快降主因；连续普通 RELAX 场景下首次长静置实际下修通常约 60 分钟量级。
-- 当前 `RELAX` 模式允许 low tail / mid tail 生效，因此无放电但 Vmin 进入 V0 附近区间时，`EMPTY_TAIL` / `MID_TAIL` 可能造成明显下修。
+- 当前 `RELAX` 模式仍允许 low-tail 生效；mid-tail 运行链路已关闭，因此无放电但 Vmin 进入 V0 附近区间时，主要关注 `EMPTY_TAIL` 和显示追赶。
 - 低压显示追赶和 RTC 休眠周期内提前补偿会放大用户对“唤醒后立刻变了”的感知。
 
 ### 安全边界

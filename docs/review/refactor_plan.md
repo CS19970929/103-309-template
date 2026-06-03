@@ -80,7 +80,7 @@
 | 项目 | 内容 |
 |---|---|
 | 修改范围 | 当前已完成文档合并和一轮净删减；后续只做小步、可回滚的行为保持型简化 |
-| 不能改什么 | 不改两个 tail 表、不改 1% 校准硬约束、不改满电/低压/中段/静置阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
+| 不能改什么 | 不改两个 tail 表、不改 1% 校准硬约束、不改满电/低压 low-tail/长静置慢下修阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
 | 验证方法 | SOC replay、host C、真实充放电、RTC rest、snapshot 断电恢复、上位机读取、CAN SOC 帧、Keil watch |
 | 需要确认 | tail 体验策略、初始 SOC、OCV 表、Type-C 电流产品语义、reset sleep 是否需要 RTC 秒数补偿、命令校准是否允许立即跳变 |
 | 回滚方式 | 每个源码简化批次独立 commit；涉及体验或 tail 策略必须单独确认 |
@@ -91,9 +91,10 @@
 |---|---|---|---|---|
 | SOC-DOC-01 | 已完成文档合并 | `docs/design/soc_design.md` 成为唯一权威入口，旧逻辑文档归档 | 低 | 文档链接、自洽性、`git diff --check` |
 | SOC-SIM-01 | 已完成源码净删减 | 删除无用字段、block reason、死代码和误导性 debug 字段 | 低 | SOC replay、host C |
-| SOC-SIM-02 | 已完成主流程直线化 | 恢复 tail 主流程，删除过多 helper，让 `SOC_IntEnhance_Ctrl()` 直接表达顺序 | 中 | SOC replay、host C、后续 Keil |
+| SOC-SIM-02 | 已完成主流程直线化 | 保留 low-tail/full/rest 主流程，删除过多 helper，让 `SOC_IntEnhance_Ctrl()` 直接表达顺序 | 中 | SOC replay、host C、后续 Keil |
 | SOC-SIM-03 | 已完成 RTC 口径调整 | RTC STOP 补偿不再额外扣自耗；正常运行自耗仍积分 | 中 | 自耗矩阵 host C、RTC 测试仍需上板 |
-| SOC-NEXT-01 | 待确认 | 是否调整 RELAX 下 tail 生效条件或速度 | 高 | 必须先用 Keil watch/实测确认快降来源 |
+| SOC-SIM-04 | 已完成体验简化 | 保留两个 tail 表但关闭 mid-tail 运行链路；删除短静置 deferred OCV，自动静置只保留长静置慢速下修 | 中 | SOC replay、host C、后续 Keil/上板 |
+| SOC-NEXT-01 | 待确认 | 是否继续调整 RELAX 下 low-tail 生效条件或速度 | 高 | 必须先用 Keil watch/实测确认快降来源 |
 
 ## 阶段 8：RTC 低功耗 / IWDG 阶段
 

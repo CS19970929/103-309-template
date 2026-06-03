@@ -11,7 +11,7 @@
 硬边界：
 
 - 不改 `s_empty_tail_table` 和 `s_mid_tail_table` 的活动值、结构和旧 `#if 0` 对照表。
-- 不改满电、低压、中段、静置、显示平滑、Type-C 折算、协议字段和 Flash 地址。
+- 不改满电、低压 low-tail、显示平滑、Type-C 折算、协议字段和 Flash 地址。
 - 不引入 HAL、RTOS、malloc 或新框架。
 - 保留当前 200ms AFE sample seq 驱动的调度顺序。
 
@@ -19,8 +19,10 @@
 
 | 项目 | 文件 | 结果 |
 |---|---|---|
-| 恢复 tail 主流程 | `SocEnhance.c` | 恢复 low/mid tail 计算和 `soc_apply_mid_tail()`，修复局部变量未初始化风险 |
+| 恢复 low-tail 主流程 | `SocEnhance.c` | 保留 low-tail 计算和满/空校准主流程 |
+| 关闭 mid-tail 运行链路 | `SocEnhance.c` | 保留两个 mid-tail 表，不再调用 mid-tail 查表和 `soc_apply_mid_tail()`；`mid_ticks` 每周期清零 |
 | 减少 helper | `SocEnhance.c` | 删除 `soc_run_cycle_calibration()` 和 `soc_update_rest_after_cycle()`，将核心阶段直线展开在 `SOC_IntEnhance_Ctrl()` |
+| 删除 deferred OCV 自动路径 | `SocEnhance.c` | 删除短静置锁存和 active 放电消化，只保留长静置慢速下修 |
 | 去掉 RTC 自耗扣减 | `SocEnhance.c` | 删除 `soc_apply_board_self_consumption_seconds()`；RTC STOP 只推进静置/OCV 补偿 |
 | 删除无用配置字段 | `SocEnhance.h`, `SOC.c` | 删除 `u16_SOC_CycleT_Limit` 及唯一赋值 |
 | 删除无用 OCV 标志 | `SocEnhance.h`, `SystemDebug.c/h` | 删除 `u8_SOC_OCV_Cali` 及 debug 快照/打印 |
@@ -39,10 +41,8 @@
   direction
   integrate
   sag hold
-  low/mid tail config
+  low-tail config
   full/empty
-  mid tail
-  deferred OCV
   rest timer or reset rest confidence
   save if needed
   publish
@@ -74,8 +74,9 @@
 - 活动 `s_mid_tail_table` 保留。
 - 当前活动 tick 全部来自 `DELAY_SOC_TEST = 5`。
 - 当前活动 mid-tail offset 为 `450/500/550/600mV`。
+- 当前运行路径不使用 mid-tail 表，`u8MidTailActive` 固定为 0。
 
-本文只记录当前源码事实，不建议在本轮调整 tail 策略。
+本文只记录当前源码事实；mid-tail 表不动，low-tail 表仍按用户测试状态保留。
 
 ## 6. 验证结果
 
@@ -101,4 +102,4 @@
 | 把 `SOC_Enhance_Element` 大幅私有化 | 会影响 Keil watch 和现有协议调试习惯，需要单独确认 |
 | 改 `display_soc` 策略 | 用户可见体验变化，需要上板验证 |
 | 给 reset sleep 增加 RTC 秒数 SOC 补偿 | 功能变化，需单独需求确认 |
-| RELAX 下禁用或放慢 tail | 功能体验变化，需先用 watch 确认快降来源 |
+| RELAX 下继续调整 low-tail | 功能体验变化，需先用 watch 确认快降来源 |

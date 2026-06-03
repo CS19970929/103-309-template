@@ -66,8 +66,8 @@
 | T-SOC-003 | Visual trace | `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv` | city/hill/pulse/deep/charge 5 个场景通过 |
 | T-SOC-004 | 真实电流积分 | 上板充放电 | SOC 方向、速率符合电流 |
 | T-SOC-005 | 满电锚点 | 充至阈值并保持 | 逐步到 100%，未确认前不提前 100 |
-| T-SOC-006 | 低压/中段 tail | 模拟 Vmin 靠近 V0 和 V0+450..600mV | 两个 tail 表保持当前测试值；每次最多 1%，显示可快速追赶 |
-| T-SOC-007 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内推进静置 OCV，不额外扣 RTC 自耗 |
+| T-SOC-006 | 低压/mid-tail 边界 | 模拟 Vmin 靠近 V0 和 V0+450..600mV | low-tail 表保持当前测试值；mid-tail 表保留但运行不触发，`u8MidTailActive=0` |
+| T-SOC-007 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内只推进长静置 OCV 慢速下修，不额外扣 RTC 自耗，不锁存短静置 deferred target |
 | T-SOC-008 | 量产隔离 | 读 SOC_TEST padding、尝试历史测试命令地址 | 当前无注入式测试副作用；padding 长度保持不变 |
 | T-SOC-009 | real/display SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`s_soc.display_soc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布保持 `display_soc`；自动校准不强制显示跳变 |
 | T-SOC-010 | reset sleep 快显口径 | NORMAL/DEEP reset sleep 后按键唤醒，观察 BKP sleep SOC 和启动后 SOC | 早期快显来自睡前保存显示 SOC；若后续要补 RTC 秒数必须另立功能确认 |

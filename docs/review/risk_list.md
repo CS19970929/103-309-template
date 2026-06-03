@@ -37,8 +37,8 @@
 | RISK-SOC-UX-001 | 把内部 `s_soc.soc` 和对外 `display_soc` 混为一谈 | `soc_publish()`, `SOC_PublishReportData()` | 自动校准和用户显示节奏被误改 | MUST_KEEP | 后续源码简化不得改变 `display_soc` 发布口径；调试看 internal/display 双值 |
 | RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep_port.c`, `LowPowerSleep.c`, `LedBar.c` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | 需确认 | 若要补 reset sleep 秒数，必须另立功能变更确认 |
 | RISK-SOC-SELF-001 | 混淆正常自耗和 RTC 自耗 | `soc_integrate_current_ma()`, `soc_apply_rtc_rest_ocv()` | 可能重复扣自耗或误删正常自耗 | MUST_KEEP | 保持正常运行自耗积分；RTC STOP 不额外扣自耗；host C 自耗矩阵持续覆盖 |
-| RISK-SOC-TAIL-001 | 当前 tail 测试表速度较快 | `s_empty_tail_table`, `s_mid_tail_table`, `DELAY_SOC_TEST` | RELAX/低压场景可能出现快降体验 | KEEP_BUT_REFACTOR | 本轮不动两个 tail 表；上板用 tail active 和 last calib source 确认后再决定 |
-| RISK-SOC-SIM-001 | “只改写法”时改变 SOC 状态机顺序 | `SOC_IntEnhance_Ctrl()` | 满电、低压、中段、deferred OCV、静置计时优先级变化 | MUST_KEEP | 保持当前直线顺序，用 SOC replay 和 host C 守住 |
+| RISK-SOC-TAIL-001 | 当前 low-tail 测试表速度较快 | `s_empty_tail_table`, `s_mid_tail_table`, `DELAY_SOC_TEST` | RELAX/低压场景可能出现快降体验；mid-tail 表保留但运行关闭 | KEEP_BUT_REFACTOR | 本轮不动两个 tail 表；上板用 low-tail active、last calib source 和 internal/display SOC 确认后再决定 |
+| RISK-SOC-SIM-001 | “只改写法”时改变 SOC 状态机顺序 | `SOC_IntEnhance_Ctrl()` | 满电、低压 low-tail、长静置慢下修、显示计时优先级变化 | MUST_KEEP | 保持当前直线顺序，用 SOC replay 和 host C 守住；mid-tail/deferred OCV 已按确认关闭 |
 | RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SOC_Request*()`, `Sci_Upper.c` | `SetSocOnce`、手动 OCV、容量重算 ACK 或显示行为改变 | KEEP_BUT_REFACTOR | 请求 API 已建立；后续若私有化字段必须单独验证 Modbus 写命令 |
 
 ## 中断计数专项风险

@@ -7,18 +7,18 @@
 
 ## 1. 结论
 
-如果现场看到“没有放电但 SOC 很快下降”，当前最可疑来源仍是 tail 和显示追赶，不是普通静置 OCV。
+如果现场看到“没有放电但 SOC 很快下降”，当前最可疑来源仍是 low-tail 和显示追赶，不是普通静置 OCV。
 
 优先级如下：
 
 | 优先级 | 可能来源 | 当前判断 |
 |---|---|---|
-| 1 | `RELAX` 下 low-tail / mid-tail 生效 | 最可疑。当前两类 tail 都不要求 `DSG`，只排除充电、电压无效、sag hold 等条件 |
+| 1 | `RELAX` 下 low-tail 生效 | 最可疑。当前 low-tail 不要求 `DSG`，只排除充电、电压无效、sag hold 等条件 |
 | 2 | 当前 tail 测试表速度很快 | 活动表 tick 全部为 `DELAY_SOC_TEST = 5`，约 `1s/1%` |
 | 3 | 低压显示追赶 | 内部 SOC 已下降后，`display_soc` 在低压区可按 `1s/1%` 或 `200ms/1%` 追赶 |
 | 4 | 正常运行板载自耗 | 当前 `30mA` 已计入普通 RELAX 积分，但对 27Ah 电池约 9 小时才 1%，不是快降主因 |
 | 5 | 普通静置 OCV | 连续普通 RELAX 下首次长静置实际下修通常约 60 分钟量级 |
-| 6 | RTC STOP 补偿 | HICCUP STOP 周期内会提前推进静置 OCV；当前不额外扣 RTC 自耗 |
+| 6 | RTC STOP 补偿 | HICCUP STOP 周期内会提前推进长静置 OCV；当前不额外扣 RTC 自耗，不锁存短静置 deferred target |
 
 ## 2. 自耗确认
 
@@ -49,8 +49,8 @@
 RTC STOP 补偿当前只做：
 
 1. 按新增休眠秒数推进静置计数。
-2. 电压稳定后锁存 OCV 下修目标。
-3. 长静置满足后最多按 1% 步进下修。
+2. 长静置且电压稳定后设置 OCV 下修目标。
+3. 目标有效后按 `1800s/1%` 慢速下修。
 4. 发生 SOC 变化时保存 snapshot 并发布。
 
 原因：RTC STOP 下 MCU/RTC 自耗很低，本轮按需求去掉秒级自耗扣减，避免和正常运行板载自耗口径混在一起。
@@ -68,15 +68,14 @@ RTC STOP 补偿当前只做：
 
 当前活动 low-tail 表使用 `DELAY_SOC_TEST = 5`，即所有档位约 `1s/1%`。这能解释低端附近“无放电快降”的大部分现象。
 
-## 5. Mid-Tail 快降来源
+## 5. Mid-Tail 状态
 
-`soc_mid_tail_config()` 当前也允许 `RELAX` 生效。它排除：
+当前运行路径已经关闭 mid-tail：
 
-- 充电模式。
-- 电压无效。
-- 压差超过 `SOC_MID_MAX_DELTA_MV = 200mV`。
-- sag hold 阻塞。
-- `Vmin <= V0 + 400mV` 的 low-tail 区。
+- `s_mid_tail_table` 和旧 `#if 0` mid-tail 对照表都保留，方便继续测试 tail。
+- `SOC_IntEnhance_Ctrl()` 不再查表或调用 mid-tail 下修。
+- `g_dbg_soc_watch.u8MidTailActive` 固定为 0，`u16MidTailTarget/u16MidTailTicks` 固定为 0。
+- `s_soc.mid_ticks` 每周期清零。
 
 当前活动 mid-tail 表：
 
@@ -87,7 +86,7 @@ RTC STOP 补偿当前只做：
 | 550 | 45 | 50 | 58 | disabled | 5 |
 | 600 | 50 | 55 | disabled | disabled | 5 |
 
-这表示 V0 上方 `450..600mV` 区间，如果内部 SOC 高于目标，即使无放电也可能按约 `1s/1%` 往目标靠拢。当前用户正在测试 tail，因此本文只记录事实，不建议在本轮改表。
+这张表目前只作为源码保留和测试对照，不再造成 V0 上方中段静置快降。
 
 ## 6. 显示追赶会放大感知
 
@@ -109,13 +108,11 @@ RTC STOP 补偿当前只做：
 
 | 配置 | 当前值 |
 |---|---:|
-| `PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS` | 300s |
-| `PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS` | 600s |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | 1800s |
 | `PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS` | 1800s |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | 1% |
 
-普通 RELAX 场景下，稳定约 10 分钟后可能锁存目标，但真实长静置下修通常要到约 60 分钟量级才首次 1%。这个速度明显慢于当前活动 tail 表。
+普通 RELAX 场景下，`rest_soc_ticks` 和 `stable_rest_soc_ticks` 都达到 1800s 后才设置下修目标，目标有效后再按 1800s/1% 慢速下修。连续稳定静置首次 1% 下修通常约 60 分钟量级。这个速度明显慢于当前活动 low-tail 表。
 
 ## 8. 排查清单
 
@@ -123,12 +120,12 @@ RTC STOP 补偿当前只做：
 
 | 字段 | 判断 |
 |---|---|
-| `g_dbg_soc_watch.u8LastCalibSource` | 是否为 `EMPTY_TAIL`、`MID_TAIL`、`LONG_REST_DOWN`、`RTC_REST`、`BOARD_SELF_CONSUMPTION` |
+| `g_dbg_soc_watch.u8LastCalibSource` | 是否为 `EMPTY_TAIL`、`LONG_REST_DOWN`、`RTC_REST`、`BOARD_SELF_CONSUMPTION` |
 | `g_dbg_soc_watch.u8LowTailActive/u8MidTailActive` | 当前是否 tail 生效 |
 | `g_dbg_soc_watch.u16EmptyTailTarget/u16MidTailTarget` | 当前 tail 目标 |
 | `g_dbg_soc_watch.u16EmptyTailTicks/u16MidTailTicks` | 当前 tail 速度 |
 | `g_dbg_soc_watch.u8InternalSoc/u8DisplaySoc` | 区分内部算法下降和显示追赶 |
-| `g_dbg_soc_watch.u32RestTicks/u32LongRestDownTicks` | 是否进入普通静置 OCV 慢路径 |
+| `g_dbg_soc_watch.u32RestTicks/u32StableRestTicks/u32LongRestDownTicks` | 是否进入普通静置 OCV 慢路径 |
 | `SOC_Enhance_Element.u16_VCellMin` | 与 `u16_SOC_0_Vol` 的差值 |
 | `SOC_Enhance_Element.u16_Ichg/u16_Idsg` | 是否确实处于 RELAX |
 
@@ -139,7 +136,7 @@ RTC STOP 补偿当前只做：
 判断顺序：
 
 1. 先看 `u8LastCalibSource` 和 tail active。
-2. 如果是 tail，核 `VCellMin - V0` 是否落在 low/mid 表区间。
+2. 如果是 tail，核 `VCellMin - V0` 是否落在 low-tail 表区间。
 3. 如果内部 SOC 没变但显示 SOC 变，问题在显示追赶。
 4. 如果是 `RTC_REST`，确认是否刚经历 HICCUP STOP。
 5. 如果是 `LONG_REST_DOWN`，确认静置计数是否已达到 1800s 以上。
@@ -150,9 +147,9 @@ RTC STOP 补偿当前只做：
 
 | 方向 | 行为变化 | 风险 |
 |---|---|---|
-| RELAX 下禁用 mid-tail | 静置时不再被中段表下修 | 可能保留高估 SOC 更久 |
+| RELAX 下禁用 mid-tail | 已执行：静置时不再被中段表下修，表仍保留 | 可能保留高估 SOC 更久，需实测体验 |
 | RELAX 下 low-tail 只保留 V0 附近强安全区 | 减轻 V0+较高区间快降 | 低端虚高收敛变慢 |
 | 放慢 tail tick | 目标不变，只降低用户感知速度 | 低端虚高收敛变慢 |
 | tail 仅 `DSG` 生效 | 无放电不再 tail 下修 | 行为变化最大，需台架验证 |
 
-当前建议：先保留两个 tail 表和活动测试值，用上板数据确认快降来源，再决定是否调整 RELAX tail 策略。
+当前建议：先保留两个 tail 表和活动测试值，用上板数据确认 low-tail 与显示追赶是否仍导致快降，再决定是否继续调整 RELAX low-tail 策略。

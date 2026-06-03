@@ -29,6 +29,7 @@
 | Q-MID-006 | RTC 参数 | RTC 写寄存器是否需要支持 | `Sci_WrRegs_0x10_RTC()` 空函数 | 读 RTC 有，写 RTC 无效 | MAYBE_UNUSED | 时间设置入口不一致 | 上位机是否要设置 RTC？ | A/C/D/F | |
 | Q-MID-007 | 铜损 | 铜损表是否仍参与业务 | `Sci_WrRegs_0x10_CopperLoss()` 空函数；`Sci_ACK_0x03_RW_Data_Other()` 仍读 | 可读但写入无效 | MAYBE_UNUSED | 历史参数占用协议空间 | 铜损是否删除为占位？ | A/D/E/F | |
 | Q-MID-008 | CAN 版本 | CAN 周期帧版本号是否应来自产品信息 | `CanFeidaoFrames.c:158-166` | 固定 `pro_version=1`, `soft_version=1` | CHANGE_NEEDED | 客户诊断版本错误 | CAN 版本字段应映射 `FD_VERSION` 还是 `0xC002`？ | B/C/F | |
+| Q-MID-009 | SOC | mid-tail 是否关闭，静置 OCV 是否只保留长静置慢速下修 | `SocEnhance.c`, `SocEnhance.h` | 已保留两个 mid-tail 表但运行不触发；已删除短静置 deferred OCV | 已确认 | 降低静置/中段快降和隐藏目标消化的复杂度；低端虚高主要由 low-tail 控制 | 是否接受当前“表保留、mid-tail 运行关闭、短静置不锁存、长静置慢下修”的策略？ | C. 接受当前简化 | 用户已确认：都可以 |
 
 ## 3. 可以后续确认
 

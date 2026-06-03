@@ -77,9 +77,9 @@
 | REQ-SOC-002 | SOC snapshot 失效时可由 OCV/default 60% 初始化 | `SocEnhance.c:609-668` | `SocEnhance.c` | Flash valid -> load；否则 OCV/default 并保存 | 是 | 是 | 是 | 是 | 是 | MUST_KEEP；初始 60% 策略需确认 |
 | REQ-SOC-003 | SOC 支持库仑积分、SOH、循环次数、容量学习字段 | `SocEnhance.h:19-78`, `SocEnhance.c:747-804` | `SocEnhance.c/.h` | 内部 cap/cycle/learn 状态 | 是 | 是 | 间接 | 间接 | 是 | KEEP_BUT_REFACTOR |
 | REQ-SOC-004 | 满电必须满足电压/持续时间/阈值条件，且 1% 步进到 100% | `Project_Config.h:235-258`, `SocEnhance.c:913-940`, `SocEnhance.c:1268-1318` | `SocEnhance.c`, `Project_Config.h` | full anchor + fast confirm + 1% step | 是 | 是 | 是 | 否 | 是 | MUST_KEEP |
-| REQ-SOC-005 | 低压尾段必须通过 V0 和 empty tail 限制 SOC 虚高 | `Project_Config.h:308-333`, `SocEnhance.c:1104-1266` | `SocEnhance.c` | tail target、empty fast、display low | 是 | 是 | 是 | 是 | 是 | MUST_KEEP |
+| REQ-SOC-005 | 低压尾段必须通过 V0 和 empty tail 限制 SOC 虚高；mid-tail 表保留但运行关闭 | `Project_Config.h`, `SocEnhance.c` | `SocEnhance.c` | low-tail target、empty fast、display low；`u8MidTailActive=0` | 是 | 是 | 是 | 是 | 是 | MUST_KEEP low-tail；mid-tail 已按确认关闭 |
 | REQ-SOC-006 | sag/rebound holdoff 必须避免低压瞬态导致 OCV 误校准 | `Project_Config.h:277-281`, `SocEnhance.c:980-1014` | `SocEnhance.c` | sag holdoff 秒计数 | 是 | 否 | 是 | 是 | 是 | MUST_KEEP |
-| REQ-SOC-007 | 静置 OCV 校准必须满足静置时间、稳定时间、目标步进 | `Project_Config.h:285-304`, `SocEnhance.c:1320-1516` | `SocEnhance.c` | rest OCV deferred target | 是 | 否 | 是 | 是 | 是 | MUST_KEEP |
+| REQ-SOC-007 | 自动静置 OCV 只保留长静置慢速下修，短静置不锁存 deferred target | `Project_Config.h`, `SocEnhance.c` | `SocEnhance.c` | `rest_down_target` 在 rest/stable 都达 1800s 后才有效，按 1800s/1% 下修 | 是 | 否 | 是 | 是 | 是 | MUST_KEEP |
 | REQ-SOC-008 | 显示 SOC 需要平滑，低电量允许更快下降 | `Project_Config.h:319-333`, `SocEnhance.c:1518-1590` | `SocEnhance.c`, `LedBar.c` | normal/chg/low 不同步进周期 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP |
 | REQ-SOC-009 | 当前无活动 SOC 注入式测试模式；必须保留 SOC_TEST 兼容 padding/协议长度 | `SOC.c:144-162` 为 `#if 0` 空壳，`Sci_Upper.c:828-829` 填充 16 word 0，`Sci_Upper.h:138-140` 定义 padding 长度 | `SOC.c`, `Sci_Upper.c/.h` | 不调用测试状态函数；只保留兼容占位 | 是 | 是 | 是 | 否 | 是 | MUST_KEEP padding；`#if 0` 空壳可后续低风险确认删除 |
 | REQ-SOC-010 | 上位机可写 SOC 命令/参数应触发 SOC 重新初始化或指定动作 | `SocEnhance.c:1592-1643`, `Sci_Upper.c:605-666` | `SocEnhance.c`, `Sci_Upper.c` | refresh flag、capacity reset、one-shot set SOC | 是 | 是 | 是 | 否 | 是 | UNKNOWN；现场写权限需确认 |
