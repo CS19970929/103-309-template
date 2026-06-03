@@ -157,7 +157,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void);
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
-                           uint32_t *rest_ticks, uint32_t *stable_ticks,
+                           uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
                            uint16_t *mid_ticks, uint8_t *full_anchor,
                            uint8_t *cal_allowed, uint8_t *sag_blocked,

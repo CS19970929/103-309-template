@@ -99,10 +99,11 @@ typedef struct
 	UINT32 cycle_x100;
 	UINT32 dsg_acc_as10;
 	UINT32 rem_mams;
-	UINT32 rest_ticks;
-	UINT32 stable_rest_ticks;
-	UINT32 short_rest_ticks;
-	UINT32 long_rest_down_ticks;
+	/* SOC rest counters below use 200ms SOC ticks, not RTC seconds. */
+	UINT32 rest_soc_ticks;
+	UINT32 stable_rest_soc_ticks;
+	UINT32 short_rest_soc_ticks;
+	UINT32 long_rest_down_soc_ticks;
 	UINT16 full_ticks;
 	UINT16 empty_ticks;
 	UINT16 mid_ticks;
@@ -718,7 +719,7 @@ static void soc_clear_deferred_ocv(void)
 	s_soc.deferred_ocv_valid = 0U;
 	s_soc.deferred_ocv_target = 0U;
 	s_soc.deferred_ocv_ticks = 0U;
-	s_soc.long_rest_down_ticks = 0U;
+	s_soc.long_rest_down_soc_ticks = 0U;
 }
 
 static void soc_set_deferred_ocv_target(UINT8 target)
@@ -733,7 +734,7 @@ static void soc_set_deferred_ocv_target(UINT8 target)
 		s_soc.deferred_ocv_target = target;
 		s_soc.deferred_ocv_valid = 1U;
 		s_soc.deferred_ocv_ticks = 0U;
-		s_soc.long_rest_down_ticks = 0U;
+		s_soc.long_rest_down_soc_ticks = 0U;
 	}
 }
 
@@ -1071,10 +1072,10 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u32CapNowAs10 = s_soc.cap_now_as10;
 	s_soc_debug_watch.u32CycleX100 = s_soc.cycle_x100;
 	s_soc_debug_watch.u32DsgAccAs10 = s_soc.dsg_acc_as10;
-	s_soc_debug_watch.u32RestTicks = s_soc.rest_ticks;
-	s_soc_debug_watch.u32StableRestTicks = s_soc.stable_rest_ticks;
-	s_soc_debug_watch.u32ShortRestTicks = s_soc.short_rest_ticks;
-	s_soc_debug_watch.u32LongRestDownTicks = s_soc.long_rest_down_ticks;
+	s_soc_debug_watch.u32RestTicks = s_soc.rest_soc_ticks;
+	s_soc_debug_watch.u32StableRestTicks = s_soc.stable_rest_soc_ticks;
+	s_soc_debug_watch.u32ShortRestTicks = s_soc.short_rest_soc_ticks;
+	s_soc_debug_watch.u32LongRestDownTicks = s_soc.long_rest_down_soc_ticks;
 	s_soc_debug_watch.u16VCellMax = SOC_Enhance_Element.u16_VCellMax;
 	s_soc_debug_watch.u16VCellMin = SOC_Enhance_Element.u16_VCellMin;
 	s_soc_debug_watch.u16CellDelta = soc_cell_delta();
@@ -1324,43 +1325,43 @@ static UINT8 soc_apply_full_empty(UINT8 mode,
 
 static void soc_reset_rest_confidence(void)
 {
-	s_soc.rest_ticks = 0U;
-	s_soc.stable_rest_ticks = 0U;
-	s_soc.short_rest_ticks = 0U;
-	s_soc.long_rest_down_ticks = 0U;
+	s_soc.rest_soc_ticks = 0U;
+	s_soc.stable_rest_soc_ticks = 0U;
+	s_soc.short_rest_soc_ticks = 0U;
+	s_soc.long_rest_down_soc_ticks = 0U;
 	s_soc.rest_ref_vmin = 0U;
 	s_soc.rest_ref_vmax = 0U;
 }
 
-static UINT8 soc_apply_long_rest_down_step(UINT32 delta_ticks)
+static UINT8 soc_apply_long_rest_down_step(UINT32 delta_soc_ticks)
 {
 	UINT8 changed;
 	UINT8 old_soc = s_soc.soc;
 
 	if ((!s_soc.deferred_ocv_valid) ||
 		(s_soc.deferred_ocv_target >= s_soc.soc) ||
-		(s_soc.rest_ticks < SOC_REST_LIMIT_TICKS))
+		(s_soc.rest_soc_ticks < SOC_REST_LIMIT_TICKS))
 	{
-		s_soc.long_rest_down_ticks = 0U;
+		s_soc.long_rest_down_soc_ticks = 0U;
 		return 0U;
 	}
-	if (s_soc.long_rest_down_ticks < SOC_LONG_REST_DOWN_STEP_TICKS)
+	if (s_soc.long_rest_down_soc_ticks < SOC_LONG_REST_DOWN_STEP_TICKS)
 	{
-		if (delta_ticks > (SOC_LONG_REST_DOWN_STEP_TICKS - s_soc.long_rest_down_ticks))
+		if (delta_soc_ticks > (SOC_LONG_REST_DOWN_STEP_TICKS - s_soc.long_rest_down_soc_ticks))
 		{
-			s_soc.long_rest_down_ticks = SOC_LONG_REST_DOWN_STEP_TICKS;
+			s_soc.long_rest_down_soc_ticks = SOC_LONG_REST_DOWN_STEP_TICKS;
 		}
 		else
 		{
-			s_soc.long_rest_down_ticks += delta_ticks;
+			s_soc.long_rest_down_soc_ticks += delta_soc_ticks;
 		}
 	}
-	if (s_soc.long_rest_down_ticks < SOC_LONG_REST_DOWN_STEP_TICKS)
+	if (s_soc.long_rest_down_soc_ticks < SOC_LONG_REST_DOWN_STEP_TICKS)
 	{
 		return 0U;
 	}
 	changed = soc_apply_ocv_target_step(s_soc.deferred_ocv_target, SOC_MODE_RELAX);
-	s_soc.long_rest_down_ticks = 0U;
+	s_soc.long_rest_down_soc_ticks = 0U;
 	if (changed)
 	{
 		soc_watch_set_calib_source(SOC_WATCH_CALIB_LONG_REST_DOWN, old_soc, s_soc.soc);
@@ -1409,54 +1410,54 @@ static void soc_update_rest_timer(UINT8 mode)
 		soc_reset_rest_confidence();
 		return;
 	}
-	if (s_soc.rest_ticks < SOC_REST_LIMIT_TICKS)
+	if (s_soc.rest_soc_ticks < SOC_REST_LIMIT_TICKS)
 	{
-		++s_soc.rest_ticks;
+		++s_soc.rest_soc_ticks;
 	}
 	if (soc_rest_voltage_stable())
 	{
-		if (s_soc.stable_rest_ticks < SOC_STABLE_LIMIT_TICKS)
+		if (s_soc.stable_rest_soc_ticks < SOC_STABLE_LIMIT_TICKS)
 		{
-			++s_soc.stable_rest_ticks;
+			++s_soc.stable_rest_soc_ticks;
 		}
-		if (s_soc.short_rest_ticks < SOC_SHORT_STEP_TICKS)
+		if (s_soc.short_rest_soc_ticks < SOC_SHORT_STEP_TICKS)
 		{
-			++s_soc.short_rest_ticks;
+			++s_soc.short_rest_soc_ticks;
 		}
 	}
 	else
 	{
-		s_soc.stable_rest_ticks = 0U;
-		s_soc.short_rest_ticks = 0U;
-		s_soc.long_rest_down_ticks = 0U;
+		s_soc.stable_rest_soc_ticks = 0U;
+		s_soc.short_rest_soc_ticks = 0U;
+		s_soc.long_rest_down_soc_ticks = 0U;
 		soc_clear_deferred_ocv();
 		soc_watch_set_block_reason(SOC_WATCH_BLOCK_REST_UNSTABLE);
 	}
-	if ((s_soc.stable_rest_ticks >= SOC_SHORT_MIN_TICKS) &&
-		(s_soc.short_rest_ticks >= SOC_SHORT_STEP_TICKS))
+	if ((s_soc.stable_rest_soc_ticks >= SOC_SHORT_MIN_TICKS) &&
+		(s_soc.short_rest_soc_ticks >= SOC_SHORT_STEP_TICKS))
 	{
 		(void)soc_latch_rest_ocv_target();
-		s_soc.short_rest_ticks = 0U;
+		s_soc.short_rest_soc_ticks = 0U;
 	}
 	(void)soc_apply_long_rest_down_step(1U);
 }
 
-static void soc_add_rest_seconds(UINT32 *ticks, UINT32 seconds, UINT32 limit_seconds)
+static void soc_add_rest_seconds(UINT32 *soc_ticks, UINT32 seconds, UINT32 limit_seconds)
 {
-	UINT32 limit_ticks = SOC_SEC_TO_TICKS(limit_seconds);
-	UINT32 delta_ticks = SOC_SEC_TO_TICKS(seconds);
+	UINT32 limit_soc_ticks = SOC_SEC_TO_TICKS(limit_seconds);
+	UINT32 delta_soc_ticks = SOC_SEC_TO_TICKS(seconds);
 
-	if (*ticks >= limit_ticks)
+	if (*soc_ticks >= limit_soc_ticks)
 	{
 		return;
 	}
-	if (delta_ticks > (limit_ticks - *ticks))
+	if (delta_soc_ticks > (limit_soc_ticks - *soc_ticks))
 	{
-		*ticks = limit_ticks;
+		*soc_ticks = limit_soc_ticks;
 	}
 	else
 	{
-		*ticks += delta_ticks;
+		*soc_ticks += delta_soc_ticks;
 	}
 }
 
@@ -1481,7 +1482,7 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	}
 
 	changed = soc_apply_board_self_consumption_seconds(delta_seconds);
-	soc_add_rest_seconds(&s_soc.rest_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
+	soc_add_rest_seconds(&s_soc.rest_soc_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
 	has_rest_ref = (UINT8)((s_soc.rest_ref_vmin != 0U) && (s_soc.rest_ref_vmax != 0U));
 	if (soc_rest_voltage_stable())
 	{
@@ -1489,24 +1490,24 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		{
 			return changed;
 		}
-		soc_add_rest_seconds(&s_soc.stable_rest_ticks, delta_seconds,
+		soc_add_rest_seconds(&s_soc.stable_rest_soc_ticks, delta_seconds,
 			SOC_REST_STABLE_LIMIT_SECS);
-		soc_add_rest_seconds(&s_soc.short_rest_ticks, delta_seconds, SOC_SHORT_REST_STEP_SECONDS);
+		soc_add_rest_seconds(&s_soc.short_rest_soc_ticks, delta_seconds, SOC_SHORT_REST_STEP_SECONDS);
 	}
 	else
 	{
-		s_soc.stable_rest_ticks = 0U;
-		s_soc.short_rest_ticks = 0U;
-		s_soc.long_rest_down_ticks = 0U;
+		s_soc.stable_rest_soc_ticks = 0U;
+		s_soc.short_rest_soc_ticks = 0U;
+		s_soc.long_rest_down_soc_ticks = 0U;
 		soc_clear_deferred_ocv();
 		return changed;
 	}
 
-	if ((s_soc.stable_rest_ticks >= SOC_SHORT_MIN_TICKS) &&
-		(s_soc.short_rest_ticks >= SOC_SHORT_STEP_TICKS))
+	if ((s_soc.stable_rest_soc_ticks >= SOC_SHORT_MIN_TICKS) &&
+		(s_soc.short_rest_soc_ticks >= SOC_SHORT_STEP_TICKS))
 	{
 		(void)soc_latch_rest_ocv_target();
-		s_soc.short_rest_ticks = 0U;
+		s_soc.short_rest_soc_ticks = 0U;
 	}
 	changed |= soc_apply_long_rest_down_step(SOC_SEC_TO_TICKS(delta_seconds));
 	return changed;
@@ -1748,7 +1749,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
-                           uint32_t *rest_ticks, uint32_t *stable_ticks,
+                           uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
                            uint16_t *mid_ticks, uint8_t *full_anchor,
                            uint8_t *cal_allowed, uint8_t *sag_blocked,
@@ -1757,8 +1758,8 @@ void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
 {
 	if (mode)          *mode          = s_soc.mode;
 	if (last_mode)     *last_mode     = s_soc.last_mode;
-	if (rest_ticks)    *rest_ticks    = s_soc.rest_ticks;
-	if (stable_ticks)  *stable_ticks  = s_soc.stable_rest_ticks;
+	if (rest_soc_ticks)    *rest_soc_ticks    = s_soc.rest_soc_ticks;
+	if (stable_soc_ticks)  *stable_soc_ticks  = s_soc.stable_rest_soc_ticks;
 	if (full_ticks)    *full_ticks    = s_soc.full_ticks;
 	if (empty_ticks)   *empty_ticks   = s_soc.empty_ticks;
 	if (mid_ticks)     *mid_ticks     = s_soc.mid_ticks;
