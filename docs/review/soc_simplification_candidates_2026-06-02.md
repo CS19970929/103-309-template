@@ -2,7 +2,7 @@
 
 文档状态：已执行源码简化
 源码验证日期：2026-06-03
-修改状态：`SOC-SIM-01/02/03/04/05/06/07/08/09` 已按小步源码提交完成；未执行暂不建议候选
+修改状态：`SOC-SIM-01/02/03/04/05/06/07/08/09/10` 已按小步源码提交完成；未执行暂不建议候选
 主要参考源码：`103 + 309/Project/Source/SOC.c`、`SocEnhance.c`、`SocEnhance.h`、`DataDeal.c`、`Sci_Upper.c`、`rtc_sleep.c`、`rtc_sleep_port.c`、`LowPowerSleep.c`、`LedBar.c`、`Flash.c`、`conf/Project_Config.h`
 目标：只优化软件实现和写法，方便阅读、维护和 Keil watch 调试；不改变功能、协议、时间参数、校准阈值、休眠顺序和用户可见行为。
 
@@ -20,7 +20,8 @@
 | `SOC-SIM-06` | `215badd` | 将 `soc_publish()` 拆成显示更新和 public 字段导出两个内部函数 |
 | `SOC-SIM-03` | `15f95ac` | 在 `SOC_Enhance_Element` 中标注 config/input/output/command 字段角色，结构体布局不变 |
 | `SOC-SIM-08` | `38e550e` | 将 RTC 补偿内部游标改名为已应用秒数口径 |
-| `SOC-SIM-09` | 本提交 | 将 `SOC_IntEnhance_Ctrl()` 的 tail/full/deferred 和 rest 后处理拆成内部函数，主流程更短 |
+| `SOC-SIM-09` | `3679318` | 将 `SOC_IntEnhance_Ctrl()` 的 tail/full/deferred 和 rest 后处理拆成内部函数，主流程更短 |
+| `SOC-SIM-10` | 本提交 | 将保存判重从完整 `SOC_STATE` 镜像收窄为 `SOC_SAVE_MARK` |
 
 本轮未做：
 
@@ -70,8 +71,40 @@
 - `git diff --check`：通过。
 - `clang -fsyntax-only SocEnhance.c`：通过。
 - `python3 tools/soc_replay_test.py`：47 项通过。
-- `python3 tools/project_check.py --quiet`：仍为当前仓库既有 `88 OK / 1 warning / 40 errors` 基线，失败项不是本批 SOC 主流程拆分新增。
+- `python3 tools/project_check.py --quiet`：仍为当前仓库既有 `88 OK / 1 warning / 40 errors` 基线，失败项不是本批新增。
 - 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP、CAN/Modbus 在线读取和 Keil watch 实测。
+
+### SOC-SIM-10：收窄保存判重状态
+
+当前事实：
+
+- `s_saved_soc` 原来使用完整 `SOC_STATE` 镜像。
+- `soc_save_if_needed()` 实际只比较 `soc`、`cycle_x100`、`cap_full_as10`、`snapshot_flags` 四个字段。
+- 其他字段被复制进 `s_saved_soc` 后没有消费者，容易让阅读者误以为所有 SOC runtime 状态都参与保存判重。
+
+候选动作：
+
+- 新增 `SOC_SAVE_MARK`，只保存判重真正使用的四个字段。
+- 新增 `soc_update_save_mark()` 和 `soc_save_mark_changed()`，集中表达保存判重口径。
+- 保持 `soc_save_if_needed()` 的触发字段不变。
+
+保持不变：
+
+- 不改变 Flash snapshot 内容。
+- 不改变保存触发条件。
+- 不改变 `soc_save_current_snapshot()` 只有保存成功才更新 mark 的行为。
+- 不改变 `soc_load_or_default()` 初始化结束后记录当前 mark 的行为。
+
+风险：
+
+- 低。只删除无用镜像字段；风险点是误把未参与判重的字段加入或移出保存触发条件。
+
+验证：
+
+- `git diff --check`
+- `clang -fsyntax-only 103 + 309/Project/Source/SocEnhance.c`
+- `python3 tools/soc_replay_test.py`
+- `python3 tools/project_check.py --quiet`
 
 ## 1. 总原则
 

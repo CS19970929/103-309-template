@@ -129,6 +129,14 @@ typedef struct
 
 typedef struct
 {
+	UINT32 cycle_x100;
+	UINT32 cap_full_as10;
+	UINT16 snapshot_flags;
+	UINT8 soc;
+} SOC_SAVE_MARK;
+
+typedef struct
+{
 	int16_t offset_mv;
 	UINT8 target[SOC_EMPTY_BAND_COUNT];
 	UINT16 ticks[SOC_EMPTY_BAND_COUNT];
@@ -143,7 +151,7 @@ typedef struct
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 static SOC_STATE s_soc;
-static SOC_STATE s_saved_soc;
+static SOC_SAVE_MARK s_saved_soc;
 /* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
 static UINT32 s_u32SocRtcRestAppliedSeconds;
 
@@ -614,20 +622,33 @@ static UINT8 soc_save(void)
 	return StorageFlash_SaveSocData(&data);
 }
 
+static void soc_update_save_mark(void)
+{
+	s_saved_soc.soc = s_soc.soc;
+	s_saved_soc.cycle_x100 = s_soc.cycle_x100;
+	s_saved_soc.cap_full_as10 = s_soc.cap_full_as10;
+	s_saved_soc.snapshot_flags = s_soc.snapshot_flags;
+}
+
+static UINT8 soc_save_mark_changed(void)
+{
+	return (UINT8)((s_soc.soc != s_saved_soc.soc) ||
+		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
+		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
+		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags));
+}
+
 static void soc_save_current_snapshot(void)
 {
 	if (soc_save())
 	{
-		s_saved_soc = s_soc;
+		soc_update_save_mark();
 	}
 }
 
 static void soc_save_if_needed(void)
 {
-	if ((s_soc.soc != s_saved_soc.soc) ||
-		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
-		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
-		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
+	if (soc_save_mark_changed())
 	{
 		soc_save_current_snapshot();
 	}
@@ -691,7 +712,7 @@ static void soc_load_or_default(void)
 	}
 	s_soc.display_soc = s_soc.soc;
 	s_soc.display_ready = 1U;
-	s_saved_soc = s_soc;
+	soc_update_save_mark();
 }
 
 static void soc_add_discharge(UINT32 delta_as10)

@@ -12,11 +12,13 @@
 
 - `SocEnhance.c`：将 `SOC_IntEnhance_Ctrl()` 内的 tail/full/deferred 校准阶段拆到 `soc_run_cycle_calibration()`。
 - `SocEnhance.c`：将校准后是否推进静置计数或清空静置 confidence 拆到 `soc_update_rest_after_cycle()`。
+- `SocEnhance.c`：将保存判重从完整 `SOC_STATE` 镜像收窄为 `SOC_SAVE_MARK`，减少无意义状态缓存。
 
 ### 安全边界
 
 - 未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义。
 - 保持正常周期总顺序：命令处理、方向判断、积分、sag hold、tail/full/deferred、rest、保存、发布。
+- 保持 Flash snapshot 内容和保存判重触发字段不变。
 
 ### 本次验证
 

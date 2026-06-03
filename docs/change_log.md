@@ -6,15 +6,16 @@
 
 ## 2026-06-03 SOC 主流程职责拆分
 
-本次只做 `SOC_IntEnhance_Ctrl()` 可读性优化，不修改 SOC 功能、SOC 表、阈值、时间参数、tail 策略、RTC 补偿策略、显示平滑、协议字段和 Keil 工程。
+本次只做 `SOC_IntEnhance_Ctrl()` 可读性优化和保存判重状态收窄，不修改 SOC 功能、SOC 表、阈值、时间参数、tail 策略、RTC 补偿策略、显示平滑、协议字段和 Keil 工程。
 
 源码修改：
 
 - `SocEnhance.c`：新增 `soc_run_cycle_calibration()` 和 `soc_update_rest_after_cycle()`，把正常 200ms 周期中的 tail/full/deferred 校准阶段和 rest 后处理阶段从 `SOC_IntEnhance_Ctrl()` 主函数拆出。
+- `SocEnhance.c`：将保存判重从完整 `SOC_STATE` 镜像收窄为 `SOC_SAVE_MARK`，只保留实际参与判重的 `soc/cycle_x100/cap_full_as10/snapshot_flags`。
 
 文档修改：
 
-- 更新 `docs/review/soc_simplification_candidates_2026-06-02.md`，追加 `SOC-SIM-09` 执行项和保持不变边界。
+- 更新 `docs/review/soc_simplification_candidates_2026-06-02.md`，追加 `SOC-SIM-09/10` 执行项和保持不变边界。
 
 验证：
 
