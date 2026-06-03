@@ -58,13 +58,13 @@ struct RTC_ELEMENT {
 
 extern struct RTC_ELEMENT RTC_time;
 //extern UINT8 RTC_Faultcnt;
-extern volatile bool is_rtc_wakekup;
-
 
 UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
 void RTC_SetWakeupPeriodSeconds(UINT32 seconds);
 UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds);
+UINT8 RTC_IsStopWakeup(void);
+void RTC_ClearStopWakeup(void);
 void RTC_WKTimeConfig(void);
 void RTC_DisableStopWakeup(void);
 void RTC_RestoreRunInterrupts(void);

@@ -36,7 +36,7 @@ UINT8 RtcSleep_PortIsMcuWakeActive(void)
 
 UINT8 RtcSleep_PortGetExternalCommCounter(void)
 {
-    return RTC_ExtComCnt;
+    return SleepDeal_GetExternalCommCounter();
 }
 
 UINT8 RtcSleep_PortUpdateRtcData(void)
@@ -101,7 +101,7 @@ void RtcSleep_PortRestoreAfterStop(void)
 
 UINT8 RtcSleep_PortIsRtcWake(void)
 {
-    return is_rtc_wakekup ? 1U : 0U;
+    return RTC_IsStopWakeup();
 }
 
 UINT32 RtcSleep_PortGetLastWakeupSeconds(void)

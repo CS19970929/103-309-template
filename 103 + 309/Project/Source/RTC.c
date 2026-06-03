@@ -1,8 +1,22 @@
 #include "main.h"
 #include "IrqDebug.h"
 
-static __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
+typedef struct
+{
+	__IO UINT8 disp;
+	volatile bool wake;
+	struct RTC_ELEMENT time;
+	UINT32 last;
+	UINT32 wake_override;
+} RTC_RUNTIME;
 
+static RTC_RUNTIME s_rtc = {
+	0U,
+	false,
+	{0},
+	1U,
+	0U
+};
 struct RTC_ELEMENT RTC_time;
 
 static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -15,9 +29,6 @@ static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30,
 #define RTC_WAKEUP_MIN_SECONDS   ((UINT32)1U)
 #define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)10U)
 #define RTC_WAKEUP_IWDG_SAFE_SECONDS ((UINT32)10U)
-
-static UINT32 s_u32RtcLastWakeupPeriodSeconds = 1U;
-static UINT32 s_u32RtcWakeupPeriodOverrideSeconds = 0U;
 
 static UINT8 RTC_GetMonthDays(UINT32 month, UINT8 is_leap_year)
 {
@@ -188,7 +199,8 @@ void Get_RTC_Time(void)
 	UINT32 u32BJ_SecondTimeVar;
 
 	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
-	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // 把定时器的值转换为北京时间
+	Second_To_RTCtime(u32BJ_SecondTimeVar, &s_rtc.time); // 把定时器的值转换为北京时间
+	RTC_time = s_rtc.time;
 }
 
 // 此函数为——Linux源码中的mktime算法修改为——易读懂型
@@ -371,9 +383,9 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
 	UINT32 wake_seconds;
 
-	if (s_u32RtcWakeupPeriodOverrideSeconds != 0U)
+	if (s_rtc.wake_override != 0U)
 	{
-		wake_seconds = s_u32RtcWakeupPeriodOverrideSeconds;
+		wake_seconds = s_rtc.wake_override;
 	}
 	else
 	{
@@ -396,12 +408,12 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 
 UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 {
-	return s_u32RtcLastWakeupPeriodSeconds;
+	return s_rtc.last;
 }
 
 void RTC_SetWakeupPeriodSeconds(UINT32 seconds)
 {
-	s_u32RtcWakeupPeriodOverrideSeconds = seconds;
+	s_rtc.wake_override = seconds;
 }
 
 UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds)
@@ -426,7 +438,7 @@ void RTC_WKTimeConfig(void)
 	RTC_DisableSecondInterrupt();
 	RTC_DisableAlarmInterrupt();
 	wake_seconds = RTC_GetWakeupPeriodSeconds();
-	s_u32RtcLastWakeupPeriodSeconds = wake_seconds;
+	s_rtc.last = wake_seconds;
 	RTC_EnableAlarmAfterSeconds(wake_seconds);
 }
 
@@ -494,15 +506,23 @@ void Init_RTC(void)
 }
 void App_RTC(void)
 {
-	if (0 == TimeDisplay)
+	if (0 == s_rtc.disp)
 	{
 		return;
 	}
 	Get_RTC_Time();
-	TimeDisplay = 0;
+	s_rtc.disp = 0;
 }
 
-volatile bool is_rtc_wakekup = false;
+UINT8 RTC_IsStopWakeup(void)
+{
+	return s_rtc.wake ? 1U : 0U;
+}
+
+void RTC_ClearStopWakeup(void)
+{
+	s_rtc.wake = false;
+}
 
 static void RTC_HandleAlarmWakeup(void)
 {
@@ -524,7 +544,7 @@ static void RTC_HandleAlarmWakeup(void)
 	if (had_alarm)
 	{
 		sys_time.rtc_alm_cnt++;
-		is_rtc_wakekup = true;
+		s_rtc.wake = true;
 	}
 }
 
@@ -541,7 +561,7 @@ void RTC_IRQHandler(void)
 		IrqDebug_CountFast((uint8_t)IRQDBG_RTC_SEC);
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		sys_time.rtc_sec_cnt++;
-		TimeDisplay = 1;				   // Enable time update
+		s_rtc.disp = 1;				   // Enable time update
 		RTC_WaitForLastTaskSafe();		   // Wait until last write operation on RTC registers has finished
 	}
 

@@ -4,6 +4,26 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 全局状态结构体化第 1 阶段
+
+本次按 `docs/review/global_state_struct_audit_2026-06-03.md` 的第 1 阶段执行低风险收口，只处理 `SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的散状态变量，不修改协议镜像、Flash 持久化布局、CAN/Modbus 帧格式或上位机可见数据含义。
+
+源码变更：
+- `SystemDebug.c`：新增 `DBG_RUNTIME s_dbgRt`，收口事件环、head/count 和故障快照状态。
+- `Runtime.c`：新增 `APP_RUNTIME s_rt`，收口调试打印 tick、上次故障和上次低功耗模式。
+- `Flash.c`：新增 `FLASH_RUNTIME s_flash`，收口 Flash busy 标志。
+- `SleepDeal.c/.h`：新增 `SLEEP_RUNTIME s_sleep`，通过 `SleepDeal_RecordExternalComm()` 和 `SleepDeal_GetExternalCommCounter()` 管理外部通信计数。
+- `RTC.c/.h`：新增 `RTC_RUNTIME s_rtc`，通过 `RTC_IsStopWakeup()` 和 `RTC_ClearStopWakeup()` 管理 RTC STOP 唤醒标志。
+- `Sci_Upper.c`、`rtc_sleep.c`、`rtc_sleep_port.c`、`conf.c`：调用点切换到模块访问函数。
+- `tools/project_check.py`：新增第 1 阶段门禁，防止旧散变量回流。
+
+验证：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- `rg "RTC_ExtComCnt|is_rtc_wakekup|s_dbg_events|s_dbg_print_tick|s_u8StorageFlashBusy|TimeDisplay" "103 + 309/Project/Source"`：无命中。
+- `py -3.9 tools/project_check.py --quiet`：`103 OK / 1 Warning / 39 Errors`；新增 `check_global_state_phase1()` 通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`，已生成 `FD_Release.axf/bin`。
+- RTC Alarm、USART 外部通信计数和 reset sleep 唤醒路径仍需上板验证。
+
 ## 2026-06-03 低功耗状态与阻塞原因收口
 
 本次按用户确认方案简化 `rtc_sleep` 低功耗选择逻辑，不修改低压阈值、RTC STOP 执行器、reset sleep 提交路径、CAN/Modbus 协议、IAP/App 地址或量产/测试配置。

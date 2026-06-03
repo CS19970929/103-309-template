@@ -349,7 +349,7 @@ void InitRunAfterStopWakeup(void)
     InitCan();
     InitTimer();
 
-    sys_time.wakeup_rtc = is_rtc_wakekup ? true : false;
+    sys_time.wakeup_rtc = (RTC_IsStopWakeup() != 0U) ? true : false;
     /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
        run mode can leave stale pending bits for the next low-power cycle. */
 
@@ -358,7 +358,7 @@ void InitRunAfterStopWakeup(void)
 
 void Init(void)
 {
-    if (is_rtc_wakekup)
+    if (RTC_IsStopWakeup() != 0U)
     {
         InitRtcWakeupCheck();
     }

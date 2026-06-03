@@ -226,7 +226,7 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     RtcSleep_PortPrepareRtcStop();
-    is_rtc_wakekup = false;
+    RTC_ClearStopWakeup();
     g_irq_t = NO_IRQ;
     lp_sync();
 }
@@ -256,7 +256,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         return true;
     }
 
-    is_rtc_wakekup = false;
+    RTC_ClearStopWakeup();
     LowPower_Request(NO_SLEEP);
 
     if (g_irq_t == NO_IRQ)

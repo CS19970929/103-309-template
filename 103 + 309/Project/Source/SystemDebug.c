@@ -50,28 +50,33 @@ struct DBG_EVENT {
 	uint16_t extra;
 };
 
-static volatile struct DBG_EVENT s_dbg_events[DBG_EVENT_RING_SIZE];
-static uint8_t s_dbg_event_head;
-static uint8_t s_dbg_event_count;
-static volatile struct SYSTEM_DEBUG s_dbg_fault_snap;
-static volatile uint8_t s_dbg_fault_valid;
+typedef struct
+{
+	volatile struct DBG_EVENT event[DBG_EVENT_RING_SIZE];
+	uint8_t head;
+	uint8_t count;
+	volatile struct SYSTEM_DEBUG fault;
+	volatile uint8_t fault_valid;
+} DBG_RUNTIME;
+
+static DBG_RUNTIME s_dbgRt;
 
 void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra)
 {
-	uint8_t idx = s_dbg_event_head;
-	s_dbg_events[idx].tick  = SysTime_Get10msTickCount();
-	s_dbg_events[idx].type  = type;
-	s_dbg_events[idx].val0  = val0;
-	s_dbg_events[idx].val1  = val1;
-	s_dbg_events[idx].extra = extra;
-	s_dbg_event_head = (idx + 1U) % DBG_EVENT_RING_SIZE;
-	if (s_dbg_event_count < DBG_EVENT_RING_SIZE) {
-		s_dbg_event_count++;
+	uint8_t idx = s_dbgRt.head;
+	s_dbgRt.event[idx].tick  = SysTime_Get10msTickCount();
+	s_dbgRt.event[idx].type  = type;
+	s_dbgRt.event[idx].val0  = val0;
+	s_dbgRt.event[idx].val1  = val1;
+	s_dbgRt.event[idx].extra = extra;
+	s_dbgRt.head = (idx + 1U) % DBG_EVENT_RING_SIZE;
+	if (s_dbgRt.count < DBG_EVENT_RING_SIZE) {
+		s_dbgRt.count++;
 	}
 	if ((type == 0x01) || (type == 0x02)) {
 		struct SYSTEM_DEBUG snapshot = g_dbg;
-		s_dbg_fault_snap = snapshot;
-		s_dbg_fault_valid = 1U;
+		s_dbgRt.fault = snapshot;
+		s_dbgRt.fault_valid = 1U;
 	}
 }
 
@@ -80,18 +85,18 @@ static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 										   uint8_t *type, uint8_t *val0,
 										   uint8_t *val1, uint16_t *extra)
 {
-	if (index >= s_dbg_event_count) return 0U;
+	if (index >= s_dbgRt.count) return 0U;
 	uint8_t idx;
-	if (s_dbg_event_count < DBG_EVENT_RING_SIZE) {
+	if (s_dbgRt.count < DBG_EVENT_RING_SIZE) {
 		idx = index;
 	} else {
-		idx = (s_dbg_event_head + index) % DBG_EVENT_RING_SIZE;
+		idx = (s_dbgRt.head + index) % DBG_EVENT_RING_SIZE;
 	}
-	if (tick)  *tick  = s_dbg_events[idx].tick;
-	if (type)  *type  = s_dbg_events[idx].type;
-	if (val0)  *val0  = s_dbg_events[idx].val0;
-	if (val1)  *val1  = s_dbg_events[idx].val1;
-	if (extra) *extra = s_dbg_events[idx].extra;
+	if (tick)  *tick  = s_dbgRt.event[idx].tick;
+	if (type)  *type  = s_dbgRt.event[idx].type;
+	if (val0)  *val0  = s_dbgRt.event[idx].val0;
+	if (val1)  *val1  = s_dbgRt.event[idx].val1;
+	if (extra) *extra = s_dbgRt.event[idx].extra;
 	return 1U;
 }
 #endif
@@ -830,10 +835,10 @@ void DbgPrint_Wakeup(void)
 void DbgPrint_EventRing(void)
 {
 	dbg_puts("\r\n[DBG-EVENT] count=");
-	dbg_put_dec16(s_dbg_event_count);
+	dbg_put_dec16(s_dbgRt.count);
 	dbg_puts("\r\n");
 	uint8_t i;
-	for (i = 0; i < s_dbg_event_count && i < 16U; i++) {
+	for (i = 0; i < s_dbgRt.count && i < 16U; i++) {
 		uint32_t tick;
 		uint8_t  type, v0, v1;
 		uint16_t extra;

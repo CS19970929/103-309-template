@@ -45,21 +45,26 @@ typedef struct
 	UINT32 crc;
 } APP_UPGRADE_MAILBOX;
 
-static volatile UINT8 s_u8StorageFlashBusy = 0U;
+typedef struct
+{
+	volatile UINT8 busy;
+} FLASH_RUNTIME;
+
+static FLASH_RUNTIME s_flash;
 
 static void StorageFlash_BeginWrite(void)
 {
-	s_u8StorageFlashBusy = 1U;
+	s_flash.busy = 1U;
 }
 
 static void StorageFlash_EndWrite(void)
 {
-	s_u8StorageFlashBusy = 0U;
+	s_flash.busy = 0U;
 }
 
 UINT8 StorageFlash_IsBusy(void)
 {
-	return s_u8StorageFlashBusy;
+	return s_flash.busy;
 }
 
 static UINT16 StorageFlash_CalcCrc(const UINT8 *data, UINT16 length)

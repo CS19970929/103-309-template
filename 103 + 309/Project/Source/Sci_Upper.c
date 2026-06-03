@@ -1416,7 +1416,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 	{
 		UINT8 u8RxData;
 
-		RTC_ExtComCnt++;
+		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
 
 		if ((pstPort->pstProtocolOps != 0) &&

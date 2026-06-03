@@ -4,6 +4,21 @@
 #include "Runtime.h"
 #include "SystemDebug.h"
 
+typedef struct
+{
+	uint32_t dbg_tick;
+	uint16_t fault;
+	uint8_t lp;
+	uint8_t reserved;
+} APP_RUNTIME;
+
+static APP_RUNTIME s_rt = {
+	0U,
+	0U,
+	3U,
+	0U
+};
+
 static void Runtime_RunFrontTasks(void)
 {
 	SysTime_LatchTaskFlags();
@@ -62,12 +77,11 @@ static void Runtime_RunBackgroundTasks(void)
 
 /* ---- debug periodic print (every ~5s) ---- */
 #if defined(_DEBUG_)
-static uint32_t s_dbg_print_tick;
 static void Runtime_DebugPrintHook(void)
 {
 	uint32_t now = SysTime_Get10msTickCount();
-	if ((now - s_dbg_print_tick) >= 500U) {
-		s_dbg_print_tick = now;
+	if ((now - s_rt.dbg_tick) >= 500U) {
+		s_rt.dbg_tick = now;
 		DbgPrint_Summary();
 	}
 	SystemDebug_ModuleHeartbeat((uint8_t)DBG_MODULE_DEBUG_PRINT, DBG_MODULE_STATE_READY);
@@ -87,23 +101,21 @@ static void Runtime_RunNormalOnce(void)
 
 	/* event: fault detection */
 	{
-		static uint16_t s_last_fault;
 		uint16_t now_fault = g_stCellInfoReport.unMdlFault_Third.all & 0x3FFBU;
-		if ((now_fault != 0U) && (s_last_fault == 0U)) {
+		if ((now_fault != 0U) && (s_rt.fault == 0U)) {
 			SystemDebug_Event(0x02, (uint8_t)now_fault, (uint8_t)(now_fault >> 8), 0U);
-		} else if ((now_fault == 0U) && (s_last_fault != 0U)) {
-			SystemDebug_Event(0x07, 0U, 0U, s_last_fault);
+		} else if ((now_fault == 0U) && (s_rt.fault != 0U)) {
+			SystemDebug_Event(0x07, 0U, 0U, s_rt.fault);
 		}
-		s_last_fault = now_fault;
+		s_rt.fault = now_fault;
 	}
 
 	/* event: LP mode change */
 	{
-		static uint8_t s_last_lp_mode = 3U;
 		uint8_t now_lp = g_stLowPowerRtcStatus.mode;
-		if (now_lp != s_last_lp_mode) {
+		if (now_lp != s_rt.lp) {
 			SystemDebug_Event(0x03, now_lp, (uint8_t)g_stLowPowerRtcStatus.block, 0U);
-			s_last_lp_mode = now_lp;
+			s_rt.lp = now_lp;
 		}
 	}
 

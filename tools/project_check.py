@@ -52,6 +52,7 @@ CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFram
 CAN_FEIDAO_FRAMES_H = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.h"
 SYSTEM_DEBUG_C = ROOT / "103 + 309" / "Project" / "Source" / "SystemDebug.c"
 SYSTEM_DEBUG_H = ROOT / "103 + 309" / "Project" / "Source" / "SystemDebug.h"
+RUNTIME_C = ROOT / "103 + 309" / "Project" / "Source" / "Runtime.c"
 FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
 FACTORY_AGING_H = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.h"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
@@ -1055,6 +1056,95 @@ def check_low_power_cleanup(reporter):
         reporter.fail("RTC sleep port layer should keep AFE details in a separate source file and avoid unused AFE sleep-block wrappers")
 
 
+def check_global_state_phase1(reporter):
+    required_files = [
+        SYSTEM_DEBUG_C,
+        RUNTIME_C,
+        FLASH_C,
+        SLEEPDEAL_C,
+        SLEEPDEAL_H,
+        RTC_C,
+        RTC_SLEEP_C,
+        RTC_SLEEP_PORT_C,
+        SCI_UPPER_C,
+        CONF_C,
+    ]
+    if any(not path.exists() for path in required_files):
+        return
+
+    system_debug_c = read_text(SYSTEM_DEBUG_C)
+    runtime_c = read_text(RUNTIME_C)
+    flash_c = read_text(FLASH_C)
+    sleepdeal_c = read_text(SLEEPDEAL_C)
+    sleepdeal_h = read_text(SLEEPDEAL_H)
+    rtc_c = read_text(RTC_C)
+    rtc_sleep_c = read_text(RTC_SLEEP_C)
+    rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
+    sci_upper_c = read_text(SCI_UPPER_C)
+    conf_c = read_text(CONF_C)
+    combined = "\n".join([
+        system_debug_c,
+        runtime_c,
+        flash_c,
+        sleepdeal_c,
+        sleepdeal_h,
+        rtc_c,
+        rtc_sleep_c,
+        rtc_sleep_port_c,
+        sci_upper_c,
+        conf_c,
+    ])
+
+    stale_tokens = [
+        "s_dbg_events",
+        "s_dbg_event_head",
+        "s_dbg_event_count",
+        "s_dbg_fault_snap",
+        "s_dbg_fault_valid",
+        "s_dbg_print_tick",
+        "s_last_fault",
+        "s_last_lp_mode",
+        "s_u8StorageFlashBusy",
+        "RTC_ExtComCnt",
+        "s_u8BootFromSleepStartup",
+        "s_u8BootFromSleepChargerWakeup",
+        "TimeDisplay",
+        "s_u32RtcLastWakeupPeriodSeconds",
+        "s_u32RtcWakeupPeriodOverrideSeconds",
+        "is_rtc_wakekup",
+    ]
+    found = [token for token in stale_tokens if token in combined]
+    if found:
+        reporter.fail("global state phase1 still has split state tokens: {0}".format(",".join(found)))
+    else:
+        reporter.ok("global state phase1 removed selected split state tokens")
+
+    if (
+        "static DBG_RUNTIME s_dbgRt;" in system_debug_c
+        and "static APP_RUNTIME s_rt" in runtime_c
+        and "static FLASH_RUNTIME s_flash;" in flash_c
+        and "static SLEEP_RUNTIME s_sleep;" in sleepdeal_c
+        and "static RTC_RUNTIME s_rtc" in rtc_c
+    ):
+        reporter.ok("global state phase1 uses module runtime structs")
+    else:
+        reporter.fail("global state phase1 should keep selected state in module runtime structs")
+
+    if (
+        "void SleepDeal_RecordExternalComm(void)" in sleepdeal_h
+        and "UINT8 SleepDeal_GetExternalCommCounter(void)" in sleepdeal_h
+        and "SleepDeal_RecordExternalComm();" in sci_upper_c
+        and "SleepDeal_GetExternalCommCounter()" in rtc_sleep_port_c
+        and "UINT8 RTC_IsStopWakeup(void)" in rtc_c
+        and "void RTC_ClearStopWakeup(void)" in rtc_c
+        and "RTC_ClearStopWakeup();" in rtc_sleep_c
+        and "RTC_IsStopWakeup() != 0U" in conf_c
+    ):
+        reporter.ok("global state phase1 keeps SleepDeal/RTC state behind accessors")
+    else:
+        reporter.fail("global state phase1 should access SleepDeal/RTC state through module functions")
+
+
 def check_fault_snapshot_mapping(reporter):
     required_files = [FAULT_SNAPSHOT_H, STM32F10X_IT_C, SCI_UPPER_C, SCI_UPPER_H]
     if any(not path.exists() for path in required_files):
@@ -1862,6 +1952,7 @@ def main(argv):
     check_sci_host_write_policy(reporter)
     check_soc_current_and_typec_policy(reporter)
     check_low_power_cleanup(reporter)
+    check_global_state_phase1(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
     check_can_aging_soc_service(reporter)

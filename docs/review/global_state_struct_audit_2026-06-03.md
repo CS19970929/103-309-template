@@ -123,12 +123,41 @@ extern const struct APP_WATCH g_watch;
 
 | 阶段 | 范围 | 风险 | 建议 |
 |---|---|---|---|
-| 第 1 阶段 | `SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的散计数器和标志 | 低 | 先做，基本不碰协议 |
+| 第 1 阶段 | `SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的散计数器和标志 | 低 | 已执行，基本不碰协议 |
 | 第 2 阶段 | `ADC` 运行状态结构体化 | 中 | 保留读取函数和必要 extern，先不改协议字段 |
 | 第 3 阶段 | `DataDeal` 函数内静态变量与 AFE 电流运行状态继续收口 | 中 | 每个功能点独立提交，防止保护逻辑回归 |
 | 第 4 阶段 | `Sci_Upper` 旧 per-port 散变量合并到 `SCI_PORT_RUNTIME` | 中高 | 需要重点验证 USART 收发、Modbus、升级写寄存器 |
 | 第 5 阶段 | `Fault`、`OtherElement`、`g_stCellInfoReport`、`PRT_E2ROMParas` 等协议/持久化镜像 | 高 | 暂不直接改，必须先确认上位机、Modbus/CAN、Flash 兼容 |
 | 第 6 阶段 | 新增 `g_watch` 或扩展 `g_dbg` 为统一 Keil 观察入口 | 低到中 | 可与前几阶段同步推进 |
+
+## 第 1 阶段执行记录
+
+执行时间：2026-06-03
+
+源码修改：
+
+- `SystemDebug.c`：新增 `DBG_RUNTIME s_dbgRt`，收口事件环、事件 head/count、故障快照和故障快照有效标志。
+- `Runtime.c`：新增 `APP_RUNTIME s_rt`，收口调试打印 tick、上次故障快照和上次低功耗模式。
+- `Flash.c`：新增 `FLASH_RUNTIME s_flash`，收口 Flash 写入 busy 标志，保留 `StorageFlash_IsBusy()` 外部接口。
+- `SleepDeal.c/.h`：新增 `SLEEP_RUNTIME s_sleep`，收口外部通信计数、休眠启动标志和充电唤醒标志；新增 `SleepDeal_RecordExternalComm()`、`SleepDeal_GetExternalCommCounter()`。
+- `RTC.c/.h`：新增 `RTC_RUNTIME s_rtc`，收口秒中断显示标志、RTC 唤醒标志、唤醒周期配置和 RTC 时间内部镜像；新增 `RTC_IsStopWakeup()`、`RTC_ClearStopWakeup()`。
+- `Sci_Upper.c`：USART 收包入口改为调用 `SleepDeal_RecordExternalComm()`。
+- `rtc_sleep.c`、`rtc_sleep_port.c`、`conf.c`：低功耗和恢复流程改为通过 RTC/SleepDeal 访问函数读取或清除状态。
+- `tools/project_check.py`：新增第 1 阶段门禁，防止旧散变量回流。
+
+保持不变：
+
+- 不修改 `g_stCellInfoReport`、`OtherElement`、`PRT_E2ROMParas`、`System_ErrFlag` 等协议/持久化镜像。
+- 不修改 Modbus/CAN 寄存器、帧格式、CAN ID、Flash 持久化结构布局。
+- `RTC_time` 作为对外兼容镜像暂时保留，内部 RTC 状态以 `s_rtc.time` 为主。
+
+验证记录：
+
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- 旧符号 `rg` 检查：本阶段旧散变量无命中。
+- `py -3.9 tools/project_check.py --quiet`：`103 OK / 1 Warning / 39 Errors`；新增第 1 阶段门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`。
+- 上板验证仍需覆盖：RTC Alarm 唤醒后 `RTC_IsStopWakeup()` 状态、USART 收包后外部通信阻塞位、reset sleep 唤醒路径。
 
 ## 需求确认表
 

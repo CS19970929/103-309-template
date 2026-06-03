@@ -6,6 +6,34 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 全局状态结构体化第 1 阶段
+
+本次继续按“模块状态结构体 + 统一调试观察入口”的方向收口旧散变量，范围限定为低风险模块，不触碰协议镜像和持久化布局。
+
+源码变更：
+
+- `SystemDebug.c`：新增 `DBG_RUNTIME s_dbgRt`，替代 `s_dbg_events`、`s_dbg_event_head`、`s_dbg_event_count`、`s_dbg_fault_snap`、`s_dbg_fault_valid`。
+- `Runtime.c`：新增 `APP_RUNTIME s_rt`，替代 `s_dbg_print_tick`、函数内 `s_last_fault` 和 `s_last_lp_mode`。
+- `Flash.c`：新增 `FLASH_RUNTIME s_flash`，替代 `s_u8StorageFlashBusy`。
+- `SleepDeal.c/.h`：新增 `SLEEP_RUNTIME s_sleep`，替代 `RTC_ExtComCnt`、`s_u8BootFromSleepStartup`、`s_u8BootFromSleepChargerWakeup`；新增外部通信计数访问函数。
+- `RTC.c/.h`：新增 `RTC_RUNTIME s_rtc`，替代 `TimeDisplay`、`s_u32RtcLastWakeupPeriodSeconds`、`s_u32RtcWakeupPeriodOverrideSeconds`、`is_rtc_wakekup`；新增 RTC STOP 唤醒状态访问函数。
+- `Sci_Upper.c`、`rtc_sleep.c`、`rtc_sleep_port.c`、`conf.c`：切换到新的 SleepDeal/RTC 访问接口。
+- `tools/project_check.py`：新增 `check_global_state_phase1()`，检查旧散变量是否回流。
+
+保持不变：
+
+- `g_stCellInfoReport`、`OtherElement`、`PRT_E2ROMParas`、`System_ErrFlag` 暂不迁移。
+- `RTC_time` 暂时保留为对外兼容镜像。
+- 不改 Modbus/CAN 协议、Flash 持久化结构、IAP/App 地址或量产/测试配置。
+
+验证：
+
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- 旧符号 `rg` 检查：`RTC_ExtComCnt`、`is_rtc_wakekup`、`s_dbg_events`、`s_dbg_print_tick`、`s_u8StorageFlashBusy`、`TimeDisplay` 等本阶段旧散变量无命中。
+- `py -3.9 tools/project_check.py --quiet`：`103 OK / 1 Warning / 39 Errors`；新增第 1 阶段门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`。
+- 真板 RTC Alarm、USART 外部通信计数和 reset sleep 唤醒路径仍需上板验证。
+
 ## 2026-06-03 低功耗状态与阻塞原因收口
 
 ### 本次源码修改

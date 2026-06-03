@@ -4,6 +4,20 @@
 最后更新时间：2026-06-03
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 全局状态结构体化第 1 阶段测试入口
+
+专项变更：`SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的低风险散变量已收口到模块 runtime 结构体；外部通信计数和 RTC STOP 唤醒标志改为通过模块函数访问。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 编译 | Keil `FD_Release` | 编译通过，无新增未解析符号 |
+| 静态门禁 | `py -3.9 tools/project_check.py --quiet` | `check_global_state_phase1()` 通过 |
+| 旧符号检查 | `rg "RTC_ExtComCnt|is_rtc_wakekup|s_dbg_events|s_dbg_print_tick|s_u8StorageFlashBusy|TimeDisplay" "103 + 309/Project/Source"` | 源码无本阶段已收口的旧散变量名 |
+| USART 外部通信 | 串口收包触发 `Sci_PortIRQHandler()` | `SleepDeal_RecordExternalComm()` 递增，低功耗 `LP_BLOCK_EXT_COMM` 可被置位 |
+| RTC STOP 唤醒 | RTC Alarm 唤醒 | `RTC_IsStopWakeup()` 返回 1，恢复后按原流程清除 |
+| reset sleep 唤醒 | HICCUP/NORMAL/DEEP reset sleep 后按键或充电唤醒 | `SleepDeal_IsBootFromSleepStartup()`、`SleepDeal_IsBootFromSleepChargerWakeup()` 行为不变 |
+| Keil 观察 | Watch `s_dbgRt`、`s_rt`、`s_flash`、`s_sleep`、`s_rtc`、`g_dbg` | 模块状态可观察，`g_dbg` 仍作为统一调试快照入口 |
+
 ## 低功耗状态收口专项测试入口
 
 专项变更：`g_stLowPowerRtcStatus` 统一保存低功耗模式、阻塞位图、空闲计时、低压计时、RTC STOP 累计秒数和唤醒次数；`LP_GetBlockReason()` 是唯一阻塞判断入口。
