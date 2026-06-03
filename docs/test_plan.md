@@ -4,6 +4,22 @@
 最后更新时间：2026-06-03
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 低功耗状态收口专项测试入口
+
+专项变更：`g_stLowPowerRtcStatus` 统一保存低功耗模式、阻塞位图、空闲计时、低压计时、RTC STOP 累计秒数和唤醒次数；`LP_GetBlockReason()` 是唯一阻塞判断入口。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 编译 | Keil `FD_Release` | 编译通过，无新增未解析符号 |
+| 静态门禁 | `py -3.9 tools/project_check.py --quiet` | 新增低功耗状态收口门禁通过 |
+| 文本检查 | `rg "LOW_POWER_RTC_BLOCK|s_u16IdleDelaySeconds|s_u32RtcSleepElapsedSeconds|s_u32RtcWakeCycles|s_u32LastSleepSeconds" "103 + 309/Project/Source/rtc_sleep.*"` | 源码无旧粗粒度阻塞枚举和独立计数变量 |
+| 空闲 HICCUP | 无充放电、无通信、无 LED/Flash/fault/老化 | `g_stLowPowerRtcStatus.idle` 累计到 `idleMax` 后进入 `HICCUP_MODE` |
+| 低压 deep | 单体低于强制/参数低压阈值且充电电流小于限制 | 低压计时优先于普通 block，达到阈值后请求 `DEEP_MODE` |
+| 阻塞位图 | 分别制造电流、通信、按键、Flash、fault、LED、老化 | `g_stLowPowerRtcStatus.block` 对应 `LP_BLOCK_*` 位被置位，`idle` 清零 |
+| 外部通信边沿 | 改变 `RTC_ExtComCnt` | 只通过 `LP_GetBlockReason()` 消费通信变化，`SystemDebug` 快照不提前清边沿 |
+| 工厂老化 | 老化 running | 只阻塞 HICCUP RTC STOP；低压 deep 和外部 `DEEP_MODE/NORMAL_MODE` reset sleep 仍可执行 |
+| ST-Link 监控 | `tools/stlink_bms_monitor.ps1 -Count 1` | 能按新 8 word 布局解析 `RtcMode/RtcBlock/RtcElapsedSeconds/RtcCycles` |
+
 ## 中断计数专项测试入口
 
 专项方案文档：`docs/review/interrupt_counter_plan_2026-06-03.md`

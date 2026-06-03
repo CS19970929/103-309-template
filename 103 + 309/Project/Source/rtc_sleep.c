@@ -14,20 +14,23 @@
 enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
-    LOW_POWER_RTC_BLOCK_NONE,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
+    0U,
     0U,
     0U,
     0U,
     0U};
 
-static uint16_t s_u16IdleDelaySeconds = 0U;
-static uint32_t s_u32RtcSleepElapsedSeconds = 0U;
-static uint32_t s_u32RtcWakeCycles = 0U;
-static uint32_t s_u32LastSleepSeconds = 0U;
-
 uint32_t LP_GetBlockReason(void)
 {
     uint32_t reason = 0U;
+    uint8_t comm = RtcSleep_PortGetExternalCommCounter();
 
     if (RtcSleep_PortGetChargeCurrentMa() > 10U)
     {
@@ -48,6 +51,18 @@ uint32_t LP_GetBlockReason(void)
     if (RtcSleep_PortIsMcuWakeActive() != 0U)
     {
         reason |= LP_BLOCK_KEY;
+    }
+
+    if (comm != g_stLowPowerRtcStatus.comm)
+    {
+        g_stLowPowerRtcStatus.comm = comm;
+        reason |= LP_BLOCK_EXT_COMM;
+    }
+
+    if ((g_stLowPowerRtcStatus.mode == NO_SLEEP) &&
+        (FactoryAging_IsActive() != 0U))
+    {
+        reason |= LP_BLOCK_AGING;
     }
 
     if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
@@ -75,20 +90,18 @@ uint32_t LP_GetBlockReason(void)
 
 uint32_t LP_GetLastSleepSeconds(void)
 {
-    return s_u32LastSleepSeconds;
+    return g_stLowPowerRtcStatus.last;
 }
 
 void LP_RecordLastSleepSeconds(uint32_t seconds)
 {
-    s_u32LastSleepSeconds = seconds;
+    g_stLowPowerRtcStatus.last = seconds;
 }
 
-static void low_power_refresh_rtc_status(void)
+static void lp_sync(void)
 {
-    g_stLowPowerRtcStatus.rtcWake = RtcSleep_PortIsRtcWake();
-    g_stLowPowerRtcStatus.delaySeconds = s_u16IdleDelaySeconds;
-    g_stLowPowerRtcStatus.delayTargetSeconds = sys_time.time_enter_rtc;
-    g_stLowPowerRtcStatus.elapsedSeconds = s_u32RtcSleepElapsedSeconds;
+    g_stLowPowerRtcStatus.rtc = RtcSleep_PortIsRtcWake();
+    g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
 }
 
 static void low_power_log_and_commit_sleep(uint8_t sleep_mode)
@@ -116,96 +129,67 @@ void LowPower_Request(enum _SLEEP_MODE mode)
         break;
     }
 
-    low_power_refresh_rtc_status();
+    lp_sync();
 }
 
-static void low_power_select_sleep_mode(void)
+static uint8_t lp_deep(void)
 {
-    static uint8_t last_ext_comm_count = 0U;
-    static uint32_t deep_sleep_delay_seconds = 0U;
-    static uint16_t force_deep_delay_seconds = 0U;
-    uint32_t block_mask;
-    uint8_t block_reason;
-
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
-        s_u16IdleDelaySeconds = 0U;
-        g_stLowPowerRtcStatus.blockReason = LOW_POWER_RTC_BLOCK_NONE;
-        if (++force_deep_delay_seconds >= LOW_POWER_FORCE_DEEP_SLEEP_SECONDS)
+        g_stLowPowerRtcStatus.idle = 0U;
+        g_stLowPowerRtcStatus.block = 0U;
+        if (++g_stLowPowerRtcStatus.force >= LOW_POWER_FORCE_DEEP_SLEEP_SECONDS)
         {
             LowPower_Request(DEEP_MODE);
         }
-        low_power_refresh_rtc_status();
-        return;
+        return 1U;
     }
 
     if ((RtcSleep_PortGetCellMinMv() <= RtcSleep_PortGetLowVoltageSleepMv()) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
-        s_u16IdleDelaySeconds = 0U;
-        g_stLowPowerRtcStatus.blockReason = LOW_POWER_RTC_BLOCK_NONE;
-        if (++deep_sleep_delay_seconds >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
+        g_stLowPowerRtcStatus.idle = 0U;
+        g_stLowPowerRtcStatus.block = 0U;
+        if (++g_stLowPowerRtcStatus.vlow >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
         {
             LowPower_Request(DEEP_MODE);
         }
-        low_power_refresh_rtc_status();
-        return;
+        return 1U;
     }
 
-    deep_sleep_delay_seconds = 0U;
-    force_deep_delay_seconds = 0U;
+    g_stLowPowerRtcStatus.vlow = 0U;
+    g_stLowPowerRtcStatus.force = 0U;
+    return 0U;
+}
 
-    block_mask = LP_GetBlockReason();
-    if ((block_mask & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE)) != 0U)
+static void lp_idle(void)
+{
+    if (++g_stLowPowerRtcStatus.idle >= sys_time.time_enter_rtc)
     {
-        block_reason = LOW_POWER_RTC_BLOCK_CURRENT;
-    }
-    else if ((block_mask & LP_BLOCK_KEY) != 0U)
-    {
-        block_reason = LOW_POWER_RTC_BLOCK_MCU_WAKE;
-    }
-    else
-    {
-        block_reason = LOW_POWER_RTC_BLOCK_NONE;
-    }
-
-    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
-        (last_ext_comm_count != RtcSleep_PortGetExternalCommCounter()))
-    {
-        last_ext_comm_count = RtcSleep_PortGetExternalCommCounter();
-        block_reason = LOW_POWER_RTC_BLOCK_EXT_COMM;
-    }
-
-    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
-        (g_stLowPowerRtcStatus.mode == NO_SLEEP) &&
-        (FactoryAging_IsActive() != 0U))
-    {
-        block_reason = LOW_POWER_RTC_BLOCK_FACTORY_AGING;
-    }
-
-    if ((block_reason == LOW_POWER_RTC_BLOCK_NONE) &&
-        (block_mask != 0U))
-    {
-        block_reason = LOW_POWER_RTC_BLOCK_FRAMEWORK;
-    }
-
-    if (block_reason != LOW_POWER_RTC_BLOCK_NONE)
-    {
-        s_u16IdleDelaySeconds = 0U;
-        g_stLowPowerRtcStatus.blockReason = block_reason;
-        low_power_refresh_rtc_status();
-        return;
-    }
-
-    g_stLowPowerRtcStatus.blockReason = LOW_POWER_RTC_BLOCK_NONE;
-    if (++s_u16IdleDelaySeconds >= sys_time.time_enter_rtc)
-    {
-        s_u16IdleDelaySeconds = 0U;
+        g_stLowPowerRtcStatus.idle = 0U;
         LowPower_Request(HICCUP_MODE);
     }
+}
 
-    low_power_refresh_rtc_status();
+static void lp_select(void)
+{
+    if (lp_deep() != 0U)
+    {
+        lp_sync();
+        return;
+    }
+
+    g_stLowPowerRtcStatus.block = LP_GetBlockReason();
+    if (g_stLowPowerRtcStatus.block != 0U)
+    {
+        g_stLowPowerRtcStatus.idle = 0U;
+        lp_sync();
+        return;
+    }
+
+    lp_idle();
+    lp_sync();
 }
 
 static bool isException(void)
@@ -236,15 +220,15 @@ static void rtc_sleep_prepare_rtc(void)
 {
     IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 
-    if (s_u32RtcWakeCycles == 0U)
+    if (g_stLowPowerRtcStatus.cycles == 0U)
     {
-        s_u32RtcSleepElapsedSeconds = 0U;
+        g_stLowPowerRtcStatus.sleep = 0U;
     }
 
     RtcSleep_PortPrepareRtcStop();
     is_rtc_wakekup = false;
     g_irq_t = NO_IRQ;
-    low_power_refresh_rtc_status();
+    lp_sync();
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -259,16 +243,16 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     if (RtcSleep_PortIsRtcWake() != 0U)
     {
         rtc_elapsed_seconds = RtcSleep_PortGetLastWakeupSeconds();
-        ++s_u32RtcWakeCycles;
-        s_u32RtcSleepElapsedSeconds += rtc_elapsed_seconds;
+        ++g_stLowPowerRtcStatus.cycles;
+        g_stLowPowerRtcStatus.sleep += rtc_elapsed_seconds;
     }
 
     RtcSleep_PortRestoreAfterStop();
 
     if ((RtcSleep_PortIsRtcWake() != 0U) && !isException())
     {
-        RtcSleep_PortApplySocRtcRest(s_u32RtcSleepElapsedSeconds);
-        low_power_refresh_rtc_status();
+        RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
+        lp_sync();
         return true;
     }
 
@@ -281,10 +265,10 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
     RtcSleep_PortOnWakeupSource(g_irq_t);
 
-    LP_RecordLastSleepSeconds(s_u32RtcSleepElapsedSeconds);
-    RtcSleep_PortAddRuntimeSeconds(s_u32RtcSleepElapsedSeconds);
-    s_u32RtcWakeCycles = 0U;
-    s_u32RtcSleepElapsedSeconds = 0U;
+    LP_RecordLastSleepSeconds(g_stLowPowerRtcStatus.sleep);
+    RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
+    g_stLowPowerRtcStatus.cycles = 0U;
+    g_stLowPowerRtcStatus.sleep = 0U;
     return false;
 }
 
@@ -294,11 +278,11 @@ void rtc_sleep(void)
 
     if (RtcSleep_PortIsOneSecondTick() == 0U)
     {
-        low_power_refresh_rtc_status();
+        lp_sync();
         return;
     }
 
-    low_power_select_sleep_mode();
+    lp_select();
     sleep_mode = g_stLowPowerRtcStatus.mode;
 
     if ((sleep_mode != HICCUP_MODE) &&

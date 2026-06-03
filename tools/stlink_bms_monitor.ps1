@@ -202,8 +202,6 @@ function Decode-Sample {
     )
 
     $rtcWords = Get-MdwWords -Text $Text -Address $Symbols["g_stLowPowerRtcStatus"]
-    $lpWords = if ($Symbols.ContainsKey("s_lp_runtime")) { Get-MdwWords -Text $Text -Address $Symbols["s_lp_runtime"] } else { @() }
-    $lastSleepWords = if ($Symbols.ContainsKey("s_u32LastSleepSeconds")) { Get-MdwWords -Text $Text -Address $Symbols["s_u32LastSleepSeconds"] } else { @() }
     $ledWords = Get-MdwWords -Text $Text -Address $Symbols["s_ledbar"]
     $dbgWords = Get-MdwWords -Text $Text -Address $DBGMCU_CR
     $mcuWords = Get-MdwWords -Text $Text -Address "0xE0042000"
@@ -225,9 +223,11 @@ function Decode-Sample {
     $rtc0 = Convert-HexWord (Get-WordAt $rtcWords 0)
     $rtc1 = Convert-HexWord (Get-WordAt $rtcWords 1)
     $rtc2 = Convert-HexWord (Get-WordAt $rtcWords 2)
-    $lp0 = Convert-HexWord (Get-WordAt $lpWords 0)
-    $lp1 = Convert-HexWord (Get-WordAt $lpWords 1)
-    $lastSleep0 = Convert-HexWord (Get-WordAt $lastSleepWords 0)
+    $rtc3 = Convert-HexWord (Get-WordAt $rtcWords 3)
+    $rtc4 = Convert-HexWord (Get-WordAt $rtcWords 4)
+    $rtc5 = Convert-HexWord (Get-WordAt $rtcWords 5)
+    $rtc6 = Convert-HexWord (Get-WordAt $rtcWords 6)
+    $rtc7 = Convert-HexWord (Get-WordAt $rtcWords 7)
     $led0 = Convert-HexWord (Get-WordAt $ledWords 0)
     $led2 = Convert-HexWord (Get-WordAt $ledWords 2)
     $led3 = Convert-HexWord (Get-WordAt $ledWords 3)
@@ -243,22 +243,28 @@ function Decode-Sample {
 
     $rtcMode = if ($null -ne $rtc0) { $rtc0 -band 0xff } else { $null }
     $rtcReady = if ($null -ne $rtcMode) { if ($rtcMode -ne 3) { 1 } else { 0 } } else { $null }
-    $rtcBlock = if ($null -ne $rtc0) { ($rtc0 -shr 8) -band 0xff } else { $null }
-    $rtcWake = if ($null -ne $rtc0) { ($rtc0 -shr 16) -band 0xff } else { $null }
+    $rtcWake = if ($null -ne $rtc0) { ($rtc0 -shr 8) -band 0xff } else { $null }
+    $rtcComm = if ($null -ne $rtc0) { ($rtc0 -shr 16) -band 0xff } else { $null }
     $rtcDelay = if ($null -ne $rtc1) { $rtc1 -band 0xffff } else { $null }
     $rtcTarget = if ($null -ne $rtc1) { ($rtc1 -shr 16) -band 0xffff } else { $null }
+    $rtcForce = if ($null -ne $rtc2) { $rtc2 -band 0xffff } else { $null }
+    $rtcBlock = if ($null -ne $rtc4) { ("0x{0:x8}" -f $rtc4) } else { "" }
 
     return [pscustomobject]@{
         RtcMode = $rtcMode
         RtcReady = $rtcReady
         RtcBlock = $rtcBlock
         RtcWake = $rtcWake
+        RtcComm = $rtcComm
         RtcDelaySeconds = $rtcDelay
         RtcTargetSeconds = $rtcTarget
-        RtcElapsedSeconds = $rtc2
+        RtcForceSeconds = $rtcForce
+        RtcVlowSeconds = $rtc3
+        RtcElapsedSeconds = $rtc5
+        RtcCycles = $rtc7
         LpState = ""
-        LpBlockReason = if ($null -ne $lp0) { ("0x{0:x8}" -f $lp0) } else { "" }
-        LpLastSleepSeconds = if ($null -ne $lastSleep0) { $lastSleep0 } else { $lp1 }
+        LpBlockReason = $rtcBlock
+        LpLastSleepSeconds = $rtc6
         LedInitialized = if ($null -ne $led0) { $led0 -band 0xff } else { $null }
         LedSleep = if ($null -ne $led0) { ($led0 -shr 8) -band 0xff } else { $null }
         LedBlank = if ($null -ne $led0) { ($led0 -shr 16) -band 0xff } else { $null }
@@ -368,9 +374,7 @@ Write-Host "  interval:  $IntervalSeconds s"
 Write-Host "  count:     $Count (0 means until DurationMinutes or Ctrl+C)"
 Write-Host "  duration:  $DurationMinutes min (0 means no duration limit)"
 Write-Host "  csv:       $csv"
-$lpSymbol = if ($symbols.ContainsKey("s_lp_runtime")) { $symbols["s_lp_runtime"] } else { "n/a" }
-$lastSleepSymbol = if ($symbols.ContainsKey("s_u32LastSleepSeconds")) { $symbols["s_u32LastSleepSeconds"] } else { "n/a" }
-Write-Host "  symbols:   rtc=$($symbols["g_stLowPowerRtcStatus"]) lp=$lpSymbol lastSleep=$lastSleepSymbol led=$($symbols["s_ledbar"])"
+Write-Host "  symbols:   rtc=$($symbols["g_stLowPowerRtcStatus"]) led=$($symbols["s_ledbar"])"
 
 if ($Mode -eq "DebugProbe") {
     Write-Warning "DebugProbe will set DBGMCU low-power debug bits. This is for logic monitoring only, not current measurement."
@@ -408,9 +412,7 @@ try {
         $sampleCommands = New-Object System.Collections.Generic.List[string]
         $sampleCommands.Add("init")
         $sampleCommands.Add("halt")
-        $sampleCommands.Add("mdw $($symbols["g_stLowPowerRtcStatus"]) 4")
-        if ($symbols.ContainsKey("s_lp_runtime")) { $sampleCommands.Add("mdw $($symbols["s_lp_runtime"]) 2") }
-        if ($symbols.ContainsKey("s_u32LastSleepSeconds")) { $sampleCommands.Add("mdw $($symbols["s_u32LastSleepSeconds"]) 1") }
+        $sampleCommands.Add("mdw $($symbols["g_stLowPowerRtcStatus"]) 8")
         $sampleCommands.Add("mdw $($symbols["s_ledbar"]) 9")
         $sampleCommands.Add("mdw $DBGMCU_CR 1")
         $sampleCommands.Add("mdw 0xE0042000 2")
@@ -445,9 +447,13 @@ try {
             RtcReady = $decoded.RtcReady
             RtcBlock = $decoded.RtcBlock
             RtcWake = $decoded.RtcWake
+            RtcComm = $decoded.RtcComm
             RtcDelaySeconds = $decoded.RtcDelaySeconds
             RtcTargetSeconds = $decoded.RtcTargetSeconds
+            RtcForceSeconds = $decoded.RtcForceSeconds
+            RtcVlowSeconds = $decoded.RtcVlowSeconds
             RtcElapsedSeconds = $decoded.RtcElapsedSeconds
+            RtcCycles = $decoded.RtcCycles
             LpState = $decoded.LpState
             LpBlockReason = $decoded.LpBlockReason
             LpLastSleepSeconds = $decoded.LpLastSleepSeconds

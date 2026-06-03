@@ -4,6 +4,27 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 低功耗状态与阻塞原因收口
+
+本次按用户确认方案简化 `rtc_sleep` 低功耗选择逻辑，不修改低压阈值、RTC STOP 执行器、reset sleep 提交路径、CAN/Modbus 协议、IAP/App 地址或量产/测试配置。
+
+源码变更：
+- `rtc_sleep.h/c`：删除 `LOW_POWER_RTC_BLOCK_*` 粗粒度阻塞枚举，统一使用 `LP_BLOCK_*` 位图；新增 `LP_BLOCK_EXT_COMM` 和 `LP_BLOCK_AGING`。
+- `rtc_sleep.h/c`：删除 `s_u16IdleDelaySeconds`、`s_u32RtcSleepElapsedSeconds`、`s_u32RtcWakeCycles`、`s_u32LastSleepSeconds` 等独立低功耗状态变量，统一收口到 `g_stLowPowerRtcStatus` 的 `idle/block/sleep/last/cycles/vlow/force/comm` 字段。
+- `rtc_sleep.c`：将 `low_power_select_sleep_mode()` 简化为 `lp_deep()`、`LP_GetBlockReason()`、`lp_idle()` 三段；`LP_GetBlockReason()` 成为唯一阻塞判断入口。
+- `Runtime.c`、`SystemDebug.c/h`、`tools/stlink_bms_monitor.ps1`：同步读取新的 `g_stLowPowerRtcStatus` 布局和 `block` 位图，调试快照不再调用 `LP_GetBlockReason()`，避免提前消费外部通信变化。
+- `tools/project_check.py`：新增门禁，防止旧粗粒度阻塞枚举和独立低功耗计数变量回流。
+
+文档变更：
+- 新增 `docs/review/low_power_state_bitmask_alignment_2026-06-03.md`，记录 `g_stLowPowerRtcStatus` 新字段、`LP_BLOCK_*` 唯一阻塞位图、低功耗选择流程和验证项。
+- 更新 `docs/test_plan.md`、`docs/review/test_plan.md` 和 `docs/changelog/change_log.md`。
+
+验证：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- `py -3.9 tools/project_check.py --quiet`：`101 OK / 0 Warnings / 39 Errors`；剩余失败为仓库既有缺失文件、编码和配置门禁问题，本次新增低功耗状态收口门禁通过。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`，已生成 `FD_Release.axf/bin`。
+- 真板 RTC STOP、低压 deep、外部通信阻塞、老化阻塞、ST-Link 监控脚本仍需上板验证。
+
 ## 2026-06-03 中断计数实现
 
 本次按已输出方案实现主固件中断计数，不修改 Modbus/CAN 协议、不新增上位机可见寄存器、不烧录。

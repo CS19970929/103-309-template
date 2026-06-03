@@ -194,8 +194,7 @@
 |------|------|------|
 | `mode` | uint8 | 0=NORMAL 1=HICCUP 2=DEEP 3=NO_SLP |
 | `ready` | uint8 | 准备休眠 |
-| `block_reason` | uint8 | 阻塞原因码 |
-| `block_mask` | uint32 | 阻塞位掩码 |
+| `block` | uint32 | `LP_BLOCK_*` 阻塞位掩码 |
 | `sleep_sec` | uint32 | 上次休眠秒数 |
 | `elapsed_sec` | uint32 | 累计休眠秒数 |
 | `hiccup_cycles` | uint32 | HICCUP 唤醒轮次 |
@@ -364,8 +363,8 @@
 ### 不进低功耗
 
 ```
-展开 g_dbg.lp → 看 mode/block_reason/block_mask
-mode=3 (NO_SLP) 且 block_mask != 0 → DbgPrint_LP() 看逐位解析
+展开 g_dbg.lp → 看 mode/block
+mode=3 (NO_SLP) 且 block != 0 → DbgPrint_LP() 看逐位解析
 ```
 
 ### CAN 通信问题

@@ -30,30 +30,27 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 #define LP_BLOCK_DISCHARGE    (1UL << 1)
 #define LP_BLOCK_COMM         (1UL << 2)
 #define LP_BLOCK_KEY          (1UL << 3)
+#define LP_BLOCK_EXT_COMM     (1UL << 4)
 #define LP_BLOCK_FLASH_BUSY   (1UL << 5)
 #define LP_BLOCK_UPGRADE      (1UL << 6)
 #define LP_BLOCK_FAULT        (1UL << 7)
 #define LP_BLOCK_LED_ACTIVE   (1UL << 8)
-
-enum LOW_POWER_RTC_BLOCK_REASON {
-  LOW_POWER_RTC_BLOCK_NONE = 0,
-  LOW_POWER_RTC_BLOCK_CURRENT,
-  LOW_POWER_RTC_BLOCK_RESERVED_2,
-  LOW_POWER_RTC_BLOCK_MOS_OFF,
-  LOW_POWER_RTC_BLOCK_MCU_WAKE,
-  LOW_POWER_RTC_BLOCK_FACTORY_AGING,
-  LOW_POWER_RTC_BLOCK_EXT_COMM,
-  LOW_POWER_RTC_BLOCK_AFE_NOT_IDLE,
-  LOW_POWER_RTC_BLOCK_FRAMEWORK
-};
+#define LP_BLOCK_AGING        (1UL << 9)
 
 struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
-  uint8_t blockReason;
-  uint8_t rtcWake;
-  uint16_t delaySeconds;
-  uint16_t delayTargetSeconds;
-  uint32_t elapsedSeconds;
+  uint8_t rtc;
+  uint8_t comm;
+  uint8_t reserved;
+  uint16_t idle;
+  uint16_t idleMax;
+  uint16_t force;
+  uint16_t reserved16;
+  uint32_t vlow;
+  uint32_t block;
+  uint32_t sleep;
+  uint32_t last;
+  uint32_t cycles;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;

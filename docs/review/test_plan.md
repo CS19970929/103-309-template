@@ -108,8 +108,8 @@
 | T-LP-011 | Sleep 参数有效性 | 通过上位机写 `0x2310-0x2317` 后观察策略 | 写入的有效参数必须改变对应行为；无效/占位参数必须文档化或拒绝 |
 | T-LP-012 | HICCUP 前 AFE 功耗状态 | STOP 前后读 SH367309 状态并测整机电流 | 符合确认后的 AFE sleep/保持测量策略 |
 | T-LP-013 | `app_lowpower` 主路径净删减 | `rg "LP_EnterStop|LP_BeforeSleep|LP_AfterWakeup|LP_SetWakeupPeriod|LP_Task|LP_STATE_"` | 源码无旧 wrapper/状态缓存引用；主路径为 `Runtime_RunOnce()->rtc_sleep()` |
-| T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request"` | 源码无无消费者缓存/未调用 helper；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
-| T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 不要求 `s_lp_runtime` 符号，仍能读取 `g_stLowPowerRtcStatus`、LED、DBGMCU |
+| T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request|LOW_POWER_RTC_BLOCK|s_u16IdleDelaySeconds|s_u32RtcSleepElapsedSeconds|s_u32RtcWakeCycles|s_u32LastSleepSeconds"` | 源码无无消费者缓存、未调用 helper、旧粗粒度 block 枚举和独立低功耗计数变量；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
+| T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 监控脚本按 `g_stLowPowerRtcStatus` 新 8 word 布局读取 `mode/rtc/comm/idle/idleMax/force/vlow/block/sleep/last/cycles`、LED、DBGMCU |
 | T-LP-016 | CAN busy 查询副作用隔离 | 连续 CAN RX，同时观察 `SystemDebug_Snapshot()` 和 `rtc_sleep()` | debug/heartbeat 不更新 `last_ext_comm_cnt_can`；低功耗仍能因 CAN 活动阻塞 RTC STOP |
 | T-IWDG-001 | 主循环喂狗 | 正常运行 8h | 无异常复位 |
 | T-IWDG-002 | 阻塞等待喂狗 | CAN RTC service/延时 | 无 IWDG 复位 |
@@ -159,7 +159,7 @@
 | T-SV-009 | LedBar 显式初始化 | `rg -n "LedBar_Init\\(|LedBar_EnsureInit\\(|void APP_LedBar" AppInit.c/LedBar.c`，并观察上电启动显示、按键显示、`MCU_WK` 显示、TIM4 扫描 | `AppInit_InitRuntimeState()` 显式初始化；`APP_LedBar()` 不再懒初始化；不重复初始化、不持续闪烁，显示窗口结束后熄屏并释放低功耗阻塞 |
 | T-SV-010 | LedBar STOP 前 GPIO / RTC 唤醒恢复 | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流；RTC STOP 唤醒后确认 `InitRunAfterStopWakeup()` 恢复外设但不完整重置 LedBar runtime | LED 引脚进入低漏电安全态，STOP 前无残留扫描；唤醒后显示请求、防抖和扫描状态不被 `LedBar_Init()` 重置 |
 | T-SV-011 | `readyToSleep` 收口 | `rg "readyToSleep|LowPower_IsToSleepPending|LowPower_ClearToSleepFlag" "103 + 309/Project/Source"`，并覆盖 HICCUP、NORMAL、DEEP 三类 sleep | 源码不再有全局 ready 字段/API；sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
-| T-SV-012 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | `g_dbg.lp.ready` / ST-Link `RtcReady` 由 `mode != NO_SLEEP` 派生；mode/block/rtcWake/delay/elapsed 等必要信息仍可观察 |
+| T-SV-012 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | `g_dbg.lp.ready` / ST-Link `RtcReady` 由 `mode != NO_SLEEP` 派生；`block` 直接是 `LP_BLOCK_*` 位图；mode/rtc/idle/sleep/last/cycles 等必要信息仍可观察 |
 | T-SV-013 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |
 | T-SV-014 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
 | T-SV-015 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |

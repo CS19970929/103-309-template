@@ -549,11 +549,10 @@ void SystemDebug_Snapshot(void)
 	/* ===== RTC / Low Power ===== */
 	g_dbg.lp.mode         = (enum DBG_LP_MODE)g_stLowPowerRtcStatus.mode;
 	g_dbg.lp.ready        = (uint8_t)(g_stLowPowerRtcStatus.mode != (uint8_t)NO_SLEEP);
-	g_dbg.lp.block_reason = (enum DBG_LP_BLOCK)g_stLowPowerRtcStatus.blockReason;
-	g_dbg.lp.block_mask   = LP_GetBlockReason();
-	g_dbg.lp.sleep_sec    = LP_GetLastSleepSeconds();
-	g_dbg.lp.elapsed_sec  = g_stLowPowerRtcStatus.elapsedSeconds;
-	g_dbg.lp.hiccup_cycles = 0U;   /* populated by Runtime.c event hook */
+	g_dbg.lp.block        = g_stLowPowerRtcStatus.block;
+	g_dbg.lp.sleep_sec    = g_stLowPowerRtcStatus.last;
+	g_dbg.lp.elapsed_sec  = g_stLowPowerRtcStatus.sleep;
+	g_dbg.lp.hiccup_cycles = g_stLowPowerRtcStatus.cycles;
 	g_dbg.lp.last_wake_src = 0U;
 
 	/* ===== ADC ===== */
@@ -713,7 +712,7 @@ void DbgPrint_Summary(void)
 	dbg_uart_putc(g_dbg.mos.sw_chg ? 'C' : 'c');
 	dbg_uart_putc(g_dbg.mos.sw_dsg ? 'D' : 'd');
 	dbg_puts(" |LP="); dbg_puts(dbg_lp_mode_name(g_dbg.lp.mode));
-	dbg_puts(" blk="); dbg_put_hex8(g_dbg.lp.block_reason);
+	dbg_puts(" blk="); dbg_put_hex16((uint16_t)g_dbg.lp.block);
 	dbg_puts(" |CAN=");
 	dbg_uart_putc(g_dbg.can.power_on ? 'P' : '-');
 	dbg_uart_putc(g_dbg.can.bus_off ? 'B' : '-');
@@ -765,20 +764,21 @@ void DbgPrint_LP(void)
 {
 	dbg_puts("\r\n[DBG-LP] mode="); dbg_puts(dbg_lp_mode_name(g_dbg.lp.mode));
 	dbg_puts(" ready="); dbg_put_hex8(g_dbg.lp.ready);
-	dbg_puts(" block="); dbg_put_hex8(g_dbg.lp.block_reason);
-	dbg_puts(" mask="); dbg_put_hex16((uint16_t)g_dbg.lp.block_mask);
+	dbg_puts(" block="); dbg_put_hex16((uint16_t)g_dbg.lp.block);
 	dbg_puts(" sleep_s="); dbg_put_dec16((uint16_t)g_dbg.lp.sleep_sec);
 	dbg_puts(" elap_s="); dbg_put_dec16((uint16_t)g_dbg.lp.elapsed_sec);
 	dbg_puts(" hiccup="); dbg_put_dec16((uint16_t)g_dbg.lp.hiccup_cycles);
 	dbg_puts("\r\nblock bits: ");
-	if (g_dbg.lp.block_mask & (1<<0))  dbg_puts("CHG ");
-	if (g_dbg.lp.block_mask & (1<<1))  dbg_puts("DSG ");
-	if (g_dbg.lp.block_mask & (1<<2))  dbg_puts("COMM ");
-	if (g_dbg.lp.block_mask & (1<<3))  dbg_puts("KEY ");
-	if (g_dbg.lp.block_mask & (1<<5))  dbg_puts("FLASH ");
-	if (g_dbg.lp.block_mask & (1<<6))  dbg_puts("UPG ");
-	if (g_dbg.lp.block_mask & (1<<7))  dbg_puts("FAULT ");
-	if (g_dbg.lp.block_mask & (1<<8))  dbg_puts("LED ");
+	if (g_dbg.lp.block & LP_BLOCK_CHARGE)      dbg_puts("CHG ");
+	if (g_dbg.lp.block & LP_BLOCK_DISCHARGE)   dbg_puts("DSG ");
+	if (g_dbg.lp.block & LP_BLOCK_COMM)        dbg_puts("COMM ");
+	if (g_dbg.lp.block & LP_BLOCK_KEY)         dbg_puts("KEY ");
+	if (g_dbg.lp.block & LP_BLOCK_EXT_COMM)    dbg_puts("EXT ");
+	if (g_dbg.lp.block & LP_BLOCK_FLASH_BUSY)  dbg_puts("FLASH ");
+	if (g_dbg.lp.block & LP_BLOCK_UPGRADE)     dbg_puts("UPG ");
+	if (g_dbg.lp.block & LP_BLOCK_FAULT)       dbg_puts("FAULT ");
+	if (g_dbg.lp.block & LP_BLOCK_LED_ACTIVE)  dbg_puts("LED ");
+	if (g_dbg.lp.block & LP_BLOCK_AGING)       dbg_puts("AGING ");
 	dbg_puts("\r\n");
 }
 
@@ -820,7 +820,7 @@ void DbgPrint_SOC(void)
 void DbgPrint_Wakeup(void)
 {
 	dbg_puts("\r\n[DBG-WAKE] src="); dbg_put_hex8(g_dbg.lp.last_wake_src);
-	dbg_puts(" RTC_wk="); dbg_put_hex8((uint8_t)(g_stLowPowerRtcStatus.rtcWake));
+	dbg_puts(" RTC_wk="); dbg_put_hex8((uint8_t)(g_stLowPowerRtcStatus.rtc));
 	dbg_puts(" hiccup="); dbg_put_dec16((uint16_t)g_dbg.lp.hiccup_cycles);
 	dbg_puts(" sleep_s="); dbg_put_dec16((uint16_t)g_dbg.lp.sleep_sec);
 	dbg_puts(" elap_s="); dbg_put_dec16((uint16_t)g_dbg.lp.elapsed_sec);

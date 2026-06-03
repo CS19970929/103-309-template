@@ -54,18 +54,6 @@ enum DBG_LP_MODE {
 	DBG_LP_MODE_NO_SLP  = 3
 };
 
-enum DBG_LP_BLOCK {
-	DBG_LP_BLOCK_NONE          = 0,
-	DBG_LP_BLOCK_CURRENT       = 1,
-	DBG_LP_BLOCK_RESERVED_2    = 2,
-	DBG_LP_BLOCK_MOS_OFF       = 3,
-	DBG_LP_BLOCK_MCU_WAKE      = 4,
-	DBG_LP_BLOCK_FACTORY_AGING = 5,
-	DBG_LP_BLOCK_EXT_COMM      = 6,
-	DBG_LP_BLOCK_AFE_NOT_IDLE  = 7,
-	DBG_LP_BLOCK_FRAMEWORK     = 8
-};
-
 enum DBG_WAKE_SRC {
 	DBG_WAKE_SRC_UART1   = 1,
 	DBG_WAKE_SRC_UART2   = 2,
@@ -228,8 +216,8 @@ struct DBG_CAN {
 struct DBG_LP {
 	uint8_t  mode;           /* 0=NORMAL 1=HICCUP 2=DEEP 3=NO_SLP */
 	uint8_t  ready;
-	uint8_t  block_reason;
-	uint32_t block_mask;
+	uint16_t reserved;
+	uint32_t block;
 	uint32_t sleep_sec;
 	uint32_t elapsed_sec;
 	uint32_t hiccup_cycles;  /* HICCUP 唤醒轮次 */

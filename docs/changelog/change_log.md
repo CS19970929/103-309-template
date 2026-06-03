@@ -6,6 +6,35 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 低功耗状态与阻塞原因收口
+
+### 本次源码修改
+
+- `rtc_sleep.h/c`：删除 `LOW_POWER_RTC_BLOCK_*` 粗粒度阻塞枚举，统一使用 `LP_BLOCK_*` 位图；新增 `LP_BLOCK_EXT_COMM` 和 `LP_BLOCK_AGING`。
+- `rtc_sleep.h/c`：删除 `s_u16IdleDelaySeconds`、`s_u32RtcSleepElapsedSeconds`、`s_u32RtcWakeCycles`、`s_u32LastSleepSeconds` 等独立低功耗状态变量，统一收口到 `g_stLowPowerRtcStatus` 的 `idle/block/sleep/last/cycles/vlow/force/comm` 字段。
+- `rtc_sleep.c`：将低功耗选择流程简化为 `lp_deep()`、`LP_GetBlockReason()`、`lp_idle()` 三段，`LP_GetBlockReason()` 成为唯一阻塞判断入口。
+- `Runtime.c`、`SystemDebug.c/h`、`tools/stlink_bms_monitor.ps1`：同步读取新的 `g_stLowPowerRtcStatus` 布局和 `block` 位图；`SystemDebug` 不再调用 `LP_GetBlockReason()`，避免调试快照提前消费外部通信变化。
+- `tools/project_check.py`：新增门禁，检查源码不再出现旧粗粒度阻塞枚举和独立低功耗计数变量。
+
+### 保持不变
+
+- 不修改 `2800mV` 强制 deep、`LOW_POWER_DEEP_SLEEP_ICHG_LIMIT`、`OtherElement.u16Sleep_TimeVlow`、`sys_time.time_enter_rtc` 的语义。
+- 不修改 `HICCUP_MODE/NORMAL_MODE/DEEP_MODE` 的执行路径。
+- 工厂老化仍只阻塞空闲进入 HICCUP RTC STOP，不阻塞低压或外部请求的 `DEEP_MODE/NORMAL_MODE` reset sleep。
+- 不修改 CAN/Modbus/上位机协议字段、IAP/App 地址和烧录脚本。
+
+### 验证
+
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- `py -3.9 tools/project_check.py --quiet`：`101 OK / 0 Warnings / 39 Errors`；剩余失败为仓库既有缺失文件、编码和配置门禁问题，本次新增低功耗状态收口门禁通过。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`，已生成 `FD_Release.axf/bin`。
+- 真板 RTC STOP、低压 deep、外部通信阻塞、老化阻塞、ST-Link 监控脚本仍需上板验证。
+
+### 文档
+
+- 新增 `docs/review/low_power_state_bitmask_alignment_2026-06-03.md`。
+- 更新 `docs/test_plan.md` 和 `docs/review/test_plan.md`。
+
 ## 2026-06-03 SOC 主流程职责拆分
 
 ### 本次源码修改

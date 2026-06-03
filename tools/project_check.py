@@ -945,6 +945,7 @@ def check_low_power_cleanup(reporter):
         RTC_SLEEP_AFE_SH367309_C,
         LEDBAR_C,
         LOGRECORD_C,
+        SYSTEM_DEBUG_C,
     ]
     if any(not path.exists() for path in required_files):
         return
@@ -960,6 +961,7 @@ def check_low_power_cleanup(reporter):
     project = read_text(PROJECT)
     ledbar_c = read_text(LEDBAR_C)
     logrecord_c = read_text(LOGRECORD_C)
+    system_debug_c = read_text(SYSTEM_DEBUG_C)
 
     removed_tokens = [
         "App_SleepDeal",
@@ -994,6 +996,25 @@ def check_low_power_cleanup(reporter):
         reporter.ok("low power sleep commit uses local sleep_mode without readyToSleep cross-module state")
     else:
         reporter.fail("low power sleep commit should remove LowPower_IsToSleepPending/ClearToSleepFlag and use local sleep_mode")
+
+    if (
+        "LOW_POWER_RTC_BLOCK" not in rtc_sleep_c
+        and "LOW_POWER_RTC_BLOCK" not in rtc_sleep_h
+        and "s_u16IdleDelaySeconds" not in rtc_sleep_c
+        and "s_u32RtcSleepElapsedSeconds" not in rtc_sleep_c
+        and "s_u32RtcWakeCycles" not in rtc_sleep_c
+        and "s_u32LastSleepSeconds" not in rtc_sleep_c
+        and "LP_BLOCK_EXT_COMM" in rtc_sleep_h
+        and "LP_BLOCK_AGING" in rtc_sleep_h
+        and "g_stLowPowerRtcStatus.block = LP_GetBlockReason();" in rtc_sleep_c
+        and "g_stLowPowerRtcStatus.idle = 0U;" in rtc_sleep_c
+        and "g_stLowPowerRtcStatus.sleep += rtc_elapsed_seconds;" in rtc_sleep_c
+        and "LP_GetBlockReason()" not in system_debug_c
+        and "g_dbg.lp.block        = g_stLowPowerRtcStatus.block;" in system_debug_c
+    ):
+        reporter.ok("low power state uses g_stLowPowerRtcStatus and a single LP_BLOCK bitmask")
+    else:
+        reporter.fail("low power state should remove split counters and LOW_POWER_RTC_BLOCK mapping")
 
     forbidden_core_tokens = [
         "AFE_TYPE",

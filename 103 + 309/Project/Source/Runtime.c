@@ -102,7 +102,7 @@ static void Runtime_RunNormalOnce(void)
 		static uint8_t s_last_lp_mode = 3U;
 		uint8_t now_lp = g_stLowPowerRtcStatus.mode;
 		if (now_lp != s_last_lp_mode) {
-			SystemDebug_Event(0x03, now_lp, g_stLowPowerRtcStatus.blockReason, 0U);
+			SystemDebug_Event(0x03, now_lp, (uint8_t)g_stLowPowerRtcStatus.block, 0U);
 			s_last_lp_mode = now_lp;
 		}
 	}
