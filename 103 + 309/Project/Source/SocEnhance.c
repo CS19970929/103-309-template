@@ -1542,12 +1542,11 @@ static UINT8 soc_display_target(void)
 	return s_soc.soc;
 }
 
-static void soc_publish(UINT8 force_display)
+static void soc_update_display_soc(UINT8 force_display)
 {
 	UINT8 target = soc_display_target();
 	UINT8 seconds = SOC_DISPLAY_NORMAL_SECONDS;
 	UINT8 ticks;
-	UINT32 cycles = s_soc.cycle_x100 / 100U;
 
 	if (force_display || !s_soc.display_ready ||
 		SystemFeature_IsSocZero() ||
@@ -1591,6 +1590,11 @@ static void soc_publish(UINT8 force_display)
 	{
 		s_soc.display_ticks = 0U;
 	}
+}
+
+static void soc_export_public_fields(UINT8 force_display)
+{
+	UINT32 cycles = s_soc.cycle_x100 / 100U;
 
 	SOC_Enhance_Element.u8_SOC = s_soc.display_soc;
 	SOC_Enhance_Element.u8_SOH = s_soc.soh;
@@ -1601,6 +1605,12 @@ static void soc_publish(UINT8 force_display)
 	SOC_Enhance_Element.u8_SOC_OCV_Cali = (UINT8)(s_soc.cycle_x100 % 100U);
 	soc_watch_refresh(force_display);
 	SOC_PublishReportData();
+}
+
+static void soc_publish(UINT8 force_display)
+{
+	soc_update_display_soc(force_display);
+	soc_export_public_fields(force_display);
 }
 
 static void soc_handle_command(void)
