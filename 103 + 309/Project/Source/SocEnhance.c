@@ -184,25 +184,45 @@ static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT8 soc_apply_ocv_target_step(UINT8 target, UINT8 mode);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 
+#if 0
 /* offset_mv is relative to V0; target limits SOC, ticks are 200ms SOC ticks per 1%. */
-static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
-	{-25, {0U, 0U, 0U, 0U}, {5U, 5U, 1U, 1U}},
-	{0, {0U, 0U, 0U, 0U}, {10U, 5U, 5U, 5U}},
-	{50, {4U, 5U, 8U, 12U}, {20U, 15U, 10U, 8U}},
-	{100, {8U, 10U, 14U, 18U}, {35U, 30U, 25U, 20U}},
-	{200, {12U, 14U, 20U, 25U}, {60U, 50U, 40U, 30U}},
-	{300, {14U, 18U, 25U, 32U}, {90U, 75U, 60U, 45U}},
-	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
-};
-
+// static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
+// 	{-50, {0U, 0U, 0U, 0U}, {1U, 1U, 1U, 1U}},
+// 	{-25, {0U, 0U, 0U, 0U}, {5U, 5U, 1U, 1U}},
+// 	{0, {0U, 0U, 0U, 0U}, {10U, 5U, 5U, 5U}},
+// 	{50, {4U, 5U, 8U, 12U}, {20U, 15U, 10U, 8U}},
+// 	{100, {8U, 10U, 14U, 18U}, {35U, 30U, 25U, 20U}},
+// 	{200, {12U, 14U, 20U, 25U}, {60U, 50U, 40U, 30U}},
+// 	{300, {14U, 18U, 25U, 32U}, {90U, 75U, 60U, 45U}},
+// 	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
+// };
 /* Mid-tail table limits high SOC above V0; SOC_MID_TARGET_DISABLED skips a load band. */
-static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
-	{500, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {450U, 450U, 600U, 0U}},
-	{600, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {600U, 600U, 750U, 0U}},
-	{650, {45U, 50U, 58U, SOC_MID_TARGET_DISABLED}, {750U, 750U, 900U, 0U}},
-	{700, {55U, 60U, SOC_MID_TARGET_DISABLED, SOC_MID_TARGET_DISABLED}, {900U, 900U, 0U, 0U}},
+// static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
+// 	{500, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {450U, 450U, 600U, 0U}},
+// 	{600, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {600U, 600U, 750U, 0U}},
+// 	{650, {45U, 50U, 58U, SOC_MID_TARGET_DISABLED}, {750U, 750U, 900U, 0U}},
+// 	{700, {55U, 60U, SOC_MID_TARGET_DISABLED, SOC_MID_TARGET_DISABLED}, {900U, 900U, 0U, 0U}},
+// };
+#else
+
+#define DELAY_SOC_TEST		(5)
+static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
+	{-50, {0U, 0U, 0U, 0U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{-25, {0U, 0U, 0U, 0U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{0, {0U, 0U, 0U, 0U}, 	{DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{50, {4U, 5U, 8U, 12U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{100, {8U, 10U, 14U, 18U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{200, {12U, 14U, 20U, 25U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{300, {14U, 18U, 25U, 32U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{400, {18U, 22U, 30U, 40U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
 };
+static const SOC_EMPTY_TAIL_RULE s_mid_tail_table[] = {
+	{500, {25U, 32U, 42U, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{600, {35U, 42U, 50U, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{650, {45U, 50U, 58U, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+	{700, {55U, 60U, SOC_MID_TARGET_DISABLED, SOC_MID_TARGET_DISABLED}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
+};
+#endif
 
 #if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 1)
 const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO] = {
@@ -1624,7 +1644,6 @@ static void soc_export_public_fields(UINT8 force_display)
 	SOC_Enhance_Element.u16_CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
 	SOC_Enhance_Element.u16_CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
 	SOC_Enhance_Element.u16_Cycle_times = (cycles > 0xFFFFU) ? 0xFFFFU : (UINT16)cycles;
-	SOC_Enhance_Element.u8_SOC_OCV_Cali = (UINT8)(s_soc.cycle_x100 % 100U);
 	soc_watch_refresh(force_display);
 	SOC_PublishReportData();
 }
@@ -1733,11 +1752,11 @@ static UINT8 soc_run_cycle_calibration(UINT8 mode, UINT8 *low_tail_limiter_activ
 	UINT8 low_tail_active;
 	UINT8 mid_tail_limiter_active;
 
-	low_tail_active = soc_low_tail_config(mode, &low_tail_step);
-	*low_tail_limiter_active = low_tail_active;
-	mid_tail_limiter_active = soc_mid_tail_config(mode, &mid_tail_step);
-	soc_watch_set_tail_state(low_tail_active, &low_tail_step,
-		mid_tail_limiter_active, &mid_tail_step);
+	// low_tail_active = soc_low_tail_config(mode, &low_tail_step);
+	// *low_tail_limiter_active = low_tail_active;
+	// mid_tail_limiter_active = soc_mid_tail_config(mode, &mid_tail_step);
+	// soc_watch_set_tail_state(low_tail_active, &low_tail_step,
+	// 	mid_tail_limiter_active, &mid_tail_step);
 	calibration_applied = soc_apply_full_empty(mode, low_tail_active, &low_tail_step);
 	if (!mid_tail_limiter_active)
 	{
@@ -1745,7 +1764,7 @@ static UINT8 soc_run_cycle_calibration(UINT8 mode, UINT8 *low_tail_limiter_activ
 	}
 	if (!calibration_applied && !low_tail_active && mid_tail_limiter_active)
 	{
-		calibration_applied = soc_apply_mid_tail(&mid_tail_step);
+		// calibration_applied = soc_apply_mid_tail(&mid_tail_step);
 	}
 	if (!calibration_applied && !low_tail_active)
 	{

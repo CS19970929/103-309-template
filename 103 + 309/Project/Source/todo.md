@@ -1430,3 +1430,49 @@ rtc情况下，能否通过can唤醒
 sleep必须保证数码管熄灭
 
 梳理项目中所有中断，并为每个中断增加中断计数，方便调试观察是否在不同状态、生命周期进入了不该进入的中断，例如rtc休眠前后，先给出具体方案并输出文档
+
+g_stIrqDebug
+
+
+rtc stop休眠关了哪些外设，唤醒后恢复了哪些，是否有没恢复的
+- led？？？
+
+不要用单独变量，例如s_u16IdleDelaySeconds，必须结构体模块化，而且变量名、函数名要简洁、清晰，不能太长
+
+
+测试Can_PeekBusy是否有用，升级是否会进rtc
+
+
+进一步简化low_power_select_sleep_mode，先给出方案
+
+
+动了startup_stm32f10x_hd.s，是否有风险？
+
+量产注意关掉
+
+#ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
+#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 1
+#endif
+
+// <q> Enable IRQ debug counters
+// <i> Keeps lightweight interrupt counters for Keil watch and STOP wakeup debug.
+#ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
+#endif
+
+// <q> Enable IRQ debug event ring
+// <i> High-rate interrupts are counted but not pushed into the event ring.
+#ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
+#define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 1
+#endifjj
+
+
+can上位机中mos温度没有显示
+
+整个bms app项目是否还有单个的变量，全部要统一到结构体整体中，要注意变量、函数命名规范，还有能否把所有结构体整合成一个全局结构体中，这样方便掌控全局所有变量和掌控整个项目，方便keil调试、观察
+
+
+soc_apply_mid_tail
+
+
+soc校准不太合适，还是要优化，静置校准太快

@@ -3,7 +3,7 @@
 #include "AppInit.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 30,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -356,6 +356,7 @@ void InitRunAfterStopWakeup(void)
     initAFE1_IIC();
 }
 
+//todo ????????
 void Init(void)
 {
     if (RTC_IsStopWakeup() != 0U)
