@@ -4,6 +4,7 @@
 
 本文以当前源码为第一可信来源，记录本轮 BMS App IO 与 RTC 低功耗配置审查发现的风险。未修改源码，未做上板实测。2026-06-02 追加低功耗需求对齐风险，详见 `docs/review/low_power_requirement_alignment_2026-06-02.md`。
 2026-06-02 追加 SOC 当前逻辑与源码简化风险，详见 `docs/review/soc_current_logic_2026-06-02.md` 和 `docs/review/soc_simplification_candidates_2026-06-02.md`。
+2026-06-03 追加中断计数实现风险，详见 `docs/review/interrupt_counter_plan_2026-06-03.md`。
 
 ## 参考源码
 
@@ -18,6 +19,10 @@
 - `103 + 309/Project/Source/Runtime.c`
 - `103 + 309/Project/Source/System_Init.c`
 - `103 + 309/Project/Source/SleepDeal.c`
+- `103 + 309/Project/Source/IrqDebug.c`
+- `103 + 309/Project/Source/IrqDebug.h`
+- `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x_it.c`
+- `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/startup_stm32f10x_hd.s`
 - `103 + 309/Project/Source/LedBar.c`
 - `103 + 309/Project/Source/FactoryAging.c`
 - `103 + 309/Project/Source/DataDeal.h`
@@ -33,6 +38,19 @@
 | RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep.c:247-286`, `LowPowerSleep.c:5-15`, `LedBar.c:1175-1218` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | CHANGE_NEEDED 但需确认 | 先文档化；若要补 reset sleep 秒数，必须另立功能变更确认 |
 | RISK-SOC-SIM-001 | “只改写法”时改变了 SOC 状态机顺序 | `SocEnhance.c:1677-1722` | 满电、低压、中段、deferred OCV、静置计时优先级变化，影响用户体验和低端安全 | MUST_KEEP | 源码简化只允许小步，保持调用顺序不变，用回放和上板验证守住 |
 | RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SocEnhance.h:80-95`, `Sci_Upper.c:600-640`, `Sci_Upper.c:2052-2066` | `SetSocOnce`、手动 OCV、容量重算 ACK 或显示行为改变 | KEEP_BUT_REFACTOR | 先加请求接口，不立即改变 public struct 布局；单独验证 Modbus 写命令 |
+
+## 中断计数专项风险
+
+状态：已实现，Keil FD_Release 已编译通过，待上板验证，2026-06-03 按当前源码新增
+
+专项文档：`docs/review/interrupt_counter_plan_2026-06-03.md`
+
+| 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
+|---|---|---|---|---|---|
+| RISK-IRQ-001 | 高速 ISR 计数插点增加中断开销 | `System_Init.c:TIM3_IRQHandler`, `LedBar.c:TIM4_IRQHandler`, `Can_HDX.c:USB_LP_CAN1_RX0_IRQHandler` | 可能影响 10ms 系统节拍、1ms 灯板扫描或 CAN 接收时序 | 已控制，Keil 已编译，需上板验证 | TIM3/TIM4/CAN 仅调用 `IrqDebug_CountFast()`，不写事件环、不打印、不访问 Flash |
+| RISK-IRQ-002 | 启动汇编默认 handler 调 C 函数 | `startup_stm32f10x_hd.s`, `IrqDebug.c` | 若链接或调用约定错误，会影响未实现向量兜底路径 | Keil 已编译通过，仍需未实现向量实测 | 已保留记录后 `B .` 停住语义；上板或调试时确认 `last_vectactive` |
+| RISK-IRQ-003 | 阶段标记未直接写入 `conf.c` | `rtc_sleep_port.c`, `SleepDeal.c`, `conf/conf.c` | `Sys_StopMode()` 若被新增其他直接调用，可能缺少 STOP 阶段标记 | 部分验证 | 因 `conf.c` 含历史非 UTF-8 字节，本轮避免重编码；后续新增直接调用 `Sys_StopMode()` 时必须在调用层标记阶段 |
+| RISK-IRQ-004 | Release 默认保留中断计数 | `Project_Config.h`, `IrqDebug.h` | 增加少量 RAM 和 ISR 指令开销 | 已按需求实现，需实测确认 | 默认打开轻量计数；如量产功耗或时序评估不接受，可关闭 `PROJECT_CFG_IRQ_DEBUG_ENABLE` |
 
 ## BMS App IO 与 RTC 低功耗风险
 

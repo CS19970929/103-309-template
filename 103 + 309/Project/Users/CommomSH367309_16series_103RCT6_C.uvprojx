@@ -594,6 +594,11 @@
               <FileType>1</FileType>
               <FilePath>..\Source\SystemDebug.c</FilePath>
             </File>
+            <File>
+              <FileName>IrqDebug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\IrqDebug.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1503,6 +1508,11 @@
               <FileName>SystemDebug.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\SystemDebug.c</FilePath>
+            </File>
+            <File>
+              <FileName>IrqDebug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\IrqDebug.c</FilePath>
             </File>
           </Files>
         </Group>

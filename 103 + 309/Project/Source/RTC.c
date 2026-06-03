@@ -1,4 +1,5 @@
 #include "main.h"
+#include "IrqDebug.h"
 
 static __IO UINT8 TimeDisplay = 0; // 秒中断标志，进入秒中断时置1，当时间被刷新之后清0
 
@@ -529,6 +530,7 @@ static void RTC_HandleAlarmWakeup(void)
 
 void RTCAlarm_IRQHandler(void)
 {
+	IrqDebug_Count((uint8_t)IRQDBG_RTC_ALARM);
 	RTC_HandleAlarmWakeup();
 }
 
@@ -536,6 +538,7 @@ void RTC_IRQHandler(void)
 {
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
 	{
+		IrqDebug_CountFast((uint8_t)IRQDBG_RTC_SEC);
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		sys_time.rtc_sec_cnt++;
 		TimeDisplay = 1;				   // Enable time update
@@ -544,6 +547,7 @@ void RTC_IRQHandler(void)
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 	{
+		IrqDebug_Count((uint8_t)IRQDBG_RTC_ALARM_IN_RTC_IRQ);
 		RTC_HandleAlarmWakeup();
 	}
 }

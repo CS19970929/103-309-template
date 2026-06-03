@@ -1,5 +1,6 @@
 #include "main.h"
 #include "LowPowerSleep.h"
+#include "IrqDebug.h"
 
 UINT8 RTC_ExtComCnt = 0;
 static UINT8 s_u8BootFromSleepStartup = 0U;
@@ -84,6 +85,7 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 {
 	UINT8 u8FlashWriteOK_flag = 0;
 
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 	LowPowerSleep_SaveResetState();
 
 	switch (sleep_mode)
@@ -201,7 +203,10 @@ void IsSleepStartUp(void)
 		InitWakeUp_RTCMode();
 		do
 		{
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
 			Sys_StopMode();
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
 		} while (!IsSleepWakeupValid());
 		// Sys_StandbyMode();
 		IORecover_RTCMode();
@@ -213,7 +218,10 @@ void IsSleepStartUp(void)
 		InitWakeUp_NormalMode();
 		do
 		{
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
 			Sys_StopMode();
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
 		} while (!IsSleepWakeupValid());
 		IORecover_NormalMode();
 		break;
@@ -225,7 +233,10 @@ void IsSleepStartUp(void)
 		// Sys_StandbyMode();		//??????IO???
 		do
 		{
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
 			Sys_StopMode();
+			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
 		} while (!IsSleepWakeupValid());
 		IORecover_DeepMode();
 		break;

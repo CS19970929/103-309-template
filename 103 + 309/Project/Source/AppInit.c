@@ -1,10 +1,12 @@
 #include "main.h"
 #include "AppInit.h"
+#include "IrqDebug.h"
 
 UINT8 SeriesNum = 10;
 
 static void AppInit_InitDevice(void)
 {
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_BOOT);
 	SystemInit();
 
 	InitDelay();
@@ -24,6 +26,7 @@ static void AppInit_InitDevice(void)
 
 	InitTimer();
 	__enable_irq();
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 
 
 	EnableLowPowerDebug();

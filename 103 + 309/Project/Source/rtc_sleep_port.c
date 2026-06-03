@@ -1,5 +1,6 @@
 #include "main.h"
 #include "LowPowerSleep.h"
+#include "IrqDebug.h"
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"
 
@@ -79,7 +80,9 @@ void RtcSleep_PortPrepareRtcStop(void)
 void RtcSleep_PortEnterStop(void)
 {
     Feed_IWatchDog;
+    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
     Sys_StopMode();
+    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
     Feed_IWatchDog;
 }
 
@@ -91,7 +94,9 @@ void RtcSleep_PortDisableStopWakeup(void)
 
 void RtcSleep_PortRestoreAfterStop(void)
 {
+    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_RESTORE);
     InitRunAfterStopWakeup();
+    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 }
 
 UINT8 RtcSleep_PortIsRtcWake(void)

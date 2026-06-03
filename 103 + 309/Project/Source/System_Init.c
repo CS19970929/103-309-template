@@ -1,5 +1,6 @@
 #include "main.h"
 #include "SystemDebug.h"
+#include "IrqDebug.h"
 
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
@@ -303,6 +304,7 @@ void TIM3_IRQHandler(void)
 {
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
+		IrqDebug_CountFast((uint8_t)IRQDBG_TIM3_10MS);
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
 	}

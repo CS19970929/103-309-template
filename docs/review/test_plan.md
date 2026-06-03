@@ -164,3 +164,19 @@
 | T-SV-014 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
 | T-SV-015 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
 | T-SV-016 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |
+
+## 14. 中断计数专项测试
+
+专项方案文档：`docs/review/interrupt_counter_plan_2026-06-03.md`
+
+当前阶段已实现主固件中断计数；`comm_tool_f103ret6` 仍按方案保留为第二阶段。
+
+| ID | 测试项 | 方法 | 通过标准 |
+|---|---|---|---|
+| T-IRQ-001 | 编译 | Keil `FD_Release` | 0 error，map/bin 生成 |
+| T-IRQ-002 | ISR 覆盖 | 对照方案文档中“已实现或实际相关中断清单”检查 `IRQDBG_` 插点 | 每个已实现/已启用 ISR 都有轻量计数 |
+| T-IRQ-003 | 高速 ISR 开销 | 观察 `TIM3_IRQHandler`、`TIM4_IRQHandler` 计数、主循环周期和灯板显示 | 10ms tick、1ms 扫描、灯板显示无明显异常 |
+| T-IRQ-004 | RTC STOP 合法唤醒 | 进入 HICCUP/RTC STOP，Keil Watch 观察 `g_stIrqDebug.phase` | `STOP_WAIT` 阶段只出现 RTC alarm 或合法 EXTI |
+| T-IRQ-005 | 按键/充电唤醒 | STOP 中分别触发 PA9、PA0 | `EXTI9_SW_KEY`、`EXTI0_CHG_IN` 在对应阶段递增，原唤醒行为不变 |
+| T-IRQ-006 | 通信干扰定位 | RUN、SLEEP_PREPARE、STOP_WAIT、STOP_RESTORE 阶段分别注入 USART/CAN 活动 | 可区分通信中断发生阶段，不改协议处理 |
+| T-IRQ-007 | 未实现向量兜底 | 若确认修改 startup，触发或审查默认 handler 路径 | `last_vectactive` 可记录异常向量，随后保持原停住行为 |

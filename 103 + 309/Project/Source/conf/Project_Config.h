@@ -2,6 +2,7 @@
 #define PROJECT_CONFIG_H
 
 /* Keil uVision: right click this file and select "Configuration Wizard". */
+/* 项目可视化配置: Keil Configuration Wizard marker. */
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
@@ -80,6 +81,18 @@
 // <i> Release must keep disabled.
 #ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
 #define PROJECT_CFG_DEBUG_MONITOR_ENABLE 1
+#endif
+
+// <q> Enable IRQ debug counters
+// <i> Keeps lightweight interrupt counters for Keil watch and STOP wakeup debug.
+#ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
+#endif
+
+// <q> Enable IRQ debug event ring
+// <i> High-rate interrupts are counted but not pushed into the event ring.
+#ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
+#define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 1
 #endif
 // </h>
 
@@ -212,7 +225,7 @@
 // <o> Scan timer period 100kHz <1-1000>
 #define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
 
-//todo 鏄惁鏈夌敤
+//todo 是否有用
 // <o> MCU_WK on filter 10ms <0-255>
 #define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
 

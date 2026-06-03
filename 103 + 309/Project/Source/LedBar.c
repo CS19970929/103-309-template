@@ -1,4 +1,5 @@
 #include "main.h"
+#include "IrqDebug.h"
 #include <string.h>
 
 bool key_release_wakeup = false;
@@ -1290,6 +1291,7 @@ void TIM4_IRQHandler(void)
 {
     if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
     {
+        IrqDebug_CountFast((uint8_t)IRQDBG_TIM4_LEDBAR);
         TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
         LedBar_Scan1ms();
     }

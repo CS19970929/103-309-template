@@ -177,6 +177,19 @@ struct DBG_IRQ {
 	uint32_t systick_val;
 	uint32_t exti_imr;
 	uint32_t exti_pr;
+	uint32_t irq_tim3_10ms;
+	uint32_t irq_tim4_ledbar;
+	uint32_t irq_rtc_sec;
+	uint32_t irq_rtc_alarm;
+	uint32_t irq_exti0_chg;
+	uint32_t irq_exti9_key;
+	uint32_t irq_usart1;
+	uint32_t irq_can1_rx0;
+	uint32_t irq_unhandled;
+	uint16_t last_id;
+	uint16_t last_vectactive;
+	uint8_t  current_phase;
+	uint8_t  event_count;
 };
 
 struct DBG_PERIPH {

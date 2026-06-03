@@ -1,8 +1,23 @@
 # 测试计划
 
 文档状态：部分验证
-最后更新时间：2026-06-02
+最后更新时间：2026-06-03
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
+
+## 中断计数专项测试入口
+
+专项方案文档：`docs/review/interrupt_counter_plan_2026-06-03.md`
+
+当前阶段已实现主固件中断计数，至少覆盖：
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 编译 | Keil `FD_Release` | 编译通过，无新增未解析符号 |
+| ISR 覆盖 | 对照 `docs/review/interrupt_counter_plan_2026-06-03.md` 中断清单 | 已实现/已启用 ISR 都有轻量计数插点 |
+| RTC STOP | Keil Watch 观察 `g_stIrqDebug.phase` | `STOP_WAIT` 阶段只出现 RTC alarm 或合法 EXTI 唤醒 |
+| 运行态高频中断 | TIM3/TIM4 计数和主循环周期 | 计数递增正常，灯板扫描和 10ms 节拍无明显异常 |
+| 通信干扰 | USART/CAN 在休眠前后分别注入 | 可区分 RUN、SLEEP_PREPARE、STOP_WAIT、STOP_RESTORE 阶段进入情况 |
+| 未实现向量兜底 | 启动汇编默认处理器路径 | 误入未实现中断时可看到 `last_vectactive`，并保持原停住行为 |
 
 ## 状态变量净删减专项测试入口
 

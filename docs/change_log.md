@@ -4,6 +4,30 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 中断计数实现
+
+本次按已输出方案实现主固件中断计数，不修改 Modbus/CAN 协议、不新增上位机可见寄存器、不烧录。
+
+源码变更：
+
+- 新增 `IrqDebug.h/c`，提供 `g_stIrqDebug` 全局计数、分生命周期阶段计数、最近事件环和未实现向量兜底记录。
+- 为异常、EXTI、USART、RTC、TIM3、TIM4、CAN RX0 增加中断计数插点；高频中断只做轻量计数。
+- 在启动、运行、休眠准备、STOP 等待、STOP 唤醒原始窗口、STOP 恢复和 reset sleep 等待路径标记调试阶段。
+- `SystemDebug` 的 `g_dbg.irq` 增加代表性中断计数摘要；完整数据仍直接观察 `g_stIrqDebug`。
+- `startup_stm32f10x_hd.s` 默认 weak handler 记录 `VECTACTIVE` 后继续停住。
+- Keil `FD_Release`/`FD_Debug` 两个 Target 加入 `IrqDebug.c`。
+
+文档变更：
+
+- 更新 `docs/review/interrupt_counter_plan_2026-06-03.md`、`docs/test_plan.md`、`docs/review/test_plan.md`，记录实施内容和验证项。
+
+验证：
+
+- `git diff --check`：通过；仅有 CRLF 换行提示。
+- `tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil `FD_Release` 生成 `FD_Release.axf/bin`，日志显示 `0 Error(s), 3 Warning(s)`。
+- `py -3.9 tools\project_check.py --quiet`：`100 OK / 0 Warnings / 39 Errors`；剩余失败为仓库既有缺失文件、编码和配置门禁类问题，不是本轮中断计数新增。
+- 未执行上板 RTC STOP、按键/充电/CAN/USART 唤醒实测。
+
 ## 2026-06-03 SOC 主流程职责拆分
 
 本次只做 `SOC_IntEnhance_Ctrl()` 可读性优化和保存判重状态收窄，不修改 SOC 功能、SOC 表、阈值、时间参数、tail 策略、RTC 补偿策略、显示平滑、协议字段和 Keil 工程。

@@ -5,6 +5,7 @@
 #include "conf.h"
 #include "Sci_Upper.h"
 #include "RTC.h"
+#include "IrqDebug.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
@@ -233,6 +234,8 @@ static bool isException(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
+
     if (s_u32RtcWakeCycles == 0U)
     {
         s_u32RtcSleepElapsedSeconds = 0U;

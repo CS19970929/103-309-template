@@ -1,6 +1,7 @@
 #include "main.h"
 #include "CanFeidaoFrames.h"
 #include "FactoryAging.h"
+#include "IrqDebug.h"
 #include <string.h>
 
 
@@ -863,6 +864,7 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	CanRxMsg rx_msg;
 
+	IrqDebug_CountFast((uint8_t)IRQDBG_CAN1_RX0);
 	while (CAN_MessagePending(CAN1, CAN_FIFO0) != 0U)
 	{
 		sys_time.can_rcv_cnt++;

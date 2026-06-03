@@ -15,6 +15,7 @@
 #include "SH367309_Func.h"
 #include "Fault.h"
 #include "LedBar.h"
+#include "IrqDebug.h"
 
 /* ===== DWT CYCCNT (CMSIS v1 compat) ===== */
 #define DWT_CYCCNT  (*(volatile uint32_t *)0xE0001004)
@@ -381,6 +382,19 @@ static void SystemDebug_SnapshotMcuResources(void)
 	g_dbg.irq.systick_val = SysTick->VAL;
 	g_dbg.irq.exti_imr = EXTI->IMR;
 	g_dbg.irq.exti_pr = EXTI->PR;
+	g_dbg.irq.irq_tim3_10ms = g_stIrqDebug.total[IRQDBG_TIM3_10MS];
+	g_dbg.irq.irq_tim4_ledbar = g_stIrqDebug.total[IRQDBG_TIM4_LEDBAR];
+	g_dbg.irq.irq_rtc_sec = g_stIrqDebug.total[IRQDBG_RTC_SEC];
+	g_dbg.irq.irq_rtc_alarm = g_stIrqDebug.total[IRQDBG_RTC_ALARM];
+	g_dbg.irq.irq_exti0_chg = g_stIrqDebug.total[IRQDBG_EXTI0_CHG_IN];
+	g_dbg.irq.irq_exti9_key = g_stIrqDebug.total[IRQDBG_EXTI9_SW_KEY];
+	g_dbg.irq.irq_usart1 = g_stIrqDebug.total[IRQDBG_USART1];
+	g_dbg.irq.irq_can1_rx0 = g_stIrqDebug.total[IRQDBG_CAN1_RX0];
+	g_dbg.irq.irq_unhandled = g_stIrqDebug.total[IRQDBG_UNHANDLED_VECTOR];
+	g_dbg.irq.last_id = g_stIrqDebug.last_id;
+	g_dbg.irq.last_vectactive = g_stIrqDebug.last_vectactive;
+	g_dbg.irq.current_phase = g_stIrqDebug.current_phase;
+	g_dbg.irq.event_count = g_stIrqDebug.event_count;
 
 	g_dbg.periph.usart1_sr = SystemDebug_ReadUartSr(USART1, RCC_APB2ENR_USART1EN, 1U);
 	g_dbg.periph.usart2_sr = SystemDebug_ReadUartSr(USART2, RCC_APB1ENR_USART2EN, 0U);
