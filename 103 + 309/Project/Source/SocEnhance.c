@@ -572,6 +572,22 @@ void SOC_PublishReportData(void)
 	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
 }
 
+void SOC_RequestManualOcvRefresh(void)
+{
+	SOC_Enhance_Element.u16_RefreshData_Flag = 1U;
+}
+
+void SOC_RequestCapacityReset(void)
+{
+	SOC_Enhance_Element.u16_RefreshData_Flag = 2U;
+}
+
+void SOC_RequestSetOnce(UINT8 soc)
+{
+	SOC_Enhance_Element.u16_RefreshData_Flag = 3U;
+	SOC_Enhance_Element.u8_SetSocOnce = soc;
+}
+
 static UINT8 soc_save(void)
 {
 	STORAGE_FLASH_SOC_DATA data;

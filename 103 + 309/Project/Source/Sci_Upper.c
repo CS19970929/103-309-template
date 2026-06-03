@@ -636,7 +636,7 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 
 	if (reset_soc_capacity)
 	{
-		SOC_Enhance_Element.u16_RefreshData_Flag = 2;
+		SOC_RequestCapacityReset();
 	}
 
 	if (Sci_RangeOverlaps(offset, count, 28, 4))
@@ -2055,8 +2055,7 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (u16SciRegData <= 100)
 	{
-		SOC_Enhance_Element.u16_RefreshData_Flag = 3;
-		SOC_Enhance_Element.u8_SetSocOnce = u16SciRegData;
+		SOC_RequestSetOnce((UINT8)u16SciRegData);
 	}
 	else
 	{

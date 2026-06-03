@@ -151,6 +151,9 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 void SOC_SaveSnapshotBeforeSleep(void);
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg);
 void SOC_PublishReportData(void);
+void SOC_RequestManualOcvRefresh(void);
+void SOC_RequestCapacityReset(void);
+void SOC_RequestSetOnce(UINT8 soc);
 
 void soc_param_lib_init(void);
 UINT8 SOC_ResetStoredSnapshotToDefault(void);
