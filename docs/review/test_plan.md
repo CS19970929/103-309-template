@@ -165,6 +165,7 @@
 | T-SV-015 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
 | T-SV-016 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |
 | T-SV-017 | 全局状态结构体化第 1 阶段 | `rg "RTC_ExtComCnt|is_rtc_wakekup|s_dbg_events|s_dbg_print_tick|s_u8StorageFlashBusy|TimeDisplay" "103 + 309/Project/Source"`，并执行 `py -3.9 tools/project_check.py --quiet` | `SystemDebug/Runtime/Flash/SleepDeal/RTC` 低风险散变量已进入 `s_dbgRt/s_rt/s_flash/s_sleep/s_rtc`；外部通信计数和 RTC STOP 唤醒标志通过模块函数访问；协议镜像和持久化布局不变 |
+| T-SV-018 | ADC 状态结构体化第 2 阶段 | `rg "g_u16ADCValFilter|g_i32ADCResult|g_u32Vbat_mV|g_u16TypeCOutCurrent_mA|g_u32ADCValFilter2|s_u32AnlogCalLast10msTick" "103 + 309/Project/Source"`，并执行 `py -3.9 tools/project_check.py --quiet` | ADC raw/filter/result/Vbat/Type-C/current tick 状态已进入 `s_adc`；外部模块通过 `ADC_GetResult()`、`ADC_GetRaw()`、`ADC_GetVbatMilliVolt()`、`ADC_GetTypeCOutCurrentMilliAmp()` 读取；ADC 采样和换算行为不变 |
 
 ## 14. 中断计数专项测试
 

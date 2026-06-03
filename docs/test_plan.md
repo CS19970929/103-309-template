@@ -4,6 +4,20 @@
 最后更新时间：2026-06-03
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## ADC 状态结构体化第 2 阶段测试入口
+
+专项变更：ADC DMA raw、滤波缓存、结果数组、Vbat、Type-C 电流和内部平滑计数已收口到 `s_adc`；外部模块通过 ADC getter 读取。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 编译 | Keil `FD_Release` | 编译通过，无新增未解析符号 |
+| 静态门禁 | `py -3.9 tools/project_check.py --quiet` | ADC 结构体化门禁通过 |
+| 旧符号检查 | `rg "g_u16ADCValFilter|g_i32ADCResult|g_u32Vbat_mV|g_u16TypeCOutCurrent_mA|g_u32ADCValFilter2|s_u32AnlogCalLast10msTick" "103 + 309/Project/Source"` | 源码无旧 ADC 散变量 |
+| DMA raw | Keil Watch `s_adc.raw[]` 或 `g_dbg.adc.raw_*` | TIM2 触发后 raw 值正常更新 |
+| VBC 总压 | `ADC_GetVbatMilliVolt()`、`g_dbg.adc.vbat_mv` | 与原 ADC 分压换算结果一致 |
+| Type-C 电流 | `ADC_GetTypeCOutCurrentMilliAmp()`、SOC Type-C 等效电流 | 零点、滤波、换算、SOC 输入路径不变 |
+| 温度结果 | `ADC_GetResult(ADC_TEMP_MOS1)`、`g_dbg.adc.mos_temp` | MOS 温度显示与原逻辑一致 |
+
 ## 全局状态结构体化第 1 阶段测试入口
 
 专项变更：`SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的低风险散变量已收口到模块 runtime 结构体；外部通信计数和 RTC STOP 唤醒标志改为通过模块函数访问。

@@ -191,7 +191,7 @@ void DataLoad_CellVoltMaxMinFind(void)
     }
 
     // 单片机读总压
-    // u32VCellTotle = ((g_i32ADCResult[ADC_VBC]*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
+    // u32VCellTotle = ((ADC_GetResult(ADC_VBC)*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
     // AFE读总压
     // u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
     // 所有单节电池电压加起来
@@ -230,7 +230,7 @@ void DataLoad_Temperature(void)
 
 #if 0
 	//环境温度1
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV1] / 10 - 40;		//放大1000倍和B值对应的意思
+	t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40;		//放大1000倍和B值对应的意思
 	//t_i32temp =  - 40;
 	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1])>>10;
 	g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp*10 + 400);
@@ -239,13 +239,13 @@ void DataLoad_Temperature(void)
 
     // 环境温度2
     // 如果没有，这个默认就是0(ADC.c不会调用)
-    t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
+    t_i32temp = ADC_GetResult(ADC_TEMP_EV2) / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
 
     // 环境温度3
-    t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
+    t_i32temp = ADC_GetResult(ADC_TEMP_EV3) / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
@@ -253,8 +253,8 @@ void DataLoad_Temperature(void)
 #if 1
     // MOS温度为散热片温度
     // 取两者最大值
-    // t_i32temp = (g_i32ADCResult[ADC_TEMP_MOS1] > g_i32ADCResult[ADC_TEMP_MOS2] ? g_i32ADCResult[ADC_TEMP_MOS1]:g_i32ADCResult[ADC_TEMP_MOS2]);
-    t_i32temp = g_i32ADCResult[ADC_TEMP_MOS1];
+    // t_i32temp = (ADC_GetResult(ADC_TEMP_MOS1) > ADC_GetResult(ADC_TEMP_MOS2) ? ADC_GetResult(ADC_TEMP_MOS1):ADC_GetResult(ADC_TEMP_MOS2));
+    t_i32temp = ADC_GetResult(ADC_TEMP_MOS1);
     t_i32temp = t_i32temp / 10 - 40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
@@ -943,10 +943,10 @@ void new_todo_logi(void)
 #ifdef DISP_VBAT_AND_TEMP_
         extern UINT16 SOC_GetTypeCBatEquivCurrentA10(void);
         g_stCellInfoReport.u16VCell[29] = SOC_GetTypeCBatEquivCurrentA10();
-        g_stCellInfoReport.u16VCell[30] = g_u32Vbat_mV;
+        g_stCellInfoReport.u16VCell[30] = ADC_GetVbatMilliVolt();
         // g_stCellInfoReport.u16VCell[31] = Vbat_mv;
 #endif // ! FAC_TEST
-        UINT32 Vbat_mv = g_u32Vbat_mV;
+        UINT32 Vbat_mv = ADC_GetVbatMilliVolt();
 #ifdef _UL_RENZHENG_ENABLE_
         static uint8_t state_fuse = 0;
         static uint32_t rong_fuse_afe_err_cnt = 0;

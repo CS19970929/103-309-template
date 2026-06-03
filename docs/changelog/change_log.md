@@ -6,6 +6,29 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 ADC 状态结构体化第 2 阶段
+
+本次执行全局状态结构体化第 2 阶段，只处理 ADC 模块自己的运行状态，不改变采样、换算、SOC 输入或协议镜像。
+
+源码变更：
+
+- `ADC.c`：新增 `ADC_RUNTIME s_adc`，集中保存 DMA raw、滤波缓存、结果数组、调度 tick、Vbat、Type-C 电流、Type-C 平滑计数和 VBC 平滑计数。
+- `ADC.h`：删除 ADC 原始数组、结果数组、Vbat 和 Type-C 电流的 extern 声明；新增 `ADC_GetResult()`、`ADC_GetRaw()`。
+- `DataDeal.c`：温度和 Vbat 诊断路径改为通过 ADC getter 读取。
+- `SOC.c`：总压 fallback 改为通过 `ADC_GetVbatMilliVolt()` 读取。
+- `SystemDebug.c`：`g_dbg.adc` 快照改为通过 ADC getter 读取。
+- `tools/project_check.py`：新增 ADC 结构体化门禁。
+
+保持不变：
+
+- ADC DMA、TIM2_CC2 触发、通道顺序和滤波节拍不变。
+- Type-C 电流公式、VBC 分压公式和 SOC Type-C 等效电流路径不变。
+- 不迁移 `g_stCellInfoReport`、`OtherElement`、保护参数和 Flash 持久化镜像。
+
+验证：
+
+- 待执行静态检查、Keil 编译和真板 ADC/Type-C/VBC 回归。
+
 ## 2026-06-03 全局状态结构体化第 1 阶段
 
 本次继续按“模块状态结构体 + 统一调试观察入口”的方向收口旧散变量，范围限定为低风险模块，不触碰协议镜像和持久化布局。

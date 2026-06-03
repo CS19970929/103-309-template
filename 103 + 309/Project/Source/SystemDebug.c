@@ -562,12 +562,12 @@ void SystemDebug_Snapshot(void)
 
 	/* ===== ADC ===== */
 	{
-		g_dbg.adc.mos_temp     = (uint16_t)g_i32ADCResult[ADC_TEMP_MOS1];
-		g_dbg.adc.typec_cur_ma  = g_u16TypeCOutCurrent_mA;
-		g_dbg.adc.vbat_mv      = g_u32Vbat_mV;
-		g_dbg.adc.raw_vbus     = g_u16ADCValFilter[ADC_VBC];
-		g_dbg.adc.raw_cur      = g_u16ADCValFilter[ADC_CUR_AMP];
-		g_dbg.adc.raw_mos      = g_u16ADCValFilter[ADC_TEMP_MOS1];
+		g_dbg.adc.mos_temp     = (uint16_t)ADC_GetResult(ADC_TEMP_MOS1);
+		g_dbg.adc.typec_cur_ma  = ADC_GetTypeCOutCurrentMilliAmp();
+		g_dbg.adc.vbat_mv      = ADC_GetVbatMilliVolt();
+		g_dbg.adc.raw_vbus     = ADC_GetRaw(ADC_VBC);
+		g_dbg.adc.raw_cur      = ADC_GetRaw(ADC_CUR_AMP);
+		g_dbg.adc.raw_mos      = ADC_GetRaw(ADC_TEMP_MOS1);
 	}
 
 	/* ===== SOC basic ===== */

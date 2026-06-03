@@ -14,12 +14,12 @@ static UINT32 SOC_GetPackVoltageForTypeCMv(void)
 	{
 		return pack_mv;
 	}
-	return g_u32Vbat_mV;
+	return ADC_GetVbatMilliVolt();
 }
 
 UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 {
-	// return g_u16TypeCOutCurrent_mA;
+	// return ADC_GetTypeCOutCurrentMilliAmp();
 	uint64_t numerator;
 	uint64_t denominator;
 	uint64_t current_mA;

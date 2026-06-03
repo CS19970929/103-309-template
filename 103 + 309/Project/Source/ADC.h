@@ -45,10 +45,8 @@ enum tagInfoForADCArray {
 #define Vbc_scale (((VBC_DIVIDER_RTOP_KOHM + VBC_DIVIDER_RBOTTOM_KOHM) / VBC_DIVIDER_RBOTTOM_KOHM)) // legacy integer divider ratio
 
 
-extern INT32 g_i32ADCResult[ADC_NUM];             //ADC���ݻ���
-extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];   // DMA raw		//���λ�����ܸ�
-extern UINT32 g_u32Vbat_mV;
-extern UINT16 g_u16TypeCOutCurrent_mA;
+INT32 ADC_GetResult(UINT8 index);
+UINT16 ADC_GetRaw(UINT8 index);
 
 
 void InitADC(void);

@@ -4,6 +4,27 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 ADC 状态结构体化第 2 阶段
+
+本次按全局状态结构体化方案继续处理 ADC 模块，目标是移除 ADC 模块的公开散变量，改为 `ADC_RUNTIME s_adc` 模块私有状态，并通过 getter 给 DataDeal、SOC 和 SystemDebug 读取。
+
+源码变更：
+- `ADC.c/.h`：新增 `ADC_RUNTIME s_adc`，收口 DMA raw、滤波缓存、结果数组、Vbat、Type-C 电流、调度 tick 和平滑计数；删除 `g_u16ADCValFilter`、`g_i32ADCResult`、`g_u32Vbat_mV`、`g_u16TypeCOutCurrent_mA` 等 extern 入口。
+- `ADC.h`：新增 `ADC_GetResult()`、`ADC_GetRaw()`。
+- `DataDeal.c`、`SOC.c`、`SystemDebug.c`：改为通过 ADC getter 读取 ADC 状态。
+- `tools/project_check.py`：新增 ADC 状态结构体化门禁。
+
+保持不变：
+- ADC DMA 通道、TIM2_CC2 触发、采样通道顺序、Type-C 电流公式、VBC 分压公式和 SOC Type-C 等效电流路径不变。
+- 不修改 `g_stCellInfoReport` 协议镜像、CAN/Modbus 字段或 Flash 持久化布局。
+
+验证：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- 旧 ADC 散变量 `rg` 检查：无命中。
+- `py -3.9 tools/project_check.py --quiet`：`106 OK / 1 Warning / 39 Errors`；新增 ADC 门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`，已生成 `FD_Release.axf/bin`。
+- ADC DMA raw、MOS 温度、VBC、Type-C 电流仍需上板确认。
+
 ## 2026-06-03 全局状态结构体化第 1 阶段
 
 本次按 `docs/review/global_state_struct_audit_2026-06-03.md` 的第 1 阶段执行低风险收口，只处理 `SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的散状态变量，不修改协议镜像、Flash 持久化布局、CAN/Modbus 帧格式或上位机可见数据含义。

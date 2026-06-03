@@ -31,6 +31,7 @@ APP_INIT_C = ROOT / "103 + 309" / "Project" / "Source" / "AppInit.c"
 APP_INIT_H = ROOT / "103 + 309" / "Project" / "Source" / "AppInit.h"
 RELEASE_MAP = ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
+ADC_C = ROOT / "103 + 309" / "Project" / "Source" / "ADC.c"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
@@ -1145,6 +1146,65 @@ def check_global_state_phase1(reporter):
         reporter.fail("global state phase1 should access SleepDeal/RTC state through module functions")
 
 
+def check_adc_state_runtime(reporter):
+    required_files = [
+        ADC_C,
+        ADC_H,
+        DATADEAL_C,
+        SOC_C,
+        SYSTEM_DEBUG_C,
+    ]
+    if any(not path.exists() for path in required_files):
+        return
+
+    adc_c = read_text(ADC_C)
+    adc_h = read_text(ADC_H)
+    datadeal_c = read_text(DATADEAL_C)
+    soc_c = read_text(SOC_C)
+    system_debug_c = read_text(SYSTEM_DEBUG_C)
+    combined = "\n".join([adc_c, adc_h, datadeal_c, soc_c, system_debug_c])
+
+    stale_tokens = [
+        "g_u16ADCValFilter",
+        "g_i32ADCResult",
+        "g_u32ADCValFilter2",
+        "s_u32AnlogCalLast10msTick",
+        "g_u16TypeCOutCurrent_mA",
+        "g_u32Vbat_mV",
+        "su8_ADcnt",
+        "su8_ZeroCnt",
+        "s8ADcnt",
+    ]
+    found = [token for token in stale_tokens if token in combined]
+    if found:
+        reporter.fail("ADC state still has split tokens: {0}".format(",".join(found)))
+    else:
+        reporter.ok("ADC state removed selected split variables")
+
+    if (
+        "static ADC_RUNTIME s_adc;" in adc_c
+        and "__IO UINT16 raw[ADC_NUM];" in adc_c
+        and "INT32 filt[ADC_NUM];" in adc_c
+        and "INT32 result[ADC_NUM];" in adc_c
+        and "UINT32 vbat;" in adc_c
+        and "UINT16 typec;" in adc_c
+    ):
+        reporter.ok("ADC state uses s_adc runtime struct")
+    else:
+        reporter.fail("ADC state should keep raw/filter/result/vbat/typec in s_adc")
+
+    if (
+        "INT32 ADC_GetResult(UINT8 index);" in adc_h
+        and "UINT16 ADC_GetRaw(UINT8 index);" in adc_h
+        and "ADC_GetResult(ADC_TEMP_MOS1)" in datadeal_c
+        and "ADC_GetVbatMilliVolt()" in soc_c
+        and "ADC_GetRaw(ADC_VBC)" in system_debug_c
+    ):
+        reporter.ok("ADC state is read through accessors outside ADC.c")
+    else:
+        reporter.fail("ADC state should be accessed through ADC getters outside ADC.c")
+
+
 def check_fault_snapshot_mapping(reporter):
     required_files = [FAULT_SNAPSHOT_H, STM32F10X_IT_C, SCI_UPPER_C, SCI_UPPER_H]
     if any(not path.exists() for path in required_files):
@@ -1953,6 +2013,7 @@ def main(argv):
     check_soc_current_and_typec_policy(reporter)
     check_low_power_cleanup(reporter)
     check_global_state_phase1(reporter)
+    check_adc_state_runtime(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
     check_can_aging_soc_service(reporter)

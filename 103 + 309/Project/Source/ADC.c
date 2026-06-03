@@ -1,17 +1,24 @@
 #include "main.h"
 
-__IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个佝数丝能�
+typedef struct
+{
+    __IO UINT16 raw[ADC_NUM];
+    INT32 filt[ADC_NUM];
+    INT32 result[ADC_NUM];
+    UINT32 last;
+    UINT32 vbat;
+    UINT16 typec;
+    UINT8 curCnt;
+    UINT8 zeroCnt;
+    UINT8 vbcCnt;
+    UINT8 reserved;
+} ADC_RUNTIME;
 
-static INT32 g_u32ADCValFilter2[ADC_NUM]; // ADC数杮缓存2，问题解决了，原来是UINT32，在计算过程出错了＝
-                                          // 丝能改UINT32
-INT32 g_i32ADCResult[ADC_NUM];            // ADC结果保存
-static UINT32 s_u32AnlogCalLast10msTick = 0U;
+static ADC_RUNTIME s_adc;
 #define TYPEC_CUR_ZERO_CONFIRM_CNT ((UINT8)3)
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
 #define ADC_ANALOG_CAL_MAX_CATCHUP_TICKS ((UINT32)10U)
 
-UINT16 g_u16TypeCOutCurrent_mA;
-UINT32 g_u32Vbat_mV;
 
 // 12佝，4096��
 static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
@@ -97,7 +104,7 @@ void InitADC_DMA(void)
     DMA_DeInit(DMA1_Channel1);                                               // 选择频靓
     DMA_StructInit(&DMA_InitStruct);                                         // 初�化DMA结构�
     DMA_InitStruct.DMA_PeripheralBaseAddr = (UINT32)(&(ADC1->DR));           // 酝置外�地�
-    DMA_InitStruct.DMA_MemoryBaseAddr = (UINT32)(&g_u16ADCValFilter[0]);     // 设置内存映射地址
+    DMA_InitStruct.DMA_MemoryBaseAddr = (UINT32)(&s_adc.raw[0]);     // 设置内存映射地址
     DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;                          // 数杮传输方坑�0：从外���1：从存储器�
     DMA_InitStruct.DMA_BufferSize = AD_Used_amount;                          // 传输次数，DMA缓存数组大尝设置
     DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;            // 外�地�丝坘，这�丝太懂是��外�地�
@@ -243,7 +250,7 @@ void InitADC_ADC1(void)
 
 void ADC_ResetAnlogCalSchedule(void)
 {
-    s_u32AnlogCalLast10msTick = SysTime_Get10msTickCount();
+    s_adc.last = SysTime_Get10msTickCount();
 }
 
 void ADC_StopForLowPower(void)
@@ -282,9 +289,9 @@ static UINT8 ADC_IsTypeCZeroSample(UINT32 ad_value)
 
 static void ADC_ClearTypeCOutCurrent(void)
 {
-    g_u16TypeCOutCurrent_mA = 0;
-    g_u32ADCValFilter2[ADC_CURR] = 0;
-    g_i32ADCResult[ADC_CURR] = 0;
+    s_adc.typec = 0;
+    s_adc.filt[ADC_CURR] = 0;
+    s_adc.result[ADC_CURR] = 0;
 }
 
 static UINT16 ADC_TypeCAdToMilliVolt(UINT32 ad_value)
@@ -336,7 +343,7 @@ static UINT32 ADC_VbcAdcMvToBatteryMv(UINT16 adc_mV)
 
 UINT32 ADC_GetVbatMilliVolt(void)
 {
-    return g_u32Vbat_mV;
+    return s_adc.vbat;
 }
 
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
@@ -344,42 +351,60 @@ UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
     if (sys_time.typec_curr_sim)
         return sys_time.typc_curr;
 
-    return g_u16TypeCOutCurrent_mA;
+    return s_adc.typec;
+}
+
+INT32 ADC_GetResult(UINT8 index)
+{
+    if (index >= ADC_NUM)
+    {
+        return 0;
+    }
+
+    return s_adc.result[index];
+}
+
+UINT16 ADC_GetRaw(UINT8 index)
+{
+    if (index >= ADC_NUM)
+    {
+        return 0U;
+    }
+
+    return s_adc.raw[index];
 }
 
 void ADC_Current_Smooth(void)
 {
-    static UINT8 su8_ADcnt = 0;
-    static UINT8 su8_ZeroCnt = 0;
     UINT32 u32TypeCAdAvg = 0;
     UINT16 typec_delta_mV = 0;
     UINT16 typec_current_A10 = 0;
 
-    if (ADC_IsTypeCZeroSample((UINT32)g_u16ADCValFilter[ADC_CUR_AMP]))
+    if (ADC_IsTypeCZeroSample((UINT32)s_adc.raw[ADC_CUR_AMP]))
     {
-        if (++su8_ZeroCnt >= TYPEC_CUR_ZERO_CONFIRM_CNT)
+        if (++s_adc.zeroCnt >= TYPEC_CUR_ZERO_CONFIRM_CNT)
         {
-            su8_ZeroCnt = TYPEC_CUR_ZERO_CONFIRM_CNT;
-            su8_ADcnt = 0;
-            g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
+            s_adc.zeroCnt = TYPEC_CUR_ZERO_CONFIRM_CNT;
+            s_adc.curCnt = 0;
+            s_adc.filt[ADC_CUR_AMP] = 0;
             ADC_ClearTypeCOutCurrent();
             return;
         }
     }
     else
     {
-        su8_ZeroCnt = 0;
+        s_adc.zeroCnt = 0;
     }
 
-    if (su8_ADcnt++ < AD_CalNum_Cur)
+    if (s_adc.curCnt++ < AD_CalNum_Cur)
     {
-        g_u32ADCValFilter2[ADC_CUR_AMP] += g_u16ADCValFilter[ADC_CUR_AMP];
+        s_adc.filt[ADC_CUR_AMP] += s_adc.raw[ADC_CUR_AMP];
     }
     else
     {
-        su8_ADcnt = 0;
-        u32TypeCAdAvg = g_u32ADCValFilter2[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
-        g_u32ADCValFilter2[ADC_CUR_AMP] = 0;
+        s_adc.curCnt = 0;
+        u32TypeCAdAvg = s_adc.filt[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
+        s_adc.filt[ADC_CUR_AMP] = 0;
 
         if (u32TypeCAdAvg <= (UINT32)AD_CurZeroDeadband)
         {
@@ -388,10 +413,10 @@ void ADC_Current_Smooth(void)
         }
 
         typec_delta_mV = ADC_TypeCAdToMilliVolt(u32TypeCAdAvg);
-        g_u16TypeCOutCurrent_mA = ADC_TypeCDeltaMvToMilliAmp(typec_delta_mV);
-        typec_current_A10 = (UINT16)(((UINT32)g_u16TypeCOutCurrent_mA + 50U) / 100U);
-        g_u32ADCValFilter2[ADC_CURR] = typec_current_A10;
-        g_i32ADCResult[ADC_CURR] = typec_current_A10;
+        s_adc.typec = ADC_TypeCDeltaMvToMilliAmp(typec_delta_mV);
+        typec_current_A10 = (UINT16)(((UINT32)s_adc.typec + 50U) / 100U);
+        s_adc.filt[ADC_CURR] = typec_current_A10;
+        s_adc.result[ADC_CURR] = typec_current_A10;
     }
 }
 
@@ -400,36 +425,35 @@ void ADC_TTC(void)
     INT32 t_i32temp = 0;
 
     //-------------MOS1温度(+40)-------------
-    t_i32temp = (INT32)g_u16ADCValFilter[ADC_TEMP_MOS1]; // 读坖AD�
+    t_i32temp = (INT32)s_adc.raw[ADC_TEMP_MOS1]; // 读坖AD�
     t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
-    g_u32ADCValFilter2[ADC_TEMP_MOS1] = (((t_i32temp << 10) - g_u32ADCValFilter2[ADC_TEMP_MOS1]) >> 3) + g_u32ADCValFilter2[ADC_TEMP_MOS1];
-    g_i32ADCResult[ADC_TEMP_MOS1] = (UINT16)((g_u32ADCValFilter2[ADC_TEMP_MOS1] + 512) >> 10);
+    s_adc.filt[ADC_TEMP_MOS1] = (((t_i32temp << 10) - s_adc.filt[ADC_TEMP_MOS1]) >> 3) + s_adc.filt[ADC_TEMP_MOS1];
+    s_adc.result[ADC_TEMP_MOS1] = (UINT16)((s_adc.filt[ADC_TEMP_MOS1] + 512) >> 10);
 }
 
 void ADC_Vbc(void)
 {
-    static UINT8 s8ADcnt = 0;
     UINT32 u32AdAvg = 0;
     UINT32 u32VbatCalc_mV = 0;
 
-    if (s8ADcnt++ < AD_CalNum)
+    if (s_adc.vbcCnt++ < AD_CalNum)
     {
-        g_u32ADCValFilter2[ADC_VBC] += (UINT32)g_u16ADCValFilter[ADC_VBC];
+        s_adc.filt[ADC_VBC] += (UINT32)s_adc.raw[ADC_VBC];
     }
     else
     {
-        s8ADcnt = 0;
-        u32AdAvg = (UINT32)g_u32ADCValFilter2[ADC_VBC] >> AD_CalNum_2;
-        g_u32ADCValFilter2[ADC_VBC] = 0;
+        s_adc.vbcCnt = 0;
+        u32AdAvg = (UINT32)s_adc.filt[ADC_VBC] >> AD_CalNum_2;
+        s_adc.filt[ADC_VBC] = 0;
 
         u32VbatCalc_mV = ADC_VbcAdcMvToBatteryMv(ADC_VbcAdToMilliVolt(u32AdAvg));
 
-        g_i32ADCResult[ADC_VBC] = (((INT32)u32VbatCalc_mV - g_i32ADCResult[ADC_VBC]) >> 3) + g_i32ADCResult[ADC_VBC];
-        if (g_i32ADCResult[ADC_VBC] < 0)
+        s_adc.result[ADC_VBC] = (((INT32)u32VbatCalc_mV - s_adc.result[ADC_VBC]) >> 3) + s_adc.result[ADC_VBC];
+        if (s_adc.result[ADC_VBC] < 0)
         {
-            g_i32ADCResult[ADC_VBC] = 0;
+            s_adc.result[ADC_VBC] = 0;
         }
-        g_u32Vbat_mV = (UINT32)g_i32ADCResult[ADC_VBC];
+        s_adc.vbat = (UINT32)s_adc.result[ADC_VBC];
     }
 }
 
@@ -441,13 +465,13 @@ void InitADC(void)
 
     for (i = 0; i < ADC_NUM; i++)
     {
-        g_u16ADCValFilter[i] = 0;
-        g_i32ADCResult[i] = 0;
-        g_u32ADCValFilter2[i] = 0;
+        s_adc.raw[i] = 0;
+        s_adc.result[i] = 0;
+        s_adc.filt[i] = 0;
     }
 
     ADC_ClearTypeCOutCurrent();
-    g_u32Vbat_mV = 0;
+    s_adc.vbat = 0;
     ADC_ResetAnlogCalSchedule();
 
     InitADC_GPIO();
@@ -463,7 +487,7 @@ void App_AnlogCal(void)
     UINT32 u32Process10msTick;
 
     u32Now10msTick = SysTime_Get10msTickCount();
-    u32Elapsed10msTick = u32Now10msTick - s_u32AnlogCalLast10msTick;
+    u32Elapsed10msTick = u32Now10msTick - s_adc.last;
     if (0U == u32Elapsed10msTick)
     {
         return;
@@ -474,7 +498,7 @@ void App_AnlogCal(void)
     {
         u32Process10msTick = ADC_ANALOG_CAL_MAX_CATCHUP_TICKS;
     }
-    s_u32AnlogCalLast10msTick += u32Process10msTick;
+    s_adc.last += u32Process10msTick;
 
     while (u32Process10msTick > 0U)
     {

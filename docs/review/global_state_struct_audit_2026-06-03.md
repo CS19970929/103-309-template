@@ -124,7 +124,7 @@ extern const struct APP_WATCH g_watch;
 | 阶段 | 范围 | 风险 | 建议 |
 |---|---|---|---|
 | 第 1 阶段 | `SystemDebug`、`Runtime`、`Flash`、`SleepDeal`、`RTC` 的散计数器和标志 | 低 | 已执行，基本不碰协议 |
-| 第 2 阶段 | `ADC` 运行状态结构体化 | 中 | 保留读取函数和必要 extern，先不改协议字段 |
+| 第 2 阶段 | `ADC` 运行状态结构体化 | 中 | 已执行，保留读取函数，未改协议字段 |
 | 第 3 阶段 | `DataDeal` 函数内静态变量与 AFE 电流运行状态继续收口 | 中 | 每个功能点独立提交，防止保护逻辑回归 |
 | 第 4 阶段 | `Sci_Upper` 旧 per-port 散变量合并到 `SCI_PORT_RUNTIME` | 中高 | 需要重点验证 USART 收发、Modbus、升级写寄存器 |
 | 第 5 阶段 | `Fault`、`OtherElement`、`g_stCellInfoReport`、`PRT_E2ROMParas` 等协议/持久化镜像 | 高 | 暂不直接改，必须先确认上位机、Modbus/CAN、Flash 兼容 |
@@ -158,6 +158,35 @@ extern const struct APP_WATCH g_watch;
 - `py -3.9 tools/project_check.py --quiet`：`103 OK / 1 Warning / 39 Errors`；新增第 1 阶段门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
 - `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志显示 `0 Error(s), 3 Warning(s)`。
 - 上板验证仍需覆盖：RTC Alarm 唤醒后 `RTC_IsStopWakeup()` 状态、USART 收包后外部通信阻塞位、reset sleep 唤醒路径。
+
+## 第 2 阶段执行记录
+
+执行时间：2026-06-03
+
+源码修改：
+
+- `ADC.c`：新增 `ADC_RUNTIME s_adc`，收口 DMA raw、滤波缓存、结果数组、Vbat、Type-C 电流、调度 tick、Type-C 平滑计数和 VBC 平滑计数。
+- `ADC.h`：删除 ADC 原始数组、结果数组、Vbat 和 Type-C 电流的 extern 声明；新增 `ADC_GetResult()`、`ADC_GetRaw()`。
+- `DataDeal.c`：温度和 Vbat 诊断路径改为通过 `ADC_GetResult()`、`ADC_GetVbatMilliVolt()` 读取。
+- `SOC.c`：总压 fallback 和 Type-C 电流注释路径改为使用 ADC getter。
+- `SystemDebug.c`：`g_dbg.adc` 快照改为通过 ADC getter 读取 raw/result/Vbat/Type-C。
+- `tools/project_check.py`：新增 ADC 结构体化门禁，防止旧 ADC 散变量回流。
+
+保持不变：
+
+- ADC DMA 通道、触发源、采样通道顺序不变。
+- Type-C 电流从 PA2 delta 电压换算为 mA 的公式不变。
+- VBC 分压换算公式不变。
+- SOC 使用 Type-C 电池侧等效电流路径不变。
+- `g_stCellInfoReport` 协议镜像不迁移。
+
+待验证：
+
+- `git diff --check`。
+- `rg "g_u16ADCValFilter|g_i32ADCResult|g_u32Vbat_mV|g_u16TypeCOutCurrent_mA" "103 + 309/Project/Source"` 无命中。
+- `py -3.9 tools/project_check.py --quiet` 新增 ADC 门禁通过。
+- Keil `FD_Release` 编译。
+- 上板确认 ADC DMA raw 更新、MOS 温度、VBC、电流方向和 Type-C 电流显示/上报行为不变。
 
 ## 需求确认表
 
