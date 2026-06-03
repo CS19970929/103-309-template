@@ -12,6 +12,7 @@
 | 用途 | 文档 |
 |---|---|
 | 当前源码完整逻辑、所有校准策略、时间参数 | `docs/review/soc_current_logic_2026-06-02.md` |
+| 无放电静置 SOC 快降排查与原因排序 | `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` |
 | 后续只改写法、不改功能的源码简化候选 | `docs/review/soc_simplification_candidates_2026-06-02.md` |
 | 顶层测试入口 | `docs/test_plan.md`、`docs/review/test_plan.md` |
 | 项目级风险 | `docs/review/risk_list.md` |

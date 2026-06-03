@@ -1,7 +1,7 @@
 # BMS 项目文档索引
 
 > 项目: 103-309 BMS (STM32F103 + SH367309)
-> 最后更新: 2026-06-02
+> 最后更新: 2026-06-03
 > 原则: 源码是第一可信来源，文档与源码冲突时以源码为准。
 
 ---
@@ -22,6 +22,7 @@
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
 | 查看当前 SOC 完整逻辑和校准条件 | [SOC 当前逻辑](review/soc_current_logic_2026-06-02.md) |
+| 排查无放电静置 SOC 快降 | [SOC 无放电静置快降分析](review/soc_rest_fast_drop_analysis_2026-06-03.md) |
 | 查看 SOC 源码简化候选 | [SOC 简化候选](review/soc_simplification_candidates_2026-06-02.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
@@ -117,6 +118,7 @@ docs/
 │   ├── variable_cleanup_report.md  变量清理报告
 │   ├── state_variable_audit.md     状态变量净删减专项审计
 │   ├── soc_current_logic_2026-06-02.md SOC 当前逻辑与校准策略
+│   ├── soc_rest_fast_drop_analysis_2026-06-03.md SOC 无放电静置快降分析
 │   ├── soc_simplification_candidates_2026-06-02.md SOC 源码简化候选
 │   ├── bms_app_io_low_power_compare_2026-05-27.md  IO 低功耗对比
 │   ├── rtc_sleep_low_power_requirement_confirmation_2026-05-27.md

@@ -6,6 +6,24 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 SOC 无放电静置快降分析
+
+### 本次文档修改
+
+- 新增 `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`，按当前源码梳理“无放电静置 SOC 快降”的原因排序、源码证据、Keil watch 排查字段和后续优化边界。
+- 更新 `docs/design/soc_design.md`、`docs/README.md`、`docs/INDEX.md` 和顶层 `docs/change_log.md`，加入该分析文档入口。
+
+### 核心结论
+
+- 普通静置 OCV 在当前配置下不是秒级/分钟级快降主因；连续普通 RELAX 场景下首次长静置实际下修通常约 60 分钟量级。
+- 当前 `RELAX` 模式允许 low tail / mid tail 生效，因此无放电但 Vmin 进入 V0 附近区间时，`EMPTY_TAIL` / `MID_TAIL` 可能造成明显下修。
+- 低压显示追赶和 RTC 休眠周期内提前补偿会放大用户对“唤醒后立刻变了”的感知。
+
+### 安全边界
+
+- 本次未修改 `.c/.h`、Keil 工程、配置宏、SOC 表、校准阈值、时间参数、显示策略、RTC STOP 顺序和协议字段。
+- 是否禁用或放慢 `RELAX` tail 属于功能体验变更，需先通过 `u8LastCalibSource`、`u8InternalSoc`、`u8DisplaySoc` 和 `VCellMin` 上板确认。
+
 ## 2026-06-03 SOC 源码简化候选执行
 
 ### 本次源码修改

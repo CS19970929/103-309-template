@@ -4,6 +4,21 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 SOC 无放电静置快降分析
+
+本次只做文档分析和索引更新，不修改 `.c/.h`、Keil 工程、配置宏、SOC 表、校准阈值、时间参数、显示策略、RTC STOP 顺序和协议字段。
+
+更新内容：
+
+- 新增 `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`，按当前源码说明“无放电静置 SOC 快降”的可能来源、证据、排查顺序和后续优化边界。
+- 更新 `docs/design/soc_design.md`、`docs/README.md`、`docs/INDEX.md`，加入该分析文档入口。
+
+核心结论：
+
+- 普通静置 OCV 在当前配置下不是秒级/分钟级快降主因。
+- 无放电快降更可能来自 `RELAX` 模式下的 `EMPTY_TAIL` / `MID_TAIL`、低压显示快速追赶，或 RTC 休眠期间已提前补偿。
+- 是否调整 RELAX tail 属于功能体验变更，需先用 `u8LastCalibSource` 上板确认。
+
 ## 2026-06-03 SOC 源码简化候选执行
 
 本次按 `docs/review/soc_simplification_candidates_2026-06-02.md` 执行 `SOC-SIM-01/02/03/04/05/06/07/08`，每个源码批次单独提交，不修改 SOC 功能、协议、时间参数、校准阈值、SOC 表、休眠顺序和用户可见显示策略。
