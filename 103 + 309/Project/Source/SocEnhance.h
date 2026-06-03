@@ -68,22 +68,27 @@ extern const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2];
 #endif
 
 struct SOC_ENHANCE_ELEMENT {
+	/* Config snapshot loaded from OtherElement. */
 	UINT16 u16_SOC_Ah;                 // 10 * Ah
 	UINT16 u16_SOC_CycleT_Ever;        // cycle count loaded from config
 	UINT16 u16_SOC_CycleT_Limit;       // cycle limit
 	UINT16 u16_SOC_TableSelect;        // enum SOC_TABLE_SELECT
 	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
 	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
+	#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
 	UINT16 SOC_Table_CanSet[SOC_Size_TableCanSet];
-#endif
+	#endif
+
+	/* Command payloads; requests should enter through SOC_Request* APIs. */
 	UINT8 u8_SetSocOnce;
 
+	/* Latest SOC calculation input sample. */
 	UINT16 u16_VCellMax;               // mV
 	UINT16 u16_VCellMin;               // mV
 	UINT16 u16_Ichg;                   // A * 10
 	UINT16 u16_Idsg;                   // A * 10
 
+	/* Published display/report outputs. */
 	UINT8 u8_SOC;
 	UINT8 u8_SOH;
 	UINT16 u16_CapacityNow;            // Ah * 100
@@ -92,6 +97,7 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_Cycle_times;
 	UINT8 u8_SOC_OCV_Cali;
 
+	/* Command selector consumed by soc_handle_command(). */
 	UINT16 u16_RefreshData_Flag;       // 1: OCV refresh, 2: capacity reset, 3: set SOC once
 };
 
