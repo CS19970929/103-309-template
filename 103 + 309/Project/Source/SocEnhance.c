@@ -1704,41 +1704,37 @@ void SOC_SaveSnapshotBeforeSleep(void)
 	soc_save_if_needed();
 }
 
-void SOC_IntEnhance_Ctrl(void)
+static UINT8 soc_run_cycle_calibration(UINT8 mode, UINT8 *low_tail_limiter_active)
 {
 	SOC_TAIL_STEP low_tail_step;
 	SOC_TAIL_STEP mid_tail_step;
 	UINT8 calibration_applied;
-	UINT8 low_tail_limiter_active;
+	UINT8 low_tail_active;
 	UINT8 mid_tail_limiter_active;
 
-	if (SOC_Enhance_Element.u16_RefreshData_Flag != 0U)
-	{
-		soc_handle_command();
-		return;
-	}
-
-	/* Keep the calibration order stable: integrate, tail/full, deferred/rest, save, publish. */
-	s_soc.mode = soc_direction();
-	soc_integrate(s_soc.mode);
-	soc_update_sag_hold(s_soc.mode);
-	low_tail_limiter_active = soc_low_tail_config(s_soc.mode, &low_tail_step);
-	mid_tail_limiter_active = soc_mid_tail_config(s_soc.mode, &mid_tail_step);
-	soc_watch_set_tail_state(low_tail_limiter_active, &low_tail_step,
+	low_tail_active = soc_low_tail_config(mode, &low_tail_step);
+	*low_tail_limiter_active = low_tail_active;
+	mid_tail_limiter_active = soc_mid_tail_config(mode, &mid_tail_step);
+	soc_watch_set_tail_state(low_tail_active, &low_tail_step,
 		mid_tail_limiter_active, &mid_tail_step);
-	calibration_applied = soc_apply_full_empty(s_soc.mode, low_tail_limiter_active, &low_tail_step);
+	calibration_applied = soc_apply_full_empty(mode, low_tail_active, &low_tail_step);
 	if (!mid_tail_limiter_active)
 	{
 		s_soc.mid_ticks = 0U;
 	}
-	if (!calibration_applied && !low_tail_limiter_active && mid_tail_limiter_active)
+	if (!calibration_applied && !low_tail_active && mid_tail_limiter_active)
 	{
 		calibration_applied = soc_apply_mid_tail(&mid_tail_step);
 	}
-	if (!calibration_applied && !low_tail_limiter_active)
+	if (!calibration_applied && !low_tail_active)
 	{
-		calibration_applied = soc_apply_deferred_ocv_step(s_soc.mode);
+		calibration_applied = soc_apply_deferred_ocv_step(mode);
 	}
+	return calibration_applied;
+}
+
+static void soc_update_rest_after_cycle(UINT8 calibration_applied, UINT8 low_tail_limiter_active)
+{
 	if (!low_tail_limiter_active && !calibration_applied && !soc_sag_hold_blocks_calibration())
 	{
 		soc_update_rest_timer(s_soc.mode);
@@ -1751,6 +1747,25 @@ void SOC_IntEnhance_Ctrl(void)
 		}
 		soc_reset_rest_confidence();
 	}
+}
+
+void SOC_IntEnhance_Ctrl(void)
+{
+	UINT8 calibration_applied;
+	UINT8 low_tail_limiter_active;
+
+	if (SOC_Enhance_Element.u16_RefreshData_Flag != 0U)
+	{
+		soc_handle_command();
+		return;
+	}
+
+	/* Keep the calibration order stable: integrate, tail/full, deferred/rest, save, publish. */
+	s_soc.mode = soc_direction();
+	soc_integrate(s_soc.mode);
+	soc_update_sag_hold(s_soc.mode);
+	calibration_applied = soc_run_cycle_calibration(s_soc.mode, &low_tail_limiter_active);
+	soc_update_rest_after_cycle(calibration_applied, low_tail_limiter_active);
 	soc_save_if_needed();
 	soc_publish(0U);
 }

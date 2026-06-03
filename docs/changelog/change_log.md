@@ -6,6 +6,26 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 SOC 主流程职责拆分
+
+### 本次源码修改
+
+- `SocEnhance.c`：将 `SOC_IntEnhance_Ctrl()` 内的 tail/full/deferred 校准阶段拆到 `soc_run_cycle_calibration()`。
+- `SocEnhance.c`：将校准后是否推进静置计数或清空静置 confidence 拆到 `soc_update_rest_after_cycle()`。
+
+### 安全边界
+
+- 未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义。
+- 保持正常周期总顺序：命令处理、方向判断、积分、sag hold、tail/full/deferred、rest、保存、发布。
+
+### 本次验证
+
+- `git diff --check`：通过。
+- `clang -fsyntax-only SocEnhance.c`：通过。
+- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/project_check.py --quiet`：保持当前仓库既有 `88 OK / 1 warning / 40 errors` 基线。
+- 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP、CAN/Modbus 在线读取和 Keil watch 实测。
+
 ## 2026-06-03 SOC 无放电静置快降分析
 
 ### 本次文档修改

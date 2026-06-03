@@ -2,7 +2,7 @@
 
 文档状态：已执行源码简化
 源码验证日期：2026-06-03
-修改状态：`SOC-SIM-01/02/03/04/05/06/07/08` 已按小步源码提交完成；未执行暂不建议候选
+修改状态：`SOC-SIM-01/02/03/04/05/06/07/08/09` 已按小步源码提交完成；未执行暂不建议候选
 主要参考源码：`103 + 309/Project/Source/SOC.c`、`SocEnhance.c`、`SocEnhance.h`、`DataDeal.c`、`Sci_Upper.c`、`rtc_sleep.c`、`rtc_sleep_port.c`、`LowPowerSleep.c`、`LedBar.c`、`Flash.c`、`conf/Project_Config.h`
 目标：只优化软件实现和写法，方便阅读、维护和 Keil watch 调试；不改变功能、协议、时间参数、校准阈值、休眠顺序和用户可见行为。
 
@@ -20,6 +20,7 @@
 | `SOC-SIM-06` | `215badd` | 将 `soc_publish()` 拆成显示更新和 public 字段导出两个内部函数 |
 | `SOC-SIM-03` | `15f95ac` | 在 `SOC_Enhance_Element` 中标注 config/input/output/command 字段角色，结构体布局不变 |
 | `SOC-SIM-08` | `38e550e` | 将 RTC 补偿内部游标改名为已应用秒数口径 |
+| `SOC-SIM-09` | 本提交 | 将 `SOC_IntEnhance_Ctrl()` 的 tail/full/deferred 和 rest 后处理拆成内部函数，主流程更短 |
 
 本轮未做：
 
@@ -33,6 +34,44 @@
 - `python3 tools/soc_replay_test.py` 每批均通过 47 项。
 - `python3 tools/project_check.py` 仍为当前仓库既有基线：`88 OK / 1 warning / 40 errors`；失败项为历史缺文件、编码、配置宏/BuildGuard 等，与本轮 SOC 简化无新增失败。
 - 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP 功耗、CAN/Modbus 在线读取和 Keil watch 实测。
+
+### SOC-SIM-09：拆短 `SOC_IntEnhance_Ctrl()` 主流程
+
+当前事实：
+
+- `SOC_IntEnhance_Ctrl()` 同时包含命令处理、方向判断、积分、tail/full/deferred 校准、静置后处理、保存和发布。
+- 其中 tail/full/deferred 与 rest 后处理是两个相对独立的阅读阶段，但此前都展开在主函数里。
+
+候选动作：
+
+- 新增 `soc_run_cycle_calibration()`，只负责 low tail、mid tail、full/empty 和 deferred OCV 的本周期校准阶段。
+- 新增 `soc_update_rest_after_cycle()`，只负责校准后是否推进静置计数或清空静置 confidence。
+- `SOC_IntEnhance_Ctrl()` 保留原有总顺序：命令处理、方向判断、积分、sag hold、校准阶段、静置阶段、保存、发布。
+
+保持不变：
+
+- 不改 SOC 表、阈值、时间、tail 策略、RTC 补偿、显示平滑和协议字段。
+- 不改变 `soc_sag_hold_blocks_calibration()` 的调用条件和 short-circuit 结构。
+- 不改变 `soc_watch_set_tail_state()`、`soc_watch_set_block_reason()`、`soc_save_if_needed()` 和 `soc_publish(0U)` 的相对顺序。
+
+风险：
+
+- 低。只做函数拆分和局部变量搬移；风险点是误改短路条件或校准顺序。
+
+验证：
+
+- `git diff --check`
+- `clang -fsyntax-only 103 + 309/Project/Source/SocEnhance.c`
+- `python3 tools/soc_replay_test.py`
+- `python3 tools/project_check.py --quiet`
+
+本批验证结果：
+
+- `git diff --check`：通过。
+- `clang -fsyntax-only SocEnhance.c`：通过。
+- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/project_check.py --quiet`：仍为当前仓库既有 `88 OK / 1 warning / 40 errors` 基线，失败项不是本批 SOC 主流程拆分新增。
+- 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP、CAN/Modbus 在线读取和 Keil watch 实测。
 
 ## 1. 总原则
 

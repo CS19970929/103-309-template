@@ -4,6 +4,26 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 SOC 主流程职责拆分
+
+本次只做 `SOC_IntEnhance_Ctrl()` 可读性优化，不修改 SOC 功能、SOC 表、阈值、时间参数、tail 策略、RTC 补偿策略、显示平滑、协议字段和 Keil 工程。
+
+源码修改：
+
+- `SocEnhance.c`：新增 `soc_run_cycle_calibration()` 和 `soc_update_rest_after_cycle()`，把正常 200ms 周期中的 tail/full/deferred 校准阶段和 rest 后处理阶段从 `SOC_IntEnhance_Ctrl()` 主函数拆出。
+
+文档修改：
+
+- 更新 `docs/review/soc_simplification_candidates_2026-06-02.md`，追加 `SOC-SIM-09` 执行项和保持不变边界。
+
+验证：
+
+- `git diff --check`：通过。
+- `clang -fsyntax-only SocEnhance.c`：通过。
+- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/project_check.py --quiet`：保持既有 `88 OK / 1 warning / 40 errors` 基线。
+- 未执行 Keil `FD_Release` 编译、真板充放电、RTC STOP、CAN/Modbus 在线读取和 Keil watch 实测。
+
 ## 2026-06-03 SOC 无放电静置快降分析
 
 本次只做文档分析和索引更新，不修改 `.c/.h`、Keil 工程、配置宏、SOC 表、校准阈值、时间参数、显示策略、RTC STOP 顺序和协议字段。
