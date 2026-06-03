@@ -4,6 +4,23 @@
 最后更新时间：2026-06-03
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-03 DataDeal/AFE 运行状态结构体化第 3 阶段
+
+本次继续按“模块状态结构体 + 访问函数”的方向收口 `DataDeal` 运行态，只处理 AFE 电流零点状态、AFE 通信监控计数、AFE 故障 sleep delay 计数和 AFE 电流采样序号，不修改 AFE 电流公式、保护参数、通信协议镜像或持久化参数布局。
+
+源码变更：
+- `DataDeal.c`：新增 `DATA_RUNTIME s_data`，内部按 `cur/mon/afeSeq` 分组管理 AFE 电流零点状态、AFE 监控计数和采样序号；删除 `s_afe_current`、`u8IICFaultcnt1/2`、`u8WakeCnt1/2`、`su16_Sleep_DelayT1/T2/T3`、`g_u32AfeCurrentSampleSeq`。
+- `DataDeal.h`：删除 `g_u32AfeCurrentSampleSeq` extern，新增 `AfeCurrent_GetSeq()`。
+- `I2C_AFE1.c`、`SOC.c`：改为通过 `AfeCurrent_GetSeq()` 判断 AFE 电流采样序号。
+- `tools/project_check.py`：新增 DataDeal 运行状态结构体化门禁。
+
+验证：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- 旧 DataDeal/AFE 散变量 `rg` 检查：无命中。
+- `py -3.9 tools/project_check.py --quiet`：`109 OK / 1 Warning / 39 Errors`；新增 DataDeal 门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：生成 `FD_Release.axf/bin`，Keil 日志显示 `0 Error(s), 3 Warning(s)`。
+- 真板 AFE1/AFE2 通信异常计数、AFE 自动恢复、通信异常延时 sleep、启动零点校准和 SOC 200ms 新采样触发仍需上板确认。
+
 ## 2026-06-03 ADC 状态结构体化第 2 阶段
 
 本次按全局状态结构体化方案继续处理 ADC 模块，目标是移除 ADC 模块的公开散变量，改为 `ADC_RUNTIME s_adc` 模块私有状态，并通过 getter 给 DataDeal、SOC 和 SystemDebug 读取。

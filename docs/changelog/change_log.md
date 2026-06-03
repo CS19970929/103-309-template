@@ -6,6 +6,30 @@
 最后更新时间：2026-06-03
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-03 DataDeal/AFE 运行状态结构体化第 3 阶段
+
+本次执行全局状态结构体化第 3 阶段，范围限定为 `DataDeal` 内部运行态和 AFE 电流采样序号，不迁移校准参数、协议镜像、保护参数或 Flash 持久化结构。
+
+源码变更：
+- `DataDeal.c`：新增 `DATA_RUNTIME s_data`，用 `cur` 保存 AFE 电流零点运行态，用 `mon` 保存 AFE 通信监控计数和 sleep delay，用 `afeSeq` 保存 AFE 电流采样序号。
+- `DataDeal.c`：删除旧的 `s_afe_current`、`u8IICFaultcnt1/2`、`u8WakeCnt1/2`、`su16_Sleep_DelayT1/T2/T3` 和 `g_u32AfeCurrentSampleSeq`。
+- `DataDeal.h`：删除采样序号 extern，新增 `AfeCurrent_GetSeq()`。
+- `I2C_AFE1.c`：启动零点校准前的“尚无 AFE 电流样本”判断改为 `AfeCurrent_GetSeq() == 0U`。
+- `SOC.c`：SOC 200ms 新 AFE 样本判断改为读取 `AfeCurrent_GetSeq()`。
+- `tools/project_check.py`：新增 `check_datadeal_runtime_state()`，防止旧 DataDeal/AFE 散变量回流。
+
+保持不变：
+- AFE 电流 raw 转 mA 公式、零点学习阈值、输出死区、校准开关和充放电方向判断不变。
+- AFE1/AFE2 通信异常计数阈值、恢复触发阈值、wake retry 限制和通信异常延时 sleep 周期不变。
+- `g_u16CalibCoefK/B`、`g_u32CS_Res_AFE`、`OtherElement`、`g_stCellInfoReport` 暂不迁移，避免影响校准参数、协议镜像和持久化布局。
+
+验证：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- 旧 DataDeal/AFE 散变量 `rg` 检查：无命中。
+- `py -3.9 tools/project_check.py --quiet`：`109 OK / 1 Warning / 39 Errors`；新增 DataDeal 门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：生成 `FD_Release.axf/bin`，Keil 日志显示 `0 Error(s), 3 Warning(s)`；Keil 进程码为 1，表现为 post-build 路径编码相关的非零退出，但产物已更新。
+- 真板 AFE 通信异常/恢复、启动零点校准、SOC 新样本触发仍需上板回归。
+
 ## 2026-06-03 ADC 状态结构体化第 2 阶段
 
 本次执行全局状态结构体化第 2 阶段，只处理 ADC 模块自己的运行状态，不改变采样、换算、SOC 输入或协议镜像。

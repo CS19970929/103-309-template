@@ -200,13 +200,13 @@ extern UINT16 g_u16CalibCoefK[KB_NUM];
 extern INT16  g_i16CalibCoefB[KB_NUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
-extern UINT32 g_u32AfeCurrentSampleSeq;
 
 void App_AFEGet(  void);
 void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);
 void AfeCurrent_PrepareStartupZero(void);
 void AfeCurrent_StartupZeroCal(void);
 UINT8 AfeCurrent_IsStartupZeroDone(void);
+UINT32 AfeCurrent_GetSeq(void);
 void open_ctlc(void);
 void close_ctlc(void);
 

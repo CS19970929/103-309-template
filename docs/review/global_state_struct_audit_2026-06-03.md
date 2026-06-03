@@ -188,6 +188,30 @@ extern const struct APP_WATCH g_watch;
 - Keil `FD_Release` 编译。
 - 上板确认 ADC DMA raw 更新、MOS 温度、VBC、电流方向和 Type-C 电流显示/上报行为不变。
 
+## 第 3 阶段执行记录
+
+执行时间：2026-06-03
+
+源码修改：
+- `DataDeal.c`：新增 `DATA_RUNTIME s_data`，内部划分 `cur/mon/afeSeq`，分别管理 AFE 电流零点运行态、AFE 通信监控运行态和 AFE 电流采样序号。
+- `DataDeal.c`：将原 `s_afe_current` 并入 `s_data.cur`，将 `u8IICFaultcnt1/2`、`u8WakeCnt1/2`、`su16_Sleep_DelayT1/T2/T3` 并入 `s_data.mon`，将 `g_u32AfeCurrentSampleSeq` 并入 `s_data.afeSeq`。
+- `DataDeal.h`：删除 `g_u32AfeCurrentSampleSeq` extern，新增 `AfeCurrent_GetSeq()`。
+- `I2C_AFE1.c`、`SOC.c`：外部模块改为通过 `AfeCurrent_GetSeq()` 读取采样序号。
+- `tools/project_check.py`：新增 `check_datadeal_runtime_state()`，检查旧散变量是否回流、`s_data` 是否存在、外部是否通过 getter 读取 AFE 采样序号。
+
+保持不变：
+- AFE 电流 raw 转 signed、mA、A10 的公式不变。
+- AFE 电流自动零点学习、启动零点校准、输出死区、充放电方向判断不变。
+- AFE 通信异常计数、恢复触发、wake retry 和通信异常延时 sleep 的阈值不变。
+- `g_u16CalibCoefK/B`、`g_u32CS_Res_AFE`、`OtherElement`、`g_stCellInfoReport` 暂不迁移；这些对象和校准参数、保护参数、协议镜像、Flash/上位机兼容关系更紧，需后续单独阶段处理。
+
+验证记录：
+- `git diff --check`：通过，仅有仓库既有 CRLF 换行提示。
+- `rg "g_u32AfeCurrentSampleSeq|u8IICFaultcnt|u8WakeCnt|su16_Sleep_DelayT|s_afe_current" "103 + 309/Project/Source"`：无命中。
+- `py -3.9 tools/project_check.py --quiet`：`109 OK / 1 Warning / 39 Errors`；新增 DataDeal 门禁通过，剩余失败为仓库既有缺文件、编码和配置门禁问题。
+- `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release`：生成 `FD_Release.axf/bin`，Keil 日志显示 `0 Error(s), 3 Warning(s)`；Keil 进程码为 1，表现为 post-build 路径编码相关的非零退出，但产物已更新。
+- 上板确认仍需覆盖：AFE 通信异常、自动恢复、启动零点校准、SOC 新样本触发和通信异常延时 sleep 行为不变。
+
 ## 需求确认表
 
 | Requirement ID | Requirement description | Evidence from code | Current behavior | Risk | Codex judgment | Question for user | Suggested decision | User decision placeholder |

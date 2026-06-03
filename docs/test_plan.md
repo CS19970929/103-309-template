@@ -4,6 +4,20 @@
 最后更新时间：2026-06-03
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## DataDeal/AFE 运行状态结构体化第 3 阶段测试入口
+
+专项变更：AFE 电流零点运行态、AFE 通信监控计数、通信异常 sleep delay 和 AFE 电流采样序号已收口到 `s_data`；外部模块通过 `AfeCurrent_GetSeq()` 读取采样序号。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 编译 | Keil `FD_Release` | 编译通过，无新增未解析符号 |
+| 静态门禁 | `py -3.9 tools/project_check.py --quiet` | DataDeal 运行状态结构体化门禁通过 |
+| 旧符号检查 | `rg "g_u32AfeCurrentSampleSeq|u8IICFaultcnt|u8WakeCnt|su16_Sleep_DelayT|s_afe_current" "103 + 309/Project/Source"` | 源码无旧 DataDeal/AFE 散变量 |
+| 启动零点校准 | 首次启动、sleep 唤醒后 AFE 初始化 | `AfeCurrent_GetSeq() == 0U` 时仍执行启动零点准备和校准 |
+| SOC 新样本触发 | 200ms AFE 采样周期 | `App_SOC()` 只在 AFE seq 变化后更新样本 |
+| AFE 通信异常恢复 | 模拟 AFE1/AFE2 IIC 异常 | fault/wake 计数、恢复触发和错误上报/清除行为不变 |
+| 通信异常 sleep | AFE/EEPROM 通信错误持续超过延时 | 仍按原阈值请求 `NORMAL_MODE` sleep |
+
 ## ADC 状态结构体化第 2 阶段测试入口
 
 专项变更：ADC DMA raw、滤波缓存、结果数组、Vbat、Type-C 电流和内部平滑计数已收口到 `s_adc`；外部模块通过 ADC getter 读取。

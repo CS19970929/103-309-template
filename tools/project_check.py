@@ -34,6 +34,8 @@ ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / 
 ADC_C = ROOT / "103 + 309" / "Project" / "Source" / "ADC.c"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
+DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
+I2C_AFE1_C = ROOT / "103 + 309" / "Project" / "Source" / "I2C_AFE1.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
@@ -1205,6 +1207,62 @@ def check_adc_state_runtime(reporter):
         reporter.fail("ADC state should be accessed through ADC getters outside ADC.c")
 
 
+def check_datadeal_runtime_state(reporter):
+    required_files = [
+        DATADEAL_C,
+        DATADEAL_H,
+        I2C_AFE1_C,
+        SOC_C,
+    ]
+    if any(not path.exists() for path in required_files):
+        return
+
+    datadeal_c = read_text(DATADEAL_C)
+    datadeal_h = read_text(DATADEAL_H)
+    i2c_afe1_c = read_text(I2C_AFE1_C)
+    soc_c = read_text(SOC_C)
+    combined = "\n".join([datadeal_c, datadeal_h, i2c_afe1_c, soc_c])
+
+    stale_tokens = [
+        "g_u32AfeCurrentSampleSeq",
+        "u8IICFaultcnt1",
+        "u8IICFaultcnt2",
+        "u8WakeCnt1",
+        "u8WakeCnt2",
+        "su16_Sleep_DelayT1",
+        "su16_Sleep_DelayT2",
+        "su16_Sleep_DelayT3",
+        "s_afe_current",
+    ]
+    found = [token for token in stale_tokens if token in combined]
+    if found:
+        reporter.fail("DataDeal runtime state still has split tokens: {0}".format(",".join(found)))
+    else:
+        reporter.ok("DataDeal runtime state removed selected split variables")
+
+    if (
+        "static DATA_RUNTIME s_data" in datadeal_c
+        and "AFE_CURRENT_RUNTIME cur;" in datadeal_c
+        and "AFE_MONITOR_RUNTIME mon;" in datadeal_c
+        and "UINT32 afeSeq;" in datadeal_c
+        and "AFE_MONITOR_CH ch[2];" in datadeal_c
+        and "UINT16 sleepDelay[3];" in datadeal_c
+    ):
+        reporter.ok("DataDeal runtime state uses s_data with current/monitor/sequence groups")
+    else:
+        reporter.fail("DataDeal runtime state should keep current/monitor/sequence in s_data")
+
+    if (
+        "UINT32 AfeCurrent_GetSeq(void);" in datadeal_h
+        and "AfeCurrent_NextSeq();" in datadeal_c
+        and "AfeCurrent_GetSeq() == 0U" in i2c_afe1_c
+        and "u32AfeCurrentSeq = AfeCurrent_GetSeq();" in soc_c
+    ):
+        reporter.ok("AFE current sample sequence is read through accessor")
+    else:
+        reporter.fail("AFE current sample sequence should use AfeCurrent_GetSeq outside DataDeal.c")
+
+
 def check_fault_snapshot_mapping(reporter):
     required_files = [FAULT_SNAPSHOT_H, STM32F10X_IT_C, SCI_UPPER_C, SCI_UPPER_H]
     if any(not path.exists() for path in required_files):
@@ -2014,6 +2072,7 @@ def main(argv):
     check_low_power_cleanup(reporter)
     check_global_state_phase1(reporter)
     check_adc_state_runtime(reporter)
+    check_datadeal_runtime_state(reporter)
     check_fault_snapshot_mapping(reporter)
     check_can_rtc_service_runtime(reporter)
     check_can_aging_soc_service(reporter)

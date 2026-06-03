@@ -668,7 +668,7 @@ void InitAFE1(void)
 {
 	UINT8 do_startup_zero;
 
-	do_startup_zero = ((g_u32AfeCurrentSampleSeq == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
+	do_startup_zero = ((AfeCurrent_GetSeq() == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
 
 	initAFE1_IIC();
 	close_ctlc();
