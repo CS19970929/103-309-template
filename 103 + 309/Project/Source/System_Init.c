@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 #include "SystemDebug.h"
 #include "IrqDebug.h"
 
@@ -18,6 +19,21 @@ static UINT16 fac_ms = 0;
 
 static volatile UINT8 s_u8Sys200msPendingPeriods = 0U;
 static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
+
+#if DEBUG_WATCH_ENABLED
+void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->sys_time_latched = &g_st_SysTimeFlag;
+	watch->sys_time_pending = &s_st_SysTimePending;
+	watch->sys_10ms_tick_count = &s_u32Sys10msTickCount;
+	watch->sys_cnt50ms = &s_u8Cnt50ms;
+	watch->sys_cnt100ms = &s_u8Cnt100ms;
+	watch->sys_cnt200ms = &s_u8Cnt200ms;
+	watch->sys_cnt1000ms = &s_u8Cnt1000ms;
+	watch->sys_200ms_pending_periods = &s_u8Sys200msPendingPeriods;
+	watch->sys_200ms_overflow_count = &s_u16Sys200msOverflowCnt;
+}
+#endif
 
 #define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP | \
 							  DBGMCU_CR_DBG_STOP | \

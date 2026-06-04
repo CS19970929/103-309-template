@@ -107,7 +107,6 @@ struct SOC_DEBUG_WATCH {
 };
 
 extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
-extern struct SOC_DEBUG_WATCH * const g_dbg_soc_watch;
 
 void SOC_IntEnhance_Ctrl(void);
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);

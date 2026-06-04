@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 #include "Flash.h"
 #include "SocEnhance.h"
 
@@ -26,6 +27,11 @@ static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
 static unsigned s_failures;
 static volatile union System_OnOFF_Function s_host_feature;
+
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+DEBUG_WATCH_ROOT g_dbg_watch;
+void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
+#endif
 
 #define CHECK_TRUE(expr) host_check((expr) ? 1 : 0, #expr, __LINE__)
 #define CHECK_EQ_U32(actual, expected) host_check_u32((UINT32)(actual), (UINT32)(expected), #actual, __LINE__)
@@ -201,6 +207,10 @@ static void host_reset_state(void)
 	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
 	s_host_afe_current_sample_seq = 0U;
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+	memset(&g_dbg_watch, 0, sizeof(g_dbg_watch));
+	SocEnhance_DebugWatchBind(&g_dbg_watch);
+#endif
 	host_apply_default_config();
 }
 
@@ -262,10 +272,10 @@ static void test_startup_ocv_uses_real_c_code(void)
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 70U);
 	CHECK_EQ_U32(host_internal_soc(), 70U);
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
-	CHECK_TRUE(g_dbg_soc_watch != 0);
-	CHECK_EQ_U32(g_dbg_soc_watch->u8InternalSoc, 70U);
-	CHECK_EQ_U32(g_dbg_soc_watch->u8DisplaySoc, 70U);
-	CHECK_EQ_U32(g_dbg_soc_watch->u8LastCalibSource, SOC_WATCH_CALIB_STARTUP_OCV);
+	CHECK_TRUE(g_dbg_watch.soc != 0);
+	CHECK_EQ_U32(g_dbg_watch.soc->u8InternalSoc, 70U);
+	CHECK_EQ_U32(g_dbg_watch.soc->u8DisplaySoc, 70U);
+	CHECK_EQ_U32(g_dbg_watch.soc->u8LastCalibSource, SOC_WATCH_CALIB_STARTUP_OCV);
 #endif
 }
 
@@ -296,7 +306,7 @@ static void test_board_self_consumption_integrates_during_relax(void)
 		host_cap_to_ah100(expected_cap_as10));
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
-	CHECK_EQ_U32(g_dbg_soc_watch->u8Mode, 0U);
+	CHECK_EQ_U32(g_dbg_watch.soc->u8Mode, 0U);
 #endif
 }
 

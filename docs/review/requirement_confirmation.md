@@ -17,6 +17,7 @@
 | REQ-SYS-003 | 量产 target 不得带调试/测试符号 | `uvprojx` 中 `FD_Release` defines、`tools/project_check.py` | Keil 工程、`tools/project_check.py` | `FD_Release` 不定义 `_DEBUG_` / `PROJECT_CFG_DEBUG_WATCH_ENABLE` / `ELOG_OUTPUT_ENABLE` / `FLASH64K_APP_*`，且不覆盖非 0 build profile | 间接 | 间接 | 是 | 间接 | 是 | MUST_KEEP；测试功能必须隔离 |
 | REQ-SYS-004 | 当前主 MCU 目标是 STM32F103/标准外设库，工程仍保留向 F0/其他模板演进空间 | `uvprojx` 使用 Cortex-M3/STM32F103C8，`STM32F10x_StdPeriph_Lib_V3.5.0` | Keil 工程、StdPeriph | 使用 SPL 和少量寄存器直接操作 | 否 | 否 | 间接 | 间接 | 是 | MUST_KEEP；后续做 F0/F1 兼容需抽 BSP |
 | REQ-SYS-005 | 系统运行状态、功能特性、错误标志需要被统一上报 | `Sci_Upper.c:820-845`, `System_Monitor.h` | `System_Monitor.c/.h`, `Sci_Upper.c` | 全局错误/状态结构映射到 `0xD000+` | 是 | 是 | 是 | 间接 | 是 | MUST_KEEP；但全局状态边界可重构 |
+| REQ-SYS-006 | Debug 构建允许导出 Keil Watch 单根结构体入口，但不得破坏模块 `static runtime` 封装 | `DebugWatch.h/.c`, `ADC.c`, `DataDeal.c`, `Can_HDX.c`, `LedBar.c`, `Project_BuildGuard.h` | Debug Watch 入口、BuildGuard | `FD_Debug` 只导出 `g_dbg_watch`；profile 0 打开 Debug Watch 会编译报错 | 否 | 否 | 间接 | 间接 | 是 | KEEP_BUT_REFACTOR；调试便利性通过 Debug-only 根结构体解决 |
 
 ## 2. 参数初始化与 Flash/EEPROM/参数存储需求
 

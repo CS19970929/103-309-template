@@ -15,6 +15,14 @@
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
 #endif
 
+#ifndef PROJECT_CFG_BUILD_PROFILE
+#define PROJECT_CFG_BUILD_PROFILE 0
+#endif
+
+#ifndef PROJECT_CFG_DEBUG_WATCH_ENABLE
+#define PROJECT_CFG_DEBUG_WATCH_ENABLE 0
+#endif
+
 #endif
 
 /* --- range checks --- */
@@ -25,6 +33,14 @@
 
 #if (PROJECT_CFG_HOST_WRITE_ENABLE != 0) && (PROJECT_CFG_HOST_WRITE_ENABLE != 1)
 #error "Invalid PROJECT_CFG_HOST_WRITE_ENABLE"
+#endif
+
+#if (PROJECT_CFG_DEBUG_WATCH_ENABLE != 0) && (PROJECT_CFG_DEBUG_WATCH_ENABLE != 1)
+#error "Invalid PROJECT_CFG_DEBUG_WATCH_ENABLE"
+#endif
+
+#if (PROJECT_CFG_BUILD_PROFILE == 0) && (PROJECT_CFG_DEBUG_WATCH_ENABLE != 0)
+#error "PROJECT_CFG_DEBUG_WATCH_ENABLE must stay disabled for release build profile"
 #endif
 
 /* SOC checks */

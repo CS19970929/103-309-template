@@ -1,8 +1,9 @@
 #include "main.h"
+#include "DebugWatch.h"
 #include "LowPowerSleep.h"
 #include "IrqDebug.h"
 
-typedef struct
+typedef struct SLEEP_RUNTIME_TAG
 {
 	UINT8 ext_comm;
 	UINT8 boot_sleep;
@@ -11,6 +12,14 @@ typedef struct
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
+
+#if DEBUG_WATCH_ENABLED
+void SleepDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->sleep = &s_sleep;
+}
+#endif
+
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч

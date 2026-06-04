@@ -4,6 +4,23 @@
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-04 Keil Debug Watch 单根结构体入口
+
+源码变更：
+- 新增 `DebugWatch.h`，统一 `PROJECT_CFG_DEBUG_WATCH_ENABLE` 判断和 `DEBUG_WATCH_USED` 符号保留属性。
+- 新增 `DebugWatch.c` 和唯一 Debug Watch 根变量 `g_dbg_watch`，集中挂载 ADC、DataDeal、CAN、LedBar、Sleep、Flash、Log、System、SOC 和关键全局状态。
+- 在各模块中保留 Debug-only `*_DebugWatchBind()` 绑定函数，不再导出单模块 `g_dbg_*` 全局符号。
+- `Project_BuildGuard.h` 为 `PROJECT_CFG_BUILD_PROFILE` 和 `PROJECT_CFG_DEBUG_WATCH_ENABLE` 补默认值，并阻止 profile 0 误开 Debug Watch。
+
+当前结论：
+- `FD_Debug` 下只需要在 Keil Watch 添加 `g_dbg_watch`，再展开 `adc`、`data`、`can_tx`、`can_runtime`、`can_app`、`ledbar`、`sleep`、`soc` 等字段。
+- 业务 runtime 仍保持文件级 `static`，不改变协议、Flash 布局、保护逻辑、SOC 算法和低功耗策略。
+- `FD_Release` 不生成这些新增调试符号。
+
+验证边界：
+- 需要分别构建 `FD_Debug` 和 `FD_Release`，确认 Debug 符号可用且 Release 门禁不误触发。
+- 真机调试时以 `docs/guides/DEBUG_WATCH_GUIDE.md` 的符号清单为准添加 Watch。
+
 ## 2026-06-04 RTC 唤醒后 RF_EN 熔断判定增加 ADC ready 保护
 
 源码变更：

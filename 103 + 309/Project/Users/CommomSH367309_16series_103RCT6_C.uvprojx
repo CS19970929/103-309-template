@@ -399,6 +399,11 @@
               <FilePath>..\Source\DataDeal.c</FilePath>
             </File>
             <File>
+              <FileName>DebugWatch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\DebugWatch.c</FilePath>
+            </File>
+            <File>
               <FileName>EEPROM.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\EEPROM.c</FilePath>
@@ -1312,6 +1317,11 @@
               <FileName>DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\DataDeal.c</FilePath>
+            </File>
+            <File>
+              <FileName>DebugWatch.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\DebugWatch.c</FilePath>
             </File>
             <File>
               <FileName>EEPROM.c</FileName>

@@ -12,6 +12,7 @@
 | T-BUILD-002 | App 链接地址检查 | 检查 map 中 vector/text 起始地址 | App 从 `0x08004800` 起，不覆盖 `0x08000000` IAP |
 | T-BUILD-003 | Release target guard | 检查 Keil `FD_Release` defines 和 `tools/project_check.py` | Release 不带 `_DEBUG_`、`PROJECT_CFG_DEBUG_WATCH_ENABLE`、`ELOG_OUTPUT_ENABLE`、`FLASH64K_APP_*`，且 SOC 注入测试入口 disabled |
 | T-BUILD-004 | 后 64K 地址检查 | 读取 Flash size register 或脚本静态检查 | 若小于 128KB，不允许使用 `0x0801C000+` 存储 |
+| T-BUILD-005 | Debug Watch 入口 | Keil `FD_Debug` 编译并在 Watch 添加 `g_dbg_watch` | Debug 可从单一根结构体展开模块 runtime；Release 下不生成新增调试符号，profile 0 误开 Debug Watch 会被 BuildGuard 阻止 |
 
 ## 2. 上位机 Modbus 协议回归测试
 

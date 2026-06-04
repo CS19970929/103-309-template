@@ -4,6 +4,19 @@
 最后更新时间：2026-06-04
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## Keil Debug Watch 入口补齐测试入口
+
+专项变更：在不取消模块 `static runtime` 封装的前提下，为 Debug target 导出 Keil Watch 观察指针。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| Release 编译 | Keil `FD_Release` | 编译通过，`PROJECT_CFG_DEBUG_WATCH_ENABLE` 默认为 0，`g_dbg_watch` 不参与 Release |
+| Debug 编译 | Keil `FD_Debug` | 编译通过，`PROJECT_CFG_DEBUG_WATCH_ENABLE=1` 下新增 Watch 指针符号可链接 |
+| Release 门禁 | 临时在 profile 0 打开 `PROJECT_CFG_DEBUG_WATCH_ENABLE=1` | `Project_BuildGuard.h` 应报错阻止构建 |
+| 符号扫描 | `rg "g_dbg_" "103 + 309/Project/Source"` | 源码调试全局只剩 `g_dbg_watch` |
+| Keil Watch | `FD_Debug` 下载调试后添加 `g_dbg_watch` | 能展开 `adc`、`data`、`can_tx`、`ledbar`、`soc` 等字段，不需要单步进入对应 `.c` 文件作用域 |
+| 行为回归 | 观察 ADC、AFE 电流、CAN 队列、LedBar、Sleep/Flash/Log 状态 | 只读观察，不改变协议字段、保护阈值、SOC 计算、Flash 布局和低功耗行为 |
+
 ## DataDeal/AFE 运行状态结构体化第 3 阶段测试入口
 
 专项变更：AFE 电流零点运行态、AFE 通信监控计数、通信异常 sleep delay 和 AFE 电流采样序号已收口到 `s_data`；外部模块通过 `AfeCurrent_GetSeq()` 读取采样序号。

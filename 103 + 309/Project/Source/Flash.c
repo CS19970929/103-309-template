@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 
 #define FLASH_STORAGE_MAGIC_SOC ((UINT32)0x534F4331)
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
@@ -45,12 +46,19 @@ typedef struct
 	UINT32 crc;
 } APP_UPGRADE_MAILBOX;
 
-typedef struct
+typedef struct FLASH_RUNTIME_TAG
 {
 	volatile UINT8 busy;
 } FLASH_RUNTIME;
 
 static FLASH_RUNTIME s_flash;
+
+#if DEBUG_WATCH_ENABLED
+void Flash_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->flash = &s_flash;
+}
+#endif
 
 static void StorageFlash_BeginWrite(void)
 {

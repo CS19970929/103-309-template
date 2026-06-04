@@ -1,4 +1,5 @@
 #include "SocEnhance.h"
+#include "DebugWatch.h"
 #include "conf.h"
 #include "EEPROM.h"
 #include "DataDeal.h"
@@ -145,14 +146,13 @@ static SOC_SAVE_MARK s_saved_soc;
 static UINT32 s_u32SocRtcRestAppliedSeconds;
 
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
-#if defined(__GNUC__) || defined(__CC_ARM)
-#define SOC_DEBUG_USED __attribute__((used))
-#else
-#define SOC_DEBUG_USED
-#endif
 static struct SOC_DEBUG_WATCH s_soc_debug_watch;
-struct SOC_DEBUG_WATCH * const g_dbg_soc_watch SOC_DEBUG_USED = &s_soc_debug_watch;
 static UINT8 s_soc_watch_rest_voltage_stable;
+void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->soc = &s_soc_debug_watch;
+	watch->soc_public = &SOC_Enhance_Element;
+}
 static void soc_watch_set_calib_source(UINT8 source, UINT8 before, UINT8 after);
 static void soc_watch_set_tail_state(UINT8 low_active, const SOC_TAIL_STEP *low_step);
 static void soc_watch_set_rest_voltage_stable(UINT8 stable);

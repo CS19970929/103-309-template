@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 #include "IrqDebug.h"
 #include <string.h>
 
@@ -75,7 +76,7 @@ typedef struct
     uint8_t length;
 } LedBarFrame;
 
-typedef struct
+typedef struct LEDBAR_RUNTIME_TAG
 {
     uint8_t initialized;
     uint8_t sleep;
@@ -165,6 +166,13 @@ static LedBarRuntime s_ledbar =
     0u,
     LEDBAR_ICON_PERCENT_MASK,
 };
+
+#if DEBUG_WATCH_ENABLED
+void LedBar_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+    watch->ledbar = &s_ledbar;
+}
+#endif
 
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);

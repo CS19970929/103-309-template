@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
@@ -69,6 +70,13 @@ static DATA_RUNTIME s_data =
     },
     0U
 };
+
+#if DEBUG_WATCH_ENABLED
+void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+    watch->data = &s_data;
+}
+#endif
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];

@@ -1,8 +1,17 @@
 #include "main.h"
+#include "DebugWatch.h"
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
 static volatile union System_OnOFF_Function s_system_onoff_func;
 static volatile union System_Status s_system_status;
+
+#if DEBUG_WATCH_ENABLED
+void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->system_feature = &s_system_onoff_func;
+	watch->system_status = &s_system_status;
+}
+#endif
 
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
 /* Keep these masks in sync with System_Monitor.h bitfield order. */

@@ -1,8 +1,9 @@
 #include "main.h"
+#include "DebugWatch.h"
 
 #define EVENT_RECORD_LENGTH 100
 
-typedef struct
+typedef struct LOG_RECORD_RUNTIME_TAG
 {
 	UINT8 point;
 	UINT8 records[EVENT_RECORD_LENGTH][2];
@@ -15,6 +16,14 @@ typedef struct
 } LogRecordRuntime;
 
 static LogRecordRuntime s_log_record;
+
+#if DEBUG_WATCH_ENABLED
+void LogRecord_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->log_record = &s_log_record;
+}
+#endif
+
 UINT32 su32_Interval_S_Tcnt = 0;
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)

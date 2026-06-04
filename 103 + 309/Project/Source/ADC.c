@@ -1,6 +1,7 @@
 #include "main.h"
+#include "DebugWatch.h"
 
-typedef struct
+typedef struct ADC_RUNTIME_TAG
 {
     __IO UINT16 raw[ADC_NUM];
     INT32 result[ADC_NUM];
@@ -12,6 +13,14 @@ typedef struct
 } ADC_RUNTIME;
 
 static ADC_RUNTIME s_adc;
+
+#if DEBUG_WATCH_ENABLED
+void ADC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+    watch->adc = &s_adc;
+}
+#endif
+
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
 #define ADC_STARTUP_DISCARD_TICKS ((UINT8)1U)
 

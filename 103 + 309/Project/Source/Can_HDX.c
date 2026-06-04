@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 #include "CanFeidaoFrames.h"
 #include "FactoryAging.h"
 #include "IrqDebug.h"
@@ -50,7 +51,7 @@ typedef struct
 	CanTxMsg frame;
 } FeidaoCanTxItem;
 
-typedef struct
+typedef struct FEIDAO_CAN_TX_RUNTIME_TAG
 {
 	FeidaoCanTxItem queue[FEIDAO_CAN_TX_QUEUE_SIZE];
 	UINT8 head;
@@ -60,7 +61,7 @@ typedef struct
 	UINT32 start_tick;
 } FeidaoCanTxRuntime;
 
-typedef struct
+typedef struct FEIDAO_CAN_RUNTIME_TAG
 {
 	UINT32 tick;
 	UINT32 last_1000ms_tick;
@@ -68,7 +69,7 @@ typedef struct
 	UINT8 schedule_init;
 } FeidaoCanRuntime;
 
-typedef struct
+typedef struct FEIDAO_CAN_APP_RUNTIME_TAG
 {
 	volatile UINT8 cmd_head;
 	volatile UINT8 cmd_tail;
@@ -95,6 +96,15 @@ static FeidaoCanTxRuntime s_tx = {
 };
 static FeidaoCanRuntime s_runtime;
 static FeidaoCanAppRuntime s_app;
+
+#if DEBUG_WATCH_ENABLED
+void Can_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->can_tx = &s_tx;
+	watch->can_runtime = &s_runtime;
+	watch->can_app = &s_app;
+}
+#endif
 
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static void feidao_can_power_on(void);

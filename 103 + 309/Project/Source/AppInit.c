@@ -1,5 +1,6 @@
 #include "main.h"
 #include "AppInit.h"
+#include "DebugWatch.h"
 #include "IrqDebug.h"
 
 UINT8 SeriesNum = 10;
@@ -48,6 +49,7 @@ static void AppInit_InitRuntimeState(void)
 
 void AppInit_Boot(void)
 {
+	DebugWatch_BindAll();
 	AppInit_InitDevice();
 	AppInit_InitRuntimeState();
 	Init_RTC();
