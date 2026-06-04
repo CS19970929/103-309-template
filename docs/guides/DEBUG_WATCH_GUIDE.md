@@ -1,8 +1,17 @@
 # Keil Watch 调试观察入口说明
 
+## 2026-06-04 补充：Debug/Release 隔离
+
+- `FD_Debug` 是调试入口，Keil Watch 只需要添加 `g_dbg_watch`。
+- `g_dbg` 不再建议单独添加；SystemDebug 快照从 `g_dbg_watch.system.snapshot` 展开。
+- Runtime 事件、profile、模块心跳和 debug print 周期输出已集中到 `DebugHooks.c`。
+- `FD_Release` 对 `DebugHooks.c`、`DebugWatch.c`、`SystemDebug.c`、`IrqDebug.c` 设置 `IncludeInBuild=0`，不编译不链接；业务流程中的 `DebugHooks_Runtime*()` 在 Release 下为空宏。
+- 后续新增调试点应优先放到 `DebugHooks.c` 或 Debug-only 模块，不要把 `SystemDebug_Event()`、profile 记录和调试打印细节写回业务调度文件。
+
 文档状态：已按源码验证
 最后更新时间：2026-06-04
 参考源码：
+- `103 + 309/Project/Source/DebugHooks.c/.h`
 - `103 + 309/Project/Source/DebugWatch.h`
 - `103 + 309/Project/Source/conf/Project_BuildGuard.h`
 - `103 + 309/Project/Source/ADC.c`

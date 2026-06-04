@@ -1,5 +1,11 @@
 # SystemDebug 调试监控使用指南 v2.2
 
+## 2026-06-04 补充：统一入口与量产隔离
+
+当前 Keil Watch 统一入口是 `g_dbg_watch`。`g_dbg` 保留为 SystemDebug 内部快照实体，查看路径为 `g_dbg_watch.system.snapshot`，不需要在 Watch 中单独添加。
+
+Runtime 层的事件记录、profile 记录、模块心跳和 `_DEBUG_` 打印触发已迁入 `DebugHooks.c`。`FD_Debug` 编译 `DebugHooks.c/SystemDebug.c/DebugWatch.c/IrqDebug.c`；`FD_Release` 对这些 Debug-only 源文件设置 `IncludeInBuild=0`，不编译不链接，`DebugHooks_Runtime*()` 在 Release 下为空宏。
+
 > 功能: `SystemDebug` — Keil Watch 全局状态快照
 > 版本: v2.3 2026-06-04 (纳入 g_dbg_watch 单根入口)
 > 控制宏: `PROJECT_CFG_DEBUG_MONITOR_ENABLE` (0=Release, 1=Debug)

@@ -229,6 +229,21 @@ RELEASE_FORBIDDEN_DEFINES = {
     "FLASH64K_APP_USE_TEST_ENABLE",
     "ELOG_OUTPUT_ENABLE",
 }
+DEBUG_ONLY_SOURCE_FILES = {
+    "../Source/DebugHooks.c",
+    "../Source/DebugWatch.c",
+    "../Source/SystemDebug.c",
+    "../Source/IrqDebug.c",
+}
+STARTUP_DEFAULT_HANDLER_SOURCE_FILE = "../Source/StartupDefaultHandler.c"
+RUNTIME_DEBUG_FORBIDDEN_TOKENS = [
+    "SystemDebug_Event",
+    "SystemDebug_ProfileRecord",
+    "SystemDebug_GetCycleCount",
+    "DBG_PROFILE_",
+    "DBG_MODULE_",
+    "DbgPrint_Summary",
+]
 RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_WDOG_ENABLE": "1",
     "PROJECT_CFG_HOST_WRITE_ENABLE": "1",
@@ -332,6 +347,10 @@ def find_define_value(tokens, name):
     return None
 
 
+def normalize_keil_path(path):
+    return (path or "").replace("\\", "/").strip().lower()
+
+
 def parse_project_targets(project_path):
     tree = ET.parse(str(project_path))
     root = tree.getroot()
@@ -345,14 +364,22 @@ def parse_project_targets(project_path):
         output_name = target.findtext("./TargetOption/TargetCommonOption/OutputName") or ""
         output_dir = target.findtext("./TargetOption/TargetCommonOption/OutputDirectory") or ""
         files = set()
-        for file_path in target.findall("./Groups/Group/Files/File/FilePath"):
-            if file_path.text:
-                files.add(file_path.text.replace("\\", "/"))
+        build_files = set()
+        for file_item in target.findall("./Groups/Group/Files/File"):
+            file_path = file_item.findtext("FilePath") or ""
+            if not file_path:
+                continue
+            normalized = file_path.replace("\\", "/")
+            files.add(normalized)
+            include_in_build = file_item.findtext("./FileOption/CommonProperty/IncludeInBuild")
+            if include_in_build != "0":
+                build_files.add(normalized)
         targets[name] = {
             "defines": define_tokens(c_define_text),
             "output_name": output_name.strip(),
             "output_dir": output_dir.strip(),
             "files": files,
+            "build_files": build_files,
         }
 
     return targets
@@ -467,6 +494,11 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Release output name is isolated")
 
+        if normalize_keil_path(release["output_dir"]) != "./objects/":
+            reporter.fail("FD_Release OutputDirectory should remain .\\Objects\\ for safe flash scripts, got {0}".format(release["output_dir"]))
+        else:
+            reporter.ok("FD_Release output directory remains Objects")
+
         if "../Source/conf/Project_BuildGuard.h" not in release["files"]:
             reporter.fail("FD_Release project tree does not include Project_BuildGuard.h")
         else:
@@ -481,6 +513,17 @@ def check_keil_targets(reporter):
             reporter.fail("FD_Release project tree does not include AppInit.c")
         else:
             reporter.ok("FD_Release includes AppInit.c")
+
+        if STARTUP_DEFAULT_HANDLER_SOURCE_FILE not in release["build_files"]:
+            reporter.fail("FD_Release should build StartupDefaultHandler.c for startup default-vector no-op")
+        else:
+            reporter.ok("FD_Release builds StartupDefaultHandler.c default-vector no-op")
+
+        debug_only_files = DEBUG_ONLY_SOURCE_FILES & release["build_files"]
+        if debug_only_files:
+            reporter.fail("FD_Release builds debug-only source files: {0}".format(",".join(sorted(debug_only_files))))
+        else:
+            reporter.ok("FD_Release excludes debug-only source files from build")
 
     if debug is None:
         reporter.fail("Keil target FD_Debug is missing")
@@ -532,6 +575,11 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Debug output name is isolated")
 
+        if normalize_keil_path(debug["output_dir"]) != "./objects_debug/":
+            reporter.fail("FD_Debug OutputDirectory should be .\\Objects_Debug\\ to avoid Release object reuse, got {0}".format(debug["output_dir"]))
+        else:
+            reporter.ok("FD_Debug output directory is separated from Release")
+
         if "../Source/conf/Project_BuildGuard.h" not in debug["files"]:
             reporter.fail("FD_Debug project tree does not include Project_BuildGuard.h")
         else:
@@ -547,11 +595,38 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Debug includes AppInit.c")
 
+        missing_debug_files = DEBUG_ONLY_SOURCE_FILES - debug["build_files"]
+        if missing_debug_files:
+            reporter.fail("FD_Debug missing built debug source files: {0}".format(",".join(sorted(missing_debug_files))))
+        else:
+            reporter.ok("FD_Debug includes debug hook/watch/system/IRQ source files")
+
     if release and debug:
         if release["output_name"] == debug["output_name"]:
             reporter.fail("FD_Release and FD_Debug share the same OutputName")
         else:
             reporter.ok("Keil targets use separate output names")
+        if normalize_keil_path(release["output_dir"]) == normalize_keil_path(debug["output_dir"]):
+            reporter.fail("FD_Release and FD_Debug share the same OutputDirectory")
+        else:
+            reporter.ok("Keil targets use separate output directories")
+
+
+def check_runtime_debug_isolation(reporter):
+    if not RUNTIME_C.exists():
+        return
+
+    runtime_c = read_text(RUNTIME_C)
+    leaked = [token for token in RUNTIME_DEBUG_FORBIDDEN_TOKENS if token in runtime_c]
+    if leaked:
+        reporter.fail("Runtime.c should call DebugHooks instead of debug implementation tokens: {0}".format(",".join(leaked)))
+    else:
+        reporter.ok("Runtime.c keeps event/profile/debug-print implementation behind DebugHooks")
+
+    if '#include "DebugHooks.h"' in runtime_c and "DebugHooks_RuntimeAfterFrontSection" in runtime_c:
+        reporter.ok("Runtime.c routes debug touchpoints through DebugHooks")
+    else:
+        reporter.fail("Runtime.c should include DebugHooks.h and route runtime debug touchpoints through DebugHooks")
 
 
 def check_removed_legacy_modules(reporter):
@@ -2013,6 +2088,7 @@ def main(argv):
     check_utf8_text_files(reporter)
     check_project_config_wizard_encoding(reporter)
     check_keil_targets(reporter)
+    check_runtime_debug_isolation(reporter)
     check_removed_legacy_modules(reporter)
     check_release_defaults(reporter)
     check_guard_includes(reporter)

@@ -1,5 +1,18 @@
 # 测试计划
 
+## Debug 调试实现与 Release 量产隔离测试入口
+
+专项变更：`Runtime.c` 只保留 DebugHooks 调用点，调试事件/profile/debug print 实现集中到 `DebugHooks.c`；Keil `FD_Debug` 编译调试实现文件，`FD_Release` 对这些文件设置 `IncludeInBuild=0`，不编译不链接。
+
+| 测试项 | 入口 | 通过标准 | 当前结果 |
+|---|---|---|---|
+| Runtime 调试实现隔离 | `rg "SystemDebug_Event|SystemDebug_ProfileRecord|SystemDebug_GetCycleCount|DbgPrint_Summary|DBG_PROFILE_|DBG_MODULE_" "103 + 309/Project/Source/Runtime.c"` | 无命中，业务调度文件只出现 `DebugHooks_Runtime*()` | 已通过，无命中 |
+| Keil target 文件隔离 | `py -3.9 tools\project_check.py` | `FD_Debug` 编译 `DebugHooks.c/DebugWatch.c/SystemDebug.c/IrqDebug.c`，`FD_Release` 不编译这些文件 | 新增检查通过；完整脚本仍因历史缺文件/编码等基线项失败 |
+| Keil target 输出目录隔离 | `py -3.9 tools\project_check.py` | `FD_Release` 保持 `Objects`，`FD_Debug` 使用 `Objects_Debug`，两个 target 不共用中间 `.o` | 新增检查通过 |
+| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | 0 error，`g_dbg_watch.runtime.app`、`g_dbg_watch.system.snapshot`、`g_dbg_watch.system.irq` 可链接 | 已通过，Keil `0 Error(s), 0 Warning(s)` |
+| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | 0 error，Release 不链接 Debug-only 实现文件 | 已通过，Keil `0 Error(s), 0 Warning(s)` |
+| Keil Watch 真机验证 | `FD_Debug` 下载后 Watch 添加 `g_dbg_watch` | 能展开 runtime/system/irq；不需要单独添加 `g_dbg` | 待真机验证 |
+
 文档状态：部分验证
 最后更新时间：2026-06-04
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。

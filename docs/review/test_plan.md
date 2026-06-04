@@ -1,5 +1,13 @@
 # 103-309 BMS Review 后测试计划
 
+## 2026-06-04 Debug/Release 隔离补充测试
+
+| ID | 测试项 | 方法 | 通过标准 |
+|---|---|---|---|
+| T-BUILD-006 | Debug-only 源文件隔离 | 执行 `py -3.9 tools\project_check.py` 并检查 Keil target 构建文件列表 | `FD_Debug` 编译 `DebugHooks.c`、`DebugWatch.c`、`SystemDebug.c`、`IrqDebug.c`；`FD_Release` 对这些文件保持 `IncludeInBuild=0`，不编译不链接 |
+| T-BUILD-007 | Runtime 调试实现旁路 | 执行 `rg "SystemDebug_Event|SystemDebug_ProfileRecord|SystemDebug_GetCycleCount|DbgPrint_Summary|DBG_PROFILE_|DBG_MODULE_" "103 + 309/Project/Source/Runtime.c"` | 无命中，`Runtime.c` 只通过 `DebugHooks_Runtime*()` 接触调试能力 |
+| T-BUILD-008 | Debug/Release 中间目录隔离 | 执行 `py -3.9 tools\project_check.py` 并检查 Keil target 输出目录 | `FD_Release` 保持 `Objects`，`FD_Debug` 使用 `Objects_Debug`，避免先编一个 target 后另一个 target 链接到旧 `.o` |
+
 > 状态：测试设计。
 > 源码验证：PARTIAL，测试项来自当前源码路径和需求确认表。
 > 注意：本轮未执行硬件测试；所有硬件实测需在确认需求后进行。

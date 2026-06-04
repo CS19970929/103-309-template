@@ -1,5 +1,29 @@
 # 变更记录
 
+## 2026-06-04 Debug 调试实现与 Release 量产隔离
+
+源码变更：
+- 新增 `DebugHooks.h/.c`，把 `Runtime.c` 中的 SystemDebug 事件、profile、模块心跳和 debug print 周期输出迁入 Debug-only hook 层。
+- `Runtime.c` 只保留 `DebugHooks_Runtime*()` 调用点，不再直接出现 `SystemDebug_Event()`、`SystemDebug_ProfileRecord()`、`SystemDebug_GetCycleCount()`、`DBG_PROFILE_*`、`DBG_MODULE_*` 和 `DbgPrint_Summary()`。
+- Keil `FD_Debug` target 保留并编译 `DebugHooks.c`、`DebugWatch.c`、`SystemDebug.c`、`IrqDebug.c`；`FD_Release` target 对这些 Debug-only 实现文件设置 `IncludeInBuild=0`，不参与编译和链接。
+- 新增 `StartupDefaultHandler.c`，在 Release 下为空实现启动默认异常回调，避免为了 `IrqDebug_RecordUnhandledVector()` 链接整个 `IrqDebug.c`。
+- `FD_Debug` 输出目录改为 `Objects_Debug` / `Listings_Debug`，`FD_Release` 保持 `Objects` / `Listings`，避免两个 target 共用 `.o` 导致增量构建串目标。
+- `tools\bms_dev_workflow.ps1` 改为读取 Keil target 的 `OutputDirectory/OutputName` 定位产物。
+- `tools/project_check.py` 新增 target 文件隔离检查和 `Runtime.c` 调试实现泄漏检查。
+
+当前结论：
+- `g_dbg` 不需要单独保留为 Watch 根入口；统一通过 `g_dbg_watch.system.snapshot` 查看。
+- `FD_Debug` 保留完整调试目录和快照能力；`FD_Release` 不编译、不链接调试实现文件，业务代码只留下空 hook。
+- 详细设计见 `docs/review/debug_release_isolation_2026-06-04.md`。
+
+验证：
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug`：已通过，`Objects_Debug\FD_Debug.axf/bin`，Keil `0 Error(s), 0 Warning(s)`。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：已通过，`Objects\FD_Release.axf/bin`，Keil `0 Error(s), 0 Warning(s)`。
+- `FD_Release.lnp` 无 `debughooks/debugwatch/systemdebug/irqdebug` 对象；`FD_Debug.lnp` 包含这些对象。
+- `py -3.9 tools\run_soc_host_c_test.py`：6 组 SOC host C 测试均通过，每组 19 项。
+- `py -3.9 tools\project_check.py --quiet`：本次新增检查通过；脚本仍因仓库历史缺文件、历史编码和既有 runtime/ADC 审计项失败。
+- 真机 Keil Watch 仍需验证 `g_dbg_watch.runtime.app`、`g_dbg_watch.system.snapshot` 和 `g_dbg_watch.system.irq` 展开结果。
+
 文档状态：已按源码部分验证
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。

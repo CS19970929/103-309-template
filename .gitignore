@@ -14,6 +14,9 @@
 *.uvoptx
 *.uvguix.*
 Objects/CommomBQ769x0_16series_030C8T6_C_Target 1.dep
+Objects_Debug/
+Listings_Debug/
+__pycache__/
 DebugConfig/Target_1_STM32F030C8.dbgconf
 Objects/
 Listings/

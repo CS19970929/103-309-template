@@ -20,7 +20,6 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Project = Join-Path $RepoRoot "103 + 309\Project\Users\CommomSH367309_16series_103RCT6_C.uvprojx"
 $ProjectUsers = Join-Path $RepoRoot "103 + 309\Project\Users"
-$Objects = Join-Path $ProjectUsers "Objects"
 
 function Invoke-LoggedStep {
     param(
@@ -90,9 +89,35 @@ function Invoke-KeilBuild {
     }
 }
 
+function Get-KeilTargetInfo {
+    param([string]$BuildTarget)
+
+    [xml]$projectXml = Get-Content -LiteralPath $Project
+    $targetNode = $projectXml.Project.Targets.Target | Where-Object { $_.TargetName -eq $BuildTarget } | Select-Object -First 1
+    if ($null -eq $targetNode) {
+        throw "Keil target not found: $BuildTarget"
+    }
+
+    $outputDir = [string]$targetNode.TargetOption.TargetCommonOption.OutputDirectory
+    $outputName = [string]$targetNode.TargetOption.TargetCommonOption.OutputName
+    if ([string]::IsNullOrWhiteSpace($outputDir)) {
+        $outputDir = ".\Objects\"
+    }
+    if ([string]::IsNullOrWhiteSpace($outputName)) {
+        $outputName = $BuildTarget
+    }
+
+    return @{
+        OutputDir = Join-Path $ProjectUsers $outputDir
+        OutputName = $outputName
+    }
+}
+
 function Get-ArtifactPath {
     param([string]$BuildTarget, [string]$Ext)
-    return Join-Path $Objects ("{0}.{1}" -f $BuildTarget, $Ext)
+
+    $targetInfo = Get-KeilTargetInfo -BuildTarget $BuildTarget
+    return Join-Path $targetInfo.OutputDir ("{0}.{1}" -f $targetInfo.OutputName, $Ext)
 }
 
 Push-Location $RepoRoot

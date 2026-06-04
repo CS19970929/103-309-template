@@ -19,6 +19,10 @@
 | REQ-SYS-005 | 系统运行状态、功能特性、错误标志需要被统一上报 | `Sci_Upper.c:820-845`, `System_Monitor.h` | `System_Monitor.c/.h`, `Sci_Upper.c` | 全局错误/状态结构映射到 `0xD000+` | 是 | 是 | 是 | 间接 | 是 | MUST_KEEP；但全局状态边界可重构 |
 | REQ-SYS-006 | Debug 构建允许导出 Keil Watch 单根结构体入口，但不得破坏模块 `static runtime` 封装 | `DebugWatch.h/.c`, `ADC.c`, `DataDeal.c`, `Can_HDX.c`, `LedBar.c`, `SystemDebug.c`, `IrqDebug.c`, `Project_BuildGuard.h` | Debug Watch 入口、SystemDebug 快照、IRQ 计数、BuildGuard | `FD_Debug` 只要求 Keil Watch 添加 `g_dbg_watch`；`g_dbg` 通过 `g_dbg_watch.system.snapshot` 查看；IRQ 计数通过 `g_dbg_watch.system.irq` 查看；profile 0 打开任一调试开关会编译报错 | 否 | 否 | 间接 | 间接 | 是 | KEEP_BUT_REFACTOR；用户已确认扩展为全项目调试目录 |
 
+### 2026-06-04 REQ-SYS-006 补充
+
+`REQ-SYS-006` 当前实现已扩展为：`FD_Debug` 通过 `g_dbg_watch` 提供 Keil Watch 单根入口，并通过 `g_dbg_watch.system.snapshot` 查看原 `g_dbg` 快照；Runtime 事件/profile/心跳/debug print 细节集中到 `DebugHooks.c`；`FD_Release` 对 `DebugHooks.c`、`DebugWatch.c`、`SystemDebug.c`、`IrqDebug.c` 设置 `IncludeInBuild=0`，不编译不链接，Release 业务流程只保留空 hook。
+
 ## 2. 参数初始化与 Flash/EEPROM/参数存储需求
 
 | ID | 需求描述 | 代码证据 | 涉及文件 | 当前实现方式 | 对外可见 | 上位机协议 | 安全 | 低功耗 | 兼容性 | Codex 初步判断 |
