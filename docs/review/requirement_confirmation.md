@@ -174,3 +174,32 @@
 | REQ-SV-007 | 同一模块、同一生命周期、同一调试视角的私有运行态变量应优先收口到模块 runtime 结构体 | `FactoryAging.c:28-37`, `FactoryAging.c:45-627` | 老化模块原有 10 个文件级静态变量分别保存 state、elapsed、last tick、BKP/Flash 保存节流、finish retry 和 MOS mode | 替换错误会影响老化进度、完成保存或 MOS 模式缓存；本批次不改持久化格式和对外接口 | 已处理 | 是否允许对单文件私有运行态做结构体收口，提升 Keil Watch 可读性？ | 已按低风险结构体收口批次执行 | 已执行 |
 | REQ-SV-008 | 日志模块私有运行态应集中管理，同时保留外部补偿时间符号 | `LogRecord.c`, `LogRecord.h`, `rtc_sleep_port.c` | 日志记录点、记录数组、startup/sleep 请求 flag、重复记录抑制和事件边沿 latch 已收口到 `LogRecordRuntime s_log_record`；`su32_Interval_S_Tcnt` 仍保留为外部符号 | 误搬 `su32_Interval_S_Tcnt` 会影响 RTC 睡眠秒数补偿；误清事件 latch 会影响日志去重 | 已处理 | 是否允许先收口私有状态，保留跨模块时间累计符号？ | 已执行；不改日志格式、Flash 保存格式和低功耗补偿接口 | 已执行 |
 | REQ-SV-009 | AFE 电流零点运行态应集中管理，但不改变电流算法和 SOC 样本序号 | `DataDeal.c`, `DataDeal.h`, `SOC.c` | 启动零点、零点 offset、last raw、stable count、ready、zero state 和采样序号已收口到 `DATA_RUNTIME s_data`；外部通过 `AfeCurrent_GetSeq()` 读取 | 替换错误会影响电流方向、零点、自学习和 SOC 积分；本批次只做字段替换 | 已处理 | 是否允许对 AFE current zero 私有状态做结构体收口，保留算法和采样序号接口？ | 已执行；不改 CADC、换算公式、deadband、sample seq | 已执行 |
+
+## 11. RTC 唤醒后 ADC 采样收敛与简化确认（2026-06-04）
+
+状态：已确认并已执行；源码已修改，硬件待验证
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+参考源码：
+
+- `103 + 309/Project/Source/ADC.c`
+- `103 + 309/Project/Source/ADC.h`
+- `103 + 309/Project/Source/conf/conf.c`
+- `103 + 309/Project/Source/Runtime.c`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/SOC.c`
+- `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/rtc_sleep_port.c`
+
+执行说明：下表的“Current behavior”保留确认前的源码证据，用户已确认本轮直接采样计算方案；当前源码已删除 VBC/MOS/Type-C 软件滤波，改为 latest-sample，并保留 ADC stop/reinit、1 个 10ms tick 丢弃、Type-C 死区/限幅、AFE/SOC/协议主路径。
+
+| Requirement ID | Requirement description | Evidence from code | Current behavior | Risk | Codex judgment | Question for user | Suggested decision | User decision placeholder |
+|---|---|---|---|---|---|---|---|---|
+| REQ-ADC-WAKE-001 | RTC STOP 前必须关闭 ADC/TIM2/DMA，唤醒后重新初始化 ADC | `conf/conf.c:114-118`, `conf/conf.c:335-344`, `ADC.c:256-270`, `ADC.c:462-480` | STOP 前关闭，唤醒恢复中再次 stop 后 `InitADC()` | 若删除关闭/重开，可能增加 STOP 功耗或导致外设状态不确定 | MUST_KEEP | 是否确认继续保留当前低功耗外设关闭/恢复路径？ | 保留，不在本轮简化中删除 | 已确认并已执行 |
+| REQ-ADC-WAKE-002 | RTC 唤醒后 ADC 最终值应尽快由首组有效样本恢复，不应从 0 慢慢收敛 | `ADC.c:466-475`, `ADC.c:430-431`, `ADC.c:451-456` | `InitADC()` 清零 `result/filt/vbat/typec`，VBC/温度从 0 做 IIR 收敛 | 唤醒后一段时间显示/诊断值偏低，可能误导调试或影响依赖 ADC VBC 的逻辑 | CHANGE_NEEDED | 是否允许增加“首包种子化”：第一组有效平均值直接写入 `result/vbat`？ | 允许，优先只改首包收敛，不动保护协议 | 已确认并已执行 |
+| REQ-ADC-WAKE-003 | VBC/ADC 总压滤波可简化，但不能替代 AFE 单体累加总压 | `DataDeal.c:201-224`, `ADC.c:434-458`, `DataDeal.c:980-986` | 主总压由 AFE 单体累加，ADC VBC 另存到调试/辅助位置 | 若把 ADC VBC 误作为主总压，可能影响保护和上报一致性 | MUST_KEEP | 是否确认最终电池总压仍以 AFE 单体累加为主，ADC VBC 只作诊断/辅助？ | 保持 AFE 总压主路径；只优化 ADC VBC 自身输出速度 | 已确认并已执行 |
+| REQ-ADC-WAKE-004 | Type-C 电流可以从 32 点平均简化为更快的直接/少点计算 | `ADC.h:9-10`, `ADC.c:377-420`, `SOC.c:20-54` | Type-C 非零电流需约 32 个 10ms 样本后输出，之后折算进 SOC 放电侧 | 直接计算响应快，但噪声可能进入 SOC；保留 32 点则滞后明显 | KEEP_BUT_REFACTOR | Type-C 电流是否允许改为直接按当前 raw/delta_mV 计算，或改为 4/8 点轻量平均？ | 建议 4/8 点平均或直接计算加限幅，保留零点死区 | 已确认并已执行 |
+| REQ-ADC-WAKE-005 | ADC 重新初始化后应有明确的首样本丢弃/ready 状态 | `ADC.c:462-480`, `ADC.c:483-510` | 当前没有 `ready`，业务 getter 可读到清零值或未充分更新值 | 首次 DMA/ADC 转换若不稳定，种子化过早会把异常值写成最终值 | CHANGE_NEEDED | 是否允许增加少量运行态字段，例如 `ready/discard/seeded`，用于首包保护？ | 允许，字段仅限 ADC 模块内部，不暴露协议 | 已确认并已执行 |
+| REQ-ADC-WAKE-006 | `App_AnlogCal()` 不能再强依赖主循环调用频率，否则未来改 1s 调用会影响 ADC 结果 | `ADC.c:483-510`, `Runtime.c:43-51`, `103 + 309/Project/Source/todo.md` | 当前按 10ms tick catch-up，单次最多处理 10 tick；主循环频繁调用时可工作 | 若后续改成 1s 调用，滤波步进和结果刷新都会变慢或积压 | CHANGE_NEEDED | 是否确认 ADC 结果计算应改为“每次用最新 raw 更新一次”，而不是补跑大量 10ms 历史 tick？ | 建议把 ADC 计算改成 latest-sample 模式，保留 10ms raw 采样 | 已确认并已执行 |
+| REQ-ADC-WAKE-007 | 简化 ADC 不应改变 Modbus/CAN 协议字段含义和 SOC 主电流样本序号 | `SOC.c:84-99`, `DataDeal.c:1105-1124`, `ADC_Get*()` 调用点 | SOC 主积分由 AFE sample seq 驱动；Type-C 仅作为附加放电等效电流 | 误把 ADC 更新节奏作为 SOC 主采样节奏会导致重复积分或漏积分 | MUST_KEEP | 是否确认本轮只改 ADC VBC/Type-C/MOS 温度输出，不改 AFE 电流 seq 和协议字段？ | 保持 AFE/SOC 主路径不变 | 已确认并已执行 |

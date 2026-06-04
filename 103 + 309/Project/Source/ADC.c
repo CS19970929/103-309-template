@@ -3,21 +3,17 @@
 typedef struct
 {
     __IO UINT16 raw[ADC_NUM];
-    INT32 filt[ADC_NUM];
     INT32 result[ADC_NUM];
     UINT32 last;
     UINT32 vbat;
     UINT16 typec;
-    UINT8 curCnt;
-    UINT8 zeroCnt;
-    UINT8 vbcCnt;
+    UINT8 discard;
     UINT8 reserved;
 } ADC_RUNTIME;
 
 static ADC_RUNTIME s_adc;
-#define TYPEC_CUR_ZERO_CONFIRM_CNT ((UINT8)3)
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
-#define ADC_ANALOG_CAL_MAX_CATCHUP_TICKS ((UINT32)10U)
+#define ADC_STARTUP_DISCARD_TICKS ((UINT8)1U)
 
 
 // 12佝，4096��
@@ -251,6 +247,7 @@ void InitADC_ADC1(void)
 void ADC_ResetAnlogCalSchedule(void)
 {
     s_adc.last = SysTime_Get10msTickCount();
+    s_adc.discard = ADC_STARTUP_DISCARD_TICKS;
 }
 
 void ADC_StopForLowPower(void)
@@ -290,7 +287,6 @@ static UINT8 ADC_IsTypeCZeroSample(UINT32 ad_value)
 static void ADC_ClearTypeCOutCurrent(void)
 {
     s_adc.typec = 0;
-    s_adc.filt[ADC_CURR] = 0;
     s_adc.result[ADC_CURR] = 0;
 }
 
@@ -374,87 +370,40 @@ UINT16 ADC_GetRaw(UINT8 index)
     return s_adc.raw[index];
 }
 
-void ADC_Current_Smooth(void)
+static void ADC_UpdateTypeCCurrent(void)
 {
-    UINT32 u32TypeCAdAvg = 0;
     UINT16 typec_delta_mV = 0;
     UINT16 typec_current_A10 = 0;
 
     if (ADC_IsTypeCZeroSample((UINT32)s_adc.raw[ADC_CUR_AMP]))
     {
-        if (++s_adc.zeroCnt >= TYPEC_CUR_ZERO_CONFIRM_CNT)
-        {
-            s_adc.zeroCnt = TYPEC_CUR_ZERO_CONFIRM_CNT;
-            s_adc.curCnt = 0;
-            s_adc.filt[ADC_CUR_AMP] = 0;
-            ADC_ClearTypeCOutCurrent();
-            return;
-        }
-    }
-    else
-    {
-        s_adc.zeroCnt = 0;
+        ADC_ClearTypeCOutCurrent();
+        return;
     }
 
-    if (s_adc.curCnt++ < AD_CalNum_Cur)
-    {
-        s_adc.filt[ADC_CUR_AMP] += s_adc.raw[ADC_CUR_AMP];
-    }
-    else
-    {
-        s_adc.curCnt = 0;
-        u32TypeCAdAvg = s_adc.filt[ADC_CUR_AMP] >> AD_CalNum_Cur_2;
-        s_adc.filt[ADC_CUR_AMP] = 0;
-
-        if (u32TypeCAdAvg <= (UINT32)AD_CurZeroDeadband)
-        {
-            ADC_ClearTypeCOutCurrent();
-            return;
-        }
-
-        typec_delta_mV = ADC_TypeCAdToMilliVolt(u32TypeCAdAvg);
-        s_adc.typec = ADC_TypeCDeltaMvToMilliAmp(typec_delta_mV);
-        typec_current_A10 = (UINT16)(((UINT32)s_adc.typec + 50U) / 100U);
-        s_adc.filt[ADC_CURR] = typec_current_A10;
-        s_adc.result[ADC_CURR] = typec_current_A10;
-    }
+    typec_delta_mV = ADC_TypeCAdToMilliVolt((UINT32)s_adc.raw[ADC_CUR_AMP]);
+    s_adc.typec = ADC_TypeCDeltaMvToMilliAmp(typec_delta_mV);
+    typec_current_A10 = (UINT16)(((UINT32)s_adc.typec + 50U) / 100U);
+    s_adc.result[ADC_CURR] = typec_current_A10;
 }
 
-void ADC_TTC(void)
+static void ADC_UpdateMosTemp(void)
 {
     INT32 t_i32temp = 0;
 
-    //-------------MOS1温度(+40)-------------
-    t_i32temp = (INT32)s_adc.raw[ADC_TEMP_MOS1]; // 读坖AD�
+    t_i32temp = (INT32)s_adc.raw[ADC_TEMP_MOS1];
     t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
-    s_adc.filt[ADC_TEMP_MOS1] = (((t_i32temp << 10) - s_adc.filt[ADC_TEMP_MOS1]) >> 3) + s_adc.filt[ADC_TEMP_MOS1];
-    s_adc.result[ADC_TEMP_MOS1] = (UINT16)((s_adc.filt[ADC_TEMP_MOS1] + 512) >> 10);
+    s_adc.result[ADC_TEMP_MOS1] = (UINT16)t_i32temp;
 }
 
-void ADC_Vbc(void)
+static void ADC_UpdateVbc(void)
 {
-    UINT32 u32AdAvg = 0;
     UINT32 u32VbatCalc_mV = 0;
 
-    if (s_adc.vbcCnt++ < AD_CalNum)
-    {
-        s_adc.filt[ADC_VBC] += (UINT32)s_adc.raw[ADC_VBC];
-    }
-    else
-    {
-        s_adc.vbcCnt = 0;
-        u32AdAvg = (UINT32)s_adc.filt[ADC_VBC] >> AD_CalNum_2;
-        s_adc.filt[ADC_VBC] = 0;
+    u32VbatCalc_mV = ADC_VbcAdcMvToBatteryMv(ADC_VbcAdToMilliVolt((UINT32)s_adc.raw[ADC_VBC]));
 
-        u32VbatCalc_mV = ADC_VbcAdcMvToBatteryMv(ADC_VbcAdToMilliVolt(u32AdAvg));
-
-        s_adc.result[ADC_VBC] = (((INT32)u32VbatCalc_mV - s_adc.result[ADC_VBC]) >> 3) + s_adc.result[ADC_VBC];
-        if (s_adc.result[ADC_VBC] < 0)
-        {
-            s_adc.result[ADC_VBC] = 0;
-        }
-        s_adc.vbat = (UINT32)s_adc.result[ADC_VBC];
-    }
+    s_adc.result[ADC_VBC] = (INT32)u32VbatCalc_mV;
+    s_adc.vbat = u32VbatCalc_mV;
 }
 
 // VDDA和VSSA为AD采样专门供电，VREF+和VREF-为AD采样的坂加电压，丝需覝冝酝置�(�以会坑现没相关�坥酝�)
@@ -467,7 +416,6 @@ void InitADC(void)
     {
         s_adc.raw[i] = 0;
         s_adc.result[i] = 0;
-        s_adc.filt[i] = 0;
     }
 
     ADC_ClearTypeCOutCurrent();
@@ -484,7 +432,6 @@ void App_AnlogCal(void)
 {
     UINT32 u32Now10msTick;
     UINT32 u32Elapsed10msTick;
-    UINT32 u32Process10msTick;
 
     u32Now10msTick = SysTime_Get10msTickCount();
     u32Elapsed10msTick = u32Now10msTick - s_adc.last;
@@ -493,18 +440,14 @@ void App_AnlogCal(void)
         return;
     }
 
-    u32Process10msTick = u32Elapsed10msTick;
-    if (u32Process10msTick > ADC_ANALOG_CAL_MAX_CATCHUP_TICKS)
+    s_adc.last = u32Now10msTick;
+    if (s_adc.discard != 0U)
     {
-        u32Process10msTick = ADC_ANALOG_CAL_MAX_CATCHUP_TICKS;
+        --s_adc.discard;
+        return;
     }
-    s_adc.last += u32Process10msTick;
 
-    while (u32Process10msTick > 0U)
-    {
-        ADC_TTC();
-        ADC_Vbc();
-        ADC_Current_Smooth();
-        u32Process10msTick--;
-    }
+    ADC_UpdateMosTemp();
+    ADC_UpdateVbc();
+    ADC_UpdateTypeCCurrent();
 }

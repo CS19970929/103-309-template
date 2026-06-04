@@ -173,3 +173,25 @@
 - AFE fault/recover 计数和低压/强制低压累计计数。
 - CAN/Sci RX/TX 队列、pending、busy、read block 状态。
 - Flash busy、日志边沿去重、BKP sleep flag 和 RTC elapsed 秒数。
+
+## 阶段 12：RTC 唤醒后 ADC 采样简化阶段
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+| 项目 | 内容 |
+|---|---|
+| 修改范围 | 已处理 ADC 模块内部的首样本丢弃、VBC/MOS 温度直接计算、Type-C 电流直接计算和 `App_AnlogCal()` latest-sample 化 |
+| 不能改什么 | 不改 ADC 引脚，不改 TIM2/ADC/DMA 低功耗关闭/恢复，不改 AFE 单体总压主路径，不改 AFE 电流 sample seq，不改 Modbus/CAN 协议字段含义 |
+| 验证方法 | 冷启动 ADC、RTC STOP 唤醒 ADC、Type-C 插拔、AFE 总压隔离、SOC Type-C 等效电流、STOP 功耗 |
+| 需要确认 | 已确认并已执行；剩余为 ADC 抖动、Type-C 边界、RTC STOP 唤醒恢复和 STOP 功耗上板验证 |
+| 回滚方式 | ADC 内部改动独立 commit；若 Type-C 抖动或 VBC 异常，可单独回退 Type-C/VBC 子批次 |
+
+### 阶段 12 推荐小批次
+
+| 批次 | 类型 | 内容 | 允许修改文件 | 前置条件 | 验证 |
+|---|---|---|---|---|---|
+| ADC-WAKE-00 | 已完成文档确认 | 完成 ADC 唤醒收敛需求确认表、风险和测试入口 | `docs/review/*`, `docs/design/adc_afe_design.md`, `docs/change_log.md`, `docs/test_plan.md` | 用户已确认 | 文档证据自洽 |
+| ADC-WAKE-01 | 已完成首样本保护 | 增加 ADC 内部 `discard` 状态，ADC 重新初始化后丢弃 1 个 10ms tick | `ADC.c` | 用户确认 Q-ADC-WAKE-001/002/005 | RTC 唤醒 200ms 内 VBC/MOS 合理；STOP 功耗不回退 |
+| ADC-WAKE-02 | 已完成 Type-C 简化 | Type-C 改为 raw 直接计算，保留死区/限幅 | `ADC.c/.h`, 必要文档 | 用户确认 Q-ADC-WAKE-003 | Type-C 接入/断开响应，SOC 附加放电稳定 |
+| ADC-WAKE-03 | 已完成时基解耦 | `App_AnlogCal()` 改成 latest-sample 更新模式，不再补跑历史 10ms tick | `ADC.c`, 文档 | 用户确认 Q-ADC-WAKE-004 | 主循环高频/低频调用下 ADC 结果一致性 |
+| ADC-WAKE-04 | 进行中 | 编译、静态检查、文档、变更记录、清晰 git commit | 源码与文档 | 源码批次完成 | Keil/脚本可用检查；真板项列入待测试 |

@@ -132,3 +132,28 @@
 | Q-RISK-002 | AFE MTP | 上位机写参数可能触发 AFE MTP/ROM 写入 | `SH367309_DataDeal.c:145-249` | 差异写入并 reset AFE | MUST_KEEP/UNKNOWN | P0/P1 | 是否需要工装模式保护？ | B/C/F | |
 | Q-RISK-003 | 低功耗 | fault active 阻塞 sleep | `rtc_sleep.c:LP_GetBlockReason()` | 有 fault 不进 STOP | MUST_KEEP | P1 | 是否所有 fault 都阻塞低功耗，还是过放必须允许 deep sleep？ | A/C/F | |
 | Q-RISK-004 | App 地址 | 工程 XML 地址口径不单一 | `uvprojx` 搜索 `IROM` 结果 | 需要 map/bin 验证 | UNKNOWN | P0 | 后续是否把链接地址检查做进脚本门禁？ | B/C | |
+
+## 7. RTC 唤醒后 ADC 采样收敛与简化确认问题
+
+状态：已确认并已执行，2026-06-04 源码已修改，硬件待验证
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+参考源码：
+
+- `103 + 309/Project/Source/ADC.c`
+- `103 + 309/Project/Source/ADC.h`
+- `103 + 309/Project/Source/conf/conf.c`
+- `103 + 309/Project/Source/Runtime.c`
+- `103 + 309/Project/Source/DataDeal.c`
+- `103 + 309/Project/Source/SOC.c`
+
+执行说明：用户已确认直接采样计算方案，本轮已删除 VBC/MOS/Type-C 软件滤波并改为 latest-sample。当前仍需真板验证 ADC 抖动、Type-C 小电流边界和 RTC STOP 唤醒恢复时间。
+
+| ID | 模块 | 需求描述 | 代码证据 | 当前行为 | Codex 判断 | 风险 | 需要我确认的问题 | 建议选项 | 我的决定 |
+|---|---|---|---|---|---|---|---|---|---|
+| Q-ADC-WAKE-001 | ADC/低功耗 | RTC STOP 前关闭 ADC/TIM2/DMA、唤醒后重新 `InitADC()` 是否必须保留 | `conf/conf.c:114-118`, `conf/conf.c:335-344`, `ADC.c:256-270`, `ADC.c:462-480` | 当前低功耗路径会停 ADC 并在唤醒后重建 | MUST_KEEP | 删除会影响 STOP 功耗和外设恢复确定性 | 是否确认本轮简化不删除 ADC stop/reinit 低功耗路径？ | A. 保留当前低功耗路径 | 已确认并已执行 |
+| Q-ADC-WAKE-002 | ADC/VBC | RTC 唤醒后 VBC/MOS 温度是否允许第一组有效样本直接初始化最终值 | `ADC.c:430-431`, `ADC.c:451-456`, `ADC.c:466-475` | 当前从 0 开始 IIR，最终值需要一段时间收敛 | CHANGE_NEEDED | 过早使用异常首样本会输出错误值；不改则唤醒后继续慢 | 是否允许加入丢弃 1 到 2 组 raw 后首包种子化？ | B. 允许首包加速，并保留少量丢弃保护 | 已确认并已执行 |
+| Q-ADC-WAKE-003 | ADC/Type-C | Type-C 电流是否从 32 点平均改成直接计算或少点平均 | `ADC.h:9-10`, `ADC.c:377-420`, `SOC.c:20-54` | 当前非零电流约 330ms 级别才输出 | KEEP_BUT_REFACTOR | 直接计算会快，但可能把 ADC 抖动带入 SOC 等效放电 | Type-C 电流优先追求响应速度，还是保留较强滤波？ | B. 改 4/8 点轻量平均；C. 直接计算加死区/限幅；A. 保留 32 点 | 已确认并已执行 |
+| Q-ADC-WAKE-004 | ADC/时基 | `App_AnlogCal()` 是否改为 latest-sample 模式，避免未来改 1s 调用后影响结果 | `ADC.c:483-510`, `Runtime.c:43-51`, `todo.md` | 当前依赖 10ms tick catch-up，单次最多补 10 tick | CHANGE_NEEDED | 若调用频率变低，结果更新会变慢或积压 | 是否确认 ADC 计算要和 App 调用频率解耦？ | B. 改为每次按最新 raw 更新一次 | 已确认并已执行 |
+| Q-ADC-WAKE-005 | ADC/总压 | ADC VBC 是否只做诊断/Type-C 辅助，不替代 AFE 单体累加总压 | `DataDeal.c:201-224`, `DataDeal.c:980-986` | `u16VCellTotle` 当前由 AFE 单体累加，ADC VBC 放在辅助/调试位置 | MUST_KEEP | 误替代会影响保护、上报和历史协议口径 | 是否确认最终电池总压继续以 AFE 单体累加为准？ | A. 保持 AFE 总压主路径 | 已确认并已执行 |

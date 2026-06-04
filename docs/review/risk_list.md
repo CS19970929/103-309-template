@@ -2,7 +2,7 @@
 
 状态：部分验证
 
-本文以当前源码为第一可信来源，记录本轮 BMS App IO 与 RTC 低功耗配置审查发现的风险。未修改源码，未做上板实测。2026-06-02 追加低功耗需求对齐风险，详见 `docs/review/low_power_requirement_alignment_2026-06-02.md`。
+本文以当前源码为第一可信来源，记录本轮 BMS App IO 与 RTC 低功耗配置审查发现的风险。部分专项已按用户确认进入源码修改；仍未做上板实测。2026-06-02 追加低功耗需求对齐风险，详见 `docs/review/low_power_requirement_alignment_2026-06-02.md`。
 2026-06-03 追加 SOC 源码复审、文档合并与源码简化风险，详见 `docs/design/soc_design.md`、`docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` 和 `docs/review/soc_simplification_candidates_2026-06-02.md`。
 2026-06-03 追加中断计数实现风险，详见 `docs/review/interrupt_counter_plan_2026-06-03.md`。
 
@@ -88,3 +88,17 @@
 | RISK-SV-AFE-CUR-001 | `DataDeal.c` AFE current zero 私有运行态已收口为结构体字段 | `DataDeal.c`, `SOC.c` | 若字段替换错误，会影响启动零点、自动零点学习、电流方向、deadband 输出和 SOC sample seq 驱动 | 已处理，需电流/SOC 回归 | 本批次不改 CADC 读取、换算公式、deadband 和 `AfeCurrent_GetSeq()` 口径；后续用真实充/放电方向、零点、`0xD000` 电流和 SOC 回归 |
 | RISK-SV-DATA-001 | `DataDeal.c` 中多个静态状态混合客户逻辑、保护逻辑和认证逻辑 | `DataDeal.c:51-95`, `DataDeal.c:930-1055` | 变量看似可删，但可能影响 MOS、RF_EN、过温、拔 5V 行为和认证 | UNKNOWN | 未确认产品/认证背景前只做文档归类，不改源码 |
 | RISK-SV-KEEP-001 | 把真实历史状态误判为“不必要变量” | `LedBar.c:890-1009`, `SOC.c:116-142`, `DataDeal.c:825-917` | 会导致误唤醒、重复积分、故障恢复失败、通信状态丢失 | MUST_KEEP | 明确边界：防抖、边沿、累计延时、ISR 队列、SOC sample seq 第一批不删 |
+
+## RTC 唤醒后 ADC 采样收敛与简化风险
+
+状态：已确认并已执行，源码已修改，硬件待验证，2026-06-04 更新
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+| 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
+|---|---|---|---|---|---|
+| RISK-ADC-WAKE-001 | VBC/MOS/Type-C 软件滤波已删除，最终值会更快反映 raw 抖动 | `ADC_UpdateVbc()`, `ADC_UpdateMosTemp()`, `ADC_UpdateTypeCCurrent()` | 诊断值和 Type-C 辅助电流可能比旧版本更敏感 | 已执行，需上板验证 | 真板观察 raw、VBC、MOS 温度、Type-C 电流抖动；必要时只对具体问题补最小保护 |
+| RISK-ADC-WAKE-002 | ADC 重新初始化后只丢弃 1 个 10ms tick | `ADC_ResetAnlogCalSchedule()`, `App_AnlogCal()` | 若硬件上电/分压/参考电压稳定时间更长，可能首个结果短时异常 | KEEP_BUT_REFACTOR | RTC STOP 唤醒后用 Keil Watch 或 debug 快照确认 20ms/50ms/200ms 内结果稳定性 |
+| RISK-ADC-WAKE-003 | Type-C 电流不再做 32 点平均和连续零点确认 | `ADC_UpdateTypeCCurrent()`, `AD_CurZeroDeadband` | 小电流边界和插拔瞬态可能更直接进入 SOC 附加放电 | 已执行，需上板验证 | 保留死区/限幅；实测 0A、小负载、阶跃负载和断开清零 |
+| RISK-ADC-WAKE-004 | `App_AnlogCal()` 已改 latest-sample，结果刷新仍受调用频率限制 | `App_AnlogCal()`, `Runtime.c` | 若未来把调用周期改成 1s，结果不会积压历史滤波，但刷新率仍为 1s | 已执行 | 后续修改调用频率时同步评估显示/诊断刷新需求，不再用滤波补跑掩盖调度问题 |
+| RISK-ADC-WAKE-005 | 简化 ADC 时误把 ADC VBC 当成主总压 | `DataDeal.c:201-224`, `DataDeal.c:980-986` | 可能改变保护、CAN/Modbus 上报和校准口径 | MUST_KEEP | 已保持 AFE 单体累加作为主总压；ADC VBC 仅作诊断和 Type-C 折算辅助 |

@@ -1,7 +1,7 @@
 # 103-309 BMS 当前项目模块地图
 
 > 范围说明：本次审查以当前主工程 `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx` 及其列入工程的 `103 + 309/Project/Source` 源码为准。`SH3673520+STM32F072CBT6 DemoCode...`、`build/generated_templates`、`firmware/comm_tool_f103ret6` 视为参考或工具工程，不按当前 BMS App 运行路径判定需求。
-> 硬性边界：本文件只记录 review 结果，没有修改任何 `.c/.h`、Keil 工程或编译配置。
+> 硬性边界：本文件记录当前模块事实；2026-06-04 已同步 ADC 直接采样源码变更，未修改 Keil 工程或编译配置。
 
 ## 1. 项目目录结构
 
@@ -262,9 +262,10 @@ TIM2_CC2 trigger
   ADC1 scan conversion
   DMA1_Channel1 -> g_u16ADCVal[]
 App_AnlogCal()
-  ADC_TTC()
-  ADC_Vbc()
-  ADC_Current_Smooth()
+  discard first 10ms tick after InitADC()
+  ADC_UpdateMosTemp()
+  ADC_UpdateVbc()
+  ADC_UpdateTypeCCurrent()
 ```
 
 当前 DMA 实际采 3 路：
@@ -275,7 +276,14 @@ App_AnlogCal()
 | ADC_Channel_2 | PA2 | Type-C 输出电流 |
 | ADC_Channel_1 | PA1 | VBC / 总压分压 |
 
-证据：`ADC.c:90-123`, `ADC.c:215-261`, `ADC.c:488-517`。
+当前事实：
+
+- ADC raw 仍由 TIM2_CC2 触发 ADC1 scan，并由 DMA1_Channel1 写入 `s_adc.raw[]`。
+- `ADC_ResetAnlogCalSchedule()` 在冷启动或 RTC STOP 唤醒重新 `InitADC()` 后丢弃 1 个 10ms tick。
+- VBC、MOS 温度、Type-C 电流已去掉软件平均/IIR 滤波，均由最新 raw 直接换算。
+- Type-C 电流保留 `AD_CurZeroDeadband` 和最大值限幅；AFE/SOC 主链路不变。
+
+证据：`ADC.c:90-123`, `ADC.c:215-261`, `ADC.c:247-250`, `ADC.c:375-452`。
 
 ### 12.2 AFE SH367309
 

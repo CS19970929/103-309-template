@@ -4,14 +4,6 @@
 #define AD_Used_amount      3
 
 
-#define AD_CalNum			8		//������λ�ƴ���>>2������������Ҹ�
-#define AD_CalNum_2			3		//2^3 = 8�������Ǹ�����2�Ķ��ٴη�������λ��
-
-#define AD_CalNum_Cur		32		//������λ�ƴ���>>5������������Ҹ�
-#define AD_CalNum_Cur_2		5		//2^5 = 32�������Ǹ�����2�Ķ��ٴη�������λ��
-
-#define AD_CurOffsetCalNum  16
-#define AD_CurOffsetCalNum_2 4
 #define AD_CurZeroDeadband  4
 
 #define TYPEC_CUR_RSENSE_MOHM       10U     // Type-C current sense resistor: 10 mohm, PA2 samples shunt voltage directly

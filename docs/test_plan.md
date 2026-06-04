@@ -1,7 +1,7 @@
 # 测试计划
 
 文档状态：部分验证
-最后更新时间：2026-06-03
+最后更新时间：2026-06-04
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
 ## DataDeal/AFE 运行状态结构体化第 3 阶段测试入口
@@ -115,3 +115,21 @@ SOC 源码净删减后，必须至少覆盖：
 | 基础静态检查 | `git diff --check`、仓库脚本、可用编译 | 结果与基线对比清楚，不把旧失败当成本次失败 |
 
 硬件实测项仍以 `docs/review/test_plan.md` 为准。
+
+## RTC 唤醒后 ADC 采样简化测试入口
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+当前阶段：源码已修改，已删除 ADC 软件滤波并改为直接采样计算；硬件实测待执行。
+
+| 测试项 | 入口 | 通过标准 |
+|---|---|---|
+| 旧滤波符号检查 | `rg "ADC_Current_Smooth|ADC_TTC|ADC_Vbc|AD_CalNum|AD_CalNum_Cur|TYPEC_CUR_ZERO_CONFIRM_CNT|filt\\[" "103 + 309/Project/Source"` | 源码中无旧 ADC 软件滤波函数、宏和缓存引用 |
+| 静态源码证据 | `rg "ADC_UpdateVbc|ADC_UpdateMosTemp|ADC_UpdateTypeCCurrent|ADC_STARTUP_DISCARD_TICKS|App_AnlogCal" "103 + 309/Project/Source/ADC.c"` | 能定位直接计算、首样本丢弃和 latest-sample 调用链 |
+| 冷启动 ADC raw | Keil Watch 或 debug 快照读取 `s_adc.raw[]` / `g_dbg.adc.raw_*` | TIM2 触发后 raw 快速更新，不长时间为 0 |
+| 冷启动 ADC 最终值 | `ADC_GetVbatMilliVolt()`、`ADC_GetTypeCOutCurrentMilliAmp()`、`ADC_GetResult(ADC_TEMP_MOS1)` | 丢弃 1 个 tick 后直接进入合理范围，不再长时间从 0 慢收敛 |
+| RTC STOP 唤醒 ADC | 进入 HICCUP RTC STOP 后由 RTC 唤醒 | 唤醒后 ADC raw 恢复；约 20ms 起出现直接计算结果，200ms 内稳定 |
+| Type-C 插拔 | 接入/断开 Type-C 负载 | 接入不再等待 32 点平均；断开后死区内清零 |
+| 主总压隔离 | 比较 `g_stCellInfoReport.u16VCellTotle` 和 ADC VBC 辅助值 | 主总压仍来自 AFE 单体累加，ADC VBC 不覆盖主路径 |
+| SOC 路径 | 观察 AFE sample seq、主回路电流、Type-C 等效电流 | AFE sample seq 仍驱动主 SOC；Type-C 只作为附加等效放电 |
+| 低功耗电流 | STOP 前后测量板端电流 | ADC 简化后仍关闭 TIM2/ADC/DMA，不抬高 STOP 功耗 |

@@ -4,6 +4,31 @@
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-04 RTC 唤醒后 ADC 直接采样简化
+
+源码变更：
+- `ADC.c` 删除 VBC、MOS 温度、Type-C 电流的软件滤波缓存、计数器和 catch-up 逻辑。
+- `ADC.c` 将 VBC、MOS 温度、Type-C 电流改为使用最新 DMA raw 直接计算；Type-C 保留零点死区和最大值限幅。
+- `ADC.c` 在 `ADC_ResetAnlogCalSchedule()` 中增加 1 个 10ms tick 的首样本丢弃，保留低功耗唤醒后 ADC stop/reinit 路径。
+- `ADC.h` 删除不再使用的 ADC 平均滤波宏，保留 Type-C 死区和换算参数。
+
+文档变更：
+- 新增 `docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`。
+- 更新 ADC/AFE 设计文档、需求确认表、需求问题表、风险清单、重构计划、模块地图、全项目 review 和测试入口。
+
+当前结论：
+- RTC 唤醒后 ADC raw 仍由 TIM2/ADC/DMA 周期采样；最终值不再等待 8/32 点平均或 IIR 收敛。
+- `App_AnlogCal()` 改为 latest-sample 模式，不再按历史 10ms tick 补跑滤波。
+- AFE 单体累加总压、AFE 电流 sample seq、SOC 主积分和 Modbus/CAN 协议字段含义保持不变。
+
+验证边界：
+- 旧 ADC 滤波符号扫描无命中。
+- `git diff --check` 通过，仅有仓库换行转换提示。
+- `py -3.9 tools/project_check.py --quiet`：本次新增 BOM 问题已修正；脚本仍因既有缺文件/非 UTF-8 源码/缺历史文档和自身 `NameError` 失败。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 编译通过，`0 Error(s), 0 Warning(s)`。
+- 产物：`103 + 309/Project/Users/Objects/FD_Release.axf` 1036908 bytes；`FD_Release.bin` 52868 bytes。
+- 真板冷启动、RTC STOP、Type-C 插拔、STOP 功耗仍需验证。
+
 ## 2026-06-04 应用层宏配置第一批收敛
 
 源码变更：

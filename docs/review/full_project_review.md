@@ -1,7 +1,7 @@
 # 103-309 BMS 全项目源码 Review
 
-> 审查状态：源码优先，只读审查。
-> 修改范围：本轮仅新增/更新 `docs/review` 与后续文档体系 Markdown，不修改源码、Keil 工程、编译配置和协议行为。
+> 审查状态：源码优先，部分专项已按用户确认进入源码修改。
+> 修改范围：2026-06-04 已同步 ADC 直接采样源码变更；未修改 Keil 工程、编译配置和协议行为。
 > 当前结论不是重构指令；所有涉及业务行为、客户协议、硬件动作和量产流程的修改必须先经过需求确认。
 
 ## 1. 项目整体评价
@@ -112,6 +112,7 @@
 5. CHG_IN、MCU_WK、SW、RS485/UART wake 源的电平和误唤醒。
 6. LedBar 查理复用扫描亮度、鬼影、STOP 前 GPIO 泄漏。
 7. 老化模式 MOS 行为、停止/完成/复位持久化。
+8. ADC 直接采样后的 VBC/MOS/Type-C 抖动、RTC STOP 唤醒后首个有效值时间、Type-C 小电流和插拔边界。
 
 ## 13. 需要确认的业务需求
 
@@ -139,3 +140,19 @@
 | debug/status mirror | `g_stLowPowerRtcStatus` 中 `rtcWake/delay/elapsed` 等展示字段 | 可考虑从控制结构迁移到 debug 快照 |
 
 后续源码修改必须先确认 `REQ-SV-*` 或 `Q-SV-*` 条目。
+
+## 16. RTC 唤醒后 ADC 简化专项补充（2026-06-04）
+
+状态：已确认并已执行；源码已修改，硬件待验证
+
+专项文档：`docs/review/adc_rtc_wakeup_simplification_2026-06-04.md`
+
+本次用户已确认把 MCU ADC 侧 VBC、MOS 温度和 Type-C 电流从软件滤波改为直接采样计算。当前源码事实：
+
+- `ADC.c` 删除 VBC/MOS/Type-C 软件滤波缓存、计数器和 10ms tick catch-up。
+- `App_AnlogCal()` 使用 latest-sample 模式，每次只按最新 DMA raw 计算一次。
+- ADC 重新初始化后只保留 1 个 10ms tick 的首样本丢弃保护。
+- Type-C 电流保留死区和最大值限幅；不再做 32 点平均和连续零点确认。
+- AFE 单体累加总压、AFE 电流 sample seq、SOC 主积分和 Modbus/CAN 协议字段含义未改变。
+
+剩余风险是直接采样噪声和真板恢复时间，需要通过冷启动、RTC STOP 唤醒、Type-C 插拔、主总压隔离和 STOP 功耗测试确认。
