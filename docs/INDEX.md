@@ -22,6 +22,7 @@
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
 | 查看当前 SOC 完整逻辑、快降排查、简化记录和测试边界 | [SOC 模块设计与源码审查](design/soc_design.md) |
+| 查看 SOC 函数粒度 review 和净删减边界 | [SOC 函数粒度审查与净删减记录](review/soc_function_granularity_review_2026-06-04.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |
@@ -118,6 +119,7 @@ docs/
 │   ├── soc_current_logic_2026-06-02.md SOC 当前逻辑历史参考，已合并至 design/soc_design.md
 │   ├── soc_rest_fast_drop_analysis_2026-06-03.md SOC 快降历史参考，已合并至 design/soc_design.md
 │   ├── soc_simplification_candidates_2026-06-02.md SOC 简化历史参考，已合并至 design/soc_design.md
+│   ├── soc_function_granularity_review_2026-06-04.md SOC 函数粒度审查与净删减记录
 │   ├── soc_test_script_usage_2026-06-03.md SOC 测试脚本历史参考，已合并至 design/soc_design.md
 │   ├── bms_app_io_low_power_compare_2026-05-27.md  IO 低功耗对比
 │   ├── rtc_sleep_low_power_requirement_confirmation_2026-05-27.md

@@ -31,6 +31,20 @@
 验证边界：
 - 本次仍不修改 low-tail 表、满电/静置/RTC 阈值、Modbus/CAN 字段、Flash snapshot 布局和 200ms AFE sample seq 调度顺序。
 
+## 2026-06-04 SOC 函数粒度净删减
+
+源码变更：
+- 删除 `soc_publish()` 到 `soc_export_public_fields()` 的一层转发包装。
+- 将只用一次的积分模式判断、长静置 OCV 单步、重放电判断合并回各自调用点。
+- 将 mid-tail 删除后遗留的泛化 tail 查表 helper 收敛为单个 `soc_low_tail_config()`。
+- 修正 snapshot load/save 附近缩进噪声。
+
+文档变更：
+- 新增 `docs/review/soc_function_granularity_review_2026-06-04.md`，明确“真实边界保留、一次性包装删除”的 SOC 重构规则。
+
+验证边界：
+- 本次不修改 low-tail 表值、满电/静置/RTC 阈值、Flash snapshot 布局、协议发布字段和 200ms 调度顺序。
+
 ## 2026-06-04 CAN 周期 TX 与 RTC idle 解耦
 
 源码变更：

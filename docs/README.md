@@ -12,6 +12,7 @@
 当前专项入口：
 
 - [SOC 模块设计与源码审查](design/soc_design.md) - 当前唯一活跃 SOC 逻辑入口，已合并历史 SOC review/devlog 的有效内容
+- [SOC 函数粒度审查与净删减记录](review/soc_function_granularity_review_2026-06-04.md) - 记录 SOC 小函数保留/合并边界
 - [状态变量净删减专项审计](review/state_variable_audit.md)
 - [顶层变更记录](change_log.md)
 - [顶层测试计划](test_plan.md)

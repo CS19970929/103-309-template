@@ -1,5 +1,20 @@
 # 变更记录
 
+## 2026-06-04 SOC 函数粒度净删减
+
+源码变更：
+- `SocEnhance.c`：删除一层 `soc_publish()` 转发包装，发布函数直接写 public 字段并刷新 Debug Watch。
+- `SocEnhance.c`：将只用一次的积分模式判断、长静置 OCV 单步和重放电判断合并回调用点。
+- `SocEnhance.c`：将 mid-tail 删除后遗留的泛化 tail 查表 helper 收敛为单个 `soc_low_tail_config()`。
+- 修正 snapshot load/save 附近缩进噪声。
+
+文档变更：
+- 新增 `docs/review/soc_function_granularity_review_2026-06-04.md`，记录 SOC 函数粒度 review 规则、保留边界和本轮合并清单。
+- 更新 `docs/design/soc_design.md` 的已处理问题表。
+
+行为边界：
+- 不修改 low-tail 表、满电/静置/RTC 阈值、Flash snapshot、Modbus/CAN/LedBar 发布字段和 200ms 调度顺序。
+
 ## 2026-06-04 SOC 删除 display_soc 平滑和 Fixed/Zero 覆盖
 
 源码变更：

@@ -435,6 +435,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | runtime table | 上位机写 SOC 表长期关闭，仍保留宏、运行时数组和 EEPROM 分支 | 删除 runtime table 宏、数组、写入分支和 EEPROM 默认表装载 |
 | 手动 OCV | flag=1 手动 OCV 与“只保留长静置慢下修”不一致 | 删除 `SOC_RequestManualOcvRefresh()` 和 flag=1 处理 |
 | display_soc 平滑 | 对外 SOC 需要维护内部/显示两套状态，但自动校准最大只有 1%，额外平滑收益很低 | 删除 `display_soc/display_ticks/display_ready`、显示平滑宏、Fixed/Zero 覆盖逻辑；对外直接发布 `s_soc.soc` |
+| 函数粒度 | 删除历史功能后仍保留一层转发、一次性小 helper 和 mid-tail 时代泛化查表 | 合并 `soc_publish` 包装层、积分模式判断、长静置 OCV 单步、重放电判断和 low-tail 泛化 helper；详见 `docs/review/soc_function_granularity_review_2026-06-04.md` |
 
 ## 12. 风险与后续建议
 
