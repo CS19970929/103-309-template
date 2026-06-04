@@ -160,20 +160,20 @@ class SocTestUi(tk.Tk):
         body.add(left, weight=1)
         body.add(right, weight=2)
 
-        columns = ("scenario", "duration", "true", "soc", "display", "error", "vmin", "current", "result")
+        columns = ("scenario", "duration", "true", "soc", "public", "error", "vmin", "current", "result")
         self.sim_tree = ttk.Treeview(left, columns=columns, show="headings", height=14)
         headings = {
             "scenario": "工况",
             "duration": "时长",
             "true": "真实SOC",
             "soc": "算法SOC",
-            "display": "显示SOC",
+            "public": "发布SOC",
             "error": "最大误差",
             "vmin": "最低Vmin",
             "current": "最大电流",
             "result": "结果",
         }
-        widths = {"scenario": 120, "duration": 64, "true": 92, "soc": 84, "display": 72, "error": 70, "vmin": 72, "current": 74, "result": 60}
+        widths = {"scenario": 120, "duration": 64, "true": 92, "soc": 84, "public": 72, "error": 70, "vmin": 72, "current": 74, "result": 60}
         for col in columns:
             self.sim_tree.heading(col, text=headings[col])
             self.sim_tree.column(col, width=widths[col], anchor="center")
@@ -579,7 +579,7 @@ class SocTestUi(tk.Tk):
                     self.set_status("板端 SOC 参数读取完成")
                 elif kind == "set_soc_done":
                     soc, row = payload  # type: ignore[misc]
-                    self.set_status(f"已写入一次 SOC={soc}%，读回显示 SOC={row['soc']}%")
+                    self.set_status(f"已写入一次 SOC={soc}%，读回发布 SOC={row['soc']}%")
                     self._show_online_row(row)
                 elif kind == "mcu_status":
                     status = payload  # type: ignore[assignment]
@@ -613,7 +613,7 @@ class SocTestUi(tk.Tk):
                     r.duration_s,
                     f"{r.true_start:.1f}->{r.true_end:.2f}",
                     f"{r.soc_start}->{r.soc_end}",
-                    r.display_end,
+                    r.public_end,
                     f"{r.max_abs_error:.2f}",
                     r.min_vmin,
                     r.max_current_a10,
@@ -625,7 +625,7 @@ class SocTestUi(tk.Tk):
             [
                 ("true_soc", "真实SOC", "#2563eb"),
                 ("internal_soc", "算法SOC", "#16a34a"),
-                ("display_soc", "显示SOC", "#dc2626"),
+                ("public_soc", "发布SOC", "#dc2626"),
             ],
             "SOC %",
         )

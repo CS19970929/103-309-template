@@ -5,11 +5,11 @@
 当前权威入口：`docs/design/soc_design.md`
 主要参考源码：`SocEnhance.c`、`SocEnhance.h`、`rtc_sleep.c`、`rtc_sleep_port.c`、`conf/Project_Config.h`
 
-归档说明：本文保留 2026-06-03 的专项排查脉络；当前 SOC 快降判断、low-tail、静置 OCV、显示平滑和风险边界统一维护在 `docs/design/soc_design.md`。
+归档说明：本文保留 2026-06-03 的专项排查脉络；当前 SOC 快降判断、low-tail、静置 OCV、发布口径和风险边界统一维护在 `docs/design/soc_design.md`。2026-06-04 后续已删除 `display_soc` 平滑层，本文“显示追赶”章节仅作为历史背景。
 
 ## 1. 结论
 
-如果现场看到“没有放电但 SOC 很快下降”，当前最可疑来源仍是 low-tail 和显示追赶，不是普通静置 OCV。
+如果现场看到“没有放电但 SOC 很快下降”，按当前源码最可疑来源仍是 low-tail，不是普通静置 OCV。
 
 优先级如下：
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | 1 | `RELAX` 下 low-tail 生效 | 最可疑。当前 low-tail 不要求 `DSG`，只排除充电、电压无效、sag hold 等条件 |
 | 2 | 当前 tail 测试表速度很快 | 活动表 tick 全部为 `DELAY_SOC_TEST = 5`，约 `1s/1%` |
-| 3 | 低压显示追赶 | 内部 SOC 已下降后，`display_soc` 在低压区可按 `1s/1%` 或 `200ms/1%` 追赶 |
+| 3 | 历史低压显示追赶 | 已删除；当前对外发布直接等于内部 SOC |
 | 4 | 正常运行板载自耗 | 当前 `30mA` 已计入普通 RELAX 积分，但对 27Ah 电池约 9 小时才 1%，不是快降主因 |
 | 5 | 普通静置 OCV | 连续普通 RELAX 下首次长静置实际下修通常约 60 分钟量级 |
 | 6 | RTC STOP 补偿 | HICCUP STOP 周期内会提前推进长静置 OCV；当前不额外扣 RTC 自耗，不锁存短静置 deferred target |
@@ -84,19 +84,9 @@ RTC STOP 补偿当前只做：
 
 这张表目前只作为源码保留和测试对照，不再造成 V0 上方中段静置快降。
 
-## 6. 显示追赶会放大感知
+## 6. 历史显示追赶结论已失效
 
-对外 SOC 是 `display_soc`，不是内部 `s_soc.soc`。
-
-显示追赶速度：
-
-| 场景 | 当前速度 |
-|---|---:|
-| 普通显示下降 | `5s/1%` |
-| 低压下降 | `1s/1%` |
-| 低于 `V0 - 50mV` | `200ms/1%` |
-
-如果 tail 先把内部 SOC 拉低，显示层又在低压区快速追赶，用户会感觉“突然掉很多”。
+当前源码已删除 `display_soc` 平滑层和对应速度配置，对外 SOC 直接发布内部 `s_soc.soc`。因此后续排查不能再把“显示追赶”作为当前原因。
 
 ## 7. 普通静置 OCV 为什么不是快降主因
 
@@ -120,7 +110,7 @@ RTC STOP 补偿当前只做：
 | `g_dbg_soc_watch.u8LowTailActive` | 当前 low-tail 是否生效 |
 | `g_dbg_soc_watch.u16EmptyTailTarget` | 当前 low-tail 目标 |
 | `g_dbg_soc_watch.u16EmptyTailTicks` | 当前 low-tail 速度 |
-| `g_dbg_soc_watch.u8InternalSoc/u8DisplaySoc` | 区分内部算法下降和显示追赶 |
+| `g_dbg_soc_watch.u8InternalSoc` 与已发布 SOC | 确认内部算法和对外发布一致 |
 | `g_dbg_soc_watch.u32RestTicks/u32StableRestTicks/u32LongRestDownTicks` | 是否进入普通静置 OCV 慢路径 |
 | `SOC_Enhance_Element.u16_VCellMin` | 与 `u16_SOC_0_Vol` 的差值 |
 | `SOC_Enhance_Element.u16_Ichg/u16_Idsg` | 是否确实处于 RELAX |

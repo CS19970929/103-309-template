@@ -43,7 +43,7 @@ class ScenarioResult:
     true_end: float
     soc_start: int
     soc_end: int
-    display_end: int
+    public_end: int
     max_abs_error: float
     min_vmin: int
     max_current_a10: int
@@ -176,7 +176,7 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
                         "segment": segment.name,
                         "true_soc": round(pack.soc, 2),
                         "internal_soc": model.soc,
-                        "display_soc": model.display_soc,
+                        "public_soc": model.soc,
                         "vmin_mv": vmin,
                         "vmax_mv": vmax,
                         "ichg_a10": segment.ichg_a10,
@@ -198,7 +198,7 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
         passed = max_abs_error <= 8.0 and 60 <= model.soc <= 70
         notes = "200ms/5Hz current pulse tracking should follow sampled average current"
     elif name == "deep_cutoff":
-        passed = min_vmin <= 3050 and model.soc == 0 and model.display_soc <= 5
+        passed = min_vmin <= 3050 and model.soc == 0
         notes = "接近控制器截止电压时应收敛到零"
     elif name == "charge_anchor":
         passed = charge_pre_anchor_max <= 99 and model.soc == 100
@@ -211,7 +211,7 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
         true_end=round(pack.soc, 2),
         soc_start=soc_start,
         soc_end=model.soc,
-        display_end=model.display_soc,
+        public_end=model.soc,
         max_abs_error=round(max_abs_error, 2),
         min_vmin=min_vmin,
         max_current_a10=max_current,
@@ -244,13 +244,13 @@ def write_report(path: Path, results: list[ScenarioResult], csv_path: Path) -> N
         "",
         "## 汇总",
         "",
-        "| 工况 | 时长(s) | 真实SOC 起止 | 算法SOC 起止 | 显示SOC | 最大误差 | 最低Vmin | 最大电流(A*10) | 结果 | 说明 |",
+        "| 工况 | 时长(s) | 真实SOC 起止 | 算法SOC 起止 | 发布SOC | 最大误差 | 最低Vmin | 最大电流(A*10) | 结果 | 说明 |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for r in results:
         lines.append(
             "| {name} | {duration_s} | {true_start:.1f}->{true_end:.2f} | "
-            "{soc_start}->{soc_end} | {display_end} | {max_abs_error:.2f} | "
+            "{soc_start}->{soc_end} | {public_end} | {max_abs_error:.2f} | "
             "{min_vmin} | {max_current_a10} | {status} | {notes} |".format(
                 name=r.name,
                 duration_s=r.duration_s,
@@ -258,7 +258,7 @@ def write_report(path: Path, results: list[ScenarioResult], csv_path: Path) -> N
                 true_end=r.true_end,
                 soc_start=r.soc_start,
                 soc_end=r.soc_end,
-                display_end=r.display_end,
+                public_end=r.public_end,
                 max_abs_error=r.max_abs_error,
                 min_vmin=r.min_vmin,
                 max_current_a10=r.max_current_a10,

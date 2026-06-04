@@ -97,7 +97,7 @@ System_Status 位:
 - b1StartUpBMS, b1Status_MOS_PRE/CHG/DSG, b1Status_AFE1/2, b1Status_Balance, b1Status_ToSleep, b1Status_BnCloseIO, b1Status_CBCCloseIO, b4Status_ProjectVer
 
 System_OnOFF_Function 位:
-- b1OnOFF_Balance, b1OnOFF_MOS_Relay, b1OnOFF_SOC_Fixed, b1OnOFF_SOC_Zero, b1OnOFF_Sleep, b1OnOFF_AFE1/2
+- b1OnOFF_Balance, b1OnOFF_MOS_Relay, bRcvedSocFixed, bRcvedSocZero, b1OnOFF_Sleep, b1OnOFF_AFE1/2
 
 ---
 
@@ -214,7 +214,7 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 | u8_SetSocOnce | 一次性SOC设置 |
 | u16_VCellMax/Min | 电芯电压 |
 | u16_Ichg/Idsg | 充放电电流 |
-| u8_SOC | 当前对外显示 SOC(%)，由 `display_soc` 发布 |
+| u8_SOC | 当前对外发布 SOC(%)，直接由内部 SOC 发布 |
 | u8_SOH | 当前SOH(%) |
 | u16_CapacityNow | 当前容量(Ah×100) |
 | u16_CapacityFull | 满充容量 |

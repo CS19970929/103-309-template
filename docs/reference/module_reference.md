@@ -168,8 +168,6 @@ main()
 | `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` | 30 | 板子自耗电(mA) |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | 1800 | 静置 OCV 等待时间 |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | 1 | SOC 校准步长(%) |
-| `PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS` | 5 | 正常显示下降速度(秒/1%) |
-| `PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS` | 1 | 低压显示下降速度 |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` | 15 | 满电确认时间 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | 30 | 电压跌落抑制时间 |
 | `PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV` | 400 | 低压尾部开始偏移 |
@@ -434,15 +432,15 @@ SOC 模块分为两层:
 **发布口径**:
 
 - 内部估算值是 `s_soc.soc`。
-- 用户显示和通信发布值是 `s_soc.display_soc`。
-- `g_stCellInfoReport.SocElement.u16Soc` 当前发布 `display_soc`，不是直接发布内部估算值。
+- 用户显示和通信发布值直接等于 `s_soc.soc`。
+- `g_stCellInfoReport.SocElement.u16Soc` 当前发布内部 SOC；`display_soc` 平滑层已删除。
 - `NORMAL/DEEP` reset sleep 快显读取 BKP 中睡前保存的显示 SOC；`HICCUP_MODE` RTC STOP 周期会先做 SOC 休眠补偿，最终按键唤醒后才请求 LedBar 显示。
 
 **调试观察**:
 
 - `SOC_WATCH_BLOCK_REASON` 和 `u8LastBlockReason` 已删除。
-- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestDownValid/u8RestDownTarget`。
-- debug monitor 中删除了固定 0 或伪造派生字段，保留真实内部计数和 `display_ticks`。
+- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive`、`u8InternalSoc`、`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestDownValid/u8RestDownTarget`。
+- debug monitor 中删除了固定 0、显示平滑计数或伪造派生字段，保留真实内部计数。
 
 **OCV 表** (42 个条目, 21对电压-SOC):
 - 三元锂: 4160mV(100%) → 3000mV(0%)
@@ -1143,8 +1141,8 @@ UNINIT → RUNNING → DONE
 `union System_OnOFF_Function`:
 - `b1OnOFF_Balance` - 均衡开关
 - `b1OnOFF_MOS_Relay` - MOS 控制
-- `b1OnOFF_SOC_Fixed` - SOC 固定
-- `b1OnOFF_SOC_Zero` - SOC 强置零
+- `bRcvedSocFixed` - 历史接收位，占位保留，不再影响 SOC
+- `bRcvedSocZero` - 历史接收位，占位保留，不再影响 SOC
 - `b1OnOFF_Sleep` - 休眠开关
 
 ### 15.6 函数
@@ -1158,8 +1156,6 @@ UNINIT → RUNNING → DONE
 | `SystemRuntime_IsChargeMosOpen()` | 检查充电 MOS |
 | `SystemRuntime_IsDischargeMosOpen()` | 检查放电 MOS |
 | `SystemFeature_SetById()` | 按位设置功能开关 |
-| `SystemFeature_IsSocFixed()` | SOC 是否固定 |
-| `SystemFeature_IsSocZero()` | SOC 是否强零 |
 | `System_ERROR_UserCallback()` | 错误回调 (Set/Remove/Get) |
 
 ---

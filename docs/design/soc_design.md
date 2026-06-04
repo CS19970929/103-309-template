@@ -12,7 +12,7 @@
 | 原文档 | 合并状态 | 当前处理 |
 |---|---|---|
 | `docs/review/soc_current_logic_2026-06-02.md` | 已合并 | 保留为历史参考 |
-| `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` | 已合并 | 快降排查内容并入本文 low-tail、静置 OCV、显示平滑和风险章节 |
+| `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` | 已合并 | 快降排查内容并入本文 low-tail、静置 OCV、发布口径和风险章节 |
 | `docs/review/soc_simplification_candidates_2026-06-02.md` | 已合并 | 简化记录并入本文已处理问题和后续风险 |
 | `docs/review/soc_test_script_usage_2026-06-03.md` | 已合并 | 测试脚本边界并入本文回归入口 |
 | `docs/devlog/CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md` | 部分合并 | 只合并 SOC 常用控制入口；CAN 老化广播仍属于协议/开发历史 |
@@ -74,7 +74,7 @@
 ## 1. 本次审查结论
 
 1. SOC 主估算仍是容量积分，OCV、满电、低压尾端、静置和 RTC 休眠补偿都是校准/约束层。
-2. 内部真实 SOC 是 `s_soc.soc`；对外发布到 CAN、Modbus、LedBar 的 SOC 是 `s_soc.display_soc`。
+2. 内部真实 SOC 是 `s_soc.soc`；对外发布到 CAN、Modbus、LedBar 的 SOC 现在直接等于 `s_soc.soc`，不再经过 `display_soc` 平滑层。
 3. 正常运行 RELAX 模式下，板载自耗已经计入 SOC：`soc_integrate_current_ma(SOC_MODE_RELAX)` 返回 `-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`，随后按放电积分累计容量损耗。
 4. RTC STOP 补偿路径当前不再额外扣自耗，只按休眠秒数推进静置 OCV 相关计数和下修；这是为了避免把 RTC 低功耗期间的极低自耗重复或过度计入。
 5. 当前只保留 low-tail 表 `s_empty_tail_table`。mid-tail 表、旧 `#if 0` tail 对照表和 mid-tail debug 字段已按确认删除。
@@ -87,14 +87,14 @@
 | 文件 | 当前职责 |
 |---|---|
 | `SOC.c` | 顶层调度、配置装载、Type-C 输出折算为电池侧等效放电电流、按 AFE sample seq 触发核心算法 |
-| `SocEnhance.c` | SOC 核心算法：容量积分、SOH、OCV 表、满电锚点、tail、静置、RTC 休眠补偿、显示平滑、Flash snapshot |
+| `SocEnhance.c` | SOC 核心算法：容量积分、SOH、OCV 表、满电锚点、tail、静置、RTC 休眠补偿、Flash snapshot、对外发布 |
 | `SocEnhance.h` | SOC 对外结构、调试 watch、请求 API |
 | `DataDeal.c` | AFE 数据加载后递增 `AfeCurrent_GetSeq()`，驱动 `App_SOC()` 只处理新样本 |
 | `Sci_Upper.c` | Modbus 写容量/一次 SOC，通过 `SOC_Request*()` 进入 SOC 模块；SOC 表写入固定返回错误 |
 | `rtc_sleep_port.c` | HICCUP STOP 周期唤醒后调用 `SOC_ApplyRtcRelaxationCompensation()` |
 | `LowPowerSleep.c` | reset sleep/STOP 前调用 `SOC_SaveSnapshotBeforeSleep()` |
 | `Flash.c` | A/B journal 方式保存和恢复 SOC snapshot |
-| `LedBar.c` | 读取已发布显示 SOC，保存/加载睡眠快显 SOC |
+| `LedBar.c` | 读取已发布 SOC，保存/加载睡眠快显 SOC |
 | `Can_HDX.c`、`CanFeidaoFrames.c` | 读取 `g_stCellInfoReport.SocElement` 作为 CAN 对外口径 |
 
 SOC 模块没有引入 HAL、RTOS、malloc，也没有新增协议字段。
@@ -140,9 +140,16 @@ Runtime_RunOnce()
 | `PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS` | `1800` | 长静置下修周期 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | `30` | 大电流放电后回弹保护 |
 | `PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV` | `400` | low-tail 最高启动区间 |
-| `PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS` | `5` | 普通显示平滑，秒/1% |
-| `PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS` | `5` | 充电上升显示平滑，秒/1% |
-| `PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS` | `1` | 低压下降显示平滑，秒/1% |
+
+已删除：
+
+- `PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS`
+- `PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS`
+- `PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS`
+- `PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV`
+- `PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV`
+
+删除原因：当前自动校准最大步长为 `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT = 1`，用户确认不再需要额外 `display_soc` 平滑层；对外 SOC 直接发布内部真实估算值。
 
 ## 5. 状态与输出口径
 
@@ -159,7 +166,6 @@ Runtime_RunOnce()
 | `dsg_acc_as10` | 放电累计，用于循环计数 |
 | `rem_mams` | 200ms 积分余量，避免小电流损失 |
 | `soc` | 内部真实 SOC |
-| `display_soc` | 对外发布 SOC |
 | `mode` | `RELAX/CHG/DSG` |
 | `full_ticks/empty_ticks` | 满电确认和 low-tail 计数 |
 | `rest_soc_ticks/stable_rest_soc_ticks/long_rest_down_soc_ticks` | 静置 OCV 慢下修计数，单位为 200ms SOC tick |
@@ -187,14 +193,14 @@ Runtime_RunOnce()
 
 | 对外字段 | 当前值来源 |
 |---|---|
-| `g_stCellInfoReport.SocElement.u16Soc` | `s_soc.display_soc` |
+| `g_stCellInfoReport.SocElement.u16Soc` | `s_soc.soc` |
 | `g_stCellInfoReport.SocElement.u16Soh` | cycle-based SOH |
 | `u16CapacityNow` | `cap_now_as10` 换算为 Ah * 100 |
 | `u16CapacityFull` | `cap_full_as10` 换算为 Ah * 100 |
 | `u16CapacityFactory` | `cap_factory_as10` 换算为 Ah * 100 |
 | `u16Cycle_times` | `cycle_x100 / 100` |
 
-调试和产品判断不能把 `display_soc` 误认为内部真实估算；需要同时看 `s_soc.soc` 或 `g_dbg_soc_watch.u8InternalSoc`。
+当前已取消内部/显示双口径；调试和产品判断统一看 `s_soc.soc`、`g_dbg_soc_watch.u8InternalSoc` 或已发布的 `g_stCellInfoReport.SocElement.u16Soc`。
 
 ## 6. 核心状态机顺序
 
@@ -208,7 +214,7 @@ Runtime_RunOnce()
 6. `soc_apply_full_empty()` 处理满电锚点或 low-tail。
 7. 如果没有 low-tail、没有校准、没有 sag hold，推进 `soc_update_rest_timer()`；否则在 low-tail 或 sag hold 时清空静置 confidence。
 8. `soc_save_if_needed()` 按保存 mark 判断是否写 Flash。
-9. `soc_publish(0U)` 更新显示平滑和对外字段。
+9. `soc_publish(0U)` 直接把内部 SOC 和容量字段发布到对外结构。
 
 本顺序保证低端安全和满电锚点优先于静置 OCV。
 
@@ -291,7 +297,7 @@ low-tail 允许在 `RELAX` 下生效；这是无放电静置快降的优先排�
 - `SOC_DEBUG_WATCH` 不再导出 `u8MidTailActive/u16MidTailTarget/u16MidTailTicks/u16MidTicks`。
 - Python replay 不再模拟或校验 mid-tail 表。
 
-当前中段电压不会触发独立 mid-tail 下修；低端虚高只由 low-tail、长静置慢下修和显示平滑共同约束。
+当前中段电压不会触发独立 mid-tail 下修；低端虚高只由 low-tail 和长静置慢下修约束。
 
 ### 8.5 Sag Hold
 
@@ -348,7 +354,7 @@ SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max);
 | `SOC_RequestCapacityReset()` | 设置 flag 2，重算容量基准并保存 |
 | `SOC_RequestSetOnce(UINT8 soc)` | 设置 flag 3，把内部 SOC 设置到指定值并保存 |
 
-命令路径使用 `soc_publish(1U)`，会强制显示同步；这与普通自动校准的显示平滑不同。
+命令路径使用 `soc_publish(1U)` 立即发布最新 SOC；当前没有单独的显示平滑层。
 
 上位机/协议入口：
 
@@ -357,7 +363,7 @@ SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max);
 | Modbus 多寄存器写 SOC 参数区 | `Sci_WrRegs_0x10_SocElement()` 转入 `OtherElement` 写入；覆盖 SOC 参数范围时先 `InitData_SOC()`，再 `SOC_RequestCapacityReset()` |
 | 单寄存器 `SetSocOnce` | `Sci_WrReg_0x06_SetSocOnce()` 校验 `0..100` 后调用 `SOC_RequestSetOnce()` |
 | CAN App 状态查询 | `Can_HDX.c` 读取 `g_stCellInfoReport.SocElement.u16Soc/u16Soh` |
-| 飞道周期 SOC 帧 | `CanFeidaoFrames.c` 读取已发布显示 SOC |
+| 飞道周期 SOC 帧 | `CanFeidaoFrames.c` 读取已发布 SOC |
 | LedBar | `LedBar.c` 读取 `g_stCellInfoReport.SocElement.u16Soc` 并限幅显示 |
 
 ## 9. 存储与休眠
@@ -392,7 +398,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 
 `g_dbg_soc_watch` 当前保留有用实时字段：
 
-- 内部/显示 SOC：`u8InternalSoc/u8DisplaySoc`
+- 内部 SOC：`u8InternalSoc`
 - 当前模式：`u8Mode/u8LastMode`
 - 容量：`u32CapFactoryAs10/u32CapFullAs10/u32CapNowAs10`
 - tail 状态：`u8LowTailActive/u16EmptyTailTarget/u16EmptyTailTicks`
@@ -404,13 +410,13 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 
 - `SOC_WATCH_BLOCK_REASON`
 - `u8LastBlockReason`
-- debug monitor 中不真实或易误导的 `cal_allowed/sag_blocked/rest_stable/low_tail/ocv_target/last_calib_soc` 派生字段，以及 mid-tail 兼容字段
+- debug monitor 中不真实或易误导的 `cal_allowed/sag_blocked/rest_stable/low_tail/ocv_target/last_calib_soc/display_ticks` 派生字段，以及 mid-tail 兼容字段
 
 排查 SOC 快降时优先看：
 
 1. `u8LastCalibSource`
 2. `u8LowTailActive`
-3. `u8InternalSoc/u8DisplaySoc`
+3. `u8InternalSoc`
 4. `u16VCellMin` 与 `u16_SOC_0_Vol` 的关系
 5. `u32RestTicks/u32LongRestDownTicks`
 
@@ -428,6 +434,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | deferred OCV 隐藏目标 | 短静置锁存目标后在 active 放电消化，行为不直观 | 删除自动 deferred OCV，只保留长静置慢速下修 |
 | runtime table | 上位机写 SOC 表长期关闭，仍保留宏、运行时数组和 EEPROM 分支 | 删除 runtime table 宏、数组、写入分支和 EEPROM 默认表装载 |
 | 手动 OCV | flag=1 手动 OCV 与“只保留长静置慢下修”不一致 | 删除 `SOC_RequestManualOcvRefresh()` 和 flag=1 处理 |
+| display_soc 平滑 | 对外 SOC 需要维护内部/显示两套状态，但自动校准最大只有 1%，额外平滑收益很低 | 删除 `display_soc/display_ticks/display_ready`、显示平滑宏、Fixed/Zero 覆盖逻辑；对外直接发布 `s_soc.soc` |
 
 ## 12. 风险与后续建议
 

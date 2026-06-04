@@ -246,13 +246,12 @@ Runtime 层的事件记录、profile 记录、模块心跳和 `_DEBUG_` 打印�
 | `full_ticks` | uint16 | 满电确认计数 |
 | `empty_ticks` | uint16 | 尾端计数 |
 | `full_anchor` | uint8 | 已满电锚定 |
-| `display_ticks` | uint16 | 显示平滑计数 |
 
 更细的 SOC 内部观察使用 `g_dbg_soc_watch`：
 
 - `u8LastCalibSource/u8LastSocBefore/u8LastSocAfter`
 - `u8LowTailActive`
-- `u8InternalSoc/u8DisplaySoc`
+- `u8InternalSoc`
 - `u32RestTicks/u32StableRestTicks/u32LongRestDownTicks`
 - `u8RestDownValid/u8RestDownTarget`
 - `u8RestVoltageStable/u8SagHoldBlocksCalibration`

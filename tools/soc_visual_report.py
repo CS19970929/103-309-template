@@ -29,7 +29,7 @@ class ScenarioSummary:
     true_end: float
     internal_start: int
     internal_end: int
-    display_end: int
+    public_end: int
     max_abs_error: float
     min_vmin: int
     max_current_a10: int
@@ -99,7 +99,7 @@ def load_rows(csv_path: Path) -> list[dict[str, object]]:
                     "segment": row["segment"],
                     "true_soc": float(row["true_soc"]),
                     "internal_soc": int(row["internal_soc"]),
-                    "display_soc": int(row["display_soc"]),
+                    "public_soc": int(row["public_soc"]),
                     "vmin_mv": int(row["vmin_mv"]),
                     "vmax_mv": int(row["vmax_mv"]),
                     "ichg_a10": int(row["ichg_a10"]),
@@ -120,7 +120,7 @@ def group_rows(rows: Iterable[dict[str, object]]) -> dict[str, list[dict[str, ob
 
 def scenario_note(name: str) -> str:
     notes = {
-        "city_commute": "城市混合骑行应平滑跟随安时积分，显示 SOC 不应乱跳。",
+        "city_commute": "城市混合骑行应跟随安时积分，对外 SOC 不应乱跳。",
         "hill_climb": "大电流爬坡产生压降，但不能误判为空电。",
         "fast_current_pulses": "快变电流按 200ms 采样平均值积分，曲线应平滑。",
         "deep_cutoff": "接近控制器截止电压时，SOC 应在低压末端收敛到 0。",
@@ -136,7 +136,7 @@ def summarize(name: str, rows: list[dict[str, object]]) -> ScenarioSummary:
     min_vmin = min(int(row["vmin_mv"]) for row in rows)
     max_current = max(max(int(row["ichg_a10"]), int(row["idsg_a10"])) for row in rows)
     internal_end = int(last["internal_soc"])
-    display_end = int(last["display_soc"])
+    public_end = int(last["public_soc"])
 
     if name == "city_commute":
         passed = max_abs_error <= 8.0 and 50 <= internal_end <= 75
@@ -145,7 +145,7 @@ def summarize(name: str, rows: list[dict[str, object]]) -> ScenarioSummary:
     elif name == "fast_current_pulses":
         passed = max_abs_error <= 8.0 and 60 <= internal_end <= 70
     elif name == "deep_cutoff":
-        passed = min_vmin <= 3050 and internal_end == 0 and display_end <= 5
+        passed = min_vmin <= 3050 and internal_end == 0 and public_end <= 5
     elif name == "charge_anchor":
         bulk_rows = [row for row in rows if row["segment"] == "bulk-charge"]
         bulk_max = max(int(row["internal_soc"]) for row in bulk_rows) if bulk_rows else internal_end
@@ -160,7 +160,7 @@ def summarize(name: str, rows: list[dict[str, object]]) -> ScenarioSummary:
         true_end=float(last["true_soc"]),
         internal_start=int(first["internal_soc"]),
         internal_end=internal_end,
-        display_end=display_end,
+        public_end=public_end,
         max_abs_error=round(max_abs_error, 2),
         min_vmin=min_vmin,
         max_current_a10=max_current,
@@ -202,7 +202,7 @@ def soc_chart(rows: list[dict[str, object]]) -> str:
         )
     true_points = polyline(rows, "true_soc", x_min, x_max, 0, 100, left, top, width, height)
     internal_points = polyline(rows, "internal_soc", x_min, x_max, 0, 100, left, top, width, height)
-    display_points = polyline(rows, "display_soc", x_min, x_max, 0, 100, left, top, width, height)
+    public_points = polyline(rows, "public_soc", x_min, x_max, 0, 100, left, top, width, height)
     return """
 <svg viewBox="0 0 930 280" role="img" aria-label="SOC curve">
   <rect x="0" y="0" width="930" height="280" class="plot-bg" />
@@ -211,7 +211,7 @@ def soc_chart(rows: list[dict[str, object]]) -> str:
   <line x1="{left}" y1="{top}" x2="{left}" y2="{bottom}" class="axis-line" />
   <polyline points="{true_points}" class="line true" />
   <polyline points="{internal_points}" class="line internal" />
-  <polyline points="{display_points}" class="line display" />
+  <polyline points="{public_points}" class="line public" />
   <text x="{left}" y="264" class="axis">0s</text>
   <text x="{right}" y="264" text-anchor="end" class="axis">{duration}s</text>
 </svg>
@@ -223,7 +223,7 @@ def soc_chart(rows: list[dict[str, object]]) -> str:
         bottom=top + height,
         true_points=true_points,
         internal_points=internal_points,
-        display_points=display_points,
+        public_points=public_points,
         duration=int(rows[-1]["time_s"]),
     )
 
@@ -286,7 +286,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
             "<tr><td>{name}</td><td>{status}</td><td>{duration}</td>"
             "<td>{true_start:.1f}->{true_end:.2f}</td>"
             "<td>{internal_start}->{internal_end}</td>"
-            "<td>{display}</td><td>{err:.2f}</td><td>{vmin}</td><td>{current}</td>"
+            "<td>{public}</td><td>{err:.2f}</td><td>{vmin}</td><td>{current}</td>"
             "<td>{note}</td></tr>".format(
                 name=html.escape(item.name),
                 status=status_badge(item.passed),
@@ -295,7 +295,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
                 true_end=item.true_end,
                 internal_start=item.internal_start,
                 internal_end=item.internal_end,
-                display=item.display_end,
+                public=item.public_end,
                 err=item.max_abs_error,
                 vmin=item.min_vmin,
                 current=item.max_current_a10,
@@ -319,7 +319,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
   <div class="legend">
     <span><i class="dot true"></i>真实估算 SOC</span>
     <span><i class="dot internal"></i>真实 C 内部 SOC</span>
-    <span><i class="dot display"></i>对外显示 SOC</span>
+    <span><i class="dot public"></i>对外发布 SOC</span>
     <span><i class="dot voltage"></i>VCellMin</span>
     <span><i class="dot current"></i>电流</span>
   </div>
@@ -350,7 +350,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
       --border: #d9e0ea;
       --true: #2563eb;
       --internal: #d97706;
-      --display: #059669;
+      --public: #059669;
       --voltage: #475569;
       --current: #dc2626;
     }}
@@ -388,7 +388,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
     .dot {{ display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }}
     .dot.true {{ background: var(--true); }}
     .dot.internal {{ background: var(--internal); }}
-    .dot.display {{ background: var(--display); }}
+    .dot.public {{ background: var(--public); }}
     .dot.voltage {{ background: var(--voltage); }}
     .dot.current {{ background: var(--current); }}
     svg {{ display: block; width: 100%; margin-top: 8px; }}
@@ -399,7 +399,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
     .line {{ fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }}
     .line.true {{ stroke: var(--true); }}
     .line.internal {{ stroke: var(--internal); }}
-    .line.display {{ stroke: var(--display); }}
+    .line.public {{ stroke: var(--public); }}
     .line.voltage {{ stroke: var(--voltage); }}
     .line.current {{ stroke: var(--current); opacity: 0.75; }}
     code {{ background: #eef2f7; padding: 2px 5px; border-radius: 4px; }}
@@ -415,7 +415,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
     <ul>
       <li>蓝线是真实容量推算 SOC，用来给测试场景提供参考基准。</li>
       <li>橙线是真实 C 代码内部 SOC，来自 host trace harness 的 Flash snapshot。</li>
-      <li>绿线是对外显示 SOC，也就是 RS485/CAN/LED 侧会读到的显示值。</li>
+      <li>绿线是对外发布 SOC；当前已取消独立显示平滑层，因此它等于内部 SOC。</li>
       <li>灰线是最低单体电压，红线是电流，用来判断压降和校准是否合理。</li>
     </ul>
   </section>
@@ -426,7 +426,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
       <thead>
         <tr>
           <th>场景</th><th>结果</th><th>时长(s)</th><th>真实 SOC</th><th>内部 SOC</th>
-          <th>显示 SOC</th><th>最大误差</th><th>最低 Vmin</th><th>最大电流(A*10)</th><th>判断点</th>
+          <th>发布 SOC</th><th>最大误差</th><th>最低 Vmin</th><th>最大电流(A*10)</th><th>判断点</th>
         </tr>
       </thead>
       <tbody>

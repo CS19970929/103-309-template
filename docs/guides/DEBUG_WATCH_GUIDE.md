@@ -248,7 +248,6 @@ g_dbg_watch.protect
 ```c
 g_dbg_watch.soc
 g_dbg_watch.soc->u8InternalSoc
-g_dbg_watch.soc->u8DisplaySoc
 g_dbg_watch.soc->u8Mode
 g_dbg_watch.soc->u8LastCalibSource
 g_dbg_watch.soc->u8LowTailActive

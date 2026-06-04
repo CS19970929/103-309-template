@@ -194,14 +194,14 @@ union System_OnOFF_Function {				//TODO
 											//ԭ���Ƿֿ��ģ����Ǻ��淢��ÿ���õ��ĵط���Ҫѡͨ���ɴ�ͺϲ���һ������Ҫѡͨ�ˡ�
 		UINT8 b1OnOFF_Relay_Rec     :1;		//�̵�������
 		
-		UINT8 b1OnOFF_SOC_Fixed     :1;		//Soc�̶�����
+		UINT8 bRcvedSocFixed        :1;		//res
 		UINT8 b1OnOFF_ReservedHeat          :1;		//���ȹ���
 		UINT8 b1OnOFF_ReservedCool          :1;		//���书��
 		UINT8 b1OnOFF_AFE1         	:1;		//AFE1״̬
 
 		UINT8 b1OnOFF_AFE2	        :1;		//AFE2״̬
 		UINT8 b1OnOFF_Sleep			:1;		//���߹���
-		UINT8 b1OnOFF_SOC_Zero		:1;		//���߹���
+		UINT8 bRcvedSocZero			:1;		//res
 		UINT8 bRcved5				:1;		//
 		
 		UINT8 bRcved1				:4;		//res
@@ -225,8 +225,5 @@ UINT8 SystemRuntime_IsDischargeMosOpen(void);
 UINT32 SystemRuntime_GetStatusSnapshot(void);
 UINT32 SystemFeature_GetMask(void);
 void SystemFeature_SetById(UINT16 function_id, UINT8 enable);
-UINT8 SystemFeature_IsSocFixed(void);
-UINT8 SystemFeature_IsSocZero(void);
 
 #endif	/* SYSTEM_MONITOR_H */
-

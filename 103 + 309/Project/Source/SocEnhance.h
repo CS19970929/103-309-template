@@ -81,7 +81,6 @@ struct SOC_DEBUG_WATCH {
 	UINT16 u16Idsg;
 	UINT16 u16FullTicks;
 	UINT16 u16EmptyTicks;
-	UINT16 u16DisplayTicks;
 	UINT16 u16SagHoldTicks;
 	UINT16 u16RestRefVmin;
 	UINT16 u16RestRefVmax;
@@ -91,7 +90,6 @@ struct SOC_DEBUG_WATCH {
 	UINT8 u8Mode;
 	UINT8 u8LastMode;
 	UINT8 u8InternalSoc;
-	UINT8 u8DisplaySoc;
 	UINT8 u8Soh;
 	UINT8 u8RestDownValid;
 	UINT8 u8RestDownTarget;
@@ -123,7 +121,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void);
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
                            uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
-                           uint8_t *full_anchor, uint16_t *display_ticks);
+                           uint8_t *full_anchor);
 #endif
 
 #endif	/* SOCENHANCE_H */

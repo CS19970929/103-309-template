@@ -17,6 +17,20 @@
 - 本次只改文档，不修改源码。
 - 当前 SOC 逻辑、快降排查、简化记录和测试边界统一以 `docs/design/soc_design.md` 为活跃权威文档。
 
+## 2026-06-04 SOC 删除 display_soc 平滑和 Fixed/Zero 覆盖
+
+源码变更：
+- 删除 `display_soc/display_ticks/display_ready`、显示平滑更新函数和 `u8DisplaySoc` debug watch 字段。
+- `g_stCellInfoReport.SocElement.u16Soc` 直接发布内部 `s_soc.soc`，CAN、Modbus、LedBar 统一读取该发布值。
+- 删除 SOC Fixed/Zero 对外覆盖逻辑；历史功能接收位只保留 bit 位置占位，不再影响 SOC。
+- 删除 `PROJECT_CFG_SOC_DISPLAY_*` 配置宏和 build guard/project_check 检查。
+
+文档变更：
+- 更新 SOC 权威设计文档、模块参考、宏参考、变量梳理、风险清单、测试计划、debug 指南和测试工具说明。
+
+验证边界：
+- 本次仍不修改 low-tail 表、满电/静置/RTC 阈值、Modbus/CAN 字段、Flash snapshot 布局和 200ms AFE sample seq 调度顺序。
+
 ## 2026-06-04 CAN 周期 TX 与 RTC idle 解耦
 
 源码变更：
@@ -208,7 +222,7 @@
 
 ### 安全边界
 
-- 未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义。
+- 历史记录：当时未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义；2026-06-04 后续已按确认删除 `display_soc` 平滑层。
 - 保持正常周期总顺序：命令处理、方向判断、积分、sag hold、tail/full/deferred、rest、保存、发布。
 - 保持 Flash snapshot 内容和保存判重触发字段不变。
 
@@ -230,13 +244,13 @@
 ### 核心结论
 
 - 普通静置 OCV 在当前配置下不是秒级/分钟级快降主因；连续普通 RELAX 场景下首次长静置实际下修通常约 60 分钟量级。
-- 当前 `RELAX` 模式仍允许 low-tail 生效；mid-tail 运行链路已关闭，因此无放电但 Vmin 进入 V0 附近区间时，主要关注 `EMPTY_TAIL` 和显示追赶。
-- 低压显示追赶和 RTC 休眠周期内提前补偿会放大用户对“唤醒后立刻变了”的感知。
+- 当前 `RELAX` 模式仍允许 low-tail 生效；mid-tail 运行链路已关闭，因此无放电但 Vmin 进入 V0 附近区间时，主要关注 `EMPTY_TAIL`。2026-06-04 后续已删除 `display_soc` 平滑层，历史“显示追赶”结论不再适用。
+- RTC 休眠周期内提前补偿仍可能放大用户对“唤醒后立刻变了”的感知。
 
 ### 安全边界
 
 - 本次未修改 `.c/.h`、Keil 工程、配置宏、SOC 表、校准阈值、时间参数、显示策略、RTC STOP 顺序和协议字段。
-- 是否禁用或放慢 `RELAX` tail 属于功能体验变更，需先通过 `u8LastCalibSource`、`u8InternalSoc`、`u8DisplaySoc` 和 `VCellMin` 上板确认。
+- 是否禁用或放慢 `RELAX` tail 属于功能体验变更，需先通过 `u8LastCalibSource`、`u8InternalSoc`、发布 SOC 和 `VCellMin` 上板确认。
 
 ## 2026-06-03 SOC 源码简化候选执行
 
@@ -253,7 +267,7 @@
 
 ### 安全边界
 
-- 未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义。
+- 历史记录：当时未修改 SOC 表、满电/低压/中段/静置/RTC 阈值、时间参数、`display_soc` 平滑策略、Modbus/CAN 字段、RTC STOP/reset sleep 顺序和 Type-C 计入 SOC 的产品语义；2026-06-04 后续已按确认删除 `display_soc` 平滑层。
 - `SOC_Enhance_Element` 命令字段仍保留在 public struct 中，避免影响 Keil watch 和结构体布局；本轮只把外部写入收口到请求接口。
 - `NORMAL/DEEP` reset sleep 是否增加 RTC 秒数补偿仍属于功能行为变更，本轮未做。
 

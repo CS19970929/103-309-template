@@ -2,7 +2,7 @@
 """Host-side replay tests for the simplified e-bike SOC model.
 
 The model mirrors the rewritten SocEnhance.c decisions that matter for storage,
-anchoring, SOH mapping, and display smoothing. It intentionally avoids STM32
+anchoring, SOH mapping, and SOC publication. It intentionally avoids STM32
 bindings so it can run in CI or during local review.
 """
 
@@ -59,11 +59,6 @@ EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = project_config_int('PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT', 1)
 EMPTY_TAIL_START_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV', 400)
-DISPLAY_NORMAL_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS', 5)
-DISPLAY_CHG_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS', DISPLAY_NORMAL_SECONDS)
-DISPLAY_LOW_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS', 1)
-DISPLAY_LOW_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV', 50)
-DISPLAY_EMPTY_FAST_BELOW_V0_MV = project_config_int('PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV', 50)
 SAG_HOLDOFF_SECONDS = project_config_int('PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS', 30)
 SAG_ALLOW_MV = EMPTY_MV + project_config_int('PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV', 50)
 REBOUND_BOOT_HOLDOFF_SECONDS = 300
@@ -143,7 +138,6 @@ def soh_from_cycle(cycle_x100):
 @dataclass
 class SocModel:
     soc: int = DEFAULT_SOC
-    display_soc: int = DEFAULT_SOC
     cycle_x100: int = 300
     cycle_acc_as10: int = 0
     cap_factory: int = CAP_FACTORY_AS10
@@ -161,14 +155,11 @@ class SocModel:
     long_rest_down_ticks: int = 0
     rest_ref_vmin: int = 0
     rest_ref_vmax: int = 0
-    display_ticks: int = 0
     rest_down_target: int = 0
     rest_down_valid: bool = False
     sag_hold_ticks: int = 0
     rebound_hold: bool = False
     full_anchor: bool = False
-    fixed: bool = False
-    zero: bool = False
     board_self_consumption_ma: int = BOARD_SELF_CONSUMPTION_MA
 
     @classmethod
@@ -181,7 +172,6 @@ class SocModel:
                 model.set_soc(interp_soc(snapshot.vmin))
             else:
                 model.set_soc(DEFAULT_SOC)
-            model.display_soc = model.soc
             return model
         model.cycle_x100 = snapshot.cycle_x100
         model.recalc_full()
@@ -194,7 +184,6 @@ class SocModel:
         if snapshot.rebound_hold:
             model.rebound_hold = True
             model.sag_hold_ticks = REBOUND_BOOT_HOLDOFF_SECONDS * TICKS_PER_SECOND
-        model.display_soc = model.soc
         model.full_anchor = model.soc >= 100
         return model
 
@@ -446,32 +435,6 @@ class SocModel:
             self.set_rest_down_target(interp_soc(vmin))
         self.apply_long_rest_down_step(vmax, vmin)
 
-    def display_target(self):
-        if self.zero:
-            return 0
-        if self.fixed:
-            return 60
-        return self.soc
-
-    def update_display(self, vmin=3600, force=False):
-        target = self.display_target()
-        if force or self.zero or self.fixed:
-            self.display_soc = target
-            self.display_ticks = 0
-            return
-        if self.display_soc == target:
-            self.display_ticks = 0
-            return
-        ticks = DISPLAY_NORMAL_SECONDS * TICKS_PER_SECOND
-        if target < self.display_soc and vmin <= EMPTY_MV + DISPLAY_LOW_OFFSET_MV:
-            ticks = 1 if vmin <= EMPTY_MV - DISPLAY_EMPTY_FAST_BELOW_V0_MV else DISPLAY_LOW_SECONDS * TICKS_PER_SECOND
-        elif target > self.display_soc and self.mode == MODE_CHG:
-            ticks = DISPLAY_CHG_SECONDS * TICKS_PER_SECOND
-        self.display_ticks += 1
-        if self.display_ticks >= ticks:
-            self.display_soc += 1 if self.display_soc < target else -1
-            self.display_ticks = 0
-
     def tick(self, vmax=3600, vmin=3600, ichg=0, idsg=0):
         self.mode = self.direction(ichg, idsg)
         self.integrate(self.mode, ichg, idsg)
@@ -482,7 +445,6 @@ class SocModel:
             self.update_rest_timer(vmax, vmin)
         elif low_tail_active or self.sag_hold_blocks_calibration(vmax, vmin):
             self.reset_rest_confidence()
-        self.update_display(vmin=vmin)
 
 
 def run_seconds(model, seconds, **kwargs):
@@ -502,7 +464,6 @@ def self_consumption_delta_as10(self_ma, seconds):
 
 def assert_model_invariants(model):
     assert 0 <= model.soc <= 100
-    assert 0 <= model.display_soc <= 100
     assert SOH_MIN <= model.soh <= 100
     assert 0 <= model.cap_now <= model.cap_full <= model.cap_factory
     assert 0 <= model.cycle_acc_as10 < max(1, model.cap_factory // 100)
@@ -604,14 +565,12 @@ def run_ride_segment(model, seconds, idsg=0, ichg=0, imbalance=4):
 def test_invalid_snapshot_defaults_to_60_percent():
     model = SocModel.from_snapshot(Snapshot(valid=False))
     assert model.soc == 60
-    assert model.display_soc == 60
     assert model.soh == 100
 
 
 def test_invalid_snapshot_uses_valid_startup_ocv():
     model = SocModel.from_snapshot(Snapshot(valid=False, vmax=3835, vmin=3835))
     assert model.soc == 70
-    assert model.display_soc == 70
 
 
 def test_valid_snapshot_restores_capacity_and_cycle_soh():
@@ -622,12 +581,10 @@ def test_valid_snapshot_restores_capacity_and_cycle_soh():
     assert model.cap_full == cap_full
 
 
-def test_set_soc_once_syncs_internal_capacity_and_display():
+def test_set_soc_once_syncs_capacity():
     model = SocModel.from_snapshot(Snapshot(valid=False))
     model.set_soc(35)
-    model.update_display(force=True)
     assert model.soc == 35
-    assert model.display_soc == 35
     assert model.cap_now == model.cap_full * 35 // 100
 
 
@@ -720,7 +677,6 @@ def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
     actual_delta = start_cap - model.cap_now
     assert abs(actual_delta - expected_delta) <= 1
     assert 66 <= model.soc <= 70
-    assert model.display_soc >= model.soc
 
 
 def test_direction_thresholds_and_conflict_resolution():
@@ -737,11 +693,10 @@ def test_direction_thresholds_and_conflict_resolution():
     assert model.remainder_ms == (expected_ma * PERIOD_MS) % MAMS_PER_AS10
 
 
-def test_charge_integration_stops_display_before_full_confirm():
+def test_charge_integration_stays_below_full_before_confirm():
     model = SocModel.from_snapshot(Snapshot(soc=98, cap_now=CAP_FACTORY_AS10 * 98 // 100))
     run_seconds(model, 900, ichg=270, vmax=4100, vmin=4050)
     assert model.soc == 99
-    assert model.display_soc < 100
 
 
 def test_soh_maps_cycles_to_capacity_floor():
@@ -860,35 +815,6 @@ def test_empty_anchor_limits_low_voltage_tail():
     assert model.soc == 30
     run_seconds(model, 6, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
     assert model.soc == 24
-
-
-def test_display_smoothing_charge_and_low_voltage_down():
-    model = SocModel.from_snapshot(Snapshot(soc=80, cap_now=CAP_FACTORY_AS10 * 80 // 100))
-    model.display_soc = 79
-    model.mode = MODE_CHG
-    for _ in range(DISPLAY_NORMAL_SECONDS * TICKS_PER_SECOND - 1):
-        model.update_display()
-    assert model.display_soc == 79
-    model.update_display()
-    assert model.display_soc == 80
-    model.soc = 70
-    model.display_soc = 75
-    for _ in range(TICKS_PER_SECOND):
-        model.update_display(vmin=3050)
-    assert model.display_soc == 74
-
-
-def test_fixed_and_zero_overlay_do_not_change_internal_soc():
-    model = SocModel.from_snapshot(Snapshot(soc=72, cap_now=CAP_FACTORY_AS10 * 72 // 100))
-    model.fixed = True
-    model.update_display(force=True)
-    assert model.display_soc == 60
-    assert model.soc == 72
-    model.fixed = False
-    model.zero = True
-    model.update_display(force=True)
-    assert model.display_soc == 0
-    assert model.soc == 72
 
 
 def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
@@ -1105,11 +1031,9 @@ def test_real_city_ride_profile_is_smooth_and_monotonic():
     for seconds, idsg in profile:
         run_ride_segment(model, seconds, idsg=idsg)
         assert model.soc <= previous_soc
-        assert 0 <= model.display_soc <= 100
         previous_soc = model.soc
     assert 55 <= model.soc <= 70
     assert model.cap_now < CAP_FACTORY_AS10 * 80 // 100
-    assert abs(model.display_soc - model.soc) <= 3
 
 
 def test_hill_climb_voltage_sag_does_not_false_empty_pack():
@@ -1135,14 +1059,12 @@ def test_deep_ride_profile_reaches_zero_near_cutoff_voltage():
             break
     assert min_seen <= 3050
     assert model.soc == 0
-    assert model.display_soc <= 5
 
 
 def test_charge_after_ride_stays_below_full_until_voltage_anchor():
     model = SocModel.from_snapshot(Snapshot(soc=88, cap_now=CAP_FACTORY_AS10 * 88 // 100))
     run_seconds(model, 600, ichg=270, vmax=4100, vmin=4050)
     assert model.soc == 99
-    assert model.display_soc < 100
     run_seconds(model, FULL_SECONDS, ichg=270, vmax=4181, vmin=4100)
     assert model.soc == 100
 
@@ -1201,7 +1123,7 @@ def main():
         test_invalid_snapshot_defaults_to_60_percent,
         test_invalid_snapshot_uses_valid_startup_ocv,
         test_valid_snapshot_restores_capacity_and_cycle_soh,
-        test_set_soc_once_syncs_internal_capacity_and_display,
+        test_set_soc_once_syncs_capacity,
         test_discharge_integration_reduces_soc_and_counts_cycle_fraction,
         test_coulomb_counting_tick_is_200ms_5hz,
         test_board_self_consumption_integrates_during_relax,
@@ -1210,7 +1132,7 @@ def main():
         test_board_self_consumption_applies_to_charge_and_discharge_current,
         test_fast_current_pulses_integrate_average_energy_at_sample_rate,
         test_direction_thresholds_and_conflict_resolution,
-        test_charge_integration_stops_display_before_full_confirm,
+        test_charge_integration_stays_below_full_before_confirm,
         test_soh_maps_cycles_to_capacity_floor,
         test_ocv_table_is_monotonic_and_exact_points_match,
         test_python_model_tables_match_c_source,
@@ -1218,8 +1140,6 @@ def main():
         test_full_confirm_requires_vmax_above_4180_before_configured_v100,
         test_full_confirm_counter_decrements_instead_of_resetting,
         test_empty_anchor_limits_low_voltage_tail,
-        test_display_smoothing_charge_and_low_voltage_down,
-        test_fixed_and_zero_overlay_do_not_change_internal_soc,
         test_low_voltage_tail_table_uses_current_bands_and_rate_limits,
         test_low_voltage_tail_table_matrix_targets_rates_and_no_upward_pull,
         test_auto_calibration_never_steps_more_than_one_percent,

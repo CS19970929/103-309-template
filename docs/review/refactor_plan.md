@@ -80,7 +80,7 @@
 | 项目 | 内容 |
 |---|---|
 | 修改范围 | 当前已完成文档合并和一轮净删减；后续只做小步、可回滚的行为保持型简化 |
-| 不能改什么 | 不改 low-tail 表、不改 1% 校准硬约束、不改满电/低压 low-tail/长静置慢下修阈值和顺序、不改 `display_soc` 用户体验、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
+| 不能改什么 | 不改 low-tail 表、不改 1% 校准硬约束、不改满电/低压 low-tail/长静置慢下修阈值和顺序、不改 Modbus/CAN 字段、不改 `0xD300` 隔离 |
 | 验证方法 | SOC replay、host C、真实充放电、RTC rest、snapshot 断电恢复、上位机读取、CAN SOC 帧、Keil watch |
 | 需要确认 | tail 体验策略、初始 SOC、OCV 表、Type-C 电流产品语义 |
 | 回滚方式 | 每个源码简化批次独立 commit；涉及体验或 tail 策略必须单独确认 |

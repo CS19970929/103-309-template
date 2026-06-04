@@ -34,12 +34,12 @@
 | 风险 ID | 风险描述 | 代码证据 | 影响 | 当前判断 | 建议处理 |
 |---|---|---|---|---|---|
 | RISK-SOC-DOC-001 | 旧 SOC 文档和当前源码事实混用 | `docs/design/soc_design.md`, `docs/review/soc_current_logic_2026-06-02.md`, `SocEnhance.c` | 后续优化可能基于旧结论误改自耗、RTC 或 tail | 已处理 | `docs/design/soc_design.md` 为唯一权威入口；旧逻辑文档已归档 |
-| RISK-SOC-UX-001 | 把内部 `s_soc.soc` 和对外 `display_soc` 混为一谈 | `soc_publish()`, `SOC_PublishReportData()` | 自动校准和用户显示节奏被误改 | MUST_KEEP | 后续源码简化不得改变 `display_soc` 发布口径；调试看 internal/display 双值 |
+| RISK-SOC-UX-001 | 旧文档把内部 `s_soc.soc` 和对外 `display_soc` 分成双口径 | `soc_publish()`, `SOC_PublishReportData()` | 后续误以为仍存在显示平滑层 | 已处理 | 用户已确认删除 `display_soc`；后续调试统一看 `u8InternalSoc` 和已发布 SOC |
 | RISK-SOC-RTC-001 | reset sleep 与 HICCUP RTC STOP 的 SOC 补偿路径不同 | `rtc_sleep_port.c`, `LowPowerSleep.c`, `LedBar.c` | 若误认为两条路径都有 RTC 秒数补偿，可能错误判断休眠后 SOC 准确性 | 已确认不补 reset sleep | reset sleep 只验证睡前 snapshot/快显 SOC；HICCUP RTC STOP 才推进长静置补偿 |
 | RISK-SOC-SELF-001 | 混淆正常自耗和 RTC 自耗 | `soc_integrate_current_ma()`, `soc_apply_rtc_rest_ocv()` | 可能重复扣自耗或误删正常自耗 | MUST_KEEP | 保持正常运行自耗积分；RTC STOP 不额外扣自耗；host C 自耗矩阵持续覆盖 |
-| RISK-SOC-TAIL-001 | 当前 low-tail 测试表速度较快 | `s_empty_tail_table`, `DELAY_SOC_TEST` | RELAX/低压场景可能出现快降体验；mid-tail 已删除 | KEEP_BUT_REFACTOR | 本轮不改 low-tail 表值；上板用 low-tail active、last calib source 和 internal/display SOC 确认体验 |
-| RISK-SOC-SIM-001 | “只改写法”时改变 SOC 状态机顺序 | `SOC_IntEnhance_Ctrl()` | 满电、低压 low-tail、长静置慢下修、显示计时优先级变化 | MUST_KEEP | 保持当前直线顺序，用 SOC replay 和 host C 守住；mid-tail/deferred OCV 已按确认关闭 |
-| RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SOC_Request*()`, `Sci_Upper.c` | `SetSocOnce`、容量重算 ACK 或显示行为改变；手动 OCV 已删除 | KEEP_BUT_REFACTOR | 请求 API 保留 capacity reset/set once；后续若私有化字段必须单独验证 Modbus 写命令 |
+| RISK-SOC-TAIL-001 | 当前 low-tail 测试表速度较快 | `s_empty_tail_table`, `DELAY_SOC_TEST` | RELAX/低压场景可能出现快降体验；mid-tail 已删除 | KEEP_BUT_REFACTOR | 本轮不改 low-tail 表值；上板用 low-tail active、last calib source 和发布 SOC 确认体验 |
+| RISK-SOC-SIM-001 | “只改写法”时改变 SOC 状态机顺序 | `SOC_IntEnhance_Ctrl()` | 满电、低压 low-tail、长静置慢下修优先级变化 | MUST_KEEP | 保持当前直线顺序，用 SOC replay 和 host C 守住；mid-tail/deferred OCV/display_soc 已按确认关闭 |
+| RISK-SOC-CMD-001 | 收口命令 shadow 时影响上位机写 SOC/容量行为 | `SOC_Request*()`, `Sci_Upper.c` | `SetSocOnce`、容量重算 ACK 或发布行为改变；手动 OCV 已删除 | KEEP_BUT_REFACTOR | 请求 API 保留 capacity reset/set once；后续若私有化字段必须单独验证 Modbus 写命令 |
 
 ## 中断计数专项风险
 

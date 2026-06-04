@@ -5,7 +5,6 @@
 #include "DataDeal.h"
 #include "Flash.h"
 #include "Sci_Upper.h"
-#include "System_Monitor.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -56,11 +55,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
-#define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS)
-#define SOC_DISPLAY_CHG_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS)
-#define SOC_DISPLAY_LOW_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS)
-#define SOC_DISPLAY_LOW_OFFSET_MV    ((int16_t)PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV)
-#define SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV ((int16_t)PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV)
 #define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
 #define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV)
@@ -98,14 +92,12 @@ typedef struct SOC_STATE_TAG
 	UINT32 long_rest_down_soc_ticks;
 	UINT16 full_ticks;
 	UINT16 empty_ticks;
-	UINT16 display_ticks;
 	UINT16 sag_hold_ticks;
 	UINT16 rest_ref_vmin;
 	UINT16 rest_ref_vmax;
 	UINT16 snapshot_flags;
 	UINT8 soc;
 	UINT8 soh;
-	UINT8 display_soc;
 	UINT8 rest_down_target;
 	UINT8 rest_down_valid;
 	UINT8 mode;
@@ -113,7 +105,6 @@ typedef struct SOC_STATE_TAG
 	UINT8 last_mode;
 #endif
 	UINT8 integrate_mode;
-	UINT8 display_ready;
 	UINT8 full_anchor;
 } SOC_STATE;
 
@@ -571,8 +562,8 @@ static void soc_save_current_snapshot(void)
 {
 	if (soc_save())
 	{
-		soc_update_save_mark();
-	}
+	soc_update_save_mark();
+}
 }
 
 static void soc_save_if_needed(void)
@@ -639,10 +630,8 @@ static void soc_load_or_default(void)
 		}
 		(void)soc_save();
 	}
-	s_soc.display_soc = s_soc.soc;
-	s_soc.display_ready = 1U;
-	soc_update_save_mark();
-}
+		soc_update_save_mark();
+	}
 
 static void soc_add_discharge(UINT32 delta_as10)
 {
@@ -913,7 +902,6 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u16Idsg = SOC_Enhance_Element.u16_Idsg;
 	s_soc_debug_watch.u16FullTicks = s_soc.full_ticks;
 	s_soc_debug_watch.u16EmptyTicks = s_soc.empty_ticks;
-	s_soc_debug_watch.u16DisplayTicks = s_soc.display_ticks;
 	s_soc_debug_watch.u16SagHoldTicks = s_soc.sag_hold_ticks;
 	s_soc_debug_watch.u16RestRefVmin = s_soc.rest_ref_vmin;
 	s_soc_debug_watch.u16RestRefVmax = s_soc.rest_ref_vmax;
@@ -921,7 +909,6 @@ static void soc_watch_refresh(UINT8 force_display)
 	s_soc_debug_watch.u8Mode = s_soc.mode;
 	s_soc_debug_watch.u8LastMode = s_soc.last_mode;
 	s_soc_debug_watch.u8InternalSoc = s_soc.soc;
-	s_soc_debug_watch.u8DisplaySoc = s_soc.display_soc;
 	s_soc_debug_watch.u8Soh = s_soc.soh;
 	s_soc_debug_watch.u8RestDownValid = s_soc.rest_down_valid;
 	s_soc_debug_watch.u8RestDownTarget = s_soc.rest_down_target;
@@ -1248,74 +1235,11 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	return changed;
 }
 
-static UINT8 soc_display_target(void)
-{
-	if (SystemFeature_IsSocZero())
-	{
-		return 0U;
-	}
-	if (SystemFeature_IsSocFixed())
-	{
-		return 60U;
-	}
-	return s_soc.soc;
-}
-
-static void soc_update_display_soc(UINT8 force_display)
-{
-	UINT8 target = soc_display_target();
-	UINT8 seconds = SOC_DISPLAY_NORMAL_SECONDS;
-	UINT8 ticks;
-
-	if (force_display || !s_soc.display_ready ||
-		SystemFeature_IsSocZero() ||
-		SystemFeature_IsSocFixed())
-	{
-		s_soc.display_soc = target;
-		s_soc.display_ready = 1U;
-		s_soc.display_ticks = 0U;
-	}
-	else if (s_soc.display_soc != target)
-	{
-		if ((target < s_soc.display_soc) &&
-			(SOC_Enhance_Element.u16_VCellMin <= soc_empty_threshold_mv(SOC_DISPLAY_LOW_OFFSET_MV)))
-		{
-			ticks = (SOC_Enhance_Element.u16_VCellMin <=
-				soc_empty_threshold_mv((int16_t)(0 - SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV))) ?
-				1U : (UINT8)(SOC_DISPLAY_LOW_SECONDS * SOC_TICKS_PER_SECOND);
-		}
-		else
-		{
-			if ((target > s_soc.display_soc) && (s_soc.mode == SOC_MODE_CHG))
-			{
-				seconds = SOC_DISPLAY_CHG_SECONDS;
-			}
-			ticks = (UINT8)(seconds * SOC_TICKS_PER_SECOND);
-		}
-		if (++s_soc.display_ticks >= ticks)
-		{
-			if (s_soc.display_soc < target)
-			{
-				++s_soc.display_soc;
-			}
-			else
-			{
-				--s_soc.display_soc;
-			}
-			s_soc.display_ticks = 0U;
-		}
-	}
-	else
-	{
-		s_soc.display_ticks = 0U;
-	}
-}
-
 static void soc_export_public_fields(UINT8 force_display)
 {
 	UINT32 cycles = s_soc.cycle_x100 / 100U;
 
-	SOC_Enhance_Element.u8_SOC = s_soc.display_soc;
+	SOC_Enhance_Element.u8_SOC = s_soc.soc;
 	SOC_Enhance_Element.u8_SOH = s_soc.soh;
 	SOC_Enhance_Element.u16_CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
 	SOC_Enhance_Element.u16_CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
@@ -1327,7 +1251,6 @@ static void soc_export_public_fields(UINT8 force_display)
 
 static void soc_publish(UINT8 force_display)
 {
-	soc_update_display_soc(force_display);
 	soc_export_public_fields(force_display);
 }
 
@@ -1339,16 +1262,13 @@ static void soc_handle_command(void)
 	switch (SOC_Enhance_Element.u16_RefreshData_Flag)
 	{
 	case 2:
-		if (!SystemFeature_IsSocZero())
-		{
-			s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
-			s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
-			s_soc.dsg_acc_as10 = 0U;
-			soc_refresh_capacity_base();
-			soc_set(soc_keep);
-			save = 1U;
-			soc_watch_set_calib_source(SOC_WATCH_CALIB_PARAM_RESET, soc_keep, s_soc.soc);
-		}
+		s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
+		s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
+		s_soc.dsg_acc_as10 = 0U;
+		soc_refresh_capacity_base();
+		soc_set(soc_keep);
+		save = 1U;
+		soc_watch_set_calib_source(SOC_WATCH_CALIB_PARAM_RESET, soc_keep, s_soc.soc);
 		break;
 	case 3:
 		soc_set(SOC_Enhance_Element.u8_SetSocOnce);
@@ -1466,7 +1386,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
                            uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
-                           uint8_t *full_anchor, uint16_t *display_ticks)
+                           uint8_t *full_anchor)
 {
 	if (mode)          *mode          = s_soc.mode;
 	if (last_mode)     *last_mode     = s_soc.last_mode;
@@ -1475,6 +1395,5 @@ void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
 	if (full_ticks)    *full_ticks    = s_soc.full_ticks;
 	if (empty_ticks)   *empty_ticks   = s_soc.empty_ticks;
 	if (full_anchor)   *full_anchor   = s_soc.full_anchor;
-	if (display_ticks) *display_ticks = s_soc.display_ticks;
 }
 #endif

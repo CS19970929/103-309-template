@@ -2022,14 +2022,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			FactoryAging_StartByHost();
 
 		SystemFeature_SetById(u16SciRegData, 1U);
-		if (u16SciRegData == 0x0B)
-		{
-			// SOC zero overlay defaults to off and is not persisted.
-			// 默�为0，不�要保�
-		}
-		else
-		{
-		}
 	}
 	else
 	{

@@ -200,16 +200,6 @@ void SystemFeature_SetById(UINT16 function_id, UINT8 enable)
 	}
 }
 
-UINT8 SystemFeature_IsSocFixed(void)
-{
-	return s_system_onoff_func.bits.b1OnOFF_SOC_Fixed;
-}
-
-UINT8 SystemFeature_IsSocZero(void)
-{
-	return s_system_onoff_func.bits.b1OnOFF_SOC_Zero;
-}
-
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	UINT8 result = 0;

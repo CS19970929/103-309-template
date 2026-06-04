@@ -78,7 +78,7 @@
 | T-SOC-006 | 低压边界 | 模拟 Vmin 靠近 V0 和 V0+400mV | low-tail 表保持当前测试值；源码无 mid-tail 表/计数/debug 字段 |
 | T-SOC-007 | RTC HICCUP 休眠补偿 | 空闲进入 HICCUP STOP，观察 `SOC_ApplyRtcRelaxationCompensation()` | RTC 周期内只推进长静置 OCV 慢速下修，不额外扣 RTC 自耗，不锁存短静置 deferred target |
 | T-SOC-008 | 量产隔离 | 读 SOC_TEST padding、尝试历史测试命令地址 | 当前无注入式测试副作用；padding 长度保持不变 |
-| T-SOC-009 | real/display SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`s_soc.display_soc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布保持 `display_soc`；自动校准不强制显示跳变 |
+| T-SOC-009 | 内部/发布 SOC 口径 | Keil watch 或 debug 读取 `s_soc.soc`、`g_dbg_soc_watch.u8InternalSoc`、`g_stCellInfoReport.SocElement.u16Soc` | 对外发布直接等于内部 SOC；不存在 `display_soc` 平滑层 |
 | T-SOC-010 | reset sleep 快显口径 | NORMAL/DEEP reset sleep 后按键唤醒，观察 BKP sleep SOC 和启动后 SOC | 早期快显来自睡前保存显示 SOC；已确认不做 reset sleep 秒数 SOC 补偿 |
 | T-SOC-011 | 命令校准 | Modbus 容量重算、`SetSocOnce`、SOC 表写入 | 容量 reset/set once 按当前源码保存并强制显示刷新；SOC 表写入固定拒绝；手动 OCV 已删除 |
 | T-SOC-012 | 正常自耗口径 | host C 覆盖 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA=0/30/1000` | 正常 RELAX 自耗被积分；RTC STOP 不额外扣自耗 |

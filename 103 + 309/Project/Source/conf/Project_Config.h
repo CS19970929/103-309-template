@@ -185,26 +185,6 @@
 // <o> Empty tail start offset mV <0-1000>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
-
-// <o> Display normal seconds per 1% <1-60>
-// <i> Normal display smoothing rate in seconds for each visible SOC percent.
-#define PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS 5
-
-// <o> Display charge seconds per 1% <1-60>
-// <i> Visible SOC rising rate while charging.
-#define PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS 5
-
-// <o> Display low seconds per 1% <1-60>
-// <i> Visible SOC falling rate near empty voltage.
-#define PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS 1
-
-// <o> Display low offset mV <0-500>
-// <i> Uses low display fall rate when Vmin is below empty voltage plus this offset.
-#define PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV 50
-
-// <o> Display empty fast below V0 mV <0-500>
-// <i> Drops visible SOC faster when Vmin is below empty voltage by this offset.
-#define PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV 50
 // </h>
 
 // <h>LedBar Configuration

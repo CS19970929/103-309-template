@@ -13,7 +13,7 @@
 硬边界：
 
 - 不改 `s_empty_tail_table` 的活动值和结构。
-- 不改满电、低压 low-tail、显示平滑、Type-C 折算、协议字段和 Flash 地址。
+- 不改满电、低压 low-tail、Type-C 折算、协议字段和 Flash 地址；历史 `display_soc` 平滑层已在 2026-06-04 按确认删除。
 - 不引入 HAL、RTOS、malloc 或新框架。
 - 保留当前 200ms AFE sample seq 驱动的调度顺序。
 
@@ -29,7 +29,7 @@
 | 删除无用配置字段 | `SocEnhance.h`, `SOC.c` | 删除 `u16_SOC_CycleT_Limit` 及唯一赋值 |
 | 删除无用 OCV 标志 | `SocEnhance.h`, `SystemDebug.c/h` | 删除 `u8_SOC_OCV_Cali` 及 debug 快照/打印 |
 | 删除 block reason | `SocEnhance.h`, `SocEnhance.c` | 删除 `SOC_WATCH_BLOCK_REASON`、`u8LastBlockReason`、`soc_watch_set_block_reason()` 和调用点 |
-| 精简 debug monitor | `SystemDebug.c/h`, `SocEnhance.h/c` | 删除固定 0 或伪造派生字段，只保留真实内部计数和 `display_ticks` |
+| 精简 debug monitor | `SystemDebug.c/h`, `SocEnhance.h/c` | 删除固定 0、显示平滑计数或伪造派生字段，只保留真实内部计数 |
 | 删除死代码 | `SOC.c` | 删除 `#if 0` 中空的 `SOC_TestMode_RunSample()` 和 `SOC_TestMode_ReadStatus()` |
 | 补齐 host stub | `tools/soc_host_c_test.c`, `tools/soc_host_visual_trace.c` | 补 `ADC_GetVbatMilliVolt()`、`AfeCurrent_GetSeq()`，host C 测试和 visual trace 可按当前接口链接 |
 | 更新 replay 表解析 | `tools/soc_replay_test.py` | 解析活动 C 源码和 `DELAY_SOC_TEST` 宏，避免误读 `#if 0` 对照表 |
@@ -98,6 +98,6 @@
 | 拆更多 helper | 当前主流程已足够短，继续拆会增加跳转成本 |
 | 移动 low-tail 表或改 tail 值 | 用户正在测试 tail，本轮冻结 |
 | 把 `SOC_Enhance_Element` 大幅私有化 | 会影响 Keil watch 和现有协议调试习惯，需要单独确认 |
-| 改 `display_soc` 策略 | 用户可见体验变化，需要上板验证 |
+| 删除 `display_soc` 策略 | 已按用户确认执行；对外发布直接等于内部 SOC |
 | 给 reset sleep 增加 RTC 秒数 SOC 补偿 | 已确认不需要；不要实现 |
 | RELAX 下继续调整 low-tail | 功能体验变化，需先用 watch 确认快降来源 |

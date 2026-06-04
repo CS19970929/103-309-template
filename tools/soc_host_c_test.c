@@ -26,7 +26,6 @@ static UINT32 s_host_afe_current_sample_seq;
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
 static unsigned s_failures;
-static volatile union System_OnOFF_Function s_host_feature;
 
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 DEBUG_WATCH_ROOT g_dbg_watch;
@@ -62,41 +61,6 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	(void)errorCode;
 	return 0U;
-}
-
-UINT32 SystemFeature_GetMask(void)
-{
-	return s_host_feature.all;
-}
-
-void SystemFeature_SetById(UINT16 function_id, UINT8 enable)
-{
-	UINT32 mask;
-
-	if ((function_id == 0U) || (function_id > 32U))
-	{
-		return;
-	}
-
-	mask = ((UINT32)1U << (function_id - 1U));
-	if (enable != 0U)
-	{
-		s_host_feature.all |= mask;
-	}
-	else
-	{
-		s_host_feature.all &= ~mask;
-	}
-}
-
-UINT8 SystemFeature_IsSocFixed(void)
-{
-	return s_host_feature.bits.b1OnOFF_SOC_Fixed;
-}
-
-UINT8 SystemFeature_IsSocZero(void)
-{
-	return s_host_feature.bits.b1OnOFF_SOC_Zero;
 }
 
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
@@ -203,7 +167,6 @@ static void host_reset_state(void)
 	memset(&SOC_Enhance_Element, 0, sizeof(SOC_Enhance_Element));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
-	memset((void *)&s_host_feature, 0, sizeof(s_host_feature));
 	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
 	s_host_afe_current_sample_seq = 0U;
@@ -274,7 +237,6 @@ static void test_startup_ocv_uses_real_c_code(void)
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 	CHECK_TRUE(g_dbg_watch.soc != 0);
 	CHECK_EQ_U32(g_dbg_watch.soc->u8InternalSoc, 70U);
-	CHECK_EQ_U32(g_dbg_watch.soc->u8DisplaySoc, 70U);
 	CHECK_EQ_U32(g_dbg_watch.soc->u8LastCalibSource, SOC_WATCH_CALIB_STARTUP_OCV);
 #endif
 }
@@ -286,7 +248,7 @@ static void test_discharge_integration_uses_app_soc_path(void)
 	host_init_with_voltage(3835U, 3835U);
 	host_run_seconds(360U, 3835U, 3835U, 0U, 270U);
 	CHECK_RANGE_U32(host_internal_soc(), 49U, 51U);
-	CHECK_TRUE(g_stCellInfoReport.SocElement.u16Soc >= host_internal_soc());
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, host_internal_soc());
 }
 
 static void test_board_self_consumption_integrates_during_relax(void)
@@ -568,24 +530,6 @@ static void test_rebound_flag_clears_when_holdoff_expires(void)
 	CHECK_EQ_U32(host_internal_soc(), 80U);
 }
 
-static void test_display_overlays_do_not_modify_internal_soc(void)
-{
-	host_reset_state();
-	host_set_snapshot(72U, 0U);
-	host_init_with_voltage(3835U, 3835U);
-
-	SystemFeature_SetById(5U, 1U);
-	host_tick(3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 60U);
-	CHECK_EQ_U32(host_internal_soc(), 72U);
-
-	SystemFeature_SetById(5U, 0U);
-	SystemFeature_SetById(0x0BU, 1U);
-	host_tick(3835U, 3835U, 0U, 0U);
-	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 0U);
-	CHECK_EQ_U32(host_internal_soc(), 72U);
-}
-
 static void test_set_soc_once_command_saves_snapshot(void)
 {
 	host_reset_state();
@@ -617,7 +561,6 @@ int main(void)
 	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();
 	test_rebound_flag_clears_when_holdoff_expires();
-	test_display_overlays_do_not_modify_internal_soc();
 	test_set_soc_once_command_saves_snapshot();
 
 	if (s_failures != 0U)
@@ -625,6 +568,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 19\n");
+	printf("SOC host C tests passed: 18\n");
 	return 0;
 }

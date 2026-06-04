@@ -1,5 +1,20 @@
 # 变更记录
 
+## 2026-06-04 SOC 删除 display_soc 平滑和 Fixed/Zero 覆盖
+
+源码变更：
+- `SocEnhance.c/.h`：删除 `display_soc/display_ticks/display_ready` 状态、显示平滑函数和 `u8DisplaySoc` debug watch 字段；`g_stCellInfoReport.SocElement.u16Soc` 直接发布内部 `s_soc.soc`。
+- `System_Monitor.c/.h`、`Sci_Upper.c`：删除 SOC Fixed/Zero 对外覆盖逻辑；历史接收位只保留 bit 位置占位，不再影响 SOC。
+- `conf/Project_Config.h`、`conf/Project_BuildGuard.h`、`tools/project_check.py`：删除 `PROJECT_CFG_SOC_DISPLAY_*` 平滑配置和门禁检查。
+- `tools/soc_replay_test.py`、host C 测试、可视化报告和 SOC UI：同步为“发布 SOC = 内部 SOC”的单一口径。
+
+文档变更：
+- 更新 `docs/design/soc_design.md`、模块参考、宏参考、变量梳理、风险清单、测试计划和 debug 指南。
+
+当前结论：
+- 自动校准最大步长仍为 `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT = 1`。
+- CAN、Modbus、LedBar 读取到的 SOC 不再经过独立显示平滑；Fixed/Zero 历史功能位不再覆盖 SOC。
+
 ## 2026-06-04 SOC 文档合并为单一活跃入口
 
 文档变更：
@@ -193,7 +208,7 @@
 - `SocEnhance.c`：删除过多 helper，使 `SOC_IntEnhance_Ctrl()` 直线表达命令、积分、low-tail/full、rest、保存、发布顺序。
 - `SocEnhance.c/.h`、`SOC.c`：删除无用 `u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason`、`soc_watch_set_block_reason()` 和空测试 stub。
 - `SocEnhance.c`：删除 RTC 秒级板载自耗扣减；正常运行 `RELAX/CHG/DSG` 仍按 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` 计入容量积分。
-- `SystemDebug.c/.h`：删除固定 0 或误导性的 SOC debug 字段，保留真实内部计数和 `display_ticks`。
+- `SystemDebug.c/.h`：删除固定 0 或误导性的 SOC debug 字段，保留真实内部计数和当时仍存在的 `display_ticks`。
 - `tools/soc_host_c_test.c`、`tools/soc_replay_test.py`：同步当前活动 tail 表、mid-tail 关闭、长静置慢下修和自耗/RTC 口径，补齐 host stub。
 
 文档变更：
