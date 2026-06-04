@@ -1,5 +1,6 @@
 #include "main.h"
 #include "FactoryAging.h"
+#include "DebugWatch.h"
 
 #define FACTORY_AGING_STATE_UNINIT  ((UINT8)0U)
 #define FACTORY_AGING_STATE_RUNNING ((UINT8)1U)
@@ -25,7 +26,7 @@
 #define FACTORY_AGING_BKP_HI_REG     BKP_DR9
 #define FACTORY_AGING_BKP_CRC_REG    BKP_DR10
 
-typedef struct
+typedef struct FACTORY_AGING_RUNTIME_TAG
 {
 	UINT8 state;
 	UINT32 elapsed10ms;
@@ -51,6 +52,13 @@ static FactoryAgingRuntime s_factory_aging = {
 	0U,
 	FACTORY_AGING_MOS_MODE_UNKNOWN
 };
+
+#if DEBUG_WATCH_ENABLED
+void FactoryAging_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->runtime.factory_aging = &s_factory_aging;
+}
+#endif
 
 static UINT8 FactoryAging_DurationHoursValid(UINT16 hours)
 {

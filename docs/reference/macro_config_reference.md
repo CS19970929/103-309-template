@@ -7,15 +7,15 @@
 
 ## 1. 构建配置状态
 
-当前 `Project_Config.h` 不再提供 `PROJECT_CFG_BUILD_PROFILE` 作为应用层配置宏。Keil `FD_Debug` target 仍定义 `PROJECT_CFG_BUILD_PROFILE=1`、`PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`_DEBUG_`，主要用于调试目标识别和 Keil Watch；当前应用源码没有活动的 SOC 注入式测试模式宏。
+当前 `Project_Config.h` 不再提供 `PROJECT_CFG_BUILD_PROFILE` 作为应用层配置宏。Keil `FD_Debug` target 定义 `PROJECT_CFG_BUILD_PROFILE=1`、`PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0`、`_DEBUG_`，主要用于调试目标识别、Keil Watch、`g_dbg` 快照和 IRQ 计数；当前应用源码没有活动的 SOC 注入式测试模式宏。
 
 量产判断以 Keil target 和检查脚本为准：
 
 | 项目 | 当前事实 |
 |----|----|
 | `FD_Release` defines | `STM32F10X_MD,USE_STDPERIPH_DRIVER` |
-| `FD_Debug` 额外 defines | `PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_` |
-| 当前 `Project_BuildGuard.h` 职责 | 检查仍在配置层的 SOC、Host write、老化、日志参数范围 |
+| `FD_Debug` 额外 defines | `PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,PROJECT_CFG_DEBUG_MONITOR_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0,_DEBUG_` |
+| 当前 `Project_BuildGuard.h` 职责 | 检查仍在配置层的 SOC、Host write、老化、日志参数范围，并阻止 Release profile 误开 Debug Watch/SystemDebug/IRQ debug |
 | 当前 SOC 测试入口 | 未启用；`0xD300` 保留兼容占位 |
 
 ## 2. 硬件产品配置
@@ -40,13 +40,13 @@
 | `PROJECT_CFG_RTC_ENABLE` | 1 | `__FUNC_RTC__` | RTC 时钟 |
 | `PROJECT_CFG_IAP_ENABLE` | 1 | `_IAP` | IAP 固件升级 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | - | 工厂老化模式 |
-| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 1 | - | 系统调试快照导出 |
-| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 1 | - | IRQ 计数 |
-| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 1 | - | IRQ 事件 ring |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 0 | - | 系统调试快照导出；`FD_Debug` target 显式打开 |
+| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 0 | - | IRQ 计数；`FD_Debug` target 显式打开 |
+| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 0 | - | IRQ 事件 ring；默认关闭以降低高频中断调试扰动 |
 | `PROJECT_CFG_HOST_WRITE_ENABLE` | 1 | - | 上位机写权限 |
 | `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | 1 | - | 升级参数策略 |
 
-说明：`PROJECT_CFG_DEBUG_WATCH_ENABLE` 当前不是 `Project_Config.h` 配置项，只由 Keil `FD_Debug` target 定义为 1。
+说明：`PROJECT_CFG_DEBUG_WATCH_ENABLE` 当前不是 `Project_Config.h` 配置项，只由 Keil `FD_Debug` target 定义为 1；Keil Watch 统一添加 `g_dbg_watch`，`g_dbg` 通过 `g_dbg_watch.system.snapshot` 查看。
 
 ## 4. 唤醒源配置
 

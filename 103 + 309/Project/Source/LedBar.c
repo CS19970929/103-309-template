@@ -171,6 +171,15 @@ static LedBarRuntime s_ledbar =
 void LedBar_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
     watch->ledbar = &s_ledbar;
+    watch->tables.ledbar_digit_map = s_ledbar_digit_map;
+    watch->tables.ledbar_digit_map_count =
+        (uint16_t)(sizeof(s_ledbar_digit_map) / sizeof(s_ledbar_digit_map[0]));
+    watch->tables.ledbar_routes = s_ledbar_routes;
+    watch->tables.ledbar_routes_count =
+        (uint16_t)(sizeof(s_ledbar_routes) / sizeof(s_ledbar_routes[0]));
+    watch->tables.ledbar_pins = s_ledbar_pins;
+    watch->tables.ledbar_pins_count =
+        (uint16_t)(sizeof(s_ledbar_pins) / sizeof(s_ledbar_pins[0]));
 }
 #endif
 

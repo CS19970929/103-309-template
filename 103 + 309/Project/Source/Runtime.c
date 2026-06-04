@@ -3,8 +3,9 @@
 #include "FactoryAging.h"
 #include "Runtime.h"
 #include "SystemDebug.h"
+#include "DebugWatch.h"
 
-typedef struct
+typedef struct APP_RUNTIME_TAG
 {
 	uint32_t dbg_tick;
 	uint16_t fault;
@@ -18,6 +19,13 @@ static APP_RUNTIME s_rt = {
 	3U,
 	0U
 };
+
+#if DEBUG_WATCH_ENABLED
+void Runtime_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->runtime.app = &s_rt;
+}
+#endif
 
 static void Runtime_RunFrontTasks(void)
 {

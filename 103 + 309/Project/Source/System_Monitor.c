@@ -5,14 +5,6 @@ volatile struct SYSTEM_ERROR System_ErrFlag;
 static volatile union System_OnOFF_Function s_system_onoff_func;
 static volatile union System_Status s_system_status;
 
-#if DEBUG_WATCH_ENABLED
-void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->system_feature = &s_system_onoff_func;
-	watch->system_status = &s_system_status;
-}
-#endif
-
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
 /* Keep these masks in sync with System_Monitor.h bitfield order. */
 #define SYSTEM_ONOFF_DEFAULT_MASK ((UINT32)0x00000287U)
@@ -27,6 +19,17 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 	16U, 17U, 21U, 18U,
 	19U, 22U
 };
+
+#if DEBUG_WATCH_ENABLED
+void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->system_feature = &s_system_onoff_func;
+	watch->system_status = &s_system_status;
+	watch->tables.system_error_field_offset = s_u8SystemErrorFieldOffset;
+	watch->tables.system_error_field_offset_count =
+		(uint16_t)(sizeof(s_u8SystemErrorFieldOffset) / sizeof(s_u8SystemErrorFieldOffset[0]));
+}
+#endif
 
 static enum SYSTEM_ERROR_COMMAND System_ErrorControlBase(enum SYSTEM_ERROR_COMMAND errorCode)
 {

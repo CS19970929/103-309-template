@@ -52,7 +52,7 @@
 | RISK-IRQ-001 | 高速 ISR 计数插点增加中断开销 | `System_Init.c:TIM3_IRQHandler`, `LedBar.c:TIM4_IRQHandler`, `Can_HDX.c:USB_LP_CAN1_RX0_IRQHandler` | 可能影响 10ms 系统节拍、1ms 灯板扫描或 CAN 接收时序 | 已控制，Keil 已编译，需上板验证 | TIM3/TIM4/CAN 仅调用 `IrqDebug_CountFast()`，不写事件环、不打印、不访问 Flash |
 | RISK-IRQ-002 | 启动汇编默认 handler 调 C 函数 | `startup_stm32f10x_hd.s`, `IrqDebug.c` | 若链接或调用约定错误，会影响未实现向量兜底路径 | Keil 已编译通过，仍需未实现向量实测 | 已保留记录后 `B .` 停住语义；上板或调试时确认 `last_vectactive` |
 | RISK-IRQ-003 | 阶段标记未直接写入 `conf.c` | `rtc_sleep_port.c`, `SleepDeal.c`, `conf/conf.c` | `Sys_StopMode()` 若被新增其他直接调用，可能缺少 STOP 阶段标记 | 部分验证 | 因 `conf.c` 含历史非 UTF-8 字节，本轮避免重编码；后续新增直接调用 `Sys_StopMode()` 时必须在调用层标记阶段 |
-| RISK-IRQ-004 | Release 默认保留中断计数 | `Project_Config.h`, `IrqDebug.h` | 增加少量 RAM 和 ISR 指令开销 | 已按需求实现，需实测确认 | 默认打开轻量计数；如量产功耗或时序评估不接受，可关闭 `PROJECT_CFG_IRQ_DEBUG_ENABLE` |
+| RISK-IRQ-004 | Debug/Release IRQ 计数隔离失效 | `Project_Config.h`, `Project_BuildGuard.h`, `IrqDebug.h`, `uvprojx` | 若 Release 误开会增加少量 RAM 和 ISR 指令开销 | 已按需求改为 Release 默认关闭、FD_Debug 显式打开，需真机时序确认 | `Project_BuildGuard.h` 阻止 profile 0 打开 `PROJECT_CFG_IRQ_DEBUG_ENABLE` / `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` |
 
 ## BMS App IO 与 RTC 低功耗风险
 

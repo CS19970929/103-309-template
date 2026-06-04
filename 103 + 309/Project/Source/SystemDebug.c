@@ -16,6 +16,7 @@
 #include "Fault.h"
 #include "LedBar.h"
 #include "IrqDebug.h"
+#include "DebugWatch.h"
 
 /* ===== DWT CYCCNT (CMSIS v1 compat) ===== */
 #define DWT_CYCCNT  (*(volatile uint32_t *)0xE0001004)
@@ -50,7 +51,7 @@ struct DBG_EVENT {
 	uint16_t extra;
 };
 
-typedef struct
+typedef struct DBG_RUNTIME_TAG
 {
 	volatile struct DBG_EVENT event[DBG_EVENT_RING_SIZE];
 	uint8_t head;
@@ -104,6 +105,14 @@ static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 /* ===== snapshot ===== */
 
 struct SYSTEM_DEBUG g_dbg;
+
+#if DEBUG_WATCH_ENABLED
+void SystemDebug_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->system.snapshot = &g_dbg;
+	watch->runtime.debug_monitor_runtime = &s_dbgRt;
+}
+#endif
 
 static uint32_t SystemDebug_ModuleMask(uint8_t module)
 {

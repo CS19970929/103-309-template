@@ -14,12 +14,6 @@ typedef struct ADC_RUNTIME_TAG
 
 static ADC_RUNTIME s_adc;
 
-#if DEBUG_WATCH_ENABLED
-void ADC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-    watch->adc = &s_adc;
-}
-#endif
 
 #define ADC_CALIBRATION_WAIT_LOOP ((UINT32)100000U)
 #define ADC_STARTUP_DISCARD_TICKS ((UINT8)1U)
@@ -86,6 +80,14 @@ static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
     1450, // 105
 
 };
+
+#if DEBUG_WATCH_ENABLED
+void ADC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+    watch->adc = &s_adc;
+    watch->tables.adc_ntc_10k = iSheldTemp_10K;
+}
+#endif
 
 // 030å’103è®¾ç½®ä¸è‡
 void InitADC_DMA(void)

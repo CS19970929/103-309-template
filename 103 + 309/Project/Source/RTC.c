@@ -1,7 +1,8 @@
 #include "main.h"
 #include "IrqDebug.h"
+#include "DebugWatch.h"
 
-typedef struct
+typedef struct RTC_RUNTIME_TAG
 {
 	__IO UINT8 disp;
 	volatile bool wake;
@@ -20,6 +21,16 @@ static RTC_RUNTIME s_rtc = {
 struct RTC_ELEMENT RTC_time;
 
 static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+#if DEBUG_WATCH_ENABLED
+void RTC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->runtime.rtc = &s_rtc;
+	watch->public_data.rtc_time = &RTC_time;
+	watch->tables.rtc_month_days = month_days;
+	watch->tables.rtc_month_days_count = (uint16_t)(sizeof(month_days) / sizeof(month_days[0]));
+}
+#endif
 
 #define RTC_CLOCK_OK             0U
 #define RTC_CLOCK_USE_LSI        1U

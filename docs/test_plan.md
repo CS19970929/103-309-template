@@ -4,6 +4,21 @@
 最后更新时间：2026-06-04
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
+## Keil Debug Watch 全项目调试目录测试入口
+
+专项变更：`g_dbg_watch` 作为唯一 Keil Watch 根入口，目录化收口模块 runtime、通信、系统快照、IRQ 计数、AFE、故障、公共状态和查表数据。
+
+| 测试项 | 入口 | 通过标准 | 当前结果 |
+|---|---|---|---|
+| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | `PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_ENABLE=1` 下可链接 | 已通过，Keil `0 Error(s), 6 Warning(s)` |
+| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | Release 不带调试符号，`g_dbg_watch` 不参与量产链接 | 已通过，Keil `0 Error(s), 5 Warning(s)` |
+| Watch 根入口 | Keil `FD_Debug` 下载后添加 `g_dbg_watch` | 能展开 `runtime/comm/system/afe/fault/public_data/app/calib/tables` | 待真机 Watch 验证 |
+| SystemDebug 快照 | Watch `g_dbg_watch.system.snapshot` | 可观察原 `g_dbg` 快照，不需要单独添加 `g_dbg` | 编译通过，待真机 Watch 验证 |
+| IRQ 计数 | Watch `g_dbg_watch.system.irq` | 能观察 `total[]`、`phase[][]`、`last_id`、`last_phase` | 编译通过，待真机中断验证 |
+| Release 门禁 | 临时在 profile 0 打开 Debug Watch/SystemDebug/IRQ debug | `Project_BuildGuard.h` 编译报错阻止构建 | 门禁代码已补，临时破坏性配置未执行 |
+| 自动工程检查 | `py -3.9 tools\project_check.py` | Debug/Release 宏策略检查通过 | 宏策略通过；脚本仍因仓库既有缺文件、编码、历史文档和 ADC runtime 检查项失败 |
+| SOC host 回归 | `py -3.9 tools\run_soc_host_c_test.py` | Debug Watch 开关下 SOC host C 测试不回退 | 已通过，6 组均 19 项 |
+
 ## Keil Debug Watch 入口补齐测试入口
 
 专项变更：在不取消模块 `static runtime` 封装的前提下，为 Debug target 导出 Keil Watch 观察指针。

@@ -15,16 +15,17 @@ typedef struct LOG_RECORD_RUNTIME_TAG
 	UINT8 cbcTemp;
 } LogRecordRuntime;
 
+UINT32 su32_Interval_S_Tcnt = 0;
+
 static LogRecordRuntime s_log_record;
 
 #if DEBUG_WATCH_ENABLED
 void LogRecord_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
 	watch->log_record = &s_log_record;
+	watch->app.log_interval_s_tcnt = &su32_Interval_S_Tcnt;
 }
 #endif
-
-UINT32 su32_Interval_S_Tcnt = 0;
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
 {

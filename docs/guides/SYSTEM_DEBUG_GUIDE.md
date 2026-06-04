@@ -1,12 +1,14 @@
 # SystemDebug 调试监控使用指南 v2.2
 
 > 功能: `SystemDebug` — Keil Watch 全局状态快照
-> 版本: v2.2 2026-06-02 (增加模块健康总览)
+> 版本: v2.3 2026-06-04 (纳入 g_dbg_watch 单根入口)
 > 控制宏: `PROJECT_CFG_DEBUG_MONITOR_ENABLE` (0=Release, 1=Debug)
 
 ## 1. 概述
 
 `g_dbg` 是一个全局结构体，200ms 更新一次，把所有 IO 状态、外设状态、功能状态、运行计数器拍成快照。
+
+当前 Keil Watch 统一入口是 `g_dbg_watch`。`g_dbg` 保留为 `SystemDebug` 内部快照实体，不需要在 Watch 中单独添加；需要查看本指南里的 `g_dbg.*` 字段时，从 `g_dbg_watch.system.snapshot->*` 展开即可。
 
 **v2.2 改进**: 21 个子结构体替代平铺字段。Keil Watch 中按需展开目标分组，无需在百级字段中翻找。新增 `module`，用于观察各模块是否运行、是否 ready、是否 busy、是否 error、是否超过 2s 未刷新。
 
@@ -14,10 +16,10 @@
 
 ## 2. 启用方法
 
-1. `conf/Project_Config.h` → `PROJECT_CFG_DEBUG_MONITOR_ENABLE` → 设为 `1`
+1. 使用 Keil `FD_Debug` target，工程已定义 `PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`
 2. 重新编译，烧录
-3. Keil → Debug → Watch 窗口 → 添加 `g_dbg`
-4. 展开子结构体查看，例如 `g_dbg.gpio` → 展开看所有 IO
+3. Keil → Debug → Watch 窗口 → 添加 `g_dbg_watch`
+4. 展开 `g_dbg_watch.system.snapshot`，例如 `g_dbg_watch.system.snapshot->gpio` 查看所有 IO
 
 ## 3. 结构体层级（21 组）
 

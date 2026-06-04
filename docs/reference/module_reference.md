@@ -146,9 +146,9 @@ main()
 | `PROJECT_CFG_IAP_ENABLE` | 1 | 使能 IAP 升级 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | 使能工厂老化模式 |
 | `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` | 259200 | 老化时间(3天) |
-| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 1 | 系统调试快照导出 |
-| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 1 | IRQ 计数 |
-| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 1 | IRQ 事件 ring |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 0 | 系统调试快照导出；`FD_Debug` target 显式打开 |
+| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 0 | IRQ 计数；`FD_Debug` target 显式打开 |
+| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 0 | IRQ 事件 ring；默认关闭以降低高频中断调试扰动 |
 
 #### 唤醒源配置
 | 宏定义 | 默认值 | 说明 |

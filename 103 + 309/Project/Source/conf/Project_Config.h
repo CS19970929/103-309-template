@@ -77,19 +77,19 @@
 // <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
 // <i> Release must keep disabled.
 #ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
-#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 1
+#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 0
 #endif
 
 // <q> Enable IRQ debug counters
 // <i> Keeps lightweight interrupt counters for Keil watch and STOP wakeup debug.
 #ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 0
 #endif
 
 // <q> Enable IRQ debug event ring
 // <i> High-rate interrupts are counted but not pushed into the event ring.
 #ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 1
+#define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
 #endif
 // </h>
 

@@ -221,6 +221,10 @@ RETAINED_FACTORY_TEST_TOKENS = [
 RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_",
     "_DEBUG_CODE",
+    "PROJECT_CFG_DEBUG_WATCH_ENABLE",
+    "PROJECT_CFG_DEBUG_MONITOR_ENABLE",
+    "PROJECT_CFG_IRQ_DEBUG_ENABLE",
+    "PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE",
     "FLASH64K_APP_QUICK_TEST_ENABLE",
     "FLASH64K_APP_USE_TEST_ENABLE",
     "ELOG_OUTPUT_ENABLE",
@@ -505,6 +509,24 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Debug enables Keil SOC Watch")
 
+        monitor_value = find_define_value(debug["defines"], "PROJECT_CFG_DEBUG_MONITOR_ENABLE")
+        if monitor_value != "1":
+            reporter.fail("FD_Debug should define PROJECT_CFG_DEBUG_MONITOR_ENABLE=1 for g_dbg snapshot")
+        else:
+            reporter.ok("FD_Debug enables g_dbg snapshot under g_dbg_watch")
+
+        irq_value = find_define_value(debug["defines"], "PROJECT_CFG_IRQ_DEBUG_ENABLE")
+        if irq_value != "1":
+            reporter.fail("FD_Debug should define PROJECT_CFG_IRQ_DEBUG_ENABLE=1 for IRQ counters")
+        else:
+            reporter.ok("FD_Debug enables IRQ debug counters")
+
+        irq_event_value = find_define_value(debug["defines"], "PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE")
+        if irq_event_value != "0":
+            reporter.fail("FD_Debug should define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0 to avoid high-rate IRQ ring noise")
+        else:
+            reporter.ok("FD_Debug keeps high-rate IRQ event ring disabled")
+
         if debug["output_name"] != "FD_Debug":
             reporter.fail("FD_Debug OutputName should be FD_Debug, got {0}".format(debug["output_name"]))
         else:
@@ -668,6 +690,7 @@ def check_release_map(reporter):
         reporter.warn("release map is missing; build FD_Release before final release checks")
         return
 
+    defines = parse_header_defines(PROJECT_CONFIG) if PROJECT_CONFIG.exists() else {}
     text = read_text(RELEASE_MAP)
     load = re.search(r"Load Region LR_IROM1 \(Base: 0x([0-9a-fA-F]+),", text)
     exec_region = re.search(r"Execution Region ER_IROM1 \(Exec base: 0x([0-9a-fA-F]+),", text)

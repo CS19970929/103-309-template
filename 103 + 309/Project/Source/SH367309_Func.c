@@ -1,4 +1,5 @@
 #include "main.h"
+#include "DebugWatch.h"
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -28,6 +29,15 @@ UINT8 ucMTPBuffer[26] = {
 	BYTE_0FH_OCCV_OCCT, BYTE_10H_MOST_OCRT_PFT, BYTE_11H_OTC, BYTE_12H_OTCR, BYTE_13H_UTC,
 	BYTE_14H_UTCR, BYTE_15H_OTD, BYTE_16H_OTDR, BYTE_17H_UTD, BYTE_18H_UTDR,
 	BYTE_19H_TR};
+
+#if DEBUG_WATCH_ENABLED
+void SH367309Func_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->afe.reg_store = &SH367309_Reg_Store;
+	watch->afe.mtp_buffer = ucMTPBuffer;
+	watch->tables.sh_ntc_10k = iSheldTemp_10K_NTC;
+}
+#endif
 
 
 /*******************************************************************************

@@ -84,7 +84,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_STABLE_LIMIT_TICKS              SOC_REST_LIMIT_TICKS
 #define SOC_LONG_REST_DOWN_STEP_TICKS       SOC_SEC_TO_TICKS(SOC_LONG_REST_DOWN_STEP_SECONDS)
 
-typedef struct
+typedef struct SOC_STATE_TAG
 {
 	UINT32 cap_factory_as10;
 	UINT32 cap_full_as10;
@@ -117,7 +117,7 @@ typedef struct
 	UINT8 full_anchor;
 } SOC_STATE;
 
-typedef struct
+typedef struct SOC_SAVE_MARK_TAG
 {
 	UINT32 cycle_x100;
 	UINT32 cap_full_as10;
@@ -125,7 +125,7 @@ typedef struct
 	UINT8 soc;
 } SOC_SAVE_MARK;
 
-typedef struct
+typedef struct SOC_EMPTY_TAIL_RULE_TAG
 {
 	int16_t offset_mv;
 	UINT8 target[SOC_EMPTY_BAND_COUNT];
@@ -148,10 +148,16 @@ static UINT32 s_u32SocRtcRestAppliedSeconds;
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 static struct SOC_DEBUG_WATCH s_soc_debug_watch;
 static UINT8 s_soc_watch_rest_voltage_stable;
+static void SocEnhance_DebugWatchBindTables(DEBUG_WATCH_ROOT *watch);
 void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
 	watch->soc = &s_soc_debug_watch;
 	watch->soc_public = &SOC_Enhance_Element;
+	watch->runtime.soc_state = &s_soc;
+	watch->runtime.soc_saved = &s_saved_soc;
+	watch->runtime.soc_rtc_rest_applied_seconds = &s_u32SocRtcRestAppliedSeconds;
+	watch->runtime.soc_rest_voltage_stable = &s_soc_watch_rest_voltage_stable;
+	SocEnhance_DebugWatchBindTables(watch);
 }
 static void soc_watch_set_calib_source(UINT8 source, UINT8 before, UINT8 after);
 static void soc_watch_set_tail_state(UINT8 low_active, const SOC_TAIL_STEP *low_step);
@@ -198,6 +204,21 @@ const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi] = {
 	3645, 40, 3615, 35, 3585, 30, 3555, 25, 3525, 20, 3480, 15,
 	3400, 10, 3250, 5, 3000, 0,
 };
+#endif
+
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+static void SocEnhance_DebugWatchBindTables(DEBUG_WATCH_ROOT *watch)
+{
+	watch->tables.soc_empty_tail = s_empty_tail_table;
+	watch->tables.soc_empty_tail_count =
+		(uint16_t)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0]));
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	watch->tables.soc_lifepo = SOC_Table_LiFePO;
+#endif
+#if (PROJECT_CFG_BAT_CHEMISTRY == 0)
+	watch->tables.soc_ternary = SocTable_TernaryLi;
+#endif
+}
 #endif
 
 static UINT16 soc_cell_delta(void)

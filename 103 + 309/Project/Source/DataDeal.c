@@ -71,19 +71,22 @@ static DATA_RUNTIME s_data =
     0U
 };
 
-#if DEBUG_WATCH_ENABLED
-void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-    watch->data = &s_data;
-}
-#endif
-
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
 UINT32 g_u32CS_Res_AFE;
 
 struct OTHER_ELEMENT OtherElement;
+
+#if DEBUG_WATCH_ENABLED
+void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+    watch->data = &s_data;
+    watch->calib.coef_k = g_u16CalibCoefK;
+    watch->calib.coef_b = g_i16CalibCoefB;
+    watch->calib.cs_res_afe = &g_u32CS_Res_AFE;
+}
+#endif
 
 void charger_detect_and_keyLogi_200ms(void)
 {

@@ -32,6 +32,8 @@ void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 	watch->sys_cnt1000ms = &s_u8Cnt1000ms;
 	watch->sys_200ms_pending_periods = &s_u8Sys200msPendingPeriods;
 	watch->sys_200ms_overflow_count = &s_u16Sys200msOverflowCnt;
+	watch->system.delay_fac_us = &fac_us;
+	watch->system.delay_fac_ms = &fac_ms;
 }
 #endif
 

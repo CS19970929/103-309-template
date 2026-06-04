@@ -1,5 +1,6 @@
 #include "main.h"
 #include "FaultSnapshot.h"
+#include "DebugWatch.h"
 
 static struct RS485MSG g_stCurrentMsgPtr_SCI1;
 static UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
@@ -144,6 +145,50 @@ static struct SCI_PORT_RUNTIME g_stSciPort3 = {
 	0};
 
 #endif
+
+#if DEBUG_WATCH_ENABLED
+void Sci_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
+{
+	watch->comm.sci1 = &g_stSciPort1;
+	watch->comm.sci_msg1 = &g_stCurrentMsgPtr_SCI1;
+	watch->comm.sci_tx_buffer = g_u8SCITxBuff;
+	watch->comm.sci_err1 = &gu16_CommuErrCnt_SCI1;
+	watch->comm.sci_tx_enable1 = &gu8_TxEnable_SCI1;
+	watch->comm.sci_tx_finish1 = &gu8_TxFinishFlag_SCI1;
+	watch->comm.flash_update_flag = &u8FlashUpdateFlag;
+	watch->comm.flash_update_e2prom = &u8FlashUpdateE2PROM;
+	watch->public_data.cell_report = &g_stCellInfoReport;
+
+#ifdef _COMMOM_UPPER_SCI2
+	watch->comm.sci2 = &g_stSciPort2;
+	watch->comm.sci_msg2 = &g_stCurrentMsgPtr_SCI2;
+	watch->comm.sci_err2 = &gu16_CommuErrCnt_SCI2;
+	watch->comm.sci_tx_enable2 = &gu8_TxEnable_SCI2;
+	watch->comm.sci_tx_finish2 = &gu8_TxFinishFlag_SCI2;
+#else
+	watch->comm.sci2 = 0;
+	watch->comm.sci_msg2 = 0;
+	watch->comm.sci_err2 = 0;
+	watch->comm.sci_tx_enable2 = 0;
+	watch->comm.sci_tx_finish2 = 0;
+#endif
+
+#ifdef _COMMOM_UPPER_SCI3
+	watch->comm.sci3 = &g_stSciPort3;
+	watch->comm.sci_msg3 = &g_stCurrentMsgPtr_SCI3;
+	watch->comm.sci_err3 = &gu16_CommuErrCnt_SCI3;
+	watch->comm.sci_tx_enable3 = &gu8_TxEnable_SCI3;
+	watch->comm.sci_tx_finish3 = &gu8_TxFinishFlag_SCI3;
+#else
+	watch->comm.sci3 = 0;
+	watch->comm.sci_msg3 = 0;
+	watch->comm.sci_err3 = 0;
+	watch->comm.sci_tx_enable3 = 0;
+	watch->comm.sci_tx_finish3 = 0;
+#endif
+}
+#endif
+
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s);

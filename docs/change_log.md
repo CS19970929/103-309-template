@@ -4,6 +4,26 @@
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-04 Keil Debug Watch 全项目调试目录
+
+源码变更：
+- 扩展 `g_dbg_watch` 为全项目调试目录，新增 `runtime`、`comm`、`system`、`afe`、`fault`、`public_data`、`app`、`calib`、`tables` 分组。
+- 将 FactoryAging、RTC、Runtime、SCI、I2C_AFE1、SH367309、Fault、ProductionID、CanFeidaoFrames、SystemDebug、IrqDebug 等状态挂到 `g_dbg_watch`。
+- `g_dbg` 保留为 `SystemDebug` 内部快照实体，但 Keil Watch 不再单独添加它；统一通过 `g_dbg_watch.system.snapshot` 观察。
+- `FD_Debug` 默认打开 `PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_ENABLE=1`，并保持 `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0`。
+- `Project_BuildGuard.h` 增加 SystemDebug/IRQ debug 默认值、0/1 范围检查、IRQ event 依赖检查，并阻止 Release profile 误开任何调试开关。
+- `tools/project_check.py` 同步检查 Debug target 的 SystemDebug/IRQ 宏，并修复 Release map SOC 表检查中的 `defines` 变量来源。
+
+当前结论：
+- Keil Watch 只需要添加 `g_dbg_watch`；系统快照看 `g_dbg_watch.system.snapshot`，IRQ 计数看 `g_dbg_watch.system.irq`。
+- `g_dbg_watch` 仍是 Debug-only 符号，Release 不参与链接，业务 runtime 继续保持模块内 `static` 封装。
+
+验证：
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug`：Keil 日志 `0 Error(s), 6 Warning(s)`。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：Keil 日志 `0 Error(s), 5 Warning(s)`。
+- `py -3.9 tools\run_soc_host_c_test.py`：6 组 SOC host C 测试全部通过，每组 19 项。
+- `py -3.9 tools\project_check.py`：已跑完整，Debug/Release 宏检查通过；仍有仓库既有缺文件、非 UTF-8、历史文档缺失和 ADC runtime 检查项失败。
+
 ## 2026-06-04 Keil Debug Watch 单根结构体入口
 
 源码变更：

@@ -59,9 +59,9 @@
 | `PROJECT_CFG_AFE_TYPE` | 1 | AFE 型号选择，影响 `ShortFunc.c`、`Sci_Upper.c` 分支 | 保留，后续减少 `AFE_TYPE` 别名 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | 工厂老化模块编译/运行入口 | 保留 |
 | `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` | 259200 | 老化默认 3 天 | 保留 |
-| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 1 | `g_dbg` 系统监控导出 | 暂保留，后续与 Debug target 统一 |
-| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 1 | 中断计数调试 | 暂保留，低功耗/中断调试期有价值 |
-| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 1 | IRQ 事件 ring | 暂保留，后续确认量产是否关闭 |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 0 | `g_dbg` 系统监控导出 | 已与 Debug target 统一，`FD_Debug` 显式打开，Release 默认关闭 |
+| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 0 | 中断计数调试 | 已与 Debug target 统一，`FD_Debug` 显式打开，Release 默认关闭 |
+| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 0 | IRQ 事件 ring | 默认关闭，高频 IRQ 事件环仅按需临时打开 |
 | `PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC` | 3600 | Flash 日志重复事件抑制 | 保留 |
 | `PROJECT_CFG_SOC_*` 核心体验参数 | 多个 | SOC 满电、静置、tail、显示平滑、自耗 | 保留，但不要继续扩展无必要宏 |
 | `PROJECT_CFG_LEDBAR_SLEEP_ENABLE` | 1 | 休眠 LED 行为 | 保留 |
@@ -98,8 +98,8 @@
 | `PROJECT_CFG_LEVEL_CURR` | 目前 `LEVEL_CURR` 使用不明显，但额定电流是产品参数 | 保留，后续确认是否仍参与保护/显示 |
 | `PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG` | 初始化标志是存储兼容边界 | 保留，补充注释说明改动会触发参数初始化 |
 | `PROJECT_CFG_WDOG_ENABLE` | 当前量产必须开；关闭只用于调试 | 保留为构建/调试层，Release guard 强制为 1 |
-| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | Release 默认仍为 1，和“调试”语义冲突 | 不急删；先确认 `g_dbg` 是否量产也要保留 |
-| `PROJECT_CFG_IRQ_DEBUG_*` | 对中断/低功耗调试有价值，但量产开销需确认 | 暂保留，后续决定 Release 是否关闭 |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 已从 Release 默认打开改为默认 0 | `FD_Debug` 显式打开，并通过 `g_dbg_watch.system.snapshot` 观察 |
+| `PROJECT_CFG_IRQ_DEBUG_*` | 已从 Release 默认打开改为默认 0 | `FD_Debug` 显式打开轻量计数，事件环保持 0 |
 
 ## 5. `conf.h` 派生宏审查
 
@@ -214,7 +214,7 @@
 | 老化使能/时长 | `PROJECT_CFG_FACTORY_AGING_*` | 产品/量产策略 | 保留 |
 | 日志重复间隔 | `PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC` | Flash 寿命保护 | 保留 |
 | IRQ debug ring | `IRQ_DEBUG_EVENT_RING_SIZE` | 调试模块内部常量 | 保留 |
-| SystemDebug 导出开关 | `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 调试/观测 | 暂保留，后续决定 Release 是否默认关闭 |
+| SystemDebug 导出开关 | `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 调试/观测 | Release 默认关闭，`FD_Debug` 显式打开 |
 
 ## 7. 删除/下沉候选清单
 
@@ -286,4 +286,4 @@
 | RTC/IAP 是否固定启用 | 若是，删除配置开关，保留功能本体 |
 | Virtual current 是否量产真实需要 | 若固定需要，去掉开关并修正拼写；若不需要，删除路径 |
 | LedBar 扫描/滤波是否还需要现场调 | 已下沉为模块内部常量；如需现场调参应另走明确测试构建 |
-| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` 是否允许 Release 默认开启 | 需要决定是否纳入 Debug target，而不是量产配置 |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` 是否允许 Release 默认开启 | 已决定纳入 Debug target，Release 默认关闭并由 BuildGuard 阻止误开 |
