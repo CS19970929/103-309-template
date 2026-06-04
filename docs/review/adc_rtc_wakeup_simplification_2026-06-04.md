@@ -24,6 +24,7 @@
 - `App_AnlogCal()` 改为 latest-sample 模式：有新的 10ms tick 时，只用当前 DMA raw 计算一次结果，不再补跑历史 tick。
 - ADC 重新初始化后丢弃 1 个 10ms tick，避免刚恢复时第一组 raw 不稳定。
 - Type-C 电流仍保留零点死区 `AD_CurZeroDeadband` 和换算限幅；这些属于最小保护，不属于运行态滤波。
+- RF_EN 熔断保险丝逻辑使用 ADC Vbat 时，必须先确认 `ADC_IsReady()!=0`，避免 RTC 唤醒初期 ADC 未计算完成或异常首值参与不可逆动作。
 - AFE 单体累加总压、AFE 电流 sample seq、SOC 主积分和 Modbus/CAN 协议字段含义保持不变。
 
 ## 当前采样时序
@@ -93,9 +94,11 @@ RTC STOP 唤醒后:
 | AFE 总压隔离 | 比较 `u16VCellTotle` 与 ADC VBC | `u16VCellTotle` 仍来自 AFE 单体累加，ADC VBC 不覆盖主总压 |
 | SOC 积分 | Type-C 有/无输出，主回路充放电 | AFE sample seq 仍驱动主 SOC；Type-C 只作为附加等效放电 |
 | 低功耗电流 | STOP 前后测功耗 | ADC 简化不破坏 STOP 前 TIM2/ADC/DMA 关闭 |
+| RF_EN 熔断保护 | RTC STOP 唤醒后观察 `ADC_IsReady()`、`ADC_GetVbatMilliVolt()`、`GPIO_RF_EN` | ADC not ready 时 ADC Vbat 不参与 RF_EN 条件；AFE 错误分支计数必须连续满足条件才累计 |
 
 ## 剩余风险
 
 - 直接采样会让 ADC 抖动更快反映到 VBC、MOS 温度和 Type-C 辅助电流，需要真板确认噪声是否可接受。
 - Type-C 电流已保留死区和限幅，但不再做连续零点确认，需实测插拔和小电流边界。
+- RF_EN 是不可逆安全动作，任何使用 ADC Vbat 的判断都必须带 `ADC_IsReady()` 或更强的连续有效判定；本轮已对当前 RF_EN 路径增加 ready 门控和连续计数清零。
 - 本轮没有修改 AFE/SOC 主链路；若后续发现 SOC 仍异常，应单独排查 AFE CADC、Type-C 是否应计入 SOC、以及电流方向。

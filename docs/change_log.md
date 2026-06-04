@@ -4,6 +4,25 @@
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-04 RTC 唤醒后 RF_EN 熔断判定增加 ADC ready 保护
+
+源码变更：
+- `ADC.c/.h` 增加 `ADC_IsReady()`，停止 ADC、ADC 重新初始化或 RTC STOP 唤醒后先置为 not ready，完成首个直接计算周期后置 ready。
+- `DataDeal.c` 的 RF_EN 熔断逻辑只在 `ADC_IsReady()!=0` 时允许 ADC Vbat 参与 `4280mV * SeriesNum` 总压条件。
+- `DataDeal.c` 的 AFE 通信错误分支在 Vbat/温度条件不满足或 AFE 错误消失时清零 `rong_fuse_afe_err_cnt`，避免非连续异常累计触发 `GPIO_RF_EN`。
+
+当前结论：
+- ADC 未完成采样/计算时，`ADC_GetVbatMilliVolt()` 仍可能为 0，但不会参与 RF_EN 的 ADC 总压条件。
+- RF_EN 仍可由 AFE 温度、AFE 单体最大电压等已有条件触发；本次只隔离 RTC 唤醒初期 ADC Vbat 未 ready 或异常首值的风险。
+
+验证边界：
+- `git diff --check`：本次相关文件无新增 whitespace error，仅有仓库行尾 LF/CRLF 提示。
+- `rg "ADC_IsReady|adc_vbat_fuse_ovp|Vbat_mv >= 4280"`：RF_EN 路径中 ADC Vbat 熔断条件已通过 `adc_vbat_fuse_ovp` 统一门控。
+- `py -3.9 tools/project_check.py --quiet`：仍因仓库既有 `elog_cfg.h` 缺失、部分历史文件非 UTF-8、历史清理文档缺失、`test_Autocurrent_cycle` 缺失，以及脚本自身 `defines` NameError 失败；未发现本次 ADC ready/RF_EN 改动导致的新失败。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：已生成 `FD_Release.axf/bin`；Keil 日志显示 `0 Error(s), 0 Warning(s)`。
+- 需要覆盖 RTC STOP 唤醒后 0ms/10ms/20ms/200ms 的 `ADC_IsReady()`、`Vbat_mv` 和 RF_EN 输出。
+- 需要验证 AFE 错误持续但 Vbat/温度条件间断时，`rong_fuse_afe_err_cnt` 不会跨间断累计。
+
 ## 2026-06-04 RTC 唤醒后 ADC 直接采样简化
 
 源码变更：

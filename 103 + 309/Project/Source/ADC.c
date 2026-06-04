@@ -8,7 +8,7 @@ typedef struct
     UINT32 vbat;
     UINT16 typec;
     UINT8 discard;
-    UINT8 reserved;
+    UINT8 ready;
 } ADC_RUNTIME;
 
 static ADC_RUNTIME s_adc;
@@ -248,10 +248,13 @@ void ADC_ResetAnlogCalSchedule(void)
 {
     s_adc.last = SysTime_Get10msTickCount();
     s_adc.discard = ADC_STARTUP_DISCARD_TICKS;
+    s_adc.ready = 0U;
 }
 
 void ADC_StopForLowPower(void)
 {
+    s_adc.ready = 0U;
+
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
@@ -348,6 +351,11 @@ UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
         return sys_time.typc_curr;
 
     return s_adc.typec;
+}
+
+UINT8 ADC_IsReady(void)
+{
+    return s_adc.ready;
 }
 
 INT32 ADC_GetResult(UINT8 index)
@@ -450,4 +458,5 @@ void App_AnlogCal(void)
     ADC_UpdateMosTemp();
     ADC_UpdateVbc();
     ADC_UpdateTypeCCurrent();
+    s_adc.ready = 1U;
 }

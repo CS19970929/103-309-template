@@ -102,3 +102,4 @@
 | RISK-ADC-WAKE-003 | Type-C 电流不再做 32 点平均和连续零点确认 | `ADC_UpdateTypeCCurrent()`, `AD_CurZeroDeadband` | 小电流边界和插拔瞬态可能更直接进入 SOC 附加放电 | 已执行，需上板验证 | 保留死区/限幅；实测 0A、小负载、阶跃负载和断开清零 |
 | RISK-ADC-WAKE-004 | `App_AnlogCal()` 已改 latest-sample，结果刷新仍受调用频率限制 | `App_AnlogCal()`, `Runtime.c` | 若未来把调用周期改成 1s，结果不会积压历史滤波，但刷新率仍为 1s | 已执行 | 后续修改调用频率时同步评估显示/诊断刷新需求，不再用滤波补跑掩盖调度问题 |
 | RISK-ADC-WAKE-005 | 简化 ADC 时误把 ADC VBC 当成主总压 | `DataDeal.c:201-224`, `DataDeal.c:980-986` | 可能改变保护、CAN/Modbus 上报和校准口径 | MUST_KEEP | 已保持 AFE 单体累加作为主总压；ADC VBC 仅作诊断和 Type-C 折算辅助 |
+| RISK-ADC-WAKE-006 | RF_EN 熔断逻辑使用 ADC Vbat 时必须确认 ADC ready | `ADC_IsReady()`, `DataDeal.c:new_todo_logi()` | RTC 唤醒初期 ADC 未计算完成或异常首值可能影响不可逆熔断动作 | 已处理，需上板验证 | ADC Vbat 条件已加 ready 门控；AFE 错误分支条件不满足或错误消失时清零连续计数 |

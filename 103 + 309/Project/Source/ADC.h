@@ -46,6 +46,7 @@ void ADC_StopForLowPower(void);
 void ADC_ResetAnlogCalSchedule(void);
 UINT32 ADC_GetVbatMilliVolt(void);
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void);
+UINT8 ADC_IsReady(void);
 void App_AnlogCal(void);
 
 #endif	/* ADC_H */

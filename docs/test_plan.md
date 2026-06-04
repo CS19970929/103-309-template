@@ -132,4 +132,5 @@ SOC 源码净删减后，必须至少覆盖：
 | Type-C 插拔 | 接入/断开 Type-C 负载 | 接入不再等待 32 点平均；断开后死区内清零 |
 | 主总压隔离 | 比较 `g_stCellInfoReport.u16VCellTotle` 和 ADC VBC 辅助值 | 主总压仍来自 AFE 单体累加，ADC VBC 不覆盖主路径 |
 | SOC 路径 | 观察 AFE sample seq、主回路电流、Type-C 等效电流 | AFE sample seq 仍驱动主 SOC；Type-C 只作为附加等效放电 |
+| RF_EN ADC ready 保护 | RTC STOP 唤醒后制造 AFE 错误/高 Vbat 条件边界，观察 `ADC_IsReady()`、`Vbat_mv`、`GPIO_RF_EN` | ADC not ready 时 ADC Vbat 不参与熔断；条件间断时 `rong_fuse_afe_err_cnt` 清零 |
 | 低功耗电流 | STOP 前后测量板端电流 | ADC 简化后仍关闭 TIM2/ADC/DMA，不抬高 STOP 功耗 |

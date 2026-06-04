@@ -985,6 +985,8 @@ void new_todo_logi(void)
         // g_stCellInfoReport.u16VCell[31] = Vbat_mv;
 #endif // ! FAC_TEST
         UINT32 Vbat_mv = ADC_GetVbatMilliVolt();
+        UINT32 fuse_vbat_threshold_mV = (UINT32)4280U * (UINT32)SeriesNum;
+        UINT8 adc_vbat_fuse_ovp = (UINT8)((ADC_IsReady() != 0U) && (Vbat_mv >= fuse_vbat_threshold_mV));
 #ifdef _UL_RENZHENG_ENABLE_
         static uint8_t state_fuse = 0;
         static uint32_t rong_fuse_afe_err_cnt = 0;
@@ -1024,7 +1026,7 @@ void new_todo_logi(void)
 
             close_ctlc();
             // todo mcc关了，when 开
-            if (Vbat_mv >= 4280 * SeriesNum || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10)
+            if ((adc_vbat_fuse_ovp != 0U) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10)
             {
                 if (++rong_fuse_afe_err_cnt >= 10)
                 {
@@ -1034,10 +1036,15 @@ void new_todo_logi(void)
 #endif
                 }
             }
+            else
+            {
+                rong_fuse_afe_err_cnt = 0;
+            }
         }
         else
         {
             static uint16_t delay_cnt = 0;
+            rong_fuse_afe_err_cnt = 0;
             if (err_afe && 0 == System_ErrFlag.u8ErrFlag_Com_AFE1)
             {
                 err_afe = 0;
@@ -1076,7 +1083,7 @@ void new_todo_logi(void)
                     state_fuse = 0;
                     open_ctlc();
                 }
-                if (((g_stCellInfoReport.u16VCellMax >= 4280) || (Vbat_mv >= 4280 * SeriesNum) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10) && (g_stCellInfoReport.u16Ichg))
+                if (((g_stCellInfoReport.u16VCellMax >= 4280) || (adc_vbat_fuse_ovp != 0U) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10) && (g_stCellInfoReport.u16Ichg))
                 {
                     if (++rong_fuse >= (15))
                     {

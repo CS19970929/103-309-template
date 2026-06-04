@@ -99,11 +99,13 @@ App_AFEGet()
 - STOP 前 `ADC_StopForLowPower()` 会关闭 TIM2、ADC1 和 DMA1。
 - STOP 唤醒恢复中 `InitRunAfterStopWakeup()` 会再次停止 ADC 后调用 `InitADC()`。
 - `InitADC()` 会清零 `s_adc.raw[]`、`s_adc.result[]`、`s_adc.vbat` 和 Type-C 电流，并通过 `discard` 丢弃 1 个 10ms tick。
+- `ADC_IsReady()` 在 `ADC_StopForLowPower()`/`InitADC()`/`ADC_ResetAnlogCalSchedule()` 后为 0，完成一次 `App_AnlogCal()` 直接计算后置 1。
 - VBC 当前由最新 `ADC_VBC` raw 直接换算 ADC mV 和电池侧 mV，不再做 8 点平均和 1/8 IIR。
 - MOS 温度当前由最新 `ADC_TEMP_MOS1` raw 查表后直接写入结果，不再做 IIR。
 - Type-C 当前由最新 `ADC_CUR_AMP` raw 直接换算 delta_mV/mA，保留 `AD_CurZeroDeadband` 和最大值限幅，不再做 32 点平均。
 - `App_AnlogCal()` 当前为 latest-sample 模式，不再按历史 10ms tick 补跑滤波。
 - 主业务总压仍由 AFE 单体累加得到，ADC VBC 不应覆盖主总压路径。
+- `DataDeal.c` 中 RF_EN 熔断逻辑使用 ADC Vbat 时必须通过 `ADC_IsReady()` 门控；ADC not ready 时只允许 AFE 温度/单体电压等已有效路径参与熔断判断。
 
 验证重点：
 

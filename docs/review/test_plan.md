@@ -84,6 +84,7 @@
 | T-ADC-003 | ADC 旧滤波删除检查 | `rg "ADC_Current_Smooth|ADC_TTC|ADC_Vbc|AD_CalNum|AD_CalNum_Cur|TYPEC_CUR_ZERO_CONFIRM_CNT|filt\\[" "103 + 309/Project/Source"` | 源码无旧 VBC/MOS/Type-C 软件滤波函数、宏和缓存引用 |
 | T-ADC-004 | ADC 直接计算链路 | 观察 `ADC_UpdateVbc()`、`ADC_UpdateMosTemp()`、`ADC_UpdateTypeCCurrent()` 输出 | VBC/MOS/Type-C 均由最新 raw 直接计算，Type-C 保留死区/限幅 |
 | T-ADC-005 | RTC 唤醒后 ADC 首样本丢弃 | 进入 HICCUP STOP 后 RTC 唤醒，观察 `s_adc.discard` 和 getter 输出 | 唤醒后丢弃 1 个 10ms tick，随后直接输出合理值，不再从 0 慢收敛 |
+| T-ADC-006 | RF_EN ADC ready 门控 | RTC STOP 唤醒后制造 AFE 错误和 ADC Vbat 边界，观察 `ADC_IsReady()`、`Vbat_mv`、`GPIO_RF_EN` | ADC not ready 时 ADC Vbat 条件为假；AFE 错误分支必须连续满足 Vbat/温度条件才累计到 RF_EN |
 | T-AFE-001 | AFE I2C 读 | 200ms 读 MTP_TEMP1 46 bytes | CRC 正确，电芯/温度更新 |
 | T-AFE-002 | CADC 真实电流 | 充/放电方向测试 | `u16Ichg/u16IDischg` 方向正确 |
 | T-AFE-003 | AFE 参数写 | 工装写保护参数 | 写入、verify、reset 后一致 |
