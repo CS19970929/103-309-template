@@ -189,12 +189,13 @@ main()
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
 | `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | 1 | 使能升级参数策略 |
-| `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION` | 0x0005 | 策略版本号 |
+| `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION` | 0x0603 | 策略版本号 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_AFE` | 1 | 升级时复位 AFE 参数 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT` | 1 | 升级时复位保护参数 |
-| `PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE` | 1 | 升级时复位 SOC 表 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG` | 1 | 升级时复位 SOC 配置 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT` | 1 | 升级时复位 SOC 快照 |
+
+说明：SOC runtime table 已删除，升级策略不再提供 SOC 表复位开关；SOC 算法只使用编译期 OCV 表。
 
 ### 2.2 conf.h - 宏条件编译派生
 

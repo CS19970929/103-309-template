@@ -59,8 +59,6 @@ EMPTY_LIGHT_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 4) // 5)
 EMPTY_MID_CURRENT_A10 = max(CURRENT_ENTER_A10, (CAP_A10 + 1) // 2)
 CAL_STEP = project_config_int('PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT', 1)
 EMPTY_TAIL_START_OFFSET_MV = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV', 400)
-EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT', 0)
-EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT = project_config_int('PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT', 100)
 DISPLAY_NORMAL_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS', 5)
 DISPLAY_CHG_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS', DISPLAY_NORMAL_SECONDS)
 DISPLAY_LOW_SECONDS = project_config_int('PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS', 1)
@@ -77,8 +75,6 @@ REST_STABLE_LIMIT_SECONDS = REST_OCV_SECONDS
 VALID_MIN_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV', 2000)
 VALID_MAX_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV', 5000)
 VALID_MAX_DELTA_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV', 1000)
-BLOCK_CALIBRATION_PROTECTION_FAULT = bool(project_config_int('PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT', 0))
-BLOCK_CALIBRATION_SYSTEM_FAULT = bool(project_config_int('PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT', 0))
 
 EMPTY_BAND_RELAX = 0
 EMPTY_BAND_LIGHT = 1
@@ -225,11 +221,7 @@ class SocModel:
             return MODE_DSG
         return MODE_RELAX
 
-    def voltage_allowed(self, vmax, vmin, fault=False, system_fault=False):
-        if BLOCK_CALIBRATION_PROTECTION_FAULT and fault:
-            return False
-        if BLOCK_CALIBRATION_SYSTEM_FAULT and system_fault:
-            return False
+    def voltage_allowed(self, vmax, vmin):
         return VALID_MIN_MV <= vmin <= vmax <= VALID_MAX_MV and (vmax - vmin) <= VALID_MAX_DELTA_MV
 
     def add_cycle_capacity(self, delta):
@@ -372,9 +364,6 @@ class SocModel:
             if vmin <= EMPTY_MV + offset:
                 target = targets[band]
                 tick_count = max(1, ticks[band])
-                if offset > 0:
-                    target = min(100, target + EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT)
-                    tick_count = max(1, (tick_count * EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT + 50) // 100)
                 return target, tick_count
         return None
 
@@ -385,8 +374,8 @@ class SocModel:
             return False
         return self.empty_tail_config(direction, vmin, idsg) is not None
 
-    def apply_ocv_target_step(self, target, vmax, vmin, direction=MODE_RELAX, fault=False):
-        if not self.voltage_allowed(vmax, vmin, fault):
+    def apply_ocv_target_step(self, target, vmax, vmin, direction=MODE_RELAX):
+        if not self.voltage_allowed(vmax, vmin):
             return False
         if self.sag_hold_blocks_calibration(vmax, vmin):
             return False
@@ -398,8 +387,8 @@ class SocModel:
         self.set_soc(step_toward(self.soc, target, CAL_STEP))
         return self.soc != old
 
-    def apply_ocv_step(self, vmax, vmin, direction=MODE_RELAX, fault=False):
-        return self.apply_ocv_target_step(interp_soc(vmin), vmax, vmin, direction=direction, fault=fault)
+    def apply_ocv_step(self, vmax, vmin, direction=MODE_RELAX):
+        return self.apply_ocv_target_step(interp_soc(vmin), vmax, vmin, direction=direction)
 
     def apply_long_rest_down_step(self, vmax, vmin, delta_ticks=1):
         if (not self.rest_down_valid or self.rest_down_target >= self.soc or
@@ -483,7 +472,7 @@ class SocModel:
             self.display_soc += 1 if self.display_soc < target else -1
             self.display_ticks = 0
 
-    def tick(self, vmax=3600, vmin=3600, ichg=0, idsg=0, fault=False):
+    def tick(self, vmax=3600, vmin=3600, ichg=0, idsg=0):
         self.mode = self.direction(ichg, idsg)
         self.integrate(self.mode, ichg, idsg)
         self.update_sag_hold(self.mode, idsg)

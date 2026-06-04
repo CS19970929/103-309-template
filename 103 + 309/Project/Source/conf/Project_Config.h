@@ -125,80 +125,92 @@
 // </h>
 
 // <h>SOC Calibration
+//
+// Keep this section short. Only product tuning or field-debug values should be
+// PROJECT_CFG_* macros. Algorithm-internal constants stay in SocEnhance.c.
 
 // <o> Full confirm min cell margin mV <0-500>
+// <i> Full-charge calibration requires max cell voltage near the compile-time full voltage.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
 
 // <o> Full confirm max cell delta mV <0-1000>
+// <i> Blocks full-charge calibration when cell imbalance is larger than this value.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
 
 // <o> Full confirm time seconds <1-600>
+// <i> Normal full-charge confirmation time before SOC can be raised to 100%.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS 15
 
 // <o> Full confirm fast time seconds <1-600>
+// <i> Shorter confirmation time used when voltage is closer to full voltage.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS 5
 
 // <o> Full confirm min SOC percent <0-100>
+// <i> Full-charge calibration only runs when internal SOC is at or above this value.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT 95
 
 // <o> Full confirm fast margin mV <0-500>
+// <i> Cell voltage margin that enables the fast full-charge confirmation path.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV 30
 
 // <o> Calibration min valid cell voltage mV <1000-3500>
+// <i> Rejects OCV/full/low-tail calibration when a cell voltage is below this range.
 #define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
 
 // <o> Calibration max valid cell voltage mV <3600-6000>
+// <i> Rejects OCV/full/low-tail calibration when a cell voltage is above this range.
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
 
 // <o> Calibration max cell delta mV <0-3000>
+// <i> Rejects calibration when max-min cell voltage delta is too large.
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 1000
 
-// <q> Block calibration on protection fault
-#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT 0
-
-// <q> Block calibration on system fault
-#define PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT 0
-
 // <o> Sag holdoff seconds <0-1800>
+// <i> Delays OCV/low-tail calibration after heavy discharge to avoid rebound miscalibration.
 #define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
 
 // <o> Sag allow offset mV <0-500>
+// <i> Sag hold blocks calibration only while Vmin is above empty voltage plus this offset.
 #define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
 
 // <o> Rest OCV wait seconds <60-43200>
+// <i> Minimum stable-rest time before rest OCV target can be trusted.
 #define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
 
 // <o> Rest down step seconds <60-43200>
+// <i> Long-rest slow-down period; each period allows at most one SOC step toward OCV target.
 #define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800
 
 // <o> Auto calibration max step percent <1-10>
+// <i> Maximum SOC change per automatic calibration step.
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 
 // <o> Board self consumption mA <0-1000>
+// <i> Normal running self-consumption current included in coulomb counting.
 #define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 30
 
 // <o> Empty tail start offset mV <0-1000>
+// <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
 
-// <o> Empty tail soft target lift percent <0-30>
-#define PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT 0
-
-// <o> Empty tail soft tick scale percent <25-400>
-#define PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT 100
-
 // <o> Display normal seconds per 1% <1-60>
+// <i> Normal display smoothing rate in seconds for each visible SOC percent.
 #define PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS 5
 
 // <o> Display charge seconds per 1% <1-60>
+// <i> Visible SOC rising rate while charging.
 #define PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS 5
 
 // <o> Display low seconds per 1% <1-60>
+// <i> Visible SOC falling rate near empty voltage.
 #define PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS 1
 
 // <o> Display low offset mV <0-500>
+// <i> Uses low display fall rate when Vmin is below empty voltage plus this offset.
 #define PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV 50
 
 // <o> Display empty fast below V0 mV <0-500>
+// <i> Drops visible SOC faster when Vmin is below empty voltage by this offset.
 #define PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV 50
 // </h>
 
@@ -240,9 +252,6 @@
 
 // <q> Reset balance open voltage on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
-
-// <q> Reset SOC table on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE 1
 
 // <q> Reset SOC config on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1

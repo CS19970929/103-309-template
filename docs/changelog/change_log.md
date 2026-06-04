@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 SOC 宏配置第一批清理
+
+源码变更：
+- 删除失效的 `PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_TABLE` / `UPGRADE_PARAM_RESET_SOC_TABLE` 升级策略宏；SOC runtime table 已删除，升级时不再存在可复位的运行时 SOC 表。
+- 删除未启用的 SOC 校准故障阻断预留宏；当前 SOC 校准允许条件保持为电压有效和压差有效。
+- 删除默认无效的 empty-tail soft target/tick 调参宏，并删除对应空条件编译分支；low-tail 表值和 tail 行为不变。
+
+文档变更：
+- 更新宏参考和模块参考中的升级策略默认值，移除已删除 SOC 配置宏说明。
+
+验证边界：
+- 本次不修改 tail 表、SOC 算法、协议窗口、Keil target define 和 Debug Watch 配置。
+
 ## 2026-06-04 SOC 删除 runtime table、手动 OCV、mid-tail
 
 本次按用户确认继续净删减 SOC 模块，目标是让算法边界更简单、稳定、易读。

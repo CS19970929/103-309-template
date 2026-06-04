@@ -55,8 +55,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
-#define SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT ((UINT8)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT)
-#define SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT)
 #define SOC_DISPLAY_NORMAL_SECONDS   ((UINT8)PROJECT_CFG_SOC_DISPLAY_NORMAL_SECONDS)
 #define SOC_DISPLAY_CHG_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_CHG_SECONDS)
 #define SOC_DISPLAY_LOW_SECONDS      ((UINT8)PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS)
@@ -351,29 +349,6 @@ static UINT16 soc_voltage_with_margin(UINT16 base_mv, UINT16 margin_mv)
 	return (base_mv > margin_mv) ? (UINT16)(base_mv - margin_mv) : 0U;
 }
 
-#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_PROTECTION_FAULT
-static UINT8 soc_protection_fault_blocks_calibration(void)
-{
-	return (UINT8)(g_stCellInfoReport.unMdlFault_Third.all != 0U);
-}
-#else
-#define soc_protection_fault_blocks_calibration() ((UINT8)0U)
-#endif
-
-#if PROJECT_CFG_SOC_CALIBRATION_BLOCK_SYSTEM_FAULT
-static UINT8 soc_system_fault_blocks_calibration(void)
-{
-	return (UINT8)((System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U) ||
-		(System_ERROR_UserCallback(ERROR_STATUS_AFE2) != 0U) ||
-		(System_ERROR_UserCallback(ERROR_STATUS_ADC) != 0U) ||
-		(System_ERROR_UserCallback(ERROR_STATUS_CBC_CHG) != 0U) ||
-		(System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) != 0U) ||
-		(System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) != 0U));
-}
-#else
-#define soc_system_fault_blocks_calibration() ((UINT8)0U)
-#endif
-
 static UINT8 soc_calibration_allowed(void)
 {
 	if (!soc_voltage_valid())
@@ -381,14 +356,6 @@ static UINT8 soc_calibration_allowed(void)
 		return 0U;
 	}
 	if (soc_cell_delta() > SOC_VALID_MAX_DELTA_MV)
-	{
-		return 0U;
-	}
-	if (soc_protection_fault_blocks_calibration())
-	{
-		return 0U;
-	}
-	if (soc_system_fault_blocks_calibration())
 	{
 		return 0U;
 	}
@@ -902,16 +869,9 @@ static void soc_watch_set_rest_voltage_stable(UINT8 stable)
 
 static void soc_watch_refresh(UINT8 force_display)
 {
-	UINT8 cal_allowed = 0U;
+	UINT8 cal_allowed = soc_calibration_allowed();
 	UINT8 sag_blocked;
 
-	if (soc_voltage_valid() &&
-		(soc_cell_delta() <= SOC_VALID_MAX_DELTA_MV) &&
-		(!soc_protection_fault_blocks_calibration()) &&
-		(!soc_system_fault_blocks_calibration()))
-	{
-		cal_allowed = 1U;
-	}
 	sag_blocked = (UINT8)((s_soc.sag_hold_ticks > 0U) &&
 		soc_voltage_valid() &&
 		(SOC_Enhance_Element.u16_VCellMin >
@@ -992,37 +952,6 @@ static UINT8 soc_tail_rule_lookup(const SOC_EMPTY_TAIL_RULE *rules,
 	return 0U;
 }
 
-#if (PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT != 0) || \
-	(PROJECT_CFG_SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT != 100)
-static void soc_apply_empty_tail_tuning(int16_t offset_mv, SOC_TAIL_STEP *step)
-{
-	UINT32 ticks;
-	UINT16 target;
-
-	if (offset_mv <= 0)
-	{
-		return;
-	}
-	if (SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT != 0U)
-	{
-		target = (UINT16)step->target + SOC_EMPTY_TAIL_SOFT_TARGET_LIFT_PERCENT;
-		step->target = (target > 100U) ? 100U : (UINT8)target;
-	}
-	if (SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT != 100U)
-	{
-		ticks = ((UINT32)step->ticks * SOC_EMPTY_TAIL_SOFT_TICK_SCALE_PERCENT + 50U) / 100U;
-		if (ticks == 0U)
-		{
-			ticks = 1U;
-		}
-		step->ticks = (ticks > 0xFFFFU) ? 0xFFFFU : (UINT16)ticks;
-	}
-}
-#else
-#define soc_apply_empty_tail_tuning(offset_mv, step) \
-	((void)(offset_mv), (void)(step))
-#endif
-
 static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 {
 	UINT8 old_soc = s_soc.soc;
@@ -1041,7 +970,6 @@ static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 static UINT8 soc_empty_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 {
 	UINT8 band = soc_empty_current_band(mode);
-	int16_t matched_offset = 0;
 	UINT8 found;
 
 	if (soc_vmin_above_empty_offset(SOC_EMPTY_TAIL_START_OFFSET_MV))
@@ -1054,11 +982,7 @@ static UINT8 soc_empty_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 		SOC_TAIL_TARGET_DISABLED,
 		1U,
 		step,
-		&matched_offset);
-	if (found)
-	{
-		soc_apply_empty_tail_tuning(matched_offset, step);
-	}
+		0);
 	return found;
 }
 

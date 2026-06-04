@@ -90,6 +90,8 @@ Runtime_RunOnce()
 
 ## 4. 配置事实
 
+配置原则：`Project_Config.h` 只保留产品调试、现场体验或确实需要编译期切换的 SOC 参数；算法内部常量不要继续扩展为 `PROJECT_CFG_*` 宏。已删除默认无效或仅预留的 SOC table 复位、校准故障阻断、empty-tail soft target/tick 调参开关。
+
 | 配置 | 当前值 | 影响 |
 |---|---:|---|
 | `PROJECT_CFG_BAT_CHEMISTRY` | `0` | 当前编译使用三元锂 `SocTable_TernaryLi` |
