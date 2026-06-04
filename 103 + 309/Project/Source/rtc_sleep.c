@@ -104,7 +104,7 @@ static void lp_sync(void)
     g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
 }
 
-static void low_power_log_and_commit_sleep(uint8_t sleep_mode)
+void low_power_log_and_commit_sleep(uint8_t sleep_mode)
 {
     if ((sleep_mode != NORMAL_MODE) && (sleep_mode != DEEP_MODE))
     {

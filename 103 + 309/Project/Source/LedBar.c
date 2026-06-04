@@ -1008,9 +1008,11 @@ static void LedBar_ServiceSwitch(void)
             (s_ledbar.key_long_handled == 0u))
         {
             s_ledbar.key_long_handled = 1u;
-            LedBar_SaveSleepSoc();
-            LowPower_Request(DEEP_MODE);
-            SleepDeal_Continue((UINT8)DEEP_MODE);
+            // LedBar_SaveSleepSoc();
+            // LowPower_Request(DEEP_MODE);
+            // SleepDeal_Continue((UINT8)DEEP_MODE);
+extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
+            low_power_log_and_commit_sleep(DEEP_MODE);
         }
 #endif
     }

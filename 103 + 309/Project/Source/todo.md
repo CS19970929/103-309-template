@@ -1476,3 +1476,58 @@ soc_apply_mid_tail
 
 
 soc校准不太合适，还是要优化，静置校准太快
+
+SOC_UpdateSampleData
+
+led模块中key和mcu_wk的滤波是否有必要，可以去掉吗
+
+MosStartup_ApplyInitialState运行时，老化模式是否已初始化，是否会有逻辑、时序问题
+
+rtc唤醒后，adc的这几个采样结果是怎样的，adc还没完全采样、计算完成时，这几个值是多少，是否会有风险，adc的总压和温度采样值会对熔断保险丝逻辑有重大影响(GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);)
+
+用keil调试时，目前很多变量都是static的，不方便加入到watch中，每次都要单步运行到对应模块才能加入，很不方便
+
+测试一遍保护和对应的状态显示，飞道协议测试，短路与恢复
+
+梳理目前所有的调试手段，分别怎么使用，是否有实际用处，能否优化调试手段，更方便在keil调试中，掌控状态、细节，方便项目优化、debug，有问题时，能快速定位、纠偏并解决
+
+Keil 的 FD_Release 和 FD_Debug 两个 target 的 Source 分组现在有什么区别，实际有用吗，你是怎么配置的，我怎么确认你配置的没问题
+
+
+FD_Release:
+STM32F10X_MD,USE_STDPERIPH_DRIVER
+
+FD_Debug:
+STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_
+
+
+我想在FD_Debug中保留这些调试功能和代码，又不想在FD_Release中见到这些代码，在量产代码中只看到和真正有用的代码，不然影响阅读，给出方案，例如{
+  /* event: fault detection */
+	{
+		uint16_t now_fault = g_stCellInfoReport.unMdlFault_Third.all & 0x3FFBU;
+		if ((now_fault != 0U) && (s_rt.fault == 0U)) {
+			SystemDebug_Event(0x02, (uint8_t)now_fault, (uint8_t)(now_fault >> 8), 0U);
+		} else if ((now_fault == 0U) && (s_rt.fault != 0U)) {
+			SystemDebug_Event(0x07, 0U, 0U, s_rt.fault);
+		}
+		s_rt.fault = now_fault;
+	}
+
+	/* event: LP mode change */
+	{
+		uint8_t now_lp = g_stLowPowerRtcStatus.mode;
+		if (now_lp != s_rt.lp) {
+			SystemDebug_Event(0x03, now_lp, (uint8_t)g_stLowPowerRtcStatus.block, 0U);
+			s_rt.lp = now_lp;
+		}
+	}
+
+	section_start = SystemDebug_GetCycleCount();
+}
+这些我都不想见到
+
+
+rtc休眠一次被唤醒后，会一直进入Can_IsBusy 的if (s_tx.count != 0U)
+	{
+		return 1U;
+	}导致一直进不了rtc

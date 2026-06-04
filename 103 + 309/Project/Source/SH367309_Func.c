@@ -316,9 +316,7 @@ void Fault_ChangeToMCU(void)
 
 void App_SH367309_Monitor(void)
 {
-	static UINT8 su8_SC_Flag = 0;
 	static UINT8 su8_EEPR_WR_Flag = 0;
-
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
@@ -328,29 +326,6 @@ void App_SH367309_Monitor(void)
 								   SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
 
 		Fault_ChangeToMCU();
-
-		switch (su8_SC_Flag)
-		{
-		case 0:
-			if (SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
-			{
-				System_ERROR_UserCallback(ERROR_CBC_DSG);
-				su8_SC_Flag = 1;
-			}
-			break;
-
-		case 1:
-			// 负载断开(DSGD管教电平低于VDSGD)，持续时间超过负载释放延时tD1，现在设置为2s
-			if (!SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
-			{
-				su8_SC_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
-		}
-
 		// 观察类型，不能被置位，置位说明有问题，配置不对
 		// SH367309_Reg_Store.REG_BSTATUS1.bits.PF;
 		// SH367309_Reg_Store.REG_BSTATUS1.bits.WDT;
@@ -365,7 +340,6 @@ void App_SH367309_Monitor(void)
 				su8_EEPR_WR_Flag = 1;
 			}
 			break;
-
 		case 1:
 			// 负载断开(DSGD管教电平低于VDSGD)，持续时间超过负载释放延时tD1，现在设置为2s
 			if (!SH367309_Reg_Store.REG_BSTATUS3.bits.EEPR_WR)
@@ -373,7 +347,6 @@ void App_SH367309_Monitor(void)
 				su8_EEPR_WR_Flag = 0;
 			}
 			break;
-
 		default:
 			break;
 		}
