@@ -58,8 +58,6 @@ extern enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);
 uint32_t LP_GetBlockReason(void);
-uint32_t LP_GetLastSleepSeconds(void);
-void LP_RecordLastSleepSeconds(uint32_t seconds);
 void rtc_sleep(void);
 void cpu_frequency_conf(void);
 

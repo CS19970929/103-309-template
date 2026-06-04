@@ -124,7 +124,7 @@
 | T-LP-011 | Sleep 参数有效性 | 通过上位机写 `0x2310-0x2317` 后观察策略 | 写入的有效参数必须改变对应行为；无效/占位参数必须文档化或拒绝 |
 | T-LP-012 | HICCUP 前 AFE 功耗状态 | STOP 前后读 SH367309 状态并测整机电流 | 符合确认后的 AFE sleep/保持测量策略 |
 | T-LP-013 | `app_lowpower` 主路径净删减 | `rg "LP_EnterStop|LP_BeforeSleep|LP_AfterWakeup|LP_SetWakeupPeriod|LP_Task|LP_STATE_"` | 源码无旧 wrapper/状态缓存引用；主路径为 `Runtime_RunOnce()->rtc_sleep()` |
-| T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request|LOW_POWER_RTC_BLOCK|s_u16IdleDelaySeconds|s_u32RtcSleepElapsedSeconds|s_u32RtcWakeCycles|s_u32LastSleepSeconds"` | 源码无无消费者缓存、未调用 helper、旧粗粒度 block 枚举和独立低功耗计数变量；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
+| T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request|LOW_POWER_RTC_BLOCK|s_u16IdleDelaySeconds|s_u32RtcSleepElapsedSeconds|s_u32RtcWakeCycles|s_u32LastSleepSeconds|LP_GetLastSleepSeconds|LP_RecordLastSleepSeconds|lp_idle"` | 源码无无消费者缓存、未调用 helper、旧粗粒度 block 枚举和独立低功耗计数变量；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
 | T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 监控脚本按 `g_stLowPowerRtcStatus` 新 8 word 布局读取 `mode/rtc/comm/idle/idleMax/force/vlow/block/sleep/last/cycles`、LED、DBGMCU |
 | T-LP-016 | CAN busy 查询副作用隔离 | 连续 CAN RX，同时观察 `SystemDebug_Snapshot()` 和 `rtc_sleep()` | debug/heartbeat 不更新 `last_ext_comm_cnt_can`；低功耗仍能因 CAN 活动阻塞 RTC STOP |
 | T-LP-017 | 周期 CAN TX 不阻塞 RTC idle | 不接 CAN 对端或制造无 ACK，观察 `g_stLowPowerRtcStatus.idle/block` 和 `s_tx.count` | 普通周期广播 pending 不反复置 `LP_BLOCK_COMM`，达到 `time_enter_rtc` 后能进入 HICCUP；接入 CAN 对端后运行态周期广播仍恢复 |

@@ -54,15 +54,15 @@ Runtime_RunIoAndPowerTasks
 | `g_stLowPowerRtcStatus.mode` | `uint8_t` | `rtc_sleep.c` | 当前低功耗请求状态：`NORMAL/HICCUP/DEEP/NO_SLEEP` | `LowPower_Request()`, `lp_select()`, wake path | `rtc_sleep()`, debug |
 | `g_stLowPowerRtcStatus.rtc` | `uint8_t` | `rtc_sleep.c` | 当前/最近是否 RTC 唤醒 | `lp_sync()` | debug |
 | `g_stLowPowerRtcStatus.comm` | `uint8_t` | `rtc_sleep.c` | 外部通信计数快照 | `LP_GetBlockReason()` | debug |
-| `g_stLowPowerRtcStatus.idle` | `uint16_t` | `rtc_sleep.c` | 无 blocker 空闲累计秒 | `lp_idle()`, `lp_deep()`, `lp_select()` | debug |
+| `g_stLowPowerRtcStatus.idle` | `uint16_t` | `rtc_sleep.c` | 无 blocker 空闲累计秒 | `lp_deep()`, `lp_select()` | debug |
 | `g_stLowPowerRtcStatus.idleMax` | `uint16_t` | `rtc_sleep.c` | `sys_time.time_enter_rtc` 快照 | `lp_sync()` | debug |
 | `g_stLowPowerRtcStatus.force` | `uint16_t` | `rtc_sleep.c` | 极低电压强制 deep 累计秒 | `lp_deep()` | debug |
 | `g_stLowPowerRtcStatus.vlow` | `uint32_t` | `rtc_sleep.c` | 低压 deep 条件累计秒 | `lp_deep()` | debug |
 | `g_stLowPowerRtcStatus.block` | `uint32_t` | `rtc_sleep.c` | blocker bitmask | `lp_select()` | debug |
 | `g_stLowPowerRtcStatus.sleep` | `uint32_t` | `rtc_sleep.c` | HICCUP 连续 STOP 累计睡眠秒 | `rtc_sleep_run_hiccup_cycle()` | SOC 补偿、debug |
-| `g_stLowPowerRtcStatus.last` | `uint32_t` | `rtc_sleep.c` | 最近一次 HICCUP 结束累计秒 | `LP_RecordLastSleepSeconds()` | debug |
+| `g_stLowPowerRtcStatus.last` | `uint32_t` | `rtc_sleep.c` | 最近一次 HICCUP 结束累计秒 | `rtc_sleep_run_hiccup_cycle()` | debug |
 | `g_stLowPowerRtcStatus.cycles` | `uint32_t` | `rtc_sleep.c` | HICCUP 连续 RTC 唤醒次数 | `rtc_sleep_run_hiccup_cycle()` | debug |
-| `g_irq_t` | `enum irqWakeup` | `rtc_sleep.c` | STOP 退出原因 | `isException()`, guess wake | wake callback/debug |
+| `g_irq_t` | `enum irqWakeup` | `rtc_sleep.c` | STOP 退出原因 | `rtc_sleep_has_wakeup_exception()`, guess wake | wake callback/debug |
 | `s_sleep.ext_comm` | `uint8_t` | `SleepDeal.c` | 串口外部通信计数 | `SleepDeal_RecordExternalComm()` | `LP_GetBlockReason()` |
 | `s_sleep.boot_sleep` | `uint8_t` | `SleepDeal.c` | 本次启动是否来自 sleep flag | `IsSleepStartUp()` | 其他模块/调试 |
 | `s_sleep.chg_wake` | `uint8_t` | `SleepDeal.c` | 是否由充电器唤醒 | `SleepDeal_MarkBootFromSleepChargerWakeup()` | 其他模块/调试 |
@@ -140,19 +140,19 @@ rtc_sleep()
         ├── if RTC wake: cycles++, sleep += elapsed
         ├── RtcSleep_PortRestoreAfterStop()
         │   └── InitRunAfterStopWakeup()
-        ├── if RTC wake && !isException()
+        ├── if RTC wake && !rtc_sleep_has_wakeup_exception()
         │   ├── SOC_ApplyRtcRelaxationCompensation()
         │   └── return true
         └── else
             ├── LowPower_Request(NO_SLEEP)
             ├── guess/on wake source
-            ├── LP_RecordLastSleepSeconds()
+            ├── last = sleep
             ├── RtcSleep_PortAddRuntimeSeconds()
             ├── cycles=0; sleep=0
             └── return false
 ```
 
-`isException()` 当前依次检查：
+`rtc_sleep_has_wakeup_exception()` 当前依次检查：
 
 | 顺序 | 函数 | 当前行为 |
 | --- | --- | --- |
@@ -172,6 +172,7 @@ low_power_log_and_commit_sleep(NORMAL/DEEP)
     ├── LogEvent_Record(BMS_SLEEP)
     └── SleepDeal_Continue()
         ├── LowPowerSleep_SaveResetState()
+        ├── select boot flag
         ├── BootFlag_Write(FLASH_NORMAL/DEEP_SLEEP_VALUE)
         ├── InitAFE1_Sleep(0)
         ├── AFE_Sleep()

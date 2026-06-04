@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 低功耗函数粒度净删减
+
+源码变更：
+- `rtc_sleep.c/.h` 删除无源码调用的 last sleep getter/setter，HICCUP 退出直接写 `g_stLowPowerRtcStatus.last`。
+- `rtc_sleep.c` 合并 `lp_idle()` 到 `lp_select()`，并把 `isException()` 改名为 `rtc_sleep_has_wakeup_exception()`。
+- `SleepDeal.c` 删除 `u8FlashWriteOK_flag` 中间状态，统一 reset-sleep 的 boot flag 写入和 AFE sleep/reset 提交。
+
+文档变更：
+- 更新低功耗设计、状态机、模块参考和测试计划。
+
+验证边界：
+- 不改变 HICCUP STOP、NORMAL/DEEP reset-sleep、BMS_SLEEP 日志、BKP flag、AFE sleep 和 SOC 休眠补偿顺序。
+
 ## 2026-06-04 SOC 函数粒度二次净删减
 
 源码变更：

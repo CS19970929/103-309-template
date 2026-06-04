@@ -58,7 +58,7 @@
 |---|---|---|
 | `Runtime.c` | `Runtime_RunFrontTasks()`、`Runtime_RunIoAndPowerTasks()`、`Runtime_RunBackgroundTasks()` 是主循环阶段边界，中间插入了 DebugHooks 计时和事件钩子。 | 保留。虽然函数短，但它们承载调试剖面边界，合并会降低运行阶段可观测性。 |
 | `LowPowerSleep.c` | `LowPowerSleep_SaveCoreState()` 和 `LowPowerSleep_SaveResetState()` 分别对应普通睡眠保存和 reset-sleep 额外 LedBar SOC 保存。 | 保留。函数短，但调用语义不同，边界清楚。 |
-| `rtc_sleep.c` | `lp_sync()`、`lp_deep()`、`lp_idle()`、`lp_select()`、`rtc_sleep_prepare_rtc()`、`rtc_sleep_run_hiccup_cycle()` 都参与低功耗状态机。 | 暂不合并。低功耗路径风险高，当前拆分对应判定阶段和 STOP 进入/恢复阶段。 |
+| `rtc_sleep.c` | `lp_idle()` 已合并回 `lp_select()`，无调用的 `LP_GetLastSleepSeconds()` / `LP_RecordLastSleepSeconds()` 已删除；`lp_sync()`、`lp_deep()`、`lp_select()`、`rtc_sleep_prepare_rtc()`、`rtc_sleep_run_hiccup_cycle()` 仍保留。 | 已小步净删减；剩余函数分别对应调试状态同步、deep 优先级判断、模式选择和 STOP 进入/恢复边界，暂不继续合并。 |
 
 ## 4. 结论
 

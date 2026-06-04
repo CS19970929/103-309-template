@@ -1,5 +1,18 @@
 # 变更记录
 
+## 2026-06-04 低功耗函数粒度净删减
+
+源码变更：
+- `rtc_sleep.c/.h`：删除无源码调用的 `LP_GetLastSleepSeconds()`、`LP_RecordLastSleepSeconds()`；HICCUP 退出时直接写 `g_stLowPowerRtcStatus.last`。
+- `rtc_sleep.c`：将只被 `lp_select()` 调用的 `lp_idle()` 合并回调用点；`isException()` 改名为 `rtc_sleep_has_wakeup_exception()`。
+- `SleepDeal.c`：`SleepDeal_Continue()` 改为先选择 `boot_flag`，再统一执行 `BootFlag_Write()`、AFE sleep 和 MCU reset，删除 `u8FlashWriteOK_flag` 中间状态。
+
+文档变更：
+- 更新低功耗设计、状态机、模块参考、测试计划和模块简化审查记录。
+
+行为边界：
+- 不修改 blocker 条件、HICCUP STOP 进入/恢复顺序、reset-sleep 日志、BKP flag、AFE sleep、SOC 休眠补偿和 LED 睡眠 SOC 保存。
+
 ## 2026-06-04 SOC 函数粒度二次净删减
 
 源码变更：

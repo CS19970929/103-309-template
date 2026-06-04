@@ -161,7 +161,7 @@ rtc_sleep_run_hiccup_cycle()
   RtcSleep_PortDisableStopWakeup()
   RtcSleep_PortRestoreAfterStop()
     InitRunAfterStopWakeup()
-  isException()
+  rtc_sleep_has_wakeup_exception()
 ```
 
 无异常时：

@@ -1211,8 +1211,7 @@ Runtime_RunOnce() -> rtc_sleep()
 | 函数 | 功能 |
 |------|------|
 | `LP_GetBlockReason()` | 获取框架层阻塞 bitmask；返回 0 表示框架允许休眠 |
-| `LP_GetLastSleepSeconds()` | 获取最近一次 RTC sleep 累计秒数 |
-| `LP_RecordLastSleepSeconds()` | 记录最近一次 RTC sleep 累计秒数 |
+| `g_stLowPowerRtcStatus.last` | 最近一次 HICCUP 结束累计秒数，由 `rtc_sleep_run_hiccup_cycle()` 更新 |
 
 ---
 

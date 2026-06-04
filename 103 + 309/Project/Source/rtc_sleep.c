@@ -88,16 +88,6 @@ uint32_t LP_GetBlockReason(void)
     return reason;
 }
 
-uint32_t LP_GetLastSleepSeconds(void)
-{
-    return g_stLowPowerRtcStatus.last;
-}
-
-void LP_RecordLastSleepSeconds(uint32_t seconds)
-{
-    g_stLowPowerRtcStatus.last = seconds;
-}
-
 static void lp_sync(void)
 {
     g_stLowPowerRtcStatus.rtc = RtcSleep_PortIsRtcWake();
@@ -163,15 +153,6 @@ static uint8_t lp_deep(void)
     return 0U;
 }
 
-static void lp_idle(void)
-{
-    if (++g_stLowPowerRtcStatus.idle >= sys_time.time_enter_rtc)
-    {
-        g_stLowPowerRtcStatus.idle = 0U;
-        LowPower_Request(HICCUP_MODE);
-    }
-}
-
 static void lp_select(void)
 {
     if (lp_deep() != 0U)
@@ -188,11 +169,15 @@ static void lp_select(void)
         return;
     }
 
-    lp_idle();
+    if (++g_stLowPowerRtcStatus.idle >= sys_time.time_enter_rtc)
+    {
+        g_stLowPowerRtcStatus.idle = 0U;
+        LowPower_Request(HICCUP_MODE);
+    }
     lp_sync();
 }
 
-static bool isException(void)
+static bool rtc_sleep_has_wakeup_exception(void)
 {
     enum irqWakeup source = NO_IRQ;
 
@@ -249,7 +234,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     RtcSleep_PortRestoreAfterStop();
 
-    if ((RtcSleep_PortIsRtcWake() != 0U) && !isException())
+    if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_sync();
@@ -265,7 +250,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
     RtcSleep_PortOnWakeupSource(g_irq_t);
 
-    LP_RecordLastSleepSeconds(g_stLowPowerRtcStatus.sleep);
+    g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
     RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;

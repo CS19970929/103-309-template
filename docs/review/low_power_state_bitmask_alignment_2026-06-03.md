@@ -67,8 +67,8 @@ lp_select()
   if block != 0
     idle = 0
     return
-  lp_idle()
-    idle 达到 idleMax 后请求 HICCUP_MODE
+  idle++
+  idle 达到 idleMax 后请求 HICCUP_MODE
 ```
 
 ## 保持不变

@@ -98,7 +98,7 @@ static UINT8 IsSleepWakeupValid(void)
 
 void SleepDeal_Continue(UINT8 sleep_mode)
 {
-	UINT8 u8FlashWriteOK_flag = 0;
+	UINT16 boot_flag;
 
 	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 	LowPowerSleep_SaveResetState();
@@ -106,29 +106,23 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 	switch (sleep_mode)
 	{
 	case NORMAL_MODE:
-		BootFlag_Write(FLASH_NORMAL_SLEEP_VALUE);
-		u8FlashWriteOK_flag = 1;
+		boot_flag = FLASH_NORMAL_SLEEP_VALUE;
 		break;
 	case HICCUP_MODE:
-		BootFlag_Write(FLASH_HICCUP_SLEEP_VALUE);
-		u8FlashWriteOK_flag = 1;
-
+		boot_flag = FLASH_HICCUP_SLEEP_VALUE;
 		break;
 	case DEEP_MODE:
-		BootFlag_Write(FLASH_DEEP_SLEEP_VALUE);
-		u8FlashWriteOK_flag = 1;
+		boot_flag = FLASH_DEEP_SLEEP_VALUE;
 		break;
 	default:
 		// 不调整引脚进入休眠，功耗会很大
-		break;
+		return;
 	}
 
-	if (u8FlashWriteOK_flag)
-	{
-		InitAFE1_Sleep(0);
-		AFE_Sleep();
-		MCU_RESET();
-	}
+	BootFlag_Write(boot_flag);
+	InitAFE1_Sleep(0);
+	AFE_Sleep();
+	MCU_RESET();
 }
 
 static void BootFlag_EnableAccess(void)

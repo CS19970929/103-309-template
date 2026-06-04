@@ -8,6 +8,7 @@
 
 ## 2026-06-02 源码复核补充
 
+- 2026-06-04 简化补充：删除无源码调用的 `LP_GetLastSleepSeconds()` / `LP_RecordLastSleepSeconds()`，HICCUP 退出时直接写 `g_stLowPowerRtcStatus.last`；`lp_idle()` 已合并回唯一调用点 `lp_select()`；`SleepDeal_Continue()` 改为先选择 `boot_flag` 再统一写 BKP、AFE sleep 和 reset。
 - 2026-06-04 补充：`Can_IsBusy()` 的低功耗语义已从“所有 CAN TX pending 都阻塞”收窄为“CAN App 请求/ACK/read-block、未归属硬件发送、RX 活动阻塞”；普通 1000ms/5000ms 周期广播 pending 不再清零 RTC idle 计数，真正入睡前仍由 `Can_PrepareSleep()` 取消 TX、清队列并关闭 CMNT。
 - 当前源码已删除 `conf.h` 中无条件 `__EnableLowPowerDebug__`；`EnableLowPowerDebug()` 在未显式定义该宏时会清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`，符合 Release 功耗实测边界。
 - 当前 `PROJECT_CFG_WDOG_ENABLE` 默认为 `1`；`Init_IWDG()` 和 `IWDG_Feed()` 已按该宏门控，RTC wake period 安全窗口与实际 IWDG 行为一致。
@@ -37,6 +38,7 @@ Reset 式 sleep 入口：
 ```text
 SleepDeal_Continue()
   LowPowerSleep_SaveResetState()
+  select boot_flag
   BootFlag_Write()
   InitAFE1_Sleep()
   AFE_Sleep()
