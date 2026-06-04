@@ -123,10 +123,9 @@ main()
 
 ### 2.1 Project_Config.h - 核心编译配置
 
-#### 构建配置
+#### 基础配置
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
-| `PROJECT_CFG_BUILD_PROFILE` | 0 | 0=Release, 1=Debug, 2=Factory/Test |
 | `PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG` | 0x2445 | EEPROM 初始化标志 |
 | `PROJECT_CFG_BAT_TYPE` | 1 | 0=BAT_MASTER(20A), 1=BAT_SLAVE(40A) |
 | `PROJECT_CFG_BAT_CHEMISTRY` | 0 | 0=TERNARYLI(三元锂), 1=LIFEPO(磷酸铁锂) |
@@ -137,6 +136,8 @@ main()
 | `PROJECT_CFG_FD_MONTH` | 5 | 固件月份 |
 | `PROJECT_CFG_FD_DAY` | 9 | 固件日期 |
 
+说明：`PROJECT_CFG_BUILD_PROFILE` 当前不是 `Project_Config.h` 应用层配置宏；Keil `FD_Debug` target 仍定义 `PROJECT_CFG_BUILD_PROFILE=1` 用于调试目标识别。
+
 #### 功能开关
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
@@ -145,18 +146,14 @@ main()
 | `PROJECT_CFG_IAP_ENABLE` | 1 | 使能 IAP 升级 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | 使能工厂老化模式 |
 | `PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS` | 259200 | 老化时间(3天) |
-| `PROJECT_CFG_IDLE_SLEEP_ENABLE` | 0 | 空闲时进入 Sleep 模式 |
-| `PROJECT_CFG_LED_FUNC_ENABLE` | 0 | 使能旧 LED 功能标志 |
-| `PROJECT_CFG_DEBUG_CODE_ENABLE` | 0 | 使能调试代码 |
-| `PROJECT_CFG_DEBUG_WATCH_ENABLE` | 0 | 使能 Keil Watch 调试导出 |
-| `PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE` | Debug=1 | 使能串口日志 |
-| `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` | 0 | 使能 Flash 启动诊断打印 |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 1 | 系统调试快照导出 |
+| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 1 | IRQ 计数 |
+| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 1 | IRQ 事件 ring |
 
 #### 唤醒源配置
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
 | `PROJECT_CFG_UART1_WAKEUP_ENABLE` | 1 | UART1 唤醒 |
-| `PROJECT_CFG_UART2_WAKEUP_ENABLE` | 0 | UART2 唤醒 |
 | `PROJECT_CFG_RS485_WAKEUP_ENABLE` | 1 | RS485 唤醒 |
 | `PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE` | 1 | 长按键开关 |
 
@@ -183,7 +180,8 @@ main()
 | `PROJECT_CFG_LEDBAR_SLEEP_ENABLE` | 1 | 休眠关闭 LED |
 | `PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS` | 500 | SOC 显示时间(5秒) |
 | `PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS` | 1000 | 唤醒显示时间(10秒) |
-| `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS` | 50 | 扫描定时器周期 |
+
+说明：扫描周期和 MCU_WK 滤波已下沉为 `LedBar.c` 内部常量。
 
 #### 升级参数策略
 | 宏定义 | 默认值 | 说明 |
@@ -216,19 +214,14 @@ UART1_WAKEUP_ENABLE  (PROJECT_CFG_UART1_WAKEUP_ENABLE)
 RS485_WAKEUP_ENABLE  (PROJECT_CFG_RS485_WAKEUP_ENABLE)
 _DI_SWITCH_longKEY_ONOFF (PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE)
 
-// 调试
-_DEBUG_CODE          (PROJECT_CFG_DEBUG_CODE_ENABLE)
-ELOG_OUTPUT_ENABLE   (debug serial log)
-
 // 通讯角色
 _COMMOM_UPPER_SCI1   上位机通讯 SCI1
-_COMMOM_UPPER_SCI2   上位机通讯 SCI2
-_COMMOM_UPPER_SCI3   上位机通讯 SCI3
+_COMMOM_UPPER_SCI2/3 历史条件路径，当前 Project_Config.h 不再提供 SCI2/SCI3 角色配置
 
 // 其他功能
 __VIRTURE_CURRENT__  虚拟电流
-FLASH64K_APP_QUICK_TEST_ENABLE  64K Flash 快速测试
-FLASH64K_APP_USE_TEST_ENABLE    64K Flash 应用测试
+FLASH64K_APP_QUICK_TEST_ENABLE  历史 64K Flash 快速测试路径，当前 Project_Config.h 不再定义
+FLASH64K_APP_USE_TEST_ENABLE    历史 64K Flash 应用测试路径，当前 Project_Config.h 不再定义
 SOC_TEST padding                兼容占位，当前无活动 SOC 测试模式宏
 ```
 
@@ -643,7 +636,7 @@ CAN 模块实现:
 ### 7.3 扫描机制
 
 - **定时器**: TIM4, 100kHz (每 tick 0.01ms)
-- **扫描周期**: `LEDBAR_SCAN_TIMER_100KHZ_TICKS` (50 tick ≈ 0.5ms 每段)
+- **扫描周期**: `LEDBAR_SCAN_TIMER_100KHZ_TICKS`，`LedBar.c` 内部固定 50 tick，约 0.5ms 每段
 - **中断**: `TIM4_IRQHandler` → `LedBar_Scan1ms()`
 
 ### 7.4 全局运行时

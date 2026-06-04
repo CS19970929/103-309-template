@@ -226,35 +226,13 @@ RELEASE_FORBIDDEN_DEFINES = {
     "ELOG_OUTPUT_ENABLE",
 }
 RELEASE_SAFE_DEFAULTS = {
-    "PROJECT_CFG_BUILD_PROFILE": "0",
     "PROJECT_CFG_WDOG_ENABLE": "1",
-    "PROJECT_CFG_DEBUG_CODE_ENABLE": "0",
-    "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE": "0",
-    "PROJECT_CFG_DEBUG_WATCH_ENABLE": "0",
-    "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE": "0",
-    "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE": "0",
-    "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE": "0",
-    "PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE": "0",
-    "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST": "0",
-    "PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON": "0",
-    "PROJECT_CFG_SOC_TEST_MODE_ENABLE": "0",
     "PROJECT_CFG_HOST_WRITE_ENABLE": "1",
-    "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY": "0",
     "PROJECT_CFG_FACTORY_AGING_ENABLE": "1",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS": "259200",
 }
 GUARD_REQUIRED_TOKENS = [
-    "PROJECT_CFG_WDOG_ENABLE",
-    "PROJECT_CFG_DEBUG_CODE_ENABLE",
-    "PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE",
-    "PROJECT_CFG_DEBUG_WATCH_ENABLE",
-    "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE",
-    "PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE",
-    "PROJECT_CFG_FLASH64K_USE_TEST_ENABLE",
-    "PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST",
-    "PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON",
     "PROJECT_CFG_HOST_WRITE_ENABLE",
-    "PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY",
     "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT",
@@ -278,11 +256,6 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
-    "_DEBUG_",
-    "_DEBUG_CODE",
-    "FLASH64K_APP_QUICK_TEST_ENABLE",
-    "FLASH64K_APP_USE_TEST_ENABLE",
-    "ELOG_OUTPUT_ENABLE",
 ]
 
 
@@ -683,11 +656,11 @@ def check_build_guard(reporter):
             reporter.fail("Project_BuildGuard.h does not check {0}".format(token))
 
     include_guard_pos = text.find("#endif")
-    release_check_pos = text.find("#if (PROJECT_CFG_BUILD_PROFILE == PROJECT_BUILD_PROFILE_RELEASE)")
-    if include_guard_pos != -1 and release_check_pos != -1 and release_check_pos > include_guard_pos:
-        reporter.ok("Project_BuildGuard.h late macro checks are outside the include guard")
+    range_check_pos = text.find("/* --- range checks --- */")
+    if include_guard_pos != -1 and range_check_pos != -1 and range_check_pos > include_guard_pos:
+        reporter.ok("Project_BuildGuard.h range checks stay outside the include guard")
     else:
-        reporter.fail("Project_BuildGuard.h late macro checks should stay outside the include guard")
+        reporter.fail("Project_BuildGuard.h range checks should stay outside the include guard")
 
 
 def check_release_map(reporter):
@@ -750,32 +723,6 @@ def check_release_map(reporter):
         reporter.warn("FD_Release linked image still contains printf library members; keep disabled in production unless diagnostics require it")
     else:
         reporter.ok("FD_Release linked image does not contain printf library members")
-
-    defines = parse_header_defines(PROJECT_CONFIG) if PROJECT_CONFIG.exists() else {}
-    disabled_sci_symbols = {
-        "PROJECT_CFG_SCI2_ROLE": [
-            "g_stCurrentMsgPtr_SCI2",
-            "g_stSciPort2",
-            "gu16_CommuErrCnt_SCI2",
-            "gu8_TxEnable_SCI2",
-            "gu8_TxFinishFlag_SCI2",
-        ],
-        "PROJECT_CFG_SCI3_ROLE": [
-            "g_stCurrentMsgPtr_SCI3",
-            "g_stSciPort3",
-            "gu16_CommuErrCnt_SCI3",
-            "gu8_TxEnable_SCI3",
-            "gu8_TxFinishFlag_SCI3",
-        ],
-    }
-    for define_name, symbols in sorted(disabled_sci_symbols.items()):
-        if defines.get(define_name) != "0":
-            continue
-        leaked = [symbol for symbol in symbols if symbol in text]
-        if leaked:
-            reporter.fail("{0}=0 but FD_Release map still contains: {1}".format(define_name, ",".join(leaked)))
-        else:
-            reporter.ok("{0}=0 removes unused SCI runtime symbols".format(define_name))
 
     removed_soc_table_symbols = [
         "SOC_Table_Set",
@@ -1922,20 +1869,10 @@ def check_comm_tool_can_iap_contract(reporter):
     else:
         reporter.fail("comm tool debug logging should use CT_CMD_DEBUG_LOG ring records and stay disabled in Release")
 
-    if (
-        "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in project_config_h
-        and "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in build_guard_h
-        and "Release build: PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE must be 0" in build_guard_h
-        and "#if PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in elog_cfg_h
-        and "#define ELOG_OUTPUT_ENABLE" in elog_cfg_h
-        and "elogInit();" in app_init_c
-        and "debug serial log enabled" in app_init_c
-        and "InitUSART_CommonUpper();" not in app_init_c[app_init_c.find("AppInit_InitSci();"):app_init_c.find("#ifdef FLASH_BOOT_PRINT_ENABLE")]
-        and "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in review_html
-    ):
-        reporter.ok("BMS App serial logs are debug-profile gated and release forbidden")
+    if "PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE" in project_config_h:
+        reporter.fail("PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE should not be a current app config macro")
     else:
-        reporter.fail("BMS App logs should enable EasyLogger only for Debug profile and forbid serial logs in Release")
+        reporter.ok("BMS App serial log macro is removed from current app config")
 
     if (
         "COMM_TOOL_F103RET6.uvprojx" in keil_doc

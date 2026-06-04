@@ -25,8 +25,8 @@
 #define UPGRADE_PARAM_RESET_FACTORY_AGING_TIME \
 	PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME
 
-/* Test only. Keep 0 in release packages to avoid repeated resets. */
-#define UPGRADE_PARAM_FORCE_REAPPLY        PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY
+/* Test only. Keep fixed 0 in release packages to avoid repeated resets. */
+#define UPGRADE_PARAM_FORCE_REAPPLY        0
 
 #define UPGRADE_PARAM_POLICY_HAS_ACTION \
 	(UPGRADE_PARAM_RESET_AFE || \

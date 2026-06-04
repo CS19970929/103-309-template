@@ -41,7 +41,7 @@ Keil 工程列入的业务源码主要包括：
 
 | 配置项 | 当前值 | 代码证据 | 影响 |
 |---|---:|---|---|
-| 构建档位 | `PROJECT_CFG_BUILD_PROFILE 0` | `Project_Config.h:17` | 量产档位 |
+| 构建档位 | `FD_Release` 不覆盖非 0 build profile | Keil 工程 + `tools/project_check.py` | 量产 target |
 | 电池类型 | `PROJECT_CFG_BAT_TYPE 1` | `Project_Config.h:31` | 代码中对应 BAT_SLAVE |
 | 电芯体系 | `PROJECT_CFG_BAT_CHEMISTRY 0` | `Project_Config.h` | 三元锂 OCV 表 |
 | SOC 运行时表 | 关闭 | `Project_Config.h` | 上位机写 SOC 表不参与量产算法 |
@@ -143,7 +143,7 @@ AppInit_Boot()
 |---|---|---|
 | `TIM3` | `InitTimer()`，100kHz 基准、Period 999 | 10ms 系统节拍；产生 50/100/200/1000ms 软件标志 |
 | `TIM2` | `InitADC_TIMER()`，100kHz 基准、Period 999、CC2 | ADC1 外部触发源，约 10ms 一轮 DMA 采样 |
-| `TIM4` | `LedBar_ScanTimerInit()` | LED 扫描定时器，当前 `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50` |
+| `TIM4` | `LedBar_ScanTimerInit()` | LED 扫描定时器，当前 `LedBar.c` 内部固定 50 个 100kHz tick |
 | RTC | `Init_RTC()`, `RTC_WKTimeConfig()` | 1s RTC、STOP 唤醒、低功耗休眠累计 |
 | IWDG | `Init_IWDG()` | 独立看门狗；运行态和部分阻塞延时中喂狗 |
 

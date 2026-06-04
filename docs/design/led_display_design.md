@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/LedBar.c`, `103 + 309/Project/Source/LedBar.h`, `103 + 309/Project/Source/DataDeal.c`, `103 + 309/Project/Source/conf/Project_Config.h`
-最后更新时间：2026-06-02
+最后更新时间：2026-06-04
 未确认事项：充电图标真实含义、故障显示策略、长按休眠目标时长仍需用户确认。
 
 ## 1. 当前硬件模型
@@ -28,7 +28,7 @@
 
 - `LedBar_ScanTimerInit()` 使用 TIM4。
 - TIM4 预分频到 100 kHz。
-- `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS = 50`，即当前扫描 update 周期约 0.5 ms。
+- `LedBar.c` 内部固定 `LEDBAR_SCAN_TIMER_100KHZ_TICKS = 50`，即当前扫描 update 周期约 0.5 ms。
 - `TIM4_IRQHandler()` 调用 `LedBar_Scan1ms()`，函数名保留旧语义，实际周期由 TIM4 配置决定。
 
 ## 3. 主循环入口

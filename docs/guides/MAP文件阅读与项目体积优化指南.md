@@ -289,7 +289,7 @@ Removing xxx.o(...)
 
 当前 Release 中可以看到 easylogger 大量函数被移除，说明 `ELOG_OUTPUT_ENABLE` 未进入 Release 主路径，这是正确的。
 
-当前 `StorageFlash_PrintBootCheck()` 已通过 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 隔离，Release 默认关闭后，启动打印函数和 `printf` 库成员会被链接器移除。
+历史版本曾通过 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 隔离 `StorageFlash_PrintBootCheck()`；当前该宏已不在 `Project_Config.h` 中，后续调试打印应走独立调试构建入口。
 
 ## 当前 RAM 使用重点
 
@@ -314,7 +314,7 @@ Removing xxx.o(...)
 
 当前 Flash 余量还可以，但 map 已经暴露出几个高收益优化点。
 
-### 已优化 1：启动打印已按配置隔离
+### 已优化 1：启动打印已从量产配置视图移出
 
 当前 `main.c` 中存在无条件调用：
 
@@ -340,13 +340,13 @@ mc_w.l          2732 bytes
 mf_w.l          1066 bytes
 ```
 
-优化前量产 Release 会拉入 `printf` 核心和部分格式化/浮点相关库代码。当前已新增 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE`，Release 默认关闭后，map 中显示 `StorageFlash_PrintBootCheck()` 被移除。
+优化前量产 Release 会拉入 `printf` 核心和部分格式化/浮点相关库代码。历史版本曾新增 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 隔离，当前该宏已从当前配置层移除。
 
 后续建议：
 
 - 如果启动 Flash 检查日志只用于调试，应保持编译开关隔离。
-- 当前使用 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 控制启动打印。
-- Release 默认关闭启动打印。
+- 当前量产配置主视图不再暴露启动打印宏。
+- Release 应保持无启动打印。
 - 需要保留板端诊断时，改为上位机寄存器读取或轻量串口输出，不走完整 `printf`。
 
 预期收益：
@@ -490,7 +490,7 @@ STACK 0x00000c00 = 3072 bytes
 - 读取最深栈水位。
 - 再决定是否从 3KB 下调。
 
-### 建议 6：Release 配置隔离目前方向正确
+### 建议 6：Release 配置隔离边界
 
 当前 `FD_Release` Keil Define：
 
@@ -498,36 +498,17 @@ STACK 0x00000c00 = 3072 bytes
 STM32F10X_MD,USE_STDPERIPH_DRIVER
 ```
 
-未显式定义 `PROJECT_CFG_BUILD_PROFILE`，因此会走默认：
+当前 `Project_Config.h` 不再提供 `PROJECT_CFG_BUILD_PROFILE`，`Project_BuildGuard.h` 也不再包含 SOC 测试档位约束。量产隔离目前依赖三点：
 
-```c
-#define PROJECT_CFG_BUILD_PROFILE 0
-```
-
-`Project_BuildGuard.h` 中已有 Release 约束：
-
-```c
-#if defined(ELOG_OUTPUT_ENABLE)
-#error "Release build: ELOG_OUTPUT_ENABLE must not be defined"
-#endif
-```
-
-以及 SOC 测试模式约束：
-
-```c
-#if PROJECT_CFG_SOC_TEST_MODE_ENABLE && \
-    (PROJECT_CFG_BUILD_PROFILE != PROJECT_BUILD_PROFILE_FACTORY_TEST)
-#error "SOC test mode requires Factory/Test build profile"
-#endif
-```
-
-这符合量产隔离要求。
+- `FD_Release` target 不定义 `_DEBUG_`、`PROJECT_CFG_DEBUG_WATCH_ENABLE`、`ELOG_OUTPUT_ENABLE`、`FLASH64K_APP_*` 等调试/测试符号。
+- `tools/project_check.py` 检查 `FD_Release` 不得把 `PROJECT_CFG_BUILD_PROFILE` 覆盖成非 0。
+- 当前源码未启用 `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 注入式测试入口，`0xD300` 仅保留兼容占位。
 
 仍建议定期通过 map 检查：
 
 - `Flash64KAppTest` 是否只剩空桩或被完全移除。
 - `ELOG_OUTPUT_ENABLE` 是否未进入 Release。
-- `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 是否为 0。
+- 当前量产源码未启用 SOC 注入测试入口。
 - `0xD300 supported=0` 是否符合量产预期。
 
 ## 结合当前项目实际情况的多维优化建议
@@ -538,7 +519,7 @@ STM32F10X_MD,USE_STDPERIPH_DRIVER
 
 | 配置项 | 当前值 | 含义 |
 | --- | ---: | --- |
-| `PROJECT_CFG_BUILD_PROFILE` | 0 | 量产 Release |
+| Keil `FD_Release` defines | `STM32F10X_MD,USE_STDPERIPH_DRIVER` | 量产 target 不覆盖非 0 build profile |
 | `PROJECT_CFG_BAT_TYPE` | 1 | 从包 BAT_SLAVE，40A |
 | `PROJECT_CFG_BAT_CHEMISTRY` | 0 | 三元锂 |
 | `PROJECT_CFG_LEVEL_CURR` | 2 | 150A 档 |
@@ -549,9 +530,6 @@ STM32F10X_MD,USE_STDPERIPH_DRIVER
 | `PROJECT_CFG_RS485_WAKEUP_ENABLE` | 1 | RS485 唤醒开启 |
 | `PROJECT_CFG_IAP_ENABLE` | 1 | IAP 支持开启 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | 出厂老化开启 |
-| `PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE` | 0 | Flash 破坏性测试关闭 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_ENABLE` | 0 | Flash 运行测试关闭 |
-| `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | 0 | SOC 注入测试关闭 |
 | `PROJECT_CFG_LEDBAR_SLEEP_ENABLE` | 1 | 休眠前备份灯条 SOC |
 | `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | 1 | 升级参数策略开启 |
 
@@ -560,15 +538,15 @@ STM32F10X_MD,USE_STDPERIPH_DRIVER
 当前方向是正确的：
 
 - `FD_Release` 没有定义 `_DEBUG_`。
-- `PROJECT_CFG_BUILD_PROFILE` 默认是 0。
-- `Project_BuildGuard.h` 已经限制 Release 中不能打开调试代码、Flash 测试、SOC 测试和 `ELOG_OUTPUT_ENABLE`。
+- `FD_Release` 不覆盖 debug build profile。
+- `Project_BuildGuard.h` 检查当前仍在配置层的关键参数范围；历史调试/Flash/SOC 测试宏已不在当前配置层。
 - map 中 App 入口和执行区域均为 `0x08004800`。
 
 建议继续加强：
 
 - 增加一个自动 map 检查脚本，构建后固定检查 `LR_IROM1 Base == 0x08004800`。
 - 增加 `Total ROM Size` 和 `Total RW Size` 阈值检查，例如 ROM 超过 96KB 或 RAM 超过 14KB 时给出告警。
-- 增加 Release 禁止项扫描，例如 `_printf_core`、`ELOG_OUTPUT_ENABLE`、`FLASH64K_APP_QUICK_TEST_ENABLE`、`PROJECT_CFG_SOC_TEST_MODE_ENABLE`。
+- 增加 Release 禁止项扫描，例如 `_printf_core`、`ELOG_OUTPUT_ENABLE`、`FLASH64K_APP_QUICK_TEST_ENABLE` 和 SOC 测试入口符号。
 - 将 map 检查作为发布前固定步骤，避免靠人工记忆判断。
 
 建议阈值起点：
@@ -592,12 +570,11 @@ Release 中出现裸 printf 建议告警
 StorageFlash_PrintBootCheck();
 ```
 
-它曾在 `InitDevice()` 中无条件执行，内部使用 `printf`。当前已改为 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 控制，量产默认关闭，避免启动阶段默认输出大量串口诊断。
+它曾在 `InitDevice()` 中无条件执行，内部使用 `printf`。当前量产配置主视图不再保留启动打印宏，避免启动阶段默认输出大量串口诊断。
 
 建议：
 
-- 新增 `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE`，Release 默认 0。
-- 或复用 `PROJECT_CFG_DEBUG_CODE_ENABLE` 控制该函数调用。
+- 如需恢复启动诊断，应放入独立 Debug/Test 构建入口。
 - 保留上位机寄存器读取入口，用来替代串口启动打印。
 
 当前 `FD_Release.map` 中也可以看到 `sci_upper.o` 和 `socenhance.o` 是主要代码大户。对于这两个模块，建议先做结构化审查，不要直接删逻辑：
@@ -795,7 +772,7 @@ RS485_WAKEUP = 开启
 - 上位机寄存器读取应优先保留，作为替代串口 debug print 的诊断通道。
 - `0x03` 读寄存器函数体积最大，应检查是否可以把重复字段打包逻辑集中。
 - `0x06` 和 `0x10` 写寄存器必须保持边界检查，不要为了省代码删除校验。
-- SOC 测试相关寄存器必须继续由 `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 隔离。
+- 当前源码未启用 SOC 注入测试寄存器实现；`0xD300` 需要继续保留兼容占位并返回 disabled/supported=0 语义。
 
 建议保留或增强的只读诊断寄存器：
 
@@ -925,7 +902,7 @@ RW 参数槽 A/B valid 和 seq
 PROJECT_CFG_LEDBAR_SLEEP_ENABLE = 1
 PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS = 500
 PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS = 1000
-PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS = 50
+LEDBAR_SCAN_TIMER_100KHZ_TICKS = 50  (LedBar.c 内部常量)
 ```
 
 建议：

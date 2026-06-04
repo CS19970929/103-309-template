@@ -8,8 +8,6 @@
 
 #define LEDBAR_SLEEP_ENABLE PROJECT_CFG_LEDBAR_SLEEP_ENABLE
 
-#define LEDBAR_TEST_ALWAYS_ON PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON
-
 /* GPIO Charlieplexing pins. LedBar.c owns the physical scan order. */
 #define LEDBAR_GPIO_P1 GPIOB
 #define LEDBAR_PIN_P1  GPIO_Pin_11

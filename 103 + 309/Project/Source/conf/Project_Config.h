@@ -109,13 +109,6 @@
 //   <1=> Host
 #define PROJECT_CFG_SCI1_ROLE 1
 
-// <o> SCI2 role
-//   <0=> Disabled
-#define PROJECT_CFG_SCI2_ROLE 0
-
-// <o> SCI3 role
-//   <0=> Disabled
-#define PROJECT_CFG_SCI3_ROLE 0
 // </h>
 
 // <h>Flash Log Wear Protection
@@ -225,15 +218,6 @@
 // <o> Wakeup display time 10ms <1-65535>
 #define PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS 1000
 
-// <o> Scan timer period 100kHz <1-1000>
-#define PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS 50
-
-//todo  «∑Ò”–”√
-// <o> MCU_WK on filter 10ms <0-255>
-#define PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS 3
-
-// <o> MCU_WK off filter 10ms <0-255>
-#define PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS 3
 // </h>
 
 // <h>Upgrade Parameter Policy

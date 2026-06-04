@@ -25,7 +25,7 @@
 | `0x2100` 起 | 保护参数 | `RS485_ADDR_RW_PORTECT`, `RS485_CMD_ADDR_VCELL_OVP_FIRST` | OVP/UVP/OCP/温度/SOC 保护参数 |
 | `0x2200` 起 | SOC/RTC/其他参数 | `RS485_ADDR_RW_OTHER`, `RS485_CMD_ADDR_SOC_VOLTAGE1` | SOC 表、铜损、RTC、容量等 |
 | `0x2300` 起 | 均衡/睡眠/系统参数 | `RS485_ADDR_RW_OTHER_CANADD`, `RS485_CMD_ADDR_BALANCE_OV` | 名称中仍有 CANADD 历史痕迹，需后续重命名确认 |
-| `0x2500` | SOC 注入测试样本 | `RS485_CMD_ADDR_SOC_TEST_SAMPLE` | 受 `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 控制 |
+| `0x2500` | SOC 注入测试样本 | `RS485_CMD_ADDR_SOC_TEST_SAMPLE` | 当前量产源码未启用 SOC 注入测试入口 |
 | `0xC000` | LCD/独立只读块起点 | `RS485_ADDR_RO_LCD` | 与 `0xD000` 主只读块独立处理 |
 | `0xC001` | RTC/出厂相关只读入口 | `RS485_ADDR_RO_FA_RTC` | 具体语义需继续逐项核对 |
 | `0xC002` | BMS 序列号/硬件版本/软件版本读取 | `RS485_ADDR_SN_READ`, `tools/comm_tool_upgrade_ui.py` | 上位机要求读取 48 个寄存器并在实时监控底部显示 |

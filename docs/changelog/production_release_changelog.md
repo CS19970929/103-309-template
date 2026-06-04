@@ -3,6 +3,7 @@
 > 分支: `production-release` (基于 `t3-master-new-new-new`)
 > 日期: 2026-06-01
 > 净删除: **~5500 行** (60+ 个源文件)
+> 状态: 历史变更报告；其中列出的已删除宏不代表当前 `Project_Config.h` 配置项，当前宏清单以 `docs/reference/macro_config_reference.md` 为准。
 
 ---
 

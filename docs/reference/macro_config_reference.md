@@ -5,14 +5,18 @@
 
 ---
 
-## 1. 构建配置 (Build Profile)
+## 1. 构建配置状态
 
-| 宏 | 值 | 条件编译影响 |
-|----|-----|-------------|
-| `PROJECT_CFG_BUILD_PROFILE` | 0 | 0=Release,1=Debug,2=Factory/Test |
-| `PROJECT_BUILD_PROFILE_RELEASE` | 0 | Release 禁止所有 debug 功能 |
-| `PROJECT_BUILD_PROFILE_DEBUG` | 1 | Debug 允许串口日志 |
-| `PROJECT_BUILD_PROFILE_FACTORY_TEST` | 2 | 历史 Factory/Test 档位；当前 `Project_Config.h` 未见活动 SOC 测试模式宏 |
+当前 `Project_Config.h` 不再提供 `PROJECT_CFG_BUILD_PROFILE` 作为应用层配置宏。Keil `FD_Debug` target 仍定义 `PROJECT_CFG_BUILD_PROFILE=1`、`PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`_DEBUG_`，主要用于调试目标识别和 Keil Watch；当前应用源码没有活动的 SOC 注入式测试模式宏。
+
+量产判断以 Keil target 和检查脚本为准：
+
+| 项目 | 当前事实 |
+|----|----|
+| `FD_Release` defines | `STM32F10X_MD,USE_STDPERIPH_DRIVER` |
+| `FD_Debug` 额外 defines | `PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,_DEBUG_` |
+| 当前 `Project_BuildGuard.h` 职责 | 检查仍在配置层的 SOC、Host write、老化、日志参数范围 |
+| 当前 SOC 测试入口 | 未启用；`0xD300` 保留兼容占位 |
 
 ## 2. 硬件产品配置
 
@@ -36,39 +40,30 @@
 | `PROJECT_CFG_RTC_ENABLE` | 1 | `__FUNC_RTC__` | RTC 时钟 |
 | `PROJECT_CFG_IAP_ENABLE` | 1 | `_IAP` | IAP 固件升级 |
 | `PROJECT_CFG_FACTORY_AGING_ENABLE` | 1 | - | 工厂老化模式 |
-| `PROJECT_CFG_IDLE_SLEEP_ENABLE` | 0 | - | 空闲 WFI Sleep |
-| `PROJECT_CFG_LED_FUNC_ENABLE` | 0 | `__FUNC__LED__` | 旧 LED 功能标志 |
-| `PROJECT_CFG_DEBUG_CODE_ENABLE` | 0 | `_DEBUG_CODE` | 调试代码 |
-| `PROJECT_CFG_DEBUG_WATCH_ENABLE` | 0 | - | Keil Watch 调试导出 |
-| `PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE` | Debug=1 | - | 串口调试日志 |
-| `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` | 0 | `FLASH_BOOT_PRINT_ENABLE` | Flash 启动诊断 |
+| `PROJECT_CFG_DEBUG_MONITOR_ENABLE` | 1 | - | 系统调试快照导出 |
+| `PROJECT_CFG_IRQ_DEBUG_ENABLE` | 1 | - | IRQ 计数 |
+| `PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE` | 1 | - | IRQ 事件 ring |
 | `PROJECT_CFG_HOST_WRITE_ENABLE` | 1 | - | 上位机写权限 |
 | `PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE` | 1 | - | 升级参数策略 |
+
+说明：`PROJECT_CFG_DEBUG_WATCH_ENABLE` 当前不是 `Project_Config.h` 配置项，只由 Keil `FD_Debug` target 定义为 1。
 
 ## 4. 唤醒源配置
 
 | 宏 | 默认值 | 条件编译宏 |
 |----|--------|-----------|
 | `PROJECT_CFG_UART1_WAKEUP_ENABLE` | 1 | `UART1_WAKEUP_ENABLE` |
-| `PROJECT_CFG_UART2_WAKEUP_ENABLE` | 0 | `UART2_WAKEUP_ENABLE` |
 | `PROJECT_CFG_RS485_WAKEUP_ENABLE` | 1 | `RS485_WAKEUP_ENABLE` |
-| `PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE` | 0 | `_DI_SWITCH_SYS_ONOFF` |
-| `PROJECT_CFG_DI_SWITCH_DSG_ONOFF_ENABLE` | 0 | `_DI_SWITCH_DSG_ONOFF` |
 | `PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE` | 1 | `_DI_SWITCH_longKEY_ONOFF` |
-| `PROJECT_CFG_SECOND_CURR_PROTECT_ENABLE` | 0 | `_SECOND_CURR_PROTECT_FUNC_` |
 | `PROJECT_CFG_VIRTUAL_CURRENT_ENABLE` | 1 | `__VIRTURE_CURRENT__` |
-| `PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE` | 0 | `_SLEEP_WITH_CURRENT` |
-| `PROJECT_CFG_LOAD_REMOVE_SHORT_ENABLE` | 0 | `__LOAD_REMOVE_SHORT_FUNC__` |
 
 ## 5. 串口角色配置
 
 | 宏 | 默认值 | 条件编译宏 |
 |----|--------|-----------|
 | `PROJECT_CFG_SCI1_ROLE` | 1 | `_COMMOM_UPPER_SCI1` (上位机) |
-| `PROJECT_CFG_SCI2_ROLE` | 0 | 禁用 |
-| `PROJECT_CFG_SCI3_ROLE` | 0 | 禁用 |
 
-可选值: 0=禁用, 1=上位机, 2=客户端, 3=LCD
+说明：SCI2/SCI3 角色配置已从当前配置层删除；源码仍有 `_COMMOM_UPPER_SCI2/3` 历史条件路径，后续单独清理。
 
 ## 6. CAN 配置
 
@@ -106,8 +101,6 @@
 | `PROJECT_CFG_SOC_DISPLAY_LOW_SECONDS` | 1 | 低压显示秒/1% |
 | `PROJECT_CFG_SOC_DISPLAY_LOW_OFFSET_MV` | 50 | 低压边界偏移 |
 | `PROJECT_CFG_SOC_DISPLAY_EMPTY_FAST_BELOW_V0_MV` | 50 | 空电快速下降偏移 |
-| `PROJECT_CFG_SOC_TEST_MODE_ENABLE` | 当前未定义 | 历史 SOC 测试模式宏，当前源码未见活动定义 |
-| `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX` | 当前未定义 | 历史测试加速 tick 上限，当前源码未见活动定义 |
 
 ## 8. LED/LedBar 配置
 
@@ -118,11 +111,8 @@
 | `PROJECT_CFG_LEDBAR_SLEEP_ENABLE` | 1 | 休眠时关 LED |
 | `PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS` | 500 | SOC 显示 5 秒 |
 | `PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS` | 1000 | 唤醒显示 10 秒 |
-| `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS` | 50 | 扫描周期 0.5ms |
-| `PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS` | 3 | MCU_WK 开滤波 |
-| `PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS` | 3 | MCU_WK 关滤波 |
-| `PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST` | 0 | 长按 GPIO 测试 |
-| `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON` | 0 | 测试常亮 |
+
+说明：LedBar 扫描周期和 MCU_WK 滤波已下沉为 `LedBar.c` 内部常量，不再作为全局配置宏。
 
 ## 9. 升级参数策略
 
@@ -136,21 +126,24 @@
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT` | 1 | 升级复位 SOC 快照 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD` | 1 | 升级清除事件记录 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME` | 0 | 升级不重置老化时间 |
-| `PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY` | 0 | 强制重新执行策略 |
 
 说明：SOC runtime table 已删除，升级策略不再提供 SOC 表复位开关。
 
-## 10. 测试与 Flash 配置
+## 10. 历史测试宏
 
-| 宏 | 默认值 | 说明 |
-|----|--------|------|
-| `PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE` | 0 | 64K Flash 破坏性测试 |
-| `PROJECT_CFG_FLASH64K_QUICK_TEST_CYCLES` | 96 | 测试循环数 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_ENABLE` | 0 | App 存储测试 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_PRINT_PERIOD_SEC` | 10 | 测试打印周期 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE` | 0 | 测试加速 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_SOC_PERIOD_SEC` | 1 | 加速 SOC 周期 |
-| `PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_AFE_PERIOD_SEC` | 30 | 加速 AFE 周期 |
+以下宏曾在历史测试/文档中出现，但当前 `Project_Config.h` 未定义，不作为当前配置项：
+
+- `PROJECT_CFG_SOC_TEST_MODE_ENABLE`
+- `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX`
+- `PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE`
+- `PROJECT_CFG_FLASH64K_USE_TEST_ENABLE`
+- `PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE`
+- `PROJECT_CFG_DEBUG_CODE_ENABLE`
+- `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE`
+- `PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE`
+- `PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST`
+- `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON`
+- `PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY`
 
 ## 11. 日志配置
 
@@ -190,20 +183,11 @@
 |----|--------|------|
 | `AFE_ID` | 0x34 | AFE I2C 地址 |
 
-## 15. Release 构建强制约束
+## 15. Release 构建检查边界
 
-Project_BuildGuard.h 确保 Release 构建：
-- `PROJECT_CFG_WDOG_ENABLE` 必须为 1
-- `PROJECT_CFG_DEBUG_CODE_ENABLE` 必须为 0
-- `PROJECT_CFG_DEBUG_WATCH_ENABLE` 必须为 0
-- `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE` 必须为 0
-- `PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE` 必须为 0
-- `PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE` 必须为 0
-- `PROJECT_CFG_FLASH64K_USE_TEST_ENABLE` 必须为 0
-- `PROJECT_CFG_LEDBAR_LONG_PRESS_GPIO_TOGGLE_TEST` 必须为 0
-- `PROJECT_CFG_LEDBAR_TEST_ALWAYS_ON` 必须为 0
-- `PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY` 必须为 0
-- `_DEBUG_`, `_DEBUG_CODE`, `FLASH64K_APP_*`, `ELOG_OUTPUT_ENABLE` 等不得定义
+- `tools/project_check.py` 检查 Keil `FD_Release` target 不得定义 `_DEBUG_`、`_DEBUG_CODE`、`FLASH64K_APP_*`、`ELOG_OUTPUT_ENABLE` 等测试/调试符号，也不得把 `PROJECT_CFG_BUILD_PROFILE` 覆盖成非 0。
+- `Project_BuildGuard.h` 继续检查当前仍在配置层的 SOC、Host write、老化和日志参数范围；它当前不负责 SOC 测试档位隔离。
+- 当前源码未启用 `PROJECT_CFG_SOC_TEST_MODE_ENABLE` 注入式测试入口，`0xD300` 兼容区返回 16 word 0。
 
 ## 16. 宏派生关系速查表
 
@@ -219,8 +203,3 @@ Project_BuildGuard.h 确保 Release 构建：
 | `PROJECT_CFG_RS485_WAKEUP_ENABLE=1` | `RS485_WAKEUP_ENABLE` |
 | `PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE=1` | `_DI_SWITCH_longKEY_ONOFF` |
 | `PROJECT_CFG_VIRTUAL_CURRENT_ENABLE=1` | `__VIRTURE_CURRENT__` |
-| `PROJECT_CFG_DEBUG_CODE_ENABLE=0/1` | `_DEBUG_CODE` |
-| `PROJECT_CFG_LED_FUNC_ENABLE=0/1` | `__FUNC__LED__` |
-| `PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE=0/1` | `FLASH_BOOT_PRINT_ENABLE` |
-| `PROJECT_CFG_SOC_TEST_MODE_ENABLE=0/1` | 历史映射；当前 `Project_Config.h`/`conf.h` 未见活动定义 |
-| `PROJECT_CFG_SLEEP_WITH_CURRENT_ENABLE=0/1` | `_SLEEP_WITH_CURRENT` |

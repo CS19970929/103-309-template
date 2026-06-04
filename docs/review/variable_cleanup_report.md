@@ -14,7 +14,7 @@
 
 - 源码级 `rg` 引用统计：检查全局变量、`extern`、文件级 `static`、跨模块读写点。
 - 本机只读语法检查：对当前业务 `.c` 文件运行 `clang -fsyntax-only -Wall -Wextra -Wunused-variable -Wunused-but-set-variable -Wunused-function`。
-- Keil 工程配置对照：当前 Release 配置为 `STM32F10X_MD, USE_STDPERIPH_DRIVER`，`PROJECT_CFG_BUILD_PROFILE 0`，`PROJECT_CFG_AFE_TYPE 1`，即当前活动 AFE 路径是 `sh36xx`。
+- Keil 工程配置对照：当前 Release 配置为 `STM32F10X_MD, USE_STDPERIPH_DRIVER`，不覆盖非 0 build profile；`PROJECT_CFG_AFE_TYPE 1`，即当前活动 AFE 路径是 `sh36xx`。
 
 语法检查结果：
 

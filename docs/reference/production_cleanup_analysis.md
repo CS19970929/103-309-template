@@ -26,11 +26,7 @@
 
 ### 1. Flash64KAppTest.c/h - 后64K Flash 测试模块
 
-**原因**: 
-- `PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE=0` (默认)
-- `PROJECT_CFG_FLASH64K_USE_TEST_ENABLE=0` (默认)
-- `Project_BuildGuard.h:291-298`: Release 构建强制报错如果启用
-- 全部代码被条件编译排除，实际不参与编译
+**当前状态**: 历史 Flash64K 测试配置宏已不在当前 `Project_Config.h` 中；若仍保留相关测试文件，应通过独立测试构建入口管理，不放入量产配置主视图。
 
 **影响**:
 - 删除 `Flash64KAppTest.c` (~500行)
@@ -43,7 +39,7 @@
 ### 2. easylogger/ 整个日志框架目录
 
 **原因**:
-- `ELOG_OUTPUT_ENABLE` 在 Release 构建必须为 0 (Project_BuildGuard.h:331-332)
+- 当前 `FD_Release` target 不定义 `ELOG_OUTPUT_ENABLE`，`tools/project_check.py` 将其列为 Release 禁止符号。
 - 所有 `log_w(...)`/`log_e(...)` 宏展开为 `((void)0)` - 空操作
 - 目录包含: `elog.c`, `elog_async.c`, `elog_buf.c`, `elog_utils.c`, `elog_port.c` 及 flash/file 插件
 
@@ -65,7 +61,7 @@
 
 ## 第二类：功能宏（默认值=0，可在 Release 中删除对应代码块）
 
-### 4. PROJECT_CFG_DEBUG_CODE_ENABLE=0 → `_DEBUG_CODE`
+### 4. 历史 debug code 宏
 
 **影响范围**:
 | 文件 | 行号 | 内容 |
@@ -109,7 +105,7 @@
 
 **操作**: 可作为低风险候选进一步确认是否删除 `SOC.c` 中 `#if 0` 空壳；不要删除 `Sci_Upper.c` 的 padding 或改变协议长度。
 
-### 7. PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE=0
+### 7. 历史 Flash boot print 宏
 
 **影响**: 仅 AppInit.c 中 `StorageFlash_PrintBootCheck()` 一处调用。删除即可。
 
@@ -134,8 +130,7 @@
 
 ### 16-18. SCI2/SCI3 及客户端/LCD 角色
 
-**原因**: `PROJECT_CFG_SCI2_ROLE=0`, `PROJECT_CFG_SCI3_ROLE=0`
-conf.h 中 `_CLIENT_SCI1/2/3`, `_LCD_SCI1/2/3` 条件编译从未触发
+**当前状态**: `PROJECT_CFG_SCI2_ROLE`、`PROJECT_CFG_SCI3_ROLE` 已从当前 `Project_Config.h` 删除；`Sci_Upper.c` 仍有 `_COMMOM_UPPER_SCI2/3` 历史条件路径，后续可单独删除死路径。
 
 **操作**: 删除 conf.h 中 138-163行的客户端/LCD角色条件编译
 
@@ -231,15 +226,15 @@ conf.h 中 `_CLIENT_SCI1/2/3`, `_LCD_SCI1/2/3` 条件编译从未触发
 以下宏在量产中确认不需要后可从 Project_Config.h 删除:
 
 ```
-PROJECT_CFG_DEBUG_CODE_ENABLE (仅debug)
+PROJECT_CFG_DEBUG_CODE_ENABLE (历史 debug 宏，当前 Project_Config.h 未定义)
 PROJECT_CFG_DEBUG_WATCH_ENABLE (仅debug)
-PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE (仅debug)
-PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE (仅debug)
+PROJECT_CFG_DEBUG_SERIAL_LOG_ENABLE (历史 debug serial log 宏，当前 Project_Config.h 未定义)
+PROJECT_CFG_FLASH_BOOT_PRINT_ENABLE (历史 boot print 宏，当前 Project_Config.h 未定义)
 PROJECT_CFG_FACTORY_AGING_ENABLE (看是否需要保留)
 SOC_TEST_MODE_ENABLE 旧宏/旧路径（当前 Project_Config/conf 未见定义，仅 SOC.c 保留 #if 0 空壳）
-PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE (仅debug)
-PROJECT_CFG_FLASH64K_USE_TEST_ENABLE (仅debug)
-PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE (仅debug)
+PROJECT_CFG_FLASH64K_QUICK_TEST_ENABLE (历史 Flash 测试宏，当前 Project_Config.h 未定义)
+PROJECT_CFG_FLASH64K_USE_TEST_ENABLE (历史 Flash 测试宏，当前 Project_Config.h 未定义)
+PROJECT_CFG_FLASH64K_USE_TEST_ACCEL_ENABLE (历史 Flash 测试宏，当前 Project_Config.h 未定义)
 PROJECT_CFG_UART2_WAKEUP_ENABLE (未使用)
 PROJECT_CFG_DI_SWITCH_SYS_ONOFF_ENABLE (未使用)
 PROJECT_CFG_DI_SWITCH_DSG_ONOFF_ENABLE (未使用)

@@ -4,6 +4,19 @@
 最后更新时间：2026-06-04
 说明：长期详细变更记录见 `docs/changelog/change_log.md`；本文件按仓库协作规则保留为顶层入口。
 
+## 2026-06-04 应用层宏配置第一批收敛
+
+源码变更：
+- 删除无有效消费者的 `PROJECT_CFG_SCI2_ROLE` / `PROJECT_CFG_SCI3_ROLE` 配置项。
+- 将 LedBar 扫描周期和 `MCU_WK` 防抖参数下沉为 `LedBar.c` 内部常量，删除测试常亮旧分支。
+- `UPGRADE_PARAM_FORCE_REAPPLY` 固定为 0，不再依赖不存在的 `PROJECT_CFG_UPGRADE_PARAM_FORCE_REAPPLY`。
+
+文档变更：
+- 新增并更新应用层宏审查文档，更新宏参考、模块参考、LedBar 设计和协议映射中的当前事实。
+
+验证边界：
+- 本次不修改保护阈值、Flash/IAP 地址、协议寄存器、AFE 寄存器和 SOC 算法。
+
 ## 2026-06-04 SOC 宏配置第一批清理
 
 源码变更：
