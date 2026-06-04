@@ -675,7 +675,6 @@ CAN 模块实现:
 | `APP_LedBar()` | 主服务: MCU_WK滤波→开关滤波→显示窗口→更新数字/图标→刷新 |
 | `LedBar_Scan1ms()` | 1ms 扫描 (TIM4 ISR 调用) |
 | `LedBar_SetNumber()` | 设置显示数字 |
-| `LedBar_SetIndicators()` | 设置图标 |
 | `LedBar_SetSleep()` | 进入/退出休眠 |
 | `LedBar_SaveSleepSoc()` | 保存 SOC 到备份域 |
 | `LedBar_LoadSleepSoc()` | 从备份域恢复 SOC |

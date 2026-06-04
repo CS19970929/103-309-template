@@ -22,8 +22,6 @@
 
 #define LEDBAR_ICON_CHARGE_MASK  (1u << 0)
 #define LEDBAR_ICON_PERCENT_MASK (1u << 1)
-#define LEDBAR_SINGLE_SEG_ID_MIN 0u
-#define LEDBAR_SINGLE_SEG_ID_MAX 17u
 #define LEDBAR_SOC_DISPLAY_10MS PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS
 #define LEDBAR_STARTUP_DISPLAY_10MS PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS
 #define LEDBAR_WAKEUP_DISPLAY_10MS PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS
@@ -31,12 +29,9 @@
 void LedBar_Init(void);
 void LedBar_Scan1ms(void);
 void LedBar_SetNumber(uint8_t value);
-void LedBar_SetIndicators(uint8_t indicator_mask);
-void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable);
 void LedBar_Clear(void);
 void LedBar_SetSleep(uint8_t enable);
 void LedBar_Wakeup(void);
-void LedBar_SetSingleSegmentIndex(uint8_t segment_id);
 void LedBar_SaveSleepSoc(void);
 uint8_t LedBar_LoadSleepSoc(void);
 void LedBar_ShowSleepSocPreview(void);

@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 其他模块简化审查与 LedBar 净删减
+
+源码变更：
+- 删除 `LedBar_SetSingleSegmentIndex()`、`LedBar_SetIndicators()`、`LedBar_SetIndicatorState()` 三个无外部调用的公开接口。
+- 删除无消费者的 `s_ledbar.test_single_segment_id` 和单段测试 ID 范围宏。
+
+文档变更：
+- 新增 `docs/review/module_simplification_review_2026-06-04.md`。
+- 更新 LedBar 模块参考、变量梳理和顶层文档入口。
+
+验证边界：
+- 不改变 TIM4 查理复用扫描、LedBar 当前显示策略、BKP 休眠 SOC 保存/恢复和低功耗阻塞条件。
+
 ## 2026-06-04 SOC 文档合并为单一活跃入口
 
 文档变更：

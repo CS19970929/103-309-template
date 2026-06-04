@@ -83,7 +83,6 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t blank;
     uint8_t number;
     uint8_t indicator_mask;
-    uint8_t test_single_segment_id;
     LedBarFrame frame;
     uint8_t scan_index;
     uint8_t scan_timer_initialized;
@@ -1059,7 +1058,6 @@ void LedBar_Init(void)
     s_ledbar.blank = 1u;
     s_ledbar.number = 0u;
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
-    s_ledbar.test_single_segment_id = 0u;
     LedBar_FrameClear(&s_ledbar.frame);
     s_ledbar.scan_index = 0u;
     s_ledbar.scan_timer_initialized = 0u;
@@ -1120,22 +1118,6 @@ void LedBar_Wakeup(void)
     LedBar_SetSleep(0u);
 }
 
-void LedBar_SetSingleSegmentIndex(uint8_t segment_id)
-{
-    LedBar_EnsureInit();
-
-    if (segment_id > LEDBAR_SINGLE_SEG_ID_MAX)
-    {
-        segment_id = LEDBAR_SINGLE_SEG_ID_MAX;
-    }
-    if (s_ledbar.test_single_segment_id == segment_id)
-    {
-        return;
-    }
-
-    s_ledbar.test_single_segment_id = segment_id;
-}
-
 void LedBar_SetNumber(uint8_t value)
 {
     LedBar_EnsureInit();
@@ -1149,44 +1131,6 @@ void LedBar_SetNumber(uint8_t value)
     s_ledbar.number = value;
     s_ledbar.blank = 0u;
     LedBar_RefreshOutput();
-}
-
-void LedBar_SetIndicators(uint8_t indicator_mask)
-{
-    LedBar_EnsureInit();
-
-    indicator_mask = (uint8_t)(indicator_mask &
-                               (LEDBAR_ICON_CHARGE_MASK |
-                                LEDBAR_ICON_PERCENT_MASK));
-    if ((s_ledbar.indicator_mask == indicator_mask) && (s_ledbar.blank == 0u))
-    {
-        return;
-    }
-
-    s_ledbar.indicator_mask = indicator_mask;
-    s_ledbar.blank = 0u;
-    LedBar_RefreshOutput();
-}
-
-void LedBar_SetIndicatorState(uint8_t indicator_mask, uint8_t enable)
-{
-    uint8_t new_mask;
-
-    LedBar_EnsureInit();
-
-    indicator_mask = (uint8_t)(indicator_mask &
-                               (LEDBAR_ICON_CHARGE_MASK |
-                                LEDBAR_ICON_PERCENT_MASK));
-    if (enable != 0u)
-    {
-        new_mask = (uint8_t)(s_ledbar.indicator_mask | indicator_mask);
-    }
-    else
-    {
-        new_mask = (uint8_t)(s_ledbar.indicator_mask & (uint8_t)(~indicator_mask));
-    }
-
-    LedBar_SetIndicators(new_mask);
 }
 
 void LedBar_SaveSleepSoc(void)

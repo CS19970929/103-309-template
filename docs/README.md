@@ -13,6 +13,7 @@
 
 - [SOC 模块设计与源码审查](design/soc_design.md) - 当前唯一活跃 SOC 逻辑入口，已合并历史 SOC review/devlog 的有效内容
 - [SOC 函数粒度审查与净删减记录](review/soc_function_granularity_review_2026-06-04.md) - 记录 SOC 小函数保留/合并边界
+- [其他模块简化审查与 LedBar 净删减记录](review/module_simplification_review_2026-06-04.md) - 记录 SOC 之外的模块简化判断和本轮 LedBar 删除项
 - [状态变量净删减专项审计](review/state_variable_audit.md)
 - [顶层变更记录](change_log.md)
 - [顶层测试计划](test_plan.md)

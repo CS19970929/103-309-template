@@ -23,6 +23,7 @@
 | 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
 | 查看当前 SOC 完整逻辑、快降排查、简化记录和测试边界 | [SOC 模块设计与源码审查](design/soc_design.md) |
 | 查看 SOC 函数粒度 review 和净删减边界 | [SOC 函数粒度审查与净删减记录](review/soc_function_granularity_review_2026-06-04.md) |
+| 查看其它模块简化审查和 LedBar 删除项 | [其他模块简化审查与 LedBar 净删减记录](review/module_simplification_review_2026-06-04.md) |
 | 查看历史开发记录 | [开发日志](#8-开发日志-devlog) |
 | 📟 Keil Watch 调试 | [SystemDebug 指南](guides/SYSTEM_DEBUG_GUIDE.md) |
 | 找操作指南 | [使用指南](#9-使用指南-guides) |

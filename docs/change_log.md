@@ -1,5 +1,19 @@
 # 变更记录
 
+## 2026-06-04 其他模块简化审查与 LedBar 净删减
+
+源码变更：
+- `LedBar.c/.h`：删除无外部调用的 `LedBar_SetSingleSegmentIndex()`、`LedBar_SetIndicators()`、`LedBar_SetIndicatorState()`。
+- `LedBar.c/.h`：删除无消费者的 `s_ledbar.test_single_segment_id` 和 `LEDBAR_SINGLE_SEG_ID_MIN/MAX`。
+
+文档变更：
+- 新增 `docs/review/module_simplification_review_2026-06-04.md`，记录其它模块简化审查结论。
+- 更新 LedBar 模块参考和变量梳理，移除已删除测试状态/API。
+
+行为边界：
+- 不修改 `APP_LedBar()` 显示策略、`TIM4_IRQHandler()` 扫描链路、BKP 休眠 SOC 保存/恢复、低功耗阻塞条件和 SOC/协议发布口径。
+- `Runtime.c`、`LowPowerSleep.c`、`rtc_sleep.c` 已审查但暂不修改，原因见审查文档。
+
 ## 2026-06-04 SOC 函数粒度净删减
 
 源码变更：
