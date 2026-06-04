@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 SOC 函数粒度二次净删减
+
+源码变更：
+- `SocEnhance.c` 将积分 signed mA 计算、空电/满电默认值选择和保存判重逻辑合并回唯一调用点。
+- 删除当前 low-tail 活动表未使用的 `SOC_TAIL_TARGET_DISABLED` 预留分支。
+- Debug Watch 中 sag hold blocked 字段复用 `soc_sag_hold_blocks_calibration()`，不再重复条件表达式。
+
+文档变更：
+- 更新 SOC 权威设计文档和函数粒度审查记录。
+
+验证边界：
+- 不改变 SOC 主顺序、low-tail 表值、Flash snapshot 和对外发布字段。
+
 ## 2026-06-04 其他模块简化审查与 LedBar 净删减
 
 源码变更：

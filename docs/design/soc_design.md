@@ -50,7 +50,7 @@
 | AFE/SOC 主链 | `Runtime.c::Runtime_RunFrontTasks()`、`DataDeal.c::App_AFEGet()`、`SOC.c::App_SOC()` |
 | Type-C 等效电流 | `SOC.c::SOC_GetTypeCBatEquivCurrentA10()`、`SOC_GetNetCurrentForCalc()` |
 | 核心状态机 | `SocEnhance.c::SOC_IntEnhance_Ctrl()` |
-| 积分与自耗 | `SocEnhance.c::soc_integrate_current_ma()`、`soc_integrate()` |
+| 积分与自耗 | `SocEnhance.c::soc_integrate()` |
 | 满电/低端/静置校准 | `soc_apply_full_empty()`、`soc_low_tail_config()`、`soc_update_rest_timer()` |
 | RTC STOP 补偿 | `rtc_sleep_port.c::RtcSleep_PortApplySocRtcRest()`、`SocEnhance.c::SOC_ApplyRtcRelaxationCompensation()` |
 | Flash snapshot | `SocEnhance.c::soc_save()`、`soc_load_or_default()`、`Flash.c::StorageFlash_LoadSocData()`、`StorageFlash_SaveSocData()` |
@@ -61,7 +61,7 @@
 本次文档合并后已执行验证：
 
 - `git diff --check`：通过。
-- `python3 tools/soc_replay_test.py`：43 项通过。
+- `python3 tools/soc_replay_test.py`：当前 41 项通过。
 - `python3 tools/project_check.py --quiet`：当前 checkout 为历史基线失败 `103 OK / 1 warning / 13 errors`；失败项为既有缺文件、非 UTF-8、历史文档引用和历史审计门禁。
 
 未验证事项：
@@ -75,7 +75,7 @@
 
 1. SOC 主估算仍是容量积分，OCV、满电、低压尾端、静置和 RTC 休眠补偿都是校准/约束层。
 2. 内部真实 SOC 是 `s_soc.soc`；对外发布到 CAN、Modbus、LedBar 的 SOC 现在直接等于 `s_soc.soc`，不再经过 `display_soc` 平滑层。
-3. 正常运行 RELAX 模式下，板载自耗已经计入 SOC：`soc_integrate_current_ma(SOC_MODE_RELAX)` 返回 `-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`，随后按放电积分累计容量损耗。
+3. 正常运行 RELAX 模式下，板载自耗已经计入 SOC：`soc_integrate()` 内部按 RELAX 计算 `-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`，随后按放电积分累计容量损耗。
 4. RTC STOP 补偿路径当前不再额外扣自耗，只按休眠秒数推进静置 OCV 相关计数和下修；这是为了避免把 RTC 低功耗期间的极低自耗重复或过度计入。
 5. 当前只保留 low-tail 表 `s_empty_tail_table`。mid-tail 表、旧 `#if 0` tail 对照表和 mid-tail debug 字段已按确认删除。
 6. `SOC_IntEnhance_Ctrl()` 当前按一条直线表达核心顺序：命令、方向、积分、sag hold、low-tail/full、静置、保存、发布。
@@ -232,7 +232,7 @@ Runtime_RunOnce()
 
 正常运行链路中，自耗已经算进 SOC：
 
-| SOC 模式 | `soc_integrate_current_ma()` 当前返回 |
+| SOC 模式 | `soc_integrate()` 内部电流口径 |
 |---|---:|
 | `CHG` | `Ichg * 100mA - board_self_mA` |
 | `DSG` | `-(Idsg * 100mA + board_self_mA)` |
@@ -436,6 +436,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | 手动 OCV | flag=1 手动 OCV 与“只保留长静置慢下修”不一致 | 删除 `SOC_RequestManualOcvRefresh()` 和 flag=1 处理 |
 | display_soc 平滑 | 对外 SOC 需要维护内部/显示两套状态，但自动校准最大只有 1%，额外平滑收益很低 | 删除 `display_soc/display_ticks/display_ready`、显示平滑宏、Fixed/Zero 覆盖逻辑；对外直接发布 `s_soc.soc` |
 | 函数粒度 | 删除历史功能后仍保留一层转发、一次性小 helper 和 mid-tail 时代泛化查表 | 合并 `soc_publish` 包装层、积分模式判断、长静置 OCV 单步、重放电判断和 low-tail 泛化 helper；详见 `docs/review/soc_function_granularity_review_2026-06-04.md` |
+| 函数粒度二次收敛 | 前一轮后仍有单纯默认值 helper、保存判重包装和未被当前 tail 表使用的 disabled 分支 | 合并 `soc_integrate_current_ma()`、`soc_empty_mv()`、`soc_full_mv()`、`soc_save_mark_changed()`，删除 `SOC_TAIL_TARGET_DISABLED` 分支 |
 
 ## 12. 风险与后续建议
 

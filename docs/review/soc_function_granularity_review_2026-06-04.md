@@ -27,6 +27,10 @@
 | low-tail 泛化查表 | `soc_tail_rule_lookup()` / `soc_empty_tail_config()` / `soc_empty_current_band()` 多层组合 | 收敛到 `soc_low_tail_config()` | mid-tail 已删除，只剩一个 low-tail 表，保留泛化参数会增加跳转 |
 | 空电偏移判断 | `soc_vmin_above_empty_offset()` 只服务 low-tail 包装层 | 合并到 `soc_low_tail_config()` | 只用一次，且 threshold 语义在 low-tail 里更直观 |
 | 缩进噪声 | snapshot load/save 处有缩进残留 | 修正缩进 | 降低 review 噪声，不改变逻辑 |
+| 积分电流转 signed mA | `soc_integrate_current_ma()` 只被 `soc_integrate()` 调用 | 合并回 `soc_integrate()` | CHG/DSG/RELAX 电流口径是积分本地逻辑，减少跳转 |
+| 空电/满电默认值 helper | `soc_empty_mv()`、`soc_full_mv()` 都只被一个函数调用 | 合并到 `soc_empty_threshold_mv()` 和 `soc_full_confirm_seconds()` | 只做默认值选择，独立函数不形成业务边界 |
+| 保存判重包装 | `soc_save_mark_changed()` 只服务 `soc_save_if_needed()` | 合并回 `soc_save_if_needed()` | 判重字段在唯一调用点直接可见，Flash 写入边界仍由 `soc_save_current_snapshot()` 保留 |
+| tail disabled 分支 | `SOC_TAIL_TARGET_DISABLED` 当前没有任何活动表项使用 | 删除宏和判断 | 当前源码没有禁用表项，保留 0xFF 预留分支会误导 review |
 
 ## 3. 明确保留
 

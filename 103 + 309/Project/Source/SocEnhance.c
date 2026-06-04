@@ -66,7 +66,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_EMPTY_BAND_MID           ((UINT8)2U)
 #define SOC_EMPTY_BAND_HEAVY         ((UINT8)3U)
 #define SOC_EMPTY_BAND_COUNT         ((UINT8)4U)
-#define SOC_TAIL_TARGET_DISABLED     ((UINT8)0xFFU)
 #define SOC_REST_MAX_DELTA_MV        ((UINT16)200U)
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
@@ -314,21 +313,6 @@ static UINT8 soc_direction(void)
 	return SOC_MODE_RELAX;
 }
 
-static int32_t soc_integrate_current_ma(UINT8 mode)
-{
-	int32_t board_ma = (int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
-
-	if (mode == SOC_MODE_CHG)
-	{
-		return ((int32_t)SOC_Enhance_Element.u16_Ichg * SOC_MA_PER_A10) - board_ma;
-	}
-	if (mode == SOC_MODE_DSG)
-	{
-		return 0 - (((int32_t)SOC_Enhance_Element.u16_Idsg * SOC_MA_PER_A10) + board_ma);
-	}
-	return 0 - board_ma;
-}
-
 static UINT8 soc_voltage_valid(void)
 {
 	if ((SOC_Enhance_Element.u16_VCellMin < SOC_VALID_MIN_MV) ||
@@ -424,15 +408,10 @@ static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage
 	return (voltage_mv >= table[0]) ? table[1U] : table[last + 1U];
 }
 
-static UINT16 soc_empty_mv(void)
-{
-	return (SOC_Enhance_Element.u16_SOC_0_Vol != 0U) ?
-		SOC_Enhance_Element.u16_SOC_0_Vol : SOC_EMPTY_MV;
-}
-
 static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 {
-	UINT16 empty_mv = soc_empty_mv();
+	UINT16 empty_mv = (SOC_Enhance_Element.u16_SOC_0_Vol != 0U) ?
+		SOC_Enhance_Element.u16_SOC_0_Vol : SOC_EMPTY_MV;
 	UINT16 offset;
 
 	if (offset_mv >= 0)
@@ -443,12 +422,6 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 	}
 	offset = (UINT16)(-offset_mv);
 	return (empty_mv > offset) ? (UINT16)(empty_mv - offset) : 0U;
-}
-
-static UINT16 soc_full_mv(void)
-{
-	return (SOC_Enhance_Element.u16_SOC_100_Vol != 0U) ?
-		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_DEFAULT_FULL_MV;
 }
 
 static UINT16 soc_current_limit_a10(UINT16 divider)
@@ -527,14 +500,6 @@ static void soc_update_save_mark(void)
 	s_saved_soc.snapshot_flags = s_soc.snapshot_flags;
 }
 
-static UINT8 soc_save_mark_changed(void)
-{
-	return (UINT8)((s_soc.soc != s_saved_soc.soc) ||
-		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
-		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
-		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags));
-}
-
 static void soc_save_current_snapshot(void)
 {
 	if (soc_save())
@@ -545,7 +510,10 @@ static void soc_save_current_snapshot(void)
 
 static void soc_save_if_needed(void)
 {
-	if (soc_save_mark_changed())
+	if ((s_soc.soc != s_saved_soc.soc) ||
+		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
+		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
+		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
 	{
 		soc_save_current_snapshot();
 	}
@@ -671,12 +639,28 @@ static void soc_set_rest_down_target(UINT8 target)
 
 static void soc_integrate(UINT8 mode)
 {
-	int32_t current_ma_signed = soc_integrate_current_ma(mode);
+	int32_t current_ma_signed;
+	int32_t board_ma = (int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
 	UINT8 integrate_mode = SOC_MODE_RELAX;
 	UINT32 current_ma;
 	UINT32 acc_mams;
 	UINT32 delta_as10;
 	UINT8 old_soc = s_soc.soc;
+
+	if (mode == SOC_MODE_CHG)
+	{
+		current_ma_signed = ((int32_t)SOC_Enhance_Element.u16_Ichg * SOC_MA_PER_A10) -
+			board_ma;
+	}
+	else if (mode == SOC_MODE_DSG)
+	{
+		current_ma_signed = 0 - (((int32_t)SOC_Enhance_Element.u16_Idsg *
+			SOC_MA_PER_A10) + board_ma);
+	}
+	else
+	{
+		current_ma_signed = 0 - board_ma;
+	}
 
 	if (current_ma_signed > 0)
 	{
@@ -740,7 +724,8 @@ static void soc_integrate(UINT8 mode)
 
 static UINT16 soc_full_confirm_seconds(void)
 {
-	UINT16 full_mv = soc_full_mv();
+	UINT16 full_mv = (SOC_Enhance_Element.u16_SOC_100_Vol != 0U) ?
+		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_DEFAULT_FULL_MV;
 	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
 	UINT16 vmin_min = vmax_min;
 	UINT16 vmin_fast = soc_voltage_with_margin(full_mv, SOC_FULL_FAST_MARGIN_MV);
@@ -825,10 +810,7 @@ static void soc_watch_refresh(UINT8 force_publish)
 	UINT8 cal_allowed = soc_calibration_allowed();
 	UINT8 sag_blocked;
 
-	sag_blocked = (UINT8)((s_soc.sag_hold_ticks > 0U) &&
-		soc_voltage_valid() &&
-		(SOC_Enhance_Element.u16_VCellMin >
-		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
+	sag_blocked = soc_sag_hold_blocks_calibration();
 
 	s_soc_debug_watch.u32CapFactoryAs10 = s_soc.cap_factory_as10;
 	s_soc_debug_watch.u32CapFullAs10 = s_soc.cap_full_as10;
@@ -922,10 +904,6 @@ static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
 		if (SOC_Enhance_Element.u16_VCellMin <= threshold)
 		{
-			if (s_empty_tail_table[i].target[band] == SOC_TAIL_TARGET_DISABLED)
-			{
-				return 0U;
-			}
 			step->target = s_empty_tail_table[i].target[band];
 			step->ticks = s_empty_tail_table[i].ticks[band];
 			if (step->ticks == 0U)

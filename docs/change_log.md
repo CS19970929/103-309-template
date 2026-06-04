@@ -1,5 +1,19 @@
 # 变更记录
 
+## 2026-06-04 SOC 函数粒度二次净删减
+
+源码变更：
+- `SocEnhance.c`：将 `soc_integrate_current_ma()` 合并回唯一调用点 `soc_integrate()`。
+- `SocEnhance.c`：将 `soc_empty_mv()`、`soc_full_mv()` 默认值选择合并回调用点。
+- `SocEnhance.c`：将 `soc_save_mark_changed()` 合并回 `soc_save_if_needed()`。
+- `SocEnhance.c`：删除当前 tail 表无消费者的 `SOC_TAIL_TARGET_DISABLED` 预留分支，并让 Debug Watch 复用 `soc_sag_hold_blocks_calibration()`。
+
+文档变更：
+- 更新 `docs/design/soc_design.md` 和 `docs/review/soc_function_granularity_review_2026-06-04.md`。
+
+行为边界：
+- 不修改 low-tail 表值、满电/静置/RTC 阈值、Flash snapshot 字段、SOC 对外发布字段和 200ms 调度顺序。
+
 ## 2026-06-04 其他模块简化审查与 LedBar 净删减
 
 源码变更：

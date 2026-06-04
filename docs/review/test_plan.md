@@ -70,7 +70,7 @@
 
 | ID | 测试项 | 方法 | 通过标准 |
 |---|---|---|---|
-| T-SOC-001 | Python 回放 | `python3 tools/soc_replay_test.py` | 43 项通过，OCV/low-tail 表从活动 C 源码解析一致 |
+| T-SOC-001 | Python 回放 | `python3 tools/soc_replay_test.py` | 当前 41 项通过，OCV/low-tail 表从活动 C 源码解析一致 |
 | T-SOC-002 | Host C 回归 | `python3 tools/run_soc_host_c_test.py` | `30mA/0mA/1000mA` 和 debug-watch 组合均通过 |
 | T-SOC-003 | Visual trace | `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv` | city/hill/pulse/deep/charge 5 个场景通过 |
 | T-SOC-004 | 真实电流积分 | 上板充放电 | SOC 方向、速率符合电流 |
