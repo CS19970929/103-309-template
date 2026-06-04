@@ -21,26 +21,27 @@ void SleepDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 #endif
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
+static void SleepDeal_WaitStopWakeup(void);
 
 #define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
 
-static UINT8 IsChargerWakeupActive(void)
+static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
 	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
 }
 
-static UINT8 IsKeyPressed(void)
+static UINT8 SleepDeal_IsKeyPressed(void)
 {
 	// PC13���رպ�Ϊ�͵�ƽ����EXTI13�½��ػ��ѱ���һ�£�
 	return (UINT8)(MCUI_ENI_DI1 == 0);
 }
 
-static UINT8 IsSleepWakeupValid(void)
+static UINT8 SleepDeal_IsWakeupValid(void)
 {
 	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;
 
-	if (IsChargerWakeupActive())
+	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
 		return 1;
@@ -48,7 +49,7 @@ static UINT8 IsSleepWakeupValid(void)
 
 	while (1)
 	{
-		if (!IsKeyPressed())
+		if (!SleepDeal_IsKeyPressed())
 		{
 			LedBar_PrepareForStop();
 			return 0;
@@ -56,9 +57,9 @@ static UINT8 IsSleepWakeupValid(void)
 
 		LedBar_ShowSleepSocPreview();
 		hold_cnt = 0;
-		while (IsKeyPressed())
+		while (SleepDeal_IsKeyPressed())
 		{
-			if (IsChargerWakeupActive())
+			if (SleepDeal_IsChargerWakeupActive())
 			{
 				SleepDeal_MarkBootFromSleepChargerWakeup();
 				return 1;
@@ -74,12 +75,12 @@ static UINT8 IsSleepWakeupValid(void)
 		display_cnt = 0;
 		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
 		{
-			if (IsChargerWakeupActive())
+			if (SleepDeal_IsChargerWakeupActive())
 			{
 				SleepDeal_MarkBootFromSleepChargerWakeup();
 				return 1;
 			}
-			if (IsKeyPressed())
+			if (SleepDeal_IsKeyPressed())
 			{
 				break;
 			}
@@ -100,9 +101,6 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 {
 	UINT16 boot_flag;
 
-	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
-	LowPowerSleep_SaveResetState();
-
 	switch (sleep_mode)
 	{
 	case NORMAL_MODE:
@@ -119,6 +117,8 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 		return;
 	}
 
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
+	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
 	InitAFE1_Sleep(0);
 	AFE_Sleep();
@@ -204,7 +204,18 @@ UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
 	return s_sleep.chg_wake;
 }
 
-void IsSleepStartUp(void)
+static void SleepDeal_WaitStopWakeup(void)
+{
+	do
+	{
+		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
+		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
+		Sys_StopMode();
+		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
+	} while (!SleepDeal_IsWakeupValid());
+}
+
+void SleepDeal_HandleBootSleepStartup(void)
 {
 	UINT16 sleep_flag;
 
@@ -220,13 +231,7 @@ void IsSleepStartUp(void)
 
 		IOstatus_RTCMode();
 		InitWakeUp_RTCMode();
-		do
-		{
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
-			Sys_StopMode();
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
-		} while (!IsSleepWakeupValid());
+		SleepDeal_WaitStopWakeup();
 		// Sys_StandbyMode();
 		IORecover_RTCMode();
 		break;
@@ -235,13 +240,7 @@ void IsSleepStartUp(void)
 		BootFlag_Clear();
 		IOstatus_NormalMode();
 		InitWakeUp_NormalMode();
-		do
-		{
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
-			Sys_StopMode();
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
-		} while (!IsSleepWakeupValid());
+		SleepDeal_WaitStopWakeup();
 		IORecover_NormalMode();
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
@@ -250,13 +249,7 @@ void IsSleepStartUp(void)
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
 		// Sys_StandbyMode();		//??????IO???
-		do
-		{
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
-			Sys_StopMode();
-			IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
-		} while (!IsSleepWakeupValid());
+		SleepDeal_WaitStopWakeup();
 		IORecover_DeepMode();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:

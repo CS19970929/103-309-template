@@ -1,5 +1,19 @@
 # 变更记录
 
+## 2026-06-04 低功耗命名与重复等待流程收敛
+
+源码变更：
+- `SleepDeal.c/.h`、`AppInit.c`：`IsSleepStartUp()` 改名为 `SleepDeal_HandleBootSleepStartup()`，表达“启动阶段处理 BKP sleep flag 并等待合法唤醒”。
+- `SleepDeal.c`：`IsChargerWakeupActive()`、`IsKeyPressed()`、`IsSleepWakeupValid()` 改为 `SleepDeal_*` 命名；三段 reset-sleep STOP 等待循环收敛为 `SleepDeal_WaitStopWakeup()`。
+- `SleepDeal_Continue()`：先校验 sleep mode 并选择 `boot_flag`，再保存 reset sleep 状态，避免非法 mode 也执行保存。
+- `rtc_sleep.c`：`lp_sync()`、`lp_deep()`、`lp_select()` 改为更明确的 `lp_refresh_status()`、`lp_select_deep_if_low_voltage()`、`lp_update_sleep_request()`；`NORMAL_MODE/DEEP_MODE` 分支合并。
+
+文档变更：
+- 更新低功耗设计、状态机、需求对齐、模块图和模块简化审查记录。
+
+行为边界：
+- 不修改 blocker 条件、HICCUP STOP 循环、RTC wake 后 SOC rest 补偿、reset-sleep 的 BKP flag/AFE sleep/MCU reset 顺序。
+
 ## 2026-06-04 LedBar 删除 key/MCU_WK 软件滤波计数
 
 源码变更：

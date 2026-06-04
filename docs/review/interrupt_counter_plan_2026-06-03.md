@@ -216,7 +216,7 @@ void IrqDebug_RecordUnhandledVector(void)
 | `STOP_WAIT` | `Sys_StopMode()` 调 `PWR_EnterSTOPMode()` 前 | 记录真正进入 STOP 等待窗口 |
 | `STOP_WAKE_RAW` | `PWR_EnterSTOPMode()` 返回后、恢复外设前 | 判断唤醒瞬间是 RTC、EXTI 还是串口/CAN 干扰 |
 | `STOP_RESTORE` | `InitRunAfterStopWakeup()` 开始到 `InitTimer()` 后 | 观察恢复外设期间是否提前进通信/定时器中断 |
-| `RESET_SLEEP_WAIT` | `IsSleepStartUp()` 中 sleep flag 分支的 STOP 等待循环 | 观察 reset sleep 路径的唤醒中断 |
+| `RESET_SLEEP_WAIT` | `SleepDeal_HandleBootSleepStartup()` 中 sleep flag 分支的 STOP 等待循环 | 观察 reset sleep 路径的唤醒中断 |
 | `FAULT` | fault handler 入口 | 保留异常进入时的阶段 |
 
 这样同一个中断会同时有总计数和分阶段计数，例如 `phase[STOP_WAIT][IRQDBG_EXTI9_SW_KEY]` 可以直接看到 RTC STOP 等待中是否被按键打断。

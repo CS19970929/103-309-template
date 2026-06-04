@@ -83,7 +83,7 @@ AppInit_Boot()
   AppInit_InitDevice()
     SystemInit()
     InitDelay()
-    IsSleepStartUp()
+    SleepDeal_HandleBootSleepStartup()
     jtag_disableAndConfIO()
     InitNVIC()
     InitIO()
@@ -328,7 +328,7 @@ Runtime_RunIoAndPowerTasks()
 
 ```text
 rtc_sleep()
-  low_power_select_sleep_mode()
+  lp_update_sleep_request()
   HICCUP_MODE:
     LowPowerSleep_SaveCoreState()
     Init_RTC()

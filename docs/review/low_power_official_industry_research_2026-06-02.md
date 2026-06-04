@@ -37,7 +37,7 @@
 当前项目已经接近官方/行业推荐的主体方向：
 
 - 运行态空闲后进入 `HICCUP_MODE`，使用 RTC 周期唤醒后继续 Stop。
-- `NORMAL_MODE/DEEP_MODE` 走 reset sleep，使用 BKP 保存 sleep intent，启动早期 `IsSleepStartUp()` 判断合法唤醒。
+- `NORMAL_MODE/DEEP_MODE` 走 reset sleep，使用 BKP 保存 sleep intent，启动早期 `SleepDeal_HandleBootSleepStartup()` 判断合法唤醒。
 - CAN/CMNT 睡前关闭，RTC 周期唤醒中不主动广播 CAN。
 - LED 真实显示窗口阻塞 Stop，窗口结束释放低功耗。
 - 睡前保存 SOC snapshot 和工厂老化进度。

@@ -282,7 +282,7 @@ int main(void) {
 
 | 函数 | 功能 |
 |------|------|
-| `AppInit_InitDevice()` | 硬件初始化: SystemInit→InitDelay→IsSleepStartUp→jtag_disable→InitNVIC→InitIO→串口→FlashBootPrint→FlashQuickTest→InitE2PROM→InitAFE1→InitCan→InitADC→InitData_SOC→InitTimer→__enable_irq→elog→EnableLowPowerDebug→Init_IWDG |
+| `AppInit_InitDevice()` | 硬件初始化: SystemInit→InitDelay→SleepDeal_HandleBootSleepStartup→jtag_disable→InitNVIC→InitIO→串口→FlashBootPrint→FlashQuickTest→InitE2PROM→InitAFE1→InitCan→InitADC→InitData_SOC→InitTimer→__enable_irq→elog→EnableLowPowerDebug→Init_IWDG |
 | `AppInit_InitRuntimeState()` | 运行时状态初始化: 加载 SystemMonitor 参数, 设置 CS 电阻比, 标记启动完成 |
 | `AppInit_Boot()` | 总启动入口: 设备初始化 → 运行时状态 → Init_RTC |
 

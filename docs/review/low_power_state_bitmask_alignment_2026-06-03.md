@@ -52,15 +52,15 @@
 | bit8 | `LP_BLOCK_LED_ACTIVE` | LedBar 显示活动 |
 | bit9 | `LP_BLOCK_AGING` | 工厂老化 running |
 
-`LP_GetBlockReason()` 是唯一阻塞判断入口。`lp_select()` 只读取该函数返回值并决定是否清空 `idle`。
+`LP_GetBlockReason()` 是唯一阻塞判断入口。`lp_update_sleep_request()` 只读取该函数返回值并决定是否清空 `idle`。
 
 ## 低功耗选择流程
 
-当前 `rtc_sleep()` 每秒调用 `lp_select()`。
+当前 `rtc_sleep()` 每秒调用 `lp_update_sleep_request()`。
 
 ```text
-lp_select()
-  lp_deep()
+lp_update_sleep_request()
+  lp_select_deep_if_low_voltage()
     强制低压 deep
     参数低压 deep
   g_stLowPowerRtcStatus.block = LP_GetBlockReason()

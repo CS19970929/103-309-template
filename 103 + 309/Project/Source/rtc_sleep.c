@@ -88,7 +88,7 @@ uint32_t LP_GetBlockReason(void)
     return reason;
 }
 
-static void lp_sync(void)
+static void lp_refresh_status(void)
 {
     g_stLowPowerRtcStatus.rtc = RtcSleep_PortIsRtcWake();
     g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
@@ -119,10 +119,10 @@ void LowPower_Request(enum _SLEEP_MODE mode)
         break;
     }
 
-    lp_sync();
+    lp_refresh_status();
 }
 
-static uint8_t lp_deep(void)
+static uint8_t lp_select_deep_if_low_voltage(void)
 {
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
@@ -153,11 +153,11 @@ static uint8_t lp_deep(void)
     return 0U;
 }
 
-static void lp_select(void)
+static void lp_update_sleep_request(void)
 {
-    if (lp_deep() != 0U)
+    if (lp_select_deep_if_low_voltage() != 0U)
     {
-        lp_sync();
+        lp_refresh_status();
         return;
     }
 
@@ -165,7 +165,7 @@ static void lp_select(void)
     if (g_stLowPowerRtcStatus.block != 0U)
     {
         g_stLowPowerRtcStatus.idle = 0U;
-        lp_sync();
+        lp_refresh_status();
         return;
     }
 
@@ -174,7 +174,7 @@ static void lp_select(void)
         g_stLowPowerRtcStatus.idle = 0U;
         LowPower_Request(HICCUP_MODE);
     }
-    lp_sync();
+    lp_refresh_status();
 }
 
 static bool rtc_sleep_has_wakeup_exception(void)
@@ -213,7 +213,7 @@ static void rtc_sleep_prepare_rtc(void)
     RtcSleep_PortPrepareRtcStop();
     RTC_ClearStopWakeup();
     g_irq_t = NO_IRQ;
-    lp_sync();
+    lp_refresh_status();
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -237,7 +237,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
-        lp_sync();
+        lp_refresh_status();
         return true;
     }
 
@@ -263,11 +263,11 @@ void rtc_sleep(void)
 
     if (RtcSleep_PortIsOneSecondTick() == 0U)
     {
-        lp_sync();
+        lp_refresh_status();
         return;
     }
 
-    lp_select();
+    lp_update_sleep_request();
     sleep_mode = g_stLowPowerRtcStatus.mode;
 
     if ((sleep_mode != HICCUP_MODE) &&
@@ -280,15 +280,13 @@ void rtc_sleep(void)
     switch (sleep_mode)
     {
     case NORMAL_MODE:
+    case DEEP_MODE:
         low_power_log_and_commit_sleep(sleep_mode);
         break;
     case HICCUP_MODE:
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
-        break;
-    case DEEP_MODE:
-        low_power_log_and_commit_sleep(sleep_mode);
         break;
     default:
         LowPower_Request(NO_SLEEP);

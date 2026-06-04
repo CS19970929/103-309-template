@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 低功耗命名与重复等待流程收敛
+
+源码变更：
+- `SleepDeal.c/.h`、`AppInit.c` 将 `IsSleepStartUp()` 改名为 `SleepDeal_HandleBootSleepStartup()`。
+- `SleepDeal.c` 将 reset-sleep 三段重复 STOP 等待循环收敛为 `SleepDeal_WaitStopWakeup()`，并统一 `SleepDeal_*` 内部命名。
+- `SleepDeal_Continue()` 先校验模式再保存 reset sleep 状态；`rtc_sleep.c` 内部 helper 改成更明确的状态刷新、低压 deep 选择和 sleep request 更新命名。
+
+文档变更：
+- 更新低功耗设计、状态机、需求对齐、模块图和模块简化审查记录。
+
+验证边界：
+- 不改变 blocker 条件、HICCUP STOP、RTC wake SOC 补偿、BKP flag、AFE sleep、MCU reset 和唤醒合法性判断。
+
 ## 2026-06-04 LedBar 删除 key/MCU_WK 软件滤波计数
 
 源码变更：

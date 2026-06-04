@@ -91,7 +91,7 @@
 |---|---|---|
 | `Runtime.c` | `Runtime_RunFrontTasks()`、`Runtime_RunIoAndPowerTasks()`、`Runtime_RunBackgroundTasks()` 是主循环阶段边界，中间插入了 DebugHooks 计时和事件钩子。 | 保留。虽然函数短，但它们承载调试剖面边界，合并会降低运行阶段可观测性。 |
 | `LowPowerSleep.c` | `LowPowerSleep_SaveCoreState()` 和 `LowPowerSleep_SaveResetState()` 分别对应普通睡眠保存和 reset-sleep 额外 LedBar SOC 保存。 | 保留。函数短，但调用语义不同，边界清楚。 |
-| `rtc_sleep.c` | `lp_idle()` 已合并回 `lp_select()`，无调用的 `LP_GetLastSleepSeconds()` / `LP_RecordLastSleepSeconds()` 已删除；`lp_sync()`、`lp_deep()`、`lp_select()`、`rtc_sleep_prepare_rtc()`、`rtc_sleep_run_hiccup_cycle()` 仍保留。 | 已小步净删减；剩余函数分别对应调试状态同步、deep 优先级判断、模式选择和 STOP 进入/恢复边界，暂不继续合并。 |
+| `rtc_sleep.c` / `SleepDeal.c` | `lp_idle()` 已合并回低功耗请求更新流程，无调用的 `LP_GetLastSleepSeconds()` / `LP_RecordLastSleepSeconds()` 已删除；`lp_sync()`、`lp_deep()`、`lp_select()` 已改为 `lp_refresh_status()`、`lp_select_deep_if_low_voltage()`、`lp_update_sleep_request()`；reset-sleep 三段重复 STOP 等待收敛为 `SleepDeal_WaitStopWakeup()`。 | 已小步净删减和命名收敛；保留状态刷新、deep 优先级判断、模式选择和 STOP 进入/恢复边界，不继续做大范围合并。 |
 
 ## 5. 结论
 

@@ -34,7 +34,7 @@
 
 1. 运行态每轮主循环直接调用 `rtc_sleep()`，每秒判断是否进入 `HICCUP_MODE`。
 2. `HICCUP_MODE` 在当前运行态内反复进入 `PWR_EnterSTOPMode()`，RTC alarm 周期唤醒后恢复外设；如果没有异常唤醒，则继续 STOP。
-3. `NORMAL_MODE` 和 `DEEP_MODE` 走 reset sleep：写 BKP sleep flag、保存状态、让 AFE sleep、`MCU_RESET()`，再由启动早期 `IsSleepStartUp()` 进入 STOP 等有效唤醒。
+3. `NORMAL_MODE` 和 `DEEP_MODE` 走 reset sleep：先确认 sleep mode，再保存状态、写 BKP sleep flag、让 AFE sleep、`MCU_RESET()`，再由启动早期 `SleepDeal_HandleBootSleepStartup()` 进入 STOP 等有效唤醒。
 
 复杂度主要来自两套 sleep 执行路径都在处理保存状态、CAN 电源、AFE、LED、唤醒合法性和日志；此前还有一层 `app_lowpower.c` bitmask、一层 `rtc_sleep.c` 8 位 block reason、一个 `readyToSleep` 全局阶段变量，以及若干当前无真实调用的 wrapper。本轮已删除 `app_lowpower.c/h` 和 `readyToSleep` 控制字段，详细 bitmask 和粗粒度 block reason 都收口在 `rtc_sleep.c/h`。
 
@@ -49,7 +49,7 @@ main()
   AppInit_Boot()
     SystemInit()
     InitDelay()
-    IsSleepStartUp()
+    SleepDeal_HandleBootSleepStartup()
     InitIO / InitSCI / InitE2PROM / InitAFE1 / InitCan / InitADC
     InitData_SOC()
     InitTimer()
@@ -60,7 +60,7 @@ main()
 
 关键点：
 
-- `IsSleepStartUp()` 在完整 IO/AFE/CAN 初始化之前执行，用 BKP_DR2/DR3 判断是否是 sleep reset 启动。
+- `SleepDeal_HandleBootSleepStartup()` 在完整 IO/AFE/CAN 初始化之前执行，用 BKP_DR2/DR3 判断是否是 sleep reset 启动。
 - `Init_RTC()` 使用 BKP_DR1 判断 RTC 是否已初始化；若首次初始化会 `BKP_DeInit()`，因此 BKP 寄存器分配必须固定，不能随意复用。
 - `EnableLowPowerDebug()` 当前仍在启动阶段调用；`conf.h` 已不再无条件定义 `__EnableLowPowerDebug__`，Release 默认清除 DBGMCU 低功耗调试保持位，调试时可通过显式宏打开。
 - `PROJECT_CFG_WDOG_ENABLE` 当前默认为 1；`Init_IWDG()` 和 `IWDG_Feed()` 已按该宏门控，RTC wake period 安全窗口与实际 IWDG 行为一致。
@@ -102,7 +102,7 @@ Runtime_RunOnce()
 
 ### HICCUP 空闲入睡
 
-`rtc_sleep()` 每秒调用一次 `low_power_select_sleep_mode()`：
+`rtc_sleep()` 每秒调用一次 `lp_update_sleep_request()`：
 
 - 若 `VCellMin <= 2800mV` 且充电电流 `<= 5`，持续 60 秒后请求 `DEEP_MODE`。
 - 若 `VCellMin <= OtherElement.u16Sleep_Vlow` 且充电电流 `<= 5`，持续 `OtherElement.u16Sleep_TimeVlow * 60` 秒后请求 `DEEP_MODE`。
@@ -111,13 +111,13 @@ Runtime_RunOnce()
   - `GPIO_MCU_WK` active。
   - `RTC_ExtComCnt` 变化，代表 RS485/USART 有接收。
   - `LP_GetBlockReason() != 0`，代表框架层有阻塞。
-- 无阻塞时，`s_u16IdleDelaySeconds` 达到 `sys_time.time_enter_rtc` 后请求 `HICCUP_MODE`。
+- 无阻塞时，`g_stLowPowerRtcStatus.idle` 达到 `sys_time.time_enter_rtc` 后请求 `HICCUP_MODE`。
 
 ### Sleep 提交口径
 
 `rtc_sleep()` 当前不再维护独立 `readyToSleep` 阶段变量：
 
-- `low_power_select_sleep_mode()` 只负责更新 `g_stLowPowerRtcStatus.mode` 和 `blockReason`。
+- `lp_update_sleep_request()` 只负责更新 `g_stLowPowerRtcStatus.mode` 和 `block`。
 - 本轮 `rtc_sleep()` 读取局部 `sleep_mode = g_stLowPowerRtcStatus.mode`。
 - `sleep_mode == HICCUP_MODE` 时直接进入 `rtc_sleep_run_hiccup_cycle()`。
 - `sleep_mode == NORMAL_MODE/DEEP_MODE` 时直接进入 `RtcSleep_PortCommitResetSleep()`，同步完成 `BMS_SLEEP` 日志和 `SleepDeal_Continue()`。
@@ -180,6 +180,7 @@ rtc_sleep_run_hiccup_cycle()
 
 ```text
 SleepDeal_Continue()
+  select boot flag
   LowPowerSleep_SaveResetState()
     LowPowerSleep_SaveCoreState()
     LedBar_SaveSleepSoc()
@@ -188,16 +189,16 @@ SleepDeal_Continue()
   AFE_Sleep()
   MCU_RESET()
 
-IsSleepStartUp()
+SleepDeal_HandleBootSleepStartup()
   BootFlag_Read()
   BootFlag_Clear()
   IOstatus_xxxMode()
   InitWakeUp_xxxMode()
-  do Sys_StopMode() while (!IsSleepWakeupValid())
+  SleepDeal_WaitStopWakeup()
   IORecover_xxxMode()
 ```
 
-`IsSleepWakeupValid()` 当前认为以下条件可结束睡眠：
+`SleepDeal_IsWakeupValid()` 当前认为以下条件可结束睡眠：
 
 - `CHG_IN` active，标记 `FLASH_SLEEP_CHARGER_WAKE_VALUE`。
 - `SW/DI1` 持续按下达到 `DI1_LONG_PRESS_WAKE_10MS`，当前为 50 个 10ms，即约 500ms。

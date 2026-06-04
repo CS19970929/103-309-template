@@ -11,7 +11,7 @@ static void AppInit_InitDevice(void)
 	SystemInit();
 
 	InitDelay();
-	IsSleepStartUp();
+	SleepDeal_HandleBootSleepStartup();
 
 	jtag_disableAndConfIO();
 

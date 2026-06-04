@@ -129,6 +129,7 @@
 | T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 监控脚本按 `g_stLowPowerRtcStatus` 新 8 word 布局读取 `mode/rtc/comm/idle/idleMax/force/vlow/block/sleep/last/cycles`、LED、DBGMCU |
 | T-LP-016 | CAN busy 查询副作用隔离 | 连续 CAN RX，同时观察 `SystemDebug_Snapshot()` 和 `rtc_sleep()` | debug/heartbeat 不更新 `last_ext_comm_cnt_can`；低功耗仍能因 CAN 活动阻塞 RTC STOP |
 | T-LP-017 | 周期 CAN TX 不阻塞 RTC idle | 不接 CAN 对端或制造无 ACK，观察 `g_stLowPowerRtcStatus.idle/block` 和 `s_tx.count` | 普通周期广播 pending 不反复置 `LP_BLOCK_COMM`，达到 `time_enter_rtc` 后能进入 HICCUP；接入 CAN 对端后运行态周期广播仍恢复 |
+| T-LP-018 | 低功耗命名与重复 STOP 循环收敛 | `rg "\\b(IsSleepStartUp|IsSleepWakeupValid|lp_sync|lp_deep|lp_select)\\b|low_power_select_sleep_mode" "103 + 309/Project/Source" tools`，并对 `AppInit.c/SleepDeal.c/rtc_sleep.c/LowPowerSleep.c` 做语法检查 | 旧低功耗源码入口无残留；reset-sleep 等待通过 `SleepDeal_WaitStopWakeup()` 复用；`NORMAL_MODE/DEEP_MODE` 仍进入 `low_power_log_and_commit_sleep()` |
 | T-IWDG-001 | 主循环喂狗 | 正常运行 8h | 无异常复位 |
 | T-IWDG-002 | 阻塞等待喂狗 | CAN RTC service/延时 | 无 IWDG 复位 |
 

@@ -51,20 +51,20 @@ Runtime_RunIoAndPowerTasks
 
 | 变量 | 类型 | 文件 | 含义 | 写入者 | 读取者 |
 | --- | --- | --- | --- | --- | --- |
-| `g_stLowPowerRtcStatus.mode` | `uint8_t` | `rtc_sleep.c` | 当前低功耗请求状态：`NORMAL/HICCUP/DEEP/NO_SLEEP` | `LowPower_Request()`, `lp_select()`, wake path | `rtc_sleep()`, debug |
-| `g_stLowPowerRtcStatus.rtc` | `uint8_t` | `rtc_sleep.c` | 当前/最近是否 RTC 唤醒 | `lp_sync()` | debug |
+| `g_stLowPowerRtcStatus.mode` | `uint8_t` | `rtc_sleep.c` | 当前低功耗请求状态：`NORMAL/HICCUP/DEEP/NO_SLEEP` | `LowPower_Request()`, `lp_update_sleep_request()`, wake path | `rtc_sleep()`, debug |
+| `g_stLowPowerRtcStatus.rtc` | `uint8_t` | `rtc_sleep.c` | 当前/最近是否 RTC 唤醒 | `lp_refresh_status()` | debug |
 | `g_stLowPowerRtcStatus.comm` | `uint8_t` | `rtc_sleep.c` | 外部通信计数快照 | `LP_GetBlockReason()` | debug |
-| `g_stLowPowerRtcStatus.idle` | `uint16_t` | `rtc_sleep.c` | 无 blocker 空闲累计秒 | `lp_deep()`, `lp_select()` | debug |
-| `g_stLowPowerRtcStatus.idleMax` | `uint16_t` | `rtc_sleep.c` | `sys_time.time_enter_rtc` 快照 | `lp_sync()` | debug |
-| `g_stLowPowerRtcStatus.force` | `uint16_t` | `rtc_sleep.c` | 极低电压强制 deep 累计秒 | `lp_deep()` | debug |
-| `g_stLowPowerRtcStatus.vlow` | `uint32_t` | `rtc_sleep.c` | 低压 deep 条件累计秒 | `lp_deep()` | debug |
-| `g_stLowPowerRtcStatus.block` | `uint32_t` | `rtc_sleep.c` | blocker bitmask | `lp_select()` | debug |
+| `g_stLowPowerRtcStatus.idle` | `uint16_t` | `rtc_sleep.c` | 无 blocker 空闲累计秒 | `lp_select_deep_if_low_voltage()`, `lp_update_sleep_request()` | debug |
+| `g_stLowPowerRtcStatus.idleMax` | `uint16_t` | `rtc_sleep.c` | `sys_time.time_enter_rtc` 快照 | `lp_refresh_status()` | debug |
+| `g_stLowPowerRtcStatus.force` | `uint16_t` | `rtc_sleep.c` | 极低电压强制 deep 累计秒 | `lp_select_deep_if_low_voltage()` | debug |
+| `g_stLowPowerRtcStatus.vlow` | `uint32_t` | `rtc_sleep.c` | 低压 deep 条件累计秒 | `lp_select_deep_if_low_voltage()` | debug |
+| `g_stLowPowerRtcStatus.block` | `uint32_t` | `rtc_sleep.c` | blocker bitmask | `lp_update_sleep_request()` | debug |
 | `g_stLowPowerRtcStatus.sleep` | `uint32_t` | `rtc_sleep.c` | HICCUP 连续 STOP 累计睡眠秒 | `rtc_sleep_run_hiccup_cycle()` | SOC 补偿、debug |
 | `g_stLowPowerRtcStatus.last` | `uint32_t` | `rtc_sleep.c` | 最近一次 HICCUP 结束累计秒 | `rtc_sleep_run_hiccup_cycle()` | debug |
 | `g_stLowPowerRtcStatus.cycles` | `uint32_t` | `rtc_sleep.c` | HICCUP 连续 RTC 唤醒次数 | `rtc_sleep_run_hiccup_cycle()` | debug |
 | `g_irq_t` | `enum irqWakeup` | `rtc_sleep.c` | STOP 退出原因 | `rtc_sleep_has_wakeup_exception()`, guess wake | wake callback/debug |
 | `s_sleep.ext_comm` | `uint8_t` | `SleepDeal.c` | 串口外部通信计数 | `SleepDeal_RecordExternalComm()` | `LP_GetBlockReason()` |
-| `s_sleep.boot_sleep` | `uint8_t` | `SleepDeal.c` | 本次启动是否来自 sleep flag | `IsSleepStartUp()` | 其他模块/调试 |
+| `s_sleep.boot_sleep` | `uint8_t` | `SleepDeal.c` | 本次启动是否来自 sleep flag | `SleepDeal_HandleBootSleepStartup()` | 其他模块/调试 |
 | `s_sleep.chg_wake` | `uint8_t` | `SleepDeal.c` | 是否由充电器唤醒 | `SleepDeal_MarkBootFromSleepChargerWakeup()` | 其他模块/调试 |
 
 ## 运行期状态机
@@ -72,8 +72,8 @@ Runtime_RunIoAndPowerTasks
 ```mermaid
 flowchart TD
     A["主循环每轮调用 rtc_sleep()"] --> B{"1s tick?"}
-    B -- "否" --> C["lp_sync(); return"]
-    B -- "是" --> D["lp_select()"]
+    B -- "否" --> C["lp_refresh_status(); return"]
+    B -- "是" --> D["lp_update_sleep_request()"]
     D --> E{"极低/低压 deep 条件成立?"}
     E -- "是且累计到阈值" --> F["LowPower_Request(DEEP_MODE)"]
     E -- "否" --> G["LP_GetBlockReason()"]
@@ -179,18 +179,18 @@ low_power_log_and_commit_sleep(NORMAL/DEEP)
         └── MCU_RESET()
 ```
 
-复位后启动阶段 `AppInit_InitDevice()` 早期调用 `IsSleepStartUp()`：
+复位后启动阶段 `AppInit_InitDevice()` 早期调用 `SleepDeal_HandleBootSleepStartup()`：
 
 ```text
-IsSleepStartUp()
+SleepDeal_HandleBootSleepStartup()
 ├── BootFlag_Read()
 ├── 根据 FLASH_*_SLEEP_VALUE 配置 IO 和唤醒源
-├── do Sys_StopMode() while (!IsSleepWakeupValid())
+├── SleepDeal_WaitStopWakeup()
 ├── IORecover_*Mode()
 └── BootFlag_Clear()
 ```
 
-`IsSleepWakeupValid()` 当前逻辑：
+`SleepDeal_IsWakeupValid()` 当前逻辑：
 
 | 条件 | 行为 |
 | --- | --- |

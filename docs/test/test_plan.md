@@ -77,6 +77,7 @@
 - 使用 `tools/stlink_bms_monitor.ps1 -Mode ReleaseProxy` 做真实低功耗长期监控。
 - 使用 `tools/stlink_bms_monitor.ps1 -Mode DebugProbe` 做 RTC STOP 内部状态诊断，测试结果必须标注“非功耗实测”。
 - RTC 周期唤醒恢复。
+- 低功耗命名/重复循环静态回归：源码无旧 `IsSleepStartUp`、`IsSleepWakeupValid`、`lp_sync/lp_deep/lp_select` 入口残留，reset-sleep 三段 STOP 等待统一走 `SleepDeal_WaitStopWakeup()`。
 - IWDG 长稳。
 - 过放 deep sleep 和接充恢复。
 - STOP 电流实测。
