@@ -1,7 +1,7 @@
 # BMS 项目文档
 
 > 项目: 103-309 BMS (STM32F103 + SH367309)
-> 最后更新: 2026-06-03
+> 最后更新: 2026-06-04
 
 ---
 
@@ -11,10 +11,7 @@
 
 当前专项入口：
 
-- [SOC 模块设计与源码审查](design/soc_design.md)
-- [SOC 无放电静置快降分析](review/soc_rest_fast_drop_analysis_2026-06-03.md)
-- [SOC 源码简化执行记录](review/soc_simplification_candidates_2026-06-02.md)
-- [SOC 测试脚本用途与调用边界](review/soc_test_script_usage_2026-06-03.md)
+- [SOC 模块设计与源码审查](design/soc_design.md) - 当前唯一活跃 SOC 逻辑入口，已合并历史 SOC review/devlog 的有效内容
 - [状态变量净删减专项审计](review/state_variable_audit.md)
 - [顶层变更记录](change_log.md)
 - [顶层测试计划](test_plan.md)

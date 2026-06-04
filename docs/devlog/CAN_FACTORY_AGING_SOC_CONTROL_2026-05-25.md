@@ -1,5 +1,8 @@
 # CAN 老化模式和 SOC 常用控制
 
+文档状态：历史开发记录，SOC 常用控制内容已部分合并至 `docs/design/soc_design.md`
+当前权威入口：SOC 当前逻辑看 `docs/design/soc_design.md`；CAN/老化协议看 `docs/protocol/can_protocol.md` 和相关上位机文档。
+
 ## 背景
 
 CAN 上位机需要把写 SOC 作为常用功能单独展示，同时支持老化模式剩余时间上报，以及开启、关闭、重置老化时间三个独立控制动作。

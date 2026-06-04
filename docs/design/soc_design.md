@@ -3,7 +3,27 @@
 文档状态：已按源码验证
 源码验证日期：2026-06-04
 适用范围：当前 `103 + 309` BMS App SOC 模块
-权威性说明：本文是 SOC 模块当前唯一权威入口；历史 review/devlog 只作追溯，不作为当前行为依据。
+权威性说明：本文是 SOC 模块当前唯一活跃权威入口；历史 review/devlog 只作追溯，不作为当前行为依据。
+
+## 0. 合并范围与阅读规则
+
+本次按当前源码重新核对 SOC 主链路、配置、校准、休眠、存储、调试和测试边界，并把以下 SOC 相关文档的有效内容合并到本文：
+
+| 原文档 | 合并状态 | 当前处理 |
+|---|---|---|
+| `docs/review/soc_current_logic_2026-06-02.md` | 已合并 | 保留为历史参考 |
+| `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md` | 已合并 | 快降排查内容并入本文 low-tail、静置 OCV、显示平滑和风险章节 |
+| `docs/review/soc_simplification_candidates_2026-06-02.md` | 已合并 | 简化记录并入本文已处理问题和后续风险 |
+| `docs/review/soc_test_script_usage_2026-06-03.md` | 已合并 | 测试脚本边界并入本文回归入口 |
+| `docs/devlog/CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md` | 部分合并 | 只合并 SOC 常用控制入口；CAN 老化广播仍属于协议/开发历史 |
+| `docs/design/soc_design.md` | 当前权威 | 后续 SOC 当前逻辑只维护本文 |
+
+阅读规则：
+
+1. 判断当前 SOC 行为时，以本文和当前源码为准。
+2. 旧 review/devlog 可以追溯原因，但不能直接作为当前算法事实。
+3. 如本文与源码冲突，以源码为准，并优先修本文。
+4. 本文只描述当前已实现行为；不把未确认优化建议写成需求。
 
 主要参考源码：
 
@@ -21,16 +41,33 @@
 - `103 + 309/Project/Source/System_Monitor.c`
 - `103 + 309/Project/Source/conf/Project_Config.h`
 
-已执行验证：
+源码证据索引：
 
-- `python3 tools/soc_replay_test.py`：43 项通过。
-- `python3 tools/run_soc_host_c_test.py`：`30mA/0mA/1000mA` 自耗配置和 debug-watch 组合均通过。
-- `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：5 个场景通过。
+| 主题 | 源码入口 |
+|---|---|
+| 启动初始化 | `AppInit.c::AppInit_InitDevice()` -> `InitData_SOC()` |
+| 200ms 调度 | `System_Init.c::TIM3_IRQHandler()`、`SysTime_Post10msTick()`、`SysTime_Take200msTaskPeriod()` |
+| AFE/SOC 主链 | `Runtime.c::Runtime_RunFrontTasks()`、`DataDeal.c::App_AFEGet()`、`SOC.c::App_SOC()` |
+| Type-C 等效电流 | `SOC.c::SOC_GetTypeCBatEquivCurrentA10()`、`SOC_GetNetCurrentForCalc()` |
+| 核心状态机 | `SocEnhance.c::SOC_IntEnhance_Ctrl()` |
+| 积分与自耗 | `SocEnhance.c::soc_integrate_current_ma()`、`soc_integrate()` |
+| 满电/低端/静置校准 | `soc_apply_full_empty()`、`soc_low_tail_config()`、`soc_update_rest_timer()` |
+| RTC STOP 补偿 | `rtc_sleep_port.c::RtcSleep_PortApplySocRtcRest()`、`SocEnhance.c::SOC_ApplyRtcRelaxationCompensation()` |
+| Flash snapshot | `SocEnhance.c::soc_save()`、`soc_load_or_default()`、`Flash.c::StorageFlash_LoadSocData()`、`StorageFlash_SaveSocData()` |
+| 对外发布 | `soc_publish()`、`SOC_PublishReportData()`、`LedBar.c`、`Can_HDX.c`、`CanFeidaoFrames.c` |
+| 上位机控制 | `Sci_Upper.c::Sci_WrRegs_0x10_SocElement()`、`Sci_WrReg_0x06_SetSocOnce()` |
+| Debug Watch | `SocEnhance.h::SOC_DEBUG_WATCH`、`SystemDebug.c::SystemDebug_UpdateSnapshot()` |
+
+本次文档合并后已执行验证：
+
 - `git diff --check`：通过。
-- `python3 tools/project_check.py --quiet`：当前 checkout 为历史基线失败 `99 OK / 1 warning / 39 errors`；SOC/ADC/DataDeal 新门禁未见本轮新增失败。
+- `python3 tools/soc_replay_test.py`：43 项通过。
+- `python3 tools/project_check.py --quiet`：当前 checkout 为历史基线失败 `103 OK / 1 warning / 13 errors`；失败项为既有缺文件、非 UTF-8、历史文档引用和历史审计门禁。
 
 未验证事项：
 
+- `python3 tools/run_soc_host_c_test.py`：当前被 `Project_BuildGuard.h` release/debug 宏门禁阻断，错误为 `Debug watch, system debug and IRQ debug must stay disabled for release build profile`；本次文档合并未修改该工具或构建宏。
+- `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：本次未执行。
 - 未执行 Keil `FD_Release` 编译。
 - 未做真板充放电、RTC STOP 功耗、CAN/Modbus 在线读取、Keil watch 实测。
 
@@ -219,6 +256,8 @@ Type-C 输出电流不直接使用 ADC mA 作为电池放电电流，而是按�
 | startup OCV | snapshot 无效且电压校准允许 | 用 `VCellMin` 查 OCV 表 |
 | default | snapshot 无效且电压校准不允许 | 使用 `SOC_DEFAULT_STARTUP_PERCENT = 60` |
 
+启动时 `SOC_LoadConfigData()` 会把 `OtherElement.u16Soc_Ah/u16Soc_Cycle_times/u16Soc_V_100/u16Soc_V_0` 装载到 `SOC_Enhance_Element`。当前化学体系由 `PROJECT_CFG_BAT_CHEMISTRY` 编译期选择；`OtherElement.u16Soc_TableSelect` 保留为协议兼容字段，不参与算法选表。
+
 ### 8.2 满电锚点
 
 满电锚点只在非放电模式执行。满足电压、压差和持续时间后，每次最多上修 1%，直到 100%，并置位 `full_anchor`。充电积分在未锚定前最高压到 99%，避免未确认满电时直接发布 100%。
@@ -311,6 +350,16 @@ SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max);
 
 命令路径使用 `soc_publish(1U)`，会强制显示同步；这与普通自动校准的显示平滑不同。
 
+上位机/协议入口：
+
+| 入口 | 当前行为 |
+|---|---|
+| Modbus 多寄存器写 SOC 参数区 | `Sci_WrRegs_0x10_SocElement()` 转入 `OtherElement` 写入；覆盖 SOC 参数范围时先 `InitData_SOC()`，再 `SOC_RequestCapacityReset()` |
+| 单寄存器 `SetSocOnce` | `Sci_WrReg_0x06_SetSocOnce()` 校验 `0..100` 后调用 `SOC_RequestSetOnce()` |
+| CAN App 状态查询 | `Can_HDX.c` 读取 `g_stCellInfoReport.SocElement.u16Soc/u16Soh` |
+| 飞道周期 SOC 帧 | `CanFeidaoFrames.c` 读取已发布显示 SOC |
+| LedBar | `LedBar.c` 读取 `g_stCellInfoReport.SocElement.u16Soc` 并限幅显示 |
+
 ## 9. 存储与休眠
 
 Flash snapshot 采用 `STORAGE_FLASH_SOC_DATA` V2：
@@ -400,3 +449,10 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | 仓库检查 | `python3 tools/project_check.py --quiet` |
 | 量产构建 | `./tools/bms_dev_workflow.ps1 -Mode build -Target FD_Release` |
 | 上板协议 | `COM4/19200/slave=1` 读 `0xD000/0xD300`，CAN 抓 `0x14F80200+index` |
+
+测试结论表达必须分层：
+
+1. `soc_replay_test.py` 只能说明 Python 模型与预期表一致，不等价于真实 C 固件验证。
+2. `run_soc_host_c_test.py` 编译并运行真实 `SOC.c/SocEnhance.c`，但外设、Flash、ADC、RTC、CAN 都是 host stub。
+3. `project_check.py` 是仓库静态门禁，不是 SOC 功能测试；当前 checkout 若存在历史失败，需要按基线解释。
+4. 出货判断必须补 Keil `FD_Release`、真板充放电、RTC STOP、CAN/Modbus 在线读取和 Keil Watch。

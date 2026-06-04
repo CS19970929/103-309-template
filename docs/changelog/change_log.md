@@ -6,6 +6,17 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 SOC 文档合并为单一活跃入口
+
+文档变更：
+- `docs/design/soc_design.md` 增加合并范围、源码证据索引、上位机/协议控制入口和测试结论表达规则。
+- `docs/README.md`、`docs/INDEX.md` 的 SOC 快速入口收敛为 `docs/design/soc_design.md`。
+- SOC 快降、简化、测试脚本和 CAN 老化/SOC 常用控制旧文档标记为历史参考。
+
+边界：
+- 本次只改文档，不修改源码。
+- 当前 SOC 逻辑、快降排查、简化记录和测试边界统一以 `docs/design/soc_design.md` 为活跃权威文档。
+
 ## 2026-06-04 CAN 周期 TX 与 RTC idle 解耦
 
 源码变更：

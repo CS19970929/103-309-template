@@ -1,8 +1,10 @@
 # SOC 源码简化执行记录
 
-文档状态：已按当前源码更新
+文档状态：历史参考，已合并至 `docs/design/soc_design.md`
 源码验证日期：2026-06-04
 当前权威入口：`docs/design/soc_design.md`
+
+归档说明：本文保留 SOC 简化执行脉络；当前源码事实、已删除项、风险与测试入口统一维护在 `docs/design/soc_design.md`。
 
 ## 1. 本轮目标
 

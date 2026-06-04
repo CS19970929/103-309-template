@@ -1,7 +1,10 @@
 # SOC 测试脚本用途与调用边界
 
-> 文档状态：已按当前脚本和源码核对
+> 文档状态：历史参考，已合并至 `docs/design/soc_design.md`
 > 源码验证日期：2026-06-03
+> 当前权威入口：`docs/design/soc_design.md`
+
+> 归档说明：本文保留测试脚本使用边界的原始说明；当前 SOC 回归入口和测试结论表达规则统一维护在 `docs/design/soc_design.md`。
 > 适用范围：`tools/soc_replay_test.py`、`tools/run_soc_host_c_test.py`、`tools/soc_visual_report.py`、`tools/project_check.py`
 
 ## 1. 结论

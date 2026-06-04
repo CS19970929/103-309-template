@@ -1,9 +1,11 @@
 # SOC 无放电静置快降分析
 
-文档状态：已按源码验证
+文档状态：历史参考，已合并至 `docs/design/soc_design.md`
 源码验证日期：2026-06-04
 当前权威入口：`docs/design/soc_design.md`
 主要参考源码：`SocEnhance.c`、`SocEnhance.h`、`rtc_sleep.c`、`rtc_sleep_port.c`、`conf/Project_Config.h`
+
+归档说明：本文保留 2026-06-03 的专项排查脉络；当前 SOC 快降判断、low-tail、静置 OCV、显示平滑和风险边界统一维护在 `docs/design/soc_design.md`。
 
 ## 1. 结论
 

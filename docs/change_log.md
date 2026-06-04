@@ -1,5 +1,16 @@
 # 变更记录
 
+## 2026-06-04 SOC 文档合并为单一活跃入口
+
+文档变更：
+- `docs/design/soc_design.md` 增加合并范围、源码证据索引、上位机/协议控制入口和测试结论表达规则。
+- `docs/README.md`、`docs/INDEX.md` 的 SOC 快速入口收敛为 `docs/design/soc_design.md`。
+- `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`、`docs/review/soc_simplification_candidates_2026-06-02.md`、`docs/review/soc_test_script_usage_2026-06-03.md` 和 `docs/devlog/CAN_FACTORY_AGING_SOC_CONTROL_2026-05-25.md` 标记为历史参考。
+
+当前结论：
+- 当前 SOC 逻辑、快降排查、简化记录和测试边界统一以 `docs/design/soc_design.md` 为活跃权威文档。
+- 本次不修改源码，不改变 SOC 算法、协议字段、Flash 布局、低功耗路径和显示策略。
+
 ## 2026-06-04 CAN 周期 TX 不再阻塞 RTC idle
 
 源码变更：
