@@ -6,6 +6,16 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 CAN 周期 TX 与 RTC idle 解耦
+
+源码变更：
+- `Can_HDX.c/.h` 新增 `Can_HDX_TransmitPeriodic()`，TX queue item 增加来源标记。
+- `CanFeidaoFrames.c` 的 1000ms/5000ms 周期广播改走周期发送入口；CAN ID、payload、周期 mask 不变。
+- `Can_IsBusy()` 低功耗语义收窄：CAN App 请求/ACK/read-block、命令队列、未归属硬件发送和 RX 活动阻塞 STOP；普通周期广播 TX pending 不再反复清零 RTC idle。
+
+验证边界：
+- 需上板验证无 CAN 对端/no-ACK 时可重新进入 RTC HICCUP，接入 CAN 对端后运行态周期广播恢复。
+
 ## 2026-06-04 应用层宏配置第一批收敛
 
 源码变更：

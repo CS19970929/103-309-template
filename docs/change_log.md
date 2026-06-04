@@ -1,5 +1,24 @@
 # 变更记录
 
+## 2026-06-04 CAN 周期 TX 不再阻塞 RTC idle
+
+源码变更：
+- `Can_HDX.c/.h`：新增 `Can_HDX_TransmitPeriodic()`，TX 队列项增加来源标记，区分普通周期广播和请求类发送。
+- `CanFeidaoFrames.c`：1000ms/5000ms 飞道周期广播改走 `Can_HDX_TransmitPeriodic()`；CAN ID、payload、周期 mask 不变。
+- `Can_IsBusy()` 的低功耗判定收窄为请求类 TX、CAN App 命令队列、read-block stream、未归属硬件发送和 RX 活动阻塞；普通周期广播 TX pending 不再反复置 `LP_BLOCK_COMM`、清零 `g_stLowPowerRtcStatus.idle`。
+- `Can_PeekBusy()` 仍保留完整 busy 观察语义，debug/heartbeat 可以继续看到周期 TX pending。
+
+当前结论：
+- 无 ACK 或无 CAN 对端时，周期广播队列不会长期阻止 RTC idle 累计；真正进入 STOP 前仍由 `Can_PrepareSleep()` 取消当前 TX、清队列并关闭 `GPIO_CMNT_EN`。
+- CAN App ACK、READ_BLOCK 分包、命令队列和 RX 活动仍按通信忙处理，避免请求响应被 STOP 截断。
+- 本次不修改 CAN ID、payload、Modbus/CAN App 协议、RTC wake 地址、IAP/Bootloader 地址、保护条件和硬件初始化参数。
+
+验证边界：
+- `git diff --check`：通过。
+- `cc -fsyntax-only`：`Can_HDX.c`、`CanFeidaoFrames.c` 在临时 Debug profile 和强制 Release profile 下均通过。
+- `python3 tools/project_check.py --quiet`：当前基线为 `103 OK / 1 warning / 13 errors`，失败项为仓库既有缺文件、编码和历史审计门禁。
+- 需上板确认 no-ACK/无对端时 `g_stLowPowerRtcStatus.idle` 可累计到 `idleMax` 并进入 HICCUP，接入 CAN 对端后周期广播恢复。
+
 ## 2026-06-04 Debug 调试实现与 Release 量产隔离
 
 源码变更：

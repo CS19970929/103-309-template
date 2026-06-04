@@ -102,6 +102,7 @@
 | REQ-CAN-002 | CAN 应用命令必须支持读写 Modbus 寄存器、状态查询、IAP、老化控制 | `Can_HDX.c:29-54`, `Can_HDX.c:609-775` | `Can_HDX.c`, `Sci_Upper.c` | 标准帧 0x60/0x61，A5/5A + CRC | 是 | 是 | 是 | 是 | 是 | MUST_KEEP；写权限与 IAP 必须受控 |
 | REQ-CAN-003 | RTC 休眠中不再周期广播 CAN | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 睡前 `Can_PrepareSleep()` 关闭 CMNT；RTC 周期唤醒不调用 CAN 服务；唤醒恢复后 `InitCan()` 打开 CMNT | 是 | 是 | 否 | 是 | 是 | CHANGE_NEEDED；用户已确认 |
 | REQ-CAN-004 | CAN bus-off 恢复交给 bxCAN ABOM | `Can_HDX.c`, `InitCan_CAN1()` | `Can_HDX.c` | `CAN_ABOM=ENABLE`；软件 bus-off 状态机已删除；debug 只读 ESR BOFF | 是 | 是 | 间接 | 否 | 是 | CHANGE_NEEDED；用户已确认 |
+| REQ-CAN-005 | 周期广播 TX pending 不应长期阻止 RTC idle 累计 | `Can_HDX.c`, `CanFeidaoFrames.c`, `rtc_sleep.c` | `Can_HDX.c`, `CanFeidaoFrames.c`, `rtc_sleep.c` | TX 队列标记周期/请求来源；周期广播走 `Can_HDX_TransmitPeriodic()`；`Can_IsBusy()` 只让请求类 TX/read-block/cmd/RX 阻塞 | 否 | 否 | 是 | 是 | 是 | KEEP_BUT_REFACTOR；已按用户“开始”执行，需上板验证 |
 
 ## 8. LED / RTC 低功耗 / IWDG / IAP / 客户需求
 

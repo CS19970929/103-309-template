@@ -15,6 +15,9 @@
 
 #define FEIDAO_CAN_TX_QUEUE_SIZE ((UINT8)32U)
 #define FEIDAO_CAN_APP_CMD_QUEUE_SIZE ((UINT8)4U)
+#define FEIDAO_CAN_TX_SOURCE_PERIODIC ((UINT8)0U)
+#define FEIDAO_CAN_TX_SOURCE_REQUEST ((UINT8)1U)
+#define FEIDAO_CAN_TX_SOURCE_NONE ((UINT8)0xFFU)
 
 #define FEIDAO_CAN_APP_CMD_ID ((UINT16)0x60U)
 #define FEIDAO_CAN_APP_ACK_ID ((UINT16)0x61U)
@@ -49,6 +52,7 @@
 typedef struct
 {
 	CanTxMsg frame;
+	UINT8 source;
 } FeidaoCanTxItem;
 
 typedef struct FEIDAO_CAN_TX_RUNTIME_TAG
@@ -58,6 +62,7 @@ typedef struct FEIDAO_CAN_TX_RUNTIME_TAG
 	UINT8 tail;
 	UINT8 count;
 	UINT8 mailbox;
+	UINT8 mailbox_source;
 	UINT32 start_tick;
 } FeidaoCanTxRuntime;
 
@@ -92,6 +97,7 @@ static FeidaoCanTxRuntime s_tx = {
 	0U,
 	0U,
 	CAN_TxStatus_NoMailBox,
+	FEIDAO_CAN_TX_SOURCE_NONE,
 	0U
 };
 static FeidaoCanRuntime s_runtime;
@@ -112,9 +118,10 @@ static void feidao_can_power_off(void);
 static void feidao_can_clear_tx_done(UINT8 mailbox);
 static void feidao_can_cancel_tx(UINT8 mailbox);
 static void feidao_can_abort_tx(void);
-static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame);
-static UINT8 feidao_can_dequeue_tx(CanTxMsg *frame);
+static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame, UINT8 source);
+static UINT8 feidao_can_dequeue_tx(FeidaoCanTxItem *item);
 static void feidao_can_clear_tx_queue(void);
+static UINT8 feidao_can_queue_has_request(void);
 static void feidao_can_service_tx(UINT32 now_tick);
 static void feidao_can_queue_periodic_mask(UINT16 mask);
 static void feidao_can_schedule_periodic(UINT32 now_tick);
@@ -170,6 +177,7 @@ static void feidao_can_abort_tx(void)
 	{
 		feidao_can_cancel_tx(s_tx.mailbox);
 		s_tx.mailbox = CAN_TxStatus_NoMailBox;
+		s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 	}
 	feidao_can_clear_tx_queue();
 }
@@ -191,7 +199,7 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 	feidao_can_clear_tx_done(mailbox);
 }
 
-static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame)
+static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame, UINT8 source)
 {
 	if ((frame == 0) || (frame->DLC > 8U) || (s_tx.count >= FEIDAO_CAN_TX_QUEUE_SIZE))
 	{
@@ -199,6 +207,7 @@ static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame)
 	}
 
 	s_tx.queue[s_tx.tail].frame = *frame;
+	s_tx.queue[s_tx.tail].source = source;
 	s_tx.tail++;
 	if (s_tx.tail >= FEIDAO_CAN_TX_QUEUE_SIZE)
 	{
@@ -208,14 +217,14 @@ static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame)
 	return 1U;
 }
 
-static UINT8 feidao_can_dequeue_tx(CanTxMsg *frame)
+static UINT8 feidao_can_dequeue_tx(FeidaoCanTxItem *item)
 {
-	if ((frame == 0) || (s_tx.count == 0U))
+	if ((item == 0) || (s_tx.count == 0U))
 	{
 		return 0U;
 	}
 
-	*frame = s_tx.queue[s_tx.head].frame;
+	*item = s_tx.queue[s_tx.head];
 	s_tx.head++;
 	if (s_tx.head >= FEIDAO_CAN_TX_QUEUE_SIZE)
 	{
@@ -232,9 +241,31 @@ static void feidao_can_clear_tx_queue(void)
 	s_tx.count = 0U;
 }
 
+static UINT8 feidao_can_queue_has_request(void)
+{
+	UINT8 index = s_tx.head;
+	UINT8 remaining = s_tx.count;
+
+	while (remaining != 0U)
+	{
+		if (s_tx.queue[index].source != FEIDAO_CAN_TX_SOURCE_PERIODIC)
+		{
+			return 1U;
+		}
+		index++;
+		if (index >= FEIDAO_CAN_TX_QUEUE_SIZE)
+		{
+			index = 0U;
+		}
+		remaining--;
+	}
+
+	return 0U;
+}
+
 static void feidao_can_service_tx(UINT32 now_tick)
 {
-	CanTxMsg frame;
+	FeidaoCanTxItem item;
 	UINT8 status;
 
 	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
@@ -244,32 +275,40 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		{
 			feidao_can_clear_tx_done(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
+			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 		}
 		else if (status == CAN_TxStatus_Failed)
 		{
 			feidao_can_clear_tx_done(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
+			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 		}
 		else if (feidao_can_tick_elapsed(now_tick, s_tx.start_tick, FEIDAO_CAN_TX_TIMEOUT_TICKS))
 		{
 			feidao_can_cancel_tx(s_tx.mailbox);
 			s_tx.mailbox = CAN_TxStatus_NoMailBox;
+			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 		}
 	}
 
 	if ((s_tx.mailbox == CAN_TxStatus_NoMailBox) &&
 		(s_tx.count != 0U))
 	{
-		(void)feidao_can_dequeue_tx(&frame);
-		s_tx.mailbox = CAN_Transmit(CAN1, &frame);
+		(void)feidao_can_dequeue_tx(&item);
+		s_tx.mailbox = CAN_Transmit(CAN1, &item.frame);
 		if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
 		{
+			s_tx.mailbox_source = item.source;
 			s_tx.start_tick = now_tick;
+		}
+		else
+		{
+			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 		}
 	}
 }
 
-UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
+static UINT8 feidao_can_transmit(CanTxMsg *Msg, UINT8 source)
 {
 	CanTxMsg frame;
 
@@ -285,7 +324,17 @@ UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
 	}
 
 	/* Return 0 when the frame is queued; hardware ACK is checked later. */
-	return feidao_can_enqueue_tx(&frame) ? 0U : CAN_TxStatus_NoMailBox;
+	return feidao_can_enqueue_tx(&frame, source) ? 0U : CAN_TxStatus_NoMailBox;
+}
+
+UINT8 Can_HDX_Transmit(CanTxMsg *Msg)
+{
+	return feidao_can_transmit(Msg, FEIDAO_CAN_TX_SOURCE_REQUEST);
+}
+
+UINT8 Can_HDX_TransmitPeriodic(CanTxMsg *Msg)
+{
+	return feidao_can_transmit(Msg, FEIDAO_CAN_TX_SOURCE_PERIODIC);
 }
 
 static void feidao_can_queue_periodic_mask(UINT16 mask)
@@ -790,6 +839,7 @@ static void InitCan_CAN1(void)
 void InitCan(void)
 {
 	s_tx.mailbox = CAN_TxStatus_NoMailBox;
+	s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
 	s_runtime.schedule_init = 0U;
 	s_app.enter_iap_delay_ticks = 0U;
 	s_app.read_block_active = 0U;
@@ -823,6 +873,33 @@ static UINT8 can_has_pending_work(void)
 	return ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME) ? 1U : 0U;
 }
 
+static UINT8 can_has_sleep_blocking_work(void)
+{
+	if (feidao_can_queue_has_request() != 0U)
+	{
+		return 1U;
+	}
+	if ((s_tx.mailbox != CAN_TxStatus_NoMailBox) &&
+		(s_tx.mailbox_source != FEIDAO_CAN_TX_SOURCE_PERIODIC))
+	{
+		return 1U;
+	}
+	if (s_app.read_block_active != 0U)
+	{
+		return 1U;
+	}
+	if (s_app.cmd_count != 0U)
+	{
+		return 1U;
+	}
+	if ((s_tx.mailbox == CAN_TxStatus_NoMailBox) &&
+		((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME))
+	{
+		return 1U;
+	}
+	return 0U;
+}
+
 UINT8 Can_PeekBusy(void)
 {
 	if (can_has_pending_work() != 0U)
@@ -834,7 +911,7 @@ UINT8 Can_PeekBusy(void)
 
 UINT8 Can_IsBusy(void)
 {
-	if (can_has_pending_work() != 0U)
+	if (can_has_sleep_blocking_work() != 0U)
 	{
 		return 1U;
 	}

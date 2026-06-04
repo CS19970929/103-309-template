@@ -129,7 +129,7 @@ Runtime_RunOnce()
 
 - 充电电流 `> 10`。
 - 放电电流 `> 10`。
-- `Sci_IsAnyPortBusy()` 或 `Can_IsBusy()`。低功耗路径使用 `Can_IsBusy()` 消费并确认 CAN 接收活动；debug/heartbeat 只使用 `Can_PeekBusy()`。
+- `Sci_IsAnyPortBusy()` 或 `Can_IsBusy()`。低功耗路径使用 `Can_IsBusy()` 消费并确认 CAN 接收活动；debug/heartbeat 只使用 `Can_PeekBusy()`。2026-06-04 起，普通周期广播 TX pending 不再作为 RTC idle 阻塞条件，CAN App 请求/ACK/read-block 和 RX 活动仍阻塞。
 - `GPIO_MCU_WK` active。
 - `StorageFlash_IsBusy()` 或 `u8FlashUpdateE2PROM != 0`。
 - `u8FlashUpdateFlag != 0`。
@@ -209,7 +209,7 @@ IsSleepStartUp()
 | 对象 | 当前行为 | 判断 |
 |---|---|---|
 | CAN/CMNT | 运行态 `InitCan()` 打开 `GPIO_CMNT_EN`；睡前 `Can_PrepareSleep()` 取消 TX、清命令队列、停 read-block、关闭 CMNT | MUST_KEEP，功耗收益明确 |
-| CAN 周期广播 | 运行态 1000ms/5000ms 广播；RTC STOP 周期唤醒不主动广播 | 已确认策略 |
+| CAN 周期广播 | 运行态 1000ms/5000ms 广播；RTC STOP 周期唤醒不主动广播；周期广播 TX pending 不再清零 RTC idle，入睡前可由 `Can_PrepareSleep()` 丢弃 | 已确认策略 |
 | ADC/TIM2/DMA | STOP 前 `ADC_StopForLowPower()`；唤醒后 `InitADC()` | MUST_KEEP |
 | TIM3 | `Sys_StopMode()` 前关闭，唤醒恢复 `InitTimer()` | MUST_KEEP |
 | TIM4/LED | LED display active 阻塞低功耗；睡前 `LedBar_PrepareForStop()` 拉低 Charlieplexing 引脚 | MUST_KEEP，但显示窗口策略需确认 |
@@ -276,6 +276,7 @@ IsSleepStartUp()
 | LP-REQ-012 | Release 是否必须关闭 DBGMCU 低功耗调试保持 | `System_Init.c:21-34`, `docs/review/rtc_sleep_low_power_requirement_confirmation_2026-05-27.md` | 当前 Release 未定义 `__EnableLowPowerDebug__` 时会清除 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP | 调试 STOP 时需显式打开宏，不能用于功耗实测 | MUST_KEEP | 是否继续保持 Release 关闭低功耗调试保持？ | 保持当前修复 | 已确认 |
 | LP-REQ-013 | `PROJECT_CFG_WDOG_ENABLE` 是否必须真实门控 IWDG | `Project_Config.h:57-59`, `AppInit.c:32`, `System_Init.c:37-52` | 当前默认 1；`Init_IWDG()` 和 `IWDG_Feed()` 已按宏门控；RTC wake 安全窗口与宏一致 | IWDG 开启会限制 RTC 周期，影响极低功耗目标 | KEEP_BUT_REFACTOR | 是否接受量产稳定优先、默认启用 IWDG？ | 接受当前处理；后续只在实测功耗不足时重新评估 | 本轮已处理 |
 | LP-REQ-014 | sleep 阻塞原因是否需要保留 bitmask 可观测性 | `rtc_sleep.h`, `rtc_sleep.c`, `SystemDebug.c:537-542` | `g_dbg.lp.block_mask` 由 `LP_GetBlockReason()` 现算，`g_stLowPowerRtcStatus.blockReason` 保留粗粒度映射；老化使用粗粒度 `LOW_POWER_RTC_BLOCK_FACTORY_AGING`，不加入通用 bitmask，避免被误解为阻塞所有 sleep | 排查“为什么不睡”仍有详细 bitmask，老化原因看 `blockReason` | KEEP_BUT_REFACTOR | 后续是否允许进一步删除粗粒度未触发 reason？ | 保留当前 bitmask，未确认的 AFE reason 确认后再删或接入 | 本轮已合并到 `rtc_sleep.c/h` |
+| LP-REQ-017 | 周期 CAN 广播不能在无 ACK 或总线断开时长期阻止 RTC idle 累计 | `Can_HDX.c`, `CanFeidaoFrames.c`, `rtc_sleep.c` | TX 队列已标记来源；周期广播走 `Can_HDX_TransmitPeriodic()`，`Can_IsBusy()` 只让请求类 TX、命令队列、read-block、未归属硬件发送和 RX 活动阻塞 | 若错误忽略请求类 TX，会丢 ACK；若继续让周期帧阻塞，RTC 难进入 STOP | KEEP_BUT_REFACTOR | 是否保持“周期广播可睡前丢弃，请求/ACK/read-block 必须阻塞”的边界？ | 已按本轮问题执行；需上板验证无设备时可重新进入 RTC | 已按用户“开始”执行 |
 | LP-REQ-015 | `LP_EnterStop/LP_BeforeSleep/LP_AfterWakeup/LP_Task` 这组 wrapper 是否保留 | `rg` 仅见旧文档引用，源码主路径不调用 | 已删除这些 wrapper，只保留真实 `Runtime_RunOnce()->rtc_sleep()` 路径 | 主路径更直接；若外部工具依赖旧 API 需同步改工具 | 已执行净删减 | 是否接受后续继续按“无调用、无协议、无硬件行为影响”净删减？ | 接受当前处理，后续继续白名单小批次 | 本轮已处理 |
 | LP-REQ-016 | RTC SOC 临时缓存和访问 API 是否保留 | `rg` 仅见旧文档引用，源码无 `get_rtc_soc()/set_rtc_soc()` 消费者 | 已删除 `s_u8RtcSoc`、`get_rtc_soc()`、`set_rtc_soc()`；保留 `SOC_ApplyRtcRelaxationCompensation()` 调用 | 不再保存无消费者返回值，SOC 休眠补偿行为不变 | 已执行净删减 | 是否接受后续删除“只保存返回值但没有消费者”的变量？ | 接受，前提是保留真实副作用 | 本轮已处理 |
 

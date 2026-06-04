@@ -3,11 +3,12 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`rtc_sleep.c`, `rtc_sleep.h`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
-最后更新时间：2026-06-02
+最后更新时间：2026-06-04
 未确认事项：factory aging / AFE not idle 是否阻塞 sleep、`OtherElement` 普通休眠和 RTC 参数是否仍为有效需求。
 
 ## 2026-06-02 源码复核补充
 
+- 2026-06-04 补充：`Can_IsBusy()` 的低功耗语义已从“所有 CAN TX pending 都阻塞”收窄为“CAN App 请求/ACK/read-block、未归属硬件发送、RX 活动阻塞”；普通 1000ms/5000ms 周期广播 pending 不再清零 RTC idle 计数，真正入睡前仍由 `Can_PrepareSleep()` 取消 TX、清队列并关闭 CMNT。
 - 当前源码已删除 `conf.h` 中无条件 `__EnableLowPowerDebug__`；`EnableLowPowerDebug()` 在未显式定义该宏时会清除 `DBGMCU_CR_DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP`，符合 Release 功耗实测边界。
 - 当前 `PROJECT_CFG_WDOG_ENABLE` 默认为 `1`；`Init_IWDG()` 和 `IWDG_Feed()` 已按该宏门控，RTC wake period 安全窗口与实际 IWDG 行为一致。
 - `rtc_sleep()` 只实际使用 `OtherElement.u16Sleep_Vlow` 和 `OtherElement.u16Sleep_TimeVlow`；`u16Sleep_VNormal`、`u16Sleep_TimeNormal`、`u16Sleep_RTC_WakeUpTime`、`u16Sleep_TimeRTC` 当前未进入主判断。
@@ -56,7 +57,7 @@ SleepDeal_Continue()
 当前 `LP_GetBlockReason()` 在 `rtc_sleep.c` 内现算，会阻塞 sleep 的条件：
 
 - 充/放电电流 > 10mA。
-- SCI/CAN busy。低功耗判断使用会确认 CAN 接收活动的 `Can_IsBusy()`，debug/heartbeat 使用无副作用的 `Can_PeekBusy()`。
+- SCI/CAN busy。低功耗判断使用会确认 CAN 接收活动的 `Can_IsBusy()`，debug/heartbeat 使用无副作用的 `Can_PeekBusy()`；普通周期广播 TX pending 不作为 RTC idle 阻塞条件，CAN App 请求/ACK/read-block 和 RX 活动仍阻塞。
 - MCU_WK/key active。
 - Flash busy 或待写参数。
 - IAP pending。
@@ -108,7 +109,8 @@ HICCUP STOP 醒来后：
 
 | 风险 | 建议 |
 |---|---|
-| CAN busy 被打断导致协议半包 | 保留 `Can_IsBusy()` 阻塞 STOP；debug 和 heartbeat 使用 `Can_PeekBusy()`，不能消费 CAN 接收活动 |
+| CAN busy 被打断导致协议半包 | `Can_IsBusy()` 只让请求/ACK/read-block/RX 活动阻塞 STOP；普通周期广播 pending 可在睡前丢弃，debug 和 heartbeat 使用 `Can_PeekBusy()`，不能消费 CAN 接收活动 |
+| 周期广播无 ACK 导致难进 RTC | 周期帧通过 `Can_HDX_TransmitPeriodic()` 入队，低功耗 idle 不再被普通周期队列反复清零；入睡时 `Can_PrepareSleep()` 清队列 |
 | IWDG 开启后 RTC 周期最多 10 秒 | 当前以稳定优先，量产默认启用 IWDG；若后续为极低功耗拉长 RTC 周期，必须同步评估 IWDG 策略 |
 | DBGMCU 低功耗调试保持只能显式打开 | 量产功耗实测必须确认 DBG_SLEEP/STOP/STANDBY/IWDG_STOP/WWDG_STOP 为 0；调试 STOP 时再临时打开 |
 | fault 全部阻塞可能与过放 deep sleep 冲突 | 按 fault 类型分级确认 |

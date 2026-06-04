@@ -523,6 +523,7 @@ I_out(mA) = ADC_mV × 1000 / 10mΩ
 CAN 模块实现:
 - 硬件 CAN1 驱动 (STM32F103 bxCAN)
 - 软件 TX 队列 (32条)
+- TX 队列区分周期广播和请求类发送
 - 应用层命令队列 (4条)
 - CAN 收发器电源管理 (GPIO_CMNT_EN)
 - 运行态固定周期广播调度
@@ -541,6 +542,7 @@ CAN 模块实现:
 | `queue[32]` | 发送队列 |
 | `head/tail/count` | 环形队列管理 |
 | `mailbox` | 当前使用的硬件邮箱 (0-2 或 NoMailBox) |
+| `mailbox_source` | 当前硬件邮箱发送来源，区分周期广播和请求类发送 |
 | `start_tick` | 当前发送开始 tick |
 
 **FeidaoCanRuntime** (CAN 状态):
@@ -576,6 +578,7 @@ CAN 模块实现:
 
 - `Can_PrepareSleep()` 清 TX、清 App 命令、停止 block stream，并关闭 CMNT。
 - RTC HICCUP 周期唤醒后不主动发送 CAN。
+- 普通周期广播 TX pending 不阻塞 RTC idle；CAN App 请求/ACK/read-block、未归属硬件发送和 RX 活动仍由 `Can_IsBusy()` 阻塞低功耗。
 - 唤醒恢复后由 `InitRunAfterStopWakeup()` 调 `InitCan()` 重新打开 CMNT，通信回到运行态。
 
 ### 6.8 应用层 CAN 命令 (0x60→0x61)
@@ -600,8 +603,9 @@ CAN 模块实现:
 | `InitCan()` | CAN 硬件+GPIO+NVIC+过滤器全部重新初始化 |
 | `App_Can()` | CAN 主服务: 超时检测→调度周期帧→处理应用命令→服务TX→流式读取→IAP延时 |
 | `Can_HDX_Transmit()` | 外部发送接口, 入队 |
+| `Can_HDX_TransmitPeriodic()` | 周期广播发送接口, 入队并标记为可在睡前丢弃 |
 | `Can_PeekBusy()` | 无副作用检查 CAN 是否忙，供 debug/heartbeat 使用 |
-| `Can_IsBusy()` | 检查 CAN 是否忙；低功耗路径用它确认并消费 CAN 接收活动 |
+| `Can_IsBusy()` | 检查低功耗阻塞型 CAN busy；确认并消费 CAN 接收活动，但不让普通周期广播 TX pending 清零 RTC idle |
 | `Can_PrepareSleep()` | 休眠前清理 |
 
 ---

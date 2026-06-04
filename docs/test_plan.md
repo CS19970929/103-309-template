@@ -100,6 +100,7 @@
 | 低压 deep | 单体低于强制/参数低压阈值且充电电流小于限制 | 低压计时优先于普通 block，达到阈值后请求 `DEEP_MODE` |
 | 阻塞位图 | 分别制造电流、通信、按键、Flash、fault、LED、老化 | `g_stLowPowerRtcStatus.block` 对应 `LP_BLOCK_*` 位被置位，`idle` 清零 |
 | 外部通信边沿 | 改变 `RTC_ExtComCnt` | 只通过 `LP_GetBlockReason()` 消费通信变化，`SystemDebug` 快照不提前清边沿 |
+| 周期 CAN TX pending | 不接 CAN 对端或制造 no-ACK，观察 `s_tx.count` 与 `g_stLowPowerRtcStatus.idle/block` | 普通 1s/5s 周期广播 pending 不反复置 `LP_BLOCK_COMM`，达到 `idleMax` 后能进入 HICCUP；接入 CAN 对端后周期广播恢复 |
 | 工厂老化 | 老化 running | 只阻塞 HICCUP RTC STOP；低压 deep 和外部 `DEEP_MODE/NORMAL_MODE` reset sleep 仍可执行 |
 | ST-Link 监控 | `tools/stlink_bms_monitor.ps1 -Count 1` | 能按新 8 word 布局解析 `RtcMode/RtcBlock/RtcElapsedSeconds/RtcCycles` |
 

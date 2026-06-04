@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/Can_HDX.c`, `103 + 309/Project/Source/Can_HDX.h`, `103 + 309/Project/Source/CanFeidaoFrames.c`, `103 + 309/Project/Source/CanFeidaoFrames.h`, `tools/can_bms_host.py`
-最后更新时间：2026-06-02
+最后更新时间：2026-06-04
 未确认事项：飞道协议字段单位和客户最终版本仍需用户确认；本文以当前源码发送内容和 App 命令为准。
 
 ## 1. CAN 初始化
@@ -13,7 +13,7 @@
 - 使用 CAN1，PA11/PA12。
 - `CAN_ABOM = ENABLE`，允许自动 bus-off 恢复。
 - FIFO0 接收中断 `USB_LP_CAN1_RX0_IRQn`。
-- 发送侧使用 `FEIDAO_CAN_TX_QUEUE_SIZE = 32` 的软件队列。
+- 发送侧使用 `FEIDAO_CAN_TX_QUEUE_SIZE = 32` 的软件队列；队列项标记来源，周期广播走 `Can_HDX_TransmitPeriodic()`，App ACK/read-block 等请求类帧走 `Can_HDX_Transmit()`。
 - CAN 诊断通过 `Can_GetDebugSnapshot()` 填充 debug 结构；bus-off 位从 `CAN1->ESR` 只读获取。
 - `Can_HDX.c` 内部状态按职责收口为 `s_tx`、`s_runtime`、`s_app` 三类文件级 `static` runtime。
 
@@ -66,6 +66,7 @@
 - `Can_PrepareSleep()` 会取消当前发送、清空发送队列、清空 App 命令队列、停止 block stream，并关闭 CAN 收发器电源。
 - RTC HICCUP 周期唤醒后不再主动广播 CAN；唤醒恢复后回到主循环，再按运行态调度通信。
 - 运行态不再维护 CAN active/probe/no-ACK 退避状态，固定按 1000ms/5000ms 周期调度飞道广播。
+- 低功耗 `Can_IsBusy()` 不再把普通周期广播 TX pending 当作 RTC idle 阻塞条件；CAN App 请求/ACK/read-block、未归属硬件发送和 RX 活动仍会阻塞 STOP。
 - `CAN_NART = ENABLE`，无 ACK 时不做硬件自动重发，避免无对端时持续重发导致功耗升高。
 - `CAN_ABOM = ENABLE`，bus-off 恢复交给 bxCAN 自动处理，软件不再维护 bus-off 状态机。
 

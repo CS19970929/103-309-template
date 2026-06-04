@@ -127,6 +127,7 @@
 | T-LP-014 | RTC sleep 变量净删减 | `rg "get_rtc_soc|set_rtc_soc|s_u8RtcSoc|s_lp_runtime|LP_CanSleep|low_power_cancel_rtc|low_power_is_idle_rtc_request|LOW_POWER_RTC_BLOCK|s_u16IdleDelaySeconds|s_u32RtcSleepElapsedSeconds|s_u32RtcWakeCycles|s_u32LastSleepSeconds"` | 源码无无消费者缓存、未调用 helper、旧粗粒度 block 枚举和独立低功耗计数变量；SOC 休眠补偿仍调用 `RtcSleep_PortApplySocRtcRest()` |
 | T-LP-015 | ST-Link 监控脚本兼容 | 用新 ELF 跑 `tools/stlink_bms_monitor.ps1 -Count 1` | 监控脚本按 `g_stLowPowerRtcStatus` 新 8 word 布局读取 `mode/rtc/comm/idle/idleMax/force/vlow/block/sleep/last/cycles`、LED、DBGMCU |
 | T-LP-016 | CAN busy 查询副作用隔离 | 连续 CAN RX，同时观察 `SystemDebug_Snapshot()` 和 `rtc_sleep()` | debug/heartbeat 不更新 `last_ext_comm_cnt_can`；低功耗仍能因 CAN 活动阻塞 RTC STOP |
+| T-LP-017 | 周期 CAN TX 不阻塞 RTC idle | 不接 CAN 对端或制造无 ACK，观察 `g_stLowPowerRtcStatus.idle/block` 和 `s_tx.count` | 普通周期广播 pending 不反复置 `LP_BLOCK_COMM`，达到 `time_enter_rtc` 后能进入 HICCUP；接入 CAN 对端后运行态周期广播仍恢复 |
 | T-IWDG-001 | 主循环喂狗 | 正常运行 8h | 无异常复位 |
 | T-IWDG-002 | 阻塞等待喂狗 | CAN RTC service/延时 | 无 IWDG 复位 |
 

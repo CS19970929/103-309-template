@@ -62,6 +62,7 @@
 | RISK-RTC-IO-002 | `PA3 / 2737_EN` 在 RTC 模式排除模拟输入 | `conf.c:IOstatus_RTCMode()` | 若该脚应关闭，可能增加休眠电流 | UNKNOWN | 测 STOP 电流，并确认 PA3 休眠期硬件要求 |
 | RISK-RTC-IO-003 | `PB14 / AFE1_CTL` 在 RTC 模式排除模拟输入 | `conf.c:IOstatus_RTCMode()` | 可能影响 AFE 控制或低功耗漏电 | UNKNOWN | 核对 AFE 控制脚原理图，测 STOP 前后电平 |
 | RISK-RTC-CAN-001 | RTC 周期唤醒后不再主动广播 CAN | `Can_HDX.c`, `rtc_sleep.c`, `RTC.c` | 休眠中 CAN 不再周期可见；换取更低功耗和更简单低功耗链路 | 用户已确认 | 上板验证 CMNT 睡前关闭、唤醒恢复后打开，确认外部唤醒后 CAN 正常恢复 |
+| RISK-RTC-CAN-003 | 周期 CAN TX pending 不再阻塞 RTC idle | `Can_HDX.c`, `CanFeidaoFrames.c`, `rtc_sleep.c` | 无 ACK/无设备时更容易重新进入 RTC；周期广播可能被睡前取消，不保证每个周期帧都发出 | 已处理，需上板验证 | 周期帧走 `Can_HDX_TransmitPeriodic()`；请求/ACK/read-block/RX 仍阻塞，抓包确认有设备时周期广播恢复正常 |
 | RISK-RTC-IWDG-001 | IWDG 开启时 RTC 唤醒周期最大 10 秒 | `RTC.c` | 与极低功耗目标可能冲突 | CONFLICT | 结合整机功耗目标确认 IWDG 与 RTC 周期策略 |
 | RISK-RTC-IWDG-002 | `PROJECT_CFG_WDOG_ENABLE` 与 IWDG 实际行为必须一致 | `Project_Config.h`, `AppInit.c`, `System_Init.c` | 若宏和实际硬件状态漂移，RTC wake 安全窗口会误判 | 已处理，需构建/长稳验证 | 当前默认 `1`；`Init_IWDG()` 和 `IWDG_Feed()` 已按宏门控 |
 | RISK-RTC-CAN-002 | CAN busy 查询不能被 debug 消费 | `Can_HDX.c`, `SystemDebug.c`, `Runtime.c`, `rtc_sleep.c` | 若 debug 先更新 CAN 接收计数，低功耗可能误判通信空闲 | 已处理，需通信回归 | 低功耗使用 `Can_IsBusy()`；debug/heartbeat 使用无副作用 `Can_PeekBusy()` |

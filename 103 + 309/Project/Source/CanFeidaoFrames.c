@@ -74,7 +74,7 @@ static UINT8 CanFeidao_SendFrame(uint8_t chd_index, const uint8_t *data, uint8_t
 		tx_msg.Data[i] = data[i];
 	}
 
-	return Can_HDX_Transmit(&tx_msg);
+	return Can_HDX_TransmitPeriodic(&tx_msg);
 }
 
 static UINT8 CanFeidao_SendVoltageCurrent1000ms(void)
