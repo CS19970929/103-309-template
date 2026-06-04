@@ -3,8 +3,26 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：当前主工程源码和 `docs/review/*`
-最后更新时间：2026-06-03
+最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
+
+## 2026-06-04 SOC 删除 runtime table、手动 OCV、mid-tail
+
+本次按用户确认继续净删减 SOC 模块，目标是让算法边界更简单、稳定、易读。
+
+源码变更：
+- 删除 SOC runtime table 宏、运行时数组、EEPROM 默认表装载和上位机写表条件分支；SOC 算法只使用 `PROJECT_CFG_BAT_CHEMISTRY` 选择的编译期 OCV 表，写 SOC 表固定返回错误。
+- 删除手动 OCV 请求 API 和 `u16_RefreshData_Flag=1` 处理；命令路径只保留容量 reset 和 `SetSocOnce`。
+- 删除 mid-tail 表、`mid_ticks`、mid-tail debug watch 字段、SystemDebug `midT` 输出和 Python replay mid-tail 模型；low-tail 表值不变。
+- 删除未使用的 `PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS`、`PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS` 配置和 build guard 检查。
+
+文档变更：
+- 更新 `docs/design/soc_design.md`、模块参考、宏参考、变量梳理、风险清单、需求确认、测试计划、debug 指南和 SOC 相关 review 文档。
+- 明确 reset sleep 不做秒数 SOC 补偿；HICCUP RTC STOP 才推进长静置慢速下修。
+
+验证：
+- 已执行源码/文档扫描，确认源码和工具中无 runtime table/manual OCV/mid-tail 残留路径。
+- Keil、真板、RTC STOP、CAN/Modbus 在线验证仍未执行。
 
 ## 2026-06-03 SOC 模块复审、净删减与文档合并
 
@@ -25,7 +43,7 @@
 - 更新 `docs/review/soc_rest_fast_drop_analysis_2026-06-03.md`、`docs/review/soc_simplification_candidates_2026-06-02.md`、模块参考、风险清单、测试计划和文档索引。
 
 验证：
-- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/soc_replay_test.py`：43 项通过。
 - `python3 tools/run_soc_host_c_test.py`：`30mA/0mA/1000mA` 和 debug-watch 组合均通过。
 - Keil、真板、RTC STOP、CAN/Modbus 在线验证仍未执行。
 

@@ -267,8 +267,6 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS",
     "PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV",
     "PROJECT_CFG_SOC_REST_OCV_SECONDS",
-    "PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS",
-    "PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS",
     "PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS",
     "PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT",
     "PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA",
@@ -783,30 +781,31 @@ def check_release_map(reporter):
         else:
             reporter.ok("{0}=0 removes unused SCI runtime symbols".format(define_name))
 
-    if defines.get("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE") == "0":
-        runtime_soc_table_symbols = [
-            "SOC_Table_Set",
-            "SOC_Table_Default",
-            "SOC_Table_CanSet",
-        ]
-        leaked = [symbol for symbol in runtime_soc_table_symbols if symbol in text]
-        if leaked:
-            reporter.fail("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0 but FD_Release map still contains: {0}".format(",".join(leaked)))
-        else:
-            reporter.ok("PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0 removes runtime SOC table symbols")
+    removed_soc_table_symbols = [
+        "SOC_Table_Set",
+        "SOC_Table_Default",
+        "SOC_Table_CanSet",
+        "SocTable_LiFEPO2",
+        "SocTable_LiFePO2",
+    ]
+    leaked = [symbol for symbol in removed_soc_table_symbols if symbol in text]
+    if leaked:
+        reporter.fail("removed runtime SOC table symbols still appear in FD_Release map: {0}".format(",".join(leaked)))
+    else:
+        reporter.ok("runtime SOC table symbols are removed from release map")
 
-        chemistry = defines.get("PROJECT_CFG_BAT_CHEMISTRY")
-        if chemistry == "0":
-            fixed_table_leaks = ["SOC_Table_LiFePO", "SocTable_LiFePO2"]
-        elif chemistry == "1":
-            fixed_table_leaks = ["SocTable_TernaryLi", "SocTable_LiFePO2"]
-        else:
-            fixed_table_leaks = []
-        leaked = [symbol for symbol in fixed_table_leaks if symbol in text]
-        if leaked:
-            reporter.fail("fixed compile-time SOC table build still contains unused table symbols: {0}".format(",".join(leaked)))
-        elif fixed_table_leaks:
-            reporter.ok("fixed compile-time SOC table build keeps only the selected chemistry table")
+    chemistry = defines.get("PROJECT_CFG_BAT_CHEMISTRY")
+    if chemistry == "0":
+        fixed_table_leaks = ["SOC_Table_LiFePO"]
+    elif chemistry == "1":
+        fixed_table_leaks = ["SocTable_TernaryLi"]
+    else:
+        fixed_table_leaks = []
+    leaked = [symbol for symbol in fixed_table_leaks if symbol in text]
+    if leaked:
+        reporter.fail("fixed compile-time SOC table build still contains unused table symbols: {0}".format(",".join(leaked)))
+    elif fixed_table_leaks:
+        reporter.ok("fixed compile-time SOC table build keeps only the selected chemistry table")
 
 
 def check_gitignore(reporter):
@@ -846,17 +845,16 @@ def check_soc_parameter_side_effects(reporter):
 
     body = text[start:end]
     if (
-        "Sci_RangeOverlaps(offset, count, 12, 1)" in body
+        "Sci_RangeOverlaps(offset, count, 24, 4)" in body
         and "reload_soc = 1U;" in body
-        and "Sci_RangeOverlaps(offset, count, 24, 4)" in body
         and (
             "SOC_RequestCapacityReset();" in body
             or "SOC_Enhance_Element.u16_RefreshData_Flag = 2;" in body
         )
     ):
-        reporter.ok("SOC table select and capacity parameter writes refresh SOC runtime state")
+        reporter.ok("SOC capacity parameter writes refresh SOC runtime state")
     else:
-        reporter.fail("SOC table select/capacity side effects must refresh SOC runtime state")
+        reporter.fail("SOC capacity side effects must refresh SOC runtime state")
 
 
 def check_sci_host_write_policy(reporter):

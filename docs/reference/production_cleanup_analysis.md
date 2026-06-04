@@ -105,7 +105,7 @@
 |------|------|------|
 | SOC.c | 144-162 | `#if 0` 包裹的 `SOC_TestMode_RunSample()` / `SOC_TestMode_ReadStatus()` 空壳 |
 | Sci_Upper.c | 828-829 | `SOC_TEST status padding`，16 word 置 0，用于保持协议长度 |
-| Sci_Upper.c | 1742-1765 | SOC 表写入入口；`PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE=0` 时返回写入错误 |
+| Sci_Upper.c | `Sci_WrRegs_0x10_SocTable()` | SOC 表写入入口；runtime table 已删除，写入固定返回错误 |
 
 **操作**: 可作为低风险候选进一步确认是否删除 `SOC.c` 中 `#if 0` 空壳；不要删除 `Sci_Upper.c` 的 padding 或改变协议长度。
 

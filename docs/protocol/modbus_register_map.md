@@ -52,7 +52,7 @@
 
 - 写入口受 `PROJECT_CFG_HOST_WRITE_ENABLE` 控制。
 - 读写函数会做地址窗口和长度校验，错误时返回 Modbus 异常。
-- SOC 表运行时写入还受 `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE` 控制，默认关闭。
+- SOC 表运行时写入功能已删除；相关写入口固定返回 Modbus 异常，读表仍返回当前编译期 OCV 表以保持协议窗口可读。
 - `0x1005` 单次写 SOC 是对外可见行为，CAN App 和上位机工具都依赖。
 - `0xFFFD` 进入 IAP 属于高风险写入口，必须保留确认机制。
 

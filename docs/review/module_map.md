@@ -171,7 +171,7 @@ main loop
 - 只读实时窗口：`0xD000`, `0xD100`, `0xD200`, `0xD300`，见 `Sci_Upper.h:139-151`。
 - 产品信息读取：`0xC002`，48 个寄存器，见 `Sci_Upper.c:769-773`。
 - 保护参数：`0x2100` 起。
-- SOC 表/铜损/RTC：`0x2200` 起，其中 SOC runtime table 当前关闭。
+- SOC 表/铜损/RTC：`0x2200` 起；SOC runtime table 已删除，写表固定拒绝，读表返回编译期 OCV 表。
 - 均衡/系统/睡眠/SOC/串数/采样电阻：`0x2300` 起。
 - IAP/Flash connect：`0xFFFD`。
 

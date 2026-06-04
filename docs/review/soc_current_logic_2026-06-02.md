@@ -18,7 +18,7 @@
 |---|---|
 | 普通 `RELAX` 自耗不直接扣，RTC 休眠补偿扣自耗 | 普通运行 `RELAX` 已按 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` 积分；RTC STOP 补偿不再额外扣自耗 |
 | RTC 补偿包含自耗和静置下修 | RTC 补偿当前只推进静置 OCV 计数和长静置下修 |
-| mid-tail 使用旧 `500/600/650/700mV` 慢 tick 表 | 当前活动 mid-tail 为 `450/500/550/600mV`，tick 全部来自 `DELAY_SOC_TEST = 5` |
+| mid-tail 使用旧 `500/600/650/700mV` 慢 tick 表 | mid-tail 表、计数、debug 字段和测试模型已删除；当前只保留 low-tail 表 |
 | 可观察 `SOC_WATCH_BLOCK_REASON/u8LastBlockReason` | 阻塞原因枚举和字段已删除，调试以 tail active、last calib source、内部/显示 SOC 为主 |
 | `SOC_IntEnhance_Ctrl()` 拆出 `soc_run_cycle_calibration()`/`soc_update_rest_after_cycle()` | 当前主流程已改为在 `SOC_IntEnhance_Ctrl()` 内直线展开，减少 helper |
 

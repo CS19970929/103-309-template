@@ -18,9 +18,6 @@
 //   <1=> LiFePO4 LIFEPO
 #define PROJECT_CFG_BAT_CHEMISTRY 0
 
-// <q> Allow host runtime SOC table writes
-#define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
-
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 
@@ -170,12 +167,6 @@
 
 // <o> Rest OCV wait seconds <60-43200>
 #define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
-
-// <o> Rest stable min seconds <60-7200>
-#define PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS 300
-
-// <o> Rest target step seconds <60-7200>
-#define PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS 600
 
 // <o> Rest down step seconds <60-43200>
 #define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800

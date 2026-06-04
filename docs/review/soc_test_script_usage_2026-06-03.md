@@ -36,7 +36,7 @@
 |---|---|---|
 | 只改 SOC 文档、索引、说明文字 | `git diff --check`，必要时 `rg` 检查链接/旧术语 | 不默认跑 SOC replay、host C、visual trace |
 | 改 SOC C 主流程、积分、自耗、RTC、Type-C、display publish | `python3 tools/run_soc_host_c_test.py`，必要时补跑 `soc_replay_test.py` | 不默认跑 visual trace，除非需要看趋势 |
-| 改 OCV 表、empty-tail 表、mid-tail 表、时间参数 | `python3 tools/soc_replay_test.py`；若触及 C 逻辑，再跑 host C | 不用 `project_check.py` 证明功能正确 |
+| 改 OCV 表、empty-tail 表、时间参数 | `python3 tools/soc_replay_test.py`；若触及 C 逻辑，再跑 host C | mid-tail 已删除；不用 `project_check.py` 证明功能正确 |
 | 调整用户体验曲线、快降/回弹/充电锚点体验 | `soc_replay_test.py` + `soc_visual_report.py`；必要时 host C | 不把 visual trace 当唯一硬门禁 |
 | 提交前或跨模块较大变更 | `git diff --check`；可跑 `python3 tools/project_check.py --quiet` 并说明当前基线 | 不把历史失败算成本轮回归 |
 | 出货/真板判断 | Keil `FD_Release`、真板充放电、RTC STOP 功耗、CAN/Modbus、Keil watch | 不用任何 host 脚本替代上板验证 |

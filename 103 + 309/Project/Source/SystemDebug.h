@@ -251,7 +251,6 @@ struct DBG_SOC {
 	uint32_t stable_ticks;
 	uint16_t full_ticks;
 	uint16_t empty_ticks;
-	uint16_t mid_ticks;
 	uint8_t  full_anchor;
 	uint16_t display_ticks;
 };

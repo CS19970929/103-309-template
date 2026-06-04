@@ -1,16 +1,16 @@
 # SOC 源码简化执行记录
 
 文档状态：已按当前源码更新
-源码验证日期：2026-06-03
+源码验证日期：2026-06-04
 当前权威入口：`docs/design/soc_design.md`
 
 ## 1. 本轮目标
 
-本轮目标是按用户要求简化 SOC 模块写法，删除无用代码和误导性状态，不增加过多 helper，不改两个 tail 表，不改协议字段和硬件时序。
+本轮目标是按用户要求简化 SOC 模块写法，删除无用代码和误导性状态，不增加过多 helper，不改 low-tail 表，不改协议字段和硬件时序。
 
 硬边界：
 
-- 不改 `s_empty_tail_table` 和 `s_mid_tail_table` 的活动值、结构和旧 `#if 0` 对照表。
+- 不改 `s_empty_tail_table` 的活动值和结构。
 - 不改满电、低压 low-tail、显示平滑、Type-C 折算、协议字段和 Flash 地址。
 - 不引入 HAL、RTOS、malloc 或新框架。
 - 保留当前 200ms AFE sample seq 驱动的调度顺序。
@@ -20,7 +20,7 @@
 | 项目 | 文件 | 结果 |
 |---|---|---|
 | 恢复 low-tail 主流程 | `SocEnhance.c` | 保留 low-tail 计算和满/空校准主流程 |
-| 关闭 mid-tail 运行链路 | `SocEnhance.c` | 保留两个 mid-tail 表，不再调用 mid-tail 查表和 `soc_apply_mid_tail()`；`mid_ticks` 每周期清零 |
+| 删除 mid-tail | `SocEnhance.c/.h`, `SystemDebug.c/h`, `tools/soc_replay_test.py` | 删除 mid-tail 表、计数、debug 字段和测试模型 |
 | 减少 helper | `SocEnhance.c` | 删除 `soc_run_cycle_calibration()` 和 `soc_update_rest_after_cycle()`，将核心阶段直线展开在 `SOC_IntEnhance_Ctrl()` |
 | 删除 deferred OCV 自动路径 | `SocEnhance.c` | 删除短静置锁存和 active 放电消化，只保留长静置慢速下修 |
 | 去掉 RTC 自耗扣减 | `SocEnhance.c` | 删除 `soc_apply_board_self_consumption_seconds()`；RTC STOP 只推进静置/OCV 补偿 |
@@ -69,20 +69,16 @@
 
 当前保持：
 
-- `#if 0` 旧 empty-tail/mid-tail 对照表保留。
 - 活动 `s_empty_tail_table` 保留。
-- 活动 `s_mid_tail_table` 保留。
 - 当前活动 tick 全部来自 `DELAY_SOC_TEST = 5`。
-- 当前活动 mid-tail offset 为 `450/500/550/600mV`。
-- 当前运行路径不使用 mid-tail 表，`u8MidTailActive` 固定为 0。
 
-本文只记录当前源码事实；mid-tail 表不动，low-tail 表仍按用户测试状态保留。
+本文只记录当前源码事实；mid-tail 已删除，low-tail 表仍按用户测试状态保留。
 
 ## 6. 验证结果
 
 已执行：
 
-- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/soc_replay_test.py`：43 项通过。
 - `python3 tools/run_soc_host_c_test.py`：`30mA/0mA/1000mA` 和 debug-watch 组合均通过。
 - `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：5 个场景通过。
 - `git diff --check`：通过。
@@ -98,8 +94,8 @@
 | 项目 | 原因 |
 |---|---|
 | 拆更多 helper | 当前主流程已足够短，继续拆会增加跳转成本 |
-| 移动 tail 表或改 tail 值 | 用户正在测试 tail，本轮冻结 |
+| 移动 low-tail 表或改 tail 值 | 用户正在测试 tail，本轮冻结 |
 | 把 `SOC_Enhance_Element` 大幅私有化 | 会影响 Keil watch 和现有协议调试习惯，需要单独确认 |
 | 改 `display_soc` 策略 | 用户可见体验变化，需要上板验证 |
-| 给 reset sleep 增加 RTC 秒数 SOC 补偿 | 功能变化，需单独需求确认 |
+| 给 reset sleep 增加 RTC 秒数 SOC 补偿 | 已确认不需要；不要实现 |
 | RELAX 下继续调整 low-tail | 功能体验变化，需先用 watch 确认快降来源 |

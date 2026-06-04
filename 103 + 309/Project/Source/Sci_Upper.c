@@ -529,7 +529,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	}
 	if (actual_addr >= RS485_ADDR_RW_OTHER)
 	{
-		*word_count = (UINT16)(SOC_Size_TableCanSet + 16 + 16 + E2P_PARA_NUM_RTC);
+		*word_count = (UINT16)(SOC_TABLE_SIZE + 16 + 16 + E2P_PARA_NUM_RTC);
 		return 1;
 	}
 	if (actual_addr >= RS485_ADDR_RW_PORTECT)
@@ -617,11 +617,6 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 		Sci_RangeOverlaps(offset, count, 28, 4))
 	{
 		AFE_PARAM_WRITE_Flag = 1;
-	}
-
-	if (Sci_RangeOverlaps(offset, count, 12, 1))
-	{
-		reload_soc = 1U;
 	}
 
 	if (Sci_RangeOverlaps(offset, count, 24, 4))
@@ -870,27 +865,10 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 static UINT16 Sci_GetSocTableWord(UINT16 index)
 {
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-	switch (OtherElement.u16Soc_TableSelect)
-	{
-	case SOC_TABLE_TEST:
-		return SOC_Table_Set[index];
-	case SOC_TABLE_LIFEPO:
-		return SOC_Table_LiFePO[index];
-	case SOC_TABLE_TERNARYLI:
-		return SocTable_TernaryLi[index];
-	case SOC_TABLE_LIFEPO2:
-		return SocTable_LiFePO2[index];
-	default:
-		return SOC_Table_Set[index];
-	}
-#else
-	(void)OtherElement.u16Soc_TableSelect;
 #if (PROJECT_CFG_BAT_CHEMISTRY == 1)
 	return SOC_Table_LiFePO[index];
 #else
 	return SocTable_TernaryLi[index];
-#endif
 #endif
 }
 
@@ -899,7 +877,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
-	for (j = 0; j < SOC_Size_TableCanSet; j++)
+	for (j = 0; j < SOC_TABLE_SIZE; j++)
 	{ // 由于GetEndValue()函数的问题，�能混在一�
 		u16SciTemp = Sci_GetSocTableWord(j);
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
@@ -1741,28 +1719,8 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 {
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_SOC_TABLE)
-	{
-		for (i = 0; i < E2P_PARA_NUM_SOC_TABLE; ++i)
-		{
-			SOC_Table_Set[i] = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-
-		InitData_SOC();
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
-#else
 	s->AckType = RS485_ACK_NEG;
 	s->ErrorType = RS485_ERROR_CMD_INVALID;
-#endif
 }
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)

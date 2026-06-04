@@ -237,14 +237,13 @@
 | `stable_ticks` | uint32 | 稳定计数 |
 | `full_ticks` | uint16 | 满电确认计数 |
 | `empty_ticks` | uint16 | 尾端计数 |
-| `mid_ticks` | uint16 | 中段计数；当前 mid-tail 运行关闭，通常为 0 |
 | `full_anchor` | uint8 | 已满电锚定 |
 | `display_ticks` | uint16 | 显示平滑计数 |
 
 更细的 SOC 内部观察使用 `g_dbg_soc_watch`：
 
 - `u8LastCalibSource/u8LastSocBefore/u8LastSocAfter`
-- `u8LowTailActive/u8MidTailActive`
+- `u8LowTailActive`
 - `u8InternalSoc/u8DisplaySoc`
 - `u32RestTicks/u32StableRestTicks/u32LongRestDownTicks`
 - `u8RestDownValid/u8RestDownTarget`

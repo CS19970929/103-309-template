@@ -585,8 +585,7 @@ void SystemDebug_Snapshot(void)
 	SOC_GetDebugInternals(&g_dbg.soc.mode, &g_dbg.soc.last_mode,
 	                      &g_dbg.soc.rest_ticks, &g_dbg.soc.stable_ticks,
 	                      &g_dbg.soc.full_ticks, &g_dbg.soc.empty_ticks,
-	                      &g_dbg.soc.mid_ticks, &g_dbg.soc.full_anchor,
-	                      &g_dbg.soc.display_ticks);
+	                      &g_dbg.soc.full_anchor, &g_dbg.soc.display_ticks);
 
 	/* ===== AFE ===== */
 	g_dbg.afe.bstatus1    = SH367309_Reg_Store.REG_BSTATUS1.all;
@@ -806,7 +805,6 @@ void DbgPrint_SOC(void)
 	dbg_puts(" stableT="); dbg_put_dec16((uint16_t)g_dbg.soc.stable_ticks);
 	dbg_puts(" fullT="); dbg_put_dec16(g_dbg.soc.full_ticks);
 	dbg_puts("\r\nemptyT="); dbg_put_dec16(g_dbg.soc.empty_ticks);
-	dbg_puts(" midT="); dbg_put_dec16(g_dbg.soc.mid_ticks);
 	dbg_puts(" fullAnc="); dbg_put_hex8(g_dbg.soc.full_anchor);
 	dbg_puts(" dispT="); dbg_put_dec16(g_dbg.soc.display_ticks);
 	dbg_puts("\r\n");

@@ -5,21 +5,13 @@
 #include "Project_Config.h"
 //#include "stm32f0xx.h"
 
-#ifndef PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-#define PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0
-#endif
-
-#define SOC_Size_TableCanSet 	(UINT16)42
 #define SOC_Size_LiFePO 		(UINT16)42
 #define SOC_Size_TernaryLi 		(UINT16)42
-#define SOC_Size_LiFePO2 		(UINT16)42
 #define SOC_DEFAULT_STARTUP_PERCENT ((UINT8)60)
 
 enum SOC_TABLE_SELECT {
-	SOC_TABLE_TEST = 0,
-	SOC_TABLE_LIFEPO,
-	SOC_TABLE_TERNARYLI,
-	SOC_TABLE_LIFEPO2
+	SOC_TABLE_LIFEPO = 1,
+	SOC_TABLE_TERNARYLI = 2
 };
 
 enum SOC_WATCH_CALIB_SOURCE {
@@ -28,11 +20,7 @@ enum SOC_WATCH_CALIB_SOURCE {
 	SOC_WATCH_CALIB_INTEGRATE_DSG,
 	SOC_WATCH_CALIB_FULL_ANCHOR,
 	SOC_WATCH_CALIB_EMPTY_TAIL,
-	SOC_WATCH_CALIB_MID_TAIL,      /* Reserved: runtime mid-tail is disabled. */
-	SOC_WATCH_CALIB_REST_TARGET,   /* Reserved: short rest target latch is disabled. */
-	SOC_WATCH_CALIB_DEFERRED_OCV,  /* Reserved: active deferred OCV is disabled. */
 	SOC_WATCH_CALIB_LONG_REST_DOWN,
-	SOC_WATCH_CALIB_MANUAL_OCV,
 	SOC_WATCH_CALIB_PARAM_RESET,
 	SOC_WATCH_CALIB_SET_ONCE,
 	SOC_WATCH_CALIB_STARTUP_SNAPSHOT,
@@ -42,26 +30,19 @@ enum SOC_WATCH_CALIB_SOURCE {
 	SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION
 };
 
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 1)
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
 extern const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO];
 #endif
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE || (PROJECT_CFG_BAT_CHEMISTRY == 0)
+#if (PROJECT_CFG_BAT_CHEMISTRY == 0)
 extern const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi];
-#endif
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-extern const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2];
 #endif
 
 struct SOC_ENHANCE_ELEMENT {
 	/* Config snapshot loaded from OtherElement. */
 	UINT16 u16_SOC_Ah;                 // 10 * Ah
 	UINT16 u16_SOC_CycleT_Ever;        // cycle count loaded from config
-	UINT16 u16_SOC_TableSelect;        // enum SOC_TABLE_SELECT
 	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
 	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
-	#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-	UINT16 SOC_Table_CanSet[SOC_Size_TableCanSet];
-	#endif
 
 	/* Command payloads; requests should enter through SOC_Request* APIs. */
 	UINT8 u8_SetSocOnce;
@@ -81,7 +62,7 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT16 u16_Cycle_times;
 
 	/* Command selector consumed by soc_handle_command(). */
-	UINT16 u16_RefreshData_Flag;       // 1: OCV refresh, 2: capacity reset, 3: set SOC once
+	UINT16 u16_RefreshData_Flag;       // 2: capacity reset, 3: set SOC once
 };
 
 struct SOC_DEBUG_WATCH {
@@ -100,15 +81,12 @@ struct SOC_DEBUG_WATCH {
 	UINT16 u16Idsg;
 	UINT16 u16FullTicks;
 	UINT16 u16EmptyTicks;
-	UINT16 u16MidTicks;
 	UINT16 u16DisplayTicks;
 	UINT16 u16SagHoldTicks;
 	UINT16 u16RestRefVmin;
 	UINT16 u16RestRefVmax;
 	UINT16 u16EmptyTailTarget;
 	UINT16 u16EmptyTailTicks;
-	UINT16 u16MidTailTarget;
-	UINT16 u16MidTailTicks;
 	UINT16 u16SnapshotFlags;
 	UINT8 u8Mode;
 	UINT8 u8LastMode;
@@ -119,7 +97,6 @@ struct SOC_DEBUG_WATCH {
 	UINT8 u8RestDownTarget;
 	UINT8 u8FullAnchor;
 	UINT8 u8LowTailActive;
-	UINT8 u8MidTailActive;
 	UINT8 u8CalibrationAllowed;
 	UINT8 u8SagHoldBlocksCalibration;
 	UINT8 u8RestVoltageStable;
@@ -137,7 +114,6 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 void SOC_SaveSnapshotBeforeSleep(void);
 void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg);
 void SOC_PublishReportData(void);
-void SOC_RequestManualOcvRefresh(void);
 void SOC_RequestCapacityReset(void);
 void SOC_RequestSetOnce(UINT8 soc);
 
@@ -148,8 +124,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void);
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
                            uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
                            uint16_t *full_ticks, uint16_t *empty_ticks,
-                           uint16_t *mid_ticks, uint8_t *full_anchor,
-                           uint16_t *display_ticks);
+                           uint8_t *full_anchor, uint16_t *display_ticks);
 #endif
 
 #endif	/* SOCENHANCE_H */

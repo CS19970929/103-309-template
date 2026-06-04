@@ -3,10 +3,6 @@
 #include "FactoryAging.h"
 #include "SocEnhance.h"
 
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-extern const UINT16 SOC_Table_Default[SOC_TABLE_SIZE];
-#endif
-
 #if FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
 #error "RW parameter protect word count mismatch"
 #endif
@@ -59,18 +55,6 @@ static void EEPROM_LoadDefaultOtherElement(void)
 	}
 
 	EEPROM_UpdateOtherElementRuntime();
-}
-
-static void EEPROM_LoadDefaultSocTable(void)
-{
-#if PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-	UINT8 i;
-
-	for (i = 0; i < SOC_TABLE_SIZE; ++i)
-	{
-		SOC_Table_Set[i] = SOC_Table_Default[i];
-	}
-#endif
 }
 
 static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
@@ -177,7 +161,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultProtect();
 	EEPROM_LoadDefaultCalib();
 	EEPROM_LoadDefaultOtherElement();
-	EEPROM_LoadDefaultSocTable();
 
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
@@ -238,10 +221,6 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 #if UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
 	EEPROM_LoadDefaultBalanceOpenVoltage();
 	rw_param_dirty = 1;
-#endif
-
-#if UPGRADE_PARAM_RESET_SOC_TABLE && PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE
-	EEPROM_LoadDefaultSocTable();
 #endif
 
 #if UPGRADE_PARAM_RESET_SOC_CONFIG

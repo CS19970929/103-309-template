@@ -167,7 +167,6 @@ main()
 #### SOC 配置
 | 宏定义 | 默认值 | 说明 |
 |--------|--------|------|
-| `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE` | 0 | 允许运行时写 SOC 表 |
 | `PROJECT_CFG_HOST_WRITE_ENABLE` | 1 | 允许上位机写寄存器 |
 | `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` | 30 | 板子自耗电(mA) |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | 1800 | 静置 OCV 等待时间 |
@@ -374,8 +373,7 @@ SOC 模块分为两层:
 
 **当前关键事实**:
 
-- `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE = 0` 时，上位机运行时 SOC 表不参与量产算法。
-- 当前 `PROJECT_CFG_BAT_CHEMISTRY = 0`，编译期使用 `SocTable_TernaryLi`。
+- 当前 `PROJECT_CFG_BAT_CHEMISTRY = 0`，编译期使用 `SocTable_TernaryLi`；SOC 算法不再支持 runtime table。
 - `SOC.c` 不直接持有当前 SOC 表；OCV 表选择在 `SocEnhance.c` 中完成。
 
 **函数**:
@@ -407,7 +405,7 @@ SOC 模块分为两层:
 **SOC_ENHANCE_ELEMENT 结构体**:
 | 字段组 | 字段 | 说明 |
 |---|---|---|
-| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_TableSelect/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载 |
+| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载；`OtherElement.u16Soc_TableSelect` 仅保留参数布局兼容 |
 | 命令 payload | `u8_SetSocOnce/u16_RefreshData_Flag` | 由 `SOC_Request*()` 写入，`soc_handle_command()` 消费 |
 | 输入采样 | `u16_VCellMax/u16_VCellMin/u16_Ichg/u16_Idsg` | SOC 计算输入 |
 | 发布输出 | `u8_SOC/u8_SOH/u16_CapacityNow/u16_CapacityFull/u16_CapacityFactory/u16_Cycle_times` | 对外显示 SOC、SOH、容量、循环次数 |
@@ -428,14 +426,11 @@ SOC 模块分为两层:
 - `INTEGRATE_CHG/DSG` - 安时积分
 - `FULL_ANCHOR` - 满电锚定 (充满确认)
 - `EMPTY_TAIL` - 低压尾端
-- `MID_TAIL` - 中段尾端，当前运行路径已关闭，仅保留枚举值兼容
-- `REST_TARGET` - 静置目标接近，当前自动短静置锁存已删除，仅保留枚举值兼容
-- `DEFERRED_OCV` - 延迟 OCV 校准，当前自动 deferred 路径已删除，仅保留枚举值兼容
 - `LONG_REST_DOWN` - 长时间静置下调
 - `RTC_REST` - RTC 休眠静置补偿
 - `BOARD_SELF_CONSUMPTION` - 正常运行 RELAX 自耗积分
 - `STARTUP_SNAPSHOT/OCV/DEFAULT` - 启动时恢复
-- `MANUAL_OCV/PARAM_RESET/SET_ONCE` - 上位机命令校准
+- `PARAM_RESET/SET_ONCE` - 上位机命令校准
 
 **自耗与 RTC 口径**:
 
@@ -452,7 +447,7 @@ SOC 模块分为两层:
 **调试观察**:
 
 - `SOC_WATCH_BLOCK_REASON` 和 `u8LastBlockReason` 已删除。
-- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive/u8MidTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestDownValid/u8RestDownTarget`。
+- 当前优先观察 `u8LastCalibSource`、`u8LowTailActive`、`u8InternalSoc/u8DisplaySoc`、`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestDownValid/u8RestDownTarget`。
 - debug monitor 中删除了固定 0 或伪造派生字段，保留真实内部计数和 `display_ticks`。
 
 **OCV 表** (42 个条目, 21对电压-SOC):
@@ -1294,7 +1289,6 @@ struct stCell_Info g_stCellInfoReport; // 核心上报数据
 
 ```c
 struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
-UINT16 SOC_Table_Set[42];          // 仅 runtime table 宏路径引用，当前量产关闭
 ```
 
 ### 18.7 Fault

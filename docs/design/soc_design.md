@@ -1,7 +1,7 @@
 # SOC 模块设计与源码审查
 
 文档状态：已按源码验证
-源码验证日期：2026-06-03
+源码验证日期：2026-06-04
 适用范围：当前 `103 + 309` BMS App SOC 模块
 权威性说明：本文是 SOC 模块当前唯一权威入口；历史 review/devlog 只作追溯，不作为当前行为依据。
 
@@ -23,7 +23,7 @@
 
 已执行验证：
 
-- `python3 tools/soc_replay_test.py`：47 项通过。
+- `python3 tools/soc_replay_test.py`：43 项通过。
 - `python3 tools/run_soc_host_c_test.py`：`30mA/0mA/1000mA` 自耗配置和 debug-watch 组合均通过。
 - `python3 tools/soc_visual_report.py --html build/host_tests/soc_visual_report_check.html --csv build/host_tests/soc_visual_trace_check.csv`：5 个场景通过。
 - `git diff --check`：通过。
@@ -40,9 +40,9 @@
 2. 内部真实 SOC 是 `s_soc.soc`；对外发布到 CAN、Modbus、LedBar 的 SOC 是 `s_soc.display_soc`。
 3. 正常运行 RELAX 模式下，板载自耗已经计入 SOC：`soc_integrate_current_ma(SOC_MODE_RELAX)` 返回 `-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`，随后按放电积分累计容量损耗。
 4. RTC STOP 补偿路径当前不再额外扣自耗，只按休眠秒数推进静置 OCV 相关计数和下修；这是为了避免把 RTC 低功耗期间的极低自耗重复或过度计入。
-5. 两个 tail 表都保留。当前活动表使用 `DELAY_SOC_TEST (5)`，mid-tail 活动偏移为 `450/500/550/600mV`；旧 `#if 0` 表仅作对照，不参与编译。当前运行路径不再应用 mid-tail。
+5. 当前只保留 low-tail 表 `s_empty_tail_table`。mid-tail 表、旧 `#if 0` tail 对照表和 mid-tail debug 字段已按确认删除。
 6. `SOC_IntEnhance_Ctrl()` 当前按一条直线表达核心顺序：命令、方向、积分、sag hold、low-tail/full、静置、保存、发布。
-7. 已删除无消费者或误导性字段：`u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason` 以及 debug monitor 中的伪造派生字段。
+7. 已删除无消费者或误导性字段/路径：runtime SOC table、手动 OCV、mid-tail、short-rest deferred OCV、`u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason` 以及 debug monitor 中的伪造派生字段。
 8. 当前代码未发现剩余必须立即修复的 SOC 协议兼容问题；硬件验证仍是后续风险边界。
 
 ## 2. 模块边界
@@ -53,7 +53,7 @@
 | `SocEnhance.c` | SOC 核心算法：容量积分、SOH、OCV 表、满电锚点、tail、静置、RTC 休眠补偿、显示平滑、Flash snapshot |
 | `SocEnhance.h` | SOC 对外结构、调试 watch、请求 API |
 | `DataDeal.c` | AFE 数据加载后递增 `AfeCurrent_GetSeq()`，驱动 `App_SOC()` 只处理新样本 |
-| `Sci_Upper.c` | Modbus 写容量/一次 SOC/手动命令，通过 `SOC_Request*()` 进入 SOC 模块 |
+| `Sci_Upper.c` | Modbus 写容量/一次 SOC，通过 `SOC_Request*()` 进入 SOC 模块；SOC 表写入固定返回错误 |
 | `rtc_sleep_port.c` | HICCUP STOP 周期唤醒后调用 `SOC_ApplyRtcRelaxationCompensation()` |
 | `LowPowerSleep.c` | reset sleep/STOP 前调用 `SOC_SaveSnapshotBeforeSleep()` |
 | `Flash.c` | A/B journal 方式保存和恢复 SOC snapshot |
@@ -93,14 +93,11 @@ Runtime_RunOnce()
 | 配置 | 当前值 | 影响 |
 |---|---:|---|
 | `PROJECT_CFG_BAT_CHEMISTRY` | `0` | 当前编译使用三元锂 `SocTable_TernaryLi` |
-| `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE` | `0` | 上位机写 SOC runtime table 不参与量产算法 |
 | `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` | `30` | 正常运行积分中的板载自耗 |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | `1` | 自动校准单次最多 1% |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` | `15` | 普通满电确认时间 |
 | `PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS` | `5` | 快速满电确认时间 |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | `1800` | 静置 OCV 基础门槛 |
-| `PROJECT_CFG_SOC_REST_STABLE_MIN_SECONDS` | `300` | 手动 OCV 旧门槛；当前自动静置慢下修不再使用短静置锁存 |
-| `PROJECT_CFG_SOC_REST_TARGET_STEP_SECONDS` | `600` | 兼容保留配置；当前自动静置不再用它做 deferred active 消化 |
 | `PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS` | `1800` | 长静置下修周期 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | `30` | 大电流放电后回弹保护 |
 | `PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV` | `400` | low-tail 最高启动区间 |
@@ -125,7 +122,7 @@ Runtime_RunOnce()
 | `soc` | 内部真实 SOC |
 | `display_soc` | 对外发布 SOC |
 | `mode` | `RELAX/CHG/DSG` |
-| `full_ticks/empty_ticks/mid_ticks` | 满电、低压 tail、mid-tail 兼容计数；当前 `mid_ticks` 运行中保持 0 |
+| `full_ticks/empty_ticks` | 满电确认和 low-tail 计数 |
 | `rest_soc_ticks/stable_rest_soc_ticks/long_rest_down_soc_ticks` | 静置 OCV 慢下修计数，单位为 200ms SOC tick |
 | `sag_hold_ticks` | 电压 sag/rebound holdoff |
 | `rest_down_valid/rest_down_target` | 长静置慢下修目标，只接受低于当前 SOC 的 OCV 目标 |
@@ -137,7 +134,7 @@ Runtime_RunOnce()
 
 | 字段组 | 字段 | 说明 |
 |---|---|---|
-| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_TableSelect/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载 |
+| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载；`OtherElement.u16Soc_TableSelect` 仅作为协议兼容参数保留，算法不消费 |
 | 命令 payload | `u8_SetSocOnce/u16_RefreshData_Flag` | 由 `SOC_Request*()` 写入，`soc_handle_command()` 消费 |
 | 输入采样 | `u16_VCellMax/u16_VCellMin/u16_Ichg/u16_Idsg` | SOC 计算输入 |
 | 发布输出 | `u8_SOC/u8_SOH/u16_CapacityNow/u16_CapacityFull/u16_CapacityFactory/u16_Cycle_times` | 发布到 `g_stCellInfoReport.SocElement` |
@@ -168,7 +165,7 @@ Runtime_RunOnce()
 2. `soc_direction()` 判断 `RELAX/CHG/DSG`。
 3. `soc_integrate()` 做容量积分和自耗积分。
 4. `soc_update_sag_hold()` 更新大电流回弹保护。
-5. `soc_low_tail_config()` 计算本周期 low-tail 状态，并刷新 debug watch；mid-tail 运行状态固定为 inactive。
+5. `soc_low_tail_config()` 计算本周期 low-tail 状态，并刷新 debug watch。
 6. `soc_apply_full_empty()` 处理满电锚点或 low-tail。
 7. 如果没有 low-tail、没有校准、没有 sag hold，推进 `soc_update_rest_timer()`；否则在 low-tail 或 sag hold 时清空静置 confidence。
 8. `soc_save_if_needed()` 按保存 mark 判断是否写 Flash。
@@ -246,23 +243,14 @@ low-tail 允许在 `RELAX` 下生效；这是无放电静置快降的优先排�
 
 ### 8.4 Mid-Tail
 
-mid-tail 表 `s_mid_tail_table` 当前保留用于 tail 测试对照，但运行路径不再应用 mid-tail 校准。
+已按确认删除。
 
-当前活动表：
+- 源码不再定义 `s_mid_tail_table`。
+- `SOC_STATE` 不再保留 `mid_ticks`。
+- `SOC_DEBUG_WATCH` 不再导出 `u8MidTailActive/u16MidTailTarget/u16MidTailTicks/u16MidTicks`。
+- Python replay 不再模拟或校验 mid-tail 表。
 
-| offset mV | target RELAX | target light | target mid | target heavy | tick |
-|---:|---:|---:|---:|---:|---:|
-| 450 | 25 | 32 | 42 | disabled | 5 |
-| 500 | 35 | 42 | 50 | disabled | 5 |
-| 550 | 45 | 50 | 58 | disabled | 5 |
-| 600 | 50 | 55 | disabled | disabled | 5 |
-
-注意：
-
-- 旧 `#if 0` 中 `500/600/650/700mV` 和较慢 tick 表仅为历史对照。
-- 当前用户正在测试 tail，因此代码中两个 tail 表都保留，不改表结构和值。
-- `SOC_IntEnhance_Ctrl()` 不再调用 mid-tail 查表和下修，`g_dbg_soc_watch.u8MidTailActive` 固定为 0，`s_soc.mid_ticks` 每周期清零。
-- 这样做减少无放电中段快降来源，表值仍可继续保留和测试。
+当前中段电压不会触发独立 mid-tail 下修；低端虚高只由 low-tail、长静置慢下修和显示平滑共同约束。
 
 ### 8.5 Sag Hold
 
@@ -306,7 +294,7 @@ SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max);
 当前 RTC 补偿不做：
 
 - 不额外扣 `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`。
-- 不执行 low-tail/mid-tail。
+- 不执行 low-tail。
 - 不锁存短静置 deferred OCV 目标，也不在后续 active 放电中消化隐藏目标。
 - 不改变 reset sleep 的早期快显逻辑。
 
@@ -316,7 +304,6 @@ SOC_ApplyRtcRelaxationCompensation(rest_seconds, vcell_min, vcell_max);
 
 | API | 行为 |
 |---|---|
-| `SOC_RequestManualOcvRefresh()` | 设置 flag 1，本周期尝试手动 OCV 下修 |
 | `SOC_RequestCapacityReset()` | 设置 flag 2，重算容量基准并保存 |
 | `SOC_RequestSetOnce(UINT8 soc)` | 设置 flag 3，把内部 SOC 设置到指定值并保存 |
 
@@ -348,7 +335,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | 低功耗路径 | SOC 行为 |
 |---|---|
 | `HICCUP_MODE` RTC STOP | 周期唤醒时累计秒数并调用 RTC SOC 补偿 |
-| `NORMAL/DEEP` reset sleep | 睡前保存 snapshot 和 LedBar 快显 SOC；当前未看到复位后按休眠秒数补偿 SOC 的闭环 |
+| `NORMAL/DEEP` reset sleep | 睡前保存 snapshot 和 LedBar 快显 SOC；已确认不增加 reset sleep 秒数 SOC 补偿 |
 
 ## 10. 调试口径
 
@@ -357,7 +344,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 - 内部/显示 SOC：`u8InternalSoc/u8DisplaySoc`
 - 当前模式：`u8Mode/u8LastMode`
 - 容量：`u32CapFactoryAs10/u32CapFullAs10/u32CapNowAs10`
-- tail 状态：`u8LowTailActive/u8MidTailActive/u16EmptyTailTarget/u16EmptyTailTicks/u16MidTailTarget/u16MidTailTicks`
+- tail 状态：`u8LowTailActive/u16EmptyTailTarget/u16EmptyTailTicks`
 - 静置状态：`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestVoltageStable/u8RestDownValid/u8RestDownTarget`
 - sag：`u16SagHoldTicks/u8SagHoldBlocksCalibration`
 - 最近校准：`u8LastCalibSource/u8LastSocBefore/u8LastSocAfter`
@@ -366,12 +353,12 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 
 - `SOC_WATCH_BLOCK_REASON`
 - `u8LastBlockReason`
-- debug monitor 中不真实或易误导的 `cal_allowed/sag_blocked/rest_stable/low_tail/mid_tail/ocv_target/last_calib_soc` 派生字段
+- debug monitor 中不真实或易误导的 `cal_allowed/sag_blocked/rest_stable/low_tail/ocv_target/last_calib_soc` 派生字段，以及 mid-tail 兼容字段
 
 排查 SOC 快降时优先看：
 
 1. `u8LastCalibSource`
-2. `u8LowTailActive/u8MidTailActive`
+2. `u8LowTailActive`
 3. `u8InternalSoc/u8DisplaySoc`
 4. `u16VCellMin` 与 `u16_SOC_0_Vol` 的关系
 5. `u32RestTicks/u32LongRestDownTicks`
@@ -380,23 +367,25 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 
 | 项目 | 原问题 | 处理结果 |
 |---|---|---|
-| tail 主流程 | `soc_run_cycle_calibration()` 中 low/mid tail 计算曾被注释，导致局部变量未初始化并让 mid-tail 失效 | 恢复 tail 计算和 mid-tail 应用，改为在 `SOC_IntEnhance_Ctrl()` 中直线展开 |
+| tail 主流程 | 旧实现混有 low/mid tail、历史表和兼容计数，阅读成本高 | 保留 low-tail 主流程，删除 mid-tail 表、计数和 debug 字段 |
 | RTC 自耗 | RTC 休眠补偿额外扣板载自耗，与“RTC 低功耗自耗可忽略”的需求不一致 | 删除 RTC 秒级自耗扣减，仅保留正常运行自耗积分 |
 | 无用字段 | `u16_SOC_CycleT_Limit/u8_SOC_OCV_Cali/u8LastBlockReason` 无有效消费者或已误导 | 删除字段、调用和打印 |
 | debug monitor | 多个 debug 字段固定为 0 或伪造来源 | 删除，保留真实内部计数和 display tick |
 | host test stub | host 工具缺 `ADC_GetVbatMilliVolt()`、`AfeCurrent_GetSeq()` stub | 补齐 `soc_host_c_test.c` 和 `soc_host_visual_trace.c` 桩函数，host 测试/trace 可按当前接口链接运行 |
 | replay 表解析 | Python replay 之前可能解析到 `#if 0` 对照表 | 改为解析活动 C 源码和 `DELAY_SOC_TEST` 宏 |
-| mid-tail 运行复杂度 | V0 上方 mid-tail 在 RELAX 下也会下修，体验上容易与静置快降混淆 | 保留两个 mid-tail 表，但运行路径关闭 mid-tail，debug `u8MidTailActive` 固定为 0 |
+| mid-tail 运行复杂度 | V0 上方 mid-tail 在 RELAX 下也会下修，体验上容易与静置快降混淆 | 删除 mid-tail 源码、测试模型和 debug 字段 |
 | deferred OCV 隐藏目标 | 短静置锁存目标后在 active 放电消化，行为不直观 | 删除自动 deferred OCV，只保留长静置慢速下修 |
+| runtime table | 上位机写 SOC 表长期关闭，仍保留宏、运行时数组和 EEPROM 分支 | 删除 runtime table 宏、数组、写入分支和 EEPROM 默认表装载 |
+| 手动 OCV | flag=1 手动 OCV 与“只保留长静置慢下修”不一致 | 删除 `SOC_RequestManualOcvRefresh()` 和 flag=1 处理 |
 
 ## 12. 风险与后续建议
 
 | 风险 | 当前判断 | 建议 |
 |---|---|---|
 | 当前 low-tail 测试表 tick 很快 | 活动表 `5 tick = 1s/1%`，用户正在测试；可能造成低压场景显示快降 | 不在本次改表。上板时用 `u8LastCalibSource` 和 low-tail active 字段确认体验 |
-| reset sleep 无 RTC 秒数补偿 | 当前源码事实如此，不能误认为所有休眠路径都会补偿 | 是否补 reset sleep 秒数属于功能变更，单独确认 |
+| reset sleep 无 RTC 秒数补偿 | 已按确认不做 reset sleep 秒数 SOC 补偿 | 文档和测试只验证睡前 snapshot/快显 SOC，不再把 reset sleep 补偿列为待确认功能 |
 | 未做 Keil/真板验证 | host/replay 已过，但硬件时序、电流方向、STOP 功耗仍未确认 | 后续跑 Keil `FD_Release`、Modbus/CAN、充放电、RTC STOP |
-| 运行时 SOC 表关闭 | 上位机写表不影响量产 SOC 算法 | 文档和上位机提示保持一致，避免误测 |
+| 运行时 SOC 表已删除 | 上位机写表固定返回错误，算法只使用编译期化学体系表 | 上位机若仍暴露写表入口，应提示该功能无效 |
 
 ## 13. 回归入口
 

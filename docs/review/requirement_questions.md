@@ -24,12 +24,12 @@
 | Q-MID-001 | 温度 | ENV2/ENV3 是否真实没有传感器 | `DataDeal.c:227-277` | 两个环境温度被强制为 -40 等效值 | UNKNOWN | 上位机显示可能误导 | 是否应显示无效值、隐藏，还是保留 -40？ | A/B/C/F | |
 | Q-MID-002 | LedBar | 故障显示是否需要落地 | `LedBar.c:702-717`, `LedBar.c:1022-1024` | 有故障判断但显示分支为空 | MISUNDERSTOOD | 用户端故障提示缺失 | LED 是否只显示 SOC，还是也要显示 fault pattern？ | A/B/C/F | |
 | Q-MID-003 | SOC | 初始 SOC 默认 60% 是否符合体验 | `SocEnhance.c:609-668` | Snapshot 失效后 OCV/default 初始 | UNKNOWN | 首次上电显示偏差 | 新板默认 SOC 应来自 OCV、固定值、工厂写入？ | A/C/F | |
-| Q-MID-004 | SOC | SOC runtime table 是否永久关闭 | `PROJECT_CFG_SOC_RUNTIME_TABLE_ENABLE 0`, `Sci_Upper.c:1860-1884` | `0x2200` SOC 表写入被拒绝 | MAYBE_UNUSED | 上位机旧功能可能不可用 | 上位机是否还需要改 SOC 表？ | A/D/E/F | |
+| Q-MID-004 | SOC | SOC runtime table 是否永久关闭 | `SocEnhance.c`, `Sci_Upper.c`, `EEPROM.c` | runtime table 宏、数组、EEPROM 默认表装载和写表分支已删除；`0x2200` 写 SOC 表固定拒绝 | 已确认 | 上位机旧写表入口不可用，但量产算法更简单 | 是否接受删除 runtime table？ | 已执行删除 | 用户已确认：可以删除 |
 | Q-MID-005 | 校准 | Modbus 校准写入是否已废弃 | `Sci_WrRegs_0x10_CalibCoef()` 主体 `#if 0` | 地址保留但写入无效 | MAYBE_UNUSED | 旧上位机校准入口可能失败 | 量产是否还通过协议写 K/B？ | B/D/F | |
 | Q-MID-006 | RTC 参数 | RTC 写寄存器是否需要支持 | `Sci_WrRegs_0x10_RTC()` 空函数 | 读 RTC 有，写 RTC 无效 | MAYBE_UNUSED | 时间设置入口不一致 | 上位机是否要设置 RTC？ | A/C/D/F | |
 | Q-MID-007 | 铜损 | 铜损表是否仍参与业务 | `Sci_WrRegs_0x10_CopperLoss()` 空函数；`Sci_ACK_0x03_RW_Data_Other()` 仍读 | 可读但写入无效 | MAYBE_UNUSED | 历史参数占用协议空间 | 铜损是否删除为占位？ | A/D/E/F | |
 | Q-MID-008 | CAN 版本 | CAN 周期帧版本号是否应来自产品信息 | `CanFeidaoFrames.c:158-166` | 固定 `pro_version=1`, `soft_version=1` | CHANGE_NEEDED | 客户诊断版本错误 | CAN 版本字段应映射 `FD_VERSION` 还是 `0xC002`？ | B/C/F | |
-| Q-MID-009 | SOC | mid-tail 是否关闭，静置 OCV 是否只保留长静置慢速下修 | `SocEnhance.c`, `SocEnhance.h` | 已保留两个 mid-tail 表但运行不触发；已删除短静置 deferred OCV | 已确认 | 降低静置/中段快降和隐藏目标消化的复杂度；低端虚高主要由 low-tail 控制 | 是否接受当前“表保留、mid-tail 运行关闭、短静置不锁存、长静置慢下修”的策略？ | C. 接受当前简化 | 用户已确认：都可以 |
+| Q-MID-009 | SOC | mid-tail 是否删除，静置 OCV 是否只保留长静置慢速下修 | `SocEnhance.c`, `SocEnhance.h`, `tools/soc_replay_test.py` | mid-tail 表/计数/debug/test 已删除；短静置 deferred OCV 已删除；只保留长静置慢速下修 | 已确认 | 降低静置/中段快降和隐藏目标消化复杂度；低端虚高主要由 low-tail 控制 | 是否接受删除 mid-tail 和 short-rest/deferred OCV？ | 已执行删除 | 用户已确认：都可以 |
 
 ## 3. 可以后续确认
 

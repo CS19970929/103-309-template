@@ -1,7 +1,7 @@
 # SOC 无放电静置快降分析
 
 文档状态：已按源码验证
-源码验证日期：2026-06-03
+源码验证日期：2026-06-04
 当前权威入口：`docs/design/soc_design.md`
 主要参考源码：`SocEnhance.c`、`SocEnhance.h`、`rtc_sleep.c`、`rtc_sleep_port.c`、`conf/Project_Config.h`
 
@@ -70,20 +70,14 @@ RTC STOP 补偿当前只做：
 
 ## 5. Mid-Tail 状态
 
-当前运行路径已经关闭 mid-tail：
+当前源码已删除 mid-tail：
 
-- `s_mid_tail_table` 和旧 `#if 0` mid-tail 对照表都保留，方便继续测试 tail。
+- 不再定义 `s_mid_tail_table`。
 - `SOC_IntEnhance_Ctrl()` 不再查表或调用 mid-tail 下修。
-- `g_dbg_soc_watch.u8MidTailActive` 固定为 0，`u16MidTailTarget/u16MidTailTicks` 固定为 0。
-- `s_soc.mid_ticks` 每周期清零。
+- `g_dbg_soc_watch` 不再导出 `u8MidTailActive/u16MidTailTarget/u16MidTailTicks`。
+- `s_soc` 不再保留 `mid_ticks`。
 
-当前活动 mid-tail 表：
-
-| offset mV | RELAX target | light target | mid target | heavy target | tick |
-|---:|---:|---:|---:|---:|---:|
-| 450 | 25 | 32 | 42 | disabled | 5 |
-| 500 | 35 | 42 | 50 | disabled | 5 |
-| 550 | 45 | 50 | 58 | disabled | 5 |
+因此中段电压不再是独立快降来源，快降排查集中看 low-tail、长静置慢下修、正常自耗积分和显示追赶。
 | 600 | 50 | 55 | disabled | disabled | 5 |
 
 这张表目前只作为源码保留和测试对照，不再造成 V0 上方中段静置快降。
@@ -121,9 +115,9 @@ RTC STOP 补偿当前只做：
 | 字段 | 判断 |
 |---|---|
 | `g_dbg_soc_watch.u8LastCalibSource` | 是否为 `EMPTY_TAIL`、`LONG_REST_DOWN`、`RTC_REST`、`BOARD_SELF_CONSUMPTION` |
-| `g_dbg_soc_watch.u8LowTailActive/u8MidTailActive` | 当前是否 tail 生效 |
-| `g_dbg_soc_watch.u16EmptyTailTarget/u16MidTailTarget` | 当前 tail 目标 |
-| `g_dbg_soc_watch.u16EmptyTailTicks/u16MidTailTicks` | 当前 tail 速度 |
+| `g_dbg_soc_watch.u8LowTailActive` | 当前 low-tail 是否生效 |
+| `g_dbg_soc_watch.u16EmptyTailTarget` | 当前 low-tail 目标 |
+| `g_dbg_soc_watch.u16EmptyTailTicks` | 当前 low-tail 速度 |
 | `g_dbg_soc_watch.u8InternalSoc/u8DisplaySoc` | 区分内部算法下降和显示追赶 |
 | `g_dbg_soc_watch.u32RestTicks/u32StableRestTicks/u32LongRestDownTicks` | 是否进入普通静置 OCV 慢路径 |
 | `SOC_Enhance_Element.u16_VCellMin` | 与 `u16_SOC_0_Vol` 的差值 |
@@ -147,7 +141,7 @@ RTC STOP 补偿当前只做：
 
 | 方向 | 行为变化 | 风险 |
 |---|---|---|
-| RELAX 下禁用 mid-tail | 已执行：静置时不再被中段表下修，表仍保留 | 可能保留高估 SOC 更久，需实测体验 |
+| 删除 mid-tail | 已执行：静置时不再被中段表下修，表和 debug 字段已删除 | 可能保留高估 SOC 更久，需实测体验 |
 | RELAX 下 low-tail 只保留 V0 附近强安全区 | 减轻 V0+较高区间快降 | 低端虚高收敛变慢 |
 | 放慢 tail tick | 目标不变，只降低用户感知速度 | 低端虚高收敛变慢 |
 | tail 仅 `DSG` 生效 | 无放电不再 tail 下修 | 行为变化最大，需台架验证 |
