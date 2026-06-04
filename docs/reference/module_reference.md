@@ -1312,8 +1312,10 @@ static ADC_RUNTIME s_adc;          // ADC.c 模块内运行态
 ### 18.10 LedBar
 
 ```c
-bool key_release_wakeup = false;    // 按键释放唤醒标志
+static LedBarRuntime s_ledbar;      // 显示、扫描、按键和 MCU_WK 上一拍状态
 ```
+
+`key` 和 `MCU_WK` 的 3 tick 软件滤波计数已删除；当前只保留上一拍原始电平，用于显示窗口上升沿和按键长按判断。
 
 ### 18.11 rtc_sleep
 

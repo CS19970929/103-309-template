@@ -3,14 +3,8 @@
 #include "IrqDebug.h"
 #include <string.h>
 
-bool key_release_wakeup = false;
-
 #define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS 50u
-#define LEDBAR_MCU_WK_ON_FILTER_10MS 3u
-#define LEDBAR_MCU_WK_OFF_FILTER_10MS 3u
-#define LEDBAR_KEY_ON_FILTER_10MS 3u
-#define LEDBAR_KEY_OFF_FILTER_10MS 3u
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
 
 #define LEDBAR_GPIOA_CRL_MASK ((0xFUL << 16u) | (0xFUL << 20u) | (0xFUL << 24u))
@@ -91,16 +85,10 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t startup_display_armed;
     uint32_t key_hold_10ms;
     uint32_t key_press_start_10ms;
-    uint8_t key_last_pressed;
     uint8_t key_long_handled;
-    uint8_t key_filter_initialized;
+    uint8_t key_wakeup_armed;
     uint8_t key_active;
-    uint8_t key_on_10ms;
-    uint8_t key_off_10ms;
-    uint8_t mcu_wk_filter_initialized;
     uint8_t mcu_wk_active;
-    uint8_t mcu_wk_on_10ms;
-    uint8_t mcu_wk_off_10ms;
 } LedBarRuntime;
 
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
@@ -164,6 +152,18 @@ static LedBarRuntime s_ledbar =
     1u,
     0u,
     LEDBAR_ICON_PERCENT_MASK,
+    {{0u}, 0u},
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
 };
 
 #if DEBUG_WATCH_ENABLED
@@ -184,6 +184,9 @@ void LedBar_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);
+#ifdef _DI_SWITCH_longKEY_ONOFF
+extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
+#endif
 
 static void LedBar_EnsureInit(void)
 {
@@ -859,89 +862,15 @@ static void LedBar_ServiceStartupDisplayWindow(void)
     }
 }
 
-static void LedBar_PrimeBinaryFilter(uint8_t raw_active,
-                                     uint8_t *active,
-                                     uint8_t *on_count,
-                                     uint8_t *off_count,
-                                     uint8_t on_limit,
-                                     uint8_t off_limit)
+static void LedBar_ServiceMcuWake(void)
 {
-    *active = raw_active;
-    *on_count = (raw_active != 0u) ? on_limit : 0u;
-    *off_count = (raw_active == 0u) ? off_limit : 0u;
-}
+    uint8_t active = LedBar_ReadMcuWakeRaw();
 
-static void LedBar_UpdateBinaryFilter(uint8_t raw_active,
-                                      uint8_t *active,
-                                      uint8_t *on_count,
-                                      uint8_t *off_count,
-                                      uint8_t on_limit,
-                                      uint8_t off_limit)
-{
-    if (raw_active != 0u)
-    {
-        *off_count = 0u;
-        if (*on_count < on_limit)
-        {
-            (*on_count)++;
-        }
-        if (*on_count >= on_limit)
-        {
-            *active = 1u;
-        }
-    }
-    else
-    {
-        *on_count = 0u;
-        if (*off_count < off_limit)
-        {
-            (*off_count)++;
-        }
-        if (*off_count >= off_limit)
-        {
-            *active = 0u;
-        }
-    }
-}
-
-static void LedBar_ServiceMcuWakeFilter(void)
-{
-    uint8_t raw_active = LedBar_ReadMcuWakeRaw();
-    uint8_t was_active;
-
-    if (s_ledbar.mcu_wk_filter_initialized == 0u)
-    {
-        s_ledbar.mcu_wk_filter_initialized = 1u;
-        LedBar_PrimeBinaryFilter(raw_active,
-                                 &s_ledbar.mcu_wk_active,
-                                 &s_ledbar.mcu_wk_on_10ms,
-                                 &s_ledbar.mcu_wk_off_10ms,
-                                 LEDBAR_MCU_WK_ON_FILTER_10MS,
-                                 LEDBAR_MCU_WK_OFF_FILTER_10MS);
-        return;
-    }
-
-    if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
-    {
-        return;
-    }
-
-    was_active = s_ledbar.mcu_wk_active;
-    LedBar_UpdateBinaryFilter(raw_active,
-                              &s_ledbar.mcu_wk_active,
-                              &s_ledbar.mcu_wk_on_10ms,
-                              &s_ledbar.mcu_wk_off_10ms,
-                              LEDBAR_MCU_WK_ON_FILTER_10MS,
-                              LEDBAR_MCU_WK_OFF_FILTER_10MS);
-    if ((was_active == 0u) && (s_ledbar.mcu_wk_active != 0u))
+    if ((s_ledbar.mcu_wk_active == 0u) && (active != 0u))
     {
         LedBar_RequestSocDisplayWindow();
     }
-}
-
-static uint8_t LedBar_IsMcuWakeActive(void)
-{
-    return s_ledbar.mcu_wk_active;
+    s_ledbar.mcu_wk_active = active;
 }
 
 static uint8_t LedBar_IsDisplayRequested(void)
@@ -959,46 +888,29 @@ static uint8_t LedBar_IsDisplayRequested(void)
 
 static void LedBar_ServiceSwitch(void)
 {
-    uint8_t raw_pressed = LedBar_ReadSwitchRaw();
+    uint8_t pressed;
     uint8_t was_pressed;
     uint32_t now_10ms = SysTime_Get10msTickCount();
-
-    if (s_ledbar.key_filter_initialized == 0u)
-    {
-        s_ledbar.key_filter_initialized = 1u;
-        LedBar_PrimeBinaryFilter(raw_pressed,
-                                 &s_ledbar.key_active,
-                                 &s_ledbar.key_on_10ms,
-                                 &s_ledbar.key_off_10ms,
-                                 LEDBAR_KEY_ON_FILTER_10MS,
-                                 LEDBAR_KEY_OFF_FILTER_10MS);
-        s_ledbar.key_last_pressed = s_ledbar.key_active;
-        return;
-    }
 
     if (g_st_SysTimeFlag.bits.b1Sys10msFlag == 0u)
     {
         return;
     }
 
+    pressed = LedBar_ReadSwitchRaw();
     was_pressed = s_ledbar.key_active;
-    LedBar_UpdateBinaryFilter(raw_pressed,
-                              &s_ledbar.key_active,
-                              &s_ledbar.key_on_10ms,
-                              &s_ledbar.key_off_10ms,
-                              LEDBAR_KEY_ON_FILTER_10MS,
-                              LEDBAR_KEY_OFF_FILTER_10MS);
+    s_ledbar.key_active = pressed;
 
-    if ((was_pressed == 0u) && (s_ledbar.key_active != 0u))
+    if ((was_pressed == 0u) && (pressed != 0u))
     {
-        key_release_wakeup = true;
+        s_ledbar.key_wakeup_armed = 1u;
         LedBar_RequestSocDisplayWindow();
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_hold_10ms = 0u;
         s_ledbar.key_long_handled = 0u;
     }
 
-    if (s_ledbar.key_active != 0u && key_release_wakeup)
+    if ((pressed != 0u) && (s_ledbar.key_wakeup_armed != 0u))
     {
         s_ledbar.key_hold_10ms = now_10ms - s_ledbar.key_press_start_10ms;
 
@@ -1010,7 +922,6 @@ static void LedBar_ServiceSwitch(void)
             // LedBar_SaveSleepSoc();
             // LowPower_Request(DEEP_MODE);
             // SleepDeal_Continue((UINT8)DEEP_MODE);
-extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
             low_power_log_and_commit_sleep(DEEP_MODE);
         }
 #endif
@@ -1020,9 +931,8 @@ extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
         s_ledbar.key_hold_10ms = 0u;
         s_ledbar.key_press_start_10ms = now_10ms;
         s_ledbar.key_long_handled = 0u;
+        s_ledbar.key_wakeup_armed = 0u;
     }
-
-    s_ledbar.key_last_pressed = s_ledbar.key_active;
 
     if (s_ledbar.soc_display_10ms != 0u)
     {
@@ -1066,17 +976,11 @@ void LedBar_Init(void)
     s_ledbar.startup_display_armed = 0u;
     s_ledbar.key_hold_10ms = 0u;
     s_ledbar.key_press_start_10ms = 0u;
-    s_ledbar.key_last_pressed = 0u;
     s_ledbar.key_long_handled = 0u;
-    s_ledbar.key_filter_initialized = 0u;
-    s_ledbar.key_active = 0u;
-    s_ledbar.key_on_10ms = 0u;
-    s_ledbar.key_off_10ms = 0u;
-    s_ledbar.mcu_wk_filter_initialized = 0u;
-    s_ledbar.mcu_wk_active = 0u;
-    s_ledbar.mcu_wk_on_10ms = 0u;
-    s_ledbar.mcu_wk_off_10ms = 0u;
+    s_ledbar.key_wakeup_armed = 0u;
     LedBar_GpioInitForDisplay();
+    s_ledbar.key_active = LedBar_ReadSwitchRaw();
+    s_ledbar.mcu_wk_active = LedBar_ReadMcuWakeRaw();
     LedBar_OutputOff();
     LedBar_GpioPrepareForStop();
     s_ledbar.initialized = 1u;
@@ -1263,12 +1167,10 @@ void APP_LedBar(void)
     uint8_t display_value;
     uint8_t indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     uint8_t display_requested;
-    uint8_t mcu_wk_active;
     uint8_t discharge_mos_open;
 
-    LedBar_ServiceMcuWakeFilter();
+    LedBar_ServiceMcuWake();
     LedBar_ServiceSwitch();
-    mcu_wk_active = LedBar_IsMcuWakeActive();
 
     LedBar_ServiceStartupDisplayWindow();
 

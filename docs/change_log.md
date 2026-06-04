@@ -1,5 +1,19 @@
 # 变更记录
 
+## 2026-06-04 LedBar 删除 key/MCU_WK 软件滤波计数
+
+源码变更：
+- `LedBar.c`：删除 `key` 和 `MCU_WK` 的 3 个 10ms 软件滤波计数、首次滤波初始化字段和通用二值滤波 helper。
+- `LedBar.c`：保留最小上一拍电平状态，用原始 GPIO 上升沿触发 SOC 显示窗口；按键长按仍按 10ms 主循环节拍计时。
+- `LedBar.c`：删除无外部消费者的 `key_release_wakeup` 裸全局和 `key_last_pressed` 字段，长按 armed 状态收进 `s_ledbar`。
+
+文档变更：
+- 更新 LED 显示设计、状态变量审计、需求确认、测试计划和模块简化审查记录。
+
+行为边界：
+- 不修改 Charlieplexing 扫描、TIM4 中断、显示窗口时长、长按阈值、睡眠 SOC BKP 保存和 STOP 前 GPIO 处理。
+- 本轮按试验要求删除输入软件滤波；按键抖动和 `MCU_WK` 毛刺需要上板观察。
+
 ## 2026-06-04 CAN App 返回帧 helper 收敛
 
 源码变更：

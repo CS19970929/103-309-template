@@ -32,6 +32,8 @@
 | 公开 API | `LedBar_SetIndicatorState()` | 无外部调用，只是 `LedBar_SetIndicators()` 的二次包装。 |
 | 运行时字段 | `s_ledbar.test_single_segment_id` | 仅由已删除测试 API 写入，没有消费者。 |
 | 宏 | `LEDBAR_SINGLE_SEG_ID_MIN/MAX` | 删除单段测试 API 后无消费者。 |
+| 输入滤波 | `key` / `MCU_WK` 3 tick 软件滤波计数和通用二值滤波 helper | 按本轮试验要求删除滤波计数；保留上一拍原始电平用于边沿检测。 |
+| 运行时字段 | `key_release_wakeup`、`key_last_pressed` | 裸全局/字段无外部消费者；长按 armed 状态收进 `s_ledbar.key_wakeup_armed`。 |
 
 ### 2.2 保留内容
 
@@ -42,6 +44,7 @@
 | `LedBar_Scan1ms()` | 当前由 `TIM4_IRQHandler()` 调用，负责查理复用扫描输出，不能删除。 |
 | `LedBar_SaveSleepSoc()` / `LedBar_LoadSleepSoc()` | 低功耗前后 SOC 预览依赖 BKP 保存/恢复。 |
 | `LedBar_SetSleep()` / `LedBar_PrepareForStop()` | STOP 前 GPIO 状态和显示关闭边界仍有效。 |
+| `s_ledbar.key_active` / `s_ledbar.mcu_wk_active` | 不再表示滤波后状态，只作为上一拍原始电平，用于按下/唤醒上升沿检测。 |
 
 ### 2.3 行为边界
 
@@ -52,6 +55,7 @@
 - BKP 休眠 SOC 保存/恢复寄存器。
 - 低功耗阻塞条件 `LedBar_IsActiveForLowPower()`。
 - Modbus/CAN/SOC 对外发布字段。
+- 按键和 `MCU_WK` 软件滤波已删除，需上板观察抖动体验；本轮不修改显示窗口时长和长按阈值。
 
 ## 3. 已修改模块：CAN App 返回帧
 

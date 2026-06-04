@@ -141,6 +141,7 @@
 | T-LED-003 | 睡眠预览 | 睡眠中按键 | 显示保存 SOC，超时熄屏 |
 | T-LED-004 | 长按休眠 | 长按 SW | 进入 DEEP_MODE，SOC 保存 |
 | T-LED-005 | STOP GPIO 泄漏 | 低功耗电流测试 | LED 引脚无明显漏电 |
+| T-LED-006 | 输入滤波删除试验 | 单击/连击/长按 SW，并制造 `MCU_WK` 插拔或毛刺 | 无软件滤波后不应出现不可接受的重复显示、误长按或无法熄屏；若体验差，恢复最小防抖 |
 
 ## 11. Bootloader / IAP 测试
 
@@ -178,7 +179,7 @@
 | T-SV-010 | LedBar STOP 前 GPIO / RTC 唤醒恢复 | 触发 `LedBar_PrepareForStop()` 后测 GPIO 和 STOP 电流；RTC STOP 唤醒后确认 `InitRunAfterStopWakeup()` 恢复外设但不完整重置 LedBar runtime | LED 引脚进入低漏电安全态，STOP 前无残留扫描；唤醒后显示请求、防抖和扫描状态不被 `LedBar_Init()` 重置 |
 | T-SV-011 | `readyToSleep` 收口 | `rg "readyToSleep|LowPower_IsToSleepPending|LowPower_ClearToSleepFlag" "103 + 309/Project/Source"`，并覆盖 HICCUP、NORMAL、DEEP 三类 sleep | 源码不再有全局 ready 字段/API；sleep SOC 保存、`BMS_SLEEP` 日志、`SleepDeal_Continue()` 和 STOP 循环行为不变 |
 | T-SV-012 | 低功耗 debug 快照 | 读取 `g_dbg.lp`、`g_stLowPowerRtcStatus` 或 ST-Link 监控输出 | `g_dbg.lp.ready` / ST-Link `RtcReady` 由 `mode != NO_SLEEP` 派生；`block` 直接是 `LP_BLOCK_*` 位图；mode/rtc/idle/sleep/last/cycles 等必要信息仍可观察 |
-| T-SV-013 | 历史状态保留 | `rg` 确认按键/`MCU_WK` 防抖、SOC sample seq、AFE fault/recover 计数未被第一批删除 | 第一批净删减不碰真实历史状态 |
+| T-SV-013 | 历史状态保留 | `rg` 确认 SOC sample seq、AFE fault/recover 计数仍保留；LedBar 输入只保留上一拍原始电平状态 | 本轮按试验要求删除 key/`MCU_WK` 软件滤波计数，但不删除边沿检测和长按必要状态 |
 | T-SV-014 | DataDeal 客户逻辑隔离 | 文档阶段只确认需求，不改源码；源码阶段若拆分，先做等价调用链检查 | `charger_detect_and_keyLogi_200ms()` 和 `new_todo_logi()` 行为未在未确认前改变 |
 | T-SV-015 | 静态检查 | 每批执行 `git diff --check`、`rg` 旧符号、可用时 `python3 tools/project_check.py --quiet` | 无新增 whitespace 错误；旧符号按预期消失；脚本结果与基线对比解释清楚 |
 | T-SV-016 | 编译 | 可用 Keil 或等价静态检查时编译/检查涉及文件 | `FD_Release` 0 error；若缺 Keil/硬件，必须在结论中说明未验证 |

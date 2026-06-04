@@ -6,6 +6,19 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 LedBar 删除 key/MCU_WK 软件滤波计数
+
+源码变更：
+- `LedBar.c` 删除 `key` 和 `MCU_WK` 的 3 个 10ms 软件滤波计数、首次滤波初始化字段和通用二值滤波 helper。
+- `LedBar.c` 保留上一拍原始电平用于上升沿检测；SOC 显示窗口和按键长按功能保留。
+- `key_release_wakeup` 裸全局收进 `s_ledbar`，无消费者的 `key_last_pressed` 删除。
+
+文档变更：
+- 更新 LED 显示设计、状态变量审计、需求确认、测试计划和模块简化审查记录。
+
+验证边界：
+- 不改变 TIM4 扫描、显示窗口时长、长按阈值、睡眠 SOC BKP 保存和 STOP 前 GPIO 处理；需上板观察按键抖动和 `MCU_WK` 毛刺影响。
+
 ## 2026-06-04 CAN App 返回帧 helper 收敛
 
 源码变更：

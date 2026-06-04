@@ -18,7 +18,7 @@
 | ADC | 1 个模块内运行态 | `static ADC_RUNTIME s_adc`，对外通过 `ADC_Get*()` 读取 |
 | CAN | ~2 | g_stCanErrorSnapshot, g_stCanLowPowerStatus |
 | 低功耗 | ~5 | g_stLowPowerRtcStatus, RTC_ExtComCnt |
-| LED | ~1 | key_release_wakeup |
+| LED | 1 个模块内运行态 | `static LedBarRuntime s_ledbar` |
 | Flash/升级 | ~2 | u8FlashUpdateFlag, u8FlashUpdateE2PROM |
 | 日志 | ~1 | su32_Interval_S_Tcnt |
 | 老化 | ~6 | s_u8FactoryAgingState (静态全局) |
@@ -307,13 +307,9 @@ static uint32_t s_u32LastSleepSeconds;  // 最近一次 RTC sleep 累计秒数
 
 ## 12. LED
 
-```c
-// LedBar.c
-bool key_release_wakeup = false;  // 按键释放唤醒标志
-```
-
-LedBar 主要状态存储在静态全局 `s_ledbar`:
-- 显示数字、图标掩码、扫描帧、SOC显示窗口、按键滤波状态
+LedBar 状态存储在静态全局 `s_ledbar`：
+- 显示数字、图标掩码、扫描帧、SOC 显示窗口、按键长按状态。
+- `key` 和 `MCU_WK` 软件滤波计数已删除，只保留上一拍原始电平用于边沿检测。
 
 ---
 

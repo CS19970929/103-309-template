@@ -85,7 +85,7 @@
 | `g_stAfeCurrentObserve` | `DataDeal.c:47`, `DataDeal.h:252` | 当前无外部 C 文件读取 | 如果只是调试观察，可受 `PROJECT_CFG_DEBUG_WATCH_ENABLE` 控制或提供只读 getter |
 | `iSheldTemp_10K_AFE` | `I2C_AFE1.c:7` | 仅 `I2C_AFE1.c` 使用 | 可改为 `static const` |
 | `CRC8Table` | `I2C_AFE1.c:69` | 仅 `I2C_AFE1.c` 使用 | 可改为 `static const` |
-| `key_release_wakeup` | `LedBar.c:22` | 仅 `LedBar.c` 使用 | 可改为 `static` |
+| `key_release_wakeup` | `LedBar.c` | 原先仅 `LedBar.c` 使用 | 已删除裸全局，长按 armed 状态收进 `s_ledbar.key_wakeup_armed` |
 | `BMS_LOG_POINT` / `BMS_LOG_RECORD` | `LogRecord.c:5-6` | 仅 `LogRecord.c` 使用 | 可改为 `static`，对外通过日志 API 访问 |
 | `TimeDisplay` | `RTC.c:3` | 仅 `RTC.c` 使用 | 可改为 `static __IO`，但必须确认 RTC IRQ handler 同文件 |
 | `Systmtime` | `RTC.c:7` | 仅 `RTC.c` 用作默认时间 | 可 `static`，并考虑是否 `const` |
@@ -149,7 +149,7 @@
 优先处理只在本文件使用且不影响协议布局的变量：
 
 - `iSheldTemp_10K`, `iSheldTemp_10K_AFE`, `CRC8Table`, `month_days` 改为 `static const`。
-- `key_release_wakeup`, `BMS_LOG_POINT`, `BMS_LOG_RECORD`, `g_u8SCITxBuff` 改为 `static`。
+- `key_release_wakeup` 已删除并收进 LedBar runtime；`BMS_LOG_POINT`, `BMS_LOG_RECORD`, `g_u8SCITxBuff` 可继续按低风险可见性收口处理。
 - `g_u16BusOff_InitTestCnt`, `g_u16BusOff_RecoverCnt` 改为 `static` 或并入 CAN runtime。
 
 验证重点：编译通过，协议输出不变。

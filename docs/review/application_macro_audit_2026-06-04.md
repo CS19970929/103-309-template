@@ -85,8 +85,8 @@
 | `PROJECT_CFG_RS485_WAKEUP_ENABLE` | 1 | 只派生 `RS485_WAKEUP_ENABLE`，当前引用少 | 若硬件固定，删除配置开关 |
 | `PROJECT_CFG_VIRTUAL_CURRENT_ENABLE` | 1 | 派生 `__VIRTURE_CURRENT__`，拼写错误且只做旧路径开关 | 需先确认虚拟电流是否量产真实需求；若固定启用，删除开关并重命名 |
 | `PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE` | 1 | 派生 `_DI_SWITCH_longKEY_ONOFF` | 若按键开关为固定硬件能力，删除配置开关 |
-| `PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS` | 已删除 | 只被 `LedBar.c` 转成本地宏 | 已下沉为 `LedBar.c` 内部常量 |
-| `PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS` | 已删除 | 同上 | 已下沉为 `LedBar.c` 内部常量 |
+| `PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS` | 已删除 | 原先只被 `LedBar.c` 转成本地宏 | 本轮连同 LedBar 内部 MCU_WK 软件滤波计数一起删除 |
+| `PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS` | 已删除 | 同上 | 本轮连同 LedBar 内部 MCU_WK 软件滤波计数一起删除 |
 | `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS` | 已删除 | 只被 `LedBar.c` 转发 | 已下沉为 `LedBar.c` 内部常量 |
 | `PROJECT_CFG_UPGRADE_PARAM_RESET_AFE` 等 reset 开关 | 1 | 只在 `UpgradeParamPolicy.h` 纯转发 | 保留策略，但可把纯转发宏去掉，业务直接读 `PROJECT_CFG_*` |
 
@@ -236,8 +236,8 @@
 | ID | 宏 | 建议动作 | 说明 |
 |---|---|---|---|
 | MACRO-INTERNAL-01 | `PROJECT_CFG_LEDBAR_SCAN_TIMER_100KHZ_TICKS` | 已下沉到 `LedBar.c` | 扫描定时器参数是模块实现细节 |
-| MACRO-INTERNAL-02 | `PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS` | 已下沉到 `LedBar.c` | MCU_WK 防抖值不应放全局配置 |
-| MACRO-INTERNAL-03 | `PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS` | 已下沉到 `LedBar.c` | 同上 |
+| MACRO-INTERNAL-02 | `PROJECT_CFG_LEDBAR_MCU_WK_ON_FILTER_10MS` | 已删除 | MCU_WK 软件滤波计数已按试验要求删除 |
+| MACRO-INTERNAL-03 | `PROJECT_CFG_LEDBAR_MCU_WK_OFF_FILTER_10MS` | 已删除 | 同上 |
 | MACRO-INTERNAL-04 | `PROJECT_CFG_RTC_ENABLE` | 固定启用 RTC，删除派生 `__FUNC_RTC__` | 当前产品 RTC 是必需能力 |
 | MACRO-INTERNAL-05 | `PROJECT_CFG_IAP_ENABLE` | 固定启用 IAP，删除派生 `_IAP` | 需保持烧录/IAP 安全文档 |
 | MACRO-INTERNAL-06 | `PROJECT_CFG_UART1_WAKEUP_ENABLE`、`PROJECT_CFG_RS485_WAKEUP_ENABLE` | 若硬件固定，改为模块内部常量或直接保留代码路径 | 需确认唤醒策略 |

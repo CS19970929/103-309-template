@@ -376,7 +376,7 @@ rtc_sleep()
 ```text
 Runtime_RunFrontTasks()
   APP_LedBar()
-    LedBar_ServiceMcuWakeFilter()
+    LedBar_ServiceMcuWake()
     LedBar_ServiceSwitch()
     sleep pending -> save sleep SOC / sleep pins
     startup display window
