@@ -8,6 +8,7 @@
 - `103 + 309/Project/Source/Runtime.c`
 - `103 + 309/Project/Source/LowPowerSleep.c`
 - `103 + 309/Project/Source/rtc_sleep.c`
+- `103 + 309/Project/Source/Can_HDX.c`
 最后更新时间：2026-06-04
 未确认事项：未做上板显示扫描验证；`docs/code_flow_analysis/` 为历史/生成索引，本次未人工同步。
 
@@ -52,7 +53,35 @@
 - 低功耗阻塞条件 `LedBar_IsActiveForLowPower()`。
 - Modbus/CAN/SOC 对外发布字段。
 
-## 3. 已审查但暂不修改的模块
+## 3. 已修改模块：CAN App 返回帧
+
+### 3.1 删除内容
+
+| 类型 | 删除项 | 原因 |
+|---|---|---|
+| 内部 helper | `feidao_can_app_send_ack()` | 与 `READ_BLOCK_DATA` 发送函数重复组 `0x61` 标准帧，只是 `Data[2..5]` 不同。 |
+| 内部 helper | `feidao_can_app_send_word_frame()` | 与普通 ACK 使用同一返回帧格式，合并为 `feidao_can_app_send_frame()` 后仍按 `0x86/seq/value_hi/value_lo` 填充。 |
+| 内部 helper | `feidao_can_u16_to_percent()` | 只服务 `GET_STATUS` 一处分支，100% 限幅直接写回命令分支更直观。 |
+
+### 3.2 保留内容
+
+| 保留项 | 理由 |
+|---|---|
+| `s_app.write_pending/write_addr/write_value_hi` | `WRITE_PREP/WRITE_COMMIT` 两阶段写寄存器是 CAN App 协议边界，不能按状态变量简化删除。 |
+| `Can_IsBusy()` / `Can_PeekBusy()` 分工 | `Can_IsBusy()` 会消费 CAN RX 活动计数，低功耗依赖该副作用；debug/heartbeat 使用无副作用查询。 |
+| `READ_BLOCK` 分包状态 | 上位机依赖 `0x86` 顺序分包，且读块期间要阻塞 STOP。 |
+
+### 3.3 行为边界
+
+本次不改变：
+
+- CAN App 命令 ID `0x60`、ACK ID `0x61`。
+- ACK magic `5A A5`、CRC16 和 `Data[2..5]` 字段含义。
+- `READ_BLOCK` 最大 120 words、1 tick 分包间隔和 `0x86` 数据帧顺序。
+- TX 队列 request/periodic 来源标记。
+- `Can_IsBusy()` 对低功耗的阻塞语义。
+
+## 4. 已审查但暂不修改的模块
 
 | 模块 | 观察 | 判断 |
 |---|---|---|
@@ -60,6 +89,6 @@
 | `LowPowerSleep.c` | `LowPowerSleep_SaveCoreState()` 和 `LowPowerSleep_SaveResetState()` 分别对应普通睡眠保存和 reset-sleep 额外 LedBar SOC 保存。 | 保留。函数短，但调用语义不同，边界清楚。 |
 | `rtc_sleep.c` | `lp_idle()` 已合并回 `lp_select()`，无调用的 `LP_GetLastSleepSeconds()` / `LP_RecordLastSleepSeconds()` 已删除；`lp_sync()`、`lp_deep()`、`lp_select()`、`rtc_sleep_prepare_rtc()`、`rtc_sleep_run_hiccup_cycle()` 仍保留。 | 已小步净删减；剩余函数分别对应调试状态同步、deep 优先级判断、模式选择和 STOP 进入/恢复边界，暂不继续合并。 |
 
-## 4. 结论
+## 5. 结论
 
-本轮只落地 `LedBar` 的净删减，因为它符合“无调用方、无消费者、无当前行为”的低风险条件。其它看起来短的小函数暂不按代码行数机械合并，后续如果继续简化，应优先从静态调用关系明确的 dead API、无消费者状态、已失效配置分支继续下手。
+本轮落地 `LedBar` 和 CAN App 返回帧两处净删减，因为它们符合“无调用方、无消费者或重复实现、无当前行为变化”的低风险条件。其它看起来短的小函数暂不按代码行数机械合并，后续如果继续简化，应优先从静态调用关系明确的 dead API、无消费者状态、已失效配置分支继续下手。

@@ -42,6 +42,7 @@
 | T-CAN-004 | READ_BLOCK | 通过 CAN App 读 `0xD000` 块 | 多帧 `0x86` 顺序返回，不丢帧 |
 | T-CAN-005 | ENTER_IAP | 工装环境发进入 IAP | ack 后延迟复位，App 不覆盖 IAP |
 | T-CAN-006 | BusOff 恢复 | 模拟 CAN 异常后恢复总线 | `CAN_ABOM` 自动恢复，恢复后周期帧继续发送；debug 可只读 ESR BOFF |
+| T-CAN-007 | App 返回帧 helper 回归 | 执行 `rg "feidao_can_app_send_ack|feidao_can_app_send_word_frame" "103 + 309/Project/Source"`，并对 `Can_HDX.c` 做语法检查 | 旧重复 helper 无源码命中；`GET_STATUS` ACK 和 `READ_BLOCK_DATA` 仍使用 `0x61/5A A5/CRC16` |
 
 ## 4. 参数读写测试
 

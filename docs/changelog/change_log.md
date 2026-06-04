@@ -6,6 +6,18 @@
 最后更新时间：2026-06-04
 未确认事项：`NEED_CONFIRM` 文档仍需用户确认是否保留；部分旧文档仍被 `tools/project_check.py` 固定引用。
 
+## 2026-06-04 CAN App 返回帧 helper 收敛
+
+源码变更：
+- `Can_HDX.c` 将普通 ACK 和 `READ_BLOCK_DATA` 的 `0x61` 返回帧组包收敛为单一 `feidao_can_app_send_frame()`。
+- 删除只服务 `GET_STATUS` 的 `feidao_can_u16_to_percent()`，SOC/SOH 100% 限幅直接保留在命令处理分支。
+
+文档变更：
+- 更新 CAN 协议、通信协议设计、测试计划和模块简化审查记录。
+
+验证边界：
+- 不改变 CAN ID、payload 字节含义、CRC、ACK 状态码、`READ_BLOCK` 顺序分包、TX 队列来源和低功耗 busy 判断。
+
 ## 2026-06-04 低功耗函数粒度净删减
 
 源码变更：

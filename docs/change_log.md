@@ -1,5 +1,17 @@
 # 变更记录
 
+## 2026-06-04 CAN App 返回帧 helper 收敛
+
+源码变更：
+- `Can_HDX.c`：将 App 普通 ACK 和 `READ_BLOCK_DATA` 的重复 `0x61` 返回帧组包收敛为单一 `feidao_can_app_send_frame()`。
+- `Can_HDX.c`：删除只被 `GET_STATUS` 使用的 `feidao_can_u16_to_percent()`，SOC/SOH 100% 限幅直接留在命令分支内。
+
+文档变更：
+- 更新 CAN 协议、通信协议设计、测试计划和模块简化审查记录。
+
+行为边界：
+- 不修改 CAN 标准帧 ID、扩展帧 ID、magic、CRC、ACK 状态码、`READ_BLOCK` 分包格式、TX 队列来源和 `Can_IsBusy()` 低功耗语义。
+
 ## 2026-06-04 低功耗函数粒度净删减
 
 源码变更：

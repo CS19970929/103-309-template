@@ -16,6 +16,7 @@
 - 发送侧使用 `FEIDAO_CAN_TX_QUEUE_SIZE = 32` 的软件队列；队列项标记来源，周期广播走 `Can_HDX_TransmitPeriodic()`，App ACK/read-block 等请求类帧走 `Can_HDX_Transmit()`。
 - CAN 诊断通过 `Can_GetDebugSnapshot()` 填充 debug 结构；bus-off 位从 `CAN1->ESR` 只读获取。
 - `Can_HDX.c` 内部状态按职责收口为 `s_tx`、`s_runtime`、`s_app` 三类文件级 `static` runtime。
+- App 普通 ACK 和 `READ_BLOCK_DATA` 共用内部 `feidao_can_app_send_frame()` 生成 `0x61` 标准返回帧，保持 `5A A5`、`Data[2..5]` 和 CRC16 格式一致。
 
 ## 2. 周期广播
 

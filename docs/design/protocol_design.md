@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`Sci_Upper.c/.h`, `Can_HDX.c/.h`, `CanFeidaoFrames.c/.h`, `ProductionID.c`, `Flash.c`, `FactoryAging.c`
-最后更新时间：2026-05-26
+最后更新时间：2026-06-04
 未确认事项：Host 写权限、CAN 版本字段来源、老化和 SOC 控制是否长期保留。
 
 ## 1. 通信架构
@@ -69,6 +69,8 @@ CAN App 服务会复用 Modbus 寄存器读写函数，因此 Modbus 寄存器�
 | `0x04/0x05` | WRITE_PREP/WRITE_COMMIT，桥接 Modbus 单寄存器写 |
 | `0x06` | READ_BLOCK，连续读寄存器并以 `0x86` 分帧返回 |
 | `0x07-0x0A` | 老化 start/stop/reset/set hours |
+
+实现边界：普通 ACK 和 `READ_BLOCK` 的 `0x86` 数据帧都通过同一个内部 `feidao_can_app_send_frame()` 组 `0x61` 标准帧，差异只在 `Data[2..5]`；协议 ID、magic、CRC 和分包字段不变。
 
 ## 5. 协议和业务耦合风险
 

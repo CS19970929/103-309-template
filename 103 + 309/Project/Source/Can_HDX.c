@@ -127,11 +127,9 @@ static void feidao_can_queue_periodic_mask(UINT16 mask);
 static void feidao_can_schedule_periodic(UINT32 now_tick);
 static UINT8 feidao_can_app_crc_ok(const UINT8 data[8]);
 static void feidao_can_app_fill_crc(UINT8 data[8]);
-static UINT8 feidao_can_u16_to_percent(UINT16 value);
 static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action);
 static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1);
-static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1);
-static void feidao_can_app_send_word_frame(UINT8 seq, UINT16 value);
+static void feidao_can_app_send_frame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1);
 static UINT8 feidao_can_app_status_from_host_error(UINT8 error);
 static void feidao_can_clear_app_cmd_queue(void);
 static UINT8 feidao_can_take_app_cmd(UINT8 data[8]);
@@ -392,11 +390,6 @@ static void feidao_can_app_fill_crc(UINT8 data[8])
 	data[7] = (UINT8)crc;
 }
 
-static UINT8 feidao_can_u16_to_percent(UINT16 value)
-{
-	return (value > 100U) ? 100U : (UINT8)value;
-}
-
 static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action)
 {
 	return ((data[3] == FEIDAO_CAN_APP_AGING_GUARD) &&
@@ -419,7 +412,7 @@ static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1)
 	}
 }
 
-static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8 value1)
+static void feidao_can_app_send_frame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1)
 {
 	CanTxMsg tx_msg;
 
@@ -431,28 +424,9 @@ static void feidao_can_app_send_ack(UINT8 cmd, UINT8 status, UINT8 value0, UINT8
 	tx_msg.Data[0] = 0x5AU;
 	tx_msg.Data[1] = 0xA5U;
 	tx_msg.Data[2] = cmd;
-	tx_msg.Data[3] = status;
+	tx_msg.Data[3] = status_or_seq;
 	tx_msg.Data[4] = value0;
 	tx_msg.Data[5] = value1;
-	feidao_can_app_fill_crc(tx_msg.Data);
-	(void)Can_HDX_Transmit(&tx_msg);
-}
-
-static void feidao_can_app_send_word_frame(UINT8 seq, UINT16 value)
-{
-	CanTxMsg tx_msg;
-
-	memset(&tx_msg, 0, sizeof(tx_msg));
-	tx_msg.StdId = FEIDAO_CAN_APP_ACK_ID;
-	tx_msg.IDE = CAN_ID_STD;
-	tx_msg.RTR = CAN_RTR_DATA;
-	tx_msg.DLC = 8U;
-	tx_msg.Data[0] = 0x5AU;
-	tx_msg.Data[1] = 0xA5U;
-	tx_msg.Data[2] = FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA;
-	tx_msg.Data[3] = seq;
-	tx_msg.Data[4] = (UINT8)(value >> 8);
-	tx_msg.Data[5] = (UINT8)value;
 	feidao_can_app_fill_crc(tx_msg.Data);
 	(void)Can_HDX_Transmit(&tx_msg);
 }
@@ -558,7 +532,10 @@ static void feidao_can_service_read_block_stream(UINT32 now_tick)
 		return;
 	}
 
-	feidao_can_app_send_word_frame(s_app.read_block_index, s_app.read_block_words[s_app.read_block_index]);
+	feidao_can_app_send_frame(FEIDAO_CAN_APP_CMD_READ_BLOCK_DATA,
+							  s_app.read_block_index,
+							  (UINT8)(s_app.read_block_words[s_app.read_block_index] >> 8),
+							  (UINT8)s_app.read_block_words[s_app.read_block_index]);
 	s_app.read_block_index++;
 	s_app.read_block_last_tick = now_tick;
 	if (s_app.read_block_index >= s_app.read_block_count)
@@ -591,8 +568,10 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 	switch (cmd)
 	{
 	case FEIDAO_CAN_APP_CMD_GET_STATUS:
-		value0 = feidao_can_u16_to_percent(g_stCellInfoReport.SocElement.u16Soc);
-		value1 = feidao_can_u16_to_percent(g_stCellInfoReport.SocElement.u16Soh);
+		reg_value = g_stCellInfoReport.SocElement.u16Soc;
+		value0 = (UINT8)((reg_value > 100U) ? 100U : reg_value);
+		reg_value = g_stCellInfoReport.SocElement.u16Soh;
+		value1 = (UINT8)((reg_value > 100U) ? 100U : reg_value);
 		break;
 
 	case FEIDAO_CAN_APP_CMD_ENTER_IAP:
@@ -730,7 +709,7 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		break;
 	}
 
-	feidao_can_app_send_ack(cmd, status, value0, value1);
+	feidao_can_app_send_frame(cmd, status, value0, value1);
 }
 
 static void feidao_can_service_enter_iap_delay(void)
