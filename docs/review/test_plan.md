@@ -21,6 +21,7 @@
 | T-BUILD-003 | Release target guard | 检查 Keil `FD_Release` defines 和 `tools/project_check.py` | Release 不带 `_DEBUG_`、`PROJECT_CFG_DEBUG_WATCH_ENABLE`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE`、`PROJECT_CFG_IRQ_DEBUG_ENABLE`、`PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE`、`ELOG_OUTPUT_ENABLE`、`FLASH64K_APP_*`，且 SOC 注入测试入口 disabled |
 | T-BUILD-004 | 后 64K 地址检查 | 读取 Flash size register 或脚本静态检查 | 若小于 128KB，不允许使用 `0x0801C000+` 存储 |
 | T-BUILD-005 | Debug Watch 入口 | Keil `FD_Debug` 编译并在 Watch 添加 `g_dbg_watch` | Debug 可从单一根结构体展开 `runtime/comm/system/afe/fault/public_data/app/calib/tables`；`g_dbg` 通过 `g_dbg_watch.system.snapshot` 查看；IRQ 计数通过 `g_dbg_watch.system.irq` 查看；Release 下不生成新增调试符号，profile 0 误开任一调试开关会被 BuildGuard 阻止 |
+| T-BUILD-009 | Debug Watch 顶层重复别名清理 | 执行旧顶层字段静态扫描，并按 `docs/guides/DEBUG_WATCH_GUIDE.md` 添加 Watch | 源码不再绑定旧顶层重复入口；Keil Watch 从 `runtime.*`、`system.*`、`public_data.*` 等目录字段展开 |
 
 ## 2. 上位机 Modbus 协议回归测试
 

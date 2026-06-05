@@ -56,7 +56,7 @@ static FLASH_RUNTIME s_flash;
 #if DEBUG_WATCH_ENABLED
 void Flash_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->flash = &s_flash;
+	watch->runtime.flash = &s_flash;
 }
 #endif
 

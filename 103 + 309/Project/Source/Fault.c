@@ -21,6 +21,7 @@ void FaultWarnRecord2(enum FaultFlag num);
 void Fault_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
 	watch->fault.protect = &PRT_E2ROMParas;
+	watch->public_data.protect = &PRT_E2ROMParas;
 	watch->fault.first = &Fault_Flag_Fisrt;
 	watch->fault.second = &Fault_Flag_Second;
 	watch->fault.third = &Fault_Flag_Third;

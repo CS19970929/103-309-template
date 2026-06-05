@@ -16,7 +16,7 @@ static SLEEP_RUNTIME s_sleep;
 #if DEBUG_WATCH_ENABLED
 void SleepDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->sleep = &s_sleep;
+	watch->runtime.sleep = &s_sleep;
 }
 #endif
 

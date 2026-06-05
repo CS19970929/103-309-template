@@ -9,7 +9,7 @@
 - 后续新增调试点应优先放到 `DebugHooks.c` 或 Debug-only 模块，不要把 `SystemDebug_Event()`、profile 记录和调试打印细节写回业务调度文件。
 
 文档状态：已按源码验证
-最后更新时间：2026-06-04
+最后更新时间：2026-06-05
 参考源码：
 - `103 + 309/Project/Source/DebugHooks.c/.h`
 - `103 + 309/Project/Source/DebugWatch.h`
@@ -91,7 +91,7 @@ g_dbg_watch
 | `g_dbg_watch.calib` | K/B 校准系数和 AFE 采样电阻换算值 |
 | `g_dbg_watch.tables` | 只读查表数据，如 NTC、AFE 阈值、SOC OCV、LED 映射、CAN 飞道广播调度表 |
 
-旧字段如 `g_dbg_watch.adc`、`g_dbg_watch.data`、`g_dbg_watch.can_tx`、`g_dbg_watch.low_power` 仍保留，用于兼容已经保存的 Watch 表达式；新调试建议优先用目录字段。
+旧顶层别名字段已经删除，不再保留重复入口。Keil Watch 请统一从目录字段展开，避免同一个变量在根结构中重复出现。
 
 `g_dbg` 不需要再单独加入 Keil Watch。`FD_Debug` 默认打开 `SystemDebug` 后，`g_dbg` 会作为快照实体挂到：
 
@@ -126,31 +126,31 @@ g_dbg_watch.tables.adc_ntc_10k
 ### DataDeal / AFE 电流
 
 ```c
-g_dbg_watch.data
-g_dbg_watch.data->cur.zeroState
-g_dbg_watch.data->cur.zeroReady
-g_dbg_watch.data->cur.zeroOffsetRawQ4
-g_dbg_watch.data->cur.lastRawSigned
-g_dbg_watch.data->mon.ch[0].faultCnt
-g_dbg_watch.data->mon.ch[0].wakeCnt
-g_dbg_watch.data->mon.sleepDelay[0]
-g_dbg_watch.data->afeSeq
+g_dbg_watch.runtime.data
+g_dbg_watch.runtime.data->cur.zeroState
+g_dbg_watch.runtime.data->cur.zeroReady
+g_dbg_watch.runtime.data->cur.zeroOffsetRawQ4
+g_dbg_watch.runtime.data->cur.lastRawSigned
+g_dbg_watch.runtime.data->mon.ch[0].faultCnt
+g_dbg_watch.runtime.data->mon.ch[0].wakeCnt
+g_dbg_watch.runtime.data->mon.sleepDelay[0]
+g_dbg_watch.runtime.data->afeSeq
 ```
 
 ### LedBar
 
 ```c
-g_dbg_watch.ledbar
-g_dbg_watch.ledbar->number
-g_dbg_watch.ledbar->indicator_mask
-g_dbg_watch.ledbar->scan_index
-g_dbg_watch.ledbar->frame.length
-g_dbg_watch.ledbar->soc_display_10ms
-g_dbg_watch.ledbar->key_hold_10ms
-g_dbg_watch.ledbar->key_active
-g_dbg_watch.ledbar->mcu_wk_active
-g_dbg_watch.ledbar->sleep
-g_dbg_watch.ledbar->blank
+g_dbg_watch.runtime.ledbar
+g_dbg_watch.runtime.ledbar->number
+g_dbg_watch.runtime.ledbar->indicator_mask
+g_dbg_watch.runtime.ledbar->scan_index
+g_dbg_watch.runtime.ledbar->frame.length
+g_dbg_watch.runtime.ledbar->soc_display_10ms
+g_dbg_watch.runtime.ledbar->key_hold_10ms
+g_dbg_watch.runtime.ledbar->key_active
+g_dbg_watch.runtime.ledbar->mcu_wk_active
+g_dbg_watch.runtime.ledbar->sleep
+g_dbg_watch.runtime.ledbar->blank
 ```
 
 ### 飞道 CAN
@@ -158,22 +158,22 @@ g_dbg_watch.ledbar->blank
 Debug Watch 入口分成发送队列、周期调度和 App 命令三部分：
 
 ```c
-g_dbg_watch.can_tx
-g_dbg_watch.can_tx->count
-g_dbg_watch.can_tx->mailbox
-g_dbg_watch.can_tx->start_tick
+g_dbg_watch.runtime.can_tx
+g_dbg_watch.runtime.can_tx->count
+g_dbg_watch.runtime.can_tx->mailbox
+g_dbg_watch.runtime.can_tx->start_tick
 
-g_dbg_watch.can_runtime
-g_dbg_watch.can_runtime->tick
-g_dbg_watch.can_runtime->last_1000ms_tick
-g_dbg_watch.can_runtime->last_5000ms_tick
+g_dbg_watch.runtime.can_runtime
+g_dbg_watch.runtime.can_runtime->tick
+g_dbg_watch.runtime.can_runtime->last_1000ms_tick
+g_dbg_watch.runtime.can_runtime->last_5000ms_tick
 
-g_dbg_watch.can_app
-g_dbg_watch.can_app->cmd_count
-g_dbg_watch.can_app->write_pending
-g_dbg_watch.can_app->write_addr
-g_dbg_watch.can_app->read_block_active
-g_dbg_watch.can_app->enter_iap_delay_ticks
+g_dbg_watch.runtime.can_app
+g_dbg_watch.runtime.can_app->cmd_count
+g_dbg_watch.runtime.can_app->write_pending
+g_dbg_watch.runtime.can_app->write_addr
+g_dbg_watch.runtime.can_app->read_block_active
+g_dbg_watch.runtime.can_app->enter_iap_delay_ticks
 ```
 
 `FD_Debug` 已默认打开 `PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`。不要单独把 `g_dbg` 加入 Watch，需要快照时展开 `g_dbg_watch.system.snapshot->can`。
@@ -181,83 +181,83 @@ g_dbg_watch.can_app->enter_iap_delay_ticks
 ### SleepDeal / Flash / Log
 
 ```c
-g_dbg_watch.sleep
-g_dbg_watch.sleep->ext_comm
-g_dbg_watch.sleep->boot_sleep
-g_dbg_watch.sleep->chg_wake
+g_dbg_watch.runtime.sleep
+g_dbg_watch.runtime.sleep->ext_comm
+g_dbg_watch.runtime.sleep->boot_sleep
+g_dbg_watch.runtime.sleep->chg_wake
 
-g_dbg_watch.flash
-g_dbg_watch.flash->busy
+g_dbg_watch.runtime.flash
+g_dbg_watch.runtime.flash->busy
 
-g_dbg_watch.log_record
-g_dbg_watch.log_record->point
-g_dbg_watch.log_record->uptimeSeconds
-g_dbg_watch.log_record->lastSaveValid[0]
-g_dbg_watch.log_record->eventLatch[0]
+g_dbg_watch.runtime.log_record
+g_dbg_watch.runtime.log_record->point
+g_dbg_watch.runtime.log_record->uptimeSeconds
+g_dbg_watch.runtime.log_record->lastSaveValid[0]
+g_dbg_watch.runtime.log_record->eventLatch[0]
 ```
 
 低功耗 RTC 状态当前仍可直接观察：
 
 ```c
-g_dbg_watch.low_power
-g_dbg_watch.low_power->mode
-g_dbg_watch.low_power->block
-g_dbg_watch.low_power->idle
-g_dbg_watch.low_power->sleep
-g_dbg_watch.irq_wakeup
-*g_dbg_watch.irq_wakeup
+g_dbg_watch.system.low_power
+g_dbg_watch.system.low_power->mode
+g_dbg_watch.system.low_power->block
+g_dbg_watch.system.low_power->idle
+g_dbg_watch.system.low_power->sleep
+g_dbg_watch.system.irq_wakeup
+*g_dbg_watch.system.irq_wakeup
 ```
 
 ### 系统节拍 / 状态
 
 ```c
-g_dbg_watch.sys_time_latched
-g_dbg_watch.sys_time_latched->all
-g_dbg_watch.sys_time_pending
-g_dbg_watch.sys_time_pending->all
-g_dbg_watch.sys_10ms_tick_count
-*g_dbg_watch.sys_10ms_tick_count
-g_dbg_watch.sys_200ms_pending_periods
-*g_dbg_watch.sys_200ms_pending_periods
-g_dbg_watch.sys_200ms_overflow_count
-*g_dbg_watch.sys_200ms_overflow_count
+g_dbg_watch.system.time_latched
+g_dbg_watch.system.time_latched->all
+g_dbg_watch.system.time_pending
+g_dbg_watch.system.time_pending->all
+g_dbg_watch.system.tick_10ms
+*g_dbg_watch.system.tick_10ms
+g_dbg_watch.system.pending_200ms
+*g_dbg_watch.system.pending_200ms
+g_dbg_watch.system.overflow_200ms
+*g_dbg_watch.system.overflow_200ms
 
-g_dbg_watch.system_feature
-g_dbg_watch.system_feature->all
-g_dbg_watch.system_status
-g_dbg_watch.system_status->all
-g_dbg_watch.system_error
-g_dbg_watch.system_error->u8ErrFlag_ADC
+g_dbg_watch.system.feature
+g_dbg_watch.system.feature->all
+g_dbg_watch.system.status
+g_dbg_watch.system.status->all
+g_dbg_watch.system.error
+g_dbg_watch.system.error->u8ErrFlag_ADC
 ```
 
 核心状态也集中到根结构体：
 
 ```c
-g_dbg_watch.cell_report
-g_dbg_watch.cell_report->u16VCellTotle
-g_dbg_watch.cell_report->u16Ichg
-g_dbg_watch.cell_report->u16IDischg
-g_dbg_watch.cell_report->SocElement.u16Soc
+g_dbg_watch.public_data.cell_report
+g_dbg_watch.public_data.cell_report->u16VCellTotle
+g_dbg_watch.public_data.cell_report->u16Ichg
+g_dbg_watch.public_data.cell_report->u16IDischg
+g_dbg_watch.public_data.cell_report->SocElement.u16Soc
 
-g_dbg_watch.other
-g_dbg_watch.protect
+g_dbg_watch.public_data.other
+g_dbg_watch.public_data.protect
 ```
 
 ### SOC
 
 ```c
-g_dbg_watch.soc
-g_dbg_watch.soc->u8InternalSoc
-g_dbg_watch.soc->u8Mode
-g_dbg_watch.soc->u8LastCalibSource
-g_dbg_watch.soc->u8LowTailActive
-g_dbg_watch.soc->u16EmptyTailTarget
-g_dbg_watch.soc->u32RestTicks
-g_dbg_watch.soc->u32StableRestTicks
+g_dbg_watch.runtime.soc
+g_dbg_watch.runtime.soc->u8InternalSoc
+g_dbg_watch.runtime.soc->u8Mode
+g_dbg_watch.runtime.soc->u8LastCalibSource
+g_dbg_watch.runtime.soc->u8LowTailActive
+g_dbg_watch.runtime.soc->u16EmptyTailTarget
+g_dbg_watch.runtime.soc->u32RestTicks
+g_dbg_watch.runtime.soc->u32StableRestTicks
 
-g_dbg_watch.soc_public
-g_dbg_watch.soc_public->u8_SOC
-g_dbg_watch.soc_public->u16_CapacityNow
+g_dbg_watch.public_data.soc
+g_dbg_watch.public_data.soc->u8_SOC
+g_dbg_watch.public_data.soc->u16_CapacityNow
 ```
 
 ### 新增目录常用入口

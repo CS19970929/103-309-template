@@ -1,5 +1,27 @@
 # 变更记录
 
+## 2026-06-05 Debug Watch 顶层重复别名清理
+
+源码变更：
+- `DebugWatch.h` 删除根结构体中的旧顶层重复指针字段，`g_dbg_watch` 只保留 `runtime`、`comm`、`system`、`afe`、`fault`、`public_data`、`app`、`calib`、`tables` 目录入口。
+- 各模块 `*_DebugWatchBind()` 改为直接绑定到目录字段，例如 `runtime.adc`、`runtime.data`、`runtime.can_tx`、`system.low_power`、`system.tick_10ms`、`public_data.cell_report` 和 `public_data.soc`。
+- `DebugWatch_BindAll()` 只保留跨模块公共入口绑定，不再二次同步旧顶层别名。
+
+文档变更：
+- 更新 `docs/guides/DEBUG_WATCH_GUIDE.md`，Keil Watch 示例统一改为目录字段。
+- 更新 `docs/test_plan.md` 和 `docs/review/test_plan.md`，新增旧顶层别名静态扫描测试项。
+
+当前结论：
+- Keil Watch 仍只需要添加 `g_dbg_watch`，但不再使用旧根字段；按目录展开即可定位模块运行态、系统状态、公共数据和查表数据。
+- `FD_Debug.map` 中 `g_dbg_watch` 当前为 440B；按本轮删除的 28 个 32-bit 指针估算，Debug ZI 减少 112B。
+- Release 仍不链接 `debugwatch/systemdebug/irqdebug` 相关调试符号。
+
+验证：
+- 旧顶层字段静态扫描：源码和 `docs/guides/DEBUG_WATCH_GUIDE.md` 无命中。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug`：产物已生成，Keil 日志 `0 Error(s), 5 Warning(s)`。
+- `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`：产物已生成，Keil 日志 `0 Error(s), 2 Warning(s)`。
+- `py -3.9 tools\project_check.py --quiet`：`107 OK / 13 errors`，失败项为仓库既有缺文件、非 UTF-8 文件和历史审计门禁。
+
 ## 2026-06-04 低功耗命名与重复等待流程收敛
 
 源码变更：

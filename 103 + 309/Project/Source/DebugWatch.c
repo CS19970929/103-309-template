@@ -57,45 +57,9 @@ void DebugWatch_BindAll(void)
 	SystemDebug_DebugWatchBind(&g_dbg_watch);
 #endif
 
-	g_dbg_watch.system_error = &System_ErrFlag;
-	g_dbg_watch.low_power = &g_stLowPowerRtcStatus;
-	g_dbg_watch.irq_wakeup = &g_irq_t;
-	g_dbg_watch.cell_report = &g_stCellInfoReport;
-	g_dbg_watch.other = &OtherElement;
-	g_dbg_watch.protect = &PRT_E2ROMParas;
-
-	g_dbg_watch.runtime.adc = g_dbg_watch.adc;
-	g_dbg_watch.runtime.data = g_dbg_watch.data;
-	g_dbg_watch.runtime.can_tx = g_dbg_watch.can_tx;
-	g_dbg_watch.runtime.can_runtime = g_dbg_watch.can_runtime;
-	g_dbg_watch.runtime.can_app = g_dbg_watch.can_app;
-	g_dbg_watch.runtime.ledbar = g_dbg_watch.ledbar;
-	g_dbg_watch.runtime.sleep = g_dbg_watch.sleep;
-	g_dbg_watch.runtime.flash = g_dbg_watch.flash;
-	g_dbg_watch.runtime.log_record = g_dbg_watch.log_record;
-	g_dbg_watch.runtime.soc = g_dbg_watch.soc;
-	g_dbg_watch.runtime.soc_public = g_dbg_watch.soc_public;
-
 	g_dbg_watch.system.irq = &g_stIrqDebug;
-	g_dbg_watch.system.time_latched = g_dbg_watch.sys_time_latched;
-	g_dbg_watch.system.time_pending = g_dbg_watch.sys_time_pending;
-	g_dbg_watch.system.tick_10ms = g_dbg_watch.sys_10ms_tick_count;
-	g_dbg_watch.system.cnt50ms = g_dbg_watch.sys_cnt50ms;
-	g_dbg_watch.system.cnt100ms = g_dbg_watch.sys_cnt100ms;
-	g_dbg_watch.system.cnt200ms = g_dbg_watch.sys_cnt200ms;
-	g_dbg_watch.system.cnt1000ms = g_dbg_watch.sys_cnt1000ms;
-	g_dbg_watch.system.pending_200ms = g_dbg_watch.sys_200ms_pending_periods;
-	g_dbg_watch.system.overflow_200ms = g_dbg_watch.sys_200ms_overflow_count;
-	g_dbg_watch.system.feature = g_dbg_watch.system_feature;
-	g_dbg_watch.system.status = g_dbg_watch.system_status;
-	g_dbg_watch.system.error = g_dbg_watch.system_error;
-	g_dbg_watch.system.low_power = g_dbg_watch.low_power;
-	g_dbg_watch.system.irq_wakeup = g_dbg_watch.irq_wakeup;
-
-	g_dbg_watch.public_data.cell_report = g_dbg_watch.cell_report;
-	g_dbg_watch.public_data.other = g_dbg_watch.other;
-	g_dbg_watch.public_data.protect = g_dbg_watch.protect;
-	g_dbg_watch.public_data.soc = g_dbg_watch.soc_public;
+	g_dbg_watch.system.low_power = &g_stLowPowerRtcStatus;
+	g_dbg_watch.system.irq_wakeup = &g_irq_t;
 
 	g_dbg_watch.app.series_num = &SeriesNum;
 }

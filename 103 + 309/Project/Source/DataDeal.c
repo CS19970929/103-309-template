@@ -81,7 +81,8 @@ struct OTHER_ELEMENT OtherElement;
 #if DEBUG_WATCH_ENABLED
 void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-    watch->data = &s_data;
+    watch->runtime.data = &s_data;
+    watch->public_data.other = &OtherElement;
     watch->calib.coef_k = g_u16CalibCoefK;
     watch->calib.coef_b = g_i16CalibCoefB;
     watch->calib.cs_res_afe = &g_u32CS_Res_AFE;

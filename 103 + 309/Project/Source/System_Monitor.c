@@ -23,8 +23,9 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 #if DEBUG_WATCH_ENABLED
 void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->system_feature = &s_system_onoff_func;
-	watch->system_status = &s_system_status;
+	watch->system.feature = &s_system_onoff_func;
+	watch->system.status = &s_system_status;
+	watch->system.error = &System_ErrFlag;
 	watch->tables.system_error_field_offset = s_u8SystemErrorFieldOffset;
 	watch->tables.system_error_field_offset_count =
 		(uint16_t)(sizeof(s_u8SystemErrorFieldOffset) / sizeof(s_u8SystemErrorFieldOffset[0]));

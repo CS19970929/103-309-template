@@ -23,15 +23,15 @@ static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 #if DEBUG_WATCH_ENABLED
 void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->sys_time_latched = &g_st_SysTimeFlag;
-	watch->sys_time_pending = &s_st_SysTimePending;
-	watch->sys_10ms_tick_count = &s_u32Sys10msTickCount;
-	watch->sys_cnt50ms = &s_u8Cnt50ms;
-	watch->sys_cnt100ms = &s_u8Cnt100ms;
-	watch->sys_cnt200ms = &s_u8Cnt200ms;
-	watch->sys_cnt1000ms = &s_u8Cnt1000ms;
-	watch->sys_200ms_pending_periods = &s_u8Sys200msPendingPeriods;
-	watch->sys_200ms_overflow_count = &s_u16Sys200msOverflowCnt;
+	watch->system.time_latched = &g_st_SysTimeFlag;
+	watch->system.time_pending = &s_st_SysTimePending;
+	watch->system.tick_10ms = &s_u32Sys10msTickCount;
+	watch->system.cnt50ms = &s_u8Cnt50ms;
+	watch->system.cnt100ms = &s_u8Cnt100ms;
+	watch->system.cnt200ms = &s_u8Cnt200ms;
+	watch->system.cnt1000ms = &s_u8Cnt1000ms;
+	watch->system.pending_200ms = &s_u8Sys200msPendingPeriods;
+	watch->system.overflow_200ms = &s_u16Sys200msOverflowCnt;
 	watch->system.delay_fac_us = &fac_us;
 	watch->system.delay_fac_ms = &fac_ms;
 }

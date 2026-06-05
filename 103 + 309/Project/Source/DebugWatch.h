@@ -211,38 +211,6 @@ typedef struct DEBUG_WATCH_ROOT_TAG
 	DEBUG_WATCH_APP_DIR app;
 	DEBUG_WATCH_CALIB_DIR calib;
 	DEBUG_WATCH_TABLE_DIR tables;
-
-	struct ADC_RUNTIME_TAG *adc;
-	struct _DATA_RUNTIME *data;
-	struct FEIDAO_CAN_TX_RUNTIME_TAG *can_tx;
-	struct FEIDAO_CAN_RUNTIME_TAG *can_runtime;
-	struct FEIDAO_CAN_APP_RUNTIME_TAG *can_app;
-	struct LEDBAR_RUNTIME_TAG *ledbar;
-	struct SLEEP_RUNTIME_TAG *sleep;
-	struct FLASH_RUNTIME_TAG *flash;
-	struct LOG_RECORD_RUNTIME_TAG *log_record;
-	struct SOC_DEBUG_WATCH *soc;
-	struct SOC_ENHANCE_ELEMENT *soc_public;
-
-	volatile union SYS_TIME *sys_time_latched;
-	volatile union SYS_TIME *sys_time_pending;
-	volatile uint32_t *sys_10ms_tick_count;
-	uint8_t *sys_cnt50ms;
-	uint8_t *sys_cnt100ms;
-	uint8_t *sys_cnt200ms;
-	uint8_t *sys_cnt1000ms;
-	volatile uint8_t *sys_200ms_pending_periods;
-	volatile uint16_t *sys_200ms_overflow_count;
-
-	volatile union System_OnOFF_Function *system_feature;
-	volatile union System_Status *system_status;
-	volatile struct SYSTEM_ERROR *system_error;
-	volatile struct LOW_POWER_RTC_STATUS *low_power;
-	enum irqWakeup *irq_wakeup;
-
-	struct stCell_Info *cell_report;
-	struct OTHER_ELEMENT *other;
-	struct PRT_E2ROM_PARAS *protect;
 } DEBUG_WATCH_ROOT;
 
 extern DEBUG_WATCH_ROOT g_dbg_watch;

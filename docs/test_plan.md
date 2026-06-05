@@ -9,12 +9,12 @@
 | Runtime 调试实现隔离 | `rg "SystemDebug_Event|SystemDebug_ProfileRecord|SystemDebug_GetCycleCount|DbgPrint_Summary|DBG_PROFILE_|DBG_MODULE_" "103 + 309/Project/Source/Runtime.c"` | 无命中，业务调度文件只出现 `DebugHooks_Runtime*()` | 已通过，无命中 |
 | Keil target 文件隔离 | `py -3.9 tools\project_check.py` | `FD_Debug` 编译 `DebugHooks.c/DebugWatch.c/SystemDebug.c/IrqDebug.c`，`FD_Release` 不编译这些文件 | 新增检查通过；完整脚本仍因历史缺文件/编码等基线项失败 |
 | Keil target 输出目录隔离 | `py -3.9 tools\project_check.py` | `FD_Release` 保持 `Objects`，`FD_Debug` 使用 `Objects_Debug`，两个 target 不共用中间 `.o` | 新增检查通过 |
-| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | 0 error，`g_dbg_watch.runtime.app`、`g_dbg_watch.system.snapshot`、`g_dbg_watch.system.irq` 可链接 | 已通过，Keil `0 Error(s), 0 Warning(s)` |
-| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | 0 error，Release 不链接 Debug-only 实现文件 | 已通过，Keil `0 Error(s), 0 Warning(s)` |
+| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | 0 error，`g_dbg_watch.runtime.app`、`g_dbg_watch.system.snapshot`、`g_dbg_watch.system.irq` 可链接 | 已通过，Keil `0 Error(s), 5 Warning(s)` |
+| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | 0 error，Release 不链接 Debug-only 实现文件 | 已通过，Keil `0 Error(s), 2 Warning(s)` |
 | Keil Watch 真机验证 | `FD_Debug` 下载后 Watch 添加 `g_dbg_watch` | 能展开 runtime/system/irq；不需要单独添加 `g_dbg` | 待真机验证 |
 
 文档状态：部分验证
-最后更新时间：2026-06-04
+最后更新时间：2026-06-05
 说明：完整 review 后测试计划见 `docs/review/test_plan.md`；本文件按仓库协作规则保留为顶层入口。
 
 ## Keil Debug Watch 全项目调试目录测试入口
@@ -23,13 +23,14 @@
 
 | 测试项 | 入口 | 通过标准 | 当前结果 |
 |---|---|---|---|
-| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | `PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_ENABLE=1` 下可链接 | 已通过，Keil `0 Error(s), 6 Warning(s)` |
-| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | Release 不带调试符号，`g_dbg_watch` 不参与量产链接 | 已通过，Keil `0 Error(s), 5 Warning(s)` |
+| Debug 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Debug` | `PROJECT_CFG_DEBUG_WATCH_ENABLE=1`、`PROJECT_CFG_DEBUG_MONITOR_ENABLE=1`、`PROJECT_CFG_IRQ_DEBUG_ENABLE=1` 下可链接 | 已通过，Keil `0 Error(s), 5 Warning(s)` |
+| Release 编译 | `powershell -ExecutionPolicy Bypass -File tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release` | Release 不带调试符号，`g_dbg_watch` 不参与量产链接 | 已通过，Keil `0 Error(s), 2 Warning(s)` |
 | Watch 根入口 | Keil `FD_Debug` 下载后添加 `g_dbg_watch` | 能展开 `runtime/comm/system/afe/fault/public_data/app/calib/tables` | 待真机 Watch 验证 |
+| 顶层重复别名清理 | `rg "g_dbg_watch\\.(adc|data|can_tx|can_runtime|can_app|ledbar|sleep|flash|log_record|low_power|irq_wakeup|sys_|soc\\b|soc_public)" "103 + 309/Project/Source" docs/guides/DEBUG_WATCH_GUIDE.md` | 源码和调试指南不再出现旧顶层重复入口 | 已通过，无命中 |
 | SystemDebug 快照 | Watch `g_dbg_watch.system.snapshot` | 可观察原 `g_dbg` 快照，不需要单独添加 `g_dbg` | 编译通过，待真机 Watch 验证 |
 | IRQ 计数 | Watch `g_dbg_watch.system.irq` | 能观察 `total[]`、`phase[][]`、`last_id`、`last_phase` | 编译通过，待真机中断验证 |
 | Release 门禁 | 临时在 profile 0 打开 Debug Watch/SystemDebug/IRQ debug | `Project_BuildGuard.h` 编译报错阻止构建 | 门禁代码已补，临时破坏性配置未执行 |
-| 自动工程检查 | `py -3.9 tools\project_check.py` | Debug/Release 宏策略检查通过 | 宏策略通过；脚本仍因仓库既有缺文件、编码、历史文档和 ADC runtime 检查项失败 |
+| 自动工程检查 | `py -3.9 tools\project_check.py --quiet` | Debug/Release 宏策略检查通过 | 已执行，`107 OK / 13 errors`；失败项为仓库既有缺文件、非 UTF-8 文件和历史审计门禁 |
 | SOC host 回归 | `py -3.9 tools\run_soc_host_c_test.py` | Debug Watch 开关下 SOC host C 测试不回退 | 已通过，6 组均 19 项 |
 
 ## Keil Debug Watch 入口补齐测试入口
@@ -42,7 +43,7 @@
 | Debug 编译 | Keil `FD_Debug` | 编译通过，`PROJECT_CFG_DEBUG_WATCH_ENABLE=1` 下新增 Watch 指针符号可链接 |
 | Release 门禁 | 临时在 profile 0 打开 `PROJECT_CFG_DEBUG_WATCH_ENABLE=1` | `Project_BuildGuard.h` 应报错阻止构建 |
 | 符号扫描 | `rg "g_dbg_" "103 + 309/Project/Source"` | 源码调试全局只剩 `g_dbg_watch` |
-| Keil Watch | `FD_Debug` 下载调试后添加 `g_dbg_watch` | 能展开 `adc`、`data`、`can_tx`、`ledbar`、`soc` 等字段，不需要单步进入对应 `.c` 文件作用域 |
+| Keil Watch | `FD_Debug` 下载调试后添加 `g_dbg_watch` | 能展开 `runtime.adc`、`runtime.data`、`runtime.can_tx`、`runtime.ledbar`、`runtime.soc` 等目录字段，不需要单步进入对应 `.c` 文件作用域 |
 | 行为回归 | 观察 ADC、AFE 电流、CAN 队列、LedBar、Sleep/Flash/Log 状态 | 只读观察，不改变协议字段、保护阈值、SOC 计算、Flash 布局和低功耗行为 |
 
 ## DataDeal/AFE 运行状态结构体化第 3 阶段测试入口

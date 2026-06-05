@@ -84,7 +84,7 @@ static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
 #if DEBUG_WATCH_ENABLED
 void ADC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-    watch->adc = &s_adc;
+    watch->runtime.adc = &s_adc;
     watch->tables.adc_ntc_10k = iSheldTemp_10K;
 }
 #endif

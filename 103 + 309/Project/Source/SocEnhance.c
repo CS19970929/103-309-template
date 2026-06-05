@@ -141,8 +141,9 @@ static UINT8 s_soc_watch_rest_voltage_stable;
 static void SocEnhance_DebugWatchBindTables(DEBUG_WATCH_ROOT *watch);
 void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->soc = &s_soc_debug_watch;
-	watch->soc_public = &SOC_Enhance_Element;
+	watch->runtime.soc = &s_soc_debug_watch;
+	watch->runtime.soc_public = &SOC_Enhance_Element;
+	watch->public_data.soc = &SOC_Enhance_Element;
 	watch->runtime.soc_state = &s_soc;
 	watch->runtime.soc_saved = &s_saved_soc;
 	watch->runtime.soc_rtc_rest_applied_seconds = &s_u32SocRtcRestAppliedSeconds;

@@ -106,9 +106,9 @@ static FeidaoCanAppRuntime s_app;
 #if DEBUG_WATCH_ENABLED
 void Can_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
-	watch->can_tx = &s_tx;
-	watch->can_runtime = &s_runtime;
-	watch->can_app = &s_app;
+	watch->runtime.can_tx = &s_tx;
+	watch->runtime.can_runtime = &s_runtime;
+	watch->runtime.can_app = &s_app;
 }
 #endif
 
