@@ -663,21 +663,6 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
 }
 
-static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
-{
-	UINT8 old_soc = s_soc.soc;
-
-	if (++(*counter) >= step->ticks)
-	{
-		if (s_soc.soc > step->target)
-		{
-			soc_set(soc_step(s_soc.soc, step->target, SOC_CAL_STEP));
-		}
-		*counter = 0U;
-	}
-	return (UINT8)(s_soc.soc != old_soc);
-}
-
 static UINT8 soc_select_empty_tail_step(UINT8 mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
 	UINT8 band;
@@ -734,47 +719,49 @@ static UINT8 soc_select_empty_tail_step(UINT8 mode, int32_t net_current_ma, SOC_
 	return 0U;
 }
 
-static UINT8 soc_apply_full_or_empty_tail(UINT8 mode,
-										  UINT8 empty_active,
-										  const SOC_TAIL_STEP *empty_step)
+static UINT8 soc_apply_full_confirm(UINT8 active)
 {
 	UINT16 full_confirm_ticks;
 	UINT8 old_soc = s_soc.soc;
 
-	if (mode != SOC_MODE_DSG)
-	{
-		if (soc_full_confirm_allowed())
-		{
-			full_confirm_ticks = (UINT16)(SOC_FULL_SECONDS * SOC_TICKS_PER_SECOND);
-			s_soc.empty_ticks = 0U;
-			if (s_soc.full_ticks < full_confirm_ticks)
-			{
-				++s_soc.full_ticks;
-			}
-			if (s_soc.full_ticks >= full_confirm_ticks)
-			{
-				soc_set(soc_step(s_soc.soc, 100U, SOC_CAL_STEP));
-				s_soc.full_ticks = 0U;
-			}
-			return (UINT8)(s_soc.soc != old_soc);
-		}
-		s_soc.full_ticks = 0U;
-	}
-	else
+	if (!active)
 	{
 		s_soc.full_ticks = 0U;
+		return 0U;
 	}
+	full_confirm_ticks = (UINT16)(SOC_FULL_SECONDS * SOC_TICKS_PER_SECOND);
+	s_soc.empty_ticks = 0U;
+	if (s_soc.full_ticks < full_confirm_ticks)
+	{
+		++s_soc.full_ticks;
+	}
+	if (s_soc.full_ticks >= full_confirm_ticks)
+	{
+		soc_set(soc_step(s_soc.soc, 100U, SOC_CAL_STEP));
+		s_soc.full_ticks = 0U;
+	}
+	return (UINT8)(s_soc.soc != old_soc);
+}
+
+static UINT8 soc_apply_empty_tail(UINT8 empty_active, const SOC_TAIL_STEP *empty_step)
+{
+	UINT8 old_soc = s_soc.soc;
 
 	if (!empty_active)
 	{
 		s_soc.empty_ticks = 0U;
 		return 0U;
 	}
-	if (soc_apply_tail_step(empty_step, &s_soc.empty_ticks))
+	if (++s_soc.empty_ticks < empty_step->ticks)
 	{
-		return 1U;
+		return 0U;
 	}
-	return 0U;
+	if (s_soc.soc > empty_step->target)
+	{
+		soc_set(soc_step(s_soc.soc, empty_step->target, SOC_CAL_STEP));
+	}
+	s_soc.empty_ticks = 0U;
+	return (UINT8)(s_soc.soc != old_soc);
 }
 
 static void soc_reset_rest_confidence(void)
@@ -988,6 +975,7 @@ void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 	SOC_TAIL_STEP empty_tail_step;
 	UINT8 voltage_calibrated;
 	UINT8 empty_tail_active;
+	UINT8 full_confirm_active;
 	UINT8 sag_hold_blocked;
 	UINT8 mode;
 
@@ -996,10 +984,18 @@ void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 	soc_integrate(net_current_ma);
 	soc_update_sag_hold(mode, net_current_ma);
 
-	empty_tail_active = soc_select_empty_tail_step(mode, net_current_ma, &empty_tail_step);
-	voltage_calibrated = soc_apply_full_or_empty_tail(mode,
-		empty_tail_active,
-		&empty_tail_step);
+	full_confirm_active = (UINT8)((mode != SOC_MODE_DSG) && soc_full_confirm_allowed());
+	voltage_calibrated = soc_apply_full_confirm(full_confirm_active);
+
+	empty_tail_active = 0U;
+	if (!full_confirm_active)
+	{
+		empty_tail_active = soc_select_empty_tail_step(mode, net_current_ma, &empty_tail_step);
+		if (soc_apply_empty_tail(empty_tail_active, &empty_tail_step))
+		{
+			voltage_calibrated = 1U;
+		}
+	}
 
 	sag_hold_blocked = soc_sag_hold_blocks_calibration();
 	if (empty_tail_active || sag_hold_blocked)
