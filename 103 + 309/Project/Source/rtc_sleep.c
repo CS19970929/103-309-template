@@ -8,7 +8,7 @@
 #include "IrqDebug.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
-#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
+#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
 enum irqWakeup g_irq_t = NO_IRQ;

@@ -61,10 +61,7 @@ UINT8 RtcSleep_PortIsEmergencyWakeVoltage(void)
 
 void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
 {
-    extern UINT32 su32_Interval_S_Tcnt;
-
     LogRecord_RequestSleep();
-    LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
     SleepDeal_Continue(sleep_mode);
 }
 

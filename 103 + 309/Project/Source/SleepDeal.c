@@ -113,7 +113,6 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 		boot_flag = FLASH_DEEP_SLEEP_VALUE;
 		break;
 	default:
-		// 不调整引脚进入休眠，功耗会很大
 		return;
 	}
 

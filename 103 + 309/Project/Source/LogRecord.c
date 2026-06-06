@@ -86,7 +86,7 @@ void LogRecord_RequestStartup(void)
 
 void LogRecord_RequestSleep(void)
 {
-	s_log_record.flags.bits.Log_Sleep = 1U;
+    LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
 }
 
 UINT8 LogTime_Map(UINT32 *Time_S_Cnt)

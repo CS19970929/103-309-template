@@ -3,7 +3,7 @@
 #include "AppInit.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 10,
+    .time_enter_rtc = 60,
     .power_on = false,
 };
 
