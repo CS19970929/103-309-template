@@ -166,7 +166,7 @@ static void soc_watch_refresh(UINT8 force_publish);
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 
-#define DELAY_SOC_TEST		(5)
+#define DELAY_SOC_TEST		(5 * 60)
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{-50, {0U, 0U, 0U, 0U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},
 	{-25, {0U, 0U, 0U, 0U}, {DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST, DELAY_SOC_TEST}},

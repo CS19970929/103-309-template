@@ -1,6 +1,25 @@
 #include "main.h"
 #include "DebugWatch.h"
 
+const unsigned char SeriesSelect_AFE1[16][16] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 1´®
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 2´®
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 3
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 4
+    {0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 5
+    {0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 6
+    {0, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 7
+    {0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0},      // 8
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0},      // 9
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0},      // 10
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 0, 0, 0, 0},     // 11
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0},    // 12
+    {0, 1, 2, 3, 4, 5, 6, 7, 9, 9, 10, 11, 12, 0, 0, 0},   // 13
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0},  // 14
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0}, // 15
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} // 16
+};
+
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
 #define MONITOR_AFE_WAKE_RETRY_LIMIT ((UINT8)20)
@@ -59,17 +78,12 @@ typedef struct _DATA_RUNTIME
 } DATA_RUNTIME;
 
 static DATA_RUNTIME s_data =
-{
-    {1U, 0, 0, 0U, 0U, (UINT8)AFE_CURRENT_ZERO_IDLE},
     {
-        {
-            {0U, 0U},
-            {0U, 0U}
-        },
-        {0U, 0U, 0U}
-    },
-    0U
-};
+        {1U, 0, 0, 0U, 0U, (UINT8)AFE_CURRENT_ZERO_IDLE},
+        {{{0U, 0U},
+          {0U, 0U}},
+         {0U, 0U, 0U}},
+        0U};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
@@ -162,6 +176,7 @@ void Init_Registers(UINT8 num)
 // 假设先确定用AFE1还是本身的KB的话，会出现问题。如下：
 // 假设需要整体校准，行，AFE1先行，然后发现某几串出问题，继续使用本身KB值，然后本身KB值需要同步前面AFE1的KB值一起算才行
 // 如果又变成单独使用本身KB值校准，出现错误。
+#if 0
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
@@ -188,6 +203,27 @@ void DataLoad_CellVolt(void)
     if (series_num < 32)
     {
         for (i = series_num; i < 25; ++i)
+        {
+            g_stCellInfoReport.u16VCell[i] = 61001;
+        }
+    }
+}
+#endif
+
+void DataLoad_CellVolt(void)
+{
+    UINT8 i;
+    INT32 t_i32temp;
+
+    for (i = 0; i < SeriesNum; ++i)
+    {
+        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
+        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
+    }
+
+    if (SeriesNum < 32)
+    {
+        for (i = SeriesNum; i < 31; ++i)
         {
             g_stCellInfoReport.u16VCell[i] = 61001;
         }
@@ -1040,7 +1076,7 @@ void new_todo_logi(void)
             // todo mcc关了，when 开
             if ((adc_vbat_fuse_ovp != 0U) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10)
             {
-                if (++rong_fuse_afe_err_cnt >= 10)
+                if (++rong_fuse_afe_err_cnt >= (5 * 10))
                 {
                     rong_fuse_afe_err_cnt = 0;
 #ifdef _UL_RENZHENG_ENABLE_
