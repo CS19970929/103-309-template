@@ -580,13 +580,13 @@ void SystemDebug_Snapshot(void)
 	}
 
 	/* ===== SOC basic ===== */
-	g_dbg.soc.pct       = SOC_Enhance_Element.u8_SOC;
-	g_dbg.soc.soh       = SOC_Enhance_Element.u8_SOH;
-	g_dbg.soc.cap_now   = SOC_Enhance_Element.u16_CapacityNow;
-	g_dbg.soc.vmax      = SOC_Enhance_Element.u16_VCellMax;
-	g_dbg.soc.vmin      = SOC_Enhance_Element.u16_VCellMin;
-	g_dbg.soc.ichg      = SOC_Enhance_Element.u16_Ichg;
-	g_dbg.soc.idsg      = SOC_Enhance_Element.u16_Idsg;
+	g_dbg.soc.pct       = (uint8_t)g_stCellInfoReport.SocElement.u16Soc;
+	g_dbg.soc.soh       = (uint8_t)g_stCellInfoReport.SocElement.u16Soh;
+	g_dbg.soc.cap_now   = g_stCellInfoReport.SocElement.u16CapacityNow;
+	g_dbg.soc.vmax      = g_stCellInfoReport.u16VCellMax;
+	g_dbg.soc.vmin      = g_stCellInfoReport.u16VCellMin;
+	g_dbg.soc.ichg      = g_stCellInfoReport.u16Ichg;
+	g_dbg.soc.idsg      = g_stCellInfoReport.u16IDischg;
 	g_dbg.soc.init_over = 1U;
 	g_dbg.soc.vtotal    = g_stCellInfoReport.u16VCellTotle;
 

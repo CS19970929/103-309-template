@@ -217,7 +217,6 @@ function Decode-Sample {
     $flashWords = if ($Symbols.ContainsKey("u8FlashUpdateFlag")) { Get-MdwWords -Text $Text -Address $Symbols["u8FlashUpdateFlag"] } else { @() }
     $factoryWords = if ($Symbols.ContainsKey("s_u8FactoryAgingState")) { Get-MdwWords -Text $Text -Address $Symbols["s_u8FactoryAgingState"] } else { @() }
     $sysTimeWords = if ($Symbols.ContainsKey("sys_time")) { Get-MdwWords -Text $Text -Address $Symbols["sys_time"] } else { @() }
-    $socEnhanceWords = if ($Symbols.ContainsKey("SOC_Enhance_Element")) { Get-MdwWords -Text $Text -Address $Symbols["SOC_Enhance_Element"] } else { @() }
     $systemErrWords = if ($Symbols.ContainsKey("System_ErrFlag")) { Get-MdwWords -Text $Text -Address $Symbols["System_ErrFlag"] } else { @() }
 
     $rtc0 = Convert-HexWord (Get-WordAt $rtcWords 0)
@@ -314,7 +313,6 @@ function Decode-Sample {
         ConfigCsRes_mOhm = Convert-HexWord (Get-WordAt $otherHalf 29)
         ConfigCsResNum = Convert-HexWord (Get-WordAt $otherHalf 30)
         SysTimeRaw0 = "0x$(Get-WordAt $sysTimeWords 0)"
-        SocEnhanceRaw0 = "0x$(Get-WordAt $socEnhanceWords 0)"
         SystemErrRaw0 = "0x$(Get-WordAt $systemErrWords 0)"
     }
 }
@@ -428,7 +426,6 @@ try {
         if ($symbols.ContainsKey("u8FlashUpdateFlag")) { $sampleCommands.Add("mdw $($symbols["u8FlashUpdateFlag"]) 1") }
         if ($symbols.ContainsKey("s_u8FactoryAgingState")) { $sampleCommands.Add("mdw $($symbols["s_u8FactoryAgingState"]) 1") }
         if ($symbols.ContainsKey("sys_time")) { $sampleCommands.Add("mdw $($symbols["sys_time"]) 18") }
-        if ($symbols.ContainsKey("SOC_Enhance_Element")) { $sampleCommands.Add("mdw $($symbols["SOC_Enhance_Element"]) 12") }
         if ($symbols.ContainsKey("System_ErrFlag")) { $sampleCommands.Add("mdw $($symbols["System_ErrFlag"]) 6") }
         $sampleCommands.Add("resume")
         $sampleCommands.Add("shutdown")
@@ -505,7 +502,6 @@ try {
             ConfigCsRes_mOhm = $decoded.ConfigCsRes_mOhm
             ConfigCsResNum = $decoded.ConfigCsResNum
             SysTimeRaw0 = $decoded.SysTimeRaw0
-            SocEnhanceRaw0 = $decoded.SocEnhanceRaw0
             SystemErrRaw0 = $decoded.SystemErrRaw0
         }
         $rows.Add($row)

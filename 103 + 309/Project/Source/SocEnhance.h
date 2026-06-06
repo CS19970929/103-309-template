@@ -3,6 +3,7 @@
 
 #include "stm32f10x.h"
 #include "Project_Config.h"
+#include <stdint.h>
 //#include "stm32f0xx.h"
 
 #define SOC_Size_LiFePO 		(UINT16)42
@@ -36,34 +37,6 @@ extern const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO];
 #if (PROJECT_CFG_BAT_CHEMISTRY == 0)
 extern const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi];
 #endif
-
-struct SOC_ENHANCE_ELEMENT {
-	/* Config snapshot loaded from OtherElement. */
-	UINT16 u16_SOC_Ah;                 // 10 * Ah
-	UINT16 u16_SOC_CycleT_Ever;        // cycle count loaded from config
-	UINT16 u16_SOC_0_Vol;              // mV at SOC 0%
-	UINT16 u16_SOC_100_Vol;            // mV at SOC 100%
-
-	/* Command payloads; requests should enter through SOC_Request* APIs. */
-	UINT8 u8_SetSocOnce;
-
-	/* Latest SOC calculation input sample. */
-	UINT16 u16_VCellMax;               // mV
-	UINT16 u16_VCellMin;               // mV
-	UINT16 u16_Ichg;                   // A * 10
-	UINT16 u16_Idsg;                   // A * 10
-
-	/* Published display/report outputs. */
-	UINT8 u8_SOC;
-	UINT8 u8_SOH;
-	UINT16 u16_CapacityNow;            // Ah * 100
-	UINT16 u16_CapacityFull;           // Ah * 100
-	UINT16 u16_CapacityFactory;        // Ah * 100
-	UINT16 u16_Cycle_times;
-
-	/* Command selector consumed by soc_handle_command(). */
-	UINT16 u16_RefreshData_Flag;       // 2: capacity reset, 3: set SOC once
-};
 
 struct SOC_DEBUG_WATCH {
 	UINT32 u32CapFactoryAs10;
@@ -104,12 +77,9 @@ struct SOC_DEBUG_WATCH {
 	UINT8 u8LastPublishForce;
 };
 
-extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
-
-void SOC_IntEnhance_Ctrl(void);
+void SOC_IntEnhance_Ctrl(int32_t net_current_ma);
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
 void SOC_SaveSnapshotBeforeSleep(void);
-void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg);
 void SOC_PublishReportData(void);
 void SOC_RequestCapacityReset(void);
 void SOC_RequestSetOnce(UINT8 soc);

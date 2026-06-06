@@ -47,35 +47,20 @@ UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 	return SOC_LimitA10((UINT32)((current_mA + 50ULL) / 100ULL));
 }
 
-static void SOC_GetNetCurrentForCalc(UINT16 report_ichg, UINT16 report_idsg,
-									 UINT16 *soc_ichg, UINT16 *soc_idsg)
+static int32_t SOC_GetNetCurrentMilliAmp(UINT16 report_ichg, UINT16 report_idsg)
 {
 	UINT32 chg_a10 = report_ichg;
 	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)SOC_GetTypeCBatEquivCurrentA10();
 
 	if (chg_a10 >= dsg_a10)
 	{
-		*soc_ichg = SOC_LimitA10(chg_a10 - dsg_a10);
-		*soc_idsg = 0U;
+		return (int32_t)SOC_LimitA10(chg_a10 - dsg_a10) * 100;
 	}
-	else
-	{
-		*soc_ichg = 0U;
-		*soc_idsg = SOC_LimitA10(dsg_a10 - chg_a10);
-	}
-}
-
-static void SOC_LoadConfigData(void)
-{
-	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
-	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
-	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
-	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
+	return 0 - ((int32_t)SOC_LimitA10(dsg_a10 - chg_a10) * 100);
 }
 
 void InitData_SOC(void)
 {
-	SOC_LoadConfigData();
 	soc_param_lib_init();
 }
 
@@ -84,23 +69,14 @@ void App_SOC(void)
 	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
 	UINT32 u32AfeCurrentSeq;
 	UINT8 u8HasNewAfeSample;
-	UINT16 soc_ichg;
-	UINT16 soc_idsg;
 
 	u32AfeCurrentSeq = AfeCurrent_GetSeq();
 	u8HasNewAfeSample = (u32AfeCurrentSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
 	if (u8HasNewAfeSample)
 	{
 		s_u32LastAfeCurrentSampleSeq = u32AfeCurrentSeq;
-		SOC_GetNetCurrentForCalc(g_stCellInfoReport.u16Ichg,
-								 g_stCellInfoReport.u16IDischg,
-								 &soc_ichg,
-								 &soc_idsg);
-		SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
-							 g_stCellInfoReport.u16VCellMin,
-							 soc_ichg,
-							 soc_idsg);
-		SOC_IntEnhance_Ctrl();
+		SOC_IntEnhance_Ctrl(SOC_GetNetCurrentMilliAmp(g_stCellInfoReport.u16Ichg,
+		                                               g_stCellInfoReport.u16IDischg));
 	}
 	else
 	{

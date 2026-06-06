@@ -42,7 +42,6 @@ struct DBG_RUNTIME_TAG;
 struct SYSTEM_DEBUG;
 struct IRQ_DEBUG_STATE;
 struct SOC_DEBUG_WATCH;
-struct SOC_ENHANCE_ELEMENT;
 struct SOC_STATE_TAG;
 struct SOC_SAVE_MARK_TAG;
 struct SOC_EMPTY_TAIL_RULE_TAG;
@@ -66,11 +65,10 @@ typedef struct DEBUG_WATCH_RUNTIME_DIR_TAG
 	struct FLASH_RUNTIME_TAG *flash;
 	struct LOG_RECORD_RUNTIME_TAG *log_record;
 	struct FACTORY_AGING_RUNTIME_TAG *factory_aging;
-	struct RTC_RUNTIME_TAG *rtc;
-	struct APP_RUNTIME_TAG *app;
-	struct SOC_DEBUG_WATCH *soc;
-	struct SOC_ENHANCE_ELEMENT *soc_public;
-	struct SOC_STATE_TAG *soc_state;
+		struct RTC_RUNTIME_TAG *rtc;
+		struct APP_RUNTIME_TAG *app;
+		struct SOC_DEBUG_WATCH *soc;
+		struct SOC_STATE_TAG *soc_state;
 	struct SOC_SAVE_MARK_TAG *soc_saved;
 	uint32_t *soc_rtc_rest_applied_seconds;
 	uint8_t *soc_rest_voltage_stable;
@@ -151,7 +149,6 @@ typedef struct DEBUG_WATCH_PUBLIC_DIR_TAG
 	struct PRT_E2ROM_PARAS *protect;
 	PRODUCTION_ID_INFO *production;
 	struct RTC_ELEMENT *rtc_time;
-	struct SOC_ENHANCE_ELEMENT *soc;
 } DEBUG_WATCH_PUBLIC_DIR;
 
 typedef struct DEBUG_WATCH_APP_DIR_TAG

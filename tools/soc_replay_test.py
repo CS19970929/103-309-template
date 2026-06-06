@@ -134,6 +134,12 @@ def step_toward(current, target, step):
     return current
 
 
+def trunc_div(numerator, denominator):
+    if numerator >= 0:
+        return numerator // denominator
+    return -((-numerator) // denominator)
+
+
 def soh_from_cycle(cycle_x100):
     drop = (cycle_x100 // 100) // SOH_STEP_CYCLES
     return max(SOH_MIN, 100 - drop)
@@ -150,7 +156,6 @@ class SocModel:
     soh: int = 100
     mode: int = MODE_RELAX
     last_mode: int = MODE_RELAX
-    integrate_mode: int = MODE_RELAX
     remainder_ms: int = 0
     full_ticks: int = 0
     empty_ticks: int = 0
@@ -207,10 +212,14 @@ class SocModel:
         self.remainder_ms = 0
         self.full_anchor = self.soc >= 100
 
+    def net_current_ma(self, ichg, idsg):
+        return (ichg - idsg) * MA_PER_A10
+
     def direction(self, ichg, idsg):
-        if ichg >= CURRENT_ENTER_A10 and ichg >= idsg:
+        net_current = self.net_current_ma(ichg, idsg)
+        if net_current >= CURRENT_ENTER_A10 * MA_PER_A10:
             return MODE_CHG
-        if idsg >= CURRENT_ENTER_A10:
+        if net_current <= -(CURRENT_ENTER_A10 * MA_PER_A10):
             return MODE_DSG
         return MODE_RELAX
 
@@ -228,36 +237,27 @@ class SocModel:
         if self.soh != old_soh:
             self.soc = self.soc_from_cap()
 
-    def integrate_current_ma(self, direction, ichg, idsg):
-        if direction == MODE_CHG:
-            return ichg * MA_PER_A10 - self.board_self_consumption_ma
-        if direction == MODE_DSG:
-            return -(idsg * MA_PER_A10 + self.board_self_consumption_ma)
-        return -self.board_self_consumption_ma
+    def integrate_current_ma(self, ichg, idsg):
+        return self.net_current_ma(ichg, idsg) - self.board_self_consumption_ma
 
     def integrate(self, direction, ichg, idsg):
-        current_ma = self.integrate_current_ma(direction, ichg, idsg)
-        integrate_mode = MODE_CHG if current_ma > 0 else MODE_DSG if current_ma < 0 else MODE_RELAX
-        if integrate_mode != self.integrate_mode:
-            self.remainder_ms = 0
-            self.integrate_mode = integrate_mode
+        current_ma = self.integrate_current_ma(ichg, idsg)
         self.last_mode = direction
-        if integrate_mode == MODE_RELAX:
-            self.remainder_ms = 0
+        if current_ma == 0:
             return
-        acc_mams = abs(current_ma) * PERIOD_MS + self.remainder_ms
-        delta = acc_mams // MAMS_PER_AS10
-        self.remainder_ms = acc_mams % MAMS_PER_AS10
+        acc_mams = current_ma * PERIOD_MS + self.remainder_ms
+        delta = trunc_div(acc_mams, MAMS_PER_AS10)
+        self.remainder_ms = acc_mams - (delta * MAMS_PER_AS10)
         if delta == 0:
             return
-        if integrate_mode == MODE_CHG:
+        if delta > 0:
             self.cap_now = min(self.cap_full, self.cap_now + delta)
         else:
             self.full_anchor = False
-            self.add_cycle_capacity(delta)
-            self.cap_now = max(0, self.cap_now - delta)
+            self.add_cycle_capacity(-delta)
+            self.cap_now = max(0, self.cap_now + delta)
         self.soc = self.soc_from_cap()
-        if integrate_mode == MODE_CHG and not self.full_anchor and self.soc >= 100:
+        if delta > 0 and not self.full_anchor and self.soc >= 100:
             self.soc = 99
             self.cap_now = self.cap_full * 99 // 100
 
@@ -670,25 +670,20 @@ def test_fast_current_pulses_integrate_average_energy_at_sample_rate():
     model = SocModel.from_snapshot(Snapshot(soc=70, cap_now=CAP_FACTORY_AS10 * 70 // 100))
     start_cap = model.cap_now
     expected_rem_mams = 0
-    expected_integrate_mode = MODE_RELAX
     expected_delta = 0
     currents = [30, 260, 80, 420, 0, 160, 320, 40]
     for index in range(120 * TICKS_PER_SECOND):
         idsg = currents[index % len(currents)]
         vmax, vmin = ride_voltage(model, idsg=idsg, imbalance=8 if idsg >= 260 else 4)
         model.tick(vmax=vmax, vmin=vmin, idsg=idsg)
-        direction = model.direction(0, idsg)
-        signed_ma = model.integrate_current_ma(direction, 0, idsg)
-        integrate_mode = MODE_CHG if signed_ma > 0 else MODE_DSG if signed_ma < 0 else MODE_RELAX
-        if integrate_mode != expected_integrate_mode:
-            expected_rem_mams = 0
-            expected_integrate_mode = integrate_mode
-        if integrate_mode == MODE_RELAX:
-            expected_rem_mams = 0
+        signed_ma = model.integrate_current_ma(0, idsg)
+        if signed_ma == 0:
             continue
-        acc_mams = abs(signed_ma) * PERIOD_MS + expected_rem_mams
-        expected_delta += acc_mams // MAMS_PER_AS10
-        expected_rem_mams = acc_mams % MAMS_PER_AS10
+        acc_mams = signed_ma * PERIOD_MS + expected_rem_mams
+        delta = trunc_div(acc_mams, MAMS_PER_AS10)
+        if delta < 0:
+            expected_delta += -delta
+        expected_rem_mams = acc_mams - (delta * MAMS_PER_AS10)
     actual_delta = start_cap - model.cap_now
     assert abs(actual_delta - expected_delta) <= 1
     assert 66 <= model.soc <= 70
@@ -700,12 +695,19 @@ def test_direction_thresholds_and_conflict_resolution():
     assert model.mode == MODE_RELAX
 
     model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10)
-    assert model.mode == MODE_CHG
+    assert model.mode == MODE_RELAX
 
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
     model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10 + 1)
+    assert model.mode == MODE_RELAX
+    expected_ma = -(MA_PER_A10 + BOARD_SELF_CONSUMPTION_MA)
+    assert model.remainder_ms == expected_ma * PERIOD_MS
+
+    model = SocModel.from_snapshot(Snapshot(soc=50, cap_now=CAP_FACTORY_AS10 * 50 // 100))
+    model.tick(ichg=CURRENT_ENTER_A10, idsg=CURRENT_ENTER_A10 + 2)
     assert model.mode == MODE_DSG
-    expected_ma = ((CURRENT_ENTER_A10 + 1) * MA_PER_A10) + BOARD_SELF_CONSUMPTION_MA
-    assert model.remainder_ms == (expected_ma * PERIOD_MS) % MAMS_PER_AS10
+    expected_ma = -((2 * MA_PER_A10) + BOARD_SELF_CONSUMPTION_MA)
+    assert model.remainder_ms == expected_ma * PERIOD_MS
 
 
 def test_charge_integration_stays_below_full_before_confirm():

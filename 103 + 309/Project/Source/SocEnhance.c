@@ -84,7 +84,7 @@ typedef struct SOC_STATE_TAG
 	UINT32 cap_now_as10;
 	UINT32 cycle_x100;
 	UINT32 dsg_acc_as10;
-	UINT32 rem_mams;
+	int32_t rem_mams;
 	/* SOC rest counters below use 200ms SOC ticks, not RTC seconds. */
 	UINT32 rest_soc_ticks;
 	UINT32 stable_rest_soc_ticks;
@@ -103,7 +103,6 @@ typedef struct SOC_STATE_TAG
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	UINT8 last_mode;
 #endif
-	UINT8 integrate_mode;
 	UINT8 full_anchor;
 } SOC_STATE;
 
@@ -128,8 +127,6 @@ typedef struct
 	UINT16 ticks;
 } SOC_TAIL_STEP;
 
-struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
-
 static SOC_STATE s_soc;
 static SOC_SAVE_MARK s_saved_soc;
 /* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
@@ -142,8 +139,6 @@ static void SocEnhance_DebugWatchBindTables(DEBUG_WATCH_ROOT *watch);
 void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 {
 	watch->runtime.soc = &s_soc_debug_watch;
-	watch->runtime.soc_public = &SOC_Enhance_Element;
-	watch->public_data.soc = &SOC_Enhance_Element;
 	watch->runtime.soc_state = &s_soc;
 	watch->runtime.soc_saved = &s_saved_soc;
 	watch->runtime.soc_rtc_rest_applied_seconds = &s_u32SocRtcRestAppliedSeconds;
@@ -153,18 +148,21 @@ void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 static void soc_watch_set_calib_source(UINT8 source, UINT8 before, UINT8 after);
 static void soc_watch_set_tail_state(UINT8 low_active, const SOC_TAIL_STEP *low_step);
 static void soc_watch_set_rest_voltage_stable(UINT8 stable);
-static void soc_watch_refresh(UINT8 force_publish);
+static void soc_watch_refresh(UINT8 force_publish, int32_t net_current_ma);
 #else
 #define soc_watch_set_calib_source(source, before, after) \
 	((void)(source), (void)(before), (void)(after))
 #define soc_watch_set_tail_state(low_active, low_step) \
 	((void)(low_active), (void)(low_step))
 #define soc_watch_set_rest_voltage_stable(stable) ((void)(stable))
-#define soc_watch_refresh(force_publish) ((void)(force_publish))
+#define soc_watch_refresh(force_publish, net_current_ma) \
+	((void)(force_publish), (void)(net_current_ma))
 #endif
 
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
+static void soc_save_current_snapshot(void);
+static void soc_publish(UINT8 force_publish, int32_t net_current_ma);
 
 #define DELAY_SOC_TEST		(5 * 60)
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
@@ -213,9 +211,9 @@ static void SocEnhance_DebugWatchBindTables(DEBUG_WATCH_ROOT *watch)
 
 static UINT16 soc_cell_delta(void)
 {
-	return (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_VCellMin) ?
-		(UINT16)(SOC_Enhance_Element.u16_VCellMax - SOC_Enhance_Element.u16_VCellMin) :
-		(UINT16)(SOC_Enhance_Element.u16_VCellMin - SOC_Enhance_Element.u16_VCellMax);
+	return (g_stCellInfoReport.u16VCellMax >= g_stCellInfoReport.u16VCellMin) ?
+		(UINT16)(g_stCellInfoReport.u16VCellMax - g_stCellInfoReport.u16VCellMin) :
+		(UINT16)(g_stCellInfoReport.u16VCellMin - g_stCellInfoReport.u16VCellMax);
 }
 
 static UINT16 soc_abs_diff_u16(UINT16 a, UINT16 b)
@@ -300,14 +298,15 @@ static void soc_set(UINT8 soc)
 	s_soc.full_anchor = (soc >= 100U) ? 1U : 0U;
 }
 
-static UINT8 soc_direction(void)
+static UINT8 soc_direction(int32_t net_current_ma)
 {
-	if ((SOC_Enhance_Element.u16_Ichg >= SOC_CURRENT_ACTIVE_A10) &&
-		(SOC_Enhance_Element.u16_Ichg >= SOC_Enhance_Element.u16_Idsg))
+	if (net_current_ma >=
+		((int32_t)SOC_CURRENT_ACTIVE_A10 * SOC_MA_PER_A10))
 	{
 		return SOC_MODE_CHG;
 	}
-	if (SOC_Enhance_Element.u16_Idsg >= SOC_CURRENT_ACTIVE_A10)
+	if (net_current_ma <=
+		(0 - ((int32_t)SOC_CURRENT_ACTIVE_A10 * SOC_MA_PER_A10)))
 	{
 		return SOC_MODE_DSG;
 	}
@@ -316,11 +315,11 @@ static UINT8 soc_direction(void)
 
 static UINT8 soc_voltage_valid(void)
 {
-	if ((SOC_Enhance_Element.u16_VCellMin < SOC_VALID_MIN_MV) ||
-		(SOC_Enhance_Element.u16_VCellMax < SOC_VALID_MIN_MV) ||
-		(SOC_Enhance_Element.u16_VCellMin > SOC_VALID_MAX_MV) ||
-		(SOC_Enhance_Element.u16_VCellMax > SOC_VALID_MAX_MV) ||
-		(SOC_Enhance_Element.u16_VCellMax < SOC_Enhance_Element.u16_VCellMin))
+	if ((g_stCellInfoReport.u16VCellMin < SOC_VALID_MIN_MV) ||
+		(g_stCellInfoReport.u16VCellMax < SOC_VALID_MIN_MV) ||
+		(g_stCellInfoReport.u16VCellMin > SOC_VALID_MAX_MV) ||
+		(g_stCellInfoReport.u16VCellMax > SOC_VALID_MAX_MV) ||
+		(g_stCellInfoReport.u16VCellMax < g_stCellInfoReport.u16VCellMin))
 	{
 		return 0U;
 	}
@@ -360,7 +359,7 @@ static UINT8 soc_ocv_percent(void)
 {
 	UINT16 size;
 	const UINT16 *table = soc_ocv_table(&size);
-	UINT16 soc = soc_table_percent(table, size, SOC_Enhance_Element.u16_VCellMin);
+	UINT16 soc = soc_table_percent(table, size, g_stCellInfoReport.u16VCellMin);
 	return (soc > 100U) ? 100U : (UINT8)soc;
 }
 
@@ -411,8 +410,8 @@ static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage
 
 static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 {
-	UINT16 empty_mv = (SOC_Enhance_Element.u16_SOC_0_Vol != 0U) ?
-		SOC_Enhance_Element.u16_SOC_0_Vol : SOC_EMPTY_MV;
+	UINT16 empty_mv = (OtherElement.u16Soc_V_0 != 0U) ?
+		OtherElement.u16Soc_V_0 : SOC_EMPTY_MV;
 	UINT16 offset;
 
 	if (offset_mv >= 0)
@@ -427,8 +426,8 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 
 static UINT16 soc_current_limit_a10(UINT16 divider)
 {
-	UINT16 cap_a10 = (SOC_Enhance_Element.u16_SOC_Ah != 0U) ?
-		SOC_Enhance_Element.u16_SOC_Ah : SOC_DEFAULT_CAP_A10;
+	UINT16 cap_a10 = (OtherElement.u16Soc_Ah != 0U) ?
+		OtherElement.u16Soc_Ah : SOC_DEFAULT_CAP_A10;
 	UINT16 limit;
 
 	if (divider == 0U)
@@ -439,33 +438,62 @@ static UINT16 soc_current_limit_a10(UINT16 divider)
 	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
 }
 
-void SOC_UpdateSampleData(UINT16 vcell_max, UINT16 vcell_min, UINT16 ichg, UINT16 idsg)
+static UINT16 soc_current_ma_to_a10(int32_t current_ma)
 {
-	SOC_Enhance_Element.u16_VCellMax = vcell_max;
-	SOC_Enhance_Element.u16_VCellMin = vcell_min;
-	SOC_Enhance_Element.u16_Ichg = ichg;
-	SOC_Enhance_Element.u16_Idsg = idsg;
+	uint64_t magnitude_ma;
+	uint32_t current_a10;
+
+	magnitude_ma = (current_ma >= 0) ? (uint64_t)current_ma : (uint64_t)(0 - (int64_t)current_ma);
+	current_a10 = (uint32_t)((magnitude_ma + 50ULL) / 100ULL);
+	return (current_a10 > (uint32_t)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
+}
+
+#if PROJECT_CFG_DEBUG_WATCH_ENABLE
+static UINT16 soc_net_current_ichg_a10(int32_t net_current_ma)
+{
+	return (net_current_ma > 0) ? soc_current_ma_to_a10(net_current_ma) : 0U;
+}
+#endif
+
+static UINT16 soc_net_current_idsg_a10(int32_t net_current_ma)
+{
+	return (net_current_ma < 0) ? soc_current_ma_to_a10(net_current_ma) : 0U;
 }
 
 void SOC_PublishReportData(void)
 {
-	g_stCellInfoReport.SocElement.u16Soc = SOC_Enhance_Element.u8_SOC;
-	g_stCellInfoReport.SocElement.u16Soh = SOC_Enhance_Element.u8_SOH;
-	g_stCellInfoReport.SocElement.u16CapacityNow = SOC_Enhance_Element.u16_CapacityNow;
-	g_stCellInfoReport.SocElement.u16CapacityFull = SOC_Enhance_Element.u16_CapacityFull;
-	g_stCellInfoReport.SocElement.u16CapacityFactory = SOC_Enhance_Element.u16_CapacityFactory;
-	g_stCellInfoReport.SocElement.u16Cycle_times = SOC_Enhance_Element.u16_Cycle_times;
+	UINT32 cycles = s_soc.cycle_x100 / 100U;
+
+	g_stCellInfoReport.SocElement.u16Soc = s_soc.soc;
+	g_stCellInfoReport.SocElement.u16Soh = s_soc.soh;
+	g_stCellInfoReport.SocElement.u16CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
+	g_stCellInfoReport.SocElement.u16CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
+	g_stCellInfoReport.SocElement.u16CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
+	g_stCellInfoReport.SocElement.u16Cycle_times = (cycles > 0xFFFFU) ? 0xFFFFU : (UINT16)cycles;
 }
 
 void SOC_RequestCapacityReset(void)
 {
-	SOC_Enhance_Element.u16_RefreshData_Flag = 2U;
+	UINT8 soc_keep = s_soc.soc;
+
+	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
+	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+	s_soc.dsg_acc_as10 = 0U;
+	soc_refresh_capacity_base();
+	soc_set(soc_keep);
+	soc_watch_set_calib_source(SOC_WATCH_CALIB_PARAM_RESET, soc_keep, s_soc.soc);
+	soc_save_current_snapshot();
+	soc_publish(1U, 0);
 }
 
 void SOC_RequestSetOnce(UINT8 soc)
 {
-	SOC_Enhance_Element.u16_RefreshData_Flag = 3U;
-	SOC_Enhance_Element.u8_SetSocOnce = soc;
+	UINT8 old_soc = s_soc.soc;
+
+	soc_set(soc);
+	soc_watch_set_calib_source(SOC_WATCH_CALIB_SET_ONCE, old_soc, s_soc.soc);
+	soc_save_current_snapshot();
+	soc_publish(1U, 0);
 }
 
 static UINT8 soc_save(void)
@@ -559,7 +587,7 @@ static void soc_load_or_default(void)
 	}
 	else
 	{
-		s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
+		s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 		soc_refresh_capacity_base();
 		if (soc_calibration_allowed())
 		{
@@ -639,115 +667,79 @@ static void soc_set_rest_down_target(UINT8 target)
 	}
 }
 
-static void soc_integrate(UINT8 mode)
+static void soc_integrate(UINT8 mode, int32_t net_current_ma)
 {
 	int32_t current_ma_signed;
-	int32_t board_ma = (int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
-	UINT8 integrate_mode = SOC_MODE_RELAX;
-	UINT32 current_ma;
-	UINT32 acc_mams;
-	UINT32 delta_as10;
+	int32_t delta_as10;
+	int64_t acc_mams;
 	UINT8 old_soc = s_soc.soc;
 
-	if (mode == SOC_MODE_CHG)
-	{
-		current_ma_signed = ((int32_t)SOC_Enhance_Element.u16_Ichg * SOC_MA_PER_A10) -
-			board_ma;
-	}
-	else if (mode == SOC_MODE_DSG)
-	{
-		current_ma_signed = 0 - (((int32_t)SOC_Enhance_Element.u16_Idsg *
-			SOC_MA_PER_A10) + board_ma);
-	}
-	else
-	{
-		current_ma_signed = 0 - board_ma;
-	}
-
-	if (current_ma_signed > 0)
-	{
-		integrate_mode = SOC_MODE_CHG;
-	}
-	else if (current_ma_signed < 0)
-	{
-		integrate_mode = SOC_MODE_DSG;
-	}
-	if (integrate_mode != s_soc.integrate_mode)
-	{
-		s_soc.rem_mams = 0U;
-		s_soc.integrate_mode = integrate_mode;
-	}
+	current_ma_signed = net_current_ma -
+		(int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	s_soc.last_mode = mode;
 #endif
-	if (integrate_mode == SOC_MODE_RELAX)
-	{
-		s_soc.rem_mams = 0U;
-		return;
-	}
-	current_ma = (current_ma_signed > 0) ?
-		(UINT32)current_ma_signed : (UINT32)(0 - current_ma_signed);
-	acc_mams = (current_ma * SOC_TICK_MS) + s_soc.rem_mams;
-	delta_as10 = acc_mams / SOC_MAMS_PER_AS10;
-	s_soc.rem_mams = acc_mams % SOC_MAMS_PER_AS10;
-	if (delta_as10 == 0U)
+	if (current_ma_signed == 0)
 	{
 		return;
 	}
-	if (integrate_mode == SOC_MODE_CHG)
+	acc_mams = ((int64_t)current_ma_signed * (int64_t)SOC_TICK_MS) +
+		(int64_t)s_soc.rem_mams;
+	delta_as10 = (int32_t)(acc_mams / (int64_t)SOC_MAMS_PER_AS10);
+	s_soc.rem_mams = (int32_t)(acc_mams % (int64_t)SOC_MAMS_PER_AS10);
+	if (delta_as10 == 0)
 	{
-		s_soc.cap_now_as10 = ((s_soc.cap_full_as10 - s_soc.cap_now_as10) < delta_as10) ?
-			s_soc.cap_full_as10 : (s_soc.cap_now_as10 + delta_as10);
+		return;
+	}
+	if (delta_as10 > 0)
+	{
+		s_soc.cap_now_as10 = ((s_soc.cap_full_as10 - s_soc.cap_now_as10) < (UINT32)delta_as10) ?
+			s_soc.cap_full_as10 : (s_soc.cap_now_as10 + (UINT32)delta_as10);
 	}
 	else
 	{
-		(void)soc_apply_discharge_delta(delta_as10,
+		(void)soc_apply_discharge_delta((UINT32)(0 - delta_as10),
 			(mode == SOC_MODE_RELAX) ? SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION :
 				SOC_WATCH_CALIB_INTEGRATE_DSG,
 			old_soc);
 		return;
 	}
 	s_soc.soc = soc_from_cap();
-	if ((integrate_mode == SOC_MODE_CHG) && (!s_soc.full_anchor) && (s_soc.soc >= 100U))
+	if (!s_soc.full_anchor && (s_soc.soc >= 100U))
 	{
 		s_soc.soc = 99U;
 		s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * 99ULL) / 100ULL);
 	}
 	if (s_soc.soc != old_soc)
 	{
-		soc_watch_set_calib_source((integrate_mode == SOC_MODE_CHG) ?
-			SOC_WATCH_CALIB_INTEGRATE_CHG :
-			((mode == SOC_MODE_RELAX) ? SOC_WATCH_CALIB_BOARD_SELF_CONSUMPTION :
-			 SOC_WATCH_CALIB_INTEGRATE_DSG),
-			old_soc,
-			s_soc.soc);
+		soc_watch_set_calib_source(SOC_WATCH_CALIB_INTEGRATE_CHG, old_soc, s_soc.soc);
 	}
 }
 
 static UINT16 soc_full_confirm_seconds(void)
 {
-	UINT16 full_mv = (SOC_Enhance_Element.u16_SOC_100_Vol != 0U) ?
-		SOC_Enhance_Element.u16_SOC_100_Vol : SOC_DEFAULT_FULL_MV;
+	UINT16 full_mv = (OtherElement.u16Soc_V_100 != 0U) ?
+		OtherElement.u16Soc_V_100 : SOC_DEFAULT_FULL_MV;
 	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
 	UINT16 vmin_min = vmax_min;
 	UINT16 vmin_fast = soc_voltage_with_margin(full_mv, SOC_FULL_FAST_MARGIN_MV);
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
-		(SOC_Enhance_Element.u16_VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
-		(SOC_Enhance_Element.u16_VCellMax < vmax_min))
+		(g_stCellInfoReport.u16VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
+		(g_stCellInfoReport.u16VCellMax < vmax_min))
 	{
 		return 0U;
 	}
 
 	delta = soc_cell_delta();
-	if ((SOC_Enhance_Element.u16_VCellMin >= vmin_fast) &&
+	if ((g_stCellInfoReport.u16VCellMin >= vmin_fast) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
 		return SOC_FULL_FAST_SECONDS;
 	}
 	if ((s_soc.soc >= SOC_FULL_MIN_SOC) &&
-		(SOC_Enhance_Element.u16_VCellMin >= vmin_min) &&
+		(g_stCellInfoReport.u16VCellMin >= vmin_min) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
 		return SOC_FULL_SECONDS;
@@ -755,10 +747,10 @@ static UINT16 soc_full_confirm_seconds(void)
 	return 0U;
 }
 
-static void soc_update_sag_hold(UINT8 mode)
+static void soc_update_sag_hold(UINT8 mode, int32_t net_current_ma)
 {
 	if ((mode == SOC_MODE_DSG) &&
-		(SOC_Enhance_Element.u16_Idsg >
+		(soc_net_current_idsg_a10(net_current_ma) >
 		 soc_current_limit_a10(SOC_EMPTY_CUR_MID_DIVIDER)))
 	{
 		s_soc.sag_hold_ticks = (UINT16)(SOC_SAG_HOLDOFF_SECONDS *
@@ -783,7 +775,7 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 {
 	return (UINT8)((s_soc.sag_hold_ticks > 0U) &&
 		soc_voltage_valid() &&
-		(SOC_Enhance_Element.u16_VCellMin >
+		(g_stCellInfoReport.u16VCellMin >
 		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
 }
 
@@ -807,7 +799,7 @@ static void soc_watch_set_rest_voltage_stable(UINT8 stable)
 	s_soc_watch_rest_voltage_stable = stable;
 }
 
-static void soc_watch_refresh(UINT8 force_publish)
+static void soc_watch_refresh(UINT8 force_publish, int32_t net_current_ma)
 {
 	UINT8 cal_allowed = soc_calibration_allowed();
 	UINT8 sag_blocked;
@@ -822,11 +814,11 @@ static void soc_watch_refresh(UINT8 force_publish)
 	s_soc_debug_watch.u32RestTicks = s_soc.rest_soc_ticks;
 	s_soc_debug_watch.u32StableRestTicks = s_soc.stable_rest_soc_ticks;
 	s_soc_debug_watch.u32LongRestDownTicks = s_soc.long_rest_down_soc_ticks;
-	s_soc_debug_watch.u16VCellMax = SOC_Enhance_Element.u16_VCellMax;
-	s_soc_debug_watch.u16VCellMin = SOC_Enhance_Element.u16_VCellMin;
+	s_soc_debug_watch.u16VCellMax = g_stCellInfoReport.u16VCellMax;
+	s_soc_debug_watch.u16VCellMin = g_stCellInfoReport.u16VCellMin;
 	s_soc_debug_watch.u16CellDelta = soc_cell_delta();
-	s_soc_debug_watch.u16Ichg = SOC_Enhance_Element.u16_Ichg;
-	s_soc_debug_watch.u16Idsg = SOC_Enhance_Element.u16_Idsg;
+	s_soc_debug_watch.u16Ichg = soc_net_current_ichg_a10(net_current_ma);
+	s_soc_debug_watch.u16Idsg = soc_net_current_idsg_a10(net_current_ma);
 	s_soc_debug_watch.u16FullTicks = s_soc.full_ticks;
 	s_soc_debug_watch.u16EmptyTicks = s_soc.empty_ticks;
 	s_soc_debug_watch.u16SagHoldTicks = s_soc.sag_hold_ticks;
@@ -862,7 +854,7 @@ static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
-static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
+static UINT8 soc_low_tail_config(UINT8 mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
 	UINT8 band;
 	UINT16 i;
@@ -876,7 +868,7 @@ static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 	{
 		return 0U;
 	}
-	if (SOC_Enhance_Element.u16_VCellMin >
+	if (g_stCellInfoReport.u16VCellMin >
 		soc_empty_threshold_mv(SOC_EMPTY_TAIL_START_OFFSET_MV))
 	{
 		return 0U;
@@ -886,12 +878,12 @@ static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 	{
 		band = SOC_EMPTY_BAND_RELAX;
 	}
-	else if (SOC_Enhance_Element.u16_Idsg <=
+	else if (soc_net_current_idsg_a10(net_current_ma) <=
 		soc_current_limit_a10(SOC_EMPTY_CUR_LIGHT_DIVIDER))
 	{
 		band = SOC_EMPTY_BAND_LIGHT;
 	}
-	else if (SOC_Enhance_Element.u16_Idsg <=
+	else if (soc_net_current_idsg_a10(net_current_ma) <=
 		soc_current_limit_a10(SOC_EMPTY_CUR_MID_DIVIDER))
 	{
 		band = SOC_EMPTY_BAND_MID;
@@ -904,7 +896,7 @@ static UINT8 soc_low_tail_config(UINT8 mode, SOC_TAIL_STEP *step)
 	for (i = 0U; i < (UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])); ++i)
 	{
 		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
-		if (SOC_Enhance_Element.u16_VCellMin <= threshold)
+		if (g_stCellInfoReport.u16VCellMin <= threshold)
 		{
 			step->target = s_empty_tail_table[i].target[band];
 			step->ticks = s_empty_tail_table[i].ticks[band];
@@ -1040,19 +1032,19 @@ static UINT8 soc_rest_voltage_stable(void)
 	}
 	if ((s_soc.rest_ref_vmin == 0U) || (s_soc.rest_ref_vmax == 0U))
 	{
-		s_soc.rest_ref_vmin = SOC_Enhance_Element.u16_VCellMin;
-		s_soc.rest_ref_vmax = SOC_Enhance_Element.u16_VCellMax;
+		s_soc.rest_ref_vmin = g_stCellInfoReport.u16VCellMin;
+		s_soc.rest_ref_vmax = g_stCellInfoReport.u16VCellMax;
 		soc_watch_set_rest_voltage_stable(1U);
 		return 1U;
 	}
-	if ((soc_abs_diff_u16(SOC_Enhance_Element.u16_VCellMin, s_soc.rest_ref_vmin) <= SOC_REST_STABLE_DELTA_MV) &&
-		(soc_abs_diff_u16(SOC_Enhance_Element.u16_VCellMax, s_soc.rest_ref_vmax) <= SOC_REST_STABLE_DELTA_MV))
+	if ((soc_abs_diff_u16(g_stCellInfoReport.u16VCellMin, s_soc.rest_ref_vmin) <= SOC_REST_STABLE_DELTA_MV) &&
+		(soc_abs_diff_u16(g_stCellInfoReport.u16VCellMax, s_soc.rest_ref_vmax) <= SOC_REST_STABLE_DELTA_MV))
 	{
 		soc_watch_set_rest_voltage_stable(1U);
 		return 1U;
 	}
-	s_soc.rest_ref_vmin = SOC_Enhance_Element.u16_VCellMin;
-	s_soc.rest_ref_vmax = SOC_Enhance_Element.u16_VCellMax;
+	s_soc.rest_ref_vmin = g_stCellInfoReport.u16VCellMin;
+	s_soc.rest_ref_vmax = g_stCellInfoReport.u16VCellMax;
 	soc_watch_set_rest_voltage_stable(0U);
 	return 0U;
 }
@@ -1154,65 +1146,21 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	return changed;
 }
 
-static void soc_publish(UINT8 force_publish)
+static void soc_publish(UINT8 force_publish, int32_t net_current_ma)
 {
-	UINT32 cycles = s_soc.cycle_x100 / 100U;
-
-	SOC_Enhance_Element.u8_SOC = s_soc.soc;
-	SOC_Enhance_Element.u8_SOH = s_soc.soh;
-	SOC_Enhance_Element.u16_CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
-	SOC_Enhance_Element.u16_CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
-	SOC_Enhance_Element.u16_CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
-	SOC_Enhance_Element.u16_Cycle_times = (cycles > 0xFFFFU) ? 0xFFFFU : (UINT16)cycles;
-	soc_watch_refresh(force_publish);
+	soc_watch_refresh(force_publish, net_current_ma);
 	SOC_PublishReportData();
-}
-
-static void soc_handle_command(void)
-{
-	UINT8 save = 0U;
-	UINT8 soc_keep = s_soc.soc;
-
-	switch (SOC_Enhance_Element.u16_RefreshData_Flag)
-	{
-	case 2:
-		s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
-		s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
-		s_soc.dsg_acc_as10 = 0U;
-		soc_refresh_capacity_base();
-		soc_set(soc_keep);
-		save = 1U;
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_PARAM_RESET, soc_keep, s_soc.soc);
-		break;
-	case 3:
-		soc_set(SOC_Enhance_Element.u8_SetSocOnce);
-		save = 1U;
-		soc_watch_set_calib_source(SOC_WATCH_CALIB_SET_ONCE, soc_keep, s_soc.soc);
-		break;
-	default:
-		break;
-	}
-	SOC_Enhance_Element.u16_RefreshData_Flag = 0U;
-	if (save)
-	{
-		soc_save_current_snapshot();
-	}
-	soc_publish(1U);
 }
 
 void soc_param_lib_init(void)
 {
 	memset(&s_soc, 0, sizeof(s_soc));
-	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(SOC_Enhance_Element.u16_SOC_Ah);
-	s_soc.cycle_x100 = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever * 100U;
+	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
+	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	s_u32SocRtcRestAppliedSeconds = 0U;
 	soc_refresh_capacity_base();
-	SOC_UpdateSampleData(g_stCellInfoReport.u16VCellMax,
-						 g_stCellInfoReport.u16VCellMin,
-						 g_stCellInfoReport.u16Ichg,
-						 g_stCellInfoReport.u16IDischg);
 	soc_load_or_default();
-	soc_publish(1U);
+	soc_publish(1U, 0);
 }
 
 UINT8 SOC_ResetStoredSnapshotToDefault(void)
@@ -1237,25 +1185,19 @@ void SOC_SaveSnapshotBeforeSleep(void)
 	soc_save_if_needed();
 }
 
-void SOC_IntEnhance_Ctrl(void)
+void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 {
 	SOC_TAIL_STEP low_tail_step;
 	UINT8 calibration_applied;
 	UINT8 low_tail_active;
 	UINT8 sag_hold_blocked;
 
-	if (SOC_Enhance_Element.u16_RefreshData_Flag != 0U)
-	{
-		soc_handle_command();
-		return;
-	}
-
 	/* Keep the calibration order stable: integrate, low-tail/full, rest, save, publish. */
-	s_soc.mode = soc_direction();
-	soc_integrate(s_soc.mode);
-	soc_update_sag_hold(s_soc.mode);
+	s_soc.mode = soc_direction(net_current_ma);
+	soc_integrate(s_soc.mode, net_current_ma);
+	soc_update_sag_hold(s_soc.mode, net_current_ma);
 
-	low_tail_active = soc_low_tail_config(s_soc.mode, &low_tail_step);
+	low_tail_active = soc_low_tail_config(s_soc.mode, net_current_ma, &low_tail_step);
 	soc_watch_set_tail_state(low_tail_active, &low_tail_step);
 
 	calibration_applied = soc_apply_full_empty(s_soc.mode, low_tail_active, &low_tail_step);
@@ -1271,7 +1213,7 @@ void SOC_IntEnhance_Ctrl(void)
 	}
 
 	soc_save_if_needed();
-	soc_publish(0U);
+	soc_publish(0U, net_current_ma);
 }
 
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max)
@@ -1283,8 +1225,8 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE
 	old_soc = s_soc.soc;
 #endif
-	SOC_Enhance_Element.u16_VCellMin = vcell_min;
-	SOC_Enhance_Element.u16_VCellMax = vcell_max;
+	g_stCellInfoReport.u16VCellMin = vcell_min;
+	g_stCellInfoReport.u16VCellMax = vcell_max;
 	changed = soc_apply_rtc_rest_ocv(rest_seconds);
 	if (changed)
 	{
@@ -1293,7 +1235,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 #endif
 		soc_save_current_snapshot();
 	}
-	soc_publish(0U);
+	soc_publish(0U, 0);
 }
 
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE

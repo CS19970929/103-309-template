@@ -158,7 +158,6 @@ static void host_reset_state(void)
 {
 	memset(&g_stCellInfoReport, 0, sizeof(g_stCellInfoReport));
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
-	memset(&SOC_Enhance_Element, 0, sizeof(SOC_Enhance_Element));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
 	s_host_typec_out_current_mA = 0U;

@@ -882,10 +882,7 @@ def check_soc_parameter_side_effects(reporter):
     if (
         "Sci_RangeOverlaps(offset, count, 24, 4)" in body
         and "reload_soc = 1U;" in body
-        and (
-            "SOC_RequestCapacityReset();" in body
-            or "SOC_Enhance_Element.u16_RefreshData_Flag = 2;" in body
-        )
+        and "SOC_RequestCapacityReset();" in body
     ):
         reporter.ok("SOC capacity parameter writes refresh SOC runtime state")
     else:

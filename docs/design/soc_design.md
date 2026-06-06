@@ -48,8 +48,8 @@
 | 启动初始化 | `AppInit.c::AppInit_InitDevice()` -> `InitData_SOC()` |
 | 200ms 调度 | `System_Init.c::TIM3_IRQHandler()`、`SysTime_Post10msTick()`、`SysTime_Take200msTaskPeriod()` |
 | AFE/SOC 主链 | `Runtime.c::Runtime_RunFrontTasks()`、`DataDeal.c::App_AFEGet()`、`SOC.c::App_SOC()` |
-| Type-C 等效电流 | `SOC.c::SOC_GetTypeCBatEquivCurrentA10()`、`SOC_GetNetCurrentForCalc()` |
-| 核心状态机 | `SocEnhance.c::SOC_IntEnhance_Ctrl()` |
+| Type-C 等效电流 | `SOC.c::SOC_GetTypeCBatEquivCurrentA10()`、`SOC_GetNetCurrentMilliAmp()` |
+| 核心状态机 | `SocEnhance.c::SOC_IntEnhance_Ctrl(net_current_ma)` |
 | 积分与自耗 | `SocEnhance.c::soc_integrate()` |
 | 满电/低端/静置校准 | `soc_apply_full_empty()`、`soc_low_tail_config()`、`soc_update_rest_timer()` |
 | RTC STOP 补偿 | `rtc_sleep_port.c::RtcSleep_PortApplySocRtcRest()`、`SocEnhance.c::SOC_ApplyRtcRelaxationCompensation()` |
@@ -78,8 +78,8 @@
 3. 正常运行 RELAX 模式下，板载自耗已经计入 SOC：`soc_integrate()` 内部按 RELAX 计算 `-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA`，随后按放电积分累计容量损耗。
 4. RTC STOP 补偿路径当前不再额外扣自耗，只按休眠秒数推进静置 OCV 相关计数和下修；这是为了避免把 RTC 低功耗期间的极低自耗重复或过度计入。
 5. 当前只保留 low-tail 表 `s_empty_tail_table`。mid-tail 表、旧 `#if 0` tail 对照表和 mid-tail debug 字段已按确认删除。
-6. `SOC_IntEnhance_Ctrl()` 当前按一条直线表达核心顺序：命令、方向、积分、sag hold、low-tail/full、静置、保存、发布。
-7. 已删除无消费者或误导性字段/路径：runtime SOC table、手动 OCV、mid-tail、short-rest deferred OCV、`u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason` 以及 debug monitor 中的伪造派生字段。
+6. `SOC_IntEnhance_Ctrl(net_current_ma)` 当前按一条直线表达核心顺序：方向、signed 积分、sag hold、low-tail/full、静置、保存、发布。
+7. 已删除无消费者或误导性字段/路径：`SOC_Enhance_Element`、runtime SOC table、手动 OCV、mid-tail、short-rest deferred OCV、`u16_SOC_CycleT_Limit`、`u8_SOC_OCV_Cali`、`SOC_WATCH_BLOCK_REASON/u8LastBlockReason` 以及 debug monitor 中的伪造派生字段。
 8. 当前代码未发现剩余必须立即修复的 SOC 协议兼容问题；硬件验证仍是后续风险边界。
 
 ## 2. 模块边界
@@ -110,20 +110,19 @@ Runtime_RunOnce()
     AFE sample seq +1
     App_SOC()
       AfeCurrent_GetSeq()
-      SOC_GetNetCurrentForCalc()
-      SOC_UpdateSampleData()
-      SOC_IntEnhance_Ctrl()
-        soc_integrate()
+      SOC_GetNetCurrentMilliAmp()
+      SOC_IntEnhance_Ctrl(net_current_ma)
+        soc_integrate(mode, net_current_ma)
         low-tail/full/rest
         soc_save_if_needed()
-        soc_publish(0)
+        soc_publish(0, net_current_ma)
 ```
 
 关键边界：
 
 - `App_SOC()` 只在 AFE sample seq 变化时执行核心算法；没有新样本时只重新发布当前数据。
-- `SOC_GetNetCurrentForCalc()` 会把 Type-C 输出电流按 `TYPEC_OUT_VOLTAGE_MV`、电池总压和 DCDC 效率折算成电池侧等效放电电流。
-- 发布路径是 `soc_publish()` -> `soc_export_public_fields()` -> `SOC_PublishReportData()`。
+- `SOC_GetNetCurrentMilliAmp()` 会把 Type-C 输出电流按 `TYPEC_OUT_VOLTAGE_MV`、电池总压和 DCDC 效率折算成电池侧等效放电电流，并形成 signed mA 净电流。
+- 发布路径是 `soc_publish()` -> `SOC_PublishReportData()`。
 
 ## 4. 配置事实
 
@@ -173,21 +172,17 @@ Runtime_RunOnce()
 | `rest_down_valid/rest_down_target` | 长静置慢下修目标，只接受低于当前 SOC 的 OCV 目标 |
 | `snapshot_flags` | 当前只保留 rebound hold 标志 |
 
-### 5.2 对外结构
+### 5.2 外部数据边界
 
-`SOC_Enhance_Element` 当前按角色分组：
+`SOC_Enhance_Element` 中间层已删除。当前边界：
 
-| 字段组 | 字段 | 说明 |
-|---|---|---|
-| 配置快照 | `u16_SOC_Ah/u16_SOC_CycleT_Ever/u16_SOC_0_Vol/u16_SOC_100_Vol` | 从 `OtherElement` 装载；`OtherElement.u16Soc_TableSelect` 仅作为协议兼容参数保留，算法不消费 |
-| 命令 payload | `u8_SetSocOnce/u16_RefreshData_Flag` | 由 `SOC_Request*()` 写入，`soc_handle_command()` 消费 |
-| 输入采样 | `u16_VCellMax/u16_VCellMin/u16_Ichg/u16_Idsg` | SOC 计算输入 |
-| 发布输出 | `u8_SOC/u8_SOH/u16_CapacityNow/u16_CapacityFull/u16_CapacityFactory/u16_Cycle_times` | 发布到 `g_stCellInfoReport.SocElement` |
-
-已删除字段：
-
-- `u16_SOC_CycleT_Limit`：只写无读。
-- `u8_SOC_OCV_Cali`：只作为旧调试影子字段，无真实控制逻辑。
+| 数据角色 | 当前来源/去向 |
+|---|---|
+| 参数 | 直接读取 `OtherElement.u16Soc_Ah/u16Soc_Cycle_times/u16Soc_V_100/u16Soc_V_0` |
+| 电压 | 直接读取 `g_stCellInfoReport.u16VCellMax/u16VCellMin` |
+| 电流 | `SOC_IntEnhance_Ctrl(net_current_ma)` 入参，signed mA，充电为正、放电为负 |
+| 命令 | `SOC_RequestCapacityReset()`、`SOC_RequestSetOnce()` 直接执行 |
+| 发布 | `SOC_PublishReportData()` 直接写 `g_stCellInfoReport.SocElement` |
 
 ### 5.3 发布口径
 
@@ -204,17 +199,16 @@ Runtime_RunOnce()
 
 ## 6. 核心状态机顺序
 
-`SOC_IntEnhance_Ctrl()` 当前顺序如下，后续重构必须保持：
+`SOC_IntEnhance_Ctrl(net_current_ma)` 当前顺序如下，后续重构必须保持：
 
-1. 如果存在 `u16_RefreshData_Flag`，先执行 `soc_handle_command()`，强制发布并返回。
-2. `soc_direction()` 判断 `RELAX/CHG/DSG`。
-3. `soc_integrate()` 做容量积分和自耗积分。
-4. `soc_update_sag_hold()` 更新大电流回弹保护。
-5. `soc_low_tail_config()` 计算本周期 low-tail 状态，并刷新 debug watch。
-6. `soc_apply_full_empty()` 处理满电锚点或 low-tail。
-7. 如果没有 low-tail、没有校准、没有 sag hold，推进 `soc_update_rest_timer()`；否则在 low-tail 或 sag hold 时清空静置 confidence。
-8. `soc_save_if_needed()` 按保存 mark 判断是否写 Flash。
-9. `soc_publish(0U)` 直接把内部 SOC 和容量字段发布到对外结构。
+1. `soc_direction(net_current_ma)` 判断 `RELAX/CHG/DSG`。
+2. `soc_integrate(mode, net_current_ma)` 做容量积分和板端自耗积分。
+3. `soc_update_sag_hold(mode, net_current_ma)` 更新大电流回弹保护。
+4. `soc_low_tail_config(mode, net_current_ma, &step)` 计算本周期 low-tail 状态，并刷新 debug watch。
+5. `soc_apply_full_empty()` 处理满电锚点或 low-tail。
+6. 如果没有 low-tail、没有校准、没有 sag hold，推进 `soc_update_rest_timer()`；否则在 low-tail 或 sag hold 时清空静置 confidence。
+7. `soc_save_if_needed()` 按保存 mark 判断是否写 Flash。
+8. `soc_publish(0U, net_current_ma)` 直接把内部 SOC 和容量字段发布到对外结构。
 
 本顺序保证低端安全和满电锚点优先于静置 OCV。
 
@@ -224,19 +218,18 @@ Runtime_RunOnce()
 
 | 模式 | 条件 |
 |---|---|
-| `CHG` | `Ichg >= 2(A*10)` 且 `Ichg >= Idsg` |
-| `DSG` | `Idsg >= 2(A*10)` |
-| `RELAX` | 充放电电流都低于 active 门槛 |
+| `CHG` | `net_current_ma >= 200mA` |
+| `DSG` | `net_current_ma <= -200mA` |
+| `RELAX` | signed 净电流未达到 active 门槛 |
 
 ### 7.2 自耗口径
 
 正常运行链路中，自耗已经算进 SOC：
 
-| SOC 模式 | `soc_integrate()` 内部电流口径 |
-|---|---:|
-| `CHG` | `Ichg * 100mA - board_self_mA` |
-| `DSG` | `-(Idsg * 100mA + board_self_mA)` |
-| `RELAX` | `-board_self_mA` |
+```text
+net_current_ma = (u16Ichg - (u16IDischg + TypeC等效放电A10)) * 100mA
+integrate_current_ma = net_current_ma - PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA
+```
 
 因此，普通无外部电流运行时，`30mA` 会以放电积分形式逐步减少 `cap_now_as10`。对 27Ah 电池，约 9 小时才接近 1% SOC，不能解释秒级或分钟级快降。
 
@@ -248,7 +241,7 @@ Type-C 输出电流不直接使用 ADC mA 作为电池放电电流，而是按�
 电池侧等效放电电流 = TypeC输出电流 * TypeC输出电压 / 电池总压 / DCDC效率
 ```
 
-该等效电流会并入 `Idsg`，再与 `Ichg` 抵消，得到 SOC 计算使用的净充/放电电流。
+该等效电流只在进入 SOC 核心前并入 `u16IDischg` 参与 signed 净电流计算；协议字段 `g_stCellInfoReport.u16Ichg/u16IDischg` 仍保持 unsigned `A * 10` 兼容口径。
 
 ## 8. 校准策略
 
@@ -262,7 +255,7 @@ Type-C 输出电流不直接使用 ADC mA 作为电池放电电流，而是按�
 | startup OCV | snapshot 无效且电压校准允许 | 用 `VCellMin` 查 OCV 表 |
 | default | snapshot 无效且电压校准不允许 | 使用 `SOC_DEFAULT_STARTUP_PERCENT = 60` |
 
-启动时 `SOC_LoadConfigData()` 会把 `OtherElement.u16Soc_Ah/u16Soc_Cycle_times/u16Soc_V_100/u16Soc_V_0` 装载到 `SOC_Enhance_Element`。当前化学体系由 `PROJECT_CFG_BAT_CHEMISTRY` 编译期选择；`OtherElement.u16Soc_TableSelect` 保留为协议兼容字段，不参与算法选表。
+启动时 `soc_param_lib_init()` 直接从 `OtherElement.u16Soc_Ah/u16Soc_Cycle_times` 初始化容量和循环基线；满电/空电阈值运行时直接读取 `OtherElement.u16Soc_V_100/u16Soc_V_0`。当前化学体系由 `PROJECT_CFG_BAT_CHEMISTRY` 编译期选择；`OtherElement.u16Soc_TableSelect` 保留为协议兼容字段，不参与算法选表。
 
 ### 8.2 满电锚点
 
@@ -277,7 +270,7 @@ low-tail 用 `s_empty_tail_table` 约束 V0 附近低端 SOC 虚高。
 - offset 是相对 `V0` 的 mV。
 - target 是不同负载档位下允许的最高 SOC。
 - ticks 是 200ms SOC tick，每达到一次最多下修 1%。
-- 当前活动 ticks 全部为 `DELAY_SOC_TEST = 5`，即约 `1s/1%`，属于当前 tail 测试状态。
+- 当前活动 ticks 全部为 `DELAY_SOC_TEST = 5 * 60`，即约 `60s/1%`。
 
 生效条件：
 
