@@ -1531,3 +1531,7 @@ rtc休眠一次被唤醒后，会一直进入Can_IsBusy 的if (s_tx.count != 0U)
 	{
 		return 1U;
 	}导致一直进不了rtc
+
+
+g_dbg_watch中有很多重复的变量，直接搜索DebugWatch_BindAll函数
+cell_report重复

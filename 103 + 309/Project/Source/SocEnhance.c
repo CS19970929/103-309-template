@@ -541,6 +541,7 @@ static void soc_load_or_default(void)
 		{
 			s_soc.cap_now_as10 = data.u32CapNow;
 			s_soc.soc = soc_from_cap();
+			s_soc.full_anchor = (s_soc.soc >= 100U) ? 1U : 0U;
 		}
 		else
 		{
