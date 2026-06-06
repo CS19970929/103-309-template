@@ -26,7 +26,6 @@ void ProductionID_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
 void CanFeidaoFrames_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
 void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
 void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
-void SocEnhance_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
 #if DEBUG_WATCH_SYSTEM_DEBUG_ENABLED
 void SystemDebug_DebugWatchBind(DEBUG_WATCH_ROOT *watch);
 #endif
@@ -52,7 +51,6 @@ void DebugWatch_BindAll(void)
 	CanFeidaoFrames_DebugWatchBind(&g_dbg_watch);
 	SystemInit_DebugWatchBind(&g_dbg_watch);
 	SystemMonitor_DebugWatchBind(&g_dbg_watch);
-	SocEnhance_DebugWatchBind(&g_dbg_watch);
 #if DEBUG_WATCH_SYSTEM_DEBUG_ENABLED
 	SystemDebug_DebugWatchBind(&g_dbg_watch);
 #endif

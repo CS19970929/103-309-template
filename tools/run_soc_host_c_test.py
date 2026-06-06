@@ -113,16 +113,6 @@ def main() -> int:
     for value in variants:
         suffix = f"board_self_{value}"
         build_and_run(cc, BUILD_DIR / f"soc_host_c_test_{suffix}", board_self_consumption_ma=value)
-        build_and_run(
-            cc,
-            BUILD_DIR / f"soc_host_c_test_debug_watch_{suffix}",
-            [
-                "-DPROJECT_CFG_BUILD_PROFILE=1",
-                "-DPROJECT_CFG_DEBUG_WATCH_ENABLE=1",
-                "-D_DEBUG_",
-            ],
-            board_self_consumption_ma=value,
-        )
     return 0
 
 

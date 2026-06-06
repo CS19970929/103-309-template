@@ -56,7 +56,6 @@
 | Flash snapshot | `SocEnhance.c::soc_save()`、`soc_load_or_default()`、`Flash.c::StorageFlash_LoadSocData()`、`StorageFlash_SaveSocData()` |
 | 对外发布 | `soc_publish()`、`SOC_PublishReportData()`、`LedBar.c`、`Can_HDX.c`、`CanFeidaoFrames.c` |
 | 上位机控制 | `Sci_Upper.c::Sci_WrRegs_0x10_SocElement()`、`Sci_WrReg_0x06_SetSocOnce()` |
-| Debug Watch | `SocEnhance.h::SOC_DEBUG_WATCH`、`SystemDebug.c::SystemDebug_UpdateSnapshot()` |
 
 本次文档合并后已执行验证：
 
@@ -194,7 +193,7 @@ Runtime_RunOnce()
 | `u16CapacityFactory` | `cap_factory_as10` 换算为 Ah * 100 |
 | `u16Cycle_times` | `cycle_x100 / 100` |
 
-当前已取消内部/显示双口径；调试和产品判断统一看 `s_soc.soc`、`g_dbg_soc_watch.u8InternalSoc` 或已发布的 `g_stCellInfoReport.SocElement.u16Soc`。
+当前已取消内部/显示双口径；产品判断统一看已发布的 `g_stCellInfoReport.SocElement.u16Soc`，量产分支不保留 SOC 内部 debug watch。
 
 ## 6. 核心状态机顺序
 
@@ -286,7 +285,7 @@ low-tail 允许在 `RELAX` 下生效；这是无放电静置快降的优先排�
 
 - 源码不再定义 `s_mid_tail_table`。
 - `SOC_STATE` 不再保留 `mid_ticks`。
-- `SOC_DEBUG_WATCH` 不再导出 `u8MidTailActive/u16MidTailTarget/u16MidTailTicks/u16MidTicks`。
+- 源码不再保留 mid-tail 调试字段。
 - Python replay 不再模拟或校验 mid-tail 表。
 
 当前中段电压不会触发独立 mid-tail 下修；低端虚高只由 low-tail 和长静置慢下修约束。
@@ -388,29 +387,17 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 
 ## 10. 调试口径
 
-`g_dbg_soc_watch` 当前保留有用实时字段：
+量产分支已删除 SOC Debug Watch 和 SOC 内部 getter，SOC 模块只保留实际算法状态和对外发布数据。
 
-- 内部 SOC：`u8InternalSoc`
-- 当前模式：`u8Mode/u8LastMode`
-- 容量：`u32CapFactoryAs10/u32CapFullAs10/u32CapNowAs10`
-- tail 状态：`u8LowTailActive/u16EmptyTailTarget/u16EmptyTailTicks`
-- 静置状态：`u32RestTicks/u32StableRestTicks/u32LongRestDownTicks/u8RestVoltageStable/u8RestDownValid/u8RestDownTarget`
-- sag：`u16SagHoldTicks/u8SagHoldBlocksCalibration`
-- 最近校准：`u8LastCalibSource/u8LastSocBefore/u8LastSocAfter`
+可观察口径：
 
-已删除：
+1. `g_stCellInfoReport.SocElement.u16Soc`
+2. `g_stCellInfoReport.SocElement.u16Soh`
+3. `g_stCellInfoReport.SocElement.u16CapacityNow`
+4. `g_stCellInfoReport.u16VCellMin/u16VCellMax`
+5. `g_stCellInfoReport.u16Ichg/u16IDischg`
 
-- `SOC_WATCH_BLOCK_REASON`
-- `u8LastBlockReason`
-- debug monitor 中不真实或易误导的 `cal_allowed/sag_blocked/rest_stable/low_tail/ocv_target/last_calib_soc/display_ticks` 派生字段，以及 mid-tail 兼容字段
-
-排查 SOC 快降时优先看：
-
-1. `u8LastCalibSource`
-2. `u8LowTailActive`
-3. `u8InternalSoc`
-4. `u16VCellMin` 与 `u16_SOC_0_Vol` 的关系
-5. `u32RestTicks/u32LongRestDownTicks`
+排查 SOC 快降时优先看真实输入和输出：电芯最低电压、充放电电流、满电阈值、低压阈值、已发布 SOC 和容量字段。
 
 ## 11. 本次源码 review 已处理的问题
 
@@ -419,7 +406,7 @@ reset sleep 和 HICCUP STOP 的 SOC 口径不同：
 | tail 主流程 | 旧实现混有 low/mid tail、历史表和兼容计数，阅读成本高 | 保留 low-tail 主流程，删除 mid-tail 表、计数和 debug 字段 |
 | RTC 自耗 | RTC 休眠补偿额外扣板载自耗，与“RTC 低功耗自耗可忽略”的需求不一致 | 删除 RTC 秒级自耗扣减，仅保留正常运行自耗积分 |
 | 无用字段 | `u16_SOC_CycleT_Limit/u8_SOC_OCV_Cali/u8LastBlockReason` 无有效消费者或已误导 | 删除字段、调用和打印 |
-| debug monitor | 多个 debug 字段固定为 0 或伪造来源 | 删除，保留真实内部计数和 display tick |
+| debug monitor | SOC debug 字段增加阅读成本，且量产分支不需要内部 watch 口径 | 删除 SOC Debug Watch 和内部 getter，只保留公开发布字段 |
 | host test stub | host 工具缺 `ADC_GetVbatMilliVolt()`、`AfeCurrent_GetSeq()` stub | 补齐 `soc_host_c_test.c` 和 `soc_host_visual_trace.c` 桩函数，host 测试/trace 可按当前接口链接运行 |
 | replay 表解析 | Python replay 之前可能解析到 `#if 0` 对照表 | 改为解析活动 C 源码和 `DELAY_SOC_TEST` 宏 |
 | mid-tail 运行复杂度 | V0 上方 mid-tail 在 RELAX 下也会下修，体验上容易与静置快降混淆 | 删除 mid-tail 源码、测试模型和 debug 字段 |

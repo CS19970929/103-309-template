@@ -244,13 +244,6 @@ struct DBG_SOC {
 	uint16_t idsg;
 	uint8_t  init_over;
 	uint16_t vtotal;
-	/* calibration internals */
-	uint8_t  mode;           /* CHG/DSG/RELAX */
-	uint8_t  last_mode;
-	uint32_t rest_ticks;
-	uint32_t stable_ticks;
-	uint16_t full_ticks;
-	uint16_t empty_ticks;
 };
 
 struct DBG_AFE {

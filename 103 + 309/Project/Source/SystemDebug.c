@@ -590,11 +590,6 @@ void SystemDebug_Snapshot(void)
 	g_dbg.soc.init_over = 1U;
 	g_dbg.soc.vtotal    = g_stCellInfoReport.u16VCellTotle;
 
-	/* ===== SOC calibration internals ===== */
-	SOC_GetDebugInternals(&g_dbg.soc.mode, &g_dbg.soc.last_mode,
-	                      &g_dbg.soc.rest_ticks, &g_dbg.soc.stable_ticks,
-	                      &g_dbg.soc.full_ticks, &g_dbg.soc.empty_ticks);
-
 	/* ===== AFE ===== */
 	g_dbg.afe.bstatus1    = SH367309_Reg_Store.REG_BSTATUS1.all;
 	g_dbg.afe.bstatus3    = SH367309_Reg_Store.REG_BSTATUS3.all;
@@ -808,11 +803,6 @@ void DbgPrint_SOC(void)
 	dbg_puts("mV I="); dbg_put_dec16(g_dbg.soc.ichg / 10U);
 	dbg_puts("/"); dbg_put_dec16(g_dbg.soc.idsg / 10U);
 	dbg_puts("A init="); dbg_put_hex8(g_dbg.soc.init_over);
-	dbg_puts("\r\nmode="); dbg_put_hex8(g_dbg.soc.mode);
-	dbg_puts(" restT="); dbg_put_dec16((uint16_t)g_dbg.soc.rest_ticks);
-	dbg_puts(" stableT="); dbg_put_dec16((uint16_t)g_dbg.soc.stable_ticks);
-	dbg_puts(" fullT="); dbg_put_dec16(g_dbg.soc.full_ticks);
-	dbg_puts("\r\nemptyT="); dbg_put_dec16(g_dbg.soc.empty_ticks);
 	dbg_puts("\r\n");
 }
 

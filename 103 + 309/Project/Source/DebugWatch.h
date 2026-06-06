@@ -41,10 +41,6 @@ struct RS485MSG;
 struct DBG_RUNTIME_TAG;
 struct SYSTEM_DEBUG;
 struct IRQ_DEBUG_STATE;
-struct SOC_DEBUG_WATCH;
-struct SOC_STATE_TAG;
-struct SOC_SAVE_MARK_TAG;
-struct SOC_EMPTY_TAIL_RULE_TAG;
 struct stCell_Info;
 struct OTHER_ELEMENT;
 struct PRT_E2ROM_PARAS;
@@ -65,13 +61,8 @@ typedef struct DEBUG_WATCH_RUNTIME_DIR_TAG
 	struct FLASH_RUNTIME_TAG *flash;
 	struct LOG_RECORD_RUNTIME_TAG *log_record;
 	struct FACTORY_AGING_RUNTIME_TAG *factory_aging;
-		struct RTC_RUNTIME_TAG *rtc;
-		struct APP_RUNTIME_TAG *app;
-		struct SOC_DEBUG_WATCH *soc;
-		struct SOC_STATE_TAG *soc_state;
-	struct SOC_SAVE_MARK_TAG *soc_saved;
-	uint32_t *soc_rtc_rest_applied_seconds;
-	uint8_t *soc_rest_voltage_stable;
+	struct RTC_RUNTIME_TAG *rtc;
+	struct APP_RUNTIME_TAG *app;
 	struct DBG_RUNTIME_TAG *debug_monitor_runtime;
 } DEBUG_WATCH_RUNTIME_DIR;
 
@@ -177,10 +168,6 @@ typedef struct DEBUG_WATCH_TABLE_DIR_TAG
 	const uint16_t *sh_afe_ovt_uvt;
 	const uint16_t *sh_afe_ocd1t;
 	const uint16_t *sh_afe_occt_ocd2t;
-	const uint16_t *soc_lifepo;
-	const uint16_t *soc_ternary;
-	const struct SOC_EMPTY_TAIL_RULE_TAG *soc_empty_tail;
-	uint16_t soc_empty_tail_count;
 	const uint8_t *ledbar_digit_map;
 	uint16_t ledbar_digit_map_count;
 	const void *ledbar_routes;
