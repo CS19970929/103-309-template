@@ -534,28 +534,6 @@ static void soc_load_or_default(void)
 	soc_update_save_mark();
 }
 
-static void soc_add_discharge(UINT32 delta_as10)
-{
-	UINT32 unit = s_soc.cap_factory_as10 / 100U;
-	UINT8 old_soh = s_soc.soh;
-
-	if ((delta_as10 == 0U) || (unit == 0U))
-	{
-		return;
-	}
-	s_soc.dsg_acc_as10 += delta_as10;
-	while (s_soc.dsg_acc_as10 >= unit)
-	{
-		s_soc.dsg_acc_as10 -= unit;
-		++s_soc.cycle_x100;
-	}
-	soc_refresh_capacity_base();
-	if (s_soc.soh != old_soh)
-	{
-		s_soc.soc = soc_from_cap();
-	}
-}
-
 static void soc_clear_rest_down_target(void)
 {
 	s_soc.rest_down_valid = 0U;
@@ -580,19 +558,13 @@ static void soc_set_rest_down_target(UINT8 target)
 
 static void soc_integrate(int32_t net_current_ma)
 {
-	int32_t current_ma_signed;
 	int32_t delta_as10;
 	int64_t acc_mams;
 	int64_t cap_now_as10;
 	UINT8 old_soc;
 
-	current_ma_signed = net_current_ma -
-		(int32_t)SOC_BOARD_SELF_CONSUMPTION_MA;
-	if (current_ma_signed == 0)
-	{
-		return;
-	}
-	acc_mams = ((int64_t)current_ma_signed * (int64_t)SOC_TICK_MS) +
+	acc_mams = (((int64_t)net_current_ma -
+		(int64_t)SOC_BOARD_SELF_CONSUMPTION_MA) * (int64_t)SOC_TICK_MS) +
 		(int64_t)s_soc.rem_mams;
 	delta_as10 = (int32_t)(acc_mams / (int64_t)SOC_MAMS_PER_AS10);
 	s_soc.rem_mams = (int32_t)(acc_mams % (int64_t)SOC_MAMS_PER_AS10);
@@ -603,7 +575,19 @@ static void soc_integrate(int32_t net_current_ma)
 	old_soc = s_soc.soc;
 	if (delta_as10 < 0)
 	{
-		soc_add_discharge((UINT32)(-(int64_t)delta_as10));
+		UINT32 dsg_as10 = (UINT32)(-(int64_t)delta_as10);
+		UINT32 unit = s_soc.cap_factory_as10 / 100U;
+
+		if (unit != 0U)
+		{
+			s_soc.dsg_acc_as10 += dsg_as10;
+			while (s_soc.dsg_acc_as10 >= unit)
+			{
+				s_soc.dsg_acc_as10 -= unit;
+				++s_soc.cycle_x100;
+			}
+			soc_refresh_capacity_base();
+		}
 	}
 	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
 	if (cap_now_as10 < 0)
