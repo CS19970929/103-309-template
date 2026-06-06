@@ -133,8 +133,7 @@ Runtime_RunOnce()
 | `PROJECT_CFG_BAT_CHEMISTRY` | `0` | 当前编译使用三元锂 `SocTable_TernaryLi` |
 | `PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA` | `30` | 正常运行积分中的板载自耗 |
 | `PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT` | `1` | 自动校准单次最多 1% |
-| `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` | `15` | 普通满电确认时间 |
-| `PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS` | `5` | 快速满电确认时间 |
+| `PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS` | `15` | 单一路径满电确认时间 |
 | `PROJECT_CFG_SOC_REST_OCV_SECONDS` | `1800` | 静置 OCV 基础门槛 |
 | `PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS` | `1800` | 长静置下修周期 |
 | `PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS` | `30` | 大电流放电后回弹保护 |
@@ -259,7 +258,7 @@ Type-C 输出电流不直接使用 ADC mA 作为电池放电电流，而是按�
 
 ### 8.2 满电锚点
 
-满电锚点只在非放电模式执行。满足电压、压差和持续时间后，每次最多上修 1%，直到 100%，并置位 `full_anchor`。充电积分在未锚定前最高压到 99%，避免未确认满电时直接发布 100%。
+满电锚点只在非放电模式执行。当前只有一条满电确认路径；满足电压、压差和连续确认时间后，每次最多上修 1%，直到 100%，并置位 `full_anchor`。充电积分在未锚定前最高压到 99%，避免未确认满电时直接发布 100%。
 
 ### 8.3 Low-Tail
 

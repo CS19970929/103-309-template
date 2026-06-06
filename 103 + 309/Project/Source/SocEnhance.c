@@ -39,11 +39,8 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
 #define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
-#define SOC_FULL_FAST_SECONDS        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS)
-#define SOC_FULL_MIN_SOC             ((UINT8)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT)
 #define SOC_DEFAULT_FULL_MV          ((UINT16)4180U)
 #define SOC_FULL_CONFIRM_MIN_VMAX_MV SOC_DEFAULT_FULL_MV
-#define SOC_FULL_FAST_MARGIN_MV      ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV)
 #define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
 #define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
 #define SOC_EMPTY_MV                 ((UINT16)3000U)
@@ -716,13 +713,12 @@ static void soc_integrate(UINT8 mode, int32_t net_current_ma)
 	}
 }
 
-static UINT16 soc_full_confirm_seconds(void)
+static UINT8 soc_full_confirm_allowed(void)
 {
 	UINT16 full_mv = (OtherElement.u16Soc_V_100 != 0U) ?
 		OtherElement.u16Soc_V_100 : SOC_DEFAULT_FULL_MV;
 	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
 	UINT16 vmin_min = vmax_min;
-	UINT16 vmin_fast = soc_voltage_with_margin(full_mv, SOC_FULL_FAST_MARGIN_MV);
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
@@ -733,16 +729,10 @@ static UINT16 soc_full_confirm_seconds(void)
 	}
 
 	delta = soc_cell_delta();
-	if ((g_stCellInfoReport.u16VCellMin >= vmin_fast) &&
+	if ((g_stCellInfoReport.u16VCellMin >= vmin_min) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
-		return SOC_FULL_FAST_SECONDS;
-	}
-	if ((s_soc.soc >= SOC_FULL_MIN_SOC) &&
-		(g_stCellInfoReport.u16VCellMin >= vmin_min) &&
-		(delta <= SOC_FULL_MAX_DELTA_MV))
-	{
-		return SOC_FULL_SECONDS;
+		return 1U;
 	}
 	return 0U;
 }
@@ -914,16 +904,14 @@ static UINT8 soc_apply_full_empty(UINT8 mode,
 								  UINT8 empty_active,
 								  const SOC_TAIL_STEP *empty_step)
 {
-	UINT16 full_seconds;
 	UINT16 full_confirm_ticks;
 	UINT8 old_soc = s_soc.soc;
 
 	if (mode != SOC_MODE_DSG)
 	{
-		full_seconds = soc_full_confirm_seconds();
-		if (full_seconds != 0U)
+		if (soc_full_confirm_allowed())
 		{
-			full_confirm_ticks = (UINT16)(full_seconds * SOC_TICKS_PER_SECOND);
+			full_confirm_ticks = (UINT16)(SOC_FULL_SECONDS * SOC_TICKS_PER_SECOND);
 			s_soc.empty_ticks = 0U;
 			if (s_soc.full_ticks < full_confirm_ticks)
 			{
@@ -941,10 +929,7 @@ static UINT8 soc_apply_full_empty(UINT8 mode,
 			}
 			return (UINT8)(s_soc.soc != old_soc);
 		}
-		if (s_soc.full_ticks > 0U)
-		{
-			--s_soc.full_ticks;
-		}
+		s_soc.full_ticks = 0U;
 	}
 	else
 	{

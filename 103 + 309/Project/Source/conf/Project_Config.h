@@ -131,20 +131,8 @@
 #define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
 
 // <o> Full confirm time seconds <1-600>
-// <i> Normal full-charge confirmation time before SOC can be raised to 100%.
+// <i> Continuous full-charge confirmation time before SOC can be raised by one step.
 #define PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS 15
-
-// <o> Full confirm fast time seconds <1-600>
-// <i> Shorter confirmation time used when voltage is closer to full voltage.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS 5
-
-// <o> Full confirm min SOC percent <0-100>
-// <i> Full-charge calibration only runs when internal SOC is at or above this value.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_SOC_PERCENT 95
-
-// <o> Full confirm fast margin mV <0-500>
-// <i> Cell voltage margin that enables the fast full-charge confirmation path.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_FAST_MARGIN_MV 30
 
 // <o> Calibration min valid cell voltage mV <1000-3500>
 // <i> Rejects OCV/full/low-tail calibration when a cell voltage is below this range.

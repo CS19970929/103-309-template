@@ -292,8 +292,7 @@ static void test_full_voltage_anchor_can_override_self_consumption(void)
 	host_reset_state();
 	host_set_snapshot(99U, 0U);
 	host_init_with_voltage(4181U, 4181U);
-	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_FAST_SECONDS * 4U),
-		4181U, 4181U, 0U, 0U);
+	host_run_seconds(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS, 4181U, 4181U, 0U, 0U);
 	CHECK_EQ_U32(host_internal_soc(), 100U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
 		host_cap_to_ah100(HOST_CAP_FACTORY_AS10));
