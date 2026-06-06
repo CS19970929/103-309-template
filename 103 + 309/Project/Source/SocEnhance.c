@@ -126,7 +126,6 @@ static UINT32 s_u32SocRtcRestAppliedSeconds;
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
-static void soc_publish(void);
 
 #define DELAY_SOC_TEST		(5 * 60)
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
@@ -423,14 +422,14 @@ void SOC_RequestCapacityReset(void)
 	soc_refresh_capacity_base();
 	soc_set(soc_keep);
 	soc_save_current_snapshot();
-	soc_publish();
+	SOC_PublishReportData();
 }
 
 void SOC_RequestSetOnce(UINT8 soc)
 {
 	soc_set(soc);
 	soc_save_current_snapshot();
-	soc_publish();
+	SOC_PublishReportData();
 }
 
 static UINT8 soc_save(void)
@@ -695,7 +694,7 @@ static UINT8 soc_apply_tail_step(const SOC_TAIL_STEP *step, UINT16 *counter)
 	return (UINT8)(s_soc.soc != old_soc);
 }
 
-static UINT8 soc_low_tail_config(UINT8 mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
+static UINT8 soc_select_empty_tail_step(UINT8 mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
 	UINT8 band;
 	UINT16 i;
@@ -751,9 +750,9 @@ static UINT8 soc_low_tail_config(UINT8 mode, int32_t net_current_ma, SOC_TAIL_ST
 	return 0U;
 }
 
-static UINT8 soc_apply_full_empty(UINT8 mode,
-								  UINT8 empty_active,
-								  const SOC_TAIL_STEP *empty_step)
+static UINT8 soc_apply_full_or_empty_tail(UINT8 mode,
+										  UINT8 empty_active,
+										  const SOC_TAIL_STEP *empty_step)
 {
 	UINT16 full_confirm_ticks;
 	UINT8 old_soc = s_soc.soc;
@@ -873,7 +872,6 @@ static UINT8 soc_rest_voltage_stable(void)
 
 static void soc_update_rest_timer(UINT8 mode)
 {
-
 	if (mode != SOC_MODE_RELAX)
 	{
 		soc_reset_rest_confidence();
@@ -968,11 +966,6 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	return changed;
 }
 
-static void soc_publish(void)
-{
-	SOC_PublishReportData();
-}
-
 void soc_param_lib_init(void)
 {
 	memset(&s_soc, 0, sizeof(s_soc));
@@ -981,7 +974,7 @@ void soc_param_lib_init(void)
 	s_u32SocRtcRestAppliedSeconds = 0U;
 	soc_refresh_capacity_base();
 	soc_load_or_default();
-	soc_publish();
+	SOC_PublishReportData();
 }
 
 UINT8 SOC_ResetStoredSnapshotToDefault(void)
@@ -1008,33 +1001,34 @@ void SOC_SaveSnapshotBeforeSleep(void)
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 {
-	SOC_TAIL_STEP low_tail_step;
-	UINT8 calibration_applied;
-	UINT8 low_tail_active;
+	SOC_TAIL_STEP empty_tail_step;
+	UINT8 voltage_calibrated;
+	UINT8 empty_tail_active;
 	UINT8 sag_hold_blocked;
 	UINT8 mode;
 
-	/* Keep the calibration order stable: integrate, low-tail/full, rest, save, publish. */
+	/* Order: integrate, sag hold, voltage calibration, rest, save, publish. */
 	mode = soc_direction(net_current_ma);
 	soc_integrate(net_current_ma);
 	soc_update_sag_hold(mode, net_current_ma);
 
-	low_tail_active = soc_low_tail_config(mode, net_current_ma, &low_tail_step);
-
-	calibration_applied = soc_apply_full_empty(mode, low_tail_active, &low_tail_step);
+	empty_tail_active = soc_select_empty_tail_step(mode, net_current_ma, &empty_tail_step);
+	voltage_calibrated = soc_apply_full_or_empty_tail(mode,
+		empty_tail_active,
+		&empty_tail_step);
 
 	sag_hold_blocked = soc_sag_hold_blocks_calibration();
-	if (!low_tail_active && !calibration_applied && !sag_hold_blocked)
-	{
-		soc_update_rest_timer(mode);
-	}
-	else if (low_tail_active || sag_hold_blocked)
+	if (empty_tail_active || sag_hold_blocked)
 	{
 		soc_reset_rest_confidence();
 	}
+	else if (!voltage_calibrated)
+	{
+		soc_update_rest_timer(mode);
+	}
 
 	soc_save_if_needed();
-	soc_publish();
+	SOC_PublishReportData();
 }
 
 void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max)
@@ -1048,5 +1042,5 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 	{
 		soc_save_current_snapshot();
 	}
-	soc_publish();
+	SOC_PublishReportData();
 }
