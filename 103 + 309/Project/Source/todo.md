@@ -1535,3 +1535,81 @@ rtc休眠一次被唤醒后，会一直进入Can_IsBusy 的if (s_tx.count != 0U)
 
 g_dbg_watch中有很多重复的变量，直接搜索DebugWatch_BindAll函数
 cell_report重复
+
+去掉full_anchor，梳理静置soc校准
+
+
+
+
+
+
+func
+
+/****************init***************/
+- DebugWatch_BindAll
+- SleepDeal_HandleBootSleepStartup
+  - afe sleep
+  - mcu io\adc\can\ sleep conf
+  - wakeup
+  - soc backup dom store
+- io conf
+- uart conf
+- flash param read and update
+- afe init
+  - param update
+  - afe zero current cali
+- can init
+- adc init
+- soc init
+- timer sch irq init
+- iwdg init
+
+/*************************loop*****************/
+- FactoryAging_Task
+  - old task logi
+- APP_LedBar
+  - if(key press or typec wk) 5pin led disp task,disp window(5s??)
+  - rtc sleep status:key/typec wk irq wakeup from sleep and disp led
+  - if(key long press)  deep sleep
+  - disp 1、soc 2、dsg mos
+- App_AFEGet
+  - 200ms led 
+  - afe sample 1、vcell 2、temp 3、curr 4、309 status
+  - adc sample 1、vbat 2、typec curr(neew to translate) 3、mos temp 4、one temp
+  - _UL_RENZHENG_ENABLE_ logi
+    - mos temp protect
+    - if(afe comm err) close ctlc,if(vbat >= 4280 || temp >= 85 && 10s) 
+    - if(!afe comm err) if(temp >> 80 || (vcell >= 4270 && vcellmin >= 2000) && 3s)->close ctlc->if((vcellmax >= 4280 || vbat || temp) && ichg)
+  - if(5v chg) open_chg_close_dsg if(!5v chg) sleep;
+- App_AnlogCal
+- rtc_sleep
+- App_Can
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
