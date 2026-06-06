@@ -273,11 +273,6 @@ static UINT8 soc_voltage_valid(void)
 	return 1U;
 }
 
-static UINT16 soc_voltage_with_margin(UINT16 base_mv, UINT16 margin_mv)
-{
-	return (base_mv > margin_mv) ? (UINT16)(base_mv - margin_mv) : 0U;
-}
-
 static UINT8 soc_calibration_allowed(void)
 {
 	if (!soc_voltage_valid())
@@ -291,22 +286,20 @@ static UINT8 soc_calibration_allowed(void)
 	return 1U;
 }
 
-static const UINT16 *soc_ocv_table(UINT16 *size)
-{
-#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
-	*size = SOC_Size_LiFePO;
-	return SOC_Table_LiFePO;
-#else
-	*size = SOC_Size_TernaryLi;
-	return SocTable_TernaryLi;
-#endif
-}
-
 static UINT8 soc_ocv_percent(void)
 {
+	const UINT16 *table;
 	UINT16 size;
-	const UINT16 *table = soc_ocv_table(&size);
-	UINT16 soc = soc_table_percent(table, size, g_stCellInfoReport.u16VCellMin);
+	UINT16 soc;
+
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	table = SOC_Table_LiFePO;
+	size = SOC_Size_LiFePO;
+#else
+	table = SocTable_TernaryLi;
+	size = SOC_Size_TernaryLi;
+#endif
+	soc = soc_table_percent(table, size, g_stCellInfoReport.u16VCellMin);
 	return (soc > 100U) ? 100U : (UINT8)soc;
 }
 
@@ -385,19 +378,17 @@ static UINT16 soc_current_limit_a10(UINT16 divider)
 	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
 }
 
-static UINT16 soc_current_ma_to_a10(int32_t current_ma)
-{
-	uint64_t magnitude_ma;
-	uint32_t current_a10;
-
-	magnitude_ma = (current_ma >= 0) ? (uint64_t)current_ma : (uint64_t)(0 - (int64_t)current_ma);
-	current_a10 = (uint32_t)((magnitude_ma + 50ULL) / 100ULL);
-	return (current_a10 > (uint32_t)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
-}
-
 static UINT16 soc_net_current_idsg_a10(int32_t net_current_ma)
 {
-	return (net_current_ma < 0) ? soc_current_ma_to_a10(net_current_ma) : 0U;
+	uint32_t current_a10;
+
+	if (net_current_ma >= 0)
+	{
+		return 0U;
+	}
+	current_a10 = (uint32_t)((((uint64_t)(-(int64_t)net_current_ma)) + 50ULL) /
+		100ULL);
+	return (current_a10 > (uint32_t)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
 }
 
 void SOC_PublishReportData(void)
@@ -611,19 +602,19 @@ static UINT8 soc_full_confirm_allowed(void)
 {
 	UINT16 full_mv = (OtherElement.u16Soc_V_100 != 0U) ?
 		OtherElement.u16Soc_V_100 : SOC_DEFAULT_FULL_MV;
-	UINT16 vmax_min = soc_voltage_with_margin(full_mv, SOC_FULL_MIN_MARGIN_MV);
-	UINT16 vmin_min = vmax_min;
+	UINT16 full_min_mv = (full_mv > SOC_FULL_MIN_MARGIN_MV) ?
+		(UINT16)(full_mv - SOC_FULL_MIN_MARGIN_MV) : 0U;
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
 		(g_stCellInfoReport.u16VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
-		(g_stCellInfoReport.u16VCellMax < vmax_min))
+		(g_stCellInfoReport.u16VCellMax < full_min_mv))
 	{
 		return 0U;
 	}
 
 	delta = soc_cell_delta();
-	if ((g_stCellInfoReport.u16VCellMin >= vmin_min) &&
+	if ((g_stCellInfoReport.u16VCellMin >= full_min_mv) &&
 		(delta <= SOC_FULL_MAX_DELTA_MV))
 	{
 		return 1U;
