@@ -9,6 +9,7 @@ bindings so it can run in CI or during local review.
 import random
 import re
 import os
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,7 +70,10 @@ LONG_REST_DOWN_STEP_SECONDS = project_config_int('PROJECT_CFG_SOC_REST_DOWN_STEP
 REST_STABLE_LIMIT_SECONDS = REST_OCV_SECONDS
 VALID_MIN_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV', 2000)
 VALID_MAX_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV', 5000)
-VALID_MAX_DELTA_MV = project_config_int('PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV', 1000)
+VALID_MAX_DELTA_MV = 300
+
+DELAY_SOC_TEST_TICKS = 5 * 60
+LOW_TAIL_STEP_SECONDS = DELAY_SOC_TEST_TICKS // TICKS_PER_SECOND
 
 EMPTY_BAND_RELAX = 0
 EMPTY_BAND_LIGHT = 1
@@ -77,14 +81,14 @@ EMPTY_BAND_MID = 2
 EMPTY_BAND_HEAVY = 3
 
 EMPTY_TAIL_TABLE = [
-    (-50, (0, 0, 0, 0), (5, 5, 5, 5)),
-    (-25, (0, 0, 0, 0), (5, 5, 5, 5)),
-    (0, (0, 0, 0, 0), (5, 5, 5, 5)),
-    (50, (4, 5, 8, 12), (5, 5, 5, 5)),
-    (100, (8, 10, 14, 18), (5, 5, 5, 5)),
-    (200, (12, 14, 20, 25), (5, 5, 5, 5)),
-    (300, (14, 18, 25, 32), (5, 5, 5, 5)),
-    (400, (18, 22, 30, 40), (5, 5, 5, 5)),
+    (-50, (0, 0, 0, 0), (DELAY_SOC_TEST_TICKS,) * 4),
+    (-25, (0, 0, 0, 0), (DELAY_SOC_TEST_TICKS,) * 4),
+    (0, (0, 0, 0, 0), (DELAY_SOC_TEST_TICKS,) * 4),
+    (50, (4, 5, 8, 12), (DELAY_SOC_TEST_TICKS,) * 4),
+    (100, (8, 10, 14, 18), (DELAY_SOC_TEST_TICKS,) * 4),
+    (200, (12, 14, 20, 25), (DELAY_SOC_TEST_TICKS,) * 4),
+    (300, (14, 18, 25, 32), (DELAY_SOC_TEST_TICKS,) * 4),
+    (400, (18, 22, 30, 40), (DELAY_SOC_TEST_TICKS,) * 4),
 ]
 
 MODE_RELAX = 0
@@ -500,13 +504,24 @@ def active_c_source_text():
 
 def parse_c_number(token):
     token = token.strip()
-    macro = re.search(r'^\s*#define\s+{0}\s+\(?(\d+)[Uu]?\)?\s*$'.format(re.escape(token)),
+    macro = re.search(r'^\s*#define\s+{0}\s+(.+?)\s*$'.format(re.escape(token)),
                       active_c_source_text(),
                       re.MULTILINE)
     if macro:
-        return int(macro.group(1), 0)
-    token = re.sub(r'[()A-Za-z_]+', '', token)
-    return int(token, 0)
+        return parse_c_number(macro.group(1).split('//', 1)[0])
+    token = re.sub(r'\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\)', '', token)
+    token = re.sub(r'(?<=\d)[UuLl]+', '', token)
+    if not re.fullmatch(r'[\d\s+\-*/%()]+', token):
+        raise ValueError(token)
+    parsed = ast.parse(token, mode='eval')
+    for node in ast.walk(parsed):
+        if not isinstance(node, (
+            ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
+            ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
+            ast.Mod, ast.USub, ast.UAdd,
+        )):
+            raise ValueError(token)
+    return int(eval(compile(parsed, '<c-int>', 'eval'), {'__builtins__': {}}, {}))
 
 
 def parse_c_tail_table(name):
@@ -782,24 +797,24 @@ def test_full_confirm_counter_decrements_instead_of_resetting():
 
 def test_empty_anchor_limits_low_voltage_tail():
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
-    run_seconds(model, 5, idsg=40, vmax=3000, vmin=3000)
-    assert model.soc == 25
+    run_seconds(model, LOW_TAIL_STEP_SECONDS, idsg=40, vmax=3000, vmin=3000)
+    assert model.soc == 29
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
     run_seconds(model, 500, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3400, vmin=3400)
-    assert model.soc == 27
+    assert model.soc == 52
 
     model = SocModel.from_snapshot(Snapshot(soc=60, cap_now=CAP_FACTORY_AS10 * 60 // 100))
     run_seconds(model, 300, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3300, vmin=3300)
-    assert model.soc == 23
+    assert model.soc == 55
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 80, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3100, vmin=3100)
-    assert 13 <= model.soc <= 14
+    assert model.soc == 29
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 50, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3050, vmin=3050)
-    assert 8 <= model.soc <= 9
+    assert model.soc == 30
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=40, vmax=2750, vmin=2750)
@@ -809,18 +824,18 @@ def test_empty_anchor_limits_low_voltage_tail():
     assert model.soc == 30
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 15, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=3000, vmin=3000)
-    assert model.soc == 15
+    assert model.soc == 30
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     model.tick(idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
     assert model.soc == 30
-    run_seconds(model, 6, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 24
+    run_seconds(model, LOW_TAIL_STEP_SECONDS, idsg=EMPTY_LIGHT_CURRENT_A10 + 10, vmax=2950, vmin=2950)
+    assert model.soc == 29
 
 
 def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
-    assert model.empty_tail_config(MODE_DSG, 3400, 20) == (22, 5)
-    for _ in range(4):
+    assert model.empty_tail_config(MODE_DSG, 3400, 20) == (22, DELAY_SOC_TEST_TICKS)
+    for _ in range(DELAY_SOC_TEST_TICKS - 1):
         model.tick(idsg=20, vmax=3400, vmin=3400)
     assert model.soc == 40
     model.tick(idsg=20, vmax=3400, vmin=3400)
@@ -828,6 +843,8 @@ def test_low_voltage_tail_table_uses_current_bands_and_rate_limits():
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
     run_seconds(model, 1, idsg=EMPTY_LIGHT_CURRENT_A10 + 1, vmax=3400, vmin=3400)
+    assert model.soc == 40
+    run_seconds(model, LOW_TAIL_STEP_SECONDS, idsg=EMPTY_LIGHT_CURRENT_A10 + 1, vmax=3400, vmin=3400)
     assert model.soc == 39
 
     model = SocModel.from_snapshot(Snapshot(soc=40, cap_now=CAP_FACTORY_AS10 * 40 // 100))
@@ -895,7 +912,9 @@ def test_heavy_discharge_sag_hold_blocks_voltage_table_until_tail():
 
     model = SocModel.from_snapshot(Snapshot(soc=30, cap_now=CAP_FACTORY_AS10 * 30 // 100))
     run_seconds(model, 6, idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2950, vmin=2950)
-    assert model.soc == 24
+    assert model.soc == 30
+    run_seconds(model, LOW_TAIL_STEP_SECONDS, idsg=EMPTY_MID_CURRENT_A10 + 10, vmax=2950, vmin=2950)
+    assert model.soc <= 29
 
 
 def test_short_stable_rest_does_not_latch_ocv_target():

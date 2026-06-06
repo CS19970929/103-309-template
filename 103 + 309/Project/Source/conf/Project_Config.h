@@ -154,10 +154,6 @@
 // <i> Rejects OCV/full/low-tail calibration when a cell voltage is above this range.
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
 
-// <o> Calibration max cell delta mV <0-3000>
-// <i> Rejects calibration when max-min cell voltage delta is too large.
-#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_DELTA_MV 1000
-
 // <o> Sag holdoff seconds <0-1800>
 // <i> Delays OCV/low-tail calibration after heavy discharge to avoid rebound miscalibration.
 #define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
