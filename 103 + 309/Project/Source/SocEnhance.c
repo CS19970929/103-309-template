@@ -100,7 +100,6 @@ typedef struct SOC_STATE_TAG
 #if PROJECT_CFG_DEBUG_WATCH_ENABLE || PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	UINT8 last_mode;
 #endif
-	UINT8 full_anchor;
 } SOC_STATE;
 
 typedef struct SOC_SAVE_MARK_TAG
@@ -292,7 +291,6 @@ static void soc_set(UINT8 soc)
 	s_soc.soc = soc;
 	s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * soc) / 100ULL);
 	s_soc.rem_mams = 0U;
-	s_soc.full_anchor = (soc >= 100U) ? 1U : 0U;
 }
 
 static UINT8 soc_direction(int32_t net_current_ma)
@@ -563,11 +561,10 @@ static void soc_load_or_default(void)
 		}
 		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
 			(data.u32CapNow <= s_soc.cap_full_as10))
-		{
-			s_soc.cap_now_as10 = data.u32CapNow;
-			s_soc.soc = soc_from_cap();
-			s_soc.full_anchor = (s_soc.soc >= 100U) ? 1U : 0U;
-		}
+			{
+				s_soc.cap_now_as10 = data.u32CapNow;
+				s_soc.soc = soc_from_cap();
+			}
 		else
 		{
 			soc_set((UINT8)data.u16SocNow);
@@ -629,7 +626,6 @@ static void soc_add_discharge(UINT32 delta_as10)
 
 static UINT8 soc_apply_discharge_delta(UINT32 delta_as10, UINT8 watch_source, UINT8 old_soc)
 {
-	s_soc.full_anchor = 0U;
 	soc_add_discharge(delta_as10);
 	s_soc.cap_now_as10 = (s_soc.cap_now_as10 > delta_as10) ?
 		(s_soc.cap_now_as10 - delta_as10) : 0U;
@@ -702,7 +698,7 @@ static void soc_integrate(UINT8 mode, int32_t net_current_ma)
 		return;
 	}
 	s_soc.soc = soc_from_cap();
-	if (!s_soc.full_anchor && (s_soc.soc >= 100U))
+	if ((old_soc < 100U) && (s_soc.soc >= 100U))
 	{
 		s_soc.soc = 99U;
 		s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * 99ULL) / 100ULL);
@@ -821,7 +817,6 @@ static void soc_watch_refresh(UINT8 force_publish, int32_t net_current_ma)
 	s_soc_debug_watch.u8Soh = s_soc.soh;
 	s_soc_debug_watch.u8RestDownValid = s_soc.rest_down_valid;
 	s_soc_debug_watch.u8RestDownTarget = s_soc.rest_down_target;
-	s_soc_debug_watch.u8FullAnchor = s_soc.full_anchor;
 	s_soc_debug_watch.u8CalibrationAllowed = cal_allowed;
 	s_soc_debug_watch.u8SagHoldBlocksCalibration = sag_blocked;
 	s_soc_debug_watch.u8RestVoltageStable = s_soc_watch_rest_voltage_stable;
@@ -918,11 +913,10 @@ static UINT8 soc_apply_full_empty(UINT8 mode,
 				++s_soc.full_ticks;
 			}
 			if (s_soc.full_ticks >= full_confirm_ticks)
-			{
-				soc_set(soc_step(s_soc.soc, 100U, SOC_CAL_STEP));
-				s_soc.full_ticks = 0U;
-				s_soc.full_anchor = (s_soc.soc >= 100U) ? 1U : 0U;
-			}
+				{
+					soc_set(soc_step(s_soc.soc, 100U, SOC_CAL_STEP));
+					s_soc.full_ticks = 0U;
+				}
 			if (s_soc.soc != old_soc)
 			{
 				soc_watch_set_calib_source(SOC_WATCH_CALIB_FULL_ANCHOR, old_soc, s_soc.soc);
@@ -1226,8 +1220,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 #if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
                            uint32_t *rest_soc_ticks, uint32_t *stable_soc_ticks,
-                           uint16_t *full_ticks, uint16_t *empty_ticks,
-                           uint8_t *full_anchor)
+                           uint16_t *full_ticks, uint16_t *empty_ticks)
 {
 	if (mode)          *mode          = s_soc.mode;
 	if (last_mode)     *last_mode     = s_soc.last_mode;
@@ -1235,6 +1228,5 @@ void SOC_GetDebugInternals(uint8_t *mode, uint8_t *last_mode,
 	if (stable_soc_ticks)  *stable_soc_ticks  = s_soc.stable_rest_soc_ticks;
 	if (full_ticks)    *full_ticks    = s_soc.full_ticks;
 	if (empty_ticks)   *empty_ticks   = s_soc.empty_ticks;
-	if (full_anchor)   *full_anchor   = s_soc.full_anchor;
 }
 #endif

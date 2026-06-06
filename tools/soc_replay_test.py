@@ -165,7 +165,6 @@ class SocModel:
     rest_down_valid: bool = False
     sag_hold_ticks: int = 0
     rebound_hold: bool = False
-    full_anchor: bool = False
     board_self_consumption_ma: int = BOARD_SELF_CONSUMPTION_MA
 
     @classmethod
@@ -190,7 +189,6 @@ class SocModel:
         if snapshot.rebound_hold:
             model.rebound_hold = True
             model.sag_hold_ticks = REBOUND_BOOT_HOLDOFF_SECONDS * TICKS_PER_SECOND
-        model.full_anchor = model.soc >= 100
         return model
 
     def recalc_full(self):
@@ -207,7 +205,6 @@ class SocModel:
         self.soc = max(0, min(100, soc))
         self.cap_now = self.soc * self.cap_full // 100
         self.remainder_ms = 0
-        self.full_anchor = self.soc >= 100
 
     def net_current_ma(self, ichg, idsg):
         return (ichg - idsg) * MA_PER_A10
@@ -239,6 +236,7 @@ class SocModel:
 
     def integrate(self, direction, ichg, idsg):
         current_ma = self.integrate_current_ma(ichg, idsg)
+        old_soc = self.soc
         self.last_mode = direction
         if current_ma == 0:
             return
@@ -250,11 +248,10 @@ class SocModel:
         if delta > 0:
             self.cap_now = min(self.cap_full, self.cap_now + delta)
         else:
-            self.full_anchor = False
             self.add_cycle_capacity(-delta)
             self.cap_now = max(0, self.cap_now + delta)
         self.soc = self.soc_from_cap()
-        if delta > 0 and not self.full_anchor and self.soc >= 100:
+        if delta > 0 and old_soc < 100 and self.soc >= 100:
             self.soc = 99
             self.cap_now = self.cap_full * 99 // 100
 
