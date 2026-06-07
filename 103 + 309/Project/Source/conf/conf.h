@@ -58,10 +58,6 @@
 #define _DI_SWITCH_longKEY_ONOFF
 #endif
 
-#if PROJECT_CFG_IAP_ENABLE
-#define _IAP
-#endif
-
 #if (PROJECT_CFG_SCI1_ROLE == 1)
 #define _COMMOM_UPPER_SCI1
 #elif (PROJECT_CFG_SCI1_ROLE != 0)

@@ -58,9 +58,6 @@
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
 
-// <q> Enable IAP
-#define PROJECT_CFG_IAP_ENABLE 1
-
 // <q> Enable factory aging
 #define PROJECT_CFG_FACTORY_AGING_ENABLE 1
 
@@ -172,9 +169,6 @@
 // </h>
 
 // <h>Upgrade Parameter Policy
-
-// <q> Enable upgrade param policy
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE 1
 
 // <o> Policy version <0x0000-0xFFFE>
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0606

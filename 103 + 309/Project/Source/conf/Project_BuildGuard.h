@@ -35,6 +35,14 @@
 #define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
 #endif
 
+#if defined(PROJECT_CFG_IAP_ENABLE) && (PROJECT_CFG_IAP_ENABLE != 1)
+#error "IAP is a required board feature and must not be disabled"
+#endif
+
+#if defined(PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE) && (PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE != 1)
+#error "Upgrade parameter policy is a required board feature and must not be disabled"
+#endif
+
 #endif
 
 /* --- range checks --- */

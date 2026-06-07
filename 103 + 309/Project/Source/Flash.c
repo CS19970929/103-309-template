@@ -1124,7 +1124,6 @@ void StorageFlash_PrintBootCheck(void)
 
 void App_FlashUpdate(void)
 {
-#ifdef _IAP
 	if (1 == u8FlashUpdateFlag)
 	{
 		SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
@@ -1134,7 +1133,6 @@ void App_FlashUpdate(void)
 		__disable_fault_irq();
 		MCU_RESET();
 	}
-#endif
 }
 
 void APP_To_IAP_Jump(void)

@@ -60,6 +60,7 @@ FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
 FACTORY_AGING_H = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.h"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
 FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
+UPGRADE_PARAM_POLICY_H = ROOT / "103 + 309" / "Project" / "Source" / "UpgradeParamPolicy.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -250,8 +251,14 @@ RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_FACTORY_AGING_ENABLE": "1",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS": "259200",
 }
+FORBIDDEN_PROJECT_CONFIG_MACROS = {
+    "PROJECT_CFG_IAP_ENABLE",
+    "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE",
+}
 GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_HOST_WRITE_ENABLE",
+    "PROJECT_CFG_IAP_ENABLE",
+    "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE",
     "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
@@ -719,6 +726,46 @@ def check_release_defaults(reporter):
             reporter.fail("Project_Config.h {0} should default to {1}, got {2}".format(name, expected, actual))
         else:
             reporter.ok("Project_Config.h {0} default is {1}".format(name, expected))
+
+    for name in sorted(FORBIDDEN_PROJECT_CONFIG_MACROS):
+        if name in defines:
+            reporter.fail("Project_Config.h must not expose required feature switch {0}".format(name))
+        else:
+            reporter.ok("Project_Config.h does not expose required feature switch {0}".format(name))
+
+
+def check_required_board_features(reporter):
+    required = [PROJECT_CONFIG, BUILD_GUARD, FLASH_C, UPGRADE_PARAM_POLICY_H]
+    if any(not path.exists() for path in required):
+        return
+
+    project_config = read_text(PROJECT_CONFIG)
+    build_guard = read_text(BUILD_GUARD)
+    flash_c = read_text(FLASH_C)
+    policy_h = read_text(UPGRADE_PARAM_POLICY_H)
+
+    if (
+        "PROJECT_CFG_IAP_ENABLE" not in project_config
+        and "#ifdef _IAP" not in flash_c
+        and "u8FlashUpdateFlag" in flash_c
+        and "MCU_RESET();" in flash_c
+        and "IAP is a required board feature" in build_guard
+    ):
+        reporter.ok("IAP is always compiled and guarded against legacy disable macros")
+    else:
+        reporter.fail("IAP must be always compiled and must not be a Project_Config.h switch")
+
+    if (
+        "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE" not in project_config
+        and "#define UPGRADE_PARAM_POLICY_ENABLE        1" in policy_h
+        and "#error \"Upgrade parameter policy is a required board feature and must not be disabled\"" in policy_h
+        and "PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION" in policy_h
+        and "PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD" in policy_h
+        and "Upgrade parameter policy is a required board feature" in build_guard
+    ):
+        reporter.ok("upgrade parameter policy mechanism is required while reset policy remains configurable")
+    else:
+        reporter.fail("upgrade parameter policy must always be present while keeping version/reset settings configurable")
 
 
 def check_guard_includes(reporter):
@@ -2080,6 +2127,7 @@ def main(argv):
     check_runtime_debug_isolation(reporter)
     check_removed_legacy_modules(reporter)
     check_release_defaults(reporter)
+    check_required_board_features(reporter)
     check_guard_includes(reporter)
     check_build_guard(reporter)
     check_release_map(reporter)

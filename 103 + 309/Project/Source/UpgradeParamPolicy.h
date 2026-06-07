@@ -3,16 +3,20 @@
 
 #include "Project_Config.h"
 
+#if defined(PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE) && (PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE != 1)
+#error "Upgrade parameter policy is a required board feature and must not be disabled"
+#endif
+
 /*
  * Customer upgrade parameter policy.
  *
  * Workflow for a customer-specific package:
  * 1. Modify the firmware default parameter tables.
  * 2. Open conf/Project_Config.h with Keil Configuration Wizard.
- * 3. Enable only the reset switches that must overwrite field parameters.
+ * 3. Enable only the reset actions that must overwrite field parameters.
  * 4. Increase PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION before building.
  */
-#define UPGRADE_PARAM_POLICY_ENABLE        PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE
+#define UPGRADE_PARAM_POLICY_ENABLE        1
 #define UPGRADE_PARAM_POLICY_VERSION       PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION
 
 #define UPGRADE_PARAM_RESET_AFE            PROJECT_CFG_UPGRADE_PARAM_RESET_AFE
