@@ -25,7 +25,7 @@
 #include "SH367309_DataDeal.h"
 #include "LogRecord.h"
 #include "LedBar.h"
-#include "AppInit.h"
+#include "Runtime.h"
 #include "MosStartup.h"
 
 #include "ShortFunc.h"

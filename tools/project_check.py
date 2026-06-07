@@ -27,8 +27,6 @@ MAIN_C = ROOT / "103 + 309" / "Project" / "Source" / "main.c"
 MAIN_H = ROOT / "103 + 309" / "Project" / "Source" / "main.h"
 MOS_STARTUP_C = ROOT / "103 + 309" / "Project" / "Source" / "MosStartup.c"
 MOS_STARTUP_H = ROOT / "103 + 309" / "Project" / "Source" / "MosStartup.h"
-APP_INIT_C = ROOT / "103 + 309" / "Project" / "Source" / "AppInit.c"
-APP_INIT_H = ROOT / "103 + 309" / "Project" / "Source" / "AppInit.h"
 RELEASE_MAP = ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 ELOG_CFG_H = ROOT / "103 + 309" / "Project" / "Source" / "easylogger" / "inc" / "elog_cfg.h"
 ADC_C = ROOT / "103 + 309" / "Project" / "Source" / "ADC.c"
@@ -398,7 +396,7 @@ def parse_header_defines(header_path):
 
 
 def check_required_files(reporter):
-    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, APP_INIT_C, APP_INIT_H, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
+    for path in [PROJECT, PROJECT_CONFIG, BUILD_GUARD, CONF_H, MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, RUNTIME_C, ELOG_CFG_H, GITIGNORE, PRE_COMMIT, PRE_PUSH]:
         if path.exists():
             reporter.ok("required file exists: {0}".format(path.relative_to(ROOT)))
         else:
@@ -507,10 +505,10 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Release includes MosStartup.c")
 
-        if "../Source/AppInit.c" not in release["files"]:
-            reporter.fail("FD_Release project tree does not include AppInit.c")
+        if "../Source/Runtime.c" not in release["files"]:
+            reporter.fail("FD_Release project tree does not include Runtime.c")
         else:
-            reporter.ok("FD_Release includes AppInit.c")
+            reporter.ok("FD_Release includes Runtime.c")
 
         if STARTUP_DEFAULT_HANDLER_SOURCE_FILE not in release["build_files"]:
             reporter.fail("FD_Release should build StartupDefaultHandler.c for startup default-vector no-op")
@@ -588,10 +586,10 @@ def check_keil_targets(reporter):
         else:
             reporter.ok("FD_Debug includes MosStartup.c")
 
-        if "../Source/AppInit.c" not in debug["files"]:
-            reporter.fail("FD_Debug project tree does not include AppInit.c")
+        if "../Source/Runtime.c" not in debug["files"]:
+            reporter.fail("FD_Debug project tree does not include Runtime.c")
         else:
-            reporter.ok("FD_Debug includes AppInit.c")
+            reporter.ok("FD_Debug includes Runtime.c")
 
         missing_debug_files = DEBUG_ONLY_SOURCE_FILES - debug["build_files"]
         if missing_debug_files:
@@ -1711,7 +1709,7 @@ def check_rtc_stop_sleep_contract(reporter):
 
 
 def check_app_architecture(reporter):
-    required_files = [MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, APP_INIT_C, APP_INIT_H, CONF_C, DATADEAL_C, APP_ARCH_REFACTOR_DOC, REFACTOR_REQUIREMENTS_DOC]
+    required_files = [MAIN_C, MAIN_H, MOS_STARTUP_C, MOS_STARTUP_H, RUNTIME_C, CONF_C, DATADEAL_C, APP_ARCH_REFACTOR_DOC, REFACTOR_REQUIREMENTS_DOC]
     if any(not path.exists() for path in required_files):
         missing = [str(path.relative_to(ROOT)) for path in required_files if not path.exists()]
         reporter.fail("app architecture files missing: {0}".format(",".join(missing)))
@@ -1721,8 +1719,7 @@ def check_app_architecture(reporter):
     main_h = read_text(MAIN_H)
     mos_c = read_text(MOS_STARTUP_C)
     mos_h = read_text(MOS_STARTUP_H)
-    app_init_c = read_text(APP_INIT_C)
-    app_init_h = read_text(APP_INIT_H)
+    runtime_c = read_text(RUNTIME_C)
     conf_c = read_text(CONF_C)
     datadeal_c = read_text(DATADEAL_C)
 
@@ -1740,23 +1737,26 @@ def check_app_architecture(reporter):
         reporter.fail("MOS startup control should stay out of main.c and be owned by MosStartup.c/.h")
 
     if (
-        '#include "AppInit.h"' in main_c
-        and "AppInit_Boot();" in main_c
+        '#include "Runtime.h"' in main_c
+        and "Runtime_Boot();" in main_c
         and "Runtime_RunOnce();" in main_c
         and "void InitDevice(" not in main_c
         and "void InitVar(" not in main_c
         and "void InitSci(" not in main_c
         and "void App_Sci(" not in main_c
-        and "static void AppInit_InitDevice(void)" in app_init_c
-        and "static void AppInit_InitRuntimeState(void)" in app_init_c
-        and "void AppInit_Boot(void)" in app_init_c
-        and "UINT8 SeriesNum" in app_init_c
-        and "#define AppInit_InitSci()" in app_init_h
-        and "#define AppInit_ServiceSci()" in app_init_h
+        and "void Runtime_Boot(void)" in runtime_c
+        and "void Runtime_RunOnce(void)" in runtime_c
+        and "UINT8 SeriesNum" in runtime_c
+        and "InitUSART_CommonUpper();" in runtime_c
+        and "App_CommonUpper();" in runtime_c
+        and "Runtime_RunFrontTasks" not in runtime_c
+        and "Runtime_RunIoAndPowerTasks" not in runtime_c
+        and "Runtime_RunBackgroundTasks" not in runtime_c
+        and "Runtime_RunNormalOnce" not in runtime_c
     ):
-        reporter.ok("boot initialization is isolated in AppInit while main.c stays as a thin entry point")
+        reporter.ok("boot initialization is owned by Runtime while main.c stays as a thin entry point")
     else:
-        reporter.fail("boot initialization should stay in AppInit.c/.h and main.c should only call AppInit_Boot/Runtime_RunOnce")
+        reporter.fail("boot initialization should stay in Runtime.c and main.c should only call Runtime_Boot/Runtime_RunOnce")
 
     if (
         "static void Conf_InitRunSharedIo(void)" in conf_c
@@ -1772,7 +1772,7 @@ def check_app_architecture(reporter):
 
     if (
         "SeriesSelect_AFE1" not in main_h
-        and "SeriesSelect_AFE1" not in app_init_c
+        and "SeriesSelect_AFE1" not in runtime_c
         and "SeriesSelect_AFE1" not in datadeal_c
         and "UINT8 series_num = SeriesNum;" in datadeal_c
         and "series_num < 5U" in datadeal_c
@@ -1793,7 +1793,7 @@ def check_app_architecture(reporter):
     doc = read_text(APP_ARCH_REFACTOR_DOC)
     if (
         "MosStartup.c" in doc
-        and "AppInit.c" in doc
+        and "Runtime.c" in doc
         and "SeriesSelect_AFE1" in doc
         and "Conf_InitRunSharedIo" in doc
         and "FD_Release" in doc
@@ -1801,7 +1801,7 @@ def check_app_architecture(reporter):
     ):
         reporter.ok("architecture refactor document records module boundary, size optimization, and follow-up split order")
     else:
-        reporter.fail("architecture refactor document should cover MosStartup, AppInit, compact cell mapping, checks, and next module split order")
+        reporter.fail("architecture refactor document should cover MosStartup, Runtime, compact cell mapping, checks, and next module split order")
 
     requirements = read_text(REFACTOR_REQUIREMENTS_DOC)
     required_terms = [
@@ -1892,7 +1892,6 @@ def check_comm_tool_can_iap_contract(reporter):
         COMM_TOOL_BSP_SOURCE / "board_can.c",
         COMM_TOOL_KEIL_PROJECT,
         COMM_TOOL_IAP_PROJECT,
-        APP_INIT_C,
         ELOG_CFG_H,
         PROJECT_CONFIG,
         BUILD_GUARD,
@@ -1928,7 +1927,6 @@ def check_comm_tool_can_iap_contract(reporter):
     board_can_c = read_text(COMM_TOOL_BSP_SOURCE / "board_can.c")
     comm_tool_uvprojx = read_text(COMM_TOOL_KEIL_PROJECT)
     comm_tool_iap_uvprojx = read_text(COMM_TOOL_IAP_PROJECT)
-    app_init_c = read_text(APP_INIT_C)
     elog_cfg_h = read_text(ELOG_CFG_H)
     project_config_h = read_text(PROJECT_CONFIG)
     build_guard_h = read_text(BUILD_GUARD)

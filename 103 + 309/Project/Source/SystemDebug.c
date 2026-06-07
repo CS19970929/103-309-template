@@ -4,7 +4,6 @@
 
 #include "main.h"
 #include "conf.h"
-#include "AppInit.h"
 #include "System_Init.h"
 #include "System_Monitor.h"
 #include "Can_HDX.h"

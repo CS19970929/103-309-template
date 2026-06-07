@@ -1,12 +1,63 @@
 #include "main.h"
-#include "AppInit.h"
 #include "FactoryAging.h"
 #include "Runtime.h"
 #include "DebugHooks.h"
+#include "DebugWatch.h"
+#include "IrqDebug.h"
 #include "debug_hub.h"
 
-static void Runtime_RunFrontTasks(void)
+UINT8 SeriesNum = 10;
+
+void Runtime_Boot(void)
 {
+	DebugWatch_BindAll();
+
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_BOOT);
+	SystemInit();
+
+	InitDelay();
+	SleepDeal_HandleBootSleepStartup();
+
+	jtag_disableAndConfIO();
+
+	InitNVIC();
+	InitIO();
+	InitUSART_CommonUpper();
+	InitE2PROM();
+	InitAFE1();
+	InitCan();
+	InitADC();
+
+	InitData_SOC();
+
+	InitTimer();
+	__enable_irq();
+	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
+
+	EnableLowPowerDebug();
+
+	Init_IWDG();
+
+	InitSystemMonitorData_EEPROM();
+	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+
+	SystemRuntime_MarkBootReady();
+	SystemRuntime_SetProjectVersion(1U);
+	LedBar_Init();
+	InitProID();
+	LogRecord_RequestStartup();
+
+	Init_RTC();
+	DBG_Init();
+	/* RTC_WKTimeConfig(); */
+}
+
+void Runtime_RunOnce(void)
+{
+	uint32_t loop_start = DebugHooks_RuntimeLoopStart();
+	uint32_t section_start;
+
+	section_start = DebugHooks_RuntimeSectionStart();
 	SysTime_LatchTaskFlags();
 	DebugHooks_RuntimeAfterSysTime();
 
@@ -20,11 +71,10 @@ static void Runtime_RunFrontTasks(void)
 	DebugHooks_RuntimeAfterAfe();
 
 	DebugHooks_RuntimeSnapshot();
-}
+	DebugHooks_RuntimeAfterFrontSection(section_start);
 
-static void Runtime_RunIoAndPowerTasks(void)
-{
-	AppInit_ServiceSci();
+	section_start = DebugHooks_RuntimeSectionStart();
+	App_CommonUpper();
 	DebugHooks_RuntimeAfterSci();
 
 	App_AnlogCal();
@@ -35,10 +85,9 @@ static void Runtime_RunIoAndPowerTasks(void)
 
 	App_Can();
 	DebugHooks_RuntimeAfterCan();
-}
+	DebugHooks_RuntimeAfterIoPowerSection(section_start);
 
-static void Runtime_RunBackgroundTasks(void)
-{
+	section_start = DebugHooks_RuntimeSectionStart();
 	App_FlashUpdate();
 	DebugHooks_RuntimeAfterFlash();
 
@@ -50,23 +99,6 @@ static void Runtime_RunBackgroundTasks(void)
 
 	Feed_IWatchDog;
 	DBG_Task();
-}
-
-static void Runtime_RunNormalOnce(void)
-{
-	uint32_t loop_start = DebugHooks_RuntimeLoopStart();
-	uint32_t section_start;
-
-	section_start = DebugHooks_RuntimeSectionStart();
-	Runtime_RunFrontTasks();
-	DebugHooks_RuntimeAfterFrontSection(section_start);
-
-	section_start = DebugHooks_RuntimeSectionStart();
-	Runtime_RunIoAndPowerTasks();
-	DebugHooks_RuntimeAfterIoPowerSection(section_start);
-
-	section_start = DebugHooks_RuntimeSectionStart();
-	Runtime_RunBackgroundTasks();
 	DebugHooks_RuntimeAfterBackgroundSection(section_start);
 
 	section_start = DebugHooks_RuntimeSectionStart();
@@ -74,9 +106,4 @@ static void Runtime_RunNormalOnce(void)
 	DebugHooks_RuntimeAfterDebugPrintSection(section_start);
 
 	DebugHooks_RuntimeLoopDone(loop_start);
-}
-
-void Runtime_RunOnce(void)
-{
-	Runtime_RunNormalOnce();
 }
