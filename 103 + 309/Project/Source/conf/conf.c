@@ -258,7 +258,6 @@ void IOstatus_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-    Conf_PrepareStopEntry();
     Conf_InitAllPortsAnalog();
     Conf_InitMainPowerRails(Bit_RESET,
                             Bit_RESET,
@@ -267,6 +266,7 @@ void IOstatus_Base(void)
                             Bit_RESET,
                             Bit_RESET);
 
+    Conf_PrepareStopEntry();
     // LedBar_PrepareForStop();
 }
 

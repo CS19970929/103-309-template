@@ -59,8 +59,7 @@ uint32_t LP_GetBlockReason(void)
         reason |= LP_BLOCK_EXT_COMM;
     }
 
-    if ((g_stLowPowerRtcStatus.mode == NO_SLEEP) &&
-        (FactoryAging_IsActive() != 0U))
+    if ((FactoryAging_IsActive() != 0U))
     {
         reason |= LP_BLOCK_AGING;
     }

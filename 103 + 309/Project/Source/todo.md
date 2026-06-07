@@ -1596,6 +1596,16 @@ func
 
 
 
+完全去掉SOC_Enhance_Element中间层
+
+
+
+ 有很多冗余或者说没意义的写法，例如if (cap_a10 == 0U)
+	{
+		cap_a10 = SOC_DEFAULT_CAP_A10;
+	},首先你能证明cap_a10会为0的情况吗，还有{return (g_stCellInfoReport.u16VCellMax >= g_stCellInfoReport.u16VCellMin) ?
+		(UINT16)(g_stCellInfoReport.u16VCellMax - g_stCellInfoReport.u16VCellMin) :
+		(UINT16)(g_stCellInfoReport.u16VCellMin - g_stCellInfoReport.u16VCellMax);}vcellmax会有比vcellmin小的情况吗，类似很多这种冗余写法，除非你能证明会有这种情况，而且如果有这种情况，说明其他模块的判断有问题，应该从根本解决，而不是这种冗余复杂的写法，否则不应该这么写，你认为了
 
 
 
@@ -1611,5 +1621,15 @@ func
 
 
 
+led模块太复杂了，不仅是本身逻辑复杂、LedBarRuntime结构体成员多，而且还涉及到各种状态，例如rtc休眠，深度休眠，休眠后led要配置好，保证低功耗，同时要保证体验，用户深度休眠唤醒后预览soc，数码管本身显示逻辑就很复杂，不方便调试，不清楚运行时序，帮我梳理清楚，然后看能否简化
 
 
+宏太多了，不方便阅读和管理项目，只有必须用宏的地方使用宏，同时尽量减少Project_Config.h中的需要我配置的宏，尽量将宏配置放进对应模块，只有经常需要我修改的宏，例如soc体验、调试、升级相关需要我经常调试配置的房间Project_Config.h中，然后不是非必须使用宏的地方，尽量不要用宏，例如状态相关，可以用枚举或者更好的方案，例如#define SOC_MODE_RELAX               ((UINT8)0U)
+#define SOC_MODE_CHG                 ((UINT8)1U)
+#define SOC_MODE_DSG                 ((UINT8)2U)这几个宏
+
+增加soc低电校准逻辑，目前逻辑应该是会往下校准，不会往上校准，这没问题，但是soc积分还是有用的，不能够确定表格是否合理，最好能加入当电压高于表格，但对应soc却低于表格，这个时候放电应该“卡住”soc，你认为怎么样
+
+System_ErrorControlBase???
+
+合并AppInit和Runtime，同时Runtime主循环实现合并为一个函数，不需要分这么多函数，然后rtc_sleep是否应该放在循环的末尾

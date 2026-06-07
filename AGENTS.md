@@ -26,13 +26,6 @@
 - 如果代码行为变化会让当前权威文档误导维护者，只更新最相关的一处文档，简短写清楚当前事实。
 - 涉及烧录地址、测试模式、量产隔离、上位机启动方式、安全脚本、协议对外行为时，必须把长期规则写入脚本或文档。
 
-## SOC 简化偏好
-
-- SOC 内部计算优先使用真实语义，例如 signed current 做安时积分；协议兼容字段只留在协议边界。
-- 状态机要按直线顺序表达：方向、安时积分、低压尾段、满电、静置、保存、发布。
-- 删除无真实价值的桥接结构、影子字段和中间状态；不要为了调试或兼容保留无消费者中间层。
-- 每一步保持功能不变或明确说明行为变化；每一步单独验证、单独提交。
-
 ## 烧录安全
 
 - IAP/Bootloader 地址是 `0x08000000`。
@@ -42,19 +35,6 @@
 - App 烧录优先使用：
   `.\tools\soc_flash_app_safe.ps1 -Bin "103 + 309\Project\Users\Objects\FD_Release.bin" -Flash`
 - 修改或新增烧录脚本时，必须保留 `0x08004800` 地址检查和 dry-run 输出。
-
-## SOC 测试隔离
-
-- 量产程序必须保持 `PROJECT_CFG_BUILD_PROFILE 0`。
-- SOC 测试固件才允许打开：
-  `PROJECT_CFG_BUILD_PROFILE 2`
-  `PROJECT_CFG_SOC_TEST_MODE_ENABLE 1`
-  `PROJECT_CFG_SOC_TEST_ACCEL_TICKS_MAX 300`
-- 测试模式必须通过编译配置隔离，不能影响量产程序。
-- SOC 测试上位机固定启动方式：
-  `.\tools\start_soc_test_ui.ps1`
-- 自动演示启动方式：
-  `.\tools\start_soc_test_ui.ps1 -Demo -Port COM4 -Baud 19200 -Slave 1 -Samples 10 -Interval 0.5`
 
 ## 上位机与显示要求
 
