@@ -54,14 +54,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
 #define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)300)
-#define SOC_MODE_RELAX               ((UINT8)0U)
-#define SOC_MODE_CHG                 ((UINT8)1U)
-#define SOC_MODE_DSG                 ((UINT8)2U)
-#define SOC_EMPTY_BAND_RELAX         ((UINT8)0U)
-#define SOC_EMPTY_BAND_LIGHT         ((UINT8)1U)
-#define SOC_EMPTY_BAND_MID           ((UINT8)2U)
-#define SOC_EMPTY_BAND_HEAVY         ((UINT8)3U)
-#define SOC_EMPTY_BAND_COUNT         ((UINT8)4U)
 #define SOC_REST_MAX_DELTA_MV        ((UINT16)200U)
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
@@ -72,6 +64,22 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REST_LIMIT_TICKS                SOC_SEC_TO_TICKS(SOC_REST_OCV_SECONDS)
 #define SOC_STABLE_LIMIT_TICKS              SOC_REST_LIMIT_TICKS
 #define SOC_LONG_REST_DOWN_STEP_TICKS       SOC_SEC_TO_TICKS(SOC_LONG_REST_DOWN_STEP_SECONDS)
+
+typedef enum
+{
+	SOC_MODE_RELAX = 0,
+	SOC_MODE_CHG = 1,
+	SOC_MODE_DSG = 2
+} SOC_MODE;
+
+typedef enum
+{
+	SOC_EMPTY_BAND_RELAX = 0,
+	SOC_EMPTY_BAND_LIGHT,
+	SOC_EMPTY_BAND_MID,
+	SOC_EMPTY_BAND_HEAVY,
+	SOC_EMPTY_BAND_COUNT
+} SOC_EMPTY_BAND;
 
 typedef struct SOC_STATE_TAG
 {
@@ -245,7 +253,7 @@ static void soc_set(UINT8 soc)
 	s_soc.rem_mams = 0U;
 }
 
-static UINT8 soc_direction(int32_t net_current_ma)
+static SOC_MODE soc_direction(int32_t net_current_ma)
 {
 	if (net_current_ma >=
 		((int32_t)SOC_CURRENT_ACTIVE_A10 * SOC_MA_PER_A10))
@@ -622,7 +630,7 @@ static UINT8 soc_full_confirm_allowed(void)
 	return 0U;
 }
 
-static void soc_update_sag_hold(UINT8 mode, int32_t net_current_ma)
+static void soc_update_sag_hold(SOC_MODE mode, int32_t net_current_ma)
 {
 	if ((mode == SOC_MODE_DSG) &&
 		(soc_net_current_idsg_a10(net_current_ma) >
@@ -654,9 +662,9 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 		 soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV)));
 }
 
-static UINT8 soc_select_empty_tail_step(UINT8 mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
+static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
-	UINT8 band;
+	SOC_EMPTY_BAND band;
 	UINT16 i;
 	UINT16 threshold;
 
@@ -832,7 +840,7 @@ static UINT8 soc_rest_voltage_stable(void)
 	return 0U;
 }
 
-static void soc_update_rest_timer(UINT8 mode)
+static void soc_update_rest_timer(SOC_MODE mode)
 {
 	if (mode != SOC_MODE_RELAX)
 	{
@@ -968,7 +976,7 @@ void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 	UINT8 empty_tail_active;
 	UINT8 full_confirm_active;
 	UINT8 sag_hold_blocked;
-	UINT8 mode;
+	SOC_MODE mode;
 
 	/* Order: integrate, sag hold, voltage calibration, rest, save, publish. */
 	mode = soc_direction(net_current_ma);
