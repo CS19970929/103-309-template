@@ -248,10 +248,10 @@ RUNTIME_DEBUG_FORBIDDEN_TOKENS = [
 RELEASE_SAFE_DEFAULTS = {
     "PROJECT_CFG_WDOG_ENABLE": "1",
     "PROJECT_CFG_HOST_WRITE_ENABLE": "1",
-    "PROJECT_CFG_FACTORY_AGING_ENABLE": "1",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS": "259200",
 }
 FORBIDDEN_PROJECT_CONFIG_MACROS = {
+    "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_IAP_ENABLE",
     "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE",
 }
@@ -735,7 +735,7 @@ def check_release_defaults(reporter):
 
 
 def check_required_board_features(reporter):
-    required = [PROJECT_CONFIG, BUILD_GUARD, FLASH_C, UPGRADE_PARAM_POLICY_H]
+    required = [PROJECT_CONFIG, BUILD_GUARD, FLASH_C, UPGRADE_PARAM_POLICY_H, FACTORY_AGING_C]
     if any(not path.exists() for path in required):
         return
 
@@ -743,6 +743,7 @@ def check_required_board_features(reporter):
     build_guard = read_text(BUILD_GUARD)
     flash_c = read_text(FLASH_C)
     policy_h = read_text(UPGRADE_PARAM_POLICY_H)
+    aging_c = read_text(FACTORY_AGING_C)
 
     if (
         "PROJECT_CFG_IAP_ENABLE" not in project_config
@@ -766,6 +767,17 @@ def check_required_board_features(reporter):
         reporter.ok("upgrade parameter policy mechanism is required while reset policy remains configurable")
     else:
         reporter.fail("upgrade parameter policy must always be present while keeping version/reset settings configurable")
+
+    if (
+        "PROJECT_CFG_FACTORY_AGING_ENABLE" not in project_config
+        and "PROJECT_CFG_FACTORY_AGING_ENABLE" not in aging_c
+        and "FactoryAging_StartByHost" in aging_c
+        and "FactoryAging_Task" in aging_c
+        and "Factory aging is a required board feature" in build_guard
+    ):
+        reporter.ok("factory aging is always compiled while duration remains configurable")
+    else:
+        reporter.fail("factory aging must always be present while keeping duration configurable")
 
 
 def check_guard_includes(reporter):

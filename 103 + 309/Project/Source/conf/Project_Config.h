@@ -58,9 +58,6 @@
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
 
-// <q> Enable factory aging
-#define PROJECT_CFG_FACTORY_AGING_ENABLE 1
-
 // <o> Factory aging duration seconds <1-604800>
 #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 

@@ -43,6 +43,10 @@
 #error "Upgrade parameter policy is a required board feature and must not be disabled"
 #endif
 
+#if defined(PROJECT_CFG_FACTORY_AGING_ENABLE) && (PROJECT_CFG_FACTORY_AGING_ENABLE != 1)
+#error "Factory aging is a required board feature and must not be disabled"
+#endif
+
 #endif
 
 /* --- range checks --- */
@@ -129,17 +133,11 @@
 #endif
 
 /* factory aging */
-#if (PROJECT_CFG_FACTORY_AGING_ENABLE != 0) && (PROJECT_CFG_FACTORY_AGING_ENABLE != 1)
-#error "Invalid PROJECT_CFG_FACTORY_AGING_ENABLE"
-#endif
 #if (PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS < 1) || (PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS > 604800)
 #error "Invalid PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS"
 #endif
 #if (PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME != 0) && (PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME != 1)
 #error "Invalid PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME"
-#endif
-#if PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME && !PROJECT_CFG_FACTORY_AGING_ENABLE
-#error "PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME requires PROJECT_CFG_FACTORY_AGING_ENABLE"
 #endif
 
 /* log */
