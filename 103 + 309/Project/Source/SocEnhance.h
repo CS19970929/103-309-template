@@ -6,9 +6,7 @@
 #include <stdint.h>
 //#include "stm32f0xx.h"
 
-#define SOC_Size_LiFePO 		(UINT16)42
-#define SOC_Size_TernaryLi 		(UINT16)42
-#define SOC_DEFAULT_STARTUP_PERCENT ((UINT8)60)
+#define SOC_TABLE_SIZE 		42
 
 enum SOC_TABLE_SELECT {
 	SOC_TABLE_LIFEPO = 1,
@@ -16,10 +14,10 @@ enum SOC_TABLE_SELECT {
 };
 
 #if (PROJECT_CFG_BAT_CHEMISTRY == 1)
-extern const UINT16 SOC_Table_LiFePO[SOC_Size_LiFePO];
+extern const UINT16 SOC_Table_LiFePO[SOC_TABLE_SIZE];
 #endif
 #if (PROJECT_CFG_BAT_CHEMISTRY == 0)
-extern const UINT16 SocTable_TernaryLi[SOC_Size_TernaryLi];
+extern const UINT16 SocTable_TernaryLi[SOC_TABLE_SIZE];
 #endif
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma);
