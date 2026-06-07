@@ -61,6 +61,8 @@ typedef struct DBG_RUNTIME_TAG
 } DBG_RUNTIME;
 
 static DBG_RUNTIME s_dbgRt;
+struct SYSTEM_DEBUG g_system_dbg;
+#define g_dbg g_system_dbg
 
 void SystemDebug_Event(uint8_t type, uint8_t val0, uint8_t val1, uint16_t extra)
 {
@@ -103,8 +105,6 @@ static uint16_t SystemDebug_ReadEventRing(uint8_t index, uint32_t *tick,
 #endif
 
 /* ===== snapshot ===== */
-
-struct SYSTEM_DEBUG g_dbg;
 
 #if DEBUG_WATCH_ENABLED
 void SystemDebug_DebugWatchBind(DEBUG_WATCH_ROOT *watch)

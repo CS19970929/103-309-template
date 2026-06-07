@@ -3,6 +3,7 @@
 #include "CanFeidaoFrames.h"
 #include "FactoryAging.h"
 #include "IrqDebug.h"
+#include "debug_hub.h"
 #include <string.h>
 
 
@@ -298,6 +299,11 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		{
 			s_tx.mailbox_source = item.source;
 			s_tx.start_tick = now_tick;
+			DBG_RecordCanTxFrame((item.frame.IDE == CAN_ID_STD) ? item.frame.StdId : item.frame.ExtId,
+								 item.frame.IDE,
+								 item.frame.RTR,
+								 item.frame.DLC,
+								 item.frame.Data);
 		}
 		else
 		{
@@ -935,6 +941,11 @@ void USB_LP_CAN1_RX0_IRQHandler(void)
 	{
 		sys_time.can_rcv_cnt++;
 		CAN_Receive(CAN1, CAN_FIFO0, &rx_msg);
+		DBG_RecordCanRxFrame((rx_msg.IDE == CAN_ID_STD) ? rx_msg.StdId : rx_msg.ExtId,
+							 rx_msg.IDE,
+							 rx_msg.RTR,
+							 rx_msg.DLC,
+							 rx_msg.Data);
 		feidao_can_handle_rx_msg(&rx_msg);
 	}
 }

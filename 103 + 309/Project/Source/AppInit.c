@@ -2,6 +2,7 @@
 #include "AppInit.h"
 #include "DebugWatch.h"
 #include "IrqDebug.h"
+#include "debug_hub.h"
 
 UINT8 SeriesNum = 10;
 
@@ -53,6 +54,7 @@ void AppInit_Boot(void)
 	AppInit_InitDevice();
 	AppInit_InitRuntimeState();
 	Init_RTC();
+	DBG_Init();
 	/* RTC_WKTimeConfig(); */
 	 
 	

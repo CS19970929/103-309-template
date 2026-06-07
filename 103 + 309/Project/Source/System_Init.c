@@ -2,6 +2,7 @@
 #include "DebugWatch.h"
 #include "SystemDebug.h"
 #include "IrqDebug.h"
+#include "debug_hub.h"
 
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
@@ -68,6 +69,7 @@ void Init_IWDG(void)
 #endif					  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
 							  // 800——1.28s，80——128ms
 	IWDG_ReloadCounter(); // 喂狗
+	DBG_RecordIwdgFeed((UINT8)DBG_HUB_IWDG_FEED_INIT);
 	IWDG_Enable();		  // 使能IWDG
 #endif
 }
@@ -314,6 +316,7 @@ void IWDG_Feed(void)
 {
 #if PROJECT_CFG_WDOG_ENABLE
 	IWDG_ReloadCounter();
+	DBG_RecordIwdgFeed((UINT8)DBG_HUB_IWDG_FEED_RUNTIME);
 	SystemDebug_RecordWatchdogFeed((UINT8)DBG_WDG_SRC_FEED);
 #endif
 }

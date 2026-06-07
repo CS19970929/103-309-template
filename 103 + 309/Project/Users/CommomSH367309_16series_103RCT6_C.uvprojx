@@ -818,6 +818,11 @@
                 </FileArmAds>
               </FileOption>
             </File>
+            <File>
+              <FileName>debug_hub.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\debug_hub.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1747,6 +1752,11 @@
               <FileName>IrqDebug.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\IrqDebug.c</FilePath>
+            </File>
+            <File>
+              <FileName>debug_hub.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\debug_hub.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -357,7 +357,7 @@ struct SYSTEM_DEBUG {
 
 /* ---- public interface ---- */
 
-extern struct SYSTEM_DEBUG g_dbg;
+extern struct SYSTEM_DEBUG g_system_dbg;
 
 void SystemDebug_Snapshot(void);
 uint32_t SystemDebug_GetCycleCount(void);

@@ -1,6 +1,8 @@
 #include "main.h"
 #include "FaultSnapshot.h"
 #include "DebugWatch.h"
+#include "FactoryAging.h"
+#include "debug_hub.h"
 
 static struct RS485MSG g_stCurrentMsgPtr_SCI1;
 static UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
@@ -188,6 +190,25 @@ void Sci_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 #endif
 }
 #endif
+
+static UINT8 Sci_DebugPortIndex(const struct SCI_PORT_RUNTIME *pstPort)
+{
+	if ((pstPort != 0) && (pstPort->pstUsart == USART1))
+	{
+		return (UINT8)DBG_HUB_USART1;
+	}
+	if ((pstPort != 0) && (pstPort->pstUsart == USART2))
+	{
+		return (UINT8)DBG_HUB_USART2;
+	}
+#ifdef USART3
+	if ((pstPort != 0) && (pstPort->pstUsart == USART3))
+	{
+		return (UINT8)DBG_HUB_USART3;
+	}
+#endif
+	return 0U;
+}
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
@@ -1425,11 +1446,14 @@ static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort)
 static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 {
 	UINT16 u16Status;
+	UINT8 u8DbgPort;
 
 	u16Status = pstPort->pstUsart->SR;
+	u8DbgPort = Sci_DebugPortIndex(pstPort);
 
 	if ((u16Status & SCI_USART_ERROR_FLAGS) != 0U)
 	{
+		DBG_RecordUsartError(u8DbgPort, u16Status);
 		Sci_PortHandleError(pstPort);
 		return;
 	}
@@ -1441,6 +1465,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
+		DBG_RecordUsartRx(u8DbgPort);
 
 		if ((pstPort->pstProtocolOps != 0) &&
 			(pstPort->pstProtocolOps->pfRxFeed != 0) &&
@@ -1459,6 +1484,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		u16Dummy = pstPort->pstUsart->DR;
 		(void)u16Dummy;
+		DBG_RecordUsartIdle(u8DbgPort);
 
 		if ((pstPort->u8FramePending == 0U) &&
 			(pstPort->u16TxLength == 0U) &&
@@ -1480,6 +1506,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 		else
 		{
 			pstPort->pstUsart->DR = pstPort->pu8TxBuffer[pstPort->u16TxIndex++];
+			DBG_RecordUsartTx(u8DbgPort);
 			if (pstPort->u16TxIndex >= pstPort->u16TxLength)
 			{
 				pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TXEIE;

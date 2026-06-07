@@ -1,5 +1,6 @@
 #include "main.h"
 #include "DebugWatch.h"
+#include "debug_hub.h"
 
 typedef struct ADC_RUNTIME_TAG
 {
@@ -470,4 +471,5 @@ void App_AnlogCal(void)
     ADC_UpdateVbc();
     ADC_UpdateTypeCCurrent();
     s_adc.ready = 1U;
+    DBG_RecordAdcSample();
 }

@@ -3,6 +3,7 @@
 #include "FactoryAging.h"
 #include "Runtime.h"
 #include "DebugHooks.h"
+#include "debug_hub.h"
 
 static void Runtime_RunFrontTasks(void)
 {
@@ -48,6 +49,7 @@ static void Runtime_RunBackgroundTasks(void)
 	DebugHooks_RuntimeAfterProId();
 
 	Feed_IWatchDog;
+	DBG_Task();
 }
 
 static void Runtime_RunNormalOnce(void)
