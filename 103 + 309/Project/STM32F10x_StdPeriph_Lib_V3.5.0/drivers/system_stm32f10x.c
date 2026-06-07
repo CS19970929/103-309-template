@@ -127,6 +127,9 @@
 /* #define VECT_TAB_SRAM */
 #define VECT_TAB_OFFSET  0x4800 /*!< Vector Table base offset field. 
                                   This value must be a multiple of 0x200. */
+#if (VECT_TAB_OFFSET != 0x4800)
+#error "BMS app vector table must stay at 0x08004800; 0x08000000 is reserved for IAP."
+#endif
 
 
 /**
@@ -264,11 +267,7 @@ void SystemInit (void)
 #ifdef VECT_TAB_SRAM
   SCB->VTOR = SRAM_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM. */
 #else
-  #ifdef _IAP
   SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH. */
-  #else
-  SCB->VTOR = FLASH_BASE | 0;
-  #endif
 #endif 
 }
 
