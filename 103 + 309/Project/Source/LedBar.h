@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "Project_Config.h"
 
-#define LEDBAR_SOC_DISPLAY_10MS PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS
+#define LEDBAR_SOC_DISPLAY_10MS 500u
 
 void LedBar_Init(void);
 void LedBar_SetSleep(uint8_t enable);

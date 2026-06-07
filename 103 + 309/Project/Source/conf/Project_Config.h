@@ -171,19 +171,6 @@
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
 // </h>
 
-// <h>LedBar Configuration
-
-// <q> Enable sleep LED off
-#define PROJECT_CFG_LEDBAR_SLEEP_ENABLE 1
-
-// <o> SOC display time 10ms <1-65535>
-#define PROJECT_CFG_LEDBAR_SOC_DISPLAY_10MS 500
-
-// <o> Wakeup display time 10ms <1-65535>
-#define PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS 1000
-
-// </h>
-
 // <h>Upgrade Parameter Policy
 
 // <q> Enable upgrade param policy

@@ -3,10 +3,6 @@
 #include "IrqDebug.h"
 #include <string.h>
 
-#define LEDBAR_PIN_COUNT 5u
-#define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
-#define LEDBAR_SLEEP_ENABLE PROJECT_CFG_LEDBAR_SLEEP_ENABLE
-#define LEDBAR_STARTUP_DISPLAY_10MS PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS 50u
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
 
@@ -46,6 +42,12 @@
 #define LEDBAR_DIGIT_BIT_F (1u << 5)
 #define LEDBAR_DIGIT_BIT_G (1u << 6)
 
+enum
+{
+    LEDBAR_PIN_COUNT = 5u,
+    LEDBAR_STARTUP_DISPLAY_10MS = 1000u
+};
+
 typedef enum
 {
     LEDBAR_ROUTE_HUNDREDS_1_UPPER = 0,
@@ -68,6 +70,11 @@ typedef enum
     LEDBAR_ROUTE_ICON_PERCENT,
     LEDBAR_ROUTE_COUNT
 } LedBarRouteId;
+
+enum
+{
+    LEDBAR_FRAME_ROUTE_COUNT = LEDBAR_ROUTE_COUNT
+};
 
 typedef struct
 {
@@ -885,15 +892,7 @@ static void LedBar_ServiceMcuWake(void)
 
 static uint8_t LedBar_IsDisplayRequested(void)
 {
-#if !LEDBAR_SLEEP_ENABLE
-    return 1u;
-#else
-    if (s_ledbar.soc_display_10ms != 0u)
-    {
-        return 1u;
-    }
-    return 0u;
-#endif
+    return (uint8_t)(s_ledbar.soc_display_10ms != 0u);
 }
 
 static void LedBar_ServiceSwitch(void)
@@ -987,11 +986,7 @@ void LedBar_SetSleep(uint8_t enable)
 {
     LedBar_EnsureInit();
 
-#if !LEDBAR_SLEEP_ENABLE
-    enable = 0u;
-#else
     enable = (enable != 0u) ? 1u : 0u;
-#endif
 
     if (s_ledbar.sleep == enable)
     {
@@ -1062,14 +1057,10 @@ void LedBar_PrepareForStop(void)
 {
     LedBar_EnsureInit();
 
-#if LEDBAR_SLEEP_ENABLE
     s_ledbar.sleep = 1u;
     s_ledbar.blank = 1u;
     LedBar_RefreshOutput();
     LedBar_GpioPrepareForStop();
-#else
-    LedBar_Clear();
-#endif
 }
 
 uint8_t LedBar_IsActiveForLowPower(void)
