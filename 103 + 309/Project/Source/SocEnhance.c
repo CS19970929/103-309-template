@@ -37,11 +37,9 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
 #define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
-#define SOC_DEFAULT_FULL_MV          ((UINT16)4180U)
-#define SOC_FULL_CONFIRM_MIN_VMAX_MV SOC_DEFAULT_FULL_MV
+#define SOC_FULL_CONFIRM_MIN_VMAX_MV ((UINT16)4180U)
 #define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
 #define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
-#define SOC_EMPTY_MV                 ((UINT16)3000U)
 #define SOC_EMPTY_CUR_LIGHT_DIVIDER  ((UINT16)5U)
 #define SOC_EMPTY_CUR_MID_DIVIDER    ((UINT16)2U)
 #define SOC_SAG_HOLDOFF_SECONDS      ((UINT16)PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS)
@@ -126,11 +124,8 @@ static const UINT8 s_soc_default_startup_percent = 60U;
 static UINT32 s_u32SocRtcRestAppliedSeconds;
 
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
-static UINT32 soc_rest_limit_ticks(void);
-static UINT32 soc_stable_limit_ticks(void);
-static UINT32 soc_long_rest_down_step_ticks(void);
 static UINT8 soc_sag_hold_blocks_calibration(void);
-static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv);
+static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
 
 #define SOC_EMPTY_TAIL_STEP_TICKS		(5U * 60U)
@@ -208,21 +203,6 @@ static UINT32 soc_seconds_to_ticks(UINT32 seconds)
 	return seconds * (UINT32)SOC_TICKS_PER_SECOND;
 }
 
-static UINT32 soc_rest_limit_ticks(void)
-{
-	return soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
-}
-
-static UINT32 soc_stable_limit_ticks(void)
-{
-	return soc_rest_limit_ticks();
-}
-
-static UINT32 soc_long_rest_down_step_ticks(void)
-{
-	return soc_seconds_to_ticks(SOC_LONG_REST_DOWN_STEP_SECONDS);
-}
-
 static UINT16 soc_cell_delta(void)
 {
 	return (UINT16)(g_stCellInfoReport.u16VCellMax - g_stCellInfoReport.u16VCellMin);
@@ -261,10 +241,6 @@ static void soc_refresh_capacity_base(void)
 {
 	s_soc.soh = soc_soh_from_cycle(s_soc.cycle_x100);
 	s_soc.cap_full_as10 = (UINT32)(((uint64_t)s_soc.cap_factory_as10 * s_soc.soh) / 100ULL);
-	if (s_soc.cap_full_as10 == 0U)
-	{
-		s_soc.cap_full_as10 = s_soc.cap_factory_as10;
-	}
 	if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
 	{
 		s_soc.cap_now_as10 = s_soc.cap_full_as10;
@@ -275,10 +251,6 @@ static UINT8 soc_from_cap(void)
 {
 	UINT32 soc;
 
-	if (s_soc.cap_full_as10 == 0U)
-	{
-		return 0U;
-	}
 	if (s_soc.cap_now_as10 >= s_soc.cap_full_as10)
 	{
 		return 100U;
@@ -349,69 +321,49 @@ static UINT8 soc_calibration_allowed(void)
 static UINT8 soc_ocv_percent(void)
 {
 	const UINT16 *table;
-	UINT16 size;
 	UINT16 soc;
 
 #if (PROJECT_CFG_BAT_CHEMISTRY == 1)
 	table = SOC_Table_LiFePO;
-	size = SOC_TABLE_SIZE;
 #else
 	table = SocTable_TernaryLi;
-	size = SOC_TABLE_SIZE;
 #endif
-	soc = soc_table_percent(table, size, g_stCellInfoReport.u16VCellMin);
+	soc = soc_table_percent(table, g_stCellInfoReport.u16VCellMin);
 	return (soc > 100U) ? 100U : (UINT8)soc;
 }
 
-static UINT16 soc_table_percent(const UINT16 *table, UINT16 size, UINT16 voltage_mv)
+static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv)
 {
 	UINT16 i;
-	UINT16 last;
-	UINT16 x1;
-	UINT16 x2;
 	int32_t value;
 	int32_t dx;
 
-	if ((table == 0) || (size < 4U))
+	if (voltage_mv >= table[0])
 	{
-		return 0U;
+		return table[1U];
 	}
 
-	for (i = 0U; i <= (UINT16)(size - 4U); i = (UINT16)(i + 2U))
+	for (i = 0U; i <= (UINT16)(SOC_TABLE_SIZE - 4U); i = (UINT16)(i + 2U))
 	{
-		x1 = table[i];
-		x2 = table[i + 2U];
-		if (((voltage_mv >= x1) && (voltage_mv <= x2)) ||
-			((voltage_mv <= x1) && (voltage_mv >= x2)))
+		if (table[i] == table[i + 2U])
 		{
-			if (x1 == x2)
-			{
-				return table[i + 1U];
-			}
-			dx = (int32_t)x2 - (int32_t)x1;
+			continue;
+		}
+		if (voltage_mv >= table[i + 2U])
+		{
+			dx = (int32_t)table[i + 2U] - (int32_t)table[i];
 			value = (int32_t)table[i + 1U] +
-				(((int32_t)voltage_mv - (int32_t)x1) *
+				(((int32_t)voltage_mv - (int32_t)table[i]) *
 				 ((int32_t)table[i + 3U] - (int32_t)table[i + 1U])) / dx;
-			if (value <= 0)
-			{
-				return 0U;
-			}
-			return (value > (int32_t)0xFFFFU) ? 0xFFFFU : (UINT16)value;
+			return (UINT16)value;
 		}
 	}
-
-	last = (UINT16)(size - 2U);
-	if (table[0] <= table[last])
-	{
-		return (voltage_mv >= table[last]) ? table[last + 1U] : table[1U];
-	}
-	return (voltage_mv >= table[0]) ? table[1U] : table[last + 1U];
+	return table[SOC_TABLE_SIZE - 1U];
 }
 
 static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 {
-	UINT16 empty_mv = (OtherElement.u16Soc_V_0 != 0U) ?
-		OtherElement.u16Soc_V_0 : SOC_EMPTY_MV;
+	UINT16 empty_mv = OtherElement.u16Soc_V_0;
 	UINT16 offset;
 
 	if (offset_mv >= 0)
@@ -492,13 +444,10 @@ static UINT8 soc_save(void)
 	data.u32CapFull = s_soc.cap_full_as10;
 	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
 	data.u16Flags = (UINT16)(s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
-	if (unit != 0U)
+	data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
+	if (data.u16DsgSocInt > 100U)
 	{
-		data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
-		if (data.u16DsgSocInt > 100U)
-		{
-			data.u16DsgSocInt = 100U;
-		}
+		data.u16DsgSocInt = 100U;
 	}
 	return StorageFlash_SaveSocData(&data);
 }
@@ -540,18 +489,15 @@ static void soc_load_or_default(void)
 	{
 		s_soc.cycle_x100 = data.u32CycleTimes;
 		soc_refresh_capacity_base();
-		if (unit != 0U)
-		{
-			s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
-				(data.u32LearnPassedAs10 % unit) :
-				(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
-		}
+		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
+			(data.u32LearnPassedAs10 % unit) :
+			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
 		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
 			(data.u32CapNow <= s_soc.cap_full_as10))
-			{
-				s_soc.cap_now_as10 = data.u32CapNow;
-				s_soc.soc = soc_from_cap();
-			}
+		{
+			s_soc.cap_now_as10 = data.u32CapNow;
+			s_soc.soc = soc_from_cap();
+		}
 		else
 		{
 			soc_set((UINT8)data.u16SocNow);
@@ -624,16 +570,13 @@ static void soc_integrate(int32_t net_current_ma)
 		UINT32 dsg_as10 = (UINT32)(-(int64_t)delta_as10);
 		UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
-		if (unit != 0U)
+		s_soc.dsg_acc_as10 += dsg_as10;
+		while (s_soc.dsg_acc_as10 >= unit)
 		{
-			s_soc.dsg_acc_as10 += dsg_as10;
-			while (s_soc.dsg_acc_as10 >= unit)
-			{
-				s_soc.dsg_acc_as10 -= unit;
-				++s_soc.cycle_x100;
-			}
-			soc_refresh_capacity_base();
+			s_soc.dsg_acc_as10 -= unit;
+			++s_soc.cycle_x100;
 		}
+		soc_refresh_capacity_base();
 	}
 	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
 	if (cap_now_as10 < 0)
@@ -655,8 +598,7 @@ static void soc_integrate(int32_t net_current_ma)
 
 static UINT8 soc_full_confirm_allowed(void)
 {
-	UINT16 full_mv = (OtherElement.u16Soc_V_100 != 0U) ?
-		OtherElement.u16Soc_V_100 : SOC_DEFAULT_FULL_MV;
+	UINT16 full_mv = OtherElement.u16Soc_V_100;
 	UINT16 full_min_mv = (full_mv > SOC_FULL_MIN_MARGIN_MV) ?
 		(UINT16)(full_mv - SOC_FULL_MIN_MARGIN_MV) : 0U;
 	UINT16 delta;
@@ -821,13 +763,13 @@ static void soc_reset_rest_confidence(void)
 
 static UINT8 soc_apply_long_rest_down_step(UINT32 delta_soc_ticks)
 {
-	UINT32 step_ticks = soc_long_rest_down_step_ticks();
+	UINT32 step_ticks = soc_seconds_to_ticks(SOC_LONG_REST_DOWN_STEP_SECONDS);
 	UINT8 changed;
 	UINT8 old_soc = s_soc.soc;
 
 	if ((!s_soc.rest_down_valid) ||
 		(s_soc.rest_down_target >= s_soc.soc) ||
-		(s_soc.rest_soc_ticks < soc_rest_limit_ticks()))
+		(s_soc.rest_soc_ticks < soc_seconds_to_ticks(SOC_REST_OCV_SECONDS)))
 	{
 		s_soc.long_rest_down_soc_ticks = 0U;
 		return 0U;
@@ -890,21 +832,20 @@ static UINT8 soc_rest_voltage_stable(void)
 
 static void soc_update_rest_timer(SOC_MODE mode)
 {
-	UINT32 rest_limit_ticks = soc_rest_limit_ticks();
-	UINT32 stable_limit_ticks = soc_stable_limit_ticks();
+	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 
 	if (mode != SOC_MODE_RELAX)
 	{
 		soc_reset_rest_confidence();
 		return;
 	}
-	if (s_soc.rest_soc_ticks < rest_limit_ticks)
+	if (s_soc.rest_soc_ticks < rest_ocv_ticks)
 	{
 		++s_soc.rest_soc_ticks;
 	}
 	if (soc_rest_voltage_stable())
 	{
-		if (s_soc.stable_rest_soc_ticks < stable_limit_ticks)
+		if (s_soc.stable_rest_soc_ticks < rest_ocv_ticks)
 		{
 			++s_soc.stable_rest_soc_ticks;
 		}
@@ -914,8 +855,8 @@ static void soc_update_rest_timer(SOC_MODE mode)
 		s_soc.stable_rest_soc_ticks = 0U;
 		soc_clear_rest_down_target();
 	}
-	if ((s_soc.rest_soc_ticks >= rest_limit_ticks) &&
-		(s_soc.stable_rest_soc_ticks >= stable_limit_ticks))
+	if ((s_soc.rest_soc_ticks >= rest_ocv_ticks) &&
+		(s_soc.stable_rest_soc_ticks >= rest_ocv_ticks))
 	{
 		soc_set_rest_down_target(soc_ocv_percent());
 	}
@@ -944,8 +885,7 @@ static void soc_add_rest_seconds(UINT32 *soc_ticks, UINT32 seconds, UINT32 limit
 static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 {
 	UINT32 delta_seconds;
-	UINT32 rest_limit_ticks = soc_rest_limit_ticks();
-	UINT32 stable_limit_ticks = soc_stable_limit_ticks();
+	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 	UINT8 has_rest_ref;
 	UINT8 changed = 0U;
 
@@ -980,8 +920,8 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 		return changed;
 	}
 
-	if ((s_soc.rest_soc_ticks >= rest_limit_ticks) &&
-		(s_soc.stable_rest_soc_ticks >= stable_limit_ticks))
+	if ((s_soc.rest_soc_ticks >= rest_ocv_ticks) &&
+		(s_soc.stable_rest_soc_ticks >= rest_ocv_ticks))
 	{
 		soc_set_rest_down_target(soc_ocv_percent());
 	}

@@ -26,10 +26,7 @@ UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 	UINT32 pack_mv = SOC_GetPackVoltageForTypeCMv();
 	UINT16 typec_out_current_mA = ADC_GetTypeCOutCurrentMilliAmp();
 
-	if ((typec_out_current_mA == 0U) ||
-		(pack_mv == 0U) ||
-		(TYPEC_OUT_VOLTAGE_MV == 0U) ||
-		(TYPEC_DCDC_EFFICIENCY_PERMILLE == 0U))
+	if ((typec_out_current_mA == 0U) || (pack_mv == 0U))
 	{
 		return 0U;
 	}
