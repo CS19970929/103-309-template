@@ -1066,7 +1066,7 @@ void new_todo_logi(void)
 #ifdef _UL_RENZHENG_ENABLE_
         static bool err_afe = false;
 
-        if (1 == System_ErrFlag.u8ErrFlag_Com_AFE1)
+        if (System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U)
         {
             err_afe = 1;
             rong_fuse = 0;
@@ -1093,7 +1093,7 @@ void new_todo_logi(void)
         {
             static uint16_t delay_cnt = 0;
             rong_fuse_afe_err_cnt = 0;
-            if (err_afe && 0 == System_ErrFlag.u8ErrFlag_Com_AFE1)
+            if (err_afe && (System_ERROR_UserCallback(ERROR_STATUS_AFE1) == 0U))
             {
                 err_afe = 0;
                 open_ctlc();
