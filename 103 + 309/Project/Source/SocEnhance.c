@@ -34,7 +34,6 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_MA_PER_A10               ((int32_t)100)
 #define SOC_MAMS_PER_AS10            ((UINT32)100000U)
 #define SOC_BOARD_SELF_CONSUMPTION_MA ((UINT16)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA)
-#define SOC_DEFAULT_CAP_A10          ((UINT16)270U)
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
 #define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
@@ -226,9 +225,7 @@ static UINT32 soc_long_rest_down_step_ticks(void)
 
 static UINT16 soc_cell_delta(void)
 {
-	return (g_stCellInfoReport.u16VCellMax >= g_stCellInfoReport.u16VCellMin) ?
-		(UINT16)(g_stCellInfoReport.u16VCellMax - g_stCellInfoReport.u16VCellMin) :
-		(UINT16)(g_stCellInfoReport.u16VCellMin - g_stCellInfoReport.u16VCellMax);
+	return (UINT16)(g_stCellInfoReport.u16VCellMax - g_stCellInfoReport.u16VCellMin);
 }
 
 static UINT16 soc_abs_diff_u16(UINT16 a, UINT16 b)
@@ -251,10 +248,6 @@ static UINT8 soc_step(UINT8 now, UINT8 target, UINT8 step)
 
 static UINT32 soc_factory_cap_as10_from(UINT16 cap_a10)
 {
-	if (cap_a10 == 0U)
-	{
-		cap_a10 = SOC_DEFAULT_CAP_A10;
-	}
 	return (UINT32)cap_a10 * 3600U;
 }
 
@@ -433,14 +426,9 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 
 static UINT16 soc_current_limit_a10(UINT16 divider)
 {
-	UINT16 cap_a10 = (OtherElement.u16Soc_Ah != 0U) ?
-		OtherElement.u16Soc_Ah : SOC_DEFAULT_CAP_A10;
+	UINT16 cap_a10 = OtherElement.u16Soc_Ah;
 	UINT16 limit;
 
-	if (divider == 0U)
-	{
-		divider = 1U;
-	}
 	limit = (UINT16)((cap_a10 + divider - 1U) / divider);
 	return (limit < SOC_CURRENT_ACTIVE_A10) ? SOC_CURRENT_ACTIVE_A10 : limit;
 }
