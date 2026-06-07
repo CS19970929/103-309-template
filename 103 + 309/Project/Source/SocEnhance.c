@@ -363,17 +363,17 @@ static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv)
 
 static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 {
-	UINT16 empty_mv = OtherElement.u16Soc_V_0;
-	UINT16 offset;
+	int32_t threshold = (int32_t)OtherElement.u16Soc_V_0 + (int32_t)offset_mv;
 
-	if (offset_mv >= 0)
+	if (threshold < 0)
 	{
-		offset = (UINT16)offset_mv;
-		return (empty_mv > (UINT16)(SOC_VALID_MAX_MV - offset)) ?
-			SOC_VALID_MAX_MV : (UINT16)(empty_mv + offset);
+		return 0U;
 	}
-	offset = (UINT16)(-offset_mv);
-	return (empty_mv > offset) ? (UINT16)(empty_mv - offset) : 0U;
+	if (threshold > (int32_t)SOC_VALID_MAX_MV)
+	{
+		return SOC_VALID_MAX_MV;
+	}
+	return (UINT16)threshold;
 }
 
 static UINT16 soc_current_limit_a10(UINT16 divider)
@@ -571,11 +571,8 @@ static void soc_integrate(int32_t net_current_ma)
 		UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
 		s_soc.dsg_acc_as10 += dsg_as10;
-		while (s_soc.dsg_acc_as10 >= unit)
-		{
-			s_soc.dsg_acc_as10 -= unit;
-			++s_soc.cycle_x100;
-		}
+		s_soc.cycle_x100 += s_soc.dsg_acc_as10 / unit;
+		s_soc.dsg_acc_as10 %= unit;
 		soc_refresh_capacity_base();
 	}
 	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
