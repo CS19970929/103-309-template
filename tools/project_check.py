@@ -1022,7 +1022,8 @@ def check_low_power_cleanup(reporter):
         and "void SleepDeal_Continue(UINT8 sleep_mode)" in sleepdeal_c
         and "RtcSleep_PortCommitResetSleep(sleep_mode);" in rtc_sleep_c
         and "SleepDeal_Continue(sleep_mode);" in rtc_sleep_port_c
-        and "SleepDeal_Continue((UINT8)DEEP_MODE);" in ledbar_c
+        and "low_power_log_and_commit_sleep(DEEP_MODE);" in ledbar_c
+        and "SleepDeal_Continue((UINT8)DEEP_MODE);" not in ledbar_c
     ):
         reporter.ok("low power sleep commit uses local sleep_mode without readyToSleep cross-module state")
     else:

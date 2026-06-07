@@ -3,9 +3,23 @@
 #include "IrqDebug.h"
 #include <string.h>
 
+#define LEDBAR_PIN_COUNT 5u
 #define LEDBAR_FRAME_ROUTE_COUNT ((uint8_t)LEDBAR_ROUTE_COUNT)
+#define LEDBAR_SLEEP_ENABLE PROJECT_CFG_LEDBAR_SLEEP_ENABLE
+#define LEDBAR_STARTUP_DISPLAY_10MS PROJECT_CFG_LEDBAR_WAKEUP_DISPLAY_10MS
 #define LEDBAR_SCAN_TIMER_100KHZ_TICKS 50u
 #define LEDBAR_KEY_LONG_PRESS_10MS 50u
+
+#define LEDBAR_GPIO_P1 GPIOB
+#define LEDBAR_PIN_P1  GPIO_Pin_11
+#define LEDBAR_GPIO_P2 GPIO_SPI1_NSS
+#define LEDBAR_PIN_P2  PIN_SPI1_NSS
+#define LEDBAR_GPIO_P3 GPIO_SPI1_SCK
+#define LEDBAR_PIN_P3  PIN_SPI1_SCK
+#define LEDBAR_GPIO_P4 GPIO_SPI_MOSI
+#define LEDBAR_PIN_P4  PIN_SPI_MOSI
+#define LEDBAR_GPIO_P5 GPIO_SEG_EN
+#define LEDBAR_PIN_P5  PIN_SEG_EN
 
 #define LEDBAR_GPIOA_CRL_MASK ((0xFUL << 16u) | (0xFUL << 20u) | (0xFUL << 24u))
 #define LEDBAR_GPIOB_CRH_MASK ((0xFUL << 8u) | (0xFUL << 12u))
@@ -20,6 +34,9 @@
 #define LEDBAR_SLEEP_SOC_VALUE_MASK 0x00FFu
 #define LEDBAR_SLEEP_SOC_REG BKP_DR4
 #define LEDBAR_SLEEP_SOC_INV_REG BKP_DR5
+
+#define LEDBAR_ICON_CHARGE_MASK  (1u << 0)
+#define LEDBAR_ICON_PERCENT_MASK (1u << 1)
 
 #define LEDBAR_DIGIT_BIT_A (1u << 0)
 #define LEDBAR_DIGIT_BIT_B (1u << 1)
@@ -79,7 +96,6 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t indicator_mask;
     LedBarFrame frame;
     uint8_t scan_index;
-    uint8_t scan_timer_initialized;
     uint8_t scan_timer_enabled;
     uint16_t soc_display_10ms;
     uint8_t startup_display_armed;
@@ -163,7 +179,6 @@ static LedBarRuntime s_ledbar =
     0u,
     0u,
     0u,
-    0u,
 };
 
 #if DEBUG_WATCH_ENABLED
@@ -184,6 +199,7 @@ void LedBar_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 
 static void LedBar_StopScanTimer(void);
 static void LedBar_RefreshOutput(void);
+static void LedBar_Clear(void);
 #ifdef _DI_SWITCH_longKEY_ONOFF
 extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
 #endif
@@ -378,11 +394,6 @@ static void LedBar_ScanTimerInit(void)
     TIM_TimeBaseInitTypeDef timer_init;
     NVIC_InitTypeDef nvic_init;
 
-    if (s_ledbar.scan_timer_initialized != 0u)
-    {
-        return;
-    }
-
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
     TIM_Cmd(TIM4, DISABLE);
 
@@ -400,29 +411,29 @@ static void LedBar_ScanTimerInit(void)
     nvic_init.NVIC_IRQChannelSubPriority = 3;
     nvic_init.NVIC_IRQChannelCmd = ENABLE;
     NVIC_Init(&nvic_init);
-
-    s_ledbar.scan_timer_initialized = 1u;
 }
 
 static void LedBar_StartScanTimer(void)
 {
+    if (s_ledbar.scan_timer_enabled != 0u)
+    {
+        return;
+    }
+
     LedBar_GpioInitForDisplay();
     LedBar_ScanTimerInit();
 
     TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
     NVIC_EnableIRQ(TIM4_IRQn);
-    if (s_ledbar.scan_timer_enabled == 0u)
-    {
-        TIM_SetCounter(TIM4, 0U);
-        TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
-        TIM_Cmd(TIM4, ENABLE);
-        s_ledbar.scan_timer_enabled = 1u;
-    }
+    TIM_SetCounter(TIM4, 0U);
+    TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+    TIM_Cmd(TIM4, ENABLE);
+    s_ledbar.scan_timer_enabled = 1u;
 }
 
 static void LedBar_StopScanTimer(void)
 {
-    if (s_ledbar.scan_timer_initialized != 0u)
+    if (s_ledbar.scan_timer_enabled != 0u)
     {
         TIM_Cmd(TIM4, DISABLE);
         TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
@@ -430,9 +441,8 @@ static void LedBar_StopScanTimer(void)
         NVIC_DisableIRQ(TIM4_IRQn);
         NVIC_ClearPendingIRQ(TIM4_IRQn);
         RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
-        s_ledbar.scan_timer_initialized = 0u;
+        s_ledbar.scan_timer_enabled = 0u;
     }
-    s_ledbar.scan_timer_enabled = 0u;
 }
 
 static void LedBar_AddDigitRoutes(uint32_t *target_mask,
@@ -919,9 +929,6 @@ static void LedBar_ServiceSwitch(void)
             (s_ledbar.key_long_handled == 0u))
         {
             s_ledbar.key_long_handled = 1u;
-            // LedBar_SaveSleepSoc();
-            // LowPower_Request(DEEP_MODE);
-            // SleepDeal_Continue((UINT8)DEEP_MODE);
             low_power_log_and_commit_sleep(DEEP_MODE);
         }
 #endif
@@ -940,23 +947,6 @@ static void LedBar_ServiceSwitch(void)
     }
 }
 
-static uint8_t LedBar_IsFaultActive(void)
-{
-    if ((g_stCellInfoReport.unMdlFault_Third.all & 0x3FFBu) != 0u)
-    {
-        return 1u;
-    }
-    if (System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK) != 0u)
-    {
-        return 1u;
-    }
-    if (System_ERROR_UserCallback(ERROR_STATUS_CBC_DSG) != 0u)
-    {
-        return 1u;
-    }
-    return 0u;
-}
-
 void LedBar_Init(void)
 {
     if (s_ledbar.initialized != 0u)
@@ -970,7 +960,6 @@ void LedBar_Init(void)
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_FrameClear(&s_ledbar.frame);
     s_ledbar.scan_index = 0u;
-    s_ledbar.scan_timer_initialized = 0u;
     s_ledbar.scan_timer_enabled = 0u;
     s_ledbar.soc_display_10ms = 0u;
     s_ledbar.startup_display_armed = 0u;
@@ -986,7 +975,7 @@ void LedBar_Init(void)
     s_ledbar.initialized = 1u;
 }
 
-void LedBar_Clear(void)
+static void LedBar_Clear(void)
 {
     LedBar_EnsureInit();
 
@@ -1017,26 +1006,6 @@ void LedBar_SetSleep(uint8_t enable)
     }
 }
 
-void LedBar_Wakeup(void)
-{
-    LedBar_SetSleep(0u);
-}
-
-void LedBar_SetNumber(uint8_t value)
-{
-    LedBar_EnsureInit();
-
-    value = LedBar_LimitSoc(value);
-    if ((s_ledbar.number == value) && (s_ledbar.blank == 0u))
-    {
-        return;
-    }
-
-    s_ledbar.number = value;
-    s_ledbar.blank = 0u;
-    LedBar_RefreshOutput();
-}
-
 void LedBar_SaveSleepSoc(void)
 {
     uint16_t value = (uint16_t)(LEDBAR_SLEEP_SOC_MAGIC | LedBar_GetRuntimeSoc());
@@ -1046,7 +1015,7 @@ void LedBar_SaveSleepSoc(void)
     BKP_WriteBackupRegister(LEDBAR_SLEEP_SOC_INV_REG, (uint16_t)(~value));
 }
 
-uint8_t LedBar_LoadSleepSoc(void)
+static uint8_t LedBar_LoadSleepSoc(void)
 {
     uint16_t value;
     uint16_t value_inv;
@@ -1125,7 +1094,7 @@ uint8_t LedBar_IsActiveForLowPower(void)
     return 0u;
 }
 
-void LedBar_Scan1ms(void)
+static void LedBar_Scan1ms(void)
 {
     if (s_ledbar.initialized == 0u)
     {
@@ -1189,7 +1158,7 @@ void APP_LedBar(void)
 
     if (s_ledbar.sleep != 0u)
     {
-        LedBar_Wakeup();
+        LedBar_SetSleep(0u);
     }
 
     if ((g_st_SysTimeFlag.bits.b1Sys100msFlag == 0u) &&
@@ -1204,10 +1173,6 @@ void APP_LedBar(void)
     if (discharge_mos_open != 0u)
     {
         indicator_mask |= LEDBAR_ICON_CHARGE_MASK;
-    }
-
-    if (LedBar_IsFaultActive() != 0u)
-    {
     }
 
     if ((s_ledbar.number != display_value) ||
