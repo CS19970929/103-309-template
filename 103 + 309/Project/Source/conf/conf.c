@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -25,6 +25,20 @@ static void Conf_InitGpioMode(GPIO_TypeDef *gpio, uint16_t pin, GPIOMode_TypeDef
     GPIO_InitStructure.GPIO_Mode = mode;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
     GPIO_Init(gpio, &GPIO_InitStructure);
+}
+
+static void Conf_InitD009SwitchInputs(void)
+{
+    Conf_InitGpioMode(GPIO_SOC_KEY, PIN_SOC_KEY, GPIO_Mode_IPU);
+    Conf_InitGpioMode(GPIO_MAIN_SW, PIN_MAIN_SW, GPIO_Mode_IPU);
+}
+
+static void Conf_InitD009SocLedsOff(void)
+{
+    uint16_t pins = (uint16_t)(PIN_SOC_LED_25 | PIN_SOC_LED_50 | PIN_SOC_LED_75 | PIN_SOC_LED_100);
+
+    GPIO_ResetBits(GPIOA, pins);
+    Conf_InitGpioMode(GPIOA, pins, GPIO_Mode_Out_PP);
 }
 
 static void Conf_InitWakeupInputExti(GPIO_TypeDef *gpio,
@@ -68,43 +82,39 @@ static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger
 static void Conf_InitMainPowerRails(BitAction m_stb,
                                     BitAction ad_en,
                                     BitAction cmnt_en,
-                                    BitAction adc_bus_en,
-                                    BitAction dc_en,
-                                    BitAction boost_en)
+                                    BitAction adc_bus_en)
 {
     GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, m_stb);
     GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, ad_en);
     GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, cmnt_en);
     GPIO_WriteBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, adc_bus_en);
-    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, dc_en);
-    GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, boost_en);
 
     Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
     Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
     Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
     Conf_InitGpioMode(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_2727_EN, PIN_2737_EN, GPIO_Mode_Out_PP);
 }
 
 static void Conf_InitRunSharedIo(void)
 {
     Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT, GPIO_Mode_IN_FLOATING);
 
-    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
     GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
+    Conf_InitGpioMode(GPIO_MCC_C, PIN_MCC_C, GPIO_Mode_Out_PP);
 
-    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
+    GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_RESET);
     Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
+
+    Conf_InitD009SwitchInputs();
+    Conf_InitD009SocLedsOff();
+
+    Conf_InitGpioMode(GPIO_ADC_VBUS, PIN_ADC_VBUS, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIO_ADC_NMOS, PIN_ADC_NMOS, GPIO_Mode_AIN);
 
     Conf_InitMainPowerRails(Bit_SET,
                             Bit_SET,
                             Bit_RESET,
-                            Bit_SET,
-                            Bit_SET,
                             Bit_SET);
 
     Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
@@ -128,9 +138,9 @@ static void Conf_InitAllPortsAnalog(void)
 void LowPower_ClearWakeupPending(void)
 {
     EXTI_ClearITPendingBit(EXTI_Line0);
-    EXTI_ClearITPendingBit(EXTI_Line9);
+    EXTI_ClearITPendingBit(SOC_KEY_EXTI_LINE);
+    EXTI_ClearITPendingBit(MAIN_SW_EXTI_LINE);
     EXTI_ClearITPendingBit(EXTI_Line12);
-    EXTI_ClearITPendingBit(EXTI_Line13);
 
 #if defined(UART1_WAKEUP_ENABLE)
     EXTI_ClearITPendingBit(EXTI_Line7);
@@ -143,9 +153,9 @@ void LowPower_ClearWakeupPending(void)
 void LowPower_DisableWakeupExti(void)
 {
     LowPower_ConfigWakeupExti(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
-    LowPower_ConfigWakeupExti(EXTI_Line9, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(SOC_KEY_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(MAIN_SW_EXTI_LINE, EXTI_Trigger_Falling, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
-    LowPower_ConfigWakeupExti(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
 
 #if defined(UART1_WAKEUP_ENABLE)
@@ -183,7 +193,6 @@ void InitWakeUp_Base(void)
     RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
 
     jtag_disableAndConfIO();
-#if 1
     Conf_InitWakeupInputExti(GPIO_CHG_IN,
                              PIN_CHG_IN,
                              GPIO_PortSourceGPIOA,
@@ -191,52 +200,42 @@ void InitWakeUp_Base(void)
                              EXTI_Line0,
                              EXTI_Trigger_Falling,
                              EXTI0_IRQn);
-    Conf_InitWakeupInputExti(GPIO_SW,
-                             PIN_SW,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource9,
-                             EXTI_Line9,
+    Conf_InitWakeupInputExti(GPIO_SOC_KEY,
+                             PIN_SOC_KEY,
+                             SOC_KEY_EXTI_PORT_SOURCE,
+                             SOC_KEY_EXTI_PIN_SOURCE,
+                             SOC_KEY_EXTI_LINE,
                              EXTI_Trigger_Falling,
-                             EXTI9_5_IRQn);
-#endif
+                             SOC_KEY_EXTI_IRQn);
+    Conf_InitWakeupInputExti(GPIO_MAIN_SW,
+                             PIN_MAIN_SW,
+                             MAIN_SW_EXTI_PORT_SOURCE,
+                             MAIN_SW_EXTI_PIN_SOURCE,
+                             MAIN_SW_EXTI_LINE,
+                             EXTI_Trigger_Falling,
+                             MAIN_SW_EXTI_IRQn);
+    Conf_InitD009SwitchInputs();
 }
 
 void InitWakeUp_NormalMode(void)
 {
     InitWakeUp_Base();
 
-    {
 #ifdef UART1_WAKEUP_ENABLE
-        Conf_InitWakeupInputExti(GPIO_SCI1_RX,
-                                 PIN_SCI1_RX,
-                                 GPIO_PortSourceGPIOB,
-                                 GPIO_PinSource7,
-                                 EXTI_Line7,
-                                 EXTI_Trigger_Rising,
-                                 EXTI9_5_IRQn);
-#endif // UART1_WAKEUP_ENABLE
+    Conf_InitWakeupInputExti(GPIO_SCI1_RX,
+                             PIN_SCI1_RX,
+                             GPIO_PortSourceGPIOB,
+                             GPIO_PinSource7,
+                             EXTI_Line7,
+                             EXTI_Trigger_Rising,
+                             EXTI9_5_IRQn);
+#endif
 
-
-    }
-    Conf_InitWakeupInputExti(GPIO_CHG_IN,
-                             PIN_CHG_IN,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource0,
-                             EXTI_Line0,
-                             EXTI_Trigger_Falling,
-                             EXTI0_IRQn);
     Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
                              PIN_INT_WK_CMNT,
                              GPIO_PortSourceGPIOB,
                              GPIO_PinSource12,
                              EXTI_Line12,
-                             EXTI_Trigger_Rising,
-                             EXTI15_10_IRQn);
-    Conf_InitWakeupInputExti(GPIO_MCU_WK,
-                             PIN_MCU_WK,
-                             GPIO_PortSourceGPIOB,
-                             GPIO_PinSource13,
-                             EXTI_Line13,
                              EXTI_Trigger_Rising,
                              EXTI15_10_IRQn);
 }
@@ -262,8 +261,6 @@ void IOstatus_Base(void)
     Conf_InitMainPowerRails(Bit_RESET,
                             Bit_RESET,
                             Bit_SET,
-                            Bit_RESET,
-                            Bit_RESET,
                             Bit_RESET);
 
     Conf_PrepareStopEntry();
@@ -276,14 +273,16 @@ void IOstatus_RTCMode(void)
 
     Conf_PrepareStopEntry();
 
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
-    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
+    Conf_InitMainPowerRails(Bit_RESET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_RESET);
 
     LedBar_PrepareForStop();
 }

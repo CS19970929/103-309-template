@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "Project_Config.h"
 
+#define LEDBAR_SOC_LED_COUNT 4u
 #define LEDBAR_SOC_DISPLAY_10MS 500u
 
 void LedBar_Init(void);

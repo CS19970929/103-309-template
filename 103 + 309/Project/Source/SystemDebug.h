@@ -226,10 +226,10 @@ struct DBG_LP {
 
 struct DBG_ADC {
 	uint16_t mos_temp;
-	uint16_t typec_cur_ma;
+	uint16_t reserved_cur_ma;
 	uint32_t vbat_mv;
 	uint16_t raw_vbus;
-	uint16_t raw_cur;
+	uint16_t raw_reserved;
 	uint16_t raw_mos;
 };
 

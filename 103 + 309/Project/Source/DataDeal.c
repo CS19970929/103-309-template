@@ -115,29 +115,20 @@ void charger_detect_and_keyLogi_200ms(void)
             state = 1;
             open_chg_close_dsg();
         }
-        // else if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
-        // {
-        //     LedBar_SaveSleepSoc();
-        //     LowPower_Request(DEEP_MODE);
-        // }
-        // else
-        // {
-        // }
         break;
     case 1:
         if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
         {
-            // state = 0;
-            // if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
-            // {
-            //     LedBar_SaveSleepSoc();
-            //     LowPower_Request(DEEP_MODE);
-            // }
-            // else
-            // {
-            //     open_dsg_close_chg();
-            // }
-            LowPower_Request(DEEP_MODE);
+            state = 0;
+            if (GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW) == Bit_RESET)
+            {
+                open_dsg_close_chg();
+                LowPower_Request(NO_SLEEP);
+            }
+            else
+            {
+                LowPower_Request(DEEP_MODE);
+            }
         }
         else
         {
@@ -1027,8 +1018,7 @@ void new_todo_logi(void)
 #if 1
     {
 #ifdef DISP_VBAT_AND_TEMP_
-        extern UINT16 SOC_GetTypeCBatEquivCurrentA10(void);
-        g_stCellInfoReport.u16VCell[29] = SOC_GetTypeCBatEquivCurrentA10();
+        g_stCellInfoReport.u16VCell[29] = 0U;
         g_stCellInfoReport.u16VCell[30] = ADC_GetVbatMilliVolt();
         // g_stCellInfoReport.u16VCell[31] = Vbat_mv;
 #endif // ! FAC_TEST

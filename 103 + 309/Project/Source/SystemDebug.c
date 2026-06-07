@@ -400,7 +400,7 @@ static void SystemDebug_SnapshotMcuResources(void)
 	g_dbg.irq.irq_rtc_sec = g_stIrqDebug.total[IRQDBG_RTC_SEC];
 	g_dbg.irq.irq_rtc_alarm = g_stIrqDebug.total[IRQDBG_RTC_ALARM];
 	g_dbg.irq.irq_exti0_chg = g_stIrqDebug.total[IRQDBG_EXTI0_CHG_IN];
-	g_dbg.irq.irq_exti9_key = g_stIrqDebug.total[IRQDBG_EXTI9_SW_KEY];
+	g_dbg.irq.irq_exti9_key = g_stIrqDebug.total[IRQDBG_EXTI9_MAIN_SW];
 	g_dbg.irq.irq_usart1 = g_stIrqDebug.total[IRQDBG_USART1];
 	g_dbg.irq.irq_can1_rx0 = g_stIrqDebug.total[IRQDBG_CAN1_RX0];
 	g_dbg.irq.irq_unhandled = g_stIrqDebug.total[IRQDBG_UNHANDLED_VECTOR];
@@ -524,16 +524,16 @@ void SystemDebug_Snapshot(void)
 
 	g_dbg.gpio.chg_in     = (GPIO_ReadInputDataBit(GPIO_CHG_IN,  PIN_CHG_IN)  != Bit_RESET);
 	g_dbg.gpio.sw_key     = (GPIO_ReadInputDataBit(GPIO_SW,      PIN_SW)      == Bit_RESET);
-	g_dbg.gpio.mcu_wk     = (GPIO_ReadInputDataBit(GPIO_MCU_WK,  PIN_MCU_WK)  != Bit_RESET);
+	g_dbg.gpio.mcu_wk     = 0U;
 	g_dbg.gpio.cmnt_en    = (GPIO_ReadOutputDataBit(GPIO_CMNT_EN, PIN_CMNT_EN) != Bit_RESET);
-	g_dbg.gpio.dc_en      = (GPIO_ReadOutputDataBit(GPIO_DC_EN,   PIN_DC_EN)   != Bit_RESET);
+	g_dbg.gpio.dc_en      = 0U;
 	g_dbg.gpio.dbg_led    = (GPIO_ReadOutputDataBit(GPIO_DBG_LED, PIN_DBG_LED) != Bit_RESET);
 	g_dbg.gpio.afe_ctlc   = (GPIO_ReadOutputDataBit(GPIO_AFE1_CTL, PIN_AFE1_CTL) != Bit_RESET);
 	g_dbg.gpio.afe_pro_en = (GPIO_ReadOutputDataBit(GPIO_AFE1_PRO_EN, PIN_AFE1_PRO_EN) != Bit_RESET);
 	g_dbg.gpio.m_stb      = (GPIO_ReadOutputDataBit(GPIO_M_STB,  PIN_M_STB)   != Bit_RESET);
 	g_dbg.gpio.ad_en      = (GPIO_ReadOutputDataBit(GPIO_AD_EN,   PIN_AD_EN)   != Bit_RESET);
 	g_dbg.gpio.adc_bus_en = (GPIO_ReadOutputDataBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN) != Bit_RESET);
-	g_dbg.gpio._2727_en   = (GPIO_ReadOutputDataBit(GPIO_2727_EN, PIN_2737_EN) != Bit_RESET);
+	g_dbg.gpio._2727_en   = 0U;
 
 	/* ===== MOS ===== */
 	g_dbg.mos.sw_chg = SystemRuntime_IsChargeMosOpen();
@@ -571,10 +571,10 @@ void SystemDebug_Snapshot(void)
 	/* ===== ADC ===== */
 	{
 		g_dbg.adc.mos_temp     = (uint16_t)ADC_GetResult(ADC_TEMP_MOS1);
-		g_dbg.adc.typec_cur_ma  = ADC_GetTypeCOutCurrentMilliAmp();
+		g_dbg.adc.reserved_cur_ma  = 0U;
 		g_dbg.adc.vbat_mv      = ADC_GetVbatMilliVolt();
 		g_dbg.adc.raw_vbus     = ADC_GetRaw(ADC_VBC);
-		g_dbg.adc.raw_cur      = ADC_GetRaw(ADC_CUR_AMP);
+		g_dbg.adc.raw_reserved      = 0U;
 		g_dbg.adc.raw_mos      = ADC_GetRaw(ADC_TEMP_MOS1);
 	}
 

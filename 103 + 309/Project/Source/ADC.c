@@ -8,7 +8,6 @@ typedef struct ADC_RUNTIME_TAG
     INT32 result[ADC_NUM];
     UINT32 last;
     UINT32 vbat;
-    UINT16 typec;
     UINT8 discard;
     UINT8 ready;
 } ADC_RUNTIME;
@@ -135,7 +134,7 @@ void InitADC_GPIO(void)
 
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
@@ -228,8 +227,7 @@ void InitADC_ADC1(void)
     RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 酝置ADC时钟PCLK2�8分�，�9MHz
 
     ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5); // PB1: GPIO_ADC_NMOS
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_239Cycles5); // PA1: GPIO_ADC_VBUS
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 2, ADC_SampleTime_239Cycles5); // PA1: GPIO_ADC_VBUS
 
     ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
@@ -294,40 +292,6 @@ static UINT16 ADC_LimitU16(UINT32 value)
     return (UINT16)value;
 }
 
-static UINT8 ADC_IsTypeCZeroSample(UINT32 ad_value)
-{
-    return (UINT8)(ad_value <= (UINT32)AD_CurZeroDeadband);
-}
-
-static void ADC_ClearTypeCOutCurrent(void)
-{
-    s_adc.typec = 0;
-    s_adc.result[ADC_CURR] = 0;
-}
-
-static UINT16 ADC_TypeCAdToMilliVolt(UINT32 ad_value)
-{
-    UINT32 delta_mV;
-
-    delta_mV = (ad_value * (UINT32)TYPEC_CUR_VDDA_MV + 2048U) / 4096U;
-
-    return ADC_LimitU16(delta_mV);
-}
-
-static UINT16 ADC_TypeCDeltaMvToMilliAmp(UINT16 delta_mV)
-{
-    UINT32 current_mA;
-
-    if (TYPEC_CUR_RSENSE_MOHM == 0U)
-    {
-        return 0;
-    }
-
-    current_mA = ((UINT32)delta_mV * 1000U + ((UINT32)TYPEC_CUR_RSENSE_MOHM / 2U)) / (UINT32)TYPEC_CUR_RSENSE_MOHM;
-
-    return ADC_LimitU16(current_mA);
-}
-
 static UINT16 ADC_VbcAdToMilliVolt(UINT32 ad_value)
 {
     UINT32 adc_mV;
@@ -357,14 +321,6 @@ UINT32 ADC_GetVbatMilliVolt(void)
     return s_adc.vbat;
 }
 
-UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
-{
-    if (sys_time.typec_curr_sim)
-        return sys_time.typc_curr;
-
-    return s_adc.typec;
-}
-
 UINT8 ADC_IsReady(void)
 {
     return s_adc.ready;
@@ -388,23 +344,6 @@ UINT16 ADC_GetRaw(UINT8 index)
     }
 
     return s_adc.raw[index];
-}
-
-static void ADC_UpdateTypeCCurrent(void)
-{
-    UINT16 typec_delta_mV = 0;
-    UINT16 typec_current_A10 = 0;
-
-    if (ADC_IsTypeCZeroSample((UINT32)s_adc.raw[ADC_CUR_AMP]))
-    {
-        ADC_ClearTypeCOutCurrent();
-        return;
-    }
-
-    typec_delta_mV = ADC_TypeCAdToMilliVolt((UINT32)s_adc.raw[ADC_CUR_AMP]);
-    s_adc.typec = ADC_TypeCDeltaMvToMilliAmp(typec_delta_mV);
-    typec_current_A10 = (UINT16)(((UINT32)s_adc.typec + 50U) / 100U);
-    s_adc.result[ADC_CURR] = typec_current_A10;
 }
 
 static void ADC_UpdateMosTemp(void)
@@ -438,7 +377,6 @@ void InitADC(void)
         s_adc.result[i] = 0;
     }
 
-    ADC_ClearTypeCOutCurrent();
     s_adc.vbat = 0;
     ADC_ResetAnlogCalSchedule();
 
@@ -469,7 +407,6 @@ void App_AnlogCal(void)
 
     ADC_UpdateMosTemp();
     ADC_UpdateVbc();
-    ADC_UpdateTypeCCurrent();
     s_adc.ready = 1U;
     DBG_RecordAdcSample();
 }

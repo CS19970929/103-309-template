@@ -422,11 +422,11 @@ void DBG_CaptureExti(void)
 	g_dbg.mcu.exti.line_trigger_count[2] = g_stIrqDebug.total[IRQDBG_EXTI2_STRAY];
 	g_dbg.mcu.exti.line_trigger_count[3] = g_stIrqDebug.total[IRQDBG_EXTI3_STRAY];
 	g_dbg.mcu.exti.line_trigger_count[5] = g_stIrqDebug.total[IRQDBG_EXTI5_STRAY];
-	g_dbg.mcu.exti.line_trigger_count[6] = g_stIrqDebug.total[IRQDBG_EXTI6_STRAY];
+	g_dbg.mcu.exti.line_trigger_count[6] = g_stIrqDebug.total[IRQDBG_EXTI6_SOC_KEY];
 	g_dbg.mcu.exti.line_trigger_count[7] = g_stIrqDebug.total[IRQDBG_EXTI7_UART1_WAKE];
-	g_dbg.mcu.exti.line_trigger_count[9] = g_stIrqDebug.total[IRQDBG_EXTI9_SW_KEY];
+	g_dbg.mcu.exti.line_trigger_count[9] = g_stIrqDebug.total[IRQDBG_EXTI9_MAIN_SW];
 	g_dbg.mcu.exti.line_trigger_count[12] = g_stIrqDebug.total[IRQDBG_EXTI12_CMNT_WAKE];
-	g_dbg.mcu.exti.line_trigger_count[13] = g_stIrqDebug.total[IRQDBG_EXTI13_MCU_WAKE];
+	g_dbg.mcu.exti.line_trigger_count[13] = g_stIrqDebug.total[IRQDBG_EXTI13_RESERVED];
 	g_dbg.mcu.exti.spurious_count = g_stIrqDebug.total[IRQDBG_EXTI_GROUP_SPURIOUS];
 #else
 	g_dbg.mcu.exti.line_trigger_count[0] = sys_time.cnt_PA0_irq;
@@ -481,8 +481,8 @@ void DBG_CaptureGpio(void)
 	g_dbg.mcu.gpio.named.key_pressed = (g_dbg.mcu.gpio.named.key_raw == 0U) ? 1U : 0U;
 	g_dbg.mcu.gpio.named.charger_det_raw = dbg_gpio_in(GPIO_CHG_IN, PIN_CHG_IN);
 	g_dbg.mcu.gpio.named.charger_connected = (g_dbg.mcu.gpio.named.charger_det_raw == 0U) ? 1U : 0U;
-	g_dbg.mcu.gpio.named.load_det_raw = dbg_gpio_in(GPIO_MCU_WK, PIN_MCU_WK);
-	g_dbg.mcu.gpio.named.load_present = g_dbg.mcu.gpio.named.load_det_raw;
+	g_dbg.mcu.gpio.named.load_det_raw = dbg_gpio_in(GPIO_MAIN_SW, PIN_MAIN_SW);
+	g_dbg.mcu.gpio.named.load_present = (g_dbg.mcu.gpio.named.load_det_raw == 0U) ? 1U : 0U;
 	g_dbg.mcu.gpio.named.afe_alert_raw = 0xFFU;
 	g_dbg.mcu.gpio.named.afe_alert_valid = 0U;
 	g_dbg.mcu.gpio.named.chg_mos = (uint8_t)SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS;
@@ -491,7 +491,7 @@ void DBG_CaptureGpio(void)
 	g_dbg.mcu.gpio.named.rs485_dir = 0xFFU;
 	g_dbg.mcu.gpio.named.mcc_c_gpio = dbg_gpio_out(GPIO_MCC_C, PIN_MCC_C);
 	g_dbg.mcu.gpio.named.cmnt_en_gpio = dbg_gpio_out(GPIO_CMNT_EN, PIN_CMNT_EN);
-	g_dbg.mcu.gpio.named.dc_en_gpio = dbg_gpio_out(GPIO_DC_EN, PIN_DC_EN);
+	g_dbg.mcu.gpio.named.dc_en_gpio = 0U;
 	g_dbg.mcu.gpio.named.afe_ctl_gpio = dbg_gpio_out(GPIO_AFE1_CTL, PIN_AFE1_CTL);
 }
 
@@ -616,7 +616,7 @@ static void dbg_capture_adc(void)
 	g_dbg.mcu.adc.dr_read_skipped = 1U;
 	g_dbg.mcu.adc.ready = ADC_IsReady();
 	g_dbg.mcu.adc.vbat_mv = ADC_GetVbatMilliVolt();
-	g_dbg.mcu.adc.typec_current_ma = ADC_GetTypeCOutCurrentMilliAmp();
+	g_dbg.mcu.adc.reserved_current_ma = 0U;
 	for (i = 0U; i < DBG_HUB_ADC_KEYS; i++)
 	{
 		g_dbg.mcu.adc.raw[i] = ADC_GetRaw(i);
@@ -870,8 +870,8 @@ static void dbg_capture_business(void)
 	g_dbg.mos.mtp_pchmos = (uint8_t)SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS;
 	g_dbg.mos.mcc_c_gpio = dbg_gpio_out(GPIO_MCC_C, PIN_MCC_C);
 	g_dbg.mos.rf_en_gpio = dbg_gpio_out(GPIO_RF_EN, PIN_RF_EN);
-	g_dbg.mos.dc_en_gpio = dbg_gpio_out(GPIO_DC_EN, PIN_DC_EN);
-	g_dbg.mos.boost_en_gpio = dbg_gpio_out(GPIO_2727_EN, PIN_2737_EN);
+	g_dbg.mos.dc_en_gpio = 0U;
+	g_dbg.mos.boost_en_gpio = 0U;
 
 	g_dbg.soc.soc_pct = g_stCellInfoReport.SocElement.u16Soc;
 	g_dbg.soc.soh_pct = g_stCellInfoReport.SocElement.u16Soh;
@@ -884,7 +884,7 @@ static void dbg_capture_business(void)
 	g_dbg.soc.vcell_total_v100 = g_stCellInfoReport.u16VCellTotle;
 	g_dbg.soc.ichg_a10 = g_stCellInfoReport.u16Ichg;
 	g_dbg.soc.idsg_a10 = g_stCellInfoReport.u16IDischg;
-	g_dbg.soc.typec_current_ma = ADC_GetTypeCOutCurrentMilliAmp();
+	g_dbg.soc.reserved_current_ma = 0U;
 	g_dbg.soc.vbat_mv = ADC_GetVbatMilliVolt();
 
 	g_dbg.afe.bstatus1 = SH367309_Reg_Store.REG_BSTATUS1.all;

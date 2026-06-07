@@ -247,7 +247,7 @@ typedef struct DBG_HubAdcTag {
 	uint16_t raw[DBG_HUB_ADC_KEYS];
 	int32_t value[DBG_HUB_ADC_KEYS];
 	uint32_t vbat_mv;
-	uint16_t typec_current_ma;
+	uint16_t reserved_current_ma;
 	uint8_t ready;
 	uint8_t dr_read_skipped;
 } DBG_HubAdc_t;
@@ -451,7 +451,7 @@ typedef struct DBG_HubSocTag {
 	uint16_t vcell_total_v100;
 	uint16_t ichg_a10;
 	uint16_t idsg_a10;
-	uint16_t typec_current_ma;
+	uint16_t reserved_current_ma;
 	uint32_t vbat_mv;
 } DBG_HubSoc_t;
 

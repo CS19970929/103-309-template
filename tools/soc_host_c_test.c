@@ -18,7 +18,6 @@ struct stCell_Info g_stCellInfoReport;
 volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
-static UINT16 s_host_typec_out_current_mA;
 static UINT32 s_host_vbat_mV;
 static UINT32 s_host_afe_current_sample_seq;
 
@@ -55,11 +54,6 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	(void)errorCode;
 	return 0U;
-}
-
-UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
-{
-	return s_host_typec_out_current_mA;
 }
 
 UINT32 ADC_GetVbatMilliVolt(void)
@@ -160,7 +154,6 @@ static void host_reset_state(void)
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
-	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
 	s_host_afe_current_sample_seq = 0U;
 	host_apply_default_config();
@@ -323,32 +316,6 @@ static void test_board_self_consumption_adjusts_charge_and_discharge_current(voi
 		expected_cap_as10 = start_cap_as10 + expected_delta_as10;
 	}
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
-}
-
-static void test_typec_output_current_converts_to_battery_equivalent(void)
-{
-	UINT32 start_cap_as10 = host_cap_now_from_soc(60U);
-	UINT32 expected_cap_as10;
-	UINT32 net_charge_ma;
-
-	host_reset_state();
-	host_set_snapshot(60U, 0U);
-	host_init_with_voltage(3835U, 3835U);
-	s_host_typec_out_current_mA = 9000U;
-	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	expected_cap_as10 = start_cap_as10 - host_self_delta_as10(
-		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
-		360U);
-	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
-
-	s_host_typec_out_current_mA = 0U;
-	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	net_charge_ma = (23U * 100U > (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) ?
-		(23U * 100U - (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) : 0U;
-	expected_cap_as10 += host_self_delta_as10(net_charge_ma, 360U);
-	CHECK_RANGE_U32(host_internal_soc(),
-		(UINT32)(host_soc_from_cap(expected_cap_as10) - 1U),
-		(UINT32)(host_soc_from_cap(expected_cap_as10) + 1U));
 }
 
 static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
@@ -528,7 +495,6 @@ int main(void)
 	test_full_voltage_anchor_can_override_self_consumption();
 	test_rtc_sleep_does_not_apply_board_self_consumption();
 	test_board_self_consumption_adjusts_charge_and_discharge_current();
-	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_ignores_upward_target_during_charge();

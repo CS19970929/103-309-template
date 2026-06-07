@@ -120,8 +120,6 @@ typedef struct
   uint32_t    rtc_irq_cnt;
 
   uint8_t     isdebugenable;
-  bool        typec_curr_sim;
-  uint16_t    typc_curr;
 }Time_T;
 
 extern Time_T  sys_time;

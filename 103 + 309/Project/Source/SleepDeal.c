@@ -23,64 +23,83 @@ void SleepDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
 
-#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
-
 static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
+	return MosStartup_Is5vChargeActive();
 }
 
-static UINT8 SleepDeal_IsKeyPressed(void)
+static UINT8 SleepDeal_IsMainSwitchClosed(void)
 {
-	// PC13���رպ�Ϊ�͵�ƽ����EXTI13�½��ػ��ѱ���һ�£�
-	return (UINT8)(MCUI_ENI_DI1 == 0);
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_MAIN_SW, PIN_MAIN_SW) == Bit_RESET);
+}
+
+static UINT8 SleepDeal_IsSocKeyPressed(void)
+{
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_SOC_KEY, PIN_SOC_KEY) == Bit_RESET);
+}
+
+static UINT8 SleepDeal_IsDirectWakeupValid(void)
+{
+	if (SleepDeal_IsChargerWakeupActive())
+	{
+		SleepDeal_MarkBootFromSleepChargerWakeup();
+		return 1U;
+	}
+
+	if ((g_irq_t == bms_keyirq) && (SleepDeal_IsMainSwitchClosed() != 0U))
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+static UINT8 SleepDeal_RejectWakeup(void)
+{
+	LedBar_PrepareForStop();
+	g_irq_t = NO_IRQ;
+	return 0U;
 }
 
 static UINT8 SleepDeal_IsWakeupValid(void)
 {
-	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;
 
-	if (SleepDeal_IsChargerWakeupActive())
+	if (SleepDeal_IsDirectWakeupValid())
 	{
-		SleepDeal_MarkBootFromSleepChargerWakeup();
-		return 1;
+		return 1U;
 	}
 
 	while (1)
 	{
-		if (!SleepDeal_IsKeyPressed())
+		if (SleepDeal_IsDirectWakeupValid())
 		{
-			LedBar_PrepareForStop();
-			return 0;
+			return 1U;
+		}
+		if ((g_irq_t != soc_key) && (SleepDeal_IsSocKeyPressed() == 0U))
+		{
+			return SleepDeal_RejectWakeup();
 		}
 
 		LedBar_ShowSleepSocPreview();
-		hold_cnt = 0;
-		while (SleepDeal_IsKeyPressed())
+		while (SleepDeal_IsSocKeyPressed())
 		{
-			if (SleepDeal_IsChargerWakeupActive())
+			if (SleepDeal_IsDirectWakeupValid())
 			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
+				return 1U;
 			}
 
 			__delay_ms(10);
-			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
-			{
-				return 1;
-			}
 		}
 
 		display_cnt = 0;
 		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
 		{
-			if (SleepDeal_IsChargerWakeupActive())
+			if (SleepDeal_IsDirectWakeupValid())
 			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
+				return 1U;
 			}
-			if (SleepDeal_IsKeyPressed())
+			if (SleepDeal_IsSocKeyPressed())
 			{
 				break;
 			}
@@ -91,8 +110,7 @@ static UINT8 SleepDeal_IsWakeupValid(void)
 
 		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
 		{
-			LedBar_PrepareForStop();
-			return 0;
+			return SleepDeal_RejectWakeup();
 		}
 	}
 }

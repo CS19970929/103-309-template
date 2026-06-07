@@ -245,7 +245,7 @@ void EXTI15_10_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line13) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI13_MCU_WAKE);
+    IrqDebug_Count((uint8_t)IRQDBG_EXTI13_RESERVED);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line13);
   }
@@ -272,8 +272,10 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI6_STRAY);
+    IrqDebug_Count((uint8_t)IRQDBG_EXTI6_SOC_KEY);
+    sys_time.cnt_bms1_keyirq++;
     handled = 1U;
+    g_irq_t = soc_key;
     EXTI_ClearITPendingBit(EXTI_Line6);
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
@@ -284,10 +286,9 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI9_SW_KEY);
-    sys_time.cnt_bms1_keyirq++;
+    IrqDebug_Count((uint8_t)IRQDBG_EXTI9_MAIN_SW);
     handled = 1U;
-    g_irq_t = soc_key;
+    g_irq_t = bms_keyirq;
     EXTI_ClearITPendingBit(EXTI_Line9);
   }
   if (handled == 0U)

@@ -11,7 +11,7 @@
 // <o> Battery type
 //   <0=> Master BAT_MASTER 20A
 //   <1=> Slave  BAT_SLAVE  40A
-#define PROJECT_CFG_BAT_TYPE 1
+#define PROJECT_CFG_BAT_TYPE 0
 
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
