@@ -128,7 +128,8 @@ static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
 
-#define SOC_EMPTY_TAIL_STEP_TICKS		(5U * 60U)
+// #define SOC_EMPTY_TAIL_STEP_TICKS		(5U * 60U)
+#define SOC_EMPTY_TAIL_STEP_TICKS		(5U)
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	{
 		-50,
@@ -150,19 +151,19 @@ static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
 	},
 	{
 		50,
-		{4U, 5U, 8U, 12U},
+		{3U, 5U, 8U, 12U},
 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
 	},
 	{
 		100,
-		{8U, 10U, 14U, 18U},
+		{5U, 10U, 14U, 18U},
 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
 	},
 	{
 		200,
-		{12U, 14U, 20U, 25U},
+		{8U, 14U, 20U, 25U},
 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
 	},
