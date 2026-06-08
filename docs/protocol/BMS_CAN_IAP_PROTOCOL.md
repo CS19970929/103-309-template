@@ -14,6 +14,17 @@
 
 多设备总线中，IAP 节点必须在同一时刻唯一。当前流程推荐先用 BMS App CAN 地址选中目标板并发送 `ENTER_IAP`，使只有目标板进入 IAP；其它同总线 BMS 保持 App 运行时不会响应 CAN-IAP 扩展帧。如果多个 BMS 已经同时停留在 IAP 且节点相同，ACK/NACK ID 完全一致，comm tool 无法判断是哪一块板响应，禁止直接升级。
 
+## 当前分支 IAP 地址
+
+当前主板配套 IAP 工程位于 `firmware/bms_iap_f103c8/`：
+
+- IAP：`0x08000000..0x080047FF`
+- App：`0x08004800..0x0801F7FF`
+- 顶部运行标志页：`0x0801F800..0x0801FFFF`
+- SRAM mailbox：`0x20004FE0`
+
+App 必须链接到 `0x08004800`。上位机和 IAP 均拒绝写入超过 `0x0801F800` 的 BMS App 镜像，避免擦掉当前项目 `FLASH_ADDR_UPDATE_FLAG` / `FLASH_ADDR_SLEEP_FLAG` 所在页。
+
 ## 控制命令
 
 | 命令 | payload | 说明 |

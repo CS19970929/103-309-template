@@ -107,7 +107,7 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 
 ## 安全规则
 
-- 下载 BMS App 时 `FW_BEGIN.app_addr` 必须等于 `0x08004800`，PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
+- 下载 BMS App 时 `FW_BEGIN.app_addr` 必须等于 `0x08004800`，镜像不能超过 `0x0801F800`，PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08004800`。
 - 下载 comm tool App 给另一台 comm tool 自升级时，`FW_BEGIN.app_addr` 必须等于 `0x08008000`，PC 工具真实下载必须显式传入 `-ConfirmAppAddress 0x08008000`。
 - comm tool App 不能裸写到 `0x08000000`；该地址是 comm tool 自身 IAP。
 - comm tool 写缓存前必须擦除缓存页，不能覆盖自身程序区。

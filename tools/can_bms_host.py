@@ -14,7 +14,10 @@ from typing import Iterable, Optional
 
 
 APP_BASE_ADDR = 0x08004800
+APP_FLASH_LIMIT = 0x0801F800
 IAP_BASE_ADDR = 0x08000000
+SRAM_BASE = 0x20000000
+SRAM_LIMIT = 0x20004FE0
 
 FEIDAO_BROADCAST_BASE = 0x14F80200
 CAN_IAP_NODE_DEFAULT = 1
@@ -294,6 +297,20 @@ def load_image(bin_path: Path, app_address: int) -> bytes:
     image = bin_path.read_bytes()
     if not image:
         raise SystemExit(f"bin 文件为空：{bin_path}")
+    if len(image) < 8:
+        raise SystemExit(f"bin 文件太小，缺少向量表：{bin_path}")
+    if app_address + len(image) > APP_FLASH_LIMIT:
+        raise SystemExit(
+            f"bin 超出 App 区: end=0x{app_address + len(image):08X}, limit=0x{APP_FLASH_LIMIT:08X}"
+        )
+    msp, reset = struct.unpack_from("<II", image, 0)
+    reset_entry = reset & ~1
+    if not (SRAM_BASE <= msp < SRAM_LIMIT):
+        raise SystemExit(f"App 初始 MSP 非法: 0x{msp:08X}, SRAM上限=0x{SRAM_LIMIT:08X}")
+    if ((reset & 1) == 0) or not (app_address <= reset_entry < (app_address + len(image))):
+        raise SystemExit(
+            f"App ResetHandler 非法: 0x{reset:08X}, 镜像区=0x{app_address:08X}..0x{app_address + len(image):08X}"
+        )
     return image
 
 
@@ -304,6 +321,7 @@ def print_upgrade_plan(bin_path: Path, image: bytes, node_id: int) -> None:
     print("CAN-IAP 升级 dry-run")
     print(f"  bin: {bin_path}")
     print(f"  App 起始地址: 0x{APP_BASE_ADDR:08X}")
+    print(f"  App 区上限: 0x{APP_FLASH_LIMIT:08X}")
     print(f"  镜像大小: {len(image)} bytes")
     print(f"  数据帧数: {frame_count}")
     print(f"  CRC16-Modbus: 0x{image_crc16:04X}")

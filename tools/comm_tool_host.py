@@ -25,10 +25,11 @@ BMS_APP_BASE_ADDR = 0x08004800
 COMM_TOOL_APP_BASE_ADDR = 0x08008000
 APP_BASE_ADDR = BMS_APP_BASE_ADDR
 IAP_BASE_ADDR = 0x08000000
-BMS_APP_FLASH_LIMIT = 0x08020000
+BMS_APP_FLASH_LIMIT = 0x0801F800
 COMM_TOOL_APP_FLASH_LIMIT = 0x08018000
 SRAM_BASE = 0x20000000
 SRAM_LIMIT = 0x20010000
+BMS_SRAM_LIMIT = 0x20004FE0
 
 CMD_GET_INFO = 0x01
 CMD_SET_CAN = 0x02
@@ -255,11 +256,12 @@ def load_image(path: Path, app_address: int) -> bytes:
         raise SystemExit(
             f"bin 超出 App 区: end=0x{app_address + len(image):08X}, limit=0x{limit:08X}"
         )
-    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-    if (not msp_ok) or (not reset_thumb_ok) or (reset < app_address) or (reset >= limit):
+    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image, app_address)
+    reset_entry = reset & ~1
+    if (not msp_ok) or (not reset_thumb_ok) or (reset_entry < app_address) or (reset_entry >= (app_address + len(image))):
         raise SystemExit(
             f"App 向量表非法: MSP=0x{msp:08X}, Reset=0x{reset:08X}, "
-            f"App区=0x{app_address:08X}..0x{limit:08X}"
+            f"镜像区=0x{app_address:08X}..0x{app_address + len(image):08X}"
         )
     return image
 
@@ -272,11 +274,17 @@ def image_limit(app_address: int) -> Optional[int]:
     return None
 
 
-def vector_summary(image: bytes) -> tuple[int, int, bool, bool]:
+def image_sram_limit(app_address: int) -> int:
+    if app_address == BMS_APP_BASE_ADDR:
+        return BMS_SRAM_LIMIT
+    return SRAM_LIMIT
+
+
+def vector_summary(image: bytes, app_address: int = APP_BASE_ADDR) -> tuple[int, int, bool, bool]:
     if len(image) < 8:
         return 0, 0, False, False
     msp, reset = struct.unpack_from("<II", image, 0)
-    msp_ok = SRAM_BASE <= msp < SRAM_LIMIT
+    msp_ok = SRAM_BASE <= msp < image_sram_limit(app_address)
     reset_ok = (reset & 1) == 1
     return msp, reset, msp_ok, reset_ok
 
@@ -287,8 +295,9 @@ def print_image_plan(path: Path, image: bytes, app_address: int, chunk_size: int
     crc16 = crc16_modbus(image)
     crc32 = zlib.crc32(image) & 0xFFFFFFFF
     limit = image_limit(app_address)
-    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-    reset_ok = reset_thumb_ok and (limit is not None) and (app_address <= reset < limit)
+    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image, app_address)
+    reset_entry = reset & ~1
+    reset_ok = reset_thumb_ok and (limit is not None) and (app_address <= reset_entry < (app_address + len(image)))
     chunks = math.ceil(len(image) / chunk_size)
     print("comm tool 固件下载 dry-run")
     print(f"  bin: {path}")

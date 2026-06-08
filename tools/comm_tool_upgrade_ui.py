@@ -2814,7 +2814,8 @@ class UpgradeUi(tk.Tk):
         if APP_BASE_ADDR + len(image) > APP_FLASH_LIMIT:
             raise RuntimeError(f"bin 超出 App 区: end=0x{APP_BASE_ADDR + len(image):08X}")
         msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
+        reset_entry = reset & ~1
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset_entry < (APP_BASE_ADDR + len(image)))
         if not msp_ok or not reset_ok:
             raise RuntimeError(f"App 向量表非法: MSP=0x{msp:08X}, Reset=0x{reset:08X}")
         self._emit("image", self._image_info_text(path, image))
@@ -2865,7 +2866,8 @@ class UpgradeUi(tk.Tk):
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
         msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
+        reset_entry = reset & ~1
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset_entry < (APP_BASE_ADDR + len(image)))
         return (
             f"{path.name}\n"
             f"{len(image)} bytes\n"

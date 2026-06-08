@@ -10,6 +10,7 @@ BMS App CAN 服务用于 comm tool 在正常 App 运行时读取状态、写保�
 - `ENTER_IAP` 按 d009 的 SRAM mailbox 方式进入 IAP：App 写 `0x20004FE0` mailbox，ACK 后延时复位；不再把 `FLASH_ADDR_UPDATE_FLAG` 作为新的升级门闩。
 - 当前项目保护参数不同于 d009：主保护参数表为 `0x2100..0x2140`，共 65 word，13 组，每组 5 word。CAN 单寄存器写入保护参数时，板端会按当前项目规则自动合成所在 5-word 组写入，保留原 `Sci_WrRegs_0x10_Protect()` 的写标志和副作用。
 - 当前项目没有 d009 的 `FactoryAging` 模块；老化命令 `0x07..0x0A` 在本分支板端返回明确拒绝，不做静默超时。
+- 配套 BMS IAP 工程在 `firmware/bms_iap_f103c8/`；App 链接地址固定 `0x08004800`，BMS App 写入上限为 `0x0801F800`。
 
 ## CAN 帧
 
