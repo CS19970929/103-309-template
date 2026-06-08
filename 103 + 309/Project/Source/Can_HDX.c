@@ -11,9 +11,46 @@ CanRxMsg RxMessage;
 #define CAN_TX_FLAG_TEST                ((UINT32)0x00000001u)
 #define CAN_TX_FLAG_BY_ID(id)           ((UINT32)1u << ((UINT8)(id) + 1u))
 
+#define CAN_APP_CMD_QUEUE_SIZE          ((UINT8)4u)
+#define CAN_APP_CMD_ID                  ((UINT16)0x60u)
+#define CAN_APP_ACK_ID                  ((UINT16)0x61u)
+#define CAN_APP_CMD_GET_STATUS          ((UINT8)0x01u)
+#define CAN_APP_CMD_ENTER_IAP           ((UINT8)0x02u)
+#define CAN_APP_CMD_READ_REG            ((UINT8)0x03u)
+#define CAN_APP_CMD_WRITE_PREP          ((UINT8)0x04u)
+#define CAN_APP_CMD_WRITE_COMMIT        ((UINT8)0x05u)
+#define CAN_APP_CMD_READ_BLOCK          ((UINT8)0x06u)
+#define CAN_APP_CMD_READ_BLOCK_DATA     ((UINT8)0x86u)
+#define CAN_APP_READ_BLOCK_MAX_WORDS    ((UINT8)120u)
+#define CAN_APP_ACK_OK                  ((UINT8)0x00u)
+#define CAN_APP_ACK_BAD_CMD             ((UINT8)0x01u)
+#define CAN_APP_ACK_BAD_PARAM           ((UINT8)0x02u)
+#define CAN_APP_ACK_FLASH_ERR           ((UINT8)0x05u)
+#define CAN_APP_ACK_NO_PERMISSION       ((UINT8)0x07u)
+#define CAN_APP_ACK_BMS_ERROR           ((UINT8)0x08u)
+#define CAN_APP_ENTER_IAP_DELAY_TICKS   ((UINT8)20u)
+
 static BOOL s_bCanLowPower = FALSE;
 static BOOL s_bLastCanTxOk = FALSE;
 static UINT16 s_u16CanTxSearchId = CANID_CHECK_0x00;
+
+typedef struct
+{
+	volatile UINT8 cmd_head;
+	volatile UINT8 cmd_tail;
+	volatile UINT8 cmd_count;
+	UINT8 cmd_queue[CAN_APP_CMD_QUEUE_SIZE][8];
+	UINT8 write_pending;
+	UINT16 write_addr;
+	UINT8 write_value_hi;
+	UINT8 enter_iap_delay_ticks;
+	UINT16 read_block_words[CAN_APP_READ_BLOCK_MAX_WORDS];
+	UINT8 read_block_count;
+	UINT8 read_block_index;
+	UINT8 read_block_active;
+} CanAppRuntime;
+
+static CanAppRuntime s_can_app;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -827,6 +864,278 @@ void Can_BusOFF_Monitor(void)
 	Can_BusOFF_Recover();
 }
 
+
+static UINT8 Can_AppCrcOk(const UINT8 data[8])
+{
+	UINT16 expect_crc = (UINT16)(((UINT16)data[6] << 8) | data[7]);
+	UINT16 actual_crc = Sci_CRC16RTU((UINT8 *)data, 6U);
+
+	return (expect_crc == actual_crc) ? 1U : 0U;
+}
+
+static void Can_AppFillCrc(UINT8 data[8])
+{
+	UINT16 crc = Sci_CRC16RTU(data, 6U);
+	data[6] = (UINT8)(crc >> 8);
+	data[7] = (UINT8)crc;
+}
+
+static void Can_AppSendFrame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1)
+{
+	CanTxMsg tx_msg;
+
+	memset(&tx_msg, 0, sizeof(tx_msg));
+	tx_msg.StdId = CAN_APP_ACK_ID;
+	tx_msg.ExtId = 0;
+	tx_msg.IDE = CAN_ID_STD;
+	tx_msg.RTR = CAN_RTR_DATA;
+	tx_msg.DLC = 8;
+	tx_msg.Data[0] = 0x5A;
+	tx_msg.Data[1] = 0xA5;
+	tx_msg.Data[2] = cmd;
+	tx_msg.Data[3] = status_or_seq;
+	tx_msg.Data[4] = value0;
+	tx_msg.Data[5] = value1;
+	Can_AppFillCrc(tx_msg.Data);
+	(void)CAN_Tx_Data(&tx_msg);
+}
+
+static UINT8 Can_AppStatusFromHostError(UINT8 error)
+{
+	switch (error)
+	{
+	case 0U:
+		return CAN_APP_ACK_OK;
+	case RS485_ERROR_NO_PERMISSION:
+		return CAN_APP_ACK_NO_PERMISSION;
+	case RS485_ERROR_ADDR_INVALID:
+	case RS485_ERROR_DATA_INVALID:
+	case RS485_ERROR_RONLY_NO_W:
+	case RS485_ERROR_WONLY_NO_R:
+		return CAN_APP_ACK_BAD_PARAM;
+	default:
+		return CAN_APP_ACK_BMS_ERROR;
+	}
+}
+
+static void Can_AppClearCmdQueue(void)
+{
+	__disable_irq();
+	s_can_app.cmd_head = 0;
+	s_can_app.cmd_tail = 0;
+	s_can_app.cmd_count = 0;
+	__enable_irq();
+}
+
+static void Can_AppStopReadBlock(void)
+{
+	s_can_app.read_block_active = 0;
+	s_can_app.read_block_count = 0;
+	s_can_app.read_block_index = 0;
+}
+
+static void Can_AppQueueCmd(const UINT8 data[8])
+{
+	__disable_irq();
+	if (s_can_app.cmd_count < CAN_APP_CMD_QUEUE_SIZE)
+	{
+		memcpy(s_can_app.cmd_queue[s_can_app.cmd_tail], data, 8U);
+		s_can_app.cmd_tail++;
+		if (s_can_app.cmd_tail >= CAN_APP_CMD_QUEUE_SIZE)
+		{
+			s_can_app.cmd_tail = 0;
+		}
+		s_can_app.cmd_count++;
+	}
+	__enable_irq();
+}
+
+static UINT8 Can_AppTakeCmd(UINT8 data[8])
+{
+	UINT8 has_cmd = 0;
+
+	__disable_irq();
+	if (s_can_app.cmd_count != 0)
+	{
+		memcpy(data, s_can_app.cmd_queue[s_can_app.cmd_head], 8U);
+		s_can_app.cmd_head++;
+		if (s_can_app.cmd_head >= CAN_APP_CMD_QUEUE_SIZE)
+		{
+			s_can_app.cmd_head = 0;
+		}
+		s_can_app.cmd_count--;
+		has_cmd = 1;
+	}
+	__enable_irq();
+
+	return has_cmd;
+}
+
+static void Can_AppStartReadBlock(UINT8 count)
+{
+	s_can_app.read_block_count = count;
+	s_can_app.read_block_index = 0;
+	s_can_app.read_block_active = 1;
+}
+
+static void Can_AppServiceReadBlock(void)
+{
+	if (s_can_app.read_block_active == 0)
+	{
+		return;
+	}
+	if (s_can_app.read_block_index >= s_can_app.read_block_count)
+	{
+		Can_AppStopReadBlock();
+		return;
+	}
+
+	Can_AppSendFrame(CAN_APP_CMD_READ_BLOCK_DATA,
+					 s_can_app.read_block_index,
+					 (UINT8)(s_can_app.read_block_words[s_can_app.read_block_index] >> 8),
+					 (UINT8)s_can_app.read_block_words[s_can_app.read_block_index]);
+	s_can_app.read_block_index++;
+	if (s_can_app.read_block_index >= s_can_app.read_block_count)
+	{
+		Can_AppStopReadBlock();
+	}
+}
+
+static void Can_AppServiceEnterIapDelay(void)
+{
+	if (s_can_app.enter_iap_delay_ticks == 0)
+	{
+		return;
+	}
+
+	s_can_app.enter_iap_delay_ticks--;
+	if (s_can_app.enter_iap_delay_ticks == 0)
+	{
+		u8FlashUpdateFlag = 1;
+	}
+}
+
+static void Can_AppHandleCmdData(const UINT8 data[8])
+{
+	UINT8 status = CAN_APP_ACK_OK;
+	UINT8 value0 = 0;
+	UINT8 value1 = 0;
+	UINT8 cmd;
+	UINT16 reg_addr;
+	UINT16 reg_value;
+	UINT8 reg_count;
+	UINT8 host_error;
+
+	if ((data[0] != 0xA5) ||
+		(data[1] != 0x5A) ||
+		(Can_AppCrcOk(data) == 0))
+	{
+		return;
+	}
+
+	cmd = data[2];
+	Can_AppStopReadBlock();
+
+	switch (cmd)
+	{
+	case CAN_APP_CMD_GET_STATUS:
+		reg_value = g_stCellInfoReport.SocElement.u16Soc;
+		value0 = (UINT8)((reg_value > 100U) ? 100U : reg_value);
+		reg_value = g_stCellInfoReport.SocElement.u16Soh;
+		value1 = (UINT8)((reg_value > 100U) ? 100U : reg_value);
+		break;
+
+	case CAN_APP_CMD_ENTER_IAP:
+		if ((data[3] != 0xC3) ||
+			(data[4] != 0x3C) ||
+			(data[5] != (UINT8)CAN_ADRESS_STD_ID))
+		{
+			status = CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		if (AppUpgrade_RequestIap() == 0U)
+		{
+			status = CAN_APP_ACK_FLASH_ERR;
+			break;
+		}
+		value0 = 0x08;
+		value1 = 0x48;
+		s_can_app.enter_iap_delay_ticks = CAN_APP_ENTER_IAP_DELAY_TICKS;
+		break;
+
+	case CAN_APP_CMD_READ_REG:
+		reg_addr = (UINT16)(((UINT16)data[3] << 8) | data[4]);
+		host_error = Sci_HostReadWords(reg_addr, 1U, &reg_value);
+		status = Can_AppStatusFromHostError(host_error);
+		if (status == CAN_APP_ACK_OK)
+		{
+			value0 = (UINT8)(reg_value >> 8);
+			value1 = (UINT8)reg_value;
+		}
+		break;
+
+	case CAN_APP_CMD_READ_BLOCK:
+		reg_addr = (UINT16)(((UINT16)data[3] << 8) | data[4]);
+		reg_count = data[5];
+		if ((reg_count == 0) ||
+			(reg_count > CAN_APP_READ_BLOCK_MAX_WORDS) ||
+			(((UINT32)reg_addr + (UINT32)reg_count - 1U) > 0xFFFFU))
+		{
+			status = CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		host_error = Sci_HostReadWords(reg_addr, reg_count, s_can_app.read_block_words);
+		status = Can_AppStatusFromHostError(host_error);
+		if (status == CAN_APP_ACK_OK)
+		{
+			value0 = reg_count;
+			value1 = 0;
+			Can_AppStartReadBlock(reg_count);
+		}
+		break;
+
+	case CAN_APP_CMD_WRITE_PREP:
+		s_can_app.write_addr = (UINT16)(((UINT16)data[3] << 8) | data[4]);
+		s_can_app.write_value_hi = data[5];
+		s_can_app.write_pending = 1;
+		value0 = data[3];
+		value1 = data[4];
+		break;
+
+	case CAN_APP_CMD_WRITE_COMMIT:
+		reg_addr = (UINT16)(((UINT16)data[3] << 8) | data[4]);
+		if ((s_can_app.write_pending == 0) || (reg_addr != s_can_app.write_addr))
+		{
+			s_can_app.write_pending = 0;
+			status = CAN_APP_ACK_BAD_PARAM;
+			break;
+		}
+		reg_value = (UINT16)(((UINT16)s_can_app.write_value_hi << 8) | data[5]);
+		s_can_app.write_pending = 0;
+		host_error = Sci_HostWriteWords(reg_addr, &reg_value, 1U);
+		status = Can_AppStatusFromHostError(host_error);
+		break;
+
+	default:
+		status = CAN_APP_ACK_BAD_CMD;
+		break;
+	}
+
+	Can_AppSendFrame(cmd, status, value0, value1);
+}
+
+static void Can_AppService(void)
+{
+	UINT8 data[8];
+
+	if (Can_AppTakeCmd(data) != 0)
+	{
+		Can_AppHandleCmdData(data);
+	}
+	Can_AppServiceReadBlock();
+	Can_AppServiceEnterIapDelay();
+}
+
 static UINT32 Can_TxFlagFromRequestId(UINT16 request_id)
 {
 	if (request_id <= CANID_CHECK_0x11)
@@ -849,8 +1158,16 @@ static void Can_QueueTxByRequestId(UINT16 request_id)
 
 static void Can_HandleRxMessage(const CanRxMsg *msg)
 {
-	if ((msg->StdId >> 7) != CAN_ADRESS_STD_ID)
+	UINT16 app_cmd_id = (UINT16)(((UINT16)CAN_ADRESS_STD_ID << 7) | CAN_APP_CMD_ID);
+
+	if ((msg->IDE != CAN_ID_STD) || ((msg->StdId >> 7) != CAN_ADRESS_STD_ID))
 	{
+		return;
+	}
+
+	if (((UINT16)msg->StdId == app_cmd_id) && (msg->DLC == 8))
+	{
+		Can_AppQueueCmd(msg->Data);
 		return;
 	}
 
@@ -1066,6 +1383,9 @@ void InitCan(void)
 	InitCan_CAN1();	  // 目前是回环模式，要改回普通模式,Test
 	InitCan_Filter(); // 这个调到后面，RX也可以了
 	s_bCanLowPower = FALSE;
+	memset(&s_can_app, 0, sizeof(s_can_app));
+	Can_AppClearCmdQueue();
+	Can_AppStopReadBlock();
 	Can_EnsureNormalMode();
 }
 
@@ -1088,6 +1408,7 @@ void App_Can(void)
 	Can_EnsureNormalMode();
 	// Can_BusOFF_Monitor();
 	(void)Can_PollReceive();
+	Can_AppService();
 	(void)Can_TransmitDeal();
 
 	if (++cnt_send_0x02 >= CAN_0X02_SEND_PERIOD_TICKS)

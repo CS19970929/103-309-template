@@ -16,6 +16,7 @@
 #define FLASH_309_RTC_NORMAL_VALUE		((UINT16)0x2333)	//RTC���ߣ������ʽ����(ͨѶ����ť�ȵ�)
 #define FLASH_309_NORMAL_NORMAL_VALUE	((UINT16)0xFFFF)	//��ͨ���ߣ������ʽ����(ͨѶ����ť�ȵ�)
 
+/* App->IAP request uses the d009 SRAM mailbox at 0x20004FE0; these legacy values remain for compatibility. */
 #define FLASH_TO_IAP_VALUE				((UINT16)0x00AB)
 #define FLASH_TO_APP_VALUE				((UINT16)0xFFFF)
 
@@ -27,6 +28,7 @@
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr,uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
+UINT8 AppUpgrade_RequestIap(void);
 void FlashTest(void);
 
 void App_FlashUpdate(void);

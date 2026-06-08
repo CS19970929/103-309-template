@@ -563,6 +563,10 @@ extern struct RS485MSG g_stCurrentMsgPtr_SCI3;
 
 extern struct stCell_Info g_stCellInfoReport;
 
+UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words);
+UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count);
+UINT8 Sci_IsAnyPortBusy(void);
+
 struct nrb_protect
 {
 	UINT16	shortPro;

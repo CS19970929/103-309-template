@@ -798,6 +798,204 @@ void Sci_ACK_0x06_0x10(struct RS485MSG *s)
 	s->csr = RS485_STA_TX_COMPLETE;
 }
 
+
+#define SCI_HOST_PROTECT_GROUP_WORDS ((UINT16)5U)
+#define SCI_HOST_PROTECT_BASE        ((UINT16)RS485_CMD_ADDR_VCELL_OVP_FIRST)
+#define SCI_HOST_PROTECT_END         ((UINT16)(RS485_CMD_ADDR_VCELL_OVP_FIRST + E2P_PARA_NUM_PROTECT))
+
+UINT8 Sci_IsAnyPortBusy(void)
+{
+	if ((gu8_TxEnable_SCI1 != 0U) ||
+		(gu8_TxEnable_SCI2 != 0U) ||
+		(gu8_TxEnable_SCI3 != 0U))
+	{
+		return 1U;
+	}
+
+	if (((g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE) && (g_stCurrentMsgPtr_SCI1.csr != RS485_STA_TX_COMPLETE)) ||
+		((g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE) && (g_stCurrentMsgPtr_SCI2.csr != RS485_STA_TX_COMPLETE)) ||
+		((g_stCurrentMsgPtr_SCI3.csr != RS485_STA_IDLE) && (g_stCurrentMsgPtr_SCI3.csr != RS485_STA_TX_COMPLETE)))
+	{
+		return 1U;
+	}
+
+	return 0U;
+}
+
+UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words)
+{
+	struct RS485MSG stMsg;
+	UINT16 i;
+
+	if ((pu16Words == 0) ||
+		(u16Count == 0U) ||
+		(((UINT32)u16StartAddr + (UINT32)u16Count - 1U) > 0xFFFFU) ||
+		(u16Count > (UINT16)((RS485_MAX_BUFFER_SIZE - 5U) / 2U)))
+	{
+		return RS485_ERROR_DATA_INVALID;
+	}
+
+	if (Sci_IsAnyPortBusy() != 0U)
+	{
+		return RS485_ERROR_CMD_INVALID;
+	}
+
+	memset(&stMsg, 0, sizeof(stMsg));
+	stMsg.AckType = RS485_ACK_POS;
+	stMsg.ErrorType = RS485_ERROR_NULL;
+	stMsg.enRs485CmdType = RS485_CMD_READ_REGS;
+	stMsg.u16Buffer[0] = RS485_SLAVE_ADDR;
+	stMsg.u16Buffer[1] = RS485_CMD_READ_REGS;
+	stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+	stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+	stMsg.u16Buffer[4] = (UINT8)(u16Count >> 8);
+	stMsg.u16Buffer[5] = (UINT8)u16Count;
+
+	Sci_Deal_ReadRegs_0x03(&stMsg);
+	if (stMsg.AckType != RS485_ACK_POS)
+	{
+		return stMsg.ErrorType;
+	}
+
+	Sci_ACK_0x03(&stMsg);
+	if ((stMsg.AckType != RS485_ACK_POS) ||
+		(stMsg.AckLenth < (UINT8)(5U + (u16Count << 1))) ||
+		(stMsg.u16Buffer[1] != RS485_CMD_READ_REGS) ||
+		(stMsg.u16Buffer[2] != (UINT8)(u16Count << 1)))
+	{
+		return (stMsg.ErrorType != RS485_ERROR_NULL) ? stMsg.ErrorType : RS485_ERROR_DATA_INVALID;
+	}
+
+	for (i = 0; i < u16Count; ++i)
+	{
+		pu16Words[i] = (UINT16)(((UINT16)stMsg.u16Buffer[3U + (i << 1)] << 8) |
+								stMsg.u16Buffer[4U + (i << 1)]);
+	}
+
+	return 0U;
+}
+
+static UINT8 Sci_HostWriteRawWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count)
+{
+	struct RS485MSG stMsg;
+	UINT16 i;
+
+	memset(&stMsg, 0, sizeof(stMsg));
+	stMsg.AckType = RS485_ACK_POS;
+	stMsg.ErrorType = RS485_ERROR_NULL;
+	stMsg.u16Buffer[0] = RS485_SLAVE_ADDR;
+
+	if ((u16Count == 1U) && (u16StartAddr < RS485_ADDR_RW_CALIB))
+	{
+		stMsg.enRs485CmdType = RS485_CMD_WRITE_REG;
+		stMsg.u16Buffer[1] = RS485_CMD_WRITE_REG;
+		stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+		stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+		stMsg.u16Buffer[4] = (UINT8)(pu16Words[0] >> 8);
+		stMsg.u16Buffer[5] = (UINT8)pu16Words[0];
+		Sci_Deal_WrReg_0x06(&stMsg);
+	}
+	else
+	{
+		stMsg.enRs485CmdType = RS485_CMD_WRITE_REGS;
+		stMsg.u16Buffer[1] = RS485_CMD_WRITE_REGS;
+		stMsg.u16Buffer[2] = (UINT8)(u16StartAddr >> 8);
+		stMsg.u16Buffer[3] = (UINT8)u16StartAddr;
+		stMsg.u16Buffer[4] = (UINT8)(u16Count >> 8);
+		stMsg.u16Buffer[5] = (UINT8)u16Count;
+		stMsg.u16Buffer[6] = (UINT8)(u16Count << 1);
+		for (i = 0; i < u16Count; ++i)
+		{
+			stMsg.u16Buffer[7U + (i << 1)] = (UINT8)(pu16Words[i] >> 8);
+			stMsg.u16Buffer[8U + (i << 1)] = (UINT8)pu16Words[i];
+		}
+		Sci_Deal_WrRegs_0x10(&stMsg);
+	}
+
+	if (stMsg.AckType != RS485_ACK_POS)
+	{
+		return stMsg.ErrorType;
+	}
+
+	return 0U;
+}
+
+static UINT8 Sci_HostWriteProtectWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count)
+{
+	UINT16 group_words[SCI_HOST_PROTECT_GROUP_WORDS];
+	UINT16 offset;
+	UINT16 group_base;
+	UINT16 group_offset;
+	UINT16 chunk;
+	UINT16 i;
+	UINT8 error;
+
+	while (u16Count != 0U)
+	{
+		offset = (UINT16)(u16StartAddr - SCI_HOST_PROTECT_BASE);
+		group_base = (UINT16)(SCI_HOST_PROTECT_BASE + ((offset / SCI_HOST_PROTECT_GROUP_WORDS) * SCI_HOST_PROTECT_GROUP_WORDS));
+		group_offset = (UINT16)(offset % SCI_HOST_PROTECT_GROUP_WORDS);
+		chunk = (UINT16)(SCI_HOST_PROTECT_GROUP_WORDS - group_offset);
+		if (chunk > u16Count)
+		{
+			chunk = u16Count;
+		}
+
+		for (i = 0; i < SCI_HOST_PROTECT_GROUP_WORDS; ++i)
+		{
+			group_words[i] = *(&PRT_E2ROMParas.u16VcellOvp_First + (group_base - SCI_HOST_PROTECT_BASE) + i);
+		}
+		for (i = 0; i < chunk; ++i)
+		{
+			group_words[group_offset + i] = pu16Words[i];
+		}
+
+		error = Sci_HostWriteRawWords(group_base, group_words, SCI_HOST_PROTECT_GROUP_WORDS);
+		if (error != 0U)
+		{
+			return error;
+		}
+
+		u16StartAddr = (UINT16)(u16StartAddr + chunk);
+		pu16Words += chunk;
+		u16Count = (UINT16)(u16Count - chunk);
+	}
+
+	return 0U;
+}
+
+UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count)
+{
+	UINT32 range_end;
+
+	if ((pu16Words == 0) ||
+		(u16Count == 0U) ||
+		(((UINT32)u16StartAddr + (UINT32)u16Count - 1U) > 0xFFFFU) ||
+		(u16Count > (UINT16)((RS485_MAX_BUFFER_SIZE - 9U) / 2U)))
+	{
+		return RS485_ERROR_DATA_INVALID;
+	}
+
+	if (Sci_IsAnyPortBusy() != 0U)
+	{
+		return RS485_ERROR_CMD_INVALID;
+	}
+
+	range_end = (UINT32)u16StartAddr + (UINT32)u16Count;
+	if (((UINT32)u16StartAddr < (UINT32)SCI_HOST_PROTECT_END) &&
+		(range_end > (UINT32)SCI_HOST_PROTECT_BASE))
+	{
+		if (((UINT32)u16StartAddr < (UINT32)SCI_HOST_PROTECT_BASE) ||
+			(range_end > (UINT32)SCI_HOST_PROTECT_END))
+		{
+			return RS485_ERROR_DATA_INVALID;
+		}
+		return Sci_HostWriteProtectWords(u16StartAddr, pu16Words, u16Count);
+	}
+
+	return Sci_HostWriteRawWords(u16StartAddr, pu16Words, u16Count);
+}
+
 #if (defined _COMMOM_UPPER_SCI1)
 void Sci1_CommonUpper_FaultChk(void)
 {
@@ -2726,7 +2924,7 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (u16WrRegNum == 1)
 	{
-		if (FLASH_COMPLETE != FlashWriteOneHalfWord(FLASH_ADDR_UPDATE_FLAG, FLASH_TO_IAP_VALUE))
+		if (AppUpgrade_RequestIap() == 0U)
 		{
 			// System_ERROR_UserCallback(ERROR_FLASH);
 			s->AckType = RS485_ACK_NEG;

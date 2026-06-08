@@ -1,8 +1,18 @@
 #include "main.h"
 
-typedef void (*pFunction)(void);
-pFunction Jump_To_Application;
-uint32_t JumpAddress;
+#define APP_UPGRADE_MAILBOX_ADDR    ((UINT32)0x20004FE0)
+#define APP_UPGRADE_MAILBOX_MAGIC   ((UINT32)0x49415031)
+#define APP_UPGRADE_MAILBOX_REQUEST ((UINT32)0x5AA55AA5)
+
+typedef struct
+{
+	UINT32 magic;
+	UINT32 magic_inv;
+	UINT32 request;
+	UINT32 request_inv;
+	UINT32 crc;
+	UINT32 reserved[3];
+} APP_UPGRADE_MAILBOX;
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 {
@@ -26,6 +36,45 @@ UINT16 FlashReadOneHalfWord(UINT32 faddr)
 	return *(vu16 *)faddr;
 }
 
+static volatile APP_UPGRADE_MAILBOX *AppUpgrade_Mailbox(void)
+{
+	return (volatile APP_UPGRADE_MAILBOX *)APP_UPGRADE_MAILBOX_ADDR;
+}
+
+static UINT32 AppUpgrade_MailboxCrc(UINT32 magic, UINT32 request)
+{
+	return magic ^ request ^ 0xA5A55A5A;
+}
+
+static UINT8 AppUpgrade_IsIapRequested(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox = AppUpgrade_Mailbox();
+
+	if ((mailbox->magic != APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->magic_inv != (UINT32)~APP_UPGRADE_MAILBOX_MAGIC) ||
+		(mailbox->request != APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->request_inv != (UINT32)~APP_UPGRADE_MAILBOX_REQUEST) ||
+		(mailbox->crc != AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST)))
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+UINT8 AppUpgrade_RequestIap(void)
+{
+	volatile APP_UPGRADE_MAILBOX *mailbox = AppUpgrade_Mailbox();
+
+	mailbox->magic = APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->magic_inv = (UINT32)~APP_UPGRADE_MAILBOX_MAGIC;
+	mailbox->request = APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->request_inv = (UINT32)~APP_UPGRADE_MAILBOX_REQUEST;
+	mailbox->crc = AppUpgrade_MailboxCrc(APP_UPGRADE_MAILBOX_MAGIC, APP_UPGRADE_MAILBOX_REQUEST);
+
+	return AppUpgrade_IsIapRequested();
+}
+
 void FlashTest(void)
 {
 	/*
@@ -47,6 +96,10 @@ void App_FlashUpdate(void)
 		SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
 		__delay_ms(10);
 		u8FlashUpdateFlag = 0;
+		if (AppUpgrade_RequestIap() == 0U)
+		{
+			return;
+		}
 		__disable_fault_irq();
 		MCU_RESET(); // reset避免了一切中断初始化问题
 	}
@@ -55,18 +108,21 @@ void App_FlashUpdate(void)
 
 void APP_To_IAP_Jump(void)
 {
-	if (((*(__IO uint32_t *)FLASH_ADDR_IAP_START) & 0x2FFE0000) == 0x20000000)
-	{ // 判断APP区是否有代码
-
-		JumpAddress = *(__IO uint32_t *)(FLASH_ADDR_IAP_START + 4); // Jump to user application
-		Jump_To_Application = (pFunction)JumpAddress;
-		__set_MSP(*(__IO uint32_t *)FLASH_ADDR_IAP_START); // Initialize user application's Stack Pointer
-		Jump_To_Application();							   // Jump to application
+	if (AppUpgrade_RequestIap() != 0U)
+	{
+		__disable_fault_irq();
+		MCU_RESET();
 	}
 }
 
 void InitAreaSelect(void)
 {
+	if (AppUpgrade_IsIapRequested() != 0U)
+	{
+		__disable_fault_irq();
+		MCU_RESET();
+	}
+
 	if (FlashReadOneHalfWord(FLASH_ADDR_UPDATE_FLAG) == FLASH_TO_IAP_VALUE)
 	{
 		APP_To_IAP_Jump(); // 跳回去不能开各种中断或者初始化，也即下面的初始化不能放上来
