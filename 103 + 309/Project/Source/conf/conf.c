@@ -12,7 +12,7 @@ Time_T sys_time = {
                                RCC_APB2Periph_GPIOD | \
                                RCC_APB2Periph_GPIOE)
 #define CONF_APB2_IO_CLOCKS (RCC_APB2Periph_AFIO | CONF_APB2_GPIO_CLOCKS)
-#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO | \
+#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO |  \
                                  RCC_APB2Periph_GPIOA | \
                                  RCC_APB2Periph_GPIOB | \
                                  RCC_APB2Periph_GPIOC)
@@ -219,7 +219,31 @@ void InitWakeUp_Base(void)
 
 void InitWakeUp_NormalMode(void)
 {
-    InitWakeUp_Base();
+    RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
+
+    jtag_disableAndConfIO();
+    Conf_InitWakeupInputExti(GPIO_CHG_IN,
+                             PIN_CHG_IN,
+                             GPIO_PortSourceGPIOA,
+                             GPIO_PinSource0,
+                             EXTI_Line0,
+                             EXTI_Trigger_Falling,
+                             EXTI0_IRQn);
+    Conf_InitWakeupInputExti(GPIO_SOC_KEY,
+                             PIN_SOC_KEY,
+                             SOC_KEY_EXTI_PORT_SOURCE,
+                             SOC_KEY_EXTI_PIN_SOURCE,
+                             SOC_KEY_EXTI_LINE,
+                             EXTI_Trigger_Falling,
+                             SOC_KEY_EXTI_IRQn);
+    Conf_InitWakeupInputExti(GPIO_MAIN_SW,
+                             PIN_MAIN_SW,
+                             MAIN_SW_EXTI_PORT_SOURCE,
+                             MAIN_SW_EXTI_PIN_SOURCE,
+                             MAIN_SW_EXTI_LINE,
+                            //  EXTI_Trigger_Falling,
+                             EXTI_Trigger_Rising_Falling,
+                             MAIN_SW_EXTI_IRQn);
 
 #ifdef UART1_WAKEUP_ENABLE
     Conf_InitWakeupInputExti(GPIO_SCI1_RX,
@@ -354,7 +378,7 @@ void InitRunAfterStopWakeup(void)
     initAFE1_IIC();
 }
 
-//todo ????????
+// todo ????????
 void Init(void)
 {
     if (RTC_IsStopWakeup() != 0U)
