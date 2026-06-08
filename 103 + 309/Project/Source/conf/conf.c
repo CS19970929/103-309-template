@@ -214,7 +214,7 @@ void InitWakeUp_Base(void)
                              MAIN_SW_EXTI_LINE,
                              EXTI_Trigger_Falling,
                              MAIN_SW_EXTI_IRQn);
-    Conf_InitD009SwitchInputs();
+    // Conf_InitD009SwitchInputs();
 }
 
 void InitWakeUp_NormalMode(void)

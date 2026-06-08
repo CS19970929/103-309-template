@@ -1641,3 +1641,6 @@ abe8f8d6c0b0e3a8b87c0cd54347b772aba6a32b这个commit加入DBG_Init()后，和上
 看一下当前pc网络是怎样的，感觉很奇怪，我明明没开代理，或者说每个代理软件都显示节点有问题，但实际其他pc、手机使用都正常，当前pc显示节点有问题，但有时候能科学上网，有时候又不行
 
 每次修改共同逻辑时，需要同步修改T3-27Ah-production-release和d009-production-code两个分支
+
+
+can上位机mos温度没有显示
