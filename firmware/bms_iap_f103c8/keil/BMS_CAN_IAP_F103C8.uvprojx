@@ -439,6 +439,11 @@
               <FilePath>..\..\..\103 + 309\Project\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_gpio.c</FilePath>
             </File>
             <File>
+              <FileName>stm32f10x_iwdg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\103 + 309\Project\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_iwdg.c</FilePath>
+            </File>
+            <File>
               <FileName>stm32f10x_rcc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\103 + 309\Project\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_rcc.c</FilePath>

@@ -47,6 +47,7 @@ ACK 中的第 3 字节是 IAP 当前状态，不是错误码。典型状态值�
 - BMS IAP 只有收到 `COMMIT` 且块 CRC 正确后，才擦写或写入 Flash。
 - 每个块写入后必须回读校验。
 - 整包 `END` 后再做总 CRC 和 App 向量校验。
+- IAP 只在 `START` 后启用 IWDG。升级前有效 App 不受 IAP 看门狗影响；升级中若异常卡死，复位后继续停留在 IAP。
 
 ## App 有效性检查
 

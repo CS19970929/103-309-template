@@ -32,6 +32,8 @@ IAP 在 `START` 时擦除 App 首页使旧 App 立即失效；首个 App 页缓�
 
 源码同时保留旧串口 IAP 解析作为兜底路径，默认 USART1 重映射 `PB6/TX`、`PB7/RX`，`115200 8N1`。
 
+IAP 只在收到 `START` 或旧串口连接、准备擦除 App 首页后启用 IWDG。正常上电且 App 向量有效时，IAP 会直接跳 App，不启动 IWDG；升级过程中若异常卡死，IWDG 复位后因 App 首页已失效会继续停留在 IAP。
+
 ## Keil 工程
 
 工程文件：`firmware/bms_iap_f103c8/keil/BMS_CAN_IAP_F103C8.uvprojx`

@@ -4,6 +4,7 @@
 #include "stm32f10x_can.h"
 #include "stm32f10x_flash.h"
 #include "stm32f10x_gpio.h"
+#include "stm32f10x_iwdg.h"
 #include "stm32f10x_rcc.h"
 #include "stm32f10x_usart.h"
 #include "misc.h"
@@ -22,6 +23,8 @@
 #define IAP_CAN_PRESCALER_250K           4u
 #define IAP_CAN_RX_TIMEOUT_MS            5000u
 #define IAP_RESET_DELAY_MS               20u
+#define IAP_IWDG_LSI_TIMEOUT_LOOPS       50000u
+#define IAP_IWDG_RELOAD                  0x0FFFu
 
 #if (CT_COMM_UART_PORT == CT_COMM_UART_PORT_USART1)
 #define IAP_SERIAL_USART                 USART1
@@ -126,6 +129,7 @@ static volatile uint8_t s_serial_irq_tx[IAP_SERIAL_IRQ_TX_SIZE];
 static volatile uint16_t s_serial_tx_head;
 static volatile uint16_t s_serial_tx_tail;
 static uint8_t s_reset_pending;
+static uint8_t s_iwdg_started;
 static uint32_t s_reset_time_ms;
 
 static uint16_t rd_be16(const uint8_t *data)
@@ -253,19 +257,77 @@ static void schedule_reset(void)
     s_reset_time_ms = s_tick_ms + IAP_RESET_DELAY_MS;
 }
 
+static void iap_watchdog_refresh(void)
+{
+    if (s_iwdg_started != 0u)
+    {
+        IWDG_ReloadCounter();
+    }
+}
+
+static void iap_watchdog_start_after_upgrade_begin(void)
+{
+    uint32_t wait;
+
+    if (s_iwdg_started != 0u)
+    {
+        IWDG_ReloadCounter();
+        return;
+    }
+
+    RCC_LSICmd(ENABLE);
+    wait = IAP_IWDG_LSI_TIMEOUT_LOOPS;
+    while ((RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET) && (wait != 0u))
+    {
+        wait--;
+    }
+    if (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
+    {
+        return;
+    }
+
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+    IWDG_SetPrescaler(IWDG_Prescaler_256);
+    IWDG_SetReload(IAP_IWDG_RELOAD);
+
+    wait = IAP_IWDG_LSI_TIMEOUT_LOOPS;
+    while (((IWDG_GetFlagStatus(IWDG_FLAG_PVU) != RESET) ||
+            (IWDG_GetFlagStatus(IWDG_FLAG_RVU) != RESET)) &&
+           (wait != 0u))
+    {
+        wait--;
+    }
+    if (wait == 0u)
+    {
+        return;
+    }
+
+    IWDG_ReloadCounter();
+    IWDG_Enable();
+    s_iwdg_started = 1u;
+}
+
 static uint8_t flash_erase_page(uint32_t addr)
 {
+    iap_watchdog_refresh();
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-    return (FLASH_ErasePage(addr) == FLASH_COMPLETE) ? 1u : 0u;
+    if (FLASH_ErasePage(addr) != FLASH_COMPLETE)
+    {
+        return 0u;
+    }
+    iap_watchdog_refresh();
+    return 1u;
 }
 
 static uint8_t flash_program_halfword(uint32_t addr, uint16_t value)
 {
+    iap_watchdog_refresh();
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
     if (FLASH_ProgramHalfWord(addr, value) != FLASH_COMPLETE)
     {
         return 0u;
     }
+    iap_watchdog_refresh();
     return (*(__IO uint16_t *)addr == value) ? 1u : 0u;
 }
 
@@ -335,6 +397,7 @@ static uint8_t iap_flash_begin(uint8_t owner)
     memset(s_flash.page_erased, 0, sizeof(s_flash.page_erased));
     memset(s_flash.first_page, 0xFF, sizeof(s_flash.first_page));
 
+    iap_watchdog_start_after_upgrade_begin();
     FLASH_Unlock();
     if (flash_erase_page(CT_SELF_APP_BASE) == 0u)
     {
@@ -602,6 +665,7 @@ static void serial_delay_ms(uint32_t delay_ms)
 
     while ((uint32_t)(s_tick_ms - start) < delay_ms)
     {
+        iap_watchdog_refresh();
     }
 }
 
@@ -1438,6 +1502,8 @@ static void iap_task_1ms(void)
         s_reset_pending = 0u;
         NVIC_SystemReset();
     }
+
+    iap_watchdog_refresh();
 }
 
 static void iap_init(void)
