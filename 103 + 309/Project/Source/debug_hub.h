@@ -1,6 +1,7 @@
 #ifndef DEBUG_HUB_H
 #define DEBUG_HUB_H
 
+#include "Project_BuildGuard.h"
 #include <stdint.h>
 
 #define DBG_HUB_MAGIC          ((uint32_t)0x44424748U)
@@ -531,6 +532,8 @@ typedef struct DBG_HubTag {
 	DBG_HubFault_t fault;
 } DBG_Hub_t;
 
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+
 extern volatile DBG_Hub_t g_dbg;
 
 void DBG_Init(void);
@@ -555,5 +558,31 @@ void DBG_RecordCanTxFrame(uint32_t id, uint8_t ide, uint8_t rtr, uint8_t dlc, co
 void DBG_RecordAdcSample(void);
 void DBG_RecordIwdgFeed(uint8_t source);
 void DBG_RecordI2c1Status(uint16_t sr1, uint16_t sr2, uint8_t state, uint8_t event);
+
+#else
+
+#define DBG_Init()                                      do{}while(0)
+#define DBG_Task()                                      do{}while(0)
+#define DBG_CaptureMcuFast()                            do{}while(0)
+#define DBG_CaptureMcuSlow()                            do{}while(0)
+#define DBG_CaptureMcuAll()                             do{}while(0)
+#define DBG_CaptureClock()                              do{}while(0)
+#define DBG_CaptureRcc()                                do{}while(0)
+#define DBG_CaptureGpio()                               do{}while(0)
+#define DBG_CaptureNvic()                               do{}while(0)
+#define DBG_CaptureExti()                               do{}while(0)
+#define DBG_CaptureRtcBkp()                             do{}while(0)
+#define DBG_ClearCounters()                             do{}while(0)
+#define DBG_RecordUsartRx(port)                         do{}while(0)
+#define DBG_RecordUsartTx(port)                         do{}while(0)
+#define DBG_RecordUsartIdle(port)                       do{}while(0)
+#define DBG_RecordUsartError(port, sr)                  do{}while(0)
+#define DBG_RecordCanRxFrame(id, ide, rtr, dlc, data)   do{}while(0)
+#define DBG_RecordCanTxFrame(id, ide, rtr, dlc, data)   do{}while(0)
+#define DBG_RecordAdcSample()                           do{}while(0)
+#define DBG_RecordIwdgFeed(source)                      do{}while(0)
+#define DBG_RecordI2c1Status(sr1, sr2, state, event)    do{}while(0)
+
+#endif
 
 #endif /* DEBUG_HUB_H */

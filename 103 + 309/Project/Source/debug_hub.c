@@ -1,5 +1,7 @@
 #include "debug_hub.h"
 
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
+
 #include "main.h"
 #include "FactoryAging.h"
 #include "FaultSnapshot.h"
@@ -1053,7 +1055,7 @@ void DBG_Init(void)
 	g_dbg.ctrl.magic = DBG_HUB_MAGIC;
 	g_dbg.ctrl.version = DBG_HUB_VERSION;
 	g_dbg.ctrl.size = (uint16_t)sizeof(g_dbg);
-	g_dbg.ctrl.enable = 1U;
+	g_dbg.ctrl.enable = (uint8_t)PROJECT_CFG_DEBUG_HUB_AUTORUN_ENABLE;
 	g_dbg.ctrl.fast_period_10ms = 1U;
 	g_dbg.ctrl.slow_period_10ms = 100U;
 	g_dbg.ctrl.init_count = 1U;
@@ -1061,7 +1063,10 @@ void DBG_Init(void)
 	g_dbg.mcu.iwdg.last_feed_tick_10ms = last_feed_tick;
 	g_dbg.mcu.iwdg.max_feed_gap_10ms = max_feed_gap;
 	g_dbg.mcu.iwdg.last_feed_source = last_feed_source;
-	DBG_CaptureMcuAll();
+	if (g_dbg.ctrl.enable != 0U)
+	{
+		DBG_CaptureMcuAll();
+	}
 }
 
 void DBG_Task(void)
@@ -1107,3 +1112,5 @@ void DBG_Task(void)
 		dbg_capture_business();
 	}
 }
+
+#endif
