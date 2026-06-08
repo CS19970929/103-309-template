@@ -6,315 +6,79 @@ from __future__ import annotations
 import argparse
 import math
 import struct
-import sys
 import time
 import zlib
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
+from can_tool.app_can import (
+    APP_SET_ONCE_SOC_ADDR,
+    CAN_APP_AGING_ACTION_RESET_TIME as APP_AGING_ACTION_RESET_TIME,
+    CAN_APP_AGING_ACTION_START as APP_AGING_ACTION_START,
+    CAN_APP_AGING_ACTION_STOP as APP_AGING_ACTION_STOP,
+)
+from can_tool.comm_serial import (
+    CMD_BMS_AGING_CTRL,
+    CMD_BMS_AGING_SET_HOURS,
+    CMD_BMS_AGING_STATUS,
+    CMD_BMS_READ,
+    CMD_BMS_WRITE,
+    CMD_CAN_DIAG,
+    CMD_DEBUG_LOG,
+    CMD_ENTER_IAP,
+    CMD_FW_BEGIN,
+    CMD_FW_DATA,
+    CMD_FW_END,
+    CMD_FW_INFO,
+    CMD_GET_INFO,
+    CMD_RAW_CAN_TX,
+    CMD_SET_CAN,
+    CMD_UPGRADE,
+    CMD_UPGRADE_ABORT,
+    CMD_UPGRADE_STATUS,
+    DEBUG_LOG_EVENTS,
+    DEBUG_LOG_MODULES,
+    FLAG_ACK,
+    FW_DATA_DEFAULT_CHUNK,
+    FW_DATA_MAX_CHUNK,
+    HEADER_SIZE,
+    HEADER_STRUCT,
+    MAGIC,
+    MAX_PAYLOAD,
+    STATUS_TEXT,
+    VERSION,
+    CommToolClient,
+    Frame,
+    encode_frame,
+    read_frame,
+    require_pyserial,
+)
+from can_tool.crc import crc16_modbus
+from can_tool.firmware_image import (
+    APP_BASE_ADDR,
+    APP_FLASH_LIMIT,
+    BMS_APP_BASE_ADDR,
+    BMS_APP_FLASH_LIMIT,
+    BMS_SRAM_LIMIT,
+    COMM_TOOL_APP_BASE_ADDR,
+    COMM_TOOL_APP_FLASH_LIMIT,
+    IAP_BASE_ADDR,
+    SRAM_BASE,
+    SRAM_LIMIT,
+    image_limit,
+    image_sram_limit,
+    iter_chunks,
+    load_image,
+    print_image_plan,
+    vector_summary,
+)
+from can_tool.formatting import (
+    aging_state_name,
+    decode_can_esr,
+    format_hex,
+    format_remaining_minutes,
+)
 
-MAGIC = 0xAA55
-VERSION = 1
-FLAG_ACK = 0x01
-MAX_PAYLOAD = 512
-FW_DATA_MAX_CHUNK = MAX_PAYLOAD - 4
-FW_DATA_DEFAULT_CHUNK = 496
-
-BMS_APP_BASE_ADDR = 0x08004800
-COMM_TOOL_APP_BASE_ADDR = 0x08008000
-APP_BASE_ADDR = BMS_APP_BASE_ADDR
-IAP_BASE_ADDR = 0x08000000
-BMS_APP_FLASH_LIMIT = 0x0801F800
-COMM_TOOL_APP_FLASH_LIMIT = 0x08018000
-APP_FLASH_LIMIT = BMS_APP_FLASH_LIMIT
-SRAM_BASE = 0x20000000
-SRAM_LIMIT = 0x20010000
-BMS_SRAM_LIMIT = 0x20004FE0
-
-CMD_GET_INFO = 0x01
-CMD_SET_CAN = 0x02
-CMD_BMS_READ = 0x10
-CMD_BMS_WRITE = 0x11
-CMD_BMS_AGING_CTRL = 0x12
-CMD_BMS_AGING_STATUS = 0x13
-CMD_BMS_AGING_SET_HOURS = 0x14
-CMD_FW_BEGIN = 0x20
-CMD_FW_DATA = 0x21
-CMD_FW_END = 0x22
-CMD_FW_INFO = 0x23
-CMD_ENTER_IAP = 0x30
-CMD_UPGRADE = 0x31
-CMD_UPGRADE_STATUS = 0x32
-CMD_UPGRADE_ABORT = 0x33
-CMD_RAW_CAN_TX = 0x40
-CMD_CAN_DIAG = 0x41
-CMD_DEBUG_LOG = 0x42
-
-APP_SET_ONCE_SOC_ADDR = 0x1005
-APP_AGING_ACTION_START = 0x51
-APP_AGING_ACTION_STOP = 0x50
-APP_AGING_ACTION_RESET_TIME = 0x5A
-
-STATUS_TEXT = {
-    0x00: "OK",
-    0x01: "CRC_ERROR",
-    0x02: "UNSUPPORTED",
-    0x03: "BAD_PARAM",
-    0x04: "BAD_STATE",
-    0x05: "FLASH_ERROR",
-    0x06: "CAN_TIMEOUT",
-    0x07: "BMS_ERROR(板端拒绝/地址无效/参数越界/写权限关闭)",
-}
-
-DEBUG_LOG_MODULES = {
-    1: "APP",
-    2: "UART",
-    3: "CAN",
-    4: "FLASH",
-    5: "UPGRADE",
-    6: "PROTOCOL",
-}
-
-DEBUG_LOG_EVENTS = {
-    1: "BOOT",
-    2: "CMD_RX",
-    3: "CMD_TX",
-    4: "BAD_FRAME",
-    5: "CAN_SET",
-    6: "CAN_TX_FAIL",
-    7: "CAN_TX_TIMEOUT",
-    8: "FW_BEGIN",
-    9: "FW_END",
-    10: "UPGRADE_START",
-    11: "UPGRADE_PHASE",
-    12: "UPGRADE_ERROR",
-    13: "UPGRADE_ABORT",
-}
-
-HEADER_STRUCT = struct.Struct("<HBBHBBH")
-HEADER_SIZE = HEADER_STRUCT.size
-
-
-@dataclass
-class Frame:
-    version: int
-    flags: int
-    seq: int
-    cmd: int
-    status: int
-    payload: bytes
-
-
-def crc16_modbus(data: bytes) -> int:
-    crc = 0xFFFF
-    for value in data:
-        crc ^= value
-        for _ in range(8):
-            if crc & 0x0001:
-                crc = (crc >> 1) ^ 0xA001
-            else:
-                crc >>= 1
-    return crc & 0xFFFF
-
-
-def require_pyserial():
-    try:
-        import serial  # type: ignore
-    except ImportError as exc:
-        raise SystemExit(
-            "当前 Python 环境缺少 pyserial。\n"
-            "请执行: py -3.9 -m pip install pyserial\n"
-            f"当前解释器: {sys.executable}"
-        ) from exc
-    return serial
-
-
-def encode_frame(seq: int, cmd: int, payload: bytes = b"", *, status: int = 0, flags: int = 0) -> bytes:
-    if len(payload) > MAX_PAYLOAD:
-        raise ValueError(f"payload too large: {len(payload)} > {MAX_PAYLOAD}")
-    header = HEADER_STRUCT.pack(MAGIC, VERSION, flags & 0xFF, seq & 0xFFFF, cmd & 0xFF, status & 0xFF, len(payload))
-    body = header + payload
-    return body + struct.pack("<H", crc16_modbus(body))
-
-
-def read_frame(ser, timeout: float) -> Frame:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        first = ser.read(1)
-        if first != b"\x55":
-            continue
-        second = ser.read(1)
-        if second != b"\xAA":
-            continue
-        rest = ser.read(HEADER_SIZE - 2)
-        if len(rest) != HEADER_SIZE - 2:
-            break
-        header = b"\x55\xAA" + rest
-        magic, version, flags, seq, cmd, status, length = HEADER_STRUCT.unpack(header)
-        if magic != MAGIC:
-            continue
-        if version != VERSION:
-            raise RuntimeError(f"协议版本不匹配: device={version} host={VERSION}")
-        if length > MAX_PAYLOAD:
-            raise RuntimeError(f"payload 长度异常: {length}")
-        payload_crc = ser.read(length + 2)
-        if len(payload_crc) != length + 2:
-            break
-        payload = payload_crc[:length]
-        expect_crc = struct.unpack("<H", payload_crc[length:])[0]
-        actual_crc = crc16_modbus(header + payload)
-        if expect_crc != actual_crc:
-            raise RuntimeError(f"响应 CRC 错误: expect=0x{expect_crc:04X} actual=0x{actual_crc:04X}")
-        return Frame(version, flags, seq, cmd, status, payload)
-    raise TimeoutError("等待 comm tool 响应超时")
-
-
-class CommToolClient:
-    def __init__(self, port: str, baud: int, timeout: float):
-        serial = require_pyserial()
-        self._ser = serial.Serial(port=port, baudrate=baud, timeout=0.05, write_timeout=timeout)
-        self._timeout = timeout
-        self._seq = 0
-
-    def close(self) -> None:
-        self._ser.close()
-
-    def command(self, cmd: int, payload: bytes = b"", timeout: Optional[float] = None) -> Frame:
-        self._seq = (self._seq + 1) & 0xFFFF
-        if self._seq == 0:
-            self._seq = 1
-        frame = encode_frame(self._seq, cmd, payload)
-        self._ser.write(frame)
-        self._ser.flush()
-
-        deadline = time.monotonic() + (timeout if timeout is not None else self._timeout)
-        while time.monotonic() < deadline:
-            resp = read_frame(self._ser, max(0.05, deadline - time.monotonic()))
-            if resp.seq != self._seq:
-                continue
-            if resp.cmd != cmd:
-                continue
-            if (resp.flags & FLAG_ACK) == 0:
-                continue
-            if resp.status != 0:
-                status_name = STATUS_TEXT.get(resp.status, f"0x{resp.status:02X}")
-                raise RuntimeError(f"comm tool 返回错误: {status_name}")
-            return resp
-        raise TimeoutError(f"等待命令 0x{cmd:02X} 响应超时")
-
-    def __enter__(self) -> "CommToolClient":
-        return self
-
-    def __exit__(self, _exc_type, _exc, _tb) -> None:
-        self.close()
-
-
-def format_hex(data: bytes) -> str:
-    return " ".join(f"{value:02X}" for value in data)
-
-
-def decode_can_esr(esr: int) -> str:
-    lec_text = {
-        0: "none",
-        1: "stuff",
-        2: "form",
-        3: "ack",
-        4: "bit-recessive",
-        5: "bit-dominant",
-        6: "crc",
-        7: "software",
-    }
-    lec = (esr >> 4) & 0x07
-    tec = (esr >> 16) & 0xFF
-    rec = (esr >> 24) & 0xFF
-    flags = []
-    if esr & 0x01:
-        flags.append("EWGF")
-    if esr & 0x02:
-        flags.append("EPVF")
-    if esr & 0x04:
-        flags.append("BOFF")
-    flag_text = ",".join(flags) if flags else "none"
-    return f"TEC={tec} REC={rec} LEC={lec_text.get(lec, str(lec))} flags={flag_text}"
-
-
-def load_image(path: Path, app_address: int) -> bytes:
-    if app_address == IAP_BASE_ADDR:
-        raise SystemExit("拒绝 App 地址 0x08000000，该地址是 IAP/Bootloader 起始地址。")
-    limit = image_limit(app_address)
-    if limit is None:
-        raise SystemExit(
-            f"App 地址只允许 BMS 0x{BMS_APP_BASE_ADDR:08X} 或 comm tool 0x{COMM_TOOL_APP_BASE_ADDR:08X}，"
-            f"实际为 0x{app_address:08X}。"
-        )
-    if not path.exists():
-        raise SystemExit(f"找不到 bin 文件: {path}")
-    image = path.read_bytes()
-    if len(image) < 8:
-        raise SystemExit(f"bin 文件太小，缺少向量表: {path}")
-    if app_address + len(image) > limit:
-        raise SystemExit(
-            f"bin 超出 App 区: end=0x{app_address + len(image):08X}, limit=0x{limit:08X}"
-        )
-    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image, app_address)
-    reset_entry = reset & ~1
-    if (not msp_ok) or (not reset_thumb_ok) or (reset_entry < app_address) or (reset_entry >= (app_address + len(image))):
-        raise SystemExit(
-            f"App 向量表非法: MSP=0x{msp:08X}, Reset=0x{reset:08X}, "
-            f"镜像区=0x{app_address:08X}..0x{app_address + len(image):08X}"
-        )
-    return image
-
-
-def image_limit(app_address: int) -> Optional[int]:
-    if app_address == BMS_APP_BASE_ADDR:
-        return BMS_APP_FLASH_LIMIT
-    if app_address == COMM_TOOL_APP_BASE_ADDR:
-        return COMM_TOOL_APP_FLASH_LIMIT
-    return None
-
-
-def image_sram_limit(app_address: int) -> int:
-    if app_address == BMS_APP_BASE_ADDR:
-        return BMS_SRAM_LIMIT
-    return SRAM_LIMIT
-
-
-def vector_summary(image: bytes, app_address: int = APP_BASE_ADDR) -> tuple[int, int, bool, bool]:
-    if len(image) < 8:
-        return 0, 0, False, False
-    msp, reset = struct.unpack_from("<II", image, 0)
-    msp_ok = SRAM_BASE <= msp < image_sram_limit(app_address)
-    reset_ok = (reset & 1) == 1
-    return msp, reset, msp_ok, reset_ok
-
-
-def print_image_plan(path: Path, image: bytes, app_address: int, chunk_size: int) -> None:
-    if chunk_size <= 0 or chunk_size > FW_DATA_MAX_CHUNK:
-        raise ValueError(f"chunk-size 必须在 1..{FW_DATA_MAX_CHUNK} 之间")
-    crc16 = crc16_modbus(image)
-    crc32 = zlib.crc32(image) & 0xFFFFFFFF
-    limit = image_limit(app_address)
-    msp, reset, msp_ok, reset_thumb_ok = vector_summary(image, app_address)
-    reset_entry = reset & ~1
-    reset_ok = reset_thumb_ok and (limit is not None) and (app_address <= reset_entry < (app_address + len(image)))
-    chunks = math.ceil(len(image) / chunk_size)
-    print("comm tool 固件下载 dry-run")
-    print(f"  bin: {path}")
-    print(f"  App 地址: 0x{app_address:08X}")
-    print(f"  大小: {len(image)} bytes")
-    print(f"  分块: {chunks} x {chunk_size} bytes")
-    print(f"  CRC16-Modbus: 0x{crc16:04X}")
-    print(f"  CRC32: 0x{crc32:08X}")
-    print(f"  初始 MSP: 0x{msp:08X} {'OK' if msp_ok else 'BAD'}")
-    print(f"  ResetHandler: 0x{reset:08X} {'OK' if reset_ok else 'BAD'}")
-    print("  结果: 仅检查文件和分块，未写入 comm tool。")
-
-
-def iter_chunks(image: bytes, chunk_size: int) -> Iterable[tuple[int, bytes]]:
-    for offset in range(0, len(image), chunk_size):
-        yield offset, image[offset : offset + chunk_size]
 
 
 def open_client(args) -> CommToolClient:
@@ -444,21 +208,6 @@ def cmd_bms_write_soc(args) -> int:
         client.command(CMD_BMS_WRITE, payload, timeout=args.long_timeout)
     print(f"已写入 BMS SOC={args.soc}%")
     return 0
-
-
-def aging_state_name(value: int) -> str:
-    return {
-        0: "停止",
-        1: "运行",
-        2: "完成",
-    }.get(value, f"未知({value})")
-
-
-def format_remaining_minutes(minutes: int) -> str:
-    hours, mins = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h{mins:02d}min"
-    return f"{mins}min"
 
 
 def cmd_bms_aging(args) -> int:

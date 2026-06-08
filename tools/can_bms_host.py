@@ -5,335 +5,82 @@ from __future__ import annotations
 
 import argparse
 import math
-import struct
 import sys
 import time
-import zlib
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
-
-APP_BASE_ADDR = 0x08004800
-APP_FLASH_LIMIT = 0x0801F800
-IAP_BASE_ADDR = 0x08000000
-SRAM_BASE = 0x20000000
-SRAM_LIMIT = 0x20004FE0
-
-FEIDAO_BROADCAST_BASE = 0x14F80200
-CAN_IAP_NODE_DEFAULT = 1
-CAN_IAP_HOST_CTRL_BASE = 0x14F8F000
-CAN_IAP_DEVICE_ACK_BASE = 0x14F8F100
-CAN_IAP_DATA_BASE = 0x14000000
-CAN_IAP_PROTOCOL_VERSION = 1
-
-CAN_APP_CMD_ID = 0x60
-CAN_APP_ACK_ID = 0x61
-CAN_APP_MAGIC = bytes([0xA5, 0x5A])
-CAN_APP_ACK_MAGIC = bytes([0x5A, 0xA5])
-CAN_APP_CMD_GET_STATUS = 0x01
-CAN_APP_CMD_ENTER_IAP = 0x02
-CAN_APP_CMD_READ_REG = 0x03
-CAN_APP_CMD_WRITE_PREP = 0x04
-CAN_APP_CMD_WRITE_COMMIT = 0x05
-CAN_APP_CMD_READ_BLOCK = 0x06
-CAN_APP_CMD_AGING_START = 0x07
-CAN_APP_CMD_AGING_STOP = 0x08
-CAN_APP_CMD_AGING_RESET_TIME = 0x09
-CAN_APP_CMD_AGING_SET_HOURS = 0x0A
-CAN_APP_CMD_READ_BLOCK_DATA = 0x86
-CAN_APP_READ_BLOCK_MAX_WORDS = 120
-CAN_APP_AGING_GUARD = 0xA9
-CAN_APP_AGING_ACTION_START = 0x51
-CAN_APP_AGING_ACTION_STOP = 0x50
-CAN_APP_AGING_ACTION_RESET_TIME = 0x5A
-APP_SET_ONCE_SOC_ADDR = 0x1005
-
-CMD_HELLO = 0x01
-CMD_START = 0x02
-CMD_COMMIT = 0x03
-CMD_END = 0x04
-CMD_ABORT = 0x05
-CMD_ACK = 0x79
-CMD_NACK = 0x1F
-
-
-def crc16_modbus(data: bytes) -> int:
-    crc = 0xFFFF
-    for value in data:
-        crc ^= value
-        for _ in range(8):
-            if crc & 0x0001:
-                crc = (crc >> 1) ^ 0xA001
-            else:
-                crc >>= 1
-    return crc & 0xFFFF
-
-
-def be_u16(data: bytes, offset: int) -> int:
-    return struct.unpack_from(">H", data, offset)[0]
-
-
-def be_u32(data: bytes, offset: int) -> int:
-    return struct.unpack_from(">I", data, offset)[0]
-
-
-def be_i32(data: bytes, offset: int) -> int:
-    return struct.unpack_from(">i", data, offset)[0]
-
-
-def signed_i8(value: int) -> int:
-    return value - 256 if value & 0x80 else value
-
-
-def aging_state_name(value: int) -> str:
-    return {
-        0: "停止",
-        1: "运行",
-        2: "完成",
-    }.get(value, f"未知({value})")
-
-
-def format_remaining_minutes(minutes: int) -> str:
-    hours, mins = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h{mins:02d}min"
-    return f"{mins}min"
-
-
-def require_python_can():
-    try:
-        import can  # type: ignore
-    except ImportError as exc:
-        raise SystemExit(
-            "缺少 python-can，先安装：py -3.9 -m pip install python-can\n"
-            f"当前解释器：{sys.executable}"
-        ) from exc
-    return can
-
-
-def open_bus(interface: str, channel: str, bitrate: int):
-    can = require_python_can()
-    try:
-        return can.Bus(interface=interface, channel=channel, bitrate=bitrate)
-    except TypeError:
-        return can.interface.Bus(bustype=interface, channel=channel, bitrate=bitrate)
-
-
-def make_message(arbitration_id: int, data: bytes, extended: bool = True):
-    can = require_python_can()
-    return can.Message(
-        arbitration_id=arbitration_id,
-        data=bytearray(data),
-        is_extended_id=extended,
-        is_remote_frame=False,
-    )
-
-
-def format_bytes(data: bytes) -> str:
-    return " ".join(f"{value:02X}" for value in data)
-
-
-def decode_feidao_broadcast(arbitration_id: int, data: bytes) -> Optional[str]:
-    if (arbitration_id & 0x1FFFFF00) != FEIDAO_BROADCAST_BASE:
-        return None
-
-    ch = arbitration_id & 0xFF
-    if ch == 0 and len(data) >= 8:
-        voltage_mv = be_u32(data, 0)
-        current_ma = be_i32(data, 4)
-        return f"总压={voltage_mv / 1000:.3f}V 电流={current_ma / 1000:.3f}A"
-    if ch == 1 and len(data) >= 8:
-        real_cap = be_u32(data, 0)
-        design_cap = be_u32(data, 4)
-        return f"实际容量raw={real_cap} 设计容量raw={design_cap}"
-    if ch == 2 and len(data) >= 8:
-        status = data[0]
-        soc = data[1]
-        temp_c = signed_i8(data[2])
-        charge_time = be_u16(data, 3)
-        bat_type = data[5]
-        return f"充电状态={status} SOC={soc}% 温度={temp_c}C 剩余充电时间={charge_time}min 类型={bat_type}"
-    if ch == 3 and len(data) >= 3:
-        soh = data[0]
-        cycles = be_u16(data, 1)
-        return f"SOH={soh}% 循环={cycles}"
-    if ch == 4 and len(data) >= 2:
-        return f"协议版本={data[0]} 软件版本={data[1]}"
-    if ch == 5 and len(data) >= 8:
-        work_status = data[0]
-        exception_status = data[1]
-        cap_full = be_u16(data, 2)
-        cap_now = be_u16(data, 4)
-        cap_design = be_u16(data, 6)
-        return (
-            f"工作状态=0x{work_status:02X} 异常=0x{exception_status:02X} "
-            f"满充容量raw={cap_full} 当前容量raw={cap_now} 设计容量raw={cap_design}"
-        )
-    if ch == 8 and len(data) >= 8:
-        factory_cap = be_u16(data, 0)
-        aging_state = data[2]
-        aging_remaining_min = be_u16(data, 3)
-        return (
-            f"出厂容量raw={factory_cap} "
-            f"老化={aging_state_name(aging_state)} 剩余={format_remaining_minutes(aging_remaining_min)} "
-            f"日期=20{data[5]:02d}-{data[6]:02d}-{data[7]:02d}"
-        )
-
-    return f"广播通道={ch} 原始={format_bytes(data)}"
-
-
-def iap_ctrl_id(node_id: int) -> int:
-    return CAN_IAP_HOST_CTRL_BASE | (node_id & 0xFF)
-
-
-def iap_ack_id(node_id: int) -> int:
-    return CAN_IAP_DEVICE_ACK_BASE | (node_id & 0xFF)
-
-
-def iap_data_id(node_id: int, seq: int) -> int:
-    return CAN_IAP_DATA_BASE | ((seq & 0xFFFF) << 8) | (node_id & 0xFF)
-
-
-def app_std_id(base_id: int, can_address: int) -> int:
-    return ((can_address & 0x0F) << 7) | (base_id & 0x7F)
-
-
-def build_app_command(cmd: int, arg0: int = 0, arg1: int = 0, arg2: int = 0) -> bytes:
-    payload = bytearray(8)
-    payload[0:2] = CAN_APP_MAGIC
-    payload[2] = cmd & 0xFF
-    payload[3] = arg0 & 0xFF
-    payload[4] = arg1 & 0xFF
-    payload[5] = arg2 & 0xFF
-    crc = crc16_modbus(bytes(payload[:6]))
-    payload[6] = (crc >> 8) & 0xFF
-    payload[7] = crc & 0xFF
-    return bytes(payload)
-
-
-def validate_app_ack(data: bytes) -> tuple[int, int, int, int]:
-    if len(data) != 8:
-        raise SystemExit(f"App ACK 长度错误: {len(data)}")
-    if data[0:2] != CAN_APP_ACK_MAGIC:
-        raise SystemExit(f"App ACK magic 错误: {format_bytes(data)}")
-    crc_expect = (data[6] << 8) | data[7]
-    crc_actual = crc16_modbus(data[:6])
-    if crc_expect != crc_actual:
-        raise SystemExit(f"App ACK CRC 错误: expect=0x{crc_expect:04X} actual=0x{crc_actual:04X}")
-    return data[2], data[3], data[4], data[5]
-
-
-def build_iap_control_frames(image: bytes, node_id: int) -> list[tuple[int, bytes, str]]:
-    image_size = len(image)
-    image_crc = crc16_modbus(image)
-    frame_count = math.ceil(image_size / 8)
-    return [
-        (
-            iap_ctrl_id(node_id),
-            bytes([CMD_HELLO, CAN_IAP_PROTOCOL_VERSION, node_id & 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]),
-            "HELLO",
-        ),
-        (
-            iap_ctrl_id(node_id),
-            bytes([CMD_START, CAN_IAP_PROTOCOL_VERSION])
-            + image_size.to_bytes(4, "big")
-            + image_crc.to_bytes(2, "big"),
-            "START",
-        ),
-        (
-            iap_ctrl_id(node_id),
-            bytes([CMD_END])
-            + frame_count.to_bytes(2, "big")
-            + image_crc.to_bytes(2, "big")
-            + bytes([0xFF, 0xFF, 0xFF]),
-            "END",
-        ),
-    ]
-
-
-def iter_iap_data_frames(image: bytes, node_id: int) -> Iterable[tuple[int, bytes, int]]:
-    frame_count = math.ceil(len(image) / 8)
-    for seq in range(frame_count):
-        chunk = image[seq * 8 : (seq + 1) * 8]
-        if len(chunk) < 8:
-            chunk = chunk + bytes([0xFF] * (8 - len(chunk)))
-        yield iap_data_id(node_id, seq), chunk, seq
-
-
-def iter_iap_blocks(
-    image: bytes, node_id: int, block_size: int = 256
-) -> Iterable[tuple[list[tuple[int, bytes, int]], tuple[int, bytes, int]]]:
-    seq = 0
-    block_seq = 0
-    for offset in range(0, len(image), block_size):
-        block = image[offset : offset + block_size]
-        data_frames: list[tuple[int, bytes, int]] = []
-        for inner in range(math.ceil(len(block) / 8)):
-            chunk = block[inner * 8 : (inner + 1) * 8]
-            if len(chunk) < 8:
-                chunk = chunk + bytes([0xFF] * (8 - len(chunk)))
-            data_frames.append((iap_data_id(node_id, seq), chunk, seq))
-            seq += 1
-
-        block_crc = crc16_modbus(block)
-        commit_payload = (
-            bytes([CMD_COMMIT])
-            + block_seq.to_bytes(2, "big")
-            + len(block).to_bytes(2, "big")
-            + block_crc.to_bytes(2, "big")
-            + bytes([0xFF])
-        )
-        yield data_frames, (iap_ctrl_id(node_id), commit_payload, block_seq)
-        block_seq += 1
+from can_tool.app_can import (
+    APP_SET_ONCE_SOC_ADDR,
+    CAN_APP_ACK_ID,
+    CAN_APP_ACK_MAGIC,
+    CAN_APP_AGING_ACTION_RESET_TIME,
+    CAN_APP_AGING_ACTION_START,
+    CAN_APP_AGING_ACTION_STOP,
+    CAN_APP_AGING_GUARD,
+    CAN_APP_CMD_AGING_RESET_TIME,
+    CAN_APP_CMD_AGING_SET_HOURS,
+    CAN_APP_CMD_AGING_START,
+    CAN_APP_CMD_AGING_STOP,
+    CAN_APP_CMD_ENTER_IAP,
+    CAN_APP_CMD_GET_STATUS,
+    CAN_APP_CMD_ID,
+    CAN_APP_CMD_READ_BLOCK,
+    CAN_APP_CMD_READ_BLOCK_DATA,
+    CAN_APP_CMD_READ_REG,
+    CAN_APP_CMD_WRITE_COMMIT,
+    CAN_APP_CMD_WRITE_PREP,
+    CAN_APP_READ_BLOCK_MAX_WORDS,
+    CAN_APP_MAGIC,
+    app_std_id,
+    build_app_command,
+    validate_app_ack,
+)
+from can_tool.can_iap import (
+    CAN_IAP_DATA_BASE,
+    CAN_IAP_DEVICE_ACK_BASE,
+    CAN_IAP_HOST_CTRL_BASE,
+    CAN_IAP_NODE_DEFAULT,
+    CAN_IAP_PROTOCOL_VERSION,
+    CMD_ACK,
+    CMD_ABORT,
+    CMD_COMMIT,
+    CMD_END,
+    CMD_HELLO,
+    CMD_NACK,
+    CMD_START,
+    build_iap_control_frames,
+    iap_ack_id,
+    iap_ctrl_id,
+    iap_data_id,
+    iter_iap_blocks,
+    iter_iap_data_frames,
+    print_upgrade_plan,
+)
+from can_tool.crc import crc16_modbus
+from can_tool.feidao_decode import FEIDAO_BROADCAST_BASE, decode_feidao_broadcast
+from can_tool.firmware_image import (
+    APP_BASE_ADDR,
+    APP_FLASH_LIMIT,
+    IAP_BASE_ADDR,
+    SRAM_BASE,
+    BMS_SRAM_LIMIT as SRAM_LIMIT,
+    load_image as _load_image,
+)
+from can_tool.formatting import (
+    aging_state_name,
+    be_i32,
+    be_u16,
+    be_u32,
+    format_bytes,
+    format_remaining_minutes,
+    signed_i8,
+)
+from can_tool.python_can_bus import make_message, open_bus, require_python_can
 
 
 def load_image(bin_path: Path, app_address: int) -> bytes:
-    if app_address == IAP_BASE_ADDR:
-        raise SystemExit("拒绝升级地址 0x08000000：该地址是 IAP/Bootloader 起始地址。")
-    if app_address != APP_BASE_ADDR:
-        raise SystemExit(f"拒绝升级地址 0x{app_address:08X}：当前项目 App 固定地址必须是 0x{APP_BASE_ADDR:08X}。")
-    if not bin_path.exists():
-        raise SystemExit(f"找不到 bin 文件：{bin_path}")
-    image = bin_path.read_bytes()
-    if not image:
-        raise SystemExit(f"bin 文件为空：{bin_path}")
-    if len(image) < 8:
-        raise SystemExit(f"bin 文件太小，缺少向量表：{bin_path}")
-    if app_address + len(image) > APP_FLASH_LIMIT:
-        raise SystemExit(
-            f"bin 超出 App 区: end=0x{app_address + len(image):08X}, limit=0x{APP_FLASH_LIMIT:08X}"
-        )
-    msp, reset = struct.unpack_from("<II", image, 0)
-    reset_entry = reset & ~1
-    if not (SRAM_BASE <= msp < SRAM_LIMIT):
-        raise SystemExit(f"App 初始 MSP 非法: 0x{msp:08X}, SRAM上限=0x{SRAM_LIMIT:08X}")
-    if ((reset & 1) == 0) or not (app_address <= reset_entry < (app_address + len(image))):
-        raise SystemExit(
-            f"App ResetHandler 非法: 0x{reset:08X}, 镜像区=0x{app_address:08X}..0x{app_address + len(image):08X}"
-        )
-    return image
-
-
-def print_upgrade_plan(bin_path: Path, image: bytes, node_id: int) -> None:
-    image_crc16 = crc16_modbus(image)
-    image_crc32 = zlib.crc32(image) & 0xFFFFFFFF
-    frame_count = math.ceil(len(image) / 8)
-    print("CAN-IAP 升级 dry-run")
-    print(f"  bin: {bin_path}")
-    print(f"  App 起始地址: 0x{APP_BASE_ADDR:08X}")
-    print(f"  App 区上限: 0x{APP_FLASH_LIMIT:08X}")
-    print(f"  镜像大小: {len(image)} bytes")
-    print(f"  数据帧数: {frame_count}")
-    print(f"  CRC16-Modbus: 0x{image_crc16:04X}")
-    print(f"  CRC32(参考): 0x{image_crc32:08X}")
-    print(f"  控制帧ID: 0x{iap_ctrl_id(node_id):08X}")
-    print(f"  应答帧ID: 0x{iap_ack_id(node_id):08X}")
-    if frame_count:
-        first_id, first_data, _ = next(iter_iap_data_frames(image, node_id))
-        last_id, last_data, _ = list(iter_iap_data_frames(image, node_id))[-1]
-        print(f"  首个数据帧: id=0x{first_id:08X} data={format_bytes(first_data)}")
-        print(f"  末个数据帧: id=0x{last_id:08X} data={format_bytes(last_data)}")
-    print("  结果: 仅分包检查，未发送 CAN 帧，未擦写 Flash。")
+    return _load_image(bin_path, app_address, allow_comm_tool=False)
 
 
 def cmd_detect(_args: argparse.Namespace) -> int:
