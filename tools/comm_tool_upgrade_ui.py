@@ -74,6 +74,11 @@ LOG_MAX_INTERVAL_SECONDS = 3600.0
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
 BMS_LIVE_WORDS = 88
+BMS_TEMP_WORD_OFFSET = 38
+BMS_TEMP_WORD_COUNT = 10
+BMS_TEMP1_INDEX = 0
+BMS_TEMP2_INDEX = 1
+BMS_MOS_TEMP_INDEX = 9
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
@@ -309,6 +314,13 @@ class UiEvent:
 
 def _temp_c(raw: int) -> float:
     return raw / 10.0 - 40.0
+
+
+def _live_temp_word(words: list[int], temp_index: int) -> int:
+    word_index = BMS_TEMP_WORD_OFFSET + temp_index
+    if temp_index < 0 or temp_index >= BMS_TEMP_WORD_COUNT or len(words) <= word_index:
+        return 0
+    return words[word_index]
 
 
 def _is_valid_cell_voltage(value: int) -> bool:
@@ -1718,7 +1730,7 @@ class UpgradeUi(tk.Tk):
             self._temp_display(words[48]),
             self._temp_display(words[49]),
         ]
-        row.extend(self._temp_display(raw) for raw in words[38:48])
+        row.extend(self._temp_display(_live_temp_word(words, index)) for index in range(BMS_TEMP_WORD_COUNT))
         row.extend(
             [
                 f"0x{words[58]:04X}",
@@ -1858,12 +1870,11 @@ class UpgradeUi(tk.Tk):
         self.basic_vars["state"].set("充电" if ichg > 0 else ("放电" if idsg > 0 else "静置"))
         self._draw_battery(soc)
 
-        temp_values = words[38:48]
         self.temp_vars["max"].set(self._temp_display(words[48]))
         self.temp_vars["min"].set(self._temp_display(words[49]))
-        self.temp_vars["t1"].set(self._temp_display(temp_values[0] if len(temp_values) > 0 else 0))
-        self.temp_vars["t2"].set(self._temp_display(temp_values[1] if len(temp_values) > 1 else 0))
-        self.temp_vars["mos"].set(self._temp_display(temp_values[3] if len(temp_values) > 3 else 0))
+        self.temp_vars["t1"].set(self._temp_display(_live_temp_word(words, BMS_TEMP1_INDEX)))
+        self.temp_vars["t2"].set(self._temp_display(_live_temp_word(words, BMS_TEMP2_INDEX)))
+        self.temp_vars["mos"].set(self._temp_display(_live_temp_word(words, BMS_MOS_TEMP_INDEX)))
 
         status_low = words[84] if len(words) > 84 else None
         func_low = words[86] if len(words) > 86 else None
@@ -3099,6 +3110,7 @@ def main() -> int:
         words[37] = 3350
         words[38] = 640
         words[39] = 650
+        words[47] = 920
         words[48] = 650
         words[49] = 640
         words[50] = 12
@@ -3113,6 +3125,10 @@ def main() -> int:
         row = UpgradeUi._battery_log_row(probe, words)
         if len(headers) != len(row):
             raise RuntimeError("长期监控 CSV 表头和数据列数不一致")
+        if _live_temp_word(words, BMS_MOS_TEMP_INDEX) != 920:
+            raise RuntimeError("MOS 温度索引应映射到 0xD02F / u16Temperature[9]")
+        if row[31] != "52.0":
+            raise RuntimeError("长期监控 CSV MOS 温度列映射错误")
         if "61001" in row[-32:]:
             raise RuntimeError("不存在的单体电压不应写入 CSV")
         root = tk.Tk()
