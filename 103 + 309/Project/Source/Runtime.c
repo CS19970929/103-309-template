@@ -48,7 +48,7 @@ void Runtime_Boot(void)
 	LogRecord_RequestStartup();
 
 	Init_RTC();
-	// DBG_Init();
+	DBG_Init();
 	/* RTC_WKTimeConfig(); */
 }
 

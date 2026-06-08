@@ -191,6 +191,7 @@ void Sci_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 }
 #endif
 
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 static UINT8 Sci_DebugPortIndex(const struct SCI_PORT_RUNTIME *pstPort)
 {
 	if ((pstPort != 0) && (pstPort->pstUsart == USART1))
@@ -209,6 +210,7 @@ static UINT8 Sci_DebugPortIndex(const struct SCI_PORT_RUNTIME *pstPort)
 #endif
 	return 0U;
 }
+#endif
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
@@ -1446,14 +1448,20 @@ static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort)
 static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 {
 	UINT16 u16Status;
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	UINT8 u8DbgPort;
+#endif
 
 	u16Status = pstPort->pstUsart->SR;
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 	u8DbgPort = Sci_DebugPortIndex(pstPort);
+#endif
 
 	if ((u16Status & SCI_USART_ERROR_FLAGS) != 0U)
 	{
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 		DBG_RecordUsartError(u8DbgPort, u16Status);
+#endif
 		Sci_PortHandleError(pstPort);
 		return;
 	}
@@ -1465,7 +1473,9 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 		DBG_RecordUsartRx(u8DbgPort);
+#endif
 
 		if ((pstPort->pstProtocolOps != 0) &&
 			(pstPort->pstProtocolOps->pfRxFeed != 0) &&
@@ -1484,7 +1494,9 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		u16Dummy = pstPort->pstUsart->DR;
 		(void)u16Dummy;
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 		DBG_RecordUsartIdle(u8DbgPort);
+#endif
 
 		if ((pstPort->u8FramePending == 0U) &&
 			(pstPort->u16TxLength == 0U) &&
@@ -1506,7 +1518,9 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 		else
 		{
 			pstPort->pstUsart->DR = pstPort->pu8TxBuffer[pstPort->u16TxIndex++];
+#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
 			DBG_RecordUsartTx(u8DbgPort);
+#endif
 			if (pstPort->u16TxIndex >= pstPort->u16TxLength)
 			{
 				pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TXEIE;
