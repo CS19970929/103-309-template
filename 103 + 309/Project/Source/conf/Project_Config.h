@@ -235,7 +235,7 @@
 #define PROJECT_CFG_UPGRADE_OTHER_CUR_LIMIT_CUR 30
 
 // <o> Normal sleep voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_NORMAL 3200
+#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_NORMAL 4200
 // <o> Normal sleep time min <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_NORMAL 7200
 // <o> Low-voltage sleep voltage mV <1000-5000>
@@ -252,9 +252,9 @@
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_RTC 3
 
 // <o> SOC capacity Ah*10 <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 180
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 270
 // <o> SOC cycle times <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 1
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 10
 // <o> SOC 100 percent voltage mV <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
 // <o> SOC 0 percent voltage mV <1-50000>
@@ -265,7 +265,7 @@
 // <o> System current-sense resistor mOhm <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES 2
 // <o> System current-sense resistor numerator <1-10000>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES_NUM 3
+#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES_NUM 4
 // <o> System precharge time s <0-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_PRECHG_TIME 10
 // </h>

@@ -30,15 +30,15 @@
 #define AFE_CUV_filter     (100)
 #endif // LIFEPO
 
-#define AFE_OTC           ((60 + 40) * 10)
-#define AFE_OTC_recover     ((50 + 40) * 10)
+#define AFE_OTC           ((55 + 40) * 10)
+#define AFE_OTC_recover     ((45 + 40) * 10)
 #define AFE_OTC_filter      100
 
 #define AFE_UTC           ((-7 + 40) * 10)
 #define AFE_UTC_recover     ((0 + 40) * 10)
 #define AFE_UTC_filter      100
 
-#define AFE_OTD           ((70 + 40) * 10)
+#define AFE_OTD           ((75 + 40) * 10)
 #define AFE_OTD_recover     ((60 + 40) * 10)
 #define AFE_OTD_filter      100
 
@@ -47,15 +47,15 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(500) 
+#define AFE_OCC1       		(200) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(600) 
+#define AFE_OCC2       		(200) 
 #define AFE_OCC2_filter  	(10)
 
 #define AFE_ODC1       		(800) 
-#define AFE_ODC1_filter  	(10)
+#define AFE_ODC1_filter  	(100)
 #define AFE_ODC2       		(1000) 
-#define AFE_ODC2_filter  	(10)
+#define AFE_ODC2_filter  	(50)
 
 
 /*curValue*/  /*defaultValue*/ /*maxValue*/ /*minValue*/
