@@ -271,6 +271,7 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
+    "PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT",
 ]
 
 
@@ -760,6 +761,7 @@ def check_required_board_features(reporter):
         and "#error \"Upgrade parameter policy is a required board feature and must not be disabled\"" in policy_h
         and "PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION" in policy_h
         and "PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD" in policy_h
+        and "PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT" in policy_h
         and "Upgrade parameter policy is a required board feature" in build_guard
     ):
         reporter.ok("upgrade parameter policy mechanism is required while reset policy remains configurable")
