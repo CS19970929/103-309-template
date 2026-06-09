@@ -6,6 +6,7 @@
 #include "Sci_Upper.h"
 #include "RTC.h"
 #include "IrqDebug.h"
+#include "RuntimeLog.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
@@ -101,6 +102,7 @@ void low_power_log_and_commit_sleep(uint8_t sleep_mode)
         return;
     }
 
+    RuntimeLog_ResetSleepCommit(sleep_mode);
     RtcSleep_PortCommitResetSleep(sleep_mode);
 }
 
@@ -119,6 +121,10 @@ void LowPower_Request(enum _SLEEP_MODE mode)
     }
 
     lp_refresh_status();
+    RuntimeLog_LowPowerRequest(g_stLowPowerRtcStatus.mode,
+                               g_stLowPowerRtcStatus.block,
+                               g_stLowPowerRtcStatus.idle,
+                               g_stLowPowerRtcStatus.idleMax);
 }
 
 static uint8_t lp_select_deep_if_low_voltage(void)
@@ -209,6 +215,8 @@ static void rtc_sleep_prepare_rtc(void)
         g_stLowPowerRtcStatus.sleep = 0U;
     }
 
+    RuntimeLog_RtcStopEnter(g_stLowPowerRtcStatus.cycles,
+                            g_stLowPowerRtcStatus.sleep);
     RtcSleep_PortPrepareRtcStop();
     RTC_ClearStopWakeup();
     g_irq_t = NO_IRQ;
@@ -232,6 +240,9 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
 
     RtcSleep_PortRestoreAfterStop();
+    RuntimeLog_RtcStopWake(RtcSleep_PortIsRtcWake(),
+                           rtc_elapsed_seconds,
+                           g_stLowPowerRtcStatus.sleep);
 
     if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
@@ -250,6 +261,9 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     RtcSleep_PortOnWakeupSource(g_irq_t);
 
     g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
+    RuntimeLog_RtcStopExit((uint8_t)g_irq_t,
+                           g_stLowPowerRtcStatus.sleep,
+                           g_stLowPowerRtcStatus.cycles);
     RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;

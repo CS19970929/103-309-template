@@ -4,6 +4,7 @@
 #include "DebugHooks.h"
 #include "DebugWatch.h"
 #include "IrqDebug.h"
+#include "RuntimeLog.h"
 #include "debug_hub.h"
 
 UINT8 SeriesNum = 10;
@@ -37,6 +38,7 @@ void Runtime_Boot(void)
 	EnableLowPowerDebug();
 
 	Init_IWDG();
+	RuntimeLog_Init();
 
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
@@ -49,6 +51,7 @@ void Runtime_Boot(void)
 
 	Init_RTC();
 	DBG_Init();
+	RuntimeLog_BootReady();
 	/* RTC_WKTimeConfig(); */
 }
 
@@ -93,6 +96,7 @@ void Runtime_RunOnce(void)
 
 	App_LogRecord();
 	DebugHooks_RuntimeAfterLog();
+	RuntimeLog_Task1s();
 
 	App_ProID_Deal();
 	DebugHooks_RuntimeAfterProId();

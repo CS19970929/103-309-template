@@ -111,6 +111,38 @@
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
 // </h>
 
+// <h>Runtime Serial Log
+
+// <q> Enable runtime serial log
+// <i> Debug target only. Release build profile must keep disabled.
+#ifndef PROJECT_CFG_RUNTIME_LOG_ENABLE
+#define PROJECT_CFG_RUNTIME_LOG_ENABLE 0
+#endif
+
+// <o> Runtime log level
+//   <1=> Error
+//   <2=> Warn
+//   <3=> Info
+//   <4=> Debug
+//   <5=> Verbose
+#ifndef PROJECT_CFG_RUNTIME_LOG_LEVEL
+#define PROJECT_CFG_RUNTIME_LOG_LEVEL 3
+#endif
+
+// <o> Runtime log heartbeat interval seconds <1-60>
+#ifndef PROJECT_CFG_RUNTIME_LOG_HEARTBEAT_SECONDS
+#define PROJECT_CFG_RUNTIME_LOG_HEARTBEAT_SECONDS 1
+#endif
+
+// <o> Runtime log UART
+//   <1=> USART1 PB6/PB7
+//   <2=> USART2
+//   <3=> USART3
+#ifndef PROJECT_CFG_RUNTIME_LOG_UART
+#define PROJECT_CFG_RUNTIME_LOG_UART 1
+#endif
+// </h>
+
 // <h>SOC Calibration
 //
 // Keep this section short. Only product tuning or field-debug values should be

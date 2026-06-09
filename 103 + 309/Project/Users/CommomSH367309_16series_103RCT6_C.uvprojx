@@ -561,6 +561,11 @@
               <FilePath>..\Source\Runtime.c</FilePath>
             </File>
             <File>
+              <FileName>RuntimeLog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\RuntimeLog.c</FilePath>
+            </File>
+            <File>
               <FileName>StartupDefaultHandler.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
@@ -1471,7 +1476,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,PROJECT_CFG_DEBUG_MONITOR_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0,_DEBUG_</Define>
+              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,PROJECT_CFG_DEBUG_MONITOR_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0,PROJECT_CFG_RUNTIME_LOG_ENABLE=1,PROJECT_CFG_RUNTIME_LOG_LEVEL=3,PROJECT_CFG_RUNTIME_LOG_HEARTBEAT_SECONDS=1,PROJECT_CFG_RUNTIME_LOG_UART=1,_DEBUG_</Define>
               <Undefine></Undefine>
               <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
@@ -1591,6 +1596,11 @@
               <FileName>Runtime.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Runtime.c</FilePath>
+            </File>
+            <File>
+              <FileName>RuntimeLog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\RuntimeLog.c</FilePath>
             </File>
             <File>
               <FileName>StartupDefaultHandler.c</FileName>
@@ -1747,6 +1757,21 @@
               <FileName>debug_hub.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\debug_hub.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog_utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\src\elog_utils.c</FilePath>
+            </File>
+            <File>
+              <FileName>elog_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\easylogger\port\elog_port.c</FilePath>
             </File>
           </Files>
         </Group>
