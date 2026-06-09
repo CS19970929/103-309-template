@@ -181,8 +181,9 @@ static void soc_save_current_snapshot(void);
 // 	},
 // };
 static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-	{-50, {0U, 0U, 0U, 0U}, 	{10U, 10U, 10U, 10U}},
+	// {-50, {0U, 0U, 0U, 0U}, 	{10U, 10U, 10U, 10U}},
 	{-25, {0U, 0U, 0U, 0U}, 	{10U, 10U, 10U, 10U}},
+	{-5,  {0U, 0U, 0U, 0U}, 	{20U, 20U, 20U, 10U}},
 	{0,   {0U, 0U, 0U, 0U}, 	{50U, 50U, 50U, 50U}},
 	{50,  {2U, 5U, 8U, 12U}, 	{50U, 50U, 50U, 50U}},
 	{100, {5U, 10U, 14U, 18U},  {50U, 50U, 50U, 50U}},
