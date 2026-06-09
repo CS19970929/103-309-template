@@ -1644,3 +1644,7 @@ abe8f8d6c0b0e3a8b87c0cd54347b772aba6a32b这个commit加入DBG_Init()后，和上
 
 
 can上位机mos温度没有显示
+
+增加通过Project_Config升级更新OtherElement参数功能
+
+同步把此次更新功能加入到T3-27Ah-production-code分支上
