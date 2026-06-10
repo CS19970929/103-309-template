@@ -1893,34 +1893,39 @@ void App_VdeltaOp_ThirdCheck(void)
 }
 
 #define APP_WARN_CHECK_LIST(RUN_CHECK) \
-	RUN_CHECK(App_CellOvp_SecondCheck) \
-	RUN_CHECK(App_CellOvp_ThirdCheck) \
-	RUN_CHECK(App_CellUvp_SecondCheck) \
-	RUN_CHECK(App_CellUvp_ThirdCheck) \
-	RUN_CHECK(App_BatOvp_SecondCheck) \
-	RUN_CHECK(App_BatOvp_ThirdCheck) \
-	RUN_CHECK(App_BatUvp_SecondCheck) \
-	RUN_CHECK(App_BatUvp_ThirdCheck) \
-	RUN_CHECK(App_MosOtp_SecondCheck) \
-	RUN_CHECK(App_MosOtp_ThirdCheck) \
-	RUN_CHECK(App_VdeltaOp_SecondCheck) \
-	RUN_CHECK(App_VdeltaOp_ThirdCheck) \
-	RUN_CHECK(App_IdischgOcp_SecondCheck) \
-	RUN_CHECK(App_IdischgOcp_ThirdCheck) \
-	RUN_CHECK(App_IchgOcp_SecondCheck) \
-	RUN_CHECK(App_IchgOcp_ThirdCheck) \
-	RUN_CHECK(App_CellSocUp_SecondCheck) \
-	RUN_CHECK(App_CellSocUp_ThirdCheck) \
-	RUN_CHECK(App_CellDisChgOtp_SecondCheck) \
-	RUN_CHECK(App_CellDisChgOtp_ThirdCheck) \
-	RUN_CHECK(App_CellDischgUtp_SecondCheck) \
-	RUN_CHECK(App_CellDischgUtp_ThirdCheck) \
-	RUN_CHECK(App_CellChgOtp_SecondCheck) \
-	RUN_CHECK(App_CellChgOtp_ThirdCheck) \
-	RUN_CHECK(App_CellChgUtp_SecondCheck) \
-	RUN_CHECK(App_CellChgUtp_ThirdCheck)
+	RUN_CHECK(APP_WARN_CHECK_CELL_OVP_SECOND, App_CellOvp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_OVP_THIRD, App_CellOvp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_UVP_SECOND, App_CellUvp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_UVP_THIRD, App_CellUvp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_BAT_OVP_SECOND, App_BatOvp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_BAT_OVP_THIRD, App_BatOvp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_BAT_UVP_SECOND, App_BatUvp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_BAT_UVP_THIRD, App_BatUvp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_MOS_OTP_SECOND, App_MosOtp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_MOS_OTP_THIRD, App_MosOtp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_VDELTA_OP_SECOND, App_VdeltaOp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_VDELTA_OP_THIRD, App_VdeltaOp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_IDISCHG_OCP_SECOND, App_IdischgOcp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_IDISCHG_OCP_THIRD, App_IdischgOcp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_ICHG_OCP_SECOND, App_IchgOcp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_ICHG_OCP_THIRD, App_IchgOcp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_SOC_UP_SECOND, App_CellSocUp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_SOC_UP_THIRD, App_CellSocUp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_DISCHG_OTP_SECOND, App_CellDisChgOtp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_DISCHG_OTP_THIRD, App_CellDisChgOtp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_DISCHG_UTP_SECOND, App_CellDischgUtp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_DISCHG_UTP_THIRD, App_CellDischgUtp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_CHG_OTP_SECOND, App_CellChgOtp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_CHG_OTP_THIRD, App_CellChgOtp_ThirdCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_CHG_UTP_SECOND, App_CellChgUtp_SecondCheck) \
+	RUN_CHECK(APP_WARN_CHECK_CELL_CHG_UTP_THIRD, App_CellChgUtp_ThirdCheck)
 
-#define APP_WARN_RUN_CHECK(CheckFunc) CheckFunc();
+#define APP_WARN_RUN_CHECK(CheckId, CheckFunc) \
+	do { \
+		AppTrace_WarnCheckBegin((UINT8)(CheckId)); \
+		CheckFunc(); \
+		AppTrace_WarnCheckEnd((UINT8)(CheckId)); \
+	} while (0);
 /*******************************************************************************
  *Function name: App_WarnCtrl()
  *Description :  IO port state sample, filter, warning judge and treatment

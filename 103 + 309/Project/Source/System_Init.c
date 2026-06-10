@@ -22,6 +22,16 @@ static UINT8 s_u8Sys10msNextPhase = 1;
 volatile UINT16 gu16_SysTime1msOverrunCnt = 0;
 volatile UINT16 gu16_SysTime10msPhaseOverrunCnt = 0;
 
+volatile APP_TRACE_TASK g_stAppTraceTask[APP_TRACE_TASK_NUM];
+volatile APP_TRACE_WARN_CHECK g_stAppTraceWarnCheck[APP_WARN_CHECK_NUM];
+volatile UINT32 gu32_AppTraceLoopCnt = 0;
+volatile UINT32 gu32_AppTrace1msTick = 0;
+volatile UINT32 gu32_AppTrace10msPhaseTick = 0;
+volatile UINT32 gu32_AppTrace10msFlag1Tick = 0;
+volatile UINT8 gu8_AppTraceCurrentTask = APP_TRACE_TASK_NONE;
+volatile UINT8 gu8_AppTraceCurrentWarnCheck = APP_WARN_CHECK_NONE;
+volatile UINT8 gu8_AppTraceLast10msPhase = 0;
+
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
@@ -137,6 +147,116 @@ void __delay_ms(UINT16 nms)
 	SysTick->VAL = 0X00;					   // 清空计数器
 }
 
+static UINT16 AppTrace_DeltaToU16(UINT32 u32Now, UINT32 u32Last)
+{
+	UINT32 u32Delta = u32Now - u32Last;
+
+	if (u32Delta > 0xFFFF)
+	{
+		return 0xFFFF;
+	}
+	return (UINT16)u32Delta;
+}
+
+void AppTrace_LoopBegin(void)
+{
+	gu32_AppTraceLoopCnt++;
+}
+
+void AppTrace_TaskBegin(UINT8 u8TaskId)
+{
+	volatile APP_TRACE_TASK *pstTrace;
+	UINT16 u16Delta;
+
+	if (u8TaskId >= APP_TRACE_TASK_NUM)
+	{
+		return;
+	}
+
+	pstTrace = &g_stAppTraceTask[u8TaskId];
+	pstTrace->active = 1;
+	pstTrace->runCnt++;
+
+	if (pstTrace->lastLoopCnt != 0)
+	{
+		u16Delta = AppTrace_DeltaToU16(gu32_AppTraceLoopCnt, pstTrace->lastLoopCnt);
+		pstTrace->lastLoopInterval = u16Delta;
+		if (u16Delta > pstTrace->maxLoopInterval)
+		{
+			pstTrace->maxLoopInterval = u16Delta;
+		}
+	}
+
+	if (pstTrace->last10msFlag1Tick != 0)
+	{
+		u16Delta = AppTrace_DeltaToU16(gu32_AppTrace10msFlag1Tick, pstTrace->last10msFlag1Tick);
+		pstTrace->last10msFlag1Interval = u16Delta;
+		if (u16Delta > pstTrace->max10msFlag1Interval)
+		{
+			pstTrace->max10msFlag1Interval = u16Delta;
+		}
+	}
+
+	pstTrace->lastLoopCnt = gu32_AppTraceLoopCnt;
+	pstTrace->last1msTick = gu32_AppTrace1msTick;
+	pstTrace->last10msPhaseTick = gu32_AppTrace10msPhaseTick;
+	pstTrace->last10msFlag1Tick = gu32_AppTrace10msFlag1Tick;
+	gu8_AppTraceCurrentTask = u8TaskId;
+}
+
+void AppTrace_TaskEnd(UINT8 u8TaskId)
+{
+	if (u8TaskId < APP_TRACE_TASK_NUM)
+	{
+		g_stAppTraceTask[u8TaskId].active = 0;
+	}
+	if (gu8_AppTraceCurrentTask == u8TaskId)
+	{
+		gu8_AppTraceCurrentTask = APP_TRACE_TASK_NONE;
+	}
+}
+
+void AppTrace_WarnCheckBegin(UINT8 u8CheckId)
+{
+	volatile APP_TRACE_WARN_CHECK *pstTrace;
+	UINT32 u32WarnCtrlCnt;
+	UINT16 u16Delta;
+
+	if (u8CheckId >= APP_WARN_CHECK_NUM)
+	{
+		return;
+	}
+
+	u32WarnCtrlCnt = g_stAppTraceTask[APP_TRACE_TASK_WARN_CTRL].runCnt;
+	pstTrace = &g_stAppTraceWarnCheck[u8CheckId];
+	pstTrace->active = 1;
+	pstTrace->runCnt++;
+
+	if (pstTrace->lastWarnCtrlCnt != 0)
+	{
+		u16Delta = AppTrace_DeltaToU16(u32WarnCtrlCnt, pstTrace->lastWarnCtrlCnt);
+		pstTrace->lastWarnCtrlInterval = u16Delta;
+		if (u16Delta > pstTrace->maxWarnCtrlInterval)
+		{
+			pstTrace->maxWarnCtrlInterval = u16Delta;
+		}
+	}
+
+	pstTrace->lastWarnCtrlCnt = u32WarnCtrlCnt;
+	gu8_AppTraceCurrentWarnCheck = u8CheckId;
+}
+
+void AppTrace_WarnCheckEnd(UINT8 u8CheckId)
+{
+	if (u8CheckId < APP_WARN_CHECK_NUM)
+	{
+		g_stAppTraceWarnCheck[u8CheckId].active = 0;
+	}
+	if (gu8_AppTraceCurrentWarnCheck == u8CheckId)
+	{
+		gu8_AppTraceCurrentWarnCheck = APP_WARN_CHECK_NONE;
+	}
+}
 static void SysTime_AddPending(volatile UINT8 *pu8Pending, UINT8 u8Max, volatile UINT16 *pu16OverrunCnt)
 {
 	if (*pu8Pending < u8Max)
@@ -213,7 +333,9 @@ void App_SysTime(void)
 
 	g_st_SysTimeFlag.bits.b1Sys1msFlag = 0;
 	if (SysTime_TakePending(&s_u8Sys1msPending))
-	{ // 1ms定时标志
+	{
+		gu32_AppTrace1msTick++;
+		// 1ms定时标志
 		g_st_SysTimeFlag.bits.b1Sys1msFlag = 1;
 	}
 
@@ -223,7 +345,14 @@ void App_SysTime(void)
 	g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 0;
 	if (SysTime_Take10msPhase(&u8Phase))
-	{ // 10ms分相定时标志，按TIM3入队顺序逐个派发，避免主循环慢时漏标志
+	{
+		gu32_AppTrace10msPhaseTick++;
+		gu8_AppTraceLast10msPhase = u8Phase;
+		if (u8Phase == 0)
+		{
+			gu32_AppTrace10msFlag1Tick++;
+		}
+		// 10ms分相定时标志，按TIM3入队顺序逐个派发，避免主循环慢时漏标志
 		switch (u8Phase)
 		{
 		case 0:
