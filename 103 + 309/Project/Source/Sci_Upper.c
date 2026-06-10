@@ -38,6 +38,22 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s);
+
+#define SCI_USART_ERR_FLAGS (USART_FLAG_ORE | USART_FLAG_NE | USART_FLAG_FE | USART_FLAG_PE)
+
+static UINT8 Sci_CommonUpper_ClearUsartFault(USART_TypeDef *USARTx)
+{
+	UINT16 u16Sr = USARTx->SR;
+
+	if ((u16Sr & SCI_USART_ERR_FLAGS) == 0)
+	{
+		return 0;
+	}
+
+	(void)USARTx->DR; // STM32F10x USART错误标志需读SR后读DR清除
+	return 1;
+}
+
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s);
 void Sci_WrReg_0x06_SwitchON(struct RS485MSG *s);
@@ -762,33 +778,7 @@ void Sci_ACK_0x06_0x10(struct RS485MSG *s)
 #if (defined _COMMOM_UPPER_SCI1)
 void Sci1_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART1->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART1->SR &= ~0x08;
-		FaultCnt++;
-	}
-
-	if (USART1->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART1->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART1->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART1->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART1->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART1->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (Sci_CommonUpper_ClearUsartFault(USART1))
 	{
 		gu16_CommuErrCnt_SCI1++;
 	}
@@ -1075,33 +1065,7 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 
 void Sci2_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART2->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART2->SR &= ~0x08;
-		FaultCnt++;
-	}
-
-	if (USART2->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART2->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART2->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART2->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART2->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART2->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (Sci_CommonUpper_ClearUsartFault(USART2))
 	{
 		gu16_CommuErrCnt_SCI2++;
 	}
@@ -1386,33 +1350,7 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 #if (defined _COMMOM_UPPER_SCI3)
 void Sci3_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART3->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART3->SR &= ~0x08;
-		FaultCnt++;
-	}
-
-	if (USART3->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART3->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART3->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART3->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART3->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART3->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (Sci_CommonUpper_ClearUsartFault(USART3))
 	{
 		gu16_CommuErrCnt_SCI3++;
 	}
