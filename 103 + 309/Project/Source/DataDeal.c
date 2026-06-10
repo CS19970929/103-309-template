@@ -223,7 +223,7 @@ void DataLoad_CellVolt(void)
 
     if (SeriesNum < 32)
     {
-        for (i = SeriesNum; i < 31; ++i)
+        for (i = SeriesNum; i < 32; ++i)
         {
             g_stCellInfoReport.u16VCell[i] = 61001;
         }

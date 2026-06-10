@@ -9,8 +9,8 @@
 #include "Project_Config.h"
 
 #define _UL_RENZHENG_ENABLE_
-#define DISP_VBAT_AND_TEMP_
-#define __EnableLowPowerDebug__
+// #define DISP_VBAT_AND_TEMP_
+// #define __EnableLowPowerDebug__
 
 #define EEPROM_VALUE_BEGIN_FLAG PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG
 
