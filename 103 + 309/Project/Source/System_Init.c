@@ -12,6 +12,16 @@ UINT8 gu8_200msAccClock_Flag = 0;
 UINT8 gu8_200msAccClock_Flag2 = 0;
 UINT8 gu8_1000msAccClock_Flag = 0;
 
+#define SYS_TIME_1MS_PENDING_MAX ((UINT8)20)
+#define SYS_TIME_10MS_PHASE_PENDING_MAX ((UINT8)25)
+
+static volatile UINT8 s_u8Sys1msPending = 0;
+static volatile UINT8 s_u8Sys10msPhasePending = 0;
+static UINT8 s_u8Sys10msNextPhase = 1;
+
+volatile UINT16 gu16_SysTime1msOverrunCnt = 0;
+volatile UINT16 gu16_SysTime10msPhaseOverrunCnt = 0;
+
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
 
@@ -127,11 +137,64 @@ void __delay_ms(UINT16 nms)
 	SysTick->VAL = 0X00;					   // 清空计数器
 }
 
+static void SysTime_AddPending(volatile UINT8 *pu8Pending, UINT8 u8Max, volatile UINT16 *pu16OverrunCnt)
+{
+	if (*pu8Pending < u8Max)
+	{
+		(*pu8Pending)++;
+	}
+	else if (*pu16OverrunCnt < 0xFFFF)
+	{
+		(*pu16OverrunCnt)++;
+	}
+}
+
+static UINT8 SysTime_TakePending(volatile UINT8 *pu8Pending)
+{
+	UINT8 u8HasEvent = 0;
+	UINT32 u32Primask;
+
+	u32Primask = __get_PRIMASK();
+	__disable_irq();
+	if (*pu8Pending > 0)
+	{
+		(*pu8Pending)--;
+		u8HasEvent = 1;
+	}
+	__set_PRIMASK(u32Primask);
+
+	return u8HasEvent;
+}
+
+static UINT8 SysTime_Take10msPhase(UINT8 *pu8Phase)
+{
+	UINT8 u8HasEvent;
+	UINT32 u32Primask;
+
+	u32Primask = __get_PRIMASK();
+	__disable_irq();
+	if (s_u8Sys10msPhasePending > 0)
+	{
+		s_u8Sys10msPhasePending--;
+		*pu8Phase = s_u8Sys10msNextPhase;
+		s_u8Sys10msNextPhase++;
+		if (s_u8Sys10msNextPhase >= 5)
+		{
+			s_u8Sys10msNextPhase = 0;
+		}
+		u8HasEvent = 1;
+	}
+	else
+	{
+		u8HasEvent = 0;
+	}
+	__set_PRIMASK(u32Primask);
+
+	return u8HasEvent;
+}
+
 void App_SysTime(void)
 {
-	static UINT8 s_u8Cnt1ms = 0;
-
-	static UINT8 s_u8Cnt10ms = 0;
 	// static UINT8 s_u8Cnt20ms = 0;
 	static UINT8 s_u8Cnt50ms = 0;
 	static UINT8 s_u8Cnt100ms = 0;
@@ -146,10 +209,11 @@ void App_SysTime(void)
 	static UINT8 s_u8Cnt1000ms2 = 33;
 	static UINT8 s_u8Cnt1000ms3 = 66;
 
+	UINT8 u8Phase = 0;
+
 	g_st_SysTimeFlag.bits.b1Sys1msFlag = 0;
-	if (s_u8Cnt1ms != g_u81msClockCnt)
+	if (SysTime_TakePending(&s_u8Sys1msPending))
 	{ // 1ms定时标志
-		s_u8Cnt1ms = g_u81msClockCnt;
 		g_st_SysTimeFlag.bits.b1Sys1msFlag = 1;
 	}
 
@@ -158,10 +222,9 @@ void App_SysTime(void)
 	g_st_SysTimeFlag.bits.b1Sys10msFlag3 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 0;
-	if (s_u8Cnt10ms != g_u810msClockCnt)
-	{ // 10ms定时标志
-		s_u8Cnt10ms = g_u810msClockCnt;
-		switch (g_u810msClockCnt)
+	if (SysTime_Take10msPhase(&u8Phase))
+	{ // 10ms分相定时标志，按TIM3入队顺序逐个派发，避免主循环慢时漏标志
+		switch (u8Phase)
 		{
 		case 0:
 			g_st_SysTimeFlag.bits.b1Sys10msFlag1 = 1;
@@ -179,8 +242,8 @@ void App_SysTime(void)
 			break;
 
 		case 3:
-			s_u8Cnt200ms1++; // 本想用一个变量搞一个循环然后置位，发现有BUG，不行
-			s_u8Cnt200ms2++; // 会持续进来一个10ms，必须改变标志位让其不再进来
+			s_u8Cnt200ms1++;
+			s_u8Cnt200ms2++;
 			s_u8Cnt200ms3++;
 			s_u8Cnt200ms4++;
 			s_u8Cnt200ms5++;
@@ -283,10 +346,13 @@ void TIM3_IRQHandler(void)
 			g_u81msClockCnt++;
 			gu8_200msCnt++;
 
+			SysTime_AddPending(&s_u8Sys1msPending, SYS_TIME_1MS_PENDING_MAX, &gu16_SysTime1msOverrunCnt);
+
 			if (g_u81msClockCnt >= 2)
 			{ // 2ms
 				g_u81msClockCnt = 0;
 				g_u810msClockCnt++;
+				SysTime_AddPending(&s_u8Sys10msPhasePending, SYS_TIME_10MS_PHASE_PENDING_MAX, &gu16_SysTime10msPhaseOverrunCnt);
 				if (g_u810msClockCnt >= 5)
 				{ // 10ms
 					g_u810msClockCnt = 0;

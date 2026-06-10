@@ -128,6 +128,8 @@ extern volatile union SYS_TIME g_st_SysTimeFlag;
 extern struct CBC_ELEMENT CBC_Element;
 extern UINT8 gu8_200msAccClock_Flag;
 extern UINT8 gu8_1000msAccClock_Flag;
+extern volatile UINT16 gu16_SysTime1msOverrunCnt;
+extern volatile UINT16 gu16_SysTime10msPhaseOverrunCnt;
 
 
 void InitDelay(void);

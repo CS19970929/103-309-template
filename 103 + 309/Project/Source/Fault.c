@@ -1892,6 +1892,35 @@ void App_VdeltaOp_ThirdCheck(void)
 	}
 }
 
+#define APP_WARN_CHECK_LIST(RUN_CHECK) \
+	RUN_CHECK(App_CellOvp_SecondCheck) \
+	RUN_CHECK(App_CellOvp_ThirdCheck) \
+	RUN_CHECK(App_CellUvp_SecondCheck) \
+	RUN_CHECK(App_CellUvp_ThirdCheck) \
+	RUN_CHECK(App_BatOvp_SecondCheck) \
+	RUN_CHECK(App_BatOvp_ThirdCheck) \
+	RUN_CHECK(App_BatUvp_SecondCheck) \
+	RUN_CHECK(App_BatUvp_ThirdCheck) \
+	RUN_CHECK(App_MosOtp_SecondCheck) \
+	RUN_CHECK(App_MosOtp_ThirdCheck) \
+	RUN_CHECK(App_VdeltaOp_SecondCheck) \
+	RUN_CHECK(App_VdeltaOp_ThirdCheck) \
+	RUN_CHECK(App_IdischgOcp_SecondCheck) \
+	RUN_CHECK(App_IdischgOcp_ThirdCheck) \
+	RUN_CHECK(App_IchgOcp_SecondCheck) \
+	RUN_CHECK(App_IchgOcp_ThirdCheck) \
+	RUN_CHECK(App_CellSocUp_SecondCheck) \
+	RUN_CHECK(App_CellSocUp_ThirdCheck) \
+	RUN_CHECK(App_CellDisChgOtp_SecondCheck) \
+	RUN_CHECK(App_CellDisChgOtp_ThirdCheck) \
+	RUN_CHECK(App_CellDischgUtp_SecondCheck) \
+	RUN_CHECK(App_CellDischgUtp_ThirdCheck) \
+	RUN_CHECK(App_CellChgOtp_SecondCheck) \
+	RUN_CHECK(App_CellChgOtp_ThirdCheck) \
+	RUN_CHECK(App_CellChgUtp_SecondCheck) \
+	RUN_CHECK(App_CellChgUtp_ThirdCheck)
+
+#define APP_WARN_RUN_CHECK(CheckFunc) CheckFunc();
 /*******************************************************************************
  *Function name: App_WarnCtrl()
  *Description :  IO port state sample, filter, warning judge and treatment
@@ -1903,39 +1932,7 @@ void App_VdeltaOp_ThirdCheck(void)
 void App_WarnCtrl(void)
 {
 	sys_time.sys_tick_10ms++;
-
-	App_CellOvp_SecondCheck();
-	App_CellOvp_ThirdCheck();
-	App_CellUvp_SecondCheck();
-	App_CellUvp_ThirdCheck();
-
-	App_BatOvp_SecondCheck();
-	App_BatOvp_ThirdCheck();
-	App_BatUvp_SecondCheck();
-	App_BatUvp_ThirdCheck();
-
-	App_MosOtp_SecondCheck();
-	App_MosOtp_ThirdCheck();
-	App_VdeltaOp_SecondCheck();
-	App_VdeltaOp_ThirdCheck();
-
-	App_IdischgOcp_SecondCheck();
-	App_IdischgOcp_ThirdCheck();
-	App_IchgOcp_SecondCheck();
-	App_IchgOcp_ThirdCheck();
-
-	App_CellSocUp_SecondCheck();
-	App_CellSocUp_ThirdCheck();
-
-	App_CellDisChgOtp_SecondCheck();
-	App_CellDisChgOtp_ThirdCheck();
-	App_CellDischgUtp_SecondCheck();
-	App_CellDischgUtp_ThirdCheck();
-
-	App_CellChgOtp_SecondCheck();
-	App_CellChgOtp_ThirdCheck();
-	App_CellChgUtp_SecondCheck();
-	App_CellChgUtp_ThirdCheck();
+	APP_WARN_CHECK_LIST(APP_WARN_RUN_CHECK)
 }
 
 // 记录是按顺序记录下去，上传则是最新的在顶部
