@@ -30,6 +30,9 @@ void InitSci(void);
 void App_Sci(void);
 void InitSystemWakeUp(void);
 
+#define APP_TRACE_WRAP_MAIN_TASKS
+#include "App_Trace.h"
+
 // todo 好像有问题，串口通信不上有可能，can影响的？log？
 
 int main(void)
@@ -40,41 +43,43 @@ int main(void)
 	{
 #if (defined _DEBUG_CODE)
 #else
-		AppTrace_LoopBegin();
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_SYS_TIME, App_SysTime);
+		App_SysTime();
 		if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
 		{
-			APP_TRACE_RUN_TASK(APP_TRACE_TASK_WARN_CTRL, App_WarnCtrl);
-			APP_TRACE_RUN_TASK(APP_TRACE_TASK_LED_BAR, APP_LedBar);
+			App_WarnCtrl();
+			APP_LedBar();
 		}
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_AFE_GET, App_AFEGet);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_POWER_UI, PowerUi_ProcessRequests);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_SCI, App_Sci);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_ANALOG_CAL, App_AnlogCal);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_EEPROM, App_E2promDeal);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_CELL_BALANCE, App_CellBalance);
+		App_AFEGet();
+		PowerUi_ProcessRequests();
+		App_Sci();
+		App_AnlogCal();
+		App_E2promDeal();
+		App_CellBalance();
 		// App_Can();
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_SLEEP, App_SleepDeal);
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		// sleep();
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_SOC, App_SOC);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_BMS_EUAVCAN, App_BmsEUavcan);
+		App_SOC();
+		App_BmsEUavcan();
 
 #ifdef __FUNC__HEAT__
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_HEAT_COOL, App_Heat_Cool_Ctrl);
+		App_Heat_Cool_Ctrl();
 #endif
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_CHARGER_ON, AllSeriesDeal_Charger_ON);
+		AllSeriesDeal_Charger_ON();
 		// APP_LedBar();
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_FLASH_UPDATE, App_FlashUpdate);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_LOG_RECORD, App_LogRecord);
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_PRO_ID, App_ProID_Deal);
+		App_FlashUpdate();
+		App_LogRecord();
+		App_ProID_Deal();
 		// __delay_ms(1000);
 #ifdef wdog_enable
-		APP_TRACE_RUN_TASK(APP_TRACE_TASK_IWDG_FEED, IWDG_Feed);
+		Feed_IWatchDog;
 
 #endif
 #endif
 	}
 }
+
+#define APP_TRACE_UNWRAP_MAIN_TASKS
+#include "App_Trace.h"
 
 void InitDevice(void)
 {

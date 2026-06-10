@@ -121,82 +121,6 @@ struct CBC_ELEMENT {
 };
 
 
-typedef enum _APP_TRACE_TASK_ID {
-	APP_TRACE_TASK_SYS_TIME = 0,
-	APP_TRACE_TASK_WARN_CTRL,
-	APP_TRACE_TASK_LED_BAR,
-	APP_TRACE_TASK_AFE_GET,
-	APP_TRACE_TASK_POWER_UI,
-	APP_TRACE_TASK_SCI,
-	APP_TRACE_TASK_ANALOG_CAL,
-	APP_TRACE_TASK_EEPROM,
-	APP_TRACE_TASK_CELL_BALANCE,
-	APP_TRACE_TASK_SLEEP,
-	APP_TRACE_TASK_SOC,
-	APP_TRACE_TASK_BMS_EUAVCAN,
-	APP_TRACE_TASK_HEAT_COOL,
-	APP_TRACE_TASK_CHARGER_ON,
-	APP_TRACE_TASK_FLASH_UPDATE,
-	APP_TRACE_TASK_LOG_RECORD,
-	APP_TRACE_TASK_PRO_ID,
-	APP_TRACE_TASK_IWDG_FEED,
-	APP_TRACE_TASK_NUM
-} APP_TRACE_TASK_ID;
-
-#define APP_TRACE_TASK_NONE ((UINT8)0xFF)
-
-typedef enum _APP_WARN_CHECK_ID {
-	APP_WARN_CHECK_CELL_OVP_SECOND = 0,
-	APP_WARN_CHECK_CELL_OVP_THIRD,
-	APP_WARN_CHECK_CELL_UVP_SECOND,
-	APP_WARN_CHECK_CELL_UVP_THIRD,
-	APP_WARN_CHECK_BAT_OVP_SECOND,
-	APP_WARN_CHECK_BAT_OVP_THIRD,
-	APP_WARN_CHECK_BAT_UVP_SECOND,
-	APP_WARN_CHECK_BAT_UVP_THIRD,
-	APP_WARN_CHECK_MOS_OTP_SECOND,
-	APP_WARN_CHECK_MOS_OTP_THIRD,
-	APP_WARN_CHECK_VDELTA_OP_SECOND,
-	APP_WARN_CHECK_VDELTA_OP_THIRD,
-	APP_WARN_CHECK_IDISCHG_OCP_SECOND,
-	APP_WARN_CHECK_IDISCHG_OCP_THIRD,
-	APP_WARN_CHECK_ICHG_OCP_SECOND,
-	APP_WARN_CHECK_ICHG_OCP_THIRD,
-	APP_WARN_CHECK_CELL_SOC_UP_SECOND,
-	APP_WARN_CHECK_CELL_SOC_UP_THIRD,
-	APP_WARN_CHECK_CELL_DISCHG_OTP_SECOND,
-	APP_WARN_CHECK_CELL_DISCHG_OTP_THIRD,
-	APP_WARN_CHECK_CELL_DISCHG_UTP_SECOND,
-	APP_WARN_CHECK_CELL_DISCHG_UTP_THIRD,
-	APP_WARN_CHECK_CELL_CHG_OTP_SECOND,
-	APP_WARN_CHECK_CELL_CHG_OTP_THIRD,
-	APP_WARN_CHECK_CELL_CHG_UTP_SECOND,
-	APP_WARN_CHECK_CELL_CHG_UTP_THIRD,
-	APP_WARN_CHECK_NUM
-} APP_WARN_CHECK_ID;
-
-#define APP_WARN_CHECK_NONE ((UINT8)0xFF)
-
-typedef struct _APP_TRACE_TASK {
-	volatile UINT32 runCnt;
-	volatile UINT32 lastLoopCnt;
-	volatile UINT32 last1msTick;
-	volatile UINT32 last10msPhaseTick;
-	volatile UINT32 last10msFlag1Tick;
-	volatile UINT16 lastLoopInterval;
-	volatile UINT16 maxLoopInterval;
-	volatile UINT16 last10msFlag1Interval;
-	volatile UINT16 max10msFlag1Interval;
-	volatile UINT8 active;
-} APP_TRACE_TASK;
-
-typedef struct _APP_TRACE_WARN_CHECK {
-	volatile UINT32 runCnt;
-	volatile UINT32 lastWarnCtrlCnt;
-	volatile UINT16 lastWarnCtrlInterval;
-	volatile UINT16 maxWarnCtrlInterval;
-	volatile UINT8 active;
-} APP_TRACE_WARN_CHECK;
 void IWDG_Feed(void);
 #define Feed_IWatchDog IWDG_Feed()
 
@@ -206,15 +130,6 @@ extern UINT8 gu8_200msAccClock_Flag;
 extern UINT8 gu8_1000msAccClock_Flag;
 extern volatile UINT16 gu16_SysTime1msOverrunCnt;
 extern volatile UINT16 gu16_SysTime10msPhaseOverrunCnt;
-extern volatile APP_TRACE_TASK g_stAppTraceTask[APP_TRACE_TASK_NUM];
-extern volatile APP_TRACE_WARN_CHECK g_stAppTraceWarnCheck[APP_WARN_CHECK_NUM];
-extern volatile UINT32 gu32_AppTraceLoopCnt;
-extern volatile UINT32 gu32_AppTrace1msTick;
-extern volatile UINT32 gu32_AppTrace10msPhaseTick;
-extern volatile UINT32 gu32_AppTrace10msFlag1Tick;
-extern volatile UINT8 gu8_AppTraceCurrentTask;
-extern volatile UINT8 gu8_AppTraceCurrentWarnCheck;
-extern volatile UINT8 gu8_AppTraceLast10msPhase;
 
 
 void InitDelay(void);
@@ -226,18 +141,6 @@ void InitIO(void);
 void InitNVIC(void);
 void Init_IWDG(void);
 void App_CBC(void);
-void AppTrace_LoopBegin(void);
-void AppTrace_TaskBegin(UINT8 u8TaskId);
-void AppTrace_TaskEnd(UINT8 u8TaskId);
-void AppTrace_WarnCheckBegin(UINT8 u8CheckId);
-void AppTrace_WarnCheckEnd(UINT8 u8CheckId);
-
-#define APP_TRACE_RUN_TASK(TaskId, TaskFunc) \
-	do { \
-		AppTrace_TaskBegin((UINT8)(TaskId)); \
-		TaskFunc(); \
-		AppTrace_TaskEnd((UINT8)(TaskId)); \
-	} while (0)
 void App_SysTime(void);
 void App_ChgDet_Status(void);
 
