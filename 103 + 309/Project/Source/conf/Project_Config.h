@@ -171,10 +171,10 @@
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0610
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
 
 // <q> Reset balance open voltage on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
@@ -202,7 +202,7 @@
 // <o> Balance open voltage mV <1000-5000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 4160
 // <o> Balance open window mV <1-2000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 30
+#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 100
 // <o> Balance close window mV <0-2000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_CLOSE_WINDOW 20
 // <o> Balance reserved 1 <0-65000>
@@ -223,7 +223,7 @@
 // <o> CBC delay time us*10 <0-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_CBC_DELAY_T 2000
 // <o> CBC discharge current A*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CBC_CUR_DSG 2000
+#define PROJECT_CFG_UPGRADE_OTHER_CBC_CUR_DSG 3200
 
 // <o> SOC table select <0-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_TABLE_SELECT 2
@@ -241,7 +241,7 @@
 // <o> Low-voltage sleep voltage mV <1000-5000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_LOW 3000
 // <o> Low-voltage sleep time min <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1440
+#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1
 // <o> Sleep virtual charge current A*10 <0-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_VIR_CUR_CHG 10
 // <o> Sleep virtual discharge current A*10 <0-50000>
@@ -254,7 +254,7 @@
 // <o> SOC capacity Ah*10 <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 270
 // <o> SOC cycle times <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 0
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 1
 // <o> SOC 100 percent voltage mV <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
 // <o> SOC 0 percent voltage mV <1-50000>

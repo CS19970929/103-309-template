@@ -36,7 +36,7 @@ void Runtime_Boot(void)
 
 	EnableLowPowerDebug();
 
-	Init_IWDG();
+	// Init_IWDG();
 
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
