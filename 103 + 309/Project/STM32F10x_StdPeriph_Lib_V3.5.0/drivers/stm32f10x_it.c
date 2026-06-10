@@ -296,6 +296,10 @@ void USART1_IRQHandler(void)
     LCD_Rx_Deal_SCI1(&g_stCurrentMsgPtrLCD_SCI1);
 #endif
   }
+
+#ifdef _COMMOM_UPPER_SCI1
+  Sci1_CommonUpper_Idle_Deal(&g_stCurrentMsgPtr_SCI1);
+#endif
 }
 
 void USART2_IRQHandler(void)
@@ -323,6 +327,10 @@ void USART2_IRQHandler(void)
     LCD_Rx_Deal_SCI2(&g_stCurrentMsgPtrLCD_SCI2);
 #endif
   }
+
+#ifdef _COMMOM_UPPER_SCI2
+  Sci2_CommonUpper_Idle_Deal(&g_stCurrentMsgPtr_SCI2);
+#endif
 }
 
 void USART3_IRQHandler(void)
@@ -350,6 +358,10 @@ void USART3_IRQHandler(void)
     LCD_Rx_Deal_SCI3(&g_stCurrentMsgPtrLCD_SCI3);
 #endif
   }
+
+#ifdef _COMMOM_UPPER_SCI3
+  Sci3_CommonUpper_Idle_Deal(&g_stCurrentMsgPtr_SCI3);
+#endif
 }
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

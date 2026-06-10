@@ -40,6 +40,138 @@ void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s);
 
 #define SCI_USART_ERR_FLAGS (USART_FLAG_ORE | USART_FLAG_NE | USART_FLAG_FE | USART_FLAG_PE)
+#define SCI_FIXED_REQ_LEN ((UINT8)8)
+#define SCI_WRITE_REGS_REQ_OVERHEAD_LEN ((UINT8)9)
+
+static void Sci_CommonUpper_ResetRxFrame(struct RS485MSG *s)
+{
+	s->ptr_no = 0;
+	s->u8RxOverflow = 0;
+	s->u16Buffer[0] = 0;
+	s->u16Buffer[1] = 0;
+	s->u16Buffer[2] = 0;
+	s->u16Buffer[3] = 0;
+}
+
+static void Sci_CommonUpper_EnableRx(USART_TypeDef *USARTx)
+{
+	USARTx->CR1 |= USART_CR1_RE;
+	USARTx->CR1 |= USART_CR1_RXNEIE;
+}
+
+static void Sci_CommonUpper_DisableRx(USART_TypeDef *USARTx)
+{
+	USARTx->CR1 &= (uint16_t)~(USART_CR1_RE | USART_CR1_RXNEIE);
+}
+
+static void Sci_CommonUpper_DiscardRxFrame(USART_TypeDef *USARTx, struct RS485MSG *s)
+{
+	Sci_CommonUpper_ResetRxFrame(s);
+	s->csr = RS485_STA_IDLE;
+	Sci_CommonUpper_EnableRx(USARTx);
+}
+
+static UINT8 Sci_CommonUpper_CheckRxFrame(struct RS485MSG *s)
+{
+	UINT16 u16ExpectedLen;
+
+	if (s->u8RxOverflow)
+	{
+		return 0;
+	}
+
+	if (s->ptr_no < SCI_FIXED_REQ_LEN)
+	{
+		return 0;
+	}
+
+	if ((s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
+	{
+		return 0;
+	}
+
+	switch (s->u16Buffer[1])
+	{
+	case RS485_CMD_READ_REGS:
+		s->enRs485CmdType = RS485_CMD_READ_REGS;
+		u16ExpectedLen = SCI_FIXED_REQ_LEN;
+		break;
+
+	case RS485_CMD_WRITE_REG:
+		s->enRs485CmdType = RS485_CMD_WRITE_REG;
+		u16ExpectedLen = SCI_FIXED_REQ_LEN;
+		break;
+
+	case RS485_CMD_WRITE_REGS:
+		if (s->ptr_no < SCI_WRITE_REGS_REQ_OVERHEAD_LEN)
+		{
+			return 0;
+		}
+		s->enRs485CmdType = RS485_CMD_WRITE_REGS;
+		u16ExpectedLen = (UINT16)s->u16Buffer[6] + SCI_WRITE_REGS_REQ_OVERHEAD_LEN;
+		if (u16ExpectedLen > RS485_MAX_BUFFER_SIZE)
+		{
+			return 0;
+		}
+		break;
+
+	default:
+		return 0;
+	}
+
+	if (s->ptr_no != u16ExpectedLen)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+static void Sci_CommonUpper_RxIrqDeal(USART_TypeDef *USARTx, struct RS485MSG *s)
+{
+	UINT8 u8Data;
+
+	u8Data = (UINT8)USARTx->DR;
+	if (s->csr != RS485_STA_IDLE)
+	{
+		return;
+	}
+
+	if (s->u8RxOverflow)
+	{
+		return;
+	}
+
+	if (s->ptr_no < RS485_MAX_BUFFER_SIZE)
+	{
+		s->u16Buffer[s->ptr_no++] = u8Data;
+	}
+	else
+	{
+		s->ptr_no = 0;
+		s->u8RxOverflow = 1;
+	}
+}
+
+static UINT8 Sci_CommonUpper_IdleIrqDeal(USART_TypeDef *USARTx, struct RS485MSG *s)
+{
+	UINT16 u16Sr;
+
+	u16Sr = USARTx->SR;
+	if (((USARTx->CR1 & USART_CR1_IDLEIE) == 0) || ((u16Sr & USART_FLAG_IDLE) == 0))
+	{
+		return 0;
+	}
+
+	(void)USARTx->DR;
+	if ((s->csr == RS485_STA_IDLE) && ((s->ptr_no > 0) || s->u8RxOverflow))
+	{
+		s->csr = RS485_STA_RX_COMPLETE;
+		Sci_CommonUpper_DisableRx(USARTx);
+	}
+
+	return 1;
+}
 
 static UINT8 Sci_CommonUpper_ClearUsartFault(USART_TypeDef *USARTx)
 {
@@ -54,11 +186,6 @@ static UINT8 Sci_CommonUpper_ClearUsartFault(USART_TypeDef *USARTx)
 	sys_time.test2_cnt++;
 	(void)USARTx->DR; // STM32F10x USART错误标志需读SR后读DR清除
 	return 1;
-}
-
-static void Sci_CommonUpper_StopTxIrq(USART_TypeDef *USARTx)
-{
-	USARTx->CR1 &= (uint16_t)~(USART_CR1_TXEIE | USART_CR1_TCIE);
 }
 
 static void Sci_CommonUpper_StartTxIrq(USART_TypeDef *USARTx)
@@ -122,6 +249,7 @@ void Sci_DataInit(struct RS485MSG *s)
 
 	s->ptr_no = 0;
 	s->csr = RS485_STA_IDLE;
+	s->u8RxOverflow = 0;
 	s->enRs485CmdType = RS485_CMD_READ_REGS;
 	for (i = 0; i < RS485_MAX_BUFFER_SIZE; i++)
 	{
@@ -835,6 +963,10 @@ void Sci1_CommonUpper_FaultChk(void)
 	if (Sci_CommonUpper_ClearUsartFault(USART1))
 	{
 		gu16_CommuErrCnt_SCI1++;
+		if (0 == gu8_TxEnable_SCI1)
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART1, &g_stCurrentMsgPtr_SCI1);
+		}
 	}
 }
 
@@ -853,96 +985,18 @@ void Sci1_CommonUpper_FaultChk(void)
  *=================================================================*/
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
-	// RC1IE = 0;// 禁止EUSART2 接收中断
-	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
-	// NVIC_DisableIRQ(USART1_IRQn);
-	USART1->CR1 &= (uint16_t)~USART_CR1_RXNEIE;			  // 和上面那句话二选一
-	s->u16Buffer[s->ptr_no] = USART1->DR; // 从RXFIFO 中读取接收到的数据
-	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
-	{
-		s->ptr_no = 0;
-		s->u16Buffer[0] = 0;
-	}
-	else
-	{
-		if (s->ptr_no == 1)
-		{
-			switch (s->u16Buffer[s->ptr_no])
-			{
-			case RS485_CMD_READ_REGS:
-				s->enRs485CmdType = RS485_CMD_READ_REGS;
-				break;
-			case RS485_CMD_WRITE_REG:
-				s->enRs485CmdType = RS485_CMD_WRITE_REG;
-				break;
-			case RS485_CMD_WRITE_REGS:
-				s->enRs485CmdType = RS485_CMD_WRITE_REGS;
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				s->u16Buffer[1] = 0;
-				break;
-			}
-		}
-		else if (s->ptr_no >= 2)
-		{
-			switch (s->enRs485CmdType)
-			{
-			case RS485_CMD_READ_REGS:
-			case RS485_CMD_WRITE_REG:
-				if (s->ptr_no == 7)
-				{ //	receive complete
-					s->csr = RS485_STA_RX_COMPLETE;
-					// RCSTA1bits.CREN = 0;  //禁止接收
-					// RC1IE = 0;			// 禁止EUSART2 接收中断
-					USART1->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART1->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			case RS485_CMD_WRITE_REGS:
-				if ((s->ptr_no >= 7) && (s->ptr_no == (s->u16Buffer[6] + 8)))
-				{
-					s->csr = RS485_STA_RX_COMPLETE;
-					// disable rx TODO
-					// disable rx/tx interrupt TODO
-					// RCSTA1bits.CREN = 0;    //禁止接收
-					// RC1IE = 0;				// 禁止EUSART2 接收中断
-					USART1->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART1->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				break;
-			}
-		}
-		s->ptr_no++;
-		if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
-		{
-			s->ptr_no = 0;
-			s->u16Buffer[0] = 0;
-		}
-	}
-	if (s->csr != RS485_STA_RX_COMPLETE)
-	{
-		USART1->CR1 |= USART_CR1_RXNEIE;
-	}
+	Sci_CommonUpper_RxIrqDeal(USART1, s);
+}
+
+void Sci1_CommonUpper_Idle_Deal(struct RS485MSG *s)
+{
+	(void)Sci_CommonUpper_IdleIrqDeal(USART1, s);
 }
 
 void Sci1_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	if (0 == gu8_TxEnable_SCI1)
 	{
-		return;
-	}
-
-	if (gu16_CommuErrCnt_SCI1)
-	{ // 出现错误不回复，等待主状态机重新打开接收
-		Sci_CommonUpper_StopTxIrq(USART1);
-		Sci_CommonUpper_SetTxComplete(s, &gu8_TxEnable_SCI1, &gu8_TxFinishFlag_SCI1);
-		gu16_CommuErrCnt_SCI1 = 0;
 		return;
 	}
 
@@ -997,6 +1051,7 @@ void InitSCI1_CommonUpper(void)
 	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
 	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
+	USART_ITConfig(USART1, USART_IT_IDLE, ENABLE); // 使能空闲中断，用于判定一帧结束
 	USART_Cmd(USART1, ENABLE);					   // 使能串口1
 
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI1);
@@ -1015,6 +1070,11 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 	case RS485_STA_RX_COMPLETE:
 	{
 		USART1->CR1 &= (uint16_t)~USART_CR1_RXNEIE; // 禁止产生中断
+		if (0 == Sci_CommonUpper_CheckRxFrame(s))
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART1, s);
+			break;
+		}
 		CRC_verify(s);
 		if (s->AckType == RS485_ACK_POS)
 		{
@@ -1096,6 +1156,10 @@ void Sci2_CommonUpper_FaultChk(void)
 	if (Sci_CommonUpper_ClearUsartFault(USART2))
 	{
 		gu16_CommuErrCnt_SCI2++;
+		if (0 == gu8_TxEnable_SCI2)
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART2, &g_stCurrentMsgPtr_SCI2);
+		}
 	}
 }
 
@@ -1114,96 +1178,18 @@ void Sci2_CommonUpper_FaultChk(void)
  *=================================================================*/
 void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
-	// RC1IE = 0;// 禁止EUSART2 接收中断
-	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
-	// NVIC_DisableIRQ(USART2_IRQn);
-	USART2->CR1 &= (uint16_t)~USART_CR1_RXNEIE;			  // 和上面那句话二选一
-	s->u16Buffer[s->ptr_no] = USART2->DR; // 从RXFIFO 中读取接收到的数据
-	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
-	{
-		s->ptr_no = 0;
-		s->u16Buffer[0] = 0;
-	}
-	else
-	{
-		if (s->ptr_no == 1)
-		{
-			switch (s->u16Buffer[s->ptr_no])
-			{
-			case RS485_CMD_READ_REGS:
-				s->enRs485CmdType = RS485_CMD_READ_REGS;
-				break;
-			case RS485_CMD_WRITE_REG:
-				s->enRs485CmdType = RS485_CMD_WRITE_REG;
-				break;
-			case RS485_CMD_WRITE_REGS:
-				s->enRs485CmdType = RS485_CMD_WRITE_REGS;
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				s->u16Buffer[1] = 0;
-				break;
-			}
-		}
-		else if (s->ptr_no >= 2)
-		{
-			switch (s->enRs485CmdType)
-			{
-			case RS485_CMD_READ_REGS:
-			case RS485_CMD_WRITE_REG:
-				if (s->ptr_no == 7)
-				{ //	receive complete
-					s->csr = RS485_STA_RX_COMPLETE;
-					// RCSTA1bits.CREN = 0;  //禁止接收
-					// RC1IE = 0;			// 禁止EUSART2 接收中断
-					USART2->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART2->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			case RS485_CMD_WRITE_REGS:
-				if ((s->ptr_no >= 7) && (s->ptr_no == (s->u16Buffer[6] + 8)))
-				{
-					s->csr = RS485_STA_RX_COMPLETE;
-					// disable rx TODO
-					// disable rx/tx interrupt TODO
-					// RCSTA1bits.CREN = 0;    //禁止接收
-					// RC1IE = 0;				// 禁止EUSART2 接收中断
-					USART2->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART2->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				break;
-			}
-		}
-		s->ptr_no++;
-		if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
-		{
-			s->ptr_no = 0;
-			s->u16Buffer[0] = 0;
-		}
-	}
-	if (s->csr != RS485_STA_RX_COMPLETE)
-	{
-		USART2->CR1 |= USART_CR1_RXNEIE;
-	}
+	Sci_CommonUpper_RxIrqDeal(USART2, s);
+}
+
+void Sci2_CommonUpper_Idle_Deal(struct RS485MSG *s)
+{
+	(void)Sci_CommonUpper_IdleIrqDeal(USART2, s);
 }
 
 void Sci2_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	if (0 == gu8_TxEnable_SCI2)
 	{
-		return;
-	}
-
-	if (gu16_CommuErrCnt_SCI2)
-	{ // 出现错误不回复，等待主状态机重新打开接收
-		Sci_CommonUpper_StopTxIrq(USART2);
-		Sci_CommonUpper_SetTxComplete(s, &gu8_TxEnable_SCI2, &gu8_TxFinishFlag_SCI2);
-		gu16_CommuErrCnt_SCI2 = 0;
 		return;
 	}
 
@@ -1257,6 +1243,7 @@ void InitSCI2_CommonUpper(void)
 	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
 	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
+	USART_ITConfig(USART2, USART_IT_IDLE, ENABLE); // 使能空闲中断，用于判定一帧结束
 	USART_Cmd(USART2, ENABLE);					   // 使能串口2
 
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI2);
@@ -1275,6 +1262,11 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 	case RS485_STA_RX_COMPLETE:
 	{
 		USART2->CR1 &= (uint16_t)~USART_CR1_RXNEIE; // 禁止产生中断
+		if (0 == Sci_CommonUpper_CheckRxFrame(s))
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART2, s);
+			break;
+		}
 		CRC_verify(s);
 		if (s->AckType == RS485_ACK_POS)
 		{
@@ -1355,6 +1347,10 @@ void Sci3_CommonUpper_FaultChk(void)
 	if (Sci_CommonUpper_ClearUsartFault(USART3))
 	{
 		gu16_CommuErrCnt_SCI3++;
+		if (0 == gu8_TxEnable_SCI3)
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART3, &g_stCurrentMsgPtr_SCI3);
+		}
 	}
 }
 
@@ -1373,96 +1369,18 @@ void Sci3_CommonUpper_FaultChk(void)
  *=================================================================*/
 void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
-	// RC1IE = 0;// 禁止EUSART2 接收中断
-	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
-	// NVIC_DisableIRQ(USART3_IRQn);
-	USART3->CR1 &= (uint16_t)~USART_CR1_RXNEIE;			  // 和上面那句话二选一
-	s->u16Buffer[s->ptr_no] = USART3->DR; // 从RXFIFO 中读取接收到的数据
-	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
-	{
-		s->ptr_no = 0;
-		s->u16Buffer[0] = 0;
-	}
-	else
-	{
-		if (s->ptr_no == 1)
-		{
-			switch (s->u16Buffer[s->ptr_no])
-			{
-			case RS485_CMD_READ_REGS:
-				s->enRs485CmdType = RS485_CMD_READ_REGS;
-				break;
-			case RS485_CMD_WRITE_REG:
-				s->enRs485CmdType = RS485_CMD_WRITE_REG;
-				break;
-			case RS485_CMD_WRITE_REGS:
-				s->enRs485CmdType = RS485_CMD_WRITE_REGS;
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				s->u16Buffer[1] = 0;
-				break;
-			}
-		}
-		else if (s->ptr_no >= 2)
-		{
-			switch (s->enRs485CmdType)
-			{
-			case RS485_CMD_READ_REGS:
-			case RS485_CMD_WRITE_REG:
-				if (s->ptr_no == 7)
-				{ //	receive complete
-					s->csr = RS485_STA_RX_COMPLETE;
-					// RCSTA1bits.CREN = 0;  //禁止接收
-					// RC1IE = 0;			// 禁止EUSART2 接收中断
-					USART3->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART3->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			case RS485_CMD_WRITE_REGS:
-				if ((s->ptr_no >= 7) && (s->ptr_no == (s->u16Buffer[6] + 8)))
-				{
-					s->csr = RS485_STA_RX_COMPLETE;
-					// disable rx TODO
-					// disable rx/tx interrupt TODO
-					// RCSTA1bits.CREN = 0;    //禁止接收
-					// RC1IE = 0;				// 禁止EUSART2 接收中断
-					USART3->CR1 &= (uint16_t)~USART_CR1_RE;
-					USART3->CR1 &= (uint16_t)~USART_CR1_RXNEIE;
-				}
-				break;
-			default:
-				s->ptr_no = RS485_MAX_BUFFER_SIZE;
-				s->u16Buffer[0] = 0;
-				break;
-			}
-		}
-		s->ptr_no++;
-		if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
-		{
-			s->ptr_no = 0;
-			s->u16Buffer[0] = 0;
-		}
-	}
-	if (s->csr != RS485_STA_RX_COMPLETE)
-	{
-		USART3->CR1 |= USART_CR1_RXNEIE;
-	}
+	Sci_CommonUpper_RxIrqDeal(USART3, s);
+}
+
+void Sci3_CommonUpper_Idle_Deal(struct RS485MSG *s)
+{
+	(void)Sci_CommonUpper_IdleIrqDeal(USART3, s);
 }
 
 void Sci3_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	if (0 == gu8_TxEnable_SCI3)
 	{
-		return;
-	}
-
-	if (gu16_CommuErrCnt_SCI3)
-	{ // 出现错误不回复，等待主状态机重新打开接收
-		Sci_CommonUpper_StopTxIrq(USART3);
-		Sci_CommonUpper_SetTxComplete(s, &gu8_TxEnable_SCI3, &gu8_TxFinishFlag_SCI3);
-		gu16_CommuErrCnt_SCI3 = 0;
 		return;
 	}
 
@@ -1516,6 +1434,7 @@ void InitSCI3_CommonUpper(void)
 	USART3->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
 	USART_ITConfig(USART3, USART_IT_RXNE, ENABLE); // 使能接收中断
+	USART_ITConfig(USART3, USART_IT_IDLE, ENABLE); // 使能空闲中断，用于判定一帧结束
 	USART_Cmd(USART3, ENABLE);					   // 使能串口3
 
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI3);
@@ -1534,6 +1453,11 @@ void App_CommonUpperSCI3(struct RS485MSG *s)
 	case RS485_STA_RX_COMPLETE:
 	{
 		USART3->CR1 &= (uint16_t)~USART_CR1_RXNEIE; // 禁止产生中断
+		if (0 == Sci_CommonUpper_CheckRxFrame(s))
+		{
+			Sci_CommonUpper_DiscardRxFrame(USART3, s);
+			break;
+		}
 		CRC_verify(s);
 		if (s->AckType == RS485_ACK_POS)
 		{
