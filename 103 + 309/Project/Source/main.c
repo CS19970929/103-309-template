@@ -41,6 +41,11 @@ int main(void)
 #if (defined _DEBUG_CODE)
 #else
 		App_SysTime();
+		if (g_st_SysTimeFlag.bits.b1Sys10msFlag1)
+		{
+			App_WarnCtrl();
+			APP_LedBar();
+		}
 		App_AFEGet();
 		PowerUi_ProcessRequests();
 		App_Sci();

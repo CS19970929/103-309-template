@@ -274,6 +274,7 @@ void USART1_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI1
   Sci1_CommonUpper_FaultChk();
+  Sci1_CommonUpper_Tx_IRQHandler(&g_stCurrentMsgPtr_SCI1);
 #endif
 
   if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
@@ -281,7 +282,6 @@ void USART1_IRQHandler(void)
     RTC_ExtComCnt++;
 
 #ifdef _COMMOM_UPPER_SCI1
-    Sci1_CommonUpper_FaultChk();
     Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
 #endif
 
@@ -302,6 +302,7 @@ void USART2_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI2
   Sci2_CommonUpper_FaultChk();
+  Sci2_CommonUpper_Tx_IRQHandler(&g_stCurrentMsgPtr_SCI2);
 #endif
 
   if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
@@ -309,7 +310,6 @@ void USART2_IRQHandler(void)
     RTC_ExtComCnt++;
 
 #ifdef _COMMOM_UPPER_SCI2
-    Sci2_CommonUpper_FaultChk();
     Sci2_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI2);
 #endif
 
@@ -329,6 +329,7 @@ void USART3_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI3
   Sci3_CommonUpper_FaultChk();
+  Sci3_CommonUpper_Tx_IRQHandler(&g_stCurrentMsgPtr_SCI3);
 #endif
 
   if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
@@ -336,7 +337,6 @@ void USART3_IRQHandler(void)
     RTC_ExtComCnt++;
 
 #ifdef _COMMOM_UPPER_SCI3
-    Sci3_CommonUpper_FaultChk();
     Sci3_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI3);
 #endif
 

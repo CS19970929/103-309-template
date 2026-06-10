@@ -72,7 +72,7 @@ void InitTimer(void)
 
 	/*	TIM3 中断嵌套设计*/
 	NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0; // 先占优先级0级
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级低于USART，避免串口接收溢出
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 从优先级3级
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
@@ -290,8 +290,6 @@ void TIM3_IRQHandler(void)
 				if (g_u810msClockCnt >= 5)
 				{ // 10ms
 					g_u810msClockCnt = 0;
-					App_WarnCtrl();
-					APP_LedBar();
 				}
 			}
 

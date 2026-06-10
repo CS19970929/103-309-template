@@ -537,10 +537,13 @@ extern struct stCell_Info g_stCellInfoReport;
 
 void Sci1_CommonUpper_FaultChk(void);
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s);
+void Sci1_CommonUpper_Tx_IRQHandler(struct RS485MSG *s);
 void Sci2_CommonUpper_FaultChk(void);
 void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s);
+void Sci2_CommonUpper_Tx_IRQHandler(struct RS485MSG *s);
 void Sci3_CommonUpper_FaultChk(void);
 void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
+void Sci3_CommonUpper_Tx_IRQHandler(struct RS485MSG *s);
 
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
