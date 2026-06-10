@@ -223,7 +223,7 @@ void EXTI9_5_IRQHandler(void)
   {
     // sys_time.test_cnt1++;
     // extern LEDBAR_COMMAND LedBar_Command;
-    // g_irq_t = soc_key;
+    g_irq_t = soc_key;
     // if (!sys_time.power_on)
     // {
     //   extern void LedBar_StartUp_var_init(void);

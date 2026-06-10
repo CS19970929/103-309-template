@@ -13,6 +13,10 @@ uint8_t reset_sleep_state = 0;
 #define SLEEP_BKP_FLAG_REG      BKP_DR6
 #define SLEEP_BKP_FLAG_INV_REG  BKP_DR7
 
+static UINT8 SleepDeal_SelectMode(void);
+static UINT16 SleepDeal_ModeToFlag(UINT8 mode);
+static void SleepDeal_RunStopWake(UINT8 mode);
+
 static UINT8 SleepDeal_IsValidSleepFlag(UINT16 flag)
 {
 	return (flag == FLASH_NORMAL_SLEEP_VALUE) ||
@@ -25,6 +29,72 @@ static void SleepDeal_EnableBackupAccess(void)
 {
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
 	PWR_BackupAccessCmd(ENABLE);
+}
+
+static UINT8 SleepDeal_SelectMode(void)
+{
+	if (Sleep_Mode.bits.b1TestSleep)
+	{
+		return NORMAL_MODE;
+	}
+	if (Sleep_Mode.bits.b1OverCurSleep)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1OverVdeltaSleep)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1CBCSleep)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1ForceToSleep_L1)
+	{
+		return HICCUP_MODE;
+	}
+	if (Sleep_Mode.bits.b1ForceToSleep_L2)
+	{
+		return NORMAL_MODE;
+	}
+	if (Sleep_Mode.bits.b1ForceToSleep_L3)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1VcellOVP)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1VcellUVP)
+	{
+		return DEEP_MODE;
+	}
+	if (Sleep_Mode.bits.b1NormalSleep_L1)
+	{
+		return HICCUP_MODE;
+	}
+	if (Sleep_Mode.bits.b1NormalSleep_L2)
+	{
+		return NORMAL_MODE;
+	}
+	if (Sleep_Mode.bits.b1NormalSleep_L3)
+	{
+		return DEEP_MODE;
+	}
+	return NORMAL_MODE;
+}
+
+static UINT16 SleepDeal_ModeToFlag(UINT8 mode)
+{
+	if (mode == HICCUP_MODE)
+	{
+		return FLASH_HICCUP_SLEEP_VALUE;
+	}
+	if (mode == DEEP_MODE)
+	{
+		return FLASH_DEEP_SLEEP_VALUE;
+	}
+	return FLASH_NORMAL_SLEEP_VALUE;
 }
 
 UINT8 SleepDeal_SaveSleepModeFlag(UINT16 flag)
@@ -70,88 +140,14 @@ void SleepDeal_ClearSleepModeFlag(void)
 void SleepDeal_Continue(void)
 {
 	UINT8 u8SleepFlagWriteOK_flag = 0;
-	static UINT8 s_u8SleepModeSelect = NORMAL_MODE;
+	UINT8 u8SleepModeSelect;
 
 	LedSnapshot_SaveRuntime();
+	u8SleepModeSelect = SleepDeal_SelectMode();
 
-	if (Sleep_Mode.bits.b1TestSleep)
+	if (SleepDeal_SaveSleepModeFlag(SleepDeal_ModeToFlag(u8SleepModeSelect)))
 	{
-		s_u8SleepModeSelect = NORMAL_MODE;
-	}
-	else if (Sleep_Mode.bits.b1OverCurSleep)
-	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1OverVdeltaSleep)
-	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1CBCSleep)
-	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1ForceToSleep_L1)
-	{
-		s_u8SleepModeSelect = HICCUP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1ForceToSleep_L2)
-	{
-		s_u8SleepModeSelect = NORMAL_MODE;
-	}
-	else if (Sleep_Mode.bits.b1ForceToSleep_L3)
-	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1VcellOVP)
-	{
-		// s_u8SleepModeSelect = HICCUP_MODE;
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1VcellUVP)
-	{
-		// s_u8SleepModeSelect = HICCUP_MODE;
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1NormalSleep_L1)
-	{
-		s_u8SleepModeSelect = HICCUP_MODE;
-	}
-	else if (Sleep_Mode.bits.b1NormalSleep_L2)
-	{
-		s_u8SleepModeSelect = NORMAL_MODE;
-	}
-	else if (Sleep_Mode.bits.b1NormalSleep_L3)
-	{
-		s_u8SleepModeSelect = DEEP_MODE;
-	}
-	else
-	{
-		s_u8SleepModeSelect = NORMAL_MODE;
-	}
-
-	switch (s_u8SleepModeSelect)
-	{
-	case NORMAL_MODE:
-		if (SleepDeal_SaveSleepModeFlag(FLASH_NORMAL_SLEEP_VALUE))
-		{
-			u8SleepFlagWriteOK_flag = 1;
-		}
-		break;
-	case HICCUP_MODE:
-		if (SleepDeal_SaveSleepModeFlag(FLASH_HICCUP_SLEEP_VALUE))
-		{
-			u8SleepFlagWriteOK_flag = 1;
-		}
-
-		break;
-	case DEEP_MODE:
-		if (SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE))
-		{
-			u8SleepFlagWriteOK_flag = 1;
-		}
-		break;
-	default:
-		break;
+		u8SleepFlagWriteOK_flag = 1;
 	}
 
 	if (u8SleepFlagWriteOK_flag)
@@ -668,7 +664,7 @@ void SleepDeal_Test(void)
 	}
 }
 
-static UINT8 SleepDeal_RunStopWake(UINT8 mode)
+static void SleepDeal_RunStopWake(UINT8 mode)
 {
 	while (1)
 	{
@@ -688,31 +684,38 @@ static UINT8 SleepDeal_RunStopWake(UINT8 mode)
 			InitWakeUp_DeepMode();
 		}
 
+		g_irq_t = NO_IRQ;
+		(void)SleepWakeFastUi_ServiceAfterStop(mode);
 		Sys_StopMode();
 		(void)SleepWakeFastUi_ServiceAfterStop(mode);
 	}
-	return 0;
 }
 
 void IsSleepStartUp(void)
 {
+	UINT8 mode = DEEP_MODE;
+
 	switch (SleepDeal_LoadSleepModeFlag())
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
-		(void)SleepDeal_RunStopWake(HICCUP_MODE);
+		mode = HICCUP_MODE;
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
-		(void)SleepDeal_RunStopWake(NORMAL_MODE);
+		mode = NORMAL_MODE;
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
-		(void)SleepDeal_RunStopWake(DEEP_MODE);
+		mode = DEEP_MODE;
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
-		break;
 	default:
+		mode = DEEP_MODE;
+		(void)SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE);
 		break;
 	}
+
+	SleepDeal_RunStopWake(mode);
 }
+
 void App_SleepDeal(void)
 {
 	static UINT16 force_sleep_delay = 0;
@@ -734,9 +737,6 @@ void App_SleepDeal(void)
 	case SLEEP_HICCUP_NORMAL_L3:
 		SleepDeal_Normal_L3();
 		break;
-	// case SLEEP_HICCUP_CONTINUE:
-	// 	SleepDeal_Continue();
-	// 	break;
 	default:
 		Sleep_Status = SLEEP_HICCUP_NORMAL_SELECT;
 		break;

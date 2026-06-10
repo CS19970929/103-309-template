@@ -25,24 +25,20 @@ static UINT8 SleepWakeFastUi_SaveWakePreview(UINT8 mode, UINT8 reason);
 static UINT8 SleepWakeFastUi_LoadWakePreview(UINT8 *mode, UINT8 *reason);
 static void SleepWakeFastUi_ClearWakePreview(void);
 static UINT8 SleepWakeFastUi_IsChargeWake(void);
-static UINT8 SleepWakeFastUi_IsSocKeyPressed(void);
+static UINT8 SleepWakeFastUi_IsPowerKeyWake(void);
+static UINT8 SleepWakeFastUi_DetectWakeReason(UINT8 *reason);
 static UINT8 SleepWakeFastUi_ConfirmPowerOn(UINT8 soc, UINT8 alarm);
 static void SleepWakeFastUi_EnterStopAgain(UINT8 mode);
 static void SleepWakeFastUi_BootAnimation(UINT8 soc, UINT8 alarm);
 
 UINT8 SleepWakeFastUi_ServiceAfterStop(UINT8 sleep_mode)
 {
+    UINT8 reason;
+
     SleepWakeFastUi_InitWakeCheckGpio();
 
-    if (SleepWakeFastUi_IsChargeWake()) {
-        if (SleepWakeFastUi_SaveWakePreview(sleep_mode, WAKE_PREVIEW_REASON_CHARGE)) {
-            MCU_RESET();
-        }
-        return SLEEP_WAKE_FAST_NONE;
-    }
-
-    if (SleepWakeFastUi_IsSocKeyPressed()) {
-        if (SleepWakeFastUi_SaveWakePreview(sleep_mode, WAKE_PREVIEW_REASON_KEY)) {
+    if (SleepWakeFastUi_DetectWakeReason(&reason)) {
+        if (SleepWakeFastUi_SaveWakePreview(sleep_mode, reason)) {
             MCU_RESET();
         }
     }
@@ -64,7 +60,11 @@ UINT8 SleepWakeFastUi_ServiceStartupPreview(void)
     UINT8 alarm;
 
     if (!SleepWakeFastUi_LoadWakePreview(&mode, &reason)) {
-        return 0;
+        SleepWakeFastUi_InitWakeCheckGpio();
+        mode = DEEP_MODE;
+        if (!SleepWakeFastUi_DetectWakeReason(&reason)) {
+            return 0;
+        }
     }
 
     SleepWakeFastUi_InitWakeCheckGpio();
@@ -93,7 +93,7 @@ UINT8 SleepWakeFastUi_ServiceStartupPreview(void)
             return SleepWakeFastUi_ConfirmPowerOn(soc, alarm);
         }
 
-        if (SleepWakeFastUi_IsSocKeyPressed()) {
+        if (SleepWakeFastUi_IsPowerKeyWake()) {
             if (hold_ticks < FAST_UI_CONFIRM_TICKS) {
                 ++hold_ticks;
             }
@@ -129,7 +129,7 @@ static void SleepWakeFastUi_InitWakeCheckGpio(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 
     GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
@@ -138,6 +138,10 @@ static void SleepWakeFastUi_InitWakeCheckGpio(void)
     GPIO_InitStructure.GPIO_Pin = PIN_SOC_KEY;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
     GPIO_Init(PORT_SOC_KEY, &GPIO_InitStructure);
+
+    GPIO_InitStructure.GPIO_Pin = PIN_KEY1;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIO_KEY1, &GPIO_InitStructure);
 }
 
 static UINT8 SleepWakeFastUi_IsValidSleepMode(UINT8 mode)
@@ -229,15 +233,40 @@ static void SleepWakeFastUi_ClearWakePreview(void)
 
 static UINT8 SleepWakeFastUi_IsChargeWake(void)
 {
+    if (g_irq_t == CHG_IRQ) {
+        return 1;
+    }
     if (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU)) {
         return 1;
     }
     return 0;
 }
 
-static UINT8 SleepWakeFastUi_IsSocKeyPressed(void)
+static UINT8 SleepWakeFastUi_IsPowerKeyWake(void)
 {
-    return (MCUI_SOC_KEY == 0) ? 1 : 0;
+    if ((g_irq_t == bms_keyirq) || (g_irq_t == soc_key)) {
+        return 1;
+    }
+    if (MCUI_SOC_KEY == 0) {
+        return 1;
+    }
+    if (GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) == Bit_RESET) {
+        return 1;
+    }
+    return 0;
+}
+
+static UINT8 SleepWakeFastUi_DetectWakeReason(UINT8 *reason)
+{
+    if (SleepWakeFastUi_IsChargeWake()) {
+        *reason = WAKE_PREVIEW_REASON_CHARGE;
+        return 1;
+    }
+    if (SleepWakeFastUi_IsPowerKeyWake()) {
+        *reason = WAKE_PREVIEW_REASON_KEY;
+        return 1;
+    }
+    return 0;
 }
 
 static UINT8 SleepWakeFastUi_ConfirmPowerOn(UINT8 soc, UINT8 alarm)
