@@ -843,7 +843,7 @@ static void soc_update_rest_timer(SOC_MODE mode)
 {
 	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 
-	if (mode != SOC_MODE_RELAX)
+	if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
 	{
 		soc_reset_rest_confidence();
 		return;

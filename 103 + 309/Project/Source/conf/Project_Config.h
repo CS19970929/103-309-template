@@ -235,7 +235,7 @@
 #define PROJECT_CFG_UPGRADE_OTHER_CUR_LIMIT_CUR 30
 
 // <o> Normal sleep voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_NORMAL 3200
+#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_NORMAL 4200
 // <o> Normal sleep time min <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_NORMAL 7200
 // <o> Low-voltage sleep voltage mV <1000-5000>
