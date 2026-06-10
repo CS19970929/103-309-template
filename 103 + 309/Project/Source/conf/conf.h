@@ -18,7 +18,7 @@
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 #define log_i(...)       ((void)0);
 #define log_w(...)       ((void)0);
@@ -65,6 +65,8 @@ typedef struct
 {
   uint64_t    sys_tick_10ms;
   uint64_t    sys_tick_1ms;
+  uint64_t    test1_cnt;
+  uint64_t    test2_cnt;
   uint32_t    can_rcv_cnt;
 
   // uint16_t    cov1_cnt;

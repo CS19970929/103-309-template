@@ -47,9 +47,11 @@ static UINT8 Sci_CommonUpper_ClearUsartFault(USART_TypeDef *USARTx)
 
 	if ((u16Sr & SCI_USART_ERR_FLAGS) == 0)
 	{
+		sys_time.test1_cnt++;
 		return 0;
 	}
 
+	sys_time.test2_cnt++;
 	(void)USARTx->DR; // STM32F10x USART错误标志需读SR后读DR清除
 	return 1;
 }
