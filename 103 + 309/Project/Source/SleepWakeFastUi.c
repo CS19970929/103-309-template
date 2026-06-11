@@ -59,13 +59,13 @@ UINT8 SleepWakeFastUi_ServiceStartupPreview(void)
     UINT16 blink_ticks;
     UINT8 alarm;
 
-    if (!SleepWakeFastUi_LoadWakePreview(&mode, &reason)) {
-        SleepWakeFastUi_InitWakeCheckGpio();
-        mode = DEEP_MODE;
-        if (!SleepWakeFastUi_DetectWakeReason(&reason)) {
-            return 0;
-        }
-    }
+    // if (!SleepWakeFastUi_LoadWakePreview(&mode, &reason)) {
+    //     SleepWakeFastUi_InitWakeCheckGpio();
+    //     mode = DEEP_MODE;
+    //     if (!SleepWakeFastUi_DetectWakeReason(&reason)) {
+    //         return 0;
+    //     }
+    // }
 
     SleepWakeFastUi_InitWakeCheckGpio();
     LedSnapshot_Load(&soc, &flags, &power_on);

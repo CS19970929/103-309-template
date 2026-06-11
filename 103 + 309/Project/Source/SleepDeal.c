@@ -10,12 +10,10 @@ UINT8 RTC_ExtComCnt = 0;
 uint8_t reset_sleep_state = 0;
 
 // use BKP instead of Flash for the one-shot sleep resume flag.
-#define SLEEP_BKP_FLAG_REG      BKP_DR6
-#define SLEEP_BKP_FLAG_INV_REG  BKP_DR7
+#define SLEEP_BKP_FLAG_REG BKP_DR6
+#define SLEEP_BKP_FLAG_INV_REG BKP_DR7
 
-static UINT8 SleepDeal_SelectMode(void);
 static UINT16 SleepDeal_ModeToFlag(UINT8 mode);
-static void SleepDeal_RunStopWake(UINT8 mode);
 
 static UINT8 SleepDeal_IsValidSleepFlag(UINT16 flag)
 {
@@ -29,59 +27,6 @@ static void SleepDeal_EnableBackupAccess(void)
 {
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
 	PWR_BackupAccessCmd(ENABLE);
-}
-
-static UINT8 SleepDeal_SelectMode(void)
-{
-	if (Sleep_Mode.bits.b1TestSleep)
-	{
-		return NORMAL_MODE;
-	}
-	if (Sleep_Mode.bits.b1OverCurSleep)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1OverVdeltaSleep)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1CBCSleep)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1ForceToSleep_L1)
-	{
-		return HICCUP_MODE;
-	}
-	if (Sleep_Mode.bits.b1ForceToSleep_L2)
-	{
-		return NORMAL_MODE;
-	}
-	if (Sleep_Mode.bits.b1ForceToSleep_L3)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1VcellOVP)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1VcellUVP)
-	{
-		return DEEP_MODE;
-	}
-	if (Sleep_Mode.bits.b1NormalSleep_L1)
-	{
-		return HICCUP_MODE;
-	}
-	if (Sleep_Mode.bits.b1NormalSleep_L2)
-	{
-		return NORMAL_MODE;
-	}
-	if (Sleep_Mode.bits.b1NormalSleep_L3)
-	{
-		return DEEP_MODE;
-	}
-	return NORMAL_MODE;
 }
 
 static UINT16 SleepDeal_ModeToFlag(UINT8 mode)
@@ -139,18 +84,9 @@ void SleepDeal_ClearSleepModeFlag(void)
 
 void SleepDeal_Continue(void)
 {
-	UINT8 u8SleepFlagWriteOK_flag = 0;
-	UINT8 u8SleepModeSelect;
-
 	LedSnapshot_SaveRuntime();
-	u8SleepModeSelect = SleepDeal_SelectMode();
 
-	if (SleepDeal_SaveSleepModeFlag(SleepDeal_ModeToFlag(u8SleepModeSelect)))
-	{
-		u8SleepFlagWriteOK_flag = 1;
-	}
-
-	if (u8SleepFlagWriteOK_flag)
+	if (SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE))
 	{
 		InitAFE1_Sleep(0);
 		AFE_Sleep();
@@ -664,36 +600,10 @@ void SleepDeal_Test(void)
 	}
 }
 
-static void SleepDeal_RunStopWake(UINT8 mode)
-{
-	while (1)
-	{
-		if (mode == HICCUP_MODE)
-		{
-			IOstatus_RTCMode();
-			InitWakeUp_RTCMode();
-		}
-		else if (mode == NORMAL_MODE)
-		{
-			IOstatus_NormalMode();
-			InitWakeUp_NormalMode();
-		}
-		else
-		{
-			IOstatus_DeepMode();
-			InitWakeUp_DeepMode();
-		}
-
-		g_irq_t = NO_IRQ;
-		(void)SleepWakeFastUi_ServiceAfterStop(mode);
-		Sys_StopMode();
-		(void)SleepWakeFastUi_ServiceAfterStop(mode);
-	}
-}
-
 void IsSleepStartUp(void)
 {
-	UINT8 mode = DEEP_MODE;
+	// UINT8 mode = DEEP_MODE;
+	UINT8 mode = FLASH_SLEEP_RESET_VALUE;
 
 	switch (SleepDeal_LoadSleepModeFlag())
 	{
@@ -708,12 +618,39 @@ void IsSleepStartUp(void)
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
 	default:
-		mode = DEEP_MODE;
-		(void)SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE);
+		// mode = DEEP_MODE;
+		// (void)SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE);
 		break;
 	}
 
-	SleepDeal_RunStopWake(mode);
+	if (mode == FLASH_DEEP_SLEEP_VALUE)
+	{
+		while (1)
+		{
+			{
+				IOstatus_DeepMode();
+				InitWakeUp_DeepMode();
+			}
+
+			g_irq_t = NO_IRQ;
+			Sys_StopMode();
+			(void)SleepWakeFastUi_ServiceAfterStop(mode);
+
+			UINT8 reason;
+
+			SleepWakeFastUi_InitWakeCheckGpio();
+
+			if (SleepWakeFastUi_DetectWakeReason(&reason))
+			{
+				break;
+				// if (SleepWakeFastUi_SaveWakePreview(sleep_mode, reason))
+				// {
+				// 	MCU_RESET();
+				// }
+			}
+		}
+	}
+	SleepWakeFastUi_ServiceStartupPreview();
 }
 
 void App_SleepDeal(void)
