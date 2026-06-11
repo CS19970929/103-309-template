@@ -7,5 +7,7 @@
 
 UINT8 SleepWakeFastUi_ServiceAfterStop(UINT8 sleep_mode);
 UINT8 SleepWakeFastUi_ServiceStartupPreview(void);
+void SleepWakeFastUi_InitWakeCheckGpio(void);
+UINT8 SleepWakeFastUi_DetectWakeReason(UINT8 *reason);
 
 #endif

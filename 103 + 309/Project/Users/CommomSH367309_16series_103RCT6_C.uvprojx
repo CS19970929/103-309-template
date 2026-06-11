@@ -609,6 +609,11 @@
               <FileType>1</FileType>
               <FilePath>..\Source\uavcan.equipment.power.BatteryInfo.c</FilePath>
             </File>
+            <File>
+              <FileName>App_Trace.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\App_Trace.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

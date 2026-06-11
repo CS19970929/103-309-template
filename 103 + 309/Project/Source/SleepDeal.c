@@ -1,6 +1,7 @@
 #include "main.h"
 #include "LedSnapshot.h"
 #include "SleepWakeFastUi.h"
+// #include "SleepWakeFastUi.h"
 
 volatile union SLEEP_MODE Sleep_Mode; // 用于外部控制进入休眠标志�?
 enum SLEEP_STATUS Sleep_Status = SLEEP_HICCUP_SHIFT;
@@ -603,7 +604,9 @@ void SleepDeal_Test(void)
 void IsSleepStartUp(void)
 {
 	// UINT8 mode = DEEP_MODE;
-	UINT8 mode = FLASH_SLEEP_RESET_VALUE;
+	UINT8 mode = NO_SLEEP;
+	bool is_ret_from_deepsleep = false;
+	UINT8 last_mode = NO_SLEEP;
 
 	switch (SleepDeal_LoadSleepModeFlag())
 	{
@@ -618,39 +621,31 @@ void IsSleepStartUp(void)
 		break;
 	case FLASH_SLEEP_RESET_VALUE:
 	default:
-		// mode = DEEP_MODE;
-		// (void)SleepDeal_SaveSleepModeFlag(FLASH_DEEP_SLEEP_VALUE);
 		break;
 	}
 
-	if (mode == FLASH_DEEP_SLEEP_VALUE)
+	if (mode == DEEP_MODE)
 	{
 		while (1)
 		{
-			{
-				IOstatus_DeepMode();
-				InitWakeUp_DeepMode();
-			}
+			IOstatus_DeepMode();
+			InitWakeUp_DeepMode();
 
 			g_irq_t = NO_IRQ;
 			Sys_StopMode();
-			(void)SleepWakeFastUi_ServiceAfterStop(mode);
+			SystemInit();
+			InitDelay();
 
 			UINT8 reason;
-
-			SleepWakeFastUi_InitWakeCheckGpio();
-
 			if (SleepWakeFastUi_DetectWakeReason(&reason))
 			{
+				is_ret_from_deepsleep = true;
 				break;
-				// if (SleepWakeFastUi_SaveWakePreview(sleep_mode, reason))
-				// {
-				// 	MCU_RESET();
-				// }
 			}
 		}
 	}
-	SleepWakeFastUi_ServiceStartupPreview();
+	if (is_ret_from_deepsleep)
+		SleepWakeFastUi_ServiceStartupPreview();
 }
 
 void App_SleepDeal(void)

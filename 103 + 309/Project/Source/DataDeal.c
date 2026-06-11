@@ -489,8 +489,8 @@ void test_Autocurrent_cycle(void)
 {
 	static uint8_t step = 0;
 #if 1
-	static uint16_t CHG_current = 200;
-	static uint16_t DSG_current = 400;
+	static uint16_t CHG_current = 500;
+	static uint16_t DSG_current = 500;
 #else
 	static uint16_t CHG_current = 200;
 	static uint16_t DSG_current = 400;
@@ -555,8 +555,8 @@ void App_AFEGet(void)
 	DataLoad_CellVoltMaxMinFind();
 	DataLoad_Temperature();
 	DataLoad_TemperatureMaxMinFind();
-	DataLoad_Current();
-	// test_Autocurrent_cycle();
+	// DataLoad_Current();
+	test_Autocurrent_cycle();
 	App_SH367309();
 	App_MOS_Relay_Ctrl();
 
