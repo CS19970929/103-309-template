@@ -86,7 +86,7 @@ void LogRecord_RequestStartup(void)
 
 void LogRecord_RequestSleep(void)
 {
-    LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
+	LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
 }
 
 UINT8 LogTime_Map(UINT32 *Time_S_Cnt)
@@ -130,7 +130,7 @@ void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 	}
 	++s_log_record.point;
 
-	if (StorageFlash_SaveLogData(s_log_record.point, (const UINT8 (*)[2])s_log_record.records))
+	if (StorageFlash_SaveLogData(s_log_record.point, (const UINT8(*)[2])s_log_record.records))
 	{
 		LogRecord_MarkEventSaved(event);
 	}
@@ -148,11 +148,7 @@ void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 	}
 	else if (BMS_SLEEP == event)
 	{
-		if (s_log_record.flags.bits.Log_Sleep)
-		{
-			LogEvent_EEPROM(event, Time_S_Cnt);
-			s_log_record.flags.bits.Log_Sleep = 0U;
-		}
+		LogEvent_EEPROM(event, Time_S_Cnt);
 	}
 	else if (CBC_ERR == event)
 	{
@@ -274,7 +270,7 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 	}
 	s_log_record.point = 0;
 
-	return StorageFlash_SaveLogData(s_log_record.point, (const UINT8 (*)[2])s_log_record.records);
+	return StorageFlash_SaveLogData(s_log_record.point, (const UINT8(*)[2])s_log_record.records);
 }
 
 void ReadEEPROM_EventRecord_Parameters(void)
