@@ -186,14 +186,14 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.
