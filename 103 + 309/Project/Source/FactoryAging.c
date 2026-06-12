@@ -38,6 +38,7 @@ typedef struct FACTORY_AGING_RUNTIME_TAG
 	UINT8 bkpSaveValid;
 	UINT8 flashSaveValid;
 	UINT8 mosMode;
+	UINT32 pendingSleep10ms;
 } FactoryAgingRuntime;
 
 static FactoryAgingRuntime s_factory_aging = {
@@ -50,7 +51,8 @@ static FactoryAgingRuntime s_factory_aging = {
 	0U,
 	0U,
 	0U,
-	FACTORY_AGING_MOS_MODE_UNKNOWN
+	FACTORY_AGING_MOS_MODE_UNKNOWN,
+	0U
 };
 
 #if DEBUG_WATCH_ENABLED
@@ -385,8 +387,9 @@ static void FactoryAging_AddRunningTicks(UINT32 now_tick)
 	}
 	else
 	{
-		/* TIM3 is reset after STOP wakeup; sleep time is not aging time. */
-		delta = 0U;
+		/* TIM3 is reset after STOP wakeup; include pending sleep time. */
+		delta = s_factory_aging.pendingSleep10ms + now_tick;
+		s_factory_aging.pendingSleep10ms = 0U;
 	}
 
 	s_factory_aging.lastTick = now_tick;
@@ -458,6 +461,31 @@ UINT8 FactoryAging_SaveProgressBeforeSleep(void)
 UINT8 FactoryAging_IsActive(void)
 {
 	return (s_factory_aging.state == FACTORY_AGING_STATE_RUNNING) ? 1U : 0U;
+}
+
+void FactoryAging_ApplySleepTime(UINT32 seconds)
+{
+	s_factory_aging.pendingSleep10ms += seconds * FACTORY_AGING_10MS_PER_SEC;
+}
+
+void FactoryAging_SaveProgressQuick(void)
+{
+	UINT32 now_tick;
+
+	if (s_factory_aging.state != FACTORY_AGING_STATE_RUNNING)
+	{
+		return;
+	}
+
+	now_tick = SysTime_Get10msTickCount();
+	FactoryAging_AddRunningTicks(now_tick);
+	if (s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	{
+		FactoryAging_Finish();
+		return;
+	}
+
+	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 
 UINT8 FactoryAging_GetState(void)

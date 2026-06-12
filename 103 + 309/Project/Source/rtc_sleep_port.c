@@ -1,4 +1,5 @@
 #include "main.h"
+#include "FactoryAging.h"
 #include "LowPowerSleep.h"
 #include "IrqDebug.h"
 #include "rtc_sleep_afe_port.h"
@@ -105,6 +106,7 @@ void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
     extern UINT32 su32_Interval_S_Tcnt;
 
     su32_Interval_S_Tcnt += seconds;
+    FactoryAging_ApplySleepTime(seconds);
 }
 
 enum irqWakeup RtcSleep_PortGuessWakeupSource(void)

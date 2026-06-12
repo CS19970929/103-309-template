@@ -237,6 +237,9 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
+        FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
+        FactoryAging_SaveProgressQuick();
+
         MCUO_DEBUG_LED1 = 1;
         return true;
     }

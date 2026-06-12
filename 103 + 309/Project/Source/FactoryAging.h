@@ -19,5 +19,7 @@ UINT8 FactoryAging_StartByHost(void);
 UINT8 FactoryAging_StopByHost(void);
 UINT8 FactoryAging_ResetTimeByHost(void);
 UINT8 FactoryAging_SetDurationHoursByHost(UINT16 hours);
+void FactoryAging_ApplySleepTime(UINT32 seconds);
+void FactoryAging_SaveProgressQuick(void);
 
 #endif
