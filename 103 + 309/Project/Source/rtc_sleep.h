@@ -51,6 +51,7 @@ struct LOW_POWER_RTC_STATUS {
   uint32_t sleep;
   uint32_t last;
   uint32_t cycles;
+  uint16_t test_sample_voltage;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;

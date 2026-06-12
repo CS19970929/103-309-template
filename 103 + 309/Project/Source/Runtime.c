@@ -34,9 +34,6 @@ void Runtime_Boot(void)
 	__enable_irq();
 	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 
-	EnableLowPowerDebug();
-
-	Init_IWDG();
 
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
@@ -50,6 +47,8 @@ void Runtime_Boot(void)
 	Init_RTC();
 	DBG_Init();
 	/* RTC_WKTimeConfig(); */
+	EnableLowPowerDebug();
+	Init_IWDG();
 }
 
 void Runtime_RunOnce(void)

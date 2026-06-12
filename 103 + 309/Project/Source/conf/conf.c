@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -267,7 +267,7 @@ void InitWakeUp_NormalMode(void)
 void InitWakeUp_RTCMode(void)
 {
     InitWakeUp_NormalMode(); // ???Base?????
-    RTC_WKTimeConfig();
+    // RTC_WKTimeConfig();
 }
 
 // ???standby?????PA0?wkup???
@@ -354,6 +354,11 @@ void InitRtcWakeupCheck(void)
     InitRunAfterStopWakeup();
 }
 
+void test_rtc_led_display(void)
+{
+    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+    MCUO_DEBUG_LED1 = 0;
+}
 void InitRunAfterStopWakeup(void)
 {
     InitDelay();

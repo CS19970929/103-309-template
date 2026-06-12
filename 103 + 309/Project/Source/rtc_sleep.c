@@ -204,11 +204,6 @@ static void rtc_sleep_prepare_rtc(void)
 {
     IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 
-    if (g_stLowPowerRtcStatus.cycles == 0U)
-    {
-        g_stLowPowerRtcStatus.sleep = 0U;
-    }
-
     RtcSleep_PortPrepareRtcStop();
     RTC_ClearStopWakeup();
     g_irq_t = NO_IRQ;
@@ -217,42 +212,41 @@ static void rtc_sleep_prepare_rtc(void)
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
-    uint32_t rtc_elapsed_seconds = 0U;
-
     rtc_sleep_prepare_rtc();
+    RTC_WKTimeConfig();
 
     RtcSleep_PortEnterStop();
-    RtcSleep_PortDisableStopWakeup();
+    // RtcSleep_PortDisableStopWakeup();
 
-    if (RtcSleep_PortIsRtcWake() != 0U)
-    {
-        rtc_elapsed_seconds = RtcSleep_PortGetLastWakeupSeconds();
-        ++g_stLowPowerRtcStatus.cycles;
-        g_stLowPowerRtcStatus.sleep += rtc_elapsed_seconds;
-    }
-
-    RtcSleep_PortRestoreAfterStop();
+    extern void test_rtc_led_display(void);
+    test_rtc_led_display();
+    initAFE1_IIC();
 
     if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
+        ++g_stLowPowerRtcStatus.cycles;
+        g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
+        g_stLowPowerRtcStatus.test_sample_voltage = g_stCellInfoReport.u16VCell[0];
+
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
+
+        MCUO_DEBUG_LED1 = 1;
         return true;
     }
 
     RTC_ClearStopWakeup();
     LowPower_Request(NO_SLEEP);
+    // todo ◊–œ∏ ·¿Ìœ¬≈‰÷√
+    RtcSleep_PortRestoreAfterStop();
 
-    if (g_irq_t == NO_IRQ)
-    {
-        g_irq_t = RtcSleep_PortGuessWakeupSource();
-    }
-    RtcSleep_PortOnWakeupSource(g_irq_t);
-
+    // if (g_irq_t == NO_IRQ)
+    // {
+    //     g_irq_t = RtcSleep_PortGuessWakeupSource();
+    // }
+    // RtcSleep_PortOnWakeupSource(g_irq_t);
     g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
     RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
-    g_stLowPowerRtcStatus.cycles = 0U;
-    g_stLowPowerRtcStatus.sleep = 0U;
     return false;
 }
 
@@ -283,9 +277,16 @@ void rtc_sleep(void)
         low_power_log_and_commit_sleep(sleep_mode);
         break;
     case HICCUP_MODE:
+        g_stLowPowerRtcStatus.cycles = 0U;
+        g_stLowPowerRtcStatus.sleep = 0U;
+        Init_RTC();
+        IOstatus_RTCMode();
+        InitWakeUp_RTCMode();
+
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
+        RtcSleep_PortDisableStopWakeup();
         break;
     default:
         LowPower_Request(NO_SLEEP);

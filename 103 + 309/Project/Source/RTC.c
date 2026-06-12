@@ -7,7 +7,6 @@ typedef struct RTC_RUNTIME_TAG
 	__IO UINT8 disp;
 	volatile bool wake;
 	struct RTC_ELEMENT time;
-	UINT32 last;
 	UINT32 wake_override;
 } RTC_RUNTIME;
 
@@ -330,6 +329,7 @@ static void RTC_DisableSecondInterrupt(void)
 static void RTC_DisableAlarmInterrupt(void)
 {
 	RTC_ITConfig(RTC_IT_ALR, DISABLE);
+	//todo ??
 	RTC_WaitForLastTaskSafe();
 	RTC_ClearAlarmPending();
 }
@@ -394,6 +394,7 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
 	UINT32 wake_seconds;
 
+#if 0
 	if (s_rtc.wake_override != 0U)
 	{
 		wake_seconds = s_rtc.wake_override;
@@ -413,13 +414,15 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 		wake_seconds = RTC_WAKEUP_IWDG_SAFE_SECONDS;
 	}
 #endif
+#endif
+	wake_seconds = RTC_WAKEUP_DEFAULT_SECONDS;
 
 	return wake_seconds;
 }
 
 UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 {
-	return s_rtc.last;
+	return RTC_WAKEUP_DEFAULT_SECONDS;
 }
 
 void RTC_SetWakeupPeriodSeconds(UINT32 seconds)
@@ -449,7 +452,6 @@ void RTC_WKTimeConfig(void)
 	RTC_DisableSecondInterrupt();
 	RTC_DisableAlarmInterrupt();
 	wake_seconds = RTC_GetWakeupPeriodSeconds();
-	s_rtc.last = wake_seconds;
 	RTC_EnableAlarmAfterSeconds(wake_seconds);
 }
 
