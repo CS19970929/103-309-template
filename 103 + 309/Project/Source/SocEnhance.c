@@ -56,6 +56,13 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
 
+#define SOC_UVP_MV                  ((UINT16)2800U)
+#define SOC_SAFETY_MARGIN_MV        ((UINT16)100U)
+#define SOC_R_INTERNAL_ESTIMATE_X10 ((UINT16)100U)
+#define SOC_SAG_MAX_MV              ((UINT16)800U)
+#define SOC_LOW_SOC_ACCEL_SOC       ((UINT8)10U)
+#define SOC_LOW_SOC_ACCEL_TICKS     ((UINT16)50U)
+
 typedef enum
 {
 	SOC_MODE_RELAX = 0,
@@ -104,13 +111,6 @@ typedef struct SOC_SAVE_MARK_TAG
 	UINT8 soc;
 } SOC_SAVE_MARK;
 
-typedef struct SOC_EMPTY_TAIL_RULE_TAG
-{
-	int16_t offset_mv;
-	UINT8 target[SOC_EMPTY_BAND_COUNT];
-	UINT16 ticks[SOC_EMPTY_BAND_COUNT];
-} SOC_EMPTY_TAIL_RULE;
-
 typedef struct
 {
 	UINT8 target;
@@ -120,77 +120,13 @@ typedef struct
 static SOC_STATE s_soc;
 static SOC_SAVE_MARK s_saved_soc;
 static const UINT8 s_soc_default_startup_percent = 60U;
-/* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
 static UINT32 s_u32SocRtcRestAppliedSeconds;
+static UINT16 s_u16LowSocAccelTimer = 0U;
 
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
-
-// #define SOC_EMPTY_TAIL_STEP_TICKS		(5U * 60U)
-#define SOC_EMPTY_TAIL_STEP_TICKS		(5U)
-// static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-// 	{
-// 		-50,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		-25,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		0,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		50,
-// 		{3U, 5U, 8U, 12U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		100,
-// 		{5U, 10U, 14U, 18U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		200,
-// 		{8U, 14U, 20U, 25U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		300,
-// 		{14U, 18U, 25U, 32U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		400,
-// 		{18U, 22U, 30U, 40U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// };
-static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-	// {-50, {0U, 0U, 0U, 0U}, 	{10U, 10U, 10U, 10U}},
-	{-25, {0U, 0U, 0U, 0U}, 	{10U, 10U, 10U, 10U}},
-	{-5,  {0U, 0U, 0U, 0U}, 	{20U, 20U, 20U, 10U}},
-	{0,   {0U, 0U, 0U, 0U}, 	{50U, 50U, 50U, 50U}},
-	{50,  {2U, 5U, 8U, 12U}, 	{50U, 50U, 50U, 50U}},
-	{100, {5U, 10U, 14U, 18U},  {50U, 50U, 50U, 50U}},
-	{200, {8U, 14U, 20U, 25U},  {60U, 50U, 40U, 30U}},
-	{300, {14U, 18U, 25U, 32U}, {90U, 75U, 60U, 45U}},
-	{400, {18U, 22U, 30U, 40U}, {120U, 100U, 80U, 60U}},
-};
 
 #if (PROJECT_CFG_BAT_CHEMISTRY == 1)
 const UINT16 SOC_Table_LiFePO[SOC_TABLE_SIZE] = {
@@ -385,6 +321,35 @@ static UINT16 soc_empty_threshold_mv(int16_t offset_mv)
 	{
 		return SOC_VALID_MAX_MV;
 	}
+	return (UINT16)threshold;
+}
+
+static UINT16 soc_calc_dynamic_empty_mv(int32_t current_ma)
+{
+	UINT32 sag_mv;
+	UINT32 threshold;
+
+	if (current_ma < 0)
+	{
+		sag_mv = (UINT32)((-(int64_t)current_ma) * (int64_t)SOC_R_INTERNAL_ESTIMATE_X10) / 10000U;
+	}
+	else
+	{
+		sag_mv = 0U;
+	}
+
+	if (sag_mv > (UINT32)SOC_SAG_MAX_MV)
+	{
+		sag_mv = (UINT32)SOC_SAG_MAX_MV;
+	}
+
+	threshold = (UINT32)SOC_UVP_MV + (UINT32)SOC_SAFETY_MARGIN_MV + sag_mv;
+
+	if (threshold > (UINT32)SOC_VALID_MAX_MV)
+	{
+		threshold = (UINT32)SOC_VALID_MAX_MV;
+	}
+
 	return (UINT16)threshold;
 }
 
@@ -663,8 +628,8 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
 	SOC_EMPTY_BAND band;
-	UINT16 i;
-	UINT16 threshold;
+	UINT16 dynamic_mv;
+	int32_t voltage_deficit;
 
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
 	{
@@ -674,8 +639,10 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 	{
 		return 0U;
 	}
-	if (g_stCellInfoReport.u16VCellMin >
-		soc_empty_threshold_mv(SOC_EMPTY_TAIL_START_OFFSET_MV))
+
+	dynamic_mv = soc_calc_dynamic_empty_mv(net_current_ma);
+
+	if (g_stCellInfoReport.u16VCellMin > dynamic_mv)
 	{
 		return 0U;
 	}
@@ -699,21 +666,25 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 		band = SOC_EMPTY_BAND_HEAVY;
 	}
 
-	for (i = 0U; i < (UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])); ++i)
+	voltage_deficit = (int32_t)dynamic_mv - (int32_t)g_stCellInfoReport.u16VCellMin;
+
+	if (voltage_deficit <= 50)
 	{
-		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
-		if (g_stCellInfoReport.u16VCellMin <= threshold)
-		{
-			step->target = s_empty_tail_table[i].target[band];
-			step->ticks = s_empty_tail_table[i].ticks[band];
-			if (step->ticks == 0U)
-			{
-				step->ticks = 1U;
-			}
-			return 1U;
-		}
+		step->target = (band == SOC_EMPTY_BAND_HEAVY) ? 5U : 3U;
+		step->ticks = 100U;
 	}
-	return 0U;
+	else if (voltage_deficit <= 150)
+	{
+		step->target = (band == SOC_EMPTY_BAND_HEAVY) ? 3U : 1U;
+		step->ticks = 50U;
+	}
+	else
+	{
+		step->target = 0U;
+		step->ticks = 20U;
+	}
+
+	return 1U;
 }
 
 static UINT8 soc_apply_full_confirm(UINT8 active)
@@ -996,6 +967,22 @@ void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 		{
 			voltage_calibrated = 1U;
 		}
+	}
+
+	if ((s_soc.soc <= SOC_LOW_SOC_ACCEL_SOC) && (s_soc.soc > 0U) && (mode == SOC_MODE_DSG))
+	{
+		s_u16LowSocAccelTimer++;
+		if (s_u16LowSocAccelTimer >= SOC_LOW_SOC_ACCEL_TICKS)
+		{
+			s_u16LowSocAccelTimer = 0U;
+			s_soc.soc--;
+			s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * s_soc.soc) / 100ULL);
+			voltage_calibrated = 1U;
+		}
+	}
+	else
+	{
+		s_u16LowSocAccelTimer = 0U;
 	}
 
 	sag_hold_blocked = soc_sag_hold_blocks_calibration();

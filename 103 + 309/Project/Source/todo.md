@@ -1633,3 +1633,5 @@ led模块太复杂了，不仅是本身逻辑复杂、LedBarRuntime结构体成�
 System_ErrorControlBase???
 
 合并AppInit和Runtime，同时Runtime主循环实现合并为一个函数，不需要分这么多函数，然后rtc_sleep是否应该放在循环的末尾
+
+整个项目的调度时序是怎样的

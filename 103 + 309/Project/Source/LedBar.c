@@ -358,11 +358,22 @@ static void LedBar_GpioPrepareForStop(void)
     LedBar_AllPinsOutputLow();
 }
 
+static void LedBar_ClearAllOdr(void)
+{
+    uint8_t pin_id;
+
+    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+    {
+        LedBar_PinWrite(pin_id, Bit_RESET);
+    }
+}
+
 static void LedBar_OutputRoute(uint8_t route_id)
 {
     const LedBarRoute *route;
 
     LedBar_AllPinsHiZ();
+    LedBar_ClearAllOdr();
     if (route_id >= (uint8_t)LEDBAR_ROUTE_COUNT)
     {
         return;

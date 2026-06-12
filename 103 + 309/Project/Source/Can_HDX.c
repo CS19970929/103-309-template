@@ -793,13 +793,26 @@ static void InitCan_Filter(void)
 {
 	CAN_FilterInitTypeDef filter;
 
+	/* Filter 0: Standard frame 0x0060 (Comm Tool commands) */
 	filter.CAN_FilterNumber = 0U;
 	filter.CAN_FilterMode = CAN_FilterMode_IdMask;
 	filter.CAN_FilterScale = CAN_FilterScale_32bit;
-	filter.CAN_FilterIdHigh = 0U;
-	filter.CAN_FilterIdLow = 0U;
-	filter.CAN_FilterMaskIdHigh = 0U;
-	filter.CAN_FilterMaskIdLow = 0U;
+	filter.CAN_FilterIdHigh = (UINT16)(((UINT16)0x0060U) << 5U);
+	filter.CAN_FilterIdLow = 0x0000U;
+	filter.CAN_FilterMaskIdHigh = (UINT16)(((UINT16)0x7FFU) << 5U);
+	filter.CAN_FilterMaskIdLow = 0x0000U;
+	filter.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
+	filter.CAN_FilterActivation = ENABLE;
+	CAN_FilterInit(&filter);
+
+	/* Filter 1: Extended frames (IAP control 0x14F8F0xx, IAP data 0x140000xx) */
+	filter.CAN_FilterNumber = 1U;
+	filter.CAN_FilterMode = CAN_FilterMode_IdMask;
+	filter.CAN_FilterScale = CAN_FilterScale_32bit;
+	filter.CAN_FilterIdHigh = 0x0000U;
+	filter.CAN_FilterIdLow = (UINT16)(0x0001U << 3U);
+	filter.CAN_FilterMaskIdHigh = 0x0000U;
+	filter.CAN_FilterMaskIdLow = (UINT16)(0x0001U << 3U);
 	filter.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
 	filter.CAN_FilterActivation = ENABLE;
 	CAN_FilterInit(&filter);
