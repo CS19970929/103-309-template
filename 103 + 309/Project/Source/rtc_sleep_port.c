@@ -65,16 +65,6 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
     SleepDeal_Continue(sleep_mode);
 }
 
-void RtcSleep_PortPrepareRtcStop(void)
-{
-    LowPowerSleep_SaveCoreState();
-
-    //todo 还必须放这儿
-    // Init_RTC();
-    // IOstatus_RTCMode();
-    // InitWakeUp_RTCMode();
-}
-
 void RtcSleep_PortEnterStop(void)
 {
     Feed_IWatchDog;
@@ -97,10 +87,6 @@ void RtcSleep_PortRestoreAfterStop(void)
     IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 }
 
-UINT8 RtcSleep_PortIsRtcWake(void)
-{
-    return RTC_IsStopWakeup();
-}
 
 UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
 {

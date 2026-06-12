@@ -59,10 +59,10 @@ uint32_t LP_GetBlockReason(void)
         reason |= LP_BLOCK_EXT_COMM;
     }
 
-    if ((FactoryAging_IsActive() != 0U))
-    {
-        reason |= LP_BLOCK_AGING;
-    }
+    // if ((FactoryAging_IsActive() != 0U))
+    // {
+    //     reason |= LP_BLOCK_AGING;
+    // }
 
     if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
     {
@@ -89,7 +89,7 @@ uint32_t LP_GetBlockReason(void)
 
 static void lp_refresh_status(void)
 {
-    g_stLowPowerRtcStatus.rtc = RtcSleep_PortIsRtcWake();
+    g_stLowPowerRtcStatus.rtc = RTC_IsStopWakeup();
     g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
 }
 
@@ -204,25 +204,31 @@ static void rtc_sleep_prepare_rtc(void)
 {
     IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 
-    RtcSleep_PortPrepareRtcStop();
-    RTC_ClearStopWakeup();
+    g_stLowPowerRtcStatus.cycles = 0U;
+    g_stLowPowerRtcStatus.sleep = 0U;
+    Init_RTC();
+    IOstatus_RTCMode();
+    InitWakeUp_RTCMode();
+
+    LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
+    MCUO_DEBUG_LED1 = 1;
     lp_refresh_status();
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
-    rtc_sleep_prepare_rtc();
+    // todo !!!!
+    RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
 
     RtcSleep_PortEnterStop();
     // RtcSleep_PortDisableStopWakeup();
 
-    extern void test_rtc_led_display(void);
-    test_rtc_led_display();
+    MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
 
-    if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
+    if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
         ++g_stLowPowerRtcStatus.cycles;
         g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
@@ -277,11 +283,7 @@ void rtc_sleep(void)
         low_power_log_and_commit_sleep(sleep_mode);
         break;
     case HICCUP_MODE:
-        g_stLowPowerRtcStatus.cycles = 0U;
-        g_stLowPowerRtcStatus.sleep = 0U;
-        Init_RTC();
-        IOstatus_RTCMode();
-        InitWakeUp_RTCMode();
+        rtc_sleep_prepare_rtc();
 
         while (rtc_sleep_run_hiccup_cycle())
         {

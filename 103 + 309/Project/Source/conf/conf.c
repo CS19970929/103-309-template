@@ -12,7 +12,7 @@ Time_T sys_time = {
                                RCC_APB2Periph_GPIOD | \
                                RCC_APB2Periph_GPIOE)
 #define CONF_APB2_IO_CLOCKS (RCC_APB2Periph_AFIO | CONF_APB2_GPIO_CLOCKS)
-#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO | \
+#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO |  \
                                  RCC_APB2Periph_GPIOA | \
                                  RCC_APB2Periph_GPIOB | \
                                  RCC_APB2Periph_GPIOC)
@@ -158,7 +158,20 @@ void InitIO_rtc(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
-    Conf_InitRunSharedIo();
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
+
+    Conf_InitGpioMode(GPIO_MCU_WK, PIN_MCU_WK, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIOA, PIN_ADC_VBUS | PIN_ADC_CUR, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, PIN_ADC_NMOS, GPIO_Mode_AIN);
+
+    Conf_InitMainPowerRails(Bit_SET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_SET,
+                            Bit_SET);
 }
 
 void InitIO(void)
@@ -166,11 +179,6 @@ void InitIO(void)
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
     {
-        // GPIO_InitStructure.GPIO_Pin = PIN_AFE1_ALM | PIN_AFE1_MODE | PIN_AFE1_SHIP;
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-        // GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IOÂè£ÈüÂ∫¶‰∏2MHz
-        // GPIO_Init(GPIOA, &GPIO_InitStructure);
-
         Conf_InitGpioMode(GPIOB, PIN_AFE1_PRO_EN | PIN_AFE1_CTL, GPIO_Mode_Out_PP);
         MCUO_AFE_CTLC = 0;
     }
@@ -215,8 +223,6 @@ void InitWakeUp_NormalMode(void)
                                  EXTI_Trigger_Rising,
                                  EXTI9_5_IRQn);
 #endif // UART1_WAKEUP_ENABLE
-
-
     }
     Conf_InitWakeupInputExti(GPIO_CHG_IN,
                              PIN_CHG_IN,
@@ -274,9 +280,8 @@ void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN) & (~PIN_MCC_C), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
@@ -360,7 +365,7 @@ void InitRunAfterStopWakeup(void)
     initAFE1_IIC();
 }
 
-//todo ????????
+// todo ????????
 void Init(void)
 {
     if (RTC_IsStopWakeup() != 0U)

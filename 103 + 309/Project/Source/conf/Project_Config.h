@@ -168,7 +168,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0001
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0002
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
@@ -189,7 +189,7 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
