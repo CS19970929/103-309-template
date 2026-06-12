@@ -168,13 +168,13 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0610
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0001
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
 
 // <q> Reset balance open voltage on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
@@ -186,14 +186,14 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.
@@ -202,7 +202,7 @@
 // <o> Balance open voltage mV <1000-5000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 4160
 // <o> Balance open window mV <1-2000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 100
+#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 30
 // <o> Balance close window mV <0-2000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_CLOSE_WINDOW 20
 // <o> Balance reserved 1 <0-65000>

@@ -69,9 +69,10 @@ void RtcSleep_PortPrepareRtcStop(void)
 {
     LowPowerSleep_SaveCoreState();
 
-    Init_RTC();
-    IOstatus_RTCMode();
-    InitWakeUp_RTCMode();
+    //todo 还必须放这儿
+    // Init_RTC();
+    // IOstatus_RTCMode();
+    // InitWakeUp_RTCMode();
 }
 
 void RtcSleep_PortEnterStop(void)

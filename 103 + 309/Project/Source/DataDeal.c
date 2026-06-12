@@ -115,28 +115,10 @@ void charger_detect_and_keyLogi_200ms(void)
             state = 1;
             open_chg_close_dsg();
         }
-        // else if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
-        // {
-        //     LedBar_SaveSleepSoc();
-        //     LowPower_Request(DEEP_MODE);
-        // }
-        // else
-        // {
-        // }
         break;
     case 1:
         if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
         {
-            // state = 0;
-            // if (SleepDeal_IsBootFromSleepChargerWakeup() != 0U)
-            // {
-            //     LedBar_SaveSleepSoc();
-            //     LowPower_Request(DEEP_MODE);
-            // }
-            // else
-            // {
-            //     open_dsg_close_chg();
-            // }
             LowPower_Request(DEEP_MODE);
         }
         else
@@ -221,13 +203,13 @@ void DataLoad_CellVolt(void)
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 
-    if (SeriesNum < 32)
-    {
-        for (i = SeriesNum; i < 32; ++i)
-        {
-            g_stCellInfoReport.u16VCell[i] = 61001;
-        }
-    }
+    // if (SeriesNum < 32)
+    // {
+    //     for (i = SeriesNum; i < 32; ++i)
+    //     {
+    //         g_stCellInfoReport.u16VCell[i] = 61001;
+    //     }
+    // }
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -1177,4 +1159,11 @@ void App_AFEGet(void)
     App_SH367309();
     new_todo_logi();
     App_SOC();
+
+	{
+		g_stCellInfoReport.u16VCell[27] = g_stLowPowerRtcStatus.test_sample_voltage;
+		g_stCellInfoReport.u16VCell[28] = g_stLowPowerRtcStatus.last;
+		g_stCellInfoReport.u16VCell[29] = g_stLowPowerRtcStatus.cycles;
+		g_stCellInfoReport.u16VCell[30] = g_stLowPowerRtcStatus.sleep;
+	}
 }
