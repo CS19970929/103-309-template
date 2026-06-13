@@ -777,7 +777,7 @@ static uint8_t LedBar_LoadSleepSoc(void)
     return LedBar_GetRuntimeSoc();
 }
 
-void LedBar_ShowSleepSocPreview(void)
+void LedBar_LpRestore(void)
 {
     LedBar_EnsureInit();
 
@@ -795,7 +795,7 @@ void LedBar_RequestSocDisplay(void)
     LedBar_RequestDisplayWindow(LEDBAR_SOC_DISPLAY_10MS);
 }
 
-void LedBar_PrepareForStop(void)
+void LedBar_LpPrepare(void)
 {
     LedBar_EnsureInit();
 

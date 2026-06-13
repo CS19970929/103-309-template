@@ -273,7 +273,7 @@ void IOstatus_Base(void)
                             Bit_RESET);
 
     Conf_PrepareStopEntry();
-    // LedBar_PrepareForStop();
+    // LedBar_LpPrepare();
 }
 
 void IOstatus_RTCMode(void)
@@ -290,7 +290,7 @@ void IOstatus_RTCMode(void)
     Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
 
     Conf_PrepareStopEntry();
-    LedBar_PrepareForStop();
+    LedBar_LpPrepare();
 }
 
 void IOstatus_NormalMode(void)

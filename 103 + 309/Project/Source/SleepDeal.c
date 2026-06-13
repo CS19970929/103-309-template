@@ -62,7 +62,7 @@ static void SleepDeal_PreviewSocAndTimeout(void)
 {
 	UINT16 display_cnt = 0;
 
-	LedBar_ShowSleepSocPreview();
+	LedBar_LpRestore();
 
 	while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
 	{
@@ -80,7 +80,7 @@ static void SleepDeal_PreviewSocAndTimeout(void)
 		display_cnt++;
 	}
 
-	LedBar_PrepareForStop();
+	LedBar_LpPrepare();
 }
 
 static UINT8 SleepDeal_IsWakeupValid(void)
@@ -93,7 +93,7 @@ static UINT8 SleepDeal_IsWakeupValid(void)
 
 	if (!SleepDeal_IsKeyPressed())
 	{
-		LedBar_PrepareForStop();
+		LedBar_LpPrepare();
 		return 0;
 	}
 

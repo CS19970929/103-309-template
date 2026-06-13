@@ -9,9 +9,9 @@
 void LedBar_Init(void);
 void LedBar_SetSleep(uint8_t enable);
 void LedBar_SaveSleepSoc(void);
-void LedBar_ShowSleepSocPreview(void);
+void LedBar_LpRestore(void);
 void LedBar_RequestSocDisplay(void);
-void LedBar_PrepareForStop(void);
+void LedBar_LpPrepare(void);
 uint8_t LedBar_IsActiveForLowPower(void);
 void APP_LedBar(void);
 
