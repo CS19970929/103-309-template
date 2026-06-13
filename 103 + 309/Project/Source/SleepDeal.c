@@ -32,69 +32,73 @@ static UINT8 SleepDeal_IsChargerWakeupActive(void)
 
 static UINT8 SleepDeal_IsKeyPressed(void)
 {
-	// PC13���رպ�Ϊ�͵�ƽ����EXTI13�½��ػ��ѱ���һ�£�
+	// PC13关闭后为低电平，EXTI13下降沿会被触发一次
 	return (UINT8)(MCUI_ENI_DI1 == 0);
+}
+
+static UINT8 SleepDeal_WaitKeyLongPress(void)
+{
+	UINT16 hold_cnt = 0;
+
+	while (SleepDeal_IsKeyPressed())
+	{
+		if (SleepDeal_IsChargerWakeupActive())
+		{
+			SleepDeal_MarkBootFromSleepChargerWakeup();
+			return 1;
+		}
+
+		__delay_ms(10);
+		if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static void SleepDeal_PreviewSocAndTimeout(void)
+{
+	UINT16 display_cnt = 0;
+
+	LedBar_ShowSleepSocPreview();
+
+	while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
+	{
+		if (SleepDeal_IsChargerWakeupActive())
+		{
+			SleepDeal_MarkBootFromSleepChargerWakeup();
+			return;
+		}
+		if (SleepDeal_IsKeyPressed())
+		{
+			return;
+		}
+
+		__delay_ms(10);
+		display_cnt++;
+	}
+
+	LedBar_PrepareForStop();
 }
 
 static UINT8 SleepDeal_IsWakeupValid(void)
 {
-	UINT16 hold_cnt = 0;
-	UINT16 display_cnt = 0;
-
 	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
 		return 1;
 	}
 
-	while (1)
+	if (!SleepDeal_IsKeyPressed())
 	{
-		if (!SleepDeal_IsKeyPressed())
-		{
-			LedBar_PrepareForStop();
-			return 0;
-		}
-
-		LedBar_ShowSleepSocPreview();
-		hold_cnt = 0;
-		while (SleepDeal_IsKeyPressed())
-		{
-			if (SleepDeal_IsChargerWakeupActive())
-			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
-			}
-
-			__delay_ms(10);
-			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
-			{
-				return 1;
-			}
-		}
-
-		display_cnt = 0;
-		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
-		{
-			if (SleepDeal_IsChargerWakeupActive())
-			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
-			}
-			if (SleepDeal_IsKeyPressed())
-			{
-				break;
-			}
-
-			__delay_ms(10);
-			display_cnt++;
-		}
-
-		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
-		{
-			LedBar_PrepareForStop();
-			return 0;
-		}
+		LedBar_PrepareForStop();
+		return 0;
 	}
+
+	SleepDeal_PreviewSocAndTimeout();
+	return SleepDeal_WaitKeyLongPress();
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)
@@ -214,6 +218,11 @@ static void SleepDeal_WaitStopWakeup(void)
 	} while (!SleepDeal_IsWakeupValid());
 }
 
+static void SleepDeal_WakeupRecover(void)
+{
+	MCU_RESET();
+}
+
 void SleepDeal_HandleBootSleepStartup(void)
 {
 	UINT16 sleep_flag;
@@ -231,8 +240,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 		IOstatus_RTCMode();
 		InitWakeUp_RTCMode();
 		SleepDeal_WaitStopWakeup();
-		// Sys_StandbyMode();
-		IORecover_RTCMode();
+		SleepDeal_WakeupRecover();
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
@@ -240,16 +248,15 @@ void SleepDeal_HandleBootSleepStartup(void)
 		IOstatus_NormalMode();
 		InitWakeUp_NormalMode();
 		SleepDeal_WaitStopWakeup();
-		IORecover_NormalMode();
+		SleepDeal_WakeupRecover();
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
 		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
-		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
-		IORecover_DeepMode();
+		SleepDeal_WakeupRecover();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 		s_sleep.boot_sleep = 1U;
