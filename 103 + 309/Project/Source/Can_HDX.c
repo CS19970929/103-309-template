@@ -18,7 +18,7 @@ enum {
 
 enum {
 	FEIDAO_CAN_TX_QUEUE_SIZE = 32U,
-	FEIDAO_CAN_APP_CMD_QUEUE_SIZE = 4U,
+	FEIDAO_CAN_APP_CMD_QUEUE_SIZE = 8U,
 	FEIDAO_CAN_TX_SOURCE_PERIODIC = 0U,
 	FEIDAO_CAN_TX_SOURCE_REQUEST = 1U,
 	FEIDAO_CAN_TX_SOURCE_NONE = 0xFFU
@@ -109,6 +109,8 @@ static FeidaoCanTxRuntime s_tx = {
 };
 static FeidaoCanRuntime s_runtime;
 static FeidaoCanAppRuntime s_app;
+static UINT32 s_tx_drop_count = 0U;
+static UINT32 s_cmd_drop_count = 0U;
 
 #if DEBUG_WATCH_ENABLED
 void Can_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
@@ -208,6 +210,7 @@ static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame, UINT8 source)
 {
 	if ((frame == 0) || (frame->DLC > 8U) || (s_tx.count >= FEIDAO_CAN_TX_QUEUE_SIZE))
 	{
+		s_tx_drop_count++;
 		return 0U;
 	}
 
@@ -495,6 +498,7 @@ static void feidao_can_queue_app_cmd(const UINT8 data[8])
 {
 	if (s_app.cmd_count >= FEIDAO_CAN_APP_CMD_QUEUE_SIZE)
 	{
+		s_cmd_drop_count++;
 		return;
 	}
 
@@ -796,9 +800,11 @@ static void InitCan_Filter(void)
 	filter.CAN_FilterNumber = 0U;
 	filter.CAN_FilterMode = CAN_FilterMode_IdMask;
 	filter.CAN_FilterScale = CAN_FilterScale_32bit;
-	filter.CAN_FilterIdHigh = 0U;
+	// StdId=0x60 (App命令), IDE=0 (StdId帧), RTR=0 (数据帧)
+	filter.CAN_FilterIdHigh = (UINT16)((0x0060U << 5U) | (0U << 4U) | (0U << 3U));
 	filter.CAN_FilterIdLow = 0U;
-	filter.CAN_FilterMaskIdHigh = 0U;
+	// StdId 11位必须匹配, IDE必须为0(拒绝ExtId帧), RTR不关心
+	filter.CAN_FilterMaskIdHigh = (UINT16)((0x07FFU << 5U) | (0U << 4U) | (1U << 3U));
 	filter.CAN_FilterMaskIdLow = 0U;
 	filter.CAN_FilterFIFOAssignment = CAN_Filter_FIFO0;
 	filter.CAN_FilterActivation = ENABLE;
@@ -916,10 +922,31 @@ UINT8 Can_IsBusy(void)
 
 void Can_PrepareSleep(void)
 {
+	NVIC_DisableIRQ(USB_LP_CAN1_RX0_IRQn);
 	feidao_can_abort_tx();
 	feidao_can_clear_app_cmd_queue();
 	feidao_can_stop_read_block_stream();
 	feidao_can_power_off();
+}
+
+UINT32 Can_HDX_GetTxDropCount(void)
+{
+	return s_tx_drop_count;
+}
+
+void Can_HDX_ClearTxDropCount(void)
+{
+	s_tx_drop_count = 0U;
+}
+
+UINT32 Can_HDX_GetCmdDropCount(void)
+{
+	return s_cmd_drop_count;
+}
+
+void Can_HDX_ClearCmdDropCount(void)
+{
+	s_cmd_drop_count = 0U;
 }
 
 void App_Can(void)
