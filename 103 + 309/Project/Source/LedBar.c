@@ -102,6 +102,7 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t number;
     uint8_t indicator_mask;
     LedBarFrame frame;
+    uint32_t last_target_mask;
     uint8_t scan_index;
     uint8_t scan_timer_enabled;
     uint16_t soc_display_10ms;
@@ -176,6 +177,7 @@ static LedBarRuntime s_ledbar =
     0u,
     LEDBAR_ICON_PERCENT_MASK,
     {{0u}, 0u},
+    0xFFFFFFFFu,
     0u,
     0u,
     0u,
@@ -682,7 +684,7 @@ static void LedBar_ImproveFrameOrder(LedBarFrame *frame, uint32_t target_mask)
     }
 
     best_cost = LedBar_FrameTransitionCost(frame, target_mask);
-    for (pass = 0u; pass < LEDBAR_ORDER_IMPROVE_MAX_PASSES; ++pass)
+    for (pass = 0u; pass < 4u; ++pass)
     {
         improved = 0u;
         for (left_index = 0u; left_index < frame->length; ++left_index)
@@ -716,11 +718,6 @@ static void LedBar_ImproveFrameOrder(LedBarFrame *frame, uint32_t target_mask)
 static void LedBar_BuildFrameFromMask(LedBarFrame *frame, uint32_t target_mask)
 {
     uint8_t route_id;
-    uint8_t start_route;
-    uint16_t best_cost = LEDBAR_TRANSITION_MAX_COST;
-    uint16_t candidate_cost;
-    LedBarFrame candidate_frame;
-    LedBarFrame best_frame;
 
     LedBar_FrameClear(frame);
     for (route_id = 0u; route_id < (uint8_t)LEDBAR_ROUTE_COUNT; ++route_id)
@@ -735,28 +732,8 @@ static void LedBar_BuildFrameFromMask(LedBarFrame *frame, uint32_t target_mask)
         return;
     }
 
-    LedBar_FrameClear(&best_frame);
-    for (start_route = 0u; start_route < (uint8_t)LEDBAR_ROUTE_COUNT; ++start_route)
-    {
-        if ((target_mask & (1UL << start_route)) == 0u)
-        {
-            continue;
-        }
-
-        LedBar_BuildGreedyFrameFromStart(&candidate_frame,
-                                         target_mask,
-                                         start_route);
-        candidate_cost = LedBar_FrameTransitionCost(&candidate_frame,
-                                                    target_mask);
-        if ((best_frame.length == 0u) || (candidate_cost < best_cost))
-        {
-            best_frame = candidate_frame;
-            best_cost = candidate_cost;
-        }
-    }
-
-    LedBar_ImproveFrameOrder(&best_frame, target_mask);
-    *frame = best_frame;
+    LedBar_BuildGreedyFrameFromStart(frame, target_mask, route_id);
+    LedBar_ImproveFrameOrder(frame, target_mask);
 }
 
 static uint8_t LedBar_FrameEquals(const LedBarFrame *left, const LedBarFrame *right)
@@ -786,6 +763,7 @@ static void LedBar_BuildCurrentFrame(LedBarFrame *frame)
     if ((s_ledbar.blank != 0u) || (s_ledbar.sleep != 0u))
     {
         LedBar_FrameClear(frame);
+        s_ledbar.last_target_mask = 0xFFFFFFFFu;
         return;
     }
 
@@ -793,7 +771,15 @@ static void LedBar_BuildCurrentFrame(LedBarFrame *frame)
                                          (uint8_t)(s_ledbar.indicator_mask &
                                                    (LEDBAR_ICON_CHARGE_MASK |
                                                     LEDBAR_ICON_PERCENT_MASK)));
+
+    if (target_mask == s_ledbar.last_target_mask)
+    {
+        *frame = s_ledbar.frame;
+        return;
+    }
+
     LedBar_BuildFrameFromMask(frame, target_mask);
+    s_ledbar.last_target_mask = target_mask;
 }
 
 static void LedBar_ApplyFrame(const LedBarFrame *frame)
