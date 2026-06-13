@@ -27,61 +27,55 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U};
 
+typedef uint8_t (*BlockCheckFunc)(void);
+
+static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
+static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
+static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
+static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
+static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U) ? 1U : 0U; }
+static uint8_t CheckLedActive(void) { return LedBar_IsActiveForLowPower(); }
+
+typedef struct {
+    uint32_t mask;
+    BlockCheckFunc check;
+} BlockReasonEntry;
+
+static const BlockReasonEntry s_block_table[] = {
+    { LP_BLOCK_CHARGE,     CheckChargeMa },
+    { LP_BLOCK_DISCHARGE,  CheckDischargeMa },
+    { LP_BLOCK_COMM,       CheckCommBusy },
+    { LP_BLOCK_KEY,        CheckKeyActive },
+    { LP_BLOCK_FLASH_BUSY, CheckFlashBusy },
+    { LP_BLOCK_UPGRADE,    CheckUpgrade },
+    { LP_BLOCK_FAULT,      CheckFault },
+    { LP_BLOCK_LED_ACTIVE, CheckLedActive },
+};
+
+#define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
+
 uint32_t LP_GetBlockReason(void)
 {
     uint32_t reason = 0U;
-    uint8_t comm = RtcSleep_PortGetExternalCommCounter();
+    uint32_t i;
 
-    if (RtcSleep_PortGetChargeCurrentMa() > 10U)
+    for (i = 0U; i < BLOCK_TABLE_SIZE; i++)
     {
-        reason |= LP_BLOCK_CHARGE;
+        if (s_block_table[i].check() != 0U)
+        {
+            reason |= s_block_table[i].mask;
+        }
     }
 
-    if (RtcSleep_PortGetDischargeCurrentMa() > 10U)
     {
-        reason |= LP_BLOCK_DISCHARGE;
-    }
-
-    if ((Sci_IsAnyPortBusy() != 0U) ||
-        (Can_IsBusy() != 0U))
-    {
-        reason |= LP_BLOCK_COMM;
-    }
-
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        reason |= LP_BLOCK_KEY;
-    }
-
-    if (comm != g_stLowPowerRtcStatus.comm)
-    {
-        g_stLowPowerRtcStatus.comm = comm;
-        reason |= LP_BLOCK_EXT_COMM;
-    }
-
-    // if ((FactoryAging_IsActive() != 0U))
-    // {
-    //     reason |= LP_BLOCK_AGING;
-    // }
-
-    if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
-    {
-        reason |= LP_BLOCK_FLASH_BUSY;
-    }
-
-    if (u8FlashUpdateFlag != 0U)
-    {
-        reason |= LP_BLOCK_UPGRADE;
-    }
-
-    if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
-    {
-        reason |= LP_BLOCK_FAULT;
-    }
-
-    if (LedBar_IsActiveForLowPower() != 0U)
-    {
-        reason |= LP_BLOCK_LED_ACTIVE;
+        uint8_t comm = RtcSleep_PortGetExternalCommCounter();
+        if (comm != g_stLowPowerRtcStatus.comm)
+        {
+            g_stLowPowerRtcStatus.comm = comm;
+            reason |= LP_BLOCK_EXT_COMM;
+        }
     }
 
     return reason;

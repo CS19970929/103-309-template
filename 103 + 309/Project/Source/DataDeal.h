@@ -96,7 +96,7 @@ typedef enum _AFE_CURRENT_ZERO_STATE {
 struct OTHER_ELEMENT {
     UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
     UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��
+    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
     UINT16 u16Balance_Res1;			//����λ
     UINT16 u16Balance_Res2;			//����λ
     UINT16 u16Balance_Res3;			//����λ
@@ -119,8 +119,8 @@ struct OTHER_ELEMENT {
 	UINT16 u16Sleep_TimeVlow;		//min
 	UINT16 u16Sleep_VirCur_Chg;     //A *10
     UINT16 u16Sleep_VirCur_Dsg;    	//A *10
-	UINT16 u16Sleep_RTC_WakeUpTime;	//min��RTC����ʱ��
-	UINT16 u16Sleep_TimeRTC;		//min������RTC����ʱ��
+	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min��RTC����ʱ��
+	UINT16 u16Sleep_TimeRTC;		// UNUSED: min������RTC����ʱ��
 
 	UINT16 u16Soc_Ah;               //10*Ah
 	UINT16 u16Soc_Cycle_times;		//ѭ������*1
