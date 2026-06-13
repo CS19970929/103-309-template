@@ -359,18 +359,25 @@ static void LedBar_GpioOutput(uint8_t pin_id, BitAction level)
 static void LedBar_OutputRoute(uint8_t route_id)
 {
     const LedBarRoute *route;
+    uint8_t pin_id;
 
-    LedBar_AllPinsHiZ();
     if (route_id >= (uint8_t)LEDBAR_ROUTE_COUNT)
     {
+        LedBar_AllPinsHiZ();
         return;
     }
 
     route = &s_ledbar_routes[route_id];
-    LedBar_PinWrite(route->low_pin, Bit_RESET);
+
+    /* Step 1: Set ALL pins to output LOW first (safe state, no current flows) */
+    for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+    {
+        LedBar_PinWrite(pin_id, Bit_RESET);
+        LedBar_PinToOutputMode(pin_id);
+    }
+
+    /* Step 2: Set the correct pins for this route */
     LedBar_PinWrite(route->high_pin, Bit_SET);
-    LedBar_PinToOutputMode(route->low_pin);
-    LedBar_PinToOutputMode(route->high_pin);
 }
 
 static UINT16 LedBar_GetTimerPrescalerFor100kHz(void)
@@ -583,9 +590,14 @@ static void LedBar_ApplyFrame(const LedBarFrame *frame)
 
     if (s_ledbar.frame.length == 0u)
     {
+        uint8_t pin_id;
         LedBar_StopScanTimer();
-        LedBar_AllPinsHiZ();
-        LedBar_GpioInit(1U);
+        /* Safe state: all pins output LOW */
+        for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+        {
+            LedBar_PinWrite(pin_id, Bit_RESET);
+            LedBar_PinToOutputMode(pin_id);
+        }
         return;
     }
 
@@ -829,6 +841,8 @@ uint8_t LedBar_IsActiveForLowPower(void)
 
 static void LedBar_Scan1ms(void)
 {
+    uint8_t pin_id;
+
     if (s_ledbar.initialized == 0u)
     {
         return;
@@ -836,7 +850,12 @@ static void LedBar_Scan1ms(void)
 
     if ((s_ledbar.sleep != 0u) || (s_ledbar.frame.length == 0u))
     {
-        LedBar_AllPinsHiZ();
+        /* Safe state: all pins output LOW */
+        for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
+        {
+            LedBar_PinWrite(pin_id, Bit_RESET);
+            LedBar_PinToOutputMode(pin_id);
+        }
         s_ledbar.scan_index = 0u;
         return;
     }
