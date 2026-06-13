@@ -1,4 +1,5 @@
 #include "SocEnhance.h"
+#include "SocConfig.h"
 #include "conf.h"
 #include "EEPROM.h"
 #include "DataDeal.h"
@@ -28,33 +29,34 @@ extern UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #endif
 
-#define SOC_TICK_MS                  ((UINT32)200U)
-#define SOC_TICKS_PER_SECOND         ((UINT16)5U)
-#define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)
-#define SOC_MA_PER_A10               ((int32_t)100)
-#define SOC_MAMS_PER_AS10            ((UINT32)100000U)
-#define SOC_BOARD_SELF_CONSUMPTION_MA ((UINT16)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA)
-#define SOC_SOH_MIN                  ((UINT8)80U)
-#define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
-#define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
-#define SOC_FULL_CONFIRM_MIN_VMAX_MV ((UINT16)4180U)
-#define SOC_FULL_MIN_MARGIN_MV       ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV)
-#define SOC_FULL_MAX_DELTA_MV        ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV)
-#define SOC_EMPTY_CUR_LIGHT_DIVIDER  ((UINT16)5U)
-#define SOC_EMPTY_CUR_MID_DIVIDER    ((UINT16)2U)
-#define SOC_SAG_HOLDOFF_SECONDS      ((UINT16)PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS)
-#define SOC_SAG_ALLOW_OFFSET_MV      ((int16_t)PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV)
-#define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
-#define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
-#define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
-#define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
-#define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
-#define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
-#define SOC_VALID_MAX_DELTA_MV       ((UINT16)300)
-#define SOC_REST_MAX_DELTA_MV        ((UINT16)200U)
-#define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
-#define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
-#define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
+/* 使用SocConfig.h中的集中化配置，保留向后兼容的别名 */
+#define SOC_TICK_MS                  SOC_CFG_TICK_MS
+#define SOC_TICKS_PER_SECOND         SOC_CFG_TICKS_PER_SECOND
+#define SOC_CURRENT_ACTIVE_A10       SOC_CFG_CURRENT_ACTIVE_A10
+#define SOC_MA_PER_A10               SOC_CFG_MA_PER_A10
+#define SOC_MAMS_PER_AS10            SOC_CFG_MAMS_PER_AS10
+#define SOC_BOARD_SELF_CONSUMPTION_MA SOC_CFG_BOARD_SELF_CONSUMPTION_MA
+#define SOC_SOH_MIN                  SOC_CFG_SOH_MIN
+#define SOC_SOH_CYCLE_STEP           SOC_CFG_SOH_CYCLE_STEP
+#define SOC_FULL_SECONDS             SOC_CFG_FULL_SECONDS
+#define SOC_FULL_CONFIRM_MIN_VMAX_MV SOC_CFG_FULL_CONFIRM_MIN_VMAX_MV
+#define SOC_FULL_MIN_MARGIN_MV       SOC_CFG_FULL_MIN_MARGIN_MV
+#define SOC_FULL_MAX_DELTA_MV        SOC_CFG_FULL_MAX_DELTA_MV
+#define SOC_EMPTY_CUR_LIGHT_DIVIDER  SOC_CFG_EMPTY_CUR_LIGHT_DIVIDER
+#define SOC_EMPTY_CUR_MID_DIVIDER    SOC_CFG_EMPTY_CUR_MID_DIVIDER
+#define SOC_SAG_HOLDOFF_SECONDS      SOC_CFG_SAG_HOLDOFF_SECONDS
+#define SOC_SAG_ALLOW_OFFSET_MV      SOC_CFG_SAG_ALLOW_OFFSET_MV
+#define SOC_REST_OCV_SECONDS         SOC_CFG_REST_OCV_SECONDS
+#define SOC_LONG_REST_DOWN_STEP_SECONDS SOC_CFG_LONG_REST_DOWN_STEP_SECONDS
+#define SOC_CAL_STEP                 SOC_CFG_CAL_STEP
+#define SOC_EMPTY_TAIL_START_OFFSET_MV SOC_CFG_EMPTY_TAIL_START_OFFSET_MV
+#define SOC_VALID_MIN_MV             SOC_CFG_VALID_MIN_MV
+#define SOC_VALID_MAX_MV             SOC_CFG_VALID_MAX_MV
+#define SOC_VALID_MAX_DELTA_MV       SOC_CFG_VALID_MAX_DELTA_MV
+#define SOC_REST_MAX_DELTA_MV        SOC_CFG_REST_MAX_DELTA_MV
+#define SOC_REST_STABLE_DELTA_MV     SOC_CFG_REST_STABLE_DELTA_MV
+#define SOC_REBOUND_BOOT_HOLDOFF_SECONDS SOC_CFG_REBOUND_BOOT_HOLDOFF_SECONDS
+#define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   SOC_CFG_SNAPSHOT_FLAG_REBOUND_HOLD
 
 typedef enum
 {
@@ -289,6 +291,17 @@ static void soc_set(UINT8 soc)
 	s_soc.rem_mams = 0U;
 }
 
+/**
+ * @brief 判断当前充放电方向
+ * 
+ * 根据净电流大小判断：
+ * - 净电流 > 200mA → 充电模式 (SOC_MODE_CHG)
+ * - 净电流 < -200mA → 放电模式 (SOC_MODE_DSG)
+ * - 其他 → 静置模式 (SOC_MODE_RELAX)
+ * 
+ * @param net_current_ma 净电流(mA)，正=充电，负=放电
+ * @return SOC_MODE 充放电模式
+ */
 static SOC_MODE soc_direction(int32_t net_current_ma)
 {
 	if (net_current_ma >=
@@ -560,6 +573,16 @@ static void soc_set_rest_down_target(UINT8 target)
 	}
 }
 
+/**
+ * @brief 库仑计积分核心函数
+ * 
+ * 每200ms调用一次，计算电量变化：
+ * delta_As = (净电流mA - 板级自耗mA) × 0.2s / 100
+ * 
+ * 放电时累计放电量，更新循环次数和SOH
+ * 
+ * @param net_current_ma 净电流(mA)
+ */
 static void soc_integrate(int32_t net_current_ma)
 {
 	int32_t delta_as10;
@@ -628,6 +651,17 @@ static UINT8 soc_full_confirm_allowed(void)
 	return 0U;
 }
 
+/**
+ * @brief 更新Sag Hold状态
+ * 
+ * 大电流放电后设置保持期，防止电压回弹导致OCV校准错误。
+ * 
+ * 触发条件：放电模式 + 放电电流 > 中载阈值
+ * 保持时间：SOC_SAG_HOLDOFF_SECONDS (默认30秒)
+ * 
+ * @param mode 当前充放电模式
+ * @param net_current_ma 净电流(mA)
+ */
 static void soc_update_sag_hold(SOC_MODE mode, int32_t net_current_ma)
 {
 	if ((mode == SOC_MODE_DSG) &&
@@ -815,6 +849,16 @@ static UINT8 soc_apply_long_rest_down_step(UINT32 delta_soc_ticks)
 	return changed;
 }
 
+/**
+ * @brief 检查电压是否稳定
+ * 
+ * 判定标准：
+ * 1. 电压有效且压差≤200mV
+ * 2. 无Sag Hold阻止
+ * 3. Vmin波动≤30mV 且 Vmax波动≤30mV（与参考值比较）
+ * 
+ * @return 1=稳定, 0=不稳定
+ */
 static UINT8 soc_rest_voltage_stable(void)
 {
 	if (!soc_calibration_allowed() ||
@@ -839,6 +883,19 @@ static UINT8 soc_rest_voltage_stable(void)
 	return 0U;
 }
 
+/**
+ * @brief 更新静置OCV校准计时器
+ * 
+ * 触发条件（需同时满足）：
+ * 1. 静置状态（|电流| < 200mA）
+ * 2. VCellMin < 3700mV（低压区间才做OCV校准）
+ * 3. 静置时间 >= SOC_REST_OCV_SECONDS
+ * 4. 电压稳定性：Vmin/Vmax波动 <= 30mV
+ * 
+ * 校准方式：OCV查表获取目标SOC，逐步步进校准
+ * 
+ * @param mode 当前充放电模式
+ */
 static void soc_update_rest_timer(SOC_MODE mode)
 {
 	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
@@ -971,6 +1028,21 @@ void SOC_SaveSnapshotBeforeSleep(void)
 	soc_save_if_needed();
 }
 
+/**
+ * @brief SOC主控制函数（每200ms调用一次）
+ * 
+ * 完整SOC计算流程：
+ * 1. 判断充放电方向
+ * 2. 库仑计积分
+ * 3. 更新Sag Hold状态
+ * 4. 满充校准（非放电时）
+ * 5. 低电量尾部修正（非满充时）
+ * 6. 静置OCV校准（无其他校准时）
+ * 7. 持久化存储
+ * 8. 发布SOC数据
+ * 
+ * @param net_current_ma 净电流(mA)，正=充电，负=放电
+ */
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 {
 	SOC_TAIL_STEP empty_tail_step;
