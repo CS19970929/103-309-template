@@ -327,7 +327,7 @@ static void LedBar_AllPinsOutputLow(void)
     LedBar_AllPinsHiZ();
     for (pin_id = 0u; pin_id < LEDBAR_PIN_COUNT; ++pin_id)
     {
-        LedBar_PinToOutput(pin_id, Bit_RESET);
+        LedBar_GpioOutput(pin_id, Bit_RESET);
     }
 }
 
@@ -336,17 +336,24 @@ static void LedBar_GpioClockEnable(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 }
 
-static void LedBar_GpioInitForDisplay(void)
+static void LedBar_GpioInit(uint8_t for_stop)
 {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     LedBar_GpioClockEnable();
-    LedBar_AllPinsHiZ();
+    if (for_stop)
+    {
+        LedBar_AllPinsOutputLow();
+    }
+    else
+    {
+        LedBar_AllPinsHiZ();
+    }
 }
 
-static void LedBar_GpioPrepareForStop(void)
+static void LedBar_GpioOutput(uint8_t pin_id, BitAction level)
 {
-    LedBar_GpioClockEnable();
-    LedBar_AllPinsOutputLow();
+    LedBar_PinWrite(pin_id, level);
+    LedBar_PinToOutputMode(pin_id);
 }
 
 static void LedBar_OutputRoute(uint8_t route_id)
@@ -413,7 +420,7 @@ static void LedBar_StartScanTimer(void)
         return;
     }
 
-    LedBar_GpioInitForDisplay();
+    LedBar_GpioInit(0U);
     LedBar_ScanTimerInit();
 
     TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
@@ -578,7 +585,7 @@ static void LedBar_ApplyFrame(const LedBarFrame *frame)
     {
         LedBar_StopScanTimer();
         LedBar_AllPinsHiZ();
-        LedBar_GpioPrepareForStop();
+        LedBar_GpioInit(1U);
         return;
     }
 
@@ -709,11 +716,11 @@ void LedBar_Init(void)
     s_ledbar.key_press_start_10ms = 0u;
     s_ledbar.key_long_handled = 0u;
     s_ledbar.key_wakeup_armed = 0u;
-    LedBar_GpioInitForDisplay();
+    LedBar_GpioInit(0U);
     s_ledbar.key_active = LedBar_ReadSwitchRaw();
     s_ledbar.mcu_wk_active = LedBar_ReadMcuWakeRaw();
     LedBar_AllPinsHiZ();
-    LedBar_GpioPrepareForStop();
+    LedBar_GpioInit(1U);
     s_ledbar.initialized = 1u;
 }
 
@@ -732,7 +739,7 @@ void LedBar_SetSleep(uint8_t enable)
     LedBar_RefreshOutput();
     if (enable != 0u)
     {
-        LedBar_GpioPrepareForStop();
+        LedBar_GpioInit(1U);
     }
 }
 
@@ -795,7 +802,7 @@ void LedBar_PrepareForStop(void)
     s_ledbar.sleep = 1u;
     s_ledbar.blank = 1u;
     LedBar_RefreshOutput();
-    LedBar_GpioPrepareForStop();
+    LedBar_GpioInit(1U);
 }
 
 uint8_t LedBar_IsActiveForLowPower(void)
