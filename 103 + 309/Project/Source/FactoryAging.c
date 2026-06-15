@@ -292,7 +292,6 @@ static UINT8 FactoryAging_EnterRunningFromHost(UINT32 now_tick)
 	s_factory_aging.state = FACTORY_AGING_STATE_RUNNING;
 	s_factory_aging.lastTick = now_tick;
 	s_factory_aging.nextFinishRetry10ms = 0U;
-	FactoryAging_ResetMosCache();
 	FactoryAging_ApplyRunningMos();
 	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 1U, 1U);
 }
@@ -343,7 +342,6 @@ static void FactoryAging_Start(UINT32 now_tick)
 		return;
 	}
 
-	FactoryAging_ResetMosCache();
 	FactoryAging_ApplyRunningMos();
 	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }

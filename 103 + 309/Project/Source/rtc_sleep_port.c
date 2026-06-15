@@ -106,7 +106,7 @@ void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
     extern UINT32 su32_Interval_S_Tcnt;
 
     su32_Interval_S_Tcnt += seconds;
-    FactoryAging_ApplySleepTime(seconds);
+    // FactoryAging_ApplySleepTime(seconds);
 }
 
 enum irqWakeup RtcSleep_PortGuessWakeupSource(void)

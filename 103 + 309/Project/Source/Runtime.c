@@ -48,7 +48,7 @@ void Runtime_Boot(void)
 	DBG_Init();
 	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
-	// Init_IWDG();
+	Init_IWDG();
 }
 
 void Runtime_RunOnce(void)
