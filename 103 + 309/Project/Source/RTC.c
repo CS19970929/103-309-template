@@ -7,15 +7,12 @@ typedef struct RTC_RUNTIME_TAG
 	__IO UINT8 disp;
 	volatile bool wake;
 	struct RTC_ELEMENT time;
-	UINT32 wake_override;
 } RTC_RUNTIME;
 
 static RTC_RUNTIME s_rtc = {
 	0U,
 	false,
-	{0},
-	1U,
-	0U
+	{0}
 };
 struct RTC_ELEMENT RTC_time;
 
@@ -36,9 +33,7 @@ void RTC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 #define RTC_CLOCK_NEED_REINIT    2U
 #define RTC_CLOCK_INIT_FAILED    3U
 #define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
-#define RTC_WAKEUP_MIN_SECONDS   ((UINT32)1U)
 #define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)10U)
-#define RTC_WAKEUP_IWDG_SAFE_SECONDS ((UINT32)10U)
 
 static UINT8 RTC_GetMonthDays(UINT32 month, UINT8 is_leap_year)
 {
@@ -392,56 +387,12 @@ void RTC_NVIC_Config(void)
 
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
-	UINT32 wake_seconds;
-
-#if 0
-	if (s_rtc.wake_override != 0U)
-	{
-		wake_seconds = s_rtc.wake_override;
-	}
-	else
-	{
-		wake_seconds = RTC_WAKEUP_DEFAULT_SECONDS;
-	}
-	if (wake_seconds == 0U)
-	{
-		wake_seconds = RTC_WAKEUP_MIN_SECONDS;
-	}
-
-#if defined(wdog_enable)
-	if (wake_seconds > RTC_WAKEUP_IWDG_SAFE_SECONDS)
-	{
-		wake_seconds = RTC_WAKEUP_IWDG_SAFE_SECONDS;
-	}
-#endif
-#endif
-	wake_seconds = RTC_WAKEUP_DEFAULT_SECONDS;
-
-	return wake_seconds;
+	return RTC_WAKEUP_DEFAULT_SECONDS;
 }
 
 UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 {
 	return RTC_WAKEUP_DEFAULT_SECONDS;
-}
-
-void RTC_SetWakeupPeriodSeconds(UINT32 seconds)
-{
-	s_rtc.wake_override = seconds;
-}
-
-UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds)
-{
-	if (seconds == 0U)
-	{
-		return 0U;
-	}
-
-#if defined(wdog_enable)
-	return (seconds <= RTC_WAKEUP_IWDG_SAFE_SECONDS) ? 1U : 0U;
-#else
-	return 1U;
-#endif
 }
 
 void RTC_WKTimeConfig(void)

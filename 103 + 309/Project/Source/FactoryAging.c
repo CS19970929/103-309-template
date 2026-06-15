@@ -2,10 +2,6 @@
 #include "FactoryAging.h"
 #include "DebugWatch.h"
 
-#define FACTORY_AGING_STATE_UNINIT  ((UINT8)0U)
-#define FACTORY_AGING_STATE_RUNNING ((UINT8)1U)
-#define FACTORY_AGING_STATE_DONE    ((UINT8)2U)
-#define FACTORY_AGING_STATE_STOPPED ((UINT8)3U)
 #define FACTORY_AGING_10MS_PER_SEC  ((UINT32)100U)
 #define FACTORY_AGING_FLASH_SAVE_INTERVAL_SECONDS ((UINT32)7200U)
 #define FACTORY_AGING_FLASH_SAVE_INTERVAL_10MS \
@@ -16,15 +12,11 @@
 	((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS * FACTORY_AGING_10MS_PER_SEC)
 #define FACTORY_AGING_DURATION_10MS FactoryAging_GetDuration10ms()
 #define FACTORY_AGING_DURATION_HOURS_RESET_VALUE ((UINT16)0xFFFFU)
-#define FACTORY_AGING_MOS_MODE_UNKNOWN        ((UINT8)0xFFU)
-#define FACTORY_AGING_MOS_MODE_FACTORY        ((UINT8)1U)
-#define FACTORY_AGING_MOS_MODE_5V_CHARGE      ((UINT8)2U)
 #define FACTORY_AGING_BKP_MAGIC      ((UINT16)0xA91E)
 #define FACTORY_AGING_BKP_MAGIC_REG  BKP_DR6
-#define FACTORY_AGING_BKP_INV_REG    BKP_DR7
-#define FACTORY_AGING_BKP_LO_REG     BKP_DR8
-#define FACTORY_AGING_BKP_HI_REG     BKP_DR9
-#define FACTORY_AGING_BKP_CRC_REG    BKP_DR10
+#define FACTORY_AGING_BKP_LO_REG     BKP_DR7
+#define FACTORY_AGING_BKP_HI_REG     BKP_DR8
+#define FACTORY_AGING_BKP_CRC_REG    BKP_DR9
 
 typedef struct FACTORY_AGING_RUNTIME_TAG
 {
@@ -37,7 +29,7 @@ typedef struct FACTORY_AGING_RUNTIME_TAG
 	UINT16 durationHours;
 	UINT8 bkpSaveValid;
 	UINT8 flashSaveValid;
-	UINT8 mosMode;
+	UINT32 pendingSleep10ms;
 } FactoryAgingRuntime;
 
 static FactoryAgingRuntime s_factory_aging = {
@@ -50,7 +42,7 @@ static FactoryAgingRuntime s_factory_aging = {
 	0U,
 	0U,
 	0U,
-	FACTORY_AGING_MOS_MODE_UNKNOWN
+	0U
 };
 
 #if DEBUG_WATCH_ENABLED
@@ -108,7 +100,6 @@ static void FactoryAging_SaveBkp(UINT32 elapsed10ms)
 	elapsed10ms = FactoryAging_ClampElapsed(elapsed10ms);
 	FactoryAging_EnableBkpAccess();
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_MAGIC_REG, FACTORY_AGING_BKP_MAGIC);
-	BKP_WriteBackupRegister(FACTORY_AGING_BKP_INV_REG, (UINT16)(~FACTORY_AGING_BKP_MAGIC));
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_LO_REG, (UINT16)(elapsed10ms & 0xFFFFU));
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_HI_REG, (UINT16)((elapsed10ms >> 16) & 0xFFFFU));
 	BKP_WriteBackupRegister(FACTORY_AGING_BKP_CRC_REG, FactoryAging_BkpCrc(elapsed10ms));
@@ -119,7 +110,6 @@ static void FactoryAging_SaveBkp(UINT32 elapsed10ms)
 static UINT8 FactoryAging_LoadBkp(UINT32 *elapsed10ms)
 {
 	UINT16 magic;
-	UINT16 inverse_magic;
 	UINT16 lo;
 	UINT16 hi;
 	UINT32 elapsed;
@@ -131,9 +121,7 @@ static UINT8 FactoryAging_LoadBkp(UINT32 *elapsed10ms)
 
 	FactoryAging_EnableBkpAccess();
 	magic = BKP_ReadBackupRegister(FACTORY_AGING_BKP_MAGIC_REG);
-	inverse_magic = BKP_ReadBackupRegister(FACTORY_AGING_BKP_INV_REG);
-	if ((magic != FACTORY_AGING_BKP_MAGIC) ||
-		((UINT16)(magic ^ inverse_magic) != 0xFFFFU))
+	if (magic != FACTORY_AGING_BKP_MAGIC)
 	{
 		return 0U;
 	}
@@ -289,29 +277,14 @@ static UINT8 FactoryAging_ResolveStoredState(UINT32 *elapsed, UINT8 *was_done, U
 	return 1U;
 }
 
-static void FactoryAging_ResetMosCache(void)
-{
-	s_factory_aging.mosMode = FACTORY_AGING_MOS_MODE_UNKNOWN;
-}
-
 static void FactoryAging_ApplyStoppedMos(void)
 {
 	enter_fac_mode(false);
-	FactoryAging_ResetMosCache();
 }
 
 static void FactoryAging_ApplyRunningMos(void)
 {
-	UINT8 next_mode = (MosStartup_Is5vChargeActive() != 0U) ?
-		FACTORY_AGING_MOS_MODE_5V_CHARGE : FACTORY_AGING_MOS_MODE_FACTORY;
-
-	if (s_factory_aging.mosMode == next_mode)
-	{
-		return;
-	}
-
 	enter_fac_mode(true);
-	s_factory_aging.mosMode = next_mode;
 }
 
 static UINT8 FactoryAging_EnterRunningFromHost(UINT32 now_tick)
@@ -319,7 +292,6 @@ static UINT8 FactoryAging_EnterRunningFromHost(UINT32 now_tick)
 	s_factory_aging.state = FACTORY_AGING_STATE_RUNNING;
 	s_factory_aging.lastTick = now_tick;
 	s_factory_aging.nextFinishRetry10ms = 0U;
-	FactoryAging_ResetMosCache();
 	FactoryAging_ApplyRunningMos();
 	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 1U, 1U);
 }
@@ -370,7 +342,6 @@ static void FactoryAging_Start(UINT32 now_tick)
 		return;
 	}
 
-	FactoryAging_ResetMosCache();
 	FactoryAging_ApplyRunningMos();
 	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
@@ -385,8 +356,9 @@ static void FactoryAging_AddRunningTicks(UINT32 now_tick)
 	}
 	else
 	{
-		/* TIM3 is reset after STOP wakeup; sleep time is not aging time. */
-		delta = 0U;
+		/* TIM3 is reset after STOP wakeup; include pending sleep time. */
+		delta = s_factory_aging.pendingSleep10ms + now_tick;
+		s_factory_aging.pendingSleep10ms = 0U;
 	}
 
 	s_factory_aging.lastTick = now_tick;
@@ -458,6 +430,31 @@ UINT8 FactoryAging_SaveProgressBeforeSleep(void)
 UINT8 FactoryAging_IsActive(void)
 {
 	return (s_factory_aging.state == FACTORY_AGING_STATE_RUNNING) ? 1U : 0U;
+}
+
+void FactoryAging_ApplySleepTime(UINT32 seconds)
+{
+	s_factory_aging.pendingSleep10ms += seconds * FACTORY_AGING_10MS_PER_SEC;
+}
+
+void FactoryAging_SaveProgressQuick(void)
+{
+	UINT32 now_tick;
+
+	if (s_factory_aging.state != FACTORY_AGING_STATE_RUNNING)
+	{
+		return;
+	}
+
+	now_tick = SysTime_Get10msTickCount();
+	FactoryAging_AddRunningTicks(now_tick);
+	if (s_factory_aging.elapsed10ms >= FACTORY_AGING_DURATION_10MS)
+	{
+		FactoryAging_Finish();
+		return;
+	}
+
+	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 
 UINT8 FactoryAging_GetState(void)

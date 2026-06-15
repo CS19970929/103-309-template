@@ -27,61 +27,55 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U};
 
+typedef uint8_t (*BlockCheckFunc)(void);
+
+static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
+static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
+static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
+static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
+static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U) ? 1U : 0U; }
+static uint8_t CheckLedActive(void) { return LedBar_IsActiveForLowPower(); }
+
+typedef struct {
+    uint32_t mask;
+    BlockCheckFunc check;
+} BlockReasonEntry;
+
+static const BlockReasonEntry s_block_table[] = {
+    { LP_BLOCK_CHARGE,     CheckChargeMa },
+    { LP_BLOCK_DISCHARGE,  CheckDischargeMa },
+    { LP_BLOCK_COMM,       CheckCommBusy },
+    { LP_BLOCK_KEY,        CheckKeyActive },
+    { LP_BLOCK_FLASH_BUSY, CheckFlashBusy },
+    { LP_BLOCK_UPGRADE,    CheckUpgrade },
+    { LP_BLOCK_FAULT,      CheckFault },
+    { LP_BLOCK_LED_ACTIVE, CheckLedActive },
+};
+
+#define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
+
 uint32_t LP_GetBlockReason(void)
 {
     uint32_t reason = 0U;
-    uint8_t comm = RtcSleep_PortGetExternalCommCounter();
+    uint32_t i;
 
-    if (RtcSleep_PortGetChargeCurrentMa() > 10U)
+    for (i = 0U; i < BLOCK_TABLE_SIZE; i++)
     {
-        reason |= LP_BLOCK_CHARGE;
+        if (s_block_table[i].check() != 0U)
+        {
+            reason |= s_block_table[i].mask;
+        }
     }
 
-    if (RtcSleep_PortGetDischargeCurrentMa() > 10U)
     {
-        reason |= LP_BLOCK_DISCHARGE;
-    }
-
-    if ((Sci_IsAnyPortBusy() != 0U) ||
-        (Can_IsBusy() != 0U))
-    {
-        reason |= LP_BLOCK_COMM;
-    }
-
-    if (RtcSleep_PortIsMcuWakeActive() != 0U)
-    {
-        reason |= LP_BLOCK_KEY;
-    }
-
-    if (comm != g_stLowPowerRtcStatus.comm)
-    {
-        g_stLowPowerRtcStatus.comm = comm;
-        reason |= LP_BLOCK_EXT_COMM;
-    }
-
-    if ((FactoryAging_IsActive() != 0U))
-    {
-        reason |= LP_BLOCK_AGING;
-    }
-
-    if ((StorageFlash_IsBusy() != 0U) || (u8FlashUpdateE2PROM != 0U))
-    {
-        reason |= LP_BLOCK_FLASH_BUSY;
-    }
-
-    if (u8FlashUpdateFlag != 0U)
-    {
-        reason |= LP_BLOCK_UPGRADE;
-    }
-
-    if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
-    {
-        reason |= LP_BLOCK_FAULT;
-    }
-
-    if (LedBar_IsActiveForLowPower() != 0U)
-    {
-        reason |= LP_BLOCK_LED_ACTIVE;
+        uint8_t comm = RtcSleep_PortGetExternalCommCounter();
+        if (comm != g_stLowPowerRtcStatus.comm)
+        {
+            g_stLowPowerRtcStatus.comm = comm;
+            reason |= LP_BLOCK_EXT_COMM;
+        }
     }
 
     return reason;
@@ -89,7 +83,7 @@ uint32_t LP_GetBlockReason(void)
 
 static void lp_refresh_status(void)
 {
-    g_stLowPowerRtcStatus.rtc = RtcSleep_PortIsRtcWake();
+    g_stLowPowerRtcStatus.rtc = RTC_IsStopWakeup();
     g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
 }
 
@@ -204,25 +198,31 @@ static void rtc_sleep_prepare_rtc(void)
 {
     IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 
-    RtcSleep_PortPrepareRtcStop();
-    RTC_ClearStopWakeup();
+    g_stLowPowerRtcStatus.cycles = 0U;
+    g_stLowPowerRtcStatus.sleep = 0U;
+    Init_RTC();
+    IOstatus_RTCMode();
+    InitWakeUp_RTCMode();
+
+    LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
+    MCUO_DEBUG_LED1 = 1;
     lp_refresh_status();
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
-    rtc_sleep_prepare_rtc();
+    // todo !!!!
+    RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
 
     RtcSleep_PortEnterStop();
     // RtcSleep_PortDisableStopWakeup();
 
-    extern void test_rtc_led_display(void);
-    test_rtc_led_display();
+    MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
 
-    if ((RtcSleep_PortIsRtcWake() != 0U) && !rtc_sleep_has_wakeup_exception())
+    if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
         ++g_stLowPowerRtcStatus.cycles;
         g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
@@ -231,13 +231,16 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
+        FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
+        FactoryAging_SaveProgressQuick();
+
         MCUO_DEBUG_LED1 = 1;
         return true;
     }
 
     RTC_ClearStopWakeup();
     LowPower_Request(NO_SLEEP);
-    // todo ◊–œ∏ ·¿Ìœ¬≈‰÷√
+    // todo ‰ªîÁªÜÊ¢≥ÁêÜ‰∏ãÈÖçÁΩÆ
     RtcSleep_PortRestoreAfterStop();
 
     // if (g_irq_t == NO_IRQ)
@@ -277,11 +280,7 @@ void rtc_sleep(void)
         low_power_log_and_commit_sleep(sleep_mode);
         break;
     case HICCUP_MODE:
-        g_stLowPowerRtcStatus.cycles = 0U;
-        g_stLowPowerRtcStatus.sleep = 0U;
-        Init_RTC();
-        IOstatus_RTCMode();
-        InitWakeUp_RTCMode();
+        rtc_sleep_prepare_rtc();
 
         while (rtc_sleep_run_hiccup_cycle())
         {

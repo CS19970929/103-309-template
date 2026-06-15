@@ -11,8 +11,6 @@
 #define	UNIX_TIME_YEAR		1970				//��Ԫʱ��
 #define SEC_DAY				86400L          	//һ���ж���s 
 
-#define ALARM_TIME_SEC		(UINT32)10       //s�����߻���ʱ�� 
-
 #define	Leapyear(year)		((year) % 4 == 0)	//�������ᳬ��2100��û����
 #define	Days_in_year(a) 	(Leapyear(a) ? 366 : 365)
 
@@ -61,8 +59,6 @@ extern struct RTC_ELEMENT RTC_time;
 
 UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
-void RTC_SetWakeupPeriodSeconds(UINT32 seconds);
-UINT8 RTC_IsWakeupPeriodSafe(UINT32 seconds);
 UINT8 RTC_IsStopWakeup(void);
 void RTC_ClearStopWakeup(void);
 void RTC_WKTimeConfig(void);
