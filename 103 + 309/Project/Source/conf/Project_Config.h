@@ -168,10 +168,10 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0610
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0616
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> Reset protection params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
@@ -186,7 +186,7 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
 
 // <q> Reset factory aging time on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
