@@ -144,9 +144,13 @@
 // <i> Sag hold blocks calibration only while Vmin is above empty voltage plus this offset.
 #define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
 
+// <q> Enable rest OCV slow downward calibration
+// <i> When enabled, rest OCV triggers once after long stable rest to correct drift and self-discharge.
+#define PROJECT_CFG_SOC_REST_OCV_ENABLE 1
+
 // <o> Rest OCV wait seconds <60-43200>
-// <i> Minimum stable-rest time before rest OCV target can be trusted.
-#define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
+// <i> Minimum stable-rest time before rest OCV target can be trusted. 3600 = 1 hour.
+#define PROJECT_CFG_SOC_REST_OCV_SECONDS 3600
 
 // <o> Rest down step seconds <60-43200>
 // <i> Long-rest slow-down period; each period allows at most one SOC step toward OCV target.
@@ -168,32 +172,32 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0616
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0617
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
 
 // <q> Reset balance open voltage on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
 
 // <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
 
 // <q> Reset SOC snapshot on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.

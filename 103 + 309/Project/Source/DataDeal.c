@@ -203,6 +203,7 @@ void DataLoad_CellVolt(void)
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 
+#ifndef VCELL_DISP_TEST
     if (SeriesNum < 32)
     {
         for (i = SeriesNum; i < 32; ++i)
@@ -210,6 +211,7 @@ void DataLoad_CellVolt(void)
             g_stCellInfoReport.u16VCell[i] = 61001;
         }
     }
+#endif // !1
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -802,6 +804,36 @@ static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
     return (UINT16)current_a10;
 }
 
+void DataLoad_soc_test(void)
+{
+    static uint8_t test_state = 0;
+
+    switch (test_state)
+    {
+    case 0:
+        if (sys_time.isdebugenable == 1)
+        {
+            g_stCellInfoReport.u16Ichg = sys_time.CHG;
+            g_stCellInfoReport.u16IDischg = 0;
+            test_state = 1;
+        }
+        else
+        {
+            g_stCellInfoReport.u16Ichg = 0;
+            g_stCellInfoReport.u16IDischg = sys_time.DSG;
+            test_state = 1;
+        }
+        break;
+    case 1:
+        g_stCellInfoReport.u16Ichg = 0;
+        g_stCellInfoReport.u16IDischg = 0;
+        test_state = 0;
+        break;
+    default:
+        test_state = 0;
+        break;
+    }
+}
 void DataLoad_Current(void)
 {
     INT32 raw_signed;
@@ -1159,16 +1191,21 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
+    // DataLoad_soc_test();
+
     AfeCurrent_NextSeq();
 
     App_SH367309();
     new_todo_logi();
     App_SOC();
 
+#ifdef VCELL_DISP_TEST
     // {
     //     g_stCellInfoReport.u16VCell[27] = g_stLowPowerRtcStatus.test_sample_voltage;
     //     g_stCellInfoReport.u16VCell[28] = g_stLowPowerRtcStatus.last;
     //     g_stCellInfoReport.u16VCell[29] = g_stLowPowerRtcStatus.cycles;
     //     g_stCellInfoReport.u16VCell[30] = g_stLowPowerRtcStatus.sleep;
     // }
+        g_stCellInfoReport.u16VCell[31] = sys_time.rtc_sec_cnt;
+#endif
 }
