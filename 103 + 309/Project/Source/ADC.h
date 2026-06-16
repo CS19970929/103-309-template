@@ -1,7 +1,7 @@
 #ifndef ADC_H
 #define ADC_H
 
-#define AD_Used_amount      3
+#define AD_Used_amount      4
 
 
 #define AD_CurZeroDeadband  4

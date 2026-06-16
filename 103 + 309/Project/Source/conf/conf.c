@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 10,
+    .time_enter_rtc = 60,
     .power_on = false,
 };
 
@@ -280,9 +280,11 @@ void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN) & (~PIN_MCC_C), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_DBG_LED), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
+    // Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN) & (~PIN_MCC_C), GPIO_Mode_AIN);
+    // Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_DBG_LED), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_MCC_C), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_2737_EN), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOC, GPIO_Pin_All & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 

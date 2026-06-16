@@ -1635,3 +1635,6 @@ System_ErrorControlBase???
 合并AppInit和Runtime，同时Runtime主循环实现合并为一个函数，不需要分这么多函数，然后rtc_sleep是否应该放在循环的末尾
 
 修改老化模式，也允许进入rtc，但要保证老化模式时间的问题，先给出修改规划
+
+
+看一下afe参数

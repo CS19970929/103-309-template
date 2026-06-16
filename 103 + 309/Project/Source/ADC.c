@@ -135,7 +135,7 @@ void InitADC_GPIO(void)
 
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR | PIN_ADC_NTC;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
@@ -227,9 +227,10 @@ void InitADC_ADC1(void)
 
     RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 酝置ADC时钟PCLK2�8分�，�9MHz
 
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5); // PB1: GPIO_ADC_NMOS
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_55Cycles5); // PB1: GPIO_ADC_NMOS
     ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_239Cycles5); // PA1: GPIO_ADC_VBUS
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_55Cycles5); // PA1: GPIO_ADC_VBUS
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
 
     ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
@@ -415,6 +416,14 @@ static void ADC_UpdateMosTemp(void)
     t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
     s_adc.result[ADC_TEMP_MOS1] = (UINT16)t_i32temp;
 }
+static void ADC_UpdateEnvTemp(void)
+{
+    INT32 t_i32temp = 0;
+
+    t_i32temp = (INT32)s_adc.raw[ADC_TEMP_EV1];
+    t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
+    s_adc.result[ADC_TEMP_EV1] = (UINT16)t_i32temp;
+}
 
 static void ADC_UpdateVbc(void)
 {
@@ -468,6 +477,7 @@ void App_AnlogCal(void)
     }
 
     ADC_UpdateMosTemp();
+    ADC_UpdateEnvTemp();
     ADC_UpdateVbc();
     ADC_UpdateTypeCCurrent();
     s_adc.ready = 1U;
