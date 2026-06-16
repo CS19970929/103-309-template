@@ -33,6 +33,8 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t key_active;
     uint8_t main_sw_closed;
     uint8_t main_sw_sleep_handled;
+    uint8_t blink_active;
+    uint8_t blink_tick;
 } LedBarRuntime;
 
 static const LedBarLed s_ledbar_leds[LEDBAR_SOC_LED_COUNT] =
@@ -305,6 +307,8 @@ void LedBar_Init(void)
     s_ledbar.soc_display_10ms = 0u;
     s_ledbar.startup_display_armed = 0u;
     s_ledbar.main_sw_sleep_handled = 0u;
+    s_ledbar.blink_active = 0u;
+    s_ledbar.blink_tick = 0u;
     LedBar_GpioInitForDisplay();
     s_ledbar.key_active = LedBar_ReadSocKeyPressed();
     s_ledbar.main_sw_closed = LedBar_ReadMainSwitchClosed();
@@ -387,6 +391,7 @@ void LedBar_ShowSleepSocPreview(void)
     s_ledbar.number = LedBar_LoadSleepSoc();
     s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
     LedBar_RefreshOutput();
+    g_stCellInfoReport.SocElement.u16Soc = s_ledbar.number;
 }
 
 void LedBar_RequestSocDisplay(void)
@@ -419,6 +424,19 @@ uint8_t LedBar_IsActiveForLowPower(void)
     }
 
     return (uint8_t)((s_ledbar.soc_display_10ms != 0u) && (s_ledbar.blank == 0u));
+}
+
+static uint8_t LedBar_IsBlinkCondition(void)
+{
+    if (g_stCellInfoReport.SocElement.u16Soc < 5u)
+    {
+        return 1u;
+    }
+    if (SH367309_Reg_Store.REG_BSTATUS1.bits.UV != 0u)
+    {
+        return 1u;
+    }
+    return 0u;
 }
 
 void APP_LedBar(void)
@@ -456,6 +474,18 @@ void APP_LedBar(void)
         s_ledbar.indicator_mask = LEDBAR_ICON_PERCENT_MASK;
         s_ledbar.blank = 0u;
         LedBar_RefreshOutput();
+    }
+
+    s_ledbar.blink_active = LedBar_IsBlinkCondition();
+    if (s_ledbar.blink_active != 0u)
+    {
+        ++s_ledbar.blink_tick;
+        if (s_ledbar.blink_tick >= 20u)
+        {
+            s_ledbar.blink_tick = 0u;
+        }
+        GPIO_WriteBit(GPIO_SOC_LED_25, PIN_SOC_LED_25,
+            (s_ledbar.blink_tick < 10u) ? LEDBAR_LED_ON : LEDBAR_LED_OFF);
     }
 }
 

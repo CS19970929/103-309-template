@@ -93,19 +93,33 @@ static UINT8 SleepDeal_IsWakeupValid(void)
 		}
 
 		display_cnt = 0;
-		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
 		{
-			if (SleepDeal_IsDirectWakeupValid())
+			uint8_t blink_tick = 0u;
+			uint8_t blink_on;
+			blink_on = (g_stCellInfoReport.SocElement.u16Soc < 5u);
+			// blink_on = (g_stCellInfoReport.SocElement.u16Soc < 5u) ||
+			//            (SH367309_Reg_Store.REG_BSTATUS1.bits.UV != 0u);
+			while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
 			{
-				return 1U;
-			}
-			if (SleepDeal_IsSocKeyPressed())
-			{
-				break;
-			}
+				if (SleepDeal_IsDirectWakeupValid())
+				{
+					return 1U;
+				}
+				if (SleepDeal_IsSocKeyPressed())
+				{
+					break;
+				}
 
-			__delay_ms(10);
-			display_cnt++;
+				__delay_ms(10);
+				display_cnt++;
+				if (blink_on != 0u)
+				{
+					++blink_tick;
+					if (blink_tick >= 20u) { blink_tick = 0u; }
+					GPIO_WriteBit(GPIO_SOC_LED_25, PIN_SOC_LED_25,
+						(blink_tick < 10u) ? Bit_SET : Bit_RESET);
+				}
+			}
 		}
 
 		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
