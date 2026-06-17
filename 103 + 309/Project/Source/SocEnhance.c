@@ -48,6 +48,10 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
+#define SOC_EMPTY_CRITICAL_OFFSET_MV ((int16_t)0)
+#define SOC_EMPTY_NEAR_TICKS         ((UINT16)(24U * SOC_TICKS_PER_SECOND))
+#define SOC_EMPTY_FORCE_TICKS        ((UINT16)(10U * SOC_TICKS_PER_SECOND))
+#define SOC_EMPTY_CRITICAL_TICKS     ((UINT16)(5U * SOC_TICKS_PER_SECOND))
 #define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
 #define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)300)
@@ -123,68 +127,32 @@ static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
 
-// #define SOC_EMPTY_TAIL_STEP_TICKS		(5U * 60U)
-#define SOC_EMPTY_TAIL_STEP_TICKS		(5U)
-// static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-// 	{
-// 		-50,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		-25,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		0,
-// 		{0U, 0U, 0U, 0U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		50,
-// 		{3U, 5U, 8U, 12U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		100,
-// 		{5U, 10U, 14U, 18U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		200,
-// 		{8U, 14U, 20U, 25U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		300,
-// 		{14U, 18U, 25U, 32U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// 	{
-// 		400,
-// 		{18U, 22U, 30U, 40U},
-// 		{SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS,
-// 		 SOC_EMPTY_TAIL_STEP_TICKS, SOC_EMPTY_TAIL_STEP_TICKS}
-// 	},
-// };
-static const SOC_EMPTY_TAIL_RULE s_empty_tail_table[] = {
-	{-25, 0U, 0U},
-	{-5,  0U, 0U},
-	{0,   0U, 0U},
-	{50,  3U, 2U},
-	{100, 5U, 3U},
-	{200, 8U, 5U},
-	{300, 14U, 8U},
-	{400, 18U, 10U},
-};
+static UINT8 soc_empty_tail_interpolate(int16_t offset_mv, UINT8 is_relax)
+{
+	int32_t target;
+
+	if (offset_mv <= -25) return 0U;
+	if (offset_mv >= 400) return is_relax ? 10U : 18U;
+
+	if (is_relax)
+	{
+		if (offset_mv <= 0) return 0U;
+		if (offset_mv <= 50)  return (UINT8)(offset_mv * 2 / 50);
+		if (offset_mv <= 100) return (UINT8)(2 + (offset_mv - 50) * 1 / 50);
+		if (offset_mv <= 200) return (UINT8)(3 + (offset_mv - 100) * 2 / 100);
+		if (offset_mv <= 300) return (UINT8)(5 + (offset_mv - 200) * 3 / 100);
+		return (UINT8)(8 + (offset_mv - 300) * 2 / 100);
+	}
+	else
+	{
+		if (offset_mv <= 0) return 0U;
+		if (offset_mv <= 50)  return (UINT8)(offset_mv * 3 / 50);
+		if (offset_mv <= 100) return (UINT8)(3 + (offset_mv - 50) * 2 / 50);
+		if (offset_mv <= 200) return (UINT8)(5 + (offset_mv - 100) * 3 / 100);
+		if (offset_mv <= 300) return (UINT8)(8 + (offset_mv - 200) * 6 / 100);
+		return (UINT8)(14 + (offset_mv - 300) * 4 / 100);
+	}
+}
 
 #if (PROJECT_CFG_BAT_CHEMISTRY == 1)
 const UINT16 SOC_Table_LiFePO[SOC_TABLE_SIZE] = {
@@ -662,11 +630,11 @@ static UINT8 soc_sag_hold_blocks_calibration(void)
 
 static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, SOC_TAIL_STEP *step)
 {
-	UINT16 i;
-	UINT16 threshold;
 	UINT16 idsg_a10;
 	UINT16 mid_limit;
 	UINT32 ticks;
+	int16_t offset_mv;
+	UINT8 target;
 
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
 	{
@@ -685,9 +653,14 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 		return 0U;
 	}
 
-	if (s_soc.soc <= 5U)
+	if (g_stCellInfoReport.u16VCellMin <=
+		soc_empty_threshold_mv(SOC_EMPTY_CRITICAL_OFFSET_MV))
 	{
-		ticks = 120U;
+		ticks = SOC_EMPTY_CRITICAL_TICKS;
+	}
+	else if (g_stCellInfoReport.u16VCellMin <= soc_empty_threshold_mv(50))
+	{
+		ticks = SOC_EMPTY_FORCE_TICKS;
 	}
 	else if (mode == SOC_MODE_RELAX)
 	{
@@ -702,23 +675,23 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 			(120U + ((UINT32)idsg_a10 * 480U / (UINT32)mid_limit)) : 120U;
 		if (ticks < 120U) { ticks = 120U; }
 		if (ticks > 600U) { ticks = 600U; }
-	}
-
-	for (i = 0U; i < (UINT16)(sizeof(s_empty_tail_table) / sizeof(s_empty_tail_table[0])); ++i)
-	{
-		threshold = soc_empty_threshold_mv(s_empty_tail_table[i].offset_mv);
-		if (g_stCellInfoReport.u16VCellMin <= threshold)
+		if (g_stCellInfoReport.u16VCellMin <=
+			soc_empty_threshold_mv(SOC_SAG_ALLOW_OFFSET_MV))
 		{
-			step->target = (mode == SOC_MODE_RELAX) ?
-				s_empty_tail_table[i].target_relax :
-				s_empty_tail_table[i].target_dsg;
-			step->ticks = (UINT16)ticks;
-			s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
-			return 1U;
+			if (ticks > SOC_EMPTY_NEAR_TICKS)
+			{
+				ticks = SOC_EMPTY_NEAR_TICKS;
+			}
 		}
 	}
+
+	offset_mv = (int16_t)g_stCellInfoReport.u16VCellMin - (int16_t)OtherElement.u16Soc_V_0;
+	target = soc_empty_tail_interpolate(offset_mv, (mode == SOC_MODE_RELAX) ? 1U : 0U);
+
+	step->target = target;
+	step->ticks = (UINT16)ticks;
 	s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
-	return 0U;
+	return 1U;
 }
 
 static UINT8 soc_apply_full_confirm(UINT8 active)
@@ -866,8 +839,8 @@ static void soc_update_rest_timer(SOC_MODE mode)
 #else
 	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 
-	// if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
-	if (mode != SOC_MODE_RELAX)
+	if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
+	// if (mode != SOC_MODE_RELAX)
 	{
 		soc_reset_rest_confidence();
 		return;

@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -168,7 +168,22 @@ void InitIO_rtc(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
 
-    Conf_InitRunSharedIo();
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
+
+    GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_RESET);
+    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
+
+    Conf_InitD009SwitchInputs();
+    Conf_InitD009SocLedsOff();
+
+    Conf_InitGpioMode(GPIO_ADC_VBUS, PIN_ADC_VBUS, GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIO_ADC_NMOS, PIN_ADC_NMOS, GPIO_Mode_AIN);
+
+    Conf_InitMainPowerRails(Bit_SET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_SET);
+
 }
 
 void InitIO(void)
@@ -241,7 +256,7 @@ void InitWakeUp_NormalMode(void)
                              MAIN_SW_EXTI_PORT_SOURCE,
                              MAIN_SW_EXTI_PIN_SOURCE,
                              MAIN_SW_EXTI_LINE,
-                            //  EXTI_Trigger_Falling,
+                             //  EXTI_Trigger_Falling,
                              EXTI_Trigger_Rising_Falling,
                              MAIN_SW_EXTI_IRQn);
 
@@ -298,7 +313,7 @@ void IOstatus_RTCMode(void)
     Conf_PrepareStopEntry();
 
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_MCC_C), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
@@ -383,15 +398,15 @@ void InitRunAfterStopWakeup(void)
     initAFE1_IIC();
 }
 
-// todo ????????
-void Init(void)
-{
-    if (RTC_IsStopWakeup() != 0U)
-    {
-        InitRtcWakeupCheck();
-    }
-    else
-    {
-        InitRunAfterStopWakeup();
-    }
-}
+// // todo ????????
+// void Init(void)
+// {
+//     if (RTC_IsStopWakeup() != 0U)
+//     {
+//         InitRtcWakeupCheck();
+//     }
+//     else
+//     {
+//         InitRunAfterStopWakeup();
+//     }
+// }

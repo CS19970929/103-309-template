@@ -606,6 +606,6 @@ void FactoryAging_Task(void)
 		return;
 	}
 
-	FactoryAging_ApplyRunningMos();
+	// FactoryAging_ApplyRunningMos();
 	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 0U);
 }

@@ -1,5 +1,9 @@
 tod
 
+new-T3-27Ah-production-release
+V1+V2-T3-27Ah-production-release
+codex/d009-production-code
+
 梳理can、rtc、soc，整体架构优化
 
 
@@ -1651,3 +1655,18 @@ can上位机mos温度没有显示
 
 soc_apply_long_rest_down_step
 
+
+进入低功耗模式后，老化计时是否有用？
+完整梳理soc模块，并评价当前soc逻辑
+
+发现一个问题，通过修改PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION iap升级来重置老化时间，升级后，好像afe mos打开了，但是mcc并没有输出，必须bms休眠重启后才正常，分析原因
+
+完整梳理所有和充、放电mos相关逻辑
+
+完整梳理低功耗所有逻辑，特别是进入rtc低功耗前和唤醒后的各种配置，并给出评价，是否会有问题
+
+完整梳理数码管逻辑，
+
+需要在
+new-T3-27Ah-production-release、
+V1+V2-T3-27Ah-production-release这两个分支上都实现以上功能,并推送到远端
