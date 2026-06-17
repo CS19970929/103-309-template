@@ -63,12 +63,9 @@ void AFE_Reset(void)
 	}
 	*/
 
-	if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-	{
-		if (!MTPWrite(0xEA, 1, WrBuf))
-		{ // 0xEA, 0xC0?A CRC
-			MTPWrite(0xEA, 1, WrBuf);
-		}
+	if (!MTPWrite(0xEA, 1, WrBuf))
+	{ // 0xEA, 0xC0?A CRC
+		MTPWrite(0xEA, 1, WrBuf);
 	}
 }
 
@@ -120,6 +117,11 @@ UINT8 AFE_IsReady(void)
 			result = 1;
 			break;
 		}
+	}
+
+	if (result == 0U)
+	{
+		System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
 	}
 	return result;
 }

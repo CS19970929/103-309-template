@@ -242,12 +242,9 @@ bool SH367309_UpdataAfeConfig(void)
 			MCUO_AFE_VPRO = 0;
 			Delay1ms(1);
 
-			if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
-			{
-				AFE_Reset();
-				Delay1ms(5);
-				AFE_IsReady();
-			}
+			AFE_Reset();
+			Delay1ms(5);
+			AFE_IsReady();
 			SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 			if (!ret)
 			{

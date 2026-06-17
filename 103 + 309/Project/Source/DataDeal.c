@@ -22,6 +22,7 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
+#define MONITOR_AFE_RECOVER_RETRY_STEP ((UINT8)5U)
 #define MONITOR_AFE_WAKE_RETRY_LIMIT ((UINT8)20)
 #define MONITOR_AFE_TASK_PERIOD_MS ((UINT16)200)
 #define MONITOR_AFE_SLEEP_DELAY_SEC ((UINT16)(5U * 60U))
@@ -62,6 +63,7 @@ typedef struct _AFE_MONITOR_CH
 {
     UINT8 faultCnt;
     UINT8 wakeCnt;
+    UINT8 errorReported;
 } AFE_MONITOR_CH;
 
 typedef struct _AFE_MONITOR_RUNTIME
@@ -80,8 +82,8 @@ typedef struct _DATA_RUNTIME
 static DATA_RUNTIME s_data =
     {
         {1U, 0, 0, 0U, 0U, (UINT8)AFE_CURRENT_ZERO_IDLE},
-        {{{0U, 0U},
-          {0U, 0U}},
+        {{{0U, 0U, 0U},
+          {0U, 0U, 0U}},
          {0U, 0U, 0U}},
         0U};
 
@@ -886,6 +888,7 @@ static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
     }
 }
 
+static AFE_MONITOR_CH *MonitorAFE_GetChannel(UINT8 num);
 static void MonitorAFE_ReportError(UINT8 num)
 {
     switch (num)
@@ -933,44 +936,52 @@ static void MonitorAFE_Recover(UINT8 num)
 
 static void MonitorAFE_UpdateChannel(UINT8 num, UINT8 result, UINT8 *fault_cnt, UINT8 *wake_cnt)
 {
+    AFE_MONITOR_CH *channel;
+
     if ((fault_cnt == 0) || (wake_cnt == 0))
+    {
+        return;
+    }
+
+    channel = MonitorAFE_GetChannel(num);
+    if (channel == 0)
     {
         return;
     }
 
     if (result != 0)
     {
+        UINT8 recover_slot;
+
         if (*fault_cnt < 0xFFU)
         {
             ++(*fault_cnt);
         }
 
-        if (*fault_cnt > MONITOR_AFE_FAIL_LIMIT)
+        if (*fault_cnt >= MONITOR_AFE_RECOVER_TRIGGER)
         {
-            Init_Registers(num);
-            *fault_cnt = 0;
-            MonitorAFE_ReportError(num);
+            recover_slot = (UINT8)((*fault_cnt - MONITOR_AFE_RECOVER_TRIGGER) / MONITOR_AFE_RECOVER_RETRY_STEP);
+            if ((recover_slot == *wake_cnt) && (*wake_cnt < MONITOR_AFE_WAKE_RETRY_LIMIT))
+            {
+                MonitorAFE_Recover(num);
+                ++(*wake_cnt);
+            }
         }
 
-        if ((*fault_cnt == MONITOR_AFE_RECOVER_TRIGGER) && (*wake_cnt < MONITOR_AFE_WAKE_RETRY_LIMIT))
+        if ((*fault_cnt >= MONITOR_AFE_FAIL_LIMIT) && (channel->errorReported == 0U))
         {
-            MonitorAFE_Recover(num);
-            ++(*wake_cnt);
+            Init_Registers(num);
+            channel->errorReported = 1U;
+            MonitorAFE_ReportError(num);
         }
 
         MonitorAFE_SetStatus(num, 0);
     }
     else
     {
-        if (*fault_cnt > 0)
-        {
-            --(*fault_cnt);
-        }
-
-        if (*wake_cnt > 0)
-        {
-            --(*wake_cnt);
-        }
+        *fault_cnt = 0U;
+        *wake_cnt = 0U;
+        channel->errorReported = 0U;
 
         MonitorAFE_SetStatus(num, 1);
         MonitorAFE_ClearError(num);
