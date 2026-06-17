@@ -96,6 +96,11 @@ BMS_DIRECT_ENTER_IAP_ADDR = 0xFFFD
 BMS_DIRECT_AGING_FUNCTION_ID = 7
 BMS_DIRECT_FUNCTION_ON_ADDR = 0x1102
 BMS_DIRECT_FUNCTION_OFF_ADDR = 0x1103
+BMS_DIRECT_AGING_STATUS_ADDR = 0xC080
+BMS_DIRECT_AGING_STATUS_WORDS = 5
+BMS_DIRECT_AGING_RESET_TIME_ADDR = 0x1008
+BMS_DIRECT_AGING_SET_HOURS_ADDR = 0x1009
+BMS_DIRECT_AGING_RESET_GUARD = 0x005A
 PRODUCT_INFO_REFRESH_SECONDS = 30.0
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
@@ -2756,6 +2761,13 @@ class UpgradeUi(tk.Tk):
     def _worker_read_aging_status(self) -> None:
         with self._open_client() as client:
             self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                text = self._format_direct_aging_status("老化时间", self._direct_aging_status(client))
+                self._emit("aging_status", text)
+                self._emit("bms_result", text)
+                self._emit("log", text)
+                self._emit("progress", 100)
+                return
             self._require_comm_tool_client(client, "读取老化时间")
             resp = client.command(CMD_BMS_AGING_STATUS, timeout=8.0)
         if len(resp.payload) < 3:
@@ -2780,13 +2792,13 @@ class UpgradeUi(tk.Tk):
             if isinstance(client, DirectBmsModbusClient):
                 if action == APP_AGING_ACTION_START:
                     self._write_bms_words(client, BMS_DIRECT_FUNCTION_ON_ADDR, [BMS_DIRECT_AGING_FUNCTION_ID])
-                    text = "开启老化模式: 已通过 BMS直连串口写入 0x1102=7"
+                    text = self._format_direct_aging_status("开启老化模式", self._direct_aging_status(client))
                 elif action == APP_AGING_ACTION_STOP:
                     self._write_bms_words(client, BMS_DIRECT_FUNCTION_OFF_ADDR, [BMS_DIRECT_AGING_FUNCTION_ID])
-                    text = "关闭老化模式: 已通过 BMS直连串口写入 0x1103=7"
+                    text = self._format_direct_aging_status("关闭老化模式", self._direct_aging_status(client))
                 else:
-                    raise RuntimeError("重置老化时间是 CAN App 专用命令，需要 comm tool/CAN桥模式")
-                text += "；剩余时间需切换到 comm tool/CAN桥读取 0x14F80208 广播"
+                    self._write_bms_words(client, BMS_DIRECT_AGING_RESET_TIME_ADDR, [BMS_DIRECT_AGING_RESET_GUARD])
+                    text = self._format_direct_aging_status("重置老化时间", self._direct_aging_status(client))
                 self._emit("aging_status", text)
                 self._emit("bms_result", text)
                 self._emit("log", text)
@@ -2807,6 +2819,14 @@ class UpgradeUi(tk.Tk):
         hours = self.active_aging_hours
         with self._open_client() as client:
             self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                self._write_bms_words(client, BMS_DIRECT_AGING_SET_HOURS_ADDR, [hours])
+                text = self._format_direct_aging_status("修改老化时间", self._direct_aging_status(client))
+                self._emit("aging_status", text)
+                self._emit("bms_result", text)
+                self._emit("log", text)
+                self._emit("progress", 100)
+                return
             self._require_comm_tool_client(client, "修改老化时间")
             resp = client.command(CMD_BMS_AGING_SET_HOURS, struct.pack("<H", hours), timeout=10.0)
         if len(resp.payload) < 4:
@@ -3145,6 +3165,23 @@ class UpgradeUi(tk.Tk):
         if hours:
             return f"{hours}h{mins:02d}min ({minutes}min)"
         return f"{mins}min"
+
+    def _direct_aging_status(self, client) -> tuple[int, int, int, int]:
+        words = self._read_bms_words(client, BMS_DIRECT_AGING_STATUS_ADDR, BMS_DIRECT_AGING_STATUS_WORDS)
+        state = words[0]
+        remaining_minutes = words[1]
+        remaining_seconds = ((words[2] & 0xFFFF) << 16) | (words[3] & 0xFFFF)
+        duration_hours = words[4]
+        return state, remaining_minutes, remaining_seconds, duration_hours
+
+    def _format_direct_aging_status(self, title: str, status: tuple[int, int, int, int]) -> str:
+        state, remaining_minutes, remaining_seconds, duration_hours = status
+        duration_text = f"{duration_hours}h" if 1 <= duration_hours <= 168 else "--"
+        return (
+            f"{title}: 状态={self._aging_state_name(state)} "
+            f"剩余={self._format_aging_remaining_minutes(remaining_minutes)} "
+            f"({remaining_seconds}s) 时长={duration_text}"
+        )
 
     def _format_bms_overview(self, words: list[int]) -> str:
         if len(words) < BMS_OVERVIEW_WORDS:
