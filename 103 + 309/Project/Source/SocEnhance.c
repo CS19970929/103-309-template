@@ -48,10 +48,10 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
-#define SOC_EMPTY_CRITICAL_OFFSET_MV ((int16_t)-50)
+#define SOC_EMPTY_CRITICAL_OFFSET_MV ((int16_t)0)
 #define SOC_EMPTY_NEAR_TICKS         ((UINT16)(24U * SOC_TICKS_PER_SECOND))
-#define SOC_EMPTY_FORCE_TICKS        ((UINT16)(12U * SOC_TICKS_PER_SECOND))
-#define SOC_EMPTY_CRITICAL_TICKS     ((UINT16)(3U * SOC_TICKS_PER_SECOND))
+#define SOC_EMPTY_FORCE_TICKS        ((UINT16)(10U * SOC_TICKS_PER_SECOND))
+#define SOC_EMPTY_CRITICAL_TICKS     ((UINT16)(5U * SOC_TICKS_PER_SECOND))
 #define SOC_VALID_MIN_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV)
 #define SOC_VALID_MAX_MV             ((UINT16)PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV)
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)300)
@@ -658,7 +658,7 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 	{
 		ticks = SOC_EMPTY_CRITICAL_TICKS;
 	}
-	else if (g_stCellInfoReport.u16VCellMin <= soc_empty_threshold_mv(0))
+	else if (g_stCellInfoReport.u16VCellMin <= soc_empty_threshold_mv(50))
 	{
 		ticks = SOC_EMPTY_FORCE_TICKS;
 	}
@@ -839,8 +839,8 @@ static void soc_update_rest_timer(SOC_MODE mode)
 #else
 	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 
-	// if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
-	if (mode != SOC_MODE_RELAX)
+	if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
+	// if (mode != SOC_MODE_RELAX)
 	{
 		soc_reset_rest_confidence();
 		return;

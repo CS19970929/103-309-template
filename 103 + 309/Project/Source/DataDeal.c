@@ -122,6 +122,7 @@ void charger_detect_and_keyLogi_200ms(void)
         if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
         {
             LowPower_Request(DEEP_MODE);
+            low_power_log_and_commit_sleep(DEEP_MODE);
         }
         else
         {

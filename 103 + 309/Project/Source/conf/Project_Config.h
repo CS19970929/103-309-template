@@ -175,29 +175,29 @@
 #define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0617
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
 
 // <q> Reset balance open voltage on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
 
 // <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
 
 // <q> Reset SOC snapshot on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.

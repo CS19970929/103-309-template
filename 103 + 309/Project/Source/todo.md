@@ -1638,3 +1638,5 @@ System_ErrorControlBase???
 
 
 看一下afe参数
+
+屏蔽了FactoryAging_Task中的FactoryAging_ApplyRunningMos()是否有影响，还有整个项目中和mos动作相关的逻辑梳理出来
