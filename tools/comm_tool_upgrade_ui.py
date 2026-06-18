@@ -33,6 +33,7 @@ from comm_tool_host import (
     CMD_FW_DATA,
     CMD_FW_END,
     CMD_FW_INFO,
+    CMD_ENTER_IAP,
     CMD_GET_INFO,
     CMD_SET_CAN,
     CMD_UPGRADE,
@@ -71,6 +72,16 @@ POST_UPGRADE_APP_READY_INTERVAL = 1.0
 LOG_MIN_INTERVAL_SECONDS = 2.0
 LOG_MAX_INTERVAL_SECONDS = 3600.0
 
+COMM_MODE_COMM_TOOL = "comm_tool"
+COMM_MODE_DIRECT_BMS = "direct_bms"
+COMM_MODE_LABELS = {
+    COMM_MODE_COMM_TOOL: "comm tool/CAN桥",
+    COMM_MODE_DIRECT_BMS: "BMS直连串口",
+}
+COMM_MODE_FROM_LABEL = {label: mode for mode, label in COMM_MODE_LABELS.items()}
+BMS_DIRECT_DEFAULT_BAUD = 19200
+BMS_DIRECT_DEFAULT_SLAVE = 1
+
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
 BMS_LIVE_WORDS = 88
@@ -81,6 +92,15 @@ BMS_EVENT_RECORD_CHUNK_WORDS = 20
 BMS_PRODUCT_INFO_ADDR = 0xC002
 BMS_PRODUCT_INFO_FIELD_LEN = 32
 BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
+BMS_DIRECT_ENTER_IAP_ADDR = 0xFFFD
+BMS_DIRECT_AGING_FUNCTION_ID = 7
+BMS_DIRECT_FUNCTION_ON_ADDR = 0x1102
+BMS_DIRECT_FUNCTION_OFF_ADDR = 0x1103
+BMS_DIRECT_AGING_STATUS_ADDR = 0xC080
+BMS_DIRECT_AGING_STATUS_WORDS = 5
+BMS_DIRECT_AGING_RESET_TIME_ADDR = 0x1008
+BMS_DIRECT_AGING_SET_HOURS_ADDR = 0x1009
+BMS_DIRECT_AGING_RESET_GUARD = 0x005A
 PRODUCT_INFO_REFRESH_SECONDS = 30.0
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
@@ -383,6 +403,101 @@ def _event_interval_text(delta: int) -> str:
     return "溢出"
 
 
+def _modbus_crc_frame(frame: bytes) -> bytes:
+    crc = crc16_modbus(frame)
+    return frame + bytes((crc & 0xFF, (crc >> 8) & 0xFF))
+
+
+def _u16be(value: int) -> bytes:
+    return bytes(((value >> 8) & 0xFF, value & 0xFF))
+
+
+class DirectBmsModbusClient:
+    def __init__(self, port: str, baud: int, timeout: float, slave: int):
+        if slave <= 0 or slave > 247:
+            raise ValueError("Modbus slave 必须是 1..247")
+        serial = require_pyserial()
+        self._ser = serial.Serial(port=port, baudrate=baud, timeout=timeout, write_timeout=timeout)
+        self._slave = slave & 0xFF
+
+    def close(self) -> None:
+        self._ser.close()
+
+    def __enter__(self) -> "DirectBmsModbusClient":
+        return self
+
+    def __exit__(self, _exc_type, _exc, _tb) -> None:
+        self.close()
+
+    def _verify_crc(self, frame: bytes) -> None:
+        if len(frame) < 4:
+            raise RuntimeError("Modbus 响应长度不足")
+        expected = crc16_modbus(frame[:-2])
+        actual = frame[-2] | (frame[-1] << 8)
+        if expected != actual:
+            raise RuntimeError(f"Modbus CRC 错误: expect=0x{expected:04X} actual=0x{actual:04X}")
+
+    def _read_exact(self, size: int, label: str) -> bytes:
+        data = self._ser.read(size)
+        if len(data) != size:
+            raise TimeoutError(f"等待 Modbus {label} 超时")
+        return data
+
+    def read_words(self, addr: int, count: int) -> list[int]:
+        if count <= 0 or count > 120:
+            raise ValueError("读取数量必须是 1..120")
+        req = _modbus_crc_frame(bytes((self._slave, 0x03)) + _u16be(addr) + _u16be(count))
+        self._ser.reset_input_buffer()
+        self._ser.write(req)
+        self._ser.flush()
+        head = self._read_exact(3, "读响应头")
+        if head[0] != self._slave:
+            raise RuntimeError(f"Modbus slave 不匹配: expect={self._slave} actual={head[0]}")
+        if head[1] & 0x80:
+            tail = self._read_exact(2, "异常响应")
+            self._verify_crc(head + tail)
+            raise RuntimeError(f"Modbus 异常: func=0x{head[1]:02X} code=0x{head[2]:02X}")
+        if head[1] != 0x03:
+            raise RuntimeError(f"Modbus 功能码不匹配: 0x{head[1]:02X}")
+        byte_count = head[2]
+        if byte_count != count * 2:
+            raise RuntimeError(f"Modbus 读长度错误: {byte_count} != {count * 2}")
+        body = self._read_exact(byte_count + 2, "读响应数据")
+        frame = head + body
+        self._verify_crc(frame)
+        payload = frame[3 : 3 + byte_count]
+        return [(payload[i] << 8) | payload[i + 1] for i in range(0, len(payload), 2)]
+
+    def write_words(self, addr: int, words: list[int]) -> None:
+        if not words:
+            raise ValueError("写入数量必须大于 0")
+        if len(words) > 120:
+            raise ValueError("一次最多写入 120 个寄存器")
+        clean_words = [word & 0xFFFF for word in words]
+        if len(clean_words) == 1 and addr < 0x2000:
+            expected_func = 0x06
+            req = _modbus_crc_frame(bytes((self._slave, 0x06)) + _u16be(addr) + _u16be(clean_words[0]))
+        else:
+            expected_func = 0x10
+            payload = b"".join(_u16be(word) for word in clean_words)
+            req = _modbus_crc_frame(
+                bytes((self._slave, 0x10)) + _u16be(addr) + _u16be(len(clean_words)) + bytes((len(payload),)) + payload
+            )
+        self._ser.reset_input_buffer()
+        self._ser.write(req)
+        self._ser.flush()
+        frame = self._read_exact(8, "写响应")
+        self._verify_crc(frame)
+        if frame[0] != self._slave:
+            raise RuntimeError(f"Modbus slave 不匹配: expect={self._slave} actual={frame[0]}")
+        if frame[1] & 0x80:
+            raise RuntimeError(f"Modbus 写异常: func=0x{frame[1]:02X} code=0x{frame[2]:02X}")
+        if frame[1] != expected_func:
+            raise RuntimeError(f"Modbus 写功能码不匹配: 0x{frame[1]:02X}")
+        if frame[2:6] != req[2:6]:
+            raise RuntimeError("Modbus 写响应回显不匹配")
+
+
 def _read_bms_words_once(port: str, baud: int, addr: int, count: int) -> list[int]:
     payload = struct.pack("<HH", addr, count)
     with CommToolClient(port, baud, timeout=1.0) as client:
@@ -571,11 +686,7 @@ class BmsMonitorWindow(tk.Toplevel):
                 self.events.put(UiEvent("busy", "串口忙，等待主任务结束"))
                 return
             try:
-                self.parent.active_port = self.parent.port_var.get().strip()
-                self.parent.active_baud = int(self.parent.baud_var.get().strip())
-                self.parent.active_can_bitrate = int(self.parent.can_bitrate_var.get().strip(), 0)
-                self.parent.active_node_id = int(self.parent.node_id_var.get().strip(), 0)
-                self.parent.active_app_can_addr = int(self.parent.app_can_addr_var.get().strip(), 0)
+                self.parent._capture_runtime_settings(include_bin=False)
                 with self.parent._open_client() as client:
                     self.parent._set_can_target(client)
                     words = self.parent._read_live_words(client)
@@ -703,11 +814,20 @@ class BmsLogWindow(tk.Toplevel):
 
 
 class UpgradeUi(tk.Tk):
-    def __init__(self, port: str, baud: int, bin_path: Path):
+    def __init__(
+        self,
+        port: str,
+        baud: int,
+        bin_path: Path,
+        mode: str = COMM_MODE_COMM_TOOL,
+        slave: int = BMS_DIRECT_DEFAULT_SLAVE,
+    ):
         super().__init__()
         self.title("BMS_V1.13.1 - CAN用户上位机")
         self.geometry("1180x760")
         self.minsize(1100, 700)
+        if mode not in COMM_MODE_LABELS:
+            mode = COMM_MODE_COMM_TOOL
 
         self.events: "queue.Queue[UiEvent]" = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -715,6 +835,8 @@ class UpgradeUi(tk.Tk):
 
         self.port_var = tk.StringVar(value=port)
         self.baud_var = tk.StringVar(value=str(baud))
+        self.connection_mode_var = tk.StringVar(value=COMM_MODE_LABELS[mode])
+        self.modbus_slave_var = tk.StringVar(value=str(slave))
         self.bin_var = tk.StringVar(value=str(bin_path))
         self.info_var = tk.StringVar(value="未连接")
         self.cache_var = tk.StringVar(value="未读取")
@@ -749,6 +871,8 @@ class UpgradeUi(tk.Tk):
         self.progress_var = tk.DoubleVar(value=0.0)
         self.active_port = port
         self.active_baud = baud
+        self.active_connection_mode = mode
+        self.active_modbus_slave = slave
         self.active_bin = bin_path
         self.active_can_bitrate = 250000
         self.active_node_id = 1
@@ -779,11 +903,11 @@ class UpgradeUi(tk.Tk):
         self.param_dirty: set[str] = set()
         self.param_loading = False
         self.log_tree: ttk.Treeview | None = None
-        self.applied_target: tuple[int, int, int] | None = None
+        self.applied_target: tuple[object, ...] | None = None
         self.live_word_count: int | None = None
         self.live_snapshot_cache: list[int] | None = None
         self.product_info_cache: dict[str, str] | None = None
-        self.product_info_cache_target: tuple[int, int, int] | None = None
+        self.product_info_cache_target: tuple[object, ...] | None = None
         self.product_info_next_due_monotonic = 0.0
 
         self._build_ui()
@@ -986,26 +1110,38 @@ class UpgradeUi(tk.Tk):
 
     def _build_connection_panel(self, parent: ttk.LabelFrame) -> None:
         parent.columnconfigure(1, weight=1)
-        ttk.Label(parent, text="串口").grid(row=0, column=0, padx=(10, 6), pady=(8, 4), sticky="w")
-        self.port_combo = ttk.Combobox(parent, textvariable=self.port_var, width=12)
-        self.port_combo.grid(row=0, column=1, sticky="w", pady=(8, 4))
-        ttk.Button(parent, text="刷新", command=self._refresh_ports).grid(row=0, column=2, padx=6, pady=(8, 4))
-        ttk.Button(parent, text="连接检测", command=self._check_connection).grid(row=0, column=3, padx=(0, 10), pady=(8, 4))
-        ttk.Label(parent, text="波特率").grid(row=1, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
-        ttk.Entry(parent, textvariable=self.baud_var, width=10).grid(row=1, column=1, sticky="w", pady=(4, 8))
-        ttk.Button(parent, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(
-            row=1, column=2, padx=6, pady=(4, 8)
+        ttk.Label(parent, text="通信方式").grid(row=0, column=0, padx=(10, 6), pady=(8, 4), sticky="w")
+        self.connection_mode_combo = ttk.Combobox(
+            parent,
+            textvariable=self.connection_mode_var,
+            values=list(COMM_MODE_LABELS.values()),
+            width=14,
+            state="readonly",
         )
-        ttk.Label(parent, text="间隔(s)").grid(row=1, column=3, sticky="w", padx=(0, 4), pady=(4, 8))
-        ttk.Entry(parent, textvariable=self.live_interval_var, width=5).grid(row=1, column=4, sticky="w", padx=(0, 10), pady=(4, 8))
-        ttk.Label(parent, text="记录间隔(s)").grid(row=2, column=0, padx=(10, 6), pady=(0, 4), sticky="w")
-        ttk.Entry(parent, textvariable=self.log_interval_var, width=10).grid(row=2, column=1, sticky="w", pady=(0, 4))
-        ttk.Button(parent, text="选择文件", command=self._choose_log_file).grid(row=2, column=2, padx=6, pady=(0, 4))
+        self.connection_mode_combo.grid(row=0, column=1, sticky="w", pady=(8, 4))
+        self.connection_mode_combo.bind("<<ComboboxSelected>>", self._on_connection_mode_changed)
+        ttk.Label(parent, text="Modbus地址").grid(row=0, column=2, padx=6, pady=(8, 4), sticky="w")
+        ttk.Entry(parent, textvariable=self.modbus_slave_var, width=6).grid(row=0, column=3, sticky="w", pady=(8, 4))
+        ttk.Label(parent, text="串口").grid(row=1, column=0, padx=(10, 6), pady=(4, 4), sticky="w")
+        self.port_combo = ttk.Combobox(parent, textvariable=self.port_var, width=12)
+        self.port_combo.grid(row=1, column=1, sticky="w", pady=(4, 4))
+        ttk.Button(parent, text="刷新", command=self._refresh_ports).grid(row=1, column=2, padx=6, pady=(4, 4))
+        ttk.Button(parent, text="连接检测", command=self._check_connection).grid(row=1, column=3, padx=(0, 10), pady=(4, 4))
+        ttk.Label(parent, text="波特率").grid(row=2, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
+        ttk.Entry(parent, textvariable=self.baud_var, width=10).grid(row=2, column=1, sticky="w", pady=(4, 8))
+        ttk.Button(parent, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(
+            row=2, column=2, padx=6, pady=(4, 8)
+        )
+        ttk.Label(parent, text="间隔(s)").grid(row=2, column=3, sticky="w", padx=(0, 4), pady=(4, 8))
+        ttk.Entry(parent, textvariable=self.live_interval_var, width=5).grid(row=2, column=4, sticky="w", padx=(0, 10), pady=(4, 8))
+        ttk.Label(parent, text="记录间隔(s)").grid(row=3, column=0, padx=(10, 6), pady=(0, 4), sticky="w")
+        ttk.Entry(parent, textvariable=self.log_interval_var, width=10).grid(row=3, column=1, sticky="w", pady=(0, 4))
+        ttk.Button(parent, text="选择文件", command=self._choose_log_file).grid(row=3, column=2, padx=6, pady=(0, 4))
         ttk.Button(parent, textvariable=self.log_button_var, command=self._toggle_data_log).grid(
-            row=2, column=3, padx=(0, 10), pady=(0, 4)
+            row=3, column=3, padx=(0, 10), pady=(0, 4)
         )
         ttk.Label(parent, textvariable=self.log_status_var).grid(
-            row=3, column=0, columnspan=5, sticky="w", padx=10, pady=(0, 8)
+            row=4, column=0, columnspan=5, sticky="w", padx=10, pady=(0, 8)
         )
 
     def _build_data_tab(self, tab: ttk.Frame) -> None:
@@ -1157,6 +1293,7 @@ class UpgradeUi(tk.Tk):
         ttk.Button(actions, text="使用缓存升级", command=self._upgrade_cached_selected).grid(row=0, column=3, padx=(0, 8))
         ttk.Button(actions, text="读取BMS状态", command=self._read_bms_status).grid(row=0, column=4, padx=(0, 8))
         ttk.Button(actions, text="CAN诊断", command=self._can_diag).grid(row=0, column=5, padx=(0, 8))
+        ttk.Button(actions, text="进入IAP", command=self._enter_iap).grid(row=0, column=6, padx=(0, 8))
 
         advanced = ttk.LabelFrame(tab, text="高级寄存器")
         advanced.grid(row=5, column=0, sticky="ew", pady=(0, 8))
@@ -1476,6 +1613,11 @@ class UpgradeUi(tk.Tk):
         if self.live_running:
             self._stop_live_monitor()
         else:
+            try:
+                self._capture_runtime_settings(include_bin=False)
+            except Exception as exc:
+                messagebox.showerror("参数错误", str(exc))
+                return
             self.live_running = True
             self.live_button_var.set("停止监控")
             self.comm_state_var.set("通信: 监控中")
@@ -1540,6 +1682,7 @@ class UpgradeUi(tk.Tk):
 
     def _start_data_log(self) -> None:
         try:
+            self._capture_runtime_settings(include_bin=False)
             interval = self._log_interval_seconds()
             path = Path(self.log_file_var.get()).resolve() if self.log_file_var.get() else self._default_log_path()
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -1605,7 +1748,7 @@ class UpgradeUi(tk.Tk):
         self.product_info_cache_target = None
         self.product_info_next_due_monotonic = 0.0
 
-    def _read_live_words(self, client: CommToolClient) -> list[int]:
+    def _read_live_words(self, client) -> list[int]:
         if self.live_word_count == BMS_OVERVIEW_WORDS:
             return self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
         if self.live_word_count == BMS_LIVE_WORDS:
@@ -1623,8 +1766,28 @@ class UpgradeUi(tk.Tk):
             self.live_word_count = BMS_OVERVIEW_WORDS
             return words
 
-    def _read_bms_product_info_cached(self, client: CommToolClient, force: bool = False) -> dict[str, str]:
-        target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
+    def _connection_cache_key(self) -> tuple[object, ...]:
+        if self.active_connection_mode == COMM_MODE_DIRECT_BMS:
+            return (
+                self.active_connection_mode,
+                self.active_port,
+                self.active_baud,
+                self.active_modbus_slave,
+            )
+        return (
+            self.active_connection_mode,
+            self.active_can_bitrate,
+            self.active_node_id,
+            self.active_app_can_addr,
+        )
+
+    def _require_comm_tool_client(self, client, feature: str) -> CommToolClient:
+        if isinstance(client, DirectBmsModbusClient):
+            raise RuntimeError(f"{feature} 依赖 comm tool/CAN桥模式，请切换通信方式后重试")
+        return client
+
+    def _read_bms_product_info_cached(self, client, force: bool = False) -> dict[str, str]:
+        target = self._connection_cache_key()
         now = time.monotonic()
         if (
             not force
@@ -1999,7 +2162,10 @@ class UpgradeUi(tk.Tk):
     def _set_child_state(self, widget, state: str) -> None:
         for child in widget.winfo_children():
             if isinstance(child, ttk.Combobox):
-                if state == tk.NORMAL and child is getattr(self, "param_combo", None):
+                if state == tk.NORMAL and child in (
+                    getattr(self, "param_combo", None),
+                    getattr(self, "connection_mode_combo", None),
+                ):
                     child.configure(state="readonly")
                 else:
                     child.configure(state=state)
@@ -2141,7 +2307,7 @@ class UpgradeUi(tk.Tk):
             return
         if not messagebox.askyesno(
             "确认写入",
-            f"将通过 comm tool/CAN 写入 BMS。\n\n"
+            f"将通过当前通信方式写入 BMS。\n\n"
             f"起始地址: 0x{self.active_bms_addr:04X}\n"
             f"数量: {len(self.active_bms_words)}\n\n"
             "板端仍会做地址、范围和权限检查，若参数越界会返回错误。",
@@ -2159,7 +2325,7 @@ class UpgradeUi(tk.Tk):
             return
         if not messagebox.askyesno(
             "确认写SOC",
-            f"将通过 comm tool/CAN 写入一次 SOC={soc}%。\n\n"
+            f"将通过当前通信方式写入一次 SOC={soc}%。\n\n"
             f"底层固定写寄存器 0x{APP_SET_ONCE_SOC_ADDR:04X}，用户不需要手动填写寄存器地址。\n\n"
             "确认继续？",
         ):
@@ -2208,6 +2374,15 @@ class UpgradeUi(tk.Tk):
     def _can_diag(self) -> None:
         self._run_worker("CAN诊断", self._worker_can_diag)
 
+    def _enter_iap(self) -> None:
+        if not messagebox.askyesno(
+            "确认进入IAP",
+            "该操作会让 BMS App 写升级标志并复位进入 IAP，实时数据会暂时中断。\n\n确认继续？",
+        ):
+            return
+        self._prepare_exclusive_upgrade()
+        self._run_worker("进入IAP", self._worker_enter_iap)
+
     def _open_monitor(self) -> None:
         if self.monitor_window is not None and self.monitor_window.winfo_exists():
             self.monitor_window.lift()
@@ -2220,16 +2395,7 @@ class UpgradeUi(tk.Tk):
             messagebox.showinfo("正在执行", "当前任务还没有结束。")
             return
         try:
-            self.active_port = self.port_var.get().strip()
-            self.active_baud = int(self.baud_var.get().strip())
-            self.active_bin = Path(self.bin_var.get()).resolve()
-            self.active_can_bitrate = int(self.can_bitrate_var.get().strip(), 0)
-            self.active_node_id = int(self.node_id_var.get().strip(), 0)
-            self.active_app_can_addr = int(self.app_can_addr_var.get().strip(), 0)
-            if self.active_node_id <= 0 or self.active_node_id > 0x7F:
-                raise ValueError("IAP节点必须是 1..127")
-            if self.active_app_can_addr < 0 or self.active_app_can_addr > 0x0F:
-                raise ValueError("BMS地址必须是 0..15")
+            self._capture_runtime_settings(include_bin=True)
         except Exception as exc:
             messagebox.showerror("参数错误", str(exc))
             return
@@ -2238,6 +2404,39 @@ class UpgradeUi(tk.Tk):
         self._set_busy(True)
         self.worker = threading.Thread(target=self._worker_guard, args=(name, target), daemon=True)
         self.worker.start()
+
+    def _parse_connection_mode(self) -> str:
+        text = self.connection_mode_var.get().strip()
+        return COMM_MODE_FROM_LABEL.get(text, COMM_MODE_COMM_TOOL)
+
+    def _capture_runtime_settings(self, include_bin: bool = True) -> None:
+        self.active_port = self.port_var.get().strip()
+        self.active_baud = int(self.baud_var.get().strip())
+        self.active_connection_mode = self._parse_connection_mode()
+        self.active_modbus_slave = int(self.modbus_slave_var.get().strip(), 0)
+        if include_bin:
+            self.active_bin = Path(self.bin_var.get()).resolve()
+        self.active_can_bitrate = int(self.can_bitrate_var.get().strip(), 0)
+        self.active_node_id = int(self.node_id_var.get().strip(), 0)
+        self.active_app_can_addr = int(self.app_can_addr_var.get().strip(), 0)
+        if not self.active_port:
+            raise ValueError("未选择串口")
+        if self.active_baud <= 0:
+            raise ValueError("波特率必须大于 0")
+        if self.active_modbus_slave <= 0 or self.active_modbus_slave > 247:
+            raise ValueError("Modbus地址必须是 1..247")
+        if self.active_node_id <= 0 or self.active_node_id > 0x7F:
+            raise ValueError("IAP节点必须是 1..127")
+        if self.active_app_can_addr < 0 or self.active_app_can_addr > 0x0F:
+            raise ValueError("BMS地址必须是 0..15")
+
+    def _on_connection_mode_changed(self, _event=None) -> None:
+        mode = self._parse_connection_mode()
+        baud_text = self.baud_var.get().strip()
+        if mode == COMM_MODE_DIRECT_BMS and baud_text in ("", "115200"):
+            self.baud_var.set(str(BMS_DIRECT_DEFAULT_BAUD))
+        elif mode == COMM_MODE_COMM_TOOL and baud_text == str(BMS_DIRECT_DEFAULT_BAUD):
+            self.baud_var.set("115200")
 
     def _parse_u16(self, text: str, name: str) -> int:
         value = int(text.strip(), 0)
@@ -2278,11 +2477,27 @@ class UpgradeUi(tk.Tk):
 
     def _worker_check_connection(self) -> None:
         with self._open_client() as client:
+            self._set_can_target(client)
             info = self._read_info(client)
             cache = self._read_cache_info(client)
+            if isinstance(client, DirectBmsModbusClient):
+                words = self._read_live_words(client)
+                try:
+                    product_info = self._read_bms_product_info_cached(client, force=True)
+                except Exception as exc:
+                    product_info = {"error": str(exc)}
+            else:
+                words = None
+                product_info = None
         self._emit("info", info)
-        self._emit("target", info)
         self._emit("cache", cache)
+        if info.get("mode") != COMM_MODE_DIRECT_BMS:
+            self._emit("target", info)
+        if words is not None:
+            self._emit("live_snapshot", words)
+            self._emit("bms_info", self._format_bms_overview(words[:BMS_OVERVIEW_WORDS]))
+        if product_info is not None:
+            self._emit("product_info", product_info)
         self._emit("progress", 100)
 
     def _worker_apply_can_settings(self) -> None:
@@ -2290,8 +2505,11 @@ class UpgradeUi(tk.Tk):
             self._set_can_target(client, force=True)
             info = self._read_info(client)
         self._emit("info", info)
-        self._emit("target", info)
-        self._emit("log", f"目标设备已设置: BMS地址={self.active_app_can_addr} IAP节点={self.active_node_id}")
+        if info.get("mode") == COMM_MODE_DIRECT_BMS:
+            self._emit("log", "BMS直连串口模式无需设置 CAN 目标设备")
+        else:
+            self._emit("target", info)
+            self._emit("log", f"目标设备已设置: BMS地址={self.active_app_can_addr} IAP节点={self.active_node_id}")
         self._emit("progress", 100)
 
     def _worker_read_cache(self) -> None:
@@ -2303,6 +2521,7 @@ class UpgradeUi(tk.Tk):
     def _worker_download_only(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            self._require_comm_tool_client(client, "写入缓存")
             self._download_image(client, image)
             cache = self._read_cache_info(client)
         self._assert_cache_matches(image, cache)
@@ -2312,6 +2531,7 @@ class UpgradeUi(tk.Tk):
     def _worker_upgrade_selected(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            self._require_comm_tool_client(client, "一键升级")
             self._set_can_target(client, force=True)
             info = self._read_info(client)
             self._emit("info", info)
@@ -2326,6 +2546,7 @@ class UpgradeUi(tk.Tk):
     def _worker_upgrade_cached_selected(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            self._require_comm_tool_client(client, "使用缓存升级")
             self._set_can_target(client)
             info = self._read_info(client)
             self._emit("info", info)
@@ -2540,6 +2761,14 @@ class UpgradeUi(tk.Tk):
     def _worker_read_aging_status(self) -> None:
         with self._open_client() as client:
             self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                text = self._format_direct_aging_status("老化时间", self._direct_aging_status(client))
+                self._emit("aging_status", text)
+                self._emit("bms_result", text)
+                self._emit("log", text)
+                self._emit("progress", 100)
+                return
+            self._require_comm_tool_client(client, "读取老化时间")
             resp = client.command(CMD_BMS_AGING_STATUS, timeout=8.0)
         if len(resp.payload) < 3:
             raise RuntimeError("老化时间响应长度不足")
@@ -2560,6 +2789,21 @@ class UpgradeUi(tk.Tk):
         name = self.active_aging_name
         with self._open_client() as client:
             self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                if action == APP_AGING_ACTION_START:
+                    self._write_bms_words(client, BMS_DIRECT_FUNCTION_ON_ADDR, [BMS_DIRECT_AGING_FUNCTION_ID])
+                    text = self._format_direct_aging_status("开启老化模式", self._direct_aging_status(client))
+                elif action == APP_AGING_ACTION_STOP:
+                    self._write_bms_words(client, BMS_DIRECT_FUNCTION_OFF_ADDR, [BMS_DIRECT_AGING_FUNCTION_ID])
+                    text = self._format_direct_aging_status("关闭老化模式", self._direct_aging_status(client))
+                else:
+                    self._write_bms_words(client, BMS_DIRECT_AGING_RESET_TIME_ADDR, [BMS_DIRECT_AGING_RESET_GUARD])
+                    text = self._format_direct_aging_status("重置老化时间", self._direct_aging_status(client))
+                self._emit("aging_status", text)
+                self._emit("bms_result", text)
+                self._emit("log", text)
+                self._emit("progress", 100)
+                return
             resp = client.command(CMD_BMS_AGING_CTRL, bytes([action]), timeout=10.0)
         if len(resp.payload) < 2:
             raise RuntimeError("老化模式响应长度不足")
@@ -2575,6 +2819,15 @@ class UpgradeUi(tk.Tk):
         hours = self.active_aging_hours
         with self._open_client() as client:
             self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                self._write_bms_words(client, BMS_DIRECT_AGING_SET_HOURS_ADDR, [hours])
+                text = self._format_direct_aging_status("修改老化时间", self._direct_aging_status(client))
+                self._emit("aging_status", text)
+                self._emit("bms_result", text)
+                self._emit("log", text)
+                self._emit("progress", 100)
+                return
+            self._require_comm_tool_client(client, "修改老化时间")
             resp = client.command(CMD_BMS_AGING_SET_HOURS, struct.pack("<H", hours), timeout=10.0)
         if len(resp.payload) < 4:
             raise RuntimeError("老化时间设置响应长度不足")
@@ -2592,11 +2845,30 @@ class UpgradeUi(tk.Tk):
 
     def _worker_can_diag(self) -> None:
         with self._open_client() as client:
+            self._require_comm_tool_client(client, "CAN诊断")
             resp = client.command(CMD_CAN_DIAG, b"\x00", timeout=2.0)
         self._emit("log", self._format_can_diag(resp.payload))
         self._emit("progress", 100)
 
-    def _set_can_target(self, client: CommToolClient, force: bool = False) -> None:
+    def _worker_enter_iap(self) -> None:
+        with self._open_client() as client:
+            self._set_can_target(client)
+            if isinstance(client, DirectBmsModbusClient):
+                self._write_bms_words(client, BMS_DIRECT_ENTER_IAP_ADDR, [1])
+                self._emit("log", "已通过 BMS直连串口写入 0xFFFD，请等待 BMS 复位进入 IAP")
+            else:
+                client.command(CMD_ENTER_IAP, timeout=10.0)
+                self._emit("log", "已通过 comm tool/CAN桥请求 BMS App 进入 IAP")
+        self._emit("progress", 100)
+
+    def _set_can_target(self, client, force: bool = False) -> None:
+        if isinstance(client, DirectBmsModbusClient):
+            target = self._connection_cache_key()
+            if force or self.applied_target != target:
+                self.applied_target = target
+                self._reset_live_capability_cache()
+                self._reset_product_info_cache()
+            return
         target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
         if not force and self.applied_target == target:
             return
@@ -2631,6 +2903,7 @@ class UpgradeUi(tk.Tk):
         progress_base: int = 0,
         progress_span: int = 95,
     ) -> None:
+        self._require_comm_tool_client(client, "CAN-IAP升级")
         self._emit("log", "缓存校验通过，开始 CAN 升级 BMS")
         self._emit("upgrade_stage", "升级进度: 正在启动 BMS CAN-IAP")
         client.command(CMD_CAN_DIAG, b"\x01", timeout=2.0)
@@ -2673,13 +2946,27 @@ class UpgradeUi(tk.Tk):
             self._emit("log", f"BMS App 状态: SOC={bms_status[0]} SOH={bms_status[1]}")
         self._emit("upgrade_stage", "升级进度: 完成")
 
-    def _open_client(self) -> CommToolClient:
+    def _open_client(self):
         port = self.active_port
         if not port:
             raise RuntimeError("未选择串口")
+        if self.active_connection_mode == COMM_MODE_DIRECT_BMS:
+            return DirectBmsModbusClient(
+                port,
+                self.active_baud,
+                timeout=1.0,
+                slave=self.active_modbus_slave,
+            )
         return CommToolClient(port, self.active_baud, timeout=1.0)
 
-    def _read_info(self, client: CommToolClient) -> dict:
+    def _read_info(self, client) -> dict:
+        if isinstance(client, DirectBmsModbusClient):
+            return {
+                "mode": COMM_MODE_DIRECT_BMS,
+                "transport": "Modbus RTU",
+                "baud": self.active_baud,
+                "slave": self.active_modbus_slave,
+            }
         payload = client.command(CMD_GET_INFO, timeout=2.0).payload
         if len(payload) < 20:
             raise RuntimeError("GET_INFO 响应长度不足")
@@ -2696,7 +2983,11 @@ class UpgradeUi(tk.Tk):
             "app_can_addr": payload[21] if len(payload) >= 22 else self.active_app_can_addr,
         }
 
-    def _read_cache_info(self, client: CommToolClient) -> dict:
+    def _read_cache_info(self, client) -> dict:
+        if isinstance(client, DirectBmsModbusClient):
+            return {
+                "unavailable": "BMS直连串口不经过 comm tool，无法读取或写入 comm tool 缓存",
+            }
         payload = client.command(CMD_FW_INFO, timeout=2.0).payload
         if len(payload) < 15:
             raise RuntimeError("FW_INFO 响应长度不足")
@@ -2709,7 +3000,8 @@ class UpgradeUi(tk.Tk):
             "valid": valid,
         }
 
-    def _read_upgrade_status(self, client: CommToolClient) -> dict:
+    def _read_upgrade_status(self, client) -> dict:
+        self._require_comm_tool_client(client, "读取升级状态")
         payload = client.command(CMD_UPGRADE_STATUS, timeout=2.0).payload
         if len(payload) < 13:
             raise RuntimeError("UPGRADE_STATUS 响应长度不足")
@@ -2724,22 +3016,24 @@ class UpgradeUi(tk.Tk):
             "expect_seq": expect_seq,
         }
 
-    def _read_bms_app_status(self, client: CommToolClient) -> tuple[int, int]:
+    def _read_bms_app_status(self, client) -> tuple[int, int]:
         words = self._read_bms_words(client, 0xD034, 2)
         return words[0], words[1]
 
-    def _read_bms_product_info(self, client: CommToolClient) -> dict[str, str]:
+    def _read_bms_product_info(self, client) -> dict[str, str]:
         words = self._read_bms_words(client, BMS_PRODUCT_INFO_ADDR, BMS_PRODUCT_INFO_WORDS)
         return _decode_product_info_words(words)
 
-    def _read_bms_words(self, client: CommToolClient, addr: int, count: int) -> list[int]:
+    def _read_bms_words(self, client, addr: int, count: int) -> list[int]:
+        if isinstance(client, DirectBmsModbusClient):
+            return client.read_words(addr, count)
         payload = struct.pack("<HH", addr, count)
         resp = client.command(CMD_BMS_READ, payload, timeout=max(10.0, count * 1.5))
         if len(resp.payload) != count * 2:
             raise RuntimeError(f"BMS_READ 响应长度错误: {len(resp.payload)}")
         return list(struct.unpack("<" + "H" * count, resp.payload))
 
-    def _read_bms_words_with_retry(self, client: CommToolClient, addr: int, count: int, label: str) -> list[int]:
+    def _read_bms_words_with_retry(self, client, addr: int, count: int, label: str) -> list[int]:
         last_error: Exception | None = None
         for attempt in range(1, BMS_READ_RETRY_COUNT + 1):
             try:
@@ -2755,7 +3049,10 @@ class UpgradeUi(tk.Tk):
                 time.sleep(BMS_READ_RETRY_DELAY_SECONDS)
         raise RuntimeError(f"{label} 重试 {BMS_READ_RETRY_COUNT} 次仍失败: {last_error}") from last_error
 
-    def _write_bms_words(self, client: CommToolClient, addr: int, words: list[int]) -> None:
+    def _write_bms_words(self, client, addr: int, words: list[int]) -> None:
+        if isinstance(client, DirectBmsModbusClient):
+            client.write_words(addr, words)
+            return
         payload = struct.pack("<HH", addr, len(words))
         payload += struct.pack("<" + "H" * len(words), *words)
         client.command(CMD_BMS_WRITE, payload, timeout=max(10.0, len(words) * 2.5))
@@ -2805,6 +3102,7 @@ class UpgradeUi(tk.Tk):
         progress_base: int = 0,
         progress_span: int = 90,
     ) -> None:
+        self._require_comm_tool_client(client, "写入缓存")
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
         start_time = time.monotonic()
@@ -2867,6 +3165,23 @@ class UpgradeUi(tk.Tk):
         if hours:
             return f"{hours}h{mins:02d}min ({minutes}min)"
         return f"{mins}min"
+
+    def _direct_aging_status(self, client) -> tuple[int, int, int, int]:
+        words = self._read_bms_words(client, BMS_DIRECT_AGING_STATUS_ADDR, BMS_DIRECT_AGING_STATUS_WORDS)
+        state = words[0]
+        remaining_minutes = words[1]
+        remaining_seconds = ((words[2] & 0xFFFF) << 16) | (words[3] & 0xFFFF)
+        duration_hours = words[4]
+        return state, remaining_minutes, remaining_seconds, duration_hours
+
+    def _format_direct_aging_status(self, title: str, status: tuple[int, int, int, int]) -> str:
+        state, remaining_minutes, remaining_seconds, duration_hours = status
+        duration_text = f"{duration_hours}h" if 1 <= duration_hours <= 168 else "--"
+        return (
+            f"{title}: 状态={self._aging_state_name(state)} "
+            f"剩余={self._format_aging_remaining_minutes(remaining_minutes)} "
+            f"({remaining_seconds}s) 时长={duration_text}"
+        )
 
     def _format_bms_overview(self, words: list[int]) -> str:
         if len(words) < BMS_OVERVIEW_WORDS:
@@ -2936,6 +3251,13 @@ class UpgradeUi(tk.Tk):
         )
 
     def _format_info(self, info: dict) -> str:
+        if info.get("mode") == COMM_MODE_DIRECT_BMS:
+            return (
+                "BMS直连串口\n"
+                f"{info.get('transport', 'Modbus RTU')}\n"
+                f"Modbus地址 {info.get('slave', self.active_modbus_slave)}\n"
+                f"波特率 {info.get('baud', self.active_baud)}"
+            )
         return (
             f"固件 {info['version']}\n"
             f"协议 {info['proto']}\n"
@@ -2945,6 +3267,8 @@ class UpgradeUi(tk.Tk):
         )
 
     def _format_cache(self, cache: dict) -> str:
+        if "unavailable" in cache:
+            return str(cache["unavailable"])
         return (
             f"地址 0x{cache['app_addr']:08X}\n"
             f"{cache['size']} bytes\n"
@@ -2982,6 +3306,13 @@ class UpgradeUi(tk.Tk):
             self.info_var.set(self._format_info(event.payload))
             self.comm_state_var.set("通信: 已连接")
         elif event.kind == "target":
+            if isinstance(event.payload, dict) and event.payload.get("mode") == COMM_MODE_DIRECT_BMS:
+                target = self._connection_cache_key()
+                if self.applied_target != target:
+                    self._reset_live_capability_cache()
+                    self._reset_product_info_cache()
+                self.applied_target = target
+                return
             self.can_bitrate_var.set(str(event.payload.get("bitrate", self.active_can_bitrate)))
             self.node_id_var.set(str(event.payload.get("node_id", self.active_node_id)))
             self.app_can_addr_var.set(str(event.payload.get("app_can_addr", self.active_app_can_addr)))
@@ -3011,7 +3342,7 @@ class UpgradeUi(tk.Tk):
                 )
             else:
                 self.product_info_cache = event.payload
-                self.product_info_cache_target = (self.active_can_bitrate, self.active_node_id, self.active_app_can_addr)
+                self.product_info_cache_target = self._connection_cache_key()
                 self.product_info_next_due_monotonic = time.monotonic() + PRODUCT_INFO_REFRESH_SECONDS
                 self.product_info_var.set(_format_product_info(event.payload))
                 if self.monitor_window is not None and self.monitor_window.winfo_exists():
@@ -3060,8 +3391,10 @@ class UpgradeUi(tk.Tk):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="BMS CAN 升级图形上位机")
     parser.add_argument("--port", default="COM4")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, default=None)
     parser.add_argument("--bin", default=str(DEFAULT_BIN))
+    parser.add_argument("--mode", choices=(COMM_MODE_COMM_TOOL, COMM_MODE_DIRECT_BMS), default=COMM_MODE_COMM_TOOL)
+    parser.add_argument("--slave", type=int, default=BMS_DIRECT_DEFAULT_SLAVE)
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 
@@ -3088,10 +3421,25 @@ def main() -> int:
             raise RuntimeError("SH309 二级过流 raw 单位应为 A*10")
         if BMS_PARAM_BY_KEY["短路参数/短路延时"].kind != "x10":
             raise RuntimeError("短路延时应按 10ms raw 和 ms 显示换算")
+        if _modbus_crc_frame(bytes((1, 3, 0, 0, 0, 1))) != b"\x01\x03\x00\x00\x00\x01\x84\x0A":
+            raise RuntimeError("Modbus CRC 打包错误")
         probe = object.__new__(UpgradeUi)
         probe.log_count = 0
         probe.log_started_monotonic = time.monotonic()
         probe.active_port = "COM_TEST"
+        probe.active_baud = BMS_DIRECT_DEFAULT_BAUD
+        probe.active_connection_mode = COMM_MODE_DIRECT_BMS
+        probe.active_modbus_slave = BMS_DIRECT_DEFAULT_SLAVE
+        probe.active_can_bitrate = 250000
+        probe.active_node_id = 1
+        probe.active_app_can_addr = 0
+        if UpgradeUi._connection_cache_key(probe) != (
+            COMM_MODE_DIRECT_BMS,
+            "COM_TEST",
+            BMS_DIRECT_DEFAULT_BAUD,
+            BMS_DIRECT_DEFAULT_SLAVE,
+        ):
+            raise RuntimeError("直连模式缓存 key 错误")
         words = [0] * BMS_LIVE_WORDS
         for index in range(10):
             words[index] = 3300 + index
@@ -3120,7 +3468,10 @@ def main() -> int:
         root.destroy()
         print("comm_tool_upgrade_ui self-test OK")
         return 0
-    app = UpgradeUi(args.port, args.baud, Path(args.bin))
+    baud = args.baud
+    if baud is None:
+        baud = BMS_DIRECT_DEFAULT_BAUD if args.mode == COMM_MODE_DIRECT_BMS else 115200
+    app = UpgradeUi(args.port, baud, Path(args.bin), mode=args.mode, slave=args.slave)
     app.mainloop()
     return 0
 

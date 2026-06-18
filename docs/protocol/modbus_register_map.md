@@ -20,6 +20,8 @@
 | 地址/范围 | 当前用途 | 源码证据 | 备注 |
 |---|---|---|---|
 | `0x1000` 起 | 单寄存器命令区 | `RS485_CMD_RW_E`, `Sci_Deal_WrReg_0x06()` | 包含清校准、清保护记录、清参数、单次写 SOC 等 |
+| `0x1008` | 老化累计时间重置 | `RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME` | 写 `0x005A` 后调用 `FactoryAging_ResetTimeByHost()` |
+| `0x1009` | 老化总时长设置 | `RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS` | 写 `1..168` 小时后调用 `FactoryAging_SetDurationHoursByHost()`，并重置累计时间 |
 | `0x1100` 起 | 系统功能开关命令 | `RS485_CMD_ADDR_SYSFUNC_ONOFF_*` | 具体功能保留/删除需用户确认 |
 | `0x2000` 起 | 校准参数 | `RS485_ADDR_RW_CALIB`, `RS485_CMD_ADDR_VC1CALIB_K` | 电压、电流、温度等 K/B 参数 |
 | `0x2100` 起 | 保护参数 | `RS485_ADDR_RW_PORTECT`, `RS485_CMD_ADDR_VCELL_OVP_FIRST` | OVP/UVP/OCP/温度/SOC 保护参数 |
@@ -30,6 +32,7 @@
 | `0xC001` | RTC/出厂相关只读入口 | `RS485_ADDR_RO_FA_RTC` | 具体语义需继续逐项核对 |
 | `0xC002` | BMS 序列号/硬件版本/软件版本读取 | `RS485_ADDR_SN_READ`, `tools/comm_tool_upgrade_ui.py` | 上位机要求读取 48 个寄存器并在实时监控底部显示 |
 | `0xC008` | 事件记录读取 | `RS485_ADDR_EVENT_RECORD` | 每条事件日志映射为一个 Modbus register |
+| `0xC080` | 老化状态只读窗口 | `RS485_ADDR_AGING_STATUS` | 5 words：`state`, `remaining_minutes`, `remaining_seconds_hi`, `remaining_seconds_lo`, `duration_hours` |
 | `0xD000` | 主实时只读窗口 | `RS485_ADDR_RO_START0`, `Sci_ACK_0x03_ReadRegs_Data()` | 当前注释为 63 个 `g_stCellInfoReport` words |
 | `0xD100` | RTC/故障/系统状态只读窗口 | `RS485_ADDR_RO_START1` | 当前拼接在主只读 buffer 后，约 33 words |
 | `0xD200` | Cortex fault snapshot | `RS485_ADDR_RO_START2` | `D200` reason, `D201` inverse |
@@ -54,6 +57,8 @@
 - 读写函数会做地址窗口和长度校验，错误时返回 Modbus 异常。
 - SOC 表运行时写入功能已删除；相关写入口固定返回 Modbus 异常，读表仍返回当前编译期 OCV 表以保持协议窗口可读。
 - `0x1005` 单次写 SOC 是对外可见行为，CAN App 和上位机工具都依赖。
+- `0x1008` 老化累计时间重置必须写 guard `0x005A`，避免误触发。
+- `0x1009` 老化总时长设置范围固定 `1..168` 小时；成功后板端会重置累计老化时间并进入运行状态。
 - `0xFFFD` 进入 IAP 属于高风险写入口，必须保留确认机制。
 
 ## 5. 后续维护规则
