@@ -692,6 +692,7 @@ void InitAFE1(void)
 	AFE_Reset();
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
+	MosStartup_ApplyInitialState();
 	if (do_startup_zero != 0U)
 	{
 		AfeCurrent_StartupZeroCal();
