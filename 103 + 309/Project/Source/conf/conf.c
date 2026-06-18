@@ -283,7 +283,7 @@ void IOstatus_RTCMode(void)
     // Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN) & (~PIN_MCC_C), GPIO_Mode_AIN);
     // Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_MCC_C), GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_2737_EN), GPIO_Mode_AIN);
+    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_2737_EN), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);

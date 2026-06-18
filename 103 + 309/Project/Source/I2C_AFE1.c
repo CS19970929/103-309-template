@@ -701,6 +701,7 @@ void InitAFE1(void)
 	{
 		open_ctlc();
 	}
+	MosStartup_ApplyInitialState();
 }
 
 /*调试心得

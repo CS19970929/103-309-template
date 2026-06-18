@@ -245,7 +245,8 @@ bool SH367309_UpdataAfeConfig(void)
 			AFE_Reset();
 			Delay1ms(5);
 			AFE_IsReady();
-			SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+			//SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+			MosStartup_ApplyInitialState();
 			if (!ret)
 			{
 				AFE_PARAM_WRITE_Flag = 1;
