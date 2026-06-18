@@ -59,7 +59,7 @@
 #define PROJECT_CFG_RTC_ENABLE 1
 
 // <o> Factory aging duration seconds <1-604800>
-#define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 60
+#define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS  259200 
 
 // <q> Enable virtual current
 #define PROJECT_CFG_VIRTUAL_CURRENT_ENABLE 1
@@ -162,7 +162,7 @@
 
 // <o> Board self consumption mA <0-1000>
 // <i> Normal running self-consumption current included in coulomb counting.
-#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 30
+#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15
 
 // <o> Empty tail start offset mV <0-1000>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
@@ -172,7 +172,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0002
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0618
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
@@ -193,7 +193,7 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
