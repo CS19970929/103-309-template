@@ -23,7 +23,7 @@
 #define LEDBAR_TRANSITION_ON_GHOST_COST 1u
 #define LEDBAR_TRANSITION_NO_SHARED_PIN_COST 2u
 #define LEDBAR_TRANSITION_MAX_COST 0xFFFFu
-#define LEDBAR_ORDER_IMPROVE_MAX_PASSES LEDBAR_FRAME_ROUTE_COUNT
+#define LEDBAR_ORDER_IMPROVE_MAX_PASSES LEDBAR_ROUTE_COUNT
 
 #define LEDBAR_SLEEP_SOC_MAGIC 0x5A00u
 #define LEDBAR_SLEEP_SOC_MAGIC_MASK 0xFF00u
@@ -71,11 +71,6 @@ typedef enum
     LEDBAR_ROUTE_COUNT
 } LedBarRouteId;
 
-enum
-{
-    LEDBAR_FRAME_ROUTE_COUNT = LEDBAR_ROUTE_COUNT
-};
-
 typedef struct
 {
     uint8_t low_pin;
@@ -90,7 +85,7 @@ typedef struct
 
 typedef struct
 {
-    uint8_t routes[LEDBAR_FRAME_ROUTE_COUNT];
+    uint8_t routes[LEDBAR_ROUTE_COUNT];
     uint8_t length;
 } LedBarFrame;
 
@@ -114,26 +109,31 @@ typedef struct LEDBAR_RUNTIME_TAG
     uint8_t mcu_wk_active;
 } LedBarRuntime;
 
+/*
+ * Charlieplexing route table: 5 pins → 5×4 = 20 possible LED positions.
+ * Each route connects a low-pin (sink) and high-pin (source).
+ * Pins: 0=P1(PB11), 1=P3(SCK), 2=P2(NSS), 3=P4(MOSI), 4=P5(SEG_EN)
+ */
 static const LedBarRoute s_ledbar_routes[LEDBAR_ROUTE_COUNT] =
 {
-    {3u, 2u},
-    {3u, 1u},
-    {2u, 1u},
-    {1u, 2u},
-    {2u, 3u},
-    {1u, 3u},
-    {1u, 4u},
-    {2u, 4u},
-    {3u, 4u},
-    {1u, 0u},
-    {0u, 1u},
-    {2u, 0u},
-    {0u, 2u},
-    {3u, 0u},
-    {0u, 3u},
-    {0u, 4u},
-    {4u, 2u},
-    {4u, 1u},
+    /* LEDBAR_ROUTE_HUNDREDS_1_UPPER */ {3u, 2u},
+    /* LEDBAR_ROUTE_HUNDREDS_1_LOWER */ {3u, 1u},
+    /* LEDBAR_ROUTE_TENS_A           */ {2u, 1u},
+    /* LEDBAR_ROUTE_TENS_B           */ {1u, 2u},
+    /* LEDBAR_ROUTE_TENS_C           */ {2u, 3u},
+    /* LEDBAR_ROUTE_TENS_D           */ {1u, 3u},
+    /* LEDBAR_ROUTE_TENS_E           */ {1u, 4u},
+    /* LEDBAR_ROUTE_TENS_F           */ {2u, 4u},
+    /* LEDBAR_ROUTE_TENS_G           */ {3u, 4u},
+    /* LEDBAR_ROUTE_ONES_A           */ {1u, 0u},
+    /* LEDBAR_ROUTE_ONES_B           */ {0u, 1u},
+    /* LEDBAR_ROUTE_ONES_C           */ {2u, 0u},
+    /* LEDBAR_ROUTE_ONES_D           */ {0u, 2u},
+    /* LEDBAR_ROUTE_ONES_E           */ {3u, 0u},
+    /* LEDBAR_ROUTE_ONES_F           */ {0u, 3u},
+    /* LEDBAR_ROUTE_ONES_G           */ {0u, 4u},
+    /* LEDBAR_ROUTE_ICON_CHARGE      */ {4u, 2u},
+    /* LEDBAR_ROUTE_ICON_PERCENT     */ {4u, 1u},
 };
 
 static const LedBarPinDef s_ledbar_pins[LEDBAR_PIN_COUNT] =
@@ -145,47 +145,48 @@ static const LedBarPinDef s_ledbar_pins[LEDBAR_PIN_COUNT] =
     {LEDBAR_GPIO_P5, LEDBAR_PIN_P5},
 };
 
+/* 7-segment digit map (active-low segments): .GFEDCBA */
 static const uint8_t s_ledbar_digit_map[10] =
 {
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
-        LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F,
-    LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_D |
-        LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
-        LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_F |
-        LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D |
-        LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D |
-        LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
-        LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F |
-        LEDBAR_DIGIT_BIT_G,
-    LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
-        LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+    /* 0 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
+            LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F,
+    /* 1 */ LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
+    /* 2 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_D |
+            LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_G,
+    /* 3 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
+            LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_G,
+    /* 4 */ LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_F |
+            LEDBAR_DIGIT_BIT_G,
+    /* 5 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D |
+            LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+    /* 6 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_C | LEDBAR_DIGIT_BIT_D |
+            LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
+    /* 7 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C,
+    /* 8 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
+            LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_E | LEDBAR_DIGIT_BIT_F |
+            LEDBAR_DIGIT_BIT_G,
+    /* 9 */ LEDBAR_DIGIT_BIT_A | LEDBAR_DIGIT_BIT_B | LEDBAR_DIGIT_BIT_C |
+            LEDBAR_DIGIT_BIT_D | LEDBAR_DIGIT_BIT_F | LEDBAR_DIGIT_BIT_G,
 };
 
 static LedBarRuntime s_ledbar =
 {
-    0u,
-    0u,
-    1u,
-    0u,
-    LEDBAR_ICON_PERCENT_MASK,
-    {{0u}, 0u},
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
+    .initialized          = 0u,
+    .sleep                = 0u,
+    .blank                = 1u,
+    .number               = 0u,
+    .indicator_mask       = LEDBAR_ICON_PERCENT_MASK,
+    .frame                = {{0u}, 0u},
+    .scan_index           = 0u,
+    .scan_timer_enabled   = 0u,
+    .soc_display_10ms     = 0u,
+    .startup_display_armed = 0u,
+    .key_hold_10ms        = 0u,
+    .key_press_start_10ms = 0u,
+    .key_long_handled     = 0u,
+    .key_wakeup_armed     = 0u,
+    .key_active           = 0u,
+    .mcu_wk_active        = 0u,
 };
 
 #if DEBUG_WATCH_ENABLED
@@ -202,13 +203,6 @@ void LedBar_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
     watch->tables.ledbar_pins_count =
         (uint16_t)(sizeof(s_ledbar_pins) / sizeof(s_ledbar_pins[0]));
 }
-#endif
-
-static void LedBar_StopScanTimer(void);
-static void LedBar_RefreshOutput(void);
-static void LedBar_Clear(void);
-#ifdef _DI_SWITCH_longKEY_ONOFF
-extern void low_power_log_and_commit_sleep(uint8_t sleep_mode);
 #endif
 
 static void LedBar_EnsureInit(void)
@@ -507,7 +501,7 @@ static void LedBar_FrameClear(LedBarFrame *frame)
 
 static void LedBar_FrameAddRoute(LedBarFrame *frame, uint8_t route_id)
 {
-    if (frame->length >= LEDBAR_FRAME_ROUTE_COUNT)
+    if (frame->length >= LEDBAR_ROUTE_COUNT)
     {
         return;
     }
@@ -531,6 +525,16 @@ static uint8_t LedBar_FindRouteByPins(uint8_t low_pin, uint8_t high_pin)
     return (uint8_t)LEDBAR_ROUTE_COUNT;
 }
 
+/*
+ * Ghost reduction: Charlieplexing pin transitions can momentarily light
+ * unintended LEDs. Compute a cost for each transition to guide scan order:
+ *   - OFF-ghost (8): unwanted route created and that LED is NOT in our set
+ *   - ON-ghost  (1): unwanted route created and that LED IS in our set
+ *   - no-shared-pin (2): two entirely different pin pairs
+ * Total cost per frame = sum of all transition costs (wraps around).
+ * LedBar_BuildFrameFromMask() starts a greedy TSP from each target route,
+ * then LedBar_ImproveFrameOrder() does pair-swap hill-climbing.
+ */
 static uint16_t LedBar_TransitionCost(uint8_t prev_route_id,
                                       uint8_t next_route_id,
                                       uint32_t target_mask)
