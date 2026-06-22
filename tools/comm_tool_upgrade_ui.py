@@ -81,6 +81,13 @@ COMM_MODE_LABELS = {
 COMM_MODE_FROM_LABEL = {label: mode for mode, label in COMM_MODE_LABELS.items()}
 BMS_DIRECT_DEFAULT_BAUD = 19200
 BMS_DIRECT_DEFAULT_SLAVE = 1
+BMS_DIRECT_IAP_SLAVE = 1
+BMS_DIRECT_IAP_BLOCK_SIZE = 1024
+BMS_DIRECT_IAP_APP_LIMIT = 0x0801F800
+BMS_DIRECT_IAP_ACK_TIMEOUT = 3.0
+BMS_DIRECT_IAP_RESET_WAIT = 1.0
+BMS_DIRECT_IAP_READY_RETRIES = 5
+BMS_DIRECT_IAP_READY_RETRY_DELAY = 0.5
 
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
@@ -93,6 +100,8 @@ BMS_PRODUCT_INFO_ADDR = 0xC002
 BMS_PRODUCT_INFO_FIELD_LEN = 32
 BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
 BMS_DIRECT_ENTER_IAP_ADDR = 0xFFFD
+BMS_DIRECT_IAP_DATA_ADDR = 0xFFFE
+BMS_DIRECT_IAP_COMPLETE_ADDR = 0xFFFF
 BMS_DIRECT_AGING_FUNCTION_ID = 7
 BMS_DIRECT_FUNCTION_ON_ADDR = 0x1102
 BMS_DIRECT_FUNCTION_OFF_ADDR = 0x1103
@@ -412,6 +421,46 @@ def _u16be(value: int) -> bytes:
     return bytes(((value >> 8) & 0xFF, value & 0xFF))
 
 
+def _build_direct_iap_write_frame(slave: int, addr: int, declared_length: int, payload: bytes, byte_count: int) -> bytes:
+    if slave <= 0 or slave > 247:
+        raise ValueError("Modbus slave 必须是 1..247")
+    if addr not in (BMS_DIRECT_ENTER_IAP_ADDR, BMS_DIRECT_IAP_DATA_ADDR, BMS_DIRECT_IAP_COMPLETE_ADDR):
+        raise ValueError(f"不支持的串口 IAP 地址: 0x{addr:04X}")
+    if declared_length <= 0 or declared_length > 0xFFFF:
+        raise ValueError("串口 IAP 长度必须是 1..65535")
+    if byte_count < 0 or byte_count > 0xFF:
+        raise ValueError("串口 IAP byte_count 超出 0..255")
+    if byte_count == 0:
+        if len(payload) != declared_length:
+            raise ValueError("串口 IAP 原始块长度与声明长度不一致")
+    elif byte_count != len(payload) or declared_length * 2 != byte_count:
+        raise ValueError("串口 IAP Modbus 字节数与寄存器数不一致")
+
+    frame = bytes((slave, 0x10)) + _u16be(addr) + _u16be(declared_length) + bytes((byte_count,)) + payload
+    return _modbus_crc_frame(frame)
+
+
+def _validate_modbus_write_response(frame: bytes, slave: int, expected_func: int, expected_echo: bytes) -> None:
+    if len(frame) not in (5, 8):
+        raise RuntimeError(f"Modbus 写响应长度错误: {len(frame)}")
+    expected_crc = crc16_modbus(frame[:-2])
+    actual_crc = frame[-2] | (frame[-1] << 8)
+    if expected_crc != actual_crc:
+        raise RuntimeError(f"Modbus CRC 错误: expect=0x{expected_crc:04X} actual=0x{actual_crc:04X}")
+    if frame[0] != slave:
+        raise RuntimeError(f"Modbus slave 不匹配: expect={slave} actual={frame[0]}")
+    if frame[1] & 0x80:
+        if len(frame) != 5:
+            raise RuntimeError(f"Modbus 异常响应长度错误: {len(frame)}")
+        raise RuntimeError(f"Modbus 异常: func=0x{frame[1]:02X} code=0x{frame[2]:02X}")
+    if len(frame) != 8:
+        raise RuntimeError(f"Modbus 正常写响应长度错误: {len(frame)}")
+    if frame[1] != expected_func:
+        raise RuntimeError(f"Modbus 写功能码不匹配: 0x{frame[1]:02X}")
+    if frame[2:6] != expected_echo:
+        raise RuntimeError("Modbus 写响应回显不匹配")
+
+
 class DirectBmsModbusClient:
     def __init__(self, port: str, baud: int, timeout: float, slave: int):
         if slave <= 0 or slave > 247:
@@ -442,6 +491,28 @@ class DirectBmsModbusClient:
         if len(data) != size:
             raise TimeoutError(f"等待 Modbus {label} 超时")
         return data
+
+    def set_slave(self, slave: int) -> None:
+        if slave <= 0 or slave > 247:
+            raise ValueError("Modbus slave 必须是 1..247")
+        self._slave = slave & 0xFF
+
+    def set_timeout(self, timeout: float) -> None:
+        if timeout <= 0:
+            raise ValueError("串口超时必须大于 0")
+        self._ser.timeout = timeout
+        self._ser.write_timeout = timeout
+
+    def reset_input_buffer(self) -> None:
+        self._ser.reset_input_buffer()
+
+    def _read_write_response(self, req: bytes, expected_func: int) -> None:
+        head = self._read_exact(2, "写响应头")
+        if head[1] & 0x80:
+            frame = head + self._read_exact(3, "写异常响应")
+        else:
+            frame = head + self._read_exact(6, "写正常响应")
+        _validate_modbus_write_response(frame, self._slave, expected_func, req[2:6])
 
     def read_words(self, addr: int, count: int) -> list[int]:
         if count <= 0 or count > 120:
@@ -486,16 +557,25 @@ class DirectBmsModbusClient:
         self._ser.reset_input_buffer()
         self._ser.write(req)
         self._ser.flush()
-        frame = self._read_exact(8, "写响应")
-        self._verify_crc(frame)
-        if frame[0] != self._slave:
-            raise RuntimeError(f"Modbus slave 不匹配: expect={self._slave} actual={frame[0]}")
-        if frame[1] & 0x80:
-            raise RuntimeError(f"Modbus 写异常: func=0x{frame[1]:02X} code=0x{frame[2]:02X}")
-        if frame[1] != expected_func:
-            raise RuntimeError(f"Modbus 写功能码不匹配: 0x{frame[1]:02X}")
-        if frame[2:6] != req[2:6]:
-            raise RuntimeError("Modbus 写响应回显不匹配")
+        self._read_write_response(req, expected_func)
+
+    def _write_direct_iap_command(self, addr: int, declared_length: int, payload: bytes, byte_count: int) -> None:
+        req = _build_direct_iap_write_frame(self._slave, addr, declared_length, payload, byte_count)
+        self._ser.reset_input_buffer()
+        self._ser.write(req)
+        self._ser.flush()
+        self._read_write_response(req, 0x10)
+
+    def iap_connect(self) -> None:
+        self._write_direct_iap_command(BMS_DIRECT_ENTER_IAP_ADDR, 1, b"\x00\x00", 2)
+
+    def iap_write_block(self, payload: bytes) -> None:
+        if not payload or len(payload) > BMS_DIRECT_IAP_BLOCK_SIZE:
+            raise ValueError(f"串口 IAP 数据块必须是 1..{BMS_DIRECT_IAP_BLOCK_SIZE} 字节")
+        self._write_direct_iap_command(BMS_DIRECT_IAP_DATA_ADDR, len(payload), payload, 0)
+
+    def iap_complete(self) -> None:
+        self._write_direct_iap_command(BMS_DIRECT_IAP_COMPLETE_ADDR, 1, b"\x00\x00", 2)
 
 
 def _read_bms_words_once(port: str, baud: int, addr: int, count: int) -> list[int]:
@@ -2212,17 +2292,31 @@ class UpgradeUi(tk.Tk):
         if not path.exists():
             messagebox.showerror("文件不存在", "请选择有效的 BMS App bin 文件。")
             return
+        if self._parse_connection_mode() == COMM_MODE_DIRECT_BMS:
+            prompt = (
+                "将通过 BMS 直连串口让 App 进入 IAP，然后把当前 bin 直接写入 BMS App 区。\n\n"
+                f"文件: {path}\n\n"
+                "升级期间不要断电、断开串口或启动其他通信任务。\n\n"
+                "确认继续？"
+            )
+        else:
+            prompt = (
+                "将先把当前选择的 bin 写入 comm tool 缓存，再通过 CAN 升级 BMS。\n\n"
+                f"文件: {path}\n\n"
+                "确认继续？"
+            )
         if not messagebox.askyesno(
             "确认升级",
-            "将先把当前选择的 bin 写入 comm tool 缓存，再通过 CAN 升级 BMS。\n\n"
-            f"文件: {path}\n\n"
-            "确认继续？",
+            prompt,
         ):
             return
         self._prepare_exclusive_upgrade()
         self._run_worker("一键升级", self._worker_upgrade_selected)
 
     def _upgrade_cached_selected(self) -> None:
+        if self._parse_connection_mode() == COMM_MODE_DIRECT_BMS:
+            messagebox.showinfo("使用缓存升级", "BMS直连串口不经过 comm tool，没有可用的固件缓存。")
+            return
         path = Path(self.bin_var.get())
         if not path.exists():
             messagebox.showerror("文件不存在", "请选择有效的 BMS App bin 文件。")
@@ -2531,6 +2625,10 @@ class UpgradeUi(tk.Tk):
     def _worker_upgrade_selected(self) -> None:
         image = self._load_selected_image()
         with self._open_client() as client:
+            if isinstance(client, DirectBmsModbusClient):
+                self._upgrade_bms_direct_serial(client, image)
+                self._emit("progress", 100)
+                return
             self._require_comm_tool_client(client, "一键升级")
             self._set_can_target(client, force=True)
             info = self._read_info(client)
@@ -2946,6 +3044,106 @@ class UpgradeUi(tk.Tk):
             self._emit("log", f"BMS App 状态: SOC={bms_status[0]} SOH={bms_status[1]}")
         self._emit("upgrade_stage", "升级进度: 完成")
 
+    def _upgrade_bms_direct_serial(self, client: DirectBmsModbusClient, image: bytes) -> None:
+        image_end = APP_BASE_ADDR + len(image)
+        if image_end > BMS_DIRECT_IAP_APP_LIMIT:
+            raise RuntimeError(
+                f"直连串口 IAP 镜像超出 App 区: end=0x{image_end:08X}, "
+                f"limit=0x{BMS_DIRECT_IAP_APP_LIMIT:08X}"
+            )
+
+        app_slave = self.active_modbus_slave
+        self._emit("upgrade_stage", "升级进度: 正在请求 BMS App 进入串口 IAP")
+        self._emit("log", f"直连串口 IAP: App Modbus地址={app_slave}, IAP固定地址={BMS_DIRECT_IAP_SLAVE}")
+        try:
+            client.write_words(BMS_DIRECT_ENTER_IAP_ADDR, [1])
+            self._emit("log", "BMS App 已确认进入 IAP 请求")
+        except Exception as exc:
+            self._emit("log", f"BMS App 进入 IAP 响应未确认，继续检测 IAP: {exc}")
+
+        time.sleep(BMS_DIRECT_IAP_RESET_WAIT)
+        client.set_slave(BMS_DIRECT_IAP_SLAVE)
+        client.set_timeout(BMS_DIRECT_IAP_ACK_TIMEOUT)
+
+        detect_error: Exception | None = None
+        for attempt in range(1, BMS_DIRECT_IAP_READY_RETRIES + 1):
+            try:
+                client.reset_input_buffer()
+                client.iap_connect()
+                detect_error = None
+                self._emit("log", f"已收到升级连接 ACK（第 {attempt} 次检测）")
+                break
+            except Exception as exc:
+                detect_error = exc
+                if attempt < BMS_DIRECT_IAP_READY_RETRIES:
+                    self._emit("log", f"等待串口 IAP: 第 {attempt} 次未响应")
+                    time.sleep(BMS_DIRECT_IAP_READY_RETRY_DELAY)
+        if detect_error is not None:
+            raise RuntimeError(f"串口 IAP 连接失败: {detect_error}") from detect_error
+
+        # 首个 ACK 可能仍由地址 1 的 App 返回；等待复位后必须再初始化一次 IAP 会话。
+        time.sleep(BMS_DIRECT_IAP_RESET_WAIT)
+        session_error: Exception | None = None
+        for attempt in range(1, BMS_DIRECT_IAP_READY_RETRIES + 1):
+            try:
+                client.reset_input_buffer()
+                client.iap_connect()
+                session_error = None
+                self._emit("log", "串口 IAP 升级会话已确认，开始从第 0 块完整写入")
+                break
+            except Exception as exc:
+                session_error = exc
+                if attempt < BMS_DIRECT_IAP_READY_RETRIES:
+                    self._emit("log", f"初始化串口 IAP 会话: 第 {attempt} 次未响应")
+                    time.sleep(BMS_DIRECT_IAP_READY_RETRY_DELAY)
+        if session_error is not None:
+            raise RuntimeError(f"串口 IAP 会话初始化失败: {session_error}") from session_error
+
+        block_total = math.ceil(len(image) / BMS_DIRECT_IAP_BLOCK_SIZE)
+        start_time = time.monotonic()
+        self._emit("upgrade_stage", f"升级进度: 串口 IAP 写入 0/{block_total} 块")
+        for block_index, offset in enumerate(range(0, len(image), BMS_DIRECT_IAP_BLOCK_SIZE), start=1):
+            block = image[offset : offset + BMS_DIRECT_IAP_BLOCK_SIZE]
+            try:
+                client.iap_write_block(block)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"串口 IAP 第 {block_index}/{block_total} 块未确认；"
+                    "协议没有块序号，为避免重发导致写入错位，已停止升级。"
+                    f"请从第 0 块重新完整升级。原因: {exc}"
+                ) from exc
+
+            percent = int(block_index * 90 / block_total)
+            self._emit("progress", min(95, 5 + percent))
+            self._emit("upgrade_stage", f"升级进度: 串口 IAP 写入 {block_index}/{block_total} 块")
+            if block_index == block_total or block_index % 8 == 0:
+                self._emit("log", f"串口 IAP 写入: {block_index}/{block_total}, {offset + len(block)}/{len(image)} bytes")
+
+        self._emit("upgrade_stage", "升级进度: 校验 App 向量并完成升级")
+        try:
+            client.iap_complete()
+        except Exception as exc:
+            raise RuntimeError(f"串口 IAP 完成命令失败，App 向量校验或 Flash 写入未通过: {exc}") from exc
+
+        elapsed = max(0.001, time.monotonic() - start_time)
+        self._emit("log", f"串口 IAP 写入完成: {len(image)} bytes, {elapsed:.1f}s, {len(image) / 1024.0 / elapsed:.1f} KiB/s")
+        self._emit("upgrade_stage", "升级进度: 等待 BMS App 复位恢复")
+
+        client.set_slave(app_slave)
+        client.set_timeout(1.0)
+        bms_status = self._wait_bms_status_after_upgrade(client)
+        if bms_status is None:
+            self._emit("log", "串口 IAP 已完成，但 BMS App 状态暂未响应；请稍后读取实时监控或产品信息复核。")
+        else:
+            self._emit("log", f"BMS App 已恢复: SOC={bms_status[0]} SOH={bms_status[1]}")
+            try:
+                product_info = self._read_bms_product_info(client)
+                self._emit("product_info", product_info)
+                self._emit("log", f"BMS 升级后软件版本: {product_info.get('software', '--')}")
+            except Exception as exc:
+                self._emit("log", f"BMS App 已恢复，但升级后版本读取失败: {exc}")
+        self._emit("upgrade_stage", "升级进度: 完成")
+
     def _open_client(self):
         port = self.active_port
         if not port:
@@ -3089,7 +3287,7 @@ class UpgradeUi(tk.Tk):
         if APP_BASE_ADDR + len(image) > APP_FLASH_LIMIT:
             raise RuntimeError(f"bin 超出 App 区: end=0x{APP_BASE_ADDR + len(image):08X}")
         msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_BASE_ADDR + len(image))
         if not msp_ok or not reset_ok:
             raise RuntimeError(f"App 向量表非法: MSP=0x{msp:08X}, Reset=0x{reset:08X}")
         self._emit("image", self._image_info_text(path, image))
@@ -3141,7 +3339,7 @@ class UpgradeUi(tk.Tk):
         crc16 = crc16_modbus(image)
         crc32 = zlib.crc32(image) & 0xFFFFFFFF
         msp, reset, msp_ok, reset_thumb_ok = vector_summary(image)
-        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_FLASH_LIMIT)
+        reset_ok = reset_thumb_ok and (APP_BASE_ADDR <= reset < APP_BASE_ADDR + len(image))
         return (
             f"{path.name}\n"
             f"{len(image)} bytes\n"
@@ -3423,6 +3621,39 @@ def main() -> int:
             raise RuntimeError("短路延时应按 10ms raw 和 ms 显示换算")
         if _modbus_crc_frame(bytes((1, 3, 0, 0, 0, 1))) != b"\x01\x03\x00\x00\x00\x01\x84\x0A":
             raise RuntimeError("Modbus CRC 打包错误")
+        iap_connect_frame = _build_direct_iap_write_frame(
+            BMS_DIRECT_IAP_SLAVE,
+            BMS_DIRECT_ENTER_IAP_ADDR,
+            1,
+            b"\x00\x00",
+            2,
+        )
+        if iap_connect_frame[:7] != b"\x01\x10\xFF\xFD\x00\x01\x02":
+            raise RuntimeError("串口 IAP 连接帧格式错误")
+        iap_block = bytes(range(256)) * 4
+        iap_block_frame = _build_direct_iap_write_frame(
+            BMS_DIRECT_IAP_SLAVE,
+            BMS_DIRECT_IAP_DATA_ADDR,
+            len(iap_block),
+            iap_block,
+            0,
+        )
+        if len(iap_block_frame) != 1033 or iap_block_frame[:7] != b"\x01\x10\xFF\xFE\x04\x00\x00":
+            raise RuntimeError("串口 IAP 1024 字节原始块格式错误")
+        if crc16_modbus(iap_block_frame[:-2]) != (iap_block_frame[-2] | (iap_block_frame[-1] << 8)):
+            raise RuntimeError("串口 IAP 数据块 CRC 错误")
+        iap_ack = _modbus_crc_frame(iap_block_frame[:6])
+        _validate_modbus_write_response(iap_ack, BMS_DIRECT_IAP_SLAVE, 0x10, iap_block_frame[2:6])
+        iap_nack = _modbus_crc_frame(bytes((BMS_DIRECT_IAP_SLAVE, 0x90, 0x04)))
+        try:
+            _validate_modbus_write_response(iap_nack, BMS_DIRECT_IAP_SLAVE, 0x10, iap_block_frame[2:6])
+        except RuntimeError as exc:
+            if "code=0x04" not in str(exc):
+                raise RuntimeError("串口 IAP NACK 错误码解析错误") from exc
+        else:
+            raise RuntimeError("串口 IAP NACK 未被识别")
+        if BMS_DIRECT_IAP_APP_LIMIT - APP_BASE_ADDR != 0x1B000:
+            raise RuntimeError("串口 IAP App 区边界错误")
         probe = object.__new__(UpgradeUi)
         probe.log_count = 0
         probe.log_started_monotonic = time.monotonic()
