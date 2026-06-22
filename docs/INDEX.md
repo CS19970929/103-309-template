@@ -1,7 +1,7 @@
 # BMS 项目文档索引
 
 > 项目: 103-309 BMS (STM32F103 + SH367309)
-> 最后更新: 2026-06-04
+> 最后更新: 2026-06-22
 > 原则: 源码是第一可信来源，文档与源码冲突时以源码为准。
 
 ---
@@ -18,6 +18,7 @@
 | 查找 Modbus 寄存器地址 | [通讯地址索引](reference/COMMUNICATION_ADDRESS_INDEX.md) |
 | 了解软件架构设计 | [架构文档](reference/architecture.md) |
 | 查看 CAN/Modbus 协议 | [协议文档](#7-协议文档-protocol) |
+| 维护新上位机、双通信方式和 IAP | [BMS 新上位机完整设计、协议与维护手册](guides/BMS_COMM_TOOL_UPPER_COMPLETE_GUIDE.md) |
 | 查看某模块的设计方案 | [设计文档](#6-设计文档-design) |
 | 查看变更记录 | [变更日志](changelog/change_log.md) |
 | 查看本轮状态变量净删减审计 | [状态变量净删减专项审计](review/state_variable_audit.md) |
@@ -95,6 +96,7 @@ docs/
 │   └── 项目逻辑完整梳理与架构简化建议_2026-05-24.html
 │
 ├── guides/                     ← 使用指南
+│   ├── BMS_COMM_TOOL_UPPER_COMPLETE_GUIDE.md  新上位机完整设计、协议、使用和维护
 │   ├── BMS_DAILY_DEV_WORKFLOW.md   日常开发工作流
 │   ├── DEBUG_WATCH_GUIDE.md        Keil Watch 调试指南
 │   ├── MAP文件阅读与项目体积优化指南.md  MAP 文件优化
@@ -257,6 +259,7 @@ docs/
 
 | 文档 | 内容 |
 |------|------|
+| [BMS_COMM_TOOL_UPPER_COMPLETE_GUIDE.md](guides/BMS_COMM_TOOL_UPPER_COMPLETE_GUIDE.md) | 新上位机完整功能、双通信架构、参数读写、两种 IAP、使用和维护 |
 | [BMS_DAILY_DEV_WORKFLOW.md](guides/BMS_DAILY_DEV_WORKFLOW.md) | 日常开发工作流 |
 | [DEBUG_WATCH_GUIDE.md](guides/DEBUG_WATCH_GUIDE.md) | Keil Watch 调试指南 |
 | [MAP文件阅读与项目体积优化指南.md](guides/MAP文件阅读与项目体积优化指南.md) | MAP 文件阅读和体积优化 |
