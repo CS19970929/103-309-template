@@ -409,6 +409,11 @@
               <FilePath>..\..\..\103 + 309\Project\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\startup_stm32f10x_hd.s</FilePath>
             </File>
             <File>
+              <FileName>startup_default_handler.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\source\startup_default_handler.c</FilePath>
+            </File>
+            <File>
               <FileName>system_stm32f10x.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\103 + 309\Project\STM32F10x_StdPeriph_Lib_V3.5.0\drivers\system_stm32f10x.c</FilePath>
