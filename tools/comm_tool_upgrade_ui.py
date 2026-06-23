@@ -92,6 +92,9 @@ BMS_DIRECT_IAP_READY_RETRY_DELAY = 0.5
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
 BMS_LIVE_WORDS = 88
+BMS_LIVE_TEMP_START_INDEX = 38
+BMS_LIVE_TEMP_COUNT = 10
+BMS_LIVE_TEMP_MOS_OFFSET = 9
 CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
@@ -346,6 +349,14 @@ def _is_valid_cell_voltage(value: int) -> bool:
 
 def _valid_cell_items(cells: list[int]) -> list[tuple[int, int]]:
     return [(index, value) for index, value in enumerate(cells) if _is_valid_cell_voltage(value)]
+
+
+def _live_temp_words(words: list[int]) -> list[int]:
+    return words[BMS_LIVE_TEMP_START_INDEX:BMS_LIVE_TEMP_START_INDEX + BMS_LIVE_TEMP_COUNT]
+
+
+def _live_temp_label(index: int) -> str:
+    return "MOS温度" if index == BMS_LIVE_TEMP_MOS_OFFSET else f"温度{index + 1}"
 
 
 def _cell_stat_text(valid_cells: list[tuple[int, int]]) -> tuple[str, str, str]:
@@ -713,8 +724,8 @@ class BmsMonitorWindow(tk.Toplevel):
 
         for index in range(32):
             self.cell_tree.insert("", tk.END, iid=f"cell{index}", values=(f"{index + 1:02d}: --",))
-        for index in range(10):
-            self.temp_tree.insert("", tk.END, iid=f"temp{index}", values=(f"T{index + 1}: --",))
+        for index in range(BMS_LIVE_TEMP_COUNT):
+            self.temp_tree.insert("", tk.END, iid=f"temp{index}", values=(f"{_live_temp_label(index)}: --",))
 
     def set_paused_by_parent(self, paused: bool) -> None:
         self.parent_paused = paused
@@ -847,8 +858,8 @@ class BmsMonitorWindow(tk.Toplevel):
             self.cell_tree.delete(item)
         for index, value in valid_cells:
             self.cell_tree.insert("", tk.END, iid=f"cell{index}", values=(f"{index + 1:02d}: {value} mV",))
-        for index, raw in enumerate(words[38:48]):
-            self.temp_tree.item(f"temp{index}", values=(f"T{index + 1}: {_temp_c(raw):.1f}",))
+        for index, raw in enumerate(_live_temp_words(words)):
+            self.temp_tree.item(f"temp{index}", values=(f"{_live_temp_label(index)}: {_temp_c(raw):.1f}",))
 
     def _on_close(self) -> None:
         self.running = False
@@ -1914,7 +1925,7 @@ class UpgradeUi(tk.Tk):
             "最高温度(℃)",
             "最低温度(℃)",
         ]
-        headers.extend(f"温度{index}(℃)" for index in range(1, 11))
+        headers.extend(f"{_live_temp_label(index)}(℃)" for index in range(BMS_LIVE_TEMP_COUNT))
         headers.extend(
             [
                 "一级告警字",
@@ -1961,7 +1972,7 @@ class UpgradeUi(tk.Tk):
             self._temp_display(words[48]),
             self._temp_display(words[49]),
         ]
-        row.extend(self._temp_display(raw) for raw in words[38:48])
+        row.extend(self._temp_display(raw) for raw in _live_temp_words(words))
         row.extend(
             [
                 f"0x{words[58]:04X}",
@@ -2101,12 +2112,14 @@ class UpgradeUi(tk.Tk):
         self.basic_vars["state"].set("充电" if ichg > 0 else ("放电" if idsg > 0 else "静置"))
         self._draw_battery(soc)
 
-        temp_values = words[38:48]
+        temp_values = _live_temp_words(words)
         self.temp_vars["max"].set(self._temp_display(words[48]))
         self.temp_vars["min"].set(self._temp_display(words[49]))
         self.temp_vars["t1"].set(self._temp_display(temp_values[0] if len(temp_values) > 0 else 0))
         self.temp_vars["t2"].set(self._temp_display(temp_values[1] if len(temp_values) > 1 else 0))
-        self.temp_vars["mos"].set(self._temp_display(temp_values[3] if len(temp_values) > 3 else 0))
+        self.temp_vars["mos"].set(
+            self._temp_display(temp_values[BMS_LIVE_TEMP_MOS_OFFSET] if len(temp_values) > BMS_LIVE_TEMP_MOS_OFFSET else 0)
+        )
 
         status_low = words[84] if len(words) > 84 else None
         func_low = words[86] if len(words) > 86 else None
@@ -2150,9 +2163,9 @@ class UpgradeUi(tk.Tk):
             ("三级保护字", f"0x{words[60]:04X}", ""),
         ]
         rows.extend((f"单体{index + 1:02d}", str(value), "mV") for index, value in _valid_cell_items(words[0:32]))
-        for index, raw in enumerate(words[38:48]):
+        for index, raw in enumerate(_live_temp_words(words)):
             if raw != 0:
-                rows.append((f"温度{index + 1}", f"{_temp_c(raw):.1f}", "℃"))
+                rows.append((_live_temp_label(index), f"{_temp_c(raw):.1f}", "℃"))
         for name, value, unit in rows:
             tree.insert("", tk.END, values=(name, value, unit))
 
@@ -3678,6 +3691,7 @@ def main() -> int:
         words[37] = 3350
         words[38] = 640
         words[39] = 650
+        words[47] = 700
         words[48] = 650
         words[49] = 640
         words[50] = 12
@@ -3692,6 +3706,11 @@ def main() -> int:
         row = UpgradeUi._battery_log_row(probe, words)
         if len(headers) != len(row):
             raise RuntimeError("长期监控 CSV 表头和数据列数不一致")
+        if "MOS温度(℃)" not in headers:
+            raise RuntimeError("长期监控 CSV 缺少 MOS 温度列")
+        mos_column = headers.index("MOS温度(℃)")
+        if row[mos_column] != UpgradeUi._temp_display(probe, words[47]):
+            raise RuntimeError("MOS 温度列未映射到 D000 第 47 个 word")
         if "61001" in row[-32:]:
             raise RuntimeError("不存在的单体电压不应写入 CSV")
         root = tk.Tk()
