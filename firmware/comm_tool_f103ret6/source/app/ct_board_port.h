@@ -35,6 +35,7 @@ typedef struct
 
 uint32_t CtBoard_GetTickMs(void);
 void CtBoard_Reset(void);
+int CtBoard_OfflineUpgradeButtonActive(void);
 int CtBoard_UartWrite(const uint8_t *data, uint16_t length);
 int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms);
 int CtBoard_CanRecv(CtCanFrame *frame, uint32_t timeout_ms);

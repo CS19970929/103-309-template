@@ -6,7 +6,7 @@
 #define CT_PROTOCOL_VERSION            1u
 #define CT_FW_VERSION_MAJOR            0u
 #define CT_FW_VERSION_MINOR            2u
-#define CT_FW_VERSION_PATCH            2u
+#define CT_FW_VERSION_PATCH            3u
 
 #define CT_BUILD_PROFILE_RELEASE       0u
 #define CT_BUILD_PROFILE_DEBUG         1u
@@ -27,6 +27,7 @@
 
 #define CT_UART_MAX_PAYLOAD            512u
 #define CT_UART_DEFAULT_BAUD           115200u
+#define CT_BMS_UART_BAUD               19200u
 #define CT_COMM_UART_PORT_USART1       1u
 #define CT_COMM_UART_PORT_USART3       3u
 

@@ -399,6 +399,11 @@
               <FilePath>..\source\app\ct_protocol.c</FilePath>
             </File>
             <File>
+              <FileName>ct_modbus_bridge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\source\app\ct_modbus_bridge.c</FilePath>
+            </File>
+            <File>
               <FileName>ct_crc16.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\source\app\ct_crc16.c</FilePath>
@@ -572,6 +577,11 @@
               <FileName>ct_self_iap.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\source\app\ct_self_iap.h</FilePath>
+            </File>
+            <File>
+              <FileName>ct_modbus_bridge.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\source\app\ct_modbus_bridge.h</FilePath>
             </File>
           </Files>
         </Group>

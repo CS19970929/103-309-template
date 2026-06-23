@@ -1,6 +1,7 @@
 #include "board.h"
 #include "board_uart.h"
 #include "ct_app.h"
+#include "ct_modbus_bridge.h"
 #include "ct_protocol.h"
 #include "ct_self_iap.h"
 
@@ -13,18 +14,20 @@ int main(void)
 
     Board_Init();
     CtProtocol_Init(&s_parser);
+    CtModbusBridge_Init();
     CtApp_Init();
 
     while (1)
     {
         while (BoardUart_ReadByte(&byte))
         {
-            CtSelfIap_FeedUartByte(byte);
+            CtModbusBridge_FeedPcByte(byte);
             if (CtProtocol_Feed(&s_parser, byte, &s_frame) != 0u)
             {
                 CtApp_HandleFrame(&s_frame);
             }
         }
+        CtModbusBridge_Task();
         CtApp_Poll();
         Board_Poll();
     }

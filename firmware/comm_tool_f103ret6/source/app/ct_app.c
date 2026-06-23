@@ -15,6 +15,12 @@ static uint8_t s_node_id = CT_NODE_ID_DEFAULT;
 static uint8_t s_app_can_addr = 0u;
 
 #define CT_BMS_MAX_REG_WORDS 120u
+#define CT_OFFLINE_BUTTON_DEBOUNCE_MS 60u
+
+static uint8_t s_offline_button_last_raw;
+static uint8_t s_offline_button_stable;
+static uint8_t s_offline_button_latched;
+static uint32_t s_offline_button_change_ms;
 
 static uint16_t rd16(const uint8_t *p)
 {
@@ -78,11 +84,76 @@ static uint8_t command_allowed_during_upgrade(uint8_t cmd)
     }
 }
 
+static void start_offline_upgrade_from_cache(void)
+{
+    const CtFirmwareInfo *info;
+    const CtUpgradeStatus *status;
+
+    status = CtUpgrade_GetStatus();
+    if (status->state == CT_UPGRADE_STATE_RUNNING)
+    {
+        return;
+    }
+
+    info = CtFlash_GetInfo();
+    if ((info->valid == 0u) ||
+        (info->size == 0u) ||
+        (info->app_addr != CT_BMS_APP_BASE_ADDR))
+    {
+        CtDebugLog_Record(CT_LOG_MOD_UPGRADE,
+                          CT_LOG_EVT_UPGRADE_ERROR,
+                          0x30u,
+                          0u);
+        return;
+    }
+
+    (void)CtUpgrade_StartWithAppAddress(s_node_id, s_app_can_addr);
+}
+
+static void poll_offline_upgrade_button(void)
+{
+    uint8_t raw;
+    uint32_t now;
+
+    now = CtBoard_GetTickMs();
+    raw = CtBoard_OfflineUpgradeButtonActive() ? 1u : 0u;
+    if (raw != s_offline_button_last_raw)
+    {
+        s_offline_button_last_raw = raw;
+        s_offline_button_change_ms = now;
+        return;
+    }
+
+    if ((uint32_t)(now - s_offline_button_change_ms) < CT_OFFLINE_BUTTON_DEBOUNCE_MS)
+    {
+        return;
+    }
+
+    if (raw != s_offline_button_stable)
+    {
+        s_offline_button_stable = raw;
+        if (s_offline_button_stable == 0u)
+        {
+            s_offline_button_latched = 0u;
+        }
+    }
+
+    if ((s_offline_button_stable != 0u) && (s_offline_button_latched == 0u))
+    {
+        s_offline_button_latched = 1u;
+        start_offline_upgrade_from_cache();
+    }
+}
+
 void CtApp_Init(void)
 {
     CtFlash_Init();
     CtUpgrade_Init();
     CtSelfIap_Init();
+    s_offline_button_last_raw = CtBoard_OfflineUpgradeButtonActive() ? 1u : 0u;
+    s_offline_button_stable = s_offline_button_last_raw;
+    s_offline_button_latched = s_offline_button_stable;
+    s_offline_button_change_ms = CtBoard_GetTickMs();
     CtDebugLog_Record(CT_LOG_MOD_APP,
                       CT_LOG_EVT_BOOT,
                       (uint16_t)(((uint16_t)CT_FW_VERSION_MAJOR << 8) | CT_FW_VERSION_MINOR),
@@ -93,6 +164,7 @@ void CtApp_Poll(void)
 {
     const CtUpgradeStatus *status;
 
+    poll_offline_upgrade_button();
     CtUpgrade_Task();
     status = CtUpgrade_GetStatus();
     if (status->state != 1u)

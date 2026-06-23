@@ -38,6 +38,11 @@ static void board_gpio_init(void)
     gpio.GPIO_Pin = BOARD_PWSV_STB_PIN;
     GPIO_Init(BOARD_PWSV_STB_GPIO, &gpio);
     GPIO_SetBits(BOARD_PWSV_STB_GPIO, BOARD_PWSV_STB_PIN);
+
+    gpio.GPIO_Pin = BOARD_OFFLINE_UPGRADE_BUTTON_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_IPU;
+    gpio.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(BOARD_OFFLINE_UPGRADE_BUTTON_GPIO, &gpio);
 }
 
 void Board_Init(void)
@@ -47,6 +52,7 @@ void Board_Init(void)
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     board_gpio_init();
     BoardUart_Init(CT_UART_DEFAULT_BAUD);
+    BoardBmsUart_Init(CT_BMS_UART_BAUD);
     BoardCan_Init(CT_CAN_DEFAULT_BITRATE);
     (void)SysTick_Config(SystemCoreClock / 1000u);
 }
@@ -81,6 +87,12 @@ uint32_t Board_GetTickMs(void)
     return s_tick_ms;
 }
 
+int Board_OfflineUpgradeButtonActive(void)
+{
+    return (GPIO_ReadInputDataBit(BOARD_OFFLINE_UPGRADE_BUTTON_GPIO,
+                                  BOARD_OFFLINE_UPGRADE_BUTTON_PIN) == Bit_RESET) ? 1 : 0;
+}
+
 void SysTick_Handler(void)
 {
     s_tick_ms++;
@@ -94,4 +106,9 @@ uint32_t CtBoard_GetTickMs(void)
 void CtBoard_Reset(void)
 {
     NVIC_SystemReset();
+}
+
+int CtBoard_OfflineUpgradeButtonActive(void)
+{
+    return Board_OfflineUpgradeButtonActive();
 }

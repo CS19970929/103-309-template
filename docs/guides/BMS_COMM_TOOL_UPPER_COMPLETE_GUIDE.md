@@ -33,6 +33,7 @@
 | PC 串口公共协议及 CLI | `tools/comm_tool_host.py` |
 | comm tool 命令分发 | `firmware/comm_tool_f103ret6/source/app/ct_app.c` |
 | comm tool PC 帧协议 | `firmware/comm_tool_f103ret6/source/app/ct_protocol.c/.h` |
+| comm tool Modbus 透传 | `firmware/comm_tool_f103ret6/source/app/ct_modbus_bridge.c/.h` |
 | comm tool CAN 桥 | `firmware/comm_tool_f103ret6/source/app/ct_can_gateway.c/.h` |
 | comm tool 升级状态机 | `firmware/comm_tool_f103ret6/source/app/ct_upgrade_manager.c/.h` |
 | comm tool 固件缓存 | `firmware/comm_tool_f103ret6/source/app/ct_flash_store.c/.h` |
@@ -108,6 +109,15 @@ flowchart LR
 | 老化启停/重置/时长 | 支持 | 支持，走寄存器 |
 
 切换通信方式时，如果当前波特率还是另一模式的默认值，UI 自动在 `115200` 与 `19200` 之间切换；用户手工设置的其它波特率不会被强制覆盖。
+
+从 comm tool 固件 `0.2.3` 开始，`BMS直连串口`还支持一条“经 comm tool 透明转发”的物理路径：
+
+```text
+PC 上位机直连模式(Modbus RTU) --115200 8N1--> comm tool 串口1/PC UART
+comm tool USART2(PA2=TX, PA3=RX) --19200 8N1--> BMS Modbus 口
+```
+
+这条路径的上位机功能仍选择 `BMS直连串口`，协议仍是原始 Modbus RTU；差异只是 PC 不是直接接 BMS，而是接 comm tool 串口1，由 comm tool 把 Modbus 请求经 USART2 发给 BMS，再把 BMS 应答原样返回 PC。由于同一 UART 不能同时工作在两个波特率，使用该路径时，UI 里选择直连模式后需要把 PC 串口波特率手工设为 `115200`；PC 直接接 BMS 时仍使用 `19200`。
 
 ## 6. 用户界面完整功能
 
@@ -365,6 +375,20 @@ state:u8 percent:u8 last_error:u8 written:u32 total:u32 expect_seq:u16
 `DEBUG_LOG` 响应 header：`enabled:u8 count:u8 capacity:u8 entry_size:u8 dropped:u16_le`。随后每条 12 bytes：`seq:u16_le tick_ms:u32_le module:u8 event:u8 value0:u16_le value1:u16_le`。Release 默认关闭记录，Debug profile 默认启用；`clear_after_read!=0` 表示编码响应后清空环形日志。
 
 升级期间 comm tool 只允许 `GET_INFO`、`FW_INFO`、`UPGRADE_STATUS`、`UPGRADE_ABORT`、`CAN_DIAG`、`DEBUG_LOG`；其它命令返回 `BAD_STATE`。
+
+### 9.6 原始 Modbus 透传到 USART2
+
+comm tool App `0.2.3` 新增 `ct_modbus_bridge.*`，让 PC 侧同一串口同时具备两类入口：
+
+- `55 AA` 开头的帧按上文 PC-comm tool 私有协议处理，不进入 Modbus 透传。
+- 非私有帧按 Modbus RTU 解析；只接受 BMS 当前使用的 `0x03`、`0x06`、`0x10`。
+- 请求 CRC16-Modbus 正确后，原样写入 USART2；USART2 硬件固定为 `PA2=TX`、`PA3=RX`、`19200 8N1`。
+- BMS 正常应答或异常应答 CRC 正确后，原样通过 PC UART 返回上位机。
+- PC 侧 UART 仍保持 comm tool 默认 `115200 8N1`，所以 UI 直连模式经 comm tool 透传时，波特率必须手工设为 `115200`。
+- 直连串口 IAP 的 `0x10 / 0xFFFE` 数据块允许 `byte_count=0`，真实数据长度取 count 字段，最大支持 1024 bytes；桥接缓冲上限按 1040-byte RTU 帧设计。
+- PC 请求帧间隔超时 100 ms；BMS 应答字节间隔超时 100 ms；单次 BMS 应答总等待 3000 ms。超时不构造代理异常帧，上位机按串口超时处理。
+
+安全边界：App 运行态下，PC 原始 Modbus `0xFFFD` 优先透传给 BMS，不再作为 comm tool 自身串口 IAP 入口处理。否则 BMS 直连 IAP 的进入命令会误触发 comm tool 自身复位。comm tool 自身升级仍保留 CAN App `ENTER_IAP` 入口和 IAP 固件侧串口升级能力。
 
 ## 10. comm tool 与 BMS App CAN 服务协议
 
@@ -638,6 +662,27 @@ state, remaining_minutes, remaining_seconds_hi, remaining_seconds_lo, duration_h
 
 `使用缓存升级` 仍要求用户选择本地 bin；它只是在缓存信息与本地文件完全一致时跳过串口下载，不允许盲目升级未知缓存。
 
+### 14.1 PA6 离线触发缓存升级
+
+comm tool App `0.2.3` 新增 PA6 离线升级按键：
+
+- 硬件：`PA6` 配置为上拉输入，低电平有效。
+- 触发条件：低电平稳定超过 60 ms，且本机 Flash 缓存中存在有效 BMS App 包。
+- 缓存限制：只接受 `app_addr=0x08004800` 的 BMS App 包；如果缓存无效、大小为 0 或缓存的是 comm tool 自身 App，按键不会启动升级。
+- 目标参数：使用当前运行时 `IAP node` 和 `BMS App CAN address`。这些值来自上位机 `SET_CAN`，断电后回到默认 `node=1`、`app_can_addr=0`。
+- 执行动作：调用同一套 `CtUpgrade_StartWithAppAddress()` 状态机，从缓存通过 CAN-IAP 发给 BMS；不会重新从 PC 下载。
+- 防重复：一次按下只触发一次；松开后再次按下才会重试。
+
+典型使用：
+
+1. PC 连接 comm tool，选择 `comm tool/CAN桥`，设置 CAN 波特率、BMS 地址和 IAP 节点。
+2. 选择 BMS App bin，点击 `写入缓存`，确认缓存地址、大小、CRC16、CRC32、`valid=1`。
+3. 断开 PC 或关闭上位机，comm tool 保持供电并连接目标 CAN 总线。
+4. 按下 PA6，让输入为低电平超过 60 ms。
+5. comm tool 从缓存启动 CAN-IAP；LED 仍按 App 心跳闪烁，具体进度只能通过重新连接上位机读取 `UPGRADE_STATUS` 或查看 CAN 总线。
+
+批量边界：PA6 只是脱离 PC 后复用现有 CAN-IAP 帧发送逻辑，不提供设备枚举或逐台结果统计。如果同一 CAN 总线上有多台 BMS 同时响应同一 App CAN 地址/IAP node，所有设备必须收到完全相同帧并保持相同 ACK 行为；否则 ACK 冲突或个别失败无法被 comm tool 精确区分。量产批量升级应先在夹具上验证 CAN 拓扑、节点一致性和失败处置流程。
+
 ## 15. 直连串口 IAP 协议和流程
 
 ### 15.1 专用帧
@@ -761,9 +806,9 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 
 ### 16.4 多设备安全要求
 
-- `BMS地址` 必须唯一，App 阶段只允许选中的 BMS 响应并进入 IAP。
-- IAP 阶段 `node` 也必须唯一。
-- 如果总线上已有多个相同 IAP node 的设备，ACK ID 完全相同，comm tool 无法区分，禁止升级。
+- 上位机在线单目标升级时，`BMS地址` 必须唯一，App 阶段只允许选中的 BMS 响应并进入 IAP。
+- 上位机在线单目标升级时，IAP 阶段 `node` 也必须唯一。
+- PA6 离线批量升级允许夹具把多台同型号 BMS 接到同一 CAN-IAP 帧流，但 comm tool 仍无法枚举设备或区分单台失败；必须保证多台设备 ACK 行为一致，并在量产夹具上验证失败处置。
 - 设置目标时 UI 限制 BMS 地址 `0..15`、IAP node `1..127`。
 
 ## 17. 使用步骤
@@ -773,7 +818,7 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 1. 关闭可能占用串口的其它程序。
 2. 打开 `dist/BMS_CommTool_Upgrade_UI.exe`。
 3. 在实时监控页选择通信方式和 COM 口。
-4. 桥接模式使用 115200，并确认 CAN 波特率、BMS 地址和 IAP 节点；直连模式使用 19200，并确认 Modbus 地址。
+4. 桥接模式使用 115200，并确认 CAN 波特率、BMS 地址和 IAP 节点；PC 直接接 BMS 的直连模式使用 19200；经 comm tool UART1→USART2 透传的直连模式使用 115200，并确认 Modbus 地址。
 5. 点击 `连接检测`。
 6. 直连模式应读出实时数据和产品信息；桥接模式应显示 comm tool 版本、缓存和目标信息。
 
@@ -806,9 +851,20 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 
 若使用 `使用缓存升级`，必须选择与缓存完全相同的本地 bin；UI 会比较地址、大小、CRC16、CRC32、valid 后才启动。
 
-### 17.5 直连串口一键升级
+### 17.5 PA6 离线缓存升级
 
-1. 选择 `BMS直连串口`，确认 App 当前 Modbus 地址和 19200 波特率。
+1. 桥接模式下先点击 `写入缓存`，确认缓存有效。
+2. 设置并应用目标 CAN 波特率、BMS 地址和 IAP 节点；如果随后不断电，这些运行时参数会用于 PA6 离线升级。
+3. 断开 PC 后保持 comm tool 和 BMS 供电，确认 CAN 连接和终端电阻。
+4. 按下 PA6，低电平保持超过 60 ms。
+5. 升级过程中不要再次按键、断电或改变 CAN 总线。
+6. 如需确认结果，重新连接上位机后读取 `UPGRADE_STATUS` 和 BMS 产品软件版本。
+
+如果 comm tool 断电重启后再按 PA6，CAN 参数恢复默认值：`250000 bit/s`、`IAP node=1`、`BMS App CAN address=0`。
+
+### 17.6 直连串口一键升级
+
+1. 选择 `BMS直连串口`，确认 App 当前 Modbus 地址。PC 直接接 BMS 时用 19200；经 comm tool UART1→USART2 透传时，PC 侧波特率手工改为 115200。
 2. 选择并校验 `FD_Release.bin`。
 3. 点击 `一键升级`；不要手工先点多次 `进入IAP`。
 4. 升级过程中禁止断电、拔串口或启动其它通信工具。
@@ -868,9 +924,11 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 | 现象 | 优先检查 |
 | --- | --- |
 | 串口打不开 | COM 是否正确、是否被其它程序占用、驱动是否正常 |
-| 直连全部超时 | 是否误用 115200、Modbus 地址是否一致、A/B 线和地是否正确 |
+| PC 直接接 BMS 直连全部超时 | 是否误用 115200、Modbus 地址是否一致、A/B 线和地是否正确；直接接 BMS 应用 19200 |
+| 经 comm tool 透传直连全部超时 | UI 是否仍被自动切到 19200；经 comm tool 透传时 PC 侧必须用 115200，BMS 侧 USART2 固定 19200 |
 | 桥接 GET_INFO 超时 | PC 是否连接到 comm tool 通信 UART、应为 115200、App/IAP 串口配置是否一致 |
 | 桥接读 BMS 返回 CAN_TIMEOUT | CAN 波特率、终端电阻、BMS 地址、BMS 是否低功耗、RX/TX 计数 |
+| PA6 按下无反应 | 缓存是否 valid、缓存地址是否 `0x08004800`、PA6 是否真正拉低、是否在升级运行中、断电后 CAN 参数是否恢复默认 |
 | 桥接读少量寄存器成功、大块失败 | BMS App 是否支持 READ_BLOCK、总线拥塞、`0x86` 数据帧是否丢失 |
 | 写参数返回 BMS_ERROR/异常 0x07 | `PROJECT_CFG_HOST_WRITE_ENABLE`、地址范围、值范围、只读属性 |
 | SH309 提示缺少完整参数 | 先读取保护参数；不得在未知块内容时整块写 |
@@ -896,6 +954,8 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 - 当前 UI 不暴露校准区和完整 `0x2100` 通用保护表；必要时只能经高级寄存器访问，并承担语义和安全校验责任。
 - 上位机限制一次最多 120 words，不能用单次操作跨越未定义窗口。
 - comm tool 的 CAN 参数是运行时设置，不应假设断电后仍保持上次 UI 值。
+- PA6 离线升级没有本地屏幕、蜂鸣器或逐台结果记录；它只触发缓存 CAN-IAP。批量升级失败定位需要重新接上位机读取状态或接 CAN 分析工具。
+- comm tool App 运行态下，PC 原始 Modbus `0xFFFD` 会透传给 BMS，不再用于 comm tool 自身串口进入 IAP；这是为了保证 BMS 直连串口 IAP 不误复位 comm tool。
 
 ## 21. 维护修改映射
 
@@ -903,10 +963,12 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 | --- | --- | --- |
 | UI 页面、按钮、用户流程 | `tools/comm_tool_upgrade_ui.py` | self-test、py_compile、重打 EXE |
 | PC-comm tool 帧/命令 | `tools/comm_tool_host.py`、`ct_protocol.*`、`ct_app.c` | 双端常量、字节序、最大 payload、兼容性 |
+| PC 原始 Modbus 透传 | `ct_modbus_bridge.*`、`board_uart.*` | `55 AA` 私有帧隔离、0x03/0x06/0x10、1024-byte IAP 块、USART2 PA2/PA3 |
 | CAN App 服务 | `ct_can_gateway.*`、BMS `Can_HDX.c` | ID、CRC 顺序、重试、`Sci_Host*` |
 | BMS 寄存器 | `Sci_Upper.c/.h` | 两种通信模式、参数 UI、本文地址表 |
 | 参数换算/边界 | `comm_tool_upgrade_ui.py`、BMS 参数结构与范围表 | 显示/raw 往返、整块回读 |
-| CAN-IAP | `ct_upgrade_manager.*`、`ct_can_gateway.*`、BMS IAP | 中断恢复、块 CRC、总 CRC、唯一 node |
+| CAN-IAP | `ct_upgrade_manager.*`、`ct_can_gateway.*`、BMS IAP | 中断恢复、块 CRC、总 CRC、单目标唯一/PA6 批量边界 |
+| PA6 离线升级 | `ct_app.c`、`board.c/.h`、`ct_upgrade_manager.*` | 按键低电平去抖、缓存有效性、运行时 CAN 目标、批量边界 |
 | 直连串口 IAP | `DirectBmsModbusClient`、BMS App 进入 IAP、BMS IAP | 旧帧兼容、双连接、失败块策略 |
 | Flash 布局 | App scatter、IAP、`ct_config.h`、bin 校验 | `0x08004800` 安全边界、断电恢复 |
 | 构建发布 | `build_comm_tool_upgrade_ui_exe.ps1` | 固定 EXE 名和 dist 覆盖 |
@@ -924,5 +986,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 7. CAN-IAP 完成后能读 SOC/SOH 和软件版本。
 8. 直连串口 IAP 完成后能读 SOC/SOH 和软件版本。
 9. 非法向量、错误 App 地址、越界镜像在发送前被拒绝。
-10. 升级期间监控/记录不抢占串口，失败不会显示成功。
-11. 打包后的 `dist/BMS_CommTool_Upgrade_UI.exe` 与源码版本一致。
+10. 经 comm tool 透传直连：PC 侧 115200、USART2 侧 19200 下，`0x03/0x06/0x10` 和直连 IAP 块可完整往返。
+11. PA6 离线升级：有效 BMS App 缓存可触发；无效缓存、错误 app_addr、升级运行中不会重复触发。
+12. 升级期间监控/记录不抢占串口，失败不会显示成功。
+13. 打包后的 `dist/BMS_CommTool_Upgrade_UI.exe` 与源码版本一致。
