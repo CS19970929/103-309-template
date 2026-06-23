@@ -79,7 +79,7 @@ COMM_MODE_LABELS = {
     COMM_MODE_DIRECT_BMS: "BMS直连串口",
 }
 COMM_MODE_FROM_LABEL = {label: mode for mode, label in COMM_MODE_LABELS.items()}
-BMS_DIRECT_DEFAULT_BAUD = 19200
+BMS_DIRECT_DEFAULT_BAUD = 115200
 BMS_DIRECT_DEFAULT_SLAVE = 1
 BMS_DIRECT_IAP_SLAVE = 1
 BMS_DIRECT_IAP_BLOCK_SIZE = 1024
@@ -2527,9 +2527,9 @@ class UpgradeUi(tk.Tk):
     def _on_connection_mode_changed(self, _event=None) -> None:
         mode = self._parse_connection_mode()
         baud_text = self.baud_var.get().strip()
-        if mode == COMM_MODE_DIRECT_BMS and baud_text in ("", "115200"):
+        if mode == COMM_MODE_DIRECT_BMS and baud_text in ("", "19200"):
             self.baud_var.set(str(BMS_DIRECT_DEFAULT_BAUD))
-        elif mode == COMM_MODE_COMM_TOOL and baud_text == str(BMS_DIRECT_DEFAULT_BAUD):
+        elif mode == COMM_MODE_COMM_TOOL and baud_text in ("", "19200"):
             self.baud_var.set("115200")
 
     def _parse_u16(self, text: str, name: str) -> int:
