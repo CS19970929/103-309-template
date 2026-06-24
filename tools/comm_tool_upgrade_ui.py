@@ -2376,8 +2376,6 @@ class UpgradeUi(tk.Tk):
 
             ports = [port.device for port in list_ports.comports()]
             self.port_combo["values"] = ports
-            if ports and not self.port_var.get():
-                self.port_var.set(ports[0])
         except Exception as exc:
             self._log(f"串口枚举失败: {exc}")
 
@@ -3714,7 +3712,7 @@ class UpgradeUi(tk.Tk):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="BMS CAN 升级图形上位机")
-    parser.add_argument("--port", default="COM4")
+    parser.add_argument("--port", default="")
     parser.add_argument("--baud", type=int, default=None)
     parser.add_argument("--bin", default=str(DEFAULT_BIN))
     parser.add_argument("--mode", choices=(COMM_MODE_COMM_TOOL, COMM_MODE_DIRECT_BMS), default=COMM_MODE_COMM_TOOL)

@@ -880,14 +880,14 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 
 ```powershell
 py -3.9 -m pip install pyserial
-py -3.9 tools\comm_tool_upgrade_ui.py --port COM4
+py -3.9 tools\comm_tool_upgrade_ui.py
 ```
 
 可选参数：
 
 | 参数 | 说明 |
 | --- | --- |
-| `--port COM4` | 初始串口 |
+| `--port COM4` | 可选，指定初始串口；不传时串口栏保持空白，由用户手动选择 |
 | `--baud 115200` | 初始波特率；不传时按 mode 选择默认值 |
 | `--bin path` | 初始 BMS App bin |
 | `--mode comm_tool` | 初始桥接模式 |
@@ -898,7 +898,7 @@ py -3.9 tools\comm_tool_upgrade_ui.py --port COM4
 启动脚本：
 
 ```powershell
-.\tools\start_comm_tool_upgrade_ui.ps1 -Port COM4 -Baud 115200
+.\tools\start_comm_tool_upgrade_ui.ps1 -Baud 115200
 ```
 
 ### 18.2 修改后的最小验证

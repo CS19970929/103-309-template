@@ -1,5 +1,5 @@
 param(
-    [string]$Port = "COM4",
+    [string]$Port = "",
     [int]$Baud = 115200,
     [string]$Bin = "",
     [string]$PythonVersion = "3.9"
@@ -30,10 +30,12 @@ try {
     $ArgsList = @(
         "-$PythonVersion",
         "tools\comm_tool_upgrade_ui.py",
-        "--port", $Port,
         "--baud", [string]$Baud,
         "--bin", $Bin
     )
+    if (-not [string]::IsNullOrWhiteSpace($Port)) {
+        $ArgsList += @("--port", $Port)
+    }
 
     $ArgString = ($ArgsList | ForEach-Object { Quote-ProcessArg $_ }) -join " "
     $Process = Start-Process -FilePath $Py -ArgumentList $ArgString -WorkingDirectory $RepoRoot -PassThru
