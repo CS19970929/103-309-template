@@ -61,13 +61,14 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 
 | 命令 | 方向 | payload | 说明 |
 | --- | --- | --- | --- |
-| `0x01 GET_INFO` | PC -> comm | 空 | 读取 comm tool 版本、Flash 缓存能力、CAN 波特率、目标节点 |
+| `0x01 GET_INFO` | PC -> comm | 空 | 读取 comm tool 版本、Flash 缓存能力、CAN 波特率、目标节点、USART2/BMS 波特率 |
 | `0x02 SET_CAN` | PC -> comm | `bitrate:u32 node:u8 app_can_addr:u8 reserved:u16` | 设置 CAN 参数、IAP 节点和 BMS App CAN 地址 |
 | `0x10 BMS_READ` | PC -> comm | `addr:u16 count:u16` | 通过 CAN 读取 BMS 寄存器 |
 | `0x11 BMS_WRITE` | PC -> comm | `addr:u16 count:u16 words[count]` | 通过 CAN 写 BMS 寄存器 |
 | `0x12 BMS_AGING_CTRL` | PC -> comm | `action:u8` | 通过 CAN 单独控制 BMS 老化模式，`0x51` 开启，`0x50` 关闭并提前结束本轮老化时间，`0x5A` 重置时间 |
 | `0x13 BMS_AGING_STATUS` | PC -> comm | 空 | 等待并解析 BMS `0x14F80208` 广播，返回 `state:u8 remaining_minutes:u16_le`，用于 UI 显示老化剩余时间 |
 | `0x14 BMS_AGING_SET_HOURS` | PC -> comm | `hours:u16_le` | 修改 BMS 老化总时长，单位小时，范围 `1..168`；成功后返回 `state:u8 remaining_hours:u8 applied_hours:u16_le`，板端会同步重置累计老化时间 |
+| `0x15 SET_BMS_UART` | PC -> comm | `baud:u32_le` | 设置 comm tool USART2/BMS 侧波特率；成功返回实际应用的 `baud:u32_le` |
 | `0x20 FW_BEGIN` | PC -> comm | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 开始下载 BMS App 或 comm tool App 到 comm tool 缓存 |
 | `0x21 FW_DATA` | PC -> comm | `offset:u32 data[n]` | 写入固件缓存 |
 | `0x22 FW_END` | PC -> comm | `size:u32 crc16:u16 crc32:u32` | 结束下载并校验缓存 |
@@ -92,6 +93,8 @@ comm tool 默认目标为：CAN 波特率 `250000`、BMS App CAN 地址 `0`、IA
 | 16 | 4 | flags |
 | 20 | 1 | 当前 IAP 节点 |
 | 21 | 1 | 当前 BMS App CAN 地址 |
+| 22 | 2 | reserved |
+| 24 | 4 | 当前 USART2/BMS 侧波特率 |
 
 `CAN_DIAG` 第 61 字节为 IAP 节点，第 62 字节为 BMS App CAN 地址。旧工具只解析前 62 字节时仍可工作。
 
@@ -127,3 +130,7 @@ comm tool IAP 同时支持旧 BMS 串口升级协议和当前 CAN-IAP 协议：
 ## 2026-05-25 串口选择补充
 
 COMM TOOL 串口不再在 App 或 IAP 里分散写死。当前统一由 `firmware/comm_tool_f103ret6/source/app/ct_config.h` 的 `CT_COMM_UART_PORT` 控制，默认 `CT_COMM_UART_PORT_USART1`，对应 USART1 重映射 `PB6/TX`、`PB7/RX`，波特率仍为 `115200 8N1`。后续需要切换回 USART3 时，使用 `.\tools\set_comm_tool_uart.ps1 -Port USART3`，不要手工只改 App 或只改 IAP。
+
+## 2026-06-24 USART2/BMS 波特率补充
+
+comm tool 串口1/PC UART 固定 `115200 8N1`，不再由上位机波特率选择框控制。上位机波特率选择框表示 comm tool USART2/BMS 侧波特率，默认 `19200`，通过 `0x15 SET_BMS_UART` 在 App 运行态动态应用；断电重启后恢复 `CT_BMS_UART_BAUD` 默认值。旧固件不支持 `0x15` 时，只能继续使用默认 `19200`。

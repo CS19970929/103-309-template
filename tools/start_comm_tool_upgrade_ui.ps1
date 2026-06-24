@@ -1,6 +1,6 @@
 param(
     [string]$Port = "",
-    [int]$Baud = 115200,
+    [int]$Baud = 19200,
     [string]$Bin = "",
     [string]$PythonVersion = "3.9"
 )

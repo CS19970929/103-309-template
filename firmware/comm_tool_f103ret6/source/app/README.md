@@ -18,7 +18,7 @@
 
 - BSP：`firmware/comm_tool_f103ret6/source/bsp/`
 - IAP：`firmware/comm_tool_f103ret6/source/iap/`
-- PC 侧 UART：串口1，默认 `115200 8N1`；BMS 透传 UART：USART2，`PA2=TX`、`PA3=RX`、`19200 8N1`。
+- PC 侧 UART：串口1，固定 `115200 8N1`；BMS 透传 UART：USART2，`PA2=TX`、`PA3=RX`，默认 `19200 8N1`，App 运行态可通过 `CT_CMD_SET_BMS_UART(0x15)` 改为其它 BMS 侧波特率。
 - PA6：离线升级按键，上拉输入，低电平稳定 60 ms 后从有效 BMS App 缓存启动 CAN-IAP。
 - App Keil 工程：`firmware/comm_tool_f103ret6/keil/COMM_TOOL_F103RET6.uvprojx`
 - IAP Keil 工程：`firmware/comm_tool_f103ret6/keil/COMM_TOOL_IAP.uvprojx`

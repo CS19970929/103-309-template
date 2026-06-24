@@ -69,7 +69,7 @@
 ```mermaid
 flowchart LR
     UI["BMS_CommTool_Upgrade_UI.exe"]
-    MODBUS["BMS Modbus RTU\n19200 8N1"]
+    MODBUS["BMS Modbus RTU\nBMS/USART2 baud 可选"]
     CTP["PC-comm tool 私有串口帧\n115200 8N1"]
     CT["comm tool App\n协议/缓存/网关/升级状态机"]
     APP["BMS App\nSci_Upper 寄存器服务"]
@@ -96,8 +96,9 @@ flowchart LR
 
 | 项目 | comm tool/CAN桥 | BMS直连串口 |
 | --- | --- | --- |
-| PC 串口默认值 | `115200 8N1`，无流控 | `115200 8N1`，无流控；PC 直接接 BMS 时手工改 `19200` |
-| PC 下一级设备 | comm tool | BMS App/IAP |
+| PC 串口默认值 | `115200 8N1`，无流控 | `115200 8N1`，无流控，经 comm tool 串口1透传 |
+| UI 波特率含义 | 不影响 CAN 桥接；供 USART2/BMS 透传路径使用，默认 `19200` | comm tool USART2/BMS 侧波特率，默认 `19200` |
+| PC 下一级设备 | comm tool | comm tool 串口1，再由 USART2 接 BMS App/IAP |
 | BMS 选择 | `BMS地址 0..15` | `Modbus地址 1..247`，常用值 1 |
 | IAP 目标 | `IAP节点 1..127`，常用值 1 | IAP 固定 Modbus 地址 1 |
 | CAN 默认值 | `250000 bit/s` | 不使用 CAN |
@@ -108,16 +109,16 @@ flowchart LR
 | 实时监控/CSV/日志/参数 | 支持 | 支持 |
 | 老化启停/重置/时长 | 支持 | 支持，走寄存器 |
 
-切换通信方式时，UI 默认保持 `115200`。这是为了兼容经 comm tool UART1→USART2 的直连透传路径；如果 PC 直接接 BMS App/IAP 串口，需要手工把波特率改为 `19200`。
+UI 中的 `BMS/串口2波特率` 不再表示 PC 到 comm tool 串口1的波特率。PC 到 comm tool 串口1固定 `115200 8N1` 并在界面隐藏；该选择框只表示 comm tool USART2/BMS 侧波特率，默认 `19200`。CAN 桥接读写 BMS 不经过 USART2，因此该值只在直连透传路径实际使用 USART2 时生效。
 
-从 comm tool 固件 `0.2.3` 开始，`BMS直连串口`还支持一条“经 comm tool 透明转发”的物理路径：
+从 comm tool 固件 `0.2.3` 开始，`BMS直连串口`支持一条“经 comm tool 透明转发”的物理路径；从 `0.2.4` 开始，USART2/BMS 侧波特率可由上位机选择：
 
 ```text
 PC 上位机直连模式(Modbus RTU) --115200 8N1--> comm tool 串口1/PC UART
-comm tool USART2(PA2=TX, PA3=RX) --19200 8N1--> BMS Modbus 口
+comm tool USART2(PA2=TX, PA3=RX) --UI选择的 BMS/串口2波特率--> BMS Modbus 口
 ```
 
-这条路径的上位机功能仍选择 `BMS直连串口`，协议仍是原始 Modbus RTU；差异只是 PC 不是直接接 BMS，而是接 comm tool 串口1，由 comm tool 把 Modbus 请求经 USART2 发给 BMS，再把 BMS 应答原样返回 PC。由于同一 UART 不能同时工作在两个波特率，直连模式 UI 默认波特率为 `115200`；PC 直接接 BMS 时仍需要手工改为 `19200`。
+这条路径的上位机功能仍选择 `BMS直连串口`，协议仍是原始 Modbus RTU；差异只是 PC 不是直接接 BMS，而是接 comm tool 串口1，由 comm tool 把 Modbus 请求经 USART2 发给 BMS，再把 BMS 应答原样返回 PC。上位机在打开直连透传前会先用私有帧 `0x15 SET_BMS_UART` 配置 USART2；旧 comm tool 固件不支持 `0x15` 时，只能继续使用默认 `19200`。
 
 ## 6. 用户界面完整功能
 
@@ -207,7 +208,7 @@ comm tool USART2(PA2=TX, PA3=RX) --19200 8N1--> BMS Modbus 口
 
 ### 8.1 通用规则
 
-- BMS App/IAP 物理串口默认 `19200 8N1`，无流控；但上位机 `BMS直连串口`模式默认显示 `115200`，用于经 comm tool 透传。
+- BMS App/IAP 物理串口默认 `19200 8N1`，无流控；上位机 `BMS直连串口`模式经 comm tool 透传时，PC 到 comm tool 串口1固定 `115200`，界面 `BMS/串口2波特率`用于设置 comm tool USART2 到 BMS 的波特率。
 - UI 默认 slave 为 1，可输入 `1..247`；实际值必须与 BMS 配置一致。
 - 地址、数量、寄存器值均为网络序/大端。
 - CRC 为 CRC16-Modbus，初值 `0xFFFF`，多项式反射值 `0xA001`，帧尾低字节在前。
@@ -309,13 +310,14 @@ UI 严格校验 slave、功能码、`byte_count == count * 2` 和 CRC。
 
 | cmd | 名称 | 请求 payload | 成功响应 payload |
 | --- | --- | --- | --- |
-| `0x01` | `GET_INFO` | 空 | 24 bytes，见下文 |
+| `0x01` | `GET_INFO` | 空 | 28 bytes，见下文 |
 | `0x02` | `SET_CAN` | `bitrate:u32 node:u8 app_addr:u8 reserved:u16` | 空 |
 | `0x10` | `BMS_READ` | `addr:u16 count:u16` | `count` 个 `u16_le` |
 | `0x11` | `BMS_WRITE` | `addr:u16 count:u16 words[count]:u16_le` | 空 |
 | `0x12` | `BMS_AGING_CTRL` | `action:u8` | `state:u8 remaining_hours:u8` |
 | `0x13` | `BMS_AGING_STATUS` | 空 | `state:u8 remaining_minutes:u16_le` |
 | `0x14` | `BMS_AGING_SET_HOURS` | `hours:u16_le` | `state:u8 remaining_hours:u8 applied_hours:u16_le` |
+| `0x15` | `SET_BMS_UART` | `baud:u32_le` | `baud:u32_le` |
 | `0x20` | `FW_BEGIN` | `app_addr:u32 size:u32 crc16:u16 crc32:u32` | 空 |
 | `0x21` | `FW_DATA` | `offset:u32 data[n]` | 空 |
 | `0x22` | `FW_END` | `size:u32 crc16:u16 crc32:u32` | 空 |
@@ -340,6 +342,7 @@ UI 严格校验 slave、功能码、`byte_count == count * 2` 和 CRC。
 | 20 | 1 | IAP node |
 | 21 | 1 | BMS App CAN address |
 | 22 | 2 | reserved |
+| 24 | 4 | USART2/BMS 侧波特率 |
 
 `UPGRADE_STATUS` 响应：
 
@@ -385,9 +388,9 @@ comm tool App `0.2.3` 新增 `ct_modbus_bridge.*`，让 PC 侧同一串口同时
 
 - `55 AA` 开头的帧按上文 PC-comm tool 私有协议处理，不进入 Modbus 透传。
 - 非私有帧按 Modbus RTU 解析；只接受 BMS 当前使用的 `0x03`、`0x06`、`0x10`。
-- 请求 CRC16-Modbus 正确后，原样写入 USART2；USART2 硬件固定为 `PA2=TX`、`PA3=RX`、`19200 8N1`。
+- 请求 CRC16-Modbus 正确后，原样写入 USART2；USART2 硬件固定为 `PA2=TX`、`PA3=RX`，波特率默认 `19200`，可通过 `SET_BMS_UART(0x15)` 动态切换。
 - BMS 正常应答或异常应答 CRC 正确后，原样通过 PC UART 返回上位机。
-- PC 侧 UART 仍保持 comm tool 默认 `115200 8N1`，所以 UI 直连模式默认波特率就是 `115200`，可直接用于经 comm tool 透传。
+- PC 侧 UART 仍保持 comm tool 默认 `115200 8N1`；UI 的 `BMS/串口2波特率`只控制 USART2/BMS 侧。
 - 直连串口 IAP 的 `0x10 / 0xFFFE` 数据块允许 `byte_count=0`，真实数据长度取 count 字段，最大支持 1024 bytes；桥接缓冲上限按 1040-byte RTU 帧设计。
 - PC 请求帧间隔超时 100 ms；BMS 应答字节间隔超时 100 ms；单次 BMS 应答总等待 3000 ms。超时不构造代理异常帧，上位机按串口超时处理。
 
@@ -835,7 +838,7 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 1. 关闭可能占用串口的其它程序。
 2. 打开 `dist/BMS_CommTool_Upgrade_UI.exe`。
 3. 在实时监控页选择通信方式和 COM 口。
-4. 桥接模式使用 115200，并确认 CAN 波特率、BMS 地址和 IAP 节点；PC 直接接 BMS 的直连模式使用 19200；经 comm tool UART1→USART2 透传的直连模式使用 115200，并确认 Modbus 地址。
+4. PC 到 comm tool 串口1固定 115200；按目标 BMS 选择 `BMS/串口2波特率`，并确认 CAN 波特率、BMS 地址、IAP 节点或 Modbus 地址。
 5. 点击 `开始监控` 或在 `实时数据` 页点击 `读取一次`。
 6. 直连模式应读出实时数据和产品信息；桥接模式应经 comm tool 读出 BMS 实时数据。
 
@@ -881,7 +884,7 @@ START 后 BMS IAP 会清除 App 有效状态；升级中断后设备应停留在
 
 ### 17.6 直连串口一键升级
 
-1. 选择 `BMS直连串口`，确认 App 当前 Modbus 地址。PC 直接接 BMS 时用 19200；经 comm tool UART1→USART2 透传时，PC 侧波特率手工改为 115200。
+1. 选择 `BMS直连串口`，确认 App 当前 Modbus 地址，并把 `BMS/串口2波特率`设为目标 BMS App/IAP 的实际波特率；PC 到 comm tool 串口1固定 115200，无需选择。
 2. 选择并校验 `FD_Release.bin`。
 3. 点击 `一键升级`；不要手工先点多次 `进入IAP`。
 4. 升级过程中禁止断电、拔串口或启动其它通信工具。
@@ -902,7 +905,7 @@ py -3.9 tools\comm_tool_upgrade_ui.py
 | 参数 | 说明 |
 | --- | --- |
 | `--port COM4` | 可选，指定初始串口；不传时串口栏保持空白，由用户手动选择 |
-| `--baud 115200` | 初始波特率；不传时按 mode 选择默认值 |
+| `--baud 19200` | 初始 BMS/串口2波特率；不传时默认 `19200` |
 | `--bin path` | 初始 BMS App bin |
 | `--mode comm_tool` | 初始桥接模式 |
 | `--mode direct_bms` | 初始直连模式 |
@@ -912,7 +915,7 @@ py -3.9 tools\comm_tool_upgrade_ui.py
 启动脚本：
 
 ```powershell
-.\tools\start_comm_tool_upgrade_ui.ps1 -Baud 115200
+.\tools\start_comm_tool_upgrade_ui.ps1 -Baud 19200
 ```
 
 ### 18.2 修改后的最小验证
@@ -941,8 +944,8 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 | 现象 | 优先检查 |
 | --- | --- |
 | 串口打不开 | COM 是否正确、是否被其它程序占用、驱动是否正常 |
-| PC 直接接 BMS 直连全部超时 | 是否误用 115200、Modbus 地址是否一致、A/B 线和地是否正确；直接接 BMS 应用 19200 |
-| 经 comm tool 透传直连全部超时 | 是否手工改成了 19200；经 comm tool 透传时 PC 侧必须用 115200，BMS 侧 USART2 固定 19200 |
+| BMS 直连串口全部超时 | Modbus 地址是否一致、A/B 线和地是否正确、`BMS/串口2波特率`是否等于目标 BMS 实际波特率、comm tool 固件是否支持 `0x15` |
+| 选择非 19200 后提示 `UNSUPPORTED` | 当前 comm tool 固件过旧，不支持动态 USART2 波特率；升级 comm tool App 或改回默认 19200 |
 | 桥接 GET_INFO 超时 | PC 是否连接到 comm tool 通信 UART、应为 115200、App/IAP 串口配置是否一致 |
 | 桥接读 BMS 返回 CAN_TIMEOUT | CAN 波特率、终端电阻、BMS 地址、BMS 是否低功耗、RX/TX 计数 |
 | PA6 按下无反应 | 缓存是否 valid、缓存地址是否 `0x08004800`、PA6 是否真正拉低、是否在升级运行中、断电后 CAN 参数是否恢复默认 |
@@ -1003,7 +1006,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 7. CAN-IAP 完成后能读 SOC/SOH 和软件版本。
 8. 直连串口 IAP 完成后能读 SOC/SOH 和软件版本。
 9. 非法向量、错误 App 地址、越界镜像在发送前被拒绝。
-10. 经 comm tool 透传直连：PC 侧 115200、USART2 侧 19200 下，`0x03/0x06/0x10` 和直连 IAP 块可完整往返。
+10. 经 comm tool 透传直连：PC 侧固定 115200，USART2 侧分别在 19200 和至少一个目标板实际波特率下验证 `0x03/0x06/0x10` 和直连 IAP 块可完整往返。
 11. PA6 离线升级：有效 BMS App 缓存可触发；无效缓存、错误 app_addr、升级运行中不会重复触发。
 12. 升级期间监控/记录不抢占串口，失败不会显示成功。
 13. 打包后的 `dist/BMS_CommTool_Upgrade_UI.exe` 与源码版本一致。
