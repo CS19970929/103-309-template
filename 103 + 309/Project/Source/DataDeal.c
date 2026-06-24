@@ -287,10 +287,10 @@ void DataLoad_Temperature(void)
 
     g_stCellInfoReport.u16Temperature[2] = 0;
     
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40; // 放大1000倍和B值对应的意思
-    t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1]) >> 10;
-    g_stCellInfoReport.u16Temperature[1] = (UINT16)(t_i32temp * 10 + 400);
-    Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[1]);
+    // t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40; // 放大1000倍和B值对应的意思
+    // t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1]) >> 10;
+    // g_stCellInfoReport.u16Temperature[1] = (UINT16)(t_i32temp * 10 + 400);
+    // Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[1]);
 
 #if 0
 	//环境温度1

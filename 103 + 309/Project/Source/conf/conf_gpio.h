@@ -15,7 +15,7 @@
 
 
 /**********************************************/
-#define MCUO_DEBUG_LED1 	PCout(13)		//LED1
+#define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
 #define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
 #define MCUO_AFE_CTLC 		PBout(14)		//��������
@@ -49,8 +49,8 @@
 #define GPIO_DC_EN                  GPIOA                   //(power)todo tyepc供电
 #define PIN_DC_EN                   GPIO_Pin_10
 
-#define GPIO_DBG_LED        GPIOC
-#define PIN_DBG_LED         GPIO_Pin_13
+#define GPIO_DBG_LED        GPIOB
+#define PIN_DBG_LED         GPIO_Pin_15
 
 #define GPIO_SPI_MOSI        GPIOA                          //todo 实际对应led控制
 #define PIN_SPI_MOSI         GPIO_Pin_6
@@ -75,11 +75,11 @@
 
 #define GPIO_ADC_CUR        GPIOA
 #define PIN_ADC_CUR         GPIO_Pin_2
-#define GPIO_ADC_NTC        GPIOA
-#define PIN_ADC_NTC         GPIO_Pin_3
+// #define GPIO_ADC_NTC        GPIOA
+// #define PIN_ADC_NTC         GPIO_Pin_3
 
-#define GPIO_2727_EN                GPIOB                   //(power)
-#define PIN_2737_EN                 GPIO_Pin_15
+#define GPIO_2727_EN                GPIOA                   //(power)
+#define PIN_2737_EN                 GPIO_Pin_3
 
 #define GPIO_SEG_EN          GPIOB
 #define PIN_SEG_EN           GPIO_Pin_10

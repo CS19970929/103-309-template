@@ -135,7 +135,7 @@ void InitADC_GPIO(void)
 
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR | PIN_ADC_NTC;
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
@@ -230,7 +230,7 @@ void InitADC_ADC1(void)
     ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_55Cycles5); // PB1: GPIO_ADC_NMOS
     ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
     ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_55Cycles5); // PA1: GPIO_ADC_VBUS
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
+    // ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
 
     ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
