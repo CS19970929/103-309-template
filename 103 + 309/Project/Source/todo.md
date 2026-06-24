@@ -1640,3 +1640,28 @@ System_ErrorControlBase???
 看一下afe参数
 
 屏蔽了FactoryAging_Task中的FactoryAging_ApplyRunningMos()是否有影响，还有整个项目中和mos动作相关的逻辑梳理出来
+
+新上位机的bms直连串口通信方式，能否实现iap升级，升级具体流程参考：旧的串口上位机升级源码参考E:\sync\git\upper\BMS-upper - 副本 (4)中的分支ttt，bms iap参考E:\work\a002\new 030\IAP 103CB
+
+梳理新上位机的完整功能、设计、架构文档，使用方式等等，例如直连串口和comm tool can桥接具体协议、流程，iap升级协议、流程，读、写bms参数协议等等，需要完整、具体的输出文档，方便后续维护
+
+
+comm tool新增功能：1、当上位机选择串口直连模式时，comm tool的串口1直接和pc串口直连，pc发送modbus指令，comm tool要通过串口2透传modbus然后接收bms应答，然后串口1要透传modbus的应答。串口2的TX是PA2，RX是PA3。2、comm tool有按键PA6，当通过上位机下载完升级bin包到comm tool后，comm tool可以通过PA6按下（低电平）来脱离上位机，可以通过can接口实现一键批量给bms升级。
+
+
+
+上位机主页面的连接检测按钮是否可以去掉？当通信异常时，实时监控的各种数据都归0,单体电压直接不显示。需要实现这两个功能
+
+用户点击停止监控后，实时监控的各种数据也要都归0,单体电压直接不显示。
+
+comm tool的iap和app是否需要加入看门狗
+
+上位机中实时监控需要加入出厂容量显示
+
+
+其他功能中选择升级文件功能，不要默认显示路径，升级文件路径让用户自己选择
+
+
+上位机系统状态中的：充电mos、放电mos、加热、冷凝这4个状态在有些状况中显示有问题，明明通信上了，却全灰显示，不会显示绿色的on和红色的off
+
+comm tool串口直连是否支持缓存升级
