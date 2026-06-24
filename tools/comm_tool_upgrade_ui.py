@@ -106,6 +106,8 @@ CELL_VOLTAGE_NOT_PRESENT = 61001
 BMS_EVENT_RECORD_ADDR = 0xC008
 BMS_EVENT_RECORD_WORDS = 100
 BMS_EVENT_RECORD_CHUNK_WORDS = 20
+BMS_RESET_EVENT_RECORD_ADDR = 0x1007
+BMS_RESET_EVENT_RECORD_VALUE = 0x0001
 BMS_PRODUCT_INFO_ADDR = 0xC002
 BMS_PRODUCT_INFO_FIELD_LEN = 32
 BMS_PRODUCT_INFO_WORDS = (BMS_PRODUCT_INFO_FIELD_LEN * 3) // 2
@@ -1312,7 +1314,8 @@ class UpgradeUi(tk.Tk):
         actions = ttk.Frame(tab)
         actions.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         ttk.Button(actions, text="读取BMS日志", command=self._read_bms_log).grid(row=0, column=0, padx=(0, 8))
-        ttk.Label(actions, text="显示板端存储的事件记录").grid(row=0, column=1, sticky="w")
+        ttk.Button(actions, text="重置100条日志", command=self._reset_bms_log).grid(row=0, column=1, padx=(0, 8))
+        ttk.Label(actions, text="显示板端存储的事件记录").grid(row=0, column=2, sticky="w")
 
         self.log_tree = ttk.Treeview(tab, columns=("index", "event", "interval", "raw"), show="headings")
         for col, title, width in [
@@ -2562,6 +2565,14 @@ class UpgradeUi(tk.Tk):
     def _read_bms_log(self) -> None:
         self._run_worker("读取BMS日志", self._worker_read_bms_log)
 
+    def _reset_bms_log(self) -> None:
+        if not messagebox.askyesno(
+            "确认重置BMS日志",
+            "将清空板端存储的100条事件日志，并写入Flash保存。\n\n确认继续？",
+        ):
+            return
+        self._run_worker("重置100条日志", self._worker_reset_bms_log)
+
     def _read_bms_regs(self) -> None:
         try:
             self.active_bms_addr = self._parse_u16(self.bms_addr_var.get(), "地址")
@@ -2987,6 +2998,21 @@ class UpgradeUi(tk.Tk):
         valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
         self._emit("bms_log", records)
         self._emit("log", f"BMS 日志读取完成: {valid_count} 条")
+        self._emit("progress", 100)
+
+    def _worker_reset_bms_log(self) -> None:
+        with self._open_client() as client:
+            self._set_can_target(client)
+            self._emit(
+                "log",
+                f"重置BMS日志: 写 0x{BMS_RESET_EVENT_RECORD_ADDR:04X}=0x{BMS_RESET_EVENT_RECORD_VALUE:04X}",
+            )
+            self._write_bms_words(client, BMS_RESET_EVENT_RECORD_ADDR, [BMS_RESET_EVENT_RECORD_VALUE])
+            words = self._read_bms_log_words(client)
+        records = [((word >> 8) & 0xFF, word & 0xFF) for word in words]
+        valid_count = sum(1 for event, delta in records if event != 0 or delta != 0)
+        self._emit("bms_log", records)
+        self._emit("log", f"BMS 日志重置完成: 当前有效记录 {valid_count} 条")
         self._emit("progress", 100)
 
     def _read_bms_log_words(self, client: CommToolClient) -> list[int]:
