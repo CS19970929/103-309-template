@@ -92,6 +92,13 @@ BMS_DIRECT_IAP_READY_RETRY_DELAY = 0.5
 BMS_OVERVIEW_ADDR = 0xD000
 BMS_OVERVIEW_WORDS = 63
 BMS_LIVE_WORDS = 88
+BMS_LIVE_STATUS_ADDR = 0xD115
+BMS_LIVE_STATUS_WORDS = 4
+BMS_LIVE_STATUS_RETRY_SECONDS = 30.0
+BMS_STATUS_CHARGE_MOS_BIT = 2
+BMS_STATUS_DISCHARGE_MOS_BIT = 3
+BMS_STATUS_HEAT_BIT = 8
+BMS_STATUS_COOL_BIT = 9
 BMS_LIVE_TEMP_START_INDEX = 38
 BMS_LIVE_TEMP_COUNT = 10
 BMS_LIVE_TEMP_MOS_OFFSET = 9
@@ -1037,6 +1044,8 @@ class UpgradeUi(tk.Tk):
         self.applied_target: tuple[object, ...] | None = None
         self.live_word_count: int | None = None
         self.live_snapshot_cache: list[int] | None = None
+        self.live_status_words_cache: list[int] | None = None
+        self.live_status_retry_due_monotonic = 0.0
         self.product_info_cache: dict[str, str] | None = None
         self.product_info_cache_target: tuple[object, ...] | None = None
         self.product_info_next_due_monotonic = 0.0
@@ -1879,28 +1888,54 @@ class UpgradeUi(tk.Tk):
     def _reset_live_capability_cache(self) -> None:
         self.live_word_count = None
         self.live_snapshot_cache = None
+        self.live_status_words_cache = None
+        self.live_status_retry_due_monotonic = 0.0
 
     def _reset_product_info_cache(self) -> None:
         self.product_info_cache = None
         self.product_info_cache_target = None
         self.product_info_next_due_monotonic = 0.0
 
+    def _read_live_status_words_optional(self, client) -> list[int] | None:
+        now = time.monotonic()
+        if self.live_status_retry_due_monotonic != 0.0 and now < self.live_status_retry_due_monotonic:
+            self.live_status_words_cache = None
+            return None
+        try:
+            words = self._read_bms_words(client, BMS_LIVE_STATUS_ADDR, BMS_LIVE_STATUS_WORDS)
+        except Exception:
+            self.live_status_words_cache = None
+            self.live_status_retry_due_monotonic = now + BMS_LIVE_STATUS_RETRY_SECONDS
+            return None
+        self.live_status_words_cache = words
+        self.live_status_retry_due_monotonic = 0.0
+        return words
+
     def _read_live_words(self, client) -> list[int]:
         if self.live_word_count == BMS_OVERVIEW_WORDS:
-            return self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+            self._read_live_status_words_optional(client)
+            return words
         if self.live_word_count == BMS_LIVE_WORDS:
             try:
-                return self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
+                self.live_status_words_cache = words[84:88]
+                return words
             except Exception:
-                self.live_word_count = None
+                words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
+                self.live_word_count = BMS_OVERVIEW_WORDS
+                self._read_live_status_words_optional(client)
+                return words
 
         try:
             words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_LIVE_WORDS)
             self.live_word_count = BMS_LIVE_WORDS
+            self.live_status_words_cache = words[84:88]
             return words
         except Exception:
             words = self._read_bms_words(client, BMS_OVERVIEW_ADDR, BMS_OVERVIEW_WORDS)
             self.live_word_count = BMS_OVERVIEW_WORDS
+            self._read_live_status_words_optional(client)
             return words
 
     def _connection_cache_key(self) -> tuple[object, ...]:
@@ -2019,6 +2054,7 @@ class UpgradeUi(tk.Tk):
             self._temp_display(words[49]),
         ]
         row.extend(self._temp_display(raw) for raw in _live_temp_words(words))
+        status_words = self._live_status_words(words)
         row.extend(
             [
                 f"0x{words[58]:04X}",
@@ -2026,8 +2062,8 @@ class UpgradeUi(tk.Tk):
                 f"0x{words[60]:04X}",
                 f"0x{words[61]:04X}",
                 f"0x{words[62]:04X}",
-                f"0x{words[84]:04X}" if len(words) > 84 else "",
-                f"0x{words[86]:04X}" if len(words) > 86 else "",
+                f"0x{status_words[0]:04X}" if status_words is not None else "",
+                f"0x{status_words[2]:04X}" if status_words is not None and len(status_words) > 2 else "",
             ]
         )
         row.extend(str(value) if _is_valid_cell_voltage(value) else "" for value in words[0:32])
@@ -2118,6 +2154,28 @@ class UpgradeUi(tk.Tk):
         else:
             badge.configure(text="off", bg="#d93025", fg="white")
 
+    def _live_status_words(self, words: list[int]) -> list[int] | None:
+        if len(words) >= BMS_LIVE_WORDS:
+            return words[84:88]
+        if self.live_status_words_cache is not None and len(self.live_status_words_cache) >= BMS_LIVE_STATUS_WORDS:
+            return self.live_status_words_cache[:BMS_LIVE_STATUS_WORDS]
+        return None
+
+    def _live_status_badges(self, words: list[int], status_low: int | None) -> dict[str, bool]:
+        if status_low is not None:
+            return {
+                "充电MOS": bool(status_low & (1 << BMS_STATUS_CHARGE_MOS_BIT)),
+                "放电MOS": bool(status_low & (1 << BMS_STATUS_DISCHARGE_MOS_BIT)),
+                "加热": bool(status_low & (1 << BMS_STATUS_HEAT_BIT)),
+                "冷凝": bool(status_low & (1 << BMS_STATUS_COOL_BIT)),
+            }
+        return {
+            "充电MOS": len(words) > 50 and words[50] > 0,
+            "放电MOS": len(words) > 51 and words[51] > 0,
+            "加热": False,
+            "冷凝": False,
+        }
+
     def _temp_display(self, raw: int) -> str:
         if raw == 0:
             return "--"
@@ -2171,12 +2229,11 @@ class UpgradeUi(tk.Tk):
             self._temp_display(temp_values[BMS_LIVE_TEMP_MOS_OFFSET] if len(temp_values) > BMS_LIVE_TEMP_MOS_OFFSET else 0)
         )
 
-        status_low = words[84] if len(words) > 84 else None
-        func_low = words[86] if len(words) > 86 else None
-        self._set_badge("充电MOS", None if status_low is None else bool(status_low & (1 << 2)))
-        self._set_badge("放电MOS", None if status_low is None else bool(status_low & (1 << 3)))
-        self._set_badge("加热", None if status_low is None else bool(status_low & (1 << 8)))
-        self._set_badge("冷凝", None if status_low is None else bool(status_low & (1 << 9)))
+        status_words = self._live_status_words(words)
+        status_low = status_words[0] if status_words is not None else None
+        func_low = status_words[2] if status_words is not None and len(status_words) > 2 else None
+        for name, enabled in self._live_status_badges(words, status_low).items():
+            self._set_badge(name, enabled)
 
         self.fault_vars["first"].set(f"0x{words[58]:04X}  {_fault_text(words[58])}")
         self.fault_vars["second"].set(f"0x{words[59]:04X}  {_fault_text(words[59])}")
@@ -2184,6 +2241,8 @@ class UpgradeUi(tk.Tk):
         monitor = f"均衡: 0x{words[61]:04X} 0x{words[62]:04X}"
         if status_low is not None:
             monitor += f"\n系统字: 0x{status_low:04X}"
+        else:
+            monitor += "\n系统字: --（兼容模式）"
         if func_low is not None:
             monitor += f"\n功能字: 0x{func_low:04X}"
         self.fault_vars["monitor"].set(monitor)
