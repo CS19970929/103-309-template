@@ -359,6 +359,24 @@ def _live_temp_label(index: int) -> str:
     return "MOS温度" if index == BMS_LIVE_TEMP_MOS_OFFSET else f"温度{index + 1}"
 
 
+def _zero_live_words() -> list[int]:
+    return [0] * BMS_LIVE_WORDS
+
+
+def _is_zero_live_snapshot(words: list[int]) -> bool:
+    return len(words) >= BMS_OVERVIEW_WORDS and all(value == 0 for value in words[:BMS_OVERVIEW_WORDS])
+
+
+def _zero_bms_overview_text() -> str:
+    return (
+        "SOC 0%  SOH 0%  总压 0.00V  充电 0.0A  放电 0.0A\n"
+        "单体: max --  min --  压差 --  有效串数 0\n"
+        "温度: max 0℃  min 0℃  容量 0.00/0.00Ah  出厂 0.00Ah  循环 0\n"
+        "故障字: 0x0000 0x0000 0x0000  均衡: 0x0000 0x0000\n"
+        "单体电压(mV): 无有效单体电压"
+    )
+
+
 def _cell_stat_text(valid_cells: list[tuple[int, int]]) -> tuple[str, str, str]:
     if not valid_cells:
         return "--", "--", "--"
@@ -817,6 +835,7 @@ class BmsMonitorWindow(tk.Toplevel):
                 else:
                     self.product_info_var.set(_format_product_info(event.payload))
             elif event.kind == "error":
+                self._clear_snapshot()
                 self.state_var.set(f"读取失败: {event.payload}")
                 if self.running and not self.parent_paused:
                     self._schedule_poll(self._interval_ms(1.0))
@@ -827,7 +846,28 @@ class BmsMonitorWindow(tk.Toplevel):
         if not self.closed:
             self.after(80, self._after_events)
 
+    def _clear_snapshot(self) -> None:
+        self.summary_var.set(
+            "SOC 0%   SOH 0%   总压 0.00V   充电 0.0A   放电 0.0A\n"
+            "单体 max --   min --   压差 --   有效串数 0   温度 max 0℃   min 0℃"
+        )
+        self.detail_var.set(
+            "容量: 0.00/0.00Ah\n"
+            "出厂容量: 0.00Ah\n"
+            "循环次数: 0\n"
+            "故障字: 0x0000  0x0000  0x0000\n"
+            "均衡: 0x0000  0x0000"
+        )
+        for item in self.cell_tree.get_children():
+            self.cell_tree.delete(item)
+        for index in range(BMS_LIVE_TEMP_COUNT):
+            self.temp_tree.item(f"temp{index}", values=(f"{_live_temp_label(index)}: 0",))
+
     def _show_snapshot(self, words: list[int]) -> None:
+        if _is_zero_live_snapshot(words):
+            self._clear_snapshot()
+            return
+
         cells = words[0:32]
         valid_cells = _valid_cell_items(cells)
         max_cell_text, min_cell_text, delta_cell_text = _cell_stat_text(valid_cells)
@@ -1217,7 +1257,6 @@ class UpgradeUi(tk.Tk):
         self.port_combo = ttk.Combobox(parent, textvariable=self.port_var, width=12)
         self.port_combo.grid(row=1, column=1, sticky="w", pady=(4, 4))
         ttk.Button(parent, text="刷新", command=self._refresh_ports).grid(row=1, column=2, padx=6, pady=(4, 4))
-        ttk.Button(parent, text="连接检测", command=self._check_connection).grid(row=1, column=3, padx=(0, 10), pady=(4, 4))
         ttk.Label(parent, text="波特率").grid(row=2, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
         ttk.Entry(parent, textvariable=self.baud_var, width=10).grid(row=2, column=1, sticky="w", pady=(4, 8))
         ttk.Button(parent, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(
@@ -1725,6 +1764,11 @@ class UpgradeUi(tk.Tk):
             except tk.TclError:
                 pass
             self.live_after_id = None
+        self.live_snapshot_cache = _zero_live_words()
+        self._clear_main_live_display("已停止")
+        self.comm_state_var.set("通信: 已停止")
+        if self.monitor_window is not None and self.monitor_window.winfo_exists():
+            self.monitor_window._clear_snapshot()
 
     def _schedule_live_monitor(self, delay_ms: int | None = None) -> None:
         if not self.live_running:
@@ -2036,11 +2080,14 @@ class UpgradeUi(tk.Tk):
                     product_info = self._read_bms_product_info_cached(client)
                 except Exception as exc:
                     product_info = {"error": str(exc)}
+            if not self.live_running:
+                return
             self._emit("live_snapshot", words)
             self._emit("product_info", product_info)
             self._emit("progress", 100)
         except Exception as exc:
             self._emit("log", f"实时监控读取失败: {exc}")
+            self._emit("live_clear")
             self._emit("comm_state", "通信: 异常")
         finally:
             self.serial_lock.release()
@@ -2142,6 +2189,62 @@ class UpgradeUi(tk.Tk):
         self.comm_state_var.set("通信: 正在通讯" if self.live_running else "通信: 已响应")
         self._update_data_tree(words)
         self._maybe_record_snapshot(words)
+
+    def _clear_main_live_display(self, state_text: str = "通信异常") -> None:
+        for index, (frame, _row, _col) in enumerate(self.cell_slots):
+            self.cell_value_vars[index].set("0")
+            frame.grid_remove()
+
+        self.cell_stat_vars["max"].set("最高电压 --")
+        self.cell_stat_vars["min"].set("最低电压 --")
+        self.cell_stat_vars["avg"].set("平均电压 --")
+        self.cell_stat_vars["delta"].set("最大压差 --")
+
+        self.basic_vars["total_v"].set("0.00")
+        self.basic_vars["current"].set("0.0")
+        self.basic_vars["soh"].set("0")
+        self.basic_vars["cap_now"].set("0")
+        self.basic_vars["cap_full"].set("0")
+        self.basic_vars["cycle"].set("0")
+        self.basic_vars["soc"].set("SOC:0%")
+        self.basic_vars["state"].set(state_text)
+        self._draw_battery(0)
+
+        for var in self.temp_vars.values():
+            var.set("0")
+
+        for name in ["充电MOS", "放电MOS", "加热", "冷凝"]:
+            self._set_badge(name, None)
+
+        self.fault_vars["first"].set("0x0000  无")
+        self.fault_vars["second"].set("0x0000  无")
+        self.fault_vars["third"].set("0x0000  无")
+        self.fault_vars["monitor"].set("均衡: 0x0000 0x0000\n系统字: 0x0000\n功能字: 0x0000")
+        self.bms_info_var.set(_zero_bms_overview_text())
+        self._update_zero_data_tree()
+
+    def _update_zero_data_tree(self) -> None:
+        tree = getattr(self, "data_tree", None)
+        if tree is None:
+            return
+        for item in tree.get_children():
+            tree.delete(item)
+        rows: list[tuple[str, str, str]] = [
+            ("总压", "0.00", "V"),
+            ("充电电流", "0.0", "A"),
+            ("放电电流", "0.0", "A"),
+            ("SOC", "0", "%"),
+            ("SOH", "0", "%"),
+            ("剩余容量", "0", "mAh"),
+            ("满电容量", "0", "mAh"),
+            ("循环次数", "0", "次"),
+            ("一级告警字", "0x0000", ""),
+            ("二级告警字", "0x0000", ""),
+            ("三级保护字", "0x0000", ""),
+        ]
+        rows.extend((_live_temp_label(index), "0", "℃") for index in range(BMS_LIVE_TEMP_COUNT))
+        for name, value, unit in rows:
+            tree.insert("", tk.END, values=(name, value, unit))
 
     def _update_data_tree(self, words: list[int]) -> None:
         tree = getattr(self, "data_tree", None)
@@ -3504,6 +3607,11 @@ class UpgradeUi(tk.Tk):
             self._log(str(event.payload))
         elif event.kind == "error":
             self._log(str(event.payload))
+            if str(event.payload).startswith("读取BMS信息 失败:"):
+                self.live_snapshot_cache = _zero_live_words()
+                self._clear_main_live_display()
+                if self.monitor_window is not None and self.monitor_window.winfo_exists():
+                    self.monitor_window._clear_snapshot()
             self.result_var.set(str(event.payload))
             messagebox.showerror("操作失败", str(event.payload))
         elif event.kind == "result":
@@ -3584,6 +3692,11 @@ class UpgradeUi(tk.Tk):
             self._show_main_snapshot(event.payload)
             if self.monitor_window is not None and self.monitor_window.winfo_exists():
                 self.monitor_window._show_snapshot(event.payload)
+        elif event.kind == "live_clear":
+            self.live_snapshot_cache = _zero_live_words()
+            self._clear_main_live_display()
+            if self.monitor_window is not None and self.monitor_window.winfo_exists():
+                self.monitor_window._clear_snapshot()
         elif event.kind == "live_done":
             self._schedule_live_monitor()
         elif event.kind == "comm_state":
@@ -3713,6 +3826,11 @@ def main() -> int:
             raise RuntimeError("MOS 温度列未映射到 D000 第 47 个 word")
         if "61001" in row[-32:]:
             raise RuntimeError("不存在的单体电压不应写入 CSV")
+        zero_words = _zero_live_words()
+        if len(zero_words) != BMS_LIVE_WORDS or not _is_zero_live_snapshot(zero_words):
+            raise RuntimeError("实时监控异常清零快照格式错误")
+        if _is_zero_live_snapshot(words):
+            raise RuntimeError("正常实时数据不应被识别为异常清零快照")
         root = tk.Tk()
         root.withdraw()
         root.destroy()
