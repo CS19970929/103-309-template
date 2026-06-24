@@ -38,6 +38,14 @@
 #define CT_CAN_DEFAULT_BITRATE         250000u
 #define CT_NODE_ID_DEFAULT             1u
 
+#ifndef CT_WATCHDOG_ENABLE
+#define CT_WATCHDOG_ENABLE             1u
+#endif
+
+#ifndef CT_WATCHDOG_RELOAD_VALUE
+#define CT_WATCHDOG_RELOAD_VALUE       1875u
+#endif
+
 #define CT_BMS_IAP_BASE_ADDR           0x08000000u
 #define CT_BMS_APP_BASE_ADDR           0x08004800u
 #define CT_BMS_APP_LIMIT_ADDR          0x08020000u

@@ -3,6 +3,7 @@
 #include "board_uart.h"
 #include "ct_board_port.h"
 #include "ct_config.h"
+#include "ct_watchdog.h"
 
 #define BOARD_APP_LED_PERIOD_MS 200u
 
@@ -55,6 +56,7 @@ void Board_Init(void)
     BoardBmsUart_Init(CT_BMS_UART_BAUD);
     BoardCan_Init(CT_CAN_DEFAULT_BITRATE);
     (void)SysTick_Config(SystemCoreClock / 1000u);
+    CtWatchdog_Init();
 }
 
 void Board_Poll(void)

@@ -394,6 +394,11 @@
               <FilePath>..\source\iap\ct_iap.c</FilePath>
             </File>
             <File>
+              <FileName>ct_watchdog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\source\bsp\ct_watchdog.c</FilePath>
+            </File>
+            <File>
               <FileName>stm32f10x_it.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\source\stm32f10x_it.c</FilePath>
@@ -472,6 +477,11 @@
               <FileName>ct_config.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\source\app\ct_config.h</FilePath>
+            </File>
+            <File>
+              <FileName>ct_watchdog.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\source\bsp\ct_watchdog.h</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_it.h</FileName>

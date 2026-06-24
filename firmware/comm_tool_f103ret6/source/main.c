@@ -4,6 +4,7 @@
 #include "ct_modbus_bridge.h"
 #include "ct_protocol.h"
 #include "ct_self_iap.h"
+#include "ct_watchdog.h"
 
 static CtProtocolParser s_parser;
 static CtFrame s_frame;
@@ -30,5 +31,6 @@ int main(void)
         CtModbusBridge_Task();
         CtApp_Poll();
         Board_Poll();
+        CtWatchdog_Feed();
     }
 }

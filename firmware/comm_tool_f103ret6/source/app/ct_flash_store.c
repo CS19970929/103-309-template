@@ -1,6 +1,7 @@
 #include "ct_flash_store.h"
 #include "ct_config.h"
 #include "ct_crc16.h"
+#include "ct_watchdog.h"
 #include "stm32f10x_flash.h"
 #include <string.h>
 
@@ -54,7 +55,9 @@ static int erase_pages(uint32_t start, uint32_t length)
     FLASH_Unlock();
     for (addr = start; addr < end; addr += CT_SELF_FLASH_PAGE_SIZE)
     {
+        CtWatchdog_Feed();
         status = FLASH_ErasePage(addr);
+        CtWatchdog_Feed();
         if (status != FLASH_COMPLETE)
         {
             FLASH_Lock();
@@ -90,6 +93,7 @@ static int program_bytes(uint32_t addr, const uint8_t *data, uint32_t length)
         }
 
         status = FLASH_ProgramHalfWord(addr + i, halfword);
+        CtWatchdog_Feed();
         if (status != FLASH_COMPLETE)
         {
             FLASH_Lock();

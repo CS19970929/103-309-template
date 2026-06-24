@@ -73,6 +73,16 @@ COMM TOOL 当前复用主仓库 `system_stm32f10x.c`，运行时 HSE 直连，`P
 
 默认使用 `250 kbit/s`，和 BMS IAP、COMM TOOL IAP 的 CAN1 位时序一致。不要按 36MHz PCLK1 计算 COMM TOOL CAN 预分频，否则工具界面显示 250k，但实际总线速率会错误。
 
+## 看门狗
+
+COMM TOOL App 和 IAP 默认启用 IWDG。公共实现为 `source/bsp/ct_watchdog.c/h`，配置在 `source/app/ct_config.h`：
+
+- `CT_WATCHDOG_ENABLE=1` 默认启用。
+- `CT_WATCHDOG_RELOAD_VALUE=1875`，IWDG prescaler 256，按 40 kHz LSI 典型值约 12 秒。
+- App 在 `Board_Init()` 后启动 IWDG，主循环喂狗；Flash 缓存擦写循环内必须喂狗。
+- IAP 只在确认停留 IAP 后启动 IWDG，正常直接跳 App 前不启动；Flash 擦写、串口响应延迟、CAN 发送等待和 IAP 主循环内必须喂狗。
+- 后续改 Flash、串口升级或 CAN-IAP 阻塞等待时，不能删除这些喂狗点；也不能在无界异常死循环中喂狗。
+
 ## 源码范围
 
 - `source/app/`：COMM TOOL 协议、Flash 缓存、CAN-IAP 业务逻辑。

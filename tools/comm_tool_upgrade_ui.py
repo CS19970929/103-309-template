@@ -1153,6 +1153,7 @@ class UpgradeUi(tk.Tk):
             "soh": tk.StringVar(value="--"),
             "cap_now": tk.StringVar(value="--"),
             "cap_full": tk.StringVar(value="--"),
+            "cap_factory": tk.StringVar(value="--"),
             "cycle": tk.StringVar(value="--"),
             "soc": tk.StringVar(value="SOC:--"),
             "state": tk.StringVar(value="--"),
@@ -1164,6 +1165,7 @@ class UpgradeUi(tk.Tk):
                 ("SOH", "soh", "%"),
                 ("剩余容量", "cap_now", "mAh"),
                 ("满电容量", "cap_full", "mAh"),
+                ("出厂容量", "cap_factory", "mAh"),
                 ("循环次数", "cycle", ""),
             ]
         ):
@@ -1174,8 +1176,8 @@ class UpgradeUi(tk.Tk):
             row=0, column=3, columnspan=2, sticky="s", padx=(12, 12)
         )
         self.battery_canvas = tk.Canvas(basic, width=84, height=170, highlightthickness=0)
-        self.battery_canvas.grid(row=1, column=3, rowspan=5, padx=(10, 14), pady=(4, 10))
-        ttk.Label(basic, textvariable=self.basic_vars["state"]).grid(row=6, column=3, sticky="n", pady=(0, 8))
+        self.battery_canvas.grid(row=1, column=3, rowspan=6, padx=(10, 14), pady=(4, 10))
+        ttk.Label(basic, textvariable=self.basic_vars["state"]).grid(row=7, column=3, sticky="n", pady=(0, 8))
         self._draw_battery(0)
 
         temp = ttk.LabelFrame(center, text="温度(℃)")
@@ -2154,6 +2156,7 @@ class UpgradeUi(tk.Tk):
         self.basic_vars["soh"].set(str(words[53]))
         self.basic_vars["cap_now"].set(str(words[54] * 10))
         self.basic_vars["cap_full"].set(str(words[55] * 10))
+        self.basic_vars["cap_factory"].set(str(words[56] * 10))
         self.basic_vars["cycle"].set(str(words[57]))
         self.basic_vars["soc"].set(f"SOC:{soc}%")
         self.basic_vars["state"].set("充电" if ichg > 0 else ("放电" if idsg > 0 else "静置"))
@@ -2205,6 +2208,7 @@ class UpgradeUi(tk.Tk):
         self.basic_vars["soh"].set("0")
         self.basic_vars["cap_now"].set("0")
         self.basic_vars["cap_full"].set("0")
+        self.basic_vars["cap_factory"].set("0")
         self.basic_vars["cycle"].set("0")
         self.basic_vars["soc"].set("SOC:0%")
         self.basic_vars["state"].set(state_text)
@@ -2237,6 +2241,7 @@ class UpgradeUi(tk.Tk):
             ("SOH", "0", "%"),
             ("剩余容量", "0", "mAh"),
             ("满电容量", "0", "mAh"),
+            ("出厂容量", "0", "mAh"),
             ("循环次数", "0", "次"),
             ("一级告警字", "0x0000", ""),
             ("二级告警字", "0x0000", ""),
@@ -2260,6 +2265,7 @@ class UpgradeUi(tk.Tk):
             ("SOH", str(words[53]), "%"),
             ("剩余容量", str(words[54] * 10), "mAh"),
             ("满电容量", str(words[55] * 10), "mAh"),
+            ("出厂容量", str(words[56] * 10), "mAh"),
             ("循环次数", str(words[57]), "次"),
             ("一级告警字", f"0x{words[58]:04X}", ""),
             ("二级告警字", f"0x{words[59]:04X}", ""),

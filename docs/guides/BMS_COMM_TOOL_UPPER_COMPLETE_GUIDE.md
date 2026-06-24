@@ -124,7 +124,7 @@ comm tool USART2(PA2=TX, PA3=RX) --19200 8N1--> BMS Modbus 口
 ### 6.1 实时监控
 
 - 32 路单体电压；`0` 和 `61001` 视为不存在，不参与最大、最小和平均值计算。
-- 总压、充电电流、放电电流、净电流、SOC、SOH、剩余容量、满电容量、循环次数。
+- 总压、充电电流、放电电流、净电流、SOC、SOH、剩余容量、满电容量、出厂容量、循环次数。
 - 10 路温度、最高温度、最低温度、MOS 温度。
 - 一级告警、二级告警、三级保护、均衡字。
 - 扩展实时窗口可用时显示充电 MOS、放电 MOS、加热、冷凝和功能字。
@@ -685,6 +685,17 @@ comm tool App `0.2.3` 新增 PA6 离线升级按键：
 5. comm tool 从缓存启动 CAN-IAP；LED 仍按 App 心跳闪烁，具体进度只能通过重新连接上位机读取 `UPGRADE_STATUS` 或查看 CAN 总线。
 
 批量边界：PA6 只是脱离 PC 后复用现有 CAN-IAP 帧发送逻辑，不提供设备枚举或逐台结果统计。如果同一 CAN 总线上有多台 BMS 同时响应同一 App CAN 地址/IAP node，所有设备必须收到完全相同帧并保持相同 ACK 行为；否则 ACK 冲突或个别失败无法被 comm tool 精确区分。量产批量升级应先在夹具上验证 CAN 拓扑、节点一致性和失败处置流程。
+
+### 14.3 comm tool App/IAP 看门狗
+
+comm tool App 和 comm tool IAP 默认启用 IWDG，配置位于 `ct_config.h`：
+
+- `CT_WATCHDOG_ENABLE=1`：默认启用。
+- `CT_WATCHDOG_RELOAD_VALUE=1875`：IWDG prescaler 256，按 40 kHz LSI 典型值约 12 秒。
+- App 在 `Board_Init()` 后启动 IWDG，主循环喂狗。
+- IAP 只在确认停留 IAP 后启动 IWDG；正常直接跳 App 前不启动。
+- Flash 擦页、Flash 半字写入、串口响应延迟、CAN 发送等待等阻塞点必须保留喂狗，避免正常升级被误复位。
+- 不允许在真实死循环或无界异常等待中补喂狗，否则看门狗失去恢复卡死的意义。
 
 ## 15. 直连串口 IAP 协议和流程
 

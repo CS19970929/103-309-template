@@ -449,6 +449,11 @@
               <FilePath>..\source\bsp\board.c</FilePath>
             </File>
             <File>
+              <FileName>ct_watchdog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\source\bsp\ct_watchdog.c</FilePath>
+            </File>
+            <File>
               <FileName>board_uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\source\bsp\board_uart.c</FilePath>
@@ -552,6 +557,11 @@
               <FileName>board.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\source\bsp\board.h</FilePath>
+            </File>
+            <File>
+              <FileName>ct_watchdog.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\source\bsp\ct_watchdog.h</FilePath>
             </File>
             <File>
               <FileName>board_uart.h</FileName>

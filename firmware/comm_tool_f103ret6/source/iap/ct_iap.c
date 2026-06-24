@@ -1,5 +1,6 @@
 #include "ct_iap.h"
 #include "ct_config.h"
+#include "ct_watchdog.h"
 #include "stm32f10x.h"
 #include "stm32f10x_can.h"
 #include "stm32f10x_flash.h"
@@ -255,8 +256,13 @@ static void schedule_reset(void)
 
 static uint8_t flash_erase_page(uint32_t addr)
 {
+    uint8_t ok;
+
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-    return (FLASH_ErasePage(addr) == FLASH_COMPLETE) ? 1u : 0u;
+    CtWatchdog_Feed();
+    ok = (FLASH_ErasePage(addr) == FLASH_COMPLETE) ? 1u : 0u;
+    CtWatchdog_Feed();
+    return ok;
 }
 
 static uint8_t flash_program_halfword(uint32_t addr, uint16_t value)
@@ -264,8 +270,10 @@ static uint8_t flash_program_halfword(uint32_t addr, uint16_t value)
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
     if (FLASH_ProgramHalfWord(addr, value) != FLASH_COMPLETE)
     {
+        CtWatchdog_Feed();
         return 0u;
     }
+    CtWatchdog_Feed();
     return (*(__IO uint16_t *)addr == value) ? 1u : 0u;
 }
 
@@ -552,6 +560,7 @@ static uint8_t serial_irq_tx_push(uint8_t byte)
 
     while (serial_irq_tx_full() != 0u)
     {
+        CtWatchdog_Feed();
         if (wait == 0u)
         {
             serial_record_fault();
@@ -586,6 +595,7 @@ static uint8_t serial_wait_tx_done(void)
            ((serial_irq_tx_empty() == 0u) ||
             (USART_GetFlagStatus(IAP_SERIAL_USART, USART_FLAG_TC) == RESET)))
     {
+        CtWatchdog_Feed();
         wait--;
     }
     if (wait == 0u)
@@ -602,6 +612,7 @@ static void serial_delay_ms(uint32_t delay_ms)
 
     while ((uint32_t)(s_tick_ms - start) < delay_ms)
     {
+        CtWatchdog_Feed();
     }
 }
 
@@ -999,6 +1010,7 @@ static uint8_t can_transmit(CanTxMsg *tx)
     }
     while ((wait > 0u) && (CAN_TransmitStatus(CAN1, mailbox) == CAN_TxStatus_Pending))
     {
+        CtWatchdog_Feed();
         --wait;
     }
     if (CAN_TransmitStatus(CAN1, mailbox) == CAN_TxStatus_Ok)
@@ -1449,6 +1461,7 @@ static void iap_init(void)
     iap_can_init();
     can_reset_runtime(0u);
     (void)SysTick_Config(SystemCoreClock / 1000u);
+    CtWatchdog_Init();
 }
 
 void CtIap_Run(void)
@@ -1471,6 +1484,7 @@ void CtIap_Run(void)
         serial_clear_overrun();
         can_poll();
         iap_task_1ms();
+        CtWatchdog_Feed();
     }
 }
 
