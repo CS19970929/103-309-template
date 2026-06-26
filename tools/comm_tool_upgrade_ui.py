@@ -28,6 +28,7 @@ from comm_tool_host import (
     CMD_BMS_AGING_CTRL,
     CMD_BMS_AGING_STATUS,
     CMD_BMS_AGING_SET_HOURS,
+    CMD_SET_BMS_UART,
     CMD_CAN_DIAG,
     CMD_FW_BEGIN,
     CMD_FW_DATA,
@@ -79,7 +80,10 @@ COMM_MODE_LABELS = {
     COMM_MODE_DIRECT_BMS: "BMS直连串口",
 }
 COMM_MODE_FROM_LABEL = {label: mode for mode, label in COMM_MODE_LABELS.items()}
-BMS_DIRECT_DEFAULT_BAUD = 115200
+COMM_TOOL_PC_BAUD = 115200
+BMS_UART_DEFAULT_BAUD = 19200
+BMS_UART_BAUD_OPTIONS = ("9600", "19200", "38400", "57600", "115200")
+BMS_DIRECT_DEFAULT_BAUD = BMS_UART_DEFAULT_BAUD
 BMS_DIRECT_DEFAULT_SLAVE = 1
 BMS_DIRECT_IAP_SLAVE = 1
 BMS_DIRECT_IAP_BLOCK_SIZE = 1024
@@ -1044,6 +1048,7 @@ class UpgradeUi(tk.Tk):
         self.param_loading = False
         self.log_tree: ttk.Treeview | None = None
         self.applied_target: tuple[object, ...] | None = None
+        self.applied_bms_uart_target: tuple[object, ...] | None = None
         self.live_word_count: int | None = None
         self.live_snapshot_cache: list[int] | None = None
         self.live_status_words_cache: list[int] | None = None
@@ -1270,8 +1275,10 @@ class UpgradeUi(tk.Tk):
         self.port_combo = ttk.Combobox(parent, textvariable=self.port_var, width=12)
         self.port_combo.grid(row=1, column=1, sticky="w", pady=(4, 4))
         ttk.Button(parent, text="刷新", command=self._refresh_ports).grid(row=1, column=2, padx=6, pady=(4, 4))
-        ttk.Label(parent, text="波特率").grid(row=2, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
-        ttk.Entry(parent, textvariable=self.baud_var, width=10).grid(row=2, column=1, sticky="w", pady=(4, 8))
+        ttk.Label(parent, text="BMS/串口2波特率").grid(row=2, column=0, padx=(10, 6), pady=(4, 8), sticky="w")
+        ttk.Combobox(parent, textvariable=self.baud_var, values=BMS_UART_BAUD_OPTIONS, width=10).grid(
+            row=2, column=1, sticky="w", pady=(4, 8)
+        )
         ttk.Button(parent, textvariable=self.live_button_var, command=self._toggle_live_monitor).grid(
             row=2, column=2, padx=6, pady=(4, 8)
         )
@@ -2706,7 +2713,9 @@ class UpgradeUi(tk.Tk):
         if not self.active_port:
             raise ValueError("未选择串口")
         if self.active_baud <= 0:
-            raise ValueError("波特率必须大于 0")
+            raise ValueError("BMS/串口2波特率必须大于 0")
+        if self.active_baud < 1200 or self.active_baud > 460800:
+            raise ValueError("BMS/串口2波特率必须在 1200..460800 范围内")
         if self.active_modbus_slave <= 0 or self.active_modbus_slave > 247:
             raise ValueError("Modbus地址必须是 1..247")
         if self.active_node_id <= 0 or self.active_node_id > 0x7F:
@@ -2715,12 +2724,9 @@ class UpgradeUi(tk.Tk):
             raise ValueError("BMS地址必须是 0..15")
 
     def _on_connection_mode_changed(self, _event=None) -> None:
-        mode = self._parse_connection_mode()
         baud_text = self.baud_var.get().strip()
-        if mode == COMM_MODE_DIRECT_BMS and baud_text in ("", "19200"):
-            self.baud_var.set(str(BMS_DIRECT_DEFAULT_BAUD))
-        elif mode == COMM_MODE_COMM_TOOL and baud_text in ("", "19200"):
-            self.baud_var.set("115200")
+        if baud_text == "":
+            self.baud_var.set(str(BMS_UART_DEFAULT_BAUD))
 
     def _parse_u16(self, text: str, name: str) -> int:
         value = int(text.strip(), 0)
@@ -3187,6 +3193,28 @@ class UpgradeUi(tk.Tk):
         self._reset_live_capability_cache()
         self._reset_product_info_cache()
 
+    def _set_comm_tool_bms_uart_baud(self, client: CommToolClient, force: bool = False) -> None:
+        target = (self.active_port, self.active_baud)
+        changed = self.applied_bms_uart_target != target
+        if not force and self.applied_bms_uart_target == target:
+            return
+        try:
+            resp = client.command(CMD_SET_BMS_UART, struct.pack("<I", self.active_baud), timeout=2.0)
+        except RuntimeError as exc:
+            if "UNSUPPORTED" in str(exc) and self.active_baud == BMS_UART_DEFAULT_BAUD:
+                self.applied_bms_uart_target = target
+                if changed:
+                    self._emit("log", "当前 comm tool 固件不支持动态 USART2 波特率，继续使用默认 19200")
+                return
+            raise
+        if len(resp.payload) >= 4:
+            applied = struct.unpack_from("<I", resp.payload, 0)[0]
+            if applied != self.active_baud:
+                raise RuntimeError(f"comm tool USART2 波特率设置不一致: expect={self.active_baud} actual={applied}")
+        self.applied_bms_uart_target = target
+        if changed:
+            self._emit("log", f"comm tool USART2/BMS 波特率已设置为 {self.active_baud}")
+
     def _upgrade_state_text(self, status: dict) -> str:
         state_text = {
             0: "空闲",
@@ -3354,20 +3382,24 @@ class UpgradeUi(tk.Tk):
         if not port:
             raise RuntimeError("未选择串口")
         if self.active_connection_mode == COMM_MODE_DIRECT_BMS:
+            with CommToolClient(port, COMM_TOOL_PC_BAUD, timeout=1.0) as client:
+                self._set_comm_tool_bms_uart_baud(client, force=True)
+            time.sleep(0.05)
             return DirectBmsModbusClient(
                 port,
-                self.active_baud,
+                COMM_TOOL_PC_BAUD,
                 timeout=1.0,
                 slave=self.active_modbus_slave,
             )
-        return CommToolClient(port, self.active_baud, timeout=1.0)
+        return CommToolClient(port, COMM_TOOL_PC_BAUD, timeout=1.0)
 
     def _read_info(self, client) -> dict:
         if isinstance(client, DirectBmsModbusClient):
             return {
                 "mode": COMM_MODE_DIRECT_BMS,
-                "transport": "Modbus RTU",
-                "baud": self.active_baud,
+                "transport": "Modbus RTU over comm tool USART2",
+                "pc_baud": COMM_TOOL_PC_BAUD,
+                "bms_uart_baud": self.active_baud,
                 "slave": self.active_modbus_slave,
             }
         payload = client.command(CMD_GET_INFO, timeout=2.0).payload
@@ -3384,6 +3416,7 @@ class UpgradeUi(tk.Tk):
             "flags": flags,
             "node_id": payload[20] if len(payload) >= 21 else self.active_node_id,
             "app_can_addr": payload[21] if len(payload) >= 22 else self.active_app_can_addr,
+            "bms_uart_baud": struct.unpack_from("<I", payload, 24)[0] if len(payload) >= 28 else self.active_baud,
         }
 
     def _read_cache_info(self, client) -> dict:
@@ -3659,12 +3692,14 @@ class UpgradeUi(tk.Tk):
                 "BMS直连串口\n"
                 f"{info.get('transport', 'Modbus RTU')}\n"
                 f"Modbus地址 {info.get('slave', self.active_modbus_slave)}\n"
-                f"波特率 {info.get('baud', self.active_baud)}"
+                f"PC串口1 {info.get('pc_baud', COMM_TOOL_PC_BAUD)}\n"
+                f"BMS/串口2 {info.get('bms_uart_baud', self.active_baud)}"
             )
         return (
             f"固件 {info['version']}\n"
             f"协议 {info['proto']}\n"
             f"CAN {info['bitrate']}\n"
+            f"USART2/BMS {info.get('bms_uart_baud', self.active_baud)}\n"
             f"BMS地址 {info.get('app_can_addr', 0)}  IAP节点 {info.get('node_id', 1)}\n"
             f"缓存 0x{info['cache_base']:08X} + {info['cache_size']}"
         )
@@ -3927,7 +3962,7 @@ def main() -> int:
         return 0
     baud = args.baud
     if baud is None:
-        baud = BMS_DIRECT_DEFAULT_BAUD if args.mode == COMM_MODE_DIRECT_BMS else 115200
+        baud = BMS_UART_DEFAULT_BAUD
     app = UpgradeUi(args.port, baud, Path(args.bin), mode=args.mode, slave=args.slave)
     app.mainloop()
     return 0

@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -288,8 +288,12 @@ void IOstatus_RTCMode(void)
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
-    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
+     Conf_InitMainPowerRails(Bit_RESET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_RESET,
+                            Bit_RESET);
 
     Conf_PrepareStopEntry();
     LedBar_PrepareForStop();

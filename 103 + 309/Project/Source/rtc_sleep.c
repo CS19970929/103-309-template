@@ -8,7 +8,8 @@
 #include "IrqDebug.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
-#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
+// #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
+#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(30))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
 enum irqWakeup g_irq_t = NO_IRQ;
@@ -38,20 +39,21 @@ static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; 
 static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U) ? 1U : 0U; }
 static uint8_t CheckLedActive(void) { return LedBar_IsActiveForLowPower(); }
 
-typedef struct {
+typedef struct
+{
     uint32_t mask;
     BlockCheckFunc check;
 } BlockReasonEntry;
 
 static const BlockReasonEntry s_block_table[] = {
-    { LP_BLOCK_CHARGE,     CheckChargeMa },
-    { LP_BLOCK_DISCHARGE,  CheckDischargeMa },
-    { LP_BLOCK_COMM,       CheckCommBusy },
-    { LP_BLOCK_KEY,        CheckKeyActive },
-    { LP_BLOCK_FLASH_BUSY, CheckFlashBusy },
-    { LP_BLOCK_UPGRADE,    CheckUpgrade },
-    { LP_BLOCK_FAULT,      CheckFault },
-    { LP_BLOCK_LED_ACTIVE, CheckLedActive },
+    {LP_BLOCK_CHARGE, CheckChargeMa},
+    {LP_BLOCK_DISCHARGE, CheckDischargeMa},
+    {LP_BLOCK_COMM, CheckCommBusy},
+    {LP_BLOCK_KEY, CheckKeyActive},
+    {LP_BLOCK_FLASH_BUSY, CheckFlashBusy},
+    {LP_BLOCK_UPGRADE, CheckUpgrade},
+    {LP_BLOCK_FAULT, CheckFault},
+    {LP_BLOCK_LED_ACTIVE, CheckLedActive},
 };
 
 #define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
@@ -179,6 +181,11 @@ static bool rtc_sleep_has_wakeup_exception(void)
         return true;
     }
 
+    if (g_stLowPowerRtcStatus.mode != HICCUP_MODE)
+    {
+        return;
+    }
+
     if (RtcSleep_PortHasCurrentWake(&source) != 0U)
     {
         g_irq_t = source;
@@ -190,8 +197,6 @@ static bool rtc_sleep_has_wakeup_exception(void)
         g_irq_t = source;
         return true;
     }
-
-    return (RtcSleep_PortIsEmergencyWakeVoltage() != 0U);
 }
 
 static void rtc_sleep_prepare_rtc(void)
@@ -202,7 +207,15 @@ static void rtc_sleep_prepare_rtc(void)
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
     IOstatus_RTCMode();
-    InitWakeUp_RTCMode();
+    // IOstatus_NormalMode();
+    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
+    {
+        InitWakeUp_RTCMode();
+    }
+    else
+    {
+        InitWakeUp_Base();
+    }
 
     LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
@@ -234,22 +247,29 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
         FactoryAging_SaveProgressQuick();
 
+        if (g_stCellInfoReport.u16VCellMin <= 3000)
+        {
+            low_power_log_and_commit_sleep(DEEP_MODE);
+            // return false;
+        }
+
         MCUO_DEBUG_LED1 = 1;
         return true;
     }
+    else if (g_stLowPowerRtcStatus.mode == NORMAL_MODE && (RTC_IsStopWakeup() == 0U))
+    {
+        extern UINT8 SleepDeal_IsWakeupValid(void);
+        if (SleepDeal_IsWakeupValid())
+        {
+            return false;
+        }
+        else
+        {
+            MCUO_DEBUG_LED1 = 1;
+            return true;
+        }
+    }
 
-    RTC_ClearStopWakeup();
-    LowPower_Request(NO_SLEEP);
-    // todo 仔细梳理下配置
-    RtcSleep_PortRestoreAfterStop();
-
-    // if (g_irq_t == NO_IRQ)
-    // {
-    //     g_irq_t = RtcSleep_PortGuessWakeupSource();
-    // }
-    // RtcSleep_PortOnWakeupSource(g_irq_t);
-    g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
-    RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
     return false;
 }
 
@@ -275,9 +295,27 @@ void rtc_sleep(void)
 
     switch (sleep_mode)
     {
-    case NORMAL_MODE:
     case DEEP_MODE:
         low_power_log_and_commit_sleep(sleep_mode);
+        break;
+    case NORMAL_MODE:
+        rtc_sleep_prepare_rtc();
+        MCUO_AFE_CTLC = 0;
+
+        while (rtc_sleep_run_hiccup_cycle())
+        {
+        }
+
+        {
+            MCUO_AFE_CTLC = 1;
+            RtcSleep_PortDisableStopWakeup();
+            RTC_ClearStopWakeup();
+            LowPower_Request(NO_SLEEP);
+            RtcSleep_PortRestoreAfterStop();
+
+            g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
+            RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
+        }
         break;
     case HICCUP_MODE:
         rtc_sleep_prepare_rtc();
@@ -285,7 +323,17 @@ void rtc_sleep(void)
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
+
         RtcSleep_PortDisableStopWakeup();
+        {
+            RTC_ClearStopWakeup();
+            LowPower_Request(NO_SLEEP);
+            // todo 仔细梳理下配置
+            RtcSleep_PortRestoreAfterStop();
+
+            g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
+            RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
+        }
         break;
     default:
         LowPower_Request(NO_SLEEP);

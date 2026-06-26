@@ -55,11 +55,6 @@ UINT8 RtcSleep_PortHasAfeWake(enum irqWakeup *source)
     return RtcSleep_AfePortHasAfeWake(source);
 }
 
-UINT8 RtcSleep_PortIsEmergencyWakeVoltage(void)
-{
-    return (UINT8)(g_stCellInfoReport.u16VCellMin <= 2750U);
-}
-
 void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
 {
     LogRecord_RequestSleep();

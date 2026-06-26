@@ -36,7 +36,7 @@ static UINT8 SleepDeal_IsKeyPressed(void)
 	return (UINT8)(MCUI_ENI_DI1 == 0);
 }
 
-static UINT8 SleepDeal_IsWakeupValid(void)
+UINT8 SleepDeal_IsWakeupValid(void)
 {
 	UINT16 hold_cnt = 0;
 	UINT16 display_cnt = 0;

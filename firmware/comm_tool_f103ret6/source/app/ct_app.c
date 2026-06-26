@@ -11,6 +11,7 @@
 
 static uint8_t s_tx[10u + CT_UART_MAX_PAYLOAD + 2u];
 static uint32_t s_can_bitrate = CT_CAN_DEFAULT_BITRATE;
+static uint32_t s_bms_uart_baud = CT_BMS_UART_BAUD;
 static uint8_t s_node_id = CT_NODE_ID_DEFAULT;
 static uint8_t s_app_can_addr = 0u;
 
@@ -176,7 +177,7 @@ void CtApp_Poll(void)
 
 static void handle_info(const CtFrame *req)
 {
-    uint8_t payload[24];
+    uint8_t payload[28];
 
     memset(payload, 0, sizeof(payload));
     payload[0] = CT_PROTOCOL_VERSION;
@@ -189,6 +190,30 @@ static void handle_info(const CtFrame *req)
     wr32(&payload[16], CtDebugLog_IsEnabled() ? 1u : 0u);
     payload[20] = s_node_id;
     payload[21] = s_app_can_addr;
+    wr32(&payload[24], s_bms_uart_baud);
+    respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
+}
+
+static void handle_set_bms_uart(const CtFrame *req)
+{
+    uint32_t baudrate;
+    uint8_t payload[4];
+
+    if (req->length < 4u)
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    baudrate = rd32(&req->payload[0]);
+    if (!CtBoard_SetBmsUartBaud(baudrate))
+    {
+        respond(req, CT_STATUS_BAD_PARAM, 0, 0u);
+        return;
+    }
+
+    s_bms_uart_baud = baudrate;
+    wr32(payload, s_bms_uart_baud);
     respond(req, CT_STATUS_OK, payload, (uint16_t)sizeof(payload));
 }
 
@@ -593,6 +618,9 @@ void CtApp_HandleFrame(const CtFrame *frame)
         break;
     case CT_CMD_BMS_AGING_SET_HOURS:
         handle_bms_aging_set_hours(frame);
+        break;
+    case CT_CMD_SET_BMS_UART:
+        handle_set_bms_uart(frame);
         break;
     case CT_CMD_ENTER_IAP:
         handle_enter_iap(frame);

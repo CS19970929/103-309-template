@@ -37,6 +37,7 @@ CMD_BMS_WRITE = 0x11
 CMD_BMS_AGING_CTRL = 0x12
 CMD_BMS_AGING_STATUS = 0x13
 CMD_BMS_AGING_SET_HOURS = 0x14
+CMD_SET_BMS_UART = 0x15
 CMD_FW_BEGIN = 0x20
 CMD_FW_DATA = 0x21
 CMD_FW_END = 0x22
@@ -340,6 +341,9 @@ def cmd_info(args) -> int:
         if len(payload) >= 22:
             print(f"  IAP 节点: {payload[20]}")
             print(f"  BMS App CAN 地址: {payload[21]}")
+        if len(payload) >= 28:
+            bms_uart_baud = struct.unpack_from("<I", payload, 24)[0]
+            print(f"  BMS UART/USART2 波特率: {bms_uart_baud}")
     return 0
 
 
@@ -352,6 +356,19 @@ def cmd_set_can(args) -> int:
     with open_client(args) as client:
         client.command(CMD_SET_CAN, payload, timeout=args.long_timeout)
     print(f"CAN 参数已设置: bitrate={args.can_bitrate} node_id={args.node_id} app_can_addr={args.app_can_addr}")
+    return 0
+
+
+def cmd_set_bms_uart(args) -> int:
+    if args.bms_baud < 1200 or args.bms_baud > 460800:
+        raise SystemExit("--bms-baud 必须在 1200..460800 之间")
+    payload = struct.pack("<I", args.bms_baud)
+    with open_client(args) as client:
+        resp = client.command(CMD_SET_BMS_UART, payload, timeout=args.long_timeout)
+    applied = args.bms_baud
+    if len(resp.payload) >= 4:
+        applied = struct.unpack_from("<I", resp.payload, 0)[0]
+    print(f"comm tool USART2/BMS 波特率已设置: {applied}")
     return 0
 
 
@@ -678,6 +695,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_set_can.add_argument("--node-id", type=lambda value: int(value, 0), default=1)
     p_set_can.add_argument("--app-can-addr", type=lambda value: int(value, 0), default=0)
     p_set_can.set_defaults(func=cmd_set_can)
+
+    p_set_bms_uart = sub.add_parser("set-bms-uart", help="设置 comm tool USART2/BMS 侧波特率")
+    add_serial_args(p_set_bms_uart)
+    p_set_bms_uart.add_argument("--bms-baud", type=int, required=True)
+    p_set_bms_uart.set_defaults(func=cmd_set_bms_uart)
 
     p_dry = sub.add_parser("fw-dry-run", help="检查 BMS App bin 和分块")
     add_fw_args(p_dry)

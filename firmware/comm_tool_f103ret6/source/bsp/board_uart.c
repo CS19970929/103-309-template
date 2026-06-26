@@ -266,12 +266,16 @@ void BoardBmsUart_Init(uint32_t baudrate)
     USART_InitTypeDef usart;
     NVIC_InitTypeDef nvic;
 
+    board_bms_uart_gpio_init();
+    USART_Cmd(USART2, DISABLE);
+    USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);
+    USART_ITConfig(USART2, USART_IT_TXE, DISABLE);
+    USART_DeInit(USART2);
+
     s_bms_rx_head = 0u;
     s_bms_rx_tail = 0u;
     s_bms_tx_head = 0u;
     s_bms_tx_tail = 0u;
-
-    board_bms_uart_gpio_init();
 
     USART_StructInit(&usart);
     usart.USART_BaudRate = baudrate;

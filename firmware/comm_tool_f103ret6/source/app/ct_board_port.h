@@ -40,6 +40,7 @@ int CtBoard_UartWrite(const uint8_t *data, uint16_t length);
 int CtBoard_CanSend(const CtCanFrame *frame, uint32_t timeout_ms);
 int CtBoard_CanRecv(CtCanFrame *frame, uint32_t timeout_ms);
 int CtBoard_SetCanBitrate(uint32_t bitrate);
+int CtBoard_SetBmsUartBaud(uint32_t baudrate);
 void CtBoard_CanGetDiag(CtCanDiag *diag);
 void CtBoard_CanClearDiag(void);
 

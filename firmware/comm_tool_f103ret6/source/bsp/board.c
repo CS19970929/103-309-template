@@ -114,3 +114,13 @@ int CtBoard_OfflineUpgradeButtonActive(void)
 {
     return Board_OfflineUpgradeButtonActive();
 }
+
+int CtBoard_SetBmsUartBaud(uint32_t baudrate)
+{
+    if ((baudrate < 1200u) || (baudrate > 460800u))
+    {
+        return 0;
+    }
+    BoardBmsUart_Init(baudrate);
+    return 1;
+}
