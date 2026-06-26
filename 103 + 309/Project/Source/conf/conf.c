@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 10,
     .power_on = false,
 };
 
@@ -280,16 +280,18 @@ void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
-    // Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_2737_EN) & (~PIN_MCC_C), GPIO_Mode_AIN);
-    // Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~GPIO_Pin_14) & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All & (~PIN_MCC_C), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_2737_EN), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All & (~PIN_DBG_LED), GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
-    GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-    Conf_InitGpioMode(GPIO_DC_EN, PIN_DC_EN, GPIO_Mode_Out_PP);
+     Conf_InitMainPowerRails(Bit_RESET,
+                            Bit_RESET,
+                            Bit_SET,
+                            Bit_RESET,
+                            Bit_RESET,
+                            Bit_RESET);
 
     Conf_PrepareStopEntry();
     LedBar_PrepareForStop();
