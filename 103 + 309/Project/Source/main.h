@@ -19,6 +19,7 @@
 #include "Can_HDX.h"
 #include "I2C_AFE1.h"
 #include "Flash.h"
+#include "BatteryRuntimeClock.h"
 #include "SleepDeal.h"
 #include "ProductionID.h"
 #include "SH367309_Func.h"

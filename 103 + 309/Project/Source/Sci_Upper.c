@@ -903,6 +903,8 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT32 status_snapshot;
 	UINT32 feature_mask;
 
+	(void)BatteryRuntimeClock_GetRtcTime(&RTC_time);
+
 	for (j = 0; j < 63; j++)
 	{ // 0xD000_63
 		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
@@ -1019,6 +1021,8 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 u16SciTemp;
 	UINT16 i, j;
 	i = 0;
+	(void)BatteryRuntimeClock_GetRtcTime(&RTC_time);
+
 	for (j = 0; j < SOC_TABLE_SIZE; j++)
 	{ // 由于GetEndValue()函数的问题，�能混在一�
 		u16SciTemp = Sci_GetSocTableWord(j);
@@ -1885,6 +1889,29 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
+	UINT16 u16WrRegNum;
+	struct RTC_ELEMENT time;
+
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
+		(u16WrRegNum != 6U))
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
+	memset(&time, 0, sizeof(time));
+	time.RTC_Time_Year = Sci_GetWrValue(s, 0U);
+	time.RTC_Time_Month = Sci_GetWrValue(s, 1U);
+	time.RTC_Time_Day = Sci_GetWrValue(s, 2U);
+	time.RTC_Time_Hour = Sci_GetWrValue(s, 3U);
+	time.RTC_Time_Minute = Sci_GetWrValue(s, 4U);
+	time.RTC_Time_Second = Sci_GetWrValue(s, 5U);
+
+	if (BatteryRuntimeClock_SetRtcTime(&time) == 0U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+	}
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)

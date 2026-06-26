@@ -126,6 +126,8 @@ BMS_DIRECT_AGING_STATUS_WORDS = 5
 BMS_DIRECT_AGING_RESET_TIME_ADDR = 0x1008
 BMS_DIRECT_AGING_SET_HOURS_ADDR = 0x1009
 BMS_DIRECT_AGING_RESET_GUARD = 0x005A
+BMS_RTC_TIME_ADDR = 0x224A
+BMS_RTC_TIME_WORDS = 6
 PRODUCT_INFO_REFRESH_SECONDS = 30.0
 BMS_READ_RETRY_COUNT = 3
 BMS_READ_RETRY_DELAY_SECONDS = 0.3
@@ -997,6 +999,8 @@ class UpgradeUi(tk.Tk):
         self.bms_soc_write_var = tk.StringVar(value="80")
         self.bms_aging_hours_var = tk.StringVar(value="72")
         self.bms_aging_var = tk.StringVar(value="老化状态: 未读取")
+        self.bms_rtc_time_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        self.bms_rtc_status_var = tk.StringVar(value="RTC时间: 未读取")
         self.product_info_var = tk.StringVar(value=_format_product_info({}))
         self.bms_info_var = tk.StringVar(value="未读取")
         self.param_key_var = tk.StringVar(value=next(iter(BMS_PARAM_PRESETS)))
@@ -1028,6 +1032,7 @@ class UpgradeUi(tk.Tk):
         self.active_aging_hours = 72
         self.active_aging_action = 0
         self.active_aging_name = ""
+        self.active_rtc_datetime = datetime.now()
         self.param_values: dict[str, int] = {}
         self.active_param_key = ""
         self.active_param_raw = 0
@@ -1434,6 +1439,14 @@ class UpgradeUi(tk.Tk):
         ttk.Button(common, text="修改老化时间", command=self._aging_set_hours).grid(row=1, column=2, padx=(8, 16), pady=(0, 8))
         ttk.Label(common, textvariable=self.bms_aging_var, foreground="#004b8d").grid(
             row=1, column=3, columnspan=7, sticky="w", padx=(0, 10), pady=(0, 8)
+        )
+        ttk.Label(common, text="RTC时间").grid(row=2, column=0, padx=(10, 6), pady=(0, 8))
+        ttk.Entry(common, textvariable=self.bms_rtc_time_var, width=22).grid(row=2, column=1, columnspan=2, sticky="w", pady=(0, 8))
+        ttk.Button(common, text="读取RTC时间", command=self._read_rtc_time).grid(row=2, column=3, padx=(0, 8), pady=(0, 8))
+        ttk.Button(common, text="设置为当前PC时间", command=self._fill_rtc_time_now).grid(row=2, column=4, padx=(0, 8), pady=(0, 8))
+        ttk.Button(common, text="写入RTC时间", command=self._write_rtc_time).grid(row=2, column=5, padx=(0, 12), pady=(0, 8))
+        ttk.Label(common, textvariable=self.bms_rtc_status_var, foreground="#004b8d").grid(
+            row=2, column=6, columnspan=4, sticky="w", padx=(0, 10), pady=(0, 8)
         )
 
         actions = ttk.Frame(tab)
@@ -2662,6 +2675,55 @@ class UpgradeUi(tk.Tk):
         self.active_aging_name = name
         self._run_worker(name, self._worker_aging_control)
 
+    def _parse_rtc_datetime(self, text: str) -> datetime:
+        value = text.strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"):
+            try:
+                dt = datetime.strptime(value, fmt)
+                if 2000 <= dt.year <= 2099:
+                    return dt
+            except ValueError:
+                continue
+        raise ValueError("RTC时间格式必须是 YYYY-MM-DD HH:MM:SS，范围 2000-2099")
+
+    def _rtc_words_from_datetime(self, dt: datetime) -> list[int]:
+        return [dt.year % 100, dt.month, dt.day, dt.hour, dt.minute, dt.second]
+
+    def _datetime_from_rtc_words(self, words: list[int]) -> datetime:
+        if len(words) < BMS_RTC_TIME_WORDS:
+            raise ValueError("RTC时间寄存器数量不足")
+        year = words[0]
+        if year < 100:
+            year += 2000
+        if not (2000 <= year <= 2099):
+            raise ValueError(f"RTC年份超出范围: {words[0]}")
+        return datetime(year, words[1], words[2], words[3], words[4], words[5])
+
+    def _format_rtc_datetime(self, dt: datetime) -> str:
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _fill_rtc_time_now(self) -> None:
+        self.bms_rtc_time_var.set(self._format_rtc_datetime(datetime.now()))
+
+    def _read_rtc_time(self) -> None:
+        self._run_worker("读取RTC时间", self._worker_read_rtc_time)
+
+    def _write_rtc_time(self) -> None:
+        try:
+            dt = self._parse_rtc_datetime(self.bms_rtc_time_var.get())
+        except Exception as exc:
+            messagebox.showerror("RTC时间参数错误", str(exc))
+            return
+        if not messagebox.askyesno(
+            "确认写入RTC时间",
+            f"将写入 BMS RTC 时间: {self._format_rtc_datetime(dt)}\n"
+            f"寄存器: 0x{BMS_RTC_TIME_ADDR:04X}..0x{BMS_RTC_TIME_ADDR + BMS_RTC_TIME_WORDS - 1:04X}\n\n"
+            "确认继续？",
+        ):
+            return
+        self.active_rtc_datetime = dt
+        self._run_worker("写入RTC时间", self._worker_write_rtc_time)
+
     def _can_diag(self) -> None:
         self._run_worker("CAN诊断", self._worker_can_diag)
 
@@ -3065,6 +3127,33 @@ class UpgradeUi(tk.Tk):
             self._write_bms_words(client, APP_SET_ONCE_SOC_ADDR, [soc])
         self._emit("bms_result", f"已写入SOC: {soc}%\n地址: 0x{APP_SET_ONCE_SOC_ADDR:04X}")
         self._emit("log", f"写SOC完成: {soc}%")
+        self._emit("progress", 100)
+
+    def _worker_read_rtc_time(self) -> None:
+        with self._open_client() as client:
+            self._set_can_target(client)
+            words = self._read_bms_words(client, BMS_RTC_TIME_ADDR, BMS_RTC_TIME_WORDS)
+        dt = self._datetime_from_rtc_words(words)
+        text = f"RTC时间: {self._format_rtc_datetime(dt)}"
+        self._emit("rtc_time", self._format_rtc_datetime(dt))
+        self._emit("rtc_status", text)
+        self._emit("bms_result", f"{text}\n" + self._format_bms_words(BMS_RTC_TIME_ADDR, words))
+        self._emit("log", text)
+        self._emit("progress", 100)
+
+    def _worker_write_rtc_time(self) -> None:
+        dt = self.active_rtc_datetime
+        words = self._rtc_words_from_datetime(dt)
+        with self._open_client() as client:
+            self._set_can_target(client)
+            self._write_bms_words(client, BMS_RTC_TIME_ADDR, words)
+            readback = self._read_bms_words(client, BMS_RTC_TIME_ADDR, BMS_RTC_TIME_WORDS)
+        readback_dt = self._datetime_from_rtc_words(readback)
+        text = f"RTC时间: {self._format_rtc_datetime(readback_dt)}"
+        self._emit("rtc_time", self._format_rtc_datetime(readback_dt))
+        self._emit("rtc_status", "已写入 " + text)
+        self._emit("bms_result", f"已写入{text}\n" + self._format_bms_words(BMS_RTC_TIME_ADDR, readback))
+        self._emit("log", f"写入RTC时间完成: {self._format_rtc_datetime(readback_dt)}")
         self._emit("progress", 100)
 
     def _worker_read_aging_status(self) -> None:
@@ -3778,6 +3867,10 @@ class UpgradeUi(tk.Tk):
             self.bms_result_var.set(str(event.payload))
         elif event.kind == "aging_status":
             self.bms_aging_var.set(str(event.payload))
+        elif event.kind == "rtc_time":
+            self.bms_rtc_time_var.set(str(event.payload))
+        elif event.kind == "rtc_status":
+            self.bms_rtc_status_var.set(str(event.payload))
         elif event.kind == "product_info":
             if isinstance(event.payload, dict) and "error" in event.payload:
                 self.product_info_var.set(

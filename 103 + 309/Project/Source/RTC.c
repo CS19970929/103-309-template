@@ -165,8 +165,146 @@ static UINT8 RTC_ReinitWithLsiClock(void)
 	return RTC_CLOCK_USE_LSI;
 }
 
+static UINT8 RTC_NormalizeYear(UINT16 input_year, UINT16 *full_year)
+{
+	if (full_year == 0)
+	{
+		return 0U;
+	}
+
+	if (input_year <= 99U)
+	{
+		*full_year = (UINT16)(2000U + input_year);
+		return 1U;
+	}
+
+	if ((input_year >= 2000U) && (input_year <= 2099U))
+	{
+		*full_year = input_year;
+		return 1U;
+	}
+
+	return 0U;
+}
+
+UINT8 RTC_IsCalendarTimeValid(const struct RTC_ELEMENT *time)
+{
+	UINT16 full_year;
+	UINT8 is_leap_year;
+	UINT8 month_days_this_month;
+
+	if (time == 0)
+	{
+		return 0U;
+	}
+	if (RTC_NormalizeYear(time->RTC_Time_Year, &full_year) == 0U)
+	{
+		return 0U;
+	}
+	if ((time->RTC_Time_Month < 1U) || (time->RTC_Time_Month > 12U))
+	{
+		return 0U;
+	}
+	if ((time->RTC_Time_Hour > 23U) ||
+		(time->RTC_Time_Minute > 59U) ||
+		(time->RTC_Time_Second > 59U))
+	{
+		return 0U;
+	}
+
+	is_leap_year = (UINT8)Leapyear(full_year);
+	month_days_this_month = RTC_GetMonthDays(time->RTC_Time_Month, is_leap_year);
+	if ((time->RTC_Time_Day < 1U) ||
+		(time->RTC_Time_Day > month_days_this_month))
+	{
+		return 0U;
+	}
+
+	return 1U;
+}
+
+UINT8 RTC_CalendarToEpochSeconds(const struct RTC_ELEMENT *time, UINT32 *epoch_seconds)
+{
+	UINT16 full_year;
+	UINT32 calc_year;
+	UINT32 calc_month;
+	UINT32 y_day;
+	UINT32 m_day;
+	UINT32 d_day;
+	UINT32 x_day;
+
+	if ((time == 0) || (epoch_seconds == 0))
+	{
+		return 0U;
+	}
+	if (RTC_IsCalendarTimeValid(time) == 0U)
+	{
+		return 0U;
+	}
+	if (RTC_NormalizeYear(time->RTC_Time_Year, &full_year) == 0U)
+	{
+		return 0U;
+	}
+
+	calc_year = full_year;
+	calc_month = time->RTC_Time_Month;
+	if (calc_month <= 2U)
+	{
+		calc_month += 12U;
+		calc_year -= 1U;
+	}
+
+	y_day = (calc_year - 1U) * 365U +
+		calc_year / 4U - calc_year / 100U + calc_year / 400U;
+	m_day = 367U * calc_month / 12U - 30U + 59U;
+	d_day = time->RTC_Time_Day - 1U;
+	x_day = (y_day + m_day + d_day) - 719162U;
+	*epoch_seconds = ((x_day * 24U + time->RTC_Time_Hour) * 60U +
+					  time->RTC_Time_Minute) * 60U +
+		time->RTC_Time_Second;
+	return 1U;
+}
+
+void RTC_EpochSecondsToCalendar(UINT32 epoch_seconds, struct RTC_ELEMENT *time)
+{
+	UINT32 i;
+	UINT32 second_res;
+	UINT32 day;
+	UINT8 is_leap_year;
+
+	if (time == 0)
+	{
+		return;
+	}
+
+	memset(time, 0, sizeof(*time));
+	day = epoch_seconds / SEC_DAY;
+	second_res = epoch_seconds % SEC_DAY;
+
+	time->RTC_Time_Hour = (UINT16)(second_res / 3600U);
+	time->RTC_Time_Minute = (UINT16)((second_res % 3600U) / 60U);
+	time->RTC_Time_Second = (UINT16)(second_res % 60U);
+
+	for (i = UNIX_TIME_YEAR; day >= Days_in_year(i); i++)
+	{
+		day -= Days_in_year(i);
+	}
+	time->RTC_Time_Year = (UINT16)(i % 100U);
+
+	is_leap_year = (UINT8)Leapyear(i);
+	for (i = 1U; day >= RTC_GetMonthDays(i, is_leap_year); i++)
+	{
+		day -= RTC_GetMonthDays(i, is_leap_year);
+	}
+	time->RTC_Time_Month = (UINT16)i;
+	time->RTC_Time_Day = (UINT16)(day + 1U);
+}
+
 void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 {
+	RTC_EpochSecondsToCalendar(AllSecond, RTCtime);
+	return;
+#if 0
 
 	UINT32 i;
 	UINT32 Second_res, Day;
@@ -197,6 +335,7 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // 计算当前日期
 
 	// GregorianDay(tm);						//计算星期几
+#endif
 }
 
 void Get_RTC_Time(void)
@@ -212,9 +351,16 @@ void Get_RTC_Time(void)
 // 1970年1月1日0时为UNIX TIME的纪元时间
 UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 {
-	UINT32 Y_day, M_day, D_day;
-	UINT32 X_day, T_sec;
+	UINT32 epoch_seconds;
 
+	if (RTC_CalendarToEpochSeconds(RTC_t, &epoch_seconds) != 0U)
+	{
+		return epoch_seconds;
+	}
+
+	return 0U;
+
+#if 0
 	if (0 >= (int)(RTC_t->RTC_Time_Month -= 2))
 	{ // 前两个月被推到上一年去
 		RTC_t->RTC_Time_Month += 12;
@@ -227,6 +373,43 @@ UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 	T_sec = ((X_day * 24 + RTC_t->RTC_Time_Hour) * 60 + RTC_t->RTC_Time_Minute) * 60 + RTC_t->RTC_Time_Second;
 
 	return T_sec;
+#endif
+}
+
+UINT8 RTC_GetCalendarTime(struct RTC_ELEMENT *time)
+{
+	if (time == 0)
+	{
+		return 0U;
+	}
+
+	Get_RTC_Time();
+	*time = RTC_time;
+	return RTC_IsCalendarTimeValid(time);
+}
+
+UINT8 RTC_SetCounterFromCalendar(const struct RTC_ELEMENT *time)
+{
+	UINT32 epoch_seconds;
+
+	if (RTC_CalendarToEpochSeconds(time, &epoch_seconds) == 0U)
+	{
+		return 0U;
+	}
+	if (epoch_seconds < TIME_ZOOM)
+	{
+		return 0U;
+	}
+
+	RTC_EnableBackupAccess();
+	RTC_SetCounter(epoch_seconds - TIME_ZOOM);
+	if (RTC_WaitForLastTaskSafe() == 0U)
+	{
+		return 0U;
+	}
+
+	Get_RTC_Time();
+	return 1U;
 }
 
 static UINT8 RTC_ClockConfig(UINT8 need_full_init)

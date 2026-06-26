@@ -108,6 +108,7 @@ flowchart LR
 | CAN 诊断 | 支持 | 不支持 |
 | 实时监控/CSV/日志/参数 | 支持 | 支持 |
 | 老化启停/重置/时长 | 支持 | 支持，走寄存器 |
+| RTC 时间读取/写入 | 支持 | 支持，走寄存器 |
 
 UI 中的 `BMS/串口2波特率` 不再表示 PC 到 comm tool 串口1的波特率。PC 到 comm tool 串口1固定 `115200 8N1` 并在界面隐藏；该选择框只表示 comm tool USART2/BMS 侧波特率，默认 `19200`。CAN 桥接读写 BMS 不经过 USART2，因此该值只在直连透传路径实际使用 USART2 时生效。
 
@@ -173,6 +174,7 @@ comm tool USART2(PA2=TX, PA3=RX) --UI选择的 BMS/串口2波特率--> BMS Modbu
 - 设置 CAN 波特率、BMS App 地址和 IAP 节点。
 - 写一次 SOC：写 `0x1005`，范围 `0..100`。
 - 老化模式开启、关闭、累计时间重置、剩余时间读取、总时长设置。
+- RTC 时间读取和写入：读写 `0x224A..0x224F` 六个寄存器，年份为 `0..99`，表示 `2000..2099`。
 - 读取/写入 comm tool 缓存。
 - 一键升级、使用缓存升级、读取 BMS 状态、进入 IAP。
 - 高级寄存器读写，地址 `0x0000..0xFFFF`，一次 `1..120` words。
@@ -629,7 +631,19 @@ state, remaining_minutes, remaining_seconds_hi, remaining_seconds_lo, duration_h
 
 桥接读取来自扩展 CAN 广播 `0x14F80208`：byte2 为 state，byte3..4 为大端 remaining_minutes。comm tool 最多等待 6.5 秒，因此点击后不是立即返回属于正常现象。
 
-### 12.4 事件记录编号
+### 12.4 RTC 时间
+
+上位机在 `其它功能 -> 常用功能` 提供 `读取RTC时间`、`设置为当前PC时间` 和 `写入RTC时间`。两种通信模式都复用 BMS word 读写路径，不新增 comm tool 私有命令。
+
+寄存器布局固定为：
+
+```text
+0x224A year, 0x224B month, 0x224C day, 0x224D hour, 0x224E minute, 0x224F second
+```
+
+写入必须一次写满 6 个寄存器；`0x2250..0x2255` alarm 字段不开放写入。板端使用 STM32 RTC counter 作为日历时间权威源，写入后立即更新硬件 RTC，读取时由固件从硬件 RTC 刷新。
+
+### 12.5 事件记录编号
 
 | ID | 事件 | ID | 事件 |
 | ---: | --- | ---: | --- |
@@ -1001,12 +1015,13 @@ powershell -ExecutionPolicy Bypass -File tools\build_comm_tool_upgrade_ui_exe.ps
 2. 两种模式都能读写一个普通参数并回读一致。
 3. SH309 完整块合并写不会覆盖未修改项。
 4. 写 SOC、老化启停/重置/时长在两种模式行为一致。
-5. 事件日志 100 words 分段读取完整，`0x1007=0x0001` 重置后列表刷新为空。
-6. 桥接缓存 CRC16/CRC32 与本地一致。
-7. CAN-IAP 完成后能读 SOC/SOH 和软件版本。
-8. 直连串口 IAP 完成后能读 SOC/SOH 和软件版本。
-9. 非法向量、错误 App 地址、越界镜像在发送前被拒绝。
-10. 经 comm tool 透传直连：PC 侧固定 115200，USART2 侧分别在 19200 和至少一个目标板实际波特率下验证 `0x03/0x06/0x10` 和直连 IAP 块可完整往返。
-11. PA6 离线升级：有效 BMS App 缓存可触发；无效缓存、错误 app_addr、升级运行中不会重复触发。
-12. 升级期间监控/记录不抢占串口，失败不会显示成功。
-13. 打包后的 `dist/BMS_CommTool_Upgrade_UI.exe` 与源码版本一致。
+5. RTC 读取、设置为 PC 时间、手动写入在两种模式下都能回读一致。
+6. 事件日志 100 words 分段读取完整，`0x1007=0x0001` 重置后列表刷新为空。
+7. 桥接缓存 CRC16/CRC32 与本地一致。
+8. CAN-IAP 完成后能读 SOC/SOH 和软件版本。
+9. 直连串口 IAP 完成后能读 SOC/SOH 和软件版本。
+10. 非法向量、错误 App 地址、越界镜像在发送前被拒绝。
+11. 经 comm tool 透传直连：PC 侧固定 115200，USART2 侧分别在 19200 和至少一个目标板实际波特率下验证 `0x03/0x06/0x10` 和直连 IAP 块可完整往返。
+12. PA6 离线升级：有效 BMS App 缓存可触发；无效缓存、错误 app_addr、升级运行中不会重复触发。
+13. 升级期间监控/记录不抢占串口，失败不会显示成功。
+14. 打包后的 `dist/BMS_CommTool_Upgrade_UI.exe` 与源码版本一致。

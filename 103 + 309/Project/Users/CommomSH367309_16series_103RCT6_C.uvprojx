@@ -526,6 +526,11 @@
               <FilePath>..\Source\FactoryAging.c</FilePath>
             </File>
             <File>
+              <FileName>BatteryRuntimeClock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BatteryRuntimeClock.c</FilePath>
+            </File>
+            <File>
               <FileName>LowPowerSleep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
@@ -1556,6 +1561,11 @@
               <FileName>FactoryAging.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\FactoryAging.c</FilePath>
+            </File>
+            <File>
+              <FileName>BatteryRuntimeClock.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BatteryRuntimeClock.c</FilePath>
             </File>
             <File>
               <FileName>LowPowerSleep.c</FileName>

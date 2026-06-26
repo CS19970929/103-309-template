@@ -6,6 +6,7 @@
 #define FLASH_STORAGE_MAGIC_RW_PARAM ((UINT32)0x52575031)
 #define FLASH_STORAGE_MAGIC_LOG ((UINT32)0x4C4F4731)
 #define FLASH_STORAGE_MAGIC_FACTORY_AGING ((UINT32)0x41474531)
+#define FLASH_STORAGE_MAGIC_RUNTIME_CLOCK ((UINT32)0x52544331)
 #define FLASH_STORAGE_VERSION   ((UINT16)0x0001)
 #define FLASH_SIZE_REG_ADDR     ((UINT32)0x1FFFF7E0)
 #define FLASH_ERASE_RETRY_MAX   ((UINT8)3)
@@ -980,6 +981,49 @@ UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *
 										  FLASH_STORAGE_MAGIC_FACTORY_AGING,
 										  (const UINT8 *)data,
 										  (UINT16)sizeof(STORAGE_FLASH_FACTORY_AGING_DATA));
+	StorageFlash_EndWrite();
+	return result;
+}
+
+UINT8 StorageFlash_LoadRuntimeClockData(STORAGE_FLASH_RUNTIME_CLOCK_DATA *data)
+{
+	if (data == 0)
+	{
+		return 0;
+	}
+
+	if (!StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_RUNTIME_SLOT_A,
+									  FLASH_ADDR_STORAGE_RUNTIME_SLOT_B,
+									  FLASH_STORAGE_MAGIC_RUNTIME_CLOCK,
+									  (UINT16)sizeof(STORAGE_FLASH_RUNTIME_CLOCK_DATA),
+									  (UINT8 *)data))
+	{
+		return 0;
+	}
+
+	return (UINT8)(data->u16FormatVersion ==
+				   FLASH_STORAGE_RUNTIME_CLOCK_DATA_VERSION);
+}
+
+UINT8 StorageFlash_SaveRuntimeClockData(const STORAGE_FLASH_RUNTIME_CLOCK_DATA *data)
+{
+	STORAGE_FLASH_RUNTIME_CLOCK_DATA save_data;
+	UINT8 result;
+
+	if (data == 0)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0;
+	}
+
+	save_data = *data;
+	save_data.u16FormatVersion = FLASH_STORAGE_RUNTIME_CLOCK_DATA_VERSION;
+	StorageFlash_BeginWrite();
+	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_RUNTIME_SLOT_A,
+										  FLASH_ADDR_STORAGE_RUNTIME_SLOT_B,
+										  FLASH_STORAGE_MAGIC_RUNTIME_CLOCK,
+										  (const UINT8 *)&save_data,
+										  (UINT16)sizeof(STORAGE_FLASH_RUNTIME_CLOCK_DATA));
 	StorageFlash_EndWrite();
 	return result;
 }

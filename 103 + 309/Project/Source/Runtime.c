@@ -45,6 +45,7 @@ void Runtime_Boot(void)
 	LogRecord_RequestStartup();
 
 	Init_RTC();
+	BatteryRuntimeClock_Init();
 	DBG_Init();
 	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
@@ -61,6 +62,7 @@ void Runtime_RunOnce(void)
 	DebugHooks_RuntimeAfterSysTime();
 
 	FactoryAging_Task();
+	BatteryRuntimeClock_Task1s();
 	DebugHooks_RuntimeAfterAging();
 
 	APP_LedBar();

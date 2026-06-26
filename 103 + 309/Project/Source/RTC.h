@@ -57,6 +57,11 @@ struct RTC_ELEMENT {
 extern struct RTC_ELEMENT RTC_time;
 //extern UINT8 RTC_Faultcnt;
 
+UINT8 RTC_IsCalendarTimeValid(const struct RTC_ELEMENT *time);
+UINT8 RTC_CalendarToEpochSeconds(const struct RTC_ELEMENT *time, UINT32 *epoch_seconds);
+void RTC_EpochSecondsToCalendar(UINT32 epoch_seconds, struct RTC_ELEMENT *time);
+UINT8 RTC_GetCalendarTime(struct RTC_ELEMENT *time);
+UINT8 RTC_SetCounterFromCalendar(const struct RTC_ELEMENT *time);
 UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
 UINT8 RTC_IsStopWakeup(void);

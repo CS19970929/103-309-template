@@ -97,6 +97,7 @@ void low_power_log_and_commit_sleep(uint8_t sleep_mode)
         return;
     }
 
+    (void)BatteryRuntimeClock_MarkSleepEntry();
     RtcSleep_PortCommitResetSleep(sleep_mode);
 }
 
@@ -225,6 +226,8 @@ static void rtc_sleep_prepare_rtc(void)
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
+    UINT32 wake_seconds;
+
     // todo !!!!
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
@@ -237,14 +240,16 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
+        wake_seconds = RtcSleep_PortGetLastWakeupSeconds();
         ++g_stLowPowerRtcStatus.cycles;
-        g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
+        g_stLowPowerRtcStatus.sleep += wake_seconds;
         g_stLowPowerRtcStatus.test_sample_voltage = g_stCellInfoReport.u16VCell[0];
+        BatteryRuntimeClock_AddSleepSeconds(wake_seconds);
 
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
-        FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
+        FactoryAging_ApplySleepTime(wake_seconds);
         FactoryAging_SaveProgressQuick();
 
         if (g_stCellInfoReport.u16VCellMin <= 3000)

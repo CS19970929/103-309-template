@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`103 + 309/Project/Source/Sci_Upper.h`, `103 + 309/Project/Source/Sci_Upper.c`, `tools/soc_online_monitor.py`, `tools/comm_tool_upgrade_ui.py`
-最后更新时间：2026-05-26
+最后更新时间：2026-06-26
 未确认事项：完整逐寄存器语义仍需从 `RS485_CMD_RW_E`、参数结构体和上位机读写表继续展开；本文先固定当前源码已确认的地址窗口和高风险入口。
 
 ## 1. 协议入口
@@ -26,6 +26,8 @@
 | `0x2000` 起 | 校准参数 | `RS485_ADDR_RW_CALIB`, `RS485_CMD_ADDR_VC1CALIB_K` | 电压、电流、温度等 K/B 参数 |
 | `0x2100` 起 | 保护参数 | `RS485_ADDR_RW_PORTECT`, `RS485_CMD_ADDR_VCELL_OVP_FIRST` | OVP/UVP/OCP/温度/SOC 保护参数 |
 | `0x2200` 起 | SOC/RTC/其他参数 | `RS485_ADDR_RW_OTHER`, `RS485_CMD_ADDR_SOC_VOLTAGE1` | SOC 表、铜损、RTC、容量等 |
+| `0x224A..0x224F` | RTC 时间读写 | `RS485_CMD_ADDR_RTC_TIME_YEAR..SECOND`, `Sci_WrRegs_0x10_RTC()` | 6 words：`year`, `month`, `day`, `hour`, `minute`, `second`；年份 `0..99` 表示 `2000..2099` |
+| `0x2250..0x2255` | RTC alarm 字段 | `RS485_CMD_ADDR_RTC_ALARM_YEAR..SECOND` | 只读保留，`0x10` 不开放写入 |
 | `0x2300` 起 | 均衡/睡眠/系统参数 | `RS485_ADDR_RW_OTHER_CANADD`, `RS485_CMD_ADDR_BALANCE_OV` | 名称中仍有 CANADD 历史痕迹，需后续重命名确认 |
 | `0x2500` | SOC 注入测试样本 | `RS485_CMD_ADDR_SOC_TEST_SAMPLE` | 当前量产源码未启用 SOC 注入测试入口 |
 | `0xC000` | LCD/独立只读块起点 | `RS485_ADDR_RO_LCD` | 与 `0xD000` 主只读块独立处理 |
@@ -57,6 +59,7 @@
 - 读写函数会做地址窗口和长度校验，错误时返回 Modbus 异常。
 - SOC 表运行时写入功能已删除；相关写入口固定返回 Modbus 异常，读表仍返回当前编译期 OCV 表以保持协议窗口可读。
 - `0x1005` 单次写 SOC 是对外可见行为，CAN App 和上位机工具都依赖。
+- `0x224A..0x224F` RTC 时间写入必须一次写满 6 个寄存器；局部写或写入 alarm 字段会返回 Modbus 异常。写入成功后硬件 RTC counter 立即更新。
 - `0x1008` 老化累计时间重置必须写 guard `0x005A`，避免误触发。
 - `0x1009` 老化总时长设置范围固定 `1..168` 小时；成功后板端会重置累计老化时间并进入运行状态。
 - `0xFFFD` 进入 IAP 属于高风险写入口，必须保留确认机制。

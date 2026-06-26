@@ -3,7 +3,7 @@
 文档状态：CURRENT
 源码验证：PARTIAL
 主要参考源码：`rtc_sleep.c`, `rtc_sleep.h`, `rtc_sleep_port.c`, `RTC.c`, `SleepDeal.c`, `LowPowerSleep.c`, `conf.c`, `Can_HDX.c`, `SocEnhance.c`, `LedBar.c`
-最后更新时间：2026-06-04
+最后更新时间：2026-06-26
 未确认事项：factory aging / AFE not idle 是否阻塞 sleep、`OtherElement` 普通休眠和 RTC 参数是否仍为有效需求。
 
 ## 2026-06-02 源码复核补充
@@ -83,6 +83,10 @@ AppInit_InitDevice()
 ## 4. RTC 使用
 
 RTC 优先 LSE，失败后 LSI fallback。F1 使用 RTC counter + Alarm 唤醒 STOP。RTC 秒中断更新 `RTC_time`，Alarm 唤醒设置 `is_rtc_wakekup`。
+
+RTC 日历时间以 STM32 RTC counter 为权威源。上位机写 `0x224A..0x224F` 时，固件把 `year/month/day/hour/minute/second` 换算成 epoch 后写 `RTC_SetCounter()`；读取 `0xD100` 或 `0x2200` RTC 字段前会从硬件 RTC 刷新 `RTC_time`。协议年份仍为 `0..99`，内部按 `2000..2099` 换算。
+
+`BatteryRuntimeClock` 只维护电池全局运行时间，不再用 `base_epoch + runtime_seconds` 模拟日历时间。正常运行每 1s 累加运行时间并写 `BKP_DR13/DR14`，Flash 默认 10 min 保存一次；HICCUP/NORMAL 的 RTC STOP 周期唤醒后按 `RtcSleep_PortGetLastWakeupSeconds()` 补偿。`DEEP_MODE` 不做周期 RTC alarm 唤醒，但进入 reset sleep/deep 前会保存当前 RTC epoch，启动恢复后用当前 RTC epoch 差值补运行时间。
 
 IWDG 开启时，RTC wake period 最大被限制为 10s。
 

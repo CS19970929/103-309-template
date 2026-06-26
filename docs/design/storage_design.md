@@ -2,8 +2,8 @@
 
 文档状态：CURRENT
 源码验证：PARTIAL
-主要参考源码：`EEPROM.c`, `Flash.c`, `Flash.h`, `UpgradeParamPolicy.h`, `SocEnhance.c`, `FactoryAging.c`
-最后更新时间：2026-05-26
+主要参考源码：`EEPROM.c`, `Flash.c`, `Flash.h`, `UpgradeParamPolicy.h`, `SocEnhance.c`, `FactoryAging.c`, `BatteryRuntimeClock.c`
+最后更新时间：2026-06-26
 未确认事项：实际 MCU Flash 容量、后 64K 量产可靠性、Host 写权限策略。
 
 ## 1. 当前实现结论
@@ -20,7 +20,7 @@
 | SOC snapshot A/B | `0x0801E000`, `0x0801E800` | `StorageFlash_LoadSocData/SaveSocData` |
 | 升级参数 flag | `0x0801F000` | `UpgradeParamPolicy_ApplyOnce()` |
 | 老化状态 | `0x0801F400` | `StorageFlash_LoadFactoryAgingData/SaveFactoryAgingData` |
-| Sleep/update legacy flag | `0x0801F800`, `0x0801FC00` | 保留 |
+| 电池运行时间 A/B | `0x0801F800`, `0x0801FC00` | `StorageFlash_LoadRuntimeClockData/SaveRuntimeClockData` |
 
 ## 3. 掉电保护
 
@@ -30,6 +30,8 @@
 - 双槽或 journal page。
 - 擦写和编程后校验。
 - 写失败触发 `ERROR_EEPROM_STORE`。
+
+电池全局运行时间使用 `0x0801F800/0x0801FC00` 双页 journal，取代 legacy update/sleep flag 预留页。正常运行由 `BatteryRuntimeClock_Task1s()` 每秒写 `BKP_DR13/DR14`，Flash 默认每 10 分钟保存一次；进入 reset sleep/deep 前会强制保存 `sleep_entry_epoch_seconds`，恢复后用硬件 RTC counter 差值补偿运行时间并清除 pending 标记。
 
 仍需实测：
 
