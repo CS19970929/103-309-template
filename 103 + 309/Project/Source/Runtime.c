@@ -52,56 +52,20 @@ void Runtime_Boot(void)
 
 void Runtime_RunOnce(void)
 {
-	uint32_t loop_start = DebugHooks_RuntimeLoopStart();
-	uint32_t section_start;
-
-	section_start = DebugHooks_RuntimeSectionStart();
 	SysTime_LatchTaskFlags();
-	DebugHooks_RuntimeAfterSysTime();
-
 	// FactoryAging_Task();
-	DebugHooks_RuntimeAfterAging();
-
-	DebugHooks_RuntimeAfterLed();
-
 	App_AFEGet();
-	DebugHooks_RuntimeAfterAfe();
-
-	DebugHooks_RuntimeSnapshot();
-	DebugHooks_RuntimeAfterFrontSection(section_start);
-
-	section_start = DebugHooks_RuntimeSectionStart();
 	App_CommonUpper();
-	DebugHooks_RuntimeAfterSci();
-
 	App_AnlogCal();
-	DebugHooks_RuntimeAfterAdc();
 
 	rtc_sleep();
-	DebugHooks_RuntimeAfterLowPower();
 
 	App_Can();
-	DebugHooks_RuntimeAfterCan();
-	DebugHooks_RuntimeAfterIoPowerSection(section_start);
-
-	section_start = DebugHooks_RuntimeSectionStart();
 	App_FlashUpdate();
-	DebugHooks_RuntimeAfterFlash();
 
 	App_LogRecord();
-	DebugHooks_RuntimeAfterLog();
 
 	App_ProID_Deal();
-	DebugHooks_RuntimeAfterProId();
 
 	Feed_IWatchDog;
-
-	DBG_Task();
-	DebugHooks_RuntimeAfterBackgroundSection(section_start);
-
-	section_start = DebugHooks_RuntimeSectionStart();
-	DebugHooks_RuntimeDebugPrint();
-	DebugHooks_RuntimeAfterDebugPrintSection(section_start);
-
-	DebugHooks_RuntimeLoopDone(loop_start);
 }

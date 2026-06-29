@@ -243,9 +243,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
-        FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
-        FactoryAging_SaveProgressQuick();
-
         if (g_stCellInfoReport.u16VCellMin <= 3000)
         {
             low_power_log_and_commit_sleep(DEEP_MODE);

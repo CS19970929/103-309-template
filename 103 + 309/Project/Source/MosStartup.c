@@ -28,35 +28,10 @@ void MosStartup_OpenDischargeCloseCharge(void)
 
 void MosStartup_EnterFactoryMode(bool on)
 {
-	// if (MosStartup_Is5vChargeActive() != 0U)
-	// {
-	// 	MosStartup_OpenChargeCloseDischarge();
-	// 	return;
-	// }
-
-	if (on)
-	{
-		MosStartup_WriteMosState(1U, 1U, Bit_SET);
-	}
-	else
-	{
-		MosStartup_OpenDischargeCloseCharge();
-	}
+	MosStartup_WriteMosState(1U, 1U, Bit_SET);
 }
 
 void MosStartup_ApplyInitialState(void)
 {
-	// if (MosStartup_Is5vChargeActive() != 0U)
-	// {
-	// 	MosStartup_OpenChargeCloseDischarge();
-	// }
-	// else if (FactoryAging_ShouldStartOnBoot() != 0U)
-	// {
-	// 	MosStartup_EnterFactoryMode(true);
-	// }
-	// else
-	// {
-	// 	MosStartup_OpenDischargeCloseCharge();
-	// }
 	MosStartup_EnterFactoryMode(true);
 }

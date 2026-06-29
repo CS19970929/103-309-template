@@ -411,17 +411,17 @@ static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action)
 
 static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1)
 {
-	UINT32 hours;
+	// UINT32 hours;
 
-	if (value0 != 0)
-	{
-		*value0 = FactoryAging_GetState();
-	}
-	if (value1 != 0)
-	{
-		hours = (FactoryAging_GetRemainingSeconds() + 3599U) / 3600U;
-		*value1 = (hours > 0xFFU) ? 0xFFU : (UINT8)hours;
-	}
+	// if (value0 != 0)
+	// {
+	// 	*value0 = FactoryAging_GetState();
+	// }
+	// if (value1 != 0)
+	// {
+	// 	hours = (FactoryAging_GetRemainingSeconds() + 3599U) / 3600U;
+	// 	*value1 = (hours > 0xFFU) ? 0xFFU : (UINT8)hours;
+	// }
 }
 
 static void feidao_can_app_send_frame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1)

@@ -1,6 +1,5 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
-#include "FactoryAging.h"
 #include "SocEnhance.h"
 
 #if FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
@@ -262,13 +261,6 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 
 #if UPGRADE_PARAM_RESET_EVENT_RECORD
 	if (result && !EEPROM_ResetData_EventRecord_ToDefault())
-	{
-		result = 0;
-	}
-#endif
-
-#if UPGRADE_PARAM_RESET_FACTORY_AGING_TIME
-	if (result && !FactoryAging_ResetTimeByHost())
 	{
 		result = 0;
 	}

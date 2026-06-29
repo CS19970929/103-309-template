@@ -1,6 +1,5 @@
 #include "main.h"
 #include "CanFeidaoFrames.h"
-#include "FactoryAging.h"
 #include "DebugWatch.h"
 
 #define CAN_FEIDAO_EXT_ID_BASE ((UINT32)0x14F80200U)
@@ -257,8 +256,8 @@ static UINT8 CanFeidao_SendFactoryTime5000ms(void)
 	UINT32 aging_remaining_min;
 
 	CanFeidao_PutU16Be(data, 0U, g_stCellInfoReport.SocElement.u16CapacityFactory * 10U);
-	data[2] = FactoryAging_GetState();
-	aging_remaining_min = (FactoryAging_GetRemainingSeconds() + 59U) / 60U;
+	data[2] = 100;
+	aging_remaining_min = 100;
 	if (aging_remaining_min > 0xFFFFU)
 	{
 		aging_remaining_min = 0xFFFFU;

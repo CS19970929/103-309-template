@@ -1,7 +1,6 @@
 #include "main.h"
 #include "FaultSnapshot.h"
 #include "DebugWatch.h"
-#include "FactoryAging.h"
 #include "Flash.h"
 #include "debug_hub.h"
 
@@ -427,13 +426,13 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_Reset_EventRecord(s);
 		break;
 
-	case RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME:
-		Sci_WrReg_0x06_FactoryAgingResetTime(s);
-		break;
+	// case RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME:
+	// 	Sci_WrReg_0x06_FactoryAgingResetTime(s);
+	// 	break;
 
-	case RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS:
-		Sci_WrReg_0x06_FactoryAgingSetHours(s);
-		break;
+	// case RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS:
+	// 	Sci_WrReg_0x06_FactoryAgingSetHours(s);
+	// 	break;
 
 	default:
 		s->AckType = RS485_ACK_NEG;
@@ -491,45 +490,45 @@ static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 
 static UINT16 Sci_GetFactoryAgingDurationHours(void)
 {
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
-	UINT32 default_hours;
+//	STORAGE_FLASH_FACTORY_AGING_DATA data;
+//	UINT32 default_hours;
 
-	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
-		(data.u16DurationHours >= FACTORY_AGING_DURATION_HOURS_MIN) &&
-		(data.u16DurationHours <= FACTORY_AGING_DURATION_HOURS_MAX))
-	{
-		return data.u16DurationHours;
-	}
+//	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
+//		(data.u16DurationHours >= FACTORY_AGING_DURATION_HOURS_MIN) &&
+//		(data.u16DurationHours <= FACTORY_AGING_DURATION_HOURS_MAX))
+//	{
+//		return data.u16DurationHours;
+//	}
 
-	default_hours = ((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS + 3599U) / 3600U;
-	if (default_hours < FACTORY_AGING_DURATION_HOURS_MIN)
-	{
-		default_hours = FACTORY_AGING_DURATION_HOURS_MIN;
-	}
-	if (default_hours > FACTORY_AGING_DURATION_HOURS_MAX)
-	{
-		default_hours = FACTORY_AGING_DURATION_HOURS_MAX;
-	}
-	return (UINT16)default_hours;
+//	default_hours = ((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS + 3599U) / 3600U;
+//	if (default_hours < FACTORY_AGING_DURATION_HOURS_MIN)
+//	{
+//		default_hours = FACTORY_AGING_DURATION_HOURS_MIN;
+//	}
+//	if (default_hours > FACTORY_AGING_DURATION_HOURS_MAX)
+//	{
+//		default_hours = FACTORY_AGING_DURATION_HOURS_MAX;
+//	}
+//	return (UINT16)default_hours;
 }
 
 static void Sci_PutFactoryAgingStatusWords(UINT8 buff[], UINT16 *index)
 {
-	UINT32 remaining_seconds;
-	UINT32 remaining_minutes;
+////	UINT32 remaining_seconds;
+////	UINT32 remaining_minutes;
 
-	remaining_seconds = FactoryAging_GetRemainingSeconds();
-	remaining_minutes = (remaining_seconds + 59U) / 60U;
-	if (remaining_minutes > 0xFFFFU)
-	{
-		remaining_minutes = 0xFFFFU;
-	}
+////	remaining_seconds = FactoryAging_GetRemainingSeconds();
+////	remaining_minutes = (remaining_seconds + 59U) / 60U;
+////	if (remaining_minutes > 0xFFFFU)
+////	{
+////		remaining_minutes = 0xFFFFU;
+////	}
 
-	Sci_PutWordBE(buff, index, (UINT16)FactoryAging_GetState());
-	Sci_PutWordBE(buff, index, (UINT16)remaining_minutes);
-	Sci_PutWordBE(buff, index, (UINT16)(remaining_seconds >> 16));
-	Sci_PutWordBE(buff, index, (UINT16)remaining_seconds);
-	Sci_PutWordBE(buff, index, Sci_GetFactoryAgingDurationHours());
+////	Sci_PutWordBE(buff, index, (UINT16)FactoryAging_GetState());
+////	Sci_PutWordBE(buff, index, (UINT16)remaining_minutes);
+////	Sci_PutWordBE(buff, index, (UINT16)(remaining_seconds >> 16));
+////	Sci_PutWordBE(buff, index, (UINT16)remaining_seconds);
+////	Sci_PutWordBE(buff, index, Sci_GetFactoryAgingDurationHours());
 }
 
 static UINT8 Sci_RecordBackIndex(UINT8 point, UINT16 back)
@@ -2133,9 +2132,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 		}
 		
-		if (u16SciRegData == 7)
-			FactoryAging_StartByHost();
-
 		SystemFeature_SetById(u16SciRegData, 1U);
 	}
 	else
@@ -2152,8 +2148,6 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		SystemFeature_SetById(u16SciRegData, 0U);
-		if (u16SciRegData == 7)
-			FactoryAging_StopByHost();
 	}
 	else
 	{
@@ -2179,41 +2173,41 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 
 void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s)
 {
-	UINT16 u16SciRegData;
+	// UINT16 u16SciRegData;
 
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData != 0x005AU)
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-		return;
-	}
+	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	// if (u16SciRegData != 0x005AU)
+	// {
+	// 	s->AckType = RS485_ACK_NEG;
+	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
+	// 	return;
+	// }
 
-	if (FactoryAging_ResetTimeByHost() == 0U)
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	// if (FactoryAging_ResetTimeByHost() == 0U)
+	// {
+	// 	s->AckType = RS485_ACK_NEG;
+	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
+	// }
 }
 
 void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s)
 {
-	UINT16 u16SciRegData;
+	// UINT16 u16SciRegData;
 
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if ((u16SciRegData < FACTORY_AGING_DURATION_HOURS_MIN) ||
-		(u16SciRegData > FACTORY_AGING_DURATION_HOURS_MAX))
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-		return;
-	}
+	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	// if ((u16SciRegData < FACTORY_AGING_DURATION_HOURS_MIN) ||
+	// 	(u16SciRegData > FACTORY_AGING_DURATION_HOURS_MAX))
+	// {
+	// 	s->AckType = RS485_ACK_NEG;
+	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
+	// 	return;
+	// }
 
-	if (FactoryAging_SetDurationHoursByHost(u16SciRegData) == 0U)
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-	}
+	// if (FactoryAging_SetDurationHoursByHost(u16SciRegData) == 0U)
+	// {
+	// 	s->AckType = RS485_ACK_NEG;
+	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
+	// }
 }
 
 void InitUSART_CommonUpper(void)

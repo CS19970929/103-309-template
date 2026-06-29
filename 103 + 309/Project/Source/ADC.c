@@ -227,10 +227,10 @@ void InitADC_ADC1(void)
 
     RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 酝置ADC时钟PCLK2�8分�，�9MHz
 
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_55Cycles5); // PB1: GPIO_ADC_NMOS
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 3, ADC_SampleTime_55Cycles5); // PA1: GPIO_ADC_VBUS
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
+    // ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_55Cycles5); // PB1: GPIO_ADC_NMOS
+    // ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5); // PA1: GPIO_ADC_VBUS
+    // ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
 
     ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
@@ -477,9 +477,9 @@ void App_AnlogCal(void)
     }
 
     ADC_UpdateMosTemp();
-    ADC_UpdateEnvTemp();
-    ADC_UpdateVbc();
-    ADC_UpdateTypeCCurrent();
+    // ADC_UpdateEnvTemp();
+    // ADC_UpdateVbc();
+    // ADC_UpdateTypeCCurrent();
     s_adc.ready = 1U;
     DBG_RecordAdcSample();
 }
