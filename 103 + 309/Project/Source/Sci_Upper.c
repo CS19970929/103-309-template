@@ -67,6 +67,12 @@ struct SCI_PORT_RUNTIME
 	UINT8 u8FramePending;
 };
 
+typedef struct SCI_RTC_WRITE_CACHE_TAG
+{
+	struct RTC_ELEMENT time;
+	UINT16 mask;
+} SCI_RTC_WRITE_CACHE;
+
 static void Sci_ModbusResetMessage(struct RS485MSG *s);
 static void Sci_SetWrError(struct RS485MSG *s, UINT8 error);
 static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data);
@@ -78,6 +84,12 @@ static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
 static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
 static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
+static UINT8 Sci_RtcWriteOneWord(UINT16 u16RegAddr, UINT16 u16Value, struct RS485MSG *s);
+
+#define SCI_RTC_TIME_WORDS      ((UINT16)6U)
+#define SCI_RTC_WRITE_ALL_MASK  ((UINT16)0x003FU)
+
+static SCI_RTC_WRITE_CACHE s_sci_rtc_write_cache;
 static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count);
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
@@ -235,6 +247,7 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s);
+void Sci_WrReg_0x06_RTC(UINT16 u16RegAddr, struct RS485MSG *s);
 
 static UINT8 Sci_BmsFunctionIdIsSupported(UINT16 id)
 {
@@ -388,6 +401,13 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 #if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegAddr;
 	u16SciRegAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+	if ((u16SciRegAddr >= RS485_CMD_ADDR_RTC_TIME_YEAR) &&
+		(u16SciRegAddr < (UINT16)(RS485_CMD_ADDR_RTC_TIME_YEAR + SCI_RTC_TIME_WORDS)))
+	{
+		Sci_WrReg_0x06_RTC(u16SciRegAddr, s);
+		return;
+	}
+
 	switch (u16SciRegAddr)
 	{
 	case RS485_CMD_ADDR_RESET_CALIB_COEF:
@@ -809,6 +829,13 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	if (Sci_IsCalibPairStart(u16SciRegStartAddr))
 	{
 		Sci_WrRegs_0x10_CalibCoef(u16SciRegStartAddr, s);
+		return;
+	}
+
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_RTC_TIME_YEAR) &&
+		(u16SciRegStartAddr < (UINT16)(RS485_CMD_ADDR_RTC_TIME_YEAR + SCI_RTC_TIME_WORDS)))
+	{
+		Sci_WrRegs_0x10_RTC(s);
 		return;
 	}
 
@@ -1887,19 +1914,130 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 	s->ErrorType = RS485_ERROR_CMD_INVALID;
 }
 
+static UINT8 Sci_RtcFieldValueValid(UINT16 u16Offset, UINT16 u16Value)
+{
+	switch (u16Offset)
+	{
+	case 0U:
+		return (UINT8)((u16Value <= 99U) ||
+					   ((u16Value >= 2000U) && (u16Value <= 2099U)));
+	case 1U:
+		return (UINT8)((u16Value >= 1U) && (u16Value <= 12U));
+	case 2U:
+		return (UINT8)((u16Value >= 1U) && (u16Value <= 31U));
+	case 3U:
+		return (UINT8)(u16Value <= 23U);
+	case 4U:
+	case 5U:
+		return (UINT8)(u16Value <= 59U);
+	default:
+		return 0U;
+	}
+}
+
+static void Sci_RtcSetCachedField(UINT16 u16Offset, UINT16 u16Value)
+{
+	switch (u16Offset)
+	{
+	case 0U:
+		s_sci_rtc_write_cache.time.RTC_Time_Year = u16Value;
+		break;
+	case 1U:
+		s_sci_rtc_write_cache.time.RTC_Time_Month = u16Value;
+		break;
+	case 2U:
+		s_sci_rtc_write_cache.time.RTC_Time_Day = u16Value;
+		break;
+	case 3U:
+		s_sci_rtc_write_cache.time.RTC_Time_Hour = u16Value;
+		break;
+	case 4U:
+		s_sci_rtc_write_cache.time.RTC_Time_Minute = u16Value;
+		break;
+	case 5U:
+		s_sci_rtc_write_cache.time.RTC_Time_Second = u16Value;
+		break;
+	default:
+		break;
+	}
+}
+
+static UINT8 Sci_RtcWriteOneWord(UINT16 u16RegAddr, UINT16 u16Value, struct RS485MSG *s)
+{
+	UINT16 u16Offset;
+
+	if ((u16RegAddr < RS485_CMD_ADDR_RTC_TIME_YEAR) ||
+		(u16RegAddr >= (UINT16)(RS485_CMD_ADDR_RTC_TIME_YEAR + SCI_RTC_TIME_WORDS)))
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return 0U;
+	}
+
+	u16Offset = (UINT16)(u16RegAddr - RS485_CMD_ADDR_RTC_TIME_YEAR);
+	if (Sci_RtcFieldValueValid(u16Offset, u16Value) == 0U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return 0U;
+	}
+
+	if (u16Offset == 0U)
+	{
+		memset(&s_sci_rtc_write_cache, 0, sizeof(s_sci_rtc_write_cache));
+	}
+
+	Sci_RtcSetCachedField(u16Offset, u16Value);
+	s_sci_rtc_write_cache.mask |= (UINT16)(1U << u16Offset);
+	if (s_sci_rtc_write_cache.mask != SCI_RTC_WRITE_ALL_MASK)
+	{
+		return 1U;
+	}
+
+	if (BatteryRuntimeClock_SetRtcTime(&s_sci_rtc_write_cache.time) == 0U)
+	{
+		memset(&s_sci_rtc_write_cache, 0, sizeof(s_sci_rtc_write_cache));
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return 0U;
+	}
+
+	memset(&s_sci_rtc_write_cache, 0, sizeof(s_sci_rtc_write_cache));
+	return 1U;
+}
+
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
+	UINT16 u16RegStartAddr;
 	UINT16 u16WrRegNum;
+	UINT16 u16Offset;
+	UINT16 i;
 	struct RTC_ELEMENT time;
 
+	u16RegStartAddr = (UINT16)(s->u16Buffer[3] + (s->u16Buffer[2] << 8));
 	u16WrRegNum = Sci_GetWrRegNum(s);
 	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
-		(u16WrRegNum != 6U))
+		!Sci_RangeFits((UINT16)(u16RegStartAddr - RS485_CMD_ADDR_RTC_TIME_YEAR),
+					   u16WrRegNum,
+					   SCI_RTC_TIME_WORDS))
 	{
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 		return;
 	}
 
+	u16Offset = (UINT16)(u16RegStartAddr - RS485_CMD_ADDR_RTC_TIME_YEAR);
+	if ((u16Offset != 0U) || (u16WrRegNum != SCI_RTC_TIME_WORDS))
+	{
+		for (i = 0U; i < u16WrRegNum; ++i)
+		{
+			if (Sci_RtcWriteOneWord((UINT16)(u16RegStartAddr + i),
+									Sci_GetWrValue(s, i),
+									s) == 0U)
+			{
+				return;
+			}
+		}
+		return;
+	}
+
+	memset(&s_sci_rtc_write_cache, 0, sizeof(s_sci_rtc_write_cache));
 	memset(&time, 0, sizeof(time));
 	time.RTC_Time_Year = Sci_GetWrValue(s, 0U);
 	time.RTC_Time_Month = Sci_GetWrValue(s, 1U);
@@ -1912,6 +2050,14 @@ void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 	}
+}
+
+void Sci_WrReg_0x06_RTC(UINT16 u16RegAddr, struct RS485MSG *s)
+{
+	UINT16 u16Value;
+
+	u16Value = (UINT16)(s->u16Buffer[5] + (s->u16Buffer[4] << 8));
+	(void)Sci_RtcWriteOneWord(u16RegAddr, u16Value, s);
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
