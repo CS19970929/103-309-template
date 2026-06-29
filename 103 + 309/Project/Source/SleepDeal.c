@@ -27,12 +27,11 @@ static void SleepDeal_WaitStopWakeup(void);
 
 static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
 }
 
 static UINT8 SleepDeal_IsKeyPressed(void)
 {
-	// PC13���رպ�Ϊ�͵�ƽ����EXTI13�½��ػ��ѱ���һ�£�
 	return (UINT8)(MCUI_ENI_DI1 == 0);
 }
 
@@ -46,16 +45,19 @@ UINT8 SleepDeal_IsWakeupValid(void)
 		SleepDeal_MarkBootFromSleepChargerWakeup();
 		return 1;
 	}
+	if (SleepDeal_IsKeyPressed())
+	{
+		return 1;
+	}
 
+#if 0
 	while (1)
 	{
 		if (!SleepDeal_IsKeyPressed())
 		{
-			LedBar_PrepareForStop();
 			return 0;
 		}
 
-		LedBar_ShowSleepSocPreview();
 		hold_cnt = 0;
 		while (SleepDeal_IsKeyPressed())
 		{
@@ -72,29 +74,30 @@ UINT8 SleepDeal_IsWakeupValid(void)
 			}
 		}
 
-		display_cnt = 0;
-		while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
-		{
-			if (SleepDeal_IsChargerWakeupActive())
-			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
-			}
-			if (SleepDeal_IsKeyPressed())
-			{
-				break;
-			}
+		// display_cnt = 0;
+		// while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
+		// {
+		// 	if (SleepDeal_IsChargerWakeupActive())
+		// 	{
+		// 		SleepDeal_MarkBootFromSleepChargerWakeup();
+		// 		return 1;
+		// 	}
+		// 	if (SleepDeal_IsKeyPressed())
+		// 	{
+		// 		break;
+		// 	}
 
-			__delay_ms(10);
-			display_cnt++;
-		}
+		// 	__delay_ms(10);
+		// 	display_cnt++;
+		// }
 
-		if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
-		{
-			LedBar_PrepareForStop();
-			return 0;
-		}
+		// if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
+		// {
+		// 	LedBar_PrepareForStop();
+		// 	return 0;
+		// }
 	}
+#endif
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)
@@ -131,7 +134,7 @@ static void BootFlag_EnableAccess(void)
 }
 
 #define SLEEP_BKP_FLAG_REG BKP_DR2
-#define SLEEP_BKP_INV_REG  BKP_DR3
+#define SLEEP_BKP_INV_REG BKP_DR3
 
 void BootFlag_Write(UINT16 flag)
 {

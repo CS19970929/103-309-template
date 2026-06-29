@@ -12,5 +12,4 @@ void LowPowerSleep_SaveCoreState(void)
 void LowPowerSleep_SaveResetState(void)
 {
 	LowPowerSleep_SaveCoreState();
-	LedBar_SaveSleepSoc();
 }

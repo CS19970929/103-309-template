@@ -135,11 +135,11 @@ void InitADC_GPIO(void)
 
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS | PIN_ADC_CUR | PIN_ADC_NTC;
+    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
     GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
 }
 
 void InitADC_TIMER(void)

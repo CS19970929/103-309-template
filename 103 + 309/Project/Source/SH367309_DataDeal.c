@@ -70,9 +70,10 @@ void Refresh_Parameters(void)
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 1;
+	//todo 待测试均衡
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
 	// temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
-	temp = (4160 + 10) / 20;
+	temp = (3500 + 10) / 20;
 	if (temp > 0xFF)
 	{
 		temp = 0xFF;

@@ -6,7 +6,7 @@
 #include "IrqDebug.h"
 #include "debug_hub.h"
 
-UINT8 SeriesNum = 10;
+UINT8 SeriesNum = 7;
 
 void Runtime_Boot(void)
 {
@@ -40,7 +40,6 @@ void Runtime_Boot(void)
 
 	SystemRuntime_MarkBootReady();
 	SystemRuntime_SetProjectVersion(1U);
-	LedBar_Init();
 	InitProID();
 	LogRecord_RequestStartup();
 
@@ -48,7 +47,7 @@ void Runtime_Boot(void)
 	DBG_Init();
 	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
-	Init_IWDG();
+	// Init_IWDG();
 }
 
 void Runtime_RunOnce(void)
@@ -60,10 +59,9 @@ void Runtime_RunOnce(void)
 	SysTime_LatchTaskFlags();
 	DebugHooks_RuntimeAfterSysTime();
 
-	FactoryAging_Task();
+	// FactoryAging_Task();
 	DebugHooks_RuntimeAfterAging();
 
-	APP_LedBar();
 	DebugHooks_RuntimeAfterLed();
 
 	App_AFEGet();

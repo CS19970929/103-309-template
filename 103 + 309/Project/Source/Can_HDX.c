@@ -1,7 +1,7 @@
 #include "main.h"
 #include "DebugWatch.h"
 #include "CanFeidaoFrames.h"
-#include "FactoryAging.h"
+// #include "FactoryAging.h"
 #include "IrqDebug.h"
 #include "debug_hub.h"
 #include <string.h>
@@ -656,7 +656,7 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		host_error = Sci_HostWriteWords(reg_addr, &reg_value, 1U);
 		status = feidao_can_app_status_from_host_error(host_error);
 		break;
-
+#if 0
 	case FEIDAO_CAN_APP_CMD_AGING_START:
 		if (feidao_can_aging_guard_ok(data, FEIDAO_CAN_APP_AGING_ACTION_START) == 0U)
 		{
@@ -715,6 +715,7 @@ static void feidao_can_handle_app_cmd_data(const UINT8 data[8])
 		}
 		feidao_can_fill_aging_ack(&value0, &value1);
 		break;
+#endif
 
 	default:
 		status = FEIDAO_CAN_APP_ACK_BAD_CMD;

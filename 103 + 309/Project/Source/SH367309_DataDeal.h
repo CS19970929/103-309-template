@@ -13,7 +13,7 @@
 #define RS485_ADDR_RW_AFE_PARAMETER  0x2400
 
 #ifdef LIFEPO
-#define AFE_COV           (3780)
+#define AFE_COV           (3750)
 #define AFE_COV_recover   (3500)
 #define AFE_COV_filter     100
 
@@ -82,8 +82,8 @@
 	/*放电高温恢复*/		AFE_OTD_recover,	AFE_OTD_recover,	50000,	1,\
 	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
 	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
-	/*短路电流*/			200,	200,	65000,	0,\
-	/*短路延时*/			320,	320,		65000,	0,\
+	/*短路电流*/			210,	210,	65000,	0,\
+	/*短路延时*/			300,	300,		65000,	0,\
 }
 
 

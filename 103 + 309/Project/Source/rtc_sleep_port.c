@@ -32,7 +32,8 @@ UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
 {
-    return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
+    // return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
+    return false;
 }
 
 UINT8 RtcSleep_PortGetExternalCommCounter(void)
@@ -117,15 +118,6 @@ enum irqWakeup RtcSleep_PortGuessWakeupSource(void)
     }
 
     return NO_IRQ;
-}
-
-void RtcSleep_PortOnWakeupSource(enum irqWakeup source)
-{
-    if (source == soc_key)
-    {
-        LedBar_RequestSocDisplay();
-        APP_LedBar();
-    }
 }
 
 void cpu_frequency_conf(void)

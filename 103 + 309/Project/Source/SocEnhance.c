@@ -839,8 +839,11 @@ static void soc_update_rest_timer(SOC_MODE mode)
 #else
 	UINT32 rest_ocv_ticks = soc_seconds_to_ticks(SOC_REST_OCV_SECONDS);
 
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3200)
+#else
 	if (mode != SOC_MODE_RELAX || g_stCellInfoReport.u16VCellMin >= 3700)
-	// if (mode != SOC_MODE_RELAX)
+#endif
 	{
 		soc_reset_rest_confidence();
 		return;
@@ -1038,6 +1041,14 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 
 	g_stCellInfoReport.u16VCellMin = vcell_min;
 	g_stCellInfoReport.u16VCellMax = vcell_max;
+
+#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
+	if (g_stCellInfoReport.u16VCellMin >= 3200)
+#else
+	if (g_stCellInfoReport.u16VCellMin >= 3700)
+#endif
+	return;
+
 	changed = soc_apply_rtc_rest_ocv(rest_seconds);
 	if (changed)
 	{

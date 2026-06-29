@@ -107,31 +107,31 @@ void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 
 void charger_detect_and_keyLogi_200ms(void)
 {
-    static uint8_t state = 0;
+    // static uint8_t state = 0;
 
-    switch (state)
-    {
-    case 0:
-        if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-        {
-            state = 1;
-            open_chg_close_dsg();
-        }
-        break;
-    case 1:
-        if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-        {
-            LowPower_Request(DEEP_MODE);
-            low_power_log_and_commit_sleep(DEEP_MODE);
-        }
-        else
-        {
-        }
-        break;
-    default:
-        state = 0;
-        break;
-    }
+    // switch (state)
+    // {
+    // case 0:
+    //     if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+    //     {
+    //         state = 1;
+    //         open_chg_close_dsg();
+    //     }
+    //     break;
+    // case 1:
+    //     if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
+    //     {
+    //         LowPower_Request(DEEP_MODE);
+    //         low_power_log_and_commit_sleep(DEEP_MODE);
+    //     }
+    //     else
+    //     {
+    //     }
+    //     break;
+    // default:
+    //     state = 0;
+    //     break;
+    // }
 }
 
 void Init_Registers(UINT8 num)
@@ -275,7 +275,7 @@ void DataLoad_Temperature(void)
     INT32 t_i32temp;
     UINT8 Select;
 
-    Select = 1;
+    Select = 2;
     // 没纳入统计的，默认值就是0了
     for (i = 0; i < Select; i++)
     {
@@ -287,11 +287,6 @@ void DataLoad_Temperature(void)
 
     g_stCellInfoReport.u16Temperature[2] = 0;
     
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40; // 放大1000倍和B值对应的意思
-    t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1]) >> 10;
-    g_stCellInfoReport.u16Temperature[1] = (UINT16)(t_i32temp * 10 + 400);
-    Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[1]);
-
 #if 0
 	//环境温度1
 	t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40;		//放大1000倍和B值对应的意思
@@ -1045,148 +1040,11 @@ void open_ctlc(void)
 void close_ctlc(void)
 {
     MCUO_AFE_CTLC = 0;
-    // todo 会不会存在冲突，逻辑完备？？？
-    GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, Bit_RESET);
 }
 
 void new_todo_logi(void)
 {
-    static uint8_t mos_state = 0;
-
     charger_detect_and_keyLogi_200ms();
-
-#if 1
-    {
-#ifdef DISP_VBAT_AND_TEMP_
-        extern UINT16 SOC_GetTypeCBatEquivCurrentA10(void);
-        g_stCellInfoReport.u16VCell[29] = SOC_GetTypeCBatEquivCurrentA10();
-        g_stCellInfoReport.u16VCell[30] = ADC_GetVbatMilliVolt();
-        // g_stCellInfoReport.u16VCell[31] = Vbat_mv;
-#endif // ! FAC_TEST
-        UINT32 Vbat_mv = ADC_GetVbatMilliVolt();
-        UINT32 fuse_vbat_threshold_mV = (UINT32)4280U * (UINT32)SeriesNum;
-        UINT8 adc_vbat_fuse_ovp = (UINT8)((ADC_IsReady() != 0U) && (Vbat_mv >= fuse_vbat_threshold_mV));
-#ifdef _UL_RENZHENG_ENABLE_
-        static uint8_t state_fuse = 0;
-        static uint32_t rong_fuse_afe_err_cnt = 0;
-        static uint32_t rong_fuse = 0;
-#endif
-
-        switch (mos_state)
-        {
-        case 0:
-            if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] >= (95 + 40) * 10)
-            {
-                close_ctlc();
-                FaultWarnRecord2(MosOTp_Third);
-                mos_state = 1;
-            }
-            break;
-        case 1:
-            if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] <= (75 + 40) * 10)
-            {
-                open_ctlc();
-                mos_state = 0;
-            }
-            break;
-        default:
-            mos_state = 0;
-            break;
-        }
-
-#ifdef _UL_RENZHENG_ENABLE_
-        static bool err_afe = false;
-
-        if (System_ERROR_UserCallback(ERROR_STATUS_AFE1) != 0U)
-        {
-            err_afe = 1;
-            rong_fuse = 0;
-            state_fuse = 0;
-
-            close_ctlc();
-            // todo mcc关了，when 开
-            if ((adc_vbat_fuse_ovp != 0U) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10)
-            {
-                if (++rong_fuse_afe_err_cnt >= (5 * 10))
-                {
-                    rong_fuse_afe_err_cnt = 0;
-#ifdef _UL_RENZHENG_ENABLE_
-                    GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
-#endif
-                }
-            }
-            else
-            {
-                rong_fuse_afe_err_cnt = 0;
-            }
-        }
-        else
-        {
-            static uint16_t delay_cnt = 0;
-            rong_fuse_afe_err_cnt = 0;
-            if (err_afe && (System_ERROR_UserCallback(ERROR_STATUS_AFE1) == 0U))
-            {
-                err_afe = 0;
-                open_ctlc();
-            }
-
-            switch (state_fuse)
-            {
-            case 0:
-                if ((g_stCellInfoReport.u16Temperature[1] >= (80 + 40) * 10))
-                {
-                    state_fuse = 1;
-                    close_ctlc();
-                    FaultWarnRecord2(CellChgOTp_Third);
-                    FaultWarnRecord2(CellDsgOTp_Third);
-                }
-                if ((g_stCellInfoReport.u16VCellMax >= 4270) && (g_stCellInfoReport.u16VCellMin >= 2000))
-                {
-                    ++delay_cnt;
-                    if (delay_cnt >= 15)
-                    {
-                        delay_cnt = 0;
-                        state_fuse = 1;
-                        close_ctlc();
-                        // 是否应该强制关掉放电？？？
-                        FaultWarnRecord2(CellOvp_Third);
-                        FaultWarnRecord2(BatOvp_Third);
-                    }
-                }
-                else
-                    delay_cnt = 0;
-                break;
-            case 1:
-                if ((g_stCellInfoReport.u16Temperature[1] < (75 + 40) * 10) && (g_stCellInfoReport.u16VCellMax <= 4150))
-                {
-                    state_fuse = 0;
-                    open_ctlc();
-                }
-                if (((g_stCellInfoReport.u16VCellMax >= 4280) || (adc_vbat_fuse_ovp != 0U) || g_stCellInfoReport.u16Temperature[1] >= (85 + 40) * 10) && (g_stCellInfoReport.u16Ichg))
-                {
-                    if (++rong_fuse >= (15))
-                    {
-                        rong_fuse = 0;
-#ifdef _UL_RENZHENG_ENABLE_
-                        GPIO_WriteBit(GPIO_RF_EN, PIN_RF_EN, Bit_SET);
-#endif
-                    }
-                }
-                else
-                {
-                    rong_fuse = 0;
-                }
-                break;
-            default:
-                state_fuse = 0;
-                break;
-            }
-        }
-#endif
-    }
-
-    // 74hc595 控制5pin 18 seg led ,待完善spi驱动、配置
-#endif
 }
 
 void App_AFEGet(void)

@@ -16,7 +16,7 @@
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
 //   <1=> LiFePO4 LIFEPO
-#define PROJECT_CFG_BAT_CHEMISTRY 0
+#define PROJECT_CFG_BAT_CHEMISTRY 1
 
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
@@ -173,32 +173,32 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0618
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0005
 
 // <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
 
 // <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
 
 // <q> Reset balance open voltage on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
 
 // <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
 
 // <q> Reset SOC snapshot on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
 
 // <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
 
 // <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.
@@ -266,11 +266,11 @@
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
 
 // <o> System series number <3-32>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 10
+#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 7
 // <o> System current-sense resistor mOhm <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES 2
 // <o> System current-sense resistor numerator <1-10000>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES_NUM 4
+#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES_NUM 6
 // <o> System precharge time s <0-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_PRECHG_TIME 10
 // </h>

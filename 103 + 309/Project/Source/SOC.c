@@ -19,29 +19,7 @@ static UINT32 SOC_GetPackVoltageForTypeCMv(void)
 
 UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 {
-	// return ADC_GetTypeCOutCurrentMilliAmp();
-	uint64_t numerator;
-	uint64_t denominator;
-	uint64_t current_mA;
-	UINT32 pack_mv = SOC_GetPackVoltageForTypeCMv();
-	UINT16 typec_out_current_mA = ADC_GetTypeCOutCurrentMilliAmp();
-
-	if ((typec_out_current_mA == 0U) || (pack_mv == 0U))
-	{
-		return 0U;
-	}
-
-	numerator = (uint64_t)typec_out_current_mA *
-		(uint64_t)TYPEC_OUT_VOLTAGE_MV * 1000ULL;
-	denominator = (uint64_t)pack_mv *
-		(uint64_t)TYPEC_DCDC_EFFICIENCY_PERMILLE;
-	current_mA = (numerator + (denominator / 2ULL)) / denominator;
-	if (current_mA > 0xFFFFULL)
-	{
-		current_mA = 0xFFFFULL;
-	}
-
-	return SOC_LimitA10((UINT32)((current_mA + 50ULL) / 100ULL));
+	return 0;
 }
 
 static int32_t SOC_GetNetCurrentMilliAmp(UINT16 report_ichg, UINT16 report_idsg)

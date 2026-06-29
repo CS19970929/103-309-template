@@ -13,7 +13,6 @@
 #include "I2C_AFE1.h"
 #include "SH367309_Func.h"
 #include "Fault.h"
-#include "LedBar.h"
 #include "IrqDebug.h"
 #include "DebugWatch.h"
 
@@ -532,7 +531,7 @@ void SystemDebug_Snapshot(void)
 	g_dbg.gpio.afe_pro_en = (GPIO_ReadOutputDataBit(GPIO_AFE1_PRO_EN, PIN_AFE1_PRO_EN) != Bit_RESET);
 	g_dbg.gpio.m_stb      = (GPIO_ReadOutputDataBit(GPIO_M_STB,  PIN_M_STB)   != Bit_RESET);
 	g_dbg.gpio.ad_en      = (GPIO_ReadOutputDataBit(GPIO_AD_EN,   PIN_AD_EN)   != Bit_RESET);
-	g_dbg.gpio.adc_bus_en = (GPIO_ReadOutputDataBit(GPIO_ADC_BUS_EN, PIN_ADC_BUS_EN) != Bit_RESET);
+	g_dbg.gpio.adc_bus_en = (GPIO_ReadOutputDataBit(GPIO_SW_EN, PIN_SW_EN) != Bit_RESET);
 	g_dbg.gpio._2727_en   = (GPIO_ReadOutputDataBit(GPIO_2727_EN, PIN_2737_EN) != Bit_RESET);
 
 	/* ===== MOS ===== */

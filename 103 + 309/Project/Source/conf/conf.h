@@ -12,6 +12,7 @@
 // #define DISP_VBAT_AND_TEMP_
 // #define __EnableLowPowerDebug__
 // #define VCELL_DISP_TEST
+#define _COMMOM_UPPER_SCI2
 
 #define EEPROM_VALUE_BEGIN_FLAG PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG
 

@@ -15,7 +15,7 @@
 
 
 /**********************************************/
-#define MCUO_DEBUG_LED1 	PCout(13)		//LED1
+#define MCUO_DEBUG_LED1 	PBout(15)		//LED1
 
 #define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
 #define MCUO_AFE_CTLC 		PBout(14)		//��������
@@ -34,55 +34,39 @@
 #define GPIO_INT_WK_CMNT            GPIOB                  //todo can唤醒
 #define PIN_INT_WK_CMNT             GPIO_Pin_12
 
-#define GPIO_MCC_C                  GPIOA                   //mcu控制的充电管。双重保护？
-#define PIN_MCC_C                   GPIO_Pin_8
-
-#define GPIO_MCU_WK                 GPIOB                   //typeC芯片唤醒mcu？？，高电平代表typec有负载？
-#define PIN_MCU_WK                  GPIO_Pin_13
-
+//todo 待确认逻辑
 #define GPIO_SW                     GPIOA
 #define PIN_SW                      GPIO_Pin_9
 
 #define GPIO_AFE1_CTL        GPIOB
 #define PIN_AFE1_CTL         GPIO_Pin_14
+//todo afe ship pin待确认
+//todo afe alm pin待确认
+//todo afe mode pin待确认
 
-#define GPIO_DC_EN                  GPIOA                   //(power)todo tyepc供电
-#define PIN_DC_EN                   GPIO_Pin_10
+#define GPIO_DBG_LED        GPIOB
+#define PIN_DBG_LED         GPIO_Pin_15
 
-#define GPIO_DBG_LED        GPIOC
-#define PIN_DBG_LED         GPIO_Pin_13
-
-#define GPIO_SPI_MOSI        GPIOA                          //todo 实际对应led控制
-#define PIN_SPI_MOSI         GPIO_Pin_6
-
+//todo afe mode c073 看是否影响，输出低就行了，应该不用管，后面测试没问题直接 删掉
 #define GPIO_RF_EN                  GPIOA                   //todo !!!熔断保险丝控制io
 #define PIN_RF_EN                   GPIO_Pin_7
 
 #define GPIO_AFE1_PRO_EN        GPIOB
 #define PIN_AFE1_PRO_EN         GPIO_Pin_0
 
+//todo 待确认 测温度？命名修改没问题直接 
 #define GPIO_ADC_VBUS               GPIOA                   //adc输入采样，总压
 #define PIN_ADC_VBUS                GPIO_Pin_1
 
-#define GPIO_SPI1_NSS        GPIOA
-#define PIN_SPI1_NSS         GPIO_Pin_4
+//todo 供电 给谁的？？？
+#define GPIO_CMNT_EN                GPIOA                   //(power) can供电？？？
+#define PIN_CMNT_EN                 GPIO_Pin_4
 
-#define GPIO_SPI1_SCK        GPIOA
-#define PIN_SPI1_SCK         GPIO_Pin_5
+#define GPIO_HT_CHG                GPIOA                   //(power) can供电？？？
+#define PIN_HT_CHG                 GPIO_Pin_5
 
 #define GPIO_ADC_NMOS        GPIOB
 #define PIN_ADC_NMOS         GPIO_Pin_1
-
-#define GPIO_ADC_CUR        GPIOA
-#define PIN_ADC_CUR         GPIO_Pin_2
-#define GPIO_ADC_NTC        GPIOA
-#define PIN_ADC_NTC         GPIO_Pin_3
-
-#define GPIO_2727_EN                GPIOB                   //(power)
-#define PIN_2737_EN                 GPIO_Pin_15
-
-#define GPIO_SEG_EN          GPIOB
-#define PIN_SEG_EN           GPIO_Pin_10
 
 #define GPIO_M_STB                  GPIOA                   //(power)
 #define PIN_M_STB                   GPIO_Pin_15
@@ -90,10 +74,11 @@
 #define GPIO_AD_EN                  GPIOB                   //todo (power) ???
 #define PIN_AD_EN                   GPIO_Pin_3
 
-#define GPIO_CMNT_EN                GPIOB                   //(power) can供电？？？
-#define PIN_CMNT_EN                 GPIO_Pin_4
+#define GPIO_BLE_EN                  GPIOB                   //todo (power) ???
+#define PIN_BLE_EN                   GPIO_Pin_4
 
-#define GPIO_ADC_BUS_EN             GPIOB                   //(power)
-#define PIN_ADC_BUS_EN              GPIO_Pin_5
+
+#define GPIO_SW_EN             GPIOB                   //(power)
+#define PIN_SW_EN              GPIO_Pin_5
 
 #endif

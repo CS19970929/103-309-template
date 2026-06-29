@@ -38,9 +38,9 @@ void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
 }
 #endif
 
-#define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP | \
-							  DBGMCU_CR_DBG_STOP | \
-							  DBGMCU_CR_DBG_STANDBY | \
+#define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP |     \
+							  DBGMCU_CR_DBG_STOP |      \
+							  DBGMCU_CR_DBG_STANDBY |   \
 							  DBGMCU_CR_DBG_IWDG_STOP | \
 							  DBGMCU_CR_DBG_WWDG_STOP)
 
@@ -67,10 +67,10 @@ void Init_IWDG(void)
 	IWDG_SetReload(0x0FFF);				   // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
 										   // 800——1.28s，80——128ms
 #endif					  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-							  // 800——1.28s，80——128ms
+						  // 800——1.28s，80——128ms
 	IWDG_ReloadCounter(); // 喂狗
 	DBG_RecordIwdgFeed((UINT8)DBG_HUB_IWDG_FEED_INIT);
-	IWDG_Enable();		  // 使能IWDG
+	IWDG_Enable(); // 使能IWDG
 #endif
 }
 
@@ -328,5 +328,10 @@ void TIM3_IRQHandler(void)
 		IrqDebug_CountFast((uint8_t)IRQDBG_TIM3_10MS);
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
+
+		if (1 == MCUI_ENI_DI1)
+		{
+			LowPower_Request(NORMAL_MODE);
+		}
 	}
 }

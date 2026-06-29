@@ -134,14 +134,14 @@ struct OTHER_ELEMENT {
 };
 
 
-#define  BMS_HARDWARE_VERDION_DEFAULT   "T3_27Ah"
+#define  BMS_HARDWARE_VERDION_DEFAULT   "C073"
 // #define  BMS_SOFTWARE_VERDION_DEFAULT   "FD-260429-T3MAX"  //32
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "V3.1"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	  "D010-20260622"
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "V1.0"  //32
+#define  BMS_SERIAL_NUMBER_DEFAULT  	  "D010-20260629"
 // #define  BMS_SERIAL_NUMBER_DEFAULT  	  "cs-666FD_20268888"
 // #define  BMS_SERIAL_NUMBER_DEFAULT  	  "test_typec_1000mA"
 
-#define SNum 		10
+#define SNum 		7
 
 
 
@@ -157,7 +157,7 @@ struct OTHER_ELEMENT {
 #define BMS_CAPCITY     180
 #elif (BAT_TYPE == BAT_SLAVE)
 #define CS_Res			2
-#define CS_Res_Num		4
+#define CS_Res_Num		6
 #define BMS_CAPCITY     270
 #endif	
 

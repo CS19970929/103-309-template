@@ -269,18 +269,12 @@ void Fault_ChangeToMCU(void)
 		{
 			FaultWarnRecord2(CellUvp_Third);
 			su8_CellUvp_Flag = 1;
-
-			GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_RESET);
-			GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_RESET);
 		}
 		break;
 	case 1:
 		if (!SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
 		{
 			su8_CellUvp_Flag = 0;
-
-			GPIO_WriteBit(GPIO_DC_EN, PIN_DC_EN, Bit_SET);
-			GPIO_WriteBit(GPIO_2727_EN, PIN_2737_EN, Bit_SET);
 		}
 		break;
 	default:

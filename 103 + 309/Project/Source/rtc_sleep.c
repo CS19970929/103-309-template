@@ -37,7 +37,6 @@ static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
 static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
 static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
 static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U) ? 1U : 0U; }
-static uint8_t CheckLedActive(void) { return LedBar_IsActiveForLowPower(); }
 
 typedef struct
 {
@@ -53,7 +52,6 @@ static const BlockReasonEntry s_block_table[] = {
     {LP_BLOCK_FLASH_BUSY, CheckFlashBusy},
     {LP_BLOCK_UPGRADE, CheckUpgrade},
     {LP_BLOCK_FAULT, CheckFault},
-    {LP_BLOCK_LED_ACTIVE, CheckLedActive},
 };
 
 #define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
@@ -207,6 +205,7 @@ static void rtc_sleep_prepare_rtc(void)
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
     IOstatus_RTCMode();
+    // IOstatus_Base();
     // IOstatus_NormalMode();
     if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
     {
