@@ -1,18 +1,10 @@
 #include "main.h"
-#include "FactoryAging.h"
 #include "Runtime.h"
-#include "DebugHooks.h"
-#include "DebugWatch.h"
-#include "IrqDebug.h"
-#include "debug_hub.h"
 
 UINT8 SeriesNum = 7;
 
 void Runtime_Boot(void)
 {
-	DebugWatch_BindAll();
-
-	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_BOOT);
 	SystemInit();
 
 	InitDelay();
@@ -32,7 +24,6 @@ void Runtime_Boot(void)
 
 	InitTimer();
 	__enable_irq();
-	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 
 
 	InitSystemMonitorData_EEPROM();
@@ -44,10 +35,10 @@ void Runtime_Boot(void)
 	LogRecord_RequestStartup();
 
 	Init_RTC();
-	DBG_Init();
+	
 	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
-	// Init_IWDG();
+	Init_IWDG();
 }
 
 void Runtime_RunOnce(void)

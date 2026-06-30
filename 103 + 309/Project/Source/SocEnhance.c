@@ -580,9 +580,14 @@ static UINT8 soc_full_confirm_allowed(void)
 		(UINT16)(full_mv - SOC_FULL_MIN_MARGIN_MV) : 0U;
 	UINT16 delta;
 
+	// if (!soc_calibration_allowed() ||
+	// 	(g_stCellInfoReport.u16VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
+	// 	(g_stCellInfoReport.u16VCellMax < full_min_mv))
+	// {
+	// 	return 0U;
+	// }
 	if (!soc_calibration_allowed() ||
-		(g_stCellInfoReport.u16VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
-		(g_stCellInfoReport.u16VCellMax < full_min_mv))
+		(g_stCellInfoReport.u16VCellMax < OtherElement.u16Soc_V_100))
 	{
 		return 0U;
 	}

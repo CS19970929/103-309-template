@@ -1,8 +1,6 @@
 #include "main.h"
 #include "FaultSnapshot.h"
-#include "DebugWatch.h"
 #include "Flash.h"
-#include "debug_hub.h"
 
 static struct RS485MSG g_stCurrentMsgPtr_SCI1;
 static UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
@@ -148,69 +146,6 @@ static struct SCI_PORT_RUNTIME g_stSciPort3 = {
 
 #endif
 
-#if DEBUG_WATCH_ENABLED
-void Sci_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->comm.sci1 = &g_stSciPort1;
-	watch->comm.sci_msg1 = &g_stCurrentMsgPtr_SCI1;
-	watch->comm.sci_tx_buffer = g_u8SCITxBuff;
-	watch->comm.sci_err1 = &gu16_CommuErrCnt_SCI1;
-	watch->comm.sci_tx_enable1 = &gu8_TxEnable_SCI1;
-	watch->comm.sci_tx_finish1 = &gu8_TxFinishFlag_SCI1;
-	watch->comm.flash_update_flag = &u8FlashUpdateFlag;
-	watch->comm.flash_update_e2prom = &u8FlashUpdateE2PROM;
-	watch->public_data.cell_report = &g_stCellInfoReport;
-
-#ifdef _COMMOM_UPPER_SCI2
-	watch->comm.sci2 = &g_stSciPort2;
-	watch->comm.sci_msg2 = &g_stCurrentMsgPtr_SCI2;
-	watch->comm.sci_err2 = &gu16_CommuErrCnt_SCI2;
-	watch->comm.sci_tx_enable2 = &gu8_TxEnable_SCI2;
-	watch->comm.sci_tx_finish2 = &gu8_TxFinishFlag_SCI2;
-#else
-	watch->comm.sci2 = 0;
-	watch->comm.sci_msg2 = 0;
-	watch->comm.sci_err2 = 0;
-	watch->comm.sci_tx_enable2 = 0;
-	watch->comm.sci_tx_finish2 = 0;
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-	watch->comm.sci3 = &g_stSciPort3;
-	watch->comm.sci_msg3 = &g_stCurrentMsgPtr_SCI3;
-	watch->comm.sci_err3 = &gu16_CommuErrCnt_SCI3;
-	watch->comm.sci_tx_enable3 = &gu8_TxEnable_SCI3;
-	watch->comm.sci_tx_finish3 = &gu8_TxFinishFlag_SCI3;
-#else
-	watch->comm.sci3 = 0;
-	watch->comm.sci_msg3 = 0;
-	watch->comm.sci_err3 = 0;
-	watch->comm.sci_tx_enable3 = 0;
-	watch->comm.sci_tx_finish3 = 0;
-#endif
-}
-#endif
-
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-static UINT8 Sci_DebugPortIndex(const struct SCI_PORT_RUNTIME *pstPort)
-{
-	if ((pstPort != 0) && (pstPort->pstUsart == USART1))
-	{
-		return (UINT8)DBG_HUB_USART1;
-	}
-	if ((pstPort != 0) && (pstPort->pstUsart == USART2))
-	{
-		return (UINT8)DBG_HUB_USART2;
-	}
-#ifdef USART3
-	if ((pstPort != 0) && (pstPort->pstUsart == USART3))
-	{
-		return (UINT8)DBG_HUB_USART3;
-	}
-#endif
-	return 0U;
-}
-#endif
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
@@ -928,7 +863,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 
 	status_snapshot = SystemRuntime_GetStatusSnapshot();
-	feature_mask = SystemFeature_GetMask();
+	feature_mask = 0;
 	switch (OPEN)
 	{
 	case 0:
@@ -1521,20 +1456,11 @@ static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort)
 static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 {
 	UINT16 u16Status;
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-	UINT8 u8DbgPort;
-#endif
 
 	u16Status = pstPort->pstUsart->SR;
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-	u8DbgPort = Sci_DebugPortIndex(pstPort);
-#endif
 
 	if ((u16Status & SCI_USART_ERROR_FLAGS) != 0U)
 	{
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-		DBG_RecordUsartError(u8DbgPort, u16Status);
-#endif
 		Sci_PortHandleError(pstPort);
 		return;
 	}
@@ -1546,9 +1472,6 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-		DBG_RecordUsartRx(u8DbgPort);
-#endif
 
 		if ((pstPort->pstProtocolOps != 0) &&
 			(pstPort->pstProtocolOps->pfRxFeed != 0) &&
@@ -1567,9 +1490,6 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 		u16Dummy = pstPort->pstUsart->DR;
 		(void)u16Dummy;
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-		DBG_RecordUsartIdle(u8DbgPort);
-#endif
 
 		if ((pstPort->u8FramePending == 0U) &&
 			(pstPort->u16TxLength == 0U) &&
@@ -1591,9 +1511,6 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 		else
 		{
 			pstPort->pstUsart->DR = pstPort->pu8TxBuffer[pstPort->u16TxIndex++];
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-			DBG_RecordUsartTx(u8DbgPort);
-#endif
 			if (pstPort->u16TxIndex >= pstPort->u16TxLength)
 			{
 				pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TXEIE;
@@ -2132,7 +2049,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 		}
 		
-		SystemFeature_SetById(u16SciRegData, 1U);
 	}
 	else
 	{
@@ -2147,7 +2063,6 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
-		SystemFeature_SetById(u16SciRegData, 0U);
 	}
 	else
 	{

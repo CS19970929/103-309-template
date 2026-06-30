@@ -1,8 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
-#include "SystemDebug.h"
-#include "IrqDebug.h"
-#include "debug_hub.h"
 
 volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
@@ -20,23 +16,6 @@ static UINT16 fac_ms = 0;
 
 static volatile UINT8 s_u8Sys200msPendingPeriods = 0U;
 static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
-
-#if DEBUG_WATCH_ENABLED
-void SystemInit_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->system.time_latched = &g_st_SysTimeFlag;
-	watch->system.time_pending = &s_st_SysTimePending;
-	watch->system.tick_10ms = &s_u32Sys10msTickCount;
-	watch->system.cnt50ms = &s_u8Cnt50ms;
-	watch->system.cnt100ms = &s_u8Cnt100ms;
-	watch->system.cnt200ms = &s_u8Cnt200ms;
-	watch->system.cnt1000ms = &s_u8Cnt1000ms;
-	watch->system.pending_200ms = &s_u8Sys200msPendingPeriods;
-	watch->system.overflow_200ms = &s_u16Sys200msOverflowCnt;
-	watch->system.delay_fac_us = &fac_us;
-	watch->system.delay_fac_ms = &fac_ms;
-}
-#endif
 
 #define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP |     \
 							  DBGMCU_CR_DBG_STOP |      \
@@ -69,8 +48,7 @@ void Init_IWDG(void)
 #endif					  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
 						  // 800——1.28s，80——128ms
 	IWDG_ReloadCounter(); // 喂狗
-	DBG_RecordIwdgFeed((UINT8)DBG_HUB_IWDG_FEED_INIT);
-	IWDG_Enable(); // 使能IWDG
+	IWDG_Enable();		  // 使能IWDG
 #endif
 }
 
@@ -316,22 +294,35 @@ void IWDG_Feed(void)
 {
 #if PROJECT_CFG_WDOG_ENABLE
 	IWDG_ReloadCounter();
-	DBG_RecordIwdgFeed((UINT8)DBG_HUB_IWDG_FEED_RUNTIME);
-	SystemDebug_RecordWatchdogFeed((UINT8)DBG_WDG_SRC_FEED);
 #endif
 }
 
 void TIM3_IRQHandler(void)
 {
+	static uint8_t sleep_state = 0;
+
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
-		IrqDebug_CountFast((uint8_t)IRQDBG_TIM3_10MS);
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
 
-		if (1 == MCUI_ENI_DI1)
-		{
-			LowPower_Request(NORMAL_MODE);
-		}
+		// switch (sleep_state)
+		// {
+		// case 0:
+		// 	if (1 == MCUI_ENI_DI1 && !g_stCellInfoReport.u16Ichg)
+		// 	{
+		// 		MCUO_AFE_CTLC = 0;
+		// 		if (!IsChargeActive())
+		// 		{
+		// 			MCUO_AFE_CTLC = 1;
+		// 			LowPower_Request(NORMAL_MODE);
+		// 		}
+		// 		else
+		// 			MCUO_AFE_CTLC = 1;
+		// 	}
+		// 	break;
+		// default:
+		// 	break;
+		// }
 	}
 }

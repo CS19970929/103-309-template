@@ -13,11 +13,6 @@ UINT8 Can_PeekBusy(void);
 UINT8 Can_IsBusy(void);
 void Can_PrepareSleep(void);
 
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-void Can_GetDebugSnapshot(uint8_t *power_on,
-                          uint8_t *bus_off,
-                          uint8_t *tx_queue,
-                          uint16_t *esr);
-#endif
+
 
 #endif

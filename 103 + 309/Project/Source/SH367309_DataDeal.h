@@ -234,6 +234,7 @@ typedef struct{
 }AFE_Parameters_RS485_Typedef; 
 
 
+extern AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction ;
 
 void App_SH367309_Supplement(void);
 

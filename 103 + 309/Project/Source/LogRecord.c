@@ -1,5 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 #define EVENT_RECORD_LENGTH 100
 
@@ -18,14 +17,6 @@ typedef struct LOG_RECORD_RUNTIME_TAG
 UINT32 su32_Interval_S_Tcnt = 0;
 
 static LogRecordRuntime s_log_record;
-
-#if DEBUG_WATCH_ENABLED
-void LogRecord_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->runtime.log_record = &s_log_record;
-	watch->app.log_interval_s_tcnt = &su32_Interval_S_Tcnt;
-}
-#endif
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
 {

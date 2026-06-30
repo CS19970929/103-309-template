@@ -58,23 +58,23 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
                                    SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
         Fault_ChangeToMCU();
 
-        if (!SystemRuntime_IsDischargeMosOpen())
-        {
-            if (source != 0)
-            {
-                *source = chg_dsg_close;
-            }
-            return 1U;
-        }
+        // if (!SystemRuntime_IsDischargeMosOpen())
+        // {
+        //     if (source != 0)
+        //     {
+        //         *source = chg_dsg_close;
+        //     }
+        //     return 1U;
+        // }
 
-        if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
-        {
-            if (source != 0)
-            {
-                *source = error_wake;
-            }
-            return 1U;
-        }
+        // if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
+        // {
+        //     if (source != 0)
+        //     {
+        //         *source = error_wake;
+        //     }
+        //     return 1U;
+        // }
     }
     return 0U;
 }

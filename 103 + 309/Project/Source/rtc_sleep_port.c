@@ -1,7 +1,5 @@
 #include "main.h"
-#include "FactoryAging.h"
 #include "LowPowerSleep.h"
-#include "IrqDebug.h"
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"
 
@@ -65,9 +63,7 @@ void RtcSleep_PortCommitResetSleep(UINT8 sleep_mode)
 void RtcSleep_PortEnterStop(void)
 {
     Feed_IWatchDog;
-    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
     Sys_StopMode();
-    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
     Feed_IWatchDog;
 }
 
@@ -79,9 +75,7 @@ void RtcSleep_PortDisableStopWakeup(void)
 
 void RtcSleep_PortRestoreAfterStop(void)
 {
-    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_RESTORE);
     InitRunAfterStopWakeup();
-    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RUN);
 }
 
 
@@ -102,22 +96,6 @@ void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
     extern UINT32 su32_Interval_S_Tcnt;
 
     su32_Interval_S_Tcnt += seconds;
-    // FactoryAging_ApplySleepTime(seconds);
-}
-
-enum irqWakeup RtcSleep_PortGuessWakeupSource(void)
-{
-    if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET)
-    {
-        return PA0_irq;
-    }
-
-    if (GPIO_ReadInputDataBit(GPIO_SW, PIN_SW) == Bit_RESET)
-    {
-        return soc_key;
-    }
-
-    return NO_IRQ;
 }
 
 void cpu_frequency_conf(void)

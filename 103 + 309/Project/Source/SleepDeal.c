@@ -1,7 +1,5 @@
 #include "main.h"
-#include "DebugWatch.h"
 #include "LowPowerSleep.h"
-#include "IrqDebug.h"
 
 typedef struct SLEEP_RUNTIME_TAG
 {
@@ -12,13 +10,6 @@ typedef struct SLEEP_RUNTIME_TAG
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
-
-#if DEBUG_WATCH_ENABLED
-void SleepDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->runtime.sleep = &s_sleep;
-}
-#endif
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
@@ -119,7 +110,6 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 		return;
 	}
 
-	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
 	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
 	InitAFE1_Sleep(0);
@@ -210,10 +200,7 @@ static void SleepDeal_WaitStopWakeup(void)
 {
 	do
 	{
-		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_RESET_SLEEP_WAIT);
-		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAIT);
 		Sys_StopMode();
-		IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_STOP_WAKE_RAW);
 	} while (!SleepDeal_IsWakeupValid());
 }
 

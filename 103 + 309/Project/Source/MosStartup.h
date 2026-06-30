@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "stm32f10x.h"
 
-UINT8 MosStartup_Is5vChargeActive(void);
+UINT8 IsChargeActive(void);
 void MosStartup_OpenChargeCloseDischarge(void);
 void MosStartup_OpenDischargeCloseCharge(void);
 void MosStartup_EnterFactoryMode(bool on);

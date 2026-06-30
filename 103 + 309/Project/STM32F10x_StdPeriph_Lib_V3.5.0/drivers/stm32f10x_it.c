@@ -25,7 +25,6 @@
 #include "stm32f10x_it.h"
 #include "main.h" //在it的头文件可能会导致别的地方也能调用main的东西，不符合安全规范
 #include "FaultSnapshot.h"
-#include "IrqDebug.h"
 
 // #include "stm32_eval.h"
 
@@ -55,7 +54,6 @@
  */
 void NMI_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_NMI);
 }
 
 __asm void wait()
@@ -94,8 +92,6 @@ static void Fault_ResetOrHold(UINT16 reason)
  */
 void HardFault_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_HARDFAULT);
-  IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_FAULT);
   Fault_ResetOrHold(FAULT_REASON_HARD);
 }
 
@@ -106,8 +102,6 @@ void HardFault_Handler(void)
  */
 void MemManage_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_MEMMANAGE);
-  IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_FAULT);
   Fault_ResetOrHold(FAULT_REASON_MEM);
 }
 
@@ -118,8 +112,6 @@ void MemManage_Handler(void)
  */
 void BusFault_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_BUSFAULT);
-  IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_FAULT);
   Fault_ResetOrHold(FAULT_REASON_BUS);
 }
 
@@ -130,8 +122,6 @@ void BusFault_Handler(void)
  */
 void UsageFault_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_USAGEFAULT);
-  IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_FAULT);
   Fault_ResetOrHold(FAULT_REASON_USAGE);
 }
 
@@ -142,7 +132,6 @@ void UsageFault_Handler(void)
  */
 void SVC_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_SVC);
 }
 
 /**
@@ -152,7 +141,6 @@ void SVC_Handler(void)
  */
 void DebugMon_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_DEBUGMON);
 }
 
 /**
@@ -162,7 +150,6 @@ void DebugMon_Handler(void)
  */
 void PendSV_Handler(void)
 {
-  IrqDebug_Count((uint8_t)IRQDBG_PENDSV);
 }
 
 /**
@@ -172,7 +159,6 @@ void PendSV_Handler(void)
  */
 void SysTick_Handler(void)
 {
-  IrqDebug_CountFast((uint8_t)IRQDBG_SYSTICK);
 }
 
 /******************************************************************************/
@@ -190,14 +176,12 @@ void EXTI0_IRQHandler(void)
 
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI0_CHG_IN);
     sys_time.cnt_PA0_irq++;
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line0);
   }
   if (handled == 0U)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI_GROUP_SPURIOUS);
   }
 }
 
@@ -207,13 +191,11 @@ void EXTI2_IRQHandler(void)
 
   if (EXTI_GetITStatus(EXTI_Line2) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI2_STRAY);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line2);
   }
   if (handled == 0U)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI_GROUP_SPURIOUS);
   }
 }
 
@@ -223,13 +205,11 @@ void EXTI3_IRQHandler(void)
 
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI3_STRAY);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line3);
   }
   if (handled == 0U)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI_GROUP_SPURIOUS);
   }
 }
 
@@ -239,19 +219,16 @@ void EXTI15_10_IRQHandler(void)
 
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI12_CMNT_WAKE);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line12);
   }
   if (EXTI_GetITStatus(EXTI_Line13) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI13_MCU_WAKE);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line13);
   }
   if (handled == 0U)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI_GROUP_SPURIOUS);
   }
 }
 
@@ -266,25 +243,21 @@ void EXTI9_5_IRQHandler(void)
 
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI5_STRAY);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line5);
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI6_STRAY);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line6);
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI7_UART1_WAKE);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line7);
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI9_SW_KEY);
     sys_time.cnt_bms1_keyirq++;
     handled = 1U;
     g_irq_t = soc_key;
@@ -292,7 +265,6 @@ void EXTI9_5_IRQHandler(void)
   }
   if (handled == 0U)
   {
-    IrqDebug_Count((uint8_t)IRQDBG_EXTI_GROUP_SPURIOUS);
   }
 }
 
@@ -323,7 +295,6 @@ void EXTI9_5_IRQHandler(void)
 // 以下的是非共有的，如果多处使用到，则移动到it.c文件
 void USART1_IRQHandler(void)
 {
-  IrqDebug_CountFast((uint8_t)IRQDBG_USART1);
   sys_time.sci1_irq_cnt++;
 #ifdef _COMMOM_UPPER_SCI1
   Sci1_CommonUpper_IRQHandler();
@@ -331,7 +302,6 @@ void USART1_IRQHandler(void)
 }
 void USART2_IRQHandler(void)
 {
-  IrqDebug_CountFast((uint8_t)IRQDBG_USART2);
   sys_time.sci2_irq_cnt++;
 #ifdef _COMMOM_UPPER_SCI2
   Sci2_CommonUpper_IRQHandler();
@@ -340,7 +310,6 @@ void USART2_IRQHandler(void)
 #ifdef _COMMOM_UPPER_SCI3
 void USART3_IRQHandler(void)
 {
-  IrqDebug_CountFast((uint8_t)IRQDBG_USART3);
   sys_time.sci3_irq_cnt++;
   Sci3_CommonUpper_IRQHandler();
 }

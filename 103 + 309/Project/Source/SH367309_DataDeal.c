@@ -1,7 +1,6 @@
 #include "main.h"
 #include "SH367309_DataDeal.h"
 #include "string.h"
-#include "DebugWatch.h"
 
 int AFE_PARAM_WRITE_Flag = 1;
 
@@ -14,26 +13,10 @@ static const UINT16 s_sh_afe_ocd1t[16] = {50, 100, 200, 400, 600, 800, 1000, 200
 static const UINT16 s_sh_afe_occt_ocd2t[16] = {10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000};
 
 AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
-static AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
 extern UINT8 ucMTPBuffer[26];
 extern const UINT16 iSheldTemp_10K_NTC[141];
-
-#if DEBUG_WATCH_ENABLED
-void SH367309Data_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->afe.rom_params = &AFE_ROM_PARAMETERS_Struction;
-	watch->afe.rs485_params = &AFE_Parameters_RS485_Struction;
-	watch->afe.param_write_flag = &AFE_PARAM_WRITE_Flag;
-	watch->tables.sh_afe_scv = g_u16ShAfeScvTable;
-	watch->tables.sh_afe_sct = g_u16ShAfeSctTable;
-	watch->tables.sh_afe_ocd1v_occv = s_sh_afe_ocd1v_occv;
-	watch->tables.sh_afe_ocd2v = s_sh_afe_ocd2v;
-	watch->tables.sh_afe_ovt_uvt = s_sh_afe_ovt_uvt;
-	watch->tables.sh_afe_ocd1t = s_sh_afe_ocd1t;
-	watch->tables.sh_afe_occt_ocd2t = s_sh_afe_occt_ocd2t;
-}
-#endif
 
 #define DSG_CHG_OCP_DELAY_TIME (30 * 100)
 #define OFF 0

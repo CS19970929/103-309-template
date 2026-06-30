@@ -1,5 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 #define FLASH_STORAGE_MAGIC_SOC ((UINT32)0x534F4331)
 #define FLASH_STORAGE_MAGIC_AFE ((UINT32)0x41464531)
@@ -52,13 +51,6 @@ typedef struct FLASH_RUNTIME_TAG
 } FLASH_RUNTIME;
 
 static FLASH_RUNTIME s_flash;
-
-#if DEBUG_WATCH_ENABLED
-void Flash_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->runtime.flash = &s_flash;
-}
-#endif
 
 static void StorageFlash_BeginWrite(void)
 {

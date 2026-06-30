@@ -395,15 +395,3 @@ void InitRunAfterStopWakeup(void)
     initAFE1_IIC();
 }
 
-// todo ????????
-void Init(void)
-{
-    if (RTC_IsStopWakeup() != 0U)
-    {
-        InitRtcWakeupCheck();
-    }
-    else
-    {
-        InitRunAfterStopWakeup();
-    }
-}

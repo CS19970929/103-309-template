@@ -1,6 +1,4 @@
 #include "main.h"
-#include "IrqDebug.h"
-#include "DebugWatch.h"
 
 typedef struct RTC_RUNTIME_TAG
 {
@@ -18,15 +16,6 @@ struct RTC_ELEMENT RTC_time;
 
 static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
-#if DEBUG_WATCH_ENABLED
-void RTC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->runtime.rtc = &s_rtc;
-	watch->public_data.rtc_time = &RTC_time;
-	watch->tables.rtc_month_days = month_days;
-	watch->tables.rtc_month_days_count = (uint16_t)(sizeof(month_days) / sizeof(month_days[0]));
-}
-#endif
 
 #define RTC_CLOCK_OK             0U
 #define RTC_CLOCK_USE_LSI        1U
@@ -315,7 +304,7 @@ static void RTC_ClearAlarmPending(void)
 
 static void RTC_DisableSecondInterrupt(void)
 {
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);
+	// RTC_ITConfig(RTC_IT_SEC, DISABLE);
 	RTC_WaitForLastTaskSafe();
 	RTC_ClearITPendingBit(RTC_IT_SEC);
 	RTC_WaitForLastTaskSafe();
@@ -518,7 +507,6 @@ static void RTC_HandleAlarmWakeup(void)
 
 void RTCAlarm_IRQHandler(void)
 {
-	IrqDebug_Count((uint8_t)IRQDBG_RTC_ALARM);
 	RTC_HandleAlarmWakeup();
 }
 
@@ -526,7 +514,6 @@ void RTC_IRQHandler(void)
 {
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
 	{
-		IrqDebug_CountFast((uint8_t)IRQDBG_RTC_SEC);
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		sys_time.rtc_sec_cnt++;
 		s_rtc.disp = 1;				   // Enable time update
@@ -535,7 +522,6 @@ void RTC_IRQHandler(void)
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 	{
-		IrqDebug_Count((uint8_t)IRQDBG_RTC_ALARM_IN_RTC_IRQ);
 		RTC_HandleAlarmWakeup();
 	}
 }

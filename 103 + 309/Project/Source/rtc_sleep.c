@@ -1,13 +1,12 @@
 #include "main.h"
-#include "FactoryAging.h"
+#include "SH367309_DataDeal.h"
 #include "rtc_sleep_port.h"
 #include "DataDeal.h"
 #include "conf.h"
 #include "Sci_Upper.h"
 #include "RTC.h"
-#include "IrqDebug.h"
 
-#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
+#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2500U)
 // #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(30))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
@@ -117,6 +116,12 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
+    if (1 == MCUI_ENI_DI1 && !g_stCellInfoReport.u16Ichg)
+    {
+        LowPower_Request(NORMAL_MODE);
+        return 1U;
+    }
+
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
@@ -199,14 +204,10 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
-    IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_SLEEP_PREPARE);
-
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
     IOstatus_RTCMode();
-    // IOstatus_Base();
-    // IOstatus_NormalMode();
     if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
     {
         InitWakeUp_RTCMode();
@@ -243,7 +244,8 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
-        if (g_stCellInfoReport.u16VCellMin <= 3000)
+        if (g_stCellInfoReport.u16VCellMin <= AFE_Parameters_RS485_Struction.u16VcellUvp.curValue ||
+            !SystemRuntime_IsDischargeMosOpen())
         {
             low_power_log_and_commit_sleep(DEEP_MODE);
             // return false;

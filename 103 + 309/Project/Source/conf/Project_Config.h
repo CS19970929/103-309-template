@@ -173,7 +173,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0005
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0002
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
@@ -205,7 +205,7 @@
 // <i> These 32 words map to RS485 0x2300..0x231F without changing protocol order.
 
 // <o> Balance open voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 4160
+#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 3400
 // <o> Balance open window mV <1-2000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 30
 // <o> Balance close window mV <0-2000>
@@ -244,7 +244,7 @@
 // <o> Normal sleep time min <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_NORMAL 7200
 // <o> Low-voltage sleep voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_LOW 3000
+#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_LOW 2800
 // <o> Low-voltage sleep time min <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1
 // <o> Sleep virtual charge current A*10 <0-50000>
@@ -261,12 +261,12 @@
 // <o> SOC cycle times <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 1
 // <o> SOC 100 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 3550
 // <o> SOC 0 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 2750
 
 // <o> System series number <3-32>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 7
+#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 10
 // <o> System current-sense resistor mOhm <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES 2
 // <o> System current-sense resistor numerator <1-10000>

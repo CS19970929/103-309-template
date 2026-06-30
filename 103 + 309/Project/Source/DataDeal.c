@@ -1,5 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 1´®
@@ -94,44 +93,8 @@ UINT32 g_u32CS_Res_AFE;
 
 struct OTHER_ELEMENT OtherElement;
 
-#if DEBUG_WATCH_ENABLED
-void DataDeal_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-    watch->runtime.data = &s_data;
-    watch->public_data.other = &OtherElement;
-    watch->calib.coef_k = g_u16CalibCoefK;
-    watch->calib.coef_b = g_i16CalibCoefB;
-    watch->calib.cs_res_afe = &g_u32CS_Res_AFE;
-}
-#endif
-
 void charger_detect_and_keyLogi_200ms(void)
 {
-    // static uint8_t state = 0;
-
-    // switch (state)
-    // {
-    // case 0:
-    //     if (!GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-    //     {
-    //         state = 1;
-    //         open_chg_close_dsg();
-    //     }
-    //     break;
-    // case 1:
-    //     if (GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN))
-    //     {
-    //         LowPower_Request(DEEP_MODE);
-    //         low_power_log_and_commit_sleep(DEEP_MODE);
-    //     }
-    //     else
-    //     {
-    //     }
-    //     break;
-    // default:
-    //     state = 0;
-    //     break;
-    // }
 }
 
 void Init_Registers(UINT8 num)

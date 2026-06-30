@@ -1,5 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -30,23 +29,6 @@ UINT8 ucMTPBuffer[26] = {
 	BYTE_14H_UTCR, BYTE_15H_OTD, BYTE_16H_OTDR, BYTE_17H_UTD, BYTE_18H_UTDR,
 	BYTE_19H_TR};
 
-#if DEBUG_WATCH_ENABLED
-void SH367309Func_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->afe.reg_store = &SH367309_Reg_Store;
-	watch->afe.mtp_buffer = ucMTPBuffer;
-	watch->tables.sh_ntc_10k = iSheldTemp_10K_NTC;
-}
-#endif
-
-
-/*******************************************************************************
-Function:ResetAFE()
-Description:  Reset SH367309 IC, Send Data:0xEA, 0xC0, CRC
-Input:	 NULL
-Output: NULL
-Others:
-*******************************************************************************/
 void AFE_Reset(void)
 {
 	UINT8 WrBuf[2];

@@ -1,5 +1,4 @@
 #include "main.h"
-#include "FactoryAging.h"
 #include "MosStartup.h"
 
 static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAction mcc_level)
@@ -11,9 +10,9 @@ static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAct
 	// GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, mcc_level);
 }
 
-UINT8 MosStartup_Is5vChargeActive(void)
+UINT8 IsChargeActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
 }
 
 void MosStartup_OpenChargeCloseDischarge(void)

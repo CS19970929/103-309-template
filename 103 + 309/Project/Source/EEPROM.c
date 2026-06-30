@@ -281,32 +281,6 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 #endif
 }
 
-UINT8 ReadEEPROM_Byte(UINT16 addr)
-{
-	(void)addr;
-	return 0xFF;
-}
-
-UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val)
-{
-	(void)addr;
-	(void)val;
-	return 0;
-}
-
-UINT16 ReadEEPROM_Word_NoZone(UINT16 addr)
-{
-	(void)addr;
-	return 0xFFFF;
-}
-
-UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data)
-{
-	(void)addr;
-	(void)data;
-	return 0;
-}
-
 void InitE2PROM(void)
 {
 	EEPROM_LoadDefaultRuntimeData();

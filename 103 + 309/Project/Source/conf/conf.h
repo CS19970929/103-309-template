@@ -145,7 +145,6 @@ void LowPower_DisableWakeupExti(void);
 void Sys_StopMode(void);
 void InitRtcWakeupCheck(void);
 void InitRunAfterStopWakeup(void);
-void Init(void);
 
 #include "Project_BuildGuard.h"
 

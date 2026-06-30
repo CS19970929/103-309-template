@@ -1,13 +1,10 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
-static volatile union System_OnOFF_Function s_system_onoff_func;
 static volatile union System_Status s_system_status;
 
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
 /* Keep these masks in sync with System_Monitor.h bitfield order. */
-#define SYSTEM_ONOFF_DEFAULT_MASK ((UINT32)0x00000287U)
 #define SYSTEM_STATUS_DEFAULT_MASK ((UINT32)0x00000001U)
 
 static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
@@ -21,18 +18,6 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 };
 
 static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode);
-
-#if DEBUG_WATCH_ENABLED
-void SystemMonitor_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->system.feature = &s_system_onoff_func;
-	watch->system.status = &s_system_status;
-	watch->system.error = &System_ErrFlag;
-	watch->tables.system_error_field_offset = s_u8SystemErrorFieldOffset;
-	watch->tables.system_error_field_offset_count =
-		(uint16_t)(sizeof(s_u8SystemErrorFieldOffset) / sizeof(s_u8SystemErrorFieldOffset[0]));
-}
-#endif
 
 static volatile UINT8 *System_ErrorCommandField(enum SYSTEM_ERROR_COMMAND errorCode)
 {
@@ -132,7 +117,6 @@ static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
 
 void InitSystemMonitorData_EEPROM(void)
 {
-	s_system_onoff_func.all = SYSTEM_ONOFF_DEFAULT_MASK;
 	s_system_status.all = SYSTEM_STATUS_DEFAULT_MASK;
 }
 
@@ -179,31 +163,6 @@ UINT8 SystemRuntime_IsDischargeMosOpen(void)
 UINT32 SystemRuntime_GetStatusSnapshot(void)
 {
 	return s_system_status.all;
-}
-
-UINT32 SystemFeature_GetMask(void)
-{
-	return s_system_onoff_func.all;
-}
-
-void SystemFeature_SetById(UINT16 function_id, UINT8 enable)
-{
-	UINT32 mask;
-
-	if ((function_id == 0U) || (function_id > 32U))
-	{
-		return;
-	}
-
-	mask = ((UINT32)1U << (function_id - 1U));
-	if (enable != 0U)
-	{
-		s_system_onoff_func.all |= mask;
-	}
-	else
-	{
-		s_system_onoff_func.all &= ~mask;
-	}
 }
 
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)

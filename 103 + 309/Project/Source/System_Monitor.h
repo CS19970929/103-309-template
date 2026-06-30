@@ -116,39 +116,6 @@ struct SYSTEM_ERROR {
 	UINT8 u8Res6;
 };
 
-
-//ϵͳ����ʱ���������
-
-union System_Function_StartUp {				//���ܳ�ʼ��ͳһ����
-    UINT32 all;
-    struct System_Func_StartUp_Flag {
-		UINT8 b1StartUpFlag_SOC		:1;		//SOC��ʼ����Ŀǰ���ڿ�·��ѹ�Ͱ�ʱ���֣��迹���ٲ����õ�����Ϊ�������ļ�����
-		UINT8 b1StartUpFlag_Balance	:1;		//�����ʼ��
-		UINT8 b1StartUpFlag_Protect :1;		//�������ܳ�ʼ��
-		UINT8 b1StartUpFlag_MOS     :1;		//MOS�ܳ�ʼ��
-		
-		UINT8 b1StartUpFlag_Relay   :1;		//�̵����ܳ�ʼ��
-		UINT8 b1StartUpFlag_ADC     :1;		//ADC��ʼ��
-		UINT8 b1StartUpFlag_CAN		:1;		//Can��ʼ��
-		UINT8 b1StartUpFlag_Reserved7	:1;		//�����������Լ�
-
-		UINT8 b1StartUpFlag_Reserved8	:1;		//ɢ�����������Լ�
-		UINT8 b1StartUpFlag_AFE1	:1;		//AFE1		//����AFE���ϵ绽�Ѻ���ʼ���꣬�����������Ҫ����Ȼ̫������
-		UINT8 b1StartUpFlag_AFE2	:1;		//AFE2
-		UINT8 b1StartUpFlag_BlueT	:1;		//���������Լ�
-		
-		UINT8 bRcved7				:1;		//res
-		UINT8 bRcved8				:1;		//res
-		UINT8 bRcved9				:1;		//res
-		UINT8 bRcved10				:1;		//res
-
-		UINT8 bRcved11				:8;		//res
-		UINT8 bRcved12				:8;		//res
-     }bits;
-};
-
-
-//ϵͳ״̬��������
 union System_Status {				//TODO�����⣬Heat��Cool��û��
     UINT32 all;
     struct System_Status_Flag {
@@ -184,34 +151,6 @@ union System_Status {				//TODO�����⣬Heat��Cool��û��
 };
 
 
-//ϵͳ���ܿ�������
-union System_OnOFF_Function {				//TODO
-    UINT32 all;
-    struct System_OnOFF_Ctrl {
-		UINT8 b1OnOFF_Balance		:1;		//���⹦��
-		UINT8 b1OnOFF_BMS_Source 	:1;		//BMS��Դ����
-		UINT8 b1OnOFF_MOS_Relay     :1;		//����MOS�ͽӴ������ܣ���ŵ��ã���Ҫ��������IO�������ع��ܹرգ�ͨ��Switch���Ʊ��
-											//ԭ���Ƿֿ��ģ����Ǻ��淢��ÿ���õ��ĵط���Ҫѡͨ���ɴ�ͺϲ���һ������Ҫѡͨ�ˡ�
-		UINT8 b1OnOFF_Relay_Rec     :1;		//�̵�������
-		
-		UINT8 bRcvedSocFixed        :1;		//res
-		UINT8 b1OnOFF_ReservedHeat          :1;		//���ȹ���
-		UINT8 b1OnOFF_ReservedCool          :1;		//���书��
-		UINT8 b1OnOFF_AFE1         	:1;		//AFE1״̬
-
-		UINT8 b1OnOFF_AFE2	        :1;		//AFE2״̬
-		UINT8 b1OnOFF_Sleep			:1;		//���߹���
-		UINT8 bRcvedSocZero			:1;		//res
-		UINT8 bRcved5				:1;		//
-		
-		UINT8 bRcved1				:4;		//res
-
-		UINT8 bRcved2				:8;		//res
-		UINT8 bRcved3				:8;		//res
-     }bits;
-};
-
-
 extern volatile struct SYSTEM_ERROR System_ErrFlag;
 
 void InitSystemMonitorData_EEPROM(void);
@@ -223,7 +162,5 @@ void SystemRuntime_SetMosStatus(UINT8 charge_on, UINT8 discharge_on);
 UINT8 SystemRuntime_IsChargeMosOpen(void);
 UINT8 SystemRuntime_IsDischargeMosOpen(void);
 UINT32 SystemRuntime_GetStatusSnapshot(void);
-UINT32 SystemFeature_GetMask(void);
-void SystemFeature_SetById(UINT16 function_id, UINT8 enable);
 
 #endif	/* SYSTEM_MONITOR_H */

@@ -1,9 +1,5 @@
 #include "main.h"
-#include "DebugWatch.h"
 #include "CanFeidaoFrames.h"
-// #include "FactoryAging.h"
-#include "IrqDebug.h"
-#include "debug_hub.h"
 #include <string.h>
 
 
@@ -109,15 +105,6 @@ static FeidaoCanTxRuntime s_tx = {
 };
 static FeidaoCanRuntime s_runtime;
 static FeidaoCanAppRuntime s_app;
-
-#if DEBUG_WATCH_ENABLED
-void Can_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->runtime.can_tx = &s_tx;
-	watch->runtime.can_runtime = &s_runtime;
-	watch->runtime.can_app = &s_app;
-}
-#endif
 
 static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static void feidao_can_power_on(void);
@@ -305,11 +292,6 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		{
 			s_tx.mailbox_source = item.source;
 			s_tx.start_tick = now_tick;
-			DBG_RecordCanTxFrame((item.frame.IDE == CAN_ID_STD) ? item.frame.StdId : item.frame.ExtId,
-								 item.frame.IDE,
-								 item.frame.RTR,
-								 item.frame.DLC,
-								 item.frame.Data);
 		}
 		else
 		{
@@ -942,30 +924,10 @@ void App_Can(void)
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	CanRxMsg rx_msg;
-
-	IrqDebug_CountFast((uint8_t)IRQDBG_CAN1_RX0);
 	while (CAN_MessagePending(CAN1, CAN_FIFO0) != 0U)
 	{
 		sys_time.can_rcv_cnt++;
 		CAN_Receive(CAN1, CAN_FIFO0, &rx_msg);
-		DBG_RecordCanRxFrame((rx_msg.IDE == CAN_ID_STD) ? rx_msg.StdId : rx_msg.ExtId,
-							 rx_msg.IDE,
-							 rx_msg.RTR,
-							 rx_msg.DLC,
-							 rx_msg.Data);
 		feidao_can_handle_rx_msg(&rx_msg);
 	}
 }
-
-#if PROJECT_CFG_DEBUG_MONITOR_ENABLE
-void Can_GetDebugSnapshot(uint8_t *power_on,
-                          uint8_t *bus_off,
-                          uint8_t *tx_queue,
-                          uint16_t *esr)
-{
-	if (power_on  != 0)   *power_on    = (uint8_t)(GPIO_ReadOutputDataBit(GPIO_CMNT_EN, PIN_CMNT_EN) == FEIDAO_CAN_POWER_ON_LEVEL);
-	if (bus_off   != 0)   *bus_off     = (uint8_t)((CAN1->ESR & CAN_ESR_BOFF) != 0U);
-	if (tx_queue  != 0)   *tx_queue    = s_tx.count;
-	if (esr       != 0)   *esr         = (uint16_t)(CAN1->ESR & 0xFFFFU);
-}
-#endif

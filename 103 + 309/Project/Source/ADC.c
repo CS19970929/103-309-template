@@ -1,6 +1,4 @@
 #include "main.h"
-#include "DebugWatch.h"
-#include "debug_hub.h"
 
 typedef struct ADC_RUNTIME_TAG
 {
@@ -82,15 +80,6 @@ static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
 
 };
 
-#if DEBUG_WATCH_ENABLED
-void ADC_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-    watch->runtime.adc = &s_adc;
-    watch->tables.adc_ntc_10k = iSheldTemp_10K;
-}
-#endif
-
-// 030å’103è®¾ç½®ä¸è‡
 void InitADC_DMA(void)
 {
     DMA_InitTypeDef DMA_InitStruct;
@@ -481,5 +470,4 @@ void App_AnlogCal(void)
     // ADC_UpdateVbc();
     // ADC_UpdateTypeCCurrent();
     s_adc.ready = 1U;
-    DBG_RecordAdcSample();
 }

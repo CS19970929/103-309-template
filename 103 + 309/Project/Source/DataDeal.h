@@ -181,7 +181,7 @@ struct OTHER_ELEMENT {
 #define OtherElement_default 	{3300,	50,	20,	0,	0,	0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
-	                             3200,	7200,	3000,	10,	10,	10,	240, 3,\
+	                             3200,	7200,	2800,	10,	10,	10,	240, 3,\
 	                             BMS_CAPCITY,	3,		3600,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif

@@ -58,11 +58,6 @@
 
 
 
-
-
-UINT8 ReadEEPROM_Byte(UINT16 addr);
-UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val);
-
 void InitE2PROM(void);
 UINT8 EEPROM_SaveRWParametersToFlash(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);

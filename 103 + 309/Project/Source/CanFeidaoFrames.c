@@ -1,6 +1,5 @@
 #include "main.h"
 #include "CanFeidaoFrames.h"
-#include "DebugWatch.h"
 
 #define CAN_FEIDAO_EXT_ID_BASE ((UINT32)0x14F80200U)
 #define CAN_FEIDAO_FRAME_LEN_8 ((uint8_t)8U)
@@ -33,15 +32,6 @@ static const CanFeidao_FrameDispatch s_can_feidao_dispatch[] = {
 	{CAN_FEIDAO_MSG_STATUS_5000MS, CanFeidao_SendStatus5000ms},
 	{CAN_FEIDAO_MSG_FACTORY_TIME_5000MS, CanFeidao_SendFactoryTime5000ms},
 };
-
-#if DEBUG_WATCH_ENABLED
-void CanFeidaoFrames_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->tables.can_feidao_dispatch = s_can_feidao_dispatch;
-	watch->tables.can_feidao_dispatch_count =
-		(uint16_t)(sizeof(s_can_feidao_dispatch) / sizeof(s_can_feidao_dispatch[0]));
-}
-#endif
 
 static void CanFeidao_PutU16Be(uint8_t *data, uint8_t offset, uint16_t value)
 {

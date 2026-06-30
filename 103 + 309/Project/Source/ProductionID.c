@@ -1,14 +1,6 @@
 #include "main.h"
-#include "DebugWatch.h"
 
 PRODUCTION_ID_INFO ProductionInfor;
-
-#if DEBUG_WATCH_ENABLED
-void ProductionID_DebugWatchBind(DEBUG_WATCH_ROOT *watch)
-{
-	watch->public_data.production = &ProductionInfor;
-}
-#endif
 
 static void InitProID_DefaultData(void)
 {
