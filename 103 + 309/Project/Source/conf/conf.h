@@ -8,7 +8,7 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0402		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x0701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (9)
 #define CURRENT_K_DSG   (float)100.0 / 93

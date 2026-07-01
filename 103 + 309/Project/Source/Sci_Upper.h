@@ -3,7 +3,7 @@
 
 #define SCI_software_ver			"06"
 
-#define __BAUD_RATE__  115200
+#define __BAUD_RATE__  9600
 
 
 // #define SCI_software_ver			"1D"
