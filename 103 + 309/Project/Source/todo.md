@@ -1735,3 +1735,29 @@ adc需求：所有项目都会采一个mos温度，偶尔项目需要adc采一�
 
 
 PROJECT_CFG_DEBUG_MONITOR_ENABLE
+
+
+
+
+
+
+
+
+
+
+1C 3600s
+1C  1%  36s
+
+1%
+100ma(0.1C)  1AH   360s
+100ma(0.01C)  10AH   3600s
+
+
+1、200ms ah
+2、自耗
+3、ocv(vcell < 3250)，30min，current_soc,ocv_soc
+
+
+history    vcell   
+自耗增加进来就行了
+ocv一天最多掉1%？？？
