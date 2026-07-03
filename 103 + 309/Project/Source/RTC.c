@@ -515,7 +515,7 @@ void RTC_IRQHandler(void)
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
 	{
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
-		sys_time.rtc_sec_cnt++;
+		// sys_time.rtc_sec_cnt++;
 		s_rtc.disp = 1;				   // Enable time update
 		RTC_WaitForLastTaskSafe();		   // Wait until last write operation on RTC registers has finished
 	}

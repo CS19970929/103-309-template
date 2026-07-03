@@ -305,6 +305,7 @@ void TIM3_IRQHandler(void)
 	{
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
+		sys_time.rtc_sec_cnt = RTC_GetCounter();
 
 		// switch (sleep_state)
 		// {

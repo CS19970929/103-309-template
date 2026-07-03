@@ -6,6 +6,7 @@ UINT8 SeriesNum = 7;
 void Runtime_Boot(void)
 {
 	SystemInit();
+	Init_RTC();
 
 	InitDelay();
 	SleepDeal_HandleBootSleepStartup();
@@ -34,11 +35,10 @@ void Runtime_Boot(void)
 	InitProID();
 	LogRecord_RequestStartup();
 
-	Init_RTC();
 	
 	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
-	Init_IWDG();
+	// Init_IWDG();
 }
 
 void Runtime_RunOnce(void)

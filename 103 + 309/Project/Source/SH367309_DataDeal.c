@@ -324,6 +324,8 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 	UINT8 i;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
 
+	RTC_SetCounter(0);
+
 	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{

@@ -228,6 +228,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     // todo !!!!
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
+    sys_time.rtc_sec_cnt = RTC_GetCounter();
 
     RtcSleep_PortEnterStop();
     // RtcSleep_PortDisableStopWakeup();
