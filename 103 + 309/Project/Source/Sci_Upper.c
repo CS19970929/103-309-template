@@ -1070,7 +1070,12 @@ void InitSCI1_CommonUpper(void)
 		UART_BAUD = 115200;
 		break;
 	default:
-		UART_BAUD = 115200;
+// #if (__BAUD_RATE__ == 9600)
+// 		UART_BAUD = 115200;
+// #else
+// 		UART_BAUD = 115200;
+// #endif
+		UART_BAUD = __BAUD_RATE__;
 		break;
 	}
 
@@ -1880,7 +1885,8 @@ void InitSCI2_CommonUpper(void)
 		UART_BAUD = 115200;
 		break;
 	default:
-		UART_BAUD = 115200;
+		// UART_BAUD = 115200;
+		UART_BAUD = __BAUD_RATE__;
 		break;
 	}
 
