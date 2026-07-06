@@ -64,8 +64,8 @@ void Refresh_Parameters(void)
 
 	if (PRT_E2ROMParas.u16VcellOvp_Third > 3800)
 	{
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((4300 / 5) >> 8) & 0x3;
-		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (4300 / 5) & 0x00FF;
+		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((4260 / 5) >> 8) & 0x3;
+		AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (4260 / 5) & 0x00FF;
 
 		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((4200 / 5) >> 8) & 0x3;
 		AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (4200 / 5) & 0x00FF;
