@@ -109,8 +109,8 @@ Runtime_RunOnce
 | `0xD117` | 86 | `SystemFeature_GetMask()` low word | bit mask |
 | `0xD118` | 87 | `SystemFeature_GetMask()` high word | bit mask |
 | `0xD119..0xD120` | 88..95 | reserved zero | 8 words |
-| `0xD200` | 96 | `BKP[FAULT_BKP_REASON_REG]` | fault reason |
-| `0xD201` | 97 | `BKP[FAULT_BKP_REASON_INV_REG]` | inverse snapshot |
+| `0xD200` | 96 | `g_u16FaultReasonSnapshot` | runtime fault reason; BKP reserved for SOC |
+| `0xD201` | 97 | `g_u16FaultReasonSnapshotInv` | runtime inverse snapshot |
 | `0xD202..0xD211` | 98..113 | SOC_TEST compatibility padding | 16 zero words |
 
 注意：

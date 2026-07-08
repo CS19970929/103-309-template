@@ -235,6 +235,8 @@ SleepDeal_HandleBootSleepStartup()
 | BKP_DR11 | fault reason | `FaultSnapshot.h` |
 | BKP_DR12 | fault reason 反码 | `FaultSnapshot.h` |
 
+2026-07-08 更新：STM32F103C8T6 当前只使用 BKP_DR1..BKP_DR10，并全部保留给 SOC runtime snapshot。Sleep boot flag 改用 `FLASH_ADDR_SLEEP_FLAG`，fault snapshot 改用 RAM runtime mirror。
+
 要求：后续任何低功耗简化都不能复用这些寄存器，也不能让 `BKP_DeInit()` 在非首次 RTC 初始化中清掉这些状态。
 
 ## 文档与源码冲突

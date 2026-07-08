@@ -35,7 +35,7 @@
 | `0xC080` | 老化状态只读窗口 | `RS485_ADDR_AGING_STATUS` | 5 words：`state`, `remaining_minutes`, `remaining_seconds_hi`, `remaining_seconds_lo`, `duration_hours` |
 | `0xD000` | 主实时只读窗口 | `RS485_ADDR_RO_START0`, `Sci_ACK_0x03_ReadRegs_Data()` | 当前注释为 63 个 `g_stCellInfoReport` words |
 | `0xD100` | RTC/故障/系统状态只读窗口 | `RS485_ADDR_RO_START1` | 当前拼接在主只读 buffer 后，约 33 words |
-| `0xD200` | Cortex fault snapshot | `RS485_ADDR_RO_START2` | `D200` reason, `D201` inverse |
+| `0xD200` | Cortex fault runtime snapshot | `RS485_ADDR_RO_START2` | `D200` reason, `D201` inverse；来源为 RAM，BKP 已保留给 SOC |
 | `0xD300` | SOC 测试状态只读窗口 | `RS485_ADDR_RO_SOC_TEST` | 16 words；量产固件读到 unsupported 是正常隔离结果 |
 | `0xFFFD` | Flash/IAP 连接命令 | `RS485_CMD_ADDR_FLASH_CONNECT`, `Sci_WrRegs_0x10_FlashConnect()` | 调用 `AppUpgrade_RequestIap()` 后触发进入 IAP |
 

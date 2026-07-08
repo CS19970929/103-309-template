@@ -92,12 +92,12 @@
 
 ### 1.3 `0xD200` Fault Snapshot
 
-`0xD200` 区当前用于读取 Cortex fault 复位前保存的 BKP 快照：
+`0xD200` 区当前用于读取 Cortex fault 运行期 RAM 快照；BKP 已全部保留给 SOC 存储，因此该区域不再保证复位后保留：
 
 | 地址 | 数据 | 来源 |
 |---|---|---|
-| 0xD200 | fault reason | `BKP_DR11` / `FAULT_BKP_REASON_REG` |
-| 0xD201 | fault reason inverse | `BKP_DR12` / `FAULT_BKP_REASON_INV_REG` |
+| 0xD200 | fault reason | `g_u16FaultReasonSnapshot` |
+| 0xD201 | fault reason inverse | `g_u16FaultReasonSnapshotInv` |
 
 reason 取值：
 
@@ -108,7 +108,7 @@ reason 取值：
 | 0x4246 | BusFault |
 | 0x5546 | UsageFault |
 
-读取时应校验 `reason ^ inverse == 0xFFFF`。不满足时代表 BKP 数据无效或未发生可识别 fault。
+读取时应校验 `reason ^ inverse == 0xFFFF`。不满足时代表 RAM 镜像无效或未发生可识别 fault。
 
 ## 2. `0x06` 单寄存器控制 / 复位
 

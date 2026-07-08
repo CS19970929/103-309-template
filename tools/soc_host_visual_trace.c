@@ -9,6 +9,9 @@
 #define HOST_CAP_FACTORY_AS10 ((double)HOST_CAP_A10 * 3600.0)
 #define HOST_TICKS_PER_SECOND ((UINT16)5U)
 #define HOST_PERIOD_MS        ((UINT16)200U)
+#define HOST_SOC_BKP_MAGIC    ((UINT16)0x5C0CU)
+#define HOST_SOC_BKP_VERSION  ((UINT16)0x0001U)
+#define HOST_SOC_BKP_CRC_SEED ((UINT16)0xA55AU)
 
 struct OTHER_ELEMENT OtherElement;
 struct stCell_Info g_stCellInfoReport;
@@ -21,6 +24,7 @@ static UINT32 s_host_afe_current_sample_seq;
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
+static UINT16 s_bkp_regs[11];
 
 typedef struct
 {
@@ -116,6 +120,43 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 	return 1U;
 }
 
+void RCC_APB1PeriphClockCmd(uint32_t RCC_APB1Periph, FunctionalState NewState)
+{
+	(void)RCC_APB1Periph;
+	(void)NewState;
+}
+
+void PWR_BackupAccessCmd(FunctionalState NewState)
+{
+	(void)NewState;
+}
+
+static UINT16 host_bkp_index(uint16_t bkp_dr)
+{
+	return (UINT16)(bkp_dr >> 2U);
+}
+
+void BKP_WriteBackupRegister(uint16_t BKP_DR, uint16_t Data)
+{
+	UINT16 index = host_bkp_index(BKP_DR);
+
+	if (index < (UINT16)(sizeof(s_bkp_regs) / sizeof(s_bkp_regs[0])))
+	{
+		s_bkp_regs[index] = Data;
+	}
+}
+
+uint16_t BKP_ReadBackupRegister(uint16_t BKP_DR)
+{
+	UINT16 index = host_bkp_index(BKP_DR);
+
+	if (index < (UINT16)(sizeof(s_bkp_regs) / sizeof(s_bkp_regs[0])))
+	{
+		return s_bkp_regs[index];
+	}
+	return 0U;
+}
+
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 {
 	(void)errorCode;
@@ -142,6 +183,120 @@ static UINT32 host_cap_now_from_soc(UINT16 soc)
 	return (UINT32)((HOST_CAP_FACTORY_AS10 * (double)soc) / 100.0);
 }
 
+static UINT16 host_bkp_crc_update(UINT16 crc, UINT16 data)
+{
+	UINT8 i;
+
+	crc ^= data;
+	for (i = 0U; i < 16U; ++i)
+	{
+		if ((crc & 0x0001U) != 0U)
+		{
+			crc = (UINT16)((crc >> 1U) ^ 0xA001U);
+		}
+		else
+		{
+			crc = (UINT16)(crc >> 1U);
+		}
+	}
+	return crc;
+}
+
+static UINT16 host_bkp_crc_calc(UINT16 soc_flags,
+								UINT32 cycle_x100,
+								UINT32 cap_now_as10,
+								UINT32 dsg_acc_as10)
+{
+	UINT32 cap_factory_as10 = (UINT32)HOST_CAP_FACTORY_AS10;
+	UINT16 crc = HOST_SOC_BKP_CRC_SEED;
+
+	crc = host_bkp_crc_update(crc, HOST_SOC_BKP_MAGIC);
+	crc = host_bkp_crc_update(crc, HOST_SOC_BKP_VERSION);
+	crc = host_bkp_crc_update(crc, soc_flags);
+	crc = host_bkp_crc_update(crc, (UINT16)(cycle_x100 & 0xFFFFU));
+	crc = host_bkp_crc_update(crc, (UINT16)(cycle_x100 >> 16U));
+	crc = host_bkp_crc_update(crc, (UINT16)(cap_now_as10 & 0xFFFFU));
+	crc = host_bkp_crc_update(crc, (UINT16)(cap_now_as10 >> 16U));
+	crc = host_bkp_crc_update(crc, (UINT16)(dsg_acc_as10 & 0xFFFFU));
+	crc = host_bkp_crc_update(crc, (UINT16)(dsg_acc_as10 >> 16U));
+	crc = host_bkp_crc_update(crc, (UINT16)(cap_factory_as10 & 0xFFFFU));
+	crc = host_bkp_crc_update(crc, (UINT16)(cap_factory_as10 >> 16U));
+	return crc;
+}
+
+static void host_write_bkp_snapshot(UINT16 soc, UINT32 cycle_x100, UINT32 cap_now_as10)
+{
+	UINT16 soc_flags = (UINT16)(soc & 0x00FFU);
+	UINT16 crc = host_bkp_crc_calc(soc_flags, cycle_x100, cap_now_as10, 0U);
+
+	BKP_WriteBackupRegister(BKP_DR2, (UINT16)(~HOST_SOC_BKP_MAGIC));
+	BKP_WriteBackupRegister(BKP_DR3, soc_flags);
+	BKP_WriteBackupRegister(BKP_DR4, (UINT16)(cycle_x100 & 0xFFFFU));
+	BKP_WriteBackupRegister(BKP_DR5, (UINT16)(cycle_x100 >> 16U));
+	BKP_WriteBackupRegister(BKP_DR6, (UINT16)(cap_now_as10 & 0xFFFFU));
+	BKP_WriteBackupRegister(BKP_DR7, (UINT16)(cap_now_as10 >> 16U));
+	BKP_WriteBackupRegister(BKP_DR8, 0U);
+	BKP_WriteBackupRegister(BKP_DR9, 0U);
+	BKP_WriteBackupRegister(BKP_DR10, crc);
+	BKP_WriteBackupRegister(BKP_DR1, HOST_SOC_BKP_MAGIC);
+}
+
+static UINT16 host_soc_from_cap_as10(UINT32 cap_as10)
+{
+	UINT32 cap_full = (UINT32)HOST_CAP_FACTORY_AS10;
+	UINT32 soc;
+
+	if (cap_as10 >= cap_full)
+	{
+		return 100U;
+	}
+	soc = (UINT32)(((uint64_t)cap_as10 * 100ULL + (cap_full / 2U)) / cap_full);
+	return (soc > 100U) ? 100U : (UINT16)soc;
+}
+
+static UINT8 host_read_bkp_soc(UINT16 *soc)
+{
+	UINT16 soc_flags;
+	UINT32 cycle_x100;
+	UINT32 cap_now_as10;
+	UINT32 dsg_acc_as10;
+
+	if (BKP_ReadBackupRegister(BKP_DR1) != HOST_SOC_BKP_MAGIC)
+	{
+		return 0U;
+	}
+	if (BKP_ReadBackupRegister(BKP_DR2) != (UINT16)(~HOST_SOC_BKP_MAGIC))
+	{
+		return 0U;
+	}
+	soc_flags = BKP_ReadBackupRegister(BKP_DR3);
+	cycle_x100 = (UINT32)BKP_ReadBackupRegister(BKP_DR4) |
+		((UINT32)BKP_ReadBackupRegister(BKP_DR5) << 16U);
+	cap_now_as10 = (UINT32)BKP_ReadBackupRegister(BKP_DR6) |
+		((UINT32)BKP_ReadBackupRegister(BKP_DR7) << 16U);
+	dsg_acc_as10 = (UINT32)BKP_ReadBackupRegister(BKP_DR8) |
+		((UINT32)BKP_ReadBackupRegister(BKP_DR9) << 16U);
+	if (host_bkp_crc_calc(soc_flags, cycle_x100, cap_now_as10, dsg_acc_as10) !=
+		BKP_ReadBackupRegister(BKP_DR10))
+	{
+		return 0U;
+	}
+	if ((soc_flags & 0x00FFU) > 100U)
+	{
+		return 0U;
+	}
+	if (((cap_now_as10 != 0U) || ((soc_flags & 0x00FFU) == 0U)) &&
+		(cap_now_as10 <= (UINT32)HOST_CAP_FACTORY_AS10))
+	{
+		*soc = host_soc_from_cap_as10(cap_now_as10);
+	}
+	else
+	{
+		*soc = (UINT16)(soc_flags & 0x00FFU);
+	}
+	return 1U;
+}
+
 static void host_apply_default_config(void)
 {
 	memset(&OtherElement, 0, sizeof(OtherElement));
@@ -159,6 +314,7 @@ static void host_reset_state(void)
 	memset(&g_stCellInfoReport, 0, sizeof(g_stCellInfoReport));
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
+	memset(s_bkp_regs, 0, sizeof(s_bkp_regs));
 	s_flash_soc_valid = 0U;
 	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
@@ -179,6 +335,7 @@ static void host_set_snapshot(UINT16 soc)
 	s_flash_soc.u32LearnPassedAs10 = 0U;
 	s_flash_soc.u16Flags = 0U;
 	s_flash_soc_valid = 1U;
+	host_write_bkp_snapshot(soc, s_flash_soc.u32CycleTimes, s_flash_soc.u32CapNow);
 }
 
 static UINT16 host_voltage_from_soc(double soc)
@@ -317,6 +474,12 @@ static double host_true_soc(double cap_now)
 
 static UINT16 host_internal_soc(void)
 {
+	UINT16 soc;
+
+	if (host_read_bkp_soc(&soc))
+	{
+		return soc;
+	}
 	return s_flash_soc.u16SocNow;
 }
 

@@ -40,6 +40,9 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+volatile UINT16 g_u16FaultReasonSnapshot = 0U;
+volatile UINT16 g_u16FaultReasonSnapshotInv = 0xFFFFU;
+
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -63,10 +66,8 @@ __asm void wait()
 
 static void Fault_SaveReason(UINT16 reason)
 {
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-  PWR_BackupAccessCmd(ENABLE);
-  BKP_WriteBackupRegister(FAULT_BKP_REASON_REG, reason);
-  BKP_WriteBackupRegister(FAULT_BKP_REASON_INV_REG, (UINT16)(~reason));
+  g_u16FaultReasonSnapshot = reason;
+  g_u16FaultReasonSnapshotInv = (UINT16)(~reason);
 }
 
 static void Fault_ResetOrHold(UINT16 reason)

@@ -51,7 +51,7 @@ def conf_override_dir(board_self_consumption_ma: int) -> Path:
     return target
 
 
-def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption_ma=None) -> None:
+def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption_ma=None, label_extra="") -> None:
     extra_defines = extra_defines or []
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     override_conf = (conf_override_dir(board_self_consumption_ma)
@@ -96,6 +96,8 @@ def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption
 
     label = ("current config" if board_self_consumption_ma is None
              else f"board_self={board_self_consumption_ma}mA")
+    if label_extra:
+        label = f"{label}, {label_extra}"
     print("Building SOC host C test with:", cc, exe.name, label, flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
     print("Running", exe, flush=True)
@@ -110,9 +112,21 @@ def main() -> int:
         if value not in variants:
             variants.append(value)
 
+    storage_modes = [
+        ("bkp_only", []),
+        ("bkp_flash", ["-DPROJECT_CFG_SOC_STORAGE_MODE=PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH"]),
+    ]
+
     for value in variants:
-        suffix = f"board_self_{value}"
-        build_and_run(cc, BUILD_DIR / f"soc_host_c_test_{suffix}", board_self_consumption_ma=value)
+        for mode_name, mode_defines in storage_modes:
+            suffix = f"board_self_{value}_{mode_name}"
+            build_and_run(
+                cc,
+                BUILD_DIR / f"soc_host_c_test_{suffix}",
+                extra_defines=mode_defines,
+                board_self_consumption_ma=value,
+                label_extra=f"storage={mode_name}",
+            )
     return 0
 
 

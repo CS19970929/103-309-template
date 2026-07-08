@@ -889,12 +889,10 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 8U);
 
-	// 0xD200_2: last Cortex fault reason and inverse snapshot.
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-	PWR_BackupAccessCmd(ENABLE);
-	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_REG);
+	// 0xD200_2: last Cortex fault reason and inverse runtime snapshot.
+	u16SciTemp = g_u16FaultReasonSnapshot;
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
+	u16SciTemp = g_u16FaultReasonSnapshotInv;
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
 	/* SOC_TEST status padding (16 words) — retained for protocol compatibility */

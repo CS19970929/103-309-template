@@ -1359,30 +1359,50 @@ def check_fault_snapshot_mapping(reporter):
     it_c = read_text(STM32F10X_IT_C)
     sci_c = read_text(SCI_UPPER_C)
     sci_h = read_text(SCI_UPPER_H)
+    soc_c = read_text(SOC_ENHANCE_C)
+    build_guard = read_text(BUILD_GUARD)
+    source_dir = ROOT / "103 + 309" / "Project" / "Source"
+    bkp_users = []
+    for path in source_dir.glob("*.c"):
+        text = read_text(path)
+        if ("BKP_WriteBackupRegister" in text) or ("BKP_ReadBackupRegister" in text):
+            bkp_users.append(path.name)
 
     if (
-        "FAULT_BKP_REASON_REG BKP_DR11" in header
-        and "FAULT_BKP_REASON_INV_REG BKP_DR12" in header
-        and "FAULT_REASON_HARD" in header
+        "FAULT_REASON_HARD" in header
+        and "g_u16FaultReasonSnapshot" in header
         and '#include "FaultSnapshot.h"' in it_c
         and "Fault_SaveReason" in it_c
-        and "BKP_WriteBackupRegister(FAULT_BKP_REASON_REG" in it_c
+        and "g_u16FaultReasonSnapshot = reason;" in it_c
+        and "BKP_WriteBackupRegister" not in it_c
     ):
-        reporter.ok("fault handlers write shared BKP fault snapshot definitions")
+        reporter.ok("fault handlers no longer occupy BKP fault snapshot registers")
     else:
-        reporter.fail("fault handlers must use FaultSnapshot.h and write BKP fault reason/inverse")
+        reporter.fail("fault handlers should use RAM fault snapshot and must not write BKP")
 
     if (
         '#include "FaultSnapshot.h"' in sci_c
-        and "BKP_ReadBackupRegister(FAULT_BKP_REASON_REG)" in sci_c
-        and "BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG)" in sci_c
+        and "g_u16FaultReasonSnapshot" in sci_c
+        and "g_u16FaultReasonSnapshotInv" in sci_c
+        and "BKP_ReadBackupRegister" not in sci_c
         and "#define RS485_RO_BASE_WORDS" in sci_h
         and "((UINT16)98U)" in sci_h
         and "D200 reason, D201 inverse" in sci_h
     ):
-        reporter.ok("RS485 0xD200 exposes fault snapshot and preserves 0xD300 SOC test offset")
+        reporter.ok("RS485 0xD200 exposes RAM fault snapshot and preserves 0xD300 SOC test offset")
     else:
-        reporter.fail("RS485 0xD200 should expose BKP fault snapshot and base words should be 98")
+        reporter.fail("RS485 0xD200 should expose RAM fault snapshot and base words should be 98")
+
+    if (
+        bkp_users == ["SocEnhance.c"]
+        and "SOC_BKP_REG_MAGIC                BKP_DR1" in soc_c
+        and "SOC_BKP_REG_CRC                  BKP_DR10" in soc_c
+        and "PROJECT_CFG_SOC_STORAGE_MODE_BKP_ONLY" in build_guard
+        and "PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH" in build_guard
+    ):
+        reporter.ok("SOC exclusively owns F103C8T6 BKP_DR1..BKP_DR10")
+    else:
+        reporter.fail("BKP registers must be reserved for SOC storage only")
 
 
 def check_can_rtc_service_runtime(reporter):

@@ -423,7 +423,7 @@ void Init_RTC(void)
 
 	RTC_EnableBackupAccess();
 
-	need_full_init = (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA) ? 1U : 0U;
+	need_full_init = 0U;
 	clock_status = RTC_ClockConfig(need_full_init); // RTC时钟配置
 
 	if ((!need_full_init) && (clock_status == RTC_CLOCK_NEED_REINIT))
@@ -440,7 +440,6 @@ void Init_RTC(void)
 	if (need_full_init)
 	{ // 读取备份里面的值是否被写过。
 		RTC_TimeConfig();
-		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
 	}
 	else
 	{ // 以下这段话需要吗？

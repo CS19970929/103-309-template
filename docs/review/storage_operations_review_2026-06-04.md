@@ -280,6 +280,8 @@ SOC 使用 `0x0801E000/0x0801E800` 双页 journal，payload 是 `STORAGE_FLASH_S
 | `BKP_DR11` | Cortex fault reason | `DR12` 反码 |
 | `BKP_DR12` | Cortex fault reason 反码 | 反码 |
 
+2026-07-08 更新：STM32F103C8T6 只有 BKP_DR1..BKP_DR10 可作为项目资源，且当前全部由 SOC runtime snapshot 独占；sleep boot flag 已迁移到 `FLASH_ADDR_SLEEP_FLAG`，`0xD200/0xD201` fault snapshot 改为 RAM runtime mirror，不再使用 BKP_DR11/DR12。
+
 风险点：`RTC_ClockConfig()` 在首次 RTC 初始化时调用 `BKP_DeInit()`，`RTC_ReinitWithLsiClock()` 也会调用 `BKP_DeInit()`。这会清空所有 BKP 状态，包括睡眠标志、LED 睡前 SOC、老化短期进度和 fault reason。BKP 只能作为短期状态，不应当当作可靠长期存储。
 
 ## 睡眠/低功耗相关存储

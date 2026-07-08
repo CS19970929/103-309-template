@@ -59,6 +59,19 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
+#define SOC_BKP_MAGIC                    ((UINT16)0x5C0CU)
+#define SOC_BKP_VERSION                  ((UINT16)0x0001U)
+#define SOC_BKP_CRC_SEED                 ((UINT16)0xA55AU)
+#define SOC_BKP_REG_MAGIC                BKP_DR1
+#define SOC_BKP_REG_MAGIC_INV            BKP_DR2
+#define SOC_BKP_REG_SOC_FLAGS            BKP_DR3
+#define SOC_BKP_REG_CYCLE_LO             BKP_DR4
+#define SOC_BKP_REG_CYCLE_HI             BKP_DR5
+#define SOC_BKP_REG_CAP_NOW_LO           BKP_DR6
+#define SOC_BKP_REG_CAP_NOW_HI           BKP_DR7
+#define SOC_BKP_REG_DSG_ACC_LO           BKP_DR8
+#define SOC_BKP_REG_DSG_ACC_HI           BKP_DR9
+#define SOC_BKP_REG_CRC                  BKP_DR10
 
 typedef enum
 {
@@ -96,9 +109,20 @@ typedef struct SOC_SAVE_MARK_TAG
 {
 	UINT32 cycle_x100;
 	UINT32 cap_full_as10;
+	UINT32 cap_now_as10;
+	UINT32 dsg_acc_as10;
 	UINT16 snapshot_flags;
 	UINT8 soc;
 } SOC_SAVE_MARK;
+
+typedef struct SOC_BKP_SNAPSHOT_TAG
+{
+	UINT32 cycle_x100;
+	UINT32 cap_now_as10;
+	UINT32 dsg_acc_as10;
+	UINT16 snapshot_flags;
+	UINT8 soc;
+} SOC_BKP_SNAPSHOT;
 
 typedef struct SOC_EMPTY_TAIL_RULE_TAG
 {
@@ -119,6 +143,9 @@ static const UINT8 s_soc_default_startup_percent = 60U;
 /* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
 static UINT32 s_u32SocRtcRestAppliedSeconds;
 static UINT16 s_u16PrevVCellMin;
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+static UINT8 s_u8SocFlashDirty;
+#endif
 
 #if PROJECT_CFG_SOC_REST_OCV_ENABLE
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
@@ -126,6 +153,7 @@ static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
+static UINT8 soc_save_bkp_snapshot(void);
 
 static UINT8 soc_empty_tail_interpolate(int16_t offset_mv, UINT8 is_relax)
 {
@@ -408,41 +436,311 @@ void SOC_RequestSetOnce(UINT8 soc)
 	SOC_PublishReportData();
 }
 
-static UINT8 soc_save(void)
+static UINT32 soc_dsg_cycle_unit_from_factory(UINT32 cap_factory_as10)
+{
+	UINT32 unit = cap_factory_as10 / 100U;
+
+	return (unit == 0U) ? 1U : unit;
+}
+
+static UINT32 soc_dsg_cycle_unit(void)
+{
+	return soc_dsg_cycle_unit_from_factory(s_soc.cap_factory_as10);
+}
+
+static UINT16 soc_bkp_crc_update(UINT16 crc, UINT16 data)
+{
+	UINT8 i;
+
+	crc ^= data;
+	for (i = 0U; i < 16U; ++i)
+	{
+		if ((crc & 0x0001U) != 0U)
+		{
+			crc = (UINT16)((crc >> 1U) ^ 0xA001U);
+		}
+		else
+		{
+			crc = (UINT16)(crc >> 1U);
+		}
+	}
+	return crc;
+}
+
+static UINT16 soc_bkp_crc_calc(UINT16 soc_flags,
+							   UINT32 cycle_x100,
+							   UINT32 cap_now_as10,
+							   UINT32 dsg_acc_as10,
+							   UINT32 cap_factory_as10)
+{
+	UINT16 crc = SOC_BKP_CRC_SEED;
+
+	crc = soc_bkp_crc_update(crc, SOC_BKP_MAGIC);
+	crc = soc_bkp_crc_update(crc, SOC_BKP_VERSION);
+	crc = soc_bkp_crc_update(crc, soc_flags);
+	crc = soc_bkp_crc_update(crc, (UINT16)(cycle_x100 & 0xFFFFU));
+	crc = soc_bkp_crc_update(crc, (UINT16)(cycle_x100 >> 16U));
+	crc = soc_bkp_crc_update(crc, (UINT16)(cap_now_as10 & 0xFFFFU));
+	crc = soc_bkp_crc_update(crc, (UINT16)(cap_now_as10 >> 16U));
+	crc = soc_bkp_crc_update(crc, (UINT16)(dsg_acc_as10 & 0xFFFFU));
+	crc = soc_bkp_crc_update(crc, (UINT16)(dsg_acc_as10 >> 16U));
+	crc = soc_bkp_crc_update(crc, (UINT16)(cap_factory_as10 & 0xFFFFU));
+	crc = soc_bkp_crc_update(crc, (UINT16)(cap_factory_as10 >> 16U));
+	return crc;
+}
+
+static void soc_bkp_enable_access(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+	PWR_BackupAccessCmd(ENABLE);
+}
+
+static UINT8 soc_write_bkp_snapshot_values(UINT8 soc,
+										   UINT16 snapshot_flags,
+										   UINT32 cycle_x100,
+										   UINT32 cap_now_as10,
+										   UINT32 dsg_acc_as10,
+										   UINT32 cap_factory_as10)
+{
+	UINT16 soc_flags;
+	UINT16 crc;
+
+	if (soc > 100U)
+	{
+		return 0U;
+	}
+
+	soc_flags = (UINT16)(((UINT16)(snapshot_flags & 0x00FFU) << 8U) | soc);
+	crc = soc_bkp_crc_calc(soc_flags,
+						   cycle_x100,
+						   cap_now_as10,
+						   dsg_acc_as10,
+						   cap_factory_as10);
+
+	soc_bkp_enable_access();
+	BKP_WriteBackupRegister(SOC_BKP_REG_MAGIC_INV, (UINT16)(~SOC_BKP_MAGIC));
+	BKP_WriteBackupRegister(SOC_BKP_REG_SOC_FLAGS, soc_flags);
+	BKP_WriteBackupRegister(SOC_BKP_REG_CYCLE_LO, (UINT16)(cycle_x100 & 0xFFFFU));
+	BKP_WriteBackupRegister(SOC_BKP_REG_CYCLE_HI, (UINT16)(cycle_x100 >> 16U));
+	BKP_WriteBackupRegister(SOC_BKP_REG_CAP_NOW_LO, (UINT16)(cap_now_as10 & 0xFFFFU));
+	BKP_WriteBackupRegister(SOC_BKP_REG_CAP_NOW_HI, (UINT16)(cap_now_as10 >> 16U));
+	BKP_WriteBackupRegister(SOC_BKP_REG_DSG_ACC_LO, (UINT16)(dsg_acc_as10 & 0xFFFFU));
+	BKP_WriteBackupRegister(SOC_BKP_REG_DSG_ACC_HI, (UINT16)(dsg_acc_as10 >> 16U));
+	BKP_WriteBackupRegister(SOC_BKP_REG_CRC, crc);
+	BKP_WriteBackupRegister(SOC_BKP_REG_MAGIC, SOC_BKP_MAGIC);
+	return 1U;
+}
+
+static UINT8 soc_save_bkp_snapshot(void)
+{
+	return soc_write_bkp_snapshot_values(s_soc.soc,
+										 s_soc.snapshot_flags,
+										 s_soc.cycle_x100,
+										 s_soc.cap_now_as10,
+										 s_soc.dsg_acc_as10,
+										 s_soc.cap_factory_as10);
+}
+
+static UINT8 soc_read_bkp_snapshot(SOC_BKP_SNAPSHOT *snapshot)
+{
+	UINT16 soc_flags;
+	UINT16 crc;
+	UINT16 saved_crc;
+	UINT32 cycle_x100;
+	UINT32 cap_now_as10;
+	UINT32 dsg_acc_as10;
+	UINT32 cap_full_as10;
+	UINT32 unit;
+	UINT8 soc;
+
+	if (snapshot == 0)
+	{
+		return 0U;
+	}
+
+	soc_bkp_enable_access();
+	if (BKP_ReadBackupRegister(SOC_BKP_REG_MAGIC) != SOC_BKP_MAGIC)
+	{
+		return 0U;
+	}
+	if (BKP_ReadBackupRegister(SOC_BKP_REG_MAGIC_INV) != (UINT16)(~SOC_BKP_MAGIC))
+	{
+		return 0U;
+	}
+
+	soc_flags = BKP_ReadBackupRegister(SOC_BKP_REG_SOC_FLAGS);
+	cycle_x100 = (UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_CYCLE_LO) |
+		((UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_CYCLE_HI) << 16U);
+	cap_now_as10 = (UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_CAP_NOW_LO) |
+		((UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_CAP_NOW_HI) << 16U);
+	dsg_acc_as10 = (UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_DSG_ACC_LO) |
+		((UINT32)BKP_ReadBackupRegister(SOC_BKP_REG_DSG_ACC_HI) << 16U);
+	saved_crc = BKP_ReadBackupRegister(SOC_BKP_REG_CRC);
+
+	crc = soc_bkp_crc_calc(soc_flags,
+						   cycle_x100,
+						   cap_now_as10,
+						   dsg_acc_as10,
+						   s_soc.cap_factory_as10);
+	if (crc != saved_crc)
+	{
+		return 0U;
+	}
+
+	soc = (UINT8)(soc_flags & 0x00FFU);
+	if (soc > 100U)
+	{
+		return 0U;
+	}
+
+	cap_full_as10 = (UINT32)(((uint64_t)s_soc.cap_factory_as10 *
+		soc_soh_from_cycle(cycle_x100)) / 100ULL);
+	if (cap_now_as10 > cap_full_as10)
+	{
+		return 0U;
+	}
+	unit = soc_dsg_cycle_unit();
+	if (dsg_acc_as10 >= unit)
+	{
+		return 0U;
+	}
+
+	snapshot->soc = soc;
+	snapshot->snapshot_flags = (UINT16)((soc_flags >> 8U) &
+		SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
+	snapshot->cycle_x100 = cycle_x100;
+	snapshot->cap_now_as10 = cap_now_as10;
+	snapshot->dsg_acc_as10 = dsg_acc_as10;
+	return 1U;
+}
+
+static void soc_apply_loaded_snapshot(UINT8 soc,
+									  UINT16 snapshot_flags,
+									  UINT32 cycle_x100,
+									  UINT32 cap_now_as10,
+									  UINT32 dsg_acc_as10)
+{
+	UINT32 unit;
+
+	s_soc.cycle_x100 = cycle_x100;
+	soc_refresh_capacity_base();
+	unit = soc_dsg_cycle_unit();
+	s_soc.dsg_acc_as10 = dsg_acc_as10 % unit;
+	if (((cap_now_as10 != 0U) || (soc == 0U)) &&
+		(cap_now_as10 <= s_soc.cap_full_as10))
+	{
+		s_soc.cap_now_as10 = cap_now_as10;
+		s_soc.soc = soc_from_cap();
+	}
+	else
+	{
+		soc_set(soc);
+	}
+	s_soc.snapshot_flags = (UINT16)(snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
+	if ((s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD) != 0U)
+	{
+		s_soc.sag_hold_ticks = (UINT16)(SOC_REBOUND_BOOT_HOLDOFF_SECONDS *
+			SOC_TICKS_PER_SECOND);
+	}
+}
+
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+static void soc_fill_flash_data(STORAGE_FLASH_SOC_DATA *data,
+								UINT8 soc,
+								UINT16 snapshot_flags,
+								UINT32 cycle_x100,
+								UINT32 cap_now_as10,
+								UINT32 cap_full_as10,
+								UINT32 dsg_acc_as10)
+{
+	UINT32 unit = soc_dsg_cycle_unit();
+
+	memset(data, 0, sizeof(*data));
+	data->u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data->u16SocNow = soc;
+	data->u16MaxErrorPercent = 100U;
+	data->u32CycleTimes = cycle_x100;
+	data->u32CapNow = cap_now_as10;
+	data->u32CapFull = cap_full_as10;
+	data->u32LearnPassedAs10 = dsg_acc_as10;
+	data->u16Flags = (UINT16)(snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
+	data->u16DsgSocInt = (UINT16)(((uint64_t)dsg_acc_as10 * 100ULL) / unit);
+	if (data->u16DsgSocInt > 100U)
+	{
+		data->u16DsgSocInt = 100U;
+	}
+}
+
+static UINT8 soc_save_flash_snapshot(void)
 {
 	STORAGE_FLASH_SOC_DATA data;
-	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
-	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
-	data.u16SocNow = s_soc.soc;
-	data.u16MaxErrorPercent = 100U;
-	data.u32CycleTimes = s_soc.cycle_x100;
-	data.u32CapNow = s_soc.cap_now_as10;
-	data.u32CapFull = s_soc.cap_full_as10;
-	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
-	data.u16Flags = (UINT16)(s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
-	data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
-	if (data.u16DsgSocInt > 100U)
-	{
-		data.u16DsgSocInt = 100U;
-	}
+	soc_fill_flash_data(&data,
+						s_soc.soc,
+						s_soc.snapshot_flags,
+						s_soc.cycle_x100,
+						s_soc.cap_now_as10,
+						s_soc.cap_full_as10,
+						s_soc.dsg_acc_as10);
 	return StorageFlash_SaveSocData(&data);
 }
+
+static UINT8 soc_load_flash_snapshot(void)
+{
+	STORAGE_FLASH_SOC_DATA data;
+	UINT8 valid;
+	UINT32 unit;
+	UINT32 dsg_acc_as10;
+
+	valid = StorageFlash_LoadSocData(&data);
+	if (!valid || (data.u16SocNow > 100U) || (data.u16DsgSocInt > 100U))
+	{
+		return 0U;
+	}
+
+	unit = soc_dsg_cycle_unit();
+	dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
+		(data.u32LearnPassedAs10 % unit) :
+		(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
+	soc_apply_loaded_snapshot((UINT8)data.u16SocNow,
+							  data.u16Flags,
+							  data.u32CycleTimes,
+							  data.u32CapNow,
+							  dsg_acc_as10);
+	return 1U;
+}
+
+static void soc_flush_flash_if_dirty(void)
+{
+	if (s_u8SocFlashDirty == 0U)
+	{
+		return;
+	}
+	if (soc_save_flash_snapshot())
+	{
+		s_u8SocFlashDirty = 0U;
+	}
+}
+#endif
 
 static void soc_update_save_mark(void)
 {
 	s_saved_soc.soc = s_soc.soc;
 	s_saved_soc.cycle_x100 = s_soc.cycle_x100;
 	s_saved_soc.cap_full_as10 = s_soc.cap_full_as10;
+	s_saved_soc.cap_now_as10 = s_soc.cap_now_as10;
+	s_saved_soc.dsg_acc_as10 = s_soc.dsg_acc_as10;
 	s_saved_soc.snapshot_flags = s_soc.snapshot_flags;
 }
 
 static void soc_save_current_snapshot(void)
 {
-	if (soc_save())
+	if (soc_save_bkp_snapshot())
 	{
 		soc_update_save_mark();
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+		s_u8SocFlashDirty = 1U;
+#endif
 	}
 }
 
@@ -451,6 +749,8 @@ static void soc_save_if_needed(void)
 	if ((s_soc.soc != s_saved_soc.soc) ||
 		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
 		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
+		(s_soc.cap_now_as10 != s_saved_soc.cap_now_as10) ||
+		(s_soc.dsg_acc_as10 != s_saved_soc.dsg_acc_as10) ||
 		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
 	{
 		soc_save_current_snapshot();
@@ -459,34 +759,26 @@ static void soc_save_if_needed(void)
 
 static void soc_load_or_default(void)
 {
-	STORAGE_FLASH_SOC_DATA data;
-	UINT8 valid = StorageFlash_LoadSocData(&data);
-	UINT32 unit = s_soc.cap_factory_as10 / 100U;
+	SOC_BKP_SNAPSHOT bkp_snapshot;
 
-	if (valid && (data.u16SocNow <= 100U) && (data.u16DsgSocInt <= 100U))
+	if (soc_read_bkp_snapshot(&bkp_snapshot))
 	{
-		s_soc.cycle_x100 = data.u32CycleTimes;
-		soc_refresh_capacity_base();
-		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
-			(data.u32LearnPassedAs10 % unit) :
-			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
-		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
-			(data.u32CapNow <= s_soc.cap_full_as10))
-		{
-			s_soc.cap_now_as10 = data.u32CapNow;
-			s_soc.soc = soc_from_cap();
-		}
-		else
-		{
-			soc_set((UINT8)data.u16SocNow);
-		}
-		s_soc.snapshot_flags = (UINT16)(data.u16Flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
-		if ((s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD) != 0U)
-		{
-			s_soc.sag_hold_ticks = (UINT16)(SOC_REBOUND_BOOT_HOLDOFF_SECONDS *
-				SOC_TICKS_PER_SECOND);
-		}
+		soc_apply_loaded_snapshot(bkp_snapshot.soc,
+								  bkp_snapshot.snapshot_flags,
+								  bkp_snapshot.cycle_x100,
+								  bkp_snapshot.cap_now_as10,
+								  bkp_snapshot.dsg_acc_as10);
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+		s_u8SocFlashDirty = 1U;
+#endif
 	}
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+	else if (soc_load_flash_snapshot())
+	{
+		(void)soc_save_bkp_snapshot();
+		s_u8SocFlashDirty = 0U;
+	}
+#endif
 	else
 	{
 		s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
@@ -499,7 +791,10 @@ static void soc_load_or_default(void)
 		{
 			soc_set(s_soc_default_startup_percent);
 		}
-		(void)soc_save();
+		(void)soc_save_bkp_snapshot();
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+		s_u8SocFlashDirty = 1U;
+#endif
 	}
 	soc_update_save_mark();
 }
@@ -548,7 +843,7 @@ static void soc_integrate(int32_t net_current_ma)
 	if (delta_as10 < 0)
 	{
 		UINT32 dsg_as10 = (UINT32)(-(int64_t)delta_as10);
-		UINT32 unit = s_soc.cap_factory_as10 / 100U;
+		UINT32 unit = soc_dsg_cycle_unit();
 
 		s_soc.dsg_acc_as10 += dsg_as10;
 		s_soc.cycle_x100 += s_soc.dsg_acc_as10 / unit;
@@ -972,6 +1267,9 @@ void soc_param_lib_init(void)
 	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	s_u32SocRtcRestAppliedSeconds = 0U;
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+	s_u8SocFlashDirty = 0U;
+#endif
 	soc_refresh_capacity_base();
 	soc_load_or_default();
 	SOC_PublishReportData();
@@ -979,24 +1277,47 @@ void soc_param_lib_init(void)
 
 UINT8 SOC_ResetStoredSnapshotToDefault(void)
 {
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
 	STORAGE_FLASH_SOC_DATA data;
+#endif
 	UINT32 cap_factory = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	UINT32 cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
+	UINT32 cap_now = (UINT32)(((uint64_t)cap_full * s_soc_default_startup_percent) / 100ULL);
+	UINT8 result;
 
-	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
-	data.u16SocNow = s_soc_default_startup_percent;
-	data.u16MaxErrorPercent = 100U;
-	data.u32CycleTimes = cycle_x100;
-	data.u32CapFull = cap_full;
-	data.u32CapNow = (UINT32)(((uint64_t)cap_full * s_soc_default_startup_percent) / 100ULL);
-	return StorageFlash_SaveSocData(&data);
+	result = soc_write_bkp_snapshot_values(s_soc_default_startup_percent,
+										   0U,
+										   cycle_x100,
+										   cap_now,
+										   0U,
+										   cap_factory);
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+	if (result)
+	{
+		soc_fill_flash_data(&data,
+							s_soc_default_startup_percent,
+							0U,
+							cycle_x100,
+							cap_now,
+							cap_full,
+							0U);
+		result = StorageFlash_SaveSocData(&data);
+		if (result)
+		{
+			s_u8SocFlashDirty = 0U;
+		}
+	}
+#endif
+	return result;
 }
 
 void SOC_SaveSnapshotBeforeSleep(void)
 {
 	soc_save_if_needed();
+#if (PROJECT_CFG_SOC_STORAGE_MODE == PROJECT_CFG_SOC_STORAGE_MODE_BKP_FLASH)
+	soc_flush_flash_if_dirty();
+#endif
 }
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma)

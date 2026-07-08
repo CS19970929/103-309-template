@@ -173,3 +173,6 @@
 | DMA2_Channel2_IRQHandler | DMA2 Channel2 | 103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/startup_stm32f10x_hd.s | 137 | 弱默认/未在C中定义 |
 | DMA2_Channel3_IRQHandler | DMA2 Channel3 | 103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/startup_stm32f10x_hd.s | 138 | 弱默认/未在C中定义 |
 | DMA2_Channel4_5_IRQHandler | DMA2 Channel4 & Channel5 | 103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/startup_stm32f10x_hd.s | 139 | 弱默认/未在C中定义 |
+## 2026-07-08 SOC BKP 更新
+
+Fault handler 不再写 BKP fault snapshot；当前只写 `g_u16FaultReasonSnapshot` / `g_u16FaultReasonSnapshotInv` 运行期 RAM 镜像。BKP_DR1..BKP_DR10 已全部保留给 SOC runtime snapshot。

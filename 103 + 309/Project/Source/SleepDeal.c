@@ -117,20 +117,12 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 	MCU_RESET();
 }
 
-static void BootFlag_EnableAccess(void)
-{
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
-	PWR_BackupAccessCmd(ENABLE);
-}
-
-#define SLEEP_BKP_FLAG_REG BKP_DR2
-#define SLEEP_BKP_INV_REG BKP_DR3
-
 void BootFlag_Write(UINT16 flag)
 {
-	BootFlag_EnableAccess();
-	BKP_WriteBackupRegister(SLEEP_BKP_FLAG_REG, flag);
-	BKP_WriteBackupRegister(SLEEP_BKP_INV_REG, (UINT16)(~flag));
+	if (FlashWriteOneHalfWord(FLASH_ADDR_SLEEP_FLAG, flag) != FLASH_COMPLETE)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	}
 }
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void)
@@ -152,16 +144,8 @@ UINT8 SleepDeal_GetExternalCommCounter(void)
 UINT16 BootFlag_Read(void)
 {
 	UINT16 flag;
-	UINT16 inverse_flag;
 
-	BootFlag_EnableAccess();
-	flag = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_REG);
-	inverse_flag = BKP_ReadBackupRegister(SLEEP_BKP_INV_REG);
-	if ((UINT16)(flag ^ inverse_flag) != 0xFFFF)
-	{
-		return BOOT_FLAG_RESET_VALUE;
-	}
-
+	flag = FlashReadOneHalfWord(FLASH_ADDR_SLEEP_FLAG);
 	switch (flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
