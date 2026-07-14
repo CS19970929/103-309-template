@@ -35,6 +35,11 @@ UINT8 RtcSleep_PortIsMcuWakeActive(void)
     return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
 }
 
+UINT8 RtcSleep_PortIsChargerPresent(void)
+{
+    return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_RESET);
+}
+
 UINT8 RtcSleep_PortGetExternalCommCounter(void)
 {
     return SleepDeal_GetExternalCommCounter();

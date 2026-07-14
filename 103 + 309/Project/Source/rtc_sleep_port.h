@@ -12,6 +12,7 @@ uint16_t RtcSleep_PortGetDischargeCurrentMa(void);
 uint16_t RtcSleep_PortGetLowVoltageSleepMv(void);
 
 uint8_t RtcSleep_PortIsMcuWakeActive(void);
+uint8_t RtcSleep_PortIsChargerPresent(void);
 uint8_t RtcSleep_PortGetExternalCommCounter(void);
 
 uint8_t RtcSleep_PortUpdateRtcData(void);

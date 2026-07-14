@@ -11,6 +11,8 @@
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
+/* g_stCellInfoReport.u16Ichg uses 0.1A units: 5 = 500mA. */
+#define LOW_POWER_RTC_BLOCK_CHARGE_A10 ((uint16_t)5U)
 #define LOW_POWER_RTC_IDLE_TO_DEEP_SECONDS \
     ((uint32_t)PROJECT_CFG_RTC_IDLE_TO_DEEP_SLEEP_HOURS * 3600UL)
 
@@ -33,7 +35,11 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
 
 typedef uint8_t (*BlockCheckFunc)(void);
 
-static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckChargeMa(void)
+{
+    return (uint8_t)(((RtcSleep_PortIsChargerPresent() != 0U) ||
+                      (RtcSleep_PortGetChargeCurrentMa() >= LOW_POWER_RTC_BLOCK_CHARGE_A10)) ? 1U : 0U);
+}
 static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() > 10U) ? 1U : 0U; }
 static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }

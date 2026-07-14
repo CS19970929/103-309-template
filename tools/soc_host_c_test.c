@@ -298,6 +298,16 @@ static void test_full_voltage_anchor_can_override_self_consumption(void)
 		host_cap_to_ah100(HOST_CAP_FACTORY_AS10));
 }
 
+static void test_full_voltage_holds_100_during_long_zero_current_idle(void)
+{
+	host_reset_state();
+	host_set_snapshot(100U, 0U);
+	host_init_with_voltage(4200U, 4200U);
+	host_run_seconds(3600U, 4200U, 4200U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, 2700U);
+}
+
 static void test_rtc_sleep_does_not_apply_board_self_consumption(void)
 {
 	UINT32 start_cap_as10 = host_cap_now_from_soc(80U);
@@ -573,6 +583,7 @@ int main(void)
 	test_board_self_consumption_integrates_during_relax();
 	test_board_self_consumption_works_at_high_non_full_voltage();
 	test_full_voltage_anchor_can_override_self_consumption();
+	test_full_voltage_holds_100_during_long_zero_current_idle();
 	test_rtc_sleep_does_not_apply_board_self_consumption();
 	test_board_self_consumption_adjusts_charge_and_discharge_current();
 	test_typec_output_current_converts_to_battery_equivalent();
@@ -594,6 +605,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 20\n");
+	printf("SOC host C tests passed: 21\n");
 	return 0;
 }
