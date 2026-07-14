@@ -8,6 +8,7 @@ void BootFlag_Clear(void);
 void SleepDeal_RecordExternalComm(void);
 UINT8 SleepDeal_GetExternalCommCounter(void);
 UINT8 SleepDeal_IsBootFromSleepStartup(void);
+UINT8 SleepDeal_IsBootFromDeepSleepStartup(void);
 UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void);
 void SleepDeal_HandleBootSleepStartup(void);
 

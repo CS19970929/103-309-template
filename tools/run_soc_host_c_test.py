@@ -27,16 +27,16 @@ def compiler() -> str:
     raise RuntimeError("no C compiler found; install clang/gcc or set CC")
 
 
-def configured_board_self_consumption_ma() -> int:
+def configured_int(name: str, default: int) -> int:
     text = (CONF_DIR / "Project_Config.h").read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r"^\s*#define\s+PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA\s+(\d+)\b",
+    match = re.search(r"^\s*#define\s+{0}\s+(\d+)\b".format(re.escape(name)),
                       text,
                       re.MULTILINE)
-    return int(match.group(1)) if match else 30
+    return int(match.group(1)) if match else default
 
 
-def conf_override_dir(board_self_consumption_ma: int) -> Path:
-    target = BUILD_DIR / f"conf_board_self_{board_self_consumption_ma}"
+def conf_override_dir(board_self_consumption_ma: int, reserve_capacity_ah10: int) -> Path:
+    target = BUILD_DIR / f"conf_board_self_{board_self_consumption_ma}_reserve_{reserve_capacity_ah10}"
     target.mkdir(parents=True, exist_ok=True)
     for name in ("conf.h", "Project_Config.h", "Project_BuildGuard.h"):
         text = (CONF_DIR / name).read_text(encoding="utf-8", errors="ignore")
@@ -47,15 +47,23 @@ def conf_override_dir(board_self_consumption_ma: int) -> Path:
                 text,
                 flags=re.MULTILINE,
             )
+            text = re.sub(
+                r"(^\s*#define\s+PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10\s+)\d+(\b)",
+                rf"\g<1>{reserve_capacity_ah10}\2",
+                text,
+                flags=re.MULTILINE,
+            )
         (target / name).write_text(text, encoding="utf-8")
     return target
 
 
-def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption_ma=None) -> None:
+def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption_ma=None,
+                  reserve_capacity_ah10=None) -> None:
     extra_defines = extra_defines or []
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    override_conf = (conf_override_dir(board_self_consumption_ma)
-                     if board_self_consumption_ma is not None else None)
+    override_conf = (conf_override_dir(board_self_consumption_ma, reserve_capacity_ah10)
+                     if board_self_consumption_ma is not None and reserve_capacity_ah10 is not None
+                     else None)
 
     include_dirs = [
         SOURCE_DIR,
@@ -82,7 +90,7 @@ def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption
         "-Wno-unused-variable",
         "-ffunction-sections",
         "-fdata-sections",
-        "-DSTM32F10X_HD",
+        "-DSTM32F10X_MD",
         "-DUSE_STDPERIPH_DRIVER",
         *extra_defines,
         *(("-I" + str(path)) for path in include_dirs),
@@ -95,7 +103,7 @@ def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption
     ]
 
     label = ("current config" if board_self_consumption_ma is None
-             else f"board_self={board_self_consumption_ma}mA")
+             else f"board_self={board_self_consumption_ma}mA reserve={reserve_capacity_ah10 / 10:.1f}Ah")
     print("Building SOC host C test with:", cc, exe.name, label, flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
     print("Running", exe, flush=True)
@@ -104,15 +112,29 @@ def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption
 
 def main() -> int:
     cc = compiler()
-    current_self = configured_board_self_consumption_ma()
+    current_self = configured_int("PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA", 30)
+    current_reserve = configured_int("PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10", 0)
     variants = []
-    for value in (current_self, 0, 30, 1000):
-        if value not in variants:
-            variants.append(value)
+    for item in (
+        (current_self, current_reserve),
+        (0, current_reserve),
+        (30, current_reserve),
+        (1000, current_reserve),
+        (current_self, 0),
+        (current_self, 270),
+        (current_self, 300),
+    ):
+        if item not in variants:
+            variants.append(item)
 
-    for value in variants:
-        suffix = f"board_self_{value}"
-        build_and_run(cc, BUILD_DIR / f"soc_host_c_test_{suffix}", board_self_consumption_ma=value)
+    for board_self, reserve in variants:
+        suffix = f"board_self_{board_self}_reserve_{reserve}"
+        build_and_run(
+            cc,
+            BUILD_DIR / f"soc_host_c_test_{suffix}",
+            board_self_consumption_ma=board_self,
+            reserve_capacity_ah10=reserve,
+        )
     return 0
 
 

@@ -7,8 +7,8 @@ typedef struct SLEEP_RUNTIME_TAG
 {
 	UINT8 ext_comm;
 	UINT8 boot_sleep;
+	UINT8 boot_deep_sleep;
 	UINT8 chg_wake;
-	UINT8 reserved;
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
@@ -192,6 +192,11 @@ UINT8 SleepDeal_IsBootFromSleepStartup(void)
 	return s_sleep.boot_sleep;
 }
 
+UINT8 SleepDeal_IsBootFromDeepSleepStartup(void)
+{
+	return s_sleep.boot_deep_sleep;
+}
+
 UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
 {
 	if ((s_sleep.chg_wake == 0U) &&
@@ -220,6 +225,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 
 	sleep_flag = BootFlag_Read();
 	s_sleep.boot_sleep = 0U;
+	s_sleep.boot_deep_sleep = 0U;
 	s_sleep.chg_wake = 0U;
 	switch (sleep_flag)
 	{
@@ -244,6 +250,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
+		s_sleep.boot_deep_sleep = 1U;
 		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();

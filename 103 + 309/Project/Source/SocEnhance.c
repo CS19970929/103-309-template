@@ -48,6 +48,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REST_OCV_SECONDS         ((UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS)
 #define SOC_LONG_REST_DOWN_STEP_SECONDS ((UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define SOC_CAL_STEP                 ((UINT8)PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT)
+#define SOC_DEEP_WAKE_OCV_DIFF_PERCENT ((UINT8)PROJECT_CFG_SOC_DEEP_SLEEP_WAKE_OCV_DIFF_PERCENT)
 #define SOC_EMPTY_TAIL_START_OFFSET_MV ((UINT16)PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV)
 #define SOC_EMPTY_CRITICAL_OFFSET_MV ((int16_t)0)
 #define SOC_EMPTY_NEAR_TICKS         ((UINT16)(24U * SOC_TICKS_PER_SECOND))
@@ -1024,6 +1025,33 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 void SOC_SaveSnapshotBeforeSleep(void)
 {
 	soc_save_if_needed();
+}
+
+UINT8 SOC_ApplyDeepSleepWakeOcvCalibration(void)
+{
+	UINT8 ocv_soc;
+	UINT8 difference;
+
+	/* The caller supplies one fresh AFE sample after a deep-sleep wake. */
+	if (!soc_calibration_allowed() || (soc_cell_delta() > SOC_REST_MAX_DELTA_MV))
+	{
+		return 0U;
+	}
+
+	ocv_soc = soc_ocv_percent();
+	difference = (s_soc.soc >= ocv_soc) ?
+		(UINT8)(s_soc.soc - ocv_soc) : (UINT8)(ocv_soc - s_soc.soc);
+	if (difference < SOC_DEEP_WAKE_OCV_DIFF_PERCENT)
+	{
+		return 0U;
+	}
+
+	soc_set(ocv_soc);
+	soc_reset_rest_confidence();
+	s_soc.rest_ocv_fired = 0U;
+	soc_save_current_snapshot();
+	SOC_PublishReportData();
+	return 1U;
 }
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma)

@@ -161,6 +161,10 @@
 // <i> Maximum SOC change per automatic calibration step.
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 
+// <o> Deep-sleep wake OCV replace threshold percent <1-100>
+// <i> After a valid deep-sleep wake voltage sample, replace restored SOC only when OCV differs by at least this value.
+#define PROJECT_CFG_SOC_DEEP_SLEEP_WAKE_OCV_DIFF_PERCENT 10
+
 // <o> Board self consumption mA <0-1000>
 // <i> Normal running self-consumption current included in coulomb counting.
 #define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15

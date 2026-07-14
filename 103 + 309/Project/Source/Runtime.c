@@ -6,10 +6,33 @@
 #include "IrqDebug.h"
 #include "debug_hub.h"
 
+void DataLoad_CellVolt(void);
+void DataLoad_CellVoltMaxMinFind(void);
+
 UINT8 SeriesNum = 10;
+
+static UINT8 Runtime_SampleDeepSleepWakeVoltage(void)
+{
+	if ((SleepDeal_IsBootFromDeepSleepStartup() == 0U) ||
+		(SleepDeal_IsBootFromSleepChargerWakeup() != 0U))
+	{
+		return 0U;
+	}
+
+	if (UpdateVoltageFromBqMaximo() != 0U)
+	{
+		return 0U;
+	}
+
+	DataLoad_CellVolt();
+	DataLoad_CellVoltMaxMinFind();
+	return 1U;
+}
 
 void Runtime_Boot(void)
 {
+	UINT8 deep_sleep_ocv_ready;
+
 	DebugWatch_BindAll();
 
 	IrqDebug_SetPhase((uint8_t)IRQDBG_PHASE_BOOT);
@@ -25,10 +48,15 @@ void Runtime_Boot(void)
 	InitUSART_CommonUpper();
 	InitE2PROM();
 	InitAFE1();
+	deep_sleep_ocv_ready = Runtime_SampleDeepSleepWakeVoltage();
 	InitCan();
 	InitADC();
 
 	InitData_SOC();
+	if (deep_sleep_ocv_ready != 0U)
+	{
+		(void)SOC_ApplyDeepSleepWakeOcvCalibration();
+	}
 
 	InitTimer();
 	__enable_irq();

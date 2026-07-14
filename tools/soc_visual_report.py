@@ -59,7 +59,7 @@ def build_trace_exe(cc: str, exe: Path) -> None:
         "-Wno-unused-variable",
         "-ffunction-sections",
         "-fdata-sections",
-        "-DSTM32F10X_HD",
+        "-DSTM32F10X_MD",
         "-DUSE_STDPERIPH_DRIVER",
         "-I" + str(SOURCE_DIR),
         "-I" + str(SOURCE_DIR / "conf"),

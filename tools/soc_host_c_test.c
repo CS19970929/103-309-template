@@ -16,6 +16,8 @@
 #define HOST_LONG_REST_DOWN_STEP_SECONDS ((UINT16)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS)
 #define HOST_REST_DOWN_START_SECONDS ((UINT16)PROJECT_CFG_SOC_REST_OCV_SECONDS)
 
+extern UINT16 SOC_GetTypeCBatEquivCurrentA10(void);
+
 struct OTHER_ELEMENT OtherElement;
 struct stCell_Info g_stCellInfoReport;
 volatile struct SYSTEM_ERROR System_ErrFlag;
@@ -27,7 +29,9 @@ static UINT32 s_host_afe_current_sample_seq;
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
+static UINT32 s_flash_save_count;
 static unsigned s_failures;
+static unsigned s_tests_run;
 
 #define CHECK_TRUE(expr) host_check((expr) ? 1 : 0, #expr, __LINE__)
 #define CHECK_EQ_U32(actual, expected) host_check_u32((UINT32)(actual), (UINT32)(expected), #actual, __LINE__)
@@ -51,6 +55,7 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 	}
 	s_flash_soc = *data;
 	s_flash_soc_valid = 1U;
+	++s_flash_save_count;
 	return 1U;
 }
 
@@ -107,6 +112,24 @@ static void host_check_range_u32(UINT32 actual, UINT32 min_v, UINT32 max_v, cons
 static UINT32 host_cap_now_from_soc(UINT16 soc)
 {
 	return (UINT32)(((uint64_t)HOST_CAP_USABLE_AS10 * (uint64_t)soc) / 100ULL);
+}
+
+static UINT8 host_soh_from_cycle(UINT32 cycle_x100)
+{
+	UINT32 drop = (cycle_x100 / 100U) / 100U;
+
+	return (drop >= 20U) ? 80U : (UINT8)(100U - drop);
+}
+
+static UINT32 host_full_cap_from_cycle(UINT32 cycle_x100)
+{
+	return (UINT32)(((uint64_t)HOST_CAP_FACTORY_AS10 * host_soh_from_cycle(cycle_x100)) / 100ULL);
+}
+
+static UINT32 host_usable_cap_from_full(UINT32 cap_full_as10)
+{
+	return (HOST_CAP_RESERVE_AS10 < cap_full_as10) ?
+		(cap_full_as10 - HOST_CAP_RESERVE_AS10) : cap_full_as10;
 }
 
 static UINT16 host_soc_from_cap(UINT32 cap_as10)
@@ -171,6 +194,7 @@ static void host_reset_state(void)
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
 	s_flash_soc_valid = 0U;
+	s_flash_save_count = 0U;
 	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
 	s_host_afe_current_sample_seq = 0U;
@@ -190,6 +214,17 @@ static void host_set_snapshot(UINT16 soc, UINT16 flags)
 	s_flash_soc.u32LearnPassedAs10 = 0U;
 	s_flash_soc.u16Flags = flags;
 	s_flash_soc_valid = 1U;
+}
+
+static void host_set_snapshot_cycles(UINT16 soc, UINT16 flags, UINT32 cycle_x100)
+{
+	UINT32 cap_full_as10 = host_full_cap_from_cycle(cycle_x100);
+	UINT32 cap_usable_as10 = host_usable_cap_from_full(cap_full_as10);
+
+	host_set_snapshot(soc, flags);
+	s_flash_soc.u32CycleTimes = cycle_x100;
+	s_flash_soc.u32CapFull = cap_usable_as10;
+	s_flash_soc.u32CapNow = (UINT32)(((uint64_t)cap_usable_as10 * soc) / 100ULL);
 }
 
 static void host_set_legacy_snapshot(UINT16 soc)
@@ -230,6 +265,14 @@ static void host_run_seconds(UINT16 seconds, UINT16 vmax, UINT16 vmin, UINT16 ic
 	}
 }
 
+static void host_run_ticks(UINT32 ticks, UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
+{
+	while (ticks-- > 0U)
+	{
+		host_tick(vmax, vmin, ichg, idsg);
+	}
+}
+
 static UINT16 host_internal_soc(void)
 {
 	return s_flash_soc.u16SocNow;
@@ -241,6 +284,52 @@ static void test_startup_ocv_uses_real_c_code(void)
 	host_init_with_voltage(3835U, 3835U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 70U);
 	CHECK_EQ_U32(host_internal_soc(), 70U);
+}
+
+static void test_startup_without_loaded_voltage_defaults_to_60(void)
+{
+	host_reset_state();
+	host_init_with_voltage(0U, 0U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 60U);
+	CHECK_EQ_U32(host_internal_soc(), 60U);
+}
+
+static void test_deep_sleep_wake_ocv_replaces_only_large_valid_difference(void)
+{
+	UINT32 saves_before;
+	UINT8 threshold = (UINT8)PROJECT_CFG_SOC_DEEP_SLEEP_WAKE_OCV_DIFF_PERCENT;
+
+	host_reset_state();
+	host_set_snapshot(90U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	saves_before = s_flash_save_count;
+	CHECK_EQ_U32(SOC_ApplyDeepSleepWakeOcvCalibration(), 1U);
+	CHECK_EQ_U32(host_internal_soc(), 70U);
+	CHECK_EQ_U32(s_flash_save_count, saves_before + 1U);
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	CHECK_EQ_U32(SOC_ApplyDeepSleepWakeOcvCalibration(), 1U);
+	CHECK_EQ_U32(host_internal_soc(), 90U);
+
+	host_reset_state();
+	host_set_snapshot(threshold, 0U);
+	host_init_with_voltage(3000U, 3000U);
+	CHECK_EQ_U32(SOC_ApplyDeepSleepWakeOcvCalibration(), 1U);
+	CHECK_EQ_U32(host_internal_soc(), 0U);
+
+	host_reset_state();
+	host_set_snapshot((UINT16)(threshold - 1U), 0U);
+	host_init_with_voltage(3000U, 3000U);
+	CHECK_EQ_U32(SOC_ApplyDeepSleepWakeOcvCalibration(), 0U);
+	CHECK_EQ_U32(host_internal_soc(), (UINT32)(threshold - 1U));
+
+	host_reset_state();
+	host_set_snapshot(90U, 0U);
+	host_init_with_voltage(4036U, 3835U);
+	CHECK_EQ_U32(SOC_ApplyDeepSleepWakeOcvCalibration(), 0U);
+	CHECK_EQ_U32(host_internal_soc(), 90U);
 }
 
 static void test_discharge_integration_uses_app_soc_path(void)
@@ -576,35 +665,348 @@ static void test_legacy_snapshot_migrates_by_saved_soc(void)
 	CHECK_EQ_U32(s_flash_soc.u32CapNow, host_cap_now_from_soc(70U));
 }
 
+static void test_no_new_afe_sample_never_repeats_integration(void)
+{
+	UINT16 cap_before;
+	UINT32 flash_cap_before;
+	UINT16 i;
+
+	host_reset_state();
+	host_set_snapshot(60U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	/* Synchronize App_SOC's function-local last-sequence state between host cases. */
+	host_tick(3835U, 3835U, 0U, 0U);
+	host_tick(3835U, 3835U, 0U, 0U);
+	cap_before = g_stCellInfoReport.SocElement.u16CapacityNow;
+	flash_cap_before = s_flash_soc.u32CapNow;
+	g_stCellInfoReport.u16Ichg = 0U;
+	g_stCellInfoReport.u16IDischg = 270U;
+	for (i = 0U; i < 1000U; ++i)
+	{
+		App_SOC();
+	}
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, cap_before);
+	CHECK_EQ_U32(s_flash_soc.u32CapNow, flash_cap_before);
+}
+
+static void test_typec_equivalent_current_uses_pack_voltage_and_fallback(void)
+{
+	host_reset_state();
+	s_host_typec_out_current_mA = 9000U;
+	g_stCellInfoReport.u16VCellTotle = 3835U;
+	CHECK_EQ_U32(SOC_GetTypeCBatEquivCurrentA10(), 21U);
+
+	g_stCellInfoReport.u16VCellTotle = 0U;
+	s_host_vbat_mV = 36000U;
+	CHECK_EQ_U32(SOC_GetTypeCBatEquivCurrentA10(), 23U);
+
+	s_host_typec_out_current_mA = 0U;
+	CHECK_EQ_U32(SOC_GetTypeCBatEquivCurrentA10(), 0U);
+}
+
+static void test_reported_capacity_maps_usable_domain_back_to_full_domain(void)
+{
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 50U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, 1350U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFull, 2700U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFactory, 2700U);
+}
+
+static void test_soh_cycle_mapping_and_capacity_floor(void)
+{
+	UINT32 cap_full_as10;
+
+	host_reset_state();
+	host_set_snapshot_cycles(100U, 0U, 10000U);
+	host_init_with_voltage(4050U, 4050U);
+	cap_full_as10 = host_full_cap_from_cycle(10000U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soh, 99U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFull,
+		host_cap_to_ah100(cap_full_as10));
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
+		host_cap_to_ah100(cap_full_as10));
+
+	host_reset_state();
+	host_set_snapshot_cycles(100U, 0U, 200000U);
+	host_init_with_voltage(4050U, 4050U);
+	cap_full_as10 = host_full_cap_from_cycle(200000U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soh, 80U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFull,
+		host_cap_to_ah100(cap_full_as10));
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFactory, 2700U);
+}
+
+static void test_full_confirm_voltage_delta_mode_and_counter_boundaries(void)
+{
+	host_reset_state();
+	host_set_snapshot(99U, 0U);
+	host_init_with_voltage(4180U, 4100U);
+	host_run_seconds(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS, 4180U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS - 1U),
+		4181U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+	host_tick(4000U, 4000U, 0U, 0U);
+	host_run_seconds(1U, 4181U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS - 1U),
+		4181U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+
+	host_reset_state();
+	host_set_snapshot(99U, 0U);
+	host_init_with_voltage(4221U, 4100U);
+	host_run_seconds(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS, 4221U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+
+	host_reset_state();
+	host_set_snapshot(99U, 0U);
+	host_init_with_voltage(4181U, 4100U);
+	host_run_seconds(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS, 4181U, 4100U, 0U, 2U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+}
+
+static void test_full_confirm_steps_one_percent_per_window(void)
+{
+	host_reset_state();
+	host_set_snapshot(95U, 0U);
+	host_init_with_voltage(4181U, 4100U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS * 5U - 1U),
+		4181U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+	host_run_seconds(1U, 4181U, 4100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+}
+
+static void test_empty_tail_critical_relax_and_dynamic_rate_boundaries(void)
+{
+	UINT32 dynamic_ticks = 120U + ((UINT32)20U * 480U / 135U);
+
+	host_reset_state();
+	host_set_snapshot(5U, 0U);
+	host_init_with_voltage(3000U, 3000U);
+	host_run_seconds(4U, 3000U, 3000U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 5U);
+	host_run_seconds(1U, 3000U, 3000U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 4U);
+
+	host_reset_state();
+	host_set_snapshot(5U, 0U);
+	host_init_with_voltage(3050U, 3050U);
+	host_run_seconds(10U, 3050U, 3050U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 4U);
+
+	host_reset_state();
+	host_set_snapshot(5U, 0U);
+	host_init_with_voltage(3100U, 3100U);
+	host_run_seconds(120U, 3100U, 3100U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 5U);
+
+	host_reset_state();
+	host_set_snapshot(40U, 0U);
+	host_init_with_voltage(3400U, 3400U);
+	host_run_ticks(dynamic_ticks - 1U, 3400U, 3400U, 0U, 20U);
+	CHECK_EQ_U32(host_internal_soc(), 40U);
+	host_run_ticks(1U, 3400U, 3400U, 0U, 20U);
+	CHECK_EQ_U32(host_internal_soc(), 39U);
+}
+
+static void test_sag_hold_blocks_soft_tail_but_not_critical_empty_tail(void)
+{
+	host_reset_state();
+	host_set_snapshot(30U, 0U);
+	host_init_with_voltage(3400U, 3400U);
+	host_tick(3400U, 3400U, 0U, 140U);
+	CHECK_TRUE((s_flash_soc.u16Flags & HOST_REBOUND_FLAG) != 0U);
+	host_run_seconds(29U, 3400U, 3400U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 30U);
+	CHECK_TRUE((s_flash_soc.u16Flags & HOST_REBOUND_FLAG) != 0U);
+	host_run_seconds(1U, 3400U, 3400U, 0U, 0U);
+	CHECK_TRUE((s_flash_soc.u16Flags & HOST_REBOUND_FLAG) == 0U);
+
+	host_reset_state();
+	host_set_snapshot(30U, 0U);
+	host_init_with_voltage(3000U, 3000U);
+	host_run_seconds(5U, 3000U, 3000U, 0U, 140U);
+	CHECK_EQ_U32(host_internal_soc(), 29U);
+}
+
+static void test_long_rest_is_downward_only_and_requires_runtime_voltage_gate(void)
+{
+	if (PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA > 100U)
+	{
+		return;
+	}
+
+	host_reset_state();
+	host_set_snapshot(80U, 0U);
+	host_init_with_voltage(3695U, 3695U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_REST_OCV_SECONDS +
+		PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS), 3695U, 3695U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 79U);
+
+	host_reset_state();
+	host_set_snapshot(40U, 0U);
+	host_init_with_voltage(3695U, 3695U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_REST_OCV_SECONDS +
+		PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS + 60U), 3695U, 3695U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 40U);
+
+	host_reset_state();
+	host_set_snapshot(52U, 0U);
+	host_init_with_voltage(3695U, 3695U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_REST_OCV_SECONDS +
+		PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS + 60U), 3695U, 3695U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 52U);
+
+	host_reset_state();
+	host_set_snapshot(95U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	host_run_seconds((UINT16)(PROJECT_CFG_SOC_REST_OCV_SECONDS +
+		PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS + 60U), 4050U, 4050U, 0U, 0U);
+	CHECK_EQ_U32(host_internal_soc(), 95U);
+}
+
+static void test_rtc_rest_can_down_calibrate_above_runtime_3700mv_gate(void)
+{
+	UINT32 seconds;
+
+	host_reset_state();
+	host_set_snapshot(95U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	for (seconds = 60U;
+		 seconds <= (UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS +
+			(UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS;
+		 seconds += 60U)
+	{
+		SOC_ApplyRtcRelaxationCompensation(seconds, 4050U, 4050U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 94U);
+}
+
+static void test_rtc_new_session_keeps_fired_latch_without_active_current(void)
+{
+	UINT32 seconds;
+	UINT32 session_seconds = (UINT32)PROJECT_CFG_SOC_REST_OCV_SECONDS +
+		(UINT32)PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS;
+
+	host_reset_state();
+	host_set_snapshot(95U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	for (seconds = 10U; seconds <= session_seconds; seconds += 10U)
+	{
+		SOC_ApplyRtcRelaxationCompensation(seconds, 4050U, 4050U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 94U);
+
+	/* A smaller cumulative value starts another RTC session but does not clear rest_ocv_fired. */
+	for (seconds = 10U; seconds <= session_seconds; seconds += 10U)
+	{
+		SOC_ApplyRtcRelaxationCompensation(seconds, 4050U, 4050U);
+	}
+	CHECK_EQ_U32(host_internal_soc(), 94U);
+}
+
+static void test_sleep_snapshot_currently_skips_subpercent_capacity_change(void)
+{
+	UINT16 cap_before;
+	UINT16 cap_after_run;
+	UINT32 flash_cap_before;
+	UINT32 saves_before_sleep;
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	cap_before = g_stCellInfoReport.SocElement.u16CapacityNow;
+	flash_cap_before = s_flash_soc.u32CapNow;
+	host_run_seconds(36U, 3835U, 3835U, 0U, 100U);
+	cap_after_run = g_stCellInfoReport.SocElement.u16CapacityNow;
+	CHECK_TRUE(cap_after_run < cap_before);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 50U);
+	CHECK_EQ_U32(s_flash_soc.u32CapNow, flash_cap_before);
+
+	saves_before_sleep = s_flash_save_count;
+	SOC_SaveSnapshotBeforeSleep();
+	CHECK_EQ_U32(s_flash_save_count, saves_before_sleep);
+	CHECK_EQ_U32(s_flash_soc.u32CapNow, flash_cap_before);
+
+	InitData_SOC();
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, cap_before);
+}
+
+static void test_soc_zero_extra_discharge_debt_is_not_tracked_on_recharge(void)
+{
+	host_reset_state();
+	host_set_snapshot(100U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	host_run_seconds(360U, 4050U, 4050U, 0U,
+		(UINT16)(HOST_CAP_USABLE_AS10 / 360U));
+	CHECK_EQ_U32(host_internal_soc(), 0U);
+
+	/* Discharge another 1Ah after visible SOC is already zero. */
+	host_run_seconds(360U, 4050U, 4050U, 0U, 100U);
+	CHECK_EQ_U32(host_internal_soc(), 0U);
+
+	/* The extra deficit is saturated away, so 1Ah recharge immediately raises visible SOC. */
+	host_run_seconds(360U, 3800U, 3800U, 100U, 0U);
+	CHECK_RANGE_U32(host_internal_soc(), 3U, 4U);
+}
+
 int main(void)
 {
-	test_startup_ocv_uses_real_c_code();
-	test_discharge_integration_uses_app_soc_path();
-	test_board_self_consumption_integrates_during_relax();
-	test_board_self_consumption_works_at_high_non_full_voltage();
-	test_full_voltage_anchor_can_override_self_consumption();
-	test_full_voltage_holds_100_during_long_zero_current_idle();
-	test_rtc_sleep_does_not_apply_board_self_consumption();
-	test_board_self_consumption_adjusts_charge_and_discharge_current();
-	test_typec_output_current_converts_to_battery_equivalent();
-	test_full_confirm_reaches_100_only_after_voltage_anchor();
-	test_low_voltage_tail_reaches_zero();
-	test_short_rest_ocv_ignores_upward_target_during_charge();
-	test_short_rest_ocv_is_not_consumed_during_active_discharge();
-	test_rtc_ocv_ignores_upward_stable_target();
-	test_rtc_ocv_waits_for_voltage_convergence();
-	test_unstable_long_rest_waits_for_voltage_convergence();
-	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();
-	test_rebound_flag_clears_when_holdoff_expires();
-	test_set_soc_once_command_saves_snapshot();
-	test_reserved_capacity_keeps_reported_full_and_reaches_zero_early();
-	test_legacy_snapshot_migrates_by_saved_soc();
+#define RUN_TEST(fn) do { \
+	unsigned failures_before = s_failures; \
+	fn(); \
+	++s_tests_run; \
+	printf("%s %s\n", (s_failures == failures_before) ? "PASS" : "FAIL", #fn); \
+} while (0)
+
+	RUN_TEST(test_startup_ocv_uses_real_c_code);
+	RUN_TEST(test_startup_without_loaded_voltage_defaults_to_60);
+	RUN_TEST(test_deep_sleep_wake_ocv_replaces_only_large_valid_difference);
+	RUN_TEST(test_discharge_integration_uses_app_soc_path);
+	RUN_TEST(test_board_self_consumption_integrates_during_relax);
+	RUN_TEST(test_board_self_consumption_works_at_high_non_full_voltage);
+	RUN_TEST(test_full_voltage_anchor_can_override_self_consumption);
+	RUN_TEST(test_full_voltage_holds_100_during_long_zero_current_idle);
+	RUN_TEST(test_rtc_sleep_does_not_apply_board_self_consumption);
+	RUN_TEST(test_board_self_consumption_adjusts_charge_and_discharge_current);
+	RUN_TEST(test_typec_output_current_converts_to_battery_equivalent);
+	RUN_TEST(test_full_confirm_reaches_100_only_after_voltage_anchor);
+	RUN_TEST(test_low_voltage_tail_reaches_zero);
+	RUN_TEST(test_short_rest_ocv_ignores_upward_target_during_charge);
+	RUN_TEST(test_short_rest_ocv_is_not_consumed_during_active_discharge);
+	RUN_TEST(test_rtc_ocv_ignores_upward_stable_target);
+	RUN_TEST(test_rtc_ocv_waits_for_voltage_convergence);
+	RUN_TEST(test_unstable_long_rest_waits_for_voltage_convergence);
+	RUN_TEST(test_long_rest_ocv_slowly_reduces_soc_above_low_tail);
+	RUN_TEST(test_rebound_flag_clears_when_holdoff_expires);
+	RUN_TEST(test_set_soc_once_command_saves_snapshot);
+	RUN_TEST(test_reserved_capacity_keeps_reported_full_and_reaches_zero_early);
+	RUN_TEST(test_legacy_snapshot_migrates_by_saved_soc);
+	RUN_TEST(test_no_new_afe_sample_never_repeats_integration);
+	RUN_TEST(test_typec_equivalent_current_uses_pack_voltage_and_fallback);
+	RUN_TEST(test_reported_capacity_maps_usable_domain_back_to_full_domain);
+	RUN_TEST(test_soh_cycle_mapping_and_capacity_floor);
+	RUN_TEST(test_full_confirm_voltage_delta_mode_and_counter_boundaries);
+	RUN_TEST(test_full_confirm_steps_one_percent_per_window);
+	RUN_TEST(test_empty_tail_critical_relax_and_dynamic_rate_boundaries);
+	RUN_TEST(test_sag_hold_blocks_soft_tail_but_not_critical_empty_tail);
+	RUN_TEST(test_long_rest_is_downward_only_and_requires_runtime_voltage_gate);
+	RUN_TEST(test_rtc_rest_can_down_calibrate_above_runtime_3700mv_gate);
+	RUN_TEST(test_rtc_new_session_keeps_fired_latch_without_active_current);
+	RUN_TEST(test_sleep_snapshot_currently_skips_subpercent_capacity_change);
+	RUN_TEST(test_soc_zero_extra_discharge_debt_is_not_tracked_on_recharge);
 
 	if (s_failures != 0U)
 	{
-		printf("SOC host C tests failed: %u\n", s_failures);
+		printf("SOC host C tests failed: tests=%u failures=%u\n", s_tests_run, s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 21\n");
+	printf("SOC host C tests passed: %u\n", s_tests_run);
 	return 0;
 }
