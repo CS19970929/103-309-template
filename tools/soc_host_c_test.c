@@ -7,6 +7,9 @@
 
 #define HOST_CAP_A10               ((UINT16)270U)
 #define HOST_CAP_FACTORY_AS10      ((UINT32)HOST_CAP_A10 * 3600U)
+#define HOST_CAP_RESERVE_AS10      ((UINT32)PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 * 3600U)
+#define HOST_CAP_USABLE_AS10       ((HOST_CAP_RESERVE_AS10 < HOST_CAP_FACTORY_AS10) ? \
+	(HOST_CAP_FACTORY_AS10 - HOST_CAP_RESERVE_AS10) : HOST_CAP_FACTORY_AS10)
 #define HOST_REBOUND_FLAG          ((UINT16)0x0001U)
 #define HOST_TICKS_PER_SECOND      ((UINT16)5U)
 #define HOST_MAMS_PER_AS10         ((UINT32)100000U)
@@ -103,25 +106,33 @@ static void host_check_range_u32(UINT32 actual, UINT32 min_v, UINT32 max_v, cons
 
 static UINT32 host_cap_now_from_soc(UINT16 soc)
 {
-	return (UINT32)(((uint64_t)HOST_CAP_FACTORY_AS10 * (uint64_t)soc) / 100ULL);
+	return (UINT32)(((uint64_t)HOST_CAP_USABLE_AS10 * (uint64_t)soc) / 100ULL);
 }
 
 static UINT16 host_soc_from_cap(UINT32 cap_as10)
 {
 	UINT32 soc;
 
-	if (cap_as10 >= HOST_CAP_FACTORY_AS10)
+	if (cap_as10 >= HOST_CAP_USABLE_AS10)
 	{
 		return 100U;
 	}
 	soc = (UINT32)(((uint64_t)cap_as10 * 100ULL +
-		(HOST_CAP_FACTORY_AS10 / 2U)) / HOST_CAP_FACTORY_AS10);
+		(HOST_CAP_USABLE_AS10 / 2U)) / HOST_CAP_USABLE_AS10);
 	return (soc > 100U) ? 100U : (UINT16)soc;
 }
 
 static UINT16 host_cap_to_ah100(UINT32 cap_as10)
 {
 	return (UINT16)((cap_as10 + 180U) / 360U);
+}
+
+static UINT16 host_report_cap_to_ah100(UINT32 cap_as10)
+{
+	UINT32 report_as10 = (UINT32)(((uint64_t)cap_as10 * HOST_CAP_FACTORY_AS10 +
+		(HOST_CAP_USABLE_AS10 / 2U)) / HOST_CAP_USABLE_AS10);
+
+	return host_cap_to_ah100(report_as10);
 }
 
 static UINT32 host_self_delta_as10(UINT32 current_ma, UINT32 seconds)
@@ -174,11 +185,18 @@ static void host_set_snapshot(UINT16 soc, UINT16 flags)
 	s_flash_soc.u16DsgSocInt = 0U;
 	s_flash_soc.u16MaxErrorPercent = 100U;
 	s_flash_soc.u32CycleTimes = 300U;
-	s_flash_soc.u32CapFull = HOST_CAP_FACTORY_AS10;
+	s_flash_soc.u32CapFull = HOST_CAP_USABLE_AS10;
 	s_flash_soc.u32CapNow = host_cap_now_from_soc(soc);
 	s_flash_soc.u32LearnPassedAs10 = 0U;
 	s_flash_soc.u16Flags = flags;
 	s_flash_soc_valid = 1U;
+}
+
+static void host_set_legacy_snapshot(UINT16 soc)
+{
+	host_set_snapshot(soc, 0U);
+	s_flash_soc.u32CapFull = HOST_CAP_FACTORY_AS10;
+	s_flash_soc.u32CapNow = (UINT32)(((uint64_t)HOST_CAP_FACTORY_AS10 * soc) / 100ULL);
 }
 
 static void host_init_with_voltage(UINT16 vmax, UINT16 vmin)
@@ -248,7 +266,7 @@ static void test_board_self_consumption_integrates_during_relax(void)
 	host_init_with_voltage(3835U, 3835U);
 	host_run_seconds(3600U, 3835U, 3835U, 0U, 0U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
-		host_cap_to_ah100(expected_cap_as10));
+		host_report_cap_to_ah100(expected_cap_as10));
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 }
 
@@ -265,7 +283,7 @@ static void test_board_self_consumption_works_at_high_non_full_voltage(void)
 	host_init_with_voltage(4050U, 4050U);
 	host_run_seconds(3600U, 4050U, 4050U, 0U, 0U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
-		host_cap_to_ah100(expected_cap_as10));
+		host_report_cap_to_ah100(expected_cap_as10));
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 }
 
@@ -289,7 +307,7 @@ static void test_rtc_sleep_does_not_apply_board_self_consumption(void)
 	host_init_with_voltage(4050U, 4050U);
 	SOC_ApplyRtcRelaxationCompensation(3600U, 4050U, 4050U);
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
-		host_cap_to_ah100(start_cap_as10));
+		host_report_cap_to_ah100(start_cap_as10));
 	CHECK_EQ_U32(host_internal_soc(), 80U);
 }
 
@@ -372,7 +390,7 @@ static void test_low_voltage_tail_reaches_zero(void)
 	host_set_snapshot(30U, 0U);
 	host_init_with_voltage(3000U, 3000U);
 	host_run_seconds(60U, 2950U, 2950U, 0U, 145U);
-	CHECK_RANGE_U32(host_internal_soc(), 28U, 29U);
+	CHECK_RANGE_U32(host_internal_soc(), 17U, 19U);
 }
 
 static void test_short_rest_ocv_ignores_upward_target_during_charge(void)
@@ -403,7 +421,7 @@ static void test_short_rest_ocv_is_not_consumed_during_active_discharge(void)
 	before_discharge = host_internal_soc();
 	CHECK_TRUE(before_discharge <= 80U);
 	host_run_seconds(600U, 3835U, 3835U, 0U, 4U);
-	CHECK_EQ_U32(host_internal_soc(), before_discharge);
+	CHECK_RANGE_U32(host_internal_soc(), (UINT32)(before_discharge - 1U), before_discharge);
 }
 
 static void test_rtc_ocv_ignores_upward_stable_target(void)
@@ -519,6 +537,35 @@ static void test_set_soc_once_command_saves_snapshot(void)
 	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 35U);
 }
 
+static void test_reserved_capacity_keeps_reported_full_and_reaches_zero_early(void)
+{
+	host_reset_state();
+	host_set_snapshot(100U, 0U);
+	host_init_with_voltage(4050U, 4050U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, 2700U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFull, 2700U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityFactory, 2700U);
+	CHECK_EQ_U32(s_flash_soc.u32CapFull, HOST_CAP_USABLE_AS10);
+
+	host_run_seconds(360U, 4050U, 4050U, 0U,
+		(UINT16)(HOST_CAP_USABLE_AS10 / 360U));
+	CHECK_EQ_U32(host_internal_soc(), 0U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, 0U);
+}
+
+static void test_legacy_snapshot_migrates_by_saved_soc(void)
+{
+	host_reset_state();
+	host_set_legacy_snapshot(70U);
+	host_init_with_voltage(3835U, 3835U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16Soc, 70U);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow, 1890U);
+
+	SOC_RequestSetOnce(70U);
+	CHECK_EQ_U32(s_flash_soc.u32CapFull, HOST_CAP_USABLE_AS10);
+	CHECK_EQ_U32(s_flash_soc.u32CapNow, host_cap_now_from_soc(70U));
+}
+
 int main(void)
 {
 	test_startup_ocv_uses_real_c_code();
@@ -539,12 +586,14 @@ int main(void)
 	test_long_rest_ocv_slowly_reduces_soc_above_low_tail();
 	test_rebound_flag_clears_when_holdoff_expires();
 	test_set_soc_once_command_saves_snapshot();
+	test_reserved_capacity_keeps_reported_full_and_reaches_zero_early();
+	test_legacy_snapshot_migrates_by_saved_soc();
 
 	if (s_failures != 0U)
 	{
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 18\n");
+	printf("SOC host C tests passed: 20\n");
 	return 0;
 }

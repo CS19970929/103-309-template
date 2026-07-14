@@ -165,9 +165,20 @@
 // <i> Normal running self-consumption current included in coulomb counting.
 #define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15
 
+// <o> Reserved capacity 0.1Ah <0-65000>
+// <i> 10 = 1Ah. SOC uses full capacity minus this reserve; reported full capacity stays unchanged.
+#define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 10
+
 // <o> Empty tail start offset mV <0-1000>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
+// </h>
+
+// <h>Low Power
+
+// <o> Idle RTC time before deep sleep hours <1-65535>
+// <i> Continuous exception-free RTC low-power time. 48 = 48 hours.
+#define PROJECT_CFG_RTC_IDLE_TO_DEEP_SLEEP_HOURS 48
 // </h>
 
 // <h>Upgrade Parameter Policy

@@ -34,6 +34,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_MA_PER_A10               ((int32_t)100)
 #define SOC_MAMS_PER_AS10            ((UINT32)100000U)
 #define SOC_BOARD_SELF_CONSUMPTION_MA ((UINT16)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA)
+#define SOC_RESERVE_CAPACITY_AH10    ((UINT16)PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10)
 #define SOC_SOH_MIN                  ((UINT8)80U)
 #define SOC_SOH_CYCLE_STEP           ((UINT16)100U)
 #define SOC_FULL_SECONDS             ((UINT16)PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS)
@@ -209,6 +210,20 @@ static UINT32 soc_factory_cap_as10_from(UINT16 cap_a10)
 	return (UINT32)cap_a10 * 3600U;
 }
 
+static UINT32 soc_usable_cap_as10_from(UINT32 cap_full_as10)
+{
+	UINT32 reserve_as10 = soc_factory_cap_as10_from(SOC_RESERVE_CAPACITY_AH10);
+
+	/* A reserve that consumes the whole pack is invalid at runtime; disable it safely. */
+	return (reserve_as10 < cap_full_as10) ?
+		(cap_full_as10 - reserve_as10) : cap_full_as10;
+}
+
+static UINT32 soc_usable_cap_as10(void)
+{
+	return soc_usable_cap_as10_from(s_soc.cap_full_as10);
+}
+
 static UINT8 soc_soh_from_cycle(UINT32 cycle_x100)
 {
 	UINT32 drop = (cycle_x100 / 100U) / SOC_SOH_CYCLE_STEP;
@@ -217,24 +232,28 @@ static UINT8 soc_soh_from_cycle(UINT32 cycle_x100)
 
 static void soc_refresh_capacity_base(void)
 {
+	UINT32 cap_usable_as10;
+
 	s_soc.soh = soc_soh_from_cycle(s_soc.cycle_x100);
 	s_soc.cap_full_as10 = (UINT32)(((uint64_t)s_soc.cap_factory_as10 * s_soc.soh) / 100ULL);
-	if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
+	cap_usable_as10 = soc_usable_cap_as10();
+	if (s_soc.cap_now_as10 > cap_usable_as10)
 	{
-		s_soc.cap_now_as10 = s_soc.cap_full_as10;
+		s_soc.cap_now_as10 = cap_usable_as10;
 	}
 }
 
 static UINT8 soc_from_cap(void)
 {
+	UINT32 cap_usable_as10 = soc_usable_cap_as10();
 	UINT32 soc;
 
-	if (s_soc.cap_now_as10 >= s_soc.cap_full_as10)
+	if (s_soc.cap_now_as10 >= cap_usable_as10)
 	{
 		return 100U;
 	}
 	soc = (UINT32)(((uint64_t)s_soc.cap_now_as10 * 100ULL +
-		(s_soc.cap_full_as10 / 2U)) / s_soc.cap_full_as10);
+		(cap_usable_as10 / 2U)) / cap_usable_as10);
 	return (soc > 100U) ? 100U : (UINT8)soc;
 }
 
@@ -244,6 +263,14 @@ static UINT16 soc_cap_to_ah100(UINT32 cap_as10)
 	return (cap > 0xFFFFU) ? 0xFFFFU : (UINT16)cap;
 }
 
+static UINT32 soc_report_cap_now_as10(void)
+{
+	UINT32 cap_usable_as10 = soc_usable_cap_as10();
+
+	return (UINT32)(((uint64_t)s_soc.cap_now_as10 * s_soc.cap_full_as10 +
+		(cap_usable_as10 / 2U)) / cap_usable_as10);
+}
+
 static void soc_set(UINT8 soc)
 {
 	if (soc > 100U)
@@ -251,7 +278,7 @@ static void soc_set(UINT8 soc)
 		soc = 100U;
 	}
 	s_soc.soc = soc;
-	s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * soc) / 100ULL);
+	s_soc.cap_now_as10 = (UINT32)(((uint64_t)soc_usable_cap_as10() * soc) / 100ULL);
 	s_soc.rem_mams = 0U;
 }
 
@@ -382,7 +409,7 @@ void SOC_PublishReportData(void)
 
 	g_stCellInfoReport.SocElement.u16Soc = s_soc.soc;
 	g_stCellInfoReport.SocElement.u16Soh = s_soc.soh;
-	g_stCellInfoReport.SocElement.u16CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
+	g_stCellInfoReport.SocElement.u16CapacityNow = soc_cap_to_ah100(soc_report_cap_now_as10());
 	g_stCellInfoReport.SocElement.u16CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
 	g_stCellInfoReport.SocElement.u16CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
 	g_stCellInfoReport.SocElement.u16Cycle_times = (cycles > 0xFFFFU) ? 0xFFFFU : (UINT16)cycles;
@@ -411,6 +438,7 @@ void SOC_RequestSetOnce(UINT8 soc)
 static UINT8 soc_save(void)
 {
 	STORAGE_FLASH_SOC_DATA data;
+	UINT32 cap_usable_as10 = soc_usable_cap_as10();
 	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
 	memset(&data, 0, sizeof(data));
@@ -419,7 +447,8 @@ static UINT8 soc_save(void)
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = s_soc.cycle_x100;
 	data.u32CapNow = s_soc.cap_now_as10;
-	data.u32CapFull = s_soc.cap_full_as10;
+	/* Store the calculation base so snapshots survive reserve-config changes safely. */
+	data.u32CapFull = cap_usable_as10;
 	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
 	data.u16Flags = (UINT16)(s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
 	data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
@@ -461,17 +490,20 @@ static void soc_load_or_default(void)
 {
 	STORAGE_FLASH_SOC_DATA data;
 	UINT8 valid = StorageFlash_LoadSocData(&data);
+	UINT32 cap_usable_as10;
 	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
 	if (valid && (data.u16SocNow <= 100U) && (data.u16DsgSocInt <= 100U))
 	{
 		s_soc.cycle_x100 = data.u32CycleTimes;
 		soc_refresh_capacity_base();
+		cap_usable_as10 = soc_usable_cap_as10();
 		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
 			(data.u32LearnPassedAs10 % unit) :
 			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
-		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
-			(data.u32CapNow <= s_soc.cap_full_as10))
+		if ((data.u32CapFull == cap_usable_as10) &&
+			((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
+			(data.u32CapNow <= cap_usable_as10))
 		{
 			s_soc.cap_now_as10 = data.u32CapNow;
 			s_soc.soc = soc_from_cap();
@@ -533,6 +565,7 @@ static void soc_integrate(int32_t net_current_ma)
 	int32_t delta_as10;
 	int64_t acc_mams;
 	int64_t cap_now_as10;
+	UINT32 cap_usable_as10;
 	UINT8 old_soc;
 
 	acc_mams = (((int64_t)net_current_ma -
@@ -555,21 +588,22 @@ static void soc_integrate(int32_t net_current_ma)
 		s_soc.dsg_acc_as10 %= unit;
 		soc_refresh_capacity_base();
 	}
+	cap_usable_as10 = soc_usable_cap_as10();
 	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
 	if (cap_now_as10 < 0)
 	{
 		cap_now_as10 = 0;
 	}
-	else if (cap_now_as10 > (int64_t)s_soc.cap_full_as10)
+	else if (cap_now_as10 > (int64_t)cap_usable_as10)
 	{
-		cap_now_as10 = (int64_t)s_soc.cap_full_as10;
+		cap_now_as10 = (int64_t)cap_usable_as10;
 	}
 	s_soc.cap_now_as10 = (UINT32)cap_now_as10;
 	s_soc.soc = soc_from_cap();
 	if ((delta_as10 > 0) && (old_soc < 100U) && (s_soc.soc >= 100U))
 	{
 		s_soc.soc = 99U;
-		s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * 99ULL) / 100ULL);
+		s_soc.cap_now_as10 = (UINT32)(((uint64_t)cap_usable_as10 * 99ULL) / 100ULL);
 	}
 }
 
@@ -975,14 +1009,15 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	UINT32 cap_factory = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	UINT32 cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
+	UINT32 cap_usable = soc_usable_cap_as10_from(cap_full);
 
 	memset(&data, 0, sizeof(data));
 	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
 	data.u16SocNow = s_soc_default_startup_percent;
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = cycle_x100;
-	data.u32CapFull = cap_full;
-	data.u32CapNow = (UINT32)(((uint64_t)cap_full * s_soc_default_startup_percent) / 100ULL);
+	data.u32CapFull = cap_usable;
+	data.u32CapNow = (UINT32)(((uint64_t)cap_usable * s_soc_default_startup_percent) / 100ULL);
 	return StorageFlash_SaveSocData(&data);
 }
 

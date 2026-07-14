@@ -6,14 +6,18 @@
 #include "Sci_Upper.h"
 #include "RTC.h"
 #include "IrqDebug.h"
+#include "LowPowerSleep.h"
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2800U)
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
+#define LOW_POWER_RTC_IDLE_TO_DEEP_SECONDS \
+    ((uint32_t)PROJECT_CFG_RTC_IDLE_TO_DEEP_SLEEP_HOURS * 3600UL)
 
 enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
+    0U,
     0U,
     0U,
     0U,
@@ -212,6 +216,8 @@ static void rtc_sleep_prepare_rtc(void)
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
+    uint32_t rtc_elapsed_seconds;
+
     // todo !!!!
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
@@ -224,15 +230,28 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
+        rtc_elapsed_seconds = RtcSleep_PortGetLastWakeupSeconds();
         ++g_stLowPowerRtcStatus.cycles;
-        g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
+        g_stLowPowerRtcStatus.sleep += rtc_elapsed_seconds;
         g_stLowPowerRtcStatus.test_sample_voltage = g_stCellInfoReport.u16VCell[0];
 
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
-        FactoryAging_ApplySleepTime(RtcSleep_PortGetLastWakeupSeconds());
+        FactoryAging_ApplySleepTime(rtc_elapsed_seconds);
         FactoryAging_SaveProgressQuick();
+
+        if (g_stLowPowerRtcStatus.sleep >= LOW_POWER_RTC_IDLE_TO_DEEP_SECONDS)
+        {
+            RTC_ClearStopWakeup();
+            RtcSleep_PortDisableStopWakeup();
+            RtcSleep_PortRestoreAfterStop();
+            g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
+            RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
+            LowPower_Request(DEEP_MODE);
+            low_power_log_and_commit_sleep(DEEP_MODE);
+            return false;
+        }
 
         MCUO_DEBUG_LED1 = 1;
         return true;
