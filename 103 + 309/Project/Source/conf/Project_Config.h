@@ -146,20 +146,28 @@
 #define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
 
 // <q> Enable rest OCV slow downward calibration
-// <i> When enabled, rest OCV triggers once after long stable rest to correct drift and self-discharge.
+// <i> When enabled, stable rest continuously rechecks the live OCV target and corrects downward drift.
 #define PROJECT_CFG_SOC_REST_OCV_ENABLE 1
 
 // <o> Rest OCV wait seconds <60-43200>
-// <i> Minimum stable-rest time before rest OCV target can be trusted. 3600 = 1 hour.
-#define PROJECT_CFG_SOC_REST_OCV_SECONDS 3600
+// <i> Minimum stable-rest time before rest OCV target can be trusted. 1800 = 30 minutes.
+#define PROJECT_CFG_SOC_REST_OCV_SECONDS 1800
 
 // <o> Rest down step seconds <60-43200>
-// <i> Long-rest slow-down period; each period allows at most one SOC step toward OCV target.
-#define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800
+// <i> After rest qualification, the live OCV target is rechecked each period and SOC moves at most one step.
+#define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 300
 
-// <o> Auto calibration max step percent <1-10>
-// <i> Maximum SOC change per automatic calibration step.
+// <o> Auto calibration max step percent <1-1>
+// <i> Fixed at 1 percent so automatic calibration can never jump directly to empty.
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
+
+// <o> Empty voltage confirm seconds <1-600>
+// <i> Vmin must stay at or below the configured SOC 0 voltage before gradual convergence starts.
+#define PROJECT_CFG_SOC_ZERO_CONFIRM_SECONDS 10
+
+// <o> Empty convergence step seconds <1-60>
+// <i> After confirmation, automatic voltage calibration lowers SOC by exactly 1 percent per step.
+#define PROJECT_CFG_SOC_ZERO_CONVERGE_STEP_SECONDS 1
 
 // <o> Board self consumption mA <0-1000>
 // <i> Normal running self-consumption current included in coulomb counting.
@@ -169,9 +177,9 @@
 // <i> 10 = 1Ah. SOC uses full capacity minus this reserve; reported full capacity stays unchanged.
 #define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 10
 
-// <o> Empty tail start offset mV <0-1000>
+// <o> Empty tail start offset mV <0-200>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
-#define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
+#define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 200
 // </h>
 
 // <h>Low Power
@@ -184,7 +192,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0618
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0715
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
@@ -196,7 +204,7 @@
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 0
 
 // <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 0
+#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
 
 // <q> Reset SOC snapshot on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 0
@@ -274,7 +282,7 @@
 // <o> SOC 100 percent voltage mV <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
 // <o> SOC 0 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3200
 
 // <o> System series number <3-32>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 10
