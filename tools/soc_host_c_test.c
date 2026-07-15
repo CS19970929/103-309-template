@@ -612,6 +612,29 @@ static void test_rtc_rest_ocv_continues_rechecking_target(void)
 	CHECK_EQ_U32(host_internal_soc(), 78U);
 }
 
+static void test_rtc_rest_ocv_rejects_4000mv_and_restarts_dwell(void)
+{
+	UINT32 rest_seconds = (UINT32)HOST_REST_DOWN_START_SECONDS;
+	UINT32 elapsed_seconds = 1U;
+
+	host_reset_state();
+	host_set_snapshot(100U, 0U);
+	host_init_with_voltage(4000U, 4000U);
+
+	SOC_ApplyRtcRelaxationCompensation(elapsed_seconds, 4000U, 4000U);
+	elapsed_seconds += rest_seconds + (UINT32)HOST_LONG_REST_DOWN_STEP_SECONDS;
+	SOC_ApplyRtcRelaxationCompensation(elapsed_seconds, 4000U, 4000U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+
+	/* The blocked high-voltage interval must not be reused after voltage drops. */
+	elapsed_seconds += 10U;
+	SOC_ApplyRtcRelaxationCompensation(elapsed_seconds, 3995U, 3995U);
+	CHECK_EQ_U32(host_internal_soc(), 100U);
+	elapsed_seconds += rest_seconds;
+	SOC_ApplyRtcRelaxationCompensation(elapsed_seconds, 3995U, 3995U);
+	CHECK_EQ_U32(host_internal_soc(), 99U);
+}
+
 static void test_rebound_flag_clears_when_holdoff_expires(void)
 {
 	host_reset_state();
@@ -690,6 +713,7 @@ int main(void)
 	test_unstable_long_rest_waits_for_voltage_convergence();
 	test_long_rest_ocv_continues_rechecking_target();
 	test_rtc_rest_ocv_continues_rechecking_target();
+	test_rtc_rest_ocv_rejects_4000mv_and_restarts_dwell();
 	test_rebound_flag_clears_when_holdoff_expires();
 	test_set_soc_once_command_saves_snapshot();
 	test_reserved_capacity_keeps_reported_full_and_reaches_zero_early();
@@ -700,6 +724,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 26\n");
+	printf("SOC host C tests passed: 27\n");
 	return 0;
 }

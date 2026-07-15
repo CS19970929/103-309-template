@@ -1640,3 +1640,43 @@ System_ErrorControlBase???
 看一下afe参数
 
 屏蔽了FactoryAging_Task中的FactoryAging_ApplyRunningMos()是否有影响，还有整个项目中和mos动作相关的逻辑梳理出来
+
+
+修改逻辑，1、只要mcu运行不处于深度休眠状态，满足soc ocv条件，即可一直进行ocv校准，而不是只校准一次 2、修改各种ocv校准、tail表等参数，例如修改soc0电压参数为3200，通过升级后，保证电压到3200附近soc需要持续N秒后快速收敛到0，保证用户soc体验
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+数码管soc会预览，如果开机进行ocv，体验会不太好.如何保证开机ocv体验
+
+
+测试
+48小时休眠
+充电器在线，无充电电流不允许进入rtc
+soc逻辑梳理、优化
+
+提交本次git，然后去掉empty末端校准，soc逻辑只保留安时积分、满电确认和静置ocv逻辑，然后保证单节电压到3200左右，soc需要渐进连续校准到0，然后进入rtc低功耗模式，只要满足ocv条件，也允许持续ocv校准
+
+
+根据源码，完整梳理soc的所有逻辑、细节，需要确认：1、soc永远连续变化，不允许跳变，soc每次变化时间至少大于5s 2、静置时，永远不允许soc向上校准 
+
+
+lp_select_hiccup_if_soc_empty
+
+然后输出完整的soc逻辑文档
+
+循环次数没变？
+
+
+SOC_SAG_CURRENT_DIVIDER170

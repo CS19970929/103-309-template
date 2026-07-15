@@ -55,6 +55,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_VALID_MAX_DELTA_MV       ((UINT16)300)
 #define SOC_REST_MAX_DELTA_MV        ((UINT16)200U)
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
+#define SOC_RTC_OCV_MAX_CELL_MV      ((UINT16)4000U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
 
@@ -555,7 +556,7 @@ static UINT8 soc_full_confirm_allowed(void)
 	UINT16 delta;
 
 	if (!soc_calibration_allowed() ||
-		(g_stCellInfoReport.u16VCellMax <= SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
+		(g_stCellInfoReport.u16VCellMax < SOC_FULL_CONFIRM_MIN_VMAX_MV) ||
 		(g_stCellInfoReport.u16VCellMax < full_min_mv))
 	{
 		return 0U;
@@ -859,6 +860,13 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 	}
 
 #if PROJECT_CFG_SOC_REST_OCV_ENABLE
+	/* High-voltage RTC time is not valid OCV-rest time; require a fresh dwell below 4.0V. */
+	if (g_stCellInfoReport.u16VCellMin >= SOC_RTC_OCV_MAX_CELL_MV)
+	{
+		soc_reset_rest_confidence();
+		return changed;
+	}
+
 	soc_add_rest_seconds(&s_soc.rest_soc_ticks, delta_seconds, SOC_REST_OCV_SECONDS);
 	has_rest_ref = (UINT8)((s_soc.rest_ref_vmin != 0U) && (s_soc.rest_ref_vmax != 0U));
 	if (soc_rest_voltage_stable())
