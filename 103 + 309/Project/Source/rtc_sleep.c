@@ -156,6 +156,19 @@ static uint8_t lp_select_deep_if_low_voltage(void)
     return 0U;
 }
 
+static uint8_t lp_select_hiccup_if_soc_empty(void)
+{
+    if ((g_stCellInfoReport.SocElement.u16Soc == 0U) &&
+        (RtcSleep_PortGetCellMinMv() <= OtherElement.u16Soc_V_0))
+    {
+        g_stLowPowerRtcStatus.idle = 0U;
+        LowPower_Request(HICCUP_MODE);
+        return 1U;
+    }
+
+    return 0U;
+}
+
 static void lp_update_sleep_request(void)
 {
     if (lp_select_deep_if_low_voltage() != 0U)
@@ -168,6 +181,12 @@ static void lp_update_sleep_request(void)
     if (g_stLowPowerRtcStatus.block != 0U)
     {
         g_stLowPowerRtcStatus.idle = 0U;
+        lp_refresh_status();
+        return;
+    }
+
+    if (lp_select_hiccup_if_soc_empty() != 0U)
+    {
         lp_refresh_status();
         return;
     }

@@ -402,7 +402,7 @@ static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
 	CHECK_EQ_U32(host_internal_soc(), 100U);
 }
 
-static void test_zero_anchor_converges_one_percent_per_step(void)
+static void test_zero_ocv_converges_one_percent_per_step(void)
 {
 	host_reset_state();
 	host_set_snapshot(30U, 0U);
@@ -432,7 +432,7 @@ static void test_startup_ocv_zero_waits_for_confirm(void)
 	CHECK_EQ_U32(host_internal_soc(), 0U);
 }
 
-static void test_zero_anchor_resets_when_voltage_recovers(void)
+static void test_zero_ocv_resets_when_voltage_recovers(void)
 {
 	host_reset_state();
 	host_set_snapshot(30U, 0U);
@@ -447,7 +447,7 @@ static void test_zero_anchor_resets_when_voltage_recovers(void)
 	CHECK_EQ_U32(host_internal_soc(), 29U);
 }
 
-static void test_rtc_zero_anchor_uses_elapsed_seconds(void)
+static void test_rtc_zero_ocv_uses_elapsed_seconds(void)
 {
 	host_reset_state();
 	host_set_snapshot(30U, 0U);
@@ -461,6 +461,15 @@ static void test_rtc_zero_anchor_uses_elapsed_seconds(void)
 	SOC_ApplyRtcRelaxationCompensation(
 		(UINT32)PROJECT_CFG_SOC_ZERO_CONFIRM_SECONDS + 10U, 3200U, 3200U);
 	CHECK_EQ_U32(host_internal_soc(), 28U);
+}
+
+static void test_empty_tail_is_removed_above_zero_ocv_voltage(void)
+{
+	host_reset_state();
+	host_set_snapshot(30U, 0U);
+	host_init_with_voltage(3300U, 3300U);
+	host_run_seconds(30U, 3300U, 3300U, 0U, 2U);
+	CHECK_EQ_U32(host_internal_soc(), 30U);
 }
 
 static void test_short_rest_ocv_ignores_upward_target_during_charge(void)
@@ -669,10 +678,11 @@ int main(void)
 	test_board_self_consumption_adjusts_charge_and_discharge_current();
 	test_typec_output_current_converts_to_battery_equivalent();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
-	test_zero_anchor_converges_one_percent_per_step();
+	test_zero_ocv_converges_one_percent_per_step();
 	test_startup_ocv_zero_waits_for_confirm();
-	test_zero_anchor_resets_when_voltage_recovers();
-	test_rtc_zero_anchor_uses_elapsed_seconds();
+	test_zero_ocv_resets_when_voltage_recovers();
+	test_rtc_zero_ocv_uses_elapsed_seconds();
+	test_empty_tail_is_removed_above_zero_ocv_voltage();
 	test_short_rest_ocv_ignores_upward_target_during_charge();
 	test_short_rest_ocv_is_not_consumed_during_active_discharge();
 	test_rtc_ocv_ignores_upward_stable_target();
@@ -690,6 +700,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 25\n");
+	printf("SOC host C tests passed: 26\n");
 	return 0;
 }

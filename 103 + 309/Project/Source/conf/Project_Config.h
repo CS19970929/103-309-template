@@ -130,19 +130,19 @@
 #define PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS 15
 
 // <o> Calibration min valid cell voltage mV <1000-3500>
-// <i> Rejects OCV/full/low-tail calibration when a cell voltage is below this range.
+// <i> Rejects OCV/full calibration when a cell voltage is below this range.
 #define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
 
 // <o> Calibration max valid cell voltage mV <3600-6000>
-// <i> Rejects OCV/full/low-tail calibration when a cell voltage is above this range.
+// <i> Rejects OCV/full calibration when a cell voltage is above this range.
 #define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
 
 // <o> Sag holdoff seconds <0-1800>
-// <i> Delays OCV/low-tail calibration after heavy discharge to avoid rebound miscalibration.
+// <i> Delays OCV calibration after heavy discharge to avoid rebound miscalibration.
 #define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
 
 // <o> Sag allow offset mV <0-500>
-// <i> Sag hold blocks calibration only while Vmin is above empty voltage plus this offset.
+// <i> Sag hold blocks calibration only while Vmin is above SOC zero voltage plus this offset.
 #define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
 
 // <q> Enable rest OCV slow downward calibration
@@ -161,11 +161,11 @@
 // <i> Fixed at 1 percent so automatic calibration can never jump directly to empty.
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 
-// <o> Empty voltage confirm seconds <1-600>
+// <o> SOC zero-voltage confirm seconds <1-600>
 // <i> Vmin must stay at or below the configured SOC 0 voltage before gradual convergence starts.
 #define PROJECT_CFG_SOC_ZERO_CONFIRM_SECONDS 10
 
-// <o> Empty convergence step seconds <1-60>
+// <o> SOC zero-voltage convergence step seconds <1-60>
 // <i> After confirmation, automatic voltage calibration lowers SOC by exactly 1 percent per step.
 #define PROJECT_CFG_SOC_ZERO_CONVERGE_STEP_SECONDS 1
 
@@ -177,9 +177,6 @@
 // <i> 10 = 1Ah. SOC uses full capacity minus this reserve; reported full capacity stays unchanged.
 #define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 10
 
-// <o> Empty tail start offset mV <0-200>
-// <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
-#define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 200
 // </h>
 
 // <h>Low Power
