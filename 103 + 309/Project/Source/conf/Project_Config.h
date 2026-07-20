@@ -118,11 +118,11 @@
 
 // <o> Full confirm min cell margin mV <0-500>
 // <i> Full-charge calibration requires max cell voltage near the compile-time full voltage.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
+#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 300
 
 // <o> Full confirm max cell delta mV <0-1000>
 // <i> Blocks full-charge calibration when cell imbalance is larger than this value.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
+#define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 300
 
 // <o> Full confirm time seconds <1-600>
 // <i> Continuous full-charge confirmation time before SOC can be raised by one step.
@@ -138,7 +138,7 @@
 
 // <o> Sag holdoff seconds <0-1800>
 // <i> Delays OCV/low-tail calibration after heavy discharge to avoid rebound miscalibration.
-#define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
+#define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 60
 
 // <o> Sag allow offset mV <0-500>
 // <i> Sag hold blocks calibration only while Vmin is above empty voltage plus this offset.
@@ -160,19 +160,38 @@
 // <i> Maximum SOC change per automatic calibration step.
 #define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
 
+// <o> SOC zero-voltage confirm seconds <1-600>
+// <i> Vmin must stay at or below the configured SOC 0 voltage before gradual convergence starts.
+#define PROJECT_CFG_SOC_ZERO_CONFIRM_SECONDS 5
+
+// <o> SOC zero-voltage convergence step seconds <1-60>
+// <i> After confirmation, automatic voltage calibration lowers SOC by exactly 1 percent per step.
+#define PROJECT_CFG_SOC_ZERO_CONVERGE_STEP_SECONDS 10
+
 // <o> Board self consumption mA <0-1000>
 // <i> Normal running self-consumption current included in coulomb counting.
 #define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15
+
+// <o> Reserved capacity 0.1Ah <0-65000>
+// <i> 10 = 1Ah. SOC uses full capacity minus this reserve; reported full capacity stays unchanged.
+#define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 10
 
 // <o> Empty tail start offset mV <0-1000>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
 // </h>
 
+// <h>Low Power
+
+// <o> Idle RTC time before deep sleep hours <1-65535>
+// <i> Continuous exception-free RTC low-power time. 48 = 48 hours.
+#define PROJECT_CFG_RTC_IDLE_TO_DEEP_SLEEP_HOURS 24
+// </h>
+
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0618
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0720
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 0
@@ -197,7 +216,7 @@
 
 // <q> Update all OtherElement words from Project_Config on upgrade
 // <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 0
+#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
 
 // <h>Upgrade OtherElement Values
 // <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.
@@ -245,7 +264,7 @@
 // <o> Low-voltage sleep voltage mV <1000-5000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_LOW 3000
 // <o> Low-voltage sleep time min <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1440
+#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1
 // <o> Sleep virtual charge current A*10 <0-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_VIR_CUR_CHG 10
 // <o> Sleep virtual discharge current A*10 <0-50000>
@@ -262,7 +281,7 @@
 // <o> SOC 100 percent voltage mV <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
 // <o> SOC 0 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3200
 
 // <o> System series number <3-32>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 10
