@@ -293,7 +293,6 @@ enum system_status bms_status = S_STARTUP;
 
 void Drivers_External_Ctrl(void)
 {
-
 #if 1
 	switch (bms_status)
 	{
@@ -385,8 +384,8 @@ void Drivers_External_Ctrl(void)
 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
 		}
 	}
-
 #endif
+
 }
 // void Drivers_External_Ctrl(void)
 // {

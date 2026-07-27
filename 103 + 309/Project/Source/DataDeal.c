@@ -309,9 +309,6 @@ void DataLoad_TemperatureMaxMinFind(void)
 	g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp; // min temp
 }
 
-extern uint16_t time_chg;
-extern uint16_t time_dsg;
-extern uint16_t time_real;
 
 static UINT16 s_u16AfeUpdateFailCnt = 0;
 static UINT8 s_u8AfeLastUpdateErr = AFE_UPDATE_OK;
@@ -322,9 +319,6 @@ static void AFE_ClearStaleRuntimeData(void)
 	g_stCellInfoReport.u16IDischg = 0;
 	u32_ChgCur_mA = 0;
 	u32_DsgCur_mA = 0;
-	time_chg = 0xFFFF;
-	time_dsg = 0xFFFF;
-	time_real = 0xFFFF;
 	g_stCellInfoReport.balance_status = 0;
 	g_stCellInfoReport.u16BalanceFlag1 = 0;
 	g_stCellInfoReport.u16BalanceFlag2 = 0;
@@ -431,42 +425,6 @@ void DataLoad_Current(void)
 	}
 #endif
 
-#if 0
-	if (g_stCellInfoReport.u16Ichg)
-	{
-		time_dsg = 0xffff;
-		// todo 1、满充、满放容量校准 2、soh与学习满充容量
-		//  time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFactory - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / g_stCellInfoReport.u16Ichg;
-		time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg * CURRENT_K_CHG);
-		time_real = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg);
-	}
-	else if (g_stCellInfoReport.u16IDischg)
-	{
-		float time;
-		time_chg = 0xffff;
-		time = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg * CURRENT_K_DSG);
-		time_dsg = (uint16_t)time;
-		time_real = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg);
-	}
-	else
-	{
-		if (g_stCellInfoReport.SocElement.u16Soc == 0)
-		{
-			time_chg = 0xffff;
-			time_dsg = 0;
-		}
-		else if ((g_stCellInfoReport.SocElement.u16Soc == 100))
-		{
-			time_chg = 0;
-			time_dsg = 0xffff;
-		}
-		else
-		{
-			time_chg = 0xffff;
-			time_dsg = 0xffff;
-		}
-	}
-#endif
 }
 void MonitorAFE(UINT8 num, UINT8 Result)
 {
@@ -808,6 +766,7 @@ void App_AFEGet(void)
 		(void)func_LoadRemove((AFE_ProtectType)0);
 	}
 
+	
 	if (is_AFE_COV && g_stCellInfoReport.u16VCellMax < PRT_E2ROMParas.u16VcellOvp_Rcv)
 		SH_AFE_ClearProtectFlag(AFE_FLAG_OV);
 	else if (is_AFE_CUV && g_stCellInfoReport.u16VCellMin > PRT_E2ROMParas.u16VcellUvp_Rcv)

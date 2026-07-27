@@ -90,7 +90,7 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
         GPIO_Init(GPIO_DSG_DET, &GPIO_InitStructure);
 
-        GPIO_SetBits(GPIO_M_CCC, PIN_M_CCC);
+        GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
         GPIO_InitStructure.GPIO_Pin = PIN_M_CCC;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz

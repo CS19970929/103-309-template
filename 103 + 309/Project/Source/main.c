@@ -37,8 +37,8 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos);
 
 int main(void)
 {
-	InitDevice(); // 初始化外�?
-	InitVar();	  // 初始化变�?
+	InitDevice(); // 初�?�化外�??
+	InitVar();	  // 初�?�化变�??
 	InitAFE3520_Registers(0, 0);
 	while (1)
 	{
@@ -53,7 +53,7 @@ int main(void)
 #ifdef __FUNC__CAN__
 		App_Can();
 #endif					 // __FUNC__CAN__
-		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏�?
+		App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关�?零，或者直接屏�?
 		// sleep();
 		App_SOC();
 
@@ -121,6 +121,11 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 	AFE3520_SyncSeriesNum(SeriesNum);
 	Registers_AFE1.sonf4 = SeriesNum;
 	result |= AFE3520_WriteRegChecked(AFE_SCONF4, Registers_AFE1.sonf4);
+	//���������ǿ�ƴ򿪷ŵ�
+	Registers_AFE1.sonf5 = 0x18;
+	//�������ǿ�ƴ򿪷ŵ�
+	// Registers_AFE1.sonf5 = 0x38;
+	result |= AFE3520_WriteRegChecked(AFE_SCONF5, Registers_AFE1.sonf5);
 
 	Registers_AFE1.sonf3.bits.CRLD_EN = 0;
 	result |= AFE3520_WriteRegChecked(AFE_SCONF3, Registers_AFE1.sonf3.all);
@@ -175,7 +180,7 @@ static UINT8 InitAFE3520_Registers(UINT8 chgmos, UINT8 dsgmos)
 
 void InitDevice(void)
 {
-	SystemInit(); // HSE默认倍频�?2MHz，如果没HSE切回HSI怎么处理目前还没了解
+	SystemInit(); // HSE默�?�倍�?��??2MHz，�?�果�?HSE切回HSI怎么处理�?前还没了�?
 
 	InitDelay();
 	IsSleepStartUp();
@@ -189,7 +194,7 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	InitE2PROM(); // 决定把这个放在前面，优先级提高，因为客户串口初始化，有可能要读其自己的数�?
+	InitE2PROM(); // 决定把这�?放在前面，优先级提高，因为�?�户串口初�?�化，有�?能�?��?�其�?己的数�??
 				  // InitAFE1();
 #ifdef __FUNC__CAN__
 	InitCan();
@@ -212,11 +217,12 @@ void InitDevice(void)
 #endif // !1
 	InitTimer();
 	log_w("init over");
+
 }
 
 void InitVar(void)
 {
-	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默认需求功能修改了，要修改EEPROM的上电标志位
+	// SystemMonitorResetData_EEPROM();							//这个函数的初始化默�?�需求功能修改了，�?�修改EEPROM的上电标志位
 	InitSystemMonitorData_EEPROM();
 	AFE3520_SyncSeriesNum(OtherElement.u16Sys_SeriesNum);
 	AFE3520_UpdateSenseResScaleSafe();

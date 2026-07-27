@@ -1,22 +1,10 @@
 #ifndef SCI_H
 #define SCI_H
 
-#define SCI_software_ver			"06"
-
-#define __BAUD_RATE__  115200
-
-
-// #define SCI_software_ver			"1D"
-// #define	BatteryNUM					"        \0\0\0"
-
-#define UART_BAUD_9600					(UINT16)9600
-#define UART_BAUD_19200					(UINT16)19200
-#define UART_BAUD_115200				(UINT16)11520
-
 #define	RS485_BROADCAST_ADDR		(( UINT8 ) 0x00 )
 #define	RS485_SLAVE_ADDR			(( UINT8 ) 0x01 )
 
-#define	SCI_TX_BUF_LEN			251   	//��־��¼��������Ϊ250
+#define	SCI_TX_BUF_LEN			251   	//锟斤拷志锟斤拷录锟斤拷锟斤拷锟斤拷锟斤拷为250
 #define RS485_MAX_BUFFER_SIZE 	251		//
 
 
@@ -27,22 +15,18 @@ enum RS485_CMD_E {
 	RS485_CMD_WRITE_REG = 6,
 	RS485_CMD_WRITE_REGS = 16,
 	
-	UART_CLIENT_CMD_0x01 = 0xA1,	//客户�?
-	UART_CLIENT_CMD_0x02 = 0xA2,	
-
-	UART_CLIENT_CMD_0x04 = 0x04,
-	UART_CLIENT_CMD_0x05 = 0x05,
-	UART_CLIENT_CMD_0x06 = 0x06,
+	//UART_CLIENT_CMD_0x01 = 0xA1,	//�ͻ���
+	//UART_CLIENT_CMD_0x02 = 0xA2,	
 };
 
 
 struct SOC_CAL_ELEMENT_UPPER {
-	UINT16 u16Soc;                 	//��ǰ���SOC     0��100 Ϊ��������ٷֱ�?
-	UINT16 u16Soh;                 	//Ϊ���������ٷֱ�0����100
-	UINT16 u16CapacityNow;        	//��ǰ����	Ah*100
-	UINT16 u16CapacityFull;        	//��ǰ��������	Ah*100		//Ϊʲô*100Ϊ��λ�أ���Ϊ��λ����mAh�������������ʾ����?
-	UINT16 u16CapacityFactory;     	//������������	Ah*100		//�����Ľ����?650Ah���?
-	UINT16 u16Cycle_times;     		//ѭ������
+	UINT16 u16Soc;                 	//锟斤拷前锟斤拷锟絊OC     0锟斤拷100 为锟斤拷锟斤拷锟斤拷锟斤拷俜直锟?
+	UINT16 u16Soh;                 	//为锟斤拷锟斤拷锟斤拷锟斤拷锟劫分憋拷0锟斤拷锟斤拷100
+	UINT16 u16CapacityNow;        	//锟斤拷前锟斤拷锟斤拷	Ah*100
+	UINT16 u16CapacityFull;        	//锟斤拷前锟斤拷锟斤拷锟斤拷锟斤拷	Ah*100		//为什么*100为锟斤拷位锟截ｏ拷锟斤拷为锟斤拷位锟斤拷锟斤拷mAh锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟绞撅拷锟斤拷锟?
+	UINT16 u16CapacityFactory;     	//锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷	Ah*100		//锟斤拷锟斤拷锟侥斤拷锟斤拷锟?650Ah锟斤拷锟?
+	UINT16 u16Cycle_times;     		//循锟斤拷锟斤拷锟斤拷
 };
 
 
@@ -60,7 +44,7 @@ struct MDLCHGFAULT_BITS     {    	// bits  description
 	UINT8 b1CellChgUtp		:1;   	//
 	UINT8 b1CellDischgUtp 	:1;   	//
 	UINT8 b1VcellDeltaBig	:1;   	//
-	UINT8 b1TempDeltaBig 	:1;   	//���û�У�Res����
+	UINT8 b1TempDeltaBig 	:1;   	//锟斤拷锟矫伙拷校锟絉es锟斤拷锟斤拷
 
 	UINT8 b1SocLow			:1;   	//
 	UINT8 b1TmosOtp			:1;   	//
@@ -84,9 +68,9 @@ struct stCell_Info {
     UINT16	u16VCellMinPosition;
 	UINT16	u16VCellDelta;                  // mv
 	UINT16	u16VCellTotle;                  // v *100
-    UINT16	u16Temperature[TEMP_NUM];       // +40��C *10
-    UINT16	u16TempMax;                     // +40��C *10
-	UINT16	u16TempMin;                     // +40��C *10
+    UINT16	u16Temperature[TEMP_NUM];       // +40锟斤拷C *10
+    UINT16	u16TempMax;                     // +40锟斤拷C *10
+	UINT16	u16TempMin;                     // +40锟斤拷C *10
 	UINT16	u16Ichg;                        // A *10
     UINT16	u16IDischg;                     // A *10
     //UINT16	u16Soc;							// %
@@ -94,38 +78,30 @@ struct stCell_Info {
     union MDLCHGFAULT_REG unMdlFault_First;
     union MDLCHGFAULT_REG unMdlFault_Second;
 	union MDLCHGFAULT_REG unMdlFault_Third;
-	UINT16	u16BalanceFlag1;                 //��ؾ����־λ1
-	UINT16	u16BalanceFlag2;                 //��ؾ����־λ2
+	UINT16	u16BalanceFlag1;                 //锟斤拷鼐锟斤拷锟斤拷志位1
+	UINT16	u16BalanceFlag2;                 //锟斤拷鼐锟斤拷锟斤拷志位2
 	uint32_t balance_status;
 };
 
 
-//RS485״̬��״̬
+//RS485状态锟斤拷状态
 #define	RS485_STA_IDLE				0
 #define	RS485_STA_RX_COMPLETE		1
 #define	RS485_STA_RX_OK				2
 #define	RS485_STA_TX_COMPLETE		3
 
-//***********************SCI
-#define SCI_STA_RX_COMPLETE			10
-#define SCI_STA_RX_OK				11
-#define	SCI_STA_TX_COMPLETE			12
-#define SCI_STA_RX_COMPLETE2		13
 
-#define SCI_HEAD1					0X5A
-#define SCI_HEAD2					0xA5		
-
-#define	RS485_ACK_POS			        0x00	// ����Ӧ
-#define	RS485_ACK_NEG			        0x01	// ����Ӧ
+#define	RS485_ACK_POS			        0x00	// 锟斤拷锟斤拷应
+#define	RS485_ACK_NEG			        0x01	// 锟斤拷锟斤拷应
 //Error type
-#define	RS485_ERROR_ADDR_INVALID	    0x01	// ��ַ���Ϸ�
-#define	RS485_ERROR_CRC_ERROR			0x02	// CRCУ�����?
-#define	RS485_ERROR_DATA_INVALID	    0x03	// �������Ϸ�
-#define	RS485_ERROR_CMD_INVALID			0x04	// ��ǰ״̬��������Ч
-#define	RS485_ERROR_RONLY_NO_W			0x05	// ֻ�������ܾ�д��
-#define	RS485_ERROR_WONLY_NO_R			0x06	// ֻд�����ܾ���ȡ
-#define	RS485_ERROR_NO_PERMISSION		0x07	// ��Ȩ��
-#define	RS485_ERROR_NULL			    0x08	// δ֪����
+#define	RS485_ERROR_ADDR_INVALID	    0x01	// 锟斤拷址锟斤拷锟较凤拷
+#define	RS485_ERROR_CRC_ERROR			0x02	// CRC校锟斤拷锟斤拷锟?
+#define	RS485_ERROR_DATA_INVALID	    0x03	// 锟斤拷锟斤拷锟斤拷锟较凤拷
+#define	RS485_ERROR_CMD_INVALID			0x04	// 锟斤拷前状态锟斤拷锟斤拷锟斤拷锟斤拷效
+#define	RS485_ERROR_RONLY_NO_W			0x05	// 只锟斤拷锟斤拷锟斤拷锟杰撅拷写锟斤拷
+#define	RS485_ERROR_WONLY_NO_R			0x06	// 只写锟斤拷锟斤拷锟杰撅拷锟斤拷取
+#define	RS485_ERROR_NO_PERMISSION		0x07	// 锟斤拷权锟斤拷
+#define	RS485_ERROR_NULL			    0x08	// 未知锟斤拷锟斤拷
 
 
 // SCI_485 Message Structure
@@ -133,7 +109,7 @@ struct RS485MSG {
 	UINT8	ptr_no;          	// Word stating what state msg is in
 	UINT8	csr;          		// I2C address of slave msg is intended for
 	UINT16	u16RdRegStartAddr;	// read reg start addr
-	UINT16	u16RdRegStartAddrActure;	//�Զ����ַ����?
+	UINT16	u16RdRegStartAddrActure;	//锟皆讹拷锟斤拷锟街凤拷锟斤拷锟?
 	UINT8	u16RdRegByteNum;    // read byte lenth
 	UINT8	AckLenth;			// ack byte lenth
 	UINT8	AckType;			// ack type
@@ -143,7 +119,7 @@ struct RS485MSG {
 };
 
 
-//�ɶ���д����enum��
+//锟缴讹拷锟斤拷写锟斤拷锟斤拷enum锟斤拷
 //#define RS485_ADDR_RW_ORDER		0x1000
 #define RS485_ADDR_RW_CALIB				0x2000
 #define RS485_ADDR_RW_PORTECT			0x2100
@@ -151,9 +127,9 @@ struct RS485MSG {
 #define RS485_ADDR_RW_OTHER_CANADD		0x2300
 
 
-//�Լ����Լ���Ŀӣ�����˲��Ǳ�׼MODBUSЭ����
+//锟皆硷拷锟斤拷锟皆硷拷锟斤拷目樱锟斤拷锟斤拷锟剿诧拷锟角憋拷准MODBUS协锟斤拷锟斤拷
 #if 0
-//ѭ��ֻ����Ҫ��1s���ϴ����?
+//循锟斤拷只锟斤拷锟斤拷要锟斤拷1s锟斤拷锟较达拷锟斤拷锟?
 #define RS485_ADDR_RO_START0			0xD000
 #define RS485_ADDR_RO_START1			0xD001
 #define RS485_ADDR_RO_START2			0xD002
@@ -161,18 +137,18 @@ struct RS485MSG {
 #define RS485_ADDR_RO_START4			0xD004
 #endif
 
-//0xD000��Ҫ��g_stCellInfoReport�Ķ�����Ŀǰ��63����
+//0xD000锟斤拷要锟斤拷g_stCellInfoReport锟侥讹拷锟斤拷锟斤拷目前锟斤拷63锟斤拷锟斤拷
 #define RS485_ADDR_RO_START0			(UINT16)0xD000
 
-//0xD100�Ǵ�RTC��ʼ����β��������λ����21+12=33����
+//0xD100锟角达拷RTC锟斤拷始锟斤拷锟斤拷尾锟斤拷锟斤拷锟斤拷锟斤拷位锟斤拷锟斤拷21+12=33锟斤拷锟斤拷
 #define RS485_ADDR_RO_START1			(UINT16)0xD100
 
-//0xD100��һ������λ��Ŀǰֻ��һ��
+//0xD100锟斤拷一锟斤拷锟斤拷锟斤拷位锟斤拷目前只锟斤拷一锟斤拷
 #define RS485_ADDR_RO_START2			(UINT16)0xD200
 
 
 
-//������ֻ��һ�Σ���
+//锟斤拷锟斤拷锟斤拷只锟斤拷一锟轿ｏ拷锟斤拷
 #define RS485_ADDR_RO_LCD       		0xC000
 #define RS485_ADDR_RO_FA_RTC    		0xC001
 #define RS485_ADDR_SN_READ				0xC002
@@ -183,10 +159,8 @@ struct RS485MSG {
 #define RS485_ADDR_SN_HAEDWARE_VER		0xFFF1
 #define RS485_ADDR_SN_SOFTWARE_VER		0xFFF2
 
-#define RS485_ADDR_ONLY_BATNUM			0xFFF3 
 
-
-#define RS485_CMD_ADDR_FLASH_CONNECT	0xFFFD		//MCU����������������
+#define RS485_CMD_ADDR_FLASH_CONNECT	0xFFFD		//MCU锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 
 
 enum RS485_CMD_RW_E {
@@ -199,9 +173,7 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_RESET_AFE_PARAMETERS,
 	RS485_CMD_ADDR_RESET_EVENT_RECORD,
 
-	RS485_CMD_ADDR_Change_BAUD_RECORD,
-
-	#if 0	//��ģ����������з����ж��ٿ�ʼ�����������ù�������ϵͳ��ʵ��û��ô����������?
+	#if 0	//锟斤拷模锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷蟹锟斤拷锟斤拷卸锟斤拷倏锟绞硷拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷霉锟斤拷锟斤拷锟斤拷锟较低筹拷锟绞碉拷锟矫伙拷锟矫达拷锟斤拷锟斤拷锟斤拷锟斤拷锟?
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_BALANCE = 0x1100,
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_BMS_SOURCE,
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_MOS,
@@ -214,13 +186,13 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_SYSFUNC_ONOFF_SLEEP,
 	#endif
 	
-	RS485_CMD_ADDR_SWITCH_ON = 0x1100,		//���
+	RS485_CMD_ADDR_SWITCH_ON = 0x1100,		//锟斤拷锟筋！
 	RS485_CMD_ADDR_SWITCH_OFF,
 	RS485_CMD_ADDR_SYSTEM_FUNCTION_ON,
 	RS485_CMD_ADDR_SYSTEM_FUNCTION_OFF,
 
 
-	RS485_CMD_ADDR_VC1CALIB_K = 0x2000,		//��ȡ
+	RS485_CMD_ADDR_VC1CALIB_K = 0x2000,		//锟斤拷取
 	RS485_CMD_ADDR_VC1CALIB_B,
 	RS485_CMD_ADDR_VC2CALIB_K,
 	RS485_CMD_ADDR_VC2CALIB_B,
@@ -284,7 +256,7 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_VC31CALIB_B,
 	RS485_CMD_ADDR_VC32CALIB_K,
 	RS485_CMD_ADDR_VC32CALIB_B,
-	RS485_CMD_ADDR_AFE1CALIB_K,			//��ȡ
+	RS485_CMD_ADDR_AFE1CALIB_K,			//锟斤拷取
 	RS485_CMD_ADDR_AFE1CALIB_B,
 	RS485_CMD_ADDR_AFE2CALIB_K,
 	RS485_CMD_ADDR_AFE2CALIB_B,
@@ -292,11 +264,11 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_VBUSCALIB_B,
 
 	//RS485_CMD_ADDR_ICHGCALIB_K = 0x2100,
-	RS485_CMD_ADDR_ICHGCALIB_K,		//�ڶ�ҳ		//��ȡ
+	RS485_CMD_ADDR_ICHGCALIB_K,		//锟节讹拷页		//锟斤拷取
 	RS485_CMD_ADDR_ICHGCALIB_B,
 	RS485_CMD_ADDR_IDISCHGCALIB_K,
 	RS485_CMD_ADDR_IDISCHGCALIB_B,
-	RS485_CMD_ADDR_TEMP1_CALIB_K,		//��ȡ
+	RS485_CMD_ADDR_TEMP1_CALIB_K,		//锟斤拷取
 	RS485_CMD_ADDR_TEMP1_CALIB_B,
 	RS485_CMD_ADDR_TEMP2_CALIB_K,
 	RS485_CMD_ADDR_TEMP2_CALIB_B,
@@ -440,7 +412,7 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_SOC_VALUE21,
 
 
-	RS485_CMD_ADDR_COPPERLOSS1,		//��ȡ
+	RS485_CMD_ADDR_COPPERLOSS1,		//锟斤拷取
 	RS485_CMD_ADDR_COPPERLOSS2,
 	RS485_CMD_ADDR_COPPERLOSS3,
 	RS485_CMD_ADDR_COPPERLOSS4,
@@ -473,7 +445,7 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_CELLNUM15,
 	RS485_CMD_ADDR_CELLNUM16,
 
-	RS485_CMD_ADDR_RTC_TIME_YEAR,		//��ȡ
+	RS485_CMD_ADDR_RTC_TIME_YEAR,		//锟斤拷取
 	RS485_CMD_ADDR_RTC_TIME_MONTH,
 	RS485_CMD_ADDR_RTC_TIME_DAY,
 	RS485_CMD_ADDR_RTC_TIME_HOUR,
@@ -486,7 +458,7 @@ enum RS485_CMD_RW_E {
 	RS485_CMD_ADDR_RTC_ALARM_MINUTE,
 	RS485_CMD_ADDR_RTC_ALARM_SECOND,
 
-	RS485_CMD_ADDR_BALANCE_OV = 0x2300,		//��ȡ
+	RS485_CMD_ADDR_BALANCE_OV = 0x2300,		//锟斤拷取
 	RS485_CMD_ADDR_BALANCE_OW,
 	RS485_CMD_ADDR_BALANCE_CW1,	
 	RS485_CMD_ADDR_BALANCE_CW2,
@@ -563,25 +535,6 @@ extern struct RS485MSG g_stCurrentMsgPtr_SCI3;
 
 extern struct stCell_Info g_stCellInfoReport;
 
-struct nrb_protect
-{
-	UINT16	shortPro;
-	UINT16	chgOcp;
-	UINT16	dsgOcp;
-	UINT16	cellOvp;
-
-	UINT16	chgOtp;
-	UINT16	chgUtp;
-	UINT16	dsgOtp;
-	UINT16	dsgUtp;
-
-	UINT16	batOvp;
-	UINT16	batUvp;
-	UINT16	recover;
-
-};
-
-extern struct nrb_protect num_pro;
 
 void Sci1_CommonUpper_FaultChk(void);
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s);
@@ -592,8 +545,6 @@ void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
 
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
-
-extern UINT8 reset_numPro;
 
 #endif	/* SCI_H */
 

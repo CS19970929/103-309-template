@@ -1741,6 +1741,198 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG, GPIO_DSG);
 }
 
+void MosCtrl_DiffDoor_NoPreChg(UINT8 OnOFF_Ctrl)
+{
+	UINT8 temp = 0;
+
+	static UINT8 su8_FR_IchgOcp_Flag = 0;
+	static UINT8 su8_FR_IchgOcp_RecTimes = 0;
+	static UINT32 su32_FR_IchgOcp_RecNormalCnt = 0;
+
+	static UINT8 su8_FR_IdsgOcp_Flag = 0;
+	static UINT8 su8_FR_IdsgOcp_RecTimes = 0;
+	static UINT32 su32_FR_IdsgOcp_RecNormalCnt = 0;
+
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;		//这种想法先缓一缓，好像更合理更直观一些
+	// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;		//还有关于电流保护不
+
+	// 重要性从高到低
+	DriversStatus s_MosCHG_Status_Normal = OPEN_MODE;
+	DriversStatus s_MosCHG_Status_Vdelta = OPEN_MODE;
+	DriversStatus s_MosCHG_Status_ChgOcp = OPEN_MODE;
+	DriversStatus s_MosCHG_Status_DsgOcp = OPEN_MODE;
+	DriversStatus s_MosCHG_Status_VolOvp = OPEN_MODE;
+	DriversStatus s_MosCHG_Status_VolUvp = OPEN_MODE;
+
+	DriversStatus s_MosDSG_Status_Normal = OPEN_MODE;
+	DriversStatus s_MosDSG_Status_Vdelta = OPEN_MODE;
+	DriversStatus s_MosDSG_Status_ChgOcp = OPEN_MODE;
+	DriversStatus s_MosDSG_Status_DsgOcp = OPEN_MODE;
+	DriversStatus s_MosDSG_Status_VolOvp = OPEN_MODE;
+	DriversStatus s_MosDSG_Status_VolUvp = OPEN_MODE;
+
+	if ((Driver_Element.Fault_Flag.all & 0x2800) != 0 || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE || !OnOFF_Ctrl)
+	{
+		s_MosCHG_Status_Normal = CLOSE_MODE;
+		s_MosDSG_Status_Normal = CLOSE_MODE;
+	}
+
+	if (Driver_Element.Fault_Flag.bits.b1VcellDeltaBig)
+	{
+		s_MosCHG_Status_Vdelta = CLOSE_MODE;
+		s_MosDSG_Status_Vdelta = CLOSE_MODE;
+		// Driver_Element.u8_FuncOFF_Flag = 1;
+		Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Vdelta = 1;
+	}
+
+	switch (Driver_Element.Fault_Flag.bits.b1IchgOcp)
+	{
+	case 1:
+		s_MosCHG_Status_ChgOcp = CLOSE_MODE;
+		s_MosDSG_Status_ChgOcp = OPEN_MODE;
+
+		if (!su8_FR_IchgOcp_Flag)
+		{
+			su8_FR_IchgOcp_Flag = 1;
+			if (++su8_FR_IchgOcp_RecTimes >= 3)
+			{
+				su8_FR_IchgOcp_RecTimes = 0;
+				// Driver_Element.u8_FuncOFF_Flag = 1;
+				Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG = FORCE_CLOSE_MODE;
+				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Ichg = 1;
+				su8_FR_IchgOcp_Flag = 0;
+				return; // 不用再执行下面的代码
+			}
+		}
+		if (su32_FR_IchgOcp_RecNormalCnt)
+			su32_FR_IchgOcp_RecNormalCnt = 0;
+		break;
+
+	case 0:
+		su8_FR_IchgOcp_Flag = 0; // 复原
+		if (su8_FR_IchgOcp_RecTimes)
+		{ // 如果计数，则2min内不再触发过流保护则清零计算
+			if (++su32_FR_IchgOcp_RecNormalCnt > DELAYB10MS_2MIN)
+			{
+				su32_FR_IchgOcp_RecNormalCnt = 0;
+				su8_FR_IchgOcp_RecTimes = 0;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	switch (Driver_Element.Fault_Flag.bits.b1IdischgOcp)
+	{
+	case 1:
+		s_MosCHG_Status_DsgOcp = OPEN_MODE;
+		s_MosDSG_Status_DsgOcp = CLOSE_MODE;
+
+		if (!su8_FR_IdsgOcp_Flag)
+		{
+			su8_FR_IdsgOcp_Flag = 1;
+			if (++su8_FR_IdsgOcp_RecTimes >= 3)
+			{
+				su8_FR_IdsgOcp_RecTimes = 0;
+				// Driver_Element.u8_FuncOFF_Flag = 1;
+				// Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+				Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG = FORCE_CLOSE_MODE;
+				Driver_Element.MosRelay_Status.bits.b1_FuncOFF_Ocp_Idsg = 1;
+				su8_FR_IdsgOcp_Flag = 0;
+				return;
+			}
+		}
+		if (su32_FR_IdsgOcp_RecNormalCnt)
+			su32_FR_IdsgOcp_RecNormalCnt = 0;
+		break;
+
+	case 0:
+		su8_FR_IdsgOcp_Flag = 0;
+		if (su8_FR_IdsgOcp_RecTimes)
+		{
+			if (++su32_FR_IdsgOcp_RecNormalCnt > DELAYB10MS_2MIN)
+			{
+				su32_FR_IdsgOcp_RecNormalCnt = 0;
+				su8_FR_IdsgOcp_RecTimes = 0;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
+	temp = (Driver_Element.Fault_Flag.bits.b1BatOvp || Driver_Element.Fault_Flag.bits.b1CellOvp || Driver_Element.Fault_Flag.bits.b1PackOvp);
+	temp |= (Driver_Element.Fault_Flag.bits.b1CellChgUtp || Driver_Element.Fault_Flag.bits.b1CellChgOtp);
+	if (temp)
+	{
+		s_MosCHG_Status_VolOvp = CLOSE_MODE;
+		s_MosDSG_Status_VolOvp = OPEN_MODE;
+	}
+
+	temp = (Driver_Element.Fault_Flag.bits.b1BatUvp || Driver_Element.Fault_Flag.bits.b1CellUvp || Driver_Element.Fault_Flag.bits.b1PackUvp);
+	temp |= (Driver_Element.Fault_Flag.bits.b1CellDischgOtp || Driver_Element.Fault_Flag.bits.b1CellDischgUtp);
+	if (temp)
+	{
+
+		s_MosCHG_Status_VolUvp = OPEN_MODE;
+		s_MosDSG_Status_VolUvp = CLOSE_MODE;
+	}
+
+#if 0 // 去掉SOC保护封管子
+	if(Driver_Element.Fault_Flag.bits.b1SocLow != 0) {
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+		u8FR_SOCup_Flag = 1;
+	}
+#endif
+
+	temp = s_MosCHG_Status_Normal & s_MosCHG_Status_Vdelta & s_MosCHG_Status_ChgOcp;
+	temp &= s_MosCHG_Status_DsgOcp & s_MosCHG_Status_VolOvp & s_MosCHG_Status_VolUvp;
+	Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = (DriversStatus)temp;
+
+	temp = s_MosDSG_Status_Normal & s_MosDSG_Status_Vdelta & s_MosDSG_Status_ChgOcp;
+	temp &= s_MosDSG_Status_DsgOcp & s_MosDSG_Status_VolOvp & s_MosDSG_Status_VolUvp;
+	Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = (DriversStatus)temp;
+
+	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_KEEP_MODE)
+	{
+		// KEEP
+	}
+	else if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_OPEN_MODE)
+	{
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = OPEN_MODE;
+	}
+	else if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_CHG == FORCE_CLOSE_MODE)
+	{
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
+	}
+	else
+	{
+		// Wrong错了
+	}
+
+	if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_KEEP_MODE)
+	{
+		// KEEP
+	}
+	else if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_OPEN_MODE)
+	{
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = OPEN_MODE;
+	}
+	else if (Driver_Element.DriverForceExt.bits.b2_Force_MOS_DSG == FORCE_CLOSE_MODE)
+	{
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+	}
+	else
+	{
+		// Wrong错了
+	}
+
+	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG, GPIO_CHG);
+	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG, GPIO_DSG);
+}
+
 #endif
 
 #ifdef _MOS_SAME_DOOR_HAVE_PRECHG
@@ -2784,6 +2976,7 @@ void InitDrivers_GPIO(GPIO_TypeDef *GPIOx, UINT16 GPIO_Pin_x, GPIO_Type GpioType
 */
 void Drivers_Ctrl(UINT8 OnOFF_Ctrl, Driver_Select DriverSelect)
 {
+#if 0
 	switch (DriverSelect)
 	{
 	// case DRIVER_RELAY_SAME_DOOR_NO_PRECHG:
@@ -2817,4 +3010,7 @@ void Drivers_Ctrl(UINT8 OnOFF_Ctrl, Driver_Select DriverSelect)
 	default:
 		break;
 	}
+#endif
+	// MosCtrl_SameDoor_NoPreChg(OnOFF_Ctrl);
+	MosCtrl_DiffDoor_NoPreChg(OnOFF_Ctrl);
 }

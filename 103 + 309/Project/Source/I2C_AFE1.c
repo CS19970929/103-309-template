@@ -941,7 +941,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	sys_time.crc_err = false;
 	System_ERROR_UserCallback(ERROR_REMOVE_SPI);
 	// sh36735_read_regs(0x40, (uint8_t *)Registers_AFE1.sonf1, (0x99 - 0x40 + 1));
-	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET;
+	SystemStatus.bits.b1Status_MOS_CHG = Registers_AFE1.bstatus1.bits.CHG_FET & GPIO_ReadOutputDataBit(GPIO_M_CCC, PIN_M_CCC);
 	SystemStatus.bits.b1Status_MOS_DSG = Registers_AFE1.bstatus1.bits.DSG_FET;
 
 	// if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
