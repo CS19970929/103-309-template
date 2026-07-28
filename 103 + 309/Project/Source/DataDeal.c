@@ -740,6 +740,7 @@ void App_AFEGet(void)
 	afe_result = UpdateVoltageFromBqMaximo();
 	if (afe_result != AFE_UPDATE_OK)
 	{
+		ChargeCtrl_ForceOff(CHARGE_CLOSE_AFE_COMM);
 		AFE_UpdateFailDeal(afe_result);
 		return;
 	}

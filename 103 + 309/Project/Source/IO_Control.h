@@ -33,6 +33,86 @@ enum system_status
 
 extern enum system_status bms_status;
 
+/*
+ * Split-port charger control.
+ *
+ * Drivers_External_Ctrl() is called after every successful 200 ms AFE update.
+ * Voltage units follow stCell_Info:
+ *   pack voltage: 0.01 V, cell voltage: mV, current: 0.1 A.
+ */
+#define CHARGE_CTRL_PERIOD_MS                 ((UINT32)200u)
+#define CHARGE_CTRL_DET_CONFIRM_MS            ((UINT32)1000u)
+#define CHARGE_CTRL_PROBE_IDLE_MS             ((UINT32)(5u * 60u * 1000u))
+#define CHARGE_CTRL_PROBE_SETTLE_MS           ((UINT32)1000u)
+#define CHARGE_CTRL_PROBE_SAMPLE_MS           ((UINT32)1000u)
+#define CHARGE_CTRL_FULL_TAPER_CONFIRM_MS     ((UINT32)(60u * 1000u))
+#define CHARGE_CTRL_FULL_VOLT_CONFIRM_MS      ((UINT32)(10u * 60u * 1000u))
+#define CHARGE_CTRL_RECHARGE_CONFIRM_MS       ((UINT32)(60u * 1000u))
+
+#define CHARGE_CTRL_DET_CONFIRM_CNT           ((UINT16)(CHARGE_CTRL_DET_CONFIRM_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_PROBE_IDLE_CNT            ((UINT16)(CHARGE_CTRL_PROBE_IDLE_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_PROBE_SETTLE_CNT          ((UINT16)(CHARGE_CTRL_PROBE_SETTLE_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_PROBE_SAMPLE_CNT          ((UINT16)(CHARGE_CTRL_PROBE_SAMPLE_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_FULL_TAPER_CONFIRM_CNT    ((UINT16)(CHARGE_CTRL_FULL_TAPER_CONFIRM_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_FULL_VOLT_CONFIRM_CNT     ((UINT16)(CHARGE_CTRL_FULL_VOLT_CONFIRM_MS / CHARGE_CTRL_PERIOD_MS))
+#define CHARGE_CTRL_RECHARGE_CONFIRM_CNT      ((UINT16)(CHARGE_CTRL_RECHARGE_CONFIRM_MS / CHARGE_CTRL_PERIOD_MS))
+
+#define CHARGE_CTRL_TARGET_SERIES             ((UINT8)19u)
+#define CHARGE_CTRL_CHARGER_PACK_CV           ((UINT16)7980u)
+#define CHARGE_CTRL_FULL_PACK_CV              ((UINT16)7900u)
+#define CHARGE_CTRL_FULL_CELL_MV              ((UINT16)4180u)
+#define CHARGE_CTRL_FULL_TAPER_CURRENT_A10    ((UINT16)10u)
+#define CHARGE_CTRL_CHARGE_EVIDENCE_A10       ((UINT16)5u)
+#define CHARGE_CTRL_PROBE_MAX_PACK_CV         ((UINT16)7800u)
+#define CHARGE_CTRL_RECHARGE_PACK_CV          ((UINT16)7700u)
+#define CHARGE_CTRL_RECHARGE_CELL_MV          ((UINT16)4050u)
+
+typedef enum CHARGE_CTRL_STATE
+{
+	CHARGE_CTRL_WAIT_CHARGER = 0,
+	CHARGE_CTRL_CHARGING,
+	CHARGE_CTRL_PROBE_OFF,
+	CHARGE_CTRL_PROBE_SAMPLE,
+	CHARGE_CTRL_FULL_HOLD,
+	CHARGE_CTRL_FAULT_HOLD
+} ChargeCtrlState;
+
+typedef enum CHARGER_PRESENCE
+{
+	CHARGER_PRESENCE_UNKNOWN = 0,
+	CHARGER_PRESENCE_ABSENT,
+	CHARGER_PRESENCE_PRESENT
+} ChargerPresence;
+
+typedef enum CHARGE_CLOSE_REASON
+{
+	CHARGE_CLOSE_NONE = 0,
+	CHARGE_CLOSE_NO_CHARGER,
+	CHARGE_CLOSE_PROBE,
+	CHARGE_CLOSE_FULL,
+	CHARGE_CLOSE_PROTECTION,
+	CHARGE_CLOSE_DATA_INVALID,
+	CHARGE_CLOSE_AFE_COMM
+} ChargeCloseReason;
+
+typedef struct CHARGE_CTRL_DIAG
+{
+	ChargeCtrlState state;
+	ChargerPresence presence;
+	ChargeCloseReason close_reason;
+	UINT8 charge_request;
+	UINT8 chg_det_low;
+	UINT16 det_low_cnt;
+	UINT16 det_high_cnt;
+	UINT16 no_charge_cnt;
+	UINT16 full_taper_cnt;
+	UINT16 full_voltage_cnt;
+	UINT16 recharge_cnt;
+} ChargeCtrlDiag;
+
+extern volatile ChargeCtrlDiag g_charge_ctrl_diag;
+void ChargeCtrl_ForceOff(ChargeCloseReason reason);
+
 typedef enum _IO_STATUS {
 OPEN = 1, CLOSE = 0
 }IO_STATUS;

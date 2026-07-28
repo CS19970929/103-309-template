@@ -7,6 +7,16 @@ enum MOS_CTRL_STATUS MOSCtrl_Command = MOS_PRE_DET;
 
 volatile union Switch_OnOFF_Function Switch_OnOFF_Func;
 UINT8 gu8_DsgFirstOpen_Flag = 0;
+volatile ChargeCtrlDiag g_charge_ctrl_diag;
+
+static void ChargeCtrl_ResetCounter(void);
+static UINT16 ChargeCtrl_IncSat(UINT16 value, UINT16 limit);
+static bool ChargeCtrl_IsDataValid(void);
+static bool ChargeCtrl_HasChargeFault(void);
+static bool ChargeCtrl_InFullVoltageZone(void);
+static bool ChargeCtrl_InRechargeZone(void);
+static void ChargeCtrl_UpdatePresence(void);
+static UINT8 ChargeCtrl_Step(UINT8 protection_allow);
 
 bool is_charger_online(void)
 {
@@ -155,6 +165,13 @@ void InitData_Drivers(void)
 	// Driver_Element.u16_10msForceOpenT_Uvp = 3000; // 默认30s
 
 	Driver_Element.u8_DriverCtrl_Right = 1; // AFE控制
+
+	g_charge_ctrl_diag.state = CHARGE_CTRL_WAIT_CHARGER;
+	g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+	g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NO_CHARGER;
+	g_charge_ctrl_diag.charge_request = 0;
+	g_charge_ctrl_diag.chg_det_low = 0;
+	ChargeCtrl_ResetCounter();
 }
 
 void App_DI1_Switch(void)
@@ -284,45 +301,343 @@ void App_DI1_Switch(void)
 
 #endif
 }
-void close_chg(void)
+static void ChargeCtrl_ResetCounter(void)
 {
-	SH367309_DriverMos_Ctrl(GPIO_CHG, CLOSE);
+	g_charge_ctrl_diag.det_low_cnt = 0;
+	g_charge_ctrl_diag.det_high_cnt = 0;
+	g_charge_ctrl_diag.no_charge_cnt = 0;
+	g_charge_ctrl_diag.full_taper_cnt = 0;
+	g_charge_ctrl_diag.full_voltage_cnt = 0;
+	g_charge_ctrl_diag.recharge_cnt = 0;
+}
+
+static UINT16 ChargeCtrl_IncSat(UINT16 value, UINT16 limit)
+{
+	if (value < limit)
+	{
+		value++;
+	}
+	return value;
+}
+
+static bool ChargeCtrl_IsDataValid(void)
+{
+	if (SeriesNum != CHARGE_CTRL_TARGET_SERIES)
+	{
+		return false;
+	}
+	if ((g_stCellInfoReport.u16VCellMin < 1000u) ||
+		(g_stCellInfoReport.u16VCellMax > 5000u) ||
+		(g_stCellInfoReport.u16VCellMax < g_stCellInfoReport.u16VCellMin))
+	{
+		return false;
+	}
+	if (g_stCellInfoReport.u16VCellTotle == 0u)
+	{
+		return false;
+	}
+	return true;
+}
+
+static bool ChargeCtrl_HasChargeFault(void)
+{
+	if (Driver_Element.Fault_Flag.bits.b1CellOvp ||
+		Driver_Element.Fault_Flag.bits.b1BatOvp ||
+		Driver_Element.Fault_Flag.bits.b1PackOvp ||
+		Driver_Element.Fault_Flag.bits.b1IchgOcp ||
+		Driver_Element.Fault_Flag.bits.b1CellChgOtp ||
+		Driver_Element.Fault_Flag.bits.b1CellChgUtp ||
+		Driver_Element.Fault_Flag.bits.b1VcellDeltaBig ||
+		Driver_Element.Fault_Flag.bits.b1TempDeltaBig ||
+		Driver_Element.Fault_Flag.bits.b1TmosOtp)
+	{
+		return true;
+	}
+
+	if (is_AFE_COV || is_AFE_OCC || is_AFE_OTC || is_AFE_UTC)
+	{
+		return true;
+	}
+	return false;
+}
+
+static bool ChargeCtrl_InFullVoltageZone(void)
+{
+	return (g_stCellInfoReport.u16VCellTotle >= CHARGE_CTRL_FULL_PACK_CV) &&
+		   (g_stCellInfoReport.u16VCellMax >= CHARGE_CTRL_FULL_CELL_MV);
+}
+
+static bool ChargeCtrl_InRechargeZone(void)
+{
+	return (g_stCellInfoReport.u16VCellTotle <= CHARGE_CTRL_RECHARGE_PACK_CV) &&
+		   (g_stCellInfoReport.u16VCellMax <= CHARGE_CTRL_RECHARGE_CELL_MV);
+}
+
+static void ChargeCtrl_UpdatePresence(void)
+{
+	g_charge_ctrl_diag.chg_det_low = is_charger_online() ? 1u : 0u;
+	if (g_charge_ctrl_diag.chg_det_low)
+	{
+		if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_ABSENT)
+		{
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		}
+		g_charge_ctrl_diag.det_low_cnt =
+			ChargeCtrl_IncSat(g_charge_ctrl_diag.det_low_cnt, CHARGE_CTRL_DET_CONFIRM_CNT);
+		g_charge_ctrl_diag.det_high_cnt = 0;
+		if (g_charge_ctrl_diag.det_low_cnt >= CHARGE_CTRL_DET_CONFIRM_CNT)
+		{
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_PRESENT;
+		}
+	}
+	else
+	{
+		if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT)
+		{
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		}
+		g_charge_ctrl_diag.det_high_cnt =
+			ChargeCtrl_IncSat(g_charge_ctrl_diag.det_high_cnt, CHARGE_CTRL_PROBE_SAMPLE_CNT);
+		g_charge_ctrl_diag.det_low_cnt = 0;
+		if (g_charge_ctrl_diag.det_high_cnt >= CHARGE_CTRL_PROBE_SAMPLE_CNT)
+		{
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_ABSENT;
+		}
+	}
+}
+
+static UINT8 ChargeCtrl_Step(UINT8 protection_allow)
+{
+	UINT8 charge_request = 0;
+
+	if (!ChargeCtrl_IsDataValid())
+	{
+		g_charge_ctrl_diag.state = CHARGE_CTRL_FAULT_HOLD;
+		g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_DATA_INVALID;
+		ChargeCtrl_ResetCounter();
+		return 0;
+	}
+
+	if ((!protection_allow) || ChargeCtrl_HasChargeFault())
+	{
+		g_charge_ctrl_diag.state = CHARGE_CTRL_FAULT_HOLD;
+		g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_PROTECTION;
+		ChargeCtrl_ResetCounter();
+		return 0;
+	}
+
+	switch (g_charge_ctrl_diag.state)
+	{
+	case CHARGE_CTRL_WAIT_CHARGER:
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NO_CHARGER;
+		ChargeCtrl_UpdatePresence();
+		if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT)
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_CHARGING;
+			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
+			g_charge_ctrl_diag.no_charge_cnt = 0;
+			charge_request = 1;
+		}
+		break;
+
+	case CHARGE_CTRL_CHARGING:
+		g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		g_charge_ctrl_diag.det_low_cnt = 0;
+		g_charge_ctrl_diag.det_high_cnt = 0;
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
+		charge_request = 1;
+
+		if (ChargeCtrl_InFullVoltageZone())
+		{
+			g_charge_ctrl_diag.full_voltage_cnt =
+				ChargeCtrl_IncSat(g_charge_ctrl_diag.full_voltage_cnt,
+								  CHARGE_CTRL_FULL_VOLT_CONFIRM_CNT);
+			if ((g_stCellInfoReport.u16IDischg == 0u) &&
+				(g_stCellInfoReport.u16Ichg <= CHARGE_CTRL_FULL_TAPER_CURRENT_A10))
+			{
+				g_charge_ctrl_diag.full_taper_cnt =
+					ChargeCtrl_IncSat(g_charge_ctrl_diag.full_taper_cnt,
+									  CHARGE_CTRL_FULL_TAPER_CONFIRM_CNT);
+			}
+			else
+			{
+				g_charge_ctrl_diag.full_taper_cnt = 0;
+			}
+		}
+		else
+		{
+			g_charge_ctrl_diag.full_taper_cnt = 0;
+			g_charge_ctrl_diag.full_voltage_cnt = 0;
+		}
+
+		if ((g_charge_ctrl_diag.full_taper_cnt >= CHARGE_CTRL_FULL_TAPER_CONFIRM_CNT) ||
+			(g_charge_ctrl_diag.full_voltage_cnt >= CHARGE_CTRL_FULL_VOLT_CONFIRM_CNT))
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_FULL_HOLD;
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_FULL;
+			g_charge_ctrl_diag.det_low_cnt = 0;
+			g_charge_ctrl_diag.det_high_cnt = 0;
+			g_charge_ctrl_diag.recharge_cnt = 0;
+			charge_request = 0;
+			break;
+		}
+
+		if (g_stCellInfoReport.u16VCellTotle >= CHARGE_CTRL_PROBE_MAX_PACK_CV)
+		{
+			g_charge_ctrl_diag.no_charge_cnt = 0;
+		}
+		else if (g_stCellInfoReport.u16Ichg >= CHARGE_CTRL_CHARGE_EVIDENCE_A10)
+		{
+			g_charge_ctrl_diag.no_charge_cnt = 0;
+		}
+		else
+		{
+			g_charge_ctrl_diag.no_charge_cnt =
+				ChargeCtrl_IncSat(g_charge_ctrl_diag.no_charge_cnt, CHARGE_CTRL_PROBE_IDLE_CNT);
+			if (g_charge_ctrl_diag.no_charge_cnt >= CHARGE_CTRL_PROBE_IDLE_CNT)
+			{
+				g_charge_ctrl_diag.state = CHARGE_CTRL_PROBE_OFF;
+				g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+				g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_PROBE;
+				g_charge_ctrl_diag.det_low_cnt = 0;
+				g_charge_ctrl_diag.det_high_cnt = 0;
+				g_charge_ctrl_diag.no_charge_cnt = 0;
+				charge_request = 0;
+			}
+		}
+		break;
+
+	case CHARGE_CTRL_PROBE_OFF:
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_PROBE;
+		g_charge_ctrl_diag.det_high_cnt =
+			ChargeCtrl_IncSat(g_charge_ctrl_diag.det_high_cnt, CHARGE_CTRL_PROBE_SETTLE_CNT);
+		if (g_charge_ctrl_diag.det_high_cnt >= CHARGE_CTRL_PROBE_SETTLE_CNT)
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_PROBE_SAMPLE;
+			g_charge_ctrl_diag.det_low_cnt = 0;
+			g_charge_ctrl_diag.det_high_cnt = 0;
+		}
+		break;
+
+	case CHARGE_CTRL_PROBE_SAMPLE:
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_PROBE;
+		ChargeCtrl_UpdatePresence();
+		if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT)
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_CHARGING;
+			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
+			charge_request = 1;
+		}
+		else if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_ABSENT)
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_WAIT_CHARGER;
+			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NO_CHARGER;
+		}
+		break;
+
+	case CHARGE_CTRL_FULL_HOLD:
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_FULL;
+		ChargeCtrl_UpdatePresence();
+		if (ChargeCtrl_InRechargeZone() &&
+			(g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT))
+		{
+			g_charge_ctrl_diag.recharge_cnt =
+				ChargeCtrl_IncSat(g_charge_ctrl_diag.recharge_cnt,
+								  CHARGE_CTRL_RECHARGE_CONFIRM_CNT);
+			if (g_charge_ctrl_diag.recharge_cnt >= CHARGE_CTRL_RECHARGE_CONFIRM_CNT)
+			{
+				g_charge_ctrl_diag.state = CHARGE_CTRL_CHARGING;
+				g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
+				g_charge_ctrl_diag.full_taper_cnt = 0;
+				g_charge_ctrl_diag.full_voltage_cnt = 0;
+				g_charge_ctrl_diag.recharge_cnt = 0;
+				charge_request = 1;
+			}
+		}
+		else
+		{
+			g_charge_ctrl_diag.recharge_cnt = 0;
+		}
+		break;
+
+	case CHARGE_CTRL_FAULT_HOLD:
+	default:
+		g_charge_ctrl_diag.state = CHARGE_CTRL_WAIT_CHARGER;
+		g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NO_CHARGER;
+		ChargeCtrl_ResetCounter();
+		break;
+	}
+
+	return charge_request;
+}
+
+void ChargeCtrl_ForceOff(ChargeCloseReason reason)
+{
+	g_charge_ctrl_diag.state = CHARGE_CTRL_FAULT_HOLD;
+	g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+	g_charge_ctrl_diag.close_reason = reason;
+	g_charge_ctrl_diag.charge_request = 0;
+	g_charge_ctrl_diag.chg_det_low = 0;
+	ChargeCtrl_ResetCounter();
+
+	Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
+	if (GPIO_ReadOutputDataBit(GPIO_M_CCC, PIN_M_CCC) != Bit_RESET)
+	{
+		sys_time.cnt_enter_chg_open++;
+		SH367309_DriverMos_Ctrl(GPIO_CHG, CLOSE);
+	}
 }
 
 enum system_status bms_status = S_STARTUP;
 
 void Drivers_External_Ctrl(void)
 {
-#if 1
+	UINT8 protection_allow_chg;
+
+	/*
+	 * Keep the original BMS/load state machine responsible for discharge
+	 * MOS control. The charger controller below is only an additional
+	 * permission condition for charge MOS.
+	 */
+	protection_allow_chg =
+		(UINT8)Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG;
+
 	switch (bms_status)
 	{
 	case S_IDLE:
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
 
-		if (is_charger_online())
-		{
-			bms_status = S_CHG;
-		}
 		if (is_load_online())
 		{
 			bms_status = S_DSG;
 		}
+		if (is_charger_online())
+		{
+			bms_status = S_CHG;
+		}
 		break;
+
 	case S_STARTUP:
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
-		if (is_charger_online())
-		{
-			bms_status = S_CHG;
-		}
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
+
 		if (is_load_online())
 		{
 			bms_status = S_DSG;
 		}
+		if (is_charger_online())
+		{
+			bms_status = S_CHG;
+		}
 		break;
+
 	case S_DSG:
-		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = 0;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
 		if (!is_load_online())
 		{
 			bms_status = S_IDLE;
@@ -332,39 +647,38 @@ void Drivers_External_Ctrl(void)
 			bms_status = S_CHG;
 		}
 		break;
+
 	case S_CHG:
 		if (!is_load_online())
-			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = 0;
-
-		static UINT16 I_cnt = 0;
-
-		if (!g_stCellInfoReport.u16Ichg)
 		{
-			if (++I_cnt >= 5)
-			{
-				I_cnt = 0;
-
-				close_chg();
-				if (!is_charger_online())
-				{
-					if (is_load_online())
-					{
-						bms_status = S_DSG;
-					}
-					else
-					{
-						bms_status = S_IDLE;
-					}
-				}
-			}
-		}
-		else
-		{
-			I_cnt = 0;
+			Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
 		}
 		break;
+
 	default:
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
+		bms_status = S_STARTUP;
 		break;
+	}
+
+	/*
+	 * Drivers_Ctrl() has already calculated the protection result. The
+	 * charger state machine may only remove that permission, never add it.
+	 */
+	g_charge_ctrl_diag.charge_request = ChargeCtrl_Step(protection_allow_chg);
+	Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG =
+		(DriversStatus)(protection_allow_chg && g_charge_ctrl_diag.charge_request);
+
+	if (g_charge_ctrl_diag.charge_request)
+	{
+		bms_status = S_CHG;
+	}
+	else if ((bms_status == S_CHG) &&
+			 (g_charge_ctrl_diag.state == CHARGE_CTRL_WAIT_CHARGER) &&
+			 (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_ABSENT))
+	{
+		bms_status = is_load_online() ? S_DSG : S_IDLE;
 	}
 
 	// todo 测试ctlc、芯片异常等情况对afe寄存器状态的影响
@@ -384,8 +698,6 @@ void Drivers_External_Ctrl(void)
 			SH367309_DriverMos_Ctrl(GPIO_DSG, Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG);
 		}
 	}
-#endif
-
 }
 // void Drivers_External_Ctrl(void)
 // {
