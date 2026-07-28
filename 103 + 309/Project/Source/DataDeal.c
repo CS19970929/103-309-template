@@ -170,6 +170,11 @@ void DataLoad_CellVolt(void)
 		g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
 	}
 
+	// for (i = 0; i < cell_count; ++i)
+	// {
+	// 	g_stCellInfoReport.u16VCell[i] = (UINT16)sys_time.sim_vcell[i];
+	// }
+
 	if (cell_count < 32)
 	{
 		for (i = cell_count; i < 32; ++i)

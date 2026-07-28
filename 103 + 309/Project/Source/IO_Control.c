@@ -20,7 +20,9 @@ static UINT8 ChargeCtrl_Step(UINT8 protection_allow);
 
 bool is_charger_online(void)
 {
-	if (0 == GPIO_ReadInputDataBit(GPIO_CHG_DET, PIN_CHG_DET))
+	// if (0 == GPIO_ReadInputDataBit(GPIO_CHG_DET, PIN_CHG_DET))
+	// return true;
+	if (1 == GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU))
 		return true;
 
 	return false;
@@ -449,6 +451,7 @@ static UINT8 ChargeCtrl_Step(UINT8 protection_allow)
 		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
 		charge_request = 1;
 
+#if 0
 		if (ChargeCtrl_InFullVoltageZone())
 		{
 			g_charge_ctrl_diag.full_voltage_cnt =
@@ -484,12 +487,18 @@ static UINT8 ChargeCtrl_Step(UINT8 protection_allow)
 			charge_request = 0;
 			break;
 		}
+#endif
+		// 最好的逻辑是：1、充电电流没有，断开chgmos，检测充电器是否在线，在线即为充满，不在线代表充电器断开
 
-		if (g_stCellInfoReport.u16VCellTotle >= CHARGE_CTRL_PROBE_MAX_PACK_CV)
-		{
-			g_charge_ctrl_diag.no_charge_cnt = 0;
-		}
-		else if (g_stCellInfoReport.u16Ichg >= CHARGE_CTRL_CHARGE_EVIDENCE_A10)
+		// if (g_stCellInfoReport.u16VCellTotle >= CHARGE_CTRL_PROBE_MAX_PACK_CV)
+		// {
+		// 	g_charge_ctrl_diag.no_charge_cnt = 0;
+		// }
+		// else if (g_stCellInfoReport.u16Ichg >= CHARGE_CTRL_CHARGE_EVIDENCE_A10)
+		// {
+		// 	g_charge_ctrl_diag.no_charge_cnt = 0;
+		// }
+		if (g_stCellInfoReport.u16Ichg >= CHARGE_CTRL_CHARGE_EVIDENCE_A10)
 		{
 			g_charge_ctrl_diag.no_charge_cnt = 0;
 		}
@@ -525,12 +534,27 @@ static UINT8 ChargeCtrl_Step(UINT8 protection_allow)
 	case CHARGE_CTRL_PROBE_SAMPLE:
 		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_PROBE;
 		ChargeCtrl_UpdatePresence();
-		if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT)
+		//无电流的三种情况
+		//!!!逻辑上天生解决充电电流小于负载电流问题，目前直接锁死，充电器在线，断开充电，只有充电器重新断开才允许重新充电
+		if (ChargeCtrl_InFullVoltageZone())
+		{
+			g_charge_ctrl_diag.state = CHARGE_CTRL_FULL_HOLD;
+			g_charge_ctrl_diag.presence = CHARGER_PRESENCE_UNKNOWN;
+			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_FULL;
+			g_charge_ctrl_diag.det_low_cnt = 0;
+			g_charge_ctrl_diag.det_high_cnt = 0;
+			g_charge_ctrl_diag.recharge_cnt = 0;
+			// charge_request = 0;
+		}
+		//需要充电电流小于负载电流时，允许充电的情况，还要按需求修改CHARGE_CTRL_PROBE_IDLE_CNT检测频率
+	#if 0
+		else if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_PRESENT)
 		{
 			g_charge_ctrl_diag.state = CHARGE_CTRL_CHARGING;
 			g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_NONE;
-			charge_request = 1;
+			// charge_request = 1;
 		}
+	#endif
 		else if (g_charge_ctrl_diag.presence == CHARGER_PRESENCE_ABSENT)
 		{
 			g_charge_ctrl_diag.state = CHARGE_CTRL_WAIT_CHARGER;
@@ -538,6 +562,7 @@ static UINT8 ChargeCtrl_Step(UINT8 protection_allow)
 		}
 		break;
 
+	// 休眠重启了？
 	case CHARGE_CTRL_FULL_HOLD:
 		g_charge_ctrl_diag.close_reason = CHARGE_CLOSE_FULL;
 		ChargeCtrl_UpdatePresence();

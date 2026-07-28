@@ -95,6 +95,10 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; // 推挽输出
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIO_M_CCC, &GPIO_InitStructure);
+
+        GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_Init(GPIO_INT_WK_MCU, &GPIO_InitStructure);
     }
 
     // MCUO_PWSV_STB = 1;
