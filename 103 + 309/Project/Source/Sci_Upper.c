@@ -1,14 +1,18 @@
 #include "main.h"
 
+#define COMMON_UPPER_RX_TIMEOUT_MS 20U
+
 struct RS485MSG g_stCurrentMsgPtr_SCI1;
 UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCIÍ¨ÐÅÒì³£¼ÆÊý
 UINT8 gu8_TxEnable_SCI1 = 0;
 UINT8 gu8_TxFinishFlag_SCI1 = 0;
+static volatile UINT8 s_u8RxTimeoutCnt_SCI1 = 0;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI2;
 UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCIÍ¨ÐÅÒì³£¼ÆÊý
 UINT8 gu8_TxEnable_SCI2 = 0;
 UINT8 gu8_TxFinishFlag_SCI2 = 0;
+static volatile UINT8 s_u8RxTimeoutCnt_SCI2 = 0;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI3;
 UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCIÍ¨ÐÅÒì³£¼ÆÊý
@@ -813,6 +817,7 @@ void Sci1_CommonUpper_FaultChk(void)
  *=================================================================*/
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
+	s_u8RxTimeoutCnt_SCI1 = COMMON_UPPER_RX_TIMEOUT_MS;
 	// RC1IE = 0;// ½ûÖ¹EUSART2 ½ÓÊÕÖÐ¶Ï
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //¶ÁRCREG¼Ä´æÆ÷À´¶ÁÈ¡½ÓÊÕµ½µÄ8Î»Êý¾Ý
 	// NVIC_DisableIRQ(USART1_IRQn);
@@ -1126,6 +1131,7 @@ void Sci2_CommonUpper_FaultChk(void)
  *=================================================================*/
 void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 {
+	s_u8RxTimeoutCnt_SCI2 = COMMON_UPPER_RX_TIMEOUT_MS;
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART2_IRQn);
@@ -2115,8 +2121,35 @@ void InitUSART_CommonUpper(void)
 
 }
 
+static void CommonUpper_RxTimeoutDeal(struct RS485MSG *s, volatile UINT8 *pu8TimeoutCnt)
+{
+	if ((s->csr == RS485_STA_IDLE) && (s->ptr_no != 0U))
+	{
+		if ((*pu8TimeoutCnt > 0U) && (--(*pu8TimeoutCnt) == 0U))
+		{
+			s->ptr_no = 0U;
+			s->u16Buffer[0] = 0U;
+		}
+	}
+	else
+	{
+		*pu8TimeoutCnt = 0U;
+	}
+}
+
 void App_CommonUpper(void)
 {
+	if (g_st_SysTimeFlag.bits.b1Sys1msFlag)
+	{
+#ifdef _COMMOM_UPPER_SCI1
+		CommonUpper_RxTimeoutDeal(&g_stCurrentMsgPtr_SCI1, &s_u8RxTimeoutCnt_SCI1);
+#endif
+
+#ifdef _COMMOM_UPPER_SCI2
+		CommonUpper_RxTimeoutDeal(&g_stCurrentMsgPtr_SCI2, &s_u8RxTimeoutCnt_SCI2);
+#endif
+	}
+
 #ifdef _COMMOM_UPPER_SCI1
 	App_CommonUpperSCI1(&g_stCurrentMsgPtr_SCI1);
 #endif

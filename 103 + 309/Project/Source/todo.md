@@ -64,3 +64,6 @@ Can_TransmitDeal中发送失效吗？
 - pa0替代chgd识别
 - 客户希望充满电后，就算不移出充电器，充电MOS也会自己关闭
 - 充电电压79.8V
+
+
+定位USART1_IRQHandler、USART2_IRQHandler、App_CommonUpper相关函数，增加接受超时处理机制，最简化修改，不要动其他部分逻辑，先给出修改方案
