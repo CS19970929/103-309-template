@@ -322,24 +322,7 @@ struct PRT_E2ROM_PARAS {
 		        				 /*ѹ�����*/10,	10,		10,		10,		1,\
 		        				 /*��������*/0,		0,		0,		0,		1}
 
-//��Ԫ��
-#ifdef TERNARYLI
-#define E2P_PROTECT_DEFAULT_PRT	{/*���ڹ�ѹ*/4200,	4200,	4250,	4100,	100,\
-								 /*���ڵ�ѹ*/3000,	3000,	2900,	3100,	100,\
-								 /*��ѹ��ѹ*/420*SNum, 420*SNum, 420*SNum, 400*SNum, 100,\
-								 /*��ѹ��ѹ*/300*SNum, 300*SNum, 290*SNum, 300*SNum, 100,\
-		        				 /*������*/650,	650,	650,	10,	1000,\
-		        				 /*�ŵ����*/1500,	1500,	1500,	10,	200,\
-								 /*������*/900,	900,	900,	800,	100,\
-								 /*������*/400,	400,	400,	450,	100,\
-								 /*�ŵ����*/1000,	1000,	1000,	900,	100,\
-								 /*�ŵ����*/300,	300,	300,	400,	100,\
-		        				 /*��������*/1350,	1350,	1350,	1000,	100,\
-		        				 /*ѹ�����*/1000,	1000,	1000,	900,	100,\
-		        				 /*��������*/3,		2,		1,		2,		100}
 
-//�������
-#elif (defined(LIFEPO))
 #define E2P_PROTECT_DEFAULT_PRT	{/*单节过压*/COV_1,	COV_2,	COV_3,	COV_recover,	COV_filter3,\
 								 /*单节低压*/CUV_1,	CUV_2,	CUV_3,	CUV_recover,	CUV_filter3,\
 								 /*总压过压*/BOV_1, BOV_2,	BOV_3,  BOV_recover, 	BOV_filter3,\
@@ -354,7 +337,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*压差过大*/VDELTER_1,	VDELTER_2,	VDELTER_3,	VDELTER_recover,	VDELTER_filter3,\
 		        				 /*电量过低*/socLow_1,	socLow_2,	socLow_3,	socLow_recover,		socLow_filter3}
 
-#endif
 
 
 

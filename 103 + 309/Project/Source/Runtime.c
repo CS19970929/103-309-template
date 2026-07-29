@@ -33,18 +33,16 @@ void Runtime_Boot(void)
 	SystemRuntime_MarkBootReady();
 	SystemRuntime_SetProjectVersion(1U);
 	InitProID();
-	LogRecord_RequestStartup();
 
-	
-	/* RTC_WKTimeConfig(); */
 	EnableLowPowerDebug();
-	Init_IWDG();
+	// Init_IWDG();
+	LogRecord_RequestStartup();
 }
 
 void Runtime_RunOnce(void)
 {
 	SysTime_LatchTaskFlags();
-	// FactoryAging_Task();
+
 	App_AFEGet();
 	App_CommonUpper();
 	App_AnlogCal();
@@ -56,7 +54,7 @@ void Runtime_RunOnce(void)
 
 	App_LogRecord();
 
-	App_ProID_Deal();
-
 	Feed_IWatchDog;
+
+	__WFI();
 }

@@ -16,7 +16,7 @@
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
 //   <1=> LiFePO4 LIFEPO
-#define PROJECT_CFG_BAT_CHEMISTRY 1
+#define PROJECT_CFG_BAT_CHEMISTRY 0
 
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
@@ -173,7 +173,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0007
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0012
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
@@ -205,7 +205,7 @@
 // <i> These 32 words map to RS485 0x2300..0x231F without changing protocol order.
 
 // <o> Balance open voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 3400
+#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 4180
 // <o> Balance open window mV <1-2000>
 #define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 30
 // <o> Balance close window mV <0-2000>
@@ -257,16 +257,16 @@
 #define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_RTC 3
 
 // <o> SOC capacity Ah*10 <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 270
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 50
 // <o> SOC cycle times <1-50000>
 #define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 1
 // <o> SOC 100 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 3550
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
 // <o> SOC 0 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 2750
+#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
 
 // <o> System series number <3-32>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 10
+#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 7
 // <o> System current-sense resistor mOhm <1-65000>
 #define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES 2
 // <o> System current-sense resistor numerator <1-10000>

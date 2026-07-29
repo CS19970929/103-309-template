@@ -1012,7 +1012,6 @@ void new_todo_logi(void)
 
 void App_AFEGet(void)
 {
-    // if (0 == g_st_SysTimeFlag.bits.b1Sys200msFlag || 0 != Sci_IsAnyPortBusy())
     if (0U == SysTime_Take200msTaskPeriod())
         return;
 
@@ -1029,7 +1028,7 @@ void App_AFEGet(void)
     AfeCurrent_NextSeq();
 
     App_SH367309();
-    new_todo_logi();
+    // new_todo_logi();
     App_SOC();
 
 #ifdef VCELL_DISP_TEST

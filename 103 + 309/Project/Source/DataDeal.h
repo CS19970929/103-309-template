@@ -3,11 +3,6 @@
 
 #include "conf.h"
 
-typedef enum _CUR {
-CurCHG = 0, CurDSG
-}_Cur;
-
-
 enum TempArray {
 	AFE1_TEMP1 = 0,
 	AFE1_TEMP2,
@@ -134,12 +129,9 @@ struct OTHER_ELEMENT {
 };
 
 
-#define  BMS_HARDWARE_VERDION_DEFAULT   "C073"
-// #define  BMS_SOFTWARE_VERDION_DEFAULT   "FD-260429-T3MAX"  //32
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "V1.0"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	  "D010-20260629"
-// #define  BMS_SERIAL_NUMBER_DEFAULT  	  "cs-666FD_20268888"
-// #define  BMS_SERIAL_NUMBER_DEFAULT  	  "test_typec_1000mA"
+#define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
+#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260729-c073v1p0"  //32
+#define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
 #define SNum 		7
 
@@ -147,20 +139,8 @@ struct OTHER_ELEMENT {
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num*1250/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
-#define CBC_DelayT		2000
-// #define CBC_Cur_DSG		((CS_Cur_CHGmax<<2)/5)
-#define CBC_Cur_DSG		(2000)
 
-#if (BAT_TYPE == BAT_MASTER)
-#define CS_Res			2
-#define CS_Res_Num		3
-#define BMS_CAPCITY     180
-#elif (BAT_TYPE == BAT_SLAVE)
-#define CS_Res			2
-#define CS_Res_Num		6
-#define BMS_CAPCITY     270
-#endif	
-
+#define BMS_CAPCITY     50
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\

@@ -53,14 +53,23 @@ void Refresh_Parameters(void)
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
-	//todo 待测试均衡
+	// todo 待测试均衡
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
 	// temp = (OtherElement.u16Balance_OpenVoltage + 10) / 20;
+#ifdef TERNARYLI
+	temp = (4180 + 10) / 20;
+	if (temp > 0xFF)
+	{
+		temp = 0xFF;
+	}
+#elif (defined(LIFEPO))
 	temp = (3500 + 10) / 20;
 	if (temp > 0xFF)
 	{
 		temp = 0xFF;
 	}
+#endif
+
 	AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = (UINT8)temp;
 
 	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) >> 8) & 0x3;
@@ -229,7 +238,7 @@ bool SH367309_UpdataAfeConfig(void)
 			AFE_Reset();
 			Delay1ms(5);
 			AFE_IsReady();
-			//SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+			// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 			MosStartup_ApplyInitialState();
 			if (!ret)
 			{

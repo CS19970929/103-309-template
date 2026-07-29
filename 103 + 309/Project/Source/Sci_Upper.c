@@ -2042,7 +2042,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 		case 8: // �活模拟前端AFE1
 			break;
-		case 0x0A: // 立刻进入休眠
+		case 0x0A: 
 			LowPower_Request(DEEP_MODE);
 			break;
 		default:

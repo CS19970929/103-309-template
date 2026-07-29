@@ -25,20 +25,20 @@
 #define AFE_COV_recover   (4150)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2740)
+#define AFE_CUV           (2800)
 #define AFE_CUV_recover     (3000)
 #define AFE_CUV_filter     (100)
 #endif // LIFEPO
 
-#define AFE_OTC           ((55 + 40) * 10)
+#define AFE_OTC           ((50 + 40) * 10)
 #define AFE_OTC_recover     ((45 + 40) * 10)
 #define AFE_OTC_filter      100
 
-#define AFE_UTC           ((-7 + 40) * 10)
-#define AFE_UTC_recover     ((0 + 40) * 10)
+#define AFE_UTC           ((0 + 40) * 10)
+#define AFE_UTC_recover     ((3 + 40) * 10)
 #define AFE_UTC_filter      100
 
-#define AFE_OTD           ((75 + 40) * 10)
+#define AFE_OTD           ((70 + 40) * 10)
 #define AFE_OTD_recover     ((60 + 40) * 10)
 #define AFE_OTD_filter      100
 
@@ -47,14 +47,14 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(200) 
+#define AFE_OCC1       		(80) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(200) 
+#define AFE_OCC2       		(100) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(800) 
+#define AFE_ODC1       		(200) 
 #define AFE_ODC1_filter  	(100)
-#define AFE_ODC2       		(1000) 
+#define AFE_ODC2       		(300) 
 #define AFE_ODC2_filter  	(50)
 
 
@@ -82,8 +82,8 @@
 	/*放电高温恢复*/		AFE_OTD_recover,	AFE_OTD_recover,	50000,	1,\
 	/*放电低温*/			AFE_UTD,	       AFE_UTD,				800,	0,\
 	/*放电低温恢复*/		AFE_UTD_recover,	AFE_UTD_recover,	50000,	1,\
-	/*短路电流*/			210,	210,	65000,	0,\
-	/*短路延时*/			300,	300,		65000,	0,\
+	/*短路电流*/			50,	    50,	65000,	0,\
+	/*短路延时*/			64,	    64,		65000,	0,\
 }
 
 

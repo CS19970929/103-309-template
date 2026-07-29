@@ -6,9 +6,13 @@
 #include "Sci_Upper.h"
 #include "RTC.h"
 
-#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2500U)
+#ifdef TERNARYLI
+#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2750U)
+#elif (defined(LIFEPO))
+#define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2650U)
+#endif
 // #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60 * 10))
-#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(30))
+#define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
 enum irqWakeup g_irq_t = NO_IRQ;
@@ -116,7 +120,7 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
-    if (1 == MCUI_ENI_DI1 && !g_stCellInfoReport.u16Ichg)
+    if (1 == MCUI_ENI_DI1)
     {
         LowPower_Request(NORMAL_MODE);
         return 1U;
@@ -298,30 +302,17 @@ void rtc_sleep(void)
         low_power_log_and_commit_sleep(sleep_mode);
         break;
     case NORMAL_MODE:
-        rtc_sleep_prepare_rtc();
-        MCUO_AFE_CTLC = 0;
-
-        while (rtc_sleep_run_hiccup_cycle())
-        {
-        }
-
-        {
-            MCUO_AFE_CTLC = 1;
-            RtcSleep_PortDisableStopWakeup();
-            RTC_ClearStopWakeup();
-            LowPower_Request(NO_SLEEP);
-            RtcSleep_PortRestoreAfterStop();
-
-            g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
-            RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
-        }
-        break;
     case HICCUP_MODE:
         rtc_sleep_prepare_rtc();
+        if (sleep_mode == NORMAL_MODE)
+            MCUO_AFE_CTLC = 0;
 
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
+        
+        if (sleep_mode == NORMAL_MODE)
+            MCUO_AFE_CTLC = 1;
 
         RtcSleep_PortDisableStopWakeup();
         {
