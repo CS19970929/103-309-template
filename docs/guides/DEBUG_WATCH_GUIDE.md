@@ -127,10 +127,7 @@ g_dbg_watch.tables.adc_ntc_10k
 
 ```c
 g_dbg_watch.runtime.data
-g_dbg_watch.runtime.data->cur.zeroState
-g_dbg_watch.runtime.data->cur.zeroReady
-g_dbg_watch.runtime.data->cur.zeroOffsetRawQ4
-g_dbg_watch.runtime.data->cur.lastRawSigned
+g_dbg_watch.runtime.data->cur.zeroOffsetRaw
 g_dbg_watch.runtime.data->mon.ch[0].faultCnt
 g_dbg_watch.runtime.data->mon.ch[0].wakeCnt
 g_dbg_watch.runtime.data->mon.sleepDelay[0]

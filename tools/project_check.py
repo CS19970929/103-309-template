@@ -1349,6 +1349,23 @@ def check_datadeal_runtime_state(reporter):
     else:
         reporter.fail("AFE current sample sequence should use AfeCurrent_GetSeq outside DataDeal.c")
 
+    removed_runtime_zero_tokens = [
+        "zeroOffsetRawQ4",
+        "lastRawSigned",
+        "zeroStableCnt",
+        "zeroReady",
+        "zeroState",
+        "DataLoad_CurrentApplyAutoZero",
+    ]
+    if (
+        "INT32 zeroOffsetRaw;" in datadeal_c
+        and "corrected_raw = raw_signed - s_data.cur.zeroOffsetRaw;" in datadeal_c
+        and all(token not in datadeal_c for token in removed_runtime_zero_tokens)
+    ):
+        reporter.ok("AFE current uses one boot-time zero offset without runtime relearning")
+    else:
+        reporter.fail("AFE current should keep only the boot-time zero offset")
+
 
 def check_fault_snapshot_mapping(reporter):
     required_files = [FAULT_SNAPSHOT_H, STM32F10X_IT_C, SCI_UPPER_C, SCI_UPPER_H]

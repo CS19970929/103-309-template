@@ -70,15 +70,6 @@ enum tagInfoForKBArray {
     KB_NUM		  // KB number_47
 };
 
-typedef enum _AFE_CURRENT_ZERO_STATE {
-    AFE_CURRENT_ZERO_IDLE = 0,
-    AFE_CURRENT_ZERO_STARTUP = 1,
-    AFE_CURRENT_ZERO_READY = 2,
-    AFE_CURRENT_ZERO_TIMEOUT = 3,
-    AFE_CURRENT_ZERO_IIC_FAIL = 4,
-    AFE_CURRENT_ZERO_RANGE_FAIL = 5
-} AFE_CURRENT_ZERO_STATE;
-
 #define SYSKMAX   		((UINT16)1536)      // 1.5
 #define SYSKDEFAULT		((UINT16)1024)      // 1
 #define SYSKMIN   		((UINT16)512)       // 0.5
@@ -182,10 +173,7 @@ extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 
 void App_AFEGet(  void);
-void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot);
-void AfeCurrent_PrepareStartupZero(void);
 void AfeCurrent_StartupZeroCal(void);
-UINT8 AfeCurrent_IsStartupZeroDone(void);
 UINT32 AfeCurrent_GetSeq(void);
 void open_ctlc(void);
 void close_ctlc(void);

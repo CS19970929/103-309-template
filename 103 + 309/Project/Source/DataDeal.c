@@ -28,14 +28,9 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define MONITOR_AFE_SLEEP_DELAY_TICKS ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
 #define AFE_CURRENT_ADC_FULL_SCALE_MV ((UINT32)200U)
 #define AFE_CURRENT_ADC_DENOMINATOR ((UINT32)21470U)
-#define AFE_CURRENT_AUTO_ZERO_LIMIT_MA ((UINT32)1000U)
-#define AFE_CURRENT_AUTO_ZERO_STABLE_RAW ((UINT16)8U)
-#define AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT ((UINT8)16U)
-#define AFE_CURRENT_AUTO_ZERO_FILTER_DIV ((INT32)16L)
-#define AFE_CURRENT_CALIB_MIN_MA ((UINT32)2000U)
+#define AFE_CURRENT_STARTUP_ZERO_LIMIT_MA ((UINT32)1000U)
+#define AFE_CURRENT_STARTUP_ZERO_STABLE_RAW ((UINT16)8U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
-#define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)2U)
-#define AFE_CURRENT_KB_CALIB_ENABLE 0U
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -50,12 +45,8 @@ static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentWarmStartupZeroParam =
 
 typedef struct _AFE_CURRENT_RUNTIME
 {
-    UINT8 startupColdBoot;
-    INT32 zeroOffsetRawQ4;
-    INT32 lastRawSigned;
-    UINT8 zeroStableCnt;
-    UINT8 zeroReady;
-    UINT8 zeroState;
+    /* Fixed after startup calibration; never relearned while running. */
+    INT32 zeroOffsetRaw;
 } AFE_CURRENT_RUNTIME;
 
 typedef struct _AFE_MONITOR_CH
@@ -78,13 +69,7 @@ typedef struct _DATA_RUNTIME
     UINT32 afeSeq;
 } DATA_RUNTIME;
 
-static DATA_RUNTIME s_data =
-    {
-        {1U, 0, 0, 0U, 0U, (UINT8)AFE_CURRENT_ZERO_IDLE},
-        {{{0U, 0U, 0U},
-          {0U, 0U, 0U}},
-         {0U, 0U, 0U}},
-        0U};
+static DATA_RUNTIME s_data = {0};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
@@ -378,28 +363,6 @@ static UINT32 DataLoad_CurrentRawToMilliAmp(UINT32 raw_abs)
     return (UINT32)current_mA;
 }
 
-static INT32 DataLoad_CurrentClampZeroOffset(INT32 offset_raw)
-{
-    INT32 limit_raw = (INT32)DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
-
-    if (limit_raw <= 0)
-    {
-        return 0;
-    }
-
-    if (offset_raw > limit_raw)
-    {
-        return limit_raw;
-    }
-
-    if (offset_raw < -limit_raw)
-    {
-        return -limit_raw;
-    }
-
-    return offset_raw;
-}
-
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
 {
     UINT16 raw_be;
@@ -414,63 +377,6 @@ static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
     {
         *raw_code = U16_SwapEndian(raw_be);
         SH367309_Read_AFE1.u16Current = *raw_code;
-        return 1U;
-    }
-
-    return 0U;
-}
-
-static void DataLoad_CurrentSetZeroOffset(INT32 offset_raw, UINT8 zero_state)
-{
-    offset_raw = DataLoad_CurrentClampZeroOffset(offset_raw);
-
-    s_data.cur.zeroOffsetRawQ4 = offset_raw * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-    s_data.cur.lastRawSigned = offset_raw;
-    s_data.cur.zeroStableCnt = AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT;
-    s_data.cur.zeroReady = 1U;
-    s_data.cur.zeroState = zero_state;
-}
-
-static void DataLoad_CurrentMarkZeroPending(UINT8 zero_state)
-{
-    s_data.cur.zeroOffsetRawQ4 = 0;
-    s_data.cur.lastRawSigned = 0;
-    s_data.cur.zeroStableCnt = 0U;
-    s_data.cur.zeroReady = 0U;
-    s_data.cur.zeroState = zero_state;
-}
-void AfeCurrent_SetStartupColdBoot(UINT8 cold_boot)
-{
-    s_data.cur.startupColdBoot = (cold_boot != 0U) ? 1U : 0U;
-}
-
-static const AFE_CURRENT_STARTUP_ZERO_PARAM *AfeCurrent_GetStartupZeroParam(void)
-{
-    if (s_data.cur.startupColdBoot != 0U)
-    {
-        return &s_stAfeCurrentColdStartupZeroParam;
-    }
-
-    return &s_stAfeCurrentWarmStartupZeroParam;
-}
-void AfeCurrent_PrepareStartupZero(void)
-{
-    s_data.cur.zeroOffsetRawQ4 = 0;
-    s_data.cur.lastRawSigned = 0;
-    s_data.cur.zeroStableCnt = 0U;
-    s_data.cur.zeroReady = 0U;
-
-    s_data.cur.zeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
-    close_ctlc();
-}
-
-UINT8 AfeCurrent_IsStartupZeroDone(void)
-{
-    if ((s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_READY) ||
-        (s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_TIMEOUT) ||
-        (s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_IIC_FAIL) ||
-        (s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_RANGE_FAIL))
-    {
         return 1U;
     }
 
@@ -493,12 +399,8 @@ static void AfeCurrent_NextSeq(void)
 void AfeCurrent_StartupZeroCal(void)
 {
     UINT8 i;
-    UINT8 valid_cnt;
-    UINT8 stable_cnt;
-    UINT8 fail_cnt;
+    UINT8 sample_cnt;
     UINT8 discard_cnt;
-    UINT8 range_fail_cnt;
-    UINT8 zero_done;
     UINT16 raw_code;
     UINT16 limit_raw;
     INT32 raw_signed;
@@ -508,21 +410,17 @@ void AfeCurrent_StartupZeroCal(void)
     UINT32 delta_abs;
     const AFE_CURRENT_STARTUP_ZERO_PARAM *param;
 
-    valid_cnt = 0U;
-    stable_cnt = 0U;
-    fail_cnt = 0U;
+    sample_cnt = 0U;
     discard_cnt = 0U;
-    range_fail_cnt = 0U;
-    zero_done = 0U;
     raw_code = 0U;
     raw_signed = 0;
     last_raw_signed = 0;
     sum_raw_signed = 0;
-    param = AfeCurrent_GetStartupZeroParam();
-    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
-
-    close_ctlc();
-    s_data.cur.zeroState = (UINT8)AFE_CURRENT_ZERO_STARTUP;
+    param = (SleepDeal_IsBootFromSleepStartup() != 0U) ?
+                &s_stAfeCurrentWarmStartupZeroParam :
+                &s_stAfeCurrentColdStartupZeroParam;
+    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_STARTUP_ZERO_LIMIT_MA);
+    s_data.cur.zeroOffsetRaw = 0;
 
     if (param->u16SettleMs > 0U)
     {
@@ -542,67 +440,46 @@ void AfeCurrent_StartupZeroCal(void)
             {
                 ++discard_cnt;
                 last_raw_signed = raw_signed;
-                valid_cnt = 0U;
-                stable_cnt = 0U;
+                sample_cnt = 0U;
                 sum_raw_signed = 0;
             }
             else if ((limit_raw > 0U) && (raw_abs <= (UINT32)limit_raw))
             {
-                if (valid_cnt == 0U)
+                if (sample_cnt == 0U)
                 {
                     sum_raw_signed = raw_signed;
-                    stable_cnt = 1U;
-                    valid_cnt = 1U;
+                    sample_cnt = 1U;
                 }
                 else
                 {
                     delta_abs = DataLoad_CurrentAbsI32(raw_signed - last_raw_signed);
-                    if (delta_abs <= (UINT32)AFE_CURRENT_AUTO_ZERO_STABLE_RAW)
+                    if (delta_abs <= (UINT32)AFE_CURRENT_STARTUP_ZERO_STABLE_RAW)
                     {
-                        if (valid_cnt < 0xFFU)
+                        if (sample_cnt < 0xFFU)
                         {
-                            ++valid_cnt;
-                        }
-                        if (stable_cnt < 0xFFU)
-                        {
-                            ++stable_cnt;
+                            ++sample_cnt;
                         }
                         sum_raw_signed += raw_signed;
                     }
                     else
                     {
                         sum_raw_signed = raw_signed;
-                        stable_cnt = 1U;
-                        valid_cnt = 1U;
+                        sample_cnt = 1U;
                     }
                 }
 
                 last_raw_signed = raw_signed;
 
-                if (stable_cnt >= param->u8ConfirmCnt)
+                if (sample_cnt >= param->u8ConfirmCnt)
                 {
-                    DataLoad_CurrentSetZeroOffset(sum_raw_signed / (INT32)valid_cnt, (UINT8)AFE_CURRENT_ZERO_READY);
-                    zero_done = 1U;
                     break;
                 }
             }
             else
             {
-                if (range_fail_cnt < 0xFFU)
-                {
-                    ++range_fail_cnt;
-                }
                 last_raw_signed = raw_signed;
-                valid_cnt = 0U;
-                stable_cnt = 0U;
+                sample_cnt = 0U;
                 sum_raw_signed = 0;
-            }
-        }
-        else
-        {
-            if (fail_cnt < 0xFFU)
-            {
-                ++fail_cnt;
             }
         }
 
@@ -612,139 +489,10 @@ void AfeCurrent_StartupZeroCal(void)
         }
     }
 
-    if (zero_done == 0U)
+    if (sample_cnt > 0U)
     {
-        if (valid_cnt > 0U)
-        {
-            DataLoad_CurrentSetZeroOffset(sum_raw_signed / (INT32)valid_cnt, (UINT8)AFE_CURRENT_ZERO_TIMEOUT);
-        }
-        else if (fail_cnt >= param->u8MaxCnt)
-        {
-            DataLoad_CurrentMarkZeroPending((UINT8)AFE_CURRENT_ZERO_IIC_FAIL);
-        }
-        else
-        {
-            DataLoad_CurrentMarkZeroPending((UINT8)AFE_CURRENT_ZERO_RANGE_FAIL);
-        }
+        s_data.cur.zeroOffsetRaw = sum_raw_signed / (INT32)sample_cnt;
     }
-
-    open_ctlc();
-}
-static INT32 DataLoad_CurrentApplyAutoZero(INT32 raw_signed)
-{
-    INT32 current_offset_raw;
-    INT32 target_q4;
-    INT32 corrected_raw;
-    UINT16 limit_raw;
-    UINT16 deadband_raw;
-    UINT32 learn_abs;
-    UINT32 delta_abs;
-    UINT8 can_learn;
-
-    current_offset_raw = s_data.cur.zeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_AUTO_ZERO_LIMIT_MA);
-    deadband_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_OUTPUT_DEADBAND_MA);
-    delta_abs = DataLoad_CurrentAbsI32(raw_signed - s_data.cur.lastRawSigned);
-    can_learn = 0U;
-
-    if (s_data.cur.zeroReady == 0U)
-    {
-        learn_abs = DataLoad_CurrentAbsI32(raw_signed);
-        if ((limit_raw > 0U) && (learn_abs <= (UINT32)limit_raw))
-        {
-            can_learn = 1U;
-        }
-    }
-    else
-    {
-        learn_abs = DataLoad_CurrentAbsI32(raw_signed - current_offset_raw);
-        if ((deadband_raw > 0U) && (learn_abs <= (UINT32)deadband_raw))
-        {
-            can_learn = 1U;
-        }
-    }
-
-    if ((can_learn != 0U) && (delta_abs <= (UINT32)AFE_CURRENT_AUTO_ZERO_STABLE_RAW))
-    {
-        if (s_data.cur.zeroStableCnt < AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
-        {
-            ++s_data.cur.zeroStableCnt;
-        }
-
-        if (s_data.cur.zeroStableCnt >= AFE_CURRENT_AUTO_ZERO_CONFIRM_CNT)
-        {
-            target_q4 = DataLoad_CurrentClampZeroOffset(raw_signed) * AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-            if (s_data.cur.zeroReady == 0U)
-            {
-                s_data.cur.zeroOffsetRawQ4 = target_q4;
-                s_data.cur.zeroReady = 1U;
-                s_data.cur.zeroState = (UINT8)AFE_CURRENT_ZERO_READY;
-            }
-            else
-            {
-                s_data.cur.zeroOffsetRawQ4 += (target_q4 - s_data.cur.zeroOffsetRawQ4) / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-            }
-        }
-    }
-    else
-    {
-        s_data.cur.zeroStableCnt = 0U;
-    }
-
-    s_data.cur.lastRawSigned = raw_signed;
-    current_offset_raw = s_data.cur.zeroOffsetRawQ4 / AFE_CURRENT_AUTO_ZERO_FILTER_DIV;
-    corrected_raw = raw_signed - current_offset_raw;
-
-    if ((s_data.cur.zeroReady != 0U) &&
-        ((s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_IDLE) ||
-         (s_data.cur.zeroState == (UINT8)AFE_CURRENT_ZERO_STARTUP)))
-    {
-        s_data.cur.zeroState = (UINT8)AFE_CURRENT_ZERO_READY;
-    }
-
-    return corrected_raw;
-}
-
-static UINT32 DataLoad_CurrentApplyCalib(UINT32 current_mA, UINT8 calib_index)
-{
-#if AFE_CURRENT_KB_CALIB_ENABLE
-    UINT16 calib_k;
-    INT16 calib_b;
-    int64_t current_q10;
-
-    if (current_mA <= AFE_CURRENT_CALIB_MIN_MA)
-    {
-        return current_mA;
-    }
-
-    calib_k = g_u16CalibCoefK[calib_index];
-    calib_b = g_i16CalibCoefB[calib_index];
-    if ((calib_k < SYSKMIN) || (calib_k > SYSKMAX))
-    {
-        calib_k = SYSKDEFAULT;
-    }
-    if ((calib_b < SYSBMIN) || (calib_b > SYSBMAX))
-    {
-        calib_b = SYSBDEFAULT;
-    }
-
-    current_q10 = ((int64_t)current_mA * (int64_t)calib_k) + ((int64_t)calib_b * 1000LL);
-    if (current_q10 <= 0)
-    {
-        return 0U;
-    }
-
-    current_q10 >>= 10;
-    if (current_q10 > 0xFFFFFFFFU)
-    {
-        return 0xFFFFFFFFU;
-    }
-
-    return (UINT32)current_q10;
-#else
-    (void)calib_index;
-    return current_mA;
-#endif
 }
 
 static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
@@ -800,10 +548,9 @@ void DataLoad_Current(void)
     INT32 raw_signed;
     INT32 corrected_raw;
     UINT32 current_mA;
-    UINT32 report_current_mA;
 
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
-    corrected_raw = DataLoad_CurrentApplyAutoZero(raw_signed);
+    corrected_raw = raw_signed - s_data.cur.zeroOffsetRaw;
     current_mA = DataLoad_CurrentRawToMilliAmp(DataLoad_CurrentAbsI32(corrected_raw));
 
     g_stCellInfoReport.u16Ichg = 0;
@@ -811,16 +558,11 @@ void DataLoad_Current(void)
 
     if (corrected_raw > 0)
     {
-        report_current_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_ICHG);
-        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(report_current_mA);
+        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(current_mA);
     }
     else if (corrected_raw < 0)
     {
-        report_current_mA = DataLoad_CurrentApplyCalib(current_mA, (UINT8)MDL_IDSG);
-        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(report_current_mA);
-    }
-    else
-    {
+        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(current_mA);
     }
 
 #ifdef __VIRTURE_CURRENT__

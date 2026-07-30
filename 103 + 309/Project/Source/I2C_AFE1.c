@@ -602,15 +602,10 @@ void InitAFE1(void)
 {
 	UINT8 do_startup_zero;
 
-	do_startup_zero = ((AfeCurrent_GetSeq() == 0U) && (AfeCurrent_IsStartupZeroDone() == 0U)) ? 1U : 0U;
+	do_startup_zero = (AfeCurrent_GetSeq() == 0U) ? 1U : 0U;
 
 	initAFE1_IIC();
 	close_ctlc();
-	if (do_startup_zero != 0U)
-	{
-		AfeCurrent_SetStartupColdBoot((SleepDeal_IsBootFromSleepStartup() != 0U) ? 0U : 1U);
-		AfeCurrent_PrepareStartupZero();
-	}
 
 	AFE_Reset();
 	AFE_IsReady();
@@ -620,10 +615,7 @@ void InitAFE1(void)
 	{
 		AfeCurrent_StartupZeroCal();
 	}
-	else
-	{
-		open_ctlc();
-	}
+	open_ctlc();
 	MosStartup_ApplyInitialState();
 }
 
