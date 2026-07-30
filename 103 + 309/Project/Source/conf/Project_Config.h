@@ -196,84 +196,11 @@
 // <q> Reset factory aging time on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
-// <q> Update all OtherElement words from Project_Config on upgrade
+// <q> Update all OtherElement words from firmware defaults on upgrade
+// <i> Values come from OtherElement_default in DataDeal.h.
 // <i> Raise policy version when enabling this action for a release package.
 #define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
 
-// <h>Upgrade OtherElement Values
-// <i> Used only when PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT is 1.
-// <i> These 32 words map to RS485 0x2300..0x231F without changing protocol order.
-
-// <o> Balance open voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_VOLTAGE 4180
-// <o> Balance open window mV <1-2000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_OPEN_WINDOW 30
-// <o> Balance close window mV <0-2000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_CLOSE_WINDOW 20
-// <o> Balance reserved 1 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_RES1 0
-// <o> Balance reserved 2 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_RES2 0
-// <o> Balance reserved 3 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_RES3 0
-// <o> Balance reserved 4 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_RES4 0
-// <o> Balance reserved 5 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_BALANCE_RES5 0
-
-// <o> Charge current max A*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CS_CUR_CHGMAX 1865
-// <o> Discharge current max A*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CS_CUR_DSGMAX 1865
-// <o> CBC delay time us*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CBC_DELAY_T 2000
-// <o> CBC discharge current A*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CBC_CUR_DSG 3200
-
-// <o> SOC table select <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_TABLE_SELECT 2
-// <o> Password always <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_PASSWORD_ALWAYS 0
-// <o> Current-limit voltage delta mV <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CUR_LIMIT_VDELTA 1000
-// <o> Current-limit current A*10 <0-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_CUR_LIMIT_CUR 30
-
-// <o> Normal sleep voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_NORMAL 4200
-// <o> Normal sleep time min <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_NORMAL 7200
-// <o> Low-voltage sleep voltage mV <1000-5000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_V_LOW 2800
-// <o> Low-voltage sleep time min <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_LOW 1
-// <o> Sleep virtual charge current A*10 <0-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_VIR_CUR_CHG 10
-// <o> Sleep virtual discharge current A*10 <0-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_VIR_CUR_DSG 10
-// <o> Sleep RTC wakeup time min <0-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_RTC_WAKEUP_TIME 240
-// <o> Sleep RTC time min <0-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SLEEP_TIME_RTC 3
-
-// <o> SOC capacity Ah*10 <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_AH 50
-// <o> SOC cycle times <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_CYCLE_TIMES 1
-// <o> SOC 100 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_100 4180
-// <o> SOC 0 percent voltage mV <1-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SOC_V_0 3000
-
-// <o> System series number <3-32>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_SERIES_NUM 7
-// <o> System current-sense resistor mOhm <1-65000>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES 2
-// <o> System current-sense resistor numerator <1-10000>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_CS_RES_NUM 6
-// <o> System precharge time s <0-50000>
-#define PROJECT_CFG_UPGRADE_OTHER_SYS_PRECHG_TIME 10
-// </h>
 // </h>
 
 // <<< end of configuration section >>>

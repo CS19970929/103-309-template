@@ -187,21 +187,6 @@ static void EEPROM_LoadDefaultBalanceOpenVoltage(void)
 }
 #endif
 
-#if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_UPDATE_OTHER_ELEMENT
-static void EEPROM_LoadConfigOtherElement(void)
-{
-	UINT8 i;
-	const struct OTHER_ELEMENT other_config = UPGRADE_PARAM_OTHER_ELEMENT_CONFIG;
-
-	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
-	{
-		*(&OtherElement.u16Balance_OpenVoltage + i) = *(&other_config.u16Balance_OpenVoltage + i);
-	}
-
-	EEPROM_UpdateOtherElementRuntime();
-}
-#endif
-
 UINT8 UpgradeParamPolicy_ApplyOnce(void)
 {
 #if (!UPGRADE_PARAM_POLICY_ENABLE) || (!UPGRADE_PARAM_POLICY_HAS_ACTION)
@@ -243,7 +228,7 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 #endif
 
 #if UPGRADE_PARAM_UPDATE_OTHER_ELEMENT
-	EEPROM_LoadConfigOtherElement();
+	EEPROM_LoadDefaultOtherElement();
 	rw_param_dirty = 1;
 #endif
 
