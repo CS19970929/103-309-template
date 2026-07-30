@@ -5,7 +5,6 @@ UINT8 SeriesNum = 7;
 
 void Runtime_Boot(void)
 {
-	SystemInit();
 	Init_RTC();
 
 	InitDelay();
@@ -56,5 +55,5 @@ void Runtime_RunOnce(void)
 
 	Feed_IWatchDog;
 
-	__WFI();
+	// __WFI();
 }

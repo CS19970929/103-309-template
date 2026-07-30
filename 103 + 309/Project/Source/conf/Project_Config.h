@@ -33,22 +33,10 @@
 // <o> Firmware version <0-65535>
 #define PROJECT_CFG_VERSION 5
 
-// <o> Rated current
-//   <0=> 80A
-//   <1=> 100A
-//   <2=> 150A
-//   <3=> 200A
-//   <4=> 250A
-#define PROJECT_CFG_LEVEL_CURR 2
-
 // <o> AFE type
 //   <0=> bq76xx
 //   <1=> sh36xx
 #define PROJECT_CFG_AFE_TYPE 1
-
-// <o> EEPROM init flag <0x0000-0xFFFF>
-#define PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG 0x2445
-// </h>
 
 // <h>Feature Switches
 
@@ -173,7 +161,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0012
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0002
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1

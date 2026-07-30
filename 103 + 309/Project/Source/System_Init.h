@@ -66,14 +66,6 @@ union SYS_TIME {
 };
 
 
-struct CBC_ELEMENT {
-	UINT8 u8CBC_CHG_ErrFlag;	//����CBC������־λ
-	UINT8 u8CBC_CHG_Cnt;		//���ֳ��CBC�Ĵ���
-	UINT8 u8CBC_DSG_ErrFlag;	//����CBC������־λ
-	UINT8 u8CBC_DSG_Cnt;		//���ַŵ�CBC�Ĵ���
-};
-
-
 void IWDG_Feed(void);
 #define Feed_IWatchDog IWDG_Feed()
 
@@ -87,13 +79,11 @@ void InitTimer(void);
 void InitNVIC(void);
 void Init_IWDG(void);
 void EnableLowPowerDebug(void);
-void App_CBC(void);
 void SysTime_LatchTaskFlags(void);
 UINT8 SysTime_HasPendingTaskFlags(void);
 UINT32 SysTime_Get10msTickCount(void);
 UINT8 SysTime_Take200msTaskPeriod(void);
 UINT16 SysTime_Get200msTaskOverflowCount(void);
-void App_ChgDet_Status(void);
 
 
 #endif	/* SYSTEM_INIT_H */

@@ -71,9 +71,6 @@ void InitShortCur(void)
     I2CWriteRegisterByteWithCRC(DEVICE_ADDR_AFE1, PROTECT1, Registers_AFE1.Protect1.Protect1Byte);
     I2CWriteRegisterByteWithCRC(DEVICE_ADDR_AFE1, PROTECT2, Registers_AFE1.Protect2.Protect2Byte);
 
-    // 设置之后需要重启吗？先试试
-    // MCU_RESET();
-
 #elif (AFE_TYPE == sh36xx)
     extern AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction;
     // todo

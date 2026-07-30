@@ -2078,3 +2078,12 @@ typedef struct
 
 是否可以降低定时器调度中断和各个任务的运行周期，例如将定时器中断降低为200ms，所有任务
 周期最低为200ms或者其整数倍，配合主循环的__WFI();来降低运行功耗，是否可行,直接定位Runtime.c模块
+
+SystemInit和InitDelay有必要显示调用吗？
+
+先不改变InitDelay实现，InitDelay应该放在SleepDeal_HandleBootSleepStartup还是之后，放在前面，
+SleepDeal_HandleBootSleepStartup从stop唤醒后，InitDelay是否有效。
+
+能否简化afe零电流校准和电流计算逻辑，在不影响电流校准和电流计算功能前提下，首先我不需要
+运行中进行电流校准，只需要开机校准一次，其他是否还有优化的地方，去掉不必要的变量、逻辑，
+简化整个架构，先给出方案

@@ -203,13 +203,13 @@ void InitWakeUp_NormalMode(void)
 
     jtag_disableAndConfIO();
 
-    Conf_InitWakeupInputExti(GPIO_CHG_IN,
-                             PIN_CHG_IN,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource0,
-                             EXTI_Line0,
-                             EXTI_Trigger_Rising_Falling,
-                             EXTI0_IRQn);
+    // Conf_InitWakeupInputExti(GPIO_CHG_IN,
+    //                          PIN_CHG_IN,
+    //                          GPIO_PortSourceGPIOA,
+    //                          GPIO_PinSource0,
+    //                          EXTI_Line0,
+    //                          EXTI_Trigger_Rising_Falling,
+    //                          EXTI0_IRQn);
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -245,13 +245,13 @@ void InitWakeUp_RTCMode(void)
 
     jtag_disableAndConfIO();
 
-    Conf_InitWakeupInputExti(GPIO_CHG_IN,
-                             PIN_CHG_IN,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource0,
-                             EXTI_Line0,
-                             EXTI_Trigger_Rising_Falling,
-                             EXTI0_IRQn);
+    // Conf_InitWakeupInputExti(GPIO_CHG_IN,
+    //                          PIN_CHG_IN,
+    //                          GPIO_PortSourceGPIOA,
+    //                          GPIO_PinSource0,
+    //                          EXTI_Line0,
+    //                          EXTI_Trigger_Rising_Falling,
+    //                          EXTI0_IRQn);
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -333,21 +333,6 @@ void IOstatus_DeepMode(void)
     IOstatus_Base();
 }
 
-void IORecover_RTCMode(void)
-{
-    MCU_RESET();
-}
-
-void IORecover_NormalMode(void)
-{
-    MCU_RESET(); // ?????????????????????????????????????????
-}
-
-void IORecover_DeepMode(void)
-{
-    MCU_RESET();
-}
-
 void Sys_StopMode(void)
 {
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
@@ -359,11 +344,6 @@ void Sys_StopMode(void)
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();
-}
-
-void InitRtcWakeupCheck(void)
-{
-    InitRunAfterStopWakeup();
 }
 
 void test_rtc_led_display(void)

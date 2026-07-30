@@ -13,7 +13,6 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
-#define EEPROM_VALUE_BEGIN_FLAG PROJECT_CFG_EEPROM_VALUE_BEGIN_FLAG
 
 #define T3MAX         0
 #define T3            1
@@ -75,7 +74,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_10A
+#define LEVEL_CURR  CURR_40A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
@@ -158,13 +157,9 @@ void IOstatus_Base(void);
 void IOstatus_RTCMode(void);
 void IOstatus_NormalMode(void);
 void IOstatus_DeepMode(void);
-void IORecover_RTCMode(void);
-void IORecover_NormalMode(void);
-void IORecover_DeepMode(void);
 void LowPower_ClearWakeupPending(void);
 void LowPower_DisableWakeupExti(void);
 void Sys_StopMode(void);
-void InitRtcWakeupCheck(void);
 void InitRunAfterStopWakeup(void);
 
 #include "Project_BuildGuard.h"

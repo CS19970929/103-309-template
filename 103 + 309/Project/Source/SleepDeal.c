@@ -93,22 +93,7 @@ UINT8 SleepDeal_IsWakeupValid(void)
 
 void SleepDeal_Continue(UINT8 sleep_mode)
 {
-	UINT16 boot_flag;
-
-	switch (sleep_mode)
-	{
-	case NORMAL_MODE:
-		boot_flag = FLASH_NORMAL_SLEEP_VALUE;
-		break;
-	case HICCUP_MODE:
-		boot_flag = FLASH_HICCUP_SLEEP_VALUE;
-		break;
-	case DEEP_MODE:
-		boot_flag = FLASH_DEEP_SLEEP_VALUE;
-		break;
-	default:
-		return;
-	}
+	UINT16 boot_flag = FLASH_DEEP_SLEEP_VALUE;
 
 	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
@@ -214,23 +199,8 @@ void SleepDeal_HandleBootSleepStartup(void)
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
-		s_sleep.boot_sleep = 1U;
-		BootFlag_Clear();
-		Init_RTC();
-
-		IOstatus_RTCMode();
-		InitWakeUp_RTCMode();
-		SleepDeal_WaitStopWakeup();
-		// Sys_StandbyMode();
-		IORecover_RTCMode();
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
-		s_sleep.boot_sleep = 1U;
-		BootFlag_Clear();
-		IOstatus_NormalMode();
-		InitWakeUp_NormalMode();
-		SleepDeal_WaitStopWakeup();
-		IORecover_NormalMode();
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
@@ -239,7 +209,6 @@ void SleepDeal_HandleBootSleepStartup(void)
 		InitWakeUp_DeepMode();
 		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
-		IORecover_DeepMode();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 		s_sleep.boot_sleep = 1U;
