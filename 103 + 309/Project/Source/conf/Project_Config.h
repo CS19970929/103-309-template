@@ -174,7 +174,7 @@
 
 // <o> Reserved capacity 0.1Ah <0-65000>
 // <i> 10 = 1Ah. SOC uses full capacity minus this reserve; reported full capacity stays unchanged.
-#define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 10
+#define PROJECT_CFG_SOC_RESERVE_CAPACITY_AH10 5
 
 // <o> Empty tail start offset mV <0-1000>
 // <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
