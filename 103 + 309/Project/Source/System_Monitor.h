@@ -152,6 +152,7 @@ union System_Status {				//TODO�����⣬Heat��Cool��û��
 
 
 extern volatile struct SYSTEM_ERROR System_ErrFlag;
+extern volatile union System_Status s_system_status;
 
 void InitSystemMonitorData_EEPROM(void);
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);

@@ -34,8 +34,8 @@ void Runtime_Boot(void)
 	InitProID();
 
 	EnableLowPowerDebug();
-	// Init_IWDG();
 	LogRecord_RequestStartup();
+	Init_IWDG();
 }
 
 void Runtime_RunOnce(void)

@@ -9,6 +9,7 @@ void MosStartup_OpenChargeCloseDischarge(void);
 void MosStartup_OpenDischargeCloseCharge(void);
 void MosStartup_EnterFactoryMode(bool on);
 void MosStartup_ApplyInitialState(void);
+void Mos_OpenAll(void);
 
 /* Keep legacy call sites readable while the module boundary is tightened. */
 #define open_chg_close_dsg() MosStartup_OpenChargeCloseDischarge()

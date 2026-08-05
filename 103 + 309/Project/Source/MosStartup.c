@@ -34,3 +34,8 @@ void MosStartup_ApplyInitialState(void)
 {
 	MosStartup_EnterFactoryMode(true);
 }
+
+void Mos_OpenAll(void)
+{
+	MosStartup_WriteMosState(1U, 1U, Bit_RESET);
+}

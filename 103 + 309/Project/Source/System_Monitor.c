@@ -1,7 +1,7 @@
 #include "main.h"
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
-static volatile union System_Status s_system_status;
+volatile union System_Status s_system_status;
 
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
 /* Keep these masks in sync with System_Monitor.h bitfield order. */

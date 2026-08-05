@@ -33,13 +33,13 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
 
 typedef uint8_t (*BlockCheckFunc)(void);
 
-static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() > 10U) ? 1U : 0U; }
-static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() > 10U) ? 1U : 0U; }
+static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 5U) ? 1U : 0U; }
+static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 5U) ? 1U : 0U; }
 static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
 static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
 static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
-static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U) ? 1U : 0U; }
+static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U || g_stCellInfoReport.unMdlFault_Second.all != 0U || SH367309_Reg_Store.REG_BSTATUS1.bits.SC) ? 1U : 0U; }
 
 typedef struct
 {
@@ -120,7 +120,8 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
-    if (1 == MCUI_ENI_DI1)
+    if (1 == MCUI_ENI_DI1 && g_stCellInfoReport.u16Ichg < 5)
+    // if (1 == MCUI_ENI_DI1)
     {
         LowPower_Request(NORMAL_MODE);
         return 1U;
@@ -310,7 +311,7 @@ void rtc_sleep(void)
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
-        
+
         if (sleep_mode == NORMAL_MODE)
             MCUO_AFE_CTLC = 1;
 

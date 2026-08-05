@@ -84,15 +84,15 @@ void Refresh_Parameters(void)
 	AFE_ROM_PARAMETERS_Struction.m06H_07H.UV = (AFE_Parameters_RS485_Struction.u16VcellUvp.curValue / 20) & 0x00FF;
 	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
 
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue * 100 / g_u32CS_Res_AFE;
+	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10;
+	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, s_sh_afe_ocd1t);
 
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
-	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, s_sh_afe_ocd2v);
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10;
-	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2T = Choose_Right_Value(temp, s_sh_afe_occt_ocd2t);
+	// temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
+	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, s_sh_afe_ocd2v);
+	// temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10;
+	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2T = Choose_Right_Value(temp, s_sh_afe_occt_ocd2t);
 
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);

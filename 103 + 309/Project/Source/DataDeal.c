@@ -234,7 +234,7 @@ void DataLoad_Temperature(void)
     }
 
     g_stCellInfoReport.u16Temperature[2] = 0;
-    
+
 #if 0
 	//环境温度1
 	t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40;		//放大1000倍和B值对应的意思
@@ -416,9 +416,7 @@ void AfeCurrent_StartupZeroCal(void)
     raw_signed = 0;
     last_raw_signed = 0;
     sum_raw_signed = 0;
-    param = (SleepDeal_IsBootFromSleepStartup() != 0U) ?
-                &s_stAfeCurrentWarmStartupZeroParam :
-                &s_stAfeCurrentColdStartupZeroParam;
+    param = (SleepDeal_IsBootFromSleepStartup() != 0U) ? &s_stAfeCurrentWarmStartupZeroParam : &s_stAfeCurrentColdStartupZeroParam;
     limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_STARTUP_ZERO_LIMIT_MA);
     s_data.cur.zeroOffsetRaw = 0;
 
@@ -749,7 +747,120 @@ void close_ctlc(void)
 
 void new_todo_logi(void)
 {
+    static uint16_t occ1_rec_cnt = 0;
+    static uint16_t odc1_rec_cnt = 0;
+    // static uint8_t Driver_Element_MOS_CHG = s_system_status.bits.b1Status_MOS_CHG;
+    // static uint8_t DRIVER_ELEMENT_MOS_DSG = s_system_status.bits.b1Status_MOS_DSG;
+    uint8_t Driver_Element_MOS_CHG = 1;
+    uint8_t DRIVER_ELEMENT_MOS_DSG = 1;
+    static uint32_t soc_low_cnt = 0;
+    // if(g_stCellInfoReport.unMdlFault_Third.all != 0)
+
+    // static bool first = true;
     charger_detect_and_keyLogi_200ms();
+
+#ifdef __SOC_5_PROTECT_
+    if (g_stCellInfoReport.SocElement.u16Soc <= 5)
+    {
+        if (g_stCellInfoReport.u16Ichg >= 10)
+        {
+            DRIVER_ELEMENT_MOS_DSG = 1;
+            soc_low_cnt = 0;
+        }
+        else
+        {
+            DRIVER_ELEMENT_MOS_DSG = 0;
+            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 1;
+            if (++soc_low_cnt >= (5 * 60 * 60))
+            {
+                soc_low_cnt = 0;
+                LowPower_Request(DEEP_MODE);
+            }
+        }
+    }
+    else
+    {
+        g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 0;
+        soc_low_cnt = 0;
+    }
+#endif // __SOC_5_PROTECT_
+    // 增加软件充电过流
+    if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
+    {
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 1;
+        FaultWarnRecord2(IchgOcp_Second);
+        occ1_rec_cnt = 0;
+    }
+    if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp && g_stCellInfoReport.u16IDischg < 10)
+    {
+        Driver_Element_MOS_CHG = 0;
+        if (++occ1_rec_cnt >= (5 * 30))
+        {
+            occ1_rec_cnt = 0;
+            g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 0;
+        }
+    }
+
+    if (g_stCellInfoReport.u16IDischg >= AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue)
+    {
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 1;
+        FaultWarnRecord2(IdischgOcp_Second);
+        odc1_rec_cnt = 0;
+    }
+    if (g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp && g_stCellInfoReport.u16Ichg < 10)
+    {
+        DRIVER_ELEMENT_MOS_DSG = 0;
+        if (odc1_rec_cnt++ >= (5 * 30))
+        {
+            odc1_rec_cnt = 0;
+            g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 0;
+        }
+    }
+
+    // switch (occ1_ararm_state)
+    // {
+    // case 0:
+    //     if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
+    //     {
+    //         FaultWarnRecord2(IchgOcp_Second);
+    //         Driver_Element_MOS_CHG = 0;
+    //         occ1_ararm_state = 1;
+    //     }
+    //     break;
+
+    // default:
+    //     break;
+    // }
+
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
+    {
+        Driver_Element_MOS_CHG = 0;
+    }
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
+        SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
+    {
+        DRIVER_ELEMENT_MOS_DSG = 0;
+    }
+
+    // 软件控制mos的逻辑
+    if (s_system_status.bits.b1Status_MOS_CHG != Driver_Element_MOS_CHG)
+    {
+        // log_w();
+        sys_time.cnt_enter_chg_open++;
+        SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element_MOS_CHG);
+    }
+    if (s_system_status.bits.b1Status_MOS_DSG != DRIVER_ELEMENT_MOS_DSG)
+    {
+        // log_w();
+        sys_time.cnt_enter_dsg_open++;
+        SH367309_DriverMos_Ctrl(GPIO_DSG, DRIVER_ELEMENT_MOS_DSG);
+    }
 }
 
 void App_AFEGet(void)
@@ -770,7 +881,7 @@ void App_AFEGet(void)
     AfeCurrent_NextSeq();
 
     App_SH367309();
-    // new_todo_logi();
+    new_todo_logi();
     App_SOC();
 
 #ifdef VCELL_DISP_TEST
@@ -780,6 +891,6 @@ void App_AFEGet(void)
     //     g_stCellInfoReport.u16VCell[29] = g_stLowPowerRtcStatus.cycles;
     //     g_stCellInfoReport.u16VCell[30] = g_stLowPowerRtcStatus.sleep;
     // }
-        g_stCellInfoReport.u16VCell[31] = sys_time.rtc_sec_cnt;
+    g_stCellInfoReport.u16VCell[31] = sys_time.rtc_sec_cnt;
 #endif
 }
