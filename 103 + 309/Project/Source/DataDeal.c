@@ -838,6 +838,8 @@ void new_todo_logi(void)
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
     {
         Driver_Element_MOS_CHG = 0;
+        if (g_stCellInfoReport.u16IDischg >= 10)
+            Driver_Element_MOS_CHG = 1;
     }
     if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
@@ -846,6 +848,8 @@ void new_todo_logi(void)
         SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
     {
         DRIVER_ELEMENT_MOS_DSG = 0;
+        if (g_stCellInfoReport.u16Ichg >= 10)
+            DRIVER_ELEMENT_MOS_DSG = 1;
     }
 
     // 软件控制mos的逻辑

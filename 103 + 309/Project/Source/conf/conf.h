@@ -8,7 +8,7 @@
 #include "conf_gpio.h"
 #include "Project_Config.h"
 
-#define __SOC_5_PROTECT_
+// #define __SOC_5_PROTECT_
 // #define DISP_VBAT_AND_TEMP_
 // #define __EnableLowPowerDebug__
 // #define VCELL_DISP_TEST
@@ -75,7 +75,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_10A
+#define LEVEL_CURR  CURR_20A_15A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
@@ -87,7 +87,7 @@
 #define CS_Res			2
 #define CS_Res_Num		3
 #define CBC_DelayT		128
-#define CBC_Cur_DSG		(50)
+#define CBC_Cur_DSG		(100)
 
 #elif (LEVEL_CURR == CURR_30A)
 #define CS_Res			2

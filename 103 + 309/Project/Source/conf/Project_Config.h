@@ -16,7 +16,7 @@
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
 //   <1=> LiFePO4 LIFEPO
-#define PROJECT_CFG_BAT_CHEMISTRY 0
+#define PROJECT_CFG_BAT_CHEMISTRY 1
 
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
@@ -161,7 +161,7 @@
 // <h>Upgrade Parameter Policy
 
 // <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0001
+#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0002
 
 // <q> Reset AFE params on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
