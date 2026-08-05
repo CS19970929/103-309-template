@@ -21,11 +21,11 @@
 #define AFE_CUV_recover     (2800)
 #define AFE_CUV_filter     (100)
 #else
-#define AFE_COV           (4250)
+#define AFE_COV           (4225)
 #define AFE_COV_recover   (4150)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2800)
+#define AFE_CUV           (2700)
 #define AFE_CUV_recover     (3000)
 #define AFE_CUV_filter     (100)
 #endif // LIFEPO
@@ -47,14 +47,14 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1       		(250) 
+#define AFE_OCC1       		(120) 
 #define AFE_OCC1_filter  	(10)
-#define AFE_OCC2       		(250) 
+#define AFE_OCC2       		(120) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(500) 
+#define AFE_ODC1       		(450) 
 #define AFE_ODC1_filter  	(100)
-#define AFE_ODC2       		(500) 
+#define AFE_ODC2       		(450) 
 #define AFE_ODC2_filter  	(50)
 
 
