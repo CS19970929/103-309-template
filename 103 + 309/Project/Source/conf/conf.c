@@ -96,7 +96,7 @@ static void Conf_InitRunSharedIo(void)
                             Bit_RESET,
                             Bit_RESET,
                             Bit_SET,
-                            Bit_SET,
+                            Bit_RESET,
                             Bit_SET);
 
     Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
@@ -158,7 +158,7 @@ void InitIO_rtc(void)
                             Bit_RESET,
                             Bit_RESET,
                             Bit_SET,
-                            Bit_SET,
+                            Bit_RESET,
                             Bit_SET);
 }
 
@@ -308,7 +308,11 @@ void IOstatus_RTCMode(void)
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_DBG_LED), GPIO_Mode_AIN);
+    if (g_stLowPowerRtcStatus.mode == NORMAL_MODE)
+        Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_DBG_LED), GPIO_Mode_AIN);
+    else
+        Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_DBG_LED) & (~PIN_BLE_EN), GPIO_Mode_AIN);
+
     Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
@@ -374,4 +378,3 @@ void InitRunAfterStopWakeup(void)
 
     initAFE1_IIC();
 }
-
