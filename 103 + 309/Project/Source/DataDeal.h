@@ -124,14 +124,14 @@ struct OTHER_ELEMENT {
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260811-c073v1p0"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		8
+#define SNum 		10
 
 
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num* 2000/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
 
-#define BMS_CAPCITY     240
+#define BMS_CAPCITY     50
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\
