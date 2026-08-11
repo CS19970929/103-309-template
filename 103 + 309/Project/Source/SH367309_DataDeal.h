@@ -52,9 +52,9 @@
 #define AFE_OCC2       		(120) 
 #define AFE_OCC2_filter  	(10)
 
-#define AFE_ODC1       		(450) 
+#define AFE_ODC1       		(150) 
 #define AFE_ODC1_filter  	(100)
-#define AFE_ODC2       		(450) 
+#define AFE_ODC2       		(200) 
 #define AFE_ODC2_filter  	(50)
 
 
