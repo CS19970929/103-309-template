@@ -304,20 +304,17 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
 	if (t_u16Temp >= RS485_ADDR_RO_START2)
-	{ // D200 offset maps to combined RO buffer
+	{
 		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
 	}
-
 	else if (t_u16Temp >= RS485_ADDR_RO_START1)
-	{ // D100 offset maps to combined RO buffer
+	{
 		t_u16Temp -= (RS485_ADDR_RO_START1 - 63);
 	}
-
 	else if (t_u16Temp >= RS485_ADDR_RO_START0)
-	{ // D000 base window
+	{
 		t_u16Temp -= RS485_ADDR_RO_START0;
 	}
-	// Independent read-only sub-blocks
 	else if (t_u16Temp >= RS485_ADDR_RO_LCD)
 	{
 		t_u16Temp -= RS485_ADDR_RO_LCD;
@@ -361,7 +358,7 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	{
 		u16ValidateOffset = 0U;
 		if ((u16ActualAddr >= RS485_ADDR_EVENT_RECORD) &&
-			(u16ActualAddr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+			(u16ActualAddr < (UINT16)(RS485_ADDR_EVENT_RECORD + STORAGE_LOG_RECORD_COUNT)))
 		{
 			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_EVENT_RECORD);
 		}
@@ -393,48 +390,36 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	case RS485_CMD_ADDR_RESET_CALIB_COEF:
 		Sci_WrReg_0x06_Reset_CalibCoef(s);
 		break;
-
 	case RS485_CMD_ADDR_RESET_PROTECT_RECORD:
 		Sci_WrReg_0x06_Reset_ProtectRecord(s);
 		break;
-
 	case RS485_CMD_ADDR_RESET_PROTECT_ELEMENT:
 		Sci_WrReg_0x06_Reset_ProtectElement(s);
 		break;
-
 	case RS485_CMD_ADDR_RESET_OTHER_CANADD:
 		Sci_WrReg_0x06_Reset_OtherCanAdd(s);
 		break;
-
 	case RS485_CMD_ADDR_SYSTEM_FUNCTION_ON:
 		Sci_WrReg_0x06_BMS_FunctionON(s);
 		break;
-
 	case RS485_CMD_ADDR_SYSTEM_FUNCTION_OFF:
 		Sci_WrReg_0x06_BMS_FunctionOFF(s);
 		break;
-
 	case RS485_CMD_ADDR_SET_ONCE_SOC:
 		Sci_WrReg_0x06_SetSocOnce(s);
 		break;
-
-	// �颖AFE参数�读可写新�
 	case RS485_CMD_ADDR_RESET_AFE_PARAMETERS:
 		Sci_WrReg_0x06_Reset_AFE_Parameters(s);
 		break;
-
 	case RS485_CMD_ADDR_RESET_EVENT_RECORD:
 		Sci_WrReg_0x06_Reset_EventRecord(s);
 		break;
-
 	case RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME:
 		Sci_WrReg_0x06_FactoryAgingResetTime(s);
 		break;
-
 	case RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS:
 		Sci_WrReg_0x06_FactoryAgingSetHours(s);
 		break;
-
 	default:
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_NO_PERMISSION;
@@ -491,10 +476,10 @@ static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 
 static UINT16 Sci_GetFactoryAgingDurationHours(void)
 {
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
+	STORAGE_FACTORY_AGING_DATA data;
 	UINT32 default_hours;
 
-	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
+	if ((Storage_LoadFactoryAgingData(&data) != 0U) &&
 		(data.u16DurationHours >= FACTORY_AGING_DURATION_HOURS_MIN) &&
 		(data.u16DurationHours <= FACTORY_AGING_DURATION_HOURS_MAX))
 	{
@@ -558,21 +543,6 @@ static void Sci_PutLatestFaultWords(UINT8 buff[], UINT16 *index, const UINT16 re
 	Sci_PutWordBE(buff, index, value);
 }
 
-static void Sci_CopyProductIdBytes(UINT8 dst[],
-								   UINT16 *length,
-								   const struct RS485MSG *s,
-								   UINT16 byte_count)
-{
-	UINT8 i;
-
-	for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
-	{
-		dst[i] = (i < byte_count) ? (UINT8)s->u16Buffer[7 + i] : 0U;
-	}
-
-	*length = byte_count;
-}
-
 static void Sci_PutBytes(UINT8 buff[], UINT16 *index, const UINT8 src[], UINT16 count)
 {
 	UINT16 i;
@@ -620,9 +590,9 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	if (actual_addr >= RS485_ADDR_RO_LCD)
 	{
 		if ((actual_addr >= RS485_ADDR_EVENT_RECORD) &&
-			(actual_addr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+			(actual_addr < (UINT16)(RS485_ADDR_EVENT_RECORD + STORAGE_LOG_RECORD_COUNT)))
 		{
-			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
+			*word_count = STORAGE_LOG_RECORD_COUNT;
 			return 1;
 		}
 		switch (actual_addr)
@@ -637,8 +607,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 			*word_count = (UINT16)(((UINT16)PRODUCT_ID_LENGTH_MAX * 3U + 1U) / 2U);
 			return 1;
 		case RS485_ADDR_EVENT_RECORD:
-			/* Each event log entry is two bytes, exactly one Modbus register. */
-			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
+			*word_count = STORAGE_LOG_RECORD_COUNT;
 			return 1;
 		case RS485_ADDR_AGING_STATUS:
 			*word_count = RS485_ADDR_AGING_STATUS_WORDS;
@@ -817,21 +786,17 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	case RS485_CMD_ADDR_SOC_VOLTAGE1:
 		Sci_WrRegs_0x10_SocTable(s);
 		break;
-
 	case RS485_CMD_ADDR_RTC_TIME_YEAR:
 		Sci_WrRegs_0x10_RTC(s);
 		break;
-
 	case RS485_ADDR_SN_SERIAL_NUM:
 	case RS485_ADDR_SN_HAEDWARE_VER:
 	case RS485_ADDR_SN_SOFTWARE_VER:
 		Sci_WrRegs_0x10_SN_Version(u16SciRegStartAddr, s);
 		break;
-
 	case RS485_CMD_ADDR_FLASH_CONNECT:
 		Sci_WrRegs_0x10_FlashConnect(s);
-		break; // 少了个BREAK导致OVER�
-
+		break;
 	default:
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
@@ -851,7 +816,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	i = 0;
 	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
-		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD + FLASH_STORAGE_LOG_RECORD_COUNT)))
+		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD + STORAGE_LOG_RECORD_COUNT)))
 	{
 		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD));
 		Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
@@ -866,9 +831,9 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	{
 		switch (s->u16RdRegStartAddr)
 		{
-		case 0: // LCD
+		case 0:
 			break;
-		case 1: // 上位机�三级保护�60+10=70�
+		case 1:
 			for (j = 0; j < Record_len; j++)
 			{
 				k = (INT8)Sci_RecordBackIndex(FaultPoint_Third, j);
@@ -877,17 +842,14 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 				Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 6U);
 			}
 			break;
-
-		case 2: // 序列号，�件版�号，�件版��
+		case 2:
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
 			break;
-
 		case 8:
 			Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
 			break;
-
 		default:
 			s->u16RdRegStartAddr = 0;
 			break;
@@ -904,18 +866,15 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT32 feature_mask;
 
 	for (j = 0; j < 63; j++)
-	{ // 0xD000_63
+	{
 		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
-	// 0xD100_33
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Month) | (RTC_time.RTC_Time_Year << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Hour) | (RTC_time.RTC_Time_Day << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Second) | (RTC_time.RTC_Time_Minute << 8);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
@@ -923,7 +882,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	Sci_PutLatestFaultWords(t_u8BuffTemp, &i, Fault_record_Third2, FaultPoint_Third2);
 
 	for (j = 0; j < 12; j++)
-	{ // 0xD002到这里�
+	{
 		u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
@@ -946,43 +905,26 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	u16SciTemp = (UINT16)(status_snapshot >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
 	u16SciTemp = (UINT16)(feature_mask & 0x0000FFFF);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
 	u16SciTemp = (UINT16)(feature_mask >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 8U);
 
-	// 0xD200_2: last Cortex fault reason and inverse snapshot.
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
 	PWR_BackupAccessCmd(ENABLE);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_REG);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
-	/* SOC_TEST status padding (16 words) — retained for protocol compatibility */
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 16U);
 }
 
-/*=================================================================
- * FUNCTION: Sci_Tx_RW_Fun
- * PURPOSE : 将需要发送的数据进�更�
- * INPUT:    void
- *
- * RETURN:   void
- *
- * CALLS:    void
- *
- * CALLED BY:Sci2_Updata()
- *
- *=================================================================*/
 void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 65�
+{
 	UINT16 u16SciTemp;
 	UINT16 i, j;
+	(void)s;
 	i = 0;
 	for (j = 0; j < E2P_PARA_NUM_PROTECT; j++)
 	{
@@ -992,15 +934,16 @@ void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 94�
+{
 	UINT16 u16SciTemp;
 	UINT16 i, j;
+	(void)s;
 	i = 0;
 	for (j = 0; j < KB_NUM; j++)
 	{
 		u16SciTemp = g_u16CalibCoefK[j];
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-		u16SciTemp = g_i16CalibCoefB[j];
+		u16SciTemp = (UINT16)g_i16CalibCoefB[j];
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 }
@@ -1015,17 +958,17 @@ static UINT16 Sci_GetSocTableWord(UINT16 index)
 }
 
 void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 86
+{
 	UINT16 u16SciTemp;
 	UINT16 i, j;
+	(void)s;
 	i = 0;
 	for (j = 0; j < SOC_TABLE_SIZE; j++)
-	{ // 由于GetEndValue()函数的问题，�能混在一�
+	{
 		u16SciTemp = Sci_GetSocTableWord(j);
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
-	/* CopperLoss + CopperLoss_Num slots (32 words) — retained for protocol compatibility */
 	for (j = 0; j < 32U; j++)
 	{
 		Sci_PutWordBE(t_u8BuffTemp, &i, 0U);
@@ -1039,9 +982,10 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 }
 
 void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
-{ // 32�
+{
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
+	(void)s;
 
 	for (j = 0; j < E2P_PARA_NUM_OTHER_ELEMENT1; j++)
 	{
@@ -1086,11 +1030,9 @@ void Sci_ACK_0x03(struct RS485MSG *s)
 			{
 				Sci_ACK_0x03_RW_Data_Cali(s, g_u8SCITxBuff);
 			}
-			// 头码，前三个字节保持不变
 			s->u16Buffer[0] = (s->u16Buffer[0] != 0) ? RS485_SLAVE_ADDR : s->u16Buffer[0];
 			s->u16Buffer[1] = s->enRs485CmdType;
 			s->u16Buffer[2] = s->u16RdRegByteNum;
-			// 数据
 			for (i = 0; i < (s->u16RdRegByteNum); i++)
 			{
 				s->u16Buffer[i + 3] = g_u8SCITxBuff[i + ((s->u16RdRegStartAddr) << 1)];
@@ -1832,9 +1774,44 @@ void InitSCI3_CommonUpper(void)
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
+	UINT16 u16WrRegNum;
+	UINT16 index;
+	UINT16 k;
+	INT16 b;
+
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	if ((u16WrRegNum != 2U) ||
+		(Sci_WrRegsByteCountValid(s, u16WrRegNum) == 0U) ||
+		(u16Channel < RS485_CMD_ADDR_VC1CALIB_K) ||
+		(u16Channel > RS485_CMD_ADDR_TEMP_MOS_CALIB_K) ||
+		(((u16Channel - RS485_CMD_ADDR_VC1CALIB_K) & 1U) != 0U))
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
+	index = (UINT16)((u16Channel - RS485_CMD_ADDR_VC1CALIB_K) >> 1);
+	if (index >= KB_NUM)
+	{
+		Sci_SetWrError(s, RS485_ERROR_ADDR_INVALID);
+		return;
+	}
+
+	k = Sci_GetWrValue(s, 0U);
+	b = (INT16)Sci_GetWrValue(s, 1U);
+	if ((k < SYSKMIN) || (k > SYSKMAX) ||
+		(b < SYSBMIN) || (b > SYSBMAX))
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	if (EEPROM_SaveCalibrationPair(index, k, b) == 0U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+	}
 }
 
-// 节省了很多代码量吧？
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 {
 	UINT16 offset;
@@ -1885,6 +1862,7 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
+	(void)s;
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
@@ -1962,7 +1940,6 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	{
 		if (AppUpgrade_RequestIap() == 0U)
 		{
-			// System_ERROR_UserCallback(ERROR_FLASH);
 			s->AckType = RS485_ACK_NEG;
 			s->ErrorType = RS485_ERROR_CMD_INVALID;
 		}
@@ -1978,47 +1955,65 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 	}
 }
 
-/* 把BMS序列号，�件版�号， �件版�号写� ohterInfor结构�
- * startADDR  如起始地�
- */
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 {
-	UINT16 u16WrSNlength;
+	UINT16 u16WrRegNum;
+	UINT16 byte_count;
+	UINT16 i;
+	UINT8 field;
+	UINT8 field_data[PRODUCT_ID_LENGTH_MAX];
 
-	u16WrSNlength = (UINT16)((UINT16)s->u16Buffer[5] + ((UINT16)s->u16Buffer[4] << 8)) << 1;
-
-	switch (startADDR - RS485_ADDR_SN_SERIAL_NUM)
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	byte_count = (UINT16)(u16WrRegNum << 1);
+	if ((u16WrRegNum == 0U) ||
+		(Sci_WrRegsByteCountValid(s, u16WrRegNum) == 0U) ||
+		(byte_count > PRODUCT_ID_LENGTH_MAX))
 	{
-	case 0:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_SerialNumber,
-							   &ProductionInfor.BMS_SerialNumberLength,
-							   s,
-							   u16WrSNlength);
-		break;
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
 
-	case 1:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_HardWareVersion,
-							   &ProductionInfor.BMS_HardWareVersionLength,
-							   s,
-							   u16WrSNlength);
+	switch (startADDR)
+	{
+	case RS485_ADDR_SN_SERIAL_NUM:
+		field = PRODUCTION_ID_FIELD_SERIAL_NUMBER;
 		break;
-
-	case 2:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_SoftWareVersion,
-							   &ProductionInfor.BMS_SoftWareVersionLength,
-							   s,
-							   u16WrSNlength);
+	case RS485_ADDR_SN_HAEDWARE_VER:
+		field = PRODUCTION_ID_FIELD_HARDWARE_VERSION;
 		break;
-
+	case RS485_ADDR_SN_SOFTWARE_VER:
+		field = PRODUCTION_ID_FIELD_SOFTWARE_VERSION;
+		break;
 	default:
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-		break;
+		Sci_SetWrError(s, RS485_ERROR_ADDR_INVALID);
+		return;
+	}
+
+	for (i = 0U; i < byte_count; ++i)
+	{
+		field_data[i] = s->u16Buffer[7U + i];
+	}
+	if (ProductionID_UpdateField(field, field_data, byte_count) == 0U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 	}
 }
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
+	UINT16 value;
+
+	value = (UINT16)(s->u16Buffer[5] + (s->u16Buffer[4] << 8));
+	if (value != 0x0001U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
+
+	if (EEPROM_ResetCalibrationToDefault() == 0U)
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+	}
 }
 
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
@@ -2109,9 +2104,6 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 	}
 }
 
-// 关于这个函数
-// A:��次打�这个功能，以前从来没打开过，则因为各种标志位变量都没变过(switch结构里面�)，所以会进�初始化验证
-// B:其中关闭了，又打�，则已经初�化过一次，这�打�就继�按照上一次的进度继续下去
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
@@ -2119,14 +2111,14 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
 		switch (u16SciRegData)
-		{		// 如果�以下功能�打开，则�要初始化验证，别的功能直接关就好
-		case 1: // 均衡
+		{
+		case 1:
 			break;
-		case 3: // MOS或�接触器功能
+		case 3:
 			break;
-		case 8: // �活模拟前端AFE1
+		case 8:
 			break;
-		case 0x0A: // 立刻进入休眠
+		case 0x0A:
 			LowPower_Request(DEEP_MODE);
 			break;
 		default:
@@ -2256,11 +2248,9 @@ void App_CommonUpper(void)
 int fputc(int ch, FILE *f)
 {
 	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
+	(void)f;
 
-	/* 写一�字节到USART1 */
 	USART_SendData(debug_uart, (uint8_t)ch);
-
-	/* 等待发�结� */
 	while ((USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET) && (wait_loop > 0U))
 	{
 		Feed_IWatchDog;
