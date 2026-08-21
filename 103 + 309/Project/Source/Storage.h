@@ -17,7 +17,17 @@
 #define STORAGE_RW_PARAM_OTHER_WORD_COUNT      32U
 #define STORAGE_RW_PARAM_RESERVED_WORD_COUNT   24U
 #define STORAGE_LOG_RECORD_COUNT               100U
+#define STORAGE_CALIB_COEF_COUNT               47U
+#define STORAGE_PRODUCT_ID_LENGTH_MAX          32U
 #define STORAGE_SOC_DATA_VERSION_V2            0x0002U
+#define STORAGE_FACTORY_DATA_VERSION           0x0001U
+#define STORAGE_FACTORY_DATA_VALID_CALIB       0x0001U
+#define STORAGE_FACTORY_DATA_VALID_PRODUCT_ID  0x0002U
+
+/* Persisted factory-aging state values are part of the storage schema. */
+#define STORAGE_FACTORY_AGING_STATE_RUNNING    ((uint16_t)0xA931U)
+#define STORAGE_FACTORY_AGING_STATE_STOPPED    ((uint16_t)0xA930U)
+#define STORAGE_FACTORY_AGING_STATE_DONE       ((uint16_t)0xA93DU)
 
 typedef enum
 {
@@ -33,6 +43,7 @@ typedef enum
     STORAGE_OBJECT_RW_PARAM,
     STORAGE_OBJECT_SOC,
     STORAGE_OBJECT_EVENT_LOG,
+    STORAGE_OBJECT_FACTORY_DATA,
     STORAGE_OBJECT_FACTORY_AGING,
     STORAGE_OBJECT_COUNT
 } STORAGE_OBJECT;
@@ -62,6 +73,22 @@ typedef struct
 
 typedef struct
 {
+    uint16_t k[STORAGE_CALIB_COEF_COUNT];
+    int16_t b[STORAGE_CALIB_COEF_COUNT];
+} STORAGE_CALIB_DATA;
+
+typedef struct
+{
+    uint8_t serial_number[STORAGE_PRODUCT_ID_LENGTH_MAX];
+    uint8_t hardware_version[STORAGE_PRODUCT_ID_LENGTH_MAX];
+    uint8_t software_version[STORAGE_PRODUCT_ID_LENGTH_MAX];
+    uint16_t serial_number_length;
+    uint16_t hardware_version_length;
+    uint16_t software_version_length;
+} STORAGE_PRODUCT_ID_DATA;
+
+typedef struct
+{
     uint32_t u32Elapsed10ms;
     uint16_t u16State;
     uint16_t u16DurationHours;
@@ -80,6 +107,10 @@ uint8_t Storage_LoadAfeData(uint16_t *values, uint16_t word_count);
 uint8_t Storage_SaveAfeData(const uint16_t *values, uint16_t word_count);
 uint8_t Storage_LoadRwParamData(STORAGE_RW_PARAM_DATA *data);
 uint8_t Storage_SaveRwParamData(const STORAGE_RW_PARAM_DATA *data);
+uint8_t Storage_LoadCalibrationData(STORAGE_CALIB_DATA *data);
+uint8_t Storage_SaveCalibrationData(const STORAGE_CALIB_DATA *data);
+uint8_t Storage_LoadProductIdData(STORAGE_PRODUCT_ID_DATA *data);
+uint8_t Storage_SaveProductIdData(const STORAGE_PRODUCT_ID_DATA *data);
 
 /*
  * Event-log API.

@@ -5,11 +5,12 @@
 #define FLASH_STORAGE_MAGIC_AFE             ((uint32_t)0x41464531U)
 #define FLASH_STORAGE_MAGIC_RW_PARAM        ((uint32_t)0x52575031U)
 #define FLASH_STORAGE_MAGIC_LOG             ((uint32_t)0x4C4F4731U)
+#define FLASH_STORAGE_MAGIC_FACTORY_DATA    ((uint32_t)0x46414331U) /* FAC1 */
 #define FLASH_STORAGE_MAGIC_FACTORY_AGING   ((uint32_t)0x41474531U)
 #define FLASH_STORAGE_RECORD_VERSION        ((uint16_t)0x0001U)
 #define FLASH_SIZE_REG_ADDR                 ((uint32_t)0x1FFFF7E0U)
 #define FLASH_ERASE_RETRY_MAX               ((uint8_t)3U)
-#define FLASH_STORAGE_BUFFER_SIZE           ((uint16_t)256U)
+#define FLASH_STORAGE_BUFFER_SIZE           ((uint16_t)320U)
 
 #define APP_UPGRADE_MAILBOX_ADDR            ((uint32_t)0x20004FE0U)
 #define APP_UPGRADE_MAILBOX_MAGIC           ((uint32_t)0x49415031U)
@@ -38,6 +39,14 @@ typedef struct
     uint8_t reserved;
     uint8_t records[FLASH_STORAGE_LOG_RECORD_COUNT][2];
 } STORAGE_FLASH_LOG_DATA;
+
+typedef struct
+{
+    uint16_t u16FormatVersion;
+    uint16_t u16ValidFlags;
+    STORAGE_CALIB_DATA calibration;
+    STORAGE_PRODUCT_ID_DATA product_id;
+} STORAGE_FLASH_FACTORY_DATA;
 
 typedef struct
 {
@@ -97,6 +106,13 @@ static const STORAGE_FLASH_OBJECT_DEF s_obj_soc = {
     FLASH_ADDR_STORAGE_SOC_SLOT_B,
     (uint16_t)sizeof(STORAGE_FLASH_SOC_DATA),
     STORAGE_FLASH_MODE_JOURNAL_PAIR};
+
+static const STORAGE_FLASH_OBJECT_DEF s_obj_factory_data = {
+    FLASH_STORAGE_MAGIC_FACTORY_DATA,
+    FLASH_ADDR_STORAGE_FACTORY_SLOT_A,
+    FLASH_ADDR_STORAGE_FACTORY_SLOT_B,
+    (uint16_t)sizeof(STORAGE_FLASH_FACTORY_DATA),
+    STORAGE_FLASH_MODE_PAIR};
 
 static const STORAGE_FLASH_OBJECT_DEF s_obj_log = {
     FLASH_STORAGE_MAGIC_LOG,
@@ -1040,6 +1056,34 @@ uint8_t AppUpgrade_RequestIap(void)
     return AppUpgrade_IsIapRequested();
 }
 
+static uint8_t StorageFlash_LoadFactoryData(STORAGE_FLASH_FACTORY_DATA *data)
+{
+    if (data == 0)
+    {
+        return 0U;
+    }
+    if (StorageFlash_LoadObject(&s_obj_factory_data, (uint8_t *)data) == 0U)
+    {
+        return 0U;
+    }
+    return (uint8_t)(data->u16FormatVersion == STORAGE_FACTORY_DATA_VERSION);
+}
+
+static uint8_t StorageFlash_SaveFactoryData(const STORAGE_FLASH_FACTORY_DATA *data)
+{
+    STORAGE_FLASH_FACTORY_DATA save_data;
+
+    if (data == 0)
+    {
+        StorageFlash_ReportError();
+        return 0U;
+    }
+
+    save_data = *data;
+    save_data.u16FormatVersion = STORAGE_FACTORY_DATA_VERSION;
+    return StorageFlash_SaveObject(&s_obj_factory_data, (const uint8_t *)&save_data);
+}
+
 uint8_t StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
     STORAGE_FLASH_SOC_DATA_V1 legacy_data;
@@ -1235,6 +1279,82 @@ uint8_t Storage_SaveRwParamData(const STORAGE_RW_PARAM_DATA *data)
     return StorageFlash_SaveRwParamData(data);
 }
 
+uint8_t Storage_LoadCalibrationData(STORAGE_CALIB_DATA *data)
+{
+    STORAGE_FLASH_FACTORY_DATA factory_data;
+
+    if (data == 0)
+    {
+        return 0U;
+    }
+    if ((StorageFlash_LoadFactoryData(&factory_data) == 0U) ||
+        ((factory_data.u16ValidFlags & STORAGE_FACTORY_DATA_VALID_CALIB) == 0U))
+    {
+        return 0U;
+    }
+
+    *data = factory_data.calibration;
+    return 1U;
+}
+
+uint8_t Storage_SaveCalibrationData(const STORAGE_CALIB_DATA *data)
+{
+    STORAGE_FLASH_FACTORY_DATA factory_data;
+
+    if (data == 0)
+    {
+        StorageFlash_ReportError();
+        return 0U;
+    }
+
+    if (StorageFlash_LoadFactoryData(&factory_data) == 0U)
+    {
+        memset(&factory_data, 0, sizeof(factory_data));
+        factory_data.u16FormatVersion = STORAGE_FACTORY_DATA_VERSION;
+    }
+    factory_data.calibration = *data;
+    factory_data.u16ValidFlags |= STORAGE_FACTORY_DATA_VALID_CALIB;
+    return StorageFlash_SaveFactoryData(&factory_data);
+}
+
+uint8_t Storage_LoadProductIdData(STORAGE_PRODUCT_ID_DATA *data)
+{
+    STORAGE_FLASH_FACTORY_DATA factory_data;
+
+    if (data == 0)
+    {
+        return 0U;
+    }
+    if ((StorageFlash_LoadFactoryData(&factory_data) == 0U) ||
+        ((factory_data.u16ValidFlags & STORAGE_FACTORY_DATA_VALID_PRODUCT_ID) == 0U))
+    {
+        return 0U;
+    }
+
+    *data = factory_data.product_id;
+    return 1U;
+}
+
+uint8_t Storage_SaveProductIdData(const STORAGE_PRODUCT_ID_DATA *data)
+{
+    STORAGE_FLASH_FACTORY_DATA factory_data;
+
+    if (data == 0)
+    {
+        StorageFlash_ReportError();
+        return 0U;
+    }
+
+    if (StorageFlash_LoadFactoryData(&factory_data) == 0U)
+    {
+        memset(&factory_data, 0, sizeof(factory_data));
+        factory_data.u16FormatVersion = STORAGE_FACTORY_DATA_VERSION;
+    }
+    factory_data.product_id = *data;
+    factory_data.u16ValidFlags |= STORAGE_FACTORY_DATA_VALID_PRODUCT_ID;
+    return StorageFlash_SaveFactoryData(&factory_data);
+}
+
 uint8_t Storage_LoadLogData(uint8_t *point,
                             uint8_t records[STORAGE_LOG_RECORD_COUNT][2])
 {
@@ -1281,12 +1401,16 @@ void StorageFlash_PrintBootCheck(void)
     uint8_t afe_valid_b;
     uint8_t rw_valid_a;
     uint8_t rw_valid_b;
+    uint8_t factory_valid_a;
+    uint8_t factory_valid_b;
     uint8_t soc_valid_a;
     uint8_t soc_valid_b;
     uint32_t afe_seq_a = 0U;
     uint32_t afe_seq_b = 0U;
     uint32_t rw_seq_a = 0U;
     uint32_t rw_seq_b = 0U;
+    uint32_t factory_seq_a = 0U;
+    uint32_t factory_seq_b = 0U;
     uint32_t soc_seq_a = 0U;
     uint32_t soc_seq_b = 0U;
     uint32_t soc_next_a = FLASH_ADDR_STORAGE_SOC_SLOT_A;
@@ -1318,6 +1442,10 @@ void StorageFlash_PrintBootCheck(void)
                                        s_obj_rw_param.length, 0, &rw_seq_a);
     rw_valid_b = StorageFlash_ReadSlot(s_obj_rw_param.slot_b, s_obj_rw_param.magic,
                                        s_obj_rw_param.length, 0, &rw_seq_b);
+    factory_valid_a = StorageFlash_ReadSlot(s_obj_factory_data.slot_a, s_obj_factory_data.magic,
+                                            s_obj_factory_data.length, 0, &factory_seq_a);
+    factory_valid_b = StorageFlash_ReadSlot(s_obj_factory_data.slot_b, s_obj_factory_data.magic,
+                                            s_obj_factory_data.length, 0, &factory_seq_b);
 
     soc_valid_a = StorageFlash_LoadJournalPage(s_obj_soc.slot_a, s_obj_soc.magic,
                                                s_obj_soc.length, 0,
@@ -1346,6 +1474,11 @@ void StorageFlash_PrintBootCheck(void)
            rw_valid_a, (unsigned long)rw_seq_a,
            rw_valid_b, (unsigned long)rw_seq_b,
            StorageFlash_SelectLabel(rw_valid_a, rw_seq_a, rw_valid_b, rw_seq_b));
+    printf("[FLASH_BOOT] FACTORY A=%u seq=%lu B=%u seq=%lu selected=%c\r\n",
+           factory_valid_a, (unsigned long)factory_seq_a,
+           factory_valid_b, (unsigned long)factory_seq_b,
+           StorageFlash_SelectLabel(factory_valid_a, factory_seq_a,
+                                    factory_valid_b, factory_seq_b));
     printf("[FLASH_BOOT] SOC A=%u seq=%lu next=0x%04lX B=%u seq=%lu next=0x%04lX selected=%c\r\n",
            soc_valid_a, (unsigned long)soc_seq_a,
            (unsigned long)(soc_next_a - s_obj_soc.slot_a),
