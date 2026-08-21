@@ -179,7 +179,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 			{
 				*flag = 1U;
 			}
-			else if (errorCode != ERROR_EEPROM_STORE)
+			else if ((errorCode != ERROR_EEPROM_STORE) && (*flag < 0xFFU))
 			{
 				++(*flag);
 			}
