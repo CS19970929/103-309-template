@@ -8,17 +8,12 @@
 #include "conf_gpio.h"
 #include "Project_Config.h"
 
-// #define __SOC_5_PROTECT_
 // #define DISP_VBAT_AND_TEMP_
 // #define __EnableLowPowerDebug__
 // #define VCELL_DISP_TEST
-#define _COMMOM_UPPER_SCI2
-
-// #define _DI_SWITCH_SYS_ONOFF	//DI������������
-//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-
+// #define _DI_SWITCH_SYS_ONOFF
+// #define _DI_SWITCH_DSG_ONOFF
 // #define __VIRTURE_CURRENT__
-
 
 #define T3MAX         0
 #define T3            1
@@ -48,6 +43,10 @@
 #define __FUNC_RTC__
 #endif
 
+#if PROJECT_CFG_SOC_LOW_PROTECT_ENABLE
+#define __SOC_5_PROTECT_
+#endif
+
 #if PROJECT_CFG_UART1_WAKEUP_ENABLE
 #define UART1_WAKEUP_ENABLE
 #endif
@@ -66,61 +65,66 @@
 #error "Invalid PROJECT_CFG_SCI1_ROLE"
 #endif
 
+#if PROJECT_CFG_SCI2_ENABLE
+#define _COMMOM_UPPER_SCI2
+#endif
+
+#if PROJECT_CFG_SCI3_ENABLE
+#define _COMMOM_UPPER_SCI3
+#endif
+
 #define VERSION  (PROJECT_CFG_VERSION)
 
-#define   CURR_10A     0
-#define   CURR_20A_15A     1
-#define   CURR_30A     2
-#define   CURR_40A     3
+#define CURR_10A        0
+#define CURR_20A_15A    1
+#define CURR_30A        2
+#define CURR_40A        3
 
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_30A
+#define LEVEL_CURR  PROJECT_CFG_CURRENT_LEVEL
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
-#define CS_Res			2
-#define CS_Res_Num		2
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(50)
-
-#define AFE_OCC1       		(120) 
-#define AFE_OCC2       		(120) 
-#define AFE_ODC1       		(150) 
-#define AFE_ODC2       		(150) 
+#define CS_Res              2
+#define CS_Res_Num          2
+#define CBC_DelayT          128
+#define CBC_Cur_DSG         (50)
+#define AFE_OCC1            (120)
+#define AFE_OCC2            (120)
+#define AFE_ODC1            (150)
+#define AFE_ODC2            (150)
 #elif (LEVEL_CURR == CURR_20A_15A)
-#define CS_Res			2
-#define CS_Res_Num		3
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(100)
-
-#define AFE_OCC1       		(200) 
-#define AFE_OCC2       		(200) 
-#define AFE_ODC1       		(250) 
-#define AFE_ODC2       		(250) 
-
+#define CS_Res              2
+#define CS_Res_Num          3
+#define CBC_DelayT          128
+#define CBC_Cur_DSG         (100)
+#define AFE_OCC1            (200)
+#define AFE_OCC2            (200)
+#define AFE_ODC1            (250)
+#define AFE_ODC2            (250)
 #elif (LEVEL_CURR == CURR_30A)
-#define CS_Res			2
-#define CS_Res_Num		3
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(80)
-
-#define AFE_OCC1       		(300) 
-#define AFE_OCC2       		(300) 
-#define AFE_ODC1       		(350) 
-#define AFE_ODC2       		(350) 
+#define CS_Res              2
+#define CS_Res_Num          3
+#define CBC_DelayT          128
+#define CBC_Cur_DSG         (80)
+#define AFE_OCC1            (300)
+#define AFE_OCC2            (300)
+#define AFE_ODC1            (350)
+#define AFE_ODC2            (350)
 #elif (LEVEL_CURR == CURR_40A)
-#define CS_Res			2
-#define CS_Res_Num		6
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(100)
-
-#define AFE_OCC1       		(400) 
-#define AFE_OCC2       		(400) 
-#define AFE_ODC1       		(450) 
-#define AFE_ODC2       		(450) 
-#endif	
+#define CS_Res              2
+#define CS_Res_Num          6
+#define CBC_DelayT          128
+#define CBC_Cur_DSG         (100)
+#define AFE_OCC1            (400)
+#define AFE_OCC2            (400)
+#define AFE_ODC1            (450)
+#define AFE_ODC2            (450)
+#else
+#error "Invalid PROJECT_CFG_CURRENT_LEVEL"
+#endif
 
 typedef enum GPIO_TYPE {
 	GPIO_PreCHG = 0,
