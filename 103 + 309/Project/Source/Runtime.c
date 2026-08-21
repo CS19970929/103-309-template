@@ -1,7 +1,7 @@
 #include "main.h"
 #include "Runtime.h"
 
-UINT8 SeriesNum = 7;
+UINT8 SeriesNum = PROJECT_CFG_DEFAULT_SERIES_NUM;
 
 void Runtime_Boot(void)
 {
@@ -17,20 +17,19 @@ void Runtime_Boot(void)
 
 	jtag_disableAndConfIO();
 
+	/* Core state must exist before AFE/config modules start publishing state. */
+	InitSystemMonitorData_EEPROM();
+
 	InitIO();
 	InitUSART_CommonUpper();
 	InitE2PROM();
 	InitAFE1();
 	InitCan();
 	InitADC();
-
 	InitData_SOC();
 
 	InitTimer();
 	__enable_irq();
-
-	InitSystemMonitorData_EEPROM();
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
 	SystemRuntime_MarkBootReady();
 	SystemRuntime_SetProjectVersion(1U);
@@ -55,10 +54,7 @@ void Runtime_RunOnce(void)
 
 	App_Can();
 	App_FlashUpdate();
-
 	App_LogRecord();
 
 	Feed_IWatchDog;
-
-	// __WFI();
 }
