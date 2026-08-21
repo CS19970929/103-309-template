@@ -130,6 +130,7 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 UINT8 EEPROM_SaveRWParametersToFlash(void)
 {
 	STORAGE_FLASH_RW_PARAM_DATA data;
+	UINT8 result;
 
 	EEPROM_BuildRWParamData(&data);
 	if (!EEPROM_RWParamDataIsValid(&data))
@@ -138,7 +139,12 @@ UINT8 EEPROM_SaveRWParametersToFlash(void)
 		return 0;
 	}
 
-	return StorageFlash_SaveRwParamData(&data);
+	result = StorageFlash_SaveRwParamData(&data);
+	if (result != 0U)
+	{
+		BmsEvent_Set(BMS_CORE_EVT_CONFIG_CHANGED);
+	}
+	return result;
 }
 
 static void EEPROM_LoadRWParametersFromFlash(void)
