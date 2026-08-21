@@ -67,6 +67,7 @@ void RtcSleep_PortEnterStop(void)
 {
     Feed_IWatchDog;
     Sys_StopMode();
+    RTC_SyncAfterStop();
     Feed_IWatchDog;
 }
 
@@ -81,10 +82,9 @@ void RtcSleep_PortRestoreAfterStop(void)
     InitRunAfterStopWakeup();
 }
 
-
 UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
 {
-    return RTC_GetWakeupPeriodSeconds();
+    return RTC_GetLastWakeupPeriodSeconds();
 }
 
 void RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
