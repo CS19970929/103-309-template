@@ -18,6 +18,14 @@
 //   <1=> LiFePO4 LIFEPO
 #define PROJECT_CFG_BAT_CHEMISTRY 1
 
+// <o> Current hardware level
+//   <0=> 10A
+//   <1=> 15A/20A
+//   <2=> 30A
+//   <3=> 40A
+// <i> Selects shunt/current-range hardware defaults only. Runtime protection thresholds remain writable parameters.
+#define PROJECT_CFG_CURRENT_LEVEL 2
+
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 
@@ -45,6 +53,9 @@
 
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
+
+// <q> Enable SOC-low protection/deep-sleep policy
+#define PROJECT_CFG_SOC_LOW_PROTECT_ENABLE 0
 
 // <q> Enable DI long-key power/wakeup logic
 // <i> Product option. Keep customer-specific key presence in this configuration file.
@@ -84,7 +95,7 @@
 #define PROJECT_CFG_SW_OCP_RECOVER_SECONDS 30
 
 // <o> SOC-low deep-sleep delay seconds <1-86400>
-// <i> Used only when the existing SOC-low protection feature is enabled.
+// <i> Used only when the SOC-low protection feature is enabled.
 #define PROJECT_CFG_SOC_LOW_DEEP_SLEEP_SECONDS 3600
 
 // </h>
@@ -118,6 +129,12 @@
 //   <0=> Disabled
 //   <1=> Host
 #define PROJECT_CFG_SCI1_ROLE 1
+
+// <q> Enable SCI2
+#define PROJECT_CFG_SCI2_ENABLE 1
+
+// <q> Enable SCI3
+#define PROJECT_CFG_SCI3_ENABLE 0
 
 // </h>
 
