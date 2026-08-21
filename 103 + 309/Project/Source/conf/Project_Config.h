@@ -2,7 +2,7 @@
 #define PROJECT_CONFIG_H
 
 /* Keil uVision: right click this file and select "Configuration Wizard". */
-/* 项目可视化配置: Keil Configuration Wizard marker. */
+/* 脧卯脛驴驴脡脢脫禄炉脜盲脰脙: Keil Configuration Wizard marker. */
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
@@ -45,6 +45,10 @@
 
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
+
+// <q> Enable DI long-key power/wakeup logic
+// <i> Product option. Keep customer-specific key presence in this configuration file.
+#define PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE 0
 
 // <o> Factory aging duration seconds <1-604800>
 // #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
