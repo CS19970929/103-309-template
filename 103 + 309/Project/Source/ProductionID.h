@@ -3,6 +3,10 @@
 
 #define PRODUCT_ID_LENGTH_MAX 32
 
+#define PRODUCTION_ID_FIELD_SERIAL_NUMBER     ((UINT8)0U)
+#define PRODUCTION_ID_FIELD_HARDWARE_VERSION  ((UINT8)1U)
+#define PRODUCTION_ID_FIELD_SOFTWARE_VERSION  ((UINT8)2U)
+
 typedef struct {
 	//均为阿斯克码
 	UINT8 BMS_SerialNumber[PRODUCT_ID_LENGTH_MAX];			//BMS序列号
@@ -24,6 +28,7 @@ extern PRODUCTION_ID_INFO ProductionInfor;
 void InitProID(void);
 void WriteProID_Default(void);
 void App_ProID_Deal(void);
+UINT8 ProductionID_UpdateField(UINT8 field, const UINT8 *data, UINT16 length);
 
 
 #endif	/* PRODUCTIONID_H */
