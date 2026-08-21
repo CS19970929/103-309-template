@@ -17,8 +17,8 @@ void Runtime_Boot(void)
 
 	jtag_disableAndConfIO();
 
-	/* Core state must exist before AFE/config modules start publishing state. */
-	InitSystemMonitorData_EEPROM();
+	/* Core state must exist before config/AFE modules start publishing state. */
+	SystemRuntime_Init();
 
 	InitIO();
 	InitUSART_CommonUpper();
