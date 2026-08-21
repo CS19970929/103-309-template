@@ -16,7 +16,6 @@
 
 // #define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-#define _DI_SWITCH_longKEY_ONOFF
 
 // #define __VIRTURE_CURRENT__
 
@@ -56,7 +55,6 @@
 #if PROJECT_CFG_RS485_WAKEUP_ENABLE
 #define RS485_WAKEUP_ENABLE
 #endif
-
 
 #if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
 #define _DI_SWITCH_longKEY_ONOFF
