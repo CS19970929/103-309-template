@@ -1,9 +1,5 @@
 #include "main.h"
-#include "SH367309_DataDeal.h"
 #include "rtc_sleep_port.h"
-#include "DataDeal.h"
-#include "conf.h"
-#include "Sci_Upper.h"
 #include "RTC.h"
 
 #ifdef TERNARYLI
@@ -13,7 +9,7 @@
 #endif
 
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)60U)
-#define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
+#define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT_A10 ((uint16_t)5U)
 
 enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
@@ -31,56 +27,12 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U};
 
-typedef uint8_t (*BlockCheckFunc)(void);
-
-static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 5U) ? 1U : 0U; }
-static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 5U) ? 1U : 0U; }
-static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
-static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
-static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
-static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
-static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U || g_stCellInfoReport.unMdlFault_Second.all != 0U || SH367309_Reg_Store.REG_BSTATUS1.bits.SC) ? 1U : 0U; }
-
-typedef struct
-{
-    uint32_t mask;
-    BlockCheckFunc check;
-} BlockReasonEntry;
-
-static const BlockReasonEntry s_block_table[] = {
-    {LP_BLOCK_CHARGE, CheckChargeMa},
-    {LP_BLOCK_DISCHARGE, CheckDischargeMa},
-    {LP_BLOCK_COMM, CheckCommBusy},
-    {LP_BLOCK_KEY, CheckKeyActive},
-    {LP_BLOCK_FLASH_BUSY, CheckFlashBusy},
-    {LP_BLOCK_UPGRADE, CheckUpgrade},
-    {LP_BLOCK_FAULT, CheckFault},
-};
-
-#define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
-
 uint32_t LP_GetBlockReason(void)
 {
-    uint32_t reason = 0U;
-    uint32_t i;
+    uint32_t reason;
 
-    for (i = 0U; i < BLOCK_TABLE_SIZE; i++)
-    {
-        if (s_block_table[i].check() != 0U)
-        {
-            reason |= s_block_table[i].mask;
-        }
-    }
-
-    {
-        uint8_t comm = RtcSleep_PortGetExternalCommCounter();
-        if (comm != g_stLowPowerRtcStatus.comm)
-        {
-            g_stLowPowerRtcStatus.comm = comm;
-            reason |= LP_BLOCK_EXT_COMM;
-        }
-    }
-
+    reason = RtcSleep_PortCollectBlockReason(&g_stLowPowerRtcStatus.comm);
+    BmsCore_SetSleepBlockReason(reason);
     return reason;
 }
 
@@ -121,7 +73,8 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
 #ifdef _DI_SWITCH_SYS_ONOFF
-    if ((MCUI_ENI_DI1 == 1) && (g_stCellInfoReport.u16Ichg < 5U))
+    if ((MCUI_ENI_DI1 == 1) &&
+        (RtcSleep_PortGetChargeCurrentA10() < LOW_POWER_DEEP_SLEEP_ICHG_LIMIT_A10))
     {
         LowPower_Request(NORMAL_MODE);
         return 1U;
@@ -129,10 +82,11 @@ static uint8_t lp_select_deep_if_low_voltage(void)
 #endif
 
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
+        (RtcSleep_PortGetChargeCurrentA10() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT_A10))
     {
         g_stLowPowerRtcStatus.idle = 0U;
         g_stLowPowerRtcStatus.block = 0U;
+        BmsCore_SetSleepBlockReason(0U);
         if (++g_stLowPowerRtcStatus.force >= LOW_POWER_FORCE_DEEP_SLEEP_SECONDS)
         {
             LowPower_Request(DEEP_MODE);
@@ -141,10 +95,11 @@ static uint8_t lp_select_deep_if_low_voltage(void)
     }
 
     if ((RtcSleep_PortGetCellMinMv() <= RtcSleep_PortGetLowVoltageSleepMv()) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
+        (RtcSleep_PortGetChargeCurrentA10() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT_A10))
     {
         g_stLowPowerRtcStatus.idle = 0U;
         g_stLowPowerRtcStatus.block = 0U;
+        BmsCore_SetSleepBlockReason(0U);
         if (++g_stLowPowerRtcStatus.vlow >= (uint32_t)OtherElement.u16Sleep_TimeVlow * 60U)
         {
             LowPower_Request(DEEP_MODE);
@@ -264,6 +219,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
 
     RtcSleep_PortEnterStop();
+    BmsEvent_Set(BMS_CORE_EVT_WAKEUP);
 
     MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
