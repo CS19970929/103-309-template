@@ -336,9 +336,10 @@ void rtc_sleep(void)
         }
 
         RtcSleep_PortDisableStopWakeup();
-        RTC_ClearStopWakeup();
         LowPower_Request(NO_SLEEP);
         RtcSleep_PortRestoreAfterStop();
+        RTC_ClearStopWakeup();
+        lp_refresh_status();
 
         g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
         RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
