@@ -17,7 +17,6 @@ enum TempArray {
 	TEMP_NUM
 };
 
-
 enum tagInfoForKBArray {
 	VOLT_C1 = 0,
 	VOLT_C2,
@@ -54,7 +53,6 @@ enum tagInfoForKBArray {
 	VOLT_AFE1,
 	VOLT_AFE2,
 	VOLT_VBUS,
-
 	MDL_ICHG,
 	MDL_IDSG,
 	MDL_TEMP1,
@@ -67,115 +65,107 @@ enum tagInfoForKBArray {
 	MDL_TEMP_ENV2,
 	MDL_TEMP_ENV3,
 	MDL_TEMP_MOS1,
-    KB_NUM		  // KB number_47
+	KB_NUM
 };
 
-#define SYSKMAX   		((UINT16)1536)      // 1.5
-#define SYSKDEFAULT		((UINT16)1024)      // 1
-#define SYSKMIN   		((UINT16)512)       // 0.5
+#define SYSKMAX       ((UINT16)1536)
+#define SYSKDEFAULT   ((UINT16)1024)
+#define SYSKMIN       ((UINT16)512)
 
-#define SYSBMAX   		((INT16)30000)      // 30
-#define SYSBDEFAULT		((INT16)0)      	// 0
-#define SYSBMIN   		((INT16)-30000)     // -30
-
+#define SYSBMAX       ((INT16)30000)
+#define SYSBDEFAULT   ((INT16)0)
+#define SYSBMIN       ((INT16)-30000)
 
 struct OTHER_ELEMENT {
-    UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
-    UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
-    UINT16 u16Balance_Res1;			//����λ
-    UINT16 u16Balance_Res2;			//����λ
-    UINT16 u16Balance_Res3;			//����λ
-    UINT16 u16Balance_Res4;			//����λ
-    UINT16 u16Balance_Res5;			//����λ
+	UINT16 u16Balance_OpenVoltage;
+	UINT16 u16Balance_OpenWindow;
+	UINT16 u16Balance_CloseWindow;
+	UINT16 u16Balance_Res1;
+	UINT16 u16Balance_Res2;
+	UINT16 u16Balance_Res3;
+	UINT16 u16Balance_Res4;
+	UINT16 u16Balance_Res5;
 
-	UINT16 u16CS_Cur_CHGmax;		//A*10
-	UINT16 u16CS_Cur_DSGmax;		//A*10
-	UINT16 u16CBC_DelayT;			//us*10
-	UINT16 u16CBC_Cur_DSG;			//A*10
-	
-	UINT16 u16Soc_TableSelect;		//ԭ����u16Password_Once
-	UINT16 u16Password_Always;		//û��
-	UINT16 u16CurLimit_Vdelta;		//mV
-	UINT16 u16CurLimit_Cur;			//A*10
+	UINT16 u16CS_Cur_CHGmax;          /* A*10 */
+	UINT16 u16CS_Cur_DSGmax;          /* A*10 */
+	UINT16 u16CBC_DelayT;             /* us*10 */
+	UINT16 u16CBC_Cur_DSG;            /* A*10 */
 
-    UINT16 u16Sleep_VNormal;      	//mV
-	UINT16 u16Sleep_TimeNormal;		//min
-    UINT16 u16Sleep_Vlow;     		//mV
-	UINT16 u16Sleep_TimeVlow;		//min
-	UINT16 u16Sleep_VirCur_Chg;     //A *10
-    UINT16 u16Sleep_VirCur_Dsg;    	//A *10
-	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min��RTC����ʱ��
-	UINT16 u16Sleep_TimeRTC;		// UNUSED: min������RTC����ʱ��
+	UINT16 u16Soc_TableSelect;
+	UINT16 u16Password_Always;
+	UINT16 u16CurLimit_Vdelta;        /* mV */
+	UINT16 u16CurLimit_Cur;           /* A*10 */
 
-	UINT16 u16Soc_Ah;               //10*Ah
-	UINT16 u16Soc_Cycle_times;		//ѭ������*1
-	UINT16 u16Soc_V_100;			//SOCΪ100�ĵ�ѹ��
-	UINT16 u16Soc_V_0;				//SOCΪ0�ĵ�ѹ��
+	UINT16 u16Sleep_VNormal;          /* mV */
+	UINT16 u16Sleep_TimeNormal;       /* min */
+	UINT16 u16Sleep_Vlow;             /* mV */
+	UINT16 u16Sleep_TimeVlow;         /* min */
+	UINT16 u16Sleep_VirCur_Chg;       /* A*10 */
+	UINT16 u16Sleep_VirCur_Dsg;       /* A*10 */
+	UINT16 u16Sleep_RTC_WakeUpTime;   /* reserved */
+	UINT16 u16Sleep_TimeRTC;          /* reserved */
 
-	UINT16 u16Sys_SeriesNum;		//N
-	UINT16 u16Sys_CS_Res;			//m��
-	UINT16 u16Sys_CS_Res_Num;		//N
-	UINT16 u16Sys_PreChg_Time;		//s��Ԥ��ʱ��
+	UINT16 u16Soc_Ah;                 /* Ah*10 */
+	UINT16 u16Soc_Cycle_times;
+	UINT16 u16Soc_V_100;
+	UINT16 u16Soc_V_0;
+
+	UINT16 u16Sys_SeriesNum;
+	UINT16 u16Sys_CS_Res;
+	UINT16 u16Sys_CS_Res_Num;
+	UINT16 u16Sys_PreChg_Time;        /* s */
 };
 
+#define BMS_HARDWARE_VERDION_DEFAULT  "LiTech"
+#define BMS_SOFTWARE_VERDION_DEFAULT  "a009-20260811-c073v1p0"
+#define BMS_SERIAL_NUMBER_DEFAULT     "LiTech"
 
-#define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
-#define  BMS_SOFTWARE_VERDION_DEFAULT   "a009-20260811-c073v1p0"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
+/* Legacy aliases retained so existing parameter-table code stays stable. */
+#define SNum          PROJECT_CFG_DEFAULT_SERIES_NUM
+#define BMS_CAPCITY   PROJECT_CFG_DEFAULT_CAPACITY_AH10
 
-#define SNum 		12
+#define CS_Cur_CHGmax ((INT32)CS_Res_Num * 2000 / CS_Res - 10)
+#define CS_Cur_DSGmax CS_Cur_CHGmax
 
-
-
-#define CS_Cur_CHGmax	((INT32)CS_Res_Num* 2000/CS_Res-10)
-#define CS_Cur_DSGmax	CS_Cur_CHGmax
-
-#define BMS_CAPCITY     300
-
-#define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
-	                           	 0,		0,		0,		0,\
-	                           	 0,		0,		0,		0,\
-	                             1000,	1,		1000,	1,		0, 	0, 	0, 	0,\
-	                             1, 	1, 		1, 		1,\
-	                             3,		1,		1,		0}
-
+#define OtherElement_min {1000, 1, 0, 0, 0, 0, 0, 0, \
+	0, 0, 0, 0, \
+	0, 0, 0, 0, \
+	1000, 1, 1000, 1, 0, 0, 0, 0, \
+	1, 1, 1, 1, \
+	3, 1, 1, 0}
 
 #ifdef TERNARYLI
-#define OtherElement_default 	{4160,	30,	20,		0,	0,		0,	0,	0,\
-	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
-	                             SOC_TABLE_TERNARYLI,	0,		1000,	30,\
-	                             3200,	7200,	3000,	1,		10,		10,	240,3,\
-	                             BMS_CAPCITY,	1,		4180,	3000,\
-	                             SNum,CS_Res,CS_Res_Num,10}
-#elif (defined(LIFEPO))
-#define OtherElement_default 	{3550,	50,	20,	0,	0,	0,	0,	0,\
-	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
-	                             SOC_TABLE_LIFEPO,0,1000,30,\
-	                             3200,	7200,	2800,	1,	10,	10,	240, 3,\
-	                             BMS_CAPCITY,	3,		3550,	2850,\
-	                             SNum,CS_Res,CS_Res_Num,10}
+#define OtherElement_default {4160, 30, 20, 0, 0, 0, 0, 0, \
+	CS_Cur_CHGmax, CS_Cur_DSGmax, CBC_DelayT, CBC_Cur_DSG, \
+	SOC_TABLE_TERNARYLI, 0, 1000, 30, \
+	3200, 7200, 3000, 1, 10, 10, 240, 3, \
+	BMS_CAPCITY, 1, 4180, 3000, \
+	SNum, CS_Res, CS_Res_Num, 10}
+#elif defined(LIFEPO)
+#define OtherElement_default {3550, 50, 20, 0, 0, 0, 0, 0, \
+	CS_Cur_CHGmax, CS_Cur_DSGmax, CBC_DelayT, CBC_Cur_DSG, \
+	SOC_TABLE_LIFEPO, 0, 1000, 30, \
+	3200, 7200, 2800, 1, 10, 10, 240, 3, \
+	BMS_CAPCITY, 3, 3550, 2850, \
+	SNum, CS_Res, CS_Res_Num, 10}
 #endif
 
-
-#define OtherElement_max 		{5000,2000,2000,65000,65000,65000,65000,65000,\
-	                             65000,65000,65000,65000,\
-	                             65000,65000,65000,65000,\
-	                             5000,65000,5000,65000,50000,50000,50000,50000,\
-	                             65000,50000,50000,50000,\
-	                             32,65000,10000,50000}
-
-
+#define OtherElement_max {5000, 2000, 2000, 65000, 65000, 65000, 65000, 65000, \
+	65000, 65000, 65000, 65000, \
+	65000, 65000, 65000, 65000, \
+	5000, 65000, 5000, 65000, 50000, 50000, 50000, 50000, \
+	65000, 50000, 50000, 50000, \
+	32, 65000, 10000, 50000}
 
 extern UINT16 g_u16CalibCoefK[KB_NUM];
-extern INT16  g_i16CalibCoefB[KB_NUM];
+extern INT16 g_i16CalibCoefB[KB_NUM];
 extern struct OTHER_ELEMENT OtherElement;
 extern UINT32 g_u32CS_Res_AFE;
 
-void App_AFEGet(  void);
+void App_AFEGet(void);
 void AfeCurrent_StartupZeroCal(void);
 UINT32 AfeCurrent_GetSeq(void);
 void open_ctlc(void);
 void close_ctlc(void);
 
-#endif	/* DATADEAL_SYS_H */
+#endif /* DATADEAL_SYS_H */
