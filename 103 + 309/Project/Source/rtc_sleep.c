@@ -120,12 +120,14 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
+#ifdef _DI_SWITCH_SYS_ONOFF
     if (1 == MCUI_ENI_DI1 && g_stCellInfoReport.u16Ichg < 5)
     // if (1 == MCUI_ENI_DI1)
     {
         LowPower_Request(NORMAL_MODE);
         return 1U;
     }
+#endif // _DI_SWITCH_SYS_ONOFF
 
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))

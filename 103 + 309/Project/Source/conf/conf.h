@@ -14,6 +14,12 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
+// #define _DI_SWITCH_SYS_ONOFF	//DI������������
+//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
+#define _DI_SWITCH_longKEY_ONOFF
+
+// #define __VIRTURE_CURRENT__
+
 
 #define T3MAX         0
 #define T3            1
@@ -51,9 +57,6 @@
 #define RS485_WAKEUP_ENABLE
 #endif
 
-#if PROJECT_CFG_VIRTUAL_CURRENT_ENABLE
-#define __VIRTURE_CURRENT__
-#endif
 
 #if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
 #define _DI_SWITCH_longKEY_ONOFF
@@ -75,7 +78,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_20A_15A
+#define LEVEL_CURR  CURR_30A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
@@ -83,22 +86,42 @@
 #define CS_Res_Num		2
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(50)
+
+#define AFE_OCC1       		(120) 
+#define AFE_OCC2       		(120) 
+#define AFE_ODC1       		(150) 
+#define AFE_ODC2       		(150) 
 #elif (LEVEL_CURR == CURR_20A_15A)
 #define CS_Res			2
 #define CS_Res_Num		3
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(100)
 
+#define AFE_OCC1       		(200) 
+#define AFE_OCC2       		(200) 
+#define AFE_ODC1       		(250) 
+#define AFE_ODC2       		(250) 
+
 #elif (LEVEL_CURR == CURR_30A)
 #define CS_Res			2
 #define CS_Res_Num		3
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(80)
+
+#define AFE_OCC1       		(300) 
+#define AFE_OCC2       		(300) 
+#define AFE_ODC1       		(350) 
+#define AFE_ODC2       		(350) 
 #elif (LEVEL_CURR == CURR_40A)
 #define CS_Res			2
 #define CS_Res_Num		6
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(100)
+
+#define AFE_OCC1       		(400) 
+#define AFE_OCC2       		(400) 
+#define AFE_ODC1       		(450) 
+#define AFE_ODC2       		(450) 
 #endif	
 
 typedef enum GPIO_TYPE {
