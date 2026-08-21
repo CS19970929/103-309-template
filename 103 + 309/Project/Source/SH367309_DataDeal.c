@@ -150,12 +150,12 @@ static void AFE_RestoreCurValues(const UINT16 *values)
 	}
 }
 
-static UINT8 AFE_SaveCurValuesToFlash(void)
+static UINT8 AFE_SaveCurValues(void)
 {
 	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
 
 	AFE_CopyCurValues(values);
-	return StorageFlash_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
+	return Storage_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
 }
 
 bool Write_Parameters(void)
@@ -286,7 +286,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 		}
 		Feed_IWatchDog;
 
-		if (!AFE_SaveCurValuesToFlash())
+		if (!AFE_SaveCurValues())
 		{
 			AFE_RestoreCurValues(snapshot);
 			s->AckType = RS485_ACK_NEG;
@@ -347,7 +347,7 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 	}
 	Feed_IWatchDog;
 
-	if (!AFE_SaveCurValuesToFlash())
+	if (!AFE_SaveCurValues())
 	{
 		return 0;
 	}
@@ -363,7 +363,7 @@ void ReadEEPROM_AFE_Parameters(void)
 	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
 	UINT8 use_default = 0;
 
-	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
+	if (!Storage_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
 	{
 		use_default = 1;
 	}
