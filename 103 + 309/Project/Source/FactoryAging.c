@@ -67,7 +67,7 @@ static UINT32 FactoryAging_GetDuration10ms(void)
 	return FACTORY_AGING_DEFAULT_DURATION_10MS;
 }
 
-static void FactoryAging_LoadDurationFromData(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
+static void FactoryAging_LoadDurationFromData(const STORAGE_FACTORY_AGING_DATA *data)
 {
 	if ((data != 0) &&
 		(FactoryAging_DurationHoursValid(data->u16DurationHours) != 0U))
@@ -140,7 +140,7 @@ static UINT8 FactoryAging_LoadBkp(UINT32 *elapsed10ms)
 
 static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done, UINT8 *stopped)
 {
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
+	STORAGE_FACTORY_AGING_DATA data;
 	UINT32 flash_elapsed = 0U;
 	UINT32 bkp_elapsed = 0U;
 	UINT8 has_progress = 0U;
@@ -153,7 +153,7 @@ static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done, U
 	*elapsed10ms = 0U;
 	*done = 0U;
 	*stopped = 0U;
-	if (StorageFlash_LoadFactoryAgingData(&data) != 0U)
+	if (Storage_LoadFactoryAgingData(&data) != 0U)
 	{
 		FactoryAging_LoadDurationFromData(&data);
 		if (data.u16State == FLASH_FACTORY_AGING_STATE_DONE)
@@ -206,7 +206,7 @@ UINT8 FactoryAging_ShouldStartOnBoot(void)
 
 static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UINT8 force_bkp)
 {
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
+	STORAGE_FACTORY_AGING_DATA data;
 	UINT8 save_flash = force_flash;
 
 	if ((force_bkp != 0U) ||
@@ -240,7 +240,7 @@ static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UI
 	data.u16DurationHours =
 		(FactoryAging_DurationHoursValid(s_factory_aging.durationHours) != 0U) ?
 			s_factory_aging.durationHours : FACTORY_AGING_DURATION_HOURS_RESET_VALUE;
-	if (StorageFlash_SaveFactoryAgingData(&data) == 0U)
+	if (Storage_SaveFactoryAgingData(&data) == 0U)
 	{
 		return 0U;
 	}
@@ -252,9 +252,9 @@ static UINT8 FactoryAging_SaveStoredProgress(UINT16 state, UINT8 force_flash, UI
 
 static UINT8 FactoryAging_MarkDone(void)
 {
-	STORAGE_FLASH_FACTORY_AGING_DATA data;
+	STORAGE_FACTORY_AGING_DATA data;
 
-	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
+	if ((Storage_LoadFactoryAgingData(&data) != 0U) &&
 		(data.u16State == FLASH_FACTORY_AGING_STATE_DONE))
 	{
 		s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
