@@ -18,6 +18,7 @@
 #include "PubFunc.h"
 #include "Can_HDX.h"
 #include "I2C_AFE1.h"
+#include "Storage.h"
 #include "Flash.h"
 #include "SleepDeal.h"
 #include "ProductionID.h"

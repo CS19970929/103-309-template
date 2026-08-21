@@ -1,112 +1,117 @@
 #ifndef PROJECT_STORAGE_FLASH_H
 #define PROJECT_STORAGE_FLASH_H
 
-#define FLASH_ADDR_IAP_START             0x08000000
-#define FLASH_ADDR_APP_START             0x08004800
+#include "Storage.h"
 
-/* Reserved persistent-storage pages start at 0x0801C000. */
-#define FLASH_ADDR_SH367309_VALUE        0x0801E000
-#define FLASH_ADDR_SH367309_FLAG         0x0801E800
-#define FLASH_ADDR_UPGRADE_PARAM_FLAG    ((UINT32)0x0801F000)
-#define FLASH_ADDR_FACTORY_AGING_FLAG    ((UINT32)0x0801F400)
-#define FLASH_ADDR_UPDATE_FLAG           0x0801F800
-#define FLASH_ADDR_SLEEP_FLAG            0x0801FC00
+/*
+ * STM32F1 internal-Flash backend.
+ *
+ * Keep physical layout and legacy boot/update definitions here. New business
+ * code must use Storage.h instead of depending on these addresses directly.
+ */
+
+#define FLASH_ADDR_IAP_START                 ((uint32_t)0x08000000U)
+#define FLASH_ADDR_APP_START                 ((uint32_t)0x08004800U)
+#define FLASH_STORAGE_FLASH_BASE             ((uint32_t)0x08000000U)
+#define FLASH_STORAGE_REQUIRED_END           ((uint32_t)0x08020000U)
+#define FLASH_STORAGE_REQUIRED_KB            ((uint16_t)128U)
+
+/*
+ * STM32F103C8 is officially a 64-KB part. Existing products may deliberately
+ * use dies that expose the rear 64 KB. Keep compatibility enabled on dev, but
+ * report STORAGE_STATE_READY_UNVERIFIED_CAPACITY so production projects can
+ * turn this off explicitly.
+ */
+#ifndef FLASH_STORAGE_ALLOW_UNVERIFIED_REAR64
+#define FLASH_STORAGE_ALLOW_UNVERIFIED_REAR64 1
+#endif
 
 #if defined(STM32F10X_MD)
-#define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000400)
+#define FLASH_STORAGE_PAGE_SIZE              ((uint32_t)0x00000400U)
 #else
-#define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000800)
+#error "This Flash backend currently targets STM32F1 medium-density 1-KB pages. Port the backend before changing MCU density."
 #endif
-#define FLASH_STORAGE_SLOT_SIZE          FLASH_STORAGE_PAGE_SIZE
 
-#define FLASH_ADDR_STORAGE_AFE_SLOT_A    ((UINT32)0x0801C000)
-#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A ((UINT32)0x0801C400)
-#define FLASH_ADDR_STORAGE_AFE_SLOT_B    ((UINT32)0x0801C800)
-#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B ((UINT32)0x0801CC00)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_A    ((UINT32)0x0801D000)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_B    ((UINT32)0x0801D800)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_A    FLASH_ADDR_SH367309_VALUE
-#define FLASH_ADDR_STORAGE_SOC_SLOT_B    FLASH_ADDR_SH367309_FLAG
+#define FLASH_STORAGE_SLOT_SIZE              FLASH_STORAGE_PAGE_SIZE
+#define FLASH_STORAGE_BASE_ADDR              ((uint32_t)0x0801C000U)
+#define FLASH_STORAGE_PAGE_ADDR(index)       (FLASH_STORAGE_BASE_ADDR + ((uint32_t)(index) * FLASH_STORAGE_PAGE_SIZE))
 
-#define FLASH_STORAGE_AFE_WORD_COUNT     ((UINT16)24)
-#define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT   65
-#define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT     32
-#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT 24
-#define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
-#define FLASH_STORAGE_SOC_DATA_VERSION_V2 ((UINT16)0x0002)
+/* 16 reserved pages: 0x0801C000..0x0801FFFF. Gaps are intentionally retained. */
+#define FLASH_ADDR_STORAGE_AFE_SLOT_A        FLASH_STORAGE_PAGE_ADDR(0U)
+#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A   FLASH_STORAGE_PAGE_ADDR(1U)
+#define FLASH_ADDR_STORAGE_AFE_SLOT_B        FLASH_STORAGE_PAGE_ADDR(2U)
+#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B   FLASH_STORAGE_PAGE_ADDR(3U)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_A        FLASH_STORAGE_PAGE_ADDR(4U)
+#define FLASH_ADDR_STORAGE_RESERVED_5        FLASH_STORAGE_PAGE_ADDR(5U)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_B        FLASH_STORAGE_PAGE_ADDR(6U)
+#define FLASH_ADDR_STORAGE_RESERVED_7        FLASH_STORAGE_PAGE_ADDR(7U)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_A        FLASH_STORAGE_PAGE_ADDR(8U)
+#define FLASH_ADDR_STORAGE_RESERVED_9        FLASH_STORAGE_PAGE_ADDR(9U)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_B        FLASH_STORAGE_PAGE_ADDR(10U)
+#define FLASH_ADDR_STORAGE_RESERVED_11       FLASH_STORAGE_PAGE_ADDR(11U)
+#define FLASH_ADDR_UPGRADE_PARAM_FLAG        FLASH_STORAGE_PAGE_ADDR(12U)
+#define FLASH_ADDR_FACTORY_AGING_FLAG        FLASH_STORAGE_PAGE_ADDR(13U)
+#define FLASH_ADDR_UPDATE_FLAG               FLASH_STORAGE_PAGE_ADDR(14U)
+#define FLASH_ADDR_SLEEP_FLAG                FLASH_STORAGE_PAGE_ADDR(15U)
 
-#define FLASH_309_RTC_RTC_VALUE          ((UINT16)0x1222)
-#define FLASH_309_RTC_NORMAL_VALUE       ((UINT16)0x2333)
-#define FLASH_309_NORMAL_NORMAL_VALUE    ((UINT16)0xFFFF)
+/* Legacy aliases retained while old modules are migrated to Storage.h. */
+#define FLASH_ADDR_SH367309_VALUE            FLASH_ADDR_STORAGE_SOC_SLOT_A
+#define FLASH_ADDR_SH367309_FLAG             FLASH_ADDR_STORAGE_SOC_SLOT_B
+#define FLASH_STORAGE_AFE_WORD_COUNT         STORAGE_AFE_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT STORAGE_RW_PARAM_PROTECT_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT   STORAGE_RW_PARAM_OTHER_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT STORAGE_RW_PARAM_RESERVED_WORD_COUNT
+#define FLASH_STORAGE_LOG_RECORD_COUNT       STORAGE_LOG_RECORD_COUNT
+#define FLASH_STORAGE_SOC_DATA_VERSION_V2    STORAGE_SOC_DATA_VERSION_V2
+#define STORAGE_FLASH_SOC_API_DECLARED       1
 
-/* App->IAP request uses the SRAM mailbox at 0x20004FE0; these legacy values are not boot gates. */
-#define FLASH_TO_IAP_VALUE               ((UINT16)0x00AB)
-#define FLASH_TO_APP_VALUE               ((UINT16)0xFFFF)
-#define FLASH_UPGRADE_PARAM_FLAG_RESET   ((UINT16)0xFFFF)
-#define FLASH_FACTORY_AGING_DONE_VALUE   ((UINT16)0xA93D)
-#define FLASH_FACTORY_AGING_RESET_VALUE  ((UINT16)0xFFFF)
-#define FLASH_FACTORY_AGING_STATE_RUNNING ((UINT16)0xA931)
-#define FLASH_FACTORY_AGING_STATE_STOPPED ((UINT16)0xA930)
-#define FLASH_FACTORY_AGING_STATE_DONE   FLASH_FACTORY_AGING_DONE_VALUE
+typedef STORAGE_SOC_DATA STORAGE_FLASH_SOC_DATA;
+typedef STORAGE_RW_PARAM_DATA STORAGE_FLASH_RW_PARAM_DATA;
+typedef STORAGE_FACTORY_AGING_DATA STORAGE_FLASH_FACTORY_AGING_DATA;
 
-#define FLASH_NORMAL_SLEEP_VALUE         ((UINT16)0x1234)
-#define FLASH_DEEP_SLEEP_VALUE           ((UINT16)0x1235)
-#define FLASH_HICCUP_SLEEP_VALUE         ((UINT16)0x1236)
-#define FLASH_SLEEP_CHARGER_WAKE_VALUE   ((UINT16)0x1237)
-#define FLASH_SLEEP_RESET_VALUE          ((UINT16)0xFFFF)
+#define FLASH_309_RTC_RTC_VALUE              ((uint16_t)0x1222U)
+#define FLASH_309_RTC_NORMAL_VALUE           ((uint16_t)0x2333U)
+#define FLASH_309_NORMAL_NORMAL_VALUE        ((uint16_t)0xFFFFU)
 
-#define BOOT_FLAG_RESET_VALUE            FLASH_SLEEP_RESET_VALUE
-#define STORAGE_FLASH_SOC_API_DECLARED   1
+/* App->IAP request uses the SRAM mailbox; these values are legacy compatibility constants. */
+#define FLASH_TO_IAP_VALUE                   ((uint16_t)0x00ABU)
+#define FLASH_TO_APP_VALUE                   ((uint16_t)0xFFFFU)
+#define FLASH_UPGRADE_PARAM_FLAG_RESET       ((uint16_t)0xFFFFU)
+#define FLASH_FACTORY_AGING_DONE_VALUE       ((uint16_t)0xA93DU)
+#define FLASH_FACTORY_AGING_RESET_VALUE      ((uint16_t)0xFFFFU)
+#define FLASH_FACTORY_AGING_STATE_RUNNING    ((uint16_t)0xA931U)
+#define FLASH_FACTORY_AGING_STATE_STOPPED    ((uint16_t)0xA930U)
+#define FLASH_FACTORY_AGING_STATE_DONE       FLASH_FACTORY_AGING_DONE_VALUE
 
-typedef struct
-{
-	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT16 u16MaxErrorPercent;
-	UINT32 u32CycleTimes;
-	UINT32 u32CapNow;
-	UINT32 u32CapFull;
-	UINT32 u32LearnPassedAs10;
-	UINT16 u16LearnAnchorSoc;
-	UINT16 u16LearnState;
-	UINT16 u16Flags;
-	UINT16 u16Reserved[4];
-} STORAGE_FLASH_SOC_DATA;
+#define FLASH_NORMAL_SLEEP_VALUE             ((uint16_t)0x1234U)
+#define FLASH_DEEP_SLEEP_VALUE               ((uint16_t)0x1235U)
+#define FLASH_HICCUP_SLEEP_VALUE             ((uint16_t)0x1236U)
+#define FLASH_SLEEP_CHARGER_WAKE_VALUE       ((uint16_t)0x1237U)
+#define FLASH_SLEEP_RESET_VALUE              ((uint16_t)0xFFFFU)
+#define BOOT_FLAG_RESET_VALUE                FLASH_SLEEP_RESET_VALUE
 
-typedef struct
-{
-	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
-	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
-	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
-} STORAGE_FLASH_RW_PARAM_DATA;
-
-typedef struct
-{
-	UINT32 u32Elapsed10ms;
-	UINT16 u16State;
-	UINT16 u16DurationHours;
-} STORAGE_FLASH_FACTORY_AGING_DATA;
-
+/* Low-level/legacy backend API. Prefer Storage.h in new code. */
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
-UINT16 FlashReadOneHalfWord(UINT32 faddr);
-UINT8 AppUpgrade_RequestIap(void);
+uint16_t FlashReadOneHalfWord(uint32_t faddr);
+uint8_t AppUpgrade_RequestIap(void);
 
-UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
-UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
-UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
-UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
-UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
-UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data);
-UINT8 StorageFlash_IsBusy(void);
+uint8_t StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
+uint8_t StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
+uint8_t StorageFlash_LoadAfeData(uint16_t *values, uint16_t word_count);
+uint8_t StorageFlash_SaveAfeData(const uint16_t *values, uint16_t word_count);
+uint8_t StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
+uint8_t StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
+uint8_t StorageFlash_LoadLogData(uint8_t *point,
+                                 uint8_t records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
+uint8_t StorageFlash_SaveLogData(uint8_t point,
+                                 const uint8_t records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
+uint8_t StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
+uint8_t StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data);
+uint8_t StorageFlash_IsBusy(void);
 
 void StorageFlash_PrintBootCheck(void);
 void App_FlashUpdate(void);
 void APP_To_IAP_Jump(void);
 void InitAreaSelect(void);
 
-#endif
+#endif /* PROJECT_STORAGE_FLASH_H */

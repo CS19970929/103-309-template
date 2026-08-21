@@ -2,31 +2,10 @@
 #include "conf.h"
 #include "EEPROM.h"
 #include "DataDeal.h"
-#include "Flash.h"
+#include "Storage.h"
 #include "Sci_Upper.h"
 #include <string.h>
 #include <stdint.h>
-
-#ifndef STORAGE_FLASH_SOC_API_DECLARED
-typedef struct
-{
-	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT16 u16MaxErrorPercent;
-	UINT32 u32CycleTimes;
-	UINT32 u32CapNow;
-	UINT32 u32CapFull;
-	UINT32 u32LearnPassedAs10;
-	UINT16 u16LearnAnchorSoc;
-	UINT16 u16LearnState;
-	UINT16 u16Flags;
-	UINT16 u16Reserved[4];
-} STORAGE_FLASH_SOC_DATA;
-
-extern UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
-extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-#endif
 
 #define SOC_TICK_MS                  ((UINT32)200U)
 #define SOC_TICKS_PER_SECOND         ((UINT16)5U)
@@ -58,6 +37,23 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_RTC_OCV_MAX_CELL_MV      ((UINT16)4000U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
+
+/*
+ * Flash-life policy:
+ * - Persist visible SOC after a 2% delta instead of every 1%.
+ * - A cycle counter alone does not force a write until one equivalent cycle.
+ * - Rare structural state changes still persist immediately.
+ * - Dirty state is eventually committed after 30 minutes and always before
+ *   reset-based sleep.
+ *
+ * This keeps unexpected-power-loss SOC error bounded while cutting the normal
+ * full-cycle write count from roughly 300 snapshots toward ~100 snapshots.
+ */
+#define SOC_FLASH_SAVE_SOC_STEP_PERCENT    ((UINT8)2U)
+#define SOC_FLASH_SAVE_CYCLE_STEP_X100     ((UINT32)100U)
+#define SOC_FLASH_SAVE_MAX_SECONDS         ((UINT32)1800U)
+#define SOC_FLASH_SAVE_MAX_TICKS \
+    (SOC_FLASH_SAVE_MAX_SECONDS * (UINT32)SOC_TICKS_PER_SECOND)
 
 typedef enum
 {
@@ -94,8 +90,10 @@ typedef struct SOC_SAVE_MARK_TAG
 {
 	UINT32 cycle_x100;
 	UINT32 cap_full_as10;
+	UINT32 ticks_since_save;
 	UINT16 snapshot_flags;
 	UINT8 soc;
+	UINT8 valid;
 } SOC_SAVE_MARK;
 
 static SOC_STATE s_soc;
@@ -147,6 +145,16 @@ static UINT16 soc_abs_diff_u16(UINT16 a, UINT16 b)
 	return (a >= b) ? (UINT16)(a - b) : (UINT16)(b - a);
 }
 #endif
+
+static UINT8 soc_abs_diff_u8(UINT8 a, UINT8 b)
+{
+	return (a >= b) ? (UINT8)(a - b) : (UINT8)(b - a);
+}
+
+static UINT32 soc_abs_diff_u32(UINT32 a, UINT32 b)
+{
+	return (a >= b) ? (a - b) : (b - a);
+}
 
 static UINT8 soc_step(UINT8 now, UINT8 target, UINT8 step)
 {
@@ -394,12 +402,12 @@ void SOC_RequestSetOnce(UINT8 soc)
 
 static UINT8 soc_save(void)
 {
-	STORAGE_FLASH_SOC_DATA data;
+	STORAGE_SOC_DATA data;
 	UINT32 cap_usable_as10 = soc_usable_cap_as10();
 	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
 	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data.u16FormatVersion = STORAGE_SOC_DATA_VERSION_V2;
 	data.u16SocNow = s_soc.soc;
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = s_soc.cycle_x100;
@@ -413,7 +421,19 @@ static UINT8 soc_save(void)
 	{
 		data.u16DsgSocInt = 100U;
 	}
-	return StorageFlash_SaveSocData(&data);
+	return Storage_SaveSocData(&data);
+}
+
+static UINT8 soc_save_mark_dirty(void)
+{
+	if (s_saved_soc.valid == 0U)
+	{
+		return 1U;
+	}
+	return (UINT8)((s_soc.soc != s_saved_soc.soc) ||
+		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
+		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
+		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags));
 }
 
 static void soc_update_save_mark(void)
@@ -422,22 +442,53 @@ static void soc_update_save_mark(void)
 	s_saved_soc.cycle_x100 = s_soc.cycle_x100;
 	s_saved_soc.cap_full_as10 = s_soc.cap_full_as10;
 	s_saved_soc.snapshot_flags = s_soc.snapshot_flags;
+	s_saved_soc.ticks_since_save = 0U;
+	s_saved_soc.valid = 1U;
 }
 
 static void soc_save_current_snapshot(void)
 {
+	if (Storage_IsReady() == 0U)
+	{
+		return;
+	}
 	if (soc_save())
 	{
 		soc_update_save_mark();
 	}
 }
 
-static void soc_save_if_needed(void)
+static void soc_save_runtime_if_needed(void)
 {
-	if ((s_soc.soc != s_saved_soc.soc) ||
-		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
+	if (Storage_IsReady() == 0U)
+	{
+		return;
+	}
+
+	if (s_saved_soc.ticks_since_save < SOC_FLASH_SAVE_MAX_TICKS)
+	{
+		++s_saved_soc.ticks_since_save;
+	}
+
+	if (soc_save_mark_dirty() == 0U)
+	{
+		return;
+	}
+
+	if ((s_saved_soc.valid == 0U) ||
+		(soc_abs_diff_u8(s_soc.soc, s_saved_soc.soc) >= SOC_FLASH_SAVE_SOC_STEP_PERCENT) ||
+		(soc_abs_diff_u32(s_soc.cycle_x100, s_saved_soc.cycle_x100) >= SOC_FLASH_SAVE_CYCLE_STEP_X100) ||
 		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10) ||
-		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags))
+		(s_soc.snapshot_flags != s_saved_soc.snapshot_flags) ||
+		(s_saved_soc.ticks_since_save >= SOC_FLASH_SAVE_MAX_TICKS))
+	{
+		soc_save_current_snapshot();
+	}
+}
+
+static void soc_save_before_sleep(void)
+{
+	if ((Storage_IsReady() != 0U) && (soc_save_mark_dirty() != 0U))
 	{
 		soc_save_current_snapshot();
 	}
@@ -445,8 +496,8 @@ static void soc_save_if_needed(void)
 
 static void soc_load_or_default(void)
 {
-	STORAGE_FLASH_SOC_DATA data;
-	UINT8 valid = StorageFlash_LoadSocData(&data);
+	STORAGE_SOC_DATA data;
+	UINT8 valid = Storage_LoadSocData(&data);
 	UINT32 cap_usable_as10;
 	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
@@ -475,6 +526,7 @@ static void soc_load_or_default(void)
 			s_soc.sag_hold_ticks = (UINT16)(SOC_REBOUND_BOOT_HOLDOFF_SECONDS *
 				SOC_TICKS_PER_SECOND);
 		}
+		soc_update_save_mark();
 	}
 	else
 	{
@@ -490,9 +542,11 @@ static void soc_load_or_default(void)
 		{
 			soc_set(s_soc_default_startup_percent);
 		}
-		(void)soc_save();
+
+		/* Mark only after a successful write. Failed initialization is retried later. */
+		s_saved_soc.valid = 0U;
+		soc_save_current_snapshot();
 	}
-	soc_update_save_mark();
 }
 
 static void soc_reset_rest_ocv_step(void)
@@ -906,6 +960,7 @@ static UINT8 soc_apply_rtc_rest_ocv(UINT32 rest_seconds)
 void soc_param_lib_init(void)
 {
 	memset(&s_soc, 0, sizeof(s_soc));
+	memset(&s_saved_soc, 0, sizeof(s_saved_soc));
 	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	s_u32SocRtcRestAppliedSeconds = 0U;
@@ -916,25 +971,25 @@ void soc_param_lib_init(void)
 
 UINT8 SOC_ResetStoredSnapshotToDefault(void)
 {
-	STORAGE_FLASH_SOC_DATA data;
+	STORAGE_SOC_DATA data;
 	UINT32 cap_factory = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	UINT32 cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
 	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
 	UINT32 cap_usable = soc_usable_cap_as10_from(cap_full);
 
 	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data.u16FormatVersion = STORAGE_SOC_DATA_VERSION_V2;
 	data.u16SocNow = s_soc_default_startup_percent;
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = cycle_x100;
 	data.u32CapFull = cap_usable;
 	data.u32CapNow = (UINT32)(((uint64_t)cap_usable * s_soc_default_startup_percent) / 100ULL);
-	return StorageFlash_SaveSocData(&data);
+	return Storage_SaveSocData(&data);
 }
 
 void SOC_SaveSnapshotBeforeSleep(void)
 {
-	soc_save_if_needed();
+	soc_save_before_sleep();
 }
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
@@ -968,7 +1023,7 @@ void SOC_IntEnhance_Ctrl(int32_t net_current_ma)
 		soc_update_rest_timer(mode);
 	}
 
-	soc_save_if_needed();
+	soc_save_runtime_if_needed();
 	SOC_PublishReportData();
 }
 

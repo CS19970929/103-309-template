@@ -23,6 +23,13 @@ void Runtime_Boot(void)
 	InitNVIC();
 	InitIO();
 	InitUSART_CommonUpper();
+
+	/*
+	 * Initialize persistent storage before any module loads parameters.
+	 * Storage_Init() owns MCU/Flash capability detection; business modules do
+	 * not need to know physical addresses or Flash geometry.
+	 */
+	Storage_Init();
 	InitE2PROM();
 	InitAFE1();
 	InitCan();
