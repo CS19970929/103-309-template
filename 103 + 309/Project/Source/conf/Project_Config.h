@@ -74,6 +74,20 @@
 #endif
 // </h>
 
+// <h>RTC / Low Power
+
+// <o> HICCUP RTC wake period seconds <1-3600>
+#define PROJECT_CFG_RTC_HICCUP_WAKE_SECONDS 3
+
+// <o> NORMAL RTC wake period seconds <1-3600>
+// <i> With IWDG enabled, keep one STOP period within the watchdog-safe window.
+#define PROJECT_CFG_RTC_NORMAL_WAKE_SECONDS 10
+
+// <o> LSE startup timeout milliseconds <100-10000>
+#define PROJECT_CFG_RTC_LSE_STARTUP_TIMEOUT_MS 5000
+
+// </h>
+
 // <h>Wakeup Sources
 
 // <q> Enable UART1 wakeup
