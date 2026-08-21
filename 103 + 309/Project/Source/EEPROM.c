@@ -12,6 +12,9 @@
 #if STORAGE_RW_PARAM_RESERVED_WORD_COUNT != E2P_PARA_NUM_RESERVED_RW_PARAM
 #error "RW parameter reserved word count mismatch"
 #endif
+#if STORAGE_CALIB_COEF_COUNT != KB_NUM
+#error "Calibration coefficient count mismatch"
+#endif
 
 /* --------------------------------------------------------------------------
  * Runtime parameter persistence
@@ -46,6 +49,112 @@ static void EEPROM_LoadDefaultCalib(void)
 		g_u16CalibCoefK[i] = SYSKDEFAULT;
 		g_i16CalibCoefB[i] = SYSBDEFAULT;
 	}
+}
+
+static UINT8 EEPROM_CalibrationDataIsValid(const STORAGE_CALIB_DATA *data)
+{
+	UINT16 i;
+
+	if (data == 0)
+	{
+		return 0U;
+	}
+
+	for (i = 0U; i < STORAGE_CALIB_COEF_COUNT; ++i)
+	{
+		if ((data->k[i] < SYSKMIN) || (data->k[i] > SYSKMAX) ||
+			(data->b[i] < SYSBMIN) || (data->b[i] > SYSBMAX))
+		{
+			return 0U;
+		}
+	}
+	return 1U;
+}
+
+static void EEPROM_BuildCalibrationData(STORAGE_CALIB_DATA *data)
+{
+	UINT16 i;
+
+	for (i = 0U; i < STORAGE_CALIB_COEF_COUNT; ++i)
+	{
+		data->k[i] = g_u16CalibCoefK[i];
+		data->b[i] = g_i16CalibCoefB[i];
+	}
+}
+
+static void EEPROM_ApplyCalibrationData(const STORAGE_CALIB_DATA *data)
+{
+	UINT16 i;
+
+	for (i = 0U; i < STORAGE_CALIB_COEF_COUNT; ++i)
+	{
+		g_u16CalibCoefK[i] = data->k[i];
+		g_i16CalibCoefB[i] = data->b[i];
+	}
+}
+
+static void EEPROM_LoadCalibrationFromStorage(void)
+{
+	STORAGE_CALIB_DATA data;
+
+	if ((Storage_LoadCalibrationData(&data) != 0U) &&
+		(EEPROM_CalibrationDataIsValid(&data) != 0U))
+	{
+		EEPROM_ApplyCalibrationData(&data);
+		return;
+	}
+
+	/* Defaults are already in RAM. Persist them once to initialize the object. */
+	System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	EEPROM_BuildCalibrationData(&data);
+	(void)Storage_SaveCalibrationData(&data);
+}
+
+UINT8 EEPROM_SaveCalibrationPair(UINT16 index, UINT16 k, INT16 b)
+{
+	STORAGE_CALIB_DATA candidate;
+
+	if ((index >= STORAGE_CALIB_COEF_COUNT) ||
+		(k < SYSKMIN) || (k > SYSKMAX) ||
+		(b < SYSBMIN) || (b > SYSBMAX))
+	{
+		return 0U;
+	}
+
+	EEPROM_BuildCalibrationData(&candidate);
+	candidate.k[index] = k;
+	candidate.b[index] = b;
+	if (EEPROM_CalibrationDataIsValid(&candidate) == 0U)
+	{
+		return 0U;
+	}
+
+	/* Persist first; only then commit the new calibration into live RAM. */
+	if (Storage_SaveCalibrationData(&candidate) == 0U)
+	{
+		return 0U;
+	}
+	EEPROM_ApplyCalibrationData(&candidate);
+	return 1U;
+}
+
+UINT8 EEPROM_ResetCalibrationToDefault(void)
+{
+	STORAGE_CALIB_DATA defaults;
+	UINT16 i;
+
+	for (i = 0U; i < STORAGE_CALIB_COEF_COUNT; ++i)
+	{
+		defaults.k[i] = SYSKDEFAULT;
+		defaults.b[i] = SYSBDEFAULT;
+	}
+
+	if (Storage_SaveCalibrationData(&defaults) == 0U)
+	{
+		return 0U;
+	}
+	EEPROM_ApplyCalibrationData(&defaults);
+	return 1U;
 }
 
 static void EEPROM_LoadDefaultOtherElement(void)
@@ -688,50 +797,53 @@ static uint8_t StorageLog_ReplayDeltaPage(uint32_t page_addr,
 									 STORAGE_LOG_DELTA_MAGIC,
 									 (uint16_t)sizeof(data),
 									 (uint8_t *)&data,
-									 &record_sequence) == 0U)
+									 &record_sequence) != 0U)
 		{
-			continue;
+			(void)record_sequence;
+			if (data.base_sequence == base_sequence)
+			{
+				if (*point >= STORAGE_LOG_RECORD_COUNT)
+				{
+					*point = 0U;
+				}
+				records[*point][0] = data.event;
+				records[*point][1] = data.delta;
+				++(*point);
+				replayed = 1U;
+			}
 		}
-		(void)record_sequence;
-		if (data.base_sequence != base_sequence)
-		{
-			continue;
-		}
-
-		if (*point >= STORAGE_LOG_RECORD_COUNT)
-		{
-			*point = 0U;
-		}
-		records[*point][0] = data.event;
-		records[*point][1] = data.delta;
-		++(*point);
-		replayed = 1U;
 	}
 	return replayed;
 }
 
 static uint8_t StorageLog_WriteBaseSnapshot(uint8_t point,
-										 const uint8_t records[STORAGE_LOG_RECORD_COUNT][2],
-										 uint32_t *new_sequence)
+											const uint8_t records[STORAGE_LOG_RECORD_COUNT][2],
+											uint32_t *new_sequence)
 {
-	STORAGE_LOG_BASE_DATA data;
-	uint32_t current_sequence = 0U;
-	uint32_t current_page = FLASH_ADDR_STORAGE_LOG_SLOT_A;
+	uint32_t seq_a = 0U;
+	uint32_t seq_b = 0U;
 	uint32_t target_page;
 	uint32_t sequence;
+	STORAGE_LOG_BASE_DATA data;
+	uint8_t valid_a;
+	uint8_t valid_b;
 
-	if (records == 0)
+	valid_a = StorageLog_FindLatestInBasePage(FLASH_ADDR_STORAGE_LOG_SLOT_A, &seq_a);
+	valid_b = StorageLog_FindLatestInBasePage(FLASH_ADDR_STORAGE_LOG_SLOT_B, &seq_b);
+	if ((valid_a != 0U) && ((valid_b == 0U) || (seq_a >= seq_b)))
 	{
-		return 0U;
+		sequence = seq_a + 1U;
+		target_page = FLASH_ADDR_STORAGE_LOG_SLOT_B;
 	}
-
-	(void)StorageLog_GetBaseSequence(&current_sequence, &current_page);
-	target_page = (current_page == FLASH_ADDR_STORAGE_LOG_SLOT_A) ?
-		FLASH_ADDR_STORAGE_LOG_SLOT_B : FLASH_ADDR_STORAGE_LOG_SLOT_A;
-	sequence = current_sequence + 1U;
-	if (sequence == 0U)
+	else if (valid_b != 0U)
+	{
+		sequence = seq_b + 1U;
+		target_page = FLASH_ADDR_STORAGE_LOG_SLOT_A;
+	}
+	else
 	{
 		sequence = 1U;
+		target_page = FLASH_ADDR_STORAGE_LOG_SLOT_A;
 	}
 
 	memset(&data, 0, sizeof(data));
@@ -743,14 +855,13 @@ static uint8_t StorageLog_WriteBaseSnapshot(uint8_t point,
 		return 0U;
 	}
 	if (StorageLog_ProgramRecord(target_page,
-								 STORAGE_LOG_BASE_MAGIC,
-								 (const uint8_t *)&data,
-								 (uint16_t)sizeof(data),
-								 sequence) == 0U)
+									 STORAGE_LOG_BASE_MAGIC,
+									 (const uint8_t *)&data,
+									 (uint16_t)sizeof(data),
+									 sequence) == 0U)
 	{
 		return 0U;
 	}
-
 	if (new_sequence != 0)
 	{
 		*new_sequence = sequence;
@@ -914,6 +1025,7 @@ void InitE2PROM(void)
 {
 	EEPROM_LoadDefaultRuntimeData();
 	EEPROM_LoadRWParametersFromFlash();
+	EEPROM_LoadCalibrationFromStorage();
 	ReadEEPROM_AFE_Parameters();
 	ReadEEPROM_EventRecord_Parameters();
 	UpgradeParamPolicy_ApplyOnce();

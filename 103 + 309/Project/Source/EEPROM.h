@@ -12,7 +12,7 @@
 #define CZONE				0x1000				// C��: 0x1000~0x1800
 
 //IO��������
-//�����������Ǹ���X<<2
+//���������Ǹ���X<<2
 #define SDA_IN_SEE()  {GPIOB->CRH&=0xFFFF0FFF;GPIOB->CRH|=(UINT32)8<<(3<<2);}
 #define SDA_OUT_SEE() {GPIOB->CRH&=0xFFFF0FFF;GPIOB->CRH|=(UINT32)3<<(3<<2);}
 
@@ -34,7 +34,7 @@
 #define E2P_PARA_NUM_COPPERLOSS 		 	CompensateNUM	//16
 #define E2P_PARA_NUM_COPPERLOSS_NUM 		CompensateNUM
 #define E2P_PARA_NUM_FAULT_RECORD 		 	(3*Record_len+ 3 +Record_len*6)//Ϊʲôdefine�����������ʱҪ�������أ���Ϊ����������������define�����ȼ��߾ͻ����
-#define E2P_PARA_NUM_OTHER_ELEMENT1 		32				//�����ӣ��ٴ����ӱ�ע������������
+#define E2P_PARA_NUM_OTHER_ELEMENT1 		32				//�����ӣ��ٴ����ӱ�ע��������
 #define E2P_PARA_NUM_RESERVED_RW_PARAM		24
 
 
@@ -59,12 +59,13 @@
 
 
 
-
 UINT8 ReadEEPROM_Byte(UINT16 addr);
 UINT8 WriteEEPROM_Byte(UINT16 addr, UINT8 val);
 
 void InitE2PROM(void);
 UINT8 EEPROM_SaveRWParametersToFlash(void);
+UINT8 EEPROM_SaveCalibrationPair(UINT16 index, UINT16 k, INT16 b);
+UINT8 EEPROM_ResetCalibrationToDefault(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);
 
 
