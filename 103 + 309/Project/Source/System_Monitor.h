@@ -143,14 +143,18 @@ union System_Status {
 #define BMS_MOS_BLOCK_USER           (1UL << 5)
 #define BMS_MOS_BLOCK_AFE            (1UL << 6)
 
+/*
+ * Coalescing pending events, not a message queue. Repeated identical events
+ * remain one bit until a consumer takes them. Safety decisions never depend
+ * on event delivery; they are recomputed from current state.
+ */
 #define BMS_CORE_EVT_FAULT_CHANGED        (1UL << 0)
 #define BMS_CORE_EVT_MOS_REQUEST_CHANGED  (1UL << 1)
 #define BMS_CORE_EVT_MOS_ACTUAL_CHANGED   (1UL << 2)
 #define BMS_CORE_EVT_AFE_RECOVERED        (1UL << 3)
 #define BMS_CORE_EVT_CONFIG_CHANGED       (1UL << 4)
-#define BMS_CORE_EVT_STORAGE_DIRTY        (1UL << 5)
-#define BMS_CORE_EVT_WAKEUP               (1UL << 6)
-#define BMS_CORE_EVT_SLEEP_BLOCK_CHANGED  (1UL << 7)
+#define BMS_CORE_EVT_WAKEUP               (1UL << 5)
+#define BMS_CORE_EVT_SLEEP_BLOCK_CHANGED  (1UL << 6)
 
 struct BMS_MEASUREMENT_STATE {
 	UINT16 cellMinMv;
@@ -184,7 +188,8 @@ struct BMS_CORE_STATE {
 extern volatile struct SYSTEM_ERROR System_ErrFlag;
 extern volatile union System_Status s_system_status;
 
-void InitSystemMonitorData_EEPROM(void);
+void SystemRuntime_Init(void);
+void InitSystemMonitorData_EEPROM(void); /* Legacy wrapper. */
 UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
 void SystemRuntime_MarkBootReady(void);
 void SystemRuntime_SetProjectVersion(UINT8 project_version);
