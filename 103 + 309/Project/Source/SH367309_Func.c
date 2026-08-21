@@ -2,7 +2,6 @@
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
-
 //-40到100的数值
 const UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
 								  11611, 11008, 10442, 9909, 9407, 8935, 8489, 8068, 7672, 7297,
@@ -29,6 +28,17 @@ UINT8 ucMTPBuffer[26] = {
 	BYTE_14H_UTCR, BYTE_15H_OTD, BYTE_16H_OTDR, BYTE_17H_UTD, BYTE_18H_UTDR,
 	BYTE_19H_TR};
 
+static UINT8 SH367309_WriteMtpConf(MTP_REG_CONF requested)
+{
+	if (!MTPWrite(MTP_CONF, 1, &requested.all))
+	{
+		return 0U;
+	}
+
+	SH367309_Reg_Store.REG_MTP_CONF = requested;
+	return 1U;
+}
+
 void AFE_Reset(void)
 {
 	UINT8 WrBuf[2];
@@ -54,16 +64,20 @@ void AFE_Reset(void)
 // 进入休眠模式
 void AFE_Sleep(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	MTP_REG_CONF requested = SH367309_Reg_Store.REG_MTP_CONF;
+
+	requested.bits.SLEEP = 1U;
+	(void)SH367309_WriteMtpConf(requested);
 }
 
 // 进入IDLE模式
 // 1，有错误，不能进入
 void AFE_IDLE(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.IDLE = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	MTP_REG_CONF requested = SH367309_Reg_Store.REG_MTP_CONF;
+
+	requested.bits.IDLE = 1U;
+	(void)SH367309_WriteMtpConf(requested);
 }
 
 // 进入休眠模式
@@ -129,6 +143,8 @@ Others:
 *******************************************************************************/
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
+	MTP_REG_CONF requested = SH367309_Reg_Store.REG_MTP_CONF;
+
 	// ucMTP_CONF |= 0x04;						//开启看门狗，不开看门狗行不行
 	// 结论，可以不开启。看门狗溢出，操作是
 	// 1，关闭充放电MOS和预充MOS
@@ -136,10 +152,10 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 	// 两者对于目前使用情况意义不大，休眠带电不允许开，MCU控驱动没意义
 	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
 	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 放电MOS由AFE硬件控制
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	requested.bits.CADCON = 1U;
+	requested.bits.CHGMOS = 1U;
+	requested.bits.DSGMOS = 1U;
+	(void)SH367309_WriteMtpConf(requested);
 }
 
 // 1：修改失败。0：修改成功
@@ -182,25 +198,34 @@ UINT8 SH367309_SC_DelayT_Set(void)
 
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 {
+	MTP_REG_CONF requested = SH367309_Reg_Store.REG_MTP_CONF;
+	UINT8 valid = 1U;
+
+	OnOFF = (OnOFF != 0U) ? 1U : 0U;
+
 	switch (Type)
 	{
 	case GPIO_PreCHG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = OnOFF;
+		requested.bits.PCHMOS = OnOFF;
 		break;
 
 	case GPIO_CHG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = OnOFF;
+		requested.bits.CHGMOS = OnOFF;
 		break;
 
 	case GPIO_DSG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = OnOFF;
+		requested.bits.DSGMOS = OnOFF;
 		break;
 
 	default:
+		valid = 0U;
 		break;
 	}
 
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	if (valid != 0U)
+	{
+		(void)SH367309_WriteMtpConf(requested);
+	}
 }
 
 static void SH367309_RecordFaultOnActive(UINT8 *latched, UINT8 active, enum FaultFlag fault)
