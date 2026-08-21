@@ -4,8 +4,10 @@ volatile struct SYSTEM_ERROR System_ErrFlag;
 volatile union System_Status s_system_status;
 
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
-/* Keep these masks in sync with System_Monitor.h bitfield order. */
 #define SYSTEM_STATUS_DEFAULT_MASK ((UINT32)0x00000001U)
+
+static volatile struct BMS_CORE_STATE s_bms_core;
+static volatile UINT32 s_bms_events;
 
 static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 	SYSTEM_ERROR_FIELD_INVALID,
@@ -18,6 +20,159 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 };
 
 static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode);
+
+static UINT32 BmsCore_EnterCritical(void)
+{
+	UINT32 primask = __get_PRIMASK();
+	__disable_irq();
+	return primask;
+}
+
+static void BmsCore_ExitCritical(UINT32 primask)
+{
+	if ((primask & 1U) == 0U)
+	{
+		__enable_irq();
+	}
+}
+
+void BmsEvent_Set(UINT32 events)
+{
+	UINT32 primask;
+
+	if (events == 0U)
+	{
+		return;
+	}
+
+	primask = BmsCore_EnterCritical();
+	s_bms_events |= events;
+	BmsCore_ExitCritical(primask);
+}
+
+UINT32 BmsEvent_Take(UINT32 mask)
+{
+	UINT32 primask;
+	UINT32 events;
+
+	primask = BmsCore_EnterCritical();
+	events = s_bms_events & mask;
+	s_bms_events &= ~mask;
+	BmsCore_ExitCritical(primask);
+	return events;
+}
+
+UINT32 BmsEvent_Peek(void)
+{
+	UINT32 primask;
+	UINT32 events;
+
+	primask = BmsCore_EnterCritical();
+	events = s_bms_events;
+	BmsCore_ExitCritical(primask);
+	return events;
+}
+
+void BmsCore_Init(void)
+{
+	UINT32 primask;
+
+	primask = BmsCore_EnterCritical();
+	memset((void *)&s_bms_core, 0, sizeof(s_bms_core));
+	s_bms_events = 0U;
+	BmsCore_ExitCritical(primask);
+}
+
+void BmsCore_UpdateMeasurement(UINT16 cell_min_mv,
+							   UINT16 cell_max_mv,
+							   UINT16 charge_current_a10,
+							   UINT16 discharge_current_a10,
+							   UINT16 soc_percent)
+{
+	s_bms_core.measurement.cellMinMv = cell_min_mv;
+	s_bms_core.measurement.cellMaxMv = cell_max_mv;
+	s_bms_core.measurement.chargeCurrentA10 = charge_current_a10;
+	s_bms_core.measurement.dischargeCurrentA10 = discharge_current_a10;
+	s_bms_core.measurement.socPercent = soc_percent;
+}
+
+void BmsCore_SetProtectionBlocks(UINT32 sw_charge_block,
+								UINT32 sw_discharge_block,
+								UINT32 hw_charge_block,
+								UINT32 hw_discharge_block)
+{
+	if ((s_bms_core.protection.swChargeBlock != sw_charge_block) ||
+		(s_bms_core.protection.swDischargeBlock != sw_discharge_block) ||
+		(s_bms_core.protection.hwChargeBlock != hw_charge_block) ||
+		(s_bms_core.protection.hwDischargeBlock != hw_discharge_block))
+	{
+		s_bms_core.protection.swChargeBlock = sw_charge_block;
+		s_bms_core.protection.swDischargeBlock = sw_discharge_block;
+		s_bms_core.protection.hwChargeBlock = hw_charge_block;
+		s_bms_core.protection.hwDischargeBlock = hw_discharge_block;
+		BmsEvent_Set(BMS_CORE_EVT_FAULT_CHANGED);
+	}
+}
+
+UINT8 BmsCore_SetMosRequest(UINT8 charge_on, UINT8 discharge_on)
+{
+	UINT8 changed = 0U;
+
+	charge_on = (charge_on != 0U) ? 1U : 0U;
+	discharge_on = (discharge_on != 0U) ? 1U : 0U;
+
+	if ((s_bms_core.mos.chargeRequest != charge_on) ||
+		(s_bms_core.mos.dischargeRequest != discharge_on))
+	{
+		s_bms_core.mos.chargeRequest = charge_on;
+		s_bms_core.mos.dischargeRequest = discharge_on;
+		changed = 1U;
+		BmsEvent_Set(BMS_CORE_EVT_MOS_REQUEST_CHANGED);
+	}
+
+	return changed;
+}
+
+void BmsCore_SetSleepBlockReason(UINT32 reason)
+{
+	if (s_bms_core.sleepBlockReason != reason)
+	{
+		s_bms_core.sleepBlockReason = reason;
+		BmsEvent_Set(BMS_CORE_EVT_SLEEP_BLOCK_CHANGED);
+	}
+}
+
+UINT32 BmsCore_GetSleepBlockReason(void)
+{
+	return s_bms_core.sleepBlockReason;
+}
+
+void BmsCore_GetState(struct BMS_CORE_STATE *state)
+{
+	UINT32 primask;
+
+	if (state == 0)
+	{
+		return;
+	}
+
+	primask = BmsCore_EnterCritical();
+	state->measurement.cellMinMv = s_bms_core.measurement.cellMinMv;
+	state->measurement.cellMaxMv = s_bms_core.measurement.cellMaxMv;
+	state->measurement.chargeCurrentA10 = s_bms_core.measurement.chargeCurrentA10;
+	state->measurement.dischargeCurrentA10 = s_bms_core.measurement.dischargeCurrentA10;
+	state->measurement.socPercent = s_bms_core.measurement.socPercent;
+	state->protection.swChargeBlock = s_bms_core.protection.swChargeBlock;
+	state->protection.swDischargeBlock = s_bms_core.protection.swDischargeBlock;
+	state->protection.hwChargeBlock = s_bms_core.protection.hwChargeBlock;
+	state->protection.hwDischargeBlock = s_bms_core.protection.hwDischargeBlock;
+	state->mos.chargeRequest = s_bms_core.mos.chargeRequest;
+	state->mos.dischargeRequest = s_bms_core.mos.dischargeRequest;
+	state->mos.chargeActual = s_bms_core.mos.chargeActual;
+	state->mos.dischargeActual = s_bms_core.mos.dischargeActual;
+	state->sleepBlockReason = s_bms_core.sleepBlockReason;
+	BmsCore_ExitCritical(primask);
+}
 
 static volatile UINT8 *System_ErrorCommandField(enum SYSTEM_ERROR_COMMAND errorCode)
 {
@@ -118,6 +273,7 @@ static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
 void InitSystemMonitorData_EEPROM(void)
 {
 	s_system_status.all = SYSTEM_STATUS_DEFAULT_MASK;
+	BmsCore_Init();
 }
 
 void SystemRuntime_MarkBootReady(void)
@@ -146,18 +302,29 @@ void SystemRuntime_SetAfeStatus(UINT8 afe_index, UINT8 is_ok)
 
 void SystemRuntime_SetMosStatus(UINT8 charge_on, UINT8 discharge_on)
 {
-	s_system_status.bits.b1Status_MOS_CHG = (charge_on != 0U) ? 1U : 0U;
-	s_system_status.bits.b1Status_MOS_DSG = (discharge_on != 0U) ? 1U : 0U;
+	UINT8 charge_actual = (charge_on != 0U) ? 1U : 0U;
+	UINT8 discharge_actual = (discharge_on != 0U) ? 1U : 0U;
+
+	if ((s_bms_core.mos.chargeActual != charge_actual) ||
+		(s_bms_core.mos.dischargeActual != discharge_actual))
+	{
+		s_bms_core.mos.chargeActual = charge_actual;
+		s_bms_core.mos.dischargeActual = discharge_actual;
+		BmsEvent_Set(BMS_CORE_EVT_MOS_ACTUAL_CHANGED);
+	}
+
+	s_system_status.bits.b1Status_MOS_CHG = charge_actual;
+	s_system_status.bits.b1Status_MOS_DSG = discharge_actual;
 }
 
 UINT8 SystemRuntime_IsChargeMosOpen(void)
 {
-	return s_system_status.bits.b1Status_MOS_CHG;
+	return s_bms_core.mos.chargeActual;
 }
 
 UINT8 SystemRuntime_IsDischargeMosOpen(void)
 {
-	return s_system_status.bits.b1Status_MOS_DSG;
+	return s_bms_core.mos.dischargeActual;
 }
 
 UINT32 SystemRuntime_GetStatusSnapshot(void)
