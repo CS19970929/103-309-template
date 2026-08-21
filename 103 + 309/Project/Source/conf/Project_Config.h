@@ -51,7 +51,6 @@
 #define PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE 0
 
 // <o> Factory aging duration seconds <1-604800>
-// #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 
 // <q> Enable debug system monitor
@@ -72,6 +71,22 @@
 #ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
 #define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
 #endif
+// </h>
+
+// <h>Protection / MOS Policy
+
+// <o> Reverse-current MOS release threshold A*10 <1-1000>
+// <i> Software-only CHG blocking may release CHG MOS while discharging above this threshold; DSG is symmetrical.
+// <i> AFE hardware protection is never overridden by this rule.
+#define PROJECT_CFG_MOS_REVERSE_RELEASE_CURRENT_A10 10
+
+// <o> Software OCP recovery seconds <1-600>
+#define PROJECT_CFG_SW_OCP_RECOVER_SECONDS 30
+
+// <o> SOC-low deep-sleep delay seconds <1-86400>
+// <i> Used only when the existing SOC-low protection feature is enabled.
+#define PROJECT_CFG_SOC_LOW_DEEP_SLEEP_SECONDS 3600
+
 // </h>
 
 // <h>RTC / Low Power
