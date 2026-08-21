@@ -230,7 +230,7 @@ static void rtc_sleep_prepare_rtc(void)
     lp_refresh_status();
 }
 
-static void rtc_sleep_prepare_stop_cycle(void)
+static bool rtc_sleep_prepare_stop_cycle(void)
 {
     IOstatus_RTCMode();
 
@@ -246,12 +246,23 @@ static void rtc_sleep_prepare_stop_cycle(void)
     RTC_ClearStopWakeup();
     RTC_SetWakeupPeriodSeconds(rtc_sleep_get_wakeup_seconds());
     RTC_WKTimeConfig();
+
+    if (RTC_GetLastWakeupPeriodSeconds() == 0U)
+    {
+        return false;
+    }
+
     sys_time.rtc_sec_cnt = RTC_GetCounter();
+    return true;
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
-    rtc_sleep_prepare_stop_cycle();
+    if (!rtc_sleep_prepare_stop_cycle())
+    {
+        return false;
+    }
+
     RtcSleep_PortEnterStop();
 
     MCUO_DEBUG_LED1 = 0;
