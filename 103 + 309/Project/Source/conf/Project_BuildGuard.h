@@ -51,8 +51,6 @@
 #error "Factory aging is a required board feature and must not be disabled"
 #endif
 
-#endif
-
 /* --- range checks --- */
 
 #if (PROJECT_CFG_BUILD_PROFILE != 0) && (PROJECT_CFG_BUILD_PROFILE != 1) && (PROJECT_CFG_BUILD_PROFILE != 2)
@@ -65,6 +63,14 @@
 
 #if (PROJECT_CFG_HOST_WRITE_ENABLE != 0) && (PROJECT_CFG_HOST_WRITE_ENABLE != 1)
 #error "Invalid PROJECT_CFG_HOST_WRITE_ENABLE"
+#endif
+
+#if (PROJECT_CFG_WDOG_ENABLE != 0) && (PROJECT_CFG_WDOG_ENABLE != 1)
+#error "Invalid PROJECT_CFG_WDOG_ENABLE"
+#endif
+
+#if (PROJECT_CFG_RTC_ENABLE != 0) && (PROJECT_CFG_RTC_ENABLE != 1)
+#error "Invalid PROJECT_CFG_RTC_ENABLE"
 #endif
 
 #if (PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE != 0) && (PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE != 1)
@@ -106,6 +112,25 @@
 	 (PROJECT_CFG_IRQ_DEBUG_ENABLE != 0) || \
 	 (PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE != 0))
 #error "Debug watch, system debug and IRQ debug must stay disabled for release build profile"
+#endif
+
+/* RTC / low-power checks */
+#if PROJECT_CFG_RTC_ENABLE
+#if (PROJECT_CFG_RTC_HICCUP_WAKE_SECONDS < 1) || (PROJECT_CFG_RTC_HICCUP_WAKE_SECONDS > 3600)
+#error "Invalid PROJECT_CFG_RTC_HICCUP_WAKE_SECONDS"
+#endif
+#if (PROJECT_CFG_RTC_NORMAL_WAKE_SECONDS < 1) || (PROJECT_CFG_RTC_NORMAL_WAKE_SECONDS > 3600)
+#error "Invalid PROJECT_CFG_RTC_NORMAL_WAKE_SECONDS"
+#endif
+#if (PROJECT_CFG_RTC_LSE_STARTUP_TIMEOUT_MS < 100) || (PROJECT_CFG_RTC_LSE_STARTUP_TIMEOUT_MS > 10000)
+#error "Invalid PROJECT_CFG_RTC_LSE_STARTUP_TIMEOUT_MS"
+#endif
+#if PROJECT_CFG_WDOG_ENABLE
+/* STM32F1 IWDG keeps running in STOP. Keep one RTC STOP interval below a conservative watchdog-safe window. */
+#if (PROJECT_CFG_RTC_HICCUP_WAKE_SECONDS > 15) || (PROJECT_CFG_RTC_NORMAL_WAKE_SECONDS > 15)
+#error "RTC STOP wake period is too long for the enabled IWDG"
+#endif
+#endif
 #endif
 
 /* SOC checks */
@@ -164,3 +189,5 @@
 #if (PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC > 86400)
 #error "Invalid PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC"
 #endif
+
+#endif /* PROJECT_BUILD_GUARD_H */
