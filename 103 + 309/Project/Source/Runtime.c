@@ -5,14 +5,18 @@ UINT8 SeriesNum = 7;
 
 void Runtime_Boot(void)
 {
-	Init_RTC();
-
 	InitDelay();
+	InitNVIC();
+
+	/* Consume backup-domain sleep flags before RTC recovery can reset the domain. */
 	SleepDeal_HandleBootSleepStartup();
+
+#if PROJECT_CFG_RTC_ENABLE
+	Init_RTC();
+#endif
 
 	jtag_disableAndConfIO();
 
-	InitNVIC();
 	InitIO();
 	InitUSART_CommonUpper();
 	InitE2PROM();
@@ -24,7 +28,6 @@ void Runtime_Boot(void)
 
 	InitTimer();
 	__enable_irq();
-
 
 	InitSystemMonitorData_EEPROM();
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
@@ -46,7 +49,9 @@ void Runtime_RunOnce(void)
 	App_CommonUpper();
 	App_AnlogCal();
 
+#if PROJECT_CFG_RTC_ENABLE
 	rtc_sleep();
+#endif
 
 	App_Can();
 	App_FlashUpdate();
