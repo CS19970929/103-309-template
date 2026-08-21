@@ -7,9 +7,10 @@
 uint8_t RtcSleep_PortIsOneSecondTick(void);
 
 uint16_t RtcSleep_PortGetCellMinMv(void);
-uint16_t RtcSleep_PortGetChargeCurrentMa(void);
-uint16_t RtcSleep_PortGetDischargeCurrentMa(void);
+uint16_t RtcSleep_PortGetChargeCurrentA10(void);
+uint16_t RtcSleep_PortGetDischargeCurrentA10(void);
 uint16_t RtcSleep_PortGetLowVoltageSleepMv(void);
+uint32_t RtcSleep_PortCollectBlockReason(volatile uint8_t *external_comm_snapshot);
 
 uint8_t RtcSleep_PortIsMcuWakeActive(void);
 uint8_t RtcSleep_PortGetExternalCommCounter(void);
