@@ -66,7 +66,7 @@ static void LogRecord_MarkEventSaved(LogEventArray event)
 
 static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 {
-	if (event > EVENT_NUM)
+	if (event >= EVENT_NUM)
 	{
 		return 0;
 	}
@@ -89,73 +89,100 @@ void LogRecord_RequestSleep(void)
 	LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);
 }
 
+static UINT8 LogTime_Encode(UINT32 time_s)
+{
+	if (time_s <= 60U)
+	{
+		return 171U;
+	}
+	if (time_s <= (3600U * 168U))
+	{
+		return (UINT8)(time_s / 3600U + ((time_s % 3600U) > 0U ? 1U : 0U));
+	}
+	return 170U;
+}
+
 UINT8 LogTime_Map(UINT32 *Time_S_Cnt)
 {
-	UINT8 result = 0;
+	UINT8 result;
 
-	if ((*Time_S_Cnt) <= 60)
-	{
-		result = 171;
-	}
-	else if ((*Time_S_Cnt) <= 3600 * 168)
-	{
-		result = (UINT8)((*Time_S_Cnt) / 3600 + (((*Time_S_Cnt) % 3600) > 0 ? 1 : 0));
-	}
-	else
-	{
-		result = 170;
-	}
-
-	(*Time_S_Cnt) = 0;
+	result = LogTime_Encode(*Time_S_Cnt);
+	*Time_S_Cnt = 0U;
 	return result;
 }
 
-void LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
+/*
+ * Commit order is intentional:
+ *   1. persist the small delta record;
+ *   2. update the RAM ring;
+ *   3. update event latch/timestamp in the caller.
+ *
+ * A Flash failure therefore leaves the event retryable instead of making RAM
+ * look newer than persistent storage.
+ */
+static UINT8 LogEvent_EEPROM(LogEventArray event, UINT32 *Time_S_Cnt)
 {
+	UINT8 delta;
+	UINT8 point;
+
 	if (!LogRecord_CanSaveEvent(event))
 	{
-		return;
+		return 1U;
+	}
+	if ((event >= EVENT_NUM) || (Time_S_Cnt == 0))
+	{
+		return 0U;
 	}
 
-	if (s_log_record.point >= EVENT_RECORD_LENGTH)
+	point = s_log_record.point;
+	if (point >= EVENT_RECORD_LENGTH)
 	{
-		s_log_record.point = 0;
+		point = 0U;
 	}
 
-	s_log_record.records[s_log_record.point][0] = event;
-	s_log_record.records[s_log_record.point][1] = LogTime_Map(Time_S_Cnt);
-	if (event == BMS_START_UP)
+	delta = (event == BMS_START_UP) ? 0U : LogTime_Encode(*Time_S_Cnt);
+	if (Storage_LogAppend((UINT8)event, delta) == 0U)
 	{
-		s_log_record.records[s_log_record.point][1] = 0;
+		return 0U;
 	}
-	++s_log_record.point;
 
-	if (StorageFlash_SaveLogData(s_log_record.point, (const UINT8(*)[2])s_log_record.records))
-	{
-		LogRecord_MarkEventSaved(event);
-	}
+	s_log_record.records[point][0] = (UINT8)event;
+	s_log_record.records[point][1] = delta;
+	s_log_record.point = (UINT8)(point + 1U);
+	*Time_S_Cnt = 0U;
+	LogRecord_MarkEventSaved(event);
+	return 1U;
 }
 
 void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 {
+	if (event >= EVENT_NUM)
+	{
+		return;
+	}
+
 	if (BMS_START_UP == event)
 	{
 		if (s_log_record.flags.bits.Log_StartUp)
 		{
-			LogEvent_EEPROM(event, Time_S_Cnt);
-			s_log_record.flags.bits.Log_StartUp = 0U;
+			if (LogEvent_EEPROM(event, Time_S_Cnt) != 0U)
+			{
+				s_log_record.flags.bits.Log_StartUp = 0U;
+			}
 		}
 	}
 	else if (BMS_SLEEP == event)
 	{
-		LogEvent_EEPROM(event, Time_S_Cnt);
+		(void)LogEvent_EEPROM(event, Time_S_Cnt);
 	}
 	else if (CBC_ERR == event)
 	{
 		if (s_log_record.cbcTemp != temp)
 		{
-			s_log_record.cbcTemp = temp;
-			LogEvent_EEPROM(event, Time_S_Cnt);
+			if (LogEvent_EEPROM(event, Time_S_Cnt) != 0U)
+			{
+				s_log_record.cbcTemp = temp;
+			}
 		}
 	}
 	else
@@ -165,19 +192,22 @@ void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt)
 		case 0:
 			if (temp)
 			{
-				LogEvent_EEPROM(event, Time_S_Cnt);
-				s_log_record.eventLatch[event] = 1;
+				if (LogEvent_EEPROM(event, Time_S_Cnt) != 0U)
+				{
+					s_log_record.eventLatch[event] = 1U;
+				}
 			}
 			break;
 
 		case 1:
 			if (!temp)
 			{
-				s_log_record.eventLatch[event] = 0;
+				s_log_record.eventLatch[event] = 0U;
 			}
 			break;
 
 		default:
+			s_log_record.eventLatch[event] = 0U;
 			break;
 		}
 	}
@@ -221,14 +251,14 @@ void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 t_u8BuffTemp[])
 {
 	UINT16 i = 0;
 	UINT16 j;
-	INT8 k;
+	INT16 k;
 
 	for (j = 0; j < EVENT_RECORD_LENGTH; j++)
 	{
-		k = (INT8)(s_log_record.point - 1 - j);
+		k = (INT16)s_log_record.point - 1 - (INT16)j;
 		if (k < 0)
 		{
-			k = EVENT_RECORD_LENGTH + k;
+			k = (INT16)(EVENT_RECORD_LENGTH + k);
 		}
 		t_u8BuffTemp[i++] = s_log_record.records[k][0];
 		t_u8BuffTemp[i++] = s_log_record.records[k][1];
@@ -261,16 +291,14 @@ void Sci_WrReg_0x06_Reset_EventRecord(struct RS485MSG *s)
 
 UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 {
-	UINT8 i;
-
-	for (i = 0; i < EVENT_RECORD_LENGTH; ++i)
+	if (Storage_LogClear() == 0U)
 	{
-		s_log_record.records[i][0] = 0;
-		s_log_record.records[i][1] = 0;
+		return 0U;
 	}
-	s_log_record.point = 0;
 
-	return StorageFlash_SaveLogData(s_log_record.point, (const UINT8(*)[2])s_log_record.records);
+	memset(s_log_record.records, 0, sizeof(s_log_record.records));
+	s_log_record.point = 0U;
+	return 1U;
 }
 
 void ReadEEPROM_EventRecord_Parameters(void)
@@ -279,7 +307,7 @@ void ReadEEPROM_EventRecord_Parameters(void)
 	UINT8 point = 0;
 	UINT8 invalid = 0;
 
-	if (!StorageFlash_LoadLogData(&point, s_log_record.records))
+	if (!Storage_LogLoad(&point, s_log_record.records))
 	{
 		invalid = 1;
 	}
@@ -302,7 +330,9 @@ void ReadEEPROM_EventRecord_Parameters(void)
 	if (invalid)
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		EEPROM_ResetData_EventRecord_ToDefault();
+		memset(s_log_record.records, 0, sizeof(s_log_record.records));
+		s_log_record.point = 0U;
+		(void)Storage_LogClear();
 		return;
 	}
 

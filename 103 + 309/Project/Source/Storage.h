@@ -7,16 +7,17 @@
  * Public non-volatile storage API.
  *
  * Business modules should depend on this file only. The current backend is
- * STM32F1 internal Flash (Flash.c/Flash.h), but callers must not depend on
- * physical addresses, page size, A/B slots or journal details.
+ * STM32F1 internal Flash, but callers must not depend on physical addresses,
+ * page size, A/B slots or journal details.
  */
 
-#define STORAGE_AFE_WORD_COUNT                 ((uint16_t)24U)
-#define STORAGE_RW_PARAM_PROTECT_WORD_COUNT    ((uint16_t)65U)
-#define STORAGE_RW_PARAM_OTHER_WORD_COUNT      ((uint16_t)32U)
-#define STORAGE_RW_PARAM_RESERVED_WORD_COUNT   ((uint16_t)24U)
-#define STORAGE_LOG_RECORD_COUNT               ((uint16_t)100U)
-#define STORAGE_SOC_DATA_VERSION_V2            ((uint16_t)0x0002U)
+/* Keep count/version macros preprocessor-safe because some are used by #if. */
+#define STORAGE_AFE_WORD_COUNT                 24U
+#define STORAGE_RW_PARAM_PROTECT_WORD_COUNT    65U
+#define STORAGE_RW_PARAM_OTHER_WORD_COUNT      32U
+#define STORAGE_RW_PARAM_RESERVED_WORD_COUNT   24U
+#define STORAGE_LOG_RECORD_COUNT               100U
+#define STORAGE_SOC_DATA_VERSION_V2            0x0002U
 
 typedef enum
 {
@@ -79,10 +80,27 @@ uint8_t Storage_LoadAfeData(uint16_t *values, uint16_t word_count);
 uint8_t Storage_SaveAfeData(const uint16_t *values, uint16_t word_count);
 uint8_t Storage_LoadRwParamData(STORAGE_RW_PARAM_DATA *data);
 uint8_t Storage_SaveRwParamData(const STORAGE_RW_PARAM_DATA *data);
+
+/*
+ * Event-log API.
+ *
+ * Storage_LogAppend() is the normal runtime path: one event is appended as a
+ * small delta record. Storage_LogLoad() reconstructs the 100-entry ring from
+ * the latest A/B snapshot plus valid deltas. Storage_LogClear() atomically
+ * advances the base snapshot so stale deltas can never reappear after reset.
+ *
+ * Storage_LoadLogData()/Storage_SaveLogData() remain as the legacy snapshot
+ * compatibility API used by the backend and old code during migration.
+ */
+uint8_t Storage_LogLoad(uint8_t *point,
+                        uint8_t records[STORAGE_LOG_RECORD_COUNT][2]);
+uint8_t Storage_LogAppend(uint8_t event, uint8_t delta);
+uint8_t Storage_LogClear(void);
 uint8_t Storage_LoadLogData(uint8_t *point,
                             uint8_t records[STORAGE_LOG_RECORD_COUNT][2]);
 uint8_t Storage_SaveLogData(uint8_t point,
                             const uint8_t records[STORAGE_LOG_RECORD_COUNT][2]);
+
 uint8_t Storage_LoadFactoryAgingData(STORAGE_FACTORY_AGING_DATA *data);
 uint8_t Storage_SaveFactoryAgingData(const STORAGE_FACTORY_AGING_DATA *data);
 
