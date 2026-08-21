@@ -14,8 +14,6 @@ static SLEEP_RUNTIME s_sleep;
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
 
-#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
-
 static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
 	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
@@ -37,69 +35,27 @@ UINT8 SleepDeal_IsWakeupValid(void)
 		SleepDeal_MarkBootFromSleepChargerWakeup();
 		return 1U;
 	}
+
 	if (SleepDeal_IsKeyPressed())
 	{
 		return 1U;
 	}
-
-#if 0
-	while (1)
-	{
-		UINT16 hold_cnt = 0;
-		UINT16 display_cnt = 0;
-
-		if (!SleepDeal_IsKeyPressed())
-		{
-			return 0;
-		}
-
-		hold_cnt = 0;
-		while (SleepDeal_IsKeyPressed())
-		{
-			if (SleepDeal_IsChargerWakeupActive())
-			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
-			}
-
-			__delay_ms(10);
-			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
-			{
-				return 1;
-			}
-		}
-
-		// display_cnt = 0;
-		// while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
-		// {
-		// 	if (SleepDeal_IsChargerWakeupActive())
-		// 	{
-		// 		SleepDeal_MarkBootFromSleepChargerWakeup();
-		// 		return 1;
-		// 	}
-		// 	if (SleepDeal_IsKeyPressed())
-		// 	{
-		// 		break;
-		// 	}
-
-		// 	__delay_ms(10);
-		// 	display_cnt++;
-		// }
-
-		// if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
-		// {
-		// 	LedBar_PrepareForStop();
-		// 	return 0;
-		// }
-	}
-#endif
 
 	return 0U;
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)
 {
-	UINT16 boot_flag = FLASH_DEEP_SLEEP_VALUE;
+	UINT16 boot_flag;
+
+	if (sleep_mode == NORMAL_MODE)
+	{
+		boot_flag = FLASH_NORMAL_SLEEP_VALUE;
+	}
+	else
+	{
+		boot_flag = FLASH_DEEP_SLEEP_VALUE;
+	}
 
 	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
@@ -148,7 +104,7 @@ UINT16 BootFlag_Read(void)
 	BootFlag_EnableAccess();
 	flag = BKP_ReadBackupRegister(SLEEP_BKP_FLAG_REG);
 	inverse_flag = BKP_ReadBackupRegister(SLEEP_BKP_INV_REG);
-	if ((UINT16)(flag ^ inverse_flag) != 0xFFFF)
+	if ((UINT16)(flag ^ inverse_flag) != 0xFFFFU)
 	{
 		return BOOT_FLAG_RESET_VALUE;
 	}
@@ -189,10 +145,17 @@ UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
 
 static void SleepDeal_WaitStopWakeup(void)
 {
-	do
+	while (!SleepDeal_IsWakeupValid())
 	{
+		/* Clear only stale pending state before sleeping. Recheck level-based
+		   wake conditions so an already-present charger/key cannot be missed. */
+		LowPower_ClearWakeupPending();
+		if (SleepDeal_IsWakeupValid())
+		{
+			break;
+		}
 		Sys_StopMode();
-	} while (!SleepDeal_IsWakeupValid());
+	}
 }
 
 void SleepDeal_HandleBootSleepStartup(void)
@@ -202,27 +165,31 @@ void SleepDeal_HandleBootSleepStartup(void)
 	sleep_flag = BootFlag_Read();
 	s_sleep.boot_sleep = 0U;
 	s_sleep.chg_wake = 0U;
+
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
 		break;
+
 	case FLASH_NORMAL_SLEEP_VALUE:
 		break;
+
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
 		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
-		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
 		break;
+
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 		s_sleep.boot_sleep = 1U;
 		s_sleep.chg_wake = 1U;
 		break;
+
 	case FLASH_SLEEP_RESET_VALUE:
-		// ????
 		break;
+
 	default:
 		BootFlag_Clear();
 		break;
