@@ -270,10 +270,15 @@ static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
 	return &(((volatile UINT8 *)&System_ErrFlag)[offset]);
 }
 
-void InitSystemMonitorData_EEPROM(void)
+void SystemRuntime_Init(void)
 {
 	s_system_status.all = SYSTEM_STATUS_DEFAULT_MASK;
 	BmsCore_Init();
+}
+
+void InitSystemMonitorData_EEPROM(void)
+{
+	SystemRuntime_Init();
 }
 
 void SystemRuntime_MarkBootReady(void)
