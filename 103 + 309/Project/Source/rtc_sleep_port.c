@@ -30,8 +30,11 @@ UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
 {
-    // return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
-    return false;
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
+    return (UINT8)(MCUI_ENI_DI1 == 0);
+#else
+    return 0U;
+#endif
 }
 
 UINT8 RtcSleep_PortGetExternalCommCounter(void)
@@ -81,7 +84,7 @@ void RtcSleep_PortRestoreAfterStop(void)
 
 UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
 {
-    return RTC_GetLastWakeupPeriodSeconds();
+    return RTC_GetWakeupPeriodSeconds();
 }
 
 void RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
