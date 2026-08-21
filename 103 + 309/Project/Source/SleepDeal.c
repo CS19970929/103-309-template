@@ -23,27 +23,31 @@ static UINT8 SleepDeal_IsChargerWakeupActive(void)
 
 static UINT8 SleepDeal_IsKeyPressed(void)
 {
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
 	return (UINT8)(MCUI_ENI_DI1 == 0);
+#else
+	return 0U;
+#endif
 }
 
 UINT8 SleepDeal_IsWakeupValid(void)
 {
-	UINT16 hold_cnt = 0;
-	UINT16 display_cnt = 0;
-
 	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
-		return 1;
+		return 1U;
 	}
 	if (SleepDeal_IsKeyPressed())
 	{
-		return 1;
+		return 1U;
 	}
 
 #if 0
 	while (1)
 	{
+		UINT16 hold_cnt = 0;
+		UINT16 display_cnt = 0;
+
 		if (!SleepDeal_IsKeyPressed())
 		{
 			return 0;
@@ -89,6 +93,8 @@ UINT8 SleepDeal_IsWakeupValid(void)
 		// }
 	}
 #endif
+
+	return 0U;
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)
