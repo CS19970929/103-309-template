@@ -187,6 +187,7 @@ void InitWakeUp_Base(void)
                              EXTI_Line0,
                              EXTI_Trigger_Rising,
                              EXTI0_IRQn);
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -194,6 +195,7 @@ void InitWakeUp_Base(void)
                              EXTI_Line9,
                              EXTI_Trigger_Falling,
                              EXTI9_5_IRQn);
+#endif
 #endif
 }
 
@@ -210,6 +212,7 @@ void InitWakeUp_NormalMode(void)
     //                          EXTI_Line0,
     //                          EXTI_Trigger_Rising_Falling,
     //                          EXTI0_IRQn);
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -217,6 +220,7 @@ void InitWakeUp_NormalMode(void)
                              EXTI_Line9,
                              EXTI_Trigger_Falling,
                              EXTI9_5_IRQn);
+#endif
 
     {
 #ifdef UART1_WAKEUP_ENABLE
@@ -252,6 +256,7 @@ void InitWakeUp_RTCMode(void)
     //                          EXTI_Line0,
     //                          EXTI_Trigger_Rising_Falling,
     //                          EXTI0_IRQn);
+#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -259,6 +264,7 @@ void InitWakeUp_RTCMode(void)
                              EXTI_Line9,
                              EXTI_Trigger_Rising_Falling,
                              EXTI9_5_IRQn);
+#endif
 
     {
 #ifdef UART1_WAKEUP_ENABLE
