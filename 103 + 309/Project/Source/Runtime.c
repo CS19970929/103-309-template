@@ -63,6 +63,12 @@ void Runtime_RunOnce(void)
 	FactoryAging_Task();
 	DebugHooks_RuntimeAfterAging();
 
+	/*
+	 * Reconcile MOS state from current inputs before the periodic AFE task.
+	 * This removes the dependency on charger-edge history during startup.
+	 */
+	MosControl_Update();
+
 	APP_LedBar();
 	DebugHooks_RuntimeAfterLed();
 

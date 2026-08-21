@@ -10,6 +10,9 @@ void MosStartup_OpenDischargeCloseCharge(void);
 void MosStartup_EnterFactoryMode(bool on);
 void MosStartup_ApplyInitialState(void);
 
+/* Reconcile MOS target from current runtime inputs; safe to call repeatedly. */
+void MosControl_Update(void);
+
 /* Keep legacy call sites readable while the module boundary is tightened. */
 #define open_chg_close_dsg() MosStartup_OpenChargeCloseDischarge()
 #define open_dsg_close_chg() MosStartup_OpenDischargeCloseCharge()
