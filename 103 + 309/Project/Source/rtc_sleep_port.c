@@ -3,6 +3,8 @@
 #include "rtc_sleep_afe_port.h"
 #include "rtc_sleep_port.h"
 
+#define RTC_SLEEP_ACTIVE_CURRENT_A10 ((UINT16)5U)
+
 UINT8 RtcSleep_PortIsOneSecondTick(void)
 {
     return g_st_SysTimeFlag.bits.b1Sys1000msFlag;
@@ -13,12 +15,12 @@ UINT16 RtcSleep_PortGetCellMinMv(void)
     return g_stCellInfoReport.u16VCellMin;
 }
 
-UINT16 RtcSleep_PortGetChargeCurrentMa(void)
+UINT16 RtcSleep_PortGetChargeCurrentA10(void)
 {
     return g_stCellInfoReport.u16Ichg;
 }
 
-UINT16 RtcSleep_PortGetDischargeCurrentMa(void)
+UINT16 RtcSleep_PortGetDischargeCurrentA10(void)
 {
     return g_stCellInfoReport.u16IDischg;
 }
@@ -26,6 +28,52 @@ UINT16 RtcSleep_PortGetDischargeCurrentMa(void)
 UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 {
     return OtherElement.u16Sleep_Vlow;
+}
+
+UINT32 RtcSleep_PortCollectBlockReason(volatile UINT8 *external_comm_snapshot)
+{
+    UINT32 reason = 0U;
+    UINT8 comm;
+
+    if (RtcSleep_PortGetChargeCurrentA10() >= RTC_SLEEP_ACTIVE_CURRENT_A10)
+    {
+        reason |= LP_BLOCK_CHARGE;
+    }
+    if (RtcSleep_PortGetDischargeCurrentA10() >= RTC_SLEEP_ACTIVE_CURRENT_A10)
+    {
+        reason |= LP_BLOCK_DISCHARGE;
+    }
+    if (Sci_IsAnyPortBusy() || Can_IsBusy())
+    {
+        reason |= LP_BLOCK_COMM;
+    }
+    if (RtcSleep_PortIsMcuWakeActive() != 0U)
+    {
+        reason |= LP_BLOCK_KEY;
+    }
+    if (StorageFlash_IsBusy() || (u8FlashUpdateE2PROM != 0U))
+    {
+        reason |= LP_BLOCK_FLASH_BUSY;
+    }
+    if (u8FlashUpdateFlag != 0U)
+    {
+        reason |= LP_BLOCK_UPGRADE;
+    }
+    if ((g_stCellInfoReport.unMdlFault_Third.all != 0U) ||
+        (g_stCellInfoReport.unMdlFault_Second.all != 0U) ||
+        (SH367309_Reg_Store.REG_BSTATUS1.bits.SC != 0U))
+    {
+        reason |= LP_BLOCK_FAULT;
+    }
+
+    comm = SleepDeal_GetExternalCommCounter();
+    if ((external_comm_snapshot != 0) && (comm != *external_comm_snapshot))
+    {
+        *external_comm_snapshot = comm;
+        reason |= LP_BLOCK_EXT_COMM;
+    }
+
+    return reason;
 }
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
