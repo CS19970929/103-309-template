@@ -5,7 +5,6 @@
 int AFE_PARAM_WRITE_Flag = 1;
 
 static const UINT16 s_sh_afe_ocd1v_occv[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};
-static const UINT16 s_sh_afe_ocd2v[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500};
 const UINT16 g_u16ShAfeScvTable[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};
 static const UINT16 s_sh_afe_ovt_uvt[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000};
 const UINT16 g_u16ShAfeSctTable[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};
@@ -17,10 +16,6 @@ AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS4
 
 extern UINT8 ucMTPBuffer[26];
 extern const UINT16 iSheldTemp_10K_NTC[141];
-
-#define DSG_CHG_OCP_DELAY_TIME (30 * 100)
-#define OFF 0
-#define ON 1
 
 int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 {
@@ -89,20 +84,14 @@ void Refresh_Parameters(void)
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, s_sh_afe_ocd1t);
 
-	// temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2V = Choose_Right_Value(temp, s_sh_afe_ocd2v);
-	// temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10;
-	// AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD2T = Choose_Right_Value(temp, s_sh_afe_occt_ocd2t);
-
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);
 	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, s_sh_afe_occt_ocd2t);
 
-	// InitShortCur();
 	temp = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = Choose_Right_Value(temp, g_u16ShAfeSctTable);
-	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE; // 当前对应多少mv
+	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
 
 	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;
@@ -146,9 +135,15 @@ static void AFE_RestoreCurValues(const UINT16 *values)
 static UINT8 AFE_SaveCurValuesToFlash(void)
 {
 	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
+	UINT8 result;
 
 	AFE_CopyCurValues(values);
-	return StorageFlash_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
+	result = StorageFlash_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
+	if (result != 0U)
+	{
+		BmsEvent_Set(BMS_CORE_EVT_CONFIG_CHANGED);
+	}
+	return result;
 }
 
 bool Write_Parameters(void)
@@ -238,7 +233,6 @@ bool SH367309_UpdataAfeConfig(void)
 			AFE_Reset();
 			Delay1ms(5);
 			AFE_IsReady();
-			// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
 			MosStartup_ApplyInitialState();
 			if (!ret)
 			{
@@ -267,7 +261,9 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
-	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) && (u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) && (u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) &&
+		(u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) &&
+		(u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
 	{
 		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
 		AFE_CopyCurValues(snapshot);
