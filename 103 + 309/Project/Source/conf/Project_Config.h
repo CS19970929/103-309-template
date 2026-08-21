@@ -26,6 +26,14 @@
 // <i> Selects shunt/current-range hardware defaults only. Runtime protection thresholds remain writable parameters.
 #define PROJECT_CFG_CURRENT_LEVEL 2
 
+// <o> Default series count <3-32>
+// <i> Factory default only. Runtime value is loaded from writable parameter storage.
+#define PROJECT_CFG_DEFAULT_SERIES_NUM 12
+
+// <o> Default rated capacity Ah*10 <1-50000>
+// <i> Factory default only. Runtime value is loaded from writable parameter storage.
+#define PROJECT_CFG_DEFAULT_CAPACITY_AH10 300
+
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 
