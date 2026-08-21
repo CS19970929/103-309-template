@@ -96,16 +96,22 @@ static void EEPROM_ApplyCalibrationData(const STORAGE_CALIB_DATA *data)
 static void EEPROM_LoadCalibrationFromStorage(void)
 {
 	STORAGE_CALIB_DATA data;
+	UINT8 loaded;
 
-	if ((Storage_LoadCalibrationData(&data) != 0U) &&
-		(EEPROM_CalibrationDataIsValid(&data) != 0U))
+	loaded = Storage_LoadCalibrationData(&data);
+	if (loaded != 0U)
 	{
-		EEPROM_ApplyCalibrationData(&data);
-		return;
+		if (EEPROM_CalibrationDataIsValid(&data) != 0U)
+		{
+			EEPROM_ApplyCalibrationData(&data);
+			return;
+		}
+
+		/* A stored calibration object exists but its values are not usable. */
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 	}
 
-	/* Defaults are already in RAM. Persist them once to initialize the object. */
-	System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	/* Missing data is a normal first-boot migration: defaults are already in RAM. */
 	EEPROM_BuildCalibrationData(&data);
 	(void)Storage_SaveCalibrationData(&data);
 }

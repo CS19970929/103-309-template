@@ -156,7 +156,7 @@ static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done, U
 	if (Storage_LoadFactoryAgingData(&data) != 0U)
 	{
 		FactoryAging_LoadDurationFromData(&data);
-		if (data.u16State == FLASH_FACTORY_AGING_STATE_DONE)
+		if (data.u16State == STORAGE_FACTORY_AGING_STATE_DONE)
 		{
 			*elapsed10ms = FACTORY_AGING_DURATION_10MS;
 			*done = 1U;
@@ -164,14 +164,14 @@ static UINT8 FactoryAging_LoadStoredProgress(UINT32 *elapsed10ms, UINT8 *done, U
 			s_factory_aging.flashSaveValid = 1U;
 			return 1U;
 		}
-		if (data.u16State == FLASH_FACTORY_AGING_STATE_RUNNING)
+		if (data.u16State == STORAGE_FACTORY_AGING_STATE_RUNNING)
 		{
 			flash_elapsed = FactoryAging_ClampElapsed(data.u32Elapsed10ms);
 			s_factory_aging.lastFlashSave10ms = flash_elapsed;
 			s_factory_aging.flashSaveValid = 1U;
 			has_progress = 1U;
 		}
-		else if (data.u16State == FLASH_FACTORY_AGING_STATE_STOPPED)
+		else if (data.u16State == STORAGE_FACTORY_AGING_STATE_STOPPED)
 		{
 			flash_elapsed = FactoryAging_ClampElapsed(data.u32Elapsed10ms);
 			s_factory_aging.lastFlashSave10ms = flash_elapsed;
@@ -255,14 +255,14 @@ static UINT8 FactoryAging_MarkDone(void)
 	STORAGE_FACTORY_AGING_DATA data;
 
 	if ((Storage_LoadFactoryAgingData(&data) != 0U) &&
-		(data.u16State == FLASH_FACTORY_AGING_STATE_DONE))
+		(data.u16State == STORAGE_FACTORY_AGING_STATE_DONE))
 	{
 		s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
 		return 1U;
 	}
 
 	s_factory_aging.elapsed10ms = FACTORY_AGING_DURATION_10MS;
-	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_DONE, 1U, 1U);
+	return FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_DONE, 1U, 1U);
 }
 
 static UINT8 FactoryAging_ResolveStoredState(UINT32 *elapsed, UINT8 *was_done, UINT8 *was_stopped)
@@ -293,7 +293,7 @@ static UINT8 FactoryAging_EnterRunningFromHost(UINT32 now_tick)
 	s_factory_aging.lastTick = now_tick;
 	s_factory_aging.nextFinishRetry10ms = 0U;
 	FactoryAging_ApplyRunningMos();
-	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 1U, 1U);
+	return FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_RUNNING, 1U, 1U);
 }
 
 static UINT8 FactoryAging_Finish(void)
@@ -343,7 +343,7 @@ static void FactoryAging_Start(UINT32 now_tick)
 	}
 
 	FactoryAging_ApplyRunningMos();
-	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
+	(void)FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 
 static void FactoryAging_AddRunningTicks(UINT32 now_tick)
@@ -424,7 +424,7 @@ UINT8 FactoryAging_SaveProgressBeforeSleep(void)
 		return FactoryAging_Finish();
 	}
 
-	return FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
+	return FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 
 UINT8 FactoryAging_IsActive(void)
@@ -454,7 +454,7 @@ void FactoryAging_SaveProgressQuick(void)
 		return;
 	}
 
-	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
+	(void)FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_RUNNING, 0U, 1U);
 }
 
 UINT8 FactoryAging_GetState(void)
@@ -607,5 +607,5 @@ void FactoryAging_Task(void)
 	}
 
 	// FactoryAging_ApplyRunningMos();
-	(void)FactoryAging_SaveStoredProgress(FLASH_FACTORY_AGING_STATE_RUNNING, 0U, 0U);
+	(void)FactoryAging_SaveStoredProgress(STORAGE_FACTORY_AGING_STATE_RUNNING, 0U, 0U);
 }
