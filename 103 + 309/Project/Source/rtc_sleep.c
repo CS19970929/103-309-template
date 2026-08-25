@@ -121,8 +121,8 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
 #ifdef _DI_SWITCH_SYS_ONOFF
-    if (1 == MCUI_ENI_DI1 && g_stCellInfoReport.u16Ichg < 5)
-    // if (1 == MCUI_ENI_DI1)
+    // if (1 == MCUI_ENI_DI1 && g_stCellInfoReport.u16Ichg < 5)
+    if (1 == MCUI_ENI_DI1)
     {
         LowPower_Request(NORMAL_MODE);
         return 1U;

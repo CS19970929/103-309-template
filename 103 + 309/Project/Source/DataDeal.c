@@ -511,6 +511,49 @@ static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
     return (UINT16)current_a10;
 }
 
+void test_Autocurrent_cycle(void)
+{
+    static uint8_t step = 0;
+
+    switch (step)
+    {
+    case 0:
+        if (g_stCellInfoReport.SocElement.u16Soc < 99)
+        {
+            step = 1;
+            sys_time.CHG = BMS_CAPCITY * 5;
+            sys_time.DSG = 0;
+            g_stCellInfoReport.u16Ichg = sys_time.CHG;
+            g_stCellInfoReport.u16IDischg = 0;
+        }
+        else
+        {
+            step = 1;
+        }
+        break;
+    case 1:
+    {
+        if (g_stCellInfoReport.SocElement.u16Soc >= 99)
+        {
+            step = 2;
+            sys_time.CHG = 0;
+            sys_time.DSG = BMS_CAPCITY * 5;
+            g_stCellInfoReport.u16Ichg = 0;
+            g_stCellInfoReport.u16IDischg = sys_time.DSG;
+        }
+        break;
+    }
+    case 2:
+        if (g_stCellInfoReport.SocElement.u16Soc <= 1)
+        {
+            step = 0;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
 void DataLoad_soc_test(void)
 {
     static uint8_t test_state = 0;
@@ -879,8 +922,9 @@ void App_AFEGet(void)
     DataLoad_CellVoltMaxMinFind();
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    DataLoad_Current();
+    // DataLoad_Current();
     // DataLoad_soc_test();
+    // test_Autocurrent_cycle();
 
     AfeCurrent_NextSeq();
 

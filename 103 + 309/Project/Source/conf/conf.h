@@ -14,9 +14,9 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
-// #define _DI_SWITCH_SYS_ONOFF	//DI������������
+#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-#define _DI_SWITCH_longKEY_ONOFF
+// #define _DI_SWITCH_longKEY_ONOFF
 
 // #define __VIRTURE_CURRENT__
 
@@ -78,7 +78,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_30A
+#define LEVEL_CURR  CURR_40A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
