@@ -4,7 +4,7 @@
 #define FLASH_ADDR_IAP_START             0x08000000
 #define FLASH_ADDR_APP_START             0x08004800
 
-/* Reserved persistent-storage pages start at 0x0801C000. */
+/* Legacy persistent objects are retained read-only for one-time migration. */
 #define FLASH_ADDR_SH367309_VALUE        0x0801E000
 #define FLASH_ADDR_SH367309_FLAG         0x0801E800
 #define FLASH_ADDR_UPGRADE_PARAM_FLAG    ((UINT32)0x0801F000)
@@ -20,14 +20,20 @@
 #define FLASH_STORAGE_SLOT_SIZE          FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT   ((UINT16)4U)
 
+/* Legacy AFE/RW slots; new writes are consolidated into CONFIG A/B. */
 #define FLASH_ADDR_STORAGE_AFE_SLOT_A      ((UINT32)0x0801C000)
 #define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A ((UINT32)0x0801C400)
 #define FLASH_ADDR_STORAGE_AFE_SLOT_B      ((UINT32)0x0801C800)
 #define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B ((UINT32)0x0801CC00)
+
 #define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801D000)
 #define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801D800)
 #define FLASH_ADDR_STORAGE_SOC_SLOT_A      FLASH_ADDR_SH367309_VALUE
 #define FLASH_ADDR_STORAGE_SOC_SLOT_B      FLASH_ADDR_SH367309_FLAG
+
+/* Free legacy holes are used for the consolidated configuration pair. */
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E400)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801EC00)
 
 #define FLASH_STORAGE_AFE_WORD_COUNT     ((UINT16)24)
 #define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT   65
@@ -35,6 +41,7 @@
 #define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT 24
 #define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
 #define FLASH_STORAGE_SOC_DATA_VERSION_V2 ((UINT16)0x0002)
+#define FLASH_STORAGE_CONFIG_FORMAT_VERSION ((UINT16)0x0001)
 
 #define FLASH_309_RTC_RTC_VALUE          ((UINT16)0x1222)
 #define FLASH_309_RTC_NORMAL_VALUE       ((UINT16)0x2333)
@@ -84,6 +91,16 @@ typedef struct
 
 typedef struct
 {
+	UINT16 u16FormatVersion;
+	UINT16 u16AppliedPolicyVersion;
+	UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
+	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
+	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
+	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
+} STORAGE_FLASH_CONFIG_DATA;
+
+typedef struct
+{
 	UINT32 u32Elapsed10ms;
 	UINT16 u16State;
 	UINT16 u16DurationHours;
@@ -99,6 +116,8 @@ UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
+UINT16 StorageFlash_GetConfigPolicyVersion(void);
+UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
