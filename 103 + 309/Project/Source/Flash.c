@@ -856,15 +856,23 @@ void StorageFlash_PrintBootCheck(void)
 		   FLASH_STORAGE_RECORD_ALIGNMENT,
 		   (unsigned long)((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) / 1024U),
 		   (unsigned long)(FLASH_APP_MAX_SIZE / 1024U));
-	if (flash_size_kb < 128U)
+
+	/* The product contract is the official STM32F103C8 64KB Flash only. Some
+	 * devices report more, but storage and APP deliberately remain below
+	 * 0x08010000. A value below 64KB means this layout is not safe to use. */
+	if (flash_size_kb < 64U)
 	{
-		printf("[FLASH_BOOT] rear64 unavailable: skip 0x08010000+ storage check\r\n");
+		printf("[FLASH_BOOT] ERROR: device flash smaller than required 64KB contract\r\n");
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return;
 	}
 
 	config_valid = StorageFlash_LoadConfigData(&config);
 	policy_version = config_valid ? config.u16AppliedPolicyVersion : FLASH_UPGRADE_PARAM_FLAG_RESET;
-	printf("[FLASH_BOOT] config=%u policy=0x%04X iap_mailbox=%u\r\n",
+	printf("[FLASH_BOOT] official_end=0x%08lX storage=[0x%08lX,0x%08lX) config=%u policy=0x%04X iap_mailbox=%u\r\n",
+		   (unsigned long)FLASH_ADDR_DEVICE_END,
+		   (unsigned long)FLASH_ADDR_STORAGE_START,
+		   (unsigned long)FLASH_ADDR_STORAGE_END,
 		   config_valid,
 		   policy_version,
 		   AppUpgrade_IsIapRequested());
