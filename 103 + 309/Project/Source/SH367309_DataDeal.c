@@ -119,9 +119,7 @@ static void AFE_RestoreCurValues(const UINT16 *values)
 
 static UINT8 AFE_SaveCurValuesToFlash(void)
 {
-	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
-	AFE_CopyCurValues(values);
-	return StorageFlash_SaveAfeData(values, AFE_PARAMETES_TOTAL_LENGTH);
+	return EEPROM_SaveConfigToFlash();
 }
 
 static UINT8 AFE_ReadConfigImage(UINT8 image[AFE_CONFIG_MTP_LENGTH])
@@ -296,18 +294,21 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
-	UINT8 i;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
+	UINT16 i;
+	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
+	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	RTC_SetCounter(0);
+	AFE_CopyCurValues(snapshot);
 	Feed_IWatchDog;
-	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		*(P + i * 4 - 1) = *(P + i * 4);
+		(param + i)->curValue = (param + i)->defaultValue;
 	}
 	Feed_IWatchDog;
 	if (!AFE_SaveCurValuesToFlash())
 	{
+		AFE_RestoreCurValues(snapshot);
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
 	}
@@ -315,36 +316,4 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 	AFE_PARAM_WRITE_Flag = 1;
 	return 1U;
-}
-
-void ReadEEPROM_AFE_Parameters(void)
-{
-	UINT16 i;
-	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
-	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
-	UINT8 use_default = 0U;
-
-	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
-	{
-		use_default = 1U;
-	}
-	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		if (!use_default)
-		{
-			(P + i)->curValue = values[i];
-			if (((P + i)->curValue < (P + i)->minValue) ||
-				((P + i)->curValue > (P + i)->maxValue))
-			{
-				use_default = 1U;
-			}
-		}
-	}
-	if (use_default)
-	{
-		if (!EEPROM_ResetData_AFE_ParametersToDefault())
-		{
-			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		}
-	}
 }
