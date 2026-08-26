@@ -5,43 +5,44 @@
 #define FLASH_ADDR_APP_START             0x08004800
 
 /*
- * Persistent storage layout contract:
- * - STM32F10X_MD erase page: 1KB
- * - APP must end before FLASH_ADDR_STORAGE_START
- * - the last 8KB of the 128KB address space is reserved for persistence
+ * STM32F103C8 project storage contract.
+ *
+ * This product intentionally uses the 128KB physical Flash available on the
+ * selected C8 devices. The firmware target remains STM32F10X_MD, therefore
+ * the erase page is 1KB. APP must never cross FLASH_ADDR_STORAGE_START.
  */
 #if !defined(STM32F10X_MD)
-#error "Persistent Flash layout requires STM32F10X_MD 1KB erase pages"
+#error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
 #endif
 
 #define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000400)
-#define FLASH_STORAGE_SLOT_SIZE          FLASH_STORAGE_PAGE_SIZE
-#define FLASH_STORAGE_RECORD_ALIGNMENT   ((UINT16)2U)
-#define FLASH_ADDR_STORAGE_START          ((UINT32)0x0801E000)
-#define FLASH_ADDR_STORAGE_END            ((UINT32)0x08020000)
-#define FLASH_ADDR_APP_END                FLASH_ADDR_STORAGE_START
-#define FLASH_APP_MAX_SIZE                (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
+#define FLASH_STORAGE_SLOT_SIZE           FLASH_STORAGE_PAGE_SIZE
+#define FLASH_STORAGE_RECORD_ALIGNMENT    ((UINT16)2U)
+#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E000)
+#define FLASH_ADDR_STORAGE_END             ((UINT32)0x08020000)
+#define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
+#define FLASH_APP_MAX_SIZE                 (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
 
-/* Current persistent objects only. */
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A    ((UINT32)0x0801E000)
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B    ((UINT32)0x0801E400)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_A       ((UINT32)0x0801E800)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_B       ((UINT32)0x0801EC00)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_A       ((UINT32)0x0801F000)
-#define FLASH_ADDR_STORAGE_LOG_DELTA_A      ((UINT32)0x0801F400)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_B       ((UINT32)0x0801F800)
-#define FLASH_ADDR_STORAGE_LOG_DELTA_B      ((UINT32)0x0801FC00)
+/* Flash addresses describe storage objects only; parameter categories do not
+ * own Flash pages. All configurable BMS parameters share CONFIG A/B. */
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E000)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801E400)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0801E800)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0801EC00)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801F000)
+#define FLASH_ADDR_STORAGE_LOG_DELTA_A     ((UINT32)0x0801F400)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801F800)
+#define FLASH_ADDR_STORAGE_LOG_DELTA_B     ((UINT32)0x0801FC00)
 
-#define FLASH_STORAGE_AFE_WORD_COUNT     ((UINT16)24)
-#define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT   65
-#define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT     32
-#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT 24
-#define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
-#define FLASH_STORAGE_SOC_DATA_VERSION_V3 ((UINT16)0x0003)
-#define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT FLASH_STORAGE_SOC_DATA_VERSION_V3
-/* Source alias only. It maps to the current format and does not enable V2 loading. */
-#define FLASH_STORAGE_SOC_DATA_VERSION_V2 FLASH_STORAGE_SOC_DATA_VERSION_CURRENT
-#define FLASH_STORAGE_CONFIG_FORMAT_VERSION ((UINT16)0x0001)
+#define BMS_CONFIG_AFE_WORD_COUNT          ((UINT16)24U)
+#define BMS_CONFIG_PROTECT_WORD_COUNT      ((UINT16)65U)
+#define BMS_CONFIG_CALIB_WORD_COUNT        ((UINT16)47U)
+#define BMS_CONFIG_OTHER_WORD_COUNT        ((UINT16)32U)
+#define BMS_CONFIG_RESERVED_WORD_COUNT     ((UINT16)24U)
+#define FLASH_STORAGE_LOG_RECORD_COUNT     ((UINT16)100U)
+
+#define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
+#define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)
 
 #define FLASH_309_RTC_RTC_VALUE          ((UINT16)0x1222)
 #define FLASH_309_RTC_NORMAL_VALUE       ((UINT16)0x2333)
@@ -75,30 +76,51 @@ typedef struct
 
 typedef struct
 {
-	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
-	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
-	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
-} STORAGE_FLASH_RW_PARAM_DATA;
+	UINT16 value[BMS_CONFIG_AFE_WORD_COUNT];
+} BMS_CONFIG_AFE;
+
+typedef struct
+{
+	UINT16 value[BMS_CONFIG_PROTECT_WORD_COUNT];
+} BMS_CONFIG_PROTECT;
+
+typedef struct
+{
+	UINT16 k[BMS_CONFIG_CALIB_WORD_COUNT];
+	INT16 b[BMS_CONFIG_CALIB_WORD_COUNT];
+} BMS_CONFIG_CALIBRATION;
+
+typedef struct
+{
+	UINT16 value[BMS_CONFIG_OTHER_WORD_COUNT];
+} BMS_CONFIG_OTHER;
 
 typedef struct
 {
 	UINT16 u16FormatVersion;
 	UINT16 u16AppliedPolicyVersion;
-	UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
-	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
-	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
-	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
-} STORAGE_FLASH_CONFIG_DATA;
+	BMS_CONFIG_AFE afe;
+	BMS_CONFIG_PROTECT protect;
+	BMS_CONFIG_CALIBRATION calibration;
+	BMS_CONFIG_OTHER other;
+	UINT16 reserved[BMS_CONFIG_RESERVED_WORD_COUNT];
+} BMS_CONFIG;
+
+/* Temporary source-level alias while call sites are being collapsed onto the
+ * unified Config API. It does not represent a different on-Flash format. */
+typedef BMS_CONFIG STORAGE_FLASH_CONFIG_DATA;
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);
+
+UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data);
+UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data);
+UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr);
+UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length);
+
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
 UINT16 StorageFlash_GetConfigPolicyVersion(void);
 UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
