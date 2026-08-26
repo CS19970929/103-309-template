@@ -2,7 +2,7 @@
 #define PROJECT_CONFIG_H
 
 /* Keil uVision: right click this file and select "Configuration Wizard". */
-/* 项目可视化配置: Keil Configuration Wizard marker. */
+/* 脧卯脛驴驴脡脢脫禄炉脜盲脰脙: Keil Configuration Wizard marker. */
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
@@ -45,10 +45,6 @@
 
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
-
-// <o> Factory aging duration seconds <1-604800>
-// #define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
-#define PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS 259200
 
 // <q> Enable debug system monitor
 // <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
@@ -174,9 +170,6 @@
 
 // <q> Reset event record on upgrade
 #define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
-
-// <q> Reset factory aging time on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_FACTORY_AGING_TIME 1
 
 // <q> Update all OtherElement words from firmware defaults on upgrade
 // <i> Values come from OtherElement_default in DataDeal.h.

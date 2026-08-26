@@ -1,19 +1,14 @@
 #include "main.h"
 
-#define FLASH_STORAGE_MAGIC_SOC                 ((UINT32)0x534F4331U)
-#define FLASH_STORAGE_MAGIC_AFE                 ((UINT32)0x41464531U)
-#define FLASH_STORAGE_MAGIC_RW_PARAM            ((UINT32)0x52575031U)
-#define FLASH_STORAGE_MAGIC_CONFIG              ((UINT32)0x43464731U)
-#define FLASH_STORAGE_MAGIC_LOG                 ((UINT32)0x4C4F4731U)
-#define FLASH_STORAGE_MAGIC_FACTORY_AGING       ((UINT32)0x41474531U)
-#define FLASH_STORAGE_RECORD_VERSION_LEGACY     ((UINT16)0x0001U)
-#define FLASH_STORAGE_RECORD_VERSION            ((UINT16)0x0002U)
-#define FLASH_SIZE_REG_ADDR                     ((UINT32)0x1FFFF7E0U)
-#define FLASH_ERASE_RETRY_MAX                   ((UINT8)3U)
-#define FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG    ((UINT32)0x0801F000U)
-#define APP_UPGRADE_MAILBOX_ADDR                ((UINT32)0x20004FE0U)
-#define APP_UPGRADE_MAILBOX_MAGIC               ((UINT32)0x49415031U)
-#define APP_UPGRADE_MAILBOX_REQUEST             ((UINT32)0x5AA55AA5U)
+#define FLASH_STORAGE_MAGIC_SOC              ((UINT32)0x534F4331U)
+#define FLASH_STORAGE_MAGIC_CONFIG           ((UINT32)0x43464731U)
+#define FLASH_STORAGE_MAGIC_LOG              ((UINT32)0x4C4F4731U)
+#define FLASH_STORAGE_RECORD_VERSION         ((UINT16)0x0002U)
+#define FLASH_SIZE_REG_ADDR                  ((UINT32)0x1FFFF7E0U)
+#define FLASH_ERASE_RETRY_MAX                ((UINT8)3U)
+#define APP_UPGRADE_MAILBOX_ADDR             ((UINT32)0x20004FE0U)
+#define APP_UPGRADE_MAILBOX_MAGIC            ((UINT32)0x49415031U)
+#define APP_UPGRADE_MAILBOX_REQUEST          ((UINT32)0x5AA55AA5U)
 
 typedef struct
 {
@@ -98,11 +93,6 @@ static UINT16 StorageFlash_CrcUpdate(UINT16 crc, const UINT8 *data, UINT16 lengt
 	}
 
 	return crc;
-}
-
-static UINT16 StorageFlash_CalcLegacyPayloadCrc(const UINT8 *payload, UINT16 length)
-{
-	return StorageFlash_CrcUpdate(0xFFFFU, payload, length);
 }
 
 static UINT16 StorageFlash_CalcRecordCrc(UINT32 magic,
@@ -253,26 +243,17 @@ static UINT8 StorageFlash_ReadRecord(uint32_t record_addr,
 	payload_addr = (const UINT8 *)(record_addr + sizeof(STORAGE_FLASH_HEADER));
 
 	if ((header.magic != expect_magic) ||
-		(header.length != expect_length) ||
-		((header.version != FLASH_STORAGE_RECORD_VERSION) &&
-		 (header.version != FLASH_STORAGE_RECORD_VERSION_LEGACY)))
+		(header.version != FLASH_STORAGE_RECORD_VERSION) ||
+		(header.length != expect_length))
 	{
 		return 0U;
 	}
 
-	if (header.version == FLASH_STORAGE_RECORD_VERSION)
-	{
-		crc = StorageFlash_CalcRecordCrc(header.magic,
+	crc = StorageFlash_CalcRecordCrc(header.magic,
 									 header.version,
 									 header.length,
 									 header.sequence,
 									 payload_addr);
-	}
-	else
-	{
-		crc = StorageFlash_CalcLegacyPayloadCrc(payload_addr, expect_length);
-	}
-
 	if (crc != header.crc)
 	{
 		return 0U;
@@ -748,6 +729,13 @@ UINT8 AppUpgrade_RequestIap(void)
 	return AppUpgrade_IsIapRequested();
 }
 
+static void StorageFlash_InitConfigData(STORAGE_FLASH_CONFIG_DATA *data)
+{
+	memset(data, 0xFF, sizeof(*data));
+	data->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
+	data->u16AppliedPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
+}
+
 static UINT8 StorageFlash_LoadConfigData(STORAGE_FLASH_CONFIG_DATA *data)
 {
 	if (data == 0)
@@ -789,51 +777,6 @@ static UINT8 StorageFlash_SaveConfigData(const STORAGE_FLASH_CONFIG_DATA *data)
 	return result;
 }
 
-static UINT8 StorageFlash_LoadLegacyAfe(UINT16 *values)
-{
-	return StorageFlash_LoadPair(FLASH_ADDR_STORAGE_AFE_SLOT_A,
-									 FLASH_ADDR_STORAGE_AFE_SLOT_B,
-									 FLASH_STORAGE_MAGIC_AFE,
-									 (UINT16)(FLASH_STORAGE_AFE_WORD_COUNT * sizeof(UINT16)),
-									 (UINT8 *)values);
-}
-
-static UINT8 StorageFlash_LoadLegacyRw(STORAGE_FLASH_RW_PARAM_DATA *data)
-{
-	return StorageFlash_LoadPair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
-									 FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
-									 FLASH_STORAGE_MAGIC_RW_PARAM,
-									 (UINT16)sizeof(*data),
-									 (UINT8 *)data);
-}
-
-static void StorageFlash_ConfigFromLegacy(STORAGE_FLASH_CONFIG_DATA *config,
-										  const UINT16 *afe,
-										  const STORAGE_FLASH_RW_PARAM_DATA *rw)
-{
-	memset(config, 0xFF, sizeof(*config));
-	config->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
-	config->u16AppliedPolicyVersion = FlashReadOneHalfWord(FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG);
-	memcpy(config->afe, afe, sizeof(config->afe));
-	memcpy(config->protect, rw->protect, sizeof(config->protect));
-	memcpy(config->other, rw->other, sizeof(config->other));
-	memcpy(config->reserved, rw->reserved, sizeof(config->reserved));
-}
-
-static UINT8 StorageFlash_TryMigrateLegacyConfig(STORAGE_FLASH_CONFIG_DATA *config)
-{
-	UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
-	STORAGE_FLASH_RW_PARAM_DATA rw;
-
-	if (!StorageFlash_LoadLegacyAfe(afe) || !StorageFlash_LoadLegacyRw(&rw))
-	{
-		return 0U;
-	}
-
-	StorageFlash_ConfigFromLegacy(config, afe, &rw);
-	return StorageFlash_SaveConfigData(config);
-}
-
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
 {
 	STORAGE_FLASH_CONFIG_DATA config;
@@ -842,53 +785,30 @@ UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
 	{
 		return 0U;
 	}
-
-	if (StorageFlash_LoadConfigData(&config))
-	{
-		memcpy(values, config.afe, sizeof(config.afe));
-		return 1U;
-	}
-
-	if (!StorageFlash_LoadLegacyAfe(values))
+	if (!StorageFlash_LoadConfigData(&config))
 	{
 		return 0U;
 	}
 
-	(void)StorageFlash_TryMigrateLegacyConfig(&config);
+	memcpy(values, config.afe, sizeof(config.afe));
 	return 1U;
 }
 
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 {
 	STORAGE_FLASH_CONFIG_DATA config;
-	STORAGE_FLASH_RW_PARAM_DATA rw;
-	UINT8 result;
 
 	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
 	{
 		return 0U;
 	}
 
-	if (StorageFlash_LoadConfigData(&config))
+	if (!StorageFlash_LoadConfigData(&config))
 	{
-		memcpy(config.afe, values, sizeof(config.afe));
-		return StorageFlash_SaveConfigData(&config);
+		StorageFlash_InitConfigData(&config);
 	}
-
-	if (StorageFlash_LoadLegacyRw(&rw))
-	{
-		StorageFlash_ConfigFromLegacy(&config, values, &rw);
-		return StorageFlash_SaveConfigData(&config);
-	}
-
-	StorageFlash_BeginWrite();
-	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_AFE_SLOT_A,
-									  FLASH_ADDR_STORAGE_AFE_SLOT_B,
-									  FLASH_STORAGE_MAGIC_AFE,
-									  (const UINT8 *)values,
-									  (UINT16)(word_count * sizeof(UINT16)));
-	StorageFlash_EndWrite();
-	return result;
+	memcpy(config.afe, values, sizeof(config.afe));
+	return StorageFlash_SaveConfigData(&config);
 }
 
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
@@ -899,68 +819,45 @@ UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		return 0U;
 	}
-
-	if (StorageFlash_LoadConfigData(&config))
-	{
-		memcpy(data->protect, config.protect, sizeof(data->protect));
-		memcpy(data->other, config.other, sizeof(data->other));
-		memcpy(data->reserved, config.reserved, sizeof(data->reserved));
-		return 1U;
-	}
-
-	if (!StorageFlash_LoadLegacyRw(data))
+	if (!StorageFlash_LoadConfigData(&config))
 	{
 		return 0U;
 	}
 
-	(void)StorageFlash_TryMigrateLegacyConfig(&config);
+	memcpy(data->protect, config.protect, sizeof(data->protect));
+	memcpy(data->other, config.other, sizeof(data->other));
+	memcpy(data->reserved, config.reserved, sizeof(data->reserved));
 	return 1U;
 }
 
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 {
 	STORAGE_FLASH_CONFIG_DATA config;
-	UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
-	UINT8 result;
 
 	if (data == 0)
 	{
 		return 0U;
 	}
 
-	if (StorageFlash_LoadConfigData(&config))
+	if (!StorageFlash_LoadConfigData(&config))
 	{
-		memcpy(config.protect, data->protect, sizeof(config.protect));
-		memcpy(config.other, data->other, sizeof(config.other));
-		memcpy(config.reserved, data->reserved, sizeof(config.reserved));
-		return StorageFlash_SaveConfigData(&config);
+		StorageFlash_InitConfigData(&config);
 	}
-
-	if (StorageFlash_LoadLegacyAfe(afe))
-	{
-		StorageFlash_ConfigFromLegacy(&config, afe, data);
-		return StorageFlash_SaveConfigData(&config);
-	}
-
-	StorageFlash_BeginWrite();
-	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
-									  FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
-									  FLASH_STORAGE_MAGIC_RW_PARAM,
-									  (const UINT8 *)data,
-									  (UINT16)sizeof(*data));
-	StorageFlash_EndWrite();
-	return result;
+	memcpy(config.protect, data->protect, sizeof(config.protect));
+	memcpy(config.other, data->other, sizeof(config.other));
+	memcpy(config.reserved, data->reserved, sizeof(config.reserved));
+	return StorageFlash_SaveConfigData(&config);
 }
 
 UINT16 StorageFlash_GetConfigPolicyVersion(void)
 {
 	STORAGE_FLASH_CONFIG_DATA config;
 
-	if (StorageFlash_LoadConfigData(&config))
+	if (!StorageFlash_LoadConfigData(&config))
 	{
-		return config.u16AppliedPolicyVersion;
+		return FLASH_UPGRADE_PARAM_FLAG_RESET;
 	}
-	return FlashReadOneHalfWord(FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG);
+	return config.u16AppliedPolicyVersion;
 }
 
 UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
@@ -969,14 +866,7 @@ UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
 
 	if (!StorageFlash_LoadConfigData(&config))
 	{
-		if (!StorageFlash_TryMigrateLegacyConfig(&config))
-		{
-			return 0U;
-		}
-		if (!StorageFlash_LoadConfigData(&config))
-		{
-			return 0U;
-		}
+		StorageFlash_InitConfigData(&config);
 	}
 
 	if (config.u16AppliedPolicyVersion == version)
@@ -1089,57 +979,10 @@ UINT8 StorageFlash_SaveLogData(UINT8 point,
 	return result;
 }
 
-UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-	if (data == 0)
-	{
-		return 0U;
-	}
-
-	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_AGING_SLOT_A,
-									  FLASH_ADDR_STORAGE_AGING_SLOT_B,
-									  FLASH_STORAGE_MAGIC_FACTORY_AGING,
-									  (UINT16)sizeof(*data),
-									  (UINT8 *)data))
-	{
-		return 1U;
-	}
-
-	if (FlashReadOneHalfWord(FLASH_ADDR_STORAGE_AGING_SLOT_A) ==
-		FLASH_FACTORY_AGING_DONE_VALUE)
-	{
-		memset(data, 0, sizeof(*data));
-		data->u16State = FLASH_FACTORY_AGING_STATE_DONE;
-		return 1U;
-	}
-
-	return 0U;
-}
-
-UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-	UINT8 result;
-
-	if (data == 0)
-	{
-		return 0U;
-	}
-
-	StorageFlash_BeginWrite();
-	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_AGING_SLOT_A,
-										  FLASH_ADDR_STORAGE_AGING_SLOT_B,
-										  FLASH_STORAGE_MAGIC_FACTORY_AGING,
-										  (const UINT8 *)data,
-										  (UINT16)sizeof(*data));
-	StorageFlash_EndWrite();
-	return result;
-}
-
 void StorageFlash_PrintBootCheck(void)
 {
 	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
 	STORAGE_FLASH_CONFIG_DATA config;
-	STORAGE_FLASH_FACTORY_AGING_DATA aging;
 
 	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu align=%u\r\n",
 		   flash_size_kb,
@@ -1151,11 +994,10 @@ void StorageFlash_PrintBootCheck(void)
 		return;
 	}
 
-	printf("[FLASH_BOOT] config=%u policy=0x%04X iap_mailbox=%u aging=%u\r\n",
+	printf("[FLASH_BOOT] config=%u policy=0x%04X iap_mailbox=%u\r\n",
 		   StorageFlash_LoadConfigData(&config),
 		   StorageFlash_GetConfigPolicyVersion(),
-		   AppUpgrade_IsIapRequested(),
-		   StorageFlash_LoadFactoryAgingData(&aging));
+		   AppUpgrade_IsIapRequested());
 }
 
 void App_FlashUpdate(void)

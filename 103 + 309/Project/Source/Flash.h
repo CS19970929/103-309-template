@@ -12,13 +12,7 @@
 #define FLASH_STORAGE_SLOT_SIZE          FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT   ((UINT16)2U)
 
-/* Legacy AFE/RW pages remain read-only migration sources. */
-#define FLASH_ADDR_STORAGE_AFE_SLOT_A       ((UINT32)0x0801C000)
-#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A  ((UINT32)0x0801C400)
-#define FLASH_ADDR_STORAGE_AFE_SLOT_B       ((UINT32)0x0801C800)
-#define FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B  ((UINT32)0x0801CC00)
-
-/* Active persistent objects. */
+/* Current persistent objects only. No legacy parameter migration areas. */
 #define FLASH_ADDR_STORAGE_LOG_SLOT_A       ((UINT32)0x0801D000)
 #define FLASH_ADDR_STORAGE_LOG_DELTA_A      ((UINT32)0x0801D400)
 #define FLASH_ADDR_STORAGE_LOG_SLOT_B       ((UINT32)0x0801D800)
@@ -27,8 +21,6 @@
 #define FLASH_ADDR_STORAGE_CONFIG_SLOT_A    ((UINT32)0x0801E400)
 #define FLASH_ADDR_STORAGE_SOC_SLOT_B       ((UINT32)0x0801E800)
 #define FLASH_ADDR_STORAGE_CONFIG_SLOT_B    ((UINT32)0x0801EC00)
-#define FLASH_ADDR_STORAGE_AGING_SLOT_A     ((UINT32)0x0801F400)
-#define FLASH_ADDR_STORAGE_AGING_SLOT_B     ((UINT32)0x0801F800)
 
 #define FLASH_STORAGE_AFE_WORD_COUNT     ((UINT16)24)
 #define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT   65
@@ -37,7 +29,7 @@
 #define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
 #define FLASH_STORAGE_SOC_DATA_VERSION_V3 ((UINT16)0x0003)
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT FLASH_STORAGE_SOC_DATA_VERSION_V3
-/* Source alias only. Records carrying old format version 0x0002 are not accepted. */
+/* Source alias only. It maps to the current format and does not enable V2 loading. */
 #define FLASH_STORAGE_SOC_DATA_VERSION_V2 FLASH_STORAGE_SOC_DATA_VERSION_CURRENT
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION ((UINT16)0x0001)
 
@@ -47,11 +39,6 @@
 #define FLASH_TO_IAP_VALUE               ((UINT16)0x00AB)
 #define FLASH_TO_APP_VALUE               ((UINT16)0xFFFF)
 #define FLASH_UPGRADE_PARAM_FLAG_RESET   ((UINT16)0xFFFF)
-#define FLASH_FACTORY_AGING_DONE_VALUE   ((UINT16)0xA93D)
-#define FLASH_FACTORY_AGING_RESET_VALUE  ((UINT16)0xFFFF)
-#define FLASH_FACTORY_AGING_STATE_RUNNING ((UINT16)0xA931)
-#define FLASH_FACTORY_AGING_STATE_STOPPED ((UINT16)0xA930)
-#define FLASH_FACTORY_AGING_STATE_DONE   FLASH_FACTORY_AGING_DONE_VALUE
 #define FLASH_NORMAL_SLEEP_VALUE         ((UINT16)0x1234)
 #define FLASH_DEEP_SLEEP_VALUE           ((UINT16)0x1235)
 #define FLASH_HICCUP_SLEEP_VALUE         ((UINT16)0x1236)
@@ -93,13 +80,6 @@ typedef struct
 	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
 } STORAGE_FLASH_CONFIG_DATA;
 
-typedef struct
-{
-	UINT32 u32Elapsed10ms;
-	UINT16 u16State;
-	UINT16 u16DurationHours;
-} STORAGE_FLASH_FACTORY_AGING_DATA;
-
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);
@@ -113,8 +93,6 @@ UINT16 StorageFlash_GetConfigPolicyVersion(void);
 UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
-UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
-UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data);
 UINT8 StorageFlash_IsBusy(void);
 void StorageFlash_PrintBootCheck(void);
 void App_FlashUpdate(void);
