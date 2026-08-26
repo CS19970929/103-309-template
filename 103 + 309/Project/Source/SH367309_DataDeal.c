@@ -1,5 +1,7 @@
 #include "main.h"
 #include "SH367309_DataDeal.h"
+#include "BmsParamSchema.h"
+#include "AfeParamAccess.h"
 #include "string.h"
 
 int AFE_PARAM_WRITE_Flag = 1;
@@ -47,7 +49,7 @@ void Refresh_Parameters(void)
 		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
 	}
 
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+	BmsParam_ApplyRuntime();
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
@@ -106,15 +108,19 @@ void Refresh_Parameters(void)
 static void AFE_CopyCurValues(UINT16 *values)
 {
 	UINT16 i;
-	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
-	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i) values[i] = (param + i)->curValue;
+	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		values[i] = AfeParam_AtConst(i)->curValue;
+	}
 }
 
 static void AFE_RestoreCurValues(const UINT16 *values)
 {
 	UINT16 i;
-	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
-	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i) (param + i)->curValue = values[i];
+	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		AfeParam_At(i)->curValue = values[i];
+	}
 }
 
 static UINT8 AFE_SaveCurValuesToFlash(void)
@@ -226,37 +232,47 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
 	UINT16 u16SciRegStartAddr;
-	int i = 0;
-	UINT16 offset = 0;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
+	UINT16 i;
+	UINT16 offset;
 	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
 	(void)u16Channel;
 
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) &&
-		(u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) &&
-		(u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
+	if ((u16SciRegStartAddr < RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) ||
+		(u16SciRegStartAddr > RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
 	{
-		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
-		AFE_CopyCurValues(snapshot);
-		Feed_IWatchDog;
-		for (i = 0; i < u16WrRegNum; i++)
-		{
-			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
-		}
-		Feed_IWatchDog;
-		if (!AFE_SaveCurValuesToFlash())
-		{
-			AFE_RestoreCurValues(snapshot);
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_CMD_INVALID;
-			return 1;
-		}
-		AFE_PARAM_WRITE_Flag = 1;
-		return 1;
+		return 0U;
 	}
-	return 0;
+
+	offset = (UINT16)(u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START);
+	if ((u16WrRegNum == 0U) ||
+		(u16WrRegNum > (UINT16)(AFE_PARAMETES_TOTAL_LENGTH - offset)) ||
+		(s->u16Buffer[6] != (UINT8)(u16WrRegNum << 1)))
+	{
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_CMD_INVALID;
+		return 1U;
+	}
+
+	AFE_CopyCurValues(snapshot);
+	Feed_IWatchDog;
+	for (i = 0U; i < u16WrRegNum; ++i)
+	{
+		AfeParam_At((UINT16)(offset + i))->curValue =
+			(UINT16)(s->u16Buffer[8U + i * 2U] +
+			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
+	}
+	Feed_IWatchDog;
+	if (!AFE_SaveCurValuesToFlash())
+	{
+		AFE_RestoreCurValues(snapshot);
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_CMD_INVALID;
+		return 1U;
+	}
+	AFE_PARAM_WRITE_Flag = 1;
+	return 1U;
 }
 
 void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
@@ -282,11 +298,10 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 u16SciTemp;
 	UINT16 i = 0;
 	UINT16 j;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
 	(void)s;
 	for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
 	{
-		u16SciTemp = *(P + j * 4);
+		u16SciTemp = AfeParam_AtConst(j)->curValue;
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -296,14 +311,14 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT16 i;
 	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
-	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	RTC_SetCounter(0);
 	AFE_CopyCurValues(snapshot);
 	Feed_IWatchDog;
 	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		(param + i)->curValue = (param + i)->defaultValue;
+		AFE_Value_Typedef *param = AfeParam_At(i);
+		param->curValue = param->defaultValue;
 	}
 	Feed_IWatchDog;
 	if (!AFE_SaveCurValuesToFlash())
