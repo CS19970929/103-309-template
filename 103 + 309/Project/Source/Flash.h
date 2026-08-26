@@ -8,16 +8,16 @@
  * STM32F103C8 project storage contract.
  *
  * This product intentionally uses the 128KB physical Flash available on the
- * selected C8 devices. The firmware target remains STM32F10X_MD, therefore
- * the erase page is 1KB. APP must never cross FLASH_ADDR_STORAGE_START.
+ * selected C8 devices. The firmware target is STM32F10X_MD, so the erase page
+ * is 1KB. APP must never cross FLASH_ADDR_STORAGE_START.
  */
 #if !defined(STM32F10X_MD)
 #error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
 #endif
 
-#define FLASH_STORAGE_PAGE_SIZE          ((UINT32)0x00000400)
-#define FLASH_STORAGE_SLOT_SIZE           FLASH_STORAGE_PAGE_SIZE
-#define FLASH_STORAGE_RECORD_ALIGNMENT    ((UINT16)2U)
+#define FLASH_STORAGE_PAGE_SIZE           ((UINT32)0x00000400)
+#define FLASH_STORAGE_SLOT_SIZE            FLASH_STORAGE_PAGE_SIZE
+#define FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)
 #define FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E000)
 #define FLASH_ADDR_STORAGE_END             ((UINT32)0x08020000)
 #define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
@@ -40,13 +40,6 @@
 #define BMS_CONFIG_OTHER_WORD_COUNT        ((UINT16)32U)
 #define BMS_CONFIG_RESERVED_WORD_COUNT     ((UINT16)24U)
 #define FLASH_STORAGE_LOG_RECORD_COUNT     ((UINT16)100U)
-
-/* Compatibility names are source aliases only. They do not allocate separate
- * Flash objects and will be removed with the old split Config API. */
-#define FLASH_STORAGE_AFE_WORD_COUNT              BMS_CONFIG_AFE_WORD_COUNT
-#define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT BMS_CONFIG_PROTECT_WORD_COUNT
-#define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT   BMS_CONFIG_OTHER_WORD_COUNT
-#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT BMS_CONFIG_RESERVED_WORD_COUNT
 
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)
@@ -81,8 +74,9 @@ typedef struct
 	UINT16 u16Reserved[4];
 } STORAGE_FLASH_SOC_DATA;
 
-/* One atomic persistent configuration image. Parameter groups are members of
- * this image; none of them owns a Flash address. */
+/* One atomic persistent configuration image. Runtime/protocol code may still
+ * distinguish AFE, protection, calibration and Other parameter groups, but
+ * Flash sees exactly one CONFIG payload. */
 typedef struct
 {
 	UINT16 u16FormatVersion;
@@ -95,39 +89,22 @@ typedef struct
 	UINT16 reserved[BMS_CONFIG_RESERVED_WORD_COUNT];
 } BMS_CONFIG;
 
-typedef BMS_CONFIG STORAGE_FLASH_CONFIG_DATA;
-
-/* Temporary compatibility payload used only by old call sites while they are
- * being collapsed onto BMS_CONFIG. It is not a separate on-Flash record. */
-typedef struct
-{
-	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
-	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
-	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
-} STORAGE_FLASH_RW_PARAM_DATA;
-
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);
 
 UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data);
 UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data);
-UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr);
-UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length);
-
-/* Temporary split-Config source API. All four functions target CONFIG A/B. */
-UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
-UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
-
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-UINT16 StorageFlash_GetConfigPolicyVersion(void);
-UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
+
+/* Bounded raw operations exist only for storage internals such as Log Delta. */
+UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr);
+UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length);
 UINT8 StorageFlash_IsBusy(void);
+
 void StorageFlash_PrintBootCheck(void);
 void App_FlashUpdate(void);
 void APP_To_IAP_Jump(void);
