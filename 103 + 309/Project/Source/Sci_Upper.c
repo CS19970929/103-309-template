@@ -1,6 +1,7 @@
 #include "main.h"
 #include "FaultSnapshot.h"
 #include "Flash.h"
+#include "BmsParamSchema.h"
 #include <stddef.h>
 
 static struct RS485MSG g_stCurrentMsgPtr_SCI1;
@@ -542,15 +543,6 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	return 0U;
 }
 
-static void Sci_CopyWords(UINT16 *dst, const UINT16 *src, UINT16 count)
-{
-	UINT16 i;
-	for (i = 0; i < count; ++i)
-	{
-		dst[i] = src[i];
-	}
-}
-
 static UINT8 Sci_WrValuesInRange(const struct RS485MSG *s, UINT16 offset,
 								 UINT16 count, const UINT16 *min_values,
 								 const UINT16 *max_values)
@@ -618,11 +610,7 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 	}
 	if (Sci_RangeOverlaps(offset, count, 28, 4))
 	{
-		SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
-		if (OtherElement.u16Sys_CS_Res != 0)
-		{
-			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-		}
+		BmsParam_ApplyRuntime();
 	}
 }
 
@@ -1588,11 +1576,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 offset;
 	UINT16 u16WrRegNum;
 	UINT16 words[E2P_PARA_NUM_PROTECT];
-	UINT16 min_words[E2P_PARA_NUM_PROTECT];
-	UINT16 max_words[E2P_PARA_NUM_PROTECT];
 	struct PRT_E2ROM_PARAS snapshot;
-	const struct PRT_E2ROM_PARAS protect_min = E2P_PROTECT_MIN_PRT;
-	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
 
 	u16WrRegNum = Sci_GetWrRegNum(s);
 	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST);
@@ -1601,9 +1585,8 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 		return;
 	}
-	memcpy(min_words, &protect_min, sizeof(min_words));
-	memcpy(max_words, &protect_max, sizeof(max_words));
-	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum, min_words, max_words))
+	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum,
+						  g_u16ProtectParamMin, g_u16ProtectParamMax))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
@@ -1640,10 +1623,6 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 u16WrRegNum;
 	UINT16 words[E2P_PARA_NUM_OTHER_ELEMENT1];
 	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
-	UINT16 min_words[E2P_PARA_NUM_OTHER_ELEMENT1];
-	UINT16 max_words[E2P_PARA_NUM_OTHER_ELEMENT1];
-	const struct OTHER_ELEMENT other_min = OtherElement_min;
-	const struct OTHER_ELEMENT other_max = OtherElement_max;
 
 	u16WrRegNum = Sci_GetWrRegNum(s);
 	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_BALANCE_OV);
@@ -1652,9 +1631,8 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 		return;
 	}
-	memcpy(min_words, &other_min, sizeof(min_words));
-	memcpy(max_words, &other_max, sizeof(max_words));
-	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum, min_words, max_words))
+	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum,
+						  g_u16OtherParamMin, g_u16OtherParamMax))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
@@ -1807,13 +1785,12 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	struct PRT_E2ROM_PARAS snapshot;
-	const struct PRT_E2ROM_PARAS defaults = E2P_PROTECT_DEFAULT_PRT;
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
 		snapshot = PRT_E2ROMParas;
-		PRT_E2ROMParas = defaults;
+		memcpy(&PRT_E2ROMParas, g_u16ProtectParamDefault, sizeof(PRT_E2ROMParas));
 		if (!EEPROM_SaveConfigToFlash())
 		{
 			PRT_E2ROMParas = snapshot;
@@ -1833,15 +1810,12 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
-	UINT16 defaults_words[E2P_PARA_NUM_OTHER_ELEMENT1];
-	const struct OTHER_ELEMENT defaults = OtherElement_default;
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
 		memcpy(snapshot, &OtherElement, sizeof(snapshot));
-		memcpy(defaults_words, &defaults, sizeof(defaults_words));
-		memcpy(&OtherElement, defaults_words, sizeof(defaults_words));
+		memcpy(&OtherElement, g_u16OtherParamDefault, sizeof(OtherElement));
 		if (!EEPROM_SaveConfigToFlash())
 		{
 			memcpy(&OtherElement, snapshot, sizeof(snapshot));
