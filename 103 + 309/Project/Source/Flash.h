@@ -1,8 +1,8 @@
 #ifndef PROJECT_STORAGE_FLASH_H
 #define PROJECT_STORAGE_FLASH_H
 
-#define FLASH_ADDR_IAP_START             0x08000000
-#define FLASH_ADDR_APP_START             0x08004800
+#define FLASH_ADDR_IAP_START             0x08000000U
+#define FLASH_ADDR_APP_START             0x08004800U
 
 /*
  * STM32F103C8 official 64KB Flash contract.
@@ -25,31 +25,34 @@
 #error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
 #endif
 
-#define FLASH_DEVICE_OFFICIAL_SIZE        ((UINT32)0x00010000)
-#define FLASH_ADDR_DEVICE_END             ((UINT32)0x08010000)
-#define FLASH_STORAGE_PAGE_SIZE           ((UINT32)0x00000400)
+/* Keep address/page constants as plain integer constant expressions: several
+ * guards below are evaluated by the ARMCC5 preprocessor, where C casts are not
+ * valid inside #if expressions. */
+#define FLASH_DEVICE_OFFICIAL_SIZE        0x00010000U
+#define FLASH_ADDR_DEVICE_END             0x08010000U
+#define FLASH_STORAGE_PAGE_SIZE           0x00000400U
 #define FLASH_STORAGE_SLOT_SIZE            FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)
-#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0800E800)
+#define FLASH_ADDR_STORAGE_START           0x0800E800U
 #define FLASH_ADDR_STORAGE_END             FLASH_ADDR_DEVICE_END
 #define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
 #define FLASH_APP_MAX_SIZE                 (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
 
 /* Flash addresses describe storage objects only; parameter categories do not
  * own Flash pages. All configurable BMS parameters share CONFIG A/B. */
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0800E800)
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0800EC00)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0800F000)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0800F400)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0800F800)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0800FC00)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   0x0800E800U
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   0x0800EC00U
+#define FLASH_ADDR_STORAGE_SOC_SLOT_A      0x0800F000U
+#define FLASH_ADDR_STORAGE_SOC_SLOT_B      0x0800F400U
+#define FLASH_ADDR_STORAGE_LOG_SLOT_A      0x0800F800U
+#define FLASH_ADDR_STORAGE_LOG_SLOT_B      0x0800FC00U
 
 /* Compile-time geometry guards: changing one address cannot silently move
  * storage outside the official C8 Flash or create page overlap/gaps. */
-#if (FLASH_ADDR_STORAGE_START != 0x0800E800)
+#if (FLASH_ADDR_STORAGE_START != 0x0800E800U)
 #error "Unexpected persistent storage start"
 #endif
-#if (FLASH_ADDR_STORAGE_END != 0x08010000)
+#if (FLASH_ADDR_STORAGE_END != 0x08010000U)
 #error "Persistent storage must end at the official 64KB boundary"
 #endif
 #if ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) != (6U * 0x400U))
