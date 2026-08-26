@@ -764,13 +764,6 @@ UINT8 AppUpgrade_RequestIap(void)
 	return AppUpgrade_IsIapRequested();
 }
 
-static void StorageFlash_InitConfigData(BMS_CONFIG *data)
-{
-	memset(data, 0xFF, sizeof(*data));
-	data->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
-	data->u16AppliedPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
-}
-
 UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data)
 {
 	if (data == 0)
@@ -810,107 +803,6 @@ UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data)
 									  (UINT16)sizeof(save_data));
 	StorageFlash_EndWrite();
 	return result;
-}
-
-UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
-{
-	BMS_CONFIG config;
-
-	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
-	{
-		return 0U;
-	}
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		return 0U;
-	}
-
-	memcpy(values, config.afe, sizeof(config.afe));
-	return 1U;
-}
-
-UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
-{
-	BMS_CONFIG config;
-
-	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
-	{
-		return 0U;
-	}
-
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		StorageFlash_InitConfigData(&config);
-	}
-	memcpy(config.afe, values, sizeof(config.afe));
-	return StorageFlash_SaveConfigData(&config);
-}
-
-UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
-{
-	BMS_CONFIG config;
-
-	if (data == 0)
-	{
-		return 0U;
-	}
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		return 0U;
-	}
-
-	memcpy(data->protect, config.protect, sizeof(data->protect));
-	memcpy(data->other, config.other, sizeof(data->other));
-	memcpy(data->reserved, config.reserved, sizeof(data->reserved));
-	return 1U;
-}
-
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
-{
-	BMS_CONFIG config;
-
-	if (data == 0)
-	{
-		return 0U;
-	}
-
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		StorageFlash_InitConfigData(&config);
-	}
-	memcpy(config.protect, data->protect, sizeof(config.protect));
-	memcpy(config.other, data->other, sizeof(config.other));
-	memcpy(config.reserved, data->reserved, sizeof(config.reserved));
-	return StorageFlash_SaveConfigData(&config);
-}
-
-UINT16 StorageFlash_GetConfigPolicyVersion(void)
-{
-	BMS_CONFIG config;
-
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		return FLASH_UPGRADE_PARAM_FLAG_RESET;
-	}
-	return config.u16AppliedPolicyVersion;
-}
-
-UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
-{
-	BMS_CONFIG config;
-
-	if (!StorageFlash_LoadConfigData(&config))
-	{
-		StorageFlash_InitConfigData(&config);
-	}
-
-	if (config.u16AppliedPolicyVersion == version)
-	{
-		return 1U;
-	}
-
-	config.u16AppliedPolicyVersion = version;
-	return StorageFlash_SaveConfigData(&config);
 }
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
@@ -1018,6 +910,8 @@ void StorageFlash_PrintBootCheck(void)
 {
 	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
 	BMS_CONFIG config;
+	UINT8 config_valid;
+	UINT16 policy_version;
 
 	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu align=%u\r\n",
 		   flash_size_kb,
@@ -1029,9 +923,11 @@ void StorageFlash_PrintBootCheck(void)
 		return;
 	}
 
+	config_valid = StorageFlash_LoadConfigData(&config);
+	policy_version = config_valid ? config.u16AppliedPolicyVersion : FLASH_UPGRADE_PARAM_FLAG_RESET;
 	printf("[FLASH_BOOT] config=%u policy=0x%04X iap_mailbox=%u\r\n",
-		   StorageFlash_LoadConfigData(&config),
-		   StorageFlash_GetConfigPolicyVersion(),
+		   config_valid,
+		   policy_version,
 		   AppUpgrade_IsIapRequested());
 }
 
