@@ -20,6 +20,11 @@ __pycache__/
 DebugConfig/Target_1_STM32F030C8.dbgconf
 Objects/
 Listings/
+# Keep Keil listing intermediates ignored, but track the linker map for
+# STM32F103 flash-size analysis on this project.
+!103 + 309/Project/Users/Listings/
+103 + 309/Project/Users/Listings/*
+!103 + 309/Project/Users/Listings/*.map
 CommomBQ769x0_16series_030C8T6_C.uvoptx
 CommomBQ769x0_16series_030C8T6_C.uvguix.cs
 JLinkLog.txt
