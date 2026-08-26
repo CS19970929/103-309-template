@@ -250,8 +250,11 @@ static UINT8 LogStorage_ReplayPage(UINT32 pageAddr,
 		{
 			break;
 		}
-		if (LogStorage_ReadDelta(pageAddr + offset, &deltaRecord) &&
-			(deltaRecord.baseSignature == s_log_base_signature))
+		if (!LogStorage_ReadDelta(pageAddr + offset, &deltaRecord))
+		{
+			return 0U;
+		}
+		if (deltaRecord.baseSignature == s_log_base_signature)
 		{
 			LogStorage_ApplyEntry(point, records, deltaRecord.event, deltaRecord.delta);
 		}
@@ -262,8 +265,14 @@ static UINT8 LogStorage_ReplayPage(UINT32 pageAddr,
 static UINT8 LogStorage_ReplayDeltas(UINT8 *point,
 									  UINT8 records[EVENT_RECORD_LENGTH][2])
 {
-	LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_A, point, records);
-	LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_B, point, records);
+	if (!LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_A, point, records))
+	{
+		return 0U;
+	}
+	if (!LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_B, point, records))
+	{
+		return 0U;
+	}
 	return 1U;
 }
 
@@ -551,15 +560,18 @@ UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 	s_log_base_signature = LogStorage_BaseSignature(0U, emptyRecords);
 	eraseA = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_A);
 	eraseB = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_B);
-	if (!eraseA || !eraseB)
-	{
-		/* Reset remains logically committed because stale deltas no longer match
-		 * the new base signature. */
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-	}
 
 	memset(s_log_record.records, 0, sizeof(s_log_record.records));
 	s_log_record.point = 0U;
+
+	if (!eraseA || !eraseB)
+	{
+		/* The new empty base is committed and stale deltas no longer match it,
+		 * but a physical erase failure must remain visible to diagnostics. */
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+
 	return 1U;
 }
 
@@ -592,12 +604,21 @@ void ReadEEPROM_EventRecord_Parameters(void)
 
 	if (invalid)
 	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		(void)EEPROM_ResetData_EventRecord_ToDefault();
+		if (!EEPROM_ResetData_EventRecord_ToDefault())
+		{
+			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		}
 		return;
 	}
 
 	s_log_base_signature = LogStorage_BaseSignature(point, s_log_record.records);
-	(void)LogStorage_ReplayDeltas(&point, s_log_record.records);
+	if (!LogStorage_ReplayDeltas(&point, s_log_record.records))
+	{
+		if (!EEPROM_ResetData_EventRecord_ToDefault())
+		{
+			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		}
+		return;
+	}
 	s_log_record.point = point;
 }
