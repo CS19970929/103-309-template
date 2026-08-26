@@ -1,23 +1,18 @@
 #include "main.h"
 
-const unsigned char SeriesSelect_AFE1[16][16] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 1´®
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 2´®
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 3
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 4
-    {0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 5
-    {0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 6
-    {0, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 7
-    {0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0},      // 8
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0},      // 9
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0},      // 10
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 0, 0, 0, 0},     // 11
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0},    // 12
-    {0, 1, 2, 3, 4, 5, 6, 7, 9, 9, 10, 11, 12, 0, 0, 0},   // 13
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0},  // 14
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0}, // 15
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} // 16
-};
+/* SH367309 cell register order is linear except 13S cell 9, which maps to VC10. */
+static UINT8 DataLoad_CellVoltAfeIndex(UINT8 series_num, UINT8 cell_index)
+{
+    if (series_num < 5U)
+    {
+        return 0U;
+    }
+    if ((series_num == 13U) && (cell_index == 8U))
+    {
+        return 9U;
+    }
+    return cell_index;
+}
 
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
@@ -26,11 +21,12 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define MONITOR_AFE_TASK_PERIOD_MS ((UINT16)200)
 #define MONITOR_AFE_SLEEP_DELAY_SEC ((UINT16)(5U * 60U))
 #define MONITOR_AFE_SLEEP_DELAY_TICKS ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
-#define AFE_CURRENT_ADC_FULL_SCALE_MV ((UINT32)200U)
-#define AFE_CURRENT_ADC_DENOMINATOR ((UINT32)21470U)
+#define AFE_CURRENT_RATIO_SCALE ((UINT32)20U)
+#define AFE_CURRENT_RATIO_DENOMINATOR ((UINT32)2147U)
 #define AFE_CURRENT_STARTUP_ZERO_LIMIT_MA ((UINT32)1000U)
 #define AFE_CURRENT_STARTUP_ZERO_STABLE_RAW ((UINT16)8U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
+
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -45,7 +41,6 @@ static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentWarmStartupZeroParam =
 
 typedef struct _AFE_CURRENT_RUNTIME
 {
-    /* Fixed after startup calibration; never relearned while running. */
     INT32 zeroOffsetRaw;
 } AFE_CURRENT_RUNTIME;
 
@@ -73,9 +68,7 @@ static DATA_RUNTIME s_data = {0};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
-
 UINT32 g_u32CS_Res_AFE;
-
 struct OTHER_ELEMENT OtherElement;
 
 void charger_detect_and_keyLogi_200ms(void)
@@ -93,76 +86,31 @@ void Init_Registers(UINT8 num)
             *(&(Registers_AFE1.Temp1) + j) = 0;
         }
         break;
-
     case 1:
-        break;
-
     default:
         break;
     }
-    // CHG_OFF;
-    // DSG_OFF;
 }
-
-// 这里排列好就行，不需要电池位号映射表。>61000为不用
-// 经过验算，AFE1校准一次，然后本身再校准一次叠加是可以的。不需要确定某一个KB值的做法。
-// 假设先确定用AFE1还是本身的KB的话，会出现问题。如下：
-// 假设需要整体校准，行，AFE1先行，然后发现某几串出问题，继续使用本身KB值，然后本身KB值需要同步前面AFE1的KB值一起算才行
-// 如果又变成单独使用本身KB值校准，出现错误。
-#if 0
-void DataLoad_CellVolt(void)
-{
-    UINT8 i;
-    UINT8 series_num = SeriesNum;
-    INT32 t_i32temp;
-
-    for (i = 0; i < series_num; ++i)
-    {
-        UINT8 afe_index = i;
-
-        if (series_num < 5U)
-        {
-            afe_index = 0U;
-        }
-        else if ((series_num == 13U) && (i == 8U))
-        {
-            afe_index = 9U;
-        }
-
-        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[afe_index];
-        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
-    }
-
-    if (series_num < 32)
-    {
-        for (i = series_num; i < 25; ++i)
-        {
-            g_stCellInfoReport.u16VCell[i] = 61001;
-        }
-    }
-}
-#endif
 
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
-    INT32 t_i32temp;
 
     for (i = 0; i < SeriesNum; ++i)
     {
-        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
-        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
+        UINT8 afe_index = DataLoad_CellVoltAfeIndex(SeriesNum, i);
+        g_stCellInfoReport.u16VCell[i] = SH367309_Read_AFE1.u16VCell[afe_index];
     }
 
 #ifndef VCELL_DISP_TEST
-    if (SeriesNum < 32)
+    if (SeriesNum < 32U)
     {
-        for (i = SeriesNum; i < 32; ++i)
+        for (i = SeriesNum; i < 32U; ++i)
         {
-            g_stCellInfoReport.u16VCell[i] = 61001;
+            g_stCellInfoReport.u16VCell[i] = 61001U;
         }
     }
-#endif // !1
+#endif
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -197,26 +145,16 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    // 单片机读总压
-    // u32VCellTotle = ((ADC_GetResult(ADC_VBC)*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // AFE读总压
-    // u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // 所有单节电池电压加起来
     u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
 
-    g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // 除以10
-    g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;                                 // max cell voltage
-    g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;                                 // min cell voltage
-    g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;           // delta cell voltage
-    g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;                  // max cell voltage
-    g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;                  // min cell voltage
+    g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF);
+    g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;
+    g_stCellInfoReport.u16VCellMin = t_u16VcellMinTemp;
+    g_stCellInfoReport.u16VCellDelta = t_u16VcellMaxTemp - t_u16VcellMinTemp;
+    g_stCellInfoReport.u16VCellMaxPosition = t_u8VcellMaxPosition + 1;
+    g_stCellInfoReport.u16VCellMinPosition = t_u8VcellMinPosition + 1;
 }
 
-/*这个是数据溢出的问题，其次是>>这个的优先级和别的符号优先级的问题
-  运算符优先级太混乱导致数据溢出的问题
-   (UINT16)(t_i32temp/100) 和
-    (UINT16)(t_i32temp)/100不一样
-*/
 void DataLoad_Temperature(void)
 {
     UINT8 i;
@@ -224,7 +162,6 @@ void DataLoad_Temperature(void)
     UINT8 Select;
 
     Select = 2;
-    // 没纳入统计的，默认值就是0了
     for (i = 0; i < Select; i++)
     {
         t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
@@ -235,38 +172,21 @@ void DataLoad_Temperature(void)
 
     g_stCellInfoReport.u16Temperature[2] = 0;
 
-#if 0
-	//环境温度1
-	t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40;		//放大1000倍和B值对应的意思
-	//t_i32temp =  - 40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1])>>10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp*10 + 400);
-	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
-#endif
-
-    // 环境温度2
-    // 如果没有，这个默认就是0(ADC.c不会调用)
     t_i32temp = ADC_GetResult(ADC_TEMP_EV2) / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
 
-    // 环境温度3
     t_i32temp = ADC_GetResult(ADC_TEMP_EV3) / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
 
-#if 1
-    // MOS温度为散热片温度
-    // 取两者最大值
-    // t_i32temp = (ADC_GetResult(ADC_TEMP_MOS1) > ADC_GetResult(ADC_TEMP_MOS2) ? ADC_GetResult(ADC_TEMP_MOS1):ADC_GetResult(ADC_TEMP_MOS2));
     t_i32temp = ADC_GetResult(ADC_TEMP_MOS1);
     t_i32temp = t_i32temp / 10 - 40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
     Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[MOS_TEMP1]);
-#endif
 }
 
 void DataLoad_TemperatureMaxMinFind(void)
@@ -278,13 +198,12 @@ void DataLoad_TemperatureMaxMinFind(void)
     t_u16VcellMaxTemp = 0;
     t_u16VcellMinTemp = 0x7FFF;
 
-    // 如果是两个环境温度，则改为8便可
     for (i = 0; i < 7; i++)
-    { // 默认只有一个环境温度，纳入计算
+    {
         if (g_stCellInfoReport.u16Temperature[i] == 0)
-        {             // 这段代码什么意思，断了就不判断吗？
-            continue; // 有的，则必定会被赋值，要么-29摄氏度。
-        } // 空的，则就是默认刚上电的值0
+        {
+            continue;
+        }
         t_u16VcellTemp = g_stCellInfoReport.u16Temperature[i];
         if (t_u16VcellMaxTemp < t_u16VcellTemp)
         {
@@ -296,8 +215,8 @@ void DataLoad_TemperatureMaxMinFind(void)
         }
     }
 
-    g_stCellInfoReport.u16TempMax = t_u16VcellMaxTemp; // max temp
-    g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp; // min temp
+    g_stCellInfoReport.u16TempMax = t_u16VcellMaxTemp;
+    g_stCellInfoReport.u16TempMin = t_u16VcellMinTemp;
 }
 
 static INT32 DataLoad_CurrentRawToSigned(UINT16 raw_code)
@@ -320,47 +239,69 @@ static UINT32 DataLoad_CurrentAbsI32(INT32 value)
     return (UINT32)value;
 }
 
-static UINT16 DataLoad_CurrentMilliAmpToRaw(UINT32 current_mA)
+/* Startup calibration only needs the fixed 1 A acceptance limit. Keeping this
+ * specialized avoids 64-bit multiply/divide on Cortex-M3. */
+static UINT16 DataLoad_CurrentStartupZeroLimitRaw(void)
 {
-    uint64_t numerator;
-    uint64_t denominator;
-    uint64_t raw_code;
+    UINT32 denominator;
+    UINT32 numerator;
+    UINT32 raw_code;
 
-    if ((current_mA == 0U) || (g_u32CS_Res_AFE == 0U))
+    if (g_u32CS_Res_AFE == 0U)
     {
-        return 0;
+        return 0U;
     }
 
-    denominator = (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
-    numerator = ((uint64_t)current_mA * (uint64_t)AFE_CURRENT_ADC_DENOMINATOR) + (denominator / 2U);
+    /* Valid configuration bounds g_u32CS_Res_AFE to <= 10,000,000. */
+    denominator = AFE_CURRENT_RATIO_SCALE * g_u32CS_Res_AFE;
+    numerator = AFE_CURRENT_STARTUP_ZERO_LIMIT_MA * AFE_CURRENT_RATIO_DENOMINATOR +
+                denominator / 2U;
     raw_code = numerator / denominator;
 
-    if (raw_code > 0x7FFFU)
-    {
-        return 0x7FFFU;
-    }
-
-    return (UINT16)raw_code;
+    return (raw_code > 0x7FFFU) ? 0x7FFFU : (UINT16)raw_code;
 }
 
 static UINT32 DataLoad_CurrentRawToMilliAmp(UINT32 raw_abs)
 {
-    uint64_t current_mA;
+    UINT32 scaled_raw;
+    UINT32 quotient;
+    UINT32 remainder;
+    UINT32 base;
+    UINT32 fraction;
 
     if ((raw_abs == 0U) || (g_u32CS_Res_AFE == 0U))
     {
         return 0U;
     }
 
-    current_mA = (uint64_t)raw_abs * (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
-    current_mA = (current_mA + ((uint64_t)AFE_CURRENT_ADC_DENOMINATOR / 2U)) / (uint64_t)AFE_CURRENT_ADC_DENOMINATOR;
-
-    if (current_mA > 0xFFFFFFFFU)
+    /* corrected_raw comes from one signed 16-bit CADC sample and a calibrated
+     * signed-16-bit-scale offset, so values above 0xFFFF are non-physical. */
+    if (raw_abs > 0xFFFFU)
     {
         return 0xFFFFFFFFU;
     }
 
-    return (UINT32)current_mA;
+    scaled_raw = raw_abs * AFE_CURRENT_RATIO_SCALE;
+    quotient = g_u32CS_Res_AFE / AFE_CURRENT_RATIO_DENOMINATOR;
+    remainder = g_u32CS_Res_AFE % AFE_CURRENT_RATIO_DENOMINATOR;
+
+    if ((quotient != 0U) && (scaled_raw > (0xFFFFFFFFU / quotient)))
+    {
+        return 0xFFFFFFFFU;
+    }
+
+    base = scaled_raw * quotient;
+    /* scaled_raw <= 1,310,700 and remainder <= 2,146, so this product fits U32. */
+    fraction = (scaled_raw * remainder +
+                (AFE_CURRENT_RATIO_DENOMINATOR / 2U)) /
+               AFE_CURRENT_RATIO_DENOMINATOR;
+
+    if (base > (0xFFFFFFFFU - fraction))
+    {
+        return 0xFFFFFFFFU;
+    }
+
+    return base + fraction;
 }
 
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
@@ -417,7 +358,7 @@ void AfeCurrent_StartupZeroCal(void)
     last_raw_signed = 0;
     sum_raw_signed = 0;
     param = (SleepDeal_IsBootFromSleepStartup() != 0U) ? &s_stAfeCurrentWarmStartupZeroParam : &s_stAfeCurrentColdStartupZeroParam;
-    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_STARTUP_ZERO_LIMIT_MA);
+    limit_raw = DataLoad_CurrentStartupZeroLimitRaw();
     s_data.cur.zeroOffsetRaw = 0;
 
     if (param->u16SettleMs > 0U)
@@ -532,7 +473,6 @@ void test_Autocurrent_cycle(void)
         }
         break;
     case 1:
-    {
         if (g_stCellInfoReport.SocElement.u16Soc >= 99)
         {
             step = 2;
@@ -542,7 +482,6 @@ void test_Autocurrent_cycle(void)
             g_stCellInfoReport.u16IDischg = sys_time.DSG;
         }
         break;
-    }
     case 2:
         if (g_stCellInfoReport.SocElement.u16Soc <= 1)
         {
@@ -553,7 +492,6 @@ void test_Autocurrent_cycle(void)
         break;
     }
 }
-
 
 void DataLoad_soc_test(void)
 {
@@ -585,6 +523,7 @@ void DataLoad_soc_test(void)
         break;
     }
 }
+
 void DataLoad_Current(void)
 {
     INT32 raw_signed;
@@ -632,6 +571,7 @@ static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
 }
 
 static AFE_MONITOR_CH *MonitorAFE_GetChannel(UINT8 num);
+
 static void MonitorAFE_ReportError(UINT8 num)
 {
     switch (num)
@@ -774,7 +714,6 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 
     MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE1), &s_data.mon.sleepDelay[0]);
     MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE2), &s_data.mon.sleepDelay[1]);
-    /* Sleep after persistent storage communication faults too. */
     MonitorAFE_UpdateSleepDelay((UINT8)(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) ||
                                         System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE)),
                                 &s_data.mon.sleepDelay[2]);
@@ -784,6 +723,7 @@ void open_ctlc(void)
 {
     MCUO_AFE_CTLC = 1;
 }
+
 void close_ctlc(void)
 {
     MCUO_AFE_CTLC = 0;
@@ -793,14 +733,10 @@ void new_todo_logi(void)
 {
     static uint16_t occ1_rec_cnt = 0;
     static uint16_t odc1_rec_cnt = 0;
-    // static uint8_t Driver_Element_MOS_CHG = s_system_status.bits.b1Status_MOS_CHG;
-    // static uint8_t DRIVER_ELEMENT_MOS_DSG = s_system_status.bits.b1Status_MOS_DSG;
     uint8_t Driver_Element_MOS_CHG = 1;
     uint8_t DRIVER_ELEMENT_MOS_DSG = 1;
     static uint32_t soc_low_cnt = 0;
-    // if(g_stCellInfoReport.unMdlFault_Third.all != 0)
 
-    // static bool first = true;
     charger_detect_and_keyLogi_200ms();
 
 #ifdef __SOC_5_PROTECT_
@@ -827,8 +763,8 @@ void new_todo_logi(void)
         g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 0;
         soc_low_cnt = 0;
     }
-#endif // __SOC_5_PROTECT_
-    // 增加软件充电过流
+#endif
+
     if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
     {
         g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 1;
@@ -861,21 +797,6 @@ void new_todo_logi(void)
         }
     }
 
-    // switch (occ1_ararm_state)
-    // {
-    // case 0:
-    //     if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp)
-    //     {
-    //         FaultWarnRecord2(IchgOcp_Second);
-    //         Driver_Element_MOS_CHG = 0;
-    //         occ1_ararm_state = 1;
-    //     }
-    //     break;
-
-    // default:
-    //     break;
-    // }
-
     if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
@@ -896,16 +817,13 @@ void new_todo_logi(void)
             DRIVER_ELEMENT_MOS_DSG = 1;
     }
 
-    // 软件控制mos的逻辑
     if (s_system_status.bits.b1Status_MOS_CHG != Driver_Element_MOS_CHG)
     {
-        // log_w();
         sys_time.cnt_enter_chg_open++;
         SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element_MOS_CHG);
     }
     if (s_system_status.bits.b1Status_MOS_DSG != DRIVER_ELEMENT_MOS_DSG)
     {
-        // log_w();
         sys_time.cnt_enter_dsg_open++;
         SH367309_DriverMos_Ctrl(GPIO_DSG, DRIVER_ELEMENT_MOS_DSG);
     }
@@ -924,8 +842,6 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
-    // DataLoad_soc_test();
-    // test_Autocurrent_cycle();
 
     AfeCurrent_NextSeq();
 
@@ -934,12 +850,6 @@ void App_AFEGet(void)
     App_SOC();
 
 #ifdef VCELL_DISP_TEST
-    // {
-    //     g_stCellInfoReport.u16VCell[27] = g_stLowPowerRtcStatus.test_sample_voltage;
-    //     g_stCellInfoReport.u16VCell[28] = g_stLowPowerRtcStatus.last;
-    //     g_stCellInfoReport.u16VCell[29] = g_stLowPowerRtcStatus.cycles;
-    //     g_stCellInfoReport.u16VCell[30] = g_stLowPowerRtcStatus.sleep;
-    // }
     g_stCellInfoReport.u16VCell[31] = sys_time.rtc_sec_cnt;
 #endif
 }
