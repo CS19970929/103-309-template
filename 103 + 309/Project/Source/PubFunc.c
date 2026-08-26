@@ -143,22 +143,19 @@ UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
 	return CRCC;
 }
 
-// 软件延时函数
+/*
+ * Millisecond delay used by AFE setup/write sequences.
+ *
+ * Do not implement protocol timing with empty software loops: ARMCC5 -O2 may
+ * legally collapse or remove them. System_Init.c provides a SysTick-backed
+ * delay whose observable peripheral accesses keep the timing independent of
+ * compiler optimization level.
+ */
 void Delay1ms(UINT8 delaycnt)
 {
-	UINT8 i, k;
-	UINT16 j;
-
-
-	for (i = 0; i < delaycnt; i++)
+	if (delaycnt != 0U)
 	{
-		for (k = 0; k < 9; k++)
-		{ // 9倍便是72MHz
-			for (j = 0; j < 560; j++)
-			{
-				// system clock = 8MHz
-			}
-		}
+		__delay_ms((UINT16)delaycnt);
 	}
 }
 
@@ -217,14 +214,4 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 	}
 
 	return result;
-}
-
-void jtag_disableAndConfIO(void)
-{
-	/* 禁用 JTAG，PB3、PB4、PA15重定义为普通IO */
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE); // 使能PA和PB端口时钟
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);	 // 配置复用时钟
-	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE); // 启用SW，禁用JTAG，PA15、PB3、PB4可用
-
 }
