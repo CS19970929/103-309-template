@@ -20,6 +20,8 @@ enum irqWakeup
   cuv_wake,
   cov_wake,
   rs485_irq,
+  rtc_alarm_irq,
+  can_wake_irq,
   NO_IRQ
 };
 typedef enum _SLEEP_MODE {
