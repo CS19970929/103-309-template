@@ -161,21 +161,27 @@ static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
 static UINT8 StorageFlash_ReadRecord(uint32_t record_addr, UINT32 expect_magic,
 									 UINT16 expect_length, UINT8 *payload, UINT32 *sequence)
 {
-	const STORAGE_FLASH_HEADER *header = (const STORAGE_FLASH_HEADER *)record_addr;
+	STORAGE_FLASH_HEADER header;
 	const UINT8 *payload_addr = (const UINT8 *)(record_addr + sizeof(STORAGE_FLASH_HEADER));
 	UINT16 crc;
-	if (((record_addr & ((UINT32)FLASH_STORAGE_RECORD_ALIGNMENT - 1U)) != 0U) ||
-		(header->magic != expect_magic) || (header->length != expect_length) ||
-		((header->version != FLASH_STORAGE_RECORD_VERSION) &&
-		 (header->version != FLASH_STORAGE_RECORD_VERSION_LEGACY))) return 0U;
-	if (header->version == FLASH_STORAGE_RECORD_VERSION)
-		crc = StorageFlash_CalcRecordCrc(header->magic, header->version, header->length,
-										 header->sequence, payload_addr);
+
+	if ((record_addr & ((UINT32)FLASH_STORAGE_RECORD_ALIGNMENT - 1U)) != 0U)
+	{
+		return 0U;
+	}
+
+	memcpy(&header, (const void *)record_addr, sizeof(header));
+	if ((header.magic != expect_magic) || (header.length != expect_length) ||
+		((header.version != FLASH_STORAGE_RECORD_VERSION) &&
+		 (header.version != FLASH_STORAGE_RECORD_VERSION_LEGACY))) return 0U;
+	if (header.version == FLASH_STORAGE_RECORD_VERSION)
+		crc = StorageFlash_CalcRecordCrc(header.magic, header.version, header.length,
+										 header.sequence, payload_addr);
 	else
 		crc = StorageFlash_CalcLegacyPayloadCrc(payload_addr, expect_length);
-	if (crc != header->crc) return 0U;
+	if (crc != header.crc) return 0U;
 	if (payload != 0) memcpy(payload, payload_addr, expect_length);
-	if (sequence != 0) *sequence = header->sequence;
+	if (sequence != 0) *sequence = header.sequence;
 	return 1U;
 }
 
