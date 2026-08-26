@@ -17,13 +17,6 @@
 
 typedef struct
 {
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT32 u32CycleTimes;
-} STORAGE_FLASH_SOC_DATA_V1;
-
-typedef struct
-{
 	UINT32 magic;
 	UINT16 version;
 	UINT16 length;
@@ -997,39 +990,21 @@ UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
-	STORAGE_FLASH_SOC_DATA_V1 legacy_data;
-
 	if (data == 0)
 	{
 		return 0U;
 	}
 
-	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
-									  FLASH_ADDR_STORAGE_SOC_SLOT_B,
-									  FLASH_STORAGE_MAGIC_SOC,
-									  (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
-									  (UINT8 *)data) &&
-		(data->u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION_V2))
-	{
-		return 1U;
-	}
-
 	if (!StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 									   FLASH_ADDR_STORAGE_SOC_SLOT_B,
 									   FLASH_STORAGE_MAGIC_SOC,
-									   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA_V1),
-									   (UINT8 *)&legacy_data))
+									   (UINT16)sizeof(STORAGE_FLASH_SOC_DATA),
+									   (UINT8 *)data))
 	{
 		return 0U;
 	}
 
-	memset(data, 0, sizeof(*data));
-	data->u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
-	data->u16SocNow = legacy_data.u16SocNow;
-	data->u16DsgSocInt = legacy_data.u16DsgSocInt;
-	data->u32CycleTimes = legacy_data.u32CycleTimes;
-	data->u16MaxErrorPercent = 100U;
-	return 1U;
+	return (data->u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION_CURRENT) ? 1U : 0U;
 }
 
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
@@ -1043,7 +1018,7 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 	}
 
 	save_data = *data;
-	save_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	save_data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_CURRENT;
 	StorageFlash_BeginWrite();
 	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 										  FLASH_ADDR_STORAGE_SOC_SLOT_B,
