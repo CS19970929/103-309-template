@@ -8,9 +8,11 @@
 #if BMS_CONFIG_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
 #error "BMS config protect word count mismatch"
 #endif
-#if BMS_CONFIG_CALIB_WORD_COUNT != KB_NUM
-#error "BMS config calibration word count mismatch"
-#endif
+/* KB_NUM is an enum constant, so it is invisible to #if preprocessing.
+ * Use a C constant-expression check instead; a mismatch creates an invalid
+ * array bound and stops the ARMCC5 build. */
+typedef char EEPROM_ConfigCalibrationWordCountCheck[
+	(BMS_CONFIG_CALIB_WORD_COUNT == KB_NUM) ? 1 : -1];
 #if BMS_CONFIG_OTHER_WORD_COUNT != E2P_PARA_NUM_OTHER_ELEMENT1
 #error "BMS config other word count mismatch"
 #endif
