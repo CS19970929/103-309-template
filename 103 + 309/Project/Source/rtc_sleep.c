@@ -14,7 +14,7 @@
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
-enum irqWakeup g_irq_t = NO_IRQ;
+volatile enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
     0U,
