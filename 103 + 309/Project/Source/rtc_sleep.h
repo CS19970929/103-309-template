@@ -56,7 +56,9 @@ struct LOW_POWER_RTC_STATUS {
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
-extern enum irqWakeup g_irq_t;
+/* Written by EXTI/RTC wake handlers and consumed by the main low-power state
+ * machine. Volatile is required so ARMCC5 -O2 cannot cache the wake source. */
+extern volatile enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);
 uint32_t LP_GetBlockReason(void);
