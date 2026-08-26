@@ -254,13 +254,6 @@ UINT8 EEPROM_SaveConfigToFlash(void)
 	return result;
 }
 
-UINT8 EEPROM_SaveRWParametersToFlash(void)
-{
-	/* Compatibility entry point for existing parameter writers. The persisted
-	 * object is the complete BMS_CONFIG, never a category-specific record. */
-	return EEPROM_SaveConfigToFlash();
-}
-
 static void EEPROM_LoadConfigFromFlash(void)
 {
 	BMS_CONFIG config;
