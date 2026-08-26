@@ -35,7 +35,6 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 #define LP_BLOCK_UPGRADE      (1UL << 6)
 #define LP_BLOCK_FAULT        (1UL << 7)
 #define LP_BLOCK_LED_ACTIVE   (1UL << 8)
-#define LP_BLOCK_AGING        (1UL << 9)
 
 struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
