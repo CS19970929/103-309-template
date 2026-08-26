@@ -17,8 +17,6 @@
 
 void InitE2PROM(void);
 UINT8 EEPROM_SaveConfigToFlash(void);
-/* Compatibility entry point; saves the same complete BMS_CONFIG. */
-UINT8 EEPROM_SaveRWParametersToFlash(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);
 
 #endif /* EEPROM_H */
