@@ -25,9 +25,7 @@ void Runtime_Boot(void)
 	InitTimer();
 	__enable_irq();
 
-
 	InitSystemMonitorData_EEPROM();
-	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
 	SystemRuntime_MarkBootReady();
 	SystemRuntime_SetProjectVersion(1U);
