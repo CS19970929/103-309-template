@@ -1,9 +1,9 @@
 #include "main.h"
 
-#define EVENT_RECORD_LENGTH               100U
-#define LOG_STORAGE_DELTA_MAGIC            ((UINT32)0x4C474432U) /* LGD2 */
-#define LOG_STORAGE_SIGNATURE_OFFSET       ((UINT32)2166136261U)
-#define LOG_STORAGE_SIGNATURE_PRIME        ((UINT32)16777619U)
+#define EVENT_RECORD_LENGTH                  FLASH_STORAGE_LOG_RECORD_COUNT
+#define LOG_STORAGE_PAGE_MAGIC               ((UINT32)0x4C4F4733U) /* LOG3 */
+#define LOG_STORAGE_PAGE_FLAG_RESET          ((UINT16)0x0001U)
+#define LOG_STORAGE_PAGE_FLAGS_VALID         LOG_STORAGE_PAGE_FLAG_RESET
 
 typedef struct LOG_RECORD_RUNTIME_TAG
 {
@@ -15,71 +15,63 @@ typedef struct LOG_RECORD_RUNTIME_TAG
 	UINT8 lastSaveValid[EVENT_NUM];
 	UINT8 eventLatch[EVENT_NUM];
 	UINT8 cbcTemp;
+	UINT32 storagePage;
+	UINT32 storageNextAddr;
+	UINT32 storageGeneration;
 } LogRecordRuntime;
 
-typedef struct LOG_STORAGE_DELTA_RECORD_TAG
+typedef struct LOG_STORAGE_PAGE_HEADER_TAG
 {
 	UINT32 magic;
-	UINT32 baseSignature;
+	UINT32 generation;
+	UINT16 flags;
+	UINT16 crc;
+} LOG_STORAGE_PAGE_HEADER;
+
+typedef struct LOG_STORAGE_ENTRY_TAG
+{
 	UINT8 event;
 	UINT8 delta;
 	UINT16 crc;
-} LOG_STORAGE_DELTA_RECORD;
+} LOG_STORAGE_ENTRY;
+
+typedef struct LOG_STORAGE_PAGE_INFO_TAG
+{
+	UINT8 valid;
+	UINT16 flags;
+	UINT32 page;
+	UINT32 generation;
+	UINT32 nextAddr;
+} LOG_STORAGE_PAGE_INFO;
+
+typedef char LogStoragePageCapacityCheck[
+	(((FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_PAGE_HEADER)) /
+	  sizeof(LOG_STORAGE_ENTRY)) >= EVENT_RECORD_LENGTH) ? 1 : -1];
 
 UINT32 su32_Interval_S_Tcnt = 0;
 
 static LogRecordRuntime s_log_record;
-static UINT32 s_log_base_signature;
 
-static UINT16 LogStorage_Crc16(const UINT8 *data, UINT16 length)
+void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt);
+
+static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 {
-	UINT16 crc = 0xFFFFU;
-	UINT16 i;
-	UINT8 bit;
-
-	for (i = 0U; i < length; ++i)
+	if (event >= EVENT_NUM)
 	{
-		crc ^= data[i];
-		for (bit = 0U; bit < 8U; ++bit)
-		{
-			if ((crc & 1U) != 0U)
-			{
-				crc = (UINT16)((crc >> 1) ^ 0xA001U);
-			}
-			else
-			{
-				crc >>= 1;
-			}
-		}
+		return 0U;
 	}
-
-	return crc;
+	if (delta > 171U)
+	{
+		return 0U;
+	}
+	return 1U;
 }
 
-static UINT32 LogStorage_BaseSignature(UINT8 point,
-										const UINT8 records[EVENT_RECORD_LENGTH][2])
-{
-	UINT32 hash = LOG_STORAGE_SIGNATURE_OFFSET;
-	UINT16 i;
-
-	hash ^= point;
-	hash *= LOG_STORAGE_SIGNATURE_PRIME;
-	for (i = 0U; i < EVENT_RECORD_LENGTH; ++i)
-	{
-		hash ^= records[i][0];
-		hash *= LOG_STORAGE_SIGNATURE_PRIME;
-		hash ^= records[i][1];
-		hash *= LOG_STORAGE_SIGNATURE_PRIME;
-	}
-
-	return hash;
-}
-
-static UINT8 LogStorage_RecordIsBlank(UINT32 addr)
+static UINT8 LogStorage_IsBlank(UINT32 addr, UINT16 length)
 {
 	UINT16 offset;
 
-	for (offset = 0U; offset < (UINT16)sizeof(LOG_STORAGE_DELTA_RECORD); offset += 2U)
+	for (offset = 0U; offset < length; offset += 2U)
 	{
 		if (FlashReadOneHalfWord(addr + offset) != 0xFFFFU)
 		{
@@ -89,99 +81,57 @@ static UINT8 LogStorage_RecordIsBlank(UINT32 addr)
 	return 1U;
 }
 
-static UINT8 LogStorage_ReadDelta(UINT32 addr, LOG_STORAGE_DELTA_RECORD *record)
+static UINT16 LogStorage_HeaderCrc(const LOG_STORAGE_PAGE_HEADER *header)
 {
-	LOG_STORAGE_DELTA_RECORD temp;
-	UINT16 crc;
+	return StorageFlash_Crc16((const UINT8 *)header,
+							  (UINT16)(sizeof(*header) - sizeof(header->crc)));
+}
 
-	if (record == 0)
+static UINT16 LogStorage_EntryCrc(const LOG_STORAGE_ENTRY *entry)
+{
+	return StorageFlash_Crc16((const UINT8 *)entry,
+							  (UINT16)(sizeof(*entry) - sizeof(entry->crc)));
+}
+
+static UINT8 LogStorage_ReadHeader(UINT32 page, LOG_STORAGE_PAGE_HEADER *header)
+{
+	LOG_STORAGE_PAGE_HEADER temp;
+
+	if (header == 0)
+	{
+		return 0U;
+	}
+
+	memcpy(&temp, (const void *)page, sizeof(temp));
+	if ((temp.magic != LOG_STORAGE_PAGE_MAGIC) ||
+		((temp.flags & (UINT16)~LOG_STORAGE_PAGE_FLAGS_VALID) != 0U) ||
+		(temp.crc != LogStorage_HeaderCrc(&temp)))
+	{
+		return 0U;
+	}
+
+	*header = temp;
+	return 1U;
+}
+
+static UINT8 LogStorage_ReadEntry(UINT32 addr, LOG_STORAGE_ENTRY *entry)
+{
+	LOG_STORAGE_ENTRY temp;
+
+	if (entry == 0)
 	{
 		return 0U;
 	}
 
 	memcpy(&temp, (const void *)addr, sizeof(temp));
-	if (temp.magic != LOG_STORAGE_DELTA_MAGIC)
+	if ((temp.crc != LogStorage_EntryCrc(&temp)) ||
+		!LogRecord_IsEntryValid(temp.event, temp.delta))
 	{
 		return 0U;
 	}
 
-	crc = LogStorage_Crc16((const UINT8 *)&temp,
-								(UINT16)(sizeof(temp) - sizeof(temp.crc)));
-	if (crc != temp.crc)
-	{
-		return 0U;
-	}
-	if ((temp.event >= EVENT_NUM) || (temp.delta > 171U))
-	{
-		return 0U;
-	}
-
-	*record = temp;
+	*entry = temp;
 	return 1U;
-}
-
-static UINT8 LogStorage_ProgramDelta(UINT32 addr,
-										LogEventArray event,
-										UINT8 delta)
-{
-	LOG_STORAGE_DELTA_RECORD record;
-	LOG_STORAGE_DELTA_RECORD verify;
-
-	if (!LogStorage_RecordIsBlank(addr))
-	{
-		return 0U;
-	}
-
-	record.magic = LOG_STORAGE_DELTA_MAGIC;
-	record.baseSignature = s_log_base_signature;
-	record.event = (UINT8)event;
-	record.delta = delta;
-	record.crc = LogStorage_Crc16((const UINT8 *)&record,
-									 (UINT16)(sizeof(record) - sizeof(record.crc)));
-
-	if (!StorageFlash_ProgramStorageBytes(addr,
-									 (const UINT8 *)&record,
-									 (UINT16)sizeof(record)))
-	{
-		return 0U;
-	}
-
-	if (!LogStorage_ReadDelta(addr, &verify) ||
-		(verify.baseSignature != record.baseSignature) ||
-		(verify.event != record.event) ||
-		(verify.delta != record.delta))
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-	return 1U;
-}
-
-static UINT8 LogStorage_EraseDeltaPage(UINT32 pageAddr)
-{
-	if (LogStorage_RecordIsBlank(pageAddr) &&
-		LogStorage_RecordIsBlank(pageAddr + FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_DELTA_RECORD)))
-	{
-		return 1U;
-	}
-
-	return StorageFlash_EraseStoragePage(pageAddr);
-}
-
-static UINT32 LogStorage_FindBlankInPage(UINT32 pageAddr)
-{
-	UINT32 offset;
-
-	for (offset = 0U;
-		 (offset + sizeof(LOG_STORAGE_DELTA_RECORD)) <= FLASH_STORAGE_PAGE_SIZE;
-		 offset += sizeof(LOG_STORAGE_DELTA_RECORD))
-	{
-		if (LogStorage_RecordIsBlank(pageAddr + offset))
-		{
-			return pageAddr + offset;
-		}
-	}
-	return 0U;
 }
 
 static void LogStorage_ApplyEntry(UINT8 *point,
@@ -199,88 +149,280 @@ static void LogStorage_ApplyEntry(UINT8 *point,
 	++(*point);
 }
 
-static UINT8 LogStorage_ReplayPage(UINT32 pageAddr,
+static UINT8 LogStorage_GetPageInfo(UINT32 page, LOG_STORAGE_PAGE_INFO *info)
+{
+	LOG_STORAGE_PAGE_HEADER header;
+	UINT32 addr;
+	UINT32 endAddr = page + FLASH_STORAGE_PAGE_SIZE;
+
+	if (info == 0)
+	{
+		return 0U;
+	}
+
+	memset(info, 0, sizeof(*info));
+	info->page = page;
+	if (!LogStorage_ReadHeader(page, &header))
+	{
+		return 0U;
+	}
+
+	info->valid = 1U;
+	info->flags = header.flags;
+	info->generation = header.generation;
+	info->nextAddr = endAddr;
+
+	for (addr = page + sizeof(LOG_STORAGE_PAGE_HEADER);
+		 (addr + sizeof(LOG_STORAGE_ENTRY)) <= endAddr;
+		 addr += sizeof(LOG_STORAGE_ENTRY))
+	{
+		if (LogStorage_IsBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
+		{
+			info->nextAddr = addr;
+			break;
+		}
+	}
+	return 1U;
+}
+
+static UINT8 LogStorage_ReplayPage(const LOG_STORAGE_PAGE_INFO *info,
 									UINT8 *point,
 									UINT8 records[EVENT_RECORD_LENGTH][2])
 {
-	UINT32 offset;
-	LOG_STORAGE_DELTA_RECORD deltaRecord;
+	UINT32 addr;
+	UINT32 endAddr;
+	LOG_STORAGE_ENTRY entry;
 
-	for (offset = 0U;
-		 (offset + sizeof(LOG_STORAGE_DELTA_RECORD)) <= FLASH_STORAGE_PAGE_SIZE;
-		 offset += sizeof(LOG_STORAGE_DELTA_RECORD))
+	if ((info == 0) || !info->valid)
 	{
-		if (LogStorage_RecordIsBlank(pageAddr + offset))
+		return 0U;
+	}
+
+	endAddr = info->page + FLASH_STORAGE_PAGE_SIZE;
+	for (addr = info->page + sizeof(LOG_STORAGE_PAGE_HEADER);
+		 (addr + sizeof(LOG_STORAGE_ENTRY)) <= endAddr;
+		 addr += sizeof(LOG_STORAGE_ENTRY))
+	{
+		if (LogStorage_IsBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
 		{
 			break;
 		}
-		if (!LogStorage_ReadDelta(pageAddr + offset, &deltaRecord))
+
+		/* A torn write consumes one slot but must not invalidate older records.
+		 * Subsequent boot writes continue at the first blank slot after it. */
+		if (!LogStorage_ReadEntry(addr, &entry))
 		{
-			return 0U;
+			continue;
 		}
-		if (deltaRecord.baseSignature == s_log_base_signature)
-		{
-			LogStorage_ApplyEntry(point, records, deltaRecord.event, deltaRecord.delta);
-		}
+		LogStorage_ApplyEntry(point, records, entry.event, entry.delta);
 	}
 	return 1U;
 }
 
-static UINT8 LogStorage_ReplayDeltas(UINT8 *point,
-									  UINT8 records[EVENT_RECORD_LENGTH][2])
+static UINT8 LogStorage_StartPage(UINT32 page, UINT32 generation, UINT16 flags)
 {
-	if (!LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_A, point, records))
-	{
-		return 0U;
-	}
-	if (!LogStorage_ReplayPage(FLASH_ADDR_STORAGE_LOG_DELTA_B, point, records))
-	{
-		return 0U;
-	}
-	return 1U;
-}
+	LOG_STORAGE_PAGE_HEADER header;
+	LOG_STORAGE_PAGE_HEADER verify;
 
-static UINT8 LogStorage_CompactWithEvent(LogEventArray event, UINT8 delta)
-{
-	UINT8 point = s_log_record.point;
-	UINT8 records[EVENT_RECORD_LENGTH][2];
-	UINT8 eraseA;
-	UINT8 eraseB;
-
-	memcpy(records, s_log_record.records, sizeof(records));
-	LogStorage_ApplyEntry(&point, records, (UINT8)event, delta);
-	if (!StorageFlash_SaveLogData(point, (const UINT8(*)[2])records))
+	if (!StorageFlash_EraseStoragePage(page))
 	{
 		return 0U;
 	}
 
-	s_log_base_signature = LogStorage_BaseSignature(point, records);
-	eraseA = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_A);
-	eraseB = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_B);
-	if (!eraseA || !eraseB)
+	header.magic = LOG_STORAGE_PAGE_MAGIC;
+	header.generation = generation;
+	header.flags = flags;
+	header.crc = LogStorage_HeaderCrc(&header);
+
+	if (!StorageFlash_ProgramStorageBytes(page,
+									 (const UINT8 *)&header,
+									 (UINT16)sizeof(header)))
 	{
-		/* The new base is already committed. Stale deltas have an old signature
-		 * and will be ignored after reboot, so cleanup failure is non-fatal. */
+		return 0U;
+	}
+	if (!LogStorage_ReadHeader(page, &verify) ||
+		(verify.generation != generation) ||
+		(verify.flags != flags))
+	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
 	}
+
+	s_log_record.storagePage = page;
+	s_log_record.storageGeneration = generation;
+	s_log_record.storageNextAddr = page + sizeof(LOG_STORAGE_PAGE_HEADER);
 	return 1U;
+}
+
+static UINT8 LogStorage_Load(void)
+{
+	LOG_STORAGE_PAGE_INFO pageA;
+	LOG_STORAGE_PAGE_INFO pageB;
+	LOG_STORAGE_PAGE_INFO *newest;
+	LOG_STORAGE_PAGE_INFO *older;
+	UINT8 validA;
+	UINT8 validB;
+
+	validA = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_A, &pageA);
+	validB = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_B, &pageB);
+	if (!validA && !validB)
+	{
+		return 0U;
+	}
+
+	if (validA && validB)
+	{
+		if (pageA.generation >= pageB.generation)
+		{
+			newest = &pageA;
+			older = &pageB;
+		}
+		else
+		{
+			newest = &pageB;
+			older = &pageA;
+		}
+	}
+	else if (validA)
+	{
+		newest = &pageA;
+		older = 0;
+	}
+	else
+	{
+		newest = &pageB;
+		older = 0;
+	}
+
+	memset(s_log_record.records, 0, sizeof(s_log_record.records));
+	s_log_record.point = 0U;
+
+	/* A committed reset page is the new history root. Older generations must
+	 * never be replayed even if cleanup was interrupted by power loss. */
+	if (((newest->flags & LOG_STORAGE_PAGE_FLAG_RESET) == 0U) && (older != 0))
+	{
+		(void)LogStorage_ReplayPage(older, &s_log_record.point, s_log_record.records);
+	}
+	(void)LogStorage_ReplayPage(newest, &s_log_record.point, s_log_record.records);
+
+	s_log_record.storagePage = newest->page;
+	s_log_record.storageGeneration = newest->generation;
+	s_log_record.storageNextAddr = newest->nextAddr;
+	return 1U;
+}
+
+static UINT8 LogStorage_Reset(void)
+{
+	LOG_STORAGE_PAGE_INFO pageA;
+	LOG_STORAGE_PAGE_INFO pageB;
+	UINT8 validA;
+	UINT8 validB;
+	UINT32 targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
+	UINT32 stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
+	UINT32 generation = 1U;
+	UINT8 cleanupOk;
+
+	validA = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_A, &pageA);
+	validB = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_B, &pageB);
+
+	if (validA || validB)
+	{
+		if (validA && (!validB || (pageA.generation >= pageB.generation)))
+		{
+			generation = pageA.generation + 1U;
+			targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
+			stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
+		}
+		else
+		{
+			generation = pageB.generation + 1U;
+			targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
+			stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
+		}
+		if (generation == 0U)
+		{
+			generation = 1U;
+		}
+	}
+
+	/* Commit the reset marker before erasing the previous history. */
+	if (!LogStorage_StartPage(targetPage, generation, LOG_STORAGE_PAGE_FLAG_RESET))
+	{
+		return 0U;
+	}
+
+	cleanupOk = StorageFlash_EraseStoragePage(stalePage);
+	memset(s_log_record.records, 0, sizeof(s_log_record.records));
+	memset(s_log_record.lastSaveValid, 0, sizeof(s_log_record.lastSaveValid));
+	memset(s_log_record.eventLatch, 0, sizeof(s_log_record.eventLatch));
+	s_log_record.point = 0U;
+	s_log_record.cbcTemp = 0U;
+
+	return cleanupOk;
+}
+
+static UINT8 LogStorage_Rollover(void)
+{
+	UINT32 nextPage;
+	UINT32 nextGeneration;
+
+	nextPage = (s_log_record.storagePage == FLASH_ADDR_STORAGE_LOG_SLOT_A) ?
+			   FLASH_ADDR_STORAGE_LOG_SLOT_B : FLASH_ADDR_STORAGE_LOG_SLOT_A;
+	nextGeneration = s_log_record.storageGeneration + 1U;
+	if (nextGeneration == 0U)
+	{
+		nextGeneration = 1U;
+	}
+
+	/* The full current page remains valid until the new page header is fully
+	 * committed, so power loss during rollover cannot erase the latest log. */
+	return LogStorage_StartPage(nextPage, nextGeneration, 0U);
 }
 
 static UINT8 LogStorage_PersistEvent(LogEventArray event, UINT8 delta)
 {
-	UINT32 addr;
+	LOG_STORAGE_ENTRY entry;
+	LOG_STORAGE_ENTRY verify;
+	UINT32 pageEnd;
 
-	addr = LogStorage_FindBlankInPage(FLASH_ADDR_STORAGE_LOG_DELTA_A);
-	if (addr == 0U)
+	if ((s_log_record.storagePage != FLASH_ADDR_STORAGE_LOG_SLOT_A) &&
+		(s_log_record.storagePage != FLASH_ADDR_STORAGE_LOG_SLOT_B))
 	{
-		addr = LogStorage_FindBlankInPage(FLASH_ADDR_STORAGE_LOG_DELTA_B);
-	}
-	if (addr != 0U)
-	{
-		return LogStorage_ProgramDelta(addr, event, delta);
+		if (!LogStorage_Load() && !LogStorage_Reset())
+		{
+			return 0U;
+		}
 	}
 
-	return LogStorage_CompactWithEvent(event, delta);
+	pageEnd = s_log_record.storagePage + FLASH_STORAGE_PAGE_SIZE;
+	if ((s_log_record.storageNextAddr + sizeof(LOG_STORAGE_ENTRY)) > pageEnd)
+	{
+		if (!LogStorage_Rollover())
+		{
+			return 0U;
+		}
+	}
+
+	entry.event = (UINT8)event;
+	entry.delta = delta;
+	entry.crc = LogStorage_EntryCrc(&entry);
+
+	if (!StorageFlash_ProgramStorageBytes(s_log_record.storageNextAddr,
+									 (const UINT8 *)&entry,
+									 (UINT16)sizeof(entry)))
+	{
+		return 0U;
+	}
+	if (!LogStorage_ReadEntry(s_log_record.storageNextAddr, &verify) ||
+		(verify.event != entry.event) ||
+		(verify.delta != entry.delta))
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+
+	s_log_record.storageNextAddr += sizeof(LOG_STORAGE_ENTRY);
+	return 1U;
 }
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
@@ -316,19 +458,6 @@ static void LogRecord_MarkEventSaved(LogEventArray event)
 		s_log_record.lastSaveSeconds[event] = s_log_record.uptimeSeconds;
 		s_log_record.lastSaveValid[event] = 1U;
 	}
-}
-
-static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
-{
-	if (event >= EVENT_NUM)
-	{
-		return 0U;
-	}
-	if (delta > 171U)
-	{
-		return 0U;
-	}
-	return 1U;
 }
 
 static UINT8 LogTime_MapValue(UINT32 timeSeconds)
@@ -512,77 +641,21 @@ void Sci_WrReg_0x06_Reset_EventRecord(struct RS485MSG *s)
 
 UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)
 {
-	UINT8 emptyRecords[EVENT_RECORD_LENGTH][2] = {{0}};
-	UINT8 eraseA;
-	UINT8 eraseB;
-
-	if (!StorageFlash_SaveLogData(0U, (const UINT8(*)[2])emptyRecords))
+	if (!LogStorage_Reset())
 	{
-		return 0U;
-	}
-
-	s_log_base_signature = LogStorage_BaseSignature(0U, emptyRecords);
-	eraseA = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_A);
-	eraseB = LogStorage_EraseDeltaPage(FLASH_ADDR_STORAGE_LOG_DELTA_B);
-
-	memset(s_log_record.records, 0, sizeof(s_log_record.records));
-	s_log_record.point = 0U;
-
-	if (!eraseA || !eraseB)
-	{
-		/* The new empty base is committed and stale deltas no longer match it,
-		 * but a physical erase failure must remain visible to diagnostics. */
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
 	}
-
 	return 1U;
 }
 
 void ReadEEPROM_EventRecord_Parameters(void)
 {
-	UINT8 i;
-	UINT8 point = 0U;
-	UINT8 invalid = 0U;
-
-	if (!StorageFlash_LoadLogData(&point, s_log_record.records))
+	if (!LogStorage_Load())
 	{
-		invalid = 1U;
-	}
-	else if (point > EVENT_RECORD_LENGTH)
-	{
-		invalid = 1U;
-	}
-	else
-	{
-		for (i = 0U; i < EVENT_RECORD_LENGTH; ++i)
-		{
-			if (!LogRecord_IsEntryValid(s_log_record.records[i][0],
-										 s_log_record.records[i][1]))
-			{
-				invalid = 1U;
-				break;
-			}
-		}
-	}
-
-	if (invalid)
-	{
-		if (!EEPROM_ResetData_EventRecord_ToDefault())
+		if (!LogStorage_Reset())
 		{
 			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		}
-		return;
 	}
-
-	s_log_base_signature = LogStorage_BaseSignature(point, s_log_record.records);
-	if (!LogStorage_ReplayDeltas(&point, s_log_record.records))
-	{
-		if (!EEPROM_ResetData_EventRecord_ToDefault())
-		{
-			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		}
-		return;
-	}
-	s_log_record.point = point;
 }
