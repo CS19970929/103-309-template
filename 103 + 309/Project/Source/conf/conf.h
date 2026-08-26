@@ -78,7 +78,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_30A
+#define LEVEL_CURR  CURR_10A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
