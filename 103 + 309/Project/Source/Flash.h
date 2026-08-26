@@ -5,37 +5,67 @@
 #define FLASH_ADDR_APP_START             0x08004800
 
 /*
- * STM32F103C8 project storage contract.
+ * STM32F103C8 official 64KB Flash contract.
  *
- * This product intentionally uses the 128KB physical Flash available on the
- * selected C8 devices. The firmware target is STM32F10X_MD, so the erase page
- * is 1KB. APP must never cross FLASH_ADDR_STORAGE_START.
+ * Only 0x08000000..0x0800FFFF is considered usable. The undocumented rear
+ * 64KB found on some C8 devices is deliberately not used by APP or storage.
+ * STM32F10X_MD uses 1KB erase pages.
  *
- * Persistent storage uses six pages total:
- *   CONFIG A/B : 2KB, atomic parameter image
- *   SOC A/B    : 2KB, append journal
- *   LOG A/B    : 2KB, append journal managed by LogRecord.c
+ * Layout:
+ *   IAP          : 0x08000000..0x080047FF  (18KB)
+ *   APP          : 0x08004800..0x0800E7FF  (40KB max)
+ *   CONFIG A/B   : 0x0800E800..0x0800EFFF  (2KB)
+ *   SOC A/B      : 0x0800F000..0x0800F7FF  (2KB)
+ *   LOG A/B      : 0x0800F800..0x0800FFFF  (2KB)
+ *
+ * Persistent storage therefore occupies the last six official 1KB pages.
+ * APP/linker configuration must never cross FLASH_ADDR_STORAGE_START.
  */
 #if !defined(STM32F10X_MD)
 #error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
 #endif
 
+#define FLASH_DEVICE_OFFICIAL_SIZE        ((UINT32)0x00010000)
+#define FLASH_ADDR_DEVICE_END             ((UINT32)0x08010000)
 #define FLASH_STORAGE_PAGE_SIZE           ((UINT32)0x00000400)
 #define FLASH_STORAGE_SLOT_SIZE            FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)
-#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E800)
-#define FLASH_ADDR_STORAGE_END             ((UINT32)0x08020000)
+#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0800E800)
+#define FLASH_ADDR_STORAGE_END             FLASH_ADDR_DEVICE_END
 #define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
 #define FLASH_APP_MAX_SIZE                 (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
 
 /* Flash addresses describe storage objects only; parameter categories do not
  * own Flash pages. All configurable BMS parameters share CONFIG A/B. */
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E800)
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801EC00)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0801F000)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0801F400)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801F800)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801FC00)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0800E800)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0800EC00)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0800F000)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0800F400)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0800F800)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0800FC00)
+
+/* Compile-time geometry guards: changing one address cannot silently move
+ * storage outside the official C8 Flash or create page overlap/gaps. */
+#if (FLASH_ADDR_STORAGE_START != 0x0800E800)
+#error "Unexpected persistent storage start"
+#endif
+#if (FLASH_ADDR_STORAGE_END != 0x08010000)
+#error "Persistent storage must end at the official 64KB boundary"
+#endif
+#if ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) != (6U * 0x400U))
+#error "Persistent storage must occupy exactly six 1KB pages"
+#endif
+#if ((FLASH_ADDR_STORAGE_CONFIG_SLOT_B - FLASH_ADDR_STORAGE_CONFIG_SLOT_A) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_SOC_SLOT_A - FLASH_ADDR_STORAGE_CONFIG_SLOT_B) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_SOC_SLOT_B - FLASH_ADDR_STORAGE_SOC_SLOT_A) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_LOG_SLOT_A - FLASH_ADDR_STORAGE_SOC_SLOT_B) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_LOG_SLOT_B - FLASH_ADDR_STORAGE_LOG_SLOT_A) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_LOG_SLOT_B) != 0x400U)
+#error "Persistent storage slots must be contiguous 1KB pages"
+#endif
+#if ((FLASH_ADDR_APP_START + 0x0000A000U) != FLASH_ADDR_APP_END)
+#error "APP region must be exactly 40KB"
+#endif
 
 /* These count macros are intentionally plain integer constant expressions.
  * EEPROM.c compares them in #if directives, where C type casts such as
