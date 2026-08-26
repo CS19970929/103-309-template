@@ -510,18 +510,8 @@ static UINT8 StorageFlash_LoadJournalPair(uint32_t slot_a,
 		return 0U;
 	}
 
-	valid_a = StorageFlash_LoadJournalPage(slot_a,
-											expect_magic,
-											expect_length,
-											0,
-											&seq_a,
-											0);
-	valid_b = StorageFlash_LoadJournalPage(slot_b,
-											expect_magic,
-											expect_length,
-											0,
-											&seq_b,
-											0);
+	valid_a = StorageFlash_LoadJournalPage(slot_a, expect_magic, expect_length, 0, &seq_a, 0);
+	valid_b = StorageFlash_LoadJournalPage(slot_b, expect_magic, expect_length, 0, &seq_b, 0);
 	if (!valid_a && !valid_b)
 	{
 		return 0U;
@@ -536,12 +526,7 @@ static UINT8 StorageFlash_LoadJournalPair(uint32_t slot_a,
 		chosen = valid_a ? slot_a : slot_b;
 	}
 
-	return StorageFlash_LoadJournalPage(chosen,
-											expect_magic,
-											expect_length,
-											payload,
-											0,
-											0);
+	return StorageFlash_LoadJournalPage(chosen, expect_magic, expect_length, payload, 0, 0);
 }
 
 static UINT8 StorageFlash_SaveJournalPair(uint32_t slot_a,
@@ -565,26 +550,14 @@ static UINT8 StorageFlash_SaveJournalPair(uint32_t slot_a,
 	FLASH_Status result;
 
 	record_span = StorageFlash_RecordSpan(length);
-	if ((payload == 0) ||
-		(record_span == 0U) ||
-		(record_span > FLASH_STORAGE_PAGE_SIZE))
+	if ((payload == 0) || (record_span == 0U) || (record_span > FLASH_STORAGE_PAGE_SIZE))
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
 	}
 
-	valid_a = StorageFlash_LoadJournalPage(slot_a,
-											magic,
-											length,
-											0,
-											&seq_a,
-											&next_addr_a);
-	valid_b = StorageFlash_LoadJournalPage(slot_b,
-											magic,
-											length,
-											0,
-											&seq_b,
-											&next_addr_b);
+	valid_a = StorageFlash_LoadJournalPage(slot_a, magic, length, 0, &seq_a, &next_addr_a);
+	valid_b = StorageFlash_LoadJournalPage(slot_b, magic, length, 0, &seq_b, &next_addr_b);
 
 	if (valid_a && valid_b)
 	{
@@ -639,18 +612,12 @@ static UINT8 StorageFlash_SaveJournalPair(uint32_t slot_a,
 		}
 	}
 
-	result = StorageFlash_ProgramRecord(target_addr,
-											magic,
-											payload,
-											length,
-											next_sequence);
+	result = StorageFlash_ProgramRecord(target_addr, magic, payload, length, next_sequence);
 	FLASH_Lock();
 	if ((result != FLASH_COMPLETE) ||
 		(!StorageFlash_ReadRecord(target_addr, magic, length, 0, &verify_sequence)) ||
 		(verify_sequence != next_sequence) ||
-		(memcmp((const void *)(target_addr + sizeof(STORAGE_FLASH_HEADER)),
-				payload,
-				length) != 0))
+		(memcmp((const void *)(target_addr + sizeof(STORAGE_FLASH_HEADER)), payload, length) != 0))
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
@@ -688,6 +655,74 @@ FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 UINT16 FlashReadOneHalfWord(UINT32 faddr)
 {
 	return *(vu16 *)faddr;
+}
+
+static UINT8 StorageFlash_RangeIsValid(UINT32 addr, UINT16 length)
+{
+	UINT32 end_addr;
+
+	if ((length == 0U) || ((addr & 1U) != 0U))
+	{
+		return 0U;
+	}
+	end_addr = addr + (UINT32)length;
+	if ((end_addr < addr) ||
+		(addr < FLASH_ADDR_STORAGE_START) ||
+		(end_addr > FLASH_ADDR_STORAGE_END))
+	{
+		return 0U;
+	}
+	return 1U;
+}
+
+UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr)
+{
+	FLASH_Status result;
+
+	if ((page_addr < FLASH_ADDR_STORAGE_START) ||
+		(page_addr >= FLASH_ADDR_STORAGE_END) ||
+		((page_addr % FLASH_STORAGE_PAGE_SIZE) != 0U))
+	{
+		return 0U;
+	}
+
+	StorageFlash_BeginWrite();
+	FLASH_Unlock();
+	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+	result = FlashErasePageVerified(page_addr);
+	FLASH_Lock();
+	StorageFlash_EndWrite();
+
+	if (result != FLASH_COMPLETE)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+	return 1U;
+}
+
+UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length)
+{
+	FLASH_Status result;
+
+	if ((data == 0) || !StorageFlash_RangeIsValid(addr, length))
+	{
+		return 0U;
+	}
+
+	StorageFlash_BeginWrite();
+	FLASH_Unlock();
+	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+	result = FlashProgramBytesVerified(addr, data, length);
+	FLASH_Lock();
+	StorageFlash_EndWrite();
+
+	if (result != FLASH_COMPLETE)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+	return 1U;
 }
 
 static volatile APP_UPGRADE_MAILBOX *AppUpgrade_Mailbox(void)
@@ -729,14 +764,14 @@ UINT8 AppUpgrade_RequestIap(void)
 	return AppUpgrade_IsIapRequested();
 }
 
-static void StorageFlash_InitConfigData(STORAGE_FLASH_CONFIG_DATA *data)
+static void StorageFlash_InitConfigData(BMS_CONFIG *data)
 {
 	memset(data, 0xFF, sizeof(*data));
 	data->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
 	data->u16AppliedPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 }
 
-static UINT8 StorageFlash_LoadConfigData(STORAGE_FLASH_CONFIG_DATA *data)
+UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data)
 {
 	if (data == 0)
 	{
@@ -755,9 +790,9 @@ static UINT8 StorageFlash_LoadConfigData(STORAGE_FLASH_CONFIG_DATA *data)
 	return (data->u16FormatVersion == FLASH_STORAGE_CONFIG_FORMAT_VERSION) ? 1U : 0U;
 }
 
-static UINT8 StorageFlash_SaveConfigData(const STORAGE_FLASH_CONFIG_DATA *data)
+UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data)
 {
-	STORAGE_FLASH_CONFIG_DATA save_data;
+	BMS_CONFIG save_data;
 	UINT8 result;
 
 	if (data == 0)
@@ -779,7 +814,7 @@ static UINT8 StorageFlash_SaveConfigData(const STORAGE_FLASH_CONFIG_DATA *data)
 
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
 	{
@@ -796,7 +831,7 @@ UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
 
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if ((values == 0) || (word_count != FLASH_STORAGE_AFE_WORD_COUNT))
 	{
@@ -813,7 +848,7 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if (data == 0)
 	{
@@ -832,7 +867,7 @@ UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if (data == 0)
 	{
@@ -851,7 +886,7 @@ UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 
 UINT16 StorageFlash_GetConfigPolicyVersion(void)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if (!StorageFlash_LoadConfigData(&config))
 	{
@@ -862,7 +897,7 @@ UINT16 StorageFlash_GetConfigPolicyVersion(void)
 
 UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
 {
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	if (!StorageFlash_LoadConfigData(&config))
 	{
@@ -982,7 +1017,7 @@ UINT8 StorageFlash_SaveLogData(UINT8 point,
 void StorageFlash_PrintBootCheck(void)
 {
 	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
-	STORAGE_FLASH_CONFIG_DATA config;
+	BMS_CONFIG config;
 
 	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu align=%u\r\n",
 		   flash_size_kb,
