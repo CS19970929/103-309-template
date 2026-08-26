@@ -35,7 +35,7 @@ typedef char SCI_ReportLayoutCheck[(sizeof(struct stCell_Info) == (63U * sizeof(
 typedef char SCI_ProtectLayoutCheck[(sizeof(struct PRT_E2ROM_PARAS) == (E2P_PARA_NUM_PROTECT * sizeof(UINT16))) ? 1 : -1];
 typedef char SCI_RtcLayoutCheck[(sizeof(struct RTC_ELEMENT) == (E2P_PARA_NUM_RTC * sizeof(UINT16))) ? 1 : -1];
 typedef char SCI_SystemErrorLayoutCheck[(sizeof(struct SYSTEM_ERROR) == 24U) ? 1 : -1];
-typedef char SCI_OtherPrefixLayoutCheck[(offsetof(struct OTHER_ELEMENT, u16Sys_PreChg_Time) == (E2P_PARA_NUM_OTHER_ELEMENT1 * sizeof(UINT16))) ? 1 : -1];
+typedef char SCI_OtherLayoutCheck[(sizeof(struct OTHER_ELEMENT) == (E2P_PARA_NUM_OTHER_ELEMENT1 * sizeof(UINT16))) ? 1 : -1];
 
 typedef UINT8 (*SCI_PROTOCOL_RX_FEED_FN)(void *pvProtocolCtx, UINT8 u8Data);
 typedef void (*SCI_PROTOCOL_PROCESS_FN)(void *pvProtocolCtx);
@@ -731,9 +731,6 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT32 status_snapshot;
 	UINT32 feature_mask;
 
-	/* Access the report as an object representation copy, rather than doing
-	 * pointer arithmetic beyond u16VCell[32]. The layout assertion above makes
-	 * any protocol/structure drift a build failure. */
 	memcpy(report_words, &g_stCellInfoReport, sizeof(report_words));
 	for (j = 0; j < SCI_REPORT_WORD_COUNT; j++)
 	{
