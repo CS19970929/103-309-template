@@ -414,7 +414,7 @@ static UINT8 soc_save(void)
 	UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
 	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_CURRENT;
 	data.u16SocNow = s_soc.soc;
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = s_soc.cycle_x100;
@@ -985,7 +985,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
 
 	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_CURRENT;
 	data.u16SocNow = s_soc_default_startup_percent;
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = cycle_x100;
