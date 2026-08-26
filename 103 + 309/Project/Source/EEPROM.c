@@ -1,6 +1,7 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
 #include "SocEnhance.h"
+#include "BmsParamSchema.h"
 
 #if BMS_CONFIG_AFE_WORD_COUNT != AFE_PARAMETES_TOTAL_LENGTH
 #error "BMS config AFE word count mismatch"
@@ -20,9 +21,23 @@ typedef char EEPROM_ConfigCalibrationWordCountCheck[
 #error "BMS config reserved word count mismatch"
 #endif
 
+typedef char EEPROM_ProtectLayoutCheck[
+	(sizeof(struct PRT_E2ROM_PARAS) == (BMS_CONFIG_PROTECT_WORD_COUNT * sizeof(UINT16))) ? 1 : -1];
+typedef char EEPROM_OtherLayoutCheck[
+	(sizeof(struct OTHER_ELEMENT) == (BMS_CONFIG_OTHER_WORD_COUNT * sizeof(UINT16))) ? 1 : -1];
+
+/* Single ROM instances shared by persistent storage and all host protocols. */
+const UINT16 g_u16ProtectParamMin[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_MIN_PRT;
+const UINT16 g_u16ProtectParamDefault[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_DEFAULT_PRT;
+const UINT16 g_u16ProtectParamMax[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_MAX_PRT;
+
+const UINT16 g_u16OtherParamMin[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_min;
+const UINT16 g_u16OtherParamDefault[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_default;
+const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
+
 static UINT16 s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 
-static void EEPROM_UpdateOtherElementRuntime(void)
+void BmsParam_ApplyRuntime(void)
 {
 	SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
 	if (OtherElement.u16Sys_CS_Res != 0U)
@@ -46,14 +61,7 @@ static void EEPROM_LoadDefaultAfe(void)
 
 static void EEPROM_LoadDefaultProtect(void)
 {
-	UINT16 i;
-	const struct PRT_E2ROM_PARAS protect_default = E2P_PROTECT_DEFAULT_PRT;
-
-	for (i = 0U; i < E2P_PARA_NUM_PROTECT; ++i)
-	{
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) =
-			*(&protect_default.u16VcellOvp_First + i);
-	}
+	memcpy(&PRT_E2ROMParas, g_u16ProtectParamDefault, sizeof(PRT_E2ROMParas));
 }
 
 static void EEPROM_LoadDefaultCalib(void)
@@ -69,15 +77,8 @@ static void EEPROM_LoadDefaultCalib(void)
 
 static void EEPROM_LoadDefaultOtherElement(void)
 {
-	UINT16 i;
-	const struct OTHER_ELEMENT other_default = OtherElement_default;
-
-	for (i = 0U; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
-	{
-		*(&OtherElement.u16Balance_OpenVoltage + i) =
-			*(&other_default.u16Balance_OpenVoltage + i);
-	}
-	EEPROM_UpdateOtherElementRuntime();
+	memcpy(&OtherElement, g_u16OtherParamDefault, sizeof(OtherElement));
+	BmsParam_ApplyRuntime();
 }
 
 static void EEPROM_LoadDefaultRuntimeData(void)
@@ -121,19 +122,13 @@ static void EEPROM_BuildConfig(BMS_CONFIG *config)
 	{
 		config->afe[i] = (afe + i)->curValue;
 	}
-	for (i = 0U; i < BMS_CONFIG_PROTECT_WORD_COUNT; ++i)
-	{
-		config->protect[i] = *(&PRT_E2ROMParas.u16VcellOvp_First + i);
-	}
+	memcpy(config->protect, &PRT_E2ROMParas, sizeof(config->protect));
 	for (i = 0U; i < BMS_CONFIG_CALIB_WORD_COUNT; ++i)
 	{
 		config->calibK[i] = g_u16CalibCoefK[i];
 		config->calibB[i] = g_i16CalibCoefB[i];
 	}
-	for (i = 0U; i < BMS_CONFIG_OTHER_WORD_COUNT; ++i)
-	{
-		config->other[i] = *(&OtherElement.u16Balance_OpenVoltage + i);
-	}
+	memcpy(config->other, &OtherElement, sizeof(config->other));
 }
 
 static UINT8 EEPROM_ConfigAfeIsValid(const BMS_CONFIG *config)
@@ -169,11 +164,6 @@ static UINT8 EEPROM_ConfigCalibrationIsValid(const BMS_CONFIG *config)
 
 static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 {
-	const struct PRT_E2ROM_PARAS protect_min = E2P_PROTECT_MIN_PRT;
-	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
-	const struct OTHER_ELEMENT other_min = OtherElement_min;
-	const struct OTHER_ELEMENT other_max = OtherElement_max;
-
 	if ((config == 0) ||
 		(config->u16FormatVersion != FLASH_STORAGE_CONFIG_FORMAT_VERSION))
 	{
@@ -184,8 +174,8 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 		return 0U;
 	}
 	if (!EEPROM_WordBlockInRange(config->protect,
-									 &protect_min.u16VcellOvp_First,
-									 &protect_max.u16VcellOvp_First,
+									 g_u16ProtectParamMin,
+									 g_u16ProtectParamMax,
 									 BMS_CONFIG_PROTECT_WORD_COUNT))
 	{
 		return 0U;
@@ -195,8 +185,8 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 		return 0U;
 	}
 	if (!EEPROM_WordBlockInRange(config->other,
-									 &other_min.u16Balance_OpenVoltage,
-									 &other_max.u16Balance_OpenVoltage,
+									 g_u16OtherParamMin,
+									 g_u16OtherParamMax,
 									 BMS_CONFIG_OTHER_WORD_COUNT))
 	{
 		return 0U;
@@ -213,23 +203,17 @@ static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 	{
 		(afe + i)->curValue = config->afe[i];
 	}
-	for (i = 0U; i < BMS_CONFIG_PROTECT_WORD_COUNT; ++i)
-	{
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = config->protect[i];
-	}
+	memcpy(&PRT_E2ROMParas, config->protect, sizeof(PRT_E2ROMParas));
 	for (i = 0U; i < BMS_CONFIG_CALIB_WORD_COUNT; ++i)
 	{
 		g_u16CalibCoefK[i] = config->calibK[i];
 		g_i16CalibCoefB[i] = config->calibB[i];
 	}
-	for (i = 0U; i < BMS_CONFIG_OTHER_WORD_COUNT; ++i)
-	{
-		*(&OtherElement.u16Balance_OpenVoltage + i) = config->other[i];
-	}
+	memcpy(&OtherElement, config->other, sizeof(OtherElement));
 
 	s_u16ConfigPolicyVersion = config->u16AppliedPolicyVersion;
 	AFE_PARAM_WRITE_Flag = 1;
-	EEPROM_UpdateOtherElementRuntime();
+	BmsParam_ApplyRuntime();
 }
 
 UINT8 EEPROM_SaveConfigToFlash(void)
@@ -278,22 +262,24 @@ static void EEPROM_LoadConfigFromFlash(void)
 #if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_RESET_SOC_CONFIG
 static void EEPROM_LoadDefaultSocConfig(void)
 {
-	const struct OTHER_ELEMENT other_default = OtherElement_default;
-
-	OtherElement.u16Soc_TableSelect = other_default.u16Soc_TableSelect;
-	OtherElement.u16Soc_Ah = other_default.u16Soc_Ah;
-	OtherElement.u16Soc_Cycle_times = other_default.u16Soc_Cycle_times;
-	OtherElement.u16Soc_V_100 = other_default.u16Soc_V_100;
-	OtherElement.u16Soc_V_0 = other_default.u16Soc_V_0;
+	OtherElement.u16Soc_TableSelect =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_TableSelect)];
+	OtherElement.u16Soc_Ah =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Ah)];
+	OtherElement.u16Soc_Cycle_times =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Cycle_times)];
+	OtherElement.u16Soc_V_100 =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_100)];
+	OtherElement.u16Soc_V_0 =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_0)];
 }
 #endif
 
 #if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
 static void EEPROM_LoadDefaultBalanceOpenVoltage(void)
 {
-	const struct OTHER_ELEMENT other_default = OtherElement_default;
-
-	OtherElement.u16Balance_OpenVoltage = other_default.u16Balance_OpenVoltage;
+	OtherElement.u16Balance_OpenVoltage =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Balance_OpenVoltage)];
 }
 #endif
 
