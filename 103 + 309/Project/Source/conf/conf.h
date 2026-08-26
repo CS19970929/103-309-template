@@ -135,17 +135,17 @@ typedef struct
 {
   uint32_t    can_rcv_cnt_test;
   uint32_t    last_ext_comm_cnt_can;
-  uint32_t    can_rcv_cnt;
+  volatile uint32_t can_rcv_cnt;
   uint64_t    test_main_cycle;
   uint32_t    App_AFEGet_cnt;
   uint32_t    App_SH367309_Monitor_cnt;
 
-  uint32_t    sci1_irq_cnt;
-  uint32_t    sci2_irq_cnt;
-  uint32_t    sci3_irq_cnt;
+  volatile uint32_t sci1_irq_cnt;
+  volatile uint32_t sci2_irq_cnt;
+  volatile uint32_t sci3_irq_cnt;
 
-  uint16_t    cnt_PA0_irq;
-  uint16_t    cnt_bms1_keyirq;
+  volatile uint16_t cnt_PA0_irq;
+  volatile uint16_t cnt_bms1_keyirq;
   uint16_t    pec_err_cnt;
 
   uint16_t    CHG;
