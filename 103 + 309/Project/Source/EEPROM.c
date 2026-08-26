@@ -2,6 +2,7 @@
 #include "UpgradeParamPolicy.h"
 #include "SocEnhance.h"
 #include "BmsParamSchema.h"
+#include "AfeParamAccess.h"
 
 #if BMS_CONFIG_AFE_WORD_COUNT != AFE_PARAMETES_TOTAL_LENGTH
 #error "BMS config AFE word count mismatch"
@@ -50,11 +51,11 @@ void BmsParam_ApplyRuntime(void)
 static void EEPROM_LoadDefaultAfe(void)
 {
 	UINT16 i;
-	AFE_Value_Typedef *param = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		(param + i)->curValue = (param + i)->defaultValue;
+		AFE_Value_Typedef *param = AfeParam_At(i);
+		param->curValue = param->defaultValue;
 	}
 	AFE_PARAM_WRITE_Flag = 1;
 }
@@ -112,7 +113,6 @@ static UINT8 EEPROM_WordBlockInRange(const UINT16 *values,
 static void EEPROM_BuildConfig(BMS_CONFIG *config)
 {
 	UINT16 i;
-	AFE_Value_Typedef *afe = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	memset(config, 0xFF, sizeof(*config));
 	config->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
@@ -120,7 +120,7 @@ static void EEPROM_BuildConfig(BMS_CONFIG *config)
 
 	for (i = 0U; i < BMS_CONFIG_AFE_WORD_COUNT; ++i)
 	{
-		config->afe[i] = (afe + i)->curValue;
+		config->afe[i] = AfeParam_AtConst(i)->curValue;
 	}
 	memcpy(config->protect, &PRT_E2ROMParas, sizeof(config->protect));
 	for (i = 0U; i < BMS_CONFIG_CALIB_WORD_COUNT; ++i)
@@ -134,12 +134,12 @@ static void EEPROM_BuildConfig(BMS_CONFIG *config)
 static UINT8 EEPROM_ConfigAfeIsValid(const BMS_CONFIG *config)
 {
 	UINT16 i;
-	AFE_Value_Typedef *afe = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	for (i = 0U; i < BMS_CONFIG_AFE_WORD_COUNT; ++i)
 	{
-		if ((config->afe[i] < (afe + i)->minValue) ||
-			(config->afe[i] > (afe + i)->maxValue))
+		const AFE_Value_Typedef *param = AfeParam_AtConst(i);
+		if ((config->afe[i] < param->minValue) ||
+			(config->afe[i] > param->maxValue))
 		{
 			return 0U;
 		}
@@ -197,11 +197,10 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 {
 	UINT16 i;
-	AFE_Value_Typedef *afe = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 
 	for (i = 0U; i < BMS_CONFIG_AFE_WORD_COUNT; ++i)
 	{
-		(afe + i)->curValue = config->afe[i];
+		AfeParam_At(i)->curValue = config->afe[i];
 	}
 	memcpy(&PRT_E2ROMParas, config->protect, sizeof(PRT_E2ROMParas));
 	for (i = 0U; i < BMS_CONFIG_CALIB_WORD_COUNT; ++i)
