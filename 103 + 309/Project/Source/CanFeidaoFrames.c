@@ -243,16 +243,12 @@ static UINT8 CanFeidao_SendStatus5000ms(void)
 static UINT8 CanFeidao_SendFactoryTime5000ms(void)
 {
 	uint8_t data[8] = {0U};
-	UINT32 aging_remaining_min;
 
 	CanFeidao_PutU16Be(data, 0U, g_stCellInfoReport.SocElement.u16CapacityFactory * 10U);
-	data[2] = 100;
-	aging_remaining_min = 100;
-	if (aging_remaining_min > 0xFFFFU)
-	{
-		aging_remaining_min = 0xFFFFU;
-	}
-	CanFeidao_PutU16Be(data, 3U, (UINT16)aging_remaining_min);
+	data[2] = 100U;
+	/* Bytes 3..4 are retained as reserved protocol fields. Factory Aging is
+	 * not part of the current firmware. */
+	CanFeidao_PutU16Be(data, 3U, 0U);
 	data[5] = FD_YEAR;
 	data[6] = FD_MONTH;
 	data[7] = FD_DAY;
