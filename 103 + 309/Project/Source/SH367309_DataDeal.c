@@ -298,6 +298,7 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT8 i;
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
+
 	RTC_SetCounter(0);
 	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
@@ -305,9 +306,15 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 		*(P + i * 4 - 1) = *(P + i * 4);
 	}
 	Feed_IWatchDog;
-	if (!AFE_SaveCurValuesToFlash()) return 0;
+	if (!AFE_SaveCurValuesToFlash())
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+
+	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 	AFE_PARAM_WRITE_Flag = 1;
-	return 1;
+	return 1U;
 }
 
 void ReadEEPROM_AFE_Parameters(void)
@@ -315,19 +322,29 @@ void ReadEEPROM_AFE_Parameters(void)
 	UINT16 i;
 	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
-	UINT8 use_default = 0;
-	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH)) use_default = 1;
+	UINT8 use_default = 0U;
+
+	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
+	{
+		use_default = 1U;
+	}
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
 		if (!use_default)
 		{
 			(P + i)->curValue = values[i];
-			if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue)) use_default = 1;
+			if (((P + i)->curValue < (P + i)->minValue) ||
+				((P + i)->curValue > (P + i)->maxValue))
+			{
+				use_default = 1U;
+			}
 		}
 	}
 	if (use_default)
 	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		EEPROM_ResetData_AFE_ParametersToDefault();
+		if (!EEPROM_ResetData_AFE_ParametersToDefault())
+		{
+			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		}
 	}
 }
