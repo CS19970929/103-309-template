@@ -167,8 +167,6 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
-void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s);
-void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s);
 
 static UINT8 Sci_BmsFunctionIdIsSupported(UINT16 id)
 {
@@ -299,11 +297,6 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 		{
 			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_EVENT_RECORD);
 		}
-		else if ((u16ActualAddr >= RS485_ADDR_AGING_STATUS) &&
-			(u16ActualAddr < (UINT16)(RS485_ADDR_AGING_STATUS + RS485_ADDR_AGING_STATUS_WORDS)))
-		{
-			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_AGING_STATUS);
-		}
 	}
 
 	if ((!Sci_GetReadWindowWordCount(u16ActualAddr, &u16WindowWords)) ||
@@ -361,14 +354,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		Sci_WrReg_0x06_Reset_EventRecord(s);
 		break;
 
-	// case RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME:
-	// 	Sci_WrReg_0x06_FactoryAgingResetTime(s);
-	// 	break;
-
-	// case RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS:
-	// 	Sci_WrReg_0x06_FactoryAgingSetHours(s);
-	// 	break;
-
 	default:
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_NO_PERMISSION;
@@ -421,49 +406,6 @@ static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 		buff[(*index)++] = 0U;
 		--count;
 	}
-}
-
-static UINT16 Sci_GetFactoryAgingDurationHours(void)
-{
-//	STORAGE_FLASH_FACTORY_AGING_DATA data;
-//	UINT32 default_hours;
-
-//	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
-//		(data.u16DurationHours >= FACTORY_AGING_DURATION_HOURS_MIN) &&
-//		(data.u16DurationHours <= FACTORY_AGING_DURATION_HOURS_MAX))
-//	{
-//		return data.u16DurationHours;
-//	}
-
-//	default_hours = ((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS + 3599U) / 3600U;
-//	if (default_hours < FACTORY_AGING_DURATION_HOURS_MIN)
-//	{
-//		default_hours = FACTORY_AGING_DURATION_HOURS_MIN;
-//	}
-//	if (default_hours > FACTORY_AGING_DURATION_HOURS_MAX)
-//	{
-//		default_hours = FACTORY_AGING_DURATION_HOURS_MAX;
-//	}
-//	return (UINT16)default_hours;
-}
-
-static void Sci_PutFactoryAgingStatusWords(UINT8 buff[], UINT16 *index)
-{
-////	UINT32 remaining_seconds;
-////	UINT32 remaining_minutes;
-
-////	remaining_seconds = FactoryAging_GetRemainingSeconds();
-////	remaining_minutes = (remaining_seconds + 59U) / 60U;
-////	if (remaining_minutes > 0xFFFFU)
-////	{
-////		remaining_minutes = 0xFFFFU;
-////	}
-
-////	Sci_PutWordBE(buff, index, (UINT16)FactoryAging_GetState());
-////	Sci_PutWordBE(buff, index, (UINT16)remaining_minutes);
-////	Sci_PutWordBE(buff, index, (UINT16)(remaining_seconds >> 16));
-////	Sci_PutWordBE(buff, index, (UINT16)remaining_seconds);
-////	Sci_PutWordBE(buff, index, Sci_GetFactoryAgingDurationHours());
 }
 
 static UINT8 Sci_RecordBackIndex(UINT8 point, UINT16 back)
@@ -574,16 +516,7 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 			/* Each event log entry is two bytes, exactly one Modbus register. */
 			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
 			return 1;
-		case RS485_ADDR_AGING_STATUS:
-			*word_count = RS485_ADDR_AGING_STATUS_WORDS;
-			return 1;
 		default:
-			if ((actual_addr >= RS485_ADDR_AGING_STATUS) &&
-				(actual_addr < (UINT16)(RS485_ADDR_AGING_STATUS + RS485_ADDR_AGING_STATUS_WORDS)))
-			{
-				*word_count = RS485_ADDR_AGING_STATUS_WORDS;
-				return 1;
-			}
 			return 0;
 		}
 	}
@@ -789,12 +722,6 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	{
 		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD));
 		Sci_ACK_0x03_ReadRegs_EventRecord(t_u8BuffTemp);
-	}
-	else if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_AGING_STATUS - RS485_ADDR_RO_LCD)) &&
-		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_AGING_STATUS - RS485_ADDR_RO_LCD + RS485_ADDR_AGING_STATUS_WORDS)))
-	{
-		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_AGING_STATUS - RS485_ADDR_RO_LCD));
-		Sci_PutFactoryAgingStatusWords(t_u8BuffTemp, &i);
 	}
 	else
 	{
@@ -2084,45 +2011,6 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
 	}
-}
-
-void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s)
-{
-	// UINT16 u16SciRegData;
-
-	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	// if (u16SciRegData != 0x005AU)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
-	// 	return;
-	// }
-
-	// if (FactoryAging_ResetTimeByHost() == 0U)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
-	// }
-}
-
-void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s)
-{
-	// UINT16 u16SciRegData;
-
-	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	// if ((u16SciRegData < FACTORY_AGING_DURATION_HOURS_MIN) ||
-	// 	(u16SciRegData > FACTORY_AGING_DURATION_HOURS_MAX))
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
-	// 	return;
-	// }
-
-	// if (FactoryAging_SetDurationHoursByHost(u16SciRegData) == 0U)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
-	// }
 }
 
 void InitUSART_CommonUpper(void)
