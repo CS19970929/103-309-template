@@ -27,6 +27,12 @@ static UINT8 DataLoad_CellVoltAfeIndex(UINT8 series_num, UINT8 cell_index)
 #define AFE_CURRENT_STARTUP_ZERO_STABLE_RAW ((UINT16)8U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
 
+#define PROTECTION_REVERSE_CURRENT_A10 ((UINT16)10U)
+#define PROTECTION_OCP_RECOVERY_TICKS ((UINT16)(5U * 30U))
+#ifdef __SOC_5_PROTECT_
+#define PROTECTION_SOC_LOW_SLEEP_TICKS ((UINT32)(5U * 60U * 60U))
+#endif
+
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -64,7 +70,23 @@ typedef struct _DATA_RUNTIME
     UINT32 afeSeq;
 } DATA_RUNTIME;
 
+typedef struct _PROTECTION_RUNTIME
+{
+    UINT16 chargeOcpRecoveryCnt;
+    UINT16 dischargeOcpRecoveryCnt;
+#ifdef __SOC_5_PROTECT_
+    UINT32 socLowCnt;
+#endif
+} PROTECTION_RUNTIME;
+
+typedef struct _MOS_DESIRED_STATE
+{
+    UINT8 chargeEnable;
+    UINT8 dischargeEnable;
+} MOS_DESIRED_STATE;
+
 static DATA_RUNTIME s_data = {0};
+static PROTECTION_RUNTIME s_protection = {0};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
@@ -77,14 +99,10 @@ void charger_detect_and_keyLogi_200ms(void)
 
 void Init_Registers(UINT8 num)
 {
-    UINT8 j;
     switch (num)
     {
     case 0:
-        for (j = 0; j < 21; j++)
-        {
-            *(&(Registers_AFE1.Temp1) + j) = 0;
-        }
+        memset(&Registers_AFE1, 0, sizeof(Registers_AFE1));
         break;
     case 1:
     default:
@@ -172,12 +190,13 @@ void DataLoad_Temperature(void)
 
     g_stCellInfoReport.u16Temperature[2] = 0;
 
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV2) / 10 - 40;
+    /* ENV2/ENV3 are not populated on this template. Preserve the previous
+     * fixed -40 C behavior without performing ADC reads whose values were
+     * immediately discarded. */
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
 
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV3) / 10 - 40;
     t_i32temp = -40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
@@ -729,104 +748,154 @@ void close_ctlc(void)
     MCUO_AFE_CTLC = 0;
 }
 
-void new_todo_logi(void)
+static void Protection_UpdateChargeOcp(void)
 {
-    static uint16_t occ1_rec_cnt = 0;
-    static uint16_t odc1_rec_cnt = 0;
-    uint8_t Driver_Element_MOS_CHG = 1;
-    uint8_t DRIVER_ELEMENT_MOS_DSG = 1;
-    static uint32_t soc_low_cnt = 0;
+    if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
+    {
+        if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp == 0U)
+        {
+            FaultWarnRecord2(IchgOcp_Second);
+        }
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 1U;
+        s_protection.chargeOcpRecoveryCnt = 0U;
+    }
 
-    charger_detect_and_keyLogi_200ms();
+    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp != 0U) &&
+        (g_stCellInfoReport.u16IDischg < PROTECTION_REVERSE_CURRENT_A10))
+    {
+        if (++s_protection.chargeOcpRecoveryCnt >= PROTECTION_OCP_RECOVERY_TICKS)
+        {
+            s_protection.chargeOcpRecoveryCnt = 0U;
+            g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 0U;
+        }
+    }
+}
+
+static void Protection_UpdateDischargeOcp(void)
+{
+    if (g_stCellInfoReport.u16IDischg >= AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue)
+    {
+        if (g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp == 0U)
+        {
+            FaultWarnRecord2(IdischgOcp_Second);
+        }
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 1U;
+        s_protection.dischargeOcpRecoveryCnt = 0U;
+    }
+
+    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp != 0U) &&
+        (g_stCellInfoReport.u16Ichg < PROTECTION_REVERSE_CURRENT_A10))
+    {
+        /* Preserve the legacy post-increment recovery timing. */
+        if (s_protection.dischargeOcpRecoveryCnt++ >= PROTECTION_OCP_RECOVERY_TICKS)
+        {
+            s_protection.dischargeOcpRecoveryCnt = 0U;
+            g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 0U;
+        }
+    }
+}
 
 #ifdef __SOC_5_PROTECT_
-    if (g_stCellInfoReport.SocElement.u16Soc <= 5)
+static void Protection_UpdateSocLow(MOS_DESIRED_STATE *desired)
+{
+    if (g_stCellInfoReport.SocElement.u16Soc <= 5U)
     {
-        if (g_stCellInfoReport.u16Ichg >= 10)
+        if (g_stCellInfoReport.u16Ichg >= PROTECTION_REVERSE_CURRENT_A10)
         {
-            DRIVER_ELEMENT_MOS_DSG = 1;
-            soc_low_cnt = 0;
+            desired->dischargeEnable = 1U;
+            s_protection.socLowCnt = 0U;
         }
         else
         {
-            DRIVER_ELEMENT_MOS_DSG = 0;
-            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 1;
-            if (++soc_low_cnt >= (5 * 60 * 60))
+            desired->dischargeEnable = 0U;
+            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 1U;
+            if (++s_protection.socLowCnt >= PROTECTION_SOC_LOW_SLEEP_TICKS)
             {
-                soc_low_cnt = 0;
+                s_protection.socLowCnt = 0U;
                 LowPower_Request(DEEP_MODE);
             }
         }
     }
     else
     {
-        g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 0;
-        soc_low_cnt = 0;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 0U;
+        s_protection.socLowCnt = 0U;
     }
+}
 #endif
 
-    if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
+static UINT8 Protection_HasChargeBlockingFault(void)
+{
+    return (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
+}
+
+static UINT8 Protection_HasDischargeBlockingFault(void)
+{
+    return (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
+                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
+                   SH367309_Reg_Store.REG_BSTATUS1.bits.SC);
+}
+
+static void MosPolicy_Evaluate(MOS_DESIRED_STATE *desired)
+{
+    desired->chargeEnable = 1U;
+    desired->dischargeEnable = 1U;
+
+#ifdef __SOC_5_PROTECT_
+    Protection_UpdateSocLow(desired);
+#endif
+
+    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp != 0U) &&
+        (g_stCellInfoReport.u16IDischg < PROTECTION_REVERSE_CURRENT_A10))
     {
-        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 1;
-        FaultWarnRecord2(IchgOcp_Second);
-        occ1_rec_cnt = 0;
+        desired->chargeEnable = 0U;
     }
-    if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp && g_stCellInfoReport.u16IDischg < 10)
+    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp != 0U) &&
+        (g_stCellInfoReport.u16Ichg < PROTECTION_REVERSE_CURRENT_A10))
     {
-        Driver_Element_MOS_CHG = 0;
-        if (++occ1_rec_cnt >= (5 * 30))
-        {
-            occ1_rec_cnt = 0;
-            g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 0;
-        }
+        desired->dischargeEnable = 0U;
     }
 
-    if (g_stCellInfoReport.u16IDischg >= AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue)
+    if (Protection_HasChargeBlockingFault())
     {
-        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 1;
-        FaultWarnRecord2(IdischgOcp_Second);
-        odc1_rec_cnt = 0;
+        desired->chargeEnable =
+            (g_stCellInfoReport.u16IDischg >= PROTECTION_REVERSE_CURRENT_A10) ? 1U : 0U;
     }
-    if (g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp && g_stCellInfoReport.u16Ichg < 10)
+    if (Protection_HasDischargeBlockingFault())
     {
-        DRIVER_ELEMENT_MOS_DSG = 0;
-        if (odc1_rec_cnt++ >= (5 * 30))
-        {
-            odc1_rec_cnt = 0;
-            g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 0;
-        }
+        desired->dischargeEnable =
+            (g_stCellInfoReport.u16Ichg >= PROTECTION_REVERSE_CURRENT_A10) ? 1U : 0U;
     }
+}
 
-    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp)
-    {
-        Driver_Element_MOS_CHG = 0;
-        if (g_stCellInfoReport.u16IDischg >= 10)
-            Driver_Element_MOS_CHG = 1;
-    }
-    if (g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
-        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
-        SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
-    {
-        DRIVER_ELEMENT_MOS_DSG = 0;
-        if (g_stCellInfoReport.u16Ichg >= 10)
-            DRIVER_ELEMENT_MOS_DSG = 1;
-    }
-
-    if (s_system_status.bits.b1Status_MOS_CHG != Driver_Element_MOS_CHG)
+static void MosDriver_Apply(const MOS_DESIRED_STATE *desired)
+{
+    if (s_system_status.bits.b1Status_MOS_CHG != desired->chargeEnable)
     {
         sys_time.cnt_enter_chg_open++;
-        SH367309_DriverMos_Ctrl(GPIO_CHG, Driver_Element_MOS_CHG);
+        SH367309_DriverMos_Ctrl(GPIO_CHG, desired->chargeEnable);
     }
-    if (s_system_status.bits.b1Status_MOS_DSG != DRIVER_ELEMENT_MOS_DSG)
+    if (s_system_status.bits.b1Status_MOS_DSG != desired->dischargeEnable)
     {
         sys_time.cnt_enter_dsg_open++;
-        SH367309_DriverMos_Ctrl(GPIO_DSG, DRIVER_ELEMENT_MOS_DSG);
+        SH367309_DriverMos_Ctrl(GPIO_DSG, desired->dischargeEnable);
     }
+}
+
+static void ProtectionMos_Process200ms(void)
+{
+    MOS_DESIRED_STATE desired;
+
+    charger_detect_and_keyLogi_200ms();
+    Protection_UpdateChargeOcp();
+    Protection_UpdateDischargeOcp();
+    MosPolicy_Evaluate(&desired);
+    MosDriver_Apply(&desired);
 }
 
 void App_AFEGet(void)
@@ -846,7 +915,7 @@ void App_AFEGet(void)
     AfeCurrent_NextSeq();
 
     App_SH367309();
-    new_todo_logi();
+    ProtectionMos_Process200ms();
     App_SOC();
 
 #ifdef VCELL_DISP_TEST
