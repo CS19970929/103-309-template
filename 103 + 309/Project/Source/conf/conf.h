@@ -14,9 +14,9 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
-// #define _DI_SWITCH_SYS_ONOFF	//DI������������
+#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-#define _DI_SWITCH_longKEY_ONOFF
+// #define _DI_SWITCH_longKEY_ONOFF
 
 // #define __VIRTURE_CURRENT__
 

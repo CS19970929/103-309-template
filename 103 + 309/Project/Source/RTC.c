@@ -377,6 +377,7 @@ void RTC_NVIC_Config(void)
 
 UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
+	return 10;
 	if(g_stLowPowerRtcStatus.mode == NORMAL_MODE)
 	{
 		return 20;
