@@ -86,25 +86,18 @@ static const UINT8 CRC8Table[] = { // 120424-1			CRC Table
 
 /*******************************************************************************
 Function: Delay4us()
-Description:
+Description: optimization-independent TWI timing delay
 Input:
 Output:
 Others:
 *******************************************************************************/
 void Delay4us(void)
 {
-	UINT8 i, j;
-
-#if 1
-	for (j = 0; j < 8; j++)
-	{ // 72MHz
-		for (i = 0; i < 13; i++)
-		{
-			// system clock = 24MHz
-		}
-	}
-#endif
-
+	/* SysTick is used only as a polling delay source in this project; TIM3 owns
+	 * the scheduler tick. Runtime_Boot() and STOP wake recovery call InitDelay()
+	 * before AFE transactions, so this delay does not depend on instruction
+	 * count and remains valid under ARMCC5 -O2. */
+	__delay_us(4U);
 }
 
 #ifdef _TWI_COM
@@ -332,43 +325,45 @@ UINT8 TwiWrite(UINT8 SlaveID, UINT16 WrAddr, UINT8 Length, UINT8 *WrBuf)
 	UINT8 TempBuf[4];
 	UINT8 result = 0;
 
+	if ((Length == 0U) || (WrBuf == 0))
+	{
+		return 0U;
+	}
+
 	TempBuf[0] = SlaveID;
 	TempBuf[1] = (UINT8)WrAddr;
 	TempBuf[2] = *WrBuf;
 	TempBuf[3] = CRC8cal(TempBuf, 3);
 
-	if (Length > 0)
-	{
-		TwiStart();
+	TwiStart();
 
-		if (!TwiSendData(SlaveID, 1))
-		{ // Send Slave ID
-			goto WrErr;
-		}
-
-		if (TwiSendData(WrAddr, 0))
-		{ // Send Write Address(Low 8bit)
-			result = 1;
-			for (i = 0; i < Length; i++)
-			{
-				if (TwiSendData(*WrBuf, 0))
-				{ // Send Write Data
-					WrBuf++;
-				}
-				else
-				{
-					result = 0;
-					break;
-				}
-			}
-			if (!TwiSendData(TempBuf[3], 0))
-			{ // write CRC
-				result = 0;
-			}
-		}
-	WrErr:
-		TwiStop();
+	if (!TwiSendData(SlaveID, 1))
+	{ // Send Slave ID
+		goto WrErr;
 	}
+
+	if (TwiSendData(WrAddr, 0))
+	{ // Send Write Address(Low 8bit)
+		result = 1;
+		for (i = 0; i < Length; i++)
+		{
+			if (TwiSendData(*WrBuf, 0))
+			{ // Send Write Data
+				WrBuf++;
+			}
+			else
+			{
+				result = 0;
+				break;
+			}
+		}
+		if (!TwiSendData(TempBuf[3], 0))
+		{ // write CRC
+			result = 0;
+		}
+	}
+WrErr:
+	TwiStop();
 
 	return result;
 }
@@ -391,66 +386,68 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 	UINT8 TempBuf[46];
 	UINT8 RdCrc = 0;
 
+	if ((Length == 0U) || (Length > (UINT8)(sizeof(TempBuf) - 4U)) || (RdBuf == 0))
+	{
+		return 0U;
+	}
+
 	TempBuf[0] = SlaveID;
 	TempBuf[1] = (UINT8)RdAddr;
 	TempBuf[2] = Length;
 	TempBuf[3] = SlaveID | 0x01;
 
-	if (Length > 0)
+	TwiStart();
+
+	if (!TwiSendData(SlaveID, 1))
+	{ // Send Slave ID
+		goto RdErr;
+	}
+
+	if (!TwiSendData(RdAddr, 0))
+	{ // Send Read Address(Low 8bit)
+		goto RdErr;
+	}
+
+	if (!TwiSendData(Length, 0))
 	{
-		TwiStart();
+		goto RdErr;
+	}
 
-		if (!TwiSendData(SlaveID, 1))
-		{ // Send Slave ID
-			goto RdErr;
-		}
+	TwiReStart();
 
-		if (!TwiSendData(RdAddr, 0))
-		{ // Send Read Address(Low 8bit)
-			goto RdErr;
-		}
-
-		if (!TwiSendData(Length, 0))
+	if (TwiSendData(SlaveID | 0x1, 0))
+	{ // Send Slave ID
+		result = 1;
+		for (i = 0; i < (UINT8)(Length + 1U); i++)
 		{
-			goto RdErr;
-		}
-
-		TwiReStart();
-
-		if (TwiSendData(SlaveID | 0x1, 0))
-		{ // Send Slave ID
-			result = 1;
-			for (i = 0; i < Length + 1; i++)
+			if (i == Length)
 			{
-				if (i == Length)
-				{
-					RdCrc = TwiGetData(0); // Get Data
-				}
-				else
-				{
-					TempBuf[4 + i] = TwiGetData(1); // Get Data
-				}
-			}
-
-			if (RdCrc != CRC8cal(TempBuf, 4 + Length))
-			{
-				result = 0;
+				RdCrc = TwiGetData(0); // Get Data
 			}
 			else
 			{
-				for (i = 0; i < Length; i++)
-				{
-					*RdBuf = TempBuf[4 + i];
-					RdBuf++;
-// 下面的问题在于，如果传进来的数值不是16位，是8位，又有问题。
-// 还是外部自己写一个大小端转换函数自己看情况是否处理
-				}
+				TempBuf[4 + i] = TwiGetData(1); // Get Data
 			}
 		}
 
-	RdErr:
-		TwiStop();
+		if (RdCrc != CRC8cal(TempBuf, (UINT8)(4U + Length)))
+		{
+			result = 0;
+		}
+		else
+		{
+			for (i = 0; i < Length; i++)
+			{
+				*RdBuf = TempBuf[4 + i];
+				RdBuf++;
+// 下面的问题在于，如果传进来的数值不是16位，是8位，又有问题。
+// 还是外部自己写一个大小端转换函数自己看情况是否处理
+			}
+		}
 	}
+
+RdErr:
+	TwiStop();
 
 	return result;
 }
@@ -462,9 +459,14 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 // 这个返回值就不改了，和目前体系相反，别的函数返回来就行
 UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
-	UINT8 result;
+	UINT8 result = 1U;
 	UINT8 i;
 	Feed_IWatchDog;
+
+	if ((Length != 0U) && (WrBuf == 0))
+	{
+		return 0U;
+	}
 
 	for (i = 0; i < Length; i++)
 	{
@@ -496,8 +498,13 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 // 这个返回值就不改了，和目前体系相反，别的函数返回来就行
 UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
-	UINT8 result;
+	UINT8 result = 1U;
 	UINT8 i;
+
+	if ((Length != 0U) && (WrBuf == 0))
+	{
+		return 0U;
+	}
 
 	for (i = 0; i < Length; i++)
 	{
@@ -533,17 +540,10 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 
 	Feed_IWatchDog;
 
-	/*
-	if(System_ErrFlag.u8ErrFlag_Com_AFE1) {
-		result = 0;
+	if ((Length != 0U) && (RdBuf == 0))
+	{
+		return 0U;
 	}
-	else {
-		result = TwiRead(AFE_ID, RdAddr, Length, RdBuf);
-		if(!result) {
-			result = TwiRead(AFE_ID, RdAddr, Length, RdBuf);
-		}
-	}
-	*/
 
 	result = TwiRead(AFE_ID, RdAddr, Length, RdBuf);
 	if (!result)
