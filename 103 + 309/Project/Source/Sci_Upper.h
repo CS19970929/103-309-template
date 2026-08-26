@@ -478,8 +478,9 @@ enum RS485_CMD_RW_E {
 };
 
 
-extern UINT8 u8FlashUpdateFlag;
-extern UINT8 u8FlashUpdateE2PROM;
+/* Written from UART ISR completion and consumed by the main loop/flash logic. */
+extern volatile UINT8 u8FlashUpdateFlag;
+extern volatile UINT8 u8FlashUpdateE2PROM;
 
 extern struct stCell_Info g_stCellInfoReport;
 
