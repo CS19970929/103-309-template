@@ -126,10 +126,6 @@ static UINT8 LogStorage_ProgramDelta(UINT32 addr,
 {
 	LOG_STORAGE_DELTA_RECORD record;
 	LOG_STORAGE_DELTA_RECORD verify;
-	const UINT8 *bytes;
-	UINT16 offset;
-	UINT16 halfWord;
-	FLASH_Status status;
 
 	if (!LogStorage_RecordIsBlank(addr))
 	{
@@ -142,24 +138,13 @@ static UINT8 LogStorage_ProgramDelta(UINT32 addr,
 	record.delta = delta;
 	record.crc = LogStorage_Crc16((const UINT8 *)&record,
 									 (UINT16)(sizeof(record) - sizeof(record.crc)));
-	bytes = (const UINT8 *)&record;
 
-	FLASH_Unlock();
-	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-	for (offset = 0U; offset < (UINT16)sizeof(record); offset += 2U)
+	if (!StorageFlash_ProgramStorageBytes(addr,
+									 (const UINT8 *)&record,
+									 (UINT16)sizeof(record)))
 	{
-		halfWord = (UINT16)bytes[offset] |
-				   (UINT16)((UINT16)bytes[offset + 1U] << 8);
-		status = FLASH_ProgramHalfWord(addr + offset, halfWord);
-		if ((status != FLASH_COMPLETE) ||
-			(FlashReadOneHalfWord(addr + offset) != halfWord))
-		{
-			FLASH_Lock();
-			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			return 0U;
-		}
+		return 0U;
 	}
-	FLASH_Lock();
 
 	if (!LogStorage_ReadDelta(addr, &verify) ||
 		(verify.baseSignature != record.baseSignature) ||
@@ -174,34 +159,13 @@ static UINT8 LogStorage_ProgramDelta(UINT32 addr,
 
 static UINT8 LogStorage_EraseDeltaPage(UINT32 pageAddr)
 {
-	UINT32 offset;
-	FLASH_Status status;
-
 	if (LogStorage_RecordIsBlank(pageAddr) &&
 		LogStorage_RecordIsBlank(pageAddr + FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_DELTA_RECORD)))
 	{
 		return 1U;
 	}
 
-	FLASH_Unlock();
-	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-	status = FLASH_ErasePage(pageAddr);
-	FLASH_Lock();
-	if (status != FLASH_COMPLETE)
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-
-	for (offset = 0U; offset < FLASH_STORAGE_PAGE_SIZE; offset += 2U)
-	{
-		if (FlashReadOneHalfWord(pageAddr + offset) != 0xFFFFU)
-		{
-			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			return 0U;
-		}
-	}
-	return 1U;
+	return StorageFlash_EraseStoragePage(pageAddr);
 }
 
 static UINT32 LogStorage_FindBlankInPage(UINT32 pageAddr)
