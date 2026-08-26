@@ -59,6 +59,7 @@ extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 #define SOC_REST_STABLE_DELTA_MV     ((UINT16)30U)
 #define SOC_REBOUND_BOOT_HOLDOFF_SECONDS ((UINT32)300U)
 #define SOC_SNAPSHOT_FLAG_REBOUND_HOLD   ((UINT16)0x0001U)
+#define SOC_INTEGRATION_CURRENT_LIMIT_MA ((int32_t)10000000)
 
 typedef enum
 {
@@ -126,6 +127,50 @@ static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 static UINT8 soc_sag_hold_blocks_calibration(void);
 static UINT16 soc_table_percent(const UINT16 *table, UINT16 voltage_mv);
 static void soc_save_current_snapshot(void);
+
+/* Exact floor(value * percent / 100) without 64-bit arithmetic.
+ * percent is always 0..100 in this module, so both products remain UINT32-safe. */
+static UINT32 soc_percent_of_u32(UINT32 value, UINT8 percent)
+{
+	UINT32 quotient = value / 100U;
+	UINT32 remainder = value % 100U;
+
+	return quotient * (UINT32)percent +
+		   (remainder * (UINT32)percent) / 100U;
+}
+
+/* Exact rounded percentage for SOC capacity ratios without forming numerator*100.
+ * Capacity is derived from UINT16 Ah*10 * 3600, therefore denominator is below
+ * 236M and each temporary *10 remains safely inside UINT32. */
+static UINT8 soc_ratio_percent_round(UINT32 numerator, UINT32 denominator)
+{
+	UINT32 scaled;
+	UINT32 remainder;
+	UINT32 percent;
+
+	if (denominator == 0U)
+	{
+		return 0U;
+	}
+	if (numerator >= denominator)
+	{
+		return 100U;
+	}
+
+	scaled = numerator * 10U;
+	percent = (scaled / denominator) * 10U;
+	remainder = scaled % denominator;
+
+	scaled = remainder * 10U;
+	percent += scaled / denominator;
+	remainder = scaled % denominator;
+
+	if ((remainder * 2U) >= denominator)
+	{
+		++percent;
+	}
+	return (percent > 100U) ? 100U : (UINT8)percent;
+}
 
 static UINT8 soc_empty_tail_interpolate(int16_t offset_mv, UINT8 is_relax)
 {
@@ -218,7 +263,7 @@ static UINT8 soc_soh_from_cycle(UINT32 cycle_x100)
 static void soc_refresh_capacity_base(void)
 {
 	s_soc.soh = soc_soh_from_cycle(s_soc.cycle_x100);
-	s_soc.cap_full_as10 = (UINT32)(((uint64_t)s_soc.cap_factory_as10 * s_soc.soh) / 100ULL);
+	s_soc.cap_full_as10 = soc_percent_of_u32(s_soc.cap_factory_as10, s_soc.soh);
 	if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
 	{
 		s_soc.cap_now_as10 = s_soc.cap_full_as10;
@@ -227,15 +272,7 @@ static void soc_refresh_capacity_base(void)
 
 static UINT8 soc_from_cap(void)
 {
-	UINT32 soc;
-
-	if (s_soc.cap_now_as10 >= s_soc.cap_full_as10)
-	{
-		return 100U;
-	}
-	soc = (UINT32)(((uint64_t)s_soc.cap_now_as10 * 100ULL +
-		(s_soc.cap_full_as10 / 2U)) / s_soc.cap_full_as10);
-	return (soc > 100U) ? 100U : (UINT8)soc;
+	return soc_ratio_percent_round(s_soc.cap_now_as10, s_soc.cap_full_as10);
 }
 
 static UINT16 soc_cap_to_ah100(UINT32 cap_as10)
@@ -251,7 +288,7 @@ static void soc_set(UINT8 soc)
 		soc = 100U;
 	}
 	s_soc.soc = soc;
-	s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * soc) / 100ULL);
+	s_soc.cap_now_as10 = soc_percent_of_u32(s_soc.cap_full_as10, soc);
 	s_soc.rem_mams = 0U;
 }
 
@@ -365,14 +402,17 @@ static UINT16 soc_current_limit_a10(UINT16 divider)
 
 static UINT16 soc_net_current_idsg_a10(int32_t net_current_ma)
 {
+	uint32_t current_ma;
 	uint32_t current_a10;
 
 	if (net_current_ma >= 0)
 	{
 		return 0U;
 	}
-	current_a10 = (uint32_t)((((uint64_t)(-(int64_t)net_current_ma)) + 50ULL) /
-		100ULL);
+
+	/* Avoid signed overflow for INT32_MIN without promoting to int64_t. */
+	current_ma = (uint32_t)(-(net_current_ma + 1)) + 1U;
+	current_a10 = (current_ma + 50U) / 100U;
 	return (current_a10 > (uint32_t)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
 }
 
@@ -422,7 +462,8 @@ static UINT8 soc_save(void)
 	data.u32CapFull = s_soc.cap_full_as10;
 	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
 	data.u16Flags = (UINT16)(s_soc.snapshot_flags & SOC_SNAPSHOT_FLAG_REBOUND_HOLD);
-	data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
+	data.u16DsgSocInt = (unit != 0U) ?
+		(UINT16)((s_soc.dsg_acc_as10 * 100U) / unit) : 0U;
 	if (data.u16DsgSocInt > 100U)
 	{
 		data.u16DsgSocInt = 100U;
@@ -468,8 +509,8 @@ static void soc_load_or_default(void)
 		s_soc.cycle_x100 = data.u32CycleTimes;
 		soc_refresh_capacity_base();
 		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
-			(data.u32LearnPassedAs10 % unit) :
-			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
+			((unit != 0U) ? (data.u32LearnPassedAs10 % unit) : 0U) :
+			soc_percent_of_u32(unit, (UINT8)data.u16DsgSocInt);
 		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
 			(data.u32CapNow <= s_soc.cap_full_as10))
 		{
@@ -531,15 +572,25 @@ static void soc_set_rest_down_target(UINT8 target)
 static void soc_integrate(int32_t net_current_ma)
 {
 	int32_t delta_as10;
-	int64_t acc_mams;
-	int64_t cap_now_as10;
+	int32_t acc_mams;
+	int32_t cap_now_as10;
 	UINT8 old_soc;
 
-	acc_mams = (((int64_t)net_current_ma -
-		(int64_t)SOC_BOARD_SELF_CONSUMPTION_MA) * (int64_t)SOC_TICK_MS) +
-		(int64_t)s_soc.rem_mams;
-	delta_as10 = (int32_t)(acc_mams / (int64_t)SOC_MAMS_PER_AS10);
-	s_soc.rem_mams = (int32_t)(acc_mams % (int64_t)SOC_MAMS_PER_AS10);
+	/* 10,000A is far beyond the product range and keeps the 200ms fixed-point
+	 * integration expression inside signed 32-bit limits. */
+	if (net_current_ma > SOC_INTEGRATION_CURRENT_LIMIT_MA)
+	{
+		net_current_ma = SOC_INTEGRATION_CURRENT_LIMIT_MA;
+	}
+	else if (net_current_ma < -SOC_INTEGRATION_CURRENT_LIMIT_MA)
+	{
+		net_current_ma = -SOC_INTEGRATION_CURRENT_LIMIT_MA;
+	}
+
+	acc_mams = (net_current_ma - (int32_t)SOC_BOARD_SELF_CONSUMPTION_MA) *
+		(int32_t)SOC_TICK_MS + s_soc.rem_mams;
+	delta_as10 = acc_mams / (int32_t)SOC_MAMS_PER_AS10;
+	s_soc.rem_mams = acc_mams % (int32_t)SOC_MAMS_PER_AS10;
 	if (delta_as10 == 0)
 	{
 		return;
@@ -547,29 +598,32 @@ static void soc_integrate(int32_t net_current_ma)
 	old_soc = s_soc.soc;
 	if (delta_as10 < 0)
 	{
-		UINT32 dsg_as10 = (UINT32)(-(int64_t)delta_as10);
+		UINT32 dsg_as10 = (UINT32)(-delta_as10);
 		UINT32 unit = s_soc.cap_factory_as10 / 100U;
 
-		s_soc.dsg_acc_as10 += dsg_as10;
-		s_soc.cycle_x100 += s_soc.dsg_acc_as10 / unit;
-		s_soc.dsg_acc_as10 %= unit;
+		if (unit != 0U)
+		{
+			s_soc.dsg_acc_as10 += dsg_as10;
+			s_soc.cycle_x100 += s_soc.dsg_acc_as10 / unit;
+			s_soc.dsg_acc_as10 %= unit;
+		}
 		soc_refresh_capacity_base();
 	}
-	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
+	cap_now_as10 = (int32_t)s_soc.cap_now_as10 + delta_as10;
 	if (cap_now_as10 < 0)
 	{
 		cap_now_as10 = 0;
 	}
-	else if (cap_now_as10 > (int64_t)s_soc.cap_full_as10)
+	else if ((UINT32)cap_now_as10 > s_soc.cap_full_as10)
 	{
-		cap_now_as10 = (int64_t)s_soc.cap_full_as10;
+		cap_now_as10 = (int32_t)s_soc.cap_full_as10;
 	}
 	s_soc.cap_now_as10 = (UINT32)cap_now_as10;
 	s_soc.soc = soc_from_cap();
 	if ((delta_as10 > 0) && (old_soc < 100U) && (s_soc.soc >= 100U))
 	{
 		s_soc.soc = 99U;
-		s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * 99ULL) / 100ULL);
+		s_soc.cap_now_as10 = soc_percent_of_u32(s_soc.cap_full_as10, 99U);
 	}
 }
 
@@ -982,7 +1036,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	STORAGE_FLASH_SOC_DATA data;
 	UINT32 cap_factory = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	UINT32 cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
+	UINT32 cap_full = soc_percent_of_u32(cap_factory, soc_soh_from_cycle(cycle_x100));
 
 	memset(&data, 0, sizeof(data));
 	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_CURRENT;
@@ -990,7 +1044,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	data.u16MaxErrorPercent = 100U;
 	data.u32CycleTimes = cycle_x100;
 	data.u32CapFull = cap_full;
-	data.u32CapNow = (UINT32)(((uint64_t)cap_full * s_soc_default_startup_percent) / 100ULL);
+	data.u32CapNow = soc_percent_of_u32(cap_full, s_soc_default_startup_percent);
 	return StorageFlash_SaveSocData(&data);
 }
 
@@ -1052,7 +1106,7 @@ void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, U
 #else
 	if (g_stCellInfoReport.u16VCellMin >= 3700)
 #endif
-	return;
+		return;
 
 	changed = soc_apply_rtc_rest_ocv(rest_seconds);
 	if (changed)
