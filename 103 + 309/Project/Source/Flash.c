@@ -10,6 +10,7 @@
 #define FLASH_STORAGE_RECORD_VERSION        ((UINT16)0x0002U)
 #define FLASH_SIZE_REG_ADDR                 ((UINT32)0x1FFFF7E0U)
 #define FLASH_ERASE_RETRY_MAX               ((UINT8)3U)
+#define FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG ((UINT32)0x0801F000U)
 #define APP_UPGRADE_MAILBOX_ADDR            ((UINT32)0x20004FE0U)
 #define APP_UPGRADE_MAILBOX_MAGIC           ((UINT32)0x49415031U)
 #define APP_UPGRADE_MAILBOX_REQUEST         ((UINT32)0x5AA55AA5U)
@@ -441,7 +442,7 @@ static void StorageFlash_ConfigFromLegacy(STORAGE_FLASH_CONFIG_DATA *config,
 {
 	memset(config, 0xFF, sizeof(*config));
 	config->u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
-	config->u16AppliedPolicyVersion = FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG);
+	config->u16AppliedPolicyVersion = FlashReadOneHalfWord(FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG);
 	memcpy(config->afe, afe, sizeof(config->afe));
 	memcpy(config->protect, rw->protect, sizeof(config->protect));
 	memcpy(config->other, rw->other, sizeof(config->other));
@@ -540,7 +541,7 @@ UINT16 StorageFlash_GetConfigPolicyVersion(void)
 {
 	STORAGE_FLASH_CONFIG_DATA config;
 	if (StorageFlash_LoadConfigData(&config)) return config.u16AppliedPolicyVersion;
-	return FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG);
+	return FlashReadOneHalfWord(FLASH_ADDR_LEGACY_UPGRADE_PARAM_FLAG);
 }
 
 UINT8 StorageFlash_SetConfigPolicyVersion(UINT16 version)
