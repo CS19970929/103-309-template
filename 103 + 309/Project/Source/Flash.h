@@ -34,12 +34,15 @@
 #define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801F800)
 #define FLASH_ADDR_STORAGE_LOG_DELTA_B     ((UINT32)0x0801FC00)
 
-#define BMS_CONFIG_AFE_WORD_COUNT          ((UINT16)24U)
-#define BMS_CONFIG_PROTECT_WORD_COUNT      ((UINT16)65U)
-#define BMS_CONFIG_CALIB_WORD_COUNT        ((UINT16)47U)
-#define BMS_CONFIG_OTHER_WORD_COUNT        ((UINT16)32U)
-#define BMS_CONFIG_RESERVED_WORD_COUNT     ((UINT16)24U)
-#define FLASH_STORAGE_LOG_RECORD_COUNT     ((UINT16)100U)
+/* These count macros are intentionally plain integer constant expressions.
+ * EEPROM.c compares them in #if directives, where C type casts such as
+ * ((UINT16)24U) are not valid preprocessor expressions on ARMCC5. */
+#define BMS_CONFIG_AFE_WORD_COUNT          24U
+#define BMS_CONFIG_PROTECT_WORD_COUNT      65U
+#define BMS_CONFIG_CALIB_WORD_COUNT        47U
+#define BMS_CONFIG_OTHER_WORD_COUNT        32U
+#define BMS_CONFIG_RESERVED_WORD_COUNT     24U
+#define FLASH_STORAGE_LOG_RECORD_COUNT     100U
 
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)
