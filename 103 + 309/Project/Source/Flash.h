@@ -41,6 +41,13 @@
 #define BMS_CONFIG_RESERVED_WORD_COUNT     ((UINT16)24U)
 #define FLASH_STORAGE_LOG_RECORD_COUNT     ((UINT16)100U)
 
+/* Compatibility names are source aliases only. They do not allocate separate
+ * Flash objects and will be removed with the old split Config API. */
+#define FLASH_STORAGE_AFE_WORD_COUNT              BMS_CONFIG_AFE_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT BMS_CONFIG_PROTECT_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT   BMS_CONFIG_OTHER_WORD_COUNT
+#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT BMS_CONFIG_RESERVED_WORD_COUNT
+
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)
 
@@ -74,41 +81,30 @@ typedef struct
 	UINT16 u16Reserved[4];
 } STORAGE_FLASH_SOC_DATA;
 
-typedef struct
-{
-	UINT16 value[BMS_CONFIG_AFE_WORD_COUNT];
-} BMS_CONFIG_AFE;
-
-typedef struct
-{
-	UINT16 value[BMS_CONFIG_PROTECT_WORD_COUNT];
-} BMS_CONFIG_PROTECT;
-
-typedef struct
-{
-	UINT16 k[BMS_CONFIG_CALIB_WORD_COUNT];
-	INT16 b[BMS_CONFIG_CALIB_WORD_COUNT];
-} BMS_CONFIG_CALIBRATION;
-
-typedef struct
-{
-	UINT16 value[BMS_CONFIG_OTHER_WORD_COUNT];
-} BMS_CONFIG_OTHER;
-
+/* One atomic persistent configuration image. Parameter groups are members of
+ * this image; none of them owns a Flash address. */
 typedef struct
 {
 	UINT16 u16FormatVersion;
 	UINT16 u16AppliedPolicyVersion;
-	BMS_CONFIG_AFE afe;
-	BMS_CONFIG_PROTECT protect;
-	BMS_CONFIG_CALIBRATION calibration;
-	BMS_CONFIG_OTHER other;
+	UINT16 afe[BMS_CONFIG_AFE_WORD_COUNT];
+	UINT16 protect[BMS_CONFIG_PROTECT_WORD_COUNT];
+	UINT16 calibK[BMS_CONFIG_CALIB_WORD_COUNT];
+	INT16 calibB[BMS_CONFIG_CALIB_WORD_COUNT];
+	UINT16 other[BMS_CONFIG_OTHER_WORD_COUNT];
 	UINT16 reserved[BMS_CONFIG_RESERVED_WORD_COUNT];
 } BMS_CONFIG;
 
-/* Temporary source-level alias while call sites are being collapsed onto the
- * unified Config API. It does not represent a different on-Flash format. */
 typedef BMS_CONFIG STORAGE_FLASH_CONFIG_DATA;
+
+/* Temporary compatibility payload used only by old call sites while they are
+ * being collapsed onto BMS_CONFIG. It is not a separate on-Flash record. */
+typedef struct
+{
+	UINT16 protect[FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT];
+	UINT16 other[FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT];
+	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
+} STORAGE_FLASH_RW_PARAM_DATA;
 
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
@@ -118,6 +114,12 @@ UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data);
 UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data);
 UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr);
 UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length);
+
+/* Temporary split-Config source API. All four functions target CONFIG A/B. */
+UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
+UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
+UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
+UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
 
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
