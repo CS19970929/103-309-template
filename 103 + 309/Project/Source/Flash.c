@@ -2,7 +2,6 @@
 
 #define FLASH_STORAGE_MAGIC_SOC              ((UINT32)0x534F4331U)
 #define FLASH_STORAGE_MAGIC_CONFIG           ((UINT32)0x43464731U)
-#define FLASH_STORAGE_MAGIC_LOG              ((UINT32)0x4C4F4731U)
 #define FLASH_STORAGE_RECORD_VERSION         ((UINT16)0x0002U)
 #define FLASH_SIZE_REG_ADDR                  ((UINT32)0x1FFFF7E0U)
 #define FLASH_ERASE_RETRY_MAX                ((UINT8)3U)
@@ -27,13 +26,6 @@ typedef struct
 	UINT16 length;
 	UINT32 sequence;
 } STORAGE_FLASH_CRC_META;
-
-typedef struct
-{
-	UINT8 point;
-	UINT8 reserved;
-	UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2];
-} STORAGE_FLASH_LOG_DATA;
 
 typedef struct
 {
@@ -66,7 +58,7 @@ UINT8 StorageFlash_IsBusy(void)
 	return s_flash.busy;
 }
 
-static UINT16 StorageFlash_CrcUpdate(UINT16 crc, const UINT8 *data, UINT16 length)
+UINT16 StorageFlash_Crc16Update(UINT16 crc, const UINT8 *data, UINT16 length)
 {
 	UINT16 i;
 	UINT8 bit;
@@ -95,6 +87,11 @@ static UINT16 StorageFlash_CrcUpdate(UINT16 crc, const UINT8 *data, UINT16 lengt
 	return crc;
 }
 
+UINT16 StorageFlash_Crc16(const UINT8 *data, UINT16 length)
+{
+	return StorageFlash_Crc16Update(0xFFFFU, data, length);
+}
+
 static UINT16 StorageFlash_CalcRecordCrc(UINT32 magic,
 										 UINT16 version,
 										 UINT16 length,
@@ -109,8 +106,8 @@ static UINT16 StorageFlash_CalcRecordCrc(UINT32 magic,
 	meta.length = length;
 	meta.sequence = sequence;
 
-	crc = StorageFlash_CrcUpdate(crc, (const UINT8 *)&meta, (UINT16)sizeof(meta));
-	crc = StorageFlash_CrcUpdate(crc, payload, length);
+	crc = StorageFlash_Crc16Update(crc, (const UINT8 *)&meta, (UINT16)sizeof(meta));
+	crc = StorageFlash_Crc16Update(crc, payload, length);
 	return crc;
 }
 
@@ -846,66 +843,6 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 	return result;
 }
 
-UINT8 StorageFlash_LoadLogData(UINT8 *point,
-									UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
-{
-	STORAGE_FLASH_LOG_DATA data;
-
-	if ((point == 0) || (records == 0))
-	{
-		return 0U;
-	}
-
-	if (!StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
-									   FLASH_ADDR_STORAGE_LOG_SLOT_B,
-									   FLASH_STORAGE_MAGIC_LOG,
-									   (UINT16)sizeof(data),
-									   (UINT8 *)&data))
-	{
-		return 0U;
-	}
-
-	*point = data.point;
-	memcpy(records, data.records, sizeof(data.records));
-	return 1U;
-}
-
-UINT8 StorageFlash_SaveLogData(UINT8 point,
-									const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2])
-{
-	STORAGE_FLASH_LOG_DATA data;
-	STORAGE_FLASH_LOG_DATA current_data;
-	UINT8 result;
-
-	if (records == 0)
-	{
-		return 0U;
-	}
-
-	memset(&data, 0, sizeof(data));
-	data.point = point;
-	memcpy(data.records, records, sizeof(data.records));
-
-	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
-									  FLASH_ADDR_STORAGE_LOG_SLOT_B,
-									  FLASH_STORAGE_MAGIC_LOG,
-									  (UINT16)sizeof(current_data),
-									  (UINT8 *)&current_data) &&
-		(memcmp(&current_data, &data, sizeof(data)) == 0))
-	{
-		return 1U;
-	}
-
-	StorageFlash_BeginWrite();
-	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_LOG_SLOT_A,
-										  FLASH_ADDR_STORAGE_LOG_SLOT_B,
-										  FLASH_STORAGE_MAGIC_LOG,
-										  (const UINT8 *)&data,
-										  (UINT16)sizeof(data));
-	StorageFlash_EndWrite();
-	return result;
-}
-
 void StorageFlash_PrintBootCheck(void)
 {
 	UINT16 flash_size_kb = *((volatile UINT16 *)FLASH_SIZE_REG_ADDR);
@@ -913,10 +850,12 @@ void StorageFlash_PrintBootCheck(void)
 	UINT8 config_valid;
 	UINT16 policy_version;
 
-	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu align=%u\r\n",
+	printf("\r\n[FLASH_BOOT] flash_size_reg=%uKB page=%lu align=%u storage=%luKB app_max=%luKB\r\n",
 		   flash_size_kb,
 		   (unsigned long)FLASH_STORAGE_PAGE_SIZE,
-		   FLASH_STORAGE_RECORD_ALIGNMENT);
+		   FLASH_STORAGE_RECORD_ALIGNMENT,
+		   (unsigned long)((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) / 1024U),
+		   (unsigned long)(FLASH_APP_MAX_SIZE / 1024U));
 	if (flash_size_kb < 128U)
 	{
 		printf("[FLASH_BOOT] rear64 unavailable: skip 0x08010000+ storage check\r\n");
