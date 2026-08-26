@@ -215,3 +215,11 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 
 	return result;
 }
+
+void jtag_disableAndConfIO(void)
+{
+	/* Disable JTAG while retaining SWD, freeing PA15/PB3/PB4 for GPIO use. */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+	GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
+}
