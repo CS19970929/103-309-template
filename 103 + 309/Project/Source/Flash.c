@@ -355,42 +355,6 @@ static UINT8 StorageFlash_SaveJournalPair(uint32_t slot_a, uint32_t slot_b, UINT
 	return 1U;
 }
 
-static UINT8 StorageFlash_SaveJournalPage(uint32_t slot_addr, UINT32 magic,
-										  const UINT8 *payload, UINT16 length)
-{
-	UINT16 record_span = StorageFlash_RecordSpan(length);
-	UINT8 valid, erase_page = 0U;
-	UINT32 sequence = 0U, next_addr = slot_addr, next_sequence = 1U, verify_sequence = 0U;
-	FLASH_Status result;
-	if ((payload == 0) || (record_span == 0U) || (record_span > FLASH_STORAGE_PAGE_SIZE))
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-	valid = StorageFlash_LoadJournalPage(slot_addr, magic, length, 0, &sequence, &next_addr);
-	if (valid) next_sequence = sequence + 1U;
-	else { erase_page = StorageFlash_IsAreaBlank(slot_addr, (UINT16)FLASH_STORAGE_PAGE_SIZE) ? 0U : 1U; next_addr = slot_addr; }
-	if ((next_addr + record_span) > (slot_addr + FLASH_STORAGE_PAGE_SIZE)) { erase_page = 1U; next_addr = slot_addr; }
-	FLASH_Unlock();
-	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-	if (erase_page)
-	{
-		result = FlashErasePageVerified(slot_addr);
-		if (result != FLASH_COMPLETE) { FLASH_Lock(); System_ERROR_UserCallback(ERROR_EEPROM_STORE); return 0U; }
-	}
-	result = StorageFlash_ProgramRecord(next_addr, magic, payload, length, next_sequence);
-	FLASH_Lock();
-	if (result != FLASH_COMPLETE ||
-		!StorageFlash_ReadRecord(next_addr, magic, length, 0, &verify_sequence) ||
-		verify_sequence != next_sequence ||
-		memcmp((const void *)(next_addr + sizeof(STORAGE_FLASH_HEADER)), payload, length) != 0)
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-	return 1U;
-}
-
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 {
 	FLASH_Status result = FLASH_ERROR_PG;
@@ -656,9 +620,14 @@ UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LO
 UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
 {
 	if (data == 0) return 0U;
-	if (StorageFlash_LoadJournalPage(FLASH_ADDR_FACTORY_AGING_FLAG, FLASH_STORAGE_MAGIC_FACTORY_AGING,
-									 (UINT16)sizeof(*data), (UINT8 *)data, 0, 0)) return 1U;
-	if (FlashReadOneHalfWord(FLASH_ADDR_FACTORY_AGING_FLAG) == FLASH_FACTORY_AGING_DONE_VALUE)
+	if (StorageFlash_LoadJournalPair(FLASH_ADDR_STORAGE_AGING_SLOT_A,
+									  FLASH_ADDR_STORAGE_AGING_SLOT_B,
+									  FLASH_STORAGE_MAGIC_FACTORY_AGING,
+									  (UINT16)sizeof(*data),
+									  (UINT8 *)data)) return 1U;
+
+	/* Compatibility with the old one-halfword DONE marker on slot A. */
+	if (FlashReadOneHalfWord(FLASH_ADDR_STORAGE_AGING_SLOT_A) == FLASH_FACTORY_AGING_DONE_VALUE)
 	{
 		memset(data, 0, sizeof(*data));
 		data->u16State = FLASH_FACTORY_AGING_STATE_DONE;
@@ -672,8 +641,11 @@ UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *
 	UINT8 result;
 	if (data == 0) return 0U;
 	StorageFlash_BeginWrite();
-	result = StorageFlash_SaveJournalPage(FLASH_ADDR_FACTORY_AGING_FLAG, FLASH_STORAGE_MAGIC_FACTORY_AGING,
-										  (const UINT8 *)data, (UINT16)sizeof(*data));
+	result = StorageFlash_SaveJournalPair(FLASH_ADDR_STORAGE_AGING_SLOT_A,
+										  FLASH_ADDR_STORAGE_AGING_SLOT_B,
+										  FLASH_STORAGE_MAGIC_FACTORY_AGING,
+										  (const UINT8 *)data,
+										  (UINT16)sizeof(*data));
 	StorageFlash_EndWrite();
 	return result;
 }
