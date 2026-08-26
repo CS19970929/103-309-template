@@ -10,6 +10,11 @@
  * This product intentionally uses the 128KB physical Flash available on the
  * selected C8 devices. The firmware target is STM32F10X_MD, so the erase page
  * is 1KB. APP must never cross FLASH_ADDR_STORAGE_START.
+ *
+ * Persistent storage uses six pages total:
+ *   CONFIG A/B : 2KB, atomic parameter image
+ *   SOC A/B    : 2KB, append journal
+ *   LOG A/B    : 2KB, append journal managed by LogRecord.c
  */
 #if !defined(STM32F10X_MD)
 #error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
@@ -18,21 +23,19 @@
 #define FLASH_STORAGE_PAGE_SIZE           ((UINT32)0x00000400)
 #define FLASH_STORAGE_SLOT_SIZE            FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)
-#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E000)
+#define FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E800)
 #define FLASH_ADDR_STORAGE_END             ((UINT32)0x08020000)
 #define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
 #define FLASH_APP_MAX_SIZE                 (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
 
 /* Flash addresses describe storage objects only; parameter categories do not
  * own Flash pages. All configurable BMS parameters share CONFIG A/B. */
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E000)
-#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801E400)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0801E800)
-#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0801EC00)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801F000)
-#define FLASH_ADDR_STORAGE_LOG_DELTA_A     ((UINT32)0x0801F400)
-#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801F800)
-#define FLASH_ADDR_STORAGE_LOG_DELTA_B     ((UINT32)0x0801FC00)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E800)
+#define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801EC00)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0801F000)
+#define FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0801F400)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801F800)
+#define FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801FC00)
 
 /* These count macros are intentionally plain integer constant expressions.
  * EEPROM.c compares them in #if directives, where C type casts such as
@@ -100,10 +103,12 @@ UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data);
 UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data);
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
-UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 
-/* Bounded raw operations exist only for storage internals such as Log Delta. */
+/* Shared CRC16/Modbus primitive used by persistent record formats. */
+UINT16 StorageFlash_Crc16Update(UINT16 crc, const UINT8 *data, UINT16 length);
+UINT16 StorageFlash_Crc16(const UINT8 *data, UINT16 length);
+
+/* Bounded raw operations exist only for storage internals such as log journal. */
 UINT8 StorageFlash_EraseStoragePage(UINT32 page_addr);
 UINT8 StorageFlash_ProgramStorageBytes(UINT32 addr, const UINT8 *data, UINT16 length);
 UINT8 StorageFlash_IsBusy(void);
