@@ -179,6 +179,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
     if (RtcSleep_PortUpdateRtcData() == 0U)
     {
+        g_irq_t = error_wake;
         return true;
     }
 
@@ -228,6 +229,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     UINT32 rtc_start;
     UINT32 rtc_elapsed;
 
+    g_irq_t = NO_IRQ;
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
     rtc_start = RTC_GetCounter();
