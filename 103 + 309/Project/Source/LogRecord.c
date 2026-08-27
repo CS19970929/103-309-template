@@ -95,42 +95,42 @@ static UINT16 LogStorage_EntryCrc(const LOG_STORAGE_ENTRY *entry)
 
 static UINT8 LogStorage_ReadHeader(UINT32 page, LOG_STORAGE_PAGE_HEADER *header)
 {
-	LOG_STORAGE_PAGE_HEADER temp;
+	const LOG_STORAGE_PAGE_HEADER *stored;
 
 	if (header == 0)
 	{
 		return 0U;
 	}
 
-	memcpy(&temp, (const void *)page, sizeof(temp));
-	if ((temp.magic != LOG_STORAGE_PAGE_MAGIC) ||
-		((temp.flags & (UINT16)~LOG_STORAGE_PAGE_FLAGS_VALID) != 0U) ||
-		(temp.crc != LogStorage_HeaderCrc(&temp)))
+	stored = (const LOG_STORAGE_PAGE_HEADER *)page;
+	if ((stored->magic != LOG_STORAGE_PAGE_MAGIC) ||
+		((stored->flags & (UINT16)~LOG_STORAGE_PAGE_FLAGS_VALID) != 0U) ||
+		(stored->crc != LogStorage_HeaderCrc(stored)))
 	{
 		return 0U;
 	}
 
-	*header = temp;
+	*header = *stored;
 	return 1U;
 }
 
 static UINT8 LogStorage_ReadEntry(UINT32 addr, LOG_STORAGE_ENTRY *entry)
 {
-	LOG_STORAGE_ENTRY temp;
+	const LOG_STORAGE_ENTRY *stored;
 
 	if (entry == 0)
 	{
 		return 0U;
 	}
 
-	memcpy(&temp, (const void *)addr, sizeof(temp));
-	if ((temp.crc != LogStorage_EntryCrc(&temp)) ||
-		!LogRecord_IsEntryValid(temp.event, temp.delta))
+	stored = (const LOG_STORAGE_ENTRY *)addr;
+	if ((stored->crc != LogStorage_EntryCrc(stored)) ||
+		!LogRecord_IsEntryValid(stored->event, stored->delta))
 	{
 		return 0U;
 	}
 
-	*entry = temp;
+	*entry = *stored;
 	return 1U;
 }
 
