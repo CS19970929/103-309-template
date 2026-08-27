@@ -108,29 +108,6 @@ void Refresh_Parameters(void)
 	}
 }
 
-static void AFE_CopyCurValues(UINT16 *values)
-{
-	UINT16 i;
-	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		values[i] = AfeParam_AtConst(i)->curValue;
-	}
-}
-
-static void AFE_RestoreCurValues(const UINT16 *values)
-{
-	UINT16 i;
-	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		AfeParam_At(i)->curValue = values[i];
-	}
-}
-
-static UINT8 AFE_SaveCurValuesToFlash(void)
-{
-	return EEPROM_SaveConfigToFlash();
-}
-
 static UINT8 AFE_ReadConfigImage(UINT8 image[AFE_CONFIG_MTP_LENGTH])
 {
 	return MTPRead(0x00, AFE_CONFIG_MTP_LENGTH, image) ? 1U : 0U;
@@ -237,7 +214,6 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 i;
 	UINT16 offset;
 	UINT16 value;
-	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
 	(void)u16Channel;
 
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
@@ -258,7 +234,8 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 		return 1U;
 	}
 
-	/* Validate the complete transaction before mutating runtime parameters. */
+	/* Validate the complete host transaction before touching persistent or
+	 * runtime state. */
 	for (i = 0U; i < u16WrRegNum; ++i)
 	{
 		value = (UINT16)(s->u16Buffer[8U + i * 2U] +
@@ -271,8 +248,28 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 		}
 	}
 
-	AFE_CopyCurValues(snapshot);
+	EEPROM_ConfigEditBegin();
+	for (i = 0U; i < u16WrRegNum; ++i)
+	{
+		value = (UINT16)(s->u16Buffer[8U + i * 2U] +
+			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
+		if (!EEPROM_ConfigEditSetAfeWord((UINT16)(offset + i), value))
+		{
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_CMD_INVALID;
+			return 1U;
+		}
+	}
 	Feed_IWatchDog;
+	if (!EEPROM_ConfigEditCommit())
+	{
+		s->AckType = RS485_ACK_NEG;
+		s->ErrorType = RS485_ERROR_CMD_INVALID;
+		return 1U;
+	}
+
+	/* Flash owns the new configuration now; applying these simple assignments
+	 * cannot fail and therefore needs no rollback snapshot. */
 	for (i = 0U; i < u16WrRegNum; ++i)
 	{
 		AfeParam_At((UINT16)(offset + i))->curValue =
@@ -280,13 +277,6 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
 	}
 	Feed_IWatchDog;
-	if (!AFE_SaveCurValuesToFlash())
-	{
-		AFE_RestoreCurValues(snapshot);
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-		return 1U;
-	}
 	AFE_PARAM_WRITE_Flag = 1;
 	return 1U;
 }
@@ -326,25 +316,31 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT16 i;
-	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
+	UINT16 value;
 
-	RTC_SetCounter(0);
-	AFE_CopyCurValues(snapshot);
+	EEPROM_ConfigEditBegin();
 	Feed_IWatchDog;
+	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		value = AfeParam_AtConst(i)->defaultValue;
+		if (!EEPROM_ConfigEditSetAfeWord(i, value))
+		{
+			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+			return 0U;
+		}
+	}
+	Feed_IWatchDog;
+	if (!EEPROM_ConfigEditCommit())
+	{
+		return 0U;
+	}
+
 	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
 		AFE_Value_Typedef *param = AfeParam_At(i);
 		param->curValue = param->defaultValue;
 	}
-	Feed_IWatchDog;
-	if (!AFE_SaveCurValuesToFlash())
-	{
-		AFE_RestoreCurValues(snapshot);
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-
-	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
+	RTC_SetCounter(0);
 	AFE_PARAM_WRITE_Flag = 1;
 	return 1U;
 }
