@@ -391,8 +391,7 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 #if (!UPGRADE_PARAM_POLICY_ENABLE) || (!UPGRADE_PARAM_POLICY_HAS_ACTION)
 	return 1U;
 #else
-	UINT8 result = 1U;
-	UINT8 config_dirty = 0U;
+	UINT16 i;
 
 #if (!UPGRADE_PARAM_FORCE_REAPPLY)
 	if (s_u16ConfigPolicyVersion == UPGRADE_PARAM_POLICY_VERSION)
@@ -401,55 +400,90 @@ UINT8 UpgradeParamPolicy_ApplyOnce(void)
 	}
 #endif
 
+#if (UPGRADE_PARAM_RESET_AFE || UPGRADE_PARAM_RESET_PROTECT || \
+	 UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE || UPGRADE_PARAM_RESET_SOC_CONFIG || \
+	 UPGRADE_PARAM_UPDATE_OTHER_ELEMENT)
+	/* Build all persistent parameter changes in the candidate image first.
+	 * Runtime remains untouched if candidate validation or Flash commit fails. */
+	EEPROM_ConfigEditBegin();
+#if UPGRADE_PARAM_RESET_AFE
+	for (i = 0U; i < BMS_CONFIG_AFE_WORD_COUNT; ++i)
+	{
+		s_stConfigScratch.afe[i] = AfeParam_AtConst(i)->defaultValue;
+	}
+#endif
+#if UPGRADE_PARAM_RESET_PROTECT
+	memcpy(s_stConfigScratch.protect,
+		   g_u16ProtectParamDefault,
+		   sizeof(s_stConfigScratch.protect));
+#endif
+#if UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Balance_OpenVoltage)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Balance_OpenVoltage)];
+#endif
+#if UPGRADE_PARAM_RESET_SOC_CONFIG
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_TableSelect)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_TableSelect)];
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Ah)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Ah)];
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Cycle_times)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_Cycle_times)];
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_100)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_100)];
+	s_stConfigScratch.other[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_0)] =
+		g_u16OtherParamDefault[BMS_OTHER_PARAM_WORD_INDEX(u16Soc_V_0)];
+#endif
+#if UPGRADE_PARAM_UPDATE_OTHER_ELEMENT
+	memcpy(s_stConfigScratch.other,
+		   g_u16OtherParamDefault,
+		   sizeof(s_stConfigScratch.other));
+#endif
+	if (!EEPROM_ConfigEditCommit())
+	{
+		return 0U;
+	}
+
+	/* Persistent commit succeeded. Apply the exact same policy to runtime. */
 #if UPGRADE_PARAM_RESET_AFE
 	EEPROM_LoadDefaultAfe();
-	config_dirty = 1U;
 #endif
 #if UPGRADE_PARAM_RESET_PROTECT
 	EEPROM_LoadDefaultProtect();
-	config_dirty = 1U;
 #endif
 #if UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
 	EEPROM_LoadDefaultBalanceOpenVoltage();
-	config_dirty = 1U;
 #endif
 #if UPGRADE_PARAM_RESET_SOC_CONFIG
 	EEPROM_LoadDefaultSocConfig();
-	config_dirty = 1U;
 #endif
 #if UPGRADE_PARAM_UPDATE_OTHER_ELEMENT
 	EEPROM_LoadDefaultOtherElement();
-	config_dirty = 1U;
+#endif
+#else
+	(void)i;
 #endif
 
-	if (config_dirty && !EEPROM_SaveConfigToFlash())
-	{
-		result = 0U;
-	}
 #if UPGRADE_PARAM_RESET_SOC_SNAPSHOT
-	if (result && !SOC_ResetStoredSnapshotToDefault())
+	if (!SOC_ResetStoredSnapshotToDefault())
 	{
-		result = 0U;
+		return 0U;
 	}
 #endif
 #if UPGRADE_PARAM_RESET_EVENT_RECORD
-	if (result && !EEPROM_ResetData_EventRecord_ToDefault())
+	if (!EEPROM_ResetData_EventRecord_ToDefault())
 	{
-		result = 0U;
+		return 0U;
 	}
 #endif
-	if (!result)
-	{
-		return 0U;
-	}
 
-	s_u16ConfigPolicyVersion = UPGRADE_PARAM_POLICY_VERSION;
-	if (!EEPROM_SaveConfigToFlash())
+	/* Mark the policy complete only after every requested reset succeeded. */
+	EEPROM_ConfigEditBegin();
+	s_stConfigScratch.u16AppliedPolicyVersion = UPGRADE_PARAM_POLICY_VERSION;
+	if (!EEPROM_ConfigEditCommit())
 	{
-		s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
 	}
+	s_u16ConfigPolicyVersion = UPGRADE_PARAM_POLICY_VERSION;
 	return 1U;
 #endif
 }
