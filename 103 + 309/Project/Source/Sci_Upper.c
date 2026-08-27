@@ -1570,8 +1570,6 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 pair_index;
 	UINT16 k_value;
 	INT16 b_value;
-	UINT16 snapshot_k[KB_NUM];
-	INT16 snapshot_b[KB_NUM];
 
 	reg_count = Sci_GetWrRegNum(s);
 	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_VC1CALIB_K);
@@ -1585,6 +1583,8 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 	}
 
 	pair_count = (UINT16)(reg_count / 2U);
+	pair_index = (UINT16)(offset / 2U);
+	EEPROM_ConfigEditBegin();
 	for (i = 0U; i < pair_count; ++i)
 	{
 		k_value = Sci_GetWrValue(s, (UINT16)(i * 2U));
@@ -1595,22 +1595,22 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 			Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 			return;
 		}
+		if (!EEPROM_ConfigEditSetCalibPair((UINT16)(pair_index + i), k_value, b_value))
+		{
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
+		}
+	}
+	if (!EEPROM_ConfigEditCommit())
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
 	}
 
-	memcpy(snapshot_k, g_u16CalibCoefK, sizeof(snapshot_k));
-	memcpy(snapshot_b, g_i16CalibCoefB, sizeof(snapshot_b));
-	pair_index = (UINT16)(offset / 2U);
 	for (i = 0U; i < pair_count; ++i)
 	{
 		g_u16CalibCoefK[pair_index + i] = Sci_GetWrValue(s, (UINT16)(i * 2U));
 		g_i16CalibCoefB[pair_index + i] = (INT16)Sci_GetWrValue(s, (UINT16)(i * 2U + 1U));
-	}
-
-	if (!EEPROM_SaveConfigToFlash())
-	{
-		memcpy(g_u16CalibCoefK, snapshot_k, sizeof(snapshot_k));
-		memcpy(g_i16CalibCoefB, snapshot_b, sizeof(snapshot_b));
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 	}
 }
 
@@ -1619,7 +1619,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 offset;
 	UINT16 u16WrRegNum;
 	UINT16 i;
-	struct PRT_E2ROM_PARAS snapshot;
+	UINT16 value;
 
 	u16WrRegNum = Sci_GetWrRegNum(s);
 	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST);
@@ -1635,17 +1635,25 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 		return;
 	}
 
-	snapshot = PRT_E2ROMParas;
+	EEPROM_ConfigEditBegin();
+	for (i = 0U; i < u16WrRegNum; ++i)
+	{
+		value = Sci_GetWrValue(s, i);
+		if (!EEPROM_ConfigEditSetProtectWord((UINT16)(offset + i), value))
+		{
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
+		}
+	}
+	if (!EEPROM_ConfigEditCommit())
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
 	for (i = 0U; i < u16WrRegNum; ++i)
 	{
 		Sci_WriteNativeWord(&PRT_E2ROMParas, (UINT16)(offset + i), Sci_GetWrValue(s, i));
-	}
-	if (!EEPROM_SaveConfigToFlash())
-	{
-		PRT_E2ROMParas = snapshot;
-		Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
-		return;
 	}
 	Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
 }
@@ -1666,7 +1674,7 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 offset;
 	UINT16 u16WrRegNum;
 	UINT16 i;
-	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
+	UINT16 value;
 
 	u16WrRegNum = Sci_GetWrRegNum(s);
 	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_BALANCE_OV);
@@ -1681,17 +1689,26 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
 	}
-	memcpy(snapshot, &OtherElement, sizeof(snapshot));
+
+	EEPROM_ConfigEditBegin();
+	for (i = 0U; i < u16WrRegNum; ++i)
+	{
+		value = Sci_GetWrValue(s, i);
+		if (!EEPROM_ConfigEditSetOtherWord((UINT16)(offset + i), value))
+		{
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
+		}
+	}
+	if (!EEPROM_ConfigEditCommit())
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
+
 	for (i = 0U; i < u16WrRegNum; ++i)
 	{
 		Sci_WriteNativeWord(&OtherElement, (UINT16)(offset + i), Sci_GetWrValue(s, i));
-	}
-	if (!EEPROM_SaveConfigToFlash())
-	{
-		memcpy(&OtherElement, snapshot, sizeof(snapshot));
-		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
-		return;
 	}
 	Sci_ApplyOtherElementSideEffects(offset, u16WrRegNum);
 }
@@ -1778,8 +1795,6 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
 	UINT16 i;
-	UINT16 snapshot_k[KB_NUM];
-	INT16 snapshot_b[KB_NUM];
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (u16SciRegData != 0x0001U)
@@ -1788,18 +1803,24 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 		return;
 	}
 
-	memcpy(snapshot_k, g_u16CalibCoefK, sizeof(snapshot_k));
-	memcpy(snapshot_b, g_i16CalibCoefB, sizeof(snapshot_b));
+	EEPROM_ConfigEditBegin();
+	for (i = 0U; i < KB_NUM; ++i)
+	{
+		if (!EEPROM_ConfigEditSetCalibPair(i, SYSKDEFAULT, SYSBDEFAULT))
+		{
+			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+			return;
+		}
+	}
+	if (!EEPROM_ConfigEditCommit())
+	{
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
+	}
 	for (i = 0U; i < KB_NUM; ++i)
 	{
 		g_u16CalibCoefK[i] = SYSKDEFAULT;
 		g_i16CalibCoefB[i] = SYSBDEFAULT;
-	}
-	if (!EEPROM_SaveConfigToFlash())
-	{
-		memcpy(g_u16CalibCoefK, snapshot_k, sizeof(snapshot_k));
-		memcpy(g_i16CalibCoefB, snapshot_b, sizeof(snapshot_b));
-		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 	}
 }
 
@@ -1829,19 +1850,26 @@ void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s)
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
-	struct PRT_E2ROM_PARAS snapshot;
+	UINT16 i;
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
-		snapshot = PRT_E2ROMParas;
-		memcpy(&PRT_E2ROMParas, g_u16ProtectParamDefault, sizeof(PRT_E2ROMParas));
-		if (!EEPROM_SaveConfigToFlash())
+		EEPROM_ConfigEditBegin();
+		for (i = 0U; i < E2P_PARA_NUM_PROTECT; ++i)
 		{
-			PRT_E2ROMParas = snapshot;
+			if (!EEPROM_ConfigEditSetProtectWord(i, g_u16ProtectParamDefault[i]))
+			{
+				Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+				return;
+			}
+		}
+		if (!EEPROM_ConfigEditCommit())
+		{
 			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 			return;
 		}
+		memcpy(&PRT_E2ROMParas, g_u16ProtectParamDefault, sizeof(PRT_E2ROMParas));
 		InitData_SOC();
 	}
 	else
@@ -1854,20 +1882,26 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 {
 	UINT16 u16SciRegData;
-	UINT16 snapshot[E2P_PARA_NUM_OTHER_ELEMENT1];
+	UINT16 i;
 
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (0x0001 == u16SciRegData)
 	{
-		memcpy(snapshot, &OtherElement, sizeof(snapshot));
-		memcpy(&OtherElement, g_u16OtherParamDefault, sizeof(OtherElement));
-		if (!EEPROM_SaveConfigToFlash())
+		EEPROM_ConfigEditBegin();
+		for (i = 0U; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 		{
-			memcpy(&OtherElement, snapshot, sizeof(snapshot));
-			Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
+			if (!EEPROM_ConfigEditSetOtherWord(i, g_u16OtherParamDefault[i]))
+			{
+				Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+				return;
+			}
+		}
+		if (!EEPROM_ConfigEditCommit())
+		{
 			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 			return;
 		}
+		memcpy(&OtherElement, g_u16OtherParamDefault, sizeof(OtherElement));
 		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
 	}
 	else
