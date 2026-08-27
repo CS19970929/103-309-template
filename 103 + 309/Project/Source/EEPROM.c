@@ -137,9 +137,7 @@ static UINT8 EEPROM_ConfigAfeIsValid(const BMS_CONFIG *config)
 
 	for (i = 0U; i < BMS_CONFIG_AFE_WORD_COUNT; ++i)
 	{
-		const AFE_Value_Typedef *param = AfeParam_AtConst(i);
-		if ((config->afe[i] < param->minValue) ||
-			(config->afe[i] > param->maxValue))
+		if (!AfeParam_ValueIsValid(i, config->afe[i]))
 		{
 			return 0U;
 		}
