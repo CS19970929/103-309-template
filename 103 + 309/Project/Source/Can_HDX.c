@@ -85,15 +85,7 @@ typedef struct FEIDAO_CAN_APP_RUNTIME_TAG
 	UINT32 read_block_last_tick;
 } FeidaoCanAppRuntime;
 
-static FeidaoCanTxRuntime s_tx = {
-	{0},
-	0U,
-	0U,
-	0U,
-	CAN_TxStatus_NoMailBox,
-	FEIDAO_CAN_TX_SOURCE_NONE,
-	0U
-};
+static FeidaoCanTxRuntime s_tx;
 static FeidaoCanRuntime s_runtime;
 static FeidaoCanAppRuntime s_app;
 
