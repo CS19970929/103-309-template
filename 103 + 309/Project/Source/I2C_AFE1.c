@@ -70,6 +70,14 @@ static const UINT8 s_u8Crc8NibbleTable[16] = {
 	0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15,
 	0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D};
 
+static UINT8 CRC8Update(UINT8 crc8, UINT8 data)
+{
+	crc8 ^= data;
+	crc8 = (UINT8)((UINT8)(crc8 << 4) ^ s_u8Crc8NibbleTable[crc8 >> 4]);
+	crc8 = (UINT8)((UINT8)(crc8 << 4) ^ s_u8Crc8NibbleTable[crc8 >> 4]);
+	return crc8;
+}
+
 /*******************************************************************************
 Function: Delay4us()
 Description: optimization-independent TWI timing delay
@@ -100,9 +108,7 @@ UINT8 CRC8cal(UINT8 *p, UINT8 Length)
 
 	while (Length-- != 0U)
 	{
-		crc8 ^= *p++;
-		crc8 = (UINT8)((UINT8)(crc8 << 4) ^ s_u8Crc8NibbleTable[crc8 >> 4]);
-		crc8 = (UINT8)((UINT8)(crc8 << 4) ^ s_u8Crc8NibbleTable[crc8 >> 4]);
+		crc8 = CRC8Update(crc8, *p++);
 	}
 
 	return crc8;
@@ -369,19 +375,21 @@ Others:
 UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 {
 	UINT8 i;
-	UINT8 result = 0;
-	UINT8 TempBuf[46];
-	UINT8 RdCrc = 0;
+	UINT8 result = 0U;
+	UINT8 rd_crc;
+	UINT8 calc_crc;
+	UINT8 rd_data;
 
-	if ((Length == 0U) || (Length > (UINT8)(sizeof(TempBuf) - 4U)) || (RdBuf == 0))
+	if ((Length == 0U) || (RdBuf == 0))
 	{
 		return 0U;
 	}
 
-	TempBuf[0] = SlaveID;
-	TempBuf[1] = (UINT8)RdAddr;
-	TempBuf[2] = Length;
-	TempBuf[3] = SlaveID | 0x01;
+	calc_crc = 0U;
+	calc_crc = CRC8Update(calc_crc, SlaveID);
+	calc_crc = CRC8Update(calc_crc, (UINT8)RdAddr);
+	calc_crc = CRC8Update(calc_crc, Length);
+	calc_crc = CRC8Update(calc_crc, (UINT8)(SlaveID | 0x01U));
 
 	TwiStart();
 
@@ -404,33 +412,15 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 
 	if (TwiSendData(SlaveID | 0x1, 0))
 	{ // Send Slave ID
-		result = 1;
-		for (i = 0; i < (UINT8)(Length + 1U); i++)
+		for (i = 0U; i < Length; ++i)
 		{
-			if (i == Length)
-			{
-				RdCrc = TwiGetData(0); // Get Data
-			}
-			else
-			{
-				TempBuf[4 + i] = TwiGetData(1); // Get Data
-			}
+			rd_data = TwiGetData(1U);
+			RdBuf[i] = rd_data;
+			calc_crc = CRC8Update(calc_crc, rd_data);
 		}
 
-		if (RdCrc != CRC8cal(TempBuf, (UINT8)(4U + Length)))
-		{
-			result = 0;
-		}
-		else
-		{
-			for (i = 0; i < Length; i++)
-			{
-				*RdBuf = TempBuf[4 + i];
-				RdBuf++;
-// 下面的问题在于，如果传进来的数值不是16位，是8位，又有问题。
-// 还是外部自己写一个大小端转换函数自己看情况是否处理
-			}
-		}
+		rd_crc = TwiGetData(0U);
+		result = (rd_crc == calc_crc) ? 1U : 0U;
 	}
 
 RdErr:
