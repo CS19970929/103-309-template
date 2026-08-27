@@ -27,6 +27,10 @@ typedef char EEPROM_ProtectLayoutCheck[
 typedef char EEPROM_OtherLayoutCheck[
 	(sizeof(struct OTHER_ELEMENT) == (BMS_CONFIG_OTHER_WORD_COUNT * sizeof(UINT16))) ? 1 : -1];
 
+#define BMS_SH367309_SERIES_MIN ((UINT16)5U)
+#define BMS_SH367309_SERIES_MAX ((UINT16)16U)
+#define BMS_CS_RES_SCALE ((UINT32)1000U)
+
 /* Single ROM instances shared by persistent storage and all host protocols. */
 const UINT16 g_u16ProtectParamMin[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_MIN_PRT;
 const UINT16 g_u16ProtectParamDefault[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_DEFAULT_PRT;
@@ -38,14 +42,57 @@ const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
 
 static UINT16 s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 
+static UINT8 EEPROM_OtherRuntimeValuesAreValid(const UINT16 *other)
+{
+	UINT16 series_num;
+	UINT16 cs_res;
+	UINT16 cs_res_num;
+	UINT32 current_ratio;
+
+	if (other == 0)
+	{
+		return 0U;
+	}
+
+	series_num = other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_SeriesNum)];
+	cs_res = other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res)];
+	cs_res_num = other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res_Num)];
+
+	if ((series_num < BMS_SH367309_SERIES_MIN) ||
+		(series_num > BMS_SH367309_SERIES_MAX) ||
+		(cs_res == 0U) ||
+		(cs_res_num == 0U))
+	{
+		return 0U;
+	}
+
+	current_ratio = ((UINT32)cs_res_num * BMS_CS_RES_SCALE) / cs_res;
+	return (current_ratio != 0U) ? 1U : 0U;
+}
+
 void BmsParam_ApplyRuntime(void)
 {
-	SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
-	if (OtherElement.u16Sys_CS_Res != 0U)
+	UINT32 current_ratio;
+
+	if ((OtherElement.u16Sys_SeriesNum < BMS_SH367309_SERIES_MIN) ||
+		(OtherElement.u16Sys_SeriesNum > BMS_SH367309_SERIES_MAX) ||
+		(OtherElement.u16Sys_CS_Res == 0U) ||
+		(OtherElement.u16Sys_CS_Res_Num == 0U))
 	{
-		g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000U) /
-			OtherElement.u16Sys_CS_Res;
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return;
 	}
+
+	current_ratio = ((UINT32)OtherElement.u16Sys_CS_Res_Num * BMS_CS_RES_SCALE) /
+		OtherElement.u16Sys_CS_Res;
+	if (current_ratio == 0U)
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return;
+	}
+
+	SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
+	g_u32CS_Res_AFE = current_ratio;
 }
 
 static void EEPROM_LoadDefaultAfe(void)
@@ -186,6 +233,10 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 									 g_u16OtherParamMin,
 									 g_u16OtherParamMax,
 									 BMS_CONFIG_OTHER_WORD_COUNT))
+	{
+		return 0U;
+	}
+	if (!EEPROM_OtherRuntimeValuesAreValid(config->other))
 	{
 		return 0U;
 	}
