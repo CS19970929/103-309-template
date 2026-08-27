@@ -42,6 +42,12 @@ const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
 
 static UINT16 s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 
+/* Config load/save runs only from startup or the serialized main-loop host
+ * service. Keep the 482-byte persistent image out of the 3KB call stack and
+ * make its RAM cost explicit in ZI instead. This object is intentionally not
+ * used from interrupt context and the API is non-reentrant by design. */
+static BMS_CONFIG s_stConfigScratch;
+
 static UINT8 EEPROM_OtherRuntimeValuesAreValid(const UINT16 *other)
 {
 	UINT16 series_num;
@@ -266,17 +272,17 @@ static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 
 UINT8 EEPROM_SaveConfigToFlash(void)
 {
-	BMS_CONFIG config;
+	BMS_CONFIG *config = &s_stConfigScratch;
 	UINT8 result;
 
-	EEPROM_BuildConfig(&config);
-	if (!EEPROM_ConfigIsValid(&config))
+	EEPROM_BuildConfig(config);
+	if (!EEPROM_ConfigIsValid(config))
 	{
 		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 		return 0U;
 	}
 
-	result = StorageFlash_SaveConfigData(&config);
+	result = StorageFlash_SaveConfigData(config);
 	if (result != 0U)
 	{
 		System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
@@ -290,11 +296,11 @@ UINT8 EEPROM_SaveConfigToFlash(void)
 
 static void EEPROM_LoadConfigFromFlash(void)
 {
-	BMS_CONFIG config;
+	BMS_CONFIG *config = &s_stConfigScratch;
 
-	if (StorageFlash_LoadConfigData(&config) && EEPROM_ConfigIsValid(&config))
+	if (StorageFlash_LoadConfigData(config) && EEPROM_ConfigIsValid(config))
 	{
-		EEPROM_ApplyConfig(&config);
+		EEPROM_ApplyConfig(config);
 		System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 		return;
 	}
