@@ -24,6 +24,7 @@ extern const UINT16 iSheldTemp_10K_NTC[141];
 #define OFF 0
 #define ON 1
 #define AFE_CONFIG_MTP_LENGTH ((UINT8)25U)
+#define AFE_NTC_TABLE_SIZE ((UINT16)141U)
 
 int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 {
@@ -40,7 +41,8 @@ void Refresh_Parameters(void)
 	int i = 0;
 	int temp = 0;
 	UINT8 TR = 0;
-	UINT16 AFE_TEMPERATURE[8] = {0};
+	UINT16 encoded_temp;
+	UINT16 ntc_index;
 
 	if (MTPRead(0x19, 1, &TR))
 	{
@@ -89,17 +91,18 @@ void Refresh_Parameters(void)
 	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
 
-	AFE_TEMPERATURE[0] = AFE_Parameters_RS485_Struction.u16TChgOTp.curValue / 10;
-	AFE_TEMPERATURE[1] = AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue / 10;
-	AFE_TEMPERATURE[2] = AFE_Parameters_RS485_Struction.u16TchgUTp.curValue / 10;
-	AFE_TEMPERATURE[3] = AFE_Parameters_RS485_Struction.u16TchgUTp_Rcv.curValue / 10;
-	AFE_TEMPERATURE[4] = AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue / 10;
-	AFE_TEMPERATURE[5] = AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue / 10;
-	AFE_TEMPERATURE[6] = AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue / 10;
-	AFE_TEMPERATURE[7] = AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue / 10;
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < 8; ++i)
 	{
-		temp = iSheldTemp_10K_NTC[AFE_TEMPERATURE[i]];
+		encoded_temp = AfeParam_AtConst((UINT16)(AFE_PARAM_TEMP_FIRST_INDEX + i))->curValue;
+		ntc_index = (UINT16)(encoded_temp / 10U);
+		/* Defense in depth: persistent/host validation already caps encoded
+		 * temperature at 1400, but never allow a corrupted runtime value to index
+		 * beyond the physical NTC table. */
+		if (ntc_index >= AFE_NTC_TABLE_SIZE)
+		{
+			ntc_index = (UINT16)(AFE_NTC_TABLE_SIZE - 1U);
+		}
+		temp = iSheldTemp_10K_NTC[ntc_index];
 		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) =
 			(UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
 	}
@@ -164,17 +167,16 @@ bool SH367309_VerifyAfeConfig(void)
 bool Write_Parameters(void)
 {
 	int i = 0;
-	UINT8 temp[AFE_CONFIG_MTP_LENGTH] = {0};
-	UINT8 verify[AFE_CONFIG_MTP_LENGTH] = {0};
+	UINT8 image[AFE_CONFIG_MTP_LENGTH] = {0};
 	UINT8 *expected = (UINT8 *)&AFE_ROM_PARAMETERS_Struction;
 
-	if (!AFE_ReadConfigImage(temp)) return false;
+	if (!AFE_ReadConfigImage(image)) return false;
 	for (i = 0; i < AFE_CONFIG_MTP_LENGTH; i++)
 	{
-		if ((temp[i] != expected[i]) && !MTPWriteROM((UINT8)i, 1, expected + i)) return false;
+		if ((image[i] != expected[i]) && !MTPWriteROM((UINT8)i, 1, expected + i)) return false;
 	}
-	if (!AFE_ReadConfigImage(verify)) return false;
-	if (!AFE_ConfigImageMatches(verify))
+	if (!AFE_ReadConfigImage(image)) return false;
+	if (!AFE_ConfigImageMatches(image))
 	{
 		System_ERROR_UserCallback(ERROR_AFE1);
 		return false;
@@ -234,6 +236,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 u16SciRegStartAddr;
 	UINT16 i;
 	UINT16 offset;
+	UINT16 value;
 	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
 	(void)u16Channel;
 
@@ -253,6 +256,19 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
 		return 1U;
+	}
+
+	/* Validate the complete transaction before mutating runtime parameters. */
+	for (i = 0U; i < u16WrRegNum; ++i)
+	{
+		value = (UINT16)(s->u16Buffer[8U + i * 2U] +
+			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
+		if (!AfeParam_ValueIsValid((UINT16)(offset + i), value))
+		{
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_DATA_INVALID;
+			return 1U;
+		}
 	}
 
 	AFE_CopyCurValues(snapshot);
