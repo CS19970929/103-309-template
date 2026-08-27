@@ -42,10 +42,9 @@ const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
 
 static UINT16 s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 
-/* Config load/save runs only from startup or the serialized main-loop host
- * service. Keep the 482-byte persistent image out of the 3KB call stack and
- * make its RAM cost explicit in ZI instead. This object is intentionally not
- * used from interrupt context and the API is non-reentrant by design. */
+/* Config load/save and host edits are serialized by the main loop. Keep the
+ * 482-byte persistent image out of the 3KB call stack and use it as the single
+ * candidate transaction buffer. It is never accessed from interrupt context. */
 static BMS_CONFIG s_stConfigScratch;
 
 static UINT8 EEPROM_OtherRuntimeValuesAreValid(const UINT16 *other)
@@ -249,6 +248,74 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 	return 1U;
 }
 
+void EEPROM_ConfigEditBegin(void)
+{
+	EEPROM_BuildConfig(&s_stConfigScratch);
+}
+
+UINT8 EEPROM_ConfigEditSetAfeWord(UINT16 index, UINT16 value)
+{
+	if (index >= BMS_CONFIG_AFE_WORD_COUNT)
+	{
+		return 0U;
+	}
+	s_stConfigScratch.afe[index] = value;
+	return 1U;
+}
+
+UINT8 EEPROM_ConfigEditSetProtectWord(UINT16 index, UINT16 value)
+{
+	if (index >= BMS_CONFIG_PROTECT_WORD_COUNT)
+	{
+		return 0U;
+	}
+	s_stConfigScratch.protect[index] = value;
+	return 1U;
+}
+
+UINT8 EEPROM_ConfigEditSetCalibPair(UINT16 index, UINT16 k_value, INT16 b_value)
+{
+	if (index >= BMS_CONFIG_CALIB_WORD_COUNT)
+	{
+		return 0U;
+	}
+	s_stConfigScratch.calibK[index] = k_value;
+	s_stConfigScratch.calibB[index] = b_value;
+	return 1U;
+}
+
+UINT8 EEPROM_ConfigEditSetOtherWord(UINT16 index, UINT16 value)
+{
+	if (index >= BMS_CONFIG_OTHER_WORD_COUNT)
+	{
+		return 0U;
+	}
+	s_stConfigScratch.other[index] = value;
+	return 1U;
+}
+
+UINT8 EEPROM_ConfigEditCommit(void)
+{
+	UINT8 result;
+
+	if (!EEPROM_ConfigIsValid(&s_stConfigScratch))
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+		return 0U;
+	}
+
+	result = StorageFlash_SaveConfigData(&s_stConfigScratch);
+	if (result != 0U)
+	{
+		System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
+	}
+	else
+	{
+		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	}
+	return result;
+}
+
 static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 {
 	UINT16 i;
@@ -272,26 +339,8 @@ static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 
 UINT8 EEPROM_SaveConfigToFlash(void)
 {
-	BMS_CONFIG *config = &s_stConfigScratch;
-	UINT8 result;
-
-	EEPROM_BuildConfig(config);
-	if (!EEPROM_ConfigIsValid(config))
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
-	}
-
-	result = StorageFlash_SaveConfigData(config);
-	if (result != 0U)
-	{
-		System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
-	}
-	else
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-	}
-	return result;
+	EEPROM_ConfigEditBegin();
+	return EEPROM_ConfigEditCommit();
 }
 
 static void EEPROM_LoadConfigFromFlash(void)
