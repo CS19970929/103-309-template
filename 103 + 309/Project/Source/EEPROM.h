@@ -19,4 +19,14 @@ void InitE2PROM(void);
 UINT8 EEPROM_SaveConfigToFlash(void);
 UINT8 UpgradeParamPolicy_ApplyOnce(void);
 
+/* Serialized configuration edit transaction. These APIs edit only the
+ * EEPROM-owned candidate image; runtime parameters stay unchanged until the
+ * caller applies its already-validated request after a successful commit. */
+void EEPROM_ConfigEditBegin(void);
+UINT8 EEPROM_ConfigEditSetAfeWord(UINT16 index, UINT16 value);
+UINT8 EEPROM_ConfigEditSetProtectWord(UINT16 index, UINT16 value);
+UINT8 EEPROM_ConfigEditSetCalibPair(UINT16 index, UINT16 k_value, INT16 b_value);
+UINT8 EEPROM_ConfigEditSetOtherWord(UINT16 index, UINT16 value);
+UINT8 EEPROM_ConfigEditCommit(void);
+
 #endif /* EEPROM_H */
