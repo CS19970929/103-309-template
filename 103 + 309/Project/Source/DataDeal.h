@@ -80,22 +80,22 @@ enum tagInfoForKBArray {
 
 
 struct OTHER_ELEMENT {
-    UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
-    UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
-    UINT16 u16Balance_Res1;			//����λ
-    UINT16 u16Balance_Res2;			//����λ
-    UINT16 u16Balance_Res3;			//����λ
-    UINT16 u16Balance_Res4;			//����λ
-    UINT16 u16Balance_Res5;			//����λ
+    UINT16 u16Balance_OpenVoltage;	//mV锟斤拷锟斤拷锟解开锟斤拷锟斤拷压
+    UINT16 u16Balance_OpenWindow;	//mV锟斤拷锟斤拷锟解开锟斤拷压锟斤拷
+    UINT16 u16Balance_CloseWindow;	//mV锟斤拷锟斤拷锟斤拷乇锟窖癸拷锟?
+    UINT16 u16Balance_Res1;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res2;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res3;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res4;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res5;			//锟斤拷锟斤拷位
 
 	UINT16 u16CS_Cur_CHGmax;		//A*10
 	UINT16 u16CS_Cur_DSGmax;		//A*10
 	UINT16 u16CBC_DelayT;			//us*10
 	UINT16 u16CBC_Cur_DSG;			//A*10
 	
-	UINT16 u16Soc_TableSelect;		//ԭ����u16Password_Once
-	UINT16 u16Password_Always;		//û��
+	UINT16 u16Soc_TableSelect;		//原锟斤拷锟斤拷u16Password_Once
+	UINT16 u16Password_Always;		//没锟斤拷
 	UINT16 u16CurLimit_Vdelta;		//mV
 	UINT16 u16CurLimit_Cur;			//A*10
 
@@ -105,18 +105,18 @@ struct OTHER_ELEMENT {
 	UINT16 u16Sleep_TimeVlow;		//min
 	UINT16 u16Sleep_VirCur_Chg;     //A *10
     UINT16 u16Sleep_VirCur_Dsg;    	//A *10
-	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min��RTC����ʱ��
-	UINT16 u16Sleep_TimeRTC;		// UNUSED: min������RTC����ʱ��
+	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min锟斤拷RTC锟斤拷锟斤拷时锟斤拷
+	UINT16 u16Sleep_TimeRTC;		// UNUSED: min锟斤拷锟斤拷锟斤拷RTC锟斤拷锟斤拷时锟斤拷
 
 	UINT16 u16Soc_Ah;               //10*Ah
-	UINT16 u16Soc_Cycle_times;		//ѭ������*1
-	UINT16 u16Soc_V_100;			//SOCΪ100�ĵ�ѹ��
-	UINT16 u16Soc_V_0;				//SOCΪ0�ĵ�ѹ��
+	UINT16 u16Soc_Cycle_times;		//循锟斤拷锟斤拷锟斤拷*1
+	UINT16 u16Soc_V_100;			//SOC为100锟侥碉拷压锟斤拷
+	UINT16 u16Soc_V_0;				//SOC为0锟侥碉拷压锟斤拷
 
 	UINT16 u16Sys_SeriesNum;		//N
-	UINT16 u16Sys_CS_Res;			//m��
+	UINT16 u16Sys_CS_Res;			//m锟斤拷
 	UINT16 u16Sys_CS_Res_Num;		//N
-	UINT16 u16Sys_PreChg_Time;		//s��Ԥ��ʱ��
+	UINT16 u16Sys_PreChg_Time;		//s锟斤拷预锟斤拷时锟斤拷
 };
 
 
@@ -133,12 +133,15 @@ struct OTHER_ELEMENT {
 
 #define BMS_CAPCITY     300
 
+/* SH367309 cell monitor supports 5..16 series cells. Keep the generic report
+ * buffer at 32 cells, but never allow the runtime AFE loop to exceed its
+ * physical 16-cell register image. */
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\
 	                           	 0,		0,		0,		0,\
 	                             1000,	1,		1000,	1,		0, 	0, 	0, 	0,\
 	                             1, 	1, 		1, 		1,\
-	                             3,		1,		1,		0}
+	                             5,		1,		1,		0}
 
 
 #ifdef TERNARYLI
@@ -163,7 +166,7 @@ struct OTHER_ELEMENT {
 	                             65000,65000,65000,65000,\
 	                             5000,65000,5000,65000,50000,50000,50000,50000,\
 	                             65000,50000,50000,50000,\
-	                             32,65000,10000,50000}
+	                             16,65000,10000,50000}
 
 
 
