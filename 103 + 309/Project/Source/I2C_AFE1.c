@@ -71,6 +71,11 @@ static const UINT8 s_u8Crc8NibbleTable[16] = {
 	0x00, 0x07, 0x0E, 0x09, 0x1C, 0x1B, 0x12, 0x15,
 	0x38, 0x3F, 0x36, 0x31, 0x24, 0x23, 0x2A, 0x2D};
 
+/* The software TWI bus is synchronous/non-reentrant by design. Keep received
+ * data here until CRC validation succeeds so a failed transaction cannot
+ * corrupt the caller's last valid register image. */
+static UINT8 s_u8TwiReadStaging[TWI_READ_MAX_LENGTH];
+
 static UINT8 CRC8Update(UINT8 crc8, UINT8 data)
 {
 	crc8 ^= data;
@@ -418,12 +423,19 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 		for (i = 0U; i < Length; ++i)
 		{
 			rd_data = TwiGetData(1U);
-			RdBuf[i] = rd_data;
+			s_u8TwiReadStaging[i] = rd_data;
 			calc_crc = CRC8Update(calc_crc, rd_data);
 		}
 
 		rd_crc = TwiGetData(0U);
-		result = (rd_crc == calc_crc) ? 1U : 0U;
+		if (rd_crc == calc_crc)
+		{
+			for (i = 0U; i < Length; ++i)
+			{
+				RdBuf[i] = s_u8TwiReadStaging[i];
+			}
+			result = 1U;
+		}
 	}
 
 RdErr:
