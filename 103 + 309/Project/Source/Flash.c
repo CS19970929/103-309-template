@@ -782,22 +782,23 @@ UINT8 StorageFlash_LoadConfigData(BMS_CONFIG *data)
 
 UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data)
 {
-	BMS_CONFIG save_data;
 	UINT8 result;
 
-	if (data == 0)
+	/* EEPROM_BuildConfig() owns the persistent image format. Reject a malformed
+	 * caller instead of copying the complete 482-byte image just to rewrite one
+	 * field; this removes a second BMS_CONFIG object from the nested save stack. */
+	if ((data == 0) ||
+		(data->u16FormatVersion != FLASH_STORAGE_CONFIG_FORMAT_VERSION))
 	{
 		return 0U;
 	}
 
-	save_data = *data;
-	save_data.u16FormatVersion = FLASH_STORAGE_CONFIG_FORMAT_VERSION;
 	StorageFlash_BeginWrite();
 	result = StorageFlash_SavePair(FLASH_ADDR_STORAGE_CONFIG_SLOT_A,
 									  FLASH_ADDR_STORAGE_CONFIG_SLOT_B,
 									  FLASH_STORAGE_MAGIC_CONFIG,
-									  (const UINT8 *)&save_data,
-									  (UINT16)sizeof(save_data));
+									  (const UINT8 *)data,
+									  (UINT16)sizeof(*data));
 	StorageFlash_EndWrite();
 	return result;
 }
