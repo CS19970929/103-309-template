@@ -162,7 +162,7 @@ typedef struct
   uint16_t    enter_rtc_delay;
   uint32_t    rtc_sleep_cnt;
   uint32_t    rtc_sec_cnt;
-  uint32_t    rtc_alm_cnt;
+  volatile uint32_t rtc_alm_cnt;
   uint32_t    rtc_irq_cnt;
 
   uint8_t     isdebugenable;
