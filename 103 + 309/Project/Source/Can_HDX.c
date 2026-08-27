@@ -413,15 +413,21 @@ static UINT8 feidao_can_app_status_from_host_error(UINT8 error)
 
 static void feidao_can_clear_app_cmd_queue(void)
 {
+	UINT32 primask = __get_PRIMASK();
+
 	__disable_irq();
 	s_app.cmd_head = 0U;
 	s_app.cmd_tail = 0U;
 	s_app.cmd_count = 0U;
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 }
 
 static UINT8 feidao_can_take_app_cmd(UINT8 data[8])
 {
+	UINT32 primask = __get_PRIMASK();
 	UINT8 has_cmd = 0U;
 
 	__disable_irq();
@@ -436,7 +442,10 @@ static UINT8 feidao_can_take_app_cmd(UINT8 data[8])
 		s_app.cmd_count--;
 		has_cmd = 1U;
 	}
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 
 	return has_cmd;
 }
