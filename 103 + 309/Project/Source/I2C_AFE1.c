@@ -4,6 +4,7 @@ AFEDATA Registers_AFE1;
 struct SH367309_Read SH367309_Read_AFE1;
 
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
+#define TWI_READ_MAX_LENGTH ((UINT8)42U)
 static const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	// AD(kΩ*100)		(Temp+40)*10
 	11611,
@@ -315,18 +316,20 @@ Output: result:1--OK
 UINT8 TwiWrite(UINT8 SlaveID, UINT16 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
 	UINT8 i;
-	UINT8 TempBuf[4];
-	UINT8 result = 0;
+	UINT8 result = 0U;
+	UINT8 write_crc;
 
 	if ((Length == 0U) || (WrBuf == 0))
 	{
 		return 0U;
 	}
 
-	TempBuf[0] = SlaveID;
-	TempBuf[1] = (UINT8)WrAddr;
-	TempBuf[2] = *WrBuf;
-	TempBuf[3] = CRC8cal(TempBuf, 3);
+	/* Preserve the legacy wire format: callers transact one MTP byte at a time,
+	 * and the CRC covers slave ID, register address and the first data byte. */
+	write_crc = 0U;
+	write_crc = CRC8Update(write_crc, SlaveID);
+	write_crc = CRC8Update(write_crc, (UINT8)WrAddr);
+	write_crc = CRC8Update(write_crc, *WrBuf);
 
 	TwiStart();
 
@@ -337,7 +340,7 @@ UINT8 TwiWrite(UINT8 SlaveID, UINT16 WrAddr, UINT8 Length, UINT8 *WrBuf)
 
 	if (TwiSendData(WrAddr, 0))
 	{ // Send Write Address(Low 8bit)
-		result = 1;
+		result = 1U;
 		for (i = 0; i < Length; i++)
 		{
 			if (TwiSendData(*WrBuf, 0))
@@ -346,13 +349,13 @@ UINT8 TwiWrite(UINT8 SlaveID, UINT16 WrAddr, UINT8 Length, UINT8 *WrBuf)
 			}
 			else
 			{
-				result = 0;
+				result = 0U;
 				break;
 			}
 		}
-		if (!TwiSendData(TempBuf[3], 0))
+		if (!TwiSendData(write_crc, 0))
 		{ // write CRC
-			result = 0;
+			result = 0U;
 		}
 	}
 WrErr:
@@ -380,7 +383,7 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 	UINT8 calc_crc;
 	UINT8 rd_data;
 
-	if ((Length == 0U) || (RdBuf == 0))
+	if ((Length == 0U) || (Length > TWI_READ_MAX_LENGTH) || (RdBuf == 0))
 	{
 		return 0U;
 	}
