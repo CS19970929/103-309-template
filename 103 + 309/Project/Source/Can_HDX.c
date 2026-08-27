@@ -2,7 +2,6 @@
 #include "CanFeidaoFrames.h"
 #include <string.h>
 
-
 #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
 #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
 
@@ -103,6 +102,7 @@ static void feidao_can_power_on(void);
 static void feidao_can_power_off(void);
 static void feidao_can_clear_tx_done(UINT8 mailbox);
 static void feidao_can_cancel_tx(UINT8 mailbox);
+static void feidao_can_mark_tx_idle(void);
 static void feidao_can_abort_tx(void);
 static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame, UINT8 source);
 static UINT8 feidao_can_dequeue_tx(FeidaoCanTxItem *item);
@@ -134,7 +134,6 @@ static UINT8 feidao_can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 
 	return (((UINT32)(now_tick - start_tick)) >= wait_ticks) ? 1U : 0U;
 }
 
-
 static void feidao_can_power_on(void)
 {
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, FEIDAO_CAN_POWER_ON_LEVEL);
@@ -153,17 +152,6 @@ static void feidao_can_clear_tx_done(UINT8 mailbox)
 	}
 }
 
-static void feidao_can_abort_tx(void)
-{
-	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
-	{
-		feidao_can_cancel_tx(s_tx.mailbox);
-		s_tx.mailbox = CAN_TxStatus_NoMailBox;
-		s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
-	}
-	feidao_can_clear_tx_queue();
-}
-
 static void feidao_can_cancel_tx(UINT8 mailbox)
 {
 	UINT16 wait_cnt = 0U;
@@ -179,6 +167,22 @@ static void feidao_can_cancel_tx(UINT8 mailbox)
 		wait_cnt++;
 	}
 	feidao_can_clear_tx_done(mailbox);
+}
+
+static void feidao_can_mark_tx_idle(void)
+{
+	s_tx.mailbox = CAN_TxStatus_NoMailBox;
+	s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
+}
+
+static void feidao_can_abort_tx(void)
+{
+	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
+	{
+		feidao_can_cancel_tx(s_tx.mailbox);
+		feidao_can_mark_tx_idle();
+	}
+	feidao_can_clear_tx_queue();
 }
 
 static UINT8 feidao_can_enqueue_tx(const CanTxMsg *frame, UINT8 source)
@@ -253,23 +257,15 @@ static void feidao_can_service_tx(UINT32 now_tick)
 	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
 	{
 		status = CAN_TransmitStatus(CAN1, s_tx.mailbox);
-		if (status == CAN_TxStatus_Ok)
+		if ((status == CAN_TxStatus_Ok) || (status == CAN_TxStatus_Failed))
 		{
 			feidao_can_clear_tx_done(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
-		}
-		else if (status == CAN_TxStatus_Failed)
-		{
-			feidao_can_clear_tx_done(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
+			feidao_can_mark_tx_idle();
 		}
 		else if (feidao_can_tick_elapsed(now_tick, s_tx.start_tick, FEIDAO_CAN_TX_TIMEOUT_TICKS))
 		{
 			feidao_can_cancel_tx(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
+			feidao_can_mark_tx_idle();
 		}
 	}
 
@@ -285,7 +281,7 @@ static void feidao_can_service_tx(UINT32 now_tick)
 		}
 		else
 		{
-			s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
+			feidao_can_mark_tx_idle();
 		}
 	}
 }
@@ -729,11 +725,11 @@ static void InitCan_CAN1(void)
 
 void InitCan(void)
 {
-	s_tx.mailbox = CAN_TxStatus_NoMailBox;
-	s_tx.mailbox_source = FEIDAO_CAN_TX_SOURCE_NONE;
+	feidao_can_mark_tx_idle();
 	s_runtime.schedule_init = 0U;
+	s_app.write_pending = 0U;
 	s_app.enter_iap_delay_ticks = 0U;
-	s_app.read_block_active = 0U;
+	feidao_can_stop_read_block_stream();
 	feidao_can_clear_tx_queue();
 	feidao_can_clear_app_cmd_queue();
 	InitCan_GPIO();
@@ -783,6 +779,10 @@ static UINT8 can_has_sleep_blocking_work(void)
 	{
 		return 1U;
 	}
+	if (s_app.enter_iap_delay_ticks != 0U)
+	{
+		return 1U;
+	}
 	if ((s_tx.mailbox == CAN_TxStatus_NoMailBox) &&
 		((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME))
 	{
@@ -806,10 +806,10 @@ UINT8 Can_IsBusy(void)
 	{
 		return 1U;
 	}
-	if(sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt)
+	if (sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt)
 	{
 		sys_time.last_ext_comm_cnt_can = sys_time.can_rcv_cnt;
-		return 1U;	
+		return 1U;
 	}
 	return 0U;
 }
@@ -819,6 +819,7 @@ void Can_PrepareSleep(void)
 	feidao_can_abort_tx();
 	feidao_can_clear_app_cmd_queue();
 	feidao_can_stop_read_block_stream();
+	s_app.write_pending = 0U;
 	feidao_can_power_off();
 }
 
