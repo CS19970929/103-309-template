@@ -18,6 +18,8 @@ UINT32 su32_Interval_S_Tcnt = 0;
 
 static LogRecordRuntime s_log_record;
 
+void LogEvent_Record(UINT8 temp, LogEventArray event, UINT32 *Time_S_Cnt);
+
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
 {
 #if PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC > 0

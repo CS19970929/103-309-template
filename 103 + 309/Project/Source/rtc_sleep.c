@@ -5,6 +5,7 @@
 #include "conf.h"
 #include "Sci_Upper.h"
 #include "RTC.h"
+#include "LowPowerSleep.h"
 
 #ifdef TERNARYLI
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2750U)
@@ -193,7 +194,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
     if (g_stLowPowerRtcStatus.mode != HICCUP_MODE)
     {
-        return;
+        return false;
     }
 
     if (RtcSleep_PortHasCurrentWake(&source) != 0U)
@@ -207,6 +208,8 @@ static bool rtc_sleep_has_wakeup_exception(void)
         g_irq_t = source;
         return true;
     }
+
+    return false;
 }
 
 static void rtc_sleep_prepare_rtc(void)

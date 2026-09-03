@@ -146,20 +146,8 @@ UINT16 Sci_CRC16RTU(UINT8 *pszBuf, UINT8 unLength)
 // 软件延时函数
 void Delay1ms(UINT8 delaycnt)
 {
-	UINT8 i, k;
-	UINT16 j;
-
-
-	for (i = 0; i < delaycnt; i++)
-	{
-		for (k = 0; k < 9; k++)
-		{ // 9倍便是72MHz
-			for (j = 0; j < 560; j++)
-			{
-				// system clock = 8MHz
-			}
-		}
-	}
+	/* 空循环没有可观察副作用，O2 会将其删除，改用 SysTick 硬件延时。 */
+	__delay_ms((UINT16)delaycnt);
 }
 
 // 1:有温度断线，0：正常

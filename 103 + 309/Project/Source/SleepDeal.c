@@ -3,7 +3,7 @@
 
 typedef struct SLEEP_RUNTIME_TAG
 {
-	UINT8 ext_comm;
+	volatile UINT8 ext_comm;
 	UINT8 boot_sleep;
 	UINT8 chg_wake;
 	UINT8 reserved;
@@ -13,8 +13,6 @@ static SLEEP_RUNTIME s_sleep;
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
-
-#define DI1_LONG_PRESS_WAKE_10MS ((UINT16)50) // PC13����3��պϲ���Ϊ��Ч
 
 static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
@@ -28,9 +26,6 @@ static UINT8 SleepDeal_IsKeyPressed(void)
 
 UINT8 SleepDeal_IsWakeupValid(void)
 {
-	UINT16 hold_cnt = 0;
-	UINT16 display_cnt = 0;
-
 	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
@@ -89,6 +84,8 @@ UINT8 SleepDeal_IsWakeupValid(void)
 		// }
 	}
 #endif
+
+	return 0U;
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)

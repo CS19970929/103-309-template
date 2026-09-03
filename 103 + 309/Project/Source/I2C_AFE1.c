@@ -93,18 +93,8 @@ Others:
 *******************************************************************************/
 void Delay4us(void)
 {
-	UINT8 i, j;
-
-#if 1
-	for (j = 0; j < 8; j++)
-	{ // 72MHz
-		for (i = 0; i < 13; i++)
-		{
-			// system clock = 24MHz
-		}
-	}
-#endif
-
+	/* 空循环延时会被 O2 删除，软件 I2C 必须使用真实的硬件定时。 */
+	__delay_us(4U);
 }
 
 #ifdef _TWI_COM

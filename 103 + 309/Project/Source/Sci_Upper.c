@@ -24,8 +24,8 @@ static UINT8 gu8_TxFinishFlag_SCI3 = 0;
 static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 
 struct stCell_Info g_stCellInfoReport;
-UINT8 u8FlashUpdateFlag = 0;
-UINT8 u8FlashUpdateE2PROM = 0;
+volatile UINT8 u8FlashUpdateFlag = 0;
+volatile UINT8 u8FlashUpdateE2PROM = 0;
 
 #define SCI_USART_ERROR_FLAGS ((UINT16)(USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
 
@@ -58,10 +58,10 @@ struct SCI_PORT_RUNTIME
 	volatile UINT16 *pu16ErrorCounter;
 	volatile UINT8 *pu8TxEnableFlag;
 	volatile UINT8 *pu8TxFinishFlag;
-	UINT8 *pu8TxBuffer;
-	UINT16 u16TxIndex;
-	UINT16 u16TxLength;
-	UINT8 u8FramePending;
+	UINT8 * volatile pu8TxBuffer;
+	volatile UINT16 u16TxIndex;
+	volatile UINT16 u16TxLength;
+	volatile UINT8 u8FramePending;
 };
 
 static void Sci_ModbusResetMessage(struct RS485MSG *s);
@@ -423,30 +423,6 @@ static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 	}
 }
 
-static UINT16 Sci_GetFactoryAgingDurationHours(void)
-{
-//	STORAGE_FLASH_FACTORY_AGING_DATA data;
-//	UINT32 default_hours;
-
-//	if ((StorageFlash_LoadFactoryAgingData(&data) != 0U) &&
-//		(data.u16DurationHours >= FACTORY_AGING_DURATION_HOURS_MIN) &&
-//		(data.u16DurationHours <= FACTORY_AGING_DURATION_HOURS_MAX))
-//	{
-//		return data.u16DurationHours;
-//	}
-
-//	default_hours = ((UINT32)PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS + 3599U) / 3600U;
-//	if (default_hours < FACTORY_AGING_DURATION_HOURS_MIN)
-//	{
-//		default_hours = FACTORY_AGING_DURATION_HOURS_MIN;
-//	}
-//	if (default_hours > FACTORY_AGING_DURATION_HOURS_MAX)
-//	{
-//		default_hours = FACTORY_AGING_DURATION_HOURS_MAX;
-//	}
-//	return (UINT16)default_hours;
-}
-
 static void Sci_PutFactoryAgingStatusWords(UINT8 buff[], UINT16 *index)
 {
 ////	UINT32 remaining_seconds;
@@ -463,7 +439,6 @@ static void Sci_PutFactoryAgingStatusWords(UINT8 buff[], UINT16 *index)
 ////	Sci_PutWordBE(buff, index, (UINT16)remaining_minutes);
 ////	Sci_PutWordBE(buff, index, (UINT16)(remaining_seconds >> 16));
 ////	Sci_PutWordBE(buff, index, (UINT16)remaining_seconds);
-////	Sci_PutWordBE(buff, index, Sci_GetFactoryAgingDurationHours());
 }
 
 static UINT8 Sci_RecordBackIndex(UINT8 point, UINT16 back)
@@ -1528,12 +1503,28 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 
 static void Sci_PortService(struct SCI_PORT_RUNTIME *pstPort)
 {
-	if ((pstPort == 0) || (pstPort->u8FramePending == 0U))
+	UINT8 u8FramePending;
+	UINT32 primask;
+
+	if (pstPort == 0)
 	{
 		return;
 	}
 
-	pstPort->u8FramePending = 0;
+	/* 原子地取走待处理标志，避免 ISR 在检查和清零之间提交的帧被丢弃。 */
+	primask = __get_PRIMASK();
+	__disable_irq();
+	u8FramePending = pstPort->u8FramePending;
+	pstPort->u8FramePending = 0U;
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
+
+	if (u8FramePending == 0U)
+	{
+		return;
+	}
 
 	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfProcessFrame != 0))
 	{
