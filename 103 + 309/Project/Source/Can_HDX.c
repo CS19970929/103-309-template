@@ -121,8 +121,10 @@ static void feidao_can_queue_periodic_mask(UINT16 mask);
 static void feidao_can_schedule_periodic(UINT32 now_tick);
 static UINT8 feidao_can_app_crc_ok(const UINT8 data[8]);
 static void feidao_can_app_fill_crc(UINT8 data[8]);
+#if 0
 static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action);
 static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1);
+#endif
 static void feidao_can_app_send_frame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1);
 static UINT8 feidao_can_app_status_from_host_error(UINT8 error);
 static void feidao_can_clear_app_cmd_queue(void);
@@ -384,6 +386,7 @@ static void feidao_can_app_fill_crc(UINT8 data[8])
 	data[7] = (UINT8)crc;
 }
 
+#if 0
 static UINT8 feidao_can_aging_guard_ok(const UINT8 data[8], UINT8 action)
 {
 	return ((data[3] == FEIDAO_CAN_APP_AGING_GUARD) &&
@@ -405,6 +408,7 @@ static void feidao_can_fill_aging_ack(UINT8 *value0, UINT8 *value1)
 	// 	*value1 = (hours > 0xFFU) ? 0xFFU : (UINT8)hours;
 	// }
 }
+#endif
 
 static void feidao_can_app_send_frame(UINT8 cmd, UINT8 status_or_seq, UINT8 value0, UINT8 value1)
 {

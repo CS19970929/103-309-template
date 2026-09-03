@@ -118,8 +118,6 @@ static SOC_SAVE_MARK s_saved_soc;
 static const UINT8 s_soc_default_startup_percent = 60U;
 /* Cumulative RTC rest seconds already applied to SOC in the current sleep session. */
 static UINT32 s_u32SocRtcRestAppliedSeconds;
-static UINT16 s_u16PrevVCellMin;
-
 #if PROJECT_CFG_SOC_REST_OCV_ENABLE
 static UINT32 soc_seconds_to_ticks(UINT32 seconds);
 #endif
@@ -129,8 +127,6 @@ static void soc_save_current_snapshot(void);
 
 static UINT8 soc_empty_tail_interpolate(int16_t offset_mv, UINT8 is_relax)
 {
-	int32_t target;
-
 	if (offset_mv <= -25) return 0U;
 	if (offset_mv >= 400) return is_relax ? 10U : 18U;
 
@@ -643,18 +639,15 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 
 	if ((mode == SOC_MODE_CHG) || !soc_voltage_valid())
 	{
-		s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
 		return 0U;
 	}
 	if (soc_sag_hold_blocks_calibration())
 	{
-		s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
 		return 0U;
 	}
 	if (g_stCellInfoReport.u16VCellMin >
 		soc_empty_threshold_mv(SOC_EMPTY_TAIL_START_OFFSET_MV))
 	{
-		s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
 		return 0U;
 	}
 
@@ -669,7 +662,6 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 	}
 	else if (mode == SOC_MODE_RELAX)
 	{
-		s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
 		return 0U;
 	}
 	else
@@ -695,7 +687,6 @@ static UINT8 soc_select_empty_tail_step(SOC_MODE mode, int32_t net_current_ma, S
 
 	step->target = target;
 	step->ticks = (UINT16)ticks;
-	s_u16PrevVCellMin = g_stCellInfoReport.u16VCellMin;
 	return 1U;
 }
 

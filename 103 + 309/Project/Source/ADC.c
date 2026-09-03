@@ -274,6 +274,7 @@ void ADC_StopForLowPower(void)
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, DISABLE);
 }
 
+#if 0
 static UINT16 ADC_LimitU16(UINT32 value)
 {
     if (value > 0xFFFFU)
@@ -283,11 +284,14 @@ static UINT16 ADC_LimitU16(UINT32 value)
 
     return (UINT16)value;
 }
+#endif
 
+#if 0
 static UINT8 ADC_IsTypeCZeroSample(UINT32 ad_value)
 {
     return (UINT8)(ad_value <= (UINT32)AD_CurZeroDeadband);
 }
+#endif
 
 static void ADC_ClearTypeCOutCurrent(void)
 {
@@ -295,6 +299,7 @@ static void ADC_ClearTypeCOutCurrent(void)
     s_adc.result[ADC_CURR] = 0;
 }
 
+#if 0
 static UINT16 ADC_TypeCAdToMilliVolt(UINT32 ad_value)
 {
     UINT32 delta_mV;
@@ -317,7 +322,9 @@ static UINT16 ADC_TypeCDeltaMvToMilliAmp(UINT16 delta_mV)
 
     return ADC_LimitU16(current_mA);
 }
+#endif
 
+#if 0
 static UINT16 ADC_VbcAdToMilliVolt(UINT32 ad_value)
 {
     UINT32 adc_mV;
@@ -341,6 +348,7 @@ static UINT32 ADC_VbcAdcMvToBatteryMv(UINT16 adc_mV)
 
     return ((UINT32)adc_mV * (divider_top + divider_bottom) + (divider_bottom / 2U)) / divider_bottom;
 }
+#endif
 
 UINT32 ADC_GetVbatMilliVolt(void)
 {
@@ -380,6 +388,7 @@ UINT16 ADC_GetRaw(UINT8 index)
     return s_adc.raw[index];
 }
 
+#if 0
 static void ADC_UpdateTypeCCurrent(void)
 {
     UINT16 typec_delta_mV = 0;
@@ -396,6 +405,7 @@ static void ADC_UpdateTypeCCurrent(void)
     typec_current_A10 = (UINT16)(((UINT32)s_adc.typec + 50U) / 100U);
     s_adc.result[ADC_CURR] = typec_current_A10;
 }
+#endif
 
 static void ADC_UpdateMosTemp(void)
 {
@@ -405,6 +415,7 @@ static void ADC_UpdateMosTemp(void)
     t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
     s_adc.result[ADC_TEMP_MOS1] = (UINT16)t_i32temp;
 }
+#if 0
 static void ADC_UpdateEnvTemp(void)
 {
     INT32 t_i32temp = 0;
@@ -423,6 +434,7 @@ static void ADC_UpdateVbc(void)
     s_adc.result[ADC_VBC] = (INT32)u32VbatCalc_mV;
     s_adc.vbat = u32VbatCalc_mV;
 }
+#endif
 
 // VDDA和VSSA为AD采样专门供电，VREF+和VREF-为AD采样的坂加电压，丝需覝冝酝置�(�以会坑现没相关�坥酝�)
 // 关于那个�，因为为12佝分辨率，所以最大输入为4096�

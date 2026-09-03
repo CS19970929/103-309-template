@@ -796,7 +796,9 @@ void new_todo_logi(void)
     // static uint8_t DRIVER_ELEMENT_MOS_DSG = s_system_status.bits.b1Status_MOS_DSG;
     uint8_t Driver_Element_MOS_CHG = 1;
     uint8_t DRIVER_ELEMENT_MOS_DSG = 1;
+#ifdef __SOC_5_PROTECT_
     static uint32_t soc_low_cnt = 0;
+#endif
     // if(g_stCellInfoReport.unMdlFault_Third.all != 0)
 
     // static bool first = true;

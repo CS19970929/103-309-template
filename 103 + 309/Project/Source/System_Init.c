@@ -299,8 +299,6 @@ void IWDG_Feed(void)
 
 void TIM3_IRQHandler(void)
 {
-	static uint8_t sleep_state = 0;
-
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
