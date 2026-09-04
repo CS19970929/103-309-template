@@ -350,11 +350,6 @@ static UINT32 ADC_VbcAdcMvToBatteryMv(UINT16 adc_mV)
 }
 #endif
 
-UINT32 ADC_GetVbatMilliVolt(void)
-{
-    return s_adc.vbat;
-}
-
 UINT16 ADC_GetTypeCOutCurrentMilliAmp(void)
 {
     if (sys_time.typec_curr_sim)

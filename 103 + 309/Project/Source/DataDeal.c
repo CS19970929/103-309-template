@@ -924,7 +924,7 @@ void App_AFEGet(void)
     DataLoad_CellVoltMaxMinFind();
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    // DataLoad_Current();
+    DataLoad_Current();
     // DataLoad_soc_test();
     // test_Autocurrent_cycle();
 

@@ -130,6 +130,22 @@ static uint8_t lp_select_deep_if_low_voltage(void)
     }
 #endif // _DI_SWITCH_SYS_ONOFF
 
+#ifdef _DI_SWITCH_longKEY_ONOFF
+    static UINT16 su16_AntiShake_Cnt2 = 0;
+
+    if (0 == MCUI_ENI_DI1)
+    {
+        if (++su16_AntiShake_Cnt2 >= 3)
+        {
+            su16_AntiShake_Cnt2 = 0;
+            LowPower_Request(NORMAL_MODE);
+        }
+    }
+    else
+        su16_AntiShake_Cnt2 = 0;
+
+#endif // _DI_SWITCH_longKEY_ONOFF
+
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
