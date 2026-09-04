@@ -3,7 +3,7 @@
 
 The underlying checker is retained intact in project_check_full.py. This shim
 adapts checks that intentionally changed in the current BMS firmware and adds
-hard guards for the STM32F103C8 persistent-storage contract.
+hard guards for the STM32F103C8 official-64KB persistent-storage contract.
 """
 
 from __future__ import print_function
@@ -24,6 +24,13 @@ EEPROM_C = checks.ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.c"
 EEPROM_H = checks.ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.h"
 SH367309_DATADEAL_C = checks.ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c"
 SH367309_DATADEAL_H = checks.ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.h"
+RELEASE_MAP = checks.ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
+SAFE_FLASH_SCRIPT = checks.ROOT / "tools" / "soc_flash_app_safe.ps1"
+
+APP_START = 0x08004800
+APP_STORAGE_BOUNDARY = 0x0800E000
+APP_MAX_SIZE = APP_STORAGE_BOUNDARY - APP_START
+OFFICIAL_FLASH_END = 0x08010000
 
 
 def check_required_board_features(reporter):
@@ -91,8 +98,6 @@ def check_low_power_cleanup(reporter):
     def read_text_without_legacy_aging_requirement(path):
         text = original_read_text(path)
         if path == checks.RTC_SLEEP_H:
-            # The legacy checker used LP_BLOCK_AGING as a positive requirement.
-            # Inject it only into that old check; verify the real source is clean below.
             return text + "\nLP_BLOCK_AGING\n"
         return text
 
@@ -109,6 +114,35 @@ def check_low_power_cleanup(reporter):
         reporter.ok("obsolete LP_BLOCK_AGING is removed")
 
 
+def _check_release_map_boundary(reporter):
+    if not RELEASE_MAP.exists():
+        reporter.fail("release map is missing; cannot verify APP/storage boundary")
+        return
+
+    text = checks.read_text(RELEASE_MAP)
+    match = re.search(
+        r"Load Region LR_IROM1 \(Base: 0x([0-9A-Fa-f]+), Size: 0x([0-9A-Fa-f]+), Max: 0x([0-9A-Fa-f]+)",
+        text,
+    )
+    if not match:
+        reporter.fail("release map does not expose LR_IROM1 base/size")
+        return
+
+    base = int(match.group(1), 16)
+    size = int(match.group(2), 16)
+    end = base + size
+    if base == APP_START and size <= APP_MAX_SIZE and end <= APP_STORAGE_BOUNDARY:
+        reporter.ok(
+            "O2 release image stays below storage boundary: 0x{0:08X}..0x{1:08X}".format(base, end)
+        )
+    else:
+        reporter.fail(
+            "release image overlaps persistent storage: base=0x{0:08X} size=0x{1:X} end=0x{2:08X}".format(
+                base, size, end
+            )
+        )
+
+
 def check_storage_contract(reporter):
     required = [
         checks.PROJECT,
@@ -121,6 +155,7 @@ def check_storage_contract(reporter):
         checks.LOGRECORD_C,
         checks.SOC_ENHANCE_C,
         checks.SCI_UPPER_C,
+        SAFE_FLASH_SCRIPT,
     ]
     if any(not path.exists() for path in required):
         missing = [str(path.relative_to(checks.ROOT)) for path in required if not path.exists()]
@@ -137,38 +172,49 @@ def check_storage_contract(reporter):
     log_c = checks.read_text(checks.LOGRECORD_C)
     soc_c = checks.read_text(checks.SOC_ENHANCE_C)
     sci_c = checks.read_text(checks.SCI_UPPER_C)
+    safe_flash = checks.read_text(SAFE_FLASH_SCRIPT)
 
     c8_contract = (
         project.count("<Device>STM32F103C8</Device>") >= 2
         and "STM32F10X_MD" in project
         and "#if !defined(STM32F10X_MD)" in flash_h
-        and "FLASH_STORAGE_PAGE_SIZE           ((UINT32)0x00000400)" in flash_h
+        and "FLASH_STORAGE_PAGE_SIZE           0x00000400U" in flash_h
+        and "FLASH_ADDR_DEVICE_END             0x08010000U" in flash_h
     )
     if c8_contract:
-        reporter.ok("BMS target is explicitly STM32F103C8/STM32F10X_MD with 1KB Flash pages")
+        reporter.ok("BMS target is STM32F103C8/STM32F10X_MD and limited to official 64KB Flash")
     else:
-        reporter.fail("BMS target must stay STM32F103C8/STM32F10X_MD with 1KB Flash pages")
+        reporter.fail("BMS target must stay STM32F103C8/STM32F10X_MD with 1KB pages and 64KB limit")
 
     partition_tokens = [
-        "FLASH_ADDR_STORAGE_START           ((UINT32)0x0801E000)",
-        "FLASH_ADDR_STORAGE_END             ((UINT32)0x08020000)",
-        "FLASH_ADDR_STORAGE_CONFIG_SLOT_A   ((UINT32)0x0801E000)",
-        "FLASH_ADDR_STORAGE_CONFIG_SLOT_B   ((UINT32)0x0801E400)",
-        "FLASH_ADDR_STORAGE_SOC_SLOT_A      ((UINT32)0x0801E800)",
-        "FLASH_ADDR_STORAGE_SOC_SLOT_B      ((UINT32)0x0801EC00)",
-        "FLASH_ADDR_STORAGE_LOG_SLOT_A      ((UINT32)0x0801F000)",
-        "FLASH_ADDR_STORAGE_LOG_DELTA_A     ((UINT32)0x0801F400)",
-        "FLASH_ADDR_STORAGE_LOG_SLOT_B      ((UINT32)0x0801F800)",
-        "FLASH_ADDR_STORAGE_LOG_DELTA_B     ((UINT32)0x0801FC00)",
+        "FLASH_ADDR_STORAGE_START           0x0800E000U",
+        "FLASH_ADDR_STORAGE_END             FLASH_ADDR_DEVICE_END",
+        "FLASH_ADDR_STORAGE_LOG_SLOT_C      0x0800E000U",
+        "FLASH_ADDR_STORAGE_LOG_SLOT_D      0x0800E400U",
+        "FLASH_ADDR_STORAGE_CONFIG_SLOT_A   0x0800E800U",
+        "FLASH_ADDR_STORAGE_CONFIG_SLOT_B   0x0800EC00U",
+        "FLASH_ADDR_STORAGE_SOC_SLOT_A      0x0800F000U",
+        "FLASH_ADDR_STORAGE_SOC_SLOT_B      0x0800F400U",
+        "FLASH_ADDR_STORAGE_LOG_SLOT_A      0x0800F800U",
+        "FLASH_ADDR_STORAGE_LOG_SLOT_B      0x0800FC00U",
+        "FLASH_STORAGE_LOG_PAGE_COUNT       4U",
+        "FLASH_STORAGE_LOG_RECORD_COUNT     500U",
         "FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)",
     ]
     if all(token in flash_h for token in partition_tokens):
-        reporter.ok("persistent layout is fixed to eight 1KB pages at 0x0801E000..0x0801FFFF")
+        reporter.ok("persistent layout uses the last eight official 1KB pages; log history is 500 records/4 pages")
     else:
-        reporter.fail("persistent layout/address/alignment contract drifted")
+        reporter.fail("persistent layout/address/log-capacity contract drifted")
+
+    rear_flash_tokens = ["0x0801E000", "0x0801E400", "0x0801E800", "0x0801EC00", "0x0801F000", "0x0801F400", "0x0801F800", "0x0801FC00", "0x08020000"]
+    rear_sources = flash_h + flash_c + log_c + soc_c
+    rear_hits = [token for token in rear_flash_tokens if token in rear_sources]
+    if rear_hits:
+        reporter.fail("rear/undocumented 64KB Flash address returned: {0}".format(",".join(rear_hits)))
+    else:
+        reporter.ok("persistent firmware contains no rear-64KB storage addresses")
 
     config_tokens = [
-        "typedef struct",
         "UINT16 u16FormatVersion;",
         "UINT16 u16AppliedPolicyVersion;",
         "UINT16 afe[BMS_CONFIG_AFE_WORD_COUNT];",
@@ -180,7 +226,7 @@ def check_storage_contract(reporter):
         "FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)",
     ]
     if all(token in flash_h for token in config_tokens):
-        reporter.ok("BMS_CONFIG owns AFE/protect/K-B calibration/Other as one versioned image")
+        reporter.ok("BMS_CONFIG remains one versioned atomic image")
     else:
         reporter.fail("BMS_CONFIG must contain every persistent parameter group")
 
@@ -196,10 +242,10 @@ def check_storage_contract(reporter):
     if split_hits:
         reporter.fail("category-specific Flash APIs returned: {0}".format(",".join(split_hits)))
     else:
-        reporter.ok("Flash layer exposes one CONFIG object instead of parameter-category storage")
+        reporter.ok("Flash layer exposes one CONFIG object instead of category-specific storage")
 
     if (
-        "StorageFlash_LoadConfigData(&config)" in eeprom_c
+        "StorageFlash_LoadConfigData(config)" in eeprom_c
         and "EEPROM_SaveConfigToFlash" in eeprom_c
         and "config->calibK" in eeprom_c
         and "config->calibB" in eeprom_c
@@ -214,7 +260,33 @@ def check_storage_contract(reporter):
     if raw_log_hits:
         reporter.fail("LogRecord bypasses Flash service: {0}".format(",".join(raw_log_hits)))
     else:
-        reporter.ok("Log Delta writes are routed through the Flash storage service")
+        reporter.ok("LogRecord writes are routed through verified Flash storage APIs")
+
+    log_reliability_tokens = [
+        "LOG_STORAGE_ENTRY",
+        "LogStorage_EntryCrc",
+        "LogStorage_ReadEntry(writeAddr, &verify)",
+        "LogStorage_SelectReusablePage",
+        "LogStorageRetainedCapacityCheck",
+        "LOG_STORAGE_PAGE_FLAG_RESET",
+    ]
+    if all(token in log_c for token in log_reliability_tokens):
+        reporter.ok("log journal keeps CRC/readback, torn-write recovery, reset commit and four-page wear leveling")
+    else:
+        reporter.fail("log reliability/wear-level contract drifted")
+
+    soc_reliability_tokens = [
+        "StorageFlash_LoadJournalPair",
+        "StorageFlash_SaveJournalPair",
+        "StorageFlash_ReadRecord",
+        "StorageFlash_CalcRecordCrc",
+        "FlashErasePageVerified",
+        "FlashProgramHalfWordVerified",
+    ]
+    if all(token in flash_c for token in soc_reliability_tokens):
+        reporter.ok("SOC remains dual-page append journal with sequence, CRC, verified erase/program and rollback")
+    else:
+        reporter.fail("SOC journal reliability contract drifted")
 
     if "VERSION_V2" in soc_c:
         reporter.fail("stale SOC V2 source alias must stay removed")
@@ -236,17 +308,30 @@ def check_storage_contract(reporter):
     else:
         reporter.ok("calibration write handler is implemented")
 
+    # The tracked Keil project currently provides a 40KB linker container. The
+    # actual product contract is stricter: post-build map and the only approved
+    # app-flash script both enforce the 38KB boundary before 0x0800E000.
     irom_pattern = re.compile(
         r"<OCR_RVCT4>.*?<Type>1</Type>.*?"
         r"<StartAddress>0x8004800</StartAddress>\s*"
-        r"<Size>0x19800</Size>.*?</OCR_RVCT4>",
+        r"<Size>0xa000</Size>.*?</OCR_RVCT4>",
         re.S,
     )
-    irom_matches = irom_pattern.findall(project)
-    if len(irom_matches) >= 2:
-        reporter.ok("Keil Release/Debug IROM is bounded to 0x08004800..0x0801DFFF")
+    if len(irom_pattern.findall(project)) >= 2:
+        reporter.ok("Keil Release/Debug APP start remains 0x08004800 in the official 64KB device")
     else:
-        reporter.fail("Keil Release/Debug IROM must be 0x08004800 + 0x19800")
+        reporter.fail("Keil Release/Debug APP start/target definition drifted")
+
+    if (
+        "$appStorageBoundary = [uint32]0x0800E000" in safe_flash
+        and "$appMaxSize = [uint32]0x00009800" in safe_flash
+        and "Refuse to flash oversized app" in safe_flash
+    ):
+        reporter.ok("safe app programmer refuses binaries that reach persistent storage")
+    else:
+        reporter.fail("safe app programmer must enforce 38KB/0x0800E000 boundary")
+
+    _check_release_map_boundary(reporter)
 
 
 checks._original_check_low_power_cleanup = checks.check_low_power_cleanup
