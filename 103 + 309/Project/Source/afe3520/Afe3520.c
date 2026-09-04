@@ -1,31 +1,29 @@
 #include "main.h"
 #include "afe3520/Afe3520.h"
+#include "afe3520/Afe3520Board.h"
 #include <string.h>
 
 /*
- * CV1.0A specifies CPOL=1/CPHA=1 and <=1MHz. The vendor V1.2 demo calculates
- * write CRC over CMD+ADDR+DATA, while one sentence in CV1.0A says an implicit
- * write-length byte is also covered. The wire diagram has no length byte.
- * We therefore start with vendor-demo behavior and, on NACK only, probe the
- * implicit-length CRC variant once; successful mode is remembered.
+ * CV1.0A specifies SPI mode 3 (CPOL=1/CPHA=1), <=1MHz and CRC8
+ * x^8+x^2+x+1, init=0. The vendor V1.2 demo calculates write CRC over
+ * CMD+ADDR+DATA, while one sentence in CV1.0A says a length byte participates.
+ * The write wire diagram has no length field. Start with the shipping demo
+ * behavior; only after a valid echoed frame followed by NACK, probe LEN=1 CRC.
  */
 #define AFE3520_WRITE_CRC_MODE_UNKNOWN   0U
 #define AFE3520_WRITE_CRC_MODE_DEMO      1U
 #define AFE3520_WRITE_CRC_MODE_LEN1      2U
 #define AFE3520_SPI_DUMMY                0x00U
 #define AFE3520_SPI_IDLE                 0xFFU
-#define AFE3520_READ_MAX                 ((uint8_t)(AFE3520_REG_LAST - AFE3520_REG_SCONF1 + 1U))
+#define AFE3520_SCONF3_OWD_TRG           0x01U
 
 static AFE3520_SNAPSHOT s_snapshot;
 static AFE3520_DIAG s_diag;
-static AFE3520_REG_CONFIG s_activeConfig;
 static uint8_t s_ready;
 static uint8_t s_configDirty = 1U;
 static uint8_t s_writeCrcMode = AFE3520_WRITE_CRC_MODE_UNKNOWN;
 static uint8_t s_shadowSconf2;
 static uint8_t s_shadowSconf3;
-static uint8_t s_shadowSconf5;
-static uint8_t s_shadowSconf6;
 
 extern const UINT16 iSheldTemp_10K_NTC[141];
 
@@ -44,10 +42,7 @@ static uint8_t Afe3520_Crc8(const uint8_t *data, uint16_t length)
 {
     uint16_t i;
     uint8_t crc = 0U;
-    for (i = 0U; i < length; ++i)
-    {
-        crc = Afe3520_Crc8Update(crc, data[i]);
-    }
+    for (i = 0U; i < length; ++i) crc = Afe3520_Crc8Update(crc, data[i]);
     return crc;
 }
 
@@ -58,12 +53,12 @@ static void Afe3520_SetError(AFE3520_RESULT result)
 
 static void Afe3520_CsLow(void)
 {
-    GPIO_ResetBits(GPIOA, GPIO_Pin_4);
+    GPIO_ResetBits(AFE3520_GPIO_SPI, AFE3520_PIN_CS);
 }
 
 static void Afe3520_CsHigh(void)
 {
-    GPIO_SetBits(GPIOA, GPIO_Pin_4);
+    GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_CS);
 }
 
 static uint8_t Afe3520_SpiByte(uint8_t tx)
@@ -112,18 +107,18 @@ void Afe3520_PortInit(void)
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO | RCC_APB2Periph_SPI1, ENABLE);
 
-    gpio.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_7;
+    gpio.GPIO_Pin = AFE3520_PIN_SCK | AFE3520_PIN_MOSI;
     gpio.GPIO_Speed = GPIO_Speed_50MHz;
     gpio.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_Init(GPIOA, &gpio);
+    GPIO_Init(AFE3520_GPIO_SPI, &gpio);
 
-    gpio.GPIO_Pin = GPIO_Pin_6;
+    gpio.GPIO_Pin = AFE3520_PIN_MISO;
     gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOA, &gpio);
+    GPIO_Init(AFE3520_GPIO_SPI, &gpio);
 
-    gpio.GPIO_Pin = GPIO_Pin_4;
+    gpio.GPIO_Pin = AFE3520_PIN_CS;
     gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(GPIOA, &gpio);
+    GPIO_Init(AFE3520_GPIO_SPI, &gpio);
     Afe3520_CsHigh();
 
     SPI_I2S_DeInit(SPI1);
@@ -133,7 +128,7 @@ void Afe3520_PortInit(void)
     spi.SPI_CPOL = SPI_CPOL_High;
     spi.SPI_CPHA = SPI_CPHA_2Edge;
     spi.SPI_NSS = SPI_NSS_Soft;
-    /* 72MHz / 128 = 562.5kHz, safely below the 1MHz AFE maximum. */
+    /* 72MHz/128=562.5kHz, below the SH3673520 1MHz ceiling. */
     spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_128;
     spi.SPI_FirstBit = SPI_FirstBit_MSB;
     spi.SPI_CRCPolynomial = 7U;
@@ -171,10 +166,7 @@ static AFE3520_RESULT Afe3520_WriteOnceMode(uint8_t reg, uint8_t value, uint8_t 
     ++s_diag.transferCount;
 
     if ((rx[0] != AFE3520_SPI_IDLE) || (rx[1] != AFE3520_CMD_WRITE) ||
-        (rx[2] != reg) || (rx[3] != value))
-    {
-        return AFE3520_ERR_SPI;
-    }
+        (rx[2] != reg) || (rx[3] != value)) return AFE3520_ERR_SPI;
     if (rx[4] != AFE3520_ACK_OK)
     {
         ++s_diag.ackErrorCount;
@@ -186,18 +178,12 @@ static AFE3520_RESULT Afe3520_WriteOnceMode(uint8_t reg, uint8_t value, uint8_t 
 AFE3520_RESULT Afe3520_Write(uint8_t reg, uint8_t value)
 {
     uint8_t retry;
-    AFE3520_RESULT result;
     uint8_t preferred = s_writeCrcMode;
+    uint8_t alternate;
+    AFE3520_RESULT result = AFE3520_ERR_ARG;
 
-    if ((reg < AFE3520_REG_SCONF1) || (reg > AFE3520_REG_FLAG2))
-    {
-        return AFE3520_ERR_ARG;
-    }
-
-    if (preferred == AFE3520_WRITE_CRC_MODE_UNKNOWN)
-    {
-        preferred = AFE3520_WRITE_CRC_MODE_DEMO;
-    }
+    if ((reg < AFE3520_REG_SCONF1) || (reg > AFE3520_REG_FLAG2)) return AFE3520_ERR_ARG;
+    if (preferred == AFE3520_WRITE_CRC_MODE_UNKNOWN) preferred = AFE3520_WRITE_CRC_MODE_DEMO;
 
     for (retry = 0U; retry < AFE3520_SPI_RETRY_MAX; ++retry)
     {
@@ -209,11 +195,10 @@ AFE3520_RESULT Afe3520_Write(uint8_t reg, uint8_t value)
             return AFE3520_OK;
         }
 
-        /* Only an ACK failure can plausibly be the CV1.0A wording ambiguity. */
         if ((result == AFE3520_ERR_ACK) && (s_writeCrcMode == AFE3520_WRITE_CRC_MODE_UNKNOWN))
         {
-            uint8_t alternate = (preferred == AFE3520_WRITE_CRC_MODE_DEMO) ?
-                                AFE3520_WRITE_CRC_MODE_LEN1 : AFE3520_WRITE_CRC_MODE_DEMO;
+            alternate = (preferred == AFE3520_WRITE_CRC_MODE_DEMO) ?
+                        AFE3520_WRITE_CRC_MODE_LEN1 : AFE3520_WRITE_CRC_MODE_DEMO;
             result = Afe3520_WriteOnceMode(reg, value, alternate);
             if (result == AFE3520_OK)
             {
@@ -240,7 +225,6 @@ static AFE3520_RESULT Afe3520_ReadOnce(uint8_t reg, uint8_t *data, uint8_t len)
     rx1 = Afe3520_SpiByte(reg);
     rx2 = Afe3520_SpiByte(len);
     rx3 = Afe3520_SpiByte(AFE3520_SPI_DUMMY);
-
     crc = Afe3520_Crc8Update(crc, rx0);
     crc = Afe3520_Crc8Update(crc, rx1);
     crc = Afe3520_Crc8Update(crc, rx2);
@@ -255,10 +239,7 @@ static AFE3520_RESULT Afe3520_ReadOnce(uint8_t reg, uint8_t *data, uint8_t len)
     ++s_diag.transferCount;
 
     if ((rx0 != AFE3520_SPI_IDLE) || (rx1 != AFE3520_CMD_READ) ||
-        (rx2 != reg) || (rx3 != len))
-    {
-        return AFE3520_ERR_SPI;
-    }
+        (rx2 != reg) || (rx3 != len)) return AFE3520_ERR_SPI;
     if (crc != rxCrc)
     {
         ++s_diag.crcErrorCount;
@@ -270,8 +251,8 @@ static AFE3520_RESULT Afe3520_ReadOnce(uint8_t reg, uint8_t *data, uint8_t len)
 AFE3520_RESULT Afe3520_Read(uint8_t reg, uint8_t *data, uint8_t len)
 {
     uint8_t retry;
-    AFE3520_RESULT result = AFE3520_ERR_ARG;
     uint16_t last;
+    AFE3520_RESULT result = AFE3520_ERR_ARG;
 
     if ((data == 0) || (len == 0U)) return AFE3520_ERR_ARG;
     last = (uint16_t)reg + (uint16_t)len - 1U;
@@ -309,7 +290,6 @@ AFE3520_RESULT Afe3520_SoftReset(void)
         rx[4] = Afe3520_SpiByte(0U);
         Afe3520_EndFrame();
         ++s_diag.transferCount;
-
         if ((rx[0] == 0xFFU) && (rx[1] == tx[0]) && (rx[2] == tx[1]) &&
             (rx[3] == tx[2]) && (rx[4] == AFE3520_ACK_OK))
         {
@@ -342,7 +322,6 @@ static int16_t Afe3520_TempFromCode(uint16_t code)
     resistance = ((uint32_t)code * 1000UL) / (32768UL - code);
     if (resistance >= iSheldTemp_10K_NTC[0]) return -400;
     if (resistance <= iSheldTemp_10K_NTC[140]) return 1000;
-
     while ((hi - lo) > 1U)
     {
         mid = (uint16_t)((lo + hi) / 2U);
@@ -366,9 +345,8 @@ static int32_t Afe3520_CurrentMaFromCadc(int16_t raw)
     }
     else magnitude = (uint32_t)value;
 
-    /* CADC input range is +/-100mV. Equivalent shunt is CS_Res/CS_Res_Num mOhm.
-     * I[mA] = raw * 200000 / 65536 / R[mOhm]
-     *       = raw * 3125 / 1024 * CS_Res_Num / CS_Res. */
+    /* Nominal SH3673520 CADC range +/-100mV. Board current calibration remains
+     * in the existing K/B layer; this value is primarily native diagnostics. */
     ma = (magnitude * 3125UL * (uint32_t)CS_Res_Num +
           (512UL * (uint32_t)CS_Res)) /
          (1024UL * (uint32_t)CS_Res);
@@ -382,11 +360,11 @@ static void Afe3520_ParseSnapshot(const uint8_t *raw)
     uint16_t code;
     int16_t cadc;
 
-    s_snapshot.flag1 = raw[AFE3520_REG_FLAG1 - AFE3520_REG_FLAG1];
-    s_snapshot.flag2 = raw[AFE3520_REG_FLAG2 - AFE3520_REG_FLAG1];
-    s_snapshot.flag3 = raw[AFE3520_REG_FLAG3 - AFE3520_REG_FLAG1];
-    s_snapshot.bstatus1 = raw[AFE3520_REG_BSTATUS1 - AFE3520_REG_FLAG1];
-    s_snapshot.bstatus2 = raw[AFE3520_REG_BSTATUS2 - AFE3520_REG_FLAG1];
+    s_snapshot.flag1 = raw[0U];
+    s_snapshot.flag2 = raw[1U];
+    s_snapshot.flag3 = raw[2U];
+    s_snapshot.bstatus1 = raw[3U];
+    s_snapshot.bstatus2 = raw[4U];
 
     for (i = 0U; i < AFE3520_TEMP_MAX; ++i)
     {
@@ -406,7 +384,6 @@ static void Afe3520_ParseSnapshot(const uint8_t *raw)
     {
         offset = (uint16_t)(AFE3520_REG_CELL1H - AFE3520_REG_FLAG1 + (uint16_t)i * 2U);
         code = Afe3520_Be16(&raw[offset]);
-        /* 13-bit VADC, nominal 5V full scale. */
         s_snapshot.cellMv[i] = (uint16_t)(((uint32_t)code * 5000UL + 4096UL) / 8192UL);
     }
 
@@ -440,12 +417,7 @@ AFE3520_RESULT Afe3520_Service(void)
         return result;
     }
     Afe3520_ParseSnapshot(raw);
-
-    /* Any AFE reset restores RAM defaults. Detect it and force re-application. */
-    if ((s_snapshot.flag1 & AFE3520_FLAG1_RST1) != 0U)
-    {
-        s_configDirty = 1U;
-    }
+    if ((s_snapshot.flag1 & AFE3520_FLAG1_RST1) != 0U) s_configDirty = 1U;
     s_ready = 1U;
     return AFE3520_OK;
 }
@@ -464,17 +436,46 @@ AFE3520_RESULT Afe3520_VerifyConfig(const AFE3520_REG_CONFIG *cfg)
     if (cfg == 0) return AFE3520_ERR_ARG;
     if (Afe3520_Read(AFE3520_REG_SCONF1, actual, (uint8_t)sizeof(actual)) != AFE3520_OK)
         return AFE3520_ERR_SPI;
-
     expected = Afe3520_ConfigBytes(cfg);
     for (i = 0U; i < (uint8_t)sizeof(actual); ++i)
     {
-        /* FLAG registers are not part of this image; cfg covers 0x40..0x54 only. */
         if (actual[i] != expected[i])
         {
             ++s_diag.verifyErrorCount;
             Afe3520_SetError(AFE3520_ERR_VERIFY);
             return AFE3520_ERR_VERIFY;
         }
+    }
+    return AFE3520_OK;
+}
+
+AFE3520_RESULT Afe3520_ClearFlags(uint8_t flag1Mask, uint8_t flag2Mask)
+{
+    AFE3520_RESULT result;
+    uint8_t flags[2];
+    uint8_t next;
+
+    /* Never clear from a cached snapshot: a new fault could arrive between the
+     * 200ms sample and recovery. Read both flag bytes immediately before the
+     * LTCLR write and preserve every bit not explicitly requested for clear. */
+    result = Afe3520_Read(AFE3520_REG_FLAG1, flags, 2U);
+    if (result != AFE3520_OK) return result;
+
+    s_shadowSconf2 |= AFE3520_SCONF2_LTCLR;
+    result = Afe3520_Write(AFE3520_REG_SCONF2, s_shadowSconf2);
+    if (result != AFE3520_OK) return result;
+
+    if (flag1Mask != 0U)
+    {
+        next = (uint8_t)(flags[0] & (uint8_t)~flag1Mask);
+        result = Afe3520_Write(AFE3520_REG_FLAG1, next);
+        if (result != AFE3520_OK) return result;
+    }
+    if (flag2Mask != 0U)
+    {
+        next = (uint8_t)(flags[1] & (uint8_t)~flag2Mask);
+        result = Afe3520_Write(AFE3520_REG_FLAG2, next);
+        if (result != AFE3520_OK) return result;
     }
     return AFE3520_OK;
 }
@@ -487,9 +488,6 @@ AFE3520_RESULT Afe3520_ApplyConfig(const AFE3520_REG_CONFIG *cfg)
 
     if (cfg == 0) return AFE3520_ERR_ARG;
     bytes = Afe3520_ConfigBytes(cfg);
-
-    /* Program 0x40..0x54 as one logical transaction. MOS commands in SCONF2 are
-     * kept OFF in the stored configuration and are applied only by the arbiter. */
     for (i = 0U; i < (uint8_t)sizeof(*cfg); ++i)
     {
         result = Afe3520_Write((uint8_t)(AFE3520_REG_SCONF1 + i), bytes[i]);
@@ -498,37 +496,22 @@ AFE3520_RESULT Afe3520_ApplyConfig(const AFE3520_REG_CONFIG *cfg)
     result = Afe3520_VerifyConfig(cfg);
     if (result != AFE3520_OK) return result;
 
-    s_activeConfig = *cfg;
     s_shadowSconf2 = cfg->sconf2;
-    s_shadowSconf3 = cfg->sconf3;
-    s_shadowSconf5 = cfg->sconf5;
-    s_shadowSconf6 = cfg->sconf6;
+    s_shadowSconf3 = (uint8_t)(cfg->sconf3 & (uint8_t)~AFE3520_SCONF3_OWD_TRG);
     s_configDirty = 0U;
     ++s_diag.configRepairCount;
+
+    /* RST1 remains latched after reset while all RAM config has already been
+     * restored and read-back verified. Clear only RST1 now, otherwise Service
+     * would mark the image dirty on every 200ms cycle and rewrite Flash-facing
+     * configuration indefinitely. */
+    result = Afe3520_ClearFlags(AFE3520_FLAG1_RST1, 0U);
+    if (result != AFE3520_OK)
+    {
+        s_configDirty = 1U;
+        return result;
+    }
     return AFE3520_OK;
-}
-
-AFE3520_RESULT Afe3520_ClearFlags(uint8_t flag1Mask, uint8_t flag2Mask)
-{
-    AFE3520_RESULT result;
-    uint8_t flag;
-
-    s_shadowSconf2 |= AFE3520_SCONF2_LTCLR;
-    result = Afe3520_Write(AFE3520_REG_SCONF2, s_shadowSconf2);
-    if (result != AFE3520_OK) return result;
-
-    if (flag1Mask != 0U)
-    {
-        flag = (uint8_t)(s_snapshot.flag1 & (uint8_t)~flag1Mask);
-        result = Afe3520_Write(AFE3520_REG_FLAG1, flag);
-        if (result != AFE3520_OK) return result;
-    }
-    if (flag2Mask != 0U)
-    {
-        flag = (uint8_t)(s_snapshot.flag2 & (uint8_t)~flag2Mask);
-        result = Afe3520_Write(AFE3520_REG_FLAG2, flag);
-    }
-    return result;
 }
 
 AFE3520_RESULT Afe3520_SetMos(uint8_t chargeOn, uint8_t dischargeOn, uint8_t preDischargeOn)
@@ -567,20 +550,26 @@ AFE3520_RESULT Afe3520_EnterPowerDown(void)
 {
     AFE3520_RESULT result;
     uint8_t pd = (uint8_t)(s_shadowSconf2 | AFE3520_SCONF2_PD_CTL);
-    /* CV1.0A: these two writes must be consecutive AFE instructions. */
+
+    /* CV1.0A requires these to be consecutive AFE instructions. No read or
+     * verify is permitted between PD_CTL and SCONF1=0x33. */
     result = Afe3520_Write(AFE3520_REG_SCONF2, pd);
     if (result != AFE3520_OK) return result;
     result = Afe3520_Write(AFE3520_REG_SCONF1, AFE3520_MODE_POWERDOWN);
-    if (result == AFE3520_OK) s_ready = 0U;
+    if (result == AFE3520_OK)
+    {
+        s_ready = 0U;
+        s_configDirty = 1U;
+    }
     return result;
 }
 
 AFE3520_RESULT Afe3520_TriggerOpenWire(void)
 {
-    uint8_t value = (uint8_t)(s_shadowSconf3 | 0x03U);
-    AFE3520_RESULT result = Afe3520_Write(AFE3520_REG_SCONF3, value);
-    if (result == AFE3520_OK) s_shadowSconf3 = value;
-    return result;
+    uint8_t trigger = (uint8_t)(s_shadowSconf3 | AFE3520_SCONF3_OWD_TRG);
+    /* OWD_TRG is a command bit, not persistent configuration. Never copy it
+     * back into the shadow image; subsequent config verification expects 0. */
+    return Afe3520_Write(AFE3520_REG_SCONF3, trigger);
 }
 
 AFE3520_RESULT Afe3520_Init(void)
@@ -588,6 +577,7 @@ AFE3520_RESULT Afe3520_Init(void)
     uint8_t probe;
     memset(&s_snapshot, 0, sizeof(s_snapshot));
     memset(&s_diag, 0, sizeof(s_diag));
+    s_writeCrcMode = AFE3520_WRITE_CRC_MODE_UNKNOWN;
     Afe3520_PortInit();
     Delay1ms(5U);
     if (Afe3520_Read(AFE3520_REG_BSTATUS2, &probe, 1U) != AFE3520_OK)
@@ -622,12 +612,17 @@ uint8_t Afe3520_PickDelayCode(const uint16_t *table, uint8_t count, uint16_t tar
     uint8_t i;
     uint8_t best = 0U;
     uint32_t bestDiff;
+    uint32_t diff;
     if ((table == 0) || (count == 0U)) return 0U;
     bestDiff = (targetMs > table[0]) ? (uint32_t)(targetMs - table[0]) : (uint32_t)(table[0] - targetMs);
     for (i = 1U; i < count; ++i)
     {
-        uint32_t diff = (targetMs > table[i]) ? (uint32_t)(targetMs - table[i]) : (uint32_t)(table[i] - targetMs);
-        if (diff < bestDiff) { best = i; bestDiff = diff; }
+        diff = (targetMs > table[i]) ? (uint32_t)(targetMs - table[i]) : (uint32_t)(table[i] - targetMs);
+        if (diff < bestDiff)
+        {
+            best = i;
+            bestDiff = diff;
+        }
     }
     return best;
 }
