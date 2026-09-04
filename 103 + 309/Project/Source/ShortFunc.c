@@ -1,4 +1,5 @@
 #include "main.h"
+#include "afe3520/BmsProtection3520.h"
 
 #if (AFE_TYPE == bq76xx_afe)
 static const UINT16 s_bq_afe_scv[10] = {22, 33, 44, 67, 89, 111, 133, 155, 178, 200}; // 短路保护电压，单位mv
@@ -20,11 +21,7 @@ UINT8 Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 
 
 #elif (AFE_TYPE == sh36xx)
-extern const UINT16 g_u16ShAfeScvTable[16]; // 短路保护电压，单位mv
-extern const UINT16 g_u16ShAfeSctTable[16]; // 短路延时,单位us。
-
-
-extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
+/* SH3673520 protection quantization is owned by BmsProtection3520.c. */
 #else
 #error
 #endif
@@ -33,9 +30,9 @@ extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
 // 在开机，Sci(设置和复位两个函数)，三次调用便可
 void InitShortCur(void)
 {
+#if (AFE_TYPE == bq76xx_afe)
     UINT16 temp = 0;
 
-#if (AFE_TYPE == bq76xx_afe)
     OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
     OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
 
@@ -72,24 +69,9 @@ void InitShortCur(void)
     I2CWriteRegisterByteWithCRC(DEVICE_ADDR_AFE1, PROTECT2, Registers_AFE1.Protect2.Protect2Byte);
 
 #elif (AFE_TYPE == sh36xx)
-    extern AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction;
-    // todo
-    OtherElement.u16CS_Cur_CHGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-    OtherElement.u16CS_Cur_DSGmax = 2000 * OtherElement.u16Sys_CS_Res_Num / OtherElement.u16Sys_CS_Res;
-
-    /* 短路延时 */
-    temp = Choose_Right_Value(OtherElement.u16CBC_DelayT / 10, g_u16ShAfeSctTable);
-    AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = temp;
-    OtherElement.u16CBC_DelayT = g_u16ShAfeSctTable[temp] * 10; // 修改最终设置的值，接近的那个
-
-    /* 短路电压 */
-    temp = OtherElement.u16CBC_Cur_DSG / 10; // A
-    temp = temp * 1000 / g_u32CS_Res_AFE;      // 当前对应多少mv
-    AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
-    // 修改最终设置的值，接近的那个
-
-    OtherElement.u16CBC_Cur_DSG = g_u16ShAfeScvTable[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV] * g_u32CS_Res_AFE / 1000; // 防止数据溢出。
-    OtherElement.u16CBC_Cur_DSG *= 10;                                                                // 防止数据溢出。
+    /* Keep this historical entry point compatible while routing all SH3673520
+     * protection settings through the validated unified configuration path. */
+    (void)Bms3520_ApplyAndVerifyAfeConfig();
 
 #else
 

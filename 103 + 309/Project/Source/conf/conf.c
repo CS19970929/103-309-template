@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 10,
+    .time_enter_rtc = 60,
     .power_on = false,
 };
 
@@ -90,7 +90,6 @@ static void Conf_InitRunSharedIo(void)
     Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
 
     Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
 
     Conf_InitMainPowerRails(Bit_SET,
                             Bit_RESET,
@@ -152,7 +151,6 @@ void InitIO_rtc(void)
     Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
 
     Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
 
     Conf_InitMainPowerRails(Bit_SET,
                             Bit_RESET,
@@ -378,3 +376,4 @@ void InitRunAfterStopWakeup(void)
 
     initAFE1_IIC();
 }
+

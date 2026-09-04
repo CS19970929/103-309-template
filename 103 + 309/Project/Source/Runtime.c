@@ -33,7 +33,7 @@ void Runtime_Boot(void)
 
 	EnableLowPowerDebug();
 	LogRecord_RequestStartup();
-	Init_IWDG();
+	// Init_IWDG();
 }
 
 void Runtime_RunOnce(void)
@@ -44,7 +44,7 @@ void Runtime_RunOnce(void)
 	App_CommonUpper();
 	App_AnlogCal();
 
-	rtc_sleep();
+	// rtc_sleep();
 
 	App_Can();
 	App_FlashUpdate();

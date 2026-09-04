@@ -7,3 +7,10 @@
  * replaced by the SH3673520 coordinated-protection module below.
  */
 #include "afe3520/BmsProtection3520.c"
+
+/* Legacy low-power code calls this name after sampling AFE status. The new
+ * protection arbiter owns the actual MOS decision and is the single receiver. */
+void Fault_ChangeToMCU(void)
+{
+    Bms3520_ProtectionService();
+}
