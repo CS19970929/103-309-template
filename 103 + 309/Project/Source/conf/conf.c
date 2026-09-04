@@ -67,38 +67,32 @@ static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger
 
 static void Conf_InitMainPowerRails(BitAction m_stb,
                                     BitAction ad_en,
-                                    BitAction cmnt_en,
-                                    BitAction sw_en,
-                                    BitAction ble_en,
-                                    BitAction boost_en)
+                                    BitAction cmnt_en)
 {
     GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, m_stb);
     GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, ad_en);
-    GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, ble_en);
     GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, cmnt_en);
-    GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, sw_en);
 
     Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
     Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_BLE_EN, PIN_BLE_EN, GPIO_Mode_Out_PP);
     Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_SW_EN, PIN_SW_EN, GPIO_Mode_Out_PP);
 }
 
 static void Conf_InitRunSharedIo(void)
 {
-    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitMainPowerRails(Bit_SET,
-                            Bit_RESET,
-                            Bit_RESET,
-                            Bit_SET,
-                            Bit_RESET,
-                            Bit_SET);
-
+    /* Keep the reference-board IO defaults used by the working AFE build. */
     Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_CS_SPI, PIN_CS_SPI, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_CHG_DET, PIN_CHG_DET, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_DSG_DET, PIN_DSG_DET, GPIO_Mode_IN_FLOATING);
+    Conf_InitGpioMode(GPIO_AFE1_CTL, PIN_AFE1_CTL, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_INT_WK_MCU, PIN_INT_WK_MCU, GPIO_Mode_IN_FLOATING);
+
+    Conf_InitMainPowerRails(Bit_SET, Bit_SET, Bit_SET);
+    GPIO_ResetBits(GPIO_AFE1_CTL, PIN_AFE1_CTL);
+    GPIO_SetBits(GPIO_CS_SPI, PIN_CS_SPI);
 }
 
 static void Conf_PrepareStopEntry(void)
@@ -152,12 +146,7 @@ void InitIO_rtc(void)
 
     Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
 
-    Conf_InitMainPowerRails(Bit_SET,
-                            Bit_RESET,
-                            Bit_RESET,
-                            Bit_SET,
-                            Bit_RESET,
-                            Bit_SET);
+    Conf_InitMainPowerRails(Bit_SET, Bit_SET, Bit_SET);
 }
 
 void InitIO(void)

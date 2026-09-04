@@ -79,8 +79,40 @@ static void Afe3520_CsHigh(void)
     GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_CS);
 }
 
+static void Afe3520_SpiDelayUs(uint32_t us)
+{
+    volatile uint32_t n = us * 12U;
+    while (n-- != 0U) __NOP();
+}
+
 static uint8_t Afe3520_SpiByte(uint8_t tx)
 {
+#if AFE3520_USE_SOFTWARE_SPI
+    uint8_t i;
+    uint8_t rx = 0U;
+
+    for (i = 0U; i < 8U; ++i)
+    {
+        if ((tx & 0x80U) != 0U)
+            GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_MOSI);
+        else
+            GPIO_ResetBits(AFE3520_GPIO_SPI, AFE3520_PIN_MOSI);
+        tx <<= 1;
+
+        /* SH3673520 Mode 3: idle high, change on falling edge, sample on rising edge. */
+        GPIO_ResetBits(AFE3520_GPIO_SPI, AFE3520_PIN_SCK);
+        Afe3520_SpiDelayUs(1U);
+        GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_SCK);
+        Afe3520_SpiDelayUs(1U);
+
+        rx <<= 1;
+        if (GPIO_ReadInputDataBit(AFE3520_GPIO_SPI, AFE3520_PIN_MISO) != Bit_RESET)
+            rx |= 1U;
+    }
+
+    GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_SCK);
+    return rx;
+#else
     uint32_t guard = 100000UL;
     while ((SPI1->SR & SPI_SR_TXE) == 0U)
     {
@@ -90,7 +122,13 @@ static uint8_t Afe3520_SpiByte(uint8_t tx)
             return 0xFFU;
         }
     }
-    *(__IO uint8_t *)&SPI1->DR = tx;
+    /*
+     * STM32F1 SPI DR must be accessed through the standard peripheral
+     * library's 16-bit data access.  The reference implementation uses
+     * SPI_I2S_SendData/ReceiveData; byte-pointer access can leave RXNE
+     * unset on this peripheral even though TXE is set.
+     */
+    SPI_I2S_SendData(SPI1, tx);
     guard = 100000UL;
     while ((SPI1->SR & SPI_SR_RXNE) == 0U)
     {
@@ -100,34 +138,45 @@ static uint8_t Afe3520_SpiByte(uint8_t tx)
             return 0xFFU;
         }
     }
-    return *(__IO uint8_t *)&SPI1->DR;
+    return (uint8_t)SPI_I2S_ReceiveData(SPI1);
+#endif
 }
 
 static void Afe3520_BeginFrame(void)
 {
     Afe3520_CsHigh();
-    __NOP(); __NOP(); __NOP();
+    Afe3520_SpiDelayUs(1U);
     Afe3520_CsLow();
-    __NOP(); __NOP(); __NOP();
+    Afe3520_SpiDelayUs(1U);
 }
 
 static void Afe3520_EndFrame(void)
 {
-    __NOP(); __NOP(); __NOP();
+    Afe3520_SpiDelayUs(1U);
     Afe3520_CsHigh();
-    __NOP(); __NOP(); __NOP();
+    Afe3520_SpiDelayUs(1U);
 }
 
 void Afe3520_PortInit(void)
 {
     GPIO_InitTypeDef gpio;
+#if !AFE3520_USE_SOFTWARE_SPI
     SPI_InitTypeDef spi;
+#endif
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO | RCC_APB2Periph_SPI1, ENABLE);
 
     gpio.GPIO_Pin = AFE3520_PIN_SCK | AFE3520_PIN_MOSI;
+#if AFE3520_USE_SOFTWARE_SPI
+    gpio.GPIO_Speed = GPIO_Speed_2MHz;
+#else
     gpio.GPIO_Speed = GPIO_Speed_50MHz;
+#endif
+#if AFE3520_USE_SOFTWARE_SPI
+    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
+#else
     gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+#endif
     GPIO_Init(AFE3520_GPIO_SPI, &gpio);
 
     gpio.GPIO_Pin = AFE3520_PIN_MISO;
@@ -139,6 +188,7 @@ void Afe3520_PortInit(void)
     GPIO_Init(AFE3520_GPIO_SPI, &gpio);
     Afe3520_CsHigh();
 
+#if !AFE3520_USE_SOFTWARE_SPI
     SPI_I2S_DeInit(SPI1);
     spi.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
     spi.SPI_Mode = SPI_Mode_Master;
@@ -152,6 +202,10 @@ void Afe3520_PortInit(void)
     spi.SPI_CRCPolynomial = 7U;
     SPI_Init(SPI1, &spi);
     SPI_Cmd(SPI1, ENABLE);
+#else
+    GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_SCK);
+    GPIO_SetBits(AFE3520_GPIO_SPI, AFE3520_PIN_MOSI);
+#endif
 }
 
 static uint8_t Afe3520_WriteCrc(uint8_t reg, uint8_t value, uint8_t mode)

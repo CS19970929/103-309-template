@@ -27,13 +27,6 @@ static void Afe3520_InitBoardControlPins(void)
     GPIO_InitTypeDef gpio;
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 
-    /* SHIP is active-low. Normal boot must release it before SPI access. */
-    gpio.GPIO_Pin = AFE3520_PIN_SHIP;
-    gpio.GPIO_Speed = GPIO_Speed_2MHz;
-    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(AFE3520_GPIO_SHIP, &gpio);
-    GPIO_SetBits(AFE3520_GPIO_SHIP, AFE3520_PIN_SHIP);
-
     /* CTLC is the independent board-level MOS safety gate. Keep it low until
      * the AFE RAM image has been written and read-back verified. */
     gpio.GPIO_Pin = AFE3520_PIN_CTLC;

@@ -5,14 +5,15 @@
 
 /*
  * Initial board mapping follows codex/afe-spi-refactor-debug SH3673520 wiring,
- * with the PA6/PA7 ALARM/MODE collision removed. PA4..PA7 belong exclusively
- * to SPI1 once the AFE is initialized.
+ * with the PA6/PA7 ALARM/MODE collision removed. The reference project uses
+ * GPIO bit-banged SPI on PA5..PA7, which is the validated path for this board.
  */
 #define AFE3520_GPIO_SPI                 GPIOA
 #define AFE3520_PIN_CS                   GPIO_Pin_4
 #define AFE3520_PIN_SCK                  GPIO_Pin_5
 #define AFE3520_PIN_MISO                 GPIO_Pin_6
 #define AFE3520_PIN_MOSI                 GPIO_Pin_7
+#define AFE3520_USE_SOFTWARE_SPI        1U
 
 #define AFE3520_GPIO_SHIP                GPIOA
 #define AFE3520_PIN_SHIP                 GPIO_Pin_10
