@@ -1,346 +1,214 @@
 #include "main.h"
 #include "SH367309_DataDeal.h"
-#include "BmsParamSchema.h"
 #include "AfeParamAccess.h"
-#include "string.h"
+#include "afe3520/Afe3520.h"
+#include "afe3520/BmsProtection3520.h"
+#include <string.h>
 
+/* Historical compile-slot name; this is now the SH3673520 parameter service. */
 int AFE_PARAM_WRITE_Flag = 1;
-
-static const UINT16 s_sh_afe_ocd1v_occv[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};
-static const UINT16 s_sh_afe_ocd2v[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500};
-const UINT16 g_u16ShAfeScvTable[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};
-static const UINT16 s_sh_afe_ovt_uvt[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000};
-const UINT16 g_u16ShAfeSctTable[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};
-static const UINT16 s_sh_afe_ocd1t[16] = {50, 100, 200, 400, 600, 800, 1000, 2000, 4000, 6000, 8000, 10000, 15000, 20000, 30000, 40000};
-static const UINT16 s_sh_afe_occt_ocd2t[16] = {10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 1000, 2000, 4000, 8000, 10000, 20000};
-
 AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
-extern UINT8 ucMTPBuffer[26];
-extern const UINT16 iSheldTemp_10K_NTC[141];
-
-#define DSG_CHG_OCP_DELAY_TIME (30 * 100)
-#define OFF 0
-#define ON 1
-#define AFE_CONFIG_MTP_LENGTH ((UINT8)25U)
-#define AFE_NTC_TABLE_SIZE ((UINT16)141U)
-
-int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
+static uint8_t Bms3520_ParamImageValid(const AFE_Parameters_RS485_Typedef *p)
 {
-	int i = 0;
-	for (i = 0; i < 15; i++)
-	{
-		if (cur_Value <= AFE_list[i]) break;
-	}
-	return i;
+    uint32_t dsg1SenseMv;
+    uint32_t dsg2SenseMv;
+    uint32_t chg2SenseUv;
+    uint16_t i;
+
+    if (p == 0) return 0U;
+    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    {
+        const AFE_Value_Typedef *v = (const AFE_Value_Typedef *)((const UINT8 *)p +
+                                    (uint32_t)i * sizeof(AFE_Value_Typedef));
+        if ((v->curValue < v->minValue) || (v->curValue > v->maxValue)) return 0U;
+    }
+
+    if (p->u16VcellOvp_Rcv.curValue >= p->u16VcellOvp.curValue) return 0U;
+    if (p->u16VcellUvp_Rcv.curValue <= p->u16VcellUvp.curValue) return 0U;
+    if (p->u16IchgOcp_First.curValue > p->u16IchgOcp_Second.curValue) return 0U;
+    if (p->u16IdsgOcp_First.curValue > p->u16IdsgOcp_Second.curValue) return 0U;
+    if (p->u16CBC_Cur_DSG.curValue < p->u16IdsgOcp_Second.curValue) return 0U;
+
+    if (p->u16TChgOTp_Rcv.curValue >= p->u16TChgOTp.curValue) return 0U;
+    if (p->u16TchgUTp_Rcv.curValue <= p->u16TchgUTp.curValue) return 0U;
+    if (p->u16TdischgOTp_Rcv.curValue >= p->u16TdischgOTp.curValue) return 0U;
+    if (p->u16TdischgUTp_Rcv.curValue <= p->u16TdischgUTp.curValue) return 0U;
+
+    if ((p->u16VcellOvp.curValue > 5115U) || (p->u16VcellUvp.curValue > 5115U)) return 0U;
+    if (p->u16CBC_DelayT.curValue > 576U) return 0U;
+
+    dsg1SenseMv = ((uint32_t)p->u16IdsgOcp_First.curValue * CS_Res +
+                   (5UL * CS_Res_Num)) / (10UL * CS_Res_Num);
+    dsg2SenseMv = ((uint32_t)p->u16IdsgOcp_Second.curValue * CS_Res +
+                   (5UL * CS_Res_Num)) / (10UL * CS_Res_Num);
+    chg2SenseUv = ((uint32_t)p->u16IchgOcp_Second.curValue * 100UL * CS_Res +
+                   (CS_Res_Num / 2U)) / CS_Res_Num;
+
+    /* SH3673520 hardware ranges: OCD1<=80mV, OCD2<=160mV, OCC<=44mV approx. */
+    if (dsg1SenseMv > 80UL) return 0U;
+    if (dsg2SenseMv > 160UL) return 0U;
+    if (chg2SenseUv > 44000UL) return 0U;
+    return 1U;
 }
 
-void Refresh_Parameters(void)
+static void Bms3520_CopyRuntimeValues(AFE_Parameters_RS485_Typedef *dst,
+                                      const AFE_Parameters_RS485_Typedef *src)
 {
-	int i = 0;
-	int temp = 0;
-	UINT8 TR = 0;
-	UINT16 encoded_temp;
-	UINT16 ntc_index;
-
-	if (MTPRead(0x19, 1, &TR))
-	{
-		SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
-		ucMTPBuffer[25] = TR & 0x7F;
-		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
-	}
-
-	BmsParam_ApplyRuntime();
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
-	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
-#ifdef TERNARYLI
-	temp = (4180 + 10) / 20;
-	if (temp > 0xFF) temp = 0xFF;
-#elif (defined(LIFEPO))
-	temp = (3500 + 10) / 20;
-	if (temp > 0xFF) temp = 0xFF;
-#endif
-	AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = (UINT8)temp;
-
-	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVH = ((AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) >> 8) & 0x3;
-	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVL = (AFE_Parameters_RS485_Struction.u16VcellOvp.curValue / 5) & 0x00FF;
-	temp = AFE_Parameters_RS485_Struction.u16VcellOvp_Filter.curValue * 10;
-	AFE_ROM_PARAMETERS_Struction.m02H_03H.OVT = Choose_Right_Value(temp, s_sh_afe_ovt_uvt);
-	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRH = ((AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) >> 8) & 0x3;
-	AFE_ROM_PARAMETERS_Struction.m04H_05H.OVRL = (AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue / 5) & 0x00FF;
-
-	temp = AFE_Parameters_RS485_Struction.u16VcellUvp_Filter.curValue * 10;
-	AFE_ROM_PARAMETERS_Struction.m04H_05H.UVT = Choose_Right_Value(temp, s_sh_afe_ovt_uvt);
-	AFE_ROM_PARAMETERS_Struction.m06H_07H.UV = (AFE_Parameters_RS485_Struction.u16VcellUvp.curValue / 20) & 0x00FF;
-	AFE_ROM_PARAMETERS_Struction.m06H_07H.UVR = (AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue / 20) & 0x00FF;
-
-	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
-	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
-	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, s_sh_afe_ocd1t);
-
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCV = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT = Choose_Right_Value(temp, s_sh_afe_occt_ocd2t);
-
-	temp = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCT = Choose_Right_Value(temp, g_u16ShAfeSctTable);
-	temp = AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue * 1000 / g_u32CS_Res_AFE;
-	AFE_ROM_PARAMETERS_Struction.m0EH_0FH.SCV = Choose_Right_Value(temp, g_u16ShAfeScvTable);
-
-	for (i = 0; i < 8; ++i)
-	{
-		encoded_temp = AfeParam_AtConst((UINT16)(AFE_PARAM_TEMP_FIRST_INDEX + i))->curValue;
-		ntc_index = (UINT16)(encoded_temp / 10U);
-		/* Defense in depth: persistent/host validation already caps encoded
-		 * temperature at 1400, but never allow a corrupted runtime value to index
-		 * beyond the physical NTC table. */
-		if (ntc_index >= AFE_NTC_TABLE_SIZE)
-		{
-			ntc_index = (UINT16)(AFE_NTC_TABLE_SIZE - 1U);
-		}
-		temp = iSheldTemp_10K_NTC[ntc_index];
-		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) =
-			(UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
-	}
+    UINT16 i;
+    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    {
+        AFE_Value_Typedef *d = (AFE_Value_Typedef *)((UINT8 *)dst + (uint32_t)i * sizeof(AFE_Value_Typedef));
+        const AFE_Value_Typedef *s = (const AFE_Value_Typedef *)((const UINT8 *)src + (uint32_t)i * sizeof(AFE_Value_Typedef));
+        d->curValue = s->curValue;
+    }
 }
 
-static UINT8 AFE_ReadConfigImage(UINT8 image[AFE_CONFIG_MTP_LENGTH])
+void App_SH367309_Supplement(void)
 {
-	return MTPRead(0x00, AFE_CONFIG_MTP_LENGTH, image) ? 1U : 0U;
-}
-
-static UINT8 AFE_ConfigImageMatches(const UINT8 actual[AFE_CONFIG_MTP_LENGTH])
-{
-	const UINT8 *expected = (const UINT8 *)&AFE_ROM_PARAMETERS_Struction;
-	UINT8 i;
-	for (i = 0U; i < AFE_CONFIG_MTP_LENGTH; ++i)
-	{
-		if (actual[i] != expected[i]) return 0U;
-	}
-	return 1U;
-}
-
-bool SH367309_VerifyAfeConfig(void)
-{
-	UINT8 actual[AFE_CONFIG_MTP_LENGTH] = {0};
-	Refresh_Parameters();
-	if (!AFE_ReadConfigImage(actual))
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
-		return false;
-	}
-	if (!AFE_ConfigImageMatches(actual))
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
-		return false;
-	}
-	return true;
-}
-
-bool Write_Parameters(void)
-{
-	int i = 0;
-	UINT8 image[AFE_CONFIG_MTP_LENGTH] = {0};
-	UINT8 *expected = (UINT8 *)&AFE_ROM_PARAMETERS_Struction;
-
-	if (!AFE_ReadConfigImage(image)) return false;
-	for (i = 0; i < AFE_CONFIG_MTP_LENGTH; i++)
-	{
-		if ((image[i] != expected[i]) && !MTPWriteROM((UINT8)i, 1, expected + i)) return false;
-	}
-	if (!AFE_ReadConfigImage(image)) return false;
-	if (!AFE_ConfigImageMatches(image))
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
-		return false;
-	}
-	return true;
-}
-
-bool SH367309_UpdataAfeConfig(void)
-{
-	bool ret = false;
-	UINT8 actual[AFE_CONFIG_MTP_LENGTH] = {0};
-	UINT8 is_match;
-
-	if (!AFE_PARAM_WRITE_Flag) return false;
-	AFE_PARAM_WRITE_Flag = 0;
-	Refresh_Parameters();
-	if (!AFE_ReadConfigImage(actual))
-	{
-		AFE_PARAM_WRITE_Flag = 1;
-		System_ERROR_UserCallback(ERROR_AFE1);
-		return false;
-	}
-	is_match = AFE_ConfigImageMatches(actual);
-	if (!is_match)
-	{
-		MCUO_AFE_VPRO = 1;
-		Delay1ms(20);
-		Feed_IWatchDog;
-		ret = Write_Parameters();
-		Feed_IWatchDog;
-		MCUO_AFE_VPRO = 0;
-		Delay1ms(1);
-		if (!ret)
-		{
-			AFE_PARAM_WRITE_Flag = 1;
-			return false;
-		}
-
-		AFE_Reset();
-		Delay1ms(5);
-		AFE_IsReady();
-		MosStartup_ApplyInitialState();
-		if (!SH367309_VerifyAfeConfig())
-		{
-			AFE_PARAM_WRITE_Flag = 1;
-			return false;
-		}
-		return true;
-	}
-
-	return true;
+    /* Hardware configuration is derived from this parameter image and repaired
+     * by Bms3520_ProtectionService after any AFE reset/config mismatch. */
+    if (AFE_PARAM_WRITE_Flag)
+    {
+        if (Bms3520_ApplyAndVerifyAfeConfig()) AFE_PARAM_WRITE_Flag = 0;
+    }
 }
 
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 {
-	UINT16 u16WrRegNum;
-	UINT16 u16SciRegStartAddr;
-	UINT16 i;
-	UINT16 offset;
-	UINT16 value;
-	(void)u16Channel;
+    AFE_Parameters_RS485_Typedef candidate;
+    UINT16 start;
+    UINT16 count;
+    UINT16 offset;
+    UINT16 i;
+    UINT16 value;
+    (void)u16Channel;
 
-	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if ((u16SciRegStartAddr < RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) ||
-		(u16SciRegStartAddr > RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
-	{
-		return 0U;
-	}
+    if (s == 0) return 0U;
+    start = (UINT16)(((UINT16)s->u16Buffer[2] << 8) | s->u16Buffer[3]);
+    if ((start < RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) ||
+        (start > RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END)) return 0U;
 
-	offset = (UINT16)(u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START);
-	if ((u16WrRegNum == 0U) ||
-		(u16WrRegNum > (UINT16)(AFE_PARAMETES_TOTAL_LENGTH - offset)) ||
-		(s->u16Buffer[6] != (UINT8)(u16WrRegNum << 1)))
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-		return 1U;
-	}
+    count = (UINT16)(((UINT16)s->u16Buffer[4] << 8) | s->u16Buffer[5]);
+    offset = (UINT16)(start - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START);
+    if ((count == 0U) || (offset >= AFE_PARAMETES_TOTAL_LENGTH) ||
+        (count > (UINT16)(AFE_PARAMETES_TOTAL_LENGTH - offset)) ||
+        (s->u16Buffer[6] != (UINT8)(count << 1)))
+    {
+        s->AckType = RS485_ACK_NEG;
+        s->ErrorType = RS485_ERROR_DATA_INVALID;
+        return 1U;
+    }
 
-	/* Validate the complete host transaction before touching persistent or
-	 * runtime state. */
-	for (i = 0U; i < u16WrRegNum; ++i)
-	{
-		value = (UINT16)(s->u16Buffer[8U + i * 2U] +
-			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
-		if (!AfeParam_ValueIsValid((UINT16)(offset + i), value))
-		{
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_DATA_INVALID;
-			return 1U;
-		}
-	}
+    candidate = AFE_Parameters_RS485_Struction;
+    for (i = 0U; i < count; ++i)
+    {
+        value = (UINT16)(((UINT16)s->u16Buffer[7U + i * 2U] << 8) |
+                         s->u16Buffer[8U + i * 2U]);
+        if (!AfeParam_ValueIsValid((UINT16)(offset + i), value))
+        {
+            s->AckType = RS485_ACK_NEG;
+            s->ErrorType = RS485_ERROR_DATA_INVALID;
+            return 1U;
+        }
+        ((AFE_Value_Typedef *)((UINT8 *)&candidate +
+          (uint32_t)(offset + i) * sizeof(AFE_Value_Typedef)))->curValue = value;
+    }
 
-	EEPROM_ConfigEditBegin();
-	for (i = 0U; i < u16WrRegNum; ++i)
-	{
-		value = (UINT16)(s->u16Buffer[8U + i * 2U] +
-			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
-		if (!EEPROM_ConfigEditSetAfeWord((UINT16)(offset + i), value))
-		{
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_CMD_INVALID;
-			return 1U;
-		}
-	}
-	Feed_IWatchDog;
-	if (!EEPROM_ConfigEditCommit())
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-		return 1U;
-	}
+    if (!Bms3520_ParamImageValid(&candidate))
+    {
+        s->AckType = RS485_ACK_NEG;
+        s->ErrorType = RS485_ERROR_DATA_INVALID;
+        return 1U;
+    }
 
-	/* Flash owns the new configuration now; applying these simple assignments
-	 * cannot fail and therefore needs no rollback snapshot. */
-	for (i = 0U; i < u16WrRegNum; ++i)
-	{
-		AfeParam_At((UINT16)(offset + i))->curValue =
-			(UINT16)(s->u16Buffer[8U + i * 2U] +
-			((UINT16)s->u16Buffer[7U + i * 2U] << 8));
-	}
-	Feed_IWatchDog;
-	AFE_PARAM_WRITE_Flag = 1;
-	return 1U;
-}
+    /* Persist first. Runtime/AFE are changed only after the dual-slot CONFIG commit succeeds. */
+    EEPROM_ConfigEditBegin();
+    for (i = 0U; i < count; ++i)
+    {
+        value = ((AFE_Value_Typedef *)((UINT8 *)&candidate +
+                 (uint32_t)(offset + i) * sizeof(AFE_Value_Typedef)))->curValue;
+        if (!EEPROM_ConfigEditSetAfeWord((UINT16)(offset + i), value))
+        {
+            s->AckType = RS485_ACK_NEG;
+            s->ErrorType = RS485_ERROR_CMD_INVALID;
+            return 1U;
+        }
+    }
+    if (!EEPROM_ConfigEditCommit())
+    {
+        s->AckType = RS485_ACK_NEG;
+        s->ErrorType = RS485_ERROR_CMD_INVALID;
+        return 1U;
+    }
 
-void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
-{
-	UINT16 u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (0x0001 == u16SciRegData)
-	{
-		if (!EEPROM_ResetData_AFE_ParametersToDefault())
-		{
-			s->AckType = RS485_ACK_NEG;
-			s->ErrorType = RS485_ERROR_CMD_INVALID;
-		}
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
+    Bms3520_CopyRuntimeValues(&AFE_Parameters_RS485_Struction, &candidate);
+    AFE_PARAM_WRITE_Flag = 1;
+    Afe3520_MarkConfigDirty();
+    return 1U;
 }
 
 void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
-	UINT16 u16SciTemp;
-	UINT16 i = 0;
-	UINT16 j;
-	(void)s;
-	for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
-	{
-		u16SciTemp = AfeParam_AtConst(j)->curValue;
-		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
-		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
-	}
+    UINT16 i;
+    UINT16 value;
+    (void)s;
+    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    {
+        value = AfeParam_AtConst(i)->curValue;
+        t_u8BuffTemp[i * 2U] = (UINT8)(value >> 8);
+        t_u8BuffTemp[i * 2U + 1U] = (UINT8)value;
+    }
 }
 
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
-	UINT16 i;
-	UINT16 value;
+    AFE_Parameters_RS485_Typedef defaults = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+    UINT16 i;
 
-	EEPROM_ConfigEditBegin();
-	Feed_IWatchDog;
-	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		value = AfeParam_AtConst(i)->defaultValue;
-		if (!EEPROM_ConfigEditSetAfeWord(i, value))
-		{
-			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-			return 0U;
-		}
-	}
-	Feed_IWatchDog;
-	if (!EEPROM_ConfigEditCommit())
-	{
-		return 0U;
-	}
+    if (!Bms3520_ParamImageValid(&defaults))
+    {
+        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+        return 0U;
+    }
 
-	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		AFE_Value_Typedef *param = AfeParam_At(i);
-		param->curValue = param->defaultValue;
-	}
-	RTC_SetCounter(0);
-	AFE_PARAM_WRITE_Flag = 1;
-	return 1U;
+    EEPROM_ConfigEditBegin();
+    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    {
+        if (!EEPROM_ConfigEditSetAfeWord(i,
+            ((AFE_Value_Typedef *)((UINT8 *)&defaults + (uint32_t)i * sizeof(AFE_Value_Typedef)))->curValue))
+            return 0U;
+    }
+    if (!EEPROM_ConfigEditCommit()) return 0U;
+
+    Bms3520_CopyRuntimeValues(&AFE_Parameters_RS485_Struction, &defaults);
+    AFE_PARAM_WRITE_Flag = 1;
+    Afe3520_MarkConfigDirty();
+    return 1U;
+}
+
+void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
+{
+    UINT16 value;
+    if (s == 0) return;
+    value = (UINT16)(((UINT16)s->u16Buffer[4] << 8) | s->u16Buffer[5]);
+    if (value != 1U)
+    {
+        s->AckType = RS485_ACK_NEG;
+        s->ErrorType = RS485_ERROR_DATA_INVALID;
+        return;
+    }
+    if (!EEPROM_ResetData_AFE_ParametersToDefault())
+    {
+        s->AckType = RS485_ACK_NEG;
+        s->ErrorType = RS485_ERROR_CMD_INVALID;
+    }
+}
+
+void ReadEEPROM_AFE_Parameters(void)
+{
+    /* Unified CONFIG loading in EEPROM.c already populates curValue fields. */
+    AFE_PARAM_WRITE_Flag = 1;
+    Afe3520_MarkConfigDirty();
 }
