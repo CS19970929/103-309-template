@@ -1,5 +1,6 @@
 #include "main.h"
 #include "afe3520/BmsProtection3520.h"
+#include "afe3520/Afe3520Board.h"
 
 /* Keil compile-slot adapter: Afe3520.c is the real transport/measurement unit. */
 #include "afe3520/Afe3520.c"
@@ -12,11 +13,11 @@ static INT16 Afe3520_NativeToLegacyCadc(INT16 nativeRaw)
     /*
      * Generic DataDeal.c still applies the historical current calibration:
      * I = raw * 20 * (CS_Res_Num*1000/CS_Res) / 2147.
-     * SH3673520 native CADC is +/-100mV full scale:
+     * SH3673520 native CADC is nominally +/-100mV full scale:
      * I = native * 200000/65536 * CS_Res_Num/CS_Res.
      * Equating both gives legacyRaw = nativeRaw * 21470 / 65536.
-     * This adapter preserves the mature SOC/current-calibration path while the
-     * AFE layer and host diagnostics retain the native CADC value separately.
+     * This adapter lets the existing calibrated SOC/current pipeline continue
+     * while native SH3673520 CADC remains available inside Afe3520_SNAPSHOT.
      */
     return (INT16)(((INT32)nativeRaw * 21470L) / 65536L);
 }
@@ -26,27 +27,34 @@ static void Afe3520_InitBoardControlPins(void)
     GPIO_InitTypeDef gpio;
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
 
-    /* SHIP is active low. Keep device out of SHIP during normal boot. */
-    gpio.GPIO_Pin = GPIO_Pin_10;
+    /* SHIP is active-low. Normal boot must release it before SPI access. */
+    gpio.GPIO_Pin = AFE3520_PIN_SHIP;
     gpio.GPIO_Speed = GPIO_Speed_2MHz;
     gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(GPIOA, &gpio);
-    GPIO_SetBits(GPIOA, GPIO_Pin_10);
+    GPIO_Init(AFE3520_GPIO_SHIP, &gpio);
+    GPIO_SetBits(AFE3520_GPIO_SHIP, AFE3520_PIN_SHIP);
 
-    /* Existing board CTLC safety path: low until AFE config has been verified. */
-    gpio.GPIO_Pin = GPIO_Pin_14;
+    /* CTLC is the independent board-level MOS safety gate. Keep it low until
+     * the AFE RAM image has been written and read-back verified. */
+    gpio.GPIO_Pin = AFE3520_PIN_CTLC;
     gpio.GPIO_Speed = GPIO_Speed_2MHz;
     gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(GPIOB, &gpio);
-    GPIO_ResetBits(GPIOB, GPIO_Pin_14);
+    GPIO_Init(AFE3520_GPIO_CTLC, &gpio);
+    GPIO_ResetBits(AFE3520_GPIO_CTLC, AFE3520_PIN_CTLC);
+
+    gpio.GPIO_Pin = AFE3520_PIN_PRO_EN;
+    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_Init(AFE3520_GPIO_PRO_EN, &gpio);
+
+    gpio.GPIO_Pin = AFE3520_PIN_DSG_DET | AFE3520_PIN_CHG_DET;
+    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOA, &gpio);
 }
 
 UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 {
     if ((RdBuf == 0) || (Length == 0U)) return 0U;
 
-    /* Keep the generic current pipeline numerically compatible without hiding
-     * the native SH3673520 CADC value from the new diagnostic API. */
     if ((RdAddr == MTP_ADC2) && (Length == 2U))
     {
         const AFE3520_SNAPSHOT *snap = Afe3520_GetSnapshot();
@@ -58,7 +66,6 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
         RdBuf[1] = (UINT8)proxy;
         return 1U;
     }
-
     return (Afe3520_Read(RdAddr, RdBuf, Length) == AFE3520_OK) ? 1U : 0U;
 }
 
@@ -75,14 +82,18 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 
 UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
-    /* SH3673520 protection configuration is RAM, not EEPROM/MTP. The name is
-     * retained only so generic code links; writes go through verified RAM SPI. */
+    /* SH3673520 protection configuration is RAM. The historical function name
+     * survives only as a build/API compatibility shim. */
     return MTPWrite(WrAddr, Length, WrBuf);
 }
 
 void initAFE1_IIC(void)
 {
+    /* STOP entry converts most GPIO to analog. Rebuild SPI pins on every wake.
+     * Mark config dirty because a concurrent AFE reset/WDT recovery may also
+     * have restored RAM defaults while the MCU was asleep. */
     Afe3520_PortInit();
+    Afe3520_MarkConfigDirty();
 }
 
 void InitAFE1(void)
@@ -148,7 +159,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 
     for (i = 0U; i < AFE3520_TEMP_MAX; ++i)
     {
-        /* Generic DataDeal expects (degC + 40) * 10. */
+        /* Generic report convention: (degC + 40) * 10. */
         tempEncoded = (INT32)snap->tempDeciC[i] + 400L;
         if (tempEncoded < 0L) tempEncoded = 0L;
         if (tempEncoded > 2000L) tempEncoded = 2000L;
