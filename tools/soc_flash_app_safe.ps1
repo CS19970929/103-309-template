@@ -15,8 +15,18 @@ if (-not (Test-Path -LiteralPath $Programmer)) {
 }
 
 $appAddress = [Convert]::ToUInt32($Address.Replace("0x", ""), 16)
+$appStorageBoundary = [uint32]0x0800E000
+$appMaxSize = [uint32]0x00009800
 if ($appAddress -ne 0x08004800) {
     throw "Refuse to flash SOC app at $Address. This project app starts at 0x08004800; 0x08000000 is the IAP area."
+}
+
+$binSize = [uint32](Get-Item -LiteralPath $resolvedBin.Path).Length
+$appEnd = [uint64]$appAddress + [uint64]$binSize
+if (($binSize -gt $appMaxSize) -or ($appEnd -gt [uint64]$appStorageBoundary)) {
+    $message = ("Refuse to flash oversized app: size={0} bytes, max={1} bytes, end=0x{2:X8}. " +
+                "Persistent storage starts at 0x0800E000 and must never be overwritten.") -f $binSize, $appMaxSize, $appEnd
+    throw $message
 }
 
 $args = @(
@@ -28,9 +38,12 @@ $args = @(
 )
 
 Write-Host "SOC app flash target:"
-Write-Host "  bin:     $($resolvedBin.Path)"
-Write-Host "  address: $Address"
-Write-Host "  note:    IAP stays at 0x08000000; only app area is programmed."
+Write-Host "  bin:       $($resolvedBin.Path)"
+Write-Host "  size:      $binSize bytes / $appMaxSize bytes max"
+Write-Host "  address:   $Address"
+Write-Host ("  app end:   0x{0:X8}" -f $appEnd)
+Write-Host "  storage:   0x0800E000..0x0800FFFF (official front 64KB only)"
+Write-Host "  note:      IAP stays at 0x08000000; storage pages are excluded."
 
 if (-not $Flash) {
     Write-Host ""

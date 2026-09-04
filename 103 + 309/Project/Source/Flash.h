@@ -7,19 +7,21 @@
 /*
  * STM32F103C8 official 64KB Flash contract.
  *
- * Only 0x08000000..0x0800FFFF is considered usable. The undocumented rear
- * 64KB found on some C8 devices is deliberately not used by APP or storage.
+ * Only 0x08000000..0x0800FFFF is usable. The undocumented rear 64KB found on
+ * some C8 devices is deliberately excluded from APP and persistent storage.
  * STM32F10X_MD uses 1KB erase pages.
  *
  * Layout:
  *   IAP          : 0x08000000..0x080047FF  (18KB)
- *   APP          : 0x08004800..0x0800E7FF  (40KB max)
+ *   APP          : 0x08004800..0x0800DFFF  (38KB max)
+ *   LOG C/D      : 0x0800E000..0x0800E7FF  (2KB, new log wear-level pages)
  *   CONFIG A/B   : 0x0800E800..0x0800EFFF  (2KB)
  *   SOC A/B      : 0x0800F000..0x0800F7FF  (2KB)
- *   LOG A/B      : 0x0800F800..0x0800FFFF  (2KB)
+ *   LOG A/B      : 0x0800F800..0x0800FFFF  (2KB, legacy-compatible pages)
  *
- * Persistent storage therefore occupies the last six official 1KB pages.
- * APP/linker configuration must never cross FLASH_ADDR_STORAGE_START.
+ * Persistent storage therefore occupies the last eight official 1KB pages.
+ * Existing CONFIG/SOC/LOG A/B addresses are intentionally unchanged so an
+ * upgrade from the previous six-page layout keeps valid persisted data.
  */
 #if !defined(STM32F10X_MD)
 #error "STM32F103C8 persistent layout requires STM32F10X_MD 1KB erase pages"
@@ -33,41 +35,50 @@
 #define FLASH_STORAGE_PAGE_SIZE           0x00000400U
 #define FLASH_STORAGE_SLOT_SIZE            FLASH_STORAGE_PAGE_SIZE
 #define FLASH_STORAGE_RECORD_ALIGNMENT     ((UINT16)4U)
-#define FLASH_ADDR_STORAGE_START           0x0800E800U
+#define FLASH_ADDR_STORAGE_START           0x0800E000U
 #define FLASH_ADDR_STORAGE_END             FLASH_ADDR_DEVICE_END
 #define FLASH_ADDR_APP_END                 FLASH_ADDR_STORAGE_START
 #define FLASH_APP_MAX_SIZE                 (FLASH_ADDR_APP_END - FLASH_ADDR_APP_START)
 
 /* Flash addresses describe storage objects only; parameter categories do not
- * own Flash pages. All configurable BMS parameters share CONFIG A/B. */
+ * own Flash pages. All configurable BMS parameters share CONFIG A/B.
+ *
+ * LOG A/B retain their old addresses. LOG C/D consume the two pages released
+ * by O2 code-size reduction. A four-page journal means that, while one page is
+ * erased during rollover, three complete pages remain readable. */
+#define FLASH_ADDR_STORAGE_LOG_SLOT_C      0x0800E000U
+#define FLASH_ADDR_STORAGE_LOG_SLOT_D      0x0800E400U
 #define FLASH_ADDR_STORAGE_CONFIG_SLOT_A   0x0800E800U
 #define FLASH_ADDR_STORAGE_CONFIG_SLOT_B   0x0800EC00U
 #define FLASH_ADDR_STORAGE_SOC_SLOT_A      0x0800F000U
 #define FLASH_ADDR_STORAGE_SOC_SLOT_B      0x0800F400U
 #define FLASH_ADDR_STORAGE_LOG_SLOT_A      0x0800F800U
 #define FLASH_ADDR_STORAGE_LOG_SLOT_B      0x0800FC00U
+#define FLASH_STORAGE_LOG_PAGE_COUNT       4U
 
 /* Compile-time geometry guards: changing one address cannot silently move
  * storage outside the official C8 Flash or create page overlap/gaps. */
-#if (FLASH_ADDR_STORAGE_START != 0x0800E800U)
+#if (FLASH_ADDR_STORAGE_START != 0x0800E000U)
 #error "Unexpected persistent storage start"
 #endif
 #if (FLASH_ADDR_STORAGE_END != 0x08010000U)
 #error "Persistent storage must end at the official 64KB boundary"
 #endif
-#if ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) != (6U * 0x400U))
-#error "Persistent storage must occupy exactly six 1KB pages"
+#if ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_START) != (8U * 0x400U))
+#error "Persistent storage must occupy exactly eight 1KB pages"
 #endif
-#if ((FLASH_ADDR_STORAGE_CONFIG_SLOT_B - FLASH_ADDR_STORAGE_CONFIG_SLOT_A) != 0x400U) || \
+#if ((FLASH_ADDR_STORAGE_LOG_SLOT_D - FLASH_ADDR_STORAGE_LOG_SLOT_C) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_CONFIG_SLOT_A - FLASH_ADDR_STORAGE_LOG_SLOT_D) != 0x400U) || \
+    ((FLASH_ADDR_STORAGE_CONFIG_SLOT_B - FLASH_ADDR_STORAGE_CONFIG_SLOT_A) != 0x400U) || \
     ((FLASH_ADDR_STORAGE_SOC_SLOT_A - FLASH_ADDR_STORAGE_CONFIG_SLOT_B) != 0x400U) || \
     ((FLASH_ADDR_STORAGE_SOC_SLOT_B - FLASH_ADDR_STORAGE_SOC_SLOT_A) != 0x400U) || \
     ((FLASH_ADDR_STORAGE_LOG_SLOT_A - FLASH_ADDR_STORAGE_SOC_SLOT_B) != 0x400U) || \
     ((FLASH_ADDR_STORAGE_LOG_SLOT_B - FLASH_ADDR_STORAGE_LOG_SLOT_A) != 0x400U) || \
     ((FLASH_ADDR_STORAGE_END - FLASH_ADDR_STORAGE_LOG_SLOT_B) != 0x400U)
-#error "Persistent storage slots must be contiguous 1KB pages"
+#error "Persistent storage pages must be contiguous 1KB pages"
 #endif
-#if ((FLASH_ADDR_APP_START + 0x0000A000U) != FLASH_ADDR_APP_END)
-#error "APP region must be exactly 40KB"
+#if ((FLASH_ADDR_APP_START + 0x00009800U) != FLASH_ADDR_APP_END)
+#error "APP region must be exactly 38KB"
 #endif
 
 /* These count macros are intentionally plain integer constant expressions.
@@ -78,7 +89,7 @@
 #define BMS_CONFIG_CALIB_WORD_COUNT        47U
 #define BMS_CONFIG_OTHER_WORD_COUNT        32U
 #define BMS_CONFIG_RESERVED_WORD_COUNT     24U
-#define FLASH_STORAGE_LOG_RECORD_COUNT     100U
+#define FLASH_STORAGE_LOG_RECORD_COUNT     500U
 
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)

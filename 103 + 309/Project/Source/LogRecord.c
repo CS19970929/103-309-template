@@ -1,13 +1,13 @@
 #include "main.h"
 
 #define EVENT_RECORD_LENGTH                  FLASH_STORAGE_LOG_RECORD_COUNT
-#define LOG_STORAGE_PAGE_MAGIC               ((UINT32)0x4C4F4733U) /* LOG3 */
+#define LOG_STORAGE_PAGE_MAGIC               ((UINT32)0x4C4F4733U) /* LOG3: keep old A/B compatible */
 #define LOG_STORAGE_PAGE_FLAG_RESET          ((UINT16)0x0001U)
 #define LOG_STORAGE_PAGE_FLAGS_VALID         LOG_STORAGE_PAGE_FLAG_RESET
 
 typedef struct LOG_RECORD_RUNTIME_TAG
 {
-	UINT8 point;
+	UINT16 point;
 	UINT8 records[EVENT_RECORD_LENGTH][2];
 	LOG_RECORD_FLAG flags;
 	UINT32 uptimeSeconds;
@@ -44,9 +44,22 @@ typedef struct LOG_STORAGE_PAGE_INFO_TAG
 	UINT32 nextAddr;
 } LOG_STORAGE_PAGE_INFO;
 
-typedef char LogStoragePageCapacityCheck[
-	(((FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_PAGE_HEADER)) /
-	  sizeof(LOG_STORAGE_ENTRY)) >= EVENT_RECORD_LENGTH) ? 1 : -1];
+#define LOG_STORAGE_ENTRY_CAPACITY_PER_PAGE \
+	((FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_PAGE_HEADER)) / sizeof(LOG_STORAGE_ENTRY))
+
+/* During rollover one page may be erased or contain a torn header. The other
+ * three pages must still be able to retain the complete 500-record history. */
+typedef char LogStorageRetainedCapacityCheck[
+	((((FLASH_STORAGE_LOG_PAGE_COUNT - 1U) * LOG_STORAGE_ENTRY_CAPACITY_PER_PAGE) >=
+	  EVENT_RECORD_LENGTH) ? 1 : -1)];
+
+typedef char LogStoragePageCountCheck[(FLASH_STORAGE_LOG_PAGE_COUNT == 4U) ? 1 : -1];
+
+static const UINT32 s_log_storage_pages[FLASH_STORAGE_LOG_PAGE_COUNT] = {
+	FLASH_ADDR_STORAGE_LOG_SLOT_A,
+	FLASH_ADDR_STORAGE_LOG_SLOT_B,
+	FLASH_ADDR_STORAGE_LOG_SLOT_C,
+	FLASH_ADDR_STORAGE_LOG_SLOT_D};
 
 UINT32 su32_Interval_S_Tcnt = 0;
 
@@ -134,7 +147,7 @@ static UINT8 LogStorage_ReadEntry(UINT32 addr, LOG_STORAGE_ENTRY *entry)
 	return 1U;
 }
 
-static void LogStorage_ApplyEntry(UINT8 *point,
+static void LogStorage_ApplyEntry(UINT16 *point,
 								 UINT8 records[EVENT_RECORD_LENGTH][2],
 								 UINT8 event,
 								 UINT8 delta)
@@ -147,6 +160,10 @@ static void LogStorage_ApplyEntry(UINT8 *point,
 	records[*point][0] = event;
 	records[*point][1] = delta;
 	++(*point);
+	if (*point >= EVENT_RECORD_LENGTH)
+	{
+		*point = 0U;
+	}
 }
 
 static UINT8 LogStorage_GetPageInfo(UINT32 page, LOG_STORAGE_PAGE_INFO *info)
@@ -186,7 +203,7 @@ static UINT8 LogStorage_GetPageInfo(UINT32 page, LOG_STORAGE_PAGE_INFO *info)
 }
 
 static UINT8 LogStorage_ReplayPage(const LOG_STORAGE_PAGE_INFO *info,
-									UINT8 *point,
+									UINT16 *point,
 									UINT8 records[EVENT_RECORD_LENGTH][2])
 {
 	UINT32 addr;
@@ -208,8 +225,8 @@ static UINT8 LogStorage_ReplayPage(const LOG_STORAGE_PAGE_INFO *info,
 			break;
 		}
 
-		/* A torn write consumes one slot but must not invalidate older records.
-		 * Subsequent boot writes continue at the first blank slot after it. */
+		/* A torn entry consumes its non-blank slot but does not invalidate any
+		 * older or newer valid entry in this page. */
 		if (!LogStorage_ReadEntry(addr, &entry))
 		{
 			continue;
@@ -219,12 +236,91 @@ static UINT8 LogStorage_ReplayPage(const LOG_STORAGE_PAGE_INFO *info,
 	return 1U;
 }
 
+static UINT8 LogStorage_GenerationIsNewer(UINT32 a, UINT32 b)
+{
+	if (a == b)
+	{
+		return 0U;
+	}
+	return (((UINT32)(a - b)) < 0x80000000UL) ? 1U : 0U;
+}
+
+static void LogStorage_SortOldestFirst(LOG_STORAGE_PAGE_INFO pages[], UINT8 count)
+{
+	UINT8 i;
+	UINT8 j;
+	LOG_STORAGE_PAGE_INFO temp;
+
+	for (i = 0U; i < count; ++i)
+	{
+		for (j = (UINT8)(i + 1U); j < count; ++j)
+		{
+			if (LogStorage_GenerationIsNewer(pages[i].generation, pages[j].generation))
+			{
+				temp = pages[i];
+				pages[i] = pages[j];
+				pages[j] = temp;
+			}
+		}
+	}
+}
+
+static UINT8 LogStorage_CollectPages(LOG_STORAGE_PAGE_INFO pages[])
+{
+	UINT8 i;
+	UINT8 count = 0U;
+	LOG_STORAGE_PAGE_INFO info;
+
+	for (i = 0U; i < FLASH_STORAGE_LOG_PAGE_COUNT; ++i)
+	{
+		if (LogStorage_GetPageInfo(s_log_storage_pages[i], &info))
+		{
+			pages[count++] = info;
+		}
+	}
+	LogStorage_SortOldestFirst(pages, count);
+	return count;
+}
+
+static UINT8 LogStorage_PageIsInList(const LOG_STORAGE_PAGE_INFO pages[],
+									  UINT8 count,
+									  UINT32 page)
+{
+	UINT8 i;
+
+	for (i = 0U; i < count; ++i)
+	{
+		if (pages[i].page == page)
+		{
+			return 1U;
+		}
+	}
+	return 0U;
+}
+
+static UINT8 LogStorage_IsKnownPage(UINT32 page)
+{
+	UINT8 i;
+
+	for (i = 0U; i < FLASH_STORAGE_LOG_PAGE_COUNT; ++i)
+	{
+		if (s_log_storage_pages[i] == page)
+		{
+			return 1U;
+		}
+	}
+	return 0U;
+}
+
 static UINT8 LogStorage_StartPage(UINT32 page, UINT32 generation, UINT16 flags)
 {
 	LOG_STORAGE_PAGE_HEADER header;
 	LOG_STORAGE_PAGE_HEADER verify;
 
-	if (!StorageFlash_EraseStoragePage(page))
+	/* Fresh/previously-cleaned pages do not need another erase. A non-blank
+	 * target is always erased and verified before its new generation is written. */
+	if (!LogStorage_IsBlank(page, (UINT16)FLASH_STORAGE_PAGE_SIZE) &&
+		!StorageFlash_EraseStoragePage(page))
 	{
 		return 0U;
 	}
@@ -256,126 +352,134 @@ static UINT8 LogStorage_StartPage(UINT32 page, UINT32 generation, UINT16 flags)
 
 static UINT8 LogStorage_Load(void)
 {
-	LOG_STORAGE_PAGE_INFO pageA;
-	LOG_STORAGE_PAGE_INFO pageB;
+	LOG_STORAGE_PAGE_INFO pages[FLASH_STORAGE_LOG_PAGE_COUNT];
 	LOG_STORAGE_PAGE_INFO *newest;
-	LOG_STORAGE_PAGE_INFO *older;
-	UINT8 validA;
-	UINT8 validB;
+	UINT8 count;
+	UINT8 replayStart = 0U;
+	UINT8 i;
 
-	validA = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_A, &pageA);
-	validB = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_B, &pageB);
-	if (!validA && !validB)
+	count = LogStorage_CollectPages(pages);
+	if (count == 0U)
 	{
 		return 0U;
 	}
 
-	if (validA && validB)
+	/* The newest RESET generation is the history root. Older pages can remain
+	 * physically present after an interrupted reset and are intentionally ignored. */
+	for (i = 0U; i < count; ++i)
 	{
-		if (pageA.generation >= pageB.generation)
+		if ((pages[i].flags & LOG_STORAGE_PAGE_FLAG_RESET) != 0U)
 		{
-			newest = &pageA;
-			older = &pageB;
+			replayStart = i;
 		}
-		else
-		{
-			newest = &pageB;
-			older = &pageA;
-		}
-	}
-	else if (validA)
-	{
-		newest = &pageA;
-		older = 0;
-	}
-	else
-	{
-		newest = &pageB;
-		older = 0;
 	}
 
 	memset(s_log_record.records, 0, sizeof(s_log_record.records));
 	s_log_record.point = 0U;
-
-	/* A committed reset page is the new history root. Older generations must
-	 * never be replayed even if cleanup was interrupted by power loss. */
-	if (((newest->flags & LOG_STORAGE_PAGE_FLAG_RESET) == 0U) && (older != 0))
+	for (i = replayStart; i < count; ++i)
 	{
-		(void)LogStorage_ReplayPage(older, &s_log_record.point, s_log_record.records);
+		(void)LogStorage_ReplayPage(&pages[i], &s_log_record.point, s_log_record.records);
 	}
-	(void)LogStorage_ReplayPage(newest, &s_log_record.point, s_log_record.records);
 
+	newest = &pages[count - 1U];
 	s_log_record.storagePage = newest->page;
 	s_log_record.storageGeneration = newest->generation;
 	s_log_record.storageNextAddr = newest->nextAddr;
 	return 1U;
 }
 
+static UINT32 LogStorage_SelectReusablePage(const LOG_STORAGE_PAGE_INFO pages[],
+										 UINT8 count,
+										 UINT32 excludePage)
+{
+	UINT8 i;
+
+	/* Prefer a page with no valid header. This makes migration from the old
+	 * two-page LOG3 layout use the new pages before erasing old history. */
+	for (i = 0U; i < FLASH_STORAGE_LOG_PAGE_COUNT; ++i)
+	{
+		if ((s_log_storage_pages[i] != excludePage) &&
+			!LogStorage_PageIsInList(pages, count, s_log_storage_pages[i]))
+		{
+			return s_log_storage_pages[i];
+		}
+	}
+
+	/* All pages are valid: pages[] is oldest-to-newest, so erase the oldest
+	 * generation that is not the current active page. */
+	for (i = 0U; i < count; ++i)
+	{
+		if (pages[i].page != excludePage)
+		{
+			return pages[i].page;
+		}
+	}
+	return 0U;
+}
+
 static UINT8 LogStorage_Reset(void)
 {
-	LOG_STORAGE_PAGE_INFO pageA;
-	LOG_STORAGE_PAGE_INFO pageB;
-	UINT8 validA;
-	UINT8 validB;
-	UINT32 targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
-	UINT32 stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
+	LOG_STORAGE_PAGE_INFO pages[FLASH_STORAGE_LOG_PAGE_COUNT];
+	UINT8 count;
+	UINT32 targetPage;
 	UINT32 generation = 1U;
-	UINT8 cleanupOk;
 
-	validA = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_A, &pageA);
-	validB = LogStorage_GetPageInfo(FLASH_ADDR_STORAGE_LOG_SLOT_B, &pageB);
-
-	if (validA || validB)
+	count = LogStorage_CollectPages(pages);
+	if (count != 0U)
 	{
-		if (validA && (!validB || (pageA.generation >= pageB.generation)))
-		{
-			generation = pageA.generation + 1U;
-			targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
-			stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
-		}
-		else
-		{
-			generation = pageB.generation + 1U;
-			targetPage = FLASH_ADDR_STORAGE_LOG_SLOT_A;
-			stalePage = FLASH_ADDR_STORAGE_LOG_SLOT_B;
-		}
+		generation = pages[count - 1U].generation + 1U;
 		if (generation == 0U)
 		{
 			generation = 1U;
 		}
 	}
 
-	/* Commit the reset marker before erasing the previous history. */
+	targetPage = LogStorage_SelectReusablePage(pages, count, 0U);
+	if (targetPage == 0U)
+	{
+		return 0U;
+	}
+
+	/* The reset marker is the atomic commit. Old pages are deliberately not
+	 * erased here: this avoids two unnecessary erase cycles and guarantees that
+	 * a power loss anywhere before the new header commits leaves old history
+	 * intact. Future rollovers reclaim those pages oldest-first. */
 	if (!LogStorage_StartPage(targetPage, generation, LOG_STORAGE_PAGE_FLAG_RESET))
 	{
 		return 0U;
 	}
 
-	cleanupOk = StorageFlash_EraseStoragePage(stalePage);
 	memset(s_log_record.records, 0, sizeof(s_log_record.records));
 	memset(s_log_record.lastSaveValid, 0, sizeof(s_log_record.lastSaveValid));
 	memset(s_log_record.eventLatch, 0, sizeof(s_log_record.eventLatch));
 	s_log_record.point = 0U;
 	s_log_record.cbcTemp = 0U;
-
-	return cleanupOk;
+	return 1U;
 }
 
 static UINT8 LogStorage_Rollover(void)
 {
+	LOG_STORAGE_PAGE_INFO pages[FLASH_STORAGE_LOG_PAGE_COUNT];
+	UINT8 count;
 	UINT32 nextPage;
 	UINT32 nextGeneration;
 
-	nextPage = (s_log_record.storagePage == FLASH_ADDR_STORAGE_LOG_SLOT_A) ?
-			   FLASH_ADDR_STORAGE_LOG_SLOT_B : FLASH_ADDR_STORAGE_LOG_SLOT_A;
+	count = LogStorage_CollectPages(pages);
+	nextPage = LogStorage_SelectReusablePage(pages, count, s_log_record.storagePage);
+	if (nextPage == 0U)
+	{
+		return 0U;
+	}
+
 	nextGeneration = s_log_record.storageGeneration + 1U;
 	if (nextGeneration == 0U)
 	{
 		nextGeneration = 1U;
 	}
 
-	/* The full current page remains valid until the new page header is fully
-	 * committed, so power loss during rollover cannot erase the latest log. */
+	/* The current page and at least two additional pages remain valid while the
+	 * target page is erased/programmed. With 253 entries/page, three retained
+	 * pages provide 759 physical slots for a 500-record logical history. */
 	return LogStorage_StartPage(nextPage, nextGeneration, 0U);
 }
 
@@ -384,9 +488,10 @@ static UINT8 LogStorage_PersistEvent(LogEventArray event, UINT8 delta)
 	LOG_STORAGE_ENTRY entry;
 	LOG_STORAGE_ENTRY verify;
 	UINT32 pageEnd;
+	UINT32 writeAddr;
+	UINT8 programmed;
 
-	if ((s_log_record.storagePage != FLASH_ADDR_STORAGE_LOG_SLOT_A) &&
-		(s_log_record.storagePage != FLASH_ADDR_STORAGE_LOG_SLOT_B))
+	if (!LogStorage_IsKnownPage(s_log_record.storagePage))
 	{
 		if (!LogStorage_Load() && !LogStorage_Reset())
 		{
@@ -406,23 +511,32 @@ static UINT8 LogStorage_PersistEvent(LogEventArray event, UINT8 delta)
 	entry.event = (UINT8)event;
 	entry.delta = delta;
 	entry.crc = LogStorage_EntryCrc(&entry);
+	writeAddr = s_log_record.storageNextAddr;
 
-	if (!StorageFlash_ProgramStorageBytes(s_log_record.storageNextAddr,
-									 (const UINT8 *)&entry,
-									 (UINT16)sizeof(entry)))
+	programmed = StorageFlash_ProgramStorageBytes(writeAddr,
+											   (const UINT8 *)&entry,
+											   (UINT16)sizeof(entry));
+	if (LogStorage_ReadEntry(writeAddr, &verify) &&
+		(verify.event == entry.event) &&
+		(verify.delta == entry.delta))
 	{
-		return 0U;
-	}
-	if (!LogStorage_ReadEntry(s_log_record.storageNextAddr, &verify) ||
-		(verify.event != entry.event) ||
-		(verify.delta != entry.delta))
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0U;
+		/* Treat a fully verified record as committed even if the low-level Flash
+		 * API reported an EOP anomaly after programming. */
+		s_log_record.storageNextAddr += sizeof(LOG_STORAGE_ENTRY);
+		return 1U;
 	}
 
-	s_log_record.storageNextAddr += sizeof(LOG_STORAGE_ENTRY);
-	return 1U;
+	/* A partially programmed non-blank slot can never be restored to 0xFFFF
+	 * without erasing the page. Consume it so later events can continue. If the
+	 * failed slot is still blank, retry the same address on the next event; this
+	 * avoids creating a blank hole that boot replay would interpret as end-of-log. */
+	if (!LogStorage_IsBlank(writeAddr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
+	{
+		s_log_record.storageNextAddr += sizeof(LOG_STORAGE_ENTRY);
+	}
+	(void)programmed;
+	System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+	return 0U;
 }
 
 static UINT8 LogRecord_CanSaveEvent(LogEventArray event)
@@ -602,17 +716,19 @@ void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 t_u8BuffTemp[])
 {
 	UINT16 i = 0U;
 	UINT16 j;
-	INT8 k;
+	UINT16 index;
 
 	for (j = 0U; j < EVENT_RECORD_LENGTH; ++j)
 	{
-		k = (INT8)(s_log_record.point - 1 - j);
-		if (k < 0)
+		/* point is always the next write position. Keep newest-first protocol
+		 * ordering while using 16-bit arithmetic for the 500-entry ring. */
+		index = (UINT16)(s_log_record.point + EVENT_RECORD_LENGTH - 1U - j);
+		if (index >= EVENT_RECORD_LENGTH)
 		{
-			k = (INT8)(EVENT_RECORD_LENGTH + k);
+			index = (UINT16)(index - EVENT_RECORD_LENGTH);
 		}
-		t_u8BuffTemp[i++] = s_log_record.records[(UINT8)k][0];
-		t_u8BuffTemp[i++] = s_log_record.records[(UINT8)k][1];
+		t_u8BuffTemp[i++] = s_log_record.records[index][0];
+		t_u8BuffTemp[i++] = s_log_record.records[index][1];
 	}
 }
 
