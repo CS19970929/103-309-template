@@ -133,9 +133,8 @@ struct OTHER_ELEMENT {
 
 #define BMS_CAPCITY     300
 
-/* SH367309 cell monitor supports 5..16 series cells. Keep the generic report
- * buffer at 32 cells, but never allow the runtime AFE loop to exceed its
- * physical 16-cell register image. */
+/* SH3673520 supports 5..20 series cells. Keep the generic report buffer at
+ * 32 cells, but never allow the runtime AFE loop to exceed its 20-cell image. */
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\
 	                           	 0,		0,		0,		0,\
@@ -166,7 +165,7 @@ struct OTHER_ELEMENT {
 	                             65000,65000,65000,65000,\
 	                             5000,65000,5000,65000,50000,50000,50000,50000,\
 	                             65000,50000,50000,50000,\
-	                             16,65000,10000,50000}
+	                             20,65000,10000,50000}
 
 
 

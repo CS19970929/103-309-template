@@ -456,7 +456,8 @@ static void Afe3520_ParseSnapshot(const uint8_t *raw)
     {
         offset = (uint16_t)(AFE3520_REG_CELL1H - AFE3520_REG_FLAG1 + (uint16_t)i * 2U);
         code = Afe3520_Be16(&raw[offset]);
-        s_snapshot.cellMv[i] = (uint16_t)(((uint32_t)code * 5000UL + 4096UL) / 8192UL);
+        /* Reference-board convention: Vcell(mV) = ADC_code * 5 / 32. */
+        s_snapshot.cellMv[i] = (uint16_t)(((uint32_t)code * 5UL + 16UL) >> 5);
     }
 
     offset = (uint16_t)(AFE3520_REG_CADCDH - AFE3520_REG_FLAG1);

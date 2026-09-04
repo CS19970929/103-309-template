@@ -1,7 +1,8 @@
 #include "main.h"
 #include "Runtime.h"
 
-UINT8 SeriesNum = 7;
+/* Fallback for a missing/invalid persistent image. The target pack is 19S. */
+UINT8 SeriesNum = 19;
 
 void Runtime_Boot(void)
 {

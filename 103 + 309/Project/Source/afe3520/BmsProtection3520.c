@@ -7,7 +7,6 @@ static BMS3520_PROTECTION_STATUS s_prot;
 static uint16_t s_swCnt[8];
 static uint16_t s_swRcvCnt[8];
 static uint16_t s_hwStableCnt;
-static uint16_t s_openWireTick;
 static uint8_t s_systemBlock;
 static uint8_t s_faultLogLatch[8];
 
@@ -130,7 +129,9 @@ uint8_t Bms3520_BuildAfeConfig(AFE3520_REG_CONFIG *cfg)
     cfg->sconf2 = AFE3520_SCONF2_PUMP_EN;
     /* Enable OWD engine, load-connect wake and charger wake. */
     cfg->sconf3 = 0x52U;
-    cfg->sconf4 = (uint8_t)(0x60U | ((SeriesNum > 20U) ? 20U : SeriesNum));
+    /* SCONF4 is the plain cell-count field on the working reference board. */
+    cfg->sconf4 = (uint8_t)((SeriesNum > AFE3520_CELL_MAX) ?
+                            AFE3520_CELL_MAX : SeriesNum);
     cfg->sconf5 = (uint8_t)(AFE3520_SCONF5_MOS_EN | AFE3520_SCONF5_OCC_EN |
                             AFE3520_SCONF5_CADC_EN | AFE3520_SCONF5_WDT_EN | 0x02U);
     /* TS1/TS2 are populated by the current board; all fast voltage/current protections enabled. */
@@ -505,12 +506,6 @@ void Bms3520_ProtectionService(void)
     Bms3520_UpdateHardwareProtection(snap);
     Bms3520_TryRecoverHardware(snap);
     Bms3520_PublishLegacyFaultView(snap);
-
-    if (++s_openWireTick >= 25U)
-    {
-        s_openWireTick = 0U;
-        (void)Afe3520_TriggerOpenWire();
-    }
 
     s_prot.activeAll = s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks;
     Bms3520_ApplyMosArbitration();

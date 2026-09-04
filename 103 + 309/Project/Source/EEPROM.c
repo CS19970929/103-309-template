@@ -27,8 +27,8 @@ typedef char EEPROM_ProtectLayoutCheck[
 typedef char EEPROM_OtherLayoutCheck[
 	(sizeof(struct OTHER_ELEMENT) == (BMS_CONFIG_OTHER_WORD_COUNT * sizeof(UINT16))) ? 1 : -1];
 
-#define BMS_SH367309_SERIES_MIN ((UINT16)5U)
-#define BMS_SH367309_SERIES_MAX ((UINT16)16U)
+#define BMS_SH3673520_SERIES_MIN ((UINT16)5U)
+#define BMS_SH3673520_SERIES_MAX ((UINT16)20U)
 #define BMS_CS_RES_SCALE ((UINT32)1000U)
 
 /* Single ROM instances shared by persistent storage and all host protocols. */
@@ -63,8 +63,8 @@ static UINT8 EEPROM_OtherRuntimeValuesAreValid(const UINT16 *other)
 	cs_res = other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res)];
 	cs_res_num = other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res_Num)];
 
-	if ((series_num < BMS_SH367309_SERIES_MIN) ||
-		(series_num > BMS_SH367309_SERIES_MAX) ||
+	if ((series_num < BMS_SH3673520_SERIES_MIN) ||
+		(series_num > BMS_SH3673520_SERIES_MAX) ||
 		(cs_res == 0U) ||
 		(cs_res_num == 0U))
 	{
@@ -79,8 +79,8 @@ void BmsParam_ApplyRuntime(void)
 {
 	UINT32 current_ratio;
 
-	if ((OtherElement.u16Sys_SeriesNum < BMS_SH367309_SERIES_MIN) ||
-		(OtherElement.u16Sys_SeriesNum > BMS_SH367309_SERIES_MAX) ||
+	if ((OtherElement.u16Sys_SeriesNum < BMS_SH3673520_SERIES_MIN) ||
+		(OtherElement.u16Sys_SeriesNum > BMS_SH3673520_SERIES_MAX) ||
 		(OtherElement.u16Sys_CS_Res == 0U) ||
 		(OtherElement.u16Sys_CS_Res_Num == 0U))
 	{
