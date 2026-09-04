@@ -3,7 +3,7 @@
 
 int main(void)
 {
-	Runtime_Boot();
+		Runtime_Boot();
 
 	while (1)
 	{

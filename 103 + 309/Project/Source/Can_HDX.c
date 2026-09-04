@@ -2,8 +2,10 @@
 #include "CanFeidaoFrames.h"
 #include <string.h>
 
-#define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
-#define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
+// #define FEIDAO_CAN_POWER_ON_LEVEL Bit_RESET
+// #define FEIDAO_CAN_POWER_OFF_LEVEL Bit_SET
+#define FEIDAO_CAN_POWER_ON_LEVEL Bit_SET
+#define FEIDAO_CAN_POWER_OFF_LEVEL Bit_RESET
 
 enum {
 	FEIDAO_CAN_PERIOD_1000MS_TICKS = 10U,

@@ -45,7 +45,7 @@ void Runtime_RunOnce(void)
 	App_CommonUpper();
 	App_AnlogCal();
 
-	// rtc_sleep();
+	rtc_sleep();
 
 	App_Can();
 	App_FlashUpdate();
