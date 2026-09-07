@@ -6,6 +6,9 @@
  * Software protection remains independent in the existing 0x2400 area. */
 #include <stdint.h>
 
+/* Reference board: MOS thermistor is wired to TS4 (zero-based index 3). */
+#define AFE3520_MOS_TEMP_INDEX 3U
+
 // <<< Use Configuration Wizard in Context Menu >>>
 // <h>Protection sources (service/MOS feedback always runs)
 // <o> Protection mode <1=>Software only <2=>AFE hardware only <3=>Both

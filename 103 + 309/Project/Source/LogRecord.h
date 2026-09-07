@@ -4,7 +4,7 @@
 /*
  * Event records are exposed as one Modbus register per log item (event, delta).
  * The transport still limits each response to RS485_MAX_BUFFER_SIZE, but the
- * internal read-window scratch must hold the complete 500-record logical area
+ * internal read-window scratch must hold the complete configured logical log area
  * because Sci_Upper.c builds the window first and then slices the requested
  * Modbus range. This only enlarges the shared scratch buffer; it does not
  * enlarge RS485MSG or the on-wire frame size.

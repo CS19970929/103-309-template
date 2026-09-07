@@ -6,26 +6,10 @@ static UINT16 SOC_LimitA10(UINT32 current_a10)
 	return (current_a10 > (UINT32)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
 }
 
-static UINT32 SOC_GetPackVoltageForTypeCMv(void)
-{
-	UINT32 pack_mv = (UINT32)g_stCellInfoReport.u16VCellTotle * 10U;
-
-	if (pack_mv != 0U)
-	{
-		return pack_mv;
-	}
-	return ADC_GetVbatMilliVolt();
-}
-
-UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
-{
-	return 0;
-}
-
 static int32_t SOC_GetNetCurrentMilliAmp(UINT16 report_ichg, UINT16 report_idsg)
 {
 	UINT32 chg_a10 = report_ichg;
-	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)SOC_GetTypeCBatEquivCurrentA10();
+	UINT32 dsg_a10 = report_idsg;
 
 	if (chg_a10 >= dsg_a10)
 	{

@@ -147,7 +147,8 @@ void DataLoad_Temperature(void)
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
 
-    t_i32temp = ADC_GetResult(ADC_TEMP_MOS1);
+    /* Reference board MOS NTC is AFE TS4, not the MCU ADC. */
+    t_i32temp = g_afe3520Measurements.u16TempBat[AFE3520_MOS_TEMP_INDEX];
     t_i32temp = t_i32temp / 10 - 40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);

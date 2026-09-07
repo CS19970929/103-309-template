@@ -13,7 +13,7 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 	5U,  6U,  7U,  8U,
 	9U,  10U, 11U, 20U,
 	12U, 13U, 14U, 15U,
-	16U, 17U, 21U, 18U,
+	16U, SYSTEM_ERROR_FIELD_INVALID, 21U, 18U,
 	19U, 22U
 };
 
@@ -77,9 +77,6 @@ static volatile UINT8 *System_ErrorCommandField(enum SYSTEM_ERROR_COMMAND errorC
 	case ERROR_REMOVE_BALANCED:
 	case ERROR_STATUS_BALANCED:
 		return System_ErrorField(ERROR_BALANCED);
-	case ERROR_REMOVE_ADC:
-	case ERROR_STATUS_ADC:
-		return System_ErrorField(ERROR_ADC);
 	case ERROR_REMOVE_SOC_CAIL:
 	case ERROR_STATUS_SOC_CAIL:
 		return System_ErrorField(ERROR_SOC_CAIL);

@@ -384,11 +384,6 @@
           <GroupName>Source</GroupName>
           <Files>
             <File>
-              <FileName>ADC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ADC.c</FilePath>
-            </File>
-            <File>
               <FileName>DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\DataDeal.c</FilePath>
@@ -564,11 +559,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\misc.h</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_adc.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_adc.h</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_bkp.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_bkp.h</FilePath>
@@ -597,11 +587,6 @@
               <FileName>stm32f10x_dbgmcu.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_dbgmcu.h</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_dma.h</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_exti.h</FileName>
@@ -679,11 +664,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\misc.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_adc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_adc.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_bkp.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_bkp.c</FilePath>
@@ -712,11 +692,6 @@
               <FileName>stm32f10x_dbgmcu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dbgmcu.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dma.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_exti.c</FileName>
@@ -1258,11 +1233,6 @@
           <GroupName>Source</GroupName>
           <Files>
             <File>
-              <FileName>ADC.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ADC.c</FilePath>
-            </File>
-            <File>
               <FileName>DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\DataDeal.c</FilePath>
@@ -1438,11 +1408,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\misc.h</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_adc.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_adc.h</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_bkp.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_bkp.h</FilePath>
@@ -1471,11 +1436,6 @@
               <FileName>stm32f10x_dbgmcu.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_dbgmcu.h</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\inc\stm32f10x_dma.h</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_exti.h</FileName>
@@ -1553,11 +1513,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\misc.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_adc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_adc.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_bkp.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_bkp.c</FilePath>
@@ -1586,11 +1541,6 @@
               <FileName>stm32f10x_dbgmcu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dbgmcu.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dma.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_exti.c</FileName>

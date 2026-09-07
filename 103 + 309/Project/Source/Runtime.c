@@ -18,7 +18,6 @@ void Runtime_Boot(void)
 	InitE2PROM();
 	Afe3520_AppInit();
 	InitCan();
-	InitADC();
 
 	InitData_SOC();
 
@@ -45,7 +44,6 @@ void Runtime_RunOnce(void)
 
 	App_AFEGet();
 	App_CommonUpper();
-	App_AnlogCal();
 
 	rtc_sleep();
 

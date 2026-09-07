@@ -48,7 +48,7 @@ typedef struct LOG_STORAGE_PAGE_INFO_TAG
 	((FLASH_STORAGE_PAGE_SIZE - sizeof(LOG_STORAGE_PAGE_HEADER)) / sizeof(LOG_STORAGE_ENTRY))
 
 /* During rollover one page may be erased or contain a torn header. The other
- * three pages must still be able to retain the complete 500-record history. */
+ * three pages must still be able to retain the complete configured history. */
 typedef char LogStorageRetainedCapacityCheck[
 	((((FLASH_STORAGE_LOG_PAGE_COUNT - 1U) * LOG_STORAGE_ENTRY_CAPACITY_PER_PAGE) >=
 	  EVENT_RECORD_LENGTH) ? 1 : -1)];

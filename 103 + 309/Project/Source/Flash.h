@@ -89,7 +89,13 @@
 #define BMS_CONFIG_CALIB_WORD_COUNT        47U
 #define BMS_CONFIG_OTHER_WORD_COUNT        32U
 #define BMS_CONFIG_RESERVED_WORD_COUNT     24U
+/* Select 100 or 500 records; storage format and addresses stay compatible. */
+#ifndef FLASH_STORAGE_LOG_RECORD_COUNT
 #define FLASH_STORAGE_LOG_RECORD_COUNT     500U
+#endif
+#if FLASH_STORAGE_LOG_RECORD_COUNT != 100U && FLASH_STORAGE_LOG_RECORD_COUNT != 500U
+#error "Log record count must be 100 or 500"
+#endif
 
 #define FLASH_STORAGE_SOC_DATA_VERSION_CURRENT ((UINT16)0x0003U)
 #define FLASH_STORAGE_CONFIG_FORMAT_VERSION    ((UINT16)0x0002U)

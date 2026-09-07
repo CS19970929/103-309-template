@@ -87,7 +87,6 @@ static void SysTime_ResetCounters(void)
 	g_st_SysTimeFlag.all = 0U;
 	s_st_SysTimePending.all = 0U;
 	s_u32Sys10msTickCount = 0U;
-	ADC_ResetAnlogCalSchedule();
 
 	s_u8Cnt50ms = 0U;
 	s_u8Cnt100ms = 0U;

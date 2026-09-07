@@ -85,11 +85,6 @@ static void Conf_InitRunSharedIo(void)
     GPIO_SetBits(GPIO_CS_SPI, PIN_CS_SPI);
 }
 
-static void Conf_PrepareStopEntry(void)
-{
-    ADC_StopForLowPower();
-}
-
 static void Conf_InitAllPortsAnalog(void)
 {
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
@@ -163,14 +158,12 @@ void InitWakeUp_DeepMode(void)
 void IOstatus_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
-    Conf_PrepareStopEntry();
     Conf_InitAllPortsAnalog();
 }
 
 void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
-    Conf_PrepareStopEntry();
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
     /* Keep only M_CCC as in reference; no fictitious PRO_EN/BLE/LED rails. */
     Conf_InitGpioMode(GPIOB, GPIO_Pin_All & ~PIN_M_CCC, GPIO_Mode_AIN);
@@ -221,8 +214,6 @@ void InitRunAfterStopWakeup(void)
     // InitIO();
     InitIO_rtc();
 
-    ADC_StopForLowPower();
-    InitADC();
 
     /* SPL DeInit sequence for the fixed USART1 peripheral. */
     RCC_APB2PeriphResetCmd(RCC_APB2Periph_USART1, ENABLE);

@@ -79,16 +79,10 @@ static const UINT16 g_u16OtherParamMin[32]=OtherElement_min, g_u16OtherParamMax[
 static const UINT16 old_min[65]=E2P_PROTECT_MIN_PRT, old_max[65]=E2P_PROTECT_MAX_PRT;
 """
     code += function(read("EEPROM.c"), "BmsParam_ValueInRange")
-    code += function(read("PubFunc.c", True), "GetEndValue")
     code += function(read("PubFunc.c", True), "Sci_CRC16RTU").replace("Sci_CRC16RTU", "OldCrc")
     code += function(read("Flash.c"), "StorageFlash_Crc16Update")
     code += function(read("Flash.c"), "StorageFlash_Crc16")
     code += function(read("PubFunc.c"), "Sci_CRC16RTU")
-    adc = read("ADC.c")
-    code += clean(adc[adc.index("#define ADC_NTC_FIRST_ENCODED"):adc.index("/* Fixed ADC DMA")])
-    old_adc = clean(read("ADC.c", True))
-    table = re.search(r"static const UINT16 iSheldTemp_10K\[[^]]+\]\s*=\s*\{.*?\};", old_adc, re.S).group()
-    code += table.replace("LENGTH_TBLTEMP_PORT_10K", "56")
     code += """
 int main(void) {
     unsigned i,v,n; UINT8 frame[255];
@@ -98,13 +92,12 @@ int main(void) {
         assert(BmsParam_ValueInRange(i<65,i<65?i:i-65,v)==(v>=min && v<=max));
     }
     assert(!BmsParam_ValueInRange(1,65,1000) && !BmsParam_ValueInRange(0,32,1000));
-    for(v=0;v<65536;++v) assert(ADC_NtcTemperature(v)==GetEndValue(iSheldTemp_10K,56,v));
     for(n=0;n<1000;++n) {
         for(i=0;i<255;++i) frame[i]=(UINT8)next_random();
         for(i=0;i<256;++i) assert(Sci_CRC16RTU(frame,i)==OldCrc(frame,i));
     }
     assert(Sci_CRC16RTU((UINT8 *)"123456789",9)==0x4B37);
-    puts("PASS: 6,356,992 parameter values, all 65,536 NTC inputs, 256,000 CRC frames");
+    puts("PASS: 6,356,992 parameter values and 256,000 CRC frames");
     return 0;
 }
 """
@@ -287,6 +280,109 @@ def vector_checks():
     print("PASS: all 59 F103C8 vectors retain positions; stack size unchanged")
 
 
+def log_temperature_checks():
+    assert not (ROOT / SOURCE / "ADC.c").exists() and not (ROOT / SOURCE / "ADC.h").exists()
+    project = (ROOT / "103 + 309/Project/Users/BMS_SH3673520.uvprojx").read_text()
+    for name in ("ADC.c", "stm32f10x_adc.c", "stm32f10x_dma.c"):
+        assert f"<FileName>{name}</FileName>" not in project
+    header = clean(read("DataDeal.h"))
+    code = re.search(r"enum TempArray\s*\{.*?\};", header, re.S).group()
+    code += re.search(r"enum tagInfoForKBArray\s*\{.*?\};", header, re.S).group()
+    code += "\n" + macro(read("afe3520/Afe3520Config.h"), "AFE3520_MOS_TEMP_INDEX")
+    code += """
+static struct { UINT16 u16TempBat[4]; } g_afe3520Measurements;
+static struct { UINT16 u16Temperature[TEMP_NUM]; } g_stCellInfoReport;
+static UINT16 g_u16CalibCoefK[KB_NUM]; static INT16 g_i16CalibCoefB[KB_NUM];
+static unsigned checks;
+static void Monitor_TempBreak(UINT16 *value) { (void)value; ++checks; }
+""" + function(read("DataDeal.c"), "DataLoad_Temperature") + """
+int main(void) {
+    unsigned i,v;
+    for(i=0;i<KB_NUM;++i) g_u16CalibCoefK[i]=1024;
+    g_afe3520Measurements.u16TempBat[0]=650;
+    g_afe3520Measurements.u16TempBat[1]=660;
+    g_afe3520Measurements.u16TempBat[2]=990;
+    for(v=0;v<=1400;++v) {
+        g_afe3520Measurements.u16TempBat[3]=v;
+        checks=0; DataLoad_Temperature();
+        assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==v/10*10);
+        assert(g_stCellInfoReport.u16Temperature[0]==650 && g_stCellInfoReport.u16Temperature[1]==660);
+        assert(checks==3);
+    }
+    g_u16CalibCoefK[MDL_TEMP_MOS1]=2048; g_i16CalibCoefB[MDL_TEMP_MOS1]=1024;
+    g_afe3520Measurements.u16TempBat[3]=650; DataLoad_Temperature();
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==910);
+    puts("PASS: MOS uses TS4 only, -40..100 C mapping, calibration and broken-sensor monitor retained");
+    return 0;
+}
+"""
+    print(run("ts4_temperature", code).decode().strip())
+    header = clean(read("Sci_Upper.h"))
+    defs = "\n".join(line for line in header.splitlines() if line.startswith("#define") and re.search(r"\b(?:RS485_|SCI_TX_BUF_LEN)", line)) + "\n"
+    defs += re.search(r"enum RS485_CMD_E\s*\{.*?\};", header, re.S).group()
+    defs += re.search(r"struct RS485MSG\s*\{.*?\};", header, re.S).group()
+    defs += """
+typedef int8_t INT8;
+#define BMS3520_HW_REGISTER_BASE 0x2500U
+#define BMS3520_HW_READ_WORDS 32U
+#define RS485_ADDR_RW_BMS_PARAMETER 0x2400U
+#define BMS_PARAMETER_COUNT 24U
+#define E2P_PARA_NUM_OTHER_ELEMENT1 32U
+#define SOC_TABLE_SIZE 21U
+#define E2P_PARA_NUM_RTC 21U
+#define E2P_PARA_NUM_PROTECT 65U
+#define KB_NUM 47U
+#define PRODUCT_ID_LENGTH_MAX 32U
+#define Record_len 10U
+static UINT8 FaultPoint_Third; static UINT16 Fault_record_Third[Record_len];
+static struct { UINT8 BMS_SerialNumber[32], BMS_HardWareVersion[32], BMS_SoftWareVersion[32]; } ProductionInfor;
+#define EVENT_RECORD_LENGTH FLASH_STORAGE_LOG_RECORD_COUNT
+static struct { UINT16 point; UINT8 records[EVENT_RECORD_LENGTH][2]; } s_log_record;
+static UINT8 g_u8SCITxBuff[EVENT_RECORD_LENGTH*2U];
+"""
+    protocol = read("Sci_Upper.c")
+    for name in ("Sci_RangeFits", "Sci_GetReadWindowWordCount", "Sci_Deal_ReadRegs_0x03", "Sci_RecordBackIndex", "Sci_PutWordBE", "Sci_PutZeroWordsBE", "Sci_PutBytes"):
+        defs += function(protocol, name)
+    defs += function(read("LogRecord.c"), "Sci_ACK_0x03_ReadRegs_EventRecord")
+    defs += function(protocol, "Sci_FillReadRegsLCD")
+    defs += """
+static void Sci_BuildReadWindow(UINT16 addr,UINT16 *offset,UINT8 *buffer) {
+    assert(addr>=RS485_ADDR_EVENT_RECORD && addr<RS485_ADDR_EVENT_RECORD+EVENT_RECORD_LENGTH);
+    Sci_FillReadRegsLCD(*offset,offset,buffer);
+}
+"""
+    for name in ("StorageFlash_Crc16Update", "StorageFlash_Crc16"):
+        defs += function(read("Flash.c"), name)
+    defs += function(read("PubFunc.c"), "Sci_CRC16RTU")
+    defs += function(protocol, "Sci_ACK_0x03")
+    defs += """
+int main(void) {
+    unsigned offset,i; struct RS485MSG s;
+    s_log_record.point=37;
+    for(i=0;i<EVENT_RECORD_LENGTH;++i) { s_log_record.records[i][0]=i%20+1; s_log_record.records[i][1]=i%255; }
+    for(offset=0;offset<EVENT_RECORD_LENGTH;offset+=100) {
+        unsigned addr=RS485_ADDR_EVENT_RECORD+offset;
+        memset(&s,0,sizeof(s)); s.u16Buffer[0]=1; s.u16Buffer[2]=addr>>8; s.u16Buffer[3]=addr;
+        s.u16Buffer[5]=100; s.enRs485CmdType=RS485_CMD_READ_REGS;
+        Sci_Deal_ReadRegs_0x03(&s); assert(s.AckType==RS485_ACK_POS);
+        Sci_ACK_0x03(&s); assert(s.AckLenth==205 && s.u16Buffer[2]==200);
+        for(i=0;i<100;++i) {
+            unsigned n=(s_log_record.point+EVENT_RECORD_LENGTH-1-offset-i)%EVENT_RECORD_LENGTH;
+            assert(s.u16Buffer[3+2*i]==s_log_record.records[n][0]);
+            assert(s.u16Buffer[4+2*i]==s_log_record.records[n][1]);
+        }
+    }
+    memset(&s,0,sizeof(s)); offset=RS485_ADDR_EVENT_RECORD+EVENT_RECORD_LENGTH;
+    s.u16Buffer[2]=offset>>8; s.u16Buffer[3]=offset; s.u16Buffer[5]=1;
+    Sci_Deal_ReadRegs_0x03(&s); assert(s.AckType==RS485_ACK_NEG);
+    printf("PASS: %u logs, 100-word pages, newest-first ring wrap and end-boundary rejection\\n",EVENT_RECORD_LENGTH);
+    return 0;
+}
+"""
+    for count in (100, 500):
+        print(run(f"logs_{count}", f"#define FLASH_STORAGE_LOG_RECORD_COUNT {count}U\n" + defs).decode().strip())
+
+
 def main():
     if not CC:
         raise SystemExit("Run in a VS developer shell or put gcc/clang on PATH")
@@ -295,6 +391,7 @@ def main():
     serial_checks()
     flash_checks()
     vector_checks()
+    log_temperature_checks()
 
 
 if __name__ == "__main__":

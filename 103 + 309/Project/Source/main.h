@@ -13,7 +13,6 @@
 #include "EEPROM.h"
 #include "Fault.h"
 #include "SOC.h"
-#include "ADC.h"
 #include "RTC.h"
 #include "PubFunc.h"
 #include "Can_HDX.h"
