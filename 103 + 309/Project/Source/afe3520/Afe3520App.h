@@ -14,7 +14,6 @@ extern struct Afe3520Measurements g_afe3520Measurements;
 
 void Afe3520_AppInit(void);
 void Afe3520_RestorePort(void);
-void Afe3520_SetLowPowerMode(UINT8 mode);
 UINT8 Afe3520_UpdateMeasurements(void); /* 0=success, 1=failure */
 UINT8 Afe3520_ReadCalibratedCurrentCode(UINT16 *code); /* 1=success */
 

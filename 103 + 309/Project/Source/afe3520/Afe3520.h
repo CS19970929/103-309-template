@@ -149,7 +149,8 @@ typedef enum
     AFE3520_ERR_CRC,
     AFE3520_ERR_ACK,
     AFE3520_ERR_VERIFY,
-    AFE3520_ERR_CONFIG
+    AFE3520_ERR_CONFIG,
+    AFE3520_ERR_TIMEOUT
 } AFE3520_RESULT;
 
 typedef struct
@@ -161,7 +162,11 @@ typedef struct
     uint32_t verifyErrorCount;
     uint32_t resetCount;
     uint32_t configRepairCount;
+    uint32_t timeoutCount;
+    uint32_t spiErrorCount;
+    uint32_t busRecoveryCount;
     AFE3520_RESULT lastError;
+    AFE3520_RESULT lastFault; /* Preserved across subsequent successful transfers. */
 } AFE3520_DIAG;
 
 #define AFE3520_CONFIG_LENGTH 21U
@@ -192,6 +197,7 @@ typedef struct
 } AFE3520_SNAPSHOT;
 
 void Afe3520_PortInit(void);
+void Afe3520_Invalidate(void);
 AFE3520_RESULT Afe3520_Read(uint8_t reg, uint8_t *data, uint8_t len);
 AFE3520_RESULT Afe3520_Write(uint8_t reg, uint8_t value);
 AFE3520_RESULT Afe3520_SoftReset(void);

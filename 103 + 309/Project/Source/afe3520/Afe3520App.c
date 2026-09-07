@@ -33,7 +33,7 @@ void Afe3520_RestorePort(void)
      * Mark config dirty because a concurrent AFE reset/WDT recovery may also
      * have restored RAM defaults while the MCU was asleep. */
     Afe3520_PortInit();
-    Afe3520_MarkConfigDirty();
+    Afe3520_Invalidate();
 }
 
 void Afe3520_AppInit(void)
@@ -47,7 +47,7 @@ void Afe3520_AppInit(void)
         return;
     }
 
-    if (!Bms3520_ApplyAndVerifyAfeConfig() || (Afe3520_SetBalance(0U) != AFE3520_OK))
+    if (!Bms3520_ApplyAndVerifyAfeConfig())
     {
         SystemRuntime_SetAfeStatus(0U, 0U);
         System_ERROR_UserCallback(ERROR_AFE1);
@@ -56,22 +56,6 @@ void Afe3520_AppInit(void)
 
     SystemRuntime_SetAfeStatus(0U, 1U);
     System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
-}
-
-void Afe3520_SetLowPowerMode(UINT8 mode)
-{
-    switch (mode)
-    {
-    case 0U:
-        (void)Afe3520_EnterIdle();
-        break;
-    case 1U:
-        (void)Afe3520_EnterSleep();
-        break;
-    default:
-        (void)Afe3520_EnterPowerDown();
-        break;
-    }
 }
 
 UINT8 Afe3520_UpdateMeasurements(void)
@@ -108,6 +92,5 @@ UINT8 Afe3520_UpdateMeasurements(void)
     proxy = Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
     g_afe3520Measurements.u16Current = (UINT16)proxy;
 
-    SystemRuntime_SetAfeStatus(0U, 1U);
     return 0U;
 }

@@ -595,7 +595,7 @@ static void MonitorAFE_Recover(UINT8 num)
     switch (num)
     {
     case 0:
-        Afe3520_AppInit();
+        Afe3520_RestorePort();
         break;
     case 1:
         Bms3520_ApplyAndVerifyAfeConfig();
@@ -863,7 +863,15 @@ void App_AFEGet(void)
 
     GPIO_WriteBit(GPIO_DBG_LED, PIN_DBG_LED,
                   GPIO_ReadOutputDataBit(GPIO_DBG_LED, PIN_DBG_LED) ? Bit_RESET : Bit_SET);
-    MonitorAFE(0, Afe3520_UpdateMeasurements());
+    {
+        UINT8 result = Afe3520_UpdateMeasurements();
+        MonitorAFE(0, result);
+        if (result != 0U)
+        {
+            Bms3520_HandleCommFault();
+            return; /* Never integrate SOC or protection counters from stale samples. */
+        }
+    }
 
     DataLoad_CellVolt();
     DataLoad_CellVoltMaxMinFind();
@@ -874,7 +882,9 @@ void App_AFEGet(void)
     AfeCurrent_NextSeq();
 
     Bms3520_ProtectionService();
+    if (!Afe3520_GetSnapshot()->valid) return;
     ProtectionMos_Process200ms();
+    if (!Afe3520_GetSnapshot()->valid) return;
     App_SOC();
 
 #ifdef VCELL_DISP_TEST

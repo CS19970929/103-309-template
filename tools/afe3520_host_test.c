@@ -116,9 +116,43 @@ uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef *p, uint16_t pin) { return (p->odr&p
 void GPIO_Init(GPIO_TypeDef *p, GPIO_InitTypeDef *g) { (void)p; (void)g; }
 void RCC_APB2PeriphClockCmd(int clock, int on) { (void)clock; (void)on; }
 
+SPI_TypeDef host_spi;
+static unsigned hw_fault, hw_fault_resets, hw_resets, hw_rx_ready;
+static uint8_t hw_rx;
+void GPIO_PinRemapConfig(unsigned map, int on) { assert(map==GPIO_Remap_SPI1 && !on); }
+void SPI_I2S_DeInit(SPI_TypeDef *spi) {
+    assert(GPIOA->odr & PIN_CS_SPI); spi->enabled=0; hw_rx_ready=0; ++hw_resets;
+    if(hw_fault_resets && !--hw_fault_resets) hw_fault=0;
+}
+void SPI_StructInit(SPI_InitTypeDef *spi) { memset(spi,0,sizeof(*spi)); }
+void SPI_Init(SPI_TypeDef *spi, SPI_InitTypeDef *cfg) {
+    (void)spi;
+    assert(cfg->SPI_Direction==SPI_Direction_2Lines_FullDuplex && cfg->SPI_Mode==SPI_Mode_Master);
+    assert(cfg->SPI_CPOL==SPI_CPOL_High && cfg->SPI_CPHA==SPI_CPHA_2Edge);
+    assert(cfg->SPI_DataSize==SPI_DataSize_8b && cfg->SPI_FirstBit==SPI_FirstBit_MSB);
+    assert(cfg->SPI_NSS==SPI_NSS_Soft && cfg->SPI_BaudRatePrescaler==AFE3520_CFG_SPI_DIVIDER);
+}
+void SPI_Cmd(SPI_TypeDef *spi, int on) { spi->enabled=on; }
+void SPI_NSSInternalSoftwareConfig(SPI_TypeDef *spi, unsigned state) { (void)spi; assert(state==SPI_NSSInternalSoft_Set); }
+FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef *spi, uint16_t flag) {
+    (void)spi;
+    if(hw_fault==flag) return flag<=2 ? RESET : SET;
+    if(flag==SPI_I2S_FLAG_TXE) return SET;
+    if(flag==SPI_I2S_FLAG_RXNE) return hw_rx_ready ? SET : RESET;
+    return RESET;
+}
+void SPI_I2S_SendData(SPI_TypeDef *spi, uint16_t value) {
+    unsigned pos=bits/8;
+    assert(spi->enabled && selected && !hw_rx_ready && pos<sizeof(tx_frame));
+    tx_frame[pos]=(uint8_t)value; hw_rx=response(pos); rx_frame[pos]=hw_rx;
+    bits+=8; hw_rx_ready=1;
+}
+uint16_t SPI_I2S_ReceiveData(SPI_TypeDef *spi) { (void)spi; hw_rx_ready=0; return hw_rx; }
+
 static void healthy(void)
 {
     unsigned i;
+    hw_fault=hw_fault_resets=0;
     memset(ram,0,sizeof(ram)); memset(write_count,0,sizeof(write_count));
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
     fail_reads=fail_writes=corrupt_echo=force_fet_off=0; corrupt_read_reg=-1;
@@ -220,6 +254,47 @@ int main(void)
       assert(!Afe3520_ReadCalibratedCurrentCode(0));
     }
     CHECK_CASE("native CADC preserves signed current calibration without MTP alias");
+    healthy(); Bms3520_ProtectionService();
+    Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
+    fail_reads=100; fail_writes=100;
+    Bms3520_ProtectionService();
+    assert(afe_error && !s_snapshot.valid && !s_prot.mosFeedbackValid);
+    assert(Bms3520_GetBlockMask() & AFE3520_BLOCK_GLOBAL_AFE_COMM);
+    assert(!(GPIOB->odr & PIN_M_CCC));
+    fail_reads=fail_writes=0;
+    for(i=1;i<AFE3520_CFG_COMM_RECOVERY_TICKS;i++) {
+        Bms3520_ProtectionService(); assert(afe_error && !(ram[0x41]&3));
+    }
+    Bms3520_ProtectionService(); assert(!afe_error && (ram[0x41]&3)==3);
+    CHECK_CASE("persistent bus fault blocks MOS; recovery requires consecutive verified cycles");
+
+    healthy(); ram[0x58]=AFE3520_FLAG1_SC;
+    assert(Bms3520_ApplyAndVerifyAfeConfig() && (ram[0x58]&AFE3520_FLAG1_SC));
+    CHECK_CASE("configuration repair preserves live protection latches");
+
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    for(i=1;i<=5;i++) {
+        healthy(); before=hw_resets; hw_fault=i; hw_fault_resets=1;
+        assert(Afe3520_Read(0x41,&value,1)==AFE3520_OK);
+        assert(hw_resets==before+1 && (GPIOA->odr & PIN_CS_SPI));
+    }
+    CHECK_CASE("TXE/RXNE/BSY timeout and OVR/MODF reset SPI and retry successfully");
+    healthy(); hw_fault=2; hw_fault_resets=100;
+    assert(Afe3520_Read(0x41,&value,1)==AFE3520_ERR_TIMEOUT);
+    assert(!s_snapshot.valid && Afe3520_ConfigDirty() && (GPIOA->odr & PIN_CS_SPI));
+    hw_fault=hw_fault_resets=0;
+    assert(Afe3520_Read(0x41,&value,1)==AFE3520_OK);
+    CHECK_CASE("persistent RXNE timeout is bounded; subsequent frame can recover");
+#endif
+    healthy(); g_stCellInfoReport.u16Temperature[0]=1000; g_stCellInfoReport.u16Temperature[1]=200;
+    Bms3520_ProtectionService();
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp && g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
+    g_stCellInfoReport.u16Temperature[0]=g_stCellInfoReport.u16Temperature[1]=650;
+    for(i=0;i<BMS3520_SW_RECOVERY_STABLE_TICKS;i++) Bms3520_ProtectionService();
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp && !g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
+    g_stCellInfoReport.u16Temperature[0]=0; Bms3520_ProtectionService();
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
+    CHECK_CASE("hot/cold latches recover independently; zero temperature sensor is not ignored");
     SeriesNum=21; assert(!Bms3520_BuildAfeConfig(&cfg));
     printf("PASS: %u cases, watchdog=%d\n",tests,AFE3520_CFG_WDT_ENABLE);
     return 0;

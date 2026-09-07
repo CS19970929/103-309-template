@@ -1,5 +1,6 @@
 #include "main.h"
 #include "LowPowerSleep.h"
+#include "afe3520/Afe3520Config.h"
 
 typedef struct SLEEP_RUNTIME_TAG
 {
@@ -43,13 +44,28 @@ UINT8 SleepDeal_IsWakeupValid(void)
 
 void SleepDeal_Continue(UINT8 sleep_mode)
 {
-	UINT16 boot_flag = FLASH_DEEP_SLEEP_VALUE;
-
-	LowPowerSleep_SaveResetState();
-	BootFlag_Write(boot_flag);
-	Afe3520_SetLowPowerMode(0);
-	(void)Afe3520_EnterSleep();
-	MCU_RESET();
+    const BMS3520_PROTECTION_STATUS *status;
+    if ((sleep_mode != NORMAL_MODE && sleep_mode != DEEP_MODE) ||
+        AFE3520_CFG_WDT_ENABLE || !Afe3520_GetSnapshot()->valid ||
+        (Bms3520_GetBlockMask() & (AFE3520_BLOCK_GLOBAL_AFE_COMM | AFE3520_BLOCK_GLOBAL_AFE_CONFIG)))
+    {
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
+    Bms3520_SetSystemBlock(1U);
+    status = Bms3520_GetProtectionStatus();
+    if (!status->mosFeedbackValid || status->actualCharge || status->actualDischarge ||
+        Afe3520_EnterSleep() != AFE3520_OK)
+    {
+        Bms3520_HandleCommFault();
+        Bms3520_SetSystemBlock(0U);
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
+    /* Commit the boot marker only after MOS-off feedback and sleep ACK. */
+    LowPowerSleep_SaveResetState();
+    BootFlag_Write(sleep_mode == DEEP_MODE ? FLASH_DEEP_SLEEP_VALUE : FLASH_NORMAL_SLEEP_VALUE);
+    MCU_RESET();
 }
 
 static void BootFlag_EnableAccess(void)
@@ -133,10 +149,11 @@ UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
 
 static void SleepDeal_WaitStopWakeup(void)
 {
-	do
-	{
-		Sys_StopMode();
-	} while (!SleepDeal_IsWakeupValid());
+    while (!SleepDeal_IsWakeupValid())
+    {
+        g_irq_t = NO_IRQ;
+        Sys_StopMode();
+    }
 }
 
 void SleepDeal_HandleBootSleepStartup(void)
@@ -151,7 +168,6 @@ void SleepDeal_HandleBootSleepStartup(void)
 	case FLASH_HICCUP_SLEEP_VALUE:
 		break;
 	case FLASH_NORMAL_SLEEP_VALUE:
-		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
 		BootFlag_Clear();

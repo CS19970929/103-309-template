@@ -22,9 +22,11 @@ typedef struct
     uint8_t actualCharge;
     uint8_t actualDischarge;
     uint8_t configValid;
+    uint8_t mosFeedbackValid;
 } BMS3520_PROTECTION_STATUS;
 
 void Bms3520_ProtectionInit(void);
+void Bms3520_HandleCommFault(void);
 void Bms3520_ProtectionService(void);
 void Bms3520_RequestMos(GPIO_Type type, uint8_t on);
 uint8_t Bms3520_BuildAfeConfig(AFE3520_REG_CONFIG *cfg);

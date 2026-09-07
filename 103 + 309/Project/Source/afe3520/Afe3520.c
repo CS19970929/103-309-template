@@ -1,9 +1,10 @@
 #include "main.h"
 #include "afe3520/Afe3520.h"
+#include "afe3520/Afe3520Config.h"
 #include "conf/conf_gpio.h"
 #include <string.h>
 
-/* Reference protocol: Mode 3 software SPI, CRC8 poly 0x07/init 0.
+/* Reference protocol: Mode 3 SPI, CRC8 poly 0x07/init 0.
  * Write CRC covers CMD+ADDR+DATA; read CRC includes FF+CMD+ADDR+LEN+DATA. */
 #define AFE3520_SPI_DUMMY 0x00U
 #define AFE3520_SPI_IDLE  0xFFU
@@ -13,6 +14,7 @@ static AFE3520_DIAG s_diag;
 static uint8_t s_ready;
 static uint8_t s_configDirty = 1U;
 static uint8_t s_shadowSconf2;
+static AFE3520_RESULT s_frameError;
 
 /* 10K NTC lookup table used by the SH3673520 temperature code conversion.
  * The index is encoded temperature in degC + 40, covering -40..100 degC. */
@@ -56,6 +58,7 @@ static uint8_t Afe3520_Crc8(const uint8_t *data, uint16_t length)
 static void Afe3520_SetError(AFE3520_RESULT result)
 {
     s_diag.lastError = result;
+    if (result != AFE3520_OK) s_diag.lastFault = result;
 }
 
 static void Afe3520_CsLow(void)
@@ -74,8 +77,72 @@ static void Afe3520_SpiDelayUs(uint32_t us)
     while (n-- != 0U) __NOP();
 }
 
+#if AFE3520_CFG_USE_HARDWARE_SPI
+static void Afe3520_HardwareSpiInit(void)
+{
+    SPI_InitTypeDef spi;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
+    /* SPL deinit uses the APB2 reset line: clears stuck BSY, OVR and MODF. */
+    SPI_I2S_DeInit(SPI1);
+    SPI_StructInit(&spi);
+    spi.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+    spi.SPI_Mode = SPI_Mode_Master;
+    spi.SPI_DataSize = SPI_DataSize_8b;
+    spi.SPI_CPOL = SPI_CPOL_High;
+    spi.SPI_CPHA = SPI_CPHA_2Edge;
+    spi.SPI_NSS = SPI_NSS_Soft;
+#if AFE3520_CFG_SPI_DIVIDER == 128
+    spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_128;
+#else
+    spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_256;
+#endif
+    spi.SPI_FirstBit = SPI_FirstBit_MSB;
+    SPI_Init(SPI1, &spi);
+    SPI_NSSInternalSoftwareConfig(SPI1, SPI_NSSInternalSoft_Set);
+    SPI_Cmd(SPI1, ENABLE);
+}
+
+static uint8_t Afe3520_WaitSpiFlag(uint16_t flag, FlagStatus state)
+{
+    uint32_t remaining = AFE3520_CFG_SPI_POLL_LIMIT;
+    if (s_frameError != AFE3520_OK) return 0U;
+    while (remaining-- != 0U)
+    {
+        if ((SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_OVR) != RESET) ||
+            (SPI_I2S_GetFlagStatus(SPI1, SPI_FLAG_MODF) != RESET))
+        {
+            ++s_diag.spiErrorCount;
+            s_frameError = AFE3520_ERR_SPI;
+            return 0U;
+        }
+        if (SPI_I2S_GetFlagStatus(SPI1, flag) == state) return 1U;
+    }
+    ++s_diag.timeoutCount;
+    s_frameError = AFE3520_ERR_TIMEOUT;
+    return 0U;
+}
+#endif
+
+static void Afe3520_RecoverBus(void)
+{
+    Afe3520_CsHigh();
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    Afe3520_HardwareSpiInit();
+#else
+    GPIO_SetBits(GPIO_SCLK_SPI, PIN_SCLK_SPI);
+    GPIO_SetBits(GPIO_MOSI_SPI, PIN_MOSI_SPI);
+#endif
+    ++s_diag.busRecoveryCount;
+}
+
 static uint8_t Afe3520_SpiByte(uint8_t tx)
 {
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    if (!Afe3520_WaitSpiFlag(SPI_I2S_FLAG_TXE, SET)) return 0U;
+    SPI_I2S_SendData(SPI1, tx);
+    if (!Afe3520_WaitSpiFlag(SPI_I2S_FLAG_RXNE, SET)) return 0U;
+    return (uint8_t)SPI_I2S_ReceiveData(SPI1);
+#else
     uint8_t i;
     uint8_t rx = 0U;
 
@@ -100,11 +167,12 @@ static uint8_t Afe3520_SpiByte(uint8_t tx)
 
     GPIO_SetBits(GPIO_SCLK_SPI, PIN_SCLK_SPI);
     return rx;
-
+#endif
 }
 
 static void Afe3520_BeginFrame(void)
 {
+    s_frameError = AFE3520_OK;
     Afe3520_CsHigh();
     Afe3520_SpiDelayUs(1U);
     Afe3520_CsLow();
@@ -113,6 +181,9 @@ static void Afe3520_BeginFrame(void)
 
 static void Afe3520_EndFrame(void)
 {
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    (void)Afe3520_WaitSpiFlag(SPI_I2S_FLAG_BSY, RESET);
+#endif
     Afe3520_SpiDelayUs(1U);
     Afe3520_CsHigh();
     Afe3520_SpiDelayUs(1U);
@@ -130,6 +201,11 @@ void Afe3520_PortInit(void)
     gpio.GPIO_Mode = GPIO_Mode_Out_PP;
     gpio.GPIO_Pin = PIN_CS_SPI;
     GPIO_Init(GPIO_CS_SPI, &gpio);
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_SPI1, DISABLE);
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+#endif
     gpio.GPIO_Pin = PIN_SCLK_SPI;
     GPIO_Init(GPIO_SCLK_SPI, &gpio);
     gpio.GPIO_Pin = PIN_MOSI_SPI;
@@ -137,6 +213,9 @@ void Afe3520_PortInit(void)
     gpio.GPIO_Pin = PIN_MISO_SPI;
     gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
     GPIO_Init(GPIO_MISO_SPI, &gpio);
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    Afe3520_HardwareSpiInit();
+#endif
 }
 
 static uint8_t Afe3520_WriteCrc(uint8_t reg, uint8_t value)
@@ -158,6 +237,7 @@ static AFE3520_RESULT Afe3520_WriteOnce(uint8_t reg, uint8_t value)
     rx[4] = Afe3520_SpiByte(AFE3520_SPI_DUMMY);
     Afe3520_EndFrame();
     ++s_diag.transferCount;
+    if (s_frameError != AFE3520_OK) return s_frameError;
 
     if ((rx[0] != AFE3520_SPI_IDLE) || (rx[1] != AFE3520_CMD_WRITE) ||
         (rx[2] != reg) || (rx[3] != value)) return AFE3520_ERR_SPI;
@@ -179,9 +259,11 @@ AFE3520_RESULT Afe3520_Write(uint8_t reg, uint8_t value)
         result = Afe3520_WriteOnce(reg, value);
         if (result == AFE3520_OK) break;
         ++s_diag.retryCount;
+        Afe3520_RecoverBus();
         Delay1ms(1U); /* CS is high: retry always starts a fresh transaction. */
     }
     Afe3520_SetError(result);
+    if (result != AFE3520_OK) Afe3520_Invalidate();
     return result;
 }
 
@@ -208,6 +290,7 @@ static AFE3520_RESULT Afe3520_ReadOnce(uint8_t reg, uint8_t *data, uint8_t len)
     rxCrc = Afe3520_SpiByte(AFE3520_SPI_DUMMY);
     Afe3520_EndFrame();
     ++s_diag.transferCount;
+    if (s_frameError != AFE3520_OK) return s_frameError;
 
     if ((rx0 != AFE3520_SPI_IDLE) || (rx1 != AFE3520_CMD_READ) ||
         (rx2 != reg) || (rx3 != len)) return AFE3520_ERR_SPI;
@@ -238,9 +321,11 @@ AFE3520_RESULT Afe3520_Read(uint8_t reg, uint8_t *data, uint8_t len)
             return result;
         }
         ++s_diag.retryCount;
+        Afe3520_RecoverBus();
         Delay1ms(1U);
     }
     Afe3520_SetError(result);
+    if (result != AFE3520_OK) Afe3520_Invalidate();
     return result;
 }
 
@@ -261,20 +346,21 @@ AFE3520_RESULT Afe3520_SoftReset(void)
         rx[4] = Afe3520_SpiByte(0U);
         Afe3520_EndFrame();
         ++s_diag.transferCount;
-        if ((rx[0] == 0xFFU) && (rx[1] == tx[0]) && (rx[2] == tx[1]) &&
+        if ((s_frameError == AFE3520_OK) && (rx[0] == 0xFFU) && (rx[1] == tx[0]) && (rx[2] == tx[1]) &&
             (rx[3] == tx[2]) && (rx[4] == AFE3520_ACK_OK))
         {
             ++s_diag.resetCount;
-            s_ready = 0U;
-            s_configDirty = 1U;
+            Afe3520_Invalidate();
             Delay1ms(5U);
             return AFE3520_OK;
         }
         ++s_diag.retryCount;
+        Afe3520_RecoverBus();
         Delay1ms(1U);
     }
-    Afe3520_SetError(AFE3520_ERR_ACK);
-    return AFE3520_ERR_ACK;
+    Afe3520_Invalidate();
+    Afe3520_SetError(s_frameError != AFE3520_OK ? s_frameError : AFE3520_ERR_ACK);
+    return s_diag.lastError;
 }
 
 static uint16_t Afe3520_Be16(const uint8_t *p)
@@ -455,9 +541,11 @@ AFE3520_RESULT Afe3520_ApplyConfig(const AFE3520_REG_CONFIG *cfg)
     result = Afe3520_VerifyConfig(cfg);
     if (result != AFE3520_OK) return result;
     s_shadowSconf2 = cfg->value[AFE3520_REG_SCONF2 - AFE3520_REG_SCONF1];
-    /* Reference clears protection latches after initialization. Also consume
-     * reset/WDT latches so post-debug recovery does not rewrite RAM forever. */
-    result = Afe3520_ClearFlags(0xBFU, 0xFCU);
+    /* Balance must be confirmed off before configuration becomes valid. */
+    result = Afe3520_SetBalance(0U);
+    if (result != AFE3520_OK) return result;
+    /* Only acknowledge resets here. Protection latches need safe recovery. */
+    result = Afe3520_ClearFlags(AFE3520_FLAG1_RST1, AFE3520_FLAG2_RST2);
     if (result != AFE3520_OK) return result;
     s_configDirty = 0U;
     ++s_diag.configRepairCount;
@@ -476,7 +564,12 @@ AFE3520_RESULT Afe3520_SetMos(uint8_t chargeOn, uint8_t dischargeOn, uint8_t pre
     if (result != AFE3520_OK) return result;
     s_shadowSconf2 = next;
     /* Acknowledged command and actual FET feedback are different states. */
-    return Afe3520_Read(AFE3520_REG_BSTATUS1, &s_snapshot.bstatus1, 1U);
+    {
+        uint8_t status;
+        result = Afe3520_Read(AFE3520_REG_BSTATUS1, &status, 1U);
+        if (result == AFE3520_OK) s_snapshot.bstatus1 = status;
+        return result;
+    }
 }
 
 AFE3520_RESULT Afe3520_SetBalance(uint32_t mask)
@@ -495,7 +588,9 @@ AFE3520_RESULT Afe3520_EnterSleep(void)
 {
     AFE3520_RESULT result = Afe3520_SetBalance(0U);
     if (result != AFE3520_OK) return result;
-    return Afe3520_Write(AFE3520_REG_SCONF1, AFE3520_MODE_SLEEP);
+    result = Afe3520_Write(AFE3520_REG_SCONF1, AFE3520_MODE_SLEEP);
+    if (result == AFE3520_OK) Afe3520_Invalidate();
+    return result;
 }
 
 AFE3520_RESULT Afe3520_EnterPowerDown(void)
@@ -520,7 +615,6 @@ AFE3520_RESULT Afe3520_Init(void)
 {
     uint8_t probe;
     memset(&s_snapshot, 0, sizeof(s_snapshot));
-    memset(&s_diag, 0, sizeof(s_diag));
     Afe3520_PortInit();
     Delay1ms(5U);
     if (Afe3520_Read(AFE3520_REG_BSTATUS2, &probe, 1U) != AFE3520_OK)
@@ -538,3 +632,10 @@ const AFE3520_DIAG *Afe3520_GetDiag(void) { return &s_diag; }
 uint8_t Afe3520_IsReady(void) { return s_ready; }
 uint8_t Afe3520_ConfigDirty(void) { return s_configDirty; }
 void Afe3520_MarkConfigDirty(void) { s_configDirty = 1U; }
+
+void Afe3520_Invalidate(void)
+{
+    s_snapshot.valid = 0U;
+    s_ready = 0U;
+    s_configDirty = 1U;
+}

@@ -8,6 +8,7 @@ static uint16_t s_swCnt[8];
 static uint16_t s_swRcvCnt[8];
 static uint16_t s_hwStableCnt;
 static uint8_t s_systemBlock;
+static uint8_t s_tempActive[4];
 
 static uint16_t Bms3520_MaxCell(void)
 {
@@ -43,7 +44,7 @@ static uint16_t Bms3520_MinTempEncoded(void)
     for (i = 0U; i < 2U; ++i)
     {
         uint16_t t = g_stCellInfoReport.u16Temperature[i];
-        if ((t != 0U) && (t < v)) v = t;
+        if (t < v) v = t;
     }
     return (v == 0xFFFFU) ? 0U : v;
 }
@@ -88,7 +89,6 @@ uint8_t Bms3520_ApplyAndVerifyAfeConfig(void)
         return 0U;
     }
     s_prot.configValid = 1U;
-    System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
     return 1U;
 }
 
@@ -194,25 +194,24 @@ static void Bms3520_UpdateSoftwareProtection(void)
         s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_OCP;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_OCP;
 
-    active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TChgOTp.curValue, 1U,
-                           &s_swCnt[4], &s_swRcvCnt[4], active,
-                           g_bmsParameters.u16TChgOTp_Rcv.curValue) ||
-        Bms3520_FilterLow(minTemp, g_bmsParameters.u16TchgUTp.curValue, 1U,
-                          &s_swCnt[5], &s_swRcvCnt[5], active,
-                          g_bmsParameters.u16TchgUTp_Rcv.curValue))
-        s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_TEMP;
+    s_tempActive[0] = Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TChgOTp.curValue, 1U,
+                           &s_swCnt[4], &s_swRcvCnt[4], s_tempActive[0],
+                           g_bmsParameters.u16TChgOTp_Rcv.curValue);
+    s_tempActive[1] = Bms3520_FilterLow(minTemp, g_bmsParameters.u16TchgUTp.curValue, 1U,
+                           &s_swCnt[5], &s_swRcvCnt[5], s_tempActive[1],
+                           g_bmsParameters.u16TchgUTp_Rcv.curValue);
+    if (s_tempActive[0] || s_tempActive[1]) s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_TEMP;
     else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_TEMP;
 
-    active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TdischgOTp.curValue, 1U,
-                           &s_swCnt[6], &s_swRcvCnt[6], active,
-                           g_bmsParameters.u16TdischgOTp_Rcv.curValue) ||
-        Bms3520_FilterLow(minTemp, g_bmsParameters.u16TdischgUTp.curValue, 1U,
-                          &s_swCnt[7], &s_swRcvCnt[7], active,
-                          g_bmsParameters.u16TdischgUTp_Rcv.curValue))
-        s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_TEMP;
+    s_tempActive[2] = Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TdischgOTp.curValue, 1U,
+                           &s_swCnt[6], &s_swRcvCnt[6], s_tempActive[2],
+                           g_bmsParameters.u16TdischgOTp_Rcv.curValue);
+    s_tempActive[3] = Bms3520_FilterLow(minTemp, g_bmsParameters.u16TdischgUTp.curValue, 1U,
+                           &s_swCnt[7], &s_swRcvCnt[7], s_tempActive[3],
+                           g_bmsParameters.u16TdischgUTp_Rcv.curValue);
+    if (s_tempActive[2] || s_tempActive[3]) s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_TEMP;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_TEMP;
+
 }
 
 static void Bms3520_UpdateHardwareProtection(const AFE3520_SNAPSHOT *snap)
@@ -238,7 +237,7 @@ static void Bms3520_UpdateHardwareProtection(const AFE3520_SNAPSHOT *snap)
     s_prot.dischargeBlocks = (s_prot.dischargeBlocks & (AFE3520_BLOCK_DSG_SW_UV | AFE3520_BLOCK_DSG_SW_OCP | AFE3520_BLOCK_DSG_SW_TEMP)) | dsg;
     s_prot.globalBlocks &= ~(AFE3520_BLOCK_GLOBAL_SHORT | AFE3520_BLOCK_GLOBAL_WDT |
                              AFE3520_BLOCK_GLOBAL_OPEN_WIRE | AFE3520_BLOCK_GLOBAL_INTERNAL_TEMP |
-                             AFE3520_BLOCK_GLOBAL_AFE_COMM);
+                             0U);
     s_prot.globalBlocks |= global;
     if (s_systemBlock) s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_SYSTEM;
     else s_prot.globalBlocks &= ~AFE3520_BLOCK_GLOBAL_SYSTEM;
@@ -253,13 +252,15 @@ static uint8_t Bms3520_HardwareRecoverySafe(const AFE3520_SNAPSHOT *snap)
     uint16_t minCell = Bms3520_MinCell();
     uint16_t maxTemp = Bms3520_MaxTempEncoded();
     uint16_t minTemp = Bms3520_MinTempEncoded();
-    (void)snap;
+    if (!snap->valid || minCell == 0U || minTemp == 0U || snap->internalTempDeciC >= 1050) return 0U;
     if (maxCell > g_bmsParameters.u16VcellOvp_Rcv.curValue) return 0U;
     if ((minCell != 0U) && (minCell < g_bmsParameters.u16VcellUvp_Rcv.curValue)) return 0U;
     if (g_stCellInfoReport.u16Ichg >= BMS3520_REVERSE_CURRENT_A10) return 0U;
     if (g_stCellInfoReport.u16IDischg >= BMS3520_REVERSE_CURRENT_A10) return 0U;
+    if (maxTemp > g_bmsParameters.u16TChgOTp_Rcv.curValue) return 0U;
     if (maxTemp > g_bmsParameters.u16TdischgOTp_Rcv.curValue) return 0U;
-    if ((minTemp != 0U) && (minTemp < g_bmsParameters.u16TdischgUTp_Rcv.curValue)) return 0U;
+    if (minTemp < g_bmsParameters.u16TchgUTp_Rcv.curValue) return 0U;
+    if (minTemp < g_bmsParameters.u16TdischgUTp_Rcv.curValue) return 0U;
     return 1U;
 }
 
@@ -281,7 +282,7 @@ static void Bms3520_TryRecoverHardware(const AFE3520_SNAPSHOT *snap)
     if (snap->flag2 & AFE3520_FLAG2_WDT) clear2 |= AFE3520_FLAG2_WDT;
     if (snap->flag2 & (AFE3520_FLAG2_UTC | AFE3520_FLAG2_OTC | AFE3520_FLAG2_UTD | AFE3520_FLAG2_OTD))
         clear2 |= (uint8_t)(snap->flag2 & (AFE3520_FLAG2_UTC | AFE3520_FLAG2_OTC | AFE3520_FLAG2_UTD | AFE3520_FLAG2_OTD));
-    (void)Afe3520_ClearFlags(clear1, clear2);
+    if (Afe3520_ClearFlags(clear1, clear2) != AFE3520_OK) Bms3520_HandleCommFault();
 }
 
 static void Bms3520_PublishFaults(const AFE3520_SNAPSHOT *snap)
@@ -296,11 +297,33 @@ static void Bms3520_PublishFaults(const AFE3520_SNAPSHOT *snap)
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = uvp;
     g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = chgOcp;
     g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = dsgOcp;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTC);
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTC);
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTD);
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTD);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = s_tempActive[1] || (snap->flag2 & AFE3520_FLAG2_UTC);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = s_tempActive[0] || (snap->flag2 & AFE3520_FLAG2_OTC);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = s_tempActive[3] || (snap->flag2 & AFE3520_FLAG2_UTD);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = s_tempActive[2] || (snap->flag2 & AFE3520_FLAG2_OTD);
     System_ErrFlag.u8ErrFlag_CBC_DSG = (snap->flag1 & AFE3520_FLAG1_SC) ? 1U : 0U;
+}
+
+void Bms3520_HandleCommFault(void)
+{
+    s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM | AFE3520_BLOCK_GLOBAL_AFE_CONFIG;
+    s_prot.configValid = 0U;
+    s_prot.recoveryCounter = 0U;
+    s_hwStableCnt = 0U;
+    s_prot.mosFeedbackValid = 0U;
+    Afe3520_Invalidate();
+    GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
+    s_prot.actualCharge = 0U; /* External charge gate is physically low. */
+    /* Best effort only: a broken bus cannot guarantee discharge FET shutdown. */
+    if (Afe3520_SetMos(0U, 0U, 0U) == AFE3520_OK)
+    {
+        s_prot.actualDischarge = (Afe3520_GetSnapshot()->bstatus1 & AFE3520_BSTATUS1_DSG_FET) ? 1U : 0U;
+        s_prot.mosFeedbackValid = 1U;
+    }
+    SystemRuntime_SetMosStatus(s_prot.actualCharge, s_prot.actualDischarge);
+    SystemRuntime_SetAfeStatus(0U, 0U);
+    System_ERROR_UserCallback(ERROR_AFE1);
+    s_prot.activeAll = s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks;
 }
 
 static void Bms3520_ApplyMosArbitration(void)
@@ -311,7 +334,7 @@ static void Bms3520_ApplyMosArbitration(void)
     uint8_t reverseDischarge = (g_stCellInfoReport.u16IDischg >= BMS3520_REVERSE_CURRENT_A10);
     uint8_t reverseCharge = (g_stCellInfoReport.u16Ichg >= BMS3520_REVERSE_CURRENT_A10);
 
-    if ((s_prot.globalBlocks != 0U) || !s_prot.configValid)
+    if ((s_prot.globalBlocks != 0U) || !s_prot.configValid || s_systemBlock || !Afe3520_GetSnapshot()->valid)
     {
         charge = 0U;
         discharge = 0U;
@@ -328,9 +351,7 @@ static void Bms3520_ApplyMosArbitration(void)
     if (!charge) GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
     if (Afe3520_SetMos(charge, discharge, 0U) != AFE3520_OK)
     {
-        s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
-        GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
-        System_ERROR_UserCallback(ERROR_AFE1);
+        Bms3520_HandleCommFault();
         return;
     }
     GPIO_WriteBit(GPIO_M_CCC, PIN_M_CCC, charge ? Bit_SET : Bit_RESET);
@@ -338,6 +359,7 @@ static void Bms3520_ApplyMosArbitration(void)
     s_prot.actualCharge = ((snap->bstatus1 & AFE3520_BSTATUS1_CHG_FET) &&
                            GPIO_ReadOutputDataBit(GPIO_M_CCC, PIN_M_CCC)) ? 1U : 0U;
     s_prot.actualDischarge = (snap->bstatus1 & AFE3520_BSTATUS1_DSG_FET) ? 1U : 0U;
+    s_prot.mosFeedbackValid = 1U;
     SystemRuntime_SetMosStatus(s_prot.actualCharge, s_prot.actualDischarge);
 }
 
@@ -345,6 +367,7 @@ void Bms3520_ProtectionInit(void)
 {
     memset(&s_prot, 0, sizeof(s_prot));
     memset(s_swCnt, 0, sizeof(s_swCnt));
+    memset(s_tempActive, 0, sizeof(s_tempActive));
     memset(s_swRcvCnt, 0, sizeof(s_swRcvCnt));
     s_hwStableCnt = 0U;
     s_prot.requestedCharge = 0U;
@@ -356,44 +379,46 @@ void Bms3520_ProtectionInit(void)
 void Bms3520_ProtectionService(void)
 {
     const AFE3520_SNAPSHOT *snap;
-    AFE3520_RESULT result;
-
-    result = Afe3520_Service();
-    snap = Afe3520_GetSnapshot();
-    if (result != AFE3520_OK)
+    if (Afe3520_Service() != AFE3520_OK)
     {
-        s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
-        System_ERROR_UserCallback(ERROR_AFE1);
-        Bms3520_ApplyMosArbitration();
+        Bms3520_HandleCommFault();
         return;
     }
-    s_prot.globalBlocks &= ~AFE3520_BLOCK_GLOBAL_AFE_COMM;
-    System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
-
     if (Afe3520_ConfigDirty() || !s_prot.configValid)
     {
-        if (!Bms3520_ApplyAndVerifyAfeConfig())
+        if (!Bms3520_ApplyAndVerifyAfeConfig() || Afe3520_Service() != AFE3520_OK)
         {
-            s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_CONFIG;
-            Bms3520_ApplyMosArbitration();
-            return;
-        }
-        if (Afe3520_Service() != AFE3520_OK)
-        {
-            s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
-            System_ERROR_UserCallback(ERROR_AFE1);
-            Bms3520_ApplyMosArbitration();
+            Bms3520_HandleCommFault();
             return;
         }
     }
-
+    snap = Afe3520_GetSnapshot();
     Bms3520_UpdateSoftwareProtection();
     Bms3520_UpdateHardwareProtection(snap);
     Bms3520_TryRecoverHardware(snap);
+    if (!snap->valid) return; /* Flag-clear failure has already latched a comm fault. */
     Bms3520_PublishFaults(snap);
 
-    s_prot.activeAll = s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks;
+    if (s_prot.globalBlocks & AFE3520_BLOCK_GLOBAL_AFE_COMM)
+    {
+        if (++s_prot.recoveryCounter >= AFE3520_CFG_COMM_RECOVERY_TICKS)
+        {
+            s_prot.globalBlocks &= ~AFE3520_BLOCK_GLOBAL_AFE_COMM;
+            s_prot.recoveryCounter = 0U;
+        }
+    }
     Bms3520_ApplyMosArbitration();
+    s_prot.activeAll = s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks;
+    if (!(s_prot.globalBlocks & (AFE3520_BLOCK_GLOBAL_AFE_COMM | AFE3520_BLOCK_GLOBAL_AFE_CONFIG)))
+    {
+        SystemRuntime_SetAfeStatus(0U, 1U);
+        System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
+    }
+    else
+    {
+        SystemRuntime_SetAfeStatus(0U, 0U);
+        System_ERROR_UserCallback(ERROR_AFE1);
+    }
 }
 
 void Bms3520_RequestMos(GPIO_Type type, uint8_t on)
@@ -410,5 +435,12 @@ void Bms3520_RequestMos(GPIO_Type type, uint8_t on)
 }
 
 const BMS3520_PROTECTION_STATUS *Bms3520_GetProtectionStatus(void) { return &s_prot; }
-uint32_t Bms3520_GetBlockMask(void) { return s_prot.activeAll; }
-void Bms3520_SetSystemBlock(uint8_t blocked) { s_systemBlock = blocked ? 1U : 0U; }
+uint32_t Bms3520_GetBlockMask(void) { return s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks; }
+void Bms3520_SetSystemBlock(uint8_t blocked)
+{
+    s_systemBlock = blocked ? 1U : 0U;
+    if (blocked) s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_SYSTEM;
+    else s_prot.globalBlocks &= ~AFE3520_BLOCK_GLOBAL_SYSTEM;
+    if (blocked) Bms3520_ApplyMosArbitration();
+    s_prot.activeAll = Bms3520_GetBlockMask();
+}

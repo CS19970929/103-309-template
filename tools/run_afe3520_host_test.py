@@ -35,19 +35,42 @@ def main():
     if not cc:
         raise SystemExit("Run from a Visual Studio developer shell, or put gcc/clang on PATH.")
     msvc = Path(cc).name.lower() == "cl.exe"
-    for watchdog in (0, 1):
-        exe = OUT / f"afe3520_wdt{watchdog}.exe"
+    for hardware, watchdog in ((0,0), (0,1), (1,0), (1,1)):
+        exe = OUT / f"afe3520_spi{hardware}_wdt{watchdog}.exe"
         includes = [ROOT / "tools/afe3520_test_stubs", SRC]
         if msvc:
             cmd = [cc, "/nologo", "/std:c11", "/utf-8", "/W3", "/wd4819",
-                   f"/DAFE3520_CFG_WDT_ENABLE={watchdog}", *[f"/I{p}" for p in includes],
+                   f"/DAFE3520_CFG_WDT_ENABLE={watchdog}", f"/DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"/I{p}" for p in includes],
                    str(ROOT / "tools/afe3520_host_test.c"), f"/Fe:{exe}", f"/Fo:{OUT}/"]
         else:
             cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Wno-unused-parameter",
-                   f"-DAFE3520_CFG_WDT_ENABLE={watchdog}", *[f"-I{p}" for p in includes],
+                   f"-DAFE3520_CFG_WDT_ENABLE={watchdog}", f"-DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"-I{p}" for p in includes],
                    str(ROOT / "tools/afe3520_host_test.c"), "-o", str(exe)]
         subprocess.run(cmd, cwd=OUT, check=True)
         subprocess.run([str(exe)], cwd=OUT, check=True)
+
+    # Selected production bodies keep this state-machine harness focused.
+    def function_body(source, name):
+        text = (SRC / source).read_bytes().decode("latin1").replace("\r\n", "\n")
+        match = re.search(r"^(?:static )?[\w]+ " + name + r"\([^)]*\)\s*\{.*?^\}", text, re.S | re.M)
+        assert match, name
+        # Source comments may be GBK; generated C contains only ASCII code.
+        return re.sub(r"/\*.*?\*/|//[^\n]*", "", match.group(0), flags=re.S)
+    functions = ["lp_refresh_status", "LowPower_Request", "LP_GetBlockReason",
+                 "low_power_log_and_commit_sleep", "lp_select_deep_if_low_voltage",
+                 "lp_update_sleep_request", "rtc_sleep_has_wakeup_exception"]
+    text = "\n\n".join(function_body("rtc_sleep.c", name) for name in functions)
+    text += "\n\n" + function_body("SleepDeal.c", "SleepDeal_Continue")
+    text += "\n\n" + function_body("System_Monitor.c", "System_ERROR_UserCallback")
+    text += "\n\n" + function_body("conf/conf.c", "Sys_StopMode")
+    (OUT / "afe3520_sleep_functions.inc").write_text(text, encoding="ascii")
+    for sleep_wdt in (0, 1):
+        sleep_exe = OUT / f"sleep_wdt{sleep_wdt}.exe"
+        sleep_cmd = [arg.replace(str(ROOT / "tools/afe3520_host_test.c"), str(ROOT / "tools/afe3520_recovery_sleep_test.c"))
+                     .replace(str(exe), str(sleep_exe)).replace("WDT_ENABLE=1", f"WDT_ENABLE={sleep_wdt}") for arg in cmd]
+        sleep_cmd.append(f"/I{OUT}" if msvc else f"-I{OUT}")
+        subprocess.run(sleep_cmd, cwd=OUT, check=True)
+        subprocess.run([str(sleep_exe)], cwd=OUT, check=True)
 
     # Exercise the actual report-copy function, including its unused-channel sentinel.
     data = (SRC / "DataDeal.c").read_bytes().decode("latin1")

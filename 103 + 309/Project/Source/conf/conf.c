@@ -188,15 +188,25 @@ void IOstatus_DeepMode(void)
 
 void Sys_StopMode(void)
 {
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (g_irq_t != NO_IRQ ||
+        GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) == Bit_RESET ||
+        GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU) == Bit_SET)
+    {
+        __set_PRIMASK(primask);
+        return;
+    }
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
     TIM_Cmd(TIM3, DISABLE);
     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
-    LowPower_ClearWakeupPending();
+    /* Do not clear a just-arrived wake event. Pending IRQ wakes masked WFI. */
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();
+    __set_PRIMASK(primask);
 }
 
 void test_rtc_led_display(void)

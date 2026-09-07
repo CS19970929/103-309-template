@@ -32,4 +32,42 @@ uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef *, uint16_t);
 uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef *, uint16_t);
 void GPIO_Init(GPIO_TypeDef *, GPIO_InitTypeDef *);
 void RCC_APB2PeriphClockCmd(int, int);
+#define DISABLE 0
+#define GPIO_Mode_AF_PP 3
+#define GPIO_Remap_SPI1 1
+#define RCC_APB2Periph_AFIO 2
+#define RCC_APB2Periph_SPI1 4
+typedef enum { RESET, SET } FlagStatus;
+typedef struct { unsigned enabled; } SPI_TypeDef;
+extern SPI_TypeDef host_spi;
+#define SPI1 (&host_spi)
+typedef struct {
+    unsigned SPI_Direction, SPI_Mode, SPI_DataSize, SPI_CPOL, SPI_CPHA;
+    unsigned SPI_NSS, SPI_BaudRatePrescaler, SPI_FirstBit;
+} SPI_InitTypeDef;
+#define SPI_Direction_2Lines_FullDuplex 1
+#define SPI_Mode_Master 2
+#define SPI_DataSize_8b 3
+#define SPI_CPOL_High 4
+#define SPI_CPHA_2Edge 5
+#define SPI_NSS_Soft 6
+#define SPI_BaudRatePrescaler_64 64
+#define SPI_BaudRatePrescaler_128 128
+#define SPI_BaudRatePrescaler_256 256
+#define SPI_FirstBit_MSB 7
+#define SPI_NSSInternalSoft_Set 8
+#define SPI_I2S_FLAG_TXE 1
+#define SPI_I2S_FLAG_RXNE 2
+#define SPI_I2S_FLAG_BSY 3
+#define SPI_I2S_FLAG_OVR 4
+#define SPI_FLAG_MODF 5
+void GPIO_PinRemapConfig(unsigned, int);
+void SPI_I2S_DeInit(SPI_TypeDef *);
+void SPI_StructInit(SPI_InitTypeDef *);
+void SPI_Init(SPI_TypeDef *, SPI_InitTypeDef *);
+void SPI_Cmd(SPI_TypeDef *, int);
+void SPI_NSSInternalSoftwareConfig(SPI_TypeDef *, unsigned);
+FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef *, uint16_t);
+void SPI_I2S_SendData(SPI_TypeDef *, uint16_t);
+uint16_t SPI_I2S_ReceiveData(SPI_TypeDef *);
 #endif

@@ -6,6 +6,7 @@
 #include "Sci_Upper.h"
 #include "RTC.h"
 #include "LowPowerSleep.h"
+#include "afe3520/Afe3520Config.h"
 
 #ifdef TERNARYLI
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2750U)
@@ -35,12 +36,20 @@ uint32_t LP_GetBlockReason(void)
 {
     uint32_t reason = 0U;
     uint8_t comm;
+    if (!Afe3520_GetSnapshot()->valid || Afe3520_ConfigDirty() ||
+        !Bms3520_GetProtectionStatus()->configValid ||
+        (Bms3520_GetBlockMask() & (AFE3520_BLOCK_GLOBAL_AFE_COMM | AFE3520_BLOCK_GLOBAL_AFE_CONFIG | AFE3520_BLOCK_GLOBAL_SYSTEM)))
+        reason |= LP_BLOCK_AFE;
+#if AFE3520_CFG_WDT_ENABLE
+    /* External WDT cannot be serviced during STOP: keep the scheduler alive. */
+    reason |= LP_BLOCK_AFE_WDT;
+#endif
 
-    if (RtcSleep_PortGetChargeCurrentMa() >= 5U)
+    if (RtcSleep_PortGetChargeCurrentA10() >= 5U)
     {
         reason |= LP_BLOCK_CHARGE;
     }
-    if (RtcSleep_PortGetDischargeCurrentMa() >= 5U)
+    if (RtcSleep_PortGetDischargeCurrentA10() >= 5U)
     {
         reason |= LP_BLOCK_DISCHARGE;
     }
@@ -91,6 +100,12 @@ void low_power_log_and_commit_sleep(uint8_t sleep_mode)
         return;
     }
 
+    if (LP_GetBlockReason() & (LP_BLOCK_AFE | LP_BLOCK_AFE_WDT | LP_BLOCK_FLASH_BUSY |
+                              LP_BLOCK_UPGRADE | LP_BLOCK_KEY | LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE | LP_BLOCK_COMM))
+    {
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
     RtcSleep_PortCommitResetSleep(sleep_mode);
 }
 
@@ -114,8 +129,8 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
 
-    if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
+    if ((RtcSleep_PortGetCellMinMv() > 0U) && (RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
+        (RtcSleep_PortGetChargeCurrentA10() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
         g_stLowPowerRtcStatus.idle = 0U;
         g_stLowPowerRtcStatus.block = 0U;
@@ -126,8 +141,8 @@ static uint8_t lp_select_deep_if_low_voltage(void)
         return 1U;
     }
 
-    if ((RtcSleep_PortGetCellMinMv() <= RtcSleep_PortGetLowVoltageSleepMv()) &&
-        (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
+    if ((RtcSleep_PortGetCellMinMv() > 0U) && (RtcSleep_PortGetCellMinMv() <= RtcSleep_PortGetLowVoltageSleepMv()) &&
+        (RtcSleep_PortGetChargeCurrentA10() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
         g_stLowPowerRtcStatus.idle = 0U;
         g_stLowPowerRtcStatus.block = 0U;
@@ -145,16 +160,29 @@ static uint8_t lp_select_deep_if_low_voltage(void)
 
 static void lp_update_sleep_request(void)
 {
+    uint32_t block = LP_GetBlockReason();
+    /* Low voltage can override idle/fault waiting, but never these constraints. */
+    if (block & (LP_BLOCK_AFE | LP_BLOCK_AFE_WDT | LP_BLOCK_FLASH_BUSY | LP_BLOCK_UPGRADE |
+                 LP_BLOCK_KEY | LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE | LP_BLOCK_COMM | LP_BLOCK_EXT_COMM))
+    {
+        g_stLowPowerRtcStatus.block = block;
+        g_stLowPowerRtcStatus.idle = 0U;
+        g_stLowPowerRtcStatus.force = 0U;
+        g_stLowPowerRtcStatus.vlow = 0U;
+        LowPower_Request(NO_SLEEP);
+        return;
+    }
     if (lp_select_deep_if_low_voltage() != 0U)
     {
         lp_refresh_status();
         return;
     }
 
-    g_stLowPowerRtcStatus.block = LP_GetBlockReason();
+    g_stLowPowerRtcStatus.block = block;
     if (g_stLowPowerRtcStatus.block != 0U)
     {
         g_stLowPowerRtcStatus.idle = 0U;
+        LowPower_Request(NO_SLEEP);
         lp_refresh_status();
         return;
     }
@@ -199,6 +227,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    g_irq_t = NO_IRQ;
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
@@ -213,7 +242,6 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     LowPowerSleep_SaveCoreState();
-    g_irq_t = NO_IRQ;
     lp_refresh_status();
 }
 
@@ -222,7 +250,13 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     UINT32 rtc_start;
     UINT32 rtc_elapsed;
 
-    g_irq_t = NO_IRQ;
+    {
+        uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+        if (g_irq_t == rtc_alarm_irq) g_irq_t = NO_IRQ;
+        __set_PRIMASK(primask);
+    }
+    if (g_irq_t != NO_IRQ) return false;
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
     rtc_start = RTC_GetCounter();
@@ -250,7 +284,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
             low_power_log_and_commit_sleep(DEEP_MODE);
         }
 
-        return true;
+        return g_irq_t == rtc_alarm_irq || g_irq_t == NO_IRQ;
     }
     else if ((g_stLowPowerRtcStatus.mode == NORMAL_MODE) && (RTC_IsStopWakeup() == 0U))
     {
@@ -260,7 +294,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
             return false;
         }
 
-        return true;
+        return g_irq_t == rtc_alarm_irq || g_irq_t == NO_IRQ;
     }
 
     return false;

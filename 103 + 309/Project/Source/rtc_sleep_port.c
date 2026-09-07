@@ -13,12 +13,12 @@ UINT16 RtcSleep_PortGetCellMinMv(void)
     return g_stCellInfoReport.u16VCellMin;
 }
 
-UINT16 RtcSleep_PortGetChargeCurrentMa(void)
+UINT16 RtcSleep_PortGetChargeCurrentA10(void)
 {
     return g_stCellInfoReport.u16Ichg;
 }
 
-UINT16 RtcSleep_PortGetDischargeCurrentMa(void)
+UINT16 RtcSleep_PortGetDischargeCurrentA10(void)
 {
     return g_stCellInfoReport.u16IDischg;
 }
@@ -30,7 +30,8 @@ UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
 {
-    return false;
+    return (GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) == Bit_RESET) ||
+           (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU) == Bit_SET);
 }
 
 UINT8 RtcSleep_PortGetExternalCommCounter(void)

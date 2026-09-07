@@ -489,7 +489,7 @@ static void RTC_HandleAlarmWakeup(void)
 	if (had_alarm)
 	{
 		sys_time.rtc_alm_cnt++;
-		g_irq_t = rtc_alarm_irq;
+		if (g_irq_t == NO_IRQ) g_irq_t = rtc_alarm_irq;
 		s_rtc.wake = true;
 	}
 }

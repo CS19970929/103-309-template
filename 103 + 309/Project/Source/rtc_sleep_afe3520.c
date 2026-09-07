@@ -11,6 +11,7 @@ UINT8 RtcSleep_AfePortUpdateRtcData(void)
 {
     if (Afe3520_UpdateMeasurements())
     {
+        Bms3520_HandleCommFault();
         return 0U;
     }
     DataLoad_CellVolt();
@@ -49,5 +50,11 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
     if (source != 0) *source = NO_IRQ;
     /* Read native SH3673520 flags and actual MOS feedback. */
     Bms3520_ProtectionService();
+    if (!Afe3520_GetSnapshot()->valid || !Bms3520_GetProtectionStatus()->mosFeedbackValid ||
+        Bms3520_GetBlockMask() != 0U)
+    {
+        if (source != 0) *source = error_wake;
+        return 1U;
+    }
     return 0U;
 }
