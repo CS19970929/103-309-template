@@ -1874,7 +1874,7 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 		case 8:
 			break;
 		case 0x0A:
-			LowPower_Request(DEEP_MODE);
+			LowPower_RequestCommandSleep();
 			break;
 		default:
 			break;

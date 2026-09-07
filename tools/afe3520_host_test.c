@@ -23,6 +23,7 @@ static struct {
 } g_stCellInfoReport;
 static struct { uint8_t u8ErrFlag_CBC_DSG; } System_ErrFlag;
 UINT8 SeriesNum = 19;
+UINT32 g_u32CS_Res_AFE = CS_Res_Num * 1000U / CS_Res;
 BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
 enum { ERROR_AFE1, ERROR_REMOVE_AFE1 };
 static int afe_error, reported_chg, reported_dsg;
@@ -246,12 +247,20 @@ int main(void)
     assert(!(ram[0x59]&4) && (ram[0x41]&3)==3);
     CHECK_CASE("WDT latch blocks MOS then clears after stable recovery");
     healthy();
-    s_snapshot.valid=1; s_snapshot.cadcRaw=1000;
+    s_snapshot.valid=1; s_snapshot.cadcRaw=0;
+    ram[0x91]=1000>>8; ram[0x92]=1000&255;
     { UINT16 code=0;
-      assert(Afe3520_ReadCalibratedCurrentCode(&code) && code==327);
-      s_snapshot.cadcRaw=(UINT16)(INT16)-1000;
-      assert(Afe3520_ReadCalibratedCurrentCode(&code) && (INT16)code==-327);
+      assert(Afe3520_ReadCalibratedCurrentCode(&code) && code==368);
+      ram[0x91]=((UINT16)(INT16)-1000)>>8; ram[0x92]=((UINT16)(INT16)-1000)&255;
+      assert(Afe3520_ReadCalibratedCurrentCode(&code) && (INT16)code==-368);
       assert(!Afe3520_ReadCalibratedCurrentCode(0));
+      assert(Afe3520_CurrentMaFromCadc(29127)==400000);
+      assert(Afe3520_CurrentMaFromCadc(-29127)==-400000);
+      assert(Afe3520_CurrentMaFromCadc(0)==0);
+      assert(Afe3520_CurrentMaFromCadc(1000)==13732);
+      g_u32CS_Res_AFE=1000; assert(Afe3520_CurrentMaFromCadc(29127)==100000);
+      g_u32CS_Res_AFE=4000;
+      fail_reads=100; assert(!Afe3520_ReadCalibratedCurrentCode(&code));
     }
     CHECK_CASE("native CADC preserves signed current calibration without MTP alias");
     healthy(); Bms3520_ProtectionService();

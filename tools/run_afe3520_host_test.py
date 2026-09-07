@@ -63,6 +63,8 @@ def main():
     text += "\n\n" + function_body("SleepDeal.c", "SleepDeal_Continue")
     for name in ("SleepDeal_CommitEmergencyBoot", "SleepDeal_EmergencySleep", "SleepDeal_WaitEmergencyWake"):
         text += "\n\n" + function_body("SleepDeal.c", name)
+    text += "\n\n" + function_body("rtc_sleep.c", "LowPower_RequestCommandSleep")
+    text += "\n\n" + function_body("rtc_sleep.c", "lp_process_command_sleep")
     text += "\n\n" + function_body("System_Monitor.c", "System_ERROR_UserCallback")
     text += "\n\n" + function_body("conf/conf.c", "Sys_StopMode")
     (OUT / "afe3520_sleep_functions.inc").write_text(text, encoding="ascii")
@@ -73,6 +75,46 @@ def main():
         sleep_cmd.append(f"/I{OUT}" if msvc else f"-I{OUT}")
         subprocess.run(sleep_cmd, cwd=OUT, check=True)
         subprocess.run([str(sleep_exe)], cwd=OUT, check=True)
+
+    # Boot migration must not reset calibration/SOC or unrelated shunt settings.
+    migration = OUT / "shunt_migration.c"
+    migration.write_text("""#include <stdint.h>
+#include <assert.h>
+#include <stdio.h>
+typedef uint8_t UINT8;
+typedef struct { uint16_t other[3]; } BMS_CONFIG;
+#define CS_Res 2
+#define CS_Res_Num 8
+#define u16Sys_CS_Res 0
+#define u16Sys_CS_Res_Num 1
+#define BMS_OTHER_PARAM_WORD_INDEX(x) (x)
+#define ERROR_REMOVE_EEPROM_STORE 0
+#define ERROR_EEPROM_STORE 1
+static BMS_CONFIG s_stConfigScratch, stored, applied;
+static unsigned saves, fault, save_ok=1;
+static int StorageFlash_LoadConfigData(BMS_CONFIG *p) { *p=stored; return 1; }
+static int EEPROM_ConfigIsValid(const BMS_CONFIG *p) { (void)p; return 1; }
+static void EEPROM_ApplyConfig(const BMS_CONFIG *p) { applied=*p; }
+static int EEPROM_SaveConfigToFlash(void) { ++saves; return save_ok; }
+static void System_ERROR_UserCallback(unsigned code) { fault=code; }
+""" + function_body("EEPROM.c", "EEPROM_LoadConfigFromFlash") + """
+int main(void) {
+    stored.other[0]=2; stored.other[1]=2; stored.other[2]=1234;
+    EEPROM_LoadConfigFromFlash();
+    assert(saves==1 && applied.other[0]==2 && applied.other[1]==8 && applied.other[2]==1234 && !fault);
+    saves=0; stored.other[1]=8; EEPROM_LoadConfigFromFlash(); assert(!saves);
+    stored.other[0]=3; stored.other[1]=2; EEPROM_LoadConfigFromFlash();
+    assert(!saves && applied.other[0]==3 && applied.other[1]==2);
+    stored.other[0]=2; save_ok=0; EEPROM_LoadConfigFromFlash(); assert(fault);
+    puts("PASS: only obsolete 2/2 shunt migrates to 2/8; other values survive; save error reported");
+    return 0;
+}
+""", encoding="ascii")
+    migration_exe = OUT / "shunt_migration.exe"
+    migration_cmd = [arg.replace(str(ROOT / "tools/afe3520_host_test.c"), str(migration))
+                     .replace(str(exe), str(migration_exe)) for arg in cmd]
+    subprocess.run(migration_cmd, cwd=OUT, check=True)
+    subprocess.run([str(migration_exe)], cwd=OUT, check=True)
 
     # Exercise the actual report-copy function, including its unused-channel sentinel.
     data = (SRC / "DataDeal.c").read_bytes().decode("latin1")

@@ -63,6 +63,7 @@ extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 extern volatile enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);
+void LowPower_RequestCommandSleep(void);
 uint32_t LP_GetBlockReason(void);
 void rtc_sleep(void);
 void cpu_frequency_conf(void);

@@ -12,7 +12,7 @@ typedef int32_t INT32;
 typedef enum { GPIO_CHG, GPIO_DSG, GPIO_PreCHG, GPIO_MAIN } GPIO_Type;
 struct RS485MSG;
 #define CS_Res 2
-#define CS_Res_Num 2
+#define CS_Res_Num 8
 #define LIFEPO
 #define BMS_SW_OCC1 120
 #define BMS_SW_OCC2 120

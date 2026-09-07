@@ -3,27 +3,27 @@
 
 struct Afe3520Measurements g_afe3520Measurements;
 
-static INT16 Afe3520_NativeToLegacyCadc(INT16 nativeRaw)
+static INT16 Afe3520_NativeToCalibratedCode(INT16 nativeRaw)
 {
     /*
      * Generic DataDeal.c still applies the historical current calibration:
      * I = raw * 20 * (CS_Res_Num*1000/CS_Res) / 2147.
-     * SH3673520 native CADC is nominally +/-100mV full scale:
-     * I = native * 200000/65536 * CS_Res_Num/CS_Res.
-     * Equating both gives legacyRaw = nativeRaw * 21470 / 65536.
+     * Reference board CADC conversion:
+     * I_mA = native * 100 * (CS_Res_Num*1000/CS_Res) / 29127.
+     * Equating both gives legacyRaw = nativeRaw * 10735 / 29127.
      * This adapter lets the existing calibrated SOC/current pipeline continue
      * while native SH3673520 CADC remains available inside Afe3520_SNAPSHOT.
      */
-    return (INT16)(((INT32)nativeRaw * 21470L) / 65536L);
+    return (INT16)(((INT32)nativeRaw * 10735L) / 29127L);
 }
 
 UINT8 Afe3520_ReadCalibratedCurrentCode(UINT16 *code)
 {
     const AFE3520_SNAPSHOT *snap = Afe3520_GetSnapshot();
     if (code == 0) return 0U;
-    if (!snap->valid && (Afe3520_Service() != AFE3520_OK)) return 0U;
+    if (Afe3520_Service() != AFE3520_OK) return 0U;
     snap = Afe3520_GetSnapshot();
-    *code = (UINT16)Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
+    *code = (UINT16)Afe3520_NativeToCalibratedCode((INT16)snap->cadcRaw);
     return 1U;
 }
 
@@ -89,7 +89,7 @@ UINT8 Afe3520_UpdateMeasurements(void)
         g_afe3520Measurements.u16TempBat[i] = (UINT16)tempEncoded;
     }
 
-    proxy = Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
+    proxy = Afe3520_NativeToCalibratedCode((INT16)snap->cadcRaw);
     g_afe3520Measurements.u16Current = (UINT16)proxy;
 
     return 0U;

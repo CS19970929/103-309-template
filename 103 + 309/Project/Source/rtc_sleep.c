@@ -16,6 +16,27 @@
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
+/* A host command survives automatic idle decisions and polling traffic. */
+static uint8_t s_commandSleepPending;
+
+void LowPower_RequestCommandSleep(void)
+{
+    s_commandSleepPending = 1U;
+}
+
+static uint8_t lp_process_command_sleep(void)
+{
+    if (!s_commandSleepPending) return 0U;
+    /* Finish the command reply and any in-flight persistent transaction. */
+    if (Sci_IsAnyPortBusy() || Can_IsBusy() || StorageFlash_IsBusy() ||
+        u8FlashUpdateE2PROM || u8FlashUpdateFlag) return 1U;
+    s_commandSleepPending = 0U;
+    LowPowerSleep_SaveResetState();
+    /* Explicit shutdown uses bounded AFE attempts, WDT-off and key-only STOP. */
+    SleepDeal_EmergencySleep();
+    return 1U;
+}
+
 volatile enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
@@ -325,6 +346,8 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 void rtc_sleep(void)
 {
     uint8_t sleep_mode;
+
+    if (lp_process_command_sleep()) return;
 
     if (RtcSleep_PortIsOneSecondTick() == 0U)
     {

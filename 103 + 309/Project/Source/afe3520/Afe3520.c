@@ -402,11 +402,8 @@ static int32_t Afe3520_CurrentMaFromCadc(int16_t raw)
     }
     else magnitude = (uint32_t)value;
 
-    /* Nominal SH3673520 CADC range +/-100mV. Board current calibration remains
-     * in the existing K/B layer; this value is primarily native diagnostics. */
-    ma = (magnitude * 3125UL * (uint32_t)CS_Res_Num +
-          (512UL * (uint32_t)CS_Res)) /
-         (1024UL * (uint32_t)CS_Res);
+    /* Use the reference board scale and the same runtime shunt as reporting. */
+    ma = (uint32_t)(((uint64_t)magnitude * 100U * g_u32CS_Res_AFE) / 29127U);
     return (sign > 0) ? (int32_t)ma : -(int32_t)ma;
 }
 

@@ -55,7 +55,7 @@
 /* Board shunt values and software current-protection defaults.
  * AFE hardware thresholds live in afe3520/Afe3520Config.h. */
 #define CS_Res			2
-#define CS_Res_Num		2
+#define CS_Res_Num		8 /* Reference board: eight 2 mOhm resistors in parallel = 0.25 mOhm. */
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(50)
 

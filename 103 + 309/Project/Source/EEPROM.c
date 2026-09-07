@@ -347,7 +347,22 @@ static void EEPROM_LoadConfigFromFlash(void)
 
 	if (StorageFlash_LoadConfigData(config) && EEPROM_ConfigIsValid(config))
 	{
-		EEPROM_ApplyConfig(config);
+        /* Migrate only this refactor's incorrect 2 mOhm / 2 default.
+         * Leave calibration, SOC and explicitly different hardware settings intact. */
+        UINT8 migrate_shunt =
+            config->other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res)] == 2U &&
+            config->other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res_Num)] == 2U;
+        if (migrate_shunt)
+        {
+            config->other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res)] = CS_Res;
+            config->other[BMS_OTHER_PARAM_WORD_INDEX(u16Sys_CS_Res_Num)] = CS_Res_Num;
+        }
+        EEPROM_ApplyConfig(config);
+        if (migrate_shunt && !EEPROM_SaveConfigToFlash())
+        {
+            System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+            return;
+        }
 		System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 		return;
 	}

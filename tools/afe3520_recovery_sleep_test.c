@@ -28,6 +28,7 @@ volatile enum irqWakeup g_irq_t;
 #define FLASH_DEEP_SLEEP_VALUE 2U
 #define FLASH_EMERGENCY_SLEEP_VALUE 3U
 static uint16_t s_emergencyFaultSeconds, s_emergencyLowSeconds;
+static uint8_t s_commandSleepPending;
 #define MCU_RESET() (++resets)
 const AFE3520_SNAPSHOT *Afe3520_GetSnapshot(void) { return &snapshot; }
 uint8_t Afe3520_ConfigDirty(void) { return dirty; }
@@ -105,6 +106,7 @@ static void healthy(void) {
     blocks=dirty=charge=discharge=key=busy=flash_busy=ext_comm=0;
     commits=resets=flags=saves=fault_calls=forced_on=0;
     s_emergencyFaultSeconds=s_emergencyLowSeconds=0;
+    s_commandSleepPending=0;
     mos_attempts=write_attempts=disabled_irqs=emergency_wait=0;
     u8FlashUpdateFlag=u8FlashUpdateE2PROM=0;
     sleep_ack=rtc_valid=1; current_wake_test=afe_wake_test=0;
@@ -184,5 +186,14 @@ int main(void) {
     assert(!(GPIO_M_CCC->odr & PIN_M_CCC) && !(GPIO_AD_EN->odr & PIN_AD_EN) && !(GPIO_CMNT_EN->odr & PIN_CMNT_EN));
     assert(GPIO_CS_SPI->odr & PIN_CS_SPI);
     puts("PASS: emergency STOP ignores held key level and unapproved wake; keeps marker until new key edge");
+    healthy(); busy=1; LowPower_RequestCommandSleep();
+    lp_update_sleep_request(); assert(s_commandSleepPending);
+    assert(lp_process_command_sleep() && !resets);
+    busy=0; u8FlashUpdateFlag=1; assert(lp_process_command_sleep() && !resets);
+    u8FlashUpdateFlag=0; flash_busy=1; assert(lp_process_command_sleep() && !resets);
+    flash_busy=0; snapshot.valid=0; sleep_ack=0; key=1; charge=discharge=100;
+    assert(lp_process_command_sleep() && resets==1 && saves==1 && flags==FLASH_EMERGENCY_SLEEP_VALUE);
+    assert(!s_commandSleepPending && !lp_process_command_sleep());
+    puts("PASS: explicit command survives automatic cancellation, waits for reply/storage/upgrade then sleeps despite AFE/WDT/current");
     return 0;
 }
