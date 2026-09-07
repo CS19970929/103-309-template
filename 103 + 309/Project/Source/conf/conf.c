@@ -225,6 +225,6 @@ void InitRunAfterStopWakeup(void)
     /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
        run mode can leave stale pending bits for the next low-power cycle. */
 
-    initAFE1_IIC();
+    Afe3520_RestorePort();
 }
 

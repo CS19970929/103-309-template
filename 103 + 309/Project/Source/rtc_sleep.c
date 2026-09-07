@@ -1,5 +1,5 @@
 #include "main.h"
-#include "SH367309_DataDeal.h"
+#include "BmsParameters.h"
 #include "rtc_sleep_port.h"
 #include "DataDeal.h"
 #include "conf.h"
@@ -62,7 +62,7 @@ uint32_t LP_GetBlockReason(void)
     }
     if ((g_stCellInfoReport.unMdlFault_Third.all != 0U) ||
         (g_stCellInfoReport.unMdlFault_Second.all != 0U) ||
-        SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
+        (Afe3520_GetSnapshot()->flag1 & AFE3520_FLAG1_SC))
     {
         reason |= LP_BLOCK_FAULT;
     }
@@ -234,7 +234,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     sys_time.rtc_sleep_cnt = rtc_elapsed;
     g_stLowPowerRtcStatus.sleep += rtc_elapsed;
 
-    initAFE1_IIC();
+    Afe3520_RestorePort();
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
@@ -244,7 +244,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
-        if ((g_stCellInfoReport.u16VCellMin <= AFE_Parameters_RS485_Struction.u16VcellUvp.curValue) ||
+        if ((g_stCellInfoReport.u16VCellMin <= g_bmsParameters.u16VcellUvp.curValue) ||
             !SystemRuntime_IsDischargeMosOpen())
         {
             low_power_log_and_commit_sleep(DEEP_MODE);

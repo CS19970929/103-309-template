@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "CommomSH367309_16series_103RCT6_C.uvprojx"
+PROJECT = ROOT / "103 + 309" / "Project" / "Users" / "BMS_SH3673520.uvprojx"
 PROJECT_CONFIG = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_Config.h"
 PROJECT_CONFIG_ENCODING = "gbk"
 BUILD_GUARD = ROOT / "103 + 309" / "Project" / "Source" / "conf" / "Project_BuildGuard.h"
@@ -33,7 +33,7 @@ ADC_C = ROOT / "103 + 309" / "Project" / "Source" / "ADC.c"
 ADC_H = ROOT / "103 + 309" / "Project" / "Source" / "ADC.h"
 DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
-I2C_AFE1_C = ROOT / "103 + 309" / "Project" / "Source" / "I2C_AFE1.c"
+AFE3520_APP_C = ROOT / "103 + 309" / "Project" / "Source" / "afe3520/Afe3520App.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
 SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
@@ -46,7 +46,7 @@ RTC_SLEEP_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep.h"
 RTC_SLEEP_PORT_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_port.c"
 RTC_SLEEP_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_port.h"
 RTC_SLEEP_AFE_PORT_H = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_afe_port.h"
-RTC_SLEEP_AFE_SH367309_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_afe_sh367309.c"
+RTC_SLEEP_AFE3520_C = ROOT / "103 + 309" / "Project" / "Source" / "rtc_sleep_afe3520.c"
 CAN_HDX_C = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.c"
 CAN_HDX_H = ROOT / "103 + 309" / "Project" / "Source" / "Can_HDX.h"
 CAN_FEIDAO_FRAMES_C = ROOT / "103 + 309" / "Project" / "Source" / "CanFeidaoFrames.c"
@@ -857,8 +857,8 @@ def check_release_map(reporter):
         ROOT / "103 + 309" / "Project" / "Source" / "Flash.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SOC.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c",
-        ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c",
-        ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "afe3520/BmsProtection3520.c",
+        ROOT / "103 + 309" / "Project" / "Source" / "BmsParameters.c",
     ]
     newest_source = max((path.stat().st_mtime for path in tracked_sources if path.exists()), default=0)
     if RELEASE_MAP.stat().st_mtime < newest_source:
@@ -1032,7 +1032,7 @@ def check_low_power_cleanup(reporter):
         RTC_SLEEP_PORT_C,
         RTC_SLEEP_PORT_H,
         RTC_SLEEP_AFE_PORT_H,
-        RTC_SLEEP_AFE_SH367309_C,
+        RTC_SLEEP_AFE3520_C,
         LEDBAR_C,
         LOGRECORD_C,
         SYSTEM_DEBUG_C,
@@ -1047,7 +1047,7 @@ def check_low_power_cleanup(reporter):
     rtc_sleep_port_c = read_text(RTC_SLEEP_PORT_C)
     rtc_sleep_port_h = read_text(RTC_SLEEP_PORT_H)
     rtc_sleep_afe_port_h = read_text(RTC_SLEEP_AFE_PORT_H)
-    rtc_sleep_afe_sh367309_c = read_text(RTC_SLEEP_AFE_SH367309_C)
+    rtc_sleep_afe3520_c = read_text(RTC_SLEEP_AFE3520_C)
     project = read_text(PROJECT)
     ledbar_c = read_text(LEDBAR_C)
     logrecord_c = read_text(LOGRECORD_C)
@@ -1133,13 +1133,13 @@ def check_low_power_cleanup(reporter):
         and "RtcSleep_AfePortHasCurrentWake(source);" in rtc_sleep_port_c
         and "RtcSleep_AfePortHasAfeWake(source);" in rtc_sleep_port_c
         and "RtcSleep_AfePortIsSleepBlocked" not in rtc_sleep_afe_port_h
-        and "RtcSleep_AfePortIsSleepBlocked" not in rtc_sleep_afe_sh367309_c
+        and "RtcSleep_AfePortIsSleepBlocked" not in rtc_sleep_afe3520_c
         and "RtcSleep_PortIsAfeSleepBlocked" not in rtc_sleep_port_h
         and "RtcSleep_PortIsAfeSleepBlocked" not in rtc_sleep_port_c
         and "AFE_TYPE" not in rtc_sleep_port_c
-        and "AFE_TYPE" not in rtc_sleep_afe_sh367309_c
+        and "AFE_TYPE" not in rtc_sleep_afe3520_c
         and "rtc_sleep_port.c" in project
-        and "rtc_sleep_afe_sh367309.c" in project
+        and "rtc_sleep_afe3520.c" in project
     ):
         reporter.ok("RTC sleep port layer selects MCU/AFE adapters by file boundary instead of AFE_TYPE branches")
     else:
@@ -1298,7 +1298,7 @@ def check_datadeal_runtime_state(reporter):
     required_files = [
         DATADEAL_C,
         DATADEAL_H,
-        I2C_AFE1_C,
+        AFE3520_APP_C,
         SOC_C,
     ]
     if any(not path.exists() for path in required_files):
@@ -1306,7 +1306,7 @@ def check_datadeal_runtime_state(reporter):
 
     datadeal_c = read_text(DATADEAL_C)
     datadeal_h = read_text(DATADEAL_H)
-    i2c_afe1_c = read_text(I2C_AFE1_C)
+    i2c_afe1_c = read_text(AFE3520_APP_C)
     soc_c = read_text(SOC_C)
     combined = "\n".join([datadeal_c, datadeal_h, i2c_afe1_c, soc_c])
 
@@ -1718,7 +1718,7 @@ def check_rtc_stop_sleep_contract(reporter):
         and "EXTI17" in doc
         and "InitRunAfterStopWakeup" in doc
         and "rtc_sleep_port.c" in port_doc
-        and "rtc_sleep_afe_sh367309.c" in port_doc
+        and "rtc_sleep_afe3520.c" in port_doc
         and "rtc_sleep.c" in port_doc
         and "过放" in doc
     ):

@@ -2,7 +2,7 @@
 #define BMS_PROTECTION_3520_H
 
 #include "afe3520/Afe3520.h"
-#include "SH367309_DataDeal.h"
+#include "BmsParameters.h"
 
 #define BMS3520_PROTECTION_PERIOD_MS        200U
 #define BMS3520_REVERSE_CURRENT_A10         10U

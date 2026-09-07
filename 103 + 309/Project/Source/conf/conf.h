@@ -52,59 +52,17 @@
 
 #define VERSION  (PROJECT_CFG_VERSION)
 
-#define   CURR_10A     0
-#define   CURR_20A_15A     1
-#define   CURR_30A     2
-#define   CURR_40A     3
-
-#define bq76xx_afe  0
-#define sh36xx      1
-
-#define LEVEL_CURR  CURR_10A
-#define AFE_TYPE    PROJECT_CFG_AFE_TYPE
-
-#if (LEVEL_CURR == CURR_10A)
+/* Board shunt values and software current-protection defaults.
+ * AFE hardware thresholds live in afe3520/Afe3520Config.h. */
 #define CS_Res			2
 #define CS_Res_Num		2
 #define CBC_DelayT		128
 #define CBC_Cur_DSG		(50)
 
-#define AFE_OCC1       		(120) 
-#define AFE_OCC2       		(120) 
-#define AFE_ODC1       		(150) 
-#define AFE_ODC2       		(150) 
-#elif (LEVEL_CURR == CURR_20A_15A)
-#define CS_Res			2
-#define CS_Res_Num		3
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(100)
-
-#define AFE_OCC1       		(200) 
-#define AFE_OCC2       		(200) 
-#define AFE_ODC1       		(250) 
-#define AFE_ODC2       		(250) 
-
-#elif (LEVEL_CURR == CURR_30A)
-#define CS_Res			2
-#define CS_Res_Num		3
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(80)
-
-#define AFE_OCC1       		(300) 
-#define AFE_OCC2       		(300) 
-#define AFE_ODC1       		(350) 
-#define AFE_ODC2       		(350) 
-#elif (LEVEL_CURR == CURR_40A)
-#define CS_Res			2
-#define CS_Res_Num		6
-#define CBC_DelayT		128
-#define CBC_Cur_DSG		(100)
-
-#define AFE_OCC1       		(400) 
-#define AFE_OCC2       		(400) 
-#define AFE_ODC1       		(450) 
-#define AFE_ODC2       		(450) 
-#endif	
+#define BMS_SW_OCC1       		(120)
+#define BMS_SW_OCC2       		(120)
+#define BMS_SW_ODC1       		(150)
+#define BMS_SW_ODC2       		(150)
 
 typedef enum GPIO_TYPE {
 	GPIO_PreCHG = 0,
@@ -120,7 +78,6 @@ typedef struct
   volatile uint32_t can_rcv_cnt;
   uint64_t    test_main_cycle;
   uint32_t    App_AFEGet_cnt;
-  uint32_t    App_SH367309_Monitor_cnt;
 
   volatile uint32_t sci1_irq_cnt;
   volatile uint32_t sci2_irq_cnt;

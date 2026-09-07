@@ -261,9 +261,9 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	{
 		t_u16Temp -= RS485_ADDR_RO_LCD;
 	}
-	else if (t_u16Temp >= RS485_ADDR_RW_AFE_PARAMETER)
+	else if (t_u16Temp >= RS485_ADDR_RW_BMS_PARAMETER)
 	{
-		t_u16Temp -= RS485_ADDR_RW_AFE_PARAMETER;
+		t_u16Temp -= RS485_ADDR_RW_BMS_PARAMETER;
 	}
 	else if (t_u16Temp >= RS485_ADDR_RW_OTHER_CANADD)
 	{
@@ -516,9 +516,9 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 			return 0U;
 		}
 	}
-	if (actual_addr >= RS485_ADDR_RW_AFE_PARAMETER)
+	if (actual_addr >= RS485_ADDR_RW_BMS_PARAMETER)
 	{
-		*word_count = AFE_PARAMETES_TOTAL_LENGTH;
+		*word_count = BMS_PARAMETER_COUNT;
 		return 1U;
 	}
 	if (actual_addr >= RS485_ADDR_RW_OTHER_CANADD)
@@ -583,19 +583,6 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 {
 	UINT8 reload_soc = 0U;
 	UINT8 reset_soc_capacity = 0U;
-	if (Sci_RangeOverlaps(offset, count, 0, 8))
-	{
-#if AFE_TYPE == bq76xx_afe
-#elif AFE_TYPE == sh36xx
-		AFE_PARAM_WRITE_Flag = 1;
-#else
-#error "error!!!"
-#endif
-	}
-	if (Sci_RangeOverlaps(offset, count, 8, 8) || Sci_RangeOverlaps(offset, count, 28, 4))
-	{
-		AFE_PARAM_WRITE_Flag = 1;
-	}
 	if (Sci_RangeOverlaps(offset, count, 24, 4))
 	{
 		reload_soc = 1U;
@@ -853,7 +840,7 @@ static void Sci_BuildReadWindow(UINT16 actual_addr, UINT16 *source_offset, UINT8
 	{
 		Sci_FillReadRegsLCD(*source_offset, source_offset, buff);
 	}
-	else if (actual_addr >= RS485_ADDR_RW_AFE_PARAMETER)
+	else if (actual_addr >= RS485_ADDR_RW_BMS_PARAMETER)
 	{
 		Sci_ACK_0x03_RW_AFE_Parameters(0, buff);
 	}

@@ -1,15 +1,14 @@
 #include "main.h"
-#include "SH367309_DataDeal.h"
+#include "BmsParameters.h"
 #include "AfeParamAccess.h"
 #include "afe3520/Afe3520.h"
 #include "afe3520/BmsProtection3520.h"
 #include <string.h>
 
-/* Historical compile-slot name; this is now the SH3673520 parameter service. */
-int AFE_PARAM_WRITE_Flag = 1;
-AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+/* Persistent software protection parameters; hardware profile is independent. */
+BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
 
-static uint8_t Bms3520_ParamImageValid(const AFE_Parameters_RS485_Typedef *p)
+static uint8_t Bms3520_ParamImageValid(const BMS_PARAMETERS *p)
 {
     uint32_t dsg1SenseMv;
     uint32_t dsg2SenseMv;
@@ -17,10 +16,10 @@ static uint8_t Bms3520_ParamImageValid(const AFE_Parameters_RS485_Typedef *p)
     uint16_t i;
 
     if (p == 0) return 0U;
-    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
     {
-        const AFE_Value_Typedef *v = (const AFE_Value_Typedef *)((const UINT8 *)p +
-                                    (uint32_t)i * sizeof(AFE_Value_Typedef));
+        const BMS_PARAMETER_VALUE *v = (const BMS_PARAMETER_VALUE *)((const UINT8 *)p +
+                                    (uint32_t)i * sizeof(BMS_PARAMETER_VALUE));
         if ((v->curValue < v->minValue) || (v->curValue > v->maxValue)) return 0U;
     }
 
@@ -52,31 +51,21 @@ static uint8_t Bms3520_ParamImageValid(const AFE_Parameters_RS485_Typedef *p)
     return 1U;
 }
 
-static void Bms3520_CopyRuntimeValues(AFE_Parameters_RS485_Typedef *dst,
-                                      const AFE_Parameters_RS485_Typedef *src)
+static void Bms3520_CopyRuntimeValues(BMS_PARAMETERS *dst,
+                                      const BMS_PARAMETERS *src)
 {
     UINT16 i;
-    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
     {
-        AFE_Value_Typedef *d = (AFE_Value_Typedef *)((UINT8 *)dst + (uint32_t)i * sizeof(AFE_Value_Typedef));
-        const AFE_Value_Typedef *s = (const AFE_Value_Typedef *)((const UINT8 *)src + (uint32_t)i * sizeof(AFE_Value_Typedef));
+        BMS_PARAMETER_VALUE *d = (BMS_PARAMETER_VALUE *)((UINT8 *)dst + (uint32_t)i * sizeof(BMS_PARAMETER_VALUE));
+        const BMS_PARAMETER_VALUE *s = (const BMS_PARAMETER_VALUE *)((const UINT8 *)src + (uint32_t)i * sizeof(BMS_PARAMETER_VALUE));
         d->curValue = s->curValue;
-    }
-}
-
-void App_SH367309_Supplement(void)
-{
-    /* Reapply the compile-time reference hardware profile when requested.
-     * The 0x2400 software parameter image does not override AFE registers. */
-    if (AFE_PARAM_WRITE_Flag)
-    {
-        if (Bms3520_ApplyAndVerifyAfeConfig()) AFE_PARAM_WRITE_Flag = 0;
     }
 }
 
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 {
-    AFE_Parameters_RS485_Typedef candidate;
+    BMS_PARAMETERS candidate;
     UINT16 start;
     UINT16 count;
     UINT16 offset;
@@ -86,13 +75,13 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 
     if (s == 0) return 0U;
     start = (UINT16)(((UINT16)s->u16Buffer[2] << 8) | s->u16Buffer[3]);
-    if ((start < RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) ||
-        (start > RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END)) return 0U;
+    if ((start < RS485_CMD_ADDR_BMS_PARAMETERS_START) ||
+        (start > RS485_CMD_ADDR_BMS_PARAMETERS_END)) return 0U;
 
     count = (UINT16)(((UINT16)s->u16Buffer[4] << 8) | s->u16Buffer[5]);
-    offset = (UINT16)(start - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START);
-    if ((count == 0U) || (offset >= AFE_PARAMETES_TOTAL_LENGTH) ||
-        (count > (UINT16)(AFE_PARAMETES_TOTAL_LENGTH - offset)) ||
+    offset = (UINT16)(start - RS485_CMD_ADDR_BMS_PARAMETERS_START);
+    if ((count == 0U) || (offset >= BMS_PARAMETER_COUNT) ||
+        (count > (UINT16)(BMS_PARAMETER_COUNT - offset)) ||
         (s->u16Buffer[6] != (UINT8)(count << 1)))
     {
         s->AckType = RS485_ACK_NEG;
@@ -100,7 +89,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
         return 1U;
     }
 
-    candidate = AFE_Parameters_RS485_Struction;
+    candidate = g_bmsParameters;
     for (i = 0U; i < count; ++i)
     {
         value = (UINT16)(((UINT16)s->u16Buffer[7U + i * 2U] << 8) |
@@ -111,8 +100,8 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
             s->ErrorType = RS485_ERROR_DATA_INVALID;
             return 1U;
         }
-        ((AFE_Value_Typedef *)((UINT8 *)&candidate +
-          (uint32_t)(offset + i) * sizeof(AFE_Value_Typedef)))->curValue = value;
+        ((BMS_PARAMETER_VALUE *)((UINT8 *)&candidate +
+          (uint32_t)(offset + i) * sizeof(BMS_PARAMETER_VALUE)))->curValue = value;
     }
 
     if (!Bms3520_ParamImageValid(&candidate))
@@ -126,8 +115,8 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
     EEPROM_ConfigEditBegin();
     for (i = 0U; i < count; ++i)
     {
-        value = ((AFE_Value_Typedef *)((UINT8 *)&candidate +
-                 (uint32_t)(offset + i) * sizeof(AFE_Value_Typedef)))->curValue;
+        value = ((BMS_PARAMETER_VALUE *)((UINT8 *)&candidate +
+                 (uint32_t)(offset + i) * sizeof(BMS_PARAMETER_VALUE)))->curValue;
         if (!EEPROM_ConfigEditSetAfeWord((UINT16)(offset + i), value))
         {
             s->AckType = RS485_ACK_NEG;
@@ -142,8 +131,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
         return 1U;
     }
 
-    Bms3520_CopyRuntimeValues(&AFE_Parameters_RS485_Struction, &candidate);
-    AFE_PARAM_WRITE_Flag = 1;
+    Bms3520_CopyRuntimeValues(&g_bmsParameters, &candidate);
     Afe3520_MarkConfigDirty();
     return 1U;
 }
@@ -153,7 +141,7 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
     UINT16 i;
     UINT16 value;
     (void)s;
-    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
     {
         value = AfeParam_AtConst(i)->curValue;
         t_u8BuffTemp[i * 2U] = (UINT8)(value >> 8);
@@ -163,7 +151,7 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
-    AFE_Parameters_RS485_Typedef defaults = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+    BMS_PARAMETERS defaults = BMS_PARAMETERS_DEFAULT;
     UINT16 i;
 
     if (!Bms3520_ParamImageValid(&defaults))
@@ -173,16 +161,15 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
     }
 
     EEPROM_ConfigEditBegin();
-    for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+    for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
     {
         if (!EEPROM_ConfigEditSetAfeWord(i,
-            ((AFE_Value_Typedef *)((UINT8 *)&defaults + (uint32_t)i * sizeof(AFE_Value_Typedef)))->curValue))
+            ((BMS_PARAMETER_VALUE *)((UINT8 *)&defaults + (uint32_t)i * sizeof(BMS_PARAMETER_VALUE)))->curValue))
             return 0U;
     }
     if (!EEPROM_ConfigEditCommit()) return 0U;
 
-    Bms3520_CopyRuntimeValues(&AFE_Parameters_RS485_Struction, &defaults);
-    AFE_PARAM_WRITE_Flag = 1;
+    Bms3520_CopyRuntimeValues(&g_bmsParameters, &defaults);
     Afe3520_MarkConfigDirty();
     return 1U;
 }
@@ -208,6 +195,5 @@ void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
 void ReadEEPROM_AFE_Parameters(void)
 {
     /* Unified CONFIG loading in EEPROM.c already populates curValue fields. */
-    AFE_PARAM_WRITE_Flag = 1;
     Afe3520_MarkConfigDirty();
 }

@@ -22,8 +22,8 @@ checks.GUARD_REQUIRED_TOKENS = [
 
 EEPROM_C = checks.ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.c"
 EEPROM_H = checks.ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.h"
-SH367309_DATADEAL_C = checks.ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c"
-SH367309_DATADEAL_H = checks.ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.h"
+BMS_PARAMETERS_C = checks.ROOT / "103 + 309" / "Project" / "Source" / "BmsParameters.c"
+BMS_PARAMETERS_H = checks.ROOT / "103 + 309" / "Project" / "Source" / "BmsParameters.h"
 RELEASE_MAP = checks.ROOT / "103 + 309" / "Project" / "Users" / "Listings" / "FD_Release.map"
 SAFE_FLASH_SCRIPT = checks.ROOT / "tools" / "soc_flash_app_safe.ps1"
 
@@ -150,8 +150,8 @@ def check_storage_contract(reporter):
         checks.FLASH_C,
         EEPROM_C,
         EEPROM_H,
-        SH367309_DATADEAL_C,
-        SH367309_DATADEAL_H,
+        BMS_PARAMETERS_C,
+        BMS_PARAMETERS_H,
         checks.LOGRECORD_C,
         checks.SOC_ENHANCE_C,
         checks.SCI_UPPER_C,
@@ -167,8 +167,8 @@ def check_storage_contract(reporter):
     flash_c = checks.read_text(checks.FLASH_C)
     eeprom_c = checks.read_text(EEPROM_C)
     eeprom_h = checks.read_text(EEPROM_H)
-    sh_c = checks.read_text(SH367309_DATADEAL_C)
-    sh_h = checks.read_text(SH367309_DATADEAL_H)
+    sh_c = checks.read_text(BMS_PARAMETERS_C)
+    sh_h = checks.read_text(BMS_PARAMETERS_H)
     log_c = checks.read_text(checks.LOGRECORD_C)
     soc_c = checks.read_text(checks.SOC_ENHANCE_C)
     sci_c = checks.read_text(checks.SCI_UPPER_C)

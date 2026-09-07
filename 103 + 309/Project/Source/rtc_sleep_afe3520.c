@@ -1,7 +1,6 @@
 #include "main.h"
 #include "rtc_sleep_afe_port.h"
 
-void Fault_ChangeToMCU(void);
 void DataLoad_CellVolt(void);
 void DataLoad_CellVoltMaxMinFind(void);
 void DataLoad_Temperature(void);
@@ -10,7 +9,7 @@ void DataLoad_Current(void);
 
 UINT8 RtcSleep_AfePortUpdateRtcData(void)
 {
-    if (UpdateVoltageFromBqMaximo())
+    if (Afe3520_UpdateMeasurements())
     {
         return 0U;
     }
@@ -48,8 +47,7 @@ UINT8 RtcSleep_AfePortHasCurrentWake(enum irqWakeup *source)
 UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
 {
     if (source != 0) *source = NO_IRQ;
-    /* The SH367309 BALANCE/BSTATUS layout is not the SH3673520 layout.
-     * The protection service reads native flags and actual MOS feedback. */
-    Fault_ChangeToMCU();
+    /* Read native SH3673520 flags and actual MOS feedback. */
+    Bms3520_ProtectionService();
     return 0U;
 }

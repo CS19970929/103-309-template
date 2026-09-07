@@ -3,9 +3,9 @@
 
 static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on)
 {
-    /* Never send SH367309 CONF bits to SH3673520 SCONF1 (mode command). */
-    SH367309_DriverMos_Ctrl(GPIO_CHG, charge_on);
-    SH367309_DriverMos_Ctrl(GPIO_DSG, discharge_on);
+    /* All MOS requests go through the SH3673520 protection arbiter. */
+    Bms3520_RequestMos(GPIO_CHG, charge_on);
+    Bms3520_RequestMos(GPIO_DSG, discharge_on);
 }
 
 UINT8 IsChargeActive(void)

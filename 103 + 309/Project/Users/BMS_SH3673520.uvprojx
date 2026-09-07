@@ -414,11 +414,6 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>I2C_AFE1.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -494,29 +489,9 @@
               <FilePath>..\Source\LogRecord.c</FilePath>
             </File>
             <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
               <FileName>SocEnhance.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_afe_sh367309.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
             </File>
             <File>
               <FileName>rtc_sleep.c</FileName>
@@ -847,6 +822,61 @@
         </Group>
         <Group>
           <GroupName>log</GroupName>
+        </Group>
+        <Group>
+          <GroupName>SH3673520</GroupName>
+          <Files>
+            <File>
+              <FileName>Afe3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\Afe3520.c</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520App.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\Afe3520App.c</FilePath>
+            </File>
+            <File>
+              <FileName>BmsProtection3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\BmsProtection3520.c</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520.h</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520App.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520App.h</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520Config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520Config.h</FilePath>
+            </File>
+            <File>
+              <FileName>BmsProtection3520.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\BmsProtection3520.h</FilePath>
+            </File>
+            <File>
+              <FileName>BmsParameters.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BmsParameters.c</FilePath>
+            </File>
+            <File>
+              <FileName>BmsParameters.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\BmsParameters.h</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_afe3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe3520.c</FilePath>
+            </File>
+          </Files>
         </Group>
       </Groups>
     </Target>
@@ -1258,11 +1288,6 @@
               <FilePath>..\Source\LowPowerSleep.c</FilePath>
             </File>
             <File>
-              <FileName>I2C_AFE1.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\I2C_AFE1.c</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\main.c</FilePath>
@@ -1338,29 +1363,9 @@
               <FilePath>..\Source\LogRecord.c</FilePath>
             </File>
             <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
               <FileName>SocEnhance.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_DataDeal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
-            </File>
-            <File>
-              <FileName>SH367309_Func.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SH367309_Func.c</FilePath>
-            </File>
-            <File>
-              <FileName>rtc_sleep_afe_sh367309.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\rtc_sleep_afe_sh367309.c</FilePath>
             </File>
             <File>
               <FileName>rtc_sleep.c</FileName>
@@ -1692,6 +1697,61 @@
         <Group>
           <GroupName>log</GroupName>
         </Group>
+        <Group>
+          <GroupName>SH3673520</GroupName>
+          <Files>
+            <File>
+              <FileName>Afe3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\Afe3520.c</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520App.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\Afe3520App.c</FilePath>
+            </File>
+            <File>
+              <FileName>BmsProtection3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\afe3520\BmsProtection3520.c</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520.h</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520App.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520App.h</FilePath>
+            </File>
+            <File>
+              <FileName>Afe3520Config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\Afe3520Config.h</FilePath>
+            </File>
+            <File>
+              <FileName>BmsProtection3520.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\afe3520\BmsProtection3520.h</FilePath>
+            </File>
+            <File>
+              <FileName>BmsParameters.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\BmsParameters.c</FilePath>
+            </File>
+            <File>
+              <FileName>BmsParameters.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\BmsParameters.h</FilePath>
+            </File>
+            <File>
+              <FileName>rtc_sleep_afe3520.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\rtc_sleep_afe3520.c</FilePath>
+            </File>
+          </Files>
+        </Group>
       </Groups>
     </Target>
   </Targets>
@@ -1705,7 +1765,7 @@
   <LayerInfo>
     <Layers>
       <Layer>
-        <LayName>CommomSH367309_16series_103RCT6_C</LayName>
+        <LayName>BMS_SH3673520</LayName>
         <LayPrjMark>1</LayPrjMark>
       </Layer>
     </Layers>

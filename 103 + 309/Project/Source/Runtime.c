@@ -17,7 +17,7 @@ void Runtime_Boot(void)
 	InitIO();
 	InitUSART_CommonUpper();
 	InitE2PROM();
-	InitAFE1();
+	Afe3520_AppInit();
 	InitCan();
 	InitADC();
 

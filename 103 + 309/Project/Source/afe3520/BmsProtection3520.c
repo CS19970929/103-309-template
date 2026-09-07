@@ -1,6 +1,5 @@
 #include "main.h"
 #include "afe3520/BmsProtection3520.h"
-#include "SH367309_Func.h"
 #include "afe3520/Afe3520Config.h"
 #include <string.h>
 
@@ -9,8 +8,6 @@ static uint16_t s_swCnt[8];
 static uint16_t s_swRcvCnt[8];
 static uint16_t s_hwStableCnt;
 static uint8_t s_systemBlock;
-
-SH367309_REG_STORE SH367309_Reg_Store;
 
 static uint16_t Bms3520_MaxCell(void)
 {
@@ -164,56 +161,56 @@ static void Bms3520_UpdateSoftwareProtection(void)
     uint8_t active;
 
     active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OV) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxCell, AFE_Parameters_RS485_Struction.u16VcellOvp.curValue,
-                           AFE_Parameters_RS485_Struction.u16VcellOvp_Filter.curValue,
+    if (Bms3520_FilterHigh(maxCell, g_bmsParameters.u16VcellOvp.curValue,
+                           g_bmsParameters.u16VcellOvp_Filter.curValue,
                            &s_swCnt[0], &s_swRcvCnt[0], active,
-                           AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue))
+                           g_bmsParameters.u16VcellOvp_Rcv.curValue))
         s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_OV;
     else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_OV;
 
     active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_UV) ? 1U : 0U;
-    if (Bms3520_FilterLow(minCell, AFE_Parameters_RS485_Struction.u16VcellUvp.curValue,
-                          AFE_Parameters_RS485_Struction.u16VcellUvp_Filter.curValue,
+    if (Bms3520_FilterLow(minCell, g_bmsParameters.u16VcellUvp.curValue,
+                          g_bmsParameters.u16VcellUvp_Filter.curValue,
                           &s_swCnt[1], &s_swRcvCnt[1], active,
-                          AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue))
+                          g_bmsParameters.u16VcellUvp_Rcv.curValue))
         s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_UV;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_UV;
 
     active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OCP) ? 1U : 0U;
     if (Bms3520_FilterHigh(g_stCellInfoReport.u16Ichg,
-                           AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue,
-                           AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_First.curValue,
+                           g_bmsParameters.u16IchgOcp_First.curValue,
+                           g_bmsParameters.u16IchgOcp_Filter_First.curValue,
                            &s_swCnt[2], &s_swRcvCnt[2], active,
-                           (uint16_t)(AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue * 8U / 10U)))
+                           (uint16_t)(g_bmsParameters.u16IchgOcp_First.curValue * 8U / 10U)))
         s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_OCP;
     else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_OCP;
 
     active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_OCP) ? 1U : 0U;
     if (Bms3520_FilterHigh(g_stCellInfoReport.u16IDischg,
-                           AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue,
-                           AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue,
+                           g_bmsParameters.u16IdsgOcp_First.curValue,
+                           g_bmsParameters.u16IdsgOcp_Filter_First.curValue,
                            &s_swCnt[3], &s_swRcvCnt[3], active,
-                           (uint16_t)(AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue * 8U / 10U)))
+                           (uint16_t)(g_bmsParameters.u16IdsgOcp_First.curValue * 8U / 10U)))
         s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_OCP;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_OCP;
 
     active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxTemp, AFE_Parameters_RS485_Struction.u16TChgOTp.curValue, 1U,
+    if (Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TChgOTp.curValue, 1U,
                            &s_swCnt[4], &s_swRcvCnt[4], active,
-                           AFE_Parameters_RS485_Struction.u16TChgOTp_Rcv.curValue) ||
-        Bms3520_FilterLow(minTemp, AFE_Parameters_RS485_Struction.u16TchgUTp.curValue, 1U,
+                           g_bmsParameters.u16TChgOTp_Rcv.curValue) ||
+        Bms3520_FilterLow(minTemp, g_bmsParameters.u16TchgUTp.curValue, 1U,
                           &s_swCnt[5], &s_swRcvCnt[5], active,
-                          AFE_Parameters_RS485_Struction.u16TchgUTp_Rcv.curValue))
+                          g_bmsParameters.u16TchgUTp_Rcv.curValue))
         s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_TEMP;
     else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_TEMP;
 
     active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxTemp, AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue, 1U,
+    if (Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TdischgOTp.curValue, 1U,
                            &s_swCnt[6], &s_swRcvCnt[6], active,
-                           AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue) ||
-        Bms3520_FilterLow(minTemp, AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue, 1U,
+                           g_bmsParameters.u16TdischgOTp_Rcv.curValue) ||
+        Bms3520_FilterLow(minTemp, g_bmsParameters.u16TdischgUTp.curValue, 1U,
                           &s_swCnt[7], &s_swRcvCnt[7], active,
-                          AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue))
+                          g_bmsParameters.u16TdischgUTp_Rcv.curValue))
         s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_TEMP;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_TEMP;
 }
@@ -257,12 +254,12 @@ static uint8_t Bms3520_HardwareRecoverySafe(const AFE3520_SNAPSHOT *snap)
     uint16_t maxTemp = Bms3520_MaxTempEncoded();
     uint16_t minTemp = Bms3520_MinTempEncoded();
     (void)snap;
-    if (maxCell > AFE_Parameters_RS485_Struction.u16VcellOvp_Rcv.curValue) return 0U;
-    if ((minCell != 0U) && (minCell < AFE_Parameters_RS485_Struction.u16VcellUvp_Rcv.curValue)) return 0U;
+    if (maxCell > g_bmsParameters.u16VcellOvp_Rcv.curValue) return 0U;
+    if ((minCell != 0U) && (minCell < g_bmsParameters.u16VcellUvp_Rcv.curValue)) return 0U;
     if (g_stCellInfoReport.u16Ichg >= BMS3520_REVERSE_CURRENT_A10) return 0U;
     if (g_stCellInfoReport.u16IDischg >= BMS3520_REVERSE_CURRENT_A10) return 0U;
-    if (maxTemp > AFE_Parameters_RS485_Struction.u16TdischgOTp_Rcv.curValue) return 0U;
-    if ((minTemp != 0U) && (minTemp < AFE_Parameters_RS485_Struction.u16TdischgUTp_Rcv.curValue)) return 0U;
+    if (maxTemp > g_bmsParameters.u16TdischgOTp_Rcv.curValue) return 0U;
+    if ((minTemp != 0U) && (minTemp < g_bmsParameters.u16TdischgUTp_Rcv.curValue)) return 0U;
     return 1U;
 }
 
@@ -287,35 +284,23 @@ static void Bms3520_TryRecoverHardware(const AFE3520_SNAPSHOT *snap)
     (void)Afe3520_ClearFlags(clear1, clear2);
 }
 
-static void Bms3520_PublishLegacyFaultView(const AFE3520_SNAPSHOT *snap)
+static void Bms3520_PublishFaults(const AFE3520_SNAPSHOT *snap)
 {
     uint8_t chgOvp = ((s_prot.chargeBlocks & (AFE3520_BLOCK_CHG_HW_OV | AFE3520_BLOCK_CHG_SW_OV)) != 0U);
     uint8_t uvp = ((s_prot.dischargeBlocks & (AFE3520_BLOCK_DSG_HW_UV | AFE3520_BLOCK_DSG_SW_UV)) != 0U);
     uint8_t chgOcp = ((s_prot.chargeBlocks & (AFE3520_BLOCK_CHG_HW_OCC | AFE3520_BLOCK_CHG_SW_OCP)) != 0U);
     uint8_t dsgOcp = ((s_prot.dischargeBlocks & (AFE3520_BLOCK_DSG_HW_OCD | AFE3520_BLOCK_DSG_SW_OCP)) != 0U);
 
-    memset(&SH367309_Reg_Store, 0, sizeof(SH367309_Reg_Store));
-    SH367309_Reg_Store.REG_BSTATUS1.bits.OV = chgOvp;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.UV = uvp;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 = dsgOcp;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2 = (snap->flag1 & AFE3520_FLAG1_OCD2) ? 1U : 0U;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.OCC = chgOcp;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.SC = (snap->flag1 & AFE3520_FLAG1_SC) ? 1U : 0U;
-    SH367309_Reg_Store.REG_BSTATUS1.bits.WDT = (snap->flag2 & AFE3520_FLAG2_WDT) ? 1U : 0U;
-    SH367309_Reg_Store.REG_BSTATUS2.bits.UTC = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTC);
-    SH367309_Reg_Store.REG_BSTATUS2.bits.OTC = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTC);
-    SH367309_Reg_Store.REG_BSTATUS2.bits.UTD = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTD);
-    SH367309_Reg_Store.REG_BSTATUS2.bits.OTD = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTD);
 
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp = chgOvp;
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp = uvp;
     g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp = chgOcp;
     g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp = dsgOcp;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTC;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTC;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = SH367309_Reg_Store.REG_BSTATUS2.bits.UTD;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = SH367309_Reg_Store.REG_BSTATUS2.bits.OTD;
-    System_ErrFlag.u8ErrFlag_CBC_DSG = SH367309_Reg_Store.REG_BSTATUS1.bits.SC;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTC);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTC);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_UTD);
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_TEMP) || (snap->flag2 & AFE3520_FLAG2_OTD);
+    System_ErrFlag.u8ErrFlag_CBC_DSG = (snap->flag1 & AFE3520_FLAG1_SC) ? 1U : 0U;
 }
 
 static void Bms3520_ApplyMosArbitration(void)
@@ -405,7 +390,7 @@ void Bms3520_ProtectionService(void)
     Bms3520_UpdateSoftwareProtection();
     Bms3520_UpdateHardwareProtection(snap);
     Bms3520_TryRecoverHardware(snap);
-    Bms3520_PublishLegacyFaultView(snap);
+    Bms3520_PublishFaults(snap);
 
     s_prot.activeAll = s_prot.chargeBlocks | s_prot.dischargeBlocks | s_prot.globalBlocks;
     Bms3520_ApplyMosArbitration();
@@ -427,27 +412,3 @@ void Bms3520_RequestMos(GPIO_Type type, uint8_t on)
 const BMS3520_PROTECTION_STATUS *Bms3520_GetProtectionStatus(void) { return &s_prot; }
 uint32_t Bms3520_GetBlockMask(void) { return s_prot.activeAll; }
 void Bms3520_SetSystemBlock(uint8_t blocked) { s_systemBlock = blocked ? 1U : 0U; }
-
-/* ===== Compatibility API: old filenames remain build slots only. ===== */
-UINT8 AFE_CheckStatus(void) { return Afe3520_IsReady(); }
-UINT8 AFE_IsReady(void) { return (Afe3520_Service() == AFE3520_OK) ? 1U : 0U; }
-void AFE_Reset(void) { (void)Afe3520_SoftReset(); }
-void AFE_Sleep(void) { (void)Afe3520_EnterSleep(); }
-void AFE_IDLE(void) { (void)Afe3520_EnterIdle(); }
-void AFE_SHIP(void)
-{
-    /* Reference board has no software-driven SHIP GPIO. */
-}
-UINT32 AFE_CalcuVbat(void)
-{
-    const AFE3520_SNAPSHOT *s = Afe3520_GetSnapshot();
-    uint8_t i;
-    uint32_t total = 0U;
-    for (i = 0U; i < SeriesNum && i < AFE3520_CELL_MAX; ++i) total += s->cellMv[i];
-    return total;
-}
-UINT8 SH367309_SC_DelayT_Set(void) { return Bms3520_ApplyAndVerifyAfeConfig(); }
-void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF) { Bms3520_RequestMos(Type, OnOFF); }
-bool SH367309_UpdataAfeConfig(void) { return Bms3520_ApplyAndVerifyAfeConfig() ? true : false; }
-void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void) { (void)Bms3520_ApplyAndVerifyAfeConfig(); }
-void App_SH367309(void) { Bms3520_ProtectionService(); }

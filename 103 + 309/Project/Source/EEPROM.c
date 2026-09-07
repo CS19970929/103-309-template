@@ -4,7 +4,7 @@
 #include "BmsParamSchema.h"
 #include "AfeParamAccess.h"
 
-#if BMS_CONFIG_AFE_WORD_COUNT != AFE_PARAMETES_TOTAL_LENGTH
+#if BMS_CONFIG_AFE_WORD_COUNT != BMS_PARAMETER_COUNT
 #error "BMS config AFE word count mismatch"
 #endif
 #if BMS_CONFIG_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
@@ -104,12 +104,11 @@ static void EEPROM_LoadDefaultAfe(void)
 {
 	UINT16 i;
 
-	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
 	{
-		AFE_Value_Typedef *param = AfeParam_At(i);
+		BMS_PARAMETER_VALUE *param = AfeParam_At(i);
 		param->curValue = param->defaultValue;
 	}
-	AFE_PARAM_WRITE_Flag = 1;
 }
 
 static void EEPROM_LoadDefaultProtect(void)
@@ -333,7 +332,6 @@ static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 	memcpy(&OtherElement, config->other, sizeof(OtherElement));
 
 	s_u16ConfigPolicyVersion = config->u16AppliedPolicyVersion;
-	AFE_PARAM_WRITE_Flag = 1;
 	BmsParam_ApplyRuntime();
 }
 

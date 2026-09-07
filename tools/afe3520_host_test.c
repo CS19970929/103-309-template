@@ -6,8 +6,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "I2C_AFE1.h"
-#include "SH367309_Func.h"
+#include "afe3520/Afe3520App.h"
 #include "afe3520/BmsProtection3520.h"
 #include "afe3520/Afe3520Config.h"
 
@@ -24,7 +23,7 @@ static struct {
 } g_stCellInfoReport;
 static struct { uint8_t u8ErrFlag_CBC_DSG; } System_ErrFlag;
 UINT8 SeriesNum = 19;
-AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
 enum { ERROR_AFE1, ERROR_REMOVE_AFE1 };
 static int afe_error, reported_chg, reported_dsg;
 static void System_ERROR_UserCallback(int code) { afe_error = (code == ERROR_AFE1); }
@@ -34,7 +33,8 @@ static void Delay1ms(UINT16 ms) { (void)ms; }
 
 /* Include production sources directly so private state transitions can also
  * be asserted. The real main.h is suppressed, board dependencies are mocked. */
-#include "../103 + 309/Project/Source/I2C_AFE1.c"
+#include "../103 + 309/Project/Source/afe3520/Afe3520.c"
+#include "../103 + 309/Project/Source/afe3520/Afe3520App.c"
 #include "../103 + 309/Project/Source/afe3520/BmsProtection3520.c"
 #include "../103 + 309/Project/Source/MosStartup.c"
 
@@ -128,7 +128,7 @@ static void healthy(void)
     }
     for (i=0;i<4;++i) { ram[0x5D+2*i]=0x40; g_stCellInfoReport.u16Temperature[i]=650; }
     ram[0x65]=0x40; /* Safe internal temperature raw code. */
-    SeriesNum=19; Bms3520_SetSystemBlock(0); InitAFE1();
+    SeriesNum=19; Bms3520_SetSystemBlock(0); Afe3520_AppInit();
     assert(!afe_error);
 }
 
@@ -154,9 +154,9 @@ int main(void)
     for(i=0;i<sizeof(untouched)/sizeof(untouched[0]);++i) assert(ram[untouched[i]]==0xA6);
     CHECK_CASE("reference profile / watchdog variant / preserve unspecified registers");
 
-    assert(UpdateVoltageFromBqMaximo()==0 && SH367309_Read_AFE1.u16VCell[0]==3300);
-    fail_reads=5; assert(UpdateVoltageFromBqMaximo()!=0 && !Afe3520_IsReady());
-    assert(UpdateVoltageFromBqMaximo()==0);
+    assert(Afe3520_UpdateMeasurements()==0 && g_afe3520Measurements.u16VCell[0]==3300);
+    fail_reads=5; assert(Afe3520_UpdateMeasurements()!=0 && !Afe3520_IsReady());
+    assert(Afe3520_UpdateMeasurements()==0);
     CHECK_CASE("sample success=0, failure!=0, next frame recovers");
 
     before=frames; fail_reads=2;
@@ -203,7 +203,7 @@ int main(void)
     healthy(); Bms3520_ProtectionService();
     before=write_count[0x40]; MosStartup_ApplyInitialState();
     assert(write_count[0x40]==before && (ram[0x41]&3)==3);
-    CHECK_CASE("legacy MOS entry does not overwrite SCONF1");
+    CHECK_CASE("MOS startup does not overwrite SCONF1");
     healthy(); Bms3520_ProtectionService();
     Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
     ram[0x59]|=4; Bms3520_ProtectionService();
@@ -211,6 +211,15 @@ int main(void)
     for(i=0;i<26;++i) Bms3520_ProtectionService();
     assert(!(ram[0x59]&4) && (ram[0x41]&3)==3);
     CHECK_CASE("WDT latch blocks MOS then clears after stable recovery");
+    healthy();
+    s_snapshot.valid=1; s_snapshot.cadcRaw=1000;
+    { UINT16 code=0;
+      assert(Afe3520_ReadCalibratedCurrentCode(&code) && code==327);
+      s_snapshot.cadcRaw=(UINT16)(INT16)-1000;
+      assert(Afe3520_ReadCalibratedCurrentCode(&code) && (INT16)code==-327);
+      assert(!Afe3520_ReadCalibratedCurrentCode(0));
+    }
+    CHECK_CASE("native CADC preserves signed current calibration without MTP alias");
     SeriesNum=21; assert(!Bms3520_BuildAfeConfig(&cfg));
     printf("PASS: %u cases, watchdog=%d\n",tests,AFE3520_CFG_WDT_ENABLE);
     return 0;

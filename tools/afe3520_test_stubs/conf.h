@@ -14,10 +14,10 @@ struct RS485MSG;
 #define CS_Res 2
 #define CS_Res_Num 2
 #define LIFEPO
-#define AFE_OCC1 120
-#define AFE_OCC2 120
-#define AFE_ODC1 150
-#define AFE_ODC2 150
+#define BMS_SW_OCC1 120
+#define BMS_SW_OCC2 120
+#define BMS_SW_ODC1 150
+#define BMS_SW_ODC2 150
 #define CBC_Cur_DSG 50
 #define CBC_DelayT 128
 #endif

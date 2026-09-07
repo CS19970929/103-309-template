@@ -1,11 +1,7 @@
 #include "main.h"
 #include "afe3520/BmsProtection3520.h"
 
-/* Keil compile-slot adapter: Afe3520.c is the real transport/measurement unit. */
-#include "afe3520/Afe3520.c"
-
-AFEDATA Registers_AFE1;
-struct SH367309_Read SH367309_Read_AFE1;
+struct Afe3520Measurements g_afe3520Measurements;
 
 static INT16 Afe3520_NativeToLegacyCadc(INT16 nativeRaw)
 {
@@ -21,43 +17,17 @@ static INT16 Afe3520_NativeToLegacyCadc(INT16 nativeRaw)
     return (INT16)(((INT32)nativeRaw * 21470L) / 65536L);
 }
 
-UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
+UINT8 Afe3520_ReadCalibratedCurrentCode(UINT16 *code)
 {
-    if ((RdBuf == 0) || (Length == 0U)) return 0U;
-
-    if ((RdAddr == MTP_ADC2) && (Length == 2U))
-    {
-        const AFE3520_SNAPSHOT *snap = Afe3520_GetSnapshot();
-        INT16 proxy;
-        if (!snap->valid && (Afe3520_Service() != AFE3520_OK)) return 0U;
-        snap = Afe3520_GetSnapshot();
-        proxy = Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
-        RdBuf[0] = (UINT8)(((UINT16)proxy) >> 8);
-        RdBuf[1] = (UINT8)proxy;
-        return 1U;
-    }
-    return (Afe3520_Read(RdAddr, RdBuf, Length) == AFE3520_OK) ? 1U : 0U;
-}
-
-UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
-{
-    UINT8 i;
-    if ((WrBuf == 0) || (Length == 0U)) return 0U;
-    for (i = 0U; i < Length; ++i)
-    {
-        if (Afe3520_Write((UINT8)(WrAddr + i), WrBuf[i]) != AFE3520_OK) return 0U;
-    }
+    const AFE3520_SNAPSHOT *snap = Afe3520_GetSnapshot();
+    if (code == 0) return 0U;
+    if (!snap->valid && (Afe3520_Service() != AFE3520_OK)) return 0U;
+    snap = Afe3520_GetSnapshot();
+    *code = (UINT16)Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
     return 1U;
 }
 
-UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
-{
-    /* SH3673520 protection configuration is RAM. The historical function name
-     * survives only as a build/API compatibility shim. */
-    return MTPWrite(WrAddr, Length, WrBuf);
-}
-
-void initAFE1_IIC(void)
+void Afe3520_RestorePort(void)
 {
     /* STOP entry converts most GPIO to analog. Rebuild SPI pins on every wake.
      * Mark config dirty because a concurrent AFE reset/WDT recovery may also
@@ -66,7 +36,7 @@ void initAFE1_IIC(void)
     Afe3520_MarkConfigDirty();
 }
 
-void InitAFE1(void)
+void Afe3520_AppInit(void)
 {
     Bms3520_ProtectionInit();
 
@@ -88,7 +58,7 @@ void InitAFE1(void)
     System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
 }
 
-void InitAFE1_Sleep(UINT8 mode)
+void Afe3520_SetLowPowerMode(UINT8 mode)
 {
     switch (mode)
     {
@@ -104,7 +74,7 @@ void InitAFE1_Sleep(UINT8 mode)
     }
 }
 
-UINT8 UpdateVoltageFromBqMaximo(void)
+UINT8 Afe3520_UpdateMeasurements(void)
 {
     /* MonitorAFE and the RTC adapter use 0=success, nonzero=failure. */
     const AFE3520_SNAPSHOT *snap;
@@ -121,11 +91,9 @@ UINT8 UpdateVoltageFromBqMaximo(void)
     snap = Afe3520_GetSnapshot();
     if (!snap->valid) return 1U;
 
-    memset(&Registers_AFE1, 0, sizeof(Registers_AFE1));
     for (i = 0U; i < AFE3520_CELL_MAX; ++i)
     {
-        SH367309_Read_AFE1.u16VCell[i] = snap->cellMv[i];
-        Registers_AFE1.Cell[i] = snap->cellMv[i];
+        g_afe3520Measurements.u16VCell[i] = snap->cellMv[i];
     }
 
     for (i = 0U; i < AFE3520_TEMP_MAX; ++i)
@@ -134,17 +102,11 @@ UINT8 UpdateVoltageFromBqMaximo(void)
         tempEncoded = (INT32)snap->tempDeciC[i] + 400L;
         if (tempEncoded < 0L) tempEncoded = 0L;
         if (tempEncoded > 2000L) tempEncoded = 2000L;
-        SH367309_Read_AFE1.u16TempBat[i] = (UINT16)tempEncoded;
+        g_afe3520Measurements.u16TempBat[i] = (UINT16)tempEncoded;
     }
-    Registers_AFE1.Temp1 = SH367309_Read_AFE1.u16TempBat[0];
-    Registers_AFE1.Temp2 = SH367309_Read_AFE1.u16TempBat[1];
-    Registers_AFE1.Temp3 = SH367309_Read_AFE1.u16TempBat[2];
-    Registers_AFE1.Temp4 = SH367309_Read_AFE1.u16TempBat[3];
 
     proxy = Afe3520_NativeToLegacyCadc((INT16)snap->cadcRaw);
-    SH367309_Read_AFE1.u16Current = (UINT16)proxy;
-    Registers_AFE1.Cadc = proxy;
-    SH367309_Read_AFE1.u32VBat = AFE_CalcuVbat();
+    g_afe3520Measurements.u16Current = (UINT16)proxy;
 
     SystemRuntime_SetAfeStatus(0U, 1U);
     return 0U;

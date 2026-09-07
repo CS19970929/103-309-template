@@ -33,11 +33,6 @@
 // <o> Firmware version <0-65535>
 #define PROJECT_CFG_VERSION 5
 
-// <o> AFE type
-//   <0=> bq76xx
-//   <1=> sh36xx
-#define PROJECT_CFG_AFE_TYPE 1
-
 // <h>Feature Switches
 
 // <q> Enable IWDG

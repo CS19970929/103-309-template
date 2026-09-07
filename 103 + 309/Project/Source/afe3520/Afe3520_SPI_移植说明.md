@@ -2,6 +2,16 @@
 
 本次基线：`codex/afe-spi-refactor-debug`，提交 `78b4f5f` 中的 `InitAFE3520_Registers`。当前工程目标是 STM32F103C8，底层沿用工程 STM32F1 标准外设库。
 
+## Keil 工程接入
+
+打开 `Project/Users/BMS_SH3673520.uvprojx`。FD_Release、FD_Debug 均有 `SH3673520` 分组，直接编译 `Afe3520.c`（SPI/寄存器/采样）、`Afe3520App.c`（应用采样与电流标定接口）、`BmsProtection3520.c`（保护/MOS）、`BmsParameters.c`（持久化软件参数）、`rtc_sleep_afe3520.c`（低功耗接入）；配置头也显示在分组内。
+
+旧 `I2C_AFE1`、`SH367309_Func`、`SH367309_DataDeal` 文件及 `#include .c` 编译占位方式已移除。没有保留 309 寄存器镜像、MTP 读写入口、I²C 地址、旧 AFE 类型选择、未用 ShortFunc/BQ 分支和只写不读的配置标志。驱动初始化、采样、低功耗及 MOS 调用均使用 3520 接口。
+
+软件参数使用 `BMS_PARAMETERS`、`g_bmsParameters` 和 `BMS_SW_*` 命名，替代暗示 AFE ROM/309 硬件的旧内部名称。0x2400 的 24 个寄存器顺序、默认数值、EEPROM 布局及电流 K/B 标定含义保持不变；未启用的其它板型电流配置已删除。参考分支使用连续电芯通道，旧 309 的 13 串跳过 VC9 规则已移除。
+
+工程目录 `103 + 309` 及历史构建记录保留原有位置；它们不是当前芯片选择项。日常构建脚本已指向新工程文件，旧工程文件已删除。本次不修改用户既有调试缓存和历史产物。
+
 ## 配置入口
 
 AFE 硬件配置集中在 `Afe3520Config.h`，支持 Keil Configuration Wizard。修改后重新编译。`AFE3520_CFG_WDT_ENABLE` 默认 `0`，改为 `1` 开启 AFE 看门狗；也可以通过编译宏覆盖。启用后，MCU 被调试器暂停并不会冻结外部 AFE 的看门狗。
@@ -54,7 +64,7 @@ MCU 软件保护继续使用现有 `0x2400` 参数区及既有算法，协议含
 
 现有实际使用的 USART2、CAN 复用接口继续由对应外设初始化。GPIO 输出使用 2 MHz 模式，SWD 保留、JTAG 释放。低功耗恢复重新配置 SPI 引脚。
 
-删除 SHIP、PRO_EN、BLE_EN/SW_EN 等无实际用途或错误别名、未用 ADC PB1、未被业务读取的 PA8/PA9 检测定义，以及旧 MCUO/MCUI 宏。参考代码中的旧 PC12/PC13/PD2 和当前工程未用的 C/D/E 整口初始化不搬入 F103C8 工程。删除 UART RX 唤醒开关及未用 EXTI 分支；只保留实际板级唤醒及 RTC 中断。历史 `AFE_SHIP()` 兼容入口不再操作虚构引脚。
+删除 SHIP、PRO_EN、BLE_EN/SW_EN 等无实际用途或错误别名、未用 ADC PB1、未被业务读取的 PA8/PA9 检测定义，以及旧 MCUO/MCUI 宏。参考代码中的旧 PC12/PC13/PD2 和当前工程未用的 C/D/E 整口初始化不搬入 F103C8 工程。删除 UART RX 唤醒开关及未用 EXTI 分支；只保留实际板级唤醒及 RTC 中断。旧 `AFE_SHIP()` 空兼容入口已删除。
 
 ## 故障修复与通信评估
 
@@ -70,15 +80,17 @@ SPI 保留参考的软件方式：Mode 3、MSB first、相同半周期延时循�
 
 ## 验证与构建
 
-`tools/run_afe3520_host_test.py` 编译实际驱动和保护源码，通过逐位 GPIO 从设备模型检查配置、保留寄存器、CRC/NACK/回显错误、5 次重试、采样返回值、LTCLR、MOS 重配置恢复、硬件反馈、RST2 和 WDT 故障恢复。WDT 关闭/开启各 10 项，共 20 项通过。Windows 可在 Visual Studio Developer Shell 中执行，或使用 PATH 中的 gcc/clang；所有测试二进制写到用户临时区。
+`tools/run_afe3520_host_test.py` 编译实际驱动和保护源码，通过逐位 GPIO 从设备模型检查配置、保留寄存器、CRC/NACK/回显错误、5 次重试、采样返回值、LTCLR、MOS 重配置恢复、硬件反馈、RST2 和 WDT 故障恢复。WDT 关闭/开启各 11 项，共 22 项通过；另验证真实上报函数在 5/13/19/20 串下的连续通道及未用通道占位值。测试同时检查两个 Keil 目标直接编译每个 3520 源文件且无重复或旧驱动引用。Windows 可在 Visual Studio Developer Shell 中执行，或使用 PATH 中的 gcc/clang；所有测试二进制写到用户临时区。
 
 Keil ARMCC 的 FD_Release、FD_Debug 均完整编译验证。Debug 原 -O0 超出 App 分区，调整为 -O1 并保留调试符号，同时补全未处理向量记录函数；优化可能影响局部变量观察和单步顺序。没有扩大分区。
 
 | 目标 | Code | RO | RW | ZI | Flash 合计 | RAM 合计 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| FD_Release | 34644 | 1796 | 544 | 8488 | 36984 | 9032 |
-| FD_Debug | 37360 | 1796 | 544 | 8488 | 39700 | 9032 |
+| FD_Release | 34288 | 1796 | 528 | 8432 | 36612 | 8960 |
+| FD_Debug | 36996 | 1796 | 528 | 8432 | 39320 | 8960 |
 
-单位为字节。完整构建仍有 7 条既有未使用函数/变量警告，位于 ADC、SOC、Sci_Upper、SocEnhance；不影响链接。产物位于 `Project/Users/Objects/FD_Release.{axf,hex,bin}` 和 `Project/Users/Objects_Debug/FD_Debug.{axf,bin}`。
+单位为字节。本轮 Release 完整构建耗时 5 秒，Debug 4 秒。完整构建仍有 7 条既有未使用函数/变量警告，位于 ADC、SOC、Sci_Upper、SocEnhance；不影响链接。产物位于 `Project/Users/Objects/FD_Release.{axf,bin}` 和 `Project/Users/Objects_Debug/FD_Debug.{axf,bin}`。
+
+当前工程不生成 HEX；输出目录中的旧 HEX 不属于本轮构建。Release AXF/BIN 为 887660/36284 字节，Debug AXF/BIN 为 937028/38992 字节。
 
 App 地址仍为 **0x08004800**，IAP 为 **0x08000000**。禁止将 App bin 裸写到 IAP 地址，后续烧录沿用仓库安全脚本。

@@ -47,8 +47,8 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 
 	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
-	InitAFE1_Sleep(0);
-	AFE_Sleep();
+	Afe3520_SetLowPowerMode(0);
+	(void)Afe3520_EnterSleep();
 	MCU_RESET();
 }
 

@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$Project = Join-Path $RepoRoot "103 + 309\Project\Users\CommomSH367309_16series_103RCT6_C.uvprojx"
+$Project = Join-Path $RepoRoot "103 + 309\Project\Users\BMS_SH3673520.uvprojx"
 $ProjectUsers = Join-Path $RepoRoot "103 + 309\Project\Users"
 
 function Invoke-LoggedStep {

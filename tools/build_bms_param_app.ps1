@@ -1,5 +1,5 @@
 param(
-    [string]$Project = "103 + 309\Project\Users\CommomSH367309_16series_103RCT6_C.uvprojx",
+    [string]$Project = "103 + 309\Project\Users\BMS_SH3673520.uvprojx",
     [string]$BaseTarget = "FD_Release",
     [string]$ParamTarget = "FD_Param",
     [string]$Uv4Path = "C:\Keil_v5\UV4\UV4.exe"

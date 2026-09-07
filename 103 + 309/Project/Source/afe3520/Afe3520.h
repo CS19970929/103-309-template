@@ -10,7 +10,6 @@
 #define AFE3520_CELL_MAX                 20U
 #define AFE3520_TEMP_MAX                 4U
 #define AFE3520_SPI_RETRY_MAX            5U
-#define AFE3520_SPI_MAX_HZ               1000000UL
 
 #define AFE3520_CMD_WRITE                0x01U
 #define AFE3520_CMD_READ                 0x02U

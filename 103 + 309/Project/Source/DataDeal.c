@@ -1,19 +1,5 @@
 #include "main.h"
 
-/* SH367309 cell register order is linear except 13S cell 9, which maps to VC10. */
-static UINT8 DataLoad_CellVoltAfeIndex(UINT8 series_num, UINT8 cell_index)
-{
-    if (series_num < 5U)
-    {
-        return 0U;
-    }
-    if ((series_num == 13U) && (cell_index == 8U))
-    {
-        return 9U;
-    }
-    return cell_index;
-}
-
 #define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
 #define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
 #define MONITOR_AFE_RECOVER_RETRY_STEP ((UINT8)5U)
@@ -97,27 +83,13 @@ void charger_detect_and_keyLogi_200ms(void)
 {
 }
 
-void Init_Registers(UINT8 num)
-{
-    switch (num)
-    {
-    case 0:
-        memset(&Registers_AFE1, 0, sizeof(Registers_AFE1));
-        break;
-    case 1:
-    default:
-        break;
-    }
-}
-
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
 
     for (i = 0; i < SeriesNum; ++i)
     {
-        UINT8 afe_index = DataLoad_CellVoltAfeIndex(SeriesNum, i);
-        g_stCellInfoReport.u16VCell[i] = SH367309_Read_AFE1.u16VCell[afe_index];
+        g_stCellInfoReport.u16VCell[i] = g_afe3520Measurements.u16VCell[i];
     }
 
 #ifndef VCELL_DISP_TEST
@@ -182,7 +154,7 @@ void DataLoad_Temperature(void)
     Select = 2;
     for (i = 0; i < Select; i++)
     {
-        t_i32temp = (INT32)SH367309_Read_AFE1.u16TempBat[i] / 10 - 40;
+        t_i32temp = (INT32)g_afe3520Measurements.u16TempBat[i] / 10 - 40;
         t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP1 + i]) + g_i16CalibCoefB[MDL_TEMP1 + i]) >> 10;
         g_stCellInfoReport.u16Temperature[i] = (UINT16)(t_i32temp * 10 + 400);
         Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[i]);
@@ -325,18 +297,15 @@ static UINT32 DataLoad_CurrentRawToMilliAmp(UINT32 raw_abs)
 
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
 {
-    UINT16 raw_be;
 
     if (raw_code == 0)
     {
         return 0U;
     }
 
-    raw_be = 0U;
-    if (MTPRead(MTP_ADC2, 2, (UINT8 *)&raw_be))
+    if (Afe3520_ReadCalibratedCurrentCode(raw_code))
     {
-        *raw_code = U16_SwapEndian(raw_be);
-        SH367309_Read_AFE1.u16Current = *raw_code;
+        g_afe3520Measurements.u16Current = *raw_code;
         return 1U;
     }
 
@@ -549,7 +518,7 @@ void DataLoad_Current(void)
     INT32 corrected_raw;
     UINT32 current_mA;
 
-    raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
+    raw_signed = DataLoad_CurrentRawToSigned(g_afe3520Measurements.u16Current);
     corrected_raw = raw_signed - s_data.cur.zeroOffsetRaw;
     current_mA = DataLoad_CurrentRawToMilliAmp(DataLoad_CurrentAbsI32(corrected_raw));
 
@@ -626,10 +595,10 @@ static void MonitorAFE_Recover(UINT8 num)
     switch (num)
     {
     case 0:
-        InitAFE1();
+        Afe3520_AppInit();
         break;
     case 1:
-        SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+        Bms3520_ApplyAndVerifyAfeConfig();
         break;
     default:
         break;
@@ -672,7 +641,6 @@ static void MonitorAFE_UpdateChannel(UINT8 num, UINT8 result, UINT8 *fault_cnt, 
 
         if ((*fault_cnt >= MONITOR_AFE_FAIL_LIMIT) && (channel->errorReported == 0U))
         {
-            Init_Registers(num);
             channel->errorReported = 1U;
             MonitorAFE_ReportError(num);
         }
@@ -740,7 +708,7 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 
 static void Protection_UpdateChargeOcp(void)
 {
-    if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
+    if (g_stCellInfoReport.u16Ichg >= g_bmsParameters.u16IchgOcp_First.curValue)
     {
         if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp == 0U)
         {
@@ -763,7 +731,7 @@ static void Protection_UpdateChargeOcp(void)
 
 static void Protection_UpdateDischargeOcp(void)
 {
-    if (g_stCellInfoReport.u16IDischg >= AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue)
+    if (g_stCellInfoReport.u16IDischg >= g_bmsParameters.u16IdsgOcp_First.curValue)
     {
         if (g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp == 0U)
         {
@@ -828,7 +796,7 @@ static UINT8 Protection_HasDischargeBlockingFault(void)
                    g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
                    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
                    g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
-                   SH367309_Reg_Store.REG_BSTATUS1.bits.SC);
+                   (Afe3520_GetSnapshot()->flag1 & AFE3520_FLAG1_SC));
 }
 
 static void MosPolicy_Evaluate(MOS_DESIRED_STATE *desired)
@@ -868,12 +836,12 @@ static void MosDriver_Apply(const MOS_DESIRED_STATE *desired)
     if (s_system_status.bits.b1Status_MOS_CHG != desired->chargeEnable)
     {
         sys_time.cnt_enter_chg_open++;
-        SH367309_DriverMos_Ctrl(GPIO_CHG, desired->chargeEnable);
+        Bms3520_RequestMos(GPIO_CHG, desired->chargeEnable);
     }
     if (s_system_status.bits.b1Status_MOS_DSG != desired->dischargeEnable)
     {
         sys_time.cnt_enter_dsg_open++;
-        SH367309_DriverMos_Ctrl(GPIO_DSG, desired->dischargeEnable);
+        Bms3520_RequestMos(GPIO_DSG, desired->dischargeEnable);
     }
 }
 
@@ -895,7 +863,7 @@ void App_AFEGet(void)
 
     GPIO_WriteBit(GPIO_DBG_LED, PIN_DBG_LED,
                   GPIO_ReadOutputDataBit(GPIO_DBG_LED, PIN_DBG_LED) ? Bit_RESET : Bit_SET);
-    MonitorAFE(0, UpdateVoltageFromBqMaximo());
+    MonitorAFE(0, Afe3520_UpdateMeasurements());
 
     DataLoad_CellVolt();
     DataLoad_CellVoltMaxMinFind();
@@ -905,7 +873,7 @@ void App_AFEGet(void)
 
     AfeCurrent_NextSeq();
 
-    App_SH367309();
+    Bms3520_ProtectionService();
     ProtectionMos_Process200ms();
     App_SOC();
 
