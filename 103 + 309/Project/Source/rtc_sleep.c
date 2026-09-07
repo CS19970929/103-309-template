@@ -257,7 +257,7 @@ static void rtc_sleep_prepare_rtc(void)
     }
     else
     {
-        InitWakeUp_Base();
+        InitWakeUp_NormalMode();
     }
 
     LowPowerSleep_SaveCoreState();
@@ -286,6 +286,8 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     sys_time.rtc_sleep_cnt = rtc_elapsed;
     g_stLowPowerRtcStatus.sleep += rtc_elapsed;
 
+    /* External traffic wins even if the RTC alarm arrived in the same window. */
+    if (g_irq_t != NO_IRQ && g_irq_t != rtc_alarm_irq) return false;
     Afe3520_RestorePort();
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())

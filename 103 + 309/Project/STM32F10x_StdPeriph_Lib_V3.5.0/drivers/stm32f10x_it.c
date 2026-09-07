@@ -106,6 +106,17 @@ void EXTI0_IRQHandler(void)
     EXTI_ClearITPendingBit(EXTI_Line0);
   }
 }
+void EXTI3_IRQHandler(void)
+{
+  if (EXTI_GetITStatus(EXTI_Line3) != RESET)
+  {
+    EXTI->IMR &= ~EXTI_Line3; /* One-shot: mask RX transitions until run restore. */
+    if (g_irq_t == NO_IRQ || g_irq_t == rtc_alarm_irq) g_irq_t = uart2_irq;
+    EXTI_ClearITPendingBit(EXTI_Line3);
+  }
+}
+
+
 
 void EXTI15_10_IRQHandler(void)
 {
@@ -118,6 +129,12 @@ void EXTI15_10_IRQHandler(void)
 
 void EXTI9_5_IRQHandler(void)
 {
+  if (EXTI_GetITStatus(EXTI_Line7) != RESET)
+  {
+    EXTI->IMR &= ~EXTI_Line7;
+    if (g_irq_t == NO_IRQ || g_irq_t == rtc_alarm_irq) g_irq_t = uart1_irq;
+    EXTI_ClearITPendingBit(EXTI_Line7);
+  }
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
     sys_time.cnt_bms1_keyirq++;

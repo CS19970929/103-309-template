@@ -41,6 +41,15 @@
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
 
+// <o> RTC STOP inspection interval in seconds <1-10>
+// <i> Keep below the enabled IWDG minimum timeout; 1s costs more average current.
+#ifndef PROJECT_CFG_RTC_STOP_SECONDS
+#define PROJECT_CFG_RTC_STOP_SECONDS 10U
+#endif
+#if PROJECT_CFG_RTC_STOP_SECONDS < 1U || PROJECT_CFG_RTC_STOP_SECONDS > 10U
+#error "RTC STOP interval must be 1..10 seconds"
+#endif
+
 // <q> Enable debug system monitor
 // <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
 // <i> Release must keep disabled.

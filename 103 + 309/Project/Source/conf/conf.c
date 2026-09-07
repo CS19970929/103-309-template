@@ -93,16 +93,17 @@ static void Conf_InitAllPortsAnalog(void)
 
 void LowPower_ClearWakeupPending(void)
 {
-    EXTI_ClearITPendingBit(EXTI_Line0 | EXTI_Line5 | EXTI_Line12);
+    EXTI_ClearITPendingBit(EXTI_Line0 | EXTI_Line3 | EXTI_Line5 | EXTI_Line7 | EXTI_Line12);
     NVIC_ClearPendingIRQ(EXTI0_IRQn);
+    NVIC_ClearPendingIRQ(EXTI3_IRQn);
     NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
     NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
 }
 
 void LowPower_DisableWakeupExti(void)
 {
-    LowPower_ConfigWakeupExti(EXTI_Line0 | EXTI_Line5 | EXTI_Line12 | EXTI_Line17,
-                            EXTI_Trigger_Rising, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line0 | EXTI_Line3 | EXTI_Line5 | EXTI_Line7 | EXTI_Line12 | EXTI_Line17,
+                              EXTI_Trigger_Rising, DISABLE);
     LowPower_ClearWakeupPending();
 }
 
@@ -128,20 +129,34 @@ void InitWakeUp_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
     jtag_disableAndConfIO();
+    LowPower_ClearWakeupPending();
     Conf_InitWakeupInputExti(GPIO_INT_WK_MCU, PIN_INT_WK_MCU,
-                            GPIO_PortSourceGPIOA, GPIO_PinSource0, EXTI_Line0,
-                            EXTI_Trigger_Rising, EXTI0_IRQn);
+                             GPIO_PortSourceGPIOA, GPIO_PinSource0, EXTI_Line0,
+                             EXTI_Trigger_Rising, EXTI0_IRQn);
     Conf_InitWakeupInputExti(GPIO_KEY1, PIN_KEY1,
-                            GPIO_PortSourceGPIOB, GPIO_PinSource5, EXTI_Line5,
-                            EXTI_Trigger_Falling, EXTI9_5_IRQn);
+                             GPIO_PortSourceGPIOB, GPIO_PinSource5, EXTI_Line5,
+                             EXTI_Trigger_Falling, EXTI9_5_IRQn);
 }
 
 void InitWakeUp_NormalMode(void)
 {
     InitWakeUp_Base();
     Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT,
-                            GPIO_PortSourceGPIOB, GPIO_PinSource12, EXTI_Line12,
-                            EXTI_Trigger_Rising, EXTI15_10_IRQn);
+                             GPIO_PortSourceGPIOB, GPIO_PinSource12, EXTI_Line12,
+                             EXTI_Trigger_Rising, EXTI15_10_IRQn);
+
+#ifdef _COMMOM_UPPER_SCI1
+    Conf_InitWakeupInputExti(GPIO_SCI1_RX, PIN_SCI1_RX,
+                            GPIO_PortSourceGPIOB, GPIO_PinSource7, EXTI_Line7,
+                            EXTI_Trigger_Falling, EXTI9_5_IRQn);
+    Conf_InitGpioMode(GPIO_SCI1_RX, PIN_SCI1_RX, GPIO_Mode_IPU);
+#endif
+#ifdef _COMMOM_UPPER_SCI2
+    Conf_InitWakeupInputExti(GPIO_SCI2_RX, PIN_SCI2_RX,
+                            GPIO_PortSourceGPIOA, GPIO_PinSource3, EXTI_Line3,
+                            EXTI_Trigger_Falling, EXTI3_IRQn);
+    Conf_InitGpioMode(GPIO_SCI2_RX, PIN_SCI2_RX, GPIO_Mode_IPU);
+#endif
 }
 
 void InitWakeUp_RTCMode(void)
@@ -161,12 +176,41 @@ void IOstatus_Base(void)
     Conf_InitAllPortsAnalog();
 }
 
+static void Conf_ParkRtcSpi(void)
+{
+    /* A deselected AFE must never see a floating CS between RTC inspections. */
+    RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS | RCC_APB2Periph_SPI1, ENABLE);
+    SPI_Cmd(SPI1, DISABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, DISABLE);
+    GPIO_SetBits(GPIO_CS_SPI, PIN_CS_SPI);
+    Conf_InitGpioMode(GPIO_CS_SPI, PIN_CS_SPI, GPIO_Mode_Out_PP);
+    GPIO_SetBits(GPIO_SCLK_SPI, PIN_SCLK_SPI);
+    GPIO_ResetBits(GPIO_MOSI_SPI, PIN_MOSI_SPI);
+    Conf_InitGpioMode(GPIO_SCLK_SPI, PIN_SCLK_SPI, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_MOSI_SPI, PIN_MOSI_SPI, GPIO_Mode_Out_PP);
+    Conf_InitGpioMode(GPIO_MISO_SPI, PIN_MISO_SPI, GPIO_Mode_AIN);
+}
+
 void IOstatus_RTCMode(void)
 {
+    /* F103 USART cannot receive in STOP. RX EXTI wakes the core; the first
+       character is a wake preamble, not a guaranteed complete Modbus frame. */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+    USART_Cmd(USART1, DISABLE);
+    USART_Cmd(USART2, DISABLE);
+    NVIC_DisableIRQ(USART1_IRQn);
+    NVIC_DisableIRQ(USART2_IRQn);
+    NVIC_ClearPendingIRQ(USART1_IRQn);
+    NVIC_ClearPendingIRQ(USART2_IRQn);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, DISABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, DISABLE);
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
     Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
     /* Keep only M_CCC as in reference; no fictitious PRO_EN/BLE/LED rails. */
     Conf_InitGpioMode(GPIOB, GPIO_Pin_All & ~PIN_M_CCC, GPIO_Mode_AIN);
+    Conf_InitMainPowerRails(Bit_RESET, Bit_RESET, Bit_RESET);
+    Conf_ParkRtcSpi();
 }
 
 void IOstatus_NormalMode(void)
@@ -195,8 +239,16 @@ void Sys_StopMode(void)
     TIM_Cmd(TIM3, DISABLE);
     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
+    NVIC_ClearPendingIRQ(TIM3_IRQn);
+    SysTick->CTRL = 0U;
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;
+    EnableLowPowerDebug();
+    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE || g_stLowPowerRtcStatus.mode == NORMAL_MODE)
+        Conf_ParkRtcSpi();
     /* Do not clear a just-arrived wake event. Pending IRQ wakes masked WFI. */
+    __DSB();
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+    __ISB();
 
     cpu_frequency_conf();
     __set_PRIMASK(primask);
@@ -214,7 +266,6 @@ void InitRunAfterStopWakeup(void)
     // InitIO();
     InitIO_rtc();
 
-
     /* SPL DeInit sequence for the fixed USART1 peripheral. */
     RCC_APB2PeriphResetCmd(RCC_APB2Periph_USART1, ENABLE);
     RCC_APB2PeriphResetCmd(RCC_APB2Periph_USART1, DISABLE);
@@ -226,10 +277,10 @@ void InitRunAfterStopWakeup(void)
     InitCan();
     InitTimer();
 
+    if (g_irq_t == uart1_irq || g_irq_t == uart2_irq) SleepDeal_RecordExternalComm();
     sys_time.wakeup_rtc = (RTC_IsStopWakeup() != 0U) ? true : false;
     /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in
        run mode can leave stale pending bits for the next low-power cycle. */
 
     Afe3520_RestorePort();
 }
-

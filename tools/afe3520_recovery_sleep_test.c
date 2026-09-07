@@ -62,6 +62,15 @@ static unsigned primask, stop_calls, clock_restores, inject_wake;
 #define RCC_APB1Periph_PWR 1
 #define RCC_APB1Periph_TIM3 2
 #define TIM3 3
+#define TIM3_IRQn 3
+#define SCB_ICSR_PENDSTCLR_Msk (1U<<25)
+static struct {unsigned ICSR;} host_scb;
+#define SCB (&host_scb)
+static void NVIC_ClearPendingIRQ(unsigned irq) {(void)irq;}
+static void EnableLowPowerDebug(void) {}
+static void Conf_ParkRtcSpi(void) {}
+static void __DSB(void) {}
+static void __ISB(void) {}
 #define TIM_IT_Update 1
 #define PWR_Regulator_LowPower 1
 #define PWR_STOPEntry_WFI 1

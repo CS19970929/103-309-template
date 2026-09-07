@@ -40,4 +40,9 @@
 #define GPIO_AD_TTC_MOS1  GPIOA
 #define PIN_AD_TTC_MOS1   GPIO_Pin_1
 
+#define GPIO_SCI2_TX      GPIOA
+#define PIN_SCI2_TX       GPIO_Pin_2
+#define GPIO_SCI2_RX      GPIOA
+#define PIN_SCI2_RX       GPIO_Pin_3
+
 #endif
