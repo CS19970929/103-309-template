@@ -1,4 +1,9 @@
 #include "main.h"
+#include "FlashEndurance.h"
+#if FLASH_ENDURANCE_TEST_ENABLE
+static UINT32 s_testEraseAttempt[8], s_testEraseSuccess[8];
+static UINT32 s_testProgramFailure;
+#endif
 
 #define FLASH_STORAGE_MAGIC_SOC              ((UINT32)0x534F4331U)
 #define FLASH_STORAGE_MAGIC_CONFIG           ((UINT32)0x43464731U)
@@ -120,6 +125,10 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 		return FLASH_ERROR_PG;
 	}
 
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (page_addr >= FLASH_ADDR_STORAGE_START && page_addr < FLASH_ADDR_STORAGE_END)
+        ++s_testEraseAttempt[(page_addr-FLASH_ADDR_STORAGE_START)/FLASH_STORAGE_PAGE_SIZE];
+#endif
 	result = FLASH_ErasePage(page_addr);
 	if (result != FLASH_COMPLETE)
 	{
@@ -129,6 +138,10 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 	if (!StorageFlash_IsAreaBlank(page_addr, FLASH_STORAGE_PAGE_SIZE))
 		return FLASH_ERROR_PG;
 
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (page_addr >= FLASH_ADDR_STORAGE_START && page_addr < FLASH_ADDR_STORAGE_END)
+        ++s_testEraseSuccess[(page_addr-FLASH_ADDR_STORAGE_START)/FLASH_STORAGE_PAGE_SIZE];
+#endif
 	return FLASH_COMPLETE;
 }
 
@@ -142,6 +155,9 @@ static FLASH_Status FlashProgramHalfWordVerified(uint32_t addr, uint16_t data)
 	}
 
 	result = FLASH_ProgramHalfWord(addr, data);
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (result != FLASH_COMPLETE || FlashReadOneHalfWord(addr) != data) ++s_testProgramFailure;
+#endif
 	if (result != FLASH_COMPLETE)
 	{
 		return result;
@@ -769,7 +785,7 @@ UINT8 StorageFlash_SaveConfigData(const BMS_CONFIG *data)
 	return result;
 }
 
-UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
+static UINT8 StorageFlash_LoadSocDataReal(STORAGE_FLASH_SOC_DATA *data)
 {
 	if (data == 0)
 	{
@@ -788,7 +804,15 @@ UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 	return (data->u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION_CURRENT) ? 1U : 0U;
 }
 
-UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
+UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
+{
+    UINT8 valid=StorageFlash_LoadSocDataReal(data);
+    /* Also reject test snapshots when returning to production firmware. */
+    if (valid && data->u16Reserved[0]==FLASH_TEST_SNAPSHOT_MARKER) return 0U;
+    return valid;
+}
+
+static UINT8 StorageFlash_SaveSocDataReal(const STORAGE_FLASH_SOC_DATA *data)
 {
 	STORAGE_FLASH_SOC_DATA save_data;
 	UINT8 result;
@@ -809,6 +833,17 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 	StorageFlash_EndWrite();
 	return result;
 }
+
+UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
+{
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (FlashTest_Active()) return 0U; /* Keep the runtime save mark unchanged. */
+#endif
+    return StorageFlash_SaveSocDataReal(data);
+}
+#if FLASH_ENDURANCE_TEST_ENABLE
+#include "FlashEndurance.inc"
+#endif
 
 void StorageFlash_PrintBootCheck(void)
 {
@@ -847,6 +882,9 @@ void StorageFlash_PrintBootCheck(void)
 
 void App_FlashUpdate(void)
 {
+#if FLASH_ENDURANCE_TEST_ENABLE
+    FlashTest_Service();
+#endif
 	if (1 == u8FlashUpdateFlag)
 	{
 		Bms3520_RequestMos(GPIO_CHG, 0);

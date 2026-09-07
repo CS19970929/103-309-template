@@ -2,6 +2,7 @@
 #include "afe3520/BmsProtection3520.h"
 #include "FaultSnapshot.h"
 #include "Flash.h"
+#include "FlashEndurance.h"
 #include "BmsParamSchema.h"
 #include <stddef.h>
 
@@ -197,6 +198,11 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	u16ActualAddr = t_u16Temp;
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (t_u16Temp >= FLASH_TEST_BASE && t_u16Temp < FLASH_TEST_BASE+FLASH_TEST_WORDS)
+        t_u16Temp -= FLASH_TEST_BASE;
+    else
+#endif
 	if (t_u16Temp >= BMS3520_HW_REGISTER_BASE && t_u16Temp < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
     {
         t_u16Temp -= BMS3520_HW_REGISTER_BASE;
@@ -278,6 +284,14 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 #if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegAddr;
 	u16SciRegAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (u16SciRegAddr == FLASH_TEST_BASE || u16SciRegAddr == FLASH_TEST_BASE+1U)
+    {
+        if (!FlashTest_Command(u16SciRegAddr,(UINT16)((s->u16Buffer[4]<<8)|s->u16Buffer[5])))
+        { s->AckType=RS485_ACK_NEG; s->ErrorType=RS485_ERROR_CMD_INVALID; }
+        return;
+    }
+#endif
 	switch (u16SciRegAddr)
 	{
 	case RS485_CMD_ADDR_RESET_CALIB_COEF:
@@ -437,6 +451,10 @@ static UINT8 Sci_RangeOverlaps(UINT16 start, UINT16 count, UINT16 block_start, U
 
 static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 {
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (word_count && actual_addr>=FLASH_TEST_BASE && actual_addr<FLASH_TEST_BASE+FLASH_TEST_WORDS)
+    { *word_count=FLASH_TEST_WORDS; return 1U; }
+#endif
     if (word_count && actual_addr >= BMS3520_HW_REGISTER_BASE && actual_addr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
     { *word_count=BMS3520_HW_READ_WORDS; return 1U; }
 
@@ -565,6 +583,17 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 #if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegStartAddr;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if (u16SciRegStartAddr == FLASH_TEST_RESTORE)
+    {
+        UINT16 words[sizeof(STORAGE_FLASH_SOC_DATA)/2U], i;
+        if (Sci_GetWrRegNum(s)!=sizeof(STORAGE_FLASH_SOC_DATA)/2U || s->u16Buffer[6]!=sizeof(STORAGE_FLASH_SOC_DATA))
+        { s->AckType=RS485_ACK_NEG; s->ErrorType=RS485_ERROR_DATA_INVALID; return; }
+        for(i=0U;i<sizeof(STORAGE_FLASH_SOC_DATA)/2U;++i) words[i]=Sci_GetWrValue(s,i);
+        if(!FlashTest_Restore(words)) { s->AckType=RS485_ACK_NEG; s->ErrorType=RS485_ERROR_CMD_INVALID; }
+        return;
+    }
+#endif
     if (u16SciRegStartAddr >= BMS3520_HW_REGISTER_BASE && u16SciRegStartAddr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
     {
         UINT16 words[BMS3520_HW_STORAGE_WORDS], i;
@@ -810,6 +839,10 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 static void Sci_BuildReadWindow(UINT16 actual_addr, UINT16 *source_offset, UINT8 buff[])
 {
+#if FLASH_ENDURANCE_TEST_ENABLE
+    if(actual_addr>=FLASH_TEST_BASE && actual_addr<FLASH_TEST_BASE+FLASH_TEST_WORDS)
+    { FlashTest_Read(buff); return; }
+#endif
     if (actual_addr >= BMS3520_HW_REGISTER_BASE && actual_addr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
     {
         UINT16 words[BMS3520_HW_READ_WORDS], i;
