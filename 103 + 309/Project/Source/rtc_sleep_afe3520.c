@@ -49,7 +49,7 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
 {
     if (source != 0) *source = NO_IRQ;
     /* Read native SH3673520 flags and actual MOS feedback. */
-    Bms3520_ProtectionService();
+    Bms3520_Service200ms();
     if (!Afe3520_GetSnapshot()->valid || !Bms3520_GetProtectionStatus()->mosFeedbackValid ||
         Bms3520_GetBlockMask() != 0U)
     {

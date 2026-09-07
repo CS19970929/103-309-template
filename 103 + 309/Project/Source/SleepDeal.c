@@ -80,7 +80,7 @@ void SleepDeal_EmergencySleep(void)
     GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
     /* Every operation has bounded transport retries. Failure never vetoes sleep. */
     (void)Afe3520_SetMos(0U, 0U, 0U);
-    (void)Afe3520_Write(AFE3520_REG_SCONF5, AFE3520_CFG_SCONF5); /* WDT off if reachable. */
+    (void)Afe3520_Write(AFE3520_REG_SCONF5, (AFE3520_CFG_EFFECTIVE_SCONF5 & ~AFE3520_SCONF5_WDT_EN)); /* WDT off if reachable. */
     (void)Afe3520_EnterSleep(); /* Includes best-effort balance off. */
     SleepDeal_CommitEmergencyBoot();
 }

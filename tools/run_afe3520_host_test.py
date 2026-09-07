@@ -35,16 +35,16 @@ def main():
     if not cc:
         raise SystemExit("Run from a Visual Studio developer shell, or put gcc/clang on PATH.")
     msvc = Path(cc).name.lower() == "cl.exe"
-    for hardware, watchdog in ((0,0), (0,1), (1,0), (1,1)):
-        exe = OUT / f"afe3520_spi{hardware}_wdt{watchdog}.exe"
+    for mode, hardware, watchdog, port in ((m,h,w,p) for m in (1,2,3) for h,w in ((0,0),(0,1),(1,0),(1,1)) for p in (0,1)):
+        exe = OUT / f"afe3520_mode{mode}_spi{hardware}_wdt{watchdog}_port{port}.exe"
         includes = [ROOT / "tools/afe3520_test_stubs", SRC]
         if msvc:
             cmd = [cc, "/nologo", "/std:c11", "/utf-8", "/W3", "/wd4819",
-                   f"/DAFE3520_CFG_WDT_ENABLE={watchdog}", f"/DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"/I{p}" for p in includes],
+                   f"/DAFE3520_CFG_COMMON_PORT={port}", f"/DBMS3520_CFG_PROTECTION_MODE={mode}", f"/DAFE3520_CFG_WDT_ENABLE={watchdog}", f"/DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"/I{p}" for p in includes],
                    str(ROOT / "tools/afe3520_host_test.c"), f"/Fe:{exe}", f"/Fo:{OUT}/"]
         else:
             cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Wno-unused-parameter",
-                   f"-DAFE3520_CFG_WDT_ENABLE={watchdog}", f"-DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"-I{p}" for p in includes],
+                   f"-DAFE3520_CFG_COMMON_PORT={port}", f"-DBMS3520_CFG_PROTECTION_MODE={mode}", f"-DAFE3520_CFG_WDT_ENABLE={watchdog}", f"-DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"-I{p}" for p in includes],
                    str(ROOT / "tools/afe3520_host_test.c"), "-o", str(exe)]
         subprocess.run(cmd, cwd=OUT, check=True)
         subprocess.run([str(exe)], cwd=OUT, check=True)

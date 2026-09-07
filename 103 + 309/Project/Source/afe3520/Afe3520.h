@@ -125,6 +125,7 @@
 #define AFE3520_BLOCK_DSG_SW_UV              (1UL << 11)
 #define AFE3520_BLOCK_DSG_SW_OCP             (1UL << 12)
 #define AFE3520_BLOCK_DSG_SW_TEMP             (1UL << 13)
+#define AFE3520_BLOCK_DSG_SW_SOC              (1UL << 14)
 #define AFE3520_BLOCK_GLOBAL_SHORT            (1UL << 16)
 #define AFE3520_BLOCK_GLOBAL_AFE_COMM         (1UL << 17)
 #define AFE3520_BLOCK_GLOBAL_AFE_CONFIG       (1UL << 18)

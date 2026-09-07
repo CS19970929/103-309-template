@@ -19,7 +19,7 @@ typedef union {
 } HOST_FAULT;
 static struct {
     uint16_t u16VCell[20], u16Temperature[4], u16Ichg, u16IDischg;
-    HOST_FAULT unMdlFault_Third;
+    HOST_FAULT unMdlFault_Third, unMdlFault_Second;
 } g_stCellInfoReport;
 static struct { uint8_t u8ErrFlag_CBC_DSG; } System_ErrFlag;
 static RCC_ClocksTypeDef clocks = {72000000,72000000,36000000,72000000};
@@ -33,6 +33,8 @@ void TIM_PrescalerConfig(int t,uint16_t value,int mode) { (void)t; (void)mode; t
 void TIM_SetCounter(int t,uint16_t value) { (void)t; timer_count=value; }
 uint16_t TIM_GetCounter(int t) { (void)t; if(timer_on && !timer_stuck) ++timer_count; return timer_count; }
 void TIM_Cmd(int t,int on) { (void)t; timer_on=on; }
+enum { IchgOcp_Second, IdischgOcp_Second };
+static void FaultWarnRecord2(int code) { (void)code; }
 UINT8 SeriesNum = 19;
 UINT32 g_u32CS_Res_AFE = CS_Res_Num * 1000U / CS_Res;
 BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
@@ -54,7 +56,7 @@ GPIO_TypeDef host_gpioa, host_gpiob;
 static uint8_t ram[256], tx_frame[128], rx_frame[128];
 static unsigned bits, frames, write_count[256];
 static int selected, fail_reads, fail_writes, corrupt_echo, corrupt_read_reg=-1;
-static int frame_bad_read, frame_bad_write, frame_bad_echo, force_fet_off, flag_unlocked;
+static int frame_bad_read, frame_bad_write, frame_bad_echo, force_fet_off, force_reverse_dsg, flag_unlocked;
 static unsigned tests;
 
 static uint8_t model_crc(const uint8_t *p, unsigned n)
@@ -107,7 +109,8 @@ void GPIO_SetBits(GPIO_TypeDef *p, uint16_t pin)
             /* LTCLR self-clears; flags are cleared by writing zero to selected bits. */
             if (addr==0x58 || addr==0x59) { ram[addr] &= value; flag_unlocked=0; }
             else ram[addr]=(addr==0x41) ? value & 0x7F : value;
-            if (addr==0x41) { flag_unlocked=(value&0x80)!=0; ram[0x5B]=force_fet_off ? 0 : value & 3; }
+            if (addr==0x41) { flag_unlocked=(value&0x80)!=0; ram[0x5B]=force_fet_off ? 0 : value & 3;
+                if(force_reverse_dsg && (ram[0x44]&AFE3520_SCONF5_MOS_EN)) ram[0x5B]|=AFE3520_BSTATUS1_DSG_FET; }
         }
         if (tx_frame[0]==1 && fail_writes>0) --fail_writes;
     }
@@ -170,7 +173,7 @@ static void healthy(void)
     hw_fault=hw_fault_resets=0;
     memset(ram,0,sizeof(ram)); memset(write_count,0,sizeof(write_count));
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
-    fail_reads=fail_writes=corrupt_echo=force_fet_off=0; corrupt_read_reg=-1;
+    fail_reads=fail_writes=corrupt_echo=force_fet_off=force_reverse_dsg=0; corrupt_read_reg=-1;
     for (i=0;i<20;++i) {
         ram[0x69+2*i]=0x52; ram[0x6A+2*i]=0x80; /* 21120 -> 3300mV */
         g_stCellInfoReport.u16VCell[i]=3300;
@@ -187,21 +190,83 @@ int main(void)
     AFE3520_REG_CONFIG cfg;
     uint8_t value;
     unsigned before;
-    static const unsigned untouched[]={0x46,0x47,0x48,0x4D,0x4F};
+
     unsigned i;
     healthy();
     assert(Bms3520_BuildAfeConfig(&cfg));
     assert(ram[0x41]==0 && ram[0x42]==0 && ram[0x43]==19);
-    assert(ram[0x44]==(AFE3520_CFG_SCONF5|(AFE3520_CFG_WDT_ENABLE<<2)) && ram[0x45]==0x7F);
+    assert(ram[0x44]==AFE3520_CFG_EFFECTIVE_SCONF5 && ram[0x45]==(BMS3520_CFG_HW_PROTECTION ? s_hwConfig.enableMask : 0U));
     assert(ram[0x49]==3 && ram[0x4A]==0x52 && ram[0x4B]==2 && ram[0x4C]==0x12);
     assert(ram[0x4E]==3 && ram[0x50]==7);
     assert(ram[0x51]==0x86 && ram[0x52]==0x53 && ram[0x53]==0x77 && ram[0x54]==0xD7);
-    for(i=0;i<sizeof(untouched)/sizeof(untouched[0]);++i) {
-        assert(write_count[untouched[i]]==0); ram[untouched[i]]=0xA6;
+    assert(ram[0x46]==4 && ram[0x47]==0x57 && ram[0x48]==0xFF && ram[0x4D]==0x39 && ram[0x4F]==7);
+    assert(cfg.writeMask == (1UL << AFE3520_CONFIG_LENGTH)-1UL);
+    CHECK_CASE("physical-unit defaults explicitly configure all registers");
+    {
+        BMS3520_HARDWARE_CONFIG saved=*Bms3520_GetHardwareConfig(), next=saved;
+        before=frames; next.ovMv=4251;
+        assert(Bms3520_SetHardwareConfig(&next)==BMS3520_CONFIG_INVALID && frames==before);
+        next=saved; next.scDelayUs=160; assert(!Bms3520_ValidateHardwareConfig(&next));
+        next=saved; next.chgOtRecoveryC=-32768; assert(!Bms3520_ValidateHardwareConfig(&next));
+        next=saved; next.chgUtRecoveryC=32767; assert(!Bms3520_ValidateHardwareConfig(&next));
+        next=saved; next.ovMv=4300; next.ovDelayMs=980;
+        assert(Bms3520_SetHardwareConfig(&next)==BMS3520_CONFIG_VERIFIED);
+        assert(ram[0x49]==0x33 && ram[0x4A]==0x5C && !(ram[0x41]&3));
+        Bms3520_Service200ms();
+        next=saved; corrupt_read_reg=0x4A;
+        assert(Bms3520_SetHardwareConfig(&next)==BMS3520_CONFIG_PENDING);
+        assert(!s_prot.configValid && !s_snapshot.valid && !(GPIOB->odr&PIN_M_CCC));
+        corrupt_read_reg=-1;
+        for(i=0;i<4;i++) Bms3520_Service200ms();
+        assert(s_prot.configValid && !afe_error);
+        assert(!memcmp(Bms3520_GetHardwareConfig(),&saved,sizeof(saved)));
     }
-    assert(Afe3520_ApplyConfig(&cfg)==AFE3520_OK);
-    for(i=0;i<sizeof(untouched)/sizeof(untouched[0]);++i) assert(ram[untouched[i]]==0xA6);
-    CHECK_CASE("reference profile / watchdog variant / preserve unspecified registers");
+    CHECK_CASE("runtime config rejects bad units/hysteresis, verifies writes, inhibits MOS during failed apply");
+
+    healthy(); Bms3520_Service200ms();
+    Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
+    g_stCellInfoReport.u16VCell[0]=5000;
+    for(i=0;i<100;i++) Bms3520_Service200ms();
+    assert(!!(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OV)==BMS3520_CFG_SW_PROTECTION);
+    assert(s_prot.requestedCharge==1);
+    g_stCellInfoReport.u16VCell[0]=3300;
+    for(i=0;i<10;i++) Bms3520_Service200ms();
+    assert(!(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OV));
+    CHECK_CASE("software protection selected only in modes 1/3; recovery preserves requested MOS");
+
+    healthy(); Bms3520_Service200ms();
+    Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
+    ram[0x58]=AFE3520_FLAG1_OV|AFE3520_FLAG1_UV;
+    g_stCellInfoReport.u16VCell[0]=2000;
+    for(i=0;i<30;i++) Bms3520_Service200ms();
+#if BMS3520_CFG_HW_PROTECTION
+    assert(!(ram[0x58]&AFE3520_FLAG1_OV) && (ram[0x58]&AFE3520_FLAG1_UV));
+    assert(s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_HW_UV);
+#endif
+    assert(!(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_HW_OV));
+    Bms3520_RequestMos(GPIO_DSG,0);
+    g_stCellInfoReport.u16VCell[0]=3300;
+    for(i=0;i<30;i++) Bms3520_Service200ms();
+    assert(!(ram[0x58] & (AFE3520_FLAG1_OV|AFE3520_FLAG1_UV)));
+    assert(!s_prot.requestedDischarge && !(ram[0x41]&2));
+    CHECK_CASE("each hardware latch recovers independently; recovery never cancels manual MOS-off");
+#if BMS3520_CFG_SW_PROTECTION && BMS3520_CFG_HW_PROTECTION
+    healthy(); Bms3520_Service200ms(); Bms3520_RequestMos(GPIO_CHG,1);
+    g_stCellInfoReport.u16VCell[0]=5000;
+    for(i=0;i<100;i++) Bms3520_Service200ms();
+    ram[0x58]=AFE3520_FLAG1_OCC;
+    g_stCellInfoReport.u16VCell[0]=3300; g_stCellInfoReport.u16Ichg=20;
+    for(i=0;i<10;i++) Bms3520_Service200ms();
+    assert(!(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OV));
+    assert(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_HW_OCC);
+    assert(!(ram[0x41]&1) && s_prot.requestedCharge);
+    g_stCellInfoReport.u16Ichg=0;
+    for(i=0;i<30;i++) Bms3520_Service200ms();
+    assert(!(s_prot.chargeBlocks & AFE3520_BLOCK_CHG_HW_OCC) && (ram[0x41]&1));
+    CHECK_CASE("combined mode keeps blocking until BOTH independent protection sources recover");
+#endif
+    healthy();
+
 
     assert(Afe3520_UpdateMeasurements()==0 && g_afe3520Measurements.u16VCell[0]==3300);
     fail_reads=5; assert(Afe3520_UpdateMeasurements()!=0 && !Afe3520_IsReady());
@@ -228,36 +293,44 @@ int main(void)
     assert(ram[0x58]==0x42 && ram[0x59]==7);
     CHECK_CASE("per-register LTCLR unlock; unrelated flag latches preserved");
 
-    healthy(); Bms3520_ProtectionService();
+    healthy(); Bms3520_Service200ms();
     Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
     assert((ram[0x41]&3)==3 && reported_chg && reported_dsg);
-    Afe3520_MarkConfigDirty(); Bms3520_ProtectionService();
+    Afe3520_MarkConfigDirty(); Bms3520_Service200ms();
     assert((ram[0x41]&3)==3 && reported_chg && reported_dsg);
     CHECK_CASE("config rewrite restores requested MOS commands despite old cache");
 
-    force_fet_off=1; Bms3520_ProtectionService();
+    force_fet_off=1; Bms3520_Service200ms();
     assert((ram[0x41]&3)==3 && !reported_chg && !reported_dsg);
     force_fet_off=0; Bms3520_RequestMos(GPIO_CHG,0);
     assert(!(GPIOB->odr & PIN_M_CCC) && !reported_chg && reported_dsg);
-    Bms3520_SetSystemBlock(1); Bms3520_ProtectionService();
+    Bms3520_SetSystemBlock(1); Bms3520_Service200ms();
     assert(!(ram[0x41]&3) && !(GPIOB->odr&PIN_M_CCC));
     CHECK_CASE("actual FET feedback, M_CCC follows charge, global fault closes MOS");
+    healthy(); Bms3520_Service200ms();
+    force_reverse_dsg=1; Bms3520_RequestMos(GPIO_DSG,0);
+    assert(!s_prot.requestedDischarge && !(ram[0x41]&AFE3520_SCONF2_DSGMOS));
+    assert(s_prot.actualDischarge==AFE3520_CFG_COMMON_PORT);
+    force_reverse_dsg=0; Bms3520_Service200ms();
+    assert(!s_prot.requestedDischarge && !s_prot.actualDischarge);
+    CHECK_CASE("common-port reverse FET feedback does not overwrite manual request; separate port disables MOS_EN");
 
-    healthy(); ram[0x59]|=8; Bms3520_ProtectionService();
+
+    healthy(); ram[0x59]|=8; Bms3520_Service200ms();
     assert(!(ram[0x59]&8) && !Afe3520_ConfigDirty());
-    before=write_count[0x44]; Bms3520_ProtectionService();
+    before=write_count[0x44]; Bms3520_Service200ms();
     assert(write_count[0x44]==before);
     CHECK_CASE("RST2 triggers one config repair, not false open-wire protection");
 
-    healthy(); Bms3520_ProtectionService();
+    healthy(); Bms3520_Service200ms();
     before=write_count[0x40]; MosStartup_ApplyInitialState();
     assert(write_count[0x40]==before && (ram[0x41]&3)==3);
     CHECK_CASE("MOS startup does not overwrite SCONF1");
-    healthy(); Bms3520_ProtectionService();
+    healthy(); Bms3520_Service200ms();
     Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
-    ram[0x59]|=4; Bms3520_ProtectionService();
+    ram[0x59]|=4; Bms3520_Service200ms();
     assert(!(ram[0x41]&3));
-    for(i=0;i<26;++i) Bms3520_ProtectionService();
+    for(i=0;i<26;++i) Bms3520_Service200ms();
     assert(!(ram[0x59]&4) && (ram[0x41]&3)==3);
     CHECK_CASE("WDT latch blocks MOS then clears after stable recovery");
     healthy();
@@ -277,22 +350,23 @@ int main(void)
       fail_reads=100; assert(!Afe3520_ReadCalibratedCurrentCode(&code));
     }
     CHECK_CASE("native CADC preserves signed current calibration without MTP alias");
-    healthy(); Bms3520_ProtectionService();
+    healthy(); Bms3520_Service200ms();
     Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
     fail_reads=100; fail_writes=100;
-    Bms3520_ProtectionService();
+    Bms3520_Service200ms();
     assert(afe_error && !s_snapshot.valid && !s_prot.mosFeedbackValid);
     assert(Bms3520_GetBlockMask() & AFE3520_BLOCK_GLOBAL_AFE_COMM);
     assert(!(GPIOB->odr & PIN_M_CCC));
     fail_reads=fail_writes=0;
     for(i=1;i<AFE3520_CFG_COMM_RECOVERY_TICKS;i++) {
-        Bms3520_ProtectionService(); assert(afe_error && !(ram[0x41]&3));
+        Bms3520_Service200ms(); assert(afe_error && !(ram[0x41]&3));
     }
-    Bms3520_ProtectionService(); assert(!afe_error && (ram[0x41]&3)==3);
+    Bms3520_Service200ms(); assert(!afe_error && (ram[0x41]&3)==3);
     CHECK_CASE("persistent bus fault blocks MOS; recovery requires consecutive verified cycles");
 
     healthy(); ram[0x58]=AFE3520_FLAG1_SC;
-    assert(Bms3520_ApplyAndVerifyAfeConfig() && (ram[0x58]&AFE3520_FLAG1_SC));
+    assert(Bms3520_ApplyAndVerifyAfeConfig());
+    assert(!!(ram[0x58]&AFE3520_FLAG1_SC)==BMS3520_CFG_HW_PROTECTION);
     CHECK_CASE("configuration repair preserves live protection latches");
 
 #if AFE3520_CFG_USE_HARDWARE_SPI
@@ -309,15 +383,17 @@ int main(void)
     assert(Afe3520_Read(0x41,&value,1)==AFE3520_OK);
     CHECK_CASE("persistent RXNE timeout is bounded; subsequent frame can recover");
 #endif
+#if BMS3520_CFG_SW_PROTECTION
     healthy(); g_stCellInfoReport.u16Temperature[0]=1000; g_stCellInfoReport.u16Temperature[1]=200;
-    Bms3520_ProtectionService();
+    Bms3520_Service200ms();
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp && g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
     g_stCellInfoReport.u16Temperature[0]=g_stCellInfoReport.u16Temperature[1]=650;
-    for(i=0;i<BMS3520_SW_RECOVERY_STABLE_TICKS;i++) Bms3520_ProtectionService();
+    for(i=0;i<BMS3520_SW_RECOVERY_STABLE_TICKS;i++) Bms3520_Service200ms();
     assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp && !g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
-    g_stCellInfoReport.u16Temperature[0]=0; Bms3520_ProtectionService();
+    g_stCellInfoReport.u16Temperature[0]=0; Bms3520_Service200ms();
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
     CHECK_CASE("hot/cold latches recover independently; zero temperature sensor is not ignored");
+#endif
     SeriesNum=21; assert(!Bms3520_BuildAfeConfig(&cfg));
     { const uint32_t mhz[]={8,24,48,72}; unsigned n;
       for(n=0;n<4;n++) {
@@ -345,6 +421,6 @@ int main(void)
       }
     }
     CHECK_CASE("8/24/48/72 MHz and changed APB2 adapt per frame; timer wrap and stopped timer remain bounded");
-    printf("PASS: %u cases, watchdog=%d\n", tests, AFE3520_CFG_WDT_ENABLE);
+    printf("PASS: %u cases, mode=%d SPI=%d WDT=%d commonPort=%d\n", tests, BMS3520_CFG_PROTECTION_MODE, AFE3520_CFG_USE_HARDWARE_SPI, AFE3520_CFG_WDT_ENABLE, AFE3520_CFG_COMMON_PORT);
     return 0;
 }

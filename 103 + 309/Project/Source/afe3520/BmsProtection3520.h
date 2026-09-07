@@ -3,10 +3,9 @@
 
 #include "afe3520/Afe3520.h"
 #include "BmsParameters.h"
+#include "afe3520/Afe3520Config.h"
 
 #define BMS3520_PROTECTION_PERIOD_MS        200U
-#define BMS3520_REVERSE_CURRENT_A10         10U
-#define BMS3520_HW_RECOVERY_STABLE_TICKS    25U
 #define BMS3520_SW_RECOVERY_STABLE_TICKS    5U
 
 typedef struct
@@ -25,9 +24,18 @@ typedef struct
     uint8_t mosFeedbackValid;
 } BMS3520_PROTECTION_STATUS;
 
+typedef enum {
+    BMS3520_CONFIG_INVALID = 0, /* rejected, no changes */
+    BMS3520_CONFIG_PENDING,     /* accepted, bus/apply failed; MOS inhibited */
+    BMS3520_CONFIG_VERIFIED     /* register readback passed; next service arbitrates */
+} BMS3520_CONFIG_RESULT;
+const BMS3520_HARDWARE_CONFIG *Bms3520_GetHardwareConfig(void);
+uint8_t Bms3520_ValidateHardwareConfig(const BMS3520_HARDWARE_CONFIG *cfg);
+BMS3520_CONFIG_RESULT Bms3520_SetHardwareConfig(const BMS3520_HARDWARE_CONFIG *cfg);
+/* Mandatory for ALL three modes; do not remove this service to disable protection. */
 void Bms3520_ProtectionInit(void);
 void Bms3520_HandleCommFault(void);
-void Bms3520_ProtectionService(void);
+void Bms3520_Service200ms(void);
 void Bms3520_RequestMos(GPIO_Type type, uint8_t on);
 uint8_t Bms3520_BuildAfeConfig(AFE3520_REG_CONFIG *cfg);
 uint8_t Bms3520_ApplyAndVerifyAfeConfig(void);

@@ -13,12 +13,6 @@
 #define AFE_CURRENT_STARTUP_ZERO_STABLE_RAW ((UINT16)8U)
 #define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
 
-#define PROTECTION_REVERSE_CURRENT_A10 ((UINT16)10U)
-#define PROTECTION_OCP_RECOVERY_TICKS ((UINT16)(5U * 30U))
-#ifdef __SOC_5_PROTECT_
-#define PROTECTION_SOC_LOW_SLEEP_TICKS ((UINT32)(5U * 60U * 60U))
-#endif
-
 typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
 {
     UINT8 u8ConfirmCnt;
@@ -56,32 +50,12 @@ typedef struct _DATA_RUNTIME
     UINT32 afeSeq;
 } DATA_RUNTIME;
 
-typedef struct _PROTECTION_RUNTIME
-{
-    UINT16 chargeOcpRecoveryCnt;
-    UINT16 dischargeOcpRecoveryCnt;
-#ifdef __SOC_5_PROTECT_
-    UINT32 socLowCnt;
-#endif
-} PROTECTION_RUNTIME;
-
-typedef struct _MOS_DESIRED_STATE
-{
-    UINT8 chargeEnable;
-    UINT8 dischargeEnable;
-} MOS_DESIRED_STATE;
-
 static DATA_RUNTIME s_data = {0};
-static PROTECTION_RUNTIME s_protection = {0};
 
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 UINT32 g_u32CS_Res_AFE;
 struct OTHER_ELEMENT OtherElement;
-
-void charger_detect_and_keyLogi_200ms(void)
-{
-}
 
 void DataLoad_CellVolt(void)
 {
@@ -706,156 +680,6 @@ void MonitorAFE(UINT8 num, UINT8 Result)
                                 &s_data.mon.sleepDelay[2]);
 }
 
-static void Protection_UpdateChargeOcp(void)
-{
-    if (g_stCellInfoReport.u16Ichg >= g_bmsParameters.u16IchgOcp_First.curValue)
-    {
-        if (g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp == 0U)
-        {
-            FaultWarnRecord2(IchgOcp_Second);
-        }
-        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 1U;
-        s_protection.chargeOcpRecoveryCnt = 0U;
-    }
-
-    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp != 0U) &&
-        (g_stCellInfoReport.u16IDischg < PROTECTION_REVERSE_CURRENT_A10))
-    {
-        if (++s_protection.chargeOcpRecoveryCnt >= PROTECTION_OCP_RECOVERY_TICKS)
-        {
-            s_protection.chargeOcpRecoveryCnt = 0U;
-            g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp = 0U;
-        }
-    }
-}
-
-static void Protection_UpdateDischargeOcp(void)
-{
-    if (g_stCellInfoReport.u16IDischg >= g_bmsParameters.u16IdsgOcp_First.curValue)
-    {
-        if (g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp == 0U)
-        {
-            FaultWarnRecord2(IdischgOcp_Second);
-        }
-        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 1U;
-        s_protection.dischargeOcpRecoveryCnt = 0U;
-    }
-
-    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp != 0U) &&
-        (g_stCellInfoReport.u16Ichg < PROTECTION_REVERSE_CURRENT_A10))
-    {
-        /* Preserve the legacy post-increment recovery timing. */
-        if (s_protection.dischargeOcpRecoveryCnt++ >= PROTECTION_OCP_RECOVERY_TICKS)
-        {
-            s_protection.dischargeOcpRecoveryCnt = 0U;
-            g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp = 0U;
-        }
-    }
-}
-
-#ifdef __SOC_5_PROTECT_
-static void Protection_UpdateSocLow(MOS_DESIRED_STATE *desired)
-{
-    if (g_stCellInfoReport.SocElement.u16Soc <= 5U)
-    {
-        if (g_stCellInfoReport.u16Ichg >= PROTECTION_REVERSE_CURRENT_A10)
-        {
-            desired->dischargeEnable = 1U;
-            s_protection.socLowCnt = 0U;
-        }
-        else
-        {
-            desired->dischargeEnable = 0U;
-            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 1U;
-            if (++s_protection.socLowCnt >= PROTECTION_SOC_LOW_SLEEP_TICKS)
-            {
-                s_protection.socLowCnt = 0U;
-                LowPower_Request(DEEP_MODE);
-            }
-        }
-    }
-    else
-    {
-        g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 0U;
-        s_protection.socLowCnt = 0U;
-    }
-}
-#endif
-
-static UINT8 Protection_HasChargeBlockingFault(void)
-{
-    return (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
-}
-
-static UINT8 Protection_HasDischargeBlockingFault(void)
-{
-    return (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
-                   g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
-                   (Afe3520_GetSnapshot()->flag1 & AFE3520_FLAG1_SC));
-}
-
-static void MosPolicy_Evaluate(MOS_DESIRED_STATE *desired)
-{
-    desired->chargeEnable = 1U;
-    desired->dischargeEnable = 1U;
-
-#ifdef __SOC_5_PROTECT_
-    Protection_UpdateSocLow(desired);
-#endif
-
-    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp != 0U) &&
-        (g_stCellInfoReport.u16IDischg < PROTECTION_REVERSE_CURRENT_A10))
-    {
-        desired->chargeEnable = 0U;
-    }
-    if ((g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp != 0U) &&
-        (g_stCellInfoReport.u16Ichg < PROTECTION_REVERSE_CURRENT_A10))
-    {
-        desired->dischargeEnable = 0U;
-    }
-
-    if (Protection_HasChargeBlockingFault())
-    {
-        desired->chargeEnable =
-            (g_stCellInfoReport.u16IDischg >= PROTECTION_REVERSE_CURRENT_A10) ? 1U : 0U;
-    }
-    if (Protection_HasDischargeBlockingFault())
-    {
-        desired->dischargeEnable =
-            (g_stCellInfoReport.u16Ichg >= PROTECTION_REVERSE_CURRENT_A10) ? 1U : 0U;
-    }
-}
-
-static void MosDriver_Apply(const MOS_DESIRED_STATE *desired)
-{
-    if (s_system_status.bits.b1Status_MOS_CHG != desired->chargeEnable)
-    {
-        sys_time.cnt_enter_chg_open++;
-        Bms3520_RequestMos(GPIO_CHG, desired->chargeEnable);
-    }
-    if (s_system_status.bits.b1Status_MOS_DSG != desired->dischargeEnable)
-    {
-        sys_time.cnt_enter_dsg_open++;
-        Bms3520_RequestMos(GPIO_DSG, desired->dischargeEnable);
-    }
-}
-
-static void ProtectionMos_Process200ms(void)
-{
-    MOS_DESIRED_STATE desired;
-
-    charger_detect_and_keyLogi_200ms();
-    Protection_UpdateChargeOcp();
-    Protection_UpdateDischargeOcp();
-    MosPolicy_Evaluate(&desired);
-    MosDriver_Apply(&desired);
-}
-
 void App_AFEGet(void)
 {
     if (0U == SysTime_Take200msTaskPeriod())
@@ -881,9 +705,7 @@ void App_AFEGet(void)
 
     AfeCurrent_NextSeq();
 
-    Bms3520_ProtectionService();
-    if (!Afe3520_GetSnapshot()->valid) return;
-    ProtectionMos_Process200ms();
+    Bms3520_Service200ms();
     if (!Afe3520_GetSnapshot()->valid) return;
     App_SOC();
 
