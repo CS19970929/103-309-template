@@ -158,6 +158,28 @@ static uint8_t lp_select_deep_if_low_voltage(void)
     return 0U;
 }
 
+static uint16_t s_emergencyFaultSeconds;
+static uint16_t s_emergencyLowSeconds;
+
+static uint8_t lp_emergency_sleep_due(void)
+{
+    uint32_t mask = Bms3520_GetBlockMask();
+    uint8_t invalid = !Afe3520_GetSnapshot()->valid || Afe3520_ConfigDirty() ||
+                      !Bms3520_GetProtectionStatus()->configValid;
+    uint8_t fault = invalid || (mask & (AFE3520_BLOCK_GLOBAL_AFE_COMM |
+                       AFE3520_BLOCK_GLOBAL_AFE_CONFIG | AFE3520_BLOCK_GLOBAL_SHORT |
+                       AFE3520_BLOCK_GLOBAL_WDT | AFE3520_BLOCK_GLOBAL_INTERNAL_TEMP));
+    uint8_t low = !invalid && RtcSleep_PortGetCellMinMv() > 0U &&
+                  RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV &&
+                  RtcSleep_PortGetChargeCurrentA10() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT;
+    if (fault) { if (s_emergencyFaultSeconds < AFE3520_CFG_EMERGENCY_FAULT_SECONDS) ++s_emergencyFaultSeconds; }
+    else s_emergencyFaultSeconds = 0U;
+    if (low) { if (s_emergencyLowSeconds < AFE3520_CFG_EMERGENCY_LOW_SECONDS) ++s_emergencyLowSeconds; }
+    else s_emergencyLowSeconds = 0U;
+    return s_emergencyFaultSeconds >= AFE3520_CFG_EMERGENCY_FAULT_SECONDS ||
+           s_emergencyLowSeconds >= AFE3520_CFG_EMERGENCY_LOW_SECONDS;
+}
+
 static void lp_update_sleep_request(void)
 {
     uint32_t block = LP_GetBlockReason();
@@ -310,6 +332,12 @@ void rtc_sleep(void)
         return;
     }
 
+    if (lp_emergency_sleep_due())
+    {
+        LowPower_Request(DEEP_MODE);
+        SleepDeal_EmergencySleep();
+        return;
+    }
     lp_update_sleep_request();
     sleep_mode = g_stLowPowerRtcStatus.mode;
 

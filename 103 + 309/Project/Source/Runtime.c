@@ -6,10 +6,9 @@ UINT8 SeriesNum = 19;
 
 void Runtime_Boot(void)
 {
-	Init_RTC();
-
 	InitDelay();
 	SleepDeal_HandleBootSleepStartup();
+	Init_RTC();
 
 	jtag_disableAndConfIO();
 

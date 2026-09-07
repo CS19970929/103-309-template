@@ -26,6 +26,8 @@ volatile enum irqWakeup g_irq_t;
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT 5U
 #define FLASH_NORMAL_SLEEP_VALUE 1U
 #define FLASH_DEEP_SLEEP_VALUE 2U
+#define FLASH_EMERGENCY_SLEEP_VALUE 3U
+static uint16_t s_emergencyFaultSeconds, s_emergencyLowSeconds;
 #define MCU_RESET() (++resets)
 const AFE3520_SNAPSHOT *Afe3520_GetSnapshot(void) { return &snapshot; }
 uint8_t Afe3520_ConfigDirty(void) { return dirty; }
@@ -68,10 +70,32 @@ static void __set_PRIMASK(unsigned value) { primask=value; }
 static void RCC_APB1PeriphClockCmd(int a,int b) { (void)a; (void)b; }
 static void TIM_Cmd(int a,int b) { (void)a; (void)b; }
 static void TIM_ClearITPendingBit(int a,int b) { (void)a; (void)b; }
-static void PWR_EnterSTOPMode(int a,int b) { (void)a; (void)b; assert(primask==1); ++stop_calls; }
+static unsigned emergency_wait;
+static void PWR_EnterSTOPMode(int a,int b) { (void)a; (void)b; assert(primask==1); ++stop_calls; if(emergency_wait) { assert(flags==FLASH_EMERGENCY_SLEEP_VALUE); g_irq_t=stop_calls==1 ? PA0_irq : soc_key; } }
 static void cpu_frequency_conf(void) { ++clock_restores; }
 uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef *port, uint16_t pin) { (void)port; return pin==PIN_KEY1 ? !key : 0; }
 GPIO_TypeDef host_gpioa, host_gpiob;
+static unsigned mos_attempts, write_attempts, disabled_irqs;
+AFE3520_RESULT Afe3520_SetMos(uint8_t a,uint8_t b,uint8_t c) { assert(!a && !b && !c); ++mos_attempts; return AFE3520_ERR_ACK; }
+AFE3520_RESULT Afe3520_Write(uint8_t reg,uint8_t data) { assert(reg==AFE3520_REG_SCONF5 && !(data&4)); ++write_attempts; return AFE3520_ERR_ACK; }
+void GPIO_ResetBits(GPIO_TypeDef *p,uint16_t pin) { p->odr &= ~pin; }
+void GPIO_SetBits(GPIO_TypeDef *p,uint16_t pin) { p->odr |= pin; }
+void GPIO_Init(GPIO_TypeDef *p,GPIO_InitTypeDef *g) { (void)p; (void)g; }
+static void IOstatus_DeepMode(void) {}
+static void InitWakeUp_DeepMode(void) {}
+#define EXTI0_IRQn 1
+#define RTC_IRQn 2
+#define RTCAlarm_IRQn 4
+#define RTC_IT_SEC 1
+#define RTC_IT_ALR 2
+#define RTC_IT_OW 4
+static struct { unsigned CTRL; } host_systick;
+#define SysTick (&host_systick)
+static void NVIC_DisableIRQ(unsigned irq) { disabled_irqs |= irq; }
+static void RTC_ITConfig(unsigned bits,unsigned enable) { assert(bits==7 && !enable); }
+static void LowPower_ClearWakeupPending(void) {}
+static void BootFlag_Clear(void) { flags=0; }
+static void __enable_irq(void) { primask=0; }
 #include "afe3520_sleep_functions.inc"
 static void healthy(void) {
     memset(&snapshot,0,sizeof(snapshot)); snapshot.valid=1;
@@ -80,6 +104,8 @@ static void healthy(void) {
     g_stLowPowerRtcStatus.mode=NO_SLEEP; g_irq_t=NO_IRQ;
     blocks=dirty=charge=discharge=key=busy=flash_busy=ext_comm=0;
     commits=resets=flags=saves=fault_calls=forced_on=0;
+    s_emergencyFaultSeconds=s_emergencyLowSeconds=0;
+    mos_attempts=write_attempts=disabled_irqs=emergency_wait=0;
     u8FlashUpdateFlag=u8FlashUpdateE2PROM=0;
     sleep_ack=rtc_valid=1; current_wake_test=afe_wake_test=0;
     cell_min=3300; sys_time.time_enter_rtc=3; OtherElement.u16Sleep_TimeVlow=1;
@@ -133,5 +159,30 @@ int main(void) {
     System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
     assert(System_ERROR_UserCallback(ERROR_STATUS_AFE1)==0);
     puts("PASS: persistent system error counters saturate instead of wrapping to healthy");
+    healthy(); snapshot.valid=0; cell_min=0; busy=flash_busy=key=u8FlashUpdateFlag=1;
+    for(i=1;i<AFE3520_CFG_EMERGENCY_FAULT_SECONDS;i++) assert(!lp_emergency_sleep_due());
+    assert(lp_emergency_sleep_due());
+    for(i=0;i<70000;i++) assert(lp_emergency_sleep_due());
+    puts("PASS: persistent invalid AFE reaches saturated emergency deadline despite ordinary blockers");
+    healthy(); blocks=AFE3520_BLOCK_GLOBAL_WDT;
+    for(i=1;i<AFE3520_CFG_EMERGENCY_FAULT_SECONDS;i++) assert(!lp_emergency_sleep_due());
+    blocks=0; assert(!lp_emergency_sleep_due() && !s_emergencyFaultSeconds);
+    blocks=AFE3520_BLOCK_GLOBAL_SHORT;
+    for(i=1;i<AFE3520_CFG_EMERGENCY_FAULT_SECONDS;i++) assert(!lp_emergency_sleep_due());
+    assert(lp_emergency_sleep_due());
+    puts("PASS: transient fault resets emergency deadline; persistent short fault triggers");
+    healthy(); cell_min=2400;
+    for(i=1;i<AFE3520_CFG_EMERGENCY_LOW_SECONDS;i++) assert(!lp_emergency_sleep_due());
+    assert(lp_emergency_sleep_due()); charge=6; assert(!lp_emergency_sleep_due());
+    puts("PASS: trusted critical voltage triggers at deadline; charging clears low-voltage deadline");
+    healthy(); sleep_ack=0; SleepDeal_EmergencySleep();
+    assert(resets==1 && flags==FLASH_EMERGENCY_SLEEP_VALUE && !saves && mos_attempts==1 && write_attempts==1);
+    puts("PASS: failed MOS, watchdog-disable and sleep ACK cannot veto emergency reset; no flash save");
+    primask=stop_calls=clock_restores=inject_wake=0; emergency_wait=1; key=1;
+    SleepDeal_WaitEmergencyWake();
+    assert(stop_calls==2 && clock_restores==1 && !flags && !primask && disabled_irqs==7 && !SysTick->CTRL);
+    assert(!(GPIO_M_CCC->odr & PIN_M_CCC) && !(GPIO_AD_EN->odr & PIN_AD_EN) && !(GPIO_CMNT_EN->odr & PIN_CMNT_EN));
+    assert(GPIO_CS_SPI->odr & PIN_CS_SPI);
+    puts("PASS: emergency STOP ignores held key level and unapproved wake; keeps marker until new key edge");
     return 0;
 }

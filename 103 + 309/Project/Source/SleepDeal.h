@@ -2,6 +2,8 @@
 #define SLEEPDEAL_H
 
 void SleepDeal_Continue(UINT8 sleep_mode);
+void SleepDeal_EmergencySleep(void);
+void SleepDeal_CommitEmergencyBoot(void);
 void BootFlag_Write(UINT16 flag);
 UINT16 BootFlag_Read(void);
 void BootFlag_Clear(void);

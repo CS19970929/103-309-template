@@ -177,7 +177,7 @@ int main(void)
     healthy();
     assert(Bms3520_BuildAfeConfig(&cfg));
     assert(ram[0x41]==0 && ram[0x42]==0 && ram[0x43]==19);
-    assert(ram[0x44]==(0x18|(AFE3520_CFG_WDT_ENABLE<<2)) && ram[0x45]==0x7F);
+    assert(ram[0x44]==(AFE3520_CFG_SCONF5|(AFE3520_CFG_WDT_ENABLE<<2)) && ram[0x45]==0x7F);
     assert(ram[0x49]==3 && ram[0x4A]==0x52 && ram[0x4B]==2 && ram[0x4C]==0x12);
     assert(ram[0x4E]==3 && ram[0x50]==7);
     assert(ram[0x51]==0x86 && ram[0x52]==0x53 && ram[0x53]==0x77 && ram[0x54]==0xD7);

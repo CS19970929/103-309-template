@@ -58,9 +58,11 @@ def main():
         return re.sub(r"/\*.*?\*/|//[^\n]*", "", match.group(0), flags=re.S)
     functions = ["lp_refresh_status", "LowPower_Request", "LP_GetBlockReason",
                  "low_power_log_and_commit_sleep", "lp_select_deep_if_low_voltage",
-                 "lp_update_sleep_request", "rtc_sleep_has_wakeup_exception"]
+                 "lp_update_sleep_request", "rtc_sleep_has_wakeup_exception", "lp_emergency_sleep_due"]
     text = "\n\n".join(function_body("rtc_sleep.c", name) for name in functions)
     text += "\n\n" + function_body("SleepDeal.c", "SleepDeal_Continue")
+    for name in ("SleepDeal_CommitEmergencyBoot", "SleepDeal_EmergencySleep", "SleepDeal_WaitEmergencyWake"):
+        text += "\n\n" + function_body("SleepDeal.c", name)
     text += "\n\n" + function_body("System_Monitor.c", "System_ERROR_UserCallback")
     text += "\n\n" + function_body("conf/conf.c", "Sys_StopMode")
     (OUT / "afe3520_sleep_functions.inc").write_text(text, encoding="ascii")

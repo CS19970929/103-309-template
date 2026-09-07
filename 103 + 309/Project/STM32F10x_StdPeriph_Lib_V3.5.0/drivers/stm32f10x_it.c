@@ -23,6 +23,7 @@
 #include "stm32f10x_it.h"
 #include "main.h"
 #include "FaultSnapshot.h"
+#include "afe3520/Afe3520Config.h"
 
 void NMI_Handler(void)
 {
@@ -44,6 +45,9 @@ static void Fault_SaveReason(UINT16 reason)
 static void Fault_ResetOrHold(UINT16 reason)
 {
   Fault_SaveReason(reason);
+#if AFE3520_CFG_FATAL_SLEEP_ENABLE
+  SleepDeal_CommitEmergencyBoot();
+#endif
 #ifdef _DEBUG_
   while (1)
   {

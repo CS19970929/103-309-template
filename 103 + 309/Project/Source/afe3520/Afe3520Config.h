@@ -33,6 +33,19 @@
 #if (AFE3520_CFG_SPI_POLL_LIMIT < 1) || (AFE3520_CFG_COMM_RECOVERY_TICKS < 1)
 #error "Polling and recovery limits must be nonzero"
 #endif
+// <h>Emergency battery preservation (overrides ordinary sleep blockers)
+// <o> Persistent AFE/global fault timeout, seconds
+#define AFE3520_CFG_EMERGENCY_FAULT_SECONDS 300U
+// <o> Confirmed critical undervoltage timeout, seconds
+#define AFE3520_CFG_EMERGENCY_LOW_SECONDS 60U
+// <q> Fatal CPU exceptions reset directly into emergency sleep
+#define AFE3520_CFG_FATAL_SLEEP_ENABLE 1
+// <q> Allow PA0 charger/AFE wake in emergency sleep (default: key only)
+#define AFE3520_CFG_EMERGENCY_CHARGER_WAKE 0
+// </h>
+#if (AFE3520_CFG_EMERGENCY_FAULT_SECONDS < 1) || (AFE3520_CFG_EMERGENCY_FAULT_SECONDS > 65535) || (AFE3520_CFG_EMERGENCY_LOW_SECONDS < 1) || (AFE3520_CFG_EMERGENCY_LOW_SECONDS > 65535)
+#error "Emergency timeouts must be 1..65535 seconds"
+#endif
 // <h>SH3673520 AFE Configuration
 // <q> Enable AFE watchdog (MCU halt does NOT stop this watchdog)
 #ifndef AFE3520_CFG_WDT_ENABLE
