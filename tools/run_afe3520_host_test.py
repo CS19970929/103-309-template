@@ -66,7 +66,7 @@ def main():
         assert match, name
         # Source comments may be GBK; generated C contains only ASCII code.
         return re.sub(r"/\*.*?\*/|//[^\n]*", "", match.group(0), flags=re.S)
-    functions = ["lp_refresh_status", "LowPower_Request", "LP_GetBlockReason",
+    functions = ["LowPower_Request", "LP_GetBlockReason",
                  "low_power_log_and_commit_sleep", "lp_select_deep_if_low_voltage",
                  "lp_update_sleep_request", "rtc_sleep_has_wakeup_exception", "lp_emergency_sleep_due"]
     text = "\n\n".join(function_body("rtc_sleep.c", name) for name in functions)

@@ -79,11 +79,6 @@ void RtcSleep_PortRestoreAfterStop(void)
 }
 
 
-UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
-{
-    return RTC_GetLastWakeupPeriodSeconds();
-}
-
 void RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
 {
     SOC_ApplyRtcRelaxationCompensation(rest_seconds,

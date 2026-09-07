@@ -67,7 +67,7 @@ typedef struct {
 #define SPI_I2S_FLAG_OVR 4
 #define SPI_FLAG_MODF 5
 void GPIO_PinRemapConfig(unsigned, int);
-void SPI_I2S_DeInit(SPI_TypeDef *);
+void RCC_APB2PeriphResetCmd(int, int);
 void SPI_StructInit(SPI_InitTypeDef *);
 void SPI_Init(SPI_TypeDef *, SPI_InitTypeDef *);
 void SPI_Cmd(SPI_TypeDef *, int);

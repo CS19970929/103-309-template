@@ -2,6 +2,8 @@
 
 依据 2026-09-07 当前源码和 ST-Link 实测。入口为 Runtime_Boot / Runtime_RunOnce，主要实现为 rtc_sleep.c、SleepDeal.c、rtc_sleep_port.c、rtc_sleep_afe3520.c、RTC.c、conf/conf.c、LowPowerSleep.c。本文件区分已实测结果和从源码推导的路径。
 
+2026-09-07 容量优化：删除只写不读的 `rtc`、`idleMax`、`last`、`cycles`、`test_sample_voltage` 调试镜像及未调用的取值接口。下文现场记录中的 `idleMax` 是当时读数，现在直接查看 `sys_time.time_enter_rtc`；当前休眠累计秒数仍为 `g_stLowPowerRtcStatus.sleep`。休眠门限、命令、正常/周期/深睡、异常保电和唤醒条件均未改变，见 [Flash容量优化.md](Flash容量优化.md)。
+
 ## 本次 MOS 不开：已实板确认的根因
 
 ST-Link V2J37S7 / SWD 950 kHz，目标约 3.28 V，Cortex-M3。首次附着没有下载程序，板上 ER_IROM1 与当时 FD_Release.axf 完全匹配；RW_IRAM1 在运行时被修改，GDB compare-sections 报 RAM 不同是预期现象。

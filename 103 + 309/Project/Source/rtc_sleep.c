@@ -38,20 +38,7 @@ static uint8_t lp_process_command_sleep(void)
 }
 
 volatile enum irqWakeup g_irq_t = NO_IRQ;
-volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
-    NO_SLEEP,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U,
-    0U};
+volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {NO_SLEEP};
 
 uint32_t LP_GetBlockReason(void)
 {
@@ -107,12 +94,6 @@ uint32_t LP_GetBlockReason(void)
     return reason;
 }
 
-static void lp_refresh_status(void)
-{
-    g_stLowPowerRtcStatus.rtc = RTC_IsStopWakeup();
-    g_stLowPowerRtcStatus.idleMax = sys_time.time_enter_rtc;
-}
-
 void low_power_log_and_commit_sleep(uint8_t sleep_mode)
 {
     if ((sleep_mode != NORMAL_MODE) && (sleep_mode != DEEP_MODE))
@@ -144,7 +125,6 @@ void LowPower_Request(enum _SLEEP_MODE mode)
         break;
     }
 
-    lp_refresh_status();
 }
 
 static uint8_t lp_select_deep_if_low_voltage(void)
@@ -217,7 +197,6 @@ static void lp_update_sleep_request(void)
     }
     if (lp_select_deep_if_low_voltage() != 0U)
     {
-        lp_refresh_status();
         return;
     }
 
@@ -226,7 +205,6 @@ static void lp_update_sleep_request(void)
     {
         g_stLowPowerRtcStatus.idle = 0U;
         LowPower_Request(NO_SLEEP);
-        lp_refresh_status();
         return;
     }
 
@@ -235,7 +213,6 @@ static void lp_update_sleep_request(void)
         g_stLowPowerRtcStatus.idle = 0U;
         LowPower_Request(HICCUP_MODE);
     }
-    lp_refresh_status();
 }
 
 static bool rtc_sleep_has_wakeup_exception(void)
@@ -271,7 +248,6 @@ static bool rtc_sleep_has_wakeup_exception(void)
 static void rtc_sleep_prepare_rtc(void)
 {
     g_irq_t = NO_IRQ;
-    g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
     IOstatus_RTCMode();
@@ -285,7 +261,6 @@ static void rtc_sleep_prepare_rtc(void)
     }
 
     LowPowerSleep_SaveCoreState();
-    lp_refresh_status();
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -315,11 +290,8 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
-        ++g_stLowPowerRtcStatus.cycles;
-        g_stLowPowerRtcStatus.test_sample_voltage = g_stCellInfoReport.u16VCell[0];
 
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
-        lp_refresh_status();
 
         if ((g_stCellInfoReport.u16VCellMin <= g_bmsParameters.u16VcellUvp.curValue) ||
             !SystemRuntime_IsDischargeMosOpen())
@@ -351,7 +323,6 @@ void rtc_sleep(void)
 
     if (RtcSleep_PortIsOneSecondTick() == 0U)
     {
-        lp_refresh_status();
         return;
     }
 
@@ -390,7 +361,6 @@ void rtc_sleep(void)
         LowPower_Request(NO_SLEEP);
         RtcSleep_PortRestoreAfterStop();
 
-        g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
         RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
         break;
 

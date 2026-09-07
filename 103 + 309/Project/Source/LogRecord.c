@@ -80,20 +80,6 @@ static UINT8 LogRecord_IsEntryValid(UINT8 event, UINT8 delta)
 	return 1U;
 }
 
-static UINT8 LogStorage_IsBlank(UINT32 addr, UINT16 length)
-{
-	UINT16 offset;
-
-	for (offset = 0U; offset < length; offset += 2U)
-	{
-		if (FlashReadOneHalfWord(addr + offset) != 0xFFFFU)
-		{
-			return 0U;
-		}
-	}
-	return 1U;
-}
-
 static UINT16 LogStorage_HeaderCrc(const LOG_STORAGE_PAGE_HEADER *header)
 {
 	return StorageFlash_Crc16((const UINT8 *)header,
@@ -193,7 +179,7 @@ static UINT8 LogStorage_GetPageInfo(UINT32 page, LOG_STORAGE_PAGE_INFO *info)
 		 (addr + sizeof(LOG_STORAGE_ENTRY)) <= endAddr;
 		 addr += sizeof(LOG_STORAGE_ENTRY))
 	{
-		if (LogStorage_IsBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
+		if (StorageFlash_IsAreaBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
 		{
 			info->nextAddr = addr;
 			break;
@@ -220,7 +206,7 @@ static UINT8 LogStorage_ReplayPage(const LOG_STORAGE_PAGE_INFO *info,
 		 (addr + sizeof(LOG_STORAGE_ENTRY)) <= endAddr;
 		 addr += sizeof(LOG_STORAGE_ENTRY))
 	{
-		if (LogStorage_IsBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
+		if (StorageFlash_IsAreaBlank(addr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
 		{
 			break;
 		}
@@ -319,7 +305,7 @@ static UINT8 LogStorage_StartPage(UINT32 page, UINT32 generation, UINT16 flags)
 
 	/* Fresh/previously-cleaned pages do not need another erase. A non-blank
 	 * target is always erased and verified before its new generation is written. */
-	if (!LogStorage_IsBlank(page, (UINT16)FLASH_STORAGE_PAGE_SIZE) &&
+	if (!StorageFlash_IsAreaBlank(page, (UINT16)FLASH_STORAGE_PAGE_SIZE) &&
 		!StorageFlash_EraseStoragePage(page))
 	{
 		return 0U;
@@ -530,7 +516,7 @@ static UINT8 LogStorage_PersistEvent(LogEventArray event, UINT8 delta)
 	 * without erasing the page. Consume it so later events can continue. If the
 	 * failed slot is still blank, retry the same address on the next event; this
 	 * avoids creating a blank hole that boot replay would interpret as end-of-log. */
-	if (!LogStorage_IsBlank(writeAddr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
+	if (!StorageFlash_IsAreaBlank(writeAddr, (UINT16)sizeof(LOG_STORAGE_ENTRY)))
 	{
 		s_log_record.storageNextAddr += sizeof(LOG_STORAGE_ENTRY);
 	}

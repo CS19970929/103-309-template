@@ -104,6 +104,17 @@ static uint8_t Bms3520_TableCode(uint16_t value, const uint16_t *table, uint8_t 
     return 255U; /* Unsupported physical value; never silently round a delay. */
 }
 
+/* Charge and discharge NTC pairs obey the same bounds and hysteresis. */
+static uint8_t Bms3520_NtcPairValid(uint32_t hotOhm, uint32_t coldOhm,
+                                   int16_t hotRecoveryC, int16_t coldRecoveryC)
+{
+    if (hotOhm < 980UL || hotOhm >= 10000UL ||
+        coldOhm < 10000UL || coldOhm > 203750UL ||
+        hotRecoveryC > 100 || coldRecoveryC < -40 || coldRecoveryC >= hotRecoveryC) return 0U;
+    return (uint32_t)iSheldTemp_10K_NTC[hotRecoveryC+40]*10UL > hotOhm &&
+           (uint32_t)iSheldTemp_10K_NTC[coldRecoveryC+40]*10UL < coldOhm;
+}
+
 uint8_t Bms3520_ValidateHardwareConfig(const BMS3520_HARDWARE_CONFIG *p)
 {
     if (!p || p->enableMask > 255U || p->occEnable > 1U) return 0U;
@@ -122,17 +133,8 @@ uint8_t Bms3520_ValidateHardwareConfig(const BMS3520_HARDWARE_CONFIG *p)
         p->ocd2DelayMs < 25U || p->ocd2DelayMs > 400U || p->ocd2DelayMs % 25U ||
         p->occShuntUv < 1375U || p->occShuntUv > 44000U || p->occShuntUv % 1375U) return 0U;
     /* Rref=10kOhm: high-temp byte <256, low-temp byte omits bit8. */
-    if (p->chgOtOhm < 980UL || p->chgOtOhm >= 10000UL ||
-        p->dsgOtOhm < 980UL || p->dsgOtOhm >= 10000UL ||
-        p->chgUtOhm < 10000UL || p->chgUtOhm > 203750UL ||
-        p->dsgUtOhm < 10000UL || p->dsgUtOhm > 203750UL ||
-        p->chgOtRecoveryC > 100 || p->dsgOtRecoveryC > 100 ||
-        p->chgUtRecoveryC < -40 || p->dsgUtRecoveryC < -40 ||
-        p->chgUtRecoveryC >= p->chgOtRecoveryC || p->dsgUtRecoveryC >= p->dsgOtRecoveryC) return 0U;
-    if ((uint32_t)iSheldTemp_10K_NTC[p->chgOtRecoveryC+40]*10UL <= p->chgOtOhm ||
-        (uint32_t)iSheldTemp_10K_NTC[p->dsgOtRecoveryC+40]*10UL <= p->dsgOtOhm ||
-        (uint32_t)iSheldTemp_10K_NTC[p->chgUtRecoveryC+40]*10UL >= p->chgUtOhm ||
-        (uint32_t)iSheldTemp_10K_NTC[p->dsgUtRecoveryC+40]*10UL >= p->dsgUtOhm) return 0U;
+    if (!Bms3520_NtcPairValid(p->chgOtOhm,p->chgUtOhm,p->chgOtRecoveryC,p->chgUtRecoveryC) ||
+        !Bms3520_NtcPairValid(p->dsgOtOhm,p->dsgUtOhm,p->dsgOtRecoveryC,p->dsgUtRecoveryC)) return 0U;
     if (!p->ocpRecoveryMa || p->ocpRecoveryMa % 100U ||
         p->recoveryMs < BMS3520_PROTECTION_PERIOD_MS || p->recoveryMs % BMS3520_PROTECTION_PERIOD_MS) return 0U;
     return 1U;

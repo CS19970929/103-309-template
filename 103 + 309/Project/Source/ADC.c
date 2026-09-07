@@ -18,67 +18,67 @@ static ADC_RUNTIME s_adc;
 #define ADC_STARTUP_DISCARD_TICKS ((UINT8)1U)
 
 
-// 12佝，4096��
-static const UINT16 iSheldTemp_10K[LENGTH_TBLTEMP_PORT_10K] = {
-    // AD		(Temp+40)*10
-    3771,
-    100, //-30
-    3683,
-    150, //-25
-    3580,
-    200, //-20
-    3460,
-    250, //-15
-    3323,
-    300, //-10
-    3169,
-    350, //-5
-    3004,
-    400, // 0
-    2820,
-    450, // 5
-    2633,
-    500, // 10
-    2437,
-    550, // 15
-    2241,
-    600, // 20
-    2048,
-    650, // 25
-    1859,
-    700, // 30
-    1679,
-    750, // 35
-    1509,
-    800, // 40
-    1351,
-    850, // 45
-    1204,
-    900, // 50
-    1073,
-    950, // 55
-    953,
-    1000, // 60
-    845,
-    1050, // 65
-    749,
-    1100, // 70
-    664,
-    1150, // 75
-    588,
-    1200, // 80
-    522,
-    1250, // 85
-    463,
-    1300, // 90
-    411,
-    1350, // 95
-    366,
-    1400, // 100
-    326,
-    1450, // 105
-
+/* 12-bit ADC codes for the existing 10k NTC divider. Temperature rows are
+ * uniformly spaced; the public result remains (degrees C + 40) * 10. */
+#define ADC_NTC_FIRST_ENCODED 100U
+#define ADC_NTC_STEP_ENCODED 50U
+static const UINT16 s_ntcAdc[] = {
+    3771, /* -30 C */
+    3683, /* -25 C */
+    3580, /* -20 C */
+    3460, /* -15 C */
+    3323, /* -10 C */
+    3169, /* -5 C */
+    3004, /* +0 C */
+    2820, /* +5 C */
+    2633, /* +10 C */
+    2437, /* +15 C */
+    2241, /* +20 C */
+    2048, /* +25 C */
+    1859, /* +30 C */
+    1679, /* +35 C */
+    1509, /* +40 C */
+    1351, /* +45 C */
+    1204, /* +50 C */
+    1073, /* +55 C */
+    953, /* +60 C */
+    845, /* +65 C */
+    749, /* +70 C */
+    664, /* +75 C */
+    588, /* +80 C */
+    522, /* +85 C */
+    463, /* +90 C */
+    411, /* +95 C */
+    366, /* +100 C */
+    326, /* +105 C */
 };
+#define ADC_NTC_POINT_COUNT (sizeof(s_ntcAdc) / sizeof(s_ntcAdc[0]))
+
+static UINT16 ADC_NtcTemperature(UINT16 adc)
+{
+    UINT16 i;
+    if (adc >= s_ntcAdc[0]) return ADC_NTC_FIRST_ENCODED;
+    for (i = 1U; i < ADC_NTC_POINT_COUNT; ++i)
+    {
+        if (adc >= s_ntcAdc[i])
+            return ADC_NTC_FIRST_ENCODED + (i-1U)*ADC_NTC_STEP_ENCODED +
+                (UINT32)(s_ntcAdc[i-1U]-adc)*ADC_NTC_STEP_ENCODED /
+                (s_ntcAdc[i-1U]-s_ntcAdc[i]);
+    }
+    return ADC_NTC_FIRST_ENCODED + (ADC_NTC_POINT_COUNT-1U)*ADC_NTC_STEP_ENCODED;
+}
+
+/* Fixed ADC DMA channel. Same reset order as SPL V3.5.0 DMA_DeInit,
+ * without dispatch for DMA channels absent from this ADC path. */
+static void ADC_ResetDmaChannel(void)
+{
+    DMA1_Channel1->CCR &= (uint16_t)(~DMA_CCR1_EN);
+    DMA1_Channel1->CCR = 0U;
+    DMA1_Channel1->CNDTR = 0U;
+    DMA1_Channel1->CPAR = 0U;
+    DMA1_Channel1->CMAR = 0U;
+    DMA1->IFCR |= DMA_ISR_GIF1 | DMA_ISR_TCIF1 | DMA_ISR_HTIF1 | DMA_ISR_TEIF1;
+}
 
 void InitADC_DMA(void)
 {
@@ -98,7 +98,7 @@ void InitADC_DMA(void)
     // DMA初�化
     // 按靓睆SYSCFG_CFGR1的ADC_DMA_RMP佝置�0，ADC扝和Channel1连在�起，�1时和Channel2连在��(ADC覝么Channel1覝么2)
     // 而这�东西我没酝置过，reset值为0，所以丝用�
-    DMA_DeInit(DMA1_Channel1);                                               // 选择频靓
+    ADC_ResetDmaChannel();                                               // 选择频靓
     /* Every SPL init-structure member is assigned explicitly below. */                                         // 初�化DMA结构�
     DMA_InitStruct.DMA_PeripheralBaseAddr = (UINT32)(&(ADC1->DR));           // 酝置外�地�
     DMA_InitStruct.DMA_MemoryBaseAddr = (UINT32)(&s_adc.raw[0]);     // 设置内存映射地址
@@ -198,7 +198,9 @@ void InitADC_ADC1(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE); // �坯ADC1外�时�
 
     // ADC初�化
-    ADC_DeInit(ADC1);                // ADC杢�默认�置
+    /* SPL DeInit sequence for the fixed ADC1 peripheral. */
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_ADC1, ENABLE);
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_ADC1, DISABLE);                // ADC杢�默认�置
     /* Every SPL init-structure member is assigned explicitly below. */ // 初�化ADC结构�
 
     ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;                    // �立模�
@@ -258,8 +260,10 @@ void ADC_StopForLowPower(void)
     ADC_DMACmd(ADC1, DISABLE);
     ADC_Cmd(ADC1, DISABLE);
     DMA_Cmd(DMA1_Channel1, DISABLE);
-    DMA_DeInit(DMA1_Channel1);
-    ADC_DeInit(ADC1);
+    ADC_ResetDmaChannel();
+    /* SPL DeInit sequence for the fixed ADC1 peripheral. */
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_ADC1, ENABLE);
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_ADC1, DISABLE);
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, DISABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, DISABLE);
@@ -394,7 +398,7 @@ static void ADC_UpdateMosTemp(void)
     INT32 t_i32temp = 0;
 
     t_i32temp = (INT32)s_adc.raw[ADC_TEMP_MOS1];
-    t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
+    t_i32temp = ADC_NtcTemperature((UINT16)t_i32temp);
     s_adc.result[ADC_TEMP_MOS1] = (UINT16)t_i32temp;
 }
 static void ADC_UpdateEnvTemp(void)
@@ -402,7 +406,7 @@ static void ADC_UpdateEnvTemp(void)
     INT32 t_i32temp = 0;
 
     t_i32temp = (INT32)s_adc.raw[ADC_TEMP_EV1];
-    t_i32temp = GetEndValue(iSheldTemp_10K, (UINT16)LENGTH_TBLTEMP_PORT_10K, (UINT16)t_i32temp);
+    t_i32temp = ADC_NtcTemperature((UINT16)t_i32temp);
     s_adc.result[ADC_TEMP_EV1] = (UINT16)t_i32temp;
 }
 

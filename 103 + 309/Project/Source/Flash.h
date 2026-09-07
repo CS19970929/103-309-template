@@ -148,6 +148,8 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 
 /* Shared CRC16/Modbus primitive used by persistent record formats. */
 UINT16 StorageFlash_Crc16Update(UINT16 crc, const UINT8 *data, UINT16 length);
+/* Halfword-aligned address and even length, within mapped Flash. */
+UINT8 StorageFlash_IsAreaBlank(UINT32 addr, UINT16 length);
 UINT16 StorageFlash_Crc16(const UINT8 *data, UINT16 length);
 
 /* Bounded raw operations exist only for storage internals such as log journal. */

@@ -113,7 +113,6 @@ static UINT16 StorageFlash_CalcRecordCrc(UINT32 magic,
 
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 {
-	UINT32 offset;
 	FLASH_Status result;
 
 	if ((page_addr % FLASH_STORAGE_PAGE_SIZE) != 0U)
@@ -127,13 +126,8 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 		return result;
 	}
 
-	for (offset = 0U; offset < FLASH_STORAGE_PAGE_SIZE; offset += 2U)
-	{
-		if (FlashReadOneHalfWord(page_addr + offset) != 0xFFFFU)
-		{
-			return FLASH_ERROR_PG;
-		}
-	}
+	if (!StorageFlash_IsAreaBlank(page_addr, FLASH_STORAGE_PAGE_SIZE))
+		return FLASH_ERROR_PG;
 
 	return FLASH_COMPLETE;
 }
@@ -207,7 +201,7 @@ static UINT16 StorageFlash_RecordSpan(UINT16 payload_length)
 	return (UINT16)span;
 }
 
-static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
+UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
 {
 	UINT16 offset;
 
@@ -383,20 +377,7 @@ static UINT8 StorageFlash_SavePair(uint32_t slot_a,
 	valid_a = StorageFlash_ReadRecord(slot_a, magic, length, 0, &seq_a);
 	valid_b = StorageFlash_ReadRecord(slot_b, magic, length, 0, &seq_b);
 
-	if (valid_a && valid_b)
-	{
-		if (seq_a >= seq_b)
-		{
-			next_sequence = seq_a + 1U;
-			target_slot = slot_b;
-		}
-		else
-		{
-			next_sequence = seq_b + 1U;
-			target_slot = slot_a;
-		}
-	}
-	else if (valid_a)
+	if (valid_a && (!valid_b || seq_a >= seq_b))
 	{
 		next_sequence = seq_a + 1U;
 		target_slot = slot_b;
@@ -556,22 +537,7 @@ static UINT8 StorageFlash_SaveJournalPair(uint32_t slot_a,
 	valid_a = StorageFlash_LoadJournalPage(slot_a, magic, length, 0, &seq_a, &next_addr_a);
 	valid_b = StorageFlash_LoadJournalPage(slot_b, magic, length, 0, &seq_b, &next_addr_b);
 
-	if (valid_a && valid_b)
-	{
-		if (seq_a >= seq_b)
-		{
-			next_sequence = seq_a + 1U;
-			target_page = slot_a;
-			target_addr = next_addr_a;
-		}
-		else
-		{
-			next_sequence = seq_b + 1U;
-			target_page = slot_b;
-			target_addr = next_addr_b;
-		}
-	}
-	else if (valid_a)
+	if (valid_a && (!valid_b || seq_a >= seq_b))
 	{
 		next_sequence = seq_a + 1U;
 		target_page = slot_a;

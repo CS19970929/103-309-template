@@ -131,7 +131,9 @@ static void Afe3520_HardwareSpiInit(void)
     { ++index; divider *= 2U; }
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
     /* SPL deinit uses the APB2 reset line: clears stuck BSY, OVR and MODF. */
-    SPI_I2S_DeInit(SPI1);
+    /* SPL DeInit sequence for the fixed SPI1 peripheral. */
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_SPI1, ENABLE);
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_SPI1, DISABLE);
     SPI_StructInit(&spi);
     spi.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
     spi.SPI_Mode = SPI_Mode_Master;

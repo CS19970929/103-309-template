@@ -308,19 +308,26 @@ struct PRT_E2ROM_PARAS {
 #define ODC_filter3  10
 
 
-#define E2P_PROTECT_MIN_PRT		{/*���ڹ�ѹ*/1000,	1000,	1000,	1000,	1,\
-								 /*���ڵ�ѹ*/1000,	1000,	1000,	1000,	1,\
-								 /*��ѹ��ѹ*/300,	300,	300,	300,	1,\
-								 /*��ѹ��ѹ*/300,	300,	300,	300,	1,\
-		        				 /*������*/10,	10,		10,		10,		1,\
-		        				 /*�ŵ����*/10,	10,		10,		10,		1,\
-								 /*������*/400,	400,	400,	400,	1,\
-								 /*������*/0,		0,		0,		0,		1,\
-								 /*�ŵ����*/400,	400,	400,	400,	1,\
-								 /*�ŵ����*/0,		0,		0,		0,		1,\
-		        				 /*��������*/400,	400,	400,	400,	1,\
-		        				 /*ѹ�����*/10,	10,		10,		10,		1,\
-		        				 /*��������*/0,		0,		0,		0,		1}
+/* Each legacy protection group has four threshold/recovery words and one
+ * delay word. Store shared bounds once per group; wire layout is unchanged. */
+#define BMS_PROTECT_GROUP_WORDS 5U
+#define BMS_PROTECT_DELAY_MIN 1U
+#define BMS_PROTECT_DELAY_MAX 50000U
+#define E2P_PROTECT_GROUP_LIMITS { \
+    {1000, 5000},  /* cell overvoltage */ \
+    {1000, 5000},  /* cell undervoltage */ \
+    {300, 20000},  /* pack overvoltage */ \
+    {300, 20000},  /* pack undervoltage */ \
+    {10, 50000},   /* charge overcurrent */ \
+    {10, 50000},   /* discharge overcurrent */ \
+    {400, 2000},   /* charge overtemperature */ \
+    {0, 800},      /* charge undertemperature */ \
+    {400, 2000},   /* discharge overtemperature */ \
+    {0, 800},      /* discharge undertemperature */ \
+    {400, 2000},   /* MOS overtemperature */ \
+    {10, 2000},    /* cell voltage difference */ \
+    {0, 50}       /* low SOC */ \
+}
 
 
 #define E2P_PROTECT_DEFAULT_PRT	{/*单节过压*/COV_1,	COV_2,	COV_3,	COV_recover,	COV_filter3,\
@@ -341,19 +348,6 @@ struct PRT_E2ROM_PARAS {
 
 
 
-#define E2P_PROTECT_MAX_PRT		{/*���ڹ�ѹ*/5000,	5000,	5000,	5000,	50000,\
-								 /*���ڵ�ѹ*/5000,	5000,	5000,	5000,	50000,\
-								 /*��ѹ��ѹ*/20000,	20000,	20000,	20000,	50000,\
-								 /*��ѹ��ѹ*/20000,	20000,	20000,	20000,	50000,\
-		        				 /*������*/50000,	50000,	50000,	50000,	50000,\
-		        				 /*�ŵ����*/50000,	50000,	50000,	50000,	50000,\
-								 /*������*/2000,	2000,	2000,	2000,	50000,\
-								 /*������*/800,	800,	800,	800,	50000,\
-								 /*�ŵ����*/2000,	2000,	2000,	2000,	50000,\
-								 /*�ŵ����*/800,	800,	800,	800,	50000,\
-		        				 /*��������*/2000,	2000,	2000,	2000,	50000,\
-		        				 /*ѹ�����*/2000,	2000,	2000,	2000,	50000,\
-		        				 /*��������*/50,	50,		50,		50,		50000}
 
 
 

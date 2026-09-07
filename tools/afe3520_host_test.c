@@ -156,7 +156,12 @@ SPI_TypeDef host_spi;
 static unsigned hw_fault, hw_fault_resets, hw_resets, hw_rx_ready;
 static uint8_t hw_rx;
 void GPIO_PinRemapConfig(unsigned map, int on) { assert(map==GPIO_Remap_SPI1 && !on); }
-void SPI_I2S_DeInit(SPI_TypeDef *spi) {
+void RCC_APB2PeriphResetCmd(int peripheral, int on) {
+    static int asserted;
+    SPI_TypeDef *spi=SPI1;
+    assert(peripheral==RCC_APB2Periph_SPI1);
+    if (!on) { assert(asserted); asserted=0; return; }
+    assert(!asserted); asserted=1;
     assert(GPIOA->odr & PIN_CS_SPI); spi->enabled=0; hw_rx_ready=0; ++hw_resets;
     if(hw_fault_resets && !--hw_fault_resets) hw_fault=0;
 }

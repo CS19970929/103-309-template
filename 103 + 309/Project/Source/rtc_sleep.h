@@ -36,25 +36,17 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 #define LP_BLOCK_FLASH_BUSY   (1UL << 5)
 #define LP_BLOCK_UPGRADE      (1UL << 6)
 #define LP_BLOCK_FAULT        (1UL << 7)
-#define LP_BLOCK_LED_ACTIVE   (1UL << 8)
 #define LP_BLOCK_AFE          (1UL << 9)
 #define LP_BLOCK_AFE_WDT      (1UL << 10)
 
 struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
-  uint8_t rtc;
   uint8_t comm;
-  uint8_t reserved;
   uint16_t idle;
-  uint16_t idleMax;
   uint16_t force;
-  uint16_t reserved16;
   uint32_t vlow;
   uint32_t block;
   uint32_t sleep;
-  uint32_t last;
-  uint32_t cycles;
-  uint16_t test_sample_voltage;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;

@@ -224,8 +224,12 @@ void InitRunAfterStopWakeup(void)
     ADC_StopForLowPower();
     InitADC();
 
-    USART_DeInit(USART1);
-    USART_DeInit(USART2);
+    /* SPL DeInit sequence for the fixed USART1 peripheral. */
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_USART1, ENABLE);
+    RCC_APB2PeriphResetCmd(RCC_APB2Periph_USART1, DISABLE);
+    /* SPL DeInit sequence for the fixed USART2 peripheral. */
+    RCC_APB1PeriphResetCmd(RCC_APB1Periph_USART2, ENABLE);
+    RCC_APB1PeriphResetCmd(RCC_APB1Periph_USART2, DISABLE);
 
     InitUSART_CommonUpper();
     InitCan();

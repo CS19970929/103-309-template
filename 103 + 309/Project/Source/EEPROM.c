@@ -32,13 +32,12 @@ typedef char EEPROM_OtherLayoutCheck[
 #define BMS_CS_RES_SCALE ((UINT32)1000U)
 
 /* Single ROM instances shared by persistent storage and all host protocols. */
-const UINT16 g_u16ProtectParamMin[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_MIN_PRT;
+static const UINT16 s_protectGroupLimits[E2P_PARA_NUM_PROTECT / BMS_PROTECT_GROUP_WORDS][2] = E2P_PROTECT_GROUP_LIMITS;
 const UINT16 g_u16ProtectParamDefault[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_DEFAULT_PRT;
-const UINT16 g_u16ProtectParamMax[E2P_PARA_NUM_PROTECT] = E2P_PROTECT_MAX_PRT;
 
-const UINT16 g_u16OtherParamMin[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_min;
+static const UINT16 g_u16OtherParamMin[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_min;
 const UINT16 g_u16OtherParamDefault[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_default;
-const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
+static const UINT16 g_u16OtherParamMax[E2P_PARA_NUM_OTHER_ELEMENT1] = OtherElement_max;
 
 static UINT16 s_u16ConfigPolicyVersion = FLASH_UPGRADE_PARAM_FLAG_RESET;
 
@@ -144,21 +143,32 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 }
 
-static UINT8 EEPROM_WordBlockInRange(const UINT16 *values,
-										 const UINT16 *min_values,
-										 const UINT16 *max_values,
-										 UINT16 count)
+UINT8 BmsParam_ValueInRange(UINT8 protect, UINT16 index, UINT16 value)
 {
-	UINT16 i;
+    UINT16 minValue, maxValue;
+    if (protect)
+    {
+        if (index >= E2P_PARA_NUM_PROTECT) return 0U;
+        if (index % BMS_PROTECT_GROUP_WORDS == BMS_PROTECT_GROUP_WORDS-1U)
+            return value >= BMS_PROTECT_DELAY_MIN && value <= BMS_PROTECT_DELAY_MAX;
+        minValue = s_protectGroupLimits[index / BMS_PROTECT_GROUP_WORDS][0];
+        maxValue = s_protectGroupLimits[index / BMS_PROTECT_GROUP_WORDS][1];
+    }
+    else
+    {
+        if (index >= E2P_PARA_NUM_OTHER_ELEMENT1) return 0U;
+        minValue = g_u16OtherParamMin[index];
+        maxValue = g_u16OtherParamMax[index];
+    }
+    return value >= minValue && value <= maxValue;
+}
 
-	for (i = 0U; i < count; ++i)
-	{
-		if ((values[i] < min_values[i]) || (values[i] > max_values[i]))
-		{
-			return 0U;
-		}
-	}
-	return 1U;
+static UINT8 EEPROM_WordBlockInRange(const UINT16 *values, UINT16 count, UINT8 protect)
+{
+    UINT16 i;
+    for (i=0U; i<count; ++i)
+        if (!BmsParam_ValueInRange(protect,i,values[i])) return 0U;
+    return 1U;
 }
 
 static void EEPROM_BuildConfig(BMS_CONFIG *config)
@@ -226,9 +236,7 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 		return 0U;
 	}
 	if (!EEPROM_WordBlockInRange(config->protect,
-									 g_u16ProtectParamMin,
-									 g_u16ProtectParamMax,
-									 BMS_CONFIG_PROTECT_WORD_COUNT))
+									 BMS_CONFIG_PROTECT_WORD_COUNT, 1U))
 	{
 		return 0U;
 	}
@@ -237,9 +245,7 @@ static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 		return 0U;
 	}
 	if (!EEPROM_WordBlockInRange(config->other,
-									 g_u16OtherParamMin,
-									 g_u16OtherParamMax,
-									 BMS_CONFIG_OTHER_WORD_COUNT))
+									 BMS_CONFIG_OTHER_WORD_COUNT, 0U))
 	{
 		return 0U;
 	}

@@ -33,7 +33,6 @@ enum tagInfoForADCArray {
 };
 
 
-#define LENGTH_TBLTEMP_PORT_10K    ((UINT16)56)
 #define Vbc_scale (((VBC_DIVIDER_RTOP_KOHM + VBC_DIVIDER_RBOTTOM_KOHM) / VBC_DIVIDER_RBOTTOM_KOHM)) // legacy integer divider ratio
 
 

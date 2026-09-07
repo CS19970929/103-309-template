@@ -6,15 +6,9 @@
 #include <stddef.h>
 
 static struct RS485MSG g_stCurrentMsgPtr_SCI1;
-static volatile UINT16 gu16_CommuErrCnt_SCI1 = 0;
-static volatile UINT8 gu8_TxEnable_SCI1 = 0;
-static volatile UINT8 gu8_TxFinishFlag_SCI1 = 0;
 
 #ifdef _COMMOM_UPPER_SCI2
 static struct RS485MSG g_stCurrentMsgPtr_SCI2;
-static volatile UINT16 gu16_CommuErrCnt_SCI2 = 0;
-static volatile UINT8 gu8_TxEnable_SCI2 = 0;
-static volatile UINT8 gu8_TxFinishFlag_SCI2 = 0;
 #endif
 
 /* Main-loop scratch only. UART ISR paths never touch this object. The UART
@@ -42,35 +36,11 @@ typedef char SCI_RtcLayoutCheck[(sizeof(struct RTC_ELEMENT) == (E2P_PARA_NUM_RTC
 typedef char SCI_SystemErrorLayoutCheck[(sizeof(struct SYSTEM_ERROR) == 24U) ? 1 : -1];
 typedef char SCI_OtherLayoutCheck[(sizeof(struct OTHER_ELEMENT) == (E2P_PARA_NUM_OTHER_ELEMENT1 * sizeof(UINT16))) ? 1 : -1];
 
-typedef UINT8 (*SCI_PROTOCOL_RX_FEED_FN)(void *pvProtocolCtx, UINT8 u8Data);
-typedef void (*SCI_PROTOCOL_PROCESS_FN)(void *pvProtocolCtx);
-typedef UINT8 *(*SCI_PROTOCOL_TX_BUFFER_FN)(void *pvProtocolCtx);
-typedef UINT16 (*SCI_PROTOCOL_TX_LENGTH_FN)(void *pvProtocolCtx);
-typedef UINT8 (*SCI_PROTOCOL_IS_BUSY_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_RESET_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_RX_IDLE_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_TX_COMPLETE_FN)(void *pvProtocolCtx);
-
-struct SCI_PROTOCOL_OPS
-{
-	SCI_PROTOCOL_RESET_FN pfReset;
-	SCI_PROTOCOL_RX_FEED_FN pfRxFeed;
-	SCI_PROTOCOL_PROCESS_FN pfProcessFrame;
-	SCI_PROTOCOL_TX_BUFFER_FN pfGetTxBuffer;
-	SCI_PROTOCOL_TX_LENGTH_FN pfGetTxLength;
-	SCI_PROTOCOL_IS_BUSY_FN pfIsBusy;
-	SCI_PROTOCOL_RX_IDLE_FN pfOnRxIdle;
-	SCI_PROTOCOL_TX_COMPLETE_FN pfOnTxComplete;
-};
-
 struct SCI_PORT_RUNTIME
 {
 	USART_TypeDef *pstUsart;
-	void *pvProtocolCtx;
-	const struct SCI_PROTOCOL_OPS *pstProtocolOps;
-	volatile UINT16 *pu16ErrorCounter;
-	volatile UINT8 *pu8TxEnableFlag;
-	volatile UINT8 *pu8TxFinishFlag;
+	struct RS485MSG *message;
+	volatile UINT16 errorCount;
 	UINT8 * volatile pu8TxBuffer;
 	volatile UINT16 u16TxIndex;
 	volatile UINT16 u16TxLength;
@@ -79,14 +49,10 @@ struct SCI_PORT_RUNTIME
 
 static void Sci_ModbusResetMessage(struct RS485MSG *s);
 static void Sci_SetWrError(struct RS485MSG *s, UINT8 error);
-static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data);
-static void Sci_ModbusProcessFrame(void *pvProtocolCtx);
-static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx);
-static UINT16 Sci_ModbusGetTxLength(void *pvProtocolCtx);
-static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx);
-static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
-static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
-static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
+static UINT8 Sci_ModbusProtocolFeed(struct RS485MSG *s, UINT8 u8Data);
+static void Sci_ModbusProcessFrame(struct RS485MSG *s);
+static UINT8 Sci_ModbusIsBusy(struct RS485MSG *s);
+static void Sci_ModbusOnRxIdle(struct RS485MSG *s);
 static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
 static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count);
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
@@ -107,23 +73,11 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 							   UINT16 u16RxPin,
 							   UINT32 u32RemapConfig);
 
-static const struct SCI_PROTOCOL_OPS g_stSciModbusProtocolOps = {
-	Sci_ModbusResetProtocol,
-	Sci_ModbusProtocolFeed,
-	Sci_ModbusProcessFrame,
-	Sci_ModbusGetTxBuffer,
-	Sci_ModbusGetTxLength,
-	Sci_ModbusIsBusy,
-	Sci_ModbusOnRxIdle,
-	Sci_ModbusOnTxComplete};
-
+/* Fixed Modbus ports: no protocol vtable or write-only TX status mirrors. */
 static struct SCI_PORT_RUNTIME g_stSciPort1 = {
 	USART1,
 	&g_stCurrentMsgPtr_SCI1,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI1,
-	&gu8_TxEnable_SCI1,
-	&gu8_TxFinishFlag_SCI1,
+	0,
 	0,
 	0,
 	0,
@@ -133,10 +87,7 @@ static struct SCI_PORT_RUNTIME g_stSciPort1 = {
 static struct SCI_PORT_RUNTIME g_stSciPort2 = {
 	USART2,
 	&g_stCurrentMsgPtr_SCI2,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI2,
-	&gu8_TxEnable_SCI2,
-	&gu8_TxFinishFlag_SCI2,
+	0,
 	0,
 	0,
 	0,
@@ -553,15 +504,14 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 }
 
 static UINT8 Sci_WrValuesInRange(const struct RS485MSG *s, UINT16 offset,
-								 UINT16 count, const UINT16 *min_values,
-								 const UINT16 *max_values)
+								 UINT16 count, UINT8 protect)
 {
 	UINT16 i;
 	UINT16 value;
 	for (i = 0; i < count; ++i)
 	{
 		value = Sci_GetWrValue(s, i);
-		if ((value < min_values[offset + i]) || (value > max_values[offset + i]))
+		if (!BmsParam_ValueInRange(protect, (UINT16)(offset+i), value))
 		{
 			return 0U;
 		}
@@ -1071,14 +1021,8 @@ static void Sci_ModbusResetMessage(struct RS485MSG *s)
 	s->u16Buffer[3] = 0;
 }
 
-static void Sci_ModbusResetProtocol(void *pvProtocolCtx)
+static UINT8 Sci_ModbusProtocolFeed(struct RS485MSG *s, UINT8 u8Data)
 {
-	Sci_ModbusResetMessage((struct RS485MSG *)pvProtocolCtx);
-}
-
-static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
-{
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
 	UINT16 u16FrameEndIndex;
 	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
 	{
@@ -1158,9 +1102,8 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 	return 0U;
 }
 
-static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
+static void Sci_ModbusProcessFrame(struct RS485MSG *s)
 {
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
 	s->AckType = RS485_ACK_POS;
 	s->ErrorType = RS485_ERROR_NULL;
 	CRC_verify(s);
@@ -1199,34 +1142,17 @@ static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 	}
 }
 
-static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx)
+static UINT8 Sci_ModbusIsBusy(struct RS485MSG *s)
 {
-	return ((struct RS485MSG *)pvProtocolCtx)->u16Buffer;
-}
-
-static UINT16 Sci_ModbusGetTxLength(void *pvProtocolCtx)
-{
-	return ((struct RS485MSG *)pvProtocolCtx)->AckLenth;
-}
-
-static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx)
-{
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
 	return (UINT8)((s->ptr_no != 0U) || (s->csr != RS485_STA_IDLE));
 }
 
-static void Sci_ModbusOnRxIdle(void *pvProtocolCtx)
+static void Sci_ModbusOnRxIdle(struct RS485MSG *s)
 {
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
 	if ((s->ptr_no != 0U) && (s->csr == RS485_STA_IDLE))
 	{
 		Sci_ModbusResetMessage(s);
 	}
-}
-
-static void Sci_ModbusOnTxComplete(void *pvProtocolCtx)
-{
-	Sci_ModbusResetMessage((struct RS485MSG *)pvProtocolCtx);
 }
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort)
@@ -1249,32 +1175,13 @@ static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort)
 	pstPort->u16TxIndex = 0;
 	pstPort->u16TxLength = 0;
 	pstPort->pu8TxBuffer = 0;
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfReset != 0))
-	{
-		pstPort->pstProtocolOps->pfReset(pstPort->pvProtocolCtx);
-	}
+	Sci_ModbusResetMessage(pstPort->message);
 	Sci_PortArmReceiver(pstPort);
 }
 
 static void Sci_PortStartTx(struct SCI_PORT_RUNTIME *pstPort)
 {
 	pstPort->u16TxIndex = 0;
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 1;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
 	pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_TCIE);
 	__DMB();
 	pstPort->pstUsart->CR1 |= (USART_CR1_TE | USART_CR1_TXEIE);
@@ -1284,18 +1191,7 @@ static void Sci_PortFinishTx(struct SCI_PORT_RUNTIME *pstPort)
 {
 	USART_ClearFlag(pstPort->pstUsart, USART_FLAG_TC);
 	pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TCIE;
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 1;
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfOnTxComplete != 0))
-	{
-		pstPort->pstProtocolOps->pfOnTxComplete(pstPort->pvProtocolCtx);
-	}
+	Sci_ModbusResetMessage(pstPort->message);
 	if (u8FlashUpdateE2PROM != 0U)
 	{
 		u8FlashUpdateE2PROM = 0;
@@ -1309,10 +1205,7 @@ static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort)
 	volatile UINT16 u16Dummy;
 	u16Dummy = pstPort->pstUsart->DR;
 	(void)u16Dummy;
-	if (pstPort->pu16ErrorCounter != 0)
-	{
-		(*pstPort->pu16ErrorCounter)++;
-	}
+	pstPort->errorCount++;
 	Sci_PortAbortTransfer(pstPort);
 }
 
@@ -1330,8 +1223,7 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 		UINT8 u8RxData;
 		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
-		if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfRxFeed != 0) &&
-			(pstPort->pstProtocolOps->pfRxFeed(pstPort->pvProtocolCtx, u8RxData) != 0U))
+		if (Sci_ModbusProtocolFeed(pstPort->message, u8RxData) != 0U)
 		{
 			__DMB();
 			pstPort->u8FramePending = 1U;
@@ -1344,10 +1236,9 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 		volatile UINT16 u16Dummy;
 		u16Dummy = pstPort->pstUsart->DR;
 		(void)u16Dummy;
-		if ((pstPort->u8FramePending == 0U) && (pstPort->u16TxLength == 0U) &&
-			(pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfOnRxIdle != 0))
+		if ((pstPort->u8FramePending == 0U) && (pstPort->u16TxLength == 0U))
 		{
-			pstPort->pstProtocolOps->pfOnRxIdle(pstPort->pvProtocolCtx);
+			Sci_ModbusOnRxIdle(pstPort->message);
 		}
 	}
 	if (((pstPort->pstUsart->SR & USART_SR_TXE) != 0U) && ((pstPort->pstUsart->CR1 & USART_CR1_TXEIE) != 0U))
@@ -1400,26 +1291,9 @@ static void Sci_PortService(struct SCI_PORT_RUNTIME *pstPort)
 	}
 
 	__DMB();
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfProcessFrame != 0))
-	{
-		pstPort->pstProtocolOps->pfProcessFrame(pstPort->pvProtocolCtx);
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfGetTxBuffer != 0))
-	{
-		pstPort->pu8TxBuffer = pstPort->pstProtocolOps->pfGetTxBuffer(pstPort->pvProtocolCtx);
-	}
-	else
-	{
-		pstPort->pu8TxBuffer = 0;
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfGetTxLength != 0))
-	{
-		pstPort->u16TxLength = pstPort->pstProtocolOps->pfGetTxLength(pstPort->pvProtocolCtx);
-	}
-	else
-	{
-		pstPort->u16TxLength = 0;
-	}
+	Sci_ModbusProcessFrame(pstPort->message);
+	pstPort->pu8TxBuffer = pstPort->message->u16Buffer;
+	pstPort->u16TxLength = pstPort->message->AckLenth;
 	if ((pstPort->pu8TxBuffer != 0) && (pstPort->u16TxLength != 0U))
 	{
 		Sci_PortStartTx(pstPort);
@@ -1440,11 +1314,7 @@ static UINT8 Sci_PortIsBusy(const struct SCI_PORT_RUNTIME *pstPort)
 	{
 		return 1U;
 	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfIsBusy != 0))
-	{
-		return pstPort->pstProtocolOps->pfIsBusy(pstPort->pvProtocolCtx);
-	}
-	return 0U;
+	return Sci_ModbusIsBusy(pstPort->message);
 }
 
 static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
@@ -1493,26 +1363,9 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TXE, DISABLE);
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TC, DISABLE);
 	USART_Cmd(pstPort->pstUsart, ENABLE);
-	if (pstPort->pvProtocolCtx != 0)
-	{
-		Sci_DataInit((struct RS485MSG *)pstPort->pvProtocolCtx);
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfReset != 0))
-	{
-		pstPort->pstProtocolOps->pfReset(pstPort->pvProtocolCtx);
-	}
-	if (pstPort->pu16ErrorCounter != 0)
-	{
-		*pstPort->pu16ErrorCounter = 0;
-	}
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
+	Sci_DataInit(pstPort->message);
+	Sci_ModbusResetMessage(pstPort->message);
+	pstPort->errorCount = 0;
 	Sci_PortArmReceiver(pstPort);
 }
 
@@ -1620,7 +1473,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 		return;
 	}
 	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum,
-						  g_u16ProtectParamMin, g_u16ProtectParamMax))
+						  1U))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
@@ -1675,7 +1528,7 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 		return;
 	}
 	if (!Sci_WrValuesInRange(s, offset, u16WrRegNum,
-						  g_u16OtherParamMin, g_u16OtherParamMax))
+						  0U))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
