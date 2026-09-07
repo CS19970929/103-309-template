@@ -1,33 +1,31 @@
 #include "main.h"
 #include "MosStartup.h"
 
-static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAction mcc_level)
+static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = charge_on;
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = discharge_on;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
-	// GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, mcc_level);
+    /* Never send SH367309 CONF bits to SH3673520 SCONF1 (mode command). */
+    SH367309_DriverMos_Ctrl(GPIO_CHG, charge_on);
+    SH367309_DriverMos_Ctrl(GPIO_DSG, discharge_on);
 }
 
 UINT8 IsChargeActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
+	return (UINT8)(GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU) == Bit_SET);
 }
 
 void MosStartup_OpenChargeCloseDischarge(void)
 {
-	MosStartup_WriteMosState(1U, 0U, Bit_SET);
+	MosStartup_WriteMosState(1U, 0U);
 }
 
 void MosStartup_OpenDischargeCloseCharge(void)
 {
-	MosStartup_WriteMosState(0U, 1U, Bit_RESET);
+	MosStartup_WriteMosState(0U, 1U);
 }
 
 void MosStartup_EnterFactoryMode(bool on)
 {
-	MosStartup_WriteMosState(1U, 1U, Bit_SET);
+	MosStartup_WriteMosState(1U, 1U);
 }
 
 void MosStartup_ApplyInitialState(void)
@@ -37,5 +35,5 @@ void MosStartup_ApplyInitialState(void)
 
 void Mos_OpenAll(void)
 {
-	MosStartup_WriteMosState(1U, 1U, Bit_RESET);
+	MosStartup_WriteMosState(1U, 1U);
 }

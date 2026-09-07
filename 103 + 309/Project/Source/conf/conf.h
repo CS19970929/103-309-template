@@ -14,12 +14,7 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
-// #define _DI_SWITCH_SYS_ONOFF	//DI������������
-//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-// #define _DI_SWITCH_longKEY_ONOFF
-
 // #define __VIRTURE_CURRENT__
-
 
 #define T3MAX         0
 #define T3            1
@@ -47,19 +42,6 @@
 
 #if PROJECT_CFG_RTC_ENABLE
 #define __FUNC_RTC__
-#endif
-
-#if PROJECT_CFG_UART1_WAKEUP_ENABLE
-#define UART1_WAKEUP_ENABLE
-#endif
-
-#if PROJECT_CFG_RS485_WAKEUP_ENABLE
-#define RS485_WAKEUP_ENABLE
-#endif
-
-
-#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
-#define _DI_SWITCH_longKEY_ONOFF
 #endif
 
 #if (PROJECT_CFG_SCI1_ROLE == 1)

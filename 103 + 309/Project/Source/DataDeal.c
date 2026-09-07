@@ -738,16 +738,6 @@ void MonitorAFE(UINT8 num, UINT8 Result)
                                 &s_data.mon.sleepDelay[2]);
 }
 
-void open_ctlc(void)
-{
-    MCUO_AFE_CTLC = 1;
-}
-
-void close_ctlc(void)
-{
-    MCUO_AFE_CTLC = 0;
-}
-
 static void Protection_UpdateChargeOcp(void)
 {
     if (g_stCellInfoReport.u16Ichg >= AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue)
@@ -903,7 +893,8 @@ void App_AFEGet(void)
     if (0U == SysTime_Take200msTaskPeriod())
         return;
 
-    MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
+    GPIO_WriteBit(GPIO_DBG_LED, PIN_DBG_LED,
+                  GPIO_ReadOutputDataBit(GPIO_DBG_LED, PIN_DBG_LED) ? Bit_RESET : Bit_SET);
     MonitorAFE(0, UpdateVoltageFromBqMaximo());
 
     DataLoad_CellVolt();

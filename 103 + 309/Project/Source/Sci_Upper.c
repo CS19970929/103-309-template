@@ -16,13 +16,6 @@ static volatile UINT8 gu8_TxEnable_SCI2 = 0;
 static volatile UINT8 gu8_TxFinishFlag_SCI2 = 0;
 #endif
 
-#ifdef _COMMOM_UPPER_SCI3
-static struct RS485MSG g_stCurrentMsgPtr_SCI3;
-static volatile UINT16 gu16_CommuErrCnt_SCI3 = 0;
-static volatile UINT8 gu8_TxEnable_SCI3 = 0;
-static volatile UINT8 gu8_TxFinishFlag_SCI3 = 0;
-#endif
-
 /* Main-loop scratch only. UART ISR paths never touch this object. The UART
  * response builder and transport-neutral Host API are serialized by
  * Runtime_RunOnce(), so the same storage can serve either use without adding
@@ -143,20 +136,6 @@ static struct SCI_PORT_RUNTIME g_stSciPort2 = {
 	&gu16_CommuErrCnt_SCI2,
 	&gu8_TxEnable_SCI2,
 	&gu8_TxFinishFlag_SCI2,
-	0,
-	0,
-	0,
-	0};
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-static struct SCI_PORT_RUNTIME g_stSciPort3 = {
-	USART3,
-	&g_stCurrentMsgPtr_SCI3,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI3,
-	&gu8_TxEnable_SCI3,
-	&gu8_TxFinishFlag_SCI3,
 	0,
 	0,
 	0,
@@ -1514,9 +1493,6 @@ UINT8 Sci_IsAnyPortBusy(void)
 #ifdef _COMMOM_UPPER_SCI2
 	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort2));
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort3));
-#endif
 	return busy;
 }
 
@@ -1532,17 +1508,10 @@ void Sci2_CommonUpper_IRQHandler(void)
 #endif
 }
 
-#ifdef _COMMOM_UPPER_SCI3
-void Sci3_CommonUpper_IRQHandler(void)
-{
-	Sci_PortIRQHandler(&g_stSciPort3);
-}
-#endif
-
 void InitSCI1_CommonUpper(void)
 {
 	Sci_InitCommonPort(&g_stSciPort1, USART1_IRQn, 1U, RCC_APB2Periph_USART1,
-					   GPIOB, GPIO_Pin_6, GPIOB, GPIO_Pin_7, GPIO_Remap_USART1);
+					   GPIO_SCI1_TX, PIN_SCI1_TX, GPIO_SCI1_RX, PIN_SCI1_RX, GPIO_Remap_USART1);
 }
 
 void InitSCI2_CommonUpper(void)
@@ -1552,14 +1521,6 @@ void InitSCI2_CommonUpper(void)
 					   GPIOA, GPIO_Pin_2, GPIOA, GPIO_Pin_3, 0U);
 #endif
 }
-
-#ifdef _COMMOM_UPPER_SCI3
-void InitSCI3_CommonUpper(void)
-{
-	Sci_InitCommonPort(&g_stSciPort3, USART3_IRQn, 0U, RCC_APB1Periph_USART3,
-					   GPIOD, GPIO_Pin_8, GPIOD, GPIO_Pin_9, GPIO_FullRemap_USART3);
-}
-#endif
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
@@ -1973,9 +1934,6 @@ void InitUSART_CommonUpper(void)
 #ifdef _COMMOM_UPPER_SCI2
 	InitSCI2_CommonUpper();
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-	InitSCI3_CommonUpper();
-#endif
 }
 
 void App_CommonUpper(void)
@@ -1985,9 +1943,6 @@ void App_CommonUpper(void)
 #endif
 #ifdef _COMMOM_UPPER_SCI2
 	Sci_PortService(&g_stSciPort2);
-#endif
-#ifdef _COMMOM_UPPER_SCI3
-	Sci_PortService(&g_stSciPort3);
 #endif
 }
 

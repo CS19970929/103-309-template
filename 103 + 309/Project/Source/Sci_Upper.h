@@ -489,6 +489,7 @@ UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u1
 UINT8 Sci_IsAnyPortBusy(void);
 
 void Sci1_CommonUpper_IRQHandler(void);
+void Sci2_CommonUpper_IRQHandler(void);
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
 

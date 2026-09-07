@@ -1,6 +1,5 @@
 #include "main.h"
 #include "afe3520/BmsProtection3520.h"
-#include "afe3520/Afe3520Board.h"
 
 /* Keil compile-slot adapter: Afe3520.c is the real transport/measurement unit. */
 #include "afe3520/Afe3520.c"
@@ -20,28 +19,6 @@ static INT16 Afe3520_NativeToLegacyCadc(INT16 nativeRaw)
      * while native SH3673520 CADC remains available inside Afe3520_SNAPSHOT.
      */
     return (INT16)(((INT32)nativeRaw * 21470L) / 65536L);
-}
-
-static void Afe3520_InitBoardControlPins(void)
-{
-    GPIO_InitTypeDef gpio;
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
-
-    /* CTLC is the independent board-level MOS safety gate. Keep it low until
-     * the AFE RAM image has been written and read-back verified. */
-    gpio.GPIO_Pin = AFE3520_PIN_CTLC;
-    gpio.GPIO_Speed = GPIO_Speed_2MHz;
-    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(AFE3520_GPIO_CTLC, &gpio);
-    GPIO_ResetBits(AFE3520_GPIO_CTLC, AFE3520_PIN_CTLC);
-
-    gpio.GPIO_Pin = AFE3520_PIN_PRO_EN;
-    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(AFE3520_GPIO_PRO_EN, &gpio);
-
-    gpio.GPIO_Pin = AFE3520_PIN_DSG_DET | AFE3520_PIN_CHG_DET;
-    gpio.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOA, &gpio);
 }
 
 UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
@@ -91,7 +68,6 @@ void initAFE1_IIC(void)
 
 void InitAFE1(void)
 {
-    Afe3520_InitBoardControlPins();
     Bms3520_ProtectionInit();
 
     if (Afe3520_Init() != AFE3520_OK)
@@ -101,9 +77,10 @@ void InitAFE1(void)
         return;
     }
 
-    if (!Bms3520_ApplyAndVerifyAfeConfig())
+    if (!Bms3520_ApplyAndVerifyAfeConfig() || (Afe3520_SetBalance(0U) != AFE3520_OK))
     {
         SystemRuntime_SetAfeStatus(0U, 0U);
+        System_ERROR_UserCallback(ERROR_AFE1);
         return;
     }
 
@@ -129,6 +106,7 @@ void InitAFE1_Sleep(UINT8 mode)
 
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
+    /* MonitorAFE and the RTC adapter use 0=success, nonzero=failure. */
     const AFE3520_SNAPSHOT *snap;
     UINT8 i;
     INT32 tempEncoded;
@@ -137,11 +115,11 @@ UINT8 UpdateVoltageFromBqMaximo(void)
     if (Afe3520_Service() != AFE3520_OK)
     {
         SystemRuntime_SetAfeStatus(0U, 0U);
-        return 0U;
+        return 1U;
     }
 
     snap = Afe3520_GetSnapshot();
-    if (!snap->valid) return 0U;
+    if (!snap->valid) return 1U;
 
     memset(&Registers_AFE1, 0, sizeof(Registers_AFE1));
     for (i = 0U; i < AFE3520_CELL_MAX; ++i)
@@ -169,5 +147,5 @@ UINT8 UpdateVoltageFromBqMaximo(void)
     SH367309_Read_AFE1.u32VBat = AFE_CalcuVbat();
 
     SystemRuntime_SetAfeStatus(0U, 1U);
-    return 1U;
+    return 0U;
 }

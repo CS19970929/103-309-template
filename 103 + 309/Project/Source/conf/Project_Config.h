@@ -66,15 +66,6 @@
 #endif
 // </h>
 
-// <h>Wakeup Sources
-
-// <q> Enable UART1 wakeup
-#define PROJECT_CFG_UART1_WAKEUP_ENABLE 1
-
-// <q> Enable RS485 wakeup
-#define PROJECT_CFG_RS485_WAKEUP_ENABLE 1
-// </h>
-
 // <h>Serial Port Roles
 
 // <o> SCI1 role

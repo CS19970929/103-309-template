@@ -103,22 +103,6 @@ void EXTI0_IRQHandler(void)
   }
 }
 
-void EXTI2_IRQHandler(void)
-{
-  if (EXTI_GetITStatus(EXTI_Line2) != RESET)
-  {
-    EXTI_ClearITPendingBit(EXTI_Line2);
-  }
-}
-
-void EXTI3_IRQHandler(void)
-{
-  if (EXTI_GetITStatus(EXTI_Line3) != RESET)
-  {
-    EXTI_ClearITPendingBit(EXTI_Line3);
-  }
-}
-
 void EXTI15_10_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
@@ -126,37 +110,15 @@ void EXTI15_10_IRQHandler(void)
     g_irq_t = can_wake_irq;
     EXTI_ClearITPendingBit(EXTI_Line12);
   }
-
-  if (EXTI_GetITStatus(EXTI_Line13) != RESET)
-  {
-    g_irq_t = rs485_irq;
-    EXTI_ClearITPendingBit(EXTI_Line13);
-  }
 }
 
 void EXTI9_5_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
-    EXTI_ClearITPendingBit(EXTI_Line5);
-  }
-
-  if (EXTI_GetITStatus(EXTI_Line6) != RESET)
-  {
-    EXTI_ClearITPendingBit(EXTI_Line6);
-  }
-
-  if (EXTI_GetITStatus(EXTI_Line7) != RESET)
-  {
-    g_irq_t = uart1_irq;
-    EXTI_ClearITPendingBit(EXTI_Line7);
-  }
-
-  if (EXTI_GetITStatus(EXTI_Line9) != RESET)
-  {
     sys_time.cnt_bms1_keyirq++;
     g_irq_t = soc_key;
-    EXTI_ClearITPendingBit(EXTI_Line9);
+    EXTI_ClearITPendingBit(EXTI_Line5);
   }
 }
 
@@ -176,12 +138,5 @@ void USART2_IRQHandler(void)
 #endif
 }
 
-#ifdef _COMMOM_UPPER_SCI3
-void USART3_IRQHandler(void)
-{
-  sys_time.sci3_irq_cnt++;
-  Sci3_CommonUpper_IRQHandler();
-}
-#endif
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

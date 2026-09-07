@@ -299,31 +299,11 @@ void IWDG_Feed(void)
 
 void TIM3_IRQHandler(void)
 {
-	static uint8_t sleep_state = 0;
 
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
-		// sys_time.rtc_sec_cnt = RTC_GetCounter();
 
-		// switch (sleep_state)
-		// {
-		// case 0:
-		// 	if (1 == MCUI_ENI_DI1 && !g_stCellInfoReport.u16Ichg)
-		// 	{
-		// 		MCUO_AFE_CTLC = 0;
-		// 		if (!IsChargeActive())
-		// 		{
-		// 			MCUO_AFE_CTLC = 1;
-		// 			LowPower_Request(NORMAL_MODE);
-		// 		}
-		// 		else
-		// 			MCUO_AFE_CTLC = 1;
-		// 	}
-		// 	break;
-		// default:
-		// 	break;
-		// }
 	}
 }

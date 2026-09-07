@@ -119,16 +119,11 @@ void InitADC_DMA(void)
 // 这是个BUG，坎�观察
 void InitADC_GPIO(void)
 {
-    GPIO_InitTypeDef GPIO_InitStructure;
-    // RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
-
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_VBUS;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = PIN_ADC_NMOS;
-    GPIO_Init(GPIO_ADC_NMOS, &GPIO_InitStructure);
+    GPIO_InitTypeDef gpio;
+    gpio.GPIO_Mode = GPIO_Mode_AIN;
+    gpio.GPIO_Speed = GPIO_Speed_2MHz;
+    gpio.GPIO_Pin = PIN_AD_TTC_MOS1;
+    GPIO_Init(GPIO_AD_TTC_MOS1, &gpio);
 }
 
 void InitADC_TIMER(void)
@@ -216,10 +211,7 @@ void InitADC_ADC1(void)
 
     RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 酝置ADC时钟PCLK2�8分�，�9MHz
 
-    // ADC_RegularChannelConfig(ADC1, ADC_Channel_9, 1, ADC_SampleTime_55Cycles5); // PB1: GPIO_ADC_NMOS
-    // ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 2, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
-    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5); // PA1: GPIO_ADC_VBUS
-    // ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);  // PA2: GPIO_ADC_CUR
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5); // PA1: GPIO_AD_TTC_MOS1
 
     ADC_Cmd(ADC1, ENABLE);    // �坯ADC，并�始转�
     ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求

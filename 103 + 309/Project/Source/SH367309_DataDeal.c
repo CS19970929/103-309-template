@@ -7,7 +7,6 @@
 
 /* Historical compile-slot name; this is now the SH3673520 parameter service. */
 int AFE_PARAM_WRITE_Flag = 1;
-AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
 static uint8_t Bms3520_ParamImageValid(const AFE_Parameters_RS485_Typedef *p)
@@ -67,8 +66,8 @@ static void Bms3520_CopyRuntimeValues(AFE_Parameters_RS485_Typedef *dst,
 
 void App_SH367309_Supplement(void)
 {
-    /* Hardware configuration is derived from this parameter image and repaired
-     * by Bms3520_ProtectionService after any AFE reset/config mismatch. */
+    /* Reapply the compile-time reference hardware profile when requested.
+     * The 0x2400 software parameter image does not override AFE registers. */
     if (AFE_PARAM_WRITE_Flag)
     {
         if (Bms3520_ApplyAndVerifyAfeConfig()) AFE_PARAM_WRITE_Flag = 0;

@@ -5,6 +5,7 @@
 #include "conf.h"
 #include "Sci_Upper.h"
 #include "RTC.h"
+#include "LowPowerSleep.h"
 
 #ifdef TERNARYLI
 #define LOW_POWER_FORCE_DEEP_SLEEP_MV ((uint16_t)2750U)
@@ -112,13 +113,6 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
-#ifdef _DI_SWITCH_SYS_ONOFF
-    if (1 == MCUI_ENI_DI1)
-    {
-        LowPower_Request(NORMAL_MODE);
-        return 1U;
-    }
-#endif
 
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
@@ -220,7 +214,6 @@ static void rtc_sleep_prepare_rtc(void)
 
     LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
-    MCUO_DEBUG_LED1 = 1;
     lp_refresh_status();
 }
 
@@ -241,7 +234,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     sys_time.rtc_sleep_cnt = rtc_elapsed;
     g_stLowPowerRtcStatus.sleep += rtc_elapsed;
 
-    MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
@@ -258,7 +250,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
             low_power_log_and_commit_sleep(DEEP_MODE);
         }
 
-        MCUO_DEBUG_LED1 = 1;
         return true;
     }
     else if ((g_stLowPowerRtcStatus.mode == NORMAL_MODE) && (RTC_IsStopWakeup() == 0U))
@@ -269,7 +260,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
             return false;
         }
 
-        MCUO_DEBUG_LED1 = 1;
         return true;
     }
 
@@ -305,18 +295,9 @@ void rtc_sleep(void)
     case NORMAL_MODE:
     case HICCUP_MODE:
         rtc_sleep_prepare_rtc();
-        if (sleep_mode == NORMAL_MODE)
-        {
-            MCUO_AFE_CTLC = 0;
-        }
 
         while (rtc_sleep_run_hiccup_cycle())
         {
-        }
-
-        if (sleep_mode == NORMAL_MODE)
-        {
-            MCUO_AFE_CTLC = 1;
         }
 
         RtcSleep_PortDisableStopWakeup();

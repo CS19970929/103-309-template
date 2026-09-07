@@ -47,34 +47,9 @@ UINT8 RtcSleep_AfePortHasCurrentWake(enum irqWakeup *source)
 
 UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
 {
-    if (source != 0)
-    {
-        *source = NO_IRQ;
-    }
-
-    if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
-    {
-        SystemRuntime_SetMosStatus(SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET,
-                                   SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
-        Fault_ChangeToMCU();
-
-        // if (!SystemRuntime_IsDischargeMosOpen())
-        // {
-        //     if (source != 0)
-        //     {
-        //         *source = chg_dsg_close;
-        //     }
-        //     return 1U;
-        // }
-
-        // if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
-        // {
-        //     if (source != 0)
-        //     {
-        //         *source = error_wake;
-        //     }
-        //     return 1U;
-        // }
-    }
+    if (source != 0) *source = NO_IRQ;
+    /* The SH367309 BALANCE/BSTATUS layout is not the SH3673520 layout.
+     * The protection service reads native flags and actual MOS feedback. */
+    Fault_ChangeToMCU();
     return 0U;
 }

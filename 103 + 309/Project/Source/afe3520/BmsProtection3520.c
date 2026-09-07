@@ -1,6 +1,7 @@
 #include "main.h"
 #include "afe3520/BmsProtection3520.h"
 #include "SH367309_Func.h"
+#include "afe3520/Afe3520Config.h"
 #include <string.h>
 
 static BMS3520_PROTECTION_STATUS s_prot;
@@ -8,14 +9,8 @@ static uint16_t s_swCnt[8];
 static uint16_t s_swRcvCnt[8];
 static uint16_t s_hwStableCnt;
 static uint8_t s_systemBlock;
-static uint8_t s_faultLogLatch[8];
 
 SH367309_REG_STORE SH367309_Reg_Store;
-
-static const uint16_t s_ovDelayMs[8]  = {140U, 280U, 490U, 980U, 2030U, 3010U, 4970U, 10010U};
-static const uint16_t s_uvDelayMs[8]  = {490U, 770U, 980U, 1470U, 2030U, 3010U, 4970U, 10010U};
-static const uint16_t s_ocDelayMs[8]  = {140U, 280U, 490U, 980U, 2030U, 3010U, 4970U, 10010U};
-extern const UINT16 iSheldTemp_10K_NTC[141];
 
 static uint16_t Bms3520_MaxCell(void)
 {
@@ -63,122 +58,20 @@ static uint16_t Bms3520_FilterTicks(uint16_t filter10ms)
     return (ticks == 0U) ? 1U : ticks;
 }
 
-static uint8_t Bms3520_NtcCodeFromEncoded(uint16_t encoded, uint8_t lowTempRegister)
-{
-    uint16_t index = (uint16_t)(encoded / 10U);
-    uint32_t r;
-    uint32_t code;
-    if (index > 140U) index = 140U;
-    r = iSheldTemp_10K_NTC[index];
-    code = (r * 512UL) / (1000UL + r);
-    if (lowTempRegister)
-    {
-        if (code < 256UL) code = 256UL;
-        code -= 256UL;
-    }
-    if (code > 255UL) code = 255UL;
-    return (uint8_t)code;
-}
-
-static uint16_t Bms3520_SenseMvFromA10(uint16_t currentA10)
-{
-    uint32_t numerator = (uint32_t)currentA10 * (uint32_t)CS_Res;
-    uint32_t denominator = 10UL * (uint32_t)CS_Res_Num;
-    return (uint16_t)((numerator + denominator / 2UL) / denominator);
-}
-
-static uint32_t Bms3520_SenseUvFromA10(uint16_t currentA10)
-{
-    uint32_t numerator = (uint32_t)currentA10 * 100UL * (uint32_t)CS_Res;
-    return (numerator + (uint32_t)CS_Res_Num / 2UL) / (uint32_t)CS_Res_Num;
-}
-
-static uint8_t Bms3520_ShortMultiplierCode(uint16_t shortA10, uint8_t ocd2Code)
-{
-    static const uint8_t multipliers[4] = {2U, 3U, 4U, 6U};
-    uint16_t ocd2Mv = (uint16_t)((uint16_t)(ocd2Code + 1U) * 10U);
-    uint16_t targetMv = Bms3520_SenseMvFromA10(shortA10);
-    uint8_t code = 0U;
-    uint8_t i;
-    for (i = 0U; i < 4U; ++i)
-    {
-        if ((uint16_t)(ocd2Mv * multipliers[i]) <= targetMv) code = i;
-        else break;
-    }
-    return code;
-}
-
 uint8_t Bms3520_BuildAfeConfig(AFE3520_REG_CONFIG *cfg)
 {
-    uint8_t ovHi, ovLo, uvHi, uvLo;
-    uint8_t ocd1Code, ocd2Code, occCode;
-    uint8_t ocd1Delay, occDelay;
-    uint16_t ocd2DelayMs;
-    uint8_t ocd2DelayCode;
-    uint16_t shortDelayUs;
-    uint8_t shortDelayCode;
-
-    if (cfg == 0) return 0U;
+    static const int16_t values[AFE3520_CONFIG_LENGTH] = AFE3520_CONFIG_VALUES;
+    uint8_t i;
+    if ((cfg == 0) || (SeriesNum < 5U) || (SeriesNum > AFE3520_CELL_MAX)) return 0U;
     memset(cfg, 0, sizeof(*cfg));
-
-    if (!Afe3520_EncodeOvUvMv(AFE_Parameters_RS485_Struction.u16VcellOvp.curValue, &ovHi, &ovLo)) return 0U;
-    if (!Afe3520_EncodeOvUvMv(AFE_Parameters_RS485_Struction.u16VcellUvp.curValue, &uvHi, &uvLo)) return 0U;
-
-    cfg->sconf1 = AFE3520_MODE_NORMAL;
-    /* Pump enabled, MOS command bits initially off; final state comes from arbiter. */
-    cfg->sconf2 = AFE3520_SCONF2_PUMP_EN;
-    /* Enable OWD engine, load-connect wake and charger wake. */
-    cfg->sconf3 = 0x52U;
-    /* SCONF4 is the plain cell-count field on the working reference board. */
-    cfg->sconf4 = (uint8_t)((SeriesNum > AFE3520_CELL_MAX) ?
-                            AFE3520_CELL_MAX : SeriesNum);
-    cfg->sconf5 = (uint8_t)(AFE3520_SCONF5_MOS_EN | AFE3520_SCONF5_OCC_EN |
-                            AFE3520_SCONF5_CADC_EN | AFE3520_SCONF5_WDT_EN | 0x02U);
-    /* TS1/TS2 are populated by the current board; all fast voltage/current protections enabled. */
-    cfg->sconf6 = (uint8_t)(AFE3520_SCONF6_TS1_EN | AFE3520_SCONF6_TS2_EN |
-                            AFE3520_SCONF6_SC_EN | AFE3520_SCONF6_OCD_EN |
-                            AFE3520_SCONF6_UV_EN | AFE3520_SCONF6_OV_EN);
-    cfg->sconf7 = 0x04U;
-    cfg->alarmh = 0x03U; /* VADC + CADC completion. */
-    cfg->alarml = 0xFFU; /* Wake/WDT/OWD/temp/OCC/OCD/UV/OV. */
-
-    cfg->ovtOvh = (uint8_t)((Afe3520_PickDelayCode(s_ovDelayMs, 8U,
-                         (uint16_t)(AFE_Parameters_RS485_Struction.u16VcellOvp_Filter.curValue * 10U)) << 4) | ovHi);
-    cfg->ovl = ovLo;
-    cfg->uvtUvh = (uint8_t)((Afe3520_PickDelayCode(s_uvDelayMs, 8U,
-                         (uint16_t)(AFE_Parameters_RS485_Struction.u16VcellUvp_Filter.curValue * 10U)) << 4) | uvHi);
-    cfg->uvl = uvLo;
-
-    ocd1Code = Afe3520_EncodeOcd1Mv(Bms3520_SenseMvFromA10(AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue));
-    ocd1Delay = Afe3520_PickDelayCode(s_ocDelayMs, 8U,
-                       (uint16_t)(AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_First.curValue * 10U));
-    cfg->ocd1 = (uint8_t)((ocd1Delay << 4) | ocd1Code);
-
-    ocd2Code = Afe3520_EncodeOcd2Mv(Bms3520_SenseMvFromA10(AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue));
-    ocd2DelayMs = (uint16_t)(AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10U);
-    if (ocd2DelayMs <= 25U) ocd2DelayCode = 0U;
-    else
+    for (i = 0U; i < AFE3520_CONFIG_LENGTH; ++i)
     {
-        uint16_t code = (uint16_t)((ocd2DelayMs - 25U + 12U) / 25U);
-        ocd2DelayCode = (uint8_t)((code > 15U) ? 15U : code);
+        if (values[i] == AFE3520_CONFIG_KEEP) continue;
+        if ((values[i] < 0) || (values[i] > 255)) return 0U;
+        cfg->value[i] = (uint8_t)values[i];
+        cfg->writeMask |= 1UL << i;
     }
-    cfg->ocd2 = (uint8_t)((ocd2DelayCode << 4) | ocd2Code);
-
-    shortDelayUs = AFE_Parameters_RS485_Struction.u16CBC_DelayT.curValue;
-    shortDelayCode = (uint8_t)((shortDelayUs + 16U) / 32U);
-    if (shortDelayCode > 15U) shortDelayCode = 15U;
-    cfg->sc = (uint8_t)((Bms3520_ShortMultiplierCode(AFE_Parameters_RS485_Struction.u16CBC_Cur_DSG.curValue,
-                                                     ocd2Code) << 4) | shortDelayCode);
-
-    occCode = Afe3520_EncodeOccUv(Bms3520_SenseUvFromA10(AFE_Parameters_RS485_Struction.u16IchgOcp_Second.curValue));
-    occDelay = Afe3520_PickDelayCode(s_ocDelayMs, 8U,
-                      (uint16_t)(AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10U));
-    cfg->occ = (uint8_t)((occDelay << 5) | occCode);
-
-    cfg->otc = Bms3520_NtcCodeFromEncoded(AFE_Parameters_RS485_Struction.u16TChgOTp.curValue, 0U);
-    cfg->otd = Bms3520_NtcCodeFromEncoded(AFE_Parameters_RS485_Struction.u16TdischgOTp.curValue, 0U);
-    cfg->utc = Bms3520_NtcCodeFromEncoded(AFE_Parameters_RS485_Struction.u16TchgUTp.curValue, 1U);
-    cfg->utd = Bms3520_NtcCodeFromEncoded(AFE_Parameters_RS485_Struction.u16TdischgUTp.curValue, 1U);
+    cfg->value[AFE3520_REG_SCONF4 - AFE3520_REG_SCONF1] = SeriesNum;
     return 1U;
 }
 
@@ -190,6 +83,7 @@ uint8_t Bms3520_ApplyAndVerifyAfeConfig(void)
         s_prot.configValid = 0U;
         return 0U;
     }
+    GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
     if (Afe3520_ApplyConfig(&cfg) != AFE3520_OK)
     {
         s_prot.configValid = 0U;
@@ -341,7 +235,6 @@ static void Bms3520_UpdateHardwareProtection(const AFE3520_SNAPSHOT *snap)
     if (snap->flag2 & (AFE3520_FLAG2_UTD | AFE3520_FLAG2_OTD)) dsg |= AFE3520_BLOCK_DSG_HW_TEMP;
     if (snap->flag1 & AFE3520_FLAG1_SC) global |= AFE3520_BLOCK_GLOBAL_SHORT;
     if (snap->flag2 & AFE3520_FLAG2_WDT) global |= AFE3520_BLOCK_GLOBAL_WDT;
-    if ((snap->flag2 & AFE3520_FLAG2_OWD) && (snap->openWireMask != 0U)) global |= AFE3520_BLOCK_GLOBAL_OPEN_WIRE;
     if (snap->internalTempDeciC >= 1050) global |= AFE3520_BLOCK_GLOBAL_INTERNAL_TEMP;
 
     s_prot.chargeBlocks = (s_prot.chargeBlocks & (AFE3520_BLOCK_CHG_SW_OV | AFE3520_BLOCK_CHG_SW_OCP | AFE3520_BLOCK_CHG_SW_TEMP)) | chg;
@@ -389,7 +282,6 @@ static void Bms3520_TryRecoverHardware(const AFE3520_SNAPSHOT *snap)
     if (snap->flag1 & AFE3520_FLAG1_SC) clear1 |= AFE3520_FLAG1_SC;
     if (snap->flag1 & AFE3520_FLAG1_OCC) clear1 |= AFE3520_FLAG1_OCC;
     if (snap->flag2 & AFE3520_FLAG2_WDT) clear2 |= AFE3520_FLAG2_WDT;
-    if ((snap->flag2 & AFE3520_FLAG2_OWD) && (snap->openWireMask == 0U)) clear2 |= AFE3520_FLAG2_OWD;
     if (snap->flag2 & (AFE3520_FLAG2_UTC | AFE3520_FLAG2_OTC | AFE3520_FLAG2_UTD | AFE3520_FLAG2_OTD))
         clear2 |= (uint8_t)(snap->flag2 & (AFE3520_FLAG2_UTC | AFE3520_FLAG2_OTC | AFE3520_FLAG2_UTD | AFE3520_FLAG2_OTD));
     (void)Afe3520_ClearFlags(clear1, clear2);
@@ -430,37 +322,38 @@ static void Bms3520_ApplyMosArbitration(void)
 {
     uint8_t charge = s_prot.requestedCharge;
     uint8_t discharge = s_prot.requestedDischarge;
-    uint8_t reverseDischarge = (g_stCellInfoReport.u16IDischg >= BMS3520_REVERSE_CURRENT_A10) ? 1U : 0U;
-    uint8_t reverseCharge = (g_stCellInfoReport.u16Ichg >= BMS3520_REVERSE_CURRENT_A10) ? 1U : 0U;
+    const AFE3520_SNAPSHOT *snap;
+    uint8_t reverseDischarge = (g_stCellInfoReport.u16IDischg >= BMS3520_REVERSE_CURRENT_A10);
+    uint8_t reverseCharge = (g_stCellInfoReport.u16Ichg >= BMS3520_REVERSE_CURRENT_A10);
 
-    if (s_prot.globalBlocks != 0U)
+    if ((s_prot.globalBlocks != 0U) || !s_prot.configValid)
     {
         charge = 0U;
         discharge = 0U;
-        MCUO_AFE_CTLC = 0U;
     }
     else
     {
-        MCUO_AFE_CTLC = 1U;
         if ((s_prot.chargeBlocks != 0U) && !reverseDischarge) charge = 0U;
         if ((s_prot.dischargeBlocks != 0U) && !reverseCharge) discharge = 0U;
     }
 
-    if ((charge != s_prot.actualCharge) || (discharge != s_prot.actualDischarge))
+    /* Reissue commands after every sample/reconfiguration; a successful old
+     * command is not proof that hardware still has that state after reset.
+     * PB14 follows the charge command, exactly as reference GPIO_M_CCC. */
+    if (!charge) GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
+    if (Afe3520_SetMos(charge, discharge, 0U) != AFE3520_OK)
     {
-        if (Afe3520_SetMos(charge, discharge, 0U) == AFE3520_OK)
-        {
-            s_prot.actualCharge = charge;
-            s_prot.actualDischarge = discharge;
-            SystemRuntime_SetMosStatus(charge, discharge);
-        }
-        else
-        {
-            s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
-            MCUO_AFE_CTLC = 0U;
-            System_ERROR_UserCallback(ERROR_AFE1);
-        }
+        s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
+        GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
+        System_ERROR_UserCallback(ERROR_AFE1);
+        return;
     }
+    GPIO_WriteBit(GPIO_M_CCC, PIN_M_CCC, charge ? Bit_SET : Bit_RESET);
+    snap = Afe3520_GetSnapshot();
+    s_prot.actualCharge = ((snap->bstatus1 & AFE3520_BSTATUS1_CHG_FET) &&
+                           GPIO_ReadOutputDataBit(GPIO_M_CCC, PIN_M_CCC)) ? 1U : 0U;
+    s_prot.actualDischarge = (snap->bstatus1 & AFE3520_BSTATUS1_DSG_FET) ? 1U : 0U;
+    SystemRuntime_SetMosStatus(s_prot.actualCharge, s_prot.actualDischarge);
 }
 
 void Bms3520_ProtectionInit(void)
@@ -468,11 +361,11 @@ void Bms3520_ProtectionInit(void)
     memset(&s_prot, 0, sizeof(s_prot));
     memset(s_swCnt, 0, sizeof(s_swCnt));
     memset(s_swRcvCnt, 0, sizeof(s_swRcvCnt));
-    memset(s_faultLogLatch, 0, sizeof(s_faultLogLatch));
+    s_hwStableCnt = 0U;
     s_prot.requestedCharge = 0U;
     s_prot.requestedDischarge = 0U;
     s_prot.globalBlocks = AFE3520_BLOCK_GLOBAL_AFE_CONFIG;
-    MCUO_AFE_CTLC = 0U;
+    GPIO_ResetBits(GPIO_M_CCC, PIN_M_CCC);
 }
 
 void Bms3520_ProtectionService(void)
@@ -497,6 +390,13 @@ void Bms3520_ProtectionService(void)
         if (!Bms3520_ApplyAndVerifyAfeConfig())
         {
             s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_CONFIG;
+            Bms3520_ApplyMosArbitration();
+            return;
+        }
+        if (Afe3520_Service() != AFE3520_OK)
+        {
+            s_prot.globalBlocks |= AFE3520_BLOCK_GLOBAL_AFE_COMM;
+            System_ERROR_UserCallback(ERROR_AFE1);
             Bms3520_ApplyMosArbitration();
             return;
         }
@@ -536,14 +436,7 @@ void AFE_Sleep(void) { (void)Afe3520_EnterSleep(); }
 void AFE_IDLE(void) { (void)Afe3520_EnterIdle(); }
 void AFE_SHIP(void)
 {
-    /* Current F103 board reference uses PA10 as SHIP. Active-low per CV1.0A. */
-    GPIO_InitTypeDef gpio;
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-    gpio.GPIO_Pin = GPIO_Pin_10;
-    gpio.GPIO_Speed = GPIO_Speed_2MHz;
-    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_Init(GPIOA, &gpio);
-    GPIO_ResetBits(GPIOA, GPIO_Pin_10);
+    /* Reference board has no software-driven SHIP GPIO. */
 }
 UINT32 AFE_CalcuVbat(void)
 {

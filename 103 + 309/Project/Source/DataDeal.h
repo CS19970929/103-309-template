@@ -177,7 +177,5 @@ extern UINT32 g_u32CS_Res_AFE;
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
 UINT32 AfeCurrent_GetSeq(void);
-void open_ctlc(void);
-void close_ctlc(void);
 
 #endif	/* DATADEAL_SYS_H */

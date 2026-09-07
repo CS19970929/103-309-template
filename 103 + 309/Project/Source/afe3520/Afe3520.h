@@ -93,11 +93,14 @@
 #define AFE3520_FLAG2_CADC                 0x01U
 #define AFE3520_FLAG2_VADC                 0x02U
 #define AFE3520_FLAG2_WDT                  0x04U
-#define AFE3520_FLAG2_OWD                  0x08U
+#define AFE3520_FLAG2_RST2                 0x08U
 #define AFE3520_FLAG2_UTC                  0x10U
 #define AFE3520_FLAG2_OTC                  0x20U
 #define AFE3520_FLAG2_UTD                  0x40U
 #define AFE3520_FLAG2_OTD                  0x80U
+
+#define AFE3520_BSTATUS1_CHG_FET            0x01U
+#define AFE3520_BSTATUS1_DSG_FET            0x02U
 
 #define AFE3520_BSTATUS2_BAL                0x08U
 #define AFE3520_BSTATUS2_IDLE               0x10U
@@ -162,29 +165,11 @@ typedef struct
     AFE3520_RESULT lastError;
 } AFE3520_DIAG;
 
+#define AFE3520_CONFIG_LENGTH 21U
 typedef struct
 {
-    uint8_t sconf1;
-    uint8_t sconf2;
-    uint8_t sconf3;
-    uint8_t sconf4;
-    uint8_t sconf5;
-    uint8_t sconf6;
-    uint8_t sconf7;
-    uint8_t alarmh;
-    uint8_t alarml;
-    uint8_t ovtOvh;
-    uint8_t ovl;
-    uint8_t uvtUvh;
-    uint8_t uvl;
-    uint8_t ocd1;
-    uint8_t ocd2;
-    uint8_t sc;
-    uint8_t occ;
-    uint8_t otc;
-    uint8_t otd;
-    uint8_t utc;
-    uint8_t utd;
+    uint8_t value[AFE3520_CONFIG_LENGTH];
+    uint32_t writeMask; /* Bit i: explicitly configure register 0x40+i. */
 } AFE3520_REG_CONFIG;
 
 typedef struct
@@ -221,18 +206,10 @@ AFE3520_RESULT Afe3520_SetBalance(uint32_t mask);
 AFE3520_RESULT Afe3520_EnterIdle(void);
 AFE3520_RESULT Afe3520_EnterSleep(void);
 AFE3520_RESULT Afe3520_EnterPowerDown(void);
-AFE3520_RESULT Afe3520_TriggerOpenWire(void);
 const AFE3520_SNAPSHOT *Afe3520_GetSnapshot(void);
 const AFE3520_DIAG *Afe3520_GetDiag(void);
 uint8_t Afe3520_IsReady(void);
 uint8_t Afe3520_ConfigDirty(void);
 void Afe3520_MarkConfigDirty(void);
-
-/* Physical conversion/config helpers. */
-uint8_t Afe3520_EncodeOvUvMv(uint16_t mv, uint8_t *hi2, uint8_t *lo8);
-uint8_t Afe3520_PickDelayCode(const uint16_t *table, uint8_t count, uint16_t targetMs);
-uint8_t Afe3520_EncodeOcd1Mv(uint16_t senseMv);
-uint8_t Afe3520_EncodeOcd2Mv(uint16_t senseMv);
-uint8_t Afe3520_EncodeOccUv(uint32_t senseUv);
 
 #endif /* AFE3520_H */

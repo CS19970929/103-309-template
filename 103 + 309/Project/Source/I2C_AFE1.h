@@ -10,34 +10,8 @@
 #define AFE_ID                  0x35U
 #define E2PROM_ID               0xA0U
 
-/* Legacy names used by generic DataDeal.c are mapped to SH3673520 RAM. */
-#define MTP_CONF                AFE3520_REG_SCONF1
-#define MTP_BALANCEH            AFE3520_REG_BALANCEH
-#define MTP_BALANCEL            AFE3520_REG_BALANCEL
-#define MTP_BSTATUS1            AFE3520_REG_BSTATUS1
-#define MTP_BSTATUS2            AFE3520_REG_BSTATUS2
-#define MTP_BSTATUS3            AFE3520_REG_BSTATUS1
-#define MTP_TEMP1               AFE3520_REG_TEMP1H
-#define MTP_TEMP2               (AFE3520_REG_TEMP1H + 2U)
-#define MTP_TEMP3               (AFE3520_REG_TEMP1H + 4U)
-#define MTP_CUR                 AFE3520_REG_CURH
-#define MTP_CELL1               AFE3520_REG_CELL1H
-#define MTP_ADC2                AFE3520_REG_CADCDH
-#define MTP_BFLAG1              AFE3520_REG_FLAG1
-#define MTP_BFLAG2              AFE3520_REG_FLAG2
-#define MTP_RSTSTAT             AFE3520_REG_FLAG1
-
-/* Old temperature-ROM aliases are intentionally unsupported; 3520 temperature
- * thresholds live in RAM 0x51..0x54 and are rebuilt from the unified parameter image. */
-#define MTP_OTC                 AFE3520_REG_OTC
-#define MTP_OTCR                AFE3520_REG_OTC
-#define MTP_UTC                 AFE3520_REG_UTC
-#define MTP_UTCR                AFE3520_REG_UTC
-#define MTP_OTD                 AFE3520_REG_OTD
-#define MTP_OTDR                AFE3520_REG_OTD
-#define MTP_UTD                 AFE3520_REG_UTD
-#define MTP_UTDR                AFE3520_REG_UTD
-#define MTP_TR                  AFE3520_REG_TEMPIH
+/* DataDeal current adapter is the only remaining register alias. */
+#define MTP_ADC2 AFE3520_REG_CADCDH
 
 typedef struct _AFEDATA_
 {
