@@ -22,6 +22,9 @@ void Runtime_Boot(void)
 
 	InitData_SOC();
 
+	/* Seed requests once; the first protected sample decides actual MOS state. */
+	MosStartup_ApplyInitialState();
+
 	InitTimer();
 	__enable_irq();
 

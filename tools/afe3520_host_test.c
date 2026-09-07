@@ -326,6 +326,16 @@ int main(void)
     before=write_count[0x40]; MosStartup_ApplyInitialState();
     assert(write_count[0x40]==before && (ram[0x41]&3)==3);
     CHECK_CASE("MOS startup does not overwrite SCONF1");
+    healthy();
+    assert(!s_prot.requestedCharge && !s_prot.requestedDischarge);
+    MosStartup_ApplyInitialState();
+    assert(s_prot.requestedCharge && s_prot.requestedDischarge && !(ram[0x41]&3));
+    Bms3520_Service200ms();
+    assert((ram[0x41]&3)==3 && reported_chg && reported_dsg);
+    Bms3520_RequestMos(GPIO_DSG,0); Bms3520_Service200ms();
+    assert(!s_prot.requestedDischarge && !reported_dsg);
+    CHECK_CASE("boot seeds requests before first service, waits for protection, never overrides later manual-off");
+
     healthy(); Bms3520_Service200ms();
     Bms3520_RequestMos(GPIO_CHG,1); Bms3520_RequestMos(GPIO_DSG,1);
     ram[0x59]|=4; Bms3520_Service200ms();

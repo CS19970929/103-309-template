@@ -30,6 +30,11 @@ def main():
         assert not re.search(r"SH367309|I2C_AFE|MTPRead|MTPWrite|bq76xx|AFE_TYPE", content), path
         assert not re.search(r'#include\s+"[^"\n]+\.c"', content), path
     print("PASS: both Keil targets directly compile unique 3520 sources; obsolete sources absent")
+    runtime = (SRC / "Runtime.c").read_bytes().decode("latin1")
+    boot, loop = runtime.split("void Runtime_RunOnce", 1)
+    assert boot.count("MosStartup_ApplyInitialState();") == 1
+    assert boot.index("Afe3520_AppInit();") < boot.index("MosStartup_ApplyInitialState();") < boot.index("__enable_irq();")
+    assert "MosStartup_ApplyInitialState" not in loop
     OUT.mkdir(parents=True, exist_ok=True)
     cc = shutil.which("cl") or shutil.which("gcc") or shutil.which("clang")
     if not cc:
