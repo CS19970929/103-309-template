@@ -180,6 +180,7 @@ static void EEPROM_BuildConfig(BMS_CONFIG *config)
 		config->calibB[i] = g_i16CalibCoefB[i];
 	}
 	memcpy(config->other, &OtherElement, sizeof(config->other));
+    Bms3520_EncodeHardware(Bms3520_GetHardwareConfig(),config->reserved);
 }
 
 static UINT8 EEPROM_ConfigAfeIsValid(const BMS_CONFIG *config)
@@ -213,11 +214,13 @@ static UINT8 EEPROM_ConfigCalibrationIsValid(const BMS_CONFIG *config)
 
 static UINT8 EEPROM_ConfigIsValid(const BMS_CONFIG *config)
 {
+    BMS3520_HARDWARE_CONFIG hw;
 	if ((config == 0) ||
 		(config->u16FormatVersion != FLASH_STORAGE_CONFIG_FORMAT_VERSION))
 	{
 		return 0U;
 	}
+    if (config->reserved[0]!=0xFFFFU && !Bms3520_DecodeHardware(config->reserved,&hw)) return 0U;
 	if (!EEPROM_ConfigAfeIsValid(config))
 	{
 		return 0U;
@@ -293,6 +296,14 @@ UINT8 EEPROM_ConfigEditSetOtherWord(UINT16 index, UINT16 value)
 	return 1U;
 }
 
+UINT8 EEPROM_ConfigEditSetHardware(const UINT16 words[24])
+{
+    BMS3520_HARDWARE_CONFIG cfg;
+    if (!Bms3520_DecodeHardware(words,&cfg)) return 0U;
+    memcpy(s_stConfigScratch.reserved,words,sizeof(s_stConfigScratch.reserved));
+    return 1U;
+}
+
 UINT8 EEPROM_ConfigEditCommit(void)
 {
 	UINT8 result;
@@ -331,6 +342,8 @@ static void EEPROM_ApplyConfig(const BMS_CONFIG *config)
 	}
 	memcpy(&OtherElement, config->other, sizeof(OtherElement));
 
+    if (!Bms3520_RestoreHardware(config->reserved))
+        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 	s_u16ConfigPolicyVersion = config->u16AppliedPolicyVersion;
 	BmsParam_ApplyRuntime();
 }

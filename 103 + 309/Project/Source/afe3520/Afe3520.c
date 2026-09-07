@@ -91,7 +91,9 @@ static void Afe3520_TimerStart(void)
     s_timerHz = timerClock / divider;
     s_cpuMHz = (clocks.HCLK_Frequency + 999999U) / 1000000U;
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
-    TIM_DeInit(TIM4);
+    /* SPL TIM_DeInit(TIM4) is exactly this reset pair. */
+    RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM4, ENABLE);
+    RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM4, DISABLE);
     TIM_SetAutoreload(TIM4, 65535U);
     TIM_PrescalerConfig(TIM4, (uint16_t)(divider - 1U), TIM_PSCReloadMode_Immediate);
     TIM_SetCounter(TIM4, 0U);

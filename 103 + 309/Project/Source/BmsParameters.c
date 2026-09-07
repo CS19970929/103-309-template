@@ -10,9 +10,6 @@ BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
 
 static uint8_t Bms3520_ParamImageValid(const BMS_PARAMETERS *p)
 {
-    uint32_t dsg1SenseMv;
-    uint32_t dsg2SenseMv;
-    uint32_t chg2SenseUv;
     uint16_t i;
 
     if (p == 0) return 0U;
@@ -25,29 +22,14 @@ static uint8_t Bms3520_ParamImageValid(const BMS_PARAMETERS *p)
 
     if (p->u16VcellOvp_Rcv.curValue >= p->u16VcellOvp.curValue) return 0U;
     if (p->u16VcellUvp_Rcv.curValue <= p->u16VcellUvp.curValue) return 0U;
-    if (p->u16IchgOcp_First.curValue > p->u16IchgOcp_Second.curValue) return 0U;
-    if (p->u16IdsgOcp_First.curValue > p->u16IdsgOcp_Second.curValue) return 0U;
-    if (p->u16CBC_Cur_DSG.curValue < p->u16IdsgOcp_Second.curValue) return 0U;
-
     if (p->u16TChgOTp_Rcv.curValue >= p->u16TChgOTp.curValue) return 0U;
     if (p->u16TchgUTp_Rcv.curValue <= p->u16TchgUTp.curValue) return 0U;
     if (p->u16TdischgOTp_Rcv.curValue >= p->u16TdischgOTp.curValue) return 0U;
     if (p->u16TdischgUTp_Rcv.curValue <= p->u16TdischgUTp.curValue) return 0U;
 
-    if ((p->u16VcellOvp.curValue > 5115U) || (p->u16VcellUvp.curValue > 5115U)) return 0U;
-    if (p->u16CBC_DelayT.curValue > 576U) return 0U;
-
-    dsg1SenseMv = ((uint32_t)p->u16IdsgOcp_First.curValue * CS_Res +
-                   (5UL * CS_Res_Num)) / (10UL * CS_Res_Num);
-    dsg2SenseMv = ((uint32_t)p->u16IdsgOcp_Second.curValue * CS_Res +
-                   (5UL * CS_Res_Num)) / (10UL * CS_Res_Num);
-    chg2SenseUv = ((uint32_t)p->u16IchgOcp_Second.curValue * 100UL * CS_Res +
-                   (CS_Res_Num / 2U)) / CS_Res_Num;
-
-    /* SH3673520 hardware ranges: OCD1<=80mV, OCD2<=160mV, OCC<=44mV approx. */
-    if (dsg1SenseMv > 80UL) return 0U;
-    if (dsg2SenseMv > 160UL) return 0U;
-    if (chg2SenseUv > 44000UL) return 0U;
+    if (p->u16VcellUvp_Rcv.curValue >= p->u16VcellOvp_Rcv.curValue ||
+        p->u16TchgUTp_Rcv.curValue >= p->u16TChgOTp_Rcv.curValue ||
+        p->u16TdischgUTp_Rcv.curValue >= p->u16TdischgOTp_Rcv.curValue) return 0U;
     return 1U;
 }
 
@@ -61,6 +43,7 @@ static void Bms3520_CopyRuntimeValues(BMS_PARAMETERS *dst,
         const BMS_PARAMETER_VALUE *s = (const BMS_PARAMETER_VALUE *)((const UINT8 *)src + (uint32_t)i * sizeof(BMS_PARAMETER_VALUE));
         d->curValue = s->curValue;
     }
+    Bms3520_RestartSoftwareTimers();
 }
 
 UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
@@ -132,7 +115,6 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
     }
 
     Bms3520_CopyRuntimeValues(&g_bmsParameters, &candidate);
-    Afe3520_MarkConfigDirty();
     return 1U;
 }
 
@@ -151,9 +133,16 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
-    BMS_PARAMETERS defaults = BMS_PARAMETERS_DEFAULT;
+    BMS_PARAMETERS defaults = g_bmsParameters;
     UINT16 i;
 
+    /* Reuse immutable defaultValue members instead of a second ROM image. */
+    for (i = 0U; i < BMS_PARAMETER_COUNT; ++i)
+    {
+        BMS_PARAMETER_VALUE *v = (BMS_PARAMETER_VALUE *)((UINT8 *)&defaults +
+            (uint32_t)i * sizeof(BMS_PARAMETER_VALUE));
+        v->curValue = v->defaultValue;
+    }
     if (!Bms3520_ParamImageValid(&defaults))
     {
         System_ERROR_UserCallback(ERROR_EEPROM_STORE);
@@ -170,7 +159,6 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
     if (!EEPROM_ConfigEditCommit()) return 0U;
 
     Bms3520_CopyRuntimeValues(&g_bmsParameters, &defaults);
-    Afe3520_MarkConfigDirty();
     return 1U;
 }
 
@@ -195,5 +183,4 @@ void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s)
 void ReadEEPROM_AFE_Parameters(void)
 {
     /* Unified CONFIG loading in EEPROM.c already populates curValue fields. */
-    Afe3520_MarkConfigDirty();
 }

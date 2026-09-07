@@ -2,6 +2,9 @@
 #include "afe3520/BmsProtection3520.h"
 #include "afe3520/Afe3520Config.h"
 #include <string.h>
+#include <stddef.h>
+typedef char Bms3520_PhysicalWireLayoutCheck[(offsetof(BMS3520_HARDWARE_CONFIG, enableMask) -
+    offsetof(BMS3520_HARDWARE_CONFIG, chgOtOhm) == 32U) ? 1 : -1];
 
 static BMS3520_PROTECTION_STATUS s_prot;
 #if BMS3520_CFG_SW_PROTECTION
@@ -293,43 +296,35 @@ static uint8_t Bms3520_FilterHigh(uint16_t value, uint16_t threshold, uint16_t f
     return 1U;
 }
 
-static uint8_t Bms3520_FilterLow(uint16_t value, uint16_t threshold, uint16_t filter10ms,
-                                 uint16_t *activeCnt, uint16_t *recoverCnt, uint8_t active,
-                                 uint16_t recoverThreshold)
+typedef struct {
+    uint16_t mask;
+    uint8_t threshold, filter, recover, input, discharge, low;
+} BMS3520_SW_RULE;
+#define SW_OFFSET(member) ((uint8_t)offsetof(BMS_PARAMETERS, member))
+enum { SW_MAX_CELL, SW_MIN_CELL, SW_CHG_CURRENT, SW_DSG_CURRENT, SW_MAX_TEMP, SW_MIN_TEMP };
+static const BMS3520_SW_RULE s_swRules[8] = {
+    {AFE3520_BLOCK_CHG_SW_OV, SW_OFFSET(u16VcellOvp), SW_OFFSET(u16VcellOvp_Filter), SW_OFFSET(u16VcellOvp_Rcv), SW_MAX_CELL,0,0},
+    {AFE3520_BLOCK_DSG_SW_UV, SW_OFFSET(u16VcellUvp), SW_OFFSET(u16VcellUvp_Filter), SW_OFFSET(u16VcellUvp_Rcv), SW_MIN_CELL,1,1},
+    {AFE3520_BLOCK_CHG_SW_OCP, SW_OFFSET(u16IchgOcp_First), SW_OFFSET(u16IchgOcp_Filter_First),0,SW_CHG_CURRENT,0,0},
+    {AFE3520_BLOCK_DSG_SW_OCP, SW_OFFSET(u16IdsgOcp_First), SW_OFFSET(u16IdsgOcp_Filter_First),0,SW_DSG_CURRENT,1,0},
+    {0,SW_OFFSET(u16TChgOTp),0,SW_OFFSET(u16TChgOTp_Rcv),SW_MAX_TEMP,0,0},
+    {0,SW_OFFSET(u16TchgUTp),0,SW_OFFSET(u16TchgUTp_Rcv),SW_MIN_TEMP,0,1},
+    {0,SW_OFFSET(u16TdischgOTp),0,SW_OFFSET(u16TdischgOTp_Rcv),SW_MAX_TEMP,1,0},
+    {0,SW_OFFSET(u16TdischgUTp),0,SW_OFFSET(u16TdischgUTp_Rcv),SW_MIN_TEMP,1,1}
+};
+#undef SW_OFFSET
+static uint16_t Bms3520_SwValue(uint8_t offset)
 {
-    if (!active)
-    {
-        if (value <= threshold)
-        {
-            if (++(*activeCnt) >= Bms3520_FilterTicks(filter10ms))
-            {
-                *activeCnt = 0U;
-                *recoverCnt = 0U;
-                return 1U;
-            }
-        }
-        else *activeCnt = 0U;
-        return 0U;
-    }
-    if (value >= recoverThreshold)
-    {
-        if (++(*recoverCnt) >= BMS3520_SW_RECOVERY_STABLE_TICKS)
-        {
-            *recoverCnt = 0U;
-            return 0U;
-        }
-    }
-    else *recoverCnt = 0U;
-    return 1U;
+    return ((const BMS_PARAMETER_VALUE *)((const uint8_t *)&g_bmsParameters+offset))->curValue;
 }
 
 static void Bms3520_UpdateSoftwareProtection(void)
 {
-    uint16_t maxCell = Bms3520_MaxCell();
-    uint16_t minCell = Bms3520_MinCell();
-    uint16_t maxTemp = Bms3520_MaxTempEncoded();
-    uint16_t minTemp = Bms3520_MinTempEncoded();
-    uint8_t active;
+    uint16_t values[6];
+    uint8_t active,i;
+    values[SW_MAX_CELL]=Bms3520_MaxCell(); values[SW_MIN_CELL]=Bms3520_MinCell();
+    values[SW_CHG_CURRENT]=g_stCellInfoReport.u16Ichg; values[SW_DSG_CURRENT]=g_stCellInfoReport.u16IDischg;
+    values[SW_MAX_TEMP]=Bms3520_MaxTempEncoded(); values[SW_MIN_TEMP]=Bms3520_MinTempEncoded();
 #ifdef __SOC_5_PROTECT_
     if (g_stCellInfoReport.SocElement.u16Soc <= 5U &&
         g_stCellInfoReport.u16Ichg < BMS3520_REVERSE_CURRENT_A10)
@@ -345,55 +340,27 @@ static void Bms3520_UpdateSoftwareProtection(void)
     }
 #endif
 
-    active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OV) ? 1U : 0U;
-    if (Bms3520_FilterHigh(maxCell, g_bmsParameters.u16VcellOvp.curValue,
-                           g_bmsParameters.u16VcellOvp_Filter.curValue,
-                           &s_swCnt[0], &s_swRcvCnt[0], active,
-                           g_bmsParameters.u16VcellOvp_Rcv.curValue))
-        s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_OV;
-    else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_OV;
-
-    active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_UV) ? 1U : 0U;
-    if (Bms3520_FilterLow(minCell, g_bmsParameters.u16VcellUvp.curValue,
-                          g_bmsParameters.u16VcellUvp_Filter.curValue,
-                          &s_swCnt[1], &s_swRcvCnt[1], active,
-                          g_bmsParameters.u16VcellUvp_Rcv.curValue))
-        s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_UV;
-    else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_UV;
-
-    active = (s_prot.chargeBlocks & AFE3520_BLOCK_CHG_SW_OCP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(g_stCellInfoReport.u16Ichg,
-                           g_bmsParameters.u16IchgOcp_First.curValue,
-                           g_bmsParameters.u16IchgOcp_Filter_First.curValue,
-                           &s_swCnt[2], &s_swRcvCnt[2], active,
-                           (uint16_t)(g_bmsParameters.u16IchgOcp_First.curValue * 8U / 10U)))
-        s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_OCP;
-    else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_OCP;
-
-    active = (s_prot.dischargeBlocks & AFE3520_BLOCK_DSG_SW_OCP) ? 1U : 0U;
-    if (Bms3520_FilterHigh(g_stCellInfoReport.u16IDischg,
-                           g_bmsParameters.u16IdsgOcp_First.curValue,
-                           g_bmsParameters.u16IdsgOcp_Filter_First.curValue,
-                           &s_swCnt[3], &s_swRcvCnt[3], active,
-                           (uint16_t)(g_bmsParameters.u16IdsgOcp_First.curValue * 8U / 10U)))
-        s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_OCP;
-    else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_OCP;
-
-    s_tempActive[0] = Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TChgOTp.curValue, 1U,
-                           &s_swCnt[4], &s_swRcvCnt[4], s_tempActive[0],
-                           g_bmsParameters.u16TChgOTp_Rcv.curValue);
-    s_tempActive[1] = Bms3520_FilterLow(minTemp, g_bmsParameters.u16TchgUTp.curValue, 1U,
-                           &s_swCnt[5], &s_swRcvCnt[5], s_tempActive[1],
-                           g_bmsParameters.u16TchgUTp_Rcv.curValue);
+    /* A single evaluator keeps eight protection/recovery counters independent.
+     * Zero filter/recovery offsets select fixed temperature delay / OCP ratio. */
+    for (i=0U; i<8U; ++i)
+    {
+        const BMS3520_SW_RULE *rule=&s_swRules[i];
+        uint16_t threshold=Bms3520_SwValue(rule->threshold);
+        uint16_t recover=rule->recover ? Bms3520_SwValue(rule->recover) : (uint16_t)(threshold*8U/10U);
+        uint16_t filter=rule->filter ? Bms3520_SwValue(rule->filter) : 1U;
+        uint16_t value=values[rule->input];
+        uint32_t *blocks=rule->discharge ? &s_prot.dischargeBlocks : &s_prot.chargeBlocks;
+        active=i<4U ? ((*blocks & rule->mask)!=0U) : s_tempActive[i-4U];
+        if (rule->low) { value=(uint16_t)~value; threshold=(uint16_t)~threshold; recover=(uint16_t)~recover; }
+        active=Bms3520_FilterHigh(value,threshold,filter,&s_swCnt[i],&s_swRcvCnt[i],active,recover);
+        if (i<4U)
+        {
+            if (active) *blocks |= rule->mask; else *blocks &= ~((uint32_t)rule->mask);
+        }
+        else s_tempActive[i-4U]=active;
+    }
     if (s_tempActive[0] || s_tempActive[1]) s_prot.chargeBlocks |= AFE3520_BLOCK_CHG_SW_TEMP;
     else s_prot.chargeBlocks &= ~AFE3520_BLOCK_CHG_SW_TEMP;
-
-    s_tempActive[2] = Bms3520_FilterHigh(maxTemp, g_bmsParameters.u16TdischgOTp.curValue, 1U,
-                           &s_swCnt[6], &s_swRcvCnt[6], s_tempActive[2],
-                           g_bmsParameters.u16TdischgOTp_Rcv.curValue);
-    s_tempActive[3] = Bms3520_FilterLow(minTemp, g_bmsParameters.u16TdischgUTp.curValue, 1U,
-                           &s_swCnt[7], &s_swRcvCnt[7], s_tempActive[3],
-                           g_bmsParameters.u16TdischgUTp_Rcv.curValue);
     if (s_tempActive[2] || s_tempActive[3]) s_prot.dischargeBlocks |= AFE3520_BLOCK_DSG_SW_TEMP;
     else s_prot.dischargeBlocks &= ~AFE3520_BLOCK_DSG_SW_TEMP;
 
@@ -652,4 +619,58 @@ void Bms3520_SetSystemBlock(uint8_t blocked)
     else s_prot.globalBlocks &= ~AFE3520_BLOCK_GLOBAL_SYSTEM;
     if (blocked) Bms3520_ApplyMosArbitration();
     s_prot.activeAll = Bms3520_GetBlockMask();
+}
+
+void Bms3520_RestartSoftwareTimers(void)
+{
+#if BMS3520_CFG_SW_PROTECTION
+    /* New thresholds need a full observation interval. Existing blocks remain
+     * latched until their own recovery conditions are met under the new profile. */
+    memset(s_swCnt,0,sizeof(s_swCnt));
+    memset(s_swRcvCnt,0,sizeof(s_swRcvCnt));
+#endif
+}
+
+/* Versioned compact wire/Flash image. Physical parameters remain the public API.
+ * 32-bit NTC ohms use low-word then high-word; Modbus bytes are big-endian. */
+void Bms3520_EncodeHardware(const BMS3520_HARDWARE_CONFIG *p, uint16_t w[24])
+{
+    w[0]=BMS3520_HW_SCHEMA_MAGIC; w[1]=BMS3520_HW_SCHEMA_VERSION;
+    w[2]=(uint16_t)((Bms3520_TableCode(p->ovDelayMs,s_normalDelayMs,8U)<<10) | (p->ovMv/5U));
+    w[3]=(uint16_t)((Bms3520_TableCode(p->uvDelayMs,s_uvDelayMs,8U)<<10) | (p->uvMv/5U));
+    w[4]=(uint16_t)((Bms3520_TableCode(p->ocd1DelayMs,s_normalDelayMs,8U)<<4) | (p->ocd1ShuntMv/5U-1U) |
+        (((p->ocd2DelayMs/25U-1U)<<4 | (p->ocd2ShuntMv/10U-1U))<<8));
+    w[5]=(uint16_t)((Bms3520_TableCode(p->scOcd2Multiplier,s_scMultiplier,4U)<<4) |
+        Bms3520_TableCode(p->scDelayUs,s_scDelayUs,16U) |
+        (((Bms3520_TableCode(p->occDelayMs,s_normalDelayMs,8U)<<5) | (p->occShuntUv/1375U-1U))<<8));
+    /* The little-endian MCU stores this physical-unit block without padding.
+     * Keep the layout checked: four uint32 NTC values followed by eight words. */
+    memcpy(&w[6], (const uint8_t *)p + offsetof(BMS3520_HARDWARE_CONFIG, chgOtOhm), 32U);
+    w[22]=(uint16_t)(p->enableMask | (p->occEnable<<8)); w[23]=0U;
+}
+
+uint8_t Bms3520_DecodeHardware(const uint16_t w[24], BMS3520_HARDWARE_CONFIG *p)
+{
+    if (!w || !p || w[0]!=BMS3520_HW_SCHEMA_MAGIC || w[1]!=BMS3520_HW_SCHEMA_VERSION ||
+        (w[2]&0xE000U) || (w[3]&0xE000U) || (w[4]&0x0080U) || (w[5]&0x00C0U) ||
+        (w[22]&0xFE00U) || w[23]) return 0U;
+    p->ovMv=(w[2]&1023U)*5U; p->ovDelayMs=s_normalDelayMs[w[2]>>10];
+    p->uvMv=(w[3]&1023U)*5U; p->uvDelayMs=s_uvDelayMs[w[3]>>10];
+    p->ocd1ShuntMv=((w[4]&15U)+1U)*5U; p->ocd1DelayMs=s_normalDelayMs[(w[4]>>4)&7U];
+    p->ocd2ShuntMv=(((w[4]>>8)&15U)+1U)*10U; p->ocd2DelayMs=((w[4]>>12)+1U)*25U;
+    p->scOcd2Multiplier=s_scMultiplier[(w[5]>>4)&3U]; p->scDelayUs=s_scDelayUs[w[5]&15U];
+    p->occShuntUv=(((w[5]>>8)&31U)+1U)*1375U; p->occDelayMs=s_normalDelayMs[w[5]>>13];
+    memcpy((uint8_t *)p + offsetof(BMS3520_HARDWARE_CONFIG, chgOtOhm), &w[6], 32U);
+    p->enableMask=w[22]&255U; p->occEnable=w[22]>>8;
+    return Bms3520_ValidateHardwareConfig(p);
+}
+
+uint8_t Bms3520_RestoreHardware(const uint16_t words[24])
+{
+    BMS3520_HARDWARE_CONFIG cfg;
+    /* Legacy erased reserved words are not an instruction to disable protection. */
+    if (words[0]==0xFFFFU) return 1U;
+    if (!Bms3520_DecodeHardware(words,&cfg)) return 0U;
+    s_hwConfig=cfg; Afe3520_MarkConfigDirty();
+    return 1U;
 }

@@ -27,7 +27,7 @@ static uint16_t timer_count, timer_prescaler;
 static unsigned timer_on, timer_clock, timer_stuck, selected_divider;
 void RCC_GetClocksFreq(RCC_ClocksTypeDef *p) { *p=clocks; }
 void RCC_APB1PeriphClockCmd(int p,int on) { assert(p==RCC_APB1Periph_TIM4); timer_clock=on; }
-void TIM_DeInit(int t) { (void)t; timer_count=0; timer_on=0; }
+void RCC_APB1PeriphResetCmd(int t,int on) { assert(t==RCC_APB1Periph_TIM4); if(on) { timer_count=0; timer_on=0; } }
 void TIM_SetAutoreload(int t,uint16_t value) { (void)t; assert(value==65535); }
 void TIM_PrescalerConfig(int t,uint16_t value,int mode) { (void)t; (void)mode; timer_prescaler=value; }
 void TIM_SetCounter(int t,uint16_t value) { (void)t; timer_count=value; }
@@ -37,8 +37,7 @@ enum { IchgOcp_Second, IdischgOcp_Second };
 static void FaultWarnRecord2(int code) { (void)code; }
 UINT8 SeriesNum = 19;
 UINT32 g_u32CS_Res_AFE = CS_Res_Num * 1000U / CS_Res;
-BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
-enum { ERROR_AFE1, ERROR_REMOVE_AFE1 };
+enum { ERROR_AFE1, ERROR_REMOVE_AFE1, ERROR_EEPROM_STORE };
 static int afe_error, reported_chg, reported_dsg;
 static void System_ERROR_UserCallback(int code) { afe_error = (code == ERROR_AFE1); }
 static void SystemRuntime_SetMosStatus(UINT8 c, UINT8 d) { reported_chg=c; reported_dsg=d; }
@@ -51,6 +50,28 @@ static void Delay1ms(UINT16 ms) { (void)ms; }
 #include "../103 + 309/Project/Source/afe3520/Afe3520App.c"
 #include "../103 + 309/Project/Source/afe3520/BmsProtection3520.c"
 #include "../103 + 309/Project/Source/MosStartup.c"
+
+/* Exercise the real software-write path; only persistent media is mocked. */
+struct RS485MSG { uint8_t u16Buffer[64], AckType, ErrorType; };
+enum { RS485_ACK_NEG=1, RS485_ERROR_DATA_INVALID=3, RS485_ERROR_CMD_INVALID=4 };
+static uint16_t saved_soft[24], candidate_soft[24];
+static uint16_t saved_hw[24], candidate_hw[24];
+static unsigned config_saves, config_save_ok=1;
+static void EEPROM_ConfigEditBegin(void) {
+    memcpy(candidate_soft,saved_soft,sizeof(saved_soft));
+    Bms3520_EncodeHardware(Bms3520_GetHardwareConfig(),candidate_hw);
+}
+static uint8_t EEPROM_ConfigEditSetAfeWord(uint16_t index,uint16_t value)
+{ if(index>=24) return 0; candidate_soft[index]=value; return 1; }
+static uint8_t EEPROM_ConfigEditCommit(void)
+{ if(!config_save_ok) return 0; ++config_saves; memcpy(saved_soft,candidate_soft,sizeof(saved_soft)); memcpy(saved_hw,candidate_hw,sizeof(saved_hw)); return 1; }
+static uint8_t EEPROM_ConfigEditSetHardware(const uint16_t words[24]) {
+    BMS3520_HARDWARE_CONFIG p;
+    if(!Bms3520_DecodeHardware(words,&p)) return 0;
+    memcpy(candidate_hw,words,sizeof(candidate_hw)); return 1;
+}
+#include "../103 + 309/Project/Source/BmsParameters.c"
+#include "hardware_handler.inc"
 
 GPIO_TypeDef host_gpioa, host_gpiob;
 static uint8_t ram[256], tx_frame[128], rx_frame[128];
@@ -202,6 +223,78 @@ int main(void)
     assert(ram[0x46]==4 && ram[0x47]==0x57 && ram[0x48]==0xFF && ram[0x4D]==0x39 && ram[0x4F]==7);
     assert(cfg.writeMask == (1UL << AFE3520_CONFIG_LENGTH)-1UL);
     CHECK_CASE("physical-unit defaults explicitly configure all registers");
+    {
+        BMS3520_HARDWARE_CONFIG original=*Bms3520_GetHardwareConfig(), decoded;
+        uint16_t words[24], roundtrip[24];
+        const uint16_t expected[24]={0x3520,1,850,530,0x0339,0x0707,
+            3550,0,1935,0,27513,0,50574,1,4150,2900,50,70,5,65521,1000,5000,0x017F,0};
+        Bms3520_EncodeHardware(&original,words);
+        assert(!memcmp(words,expected,sizeof(words)));
+        assert(Bms3520_DecodeHardware(words,&decoded));
+        Bms3520_EncodeHardware(&decoded,roundtrip);
+        assert(!memcmp(words,roundtrip,sizeof(words)));
+        words[1]=2; assert(!Bms3520_DecodeHardware(words,&decoded)); words[1]=1;
+        words[2]|=0x8000; assert(!Bms3520_DecodeHardware(words,&decoded)); words[2]=850;
+        words[22]|=0x0200; assert(!Bms3520_DecodeHardware(words,&decoded)); words[22]=0x017F;
+        words[23]=1; assert(!Bms3520_DecodeHardware(words,&decoded)); words[23]=0;
+        words[14]=4250; assert(!Bms3520_DecodeHardware(words,&decoded)); words[14]=4150;
+        words[16]=0x8000; assert(!Bms3520_DecodeHardware(words,&decoded)); words[16]=50;
+        memset(words,0xFF,sizeof(words)); assert(Bms3520_RestoreHardware(words));
+        assert(!memcmp(&original,Bms3520_GetHardwareConfig(),sizeof(original)));
+        original.ovMv=4300; original.scOcd2Multiplier=6; original.scDelayUs=576;
+        original.dsgUtOhm=123456; original.recoveryMs=6000;
+        Bms3520_EncodeHardware(&original,words); assert(Bms3520_RestoreHardware(words));
+        Bms3520_EncodeHardware(Bms3520_GetHardwareConfig(),roundtrip);
+        assert(!memcmp(words,roundtrip,sizeof(words)));
+        assert(Bms3520_RestoreHardware(expected));
+    }
+    CHECK_CASE("versioned hardware image: golden vector, lossless roundtrip, reserved bits, hysteresis, legacy restore");
+    {
+        struct RS485MSG request={0};
+        BMS_PARAMETERS original=g_bmsParameters;
+        BMS3520_HARDWARE_CONFIG hw=*Bms3520_GetHardwareConfig();
+        uint8_t dirty=Afe3520_ConfigDirty();
+        assert(Bms3520_ParamImageValid(&g_bmsParameters));
+        request.u16Buffer[2]=0x24; request.u16Buffer[5]=24; request.u16Buffer[6]=48;
+        for(i=0;i<24;i++) {
+            uint16_t v=AfeParam_AtConst((UINT16)i)->curValue;
+            request.u16Buffer[7+2*i]=(uint8_t)(v>>8); request.u16Buffer[8+2*i]=(uint8_t)v;
+        }
+        assert(Sci_WrRegs_0x10_AFE_Parameters(0,&request) && !request.AckType && config_saves==1);
+        request.u16Buffer[7]=0x0E; request.u16Buffer[8]=0xD8; /* 3800 mV */
+        config_save_ok=0; Sci_WrRegs_0x10_AFE_Parameters(0,&request);
+        assert(request.AckType && config_saves==1 && !memcmp(&original,&g_bmsParameters,sizeof(original)));
+        config_save_ok=1; request.AckType=0; Sci_WrRegs_0x10_AFE_Parameters(0,&request);
+        assert(!request.AckType && config_saves==2 && g_bmsParameters.u16VcellOvp.curValue==3800);
+        assert(Afe3520_ConfigDirty()==dirty && !memcmp(&hw,Bms3520_GetHardwareConfig(),sizeof(hw)));
+        request.u16Buffer[9]=0x0F; request.u16Buffer[10]=0xA0; /* recovery 4000 > trigger */
+        Sci_WrRegs_0x10_AFE_Parameters(0,&request); assert(request.AckType && config_saves==2);
+        assert(EEPROM_ResetData_AFE_ParametersToDefault());
+        assert(!memcmp(&original,&g_bmsParameters,sizeof(original)));
+    }
+    CHECK_CASE("software default writes succeed; failed save cannot change runtime; hardware stays independent; reset restores defaults");
+    {
+        struct RS485MSG request={0};
+        BMS3520_HARDWARE_CONFIG original=*Bms3520_GetHardwareConfig(), next=original;
+        uint16_t words[24]; unsigned saves=config_saves;
+        next.ovMv=4300; Bms3520_EncodeHardware(&next,words);
+        request.u16Buffer[2]=0x25;request.u16Buffer[5]=24;request.u16Buffer[6]=48;
+        for(i=0;i<24;i++) {request.u16Buffer[7+2*i]=(uint8_t)(words[i]>>8);request.u16Buffer[8+2*i]=(uint8_t)words[i];}
+        before=frames; config_save_ok=0; Test_WriteHardware(&request);
+        assert(request.AckType && config_saves==saves && frames==before);
+        assert(!memcmp(&original,Bms3520_GetHardwareConfig(),sizeof(original)));
+        config_save_ok=1; request.AckType=0; request.u16Buffer[5]=23; Test_WriteHardware(&request);
+        assert(request.AckType && config_saves==saves && frames==before);
+        request.AckType=0;request.u16Buffer[5]=24;request.u16Buffer[3]=1;Test_WriteHardware(&request);
+        assert(request.AckType && config_saves==saves && frames==before);
+        request.AckType=0;request.u16Buffer[3]=0;corrupt_read_reg=0x4A;Test_WriteHardware(&request);
+        assert(!request.AckType && config_saves==saves+1 && !s_prot.configValid && Afe3520_ConfigDirty());
+        assert(!memcmp(saved_hw,words,sizeof(words)) && Bms3520_GetHardwareConfig()->ovMv==4300);
+        corrupt_read_reg=-1;for(i=0;i<4;i++) Bms3520_Service200ms();
+        assert(s_prot.configValid && !Afe3520_ConfigDirty());
+        Bms3520_SetHardwareConfig(&original);
+    }
+    CHECK_CASE("real hardware write handler rejects partial writes; failed persistence is inert; saved pending config recovers");
     {
         BMS3520_HARDWARE_CONFIG saved=*Bms3520_GetHardwareConfig(), next=saved;
         before=frames; next.ovMv=4251;

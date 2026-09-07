@@ -1,4 +1,5 @@
 #include "main.h"
+#include "afe3520/BmsProtection3520.h"
 #include "FaultSnapshot.h"
 #include "Flash.h"
 #include "BmsParamSchema.h"
@@ -245,7 +246,11 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	u16ActualAddr = t_u16Temp;
 	s->u16RdRegStartAddrActure = t_u16Temp;
 
-	if (t_u16Temp >= RS485_ADDR_RO_START2)
+	if (t_u16Temp >= BMS3520_HW_REGISTER_BASE && t_u16Temp < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
+    {
+        t_u16Temp -= BMS3520_HW_REGISTER_BASE;
+    }
+    else if (t_u16Temp >= RS485_ADDR_RO_START2)
 	{
 		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
 	}
@@ -481,6 +486,9 @@ static UINT8 Sci_RangeOverlaps(UINT16 start, UINT16 count, UINT16 block_start, U
 
 static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 {
+    if (word_count && actual_addr >= BMS3520_HW_REGISTER_BASE && actual_addr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
+    { *word_count=BMS3520_HW_READ_WORDS; return 1U; }
+
 	if (word_count == 0)
 	{
 		return 0U;
@@ -607,6 +615,26 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 #if PROJECT_CFG_HOST_WRITE_ENABLE
 	UINT16 u16SciRegStartAddr;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
+    if (u16SciRegStartAddr >= BMS3520_HW_REGISTER_BASE && u16SciRegStartAddr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
+    {
+        UINT16 words[BMS3520_HW_STORAGE_WORDS], i;
+        BMS3520_HARDWARE_CONFIG cfg;
+        if (u16SciRegStartAddr != BMS3520_HW_REGISTER_BASE || s->u16Buffer[4] ||
+            s->u16Buffer[5]!=BMS3520_HW_STORAGE_WORDS || s->u16Buffer[6]!=2U*BMS3520_HW_STORAGE_WORDS)
+            goto hw_invalid;
+        for (i=0U;i<BMS3520_HW_STORAGE_WORDS;++i)
+            words[i]=(UINT16)((s->u16Buffer[7U+i*2U]<<8) | s->u16Buffer[8U+i*2U]);
+        if (!Bms3520_DecodeHardware(words,&cfg)) goto hw_invalid;
+        EEPROM_ConfigEditBegin();
+        if (!EEPROM_ConfigEditSetHardware(words) || !EEPROM_ConfigEditCommit())
+        { s->AckType=RS485_ACK_NEG; s->ErrorType=RS485_ERROR_CMD_INVALID; return; }
+        /* ACK means saved; read status word25 to confirm hardware apply. */
+        (void)Bms3520_SetHardwareConfig(&cfg);
+        return;
+    hw_invalid:
+        s->AckType=RS485_ACK_NEG; s->ErrorType=RS485_ERROR_DATA_INVALID; return;
+    }
+
 	if (Sci_WrRegs_0x10_AFE_Parameters(u16SciRegStartAddr, s))
 	{
 		return;
@@ -832,6 +860,21 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 static void Sci_BuildReadWindow(UINT16 actual_addr, UINT16 *source_offset, UINT8 buff[])
 {
+    if (actual_addr >= BMS3520_HW_REGISTER_BASE && actual_addr < BMS3520_HW_REGISTER_BASE+BMS3520_HW_READ_WORDS)
+    {
+        UINT16 words[BMS3520_HW_READ_WORDS], i;
+        Bms3520_EncodeHardware(Bms3520_GetHardwareConfig(),words);
+        words[24]=BMS3520_CFG_PROTECTION_MODE;
+        words[25]=(Bms3520_GetProtectionStatus()->configValid ? 1U : 0U) |
+            (Afe3520_ConfigDirty() ? 2U : 0U);
+        words[26]=AFE3520_CFG_COMMON_PORT; words[27]=AFE3520_CFG_WDT_ENABLE;
+        words[28]=AFE3520_CFG_USE_HARDWARE_SPI;
+        words[29]=OtherElement.u16Sys_CS_Res; words[30]=OtherElement.u16Sys_CS_Res_Num;
+        words[31]=BMS_PARAMETER_COUNT;
+        for (i=0U;i<BMS3520_HW_READ_WORDS;++i) { buff[i*2U]=(UINT8)(words[i]>>8); buff[i*2U+1U]=(UINT8)words[i]; }
+        return;
+    }
+
 	if (actual_addr >= RS485_ADDR_RO_START0)
 	{
 		Sci_ACK_0x03_ReadRegs_Data(0, buff);

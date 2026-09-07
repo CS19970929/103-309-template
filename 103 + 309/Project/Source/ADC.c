@@ -99,7 +99,7 @@ void InitADC_DMA(void)
     // 按靓睆SYSCFG_CFGR1的ADC_DMA_RMP佝置�0，ADC扝和Channel1连在�起，�1时和Channel2连在��(ADC覝么Channel1覝么2)
     // 而这�东西我没酝置过，reset值为0，所以丝用�
     DMA_DeInit(DMA1_Channel1);                                               // 选择频靓
-    DMA_StructInit(&DMA_InitStruct);                                         // 初�化DMA结构�
+    /* Every SPL init-structure member is assigned explicitly below. */                                         // 初�化DMA结构�
     DMA_InitStruct.DMA_PeripheralBaseAddr = (UINT32)(&(ADC1->DR));           // 酝置外�地�
     DMA_InitStruct.DMA_MemoryBaseAddr = (UINT32)(&s_adc.raw[0]);     // 设置内存映射地址
     DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralSRC;                          // 数杮传输方坑�0：从外���1：从存储器�
@@ -199,7 +199,7 @@ void InitADC_ADC1(void)
 
     // ADC初�化
     ADC_DeInit(ADC1);                // ADC杢�默认�置
-    ADC_StructInit(&ADC_InitStruct); // 初�化ADC结构�
+    /* Every SPL init-structure member is assigned explicitly below. */ // 初�化ADC结构�
 
     ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;                    // �立模�
     ADC_InitStruct.ADC_ScanConvMode = ENABLE;                          // �杝模�

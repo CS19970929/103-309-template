@@ -27,6 +27,7 @@ UINT8 EEPROM_ConfigEditSetAfeWord(UINT16 index, UINT16 value);
 UINT8 EEPROM_ConfigEditSetProtectWord(UINT16 index, UINT16 value);
 UINT8 EEPROM_ConfigEditSetCalibPair(UINT16 index, UINT16 k_value, INT16 b_value);
 UINT8 EEPROM_ConfigEditSetOtherWord(UINT16 index, UINT16 value);
+UINT8 EEPROM_ConfigEditSetHardware(const UINT16 words[24]);
 UINT8 EEPROM_ConfigEditCommit(void);
 
 #endif /* EEPROM_H */

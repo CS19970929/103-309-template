@@ -701,7 +701,7 @@ static void InitCan_CAN1(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
 	CAN_DeInit(CAN1);
-	CAN_StructInit(&can);
+	/* Every SPL init-structure member is assigned explicitly below. */
 	can.CAN_TTCM = DISABLE;
 	can.CAN_ABOM = ENABLE;
 	can.CAN_AWUM = DISABLE;

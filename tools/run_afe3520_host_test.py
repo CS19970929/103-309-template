@@ -36,13 +36,18 @@ def main():
     assert boot.index("Afe3520_AppInit();") < boot.index("MosStartup_ApplyInitialState();") < boot.index("__enable_irq();")
     assert "MosStartup_ApplyInitialState" not in loop
     OUT.mkdir(parents=True, exist_ok=True)
+    protocol = (SRC / "Sci_Upper.c").read_bytes().decode("latin1").replace("\r\n", "\n")
+    start = protocol.index("\n\tUINT16 u16SciRegStartAddr;", protocol.index("void Sci_Deal_WrRegs_0x10("))
+    end = protocol.index("\n\tif (Sci_WrRegs_0x10_AFE_Parameters", start)
+    hardware_handler = "static void Test_WriteHardware(struct RS485MSG *s)\n{" + protocol[start:end] + "\n}\n"
+    (OUT / "hardware_handler.inc").write_text(hardware_handler, encoding="ascii")
     cc = shutil.which("cl") or shutil.which("gcc") or shutil.which("clang")
     if not cc:
         raise SystemExit("Run from a Visual Studio developer shell, or put gcc/clang on PATH.")
     msvc = Path(cc).name.lower() == "cl.exe"
     for mode, hardware, watchdog, port in ((m,h,w,p) for m in (1,2,3) for h,w in ((0,0),(0,1),(1,0),(1,1)) for p in (0,1)):
         exe = OUT / f"afe3520_mode{mode}_spi{hardware}_wdt{watchdog}_port{port}.exe"
-        includes = [ROOT / "tools/afe3520_test_stubs", SRC]
+        includes = [ROOT / "tools/afe3520_test_stubs", SRC, OUT]
         if msvc:
             cmd = [cc, "/nologo", "/std:c11", "/utf-8", "/W3", "/wd4819",
                    f"/DAFE3520_CFG_COMMON_PORT={port}", f"/DBMS3520_CFG_PROTECTION_MODE={mode}", f"/DAFE3520_CFG_WDT_ENABLE={watchdog}", f"/DAFE3520_CFG_USE_HARDWARE_SPI={hardware}", *[f"/I{p}" for p in includes],

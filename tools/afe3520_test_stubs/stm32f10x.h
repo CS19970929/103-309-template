@@ -81,7 +81,7 @@ void RCC_GetClocksFreq(RCC_ClocksTypeDef *);
 #define TIM4 4
 #define TIM_PSCReloadMode_Immediate 1
 void RCC_APB1PeriphClockCmd(int,int);
-void TIM_DeInit(int);
+void RCC_APB1PeriphResetCmd(int,int);
 void TIM_SetAutoreload(int,uint16_t);
 void TIM_PrescalerConfig(int,uint16_t,int);
 void TIM_SetCounter(int,uint16_t);
