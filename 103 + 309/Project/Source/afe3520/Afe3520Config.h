@@ -15,22 +15,22 @@
 #ifndef AFE3520_CFG_USE_HARDWARE_SPI
 #define AFE3520_CFG_USE_HARDWARE_SPI 1
 #endif
-// <o> SPI1 clock divider (128 or 256); PCLK2=72MHz / 128 = 562.5kHz
-#ifndef AFE3520_CFG_SPI_DIVIDER
-#define AFE3520_CFG_SPI_DIVIDER 128
+// <o> Maximum SPI clock, Hz (hardware divider selected from actual PCLK2)
+#ifndef AFE3520_CFG_SPI_TARGET_HZ
+#define AFE3520_CFG_SPI_TARGET_HZ 500000U
 #endif
-// <o> Maximum flag polls, independent of SysTick/interrupts
-#define AFE3520_CFG_SPI_POLL_LIMIT 4096U
+// <o> Hardware flag timeout, microseconds; TIM4 is reserved by this driver
+#define AFE3520_CFG_SPI_TIMEOUT_US 1000U
 // <o> Good 200ms protection cycles required after a communication fault
 #define AFE3520_CFG_COMM_RECOVERY_TICKS 3U
 // </h>
 #if (AFE3520_CFG_USE_HARDWARE_SPI != 0) && (AFE3520_CFG_USE_HARDWARE_SPI != 1)
 #error "AFE3520_CFG_USE_HARDWARE_SPI must be 0 or 1"
 #endif
-#if (AFE3520_CFG_SPI_DIVIDER != 128) && (AFE3520_CFG_SPI_DIVIDER != 256)
-#error "SPI divider must be 128 or 256"
+#if (AFE3520_CFG_SPI_TARGET_HZ < 10000U) || (AFE3520_CFG_SPI_TARGET_HZ > 500000U)
+#error "SPI target must be 10000..500000 Hz"
 #endif
-#if (AFE3520_CFG_SPI_POLL_LIMIT < 1) || (AFE3520_CFG_COMM_RECOVERY_TICKS < 1)
+#if (AFE3520_CFG_SPI_TIMEOUT_US < 1) || (AFE3520_CFG_SPI_TIMEOUT_US > 5000) || (AFE3520_CFG_COMM_RECOVERY_TICKS < 1)
 #error "Polling and recovery limits must be nonzero"
 #endif
 // <h>Emergency battery preservation (overrides ordinary sleep blockers)

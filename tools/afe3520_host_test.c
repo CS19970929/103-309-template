@@ -22,6 +22,17 @@ static struct {
     HOST_FAULT unMdlFault_Third;
 } g_stCellInfoReport;
 static struct { uint8_t u8ErrFlag_CBC_DSG; } System_ErrFlag;
+static RCC_ClocksTypeDef clocks = {72000000,72000000,36000000,72000000};
+static uint16_t timer_count, timer_prescaler;
+static unsigned timer_on, timer_clock, timer_stuck, selected_divider;
+void RCC_GetClocksFreq(RCC_ClocksTypeDef *p) { *p=clocks; }
+void RCC_APB1PeriphClockCmd(int p,int on) { assert(p==RCC_APB1Periph_TIM4); timer_clock=on; }
+void TIM_DeInit(int t) { (void)t; timer_count=0; timer_on=0; }
+void TIM_SetAutoreload(int t,uint16_t value) { (void)t; assert(value==65535); }
+void TIM_PrescalerConfig(int t,uint16_t value,int mode) { (void)t; (void)mode; timer_prescaler=value; }
+void TIM_SetCounter(int t,uint16_t value) { (void)t; timer_count=value; }
+uint16_t TIM_GetCounter(int t) { (void)t; if(timer_on && !timer_stuck) ++timer_count; return timer_count; }
+void TIM_Cmd(int t,int on) { (void)t; timer_on=on; }
 UINT8 SeriesNum = 19;
 UINT32 g_u32CS_Res_AFE = CS_Res_Num * 1000U / CS_Res;
 BMS_PARAMETERS g_bmsParameters = BMS_PARAMETERS_DEFAULT;
@@ -131,7 +142,10 @@ void SPI_Init(SPI_TypeDef *spi, SPI_InitTypeDef *cfg) {
     assert(cfg->SPI_Direction==SPI_Direction_2Lines_FullDuplex && cfg->SPI_Mode==SPI_Mode_Master);
     assert(cfg->SPI_CPOL==SPI_CPOL_High && cfg->SPI_CPHA==SPI_CPHA_2Edge);
     assert(cfg->SPI_DataSize==SPI_DataSize_8b && cfg->SPI_FirstBit==SPI_FirstBit_MSB);
-    assert(cfg->SPI_NSS==SPI_NSS_Soft && cfg->SPI_BaudRatePrescaler==AFE3520_CFG_SPI_DIVIDER);
+    assert(cfg->SPI_NSS==SPI_NSS_Soft);
+    selected_divider=cfg->SPI_BaudRatePrescaler;
+    assert(clocks.PCLK2_Frequency <= AFE3520_CFG_SPI_TARGET_HZ * selected_divider);
+    assert(selected_divider==2 || clocks.PCLK2_Frequency > AFE3520_CFG_SPI_TARGET_HZ * (selected_divider/2));
 }
 void SPI_Cmd(SPI_TypeDef *spi, int on) { spi->enabled=on; }
 void SPI_NSSInternalSoftwareConfig(SPI_TypeDef *spi, unsigned state) { (void)spi; assert(state==SPI_NSSInternalSoft_Set); }
@@ -305,6 +319,32 @@ int main(void)
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp);
     CHECK_CASE("hot/cold latches recover independently; zero temperature sensor is not ignored");
     SeriesNum=21; assert(!Bms3520_BuildAfeConfig(&cfg));
-    printf("PASS: %u cases, watchdog=%d\n",tests,AFE3520_CFG_WDT_ENABLE);
+    { const uint32_t mhz[]={8,24,48,72}; unsigned n;
+      for(n=0;n<4;n++) {
+        clocks.HCLK_Frequency=mhz[n]*1000000; clocks.PCLK1_Frequency=clocks.HCLK_Frequency/2;
+        clocks.PCLK2_Frequency=clocks.HCLK_Frequency;
+        healthy(); assert(Afe3520_Service()==AFE3520_OK);
+        assert(!timer_on && !timer_clock && s_timerHz<=8000000);
+#if AFE3520_CFG_USE_HARDWARE_SPI
+        assert(selected_divider==(n==0?16:n==1?64:n==2?128:256));
+        clocks.PCLK2_Frequency/=2; assert(Afe3520_Service()==AFE3520_OK);
+        assert(selected_divider==(n==0?8:n==1?32:n==2?64:128));
+#endif
+        Afe3520_TimerStart(); timer_count=65530;
+#if AFE3520_CFG_USE_HARDWARE_SPI
+        { uint16_t before_timeout=timer_count;
+          hw_fault=SPI_I2S_FLAG_RXNE; hw_rx_ready=0;
+          assert(!Afe3520_WaitSpiFlag(SPI_I2S_FLAG_RXNE,SET));
+          assert((uint16_t)(timer_count-before_timeout) >= (s_timerHz/1000));
+          hw_fault=0; s_frameError=AFE3520_OK;
+        }
+#endif
+        Afe3520_SpiDelayUs(10); assert(s_frameError==AFE3520_OK);
+        timer_stuck=1; Afe3520_SpiDelayUs(1); assert(s_frameError==AFE3520_ERR_TIMEOUT);
+        timer_stuck=0; Afe3520_EndFrame();
+      }
+    }
+    CHECK_CASE("8/24/48/72 MHz and changed APB2 adapt per frame; timer wrap and stopped timer remain bounded");
+    printf("PASS: %u cases, watchdog=%d\n", tests, AFE3520_CFG_WDT_ENABLE);
     return 0;
 }

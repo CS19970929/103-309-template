@@ -51,6 +51,11 @@ typedef struct {
 #define SPI_CPOL_High 4
 #define SPI_CPHA_2Edge 5
 #define SPI_NSS_Soft 6
+#define SPI_BaudRatePrescaler_2 2
+#define SPI_BaudRatePrescaler_4 4
+#define SPI_BaudRatePrescaler_8 8
+#define SPI_BaudRatePrescaler_16 16
+#define SPI_BaudRatePrescaler_32 32
 #define SPI_BaudRatePrescaler_64 64
 #define SPI_BaudRatePrescaler_128 128
 #define SPI_BaudRatePrescaler_256 256
@@ -70,4 +75,16 @@ void SPI_NSSInternalSoftwareConfig(SPI_TypeDef *, unsigned);
 FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef *, uint16_t);
 void SPI_I2S_SendData(SPI_TypeDef *, uint16_t);
 uint16_t SPI_I2S_ReceiveData(SPI_TypeDef *);
+typedef struct { uint32_t SYSCLK_Frequency, HCLK_Frequency, PCLK1_Frequency, PCLK2_Frequency; } RCC_ClocksTypeDef;
+void RCC_GetClocksFreq(RCC_ClocksTypeDef *);
+#define RCC_APB1Periph_TIM4 8
+#define TIM4 4
+#define TIM_PSCReloadMode_Immediate 1
+void RCC_APB1PeriphClockCmd(int,int);
+void TIM_DeInit(int);
+void TIM_SetAutoreload(int,uint16_t);
+void TIM_PrescalerConfig(int,uint16_t,int);
+void TIM_SetCounter(int,uint16_t);
+uint16_t TIM_GetCounter(int);
+void TIM_Cmd(int,int);
 #endif

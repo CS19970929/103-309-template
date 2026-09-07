@@ -68,8 +68,8 @@ static unsigned primask, stop_calls, clock_restores, inject_wake;
 static unsigned __get_PRIMASK(void) { return primask; }
 static void __disable_irq(void) { primask=1; if(inject_wake) g_irq_t=soc_key; }
 static void __set_PRIMASK(unsigned value) { primask=value; }
-static void RCC_APB1PeriphClockCmd(int a,int b) { (void)a; (void)b; }
-static void TIM_Cmd(int a,int b) { (void)a; (void)b; }
+void RCC_APB1PeriphClockCmd(int a,int b) { (void)a; (void)b; }
+void TIM_Cmd(int a,int b) { (void)a; (void)b; }
 static void TIM_ClearITPendingBit(int a,int b) { (void)a; (void)b; }
 static unsigned emergency_wait;
 static void PWR_EnterSTOPMode(int a,int b) { (void)a; (void)b; assert(primask==1); ++stop_calls; if(emergency_wait) { assert(flags==FLASH_EMERGENCY_SLEEP_VALUE); g_irq_t=stop_calls==1 ? PA0_irq : soc_key; } }

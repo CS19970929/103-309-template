@@ -4,6 +4,7 @@
 #include "conf/conf_gpio.h"
 #include <string.h>
 
+
 /* Reference protocol: Mode 3 SPI, CRC8 poly 0x07/init 0.
  * Write CRC covers CMD+ADDR+DATA; read CRC includes FF+CMD+ADDR+LEN+DATA. */
 #define AFE3520_SPI_DUMMY 0x00U
@@ -71,16 +72,61 @@ static void Afe3520_CsHigh(void)
     GPIO_SetBits(GPIO_CS_SPI, PIN_CS_SPI);
 }
 
+/* TIM4 is exclusively owned by this transport, enabled only inside a frame.
+ * SPL clock reporting reads RCC registers, including HSI fallback and APB divisors. */
+static uint32_t s_timerHz, s_cpuMHz;
+#if AFE3520_CFG_USE_HARDWARE_SPI
+static uint32_t s_spiPclk;
+#endif
+
+static void Afe3520_TimerStart(void)
+{
+    RCC_ClocksTypeDef clocks;
+    uint32_t timerClock, divider;
+    RCC_GetClocksFreq(&clocks);
+    timerClock = clocks.PCLK1_Frequency;
+    if (clocks.PCLK1_Frequency != clocks.HCLK_Frequency) timerClock *= 2U;
+    divider = (timerClock + 7999999U) / 8000000U;
+    if (!divider) divider = 1U;
+    s_timerHz = timerClock / divider;
+    s_cpuMHz = (clocks.HCLK_Frequency + 999999U) / 1000000U;
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+    TIM_DeInit(TIM4);
+    TIM_SetAutoreload(TIM4, 65535U);
+    TIM_PrescalerConfig(TIM4, (uint16_t)(divider - 1U), TIM_PSCReloadMode_Immediate);
+    TIM_SetCounter(TIM4, 0U);
+    TIM_Cmd(TIM4, ENABLE);
+}
+
 static void Afe3520_SpiDelayUs(uint32_t us)
 {
-    volatile uint32_t n = us * 12U;
-    while (n-- != 0U) __NOP();
+    uint16_t start = TIM_GetCounter(TIM4);
+    uint32_t ticks = (uint32_t)(((uint64_t)s_timerHz * us + 999999U) / 1000000U) + 1U;
+    uint32_t guard = s_cpuMHz * us + 128U;
+    while ((uint16_t)(TIM_GetCounter(TIM4) - start) < ticks)
+    {
+        if (!guard--)
+        {
+            s_frameError = AFE3520_ERR_TIMEOUT;
+            ++s_diag.timeoutCount;
+            break;
+        }
+    }
 }
 
 #if AFE3520_CFG_USE_HARDWARE_SPI
 static void Afe3520_HardwareSpiInit(void)
 {
     SPI_InitTypeDef spi;
+    RCC_ClocksTypeDef clocks;
+    static const uint16_t prescalers[] = {SPI_BaudRatePrescaler_2, SPI_BaudRatePrescaler_4,
+        SPI_BaudRatePrescaler_8, SPI_BaudRatePrescaler_16, SPI_BaudRatePrescaler_32,
+        SPI_BaudRatePrescaler_64, SPI_BaudRatePrescaler_128, SPI_BaudRatePrescaler_256};
+    uint32_t index = 0U, divider = 2U;
+    RCC_GetClocksFreq(&clocks);
+    s_spiPclk = clocks.PCLK2_Frequency;
+    while (index < 7U && s_spiPclk > AFE3520_CFG_SPI_TARGET_HZ * divider)
+    { ++index; divider *= 2U; }
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
     /* SPL deinit uses the APB2 reset line: clears stuck BSY, OVR and MODF. */
     SPI_I2S_DeInit(SPI1);
@@ -91,11 +137,7 @@ static void Afe3520_HardwareSpiInit(void)
     spi.SPI_CPOL = SPI_CPOL_High;
     spi.SPI_CPHA = SPI_CPHA_2Edge;
     spi.SPI_NSS = SPI_NSS_Soft;
-#if AFE3520_CFG_SPI_DIVIDER == 128
-    spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_128;
-#else
-    spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_256;
-#endif
+    spi.SPI_BaudRatePrescaler = prescalers[index];
     spi.SPI_FirstBit = SPI_FirstBit_MSB;
     SPI_Init(SPI1, &spi);
     SPI_NSSInternalSoftwareConfig(SPI1, SPI_NSSInternalSoft_Set);
@@ -104,9 +146,11 @@ static void Afe3520_HardwareSpiInit(void)
 
 static uint8_t Afe3520_WaitSpiFlag(uint16_t flag, FlagStatus state)
 {
-    uint32_t remaining = AFE3520_CFG_SPI_POLL_LIMIT;
+    uint16_t start = TIM_GetCounter(TIM4);
+    uint32_t ticks = (uint32_t)(((uint64_t)s_timerHz * AFE3520_CFG_SPI_TIMEOUT_US + 999999U) / 1000000U) + 1U;
+    uint32_t remaining = s_cpuMHz * AFE3520_CFG_SPI_TIMEOUT_US + 128U;
     if (s_frameError != AFE3520_OK) return 0U;
-    while (remaining-- != 0U)
+    while (remaining-- != 0U && (uint16_t)(TIM_GetCounter(TIM4) - start) < ticks)
     {
         if ((SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_OVR) != RESET) ||
             (SPI_I2S_GetFlagStatus(SPI1, SPI_FLAG_MODF) != RESET))
@@ -156,9 +200,9 @@ static uint8_t Afe3520_SpiByte(uint8_t tx)
 
         /* SH3673520 Mode 3: idle high, change on falling edge, sample on rising edge. */
         GPIO_ResetBits(GPIO_SCLK_SPI, PIN_SCLK_SPI);
-        Afe3520_SpiDelayUs(1U);
+        Afe3520_SpiDelayUs((500000U + AFE3520_CFG_SPI_TARGET_HZ - 1U) / AFE3520_CFG_SPI_TARGET_HZ);
         GPIO_SetBits(GPIO_SCLK_SPI, PIN_SCLK_SPI);
-        Afe3520_SpiDelayUs(1U);
+        Afe3520_SpiDelayUs((500000U + AFE3520_CFG_SPI_TARGET_HZ - 1U) / AFE3520_CFG_SPI_TARGET_HZ);
 
         rx <<= 1;
         if (GPIO_ReadInputDataBit(GPIO_MISO_SPI, PIN_MISO_SPI) != Bit_RESET)
@@ -172,8 +216,18 @@ static uint8_t Afe3520_SpiByte(uint8_t tx)
 
 static void Afe3520_BeginFrame(void)
 {
+    RCC_ClocksTypeDef clocks;
     s_frameError = AFE3520_OK;
     Afe3520_CsHigh();
+    Afe3520_TimerStart();
+#if AFE3520_CFG_USE_HARDWARE_SPI
+    RCC_GetClocksFreq(&clocks);
+    if (s_spiPclk != clocks.PCLK2_Frequency) Afe3520_HardwareSpiInit();
+    if (clocks.PCLK2_Frequency > AFE3520_CFG_SPI_TARGET_HZ * 256U)
+        s_frameError = AFE3520_ERR_CONFIG; /* No legal divider: never transmit too fast. */
+#else
+    (void)clocks;
+#endif
     Afe3520_SpiDelayUs(1U);
     Afe3520_CsLow();
     Afe3520_SpiDelayUs(1U);
@@ -187,6 +241,8 @@ static void Afe3520_EndFrame(void)
     Afe3520_SpiDelayUs(1U);
     Afe3520_CsHigh();
     Afe3520_SpiDelayUs(1U);
+    TIM_Cmd(TIM4, DISABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, DISABLE);
 }
 
 void Afe3520_PortInit(void)
