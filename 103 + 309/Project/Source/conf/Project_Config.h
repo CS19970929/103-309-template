@@ -16,7 +16,7 @@
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
 //   <1=> LiFePO4 LIFEPO
-#define PROJECT_CFG_BAT_CHEMISTRY 1
+#define PROJECT_CFG_BAT_CHEMISTRY 0
 
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1

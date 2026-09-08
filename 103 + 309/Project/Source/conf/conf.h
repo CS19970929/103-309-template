@@ -16,7 +16,7 @@
 
 // #define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-#define _DI_SWITCH_longKEY_ONOFF
+// #define _DI_SWITCH_longKEY_ONOFF
 
 // #define __VIRTURE_CURRENT__
 
@@ -71,14 +71,15 @@
 #define VERSION  (PROJECT_CFG_VERSION)
 
 #define   CURR_10A     0
-#define   CURR_20A_15A     1
-#define   CURR_30A     2
-#define   CURR_40A     3
+#define   CURR_15A     1
+#define   CURR_20A     2
+#define   CURR_30A     3
+#define   CURR_40A     4
 
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_30A
+#define LEVEL_CURR  CURR_10A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
@@ -91,7 +92,17 @@
 #define AFE_OCC2       		(120) 
 #define AFE_ODC1       		(150) 
 #define AFE_ODC2       		(150) 
-#elif (LEVEL_CURR == CURR_20A_15A)
+#elif (LEVEL_CURR == CURR_15A)
+#define CS_Res			2
+#define CS_Res_Num		3
+#define CBC_DelayT		128
+#define CBC_Cur_DSG		(75)
+
+#define AFE_OCC1       		(200) 
+#define AFE_OCC2       		(200) 
+#define AFE_ODC1       		(200) 
+#define AFE_ODC2       		(200) 
+#elif (LEVEL_CURR == CURR_20A)
 #define CS_Res			2
 #define CS_Res_Num		3
 #define CBC_DelayT		128
