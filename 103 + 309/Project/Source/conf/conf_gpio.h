@@ -37,8 +37,6 @@
 #define PIN_SCI1_TX       GPIO_Pin_6
 #define GPIO_SCI1_RX      GPIOB
 #define PIN_SCI1_RX       GPIO_Pin_7
-#define GPIO_AD_TTC_MOS1  GPIOA
-#define PIN_AD_TTC_MOS1   GPIO_Pin_1
 
 #define GPIO_SCI2_TX      GPIOA
 #define PIN_SCI2_TX       GPIO_Pin_2

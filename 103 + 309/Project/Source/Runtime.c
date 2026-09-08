@@ -30,7 +30,7 @@ void Runtime_Boot(void)
 	InitSystemMonitorData_EEPROM();
 
 	SystemRuntime_MarkBootReady();
-	SystemRuntime_SetProjectVersion(1U);
+	SystemRuntime_SetProjectVersion(0U);
 	InitProID();
 
 	EnableLowPowerDebug();

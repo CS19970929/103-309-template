@@ -13,7 +13,7 @@
 // <h>Protection sources (service/MOS feedback always runs)
 // <o> Protection mode <1=>Software only <2=>AFE hardware only <3=>Both
 #ifndef BMS3520_CFG_PROTECTION_MODE
-#define BMS3520_CFG_PROTECTION_MODE 3
+#define BMS3520_CFG_PROTECTION_MODE 2
 #endif
 #define BMS3520_CFG_SW_PROTECTION (BMS3520_CFG_PROTECTION_MODE != 2)
 #define BMS3520_CFG_HW_PROTECTION (BMS3520_CFG_PROTECTION_MODE != 1)
