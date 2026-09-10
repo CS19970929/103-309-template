@@ -83,24 +83,17 @@ typedef struct
 	UINT32 read_block_last_tick;
 } CommToolCanRuntime;
 
-static CanTxRuntime s_tx = {
-	{0},
-	0U,
-	0U,
-	0U,
-	CAN_TxStatus_NoMailBox,
-	CAN_TX_SOURCE_NONE,
-	0U
-};
+static CanTxRuntime s_tx;
 static CanRuntime s_runtime;
 static CommToolCanRuntime s_comm_tool;
-static volatile UINT32 s_hdx_pending_mask = 0U;
+static volatile UINT32 s_hdx_pending_mask;
 
 static UINT8 can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks);
 static void can_power_on(void);
 static void can_power_off(void);
 static void can_clear_tx_done(UINT8 mailbox);
 static void can_cancel_tx(UINT8 mailbox);
+static void can_mark_tx_idle(void);
 static void can_abort_tx(void);
 static UINT8 can_enqueue_tx(const CanTxMsg *frame, UINT8 source);
 static UINT8 can_dequeue_tx(CanTxItem *item);
@@ -185,13 +178,18 @@ static void can_cancel_tx(UINT8 mailbox)
 	can_clear_tx_done(mailbox);
 }
 
+static void can_mark_tx_idle(void)
+{
+	s_tx.mailbox = CAN_TxStatus_NoMailBox;
+	s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+}
+
 static void can_abort_tx(void)
 {
 	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
 	{
 		can_cancel_tx(s_tx.mailbox);
-		s_tx.mailbox = CAN_TxStatus_NoMailBox;
-		s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+		can_mark_tx_idle();
 	}
 	can_clear_tx_queue();
 }
@@ -268,23 +266,15 @@ static void can_service_tx(UINT32 now_tick)
 	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
 	{
 		status = CAN_TransmitStatus(CAN1, s_tx.mailbox);
-		if (status == CAN_TxStatus_Ok)
+		if ((status == CAN_TxStatus_Ok) || (status == CAN_TxStatus_Failed))
 		{
 			can_clear_tx_done(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
-		}
-		else if (status == CAN_TxStatus_Failed)
-		{
-			can_clear_tx_done(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+			can_mark_tx_idle();
 		}
 		else if (can_tick_elapsed(now_tick, s_tx.start_tick, CAN_TX_TIMEOUT_TICKS))
 		{
 			can_cancel_tx(s_tx.mailbox);
-			s_tx.mailbox = CAN_TxStatus_NoMailBox;
-			s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+			can_mark_tx_idle();
 		}
 	}
 
@@ -299,7 +289,7 @@ static void can_service_tx(UINT32 now_tick)
 		}
 		else
 		{
-			s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+			can_mark_tx_idle();
 		}
 	}
 }
@@ -319,6 +309,7 @@ static UINT8 can_transmit(CanTxMsg *msg, UINT8 source)
 		frame.StdId += ((UINT32)CAN_ADRESS_STD_ID << 7);
 	}
 
+	/* Return 0 when the frame is queued; hardware ACK is checked later. */
 	return can_enqueue_tx(&frame, source) ? 0U : CAN_TxStatus_NoMailBox;
 }
 
@@ -532,7 +523,7 @@ static UINT8 hdx_queue_request(UINT16 std_id)
 	}
 
 	frame_id = (UINT8)(std_id & 0x007FU);
-	if ((frame_id < HDX_CAN_FRAME_ID_MIN) || (frame_id > HDX_CAN_FRAME_ID_MAX))
+	if (frame_id > HDX_CAN_FRAME_ID_MAX)
 	{
 		return 0U;
 	}
@@ -548,13 +539,19 @@ static UINT8 hdx_has_pending_request(void)
 
 static void hdx_clear_pending_requests(void)
 {
+	UINT32 primask = __get_PRIMASK();
+
 	__disable_irq();
 	s_hdx_pending_mask = 0U;
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 }
 
 static void hdx_process_next_request(void)
 {
+	UINT32 primask = __get_PRIMASK();
 	UINT32 pending;
 	UINT8 frame_id;
 	UINT8 found = 0U;
@@ -570,7 +567,10 @@ static void hdx_process_next_request(void)
 			break;
 		}
 	}
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 
 	if (found != 0U)
 	{
@@ -632,15 +632,21 @@ static UINT8 comm_tool_status_from_host_error(UINT8 error)
 
 static void comm_tool_clear_cmd_queue(void)
 {
+	UINT32 primask = __get_PRIMASK();
+
 	__disable_irq();
 	s_comm_tool.cmd_head = 0U;
 	s_comm_tool.cmd_tail = 0U;
 	s_comm_tool.cmd_count = 0U;
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 }
 
 static UINT8 comm_tool_take_cmd(UINT8 data[8])
 {
+	UINT32 primask = __get_PRIMASK();
 	UINT8 has_cmd = 0U;
 
 	__disable_irq();
@@ -655,7 +661,10 @@ static UINT8 comm_tool_take_cmd(UINT8 data[8])
 		s_comm_tool.cmd_count--;
 		has_cmd = 1U;
 	}
-	__enable_irq();
+	if (primask == 0U)
+	{
+		__enable_irq();
+	}
 
 	return has_cmd;
 }
@@ -944,12 +953,11 @@ static void InitCan_CAN1(void)
 
 void InitCan(void)
 {
-	s_tx.mailbox = CAN_TxStatus_NoMailBox;
-	s_tx.mailbox_source = CAN_TX_SOURCE_NONE;
+	can_mark_tx_idle();
 	s_runtime.tick = 0U;
 	s_comm_tool.write_pending = 0U;
 	s_comm_tool.enter_iap_delay_ticks = 0U;
-	s_comm_tool.read_block_active = 0U;
+	comm_tool_stop_read_block_stream();
 	can_clear_tx_queue();
 	comm_tool_clear_cmd_queue();
 	hdx_clear_pending_requests();
@@ -1004,6 +1012,10 @@ static UINT8 can_has_sleep_blocking_work(void)
 	{
 		return 1U;
 	}
+	if (s_comm_tool.enter_iap_delay_ticks != 0U)
+	{
+		return 1U;
+	}
 	if (hdx_has_pending_request() != 0U)
 	{
 		return 1U;
@@ -1044,6 +1056,7 @@ void Can_PrepareSleep(void)
 	can_abort_tx();
 	comm_tool_clear_cmd_queue();
 	comm_tool_stop_read_block_stream();
+	s_comm_tool.write_pending = 0U;
 	hdx_clear_pending_requests();
 	can_power_off();
 }
