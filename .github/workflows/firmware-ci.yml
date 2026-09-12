@@ -1,0 +1,85 @@
+name: Firmware CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gcc-source-check:
+    name: STM32 GCC source compile check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GNU Arm Embedded GCC and cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi cppcheck
+
+      - name: Compile all C translation units
+        run: |
+          python3 tools/ci/stm32_source_check.py \
+            --project "C030v1.0/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx" \
+            --out build/ci/gcc-source-check
+
+      - name: cppcheck (informational baseline)
+        continue-on-error: true
+        run: |
+          mkdir -p build/ci
+          cppcheck \
+            --enable=warning,performance,portability \
+            --inconclusive \
+            --force \
+            --std=c11 \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            -DSTM32F10X_HD \
+            -DUSE_STDPERIPH_DRIVER \
+            -I"C030v1.0/Project/Lib" \
+            -I"C030v1.0/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers" \
+            -I"C030v1.0/Project/STM32F10x_StdPeriph_Lib_V3.5.0/inc" \
+            -I"C030v1.0/Project/Source" \
+            "C030v1.0/Project/Source" \
+            2> build/ci/cppcheck.txt
+          cat build/ci/cppcheck.txt
+
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stm32-ci-diagnostics
+          path: build/ci
+          if-no-files-found: ignore
+
+  keil-armcc5-full-build:
+    name: Keil ARMCC5 full firmware build
+    if: ${{ vars.KEIL_CI_ENABLED == '1' }}
+    runs-on: [self-hosted, windows, keil-armcc5]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with Keil uVision
+        shell: powershell
+        run: '& ".\tools\ci\keil_build.ps1" -Project "C030v1.0/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx"'
+
+      - name: Upload Keil build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keil-armcc5-build-log
+          path: build/keil
+          if-no-files-found: ignore
