@@ -24,6 +24,18 @@ def split_semicolon(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(";") if item.strip()]
 
 
+def split_defines(value: str | None) -> list[str]:
+    """Split Keil macro definitions.
+
+    uVision commonly stores defines as a comma-separated list while some projects
+    use semicolons. Keep assignment values intact and only split on those list
+    separators.
+    """
+    if not value:
+        return []
+    return [item.strip() for item in re.split(r"[;,]", value) if item.strip()]
+
+
 def resolve_uv_path(base: Path, value: str) -> Path:
     normalized = value.replace("\\", "/")
     path = Path(normalized)
@@ -59,7 +71,7 @@ def collect_project_settings(project: Path) -> tuple[str, list[str], list[Path],
     if controls is None:
         raise RuntimeError("No ARM C compiler controls found in uvprojx")
 
-    defines = split_semicolon(controls.findtext("Define"))
+    defines = split_defines(controls.findtext("Define"))
     include_values = split_semicolon(controls.findtext("IncludePath"))
     project_dir = project.parent
     include_dirs = [resolve_uv_path(project_dir, item) for item in include_values]
