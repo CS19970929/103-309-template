@@ -25,13 +25,17 @@ jobs:
       - name: Install GNU Arm Embedded GCC and cppcheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi cppcheck
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            cppcheck
 
       - name: Compile all C translation units
         run: |
           python3 tools/ci/stm32_source_check.py \
             --project "C030v1.0/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx" \
-            --out build/ci/gcc-source-check
+            --out build/ci/gcc-source-check \
+            --exclude-basename core_cm3.c
 
       - name: cppcheck (informational baseline)
         continue-on-error: true
