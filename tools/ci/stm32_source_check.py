@@ -25,12 +25,7 @@ def split_semicolon(value: str | None) -> list[str]:
 
 
 def split_defines(value: str | None) -> list[str]:
-    """Split Keil macro definitions.
-
-    uVision commonly stores defines as a comma-separated list while some projects
-    use semicolons. Keep assignment values intact and only split on those list
-    separators.
-    """
+    """Split Keil macro definitions separated by comma or semicolon."""
     if not value:
         return []
     return [item.strip() for item in re.split(r"[;,]", value) if item.strip()]
@@ -103,6 +98,12 @@ def main() -> int:
     parser.add_argument("--project", required=True, help="Path to Keil .uvprojx")
     parser.add_argument("--out", default="build/ci/gcc-source-check", help="Output directory")
     parser.add_argument("--compiler", default="arm-none-eabi-gcc")
+    parser.add_argument(
+        "--exclude-basename",
+        action="append",
+        default=[],
+        help="Skip a compiler-specific source basename (repeatable)",
+    )
     args = parser.parse_args()
 
     project = Path(args.project).resolve()
@@ -130,6 +131,13 @@ def main() -> int:
             print(f"  - {item}", file=sys.stderr)
         return 2
 
+    excluded_names = set(args.exclude_basename)
+    skipped_sources = [source for source in sources if source.name in excluded_names]
+    sources = [source for source in sources if source.name not in excluded_names]
+    if not sources:
+        print("error: no C sources remain after exclusions", file=sys.stderr)
+        return 2
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     common_flags = [
@@ -155,6 +163,8 @@ def main() -> int:
     print(f"CPU     : {cpu}")
     print(f"Defines : {', '.join(defines) if defines else '(none)'}")
     print(f"C files : {len(sources)}")
+    for source in skipped_sources:
+        print(f"Skip    : {source} (compiler-specific compatibility unit)")
     if non_gnu_link_inputs:
         print("Note    : final link is intentionally skipped; legacy .lib/ASM inputs remain Keil-owned.")
 
