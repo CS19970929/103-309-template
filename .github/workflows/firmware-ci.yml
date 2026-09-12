@@ -74,7 +74,7 @@ jobs:
 
       - name: Build with Keil uVision
         shell: powershell
-        run: tools/ci/keil_build.ps1 -Project "C030v1.0/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx"
+        run: '& ".\tools\ci\keil_build.ps1" -Project "C030v1.0/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx"'
 
       - name: Upload Keil build log
         if: always()
