@@ -4,6 +4,7 @@
 #include "DataDeal.h"
 #include "conf.h"
 #include "Sci_Upper.h"
+#include "SerialProtocolMux.h"
 #include "RTC.h"
 #include "LowPowerSleep.h"
 
@@ -36,7 +37,7 @@ typedef uint8_t (*BlockCheckFunc)(void);
 
 static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 5U) ? 1U : 0U; }
 static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 5U) ? 1U : 0U; }
-static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
+static uint8_t CheckCommBusy(void) { return (SerialProtocolMux_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
 static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
 static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }

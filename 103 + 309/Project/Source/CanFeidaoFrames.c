@@ -1,7 +1,17 @@
 /*
- * Legacy Keil project placeholder.
+ * Legacy Keil build bridge.
  *
- * The Feidao CAN protocol implementation has been removed. HDX request/response
- * frames are now implemented in Can_HDX.c. This empty translation unit is kept
- * only because the existing .uvprojx still contains a hard-coded source entry.
+ * The existing .uvprojx already compiles CanFeidaoFrames.c.  To keep the
+ * legacy project file unchanged, this translation unit includes the clearly
+ * named protocol modules below.
+ *
+ * When migrating to CMake/GCC or after cleaning the Keil project file:
+ *   1. add these four .c files as normal independent source files;
+ *   2. remove the includes below;
+ *   3. keep this file as the historical empty Feidao placeholder or remove it.
  */
+
+#include "LxPowerProtocol.c"
+#include "LxPowerProtocolPort.c"
+#include "LegacyModbusProtocol.c"
+#include "SerialProtocolMux.c"

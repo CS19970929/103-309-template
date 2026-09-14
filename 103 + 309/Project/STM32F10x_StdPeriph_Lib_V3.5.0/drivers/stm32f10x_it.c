@@ -11,11 +11,11 @@
  * @attention
  *
  * THE PRESENT FIRMWARE WHICH IS FOR GUIDANCE ONLY AIMS AT PROVIDING CUSTOMERS
- * WITH CODING INFORMATION REGARDING THEIR PRODUCTS IN ORDER FOR THEM TO SAVE
- * TIME. AS A RESULT, STMICROELECTRONICS SHALL NOT BE HELD LIABLE FOR ANY
- * DIRECT, INDIRECT OR CONSEQUENTIAL DAMAGES WITH RESPECT TO ANY CLAIMS ARISING
- * FROM THE CONTENT OF SUCH FIRMWARE AND/OR THE USE MADE BY CUSTOMERS OF THE
- * CODING INFORMATION CONTAINED HEREIN IN CONNECTION WITH THEIR PRODUCTS.
+ * WITH CODING INFORMATION IN ORDER FOR THEM TO SAVE TIME. AS A RESULT,
+ * STMICROELECTRONICS SHALL NOT BE HELD LIABLE FOR ANY DIRECT, INDIRECT OR
+ * CONSEQUENTIAL DAMAGES WITH RESPECT TO ANY CLAIMS ARISING FROM THE CONTENT
+ * OF SUCH FIRMWARE AND/OR THE USE MADE BY CUSTOMERS OF THE CODING INFORMATION
+ * CONTAINED HEREIN IN CONNECTION WITH THEIR PRODUCTS.
  *
  * <h2><center>&copy; COPYRIGHT 2011 STMicroelectronics</center></h2>
  ******************************************************************************
@@ -25,6 +25,7 @@
 #include "stm32f10x_it.h"
 #include "main.h" //在it的头文件可能会导致别的地方也能调用main的东西，不符合安全规范
 #include "FaultSnapshot.h"
+#include "SerialProtocolMux.h"
 
 // #include "stm32_eval.h"
 
@@ -292,21 +293,19 @@ void EXTI9_5_IRQHandler(void)
  * @}
  */
 
-// 以下的是非共有的，如果多处使用到，则移动到it.c文件
+/* USART1 / USART2 均由 SerialProtocolMux 分发原协议与 LX V0.9。 */
 void USART1_IRQHandler(void)
 {
   sys_time.sci1_irq_cnt++;
-#ifdef _COMMOM_UPPER_SCI1
-  Sci1_CommonUpper_IRQHandler();
-#endif
+  SerialProtocolMux_USART1_IRQHandler();
 }
+
 void USART2_IRQHandler(void)
 {
   sys_time.sci2_irq_cnt++;
-#ifdef _COMMOM_UPPER_SCI2
-  Sci2_CommonUpper_IRQHandler();
-#endif
+  SerialProtocolMux_USART2_IRQHandler();
 }
+
 #ifdef _COMMOM_UPPER_SCI3
 void USART3_IRQHandler(void)
 {

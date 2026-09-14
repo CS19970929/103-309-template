@@ -7,6 +7,17 @@
 #include "string.h"
 
 #include "DataDeal.h"
+
+/* C073 + LX V0.9 product configuration is fixed to seven series cells. */
+#if (PROJECT_CFG_SERIES_NUM != 7)
+#error "This product branch must be fixed to 7S"
+#endif
+#define PROJECT_FIXED_SERIES_NUM ((UINT8)PROJECT_CFG_SERIES_NUM)
+#ifdef SNum
+#undef SNum
+#endif
+#define SNum PROJECT_CFG_SERIES_NUM
+
 #include "Sci_Upper.h"
 #include "System_Init.h"
 #include "System_Monitor.h"

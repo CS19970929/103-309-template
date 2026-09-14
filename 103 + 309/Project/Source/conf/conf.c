@@ -1,5 +1,6 @@
 // #include "conf.h"
 #include "main.h"
+#include "SerialProtocolMux.h"
 
 Time_T sys_time = {
     .time_enter_rtc = 60,
@@ -368,7 +369,8 @@ void InitRunAfterStopWakeup(void)
     USART_DeInit(USART1);
     USART_DeInit(USART2);
 
-    InitUSART_CommonUpper();
+    /* 恢复 USART1/2 的多协议分发状态，而不是退回旧 CommonUpper 独占模式。 */
+    SerialProtocolMux_Init();
     InitCan();
     InitTimer();
 

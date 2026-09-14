@@ -2,7 +2,7 @@
 #define PROJECT_CONFIG_H
 
 /* Keil uVision: right click this file and select "Configuration Wizard". */
-/* 项目可视化配置: Keil Configuration Wizard marker. */
+/* 脧卯脛驴驴脡脢脫禄炉脜盲脰脙: Keil Configuration Wizard marker. */
 
 // <<< Use Configuration Wizard in Context Menu >>>
 
@@ -17,6 +17,10 @@
 //   <0=> Ternary Lithium TERNARYLI
 //   <1=> LiFePO4 LIFEPO
 #define PROJECT_CFG_BAT_CHEMISTRY 1
+
+// <o> Fixed series cell count <7-7>
+// <i> C073 + LX V0.9 product branch is fixed to 7S.
+#define PROJECT_CFG_SERIES_NUM 7
 
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
@@ -85,6 +89,20 @@
 //   <0=> Disabled
 //   <1=> Host
 #define PROJECT_CFG_SCI1_ROLE 1
+
+// <o> SCI1 baud rate
+//   <9600=> 9600
+//   <19200=> 19200 legacy default
+//   <115200=> 115200 LX V0.9
+// <i> One physical UART can only use one baud at a time. Keep 19200 for legacy devices;
+// <i> set 9600 or 115200 when the peer must strictly follow LX V0.9 wire settings.
+#define PROJECT_CFG_SCI1_BAUDRATE 19200
+
+// <o> SCI2 baud rate
+//   <9600=> 9600
+//   <19200=> 19200 legacy default
+//   <115200=> 115200 LX V0.9
+#define PROJECT_CFG_SCI2_BAUDRATE 19200
 
 // </h>
 
