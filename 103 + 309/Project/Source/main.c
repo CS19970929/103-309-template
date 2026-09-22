@@ -2,11 +2,11 @@
 
 UINT8 SeriesNum = 16;
 
-// ²»Í¬´®ÊıÎ¬»¤µÄ±í¸ñ
-// ÖĞÓ±
+// ä¸åŒä¸²æ•°ç»´æŠ¤çš„è¡¨æ ¼
+// ä¸­é¢–
 const unsigned char SeriesSelect_AFE1[16][16] = {
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1´®
-	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2´®
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 1ä¸²
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 2ä¸²
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 3
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 4
 	{0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	   // 5
@@ -31,8 +31,8 @@ void InitSystemWakeUp(void);
 
 int main(void)
 {
-	InitDevice(); // ³õÊ¼»¯ÍâÉè
-	InitVar();	  // ³õÊ¼»¯±äÁ¿
+	InitDevice(); // åˆå§‹åŒ–å¤–è®¾
+	InitVar();	  // åˆå§‹åŒ–å˜é‡
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
@@ -46,7 +46,7 @@ int main(void)
 		App_E2promDeal();
 		App_CellBalance();
 		// App_Can();
-		// App_SleepDeal(); // ¹Ø±ÕÕâ¸ö¹¦ÄÜµÄ»°£¬ÔÚInitVar()ÖĞSystem_OnOFF_FuncÏà¹ØÖÃÁã£¬»òÕßÖ±½ÓÆÁ±Î
+		// App_SleepDeal(); // å…³é—­è¿™ä¸ªåŠŸèƒ½çš„è¯ï¼Œåœ¨InitVar()ä¸­System_OnOFF_Funcç›¸å…³ç½®é›¶ï¼Œæˆ–è€…ç›´æ¥å±è”½
 		sleep();
 		App_SOC();
 
@@ -78,7 +78,7 @@ int main(void)
 
 void InitDevice(void)
 {
-	SystemInit(); // HSEÄ¬ÈÏ±¶Æµµ½72MHz£¬Èç¹ûÃ»HSEÇĞ»ØHSIÔõÃ´´¦ÀíÄ¿Ç°»¹Ã»ÁË½â
+	SystemInit(); // HSEé»˜è®¤å€é¢‘åˆ°72MHzï¼Œå¦‚æœæ²¡HSEåˆ‡å›HSIæ€ä¹ˆå¤„ç†ç›®å‰è¿˜æ²¡äº†è§£
 
 #if (defined _DEBUG_CODE)
 	InitDelay();
@@ -95,8 +95,24 @@ void InitDevice(void)
 	elogInit();
 #endif
 	InitSystemWakeUp();
-	InitE2PROM(); // ¾ö¶¨°ÑÕâ¸ö·ÅÔÚÇ°Ãæ£¬ÓÅÏÈ¼¶Ìá¸ß£¬ÒòÎª¿Í»§´®¿Ú³õÊ¼»¯£¬ÓĞ¿ÉÄÜÒª¶ÁÆä×Ô¼ºµÄÊı¾İ
+	InitE2PROM(); // å†³å®šæŠŠè¿™ä¸ªæ”¾åœ¨å‰é¢ï¼Œä¼˜å…ˆçº§æé«˜ï¼Œå› ä¸ºå®¢æˆ·ä¸²å£åˆå§‹åŒ–ï¼Œæœ‰å¯èƒ½è¦è¯»å…¶è‡ªå·±çš„æ•°æ®
 	InitAFE1();
+
+	/*
+	 * Boot-only synchronous zero-current calibration.
+	 * Calibration forces CTLC and SH309 CHG/DSG/PCH OFF and verifies the
+	 * actual FET state around both fresh CADC samples.
+	 */
+	(void)BmsCurrent_BootZeroCalibrate();
+	if (!BmsCurrent_IsBootZeroValid())
+	{
+		log_w("[BOOT][CUR_ZERO] fallback zero=0, deadband=500mA, status=%u",
+			  BmsCurrent_GetBootZeroStatus());
+	}
+	/* Restore the same normal power path that InitAFE1() used before calibration. */
+	SH367309_Enable_AFE_Wdt_Cadc_Drivers();
+	MCUO_AFE_CTLC = 1;
+
 	// InitCan();
 	InitADC();
 	InitSci();
@@ -107,7 +123,7 @@ void InitDevice(void)
 	Init_ChargerLoad_Det();
 
 	InitMosRelay_DOx();
-	InitData_SOC(); // ±ØĞë·ÅÔÚ¶ÁÍêeepromÊı¾İºóÃæ
+	InitData_SOC(); // å¿…é¡»æ”¾åœ¨è¯»å®Œeepromæ•°æ®åé¢
 
 #ifdef wdog_enable
 	Init_IWDG();
@@ -120,12 +136,12 @@ void InitDevice(void)
 
 void InitVar(void)
 {
-	// SystemMonitorResetData_EEPROM();							//Õâ¸öº¯ÊıµÄ³õÊ¼»¯Ä¬ÈÏĞèÇó¹¦ÄÜĞŞ¸ÄÁË£¬ÒªĞŞ¸ÄEEPROMµÄÉÏµç±êÖ¾Î»
+	// SystemMonitorResetData_EEPROM();							//è¿™ä¸ªå‡½æ•°çš„åˆå§‹åŒ–é»˜è®¤éœ€æ±‚åŠŸèƒ½ä¿®æ”¹äº†ï¼Œè¦ä¿®æ”¹EEPROMçš„ä¸Šç”µæ ‡å¿—ä½
 	InitSystemMonitorData_EEPROM();
 	SeriesNum = OtherElement.u16Sys_SeriesNum;
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
-	SystemStatus.bits.b1StartUpBMS = 0; // È¥µô¿ª»úÊ±Ğò
+	SystemStatus.bits.b1StartUpBMS = 0; // å»æ‰å¼€æœºæ—¶åº
 	SystemStatus.bits.b1Status_ToSleep = 1;
 
 	// SystemStatus.bits.b4Status_ProjectVer = 1;

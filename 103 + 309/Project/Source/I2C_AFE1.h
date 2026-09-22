@@ -62,7 +62,6 @@ struct SH367309_Read {			/* AD Read	*/
 	UINT16		u16VCell[16];   // mv
 	UINT16		u16TempBat[3];					
 	UINT32		u32VBat;       	// mv
-	UINT16      u16Current;     // mA
 };
 
 
