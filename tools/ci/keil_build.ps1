@@ -81,8 +81,18 @@ if (Test-Path $logPath) {
     Remove-Item -Force $logPath
 }
 
-& $uv4 -j0 -b $projectPath -t $Target -o $logPath
-$exitCode = $LASTEXITCODE
+$uvArgs = @(
+    "-j0",
+    "-b",
+    ('"{0}"' -f $projectPath),
+    "-t",
+    ('"{0}"' -f $Target),
+    "-o",
+    ('"{0}"' -f $logPath)
+)
+
+$process = Start-Process -FilePath $uv4 -ArgumentList $uvArgs -Wait -PassThru -NoNewWindow
+$exitCode = $process.ExitCode
 
 if (Test-Path $logPath) {
     Get-Content -LiteralPath $logPath
