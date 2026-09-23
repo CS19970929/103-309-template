@@ -71,6 +71,10 @@ struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;			   // 对外交互结构体,li
 struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element;		   // 内部计算结构体
 struct SOC_CALCULATE_ELEMENT SOC_Calculate_Element_backup; // 内部计算结构体
 
+static UINT8 s_u8SocPersistActiveSlot = 0xFFu;
+static UINT8 s_u8SocPersistSeq = 0u;
+static UINT8 s_u8SocEstimateTrusted = 0u;
+static UINT8 s_u8SocPersistTrustedBackup = 0u;
 
 void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command);
 // 古瑞瓦特
@@ -724,11 +728,6 @@ struct SOC_PERSIST_DATA
 	UINT16 cycle_count;
 	UINT32 cycle_dsg_acc;
 };
-
-static UINT8 s_u8SocPersistActiveSlot = 0xFFu;
-static UINT8 s_u8SocPersistSeq = 0u;
-static UINT8 s_u8SocEstimateTrusted = 0u;
-static UINT8 s_u8SocPersistTrustedBackup = 0u;
 
 static UINT16 SOC_Crc16UpdateByte(UINT16 crc, UINT8 data)
 {
