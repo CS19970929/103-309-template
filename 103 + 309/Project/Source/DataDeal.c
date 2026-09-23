@@ -28,25 +28,30 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define MONITOR_AFE_SLEEP_DELAY_TICKS ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
 #define AFE_CURRENT_ADC_FULL_SCALE_MV ((UINT32)200U)
 #define AFE_CURRENT_ADC_DENOMINATOR ((UINT32)21470U)
-#define AFE_CURRENT_STARTUP_ZERO_LIMIT_MA ((UINT32)1000U)
-#define AFE_CURRENT_STARTUP_ZERO_STABLE_RAW ((UINT16)8U)
-#define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)
-typedef struct _AFE_CURRENT_STARTUP_ZERO_PARAM
-{
-    UINT8 u8ConfirmCnt;
-    UINT8 u8MaxCnt;
-    UINT8 u8DiscardCnt;
-    UINT16 u16SettleMs;
-    UINT16 u16IntervalMs;
-} AFE_CURRENT_STARTUP_ZERO_PARAM;
-
-static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentColdStartupZeroParam = {4U, 32U, 6U, 800U, 25U};
-static const AFE_CURRENT_STARTUP_ZERO_PARAM s_stAfeCurrentWarmStartupZeroParam = {4U, 16U, 2U, 120U, 20U};
+#define BOOT_CURRENT_ZERO_SAMPLE_INTERVAL_MS ((UINT16)300U)
+#define BOOT_CURRENT_ZERO_MAX_ABS_COUNTS ((UINT32)40U)
+#define BOOT_CURRENT_ZERO_MAX_DELTA_COUNTS ((UINT32)6U)
+#define BOOT_CURRENT_FET_STATUS_MASK ((UINT8)0x07U)
+#define CURRENT_FIXED_SCALE ((UINT32)4U)
+#define CURRENT_REPORT_MA_PER_LSB ((UINT16)100U)
+/* Keep the existing product-visible 0.2 A deadband after a valid calibration. */
+#define CURRENT_DEADBAND_CALIBRATED_MA ((UINT16)200U)
+/* A failed calibration must not create a false offset; use a conservative fallback deadband. */
+#define CURRENT_DEADBAND_FALLBACK_MA ((UINT16)500U)
 
 typedef struct _AFE_CURRENT_RUNTIME
 {
-    /* Fixed after startup calibration; never relearned while running. */
-    INT32 zeroOffsetRaw;
+    /* Boot zero is stored in raw-count x4 units to retain half-count averaging. */
+    INT32 zeroOffsetRawX4;
+    INT32 correctedRawX4;
+    INT32 current_mA;
+    INT16 bootRaw1;
+    INT16 bootRaw2;
+    INT16 runtimeRaw;
+    UINT16 deadband_mA;
+    UINT8 zeroStatus;
+    UINT8 lastMtpConf;
+    UINT8 lastBstatus3;
 } AFE_CURRENT_RUNTIME;
 
 typedef struct _AFE_MONITOR_CH
@@ -302,65 +307,52 @@ void DataLoad_TemperatureMaxMinFind(void)
 
 static INT32 DataLoad_CurrentRawToSigned(UINT16 raw_code)
 {
-    if ((raw_code & 0x8000U) != 0U)
-    {
-        return (INT32)raw_code - 65536L;
-    }
-
-    return (INT32)raw_code;
+    return (INT32)(INT16)raw_code;
 }
 
 static UINT32 DataLoad_CurrentAbsI32(INT32 value)
 {
     if (value < 0)
     {
-        return (UINT32)(-value);
+        return (UINT32)(-(value + 1)) + 1U;
     }
 
     return (UINT32)value;
 }
 
-static UINT16 DataLoad_CurrentMilliAmpToRaw(UINT32 current_mA)
+static UINT32 DataLoad_CurrentRawX4ToMilliAmpX4(UINT32 raw_abs_x4)
 {
-    uint64_t numerator;
-    uint64_t denominator;
-    uint64_t raw_code;
+    uint64_t current_mA_x4;
 
-    if ((current_mA == 0U) || (g_u32CS_Res_AFE == 0U))
-    {
-        return 0;
-    }
-
-    denominator = (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
-    numerator = ((uint64_t)current_mA * (uint64_t)AFE_CURRENT_ADC_DENOMINATOR) + (denominator / 2U);
-    raw_code = numerator / denominator;
-
-    if (raw_code > 0x7FFFU)
-    {
-        return 0x7FFFU;
-    }
-
-    return (UINT16)raw_code;
-}
-
-static UINT32 DataLoad_CurrentRawToMilliAmp(UINT32 raw_abs)
-{
-    uint64_t current_mA;
-
-    if ((raw_abs == 0U) || (g_u32CS_Res_AFE == 0U))
+    if ((raw_abs_x4 == 0U) || (g_u32CS_Res_AFE == 0U))
     {
         return 0U;
     }
 
-    current_mA = (uint64_t)raw_abs * (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV * (uint64_t)g_u32CS_Res_AFE;
-    current_mA = (current_mA + ((uint64_t)AFE_CURRENT_ADC_DENOMINATOR / 2U)) / (uint64_t)AFE_CURRENT_ADC_DENOMINATOR;
+    current_mA_x4 = (uint64_t)raw_abs_x4 *
+                    (uint64_t)AFE_CURRENT_ADC_FULL_SCALE_MV *
+                    (uint64_t)g_u32CS_Res_AFE;
+    current_mA_x4 = (current_mA_x4 + ((uint64_t)AFE_CURRENT_ADC_DENOMINATOR / 2U)) /
+                    (uint64_t)AFE_CURRENT_ADC_DENOMINATOR;
 
-    if (current_mA > 0xFFFFFFFFU)
+    if (current_mA_x4 > 0xFFFFFFFFULL)
     {
         return 0xFFFFFFFFU;
     }
 
-    return (UINT32)current_mA;
+    return (UINT32)current_mA_x4;
+}
+
+static UINT32 DataLoad_CurrentMilliAmpX4ToMilliAmp(UINT32 current_mA_x4)
+{
+    return (current_mA_x4 + (CURRENT_FIXED_SCALE / 2U)) / CURRENT_FIXED_SCALE;
+}
+
+static UINT16 AfeCurrent_GetDeadbandMilliAmp(void)
+{
+    return (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID)
+               ? CURRENT_DEADBAND_CALIBRATED_MA
+               : CURRENT_DEADBAND_FALLBACK_MA;
 }
 
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
@@ -396,119 +388,186 @@ static void AfeCurrent_NextSeq(void)
     }
 }
 
-void AfeCurrent_StartupZeroCal(void)
+static void AfeCurrent_BootZeroFail(UINT8 status)
 {
-    UINT8 i;
-    UINT8 sample_cnt;
-    UINT8 discard_cnt;
-    UINT16 raw_code;
-    UINT16 limit_raw;
-    INT32 raw_signed;
-    INT32 last_raw_signed;
-    INT32 sum_raw_signed;
-    UINT32 raw_abs;
-    UINT32 delta_abs;
-    const AFE_CURRENT_STARTUP_ZERO_PARAM *param;
-
-    sample_cnt = 0U;
-    discard_cnt = 0U;
-    raw_code = 0U;
-    raw_signed = 0;
-    last_raw_signed = 0;
-    sum_raw_signed = 0;
-    param = (SleepDeal_IsBootFromSleepStartup() != 0U) ? &s_stAfeCurrentWarmStartupZeroParam : &s_stAfeCurrentColdStartupZeroParam;
-    limit_raw = DataLoad_CurrentMilliAmpToRaw(AFE_CURRENT_STARTUP_ZERO_LIMIT_MA);
-    s_data.cur.zeroOffsetRaw = 0;
-
-    if (param->u16SettleMs > 0U)
-    {
-        __delay_ms(param->u16SettleMs);
-    }
-
-    for (i = 0U; i < param->u8MaxCnt; ++i)
-    {
-        Feed_IWatchDog;
-
-        if (DataLoad_CurrentReadCadcRaw(&raw_code) != 0U)
-        {
-            raw_signed = DataLoad_CurrentRawToSigned(raw_code);
-            raw_abs = DataLoad_CurrentAbsI32(raw_signed);
-
-            if (discard_cnt < param->u8DiscardCnt)
-            {
-                ++discard_cnt;
-                last_raw_signed = raw_signed;
-                sample_cnt = 0U;
-                sum_raw_signed = 0;
-            }
-            else if ((limit_raw > 0U) && (raw_abs <= (UINT32)limit_raw))
-            {
-                if (sample_cnt == 0U)
-                {
-                    sum_raw_signed = raw_signed;
-                    sample_cnt = 1U;
-                }
-                else
-                {
-                    delta_abs = DataLoad_CurrentAbsI32(raw_signed - last_raw_signed);
-                    if (delta_abs <= (UINT32)AFE_CURRENT_STARTUP_ZERO_STABLE_RAW)
-                    {
-                        if (sample_cnt < 0xFFU)
-                        {
-                            ++sample_cnt;
-                        }
-                        sum_raw_signed += raw_signed;
-                    }
-                    else
-                    {
-                        sum_raw_signed = raw_signed;
-                        sample_cnt = 1U;
-                    }
-                }
-
-                last_raw_signed = raw_signed;
-
-                if (sample_cnt >= param->u8ConfirmCnt)
-                {
-                    break;
-                }
-            }
-            else
-            {
-                last_raw_signed = raw_signed;
-                sample_cnt = 0U;
-                sum_raw_signed = 0;
-            }
-        }
-
-        if ((i + 1U) < param->u8MaxCnt)
-        {
-            __delay_ms(param->u16IntervalMs);
-        }
-    }
-
-    if (sample_cnt > 0U)
-    {
-        s_data.cur.zeroOffsetRaw = sum_raw_signed / (INT32)sample_cnt;
-    }
+    s_data.cur.zeroOffsetRawX4 = 0;
+    s_data.cur.zeroStatus = status;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_FALLBACK_MA;
 }
 
-static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
+static void AfeCurrent_WaitFreshSample(void)
 {
-    UINT32 current_a10;
+    /*
+     * SH367309 CADC is 4 Hz. 300 ms guarantees that two reads cannot merely
+     * be repeated accesses to the same conversion result.
+     */
+    __delay_ms(BOOT_CURRENT_ZERO_SAMPLE_INTERVAL_MS);
+}
 
-    if (current_mA >= ((UINT32)0xFFFFU * 100U))
+static UINT8 AfeCurrent_PrepareBootZero(void)
+{
+    SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1U;
+    SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 0U;
+    SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 0U;
+    SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = 0U;
+
+    if (!MTPWrite(MTP_CONF, 1U, &SH367309_Reg_Store.REG_MTP_CONF.all))
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_CONFIG_WRITE_ERROR);
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static UINT8 AfeCurrent_CheckBootZeroSafe(void)
+{
+    MTP_REG_CONF confirmed_conf;
+    UINT8 bstatus3;
+
+    confirmed_conf.all = 0U;
+    bstatus3 = 0U;
+
+    if (!MTPRead(MTP_CONF, 1U, &confirmed_conf.all))
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_CONFIG_READBACK_ERROR);
+        return 0U;
+    }
+
+    s_data.cur.lastMtpConf = confirmed_conf.all;
+
+    if ((!confirmed_conf.bits.CADCON) ||
+        confirmed_conf.bits.CHGMOS ||
+        confirmed_conf.bits.DSGMOS ||
+        confirmed_conf.bits.PCHMOS)
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_FET_ACTIVE);
+        return 0U;
+    }
+
+    if (!MTPRead(MTP_BSTATUS3, 1U, &bstatus3))
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_SAMPLE_READ_ERROR);
+        return 0U;
+    }
+
+    s_data.cur.lastBstatus3 = bstatus3;
+    if ((bstatus3 & BOOT_CURRENT_FET_STATUS_MASK) != 0U)
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_FET_ACTIVE);
+        return 0U;
+    }
+
+    return 1U;
+}
+
+void AfeCurrent_StartupZeroCal(void)
+{
+    UINT16 raw_code;
+    INT32 raw1;
+    INT32 raw2;
+    INT32 delta;
+
+    if (s_data.cur.zeroStatus != (UINT8)AFE_CURRENT_ZERO_NOT_RUN)
+    {
+        return;
+    }
+
+    s_data.cur.zeroOffsetRawX4 = 0;
+    s_data.cur.correctedRawX4 = 0;
+    s_data.cur.current_mA = 0;
+    s_data.cur.bootRaw1 = 0;
+    s_data.cur.bootRaw2 = 0;
+    s_data.cur.runtimeRaw = 0;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_FALLBACK_MA;
+    s_data.cur.lastMtpConf = 0U;
+    s_data.cur.lastBstatus3 = 0U;
+
+    if (!AfeCurrent_PrepareBootZero())
+    {
+        return;
+    }
+
+    AfeCurrent_WaitFreshSample();
+    if ((!AfeCurrent_CheckBootZeroSafe()) ||
+        (!DataLoad_CurrentReadCadcRaw(&raw_code)) ||
+        (!AfeCurrent_CheckBootZeroSafe()))
+    {
+        return;
+    }
+    raw1 = DataLoad_CurrentRawToSigned(raw_code);
+    s_data.cur.bootRaw1 = (INT16)raw1;
+
+    AfeCurrent_WaitFreshSample();
+    if ((!AfeCurrent_CheckBootZeroSafe()) ||
+        (!DataLoad_CurrentReadCadcRaw(&raw_code)) ||
+        (!AfeCurrent_CheckBootZeroSafe()))
+    {
+        return;
+    }
+    raw2 = DataLoad_CurrentRawToSigned(raw_code);
+    s_data.cur.bootRaw2 = (INT16)raw2;
+
+    if ((DataLoad_CurrentAbsI32(raw1) > BOOT_CURRENT_ZERO_MAX_ABS_COUNTS) ||
+        (DataLoad_CurrentAbsI32(raw2) > BOOT_CURRENT_ZERO_MAX_ABS_COUNTS))
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_OUT_OF_RANGE);
+        return;
+    }
+
+    delta = raw2 - raw1;
+    if (DataLoad_CurrentAbsI32(delta) > BOOT_CURRENT_ZERO_MAX_DELTA_COUNTS)
+    {
+        AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_UNSTABLE);
+        return;
+    }
+
+    /* ((raw1 + raw2) / 2) * 4 == (raw1 + raw2) * 2. */
+    s_data.cur.zeroOffsetRawX4 = (raw1 + raw2) * 2;
+    s_data.cur.zeroStatus = (UINT8)AFE_CURRENT_ZERO_VALID;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_CALIBRATED_MA;
+}
+
+INT32 AfeCurrent_GetCurrent_mA(void)
+{
+    return s_data.cur.current_mA;
+}
+
+void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
+{
+    if (diag == 0)
+    {
+        return;
+    }
+
+    diag->version = AFE_CURRENT_DIAG_VERSION;
+    diag->zeroStatus = s_data.cur.zeroStatus;
+    diag->zeroValid = (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID) ? 1U : 0U;
+    diag->bootRaw1 = s_data.cur.bootRaw1;
+    diag->bootRaw2 = s_data.cur.bootRaw2;
+    diag->zeroRawX4 = s_data.cur.zeroOffsetRawX4;
+    diag->runtimeRaw = s_data.cur.runtimeRaw;
+    diag->correctedRawX4 = s_data.cur.correctedRawX4;
+    diag->current_mA = s_data.cur.current_mA;
+    diag->deadband_mA = s_data.cur.deadband_mA;
+    diag->mtpConf = s_data.cur.lastMtpConf;
+    diag->bstatus3 = s_data.cur.lastBstatus3;
+    diag->sampleSeq = s_data.afeSeq;
+}
+
+static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
+{
+    UINT32 divisor;
+    UINT32 report_value;
+
+    divisor = CURRENT_FIXED_SCALE * (UINT32)CURRENT_REPORT_MA_PER_LSB;
+    report_value = (current_mA_x4 + (divisor / 2U)) / divisor;
+    if (report_value > 0xFFFFU)
     {
         return 0xFFFFU;
     }
 
-    current_a10 = (current_mA + 50U) / 100U;
-    if (current_mA < AFE_CURRENT_OUTPUT_DEADBAND_MA)
-    {
-        return 0;
-    }
-
-    return (UINT16)current_a10;
+    return (UINT16)report_value;
 }
 
 void test_Autocurrent_cycle(void)
@@ -587,23 +646,53 @@ void DataLoad_soc_test(void)
 void DataLoad_Current(void)
 {
     INT32 raw_signed;
-    INT32 corrected_raw;
+    INT32 corrected_raw_x4;
+    UINT32 current_mA_x4;
     UINT32 current_mA;
+    UINT16 deadband_mA;
 
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
-    corrected_raw = raw_signed - s_data.cur.zeroOffsetRaw;
-    current_mA = DataLoad_CurrentRawToMilliAmp(DataLoad_CurrentAbsI32(corrected_raw));
-
-    g_stCellInfoReport.u16Ichg = 0;
-    g_stCellInfoReport.u16IDischg = 0;
-
-    if (corrected_raw > 0)
+    corrected_raw_x4 = raw_signed * (INT32)CURRENT_FIXED_SCALE;
+    if (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID)
     {
-        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(current_mA);
+        corrected_raw_x4 -= s_data.cur.zeroOffsetRawX4;
     }
-    else if (corrected_raw < 0)
+
+    current_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
+    deadband_mA = AfeCurrent_GetDeadbandMilliAmp();
+    if (current_mA_x4 < ((UINT32)deadband_mA * CURRENT_FIXED_SCALE))
     {
-        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(current_mA);
+        current_mA_x4 = 0U;
+    }
+
+    current_mA = DataLoad_CurrentMilliAmpX4ToMilliAmp(current_mA_x4);
+    if (current_mA_x4 == 0U)
+    {
+        s_data.cur.current_mA = 0;
+    }
+    else if (corrected_raw_x4 > 0)
+    {
+        s_data.cur.current_mA = (INT32)current_mA;
+    }
+    else
+    {
+        s_data.cur.current_mA = -(INT32)current_mA;
+    }
+
+    s_data.cur.runtimeRaw = (INT16)raw_signed;
+    s_data.cur.correctedRawX4 = corrected_raw_x4;
+    s_data.cur.deadband_mA = deadband_mA;
+
+    g_stCellInfoReport.u16Ichg = 0U;
+    g_stCellInfoReport.u16IDischg = 0U;
+
+    if (s_data.cur.current_mA > 0)
+    {
+        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpX4ToA10(current_mA_x4);
+    }
+    else if (s_data.cur.current_mA < 0)
+    {
+        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpX4ToA10(current_mA_x4);
     }
 
 #ifdef __VIRTURE_CURRENT__
