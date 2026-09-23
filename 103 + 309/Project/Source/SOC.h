@@ -13,6 +13,7 @@
 extern UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 extern const UINT16 SOC_Table_Default[42];
 
+UINT8 SOC_ValidateOcvTable(const UINT16 *table, UINT16 size);
 void InitData_SOC(void);
 void App_SOC(void);
 

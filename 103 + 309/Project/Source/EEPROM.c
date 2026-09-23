@@ -386,19 +386,15 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_SOC_TABLE; ++i)
 	{
-		UINT16 soc_table_value = ReadEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (i << 1));
-		UINT8 valid = ((i & 1u) == 0u)
-					  ? ((soc_table_value >= SOC_VOL_MIN) && (soc_table_value <= SOC_VOL_MAX))
-					  : ((soc_table_value >= SOC_VALUE_MIN) && (soc_table_value <= SOC_VALUE_MAX));
-		if (valid)
-		{
-			SOC_Table_Set[i] = soc_table_value;
-		}
-		else
-		{
+		SOC_Table_Set[i] = ReadEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (i << 1));
+	}
+	if (!SOC_ValidateOcvTable(SOC_Table_Set, E2P_PARA_NUM_SOC_TABLE))
+	{
+		for (i = 0; i < E2P_PARA_NUM_SOC_TABLE; ++i)
 			SOC_Table_Set[i] = SOC_Table_Default[i];
-			u8E2P_SocTable_WriteFlag = E2P_PARA_NUM_SOC_TABLE;
-		}
+		u8E2P_SocTable_WriteFlag = E2P_PARA_NUM_SOC_TABLE;
+		if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
+			System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 	}
 
 	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)

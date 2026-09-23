@@ -2,6 +2,56 @@
 
 UINT16 SOC_Table_Set[SOC_TABLE_SIZE];
 
+UINT8 SOC_ValidateOcvTable(const UINT16 *table, UINT16 size)
+{
+	UINT16 i;
+	UINT16 voltage;
+	UINT16 soc;
+	UINT16 next_voltage;
+	UINT16 next_soc;
+
+	if ((table == 0) || (size < 4u) || ((size & 1u) != 0u))
+		return 0u;
+
+	if ((table[0] > SOC_VOL_MAX) || (table[1] != 100u) ||
+		(table[size - 2u] > SOC_VOL_MAX) || (table[size - 1u] != 0u))
+		return 0u;
+
+	for (i = 0u; i < size; i += 2u)
+	{
+		voltage = table[i];
+		soc = table[i + 1u];
+		if ((voltage < SOC_VOL_MIN) || (voltage > SOC_VOL_MAX) ||
+			(soc < SOC_VALUE_MIN) || (soc > SOC_VALUE_MAX))
+			return 0u;
+
+		if ((i + 2u) >= size)
+			break;
+
+		next_voltage = table[i + 2u];
+		next_soc = table[i + 3u];
+
+		/* SOC must not rise as voltage falls. */
+		if (next_soc > soc)
+			return 0u;
+
+		/*
+		 * OCV evaluation is only allowed at >=1500mV. In that usable range
+		 * voltage points must be strictly descending so interpolation can never
+		 * see x1 == x2 and divide by zero.
+		 */
+		if ((voltage >= 1500u) && (next_voltage >= 1500u) &&
+			(next_voltage >= voltage))
+			return 0u;
+
+		/* Below the usable OCV range, only non-increasing voltage is accepted. */
+		if ((voltage < 1500u) && (next_voltage > voltage))
+			return 0u;
+	}
+
+	return 1u;
+}
+
 const UINT16 SOC_Table_Default[42] = {
 	3336,
 	100,
