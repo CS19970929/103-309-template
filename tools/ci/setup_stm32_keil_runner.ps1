@@ -18,6 +18,31 @@ function Find-FirstExisting([string[]]$Candidates) {
     return $null
 }
 
+function Get-GhRunnerToken {
+    param(
+        [string]$RepoName,
+        [ValidateSet("registration","remove")]
+        [string]$Kind
+    )
+
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $gh) {
+        throw "GitHub CLI (gh) is required to repair/reconfigure an existing runner automatically. Install/authenticate gh, or remove the runner in GitHub Settings and rerun with -RegistrationToken."
+    }
+
+    $endpoint = if ($Kind -eq "registration") {
+        "repos/$RepoName/actions/runners/registration-token"
+    } else {
+        "repos/$RepoName/actions/runners/remove-token"
+    }
+
+    $token = & gh api --method POST $endpoint --jq ".token"
+    if ($LASTEXITCODE -ne 0 -or -not $token) {
+        throw "Unable to obtain $Kind runner token through gh. Ensure gh is authenticated as the repository owner/admin."
+    }
+    return $token.Trim()
+}
+
 function Get-RegistrationToken {
     param([string]$RepoName, [string]$ExplicitToken)
 
@@ -25,16 +50,21 @@ function Get-RegistrationToken {
         return $ExplicitToken
     }
 
-    $gh = Get-Command gh -ErrorAction SilentlyContinue
-    if (-not $gh) {
-        throw "No registration token supplied and GitHub CLI (gh) was not found. Get a token from Repo Settings > Actions > Runners > New self-hosted runner, then rerun with -RegistrationToken."
-    }
+    return Get-GhRunnerToken -RepoName $RepoName -Kind "registration"
+}
 
-    $token = & gh api --method POST "repos/$RepoName/actions/runners/registration-token" --jq ".token"
-    if ($LASTEXITCODE -ne 0 -or -not $token) {
-        throw "Unable to obtain runner registration token through gh. Ensure gh is authenticated as the repository owner/admin."
-    }
-    return $token.Trim()
+function Find-RunnerService {
+    param([string]$Root, [string]$Name)
+
+    $services = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -like "actions.runner.*" -and (
+                ($_.PathName -and $_.PathName -like "*$Root*") -or
+                ($_.DisplayName -and $_.DisplayName -like "*$Name*")
+            )
+        }
+
+    return $services | Select-Object -First 1
 }
 
 $uv4 = Find-FirstExisting @(
@@ -84,10 +114,35 @@ if (-not (Test-Path ".\config.cmd")) {
     Remove-Item -Force $zip
 }
 
+$service = Find-RunnerService -Root $RunnerRoot -Name $RunnerName
+
+if ($InstallService -and (Test-Path ".\.runner") -and -not $service) {
+    Write-Host "Existing runner is registered but not installed as a Windows service."
+    Write-Host "Reconfiguring it with --runasservice..."
+
+    $removeToken = Get-GhRunnerToken -RepoName $Repo -Kind "remove"
+    & ".\config.cmd" remove --token $removeToken
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to remove the existing non-service runner configuration."
+    }
+}
+
 if (-not (Test-Path ".\.runner")) {
     $token = Get-RegistrationToken -RepoName $Repo -ExplicitToken $RegistrationToken
-    & ".\config.cmd" --unattended --url "https://github.com/$Repo" --token $token --name $RunnerName --labels "stm32-keil,keil-armcc5" --work "_work" --replace
+    $args = @(
+        "--unattended",
+        "--url", "https://github.com/$Repo",
+        "--token", $token,
+        "--name", $RunnerName,
+        "--labels", "stm32-keil,keil-armcc5",
+        "--work", "_work",
+        "--replace"
+    )
+    if ($InstallService) {
+        $args += "--runasservice"
+    }
 
+    & ".\config.cmd" @args
     if ($LASTEXITCODE -ne 0) {
         throw "GitHub Actions runner registration failed."
     }
@@ -96,17 +151,21 @@ if (-not (Test-Path ".\.runner")) {
 }
 
 if ($InstallService) {
-    if (-not (Test-Path ".\svc.cmd")) {
-        throw "svc.cmd was not found after runner setup."
+    Start-Sleep -Seconds 1
+    $service = Find-RunnerService -Root $RunnerRoot -Name $RunnerName
+    if (-not $service) {
+        throw "Runner was configured with --runasservice, but its Windows service could not be found."
     }
 
-    try {
-        & ".\svc.cmd" install
-    } catch {
-        Write-Host "Runner service may already be installed: $($_.Exception.Message)"
+    if ($service.State -ne "Running") {
+        Start-Service -Name $service.Name
+        Start-Sleep -Seconds 1
+        $service = Get-CimInstance Win32_Service -Filter "Name='$($service.Name)'"
     }
 
-    & ".\svc.cmd" start
+    Write-Host "Service    : $($service.Name)"
+    Write-Host "State      : $($service.State)"
+    Write-Host "Start mode : $($service.StartMode)"
 }
 
 $gh = Get-Command gh -ErrorAction SilentlyContinue
@@ -124,4 +183,4 @@ if ($gh) {
 Write-Host ""
 Write-Host "PASS: STM32 Keil self-hosted runner setup completed."
 Write-Host "Labels: self-hosted, Windows, X64, stm32-keil, keil-armcc5"
-Write-Host "The Telink runner can remain installed separately; this instance uses its own directory and service."
+Write-Host "The Telink runner remains separate; this instance uses its own directory and Windows service."
