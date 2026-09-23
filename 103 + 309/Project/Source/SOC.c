@@ -47,11 +47,44 @@ const UINT16 SOC_Table_Default[42] = {
 	0,
 };
 
+static UINT16 SOC_GetRobustOcvCellVoltage(void)
+{
+	UINT32 sum = 0u;
+	UINT16 min_v = 0xFFFFu;
+	UINT16 max_v = 0u;
+	UINT16 v;
+	UINT8 count = 0u;
+	UINT8 i;
+
+	for (i = 0u; (i < SeriesNum) && (i < 32u); ++i)
+	{
+		v = g_stCellInfoReport.u16VCell[i];
+		if ((v < 1500u) || (v > 5000u))
+			continue;
+
+		sum += v;
+		if (v < min_v)
+			min_v = v;
+		if (v > max_v)
+			max_v = v;
+		count++;
+	}
+
+	/* Trim one high and one low cell to reduce sensitivity to a single outlier. */
+	if (count >= 3u)
+		return (UINT16)((sum - min_v - max_v) / (UINT32)(count - 2u));
+	if (count > 0u)
+		return (UINT16)(sum / count);
+
+	return g_stCellInfoReport.u16VCellMin;
+}
+
 // 长期更新数据
 void RefreshData_SOC(void)
 {
 	SOC_Enhance_Element.u16_VCellMax = g_stCellInfoReport.u16VCellMax;
-	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 公版决定不扩散出去，包含6和16串，客户使用体验问题，低压保护SOC一定要降下来
+	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 末端/低压边界仍使用最低单体
+	SOC_Enhance_Element.u16_VCellOCV = SOC_GetRobustOcvCellVoltage();
 	SOC_Enhance_Element.i32_Current_mA = BmsCurrent_GetCurrent_mA();
 	SOC_Enhance_Element.u16_Ichg = g_stCellInfoReport.u16Ichg;
 	SOC_Enhance_Element.u16_Idsg = g_stCellInfoReport.u16IDischg;

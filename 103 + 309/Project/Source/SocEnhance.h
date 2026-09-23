@@ -44,7 +44,8 @@ struct SOC_ENHANCE_ELEMENT {
 
 	//��Ҫ����ϸ�ֵ�Ĳ���
 	UINT16 u16_VCellMax;			//mV
-	UINT16 u16_VCellMin;        	//mV����6��(ֻ��6��)�͵�16���������������
+	UINT16 u16_VCellMin;        	//mV
+	UINT16 u16_VCellOCV;			//mV, robust pack OCV representative voltage����6��(ֻ��6��)�͵�16���������������
 	INT32 i32_Current_mA;			// canonical current: charge > 0, discharge < 0
 	UINT16 u16_Ichg;				//A*10, legacy/report compatibility
 	UINT16 u16_Idsg;				//A*10, legacy/report compatibility
