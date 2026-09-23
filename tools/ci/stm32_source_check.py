@@ -70,6 +70,8 @@ def collect_project_settings(project: Path):
 
     c_sources: list[Path] = []
     non_gnu_link_inputs: list[Path] = []
+    legacy_gcc_excludes = {"core_cm3.c"}
+
     for file_node in target.findall("./Groups/Group/Files/File"):
         file_path = file_node.findtext("FilePath")
         if not file_path:
@@ -77,6 +79,9 @@ def collect_project_settings(project: Path):
         resolved = resolve_uv_path(project_dir, file_path)
         suffix = resolved.suffix.lower()
         if suffix == ".c":
+            if resolved.name.lower() in legacy_gcc_excludes:
+                print(f"warning: skipping legacy CMSIS source incompatible with modern GCC: {resolved}")
+                continue
             c_sources.append(resolved)
         elif suffix in {".s", ".asm", ".lib", ".a"}:
             non_gnu_link_inputs.append(resolved)
