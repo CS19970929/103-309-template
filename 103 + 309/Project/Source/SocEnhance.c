@@ -487,6 +487,12 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 // 多级保护，有个BUG，就是电压上涨太快，算不过来
 void CorrectionTerminal_CC(enum _CUR CurrentType)
 {
+	/*
+	 * A dedicated high-current terminal model is not validated yet.
+	 * Never disable endpoint convergence when the external flag is enabled;
+	 * fall back to the bounded CV strategy until a CC-specific model exists.
+	 */
+	CorrectionTerminal_CV(CurrentType);
 }
 
 void Correction_Terminal(enum _CUR CurrentType)
