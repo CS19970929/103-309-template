@@ -112,12 +112,17 @@ def main() -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    missing = [str(path) for path in [*include_dirs, *sources] if not path.exists()]
-    if missing:
-        print("error: uvprojx references missing paths:", file=sys.stderr)
-        for item in missing:
+    missing_sources = [str(path) for path in sources if not path.exists()]
+    if missing_sources:
+        print("error: uvprojx references missing source files:", file=sys.stderr)
+        for item in missing_sources:
             print(f"  - {item}", file=sys.stderr)
         return 2
+
+    missing_include_dirs = [path for path in include_dirs if not path.exists()]
+    for path in missing_include_dirs:
+        print(f"warning: skipping missing include directory from legacy uvprojx: {path}")
+    include_dirs = [path for path in include_dirs if path.exists()]
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
