@@ -7,6 +7,11 @@
 #define E2P_ADDR_SOC E2P_ADDR_E2POS_ENHANCE_SOC
 #define E2P_ADDR_DSG_SOC_Int (E2P_ADDR_E2POS_ENHANCE_SOC + 2)
 #define E2P_ADDR_CYCLE_TIMES (E2P_ADDR_E2POS_ENHANCE_SOC + 2 + 2)
+#define E2P_ADDR_SOC_JOURNAL_A (E2P_ADDR_E2POS_ENHANCE_SOC + 6)
+#define SOC_PERSIST_SLOT_WORDS ((UINT16)8)
+#define E2P_ADDR_SOC_JOURNAL_B (E2P_ADDR_SOC_JOURNAL_A + (SOC_PERSIST_SLOT_WORDS * 2))
+#define SOC_PERSIST_MAGIC      ((UINT16)0x534F)
+#define SOC_PERSIST_VERSION    ((UINT8)1)
 // #define E2P_ADDR_CYCLE_TIMES	(E2P_ADDR_E2POS_ENHANCE_SOC + 2 + 2)
 
 #define SOC_CURRENT_DEADBAND_MA          ((INT32)200)
@@ -662,70 +667,271 @@ static void SOC_RestOcv_Correct_200ms(void)
 							 SOC_Calculate_Element.u32CapFactory);
 }
 
+enum SOC_PERSIST_SLOT_STATE
+{
+	SOC_PERSIST_SLOT_EMPTY = 0,
+	SOC_PERSIST_SLOT_VALID,
+	SOC_PERSIST_SLOT_INVALID
+};
+
+struct SOC_PERSIST_DATA
+{
+	UINT8 seq;
+	UINT32 cap_now;
+	UINT16 cycle_count;
+	UINT32 cycle_dsg_acc;
+};
+
+static UINT8 s_u8SocPersistActiveSlot = 0xFFu;
+static UINT8 s_u8SocPersistSeq = 0u;
+
+static UINT16 SOC_Crc16UpdateByte(UINT16 crc, UINT8 data)
+{
+	UINT8 bit;
+	crc ^= (UINT16)data << 8;
+	for (bit = 0u; bit < 8u; ++bit)
+	{
+		if (crc & 0x8000u)
+			crc = (UINT16)((crc << 1) ^ 0x1021u);
+		else
+			crc <<= 1;
+	}
+	return crc;
+}
+
+static UINT16 SOC_PersistCalcCrc(const UINT16 *words, UINT8 count)
+{
+	UINT8 i;
+	UINT16 crc = 0xFFFFu;
+	for (i = 0u; i < count; ++i)
+	{
+		crc = SOC_Crc16UpdateByte(crc, (UINT8)(words[i] & 0xFFu));
+		crc = SOC_Crc16UpdateByte(crc, (UINT8)(words[i] >> 8));
+	}
+	return crc;
+}
+
+static enum SOC_PERSIST_SLOT_STATE SOC_PersistReadSlot(UINT16 base_addr, struct SOC_PERSIST_DATA *data)
+{
+	UINT16 words[SOC_PERSIST_SLOT_WORDS];
+	UINT8 i;
+	UINT8 version;
+	UINT16 expected_crc;
+
+	for (i = 0u; i < SOC_PERSIST_SLOT_WORDS; ++i)
+		words[i] = ReadEEPROM_Word_NoZone(base_addr + ((UINT16)i << 1));
+
+	if ((words[0] == 0xFFFFu) && (words[1] == 0xFFFFu) && (words[7] == 0xFFFFu))
+		return SOC_PERSIST_SLOT_EMPTY;
+
+	version = (UINT8)(words[1] >> 8);
+	expected_crc = SOC_PersistCalcCrc(words, 7u);
+	if ((words[0] != SOC_PERSIST_MAGIC) ||
+		(version != SOC_PERSIST_VERSION) ||
+		(words[7] != expected_crc))
+	{
+		return SOC_PERSIST_SLOT_INVALID;
+	}
+
+	data->seq = (UINT8)(words[1] & 0xFFu);
+	data->cap_now = ((UINT32)words[3] << 16) | words[2];
+	data->cycle_count = words[4];
+	data->cycle_dsg_acc = ((UINT32)words[6] << 16) | words[5];
+
+	if ((data->cap_now > SOC_Calculate_Element.u32CapFactory) ||
+		(data->cycle_dsg_acc >= SOC_Calculate_Element.u32CapFactory))
+	{
+		return SOC_PERSIST_SLOT_INVALID;
+	}
+
+	return SOC_PERSIST_SLOT_VALID;
+}
+
+static UINT8 SOC_PersistSeqNewer(UINT8 lhs, UINT8 rhs)
+{
+	UINT8 delta = (UINT8)(lhs - rhs);
+	return ((delta != 0u) && (delta < 128u)) ? 1u : 0u;
+}
+
+static UINT8 SOC_PersistLoad(void)
+{
+	struct SOC_PERSIST_DATA a;
+	struct SOC_PERSIST_DATA b;
+	struct SOC_PERSIST_DATA *selected = 0;
+	enum SOC_PERSIST_SLOT_STATE state_a;
+	enum SOC_PERSIST_SLOT_STATE state_b;
+
+	state_a = SOC_PersistReadSlot(E2P_ADDR_SOC_JOURNAL_A, &a);
+	state_b = SOC_PersistReadSlot(E2P_ADDR_SOC_JOURNAL_B, &b);
+
+	if ((state_a == SOC_PERSIST_SLOT_VALID) && (state_b == SOC_PERSIST_SLOT_VALID))
+	{
+		if (SOC_PersistSeqNewer(b.seq, a.seq))
+		{
+			selected = &b;
+			s_u8SocPersistActiveSlot = 1u;
+		}
+		else
+		{
+			selected = &a;
+			s_u8SocPersistActiveSlot = 0u;
+		}
+	}
+	else if (state_a == SOC_PERSIST_SLOT_VALID)
+	{
+		selected = &a;
+		s_u8SocPersistActiveSlot = 0u;
+	}
+	else if (state_b == SOC_PERSIST_SLOT_VALID)
+	{
+		selected = &b;
+		s_u8SocPersistActiveSlot = 1u;
+	}
+	else
+	{
+		if ((state_a == SOC_PERSIST_SLOT_INVALID) || (state_b == SOC_PERSIST_SLOT_INVALID))
+			SOC_Enhance_Element.u16_SOC_CailFaultCnt++;
+		s_u8SocPersistActiveSlot = 0xFFu;
+		return 0u;
+	}
+
+	s_u8SocPersistSeq = selected->seq;
+	SOC_Calculate_Element.u32CapNow = selected->cap_now;
+	SOC_Calculate_Element.u32Cycle_times = selected->cycle_count;
+	SOC_Calculate_Element.u32CycleDsgAcc = selected->cycle_dsg_acc;
+	SOC_Calculate_Element.u8DSG_SOC_Int =
+		SOC_CapacityToPercent(SOC_Calculate_Element.u32CycleDsgAcc,
+							 SOC_Calculate_Element.u32CapFactory);
+	SOC_Calculate_Element.u8SOC_Now =
+		SOC_CapacityToPercent(SOC_Calculate_Element.u32CapNow,
+							 SOC_Calculate_Element.u32CapFactory);
+	return 1u;
+}
+
+static UINT8 SOC_PersistWriteSlot(UINT16 base_addr, UINT8 seq)
+{
+	UINT16 words[SOC_PERSIST_SLOT_WORDS];
+	UINT8 i;
+	UINT8 result = 0u;
+	struct SOC_PERSIST_DATA verify;
+
+	words[0] = SOC_PERSIST_MAGIC;
+	words[1] = ((UINT16)SOC_PERSIST_VERSION << 8) | seq;
+	words[2] = (UINT16)(SOC_Calculate_Element.u32CapNow & 0xFFFFu);
+	words[3] = (UINT16)(SOC_Calculate_Element.u32CapNow >> 16);
+	words[4] = (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu)
+			   ? 0xFFFFu
+			   : (UINT16)SOC_Calculate_Element.u32Cycle_times;
+	words[5] = (UINT16)(SOC_Calculate_Element.u32CycleDsgAcc & 0xFFFFu);
+	words[6] = (UINT16)(SOC_Calculate_Element.u32CycleDsgAcc >> 16);
+	words[7] = SOC_PersistCalcCrc(words, 7u);
+
+	/* CRC is written last, so a power loss leaves the slot invalid rather than half-valid. */
+	for (i = 0u; i < 7u; ++i)
+		result += WriteEEPROM_Word_NoZone(base_addr + ((UINT16)i << 1), words[i]);
+	result += WriteEEPROM_Word_NoZone(base_addr + 14u, words[7]);
+
+	if (result != 0u)
+		return 0u;
+	return (SOC_PersistReadSlot(base_addr, &verify) == SOC_PERSIST_SLOT_VALID) ? 1u : 0u;
+}
+
+static void SOC_PersistSave(void)
+{
+	UINT8 next_slot;
+	UINT8 next_seq;
+	UINT16 slot_addr;
+
+	/* Legacy words are retained for downgrade/service-tool compatibility. */
+	WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now);
+	WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int);
+	WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
+							 (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu)
+							 ? 0xFFFFu
+							 : (UINT16)SOC_Calculate_Element.u32Cycle_times);
+
+	next_slot = (s_u8SocPersistActiveSlot == 0u) ? 1u : 0u;
+	if (s_u8SocPersistActiveSlot == 0xFFu)
+		next_slot = 0u;
+	next_seq = (UINT8)(s_u8SocPersistSeq + 1u);
+	slot_addr = (next_slot == 0u) ? E2P_ADDR_SOC_JOURNAL_A : E2P_ADDR_SOC_JOURNAL_B;
+
+	if (SOC_PersistWriteSlot(slot_addr, next_seq))
+	{
+		s_u8SocPersistActiveSlot = next_slot;
+		s_u8SocPersistSeq = next_seq;
+	}
+	else
+	{
+		SOC_Enhance_Element.u16_SOC_CailFaultCnt++;
+	}
+}
+
 void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 {
 	UINT16 raw_soc;
 	UINT16 raw_dsg_soc;
 	UINT16 raw_cycle;
-	UINT8 repair_needed = 0;
+	UINT8 repair_needed = 0u;
+	UINT8 journal_loaded;
 
 	switch (Command)
 	{
 	case EEPROM_DATA_REFRESH:
-		WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now);
-		WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int);
-		WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
-								 (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu) ? 0xFFFFu : (UINT16)SOC_Calculate_Element.u32Cycle_times);
+		SOC_PersistSave();
+		SOC_Calculate_Element_backup = SOC_Calculate_Element;
 		break;
+
 	case EEPROM_DATA_READ:
 		raw_soc = ReadEEPROM_Word_NoZone(E2P_ADDR_SOC);
 		raw_dsg_soc = ReadEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int);
 		raw_cycle = ReadEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES);
 
-		if (raw_soc <= 100u)
+		SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
+
+		journal_loaded = SOC_PersistLoad();
+		if (!journal_loaded)
 		{
-			SOC_Calculate_Element.u8SOC_Now = (UINT8)raw_soc;
-		}
-		else
-		{
-			/* Keep legacy first-use behaviour, then let the rest/OCV path converge it. */
-			SOC_Calculate_Element.u8SOC_Now = 60u;
-			repair_needed = 1u;
+			if (raw_soc <= 100u)
+				SOC_Calculate_Element.u8SOC_Now = (UINT8)raw_soc;
+			else
+			{
+				SOC_Calculate_Element.u8SOC_Now = 60u;
+				repair_needed = 1u;
+			}
+
+			if (raw_dsg_soc < 100u)
+				SOC_Calculate_Element.u8DSG_SOC_Int = (UINT8)raw_dsg_soc;
+			else
+			{
+				SOC_Calculate_Element.u8DSG_SOC_Int = 0u;
+				repair_needed = 1u;
+			}
+
+			if (raw_cycle != 0xFFFFu)
+				SOC_Calculate_Element.u32Cycle_times = (UINT32)raw_cycle;
+			else
+			{
+				SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever;
+				repair_needed = 1u;
+			}
+
+			SOC_Calculate_Element.u32CapNow =
+				(UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100u;
+			SOC_Calculate_Element.u32CycleDsgAcc =
+				(UINT32)SOC_Calculate_Element.u8DSG_SOC_Int * SOC_Calculate_Element.u32CapFactory / 100u;
+
+			/* Seed the new journal from legacy data on first upgrade/start. */
+			SOC_PersistSave();
 		}
 
-		if (raw_dsg_soc < 100u)
-		{
-			SOC_Calculate_Element.u8DSG_SOC_Int = (UINT8)raw_dsg_soc;
-		}
-		else
-		{
-			SOC_Calculate_Element.u8DSG_SOC_Int = 0u;
-			repair_needed = 1u;
-		}
-
-		if (raw_cycle != 0xFFFFu)
-		{
-			SOC_Calculate_Element.u32Cycle_times = (UINT32)raw_cycle;
-		}
-		else
-		{
-			SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever;
-			repair_needed = 1u;
-		}
-
-		SOC_Calculate_Element.u32CapFull = (UINT32)SOC_Calculate_Element.u32CapFactory;
-		SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100u;
-		SOC_Calculate_Element.u32CycleDsgAcc = (UINT32)SOC_Calculate_Element.u8DSG_SOC_Int * SOC_Calculate_Element.u32CapFactory / 100u;
 		SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
-
 		if (repair_needed)
-		{
 			SOC_Enhance_Element.u16_SOC_CailFaultCnt++;
-			SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH);
-		}
 
 		SOC_Calculate_Element_backup = SOC_Calculate_Element;
 		break;
+
 	default:
 		break;
 	}
@@ -776,30 +982,24 @@ void SOC_Update_StartUp(void)
 */
 void SOC_EEPROM_Deal_Monitor(void)
 {
-	static UINT8 su8_TimeCnt = 0;
+	UINT32 cap_delta;
+	UINT32 checkpoint_delta;
 
 	if (!SOC_Enhance_Element.u16_SOC_InitOver)
-	{ // 初始化完才开始这个函数
 		return;
-	}
 
-	if (SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element_backup.u8SOC_Now)
-	{
-		SOC_Calculate_Element_backup.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now);
-	}
+	cap_delta = (SOC_Calculate_Element.u32CapNow >= SOC_Calculate_Element_backup.u32CapNow)
+				? (SOC_Calculate_Element.u32CapNow - SOC_Calculate_Element_backup.u32CapNow)
+				: (SOC_Calculate_Element_backup.u32CapNow - SOC_Calculate_Element.u32CapNow);
+	checkpoint_delta = SOC_Calculate_Element.u32CapFactory / 200u; /* 0.5% */
 
-	if (SOC_Calculate_Element.u8DSG_SOC_Int != SOC_Calculate_Element_backup.u8DSG_SOC_Int)
+	if ((checkpoint_delta == 0u) ||
+		(cap_delta >= checkpoint_delta) ||
+		(SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element_backup.u32Cycle_times) ||
+		(SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element_backup.u8SOC_Now))
 	{
-		SOC_Calculate_Element_backup.u8DSG_SOC_Int = SOC_Calculate_Element.u8DSG_SOC_Int;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int);
-	}
-
-	if (SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element_backup.u32Cycle_times)
-	{
-		SOC_Calculate_Element_backup.u32Cycle_times = SOC_Calculate_Element.u32Cycle_times;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
-								 (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu) ? 0xFFFFu : (UINT16)SOC_Calculate_Element.u32Cycle_times);
+		SOC_PersistSave();
+		SOC_Calculate_Element_backup = SOC_Calculate_Element;
 	}
 }
 
