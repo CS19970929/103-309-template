@@ -34,7 +34,7 @@ jobs:
       - name: Install GNU Arm GCC and cppcheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi cppcheck
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi cppcheck
 
       - name: Compile all C translation units
         shell: bash
