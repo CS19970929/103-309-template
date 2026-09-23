@@ -654,7 +654,10 @@ void SOC_State_Transfer(void)
 
 void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 {
-	UINT16 temp = 0;
+	UINT16 raw_soc;
+	UINT16 raw_dsg_soc;
+	UINT16 raw_cycle;
+	UINT8 repair_needed = 0;
 
 	switch (Command)
 	{
@@ -665,12 +668,49 @@ void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 								 (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu) ? 0xFFFFu : (UINT16)SOC_Calculate_Element.u32Cycle_times);
 		break;
 	case EEPROM_DATA_READ:
-		SOC_Calculate_Element.u8SOC_Now = (UINT8)ReadEEPROM_Word_NoZone(E2P_ADDR_SOC);
-		SOC_Calculate_Element.u8DSG_SOC_Int = (UINT8)ReadEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int);
-		SOC_Calculate_Element.u32Cycle_times = (UINT32)ReadEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES);
-		SOC_Calculate_Element.u32CapFull = (UINT32)SOC_Calculate_Element.u32CapFactory;
+		raw_soc = ReadEEPROM_Word_NoZone(E2P_ADDR_SOC);
+		raw_dsg_soc = ReadEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int);
+		raw_cycle = ReadEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES);
 
-		SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
+		if (raw_soc <= 100u)
+		{
+			SOC_Calculate_Element.u8SOC_Now = (UINT8)raw_soc;
+		}
+		else
+		{
+			/* Keep legacy first-use behaviour, then let the rest/OCV path converge it. */
+			SOC_Calculate_Element.u8SOC_Now = 60u;
+			repair_needed = 1u;
+		}
+
+		if (raw_dsg_soc < 100u)
+		{
+			SOC_Calculate_Element.u8DSG_SOC_Int = (UINT8)raw_dsg_soc;
+		}
+		else
+		{
+			SOC_Calculate_Element.u8DSG_SOC_Int = 0u;
+			repair_needed = 1u;
+		}
+
+		if (raw_cycle != 0xFFFFu)
+		{
+			SOC_Calculate_Element.u32Cycle_times = (UINT32)raw_cycle;
+		}
+		else
+		{
+			SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever;
+			repair_needed = 1u;
+		}
+
+		SOC_Calculate_Element.u32CapFull = (UINT32)SOC_Calculate_Element.u32CapFactory;
+		SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100u;
+
+		if (repair_needed)
+		{
+			SOC_Enhance_Element.u16_SOC_CailFaultCnt++;
+			SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH);
+		}
 
 		SOC_Calculate_Element_backup = SOC_Calculate_Element;
 		break;
