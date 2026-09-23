@@ -1,0 +1,118 @@
+name: STM32F103 CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_keil:
+        description: "Run the Windows Keil/ARMCC5 production build"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stm32-f103-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_PATH: "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx"
+
+jobs:
+  gcc-source-check:
+    name: GNU Arm source compile gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GNU Arm GCC and cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi cppcheck
+
+      - name: Compile all C translation units
+        shell: bash
+        run: |
+          mkdir -p build/ci
+          set +e
+          python3 tools/ci/stm32_source_check.py \
+            --project "$PROJECT_PATH" \
+            --out build/ci/gcc-source-check \
+            2>&1 | tee build/ci/gcc-source-check.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+
+      - name: cppcheck baseline
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p build/ci
+          cppcheck \
+            --enable=warning,performance,portability \
+            --inconclusive \
+            --force \
+            --std=c11 \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            -DSTM32F10X_MD \
+            -DUSE_STDPERIPH_DRIVER \
+            -I"103 + 309/Project/Lib" \
+            -I"103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers" \
+            -I"103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/inc" \
+            -I"103 + 309/Project/Source" \
+            -I"103 + 309/Project/Source/conf" \
+            "103 + 309/Project/Source" \
+            2> build/ci/cppcheck.txt
+          cat build/ci/cppcheck.txt
+
+      - name: Upload source-check diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stm32-gcc-source-check
+          path: build/ci
+          if-no-files-found: ignore
+          retention-days: 14
+
+  keil-armcc5-production:
+    name: Keil ARMCC5 production build
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.run_keil) ||
+      (github.event_name == 'push' && vars.STM32_KEIL_CI_ENABLED == '1')
+    runs-on: [self-hosted, Windows, X64, stm32-keil]
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Runner diagnostics
+        shell: powershell
+        run: |
+          Write-Host "Computer: $env:COMPUTERNAME"
+          Write-Host "User:     $env:USERNAME"
+          Write-Host "Workspace:$env:GITHUB_WORKSPACE"
+          if (Test-Path "C:\Keil_v5\UV4\UV4.exe") {
+            Write-Host "Keil: C:\Keil_v5\UV4\UV4.exe"
+          }
+
+      - name: Build production firmware with Keil
+        shell: powershell
+        run: |
+          & ".\tools\ci\keil_build.ps1" -Project "$env:PROJECT_PATH"
+
+      - name: Upload Keil firmware and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stm32-keil-production-${{ github.sha }}
+          path: build/keil
+          if-no-files-found: ignore
+          retention-days: 30
