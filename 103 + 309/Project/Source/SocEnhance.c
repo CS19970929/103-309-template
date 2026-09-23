@@ -221,6 +221,10 @@ void soc_factory_param_init_first(void)
 	SOC_Calculate_Element.u8SOC_Now = 60;
 	SOC_Calculate_Element.u8SOC_Display = 60;
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
+	SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u32CapFactory * 60u / 100u;
+	SOC_Calculate_Element.u32CycleDsgAcc = 0u;
+	SOC_Calculate_Element.u8DSG_SOC_Int = 0u;
+	SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
 	SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH);
 }
 
