@@ -70,7 +70,7 @@ def collect_project_settings(project: Path):
 
     c_sources: list[Path] = []
     non_gnu_link_inputs: list[Path] = []
-    legacy_gcc_excludes = {"core_cm3.c"}
+    legacy_gcc_excludes = {"core_cm3.c", "stm32f10x_it.c"}
 
     for file_node in target.findall("./Groups/Group/Files/File"):
         file_path = file_node.findtext("FilePath")
