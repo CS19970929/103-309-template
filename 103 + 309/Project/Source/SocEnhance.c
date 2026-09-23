@@ -911,13 +911,28 @@ static void SOC_PersistSave(void)
 	UINT8 next_seq;
 	UINT16 slot_addr;
 
-	/* Legacy words are retained for downgrade/service-tool compatibility. */
-	WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now);
-	WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int);
-	WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
+	/*
+	 * Legacy words are retained for downgrade/service-tool compatibility, but
+	 * do not rewrite them on every 0.5% high-precision journal checkpoint.
+	 */
+	if ((s_u8SocPersistActiveSlot == 0xFFu) ||
+		(SOC_Calculate_Element.u8SOC_Now != SOC_Calculate_Element_backup.u8SOC_Now))
+	{
+		WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now);
+	}
+	if ((s_u8SocPersistActiveSlot == 0xFFu) ||
+		(SOC_Calculate_Element.u8DSG_SOC_Int != SOC_Calculate_Element_backup.u8DSG_SOC_Int))
+	{
+		WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int);
+	}
+	if ((s_u8SocPersistActiveSlot == 0xFFu) ||
+		(SOC_Calculate_Element.u32Cycle_times != SOC_Calculate_Element_backup.u32Cycle_times))
+	{
+		WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
 							 (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu)
 							 ? 0xFFFFu
 							 : (UINT16)SOC_Calculate_Element.u32Cycle_times);
+	}
 
 	next_slot = (s_u8SocPersistActiveSlot == 0u) ? 1u : 0u;
 	if (s_u8SocPersistActiveSlot == 0xFFu)
