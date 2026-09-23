@@ -12,6 +12,10 @@
 #define SOC_VIRTUAL_CURRENT_CHG (UINT16)2 // A*10，1和2都认为是0，带=号，0.2就开始算了
 #define SOC_VIRTUAL_CURRENT_DSG (UINT16)2 // A*10，1和2都认为是0，这个不能为0的同时，把=号判断上去，不然就会卡在DSG那里计算出不来。
 
+#define SOC_CURRENT_DEADBAND_MA          ((INT32)200)
+#define SOC_INTEGRATION_PERIOD_MS        ((INT32)200)
+#define SOC_CAP_UNIT_MA_MS               ((INT32)100000) /* 1 x (A*10*s) = 100000 mA*ms */
+
 // #define CHG_CUR_1C							2100	//A*10恒流充电为1C，恒压充电为1C-0.1C(SOC=95%)，涓流充电也为0.1C
 #define EEPROM_VALUE_POWEROFF_FLAG ((UINT16)0x5678)
 #define EEPROM_VALUE_DATA_UPDATE_FLAG ((UINT16)0x9ABC)
@@ -48,6 +52,8 @@ struct SOC_CALCULATE_ELEMENT
 	UINT32 u32CycleT_Limit; // 可循环次数(EFC)
 	// 以下置零
 	UINT32 u32CapChange;	  // 电池容量变化	   As*10，叠加类型
+	INT32 i32CoulombRemainder_mAms; // 200ms积分余数，避免小电流/短脉冲量化丢失
+	UINT32 u32CycleDsgAcc;             // 当前EFC周期累计放电量，单位同u32CapFactory
 	UINT8 u8OCV_Cali_Flag;	  // 开路电压法可使用标志
 	UINT8 u8CHG_AHCalcu_Flag; // 充电安时积分可使用标志
 	UINT8 u8DSG_AHCalcu_Flag; // 放电安时积分可使用标志
@@ -234,6 +240,8 @@ void soc_param_lib_init(void)
 	SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit;
 
 	SOC_Calculate_Element.u32CapChange = 0;
+	SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
+	SOC_Calculate_Element.u32CycleDsgAcc = 0;
 	SOC_Calculate_Element.u8OCV_Cali_Flag = 0; // 第一次写置1出现了开机严重错误的问题
 	SOC_Calculate_Element.u8CHG_AHCalcu_Flag = 0;
 	SOC_Calculate_Element.u8DSG_AHCalcu_Flag = 0;
@@ -490,12 +498,114 @@ void Correction_Terminal(enum _CUR CurrentType)
 	}
 }
 
+static UINT32 SOC_AbsCurrent_mA(INT32 current_mA)
+{
+	return (current_mA < 0) ? (UINT32)(-current_mA) : (UINT32)current_mA;
+}
+
+static UINT8 SOC_CapacityToPercent(UINT32 capacity, UINT32 full_capacity)
+{
+	UINT32 one_percent;
+	UINT32 percent;
+
+	if (full_capacity == 0u)
+		return 0u;
+	if (capacity >= full_capacity)
+		return 100u;
+
+	one_percent = full_capacity / 100u;
+	if (one_percent == 0u)
+		return (UINT8)((capacity * 100u) / full_capacity);
+
+	percent = capacity / one_percent;
+	return (percent > 99u) ? 99u : (UINT8)percent;
+}
+
+static void SOC_UpdateCycleEFC(UINT32 discharged_cap)
+{
+	if ((discharged_cap == 0u) || (SOC_Calculate_Element.u32CapFactory == 0u))
+		return;
+
+	SOC_Calculate_Element.u32CycleDsgAcc += discharged_cap;
+	while (SOC_Calculate_Element.u32CycleDsgAcc >= SOC_Calculate_Element.u32CapFactory)
+	{
+		SOC_Calculate_Element.u32CycleDsgAcc -= SOC_Calculate_Element.u32CapFactory;
+		SOC_Calculate_Element.u32Cycle_times++;
+	}
+
+	SOC_Calculate_Element.u8DSG_SOC_Int =
+		SOC_CapacityToPercent(SOC_Calculate_Element.u32CycleDsgAcc,
+							 SOC_Calculate_Element.u32CapFactory);
+}
+
+static void SOC_Coulomb_Integrate_200ms(void)
+{
+	static UINT8 s_u8Terminal200msCnt = 0;
+	INT32 current_mA = SOC_Enhance_Element.i32_Current_mA;
+	INT32 delta_mAms;
+	INT32 delta_cap;
+	UINT32 delta_abs;
+	UINT32 cap_limit = SOC_Calculate_Element.u32CapFull;
+
+	if (cap_limit == 0u)
+		cap_limit = SOC_Calculate_Element.u32CapFactory;
+
+	if (SOC_AbsCurrent_mA(current_mA) < (UINT32)SOC_CURRENT_DEADBAND_MA)
+		current_mA = 0;
+
+	if (current_mA == 0)
+	{
+		s_u8Terminal200msCnt = 0;
+		return;
+	}
+
+	/* Keep the legacy terminal correction at its original ~1 s cadence. */
+	if (++s_u8Terminal200msCnt >= 5u)
+	{
+		s_u8Terminal200msCnt = 0;
+		Correction_Terminal((current_mA > 0) ? CurCHG : CurDSG);
+	}
+
+	delta_mAms = SOC_Calculate_Element.i32CoulombRemainder_mAms +
+				  current_mA * SOC_INTEGRATION_PERIOD_MS;
+	delta_cap = delta_mAms / SOC_CAP_UNIT_MA_MS;
+	SOC_Calculate_Element.i32CoulombRemainder_mAms =
+		delta_mAms - delta_cap * SOC_CAP_UNIT_MA_MS;
+
+	if (delta_cap > 0)
+	{
+		delta_abs = (UINT32)delta_cap;
+		if (SOC_Calculate_Element.u32CapNow >= cap_limit ||
+			delta_abs >= (cap_limit - SOC_Calculate_Element.u32CapNow))
+		{
+			SOC_Calculate_Element.u32CapNow = cap_limit;
+		}
+		else
+		{
+			SOC_Calculate_Element.u32CapNow += delta_abs;
+		}
+	}
+	else if (delta_cap < 0)
+	{
+		delta_abs = (UINT32)(-delta_cap);
+		if (delta_abs >= SOC_Calculate_Element.u32CapNow)
+			SOC_Calculate_Element.u32CapNow = 0u;
+		else
+			SOC_Calculate_Element.u32CapNow -= delta_abs;
+		SOC_UpdateCycleEFC(delta_abs);
+	}
+
+	SOC_Calculate_Element.u8SOC_Old = SOC_Calculate_Element.u8SOC_Now;
+	SOC_Calculate_Element.u8SOC_Now =
+		SOC_CapacityToPercent(SOC_Calculate_Element.u32CapNow, cap_limit);
+}
+
 void SOC_Cont_AH_Int_CHG(void)
 {
 	UINT32 C_change_per;
 	static UINT8 s_u8_CHG200msCnt = 0;
 	static UINT8 s_u8_Transfer200msCnt = 0;
-	if (SOC_Enhance_Element.u16_Ichg >= SOC_VIRTUAL_CURRENT_CHG)
+	if (SOC_Enhance_Element.i32_Current_mA >= SOC_CURRENT_DEADBAND_MA)
 	{
 		// if(g_stCellInfoReport.u16Ichg > 0) {
 		if (++s_u8_CHG200msCnt >= 5)
@@ -627,7 +737,7 @@ void SOC_State_Transfer(void)
 		if (s_u8SOC_State_OCV)
 			s_u8SOC_State_OCV = 0;
 	}
-	else if (SOC_Enhance_Element.u16_Idsg >= SOC_VIRTUAL_CURRENT_DSG)
+	else if (SOC_Enhance_Element.i32_Current_mA <= -SOC_CURRENT_DEADBAND_MA)
 	{
 		if (++s_u8SOC_State_DSG >= 3)
 		{
@@ -705,6 +815,8 @@ void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 
 		SOC_Calculate_Element.u32CapFull = (UINT32)SOC_Calculate_Element.u32CapFactory;
 		SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100u;
+		SOC_Calculate_Element.u32CycleDsgAcc = (UINT32)SOC_Calculate_Element.u8DSG_SOC_Int * SOC_Calculate_Element.u32CapFactory / 100u;
+		SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
 
 		if (repair_needed)
 		{
@@ -731,6 +843,8 @@ void SOC_Update_StartUp(void)
 			// 添加容量初始化
 		// SOC_Calculate_Element.u8SOC_Now = 0;
 		SOC_Calculate_Element.u8DSG_SOC_Int = 0;
+		SOC_Calculate_Element.u32CycleDsgAcc = 0;
+		SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
 		SOC_Calculate_Element.u32CapFactory = (UINT32)SOC_Enhance_Element.u16_SOC_Ah * 3600;
 		SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever;
 		SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit;
@@ -900,6 +1014,8 @@ void InitSOC_IntEnhance(void)
 	SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit;
 
 	SOC_Calculate_Element.u32CapChange = 0;
+	SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;
+	SOC_Calculate_Element.u32CycleDsgAcc = 0;
 	SOC_Calculate_Element.u8OCV_Cali_Flag = 0; // 第一次写置1出现了开机严重错误的问题
 	SOC_Calculate_Element.u8CHG_AHCalcu_Flag = 0;
 	SOC_Calculate_Element.u8DSG_AHCalcu_Flag = 0;
@@ -916,13 +1032,13 @@ void InitSOC_IntEnhance(void)
 UINT8 isCHG(void)
 {
 	// return g_stCellInfoReport.u16Ichg > SOC_VIRTUAL_CURRENT_CHG ? 1 : 0;
-	return SOC_Enhance_Element.u16_Ichg > SOC_VIRTUAL_CURRENT_CHG ? 1 : 0;
+	return SOC_Enhance_Element.i32_Current_mA >= SOC_CURRENT_DEADBAND_MA ? 1 : 0;
 }
 
 UINT8 isDSG(void)
 {
 	// return g_stCellInfoReport.u16IDischg > SOC_VIRTUAL_CURRENT_DSG ? 1 : 0;
-	return SOC_Enhance_Element.u16_Idsg > SOC_VIRTUAL_CURRENT_DSG ? 1 : 0;
+	return SOC_Enhance_Element.i32_Current_mA <= -SOC_CURRENT_DEADBAND_MA ? 1 : 0;
 }
 
 
@@ -975,27 +1091,12 @@ void soc_cali(void)
 */
 void SOC_IntEnhance_Ctrl(void)
 {
-	switch (SOC_Cali_Flag)
-	{
-	// case SOC_CALI_DATA_INIT:
-	// 	InitSOC_IntEnhance();
-	// 	break;
-	// case SOC_CALI_STARTUP:
-	// 	SOC_Update_StartUp();
-	// 	break;
-	case SOC_CALI_STATE_TRANSFER:
-		SOC_State_Transfer();
-		break;
-	case SOC_CALI_CONT_CHG:
-		SOC_Cont_AH_Int_CHG();
-		break;
-	case SOC_CALI_CONT_DSG:
-		SOC_Cont_AH_Int_DSG();
-		break;
-	default:
-		SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
-		break;
-	}
+	/*
+	 * SOC is integrated on every fixed 200 ms tick. SOC_Cali_Flag is retained
+	 * only for compatibility/diagnostics; it no longer gates coulomb counting.
+	 */
+	SOC_State_Transfer();
+	SOC_Coulomb_Integrate_200ms();
 	soc_cali();
 
 	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
