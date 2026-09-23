@@ -289,6 +289,11 @@ void soc_param_lib_init(void)
 UINT8 Get_OpenCircuit_Value(void)
 {
 	UINT8 result = 0;
+
+	/* Never interpolate the legacy low-voltage sentinel region. */
+	if (SOC_Enhance_Element.u16_VCellOCV < 1500u)
+		return 0u;
+
 	switch (SOC_Enhance_Element.u16_SOC_TableSelect)
 	{
 	case SOC_TABLE_TEST:
