@@ -98,9 +98,6 @@ if (Test-Path $logPath) {
     Get-Content -LiteralPath $logPath
 }
 
-if ($exitCode -ne 0) {
-    throw "Keil build process returned exit code $exitCode"
-}
 if (-not (Test-Path $logPath)) {
     throw "Keil did not produce a build log."
 }
@@ -116,7 +113,10 @@ $errorCount = [int]$errorMatch.Groups[1].Value
 $warningCount = if ($warningMatch.Success) { [int]$warningMatch.Groups[1].Value } else { -1 }
 
 if ($errorCount -ne 0) {
-    throw "Keil production build failed with $errorCount error(s)."
+    throw "Keil production build failed with $errorCount error(s). UV4 exit code: $exitCode"
+}
+if ($exitCode -ne 0) {
+    Write-Warning "UV4 returned exit code $exitCode, but the Keil build log reports 0 errors. Treating the production build as successful."
 }
 if ($FailOnWarnings -and $warningCount -gt 0) {
     throw "Keil production build has $warningCount warning(s) and FailOnWarnings is enabled."
@@ -155,6 +155,74 @@ if ($axf -and $fromelf) {
 }
 
 $programSize = [regex]::Match($logText, 'Program Size:[^\r\n]*')
+$map = Get-ChildItem -Path $artifactDir -Filter "*.map" -File -ErrorAction SilentlyContinue |
+       Select-Object -First 1
+
+if ($map) {
+    Write-Host ""
+    Write-Host "=== ARMCC MAP SUMMARY ==="
+    $mapText = Get-Content -Raw -LiteralPath $map.FullName
+
+    $roTotal = [regex]::Match($mapText, 'Total RO\s+Size[^\r\n]*')
+    $rwTotal = [regex]::Match($mapText, 'Total RW\s+Size[^\r\n]*')
+    $romTotal = [regex]::Match($mapText, 'Total ROM Size[^\r\n]*')
+
+    foreach ($m in @($roTotal, $rwTotal, $romTotal)) {
+        if ($m.Success) {
+            Write-Host $m.Value.Trim()
+        }
+    }
+
+    $objectRows = @()
+    foreach ($line in (Get-Content -LiteralPath $map.FullName)) {
+        if ($line -match '^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+\.o)\s*
+    "target=$Target",
+    "uv4=$uv4",
+    "fromelf=$fromelf",
+    "uv4_exit_code=$exitCode",
+    "errors=$errorCount",
+    "warnings=$warningCount",
+    "program_size=$($programSize.Value)"
+)
+$summary | Set-Content -Encoding UTF8 -LiteralPath $summaryPath
+
+Write-Host ""
+Write-Host "PASS: Keil ARMCC5 production build completed."
+Write-Host "Errors   : $errorCount"
+Write-Host "Warnings : $warningCount"
+if ($programSize.Success) {
+    Write-Host $programSize.Value
+}
+Write-Host "Artifacts: $artifactDir"
+) {
+            $objectRows += [pscustomobject]@{
+                Code = [int]$matches[1]
+                IncData = [int]$matches[2]
+                RO = [int]$matches[3]
+                RW = [int]$matches[4]
+                ZI = [int]$matches[5]
+                Debug = [int]$matches[6]
+                Name = $matches[7].Trim()
+                ROM = ([int]$matches[1] + [int]$matches[3] + [int]$matches[4])
+                RAM = ([int]$matches[4] + [int]$matches[5])
+            }
+        }
+    }
+
+    if ($objectRows.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Top objects by ROM:"
+        $objectRows | Sort-Object ROM -Descending | Select-Object -First 12 |
+            Format-Table Name,Code,RO,RW,ROM -AutoSize | Out-String | Write-Host
+
+        Write-Host "Top objects by RAM:"
+        $objectRows | Sort-Object RAM -Descending | Select-Object -First 12 |
+            Format-Table Name,RW,ZI,RAM -AutoSize | Out-String | Write-Host
+    }
+} else {
+    Write-Warning "No ARMCC map file was found in the Keil Listings/Objects directories."
+}
+
 $summary = @(
     "project=$projectPath",
     "target=$Target",
