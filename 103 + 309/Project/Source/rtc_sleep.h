@@ -67,6 +67,7 @@ void set_irq_wksource(uint8_t irq);
 
 
 bool isVol_low_sleep(void);
+bool isHaveCurrent_sh3x(void);
 void entersleep(enum _SLEEP_MODE mode);
 
 void sleep(void);

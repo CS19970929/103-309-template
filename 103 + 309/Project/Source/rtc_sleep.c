@@ -180,28 +180,25 @@ bool isHaveCurrent_sh3x(void)
 #if (AFE_TYPE == sh36xx)
 
     bool isCURR = false;
-    uint16_t current = SH367309_Read_AFE1.u16Current;
+    INT32 current_mA;
 
     DataLoad_Current();
-    // DataLoad_Current_OK();
+    current_mA = BmsCurrent_GetCurrent_mA();
 
     log_i("ichg %d\n", g_stCellInfoReport.u16Ichg);
     log_i("dsg %d\n", g_stCellInfoReport.u16IDischg);
-#if 0
-	if(ModulusSub(current, su16_OffsetValue) < 1)
-#endif
 
     if (g_stCellInfoReport.u16Ichg)
     {
         isCURR = true;
         g_irq_t = current_wake;
-        log_w("afe current V %d, ICHG %d", current, g_stCellInfoReport.u16Ichg);
+        log_w("afe current %d mA, ICHG %d", current_mA, g_stCellInfoReport.u16Ichg);
     }
     if (g_stCellInfoReport.u16IDischg)
     {
         isCURR = true;
         g_irq_t = current_wake;
-        log_w("afe current V %d, IDSG %d", current, g_stCellInfoReport.u16IDischg);
+        log_w("afe current %d mA, IDSG %d", current_mA, g_stCellInfoReport.u16IDischg);
     }
 
     return isCURR;
@@ -359,9 +356,9 @@ void BQ769x0_SleepMode_Ctrl(void)
 
     UINT8 u8_CurComDelay_Flag = 0;
 
-    // todo Í³Ò»rtc_sleep()ºÍApp_SleepDeal()¹ı·ÅĞİÃß
+    // todo ç»Ÿä¸€rtc_sleep()å’ŒApp_SleepDeal()è¿‡æ”¾ä¼‘çœ 
     // if (AFE_SleepMode_Judge() == 1)
-    //todo¹ı³ä¡¢³äµç¹Ü¹ØÁË£¿½ø´ı»ú£¿
+    //todoè¿‡å……ã€å……ç”µç®¡å…³äº†ï¼Ÿè¿›å¾…æœºï¼Ÿ
     if (g_stCellInfoReport.u16VCellMin <= 2600 && (g_stCellInfoReport.u16Ichg <= 0))
     {
         sys_time.enter_rtc_delay = 0;
@@ -489,7 +486,7 @@ void BQ769x0_SleepMode_Ctrl(void)
             {
             case FLASH_VALUE_WAKE_RTC:
                 if (AFE_SleepMode_Judge() == 1)
-                { // mos¹ıÎÂÒ²ÄÉÈë´¦Àí
+                { // mosè¿‡æ¸©ä¹Ÿçº³å…¥å¤„ç†
                     if (++su16_Normal1_100msTCnt >= (UINT16)OtherElement.u16Sleep_TimeVlow * 60)
                     {
                         su16_Normal1_100msTCnt = 0;
@@ -557,7 +554,7 @@ void BQ769x0_SleepMode_Ctrl(void)
                 }
                 else
                 {
-                    // ²»½øÈëĞİÃß
+                    // ä¸è¿›å…¥ä¼‘çœ 
                 }
                 aaa11 = 1;
                 break;
@@ -592,7 +589,7 @@ void BQ769x0_SleepMode_Ctrl(void)
                 }
                 else
                 {
-                    // ²»½øÈëĞİÃß
+                    // ä¸è¿›å…¥ä¼‘çœ 
                 }
 
                 aaa11 = 2;
@@ -612,7 +609,7 @@ void BQ769x0_SleepMode_Ctrl(void)
 
     if (Sleep_Mode.bits.b1ForceToSleep_L1)
     {
-        // Èç¹ûÊÇµÍÑ¹£¬Ôò»á×Ô¶¯½øÈëL2£¬ºÍL3Ò²ÎŞÇø±ğ
+        // å¦‚æœæ˜¯ä½å‹ï¼Œåˆ™ä¼šè‡ªåŠ¨è¿›å…¥L2ï¼Œå’ŒL3ä¹Ÿæ— åŒºåˆ«
     }
 }
 
@@ -672,7 +669,7 @@ static bool rtc_monitor_sh367309(void)
 
     if (!sys_time.power_on)
     {
-        // todo ÈßÓà¼ì²â
+        // todo å†—ä½™æ£€æµ‹
         return false;
     }
 
@@ -691,12 +688,12 @@ static bool rtc_monitor_sh367309(void)
 		if (SH367309_Reg_Store.REG_BSTATUS1.bits.OV)
 		{
 			result = true;
-			log_w("¹ıÑ¹\n");
+			log_w("è¿‡å‹\n");
 		}
 		if (SH367309_Reg_Store.REG_BSTATUS1.bits.UV)
 		{
 			result = true;
-			log_w("µÍÑ¹\n");
+			log_w("ä½å‹\n");
 		}
 #endif
         if (!SystemStatus.bits.b1Status_MOS_CHG)
@@ -719,7 +716,7 @@ static bool rtc_monitor_sh367309(void)
 
 bool isException(void)
 {
-    // todo rtcÆğÀ´¶Áafe±£»¤×´Ì¬ 2¡¢ocvÂß¼­ ´óµçÁ÷ ÑÓÊ±ocv
+    // todo rtcèµ·æ¥è¯»afeä¿æŠ¤çŠ¶æ€ 2ã€ocvé€»è¾‘ å¤§ç”µæµ å»¶æ—¶ocv
     if (!updataData_rtc())
     {
         return true;
@@ -733,7 +730,7 @@ bool isException(void)
     // TOTEST
     // else if (AFE_SleepMode_Judge() == 1)
     // {
-    //     log_e("¹ı·ÅĞİÃß");
+    //     log_e("è¿‡æ”¾ä¼‘çœ ");
 
     //     return true;
     // }
@@ -753,14 +750,14 @@ static bool updataData_rtc(void)
 
 #else
 
-#error "error£¡£¡£¡¡°
+#error "errorï¼ï¼ï¼â€œ
 
 #endif
 
     // return true;
 }
 
-// todo ĞèÒª¿¼ÂÇafe²ÉÑùÊ±Ğò
+// todo éœ€è¦è€ƒè™‘afeé‡‡æ ·æ—¶åº
 static bool updataData_rtc_bq7x(void)
 {
 #if (AFE_TYPE == bq76xx_afe)
@@ -935,7 +932,7 @@ static bool update_rtc_soc(uint32_t *_sleep_cnt)
 #endif
 }
 
-// todo ÍêÉÆ²»Í¬²ßÂÔ
+// todo å®Œå–„ä¸åŒç­–ç•¥
 // fixme a036
 #if 0
 bool update_rtc_soc(uint32_t *_sleep_cnt)
@@ -1013,11 +1010,11 @@ bool update_rtc_soc(uint32_t *_sleep_cnt)
     }
     case 1:
     {
-        // 20s rtcÒ»´Î get soc£¬5´ÎÂË²¨ºóµÄÖµ
+        // 20s rtcä¸€æ¬¡ get socï¼Œ5æ¬¡æ»¤æ³¢åçš„å€¼
         /*****************/
         {
-            // PRE_OCV()Ö®ºó£¬200ms ocvÒ»´Î£¬¾ßÌåµÄ»úÖÆºóĞø¿¼ÂÇ
-            // µ½Õâ¶ù Í»È»ÓĞµçÁ÷ ÔõÃ´°ì »áÓĞÓ°ÏìÂğ Ô­×Ó²Ù×÷£¿£¿£¿£¿
+            // PRE_OCV()ä¹‹åï¼Œ200ms ocvä¸€æ¬¡ï¼Œå…·ä½“çš„æœºåˆ¶åç»­è€ƒè™‘
+            // åˆ°è¿™å„¿ çªç„¶æœ‰ç”µæµ æ€ä¹ˆåŠ ä¼šæœ‰å½±å“å— åŸå­æ“ä½œï¼Ÿï¼Ÿï¼Ÿï¼Ÿ
             //  temp_soc = get_soc_from_openVol();
             arr_soc[ocv_cnt] = get_soc_from_openVol_onlyDec();
             log_w("arr_soc[%d] %d", ocv_cnt, arr_soc[ocv_cnt]);
@@ -1036,7 +1033,7 @@ bool update_rtc_soc(uint32_t *_sleep_cnt)
 			}
 			else
 			{
-				//todo Òì³£soc µ±Ç°¡¢last´¦Àí
+				//todo å¼‚å¸¸soc å½“å‰ã€lastå¤„ç†
 				// static uint8_t err_soc_cnt = 0;
 				;
 				ocv_cnt = 0;
@@ -1054,7 +1051,7 @@ bool update_rtc_soc(uint32_t *_sleep_cnt)
         }
     }
     break;
-    // todo ×î½üN´Îsoc²Î¿¼Öµ ²Î¿¼¼ÛÖµ ¹ÊÕÏÕï¶Ï
+    // todo æœ€è¿‘Næ¬¡socå‚è€ƒå€¼ å‚è€ƒä»·å€¼ æ•…éšœè¯Šæ–­
     case 2:
     {
         // set_soc_param((temp_soc[0] + temp_soc[1] + temp_soc[2]) / 3, 1, 0);
@@ -1104,7 +1101,7 @@ bool update_rtc_soc(uint32_t *_sleep_cnt)
         // {
         // 	sum += arr_soc[i];
         // }
-        // // error Íü¸ÄÁË
+        // // error å¿˜æ”¹äº†
         // uint8_t temp_soc = sum / 5;
         // // uint8_t temp_soc = (arr_soc[0] + arr_soc[1] + arr_soc[2]) / 3;
         soc_calculate.u8SOC_Now = temp_soc;
@@ -1339,7 +1336,7 @@ void rtc_sleep(void)
             {
                 // Init();
                 // entersleep(HICCUP_MODE);
-                // »¹Ã»¸üĞÂ
+                // è¿˜æ²¡æ›´æ–°
                 // getdata_and_analyse()
                 if (isException())
                 {
@@ -1403,7 +1400,7 @@ void rtc_sleep(void)
                 break;
             }
         default:
-            // ²»µ÷ÕûÒı½Å½øÈëĞİÃß£¬¹¦ºÄ»áºÜ´ó
+            // ä¸è°ƒæ•´å¼•è„šè¿›å…¥ä¼‘çœ ï¼ŒåŠŸè€—ä¼šå¾ˆå¤§
             break;
         }
     }
