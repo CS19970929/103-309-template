@@ -400,7 +400,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 		{
 			// SOC_Calculate_Element.u8SOC_Now = 98;
 			SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now; // SOC保持不变
-			SOC_Calculate_Element.u32CapChange = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
+			SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
 			SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
 		}
 #endif
@@ -463,7 +463,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 		{
 			// SOC_Calculate_Element.u8SOC_Now = 2;
 			SOC_Calculate_Element.u8SOC_Now = SOC_Calculate_Element.u8SOC_Now; // SOC保持不变
-			SOC_Calculate_Element.u32CapChange = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
+			SOC_Calculate_Element.i32CoulombRemainder_mAms = 0;							   // 把这个累加量清零便可，还有这个漏洞，会回退1
 			SOC_Calculate_Element.u32CapNow = (UINT32)SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
 		}
 
