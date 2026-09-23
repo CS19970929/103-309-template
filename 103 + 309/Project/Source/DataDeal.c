@@ -552,38 +552,105 @@ extern uint16_t time_dsg;
 extern uint16_t time_real;
 void DataLoad_Current(void)
 {
-	BmsCurrent_Update();
+	static UINT32 s_u32EtaCurrent_mA = 0u;
+	static INT8 s_i8EtaDirection = 0;
+	INT32 signed_current_mA;
+	UINT32 current_mA;
+	INT8 direction;
+	UINT32 capacity_x100;
+	UINT32 minutes;
 
-	if (g_stCellInfoReport.u16Ichg)
+	BmsCurrent_Update();
+	signed_current_mA = BmsCurrent_GetCurrent_mA();
+
+	if (signed_current_mA >= 200)
 	{
-		time_dsg = 0xffff;
-		time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg * CURRENT_K_CHG);
-		time_real = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / g_stCellInfoReport.u16Ichg;
+		direction = 1;
+		current_mA = (UINT32)signed_current_mA;
 	}
-	else if (g_stCellInfoReport.u16IDischg)
+	else if (signed_current_mA <= -200)
 	{
-		float time;
-		time_chg = 0xffff;
-		time = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg * CURRENT_K_DSG);
-		time_dsg = (uint16_t)time;
-		time_real = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / g_stCellInfoReport.u16IDischg;
+		direction = -1;
+		current_mA = (UINT32)(-signed_current_mA);
 	}
 	else
 	{
-		if (g_stCellInfoReport.SocElement.u16Soc == 0)
+		direction = 0;
+		current_mA = 0u;
+	}
+
+	/*
+	 * ETA uses a direction-aware EMA (alpha=1/16 at the AFE sampling cadence).
+	 * Direction changes restart the filter so charge history never contaminates
+	 * discharge ETA, and vice versa.
+	 */
+	if (direction == 0)
+	{
+		s_u32EtaCurrent_mA = 0u;
+		s_i8EtaDirection = 0;
+	}
+	else if ((direction != s_i8EtaDirection) || (s_u32EtaCurrent_mA == 0u))
+	{
+		s_u32EtaCurrent_mA = current_mA;
+		s_i8EtaDirection = direction;
+	}
+	else
+	{
+		s_u32EtaCurrent_mA =
+			(s_u32EtaCurrent_mA * 15u + current_mA + 8u) / 16u;
+	}
+
+	if (!SOC_Enhance_Element.u8_SOC_Valid)
+	{
+		time_chg = 0xFFFFu;
+		time_dsg = 0xFFFFu;
+		time_real = 0xFFFFu;
+		return;
+	}
+
+	if ((direction > 0) && (s_u32EtaCurrent_mA > 0u))
+	{
+		capacity_x100 =
+			((UINT32)g_stCellInfoReport.SocElement.u16CapacityFull >=
+			 (UINT32)g_stCellInfoReport.SocElement.u16CapacityNow)
+			? ((UINT32)g_stCellInfoReport.SocElement.u16CapacityFull -
+			   (UINT32)g_stCellInfoReport.SocElement.u16CapacityNow)
+			: 0u;
+		minutes = capacity_x100 * 600u / s_u32EtaCurrent_mA;
+		if (minutes > 0xFFFEu)
+			minutes = 0xFFFEu;
+		time_real = (UINT16)minutes;
+		/* Preserve the previous 93% conservative ETA factor without float math. */
+		time_chg = (UINT16)(minutes * 93u / 100u);
+		time_dsg = 0xFFFFu;
+	}
+	else if ((direction < 0) && (s_u32EtaCurrent_mA > 0u))
+	{
+		capacity_x100 = (UINT32)g_stCellInfoReport.SocElement.u16CapacityNow;
+		minutes = capacity_x100 * 600u / s_u32EtaCurrent_mA;
+		if (minutes > 0xFFFEu)
+			minutes = 0xFFFEu;
+		time_real = (UINT16)minutes;
+		time_dsg = (UINT16)(minutes * 93u / 100u);
+		time_chg = 0xFFFFu;
+	}
+	else
+	{
+		time_real = 0xFFFFu;
+		if (g_stCellInfoReport.SocElement.u16Soc == 0u)
 		{
-			time_chg = 0xffff;
-			time_dsg = 0;
+			time_chg = 0xFFFFu;
+			time_dsg = 0u;
 		}
-		else if (g_stCellInfoReport.SocElement.u16Soc == 100)
+		else if (g_stCellInfoReport.SocElement.u16Soc == 100u)
 		{
-			time_chg = 0;
-			time_dsg = 0xffff;
+			time_chg = 0u;
+			time_dsg = 0xFFFFu;
 		}
 		else
 		{
-			time_chg = 0xffff;
-			time_dsg = 0xffff;
+			time_chg = 0xFFFFu;
+			time_dsg = 0xFFFFu;
 		}
 	}
 }
