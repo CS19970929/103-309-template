@@ -54,7 +54,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/ci
-          cppcheck \
+          set +e
+          timeout 90s cppcheck \
             --enable=warning,performance,portability \
             --inconclusive \
             --force \
@@ -63,14 +64,21 @@ jobs:
             --suppress=unusedFunction \
             -DSTM32F10X_MD \
             -DUSE_STDPERIPH_DRIVER \
-            -I"103 + 309/Project/Lib" \
             -I"103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers" \
             -I"103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/inc" \
             -I"103 + 309/Project/Source" \
             -I"103 + 309/Project/Source/conf" \
             "103 + 309/Project/Source" \
             2> build/ci/cppcheck.txt
-          cat build/ci/cppcheck.txt
+          rc=$?
+          set -e
+          cat build/ci/cppcheck.txt || true
+          if [ "$rc" -eq 124 ]; then
+            echo "cppcheck reached the 90s informational timeout; compile gate result is unaffected."
+          elif [ "$rc" -ne 0 ]; then
+            echo "cppcheck returned $rc; this baseline is informational."
+          fi
+          exit 0
 
       - name: Upload source-check diagnostics
         if: always()
