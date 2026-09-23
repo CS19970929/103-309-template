@@ -150,6 +150,10 @@ struct RS485MSG {
 #define RS485_ADDR_AGING_STATUS			0xC080
 #define RS485_ADDR_AGING_STATUS_WORDS	5U
 
+/* Independent read-only current calibration diagnostics block. */
+#define RS485_ADDR_CURRENT_DIAG			0xC100
+#define RS485_ADDR_CURRENT_DIAG_WORDS	16U
+
 #define RS485_ADDR_SN_SERIAL_NUM		0xFFF0
 #define RS485_ADDR_SN_HAEDWARE_VER		0xFFF1
 #define RS485_ADDR_SN_SOFTWARE_VER		0xFFF2
