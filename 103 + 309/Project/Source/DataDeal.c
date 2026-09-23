@@ -600,7 +600,7 @@ void DataLoad_Current(void)
 			(s_u32EtaCurrent_mA * 15u + current_mA + 8u) / 16u;
 	}
 
-	if (!SOC_Enhance_Element.u8_SOC_Valid)
+	if ((!SOC_Enhance_Element.u8_SOC_Valid) || (!SystemStatus.bits.b1Status_AFE1))
 	{
 		time_chg = 0xFFFFu;
 		time_dsg = 0xFFFFu;

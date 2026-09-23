@@ -136,6 +136,7 @@ void RefreshData_SOC(void)
 	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // 末端/低压边界仍使用最低单体
 	SOC_Enhance_Element.u16_VCellOCV = SOC_GetRobustOcvCellVoltage();
 	SOC_Enhance_Element.i32_Current_mA = BmsCurrent_GetCurrent_mA();
+	SOC_Enhance_Element.u8_DataValid = SystemStatus.bits.b1Status_AFE1 ? 1u : 0u;
 	SOC_Enhance_Element.u16_Ichg = g_stCellInfoReport.u16Ichg;
 	SOC_Enhance_Element.u16_Idsg = g_stCellInfoReport.u16IDischg;
 }

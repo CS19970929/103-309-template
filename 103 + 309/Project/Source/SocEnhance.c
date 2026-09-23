@@ -588,6 +588,12 @@ static void SOC_UpdateCycleEFC(UINT32 discharged_cap)
 static void SOC_Coulomb_Integrate_200ms(void)
 {
 	static UINT8 s_u8Terminal200msCnt = 0;
+
+	if (!SOC_Enhance_Element.u8_DataValid)
+	{
+		s_u8Terminal200msCnt = 0u;
+		return;
+	}
 	INT32 current_mA = SOC_Enhance_Element.i32_Current_mA;
 	INT32 delta_mAms;
 	INT32 delta_cap;
@@ -654,6 +660,14 @@ static void SOC_RestOcv_Correct_200ms(void)
 	UINT8 upper_bound;
 	UINT32 one_percent_cap;
 	UINT32 current_abs = SOC_AbsCurrent_mA(SOC_Enhance_Element.i32_Current_mA);
+
+	if (!SOC_Enhance_Element.u8_DataValid)
+	{
+		s_u16RestTicks = 0u;
+		s_u16CorrectionTicks = 0u;
+		SOC_Calculate_Element.u8OCV_Cali_Flag = 0u;
+		return;
+	}
 
 	if (current_abs >= (UINT32)SOC_CURRENT_DEADBAND_MA)
 	{
@@ -1304,7 +1318,8 @@ void SOC_IntEnhance_Ctrl(void)
 	/* SOC is integrated on every fixed 200 ms tick without state-entry gating. */
 	SOC_Coulomb_Integrate_200ms();
 	SOC_RestOcv_Correct_200ms();
-	soc_cali();
+	if (SOC_Enhance_Element.u8_DataValid)
+		soc_cali();
 	SOC_UpdateDisplay_200ms();
 
 	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
