@@ -515,7 +515,8 @@ void SOC_Cont_AH_Int_CHG(void)
 			SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 			return;
 		}
-		--s_u8_CHG200msCnt;
+		if (s_u8_CHG200msCnt > 0)
+			s_u8_CHG200msCnt--;
 	}
 
 #if 1 // 原来的计算方式着实太拖沓，下面的三句搞定，还清晰明了，例如，容量没到100%前，都是99%，到达那一瞬间才是100%
@@ -568,7 +569,8 @@ void SOC_Cont_AH_Int_DSG(void)
 			SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 			return;
 		}
-		--s_u8_DSG200msCnt;
+		if (s_u8_DSG200msCnt > 0)
+			s_u8_DSG200msCnt--;
 	}
 
 #if 1 // 这个计算方式还是妥一些，满减1%，SOC才显示99，客户体验会更好一些
