@@ -725,7 +725,7 @@ void SOC_State_Transfer(void)
 	static UINT8 s_u8SOC_State_CHG = 0;
 	static UINT8 s_u8SOC_State_DSG = 0;
 	static UINT8 s_u8SOC_State_OCV = 0;
-	if (SOC_Enhance_Element.u16_Ichg >= SOC_VIRTUAL_CURRENT_CHG)
+	if (SOC_Enhance_Element.i32_Current_mA >= SOC_CURRENT_DEADBAND_MA)
 	{
 		if (++s_u8SOC_State_CHG >= 3)
 		{
