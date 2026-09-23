@@ -294,7 +294,12 @@ void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 	if ((u16ActualAddr >= RS485_ADDR_RO_LCD) && (u16ActualAddr < RS485_ADDR_RO_START0))
 	{
 		u16ValidateOffset = 0U;
-		if ((u16ActualAddr >= RS485_ADDR_EVENT_RECORD) &&
+		if ((u16ActualAddr >= RS485_ADDR_CURRENT_DIAG) &&
+			(u16ActualAddr < (UINT16)(RS485_ADDR_CURRENT_DIAG + RS485_ADDR_CURRENT_DIAG_WORDS)))
+		{
+			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_CURRENT_DIAG);
+		}
+		else if ((u16ActualAddr >= RS485_ADDR_EVENT_RECORD) &&
 			(u16ActualAddr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
 		{
 			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_EVENT_RECORD);
@@ -413,6 +418,55 @@ static void Sci_PutWordBE(UINT8 buff[], UINT16 *index, UINT16 value)
 	buff[(*index)++] = (UINT8)value;
 }
 
+static void Sci_PutDWordBE(UINT8 buff[], UINT16 *index, UINT32 value)
+{
+	Sci_PutWordBE(buff, index, (UINT16)(value >> 16));
+	Sci_PutWordBE(buff, index, (UINT16)value);
+}
+
+static void Sci_PutCurrentDiagWords(UINT8 buff[], UINT16 *index)
+{
+	AFE_CURRENT_DIAG diag;
+	UINT16 flags = 0U;
+
+	AfeCurrent_GetDiagnostics(&diag);
+
+	if (diag.zeroValid != 0U)
+	{
+		flags |= 0x0001U;
+	}
+	if (SleepDeal_IsBootFromSleepStartup() != 0U)
+	{
+		flags |= 0x0002U;
+	}
+	if (diag.current_mA > 0)
+	{
+		flags |= 0x0004U;
+	}
+	else if (diag.current_mA < 0)
+	{
+		flags |= 0x0008U;
+	}
+	if (diag.zeroValid == 0U)
+	{
+		flags |= 0x0010U;
+	}
+
+	Sci_PutWordBE(buff, index, diag.version);                       /* C100 */
+	Sci_PutWordBE(buff, index, (UINT16)diag.zeroStatus);           /* C101 */
+	Sci_PutWordBE(buff, index, flags);                             /* C102 */
+	Sci_PutWordBE(buff, index, (UINT16)diag.bootRaw1);             /* C103 */
+	Sci_PutWordBE(buff, index, (UINT16)diag.bootRaw2);             /* C104 */
+	Sci_PutDWordBE(buff, index, (UINT32)diag.zeroRawX4);           /* C105-C106 */
+	Sci_PutWordBE(buff, index, (UINT16)diag.runtimeRaw);           /* C107 */
+	Sci_PutDWordBE(buff, index, (UINT32)diag.correctedRawX4);      /* C108-C109 */
+	Sci_PutDWordBE(buff, index, (UINT32)diag.current_mA);          /* C10A-C10B */
+	Sci_PutWordBE(buff, index, diag.deadband_mA);                  /* C10C */
+	Sci_PutWordBE(buff, index, (UINT16)diag.mtpConf);              /* C10D */
+	Sci_PutWordBE(buff, index, (UINT16)diag.bstatus3);             /* C10E */
+	Sci_PutWordBE(buff, index, (UINT16)diag.sampleSeq);            /* C10F */
+}
+
 static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 {
 	while (count != 0U)
@@ -528,6 +582,12 @@ static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
 	}
 	if (actual_addr >= RS485_ADDR_RO_LCD)
 	{
+		if ((actual_addr >= RS485_ADDR_CURRENT_DIAG) &&
+			(actual_addr < (UINT16)(RS485_ADDR_CURRENT_DIAG + RS485_ADDR_CURRENT_DIAG_WORDS)))
+		{
+			*word_count = RS485_ADDR_CURRENT_DIAG_WORDS;
+			return 1;
+		}
 		if ((actual_addr >= RS485_ADDR_EVENT_RECORD) &&
 			(actual_addr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
 		{
@@ -759,7 +819,13 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	INT8 k;
 
 	i = 0;
-	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
+	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD)) &&
+		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD + RS485_ADDR_CURRENT_DIAG_WORDS)))
+	{
+		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD));
+		Sci_PutCurrentDiagWords(t_u8BuffTemp, &i);
+	}
+	else if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
 		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD + FLASH_STORAGE_LOG_RECORD_COUNT)))
 	{
 		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD));
