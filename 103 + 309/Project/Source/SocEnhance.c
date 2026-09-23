@@ -15,6 +15,10 @@
 #define SOC_CURRENT_DEADBAND_MA          ((INT32)200)
 #define SOC_INTEGRATION_PERIOD_MS        ((INT32)200)
 #define SOC_CAP_UNIT_MA_MS               ((INT32)100000) /* 1 x (A*10*s) = 100000 mA*ms */
+#define SOC_OCV_REST_TICKS               ((UINT16)3000)  /* 10 min / 200 ms */
+#define SOC_OCV_BAND_PERCENT             ((UINT8)5)
+#define SOC_OCV_CORRECTION_STEP_TICKS    ((UINT16)300)   /* 1% per 60 s */
+#define SOC_OCV_MAX_CELL_DELTA_MV        ((UINT16)300)
 
 // #define CHG_CUR_1C							2100	//A*10恒流充电为1C，恒压充电为1C-0.1C(SOC=95%)，涓流充电也为0.1C
 #define EEPROM_VALUE_POWEROFF_FLAG ((UINT16)0x5678)
@@ -269,7 +273,8 @@ void soc_param_lib_init(void)
 		SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
 		SOC_Enhance_Element.u16_Cycle_times = (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu) ? 0xFFFFu : (UINT16)SOC_Calculate_Element.u32Cycle_times;
 
-		SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
+		if (!SOC_Calculate_Element.u8OCV_Cali_Flag)
+		SOC_Enhance_Element.u8_SOC_OCV_Cali = 0u;
 	}
 
 	extern void GetData_SOC(void);
@@ -598,6 +603,80 @@ static void SOC_Coulomb_Integrate_200ms(void)
 	SOC_Calculate_Element.u8SOC_Old = SOC_Calculate_Element.u8SOC_Now;
 	SOC_Calculate_Element.u8SOC_Now =
 		SOC_CapacityToPercent(SOC_Calculate_Element.u32CapNow, cap_limit);
+}
+
+static void SOC_RestOcv_Correct_200ms(void)
+{
+	static UINT16 s_u16RestTicks = 0u;
+	static UINT16 s_u16CorrectionTicks = 0u;
+	UINT8 ocv_soc;
+	UINT8 upper_bound;
+	UINT32 one_percent_cap;
+	UINT32 current_abs = SOC_AbsCurrent_mA(SOC_Enhance_Element.i32_Current_mA);
+
+	if (current_abs >= (UINT32)SOC_CURRENT_DEADBAND_MA)
+	{
+		s_u16RestTicks = 0u;
+		s_u16CorrectionTicks = 0u;
+		SOC_Calculate_Element.u8OCV_Cali_Flag = 0u;
+		return;
+	}
+
+	if ((SOC_Enhance_Element.u16_VCellOCV < 1500u) ||
+		(SOC_Enhance_Element.u16_VCellOCV > 5000u) ||
+		((UINT16)(SOC_Enhance_Element.u16_VCellMax - SOC_Enhance_Element.u16_VCellMin) >
+		 SOC_OCV_MAX_CELL_DELTA_MV))
+	{
+		s_u16RestTicks = 0u;
+		s_u16CorrectionTicks = 0u;
+		SOC_Calculate_Element.u8OCV_Cali_Flag = 0u;
+		return;
+	}
+
+	if (s_u16RestTicks < SOC_OCV_REST_TICKS)
+	{
+		s_u16RestTicks++;
+		SOC_Calculate_Element.u8OCV_Cali_Flag = 0u;
+		return;
+	}
+
+	SOC_Calculate_Element.u8OCV_Cali_Flag = 1u;
+	ocv_soc = Get_OpenCircuit_Value();
+	SOC_Enhance_Element.u8_SOC_OCV_Cali = ocv_soc;
+	upper_bound = (ocv_soc > (100u - SOC_OCV_BAND_PERCENT))
+				  ? 100u
+				  : (UINT8)(ocv_soc + SOC_OCV_BAND_PERCENT);
+
+	/*
+	 * Rest correction is deliberately one-way:
+	 * - inside the OCV +/-5% band: keep coulomb estimate
+	 * - below the band: never increase SOC while resting
+	 * - above the band: slowly converge downward to the upper boundary
+	 */
+	if (SOC_Calculate_Element.u8SOC_Now <= upper_bound)
+	{
+		s_u16CorrectionTicks = 0u;
+		return;
+	}
+
+	if (++s_u16CorrectionTicks < SOC_OCV_CORRECTION_STEP_TICKS)
+		return;
+	s_u16CorrectionTicks = 0u;
+
+	one_percent_cap = SOC_Calculate_Element.u32CapFactory / 100u;
+	if (one_percent_cap == 0u)
+		return;
+
+	if (SOC_Calculate_Element.u32CapNow > one_percent_cap)
+		SOC_Calculate_Element.u32CapNow -= one_percent_cap;
+	else
+		SOC_Calculate_Element.u32CapNow = 0u;
+
+	SOC_Calculate_Element.u8SOC_Now =
+		SOC_CapacityToPercent(SOC_Calculate_Element.u32CapNow,
+							 SOC_Calculate_Element.u32CapFull ?
+							 SOC_Calculate_Element.u32CapFull :
+							 SOC_Calculate_Element.u32CapFactory);
 }
 
 void SOC_Cont_AH_Int_CHG(void)
@@ -958,7 +1037,8 @@ void SOC_Result_Pass(void)
 	SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
 	SOC_Enhance_Element.u16_Cycle_times = (SOC_Calculate_Element.u32Cycle_times > 0xFFFFu) ? 0xFFFFu : (UINT16)SOC_Calculate_Element.u32Cycle_times;
 
-	SOC_Enhance_Element.u8_SOC_OCV_Cali = SOC_Calculate_Element.u8DSG_SOC_Int; // 留着，自己知道
+	if (!SOC_Calculate_Element.u8OCV_Cali_Flag)
+		SOC_Enhance_Element.u8_SOC_OCV_Cali = 0u;
 }
 
 void SOC_Data_Filter(void)
@@ -1097,6 +1177,7 @@ void SOC_IntEnhance_Ctrl(void)
 	 */
 	SOC_State_Transfer();
 	SOC_Coulomb_Integrate_200ms();
+	SOC_RestOcv_Correct_200ms();
 	soc_cali();
 
 	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
