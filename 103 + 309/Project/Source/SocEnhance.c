@@ -217,9 +217,16 @@ const UINT16 SocTable_LiFePO2[SOC_Size_LiFePO2] = {
 
 void soc_factory_param_init_first(void)
 {
+	/*
+	 * This function runs during first EEPROM provisioning, before InitData_SOC().
+	 * Read factory parameters directly instead of relying on the still-zero
+	 * SOC_Enhance_Element mirror.
+	 */
+	SOC_Enhance_Element.u16_SOC_Ah = OtherElement.u16Soc_Ah;
 	SOC_Enhance_Element.u16_SOC_CycleT_Ever = OtherElement.u16Soc_Cycle_times;
+	SOC_Enhance_Element.u16_SOC_CycleT_Limit = 5000u;
 
-	SOC_Calculate_Element.u32CapFactory = (UINT32)SOC_Enhance_Element.u16_SOC_Ah * 3600; // 去掉*10;改单位这里进来的单位稍微修改一下便可，如此快捷
+	SOC_Calculate_Element.u32CapFactory = (UINT32)SOC_Enhance_Element.u16_SOC_Ah * 3600u; // 去掉*10;改单位这里进来的单位稍微修改一下便可，如此快捷
 	SOC_Calculate_Element.u32Cycle_times = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Ever;
 	SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit;
 
