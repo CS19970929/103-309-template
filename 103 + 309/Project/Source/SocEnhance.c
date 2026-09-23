@@ -310,7 +310,7 @@ UINT8 Get_OpenCircuit_Value(void)
 	return result;
 }
 
-static void SOC_TerminalAdjustCapacity(INT8 direction)
+static void SOC_TerminalAdjustCapacity(int8_t direction)
 {
 	UINT32 step = SOC_Calculate_Element.u32CapFactory / 100u;
 	UINT32 limit = SOC_Calculate_Element.u32CapFull ?

@@ -553,10 +553,10 @@ extern uint16_t time_real;
 void DataLoad_Current(void)
 {
 	static UINT32 s_u32EtaCurrent_mA = 0u;
-	static INT8 s_i8EtaDirection = 0;
+	static int8_t s_i8EtaDirection = 0;
 	INT32 signed_current_mA;
 	UINT32 current_mA;
-	INT8 direction;
+	int8_t direction;
 	UINT32 capacity_x100;
 	UINT32 minutes;
 
