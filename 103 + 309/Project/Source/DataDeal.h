@@ -80,22 +80,22 @@ enum tagInfoForKBArray {
 
 
 struct OTHER_ELEMENT {
-    UINT16 u16Balance_OpenVoltage;	//mV�����⿪����ѹ
-    UINT16 u16Balance_OpenWindow;	//mV�����⿪��ѹ��
-    UINT16 u16Balance_CloseWindow;	//mV������ر�ѹ��?
-    UINT16 u16Balance_Res1;			//����λ
-    UINT16 u16Balance_Res2;			//����λ
-    UINT16 u16Balance_Res3;			//����λ
-    UINT16 u16Balance_Res4;			//����λ
-    UINT16 u16Balance_Res5;			//����λ
+    UINT16 u16Balance_OpenVoltage;	//mV锟斤拷锟斤拷锟解开锟斤拷锟斤拷压
+    UINT16 u16Balance_OpenWindow;	//mV锟斤拷锟斤拷锟解开锟斤拷压锟斤拷
+    UINT16 u16Balance_CloseWindow;	//mV锟斤拷锟斤拷锟斤拷乇锟窖癸拷锟?
+    UINT16 u16Balance_Res1;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res2;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res3;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res4;			//锟斤拷锟斤拷位
+    UINT16 u16Balance_Res5;			//锟斤拷锟斤拷位
 
 	UINT16 u16CS_Cur_CHGmax;		//A*10
 	UINT16 u16CS_Cur_DSGmax;		//A*10
 	UINT16 u16CBC_DelayT;			//us*10
 	UINT16 u16CBC_Cur_DSG;			//A*10
 	
-	UINT16 u16Soc_TableSelect;		//ԭ����u16Password_Once
-	UINT16 u16Password_Always;		//û��
+	UINT16 u16Soc_TableSelect;		//原锟斤拷锟斤拷u16Password_Once
+	UINT16 u16Password_Always;		//没锟斤拷
 	UINT16 u16CurLimit_Vdelta;		//mV
 	UINT16 u16CurLimit_Cur;			//A*10
 
@@ -105,18 +105,18 @@ struct OTHER_ELEMENT {
 	UINT16 u16Sleep_TimeVlow;		//min
 	UINT16 u16Sleep_VirCur_Chg;     //A *10
     UINT16 u16Sleep_VirCur_Dsg;    	//A *10
-	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min��RTC����ʱ��
-	UINT16 u16Sleep_TimeRTC;		// UNUSED: min������RTC����ʱ��
+	UINT16 u16Sleep_RTC_WakeUpTime;	// UNUSED: min锟斤拷RTC锟斤拷锟斤拷时锟斤拷
+	UINT16 u16Sleep_TimeRTC;		// UNUSED: min锟斤拷锟斤拷锟斤拷RTC锟斤拷锟斤拷时锟斤拷
 
 	UINT16 u16Soc_Ah;               //10*Ah
-	UINT16 u16Soc_Cycle_times;		//ѭ������*1
-	UINT16 u16Soc_V_100;			//SOCΪ100�ĵ�ѹ��
-	UINT16 u16Soc_V_0;				//SOCΪ0�ĵ�ѹ��
+	UINT16 u16Soc_Cycle_times;		//循锟斤拷锟斤拷锟斤拷*1
+	UINT16 u16Soc_V_100;			//SOC为100锟侥碉拷压锟斤拷
+	UINT16 u16Soc_V_0;				//SOC为0锟侥碉拷压锟斤拷
 
 	UINT16 u16Sys_SeriesNum;		//N
-	UINT16 u16Sys_CS_Res;			//m��
+	UINT16 u16Sys_CS_Res;			//m锟斤拷
 	UINT16 u16Sys_CS_Res_Num;		//N
-	UINT16 u16Sys_PreChg_Time;		//s��Ԥ��ʱ��
+	UINT16 u16Sys_PreChg_Time;		//s锟斤拷预锟斤拷时锟斤拷
 };
 
 
@@ -167,6 +167,36 @@ struct OTHER_ELEMENT {
 
 
 
+
+#define AFE_CURRENT_DIAG_VERSION ((UINT16)1U)
+
+enum AFE_CURRENT_ZERO_STATUS_E {
+	AFE_CURRENT_ZERO_NOT_RUN = 0,
+	AFE_CURRENT_ZERO_VALID,
+	AFE_CURRENT_ZERO_CONFIG_WRITE_ERROR,
+	AFE_CURRENT_ZERO_CONFIG_READBACK_ERROR,
+	AFE_CURRENT_ZERO_SAMPLE_READ_ERROR,
+	AFE_CURRENT_ZERO_FET_ACTIVE,
+	AFE_CURRENT_ZERO_UNSTABLE,
+	AFE_CURRENT_ZERO_OUT_OF_RANGE
+};
+
+typedef struct _AFE_CURRENT_DIAG {
+	UINT16 version;
+	UINT8 zeroStatus;
+	UINT8 zeroValid;
+	INT16 bootRaw1;
+	INT16 bootRaw2;
+	INT32 zeroRawX4;
+	INT16 runtimeRaw;
+	INT32 correctedRawX4;
+	INT32 current_mA;
+	UINT16 deadband_mA;
+	UINT8 mtpConf;
+	UINT8 bstatus3;
+	UINT32 sampleSeq;
+} AFE_CURRENT_DIAG;
+
 extern UINT16 g_u16CalibCoefK[KB_NUM];
 extern INT16  g_i16CalibCoefB[KB_NUM];
 extern struct OTHER_ELEMENT OtherElement;
@@ -175,6 +205,8 @@ extern UINT32 g_u32CS_Res_AFE;
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
 UINT32 AfeCurrent_GetSeq(void);
+INT32 AfeCurrent_GetCurrent_mA(void);
+void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag);
 void open_ctlc(void);
 void close_ctlc(void);
 
