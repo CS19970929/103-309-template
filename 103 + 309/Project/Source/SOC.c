@@ -47,16 +47,17 @@ const UINT16 SOC_Table_Default[42] = {
 	0,
 };
 
-// ³¤ÆÚ¸üĞÂÊı¾İ
+// é•¿æœŸæ›´æ–°æ•°æ®
 void RefreshData_SOC(void)
 {
 	SOC_Enhance_Element.u16_VCellMax = g_stCellInfoReport.u16VCellMax;
-	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // ¹«°æ¾ö¶¨²»À©É¢³öÈ¥£¬°üº¬6ºÍ16´®£¬¿Í»§Ê¹ÓÃÌåÑéÎÊÌâ£¬µÍÑ¹±£»¤SOCÒ»¶¨Òª½µÏÂÀ´
+	SOC_Enhance_Element.u16_VCellMin = g_stCellInfoReport.u16VCellMin; // å…¬ç‰ˆå†³å®šä¸æ‰©æ•£å‡ºå»ï¼ŒåŒ…å«6å’Œ16ä¸²ï¼Œå®¢æˆ·ä½¿ç”¨ä½“éªŒé—®é¢˜ï¼Œä½å‹ä¿æŠ¤SOCä¸€å®šè¦é™ä¸‹æ¥
+	SOC_Enhance_Element.i32_Current_mA = BmsCurrent_GetCurrent_mA();
 	SOC_Enhance_Element.u16_Ichg = g_stCellInfoReport.u16Ichg;
 	SOC_Enhance_Element.u16_Idsg = g_stCellInfoReport.u16IDischg;
 }
 
-// »ñÈ¡Êı¾İ
+// è·å–æ•°æ®
 void GetData_SOC(void)
 {
 	System_ErrFlag.u8ErrFlag_SOC_Cail = SOC_Enhance_Element.u16_SOC_CailFaultCnt;
@@ -78,7 +79,7 @@ void GetData_SOC(void)
 	}
 }
 
-// Ò»´ÎĞÔ¸³Öµ
+// ä¸€æ¬¡æ€§èµ‹å€¼
 void InitData_SOC(void)
 {
 	UINT16 i;
@@ -92,7 +93,7 @@ void InitData_SOC(void)
 	SOC_Enhance_Element.u16_SOC_100_Vol = OtherElement.u16Soc_V_100;
 	SOC_Enhance_Element.u16_SOC_0_Vol = OtherElement.u16Soc_V_0;
 
-	SOC_Enhance_Element.u8_LargeCurFlag_Chg = 0; // Ä¬ÈÏÊÇ0£¬³ı·ÇÄ©¶Ë´óµçÁ÷CC³ä·Åµçµ¼ÖÂÃ»·¨ÔÚ¶Ëµã´ïµ½100%ºÍ0%ÖÃ1
+	SOC_Enhance_Element.u8_LargeCurFlag_Chg = 0; // é»˜è®¤æ˜¯0ï¼Œé™¤éæœ«ç«¯å¤§ç”µæµCCå……æ”¾ç”µå¯¼è‡´æ²¡æ³•åœ¨ç«¯ç‚¹è¾¾åˆ°100%å’Œ0%ç½®1
 	SOC_Enhance_Element.u8_LargeCurFlag_Dsg = 0;
 
 	for (i = 0; i < SOC_Size_TableCanSet; ++i)
@@ -121,6 +122,6 @@ void App_SOC(void)
 
 	if (SOC_Enhance_Element.u16_SOC_InitOver)
 	{
-		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0; // ³õÊ¼»¯Íê±Ï
+		System_Func_StartUp.bits.b1StartUpFlag_SOC = 0; // åˆå§‹åŒ–å®Œæ¯•
 	}
 }
