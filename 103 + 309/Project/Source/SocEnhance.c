@@ -299,9 +299,35 @@ UINT8 Get_OpenCircuit_Value(void)
 	return result;
 }
 
+static void SOC_TerminalAdjustCapacity(INT8 direction)
+{
+	UINT32 step = SOC_Calculate_Element.u32CapFactory / 100u;
+	UINT32 limit = SOC_Calculate_Element.u32CapFull ?
+				   SOC_Calculate_Element.u32CapFull :
+				   SOC_Calculate_Element.u32CapFactory;
+
+	if (step == 0u)
+		return;
+
+	if (direction > 0)
+	{
+		if ((SOC_Calculate_Element.u32CapNow >= limit) ||
+			(step >= (limit - SOC_Calculate_Element.u32CapNow)))
+			SOC_Calculate_Element.u32CapNow = limit;
+		else
+			SOC_Calculate_Element.u32CapNow += step;
+	}
+	else
+	{
+		if (step >= SOC_Calculate_Element.u32CapNow)
+			SOC_Calculate_Element.u32CapNow = 0u;
+		else
+			SOC_Calculate_Element.u32CapNow -= step;
+	}
+}
+
 // 末端校准
-// 以锂智慧为范本
-// 基于第一个末端SOC值总充不满，前提条件，校准后的电流值，宁愿偏大也不能偏小
+// 保留原多级接近策略，但容量修正始终做饱和处理。
 void CorrectionTerminal_CV(enum _CUR CurrentType)
 {
 	static UINT16 su16_SocChgCal_L1_Tcnt = 0;
@@ -326,7 +352,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			{
 				su16_SocChgCal_L1_Tcnt = 0;
 				SOC_Calculate_Element.u8SOC_Now += 1;
-				SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_TerminalAdjustCapacity(1);
 			}
 		}
 		else if (SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol && SOC_Calculate_Element.u8SOC_Now < 100)
@@ -337,7 +363,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				{
 					su16_SocChgCal_L2_Tcnt = 0;
 					SOC_Calculate_Element.u8SOC_Now += 1;
-					SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_TerminalAdjustCapacity(1);
 				}
 			}
 			else
@@ -346,7 +372,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				{
 					su16_SocChgCal_L3_Tcnt = 0;
 					SOC_Calculate_Element.u8SOC_Now += 1;
-					SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_TerminalAdjustCapacity(1);
 				}
 			}
 		}
@@ -358,7 +384,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			{
 				su16_SocChgCal_L4_Tcnt = 0;
 				SOC_Calculate_Element.u8SOC_Now += 1;
-				SOC_Calculate_Element.u32CapNow += SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_TerminalAdjustCapacity(1);
 			}
 		}
 
@@ -392,7 +418,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			{ // 第一级校准
 				su16_SocDsgCal_L1_Tcnt = 0;
 				SOC_Calculate_Element.u8SOC_Now -= 1;
-				SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_TerminalAdjustCapacity(-1);
 			}
 		}
 		else if (SOC_Enhance_Element.u16_VCellMin <= SOC_Enhance_Element.u16_SOC_0_Vol && SOC_Calculate_Element.u8SOC_Now > 0)
@@ -403,7 +429,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				{										  // 电科大电流还是有一定的概率留下1%，从10改为8吧。
 					su16_SocDsgCal_L2_Tcnt = 0;			  // 但是兼顾小电流能放久一些，不能改为6
 					SOC_Calculate_Element.u8SOC_Now -= 1; // 客户好像对放电末端，如果只剩2%以内貌似可以接受，但是充电必须100%
-					SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_TerminalAdjustCapacity(-1);
 				}
 			}
 			else
@@ -412,7 +438,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 				{ // 第三级校准
 					su16_SocDsgCal_L3_Tcnt = 0;
 					SOC_Calculate_Element.u8SOC_Now -= 1;
-					SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+					SOC_TerminalAdjustCapacity(-1);
 				}
 			}
 		}
@@ -425,7 +451,7 @@ void CorrectionTerminal_CV(enum _CUR CurrentType)
 			{
 				su16_SocDsgCal_L4_Tcnt = 0;
 				SOC_Calculate_Element.u8SOC_Now -= 1;
-				SOC_Calculate_Element.u32CapNow -= SOC_Calculate_Element.u32CapFactory / 100;
+				SOC_TerminalAdjustCapacity(-1);
 			}
 		}
 
@@ -1207,6 +1233,7 @@ void soc_cali(void)
 
 	if (isCHG())
 	{
+		dsg_soc0_delay = 0u;
 		if ((SOC_Enhance_Element.u16_VCellMax >= SOC_Enhance_Element.u16_SOC_100_Vol) && SOC_Enhance_Element.u16_VCellMin >= Totle_soc100)
 		{
 			SOC_Calculate_Element.u8SOC_Now = 100;
