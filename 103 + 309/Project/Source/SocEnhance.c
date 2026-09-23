@@ -63,7 +63,8 @@ struct SOC_CALCULATE_ELEMENT
 	UINT8 u8DSG_AHCalcu_Flag; // 放电安时积分可使用标志
 
 	// InitSOC_IntEnhance赋值，其后SOC_Update_StartUp再次赋值类型
-	UINT8 u8SOC_Now;	   // 当前电池SOC     0—100 为相对容量百分比
+	UINT8 u8SOC_Now;	   // estimator SOC, 0-100
+	UINT8 u8SOC_Display; // user-facing SOC, rate-limited toward estimator
 	UINT32 u32CapNow;	   // 电池剩余总容量As*10
 	UINT8 u8DSG_SOC_Int;   // 循环次数只算放电量，已放电量积累量百分比，90%算一个循环
 	UINT32 u32Cycle_times; // 等效满循环次数(EFC)，累计放电100%额定容量记1次，不再使用×100内部编码
@@ -231,6 +232,7 @@ void soc_factory_param_init_first(void)
 	SOC_Calculate_Element.u32CycleT_Limit = (UINT32)SOC_Enhance_Element.u16_SOC_CycleT_Limit;
 
 	SOC_Calculate_Element.u8SOC_Now = 60;
+	SOC_Calculate_Element.u8SOC_Display = 60;
 	SOC_Calculate_Element.u32CapFull = SOC_Calculate_Element.u32CapFactory;
 	SOC_DealEEPROM_Data(EEPROM_DATA_REFRESH);
 }
@@ -251,15 +253,18 @@ void soc_param_lib_init(void)
 	SOC_Calculate_Element.u8DSG_AHCalcu_Flag = 0;
 
 	SOC_Calculate_Element.u8SOC_Now = 0; // 以上均为0，因为模拟前端还没读回电压
+	SOC_Calculate_Element.u8SOC_Display = 0;
 	SOC_Calculate_Element.u32CapNow = 0;
 	SOC_Calculate_Element.u8DSG_SOC_Int = 0;
 	SOC_Calculate_Element.u32CapFull = 0;
 
 	SOC_DealEEPROM_Data(EEPROM_DATA_READ);
+	SOC_Calculate_Element.u8SOC_Display = SOC_Calculate_Element.u8SOC_Now;
 	SOC_Enhance_Element.u16_SOC_InitOver = 1; // Soc初始化完毕
 
 	{
-		SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Now;
+		SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Display;
+	SOC_Enhance_Element.u8_SOC_Est = SOC_Calculate_Element.u8SOC_Now;
 		if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
 		{
 			SOC_Enhance_Element.u8_SOH = 100;
@@ -941,6 +946,7 @@ void SOC_Update_StartUp(void)
 	SOC_Calculate_Element.u8_DataUpdateOK = 1;
 
 	SOC_Calculate_Element.u32CapNow = SOC_Calculate_Element.u8SOC_Now * SOC_Calculate_Element.u32CapFactory / 100;
+	SOC_Calculate_Element.u8SOC_Display = SOC_Calculate_Element.u8SOC_Now;
 	SOC_Cali_Flag = SOC_CALI_STATE_TRANSFER;
 }
 
@@ -1014,6 +1020,27 @@ void SOC_RefreshData_Monitor(void)
 	}
 }
 
+static void SOC_UpdateDisplay_200ms(void)
+{
+	static UINT8 s_u8DisplayTicks = 0u;
+
+	if (SOC_Calculate_Element.u8SOC_Display == SOC_Calculate_Element.u8SOC_Now)
+	{
+		s_u8DisplayTicks = 0u;
+		return;
+	}
+
+	/* Max display slew: 1%/s. Estimate itself remains unconstrained. */
+	if (++s_u8DisplayTicks < 5u)
+		return;
+	s_u8DisplayTicks = 0u;
+
+	if (SOC_Calculate_Element.u8SOC_Display < SOC_Calculate_Element.u8SOC_Now)
+		SOC_Calculate_Element.u8SOC_Display++;
+	else
+		SOC_Calculate_Element.u8SOC_Display--;
+}
+
 void SOC_Result_Pass(void)
 {
 	// static UINT8 su8_TimeCnt = 0;
@@ -1023,7 +1050,8 @@ void SOC_Result_Pass(void)
 	// }
 	// su8_TimeCnt = 0;
 
-	SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Now;
+	SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Display;
+	SOC_Enhance_Element.u8_SOC_Est = SOC_Calculate_Element.u8SOC_Now;
 	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
 	{
 		SOC_Enhance_Element.u8_SOH = 100;
@@ -1179,6 +1207,7 @@ void SOC_IntEnhance_Ctrl(void)
 	SOC_Coulomb_Integrate_200ms();
 	SOC_RestOcv_Correct_200ms();
 	soc_cali();
+	SOC_UpdateDisplay_200ms();
 
 	// 这几个函数的写法真的难，因为害怕长期循环所以运行一次必须不能再被运行一次的规避
 	SOC_EEPROM_Deal_Monitor();

@@ -53,7 +53,8 @@ struct SOC_ENHANCE_ELEMENT {
 	//�ܻ�ȡ�����Ϣ�Ĳ���
 	UINT16 u16_SOC_InitOver;		//SOC������ʼ����ϱ�־λ��1:��ʼ����ɡ�0:��û��ʼ����
 	UINT16 u16_SOC_CailFaultCnt;	//���ֹ���������ҪOCV�ٴ�У׼������
-	UINT8 u8_SOC;					//Soc��ֵ
+	UINT8 u8_SOC;					// display SOC, 0..100
+	UINT8 u8_SOC_Est;				// estimator SOC, diagnostics
 	UINT8 u8_SOH;					//��ؽ���״̬
 	UINT16 u16_CapacityNow;			//Ah*100����ǰʣ������
 	UINT16 u16_CapacityFull; 		//Ah*100����������
