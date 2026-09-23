@@ -259,14 +259,9 @@ void soc_param_lib_init(void)
 		SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Display;
 	SOC_Enhance_Element.u8_SOC_Est = SOC_Calculate_Element.u8SOC_Now;
 	SOC_Enhance_Element.u8_SOC_Valid = s_u8SocEstimateTrusted;
-		if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
-		{
-			SOC_Enhance_Element.u8_SOH = 100;
-		}
-		else
-		{
-			SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
-		}
+		/* Capacity learning is intentionally disabled. */
+		SOC_Enhance_Element.u8_SOH = 100u;
+		SOC_Enhance_Element.u8_SOH_Valid = 0u;
 		SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
 		SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
 		SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;
@@ -1107,14 +1102,9 @@ void SOC_Result_Pass(void)
 	SOC_Enhance_Element.u8_SOC = SOC_Calculate_Element.u8SOC_Display;
 	SOC_Enhance_Element.u8_SOC_Est = SOC_Calculate_Element.u8SOC_Now;
 	SOC_Enhance_Element.u8_SOC_Valid = s_u8SocEstimateTrusted;
-	if (SOC_Calculate_Element.u32CapFull >= SOC_Calculate_Element.u32CapFactory)
-	{
-		SOC_Enhance_Element.u8_SOH = 100;
-	}
-	else
-	{
-		SOC_Enhance_Element.u8_SOH = (UINT8)((100 * SOC_Calculate_Element.u32CapFull / SOC_Calculate_Element.u32CapFactory) & 0xFF);
-	}
+	/* Capacity learning is intentionally disabled. */
+	SOC_Enhance_Element.u8_SOH = 100u;
+	SOC_Enhance_Element.u8_SOH_Valid = 0u;
 	SOC_Enhance_Element.u16_CapacityNow = SOC_Calculate_Element.u32CapNow * 1 / 360;
 	SOC_Enhance_Element.u16_CapacityFull = SOC_Calculate_Element.u32CapFull * 1 / 360;
 	SOC_Enhance_Element.u16_CapacityFactory = SOC_Calculate_Element.u32CapFactory * 1 / 360;

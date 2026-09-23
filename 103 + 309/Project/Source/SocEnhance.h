@@ -56,7 +56,8 @@ struct SOC_ENHANCE_ELEMENT {
 	UINT8 u8_SOC;					// display SOC, 0..100
 	UINT8 u8_SOC_Est;				// estimator SOC, diagnostics
 	UINT8 u8_SOC_Valid;			// 1: estimator anchored by persisted/manual/OCV/terminal evidence
-	UINT8 u8_SOH;					//��ؽ���״̬
+	UINT8 u8_SOH;					// protocol-compatible value while learning is disabled
+	UINT8 u8_SOH_Valid;			// 0 until validated capacity learning is implemented					//��ؽ���״̬
 	UINT16 u16_CapacityNow;			//Ah*100����ǰʣ������
 	UINT16 u16_CapacityFull; 		//Ah*100����������
 	UINT16 u16_CapacityFactory;		//Ah*100����������������Ҫ
