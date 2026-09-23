@@ -93,7 +93,7 @@ jobs:
     name: Keil ARMCC5 production build
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.run_keil) ||
-      (github.event_name == 'push' && vars.STM32_KEIL_CI_ENABLED == '1')
+      github.event_name == 'push'
     runs-on: [self-hosted, Windows, X64, stm32-keil]
     timeout-minutes: 20
 
