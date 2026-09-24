@@ -462,10 +462,26 @@ static UINT16 Sci_GetCurrentDiagVcellWord(const AFE_CURRENT_DIAG *diag, UINT16 v
 		return Sci_EncodeSignedWord((INT32)diag->runtimeRaw, 1000);
 	case 29U: /* V30 */
 		return Sci_EncodeSignedWord(diag->correctedRawX4, 10000);
-	case 30U: /* V31 */
-		return Sci_EncodeSignedWord(diag->current_mA, 30000);
-	case 31U: /* V32 */
-		return diag->deadband_mA;
+	case 30U: /* V31: charge current, 1 mA/LSB */
+		if (diag->current_mA <= 0)
+		{
+			return 0U;
+		}
+		if ((UINT32)diag->current_mA > 0xFFFFU)
+		{
+			return 0xFFFFU;
+		}
+		return (UINT16)diag->current_mA;
+	case 31U: /* V32: discharge current magnitude, 1 mA/LSB */
+		if (diag->current_mA >= 0)
+		{
+			return 0U;
+		}
+		if (diag->current_mA < -65535)
+		{
+			return 0xFFFFU;
+		}
+		return (UINT16)(-diag->current_mA);
 	default:
 		return 61001U;
 	}
