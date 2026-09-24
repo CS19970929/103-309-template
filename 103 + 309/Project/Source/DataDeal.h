@@ -78,6 +78,12 @@ enum tagInfoForKBArray {
 #define SYSBDEFAULT		((INT16)0)      	// 0
 #define SYSBMIN   		((INT16)-30000)     // -30
 
+/* Current-specific calibration bounds. */
+#define CURRENT_CAL_K_MIN        ((UINT16)768U)   /* 0.7500 in Q10 */
+#define CURRENT_CAL_K_MAX        ((UINT16)1280U)  /* 1.2500 in Q10 */
+#define CURRENT_CAL_B_MIN_MA     ((INT16)-500)
+#define CURRENT_CAL_B_MAX_MA     ((INT16)500)
+
 
 struct OTHER_ELEMENT {
     UINT16 u16Balance_OpenVoltage;	//mV锟斤拷锟斤拷锟解开锟斤拷锟斤拷压

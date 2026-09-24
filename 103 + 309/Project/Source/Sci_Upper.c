@@ -1,4 +1,5 @@
 #include "main.h"
+#include "CurrentCalibration.h"
 #include "FaultSnapshot.h"
 #include "Flash.h"
 
@@ -1036,7 +1037,14 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	{
 		u16SciTemp = g_u16CalibCoefK[j];
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-		u16SciTemp = g_i16CalibCoefB[j];
+		if ((j == (UINT16)MDL_ICHG) || (j == (UINT16)MDL_IDSG))
+		{
+			u16SciTemp = (UINT16)CurrentCalibration_EncodeProtocolB((int16_t)g_i16CalibCoefB[j]);
+		}
+		else
+		{
+			u16SciTemp = (UINT16)g_i16CalibCoefB[j];
+		}
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 }
@@ -1867,93 +1875,56 @@ void InitSCI3_CommonUpper(void)
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
-	UINT16 offset;
-	UINT16 i;
-	UINT16 value;
-	UINT16 old_chg_k;
-	UINT16 old_dsg_k;
-	INT16 signed_value;
-	INT16 old_chg_b;
-	INT16 old_dsg_b;
+	UINT16 k;
+	UINT16 b_raw;
+	UINT16 calib_index;
+	UINT16 old_k;
+	INT16 b;
+	INT16 old_b;
 
 	/*
-	 * Keep legacy behavior for calibration pairs still unsupported by this
-	 * product. Only the existing charge/discharge current K/B pairs become
-	 * functional here.
+	 * Current K/B follows the historical pair-write protocol:
+	 *   ICHGCALIB_K + ICHGCALIB_B
+	 *   IDISCHGCALIB_K + IDISCHGCALIB_B
+	 * Exactly two registers must be written atomically.
 	 */
 	if ((u16Channel != RS485_CMD_ADDR_ICHGCALIB_K) &&
 		(u16Channel != RS485_CMD_ADDR_IDISCHGCALIB_K))
-	{
-		return;
-	}
-
-	u16WrRegNum = Sci_GetWrRegNum(s);
-	offset = (UINT16)(u16Channel - RS485_CMD_ADDR_ICHGCALIB_K);
-
-	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) ||
-		(u16WrRegNum == 0U) ||
-		((u16WrRegNum & 1U) != 0U) ||
-		!Sci_RangeFits(offset, u16WrRegNum, 4U))
 	{
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 		return;
 	}
 
-	for (i = 0U; i < u16WrRegNum; ++i)
+	u16WrRegNum = Sci_GetWrRegNum(s);
+	if (!Sci_WrRegsByteCountValid(s, u16WrRegNum) || (u16WrRegNum != 2U))
 	{
-		value = Sci_GetWrValue(s, i);
-		if (((offset + i) & 1U) == 0U)
-		{
-			if ((value < SYSKMIN) || (value > SYSKMAX))
-			{
-				Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-				return;
-			}
-		}
-		else
-		{
-			signed_value = (INT16)value;
-			if ((signed_value < SYSBMIN) || (signed_value > SYSBMAX))
-			{
-				Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-				return;
-			}
-		}
+		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
+		return;
 	}
 
-	old_chg_k = g_u16CalibCoefK[MDL_ICHG];
-	old_chg_b = g_i16CalibCoefB[MDL_ICHG];
-	old_dsg_k = g_u16CalibCoefK[MDL_IDSG];
-	old_dsg_b = g_i16CalibCoefB[MDL_IDSG];
+	k = Sci_GetWrValue(s, 0U);
+	b_raw = Sci_GetWrValue(s, 1U);
+	b = (INT16)CurrentCalibration_DecodeProtocolB((uint16_t)b_raw);
 
-	for (i = 0U; i < u16WrRegNum; ++i)
+	if ((k < CURRENT_CAL_K_MIN) || (k > CURRENT_CAL_K_MAX) ||
+		(b < CURRENT_CAL_B_MIN_MA) || (b > CURRENT_CAL_B_MAX_MA))
 	{
-		value = Sci_GetWrValue(s, i);
-		switch (offset + i)
-		{
-		case 0U:
-			g_u16CalibCoefK[MDL_ICHG] = value;
-			break;
-		case 1U:
-			g_i16CalibCoefB[MDL_ICHG] = (INT16)value;
-			break;
-		case 2U:
-			g_u16CalibCoefK[MDL_IDSG] = value;
-			break;
-		case 3U:
-			g_i16CalibCoefB[MDL_IDSG] = (INT16)value;
-			break;
-		default:
-			break;
-		}
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
 	}
+
+	calib_index = (u16Channel == RS485_CMD_ADDR_ICHGCALIB_K) ?
+		(UINT16)MDL_ICHG : (UINT16)MDL_IDSG;
+	old_k = g_u16CalibCoefK[calib_index];
+	old_b = g_i16CalibCoefB[calib_index];
+
+	g_u16CalibCoefK[calib_index] = k;
+	g_i16CalibCoefB[calib_index] = b;
 
 	if (!EEPROM_SaveRWParametersToFlash())
 	{
-		g_u16CalibCoefK[MDL_ICHG] = old_chg_k;
-		g_i16CalibCoefB[MDL_ICHG] = old_chg_b;
-		g_u16CalibCoefK[MDL_IDSG] = old_dsg_k;
-		g_i16CalibCoefB[MDL_IDSG] = old_dsg_b;
+		g_u16CalibCoefK[calib_index] = old_k;
+		g_i16CalibCoefB[calib_index] = old_b;
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 	}
 }
@@ -2143,15 +2114,28 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
-	UINT16 u16SciRegData;
+	UINT16 command;
 	UINT16 old_chg_k;
 	UINT16 old_dsg_k;
 	INT16 old_chg_b;
 	INT16 old_dsg_b;
+	UINT8 reset_chg = 0U;
+	UINT8 reset_dsg = 0U;
 
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16SciRegData != 0x0001U)
+	command = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
+	switch (command)
 	{
+	case 0x0001U: /* reset both current K/B pairs */
+		reset_chg = 1U;
+		reset_dsg = 1U;
+		break;
+	case 0x55AFU: /* historical: reset discharge current K/B */
+		reset_dsg = 1U;
+		break;
+	case 0x55B0U: /* historical: reset charge current K/B */
+		reset_chg = 1U;
+		break;
+	default:
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;
 	}
@@ -2161,10 +2145,16 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 	old_dsg_k = g_u16CalibCoefK[MDL_IDSG];
 	old_dsg_b = g_i16CalibCoefB[MDL_IDSG];
 
-	g_u16CalibCoefK[MDL_ICHG] = SYSKDEFAULT;
-	g_i16CalibCoefB[MDL_ICHG] = SYSBDEFAULT;
-	g_u16CalibCoefK[MDL_IDSG] = SYSKDEFAULT;
-	g_i16CalibCoefB[MDL_IDSG] = SYSBDEFAULT;
+	if (reset_chg != 0U)
+	{
+		g_u16CalibCoefK[MDL_ICHG] = SYSKDEFAULT;
+		g_i16CalibCoefB[MDL_ICHG] = SYSBDEFAULT;
+	}
+	if (reset_dsg != 0U)
+	{
+		g_u16CalibCoefK[MDL_IDSG] = SYSKDEFAULT;
+		g_i16CalibCoefB[MDL_IDSG] = SYSBDEFAULT;
+	}
 
 	if (!EEPROM_SaveRWParametersToFlash())
 	{

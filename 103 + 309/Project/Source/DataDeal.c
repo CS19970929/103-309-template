@@ -1,4 +1,5 @@
 #include "main.h"
+#include "CurrentCalibration.h"
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},      // 1´®
@@ -543,22 +544,12 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
 
 
 /*
- * Current K/B calibration follows the existing project Q10 convention while
- * staying in the mA*4 fixed-point domain:
- *
- *   calibrated_mA_x4 = (nominal_mA_x4 * K + B * 4) / 1024
- *
- * K=1024 and B=0 are bit-for-bit identity. B is a residual correction after
- * boot-zero, in Q10*mA. Charge/discharge use independent coefficients.
+ * Boot-zero is applied before K/B. K is Q10 (1024 = 1.0000), B is signed mA.
+ * Charge/discharge use separate coefficients and there is no 2 A split.
  */
 static INT32 DataLoad_CurrentApplyCalibrationX4(INT32 nominal_mA_x4)
 {
     UINT16 calib_index;
-    UINT32 magnitude_mA_x4;
-    UINT16 k;
-    INT16 b;
-    int64_t scaled;
-    INT32 calibrated_mA_x4;
 
     if (nominal_mA_x4 == 0)
     {
@@ -566,25 +557,10 @@ static INT32 DataLoad_CurrentApplyCalibrationX4(INT32 nominal_mA_x4)
     }
 
     calib_index = (nominal_mA_x4 > 0) ? (UINT16)MDL_ICHG : (UINT16)MDL_IDSG;
-    magnitude_mA_x4 = DataLoad_CurrentAbsI32(nominal_mA_x4);
-    k = g_u16CalibCoefK[calib_index];
-    b = g_i16CalibCoefB[calib_index];
-
-    scaled = ((int64_t)magnitude_mA_x4 * (int64_t)k) +
-             ((int64_t)b * (int64_t)CURRENT_FIXED_SCALE);
-    if (scaled <= 0)
-    {
-        return 0;
-    }
-
-    scaled = (scaled + ((int64_t)SYSKDEFAULT / 2)) / (int64_t)SYSKDEFAULT;
-    if (scaled > (int64_t)0x7FFFFFFF)
-    {
-        scaled = (int64_t)0x7FFFFFFF;
-    }
-
-    calibrated_mA_x4 = (INT32)scaled;
-    return (nominal_mA_x4 > 0) ? calibrated_mA_x4 : -calibrated_mA_x4;
+    return (INT32)CurrentCalibration_ApplySignedMilliAmpX4(
+        (int32_t)nominal_mA_x4,
+        (uint16_t)g_u16CalibCoefK[calib_index],
+        (int16_t)g_i16CalibCoefB[calib_index]);
 }
 
 static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)

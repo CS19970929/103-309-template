@@ -139,6 +139,10 @@ try {
         Invoke-LoggedStep "SOC host C tests" {
             Invoke-Python -PyArgs @("tools\run_soc_host_c_test.py")
         }
+
+        Invoke-LoggedStep "Current calibration host C tests" {
+            Invoke-Python -PyArgs @("tools\run_current_calibration_host_c_test.py")
+        }
     }
 
     if ($Mode -eq "build" -or $Mode -eq "flash" -or $Mode -eq "full") {

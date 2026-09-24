@@ -21,6 +21,7 @@ UINT8 SeriesNum = 10U;
 static UINT16 s_host_typec_out_current_mA;
 static UINT32 s_host_vbat_mV;
 static UINT32 s_host_afe_current_sample_seq;
+static INT32 s_host_current_mA;
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
@@ -70,6 +71,11 @@ UINT32 ADC_GetVbatMilliVolt(void)
 UINT32 AfeCurrent_GetSeq(void)
 {
 	return s_host_afe_current_sample_seq;
+}
+
+INT32 AfeCurrent_GetCurrent_mA(void)
+{
+	return s_host_current_mA;
 }
 
 static void host_check(int ok, const char *expr, int line)
@@ -163,6 +169,7 @@ static void host_reset_state(void)
 	s_host_typec_out_current_mA = 0U;
 	s_host_vbat_mV = 0U;
 	s_host_afe_current_sample_seq = 0U;
+	s_host_current_mA = 0;
 	host_apply_default_config();
 }
 
@@ -199,6 +206,7 @@ static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 	s_host_vbat_mV = (UINT32)vmin * (UINT32)SeriesNum;
 	g_stCellInfoReport.u16Ichg = ichg;
 	g_stCellInfoReport.u16IDischg = idsg;
+	s_host_current_mA = ((INT32)ichg - (INT32)idsg) * 100;
 	++s_host_afe_current_sample_seq;
 	App_SOC();
 }
@@ -209,6 +217,26 @@ static void host_run_seconds(UINT16 seconds, UINT16 vmax, UINT16 vmin, UINT16 ic
 	while (ticks-- > 0U)
 	{
 		host_tick(vmax, vmin, ichg, idsg);
+	}
+}
+
+static void host_tick_ma(UINT16 vmax, UINT16 vmin, INT32 current_mA)
+{
+	g_stCellInfoReport.u16VCellMax = vmax;
+	g_stCellInfoReport.u16VCellMin = vmin;
+	g_stCellInfoReport.u16VCellTotle = (UINT16)(((UINT32)vmin * (UINT32)SeriesNum) / 10U);
+	s_host_vbat_mV = (UINT32)vmin * (UINT32)SeriesNum;
+	s_host_current_mA = current_mA;
+	++s_host_afe_current_sample_seq;
+	App_SOC();
+}
+
+static void host_run_seconds_ma(UINT16 seconds, UINT16 vmax, UINT16 vmin, INT32 current_mA)
+{
+	UINT32 ticks = (UINT32)seconds * HOST_TICKS_PER_SECOND;
+	while (ticks-- > 0U)
+	{
+		host_tick_ma(vmax, vmin, current_mA);
 	}
 }
 
@@ -325,30 +353,53 @@ static void test_board_self_consumption_adjusts_charge_and_discharge_current(voi
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 }
 
-static void test_typec_output_current_converts_to_battery_equivalent(void)
+static void test_milliamp_discharge_integration_uses_full_resolution(void)
 {
-	UINT32 start_cap_as10 = host_cap_now_from_soc(60U);
-	UINT32 expected_cap_as10;
-	UINT32 net_charge_ma;
+	UINT32 start_cap_as10 = host_cap_now_from_soc(70U);
+	UINT32 board_ma = (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA;
+	UINT32 expected_cap_as10 = start_cap_as10 -
+		host_self_delta_as10(853U + board_ma, 3600U);
 
 	host_reset_state();
-	host_set_snapshot(60U, 0U);
+	host_set_snapshot(70U, 0U);
 	host_init_with_voltage(3835U, 3835U);
-	s_host_typec_out_current_mA = 9000U;
-	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	expected_cap_as10 = start_cap_as10 - host_self_delta_as10(
-		(UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA,
-		360U);
+	host_run_seconds_ma(3600U, 3835U, 3835U, -853);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
+		host_cap_to_ah100(expected_cap_as10));
 	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+}
 
-	s_host_typec_out_current_mA = 0U;
-	host_run_seconds(360U, 3835U, 3835U, 23U, 0U);
-	net_charge_ma = (23U * 100U > (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) ?
-		(23U * 100U - (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA) : 0U;
-	expected_cap_as10 += host_self_delta_as10(net_charge_ma, 360U);
-	CHECK_RANGE_U32(host_internal_soc(),
-		(UINT32)(host_soc_from_cap(expected_cap_as10) - 1U),
-		(UINT32)(host_soc_from_cap(expected_cap_as10) + 1U));
+static void test_milliamp_charge_integration_uses_full_resolution(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(50U);
+	UINT32 board_ma = (UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA;
+	UINT32 net_charge_ma = (853U > board_ma) ? (853U - board_ma) : 0U;
+	UINT32 expected_cap_as10 = start_cap_as10 +
+		host_self_delta_as10(net_charge_ma, 3600U);
+
+	host_reset_state();
+	host_set_snapshot(50U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds_ma(3600U, 3835U, 3835U, 853);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
+		host_cap_to_ah100(expected_cap_as10));
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
+}
+
+static void test_signed_current_direction_switch_keeps_remainder(void)
+{
+	UINT32 start_cap_as10 = host_cap_now_from_soc(70U);
+	UINT32 expected_cap_as10 = start_cap_as10 -
+		host_self_delta_as10((UINT32)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA, 3600U);
+
+	host_reset_state();
+	host_set_snapshot(70U, 0U);
+	host_init_with_voltage(3835U, 3835U);
+	host_run_seconds_ma(1800U, 3835U, 3835U, 900);
+	host_run_seconds_ma(1800U, 3835U, 3835U, -900);
+	CHECK_EQ_U32(g_stCellInfoReport.SocElement.u16CapacityNow,
+		host_cap_to_ah100(expected_cap_as10));
+	CHECK_EQ_U32(host_internal_soc(), host_soc_from_cap(expected_cap_as10));
 }
 
 static void test_full_confirm_reaches_100_only_after_voltage_anchor(void)
@@ -528,7 +579,9 @@ int main(void)
 	test_full_voltage_anchor_can_override_self_consumption();
 	test_rtc_sleep_does_not_apply_board_self_consumption();
 	test_board_self_consumption_adjusts_charge_and_discharge_current();
-	test_typec_output_current_converts_to_battery_equivalent();
+	test_milliamp_discharge_integration_uses_full_resolution();
+	test_milliamp_charge_integration_uses_full_resolution();
+	test_signed_current_direction_switch_keeps_remainder();
 	test_full_confirm_reaches_100_only_after_voltage_anchor();
 	test_low_voltage_tail_reaches_zero();
 	test_short_rest_ocv_ignores_upward_target_during_charge();
@@ -545,6 +598,6 @@ int main(void)
 		printf("SOC host C tests failed: %u\n", s_failures);
 		return 1;
 	}
-	printf("SOC host C tests passed: 18\n");
+	printf("SOC host C tests passed: 20\n");
 	return 0;
 }
