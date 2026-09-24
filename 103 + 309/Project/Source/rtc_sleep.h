@@ -56,14 +56,14 @@ struct LOW_POWER_RTC_STATUS {
 
 /* Keil Watch: each field mirrors one bit of g_stLowPowerRtcStatus.block. */
 struct LOW_POWER_BLOCK_DEBUG {
-  uint8_t charge_current;
-  uint8_t discharge_current;
-  uint8_t comm_busy;
-  uint8_t key_active;
-  uint8_t external_comm;
-  uint8_t flash_busy;
-  uint8_t upgrade;
-  uint8_t fault;
+  uint8_t charge_current : 1;
+  uint8_t discharge_current : 1;
+  uint8_t comm_busy : 1;
+  uint8_t key_active : 1;
+  uint8_t external_comm : 1;
+  uint8_t flash_busy : 1;
+  uint8_t upgrade : 1;
+  uint8_t fault : 1;
 };
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
