@@ -194,7 +194,6 @@ typedef struct _AFE_CURRENT_DIAG {
 	UINT16 deadband_mA;
 	UINT8 mtpConf;
 	UINT8 bstatus3;
-	UINT32 sampleSeq;
 } AFE_CURRENT_DIAG;
 
 extern UINT16 g_u16CalibCoefK[KB_NUM];
@@ -204,9 +203,9 @@ extern UINT32 g_u32CS_Res_AFE;
 
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
-UINT32 AfeCurrent_GetSeq(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
 void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag);
+void AfeCurrent_MirrorDiagnosticsToUnusedVCells(void);
 void open_ctlc(void);
 void close_ctlc(void);
 
