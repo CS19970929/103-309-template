@@ -464,7 +464,7 @@ static void Sci_PutCurrentDiagWords(UINT8 buff[], UINT16 *index)
 	Sci_PutWordBE(buff, index, diag.deadband_mA);                  /* C10C */
 	Sci_PutWordBE(buff, index, (UINT16)diag.mtpConf);              /* C10D */
 	Sci_PutWordBE(buff, index, (UINT16)diag.bstatus3);             /* C10E */
-	Sci_PutWordBE(buff, index, (UINT16)diag.sampleSeq);            /* C10F */
+	Sci_PutWordBE(buff, index, 0U);                                /* C10F reserved */
 }
 
 static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
