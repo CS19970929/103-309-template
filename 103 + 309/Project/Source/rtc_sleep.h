@@ -54,7 +54,20 @@ struct LOW_POWER_RTC_STATUS {
   uint16_t test_sample_voltage;
 };
 
+/* Keil Watch: each field mirrors one bit of g_stLowPowerRtcStatus.block. */
+struct LOW_POWER_BLOCK_DEBUG {
+  uint8_t charge_current;
+  uint8_t discharge_current;
+  uint8_t comm_busy;
+  uint8_t key_active;
+  uint8_t external_comm;
+  uint8_t flash_busy;
+  uint8_t upgrade;
+  uint8_t fault;
+};
+
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
+extern volatile struct LOW_POWER_BLOCK_DEBUG g_stLowPowerBlockDebug;
 extern enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);

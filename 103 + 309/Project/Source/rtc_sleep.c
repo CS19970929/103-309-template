@@ -31,6 +31,7 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     0U,
     0U,
     0U};
+volatile struct LOW_POWER_BLOCK_DEBUG g_stLowPowerBlockDebug;
 
 typedef uint8_t (*BlockCheckFunc)(void);
 
@@ -83,6 +84,18 @@ uint32_t LP_GetBlockReason(void)
     }
 
     return reason;
+}
+
+static void lp_update_block_debug(uint32_t reason)
+{
+    g_stLowPowerBlockDebug.charge_current = (reason & LP_BLOCK_CHARGE) != 0U;
+    g_stLowPowerBlockDebug.discharge_current = (reason & LP_BLOCK_DISCHARGE) != 0U;
+    g_stLowPowerBlockDebug.comm_busy = (reason & LP_BLOCK_COMM) != 0U;
+    g_stLowPowerBlockDebug.key_active = (reason & LP_BLOCK_KEY) != 0U;
+    g_stLowPowerBlockDebug.external_comm = (reason & LP_BLOCK_EXT_COMM) != 0U;
+    g_stLowPowerBlockDebug.flash_busy = (reason & LP_BLOCK_FLASH_BUSY) != 0U;
+    g_stLowPowerBlockDebug.upgrade = (reason & LP_BLOCK_UPGRADE) != 0U;
+    g_stLowPowerBlockDebug.fault = (reason & LP_BLOCK_FAULT) != 0U;
 }
 
 static void lp_refresh_status(void)
@@ -179,11 +192,13 @@ static void lp_update_sleep_request(void)
 {
     if (lp_select_deep_if_low_voltage() != 0U)
     {
+        lp_update_block_debug(0U);
         lp_refresh_status();
         return;
     }
 
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
+    lp_update_block_debug(g_stLowPowerRtcStatus.block);
     if (g_stLowPowerRtcStatus.block != 0U)
     {
         g_stLowPowerRtcStatus.idle = 0U;
