@@ -30,21 +30,6 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
-	static UINT32 s_u32LastAfeCurrentSampleSeq = 0U;
-	UINT32 u32AfeCurrentSeq;
-	UINT8 u8HasNewAfeSample;
-
-	u32AfeCurrentSeq = AfeCurrent_GetSeq();
-	u8HasNewAfeSample = (u32AfeCurrentSeq != s_u32LastAfeCurrentSampleSeq) ? 1U : 0U;
-	if (u8HasNewAfeSample)
-	{
-		s_u32LastAfeCurrentSampleSeq = u32AfeCurrentSeq;
-		SOC_IntEnhance_Ctrl(SOC_GetNetCurrentMilliAmp(g_stCellInfoReport.u16Ichg,
-		                                               g_stCellInfoReport.u16IDischg));
-	}
-	else
-	{
-		SOC_PublishReportData();
-	}
-
+	SOC_IntEnhance_Ctrl(SOC_GetNetCurrentMilliAmp(g_stCellInfoReport.u16Ichg,
+	                                               g_stCellInfoReport.u16IDischg));
 }
