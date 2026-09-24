@@ -580,6 +580,7 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
 #else
     diag->debugInjectFlags = 0U;
 #endif
+}
 
 
 
