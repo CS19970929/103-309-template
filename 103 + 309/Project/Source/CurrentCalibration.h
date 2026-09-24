@@ -12,7 +12,7 @@
  * The correction is applied to magnitude; the original charge/discharge sign
  * is restored afterwards.
  */
-static int32_t CurrentCalibration_ApplySignedMilliAmpX4(int32_t nominal_mA_x4,
+static __inline int32_t CurrentCalibration_ApplySignedMilliAmpX4(int32_t nominal_mA_x4,
                                                         uint16_t k_q10,
                                                         int16_t b_mA)
 {
@@ -48,7 +48,7 @@ static int32_t CurrentCalibration_ApplySignedMilliAmpX4(int32_t nominal_mA_x4,
 }
 
 /* Historical K/B protocol: bit15 is B sign, low15 bits are magnitude in mA. */
-static uint16_t CurrentCalibration_EncodeProtocolB(int16_t b_mA)
+static __inline uint16_t CurrentCalibration_EncodeProtocolB(int16_t b_mA)
 {
 	uint16_t magnitude;
 
@@ -60,7 +60,7 @@ static uint16_t CurrentCalibration_EncodeProtocolB(int16_t b_mA)
 	return (uint16_t)b_mA;
 }
 
-static int16_t CurrentCalibration_DecodeProtocolB(uint16_t raw)
+static __inline int16_t CurrentCalibration_DecodeProtocolB(uint16_t raw)
 {
 	int32_t magnitude = (int32_t)(raw & 0x7FFFU);
 
