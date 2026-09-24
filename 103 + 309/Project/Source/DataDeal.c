@@ -543,33 +543,35 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
 
 
 /*
- * Current K/B calibration follows the existing project Q10 convention:
+ * Current K/B calibration follows the existing project Q10 convention while
+ * staying in the mA*4 fixed-point domain:
  *
- *   calibrated_mA = (nominal_mA * K + B) / 1024
+ *   calibrated_mA_x4 = (nominal_mA_x4 * K + B * 4) / 1024
  *
- * K=1024 and B=0 are identity. B is a residual correction after boot-zero,
- * in Q10*mA. Charge/discharge use independent coefficients.
+ * K=1024 and B=0 are bit-for-bit identity. B is a residual correction after
+ * boot-zero, in Q10*mA. Charge/discharge use independent coefficients.
  */
-static INT32 DataLoad_CurrentApplyCalibration(INT32 nominal_mA)
+static INT32 DataLoad_CurrentApplyCalibrationX4(INT32 nominal_mA_x4)
 {
     UINT16 calib_index;
-    UINT32 magnitude_mA;
+    UINT32 magnitude_mA_x4;
     UINT16 k;
     INT16 b;
     int64_t scaled;
-    INT32 calibrated_mA;
+    INT32 calibrated_mA_x4;
 
-    if (nominal_mA == 0)
+    if (nominal_mA_x4 == 0)
     {
         return 0;
     }
 
-    calib_index = (nominal_mA > 0) ? (UINT16)MDL_ICHG : (UINT16)MDL_IDSG;
-    magnitude_mA = DataLoad_CurrentAbsI32(nominal_mA);
+    calib_index = (nominal_mA_x4 > 0) ? (UINT16)MDL_ICHG : (UINT16)MDL_IDSG;
+    magnitude_mA_x4 = DataLoad_CurrentAbsI32(nominal_mA_x4);
     k = g_u16CalibCoefK[calib_index];
     b = g_i16CalibCoefB[calib_index];
 
-    scaled = ((int64_t)magnitude_mA * (int64_t)k) + (int64_t)b;
+    scaled = ((int64_t)magnitude_mA_x4 * (int64_t)k) +
+             ((int64_t)b * (int64_t)CURRENT_FIXED_SCALE);
     if (scaled <= 0)
     {
         return 0;
@@ -581,16 +583,17 @@ static INT32 DataLoad_CurrentApplyCalibration(INT32 nominal_mA)
         scaled = (int64_t)0x7FFFFFFF;
     }
 
-    calibrated_mA = (INT32)scaled;
-    return (nominal_mA > 0) ? calibrated_mA : -calibrated_mA;
+    calibrated_mA_x4 = (INT32)scaled;
+    return (nominal_mA_x4 > 0) ? calibrated_mA_x4 : -calibrated_mA_x4;
 }
 
-static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
+static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
 {
+    UINT32 divisor;
     UINT32 report_value;
 
-    report_value = (current_mA + ((UINT32)CURRENT_REPORT_MA_PER_LSB / 2U)) /
-                   (UINT32)CURRENT_REPORT_MA_PER_LSB;
+    divisor = CURRENT_FIXED_SCALE * (UINT32)CURRENT_REPORT_MA_PER_LSB;
+    report_value = (current_mA_x4 + (divisor / 2U)) / divisor;
     if (report_value > 0xFFFFU)
     {
         return 0xFFFFU;
@@ -676,11 +679,10 @@ void DataLoad_Current(void)
 {
     INT32 raw_signed;
     INT32 corrected_raw_x4;
-    INT32 nominal_mA;
-    INT32 calibrated_mA;
-    UINT32 nominal_mA_x4;
-    UINT32 nominal_abs_mA;
-    UINT32 effective_abs_mA;
+    INT32 nominal_mA_x4;
+    INT32 calibrated_mA_x4;
+    UINT32 calibrated_abs_mA_x4;
+    UINT32 calibrated_abs_mA;
     UINT16 deadband_mA;
 
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
@@ -690,33 +692,45 @@ void DataLoad_Current(void)
         corrected_raw_x4 -= s_data.cur.zeroOffsetRawX4;
     }
 
-    nominal_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
-    nominal_abs_mA = DataLoad_CurrentMilliAmpX4ToMilliAmp(nominal_mA_x4);
-
-    if ((nominal_mA_x4 == 0U) || (corrected_raw_x4 == 0))
+    calibrated_abs_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
+    if ((calibrated_abs_mA_x4 == 0U) || (corrected_raw_x4 == 0))
     {
-        nominal_mA = 0;
+        nominal_mA_x4 = 0;
     }
     else if (corrected_raw_x4 > 0)
     {
-        nominal_mA = (INT32)nominal_abs_mA;
+        nominal_mA_x4 = (INT32)calibrated_abs_mA_x4;
     }
     else
     {
-        nominal_mA = -(INT32)nominal_abs_mA;
+        nominal_mA_x4 = -(INT32)calibrated_abs_mA_x4;
     }
 
-    calibrated_mA = DataLoad_CurrentApplyCalibration(nominal_mA);
-    s_data.cur.measured_mA = calibrated_mA;
+    calibrated_mA_x4 = DataLoad_CurrentApplyCalibrationX4(nominal_mA_x4);
+    calibrated_abs_mA_x4 = DataLoad_CurrentAbsI32(calibrated_mA_x4);
+    calibrated_abs_mA = DataLoad_CurrentMilliAmpX4ToMilliAmp(calibrated_abs_mA_x4);
+
+    if (calibrated_mA_x4 > 0)
+    {
+        s_data.cur.measured_mA = (INT32)calibrated_abs_mA;
+    }
+    else if (calibrated_mA_x4 < 0)
+    {
+        s_data.cur.measured_mA = -(INT32)calibrated_abs_mA;
+    }
+    else
+    {
+        s_data.cur.measured_mA = 0;
+    }
 
     deadband_mA = CURRENT_DEADBAND_MA;
-    if (DataLoad_CurrentAbsI32(calibrated_mA) < (UINT32)deadband_mA)
+    if (calibrated_abs_mA_x4 < ((UINT32)deadband_mA * CURRENT_FIXED_SCALE))
     {
         s_data.cur.current_mA = 0;
     }
     else
     {
-        s_data.cur.current_mA = calibrated_mA;
+        s_data.cur.current_mA = s_data.cur.measured_mA;
     }
 
     s_data.cur.runtimeRaw = (INT16)raw_signed;
@@ -731,14 +745,13 @@ void DataLoad_Current(void)
     g_stCellInfoReport.u16Ichg = 0U;
     g_stCellInfoReport.u16IDischg = 0U;
 
-    effective_abs_mA = DataLoad_CurrentAbsI32(s_data.cur.current_mA);
     if (s_data.cur.current_mA > 0)
     {
-        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(effective_abs_mA);
+        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpX4ToA10(calibrated_abs_mA_x4);
     }
     else if (s_data.cur.current_mA < 0)
     {
-        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(effective_abs_mA);
+        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpX4ToA10(calibrated_abs_mA_x4);
     }
 
 #ifdef __VIRTURE_CURRENT__
