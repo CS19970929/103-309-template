@@ -64,6 +64,13 @@
 #ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
 #define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
 #endif
+
+// <q> Enable AFE current raw debug injection
+// <i> Debug/test only. Allows software or debugger to replace SH367309 CADC current raw samples.
+// <i> Default off; when enabled, injection still remains inactive until a target mask is set.
+#ifndef PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
+#define PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE 0
+#endif
 // </h>
 
 // <h>Wakeup Sources

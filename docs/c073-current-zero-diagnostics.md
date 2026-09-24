@@ -52,7 +52,7 @@
 | C10C | deadband_mA | uint16 |
 | C10D | 校准期间最后一次 MTP_CONF | uint8 放在低 8 位 |
 | C10E | 校准期间最后一次 BSTATUS3 | uint8 放在低 8 位 |
-| C10F | 保留 | 0 |
+| C10F | 调试注入 flags | bit0=运行电流 raw 注入；bit1=启动零点 raw 注入；正式版本通常为 0 |
 
 ### C101 状态码
 
@@ -133,3 +133,33 @@
 旧上位机仍可能把 V31/V32 的单位标签显示为 mV，但数值本身直接代表 mA，不再需要加减偏置换算。V31/V32 使用 uint16，因此该临时显示通道最大为 65535 mA；C073 量程足够。完整有符号电流诊断仍保留在 C10A-C10B（int32 mA），deadband_mA 仍保留在 C10C。
 
 完整诊断仍保留在 C100~C10F；V25~V32 仅是 Modbus 上位机显示层的临时映射，不写回全局单体数组。
+
+
+## AFE 电流 raw 调试注入
+
+调试注入默认关闭，不影响正式版本：
+
+```c
+#define PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE 0
+```
+
+需要测试时改为 1。启用宏后可通过代码调用，也可在 Keil Watch 中直接修改全局变量：
+
+```c
+AfeCurrent_DebugInjectRaw(100, AFE_CURRENT_DEBUG_INJECT_RUNTIME);
+AfeCurrent_DebugInjectClear();
+```
+
+或直接观察/修改：
+
+```c
+g_afeCurrentDebugInject.raw
+g_afeCurrentDebugInject.targetMask
+```
+
+targetMask：
+- 0x01：只替换运行期 CADC raw，适合测试 raw→零点修正→K/B→deadband→SOC→串口整条链。
+- 0x02：只替换启动零点采样 raw，真实 FET/MTP/BSTATUS 安全检查仍保留。
+- 0x03：运行期和启动零点都替换。
+
+raw 的类型是 int16 CADC count，正负方向与 SH367309 原始 CADC 一致。注入只发生在电流处理入口，不改写共享的 SH367309 实际采样缓存，因此其它 AFE 数据仍是真实硬件值。C10F 可确认当前是否仍处于注入模式。

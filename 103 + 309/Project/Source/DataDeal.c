@@ -77,6 +77,34 @@ typedef struct _DATA_RUNTIME
 
 static DATA_RUNTIME s_data = {0};
 
+#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
+volatile AFE_CURRENT_DEBUG_INJECT g_afeCurrentDebugInject = {0, 0U};
+
+void AfeCurrent_DebugInjectRaw(INT16 raw, UINT8 targetMask)
+{
+    g_afeCurrentDebugInject.raw = raw;
+    g_afeCurrentDebugInject.targetMask = (UINT8)(targetMask & AFE_CURRENT_DEBUG_INJECT_ALL);
+}
+
+void AfeCurrent_DebugInjectClear(void)
+{
+    g_afeCurrentDebugInject.targetMask = 0U;
+    g_afeCurrentDebugInject.raw = 0;
+}
+
+static UINT8 AfeCurrent_DebugGetInjectedRaw(UINT8 target, UINT16 *raw_code)
+{
+    if ((raw_code != 0) &&
+        ((g_afeCurrentDebugInject.targetMask & target) != 0U))
+    {
+        *raw_code = (UINT16)g_afeCurrentDebugInject.raw;
+        return 1U;
+    }
+
+    return 0U;
+}
+#endif
+
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
@@ -358,6 +386,13 @@ static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
         return 0U;
     }
 
+#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
+    if (AfeCurrent_DebugGetInjectedRaw(AFE_CURRENT_DEBUG_INJECT_BOOT_ZERO, raw_code))
+    {
+        return 1U;
+    }
+#endif
+
     raw_be = 0U;
     if (MTPRead(MTP_ADC2, 2, (UINT8 *)&raw_be))
     {
@@ -540,7 +575,12 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
     diag->deadband_mA = s_data.cur.deadband_mA;
     diag->mtpConf = s_data.cur.lastMtpConf;
     diag->bstatus3 = s_data.cur.lastBstatus3;
-}
+#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
+    diag->debugInjectFlags = (UINT16)g_afeCurrentDebugInject.targetMask;
+#else
+    diag->debugInjectFlags = 0U;
+#endif
+
 
 
 /*
@@ -654,6 +694,7 @@ void DataLoad_soc_test(void)
 }
 void DataLoad_Current(void)
 {
+    UINT16 raw_code;
     INT32 raw_signed;
     INT32 corrected_raw_x4;
     INT32 nominal_mA_x4;
@@ -662,7 +703,11 @@ void DataLoad_Current(void)
     UINT32 calibrated_abs_mA;
     UINT16 deadband_mA;
 
-    raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
+    raw_code = SH367309_Read_AFE1.u16Current;
+#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
+    (void)AfeCurrent_DebugGetInjectedRaw(AFE_CURRENT_DEBUG_INJECT_RUNTIME, &raw_code);
+#endif
+    raw_signed = DataLoad_CurrentRawToSigned(raw_code);
     corrected_raw_x4 = raw_signed * (INT32)CURRENT_FIXED_SCALE;
     if (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID)
     {
