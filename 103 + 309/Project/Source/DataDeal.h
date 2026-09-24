@@ -205,7 +205,6 @@ void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
 void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag);
-void AfeCurrent_MirrorDiagnosticsToUnusedVCells(void);
 void open_ctlc(void);
 void close_ctlc(void);
 
