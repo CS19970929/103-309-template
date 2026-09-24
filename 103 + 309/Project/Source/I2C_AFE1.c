@@ -590,10 +590,6 @@ Others:
 *******************************************************************************/
 void InitAFE1(void)
 {
-	UINT8 do_startup_zero;
-
-	do_startup_zero = (AfeCurrent_GetSeq() == 0U) ? 1U : 0U;
-
 	initAFE1_IIC();
 	close_ctlc();
 
@@ -601,10 +597,14 @@ void InitAFE1(void)
 	AFE_IsReady();
 	SH367309_UpdataAfeConfig();
 	MosStartup_ApplyInitialState();
-	if (do_startup_zero != 0U)
-	{
-		AfeCurrent_StartupZeroCal();
-	}
+
+	/*
+	 * Boot-zero calibration is self-gated by its status. It runs once after
+	 * every MCU reset (including deep-sleep reset) and returns immediately on
+	 * later AFE recovery/re-init within the same boot.
+	 */
+	AfeCurrent_StartupZeroCal();
+
 	open_ctlc();
 	MosStartup_ApplyInitialState();
 }
