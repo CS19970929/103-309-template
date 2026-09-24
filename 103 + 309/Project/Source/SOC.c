@@ -1,26 +1,31 @@
 #include "main.h"
 #include <stdint.h>
 
-static UINT16 SOC_LimitA10(UINT32 current_a10)
-{
-	return (current_a10 > (UINT32)0xFFFFU) ? (UINT16)0xFFFFU : (UINT16)current_a10;
-}
-
 UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 {
 	return 0;
 }
 
-static int32_t SOC_GetNetCurrentMilliAmp(UINT16 report_ichg, UINT16 report_idsg)
+static int32_t SOC_GetNetCurrentMilliAmp(void)
 {
-	UINT32 chg_a10 = report_ichg;
-	UINT32 dsg_a10 = (UINT32)report_idsg + (UINT32)SOC_GetTypeCBatEquivCurrentA10();
+	int64_t net_current_mA;
 
-	if (chg_a10 >= dsg_a10)
+	/*
+	 * AFE current is already signed and calibrated in mA. Keep the existing
+	 * Type-C equivalent-current meaning: it is an additional discharge load.
+	 */
+	net_current_mA = (int64_t)AfeCurrent_GetCurrent_mA() -
+	                 ((int64_t)SOC_GetTypeCBatEquivCurrentA10() * 100LL);
+
+	if (net_current_mA > (int64_t)0x7FFFFFFF)
 	{
-		return (int32_t)SOC_LimitA10(chg_a10 - dsg_a10) * 100;
+		return (int32_t)0x7FFFFFFF;
 	}
-	return 0 - ((int32_t)SOC_LimitA10(dsg_a10 - chg_a10) * 100);
+	if (net_current_mA < -((int64_t)0x7FFFFFFF) - 1LL)
+	{
+		return (int32_t)(-2147483647L - 1L);
+	}
+	return (int32_t)net_current_mA;
 }
 
 void InitData_SOC(void)
@@ -30,6 +35,5 @@ void InitData_SOC(void)
 
 void App_SOC(void)
 {
-	SOC_IntEnhance_Ctrl(SOC_GetNetCurrentMilliAmp(g_stCellInfoReport.u16Ichg,
-	                                               g_stCellInfoReport.u16IDischg));
+	SOC_IntEnhance_Ctrl(SOC_GetNetCurrentMilliAmp());
 }

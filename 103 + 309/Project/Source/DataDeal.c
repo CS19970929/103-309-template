@@ -42,6 +42,9 @@ typedef struct _AFE_CURRENT_RUNTIME
     /* Boot zero is stored in raw-count x4 units to retain half-count averaging. */
     INT32 zeroOffsetRawX4;
     INT32 correctedRawX4;
+    /* Calibrated signed current before product deadband. Unit: mA. */
+    INT32 measured_mA;
+    /* Effective signed current after product deadband. Unit: mA. */
     INT32 current_mA;
     INT16 bootRaw1;
     INT16 bootRaw2;
@@ -453,6 +456,7 @@ void AfeCurrent_StartupZeroCal(void)
 
     s_data.cur.zeroOffsetRawX4 = 0;
     s_data.cur.correctedRawX4 = 0;
+    s_data.cur.measured_mA = 0;
     s_data.cur.current_mA = 0;
     s_data.cur.bootRaw1 = 0;
     s_data.cur.bootRaw2 = 0;
@@ -506,6 +510,11 @@ void AfeCurrent_StartupZeroCal(void)
     s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
 }
 
+INT32 AfeCurrent_GetMeasuredCurrent_mA(void)
+{
+    return s_data.cur.measured_mA;
+}
+
 INT32 AfeCurrent_GetCurrent_mA(void)
 {
     return s_data.cur.current_mA;
@@ -533,13 +542,55 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
 }
 
 
-static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
+/*
+ * Current K/B calibration follows the existing project Q10 convention:
+ *
+ *   calibrated_mA = (nominal_mA * K + B) / 1024
+ *
+ * K=1024 and B=0 are identity. B is a residual correction after boot-zero,
+ * in Q10*mA. Charge/discharge use independent coefficients.
+ */
+static INT32 DataLoad_CurrentApplyCalibration(INT32 nominal_mA)
 {
-    UINT32 divisor;
+    UINT16 calib_index;
+    UINT32 magnitude_mA;
+    UINT16 k;
+    INT16 b;
+    int64_t scaled;
+    INT32 calibrated_mA;
+
+    if (nominal_mA == 0)
+    {
+        return 0;
+    }
+
+    calib_index = (nominal_mA > 0) ? (UINT16)MDL_ICHG : (UINT16)MDL_IDSG;
+    magnitude_mA = DataLoad_CurrentAbsI32(nominal_mA);
+    k = g_u16CalibCoefK[calib_index];
+    b = g_i16CalibCoefB[calib_index];
+
+    scaled = ((int64_t)magnitude_mA * (int64_t)k) + (int64_t)b;
+    if (scaled <= 0)
+    {
+        return 0;
+    }
+
+    scaled = (scaled + ((int64_t)SYSKDEFAULT / 2)) / (int64_t)SYSKDEFAULT;
+    if (scaled > (int64_t)0x7FFFFFFF)
+    {
+        scaled = (int64_t)0x7FFFFFFF;
+    }
+
+    calibrated_mA = (INT32)scaled;
+    return (nominal_mA > 0) ? calibrated_mA : -calibrated_mA;
+}
+
+static UINT16 DataLoad_CurrentMilliAmpToA10(UINT32 current_mA)
+{
     UINT32 report_value;
 
-    divisor = CURRENT_FIXED_SCALE * (UINT32)CURRENT_REPORT_MA_PER_LSB;
-    report_value = (current_mA_x4 + (divisor / 2U)) / divisor;
+    report_value = (current_mA + ((UINT32)CURRENT_REPORT_MA_PER_LSB / 2U)) /
+                   (UINT32)CURRENT_REPORT_MA_PER_LSB;
     if (report_value > 0xFFFFU)
     {
         return 0xFFFFU;
@@ -625,8 +676,11 @@ void DataLoad_Current(void)
 {
     INT32 raw_signed;
     INT32 corrected_raw_x4;
-    UINT32 current_mA_x4;
-    UINT32 current_mA;
+    INT32 nominal_mA;
+    INT32 calibrated_mA;
+    UINT32 nominal_mA_x4;
+    UINT32 nominal_abs_mA;
+    UINT32 effective_abs_mA;
     UINT16 deadband_mA;
 
     raw_signed = DataLoad_CurrentRawToSigned(SH367309_Read_AFE1.u16Current);
@@ -636,48 +690,68 @@ void DataLoad_Current(void)
         corrected_raw_x4 -= s_data.cur.zeroOffsetRawX4;
     }
 
-    current_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
-    deadband_mA = CURRENT_DEADBAND_MA;
-    if (current_mA_x4 < ((UINT32)deadband_mA * CURRENT_FIXED_SCALE))
-    {
-        current_mA_x4 = 0U;
-    }
+    nominal_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
+    nominal_abs_mA = DataLoad_CurrentMilliAmpX4ToMilliAmp(nominal_mA_x4);
 
-    current_mA = DataLoad_CurrentMilliAmpX4ToMilliAmp(current_mA_x4);
-    if (current_mA_x4 == 0U)
+    if ((nominal_mA_x4 == 0U) || (corrected_raw_x4 == 0))
     {
-        s_data.cur.current_mA = 0;
+        nominal_mA = 0;
     }
     else if (corrected_raw_x4 > 0)
     {
-        s_data.cur.current_mA = (INT32)current_mA;
+        nominal_mA = (INT32)nominal_abs_mA;
     }
     else
     {
-        s_data.cur.current_mA = -(INT32)current_mA;
+        nominal_mA = -(INT32)nominal_abs_mA;
+    }
+
+    calibrated_mA = DataLoad_CurrentApplyCalibration(nominal_mA);
+    s_data.cur.measured_mA = calibrated_mA;
+
+    deadband_mA = CURRENT_DEADBAND_MA;
+    if (DataLoad_CurrentAbsI32(calibrated_mA) < (UINT32)deadband_mA)
+    {
+        s_data.cur.current_mA = 0;
+    }
+    else
+    {
+        s_data.cur.current_mA = calibrated_mA;
     }
 
     s_data.cur.runtimeRaw = (INT16)raw_signed;
     s_data.cur.correctedRawX4 = corrected_raw_x4;
     s_data.cur.deadband_mA = deadband_mA;
 
+    /*
+     * Keep the legacy public data model unchanged: charge/discharge are still
+     * separate UINT16 values in A*10 (100 mA/LSB). Only the internal path is
+     * upgraded to signed mA.
+     */
     g_stCellInfoReport.u16Ichg = 0U;
     g_stCellInfoReport.u16IDischg = 0U;
 
+    effective_abs_mA = DataLoad_CurrentAbsI32(s_data.cur.current_mA);
     if (s_data.cur.current_mA > 0)
     {
-        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpX4ToA10(current_mA_x4);
+        g_stCellInfoReport.u16Ichg = DataLoad_CurrentMilliAmpToA10(effective_abs_mA);
     }
     else if (s_data.cur.current_mA < 0)
     {
-        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpX4ToA10(current_mA_x4);
+        g_stCellInfoReport.u16IDischg = DataLoad_CurrentMilliAmpToA10(effective_abs_mA);
     }
 
 #ifdef __VIRTURE_CURRENT__
     if (sys_time.isdebugenable == 1)
     {
+        INT32 virtual_mA;
+
         g_stCellInfoReport.u16Ichg = sys_time.CHG;
         g_stCellInfoReport.u16IDischg = sys_time.DSG;
+
+        virtual_mA = ((INT32)sys_time.CHG - (INT32)sys_time.DSG) * 100;
+        s_data.cur.measured_mA = virtual_mA;
+        s_data.cur.current_mA = virtual_mA;
     }
 #endif
 }

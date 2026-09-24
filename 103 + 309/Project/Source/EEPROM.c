@@ -12,6 +12,41 @@
 #error "RW parameter reserved word count mismatch"
 #endif
 
+/*
+ * Store current K/B in existing reserved words so the RW parameter record size
+ * stays unchanged. Old records have 0xFFFF here and keep calibration defaults.
+ */
+#define RW_PARAM_CURRENT_CAL_MAGIC_INDEX       ((UINT16)0U)
+#define RW_PARAM_CURRENT_CAL_VERSION_INDEX     ((UINT16)1U)
+#define RW_PARAM_CURRENT_CAL_CHG_K_INDEX       ((UINT16)2U)
+#define RW_PARAM_CURRENT_CAL_CHG_B_INDEX       ((UINT16)3U)
+#define RW_PARAM_CURRENT_CAL_DSG_K_INDEX       ((UINT16)4U)
+#define RW_PARAM_CURRENT_CAL_DSG_B_INDEX       ((UINT16)5U)
+#define RW_PARAM_CURRENT_CAL_MAGIC             ((UINT16)0x4349U)
+#define RW_PARAM_CURRENT_CAL_VERSION           ((UINT16)1U)
+
+static UINT8 EEPROM_CurrentCalibValuesValid(UINT16 chg_k, INT16 chg_b,
+                                            UINT16 dsg_k, INT16 dsg_b)
+{
+	if ((chg_k < SYSKMIN) || (chg_k > SYSKMAX) ||
+		(dsg_k < SYSKMIN) || (dsg_k > SYSKMAX))
+	{
+		return 0U;
+	}
+	if ((chg_b < SYSBMIN) || (chg_b > SYSBMAX) ||
+		(dsg_b < SYSBMIN) || (dsg_b > SYSBMAX))
+	{
+		return 0U;
+	}
+	return 1U;
+}
+
+static UINT8 EEPROM_RWParamHasCurrentCalib(const STORAGE_FLASH_RW_PARAM_DATA *data)
+{
+	return (UINT8)((data->reserved[RW_PARAM_CURRENT_CAL_MAGIC_INDEX] == RW_PARAM_CURRENT_CAL_MAGIC) &&
+				   (data->reserved[RW_PARAM_CURRENT_CAL_VERSION_INDEX] == RW_PARAM_CURRENT_CAL_VERSION));
+}
+
 static void EEPROM_UpdateOtherElementRuntime(void)
 {
 	SeriesNum = (UINT8)OtherElement.u16Sys_SeriesNum;
@@ -72,6 +107,13 @@ static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		data->reserved[i] = 0xFFFFU;
 	}
+
+	data->reserved[RW_PARAM_CURRENT_CAL_MAGIC_INDEX] = RW_PARAM_CURRENT_CAL_MAGIC;
+	data->reserved[RW_PARAM_CURRENT_CAL_VERSION_INDEX] = RW_PARAM_CURRENT_CAL_VERSION;
+	data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX] = g_u16CalibCoefK[MDL_ICHG];
+	data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX] = (UINT16)g_i16CalibCoefB[MDL_ICHG];
+	data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX] = g_u16CalibCoefK[MDL_IDSG];
+	data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX] = (UINT16)g_i16CalibCoefB[MDL_IDSG];
 }
 
 static UINT8 EEPROM_WordBlockInRange(const UINT16 *values, const UINT16 *min_values, const UINT16 *max_values, UINT16 count)
@@ -109,6 +151,16 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		return 0;
 	}
+
+	if (EEPROM_RWParamHasCurrentCalib(data) &&
+		!EEPROM_CurrentCalibValuesValid(
+			data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX],
+			(INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX],
+			data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX],
+			(INT16)data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX]))
+	{
+		return 0;
+	}
 	return 1;
 }
 
@@ -124,6 +176,15 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	{
 		*(&OtherElement.u16Balance_OpenVoltage + i) = data->other[i];
 	}
+
+	if (EEPROM_RWParamHasCurrentCalib(data))
+	{
+		g_u16CalibCoefK[MDL_ICHG] = data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX];
+		g_i16CalibCoefB[MDL_ICHG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX];
+		g_u16CalibCoefK[MDL_IDSG] = data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX];
+		g_i16CalibCoefB[MDL_IDSG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX];
+	}
+
 	EEPROM_UpdateOtherElementRuntime();
 }
 

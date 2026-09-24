@@ -203,6 +203,7 @@ extern UINT32 g_u32CS_Res_AFE;
 
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
+INT32 AfeCurrent_GetMeasuredCurrent_mA(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
 void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag);
 void open_ctlc(void);
