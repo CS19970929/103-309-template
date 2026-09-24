@@ -424,6 +424,52 @@ static void Sci_PutDWordBE(UINT8 buff[], UINT16 *index, UINT32 value)
 	Sci_PutWordBE(buff, index, (UINT16)value);
 }
 
+static UINT16 Sci_EncodeSignedWord(INT32 value, INT32 bias)
+{
+	INT32 encoded = value + bias;
+
+	if (encoded < 0)
+	{
+		encoded = 0;
+	}
+	else if (encoded > 0xFFFF)
+	{
+		encoded = 0xFFFF;
+	}
+
+	return (UINT16)encoded;
+}
+
+static UINT16 Sci_GetCurrentDiagVcellWord(const AFE_CURRENT_DIAG *diag, UINT16 vcell_index)
+{
+	if (diag == 0)
+	{
+		return 61001U;
+	}
+
+	switch (vcell_index)
+	{
+	case 24U: /* V25 */
+		return (UINT16)diag->zeroStatus;
+	case 25U: /* V26 */
+		return Sci_EncodeSignedWord((INT32)diag->bootRaw1, 1000);
+	case 26U: /* V27 */
+		return Sci_EncodeSignedWord((INT32)diag->bootRaw2, 1000);
+	case 27U: /* V28 */
+		return Sci_EncodeSignedWord(diag->zeroRawX4, 10000);
+	case 28U: /* V29 */
+		return Sci_EncodeSignedWord((INT32)diag->runtimeRaw, 1000);
+	case 29U: /* V30 */
+		return Sci_EncodeSignedWord(diag->correctedRawX4, 10000);
+	case 30U: /* V31 */
+		return Sci_EncodeSignedWord(diag->current_mA, 30000);
+	case 31U: /* V32 */
+		return diag->deadband_mA;
+	default:
+		return 61001U;
+	}
+}
+
 static void Sci_PutCurrentDiagWords(UINT8 buff[], UINT16 *index)
 {
 	AFE_CURRENT_DIAG diag;
@@ -877,10 +923,25 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 i = 0, j;
 	UINT32 status_snapshot;
 	UINT32 feature_mask;
+	AFE_CURRENT_DIAG current_diag;
+
+	AfeCurrent_GetDiagnostics(&current_diag);
 
 	for (j = 0; j < 63; j++)
 	{ // 0xD000_63
-		u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
+		if ((j >= 24U) && (j <= 31U))
+		{
+			/*
+			 * Only the Modbus D000 readback overlays unused V25~V32 with
+			 * current diagnostics. The real g_stCellInfoReport.u16VCell[]
+			 * remains untouched, so CAN/protection/SOC keep their original data.
+			 */
+			u16SciTemp = Sci_GetCurrentDiagVcellWord(&current_diag, j);
+		}
+		else
+		{
+			u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
+		}
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 	}
 
