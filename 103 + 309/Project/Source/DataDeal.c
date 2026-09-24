@@ -544,7 +544,8 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
 
 
 /*
- * Boot-zero is applied before K/B. K is Q10 (1024 = 1.0000), B is signed mA.
+ * Boot-zero is applied before K/B. K is Q10 and B is signed Q10(A), matching
+ * the historical BMS-upper protocol. Internal output remains signed mA.
  * Charge/discharge use separate coefficients and there is no 2 A split.
  */
 static INT32 DataLoad_CurrentApplyCalibrationX4(INT32 nominal_mA_x4)

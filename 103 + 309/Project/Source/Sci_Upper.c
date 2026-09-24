@@ -1039,7 +1039,7 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 		if ((j == (UINT16)MDL_ICHG) || (j == (UINT16)MDL_IDSG))
 		{
-			u16SciTemp = (UINT16)CurrentCalibration_EncodeProtocolB((int16_t)g_i16CalibCoefB[j]);
+			u16SciTemp = (UINT16)CurrentCalibration_EncodeReadbackB((int16_t)g_i16CalibCoefB[j]);
 		}
 		else
 		{
@@ -1904,10 +1904,10 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 
 	k = Sci_GetWrValue(s, 0U);
 	b_raw = Sci_GetWrValue(s, 1U);
-	b = (INT16)CurrentCalibration_DecodeProtocolB((uint16_t)b_raw);
+	b = (INT16)CurrentCalibration_DecodeWriteProtocolB((uint16_t)b_raw);
 
 	if ((k < CURRENT_CAL_K_MIN) || (k > CURRENT_CAL_K_MAX) ||
-		(b < CURRENT_CAL_B_MIN_MA) || (b > CURRENT_CAL_B_MAX_MA))
+		(b < CURRENT_CAL_B_MIN_Q10_A) || (b > CURRENT_CAL_B_MAX_Q10_A))
 	{
 		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		return;

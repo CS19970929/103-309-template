@@ -23,7 +23,7 @@
 #define RW_PARAM_CURRENT_CAL_DSG_K_INDEX       ((UINT16)4U)
 #define RW_PARAM_CURRENT_CAL_DSG_B_INDEX       ((UINT16)5U)
 #define RW_PARAM_CURRENT_CAL_MAGIC             ((UINT16)0x4349U)
-#define RW_PARAM_CURRENT_CAL_VERSION           ((UINT16)2U)
+#define RW_PARAM_CURRENT_CAL_VERSION           ((UINT16)3U)
 
 static UINT8 EEPROM_CurrentCalibValuesValid(UINT16 chg_k, INT16 chg_b,
                                             UINT16 dsg_k, INT16 dsg_b)
@@ -33,8 +33,8 @@ static UINT8 EEPROM_CurrentCalibValuesValid(UINT16 chg_k, INT16 chg_b,
 	{
 		return 0U;
 	}
-	if ((chg_b < CURRENT_CAL_B_MIN_MA) || (chg_b > CURRENT_CAL_B_MAX_MA) ||
-		(dsg_b < CURRENT_CAL_B_MIN_MA) || (dsg_b > CURRENT_CAL_B_MAX_MA))
+	if ((chg_b < CURRENT_CAL_B_MIN_Q10_A) || (chg_b > CURRENT_CAL_B_MAX_Q10_A) ||
+		(dsg_b < CURRENT_CAL_B_MIN_Q10_A) || (dsg_b > CURRENT_CAL_B_MAX_Q10_A))
 	{
 		return 0U;
 	}

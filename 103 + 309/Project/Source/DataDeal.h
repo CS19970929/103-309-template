@@ -78,11 +78,11 @@ enum tagInfoForKBArray {
 #define SYSBDEFAULT		((INT16)0)      	// 0
 #define SYSBMIN   		((INT16)-30000)     // -30
 
-/* Current-specific calibration bounds. */
-#define CURRENT_CAL_K_MIN        ((UINT16)768U)   /* 0.7500 in Q10 */
-#define CURRENT_CAL_K_MAX        ((UINT16)1280U)  /* 1.2500 in Q10 */
-#define CURRENT_CAL_B_MIN_MA     ((INT16)-500)
-#define CURRENT_CAL_B_MAX_MA     ((INT16)500)
+/* Current K/B uses the historical BMS-upper Q10 protocol and generic limits. */
+#define CURRENT_CAL_K_MIN        SYSKMIN
+#define CURRENT_CAL_K_MAX        SYSKMAX
+#define CURRENT_CAL_B_MIN_Q10_A  SYSBMIN
+#define CURRENT_CAL_B_MAX_Q10_A  SYSBMAX
 
 
 struct OTHER_ELEMENT {
