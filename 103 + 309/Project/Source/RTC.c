@@ -4,12 +4,16 @@ typedef struct RTC_RUNTIME_TAG
 {
 	__IO UINT8 disp;
 	volatile bool wake;
+	UINT32 stop_start_counter;
+	UINT32 last_wakeup_seconds;
 	struct RTC_ELEMENT time;
 } RTC_RUNTIME;
 
 static RTC_RUNTIME s_rtc = {
 	0U,
 	false,
+	0U,
+	0U,
 	{0}
 };
 struct RTC_ELEMENT RTC_time;
@@ -321,12 +325,17 @@ static void RTC_DisableAlarmInterrupt(void)
 
 static void RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
 {
+	UINT32 start_counter;
+
 	if (wake_seconds == 0U)
 	{
 		wake_seconds = 1U;
 	}
 	RTC_ClearAlarmPending();
-	RTC_SetAlarm(RTC_GetCounter() + wake_seconds);
+	start_counter = RTC_GetCounter();
+	s_rtc.stop_start_counter = start_counter;
+	s_rtc.last_wakeup_seconds = 0U;
+	RTC_SetAlarm(start_counter + wake_seconds);
 	RTC_WaitForLastTaskSafe();
 	RTC_ITConfig(RTC_IT_ALR, ENABLE);
 	RTC_WaitForLastTaskSafe();
@@ -386,7 +395,7 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 
 UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 {
-	return RTC_WAKEUP_DEFAULT_SECONDS;
+	return s_rtc.last_wakeup_seconds;
 }
 
 void RTC_WKTimeConfig(void)
@@ -501,6 +510,11 @@ static void RTC_HandleAlarmWakeup(void)
 
 	if (had_alarm)
 	{
+		/*
+		 * Use the RTC counter delta instead of the configured/default wake
+		 * period. Unsigned subtraction also handles the 32-bit counter wrap.
+		 */
+		s_rtc.last_wakeup_seconds = RTC_GetCounter() - s_rtc.stop_start_counter;
 		sys_time.rtc_alm_cnt++;
 		s_rtc.wake = true;
 	}
