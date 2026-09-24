@@ -71,7 +71,6 @@ typedef struct _DATA_RUNTIME
 {
     AFE_CURRENT_RUNTIME cur;
     AFE_MONITOR_RUNTIME mon;
-    UINT32 afeSeq;
 } DATA_RUNTIME;
 
 static DATA_RUNTIME s_data = {0};
@@ -375,18 +374,6 @@ static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
     return 0U;
 }
 
-UINT32 AfeCurrent_GetSeq(void)
-{
-    return s_data.afeSeq;
-}
-
-static void AfeCurrent_NextSeq(void)
-{
-    if (++s_data.afeSeq == 0U)
-    {
-        ++s_data.afeSeq;
-    }
-}
 
 static void AfeCurrent_BootZeroFail(UINT8 status)
 {
@@ -552,7 +539,54 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
     diag->deadband_mA = s_data.cur.deadband_mA;
     diag->mtpConf = s_data.cur.lastMtpConf;
     diag->bstatus3 = s_data.cur.lastBstatus3;
-    diag->sampleSeq = s_data.afeSeq;
+}
+
+static UINT16 AfeCurrent_EncodeSigned(INT32 value, INT32 bias)
+{
+    INT32 encoded = value + bias;
+
+    if (encoded < 0)
+    {
+        encoded = 0;
+    }
+    else if (encoded > 0xFFFF)
+    {
+        encoded = 0xFFFF;
+    }
+
+    return (UINT16)encoded;
+}
+
+void AfeCurrent_MirrorDiagnosticsToUnusedVCells(void)
+{
+    /*
+     * V25~V32 are unused on this 7S project and are ignored by cell
+     * min/max/total calculations. They are mirrored only for convenient
+     * observation with the existing upper-computer cell-voltage view.
+     *
+     * Decode:
+     *   V25: zero status
+     *   V26: boot raw1 + 1000
+     *   V27: boot raw2 + 1000
+     *   V28: zero raw x4 + 10000
+     *   V29: runtime raw + 1000
+     *   V30: corrected raw x4 + 10000
+     *   V31: signed current mA + 30000
+     *   V32: deadband mA
+     */
+    if (SeriesNum >= 25U)
+    {
+        return;
+    }
+
+    g_stCellInfoReport.u16VCell[24] = (UINT16)s_data.cur.zeroStatus;
+    g_stCellInfoReport.u16VCell[25] = AfeCurrent_EncodeSigned((INT32)s_data.cur.bootRaw1, 1000);
+    g_stCellInfoReport.u16VCell[26] = AfeCurrent_EncodeSigned((INT32)s_data.cur.bootRaw2, 1000);
+    g_stCellInfoReport.u16VCell[27] = AfeCurrent_EncodeSigned(s_data.cur.zeroOffsetRawX4, 10000);
+    g_stCellInfoReport.u16VCell[28] = AfeCurrent_EncodeSigned((INT32)s_data.cur.runtimeRaw, 1000);
+    g_stCellInfoReport.u16VCell[29] = AfeCurrent_EncodeSigned(s_data.cur.correctedRawX4, 10000);
+    g_stCellInfoReport.u16VCell[30] = AfeCurrent_EncodeSigned(s_data.cur.current_mA, 30000);
+    g_stCellInfoReport.u16VCell[31] = s_data.cur.deadband_mA;
 }
 
 static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
@@ -1014,10 +1048,10 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
+    AfeCurrent_MirrorDiagnosticsToUnusedVCells();
     // DataLoad_soc_test();
     // test_Autocurrent_cycle();
 
-    AfeCurrent_NextSeq();
 
     App_SH367309();
     new_todo_logi();
