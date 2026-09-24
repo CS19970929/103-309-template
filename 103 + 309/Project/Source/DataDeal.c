@@ -36,7 +36,8 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define CURRENT_FIXED_SCALE ((UINT32)4U)
 #define CURRENT_REPORT_MA_PER_LSB ((UINT16)100U)
 /* Preserve the product-visible 0.2 A deadband regardless of calibration result. */
-#define CURRENT_DEADBAND_MA ((UINT16)200U)
+// #define CURRENT_DEADBAND_MA ((UINT16)200U)
+#define CURRENT_DEADBAND_MA ((UINT16)0U)
 
 typedef struct _AFE_CURRENT_RUNTIME
 {

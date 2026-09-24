@@ -946,7 +946,7 @@ static void InitCan_CAN1(void)
 	can.CAN_SJW = CAN_SJW_1tq;
 	can.CAN_BS1 = CAN_BS1_5tq;
 	can.CAN_BS2 = CAN_BS2_2tq;
-	can.CAN_Prescaler = 4U;
+	can.CAN_Prescaler = 2U;
 	(void)CAN_Init(CAN1, &can);
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);
 }

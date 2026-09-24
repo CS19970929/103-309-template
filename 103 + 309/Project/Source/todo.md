@@ -2093,3 +2093,9 @@ SleepDeal_HandleBootSleepStartup从stop唤醒后，InitDelay是否有效。
 
 
 参考这个分支的SH367350的实现以及afe的说明书，并在codex-flash-storage-optimize分支基础上新开分支，将3673520的驱动移植到新分支并完整、完善实现新的bms项目，io直接参考3673520的分支io先实现，但整个架构不需要参考，需要完整新afe的软、硬件协同保护架构以及参数读写，并给出协议文档，我要实现对应的上位机部分
+
+
+用stlink看一下当前为什么不能进入rtc低功耗，然后优化目前的block原因查看，目前不够清晰，我在用keil调试时，不能一眼看出来block原因，但不要修改s_block_table逻辑
+
+
+修改RtcSleep_AfePortHasCurrentWake中的唤醒电流，要和RtcSleep_PortGetChargeCurrentMa、RtcSleep_PortGetDischargeCurrentMa一样，默认是5百毫安，要求宏可调
