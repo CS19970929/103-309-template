@@ -34,10 +34,8 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define BOOT_CURRENT_FET_STATUS_MASK ((UINT8)0x07U)
 #define CURRENT_FIXED_SCALE ((UINT32)4U)
 #define CURRENT_REPORT_MA_PER_LSB ((UINT16)100U)
-/* Keep the existing product-visible 0.2 A deadband after a valid calibration. */
-#define CURRENT_DEADBAND_CALIBRATED_MA ((UINT16)200U)
-/* A failed calibration must not create a false offset; use a conservative fallback deadband. */
-#define CURRENT_DEADBAND_FALLBACK_MA ((UINT16)500U)
+/* Preserve the product-visible 0.2 A deadband regardless of calibration result. */
+#define CURRENT_DEADBAND_MA ((UINT16)200U)
 
 typedef struct _AFE_CURRENT_RUNTIME
 {
@@ -347,13 +345,6 @@ static UINT32 DataLoad_CurrentMilliAmpX4ToMilliAmp(UINT32 current_mA_x4)
     return (current_mA_x4 + (CURRENT_FIXED_SCALE / 2U)) / CURRENT_FIXED_SCALE;
 }
 
-static UINT16 AfeCurrent_GetDeadbandMilliAmp(void)
-{
-    return (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID)
-               ? CURRENT_DEADBAND_CALIBRATED_MA
-               : CURRENT_DEADBAND_FALLBACK_MA;
-}
-
 static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
 {
     UINT16 raw_be;
@@ -379,7 +370,7 @@ static void AfeCurrent_BootZeroFail(UINT8 status)
 {
     s_data.cur.zeroOffsetRawX4 = 0;
     s_data.cur.zeroStatus = status;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_FALLBACK_MA;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
 }
 
 static void AfeCurrent_WaitFreshSample(void)
@@ -466,7 +457,7 @@ void AfeCurrent_StartupZeroCal(void)
     s_data.cur.bootRaw1 = 0;
     s_data.cur.bootRaw2 = 0;
     s_data.cur.runtimeRaw = 0;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_FALLBACK_MA;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
     s_data.cur.lastMtpConf = 0U;
     s_data.cur.lastBstatus3 = 0U;
 
@@ -512,7 +503,7 @@ void AfeCurrent_StartupZeroCal(void)
     /* ((raw1 + raw2) / 2) * 4 == (raw1 + raw2) * 2. */
     s_data.cur.zeroOffsetRawX4 = (raw1 + raw2) * 2;
     s_data.cur.zeroStatus = (UINT8)AFE_CURRENT_ZERO_VALID;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_CALIBRATED_MA;
+    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
 }
 
 INT32 AfeCurrent_GetCurrent_mA(void)
@@ -541,53 +532,6 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
     diag->bstatus3 = s_data.cur.lastBstatus3;
 }
 
-static UINT16 AfeCurrent_EncodeSigned(INT32 value, INT32 bias)
-{
-    INT32 encoded = value + bias;
-
-    if (encoded < 0)
-    {
-        encoded = 0;
-    }
-    else if (encoded > 0xFFFF)
-    {
-        encoded = 0xFFFF;
-    }
-
-    return (UINT16)encoded;
-}
-
-void AfeCurrent_MirrorDiagnosticsToUnusedVCells(void)
-{
-    /*
-     * V25~V32 are unused on this 7S project and are ignored by cell
-     * min/max/total calculations. They are mirrored only for convenient
-     * observation with the existing upper-computer cell-voltage view.
-     *
-     * Decode:
-     *   V25: zero status
-     *   V26: boot raw1 + 1000
-     *   V27: boot raw2 + 1000
-     *   V28: zero raw x4 + 10000
-     *   V29: runtime raw + 1000
-     *   V30: corrected raw x4 + 10000
-     *   V31: signed current mA + 30000
-     *   V32: deadband mA
-     */
-    if (SeriesNum >= 25U)
-    {
-        return;
-    }
-
-    g_stCellInfoReport.u16VCell[24] = (UINT16)s_data.cur.zeroStatus;
-    g_stCellInfoReport.u16VCell[25] = AfeCurrent_EncodeSigned((INT32)s_data.cur.bootRaw1, 1000);
-    g_stCellInfoReport.u16VCell[26] = AfeCurrent_EncodeSigned((INT32)s_data.cur.bootRaw2, 1000);
-    g_stCellInfoReport.u16VCell[27] = AfeCurrent_EncodeSigned(s_data.cur.zeroOffsetRawX4, 10000);
-    g_stCellInfoReport.u16VCell[28] = AfeCurrent_EncodeSigned((INT32)s_data.cur.runtimeRaw, 1000);
-    g_stCellInfoReport.u16VCell[29] = AfeCurrent_EncodeSigned(s_data.cur.correctedRawX4, 10000);
-    g_stCellInfoReport.u16VCell[30] = AfeCurrent_EncodeSigned(s_data.cur.current_mA, 30000);
-    g_stCellInfoReport.u16VCell[31] = s_data.cur.deadband_mA;
-}
 
 static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
 {
@@ -693,7 +637,7 @@ void DataLoad_Current(void)
     }
 
     current_mA_x4 = DataLoad_CurrentRawX4ToMilliAmpX4(DataLoad_CurrentAbsI32(corrected_raw_x4));
-    deadband_mA = AfeCurrent_GetDeadbandMilliAmp();
+    deadband_mA = CURRENT_DEADBAND_MA;
     if (current_mA_x4 < ((UINT32)deadband_mA * CURRENT_FIXED_SCALE))
     {
         current_mA_x4 = 0U;
@@ -1048,7 +992,6 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
-    AfeCurrent_MirrorDiagnosticsToUnusedVCells();
     // DataLoad_soc_test();
     // test_Autocurrent_cycle();
 
