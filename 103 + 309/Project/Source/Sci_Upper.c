@@ -28,6 +28,14 @@ struct stCell_Info g_stCellInfoReport;
 volatile UINT8 u8FlashUpdateFlag = 0;
 volatile UINT8 u8FlashUpdateE2PROM = 0;
 
+/*
+ * Temporary V25~V32 diagnostic overlay.
+ * RAM-only by design: power-on/reset defaults to normal cell display.
+ * Host function ID 0x07 enables/disables it through 0x1102/0x1103.
+ */
+#define SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY ((UINT16)0x0007U)
+static UINT8 g_u8CurrentDiagVcellDisplayEnable = 0U;
+
 #define SCI_USART_ERROR_FLAGS ((UINT16)(USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
 
 typedef UINT8 (*SCI_PROTOCOL_RX_FEED_FN)(void *pvProtocolCtx, UINT8 u8Data);
@@ -946,12 +954,14 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	for (j = 0; j < 63; j++)
 	{ // 0xD000_63
-		if ((j >= 24U) && (j <= 31U))
+		if ((g_u8CurrentDiagVcellDisplayEnable != 0U) &&
+			(j >= 24U) && (j <= 31U))
 		{
 			/*
-			 * Only the Modbus D000 readback overlays unused V25~V32 with
-			 * current diagnostics. The real g_stCellInfoReport.u16VCell[]
-			 * remains untouched, so CAN/protection/SOC keep their original data.
+			 * Diagnostic display is explicitly enabled by the host. Only the
+			 * Modbus D000 readback overlays unused V25~V32; the real
+			 * g_stCellInfoReport.u16VCell[] remains untouched, so
+			 * CAN/protection/SOC keep their original data.
 			 */
 			u16SciTemp = Sci_GetCurrentDiagVcellWord(&current_diag, j);
 		}
@@ -2285,6 +2295,9 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 			break;
 		case 3: // MOS或�接触器功能
 			break;
+		case SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY:
+			g_u8CurrentDiagVcellDisplayEnable = 1U;
+			break;
 		case 8: // �活模拟前端AFE1
 			break;
 		case 0x0A: 
@@ -2308,6 +2321,10 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
 	{
+		if (u16SciRegData == SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY)
+		{
+			g_u8CurrentDiagVcellDisplayEnable = 0U;
+		}
 	}
 	else
 	{
