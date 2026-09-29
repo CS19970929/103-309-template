@@ -1,8 +1,7 @@
 #include "main.h"
+#include "Heat_Cool.h"
 
 static  void Heat_Control(void);
-
-struct HEAT_COOL_ELEMENT Heat_Cool_Element;
 
 void InitHeat_Cool(void)
 {

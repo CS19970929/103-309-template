@@ -62,6 +62,10 @@ struct HEAT_COOL_ELEMENT {
 								 0,0,0,0,0,0,0,\
 								 0,0,0,0}
 
+#ifndef HEAT_OPEN_CURR
+#define HEAT_OPEN_CURR 500U /* 50 A disables heating in the existing controller. */
+#endif
+
 #define HeatCoolElement_Default {400,500,HEAT_OPEN_CURR,1100,1000,\
 								 0,0,0,0,0,0,0,0,\
 								 0,0,0,0,0,0,0,\

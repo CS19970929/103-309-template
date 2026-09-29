@@ -1,6 +1,12 @@
 #include "main.h"
 #include "UpgradeParamPolicy.h"
 #include "SocEnhance.h"
+#include "Heat_Cool.h"
+
+struct HEAT_COOL_ELEMENT Heat_Cool_Element;
+
+typedef char EEPROM_HeatCoolSizeCheck[(sizeof(struct HEAT_COOL_ELEMENT) ==
+	FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT * sizeof(UINT16)) ? 1 : -1];
 
 #if FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT != E2P_PARA_NUM_PROTECT
 #error "RW parameter protect word count mismatch"
@@ -91,6 +97,12 @@ static void EEPROM_LoadDefaultOtherElement(void)
 	EEPROM_UpdateOtherElementRuntime();
 }
 
+static void EEPROM_LoadDefaultHeatCool(void)
+{
+	const struct HEAT_COOL_ELEMENT heat_cool_default = HeatCoolElement_Default;
+	Heat_Cool_Element = heat_cool_default;
+}
+
 static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 {
 	UINT16 i;
@@ -106,6 +118,10 @@ static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 	for (i = 0; i < E2P_PARA_NUM_RESERVED_RW_PARAM; ++i)
 	{
 		data->reserved[i] = 0xFFFFU;
+	}
+	for (i = 0; i < FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT; ++i)
+	{
+		data->heat_cool[i] = *(&Heat_Cool_Element.u16Heat_OpenTemp + i);
 	}
 
 	data->reserved[RW_PARAM_CURRENT_CAL_MAGIC_INDEX] = RW_PARAM_CURRENT_CAL_MAGIC;
@@ -137,6 +153,8 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	const struct PRT_E2ROM_PARAS protect_max = E2P_PROTECT_MAX_PRT;
 	const struct OTHER_ELEMENT other_min = OtherElement_min;
 	const struct OTHER_ELEMENT other_max = OtherElement_max;
+	const struct HEAT_COOL_ELEMENT heat_cool_min = HeatCoolElement_Min;
+	const struct HEAT_COOL_ELEMENT heat_cool_max = HeatCoolElement_Max;
 	if (!EEPROM_WordBlockInRange(data->protect,
 								 &protect_min.u16VcellOvp_First,
 								 &protect_max.u16VcellOvp_First,
@@ -148,6 +166,13 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 								 &other_min.u16Balance_OpenVoltage,
 								 &other_max.u16Balance_OpenVoltage,
 								 E2P_PARA_NUM_OTHER_ELEMENT1))
+	{
+		return 0;
+	}
+	if (!EEPROM_WordBlockInRange(data->heat_cool,
+								 &heat_cool_min.u16Heat_OpenTemp,
+								 &heat_cool_max.u16Heat_OpenTemp,
+								 FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT))
 	{
 		return 0;
 	}
@@ -175,6 +200,10 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 	{
 		*(&OtherElement.u16Balance_OpenVoltage + i) = data->other[i];
+	}
+	for (i = 0; i < FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT; ++i)
+	{
+		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = data->heat_cool[i];
 	}
 
 	if (EEPROM_RWParamHasCurrentCalib(data))
@@ -205,6 +234,13 @@ UINT8 EEPROM_SaveRWParametersToFlash(void)
 static void EEPROM_LoadRWParametersFromFlash(void)
 {
 	STORAGE_FLASH_RW_PARAM_DATA data;
+	UINT16 i;
+
+	/* Legacy records contain only the first three blocks. */
+	for (i = 0; i < FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT; ++i)
+	{
+		data.heat_cool[i] = *(&Heat_Cool_Element.u16Heat_OpenTemp + i);
+	}
 
 	if (StorageFlash_LoadRwParamData(&data) && EEPROM_RWParamDataIsValid(&data))
 	{
@@ -221,6 +257,7 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultProtect();
 	EEPROM_LoadDefaultCalib();
 	EEPROM_LoadDefaultOtherElement();
+	EEPROM_LoadDefaultHeatCool();
 
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);

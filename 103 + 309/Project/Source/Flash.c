@@ -69,12 +69,25 @@ UINT8 StorageFlash_IsBusy(void)
 
 static UINT16 StorageFlash_CalcCrc(const UINT8 *data, UINT16 length)
 {
+	UINT16 crc = 0xFFFFU;
+	UINT16 offset;
+	UINT8 bit;
+
 	if ((data == 0) || (length == 0))
 	{
 		return 0xFFFF;
 	}
 
-	return Sci_CRC16RTU((UINT8 *)data, (UINT8)length);
+	/* RW parameters now exceed the UINT8 length accepted by Sci_CRC16RTU. */
+	for (offset = 0; offset < length; ++offset)
+	{
+		crc ^= data[offset];
+		for (bit = 0; bit < 8U; ++bit)
+		{
+			crc = (crc & 1U) ? (UINT16)((crc >> 1) ^ 0xA001U) : (UINT16)(crc >> 1);
+		}
+	}
+	return crc;
 }
 
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
@@ -239,8 +252,8 @@ static UINT8 StorageFlash_LoadPair(uint32_t slot_a,
 								   UINT16 expect_length,
 								   UINT8 *payload)
 {
-	UINT8 buffer_a[256];
-	UINT8 buffer_b[256];
+	UINT8 buffer_a[sizeof(STORAGE_FLASH_RW_PARAM_DATA)];
+	UINT8 buffer_b[sizeof(STORAGE_FLASH_RW_PARAM_DATA)];
 	UINT8 *chosen = 0;
 	UINT32 seq_a = 0;
 	UINT32 seq_b = 0;
@@ -304,7 +317,7 @@ static UINT8 StorageFlash_SavePair(uint32_t slot_a,
 								   const UINT8 *payload,
 								   UINT16 length)
 {
-	UINT8 verify_buffer[256];
+	UINT8 verify_buffer[sizeof(STORAGE_FLASH_RW_PARAM_DATA)];
 	UINT8 valid_a;
 	UINT8 valid_b;
 	UINT32 seq_a = 0;
@@ -321,6 +334,19 @@ static UINT8 StorageFlash_SavePair(uint32_t slot_a,
 
 	valid_a = StorageFlash_ReadSlot(slot_a, magic, length, verify_buffer, &seq_a);
 	valid_b = StorageFlash_ReadSlot(slot_b, magic, length, verify_buffer, &seq_b);
+	if ((magic == FLASH_STORAGE_MAGIC_RW_PARAM) &&
+		(length == sizeof(STORAGE_FLASH_RW_PARAM_DATA)))
+	{
+		/* Preserve the latest old-format slot during the first upgraded write. */
+		if (!valid_a)
+		{
+			valid_a = StorageFlash_ReadSlot(slot_a, magic, FLASH_STORAGE_RW_PARAM_LEGACY_SIZE, 0, &seq_a);
+		}
+		if (!valid_b)
+		{
+			valid_b = StorageFlash_ReadSlot(slot_b, magic, FLASH_STORAGE_RW_PARAM_LEGACY_SIZE, 0, &seq_b);
+		}
+	}
 
 	if (valid_a && valid_b)
 	{
@@ -837,18 +863,39 @@ UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 		return result;
 }
 
+static UINT8 StorageFlash_ReadRwParamSlot(uint32_t slot_addr, UINT8 *payload, UINT32 *sequence)
+{
+	if (StorageFlash_ReadSlot(slot_addr, FLASH_STORAGE_MAGIC_RW_PARAM,
+							  (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA), payload, sequence))
+	{
+		return 1;
+	}
+	return StorageFlash_ReadSlot(slot_addr, FLASH_STORAGE_MAGIC_RW_PARAM,
+							 FLASH_STORAGE_RW_PARAM_LEGACY_SIZE, payload, sequence);
+}
+
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
 {
+	UINT8 valid_a;
+	UINT8 valid_b;
+	UINT32 seq_a = 0;
+	UINT32 seq_b = 0;
+	uint32_t chosen_slot;
+
 	if (data == 0)
 	{
 		return 0;
 	}
 
-	return StorageFlash_LoadPair(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
-								 FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
-								 FLASH_STORAGE_MAGIC_RW_PARAM,
-								 (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
-								 (UINT8 *)data);
+	valid_a = StorageFlash_ReadRwParamSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A, 0, &seq_a);
+	valid_b = StorageFlash_ReadRwParamSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B, 0, &seq_b);
+	if (!valid_a && !valid_b)
+	{
+		return 0;
+	}
+	chosen_slot = (valid_a && (!valid_b || (seq_a >= seq_b))) ?
+		FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A : FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B;
+	return StorageFlash_ReadRwParamSlot(chosen_slot, (UINT8 *)data, 0);
 }
 
 UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
@@ -1037,16 +1084,8 @@ void StorageFlash_PrintBootCheck(void)
 										0,
 										&afe_seq_b);
 
-	rw_valid_a = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A,
-									   FLASH_STORAGE_MAGIC_RW_PARAM,
-									   (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
-									   0,
-									   &rw_seq_a);
-	rw_valid_b = StorageFlash_ReadSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B,
-									   FLASH_STORAGE_MAGIC_RW_PARAM,
-									   (UINT16)sizeof(STORAGE_FLASH_RW_PARAM_DATA),
-									   0,
-									   &rw_seq_b);
+	rw_valid_a = StorageFlash_ReadRwParamSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_A, 0, &rw_seq_a);
+	rw_valid_b = StorageFlash_ReadRwParamSlot(FLASH_ADDR_STORAGE_RW_PARAM_SLOT_B, 0, &rw_seq_b);
 
 	soc_valid_a = StorageFlash_LoadJournalPage(FLASH_ADDR_STORAGE_SOC_SLOT_A,
 											   FLASH_STORAGE_MAGIC_SOC,
