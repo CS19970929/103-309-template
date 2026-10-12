@@ -328,8 +328,8 @@ int main(void) {
     lse_ok=lsi_ok=sync_ok=write_ok=1;
     assert(Init_RTC()); assert(resets==1 && counter_writes==1 && prescaler==32767 && Systmtime.value==0);
     counter=1234; assert(Init_RTC()); assert(resets==1 && counter_writes==1 && counter==1234);
-    assert(RTC_WKTimeConfig() && alarm==1244);
-    counter=UINT32_MAX-4; assert(RTC_WKTimeConfig() && alarm==5);
+    assert(RTC_WKTimeConfig() && alarm==1234u+ALARM_TIME_SEC);
+    counter=UINT32_MAX-4; assert(RTC_WKTimeConfig() && alarm==(UINT32)(counter+ALARM_TIME_SEC));
     polls=0; write_ok=0; assert(!RTC_WKTimeConfig()); assert(polls==RTC_WAIT_POLL_LIMIT);
     write_ok=1; sync_ok=0; polls=0; assert(!Init_RTC()); assert(polls<=RTC_WAIT_POLL_LIMIT+1);
     sync_ok=1; lse_ok=0; polls=0; assert(!Init_RTC()); assert(resets==1 && counter==UINT32_MAX-4);
@@ -338,7 +338,7 @@ int main(void) {
     rtc_pending=RTC_IT_ALR; exti_pending=0; polls=0;
     RTCAlarm_IRQHandler(); assert(is_rtc_wakekup && rtc_cnt==1 && polls==0);
     RTCAlarm_IRQHandler(); assert(rtc_cnt==1); /* no duplicate for an already cleared alarm */
-    puts("PASS: retained RTC time, 10s alarm, wrap, LSE/LSI failures, bounded waits, short IRQ");
+    printf("PASS: retained RTC time, %us alarm, wrap, LSE/LSI failures, bounded waits, short IRQ\n", ALARM_TIME_SEC);
     return 0;
 }
 '''
@@ -408,9 +408,12 @@ def main():
                               policy_stubs, flags=re.MULTILINE)
     rtc = read("RTC.c").split("/* Poll budgets", 1)[1]
     rtc = rtc[rtc.index("#define RTC_WAIT_POLL_LIMIT"):]
+    rtc_stubs = re.sub(r"^#define ALARM_TIME_SEC[^\n]+",
+                       re.search(r"^#define ALARM_TIME_SEC[^\n]+", read("RTC.h"), re.MULTILINE)[0],
+                       RTC_STUBS, flags=re.MULTILINE)
     programs = {
         "policy": COMMON + "enum irqWakeup" + enums + policy_stubs + flash + soc + commit + policy + key + POLICY_TESTS,
-        "rtc": COMMON + RTC_STUBS + rtc + RTC_TESTS,
+        "rtc": COMMON + rtc_stubs + rtc + RTC_TESTS,
         "stop": COMMON + "enum irqWakeup" + enums + STOP_STUBS
                 + function_source(read("conf/conf.c"), "RestoreRunClockAfterStop")
                 + function_source(read("conf/conf.c"), "Sys_StopMode") + STOP_TESTS,

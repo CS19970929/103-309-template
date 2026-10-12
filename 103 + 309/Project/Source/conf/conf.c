@@ -264,7 +264,10 @@ void IOstatus_RTCMode(void)
 
     ADC_DeInit(ADC1); // ????????????????
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
+    /* Wake inputs stay digital across RTC cycles: analog PA9 creates a false
+       falling edge while EXTI9 is armed. Keep SWD pins available for debugging. */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
+        ~(PIN_INT_WK_MCU | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -274,7 +277,7 @@ void IOstatus_RTCMode(void)
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & (~GPIO_Pin_14);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & ~(PIN_AFE1_CTL | PIN_INT_WK_CMNT);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif

@@ -19,6 +19,9 @@ PROJECT = ROOT / "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvpr
 def main():
     target = ET.parse(PROJECT).find("./Targets/Target")
     ads = target.find("./TargetOption/TargetArmAds")
+    ldads = ads.find("LDads")
+    if ldads.findtext("useFile") != "0":
+        raise RuntimeError("External linker input file is not supported by this validator")
     cads = ads.find("Cads")
     controls = cads.find("VariousControls")
     compiler = Path(os.environ.get("ARMCC_BIN", r"C:\Keil_v5\ARM\ARMCC\bin"))
@@ -83,15 +86,25 @@ def main():
     if int(ram.findtext("Size"), 0) == 0:
         ram = memories.find("IRAM")
     scatter = output / "target.sct"
-    scatter.write_text(
-        f"LR_IROM1 {rom.findtext('StartAddress')} {rom.findtext('Size')} {{\n"
-        f" ER_IROM1 {rom.findtext('StartAddress')} {rom.findtext('Size')} {{\n"
-        "  *.o (RESET, +First)\n  *(InRoot$$Sections)\n  .ANY (+RO)\n }\n"
-        f" RW_IRAM1 {ram.findtext('StartAddress')} {ram.findtext('Size')} {{\n"
-        "  .ANY (+RW +ZI)\n }\n}\n", encoding="ascii")
+    if ldads.findtext("umfTarg") == "0":
+        configured_scatter = (PROJECT.parent / ldads.findtext("ScatterFile", "")).resolve()
+        if not configured_scatter.is_file():
+            raise RuntimeError(f"Missing configured scatter file: {configured_scatter}")
+        scatter.write_bytes(configured_scatter.read_bytes())
+    else:
+        scatter.write_text(
+            f"LR_IROM1 {rom.findtext('StartAddress')} {rom.findtext('Size')} {{\n"
+            f" ER_IROM1 {rom.findtext('StartAddress')} {rom.findtext('Size')} {{\n"
+            "  *.o (RESET, +First)\n  *(InRoot$$Sections)\n  .ANY (+RO)\n }\n"
+            f" RW_IRAM1 {ram.findtext('StartAddress')} {ram.findtext('Size')} {{\n"
+            "  .ANY (+RW +ZI)\n }\n}\n", encoding="ascii")
     message = run([compiler / "armlink.exe", *objects, "--library_type=microlib",
                    "--strict", "--scatter", scatter, "--summary_stderr", "--info=summarysizes",
                    "--map", "--list", output / "target.map", "-o", output / "target.axf"])
+    stop_section = re.search(r"^\s*(0x[0-9a-fA-F]+).*\bi\.PWR_EnterSTOPMode\b",
+                             (output / "target.map").read_text(), re.MULTILINE)
+    if stop_section is None or not 0x20000000 <= int(stop_section[1], 16) < 0x20005000:
+        raise RuntimeError("PWR_EnterSTOPMode must execute from RAM on this target")
     assert not list(output.rglob("*.bin"))
     warnings = len(re.findall(r"\bWarning:", "\n".join(logs)))
     print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC compile + AXF link")

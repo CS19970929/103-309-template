@@ -1,0 +1,14 @@
+; Keep the existing APP/RAM ranges. Execute the vendor STOP routine from RAM:
+; this board corrupts the post-WFI Flash instruction path during RTC wakeup.
+; __main scatter-loading copies this section before main; no debugger copy needed.
+LR_IROM1 0x08004800 0x00020000 {
+  ER_IROM1 0x08004800 0x00020000 {
+    *.o (RESET, +First)
+    *(InRoot$$Sections)
+    .ANY (+RO)
+  }
+  RW_IRAM1 0x20000000 0x00005000 {
+    *stm32f10x_pwr.o (i.PWR_EnterSTOPMode)
+    .ANY (+RW +ZI)
+  }
+}
