@@ -310,6 +310,7 @@ UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);
 UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 data);
 
 void InitE2PROM(void);
+void InitE2PROM_i2c(void);
 void App_E2promDeal(void);
 
 void EEPROM_test(void);

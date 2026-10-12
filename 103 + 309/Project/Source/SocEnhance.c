@@ -676,6 +676,17 @@ void SOC_DealEEPROM_Data(enum EEPROM_COMMAND Command)
 	}
 }
 
+/* Save only the three existing words, with the legacy scaling and addresses. */
+UINT8 SOC_SaveBeforeSleep(void)
+{
+    if (WriteEEPROM_Word_NoZone(E2P_ADDR_SOC, SOC_Calculate_Element.u8SOC_Now) ||
+        WriteEEPROM_Word_NoZone(E2P_ADDR_DSG_SOC_Int, SOC_Calculate_Element.u8DSG_SOC_Int) ||
+        WriteEEPROM_Word_NoZone(E2P_ADDR_CYCLE_TIMES,
+            (UINT16)(SOC_Calculate_Element.u32Cycle_times / 100U)))
+        return 0U;
+    return 1U;
+}
+
 void SOC_Update_StartUp(void)
 {
 	switch (SOC_Enhance_Element.u16_RefreshData_Flag)

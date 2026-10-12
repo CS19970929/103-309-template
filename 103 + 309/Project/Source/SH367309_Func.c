@@ -69,10 +69,10 @@ void AFE_Reset(void)
 }
 
 // 进入休眠模式
-void AFE_Sleep(void)
+UINT8 AFE_Sleep(void)
 {
 	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	return MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
 // 进入IDLE模式

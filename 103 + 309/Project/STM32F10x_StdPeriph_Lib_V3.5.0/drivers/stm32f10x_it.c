@@ -163,6 +163,7 @@ void EXTI0_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line0);
+    g_irq_t = PA0_irq;
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
   }
 }
@@ -188,6 +189,7 @@ void EXTI15_10_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line12);
+    g_irq_t = rs485_irq;
   }
 }
 
@@ -213,6 +215,7 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line9);
+    g_irq_t = bms_keyirq;
   }
 }
 
@@ -250,6 +253,7 @@ void USART1_IRQHandler(void)
   if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
   {
     RTC_ExtComCnt++;
+    g_irq_t = uart1_irq;
 
 #ifdef _COMMOM_UPPER_SCI1
     Sci1_CommonUpper_FaultChk();
@@ -290,6 +294,7 @@ void USART2_IRQHandler(void)
   if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
   {
     RTC_ExtComCnt++;
+    g_irq_t = uart2_irq;
 
 #ifdef _COMMOM_UPPER_SCI2
     Sci2_CommonUpper_FaultChk();
@@ -316,6 +321,7 @@ void USART3_IRQHandler(void)
   if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
   {
     RTC_ExtComCnt++;
+    g_irq_t = uart3_irq;
 
 #ifdef _COMMOM_UPPER_SCI3
     Sci3_CommonUpper_FaultChk();

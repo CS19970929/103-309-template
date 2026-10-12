@@ -73,6 +73,7 @@ struct SOC_ENHANCE_ELEMENT {
 extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 void SOC_IntEnhance_Ctrl(void);
+UINT8 SOC_SaveBeforeSleep(void);
 
 
 extern UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);

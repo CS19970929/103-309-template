@@ -252,7 +252,7 @@ UINT8 AFE_CheckStatus(void);
 UINT8 AFE_IsReady(void);
 void AFE_Reset(void);
 
-void AFE_Sleep(void);
+UINT8 AFE_Sleep(void);
 void AFE_IDLE(void);
 void AFE_SHIP(void);
 UINT32 AFE_CalcuVbat(void);

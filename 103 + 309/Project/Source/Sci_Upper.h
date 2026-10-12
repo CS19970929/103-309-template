@@ -590,6 +590,8 @@ void Sci3_CommonUpper_FaultChk(void);
 void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
 
 void InitUSART_CommonUpper(void);
+void InitSCI1_CommonUpper_rtc(void);
+void InitSCI2_CommonUpper_rtc(void);
 void App_CommonUpper(void);
 
 extern UINT8 reset_numPro;

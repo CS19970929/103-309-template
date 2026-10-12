@@ -3,7 +3,6 @@
 
 Time_T sys_time = {
     .time_enter_rtc = 30,
-    .power_on = false,
 };
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -209,7 +208,6 @@ void InitWakeUp_NormalMode(void)
 void InitWakeUp_RTCMode(void)
 {
     InitWakeUp_NormalMode(); // ???Base?????
-    RTC_WKTimeConfig();
 }
 
 // ???standby?????PA0?wkup???
@@ -338,182 +336,72 @@ void IOstatus_DeepMode(void)
     IOstatus_Base();
 }
 
-void IORecover_RTCMode(void)
+/* STOP keeps CFGR divisors and VTOR; restore only the source used before WFI. */
+static UINT8 RestoreRunClockAfterStop(UINT8 previous_source)
 {
-    MCU_RESET();
-}
-
-void IORecover_NormalMode(void)
-{
-    // TIM_Cmd(TIM3, ENABLE);	//??App_SleepTest()??
-    MCU_RESET(); // ?????????????????????????????????????????
-}
-
-void IORecover_DeepMode(void)
-{
-    MCU_RESET();
+    UINT32 polls = 1000000UL;
+    if (RCC_GetSYSCLKSource() == previous_source)
+        return 1U;
+    /* This target runs directly from HSE (no PLL); HSI is the STOP wake source. */
+    if (previous_source != RCC_CFGR_SWS_HSE)
+        return 0U;
+    RCC_HSEConfig(RCC_HSE_ON);
+    if (RCC_WaitForHSEStartUp() == ERROR)
+        return 0U;
+    RCC_SYSCLKConfig(RCC_SYSCLKSource_HSE);
+    while (RCC_GetSYSCLKSource() != previous_source)
+    {
+        if (--polls == 0U)
+            return 0U;
+    }
+    return 1U;
 }
 
 void Sys_StopMode(void)
 {
-    // RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
-    PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
-
-// ????????????????????
-// ?????????????????????
-#if (defined _HSE_8M_PLL_48M) || (defined _HSE_12M_PLL_48M)
-    RCC_HSEConfig(RCC_HSE_ON); // ????????HSI
-    while (RCC_GetFlagStatus(RCC_FLAG_HSERDY) == RESET)
-        ;               // ?? HSE ????
-    RCC_PLLCmd(ENABLE); // ?? PLL
-    while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET)
-        ;                                      // ?? PLL ????
-    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK); // ??PLL???????
-    while (RCC_GetSYSCLKSource() != 0x08)
-        ; // ??PLL?????????
-#endif
+    UINT32 primask;
+    UINT8 previous_source = RCC_GetSYSCLKSource();
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    TIM_Cmd(TIM3, DISABLE);
+    TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+    NVIC_ClearPendingIRQ(TIM3_IRQn);
+    /* Pending wake IRQs must survive until WFI, including edges during IO setup. */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    __DSB();
+    if (g_irq_t == NO_IRQ && !is_rtc_wakekup)
+        PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+    if (!RestoreRunClockAfterStop(previous_source))
+        MCU_RESET();
+    SystemCoreClockUpdate();
+    InitDelay();
+    __set_PRIMASK(primask);
 }
 
-#if 0
-void Init(void)
+void InitRunAfterStop(void)
 {
-#if 0
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOC, ENABLE); // 开启GPIOC的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOD, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
-
-	InitSci();
-#endif
-
-#ifdef _DEBUG_
-	// cpu_frequency_conf();
-	InitIO();
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 使能IO复用功能模块时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); // 使能GPIOA时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 使能GPIOB时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); // 使能GPIOC时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // 使能GPIOD时钟
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // 使能GPIOE时钟
-
-	InitSci();
-#endif
-	
-
-	if (is_rtc_wakekup)
-	{
-	}
-	else
-	{
-		cpu_frequency_conf();
-
-		is_wakeup = true;
-
-		InitDelay();
-		InitIO();
-
-		// InitSystemWakeUp();
-		// {
-		//     MCUO_PWSV_STB = 1;
-		//     MCUO_PWSV_CTR = 1;
-		//     // bug fixme 注意
-		//     MCUO_AFE_SHIP = 0;
-		//     MCUO_AFE_MODE = 0;
-		// }
-
-		// InitSci();
-		// Init_ChargerLoad_Det();
-		ADC_DeInit(ADC1);
-		InitADC();
-		//?????adc配置有什么影响
-		// Init_ChargerLoad_Det();
-
+    InitIO();
+    ADC_DeInit(ADC1);
+    InitADC();
 #ifdef __FUNC__HEAT__
-		InitHeat_Cool();
+    InitHeat_Cool();
 #endif
 #ifdef __FUNC__LED__
-		APP_LedBar();
-		set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-		InitTimer();
-		// InitTimer_10ms_fault3();
-
-
-        USART_DeInit(USART1);
-        USART_DeInit(USART2);
-
-        InitSci();
-
-        InitCan();
-	}
-
-	initAFE_IIC();
-	
-	InitE2PROM();
-
-	Init_ChargerLoad_Det();
-}
-
+    APP_LedBar();
+    set_LED_state(LED_BAR_NORMAL, 4);
 #endif
-
-void Init(void)
-{
-   
-
-#if 0
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE); // 开启GPIOA的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOB, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOC, ENABLE); // 开启GPIOC的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOD, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOE, ENABLE); // 开启GPIOB的外设时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOF, ENABLE); // 开启GPIOF的外设时钟
-
-#endif
-
-    if (is_rtc_wakekup)
-    {
-    }
-    else
-    {
-        cpu_frequency_conf();
-
-        is_wakeup = true;
-
-        InitDelay();
-        InitIO();
-
-        // Init_ChargerLoad_Det();
-        ADC_DeInit(ADC1);
-        InitADC();
-        //?????adc配置有什么影响
-        // Init_ChargerLoad_Det();
-
-#ifdef __FUNC__HEAT__
-        InitHeat_Cool();
-#endif
-#ifdef __FUNC__LED__
-        APP_LedBar();
-        set_LED_state(LED_BAR_NORMAL, 4);
-#endif // DEBUG
-
-        USART_DeInit(USART1);
-        USART_DeInit(USART2);
-
-        // InitCan();
-
-        InitTimer();
-        sys_time.wakeup_rtc = true;
-        Init_ChargerLoad_Det();
-        
-    }
-     initAFE1_IIC();
-    InitE2PROM_i2c();
-
-    extern void InitSCI1_CommonUpper_rtc(void);
-    extern void InitSCI2_CommonUpper_rtc(void);
+    USART_DeInit(USART1);
+    USART_DeInit(USART2);
+    /* Restore cached baud rates; EEPROM pins are analog until the end below. */
+#ifdef _COMMOM_UPPER_SCI1
     InitSCI1_CommonUpper_rtc();
+#endif
+#ifdef _COMMOM_UPPER_SCI2
     InitSCI2_CommonUpper_rtc();
-    // InitUSART_CommonUpper();
+#endif
+    InitTimer();
+    sys_time.wakeup_rtc = true;
+    Init_ChargerLoad_Det();
+    initAFE1_IIC();
+    InitE2PROM_i2c();
 }

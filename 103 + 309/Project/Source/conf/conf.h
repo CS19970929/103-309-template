@@ -130,7 +130,6 @@ typedef struct
    uint8_t  wakeup_reason;
   bool     wakeup_rtc;
   uint8_t time_enter_rtc;
-  bool power_on;
   uint16_t test_cnt1;
 
   uint16_t enter_rtc_delay;
@@ -148,11 +147,8 @@ void IOstatus_Base(void);
 void IOstatus_RTCMode(void);
 void IOstatus_NormalMode(void);
 void IOstatus_DeepMode(void);
-void IORecover_RTCMode(void);
-void IORecover_NormalMode(void);
-void IORecover_DeepMode(void);
 void Sys_StopMode(void);
-// void Init(void);
+void InitRunAfterStop(void);
 
 
 #endif

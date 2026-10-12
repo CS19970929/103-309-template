@@ -213,23 +213,6 @@ void LedBar_Show_Fault(void)
     }
 }
 
-void LedBar_Show_Sleep(void)
-{
-    static UINT16 su16_SleepDelay_Tcnt = 0;
-
-    if (!MCUI_SOC_KEY)
-    {
-        if (++su16_SleepDelay_Tcnt >= 20)
-        {
-            Sleep_Mode.bits.b1ForceToSleep_L3 = 1;
-        }
-    }
-    else
-    {
-        su16_SleepDelay_Tcnt = 0;
-    }
-}
-
 void APP_LedBar(void)
 {
     if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
@@ -267,7 +250,7 @@ void APP_LedBar(void)
 
     // LedBar_Show_Fault();
     // 好像有问题
-    // LedBar_Show_Sleep();
+
 
     // if (BlueToothFlag)
     // {

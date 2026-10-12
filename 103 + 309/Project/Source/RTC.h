@@ -62,8 +62,9 @@ extern volatile bool is_rtc_wakekup;
 extern volatile uint16_t rtc_cnt;
 
 
-void RTC_WKTimeConfig(void);
-void Init_RTC(void);
+UINT8 RTC_WKTimeConfig(void);
+UINT8 Init_RTC(void);
+void RTC_DisableStopAlarm(void);
 void App_RTC(void);
 
 #endif	/* RTC_H */

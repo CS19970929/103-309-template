@@ -123,181 +123,188 @@ UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 	return T_sec;
 }
 
-UINT8 RTC_ClockConfig(void)
+/* Poll budgets bound a missing oscillator or stalled backup-domain write. */
+#define RTC_WAIT_POLL_LIMIT 1000000UL
+static UINT8 s_rtc_ready;
+volatile bool is_rtc_wakekup;
+volatile uint16_t rtc_cnt;
+
+static UINT8 RTC_WaitFlag(UINT16 flag)
 {
-	__IO UINT16 StartUpCounter = 0, HSEStatus = 0;
-	INT8 result = 0;
-	PWR_BackupAccessCmd(ENABLE); // 允许访问RTC
-	BKP_DeInit();				 // 好像少了这句话导致各种wait函数卡死
-	RCC_LSEConfig(RCC_LSE_ON);	 // 使能外部LSE晶振，RCC_LSE_Bypass旁路的意思应该是使能这个LSE时钟，但是单片机不用，外围电路用?
-	do
-	{
-		HSEStatus = RCC_GetFlagStatus(RCC_FLAG_LSERDY);
-		StartUpCounter++;
-	} while ((HSEStatus == RESET) && (StartUpCounter < LSE_START_TIMEOUT)); // 等待到 LSE 预备
-
-	if (StartUpCounter < LSE_START_TIMEOUT)
-	{
-		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE); // 把RTC 时钟源配置为LSE
-		RCC_RTCCLKCmd(ENABLE);					// 使能RTC时钟
-		RTC_WaitForSynchro();					// 等待 RTC APB 寄存器同步
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// 使能 RTC 秒中断
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_SetPrescaler(LSE_FREQUENT);			// 设置 RTC 分频: 使 RTC 周期为1s
-										// RTC period = RTCCLK/RTC_PR = (32.768 KHz)/(32767+1) = 1HZ
-		RTC_WaitForLastTask(); // 确保上一次 RTC 的操作完成
-	}
-	else
-	{
-		//++RTC_Faultcnt;											//RTC错误单数为LSE出错
-		// System_ERROR_UserCallback(ERROR_LSE);
-		RCC_LSICmd(ENABLE); // 使能 LSI 振荡
-		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) == RESET)
-			;									// 等待到 LSI 预备
-		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI); // 把RTC 时钟源配置为LSI
-		RCC_RTCCLKCmd(ENABLE);					// 使能RTC时钟
-		RTC_WaitForSynchro();					// 等待 RTC APB 寄存器同步
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_ITConfig(RTC_IT_SEC, ENABLE);		// 使能 RTC 秒中断
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		RTC_SetPrescaler(40000 - 1);			// RTC period = RTCCLK/RTC_PR = (40 KHz)/(40000-1+1) = 1HZ
-		RTC_WaitForLastTask();					// 确保上一次 RTC 的操作完成
-		result = 1;
-	}
-
-	return result;
+    UINT32 polls = RTC_WAIT_POLL_LIMIT;
+    while (RTC_GetFlagStatus(flag) == RESET)
+    {
+        if (--polls == 0U)
+            return 0U;
+    }
+    return 1U;
 }
 
-void RTC_TimeConfig(void)
+static UINT8 RTC_Synchronize(void)
 {
-	// GregorianDay(tm);			//计算星期
-	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // 由日期计算时间戳并写入到RTC计数寄存器
-	RTC_WaitForLastTask();
+    RTC->CRL &= (UINT16)~RTC_FLAG_RSF;
+    return RTC_WaitFlag(RTC_FLAG_RSF);
 }
 
-void RTC_AlarmConfig(void)
+static UINT8 RTC_StartOscillator(UINT8 lse)
 {
-	NVIC_InitTypeDef NVIC_InitStructure;
-	EXTI_InitTypeDef EXTI_InitStructure;
-
-#if 0 // 不在这里初始化
-	PWR_BackupAccessCmd(ENABLE);											//后备域解锁
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);										//禁止实时时钟秒中断
-	RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
-  	RTC_WaitForLastTask();
-  	RTC_ITConfig(RTC_FLAG_ALR, ENABLE);										//打开闹钟中断
-#endif
-
-	//------------EXTI17 配置 -------------------
-	EXTI_InitStructure.EXTI_Line = EXTI_Line17;
-	EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
-	EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
-	EXTI_InitStructure.EXTI_LineCmd = ENABLE;
-	EXTI_Init(&EXTI_InitStructure);
-	//------------设置 中断-------------------
-	NVIC_InitStructure.NVIC_IRQChannel = RTCAlarm_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
+    UINT32 polls = RTC_WAIT_POLL_LIMIT;
+    UINT8 flag = lse ? RCC_FLAG_LSERDY : RCC_FLAG_LSIRDY;
+    if (lse)
+        RCC_LSEConfig(RCC_LSE_ON);
+    else
+        RCC_LSICmd(ENABLE);
+    while (RCC_GetFlagStatus(flag) == RESET)
+    {
+        if (--polls == 0U)
+            return 0U;
+    }
+    return 1U;
 }
 
-void RTC_NVIC_Config(void)
+static void RTC_EnableBackupAccess(void)
 {
-	NVIC_InitTypeDef NVIC_InitStructure;
-
-	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
-
-	NVIC_InitStructure.NVIC_IRQChannel = RTC_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    PWR_BackupAccessCmd(ENABLE);
 }
 
-// RTC唤醒时间设置，
-void RTC_WKTimeConfig(void)
+static void RTC_ConfigureInterrupts(void)
 {
-	PWR_BackupAccessCmd(ENABLE);														// 后备域解锁
-	RTC_ITConfig(RTC_IT_SEC, DISABLE);													// 禁止实时时钟秒中断
-	// RTC_SetAlarm(RTC_GetCounter() + (UINT32)g_tParam.other.u16Sleep_RTC_WakeUpTime * 60); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + 30); // 唤醒时间
-	RTC_SetAlarm(RTC_GetCounter() + 10); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + 3); // 唤醒时间
-	// RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);						//唤醒时间
-	RTC_WaitForLastTask();
-	RTC_ITConfig(RTC_FLAG_ALR, ENABLE); // 打开闹钟中断
+    EXTI_InitTypeDef exti;
+    NVIC_InitTypeDef nvic;
+    exti.EXTI_Line = EXTI_Line17;
+    exti.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti.EXTI_Trigger = EXTI_Trigger_Rising;
+    exti.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&exti);
+    nvic.NVIC_IRQChannel = RTCAlarm_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 0U;
+    nvic.NVIC_IRQChannelSubPriority = 0U;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+    nvic.NVIC_IRQChannel = RTC_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 1U;
+    NVIC_Init(&nvic);
 }
 
-void Init_RTC(void)
-{ // 使能PWR外设时钟，待机模式，RTC，看门狗
-	RTC_ClockConfig();														 // RTC时钟配置
+UINT8 Init_RTC(void)
+{
+    UINT32 source;
+    struct RTC_ELEMENT initial_time;
+    UINT8 retained;
+    RTC_EnableBackupAccess();
+    s_rtc_ready = 0U;
+    source = RCC->BDCR & RCC_BDCR_RTCSEL;
+    retained = (UINT8)(BKP_ReadBackupRegister(BKP_DR1) == RTC_BKP_DATA &&
+                      (RCC->BDCR & RCC_BDCR_RTCEN) != 0U &&
+                      (source == RCC_BDCR_RTCSEL_LSE || source == RCC_BDCR_RTCSEL_LSI));
+    if (!retained)
+    {
+        /* Only initialize an absent/invalid RTC; ordinary wake keeps its time. */
+        BKP_DeInit();
+        if (RTC_StartOscillator(1U))
+            RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
+        else if (RTC_StartOscillator(0U))
+            RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
+        else
+            return 0U;
+        RCC_RTCCLKCmd(ENABLE);
+    }
+    else if (!RTC_StartOscillator((UINT8)(source == RCC_BDCR_RTCSEL_LSE)))
+        return 0U;
+    if (!RTC_Synchronize() || !RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    if (!retained)
+    {
+        source = RCC->BDCR & RCC_BDCR_RTCSEL;
+        RTC_SetPrescaler(source == RCC_BDCR_RTCSEL_LSE ? LSE_FREQUENT : 39999U);
+        if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+            return 0U;
+        initial_time = Systmtime;
+        RTC_SetCounter(Seccond_Cal(&initial_time) - TIME_ZOOM);
+        if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+            return 0U;
+        BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
+    }
+    RTC_ITConfig(RTC_IT_ALR | RTC_IT_SEC, DISABLE);
+    if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    RTC_ClearITPendingBit(RTC_IT_ALR | RTC_IT_SEC);
+    if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    EXTI_ClearITPendingBit(EXTI_Line17);
+    NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    NVIC_ClearPendingIRQ(RTC_IRQn);
+    RTC_ConfigureInterrupts();
+    s_rtc_ready = 1U;
+    return 1U;
+}
 
-	if (BKP_ReadBackupRegister(BKP_DR1) != RTC_BKP_DATA)
-	{ // 读取备份里面的值是否被写过。
-		RTC_TimeConfig();
-		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
-		RTC_AlarmConfig();
-	}
-	else
-	{ // 以下这段话需要吗？
-		if (RCC_GetFlagStatus(RCC_FLAG_PORRST) != RESET)
-		{ // 这是啥
-			//("\r\n Power On Reset occurred....\n\r");
-			//++RTC_Faultcnt;
-		}
-		else if (RCC_GetFlagStatus(RCC_FLAG_PINRST) != RESET)
-		{ // 这是啥
-			// printf("\r\n External Reset occurred....\n\r");
-		}
-		RTC_ClearFlag(RTC_FLAG_ALR); // Clear the RTC Alarm Flag
-		EXTI_ClearITPendingBit(EXTI_Line17);
-		RCC_ClearFlag();
-		// RTC_TimeShow();				//Display the RTC Time and Alarm，这个后面会用到
-		// RTC_AlarmShow();
-	}
-	RTC_NVIC_Config();
+UINT8 RTC_WKTimeConfig(void)
+{
+    if (!s_rtc_ready || !RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    RTC_ITConfig(RTC_IT_SEC | RTC_IT_ALR, DISABLE);
+    if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    RTC_ClearITPendingBit(RTC_IT_ALR | RTC_IT_SEC);
+    if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    EXTI_ClearITPendingBit(EXTI_Line17);
+    NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    NVIC_ClearPendingIRQ(RTC_IRQn);
+    RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);
+    if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
+        return 0U;
+    RTC_ITConfig(RTC_IT_ALR, ENABLE);
+    return RTC_WaitFlag(RTC_FLAG_RTOFF);
+}
+
+void RTC_DisableStopAlarm(void)
+{
+    if (!s_rtc_ready)
+        return;
+    RTC_ITConfig(RTC_IT_ALR, DISABLE);
+    (void)RTC_WaitFlag(RTC_FLAG_RTOFF);
+    RTC_ClearITPendingBit(RTC_IT_ALR);
+    (void)RTC_WaitFlag(RTC_FLAG_RTOFF);
+    EXTI_ClearITPendingBit(EXTI_Line17);
+    NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    is_rtc_wakekup = false;
 }
 
 void App_RTC(void)
 {
-	if (0 == TimeDisplay)
-	{
-		return;
-	}
-	Get_RTC_Time();
-	TimeDisplay = 0;
+    if (TimeDisplay)
+    {
+        Get_RTC_Time();
+        TimeDisplay = 0U;
+    }
+}
+
+static void RTC_RecordAlarmWake(void)
+{
+    if (RTC_GetITStatus(RTC_IT_ALR) != RESET ||
+        EXTI_GetITStatus(EXTI_Line17) != RESET)
+    {
+        RTC_ClearITPendingBit(RTC_IT_ALR);
+        EXTI_ClearITPendingBit(EXTI_Line17);
+        is_rtc_wakekup = true;
+        ++rtc_cnt;
+    }
 }
 
 void RTCAlarm_IRQHandler(void)
 {
-	EXTI_ClearITPendingBit(EXTI_Line17); // 两个都要，不然会死机
-	// RTC_ClearITPendingBit(RTC_IT_ALR);			//不需要
-	// RTC_ITConfig(RTC_FLAG_ALR, DISABLE);
-	// if (FLASH_COMPLETE == FlashWriteOneHalfWord(FLASH_ADDR_SH367309_FLAG, FLASH_309_RTC_RTC_VALUE))
-	// {
-	// 	// RTC唤醒，则写标志位
-	// }
+    RTC_RecordAlarmWake();
 }
 
-volatile bool is_rtc_wakekup = false;
-volatile uint16_t rtc_cnt = 0;
 void RTC_IRQHandler(void)
 {
-	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
-	{
-		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
-		TimeDisplay = 1;				   // Enable time update
-		RTC_WaitForLastTask();			   // Wait until last write operation on RTC registers has finished
-	}
-
-	if (RTC_GetITStatus(RTC_FLAG_ALR) != RESET)
-	{										 // 成了！CNM！我太难了老铁
-		RTC_ClearITPendingBit(RTC_FLAG_ALR); // 会运行到这个地方，这里也要把这个标志位去除，不然卡在这里无法唤醒
-		RTC_WaitForLastTask();
-
-		is_rtc_wakekup = true;
-		rtc_cnt++;
-	}
+    if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
+    {
+        RTC_ClearITPendingBit(RTC_IT_SEC);
+        TimeDisplay = 1U;
+    }
+    RTC_RecordAlarmWake();
 }

@@ -9,9 +9,12 @@ FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer)
 	FLASH_Status result;
 	FLASH_Unlock();
 	FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-	while (FLASH_ErasePage(StartAddr) != FLASH_COMPLETE)
-		;
-	result = FLASH_ProgramHalfWord(StartAddr, Buffer);
+	/* The vendor operations are bounded; do not retry an erase forever. */
+	result = FLASH_ErasePage(StartAddr);
+	if (result == FLASH_COMPLETE)
+		result = FLASH_ProgramHalfWord(StartAddr, Buffer);
+	if (result == FLASH_COMPLETE && FlashReadOneHalfWord(StartAddr) != Buffer)
+		result = FLASH_ERROR_PG;
 	FLASH_Lock();
 	return result;
 }
