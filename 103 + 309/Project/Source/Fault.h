@@ -209,8 +209,8 @@ struct PRT_E2ROM_PARAS {
 
 #define CUV_1           3000
 #define CUV_2           3000
-#define CUV_3           2900
-#define CUV_recover     3000
+#define CUV_3           3000
+#define CUV_recover     3100
 #define CUV_filter1      100
 #define CUV_filter2     100
 #define CUV_filter3     100

@@ -8,23 +8,23 @@
 //#include "stm32f0xx.h"
 #include "conf_gpio.h"
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define __same_door__
+
+#define EEPROM_VALUE_BEGIN_FLAG				0x3701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (9)
-#define CURRENT_K_DSG   (float)100.0 / 93
-#define CURRENT_K_CHG   (float)100.0 / 93
 
 #define __lianxing__
 
 
-#define  wdog_enable
+// #define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
 
 // #define _SECOND_CURR_PROTECT_FUNC_
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 //#define _DI_SWITCH_SYS_ONOFF	//DI������������
 //#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
@@ -149,6 +149,12 @@ void IOstatus_NormalMode(void);
 void IOstatus_DeepMode(void);
 void Sys_StopMode(void);
 void InitRunAfterStop(void);
+
+#define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP |     \
+							  DBGMCU_CR_DBG_STOP |      \
+							  DBGMCU_CR_DBG_STANDBY |   \
+							  DBGMCU_CR_DBG_IWDG_STOP | \
+							  DBGMCU_CR_DBG_WWDG_STOP)
 
 
 #endif

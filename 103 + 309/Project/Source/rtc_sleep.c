@@ -344,7 +344,7 @@ static void sleep_run_rtc(void)
         if (!RTC_WKTimeConfig())
             break;
         if (RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) ||
+            // GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) ||
             !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) || g_irq_t != NO_IRQ)
             break;
         Feed_IWatchDog;
