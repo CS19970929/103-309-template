@@ -5,6 +5,14 @@
 //#include "stm32f0xx.h"
 
 
+/* Usable capacity relative to configured Ah; 100 disables derating. */
+#ifndef SOC_USABLE_CAPACITY_PERCENT
+#define SOC_USABLE_CAPACITY_PERCENT 90U
+#endif
+#if SOC_USABLE_CAPACITY_PERCENT < 1 || SOC_USABLE_CAPACITY_PERCENT > 100
+#error SOC_USABLE_CAPACITY_PERCENT_must_be_1_to_100
+#endif
+
 #define SOC_Size_TableCanSet 	(UINT16)42
 #define SOC_Size_LiFePO 		(UINT16)42
 #define SOC_Size_TernaryLi 		(UINT16)42
@@ -74,6 +82,8 @@ extern struct SOC_ENHANCE_ELEMENT SOC_Enhance_Element;
 
 void SOC_IntEnhance_Ctrl(void);
 UINT8 SOC_SaveBeforeSleep(void);
+/* Current is 0.1 A, result is minutes; 0xffff means unavailable. */
+UINT16 SOC_GetRemainingMinutes(UINT16 current_da, UINT8 is_charging);
 
 
 extern UINT16 ReadEEPROM_Word_NoZone(UINT16 addr);

@@ -589,19 +589,18 @@ void DataLoad_Current(void)
 	if (g_stCellInfoReport.u16Ichg)
 	{
 		time_dsg = 0xffff;
-		time_chg = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / (g_stCellInfoReport.u16Ichg * CURRENT_K_CHG);
-		time_real = ((uint32_t)g_stCellInfoReport.SocElement.u16CapacityFull - (uint32_t)g_stCellInfoReport.SocElement.u16CapacityNow) * 6 / g_stCellInfoReport.u16Ichg;
+		time_chg = SOC_GetRemainingMinutes(g_stCellInfoReport.u16Ichg, 1U);
+		time_real = time_chg;
 	}
 	else if (g_stCellInfoReport.u16IDischg)
 	{
-		float time;
 		time_chg = 0xffff;
-		time = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / (g_stCellInfoReport.u16IDischg * CURRENT_K_DSG);
-		time_dsg = (uint16_t)time;
-		time_real = (float)g_stCellInfoReport.SocElement.u16CapacityNow * 6 / g_stCellInfoReport.u16IDischg;
+		time_dsg = SOC_GetRemainingMinutes(g_stCellInfoReport.u16IDischg, 0U);
+		time_real = time_dsg;
 	}
 	else
 	{
+		time_real = 0xffffU;
 		if (g_stCellInfoReport.SocElement.u16Soc == 0)
 		{
 			time_chg = 0xffff;
