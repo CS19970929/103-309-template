@@ -183,8 +183,12 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
 	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
 	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 放电MOS由AFE硬件控制
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS =
+		(BmsCurrent_GetBootZeroStatus() != BOOT_CURRENT_ZERO_NOT_RUN); // 充电MOS由AFE硬件控制
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS =
+		(BmsCurrent_GetBootZeroStatus() != BOOT_CURRENT_ZERO_NOT_RUN); // 放电MOS由AFE硬件控制
+	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+		SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = 0;
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
 
@@ -300,6 +304,9 @@ void SH367309_UpdataAfeConfig_Old(void)
 
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 {
+	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+		OnOFF = 0;
+
 	switch (Type)
 	{
 	case GPIO_PreCHG:
@@ -556,7 +563,6 @@ void App_SH367309_Monitor(void)
 	static UINT8 su8_SC_Flag = 0;
 	static UINT8 su8_EEPR_WR_Flag = 0;
 
-	static UINT8 su8_CtrlMos_Flag = 0;
 	// if (0 == g_st_SysTimeFlag.bits.b1Sys100msFlag)
 	// { // 这个时基不能随便调，影响MOS动作，初始化电流校准
 	// 	return;
@@ -565,8 +571,8 @@ void App_SH367309_Monitor(void)
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
-		// g_stCellInfoReport.u16BalanceFlag1 = SH367309_Reg_Store.u8_MTP_BALANCEL;
-		// g_stCellInfoReport.u16BalanceFlag2 = SH367309_Reg_Store.u8_MTP_BALANCEH;
+		CellBalance_UpdateReport(((UINT16)SH367309_Reg_Store.u8_MTP_BALANCEH << 8)
+		    | SH367309_Reg_Store.u8_MTP_BALANCEL);
 		// SystemStatus.bits.b1Status_MOS_PRE = SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET;
 		SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
 		SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
@@ -637,31 +643,6 @@ void App_SH367309_Monitor(void)
 		if (SH367309_Reg_Store.REG_BSTATUS3.bits.L0V)
 		{
 			System_ERROR_UserCallback(ERROR_CLIENT);
-		}
-
-		// 原则上执行一次便可，不能根据MOS状态长期执行这个函数，不然效率低下
-		switch (su8_CtrlMos_Flag)
-		{
-		case 0:
-			if (SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
-				su8_CtrlMos_Flag = 1;
-			}
-			break;
-
-		case 1:
-			if (!SystemStatus.bits.b1Status_BnCloseIO)
-			{
-				SH367309_DriverMos_Ctrl(GPIO_CHG, 1);
-				SH367309_DriverMos_Ctrl(GPIO_DSG, 1);
-				su8_CtrlMos_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
 		}
 
 	}

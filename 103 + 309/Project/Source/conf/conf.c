@@ -27,6 +27,9 @@ void InitIO(void)
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz
         GPIO_Init(GPIOA, &GPIO_InitStructure);
 
+        /* Boot: latch CTLC low before output mode; STOP wake retains its level. */
+        if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+            GPIO_ResetBits(GPIOB, PIN_AFE1_CTL);
         GPIO_InitStructure.GPIO_Pin = PIN_AFE1_PRO_EN | PIN_AFE1_CTL;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
         GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // IO口速度为2MHz

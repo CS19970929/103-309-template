@@ -272,6 +272,13 @@ void App_DI1_Switch(void)
 
 void Drivers_External_Ctrl(void)
 {
+	/* NOT_RUN also covers the synchronous boot calibration window. */
+	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+	{
+		MCUO_AFE_CTLC = 0;
+		return;
+	}
+
 #if 1
 	if (Driver_Element.u8_DriverCtrl_Right)
 	{
@@ -307,12 +314,7 @@ void InitMosRelay_DOx(void)
 
 bool isforceClose(void)
 {
-	if (SystemStatus.bits.b1Status_BnCloseIO)
-	{
-		log_w("close");
-		return true;
-	}
-	else if (SystemStatus.bits.b1Status_HeatCloseIO)
+	if (SystemStatus.bits.b1Status_HeatCloseIO)
 	{
 		log_w("close");
 		return true;

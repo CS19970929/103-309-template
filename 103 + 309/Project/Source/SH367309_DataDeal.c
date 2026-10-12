@@ -37,7 +37,7 @@ int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 	return i;
 }
 
-void Refresh_Parameters(void)
+static bool Refresh_Parameters(void)
 {
 	int i = 0;
 	int temp = 0;
@@ -51,10 +51,18 @@ void Refresh_Parameters(void)
 		ucMTPBuffer[25] = TR & 0x7F;
 		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
 	}
+	else
+	{
+		return false;
+	}
 
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
 	/* 串数 */
+	/* Internal balance threshold is independent of the legacy display fields. */
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
+	AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = BYTE_08H_BALV;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
 
 	/* 充电过压 */
@@ -105,6 +113,7 @@ void Refresh_Parameters(void)
 		temp = iSheldTemp_10K_NTC[AFE_TEMPERATURE[i]];
 		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) = (UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
 	}
+	return true;
 }
 
 // 全部数据刷新到AFE_ROM_PARAMETERS_Struction结构体里面
@@ -127,9 +136,10 @@ void fac_sh367309_param_init(void)
 
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
 
+	/* Internal balance threshold is independent of the legacy display fields. */
+	AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL = 0;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
-	// AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = (0x00 >> 6);
-
+	AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV = BYTE_08H_BALV;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = OtherElement.u16Sys_SeriesNum % 16;
 
 	if (PRT_E2ROMParas.u16VcellOvp_Third > 3800)
@@ -206,7 +216,8 @@ bool Write_Parameters(void)
 		{ // 最后一个TR不做对比
 			if (temp[i] != P[i])
 			{
-				MTPWriteROM(i, 1, P + i); // 重写EEPROM的寄存器，两次
+				if (!MTPWriteROM(i, 1, P + i))
+					return false; // 重写EEPROM的寄存器，两次
 			}
 		}
 	}
@@ -214,6 +225,10 @@ bool Write_Parameters(void)
 	{
 		ret = false;
 	}
+
+	/* Confirm EEPROM values before reporting a successful configuration. */
+	if (ret && (!MTPRead(0x00, 25, temp) || memcmp(temp, P, 25) != 0))
+		ret = false;
 
 	return ret;
 }
@@ -286,14 +301,18 @@ bool SH367309_UpdataAfeConfig(void)
 #endif
 bool SH367309_UpdataAfeConfig(void)
 {
-	bool ret = false;
+	bool ret = true;
 
 	uint8_t isdiff = 0;
 
 	if (AFE_PARAM_WRITE_Flag)
 	{
 		AFE_PARAM_WRITE_Flag = 0;
-		Refresh_Parameters();
+		if (!Refresh_Parameters())
+		{
+			AFE_PARAM_WRITE_Flag = 1;
+			return false;
+		}
 		{
 			int i = 0;
 			UINT8 temp[26] = {0};
@@ -311,6 +330,11 @@ bool SH367309_UpdataAfeConfig(void)
 					}
 				}
 			}
+			else
+			{
+				AFE_PARAM_WRITE_Flag = 1;
+				return false;
+			}
 		}
 
 		if (isdiff)
@@ -327,7 +351,7 @@ bool SH367309_UpdataAfeConfig(void)
 			Delay1ms(1);
 
 			/* 每次写完如果不报错都要复位一下。这样写进去的参数才有效 */
-			if (!System_ERROR_UserCallback(ERROR_STATUS_AFE1))
+			if (ret && !System_ERROR_UserCallback(ERROR_STATUS_AFE1))
 			{
 				AFE_Reset(); // Reset IC
 				Delay1ms(5);
@@ -343,6 +367,9 @@ bool SH367309_UpdataAfeConfig(void)
 			ret = true;
 		}
 	}
+
+	if (!ret)
+		AFE_PARAM_WRITE_Flag = 1;
 
 	return ret;
 }

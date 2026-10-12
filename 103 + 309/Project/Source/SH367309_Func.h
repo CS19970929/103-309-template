@@ -8,14 +8,14 @@
 #define VAL_CELL_OVP_REC		((UINT16)4010)	//��λmV�����䱣���ָ�
 #define VAL_CELL_UVP			((UINT16)2800)	//��λmV	
 #define VAL_CELL_UVP_REC		((UINT16)2900)	//��λmV����ѹ�����ָ�
-#define VAL_BAL_OPEN			((UINT16)5000)	//��λmV�����⿪����ѹ
+#define VAL_BAL_OPEN			((UINT16)3400)	//��λmV�����⿪����ѹ
 
 #elif (defined(LIFEPO))
 #define VAL_CELL_OVP			((UINT16)3750)	//��λmV	
 #define VAL_CELL_OVP_REC		((UINT16)3650)	//��λmV�����䱣���ָ�
 #define VAL_CELL_UVP			((UINT16)2500)	//��λmV	
 #define VAL_CELL_UVP_REC		((UINT16)2600)	//��λmV����ѹ�����ָ�
-#define VAL_BAL_OPEN			((UINT16)5000)	//��λmV�����⿪����ѹ
+#define VAL_BAL_OPEN			((UINT16)3400)	//��λmV�����⿪����ѹ
 
 #endif
 
@@ -48,7 +48,7 @@
 								//�������/�¶ȱ���(�¶�ʵ�ʹ�2��)�رճ��MOS�������⵽�ŵ�״̬���������MOS
 								//������ɣ�MOSӦ�û�û��ô�ȡ�
 #define BIT_OCPM	(0<<5)		//0:������ֻ�رճ��MOS���ŵ����ֻ�طŵ�MOS��1��ͬʱ��
-#define BIT_BAL		(1<<4)		//0��ƽ�⹦�����ڲ�SH367309���ƣ�1:���ⲿMCU��
+#define BIT_BAL      (0<<4)      // SH367309 internal automatic balance
 #define BIT0_3_CN	(0)			//5-15����Ӧ���������Ϊ16��
 #define BYTE_00H_SCONF1			BIT_ENPCH|BIT_ENMOS|BIT_OCPM|BIT_BAL|BIT0_3_CN
 
@@ -56,8 +56,7 @@
 #define BIT_UV_OP	(0<<5)		//0������ֻ�رշŵ�MOS��1�����Źرճ�ŵ�MOS
 #define BIT_DIS_PF	(1<<4)		//0��������1����ֹ---���ι���籣����ͬʱҲ�Ƕ��߼�⹦��(����ˣ���ô����һ����)
 								//�����־λΪ0��������������⣬���¶ϵ��ϵ����׳���ȫ����ѹΪ10000mV���ң����Խ�ֹ��(������PF���Ż����VSS��ƽ)
-#define BIT2_3_CTLC	(0<<2)		//MOS���ڲ��߼����ƣ�CTL������Ч�����忴�����
-								//2������Ϊ���Ʒŵ�MOS��Ԥ�Ź���
+#define BIT2_3_CTLC  (3<<2)      // CTL low closes CHG/DSG/PCH MOSFETs
 #define BIT_OCRA	(0<<1)		//0����������1������---������������ʱ�ָ������ܣ�Ҳ����ζ��ֻ�ܸ����ͷŲ��ܽ�����������������Զ��ָ�
 #define BIT_EUVR	(0)			//0�����ű���״̬�ͷ��븺���ͷ��޹أ���ζ�Ÿ����ͷ�ֻ�͵��������й���
 								//���ű��������븺���ͷŲ��ܽ����

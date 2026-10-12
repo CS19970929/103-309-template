@@ -634,58 +634,6 @@ void InitE2PROM(void)
 	InitData_E2prom();
 }
 
-void DataLoad_CurrentCali_startup(void)
-{
-	static UINT8 su8_StartUp_CaliCnt = 0;
-	static UINT16 su16_OffsetValue = 0;
-
-	static UINT32 su32_OffsetValue_CHG = 0;
-	static UINT32 su32_OffsetValue_DSG = 0;
-	UINT16 raw_current;
-
-	log_i("virtual current cali\n");
-	SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-	SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
-
-	__delay_ms(1000);
-	// step 2
-	while (su8_StartUp_CaliCnt < 16)
-	{ // 先2s为20*2次，3s为20*3次
-		UpdateVoltageFromBqMaximo();
-		/* Legacy offset collection uses uncorrected, host-endian CADC counts. */
-		raw_current = U16_SwapEndian(Registers_AFE1.Cadc);
-
-		if ((raw_current & 0x8000) == 0)
-		{
-			su32_OffsetValue_CHG += raw_current;
-		}
-		else
-		{
-			su32_OffsetValue_DSG += 0xFFFF - raw_current + 1;
-		}
-
-		if (su32_OffsetValue_CHG >= su32_OffsetValue_DSG)
-		{
-			su16_OffsetValue = (UINT16)((su32_OffsetValue_CHG - su32_OffsetValue_DSG) >> 4);
-		}
-		else
-		{
-			su16_OffsetValue = (UINT16)(0xFFFF - ((su32_OffsetValue_DSG - su32_OffsetValue_CHG) >> 4) + 1);
-		}
-
-		++su8_StartUp_CaliCnt;
-		__delay_ms(500);
-	}
-	// step 2
-	{
-		// 如果是normal的休眠和唤醒，则需要再次保存最新的值。
-		WriteEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE, su16_OffsetValue);
-	}
-}
-
-uint16_t curr_offset;
-UINT16 OffsetValue_CHG = 0;
-UINT16 OffsetValue_DSG = 0;
 void InitData_E2prom(void)
 {
 #if 1
@@ -704,15 +652,6 @@ void InitData_E2prom(void)
 		}
 		{
 			g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
-			curr_offset = ReadEEPROM_Word_NoZone(FLASH_ADDR_SH367309_VALUE);
-			if ((curr_offset & 0x8000) == 0)
-			{
-				OffsetValue_CHG = (UINT32)curr_offset * 200 * g_u32CS_Res_AFE / (21470);
-			}
-			else
-			{
-				OffsetValue_DSG = (UINT32)((UINT16)(0xFFFF - curr_offset + 1)) * 200 * g_u32CS_Res_AFE / (21470); // mA
-			}
 		}
 	}
 	else
@@ -746,7 +685,6 @@ void InitData_E2prom(void)
 				// ret = fac_sh367309_param_init_first_powerup();
 				ret = SH367309_UpdataAfeConfig();
 			} while (ret == false);
-			DataLoad_CurrentCali_startup();
 		}
 		soc_factory_param_init_first();
 

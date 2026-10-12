@@ -187,9 +187,6 @@ bool isHaveCurrent_sh3x(void)
 
     log_i("ichg %d\n", g_stCellInfoReport.u16Ichg);
     log_i("dsg %d\n", g_stCellInfoReport.u16IDischg);
-#if 0
-	if(ModulusSub(current, su16_OffsetValue) < 1)
-#endif
 
     if (g_stCellInfoReport.u16Ichg)
     {
@@ -679,8 +676,8 @@ static bool rtc_monitor_sh367309(void)
     bool result = false;
     if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
     {
-        // g_stCellInfoReport.u16BalanceFlag1 = SH367309_Reg_Store.u8_MTP_BALANCEL;
-        // g_stCellInfoReport.u16BalanceFlag2 = SH367309_Reg_Store.u8_MTP_BALANCEH;
+        CellBalance_UpdateReport(((UINT16)SH367309_Reg_Store.u8_MTP_BALANCEH << 8)
+            | SH367309_Reg_Store.u8_MTP_BALANCEL);
         // SystemStatus.bits.b1Status_MOS_PRE = SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET;
         SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
         SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
@@ -1206,7 +1203,12 @@ static void report_wkup_sig(void)
 
 static bool isErr_enterRTC(void)
 {
-    extern enum BALANCE_STATE_E g_enBalanceState;
+    UINT8 balance_data[2];
+
+    /* Read current AFE balance state before requesting IDLE/SLEEP. */
+    if (!MTPRead(MTP_BALANCEH, 2, balance_data))
+        return true;
+    CellBalance_UpdateReport(((UINT16)balance_data[0] << 8) | balance_data[1]);
 
     if ((g_stCellInfoReport.u16Ichg > 10) || (g_stCellInfoReport.u16IDischg > 10))
     {
@@ -1224,7 +1226,7 @@ static bool isErr_enterRTC(void)
         log_e("Heating");
         return true;
     }
-    else if (g_enBalanceState == BALANCE_ST_ODD_ON || g_enBalanceState == BALANCE_ST_EVEN_ON)
+    else if (g_stCellInfoReport.u16BalanceFlag1 != 0u)
     {
         log_e("Balancing");
         return true;

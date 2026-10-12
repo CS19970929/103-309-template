@@ -44,7 +44,6 @@ int main(void)
 		App_Sci();
 		App_AnlogCal();
 		App_E2promDeal();
-		App_CellBalance();
 		// App_Can();
 		// App_SleepDeal(); // 关闭这个功能的话，在InitVar()中System_OnOFF_Func相关置零，或者直接屏蔽
 		sleep();
@@ -109,9 +108,8 @@ void InitDevice(void)
 		log_w("[BOOT][CUR_ZERO] fallback zero=0, deadband=500mA, status=%u",
 			  BmsCurrent_GetBootZeroStatus());
 	}
-	/* Restore the same normal power path that InitAFE1() used before calibration. */
+	/* Calibration ended (valid or fallback); normal MOS control releases CTLC. */
 	SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-	MCUO_AFE_CTLC = 1;
 
 	// InitCan();
 	InitADC();

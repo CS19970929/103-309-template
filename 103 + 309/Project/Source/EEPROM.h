@@ -314,9 +314,6 @@ void App_E2promDeal(void);
 
 void EEPROM_test(void);
 
-extern uint16_t curr_offset;
-extern UINT16 OffsetValue_CHG ;
-extern UINT16 OffsetValue_DSG;
 
 #endif	/* EEPROM_H */
 
