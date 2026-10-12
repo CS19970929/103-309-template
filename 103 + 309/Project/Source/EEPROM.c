@@ -641,6 +641,7 @@ void DataLoad_CurrentCali_startup(void)
 
 	static UINT32 su32_OffsetValue_CHG = 0;
 	static UINT32 su32_OffsetValue_DSG = 0;
+	UINT16 raw_current;
 
 	log_i("virtual current cali\n");
 	SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
@@ -651,14 +652,16 @@ void DataLoad_CurrentCali_startup(void)
 	while (su8_StartUp_CaliCnt < 16)
 	{ // 先2s为20*2次，3s为20*3次
 		UpdateVoltageFromBqMaximo();
+		/* Legacy offset collection uses uncorrected, host-endian CADC counts. */
+		raw_current = U16_SwapEndian(Registers_AFE1.Cadc);
 
-		if ((SH367309_Read_AFE1.u16Current & 0x8000) == 0)
+		if ((raw_current & 0x8000) == 0)
 		{
-			su32_OffsetValue_CHG += SH367309_Read_AFE1.u16Current;
+			su32_OffsetValue_CHG += raw_current;
 		}
 		else
 		{
-			su32_OffsetValue_DSG += 0xFFFF - SH367309_Read_AFE1.u16Current + 1;
+			su32_OffsetValue_DSG += 0xFFFF - raw_current + 1;
 		}
 
 		if (su32_OffsetValue_CHG >= su32_OffsetValue_DSG)

@@ -23,6 +23,7 @@ static bool rtc_monitor_sh367309(void);
 static bool updataData_rtc_sh3x(void);
 static bool updataData_rtc_bq7x(void);
 static bool isHaveCurrent_bq7x(void);
+bool isHaveCurrent_sh3x(void);
 static bool rtc_monitor_bq7x(void);
 static bool update_rtc_soc(uint32_t *_sleep_cnt);
 
@@ -180,7 +181,6 @@ bool isHaveCurrent_sh3x(void)
 #if (AFE_TYPE == sh36xx)
 
     bool isCURR = false;
-    uint16_t current = SH367309_Read_AFE1.u16Current;
 
     DataLoad_Current();
     // DataLoad_Current_OK();
@@ -195,13 +195,13 @@ bool isHaveCurrent_sh3x(void)
     {
         isCURR = true;
         g_irq_t = current_wake;
-        log_w("afe current V %d, ICHG %d", current, g_stCellInfoReport.u16Ichg);
+        log_w("afe current %d mA, ICHG %d", BmsCurrent_GetCurrent_mA(), g_stCellInfoReport.u16Ichg);
     }
     if (g_stCellInfoReport.u16IDischg)
     {
         isCURR = true;
         g_irq_t = current_wake;
-        log_w("afe current V %d, IDSG %d", current, g_stCellInfoReport.u16IDischg);
+        log_w("afe current %d mA, IDSG %d", BmsCurrent_GetCurrent_mA(), g_stCellInfoReport.u16IDischg);
     }
 
     return isCURR;

@@ -212,6 +212,7 @@ UINT8 BmsCurrent_GetBootZeroStatus(void);
 INT32 BmsCurrent_GetBootZeroRawX4(void);
 INT32 BmsCurrent_GetCurrent_mA(void);
 void BmsCurrent_Update(void);
+void DataLoad_Current(void);
 
 
 void App_AFEGet(  void);
