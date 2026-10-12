@@ -27,6 +27,9 @@ struct OTHER_ELEMENT OtherElement;
 #define CURRENT_REPORT_MA_PER_LSB                  100u
 #define CURRENT_DEADBAND_CALIBRATED_MA               0u
 #define CURRENT_DEADBAND_FALLBACK_MA               500u
+#define CURRENT_CALIBRATION_Q10_SCALE              1024u
+#define CURRENT_MA_PER_A                           1000u
+#define CURRENT_MAX_MA_X4                   0x7FFFFFFFu
 
 /*
  * Canonical runtime current:
@@ -48,14 +51,12 @@ static UINT32 BmsCurrent_AbsI32(INT32 value)
 	return (value < 0) ? (UINT32)(-value) : (UINT32)value;
 }
 
-static UINT32 SH309_CurrentRawX4To_mAX4(UINT32 raw_abs_x4)
+static uint64_t SH309_CurrentRawX4To_mAX4(UINT32 raw_abs_x4)
 {
 	UINT32 res_mohm = (UINT32)OtherElement.u16Sys_CS_Res;
 	UINT32 res_num = (UINT32)OtherElement.u16Sys_CS_Res_Num;
-	UINT32 numerator_scale;
+	uint64_t numerator;
 	UINT32 denominator;
-	UINT32 quotient;
-	UINT32 remainder;
 
 	if (res_mohm == 0u)
 		res_mohm = (UINT32)CS_Res;
@@ -65,13 +66,41 @@ static UINT32 SH309_CurrentRawX4To_mAX4(UINT32 raw_abs_x4)
 	if ((raw_abs_x4 == 0u) || (res_mohm == 0u) || (res_num == 0u))
 		return 0u;
 
-	numerator_scale = SH309_CADC_NUMERATOR_REDUCED * res_num;
+	/* Configurable shunt ratios can overflow a 32-bit intermediate. */
+	numerator = (uint64_t)raw_abs_x4 * SH309_CADC_NUMERATOR_REDUCED * res_num;
 	denominator = SH309_CADC_DENOMINATOR_REDUCED * res_mohm;
-	quotient = raw_abs_x4 / denominator;
-	remainder = raw_abs_x4 % denominator;
+	return (numerator + (denominator / 2u)) / denominator;
+}
 
-	return quotient * numerator_scale
-		   + (remainder * numerator_scale + (denominator / 2u)) / denominator;
+static UINT32 BmsCurrent_ApplyCalibration_mAX4(uint64_t current_mA_x4, UINT8 channel)
+{
+	UINT16 gain_q10 = g_u16CalibCoefK[channel];
+	INT16 offset_a_q10 = g_i16CalibCoefB[channel];
+	int64_t calibrated_mA_x4_q10;
+	int64_t calibrated_mA_x4;
+
+	/* Apply K/B at every nonzero magnitude; zero has no active direction. */
+	if (current_mA_x4 == 0u)
+		return 0u;
+
+	/* EEPROM loading flags invalid values but leaves them in the arrays. */
+	if ((gain_q10 < SYSKMIN) || (gain_q10 > SYSKMAX))
+		gain_q10 = SYSKDEFAULT;
+	if ((offset_a_q10 < SYSBMIN) || (offset_a_q10 > SYSBMAX))
+		offset_a_q10 = SYSBDEFAULT;
+
+	/* Legacy units: K/1024 is gain; B/1024 is an offset in amperes. */
+	calibrated_mA_x4_q10 = (int64_t)current_mA_x4 * gain_q10
+		+ (int64_t)offset_a_q10 * CURRENT_MA_PER_A * CURRENT_FIXED_SCALE;
+	if (calibrated_mA_x4_q10 <= 0)
+		return 0u;
+
+	calibrated_mA_x4 = (calibrated_mA_x4_q10 + (CURRENT_CALIBRATION_Q10_SCALE / 2u))
+		/ CURRENT_CALIBRATION_Q10_SCALE;
+	if (calibrated_mA_x4 > (int64_t)CURRENT_MAX_MA_X4)
+		return CURRENT_MAX_MA_X4;
+
+	return (UINT32)calibrated_mA_x4;
 }
 
 static UINT32 BmsCurrent_mAX4To_mA(UINT32 current_mA_x4)
@@ -512,13 +541,16 @@ void BmsCurrent_Update(void)
 {
 	INT32 raw_signed = BmsCurrent_RawToSigned(U16_SwapEndian(Registers_AFE1.Cadc));
 	INT32 corrected_raw_x4 = BmsCurrent_ApplyBootZeroX4(raw_signed);
-	UINT32 current_mA_x4 = SH309_CurrentRawX4To_mAX4(BmsCurrent_AbsI32(corrected_raw_x4));
+	uint64_t measured_mA_x4 = SH309_CurrentRawX4To_mAX4(BmsCurrent_AbsI32(corrected_raw_x4));
 	UINT32 deadband_mA = BmsCurrent_Deadband_mA();
+	UINT32 current_mA_x4;
 	UINT32 current_mA;
 
-	if (current_mA_x4 < (deadband_mA * CURRENT_FIXED_SCALE))
-		current_mA_x4 = 0u;
+	if (measured_mA_x4 < (deadband_mA * CURRENT_FIXED_SCALE))
+		measured_mA_x4 = 0u;
 
+	current_mA_x4 = BmsCurrent_ApplyCalibration_mAX4(measured_mA_x4,
+		(corrected_raw_x4 > 0) ? MDL_ICHG : MDL_IDSG);
 	current_mA = BmsCurrent_mAX4To_mA(current_mA_x4);
 	if (current_mA_x4 == 0u)
 		g_i32Current_mA = 0;
