@@ -166,13 +166,15 @@ def reference(case):
     magnitude = (abs(corrected) * 20000 * count + denominator // 2) // denominator
     if not valid and magnitude < 500 * 4:
         magnitude = 0
-    # Every active charge/discharge magnitude uses K/B, including tiny currents.
-    # A zero magnitude has no direction and must not be recreated by B.
+    # K remains full-range; B is magnitude-limited near zero to prevent
+    # a single nonzero CADC count creating an ampere-scale jump.
     if magnitude > 0:
         k, b = (chg_k, chg_b) if corrected > 0 else (dsg_k, dsg_b)
         k = k if 512 <= k <= 1536 else 1024
         b = b if -30000 <= b <= 30000 else 0
-        magnitude = max(0, magnitude * k + b * 1000 * 4)
+        offset = b * 1000 * 4
+        offset = max(-magnitude * 1024, min(magnitude * 1024, offset))
+        magnitude = max(0, magnitude * k + offset)
         magnitude = min(0x7FFFFFFF, (magnitude + 512) // 1024)
     current = (magnitude + 2) // 4
     current = current if corrected > 0 else -current
@@ -205,8 +207,10 @@ def main():
         ("zero is not created by B", (4, 16, 1, 2, 2, 1536, 30000, 1536, 30000)),
         ("below former 2A boundary uses K/B", (214, 0, 1, 2, 2, 1536, 30000, 512, -30000)),
         ("above former 2A boundary uses K/B", (215, 0, 1, 2, 2, 1536, 30000, 512, -30000)),
-        ("one positive CADC count uses K/B", (1, 0, 1, 2, 2, 1536, 1024, 512, -1024)),
-        ("one negative CADC count uses K/B", (65535, 0, 1, 2, 2, 1536, -1024, 512, 1024)),
+        ("one positive count bounded B", (1, 0, 1, 2, 2, 1536, 1024, 512, -1024)),
+        ("one negative count bounded B", (65535, 0, 1, 2, 2, 1536, -1024, 512, 1024)),
+        ("large positive B cannot amplify one count", (1, 0, 1, 2, 2, 1536, 30000, 1536, 30000)),
+        ("large discharge B cannot amplify one count", (65535, 0, 1, 2, 2, 1536, 30000, 1536, 30000)),
         ("small current reduced by negative B", (10, 0, 1, 2, 2, 1024, -1024, 1024, 0)),
         ("raw zero has no active calibration direction", (0, 0, 1, 2, 2, 1536, 30000, 1536, 30000)),
         ("fallback deadband", (53, 0, 0, 2, 2, 1536, 30000, 512, -30000)),
@@ -219,6 +223,13 @@ def main():
     ]
     for name, case in cases:
         check(lib, name, case)
+    # Independent behavioral bound, not just equality with the Python model.
+    for raw in (1, 65535):
+        for offset_b in (1024, 30000):
+            case = (raw, 0, 1, 2, 2, 1536, offset_b, 1536, offset_b)
+            lib.run_case(*case)
+            assert abs(lib.current_ma()) < 30, ("one-count spike", case)
+            assert lib.charge_report() == 0 and lib.discharge_report() == 0
     rng = random.Random(20261012)
     for index in range(10000):
         case = (rng.randrange(65536), rng.randrange(-160, 161), rng.randrange(2),

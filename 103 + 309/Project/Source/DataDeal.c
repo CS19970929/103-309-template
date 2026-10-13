@@ -78,6 +78,8 @@ static UINT32 BmsCurrent_ApplyCalibration_mAX4(uint64_t current_mA_x4, UINT8 cha
 	INT16 offset_a_q10 = g_i16CalibCoefB[channel];
 	int64_t calibrated_mA_x4_q10;
 	int64_t calibrated_mA_x4;
+	int64_t offset_mA_x4_q10;
+	int64_t offset_limit_q10;
 
 	/* Apply K/B at every nonzero magnitude; zero has no active direction. */
 	if (current_mA_x4 == 0u)
@@ -89,9 +91,16 @@ static UINT32 BmsCurrent_ApplyCalibration_mAX4(uint64_t current_mA_x4, UINT8 cha
 	if ((offset_a_q10 < SYSBMIN) || (offset_a_q10 > SYSBMAX))
 		offset_a_q10 = SYSBDEFAULT;
 
-	/* Legacy units: K/1024 is gain; B/1024 is an offset in amperes. */
-	calibrated_mA_x4_q10 = (int64_t)current_mA_x4 * gain_q10
-		+ (int64_t)offset_a_q10 * CURRENT_MA_PER_A * CURRENT_FIXED_SCALE;
+	/* Legacy K/B units are unchanged. Limit the intercept to the measured
+	 * magnitude: one CADC count must not turn into an ampere at zero.
+	 * For magnitude >= |B| in mA, the original full K/B applies. */
+	offset_mA_x4_q10 = (int64_t)offset_a_q10 * CURRENT_MA_PER_A * CURRENT_FIXED_SCALE;
+	offset_limit_q10 = (int64_t)current_mA_x4 * CURRENT_CALIBRATION_Q10_SCALE;
+	if (offset_mA_x4_q10 > offset_limit_q10)
+		offset_mA_x4_q10 = offset_limit_q10;
+	else if (offset_mA_x4_q10 < -offset_limit_q10)
+		offset_mA_x4_q10 = -offset_limit_q10;
+	calibrated_mA_x4_q10 = (int64_t)current_mA_x4 * gain_q10 + offset_mA_x4_q10;
 	if (calibrated_mA_x4_q10 <= 0)
 		return 0u;
 
