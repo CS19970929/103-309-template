@@ -326,7 +326,7 @@ void IOstatus_RTCMode(void)
     MCUO_PWSV_STB = 0;
 #endif
 
-    __delay_ms(100);
+    // __delay_ms(100);
 }
 
 void IOstatus_NormalMode(void)
