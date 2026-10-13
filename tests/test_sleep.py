@@ -293,14 +293,15 @@ static struct { UINT32 BDCR; } rcc_regs;
 #define RTC (&rtc_regs)
 #define RCC (&rcc_regs)
 static UINT8 lse_ok, lsi_ok, sync_ok, write_ok;
+static UINT32 lse_start_calls, lsi_start_calls;
 static UINT32 counter, alarm, prescaler, resets, counter_writes, polls, rtc_pending, exti_pending;
 static UINT16 backup;
 static UINT8 TimeDisplay;
 static struct RTC_ELEMENT { int value; } Systmtime;
 static UINT8 RCC_GetFlagStatus(UINT8 f) { ++polls; return f==RCC_FLAG_LSERDY? lse_ok : lsi_ok; }
 static UINT8 RTC_GetFlagStatus(UINT16 f) { ++polls; return f==RTC_FLAG_RSF? sync_ok : write_ok; }
-static void RCC_LSEConfig(int v) { (void)v; }
-static void RCC_LSICmd(int v) { (void)v; }
+static void RCC_LSEConfig(int v) { (void)v; ++lse_start_calls; }
+static void RCC_LSICmd(int v) { (void)v; ++lsi_start_calls; }
 static void RCC_APB1PeriphClockCmd(int p,int v) { (void)p; (void)v; }
 static void PWR_BackupAccessCmd(int v) { (void)v; }
 static void EXTI_Init(EXTI_InitTypeDef *p) { (void)p; }
@@ -325,20 +326,67 @@ static void Get_RTC_Time(void) {}
 
 RTC_TESTS = r'''
 int main(void) {
+    const UINT32 expected_source = (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? RCC_BDCR_RTCSEL_LSE : RCC_BDCR_RTCSEL_LSI;
+    const UINT32 other_source = (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? RCC_BDCR_RTCSEL_LSI : RCC_BDCR_RTCSEL_LSE;
+    UINT32 previous_opposite_calls;
+
     lse_ok=lsi_ok=sync_ok=write_ok=1;
-    assert(Init_RTC()); assert(resets==1 && counter_writes==1 && prescaler==32767 && Systmtime.value==0);
-    counter=1234; assert(Init_RTC()); assert(resets==1 && counter_writes==1 && counter==1234);
+    assert(Init_RTC());
+    assert(resets==1 && counter_writes==1);
+    assert(prescaler==(BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE ? 32767U : 39999U));
+    assert((RCC->BDCR & RCC_BDCR_RTCSEL)==expected_source);
+    assert(Systmtime.value==0);
+    if (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        assert(lse_start_calls==1 && lsi_start_calls==0);
+    else
+        assert(lsi_start_calls==1 && lse_start_calls==0);
+
+    counter=1234;
+    assert(Init_RTC()); assert(resets==1 && counter_writes==1 && counter==1234);
     assert(RTC_WKTimeConfig() && alarm==1234u+ALARM_TIME_SEC);
-    counter=UINT32_MAX-4; assert(RTC_WKTimeConfig() && alarm==(UINT32)(counter+ALARM_TIME_SEC));
-    polls=0; write_ok=0; assert(!RTC_WKTimeConfig()); assert(polls==RTC_WAIT_POLL_LIMIT);
-    write_ok=1; sync_ok=0; polls=0; assert(!Init_RTC()); assert(polls<=RTC_WAIT_POLL_LIMIT+1);
-    sync_ok=1; lse_ok=0; polls=0; assert(!Init_RTC()); assert(resets==1 && counter==UINT32_MAX-4);
-    backup=0; lsi_ok=1; assert(Init_RTC()); assert(prescaler==39999);
-    backup=0; lsi_ok=0; polls=0; assert(!Init_RTC()); assert(polls==2*RTC_WAIT_POLL_LIMIT);
+    counter=UINT32_MAX-4;
+    assert(RTC_WKTimeConfig() && alarm==(UINT32)(counter+ALARM_TIME_SEC));
+
+    /* Firmware changed clock selection while RTC backup values survived. */
+    backup=RTC_BKP_DATA;
+    RCC->BDCR=(RCC->BDCR & ~RCC_BDCR_RTCSEL)|other_source;
+    counter=6789;
+    assert(Init_RTC());
+    assert(resets==2 && counter_writes==2 && counter==6789);
+    assert((RCC->BDCR & RCC_BDCR_RTCSEL)==expected_source);
+
+    /* Cold power-up selects only the configured source. */
+    backup=0; lse_ok=lsi_ok=1;
+    previous_opposite_calls=(BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? lsi_start_calls : lse_start_calls;
+    assert(Init_RTC()); assert(resets==3 && counter_writes==3);
+    assert((BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? lsi_start_calls==previous_opposite_calls
+        : lse_start_calls==previous_opposite_calls);
+
+    polls=0; write_ok=0;
+    assert(!RTC_WKTimeConfig() && polls==RTC_WAIT_POLL_LIMIT);
+    write_ok=1; sync_ok=0; polls=0;
+    assert(!Init_RTC() && polls<=RTC_WAIT_POLL_LIMIT+1);
+    sync_ok=1;
+    if (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE) lse_ok=0;
+    else lsi_ok=0;
+    polls=0; assert(!Init_RTC() && polls==RTC_WAIT_POLL_LIMIT);
+    backup=0; polls=0;
+    previous_opposite_calls=(BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? lsi_start_calls : lse_start_calls;
+    assert(!Init_RTC() && polls==RTC_WAIT_POLL_LIMIT);
+    assert((BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? lsi_start_calls==previous_opposite_calls
+        : lse_start_calls==previous_opposite_calls);
+
     rtc_pending=RTC_IT_ALR; exti_pending=0; polls=0;
     RTCAlarm_IRQHandler(); assert(is_rtc_wakekup && rtc_cnt==1 && polls==0);
-    RTCAlarm_IRQHandler(); assert(rtc_cnt==1); /* no duplicate for an already cleared alarm */
-    printf("PASS: retained RTC time, %us alarm, wrap, LSE/LSI failures, bounded waits, short IRQ\n", ALARM_TIME_SEC);
+    RTCAlarm_IRQHandler(); assert(rtc_cnt==1);
+    printf("PASS: RTC source %s, cold start, retained and migration, alarm, failures\n",
+        BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE ? "LSE" : "LSI");
     return 0;
 }
 '''
@@ -411,9 +459,15 @@ def main():
     rtc_stubs = re.sub(r"^#define ALARM_TIME_SEC[^\n]+",
                        re.search(r"^#define ALARM_TIME_SEC[^\n]+", read("RTC.h"), re.MULTILINE)[0],
                        RTC_STUBS, flags=re.MULTILINE)
+    rtc_header = read("RTC.h")
+    clock_defs = rtc_header.split("/* BMS_RTC_CLOCK_CONFIG_BEGIN */", 1)[1]
+    clock_defs = clock_defs.split("/* BMS_RTC_CLOCK_CONFIG_END */", 1)[0]
+    rtc_stubs = rtc_stubs.replace("#define RTC_FLAG_RTOFF", clock_defs + "\n#define RTC_FLAG_RTOFF", 1)
     programs = {
         "policy": COMMON + "enum irqWakeup" + enums + policy_stubs + flash + soc + commit + policy + key + POLICY_TESTS,
-        "rtc": COMMON + rtc_stubs + rtc + RTC_TESTS,
+        "rtc_lsi": COMMON + rtc_stubs + rtc + RTC_TESTS,
+        "rtc_lse": COMMON + "#define BMS_RTC_CLOCK_SOURCE BMS_RTC_CLOCK_LSE\n"
+                   + rtc_stubs + rtc + RTC_TESTS,
         "stop": COMMON + "enum irqWakeup" + enums + STOP_STUBS
                 + function_source(read("conf/conf.c"), "RestoreRunClockAfterStop")
                 + function_source(read("conf/conf.c"), "Sys_StopMode") + STOP_TESTS,

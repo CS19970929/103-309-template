@@ -1,7 +1,7 @@
 #include "main.h"
 
 // UINT8 RTC_Faultcnt = 0;
-__IO UINT8 TimeDisplay = 0; // ÃëÖÐ¶Ï±êÖ¾£¬½øÈëÃëÖÐ¶ÏÊ±ÖÃ1£¬µ±Ê±¼ä±»Ë¢ÐÂÖ®ºóÇå0
+__IO UINT8 TimeDisplay = 0; // ç§’ä¸­æ–­æ ‡å¿—ï¼Œè¿›å…¥ç§’ä¸­æ–­æ—¶ç½®1ï¼Œå½“æ—¶é—´è¢«åˆ·æ–°ä¹‹åŽæ¸…0
 
 struct RTC_ELEMENT RTC_time;
 
@@ -19,9 +19,9 @@ void GregorianDay(struct RTC_ELEMENT *tm)
 	int MonthOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 	lastYear = tm->RTC_Time_Year - 1;
-	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // ¼ÆËã´Ó¹«ÔªÔªÄêµ½¼ÆÊýµÄÇ°Ò»ÄêÖ®ÖÐÒ»¹²¾­ÀúÁË¶àÉÙ¸öÈòÄê
+	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // è®¡ç®—ä»Žå…¬å…ƒå…ƒå¹´åˆ°è®¡æ•°çš„å‰ä¸€å¹´ä¹‹ä¸­ä¸€å…±ç»åŽ†äº†å¤šå°‘ä¸ªé—°å¹´
 
-	if ((tm->RTC_Time_Year % 4 == 0) // ÈçÈô¼ÆÊýµÄÕâÒ»ÄêÎªÈòÄê£¬ÇÒ¼ÆÊýµÄÔÂ·ÝÔÚ2ÔÂÖ®ºó£¬ÔòÈÕÊý¼Ó1£¬·ñÔò²»¼Ó1
+	if ((tm->RTC_Time_Year % 4 == 0) // å¦‚è‹¥è®¡æ•°çš„è¿™ä¸€å¹´ä¸ºé—°å¹´ï¼Œä¸”è®¡æ•°çš„æœˆä»½åœ¨2æœˆä¹‹åŽï¼Œåˆ™æ—¥æ•°åŠ 1ï¼Œå¦åˆ™ä¸åŠ 1
 		&& ((tm->RTC_Time_Year % 100 != 0) || (tm->RTC_Time_Year % 400 == 0)) && (tm->RTC_Time_Month > 2))
 	{
 		day = 1;
@@ -31,14 +31,14 @@ void GregorianDay(struct RTC_ELEMENT *tm)
 		day = 0;
 	}
 
-	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // ¼ÆËã´Ó¹«ÔªÔªÄêÔªµ©µ½¼ÆÊýÈÕÆÚÒ»¹²ÓÐ¶àÉÙÌì
+	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // è®¡ç®—ä»Žå…¬å…ƒå…ƒå¹´å…ƒæ—¦åˆ°è®¡æ•°æ—¥æœŸä¸€å…±æœ‰å¤šå°‘å¤©
 
 	tm->tm_wday = day % 7;
 }
 
 #endif
 
-// ´Ëº¯ÊýÎª¡ª¡ªLinuxÔ´ÂëÖÐµÄmktimeËã·¨
+// æ­¤å‡½æ•°ä¸ºâ€”â€”Linuxæºç ä¸­çš„mktimeç®—æ³•
 UINT32 mktimev(struct RTC_ELEMENT *tm)
 {
 	if (0 >= (int)(tm->RTC_Time_Month -= 2))
@@ -63,8 +63,8 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	UINT32 i;
 	UINT32 Second_res, Day;
 
-	Day = AllSecond / SEC_DAY;		  /* ÓÐ¶àÉÙÌì */
-	Second_res = AllSecond % SEC_DAY; /* ½ñÌìµÄÊ±¼ä£¬µ¥Î»s */
+	Day = AllSecond / SEC_DAY;		  /* æœ‰å¤šå°‘å¤© */
+	Second_res = AllSecond % SEC_DAY; /* ä»Šå¤©çš„æ—¶é—´ï¼Œå•ä½s */
 
 	/* Hours, minutes, seconds are easy */
 	RTCtime->RTC_Time_Hour = Second_res / 3600;
@@ -72,14 +72,14 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	RTCtime->RTC_Time_Second = (Second_res % 3600) % 60;
 
 	for (i = UNIX_TIME_YEAR; Day >= Days_in_year(i); i++)
-	{ // Ëã³öµ±Ç°Äê·Ý£¬ÆðÊ¼µÄ¼ÆÊýÄê·ÝÎª1970Äê
+	{ // ç®—å‡ºå½“å‰å¹´ä»½ï¼Œèµ·å§‹çš„è®¡æ•°å¹´ä»½ä¸º1970å¹´
 		Day -= Days_in_year(i);
 	}
-	i %= 100; // Ö»±£ÁôºóÁ½Î»
+	i %= 100; // åªä¿ç•™åŽä¸¤ä½
 	RTCtime->RTC_Time_Year = (UINT8)i;
 
 	if (Leapyear(RTCtime->RTC_Time_Year))
-	{ // ¼ÆËãµ±Ç°µÄÔÂ·Ý
+	{ // è®¡ç®—å½“å‰çš„æœˆä»½
 		Days_in_month(2) = 29;
 	}
 	for (i = 1; Day >= Days_in_month(i); i++)
@@ -89,9 +89,9 @@ void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 	Days_in_month(2) = 28;
 	RTCtime->RTC_Time_Month = (UINT8)i;
 
-	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // ¼ÆËãµ±Ç°ÈÕÆÚ
+	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // è®¡ç®—å½“å‰æ—¥æœŸ
 
-	// GregorianDay(tm);						//¼ÆËãÐÇÆÚ¼¸
+	// GregorianDay(tm);						//è®¡ç®—æ˜ŸæœŸå‡ 
 }
 
 void Get_RTC_Time(void)
@@ -99,25 +99,25 @@ void Get_RTC_Time(void)
 	UINT32 u32BJ_SecondTimeVar;
 
 	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
-	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // °Ñ¶¨Ê±Æ÷µÄÖµ×ª»»Îª±±¾©Ê±¼ä
+	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // æŠŠå®šæ—¶å™¨çš„å€¼è½¬æ¢ä¸ºåŒ—äº¬æ—¶é—´
 }
 
-// ´Ëº¯ÊýÎª¡ª¡ªLinuxÔ´ÂëÖÐµÄmktimeËã·¨ÐÞ¸ÄÎª¡ª¡ªÒ×¶Á¶®ÐÍ
-// 1970Äê1ÔÂ1ÈÕ0Ê±ÎªUNIX TIMEµÄ¼ÍÔªÊ±¼ä
+// æ­¤å‡½æ•°ä¸ºâ€”â€”Linuxæºç ä¸­çš„mktimeç®—æ³•ä¿®æ”¹ä¸ºâ€”â€”æ˜“è¯»æ‡‚åž‹
+// 1970å¹´1æœˆ1æ—¥0æ—¶ä¸ºUNIX TIMEçš„çºªå…ƒæ—¶é—´
 UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 {
 	UINT32 Y_day, M_day, D_day;
 	UINT32 X_day, T_sec;
 
 	if (0 >= (int)(RTC_t->RTC_Time_Month -= 2))
-	{ // Ç°Á½¸öÔÂ±»ÍÆµ½ÉÏÒ»ÄêÈ¥
+	{ // å‰ä¸¤ä¸ªæœˆè¢«æŽ¨åˆ°ä¸Šä¸€å¹´åŽ»
 		RTC_t->RTC_Time_Month += 12;
 		RTC_t->RTC_Time_Year -= 1;
 	}
 	Y_day = (RTC_t->RTC_Time_Year - 1) * 365 + RTC_t->RTC_Time_Year / 4 - RTC_t->RTC_Time_Year / 100 + RTC_t->RTC_Time_Year / 400;
 	M_day = 367 * RTC_t->RTC_Time_Month / 12 - 30 + 59;
 	D_day = RTC_t->RTC_Time_Day - 1;
-	X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162Îª0Äê0ÔÂ0ÈÕ0Ê±µ½¼ÍÔªÊ±¼äµÄÌìÊý
+	X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162ä¸º0å¹´0æœˆ0æ—¥0æ—¶åˆ°çºªå…ƒæ—¶é—´çš„å¤©æ•°
 	T_sec = ((X_day * 24 + RTC_t->RTC_Time_Hour) * 60 + RTC_t->RTC_Time_Minute) * 60 + RTC_t->RTC_Time_Second;
 
 	return T_sec;
@@ -190,38 +190,64 @@ static void RTC_ConfigureInterrupts(void)
 UINT8 Init_RTC(void)
 {
     UINT32 source;
+    UINT32 wanted_source;
+    UINT32 previous_counter = 0U;
     struct RTC_ELEMENT initial_time;
+    UINT8 previous_valid;
     UINT8 retained;
+    UINT8 preserve_counter = 0U;
+
     RTC_EnableBackupAccess();
     s_rtc_ready = 0U;
+
+    wanted_source = (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
+        ? RCC_BDCR_RTCSEL_LSE : RCC_BDCR_RTCSEL_LSI;
     source = RCC->BDCR & RCC_BDCR_RTCSEL;
-    retained = (UINT8)(BKP_ReadBackupRegister(BKP_DR1) == RTC_BKP_DATA &&
-                      (RCC->BDCR & RCC_BDCR_RTCEN) != 0U &&
-                      (source == RCC_BDCR_RTCSEL_LSE || source == RCC_BDCR_RTCSEL_LSI));
+    previous_valid = (UINT8)(BKP_ReadBackupRegister(BKP_DR1) == RTC_BKP_DATA &&
+                            (RCC->BDCR & RCC_BDCR_RTCEN) != 0U &&
+                            (source == RCC_BDCR_RTCSEL_LSE || source == RCC_BDCR_RTCSEL_LSI));
+    retained = (UINT8)(previous_valid && source == wanted_source);
+
     if (!retained)
     {
-        /* Only initialize an absent/invalid RTC; ordinary wake keeps its time. */
+        /* RTCSEL changes require a backup-domain reset. Preserve the old time
+         * when its clock is running; never wait for an unavailable old clock. */
+        if (previous_valid &&
+            ((source == RCC_BDCR_RTCSEL_LSE &&
+              RCC_GetFlagStatus(RCC_FLAG_LSERDY) != RESET) ||
+             (source == RCC_BDCR_RTCSEL_LSI &&
+              RCC_GetFlagStatus(RCC_FLAG_LSIRDY) != RESET)) &&
+            RTC_Synchronize() && RTC_WaitFlag(RTC_FLAG_RTOFF))
+        {
+            previous_counter = RTC_GetCounter();
+            preserve_counter = 1U;
+        }
+
         BKP_DeInit();
-        if (RTC_StartOscillator(1U))
-            RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
-        else if (RTC_StartOscillator(0U))
-            RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
-        else
+        if (!RTC_StartOscillator((UINT8)(wanted_source == RCC_BDCR_RTCSEL_LSE)))
             return 0U;
+        RCC_RTCCLKConfig((wanted_source == RCC_BDCR_RTCSEL_LSE)
+            ? RCC_RTCCLKSource_LSE : RCC_RTCCLKSource_LSI);
         RCC_RTCCLKCmd(ENABLE);
     }
-    else if (!RTC_StartOscillator((UINT8)(source == RCC_BDCR_RTCSEL_LSE)))
+    else if (!RTC_StartOscillator((UINT8)(wanted_source == RCC_BDCR_RTCSEL_LSE)))
         return 0U;
+
     if (!RTC_Synchronize() || !RTC_WaitFlag(RTC_FLAG_RTOFF))
         return 0U;
     if (!retained)
     {
-        source = RCC->BDCR & RCC_BDCR_RTCSEL;
-        RTC_SetPrescaler(source == RCC_BDCR_RTCSEL_LSE ? LSE_FREQUENT : 39999U);
+        RTC_SetPrescaler((wanted_source == RCC_BDCR_RTCSEL_LSE)
+            ? LSE_FREQUENT : 39999U);
         if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
             return 0U;
-        initial_time = Systmtime;
-        RTC_SetCounter(Seccond_Cal(&initial_time) - TIME_ZOOM);
+        if (preserve_counter)
+            RTC_SetCounter(previous_counter);
+        else
+        {
+            initial_time = Systmtime;
+            RTC_SetCounter(Seccond_Cal(&initial_time) - TIME_ZOOM);
+        }
         if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
             return 0U;
         BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);

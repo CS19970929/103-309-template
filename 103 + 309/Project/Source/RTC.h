@@ -3,6 +3,20 @@
 
 #include "conf.h"
 
+/* BMS_RTC_CLOCK_CONFIG_BEGIN */
+/* Select the RTC clock at build time. LSI (0) is the default; LSE (1)
+ * requires a populated 32.768 kHz crystal. No automatic fallback. */
+#define BMS_RTC_CLOCK_LSI 0U
+#define BMS_RTC_CLOCK_LSE 1U
+#ifndef BMS_RTC_CLOCK_SOURCE
+#define BMS_RTC_CLOCK_SOURCE BMS_RTC_CLOCK_LSI
+#endif
+#if (BMS_RTC_CLOCK_SOURCE != BMS_RTC_CLOCK_LSI) && \
+    (BMS_RTC_CLOCK_SOURCE != BMS_RTC_CLOCK_LSE)
+#error BMS_RTC_CLOCK_SOURCE_must_be_LSI_or_LSE
+#endif
+/* BMS_RTC_CLOCK_CONFIG_END */
+
 
 #define RTC_BKP_DATA        0xA5A5
 #define LSE_START_TIMEOUT   ((uint16_t)0x5000) /*!< Time out for LSE start up */
