@@ -37,13 +37,22 @@ enum _CUR { CurCHG, CurDSG };
 static struct { UINT16 u16Soc_Cycle_times; } OtherElement;
 static UINT16 saved_words[3];
 static UINT8 save_count;
+static UINT8 fail_next_write[3];
 UINT16 ReadEEPROM_Word_NoZone(UINT16 addr) {
     assert(addr >= 10 && addr <= 14 && addr % 2 == 0);
     return saved_words[(addr-10)/2];
 }
 UINT8 WriteEEPROM_Word_NoZone(UINT16 addr, UINT16 value) {
+    UINT8 index;
     assert(addr >= 10 && addr <= 14 && addr % 2 == 0);
-    saved_words[(addr-10)/2] = value; ++save_count; return 0;
+    index = (UINT8)((addr-10)/2);
+    ++save_count;
+    if (fail_next_write[index]) {
+        --fail_next_write[index];
+        return 1;
+    }
+    saved_words[index] = value;
+    return 0;
 }
 static UINT16 fake_ocv;
 UINT16 GetEndValue(const UINT16 *table, UINT16 size, UINT16 voltage) {
@@ -63,6 +72,7 @@ TESTS = r'''
 static void initialize(UINT16 nominal_dah, UINT8 soc) {
     memset(&SOC_Enhance_Element, 0, sizeof(SOC_Enhance_Element));
     memset(&SOC_Calculate_Element, 0, sizeof(SOC_Calculate_Element));
+    memset(fail_next_write, 0, sizeof(fail_next_write));
     SOC_Enhance_Element.u16_SOC_Ah = nominal_dah;
     SOC_Enhance_Element.u16_SOC_0_Vol = 3050;
     SOC_Enhance_Element.u16_SOC_100_Vol = 3600;
@@ -266,6 +276,45 @@ int main(void) {
     assert(SOC_Calculate_Element.u8SOC_Now==0 && SOC_Calculate_Element.u32CapNow==0);
     assert(SOC_GetRemainingMinutes(100,0)==65535);
     assert(SOC_Calculate_Element.u8DSG_SOC_Int==old_partial);
+    /* 656 cycles used to cause 16-bit overflow in the RAM comparison. */
+    initialize(1000, 50);
+    saved_words[2] = 656;
+    soc_param_lib_init();
+    assert(SOC_Calculate_Element.u32Cycle_times == 65600U);
+    save_count = 0;
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 0);
+    /* Each failed write retains its previous shadow and retries independently. */
+    SOC_Calculate_Element.u8SOC_Now = 55;
+    SOC_Calculate_Element.u8DSG_SOC_Int = 15;
+    SOC_Calculate_Element.u32Cycle_times = 65700U;
+    fail_next_write[0] = fail_next_write[1] = fail_next_write[2] = 1;
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 3 && saved_words[0] == 50 && saved_words[1] == 13 &&
+           saved_words[2] == 656 && SOC_Calculate_Element_backup.u32Cycle_times == 65600U);
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 6 && saved_words[0] == 55 && saved_words[1] == 15 &&
+           saved_words[2] == 657 && SOC_Calculate_Element_backup.u32Cycle_times == 65700U);
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 6); /* No wear from unchanged cycles >= 656. */
+
+    /* Failed partial pre-sleep save: only successful words advance shadows. */
+    initialize(1000, 50);
+    SOC_Calculate_Element.u8SOC_Now = 61;
+    SOC_Calculate_Element.u8DSG_SOC_Int = 27;
+    SOC_Calculate_Element.u32Cycle_times = 13000U;
+    fail_next_write[1] = 1;
+    save_count = 0;
+    assert(!SOC_SaveBeforeSleep());
+    assert(save_count == 2 && saved_words[0] == 61 && saved_words[1] == 13);
+    assert(SOC_Calculate_Element_backup.u8SOC_Now == 61 &&
+           SOC_Calculate_Element_backup.u8DSG_SOC_Int == 13 &&
+           SOC_Calculate_Element_backup.u32Cycle_times == 12300U);
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 4 && saved_words[1] == 27 && saved_words[2] == 130);
+    SOC_EEPROM_Deal_Monitor();
+    assert(save_count == 4);
+
     printf("PASS: usable=%u%%, integration/display/time/cycle/EEPROM/refresh/endpoints/bounds\n",
            SOC_USABLE_CAPACITY_PERCENT);
     return 0;
