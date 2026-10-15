@@ -137,14 +137,10 @@ static UINT16 BmsCurrent_mAX4ToReport(UINT32 current_mA_x4, UINT16 report_diviso
 
 void Init_Registers(UINT8 num)
 {
-	UINT8 j;
 	switch (num)
 	{
 	case 0:
-		for (j = 0; j < 21; j++)
-		{
-			*(&(Registers_AFE1.Temp1) + j) = 0;
-		}
+		memset(&Registers_AFE1, 0, sizeof(Registers_AFE1));
 		break;
 
 	case 1:

@@ -3,6 +3,7 @@
 
 //#define USE_STDPERIPH_DRIVER	//û�������һ���assert_param()�����Ĵ���Ҫ�ڹ����ļ�������
 #include <math.h>
+#include <stddef.h>
 #include "stm32f10x.h"
 #include "stm32f10x_it.h"			//������һЩӲ������֮����жϣ�������Ҫ��
 #include "string.h"

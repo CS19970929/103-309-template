@@ -4,13 +4,13 @@ volatile union SYS_TIME g_st_SysTimeFlag;
 struct CBC_ELEMENT CBC_Element;
 
 UINT8 g_u81msCnt = 0;
-UINT8 g_u810msClockCnt = 0;
-UINT8 g_u81msClockCnt = 0;
+volatile UINT8 g_u810msClockCnt = 0;
+volatile UINT8 g_u81msClockCnt = 0;
 
 UINT8 gu8_200msCnt = 0;
-UINT8 gu8_200msAccClock_Flag = 0;
+volatile UINT8 gu8_200msAccClock_Flag = 0;
 UINT8 gu8_200msAccClock_Flag2 = 0;
-UINT8 gu8_1000msAccClock_Flag = 0;
+volatile UINT8 gu8_1000msAccClock_Flag = 0;
 
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
@@ -129,6 +129,8 @@ void __delay_ms(UINT16 nms)
 
 void App_SysTime(void)
 {
+	UINT8 clock_1ms = g_u81msClockCnt;
+	UINT8 clock_10ms = g_u810msClockCnt;
 	static UINT8 s_u8Cnt1ms = 0;
 
 	static UINT8 s_u8Cnt10ms = 0;
@@ -147,9 +149,9 @@ void App_SysTime(void)
 	static UINT8 s_u8Cnt1000ms3 = 66;
 
 	g_st_SysTimeFlag.bits.b1Sys1msFlag = 0;
-	if (s_u8Cnt1ms != g_u81msClockCnt)
+	if (s_u8Cnt1ms != clock_1ms)
 	{ // 1ms定时标志
-		s_u8Cnt1ms = g_u81msClockCnt;
+		s_u8Cnt1ms = clock_1ms;
 		g_st_SysTimeFlag.bits.b1Sys1msFlag = 1;
 	}
 
@@ -158,10 +160,10 @@ void App_SysTime(void)
 	g_st_SysTimeFlag.bits.b1Sys10msFlag3 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag4 = 0;
 	g_st_SysTimeFlag.bits.b1Sys10msFlag5 = 0;
-	if (s_u8Cnt10ms != g_u810msClockCnt)
+	if (s_u8Cnt10ms != clock_10ms)
 	{ // 10ms定时标志
-		s_u8Cnt10ms = g_u810msClockCnt;
-		switch (g_u810msClockCnt)
+		s_u8Cnt10ms = clock_10ms;
+		switch (clock_10ms)
 		{
 		case 0:
 			g_st_SysTimeFlag.bits.b1Sys10msFlag1 = 1;
@@ -307,4 +309,17 @@ void TIM3_IRQHandler(void)
 			}
 		}
 	}
+}
+
+
+UINT8 TakePendingFlag(volatile UINT8 *flag)
+{
+	UINT32 primask = __get_PRIMASK();
+	UINT8 pending;
+
+	__disable_irq();
+	pending = *flag;
+	*flag = 0U;
+	__set_PRIMASK(primask);
+	return pending;
 }

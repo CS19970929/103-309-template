@@ -99,9 +99,10 @@ UINT16 Sys_FindProtectFilterMax(void)
 	}
 	for (i = 0; i < 13; ++i)
 	{
-		if (*(&PRT_E2ROMParas.u16VcellOvp_Filter + 5 * i) > s_u16ProtectFilterMax)
+		UINT16 filter = ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_Filter) + 5U * i * sizeof(UINT16)));
+		if (filter > s_u16ProtectFilterMax)
 		{
-			s_u16ProtectFilterMax = *(&PRT_E2ROMParas.u16VcellOvp_Filter + 5 * i);
+			s_u16ProtectFilterMax = filter;
 		}
 	}
 	s_u16ProtectFilterMax = 0;

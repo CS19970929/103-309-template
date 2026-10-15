@@ -129,8 +129,8 @@ struct stCell_Info {
 
 // SCI_485 Message Structure
 struct RS485MSG {
-	UINT8	ptr_no;          	// Word stating what state msg is in
-	UINT8	csr;          		// I2C address of slave msg is intended for
+	volatile UINT8	ptr_no;          	// Word stating what state msg is in
+	volatile UINT8	csr;          		// I2C address of slave msg is intended for
 	UINT16	u16RdRegStartAddr;	// read reg start addr
 	UINT16	u16RdRegStartAddrActure;	//�Զ����ַ����
 	UINT8	u16RdRegByteNum;    // read byte lenth

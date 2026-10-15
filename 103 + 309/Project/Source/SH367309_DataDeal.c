@@ -15,6 +15,12 @@ const UINT16 AFE_OCCT_OCD2T[16] = {10, 20, 40, 60, 80, 100, 200, 400, 600, 800, 
 AFE_ROM_PARAMETERS_TypeDef AFE_ROM_PARAMETERS_Struction = {0};
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
 
+static AFE_Value_Typedef *GetAfeParameter(UINT16 index)
+{
+	return (AFE_Value_Typedef *)((UINT8 *)&AFE_Parameters_RS485_Struction +
+		(UINT32)index * sizeof(AFE_Value_Typedef));
+}
+
 /* 用到的外部的数据 */
 extern UINT8 ucMTPBuffer[26];
 extern UINT16 iSheldTemp_10K_NTC[141];
@@ -383,7 +389,6 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 
 	int i = 0;
 	UINT16 offset = 0;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
@@ -395,10 +400,11 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 		Feed_IWatchDog;
 		for (i = 0; i < u16WrRegNum; i++)
 		{
-			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
+			AFE_Value_Typedef *parameter = GetAfeParameter((UINT16)(i + offset));
+			parameter->curValue = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
 
 			/* 直接写道EEPROM中 */
-			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), *(P + (i + offset) * 4));
+			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + ((i + offset) << 1), parameter->curValue);
 		}
 		Feed_IWatchDog;
 		AFE_PARAM_WRITE_Flag = 1;
@@ -427,12 +433,11 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 {
 	UINT16 u16SciTemp;
 	UINT16 i, j;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
 	i = 0;
 
 	for (j = 0; j < AFE_PARAMETES_TOTAL_LENGTH; j++)
 	{
-		u16SciTemp = *(P + j * 4);
+		u16SciTemp = GetAfeParameter(j)->curValue;
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -442,13 +447,13 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 void EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT8 i;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
 
 	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		*(P + i * 4 - 1) = *(P + i * 4); // 当前值变为默认值
-		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), *(P + i * 4));
+		AFE_Value_Typedef *parameter = GetAfeParameter(i);
+		parameter->curValue = parameter->defaultValue;
+		WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1), parameter->defaultValue);
 	}
 	Feed_IWatchDog;
 }
@@ -457,14 +462,14 @@ void ReadEEPROM_AFE_Parameters(void)
 {
 	UINT16 i;
 
-	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
-		(P + i)->curValue = ReadEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1));
+		AFE_Value_Typedef *parameter = GetAfeParameter(i);
+		parameter->curValue = ReadEEPROM_Word_NoZone(E2P_ADDR_E2POS_AFE_Parameters + (i << 1));
 
-		if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
+		if ((parameter->curValue < parameter->minValue) || (parameter->curValue > parameter->maxValue))
 		{
-			(P + i)->curValue = (P + i)->defaultValue;
+			parameter->curValue = parameter->defaultValue;
 			if (0 == System_ErrFlag.u8ErrFlag_Com_EEPROM)
 			{
 				System_ERROR_UserCallback(ERROR_EEPROM_STORE);

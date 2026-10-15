@@ -1,6 +1,6 @@
 #include "main.h"
 
-CHARGERLOAD_FUNC ChargerLoad_Func;
+volatile CHARGERLOAD_FUNC ChargerLoad_Func;
 
 // 电枪插入解除类型，全系列都有，PA0信号，下降沿起作用
 void AllSeriesDeal_Charger_ON(void)
@@ -18,10 +18,18 @@ void AllSeriesDeal_Charger_ON(void)
 
 		case 1:
 			// 电枪插入，则解除
-			if (ChargerLoad_Func.bits.b1ON_Charger_AllSeries)
 			{
+				UINT32 primask = __get_PRIMASK();
+				UINT8 pending;
+
+				__disable_irq();
+				pending = ChargerLoad_Func.bits.b1ON_Charger_AllSeries;
 				ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 0;
-				su8_ChargerON_All_WakeFlag = 2;
+				__set_PRIMASK(primask);
+				if (pending)
+				{
+					su8_ChargerON_All_WakeFlag = 2;
+				}
 			}
 			break;
 

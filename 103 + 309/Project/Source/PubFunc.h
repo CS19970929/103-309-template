@@ -21,6 +21,8 @@ UINT8 App_PubOPUPChk(SPUBOPUPCHK *t_sPubOPChk);
 UINT16 GetEndValue(const UINT16 * ptbl,UINT16 tblsize,UINT16 dat);
 unsigned char CRC8(unsigned char *ptr, unsigned char len,unsigned char key);
 UINT32 ModulusSub(UINT32 Data1, UINT32 Data2);
+UINT16 ReadObjectWord(const void *object, UINT16 byte_offset);
+void WriteObjectWord(void *object, UINT16 byte_offset, UINT16 value);
 void Delay_Base10us(int n);
 
 void Delay1ms(UINT8 delaycnt);

@@ -10,17 +10,17 @@ UINT8 reset_numPro;
 UINT16 his_shortPro;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI1;
-UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
+volatile UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI1 = 0;
 UINT8 gu8_TxFinishFlag_SCI1 = 0;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI2;
-UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
+volatile UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI2 = 0;
 UINT8 gu8_TxFinishFlag_SCI2 = 0;
 
 struct RS485MSG g_stCurrentMsgPtr_SCI3;
-UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCI通信异常计数
+volatile UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCI通信异常计数
 UINT8 gu8_TxEnable_SCI3 = 0;
 UINT8 gu8_TxFinishFlag_SCI3 = 0;
 
@@ -531,7 +531,8 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	for (j = 0; j < 12; j++)
 	{ // 0xD002到这里。
-		u16SciTemp = ((*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j)) << 8) | (*(&System_ErrFlag.u8ErrFlag_Com_AFE1 + 2 * j + 1));
+		u16SciTemp = ((UINT16)((const volatile UINT8 *)&System_ErrFlag)[2U * j] << 8) |
+			((const volatile UINT8 *)&System_ErrFlag)[2U * j + 1U];
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -620,7 +621,7 @@ void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	i = 0;
 	for (j = 0; j < E2P_PARA_NUM_PROTECT; j++)
 	{
-		u16SciTemp = *(&PRT_E2ROMParas.u16VcellOvp_First + j);
+		u16SciTemp = ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + j * sizeof(UINT16)));
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -688,7 +689,7 @@ void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	for (j = 0; j < E2P_PARA_NUM_RTC; j++)
 	{
-		u16SciTemp = *(&RTC_time.RTC_Time_Year + j);
+		u16SciTemp = ReadObjectWord(&RTC_time, (UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + j * sizeof(UINT16)));
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -701,14 +702,14 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	for (j = 0; j < E2P_PARA_NUM_OTHER_ELEMENT1; j++)
 	{
-		u16SciTemp = *(&OtherElement.u16Balance_OpenVoltage + j);
+		u16SciTemp = ReadObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + j * sizeof(UINT16)));
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
 
 	for (j = 0; j < E2P_PARA_NUM_HEAT_COOL; j++)
 	{
-		u16SciTemp = *(&Heat_Cool_Element.u16Heat_OpenTemp + j);
+		u16SciTemp = ReadObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + j * sizeof(UINT16)));
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -1186,7 +1187,7 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 	case SCI_STA_RX_COMPLETE2:
 	{
 		uint8_t index = 0, i;
-		UINT16 *p, u16SciTemp, sum = 0;
+		UINT16 u16SciTemp, sum = 0;
 
 		USART1->CR1 &= ~(1 << 5);
 
@@ -1199,23 +1200,19 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 
 				// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 1 * 2, num_pro.shortPro);
 
-				p = &num_pro.shortPro;
-
 				s->u16Buffer[index++] = 0xdd;
 				s->u16Buffer[index++] = 0xaa;
 				s->u16Buffer[index++] = 0x00;
 				s->u16Buffer[index++] = 0x16;
 
-				for (i = 1; i < 12; i++)
+				for (i = 0; i < 11; i++)
 				{
-					u16SciTemp = *p;
+					u16SciTemp = ReadObjectWord(&num_pro, (UINT16)(offsetof(struct nrb_protect, shortPro) + i * sizeof(UINT16)));
 
 					s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 					s->u16Buffer[index++] = u16SciTemp & 0x00ff;
 
-					sum = (*p & 0x00ff) + (*p >> 8 & 0xff) + sum;
-
-					p++;
+					sum = (u16SciTemp & 0x00ff) + ((u16SciTemp >> 8) & 0xff) + sum;
 				}
 				sum = sum + 0x16;
 				sum = ~sum + 1;
@@ -1255,11 +1252,9 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 					his_shortPro = 0;
 				}
 
-				p = &num_pro.shortPro;
-				for (i = 1; i <= 11; i++)
+				for (i = 0; i < 11; i++)
 				{
-					*p = 0;
-					p++;
+					WriteObjectWord(&num_pro, (UINT16)(offsetof(struct nrb_protect, shortPro) + i * sizeof(UINT16)), 0U);
 					// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
 				}
 				// for (i = 1; i <= 11; i++)
@@ -1991,7 +1986,7 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 	case SCI_STA_RX_COMPLETE2:
 	{
 		uint8_t index = 0, i;
-		UINT16 *p, u16SciTemp, sum = 0;
+		UINT16 u16SciTemp, sum = 0;
 
 		USART2->CR1 &= ~(1 << 5);
 
@@ -2004,23 +1999,19 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 
 				// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 1 * 2, num_pro.shortPro);
 
-				p = &num_pro.shortPro;
-
 				s->u16Buffer[index++] = 0xdd;
 				s->u16Buffer[index++] = 0xaa;
 				s->u16Buffer[index++] = 0x00;
 				s->u16Buffer[index++] = 0x16;
 
-				for (i = 1; i < 12; i++)
+				for (i = 0; i < 11; i++)
 				{
-					u16SciTemp = *p;
+					u16SciTemp = ReadObjectWord(&num_pro, (UINT16)(offsetof(struct nrb_protect, shortPro) + i * sizeof(UINT16)));
 
 					s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 					s->u16Buffer[index++] = u16SciTemp & 0x00ff;
 
-					sum = (*p & 0x00ff) + (*p >> 8 & 0xff) + sum;
-
-					p++;
+					sum = (u16SciTemp & 0x00ff) + ((u16SciTemp >> 8) & 0xff) + sum;
 				}
 				sum = sum + 0x16;
 				sum = ~sum + 1;
@@ -2060,11 +2051,9 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 					his_shortPro = 0;
 				}
 
-				p = &num_pro.shortPro;
-				for (i = 1; i <= 11; i++)
+				for (i = 0; i < 11; i++)
 				{
-					*p = 0;
-					p++;
+					WriteObjectWord(&num_pro, (UINT16)(offsetof(struct nrb_protect, shortPro) + i * sizeof(UINT16)), 0U);
 					// WriteEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + i * 2, (UINT16)0);
 				}
 				// for (i = 1; i <= 11; i++)
@@ -2583,7 +2572,8 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 		t_u16Temp = u16Channel - RS485_CMD_ADDR_VCELL_OVP_FIRST;
 		for (i = 0; i < 5; ++i)
 		{
-			*(&PRT_E2ROMParas.u16VcellOvp_First + i + t_u16Temp) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + (i + t_u16Temp) * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 
 		if (u16Channel >= RS485_CMD_ADDR_VDELTA_OP_FIRST)
@@ -2663,7 +2653,8 @@ void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 	{
 		for (i = 0; i < E2P_PARA_NUM_RTC; ++i)
 		{
-			*(&RTC_time.RTC_Time_Year + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&RTC_time, (UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_RTC_Element_WriteFlag = E2P_PARA_ALL_RTC_ELEMENT;
 	}
@@ -2683,7 +2674,8 @@ void Sci_WrRegs_0x10_Balance(struct RS485MSG *s)
 	{
 		for (i = 0; i < 8; ++i)
 		{
-			*(&OtherElement.u16Balance_OpenVoltage + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_BALANCE_OV;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_BALANCE_OW;
@@ -2711,7 +2703,8 @@ void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s)
 	{
 		for (i = 0; i < 8; ++i)
 		{
-			*(&OtherElement.u16CS_Cur_CHGmax + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16CS_Cur_CHGmax) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_CS_CUR_CHGMAX;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_CS_CUR_DSGMAX;
@@ -2740,7 +2733,8 @@ void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s)
 	{
 		for (i = 0; i < 8; ++i)
 		{
-			*(&OtherElement.u16Sleep_VNormal + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Sleep_VNormal) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_V_NORMAL;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_TIME_NORMAL;
@@ -2767,7 +2761,8 @@ void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s)
 	{
 		for (i = 0; i < 4; ++i)
 		{
-			*(&OtherElement.u16Soc_Ah + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Soc_Ah) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SOC_AH;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SOC_CYCLE_TIME;
@@ -2793,7 +2788,8 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
 	{
 		for (i = 0; i < 4; ++i)
 		{
-			*(&OtherElement.u16Sys_SeriesNum + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Sys_SeriesNum) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_SERIES_NUM;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_CS_RESIS;
@@ -2821,7 +2817,8 @@ void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s)
 	{
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 		{
-			*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
+			WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)),
+				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_HeatCool_WriteFlag |= E2P_PARA_ALL_HEAT_COOL_ELE;
 	}
@@ -3043,7 +3040,8 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 	{
 		for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 		{
-			*(&PRT_E2ROMParas.u16VcellOvp_First + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
+			WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)),
+				ReadObjectWord(&PrtE2PARAS_Default, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
 		}
 		u32E2P_Pro_VolCur_WriteFlag = E2P_PARA_ALL_VOLCUR_PROTECT;
 		u32E2P_Pro_Temp_WriteFlag = E2P_PARA_ALL_TEM_PROTECT;
@@ -3067,7 +3065,8 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 	{
 		for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 		{
-			*(&OtherElement.u16Balance_OpenVoltage + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
+			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)),
+				ReadObjectWord(&OtherElement_Default, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
 		}
 		u32E2P_OtherElement1_WriteFlag = E2P_PARA_ALL_OTHER_ELEMENT1;
 		SeriesNum = OtherElement.u16Sys_SeriesNum;
@@ -3097,7 +3096,8 @@ void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s)
 	{
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 		{
-			*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
+			WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)),
+				ReadObjectWord(&HeatCoolEle_Default, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
 		}
 		u32E2P_HeatCool_WriteFlag = E2P_PARA_ALL_HEAT_COOL_ELE;
 	}

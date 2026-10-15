@@ -227,7 +227,7 @@ int main(void) {
     assert(sizeof(AFE_ROM_PARAMETERS_Struction) == 26);
     assert(((BYTE_00H_SCONF1) & 0x10) == 0);
     assert(((BYTE_01H_SCONF2) & 0x0c) == 0x0c);
-    assert(BYTE_08H_BALV == 0xaa);
+    assert(BYTE_08H_BALV == ((VAL_BAL_OPEN / 20) & 0xff));
     for (n = 0; n < sizeof(statuses); n++) {
         reset_case(); failure = (int)n;
         Drivers_External_Ctrl(); assert(ctlc == 0);
@@ -253,7 +253,7 @@ int main(void) {
     reset_case(); assert(Refresh_Parameters());
     assert(AFE_ROM_PARAMETERS_Struction.m00H_01H.BAL == 0);
     assert(AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC == 3);
-    assert(AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV == 0xaa);
+    assert(AFE_ROM_PARAMETERS_Struction.m08H_09H.BALV == ((VAL_BAL_OPEN / 20) & 0xff));
     reset_case(); tr_failure = 1;
     assert(!SH367309_UpdataAfeConfig()); assert(writes == 0);
     assert(AFE_PARAM_WRITE_Flag == 1);

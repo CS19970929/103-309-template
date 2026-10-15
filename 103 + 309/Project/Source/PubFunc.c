@@ -276,42 +276,37 @@ UINT32 ModulusSub(UINT32 Data1, UINT32 Data2)
 	return (UINT32)(Data1 > Data2 ? Data1 - Data2 : Data2 - Data1);
 }
 
+/* STM32 is little-endian; access object bytes without scalar-member pointer arithmetic. */
+UINT16 ReadObjectWord(const void *object, UINT16 byte_offset)
+{
+	const UINT8 *bytes = (const UINT8 *)object + byte_offset;
+	return (UINT16)bytes[0] | ((UINT16)bytes[1] << 8);
+}
+
+void WriteObjectWord(void *object, UINT16 byte_offset, UINT16 value)
+{
+	UINT8 *bytes = (UINT8 *)object + byte_offset;
+	bytes[0] = (UINT8)value;
+	bytes[1] = (UINT8)(value >> 8);
+}
+
 // 以10us为时基，软件延时
-// 1ms以内误差 10%以内（而且是偏小。10us大概9.4us）
+// SysTick-based 10us delay remains valid with compiler optimization enabled.
 void Delay_Base10us(int n)
 {
-	unsigned char a, b;
-	while (n--)
+	while (n > 0)
 	{
-		for (b = 3; b > 0; b--)
-			for (a = 22; a > 0; a--)
-				;
+		__delay_us(10U);
+		--n;
 	}
 }
 
 // 软件延时函数
 void Delay1ms(UINT8 delaycnt)
 {
-	UINT8 i, k;
-	UINT16 j;
-
-#if 0
-	for(i=0; i<delaycnt; i++) {
-		for(j=0; j<1670; j++) {
-			//system clock = 24MHz
-		}
-	}
-#endif
-
-	for (i = 0; i < delaycnt; i++)
+	if (delaycnt != 0U)
 	{
-		for (k = 0; k < 9; k++)
-		{ // 9倍便是72MHz
-			for (j = 0; j < 560; j++)
-			{
-				// system clock = 8MHz
-			}
-		}
+		__delay_ms(delaycnt);
 	}
 }
 

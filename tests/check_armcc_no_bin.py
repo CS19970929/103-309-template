@@ -24,6 +24,12 @@ def main():
         raise RuntimeError("External linker input file is not supported by this validator")
     cads = ads.find("Cads")
     controls = cads.find("VariousControls")
+    optim = int(cads.findtext("Optim"))
+    if optim != 3:
+        raise RuntimeError(f"Expected explicit Keil Level 2 (-O2), got Optim={optim}")
+    if cads.findtext("oTime") != "0":
+        raise RuntimeError("Expected Optimize for Time to remain disabled (Ospace)")
+    optimization = f"-O{optim - 1}"
     compiler = Path(os.environ.get("ARMCC_BIN", r"C:\Keil_v5\ARM\ARMCC\bin"))
     base = Path(os.environ["LOCALAPPDATA"]) / "CodexTemp/103-309-template/armcc-no-bin"
     base.mkdir(parents=True, exist_ok=True)
@@ -39,7 +45,7 @@ def main():
                 elif setting.text not in ("0", "2"):
                     raise RuntimeError(f"Non-inherited per-file setting: {setting.tag}")
     flags = ["--cpu=Cortex-M3", "--apcs=interwork", "--library_type=microlib",
-             f"-O{int(cads.findtext('Optim')) - 1}", "--split_sections", "-g", "-D__MICROLIB"]
+             optimization, "--split_sections", "-g", "-D__MICROLIB"]
     if cads.findtext("uC99") == "1":
         flags.append("--c99")
     if cads.findtext("uGnu") == "1":
@@ -105,13 +111,26 @@ def main():
                              (output / "target.map").read_text(), re.MULTILINE)
     if stop_section is None or not 0x20000000 <= int(stop_section[1], 16) < 0x20005000:
         raise RuntimeError("PWR_EnterSTOPMode must execute from RAM on this target")
+    disassembly_result = subprocess.run(
+        [str(compiler / "fromelf.exe"), "--text", "-c", str(output / "target.axf")],
+        cwd=output, capture_output=True)
+    disassembly = (disassembly_result.stdout + disassembly_result.stderr).decode(
+        "gbk", errors="replace").replace("\r\n", "\n")
+    if disassembly_result.returncode:
+        raise RuntimeError(f"fromelf disassembly failed:\n{disassembly}")
+    delay_start = disassembly.find("\n    i.Delay1ms\n")
+    delay_end = disassembly.find("\n    i.", delay_start + 1)
+    delay = disassembly[delay_start:delay_end if delay_end >= 0 else None]
+    if delay_start < 0 or "__delay_ms" not in delay:
+        raise RuntimeError("O2 disassembly does not preserve Delay1ms -> __delay_ms")
     assert not list(output.rglob("*.bin"))
     warnings = len(re.findall(r"\bWarning:", "\n".join(logs)))
-    print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC compile + AXF link")
+    print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC {optimization} compile + AXF link")
     print(message.strip())
+    print("Disassembly: Delay1ms -> __delay_ms")
     print(f"Warnings: {warnings}; elapsed: {time.monotonic() - started:.1f}s")
     print(f"Temporary outputs: {output}")
-    print("No UV4, fromelf, HEX/BIN conversion or board operation executed.")
+    print("No UV4, HEX/BIN conversion or board operation executed; fromelf was disassembly-only.")
 
 
 if __name__ == "__main__":

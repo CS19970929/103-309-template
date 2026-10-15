@@ -319,10 +319,10 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 	{ // 保护点
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i));
-		t_u16TempMax = (*(&PrtE2paras_Max.u16VcellOvp_First + i));
-		t_u16TempMin = (*(&PrtE2paras_Min.u16VcellOvp_First + i));
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = t_u16RdTemp;
+		t_u16RdTemp = ReadEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
+		t_u16TempMax = ReadObjectWord(&PrtE2paras_Max, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)));
+		t_u16TempMin = ReadObjectWord(&PrtE2paras_Min, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)));
+		WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)), t_u16RdTemp);
 		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
 		{
 		}
@@ -367,10 +367,10 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 	{ // Other_CanAdd
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&OtherElement_to_Pos.u16Balance_OpenVoltage + i));
-		t_u16TempMax = (*(&OtherElement_to_Max.u16Balance_OpenVoltage + i));
-		t_u16TempMin = (*(&OtherElement_to_Min.u16Balance_OpenVoltage + i));
-		*(&OtherElement.u16Balance_OpenVoltage + i) = t_u16RdTemp;
+		t_u16RdTemp = ReadEEPROM_Word_NoZone(ReadObjectWord(&OtherElement_to_Pos, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
+		t_u16TempMax = ReadObjectWord(&OtherElement_to_Max, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)));
+		t_u16TempMin = ReadObjectWord(&OtherElement_to_Min, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)));
+		WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)), t_u16RdTemp);
 		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
 		{
 		}
@@ -386,10 +386,10 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 	{ // HeatCool_element
-		t_u16RdTemp = ReadEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i));
-		t_u16TempMax = (*(&HeatCoolEle_Max.u16Heat_OpenTemp + i));
-		t_u16TempMin = (*(&HeatCoolEle_Min.u16Heat_OpenTemp + i));
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = t_u16RdTemp;
+		t_u16RdTemp = ReadEEPROM_Word_NoZone(ReadObjectWord(&HeatCoolEle_Pos, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
+		t_u16TempMax = ReadObjectWord(&HeatCoolEle_Max, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)));
+		t_u16TempMin = ReadObjectWord(&HeatCoolEle_Min, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)));
+		WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)), t_u16RdTemp);
 		if ((t_u16RdTemp >= t_u16TempMin) && (t_u16RdTemp <= t_u16TempMax))
 		{
 		}
@@ -405,11 +405,10 @@ void ReadEEPROM_ByteData_StartUp(void)
 
 	ReadEEPROM_AFE_Parameters();
 	ReadEEPROM_EventRecord_Parameters();
-	UINT16 *p = &num_pro.shortPro;
-	for (i = 1; i <= 11; i++)
+	for (i = 0; i < 11; i++)
 	{
-		*p = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 2 * i);
-		p++;
+		WriteObjectWord(&num_pro, (UINT16)(offsetof(struct nrb_protect, shortPro) + i * sizeof(UINT16)),
+			ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD + 2 * (i + 1U)));
 	}
 }
 
@@ -432,7 +431,8 @@ void EEPROM_ResetData_AllToDefault(void)
 	// Protect
 	for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 	{
-		*(&PRT_E2ROMParas.u16VcellOvp_First + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
+		WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)),
+			ReadObjectWord(&PrtE2PARAS_Default, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
 	}
 	u32E2P_Pro_VolCur_WriteFlag = E2P_PARA_ALL_VOLCUR_PROTECT;
 	u32E2P_Pro_Temp_WriteFlag = E2P_PARA_ALL_TEM_PROTECT;
@@ -441,14 +441,16 @@ void EEPROM_ResetData_AllToDefault(void)
 	// Other_CanAdd_element
 	for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 	{
-		*(&OtherElement.u16Balance_OpenVoltage + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
+		WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)),
+			ReadObjectWord(&OtherElement_Default, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
 	}
 	u32E2P_OtherElement1_WriteFlag = E2P_PARA_ALL_OTHER_ELEMENT1;
 
 	// HeatCool_element
 	for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 	{
-		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = *(&HeatCoolEle_Default.u16Heat_OpenTemp + i);
+		WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)),
+			ReadObjectWord(&HeatCoolEle_Default, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
 	}
 	u32E2P_HeatCool_WriteFlag = E2P_PARA_ALL_HEAT_COOL_ELE;
 }
@@ -489,8 +491,8 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_VolCur_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VcellOvp_First + i),
-										*(&PRT_E2ROMParas.u16VcellOvp_First + i));
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))),
+										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
 				u32E2P_Pro_VolCur_WriteFlag -= ((long)1 << i); // 按位操作，有一个减一个。
 				break;
 			}
@@ -503,8 +505,8 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_Temp_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16TChgOTp_First + i),
-										*(&PRT_E2ROMParas.u16TChgOTp_First + i));
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16TChgOTp_First) + i * sizeof(UINT16))),
+										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16TChgOTp_First) + i * sizeof(UINT16))));
 				u32E2P_Pro_Temp_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -517,8 +519,8 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_Pro_Other_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&PrtE2paras_Pos.u16VdeltaOvp_First + i),
-										*(&PRT_E2ROMParas.u16VdeltaOvp_First + i));
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VdeltaOvp_First) + i * sizeof(UINT16))),
+										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VdeltaOvp_First) + i * sizeof(UINT16))));
 				u32E2P_Pro_Other_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -531,8 +533,8 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_OtherElement1_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&OtherCanAdd_Pos.u16Balance_OpenVoltage + i),
-										*(&OtherElement.u16Balance_OpenVoltage + i));
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&OtherCanAdd_Pos, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))),
+										ReadObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
 				u32E2P_OtherElement1_WriteFlag -= ((long)1 << i);
 				break;
 			}
@@ -572,7 +574,7 @@ void WriteEEPROM_ByteData_Circle(void)
 		{
 			if ((u32E2P_HeatCool_WriteFlag >> i) & 1)
 			{
-				WriteEEPROM_Word_NoZone((UINT16) * (&HeatCoolEle_Pos.u16Heat_OpenTemp + i), *(&Heat_Cool_Element.u16Heat_OpenTemp + i));
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&HeatCoolEle_Pos, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))), ReadObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
 				u32E2P_HeatCool_WriteFlag -= ((long)1 << i);
 				break;
 			}

@@ -362,9 +362,8 @@ static void sleep_run_rtc(void)
 
 void rtc_sleep(void)
 {
-    if (!gu8_1000msAccClock_Flag)
+    if (!TakePendingFlag(&gu8_1000msAccClock_Flag))
         return;
-    gu8_1000msAccClock_Flag = 0U;
     sleep_update_request();
     if (s_sleep_mode == HICCUP_MODE)
         sleep_run_rtc();

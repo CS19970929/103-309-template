@@ -17,14 +17,14 @@ void InitProID(void)
 	// 这样写可以吗？
 	for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 	{
-		*((UINT16 *)(&ProductionInfor.BMS_SerialNumber[i * 2])) =
-			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_SerialNumberHeadAdress + 2 + i * 2); // 往后挪一位
+		WriteObjectWord(ProductionInfor.BMS_SerialNumber, (UINT16)(i * 2U),
+			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_SerialNumberHeadAdress + 2 + i * 2)); // 往后挪一位
 
-		*((UINT16 *)(&ProductionInfor.BMS_HardWareVersion[i * 2])) =
-			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_HardWareVersionHeadAdress + 2 + i * 2);
+		WriteObjectWord(ProductionInfor.BMS_HardWareVersion, (UINT16)(i * 2U),
+			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_HardWareVersionHeadAdress + 2 + i * 2));
 
-		*((UINT16 *)(&ProductionInfor.BMS_SoftWareVersion[i * 2])) =
-			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_SoftWareVersionHeadAdress + 2 + i * 2);
+		WriteObjectWord(ProductionInfor.BMS_SoftWareVersion, (UINT16)(i * 2U),
+			ReadEEPROM_Word_NoZone(ProductionInfor.BMS_SoftWareVersionHeadAdress + 2 + i * 2));
 	}
 }
 
@@ -38,7 +38,7 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_SerialNumberHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_SerialNumber[i * 2])));
+									  ReadObjectWord(ProductionInfor.BMS_SerialNumber, (UINT16)(i * 2U)));
 		}
 		ProductionInfor.BMS_SerialNumber_WriteFlag = 0;
 	}
@@ -49,7 +49,7 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_HardWareVersionHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_HardWareVersion[i * 2])));
+									  ReadObjectWord(ProductionInfor.BMS_HardWareVersion, (UINT16)(i * 2U)));
 		}
 		ProductionInfor.BMS_HardWareVersion_WriteFlag = 0;
 	}
@@ -60,7 +60,7 @@ void WriteProID(void)
 		for (i = 0; i < (PRODUCT_ID_LENGTH_MAX >> 1); i++)
 		{
 			WriteEEPROM_Word_NoZone(ProductionInfor.BMS_SoftWareVersionHeadAdress + 2 + i * 2,
-									  *((UINT16 *)(&ProductionInfor.BMS_SoftWareVersion[i * 2])));
+									  ReadObjectWord(ProductionInfor.BMS_SoftWareVersion, (UINT16)(i * 2U)));
 		}
 		ProductionInfor.BMS_SoftWareVersion_WriteFlag = 0;
 	}

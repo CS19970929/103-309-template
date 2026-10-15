@@ -3,7 +3,8 @@
 volatile union Can_Status Can_Status_Flag;
 volatile union CanTxType_Status CanTxType_Flag;
 CanTxMsg TxMessage;
-CanRxMsg RxMessage;
+static volatile UINT32 s_received_std_id;
+static volatile UINT8 s_received_pending;
 
 UINT16 g_u16BusOff_InitTestCnt = 0; // CAN总线关闭计时
 UINT16 g_u16BusOff_RecoverCnt = 0;	// 5s计时标志位
@@ -795,18 +796,25 @@ void Can_BusOFF_Monitor(void)
 
 void Can_ReceiveDeal(void)
 {
-	if (!Can_Status_Flag.bits.b1Can_Received)
+	UINT32 primask = __get_PRIMASK();
+	UINT32 std_id;
+
+	__disable_irq();
+	if (!s_received_pending)
 	{
+		__set_PRIMASK(primask);
 		return;
 	}
-
+	std_id = s_received_std_id;
+	s_received_pending = 0U;
+	__set_PRIMASK(primask);
 	// ID已经过滤掉，不需要再判断ID是否为本机
-	if ((RxMessage.StdId >> 7) != CAN_ADRESS_STD_ID)
+	if ((std_id >> 7) != CAN_ADRESS_STD_ID)
 	{
 		return;
 	}
 
-	switch (RxMessage.StdId & 0x007F)
+	switch (std_id & 0x007F)
 	{ // 按照逻辑，是这个函数处理接受数据，然后处理数据，然后赋值标志位返回才对
 	case CANID_CHECK_0x00:
 		CanTxType_Flag.bits.b1CanTx_0x00 = 1;
@@ -867,7 +875,6 @@ void Can_ReceiveDeal(void)
 		break;
 	}
 
-	Can_Status_Flag.bits.b1Can_Received = 0;
 }
 
 void Can_TransmitDeal(void)
@@ -1021,16 +1028,10 @@ void App_CanTest(void)
 
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
-	sys_time.can_rcv_cnt++;
-	// CanRxMsg RxMessage;
-	RxMessage.StdId = 0x00;
-	RxMessage.ExtId = 0x00;
-	RxMessage.IDE = 0;
-	RxMessage.DLC = 0;
-	RxMessage.FMI = 0;
-	RxMessage.Data[0] = 0x00;
-	RxMessage.Data[1] = 0x00;
+	CanRxMsg message = {0};
 
-	CAN_Receive(CAN1, CAN_FIFO0, &RxMessage); // 接收FIFO0中的数据
-	Can_Status_Flag.bits.b1Can_Received = 1;
+	sys_time.can_rcv_cnt++;
+	CAN_Receive(CAN1, CAN_FIFO0, &message);
+	s_received_std_id = message.StdId;
+	s_received_pending = 1U;
 }

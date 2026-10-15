@@ -93,24 +93,8 @@ Others:
 *******************************************************************************/
 void Delay4us(void)
 {
-	UINT8 i, j;
-
-#if 1
-	for (j = 0; j < 8; j++)
-	{ // 72MHz
-		for (i = 0; i < 13; i++)
-		{
-			// system clock = 24MHz
-		}
-	}
-#endif
-
-#if 0
-	//当为5时，6.7us
-	for(i=0; i<5; i++) {
-		//system clock = 8MHz
-	}
-#endif
+	/* InitDelay() is completed before the AFE software bus is used. */
+	__delay_us(4U);
 }
 
 #ifdef _TWI_COM

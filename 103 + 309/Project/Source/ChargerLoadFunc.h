@@ -26,7 +26,7 @@ typedef union __CHARGERLOAD_FUNC {
 
 //#define _CHARGER_LOAD
 
-extern CHARGERLOAD_FUNC ChargerLoad_Func;
+extern volatile CHARGERLOAD_FUNC ChargerLoad_Func;
 
 void Init_ChargerLoad_Det(void);
 void App_ChargerLoad_Det(void);

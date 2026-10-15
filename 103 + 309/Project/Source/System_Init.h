@@ -121,13 +121,15 @@ struct CBC_ELEMENT {
 };
 
 
+/* Main-context event consumption that preserves the prior interrupt mask. */
+UINT8 TakePendingFlag(volatile UINT8 *flag);
 void IWDG_Feed(void);
 #define Feed_IWatchDog IWDG_Feed()
 
 extern volatile union SYS_TIME g_st_SysTimeFlag;
 extern struct CBC_ELEMENT CBC_Element;
-extern UINT8 gu8_200msAccClock_Flag;
-extern UINT8 gu8_1000msAccClock_Flag;
+extern volatile UINT8 gu8_200msAccClock_Flag;
+extern volatile UINT8 gu8_1000msAccClock_Flag;
 
 
 void InitDelay(void);

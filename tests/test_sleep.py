@@ -89,7 +89,8 @@ static struct { UINT8 u8_MTP_BALANCEH, u8_MTP_BALANCEL;
 } SH367309_Reg_Store;
 static struct { UINT32 time_enter_rtc; } sys_time;
 static struct { UINT8 ptr_no, csr; } g_stCurrentMsgPtr_SCI1, g_stCurrentMsgPtr_SCI2;
-static UINT8 gu8_TxEnable_SCI1, gu8_TxEnable_SCI2, gu8_1000msAccClock_Flag;
+static UINT8 gu8_TxEnable_SCI1, gu8_TxEnable_SCI2;
+static volatile UINT8 gu8_1000msAccClock_Flag;
 static UINT8 u8FlashUpdateFlag, u8FlashUpdateE2PROM, u8E2P_SocTable_WriteFlag;
 static UINT8 u8E2P_CopperLoss_WriteFlag, u8E2P_KB_WriteFlag, gu8_Reset_EventRecord;
 static UINT32 u32E2P_Pro_VolCur_WriteFlag, u32E2P_Pro_Temp_WriteFlag, u32E2P_Pro_Other_WriteFlag;
@@ -155,7 +156,13 @@ static void LogEvent_Record(UINT8 v, UINT8 e, UINT32 *s) { (void)v; (void)e; (vo
 #define E2P_ADDR_SOC 10
 #define E2P_ADDR_DSG_SOC_Int 12
 #define E2P_ADDR_CYCLE_TIMES 14
-static struct { UINT8 u8SOC_Now, u8DSG_SOC_Int; UINT32 u32Cycle_times; } SOC_Calculate_Element;
+static struct { UINT8 u8SOC_Now, u8DSG_SOC_Int; UINT32 u32Cycle_times; }
+    SOC_Calculate_Element, SOC_Calculate_Element_backup;
+static UINT8 TakePendingFlag(volatile UINT8 *flag) {
+    UINT8 pending = *flag;
+    *flag = 0U;
+    return pending;
+}
 static UINT16 saved_words[3];
 static UINT8 WriteEEPROM_Word_NoZone(UINT16 a, UINT16 v) {
     ++eeprom_calls;
