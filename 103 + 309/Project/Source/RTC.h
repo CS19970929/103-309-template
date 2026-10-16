@@ -25,7 +25,7 @@
 #define	UNIX_TIME_YEAR		1970				//��Ԫʱ��
 #define SEC_DAY				86400L          	//һ���ж���s 
 
-#define ALARM_TIME_SEC		(UINT32)1       //s�����߻���ʱ�� 
+#define ALARM_TIME_SEC		(UINT32)3       //s�����߻���ʱ�� 
 
 #define	Leapyear(year)		((year) % 4 == 0)	//�������ᳬ��2100��û����
 #define	Days_in_year(a) 	(Leapyear(a) ? 366 : 365)

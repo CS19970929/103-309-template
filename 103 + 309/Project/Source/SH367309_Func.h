@@ -8,7 +8,7 @@
 #define VAL_CELL_OVP_REC		((UINT16)4010)	//��λmV�����䱣���ָ�
 #define VAL_CELL_UVP			((UINT16)2800)	//��λmV	
 #define VAL_CELL_UVP_REC		((UINT16)2900)	//��λmV����ѹ�����ָ�
-#define VAL_BAL_OPEN			((UINT16)3400)	//��λmV�����⿪����ѹ
+#define VAL_BAL_OPEN			((UINT16)4180)	//��λmV�����⿪����ѹ
 
 #elif (defined(LIFEPO))
 #define VAL_CELL_OVP			((UINT16)3750)	//��λmV	

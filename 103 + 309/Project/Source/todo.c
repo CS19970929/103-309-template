@@ -311,3 +311,14 @@ todo
 - 协议测试
 - 各种保护测试，特别是温度采样
 - 
+
+
+RestoreRunClockAfterStop
+
+Sys_StopMode
+
+SleepDeal_CommitResetSleep
+LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);    测试
+单步调试     编译器优化？
+RTC_WKTimeConfig
+sleep_restore_run
