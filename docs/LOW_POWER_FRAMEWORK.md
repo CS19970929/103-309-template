@@ -90,3 +90,23 @@ UART 半帧超时在新字节到达前也执行，避免超过窗口的新帧拼
 旧 SOC/铜损表的写入地址得到保留，但本任务没有增加开机读表/迁移或断电原子事务；不能把写标志能排空等同于新增了可靠存储系统。
 
 第三轮验证：核心、策略、RTC LSI/LSE、GPIO、UART、PB12/半帧/写失败注入、当前标定（10000 随机及 65536 CADC）、启动/AFE 两种化学体系测试通过；Keil Code=45132、RO=2972、RW=1356、ZI=6224，0 errors、7 处现有警告。未生成 BIN。
+
+## 自动附着观察工具
+
+`tools/low_power_probe.py` 从当前 AXF 符号读取诊断结构，不硬编码 RAM 地址；另外读取 STM32F1 的 `DBGMCU_CR`。OpenOCD 的 `stm32f1x.cfg` 默认在 examine-end 设置 `0x307`，会自动启用 STOP debug 和 watchdog 冻结，即使固件 profile=0 也会受影响。周期附着工具用于带调试保持的功能检查，不用于证明真实 STOP 的功耗。
+
+真实 STOP 测试需要在 reset/RUN 阶段先设好唤醒后硬件断点，并覆盖默认事件：
+
+```powershell
+openocd -f interface/stlink.cfg -f target/stm32f1x.cfg -c "adapter speed 100" -c "stm32f1x.cpu configure -event examine-end {}"
+```
+
+在本板上，清除 `DBG_STOP` 后从 STOP 中反复附着未成功；必须先确保 NRST/硬件复位可用，再使用预置断点方法，不能依赖下列周期附着命令恢复连接。带调试保持的周期检查命令为：
+
+```powershell
+python -B tools/low_power_probe.py --elf "103 + 309/Project/Users/Objects/CommomSH367309_16series_103RCT6_C.axf" --duration 300 --interval 30
+```
+
+日志默认写入 `%LOCALAPPDATA%/CodexTemp/103-309-template/board-probe/`。脚本不烧录、不 reset；每次停核读取后，通过 Tcl 显式 resume 并确认 `curstate=running`，防止 OpenOCD 的 GDB detach 行为让板子一直暂停。附着会影响时序，不能用于功耗验收。工具适用于当前 `stm32f1x.cpu` target；换调试器/目标需对应修改 server/target。
+
+本次实际下载、5 分钟观察、单步结果及 DBG_STOP=0 补测阻塞见 [LOW_POWER_BOARD_VALIDATION.md](LOW_POWER_BOARD_VALIDATION.md)。

@@ -135,9 +135,9 @@ USART3 当前产品未启用，但相同的错误标志清除和 RX 边界保护
 - 全速连续运行未出现同样 HardFault；
 - 故障发生在 STOP 返回、异常进出和 `POP {...,PC}` 附近。
 
-这与调试器在异常返回边界单步时破坏或错误恢复 EPSR/ICI/IT 状态相符。全速运行只表现为
-假唤醒，是独立的 USART/GPIO 配置问题；单步才出现的 `INVSTATE` 更像调试器异常返回边界
-效应，不能仅凭原来的空循环 HardFault handler 判断业务代码地址。
+这些寄存器说明 CPU 遇到了非法执行状态，但不能单凭 `INVSTATE` 认定调试器破坏了
+EPSR/ICI/IT，也不能排除堆栈/异常返回或 STOP 指令取指问题。全速假唤醒与单步 Fault
+需要分别验证；异常源指令应由堆栈 PC/LR 和反汇编定位。
 
 现在 `HardFault_Handler` 会在 `g_hardfault_record` 中保存：
 
@@ -189,3 +189,10 @@ Keil 调试时直接观察 `g_hardfault_record`。建议不要在异常返回指
 - 唤醒后先恢复时钟，再开放中断，最后恢复外设；
 - 区分“唤醒帧”和“业务帧”，明确是否需要协议重试；
 - 给 HardFault 留下寄存器和堆栈证据，不使用只有 `while (1)` 的处理器。
+
+## 10. 框架版本
+
+后续实现已把运行态 RTC 休眠迁入 `low_power.c` 状态机：PB12 的固定关中断延时替换为
+中断开启的非阻塞稳定检查；支持多源记录、block/exit/fault 分离和 HardFault 上下文。
+最新配置、移植说明和板上证据以 [LOW_POWER_FRAMEWORK.md](LOW_POWER_FRAMEWORK.md) 为准，
+本文件前述验证数字属于早期修复版本，不是后续版本的编译或硬件结论。
