@@ -82,15 +82,15 @@ int main(void) {
         IOstatus_RTCMode();
         assert(!key_pending && key_level);
         assert(modes[GPIOA][0]==GPIO_Mode_IN_FLOATING);
-        assert(modes[GPIOA][3]==GPIO_Mode_IN_FLOATING);
+        assert(modes[GPIOA][3]==GPIO_Mode_AIN);
         assert(modes[GPIOA][9]==GPIO_Mode_IN_FLOATING);
-        assert(modes[GPIOB][7]==GPIO_Mode_IN_FLOATING);
+        assert(modes[GPIOB][7]==GPIO_Mode_AIN);
         assert(modes[GPIOB][12]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOB][14]==GPIO_Mode_Out_PP);
         assert(external_pending);
         assert(modes[GPIOA][1]==GPIO_Mode_AIN);
     }
-    puts("PASS: repeated RTC GPIO setup preserves wake inputs and CTLC without a false key edge");
+    puts("PASS: repeated RTC GPIO setup preserves valid wake inputs and makes powered-down UART RX analog");
     return 0;
 }
 '''

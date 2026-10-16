@@ -113,10 +113,13 @@ static UINT32 u32E2P_OtherElement1_WriteFlag, u32E2P_HeatCool_WriteFlag, u32E2P_
 static struct { struct { UINT8 Log_Sleep; } bits; } LogRecord_Flag;
 UINT32 su32_Interval_S_Tcnt;
 volatile bool is_rtc_wakekup;
-static UINT8 mtp_ok, balance, status_fault, fet_chg, fet_dsg, update_failed, charger, key_released;
+static UINT8 mtp_ok, balance, status_fault, fet_chg, fet_dsg, update_failed, charger, comm_wake, key_released;
+static UINT8 serial_rx_high;
 static UINT8 tc, rtc_ok, arm_ok, afe_ok, restore_calls, stop_calls, reset_calls;
+static UINT8 rtc_alarm_pending;
 static UINT32 primask_state;
-static UINT8 arm_edge, stop_fault, stop_external, log_calls, erase_calls, program_calls, locked;
+static UINT8 arm_edge, stop_fault, stop_external, stop_spurious;
+static UINT8 log_calls, erase_calls, program_calls, locked;
 static UINT8 eeprom_failure, eeprom_calls;
 static UINT32 rtc_counter, stop_elapsed;
 static UINT16 flash_value;
@@ -148,7 +151,8 @@ static void CellBalance_UpdateReport(UINT16 mask) { g_stCellInfoReport.u16Balanc
 static UINT8 GPIO_ReadInputDataBit(int port, int pin) {
     (void)port;
     if (pin==PIN_KEY1) return key_released;
-    if (pin==PIN_SCI1_RX || pin==PIN_SCI2_RX) return 1;
+    if (pin==PIN_SCI1_RX || pin==PIN_SCI2_RX) return serial_rx_high;
+    if (pin==PIN_INT_WK_CMNT) return comm_wake;
     return charger;
 }
 static UINT8 USART_GetFlagStatus(int port, int flag) { (void)port; (void)flag; return tc; }
@@ -163,6 +167,7 @@ static UINT8 Sci_CommonUpperPrepareStop(void) { return !Sci_CommonUpperHasPendin
 static UINT32 __get_PRIMASK(void) { return primask_state; }
 static void __disable_irq(void) { primask_state=1; }
 static void __set_PRIMASK(UINT32 value) { primask_state=value; }
+static void __ISB(void) {}
 static void DataLoad_Current(void) {}
 static void DataLoad_CellVolt(void) {}
 static void DataLoad_CellVoltMaxMinFind(void) {}
@@ -171,6 +176,9 @@ static void DataLoad_TemperatureMaxMinFind(void) {}
 static UINT8 UpdateVoltageFromBqMaximo(void) { return update_failed; }
 static UINT8 Init_RTC(void) { return rtc_ok; }
 static UINT8 RTC_WKTimeConfig(void);
+static void RTC_LatchAlarmWake(void) {
+    if (rtc_alarm_pending) { rtc_alarm_pending=0; is_rtc_wakekup=true; }
+}
 static UINT32 RTC_GetCounter(void) { return rtc_counter; }
 static void RTC_DisableStopAlarm(void) { is_rtc_wakekup=false; }
 static void IOstatus_RTCMode(void) {}
@@ -211,15 +219,16 @@ static UINT8 RTC_WKTimeConfig(void) { if (arm_edge) g_irq_t=bms_keyirq; return a
 static void Sys_StopMode(void) {
     ++stop_calls; assert(stop_calls<10);
     rtc_counter += stop_elapsed;
-    is_rtc_wakekup = !stop_external;
+    if (stop_external) g_irq_t=rs485_irq;
+    else if (!(stop_spurious && stop_calls==1)) rtc_alarm_pending=1;
     if (stop_fault) status_fault=1;
     else if (!stop_external && stop_calls==2) g_irq_t=rs485_irq;
 }
 static void defaults(void) {
     s_sleep_mode=NO_SLEEP; s_low_seconds=s_force_seconds=s_idle_seconds=s_last_comm=s_started=0;
-    RTC_ExtComCnt=0; g_irq_t=NO_IRQ; is_rtc_wakekup=false;
-    mtp_ok=fet_chg=fet_dsg=key_released=tc=rtc_ok=arm_ok=afe_ok=1;
-    charger=balance=status_fault=update_failed=arm_edge=stop_fault=stop_external=0;
+    RTC_ExtComCnt=0; g_irq_t=NO_IRQ; is_rtc_wakekup=false; rtc_alarm_pending=0;
+    mtp_ok=fet_chg=fet_dsg=key_released=tc=rtc_ok=arm_ok=afe_ok=serial_rx_high=1;
+    charger=comm_wake=balance=status_fault=update_failed=arm_edge=stop_fault=stop_external=stop_spurious=0;
     restore_calls=stop_calls=reset_calls=erase_calls=program_calls=log_calls=0;
     primask_state=0;
     u8FlashUpdateFlag=u8FlashUpdateE2PROM=gu8_TxEnable_SCI1=gu8_TxEnable_SCI2=0;
@@ -272,8 +281,17 @@ int main(void) {
     defaults(); entersleep(HICCUP_MODE); rtc_ok=0; tick(); assert(stop_calls==0 && s_sleep_mode==NO_SLEEP);
     defaults(); entersleep(HICCUP_MODE); arm_ok=0; tick(); assert(stop_calls==0 && restore_calls==1);
     defaults(); entersleep(HICCUP_MODE); arm_edge=1; tick(); assert(stop_calls==0 && restore_calls==1);
-    defaults(); entersleep(HICCUP_MODE); key_released=0; tick(); assert(stop_calls==0);
+    defaults(); entersleep(HICCUP_MODE); key_released=0; tick();
+    assert(stop_calls==0 && g_irq_t==bms_keyirq);
+    defaults(); entersleep(HICCUP_MODE); charger=1; tick();
+    assert(stop_calls==0 && g_irq_t==PA0_irq);
+    defaults(); entersleep(HICCUP_MODE); comm_wake=1; tick();
+    assert(stop_calls==0 && g_irq_t==rs485_irq);
+    defaults(); entersleep(HICCUP_MODE); serial_rx_high=0; tick();
+    assert(stop_calls==2 && restore_calls==1); /* communication rail off can hold UART RX low */
     defaults(); entersleep(HICCUP_MODE); stop_fault=1; tick(); assert(stop_calls==1 && g_irq_t==error_wake);
+    defaults(); entersleep(HICCUP_MODE); stop_spurious=1; tick();
+    assert(stop_calls==2 && restore_calls==1); /* unclassified WFI return retries STOP */
     defaults(); fet_chg=0; assert(rtc_monitor_sh367309()); assert(g_irq_t==chg_dsg_close);
     defaults(); mtp_ok=0; assert(rtc_monitor_sh367309()); assert(g_irq_t==error_wake);
     defaults(); update_failed=1; assert(sleep_rtc_has_exception());

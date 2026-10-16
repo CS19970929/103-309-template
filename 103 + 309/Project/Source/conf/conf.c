@@ -1,6 +1,8 @@
 // #include "conf.h"
 #include "main.h"
 
+#define RTC_WAKE_IO_SETTLE_MS 5U
+
 Time_T sys_time = {
     .time_enter_rtc = 10,
 };
@@ -237,7 +239,49 @@ void InitWakeUp_NormalMode(void)
 
 void InitWakeUp_RTCMode(void)
 {
-    InitWakeUp_NormalMode(); // ???Base?????
+    EXTI_InitTypeDef EXTI_InitStruct;
+    NVIC_InitTypeDef NVIC_InitStructure;
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    InitWakeUp_Base();
+
+    /* IOstatus_RTCMode() releases the communication supply. On this board the
+       detector can pulse while the external communication circuitry settles.
+       Ignore only that bounded hand-off interval, then clear and arm EXTI. */
+    __delay_ms(RTC_WAKE_IO_SETTLE_MS);
+
+    /* RTC IO releases CMNT_EN and removes C33V/VCC33-U. The unpowered
+       communication circuits can then hold USART RX low, so PA3/PB7 are not
+       valid RTC wake sources. Keep only the always-powered communication
+       detector on PB12; USARTs are restored after a real wake. */
+    EXTI_InitStruct.EXTI_Line = EXTI_Line3 | EXTI_Line7;
+    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+    EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+    EXTI_Init(&EXTI_InitStruct);
+    EXTI_ClearITPendingBit(EXTI_Line3 | EXTI_Line7);
+    NVIC_DisableIRQ(EXTI3_IRQn);
+    NVIC_ClearPendingIRQ(EXTI3_IRQn);
+
+    NVIC_DisableIRQ(EXTI15_10_IRQn);
+    EXTI_InitStruct.EXTI_Line = EXTI_Line12;
+    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+    EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+    EXTI_Init(&EXTI_InitStruct);
+    GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_CMNT;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
+    GPIO_Init(GPIO_INT_WK_CMNT, &GPIO_InitStructure);
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource12);
+    EXTI_ClearITPendingBit(EXTI_Line12);
+    EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStruct);
+    NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
+    NVIC_Init(&NVIC_InitStructure);
 }
 
 // ???standby?????PA0?wkup???
@@ -294,10 +338,11 @@ void IOstatus_RTCMode(void)
 
     ADC_DeInit(ADC1); // ????????????????
 
-    /* Wake inputs stay digital across RTC cycles: analog PA9 creates a false
-       falling edge while EXTI9 is armed. Keep SWD pins available for debugging. */
+    /* Keep only valid always-powered wake inputs digital. RTC mode removes the
+       communication rail, so USART RX pins must be analog to avoid leakage and
+       false wake levels. Keep SWD pins available for debugging. */
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
-        ~(PIN_INT_WK_MCU | PIN_SCI2_RX | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
+        ~(PIN_INT_WK_MCU | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -308,7 +353,7 @@ void IOstatus_RTCMode(void)
 #else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
-        ~(PIN_SCI1_RX | PIN_AFE1_CTL | PIN_INT_WK_CMNT);
+        ~(PIN_AFE1_CTL | PIN_INT_WK_CMNT);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif

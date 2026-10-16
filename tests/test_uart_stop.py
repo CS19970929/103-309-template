@@ -76,6 +76,7 @@ def main():
 
     wake_base = function_source(conf, "InitWakeUp_Base")
     wake_normal = function_source(conf, "InitWakeUp_NormalMode")
+    wake_rtc = function_source(conf, "InitWakeUp_RTCMode")
     assert "GPIO_Mode_IPD" in wake_base
     assert "GPIO_Mode_IPU" in wake_base
     assert "GPIO_Mode_IPD" in wake_normal
@@ -85,20 +86,42 @@ def main():
     assert "NVIC_ClearPendingIRQ(EXTI0_IRQn)" in wake_base
     assert "NVIC_ClearPendingIRQ(EXTI9_5_IRQn)" in wake_base
     assert "NVIC_ClearPendingIRQ(EXTI15_10_IRQn)" in wake_normal
+    assert "EXTI_Line3 | EXTI_Line7" in wake_rtc
+    assert "InitWakeUp_Base()" in wake_rtc
+    assert "InitWakeUp_NormalMode()" not in wake_rtc
+    assert "GPIO_PinSource3" not in wake_rtc
+    assert "GPIO_PinSource7" not in wake_rtc
+    assert "__delay_ms(RTC_WAKE_IO_SETTLE_MS)" in wake_rtc
+    assert wake_rtc.count("EXTI_Mode = EXTI_Mode_Interrupt") >= 2
+    assert "NVIC_ClearPendingIRQ(EXTI9_5_IRQn)" not in wake_rtc
+    ordered(
+        wake_rtc,
+        "__delay_ms(RTC_WAKE_IO_SETTLE_MS)",
+        "EXTI_ClearITPendingBit(EXTI_Line12)",
+        "NVIC_Init(&NVIC_InitStructure)",
+    )
 
     sleep_run = function_source(rtc, "sleep_run_rtc")
+    active_wake = function_source(rtc, "sleep_has_active_wakeup")
+    assert "rtc_sleep_record_wakeup(PA0_irq)" in active_wake
+    assert "rtc_sleep_record_wakeup(rs485_irq)" in active_wake
+    assert "rtc_sleep_record_wakeup(bms_keyirq)" in active_wake
     ordered(
         sleep_run,
         "__disable_irq()",
-        "InitWakeUp_RTCMode()",
         "Sci_CommonUpperPrepareStop()",
         "IOstatus_RTCMode()",
+        "InitWakeUp_RTCMode()",
         "Sys_StopMode()",
     )
     assert sleep_run.index("Sys_StopMode()") < sleep_run.rindex("__set_PRIMASK(primask)")
-    assert "GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT)" in sleep_run
-    assert "GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX)" in sleep_run
-    assert "GPIO_ReadInputDataBit(GPIO_SCI2_RX, PIN_SCI2_RX)" in sleep_run
+    assert sleep_run.index("Sys_StopMode()") < sleep_run.index("RTC_LatchAlarmWake()")
+    assert sleep_run.index("RTC_LatchAlarmWake()") < sleep_run.rindex("__set_PRIMASK(primask)")
+    assert "if (!is_rtc_wakekup)" in sleep_run
+    assert "continue;" in sleep_run
+    assert "GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT)" in active_wake
+    assert "GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX)" not in sleep_run
+    assert "GPIO_ReadInputDataBit(GPIO_SCI2_RX, PIN_SCI2_RX)" not in sleep_run
     assert "sleep_restore_run(stop_io_prepared)" in sleep_run
 
     exti3_irq = function_source(it, "EXTI3_IRQHandler")

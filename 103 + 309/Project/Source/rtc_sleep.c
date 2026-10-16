@@ -321,6 +321,26 @@ static void sleep_restore_run(UINT8 restore_peripherals)
     entersleep(NO_SLEEP);
 }
 
+static bool sleep_has_active_wakeup(void)
+{
+    if (GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU))
+    {
+        rtc_sleep_record_wakeup(PA0_irq);
+        return true;
+    }
+    if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT))
+    {
+        rtc_sleep_record_wakeup(rs485_irq);
+        return true;
+    }
+    if (!GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1))
+    {
+        rtc_sleep_record_wakeup(bms_keyirq);
+        return true;
+    }
+    return false;
+}
+
 static void sleep_run_rtc(void)
 {
     UINT32 start_counter;
@@ -340,7 +360,7 @@ static void sleep_run_rtc(void)
     {
         /* Recheck before changing IO: work may have arrived after the idle tick. */
         if (g_irq_t != NO_IRQ || RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            isErr_enterRTC() || AFE_SleepMode_Judge() != 0U)
+            sleep_has_active_wakeup() || isErr_enterRTC() || AFE_SleepMode_Judge() != 0U)
             break;
         is_rtc_wakekup = false;
         /* Keep the last busy check, wake-source setup and WFI race-free. */
@@ -348,39 +368,52 @@ static void sleep_run_rtc(void)
         __disable_irq();
         if (!stop_io_prepared)
         {
-            /* Arm RX falling-edge EXTI before stopping USART, so no start bit
-               can fall into the handover gap between the two wake mechanisms. */
-            InitWakeUp_RTCMode();
             if (!Sci_CommonUpperPrepareStop())
             {
                 __set_PRIMASK(primask);
                 break;
             }
+            /* Power down the communication rail before arming its detector.
+               The controlled rail transition can pulse INT_WK_CMNT and must
+               not be mistaken for external bus activity. */
+            IOstatus_RTCMode();
+            InitWakeUp_RTCMode();
             stop_io_prepared = 1U;
         }
-        /* AFE/I2C pins were restored for the periodic sample; lower them again. */
-        IOstatus_RTCMode();
+        else
+        {
+            /* AFE/I2C pins were restored for the periodic sample. Wake EXTI is
+               already armed, so do not clear a real event on later cycles. */
+            IOstatus_RTCMode();
+        }
         if (!RTC_WKTimeConfig())
         {
             __set_PRIMASK(primask);
             break;
         }
         if (RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU) ||
-            GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) ||
-            !GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) ||
-            !GPIO_ReadInputDataBit(GPIO_SCI2_RX, PIN_SCI2_RX) ||
-            !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) || g_irq_t != NO_IRQ)
+            sleep_has_active_wakeup() || g_irq_t != NO_IRQ)
         {
             __set_PRIMASK(primask);
             break;
         }
         Feed_IWatchDog;
         Sys_StopMode();
+        /* PRIMASK is still set here. Latch the RTC flag synchronously so the
+           sleep decision cannot run ahead of the pending RTCAlarm IRQ. */
+        RTC_LatchAlarmWake();
         __set_PRIMASK(primask);
+        __ISB();
         Feed_IWatchDog;
         initAFE1_IIC();
-        if (g_irq_t != NO_IRQ || !is_rtc_wakekup || sleep_rtc_has_exception())
+        if (g_irq_t != NO_IRQ)
+            break;
+        /* WFI may return for a pending interrupt that is not a configured wake
+           source. Recheck all entry guards and retry STOP instead of returning
+           to full RUN without a real wake reason. */
+        if (!is_rtc_wakekup)
+            continue;
+        if (sleep_rtc_has_exception())
             break;
     } while (s_sleep_mode == HICCUP_MODE);
 

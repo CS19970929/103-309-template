@@ -308,7 +308,7 @@ void App_RTC(void)
     }
 }
 
-static void RTC_RecordAlarmWake(void)
+void RTC_LatchAlarmWake(void)
 {
     if (RTC_GetITStatus(RTC_IT_ALR) != RESET ||
         EXTI_GetITStatus(EXTI_Line17) != RESET)
@@ -322,7 +322,7 @@ static void RTC_RecordAlarmWake(void)
 
 void RTCAlarm_IRQHandler(void)
 {
-    RTC_RecordAlarmWake();
+    RTC_LatchAlarmWake();
 }
 
 void RTC_IRQHandler(void)
@@ -332,5 +332,5 @@ void RTC_IRQHandler(void)
         RTC_ClearITPendingBit(RTC_IT_SEC);
         TimeDisplay = 1U;
     }
-    RTC_RecordAlarmWake();
+    RTC_LatchAlarmWake();
 }

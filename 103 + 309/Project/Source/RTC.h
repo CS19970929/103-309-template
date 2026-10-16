@@ -79,6 +79,7 @@ extern volatile uint16_t rtc_cnt;
 UINT8 RTC_WKTimeConfig(void);
 UINT8 Init_RTC(void);
 void RTC_DisableStopAlarm(void);
+void RTC_LatchAlarmWake(void);
 void App_RTC(void);
 
 #endif	/* RTC_H */

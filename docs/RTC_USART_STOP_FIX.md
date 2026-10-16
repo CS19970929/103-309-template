@@ -5,7 +5,7 @@
 板上抓到 `USART1->SR = 0xE2`，即 `TXE | TC | RXNE | FE`。这不是收到了一帧
 有效通信，而是 RX 电平在休眠切换期间形成了帧错误并同时置位 `RXNE`。
 
-问题由以下条件共同造成：
+最初的 USART 假唤醒由以下条件共同造成：
 
 1. 原理图中 USART1 使用 `PB6/SCI1-TX`、`PB7/SCI1-RX`，RX1 通路只有串联电阻、
    ESD/电容，没有直流上拉或下拉；通信盒未驱动时 RX 可能悬空。
@@ -19,20 +19,34 @@
 因此，“盒子一直插着但从未通信”仍可能进入 USART IRQ，并被软件误判为外部通信
 唤醒。
 
+后续板上复测还发现了三个独立问题，它们会让新程序看起来“始终进不了 RTC 低功耗”：
+
+1. `IOstatus_RTCMode()` 会关闭 `C33V/VCC33-U` 通信电源，掉电后的 PB7/PA3 不再是
+   可靠的 UART idle 电平；把它们作为 RTC 模式的最终电平门禁会直接拒绝 STOP。
+2. 通信电源切换后，PB12/`INT-WK-CMNT` 会出现短高脉冲。条件断点确认该脉冲来自
+   `sleep_has_active_wakeup()` 的电平复核，而不是 USART 数据，也不是 EXTI ISR。
+3. `Sys_StopMode()` 返回时外层仍设置了 `PRIMASK`，旧代码先恢复中断再立即检查
+   `is_rtc_wakekup`，可能在 `RTCAlarm_IRQHandler` 执行前就误判为非 RTC 唤醒。
+
+当前实现把 UART RX 从 RTC 唤醒源中移除，在通信电源切换后等待有界 5 ms，再清除并
+使能 PB12 EXTI；STOP 返回后在解除 `PRIMASK` 前同步锁存 RTC Alarm 标志。无有效唤醒
+原因的 WFI 返回会重新进入 STOP，不再无故恢复全速 RUN。
+
 ## 2. 原理图约束
 
 依据 `HS-C073-V2.pdf`：
 
 | 信号 | MCU 引脚 | 空闲状态与用途 | 固件配置 |
 |---|---|---|---|
-| `SCI1-RX` | PB7 | UART idle-high，板上无直流偏置 | RUN：`GPIO_Mode_IPU`；STOP：IPU + EXTI7 falling |
-| `SCI2-RX` | PA3 | UART idle-high | RUN：`GPIO_Mode_IPU`；STOP：IPU + EXTI3 falling |
+| `SCI1-RX` | PB7 | UART idle-high，通信电源关闭后电平无效 | RUN：`GPIO_Mode_IPU`；RTC STOP：`GPIO_Mode_AIN`，不作为唤醒源 |
+| `SCI2-RX` | PA3 | UART idle-high，通信电源关闭后电平无效 | RUN：`GPIO_Mode_IPU`；RTC STOP：`GPIO_Mode_AIN`，不作为唤醒源 |
 | `INT-WK-MCU` | PA0 | 板上 470 kΩ 下拉，active-high | `GPIO_Mode_IPD` + EXTI0 rising |
 | `M-DI` | PA9 | 板上 1 MΩ 上拉，按键 active-low | `GPIO_Mode_IPU` + EXTI9 falling |
 | `INT-WK-CMNT` | PB12 | 板上 100 kΩ 下拉，active-high | `GPIO_Mode_IPD` + EXTI12 rising |
 
-`VCC33-U` 是受控通信电源。通信盒未上电或输出高阻时，MCU 内部上拉保证 UART RX
-保持 idle-high，避免悬空噪声。
+`VCC33-U` 是受控通信电源。RUN 状态下 MCU 内部上拉保证 UART RX 在通信盒未驱动时
+保持 idle-high；RTC STOP 为降低功耗会关闭该供电域，因此 PB7/PA3 必须改为模拟输入，
+不能再依赖 UART RX 电平唤醒。
 
 ## 3. 当前低功耗状态流
 
@@ -44,23 +58,24 @@
 - USART1/2 没有发送、半帧接收或尚未完成的发送；
 - AFE、保护、加热、均衡、MOS 和电流状态允许休眠；
 - RTC 初始化、Alarm 配置成功；
-- PA0、PA9、PB12、PB7、PA3 没有处于有效唤醒电平；
+- PA0、PA9、PB12 没有处于有效唤醒电平；
 - 没有已经锁存的唤醒原因。
 
 ### 3.2 STOP 前的顺序
 
-`Sci_CommonUpperPrepareStop()` 在临界区内再次检查通信忙状态，然后按以下顺序处理：
+`sleep_run_rtc()` 在临界区内再次检查通信忙状态，然后按以下顺序处理：
 
-1. 先把 PB7/PA3 的下降沿 EXTI 配好，使 USART 与 EXTI 的唤醒能力短暂重叠；
-2. 关闭 `RXNEIE` 和 `EIE`；
-3. 关闭对应 NVIC 通道；
-4. 依次读 `SR`、`DR`，排空旧状态；
-5. 关闭 USART；
-6. 清除 NVIC pending；
-7. 再由 `IOstatus_RTCMode()` 切换非唤醒 GPIO；
-8. 配置 RTC Alarm，最后执行 STOP/WFI。
+1. `Sci_CommonUpperPrepareStop()` 再检查 TX、半帧 RX 和错误状态；
+2. 关闭 `RXNEIE/EIE`、USART NVIC 和 USART 外设，并按 `SR` 后 `DR` 的顺序排空状态；
+3. `IOstatus_RTCMode()` 关闭通信供电域，把 PB7/PA3 等非唤醒 GPIO 改为模拟输入；
+4. 等待固定 5 ms，使板上通信检测电路的切换瞬态结束；
+5. `InitWakeUp_RTCMode()` 只配置 PA0、PA9、PB12，并在清 pending 后使能 EXTI；
+6. 配置 RTC Alarm，最后复核 busy、有效唤醒电平和已锁存原因；
+7. 执行 STOP/WFI，返回后先调用 `RTC_LatchAlarmWake()`，再恢复 `PRIMASK`。
 
-此顺序保证不会在 USART 仍工作时改变 RX 的电气模式。
+此顺序保证不会在 USART 仍工作时改变 RX 的电气模式，也不会把本机受控电源切换产生的
+PB12 瞬态误判为外部通信唤醒。`EXTI_InitTypeDef.EXTI_Mode` 现在每次都显式赋值，避免局部
+结构体未初始化导致随机 EXTI 配置。
 
 ### 3.3 周期唤醒与继续休眠
 
@@ -74,18 +89,16 @@ USART 在整个连续 RTC STOP 循环中保持关闭；只有退出循环后才�
 RTC 周期反复打开通信外设并产生假中断。GPIO/EXTI 唤醒源也只在进入连续 RTC 循环时
 配置一次，周期采样后仅重新降低 AFE/I2C 等非唤醒引脚，避免清除刚锁存的外部边沿。
 
-## 4. 真正串口通信如何唤醒
+## 4. RTC 模式为什么不能直接用 USART1 唤醒
 
-STOP 时 USART 时钟不可用，因此不能依赖 `USART1_IRQHandler` 直接接收第一字节。
-固件把 PB7/PA3 临时配置为上拉 GPIO，以 UART 起始位的下降沿触发 EXTI：
+STOP 时 USART 时钟不可用，而本板在 RTC 低功耗中还会关闭 `C33V/VCC33-U`。这意味着
+PB7/PA3 所连接的通信域已经掉电，UART RX 的 idle/high、起始位/low 都不再可靠。仅通过
+软件改 EXTI 边沿无法同时满足“关闭通信电源降低功耗”和“USART1 任意首字节立即唤醒”。
 
-- EXTI7 记录 `uart1_irq`；
-- EXTI3 记录 `uart2_irq`；
-- MCU 退出 STOP、恢复时钟和 USART；
-- 触发唤醒的首字节可能丢失，通信主机必须按 Modbus/现有协议 timeout 重试整帧。
-
-这一区分了两类事件：空闲高电平不会唤醒；真实起始位会唤醒，但第一帧用于唤醒而非
-保证完整接收。`PB12/INT-WK-CMNT` 仍保留为独立的通信域唤醒源。
+当前策略是：RTC 模式禁用 EXTI3/7，保留一直供电的 PA0、PA9、PB12 唤醒，并由 RTC
+周期唤醒主动检查充放电、AFE 和保护状态。USART 只在退出连续 RTC 循环后恢复。若产品
+必须支持串口首字节立即唤醒，需要硬件提供一直供电的独立唤醒线，或调整电源策略使 RX
+接收域在 STOP 中保持供电；这属于硬件/功耗需求变更，不能靠当前软件安全补偿。
 
 ## 5. USART IRQ 处理规则
 
@@ -137,23 +150,35 @@ Keil 调试时直接观察 `g_hardfault_record`。建议不要在异常返回指
 
 ## 8. 验证边界与板上验收
 
-已提供的软件检查：
+已完成的软件检查：
 
 - `python -B tests/test_uart_stop.py`
 - `python -B tests/test_sleep.py`
 - `python -B tests/test_rtc_gpio.py`
-- ARMCC Target 1 全部 61 个对象编译并链接 AXF，不执行 HEX/BIN 转换，不烧录。
+- ARMCC Target 1 编译并链接 AXF：`0 Error(s), 0 Warning(s)`；构建时禁用了 post-build
+  BIN 转换，已有 BIN 的时间和大小未变化。
 
-仍需在目标板完成：
+已完成串口盒连接、全程无通信场景的板上验证：
 
-1. 通信盒连接 USART1、保持静默，连续观察多个 RTC 周期，不得出现 UART/EXTI7 唤醒；
-2. 在睡眠期间发送报文，确认 EXTI7 唤醒，主机重试后通信成功；
-3. 对 USART2 重复上述测试；
-4. 分别验证 PA0、PA9、PB12 的极性和唤醒原因；
-5. 测量 RUN、RTC STOP、盒子连接/断开四种情况下的电流；
-6. 全速运行和“STOP 返回后断点”两种调试方式观察 HardFault 记录。
+- 修复前条件断点抓到 `source=rs485_irq`，调用者为 `sleep_has_active_wakeup()`；读取后
+  PB12 已恢复低电平，证明是短瞬态而不是持续外部通信。
+- 修复后自由运行 50 秒再附着 ST-Link，PC 停在 `PWR_EnterSTOPMode().__WFI()`，
+  `s_sleep_mode=HICCUP_MODE`、`s_common_usarts_stopped=1`、`g_irq_t=NO_IRQ`、
+  `RTC_ExtComCnt=0`、`g_hardfault_record.magic=0`。
+- 第一次读取 `rtc_cnt=17`，继续运行 25 秒后为 `rtc_cnt=28`，说明多个 RTC 周期持续
+  唤醒、检测并重新进入 STOP，而非偶然停住。
+- 已使用最新 AXF 烧录，Keil Flash 日志为 `Erase Done. Programming Done. Verify OK.`。
 
-只有完成这些板上测试，才能把源码修复结论升级为硬件行为已验证。
+仍需在目标板完成以下产品验收，不把尚未实测项写成已验证：
+
+1. 实际接入充电器和负载，验证周期采样发现充/放电后退出 RTC；
+2. 分别验证 PA0、PA9、PB12 的物理极性、脉宽和 `g_irq_t`；
+3. 验证 RTC 期间的通信产品需求；当前设计明确不支持掉电 UART RX 直接唤醒；
+4. 测量 RUN、RTC STOP、盒子连接/断开四种情况下的电流；
+5. 在 Keil 使用“STOP 返回后断点”方式复查 HardFault 记录，不在异常返回指令上单步。
+
+当前“串口1盒子持续连接但不通信时，MCU 可连续 RTC STOP”已经由板上状态验证；充放电
+退出、其他唤醒源和最终功耗仍以以上实测为准。
 
 ## 9. 后续避免同类问题的检查表
 
