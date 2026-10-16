@@ -128,7 +128,7 @@ void InitDevice(void)
 	InitTimer();
 	log_w("init over");
 
-	DBGMCU->CR |= LOW_POWER_DEBUG_MASK;
+	// DBGMCU->CR |= LOW_POWER_DEBUG_MASK;
 
 #endif
 }

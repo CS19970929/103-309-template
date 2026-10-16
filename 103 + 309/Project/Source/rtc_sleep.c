@@ -231,12 +231,12 @@ static bool sleep_has_pending_work(void)
         u32E2P_HeatCool_WriteFlag || u32E2P_RTC_Element_WriteFlag ||
         u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u8E2P_KB_WriteFlag)
         return true;
-#ifdef _COMMOM_UPPER_SCI1
-    if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
-        g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
-        USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
-        return true;
-#endif
+// #ifdef _COMMOM_UPPER_SCI1
+//     if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
+//         g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
+//         USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
+//         return true;
+// #endif
 #ifdef _COMMOM_UPPER_SCI2
     if (gu8_TxEnable_SCI2 || g_stCurrentMsgPtr_SCI2.ptr_no ||
         g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE ||
