@@ -33,10 +33,18 @@ int main(void)
 {
 	InitDevice(); // 初始化外设
 	InitVar();	  // 初始化变量
+	LowPower_Init();
 	while (1)
 	{
 #if (defined _DEBUG_CODE)
 #else
+		if (LowPower_Poll() == LP_OWNS_CPU)
+		{
+#ifdef wdog_enable
+			Feed_IWatchDog;
+#endif
+			continue;
+		}
 		App_SysTime();
 		App_WarnCtrl();
 		App_AFEGet();
@@ -45,7 +53,6 @@ int main(void)
 		App_AnlogCal();
 		App_E2promDeal();
 		// App_Can();
-		rtc_sleep();
 		App_SOC();
 
 #ifdef __FUNC__HEAT__

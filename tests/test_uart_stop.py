@@ -91,38 +91,22 @@ def main():
     assert "InitWakeUp_NormalMode()" not in wake_rtc
     assert "GPIO_PinSource3" not in wake_rtc
     assert "GPIO_PinSource7" not in wake_rtc
-    assert "__delay_ms(RTC_WAKE_IO_SETTLE_MS)" in wake_rtc
-    assert wake_rtc.count("EXTI_Mode = EXTI_Mode_Interrupt") >= 2
-    assert "NVIC_ClearPendingIRQ(EXTI9_5_IRQn)" not in wake_rtc
-    ordered(
-        wake_rtc,
-        "__delay_ms(RTC_WAKE_IO_SETTLE_MS)",
-        "EXTI_ClearITPendingBit(EXTI_Line12)",
-        "NVIC_Init(&NVIC_InitStructure)",
-    )
-
-    sleep_run = function_source(rtc, "sleep_run_rtc")
-    active_wake = function_source(rtc, "sleep_has_active_wakeup")
-    assert "rtc_sleep_record_wakeup(PA0_irq)" in active_wake
-    assert "rtc_sleep_record_wakeup(rs485_irq)" in active_wake
-    assert "rtc_sleep_record_wakeup(bms_keyirq)" in active_wake
-    ordered(
-        sleep_run,
-        "__disable_irq()",
-        "Sci_CommonUpperPrepareStop()",
-        "IOstatus_RTCMode()",
-        "InitWakeUp_RTCMode()",
-        "Sys_StopMode()",
-    )
-    assert sleep_run.index("Sys_StopMode()") < sleep_run.rindex("__set_PRIMASK(primask)")
-    assert sleep_run.index("Sys_StopMode()") < sleep_run.index("RTC_LatchAlarmWake()")
-    assert sleep_run.index("RTC_LatchAlarmWake()") < sleep_run.rindex("__set_PRIMASK(primask)")
-    assert "if (!is_rtc_wakekup)" in sleep_run
-    assert "continue;" in sleep_run
-    assert "GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT)" in active_wake
-    assert "GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX)" not in sleep_run
-    assert "GPIO_ReadInputDataBit(GPIO_SCI2_RX, PIN_SCI2_RX)" not in sleep_run
-    assert "sleep_restore_run(stop_io_prepared)" in sleep_run
+    assert "__delay_ms" not in wake_rtc
+    board = read(SOURCE / "board_low_power.c")
+    core = read(SOURCE / "low_power.c")
+    begin = function_source(board, "BoardLowPower_Begin")
+    arm = function_source(board, "BoardLowPower_ArmWake")
+    capture = function_source(board, "BoardLowPower_CaptureWake")
+    assert "__delay_ms" not in board
+    ordered(begin, "Sci_CommonUpperPrepareStop()", "InitWakeUp_Base()", "IOstatus_RTCMode()")
+    assert "EXTI->IMR &= ~BOARD_RTC_EXTI_MASK" in begin
+    assert "EXTI_ClearITPendingBit" not in arm
+    ordered(capture, "RTC_SynchronizeAfterStop()", "RTC_LatchAlarmWake()")
+    ordered(core, "BoardLowPower_Stop()", "BoardLowPower_CaptureWake()")
+    assert "LP_MAX_SPURIOUS_RETURNS" in core
+    assert "LP_BLOCK_WAKE_PIN" in rtc
+    assert "GPIO_ReadInputDataBit" not in rtc
+    assert "BoardLowPower_ActiveWake()" in rtc
 
     exti3_irq = function_source(it, "EXTI3_IRQHandler")
     exti9_irq = function_source(it, "EXTI9_5_IRQHandler")

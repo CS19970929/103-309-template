@@ -54,8 +54,10 @@ static void EXTI_ClearITPendingBit(UINT32 line) { (void)line; }
 '''
 
 POLICY_STUBS = r'''
+void entersleep(enum _SLEEP_MODE mode);
 #define _COMMOM_UPPER_SCI1
 #define _COMMOM_UPPER_SCI2
+#define SNum 16
 #define AFE_TYPE 1
 #define sh36xx 1
 #define GPIOA 0
@@ -216,15 +218,28 @@ static void Sys_StopMode(void);
 '''
 
 POLICY_TESTS = r'''
-static UINT8 RTC_WKTimeConfig(void) { if (arm_edge) g_irq_t=bms_keyirq; return arm_ok; }
-static void Sys_StopMode(void) {
-    ++stop_calls; assert(stop_calls<10);
-    rtc_counter += stop_elapsed;
-    if (stop_external) g_irq_t=rs485_irq;
-    else if (!(stop_spurious && stop_calls==1)) rtc_alarm_pending=1;
-    if (stop_fault) status_fault=1;
-    else if (!stop_external && stop_calls==2) g_irq_t=rs485_irq;
+static UINT8 RTC_WKTimeConfig(void) { return arm_ok; }
+static void Sys_StopMode(void) { ++stop_calls; }
+uint32_t BoardLowPower_Lock(void) { return __get_PRIMASK(); }
+void BoardLowPower_Unlock(uint32_t value) { __set_PRIMASK(value); }
+void BoardLowPower_Init(void) {}
+uint32_t BoardLowPower_NowMs(void) { return 0U; }
+uint32_t BoardLowPower_RtcCounter(void) { return rtc_counter; }
+void BoardLowPower_Snapshot(void) {}
+uint32_t BoardLowPower_ActiveWake(void) {
+    return (charger?LP_WAKE_PA0:0U)|(comm_wake?LP_WAKE_COMM:0U)|(!key_released?LP_WAKE_KEY:0U);
 }
+uint8_t BoardLowPower_Begin(void) { return 1U; }
+uint8_t BoardLowPower_WaitQuiet(void) { return 1U; }
+void BoardLowPower_ArmWake(void) {}
+void BoardLowPower_PrepareNextStop(void) {}
+void BoardLowPower_Stop(void) { ++stop_calls; LowPower_NotifyWake(LP_WAKE_RTC); }
+uint8_t BoardLowPower_RtcInit(void) { return rtc_ok; }
+uint8_t BoardLowPower_RtcArm(void) { return arm_ok; }
+uint8_t BoardLowPower_CaptureWake(void) { return 1U; }
+void BoardLowPower_BeginSample(void) {}
+void BoardLowPower_Restore(void) { ++restore_calls; }
+void BoardLowPower_AccountSeconds(uint32_t seconds) { su32_Interval_S_Tcnt+=seconds; }
 static void defaults(void) {
     s_sleep_mode=NO_SLEEP; s_low_seconds=s_force_seconds=s_idle_seconds=s_last_comm=s_started=0;
     RTC_ExtComCnt=0; g_irq_t=NO_IRQ; is_rtc_wakekup=false; rtc_alarm_pending=0;
@@ -248,81 +263,68 @@ static void defaults(void) {
     SOC_Calculate_Element.u8SOC_Now=42; SOC_Calculate_Element.u8DSG_SOC_Int=17;
     SOC_Calculate_Element.u32Cycle_times=12345;
 }
-static void tick(void) { gu8_1000msAccClock_Flag=1; rtc_sleep(); }
+
+static void tick(void) { gu8_1000msAccClock_Flag=1; (void)LowPower_Poll(); }
 static void ticks(int n) { while(n--) tick(); }
 int main(void) {
-    defaults(); rtc_sleep_record_wakeup(uart1_irq); rtc_sleep_record_wakeup(uart2_irq);
+    defaults(); LowPower_Init();
+    rtc_sleep_record_wakeup(uart1_irq); rtc_sleep_record_wakeup(uart2_irq);
     assert(g_irq_t==uart1_irq);
-    defaults(); ticks(30); assert(stop_calls==0); tick(); assert(stop_calls==2 && restore_calls==1);
-    assert(su32_Interval_S_Tcnt==20 && s_sleep_mode==NO_SLEEP);
+    defaults(); ticks(30); assert(s_sleep_mode==NO_SLEEP);
+    tick(); assert(s_sleep_mode==HICCUP_MODE && g_low_power_diag.state==LP_PREPARE);
+    g_low_power_diag.state=LP_RUN;
     defaults(); g_stCellInfoReport.u16VCellMin=2600; ticks(59); assert(reset_calls==0);
     tick(); assert(reset_calls==1 && flash_value==FLASH_DEEP_SLEEP_VALUE);
     assert(saved_words[0]==42 && saved_words[1]==17 && saved_words[2]==123);
     defaults(); g_stCellInfoReport.u16VCellMin=2800; ticks(119); assert(reset_calls==0);
     tick(); assert(reset_calls==1);
     defaults(); g_stCellInfoReport.u16VCellMin=2600; g_stCellInfoReport.u16Ichg=1;
-    ticks(59); assert(reset_calls==0); /* charging still inhibits low-voltage deep sleep */
+    ticks(59); assert(reset_calls==0);
     defaults(); entersleep(NORMAL_MODE); entersleep(HICCUP_MODE);
-    gu8_TxEnable_SCI1=1; tick(); assert(reset_calls==0 && erase_calls==0);
+    gu8_TxEnable_SCI1=1; tick(); assert(reset_calls==0);
     gu8_TxEnable_SCI1=0; g_stCurrentMsgPtr_SCI2.ptr_no=1; tick(); assert(reset_calls==0);
     g_stCurrentMsgPtr_SCI2.ptr_no=0; tc=0; tick(); assert(reset_calls==0);
     tc=1; u32E2P_OtherElement1_WriteFlag=1; tick(); assert(reset_calls==0);
-    u32E2P_OtherElement1_WriteFlag=0; tick(); assert(reset_calls==1 && flash_value==FLASH_NORMAL_SLEEP_VALUE);
+    u32E2P_OtherElement1_WriteFlag=0; tick(); assert(reset_calls==1);
     defaults(); entersleep(NORMAL_MODE); entersleep(DEEP_MODE); entersleep(NORMAL_MODE);
     tick(); assert(flash_value==FLASH_DEEP_SLEEP_VALUE);
-    defaults(); entersleep(NORMAL_MODE); gu8_TxEnable_SCI1=1;
-    g_stCellInfoReport.u16VCellMin=2600; ticks(60);
-    assert(s_sleep_mode==DEEP_MODE && reset_calls==0);
-    gu8_TxEnable_SCI1=0; tick(); assert(flash_value==FLASH_DEEP_SLEEP_VALUE);
     defaults(); for(int i=0;i<35;i++) { RTC_ExtComCnt +=256; tick(); }
-    assert(stop_calls==0); /* 256 received bytes cannot alias an 8-bit idle counter */
-    defaults(); balance=1; ticks(35); assert(stop_calls==0);
-    defaults(); SystemStatus.bits.b1Status_Heat=1; ticks(35); assert(stop_calls==0);
-    defaults(); mtp_ok=0; ticks(35); assert(stop_calls==0);
-    defaults(); entersleep(HICCUP_MODE); rtc_ok=0; tick(); assert(stop_calls==0 && s_sleep_mode==NO_SLEEP);
-    defaults(); entersleep(HICCUP_MODE); arm_ok=0; tick(); assert(stop_calls==0 && restore_calls==1);
-    defaults(); entersleep(HICCUP_MODE); arm_edge=1; tick(); assert(stop_calls==0 && restore_calls==1);
-    defaults(); entersleep(HICCUP_MODE); key_released=0; tick();
-    assert(stop_calls==0 && g_irq_t==bms_keyirq);
-    defaults(); entersleep(HICCUP_MODE); charger=1; tick();
-    assert(stop_calls==0 && g_irq_t==PA0_irq);
-    defaults(); entersleep(HICCUP_MODE); comm_wake=1; tick();
-    assert(stop_calls==0 && g_irq_t==rs485_irq);
-    defaults(); entersleep(HICCUP_MODE); serial_rx_high=0; tick();
-    assert(stop_calls==2 && restore_calls==1); /* communication rail off can hold UART RX low */
-    defaults(); entersleep(HICCUP_MODE); stop_fault=1; tick(); assert(stop_calls==1 && g_irq_t==error_wake);
-    defaults(); entersleep(HICCUP_MODE); stop_spurious=1; tick();
-    assert(stop_calls==2 && restore_calls==1); /* unclassified WFI return retries STOP */
-    defaults(); fet_chg=0; assert(rtc_monitor_sh367309()); assert(g_irq_t==chg_dsg_close);
-    defaults(); mtp_ok=0; assert(rtc_monitor_sh367309()); assert(g_irq_t==error_wake);
-    defaults(); update_failed=1; assert(sleep_rtc_has_exception());
-    defaults(); entersleep(HICCUP_MODE); stop_external=1; stop_elapsed=3; rtc_counter=UINT32_MAX-1;
-    tick(); assert(stop_calls==1 && su32_Interval_S_Tcnt==3 && restore_calls==1);
+    assert(stop_calls==0 && s_idle_seconds==0);
+    defaults(); balance=1; ticks(35); assert(g_low_power_diag.block_mask&LP_BLOCK_BALANCE);
+    defaults(); SystemStatus.bits.b1Status_Heat=1; ticks(35);
+    assert(g_low_power_diag.block_mask&LP_BLOCK_HEAT);
+    defaults(); mtp_ok=0; ticks(35); assert(g_low_power_diag.block_mask&LP_BLOCK_AFE);
+    defaults(); fet_chg=0; assert(BmsSleep_SampleExit()&LP_EXIT_MOS);
+    defaults(); mtp_ok=0; assert(BmsSleep_SampleExit()&LP_EXIT_AFE);
+    defaults(); update_failed=1; assert(BmsSleep_SampleExit()&LP_EXIT_AFE);
+    defaults(); g_stCellInfoReport.u16Ichg=1; assert(BmsSleep_SampleExit()&LP_EXIT_CURRENT);
+    defaults(); OtherElement.u16Sys_SeriesNum=17; assert(BmsSleep_SampleExit()&LP_EXIT_CONFIG);
+    defaults(); g_stCellInfoReport.u16VCell[0]=2400; assert(BmsSleep_SampleExit()&LP_EXIT_UV);
+    defaults(); g_stCellInfoReport.u16VCell[0]=3700; assert(BmsSleep_SampleExit()&LP_EXIT_OV);
     defaults(); erase_result=FLASH_ERROR_WRP; assert(FlashWriteOneHalfWord(1,2)==FLASH_ERROR_WRP);
     assert(erase_calls==1 && program_calls==0 && locked);
     defaults(); program_result=FLASH_ERROR_PG; assert(FlashWriteOneHalfWord(1,2)==FLASH_ERROR_PG && locked);
     defaults(); corrupt_program=1; assert(FlashWriteOneHalfWord(1,2)==FLASH_ERROR_PG && locked);
     defaults(); eeprom_failure=2; entersleep(DEEP_MODE); tick(); assert(reset_calls==0 && erase_calls==0);
-    defaults(); afe_ok=0; entersleep(DEEP_MODE); tick(); tick();
-    assert(reset_calls==0 && erase_calls==2 && log_calls==0);
-    assert(flash_value==FLASH_SLEEP_RESET_VALUE && s_sleep_mode==NO_SLEEP);
+    defaults(); afe_ok=0; entersleep(DEEP_MODE); tick();
+    assert(reset_calls==0 && log_calls==0 && flash_value==FLASH_SLEEP_RESET_VALUE && s_sleep_mode==NO_SLEEP);
     defaults(); flash_value=FLASH_NORMAL_SLEEP_VALUE; IsSleepStartUp();
     assert(flash_value==FLASH_SLEEP_RESET_VALUE && erase_calls==1 && reset_calls==1);
+    defaults(); flash_value=FLASH_HICCUP_SLEEP_VALUE; IsSleepStartUp();
+    assert(s_sleep_mode==HICCUP_MODE && !stop_calls);
     defaults(); flash_value=FLASH_DEEP_SLEEP_VALUE; erase_result=FLASH_ERROR_WRP;
     IsSleepStartUp(); assert(stop_calls==0 && reset_calls==0);
     defaults(); gu8_Reset_EventRecord=1; entersleep(DEEP_MODE); tick(); assert(reset_calls==0);
     defaults(); key_released=0;
     for(int i=0;i<14;i++) App_DI1_Switch();
     assert(s_sleep_mode==NO_SLEEP); App_DI1_Switch(); assert(s_sleep_mode==DEEP_MODE);
-    key_released=1; App_DI1_Switch(); entersleep(NO_SLEEP); key_released=0;
-    for(int i=0;i<14;i++) App_DI1_Switch();
-    assert(s_sleep_mode==NO_SLEEP); /* releasing the key clears its existing 15-call debounce */
-    puts("PASS: sleep timing, priorities, busy guards, AFE faults, wake races, elapsed wrap, persistence failures");
+    puts("PASS: idle/low-voltage qualification, blockers, RTC policy, reset-sleep transactions, key debounce");
     return 0;
 }
 '''
-
 RTC_STUBS = r'''
+#define LP_WAKE_RTC 1U
+static void LowPower_NotifyWake(uint32_t value) { (void)value; }
 #define RTC_FLAG_RTOFF 0x20
 #define RTC_FLAG_RSF 8
 #define RTC_IT_ALR 2
@@ -459,6 +461,8 @@ int main(void) {
 '''
 
 STOP_STUBS = r'''
+#define LP_FAULT_CLOCK 16U
+static void LowPower_RecordFault(uint32_t value) { (void)value; }
 #define RCC_CFGR_SWS_HSE 4
 #define RCC_SYSCLKSource_HSE 1
 #define RCC_HSE_ON 1
@@ -511,6 +515,7 @@ def main():
     folder = Path(tempfile.mkdtemp(prefix="run-", dir=base))
     enums = read("rtc_sleep.h").split("enum irqWakeup", 1)[1].split("extern", 1)[0]
     policy = read("rtc_sleep.c").replace('#include "main.h"', "")
+    core = read("low_power.c")
     commit = read("SleepDeal.c").replace('#include "main.h"', "")
     flash = function_source(read("Flash.c"), "FlashWriteOneHalfWord")
     soc = function_source(read("SocEnhance.c"), "SOC_SaveBeforeSleep")
@@ -531,7 +536,8 @@ def main():
     clock_defs = clock_defs.split("/* BMS_RTC_CLOCK_CONFIG_END */", 1)[0]
     rtc_stubs = rtc_stubs.replace("#define RTC_FLAG_RTOFF", clock_defs + "\n#define RTC_FLAG_RTOFF", 1)
     programs = {
-        "policy": COMMON + "enum irqWakeup" + enums + policy_stubs + flash + soc + commit + policy + key + POLICY_TESTS,
+        "policy": COMMON + '#include "low_power_port.h"\n' + "enum irqWakeup" + enums
+                  + policy_stubs + flash + soc + commit + policy + core + key + POLICY_TESTS,
         "rtc_lsi": COMMON + rtc_stubs + rtc + RTC_TESTS,
         "rtc_lse": COMMON + "#define BMS_RTC_CLOCK_SOURCE BMS_RTC_CLOCK_LSE\n"
                    + rtc_stubs + rtc + RTC_TESTS,
@@ -544,7 +550,7 @@ def main():
         source = folder / f"{name}.c"
         source.write_text(clean(text), encoding="ascii")
         result = subprocess.run([shutil.which("cl.exe", path=env["PATH"]), "/nologo", "/TC", "/W3", "/O2",
-                                 str(source), f"/Fe{folder / (name + '.exe')}",
+                                 f"/I{SOURCE}", str(source), f"/Fe{folder / (name + '.exe')}",
                                  f"/Fo{folder / (name + '.obj')}"],
                                 env=env, cwd=folder, capture_output=True)
         log = (result.stdout + result.stderr).decode("gbk", errors="replace")

@@ -574,6 +574,16 @@
               <FileType>1</FileType>
               <FilePath>..\Source\rtc_sleep.c</FilePath>
             </File>
+            <File>
+              <FileName>low_power.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\low_power.c</FilePath>
+            </File>
+            <File>
+              <FileName>board_low_power.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\board_low_power.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

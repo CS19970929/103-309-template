@@ -159,13 +159,13 @@ UINT32 RTC_ReadCounterCoherent(void)
     UINT16 high_after;
     UINT16 low;
 
-    /* The STM32F1 counter is split across two 16-bit registers. */
-    do
-    {
-        high_before = RTC->CNTH;
+    /* A high-word carry is at least 65536 RTC seconds apart. One low-word
+       reread handles the carry without an unbounded retry loop. */
+    high_before = RTC->CNTH;
+    low = RTC->CNTL;
+    high_after = RTC->CNTH;
+    if (high_before != high_after)
         low = RTC->CNTL;
-        high_after = RTC->CNTH;
-    } while (high_before != high_after);
 
     return ((UINT32)high_after << 16) | low;
 }
@@ -340,6 +340,7 @@ void RTC_LatchAlarmWake(void)
         RTC_ClearITPendingBit(RTC_IT_ALR);
         EXTI_ClearITPendingBit(EXTI_Line17);
         is_rtc_wakekup = true;
+        LowPower_NotifyWake(LP_WAKE_RTC);
         ++rtc_cnt;
     }
 }

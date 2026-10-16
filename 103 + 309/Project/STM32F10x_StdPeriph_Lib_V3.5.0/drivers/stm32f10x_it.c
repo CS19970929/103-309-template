@@ -93,6 +93,10 @@ void HardFault_Record(uint32_t *stack_pointer, uint32_t exc_return)
   g_hardfault_record.usart2_sr = USART2->SR;
   g_hardfault_record.exti_pr = EXTI->PR;
   g_hardfault_record.rtc_crl = RTC->CRL;
+  g_hardfault_record.low_power_state = g_low_power_diag.state;
+  g_hardfault_record.low_power_block = g_low_power_diag.block_mask;
+  g_hardfault_record.low_power_wake = g_low_power_diag.wake_mask;
+  g_hardfault_record.low_power_fault = g_low_power_diag.fault_mask;
 
   while (1)
   {

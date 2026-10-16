@@ -46,12 +46,10 @@ void IsSleepStartUp(void)
         return;
     if (flag == FLASH_HICCUP_SLEEP_VALUE)
     {
-        if (!Init_RTC())
-            return;
-        IOstatus_RTCMode();
-        InitWakeUp_RTCMode();
-        if (!RTC_WKTimeConfig())
-            return;
+        /* Old retained HICCUP flags enter through the runtime framework after
+           normal initialization, including its live-timer quiet handoff. */
+        entersleep(HICCUP_MODE);
+        return;
     }
     else if (flag == FLASH_NORMAL_SLEEP_VALUE)
     {

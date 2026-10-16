@@ -1,8 +1,6 @@
 // #include "conf.h"
 #include "main.h"
 
-#define RTC_WAKE_IO_SETTLE_MS 5U
-
 Time_T sys_time = {
     .time_enter_rtc = 10,
 };
@@ -245,10 +243,8 @@ void InitWakeUp_RTCMode(void)
 
     InitWakeUp_Base();
 
-    /* IOstatus_RTCMode() releases the communication supply. On this board the
-       detector can pulse while the external communication circuitry settles.
-       Ignore only that bounded hand-off interval, then clear and arm EXTI. */
-    __delay_ms(RTC_WAKE_IO_SETTLE_MS);
+    /* The runtime framework owns the nonblocking PB12 quiet handoff.
+       This legacy helper only configures pins/interrupts. */
 
     /* RTC IO releases CMNT_EN and removes C33V/VCC33-U. The unpowered
        communication circuits can then hold USART RX low, so PA3/PB7 are not
@@ -451,7 +447,10 @@ void Sys_StopMode(void)
     if (g_irq_t == NO_IRQ && !is_rtc_wakekup)
         PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
     if (!RestoreRunClockAfterStop(previous_source))
+    {
+        LowPower_RecordFault(LP_FAULT_CLOCK);
         MCU_RESET();
+    }
     SystemCoreClockUpdate();
     InitDelay();
     __set_PRIMASK(primask);

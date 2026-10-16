@@ -36,6 +36,7 @@
 #include "ShortFunc.h"
 #include "conf.h"
 #include "rtc_sleep.h"
+#include "low_power.h"
 
 #include "elog.h"
 

@@ -54,6 +54,10 @@ typedef struct
   uint32_t usart2_sr;
   uint32_t exti_pr;
   uint32_t rtc_crl;
+  uint32_t low_power_state;
+  uint32_t low_power_block;
+  uint32_t low_power_wake;
+  uint32_t low_power_fault;
 } HardFaultRecord;
 
 extern volatile HardFaultRecord g_hardfault_record;
