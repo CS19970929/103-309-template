@@ -11,6 +11,7 @@ UINT8 gu8_200msCnt = 0;
 volatile UINT8 gu8_200msAccClock_Flag = 0;
 UINT8 gu8_200msAccClock_Flag2 = 0;
 volatile UINT8 gu8_1000msAccClock_Flag = 0;
+volatile UINT32 g_u32SystemUptimeMs = 0U;
 
 static UINT8 fac_us = 0; // us延时倍乘数
 static UINT16 fac_ms = 0;
@@ -280,7 +281,8 @@ void TIM3_IRQHandler(void)
 	{												// 检查TIM3更新中断发生与否
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update); // 清除TIMx更新中断标志
 		if ((++g_u81msCnt) >= 1)
-		{ // 1ms
+		{
+			g_u32SystemUptimeMs++; // 1ms
 			g_u81msCnt = 0;
 			g_u81msClockCnt++;
 			gu8_200msCnt++;
@@ -311,6 +313,11 @@ void TIM3_IRQHandler(void)
 	}
 }
 
+
+UINT32 System_GetUptimeMs(void)
+{
+	return g_u32SystemUptimeMs;
+}
 
 UINT8 TakePendingFlag(volatile UINT8 *flag)
 {

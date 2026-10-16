@@ -355,7 +355,7 @@ static void sleep_run_rtc(void)
         s_idle_seconds = 0U;
         return;
     }
-    start_counter = RTC_GetCounter();
+    start_counter = RTC_ReadCounterCoherent();
     do
     {
         /* Recheck before changing IO: work may have arrived after the idle tick. */
@@ -405,6 +405,11 @@ static void sleep_run_rtc(void)
         __set_PRIMASK(primask);
         __ISB();
         Feed_IWatchDog;
+        if (!RTC_SynchronizeAfterStop())
+        {
+            g_irq_t = error_wake;
+            break;
+        }
         initAFE1_IIC();
         if (g_irq_t != NO_IRQ)
             break;
@@ -418,7 +423,7 @@ static void sleep_run_rtc(void)
     } while (s_sleep_mode == HICCUP_MODE);
 
     /* Unsigned RTC subtraction handles counter wrap and partial external wakes. */
-    su32_Interval_S_Tcnt += RTC_GetCounter() - start_counter;
+    su32_Interval_S_Tcnt += RTC_ReadCounterCoherent() - start_counter;
     sleep_restore_run(stop_io_prepared);
 }
 

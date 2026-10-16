@@ -176,10 +176,11 @@ static void DataLoad_TemperatureMaxMinFind(void) {}
 static UINT8 UpdateVoltageFromBqMaximo(void) { return update_failed; }
 static UINT8 Init_RTC(void) { return rtc_ok; }
 static UINT8 RTC_WKTimeConfig(void);
+static UINT8 RTC_SynchronizeAfterStop(void) { return rtc_ok; }
 static void RTC_LatchAlarmWake(void) {
     if (rtc_alarm_pending) { rtc_alarm_pending=0; is_rtc_wakekup=true; }
 }
-static UINT32 RTC_GetCounter(void) { return rtc_counter; }
+static UINT32 RTC_ReadCounterCoherent(void) { return rtc_counter; }
 static void RTC_DisableStopAlarm(void) { is_rtc_wakekup=false; }
 static void IOstatus_RTCMode(void) {}
 static void InitWakeUp_RTCMode(void) {}
@@ -348,7 +349,7 @@ RTC_STUBS = r'''
 #define EXTI_Trigger_Rising 0
 typedef struct { UINT32 EXTI_Line, EXTI_Mode, EXTI_Trigger, EXTI_LineCmd; } EXTI_InitTypeDef;
 typedef struct { UINT8 NVIC_IRQChannel, NVIC_IRQChannelPreemptionPriority, NVIC_IRQChannelSubPriority, NVIC_IRQChannelCmd; } NVIC_InitTypeDef;
-static struct { UINT16 CRL; } rtc_regs;
+static struct { UINT16 CRL, CNTH, CNTL; } rtc_regs;
 static struct { UINT32 BDCR; } rcc_regs;
 #define RTC (&rtc_regs)
 #define RCC (&rcc_regs)
@@ -359,7 +360,11 @@ static UINT16 backup;
 static UINT8 TimeDisplay;
 static struct RTC_ELEMENT { int value; } Systmtime;
 static UINT8 RCC_GetFlagStatus(UINT8 f) { ++polls; return f==RCC_FLAG_LSERDY? lse_ok : lsi_ok; }
-static UINT8 RTC_GetFlagStatus(UINT16 f) { ++polls; return f==RTC_FLAG_RSF? sync_ok : write_ok; }
+static UINT8 RTC_GetFlagStatus(UINT16 f) {
+    ++polls;
+    rtc_regs.CNTH=(UINT16)(counter>>16); rtc_regs.CNTL=(UINT16)counter;
+    return f==RTC_FLAG_RSF? sync_ok : write_ok;
+}
 static void RCC_LSEConfig(int v) { (void)v; ++lse_start_calls; }
 static void RCC_LSICmd(int v) { (void)v; ++lsi_start_calls; }
 static void RCC_APB1PeriphClockCmd(int p,int v) { (void)p; (void)v; }
@@ -373,8 +378,10 @@ static void BKP_DeInit(void) { ++resets; RCC->BDCR=0; backup=0; }
 static void RCC_RTCCLKConfig(UINT32 v) { RCC->BDCR=(RCC->BDCR&~RCC_BDCR_RTCSEL)|v; }
 static void RCC_RTCCLKCmd(int v) { if (v) RCC->BDCR|=RCC_BDCR_RTCEN; }
 static void RTC_SetPrescaler(UINT32 v) { prescaler=v; }
-static void RTC_SetCounter(UINT32 v) { ++counter_writes; counter=v; }
-static UINT32 RTC_GetCounter(void) { return counter; }
+static void RTC_SetCounter(UINT32 v) {
+    ++counter_writes; counter=v;
+    rtc_regs.CNTH=(UINT16)(v>>16); rtc_regs.CNTL=(UINT16)v;
+}
 static UINT32 Seccond_Cal(struct RTC_ELEMENT *p) { p->value=99; return 1546315200; }
 static void RTC_ITConfig(int f,int v) { (void)f; (void)v; }
 static void RTC_ClearITPendingBit(int f) { rtc_pending&=~f; }

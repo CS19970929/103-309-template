@@ -98,7 +98,7 @@ void Get_RTC_Time(void)
 {
 	UINT32 u32BJ_SecondTimeVar;
 
-	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
+	u32BJ_SecondTimeVar = RTC_ReadCounterCoherent() + TIME_ZOOM;
 	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // 把定时器的值转换为北京时间
 }
 
@@ -144,6 +144,30 @@ static UINT8 RTC_Synchronize(void)
 {
     RTC->CRL &= (UINT16)~RTC_FLAG_RSF;
     return RTC_WaitFlag(RTC_FLAG_RSF);
+}
+
+UINT8 RTC_SynchronizeAfterStop(void)
+{
+    if (!s_rtc_ready)
+        return 0U;
+    return RTC_Synchronize();
+}
+
+UINT32 RTC_ReadCounterCoherent(void)
+{
+    UINT16 high_before;
+    UINT16 high_after;
+    UINT16 low;
+
+    /* The STM32F1 counter is split across two 16-bit registers. */
+    do
+    {
+        high_before = RTC->CNTH;
+        low = RTC->CNTL;
+        high_after = RTC->CNTH;
+    } while (high_before != high_after);
+
+    return ((UINT32)high_after << 16) | low;
 }
 
 static UINT8 RTC_StartOscillator(UINT8 lse)
@@ -219,7 +243,7 @@ UINT8 Init_RTC(void)
               RCC_GetFlagStatus(RCC_FLAG_LSIRDY) != RESET)) &&
             RTC_Synchronize() && RTC_WaitFlag(RTC_FLAG_RTOFF))
         {
-            previous_counter = RTC_GetCounter();
+            previous_counter = RTC_ReadCounterCoherent();
             preserve_counter = 1U;
         }
 
@@ -279,7 +303,7 @@ UINT8 RTC_WKTimeConfig(void)
     EXTI_ClearITPendingBit(EXTI_Line17);
     NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
     NVIC_ClearPendingIRQ(RTC_IRQn);
-    RTC_SetAlarm(RTC_GetCounter() + ALARM_TIME_SEC);
+    RTC_SetAlarm(RTC_ReadCounterCoherent() + ALARM_TIME_SEC);
     if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
         return 0U;
     RTC_ITConfig(RTC_IT_ALR, ENABLE);

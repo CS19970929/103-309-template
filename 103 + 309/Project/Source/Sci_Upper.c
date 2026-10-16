@@ -32,12 +32,40 @@ UINT8 u8FlashUpdateE2PROM = 0;
 
 /* USARTs are quiesced once for the whole periodic RTC sleep loop. */
 static UINT8 s_common_usarts_stopped;
+#define SCI_RX_PARTIAL_TIMEOUT_MS 100U
+#ifdef _COMMOM_UPPER_SCI1
+static volatile UINT32 s_sci1_last_rx_ms;
+#endif
+#ifdef _COMMOM_UPPER_SCI2
+static volatile UINT32 s_sci2_last_rx_ms;
+#endif
+
+static void Sci_ExpirePartialRx(struct RS485MSG *message,
+							   volatile UINT32 *last_rx_ms)
+{
+	UINT32 primask;
+
+	if (message->ptr_no == 0U || message->csr != RS485_STA_IDLE ||
+		(UINT32)(System_GetUptimeMs() - *last_rx_ms) < SCI_RX_PARTIAL_TIMEOUT_MS)
+		return;
+
+	primask = __get_PRIMASK();
+	__disable_irq();
+	if (message->ptr_no != 0U && message->csr == RS485_STA_IDLE &&
+		(UINT32)(System_GetUptimeMs() - *last_rx_ms) >= SCI_RX_PARTIAL_TIMEOUT_MS)
+	{
+		message->ptr_no = 0U;
+		message->u16Buffer[0] = 0U;
+	}
+	__set_PRIMASK(primask);
+}
 
 UINT8 Sci_CommonUpperHasPendingWork(void)
 {
 	if (s_common_usarts_stopped)
 		return 0U;
 #ifdef _COMMOM_UPPER_SCI1
+	Sci_ExpirePartialRx(&g_stCurrentMsgPtr_SCI1, &s_sci1_last_rx_ms);
 	if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
 		g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
 		USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET ||
@@ -46,6 +74,7 @@ UINT8 Sci_CommonUpperHasPendingWork(void)
 		return 1U;
 #endif
 #ifdef _COMMOM_UPPER_SCI2
+	Sci_ExpirePartialRx(&g_stCurrentMsgPtr_SCI2, &s_sci2_last_rx_ms);
 	if (gu8_TxEnable_SCI2 || g_stCurrentMsgPtr_SCI2.ptr_no ||
 		g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE ||
 		USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET ||
@@ -1008,6 +1037,7 @@ UINT8 Sci1_CommonUpper_IRQHandler(struct RS485MSG *s)
 	}
 
 	Sci1_CommonUpper_RxByte(s, (UINT8)data);
+	s_sci1_last_rx_ms = System_GetUptimeMs();
 	return 1U;
 }
 
@@ -1847,6 +1877,7 @@ UINT8 Sci2_CommonUpper_IRQHandler(struct RS485MSG *s)
 	}
 
 	Sci2_CommonUpper_RxByte(s, (UINT8)data);
+	s_sci2_last_rx_ms = System_GetUptimeMs();
 	return 1U;
 }
 

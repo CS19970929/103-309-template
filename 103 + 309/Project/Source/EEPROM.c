@@ -475,6 +475,7 @@ void WriteEEPROM_ByteData_Circle(void)
 	UINT8 i = 0;
 	UINT8 u8temp;
 	const struct PRT_E2ROM_PARAS PrtE2paras_Pos = E2P_ADDR_E2POS_PROTECT;
+	const struct RTC_ELEMENT RTC_Element_Pos = E2P_ADDR_E2POS_RTC;
 	const struct OTHER_ELEMENT OtherCanAdd_Pos = E2P_ADDR_E2POS_OTHER_ELEMENT1;
 	const struct HEAT_COOL_ELEMENT HeatCoolEle_Pos = E2P_ADDR_E2POS_HEAT_COOL;
 
@@ -541,33 +542,35 @@ void WriteEEPROM_ByteData_Circle(void)
 			i++;
 		}
 	}
-	// else if (u32E2P_RTC_Element_WriteFlag)
-	// {
-	// 	while (i < E2P_PARA_ALL_RTC_ELEMENT)
-	// 	{
-	// 		if ((u32E2P_RTC_Element_WriteFlag >> i) & 1)
-	// 		{
-	// 			WriteEEPROM_Word_NoZone((UINT16) * (&RTC_Element_Pos.RTC_Time_Year + i),
-	// 									  *(&RTC_time.RTC_Time_Year + i));
-	// 			u32E2P_RTC_Element_WriteFlag -= ((long)1 << i);
-	// 			break;
-	// 		}
-	// 		i++;
-	// 	}
-	// }
-	// else if (u8E2P_SocTable_WriteFlag)
-	// {
-	// 	u8temp = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
-	// 	u8E2P_SocTable_WriteFlag--;
-	// }
-	// else if (u8E2P_CopperLoss_WriteFlag)
-	// {
-	// 	u8temp = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
-	// 	WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
-	// 	u8E2P_CopperLoss_WriteFlag--;
-	// }
+	else if (u32E2P_RTC_Element_WriteFlag)
+	{
+		while (i < E2P_PARA_NUM_RTC)
+		{
+			if ((u32E2P_RTC_Element_WriteFlag >> i) & 1U)
+			{
+				WriteEEPROM_Word_NoZone(ReadObjectWord(&RTC_Element_Pos,
+					(UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16))),
+					ReadObjectWord(&RTC_time,
+					(UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16))));
+				u32E2P_RTC_Element_WriteFlag &= ~((UINT32)1U << i);
+				break;
+			}
+			i++;
+		}
+	}
+	else if (u8E2P_SocTable_WriteFlag)
+	{
+		u8temp = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
+		WriteEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
+		u8E2P_SocTable_WriteFlag--;
+	}
+	else if (u8E2P_CopperLoss_WriteFlag)
+	{
+		u8temp = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
+		WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
+		WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
+		u8E2P_CopperLoss_WriteFlag--;
+	}
 	else if (u32E2P_HeatCool_WriteFlag)
 	{
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)

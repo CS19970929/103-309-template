@@ -130,6 +130,7 @@ extern volatile union SYS_TIME g_st_SysTimeFlag;
 extern struct CBC_ELEMENT CBC_Element;
 extern volatile UINT8 gu8_200msAccClock_Flag;
 extern volatile UINT8 gu8_1000msAccClock_Flag;
+extern volatile UINT32 g_u32SystemUptimeMs;
 
 
 void InitDelay(void);
@@ -143,6 +144,7 @@ void Init_IWDG(void);
 void App_CBC(void);
 void App_SysTime(void);
 void App_ChgDet_Status(void);
+UINT32 System_GetUptimeMs(void);
 
 
 #endif	/* SYSTEM_INIT_H */
