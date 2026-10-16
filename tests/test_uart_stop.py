@@ -35,7 +35,7 @@ def main():
     it = read(IT_SOURCE)
 
     prepare = function_source(sci, "Sci_CommonUpperPrepareStop")
-    pending = function_source(sci, "Sci_CommonUpperHasPendingWork")
+    pending = function_source(sci, "Sci_CommonUpperPendingMask")
     assert "USART1->SR &" in pending and "USART2->SR &" in pending
     assert "USART_SR_RXNE" in pending and "USART_SR_FE" in pending
     assert "Sci_CommonUpperHasPendingWork()" in prepare

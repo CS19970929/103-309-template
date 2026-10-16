@@ -53,6 +53,10 @@ void BoardLowPower_Snapshot(void)
     g_low_power_diag.rcc_cfgr = RCC->CFGR;
     g_low_power_diag.scb_icsr = SCB->ICSR;
     g_low_power_diag.primask = __get_PRIMASK();
+    g_low_power_diag.comm_pending_mask = Sci_CommonUpperPendingMask();
+    g_low_power_diag.uart_partial_timeouts = g_sci_partial_timeouts;
+    g_low_power_diag.uart1_errors = gu16_CommuErrCnt_SCI1;
+    g_low_power_diag.uart2_errors = gu16_CommuErrCnt_SCI2;
 }
 
 uint32_t BoardLowPower_ActiveWake(void)

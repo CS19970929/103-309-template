@@ -592,6 +592,10 @@ void Sci3_CommonUpper_FaultChk(void);
 void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
 
 UINT8 Sci_CommonUpperHasPendingWork(void);
+UINT32 Sci_CommonUpperPendingMask(void);
+extern volatile UINT32 g_sci_partial_timeouts;
+extern volatile UINT16 gu16_CommuErrCnt_SCI1;
+extern volatile UINT16 gu16_CommuErrCnt_SCI2;
 UINT8 Sci_CommonUpperPrepareStop(void);
 
 void InitUSART_CommonUpper(void);

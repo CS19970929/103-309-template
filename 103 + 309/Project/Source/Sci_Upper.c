@@ -33,6 +33,7 @@ UINT8 u8FlashUpdateE2PROM = 0;
 /* USARTs are quiesced once for the whole periodic RTC sleep loop. */
 static UINT8 s_common_usarts_stopped;
 #define SCI_RX_PARTIAL_TIMEOUT_MS 100U
+volatile UINT32 g_sci_partial_timeouts;
 #ifdef _COMMOM_UPPER_SCI1
 static volatile UINT32 s_sci1_last_rx_ms;
 #endif
@@ -56,33 +57,44 @@ static void Sci_ExpirePartialRx(struct RS485MSG *message,
 	{
 		message->ptr_no = 0U;
 		message->u16Buffer[0] = 0U;
+		++g_sci_partial_timeouts;
 	}
 	__set_PRIMASK(primask);
 }
 
 UINT8 Sci_CommonUpperHasPendingWork(void)
 {
+	return (UINT8)(Sci_CommonUpperPendingMask() != 0U);
+}
+
+UINT32 Sci_CommonUpperPendingMask(void)
+{
+	UINT32 pending = 0U;
 	if (s_common_usarts_stopped)
 		return 0U;
 #ifdef _COMMOM_UPPER_SCI1
 	Sci_ExpirePartialRx(&g_stCurrentMsgPtr_SCI1, &s_sci1_last_rx_ms);
-	if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
-		g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
-		USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET ||
-		(USART1->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
-						USART_SR_FE | USART_SR_PE)))
-		return 1U;
+	if (gu8_TxEnable_SCI1 || USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
+		pending |= 1UL << 0;
+	if (g_stCurrentMsgPtr_SCI1.ptr_no && g_stCurrentMsgPtr_SCI1.csr == RS485_STA_IDLE)
+		pending |= 1UL << 1;
+	if (g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE)
+		pending |= 1UL << 2;
+	if (USART1->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
+		pending |= 1UL << 3;
 #endif
 #ifdef _COMMOM_UPPER_SCI2
 	Sci_ExpirePartialRx(&g_stCurrentMsgPtr_SCI2, &s_sci2_last_rx_ms);
-	if (gu8_TxEnable_SCI2 || g_stCurrentMsgPtr_SCI2.ptr_no ||
-		g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE ||
-		USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET ||
-		(USART2->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
-						USART_SR_FE | USART_SR_PE)))
-		return 1U;
+	if (gu8_TxEnable_SCI2 || USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET)
+		pending |= 1UL << 4;
+	if (g_stCurrentMsgPtr_SCI2.ptr_no && g_stCurrentMsgPtr_SCI2.csr == RS485_STA_IDLE)
+		pending |= 1UL << 5;
+	if (g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE)
+		pending |= 1UL << 6;
+	if (USART2->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
+		pending |= 1UL << 7;
 #endif
-	return 0U;
+	return pending;
 }
 
 UINT8 Sci_CommonUpperPrepareStop(void)
@@ -933,6 +945,8 @@ void Sci1_CommonUpper_FaultChk(void)
  *=================================================================*/
 static void Sci1_CommonUpper_RxByte(struct RS485MSG *s, UINT8 data)
 {
+	Sci_ExpirePartialRx(s, &s_sci1_last_rx_ms);
+	s_sci1_last_rx_ms = System_GetUptimeMs();
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART1_IRQn);
@@ -1037,7 +1051,6 @@ UINT8 Sci1_CommonUpper_IRQHandler(struct RS485MSG *s)
 	}
 
 	Sci1_CommonUpper_RxByte(s, (UINT8)data);
-	s_sci1_last_rx_ms = System_GetUptimeMs();
 	return 1U;
 }
 
@@ -1561,6 +1574,8 @@ void Sci2_CommonUpper_FaultChk(void)
  *=================================================================*/
 static void Sci2_CommonUpper_RxByte(struct RS485MSG *s, UINT8 data)
 {
+	Sci_ExpirePartialRx(s, &s_sci2_last_rx_ms);
+	s_sci2_last_rx_ms = System_GetUptimeMs();
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART1_IRQn);
@@ -1877,7 +1892,6 @@ UINT8 Sci2_CommonUpper_IRQHandler(struct RS485MSG *s)
 	}
 
 	Sci2_CommonUpper_RxByte(s, (UINT8)data);
-	s_sci2_last_rx_ms = System_GetUptimeMs();
 	return 1U;
 }
 

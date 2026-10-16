@@ -470,129 +470,136 @@ void EEPROM_ResetData_OtherToDefault(void)
 }
 
 // Sci命令表中，因为STM8的缘故，决定全部从通讯中移出来写
+static UINT8 s_eeprom_write_failed;
+static UINT32 s_eeprom_failure_ms;
+
+static UINT8 EEPROM_TryPendingWord(UINT16 address, UINT16 value)
+{
+    if (WriteEEPROM_Word_NoZone(address, value) == 0U)
+    {
+        s_eeprom_write_failed = 0U;
+        return 1U;
+    }
+    s_eeprom_write_failed = 1U;
+    s_eeprom_failure_ms = System_GetUptimeMs();
+    ++g_low_power_diag.storage_write_failures;
+    g_low_power_diag.storage_last_address = address;
+    g_low_power_diag.storage_last_value = value;
+    LowPower_RecordFault(LP_FAULT_STORAGE_WRITE);
+    return 0U;
+}
+
+static void EEPROM_PendingRangeFault(void)
+{
+    s_eeprom_write_failed = 1U;
+    s_eeprom_failure_ms = System_GetUptimeMs();
+    LowPower_RecordFault(LP_FAULT_STORAGE_RANGE);
+}
+
+/* One existing 16-bit field per call; failed writes retain the pending bit. */
+static void EEPROM_WriteFlaggedField(UINT32 *flags, UINT8 count,
+                                     const void *addresses, const void *values,
+                                     UINT16 offset)
+{
+    UINT8 index;
+    if (count < 32U && (*flags >> count) != 0U)
+    {
+        EEPROM_PendingRangeFault();
+        return;
+    }
+    for (index = 0U; index < count; ++index)
+    {
+        UINT32 bit = (UINT32)1U << index;
+        if ((*flags & bit) != 0U)
+        {
+            UINT16 field = (UINT16)(offset + index * sizeof(UINT16));
+            if (EEPROM_TryPendingWord(ReadObjectWord(addresses, field),
+                                     ReadObjectWord(values, field)))
+                *flags &= ~bit;
+            return;
+        }
+    }
+}
+
 void WriteEEPROM_ByteData_Circle(void)
 {
-	UINT8 i = 0;
-	UINT8 u8temp;
-	const struct PRT_E2ROM_PARAS PrtE2paras_Pos = E2P_ADDR_E2POS_PROTECT;
-	const struct RTC_ELEMENT RTC_Element_Pos = E2P_ADDR_E2POS_RTC;
-	const struct OTHER_ELEMENT OtherCanAdd_Pos = E2P_ADDR_E2POS_OTHER_ELEMENT1;
-	const struct HEAT_COOL_ELEMENT HeatCoolEle_Pos = E2P_ADDR_E2POS_HEAT_COOL;
+    UINT8 index;
+    const struct PRT_E2ROM_PARAS protect_addresses = E2P_ADDR_E2POS_PROTECT;
+    const struct RTC_ELEMENT rtc_addresses = E2P_ADDR_E2POS_RTC;
+    const struct OTHER_ELEMENT other_addresses = E2P_ADDR_E2POS_OTHER_ELEMENT1;
+    const struct HEAT_COOL_ELEMENT heat_addresses = E2P_ADDR_E2POS_HEAT_COOL;
 
-	if (u8E2P_KB_WriteFlag)
-	{ // 完美KB值操作，既可全部写一遍，也可以单独写其中一对KB值
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_K + (u8E2P_KB_WritePos << 1)), g_u16CalibCoefK[u8E2P_KB_WritePos]);
-		WriteEEPROM_Word_NoZone((E2P_ADDR_START_CALIB_B + (u8E2P_KB_WritePos << 1)), g_i16CalibCoefB[u8E2P_KB_WritePos]);
-		++u8E2P_KB_WritePos; // 如果u8E2P_KB_WriteFlag=0，则Pos就算错也没用，别的地方想修改KB值的话，这两者必须同时操作。
-		--u8E2P_KB_WriteFlag;
-	}
-	else if (u32E2P_Pro_VolCur_WriteFlag & E2P_PARA_ALL_VOLCUR_PROTECT)
-	{
-		while (i < E2P_PARA_ALL_VOLCUR_PROTECT)
-		{
-			if ((u32E2P_Pro_VolCur_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))),
-										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
-				u32E2P_Pro_VolCur_WriteFlag -= ((long)1 << i); // 按位操作，有一个减一个。
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_Pro_Temp_WriteFlag & E2P_PARA_ALL_TEM_PROTECT)
-	{
-		while (i < E2P_PARA_ALL_TEM_PROTECT)
-		{
-			if ((u32E2P_Pro_Temp_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16TChgOTp_First) + i * sizeof(UINT16))),
-										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16TChgOTp_First) + i * sizeof(UINT16))));
-				u32E2P_Pro_Temp_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_Pro_Other_WriteFlag & E2P_PARA_ALL_OTHER_PROTECT)
-	{
-		while (i < E2P_PARA_ALL_OTHER_PROTECT)
-		{
-			if ((u32E2P_Pro_Other_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&PrtE2paras_Pos, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VdeltaOvp_First) + i * sizeof(UINT16))),
-										ReadObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VdeltaOvp_First) + i * sizeof(UINT16))));
-				u32E2P_Pro_Other_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_OtherElement1_WriteFlag & E2P_PARA_ALL_OTHER_ELEMENT1)
-	{
-		while (i < E2P_PARA_ALL_OTHER_ELEMENT1)
-		{
-			if ((u32E2P_OtherElement1_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&OtherCanAdd_Pos, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))),
-										ReadObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
-				u32E2P_OtherElement1_WriteFlag -= ((long)1 << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u32E2P_RTC_Element_WriteFlag)
-	{
-		while (i < E2P_PARA_NUM_RTC)
-		{
-			if ((u32E2P_RTC_Element_WriteFlag >> i) & 1U)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&RTC_Element_Pos,
-					(UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16))),
-					ReadObjectWord(&RTC_time,
-					(UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16))));
-				u32E2P_RTC_Element_WriteFlag &= ~((UINT32)1U << i);
-				break;
-			}
-			i++;
-		}
-	}
-	else if (u8E2P_SocTable_WriteFlag)
-	{
-		u8temp = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_START_SOC_TABLE + (u8temp << 1), SOC_Table_Set[u8temp]);
-		u8E2P_SocTable_WriteFlag--;
-	}
-	else if (u8E2P_CopperLoss_WriteFlag)
-	{
-		u8temp = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS + (u8temp << 1), CopperLoss[u8temp]);
-		WriteEEPROM_Word_NoZone(E2P_ADDR_START_COPPERLOSS_NUM + (u8temp << 1), CopperLoss_Num[u8temp]);
-		u8E2P_CopperLoss_WriteFlag--;
-	}
-	else if (u32E2P_HeatCool_WriteFlag)
-	{
-		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
-		{
-			if ((u32E2P_HeatCool_WriteFlag >> i) & 1)
-			{
-				WriteEEPROM_Word_NoZone(ReadObjectWord(&HeatCoolEle_Pos, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))), ReadObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
-				u32E2P_HeatCool_WriteFlag -= ((long)1 << i);
-				break;
-			}
-		}
-	}
-	else if (gu8_Reset_EventRecord)
-	{
-		u8temp = 100 - gu8_Reset_EventRecord;
-		WriteEEPROM_Word_NoZone(E2P_ADDR_START_EVENT_RECORD + (u8temp << 1), 0);
-		gu8_Reset_EventRecord--;
-		if (gu8_Reset_EventRecord == 1)
-		{
-			WriteEEPROM_Word_NoZone(E2P_ADDR_E2POS_EVENT_POINT, 0);
-		}
-	}
+    if (u8E2P_KB_WriteFlag)
+    {
+        if (u8E2P_KB_WritePos >= KB_NUM || u8E2P_KB_WriteFlag > KB_NUM)
+        {
+            EEPROM_PendingRangeFault();
+            return;
+        }
+        index = u8E2P_KB_WritePos;
+        if (EEPROM_TryPendingWord(E2P_ADDR_START_CALIB_K + (index << 1), g_u16CalibCoefK[index]) &&
+            EEPROM_TryPendingWord(E2P_ADDR_START_CALIB_B + (index << 1), g_i16CalibCoefB[index]))
+        {
+            ++u8E2P_KB_WritePos;
+            --u8E2P_KB_WriteFlag;
+        }
+    }
+    else if (u32E2P_Pro_VolCur_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_Pro_VolCur_WriteFlag, E2P_PARA_NUM_VOLCUR_PROTECT,
+            &protect_addresses, &PRT_E2ROMParas, offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First));
+    else if (u32E2P_Pro_Temp_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_Pro_Temp_WriteFlag, E2P_PARA_NUM_TEM_PROTECT,
+            &protect_addresses, &PRT_E2ROMParas, offsetof(struct PRT_E2ROM_PARAS, u16TChgOTp_First));
+    else if (u32E2P_Pro_Other_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_Pro_Other_WriteFlag, E2P_PARA_NUM_OTHER_PROTECT,
+            &protect_addresses, &PRT_E2ROMParas, offsetof(struct PRT_E2ROM_PARAS, u16VdeltaOvp_First));
+    else if (u32E2P_OtherElement1_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_OtherElement1_WriteFlag, E2P_PARA_NUM_OTHER_ELEMENT1,
+            &other_addresses, &OtherElement, offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage));
+    else if (u32E2P_RTC_Element_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_RTC_Element_WriteFlag, E2P_PARA_NUM_RTC,
+            &rtc_addresses, &RTC_time, offsetof(struct RTC_ELEMENT, RTC_Time_Year));
+    else if (u8E2P_SocTable_WriteFlag)
+    {
+        if (u8E2P_SocTable_WriteFlag > E2P_PARA_NUM_SOC_TABLE)
+        {
+            EEPROM_PendingRangeFault();
+            return;
+        }
+        index = E2P_PARA_NUM_SOC_TABLE - u8E2P_SocTable_WriteFlag;
+        if (EEPROM_TryPendingWord(E2P_ADDR_START_SOC_TABLE + (index << 1), SOC_Table_Set[index]))
+            --u8E2P_SocTable_WriteFlag;
+    }
+    else if (u8E2P_CopperLoss_WriteFlag)
+    {
+        if (u8E2P_CopperLoss_WriteFlag > E2P_PARA_NUM_COPPERLOSS)
+        {
+            EEPROM_PendingRangeFault();
+            return;
+        }
+        index = E2P_PARA_NUM_COPPERLOSS - u8E2P_CopperLoss_WriteFlag;
+        if (EEPROM_TryPendingWord(E2P_ADDR_START_COPPERLOSS + (index << 1), CopperLoss[index]) &&
+            EEPROM_TryPendingWord(E2P_ADDR_START_COPPERLOSS_NUM + (index << 1), CopperLoss_Num[index]))
+            --u8E2P_CopperLoss_WriteFlag;
+    }
+    else if (u32E2P_HeatCool_WriteFlag)
+        EEPROM_WriteFlaggedField(&u32E2P_HeatCool_WriteFlag, E2P_PARA_NUM_HEAT_COOL,
+            &heat_addresses, &Heat_Cool_Element, offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp));
+    else if (gu8_Reset_EventRecord)
+    {
+        if (gu8_Reset_EventRecord > 100U)
+        {
+            EEPROM_PendingRangeFault();
+            return;
+        }
+        index = 100U - gu8_Reset_EventRecord;
+        if (!EEPROM_TryPendingWord(E2P_ADDR_START_EVENT_RECORD + (index << 1), 0U))
+            return;
+        if (gu8_Reset_EventRecord == 2U &&
+            !EEPROM_TryPendingWord(E2P_ADDR_E2POS_EVENT_POINT, 0U))
+            return;
+        --gu8_Reset_EventRecord;
+    }
 }
 
 void InitE2PROM_i2c(void)
@@ -661,10 +668,16 @@ void InitData_E2prom(void)
 	}
 	else
 	{ // 第一次上电，用于量产
+		UINT16 write_budget = 512U;
 		EEPROM_ResetData_AllToDefault();
 		while (u8E2P_KB_WriteFlag || u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag || u32E2P_Pro_Other_WriteFlag || u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u32E2P_RTC_Element_WriteFlag || u32E2P_OtherElement1_WriteFlag || u32E2P_HeatCool_WriteFlag)
 		{ // 0x2000,0x2100,0x2200,0x2300
 			WriteEEPROM_ByteData_Circle();
+			if (s_eeprom_write_failed || --write_budget == 0U)
+			{
+				System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+				return;
+			}
 		}
 		EEPROM_ResetData_OtherToDefault(); // 把E2P_BEGIN_FLAG写进头地址，
 										   // 如果有别的添加，可以往这个函数写，目前加了保护记录初始化
@@ -682,6 +695,7 @@ void InitData_E2prom(void)
 		}
 		{
 			bool ret = false;
+			UINT8 attempts = 3U;
 			do
 			{
 				initAFE1_IIC();
@@ -689,7 +703,9 @@ void InitData_E2prom(void)
 				AFE_PARAM_WRITE_Flag = 1;
 				// ret = fac_sh367309_param_init_first_powerup();
 				ret = SH367309_UpdataAfeConfig();
-			} while (ret == false);
+			} while (ret == false && --attempts != 0U);
+			if (!ret)
+				return;
 		}
 		soc_factory_param_init_first();
 
@@ -702,6 +718,9 @@ void InitData_E2prom(void)
 
 void App_E2promDeal(void)
 {
+	if (s_eeprom_write_failed &&
+		(UINT32)(System_GetUptimeMs() - s_eeprom_failure_ms) < 100U)
+		return;
 	if (u8E2P_KB_WriteFlag || u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag || u32E2P_Pro_Other_WriteFlag || u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u32E2P_RTC_Element_WriteFlag || u32E2P_OtherElement1_WriteFlag || u32E2P_HeatCool_WriteFlag)
 	{ // 0x2000,0x2100,0x2200,0x2300
 		WriteEEPROM_ByteData_Circle();

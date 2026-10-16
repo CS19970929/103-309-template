@@ -94,6 +94,8 @@ typedef int16_t INT16;
 typedef int32_t INT32;
 #include "HEADER_PATH"
 #define log_i(...) ((void)0)
+#define LP_RUN 0U
+static struct { UINT32 state; } g_low_power_diag;
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 struct OTHER_ELEMENT OtherElement;

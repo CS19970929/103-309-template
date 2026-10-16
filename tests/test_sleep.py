@@ -109,6 +109,8 @@ static struct { UINT8 ptr_no, csr; } g_stCurrentMsgPtr_SCI1, g_stCurrentMsgPtr_S
 static UINT8 gu8_TxEnable_SCI1, gu8_TxEnable_SCI2;
 static volatile UINT8 gu8_1000msAccClock_Flag;
 static UINT8 u8FlashUpdateFlag, u8FlashUpdateE2PROM, u8E2P_SocTable_WriteFlag;
+static int AFE_PARAM_WRITE_Flag, AFE_ResetFlag;
+static struct { UINT16 all; } Fault_Flag_Fisrt, Fault_Flag_Second, Fault_Flag_Third;
 static UINT8 u8E2P_CopperLoss_WriteFlag, u8E2P_KB_WriteFlag, gu8_Reset_EventRecord;
 static UINT32 u32E2P_Pro_VolCur_WriteFlag, u32E2P_Pro_Temp_WriteFlag, u32E2P_Pro_Other_WriteFlag;
 static UINT32 u32E2P_OtherElement1_WriteFlag, u32E2P_HeatCool_WriteFlag, u32E2P_RTC_Element_WriteFlag;

@@ -537,9 +537,11 @@ void BmsCurrent_Update(void)
 	else
 		g_i32Current_mA = -(INT32)current_mA;
 
-	log_i("AFE raw=%d corrected_x4=%d zero_x4=%d current=%d mA deadband=%u mA\n",
-		  raw_signed, corrected_raw_x4, BmsCurrent_GetBootZeroRawX4(),
-		  g_i32Current_mA, deadband_mA);
+	/* RTC sampling runs with the communication rail and USARTs disabled. */
+	if (g_low_power_diag.state == LP_RUN)
+		log_i("AFE raw=%d corrected_x4=%d zero_x4=%d current=%d mA deadband=%u mA\n",
+			  raw_signed, corrected_raw_x4, BmsCurrent_GetBootZeroRawX4(),
+			  g_i32Current_mA, deadband_mA);
 
 	g_stCellInfoReport.u16Ichg = BmsCurrent_mAX4ToReport(
 		(g_i32Current_mA > 0) ? current_mA_x4 : 0u,

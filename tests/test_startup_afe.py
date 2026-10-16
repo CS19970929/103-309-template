@@ -55,7 +55,6 @@ def main():
         "conf/conf.c": ["InitIO"],
         "main.c": ["InitDevice"],
         "Cell_balance.c": ["CellBalance_UpdateReport"],
-        "rtc_sleep.c": ["isErr_enterRTC"],
     }
     bodies = []
     for name, names in functions.items():
@@ -282,11 +281,8 @@ int main(void) {
     }
     SeriesNum = 255; CellBalance_UpdateReport(65535);
     assert(g_stCellInfoReport.u16BalanceFlag1 == 0);
-    SeriesNum = 16; registers[MTP_BALANCEH] = 0x80;
-    assert(isErr_enterRTC()); assert(g_stCellInfoReport.u16BalanceFlag1 == 0x8000);
-    registers[MTP_BALANCEH] = 0; assert(!isErr_enterRTC());
-    read_failure = 1; assert(isErr_enterRTC());
-    puts("PASS: boot success, eight calibration failures, CTLC interlocks/recovery, EEPROM failures/readback/idempotence, balance masks and sleep guard");
+    /* RTC policy balance/read-failure guards are exercised in test_sleep.py. */
+    puts("PASS: boot success, eight calibration failures, CTLC interlocks/recovery, EEPROM failures/readback/idempotence and balance masks");
     return 0;
 }
 '''

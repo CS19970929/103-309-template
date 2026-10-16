@@ -19,7 +19,8 @@ enum {
     LP_BLOCK_CURRENT = 1UL << 2, LP_BLOCK_HEAT = 1UL << 3,
     LP_BLOCK_BALANCE = 1UL << 4, LP_BLOCK_MOS = 1UL << 5,
     LP_BLOCK_AFE = 1UL << 6, LP_BLOCK_WAKE_PIN = 1UL << 7,
-    LP_BLOCK_COMM_CHANGED = 1UL << 8, LP_BLOCK_CONFIG = 1UL << 9
+    LP_BLOCK_COMM_CHANGED = 1UL << 8, LP_BLOCK_CONFIG = 1UL << 9,
+    LP_BLOCK_PROTECTION = 1UL << 10
 };
 
 enum {
@@ -40,7 +41,8 @@ enum {
     LP_FAULT_RTC_INIT = 1UL << 0, LP_FAULT_RTC_ARM = 1UL << 1,
     LP_FAULT_RTC_SYNC = 1UL << 2, LP_FAULT_PREPARE_TIMEOUT = 1UL << 3,
     LP_FAULT_CLOCK = 1UL << 4, LP_FAULT_RESET_SLEEP = 1UL << 5,
-    LP_FAULT_SPURIOUS_LIMIT = 1UL << 6, LP_FAULT_NO_TIMEBASE = 1UL << 7
+    LP_FAULT_SPURIOUS_LIMIT = 1UL << 6, LP_FAULT_NO_TIMEBASE = 1UL << 7,
+    LP_FAULT_STORAGE_WRITE = 1UL << 8, LP_FAULT_STORAGE_RANGE = 1UL << 9
 };
 
 /* Set at build time: 0 = production STOP; 1 = STOP with debug support;
@@ -74,6 +76,9 @@ typedef struct {
     uint32_t gpioa_idr, gpiob_idr, exti_imr, exti_pr;
     uint32_t nvic_pending[2], rtc_crl, rcc_cfgr, scb_icsr, primask;
     uint32_t debug_profile, iwdg_compiled, rcc_reset_flags;
+    uint32_t comm_pending_mask, storage_pending_mask;
+    uint32_t storage_write_failures, storage_last_address, storage_last_value;
+    uint32_t uart_partial_timeouts, uart1_errors, uart2_errors;
     uint32_t trace_sequence;
     LowPowerTrace trace[LOW_POWER_TRACE_COUNT];
 } LowPowerDiag;

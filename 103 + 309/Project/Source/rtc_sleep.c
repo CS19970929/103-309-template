@@ -78,12 +78,24 @@ LowPowerTarget BmsSleep_GetTarget(void)
 uint32_t BmsSleep_BlockMask(uint8_t refresh_afe)
 {
     uint32_t blocks = 0U;
+    uint32_t storage = 0U;
     uint8_t balance[2];
-    if (u8FlashUpdateFlag || u8FlashUpdateE2PROM || gu8_Reset_EventRecord ||
-        u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag ||
-        u32E2P_Pro_Other_WriteFlag || u32E2P_OtherElement1_WriteFlag ||
-        u32E2P_HeatCool_WriteFlag || u32E2P_RTC_Element_WriteFlag ||
-        u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u8E2P_KB_WriteFlag)
+    if (u8FlashUpdateFlag) storage |= 1UL << 0;
+    if (u8FlashUpdateE2PROM) storage |= 1UL << 1;
+    if (gu8_Reset_EventRecord) storage |= 1UL << 2;
+    if (u32E2P_Pro_VolCur_WriteFlag) storage |= 1UL << 3;
+    if (u32E2P_Pro_Temp_WriteFlag) storage |= 1UL << 4;
+    if (u32E2P_Pro_Other_WriteFlag) storage |= 1UL << 5;
+    if (u32E2P_OtherElement1_WriteFlag) storage |= 1UL << 6;
+    if (u32E2P_HeatCool_WriteFlag) storage |= 1UL << 7;
+    if (u32E2P_RTC_Element_WriteFlag) storage |= 1UL << 8;
+    if (u8E2P_SocTable_WriteFlag) storage |= 1UL << 9;
+    if (u8E2P_CopperLoss_WriteFlag) storage |= 1UL << 10;
+    if (u8E2P_KB_WriteFlag) storage |= 1UL << 11;
+    /* AFE_ResetFlag is a sticky historical flag, not a pending transaction. */
+    if (AFE_PARAM_WRITE_Flag) storage |= 1UL << 12;
+    g_low_power_diag.storage_pending_mask = storage;
+    if (storage != 0U)
         blocks |= LP_BLOCK_STORAGE;
     if (Sci_CommonUpperHasPendingWork())
         blocks |= LP_BLOCK_COMM;
@@ -93,6 +105,9 @@ uint32_t BmsSleep_BlockMask(uint8_t refresh_afe)
         blocks |= LP_BLOCK_CURRENT;
     if (SystemStatus.bits.b1Status_Heat)
         blocks |= LP_BLOCK_HEAT;
+    /* SOC-full indication (bit 12) is normal at rest, not a protection fault. */
+    if (((Fault_Flag_Fisrt.all | Fault_Flag_Second.all | Fault_Flag_Third.all) & 0x0FFFU) != 0U)
+        blocks |= LP_BLOCK_PROTECTION;
     if (OtherElement.u16Sys_SeriesNum == 0U || OtherElement.u16Sys_SeriesNum > SNum)
         blocks |= LP_BLOCK_CONFIG;
     if (refresh_afe)
