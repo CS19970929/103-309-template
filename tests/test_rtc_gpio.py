@@ -24,18 +24,24 @@ STUBS = r'''
 #define GPIO_Pin_All 0xffffu
 #define GPIO_Pin_0 (1u << 0)
 #define GPIO_Pin_2 (1u << 2)
+#define GPIO_Pin_3 (1u << 3)
 #define GPIO_Pin_4 (1u << 4)
+#define GPIO_Pin_7 (1u << 7)
 #define GPIO_Pin_9 (1u << 9)
 #define GPIO_Pin_12 (1u << 12)
 #define GPIO_Pin_13 (1u << 13)
 #define GPIO_Pin_14 (1u << 14)
 #define PIN_INT_WK_MCU GPIO_Pin_0
 #define PIN_KEY1 GPIO_Pin_9
+#define PIN_SCI1_RX GPIO_Pin_7
+#define PIN_SCI2_RX GPIO_Pin_3
 #define PIN_INT_WK_CMNT GPIO_Pin_12
 #define PIN_AFE1_CTL GPIO_Pin_14
 #define GPIO_Mode_AIN 0
 #define GPIO_Mode_Out_PP 1
 #define GPIO_Mode_IN_FLOATING 2
+#define GPIO_Mode_IPD 3
+#define GPIO_Mode_IPU 4
 #define GPIO_Speed_2MHz 2
 #define RCC_APB2Periph_GPIOA 1
 #define RCC_APB2Periph_GPIOB 2
@@ -68,14 +74,17 @@ static void GPIO_Init(unsigned port, GPIO_InitTypeDef *init) {
 TESTS = r'''
 int main(void) {
     unsigned n;
-    modes[GPIOA][0]=modes[GPIOA][9]=modes[GPIOB][12]=GPIO_Mode_IN_FLOATING;
+    modes[GPIOA][0]=modes[GPIOA][3]=modes[GPIOA][9]=GPIO_Mode_IN_FLOATING;
+    modes[GPIOB][7]=modes[GPIOB][12]=GPIO_Mode_IN_FLOATING;
     modes[GPIOB][14]=GPIO_Mode_Out_PP;
     external_pending=1; /* an already latched real event must survive IO setup */
     for (n=0; n<2; ++n) {
         IOstatus_RTCMode();
         assert(!key_pending && key_level);
         assert(modes[GPIOA][0]==GPIO_Mode_IN_FLOATING);
+        assert(modes[GPIOA][3]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOA][9]==GPIO_Mode_IN_FLOATING);
+        assert(modes[GPIOB][7]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOB][12]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOB][14]==GPIO_Mode_Out_PP);
         assert(external_pending);

@@ -27,12 +27,43 @@
 #include "stm32f10x.h"
 
 /* Exported types ------------------------------------------------------------*/
+typedef struct
+{
+  uint32_t magic;
+  uint32_t count;
+  uint32_t stack_pointer;
+  uint32_t exc_return;
+  uint32_t r0;
+  uint32_t r1;
+  uint32_t r2;
+  uint32_t r3;
+  uint32_t r12;
+  uint32_t lr;
+  uint32_t pc;
+  uint32_t xpsr;
+  uint32_t cfsr;
+  uint32_t hfsr;
+  uint32_t dfsr;
+  uint32_t mmfar;
+  uint32_t bfar;
+  uint32_t afsr;
+  uint32_t shcsr;
+  uint32_t icsr;
+  uint32_t wake_reason;
+  uint32_t usart1_sr;
+  uint32_t usart2_sr;
+  uint32_t exti_pr;
+  uint32_t rtc_crl;
+} HardFaultRecord;
+
+extern volatile HardFaultRecord g_hardfault_record;
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 
 void NMI_Handler(void);
 void HardFault_Handler(void);
+void HardFault_Record(uint32_t *stack_pointer, uint32_t exc_return);
 void MemManage_Handler(void);
 void BusFault_Handler(void);
 void UsageFault_Handler(void);

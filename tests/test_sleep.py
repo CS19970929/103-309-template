@@ -43,6 +43,8 @@ typedef uint32_t UINT32;
 #define log_e(...) ((void)0)
 #define log_a(...) ((void)0)
 #define EXTI_Line0 (1u << 0)
+#define EXTI_Line3 (1u << 3)
+#define EXTI_Line7 (1u << 7)
 #define EXTI_Line9 (1u << 9)
 #define EXTI_Line12 (1u << 12)
 #define EXTI_Line17 (1u << 17)
@@ -57,12 +59,25 @@ POLICY_STUBS = r'''
 #define AFE_TYPE 1
 #define sh36xx 1
 #define GPIOA 0
+#define GPIOB 1
+#define GPIO_INT_WK_MCU GPIOA
+#define GPIO_INT_WK_CMNT GPIOB
+#define GPIO_SCI1_RX GPIOB
+#define GPIO_SCI2_RX GPIOA
 #define GPIO_KEY1 0
 #define GPIO_Pin_0 1
 #define PIN_KEY1 512
+#define PIN_INT_WK_MCU GPIO_Pin_0
+#define PIN_INT_WK_CMNT 4096
+#define PIN_SCI1_RX 128
+#define PIN_SCI2_RX 8
 #define USART1 1
 #define USART2 2
 #define USART_FLAG_TC 1
+#define EXTI0_IRQn 0
+#define EXTI3_IRQn 1
+#define EXTI9_5_IRQn 2
+#define EXTI15_10_IRQn 3
 #define RS485_STA_IDLE 0
 #define _DI_SWITCH_longKEY_ONOFF
 #define MCUI_ENI_DI1 key_released
@@ -100,6 +115,7 @@ UINT32 su32_Interval_S_Tcnt;
 volatile bool is_rtc_wakekup;
 static UINT8 mtp_ok, balance, status_fault, fet_chg, fet_dsg, update_failed, charger, key_released;
 static UINT8 tc, rtc_ok, arm_ok, afe_ok, restore_calls, stop_calls, reset_calls;
+static UINT32 primask_state;
 static UINT8 arm_edge, stop_fault, stop_external, log_calls, erase_calls, program_calls, locked;
 static UINT8 eeprom_failure, eeprom_calls;
 static UINT32 rtc_counter, stop_elapsed;
@@ -129,8 +145,24 @@ static UINT8 MTPRead(UINT8 address, UINT8 count, UINT8 *dest) {
     return 1;
 }
 static void CellBalance_UpdateReport(UINT16 mask) { g_stCellInfoReport.u16BalanceFlag1=mask; }
-static UINT8 GPIO_ReadInputDataBit(int port, int pin) { (void)port; return pin==PIN_KEY1 ? key_released : charger; }
+static UINT8 GPIO_ReadInputDataBit(int port, int pin) {
+    (void)port;
+    if (pin==PIN_KEY1) return key_released;
+    if (pin==PIN_SCI1_RX || pin==PIN_SCI2_RX) return 1;
+    return charger;
+}
 static UINT8 USART_GetFlagStatus(int port, int flag) { (void)port; (void)flag; return tc; }
+static void NVIC_ClearPendingIRQ(int irq) { (void)irq; }
+static UINT8 Sci_CommonUpperHasPendingWork(void) {
+    return gu8_TxEnable_SCI1 || gu8_TxEnable_SCI2 ||
+        g_stCurrentMsgPtr_SCI1.ptr_no || g_stCurrentMsgPtr_SCI2.ptr_no ||
+        g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
+        g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE || !tc;
+}
+static UINT8 Sci_CommonUpperPrepareStop(void) { return !Sci_CommonUpperHasPendingWork(); }
+static UINT32 __get_PRIMASK(void) { return primask_state; }
+static void __disable_irq(void) { primask_state=1; }
+static void __set_PRIMASK(UINT32 value) { primask_state=value; }
 static void DataLoad_Current(void) {}
 static void DataLoad_CellVolt(void) {}
 static void DataLoad_CellVoltMaxMinFind(void) {}
@@ -189,6 +221,7 @@ static void defaults(void) {
     mtp_ok=fet_chg=fet_dsg=key_released=tc=rtc_ok=arm_ok=afe_ok=1;
     charger=balance=status_fault=update_failed=arm_edge=stop_fault=stop_external=0;
     restore_calls=stop_calls=reset_calls=erase_calls=program_calls=log_calls=0;
+    primask_state=0;
     u8FlashUpdateFlag=u8FlashUpdateE2PROM=gu8_TxEnable_SCI1=gu8_TxEnable_SCI2=0;
     gu8_Reset_EventRecord=0; u32E2P_OtherElement1_WriteFlag=0;
     memset(&g_stCurrentMsgPtr_SCI1,0,sizeof(g_stCurrentMsgPtr_SCI1));
@@ -208,6 +241,8 @@ static void defaults(void) {
 static void tick(void) { gu8_1000msAccClock_Flag=1; rtc_sleep(); }
 static void ticks(int n) { while(n--) tick(); }
 int main(void) {
+    defaults(); rtc_sleep_record_wakeup(uart1_irq); rtc_sleep_record_wakeup(uart2_irq);
+    assert(g_irq_t==uart1_irq);
     defaults(); ticks(30); assert(stop_calls==0); tick(); assert(stop_calls==2 && restore_calls==1);
     assert(su32_Interval_S_Tcnt==20 && s_sleep_mode==NO_SLEEP);
     defaults(); g_stCellInfoReport.u16VCellMin=2600; ticks(59); assert(reset_calls==0);

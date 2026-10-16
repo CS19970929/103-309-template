@@ -14,6 +14,7 @@ typedef enum _SLEEP_MODE {
 } SLEEP_MODE;
 extern volatile enum irqWakeup g_irq_t;
 extern volatile UINT32 RTC_ExtComCnt;
+void rtc_sleep_record_wakeup(enum irqWakeup source);
 void entersleep(enum _SLEEP_MODE mode);
 void rtc_sleep(void);
 

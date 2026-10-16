@@ -111,10 +111,17 @@ void InitWakeUp_Base(void)
     jtag_disableAndConfIO();
 #if 1
     {
+        NVIC_DisableIRQ(EXTI0_IRQn);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line0;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+        EXTI_Init(&EXTI_InitStruct);
         GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_MCU; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
         GPIO_Init(GPIO_INT_WK_MCU, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+        EXTI_ClearITPendingBit(EXTI_Line0);
         EXTI_InitStruct.EXTI_Line = EXTI_Line0;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
         EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
@@ -124,14 +131,22 @@ void InitWakeUp_Base(void)
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_ClearPendingIRQ(EXTI0_IRQn);
         NVIC_Init(&NVIC_InitStructure);
     }
 
     {
+        NVIC_DisableIRQ(EXTI9_5_IRQn);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line9;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+        EXTI_Init(&EXTI_InitStruct);
         GPIO_InitStructure.GPIO_Pin = PIN_KEY1; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
         GPIO_Init(GPIO_KEY1, &GPIO_InitStructure);
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource9);
+        EXTI_ClearITPendingBit(EXTI_Line9);
         EXTI_InitStruct.EXTI_Line = EXTI_Line9;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
         EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
@@ -141,6 +156,7 @@ void InitWakeUp_Base(void)
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
         NVIC_Init(&NVIC_InitStructure);
     }
 #endif
@@ -155,42 +171,55 @@ void InitWakeUp_NormalMode(void)
     InitWakeUp_Base();
 
     {
-        // GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line7;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI9_5_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
+        /* UART start bits are falling edges. The pull-ups keep an unplugged or
+           unpowered communication box at the UART idle level. */
+        GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+        GPIO_Init(GPIO_SCI1_RX, &GPIO_InitStructure);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
+        EXTI_ClearITPendingBit(EXTI_Line7);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line7;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStruct);
 
-        // GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX; // ?????GPIO??,PA0?????
-        // GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-        // GPIO_Init(GPIO_SCI2_RX, &GPIO_InitStructure);
-        // GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource3);
-        // EXTI_InitStruct.EXTI_Line = EXTI_Line3;
-        // EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-        // EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
-        // EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-        // EXTI_Init(&EXTI_InitStruct);
-        // NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
-        // NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-        // NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-        // NVIC_Init(&NVIC_InitStructure);
+        NVIC_DisableIRQ(EXTI3_IRQn);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line3;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+        EXTI_Init(&EXTI_InitStruct);
+        GPIO_InitStructure.GPIO_Pin = PIN_SCI2_RX;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+        GPIO_Init(GPIO_SCI2_RX, &GPIO_InitStructure);
+        GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource3);
+        EXTI_ClearITPendingBit(EXTI_Line3);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line3;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStruct.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStruct);
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI3_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_ClearPendingIRQ(EXTI3_IRQn);
+        NVIC_Init(&NVIC_InitStructure);
     }
     {
+        NVIC_DisableIRQ(EXTI15_10_IRQn);
+        EXTI_InitStruct.EXTI_Line = EXTI_Line12;
+        EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
+        EXTI_InitStruct.EXTI_LineCmd = DISABLE;
+        EXTI_Init(&EXTI_InitStruct);
         GPIO_InitStructure.GPIO_Pin = PIN_INT_WK_CMNT; // ?????GPIO??,PA0?????
-        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+        GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPD;
         GPIO_Init(GPIO_INT_WK_CMNT, &GPIO_InitStructure);
 
         GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource12);
+        EXTI_ClearITPendingBit(EXTI_Line12);
         EXTI_InitStruct.EXTI_Line = EXTI_Line12;
         EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
         EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Rising;
@@ -201,6 +230,7 @@ void InitWakeUp_NormalMode(void)
         NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
         NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
         NVIC_Init(&NVIC_InitStructure);
     }
 }
@@ -267,7 +297,7 @@ void IOstatus_RTCMode(void)
     /* Wake inputs stay digital across RTC cycles: analog PA9 creates a false
        falling edge while EXTI9 is armed. Keep SWD pins available for debugging. */
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
-        ~(PIN_INT_WK_MCU | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
+        ~(PIN_INT_WK_MCU | PIN_SCI2_RX | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -277,7 +307,8 @@ void IOstatus_RTCMode(void)
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All & ~(PIN_AFE1_CTL | PIN_INT_WK_CMNT);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
+        ~(PIN_SCI1_RX | PIN_AFE1_CTL | PIN_INT_WK_CMNT);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif

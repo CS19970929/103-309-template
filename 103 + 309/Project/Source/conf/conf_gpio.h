@@ -78,6 +78,9 @@
 #define GPIO_SCI1_RX	     GPIOB
 #define PIN_SCI1_RX	     GPIO_Pin_7
 
+#define GPIO_SCI2_RX       GPIOA
+#define PIN_SCI2_RX        GPIO_Pin_3
+
 #define GPIO_INT_WK_CMNT         GPIOB
 #define PIN_INT_WK_CMNT          GPIO_Pin_12
 

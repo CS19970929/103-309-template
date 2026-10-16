@@ -19,6 +19,12 @@ static UINT8 s_started;
 volatile UINT32 RTC_ExtComCnt;
 volatile enum irqWakeup g_irq_t = NO_IRQ;
 
+void rtc_sleep_record_wakeup(enum irqWakeup source)
+{
+    if (g_irq_t == NO_IRQ)
+        g_irq_t = source;
+}
+
 void entersleep(enum _SLEEP_MODE mode)
 {
     if (mode == NO_SLEEP)
@@ -231,18 +237,8 @@ static bool sleep_has_pending_work(void)
         u32E2P_HeatCool_WriteFlag || u32E2P_RTC_Element_WriteFlag ||
         u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u8E2P_KB_WriteFlag)
         return true;
-// #ifdef _COMMOM_UPPER_SCI1
-//     if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
-//         g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
-//         USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
-//         return true;
-// #endif
-#ifdef _COMMOM_UPPER_SCI2
-    if (gu8_TxEnable_SCI2 || g_stCurrentMsgPtr_SCI2.ptr_no ||
-        g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE ||
-        USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET)
+    if (Sci_CommonUpperHasPendingWork())
         return true;
-#endif
     return false;
 }
 
@@ -306,12 +302,18 @@ static bool sleep_rtc_has_exception(void)
            g_stCellInfoReport.u16VCellMin <= SLEEP_FORCE_LOW_MV;
 }
 
-static void sleep_restore_run(void)
+static void sleep_restore_run(UINT8 restore_peripherals)
 {
     RTC_DisableStopAlarm();
-    EXTI->IMR &= ~(EXTI_Line0 | EXTI_Line9 | EXTI_Line12);
-    EXTI_ClearITPendingBit(EXTI_Line0 | EXTI_Line9 | EXTI_Line12);
-    InitRunAfterStop();
+    EXTI->IMR &= ~(EXTI_Line0 | EXTI_Line3 | EXTI_Line7 | EXTI_Line9 | EXTI_Line12);
+    EXTI_ClearITPendingBit(EXTI_Line0 | EXTI_Line3 | EXTI_Line7 |
+                           EXTI_Line9 | EXTI_Line12);
+    NVIC_ClearPendingIRQ(EXTI0_IRQn);
+    NVIC_ClearPendingIRQ(EXTI3_IRQn);
+    NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
+    NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
+    if (restore_peripherals)
+        InitRunAfterStop();
     s_idle_seconds = 0U;
     s_low_seconds = 0U;
     s_force_seconds = 0U;
@@ -322,6 +324,8 @@ static void sleep_restore_run(void)
 static void sleep_run_rtc(void)
 {
     UINT32 start_counter;
+    UINT32 primask;
+    UINT8 stop_io_prepared = 0U;
 
     g_irq_t = NO_IRQ;
     is_rtc_wakekup = false;
@@ -339,16 +343,41 @@ static void sleep_run_rtc(void)
             isErr_enterRTC() || AFE_SleepMode_Judge() != 0U)
             break;
         is_rtc_wakekup = false;
+        /* Keep the last busy check, wake-source setup and WFI race-free. */
+        primask = __get_PRIMASK();
+        __disable_irq();
+        if (!stop_io_prepared)
+        {
+            /* Arm RX falling-edge EXTI before stopping USART, so no start bit
+               can fall into the handover gap between the two wake mechanisms. */
+            InitWakeUp_RTCMode();
+            if (!Sci_CommonUpperPrepareStop())
+            {
+                __set_PRIMASK(primask);
+                break;
+            }
+            stop_io_prepared = 1U;
+        }
+        /* AFE/I2C pins were restored for the periodic sample; lower them again. */
         IOstatus_RTCMode();
-        InitWakeUp_RTCMode();
         if (!RTC_WKTimeConfig())
+        {
+            __set_PRIMASK(primask);
             break;
+        }
         if (RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            // GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) ||
+            GPIO_ReadInputDataBit(GPIO_INT_WK_MCU, PIN_INT_WK_MCU) ||
+            GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) ||
+            !GPIO_ReadInputDataBit(GPIO_SCI1_RX, PIN_SCI1_RX) ||
+            !GPIO_ReadInputDataBit(GPIO_SCI2_RX, PIN_SCI2_RX) ||
             !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) || g_irq_t != NO_IRQ)
+        {
+            __set_PRIMASK(primask);
             break;
+        }
         Feed_IWatchDog;
         Sys_StopMode();
+        __set_PRIMASK(primask);
         Feed_IWatchDog;
         initAFE1_IIC();
         if (g_irq_t != NO_IRQ || !is_rtc_wakekup || sleep_rtc_has_exception())
@@ -357,7 +386,7 @@ static void sleep_run_rtc(void)
 
     /* Unsigned RTC subtraction handles counter wrap and partial external wakes. */
     su32_Interval_S_Tcnt += RTC_GetCounter() - start_counter;
-    sleep_restore_run();
+    sleep_restore_run(stop_io_prepared);
 }
 
 void rtc_sleep(void)

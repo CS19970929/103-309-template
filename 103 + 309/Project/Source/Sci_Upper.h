@@ -584,10 +584,15 @@ extern struct nrb_protect num_pro;
 
 void Sci1_CommonUpper_FaultChk(void);
 void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s);
+UINT8 Sci1_CommonUpper_IRQHandler(struct RS485MSG *s);
 void Sci2_CommonUpper_FaultChk(void);
 void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s);
+UINT8 Sci2_CommonUpper_IRQHandler(struct RS485MSG *s);
 void Sci3_CommonUpper_FaultChk(void);
 void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s);
+
+UINT8 Sci_CommonUpperHasPendingWork(void);
+UINT8 Sci_CommonUpperPrepareStop(void);
 
 void InitUSART_CommonUpper(void);
 void InitSCI1_CommonUpper_rtc(void);

@@ -30,6 +30,73 @@ struct stCell_Info g_stCellInfoReport;
 UINT8 u8FlashUpdateFlag = 0;
 UINT8 u8FlashUpdateE2PROM = 0;
 
+/* USARTs are quiesced once for the whole periodic RTC sleep loop. */
+static UINT8 s_common_usarts_stopped;
+
+UINT8 Sci_CommonUpperHasPendingWork(void)
+{
+	if (s_common_usarts_stopped)
+		return 0U;
+#ifdef _COMMOM_UPPER_SCI1
+	if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
+		g_stCurrentMsgPtr_SCI1.csr != RS485_STA_IDLE ||
+		USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET ||
+		(USART1->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
+						USART_SR_FE | USART_SR_PE)))
+		return 1U;
+#endif
+#ifdef _COMMOM_UPPER_SCI2
+	if (gu8_TxEnable_SCI2 || g_stCurrentMsgPtr_SCI2.ptr_no ||
+		g_stCurrentMsgPtr_SCI2.csr != RS485_STA_IDLE ||
+		USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET ||
+		(USART2->SR & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
+						USART_SR_FE | USART_SR_PE)))
+		return 1U;
+#endif
+	return 0U;
+}
+
+UINT8 Sci_CommonUpperPrepareStop(void)
+{
+	UINT32 primask;
+	volatile UINT32 status = 0U;
+	volatile UINT32 data = 0U;
+
+	if (s_common_usarts_stopped)
+		return 1U;
+
+	primask = __get_PRIMASK();
+	__disable_irq();
+	if (Sci_CommonUpperHasPendingWork())
+	{
+		__set_PRIMASK(primask);
+		return 0U;
+	}
+
+#ifdef _COMMOM_UPPER_SCI1
+	USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
+	USART1->CR3 &= ~USART_CR3_EIE;
+	NVIC_DisableIRQ(USART1_IRQn);
+	status = USART1->SR;
+	data = USART1->DR;
+	USART_Cmd(USART1, DISABLE);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+#endif
+#ifdef _COMMOM_UPPER_SCI2
+	USART_ITConfig(USART2, USART_IT_RXNE, DISABLE);
+	USART2->CR3 &= ~USART_CR3_EIE;
+	NVIC_DisableIRQ(USART2_IRQn);
+	status = USART2->SR;
+	data = USART2->DR;
+	USART_Cmd(USART2, DISABLE);
+	NVIC_ClearPendingIRQ(USART2_IRQn);
+#endif
+	(void)status;
+	(void)data;
+	s_common_usarts_stopped = 1U;
+	__set_PRIMASK(primask);
+	return 1U;
+}
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s);
@@ -806,35 +873,19 @@ void Sci_ACK_0x06_0x10(struct RS485MSG *s)
 #if (defined _COMMOM_UPPER_SCI1)
 void Sci1_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART1->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART1->SR &= ~0x08;
-		FaultCnt++;
-	}
+	UINT32 status = USART1->SR;
+	volatile UINT32 data;
 
-	if (USART1->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART1->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART1->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART1->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART1->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART1->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (status & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
 	{
-		gu16_CommuErrCnt_SCI1++;
+		/* STM32F1 clears receive errors only by reading SR and then DR. */
+		data = USART1->DR;
+		(void)data;
+		if (gu16_CommuErrCnt_SCI1 != 0xFFFFU)
+			gu16_CommuErrCnt_SCI1++;
+		g_stCurrentMsgPtr_SCI1.ptr_no = 0U;
+		g_stCurrentMsgPtr_SCI1.csr = RS485_STA_IDLE;
+		g_stCurrentMsgPtr_SCI1.u16Buffer[0] = 0U;
 	}
 }
 
@@ -851,13 +902,15 @@ void Sci1_CommonUpper_FaultChk(void)
  * CALLED BY:ISR()
  *
  *=================================================================*/
-void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s)
+static void Sci1_CommonUpper_RxByte(struct RS485MSG *s, UINT8 data)
 {
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART1_IRQn);
 	USART1->CR1 &= ~(1 << 5);			  // 和上面那句话二选一
-	s->u16Buffer[s->ptr_no] = USART1->DR; // 从RXFIFO 中读取接收到的数据
+	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
+		s->ptr_no = 0U;
+	s->u16Buffer[s->ptr_no] = data; // 从RXFIFO 中读取接收到的数据
 	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
 	{
 		s->ptr_no = 0;
@@ -928,6 +981,36 @@ void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s)
 	USART1->CR1 |= (1 << 5);
 }
 
+void Sci1_CommonUpper_Rx_Deal(struct RS485MSG *s)
+{
+	Sci1_CommonUpper_RxByte(s, (UINT8)USART1->DR);
+}
+
+UINT8 Sci1_CommonUpper_IRQHandler(struct RS485MSG *s)
+{
+	UINT32 status;
+	volatile UINT32 data;
+
+	status = USART1->SR;
+	if ((status & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
+					 USART_SR_FE | USART_SR_PE)) == 0U)
+		return 0U;
+
+	data = USART1->DR;
+	if (status & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
+	{
+		if (gu16_CommuErrCnt_SCI1 != 0xFFFFU)
+			gu16_CommuErrCnt_SCI1++;
+		s->ptr_no = 0U;
+		s->csr = RS485_STA_IDLE;
+		s->u16Buffer[0] = 0U;
+		return 0U;
+	}
+
+	Sci1_CommonUpper_RxByte(s, (UINT8)data);
+	return 1U;
+}
+
 void Sci1_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	static int delayFlag = 0;
@@ -994,12 +1077,14 @@ void InitSCI1_CommonUpper_rtc(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 	GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE); // PB6,PB7
 
+	NVIC_DisableIRQ(USART1_IRQn);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+
 	// Enable the USART1 Interrupt(使能USART1中断)
 	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级3
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	// USART1_TX   PA9
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6; // PA9
@@ -1009,7 +1094,7 @@ void InitSCI1_CommonUpper_rtc(void)
 
 	// USART1_RX	  PA10初始化
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;			  // PA10
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 浮空输入，做RX
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	// 串口初始化
@@ -1023,10 +1108,14 @@ void InitSCI1_CommonUpper_rtc(void)
 
 	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
-	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
-	USART_Cmd(USART1, ENABLE);					   // 使能串口1
-
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI1);
+	USART_Cmd(USART1, ENABLE);
+	(void)USART1->SR;
+	(void)USART1->DR;
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+	NVIC_Init(&NVIC_InitStructure);
+	s_common_usarts_stopped = 0U;
 }
 // 串口初始化函数
 void InitSCI1_CommonUpper(void)
@@ -1040,12 +1129,14 @@ void InitSCI1_CommonUpper(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 	GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE); // PB6,PB7
 
+	NVIC_DisableIRQ(USART1_IRQn);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+
 	// Enable the USART1 Interrupt(使能USART1中断)
 	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级3
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	// USART1_TX   PA9
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6; // PA9
@@ -1055,7 +1146,7 @@ void InitSCI1_CommonUpper(void)
 
 	// USART1_RX	  PA10初始化
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;			  // PA10
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 浮空输入，做RX
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	_baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
@@ -1091,10 +1182,14 @@ void InitSCI1_CommonUpper(void)
 
 	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
-	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
-	USART_Cmd(USART1, ENABLE);					   // 使能串口1
-
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI1);
+	USART_Cmd(USART1, ENABLE);
+	(void)USART1->SR;
+	(void)USART1->DR;
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+	NVIC_ClearPendingIRQ(USART1_IRQn);
+	NVIC_Init(&NVIC_InitStructure);
+	s_common_usarts_stopped = 0U;
 }
 
 void App_CommonUpperSCI1(struct RS485MSG *s)
@@ -1406,35 +1501,18 @@ void App_CommonUpperSCI1(struct RS485MSG *s)
 
 void Sci2_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART2->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART2->SR &= ~0x08;
-		FaultCnt++;
-	}
+	UINT32 status = USART2->SR;
+	volatile UINT32 data;
 
-	if (USART2->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART2->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART2->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART2->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART2->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART2->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (status & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
 	{
-		gu16_CommuErrCnt_SCI2++;
+		data = USART2->DR;
+		(void)data;
+		if (gu16_CommuErrCnt_SCI2 != 0xFFFFU)
+			gu16_CommuErrCnt_SCI2++;
+		g_stCurrentMsgPtr_SCI2.ptr_no = 0U;
+		g_stCurrentMsgPtr_SCI2.csr = RS485_STA_IDLE;
+		g_stCurrentMsgPtr_SCI2.u16Buffer[0] = 0U;
 	}
 }
 
@@ -1451,13 +1529,15 @@ void Sci2_CommonUpper_FaultChk(void)
  * CALLED BY:ISR()
  *
  *=================================================================*/
-void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
+static void Sci2_CommonUpper_RxByte(struct RS485MSG *s, UINT8 data)
 {
 	// RC1IE = 0;// 禁止EUSART2 接收中断
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART1_IRQn);
 	USART2->CR1 &= ~(1 << 5);			  // 和上面那句话二选一
-	s->u16Buffer[s->ptr_no] = USART2->DR; // 从RXFIFO 中读取接收到的数据
+	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
+		s->ptr_no = 0U;
+	s->u16Buffer[s->ptr_no] = data; // 从RXFIFO 中读取接收到的数据
 
 	if ((s->u16Buffer[0] == RS485_SLAVE_ADDR) || (s->u16Buffer[0] == RS485_BROADCAST_ADDR))
 	{
@@ -1740,6 +1820,36 @@ void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
 
 	USART2->CR1 |= (1 << 5);
 }
+void Sci2_CommonUpper_Rx_Deal(struct RS485MSG *s)
+{
+	Sci2_CommonUpper_RxByte(s, (UINT8)USART2->DR);
+}
+
+UINT8 Sci2_CommonUpper_IRQHandler(struct RS485MSG *s)
+{
+	UINT32 status;
+	volatile UINT32 data;
+
+	status = USART2->SR;
+	if ((status & (USART_SR_RXNE | USART_SR_ORE | USART_SR_NE |
+					 USART_SR_FE | USART_SR_PE)) == 0U)
+		return 0U;
+
+	data = USART2->DR;
+	if (status & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
+	{
+		if (gu16_CommuErrCnt_SCI2 != 0xFFFFU)
+			gu16_CommuErrCnt_SCI2++;
+		s->ptr_no = 0U;
+		s->csr = RS485_STA_IDLE;
+		s->u16Buffer[0] = 0U;
+		return 0U;
+	}
+
+	Sci2_CommonUpper_RxByte(s, (UINT8)data);
+	return 1U;
+}
+
 void Sci2_CommonUpper_Tx_Deal(struct RS485MSG *s)
 {
 	static int delayFlag = 0;
@@ -1804,12 +1914,14 @@ void InitSCI2_CommonUpper_rtc(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 
+	NVIC_DisableIRQ(USART2_IRQn);
+	NVIC_ClearPendingIRQ(USART2_IRQn);
+
 	// Enable the USART1 Interrupt(使能USART1中断)
 	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级3
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	// USART2_TX   PA2
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
@@ -1819,7 +1931,7 @@ void InitSCI2_CommonUpper_rtc(void)
 
 	// USART2_RX	  PA3
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 浮空输入，做RX
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	// 串口初始化
@@ -1833,10 +1945,14 @@ void InitSCI2_CommonUpper_rtc(void)
 
 	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
-	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
-	USART_Cmd(USART2, ENABLE);					   // 使能串口2
-
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI2);
+	USART_Cmd(USART2, ENABLE);
+	(void)USART2->SR;
+	(void)USART2->DR;
+	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+	NVIC_ClearPendingIRQ(USART2_IRQn);
+	NVIC_Init(&NVIC_InitStructure);
+	s_common_usarts_stopped = 0U;
 }
 // 串口初始化函数
 void InitSCI2_CommonUpper(void)
@@ -1849,12 +1965,14 @@ void InitSCI2_CommonUpper(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 
+	NVIC_DisableIRQ(USART2_IRQn);
+	NVIC_ClearPendingIRQ(USART2_IRQn);
+
 	// Enable the USART1 Interrupt(使能USART1中断)
 	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级3
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	// USART2_TX   PA2
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
@@ -1864,7 +1982,7 @@ void InitSCI2_CommonUpper(void)
 
 	// USART2_RX	  PA3
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 浮空输入，做RX
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
 	_Baud = ReadEEPROM_Word_NoZone(E2P_ADDR_BAUD_RECORD);
@@ -1896,10 +2014,14 @@ void InitSCI2_CommonUpper(void)
 
 	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
-	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
-	USART_Cmd(USART2, ENABLE);					   // 使能串口2
-
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI2);
+	USART_Cmd(USART2, ENABLE);
+	(void)USART2->SR;
+	(void)USART2->DR;
+	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+	NVIC_ClearPendingIRQ(USART2_IRQn);
+	NVIC_Init(&NVIC_InitStructure);
+	s_common_usarts_stopped = 0U;
 }
 
 void App_CommonUpperSCI2(struct RS485MSG *s)
@@ -2204,35 +2326,18 @@ void App_CommonUpperSCI2(struct RS485MSG *s)
 #if (defined _COMMOM_UPPER_SCI3)
 void Sci3_CommonUpper_FaultChk(void)
 {
-	UINT8 FaultCnt = 0;
-	if (USART3->SR & 0x08)
-	{ // 接收溢出错误，RXNEIE或EIE使能产生中断，开
-		USART3->SR &= ~0x08;
-		FaultCnt++;
-	}
+	UINT32 status = USART3->SR;
+	volatile UINT32 data;
 
-	if (USART3->SR & 0x04)
-	{ // 检测到噪声，默认开，不开的话CR3的ONEBIT置1，不开
-	  // USART_CR3的EIE使能中断
-		USART3->SR &= ~0x04;
-		FaultCnt++;
-	}
-
-	if (USART3->SR & 0x02)
-	{						 // 帧错误，USART_CR3的EIE使能中断，开
-		USART3->SR &= ~0x02; // 清除
-		FaultCnt++;
-	}
-
-	if (USART3->SR & 0x01)
-	{						 // 奇偶校验错误标志 USART_CR1的PEIE使能该中断，不开
-		USART3->SR &= ~0x01; // 清除
-		FaultCnt++;
-	}
-
-	if (FaultCnt)
+	if (status & (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
 	{
-		gu16_CommuErrCnt_SCI3++;
+		data = USART3->DR;
+		(void)data;
+		if (gu16_CommuErrCnt_SCI3 != 0xFFFFU)
+			gu16_CommuErrCnt_SCI3++;
+		g_stCurrentMsgPtr_SCI3.ptr_no = 0U;
+		g_stCurrentMsgPtr_SCI3.csr = RS485_STA_IDLE;
+		g_stCurrentMsgPtr_SCI3.u16Buffer[0] = 0U;
 	}
 }
 
@@ -2255,6 +2360,8 @@ void Sci3_CommonUpper_Rx_Deal(struct RS485MSG *s)
 	// s->u16Buffer[s->ptr_no] = RCREG1;                 //读RCREG寄存器来读取接收到的8位数据
 	// NVIC_DisableIRQ(USART3_IRQn);
 	USART3->CR1 &= ~(1 << 5);			  // 和上面那句话二选一
+	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
+		s->ptr_no = 0U;
 	s->u16Buffer[s->ptr_no] = USART3->DR; // 从RXFIFO 中读取接收到的数据
 	if ((s->ptr_no == 0) && (s->u16Buffer[0] != RS485_SLAVE_ADDR) && (s->u16Buffer[0] != RS485_BROADCAST_ADDR))
 	{
@@ -2391,12 +2498,14 @@ void InitSCI3_CommonUpper(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
 	GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
+
+	NVIC_DisableIRQ(USART3_IRQn);
+	NVIC_ClearPendingIRQ(USART3_IRQn);
 	// Enable the USART3 Interrupt(使能USART3中断)
 	NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 抢占优先级3
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
 
 	// USART3_TX   PD8
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
@@ -2406,7 +2515,7 @@ void InitSCI3_CommonUpper(void)
 
 	// USART3_RX	  PD9初始化
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入，做RX
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // 浮空输入，做RX
 	GPIO_Init(GPIOD, &GPIO_InitStructure);
 
 	// 串口初始化
@@ -2420,10 +2529,14 @@ void InitSCI3_CommonUpper(void)
 
 	USART3->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
 
-	USART_ITConfig(USART3, USART_IT_RXNE, ENABLE); // 使能接收中断
-	USART_Cmd(USART3, ENABLE);					   // 使能串口3
-
 	Sci_DataInit(&g_stCurrentMsgPtr_SCI3);
+	USART_Cmd(USART3, ENABLE);
+	(void)USART3->SR;
+	(void)USART3->DR;
+	USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
+	NVIC_ClearPendingIRQ(USART3_IRQn);
+	NVIC_Init(&NVIC_InitStructure);
+	s_common_usarts_stopped = 0U;
 }
 
 void App_CommonUpperSCI3(struct RS485MSG *s)

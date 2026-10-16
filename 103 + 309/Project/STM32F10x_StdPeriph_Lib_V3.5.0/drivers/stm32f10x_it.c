@@ -55,23 +55,60 @@ void NMI_Handler(void)
 {
 }
 
-__asm void wait()
-{
-  BX lr
-}
+#define HARDFAULT_SRAM_START   0x20000000UL
+#define HARDFAULT_SRAM_END     0x20005000UL
 
-/**
- * @brief  This function handles Hard Fault exception.
- * @param  None
- * @retval None
- */
-void HardFault_Handler(void)
+volatile HardFaultRecord g_hardfault_record;
+
+void HardFault_Record(uint32_t *stack_pointer, uint32_t exc_return)
 {
-  /* Go to infinite loop when Hard Fault exception occurs */
+  uint32_t stack_address = (uint32_t)stack_pointer;
+
+  g_hardfault_record.magic = 0x48465231UL;
+  g_hardfault_record.count++;
+  g_hardfault_record.stack_pointer = stack_address;
+  g_hardfault_record.exc_return = exc_return;
+  if (stack_address >= HARDFAULT_SRAM_START &&
+      stack_address <= HARDFAULT_SRAM_END - (8U * sizeof(uint32_t)))
+  {
+    g_hardfault_record.r0 = stack_pointer[0];
+    g_hardfault_record.r1 = stack_pointer[1];
+    g_hardfault_record.r2 = stack_pointer[2];
+    g_hardfault_record.r3 = stack_pointer[3];
+    g_hardfault_record.r12 = stack_pointer[4];
+    g_hardfault_record.lr = stack_pointer[5];
+    g_hardfault_record.pc = stack_pointer[6];
+    g_hardfault_record.xpsr = stack_pointer[7];
+  }
+  g_hardfault_record.cfsr = SCB->CFSR;
+  g_hardfault_record.hfsr = SCB->HFSR;
+  g_hardfault_record.dfsr = SCB->DFSR;
+  g_hardfault_record.mmfar = SCB->MMFAR;
+  g_hardfault_record.bfar = SCB->BFAR;
+  g_hardfault_record.afsr = SCB->AFSR;
+  g_hardfault_record.shcsr = SCB->SHCSR;
+  g_hardfault_record.icsr = SCB->ICSR;
+  g_hardfault_record.wake_reason = (uint32_t)g_irq_t;
+  g_hardfault_record.usart1_sr = USART1->SR;
+  g_hardfault_record.usart2_sr = USART2->SR;
+  g_hardfault_record.exti_pr = EXTI->PR;
+  g_hardfault_record.rtc_crl = RTC->CRL;
+
   while (1)
   {
-    wait();
+    __NOP();
   }
+}
+
+__asm void HardFault_Handler(void)
+{
+  IMPORT HardFault_Record
+  TST LR, #4
+  ITE EQ
+  MRSEQ R0, MSP
+  MRSNE R0, PSP
+  MOV R1, LR
+  B HardFault_Record
 }
 
 /**
@@ -163,7 +200,7 @@ void EXTI0_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line0);
-    g_irq_t = PA0_irq;
+    rtc_sleep_record_wakeup(PA0_irq);
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
   }
 }
@@ -181,6 +218,7 @@ void EXTI3_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line3);
+    rtc_sleep_record_wakeup(uart2_irq);
   }
 }
 
@@ -189,7 +227,7 @@ void EXTI15_10_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line12);
-    g_irq_t = rs485_irq;
+    rtc_sleep_record_wakeup(rs485_irq);
   }
 }
 
@@ -211,11 +249,12 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line7);
+    rtc_sleep_record_wakeup(uart1_irq);
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line9);
-    g_irq_t = bms_keyirq;
+    rtc_sleep_record_wakeup(bms_keyirq);
   }
 }
 
@@ -247,88 +286,35 @@ void EXTI9_5_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI1
-  Sci1_CommonUpper_FaultChk();
-#endif
-
-  if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+  if (Sci1_CommonUpper_IRQHandler(&g_stCurrentMsgPtr_SCI1))
   {
     RTC_ExtComCnt++;
-    g_irq_t = uart1_irq;
-
-#ifdef _COMMOM_UPPER_SCI1
-    Sci1_CommonUpper_FaultChk();
-    Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
-#endif
-
+    rtc_sleep_record_wakeup(uart1_irq);
   }
+#endif
 }
 
 void USART2_IRQHandler(void)
 {
-  uint32_t isr = USART2->SR;
-
-  // ---- 1. 错误检测与清除 ----
-  if (isr & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
-  {
-    volatile uint32_t dump = USART2->DR;
-    (void)dump;
-
-    // 手动清除错误标志（ICR是写1清零）
-    // USART2->CR = (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0);
-
-    // gu16_CommuErrCnt_SCI2++;
-    return;
-  }
-
-  // // ---- 2. 循环读取所有接收到的数据 ----
-  // while (USART2->SR & USART_SR_RXNE)
-  // {
-  // 	uint8_t data = (uint8_t)USART2->RDR;
-  // 	uart_receive_input(data);
-  // }
-
-  // #ifdef _COMMOM_UPPER_SCI2
-  //   Sci2_CommonUpper_FaultChk();
-  // #endif
-
-  if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
+#ifdef _COMMOM_UPPER_SCI2
+  if (Sci2_CommonUpper_IRQHandler(&g_stCurrentMsgPtr_SCI2))
   {
     RTC_ExtComCnt++;
-    g_irq_t = uart2_irq;
-
-#ifdef _COMMOM_UPPER_SCI2
-    Sci2_CommonUpper_FaultChk();
-    Sci2_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI2);
+    rtc_sleep_record_wakeup(uart2_irq);
+  }
 #endif
-
-  }
-
-  // ---- 3. 可选IDLE清除 ----
-  if (isr & USART_SR_IDLE)
-  {
-    volatile uint32_t dump = USART2->DR;
-    (void)dump;
-    // USART2->CR = (1 << 4); // IDLECF
-  }
 }
 
 void USART3_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI3
   Sci3_CommonUpper_FaultChk();
-#endif
-
   if (USART_GetITStatus(USART3, USART_IT_RXNE) != RESET)
   {
     RTC_ExtComCnt++;
-    g_irq_t = uart3_irq;
-
-#ifdef _COMMOM_UPPER_SCI3
-    Sci3_CommonUpper_FaultChk();
+    rtc_sleep_record_wakeup(uart3_irq);
     Sci3_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI3);
-#endif
-
   }
+#endif
 }
-
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/
