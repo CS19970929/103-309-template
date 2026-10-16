@@ -10,14 +10,14 @@
 
 #define __same_door__
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x5701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x5201		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (9)
 
 #define __lianxing__
 
 
-// #define  wdog_enable
+#define  wdog_enable
 #define __FUNC_RTC__
 // #define __FUNC__HEAT__
 // #define __LOAD_REMOVE_SHORT_FUNC__
