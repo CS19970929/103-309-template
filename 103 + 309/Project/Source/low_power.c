@@ -223,6 +223,14 @@ LowPowerRunResult LowPower_Poll(void)
 
     case LP_RTC_SAMPLE:
         BoardLowPower_BeginSample();
+        quiet = BoardLowPower_PollSample();
+        if (quiet == 0U)
+            return LP_OWNS_CPU;
+        if (quiet == 2U)
+        {
+            LowPower_RecordFault(LP_FAULT_ADC);
+            return lp_restore(1U);
+        }
         g_low_power_diag.exit_mask = BmsSleep_SampleExit();
         if (g_low_power_diag.exit_mask != 0U ||
             (s_pending_wake & ~LP_WAKE_RTC) != 0U ||

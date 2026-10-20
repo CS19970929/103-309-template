@@ -95,9 +95,16 @@ void entersleep(enum _SLEEP_MODE mode);
 #define FLASH_FLAG_WRPRTERR 4
 #define BMS_SLEEP 1
 typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG, FLASH_ERROR_WRP } FLASH_Status;
-static struct { UINT16 u16Ichg, u16IDischg, u16VCellMin, u16VCell[16], u16BalanceFlag1; } g_stCellInfoReport;
+static struct { UINT16 u16Ichg, u16IDischg, u16VCellMin, u16VCell[16], u16BalanceFlag1;
+    UINT16 u16Temperature[10], u16VCellDelta, u16VCellTotle; } g_stCellInfoReport;
 static struct { UINT16 u16Sys_SeriesNum, u16Sleep_Vlow, u16Sleep_TimeVlow, u16Sleep_TimeRTC; } OtherElement;
-static struct { UINT16 u16VcellUvp_Third, u16VcellOvp_Third; } PRT_E2ROMParas;
+static struct { UINT16 u16VcellUvp_Third, u16VcellOvp_Third, u16VcellUvp_Second,
+    u16VcellOvp_Second, u16TmosOTp_Second, u16TdischgOTp_Second,
+    u16TdischgUTp_Second, u16VdeltaOvp_Second, u16VbusOvp_Second,
+    u16VbusUvp_Second; } PRT_E2ROMParas;
+#define MOS_TEMP1 9
+static struct { UINT8 u8ErrFlag_TempBreak, u8ErrFlag_ADC, u8ErrFlag_Com_AFE1,
+    u8ErrFlag_Com_AFE2, u8ErrFlag_Com_EEPROM, u8ErrFlag_Store_EEPROM; } System_ErrFlag;
 static struct { struct { UINT8 b1Status_Heat, b1Status_MOS_CHG, b1Status_MOS_DSG; } bits; } SystemStatus;
 static struct { UINT8 all; } empty_status;
 static struct { UINT8 u8_MTP_BALANCEH, u8_MTP_BALANCEL;
@@ -240,6 +247,7 @@ uint8_t BoardLowPower_RtcInit(void) { return rtc_ok; }
 uint8_t BoardLowPower_RtcArm(void) { return arm_ok; }
 uint8_t BoardLowPower_CaptureWake(void) { return 1U; }
 void BoardLowPower_BeginSample(void) {}
+uint8_t BoardLowPower_PollSample(void) { return 1U; }
 void BoardLowPower_Restore(void) { ++restore_calls; }
 void BoardLowPower_AccountSeconds(uint32_t seconds) { su32_Interval_S_Tcnt+=seconds; }
 static void defaults(void) {
@@ -256,10 +264,18 @@ static void defaults(void) {
     memset(&SH367309_Reg_Store,0,sizeof(SH367309_Reg_Store));
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
     memset(&SystemStatus,0,sizeof(SystemStatus));
+    memset(&System_ErrFlag,0,sizeof(System_ErrFlag));
     OtherElement.u16Sys_SeriesNum=1; OtherElement.u16Sleep_Vlow=2800; OtherElement.u16Sleep_TimeVlow=2;
     OtherElement.u16Sleep_TimeRTC=0;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[0]=3300;
     PRT_E2ROMParas.u16VcellUvp_Third=2500; PRT_E2ROMParas.u16VcellOvp_Third=3650;
+    PRT_E2ROMParas.u16VcellUvp_Second=2800; PRT_E2ROMParas.u16VcellOvp_Second=3600;
+    PRT_E2ROMParas.u16TmosOTp_Second=1250; PRT_E2ROMParas.u16TdischgOTp_Second=900;
+    PRT_E2ROMParas.u16TdischgUTp_Second=250; PRT_E2ROMParas.u16VdeltaOvp_Second=800;
+    PRT_E2ROMParas.u16VbusOvp_Second=400; PRT_E2ROMParas.u16VbusUvp_Second=200;
+    g_stCellInfoReport.u16VCellTotle=330;
+    g_stCellInfoReport.u16Temperature[0]=g_stCellInfoReport.u16Temperature[1]=650;
+    g_stCellInfoReport.u16Temperature[MOS_TEMP1]=650;
     sys_time.time_enter_rtc=30; rtc_counter=100; stop_elapsed=10; su32_Interval_S_Tcnt=0;
     flash_value=0xffff; erase_result=program_result=FLASH_COMPLETE; corrupt_program=0;
     eeprom_calls=eeprom_failure=0;

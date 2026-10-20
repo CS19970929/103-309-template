@@ -21,6 +21,7 @@ uint8_t BoardLowPower_RtcInit(void);
 uint8_t BoardLowPower_RtcArm(void);
 uint8_t BoardLowPower_CaptureWake(void);
 void BoardLowPower_BeginSample(void);
+uint8_t BoardLowPower_PollSample(void);
 void BoardLowPower_Restore(void);
 void BoardLowPower_AccountSeconds(uint32_t seconds);
 

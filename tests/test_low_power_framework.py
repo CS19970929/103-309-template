@@ -43,6 +43,7 @@ uint8_t BoardLowPower_RtcArm(void) {
 }
 uint8_t BoardLowPower_CaptureWake(void) { assert(irq_mask); return sync_ok; }
 void BoardLowPower_BeginSample(void) { assert(!irq_mask); ++samples; }
+uint8_t BoardLowPower_PollSample(void) { return 1U; }
 void BoardLowPower_Restore(void) { ++restores; LowPower_NotifyWake(restore_wakes); }
 void BoardLowPower_AccountSeconds(uint32_t seconds) { elapsed+=seconds; }
 void BmsSleep_PollRequest(void) {}

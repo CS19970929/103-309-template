@@ -9,6 +9,8 @@ static uint32_t s_prepare_started_ms;
 static uint32_t s_quiet_started_ms;
 static uint32_t s_prepare_started_rtc;
 static uint8_t s_comm_was_active;
+static uint8_t s_sample_state;
+static uint32_t s_sample_started_ms, s_sample_started_rtc;
 
 uint32_t BoardLowPower_Lock(void)
 {
@@ -148,7 +150,11 @@ void BoardLowPower_ArmWake(void)
     NVIC_Init(&nvic);
 }
 
-void BoardLowPower_PrepareNextStop(void) { IOstatus_RTCMode(); }
+void BoardLowPower_PrepareNextStop(void)
+{
+    s_sample_state = 0U;
+    IOstatus_RTCMode();
+}
 
 void BoardLowPower_Stop(void)
 {
@@ -178,8 +184,30 @@ uint8_t BoardLowPower_CaptureWake(void)
 
 void BoardLowPower_BeginSample(void)
 {
+    if (s_sample_state != 0U)
+        return;
     Feed_IWatchDog;
     initAFE1_IIC();
+    /* TIM3 only drives the local, nonblocking sample deadline. Ordinary
+       tasks remain gated by LowPower_Poll(). */
+    InitTimer();
+    s_sample_started_ms = System_GetUptimeMs();
+    s_sample_started_rtc = RTC_ReadCounterCoherent();
+    s_sample_state = ADC_BeginRtcSample() ? 1U : 2U;
+}
+
+uint8_t BoardLowPower_PollSample(void)
+{
+    uint8_t result;
+    if (s_sample_state != 1U)
+        return 2U;
+    result = ADC_PollRtcSample();
+    if (result != 0U)
+        return result;
+    if ((uint32_t)(System_GetUptimeMs() - s_sample_started_ms) >= 100U ||
+        (uint32_t)(RTC_ReadCounterCoherent() - s_sample_started_rtc) >= 2U)
+        return 2U;
+    return 0U;
 }
 
 void BoardLowPower_Restore(void)

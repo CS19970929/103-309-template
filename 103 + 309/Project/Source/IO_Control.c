@@ -324,6 +324,10 @@ bool isforceClose(void)
 		log_w("close");
 		return true;
 	}
+	else if (System_ErrFlag.u8ErrFlag_ADC)
+	{
+		return true;
+	}
 	else if (System_ErrFlag.u8ErrFlag_Com_AFE1)
 	{
 		log_w("close");

@@ -20,7 +20,7 @@ enum {
     LP_BLOCK_BALANCE = 1UL << 4, LP_BLOCK_MOS = 1UL << 5,
     LP_BLOCK_AFE = 1UL << 6, LP_BLOCK_WAKE_PIN = 1UL << 7,
     LP_BLOCK_COMM_CHANGED = 1UL << 8, LP_BLOCK_CONFIG = 1UL << 9,
-    LP_BLOCK_PROTECTION = 1UL << 10
+    LP_BLOCK_PROTECTION = 1UL << 10, LP_BLOCK_SYSTEM = 1UL << 11
 };
 
 enum {
@@ -34,7 +34,8 @@ enum {
     LP_EXIT_CURRENT = 1UL << 0, LP_EXIT_AFE = 1UL << 1,
     LP_EXIT_MOS = 1UL << 2, LP_EXIT_UV = 1UL << 3,
     LP_EXIT_OV = 1UL << 4, LP_EXIT_CONFIG = 1UL << 5,
-    LP_EXIT_REQUEST = 1UL << 6
+    LP_EXIT_REQUEST = 1UL << 6, LP_EXIT_TEMPERATURE = 1UL << 7,
+    LP_EXIT_SAMPLE_INVALID = 1UL << 8, LP_EXIT_DELTA = 1UL << 9
 };
 
 enum {
@@ -42,7 +43,8 @@ enum {
     LP_FAULT_RTC_SYNC = 1UL << 2, LP_FAULT_PREPARE_TIMEOUT = 1UL << 3,
     LP_FAULT_CLOCK = 1UL << 4, LP_FAULT_RESET_SLEEP = 1UL << 5,
     LP_FAULT_SPURIOUS_LIMIT = 1UL << 6, LP_FAULT_NO_TIMEBASE = 1UL << 7,
-    LP_FAULT_STORAGE_WRITE = 1UL << 8, LP_FAULT_STORAGE_RANGE = 1UL << 9
+    LP_FAULT_STORAGE_WRITE = 1UL << 8, LP_FAULT_STORAGE_RANGE = 1UL << 9,
+    LP_FAULT_ADC = 1UL << 10
 };
 
 /* Set at build time: 0 = production STOP; 1 = STOP with debug support;
@@ -92,5 +94,12 @@ void LowPower_RecordFault(uint32_t faults);
 const volatile LowPowerDiag *LowPower_GetDiag(void);
 /* Stable conditional-breakpoint site; no BKPT instruction in firmware. */
 void LowPower_DebugHook(uint32_t state, uint32_t reason);
+
+/* Existing ADC implementation, bounded initialization and fresh RTC sample.
+   Poll: 0 waiting, 1 fresh MOS result available, 2 failed. */
+uint8_t ADC_TryInit(void);
+void ADC_StopForRtc(void);
+uint8_t ADC_BeginRtcSample(void);
+uint8_t ADC_PollRtcSample(void);
 
 #endif

@@ -16,6 +16,14 @@ static uint8_t s_started;
 volatile UINT32 RTC_ExtComCnt;
 volatile enum irqWakeup g_irq_t = NO_IRQ;
 
+static uint8_t sleep_system_fault(void)
+{
+    return (uint8_t)(System_ErrFlag.u8ErrFlag_TempBreak ||
+        System_ErrFlag.u8ErrFlag_ADC || System_ErrFlag.u8ErrFlag_Com_AFE1 ||
+        System_ErrFlag.u8ErrFlag_Com_AFE2 || System_ErrFlag.u8ErrFlag_Com_EEPROM ||
+        System_ErrFlag.u8ErrFlag_Store_EEPROM);
+}
+
 void rtc_sleep_record_wakeup(enum irqWakeup source)
 {
     uint32_t wake;
@@ -80,6 +88,8 @@ uint32_t BmsSleep_BlockMask(uint8_t refresh_afe)
     uint32_t blocks = 0U;
     uint32_t storage = 0U;
     uint8_t balance[2];
+    if (sleep_system_fault())
+        blocks |= LP_BLOCK_SYSTEM;
     if (u8FlashUpdateFlag) storage |= 1UL << 0;
     if (u8FlashUpdateE2PROM) storage |= 1UL << 1;
     if (gu8_Reset_EventRecord) storage |= 1UL << 2;
@@ -217,6 +227,28 @@ uint32_t BmsSleep_SampleExit(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
+    if (sleep_system_fault())
+        exits |= LP_EXIT_SAMPLE_INVALID;
+    /* The RTC path does not advance the RUN 10-ms protection filters.
+       Suspicious fresh measurements leave STOP; RUN owns fault latching/MOS.
+       Use discharge temperature range while idle, not a charge-only limit. */
+    if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] >= PRT_E2ROMParas.u16TmosOTp_Second)
+        exits |= LP_EXIT_TEMPERATURE;
+    for (i = 0U; i < 2U; ++i)
+    {
+        uint16_t temperature = g_stCellInfoReport.u16Temperature[i];
+        if (temperature <= 110U)
+            exits |= LP_EXIT_SAMPLE_INVALID;
+        if (temperature >= PRT_E2ROMParas.u16TdischgOTp_Second ||
+            temperature <= PRT_E2ROMParas.u16TdischgUTp_Second)
+            exits |= LP_EXIT_TEMPERATURE;
+    }
+    if (g_stCellInfoReport.u16VCellDelta >= PRT_E2ROMParas.u16VdeltaOvp_Second)
+        exits |= LP_EXIT_DELTA;
+    if (g_stCellInfoReport.u16VCellTotle >= PRT_E2ROMParas.u16VbusOvp_Second)
+        exits |= LP_EXIT_OV;
+    if (g_stCellInfoReport.u16VCellTotle <= PRT_E2ROMParas.u16VbusUvp_Second)
+        exits |= LP_EXIT_UV;
     if (g_stCellInfoReport.u16Ichg != 0U || g_stCellInfoReport.u16IDischg != 0U)
         exits |= LP_EXIT_CURRENT;
     if (!MTPRead(MTP_BALANCEH, 5U, &SH367309_Reg_Store.u8_MTP_BALANCEH))
@@ -233,9 +265,12 @@ uint32_t BmsSleep_SampleExit(void)
         exits |= LP_EXIT_AFE;
     for (i = 0U; i < OtherElement.u16Sys_SeriesNum; ++i)
     {
-        if (g_stCellInfoReport.u16VCell[i] < PRT_E2ROMParas.u16VcellUvp_Third)
+        if (g_stCellInfoReport.u16VCell[i] < 1000U ||
+            g_stCellInfoReport.u16VCell[i] > 5000U)
+            exits |= LP_EXIT_SAMPLE_INVALID;
+        if (g_stCellInfoReport.u16VCell[i] <= PRT_E2ROMParas.u16VcellUvp_Second)
             exits |= LP_EXIT_UV;
-        if (g_stCellInfoReport.u16VCell[i] > PRT_E2ROMParas.u16VcellOvp_Third)
+        if (g_stCellInfoReport.u16VCell[i] >= PRT_E2ROMParas.u16VcellOvp_Second)
             exits |= LP_EXIT_OV;
     }
     if (g_stCellInfoReport.u16VCellMin <= SLEEP_FORCE_LOW_MV)

@@ -297,7 +297,7 @@ void IOstatus_Base(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
-    ADC_DeInit(ADC1); // ????????????????
+    ADC_StopForRtc();
 
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
@@ -332,7 +332,7 @@ void IOstatus_RTCMode(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE); // ??GPIOD??
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOE, ENABLE); // ??GPIOE??
 
-    ADC_DeInit(ADC1); // ????????????????
+    ADC_StopForRtc();
 
     /* Keep only valid always-powered wake inputs digital. RTC mode removes the
        communication rail, so USART RX pins must be analog to avoid leakage and
@@ -463,8 +463,11 @@ extern void Init_Charger_AllSeries(void);
 void InitRunAfterStop(void)
 {
     InitIO();
-    ADC_DeInit(ADC1);
-    InitADC();
+    if (!ADC_TryInit())
+    {
+        MCUO_AFE_CTLC = 0;
+        LowPower_RecordFault(LP_FAULT_ADC);
+    }
 #ifdef __FUNC__HEAT__
     InitHeat_Cool();
 #endif

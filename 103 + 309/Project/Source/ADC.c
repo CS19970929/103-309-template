@@ -106,14 +106,15 @@ void InitADC_TIMER(void)
 	TIM_OCInitTypeDef TIM_OCInitStructure;
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 	TIM_Cmd(TIM2, DISABLE); // 先停止TIM2时钟
-	if (0 == System_ErrFlag.u8ErrFlag_HSE)
-	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 72 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-	}
-	else
-	{
-		TIM_TimeBaseStructure.TIM_Prescaler = 8 - 1; // 设置用来作为TIMx时钟频率除数的预分频值——计数分频
-	}
+
+    {
+        RCC_ClocksTypeDef clocks;
+        uint32_t timer_hz;
+        RCC_GetClocksFreq(&clocks);
+        timer_hz = clocks.PCLK1_Frequency;
+        if ((RCC->CFGR & RCC_CFGR_PPRE1) != 0U) timer_hz *= 2U;
+        TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t)(timer_hz / 1000000U - 1U);
+    }
 	TIM_TimeBaseStructure.TIM_Period = 999; // 设置在下一个更新事件装入活动的自动重装载寄存器周期的值
 
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // 向上计数
@@ -130,42 +131,59 @@ void InitADC_TIMER(void)
 	TIM_Cmd(TIM2, ENABLE);
 }
 
+#define ADC_CAL_POLL_LIMIT 100000UL
+#define ADC_BIAS_SETTLE_MS 5U
+#define ADC_RTC_SAMPLE_COUNT 4U
+static uint32_t s_adc_sample_start, s_adc_sample_sum;
+static uint8_t s_adc_sample_count, s_adc_settled;
+
+static uint8_t ADC_InitHardwareBounded(void)
+{
+    ADC_InitTypeDef config;
+    uint32_t polls;
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+    ADC_DeInit(ADC1);
+    ADC_StructInit(&config);
+    config.ADC_Mode = ADC_Mode_Independent;
+    config.ADC_ScanConvMode = ENABLE;
+    config.ADC_ContinuousConvMode = DISABLE;
+    config.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T2_CC2;
+    config.ADC_DataAlign = ADC_DataAlign_Right;
+    config.ADC_NbrOfChannel = AD_Used_amount;
+    ADC_Init(ADC1, &config);
+    RCC_ADCCLKConfig(RCC_PCLK2_Div8);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5);
+    ADC_Cmd(ADC1, ENABLE);
+    ADC_DMACmd(ADC1, ENABLE);
+    ADC_ResetCalibration(ADC1);
+    polls = ADC_CAL_POLL_LIMIT;
+    while (ADC_GetResetCalibrationStatus(ADC1))
+        if (--polls == 0U) return 0U;
+    ADC_StartCalibration(ADC1);
+    polls = ADC_CAL_POLL_LIMIT;
+    while (ADC_GetCalibrationStatus(ADC1))
+        if (--polls == 0U) return 0U;
+    ADC_ExternalTrigConvCmd(ADC1, ENABLE);
+    return 1U;
+}
+
+void ADC_StopForRtc(void)
+{
+    TIM_Cmd(TIM2, DISABLE);
+    ADC_ExternalTrigConvCmd(ADC1, DISABLE);
+    ADC_DMACmd(ADC1, DISABLE);
+    DMA_Cmd(DMA1_Channel1, DISABLE);
+    ADC_Cmd(ADC1, DISABLE);
+}
+
+/* Legacy public entry point retained; all init paths now use a bounded wait. */
 void InitADC_ADC1(void)
 {
-	ADC_InitTypeDef ADC_InitStruct;
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE); // 开启ADC1外设时钟
-
-	// ADC初始化
-	ADC_DeInit(ADC1);				 // ADC恢复默认设置
-	ADC_StructInit(&ADC_InitStruct); // 初始化ADC结构体
-
-	ADC_InitStruct.ADC_Mode = ADC_Mode_Independent;					   // 独立模式
-	ADC_InitStruct.ADC_ScanConvMode = ENABLE;						   // 扫描模式
-	ADC_InitStruct.ADC_ContinuousConvMode = DISABLE;				   // 连续转换模式
-	ADC_InitStruct.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T2_CC2; // T2_CC2触发
-	ADC_InitStruct.ADC_DataAlign = ADC_DataAlign_Right;				   // 转换结果右对齐
-	ADC_InitStruct.ADC_NbrOfChannel = AD_Used_amount;				   // 转换通道个数
-	ADC_Init(ADC1, &ADC_InitStruct);								   // 初始化ADC
-
-	RCC_ADCCLKConfig(RCC_PCLK2_Div8); // 配置ADC时钟PCLK2的8分频，即9MHz
-
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5); // 配置ADC通道的转换顺序和采样时间
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_12, 2, ADC_SampleTime_55Cycles5);	//配置ADC通道的转换顺序和采样时间
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_14, 3, ADC_SampleTime_55Cycles5);
-	// ADC_RegularChannelConfig(ADC1, ADC_Channel_15, 4, ADC_SampleTime_55Cycles5);
-
-	ADC_Cmd(ADC1, ENABLE);	  // 开启ADC，并开始转换
-	ADC_DMACmd(ADC1, ENABLE); // 使能ADC DMA 请求
-
-	ADC_ResetCalibration(ADC1); // 初始化ADC 校准寄存器，果然要放在以上两句话后面才行
-	while (ADC_GetResetCalibrationStatus(ADC1))
-		;						// 等待校准寄存器初始化完成
-	ADC_StartCalibration(ADC1); // ADC开始校准
-	while (ADC_GetCalibrationStatus(ADC1))
-		; // 等待校准完成
-
-	// ADC_SoftwareStartConvCmd(ADC1, ENABLE);		//由于没有采用外部触发，所以使用软件触发ADC转换
-	ADC_ExternalTrigConvCmd(ADC1, ENABLE);
+    if (!ADC_InitHardwareBounded())
+    {
+        ADC_StopForRtc();
+        System_ERROR_UserCallback(ERROR_ADC);
+    }
 }
 
 void ADC_Current_Smooth(void)
@@ -252,20 +270,76 @@ void ADC_Vbc(void)
 
 // VDDA和VSSA为AD采样专门供电，VREF+和VREF-为AD采样的参加电压，不需要再配置了(所以会发现没相关语句配置)
 // 关于那个表，因为为12位分辨率，所以最大输入为4096。
+uint8_t ADC_TryInit(void)
+{
+    uint8_t i;
+    ADC_StopForRtc();
+    InitADC_GPIO();
+    InitADC_DMA();
+    if (!ADC_InitHardwareBounded())
+    {
+        ADC_StopForRtc();
+        System_ERROR_UserCallback(ERROR_ADC);
+        return 0U;
+    }
+    for (i = 0U; i < ADC_NUM; ++i)
+    {
+        g_u16ADCValFilter[i] = 0;
+        g_i32ADCResult[i] = 0;
+        g_u32ADCValFilter2[i] = 0;
+    }
+    DMA_ClearFlag(DMA1_FLAG_TC1);
+    InitADC_TIMER();
+    System_ERROR_UserCallback(ERROR_REMOVE_ADC);
+    return 1U;
+}
+
 void InitADC(void)
 {
-	UINT8 i;
-	InitADC_GPIO();
-	InitADC_TIMER();
-	InitADC_DMA();
-	InitADC_ADC1();
+    (void)ADC_TryInit();
+}
 
-	for (i = 0; i < ADC_NUM; i++)
-	{
-		g_u16ADCValFilter[i] = 0;
-		g_i32ADCResult[i] = 0;
-		g_u32ADCValFilter2[i] = 0;
-	}
+uint8_t ADC_BeginRtcSample(void)
+{
+    GPIO_InitTypeDef gpio;
+    /* HS-C073 AD-EN is active low; bias must settle before accepting data. */
+    GPIO_ResetBits(GPIO_AD_EN, PIN_AD_EN);
+    gpio.GPIO_Pin = PIN_AD_EN;
+    gpio.GPIO_Mode = GPIO_Mode_Out_PP;
+    gpio.GPIO_Speed = GPIO_Speed_2MHz;
+    GPIO_Init(GPIO_AD_EN, &gpio);
+    s_adc_sample_sum = 0U;
+    s_adc_sample_count = s_adc_settled = 0U;
+    if (!ADC_TryInit()) return 0U;
+    s_adc_sample_start = System_GetUptimeMs();
+    return 1U;
+}
+
+uint8_t ADC_PollRtcSample(void)
+{
+    uint16_t raw;
+    if ((uint32_t)(System_GetUptimeMs() - s_adc_sample_start) < ADC_BIAS_SETTLE_MS)
+        return 0U;
+    if (!s_adc_settled)
+    {
+        /* Discard conversions started before the bias-settling deadline. */
+        DMA_ClearFlag(DMA1_FLAG_TC1);
+        s_adc_settled = 1U;
+        return 0U;
+    }
+    if (DMA_GetFlagStatus(DMA1_FLAG_TC1) == RESET) return 0U;
+    raw = g_u16ADCValFilter[ADC_TEMP_MOS1];
+    DMA_ClearFlag(DMA1_FLAG_TC1);
+    if (raw <= 5U || raw >= 4090U)
+    {
+        System_ERROR_UserCallback(ERROR_ADC);
+        return 2U;
+    }
+    s_adc_sample_sum += raw;
+    if (++s_adc_sample_count < ADC_RTC_SAMPLE_COUNT) return 0U;
+    raw = (uint16_t)(s_adc_sample_sum / ADC_RTC_SAMPLE_COUNT);
+    g_i32ADCResult[ADC_TEMP_MOS1] = GetEndValue(iSheldTemp_10K, LENGTH_TBLTEMP_PORT_10K, raw);
+    return 1U;
 }
 
 // 延时类型初始化是不需要return的

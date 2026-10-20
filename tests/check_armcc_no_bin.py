@@ -5,6 +5,7 @@ All generated files are written below LOCALAPPDATA/CodexTemp.
 """
 
 import os
+import argparse
 from pathlib import Path
 import re
 import subprocess
@@ -17,6 +18,10 @@ PROJECT = ROOT / "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvpr
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--configured-optimization", action="store_true",
+                        help="Use current Keil optimization; do not require the legacy O2 audit profile")
+    args = parser.parse_args()
     target = ET.parse(PROJECT).find("./Targets/Target")
     ads = target.find("./TargetOption/TargetArmAds")
     ldads = ads.find("LDads")
@@ -25,11 +30,13 @@ def main():
     cads = ads.find("Cads")
     controls = cads.find("VariousControls")
     optim = int(cads.findtext("Optim"))
-    if optim != 3:
+    if optim != 3 and not args.configured_optimization:
         raise RuntimeError(f"Expected explicit Keil Level 2 (-O2), got Optim={optim}")
     if cads.findtext("oTime") != "0":
         raise RuntimeError("Expected Optimize for Time to remain disabled (Ospace)")
-    optimization = f"-O{optim - 1}"
+    if not 0 <= optim <= 4:
+        raise RuntimeError(f"Unsupported Keil optimization: {optim}")
+    optimization = f"-O{max(0, optim - 1)}"
     compiler = Path(os.environ.get("ARMCC_BIN", r"C:\Keil_v5\ARM\ARMCC\bin"))
     base = Path(os.environ["LOCALAPPDATA"]) / "CodexTemp/103-309-template/armcc-no-bin"
     base.mkdir(parents=True, exist_ok=True)
@@ -122,7 +129,7 @@ def main():
     delay_end = disassembly.find("\n    i.", delay_start + 1)
     delay = disassembly[delay_start:delay_end if delay_end >= 0 else None]
     if delay_start < 0 or "__delay_ms" not in delay:
-        raise RuntimeError("O2 disassembly does not preserve Delay1ms -> __delay_ms")
+        raise RuntimeError("Disassembly does not preserve Delay1ms -> __delay_ms")
     assert not list(output.rglob("*.bin"))
     warnings = len(re.findall(r"\bWarning:", "\n".join(logs)))
     print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC {optimization} compile + AXF link")

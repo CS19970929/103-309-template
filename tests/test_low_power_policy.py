@@ -40,6 +40,30 @@ int main(void) {
 }
 '''
 
+SAFETY = r'''
+int main(void) {
+    defaults(); LowPower_Init();
+    if(BmsSleep_SampleExit()!=0U) return 1;
+    g_stCellInfoReport.u16Temperature[MOS_TEMP1]=1400;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_TEMPERATURE)) return 2;
+    defaults(); g_stCellInfoReport.u16Temperature[0]=110;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_SAMPLE_INVALID)) return 3;
+    defaults(); g_stCellInfoReport.u16Temperature[1]=1000;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_TEMPERATURE)) return 4;
+    defaults(); g_stCellInfoReport.u16VCellDelta=900;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_DELTA)) return 5;
+    defaults(); g_stCellInfoReport.u16VCellTotle=450;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_OV)) return 6;
+    defaults(); System_ErrFlag.u8ErrFlag_ADC=1;
+    if(!(BmsSleep_BlockMask(0)&LP_BLOCK_SYSTEM)) return 7;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_SAMPLE_INVALID)) return 8;
+    defaults(); g_stCellInfoReport.u16VCell[0]=61001;
+    if(!(BmsSleep_SampleExit()&LP_EXIT_SAMPLE_INVALID)) return 9;
+    puts("PASS: MOS/AFE temperatures, invalid sensor, delta/pack voltage, system fault, invalid cell");
+    return 0;
+}
+'''
+
 RESTORE = r'''
 #include <stdint.h>
 #include <stdio.h>
@@ -49,7 +73,11 @@ static void Init_Charger_AllSeries(void) {}
 static void Init_ChargerLoad_Det(void) { ChargerLoad_Func.all=0; }
 static void InitIO(void) {}
 static void ADC_DeInit(int x) {(void)x;}
-static void InitADC(void) {}
+static uint8_t ADC_TryInit(void) { return 1U; }
+static uint32_t faults, ctlc;
+static void LowPower_RecordFault(uint32_t value) { faults|=value; }
+#define LP_FAULT_ADC 1024U
+#define MCUO_AFE_CTLC ctlc
 static void USART_DeInit(int x) {(void)x;}
 static void InitTimer(void) {}
 static void initAFE1_IIC(void) {}
@@ -86,7 +114,7 @@ int main(void) {
     puts("PASS: restore preserves ISR event and protection latches"); return 0;
 }
 '''
-    run_programs({"policy": policy_program(POLICY), "restore": restore})
+    run_programs({"policy": policy_program(POLICY), "safety": policy_program(SAFETY), "restore": restore})
 
 
 if __name__ == "__main__":

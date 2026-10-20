@@ -57,7 +57,7 @@ static unsigned driver, power_ctr, power_stb;
 #define MCUO_PWSV_CTR power_ctr
 #define MCUO_PWSV_STB power_stb
 static void RCC_APB2PeriphClockCmd(int p,int e) { (void)p; (void)e; }
-static void ADC_DeInit(int a) { (void)a; }
+static void ADC_StopForRtc(void) {}
 static void __delay_ms(int ms) { (void)ms; }
 static void GPIO_Init(unsigned port, GPIO_InitTypeDef *init) {
     unsigned pin;
