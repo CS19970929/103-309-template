@@ -43,3 +43,31 @@
 `tests/check_armcc_no_bin.py --configured-optimization` 提供补充 ARMCC 编译；Keil Optim=0 是默认选项，不应强制解释为 -O0。最终产物大小以原生 Keil 为准。
 
 现有 Target 声明 C8/64 KiB，但 APP 散装加载区为 `0x08004800 + 0x20000`，更新/休眠标志也在 64 KiB 之外；本修复不扩大、不迁移这些区域。构建脚本会报告实际加载范围及 C8 容量不匹配，禁止拿“链接成功”替代实物型号/BOM/存储布局验收。未接板子时不做任何下载。
+
+## 最终源码与编译验证
+
+| 提交 | 内容 |
+| --- | --- |
+| `e8a2324` | 进入电流、原分钟参数、充电事件保留 |
+| `8aca14f` | 新鲜 ADC/安全巡检、失败边界、MOS ADC 错误互锁 |
+| `9daa820` | 供电有效的 UART1 候选验证、GPIO、诊断和测试/构建工具 |
+
+最终编译源码为 `9daa820` 加用户既有未提交配置（SNum=6、EEPROM 标识 0x6701 和工程文件当前状态），不是干净 checkout。未将这些用户文件带入提交。
+
+- 10 项相关脚本通过：`test_low_power_framework.py`、`test_low_power_uart.py`、`test_low_power_policy.py`、`test_low_power_adc.py`、`test_rtc_gpio.py`、`test_low_power_edges.py`、`test_sleep.py`、`test_uart_stop.py`、`test_startup_afe.py`、`test_current_calibration.py`。覆盖真实 C 函数的 host 执行和部分源码顺序检查，硬件被 stub，不代表电气验收。
+- 框架额外覆盖 UART1 候选期间显式请求 RUN、同时按键和候选拒绝后的安全采样；GPIO 检查 PB4 和 PB7 均不经过模拟模式。
+- 原生 Keil Target 1 / ARMCC 5.06u7：0 errors、11 个现有业务警告；Code=46960、RO=2972、RW=1388、ZI=6272 字节。补充 ARMCC 编译/链接同样通过，63 个对象；反汇编中 Delay1ms 仍调用 __delay_ms。
+- MAP：`PWR_EnterSTOPMode` 保持在 RAM `0x20000000`，未撤销既有 STOP 返回规避措施。
+- 实际 Flash 加载区 `[0x08004800, 0x08011078)`，51320 字节；超过标称 C8 的 `0x08010000` 边界 4216 字节。**不满足当前声明的 64 KiB Flash，不能下载验收。** 不擅自假设芯片有额外可用 Flash，也不扩区或改参数地址。
+- 原生 Keil 证据目录：`C:\Users\Administrator\AppData\Local\CodexTemp\103-309-template\keil-no-bin\run-3ycknaax`，包含隔离工程、AXF、MAP、日志及 manifest；AXF SHA256：`d9e1eebe83a97d049d1e62e2bf5e6811ed7821123c6f00862e07f15446e033e2`。
+- 补充编译目录：`C:\Users\Administrator\AppData\Local\CodexTemp\103-309-template\armcc-no-bin\run-_xn_n6n6`。均未生成 BIN、未烧录、未操作目标板。
+
+## Keil 与后续实板验收
+
+Watch 添加 `g_low_power_diag` 和 `g_hardfault_record`；在 `LowPower_DebugHook()` 对 `state==8` 观察候选验证，对 `state==7` 观察恢复原因。`wake_mask` 是会话累计来源，不等于仍未处理的唤醒；判断 UART1 是否真的退出看 `uart1_valid_frames`、`restore_count` 和 trace，不只看 `uart1_candidates`。
+
+无来源 WFI 返回应查看 `wake_sequence`、`wake_exti_pr`、`wake_rtc_crl`、`wake_nvic_pending`、`wake_icsr`、`wake_dfsr`、`wake_dhcsr` 和 `wake_dbgmcu_cr`。当前没有板子，因此没有新现场，不能确认它由调试器还是某个 IRQ 引起。现有现场保存和 8 次上限是可诊断/恢复措施，不是根因结论。
+
+单步 HardFault 同样不能由截图中的 handler 循环或“全速正常”判定根因。观察捕获的原始 PC/LR/xPSR、CFSR/HFSR、BFAR/MMFAR；调试配置 1 用于单步，配置 0 脱离调试器才用于真实低功耗验收。不要把暂停导致的 UART 溢出、RTC 超时与实际运行时故障混为一谈。
+
+恢复接板后，先确认实物 MCU/容量、Bootloader/APP/持久化布局和设备 EEPROM 标识，再决定可下载产物。之后依次验收：通信盒持续连接且无发送、各种波特率合法请求与重试、错误帧/接插毛刺、按键/PA0、充放电检测、温度/AFE/ADC 异常、单步 HardFault 现场、断开调试器的长时间 RTC 循环及独立电流表测量。当前这些项目均未完成，不能签署实板稳定或功耗合格结论。
