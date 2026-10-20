@@ -248,6 +248,9 @@ uint8_t BoardLowPower_RtcArm(void) { return arm_ok; }
 uint8_t BoardLowPower_CaptureWake(void) { return 1U; }
 void BoardLowPower_BeginSample(void) {}
 uint8_t BoardLowPower_PollSample(void) { return 1U; }
+void BoardLowPower_BeginUart1Check(void) {}
+uint8_t BoardLowPower_PollUart1Check(void) { return 2U; }
+void BoardLowPower_EndUart1Check(uint8_t accepted) { (void)accepted; }
 void BoardLowPower_Restore(void) { ++restore_calls; }
 void BoardLowPower_AccountSeconds(uint32_t seconds) { su32_Interval_S_Tcnt+=seconds; }
 static void defaults(void) {

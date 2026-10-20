@@ -5,7 +5,7 @@
 
 typedef enum {
     LP_RUN = 0, LP_PREPARE, LP_WAIT_QUIET, LP_COMMIT, LP_STOP,
-    LP_WAKE_CAPTURE, LP_RTC_SAMPLE, LP_RESTORE
+    LP_WAKE_CAPTURE, LP_RTC_SAMPLE, LP_RESTORE, LP_UART_VERIFY
 } LowPowerState;
 
 typedef enum {
@@ -83,6 +83,9 @@ typedef struct {
     uint32_t uart_partial_timeouts, uart1_errors, uart2_errors;
     uint32_t trace_sequence;
     LowPowerTrace trace[LOW_POWER_TRACE_COUNT];
+    uint32_t uart1_candidates, uart1_rejected, uart1_valid_frames;
+    uint32_t wake_sequence, wake_exti_pr, wake_rtc_crl, wake_nvic_pending[2];
+    uint32_t wake_icsr, wake_dfsr, wake_dhcsr, wake_dbgmcu_cr;
 } LowPowerDiag;
 
 extern volatile LowPowerDiag g_low_power_diag;
@@ -101,5 +104,13 @@ uint8_t ADC_TryInit(void);
 void ADC_StopForRtc(void);
 uint8_t ADC_BeginRtcSample(void);
 uint8_t ADC_PollRtcSample(void);
+
+/* Preserve a complete, validated wake request through peripheral restore. */
+void Sci_LowPowerUart1Begin(void);
+uint8_t Sci_LowPowerUart1FrameReady(void);
+void Sci_LowPowerUart1End(uint8_t accepted);
+uint8_t Sci_LowPowerUart1Preserve(void);
+uint32_t Sci_LowPowerUart1TimeoutMs(void);
+void Sci_LowPowerResume(void);
 
 #endif

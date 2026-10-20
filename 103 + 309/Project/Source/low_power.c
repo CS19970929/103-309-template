@@ -38,7 +38,7 @@ static void lp_set_state(LowPowerState state, uint32_t reason)
 void LowPower_Init(void)
 {
     g_low_power_diag.magic = 0x4C504431UL;
-    g_low_power_diag.version = 1U;
+    g_low_power_diag.version = 2U;
     g_low_power_diag.debug_profile = LOW_POWER_DEBUG_PROFILE;
     BoardLowPower_Init();
     lp_set_state(LP_RUN, 0U);
@@ -92,6 +92,19 @@ static LowPowerRunResult lp_restore(uint8_t aborted)
     BmsSleep_ResetQualification();
     lp_set_state(LP_RUN, g_low_power_diag.wake_mask);
     return LP_RUN_APPLICATION;
+}
+
+static LowPowerRunResult lp_external_wake(uint32_t external)
+{
+    if (external == LP_WAKE_UART1)
+    {
+        ++g_low_power_diag.uart1_candidates;
+        BoardLowPower_BeginUart1Check();
+        lp_set_state(LP_UART_VERIFY, external);
+        return LP_OWNS_CPU;
+    }
+    ++g_low_power_diag.external_wake_count;
+    return lp_restore(0U);
 }
 
 LowPowerRunResult LowPower_Poll(void)
@@ -188,7 +201,7 @@ LowPowerRunResult LowPower_Poll(void)
         if ((s_pending_wake & ~LP_WAKE_RTC) != 0U)
         {
             BoardLowPower_Unlock(mask);
-            return lp_restore(1U);
+            return lp_external_wake(s_pending_wake & ~LP_WAKE_RTC);
         }
         lp_set_state(LP_STOP, 0U);
         ++g_low_power_diag.stop_count;
@@ -197,14 +210,13 @@ LowPowerRunResult LowPower_Poll(void)
         if (!BoardLowPower_CaptureWake())
             LowPower_RecordFault(LP_FAULT_RTC_SYNC);
         BoardLowPower_Unlock(mask);
+        if (g_low_power_diag.fault_mask != 0U)
+            return lp_restore(1U);
         external = s_pending_wake & ~LP_WAKE_RTC;
         if (external != 0U)
         {
-            ++g_low_power_diag.external_wake_count;
-            return lp_restore(0U);
+            return lp_external_wake(external);
         }
-        if (g_low_power_diag.fault_mask != 0U)
-            return lp_restore(1U);
         if ((s_pending_wake & LP_WAKE_RTC) == 0U)
         {
             ++g_low_power_diag.spurious_count;
@@ -233,9 +245,11 @@ LowPowerRunResult LowPower_Poll(void)
         }
         g_low_power_diag.exit_mask = BmsSleep_SampleExit();
         if (g_low_power_diag.exit_mask != 0U ||
-            (s_pending_wake & ~LP_WAKE_RTC) != 0U ||
             BmsSleep_GetTarget() != LP_TARGET_RTC)
             return lp_restore(0U);
+        external = s_pending_wake & ~LP_WAKE_RTC;
+        if (external != 0U)
+            return lp_external_wake(external);
 #if LOW_POWER_DEBUG_PROFILE == LP_DEBUG_SIMULATE
         g_low_power_diag.exit_mask |= LP_EXIT_REQUEST;
         return lp_restore(0U);
@@ -243,6 +257,36 @@ LowPowerRunResult LowPower_Poll(void)
         lp_set_state(LP_COMMIT, 0U);
         return LP_OWNS_CPU;
 #endif
+
+    case LP_UART_VERIFY:
+        if ((s_pending_wake & ~(LP_WAKE_RTC | LP_WAKE_UART1)) != 0U ||
+            BmsSleep_GetTarget() != LP_TARGET_RTC)
+        {
+            BoardLowPower_EndUart1Check((uint8_t)(BoardLowPower_PollUart1Check() == 1U));
+            if (BmsSleep_GetTarget() != LP_TARGET_RTC)
+                return lp_restore(0U);
+            return lp_external_wake(s_pending_wake & ~LP_WAKE_RTC);
+        }
+        quiet = BoardLowPower_PollUart1Check();
+        if (quiet == 0U)
+            return LP_OWNS_CPU;
+        if (quiet == 1U)
+        {
+            BoardLowPower_EndUart1Check(1U);
+            ++g_low_power_diag.uart1_valid_frames;
+            ++g_low_power_diag.external_wake_count;
+            return lp_restore(0U);
+        }
+        BoardLowPower_EndUart1Check(0U);
+        mask = BoardLowPower_Lock();
+        ++g_low_power_diag.uart1_rejected;
+        s_pending_wake &= ~LP_WAKE_UART1;
+        BmsSleep_ConsumeSleepUartActivity();
+        BoardLowPower_Unlock(mask);
+        /* Even continuous rejected traffic must not starve safety sampling
+           by repeatedly moving the RTC alarm into the future. */
+        lp_set_state(LP_RTC_SAMPLE, LP_WAKE_UART1);
+        return LP_OWNS_CPU;
 
     default:
         return lp_restore(1U);

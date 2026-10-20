@@ -36,7 +36,7 @@ def main():
         raise RuntimeError("Expected Optimize for Time to remain disabled (Ospace)")
     if not 0 <= optim <= 4:
         raise RuntimeError(f"Unsupported Keil optimization: {optim}")
-    optimization = f"-O{max(0, optim - 1)}"
+    optimization = "" if optim == 0 else f"-O{optim - 1}"
     compiler = Path(os.environ.get("ARMCC_BIN", r"C:\Keil_v5\ARM\ARMCC\bin"))
     base = Path(os.environ["LOCALAPPDATA"]) / "CodexTemp/103-309-template/armcc-no-bin"
     base.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,9 @@ def main():
                 elif setting.text not in ("0", "2"):
                     raise RuntimeError(f"Non-inherited per-file setting: {setting.tag}")
     flags = ["--cpu=Cortex-M3", "--apcs=interwork", "--library_type=microlib",
-             optimization, "--split_sections", "-g", "-D__MICROLIB"]
+             "--split_sections", "-g", "-D__MICROLIB"]
+    if optimization:
+        flags.append(optimization)
     if cads.findtext("uC99") == "1":
         flags.append("--c99")
     if cads.findtext("uGnu") == "1":
@@ -132,7 +134,7 @@ def main():
         raise RuntimeError("Disassembly does not preserve Delay1ms -> __delay_ms")
     assert not list(output.rglob("*.bin"))
     warnings = len(re.findall(r"\bWarning:", "\n".join(logs)))
-    print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC {optimization} compile + AXF link")
+    print(f"PASS: {target.findtext('TargetName')}, {len(objects)} objects, ARMCC {optimization or 'default'} compile + AXF link")
     print(message.strip())
     print("Disassembly: Delay1ms -> __delay_ms")
     print(f"Warnings: {warnings}; elapsed: {time.monotonic() - started:.1f}s")

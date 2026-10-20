@@ -20,6 +20,7 @@ static uint32_t irq_mask, now_ms, rtc_now, blocks, active, sample_exit;
 static uint32_t stop_wakes, arm_wakes, restore_wakes, elapsed;
 static uint32_t stops, restores, samples;
 static uint8_t quiet_result, begin_ok, init_ok, arm_ok, sync_ok, reset_ok;
+static uint8_t uart_result;
 static LowPowerTarget target;
 uint32_t BoardLowPower_Lock(void) { uint32_t old=irq_mask; irq_mask=1; return old; }
 void BoardLowPower_Unlock(uint32_t value) { irq_mask=value; }
@@ -44,6 +45,10 @@ uint8_t BoardLowPower_RtcArm(void) {
 uint8_t BoardLowPower_CaptureWake(void) { assert(irq_mask); return sync_ok; }
 void BoardLowPower_BeginSample(void) { assert(!irq_mask); ++samples; }
 uint8_t BoardLowPower_PollSample(void) { return 1U; }
+void BoardLowPower_BeginUart1Check(void) { assert(!irq_mask); }
+uint8_t BoardLowPower_PollUart1Check(void) { return uart_result; }
+void BoardLowPower_EndUart1Check(uint8_t accepted) { (void)accepted; }
+void BmsSleep_ConsumeSleepUartActivity(void) {}
 void BoardLowPower_Restore(void) { ++restores; LowPower_NotifyWake(restore_wakes); }
 void BoardLowPower_AccountSeconds(uint32_t seconds) { elapsed+=seconds; }
 void BmsSleep_PollRequest(void) {}
@@ -58,6 +63,7 @@ static void defaults(void) {
     irq_mask=now_ms=blocks=active=sample_exit=elapsed=stops=restores=samples=0U;
     stop_wakes=LP_WAKE_RTC; arm_wakes=restore_wakes=0U;
     quiet_result=begin_ok=init_ok=arm_ok=sync_ok=reset_ok=1U;
+    uart_result=0U;
     rtc_now=100U; target=LP_TARGET_RUN;
     LowPower_Init();
 }
@@ -85,6 +91,23 @@ int main(void) {
     defaults(); prepare(); commit(); stop_wakes=LP_WAKE_RTC|LP_WAKE_COMM;
     assert(LowPower_Poll()==LP_RUN_APPLICATION && samples==0 && restores==1);
     assert(g_low_power_diag.wake_mask==(LP_WAKE_RTC|LP_WAKE_COMM));
+    defaults(); prepare(); commit(); stop_wakes=LP_WAKE_UART1;
+    assert(LowPower_Poll()==LP_OWNS_CPU && g_low_power_diag.state==LP_UART_VERIFY && restores==0);
+    for(int i=0;i<10;i++) assert(LowPower_Poll()==LP_OWNS_CPU && restores==0);
+    uart_result=2U;
+    assert(LowPower_Poll()==LP_OWNS_CPU && g_low_power_diag.state==LP_RTC_SAMPLE);
+    assert(g_low_power_diag.uart1_rejected==1U && restores==0);
+    assert(LowPower_Poll()==LP_OWNS_CPU && samples==1U);
+    defaults(); prepare(); commit(); stop_wakes=LP_WAKE_UART1;
+    assert(LowPower_Poll()==LP_OWNS_CPU); uart_result=1U;
+    assert(LowPower_Poll()==LP_RUN_APPLICATION && restores==1U);
+    assert(g_low_power_diag.uart1_valid_frames==1U && g_low_power_diag.external_wake_count==1U);
+    defaults(); prepare(); commit(); stop_wakes=LP_WAKE_UART1;
+    assert(LowPower_Poll()==LP_OWNS_CPU); LowPower_Request(LP_TARGET_RUN,0U);
+    assert(LowPower_Poll()==LP_RUN_APPLICATION && restores==1U);
+    defaults(); prepare(); commit(); stop_wakes=LP_WAKE_UART1;
+    assert(LowPower_Poll()==LP_OWNS_CPU); LowPower_NotifyWake(LP_WAKE_KEY);
+    assert(LowPower_Poll()==LP_RUN_APPLICATION && restores==1U);
     defaults(); prepare(); commit();
     assert(LowPower_Poll()==LP_OWNS_CPU && g_low_power_diag.state==LP_RTC_SAMPLE);
     assert(LowPower_Poll()==LP_OWNS_CPU && samples==1 && !restores);

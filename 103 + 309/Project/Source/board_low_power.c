@@ -1,7 +1,7 @@
 #include "main.h"
 #include "low_power_port.h"
 
-/* HS-C073: PB12 is always powered; USART RX belongs to the switched rail. */
+/* HS-C073: retain UART1's VCC33-U rail; PB12 detects RS485/CAN separately. */
 #define BOARD_RTC_EXTI_MASK (EXTI_Line0 | EXTI_Line3 | EXTI_Line7 | EXTI_Line9 | EXTI_Line12)
 #define BOARD_COMM_QUIET_MS 5U
 #define BOARD_PREPARE_TIMEOUT_MS 100U
@@ -11,6 +11,7 @@ static uint32_t s_prepare_started_rtc;
 static uint8_t s_comm_was_active;
 static uint8_t s_sample_state;
 static uint32_t s_sample_started_ms, s_sample_started_rtc;
+static uint32_t s_uart_check_started_ms, s_uart_check_started_rtc;
 
 uint32_t BoardLowPower_Lock(void)
 {
@@ -71,6 +72,8 @@ uint32_t BoardLowPower_ActiveWake(void)
         sources |= LP_WAKE_KEY;
     if (GPIO_ReadInputDataBit(GPIO_INT_WK_CMNT, PIN_INT_WK_CMNT) || (pending & EXTI_Line12))
         sources |= LP_WAKE_COMM;
+    if (pending & EXTI_Line7)
+        sources |= LP_WAKE_UART1;
     return sources;
 }
 
@@ -107,6 +110,11 @@ uint8_t BoardLowPower_Begin(void)
     s_quiet_started_ms = s_prepare_started_ms;
     s_comm_was_active = 0U;
     IOstatus_RTCMode();
+    /* RX remains high-biased and powered. Arm only after old UART work is
+       quiesced; keep edges from here until the final WFI handoff. */
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource7);
+    EXTI->FTSR |= EXTI_Line7;
+    EXTI->RTSR &= ~EXTI_Line7;
     BoardLowPower_Unlock(mask);
     return 1U;
 }
@@ -142,7 +150,7 @@ void BoardLowPower_ArmWake(void)
 {
     NVIC_InitTypeDef nvic;
     /* Preserve pending edges after the quiet test. */
-    EXTI->IMR |= EXTI_Line12;
+    EXTI->IMR |= EXTI_Line12 | EXTI_Line7;
     nvic.NVIC_IRQChannel = EXTI15_10_IRQn;
     nvic.NVIC_IRQChannelPreemptionPriority = 1U;
     nvic.NVIC_IRQChannelSubPriority = 1U;
@@ -175,8 +183,18 @@ uint8_t BoardLowPower_RtcArm(void)
 
 uint8_t BoardLowPower_CaptureWake(void)
 {
+    uint8_t ready;
+    ++g_low_power_diag.wake_sequence;
+    g_low_power_diag.wake_exti_pr = EXTI->PR;
+    g_low_power_diag.wake_rtc_crl = RTC->CRL;
+    g_low_power_diag.wake_nvic_pending[0] = NVIC->ISPR[0];
+    g_low_power_diag.wake_nvic_pending[1] = NVIC->ISPR[1];
+    g_low_power_diag.wake_icsr = SCB->ICSR;
+    g_low_power_diag.wake_dfsr = SCB->DFSR;
+    g_low_power_diag.wake_dhcsr = CoreDebug->DHCSR;
+    g_low_power_diag.wake_dbgmcu_cr = DBGMCU->CR;
     /* Synchronize before reading RTC alarm flags after APB1 stopped. */
-    uint8_t ready = RTC_SynchronizeAfterStop();
+    ready = RTC_SynchronizeAfterStop();
     RTC_LatchAlarmWake();
     LowPower_NotifyWake(BoardLowPower_ActiveWake());
     return ready;
@@ -208,6 +226,46 @@ uint8_t BoardLowPower_PollSample(void)
         (uint32_t)(RTC_ReadCounterCoherent() - s_sample_started_rtc) >= 2U)
         return 2U;
     return 0U;
+}
+
+void BoardLowPower_BeginUart1Check(void)
+{
+    uint32_t mask = BoardLowPower_Lock();
+    EXTI->IMR &= ~EXTI_Line7;
+    EXTI_ClearITPendingBit(EXTI_Line7);
+    BoardLowPower_Unlock(mask);
+    InitTimer();
+    s_uart_check_started_ms = System_GetUptimeMs();
+    s_uart_check_started_rtc = RTC_ReadCounterCoherent();
+    Sci_LowPowerUart1Begin();
+}
+
+uint8_t BoardLowPower_PollUart1Check(void)
+{
+    if (Sci_LowPowerUart1FrameReady())
+        return 1U;
+    if ((uint32_t)(System_GetUptimeMs() - s_uart_check_started_ms) >= Sci_LowPowerUart1TimeoutMs() ||
+        (uint32_t)(RTC_ReadCounterCoherent() - s_uart_check_started_rtc) >= 4U)
+        return 2U;
+    return 0U;
+}
+
+void BoardLowPower_EndUart1Check(uint8_t accepted)
+{
+    GPIO_InitTypeDef gpio;
+    uint32_t mask = BoardLowPower_Lock();
+    Sci_LowPowerUart1End(accepted);
+    if (!accepted)
+    {
+        GPIO_SetBits(GPIO_SCI1_TX, PIN_SCI1_TX);
+        gpio.GPIO_Pin = PIN_SCI1_TX;
+        gpio.GPIO_Mode = GPIO_Mode_Out_PP;
+        gpio.GPIO_Speed = GPIO_Speed_2MHz;
+        GPIO_Init(GPIO_SCI1_TX, &gpio);
+    }
+    EXTI_ClearITPendingBit(EXTI_Line7);
+    s_sample_state = 0U;
+    BoardLowPower_Unlock(mask);
 }
 
 void BoardLowPower_Restore(void)

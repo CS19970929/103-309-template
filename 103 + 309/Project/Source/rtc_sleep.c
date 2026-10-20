@@ -140,7 +140,8 @@ uint32_t BmsSleep_BlockMask(uint8_t refresh_afe)
     if (!SystemStatus.bits.b1Status_MOS_CHG || !SystemStatus.bits.b1Status_MOS_DSG)
         blocks |= LP_BLOCK_MOS;
 #endif
-    if (BoardLowPower_ActiveWake() != 0U)
+    /* A UART edge is a candidate, validated separately before leaving STOP. */
+    if ((BoardLowPower_ActiveWake() & ~LP_WAKE_UART1) != 0U)
         blocks |= LP_BLOCK_WAKE_PIN;
     return blocks;
 }
@@ -152,6 +153,13 @@ void BmsSleep_ResetQualification(void)
     s_last_comm = RTC_ExtComCnt;
     entersleep(NO_SLEEP);
     g_low_power_diag.idle_seconds = 0U;
+}
+
+void BmsSleep_ConsumeSleepUartActivity(void)
+{
+    s_last_comm = RTC_ExtComCnt;
+    if (g_irq_t == uart1_irq)
+        g_irq_t = NO_IRQ;
 }
 
 void BmsSleep_PollRequest(void)

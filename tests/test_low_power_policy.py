@@ -82,6 +82,8 @@ static void USART_DeInit(int x) {(void)x;}
 static void InitTimer(void) {}
 static void initAFE1_IIC(void) {}
 static void InitE2PROM_i2c(void) {}
+static uint8_t Sci_LowPowerUart1Preserve(void) { return 0U; }
+static void Sci_LowPowerResume(void) {}
 #define ADC1 1
 #define USART1 1
 #define USART2 2

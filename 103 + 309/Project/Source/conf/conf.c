@@ -246,10 +246,9 @@ void InitWakeUp_RTCMode(void)
     /* The runtime framework owns the nonblocking PB12 quiet handoff.
        This legacy helper only configures pins/interrupts. */
 
-    /* RTC IO releases CMNT_EN and removes C33V/VCC33-U. The unpowered
-       communication circuits can then hold USART RX low, so PA3/PB7 are not
-       valid RTC wake sources. Keep only the always-powered communication
-       detector on PB12; USARTs are restored after a real wake. */
+    /* Legacy detector-only setup, not called by the runtime framework.
+       BoardLowPower_Begin/ArmWake own the current powered UART1 EXTI7 path.
+       Do not call this helper after that handoff: it disables EXTI7. */
     EXTI_InitStruct.EXTI_Line = EXTI_Line3 | EXTI_Line7;
     EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
     EXTI_InitStruct.EXTI_Trigger = EXTI_Trigger_Falling;
@@ -334,11 +333,11 @@ void IOstatus_RTCMode(void)
 
     ADC_StopForRtc();
 
-    /* Keep only valid always-powered wake inputs digital. RTC mode removes the
-       communication rail, so USART RX pins must be analog to avoid leakage and
-       false wake levels. Keep SWD pins available for debugging. */
+    /* HS-C073: keep VCC33-U powered for UART1. C33V (RS485/CAN logic)
+       may be off; PA3 therefore remains analog. Keep SWD and CTLC. */
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
-        ~(PIN_INT_WK_MCU | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14);
+        ~(PIN_INT_WK_MCU | PIN_KEY1 | GPIO_Pin_13 | GPIO_Pin_14 |
+          PIN_CMNT_EN | PIN_M_STB | PIN_AFE1_SHIP | PIN_AFE1_MODE);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -349,7 +348,8 @@ void IOstatus_RTCMode(void)
 #else
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All;
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_All &
-        ~(PIN_AFE1_CTL | PIN_INT_WK_CMNT);
+        ~(PIN_AFE1_CTL | PIN_INT_WK_CMNT | PIN_SCI1_RX | PIN_SCI1_TX |
+          PIN_BLE_EN | PIN_AD_EN | PIN_SW_EN | PIN_AFE1_PRO_EN);
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOB, &GPIO_InitStructure);
 #endif
@@ -373,32 +373,21 @@ void IOstatus_RTCMode(void)
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
     GPIO_Init(GPIOE, &GPIO_InitStructure);
 
-    // ??????
-    // ???
-#if 1
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+    /* Set latches BEFORE output mode. Do not use old PC12/PC13/PD2 controls:
+       those nets are not the power switches on the supplied C8 board. */
+    GPIO_SetBits(GPIOA, PIN_CMNT_EN);
+    GPIO_ResetBits(GPIOA, PIN_M_STB | PIN_AFE1_SHIP | PIN_AFE1_MODE);
+    GPIO_InitStructure.GPIO_Pin = PIN_CMNT_EN | PIN_M_STB | PIN_AFE1_SHIP | PIN_AFE1_MODE;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-    MCUO_DRV_CMNT = 1;
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOC, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOC, GPIO_InitStructure.GPIO_Pin);
-    MCUO_PWSV_CTR = 1;
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    // GPIO_ResetBits(GPIOD, GPIO_InitStructure.GPIO_Pin);
-    MCUO_PWSV_STB = 0;
-#endif
-
-    // __delay_ms(100);
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    GPIO_ResetBits(GPIOB, PIN_BLE_EN | PIN_SW_EN | PIN_AFE1_PRO_EN);
+    GPIO_SetBits(GPIOB, PIN_AD_EN | PIN_SCI1_TX);
+    GPIO_InitStructure.GPIO_Pin = PIN_BLE_EN | PIN_SW_EN | PIN_AFE1_PRO_EN | PIN_AD_EN | PIN_SCI1_TX;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = PIN_SCI1_RX;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
 }
 
 void IOstatus_NormalMode(void)
@@ -475,15 +464,18 @@ void InitRunAfterStop(void)
     APP_LedBar();
     set_LED_state(LED_BAR_NORMAL, 4);
 #endif
-    USART_DeInit(USART1);
+    if (!Sci_LowPowerUart1Preserve())
+        USART_DeInit(USART1);
     USART_DeInit(USART2);
     /* Restore cached baud rates; EEPROM pins are analog until the end below. */
 #ifdef _COMMOM_UPPER_SCI1
-    InitSCI1_CommonUpper_rtc();
+    if (!Sci_LowPowerUart1Preserve())
+        InitSCI1_CommonUpper_rtc();
 #endif
 #ifdef _COMMOM_UPPER_SCI2
     InitSCI2_CommonUpper_rtc();
 #endif
+    Sci_LowPowerResume();
     InitTimer();
     sys_time.wakeup_rtc = true;
     Init_Charger_AllSeries();

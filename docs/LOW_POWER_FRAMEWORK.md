@@ -1,5 +1,10 @@
 # 低功耗框架实施与验证
 
+> 当前实现已在 2026-10-20 更新：UART1 保留电源/RX 并经 `LP_UART_VERIFY=8` 验证合法请求；
+> RTC 增加新鲜 MOS ADC 采样与软件安全边界；恢复不清充电事件。
+> 下文“第一/二/三轮”是历史实施记录，不能再据其中“RTC 禁止 UART1 RX 唤醒”判断现行行为。
+> 现行配置、兼容规则、容量门禁和未完成的实板验收见 [本轮修复记录](LOW_POWER_REPAIR_20261020.md)。
+
 ## 第一轮：进入条件的基础正确性
 
 - RTC 使用高、低、高读取，避免 16 位进位造成计数拼接错误；STOP 返回后有界等待 RSF 同步。
@@ -20,6 +25,9 @@ flowchart LR
   RUN --> PREPARE --> WAIT_QUIET --> COMMIT --> STOP
   STOP --> WAKE_CAPTURE
   WAKE_CAPTURE -->|RTC only| RTC_SAMPLE
+  WAKE_CAPTURE -->|UART1 only| UART_VERIFY
+  UART_VERIFY -->|合法请求| RESTORE
+  UART_VERIFY -->|超时或噪声| RTC_SAMPLE
   RTC_SAMPLE -->|无电流且无异常| COMMIT
   WAIT_QUIET -->|外部事件或超时| RESTORE
   WAKE_CAPTURE -->|外部事件或失败| RESTORE
@@ -41,17 +49,19 @@ Watch 中添加 `g_low_power_diag`、`g_hardfault_record`、`RTC_ExtComCnt`、`r
 
 | 字段 | 用途 |
 | --- | --- |
-| `state` | 0 RUN、1 PREPARE、2 WAIT_QUIET、3 COMMIT、4 STOP、5 WAKE_CAPTURE、6 RTC_SAMPLE、7 RESTORE |
-| `block_mask` | bit0 串口、1 存储、2 电流、3 加热、4 均衡、5 MOS、6 AFE、7 唤醒输入、8 通信计数改变、9 配置、10 软件保护 |
+| `state` | 0 RUN、1 PREPARE、2 WAIT_QUIET、3 COMMIT、4 STOP、5 WAKE_CAPTURE、6 RTC_SAMPLE、7 RESTORE、8 UART_VERIFY |
+| `block_mask` | bit0 串口、1 存储、2 电流、3 加热、4 均衡、5 MOS、6 AFE、7 唤醒输入、8 通信计数改变、9 配置、10 软件保护、11 系统安全错误 |
 | `wake_mask` | bit0 RTC、1 PA0、2 按键、3 PB12、4 USART1、5 USART2、6 USART3、7 其他；会话内累计 |
 | `first_wake` | 会话首个来源；同一批多源同时采到时以最低位作为确定的代表，不代表物理时间先后 |
-| `exit_mask` | bit0 电流、1 AFE/均衡、2 MOS、3 UV、4 OV、5 配置、6 请求变化 |
-| `fault_mask` | bit0 RTC init、1 RTC arm、2 RSF、3 准备超时、4 时钟、5 reset sleep 事务、6 无来源返回过多、7 运行态 tick 停止、8 存储写失败、9 存储范围非法 |
+| `exit_mask` | bit0 电流、1 AFE/均衡、2 MOS、3 UV、4 OV、5 配置、6 请求变化、7 温度、8 无效采样、9 压差 |
+| `fault_mask` | bit0 RTC init、1 RTC arm、2 RSF、3 准备超时、4 时钟、5 reset sleep 事务、6 无来源返回过多、7 运行态 tick 停止、8 存储写失败、9 存储范围非法、10 ADC |
 | `comm_pending_mask` | USART1 的 bit0 TX/TC、1 半帧、2 完整帧/协议状态、3 硬件 RX/错误；USART2 对应 bit4..7 |
 | `storage_pending_mask` | bit0 升级、1 升级参数、2 事件清除、3 电压电流保护、4 温度保护、5 其他保护、6 其他参数、7 加热参数、8 RTC、9 SOC 表、10 铜损、11 校准、12 AFE 参数待应用 |
 | `storage_write_failures/last_address/last_value` | 失败次数、最后失败的 EEPROM 地址和值；写失败保留 pending，不伪装成功 |
 | `stop_count/rtc_wake_count` | STOP 尝试次数、识别到的周期 RTC 唤醒次数；不等于功耗测量 |
 | `quarantine_edges` | 受控电源切换稳定窗口内 PB12 边沿数 |
+| `uart1_candidates/rejected/valid_frames` | RX 候选次数、验证超时次数、合法通信唤醒次数；仅边沿不代表合法通信 |
+| `wake_sequence/wake_*` | 最近 STOP 返回、同步/消费标志前的独立现场；DFSR 粘滞位须前后对比 |
 | `gpio*/exti*/nvic_pending/rtc_crl/primask` | 最近转换时的寄存器快照；不是连续采样波形 |
 
 在 `LowPower_DebugHook()` 设置条件断点：`state == 2` 看稳定等待；`state == 7` 看为什么恢复；`state == 5` 看 STOP 返回现场。在 `HardFault_Record()` 断点查看堆栈 PC/LR、CFSR/HFSR/BFAR/MMFAR，不能把 HardFault 循环自身的 PC 当成异常指令。
@@ -63,17 +73,17 @@ Watch 中添加 `g_low_power_diag`、`g_hardfault_record`、`RTC_ExtComCnt`、`r
 1. 保留 `low_power.c/h`；新板实现 `low_power_port.h` 的板级函数，新的 BMS/AFE 实现策略函数。这里没有运行时注册和回调表。
 2. 更新 `conf_gpio.h`、`conf.c` 的运行/RTC GPIO 掩码、电源输出保持值以及板级 EXTI 的 port/line/边沿/极性。一个 EXTI line 同时只能选一个 GPIO port，NVIC 的共享 IRQ 要逐一检查 PR。
 3. 为每个低功耗模式列清楚哪些器件仍供电、哪些 IO 输入有确定电平、哪些输出必须保持。断电器件的 UART RX 不得直接当作合法唤醒源。新唤醒源增加独立位、ISR 通知及最终电平/pending 检查。
-4. 更新策略的电流单位、采样有效性、保护/均衡/加热/参数写条件。当前进入阈值沿用 `u16Ichg/u16IDischg > 10`（每 LSB 100 mA），周期退出沿用非零电流（还受现有零点/死区限制）；未更改保护阈值。
+4. 更新策略的电流单位、采样有效性、保护/均衡/加热/参数写条件。当前进入和周期退出均采用 `u16Ichg/u16IDischg != 0`（每 LSB 100 mA，仍受现有零点/死区限制）；未更改保护参数。
 5. 查清 STOP 后时钟源、RTC RSF、外设恢复顺序、watchdog 和时间补偿。`System_GetUptimeMs()` 只统计 TIM3 运行时间，不能用于包含 STOP 时间的墙钟计算。
 6. 先运行核心/端口测试，再 AXF 编译，确认 MAP 中 STOP 例程仍在 RAM；再验收静默通信盒、真实通信、按键、PA0、充放电、低压、保护、EEPROM 失败、单步和长期电流。
 
-当前周期采样来自 AFE，保持硬件保护工作；MCU ADC/MOS 温度仅在回到 RUN 后恢复采样。若新产品要求休眠期间持续监控 MCU 直连温度或新增检测器，应扩展板级采样状态和新鲜数据判断，不能把停机前缓存当成新的测量值。
+当前周期采样来自 AFE 和有界、非阻塞的 MCU ADC/MOS 温度采样，保持硬件保护工作。若新产品新增检测器，应扩展板级采样状态和新鲜数据判断，不能把停机前缓存当成新的测量值。
 
 ## 中断与异常唤醒的原理
 
 GPIO 电平、外设标志、外设中断使能、EXTI pending、EXTI mask 和 NVIC pending/enable 是不同层。进入 IRQ 并不证明收到合法协议帧；插入通信盒、电源变化、RX 低电平/噪声都可能产生 RXNE、FE、NE 或 ORE。USART1 的中断路由与 PB7 的 EXTI7 也是两条路径；STM32F1 STOP 时 USART 时钟停止，起始位检测依靠有效供电的 GPIO/EXTI，而不是照搬其他 STM32 系列的 USART STOP 唤醒功能。
 
-本板关闭通信电源时，PA3/PB7 的数字输入可能被无电器件拖动。运行态应先等发送 TC、检查半帧/完整帧和参数写，再关闭 USART 外设中断与 NVIC、按 SR→DR 顺序清错误并关闭 USART，然后切电源和 GPIO 模式。RTC 只保留 PA0/PA9/PB12，PB12 采用高有效上升沿，PA9 低有效下降沿。PB12 电源切换瞬态通过有限稳定窗口处理，窗口后 pending 必须保留。
+本板关闭通信电源时，数字输入可能被无电器件拖动。运行态应先等发送 TC、检查半帧/完整帧和参数写，再关闭 USART 外设中断与 NVIC、按 SR→DR 顺序清错误并关闭 USART，然后切电源和 GPIO 模式。现行 RTC 保留 PA0/PA9/PB12 和供电有效的 PB7；PB12 高有效上升沿，PA9/PB7 低有效下降沿。PB7 只触发候选验证，PB12 电源切换瞬态通过有限稳定窗口处理，窗口后 pending 必须保留。
 
 清 pending 只在明确的初始化/受控隔离阶段进行。进入 STOP 最后阶段如果先检查再清标志，会擦掉刚来的真实事件；如果先开中断再恢复系统时钟，则 ISR 可能以错误时钟访问外设。这里保持 PRIMASK 到时钟恢复、RTC 同步和唤醒捕获完成，再恢复调用者原 mask。RTC 与外部源同时来时全部记录，外部源优先恢复 RUN。
 

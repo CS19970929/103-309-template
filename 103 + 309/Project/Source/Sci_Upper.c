@@ -3951,3 +3951,106 @@ void UART_CLIENT_deal_0x06(struct RS485MSG *s)
 	s->ptr_no = 0;
 	s->csr = RS485_STA_TX_COMPLETE;
 }
+
+
+/* RTC UART1 candidate receiver. No protocol execution here. The wire format,
+   address, CRC and normal command parser are unchanged. */
+static uint8_t s_uart1_preserve_frame;
+
+void Sci_LowPowerUart1Begin(void)
+{
+#ifdef _COMMOM_UPPER_SCI1
+    GPIO_InitTypeDef gpio;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    NVIC_DisableIRQ(USART1_IRQn);
+    s_uart1_preserve_frame = 0U;
+    Sci_DataInit(&g_stCurrentMsgPtr_SCI1);
+    gpio.GPIO_Pin = PIN_SCI1_TX;
+    gpio.GPIO_Mode = GPIO_Mode_AF_PP;
+    gpio.GPIO_Speed = GPIO_Speed_10MHz;
+    GPIO_Init(GPIO_SCI1_TX, &gpio);
+    (void)USART1->SR;
+    (void)USART1->DR;
+    USART1->CR1 |= USART_CR1_RE;
+    USART1->CR3 |= USART_CR3_EIE;
+    USART_Cmd(USART1, ENABLE);
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+    NVIC_ClearPendingIRQ(USART1_IRQn);
+    NVIC_EnableIRQ(USART1_IRQn);
+    __set_PRIMASK(mask);
+#endif
+}
+
+uint8_t Sci_LowPowerUart1FrameReady(void)
+{
+#ifdef _COMMOM_UPPER_SCI1
+    struct RS485MSG *message = &g_stCurrentMsgPtr_SCI1;
+    uint16_t length, crc;
+    uint8_t ready = 0U;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if (message->csr == RS485_STA_RX_COMPLETE)
+    {
+        length = message->ptr_no;
+        if (length >= 8U && length <= RS485_MAX_BUFFER_SIZE &&
+            (message->u16Buffer[0] == RS485_SLAVE_ADDR || message->u16Buffer[0] == RS485_BROADCAST_ADDR) &&
+            (((message->u16Buffer[1] == RS485_CMD_READ_REGS || message->u16Buffer[1] == RS485_CMD_WRITE_REG) && length == 8U) ||
+             (message->u16Buffer[1] == RS485_CMD_WRITE_REGS && length >= 9U && length == (uint16_t)message->u16Buffer[6] + 9U)))
+        {
+            crc = (uint16_t)message->u16Buffer[length - 2U] |
+                  ((uint16_t)message->u16Buffer[length - 1U] << 8);
+            ready = (uint8_t)(crc == Sci_CRC16RTU((uint8_t *)message->u16Buffer, length - 2U));
+        }
+        if (!ready)
+        {
+            message->ptr_no = 0U;
+            message->csr = RS485_STA_IDLE;
+            USART1->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE;
+        }
+    }
+    __set_PRIMASK(mask);
+    return ready;
+#else
+    return 0U;
+#endif
+}
+
+void Sci_LowPowerUart1End(uint8_t accepted)
+{
+    s_uart1_preserve_frame = accepted;
+#ifdef _COMMOM_UPPER_SCI1
+    if (accepted)
+        gu16_CommuErrCnt_SCI1 = 0U; /* Prior wake-fragment errors cannot cancel this valid request. */
+    if (!accepted)
+    {
+        USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
+        USART1->CR3 &= ~USART_CR3_EIE;
+        NVIC_DisableIRQ(USART1_IRQn);
+        (void)USART1->SR;
+        (void)USART1->DR;
+        USART_Cmd(USART1, DISABLE);
+        NVIC_ClearPendingIRQ(USART1_IRQn);
+        g_stCurrentMsgPtr_SCI1.ptr_no = 0U;
+        g_stCurrentMsgPtr_SCI1.csr = RS485_STA_IDLE;
+    }
+#endif
+}
+
+uint8_t Sci_LowPowerUart1Preserve(void)
+{
+    return s_uart1_preserve_frame;
+}
+
+uint32_t Sci_LowPowerUart1TimeoutMs(void)
+{
+    /* Bounded nonblocking window for the existing host retry. At 1200 baud,
+       a maximum-size request also fits. No new wake command is required. */
+    return 3000U;
+}
+
+void Sci_LowPowerResume(void)
+{
+    s_common_usarts_stopped = 0U;
+    s_uart1_preserve_frame = 0U;
+}

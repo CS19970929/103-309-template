@@ -42,7 +42,9 @@ def main():
               "quarantine_edges", "idle_seconds", "uptime_ms", "rtc_counter", "gpioa_idr",
               "gpiob_idr", "exti_imr", "exti_pr", "rtc_crl", "primask", "debug_profile",
               "iwdg_compiled", "comm_pending_mask", "storage_pending_mask", "storage_write_failures",
-              "uart_partial_timeouts", "uart1_errors", "uart2_errors")
+              "uart_partial_timeouts", "uart1_errors", "uart2_errors",
+              "uart1_candidates", "uart1_rejected", "uart1_valid_frames", "wake_sequence",
+              "wake_exti_pr", "wake_rtc_crl", "wake_icsr", "wake_dfsr", "wake_dhcsr", "wake_dbgmcu_cr")
     expressions = {name: "g_low_power_diag." + name for name in fields}
     expressions.update(hardfault_count="g_hardfault_record.count",
                        hardfault_pc="g_hardfault_record.pc", comm_count="RTC_ExtComCnt", pc="$pc",

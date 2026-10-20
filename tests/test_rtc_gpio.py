@@ -26,8 +26,12 @@ STUBS = r'''
 #define GPIO_Pin_2 (1u << 2)
 #define GPIO_Pin_3 (1u << 3)
 #define GPIO_Pin_4 (1u << 4)
+#define GPIO_Pin_5 (1u << 5)
+#define GPIO_Pin_6 (1u << 6)
 #define GPIO_Pin_7 (1u << 7)
 #define GPIO_Pin_9 (1u << 9)
+#define GPIO_Pin_10 (1u << 10)
+#define GPIO_Pin_15 (1u << 15)
 #define GPIO_Pin_12 (1u << 12)
 #define GPIO_Pin_13 (1u << 13)
 #define GPIO_Pin_14 (1u << 14)
@@ -37,6 +41,15 @@ STUBS = r'''
 #define PIN_SCI2_RX GPIO_Pin_3
 #define PIN_INT_WK_CMNT GPIO_Pin_12
 #define PIN_AFE1_CTL GPIO_Pin_14
+#define PIN_CMNT_EN GPIO_Pin_4
+#define PIN_M_STB GPIO_Pin_15
+#define PIN_AFE1_SHIP GPIO_Pin_10
+#define PIN_AFE1_MODE GPIO_Pin_7
+#define PIN_BLE_EN GPIO_Pin_4
+#define PIN_AD_EN GPIO_Pin_3
+#define PIN_SW_EN GPIO_Pin_5
+#define PIN_AFE1_PRO_EN GPIO_Pin_0
+#define PIN_SCI1_TX GPIO_Pin_6
 #define GPIO_Mode_AIN 0
 #define GPIO_Mode_Out_PP 1
 #define GPIO_Mode_IN_FLOATING 2
@@ -52,18 +65,23 @@ STUBS = r'''
 #define ADC1 1
 typedef struct { unsigned GPIO_Pin, GPIO_Mode, GPIO_Speed; } GPIO_InitTypeDef;
 static unsigned modes[5][16], key_level=1, key_pending, external_pending;
+static unsigned levels[5];
 static unsigned driver, power_ctr, power_stb;
 #define MCUO_DRV_CMNT driver
 #define MCUO_PWSV_CTR power_ctr
 #define MCUO_PWSV_STB power_stb
 static void RCC_APB2PeriphClockCmd(int p,int e) { (void)p; (void)e; }
 static void ADC_StopForRtc(void) {}
+static void GPIO_SetBits(unsigned p,unsigned bits) { levels[p]|=bits; }
+static void GPIO_ResetBits(unsigned p,unsigned bits) { levels[p]&=~bits; }
 static void __delay_ms(int ms) { (void)ms; }
 static void GPIO_Init(unsigned port, GPIO_InitTypeDef *init) {
     unsigned pin;
     for (pin=0; pin<16; ++pin) {
         if (!(init->GPIO_Pin & (1u << pin))) continue;
         modes[port][pin]=init->GPIO_Mode;
+        assert(!(port==GPIOB && pin==4 && init->GPIO_Mode==GPIO_Mode_AIN));
+        assert(!(port==GPIOB && pin==7 && init->GPIO_Mode==GPIO_Mode_AIN));
         if (port==GPIOA && pin==9 && init->GPIO_Mode==GPIO_Mode_AIN && key_level) {
             key_level=0; key_pending=1;
         }
@@ -84,13 +102,16 @@ int main(void) {
         assert(modes[GPIOA][0]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOA][3]==GPIO_Mode_AIN);
         assert(modes[GPIOA][9]==GPIO_Mode_IN_FLOATING);
-        assert(modes[GPIOB][7]==GPIO_Mode_AIN);
+        assert(modes[GPIOB][7]==GPIO_Mode_IPU);
+        assert(modes[GPIOB][6]==GPIO_Mode_Out_PP && (levels[GPIOB]&PIN_SCI1_TX));
+        assert(modes[GPIOB][4]==GPIO_Mode_Out_PP && !(levels[GPIOB]&PIN_BLE_EN));
+        assert(levels[GPIOA]&PIN_CMNT_EN);
         assert(modes[GPIOB][12]==GPIO_Mode_IN_FLOATING);
         assert(modes[GPIOB][14]==GPIO_Mode_Out_PP);
         assert(external_pending);
         assert(modes[GPIOA][1]==GPIO_Mode_AIN);
     }
-    puts("PASS: repeated RTC GPIO setup preserves valid wake inputs and makes powered-down UART RX analog");
+    puts("PASS: wake inputs retained; UART1 rail never floats, TX idle/RX bias retained; UART2 off");
     return 0;
 }
 '''

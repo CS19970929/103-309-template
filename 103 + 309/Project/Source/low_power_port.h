@@ -22,6 +22,9 @@ uint8_t BoardLowPower_RtcArm(void);
 uint8_t BoardLowPower_CaptureWake(void);
 void BoardLowPower_BeginSample(void);
 uint8_t BoardLowPower_PollSample(void);
+void BoardLowPower_BeginUart1Check(void);
+uint8_t BoardLowPower_PollUart1Check(void);
+void BoardLowPower_EndUart1Check(uint8_t accepted);
 void BoardLowPower_Restore(void);
 void BoardLowPower_AccountSeconds(uint32_t seconds);
 
@@ -32,5 +35,6 @@ uint32_t BmsSleep_BlockMask(uint8_t refresh_afe);
 uint32_t BmsSleep_SampleExit(void);
 uint8_t BmsSleep_CommitReset(void);
 void BmsSleep_ResetQualification(void);
+void BmsSleep_ConsumeSleepUartActivity(void);
 
 #endif
