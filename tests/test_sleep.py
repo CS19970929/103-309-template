@@ -96,7 +96,7 @@ void entersleep(enum _SLEEP_MODE mode);
 #define BMS_SLEEP 1
 typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG, FLASH_ERROR_WRP } FLASH_Status;
 static struct { UINT16 u16Ichg, u16IDischg, u16VCellMin, u16VCell[16], u16BalanceFlag1; } g_stCellInfoReport;
-static struct { UINT16 u16Sys_SeriesNum, u16Sleep_Vlow, u16Sleep_TimeVlow; } OtherElement;
+static struct { UINT16 u16Sys_SeriesNum, u16Sleep_Vlow, u16Sleep_TimeVlow, u16Sleep_TimeRTC; } OtherElement;
 static struct { UINT16 u16VcellUvp_Third, u16VcellOvp_Third; } PRT_E2ROMParas;
 static struct { struct { UINT8 b1Status_Heat, b1Status_MOS_CHG, b1Status_MOS_DSG; } bits; } SystemStatus;
 static struct { UINT8 all; } empty_status;
@@ -257,6 +257,7 @@ static void defaults(void) {
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
     memset(&SystemStatus,0,sizeof(SystemStatus));
     OtherElement.u16Sys_SeriesNum=1; OtherElement.u16Sleep_Vlow=2800; OtherElement.u16Sleep_TimeVlow=2;
+    OtherElement.u16Sleep_TimeRTC=0;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[0]=3300;
     PRT_E2ROMParas.u16VcellUvp_Third=2500; PRT_E2ROMParas.u16VcellOvp_Third=3650;
     sys_time.time_enter_rtc=30; rtc_counter=100; stop_elapsed=10; su32_Interval_S_Tcnt=0;

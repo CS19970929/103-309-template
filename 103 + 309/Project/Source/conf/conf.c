@@ -456,6 +456,10 @@ void Sys_StopMode(void)
     __set_PRIMASK(primask);
 }
 
+/* Cold boot clears charger state; STOP resume must retain ISR events and
+   protection latches. Reconfigure its hardware only. */
+extern void Init_Charger_AllSeries(void);
+
 void InitRunAfterStop(void)
 {
     InitIO();
@@ -479,7 +483,7 @@ void InitRunAfterStop(void)
 #endif
     InitTimer();
     sys_time.wakeup_rtc = true;
-    Init_ChargerLoad_Det();
+    Init_Charger_AllSeries();
     initAFE1_IIC();
     InitE2PROM_i2c();
 }

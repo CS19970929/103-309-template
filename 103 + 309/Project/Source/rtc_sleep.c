@@ -101,7 +101,9 @@ uint32_t BmsSleep_BlockMask(uint8_t refresh_afe)
         blocks |= LP_BLOCK_COMM;
     if (RTC_ExtComCnt != s_last_comm)
         blocks |= LP_BLOCK_COMM_CHANGED;
-    if (g_stCellInfoReport.u16Ichg > 10U || g_stCellInfoReport.u16IDischg > 10U)
+    /* Report units are 100 mA. Use the same deadband-qualified activity
+       predicate before STOP and at every RTC sample. */
+    if (g_stCellInfoReport.u16Ichg != 0U || g_stCellInfoReport.u16IDischg != 0U)
         blocks |= LP_BLOCK_CURRENT;
     if (SystemStatus.bits.b1Status_Heat)
         blocks |= LP_BLOCK_HEAT;
@@ -145,6 +147,7 @@ void BmsSleep_ResetQualification(void)
 void BmsSleep_PollRequest(void)
 {
     uint32_t blocks;
+    uint32_t idle_limit_seconds;
     if (!TakePendingFlag(&gu8_1000msAccClock_Flag))
         return;
     if (s_sleep_mode == DEEP_MODE)
@@ -186,9 +189,15 @@ void BmsSleep_PollRequest(void)
         s_idle_seconds = 0U;
     else
     {
-        if (s_idle_seconds < sys_time.time_enter_rtc)
+        /* Existing parameter address/units stay unchanged (minutes).
+           Zero was shipped as a reserved/default value: retain the current
+           board timeout instead of disabling sleep or rewriting EEPROM. */
+        idle_limit_seconds = OtherElement.u16Sleep_TimeRTC != 0U
+            ? (uint32_t)OtherElement.u16Sleep_TimeRTC * 60U
+            : (uint32_t)sys_time.time_enter_rtc;
+        if (s_idle_seconds < idle_limit_seconds)
             ++s_idle_seconds;
-        if (s_idle_seconds >= sys_time.time_enter_rtc)
+        if (s_idle_seconds >= idle_limit_seconds)
             entersleep(HICCUP_MODE);
     }
     g_low_power_diag.idle_seconds = s_idle_seconds;
