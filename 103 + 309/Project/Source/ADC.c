@@ -186,7 +186,7 @@ void App_TempADC(void)
         if (!s_adc_ready || !TempADC_Read(cfg->adc_channel, &raw) ||
             !TempADC_Convert(i, raw, &temperature))
         {
-            g_stCellInfoReport.u16Temperature[cfg->report_index] = 0U;
+            /* Keep the last valid temperature so OTP filters never see a false recovery. */
             fault = 1U;
         }
         else

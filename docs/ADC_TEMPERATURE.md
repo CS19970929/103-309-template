@@ -6,29 +6,29 @@ interrupts: the existing TIM3-based main-loop scheduler samples every 100 ms.
 
 ## Behavior
 
-- \`InitADC()\` configures the analog pins and ADC1 once (also on STOP wake),
+- `InitADC()` configures the analog pins and ADC1 once (also on STOP wake),
   then performs bounded ADC calibration.
-- \`App_TempADC()\` reads each configured channel with software triggering,
+- `App_TempADC()` reads each configured channel with software triggering,
   averaging four conversions; each conversion has a bounded EOC wait.
 - The existing NTC lookup table and the temperature K/B coefficients are
-  retained. Reports use the legacy \`(degrees_C + 40) * 10\` representation.
-- Temperature results are written independently of \`App_AFEGet()\`, so an AFE
+  retained. Reports use the legacy `(degrees_C + 40) * 10` representation.
+- Temperature results are written independently of `App_AFEGet()`, so an AFE
   sampling skip does not also skip the MOS temperature update.
 - An ADC timeout, calibration failure or out-of-range NTC sample publishes
-  zero (invalid), sets \`ERROR_ADC\`, and keeps MOS CTLC disabled through
-  \`TempADC_HasFault()\` / \`isforceClose()\`; recovery clears \`ERROR_ADC\`.
-  The AFE sensor's existing \`ERROR_TEMP_BREAK\` handling remains separate.
-- STOP wake uses the same \`InitADC()\` function to reconfigure ADC1. RTC
+  the last valid temperature unchanged, sets `ERROR_ADC`, and keeps MOS CTLC disabled through
+  `TempADC_HasFault()` / `isforceClose()`; recovery clears `ERROR_ADC`.
+  The AFE sensor's existing `ERROR_TEMP_BREAK` handling remains separate.
+- STOP wake uses the same `InitADC()` function to reconfigure ADC1. RTC
   monitoring while still in STOP cycles does not require a fresh MOS ADC sample.
 
 ## Adding channels
 
-Add one \`s_sensors[]\` entry in \`Source/ADC.c\` with GPIO port, pin,
-\`ADC_Channel_x\`, an unused temperature report index, and its K/B calibration
+Add one `s_sensors[]` entry in `Source/ADC.c` with GPIO port, pin,
+`ADC_Channel_x`, an unused temperature report index, and its K/B calibration
 index. Ensure the GPIO is not occupied by another peripheral. All channels
 currently use the same 10k NTC table and are treated as required safety
 sensors; adapt that policy if optional sensors are added. The existing
-\`DataLoad_TemperatureMaxMinFind()\` includes AFE and environment slots but
+`DataLoad_TemperatureMaxMinFind()` includes AFE and environment slots but
 excludes MOS, whose overtemperature protection is evaluated separately.
 
 ## Validation before release

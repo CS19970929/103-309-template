@@ -281,7 +281,7 @@ void DataLoad_TemperatureMaxMinFind(void)
 	t_u16VcellMaxTemp = 0;
 	t_u16VcellMinTemp = 0x7FFF;
 
-	// 如果是两个环境温度，则改为8便可
+	// AFE and optional environment temperatures, excluding the dedicated MOS slot.
 	for (i = 0; i < MOS_TEMP1; i++)
 	{ // 默认只有一个环境温度，纳入计算
 		if (g_stCellInfoReport.u16Temperature[i] == 0)
