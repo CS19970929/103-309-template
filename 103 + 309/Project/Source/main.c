@@ -38,11 +38,11 @@ int main(void)
 #if (defined _DEBUG_CODE)
 #else
 		App_SysTime();
+		App_TempADC();
 		App_WarnCtrl();
 		App_AFEGet();
 
 		App_Sci();
-		App_AnlogCal();
 		App_E2promDeal();
 		// App_Can();
 		rtc_sleep();

@@ -384,7 +384,6 @@ void Sys_StopMode(void)
 void InitRunAfterStop(void)
 {
     InitIO();
-    ADC_DeInit(ADC1);
     InitADC();
 #ifdef __FUNC__HEAT__
     InitHeat_Cool();

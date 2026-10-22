@@ -269,39 +269,7 @@ void DataLoad_Temperature(void)
 	}
 
 	g_stCellInfoReport.u16Temperature[2] = 0;
-
-#if 0
-	//环境温度1
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV1] / 10 - 40;		//放大1000倍和B值对应的意思
-	//t_i32temp =  - 40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1])>>10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp*10 + 400);
-	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
-#endif
-
-	// 环境温度2
-	// 如果没有，这个默认就是0(ADC.c不会调用)
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV2] / 10 - 40;
-	t_i32temp = -40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
-
-	// 环境温度3
-	t_i32temp = g_i32ADCResult[ADC_TEMP_EV3] / 10 - 40;
-	t_i32temp = -40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
-
-#if 1
-	// MOS温度为散热片温度
-	// 取两者最大值
-	// t_i32temp = (g_i32ADCResult[ADC_TEMP_MOS1] > g_i32ADCResult[ADC_TEMP_MOS2] ? g_i32ADCResult[ADC_TEMP_MOS1]:g_i32ADCResult[ADC_TEMP_MOS2]);
-	t_i32temp = g_i32ADCResult[ADC_TEMP_MOS1];
-	t_i32temp = t_i32temp / 10 - 40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
-	g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
-	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[MOS_TEMP1]);
-#endif
+	/* ADC temperatures are updated independently by App_TempADC(). */
 }
 
 void DataLoad_TemperatureMaxMinFind(void)
@@ -314,7 +282,7 @@ void DataLoad_TemperatureMaxMinFind(void)
 	t_u16VcellMinTemp = 0x7FFF;
 
 	// 如果是两个环境温度，则改为8便可
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < MOS_TEMP1; i++)
 	{ // 默认只有一个环境温度，纳入计算
 		if (g_stCellInfoReport.u16Temperature[i] == 0)
 		{			  // 这段代码什么意思，断了就不判断吗？
