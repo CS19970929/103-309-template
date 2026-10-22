@@ -7,7 +7,7 @@
 
 /* Usable capacity relative to configured Ah; 100 disables derating. */
 #ifndef SOC_USABLE_CAPACITY_PERCENT
-#define SOC_USABLE_CAPACITY_PERCENT 95U
+#define SOC_USABLE_CAPACITY_PERCENT 98U
 #endif
 #if SOC_USABLE_CAPACITY_PERCENT < 1 || SOC_USABLE_CAPACITY_PERCENT > 100
 #error SOC_USABLE_CAPACITY_PERCENT_must_be_1_to_100
