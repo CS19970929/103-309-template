@@ -994,13 +994,6 @@ void InitSCI1_CommonUpper_rtc(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 	GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE); // PB6,PB7
 
-	// Enable the USART1 Interrupt(使能USART1中断)
-	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
 	// USART1_TX   PA9
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6; // PA9
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
@@ -1022,6 +1015,12 @@ void InitSCI1_CommonUpper_rtc(void)
 	USART_Init(USART1, &USART_InitStructure);
 
 	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
 
 	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
 	USART_Cmd(USART1, ENABLE);					   // 使能串口1
@@ -1803,13 +1802,6 @@ void InitSCI2_CommonUpper_rtc(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 
-	// Enable the USART1 Interrupt(使能USART1中断)
-	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
 	// USART2_TX   PA2
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
@@ -1831,6 +1823,12 @@ void InitSCI2_CommonUpper_rtc(void)
 	USART_Init(USART2, &USART_InitStructure);
 
 	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
 
 	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
 	USART_Cmd(USART2, ENABLE);					   // 使能串口2

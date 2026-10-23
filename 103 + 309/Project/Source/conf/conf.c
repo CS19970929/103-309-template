@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 30,
+    .time_enter_rtc = 10,
 };
 
 // void GPIO_SetBits(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin);
@@ -389,10 +389,6 @@ void InitRunAfterStop(void)
 #ifdef __FUNC__HEAT__
     InitHeat_Cool();
 #endif
-#ifdef __FUNC__LED__
-    APP_LedBar();
-    set_LED_state(LED_BAR_NORMAL, 4);
-#endif
     USART_DeInit(USART1);
     USART_DeInit(USART2);
     /* Restore cached baud rates; EEPROM pins are analog until the end below. */
@@ -404,7 +400,7 @@ void InitRunAfterStop(void)
 #endif
     InitTimer();
     sys_time.wakeup_rtc = true;
-    Init_ChargerLoad_Det();
+    // Init_ChargerLoad_Det();
     initAFE1_IIC();
     InitE2PROM_i2c();
 }

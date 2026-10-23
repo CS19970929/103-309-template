@@ -267,7 +267,7 @@ static void sleep_update_request(void)
         return;
     }
     if (comm != s_last_comm || sleep_has_pending_work() || isErr_enterRTC() ||
-        AFE_SleepMode_Judge() != 0U)
+        AFE_SleepMode_Judge() != 0U || !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1))
     {
         s_last_comm = comm;
         s_idle_seconds = 0U;
@@ -321,20 +321,12 @@ static void sleep_run_rtc(void)
     start_counter = RTC_GetCounter();
     do
     {
-        /* Recheck before changing IO: work may have arrived after the idle tick. */
-        if (g_irq_t != NO_IRQ || RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            isErr_enterRTC() || AFE_SleepMode_Judge() != 0U)
-            break;
         is_rtc_wakekup = false;
         IOstatus_RTCMode();
 	    USART_Cmd(USART1, DISABLE);					   // 使能串口1
 	    USART_Cmd(USART2, DISABLE);					   // 使能串口1
         InitWakeUp_RTCMode();
         if (!RTC_WKTimeConfig())
-            break;
-        if (RTC_ExtComCnt != s_last_comm || sleep_has_pending_work() ||
-            // GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) ||
-            !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) || g_irq_t != NO_IRQ)
             break;
         Feed_IWatchDog;
         sys_time.irq.uart1_sr = USART1->SR;
