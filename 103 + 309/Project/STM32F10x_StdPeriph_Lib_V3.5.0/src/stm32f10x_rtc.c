@@ -130,11 +130,27 @@ void RTC_ExitConfigMode(void)
   * @param  None
   * @retval RTC counter value.
   */
+// uint32_t RTC_GetCounter(void)
+// {
+//   uint16_t tmp = 0;
+//   tmp = RTC->CNTL;
+//   return (((uint32_t)RTC->CNTH << 16 ) | tmp) ;
+// }
 uint32_t RTC_GetCounter(void)
 {
-  uint16_t tmp = 0;
-  tmp = RTC->CNTL;
-  return (((uint32_t)RTC->CNTH << 16 ) | tmp) ;
+    uint16_t high1;
+    uint16_t high2;
+    uint16_t low;
+
+    do
+    {
+        high1 = RTC->CNTH;
+        low   = RTC->CNTL;
+        high2 = RTC->CNTH;
+    }
+    while (high1 != high2);
+
+    return ((uint32_t)high1 << 16) | low;
 }
 
 /**

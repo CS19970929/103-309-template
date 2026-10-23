@@ -13,7 +13,7 @@
 #define RS485_ADDR_RW_AFE_PARAMETER  0x2400
 
 #ifdef LIFEPO
-#define AFE_COV           (3780)
+#define AFE_COV           (3760)
 #define AFE_COV_recover   (3500)
 #define AFE_COV_filter     100
 

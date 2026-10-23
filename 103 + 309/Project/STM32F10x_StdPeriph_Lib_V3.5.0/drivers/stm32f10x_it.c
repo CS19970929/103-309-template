@@ -162,6 +162,7 @@ void EXTI0_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
+    sys_time.irq.exti0++;
     EXTI_ClearITPendingBit(EXTI_Line0);
     g_irq_t = PA0_irq;
     ChargerLoad_Func.bits.b1ON_Charger_AllSeries = 1;
@@ -173,6 +174,7 @@ void EXTI2_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line2) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line2);
+    sys_time.irq.exti2++;
   }
 }
 
@@ -181,6 +183,7 @@ void EXTI3_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line3);
+    sys_time.irq.exti3++;
   }
 }
 
@@ -188,6 +191,7 @@ void EXTI15_10_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
+    sys_time.irq.exti12++;
     EXTI_ClearITPendingBit(EXTI_Line12);
     g_irq_t = rs485_irq;
   }
@@ -203,19 +207,23 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line5);
+    sys_time.irq.exti5++;
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line6);
+    sys_time.irq.exti6++;
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line7);
+    sys_time.irq.exti7++;
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
     EXTI_ClearITPendingBit(EXTI_Line9);
     g_irq_t = bms_keyirq;
+    sys_time.irq.exti9++;
   }
 }
 
@@ -246,26 +254,37 @@ void EXTI9_5_IRQHandler(void)
 // 以下的是非共有的，如果多处使用到，则移动到it.c文件
 void USART1_IRQHandler(void)
 {
+  uint32_t isr = USART1->SR;
+  sys_time.irq.uart1_irq++;
+
+  if (isr & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
+  {
+    volatile uint32_t dump = USART1->DR;
+    (void)dump;
+    sys_time.irq.uart1_err++;
+    return;
+  }
+
 #ifdef _COMMOM_UPPER_SCI1
-  Sci1_CommonUpper_FaultChk();
+  // Sci1_CommonUpper_FaultChk();
 #endif
 
   if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
   {
+    sys_time.irq.uart1_rxne++;
     RTC_ExtComCnt++;
     g_irq_t = uart1_irq;
 
 #ifdef _COMMOM_UPPER_SCI1
-    Sci1_CommonUpper_FaultChk();
     Sci1_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI1);
 #endif
-
   }
 }
 
 void USART2_IRQHandler(void)
 {
   uint32_t isr = USART2->SR;
+  sys_time.irq.uart2_irq++;
 
   // ---- 1. 错误检测与清除 ----
   if (isr & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
@@ -273,6 +292,7 @@ void USART2_IRQHandler(void)
     volatile uint32_t dump = USART2->DR;
     (void)dump;
 
+    sys_time.irq.uart2_err++;
     // 手动清除错误标志（ICR是写1清零）
     // USART2->CR = (1 << 3) | (1 << 2) | (1 << 1) | (1 << 0);
 
@@ -293,14 +313,14 @@ void USART2_IRQHandler(void)
 
   if (USART_GetITStatus(USART2, USART_IT_RXNE) != RESET)
   {
+    sys_time.irq.uart2_rxne++;
     RTC_ExtComCnt++;
     g_irq_t = uart2_irq;
 
 #ifdef _COMMOM_UPPER_SCI2
-    Sci2_CommonUpper_FaultChk();
+    // Sci2_CommonUpper_FaultChk();
     Sci2_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI2);
 #endif
-
   }
 
   // ---- 3. 可选IDLE清除 ----
@@ -327,7 +347,6 @@ void USART3_IRQHandler(void)
     Sci3_CommonUpper_FaultChk();
     Sci3_CommonUpper_Rx_Deal(&g_stCurrentMsgPtr_SCI3);
 #endif
-
   }
 }
 

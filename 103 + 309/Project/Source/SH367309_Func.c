@@ -571,8 +571,7 @@ void App_SH367309_Monitor(void)
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
-		CellBalance_UpdateReport(((UINT16)SH367309_Reg_Store.u8_MTP_BALANCEH << 8)
-		    | SH367309_Reg_Store.u8_MTP_BALANCEL);
+		CellBalance_UpdateReport(((UINT16)SH367309_Reg_Store.u8_MTP_BALANCEH << 8) | SH367309_Reg_Store.u8_MTP_BALANCEL);
 		// SystemStatus.bits.b1Status_MOS_PRE = SH367309_Reg_Store.REG_BSTATUS3.bits.PCHG_FET;
 		SystemStatus.bits.b1Status_MOS_CHG = SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET;
 		SystemStatus.bits.b1Status_MOS_DSG = SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET;
@@ -580,28 +579,12 @@ void App_SH367309_Monitor(void)
 		// TemperatureCheck();
 		Fault_ChangeToMCU();
 
-		switch (su8_SC_Flag)
+		if (SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
 		{
-		case 0:
-			if (SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
-			{
-				System_ERROR_UserCallback(ERROR_CBC_DSG);
-				su8_SC_Flag = 1;
-				ChargerLoad_Func.bits.b1OFFDriver_CBC = 1;
-			}
-			break;
-
-		case 1:
-			// 负载断开(DSGD管教电平低于VDSGD)，持续时间超过负载释放延时tD1，现在设置为2s
-			if (!SH367309_Reg_Store.REG_BSTATUS1.bits.SC)
-			{
-				su8_SC_Flag = 0;
-			}
-			break;
-
-		default:
-			break;
+			System_ErrFlag.u8ErrFlag_CBC_DSG = 1;
 		}
+		else
+			System_ErrFlag.u8ErrFlag_CBC_DSG = 0;
 
 		// 观察类型，不能被置位，置位说明有问题，配置不对
 		// SH367309_Reg_Store.REG_BSTATUS1.bits.PF;
@@ -644,7 +627,6 @@ void App_SH367309_Monitor(void)
 		{
 			System_ERROR_UserCallback(ERROR_CLIENT);
 		}
-
 	}
 	else
 	{

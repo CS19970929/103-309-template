@@ -181,13 +181,6 @@ static bool rtc_monitor_sh367309(void)
 
 static bool isErr_enterRTC(void)
 {
-    UINT8 balance_data[2];
-
-    /* Read current AFE balance state before requesting IDLE/SLEEP. */
-    if (!MTPRead(MTP_BALANCEH, 2, balance_data))
-        return true;
-    CellBalance_UpdateReport(((UINT16)balance_data[0] << 8) | balance_data[1]);
-
     if ((g_stCellInfoReport.u16Ichg > 10) || (g_stCellInfoReport.u16IDischg > 10))
     {
         log_e("CHG or DSG");
@@ -197,11 +190,6 @@ static bool isErr_enterRTC(void)
     else if (SystemStatus.bits.b1Status_Heat)
     {
         log_e("Heating");
-        return true;
-    }
-    else if (g_stCellInfoReport.u16BalanceFlag1 != 0u)
-    {
-        log_e("Balancing");
         return true;
     }
 #ifdef __same_door__
@@ -228,8 +216,7 @@ static bool sleep_has_pending_work(void)
     if (u8FlashUpdateFlag || u8FlashUpdateE2PROM || gu8_Reset_EventRecord ||
         u32E2P_Pro_VolCur_WriteFlag || u32E2P_Pro_Temp_WriteFlag ||
         u32E2P_Pro_Other_WriteFlag || u32E2P_OtherElement1_WriteFlag ||
-        u32E2P_HeatCool_WriteFlag || u32E2P_RTC_Element_WriteFlag ||
-        u8E2P_SocTable_WriteFlag || u8E2P_CopperLoss_WriteFlag || u8E2P_KB_WriteFlag)
+        u32E2P_HeatCool_WriteFlag || u8E2P_KB_WriteFlag)
         return true;
 // #ifdef _COMMOM_UPPER_SCI1
 //     if (gu8_TxEnable_SCI1 || g_stCurrentMsgPtr_SCI1.ptr_no ||
@@ -253,7 +240,7 @@ static void sleep_update_request(void)
     if (s_sleep_mode == DEEP_MODE)
         return;
     if (g_stCellInfoReport.u16VCellMin <= SLEEP_FORCE_LOW_MV &&
-        g_stCellInfoReport.u16Ichg == 0U)
+        g_stCellInfoReport.u16Ichg <= 5U)
     {
         s_idle_seconds = 0U;
         if (++s_force_seconds >= SLEEP_FORCE_LOW_SECONDS)
@@ -261,7 +248,7 @@ static void sleep_update_request(void)
         return;
     }
     if (g_stCellInfoReport.u16VCellMin <= OtherElement.u16Sleep_Vlow &&
-        g_stCellInfoReport.u16Ichg == 0U)
+        g_stCellInfoReport.u16Ichg <= 5U)
     {
         s_idle_seconds = 0U;
         if (++s_low_seconds >= (UINT32)OtherElement.u16Sleep_TimeVlow * 60U)
@@ -340,6 +327,8 @@ static void sleep_run_rtc(void)
             break;
         is_rtc_wakekup = false;
         IOstatus_RTCMode();
+	    USART_Cmd(USART1, DISABLE);					   // 使能串口1
+	    USART_Cmd(USART2, DISABLE);					   // 使能串口1
         InitWakeUp_RTCMode();
         if (!RTC_WKTimeConfig())
             break;
@@ -348,6 +337,8 @@ static void sleep_run_rtc(void)
             !GPIO_ReadInputDataBit(GPIO_KEY1, PIN_KEY1) || g_irq_t != NO_IRQ)
             break;
         Feed_IWatchDog;
+        sys_time.irq.uart1_sr = USART1->SR;
+        sys_time.irq.uart1_sr = USART2->SR;
         Sys_StopMode();
         Feed_IWatchDog;
         initAFE1_IIC();

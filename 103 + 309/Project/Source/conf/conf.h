@@ -10,7 +10,7 @@
 
 #define __same_door__
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x0701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x5701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (9)
 
@@ -63,9 +63,38 @@ typedef enum GPIO_TYPE {
 
 typedef struct 
 {
+  uint32_t    exti0;
+  uint32_t    exti2;
+  uint32_t    exti3;
+  uint32_t    exti5;
+  uint32_t    exti6;
+  uint32_t    exti7;
+  uint32_t    exti9;
+  uint32_t    exti12;
+  uint32_t    exti17;
+  uint32_t    rtc_irq;
+  uint32_t    rtc_sec;
+  uint32_t    rtc_alarm;
+  uint32_t    rtcAlarm_irq;
+  uint32_t    rtc_record_test;
+  uint32_t    uart1_sr;
+  uint32_t    uart1_irq;
+  uint32_t    uart1_rxne;
+  uint32_t    uart1_err;
+  uint32_t    uart2_sr;
+  uint32_t    uart2_irq;
+  uint32_t    uart2_rxne;
+  uint32_t    uart2_err;
+  
+}IRQ_T;
+
+
+typedef struct 
+{
   uint64_t    sys_tick_10ms;
   uint64_t    sys_tick_1ms;
   uint32_t    can_rcv_cnt;
+  IRQ_T       irq;
 
   // uint16_t    cov1_cnt;
   // uint16_t    cov2_cnt;

@@ -322,3 +322,18 @@ LogEvent_Record(1U, BMS_SLEEP, &su32_Interval_S_Tcnt);    测试
 单步调试     编译器优化？
 RTC_WKTimeConfig
 sleep_restore_run
+
+
+
+休眠、唤醒测试，充电唤醒？
+
+PA13、PA14 rtc io状态，用于stlink，后面屏蔽
+
+rtc不需要测温度，保证，rtc唤醒后会测温度，软件温度保护？时序需要保证
+
+
+soc逻辑优化：目前有SOC_VIRTUAL_CURRENT_CHG，只有>=200，然后soc积分时认为1s电流不变，
+逻辑复杂，充、放电积分分开计算
+
+梳理并评估当前项目的soc逻辑，并给出建议
+测试过流

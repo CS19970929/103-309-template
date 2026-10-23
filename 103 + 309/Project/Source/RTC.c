@@ -8,32 +8,32 @@ struct RTC_ELEMENT RTC_time;
 struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30};
 
 UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-#define Days_in_month(a) (month_days[(a)-1])
+#define Days_in_month(a) (month_days[(a) - 1])
 
 #ifdef _WEEK
 void GregorianDay(struct RTC_ELEMENT *tm)
 {
-	int leapsToDate;
-	int lastYear;
-	int day;
-	int MonthOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+    int leapsToDate;
+    int lastYear;
+    int day;
+    int MonthOffset[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-	lastYear = tm->RTC_Time_Year - 1;
-	leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // 计算从公元元年到计数的前一年之中一共经历了多少个闰年
+    lastYear = tm->RTC_Time_Year - 1;
+    leapsToDate = lastYear / 4 - lastYear / 100 + lastYear / 400; // 计算从公元元年到计数的前一年之中一共经历了多少个闰年
 
-	if ((tm->RTC_Time_Year % 4 == 0) // 如若计数的这一年为闰年，且计数的月份在2月之后，则日数加1，否则不加1
-		&& ((tm->RTC_Time_Year % 100 != 0) || (tm->RTC_Time_Year % 400 == 0)) && (tm->RTC_Time_Month > 2))
-	{
-		day = 1;
-	}
-	else
-	{
-		day = 0;
-	}
+    if ((tm->RTC_Time_Year % 4 == 0) // 如若计数的这一年为闰年，且计数的月份在2月之后，则日数加1，否则不加1
+        && ((tm->RTC_Time_Year % 100 != 0) || (tm->RTC_Time_Year % 400 == 0)) && (tm->RTC_Time_Month > 2))
+    {
+        day = 1;
+    }
+    else
+    {
+        day = 0;
+    }
 
-	day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // 计算从公元元年元旦到计数日期一共有多少天
+    day += lastYear * 365 + leapsToDate + MonthOffset[tm->RTC_Time_Month - 1] + tm->RTC_Time_Day; // 计算从公元元年元旦到计数日期一共有多少天
 
-	tm->tm_wday = day % 7;
+    tm->tm_wday = day % 7;
 }
 
 #endif
@@ -41,86 +41,86 @@ void GregorianDay(struct RTC_ELEMENT *tm)
 // 此函数为——Linux源码中的mktime算法
 UINT32 mktimev(struct RTC_ELEMENT *tm)
 {
-	if (0 >= (int)(tm->RTC_Time_Month -= 2))
-	{							  /* 1..12 -> 11,12,1..10 */
-		tm->RTC_Time_Month += 12; /* Puts Feb last since it has leap day */
-		tm->RTC_Time_Year -= 1;
-	}
+    if (0 >= (int)(tm->RTC_Time_Month -= 2))
+    {                             /* 1..12 -> 11,12,1..10 */
+        tm->RTC_Time_Month += 12; /* Puts Feb last since it has leap day */
+        tm->RTC_Time_Year -= 1;
+    }
 
-	return (((
-				 (UINT32)(tm->RTC_Time_Year / 4 - tm->RTC_Time_Year / 100 + tm->RTC_Time_Year / 400 + 367 * tm->RTC_Time_Month / 12 + tm->RTC_Time_Day) + tm->RTC_Time_Year * 365 - 719499) *
-				 24 +
-			 tm->RTC_Time_Hour /* now have hours */
-			 ) * 60 +
-			tm->RTC_Time_Minute /* now have minutes */
-			) * 60 +
-		   tm->RTC_Time_Second; /* finally seconds */
+    return (((
+                 (UINT32)(tm->RTC_Time_Year / 4 - tm->RTC_Time_Year / 100 + tm->RTC_Time_Year / 400 + 367 * tm->RTC_Time_Month / 12 + tm->RTC_Time_Day) + tm->RTC_Time_Year * 365 - 719499) *
+                 24 +
+             tm->RTC_Time_Hour /* now have hours */
+             ) * 60 +
+            tm->RTC_Time_Minute /* now have minutes */
+            ) * 60 +
+           tm->RTC_Time_Second; /* finally seconds */
 }
 
 void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
 {
 
-	UINT32 i;
-	UINT32 Second_res, Day;
+    UINT32 i;
+    UINT32 Second_res, Day;
 
-	Day = AllSecond / SEC_DAY;		  /* 有多少天 */
-	Second_res = AllSecond % SEC_DAY; /* 今天的时间，单位s */
+    Day = AllSecond / SEC_DAY;        /* 有多少天 */
+    Second_res = AllSecond % SEC_DAY; /* 今天的时间，单位s */
 
-	/* Hours, minutes, seconds are easy */
-	RTCtime->RTC_Time_Hour = Second_res / 3600;
-	RTCtime->RTC_Time_Minute = (Second_res % 3600) / 60;
-	RTCtime->RTC_Time_Second = (Second_res % 3600) % 60;
+    /* Hours, minutes, seconds are easy */
+    RTCtime->RTC_Time_Hour = Second_res / 3600;
+    RTCtime->RTC_Time_Minute = (Second_res % 3600) / 60;
+    RTCtime->RTC_Time_Second = (Second_res % 3600) % 60;
 
-	for (i = UNIX_TIME_YEAR; Day >= Days_in_year(i); i++)
-	{ // 算出当前年份，起始的计数年份为1970年
-		Day -= Days_in_year(i);
-	}
-	i %= 100; // 只保留后两位
-	RTCtime->RTC_Time_Year = (UINT8)i;
+    for (i = UNIX_TIME_YEAR; Day >= Days_in_year(i); i++)
+    { // 算出当前年份，起始的计数年份为1970年
+        Day -= Days_in_year(i);
+    }
+    i %= 100; // 只保留后两位
+    RTCtime->RTC_Time_Year = (UINT8)i;
 
-	if (Leapyear(RTCtime->RTC_Time_Year))
-	{ // 计算当前的月份
-		Days_in_month(2) = 29;
-	}
-	for (i = 1; Day >= Days_in_month(i); i++)
-	{
-		Day -= Days_in_month(i);
-	}
-	Days_in_month(2) = 28;
-	RTCtime->RTC_Time_Month = (UINT8)i;
+    if (Leapyear(RTCtime->RTC_Time_Year))
+    { // 计算当前的月份
+        Days_in_month(2) = 29;
+    }
+    for (i = 1; Day >= Days_in_month(i); i++)
+    {
+        Day -= Days_in_month(i);
+    }
+    Days_in_month(2) = 28;
+    RTCtime->RTC_Time_Month = (UINT8)i;
 
-	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // 计算当前日期
+    RTCtime->RTC_Time_Day = (UINT8)Day + 1; // 计算当前日期
 
-	// GregorianDay(tm);						//计算星期几
+    // GregorianDay(tm);						//计算星期几
 }
 
 void Get_RTC_Time(void)
 {
-	UINT32 u32BJ_SecondTimeVar;
+    UINT32 u32BJ_SecondTimeVar;
 
-	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
-	Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // 把定时器的值转换为北京时间
+    u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
+    Second_To_RTCtime(u32BJ_SecondTimeVar, &RTC_time); // 把定时器的值转换为北京时间
 }
 
 // 此函数为——Linux源码中的mktime算法修改为——易读懂型
 // 1970年1月1日0时为UNIX TIME的纪元时间
 UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
 {
-	UINT32 Y_day, M_day, D_day;
-	UINT32 X_day, T_sec;
+    UINT32 Y_day, M_day, D_day;
+    UINT32 X_day, T_sec;
 
-	if (0 >= (int)(RTC_t->RTC_Time_Month -= 2))
-	{ // 前两个月被推到上一年去
-		RTC_t->RTC_Time_Month += 12;
-		RTC_t->RTC_Time_Year -= 1;
-	}
-	Y_day = (RTC_t->RTC_Time_Year - 1) * 365 + RTC_t->RTC_Time_Year / 4 - RTC_t->RTC_Time_Year / 100 + RTC_t->RTC_Time_Year / 400;
-	M_day = 367 * RTC_t->RTC_Time_Month / 12 - 30 + 59;
-	D_day = RTC_t->RTC_Time_Day - 1;
-	X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162为0年0月0日0时到纪元时间的天数
-	T_sec = ((X_day * 24 + RTC_t->RTC_Time_Hour) * 60 + RTC_t->RTC_Time_Minute) * 60 + RTC_t->RTC_Time_Second;
+    if (0 >= (int)(RTC_t->RTC_Time_Month -= 2))
+    { // 前两个月被推到上一年去
+        RTC_t->RTC_Time_Month += 12;
+        RTC_t->RTC_Time_Year -= 1;
+    }
+    Y_day = (RTC_t->RTC_Time_Year - 1) * 365 + RTC_t->RTC_Time_Year / 4 - RTC_t->RTC_Time_Year / 100 + RTC_t->RTC_Time_Year / 400;
+    M_day = 367 * RTC_t->RTC_Time_Month / 12 - 30 + 59;
+    D_day = RTC_t->RTC_Time_Day - 1;
+    X_day = (UINT32)(Y_day + M_day + D_day) - 719162; // 719162为0年0月0日0时到纪元时间的天数
+    T_sec = ((X_day * 24 + RTC_t->RTC_Time_Hour) * 60 + RTC_t->RTC_Time_Minute) * 60 + RTC_t->RTC_Time_Second;
 
-	return T_sec;
+    return T_sec;
 }
 
 /* Poll budgets bound a missing oscillator or stalled backup-domain write. */
@@ -201,11 +201,12 @@ UINT8 Init_RTC(void)
     s_rtc_ready = 0U;
 
     wanted_source = (BMS_RTC_CLOCK_SOURCE == BMS_RTC_CLOCK_LSE)
-        ? RCC_BDCR_RTCSEL_LSE : RCC_BDCR_RTCSEL_LSI;
+                        ? RCC_BDCR_RTCSEL_LSE
+                        : RCC_BDCR_RTCSEL_LSI;
     source = RCC->BDCR & RCC_BDCR_RTCSEL;
     previous_valid = (UINT8)(BKP_ReadBackupRegister(BKP_DR1) == RTC_BKP_DATA &&
-                            (RCC->BDCR & RCC_BDCR_RTCEN) != 0U &&
-                            (source == RCC_BDCR_RTCSEL_LSE || source == RCC_BDCR_RTCSEL_LSI));
+                             (RCC->BDCR & RCC_BDCR_RTCEN) != 0U &&
+                             (source == RCC_BDCR_RTCSEL_LSE || source == RCC_BDCR_RTCSEL_LSI));
     retained = (UINT8)(previous_valid && source == wanted_source);
 
     if (!retained)
@@ -227,7 +228,8 @@ UINT8 Init_RTC(void)
         if (!RTC_StartOscillator((UINT8)(wanted_source == RCC_BDCR_RTCSEL_LSE)))
             return 0U;
         RCC_RTCCLKConfig((wanted_source == RCC_BDCR_RTCSEL_LSE)
-            ? RCC_RTCCLKSource_LSE : RCC_RTCCLKSource_LSI);
+                             ? RCC_RTCCLKSource_LSE
+                             : RCC_RTCCLKSource_LSI);
         RCC_RTCCLKCmd(ENABLE);
     }
     else if (!RTC_StartOscillator((UINT8)(wanted_source == RCC_BDCR_RTCSEL_LSE)))
@@ -238,7 +240,8 @@ UINT8 Init_RTC(void)
     if (!retained)
     {
         RTC_SetPrescaler((wanted_source == RCC_BDCR_RTCSEL_LSE)
-            ? LSE_FREQUENT : 39999U);
+                             ? LSE_FREQUENT
+                             : 39999U);
         if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
             return 0U;
         if (preserve_counter)
@@ -263,6 +266,8 @@ UINT8 Init_RTC(void)
     NVIC_ClearPendingIRQ(RTC_IRQn);
     RTC_ConfigureInterrupts();
     s_rtc_ready = 1U;
+    // RTC_ITConfig(RTC_IT_ALR, ENABLE);
+    // RTC_ITConfig(RTC_IT_SEC, ENABLE);
     return 1U;
 }
 
@@ -270,7 +275,7 @@ UINT8 RTC_WKTimeConfig(void)
 {
     if (!s_rtc_ready || !RTC_WaitFlag(RTC_FLAG_RTOFF))
         return 0U;
-    RTC_ITConfig(RTC_IT_SEC | RTC_IT_ALR, DISABLE);
+    RTC_ITConfig(RTC_IT_ALR | RTC_IT_SEC, DISABLE);
     if (!RTC_WaitFlag(RTC_FLAG_RTOFF))
         return 0U;
     RTC_ClearITPendingBit(RTC_IT_ALR | RTC_IT_SEC);
@@ -310,11 +315,26 @@ void App_RTC(void)
 
 static void RTC_RecordAlarmWake(void)
 {
-    if (RTC_GetITStatus(RTC_IT_ALR) != RESET ||
-        EXTI_GetITStatus(EXTI_Line17) != RESET)
+    sys_time.irq.rtc_record_test++;
+    // if (RTC_GetITStatus(RTC_IT_ALR) != RESET ||
+    //     EXTI_GetITStatus(EXTI_Line17) != RESET)
+    // {
+    //     RTC_ClearITPendingBit(RTC_IT_ALR);
+    //     EXTI_ClearITPendingBit(EXTI_Line17);
+    //     is_rtc_wakekup = true;
+    //     ++rtc_cnt;
+    // }
+    if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
     {
         RTC_ClearITPendingBit(RTC_IT_ALR);
+        sys_time.irq.rtc_alarm++;
+        is_rtc_wakekup = true;
+        ++rtc_cnt;
+    }
+    if (EXTI_GetITStatus(EXTI_Line17) != RESET)
+    {
         EXTI_ClearITPendingBit(EXTI_Line17);
+        sys_time.irq.exti17++;
         is_rtc_wakekup = true;
         ++rtc_cnt;
     }
@@ -327,9 +347,11 @@ void RTCAlarm_IRQHandler(void)
 
 void RTC_IRQHandler(void)
 {
+    sys_time.irq.rtc_irq++;
     if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
     {
         RTC_ClearITPendingBit(RTC_IT_SEC);
+        sys_time.irq.rtc_sec++;
         TimeDisplay = 1U;
     }
     RTC_RecordAlarmWake();

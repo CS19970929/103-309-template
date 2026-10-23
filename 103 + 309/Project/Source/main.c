@@ -51,7 +51,7 @@ int main(void)
 #ifdef __FUNC__HEAT__
 		App_Heat_Cool_Ctrl();
 #endif
-		App_ChargerLoad_Det();
+		// App_ChargerLoad_Det();
 
 		App_FlashUpdate();
 		App_LogRecord();
@@ -117,7 +117,7 @@ void InitDevice(void)
 #ifdef __FUNC__HEAT__
 	InitHeat_Cool();
 #endif
-	Init_ChargerLoad_Det();
+	// Init_ChargerLoad_Det();
 
 	InitMosRelay_DOx();
 	InitData_SOC(); // 必须放在读完eeprom数据后面

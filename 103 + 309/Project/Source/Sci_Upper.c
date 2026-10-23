@@ -532,7 +532,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	for (j = 0; j < 12; j++)
 	{ // 0xD002到这里。
 		u16SciTemp = ((UINT16)((const volatile UINT8 *)&System_ErrFlag)[2U * j] << 8) |
-			((const volatile UINT8 *)&System_ErrFlag)[2U * j + 1U];
+					 ((const volatile UINT8 *)&System_ErrFlag)[2U * j + 1U];
 		t_u8BuffTemp[i++] = (u16SciTemp >> 8) & 0x00FF;
 		t_u8BuffTemp[i++] = u16SciTemp & 0x00FF;
 	}
@@ -1040,13 +1040,6 @@ void InitSCI1_CommonUpper(void)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 	GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE); // PB6,PB7
 
-	// Enable the USART1 Interrupt(使能USART1中断)
-	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
 	// USART1_TX   PA9
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6; // PA9
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
@@ -1071,11 +1064,11 @@ void InitSCI1_CommonUpper(void)
 		UART_BAUD = 115200;
 		break;
 	default:
-// #if (__BAUD_RATE__ == 9600)
-// 		UART_BAUD = 115200;
-// #else
-// 		UART_BAUD = 115200;
-// #endif
+		// #if (__BAUD_RATE__ == 9600)
+		// 		UART_BAUD = 115200;
+		// #else
+		// 		UART_BAUD = 115200;
+		// #endif
 		UART_BAUD = __BAUD_RATE__;
 		break;
 	}
@@ -1090,6 +1083,12 @@ void InitSCI1_CommonUpper(void)
 	USART_Init(USART1, &USART_InitStructure);
 
 	USART1->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
 
 	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 使能接收中断
 	USART_Cmd(USART1, ENABLE);					   // 使能串口1
@@ -1849,13 +1848,6 @@ void InitSCI2_CommonUpper(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 
-	// Enable the USART1 Interrupt(使能USART1中断)
-	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
 	// USART2_TX   PA2
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
@@ -1895,6 +1887,13 @@ void InitSCI2_CommonUpper(void)
 	USART_Init(USART2, &USART_InitStructure);
 
 	USART2->CR3 |= 1 << 0; // EIE，开帧错误中断，同时开启噪声中断
+
+	// Enable the USART1 Interrupt(使能USART1中断)
+	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3; // 抢占优先级3
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;		  // 子优先级3
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
 
 	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 使能接收中断
 	USART_Cmd(USART2, ENABLE);					   // 使能串口2
@@ -2573,7 +2572,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 		for (i = 0; i < 5; ++i)
 		{
 			WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + (i + t_u16Temp) * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 
 		if (u16Channel >= RS485_CMD_ADDR_VDELTA_OP_FIRST)
@@ -2603,20 +2602,6 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 // 但是上位机会有EEPROM写失败标志位弥补
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_SOC_TABLE)
-	{
-		for (i = 0; i < E2P_PARA_NUM_SOC_TABLE; ++i)
-		{
-			SOC_Table_Set[i] = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-		}
-		u8E2P_SocTable_WriteFlag = E2P_PARA_NUM_SOC_TABLE;
-
-		InitData_SOC();
-	}
-	else
 	{
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
@@ -2625,19 +2610,6 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_COPPERLOSS * 2)
-	{
-		for (i = 0; i < E2P_PARA_NUM_COPPERLOSS; ++i)
-		{
-			CopperLoss[i] = (UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8));
-			CopperLoss_Num[i] = (UINT16)(s->u16Buffer[2 * (i + 16) + 8] + (s->u16Buffer[2 * (i + 16) + 7] << 8));
-		}
-		u8E2P_CopperLoss_WriteFlag = E2P_PARA_NUM_COPPERLOSS;
-	}
-	else
 	{
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
@@ -2646,19 +2618,6 @@ void Sci_WrRegs_0x10_CopperLoss(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
-	UINT8 i;
-	UINT16 u16WrRegNum;
-	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == E2P_PARA_NUM_RTC)
-	{
-		for (i = 0; i < E2P_PARA_NUM_RTC; ++i)
-		{
-			WriteObjectWord(&RTC_time, (UINT16)(offsetof(struct RTC_ELEMENT, RTC_Time_Year) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
-		}
-		u32E2P_RTC_Element_WriteFlag = E2P_PARA_ALL_RTC_ELEMENT;
-	}
-	else
 	{
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
@@ -2675,7 +2634,7 @@ void Sci_WrRegs_0x10_Balance(struct RS485MSG *s)
 		for (i = 0; i < 8; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_BALANCE_OV;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_BALANCE_OW;
@@ -2704,7 +2663,7 @@ void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s)
 		for (i = 0; i < 8; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16CS_Cur_CHGmax) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_CS_CUR_CHGMAX;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_CS_CUR_DSGMAX;
@@ -2734,7 +2693,7 @@ void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s)
 		for (i = 0; i < 8; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Sleep_VNormal) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_V_NORMAL;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SLEEP_TIME_NORMAL;
@@ -2762,7 +2721,7 @@ void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s)
 		for (i = 0; i < 4; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Soc_Ah) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SOC_AH;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SOC_CYCLE_TIME;
@@ -2789,7 +2748,7 @@ void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
 		for (i = 0; i < 4; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Sys_SeriesNum) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_SERIES_NUM;
 		u32E2P_OtherElement1_WriteFlag |= EE_FLAG_OTHER1_SYS_CS_RESIS;
@@ -2818,7 +2777,7 @@ void Sci_WrRegs_0x10_HeatCoolElement(struct RS485MSG *s)
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 		{
 			WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)),
-				(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
+							(UINT16)(s->u16Buffer[2 * i + 8] + (s->u16Buffer[2 * i + 7] << 8)));
 		}
 		u32E2P_HeatCool_WriteFlag |= E2P_PARA_ALL_HEAT_COOL_ELE;
 	}
@@ -3041,7 +3000,7 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 		for (i = 0; i < E2P_PARA_NUM_PROTECT; ++i)
 		{
 			WriteObjectWord(&PRT_E2ROMParas, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16)),
-				ReadObjectWord(&PrtE2PARAS_Default, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
+							ReadObjectWord(&PrtE2PARAS_Default, (UINT16)(offsetof(struct PRT_E2ROM_PARAS, u16VcellOvp_First) + i * sizeof(UINT16))));
 		}
 		u32E2P_Pro_VolCur_WriteFlag = E2P_PARA_ALL_VOLCUR_PROTECT;
 		u32E2P_Pro_Temp_WriteFlag = E2P_PARA_ALL_TEM_PROTECT;
@@ -3066,7 +3025,7 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 		for (i = 0; i < E2P_PARA_NUM_OTHER_ELEMENT1; ++i)
 		{
 			WriteObjectWord(&OtherElement, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16)),
-				ReadObjectWord(&OtherElement_Default, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
+							ReadObjectWord(&OtherElement_Default, (UINT16)(offsetof(struct OTHER_ELEMENT, u16Balance_OpenVoltage) + i * sizeof(UINT16))));
 		}
 		u32E2P_OtherElement1_WriteFlag = E2P_PARA_ALL_OTHER_ELEMENT1;
 		SeriesNum = OtherElement.u16Sys_SeriesNum;
@@ -3097,7 +3056,7 @@ void Sci_WrReg_0x06_Reset_HeatCool(struct RS485MSG *s)
 		for (i = 0; i < E2P_PARA_NUM_HEAT_COOL; ++i)
 		{
 			WriteObjectWord(&Heat_Cool_Element, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16)),
-				ReadObjectWord(&HeatCoolEle_Default, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
+							ReadObjectWord(&HeatCoolEle_Default, (UINT16)(offsetof(struct HEAT_COOL_ELEMENT, u16Heat_OpenTemp) + i * sizeof(UINT16))));
 		}
 		u32E2P_HeatCool_WriteFlag = E2P_PARA_ALL_HEAT_COOL_ELE;
 	}
@@ -3426,7 +3385,7 @@ void UART_CLIENT_deal_0x04(struct RS485MSG *s)
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
 #else
-#error "error!!!"
+// #error "error!!!"
 #endif
 
 	// todo	温度负值待处理	好像没问题，后面测试考虑
@@ -3633,7 +3592,7 @@ void UART_CLIENT_deal_0x06(struct RS485MSG *s)
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
 #else
-#error "error!!!"
+// #error "error!!!"
 #endif
 
 	u16SciTemp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
