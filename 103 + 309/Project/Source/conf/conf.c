@@ -104,6 +104,7 @@ static void Conf_InitRunSharedIo(void)
 
 static void Conf_PrepareStopEntry(void)
 {
+    Sci_StopForLowPower();
     Fault_PauseMeasurements();
     ADC_StopForLowPower();
 }
@@ -119,6 +120,7 @@ static void Conf_InitAllPortsAnalog(void)
 
 void LowPower_ClearWakeupPending(void)
 {
+    EXTI_ClearITPendingBit(EXTI_Line3);
     EXTI_ClearITPendingBit(EXTI_Line0);
     EXTI_ClearITPendingBit(EXTI_Line9);
     EXTI_ClearITPendingBit(EXTI_Line12);
@@ -128,22 +130,41 @@ void LowPower_ClearWakeupPending(void)
     EXTI_ClearITPendingBit(EXTI_Line7);
 #endif
     NVIC_ClearPendingIRQ(EXTI0_IRQn);
+    NVIC_ClearPendingIRQ(EXTI3_IRQn);
     NVIC_ClearPendingIRQ(EXTI9_5_IRQn);
     NVIC_ClearPendingIRQ(EXTI15_10_IRQn);
 }
 
 void LowPower_DisableWakeupExti(void)
 {
+    LowPower_DisableUartWakeup();
     LowPower_ConfigWakeupExti(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line9, EXTI_Trigger_Falling, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
 
-#if defined(UART1_WAKEUP_ENABLE)
-    LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Rising, DISABLE);
-#endif
     LowPower_ClearWakeupPending();
+}
+
+void LowPower_DisableUartWakeup(void)
+{
+    LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(EXTI_Line3, EXTI_Trigger_Falling, DISABLE);
+    EXTI_ClearITPendingBit(EXTI_Line7);
+    EXTI_ClearITPendingBit(EXTI_Line3);
+}
+
+static void Conf_InitUartWakeup(void)
+{
+#if defined(UART1_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI1) && UART1_BAUD != 115200U
+    Conf_InitWakeupInputExti(GPIOB, GPIO_Pin_7, GPIO_PortSourceGPIOB,
+        GPIO_PinSource7, EXTI_Line7, EXTI_Trigger_Falling, EXTI9_5_IRQn);
+#endif
+#if defined(RS485_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI2) && UART2_BAUD != 115200U
+    Conf_InitWakeupInputExti(GPIOA, GPIO_Pin_3, GPIO_PortSourceGPIOA,
+        GPIO_PinSource3, EXTI_Line3, EXTI_Trigger_Falling, EXTI3_IRQn);
+#endif
 }
 
 void InitIO_rtc(void)
@@ -219,17 +240,7 @@ void InitWakeUp_NormalMode(void)
                              EXTI_Trigger_Falling,
                              EXTI9_5_IRQn);
 
-    {
-#ifdef UART1_WAKEUP_ENABLE
-        Conf_InitWakeupInputExti(GPIO_SCI1_RX,
-                                 PIN_SCI1_RX,
-                                 GPIO_PortSourceGPIOB,
-                                 GPIO_PinSource7,
-                                 EXTI_Line7,
-                                 EXTI_Trigger_Rising,
-                                 EXTI9_5_IRQn);
-#endif // UART1_WAKEUP_ENABLE
-    }
+    Conf_InitUartWakeup();
 
     Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
                              PIN_INT_WK_CMNT,
@@ -261,17 +272,7 @@ void InitWakeUp_RTCMode(void)
                              EXTI_Trigger_Rising_Falling,
                              EXTI9_5_IRQn);
 
-    {
-#ifdef UART1_WAKEUP_ENABLE
-        Conf_InitWakeupInputExti(GPIO_SCI1_RX,
-                                 PIN_SCI1_RX,
-                                 GPIO_PortSourceGPIOB,
-                                 GPIO_PinSource7,
-                                 EXTI_Line7,
-                                 EXTI_Trigger_Rising,
-                                 EXTI9_5_IRQn);
-#endif // UART1_WAKEUP_ENABLE
-    }
+    Conf_InitUartWakeup();
 
     Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
                              PIN_INT_WK_CMNT,
@@ -372,9 +373,9 @@ void InitRunAfterStopWakeup(void)
     USART_DeInit(USART1);
     USART_DeInit(USART2);
 
+    InitTimer();
     InitUSART_CommonUpper();
     InitCan();
-    InitTimer();
     InitADC();
 
     sys_time.wakeup_rtc = (RTC_IsStopWakeup() != 0U) ? true : false;

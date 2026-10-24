@@ -48,6 +48,7 @@ static void setup_report(void)
     UINT16 i;
     for(i=0;i<32;++i) g_stCellInfoReport.u16VCell[i]=(UINT16)(3300+i);
     g_stCellInfoReport.u16TempMax=650;
+    g_stCellInfoReport.u16VCellMin=3300;
     g_stCellInfoReport.u16VCellTotle=2310;
     g_stCellInfoReport.SocElement.u16Soc=55;
     g_stCellInfoReport.SocElement.u16CapacityFactory=10000;
@@ -101,6 +102,12 @@ int main(void)
     assert(transmit(&s_port1,b)==7 && !memcmp(b,saved,7));
     request(&s_port2,mb,8); quiet(&s_port2); assert(transmit(&s_port2,b)==7);
     check_customer(&s_port1);
+    /* Customer packets are length-delimited; RTU's t3.5 does not split them. */
+    quiet(&s_port1);
+    for(i=0;i<3;++i) receive(&s_port1,data1_request[i]);
+    clock_us+=5000U; Sci_ServicePort(&s_port1,0);
+    for(i=3;i<7;++i) receive(&s_port1,data1_request[i]);
+    assert(Sci_ServicePort(&s_port1,0) && transmit(&s_port1,b)==43);
     /* No execution/reply or valid communication activity for bad CRC/BCC/sum. */
     activity=comm_activity; before=writes;
     mb[7]^=1; request(&s_port1,mb,8); quiet(&s_port1);
@@ -131,15 +138,16 @@ int main(void)
     quiet(&s_port1); receive(&s_port1,mb[0]); receive(&s_port1,mb[1]); receive(&s_port1,mb[2]);
     clock_us+=Sci_CharacterUs(&s_port1)*12U/10U; Sci_ServicePort(&s_port1,0);
     for(i=3;i<8;++i) receive(&s_port1,mb[i]);
-    clock_us+=Sci_FrameGapUs(&s_port1)-1U; assert(!Sci_ServicePort(&s_port1,0));
+    clock_us+=Sci_FrameGapUs(&s_port1)+SCI_CLOCK_STEP_US-1U; assert(!Sci_ServicePort(&s_port1,0));
     ++clock_us; assert(Sci_ServicePort(&s_port1,0)); assert(transmit(&s_port1,b)==7);
     quiet(&s_port1); receive(&s_port1,mb[0]); receive(&s_port1,mb[1]);
     clock_us+=Sci_ByteGapUs(&s_port1)+20U; Sci_ServicePort(&s_port1,0);
     for(i=2;i<8;++i) receive(&s_port1,mb[i]);
     quiet(&s_port1); assert(!s_port1.tx_length);
+    receive(&s_port1,0xEE); assert(!Sci_PortBusy(&s_port1));
     /* Wake validation never writes. Re-init retains and executes the held frame once. */
     before=writes; modbus_request(mb,1,6,0x1102,7); request(&s_port1,mb,8);
-    clock_us+=Sci_FrameGapUs(&s_port1);
+    clock_us+=Sci_FrameGapUs(&s_port1)+SCI_CLOCK_STEP_US;
     assert(Sci_VerifyWakeFrames() && s_port1.frame_pending==2 && writes==before);
     InitUSART_CommonUpper(); App_CommonUpper(); assert(writes==before+1);
     transmit(&s_port1,b);

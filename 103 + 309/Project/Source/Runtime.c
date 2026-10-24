@@ -14,7 +14,6 @@ void Runtime_Boot(void)
 
 	InitNVIC();
 	InitIO();
-	InitUSART_CommonUpper();
 	InitE2PROM();
 	InitAFE1();
 	InitCan();
@@ -22,6 +21,7 @@ void Runtime_Boot(void)
 	InitData_SOC();
 
 	InitTimer();
+	InitUSART_CommonUpper();
 	InitADC();
 	__enable_irq();
 

@@ -16,7 +16,7 @@
 #define LOW_POWER_FORCE_DEEP_SLEEP_SECONDS ((uint16_t)(60))
 #define LOW_POWER_DEEP_SLEEP_ICHG_LIMIT ((uint16_t)5U)
 
-enum irqWakeup g_irq_t = NO_IRQ;
+volatile enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {
     NO_SLEEP,
     0U,
@@ -264,18 +264,61 @@ static void rtc_sleep_prepare_rtc(void)
     lp_refresh_status();
 }
 
+#define LP_UART_VERIFY_TIMEOUT_US 300000U
+static bool rtc_sleep_verify_uart_wakeup(void)
+{
+    UINT32 start;
+    LowPower_DisableUartWakeup();
+    /* Only the clock and UART are restored. ADC and MOS confirmation stay paused. */
+    InitTimer();
+    InitUSART_CommonUpper();
+    start=SysTime_GetMicroseconds();
+    do
+    {
+        Feed_IWatchDog;
+        if (SleepDeal_IsWakeupValid() || Sci_VerifyWakeFrames())
+            return true;
+    } while ((UINT32)(SysTime_GetMicroseconds()-start) < LP_UART_VERIFY_TIMEOUT_US);
+
+    /* Invalid traffic must not conceal a real current/AFE wake or prevent the
+     * same protective deep sleep checked on a periodic RTC wake. */
+    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
+    {
+        if (rtc_sleep_has_wakeup_exception())
+            return true;
+        if (g_stCellInfoReport.u16VCellMin <= AFE_Parameters_RS485_Struction.u16VcellUvp.curValue ||
+            !SystemRuntime_IsDischargeMosOpen())
+            low_power_log_and_commit_sleep(DEEP_MODE);
+    }
+    IOstatus_RTCMode();
+    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
+        InitWakeUp_RTCMode();
+    else
+        InitWakeUp_Base();
+    return false;
+}
+
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
     // todo !!!!
     RTC_ClearStopWakeup();
     RTC_WKTimeConfig();
     sys_time.rtc_sec_cnt = RTC_GetCounter();
+    g_irq_t = NO_IRQ;
 
     RtcSleep_PortEnterStop();
     // RtcSleep_PortDisableStopWakeup();
 
     MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
+
+    if (g_irq_t == uart1_irq || g_irq_t == uart2_irq)
+    {
+        if (rtc_sleep_verify_uart_wakeup())
+            return false;
+        MCUO_DEBUG_LED1 = 1;
+        return true;
+    }
 
     if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
     {
@@ -298,7 +341,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     }
     else if (g_stLowPowerRtcStatus.mode == NORMAL_MODE && (RTC_IsStopWakeup() == 0U))
     {
-        extern UINT8 SleepDeal_IsWakeupValid(void);
         if (SleepDeal_IsWakeupValid())
         {
             return false;

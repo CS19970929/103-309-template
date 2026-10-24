@@ -4,6 +4,7 @@
 #define SCI_USART_ERRORS (USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE)
 #define SCI_CUSTOMER_BYTE_TIMEOUT_US 20000U
 #define SCI_TX_MARGIN_US 20000U
+#define SCI_CLOCK_STEP_US 10U
 
 enum SCI_PROTOCOL { SCI_NONE, SCI_MODBUS, SCI_CUSTOMER, SCI_DISCARD };
 struct SCI_PORT {
@@ -56,14 +57,15 @@ static void Sci_ReceiveByte(struct SCI_PORT *port, UINT8 data, UINT32 now)
     UINT32 char_us=Sci_CharacterUs(port);
     if (port->protocol != SCI_NONE)
     {
-        if (elapsed >= Sci_FrameGapUs(port)+char_us)
+        if (elapsed >= (port->protocol == SCI_CUSTOMER ?
+            SCI_CUSTOMER_BYTE_TIMEOUT_US : Sci_FrameGapUs(port))+char_us+SCI_CLOCK_STEP_US)
         {
             Sci_ResetMessage(&port->message);
             port->frame_pending=0U;
             port->protocol=SCI_NONE;
         }
         else if (port->frame_pending || (port->protocol == SCI_MODBUS &&
-            elapsed > Sci_ByteGapUs(port)+char_us+10U))
+            elapsed > Sci_ByteGapUs(port)+char_us+SCI_CLOCK_STEP_US))
         {
             /* Additional bytes invalidate a completed RTU frame until silence. */
             Sci_ResetMessage(&port->message);
@@ -147,7 +149,7 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
     else if (!(port->usart->SR & USART_SR_RXNE))
     {
         if (port->frame_pending &&
-            (port->protocol != SCI_MODBUS || elapsed >= Sci_FrameGapUs(port)))
+            (port->protocol != SCI_MODBUS || elapsed >= Sci_FrameGapUs(port)+SCI_CLOCK_STEP_US))
         {
             port->usart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE);
             port->frame_pending=0U;
@@ -155,7 +157,7 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
         }
         else if ((port->protocol == SCI_DISCARD && elapsed >= Sci_FrameGapUs(port)) ||
             (port->message.ptr_no != 0U && !port->frame_pending && elapsed >
-                (port->protocol == SCI_MODBUS ? Sci_ByteGapUs(port) : SCI_CUSTOMER_BYTE_TIMEOUT_US)))
+                (port->protocol == SCI_MODBUS ? Sci_ByteGapUs(port)+SCI_CLOCK_STEP_US : SCI_CUSTOMER_BYTE_TIMEOUT_US)))
         {
             Sci_ArmReceiver(port);
             port->protocol=SCI_DISCARD;
@@ -203,11 +205,15 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     GPIO_InitTypeDef io;
     USART_InitTypeDef uart;
     NVIC_InitTypeDef nvic;
+    volatile UINT16 dummy;
     UINT8 held=(UINT8)(port->frame_pending == 2U);
     if (apb2) RCC_APB2PeriphClockCmd(clock,ENABLE);
     else RCC_APB1PeriphClockCmd(clock,ENABLE);
     USART_Cmd(port->usart,DISABLE);
     port->usart->CR1=0U;
+    dummy=(UINT16)port->usart->SR;
+    dummy=(UINT16)port->usart->DR;
+    (void)dummy;
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA |
         RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOD,ENABLE);
     if (remap) GPIO_PinRemapConfig(remap,ENABLE);
@@ -225,7 +231,7 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     if (held)
     {
         port->frame_pending=1U;
-        port->last_rx_us=SysTime_GetMicroseconds()-Sci_FrameGapUs(port);
+        port->last_rx_us=SysTime_GetMicroseconds()-Sci_FrameGapUs(port)-SCI_CLOCK_STEP_US;
         port->usart->CR1 &= (UINT16)~USART_CR1_RE;
     }
     else
@@ -273,7 +279,8 @@ void Sci3_CommonUpper_IRQHandler(void)
 
 static UINT8 Sci_PortBusy(const struct SCI_PORT *port)
 {
-    return (UINT8)(port->protocol != SCI_NONE || port->tx_length || port->frame_pending);
+    return (UINT8)(port->protocol == SCI_MODBUS || port->protocol == SCI_CUSTOMER ||
+        port->tx_length || port->frame_pending);
 }
 
 UINT8 Sci_IsAnyPortBusy(void)
@@ -301,6 +308,34 @@ UINT8 Sci_VerifyWakeFrames(void)
     valid |= Sci_ServicePort(&s_port2,1U);
 #endif
     return valid;
+}
+
+static void Sci_StopPort(struct SCI_PORT *port)
+{
+    volatile UINT16 dummy;
+    port->usart->CR1 &= (UINT16)~(USART_CR1_RE | USART_CR1_RXNEIE |
+        USART_CR1_IDLEIE | USART_CR1_TXEIE | USART_CR1_TCIE);
+    USART_Cmd(port->usart,DISABLE);
+    dummy=(UINT16)port->usart->SR;
+    dummy=(UINT16)port->usart->DR;
+    (void)dummy;
+    Sci_ResetMessage(&port->message);
+    port->protocol=SCI_NONE;
+    port->frame_pending=0U;
+    port->tx_length=0U;
+}
+
+void Sci_StopForLowPower(void)
+{
+#ifdef _COMMOM_UPPER_SCI1
+    Sci_StopPort(&s_port1);
+#endif
+#ifdef _COMMOM_UPPER_SCI2
+    Sci_StopPort(&s_port2);
+#endif
+#ifdef _COMMOM_UPPER_SCI3
+    Sci_StopPort(&s_port3);
+#endif
 }
 
 void App_CommonUpper(void)

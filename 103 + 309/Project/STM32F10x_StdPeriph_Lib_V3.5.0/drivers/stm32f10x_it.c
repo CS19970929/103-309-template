@@ -206,6 +206,7 @@ void EXTI3_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
     handled = 1U;
+    g_irq_t = uart2_irq;
     EXTI_ClearITPendingBit(EXTI_Line3);
   }
   if (handled == 0U)
@@ -254,6 +255,7 @@ void EXTI9_5_IRQHandler(void)
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
     handled = 1U;
+    g_irq_t = uart1_irq;
     EXTI_ClearITPendingBit(EXTI_Line7);
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)

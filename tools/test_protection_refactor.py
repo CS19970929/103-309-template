@@ -471,9 +471,9 @@ static void RTC_RestoreRunInterrupts(void) { assert(order==1); order=2; }
 static void InitIO_rtc(void) { assert(order==2); order=3; }
 static void ADC_StopForLowPower(void) { adc_on=0; }
 static void USART_DeInit(int port) { assert(!adc_on && order==3); }
-static void InitUSART_CommonUpper(void) { assert(order==3); order=4; }
-static void InitCan(void) { assert(order==4); order=5; }
-static void InitTimer(void) { assert(order==5); tick=0; order=6; }
+static void InitTimer(void) { assert(order==3); tick=0; order=4; }
+static void InitUSART_CommonUpper(void) { assert(order==4); order=5; }
+static void InitCan(void) { assert(order==5); order=6; }
 static void InitADC(void) { assert(order==6 && tick==0); adc_on=1; ++adc_starts; order=7; }
 static int RTC_IsStopWakeup(void) { return 1; }
 static void initAFE1_IIC(void) { assert(order==7); order=8; }

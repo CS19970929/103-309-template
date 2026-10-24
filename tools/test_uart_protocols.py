@@ -154,11 +154,29 @@ static struct { struct { struct { UINT8 SC; } bits; } REG_BSTATUS1; } SH367309_R
 for name in ('Sci_Customer.c','Sci_Uart.c'):
     combo+='\n'.join(line for line in (src/name).read_text(encoding='utf-8').splitlines()
                       if not line.startswith('#include'))+'\n'
-combo+=(ROOT/'tools/uart_protocol_cases.c').read_text(encoding='utf-8')
+cases=(ROOT/'tools/uart_protocol_cases.c').read_text(encoding='utf-8')
+# Forward declarations let the wake fixture reuse the transport test helpers.
+a=cases.index('int main(void)')
+wake=(ROOT/'tools/uart_wake_cases.h').read_text(encoding='utf-8')
+rtc=(src/'rtc_sleep.c').read_text(encoding='utf-8')
+wake=wake.replace('/* REAL_RTC_FUNCTIONS */',func(rtc,'static bool rtc_sleep_verify_uart_wakeup(')+
+                  func(rtc,'static bool rtc_sleep_run_hiccup_cycle('))
+combo+=(src/'rtc_sleep.h').read_text(encoding='utf-8')+'\n'+cases[:a]+wake+'\n'+cases[a:]
+combo=combo.replace('    puts("PASS both UARTs:', '    test_wake_paths();\n    puts("PASS both UARTs:')
+
 (out/'uart_combined.c').write_text(combo,encoding='utf-8')
 r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
                   str(out/'uart_combined.c'),'/Fe:'+str(out/'uart_combined.exe'),
                   '/Fo:'+str(out/'uart_combined.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
 if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
 subprocess.run([str(out/'uart_combined.exe')],cwd=out,check=True)
+clock=(ROOT/'tools/uart_clock_cases.c').read_text(encoding='utf-8')
+clock=clock.replace('/* REAL_CLOCK_FUNCTION */',
+    func((src/'System_Init.c').read_text(encoding='utf-8'),'UINT32 SysTime_GetMicroseconds('))
+(out/'uart_clock.c').write_text(clock,encoding='utf-8')
+r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
+                  str(out/'uart_clock.c'),'/Fe:'+str(out/'uart_clock.exe'),
+                  '/Fo:'+str(out/'uart_clock.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
+if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
+subprocess.run([str(out/'uart_clock.exe')],cwd=out,check=True)
 print('Host evidence only; files: '+str(out))

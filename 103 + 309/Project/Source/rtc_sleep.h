@@ -68,7 +68,7 @@ struct LOW_POWER_BLOCK_DEBUG {
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 extern volatile struct LOW_POWER_BLOCK_DEBUG g_stLowPowerBlockDebug;
-extern enum irqWakeup g_irq_t;
+extern volatile enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);
 uint32_t LP_GetBlockReason(void);

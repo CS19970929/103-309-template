@@ -193,6 +193,7 @@ void IOstatus_RTCMode(void);
 void IOstatus_NormalMode(void);
 void IOstatus_DeepMode(void);
 void LowPower_ClearWakeupPending(void);
+void LowPower_DisableUartWakeup(void);
 void LowPower_DisableWakeupExti(void);
 void Sys_StopMode(void);
 void InitRunAfterStopWakeup(void);

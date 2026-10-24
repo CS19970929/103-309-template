@@ -6,6 +6,7 @@ typedef struct { UINT32 USART_BaudRate,USART_Mode; } USART_InitTypeDef;
 typedef struct { UINT32 NVIC_IRQChannel,NVIC_IRQChannelPreemptionPriority,
     NVIC_IRQChannelSubPriority,NVIC_IRQChannelCmd; } NVIC_InitTypeDef;
 typedef int IRQn_Type;
+#include <stdbool.h>
 static USART_TypeDef uart1,uart2,uart3;
 static GPIO_TypeDef gpio_a,gpio_b,gpio_d;
 #define USART1 (&uart1)
@@ -59,9 +60,10 @@ static GPIO_TypeDef gpio_a,gpio_b,gpio_d;
 #define _COMMOM_UPPER_SCI3
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 static UINT32 clock_us;
+static UINT32 clock_step;
 static UINT8 primask, u8FlashUpdateFlag, host_off;
 static int comm_activity, host_apply_ok=1;
-static UINT32 SysTime_GetMicroseconds(void) { return clock_us; }
+static UINT32 SysTime_GetMicroseconds(void) { clock_us+=clock_step; return clock_us; }
 static UINT32 __get_PRIMASK(void) { return primask; }
 static void __disable_irq(void) { primask=1; }
 static void __enable_irq(void) { primask=0; }

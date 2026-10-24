@@ -44,6 +44,18 @@
 
 客户关断请求由 `Fault.c` 独立保存，与所有保护关断合并；解除客户请求不能清除过温、过流等保护。STOP 期间保留请求，MCU 复位恢复默认。关闭命令写入/核对失败返回错误，保留关断请求供后续仲裁重试。`PROJECT_CFG_HOST_WRITE_ENABLE=0` 时两个协议均拒绝修改。
 
+## RTC STOP 通信唤醒
+
+保留现有睡眠入口和模式含义。HICCUP 配置 USART1 PB7/EXTI7、USART2 PA3/EXTI3 的下降沿为候选唤醒；分别受已有 UART1/RS485 唤醒开关控制，端口关闭或配置 115200 时不启用对应通信唤醒。NORMAL/DEEP 的既有充电/按键入口保持原有规则。
+
+STOP 前关闭 UART 中断/接收，清除残帧；ADC 关闭并暂停保护确认。UART 候选只恢复时钟、TIM3 和两个 UART，最多 300 ms 等待完整合法帧。此时不执行业务、不发送应答、不启动 ADC。Modbus 必须本机地址或允许的广播写、功能码、长度和 CRC 全部正确；客户帧必须结构和校验正确。按键/充电真实唤醒可直接结束候选等待。
+
+无有效帧则恢复睡眠 GPIO 和原唤醒条件，再进 STOP。合法帧保留于原端口缓冲，完整 RUN 恢复时先配置 GPIO/计时/UART/CAN，最后初始化 ADC；随后主循环执行该帧一次。周期 RTC 唤醒只走既有 AFE 检查，不启动 MCU ADC。收到的候选边沿不能直接触发 MOS 温度保护。
+
+STOP 首帧仍可能丢失：主机发送唤醒字节后至少等 20 ms，再在 300 ms 确认窗口内重发完整请求；超时可按相同步骤重试。这个握手要求及收发器在 STOP 的供电/电平、9600/115200 实际波形、UART 与 RTC/充电同时唤醒，需要实板验收。
+
 ## 验证
 
 `python tools/test_uart_protocols.py` 在用户临时目录编译、运行真实 C 函数的 host 检查。`python tools/check_bms_no_bin.py --target FD_Release` 只在用户临时目录编译链接，不产生 BIN/HEX。两者不代表板上串口时序和低功耗验收。
+
+若工作区保留手工 `sys_time.test_mos_temp` 注入，保护检查会明确拒绝把它作为真实 NTC 路径；可用 `python tools/test_protection_refactor.py --committed-measurement` 检查已提交的测温实现，同时保留该工作区改动。这种检查不构成对注入版本的发布验收。
