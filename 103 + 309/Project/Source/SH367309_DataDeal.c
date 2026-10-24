@@ -237,11 +237,13 @@ bool SH367309_UpdataAfeConfig(void)
 			MCUO_AFE_VPRO = 0;
 			Delay1ms(1);
 
+			close_ctlc();
 			AFE_Reset();
 			Delay1ms(5);
-			AFE_IsReady();
-			// SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-			MosStartup_ApplyInitialState();
+			if (AFE_IsReady() != 0U)
+				ret = false;
+			if (ret && !MosStartup_ApplyInitialState())
+				ret = false;
 			if (!ret)
 			{
 				AFE_PARAM_WRITE_Flag = 1;
@@ -249,7 +251,9 @@ bool SH367309_UpdataAfeConfig(void)
 		}
 		else
 		{
-			ret = true;
+			ret = (AFE_IsReady() == 0U && MosStartup_ApplyInitialState());
+			if (!ret)
+				AFE_PARAM_WRITE_Flag = 1;
 		}
 	}
 

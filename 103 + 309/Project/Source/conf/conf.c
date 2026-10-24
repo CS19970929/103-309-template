@@ -104,6 +104,7 @@ static void Conf_InitRunSharedIo(void)
 
 static void Conf_PrepareStopEntry(void)
 {
+    Fault_PauseMeasurements();
     ADC_StopForLowPower();
 }
 

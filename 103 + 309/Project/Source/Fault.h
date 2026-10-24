@@ -373,5 +373,8 @@ extern UINT8  FaultPoint_Third;
 extern UINT8  FaultPoint_Third2;
 
 void FaultWarnRecord2(enum FaultFlag num);
+void Fault_UpdateCurrentProtection(UINT8 sample_valid);
+void Fault_PauseMeasurements(void);
+UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on);
 
 #endif	/* FAULT_H */

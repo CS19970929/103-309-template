@@ -590,11 +590,13 @@ Others:
 *******************************************************************************/
 void InitAFE1(void)
 {
+	UINT8 ready;
+
 	initAFE1_IIC();
 	close_ctlc();
 
 	AFE_Reset();
-	AFE_IsReady();
+	ready = (UINT8)(AFE_IsReady() == 0U);
 	SH367309_UpdataAfeConfig();
 	MosStartup_ApplyInitialState();
 
@@ -605,8 +607,8 @@ void InitAFE1(void)
 	 */
 	AfeCurrent_StartupZeroCal();
 
-	open_ctlc();
-	MosStartup_ApplyInitialState();
+	if (ready && !AFE_PARAM_WRITE_Flag && MosStartup_ApplyInitialState())
+		open_ctlc();
 }
 
 /*调试心得

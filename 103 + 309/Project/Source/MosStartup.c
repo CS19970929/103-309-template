@@ -1,41 +1,33 @@
 #include "main.h"
 #include "MosStartup.h"
 
-static void MosStartup_WriteMosState(UINT8 charge_on, UINT8 discharge_on, BitAction mcc_level)
-{
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1;
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = charge_on;
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = discharge_on;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
-	// GPIO_WriteBit(GPIO_MCC_C, PIN_MCC_C, mcc_level);
-}
-
 UINT8 IsChargeActive(void)
 {
-	return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
+    return (UINT8)(GPIO_ReadInputDataBit(GPIO_CHG_IN, PIN_CHG_IN) == Bit_SET);
 }
 
 void MosStartup_OpenChargeCloseDischarge(void)
 {
-	MosStartup_WriteMosState(1U, 0U, Bit_SET);
+    Fault_ApplyMosPermits(1U, 0U);
 }
 
 void MosStartup_OpenDischargeCloseCharge(void)
 {
-	MosStartup_WriteMosState(0U, 1U, Bit_RESET);
+    Fault_ApplyMosPermits(0U, 1U);
 }
 
 void MosStartup_EnterFactoryMode(bool on)
 {
-	MosStartup_WriteMosState(1U, 1U, Bit_SET);
+    (void)on;
+    Fault_ApplyMosPermits(1U, 1U);
 }
 
-void MosStartup_ApplyInitialState(void)
+UINT8 MosStartup_ApplyInitialState(void)
 {
-	MosStartup_EnterFactoryMode(true);
+    return Fault_ApplyMosPermits(1U, 1U);
 }
 
 void Mos_OpenAll(void)
 {
-	MosStartup_WriteMosState(1U, 1U, Bit_RESET);
+    Fault_ApplyMosPermits(1U, 1U);
 }

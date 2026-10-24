@@ -33,6 +33,8 @@ void AFE_Reset(void)
 {
 	UINT8 WrBuf[2];
 
+	Fault_PauseMeasurements();
+
 	WrBuf[0] = 0xC0;
 	WrBuf[1] = 0xA5;
 
@@ -129,17 +131,7 @@ Others:
 *******************************************************************************/
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
-	// ucMTP_CONF |= 0x04;						//开启看门狗，不开看门狗行不行
-	// 结论，可以不开启。看门狗溢出，操作是
-	// 1，关闭充放电MOS和预充MOS
-	// 2，清除均衡
-	// 两者对于目前使用情况意义不大，休眠带电不允许开，MCU控驱动没意义
-	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
-	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = 1; // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = 1; // 放电MOS由AFE硬件控制
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+    Fault_ApplyMosPermits(1U, 1U);
 }
 
 // 1：修改失败。0：修改成功
@@ -180,27 +172,50 @@ UINT8 SH367309_SC_DelayT_Set(void)
 	return result;
 }
 
-void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
+/* CONF permits are independent of BSTATUS3's physical MOS output. */
+static UINT8 SH367309_WriteConfBits(UINT8 mask, UINT8 value)
 {
-	switch (Type)
-	{
-	case GPIO_PreCHG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = OnOFF;
-		break;
+    UINT8 current;
+    UINT8 desired;
+    UINT8 verify;
 
-	case GPIO_CHG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = OnOFF;
-		break;
+    if (!MTPRead(MTP_CONF, 1U, &current))
+        return 0U;
+    desired = (UINT8)((current & (UINT8)~mask) | (value & mask));
+    /* A pending/failed profile update may keep existing permits, never add one. */
+    if (AFE_PARAM_WRITE_Flag)
+        desired &= (UINT8)(current | (UINT8)~0x30U);
+    if (desired != current)
+    {
+        if (!MTPWrite(MTP_CONF, 1U, &desired) ||
+            !MTPRead(MTP_CONF, 1U, &verify) || (verify & mask) != (desired & mask))
+        {
+            System_ERROR_UserCallback(ERROR_AFE1);
+            return 0U;
+        }
+        current = verify;
+    }
+    SH367309_Reg_Store.REG_MTP_CONF.all = current;
+    return (UINT8)((current & mask) == (value & mask));
+}
 
-	case GPIO_DSG:
-		SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = OnOFF;
-		break;
+UINT8 SH367309_SetMosPermits(UINT8 charge_on, UINT8 discharge_on)
+{
+    return SH367309_WriteConfBits(0x38U, (UINT8)(0x08U |
+        (charge_on ? 0x10U : 0U) | (discharge_on ? 0x20U : 0U)));
+}
 
-	default:
-		break;
-	}
-
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+void SH367309_DriverMos_Ctrl(GPIO_Type type, UINT8 on)
+{
+    UINT8 mask;
+    switch (type)
+    {
+    case GPIO_PreCHG: mask = 0x40U; break;
+    case GPIO_CHG: mask = 0x10U; break;
+    case GPIO_DSG: mask = 0x20U; break;
+    default: return;
+    }
+    SH367309_WriteConfBits(mask, on ? mask : 0U);
 }
 
 static void SH367309_RecordFaultOnActive(UINT8 *latched, UINT8 active, enum FaultFlag fault)
@@ -354,5 +369,6 @@ void App_SH367309_Monitor(void)
 void App_SH367309(void)
 {
 	App_SH367309_Monitor();
-	SH367309_UpdataAfeConfig();
+	if (AFE_PARAM_WRITE_Flag && SH367309_UpdataAfeConfig())
+		open_ctlc();
 }

@@ -254,6 +254,7 @@ UINT32 AFE_CalcuVbat(void);
 
 UINT8 SH367309_SC_DelayT_Set(void);
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF);
+UINT8 SH367309_SetMosPermits(UINT8 charge_on, UINT8 discharge_on);
 bool SH367309_UpdataAfeConfig(void);
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void);
 

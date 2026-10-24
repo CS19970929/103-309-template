@@ -113,6 +113,111 @@ int main(void) {
 }
 '''
 
+FAULT_STUBS = r'''
+static struct {
+    union MDLCHGFAULT_REG unMdlFault_Second, unMdlFault_Third;
+    UINT16 u16Ichg, u16IDischg;
+} g_stCellInfoReport;
+static struct {
+    struct { UINT16 curValue; } u16IchgOcp_First, u16IdsgOcp_First;
+} AFE_Parameters_RS485_Struction;
+static struct {
+    union {
+        UINT8 all;
+        struct { UINT8 IDLE:1, SLEEP:1, ENWDT:1, CADCON:1, CHGMOS:1, DSGMOS:1, PCHMOS:1, OCRC:1; } bits;
+    } REG_MTP_CONF;
+    struct { struct { UINT8 SC; } bits; } REG_BSTATUS1;
+} SH367309_Reg_Store;
+static UINT8 hardware_conf=0x38, AFE_PARAM_WRITE_Flag;
+static int reads, writes, fail_read, fail_write, bad_verify;
+#define MTP_CONF 0x40
+#define ERROR_AFE1 2
+typedef enum { GPIO_PreCHG, GPIO_CHG, GPIO_DSG } GPIO_Type;
+static int MTPRead(int addr,int len,UINT8 *p) {
+    ++reads; if(reads==fail_read) return 0;
+    *p=hardware_conf; if(bad_verify && writes) *p^=0x10;
+    return 1;
+}
+static int MTPWrite(int addr,int len,UINT8 *p) {
+    ++writes; if(fail_write) return 0; hardware_conf=*p; return 1;
+}
+UINT8 SH367309_SetMosPermits(UINT8 charge_on,UINT8 discharge_on);
+'''
+
+FAULT_TESTS = r'''
+static void reset_case(void) {
+    memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
+    memset(&SH367309_Reg_Store,0,sizeof(SH367309_Reg_Store));
+    FaultPoint_Third2=0; reads=writes=fail_read=fail_write=bad_verify=0;
+    AFE_PARAM_WRITE_Flag=0; hardware_conf=0x38;
+    AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue=120;
+    AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue=150;
+    s_charge_recovery_ticks=s_discharge_recovery_ticks=0;
+    tick=0; Fault_PauseMeasurements();
+}
+int main(void) {
+    unsigned n; int i;
+    /* Every combination of AFE directional faults, both software latches,
+       MOS heat and reverse current. Expected outcomes come from safety rules. */
+    for(n=0;n<32768;++n) {
+        unsigned charge_fault, discharge_fault, reverse_charge, reverse_discharge, heat;
+        reset_case();
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp=(n>>0)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp=(n>>1)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp=(n>>2)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp=(n>>3)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=(n>>4)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp=(n>>5)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp=(n>>6)&1;
+        g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp=(n>>7)&1;
+        SH367309_Reg_Store.REG_BSTATUS1.bits.SC=(n>>8)&1;
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp=(n>>9)&1;
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp=(n>>10)&1;
+        heat=(n>>11)&1; g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=heat;
+        reverse_charge=(n>>12)&1; reverse_discharge=(n>>13)&1;
+        g_stCellInfoReport.u16Ichg=(UINT16)(reverse_charge*10);
+        g_stCellInfoReport.u16IDischg=(UINT16)(reverse_discharge*10);
+        Fault_UpdateCurrentProtection((n>>14)&1);
+        charge_fault=((n&15)!=0)||((n>>9)&1);
+        discharge_fault=((n&0x1f0)!=0)||((n>>10)&1);
+        if(!(n&0x4000)) reverse_charge=reverse_discharge=0;
+        assert(Fault_ApplyMosPermits(1,1));
+        assert(((hardware_conf>>4)&1)==!(heat || (charge_fault && !reverse_discharge)));
+        assert(((hardware_conf>>5)&1)==!(heat || (discharge_fault && !reverse_charge)));
+    }
+    reset_case(); g_stCellInfoReport.u16Ichg=120;
+    for(i=0;i<5;++i) { tick+=20; Fault_UpdateCurrentProtection(1); }
+    assert(FaultPoint_Third2==1 && Fault_record_Third2[0]==IchgOcp_Second);
+    /* Hardware output may be off while CONF still grants permission. */
+    assert(Fault_ApplyMosPermits(1,1) && !(hardware_conf&0x10) && writes==1);
+    g_stCellInfoReport.u16Ichg=0;
+    for(i=0;i<1000;++i) Fault_UpdateCurrentProtection(1); /* queued tasks, same tick */
+    assert(g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp);
+    for(i=0;i<149;++i) { tick+=20; Fault_UpdateCurrentProtection(1); }
+    assert(g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp);
+    tick+=20; Fault_UpdateCurrentProtection(1);
+    assert(!g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp);
+    reset_case(); g_stCellInfoReport.u16IDischg=150; Fault_UpdateCurrentProtection(1);
+    g_stCellInfoReport.u16IDischg=0;
+    tick=100000; Fault_UpdateCurrentProtection(0); Fault_UpdateCurrentProtection(1);
+    assert(s_discharge_recovery_ticks==0);
+    tick=UINT32_MAX-10; Fault_PauseMeasurements(); Fault_UpdateCurrentProtection(1);
+    tick+=20; Fault_UpdateCurrentProtection(1); assert(s_discharge_recovery_ticks==20);
+    Fault_PauseMeasurements(); assert(g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp);
+    reset_case(); fail_read=1; assert(!SH367309_SetMosPermits(0,0) && writes==0);
+    reset_case(); fail_write=1; assert(!SH367309_SetMosPermits(0,0));
+    assert(SH367309_Reg_Store.REG_MTP_CONF.all==0);
+    reset_case(); fail_read=2; assert(!SH367309_SetMosPermits(0,0));
+    reset_case(); bad_verify=1; assert(!SH367309_SetMosPermits(0,0));
+    bad_verify=0; assert(SH367309_SetMosPermits(0,0));
+    reset_case(); hardware_conf=0x08; AFE_PARAM_WRITE_Flag=1;
+    assert(!SH367309_SetMosPermits(1,1) && hardware_conf==0x08);
+    AFE_PARAM_WRITE_Flag=0; assert(SH367309_SetMosPermits(1,1) && hardware_conf==0x38);
+    puts("PASS protection: 32768 combinations, independent latches, timed recovery, one record, CONF failures/retry");
+    return 0;
+}
+'''
+
 
 def run_c(name, code, output, env, compiler):
     path = output / (name + '.c')
@@ -143,6 +248,16 @@ def main():
     compiler = sorted((vs / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/cl.exe'))[-1]
     adc = (SOURCE / 'ADC.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
     run_c('adc', ADC_STUBS + (SOURCE / 'ADC.h').read_text() + adc + ADC_TESTS, output, env, compiler)
+    upper = (SOURCE / 'Sci_Upper.h').read_text(encoding='utf-8', errors='replace')
+    # Use only the real protocol fault bit layout, not the rest of the report.
+    bits = upper[upper.index('struct MDLCHGFAULT_BITS'):
+                 upper.index('};', upper.index('union  MDLCHGFAULT_REG')) + 2]
+    driver = (SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8')
+    driver = ''.join(function(driver, sig) for sig in (
+        'static UINT8 SH367309_WriteConfBits(', 'UINT8 SH367309_SetMosPermits('))
+    fault = (SOURCE / 'Fault.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
+    run_c('protection', ADC_STUBS + (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits +
+          FAULT_STUBS + driver + fault + FAULT_TESTS, output, env, compiler)
     print(f'Host evidence only; files: {output}')
 
 
