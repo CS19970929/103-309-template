@@ -367,7 +367,6 @@ void InitRunAfterStopWakeup(void)
     InitIO_rtc();
 
     ADC_StopForLowPower();
-    InitADC();
 
     USART_DeInit(USART1);
     USART_DeInit(USART2);
@@ -375,6 +374,7 @@ void InitRunAfterStopWakeup(void)
     InitUSART_CommonUpper();
     InitCan();
     InitTimer();
+    InitADC();
 
     sys_time.wakeup_rtc = (RTC_IsStopWakeup() != 0U) ? true : false;
     /* Wakeup EXTI is configured only when entering STOP. Keeping it armed in

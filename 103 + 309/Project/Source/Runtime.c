@@ -18,11 +18,11 @@ void Runtime_Boot(void)
 	InitE2PROM();
 	InitAFE1();
 	InitCan();
-	InitADC();
 
 	InitData_SOC();
 
 	InitTimer();
+	InitADC();
 	__enable_irq();
 
 
@@ -42,9 +42,10 @@ void Runtime_RunOnce(void)
 {
 	SysTime_LatchTaskFlags();
 
+	ADC_Task();
+	DataLoad_MosTemperature();
 	App_AFEGet();
 	App_CommonUpper();
-	App_AnlogCal();
 
 	rtc_sleep();
 

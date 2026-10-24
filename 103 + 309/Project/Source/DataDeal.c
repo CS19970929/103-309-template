@@ -270,39 +270,46 @@ void DataLoad_Temperature(void)
 
     g_stCellInfoReport.u16Temperature[2] = 0;
 
-#if 0
-	//环境温度1
-	t_i32temp = ADC_GetResult(ADC_TEMP_EV1) / 10 - 40;		//放大1000倍和B值对应的意思
-	//t_i32temp =  - 40;
-	t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV1]) + g_i16CalibCoefB[MDL_TEMP_ENV1])>>10;
-	g_stCellInfoReport.u16Temperature[ENV_TEMP1] = (UINT16)(t_i32temp*10 + 400);
-	Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[ENV_TEMP1]);
-#endif
-
-    // 环境温度2
-    // 如果没有，这个默认就是0(ADC.c不会调用)
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV2) / 10 - 40;
-    t_i32temp = -40;
-    t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
+    /* Unfitted environment channels retain the existing calibration/encoding. */
+    t_i32temp = ((-40 * (INT32)g_u16CalibCoefK[MDL_TEMP_ENV2]) + g_i16CalibCoefB[MDL_TEMP_ENV2]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP2] = (UINT16)(t_i32temp * 10 + 400);
-
-    // 环境温度3
-    t_i32temp = ADC_GetResult(ADC_TEMP_EV3) / 10 - 40;
-    t_i32temp = -40;
-    t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
+    t_i32temp = ((-40 * (INT32)g_u16CalibCoefK[MDL_TEMP_ENV3]) + g_i16CalibCoefB[MDL_TEMP_ENV3]) >> 10;
     g_stCellInfoReport.u16Temperature[ENV_TEMP3] = (UINT16)(t_i32temp * 10 + 400);
+}
 
-#if 1
-    // MOS温度为散热片温度
-    // 取两者最大值
-    // t_i32temp = (ADC_GetResult(ADC_TEMP_MOS1) > ADC_GetResult(ADC_TEMP_MOS2) ? ADC_GetResult(ADC_TEMP_MOS1):ADC_GetResult(ADC_TEMP_MOS2));
-    t_i32temp = ADC_GetResult(ADC_TEMP_MOS1);
-    t_i32temp = t_i32temp / 10 - 40;
-    t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
-    g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
-    // g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (96 + 40) * 10;
-    Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[MOS_TEMP1]);
-#endif
+/* Raw NTC counts -> (degrees C + 40) * 10, shared by report and protection. */
+void DataLoad_MosTemperature(void)
+{
+    static const UINT16 mos_ntc_table[] = {
+    3771, 100, 3683, 150, 3580, 200, 3460, 250,
+    3323, 300, 3169, 350, 3004, 400, 2820, 450,
+    2633, 500, 2437, 550, 2241, 600, 2048, 650,
+    1859, 700, 1679, 750, 1509, 800, 1351, 850,
+    1204, 900, 1073, 950, 953, 1000, 845, 1050,
+    749, 1100, 664, 1150, 588, 1200, 522, 1250,
+    463, 1300, 411, 1350, 366, 1400, 326, 1450
+    };
+    UINT16 raw;
+    INT32 temperature;
+
+    if (!ADC_TakeSample(ADC_INPUT_MOS, &raw))
+        return;
+    /* Outside the characterized NTC table is unavailable, not confirmed heat. */
+    if (raw > mos_ntc_table[0] || raw < mos_ntc_table[sizeof(mos_ntc_table) / sizeof(mos_ntc_table[0]) - 2U])
+    {
+        System_ERROR_UserCallback(ERROR_ADC);
+        return;
+    }
+    temperature = GetEndValue(mos_ntc_table, sizeof(mos_ntc_table) / sizeof(mos_ntc_table[0]), raw);
+    temperature = temperature / 10 - 40;
+    temperature = (temperature * g_u16CalibCoefK[MDL_TEMP_MOS1] + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
+    temperature = temperature * 10 + 400;
+    if (temperature < 0 || temperature > 2000)
+    {
+        System_ERROR_UserCallback(ERROR_ADC);
+        return;
+    }
+    g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)temperature;
 }
 
 void DataLoad_TemperatureMaxMinFind(void)

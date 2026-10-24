@@ -3,6 +3,8 @@
 
 #include "conf.h"
 
+void DataLoad_MosTemperature(void);
+
 enum TempArray {
 	AFE1_TEMP1 = 0,
 	AFE1_TEMP2,
