@@ -2,31 +2,12 @@
 #include "CurrentCalibration.h"
 #include "FaultSnapshot.h"
 #include "Flash.h"
-
-static struct RS485MSG g_stCurrentMsgPtr_SCI1;
-static UINT16 gu16_CommuErrCnt_SCI1 = 0; // SCI通信异常计数
-static UINT8 gu8_TxEnable_SCI1 = 0;
-static UINT8 gu8_TxFinishFlag_SCI1 = 0;
-
-#ifdef _COMMOM_UPPER_SCI2
-static struct RS485MSG g_stCurrentMsgPtr_SCI2;
-static UINT16 gu16_CommuErrCnt_SCI2 = 0; // SCI通信异常计数
-static UINT8 gu8_TxEnable_SCI2 = 0;
-static UINT8 gu8_TxFinishFlag_SCI2 = 0;
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-static struct RS485MSG g_stCurrentMsgPtr_SCI3;
-static UINT16 gu16_CommuErrCnt_SCI3 = 0; // SCI通信异常计数
-static UINT8 gu8_TxEnable_SCI3 = 0;
-static UINT8 gu8_TxFinishFlag_SCI3 = 0;
-#endif
+#include "Sci_Protocol.h"
 
 static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 
 struct stCell_Info g_stCellInfoReport;
 volatile UINT8 u8FlashUpdateFlag = 0;
-volatile UINT8 u8FlashUpdateE2PROM = 0;
 
 /*
  * Temporary V25~V32 diagnostic overlay.
@@ -36,53 +17,7 @@ volatile UINT8 u8FlashUpdateE2PROM = 0;
 #define SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY ((UINT16)0x0007U)
 static UINT8 g_u8CurrentDiagVcellDisplayEnable = 0U;
 
-#define SCI_USART_ERROR_FLAGS ((UINT16)(USART_SR_ORE | USART_SR_NE | USART_SR_FE | USART_SR_PE))
-
-typedef UINT8 (*SCI_PROTOCOL_RX_FEED_FN)(void *pvProtocolCtx, UINT8 u8Data);
-typedef void (*SCI_PROTOCOL_PROCESS_FN)(void *pvProtocolCtx);
-typedef UINT8 *(*SCI_PROTOCOL_TX_BUFFER_FN)(void *pvProtocolCtx);
-typedef UINT16 (*SCI_PROTOCOL_TX_LENGTH_FN)(void *pvProtocolCtx);
-typedef UINT8 (*SCI_PROTOCOL_IS_BUSY_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_RESET_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_RX_IDLE_FN)(void *pvProtocolCtx);
-typedef void (*SCI_PROTOCOL_TX_COMPLETE_FN)(void *pvProtocolCtx);
-
-struct SCI_PROTOCOL_OPS
-{
-	SCI_PROTOCOL_RESET_FN pfReset;
-	SCI_PROTOCOL_RX_FEED_FN pfRxFeed;
-	SCI_PROTOCOL_PROCESS_FN pfProcessFrame;
-	SCI_PROTOCOL_TX_BUFFER_FN pfGetTxBuffer;
-	SCI_PROTOCOL_TX_LENGTH_FN pfGetTxLength;
-	SCI_PROTOCOL_IS_BUSY_FN pfIsBusy;
-	SCI_PROTOCOL_RX_IDLE_FN pfOnRxIdle;
-	SCI_PROTOCOL_TX_COMPLETE_FN pfOnTxComplete;
-};
-
-struct SCI_PORT_RUNTIME
-{
-	USART_TypeDef *pstUsart;
-	void *pvProtocolCtx;
-	const struct SCI_PROTOCOL_OPS *pstProtocolOps;
-	volatile UINT16 *pu16ErrorCounter;
-	volatile UINT8 *pu8TxEnableFlag;
-	volatile UINT8 *pu8TxFinishFlag;
-	UINT8 * volatile pu8TxBuffer;
-	volatile UINT16 u16TxIndex;
-	volatile UINT16 u16TxLength;
-	volatile UINT8 u8FramePending;
-};
-
-static void Sci_ModbusResetMessage(struct RS485MSG *s);
 static void Sci_SetWrError(struct RS485MSG *s, UINT8 error);
-static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data);
-static void Sci_ModbusProcessFrame(void *pvProtocolCtx);
-static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx);
-static UINT16 Sci_ModbusGetTxLength(void *pvProtocolCtx);
-static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx);
-static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
-static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
-static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
 static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
 enum SCI_READ_BLOCK { SCI_READ_REPORT, SCI_READ_LCD, SCI_READ_AFE,
     SCI_READ_OTHER1, SCI_READ_OTHER, SCI_READ_PROTECT, SCI_READ_CALIB };
@@ -111,76 +46,6 @@ static const struct SCI_READ_WINDOW s_read_windows[] = {
 static const struct SCI_READ_WINDOW *Sci_FindReadWindow(UINT16 address, UINT16 *offset);
 static void Sci_LoadReadData(struct RS485MSG *s);
 
-static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortStartTx(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortFinishTx(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_PortService(struct SCI_PORT_RUNTIME *pstPort);
-static UINT8 Sci_PortIsBusy(const struct SCI_PORT_RUNTIME *pstPort);
-static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
-							   IRQn_Type eIrqChannel,
-							   UINT8 u8UseApb2Bus,
-							   UINT32 u32UsartClock,
-							   GPIO_TypeDef *pstTxGpio,
-							   UINT16 u16TxPin,
-							   GPIO_TypeDef *pstRxGpio,
-							   UINT16 u16RxPin,
-							   UINT32 u32RemapConfig);
-
-static const struct SCI_PROTOCOL_OPS g_stSciModbusProtocolOps = {
-	Sci_ModbusResetProtocol,
-	Sci_ModbusProtocolFeed,
-	Sci_ModbusProcessFrame,
-	Sci_ModbusGetTxBuffer,
-	Sci_ModbusGetTxLength,
-	Sci_ModbusIsBusy,
-	Sci_ModbusOnRxIdle,
-	Sci_ModbusOnTxComplete};
-
-static struct SCI_PORT_RUNTIME g_stSciPort1 = {
-	USART1,
-	&g_stCurrentMsgPtr_SCI1,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI1,
-	&gu8_TxEnable_SCI1,
-	&gu8_TxFinishFlag_SCI1,
-	0,
-	0,
-	0,
-	0};
-
-#ifdef _COMMOM_UPPER_SCI2
-static struct SCI_PORT_RUNTIME g_stSciPort2 = {
-	USART2,
-	&g_stCurrentMsgPtr_SCI2,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI2,
-	&gu8_TxEnable_SCI2,
-	&gu8_TxFinishFlag_SCI2,
-	0,
-	0,
-	0,
-	0};
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-static struct SCI_PORT_RUNTIME g_stSciPort3 = {
-	USART3,
-	&g_stCurrentMsgPtr_SCI3,
-	&g_stSciModbusProtocolOps,
-	&gu16_CommuErrCnt_SCI3,
-	&gu8_TxEnable_SCI3,
-	&gu8_TxFinishFlag_SCI3,
-	0,
-	0,
-	0,
-	0};
-
-#endif
-
-
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s);
@@ -203,23 +68,6 @@ void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s);
-
-void Sci_DataInit(struct RS485MSG *s)
-{
-	UINT16 i;
-
-	s->ptr_no = 0;
-	s->csr = RS485_STA_IDLE;
-	s->enRs485CmdType = RS485_CMD_READ_REGS;
-	for (i = 0; i < RS485_MAX_BUFFER_SIZE; i++)
-	{
-		s->u16Buffer[i] = 0;
-	}
-	for (i = 0; i < SCI_TX_BUF_LEN; i++)
-	{
-		g_u8SCITxBuff[i] = 0;
-	}
-}
 
 void CRC_verify(struct RS485MSG *s)
 {
@@ -1119,6 +967,9 @@ UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u1
 		return RS485_ERROR_DATA_INVALID;
 	}
 
+    if (u16StartAddr == RS485_CMD_ADDR_FLASH_CONNECT)
+        return RS485_ERROR_NO_PERMISSION; /* CAN uses its dedicated IAP command. */
+
 	memset(&stMsg, 0, sizeof(stMsg));
 	stMsg.AckType = RS485_ACK_POS;
 	stMsg.ErrorType = RS485_ERROR_NULL;
@@ -1159,9 +1010,10 @@ UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u1
 	return 0U;
 }
 
-static void Sci_ModbusResetMessage(struct RS485MSG *s)
+void Sci_ResetMessage(struct RS485MSG *s)
 {
 	s->ptr_no = 0;
+	s->reset_after_tx = 0U;
 	s->csr = RS485_STA_IDLE;
 	s->u16RdRegStartAddr = 0;
 	s->u16RdRegStartAddrActure = 0;
@@ -1176,19 +1028,13 @@ static void Sci_ModbusResetMessage(struct RS485MSG *s)
 	s->u16Buffer[3] = 0;
 }
 
-static void Sci_ModbusResetProtocol(void *pvProtocolCtx)
+UINT8 Sci_ModbusFeed(struct RS485MSG *s, UINT8 u8Data)
 {
-	Sci_ModbusResetMessage((struct RS485MSG *)pvProtocolCtx);
-}
-
-static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
-{
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
 	UINT16 u16FrameEndIndex;
 
 	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
 	{
-		Sci_ModbusResetMessage(s);
+		Sci_ResetMessage(s);
 	}
 
 	s->u16Buffer[s->ptr_no] = u8Data;
@@ -1197,7 +1043,7 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 	{
 		if ((u8Data != RS485_SLAVE_ADDR) && (u8Data != RS485_BROADCAST_ADDR))
 		{
-			Sci_ModbusResetMessage(s);
+			Sci_ResetMessage(s);
 			return 0;
 		}
 	}
@@ -1215,7 +1061,7 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 			s->enRs485CmdType = RS485_CMD_WRITE_REGS;
 			break;
 		default:
-			Sci_ModbusResetMessage(s);
+			Sci_ResetMessage(s);
 			return 0;
 		}
 	}
@@ -1238,7 +1084,7 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 				u16FrameEndIndex = (UINT16)s->u16Buffer[6] + 8U;
 				if (u16FrameEndIndex >= RS485_MAX_BUFFER_SIZE)
 				{
-					Sci_ModbusResetMessage(s);
+					Sci_ResetMessage(s);
 					return 0;
 				}
 			}
@@ -1254,7 +1100,7 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 			}
 			break;
 		default:
-			Sci_ModbusResetMessage(s);
+			Sci_ResetMessage(s);
 			return 0;
 		}
 	}
@@ -1262,15 +1108,38 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 	s->ptr_no++;
 	if (s->ptr_no >= RS485_MAX_BUFFER_SIZE)
 	{
-		Sci_ModbusResetMessage(s);
+		Sci_ResetMessage(s);
 	}
 
 	return 0;
 }
 
-static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
+UINT8 Sci_ModbusFrameValid(const struct RS485MSG *s)
 {
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
+    UINT16 count=s->ptr_no, length;
+    const UINT8 *b=s->u16Buffer;
+    if (count < 8U || count > RS485_MAX_BUFFER_SIZE ||
+        (b[0] != RS485_SLAVE_ADDR && b[0] != RS485_BROADCAST_ADDR))
+        return 0U;
+    if (b[1] == RS485_CMD_READ_REGS || b[1] == RS485_CMD_WRITE_REG)
+    {
+        if (count != 8U || (b[0] == RS485_BROADCAST_ADDR && b[1] == RS485_CMD_READ_REGS))
+            return 0U;
+    }
+    else if (b[1] == RS485_CMD_WRITE_REGS)
+    {
+        length=(UINT16)((b[4]<<8) | b[5]);
+        if (count != (UINT16)(b[6]+9U) || !length ||
+            length > (RS485_MAX_BUFFER_SIZE-9U)/2U || b[6] != length*2U)
+            return 0U;
+    }
+    else return 0U;
+    return (UINT8)(Sci_CRC16RTU((UINT8 *)b,(UINT16)(count-2U)) ==
+        (UINT16)(b[count-2U] | (b[count-1U]<<8)));
+}
+
+void Sci_ModbusProcessFrame(struct RS485MSG *s)
+{
 	UINT8 broadcast = (UINT8)(s->u16Buffer[0] == RS485_BROADCAST_ADDR);
 
 	s->AckType = RS485_ACK_POS;
@@ -1280,10 +1149,9 @@ static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 	if ((s->AckType != RS485_ACK_POS) ||
 		(broadcast && s->enRs485CmdType == RS485_CMD_READ_REGS))
 	{
-		Sci_ModbusResetMessage(s);
+		Sci_ResetMessage(s);
 		return;
 	}
-	SleepDeal_RecordExternalComm();
 	if (s->AckType == RS485_ACK_POS)
 	{
 		switch (s->enRs485CmdType)
@@ -1307,7 +1175,7 @@ static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 
 	if (broadcast)
 	{
-		Sci_ModbusResetMessage(s);
+		Sci_ResetMessage(s);
 		return;
 	}
 	switch (s->enRs485CmdType)
@@ -1320,450 +1188,10 @@ static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 		Sci_ACK_0x06_0x10(s);
 		break;
 	default:
-		Sci_ModbusResetMessage(s);
+		Sci_ResetMessage(s);
 		break;
 	}
 }
-
-static UINT8 *Sci_ModbusGetTxBuffer(void *pvProtocolCtx)
-{
-	return ((struct RS485MSG *)pvProtocolCtx)->u16Buffer;
-}
-
-static UINT16 Sci_ModbusGetTxLength(void *pvProtocolCtx)
-{
-	return ((struct RS485MSG *)pvProtocolCtx)->AckLenth;
-}
-
-static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx)
-{
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
-
-	return (UINT8)((s->ptr_no != 0U) || (s->csr != RS485_STA_IDLE));
-}
-
-static void Sci_ModbusOnRxIdle(void *pvProtocolCtx)
-{
-	/* USART IDLE is only one character; RTU requires a timed 3.5-character gap. */
-	(void)pvProtocolCtx;
-}
-
-static void Sci_ModbusOnTxComplete(void *pvProtocolCtx)
-{
-	Sci_ModbusResetMessage((struct RS485MSG *)pvProtocolCtx);
-}
-
-static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort)
-{
-	volatile UINT16 u16Dummy;
-
-	pstPort->u8FramePending = 0;
-	pstPort->u16TxIndex = 0;
-	pstPort->u16TxLength = 0;
-	pstPort->pu8TxBuffer = 0;
-	u16Dummy = pstPort->pstUsart->SR;
-	u16Dummy = pstPort->pstUsart->DR;
-	(void)u16Dummy;
-	pstPort->pstUsart->CR1 |= (USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
-	pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_TXEIE | USART_CR1_TCIE);
-}
-
-static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort)
-{
-	pstPort->u8FramePending = 0;
-	pstPort->u16TxIndex = 0;
-	pstPort->u16TxLength = 0;
-	pstPort->pu8TxBuffer = 0;
-
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfReset != 0))
-	{
-		pstPort->pstProtocolOps->pfReset(pstPort->pvProtocolCtx);
-	}
-	Sci_PortArmReceiver(pstPort);
-}
-
-static void Sci_PortStartTx(struct SCI_PORT_RUNTIME *pstPort)
-{
-	pstPort->u16TxIndex = 0;
-
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 1;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
-
-	pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE | USART_CR1_TCIE);
-	pstPort->pstUsart->CR1 |= (USART_CR1_TE | USART_CR1_TXEIE);
-}
-
-static void Sci_PortFinishTx(struct SCI_PORT_RUNTIME *pstPort)
-{
-	USART_ClearFlag(pstPort->pstUsart, USART_FLAG_TC);
-	pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TCIE;
-
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 1;
-	}
-
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfOnTxComplete != 0))
-	{
-		pstPort->pstProtocolOps->pfOnTxComplete(pstPort->pvProtocolCtx);
-	}
-
-	if (u8FlashUpdateE2PROM != 0U)
-	{
-		u8FlashUpdateE2PROM = 0;
-		u8FlashUpdateFlag = 1;
-	}
-
-	Sci_PortArmReceiver(pstPort);
-}
-
-static void Sci_PortHandleError(struct SCI_PORT_RUNTIME *pstPort)
-{
-	volatile UINT16 u16Dummy;
-
-	u16Dummy = pstPort->pstUsart->DR;
-	(void)u16Dummy;
-
-	if (pstPort->pu16ErrorCounter != 0)
-	{
-		(*pstPort->pu16ErrorCounter)++;
-	}
-
-	Sci_PortAbortTransfer(pstPort);
-}
-
-static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
-{
-	UINT16 u16Status;
-
-	u16Status = pstPort->pstUsart->SR;
-
-	if ((u16Status & SCI_USART_ERROR_FLAGS) != 0U)
-	{
-		Sci_PortHandleError(pstPort);
-		return;
-	}
-
-	if (((u16Status & USART_SR_RXNE) != 0U) &&
-		((pstPort->pstUsart->CR1 & USART_CR1_RXNEIE) != 0U))
-	{
-		UINT8 u8RxData;
-
-		u8RxData = (UINT8)pstPort->pstUsart->DR;
-
-		if ((pstPort->pstProtocolOps != 0) &&
-			(pstPort->pstProtocolOps->pfRxFeed != 0) &&
-			(pstPort->pstProtocolOps->pfRxFeed(pstPort->pvProtocolCtx, u8RxData) != 0U))
-		{
-			pstPort->u8FramePending = 1;
-			pstPort->pstUsart->CR1 &= (UINT16) ~(USART_CR1_RE | USART_CR1_RXNEIE | USART_CR1_IDLEIE);
-		}
-	}
-
-	u16Status = pstPort->pstUsart->SR;
-	if (((u16Status & USART_SR_IDLE) != 0U) &&
-		((pstPort->pstUsart->CR1 & USART_CR1_IDLEIE) != 0U))
-	{
-		volatile UINT16 u16Dummy;
-
-		u16Dummy = pstPort->pstUsart->DR;
-		(void)u16Dummy;
-
-		if ((pstPort->u8FramePending == 0U) &&
-			(pstPort->u16TxLength == 0U) &&
-			(pstPort->pstProtocolOps != 0) &&
-			(pstPort->pstProtocolOps->pfOnRxIdle != 0))
-		{
-			pstPort->pstProtocolOps->pfOnRxIdle(pstPort->pvProtocolCtx);
-		}
-	}
-
-	if (((pstPort->pstUsart->SR & USART_SR_TXE) != 0U) &&
-		((pstPort->pstUsart->CR1 & USART_CR1_TXEIE) != 0U))
-	{
-		if ((pstPort->pu8TxBuffer == 0) || (pstPort->u16TxIndex >= pstPort->u16TxLength))
-		{
-			pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TXEIE;
-			pstPort->pstUsart->CR1 |= USART_CR1_TCIE;
-		}
-		else
-		{
-			pstPort->pstUsart->DR = pstPort->pu8TxBuffer[pstPort->u16TxIndex++];
-			if (pstPort->u16TxIndex >= pstPort->u16TxLength)
-			{
-				pstPort->pstUsart->CR1 &= (UINT16)~USART_CR1_TXEIE;
-				pstPort->pstUsart->CR1 |= USART_CR1_TCIE;
-			}
-		}
-	}
-
-	if (((pstPort->pstUsart->SR & USART_SR_TC) != 0U) &&
-		((pstPort->pstUsart->CR1 & USART_CR1_TCIE) != 0U))
-	{
-		Sci_PortFinishTx(pstPort);
-	}
-}
-
-static void Sci_PortService(struct SCI_PORT_RUNTIME *pstPort)
-{
-	UINT8 u8FramePending;
-	UINT32 primask;
-
-	if (pstPort == 0)
-	{
-		return;
-	}
-
-	/* 原子地取走待处理标志，避免 ISR 在检查和清零之间提交的帧被丢弃。 */
-	primask = __get_PRIMASK();
-	__disable_irq();
-	u8FramePending = pstPort->u8FramePending;
-	pstPort->u8FramePending = 0U;
-	if (primask == 0U)
-	{
-		__enable_irq();
-	}
-
-	if (u8FramePending == 0U)
-	{
-		return;
-	}
-
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfProcessFrame != 0))
-	{
-		pstPort->pstProtocolOps->pfProcessFrame(pstPort->pvProtocolCtx);
-	}
-
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfGetTxBuffer != 0))
-	{
-		pstPort->pu8TxBuffer = pstPort->pstProtocolOps->pfGetTxBuffer(pstPort->pvProtocolCtx);
-	}
-	else
-	{
-		pstPort->pu8TxBuffer = 0;
-	}
-
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfGetTxLength != 0))
-	{
-		pstPort->u16TxLength = pstPort->pstProtocolOps->pfGetTxLength(pstPort->pvProtocolCtx);
-	}
-	else
-	{
-		pstPort->u16TxLength = 0;
-	}
-
-	if ((pstPort->pu8TxBuffer != 0) && (pstPort->u16TxLength != 0U))
-	{
-		Sci_PortStartTx(pstPort);
-	}
-	else
-	{
-		Sci_PortAbortTransfer(pstPort);
-	}
-}
-
-static UINT8 Sci_PortIsBusy(const struct SCI_PORT_RUNTIME *pstPort)
-{
-	if (pstPort == 0)
-	{
-		return 0;
-	}
-
-	if ((pstPort->u8FramePending != 0U) || (pstPort->u16TxLength != 0U))
-	{
-		return 1;
-	}
-
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfIsBusy != 0))
-	{
-		return pstPort->pstProtocolOps->pfIsBusy(pstPort->pvProtocolCtx);
-	}
-
-	return 0;
-}
-
-static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
-							   IRQn_Type eIrqChannel,
-							   UINT8 u8UseApb2Bus,
-							   UINT32 u32UsartClock,
-							   GPIO_TypeDef *pstTxGpio,
-							   UINT16 u16TxPin,
-							   GPIO_TypeDef *pstRxGpio,
-							   UINT16 u16RxPin,
-							   UINT32 u32RemapConfig)
-{
-	GPIO_InitTypeDef GPIO_InitStructure;
-	USART_InitTypeDef USART_InitStructure;
-	NVIC_InitTypeDef NVIC_InitStructure;
-
-	if (u8UseApb2Bus != 0U)
-	{
-		RCC_APB2PeriphClockCmd(u32UsartClock, ENABLE);
-	}
-	else
-	{
-		RCC_APB1PeriphClockCmd(u32UsartClock, ENABLE);
-	}
-
-	if (u32RemapConfig != 0U)
-	{
-		GPIO_PinRemapConfig(u32RemapConfig, ENABLE);
-	}
-
-	
-
-	GPIO_InitStructure.GPIO_Pin = u16TxPin;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-	GPIO_Init(pstTxGpio, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = u16RxPin;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-	GPIO_Init(pstRxGpio, &GPIO_InitStructure);
-
-	if(pstPort->pstUsart == USART1)
-		USART_InitStructure.USART_BaudRate = UART1_BAUD;
-	else if(pstPort->pstUsart == USART2)
-		USART_InitStructure.USART_BaudRate = UART2_BAUD;
-	
-	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-	USART_InitStructure.USART_StopBits = USART_StopBits_1;
-	USART_InitStructure.USART_Parity = USART_Parity_No;
-	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-	USART_Init(pstPort->pstUsart, &USART_InitStructure);
-
-	pstPort->pstUsart->CR3 |= USART_CR3_EIE;
-	USART_ITConfig(pstPort->pstUsart, USART_IT_RXNE, ENABLE);
-	USART_ITConfig(pstPort->pstUsart, USART_IT_IDLE, ENABLE);
-	USART_ITConfig(pstPort->pstUsart, USART_IT_TXE, DISABLE);
-	USART_ITConfig(pstPort->pstUsart, USART_IT_TC, DISABLE);
-	
-	NVIC_InitStructure.NVIC_IRQChannel = eIrqChannel;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
-
-	USART_Cmd(pstPort->pstUsart, ENABLE);
-
-	if (pstPort->pvProtocolCtx != 0)
-	{
-		Sci_DataInit((struct RS485MSG *)pstPort->pvProtocolCtx);
-	}
-	if ((pstPort->pstProtocolOps != 0) && (pstPort->pstProtocolOps->pfReset != 0))
-	{
-		pstPort->pstProtocolOps->pfReset(pstPort->pvProtocolCtx);
-	}
-	if (pstPort->pu16ErrorCounter != 0)
-	{
-		*pstPort->pu16ErrorCounter = 0;
-	}
-	if (pstPort->pu8TxEnableFlag != 0)
-	{
-		*pstPort->pu8TxEnableFlag = 0;
-	}
-	if (pstPort->pu8TxFinishFlag != 0)
-	{
-		*pstPort->pu8TxFinishFlag = 0;
-	}
-
-	Sci_PortArmReceiver(pstPort);
-}
-
-UINT8 Sci_IsAnyPortBusy(void)
-{
-	UINT8 busy;
-
-	busy = (UINT8)Sci_PortIsBusy(&g_stSciPort1);
-#ifdef _COMMOM_UPPER_SCI2
-	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort2));
-#endif
-#ifdef _COMMOM_UPPER_SCI3
-	busy = (UINT8)(busy || Sci_PortIsBusy(&g_stSciPort3));
-#endif
-	return busy;
-}
-
-void Sci1_CommonUpper_IRQHandler(void)
-{
-	Sci_PortIRQHandler(&g_stSciPort1);
-}
-
-void Sci2_CommonUpper_IRQHandler(void)
-{
-#ifdef _COMMOM_UPPER_SCI2
-	Sci_PortIRQHandler(&g_stSciPort2);
-#endif
-}
-
-#ifdef _COMMOM_UPPER_SCI3
-void Sci3_CommonUpper_IRQHandler(void)
-{
-	Sci_PortIRQHandler(&g_stSciPort3);
-}
-#endif
-
-void InitSCI1_CommonUpper(void)
-{
-	Sci_InitCommonPort(&g_stSciPort1,
-					   USART1_IRQn,
-					   1U,
-					   RCC_APB2Periph_USART1,
-					   GPIOB,
-					   GPIO_Pin_6,
-					   GPIOB,
-					   GPIO_Pin_7,
-					   GPIO_Remap_USART1);
-}
-
-void InitSCI2_CommonUpper(void)
-{
-#ifdef _COMMOM_UPPER_SCI2
-	Sci_InitCommonPort(&g_stSciPort2,
-					   USART2_IRQn,
-					   0U,
-					   RCC_APB1Periph_USART2,
-					   GPIOA,
-					   GPIO_Pin_2,
-					   GPIOA,
-					   GPIO_Pin_3,
-					   0U);
-#endif
-}
-
-#ifdef _COMMOM_UPPER_SCI3
-void InitSCI3_CommonUpper(void)
-{
-	Sci_InitCommonPort(&g_stSciPort3,
-					   USART3_IRQn,
-					   0U,
-					   RCC_APB1Periph_USART3,
-					   GPIOD,
-					   GPIO_Pin_8,
-					   GPIOD,
-					   GPIO_Pin_9,
-					   GPIO_FullRemap_USART3);
-}
-#endif
 
 void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 {
@@ -1955,7 +1383,7 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (u16WrRegNum == 1)
+	if (u16WrRegNum == 1U && s->u16Buffer[0] == RS485_SLAVE_ADDR)
 	{
 		if (AppUpgrade_RequestIap() == 0U)
 		{
@@ -1965,7 +1393,7 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 		}
 		else
 		{
-			u8FlashUpdateE2PROM = 1;
+			s->reset_after_tx = 1U;
 		}
 	}
 	else
@@ -2235,36 +1663,6 @@ void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s)
 	// 	s->AckType = RS485_ACK_NEG;
 	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
 	// }
-}
-
-void InitUSART_CommonUpper(void)
-{
-#ifdef _COMMOM_UPPER_SCI1
-	InitSCI1_CommonUpper();
-#endif
-
-#ifdef _COMMOM_UPPER_SCI2
-	InitSCI2_CommonUpper();
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-	InitSCI3_CommonUpper();
-#endif
-}
-
-void App_CommonUpper(void)
-{
-#ifdef _COMMOM_UPPER_SCI1
-	Sci_PortService(&g_stSciPort1);
-#endif
-
-#ifdef _COMMOM_UPPER_SCI2
-	Sci_PortService(&g_stSciPort2);
-#endif
-
-#ifdef _COMMOM_UPPER_SCI3
-	Sci_PortService(&g_stSciPort3);
-#endif
 }
 
 /* Both UARTs carry protocols. A printf must never inject bytes into a frame. */

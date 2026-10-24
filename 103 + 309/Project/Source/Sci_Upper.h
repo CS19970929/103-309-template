@@ -4,8 +4,15 @@
 #define	RS485_BROADCAST_ADDR		(( UINT8 ) 0x00 )
 #define	RS485_SLAVE_ADDR			(( UINT8 ) 0x01 )
 
-#define  UART1_BAUD		(19200)
-#define  UART2_BAUD		(9600)
+#ifndef UART1_BAUD
+#define UART1_BAUD 19200U
+#endif
+#ifndef UART2_BAUD
+#define UART2_BAUD 9600U
+#endif
+#ifndef UART3_BAUD
+#define UART3_BAUD 9600U
+#endif
 
 #define	SCI_TX_BUF_LEN			251   	//��־��¼��������Ϊ250
 #define RS485_MAX_BUFFER_SIZE 	251		//
@@ -108,11 +115,12 @@ struct stCell_Info {
 
 // SCI_485 Message Structure
 struct RS485MSG {
-	UINT8	ptr_no;          	// Word stating what state msg is in
-	UINT8	csr;          		// I2C address of slave msg is intended for
+	volatile UINT8	ptr_no;          	// Word stating what state msg is in
+	volatile UINT8	csr;          		// I2C address of slave msg is intended for
 	UINT16	u16RdRegStartAddr;	// read reg start addr
 	UINT16	u16RdRegStartAddrActure;	//�Զ����ַ����
 	UINT8	u16RdRegByteNum;    // read byte lenth
+	UINT8 reset_after_tx; /* This request only: reset after its own UART TC. */
 	UINT8	AckLenth;			// ack byte lenth
 	UINT8	AckType;			// ack type
 	UINT8	ErrorType;			// error type
@@ -490,13 +498,13 @@ enum RS485_CMD_RW_E {
 
 
 extern volatile UINT8 u8FlashUpdateFlag;
-extern volatile UINT8 u8FlashUpdateE2PROM;
 
 extern struct stCell_Info g_stCellInfoReport;
 
 UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words);
 UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count);
 UINT8 Sci_IsAnyPortBusy(void);
+UINT8 Sci_VerifyWakeFrames(void);
 
 void Sci1_CommonUpper_IRQHandler(void);
 void Sci2_CommonUpper_IRQHandler(void);

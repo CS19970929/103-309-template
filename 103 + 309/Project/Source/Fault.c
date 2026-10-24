@@ -39,6 +39,19 @@ static UINT8 s_current_valid;
 #define FAULT_MOS_CONFIRM_IDLE 0xFFFFU
 static UINT32 s_mos_tick;
 static UINT16 s_mos_confirm_ticks = FAULT_MOS_CONFIRM_IDLE;
+static UINT8 s_host_mos_off;
+
+UINT8 Fault_SetHostMosOff(UINT8 mask)
+{
+    if (mask > 3U)
+        return 0U;
+    s_host_mos_off = mask;
+    /* Keep the requested close on an I2C failure; normal arbitration retries.
+     * Releasing the host request never releases a protection latch. */
+    if (AFE_PARAM_WRITE_Flag)
+        return 0U;
+    return Fault_ApplyMosPermits(1U, 1U);
+}
 
 void Fault_PauseMeasurements(void)
 {
@@ -150,6 +163,8 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     /* A common fault can only add a block; directional recovery cannot erase it. */
     charge_block |= g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
     discharge_block |= g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
+    charge_block |= (UINT8)(s_host_mos_off & 1U);
+    discharge_block |= (UINT8)(s_host_mos_off & 2U);
     return SH367309_SetMosPermits((UINT8)(charge_on && !charge_block),
                                  (UINT8)(discharge_on && !discharge_block));
 }

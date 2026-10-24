@@ -39,7 +39,7 @@ static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >
 static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 5U) ? 1U : 0U; }
 static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
-static uint8_t CheckFlashBusy(void) { return (StorageFlash_IsBusy() || u8FlashUpdateE2PROM) ? 1U : 0U; }
+static uint8_t CheckFlashBusy(void) { return StorageFlash_IsBusy() ? 1U : 0U; }
 static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
 static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U || g_stCellInfoReport.unMdlFault_Second.all != 0U || SH367309_Reg_Store.REG_BSTATUS1.bits.SC) ? 1U : 0U; }
 

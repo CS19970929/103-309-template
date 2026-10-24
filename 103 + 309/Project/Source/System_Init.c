@@ -211,6 +211,23 @@ UINT32 SysTime_Get10msTickCount(void)
 	return tick_count;
 }
 
+/* TIM3 is already clocked at 100 kHz. Account for an update pending while
+ * interrupts are masked; the 32-bit microsecond value wraps intentionally. */
+UINT32 SysTime_GetMicroseconds(void)
+{
+    UINT32 ticks, counter, primask=__get_PRIMASK();
+    __disable_irq();
+    ticks=s_u32Sys10msTickCount;
+    counter=TIM_GetCounter(TIM3);
+    if (TIM_GetFlagStatus(TIM3,TIM_FLAG_Update) != RESET)
+    {
+        ++ticks;
+        counter=TIM_GetCounter(TIM3);
+    }
+    if (primask == 0U) __enable_irq();
+    return ticks*10000U+counter*10U;
+}
+
 UINT8 SysTime_Take200msTaskPeriod(void)
 {
 	UINT8 has_period = 0U;

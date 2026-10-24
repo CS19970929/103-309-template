@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / '103 + 309/Project/Source'
@@ -171,7 +172,7 @@ static void reset_case(void) {
     PRT_E2ROMParas.u16TmosOTp_Rcv=1200;
     PRT_E2ROMParas.u16TmosOTp_Filter=100;
     s_charge_recovery_ticks=s_discharge_recovery_ticks=0;
-    tick=0; Fault_PauseMeasurements();
+    s_host_mos_off=0; tick=0; Fault_PauseMeasurements();
 }
 int main(void) {
     unsigned n; int i;
@@ -203,6 +204,19 @@ int main(void) {
         assert(((hardware_conf>>4)&1)==!(heat || (charge_fault && !reverse_discharge)));
         assert(((hardware_conf>>5)&1)==!(heat || (discharge_fault && !reverse_charge)));
     }
+    for(n=0;n<4;++n) {
+        reset_case(); g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=1;
+        assert(Fault_SetHostMosOff((UINT8)n) && !(hardware_conf&0x30));
+        assert(Fault_SetHostMosOff(0) && !(hardware_conf&0x30));
+        g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=0;
+        assert(Fault_SetHostMosOff((UINT8)n));
+        assert(((hardware_conf>>4)&1)==!(n&1));
+        assert(((hardware_conf>>5)&1)==!(n&2));
+        Fault_PauseMeasurements(); assert(s_host_mos_off==n);
+    }
+    reset_case(); fail_write=1; assert(!Fault_SetHostMosOff(3) && s_host_mos_off==3);
+    fail_write=0; assert(Fault_ApplyMosPermits(1,1) && !(hardware_conf&0x30));
+    assert(!Fault_SetHostMosOff(4) && s_host_mos_off==3);
     reset_case(); g_stCellInfoReport.u16Ichg=120;
     for(i=0;i<5;++i) { tick+=20; Fault_UpdateCurrentProtection(1); }
     assert(FaultPoint_Third2==1 && Fault_record_Third2[0]==IchgOcp_Second);
@@ -498,6 +512,10 @@ def run_c(name, code, output, env, compiler):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--committed-measurement', action='store_true',
+                        help='Use committed DataDeal.c while the worktree has a manual temperature injection')
+    args = parser.parse_args()
     temp_root = Path(os.environ['LOCALAPPDATA']) / 'CodexTemp/103-309-copy'
     temp_root.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix='protection-host-', dir=temp_root))
@@ -524,7 +542,15 @@ def main():
         'static void AFE_SetLowPowerBit(', 'void AFE_IDLE(', 'void AFE_Sleep('))
     fault = (SOURCE / 'Fault.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
     conversion = function((SOURCE / 'PubFunc.c').read_text(encoding='utf-8'), 'UINT16 GetEndValue(')
-    conversion += function((SOURCE / 'DataDeal.c').read_text(encoding='utf-8'), 'void DataLoad_MosTemperature(')
+    measurement = (SOURCE / 'DataDeal.c').read_text(encoding='utf-8')
+    if args.committed_measurement:
+        measurement = subprocess.check_output(
+            ['git','show','HEAD:103 + 309/Project/Source/DataDeal.c'], cwd=ROOT).decode('utf-8')
+        print('Measurement fixture: committed DataDeal.c; worktree injection is excluded explicitly')
+    elif 'temperature = sys_time.test_mos_temp;' in measurement:
+        raise SystemExit('Worktree overrides real MOS temperature with sys_time.test_mos_temp. '
+                         'Use --committed-measurement to test the committed NTC path without changing it.')
+    conversion += function(measurement, 'void DataLoad_MosTemperature(')
     sci = (SOURCE / 'Sci_Upper.c').read_text(encoding='utf-8')
     parameters = 'enum {\n' + upper[upper.index('RS485_CMD_ADDR_VCELL_OVP_FIRST ='):
                                    upper.index('RS485_CMD_ADDR_VDELTA_OP_FIRST,')] + '\n};\n'

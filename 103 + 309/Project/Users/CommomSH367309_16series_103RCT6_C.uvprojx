@@ -449,6 +449,16 @@
               <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
             </File>
             <File>
+              <FileName>Sci_Uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Sci_Uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>Sci_Customer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Sci_Customer.c</FilePath>
+            </File>
+            <File>
               <FileName>Sci_Upper.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Sci_Upper.c</FilePath>
@@ -1291,6 +1301,16 @@
               <FileName>StartupDefaultHandler.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
+            </File>
+            <File>
+              <FileName>Sci_Uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Sci_Uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>Sci_Customer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Sci_Customer.c</FilePath>
             </File>
             <File>
               <FileName>Sci_Upper.c</FileName>
