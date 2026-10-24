@@ -375,6 +375,9 @@ extern UINT8  FaultPoint_Third2;
 void FaultWarnRecord2(enum FaultFlag num);
 void Fault_UpdateCurrentProtection(UINT8 sample_valid);
 void Fault_PauseMeasurements(void);
+UINT8 Fault_MosParametersValid(const struct PRT_E2ROM_PARAS *parameters);
+void Fault_ResetMosConfirmation(void);
+void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature);
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on);
 
 #endif	/* FAULT_H */

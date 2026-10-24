@@ -34,10 +34,17 @@ static UINT16 s_charge_recovery_ticks;
 static UINT16 s_discharge_recovery_ticks;
 static UINT8 s_current_valid;
 
+#define FAULT_MOS_MAX_GAP_TICKS 30U
+#define FAULT_MOS_RECOVERY_TICKS 100U
+#define FAULT_MOS_CONFIRM_IDLE 0xFFFFU
+static UINT32 s_mos_tick;
+static UINT16 s_mos_confirm_ticks = FAULT_MOS_CONFIRM_IDLE;
+
 void Fault_PauseMeasurements(void)
 {
     /* STOP, reset and failed reads do not acknowledge any confirmed fault. */
     s_current_valid = 0U;
+    Fault_ResetMosConfirmation();
 }
 
 void Fault_UpdateCurrentProtection(UINT8 sample_valid)
@@ -145,4 +152,65 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     discharge_block |= g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
     return SH367309_SetMosPermits((UINT8)(charge_on && !charge_block),
                                  (UINT8)(discharge_on && !discharge_block));
+}
+
+UINT8 Fault_MosParametersValid(const struct PRT_E2ROM_PARAS *parameters)
+{
+    return (UINT8)(parameters != 0 &&
+        parameters->u16TmosOTp_Third >= 400U && parameters->u16TmosOTp_Third <= 1450U &&
+        parameters->u16TmosOTp_Rcv >= 400U &&
+        parameters->u16TmosOTp_Rcv < parameters->u16TmosOTp_Third &&
+        parameters->u16TmosOTp_Filter >= 1U && parameters->u16TmosOTp_Filter <= 50000U);
+}
+
+void Fault_ResetMosConfirmation(void)
+{
+    s_mos_confirm_ticks = FAULT_MOS_CONFIRM_IDLE;
+}
+
+void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature)
+{
+    UINT32 now = SysTime_Get10msTickCount();
+    UINT32 elapsed = now - s_mos_tick;
+    UINT16 trip = PRT_E2ROMParas.u16TmosOTp_Third;
+    UINT16 recover = PRT_E2ROMParas.u16TmosOTp_Rcv;
+    UINT16 delay = PRT_E2ROMParas.u16TmosOTp_Filter;
+    UINT8 active = g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
+
+    if (!sample_valid)
+    {
+        Fault_ResetMosConfirmation();
+        return;
+    }
+    /* Keep legacy Flash records intact. Invalid old MOS settings use the
+       existing factory trip/recovery/delay locally, without rewriting storage. */
+    if (!Fault_MosParametersValid(&PRT_E2ROMParas))
+    {
+        trip = mos_3;
+        recover = mos_recover;
+        delay = mos_filter3;
+    }
+    if (elapsed > FAULT_MOS_MAX_GAP_TICKS)
+        Fault_ResetMosConfirmation();
+    s_mos_tick = now;
+
+    if ((!active && temperature >= trip) || (active && temperature <= recover))
+    {
+        if (s_mos_confirm_ticks == FAULT_MOS_CONFIRM_IDLE)
+            s_mos_confirm_ticks = 0U; /* First qualifying sample only starts timing. */
+        else
+            s_mos_confirm_ticks += (UINT16)elapsed;
+        if (s_mos_confirm_ticks >= (active ? FAULT_MOS_RECOVERY_TICKS : delay))
+        {
+            g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp = (UINT8)!active;
+            if (!active)
+                FaultWarnRecord2(MosOTp_Third);
+            Fault_ResetMosConfirmation();
+            Fault_ApplyMosPermits(1U, 1U);
+        }
+    }
+    else
+    {
+        Fault_ResetMosConfirmation();
+    }
 }

@@ -11,6 +11,9 @@ SOURCE = ROOT / '103 + 309/Project/Source'
 def function(text, signature):
     start = text.index(signature)
     brace = text.index('{', start)
+    while ';' in text[start:brace]:  # Skip forward declarations.
+        start = text.index(signature, start + len(signature))
+        brace = text.index('{', start)
     depth = 0
     for pos in range(brace, len(text)):
         depth += (text[pos] == '{') - (text[pos] == '}')
@@ -84,7 +87,7 @@ int main(void) {
     start_sweep(); assert(selected_channel==9);
     /* Merely advancing time without an EOC cannot produce temperature. */
     tick+=ADC_CONVERSION_TIMEOUT_TICKS; ADC_Task();
-    assert(!ADC_TakeSample(ADC_INPUT_MOS,&raw));
+    assert(ADC_TakeSample(ADC_INPUT_MOS,&raw)==ADC_SAMPLE_INVALID && raw==99);
     start_sweep(); complete(0); /* Real startup conversion is discarded. */
     complete(1800); complete(2200);
     for(i=0;i<5;++i) complete(2000);
@@ -95,7 +98,7 @@ int main(void) {
     assert(!ADC_TakeSample((enum ADC_INPUT)-1,&raw));
     assert(!ADC_TakeSample(ADC_INPUT_MOS,0));
     start_sweep(); complete(2000); complete(0);
-    assert(!ADC_TakeSample(ADC_INPUT_MOS,&raw));
+    assert(ADC_TakeSample(ADC_INPUT_MOS,&raw)==ADC_SAMPLE_INVALID && raw==2000);
     start_sweep(); group(2050);
     assert(ADC_TakeSample(ADC_INPUT_MOS,&raw) && raw==2050);
     start_sweep(); complete(2050); complete(2050);
@@ -117,6 +120,7 @@ FAULT_STUBS = r'''
 static struct {
     union MDLCHGFAULT_REG unMdlFault_Second, unMdlFault_Third;
     UINT16 u16Ichg, u16IDischg;
+    UINT16 u16Temperature[10];
 } g_stCellInfoReport;
 static struct {
     struct { UINT16 curValue; } u16IchgOcp_First, u16IdsgOcp_First;
@@ -142,6 +146,17 @@ static int MTPWrite(int addr,int len,UINT8 *p) {
     ++writes; if(fail_write) return 0; hardware_conf=*p; return 1;
 }
 UINT8 SH367309_SetMosPermits(UINT8 charge_on,UINT8 discharge_on);
+static UINT16 g_u16CalibCoefK[1]={1024};
+static int16_t g_i16CalibCoefB[1];
+#define MDL_TEMP_MOS1 0
+#define MOS_TEMP1 9
+static UINT8 sample_status;
+static UINT16 sample_raw;
+UINT8 ADC_TakeSample(enum ADC_INPUT input, UINT16 *raw) {
+    UINT8 status=sample_status; sample_status=ADC_SAMPLE_NONE;
+    if(status==ADC_SAMPLE_READY) *raw=sample_raw;
+    return status;
+}
 '''
 
 FAULT_TESTS = r'''
@@ -152,6 +167,9 @@ static void reset_case(void) {
     AFE_PARAM_WRITE_Flag=0; hardware_conf=0x38;
     AFE_Parameters_RS485_Struction.u16IchgOcp_First.curValue=120;
     AFE_Parameters_RS485_Struction.u16IdsgOcp_First.curValue=150;
+    PRT_E2ROMParas.u16TmosOTp_Third=1350;
+    PRT_E2ROMParas.u16TmosOTp_Rcv=1200;
+    PRT_E2ROMParas.u16TmosOTp_Filter=100;
     s_charge_recovery_ticks=s_discharge_recovery_ticks=0;
     tick=0; Fault_PauseMeasurements();
 }
@@ -213,8 +231,108 @@ int main(void) {
     reset_case(); hardware_conf=0x08; AFE_PARAM_WRITE_Flag=1;
     assert(!SH367309_SetMosPermits(1,1) && hardware_conf==0x08);
     AFE_PARAM_WRITE_Flag=0; assert(SH367309_SetMosPermits(1,1) && hardware_conf==0x38);
+    reset_case();
+    for(i=0;i<1000;++i) Fault_UpdateMosTemperature(1,1350);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    for(i=0;i<9;++i) { tick+=10; Fault_UpdateMosTemperature(1,1350); }
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    tick+=10; Fault_UpdateMosTemperature(1,1350);
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp && (hardware_conf&0x30)==0);
+    assert(FaultPoint_Third2==1 && Fault_record_Third2[0]==MosOTp_Third);
+    for(i=0;i<100;++i) { tick+=10; Fault_UpdateMosTemperature(1,1349); }
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp && FaultPoint_Third2==1);
+    Fault_UpdateMosTemperature(0,0); Fault_PauseMeasurements(); tick=0;
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    for(i=0;i<10;++i) { tick+=10; Fault_UpdateMosTemperature(1,1200); }
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    tick+=10; Fault_UpdateMosTemperature(1,1200);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp && (hardware_conf&0x30)==0x30);
+    /* Interrupted or old samples must start a fresh confirmation interval. */
+    reset_case(); Fault_UpdateMosTemperature(1,1350);
+    for(i=0;i<9;++i) { tick+=10; Fault_UpdateMosTemperature(1,1350); }
+    Fault_UpdateMosTemperature(0,0); tick+=10; Fault_UpdateMosTemperature(1,1350);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    tick+=1000; Fault_UpdateMosTemperature(1,1350);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp && s_mos_confirm_ticks==0);
+    Fault_ResetMosConfirmation();
+    tick+=10; Fault_UpdateMosTemperature(1,1350); assert(s_mos_confirm_ticks==0);
+    tick=UINT32_MAX-50; Fault_ResetMosConfirmation(); Fault_UpdateMosTemperature(1,1350);
+    for(i=0;i<10;++i) { tick+=10; Fault_UpdateMosTemperature(1,1350); }
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    PRT_E2ROMParas.u16TmosOTp_Rcv=1350; assert(!Fault_MosParametersValid(&PRT_E2ROMParas));
+    assert(!Fault_MosParametersValid(0));
+    reset_case(); PRT_E2ROMParas.u16TmosOTp_Third=2000;
+    assert(!Fault_MosParametersValid(&PRT_E2ROMParas));
+    Fault_UpdateMosTemperature(1,1350);
+    for(i=0;i<10;++i) { tick+=10; Fault_UpdateMosTemperature(1,1350); }
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    assert(PRT_E2ROMParas.u16TmosOTp_Third==2000); /* No storage rewrite. */
+    reset_case(); sample_status=ADC_SAMPLE_NONE;
+    DataLoad_MosTemperature(); assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    sample_status=ADC_SAMPLE_READY; sample_raw=2048;
+    DataLoad_MosTemperature(); assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==650);
+    sample_status=ADC_SAMPLE_READY; sample_raw=0;
+    DataLoad_MosTemperature(); assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==650);
+    assert(s_mos_confirm_ticks==FAULT_MOS_CONFIRM_IDLE);
+    for(i=0;i<12;++i) {
+        sample_status=ADC_SAMPLE_READY; sample_raw=400; tick+=10; DataLoad_MosTemperature();
+    }
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    sample_status=ADC_SAMPLE_INVALID; DataLoad_MosTemperature();
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    test_parameter_transaction();
     puts("PASS protection: 32768 combinations, independent latches, timed recovery, one record, CONF failures/retry");
+    puts("PASS MOS: trigger/recovery hysteresis, invalid/old samples, STOP, wrap, parameter fallback, real NTC path");
     return 0;
+}
+'''
+
+PARAMETER_STUBS = r'''
+#define SNum 16
+#define E2P_PARA_NUM_PROTECT (sizeof(struct PRT_E2ROM_PARAS)/sizeof(UINT16))
+#define RS485_ACK_NEG 1
+#define RS485_ERROR_DATA_INVALID 2
+#define RS485_ERROR_CMD_INVALID 3
+struct RS485MSG { UINT16 u16Buffer[160]; UINT8 AckType, ErrorType; };
+static int save_calls, save_fails;
+static UINT8 EEPROM_SaveRWParametersToFlash(void) { ++save_calls; return (UINT8)!save_fails; }
+static void InitData_SOC(void) {}
+'''
+
+PARAMETER_TESTS = r'''
+static void parameter_request(struct RS485MSG *s, UINT16 value) {
+    memset(s,0,sizeof(*s)); s->u16Buffer[5]=1; s->u16Buffer[6]=2;
+    s->u16Buffer[7]=value>>8; s->u16Buffer[8]=value&255;
+}
+static void test_parameter_transaction(void) {
+    struct RS485MSG request;
+    struct PRT_E2ROM_PARAS before;
+    const struct PRT_E2ROM_PARAS defaults=E2P_PROTECT_DEFAULT_PRT;
+    UINT16 trip_address=RS485_CMD_ADDR_TMOS_OTP_FIRST+2;
+    PRT_E2ROMParas=defaults; before=PRT_E2ROMParas;
+    g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=1;
+    save_calls=save_fails=0; s_mos_confirm_ticks=55;
+    parameter_request(&request,1200); /* Equals recovery: reject before Flash. */
+    Sci_WrRegs_0x10_Protect(trip_address,&request);
+    assert(request.ErrorType==RS485_ERROR_DATA_INVALID && save_calls==0);
+    assert(memcmp(&before,&PRT_E2ROMParas,sizeof(before))==0 && s_mos_confirm_ticks==55);
+    parameter_request(&request,1451); /* Outside the NTC characterized range. */
+    Sci_WrRegs_0x10_Protect(trip_address,&request);
+    assert(request.ErrorType==RS485_ERROR_DATA_INVALID && save_calls==0);
+    parameter_request(&request,1400); save_fails=1;
+    Sci_WrRegs_0x10_Protect(trip_address,&request);
+    assert(request.ErrorType==RS485_ERROR_CMD_INVALID && save_calls==1);
+    assert(memcmp(&before,&PRT_E2ROMParas,sizeof(before))==0);
+    parameter_request(&request,1400); save_fails=0;
+    Sci_WrRegs_0x10_Protect(trip_address,&request);
+    assert(request.AckType==0 && save_calls==2 && s_mos_confirm_ticks==FAULT_MOS_CONFIRM_IDLE);
+    before.u16TmosOTp_Third=1400;
+    assert(memcmp(&before,&PRT_E2ROMParas,sizeof(before))==0);
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    parameter_request(&request,1300); request.u16Buffer[6]=0;
+    Sci_WrRegs_0x10_Protect(trip_address,&request);
+    assert(request.ErrorType==RS485_ERROR_CMD_INVALID && save_calls==2);
+    puts("PASS MOS parameters: cross-field validation, no invalid Flash writes, rollback, hot update retains fault");
 }
 '''
 
@@ -256,8 +374,23 @@ def main():
     driver = ''.join(function(driver, sig) for sig in (
         'static UINT8 SH367309_WriteConfBits(', 'UINT8 SH367309_SetMosPermits('))
     fault = (SOURCE / 'Fault.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
-    run_c('protection', ADC_STUBS + (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits +
-          FAULT_STUBS + driver + fault + FAULT_TESTS, output, env, compiler)
+    conversion = function((SOURCE / 'PubFunc.c').read_text(encoding='utf-8'), 'UINT16 GetEndValue(')
+    conversion += function((SOURCE / 'DataDeal.c').read_text(encoding='utf-8'), 'void DataLoad_MosTemperature(')
+    sci = (SOURCE / 'Sci_Upper.c').read_text(encoding='utf-8')
+    parameters = 'enum {\n' + upper[upper.index('RS485_CMD_ADDR_VCELL_OVP_FIRST ='):
+                                   upper.index('RS485_CMD_ADDR_VDELTA_OP_FIRST,')] + '\n};\n'
+    parameters += PARAMETER_STUBS
+    parameters += ''.join(function(sci, sig) for sig in (
+        'static void Sci_SetWrError(', 'static UINT16 Sci_GetWrRegNum(',
+        'static UINT16 Sci_GetWrValue(', 'static UINT8 Sci_WrRegsByteCountValid(',
+        'static UINT8 Sci_RangeFits(', 'static UINT8 Sci_RangeOverlaps(',
+        'static void Sci_CopyWords(', 'static UINT8 Sci_WrValuesInRange(',
+        'static void Sci_WriteWordsFromRequest(', 'static void Sci_ApplyProtectSideEffects(',
+        'void Sci_WrRegs_0x10_Protect('))
+    run_c('protection', ADC_STUBS + (SOURCE / 'ADC.h').read_text() +
+          (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits +
+          FAULT_STUBS + driver + fault + conversion + parameters + PARAMETER_TESTS + FAULT_TESTS,
+          output, env, compiler)
     print(f'Host evidence only; files: {output}')
 
 

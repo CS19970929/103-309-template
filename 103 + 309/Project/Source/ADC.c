@@ -1,7 +1,7 @@
 #include "main.h"
 
 #define ADC_CALIBRATION_WAIT_LOOPS 100000U
-#define ADC_SETTLE_TICKS           1U     /* 10 ms after GPIO/ADC power-up. */
+#define ADC_SETTLE_TICKS           2U     /* At least 10 ms, regardless of tick phase. */
 #define ADC_SAMPLE_PERIOD_TICKS    10U    /* 100 ms between sweeps. */
 #define ADC_CONVERSION_TIMEOUT_TICKS 3U   /* Bounded polling, including loop latency. */
 #define ADC_FILTER_SAMPLES         8U
@@ -146,7 +146,7 @@ void ADC_Task(void)
         {
             s_adc.raw[s_adc.input] = (UINT16)((s_adc.sum - s_adc.min - s_adc.max) /
                                               (ADC_FILTER_SAMPLES - 2U));
-            s_adc.ready[s_adc.input] = 1U;
+            s_adc.ready[s_adc.input] = ADC_SAMPLE_READY;
             System_ERROR_UserCallback(ERROR_REMOVE_ADC);
             if (++s_adc.input == ADC_INPUT_COUNT)
             {
@@ -163,7 +163,7 @@ void ADC_Task(void)
     return;
 
 invalid:
-    memset(s_adc.ready, 0, sizeof(s_adc.ready));
+    s_adc.ready[s_adc.input] = ADC_SAMPLE_INVALID;
     s_adc.tick = SysTime_Get10msTickCount();
     s_adc.state = ADC_WAIT;
     System_ERROR_UserCallback(ERROR_ADC);
@@ -171,9 +171,12 @@ invalid:
 
 UINT8 ADC_TakeSample(enum ADC_INPUT input, UINT16 *raw)
 {
-    if ((UINT32)input >= ADC_INPUT_COUNT || raw == 0 || s_adc.ready[input] == 0U)
-        return 0U;
-    s_adc.ready[input] = 0U;
-    *raw = s_adc.raw[input];
-    return 1U;
+    UINT8 status;
+    if ((UINT32)input >= ADC_INPUT_COUNT || raw == 0)
+        return ADC_SAMPLE_NONE;
+    status = s_adc.ready[input];
+    s_adc.ready[input] = ADC_SAMPLE_NONE;
+    if (status == ADC_SAMPLE_READY)
+        *raw = s_adc.raw[input];
+    return status;
 }

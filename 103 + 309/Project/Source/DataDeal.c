@@ -291,14 +291,16 @@ void DataLoad_MosTemperature(void)
     };
     UINT16 raw;
     INT32 temperature;
+    UINT8 status = ADC_TakeSample(ADC_INPUT_MOS, &raw);
 
-    if (!ADC_TakeSample(ADC_INPUT_MOS, &raw))
+    if (status == ADC_SAMPLE_NONE)
         return;
+    if (status != ADC_SAMPLE_READY)
+        goto invalid;
     /* Outside the characterized NTC table is unavailable, not confirmed heat. */
     if (raw > mos_ntc_table[0] || raw < mos_ntc_table[sizeof(mos_ntc_table) / sizeof(mos_ntc_table[0]) - 2U])
     {
-        System_ERROR_UserCallback(ERROR_ADC);
-        return;
+        goto invalid;
     }
     temperature = GetEndValue(mos_ntc_table, sizeof(mos_ntc_table) / sizeof(mos_ntc_table[0]), raw);
     temperature = temperature / 10 - 40;
@@ -306,10 +308,15 @@ void DataLoad_MosTemperature(void)
     temperature = temperature * 10 + 400;
     if (temperature < 0 || temperature > 2000)
     {
-        System_ERROR_UserCallback(ERROR_ADC);
-        return;
+        goto invalid;
     }
     g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)temperature;
+    Fault_UpdateMosTemperature(1U, (UINT16)temperature);
+    return;
+
+invalid:
+    System_ERROR_UserCallback(ERROR_ADC);
+    Fault_UpdateMosTemperature(0U, 0U);
 }
 
 void DataLoad_TemperatureMaxMinFind(void)

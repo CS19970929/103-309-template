@@ -765,6 +765,9 @@ static void Sci_WriteWordsFromRequest(struct RS485MSG *s, UINT16 *dst, UINT16 of
 
 static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
 {
+    if (Sci_RangeOverlaps(offset, count,
+        RS485_CMD_ADDR_TMOS_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST, 5U))
+        Fault_ResetMosConfirmation();
 	if (Sci_RangeOverlaps(offset,
 						  count,
 						  0,
@@ -1993,6 +1996,14 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
 
 	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_PROTECT);
 	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
+    if (Sci_RangeOverlaps(offset, u16WrRegNum,
+        RS485_CMD_ADDR_TMOS_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST, 5U) &&
+        !Fault_MosParametersValid(&PRT_E2ROMParas))
+    {
+        Sci_CopyWords(base, snapshot, E2P_PARA_NUM_PROTECT);
+        Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+        return;
+    }
 
 	if (!EEPROM_SaveRWParametersToFlash())
 	{
@@ -2245,6 +2256,7 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 			return;
 		}
+		Fault_ResetMosConfirmation();
 		InitData_SOC();
 	}
 	else
