@@ -1,4 +1,5 @@
 #include "main.h"
+#include "MosTempProtection.h"
 
 static bool isforceClose(void);
 
@@ -297,7 +298,9 @@ void Drivers_External_Ctrl(void)
 	}
 #endif
 
-	if(0 == System_OnOFF_Func.bits.b1OnOFF_MOS_Relay || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE)
+	if(0 == System_OnOFF_Func.bits.b1OnOFF_MOS_Relay ||
+	   Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE ||
+	   MosTempProtection_IsBlocked())
 	{
 		MCUO_AFE_CTLC = 0;
 	}

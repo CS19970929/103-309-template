@@ -1,4 +1,5 @@
 #include "main.h"
+#include "MosTempProtection.h"
 
 __IO UINT16 g_u16ADCValFilter[ADC_NUM]; // 这个位数不能改
 
@@ -282,4 +283,7 @@ void App_AnlogCal(void)
 	}
 
 	ADC_TTC();
+	/* Fast, close-only interlock still runs if the 200-ms AFE poll is delayed. */
+	if (MosTempProtection_IsBlocked())
+		MCUO_AFE_CTLC = 0;
 }

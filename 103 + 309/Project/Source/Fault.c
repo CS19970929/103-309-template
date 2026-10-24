@@ -1,4 +1,53 @@
 #include "main.h"
+#include "MosTempProtection.h"
+
+/* Single ADC1 DMA channel is the MOS NTC on PA1. */
+extern __IO UINT16 g_u16ADCValFilter[ADC_NUM];
+static UINT8 s_mosFastOtpLatch;
+
+/* An ADC conversion must be available both in DMA and its filtered value. */
+static UINT8 MosTempProtection_IsSampleValid(void)
+{
+	const UINT16 adc = g_u16ADCValFilter[ADC_TEMP_MOS1];
+	const INT32 filtered = g_i32ADCResult[ADC_TEMP_MOS1];
+	const UINT16 temp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
+	return (adc > MOS_TEMP_ADC_MIN && adc < MOS_TEMP_ADC_MAX &&
+		filtered > (INT32)MOS_TEMP_INVALID_CODE &&
+		filtered <= (INT32)MOS_TEMP_MAX_CODE &&
+		temp > MOS_TEMP_INVALID_CODE && temp <= MOS_TEMP_MAX_CODE);
+}
+
+UINT8 MosTempProtection_IsBlocked(void)
+{
+	const UINT16 trip = PRT_E2ROMParas.u16TmosOTp_Third;
+	const UINT16 recover = PRT_E2ROMParas.u16TmosOTp_Rcv;
+
+	/* The EEPROM range check does not validate threshold ordering. */
+	if (!MosTempProtection_IsSampleValid() ||
+		trip <= recover || recover <= MOS_TEMP_INVALID_CODE ||
+		trip > MOS_TEMP_MAX_CODE)
+		return 1U;
+
+	/* Immediate, hysteretic veto; brief trips still require cooling to recover. */
+	if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] >= trip ||
+		g_i32ADCResult[ADC_TEMP_MOS1] >= (INT32)trip)
+		s_mosFastOtpLatch = 1U;
+
+	/* Existing third-level fault retains its configured filtered recovery. */
+	if (g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp ||
+		System_ERROR_UserCallback(ERROR_STATUS_TEMP_BREAK))
+		return 1U;
+
+	if (s_mosFastOtpLatch)
+	{
+		if (g_stCellInfoReport.u16Temperature[MOS_TEMP1] <= recover &&
+			g_i32ADCResult[ADC_TEMP_MOS1] <= (INT32)recover)
+			s_mosFastOtpLatch = 0U;
+		else
+			return 1U;
+	}
+	return 0U;
+}
 
 struct PRT_E2ROM_PARAS PRT_E2ROMParas;
 
@@ -820,6 +869,12 @@ void App_MosOtp_SecondCheck(void)
 
 	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
 	{
+		/* An invalid sample must not count toward OTP recovery. */
+		if (!MosTempProtection_IsSampleValid())
+		{
+			s_i16TimeCnt = 0;
+			return;
+		}
 		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
 		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TmosOTp_Second;
 		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TmosOTp_First;
@@ -856,6 +911,12 @@ void App_MosOtp_ThirdCheck(void)
 
 	if (1 == g_st_SysTimeFlag.bits.b1Sys10msFlag5)
 	{
+		/* An invalid sample must not count toward OTP recovery. */
+		if (!MosTempProtection_IsSampleValid())
+		{
+			s_i16TimeCnt = 0;
+			return;
+		}
 		t_sPubOPUPChk.u16ChkVal = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
 		t_sPubOPUPChk.u16OPValB = PRT_E2ROMParas.u16TmosOTp_Third;
 		t_sPubOPUPChk.u16OPValS = PRT_E2ROMParas.u16TmosOTp_Rcv;

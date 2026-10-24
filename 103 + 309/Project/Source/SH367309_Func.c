@@ -1,4 +1,5 @@
 #include "main.h"
+#include "MosTempProtection.h"
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
@@ -175,6 +176,8 @@ Others:
 *******************************************************************************/
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 {
+	UINT8 mos_allowed = (BmsCurrent_GetBootZeroStatus() != BOOT_CURRENT_ZERO_NOT_RUN) &&
+		!MosTempProtection_IsBlocked();
 	// ucMTP_CONF |= 0x04;						//开启看门狗，不开看门狗行不行
 	// 结论，可以不开启。看门狗溢出，操作是
 	// 1，关闭充放电MOS和预充MOS
@@ -183,11 +186,9 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 	// 30x是需要开的，因为是自己的保护体系，这个309用的是他自己的体系，所以就算出问题
 	// 看门狗不关，他自己的保护体系判断是否关MOS，风险也不大。
 	SH367309_Reg_Store.REG_MTP_CONF.bits.CADCON = 1; // 开启CADC
-	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS =
-		(BmsCurrent_GetBootZeroStatus() != BOOT_CURRENT_ZERO_NOT_RUN); // 充电MOS由AFE硬件控制
-	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS =
-		(BmsCurrent_GetBootZeroStatus() != BOOT_CURRENT_ZERO_NOT_RUN); // 放电MOS由AFE硬件控制
-	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+	SH367309_Reg_Store.REG_MTP_CONF.bits.CHGMOS = mos_allowed;
+	SH367309_Reg_Store.REG_MTP_CONF.bits.DSGMOS = mos_allowed;
+	if (!mos_allowed)
 		SH367309_Reg_Store.REG_MTP_CONF.bits.PCHMOS = 0;
 	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
 }
@@ -304,7 +305,8 @@ void SH367309_UpdataAfeConfig_Old(void)
 
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF)
 {
-	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN)
+	if (BmsCurrent_GetBootZeroStatus() == BOOT_CURRENT_ZERO_NOT_RUN ||
+		MosTempProtection_IsBlocked())
 		OnOFF = 0;
 
 	switch (Type)
