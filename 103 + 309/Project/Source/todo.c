@@ -337,3 +337,28 @@ soc逻辑优化：目前有SOC_VIRTUAL_CURRENT_CHG，只有>=200，然后soc积�
 
 梳理并评估当前项目的soc逻辑，并给出建议
 测试过流
+
+
+adc   mos温度，低功耗，deinit，唤醒后保护
+can   
+cellbalance    in    3400,4180
+ChargerLoadFunc   del    afe chg、dsg
+datadeal      sample,afe comm excep
+eeprom,flash,param
+fault     soft and hard  
+flash     iap
+heat 
+afe driver
+iocontrol
+iodriver
+led
+logRec
+production,id
+sleep
+rtc 
+sci modbus
+soc
+sysinfo and debug
+schdeul   
+
+

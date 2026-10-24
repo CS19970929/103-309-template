@@ -10,7 +10,7 @@
 
 #define __same_door__
 
-#define EEPROM_VALUE_BEGIN_FLAG				0x4701		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
+#define EEPROM_VALUE_BEGIN_FLAG				0x1024		//Ĭ��0x1133������Լ����?ˢһ�飬���Լ������ٸĻ�0x1133
 
 #define __LIANXING_VERSION__   (9)
 

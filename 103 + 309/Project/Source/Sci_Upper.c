@@ -3383,7 +3383,7 @@ void UART_CLIENT_deal_0x04(struct RS485MSG *s)
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
 #else
-// #error "error!!!"
+#error "error!!!"
 #endif
 
 	// todo	温度负值待处理	好像没问题，后面测试考虑
@@ -3590,7 +3590,7 @@ void UART_CLIENT_deal_0x06(struct RS485MSG *s)
 		s->u16Buffer[index++] = (u16SciTemp >> 8) & 0x00ff;
 	}
 #else
-// #error "error!!!"
+#error "error!!!"
 #endif
 
 	u16SciTemp = g_stCellInfoReport.u16Temperature[MOS_TEMP1];
