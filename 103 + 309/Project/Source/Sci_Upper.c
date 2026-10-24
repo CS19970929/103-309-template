@@ -179,24 +179,6 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s);
 void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s);
 
-static UINT8 Sci_BmsFunctionIdIsSupported(UINT16 id)
-{
-	switch (id)
-	{
-	case 1U:
-	case 2U:
-	case 3U:
-	case 5U:
-	case 7U:
-	case 8U:
-	case 9U:
-	case 10U:
-	case 11U:
-		return 1U;
-	default:
-		return 0U;
-	}
-}
 void Sci_DataInit(struct RS485MSG *s)
 {
 	UINT16 i;
@@ -218,6 +200,11 @@ void CRC_verify(struct RS485MSG *s)
 {
 	UINT16 u16SciVerify;
 	UINT16 t_u16FrameLenth;
+	if ((s->ptr_no < 4U) || (s->ptr_no > RS485_MAX_BUFFER_SIZE))
+	{
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+		return;
+	}
 
 	t_u16FrameLenth = s->ptr_no - 2;
 	u16SciVerify = s->u16Buffer[t_u16FrameLenth] + (s->u16Buffer[t_u16FrameLenth + 1] << 8);
@@ -550,20 +537,8 @@ static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 
 static void Sci_PutFactoryAgingStatusWords(UINT8 buff[], UINT16 *index)
 {
-////	UINT32 remaining_seconds;
-////	UINT32 remaining_minutes;
-
-////	remaining_seconds = FactoryAging_GetRemainingSeconds();
-////	remaining_minutes = (remaining_seconds + 59U) / 60U;
-////	if (remaining_minutes > 0xFFFFU)
-////	{
-////		remaining_minutes = 0xFFFFU;
-////	}
-
-////	Sci_PutWordBE(buff, index, (UINT16)FactoryAging_GetState());
-////	Sci_PutWordBE(buff, index, (UINT16)remaining_minutes);
-////	Sci_PutWordBE(buff, index, (UINT16)(remaining_seconds >> 16));
-////	Sci_PutWordBE(buff, index, (UINT16)remaining_seconds);
+	/* Aging is not implemented in this target; retain five reserved words. */
+	Sci_PutZeroWordsBE(buff, index, RS485_ADDR_AGING_STATUS_WORDS);
 }
 
 static UINT8 Sci_RecordBackIndex(UINT8 point, UINT16 back)
@@ -916,6 +891,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 		switch (s->u16RdRegStartAddr)
 		{
 		case 0: // LCD
+			Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 5U);
 			break;
 		case 1: // 上位机�三级保护�60+10=70�
 			for (j = 0; j < Record_len; j++)
@@ -1422,11 +1398,19 @@ static UINT8 Sci_ModbusProtocolFeed(void *pvProtocolCtx, UINT8 u8Data)
 static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 {
 	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
+	UINT8 broadcast = (UINT8)(s->u16Buffer[0] == RS485_BROADCAST_ADDR);
 
 	s->AckType = RS485_ACK_POS;
 	s->ErrorType = RS485_ERROR_NULL;
 
 	CRC_verify(s);
+	if ((s->AckType != RS485_ACK_POS) ||
+		(broadcast && s->enRs485CmdType == RS485_CMD_READ_REGS))
+	{
+		Sci_ModbusResetMessage(s);
+		return;
+	}
+	SleepDeal_RecordExternalComm();
 	if (s->AckType == RS485_ACK_POS)
 	{
 		switch (s->enRs485CmdType)
@@ -1448,6 +1432,11 @@ static void Sci_ModbusProcessFrame(void *pvProtocolCtx)
 		}
 	}
 
+	if (broadcast)
+	{
+		Sci_ModbusResetMessage(s);
+		return;
+	}
 	switch (s->enRs485CmdType)
 	{
 	case RS485_CMD_READ_REGS:
@@ -1482,12 +1471,8 @@ static UINT8 Sci_ModbusIsBusy(void *pvProtocolCtx)
 
 static void Sci_ModbusOnRxIdle(void *pvProtocolCtx)
 {
-	struct RS485MSG *s = (struct RS485MSG *)pvProtocolCtx;
-
-	if ((s->ptr_no != 0U) && (s->csr == RS485_STA_IDLE))
-	{
-		Sci_ModbusResetMessage(s);
-	}
+	/* USART IDLE is only one character; RTU requires a timed 3.5-character gap. */
+	(void)pvProtocolCtx;
 }
 
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx)
@@ -1609,7 +1594,6 @@ static void Sci_PortIRQHandler(struct SCI_PORT_RUNTIME *pstPort)
 	{
 		UINT8 u8RxData;
 
-		SleepDeal_RecordExternalComm();
 		u8RxData = (UINT8)pstPort->pstUsart->DR;
 
 		if ((pstPort->pstProtocolOps != 0) &&
@@ -2024,6 +2008,7 @@ void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s)
 
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s)
 {
+	Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 }
 
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
@@ -2299,57 +2284,30 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 	}
 }
 
-// 关于这个函数
-// A:��次打�这个功能，以前从来没打开过，则因为各种标志位变量都没变过(switch结构里面�)，所以会进�初始化验证
-// B:其中关闭了，又打�，则已经初�化过一次，这�打�就继�按照上一次的进度继续下去
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
 {
-	UINT16 u16SciRegData;
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
-	{
-		switch (u16SciRegData)
-		{		// 如果�以下功能�打开，则�要初始化验证，别的功能直接关就好
-		case 1: // 均衡
-			break;
-		case 3: // MOS或�接触器功能
-			break;
-		case SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY:
-			g_u8CurrentDiagVcellDisplayEnable = 1U;
-			break;
-		case 8: // �活模拟前端AFE1
-			break;
-		case 0x0A: 
-			LowPower_Request(DEEP_MODE);
-			break;
-		default:
-			break;
-		}
-		
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
+    UINT16 id = (UINT16)(s->u16Buffer[5] | (s->u16Buffer[4] << 8));
+    switch (id)
+    {
+    case SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY:
+        g_u8CurrentDiagVcellDisplayEnable = 1U;
+        break;
+    case 10U:
+        LowPower_Request(DEEP_MODE);
+        break;
+    default:
+        Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+        break;
+    }
 }
 
 void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
 {
-	UINT16 u16SciRegData;
-	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	if (Sci_BmsFunctionIdIsSupported(u16SciRegData))
-	{
-		if (u16SciRegData == SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY)
-		{
-			g_u8CurrentDiagVcellDisplayEnable = 0U;
-		}
-	}
-	else
-	{
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-	}
+    UINT16 id = (UINT16)(s->u16Buffer[5] | (s->u16Buffer[4] << 8));
+    if (id == SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY)
+        g_u8CurrentDiagVcellDisplayEnable = 0U;
+    else
+        Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 }
 
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
@@ -2436,26 +2394,9 @@ void App_CommonUpper(void)
 #endif
 }
 
-#if 1
-#define debug_uart USART1
-#else
-#define debug_uart USART2
-#endif
-#define SCI_DEBUG_UART_TX_WAIT_LOOP ((UINT32)100000U)
-
+/* Both UARTs carry protocols. A printf must never inject bytes into a frame. */
 int fputc(int ch, FILE *f)
 {
-	UINT32 wait_loop = SCI_DEBUG_UART_TX_WAIT_LOOP;
-
-	/* 写一�字节到USART1 */
-	USART_SendData(debug_uart, (uint8_t)ch);
-
-	/* 等待发�结� */
-	while ((USART_GetFlagStatus(debug_uart, USART_FLAG_TC) == RESET) && (wait_loop > 0U))
-	{
-		Feed_IWatchDog;
-		wait_loop--;
-	}
-
-	return ch;
+    (void)f;
+    return ch;
 }
