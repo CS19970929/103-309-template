@@ -179,4 +179,37 @@ r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
                   '/Fo:'+str(out/'uart_clock.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
 if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
 subprocess.run([str(out/'uart_clock.exe')],cwd=out,check=True)
+
+# Compile the read-only product policy against the real write dispatchers too.
+readonly=combo[:combo.index('static const UINT8 data1_request')]
+readonly=readonly.replace('#define PROJECT_CFG_HOST_WRITE_ENABLE 1',
+                          '#define PROJECT_CFG_HOST_WRITE_ENABLE 0')
+readonly=readonly.replace('void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s);',
+    'void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s);\nstatic void Sci_SetWrError(struct RS485MSG *s,UINT8 error);')
+for signature in ('void Sci_Deal_WrReg_0x06(', 'void Sci_Deal_WrRegs_0x10('):
+    stub=func(readonly,'static '+signature)
+    readonly=readonly.replace(stub,func(sci,signature))
+readonly+=func(sci,'UINT8 Sci_HostWriteWords(')
+readonly+=r'''
+int main(void) {
+    struct RS485MSG m; UINT16 value=7;
+    const UINT8 command[]={0xDD,0x5A,0xE1,2,0,3,0xFF,0x1A,0x77};
+    Sci_ResetMessage(&m); memcpy(m.u16Buffer,command,sizeof(command)); m.ptr_no=sizeof(command);
+    assert(Sci_CustomerFrameValid(&m)); Sci_CustomerProcessFrame(&m);
+    assert(m.AckLenth==7 && m.u16Buffer[2]==0x80 && !host_off);
+    Sci_ResetMessage(&m); Sci_Deal_WrReg_0x06(&m);
+    assert(m.AckType==RS485_ACK_NEG && m.ErrorType==RS485_ERROR_NO_PERMISSION);
+    Sci_ResetMessage(&m); Sci_Deal_WrRegs_0x10(&m);
+    assert(m.AckType==RS485_ACK_NEG && m.ErrorType==RS485_ERROR_NO_PERMISSION);
+    assert(Sci_HostWriteWords(0x1102,&value,1)==RS485_ERROR_NO_PERMISSION);
+    puts("PASS read-only policy: both Modbus write functions, CAN word writes and customer MOS control rejected");
+    return 0;
+}
+'''
+(out/'uart_readonly.c').write_text(readonly,encoding='utf-8')
+r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
+                  str(out/'uart_readonly.c'),'/Fe:'+str(out/'uart_readonly.exe'),
+                  '/Fo:'+str(out/'uart_readonly.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
+if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
+subprocess.run([str(out/'uart_readonly.exe')],cwd=out,check=True)
 print('Host evidence only; files: '+str(out))

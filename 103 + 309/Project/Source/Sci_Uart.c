@@ -174,6 +174,7 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
     if (!valid)
     {
         Sci_ArmReceiver(port);
+        port->protocol=SCI_DISCARD; /* Do not execute a nested prefix in bad data. */
         return 0U;
     }
     if (validate_only)

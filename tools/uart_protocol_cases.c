@@ -115,6 +115,10 @@ int main(void)
     memcpy(bad,data1_request,7); bad[5]^=1;
     request(&s_port2,bad,7); Sci_ServicePort(&s_port2,0);
     assert(!s_port2.tx_length && activity==comm_activity);
+    modbus_request(mb,1,6,0x1102,7);
+    for(i=0;i<8;++i) receive(&s_port2,mb[i]); /* No silence after the bad customer packet. */
+    quiet(&s_port2); assert(writes==before && activity==comm_activity);
+    modbus_request(mb,1,3,0xD000,1);
     memcpy(bad,mos,9); bad[7]^=1;
     request(&s_port2,bad,9); Sci_ServicePort(&s_port2,0);
     assert(!s_port2.tx_length && !host_off && activity==comm_activity);
