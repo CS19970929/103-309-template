@@ -27,7 +27,7 @@ static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30,
 #define RTC_CLOCK_INIT_FAILED    3U
 #define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
 // #define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)10U)
-#define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)3U)
+#define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)5U)
 
 static UINT8 RTC_GetMonthDays(UINT32 month, UINT8 is_leap_year)
 {

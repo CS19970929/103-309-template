@@ -8,9 +8,9 @@
 #include "conf_gpio.h"
 #include "Project_Config.h"
 
+#define __EnableLowPowerDebug__
 // #define __SOC_5_PROTECT_
 // #define DISP_VBAT_AND_TEMP_
-// #define __EnableLowPowerDebug__
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
@@ -79,7 +79,7 @@
 #define bq76xx_afe  0
 #define sh36xx      1
 
-#define LEVEL_CURR  CURR_15A
+#define LEVEL_CURR  CURR_10A
 #define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)

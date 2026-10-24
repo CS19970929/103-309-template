@@ -4,6 +4,9 @@
 #define	RS485_BROADCAST_ADDR		(( UINT8 ) 0x00 )
 #define	RS485_SLAVE_ADDR			(( UINT8 ) 0x01 )
 
+#define  UART1_BAUD		(19200)
+#define  UART2_BAUD		(9600)
+
 #define	SCI_TX_BUF_LEN			251   	//��־��¼��������Ϊ250
 #define RS485_MAX_BUFFER_SIZE 	251		//
 

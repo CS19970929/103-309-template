@@ -30,8 +30,8 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define AFE_CURRENT_ADC_FULL_SCALE_MV ((UINT32)200U)
 #define AFE_CURRENT_ADC_DENOMINATOR ((UINT32)21470U)
 #define BOOT_CURRENT_ZERO_SAMPLE_INTERVAL_MS ((UINT16)300U)
-#define BOOT_CURRENT_ZERO_MAX_ABS_COUNTS ((UINT32)40U)
-#define BOOT_CURRENT_ZERO_MAX_DELTA_COUNTS ((UINT32)6U)
+#define BOOT_CURRENT_ZERO_MAX_ABS_COUNTS ((UINT32)65U)
+#define BOOT_CURRENT_ZERO_MAX_DELTA_COUNTS ((UINT32)15U)
 #define BOOT_CURRENT_FET_STATUS_MASK ((UINT8)0x07U)
 #define CURRENT_FIXED_SCALE ((UINT32)4U)
 #define CURRENT_REPORT_MA_PER_LSB ((UINT16)100U)
@@ -300,6 +300,7 @@ void DataLoad_Temperature(void)
     t_i32temp = t_i32temp / 10 - 40;
     t_i32temp = ((t_i32temp * g_u16CalibCoefK[MDL_TEMP_MOS1]) + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (UINT16)(t_i32temp * 10 + 400);
+    // g_stCellInfoReport.u16Temperature[MOS_TEMP1] = (96 + 40) * 10;
     Monitor_TempBreak(&g_stCellInfoReport.u16Temperature[MOS_TEMP1]);
 #endif
 }
@@ -404,7 +405,6 @@ static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
 
     return 0U;
 }
-
 
 static void AfeCurrent_BootZeroFail(UINT8 status)
 {
@@ -582,8 +582,6 @@ void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
     diag->debugInjectFlags = 0U;
 #endif
 }
-
-
 
 /*
  * Boot-zero is applied before K/B. K is Q10 and B is signed Q10(A), matching
@@ -1105,7 +1103,6 @@ void App_AFEGet(void)
     DataLoad_Current();
     // DataLoad_soc_test();
     // test_Autocurrent_cycle();
-
 
     App_SH367309();
     new_todo_logi();

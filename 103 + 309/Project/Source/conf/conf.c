@@ -2,7 +2,7 @@
 #include "main.h"
 
 Time_T sys_time = {
-    .time_enter_rtc = 60,
+    .time_enter_rtc = 5,
     .power_on = false,
 };
 
@@ -345,9 +345,13 @@ void Sys_StopMode(void)
     TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, DISABLE);
     LowPower_ClearWakeupPending();
+
+    __disable_irq();
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
 
     cpu_frequency_conf();
+    __enable_irq();
+    // __set_PRIMASK(0);
 }
 
 void test_rtc_led_display(void)

@@ -215,8 +215,10 @@ void PWR_EnterSTOPMode(uint32_t PWR_Regulator, uint8_t PWR_STOPEntry)
   /* Select STOP mode entry --------------------------------------------------*/
   if(PWR_STOPEntry == PWR_STOPEntry_WFI)
   {   
-    /* Request Wait For Interrupt */
+    /* ARMCC full-system barriers after PWR/SCR writes and on wakeup. */
+    __dsb(0xF);
     __WFI();
+    __isb(0xF);
   }
   else
   {

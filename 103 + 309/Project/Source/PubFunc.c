@@ -155,6 +155,8 @@ void Delay1ms(UINT8 delaycnt)
 // 添加自动复原功能，不需要重启
 UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 {
+	return 0;
+#if 0
 	static UINT8 su8_Recover_Cnt = 0;
 	static UINT8 su8_StartUp_Flag = 0;
 	static UINT8 su8_Delay_Cnt = 0;
@@ -205,6 +207,7 @@ UINT8 Monitor_TempBreak(UINT16 *temp_AD)
 	}
 
 	return result;
+#endif
 }
 
 void jtag_disableAndConfIO(void)

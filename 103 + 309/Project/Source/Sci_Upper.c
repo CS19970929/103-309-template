@@ -1768,11 +1768,7 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 		GPIO_PinRemapConfig(u32RemapConfig, ENABLE);
 	}
 
-	NVIC_InitStructure.NVIC_IRQChannel = eIrqChannel;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
-	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&NVIC_InitStructure);
+	
 
 	GPIO_InitStructure.GPIO_Pin = u16TxPin;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
@@ -1783,7 +1779,11 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
 	GPIO_Init(pstRxGpio, &GPIO_InitStructure);
 
-	USART_InitStructure.USART_BaudRate = 19200;
+	if(pstPort->pstUsart == USART1)
+		USART_InitStructure.USART_BaudRate = UART1_BAUD;
+	else if(pstPort->pstUsart == USART2)
+		USART_InitStructure.USART_BaudRate = UART2_BAUD;
+	
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
 	USART_InitStructure.USART_Parity = USART_Parity_No;
@@ -1796,6 +1796,13 @@ static void Sci_InitCommonPort(struct SCI_PORT_RUNTIME *pstPort,
 	USART_ITConfig(pstPort->pstUsart, USART_IT_IDLE, ENABLE);
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TXE, DISABLE);
 	USART_ITConfig(pstPort->pstUsart, USART_IT_TC, DISABLE);
+	
+	NVIC_InitStructure.NVIC_IRQChannel = eIrqChannel;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
 	USART_Cmd(pstPort->pstUsart, ENABLE);
 
 	if (pstPort->pvProtocolCtx != 0)
