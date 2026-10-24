@@ -24,7 +24,7 @@ extern const UINT16 iSheldTemp_10K_NTC[141];
 #define OFF 0
 #define ON 1
 
-int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
+int Choose_Right_Value(UINT32 cur_Value, const UINT16 *AFE_list)
 {
 	int i = 0;
 	for (i = 0; i < 15; i++)
@@ -37,21 +37,43 @@ int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list)
 	return i;
 }
 
-void Refresh_Parameters(void)
+static UINT8 AFE_ProtectionParametersValid(void)
+{
+	const AFE_Value_Typedef *parameters = &AFE_Parameters_RS485_Struction.u16VcellOvp;
+	UINT8 i;
+
+	for (i = 0U; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
+	{
+		if (parameters[i].curValue < parameters[i].minValue ||
+			parameters[i].curValue > parameters[i].maxValue)
+			return 0U;
+	}
+	parameters = &AFE_Parameters_RS485_Struction.u16TChgOTp;
+	for (i = 0U; i < 8U; ++i)
+	{
+		if (parameters[i].curValue / 10U >= sizeof(iSheldTemp_10K_NTC) / sizeof(iSheldTemp_10K_NTC[0]))
+			return 0U;
+	}
+	return 1U;
+}
+
+static UINT8 Refresh_Parameters(void)
 {
 	int i = 0;
-	int temp = 0;
+	UINT32 temp = 0;
 	UINT8 TR = 0;
 	UINT16 AFE_TEMPERATURE[8] = {0};
 
-	if (MTPRead(0x19, 1, &TR))
-	{
-		SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
-		ucMTPBuffer[25] = TR & 0x7F;
-		memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, 26);
-	}
+	if (!AFE_ProtectionParametersValid() || OtherElement.u16Sys_CS_Res == 0U ||
+		OtherElement.u16Sys_CS_Res_Num == 0U || !MTPRead(0x19, 1, &TR))
+		return 0U;
 
 	g_u32CS_Res_AFE = ((UINT32)OtherElement.u16Sys_CS_Res_Num * 1000) / OtherElement.u16Sys_CS_Res;
+	if (g_u32CS_Res_AFE == 0U)
+		return 0U;
+	SH367309_Reg_Store.TR_ResRef = 680 + 5 * (TR & 0x7F);
+	ucMTPBuffer[25] = TR & 0x7F;
+	memcpy((UINT8 *)&AFE_ROM_PARAMETERS_Struction, ucMTPBuffer, sizeof(AFE_ROM_PARAMETERS_Struction));
 
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CN = SeriesNum;
 	AFE_ROM_PARAMETERS_Struction.m00H_01H.CTLC = 3;
@@ -88,7 +110,7 @@ void Refresh_Parameters(void)
 
 	temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1V = Choose_Right_Value(temp, s_sh_afe_ocd1v_occv);
-	temp = AFE_Parameters_RS485_Struction.u16IchgOcp_Filter_Second.curValue * 10;
+	temp = (UINT32)AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue * 10U;
 	AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T = Choose_Right_Value(temp, s_sh_afe_ocd1t);
 
 	// temp = AFE_Parameters_RS485_Struction.u16IdsgOcp_Second.curValue * 100 / g_u32CS_Res_AFE;
@@ -121,6 +143,7 @@ void Refresh_Parameters(void)
 		temp = iSheldTemp_10K_NTC[AFE_TEMPERATURE[i]];
 		*(((UINT8 *)&AFE_ROM_PARAMETERS_Struction.m11H_19H) + i) = (UINT8)(((UINT32)temp << 9) / ((UINT32)SH367309_Reg_Store.TR_ResRef + temp));
 	}
+	return 1U;
 }
 
 static void AFE_CopyCurValues(UINT16 *values)
@@ -199,7 +222,12 @@ bool SH367309_UpdataAfeConfig(void)
 	if (AFE_PARAM_WRITE_Flag)
 	{
 		AFE_PARAM_WRITE_Flag = 0;
-		Refresh_Parameters();
+		if (!Refresh_Parameters())
+		{
+			AFE_PARAM_WRITE_Flag = 1;
+			System_ERROR_UserCallback(ERROR_AFE1);
+			return false;
+		}
 		{
 			int i = 0;
 			UINT8 temp[26] = {0};
@@ -266,24 +294,39 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 	UINT16 u16SciRegStartAddr;
 	int i = 0;
 	UINT16 offset = 0;
-	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction;
+	AFE_Value_Typedef *parameters = &AFE_Parameters_RS485_Struction.u16VcellOvp;
 	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
 	(void)u16Channel;
 
 	u16SciRegStartAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	u16WrRegNum = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 
-	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) && (u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END) && (u16SciRegStartAddr + u16WrRegNum - 1 <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
+	if ((u16SciRegStartAddr >= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START) &&
+		(u16SciRegStartAddr <= RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END))
 	{
 		offset = u16SciRegStartAddr - RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START;
+		if (u16WrRegNum == 0U || u16WrRegNum > AFE_PARAMETES_TOTAL_LENGTH - offset ||
+			s->u16Buffer[6] != u16WrRegNum * 2U)
+		{
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_CMD_INVALID;
+			return 1U;
+		}
 		AFE_CopyCurValues(snapshot);
 
 		Feed_IWatchDog;
 		for (i = 0; i < u16WrRegNum; i++)
 		{
-			*(P + (i + offset) * 4) = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
+			parameters[i + offset].curValue = s->u16Buffer[8 + i * 2] + (s->u16Buffer[7 + i * 2] << 8);
 		}
 		Feed_IWatchDog;
+		if (!AFE_ProtectionParametersValid())
+		{
+			AFE_RestoreCurValues(snapshot);
+			s->AckType = RS485_ACK_NEG;
+			s->ErrorType = RS485_ERROR_DATA_INVALID;
+			return 1U;
+		}
 
 		if (!AFE_SaveCurValuesToFlash())
 		{

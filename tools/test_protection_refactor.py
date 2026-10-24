@@ -231,6 +231,9 @@ int main(void) {
     reset_case(); hardware_conf=0x08; AFE_PARAM_WRITE_Flag=1;
     assert(!SH367309_SetMosPermits(1,1) && hardware_conf==0x08);
     AFE_PARAM_WRITE_Flag=0; assert(SH367309_SetMosPermits(1,1) && hardware_conf==0x38);
+    reset_case(); hardware_conf=0x08; SH367309_Reg_Store.REG_MTP_CONF.all=0x38;
+    AFE_IDLE(); assert(hardware_conf==0x09);
+    AFE_Sleep(); assert(hardware_conf==0x0b); /* A stale permit shadow cannot reopen either MOS. */
     reset_case();
     for(i=0;i<1000;++i) Fault_UpdateMosTemperature(1,1350);
     assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
@@ -336,6 +339,151 @@ static void test_parameter_transaction(void) {
 }
 '''
 
+AFE_STUBS = r'''
+#include <stdbool.h>
+#define LIFEPO 1
+#define AFE_OCC1 120
+#define AFE_OCC2 120
+#define AFE_ODC1 150
+#define AFE_ODC2 150
+#define CBC_Cur_DSG 1000
+#define CBC_DelayT 256
+#define RS485_ACK_NEG 1
+#define RS485_ERROR_CMD_INVALID 2
+#define RS485_ERROR_DATA_INVALID 3
+#define ERROR_AFE1 2
+#define Feed_IWatchDog ((void)0)
+struct RS485MSG { UINT16 u16Buffer[160]; UINT8 AckType, ErrorType; };
+static struct { UINT16 TR_ResRef; } SH367309_Reg_Store;
+static struct { UINT16 u16Sys_CS_Res_Num, u16Sys_CS_Res; } OtherElement={2,2};
+static UINT32 g_u32CS_Res_AFE;
+static UINT8 SeriesNum=16, ucMTPBuffer[26], hardware_rom[25];
+static int MCUO_AFE_VPRO, ctl, resets, startup_calls, calibration_calls;
+static int tr_fail, ready_fail, rom_write_fail, permit_fail, heat_latched;
+static int rom_reads, rom_read_fail, saved, save_fail, rom_writes, permits;
+static int MTPRead(int addr,int len,UINT8 *p) {
+    if(addr==0x19) { if(tr_fail) return 0; *p=64; return 1; }
+    assert(addr==0 && len==25);
+    if(++rom_reads==rom_read_fail) return 0;
+    memcpy(p,hardware_rom,25); return 1;
+}
+static int MTPWriteROM(UINT8 addr,int len,UINT8 *p) {
+    ++rom_writes; if(rom_write_fail) return 0; hardware_rom[addr]=*p; return 1;
+}
+static UINT8 StorageFlash_SaveAfeData(UINT16 *p,UINT16 len) { ++saved; return (UINT8)!save_fail; }
+static void Delay1ms(int ms) {}
+static void AFE_Reset(void) { ++resets; }
+static UINT8 AFE_IsReady(void) { return (UINT8)ready_fail; }
+static void close_ctlc(void) { ctl=0; }
+static void open_ctlc(void) { ctl=1; }
+static void initAFE1_IIC(void) {}
+static void AfeCurrent_StartupZeroCal(void) { ++calibration_calls; }
+static void App_SH367309_Monitor(void) {}
+'''
+
+AFE_TESTS = r'''
+static void reset_afe(void) {
+    const AFE_Parameters_RS485_Typedef defaults=AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+    AFE_Parameters_RS485_Struction=defaults;
+    OtherElement.u16Sys_CS_Res_Num=OtherElement.u16Sys_CS_Res=2;
+    memset(hardware_rom,0,sizeof(hardware_rom));
+    AFE_PARAM_WRITE_Flag=1; tr_fail=ready_fail=rom_write_fail=permit_fail=heat_latched=0;
+    rom_reads=rom_read_fail=rom_writes=saved=save_fail=resets=startup_calls=calibration_calls=permits=0;
+    ctl=1;
+}
+int main(void) {
+    struct RS485MSG request;
+    AFE_ROM_PARAMETERS_TypeDef previous;
+    UINT16 old;
+    unsigned value;
+    reset_afe(); assert(sizeof(AFE_ROM_PARAMETERS_Struction)==26);
+    assert(Refresh_Parameters());
+    assert(s_sh_afe_ocd1t[AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T]==600);
+    assert(s_sh_afe_occt_ocd2t[AFE_ROM_PARAMETERS_Struction.m0EH_0FH.OCCT]==100);
+    for(value=0;value<=500000;value+=10) {
+        int index=Choose_Right_Value(value,s_sh_afe_ocd1t);
+        assert(index>=0 && index<16);
+        assert(s_sh_afe_ocd1t[index]>=value || index==15);
+        if(index) assert(s_sh_afe_ocd1t[index-1]<value);
+    }
+    AFE_Parameters_RS485_Struction.u16IdsgOcp_Filter_Second.curValue=6554;
+    assert(Refresh_Parameters());
+    assert(AFE_ROM_PARAMETERS_Struction.m0CH_0DH.OCD1T==15); /* No 16-bit wrap to 4 ms. */
+    previous=AFE_ROM_PARAMETERS_Struction; tr_fail=1;
+    assert(!Refresh_Parameters() && memcmp(&previous,&AFE_ROM_PARAMETERS_Struction,26)==0);
+    tr_fail=0; OtherElement.u16Sys_CS_Res=0; assert(!Refresh_Parameters());
+    OtherElement.u16Sys_CS_Res=65535; OtherElement.u16Sys_CS_Res_Num=1;
+    assert(!Refresh_Parameters());
+    reset_afe(); AFE_Parameters_RS485_Struction.u16TChgOTp.curValue=2000;
+    assert(!Refresh_Parameters());
+    App_SH367309(); assert(AFE_PARAM_WRITE_Flag && rom_writes==0 && resets==0);
+    reset_afe(); memset(&request,0,sizeof(request));
+    request.u16Buffer[2]=0x24; request.u16Buffer[3]=14; /* Charge high-temperature register. */
+    request.u16Buffer[5]=1; request.u16Buffer[6]=2;
+    request.u16Buffer[7]=2000>>8; request.u16Buffer[8]=2000&255;
+    old=AFE_Parameters_RS485_Struction.u16TChgOTp.curValue;
+    assert(Sci_WrRegs_0x10_AFE_Parameters(0,&request));
+    assert(request.ErrorType==RS485_ERROR_DATA_INVALID && saved==0);
+    assert(AFE_Parameters_RS485_Struction.u16TChgOTp.curValue==old);
+    request.u16Buffer[5]=0; request.u16Buffer[6]=0;
+    Sci_WrRegs_0x10_AFE_Parameters(0,&request);
+    assert(request.ErrorType==RS485_ERROR_CMD_INVALID && saved==0);
+    request.u16Buffer[5]=1; request.u16Buffer[6]=1;
+    Sci_WrRegs_0x10_AFE_Parameters(0,&request);
+    assert(request.ErrorType==RS485_ERROR_CMD_INVALID && saved==0);
+    reset_afe(); rom_write_fail=1; App_SH367309();
+    assert(AFE_PARAM_WRITE_Flag && ctl==0 && startup_calls==0);
+    /* Successful ROM writes but failed readback: equal-profile retry must reopen
+       only after readiness and the MOS permit have both been confirmed. */
+    reset_afe(); rom_read_fail=3; App_SH367309();
+    assert(AFE_PARAM_WRITE_Flag && ctl==0 && startup_calls==0);
+    rom_read_fail=0; heat_latched=1; App_SH367309();
+    assert(!AFE_PARAM_WRITE_Flag && ctl==1 && startup_calls==1 && permits==0);
+    reset_afe(); ready_fail=1; InitAFE1(); assert(ctl==0 && permits==0);
+    reset_afe(); permit_fail=1; InitAFE1(); assert(ctl==0 && permits==0);
+    reset_afe(); heat_latched=1; InitAFE1(); assert(ctl==1 && permits==0);
+    puts("PASS AFE: 600 ms OCD1, wide timing sweep, NTC bounds, TR/ROM/readback failures, retry and startup gates");
+    return 0;
+}
+'''
+
+RTC_STUBS = r'''
+#define USART1 1
+#define USART2 2
+static int adc_on, adc_starts, order, afe_temperatures;
+static struct { int wakeup_rtc; } sys_time;
+static void InitDelay(void) { assert(order==0); order=1; }
+static void RTC_RestoreRunInterrupts(void) { assert(order==1); order=2; }
+static void InitIO_rtc(void) { assert(order==2); order=3; }
+static void ADC_StopForLowPower(void) { adc_on=0; }
+static void USART_DeInit(int port) { assert(!adc_on && order==3); }
+static void InitUSART_CommonUpper(void) { assert(order==3); order=4; }
+static void InitCan(void) { assert(order==4); order=5; }
+static void InitTimer(void) { assert(order==5); tick=0; order=6; }
+static void InitADC(void) { assert(order==6 && tick==0); adc_on=1; ++adc_starts; order=7; }
+static int RTC_IsStopWakeup(void) { return 1; }
+static void initAFE1_IIC(void) { assert(order==7); order=8; }
+static UINT8 UpdateVoltageFromBqMaximo(void) { return 0; }
+static void DataLoad_CellVolt(void) {}
+static void DataLoad_CellVoltMaxMinFind(void) {}
+static void DataLoad_Temperature(void) { assert(!adc_on); ++afe_temperatures; }
+static void DataLoad_TemperatureMaxMinFind(void) {}
+'''
+
+RTC_TESTS = r'''
+int main(void) {
+    int i;
+    ADC_StopForLowPower();
+    for(i=0;i<100;++i) assert(RtcSleep_AfePortUpdateRtcData());
+    assert(!adc_on && adc_starts==0 && afe_temperatures==100);
+    tick=100000;
+    InitRunAfterStopWakeup();
+    assert(adc_on && adc_starts==1 && order==8);
+    puts("PASS RTC: periodic AFE checks leave ADC off; full RUN restores GPIO/tick before ADC");
+    return 0;
+}
+'''
+
 
 def run_c(name, code, output, env, compiler):
     path = output / (name + '.c')
@@ -372,7 +520,8 @@ def main():
                  upper.index('};', upper.index('union  MDLCHGFAULT_REG')) + 2]
     driver = (SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8')
     driver = ''.join(function(driver, sig) for sig in (
-        'static UINT8 SH367309_WriteConfBits(', 'UINT8 SH367309_SetMosPermits('))
+        'static UINT8 SH367309_WriteConfBits(', 'UINT8 SH367309_SetMosPermits(',
+        'static void AFE_SetLowPowerBit(', 'void AFE_IDLE(', 'void AFE_Sleep('))
     fault = (SOURCE / 'Fault.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
     conversion = function((SOURCE / 'PubFunc.c').read_text(encoding='utf-8'), 'UINT16 GetEndValue(')
     conversion += function((SOURCE / 'DataDeal.c').read_text(encoding='utf-8'), 'void DataLoad_MosTemperature(')
@@ -391,6 +540,29 @@ def main():
           (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits +
           FAULT_STUBS + driver + fault + conversion + parameters + PARAMETER_TESTS + FAULT_TESTS,
           output, env, compiler)
+    afe = (SOURCE / 'SH367309_DataDeal.c').read_text(encoding='utf-8')
+    afe_prefix = afe[afe.index('int AFE_PARAM_WRITE_Flag'):afe.index('static void AFE_CopyCurValues')]
+    afe_source = ''.join(function(afe, sig) for sig in (
+        'static void AFE_CopyCurValues(', 'static void AFE_RestoreCurValues(',
+        'static UINT8 AFE_SaveCurValuesToFlash(', 'bool Write_Parameters(',
+        'bool SH367309_UpdataAfeConfig(', 'UINT8 Sci_WrRegs_0x10_AFE_Parameters('))
+    afe_header = (SOURCE / 'SH367309_DataDeal.h').read_text(encoding='utf-8').replace('#include "conf.h"', '')
+    ntc = (SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8')
+    ntc = ntc[ntc.index('const UINT16 iSheldTemp_10K_NTC'):ntc.index('// 前26个')]
+    startup = function((SOURCE / 'I2C_AFE1.c').read_text(encoding='utf-8'), 'void InitAFE1(void)')
+    app = function((SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8'), 'void App_SH367309(void)')
+    permit_stub = '''UINT8 MosStartup_ApplyInitialState(void) {
+        ++startup_calls; if(permit_fail || AFE_PARAM_WRITE_Flag) return 0;
+        permits=heat_latched ? 0 : 3; return 1;
+    }\n'''
+    run_c('afe', ADC_STUBS + AFE_STUBS + afe_header +
+          'UINT8 MosStartup_ApplyInitialState(void);\n' + ntc + afe_prefix + afe_source +
+          permit_stub + startup + app + AFE_TESTS, output, env, compiler)
+    rtc = function((SOURCE / 'rtc_sleep_afe_sh367309.c').read_text(encoding='utf-8'),
+                   'UINT8 RtcSleep_AfePortUpdateRtcData(')
+    restore = function((SOURCE / 'conf/conf.c').read_text(encoding='utf-8'),
+                       'void InitRunAfterStopWakeup(')
+    run_c('rtc', ADC_STUBS + RTC_STUBS + rtc + restore + RTC_TESTS, output, env, compiler)
     print(f'Host evidence only; files: {output}')
 
 

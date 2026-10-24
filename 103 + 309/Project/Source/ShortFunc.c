@@ -24,7 +24,7 @@ extern const UINT16 g_u16ShAfeScvTable[16]; // 短路保护电压，单位mv
 extern const UINT16 g_u16ShAfeSctTable[16]; // 短路延时,单位us。
 
 
-extern int Choose_Right_Value(UINT16 cur_Value, const UINT16 *AFE_list);
+extern int Choose_Right_Value(UINT32 cur_Value, const UINT16 *AFE_list);
 #else
 #error
 #endif

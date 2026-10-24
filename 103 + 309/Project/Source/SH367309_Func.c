@@ -53,19 +53,29 @@ void AFE_Reset(void)
 	}
 }
 
+static void AFE_SetLowPowerBit(UINT8 mode_bit)
+{
+	UINT8 conf;
+	/* Read the current permits; a stale shadow must never re-enable a MOS.
+	   SLEEP/IDLE are commands: the AFE may stop answering after the write. */
+	if (MTPRead(MTP_CONF, 1U, &conf))
+	{
+		conf |= mode_bit;
+		MTPWrite(MTP_CONF, 1U, &conf);
+	}
+}
+
 // 进入休眠模式
 void AFE_Sleep(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.SLEEP = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	AFE_SetLowPowerBit(0x02U);
 }
 
 // 进入IDLE模式
 // 1，有错误，不能进入
 void AFE_IDLE(void)
 {
-	SH367309_Reg_Store.REG_MTP_CONF.bits.IDLE = 1;
-	MTPWrite(MTP_CONF, 1, &SH367309_Reg_Store.REG_MTP_CONF.all);
+	AFE_SetLowPowerBit(0x01U);
 }
 
 // 进入休眠模式
