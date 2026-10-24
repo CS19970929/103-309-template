@@ -1,6 +1,7 @@
 #include "IODrivers.h"
 // #include "main.h"
 #include "conf.h"
+#include "MosTempProtection.h"
 
 #define _RELAY_SAME_DOOR_NO_PRECHG
 #define _RELAY_SAME_DOOR_HAVE_PRECHG
@@ -1539,7 +1540,9 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	s_MosDSG_Status_VolOvp = OPEN_MODE;
 	s_MosDSG_Status_VolUvp = OPEN_MODE;
 
-	if ((Driver_Element.Fault_Flag.all & 0x2800) != 0 || Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE || !OnOFF_Ctrl)
+	if (Driver_Element.Fault_Flag.bits.b1TmosOtp ||
+		Driver_Element.Fault_Flag.bits.b1TempDeltaBig ||
+		Driver_Element.DriverForceExt.bits.b2_DriverOFF_Flag == FORCE_CLOSE_MODE || !OnOFF_Ctrl)
 	{
 		s_MosCHG_Status_Normal = CLOSE_MODE;
 		s_MosDSG_Status_Normal = CLOSE_MODE;
@@ -1735,6 +1738,13 @@ void MosCtrl_SameDoor_NoPreChg(UINT8 OnOFF_Ctrl)
 	else
 	{
 		// Wrong¥Ì¡À
+	}
+
+	/* Force-open commands cannot bypass MOS overtemperature or sensor faults. */
+	if (MosTempProtection_IsBlocked())
+	{
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG = CLOSE_MODE;
+		Driver_Element.MosRelay_Status.bits.b1Status_MOS_DSG = CLOSE_MODE;
 	}
 
 	DriversOnOFF(Driver_Element.MosRelay_Status.bits.b1Status_MOS_CHG, GPIO_CHG);
