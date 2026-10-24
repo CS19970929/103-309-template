@@ -84,7 +84,32 @@ static void Sci_ModbusResetProtocol(void *pvProtocolCtx);
 static void Sci_ModbusOnRxIdle(void *pvProtocolCtx);
 static void Sci_ModbusOnTxComplete(void *pvProtocolCtx);
 static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
-static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count);
+enum SCI_READ_BLOCK { SCI_READ_REPORT, SCI_READ_LCD, SCI_READ_AFE,
+    SCI_READ_OTHER1, SCI_READ_OTHER, SCI_READ_PROTECT, SCI_READ_CALIB };
+struct SCI_READ_WINDOW {
+    UINT16 base, words, buffer_offset;
+    UINT8 block, selector;
+};
+/* C001/C002 select entire blocks, rather than overlapping linear addresses.
+ * D100/D200 retain their aliases into the combined D000 buffer. */
+static const struct SCI_READ_WINDOW s_read_windows[] = {
+    {RS485_ADDR_RO_START2, RS485_RO_TOTAL_WORDS-96U, 96U, SCI_READ_REPORT, 0U},
+    {RS485_ADDR_RO_START1, RS485_RO_TOTAL_WORDS-63U, 63U, SCI_READ_REPORT, 0U},
+    {RS485_ADDR_RO_START0, RS485_RO_TOTAL_WORDS, 0U, SCI_READ_REPORT, 0U},
+    {RS485_ADDR_CURRENT_DIAG, RS485_ADDR_CURRENT_DIAG_WORDS, 0x100U, SCI_READ_LCD, 0U},
+    {RS485_ADDR_AGING_STATUS, RS485_ADDR_AGING_STATUS_WORDS, 0x80U, SCI_READ_LCD, 0U},
+    {RS485_ADDR_EVENT_RECORD, FLASH_STORAGE_LOG_RECORD_COUNT, 8U, SCI_READ_LCD, 0U},
+    {RS485_ADDR_SN_READ, PRODUCT_ID_LENGTH_MAX*3U/2U, 2U, SCI_READ_LCD, 1U},
+    {RS485_ADDR_RO_FA_RTC, Record_len*7U, 1U, SCI_READ_LCD, 1U},
+    {RS485_ADDR_RO_LCD, 5U, 0U, SCI_READ_LCD, 1U},
+    {RS485_ADDR_RW_AFE_PARAMETER, AFE_PARAMETES_TOTAL_LENGTH, 0U, SCI_READ_AFE, 0U},
+    {RS485_ADDR_RW_OTHER_CANADD, E2P_PARA_NUM_OTHER_ELEMENT1, 0U, SCI_READ_OTHER1, 0U},
+    {RS485_ADDR_RW_OTHER, SOC_TABLE_SIZE+32U+E2P_PARA_NUM_RTC, 0U, SCI_READ_OTHER, 0U},
+    {RS485_ADDR_RW_PORTECT, E2P_PARA_NUM_PROTECT, 0U, SCI_READ_PROTECT, 0U},
+    {RS485_ADDR_RW_CALIB, KB_NUM*2U, 0U, SCI_READ_CALIB, 0U}
+};
+static const struct SCI_READ_WINDOW *Sci_FindReadWindow(UINT16 address, UINT16 *offset);
+static void Sci_LoadReadData(struct RS485MSG *s);
 
 static void Sci_PortArmReceiver(struct SCI_PORT_RUNTIME *pstPort);
 static void Sci_PortAbortTransfer(struct SCI_PORT_RUNTIME *pstPort);
@@ -222,101 +247,24 @@ void CRC_verify(struct RS485MSG *s)
 
 void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s)
 {
-	UINT16 t_u16Temp;
-	UINT16 u16ActualAddr;
-	UINT16 u16RegCount;
-	UINT16 u16WindowWords;
-	UINT16 u16ReadByteNum;
-	UINT16 u16ValidateOffset;
-
-	t_u16Temp = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
-	u16ActualAddr = t_u16Temp;
-	s->u16RdRegStartAddrActure = t_u16Temp;
-
-	if (t_u16Temp >= RS485_ADDR_RO_START2)
-	{ // D200 offset maps to combined RO buffer
-		t_u16Temp -= (RS485_ADDR_RO_START2 - 63 - 33);
-	}
-
-	else if (t_u16Temp >= RS485_ADDR_RO_START1)
-	{ // D100 offset maps to combined RO buffer
-		t_u16Temp -= (RS485_ADDR_RO_START1 - 63);
-	}
-
-	else if (t_u16Temp >= RS485_ADDR_RO_START0)
-	{ // D000 base window
-		t_u16Temp -= RS485_ADDR_RO_START0;
-	}
-	// Independent read-only sub-blocks
-	else if (t_u16Temp >= RS485_ADDR_RO_LCD)
-	{
-		t_u16Temp -= RS485_ADDR_RO_LCD;
-	}
-	else if (t_u16Temp >= RS485_ADDR_RW_AFE_PARAMETER)
-	{
-		t_u16Temp -= RS485_ADDR_RW_AFE_PARAMETER;
-	}
-	else if (t_u16Temp >= RS485_ADDR_RW_OTHER_CANADD)
-	{
-		t_u16Temp -= RS485_ADDR_RW_OTHER_CANADD;
-	}
-	else if (t_u16Temp >= RS485_ADDR_RW_OTHER)
-	{
-		t_u16Temp -= RS485_ADDR_RW_OTHER;
-	}
-	else if (t_u16Temp >= RS485_ADDR_RW_PORTECT)
-	{
-		t_u16Temp -= RS485_ADDR_RW_PORTECT;
-	}
-	else if (t_u16Temp >= RS485_ADDR_RW_CALIB)
-	{
-		t_u16Temp -= RS485_ADDR_RW_CALIB;
-	}
-
-	s->u16RdRegStartAddr = t_u16Temp;
-	u16RegCount = (UINT16)(s->u16Buffer[5] + (s->u16Buffer[4] << 8));
-	u16ReadByteNum = (UINT16)(u16RegCount << 1);
-
-	if ((u16RegCount == 0U) ||
-		(u16ReadByteNum > (UINT16)(RS485_MAX_BUFFER_SIZE - 5U)))
-	{
-		s->u16RdRegByteNum = 0;
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_DATA_INVALID;
-		return;
-	}
-
-	u16ValidateOffset = t_u16Temp;
-	if ((u16ActualAddr >= RS485_ADDR_RO_LCD) && (u16ActualAddr < RS485_ADDR_RO_START0))
-	{
-		u16ValidateOffset = 0U;
-		if ((u16ActualAddr >= RS485_ADDR_CURRENT_DIAG) &&
-			(u16ActualAddr < (UINT16)(RS485_ADDR_CURRENT_DIAG + RS485_ADDR_CURRENT_DIAG_WORDS)))
-		{
-			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_CURRENT_DIAG);
-		}
-		else if ((u16ActualAddr >= RS485_ADDR_EVENT_RECORD) &&
-			(u16ActualAddr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
-		{
-			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_EVENT_RECORD);
-		}
-		else if ((u16ActualAddr >= RS485_ADDR_AGING_STATUS) &&
-			(u16ActualAddr < (UINT16)(RS485_ADDR_AGING_STATUS + RS485_ADDR_AGING_STATUS_WORDS)))
-		{
-			u16ValidateOffset = (UINT16)(u16ActualAddr - RS485_ADDR_AGING_STATUS);
-		}
-	}
-
-	if ((!Sci_GetReadWindowWordCount(u16ActualAddr, &u16WindowWords)) ||
-		(!Sci_RangeFits(u16ValidateOffset, u16RegCount, u16WindowWords)))
-	{
-		s->u16RdRegByteNum = 0;
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_ADDR_INVALID;
-		return;
-	}
-
-	s->u16RdRegByteNum = (UINT8)u16ReadByteNum;
+    UINT16 offset, count;
+    const struct SCI_READ_WINDOW *window;
+    s->u16RdRegStartAddrActure = (UINT16)((s->u16Buffer[2] << 8) | s->u16Buffer[3]);
+    count = (UINT16)((s->u16Buffer[4] << 8) | s->u16Buffer[5]);
+    s->u16RdRegByteNum = 0U;
+    if (count == 0U || count > (RS485_MAX_BUFFER_SIZE-5U)/2U)
+    {
+        Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
+        return;
+    }
+    window = Sci_FindReadWindow(s->u16RdRegStartAddrActure, &offset);
+    if (window == 0 || !Sci_RangeFits(offset, count, window->words))
+    {
+        Sci_SetWrError(s, RS485_ERROR_ADDR_INVALID);
+        return;
+    }
+    s->u16RdRegStartAddr = (UINT16)(window->buffer_offset + offset);
+    s->u16RdRegByteNum = (UINT8)(count*2U);
 }
 void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 {
@@ -614,87 +562,19 @@ static UINT8 Sci_RangeOverlaps(UINT16 start, UINT16 count, UINT16 block_start, U
 	return (UINT8)((start < block_end) && (block_start < end));
 }
 
-static UINT8 Sci_GetReadWindowWordCount(UINT16 actual_addr, UINT16 *word_count)
+static const struct SCI_READ_WINDOW *Sci_FindReadWindow(UINT16 address, UINT16 *offset)
 {
-	if (word_count == 0)
-	{
-		return 0;
-	}
-
-	if (actual_addr >= RS485_ADDR_RO_START0)
-	{
-		*word_count = RS485_RO_TOTAL_WORDS;
-		return 1;
-	}
-	if (actual_addr >= RS485_ADDR_RO_LCD)
-	{
-		if ((actual_addr >= RS485_ADDR_CURRENT_DIAG) &&
-			(actual_addr < (UINT16)(RS485_ADDR_CURRENT_DIAG + RS485_ADDR_CURRENT_DIAG_WORDS)))
-		{
-			*word_count = RS485_ADDR_CURRENT_DIAG_WORDS;
-			return 1;
-		}
-		if ((actual_addr >= RS485_ADDR_EVENT_RECORD) &&
-			(actual_addr < (UINT16)(RS485_ADDR_EVENT_RECORD + FLASH_STORAGE_LOG_RECORD_COUNT)))
-		{
-			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
-			return 1;
-		}
-		switch (actual_addr)
-		{
-		case RS485_ADDR_RO_LCD:
-			*word_count = 5U;
-			return 1;
-		case RS485_ADDR_RO_FA_RTC:
-			*word_count = (UINT16)(Record_len * 7U);
-			return 1;
-		case RS485_ADDR_SN_READ:
-			*word_count = (UINT16)(((UINT16)PRODUCT_ID_LENGTH_MAX * 3U + 1U) / 2U);
-			return 1;
-		case RS485_ADDR_EVENT_RECORD:
-			/* Each event log entry is two bytes, exactly one Modbus register. */
-			*word_count = FLASH_STORAGE_LOG_RECORD_COUNT;
-			return 1;
-		case RS485_ADDR_AGING_STATUS:
-			*word_count = RS485_ADDR_AGING_STATUS_WORDS;
-			return 1;
-		default:
-			if ((actual_addr >= RS485_ADDR_AGING_STATUS) &&
-				(actual_addr < (UINT16)(RS485_ADDR_AGING_STATUS + RS485_ADDR_AGING_STATUS_WORDS)))
-			{
-				*word_count = RS485_ADDR_AGING_STATUS_WORDS;
-				return 1;
-			}
-			return 0;
-		}
-	}
-	if (actual_addr >= RS485_ADDR_RW_AFE_PARAMETER)
-	{
-		*word_count = AFE_PARAMETES_TOTAL_LENGTH;
-		return 1;
-	}
-	if (actual_addr >= RS485_ADDR_RW_OTHER_CANADD)
-	{
-		*word_count = E2P_PARA_NUM_OTHER_ELEMENT1;
-		return 1;
-	}
-	if (actual_addr >= RS485_ADDR_RW_OTHER)
-	{
-		*word_count = (UINT16)(SOC_TABLE_SIZE + 16 + 16 + E2P_PARA_NUM_RTC);
-		return 1;
-	}
-	if (actual_addr >= RS485_ADDR_RW_PORTECT)
-	{
-		*word_count = E2P_PARA_NUM_PROTECT;
-		return 1;
-	}
-	if (actual_addr >= RS485_ADDR_RW_CALIB)
-	{
-		*word_count = (UINT16)(KB_NUM * 2U);
-		return 1;
-	}
-
-	return 0;
+    UINT16 i;
+    for (i=0U; i<sizeof(s_read_windows)/sizeof(s_read_windows[0]); ++i)
+    {
+        const struct SCI_READ_WINDOW *window = &s_read_windows[i];
+        if (address < window->base)
+            continue;
+        *offset = (UINT16)(address-window->base);
+        if (*offset < window->words && (!window->selector || *offset == 0U))
+            return window;
+    }
+    return 0;
 }
 
 static void Sci_CopyWords(UINT16 *dst, const UINT16 *src, UINT16 count)
@@ -931,25 +811,35 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 
 	AfeCurrent_GetDiagnostics(&current_diag);
 
-	for (j = 0; j < 63; j++)
-	{ // 0xD000_63
-		if ((g_u8CurrentDiagVcellDisplayEnable != 0U) &&
-			(j >= 24U) && (j <= 31U))
-		{
-			/*
-			 * Diagnostic display is explicitly enabled by the host. Only the
-			 * Modbus D000 readback overlays unused V25~V32; the real
-			 * g_stCellInfoReport.u16VCell[] remains untouched, so
-			 * CAN/protection/SOC keep their original data.
-			 */
-			u16SciTemp = Sci_GetCurrentDiagVcellWord(&current_diag, j);
-		}
-		else
-		{
-			u16SciTemp = *(&g_stCellInfoReport.u16VCell[0] + j);
-		}
-		Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-	}
+    for (j=0U; j<32U; ++j)
+    {
+        u16SciTemp = (g_u8CurrentDiagVcellDisplayEnable && j>=24U) ?
+            Sci_GetCurrentDiagVcellWord(&current_diag,j) : g_stCellInfoReport.u16VCell[j];
+        Sci_PutWordBE(t_u8BuffTemp,&i,u16SciTemp);
+    }
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellMax);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellMin);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellMaxPosition);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellMinPosition);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellDelta);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellTotle);
+    for (j=0U; j<TEMP_NUM; ++j)
+        Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16Temperature[j]);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16TempMax);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16TempMin);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16Ichg);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16IDischg);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16Soc);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16Soh);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16CapacityNow);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16CapacityFull);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16CapacityFactory);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.SocElement.u16Cycle_times);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.unMdlFault_First.all);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.unMdlFault_Second.all);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.unMdlFault_Third.all);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16BalanceFlag1);
+    Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16BalanceFlag2);
 
 	// 0xD100_33
 	u16SciTemp = (UINT16)(RTC_time.RTC_Time_Month) | (RTC_time.RTC_Time_Year << 8);
@@ -1099,6 +989,24 @@ void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 }
 
+static void Sci_LoadReadData(struct RS485MSG *s)
+{
+    UINT16 offset;
+    const struct SCI_READ_WINDOW *window = Sci_FindReadWindow(s->u16RdRegStartAddrActure,&offset);
+    if (window == 0)
+        return; /* Caller has already checked the complete read range. */
+    switch (window->block)
+    {
+    case SCI_READ_REPORT: Sci_ACK_0x03_ReadRegs_Data(s,g_u8SCITxBuff); break;
+    case SCI_READ_LCD: Sci_ACK_0x03_ReadRegs_LCD(s,g_u8SCITxBuff); break;
+    case SCI_READ_AFE: Sci_ACK_0x03_RW_AFE_Parameters(s,g_u8SCITxBuff); break;
+    case SCI_READ_OTHER1: Sci_ACK_0x03_RW_Data_OtherCanAdd(s,g_u8SCITxBuff); break;
+    case SCI_READ_OTHER: Sci_ACK_0x03_RW_Data_Other(s,g_u8SCITxBuff); break;
+    case SCI_READ_PROTECT: Sci_ACK_0x03_RW_Data_Pro(s,g_u8SCITxBuff); break;
+    case SCI_READ_CALIB: Sci_ACK_0x03_RW_Data_Cali(s,g_u8SCITxBuff); break;
+    }
+}
+
 void Sci_ACK_0x03(struct RS485MSG *s)
 {
 	UINT8 i = 0U;
@@ -1107,34 +1015,7 @@ void Sci_ACK_0x03(struct RS485MSG *s)
 	{
 		if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_CALIB)
 		{
-			if (s->u16RdRegStartAddrActure >= RS485_ADDR_RO_START0)
-			{
-				Sci_ACK_0x03_ReadRegs_Data(s, g_u8SCITxBuff);
-			}
-			else if (s->u16RdRegStartAddrActure >= RS485_ADDR_RO_LCD)
-			{
-				Sci_ACK_0x03_ReadRegs_LCD(s, g_u8SCITxBuff);
-			}
-			else if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_AFE_PARAMETER)
-			{
-				Sci_ACK_0x03_RW_AFE_Parameters(s, g_u8SCITxBuff);
-			}
-			else if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_OTHER_CANADD)
-			{
-				Sci_ACK_0x03_RW_Data_OtherCanAdd(s, g_u8SCITxBuff);
-			}
-			else if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_OTHER)
-			{
-				Sci_ACK_0x03_RW_Data_Other(s, g_u8SCITxBuff);
-			}
-			else if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_PORTECT)
-			{
-				Sci_ACK_0x03_RW_Data_Pro(s, g_u8SCITxBuff);
-			}
-			else
-			{
-				Sci_ACK_0x03_RW_Data_Cali(s, g_u8SCITxBuff);
-			}
+            Sci_LoadReadData(s);
 			// 头码，前三个字节保持不变
 			s->u16Buffer[0] = (s->u16Buffer[0] != 0) ? RS485_SLAVE_ADDR : s->u16Buffer[0];
 			s->u16Buffer[1] = s->enRs485CmdType;
@@ -1194,7 +1075,7 @@ UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words)
 
 	if ((pu16Words == 0) ||
 		(u16Count == 0U) ||
-		((u16Count << 1) > (UINT16)(RS485_MAX_BUFFER_SIZE - 5U)))
+		(u16Count > (RS485_MAX_BUFFER_SIZE - 5U)/2U))
 	{
 		return RS485_ERROR_DATA_INVALID;
 	}
@@ -1216,20 +1097,12 @@ UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words)
 		return stMsg.ErrorType;
 	}
 
-	Sci_ACK_0x03(&stMsg);
-	if ((stMsg.AckType != RS485_ACK_POS) ||
-		(stMsg.AckLenth < (UINT8)(5U + (u16Count << 1))) ||
-		(stMsg.u16Buffer[1] != RS485_CMD_READ_REGS) ||
-		(stMsg.u16Buffer[2] != (UINT8)(u16Count << 1)))
-	{
-		return (stMsg.ErrorType != RS485_ERROR_NULL) ? stMsg.ErrorType : RS485_ERROR_DATA_INVALID;
-	}
-
-	for (i = 0; i < u16Count; ++i)
-	{
-		pu16Words[i] = (UINT16)(((UINT16)stMsg.u16Buffer[3U + (i << 1)] << 8) |
-								stMsg.u16Buffer[4U + (i << 1)]);
-	}
+    Sci_LoadReadData(&stMsg);
+    for (i=0U; i<u16Count; ++i)
+    {
+        UINT16 byte = (UINT16)((stMsg.u16RdRegStartAddr+i)*2U);
+        pu16Words[i] = (UINT16)((g_u8SCITxBuff[byte]<<8) | g_u8SCITxBuff[byte+1U]);
+    }
 
 	return 0U;
 }
@@ -1241,7 +1114,7 @@ UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u1
 
 	if ((pu16Words == 0) ||
 		(u16Count == 0U) ||
-		((u16Count << 1) > (UINT16)(RS485_MAX_BUFFER_SIZE - 9U)))
+		(u16Count > (RS485_MAX_BUFFER_SIZE - 9U)/2U))
 	{
 		return RS485_ERROR_DATA_INVALID;
 	}

@@ -1,6 +1,7 @@
 """Test real UART/Modbus C with host stubs; all outputs stay in user temp."""
 from pathlib import Path
-import os,subprocess,re
+import os,subprocess,re,sys
+sys.stdout.reconfigure(errors="replace")
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 src=ROOT/'103 + 309/Project/Source'
@@ -44,6 +45,7 @@ static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 static UINT16 Fault_record_Third[Record_len];
 static UINT8 FaultPoint_Third;
 static struct {UINT8 BMS_SerialNumber[32], BMS_HardWareVersion[32], BMS_SoftWareVersion[32];} ProductionInfor;
+void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s);
 static int writes;
 static void SleepDeal_RecordExternalComm(void) {}
 static void Sci_Deal_WrReg_0x06(struct RS485MSG *s) { ++writes; }
@@ -58,11 +60,11 @@ static void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s,UINT8 *p) { fill(p,0x20
 static void Sci_PutCurrentDiagWords(UINT8 *p,UINT16 *index) {fill(p,0xc1);}
 static void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 *p) {fill(p,0xe0);}
 '''
-code=pre+func(pub,'UINT16 Sci_CRC16RTU(')
-for sig in ['static void Sci_SetWrError(', 'static UINT8 Sci_RangeFits(', 'static UINT8 Sci_GetReadWindowWordCount(',
+code=pre+sci[sci.index('enum SCI_READ_BLOCK {'):sci.index('static void Sci_PortArmReceiver(')]+func(pub,'UINT16 Sci_CRC16RTU(')
+for sig in ['static void Sci_SetWrError(', 'static UINT8 Sci_RangeFits(', 'static const struct SCI_READ_WINDOW *Sci_FindReadWindow(',
             'static void Sci_PutWordBE(', 'static void Sci_PutZeroWordsBE(', 'static UINT8 Sci_RecordBackIndex(',
             'static void Sci_PutBytes(', 'static void Sci_PutFactoryAgingStatusWords(',
-            'void Sci_ACK_0x03_ReadRegs_LCD(', 'void Sci_ACK_0x03(', 'void Sci_ACK_0x06_0x10(',
+            'void Sci_ACK_0x03_ReadRegs_LCD(', 'static void Sci_LoadReadData(', 'void Sci_ACK_0x03(', 'UINT8 Sci_HostReadWords(', 'void Sci_ACK_0x06_0x10(',
             'void CRC_verify(', 'void Sci_Deal_ReadRegs_0x03(', 'static void Sci_ModbusResetMessage(',
             'static UINT8 Sci_ModbusProtocolFeed(', 'static void Sci_ModbusOnRxIdle(',
             'static void Sci_ModbusProcessFrame(']:code+=func(sci,sig)
@@ -101,6 +103,16 @@ int main(void) {
   Sci_ModbusResetMessage(&s);s.u16Buffer[2]=(UINT8)(i>>8);s.u16Buffer[3]=(UINT8)i;s.u16Buffer[5]=1;
   Sci_Deal_ReadRegs_0x03(&s);
   if(s.AckType==RS485_ACK_POS) { Sci_ACK_0x03(&s);assert(s.AckLenth==7); }
+ }
+ {
+  UINT16 words[123]; int before=writes;
+  assert(Sci_HostReadWords(0xc002,48,words)==0);
+  assert(Sci_HostReadWords(0xc003,1,words)==RS485_ERROR_ADDR_INVALID);
+  assert(Sci_HostReadWords(0xd200,18,words)==0);
+  assert(Sci_HostReadWords(0xd200,19,words)==RS485_ERROR_ADDR_INVALID);
+  assert(Sci_HostReadWords(0xd000,32768,words)==RS485_ERROR_DATA_INVALID);
+  frame(&s,0,3,0xd000,1,0); assert(!s.AckLenth && writes==before);
+  frame(&s,1,6,0x1102,7,1); assert(!s.AckLenth && writes==before);
  }
  puts("PASS all 65536 single-word address classifications and replies stay bounded in this harness");
  printf("failures=%d\n",failed);return failed?1:0;
