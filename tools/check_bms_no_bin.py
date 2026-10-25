@@ -1,4 +1,4 @@
-"""Compile/link the active BMS sources in user temp, without HEX/BIN or hooks."""
+"""Check the active BMS target with its own link settings, without HEX/BIN or hooks."""
 import argparse
 import os
 from pathlib import Path
@@ -33,6 +33,19 @@ def main():
     for node in target.iter('IncludePath'):
         if node.text:
             node.text = ';'.join(absolute(item) for item in node.text.split(';') if item)
+    compiled_sources = set()
+    for group in target.findall('Groups/Group'):
+        if group.findtext('GroupOption/CommonProperty/IncludeInBuild') == '0':
+            continue
+        for source in group.findall('Files/File'):
+            if source.findtext('FileOption/CommonProperty/IncludeInBuild') != '0':
+                compiled_sources.add(os.path.normcase(source.findtext('FilePath', '')))
+    missing = [name for name in ('Sci_Upper.c', 'Sci_Uart.c', 'Sci_Customer.c')
+               if os.path.normcase(str(root / '103 + 309/Project/Source' / name))
+               not in compiled_sources]
+    if missing:
+        raise SystemExit(f'{args.target}: UART sources missing from the build: {", ".join(missing)}. '
+                         'Restore the project entries and reload the project in Keil.')
     common = target.find('TargetOption/TargetCommonOption')
     common.find('OutputDirectory').text = str(output / 'Objects') + '\\'
     common.find('ListingPath').text = str(output / 'Listings') + '\\'
@@ -44,11 +57,12 @@ def main():
                 node.text = '0'
             elif node.tag.startswith('UserProg') and node.tag.endswith('Name'):
                 node.text = ''
-    # Honor the checked-in App layout instead of the inconsistent Device ROM size.
-    scatter = project.parent / 'Objects/FD_Release.sct'
+    # Preserve automatic/manual selection and all memory ranges from this target.
+    # Only rebase a manually selected scatter path for the disposable project.
     linker = target.find('TargetOption/TargetArmAds/LDads')
-    linker.find('umfTarg').text = '0'
-    linker.find('ScatterFile').text = str(scatter)
+    scatter = linker.find('ScatterFile')
+    if scatter.text:
+        scatter.text = absolute(scatter.text)
     (output / 'Objects').mkdir()
     (output / 'Listings').mkdir()
     isolated = output / project.name
@@ -56,7 +70,11 @@ def main():
     log = output / 'build.log'
     result = subprocess.run([args.uv4, '-b', str(isolated), '-t', args.target, '-j0', '-o', str(log)],
                             cwd=output, check=False)
-    text = log.read_bytes().decode('utf-8', errors='replace') if log.exists() else ''
+    raw_log = log.read_bytes() if log.exists() else b''
+    try:
+        text = raw_log.decode('utf-8')
+    except UnicodeDecodeError:
+        text = raw_log.decode('gbk', errors='replace')
     print(text)
     print(f'Validation files: {output}')
     images = list(output.rglob('*.bin')) + list(output.rglob('*.hex'))

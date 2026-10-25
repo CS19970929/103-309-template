@@ -58,4 +58,6 @@ STOP 首帧仍可能丢失：主机发送唤醒字节后至少等 20 ms，再在
 
 `python tools/test_uart_protocols.py` 在用户临时目录编译、运行真实 C 函数的 host 检查。`python tools/check_bms_no_bin.py --target FD_Release` 只在用户临时目录编译链接，不产生 BIN/HEX。两者不代表板上串口时序和低功耗验收。
 
+编译检查保留所选 Target 的原始链接参数、内存范围和 scatter 选择，只重定向临时输出、关闭 HEX 和用户钩子。`Sci_Upper.c`、`Sci_Uart.c`、`Sci_Customer.c` 必须包含在两个 Target 的编译清单中，缺失或排除时检查直接失败。外部修改 `.uvprojx` 后，已打开的 Keil 工程需要重新加载，避免旧工程清单覆盖磁盘上的新增文件条目。
+
 若工作区保留手工 `sys_time.test_mos_temp` 注入，保护检查会明确拒绝把它作为真实 NTC 路径；可用 `python tools/test_protection_refactor.py --committed-measurement` 检查已提交的测温实现，同时保留该工作区改动。这种检查不构成对注入版本的发布验收。
