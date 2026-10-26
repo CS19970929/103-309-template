@@ -26,11 +26,20 @@ def main():
     afe=(SOURCE/'rtc_sleep_afe_sh367309.c').read_text(encoding='utf-8')
     code=code.replace('/* AFE_WAKE_SOURCE */',afe[afe.index('UINT8 RtcSleep_AfePortHasAfeWake('):])
     path=output/'sleep.c'; path.write_text(code,encoding='utf-8')
-    exe=output/'sleep.exe'
-    result=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(SOURCE),
-        str(path),'/Fe:'+str(exe),'/Fo:'+str(output/'sleep.obj')],cwd=output,env=env,capture_output=True,text=True,errors='replace')
-    if result.returncode: raise RuntimeError(result.stdout+result.stderr)
-    subprocess.run([str(exe)],cwd=output,check=True)
+    for mode in (0,1):
+        exe=output/f'sleep-{mode}.exe'
+        result=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(SOURCE),
+            f'/DPROJECT_CFG_SWITCH_MODE={mode}',str(path),'/Fe:'+str(exe),
+            '/Fo:'+str(output/f'sleep-{mode}.obj')],cwd=output,env=env,capture_output=True,text=True,errors='replace')
+        if result.returncode: raise RuntimeError(result.stdout+result.stderr)
+        subprocess.run([str(exe)],cwd=output,check=True)
+    guard=output/'guard.c'
+    guard.write_text('#include "conf/Project_BuildGuard.h"\n')
+    for mode in (-1,0,1,2):
+        result=subprocess.run([str(compiler),'/nologo','/EP','/TC','/I'+str(SOURCE),
+            f'/DPROJECT_CFG_SWITCH_MODE={mode}',str(guard)],cwd=output,env=env,capture_output=True)
+        assert (result.returncode==0)==(mode in (0,1)),result.stderr.decode(errors='replace')
+    print('PASS switch mode guard: accepts 0/1, rejects -1/2')
     print(f'Host evidence only; files: {output}')
 
 if __name__=='__main__': main()

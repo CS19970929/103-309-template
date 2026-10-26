@@ -14,9 +14,6 @@
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
-#define _DI_SWITCH_SYS_ONOFF	//DI������������
-//#define _DI_SWITCH_DSG_ONOFF	//DI�����������Ʒŵ�Ӵ�������MOS
-// #define _DI_SWITCH_longKEY_ONOFF
 
 // #define __VIRTURE_CURRENT__
 
@@ -57,10 +54,6 @@
 #define RS485_WAKEUP_ENABLE
 #endif
 
-
-#if PROJECT_CFG_DI_SWITCH_LONGKEY_ONOFF_ENABLE
-#define _DI_SWITCH_longKEY_ONOFF
-#endif
 
 #if (PROJECT_CFG_SCI1_ROLE == 1)
 #define _COMMOM_UPPER_SCI1

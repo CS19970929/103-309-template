@@ -16,8 +16,13 @@ typedef struct SLEEP_RUNTIME_TAG
 static SLEEP_RUNTIME s_sleep;
 
 enum { KEY_READY, KEY_TIMING, KEY_WAIT_RELEASE };
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
+#define KEY_SLEEP_TICKS 5U
+#define KEY_WAKE_STEPS 5U
+#else
 #define KEY_SLEEP_TICKS 300U
 #define KEY_WAKE_STEPS 100U
+#endif
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
@@ -43,7 +48,7 @@ UINT8 SleepDeal_IsWakeupValid(void)
 	}
 	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
 	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
-	/* TIM3 is stopped here. Use a bounded 1 s qualification after the STOP
+	/* TIM3 is stopped here. Use bounded input qualification after the STOP
 	 * clock restore, while ADC and normal business remain paused. */
 	for (held=0U; held<KEY_WAKE_STEPS; ++held) {
 		__delay_ms(10U);
@@ -67,7 +72,17 @@ void SleepDeal_ResetKeyState(void)
 UINT8 SleepDeal_TakeKeySleepRequest(void)
 {
 	UINT32 now=SysTime_Get10msTickCount();
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
+	/* Charger wake is still allowed with an open switch. Re-arm the open
+	 * request while charging, so unplugging returns to NORMAL after debounce. */
+	if (SleepDeal_IsKeyPressed() || SleepDeal_IsChargerWakeupActive()) {
+		s_sleep.key_state=KEY_READY;
+		s_sleep.normal_idle_tracking=0U;
+		return 0U;
+	}
+#else
 	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
+#endif
 	s_sleep.normal_idle_tracking=0U;
 	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
 	if (s_sleep.key_state==KEY_READY) {

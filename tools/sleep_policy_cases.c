@@ -7,6 +7,7 @@
 typedef uint8_t UINT8; typedef uint16_t UINT16; typedef uint32_t UINT32;
 typedef int32_t INT32;
 typedef int FLASH_Status;
+#include "conf/Project_Config.h"
 #include "Flash.h"
 #include "SleepDeal.h"
 #include "rtc_sleep.h"
@@ -141,6 +142,45 @@ static void reset_case(void) {
 }
 int main(void) {
     int i;
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
+    reset_case(); adc_on=1; key=0;
+    for(tick=0;tick<1000;++tick) assert(!SleepDeal_TakeKeySleepRequest());
+    key=1; assert(!SleepDeal_TakeKeySleepRequest());
+    tick+=4; assert(!SleepDeal_TakeKeySleepRequest());
+    key=0; assert(!SleepDeal_TakeKeySleepRequest()); /* Opening bounce is cancelled. */
+    key=1; assert(!SleepDeal_TakeKeySleepRequest());
+    tick+=4; assert(!SleepDeal_TakeKeySleepRequest()); ++tick;
+    assert(SleepDeal_TakeKeySleepRequest());
+    tick+=1000; assert(!SleepDeal_TakeKeySleepRequest());
+    key=0; assert(!SleepDeal_TakeKeySleepRequest());
+    key=1; tick=UINT32_MAX-2; assert(!SleepDeal_TakeKeySleepRequest());
+    tick+=4; assert(!SleepDeal_TakeKeySleepRequest()); ++tick;
+    assert(SleepDeal_TakeKeySleepRequest());
+    /* The existing charger source can run with the switch open; removal
+     * re-arms the NORMAL request rather than repeatedly waking and sleeping. */
+    reset_case(); key=1; charger=1;
+    for(tick=0;tick<1000;++tick) assert(!SleepDeal_TakeKeySleepRequest());
+    charger=0; assert(!SleepDeal_TakeKeySleepRequest()); tick+=5;
+    assert(SleepDeal_TakeKeySleepRequest());
+    for(i=0;i<2;++i) {
+        reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
+        key=0; release_at_ms=40; assert(rtc_sleep_run_hiccup_cycle() && !adc_on);
+        release_at_ms=0; key=0; now_ms=0;
+        assert(!rtc_sleep_run_hiccup_cycle() && now_ms==50 && !adc_on);
+    }
+    reset_case(); key=1; assert(!SleepDeal_TakeKeySleepRequest()); tick=5;
+    scripted_key=1; rtc_sleep();
+    assert(stop_calls==2 && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    assert(!SleepDeal_TakeKeySleepRequest()); tick+=1000;
+    assert(!SleepDeal_TakeKeySleepRequest()); /* Short stays RUN. */
+    /* A switch that was already shorted before protective DEEP is not a
+     * fresh wake: it must open, then close after reset. */
+    reset_case(); key=0; SleepDeal_ResetKeyState();
+    assert(!SleepDeal_IsWakeupValid() && !now_ms);
+    key=1; assert(!SleepDeal_IsWakeupValid()); key=0;
+    assert(SleepDeal_IsWakeupValid() && now_ms==50);
+    puts("PASS maintained: short stays RUN, 50 ms open NORMAL/closed wake, bounce/wrap, charger/remove, both STOP modes, protective DEEP release/reclose");
+#else
     reset_case(); adc_on=1; key=0;
     assert(!SleepDeal_TakeKeySleepRequest());
     tick=299; for(i=0;i<1000;++i) assert(!SleepDeal_TakeKeySleepRequest());
@@ -177,6 +217,7 @@ int main(void) {
     reset_case(); charger=1; assert(SleepDeal_IsWakeupValid() && now_ms==0);
     assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     puts("PASS key: 3 s RUN hold, 1 s wake in all modes, release/re-press guard, no queued-tick acceleration, wrap, immediate sleep request and charger wake");
+#endif
     reset_case(); SleepDeal_UpdateOverdischarge(1);
     assert(soc_now==0 && zero_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
@@ -209,7 +250,7 @@ int main(void) {
     reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); charger=1;
     SleepDeal_HandleBootSleepStartup();
     assert(SleepDeal_HasHandledOverdischarge() && BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
-    puts("PASS deep restart: sleep reason survives reset during STOP wait; release/1 s wake still required; watchdog feeds and charger reason preserved");
+    puts("PASS deep restart: sleep reason survives reset during STOP wait; configured key qualification required; watchdog feeds and charger reason preserved");
     reset_case(); assert(!SleepDeal_NormalIdleExpired(0));
     rtc_counter=604799; assert(!SleepDeal_NormalIdleExpired(0));
     ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));

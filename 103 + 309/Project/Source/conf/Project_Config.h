@@ -73,6 +73,19 @@
 #endif
 // </h>
 
+// <h>Switch behavior (PA9, shorted = low)
+#define PROJECT_SWITCH_MAINTAINED 0
+#define PROJECT_SWITCH_PUSHBUTTON 1
+// <o> Switch mode
+//   <0=> Maintained: shorted RUN, open NORMAL (50 ms debounce)
+//   <1=> Pushbutton: hold 3 s NORMAL, hold 1 s wake, release before next hold
+// <i> Both modes retain charger wake and protective DEEP priority.
+// <i> Maintained mode stays RUN while charger input is active; opening takes effect after removal.
+#ifndef PROJECT_CFG_SWITCH_MODE
+#define PROJECT_CFG_SWITCH_MODE 1
+#endif
+// </h>
+
 // <h>Wakeup Sources
 
 // <q> Enable UART1 wakeup

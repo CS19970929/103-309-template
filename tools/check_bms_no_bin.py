@@ -12,6 +12,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=['FD_Release', 'FD_Debug'], default='FD_Release')
     parser.add_argument('--uv4', default=r'C:\Keil_v5\UV4\UV4.exe')
+    parser.add_argument('--switch-mode', type=int, choices=[0, 1],
+                        help='Override the switch mode in the disposable project only')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     project = root / '103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx'
@@ -21,6 +23,10 @@ def main():
         if target.findtext('TargetName') != args.target:
             targets.remove(target)
     target = targets.find('Target')
+    if args.switch_mode is not None:
+        defines = target.find('TargetOption/TargetArmAds/Cads/VariousControls/Define')
+        defines.text = (defines.text or '') + f',PROJECT_CFG_SWITCH_MODE={args.switch_mode}'
+        print(f'Switch mode override: {args.switch_mode}', flush=True)
     temp_root = Path(os.environ['LOCALAPPDATA']) / 'CodexTemp/103-309-copy'
     temp_root.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix='no-bin-', dir=temp_root))
