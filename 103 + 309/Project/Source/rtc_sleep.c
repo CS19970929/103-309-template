@@ -134,11 +134,8 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
-    if (SleepDeal_HasHandledOverdischarge()) {
-        g_stLowPowerRtcStatus.force=0U;
-        g_stLowPowerRtcStatus.vlow=0U;
-        return 0U;
-    }
+    /* UV handling only suppresses its immediate event request. The existing
+     * low-voltage timers must still run after a protective sleep wake. */
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
