@@ -35,6 +35,11 @@ def main():
     initializer = initializer.replace('static const UINT8 version[32]=BMS_SOFTWARE_VERDION_DEFAULT;',
                                       'UINT8 version[32]; memcpy(version,firmware_version,32);')
     code = code.replace('/* CONFIG_INIT_SOURCE */', initializer)
+    log = (SOURCE / 'LogRecord.c').read_text(encoding='utf-8')
+    log_code = log[:log.index('void App_LogRecord(void)')]
+    log_code += log[log.index('void Sci_ACK_0x03_ReadRegs_EventRecord('):log.index('void Sci_WrReg_0x06_Reset_EventRecord(')]
+    log_code += log[log.index('UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)'):]
+    code = code.replace('/* LOG_SOURCE */', log_code.replace('#include "main.h"', ''))
     path = output / 'storage.c'
     path.write_text(code, encoding='utf-8')
     exe = output / 'storage.exe'

@@ -372,18 +372,19 @@ UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
     return StorageFlash_SaveConfig(&config);
 }
 
-/* Log page header is committed before its six-byte append records. Each page
- * holds 167 entries (>100): rotation can erase the older page safely. */
+/* Each page starts with a committed checkpoint. This also preserves all 100
+ * entries when repeated power cuts leave many incomplete append slots. */
 #define STORAGE_LOG_MAGIC 0x4C4F4732UL
 #define STORAGE_LOG_CLEAR 0xFFFFU
-#define STORAGE_LOG_START (sizeof(STORAGE_RECORD)+sizeof(UINT16))
+typedef struct { UINT8 point, reserved, records[100][2]; } STORAGE_LOG_CHECKPOINT;
+#define STORAGE_LOG_START (sizeof(STORAGE_RECORD)+sizeof(STORAGE_LOG_CHECKPOINT))
 typedef struct { UINT16 data, crc, commit; } STORAGE_LOG_ENTRY;
 typedef char StorageLogCapacityCheck[((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/
                       sizeof(STORAGE_LOG_ENTRY)>FLASH_STORAGE_LOG_RECORD_COUNT) ? 1 : -1];
 
 static UINT32 Storage_LogLatestPage(void)
 {
-    return Storage_SelectPair(FLASH_LOG_A,FLASH_LOG_B,STORAGE_LOG_MAGIC,sizeof(UINT16));
+    return Storage_SelectPair(FLASH_LOG_A,FLASH_LOG_B,STORAGE_LOG_MAGIC,sizeof(STORAGE_LOG_CHECKPOINT));
 }
 
 static UINT8 Storage_LogEntryValid(const STORAGE_LOG_ENTRY *entry)
@@ -412,12 +413,15 @@ static void Storage_LogReplay(UINT32 page, UINT8 *point, UINT8 records[100][2])
 
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
 {
-    UINT32 latest=Storage_LogLatestPage(), older;
+    UINT32 latest=Storage_LogLatestPage();
+    const STORAGE_LOG_CHECKPOINT *checkpoint;
     if (!point || !records) return 0U;
     *point=0U; memset(records,0,200U);
     if (!latest) return 1U;
-    older=latest==FLASH_LOG_A ? FLASH_LOG_B : FLASH_LOG_A;
-    if (Storage_RecordValid(older,STORAGE_LOG_MAGIC,sizeof(UINT16))) Storage_LogReplay(older,point,records);
+    checkpoint=(const STORAGE_LOG_CHECKPOINT *)(latest+sizeof(STORAGE_RECORD));
+    if (checkpoint->point>100U) return 0U;
+    *point=checkpoint->point;
+    memcpy(records,checkpoint->records,200U);
     Storage_LogReplay(latest,point,records);
     return 1U;
 }
@@ -425,22 +429,25 @@ UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
 static UINT8 Storage_LogAppend(UINT16 data)
 {
     UINT32 page=Storage_LogLatestPage(), address, next, sequence=1U;
-    UINT16 header=1U;
+    STORAGE_LOG_CHECKPOINT checkpoint;
     STORAGE_LOG_ENTRY entry;
     FLASH_Status status;
     UINT8 result=0U;
     StorageFlash_BeginWrite();
     if (!page) {
         page=FLASH_LOG_A;
-        if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&header,2U)) goto done;
+        memset(&checkpoint,0,sizeof(checkpoint));
+        if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
     }
     next=page+STORAGE_LOG_START;
     for (address=next; address+sizeof(entry)<=page+FLASH_STORAGE_PAGE_SIZE; address+=sizeof(entry))
         if (!StorageFlash_IsAreaBlank(address,sizeof(entry))) next=address+sizeof(entry);
     if (next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
         sequence=((const STORAGE_RECORD *)page)->sequence+1U;
+        memset(&checkpoint,0,sizeof(checkpoint));
+        if (!StorageFlash_LoadLogData(&checkpoint.point,checkpoint.records)) goto done;
         page=page==FLASH_LOG_A ? FLASH_LOG_B : FLASH_LOG_A;
-        if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&header,2U)) goto done;
+        if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
         next=page+STORAGE_LOG_START;
     }
     entry.data=data; entry.crc=Storage_CrcUpdate(0xFFFFU,(const UINT8 *)&data,2U);
@@ -463,14 +470,6 @@ UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta)
 }
 
 UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(STORAGE_LOG_CLEAR); }
-
-/* Transitional caller compatibility: no full-history write is performed. */
-UINT8 StorageFlash_SaveLogData(UINT8 point, const UINT8 records[100][2])
-{
-    if (!records || point>100U) return 0U;
-    if (!point) return StorageFlash_ClearLog();
-    return StorageFlash_AppendLog(records[point-1U][0],records[point-1U][1]);
-}
 
 UINT8 StorageFlash_ResetParameters(STORAGE_FLASH_CONFIG_DATA *defaults)
 {

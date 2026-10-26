@@ -13,6 +13,9 @@ typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG } FLASH_Status;
 #define FLASH_FLAG_WRPRTERR 4
 #define ERROR_EEPROM_STORE 1
 #include "Flash.h"
+struct RS485MSG;
+#include "LogRecord.h"
+#define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
 static int mutations, cut_after=-1, errors;
 static void System_ERROR_UserCallback(int error) { ++errors; }
 static void FLASH_Unlock(void) {}
@@ -46,13 +49,65 @@ static void EEPROM_LoadDefaultRuntimeData(void) { memset(&runtime_rw,0x11,sizeof
 static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data) { *data=runtime_rw; }
 static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data) { return data->protect[0]!=0xFFFF; }
 static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data) { runtime_rw=*data; }
-static void ReadEEPROM_EventRecord_Parameters(void) {}
 /* CONFIG_INIT_SOURCE */
+/* LOG_SOURCE */
 static unsigned char saved[16384];
 static void save_flash(void) { memcpy(saved,(void *)FLASH_PARAMETER_RESET_BEGIN,sizeof(saved)); }
 static void restore_flash(void) {
     memcpy((void *)FLASH_PARAMETER_RESET_BEGIN,saved,sizeof(saved)); mutations=0; cut_after=-1;
     memset(&s_flash,0,sizeof(s_flash));
+}
+static void test_log(void) {
+    UINT8 expected[200]={0},before[200],actual[200],next[200];
+    UINT32 seconds;
+    int i,j,writes,cut,ok;
+    memset((void *)FLASH_LOG_A,0xFF,2048); memset(&s_log_record,0,sizeof(s_log_record));
+    for(i=0;i<402;++i) {
+        seconds=61; mutations=0;
+        assert(LogEvent_EEPROM(VCELL_OVP+(i % 10),&seconds));
+        memmove(expected+2,expected,198); expected[0]=(UINT8)(VCELL_OVP+i%10); expected[1]=1;
+        if(i!=0 && (i%134)!=0) assert(mutations==3); /* only 6 bytes per event */
+        memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        Sci_ACK_0x03_ReadRegs_EventRecord(actual); assert(!memcmp(expected,actual,200));
+    }
+    save_flash(); memcpy(before,expected,200);
+    seconds=61; mutations=0; assert(LogEvent_EEPROM(VCELL_UVP,&seconds)); writes=mutations;
+    Sci_ACK_0x03_ReadRegs_EventRecord(next);
+    for(cut=0;cut<=writes;++cut) {
+        restore_flash(); memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        seconds=61; cut_after=cut; LogEvent_EEPROM(VCELL_UVP,&seconds); cut_after=-1;
+        memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        Sci_ACK_0x03_ReadRegs_EventRecord(actual);
+        assert(!memcmp(actual,before,200) || !memcmp(actual,next,200));
+    }
+    restore_flash(); memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+    /* Repeated incomplete slots plus rotation must retain the full last 100. */
+    seconds=61; assert(LogEvent_EEPROM(CHG_OCP,&seconds));
+    Sci_ACK_0x03_ReadRegs_EventRecord(before);
+    for(j=0;j<200;++j) {
+        seconds=61; mutations=0; cut_after=1;
+        assert(!LogEvent_EEPROM(CHG_OTP,&seconds)); cut_after=-1;
+        memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        Sci_ACK_0x03_ReadRegs_EventRecord(actual); assert(!memcmp(actual,before,200));
+    }
+    seconds=61; assert(LogEvent_EEPROM(DSG_OTP,&seconds));
+    save_flash(); Sci_ACK_0x03_ReadRegs_EventRecord(before);
+    mutations=0; assert(EEPROM_ResetData_EventRecord_ToDefault()); writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        restore_flash(); memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        cut_after=cut; ok=EEPROM_ResetData_EventRecord_ToDefault(); cut_after=-1;
+        Sci_ACK_0x03_ReadRegs_EventRecord(actual); if(!ok) assert(!memcmp(actual,before,200));
+        memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+        Sci_ACK_0x03_ReadRegs_EventRecord(actual);
+        memset(next,0,200); assert(!memcmp(actual,before,200) || !memcmp(actual,next,200));
+    }
+    /* A failed event is retried, rather than swallowed by its RAM latch. */
+    restore_flash(); memset(&s_log_record,0,sizeof(s_log_record)); ReadEEPROM_EventRecord_Parameters();
+    seconds=100; mutations=0; cut_after=0; LogEvent_Record(1,CHG_OTP,&seconds);
+    assert(!s_log_record.eventLatch[CHG_OTP] && seconds==100);
+    cut_after=-1; LogEvent_Record(1,CHG_OTP,&seconds);
+    assert(s_log_record.eventLatch[CHG_OTP] && seconds==0);
+    puts("PASS log: 6-byte appends, 402-event wrap/reboot, all rotation cut points, 200 torn writes, atomic clear, retry, unchanged 200-byte host view");
 }
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
@@ -129,5 +184,6 @@ int main(void) {
     runtime_rw.protect[0]=456; assert(StorageFlash_SaveRwParamData(&runtime_rw));
     mutations=0; assert(InitE2PROM() && runtime_rw.protect[0]==456 && !mutations);
     printf("PASS storage: real boot init, once per version, disabled switch, %d interrupted resets, statistics untouched\n",writes+1);
+    test_log();
     return 0;
 }
