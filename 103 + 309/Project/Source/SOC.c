@@ -2,6 +2,8 @@
 #include <stdint.h>
 
 #define SOC_TIME_CURRENT_MIN_MA 200L
+#define SOC_TIME_UNKNOWN_MINUTES 0xFFFFU
+#define SOC_TIME_MAX_MINUTES 0xFFFEU
 
 UINT16 SOC_GetTypeCBatEquivCurrentA10(void)
 {
@@ -48,13 +50,17 @@ UINT16 SOC_GetRemainingMinutes(UINT8 charging)
     UINT16 full=g_stCellInfoReport.SocElement.u16CapacityFull;
     UINT16 now=g_stCellInfoReport.SocElement.u16CapacityNow;
 
-    if (!Fault_IsCurrentSampleFresh() || full==0U) return 0U;
+    if (!Fault_IsCurrentSampleFresh() || full==0U)
+        return SOC_TIME_UNKNOWN_MINUTES;
+    if (measured_ma>-SOC_TIME_CURRENT_MIN_MA && measured_ma<SOC_TIME_CURRENT_MIN_MA)
+        return SOC_TIME_UNKNOWN_MINUTES;
     if (now>full) now=full;
     /* Use the same calibrated net current and board load as coulomb counting.
      * No extrapolation through idle, invalid samples or STOP. */
     current_ma=(int64_t)measured_ma-PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA;
     if (charging) {
-        if (measured_ma<SOC_TIME_CURRENT_MIN_MA || current_ma<=0) return 0U;
+        if (measured_ma<SOC_TIME_CURRENT_MIN_MA) return 0U;
+        if (current_ma<=0) return SOC_TIME_UNKNOWN_MINUTES;
         capacity=(UINT32)(full-now);
     }
     else {
@@ -65,5 +71,6 @@ UINT16 SOC_GetRemainingMinutes(UINT8 charging)
     /* Capacity is Ah*100: one unit is 10 mAh, or 600 mA*min.
      * Round up a nonzero remainder; the largest numerator is 39,321,000. */
     minutes=(UINT32)(((int64_t)capacity*600+current_ma-1)/current_ma);
-    return (UINT16)(minutes>0xFFFFU ? 0xFFFFU : minutes);
+    /* Reserve 0xFFFF for unavailable estimates on the customer wire format. */
+    return (UINT16)(minutes>SOC_TIME_MAX_MINUTES ? SOC_TIME_MAX_MINUTES : minutes);
 }

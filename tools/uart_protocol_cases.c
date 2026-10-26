@@ -83,7 +83,8 @@ static void check_customer(struct SCI_PORT *port)
     assert(b[18]==Customer_Bcc(b+3,15) && b[19]==0xFA);
     request(port,data3_request,sizeof(data3_request)); Sci_ServicePort(port,0);
     assert(transmit(port,b)==22 && b[2]==3 && b[3]==16 && le(b+4)==900);
-    for(n=6;n<20;++n) assert(b[n]==0);
+    assert(le(b+6)==0xFFFFU && le(b+8)==0xFFFFU);
+    for(n=10;n<20;++n) assert(b[n]==0);
     SeriesNum=6; request(port,data1_request,7); Sci_ServicePort(port,0); transmit(port,b);
     assert(le(b+16)==61001); SeriesNum=7;
 }
@@ -109,25 +110,34 @@ static void test_remaining_time(void)
     request(&s_port2,data3_request,7); Sci_ServicePort(&s_port2,0);
     assert(transmit(&s_port2,b)==22 && !le(b+6) && le(b+8)==discharge);
     tick=s_current_tick+50U; assert(SOC_GetRemainingMinutes(0)==discharge);
-    ++tick; assert(!SOC_GetRemainingMinutes(0)); /* Across tick wrap. */
+    ++tick; assert(SOC_GetRemainingMinutes(0)==0xFFFFU); /* Across tick wrap. */
+    request(&s_port2,data3_request,7); Sci_ServicePort(&s_port2,0);
+    assert(transmit(&s_port2,b)==22 && le(b+6)==0xFFFFU && le(b+8)==0xFFFFU);
     s_current_tick=tick;
-    s_current_valid=0; assert(!SOC_GetRemainingMinutes(0));
+    s_current_valid=0;
+    assert(SOC_GetRemainingMinutes(0)==0xFFFFU && SOC_GetRemainingMinutes(1)==0xFFFFU);
     s_current_valid=1; measured_ma=199;
-    assert(!SOC_GetRemainingMinutes(0) && !SOC_GetRemainingMinutes(1));
-    measured_ma=-199; assert(!SOC_GetRemainingMinutes(0));
+    assert(SOC_GetRemainingMinutes(0)==0xFFFFU && SOC_GetRemainingMinutes(1)==0xFFFFU);
+    request(&s_port1,data3_request,7); Sci_ServicePort(&s_port1,0);
+    assert(transmit(&s_port1,b)==22 && le(b+6)==0xFFFFU && le(b+8)==0xFFFFU);
+    measured_ma=-199; assert(SOC_GetRemainingMinutes(0)==0xFFFFU);
+    measured_ma=0;
+    assert(SOC_GetRemainingMinutes(0)==0xFFFFU && SOC_GetRemainingMinutes(1)==0xFFFFU);
     measured_ma=200;
     g_stCellInfoReport.SocElement.u16CapacityFull=65535;
     g_stCellInfoReport.SocElement.u16CapacityNow=0;
-    assert(SOC_GetRemainingMinutes(1)==65535 && !SOC_GetRemainingMinutes(0));
+    assert(SOC_GetRemainingMinutes(1)==0xFFFEU && !SOC_GetRemainingMinutes(0));
     measured_ma=-200;
     g_stCellInfoReport.SocElement.u16CapacityNow=65535;
-    assert(SOC_GetRemainingMinutes(0)==65535);
+    assert(SOC_GetRemainingMinutes(0)==0xFFFEU);
     measured_ma=INT32_MIN; assert(SOC_GetRemainingMinutes(0)==1);
     measured_ma=INT32_MAX; assert(SOC_GetRemainingMinutes(1)==0);
     g_stCellInfoReport.SocElement.u16CapacityFull=0;
-    assert(!SOC_GetRemainingMinutes(0) && !SOC_GetRemainingMinutes(1));
+    assert(SOC_GetRemainingMinutes(0)==0xFFFFU && SOC_GetRemainingMinutes(1)==0xFFFFU);
     g_stCellInfoReport.SocElement.u16CapacityFull=100;
     measured_ma=1000; assert(!SOC_GetRemainingMinutes(1)); /* now > full clamps. */
+    g_stCellInfoReport.SocElement.u16CapacityNow=0;
+    measured_ma=-1000; assert(!SOC_GetRemainingMinutes(0)); /* Empty while discharging. */
     setup_report(); s_current_valid=0;
     puts("PASS remaining time: real SOC getter, charge/discharge LE fields, board load, idle/invalid/stale, wrap, limits");
 }

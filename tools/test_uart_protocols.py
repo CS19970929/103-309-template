@@ -260,8 +260,8 @@ wake_config+='''
 int main(void) {
     baud=9600; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==3);
     baud=19200; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==3);
-    baud=115200; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==0);
-    puts("PASS runtime baud STOP wake: both UARTs enabled at 9600/19200 and disabled at 115200");
+    baud=115200; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==3);
+    puts("PASS runtime baud STOP wake: both UARTs enabled at 9600/19200/115200");
     return 0;
 }
 '''
