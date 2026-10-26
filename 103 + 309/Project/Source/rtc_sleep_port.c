@@ -30,11 +30,7 @@ UINT16 RtcSleep_PortGetLowVoltageSleepMv(void)
 
 UINT8 RtcSleep_PortIsMcuWakeActive(void)
 {
-    // return (UINT8)(GPIO_ReadInputDataBit(GPIO_MCU_WK, PIN_MCU_WK) != Bit_RESET);
-    // if (0 == MCUI_ENI_DI1)
-    //     return true;
-
-    return false;
+    return (UINT8)(MCUI_ENI_DI1==0);
 }
 
 UINT8 RtcSleep_PortGetExternalCommCounter(void)

@@ -6,10 +6,15 @@ typedef struct SLEEP_RUNTIME_TAG
 	volatile UINT8 ext_comm;
 	UINT8 boot_sleep;
 	UINT8 chg_wake;
-	UINT8 reserved;
+	UINT8 key_state;
+	UINT32 key_press_tick;
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
+
+enum { KEY_READY, KEY_TIMING, KEY_WAIT_RELEASE };
+#define KEY_SLEEP_TICKS 300U
+#define KEY_WAKE_STEPS 100U
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
@@ -26,66 +31,49 @@ static UINT8 SleepDeal_IsKeyPressed(void)
 
 UINT8 SleepDeal_IsWakeupValid(void)
 {
+	UINT8 held;
 	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
+		SleepDeal_ResetKeyState();
 		return 1;
 	}
-	if (SleepDeal_IsKeyPressed())
-	{
-		return 1;
-	}
-
-#if 0
-	while (1)
-	{
-		if (!SleepDeal_IsKeyPressed())
-		{
-			return 0;
+	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
+	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
+	/* TIM3 is stopped here. Use a bounded 1 s qualification after the STOP
+	 * clock restore, while ADC and normal business remain paused. */
+	for (held=0U; held<KEY_WAKE_STEPS; ++held) {
+		__delay_ms(10U);
+		Feed_IWatchDog;
+		if (SleepDeal_IsChargerWakeupActive()) {
+			SleepDeal_MarkBootFromSleepChargerWakeup();
+			SleepDeal_ResetKeyState();
+			return 1U;
 		}
-
-		hold_cnt = 0;
-		while (SleepDeal_IsKeyPressed())
-		{
-			if (SleepDeal_IsChargerWakeupActive())
-			{
-				SleepDeal_MarkBootFromSleepChargerWakeup();
-				return 1;
-			}
-
-			__delay_ms(10);
-			if (++hold_cnt >= DI1_LONG_PRESS_WAKE_10MS)
-			{
-				return 1;
-			}
-		}
-
-		// display_cnt = 0;
-		// while (display_cnt < LEDBAR_SOC_DISPLAY_10MS)
-		// {
-		// 	if (SleepDeal_IsChargerWakeupActive())
-		// 	{
-		// 		SleepDeal_MarkBootFromSleepChargerWakeup();
-		// 		return 1;
-		// 	}
-		// 	if (SleepDeal_IsKeyPressed())
-		// 	{
-		// 		break;
-		// 	}
-
-		// 	__delay_ms(10);
-		// 	display_cnt++;
-		// }
-
-		// if (display_cnt >= LEDBAR_SOC_DISPLAY_10MS)
-		// {
-		// 	LedBar_PrepareForStop();
-		// 	return 0;
-		// }
+		if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
 	}
-#endif
+	s_sleep.key_state=KEY_WAIT_RELEASE;
+	return 1U;
+}
 
-	return 0U;
+void SleepDeal_ResetKeyState(void)
+{
+	s_sleep.key_state=SleepDeal_IsKeyPressed() ? KEY_WAIT_RELEASE : KEY_READY;
+}
+
+UINT8 SleepDeal_TakeKeySleepRequest(void)
+{
+	UINT32 now=SysTime_Get10msTickCount();
+	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
+	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
+	if (s_sleep.key_state==KEY_READY) {
+		s_sleep.key_press_tick=now;
+		s_sleep.key_state=KEY_TIMING;
+		return 0U;
+	}
+	if ((UINT32)(now-s_sleep.key_press_tick)<KEY_SLEEP_TICKS) return 0U;
+	s_sleep.key_state=KEY_WAIT_RELEASE;
+	return 1U;
 }
 
 void SleepDeal_Continue(UINT8 sleep_mode)
@@ -204,6 +192,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
+		SleepDeal_ResetKeyState();
 		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
 		break;

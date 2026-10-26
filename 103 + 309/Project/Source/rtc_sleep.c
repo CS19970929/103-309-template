@@ -134,31 +134,6 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
-#ifdef _DI_SWITCH_SYS_ONOFF
-    // if (1 == MCUI_ENI_DI1 && g_stCellInfoReport.u16Ichg < 5)
-    if (1 == MCUI_ENI_DI1)
-    {
-        LowPower_Request(NORMAL_MODE);
-        return 1U;
-    }
-#endif // _DI_SWITCH_SYS_ONOFF
-
-#ifdef _DI_SWITCH_longKEY_ONOFF
-    static UINT16 su16_AntiShake_Cnt2 = 0;
-
-    if (0 == MCUI_ENI_DI1)
-    {
-        if (++su16_AntiShake_Cnt2 >= 3)
-        {
-            su16_AntiShake_Cnt2 = 0;
-            LowPower_Request(NORMAL_MODE);
-        }
-    }
-    else
-        su16_AntiShake_Cnt2 = 0;
-
-#endif // _DI_SWITCH_longKEY_ONOFF
-
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
@@ -245,6 +220,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    SleepDeal_ResetKeyState();
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
@@ -312,6 +288,12 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
 
+    if (g_irq_t==soc_key) {
+        if (SleepDeal_IsWakeupValid()) return false;
+        MCUO_DEBUG_LED1=1;
+        return true;
+    }
+
     if (g_irq_t == uart1_irq || g_irq_t == uart2_irq)
     {
         if (rtc_sleep_verify_uart_wakeup())
@@ -359,14 +341,17 @@ void rtc_sleep(void)
 {
     uint8_t sleep_mode;
 
-    if (RtcSleep_PortIsOneSecondTick() == 0U)
+    if (SleepDeal_TakeKeySleepRequest() && g_stLowPowerRtcStatus.mode!=DEEP_MODE)
+        LowPower_Request(NORMAL_MODE);
+
+    if (g_stLowPowerRtcStatus.mode==NO_SLEEP && RtcSleep_PortIsOneSecondTick()!=0U)
+        lp_update_sleep_request();
+    sleep_mode = g_stLowPowerRtcStatus.mode;
+    if (sleep_mode==NO_SLEEP)
     {
         lp_refresh_status();
         return;
     }
-
-    lp_update_sleep_request();
-    sleep_mode = g_stLowPowerRtcStatus.mode;
 
     if ((sleep_mode != HICCUP_MODE) &&
         (sleep_mode != NORMAL_MODE) &&
@@ -399,6 +384,7 @@ void rtc_sleep(void)
             LowPower_Request(NO_SLEEP);
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
+            SleepDeal_ResetKeyState();
 
             g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
             RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);

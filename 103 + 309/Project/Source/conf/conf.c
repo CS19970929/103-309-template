@@ -214,7 +214,7 @@ void InitWakeUp_Base(void)
                              GPIO_PortSourceGPIOA,
                              GPIO_PinSource9,
                              EXTI_Line9,
-                             EXTI_Trigger_Falling,
+                             EXTI_Trigger_Rising_Falling,
                              EXTI9_5_IRQn);
 #endif
 }
@@ -237,7 +237,7 @@ void InitWakeUp_NormalMode(void)
                              GPIO_PortSourceGPIOA,
                              GPIO_PinSource9,
                              EXTI_Line9,
-                             EXTI_Trigger_Falling,
+                             EXTI_Trigger_Rising_Falling,
                              EXTI9_5_IRQn);
 
     Conf_InitUartWakeup();

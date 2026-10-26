@@ -9,6 +9,8 @@ void SleepDeal_RecordExternalComm(void);
 UINT8 SleepDeal_GetExternalCommCounter(void);
 UINT8 SleepDeal_IsBootFromSleepStartup(void);
 UINT8 SleepDeal_IsWakeupValid(void);
+void SleepDeal_ResetKeyState(void);
+UINT8 SleepDeal_TakeKeySleepRequest(void);
 UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void);
 void SleepDeal_HandleBootSleepStartup(void);
 
