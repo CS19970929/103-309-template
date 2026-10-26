@@ -323,7 +323,7 @@ int main(void) {
         else { key=0; scripted_key=1; }
         SleepDeal_HandleBootSleepStartup();
         SleepDeal_UpdateOverdischarge(1);
-        assert(SleepDeal_HasHandledOverdischarge() && !zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+        assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
         key=0; SleepDeal_ResetKeyState(0U);
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
         OtherElement.u16Sleep_Vlow=LOW_POWER_FORCE_DEEP_SLEEP_MV+100;
@@ -374,11 +374,13 @@ int main(void) {
     assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); reset_during_stop=0; key=0; scripted_key=1;
     expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
-    SleepDeal_HandleBootSleepStartup(); assert(SleepDeal_HasHandledOverdischarge());
+    SleepDeal_HandleBootSleepStartup(); SleepDeal_UpdateOverdischarge(1);
+    assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     assert(BootFlag_Read()==BOOT_FLAG_RESET_VALUE);
     reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); charger=1;
     SleepDeal_HandleBootSleepStartup();
-    assert(SleepDeal_HasHandledOverdischarge() && BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
+    SleepDeal_UpdateOverdischarge(1);
+    assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP && BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     puts("PASS deep restart: sleep reason survives reset during STOP wait; configured key qualification required; watchdog feeds and charger reason preserved");
     reset_case(); assert(!SleepDeal_NormalIdleExpired(0));
     rtc_counter=604799; assert(!SleepDeal_NormalIdleExpired(0));

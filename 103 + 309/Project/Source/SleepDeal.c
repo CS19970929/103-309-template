@@ -132,11 +132,6 @@ void SleepDeal_UpdateOverdischarge(UINT8 active)
 	LowPower_Request(DEEP_MODE);
 }
 
-UINT8 SleepDeal_HasHandledOverdischarge(void)
-{
-	return s_sleep.undervoltage_handled;
-}
-
 UINT8 SleepDeal_NormalIdleExpired(UINT8 activity)
 {
 	UINT32 now;
