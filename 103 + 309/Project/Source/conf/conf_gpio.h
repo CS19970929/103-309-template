@@ -54,10 +54,6 @@
 #define GPIO_AFE1_PRO_EN        GPIOB
 #define PIN_AFE1_PRO_EN         GPIO_Pin_0
 
-//todo 待确认 测温度？命名修改没问题直接 
-#define GPIO_ADC_VBUS               GPIOA                   //adc输入采样，总压
-#define PIN_ADC_VBUS                GPIO_Pin_1
-
 //todo 供电 给谁的？？？
 #define GPIO_CMNT_EN                GPIOA                   //(power) can供电？？？
 #define PIN_CMNT_EN                 GPIO_Pin_4
@@ -65,7 +61,8 @@
 #define GPIO_HT_CHG                GPIOA                   //(power) can供电？？？
 #define PIN_HT_CHG                 GPIO_Pin_5
 
-#define GPIO_ADC_NMOS        GPIOB
+/* MOS NTC is wired to PA1 / ADC1_IN1 on this board. */
+#define GPIO_ADC_NMOS        GPIOA
 #define PIN_ADC_NMOS         GPIO_Pin_1
 
 #define GPIO_M_STB                  GPIOA                   //(power)

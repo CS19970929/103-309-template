@@ -14,7 +14,7 @@ typedef struct {
 } ADC_INPUT_CONFIG;
 
 static const ADC_INPUT_CONFIG s_adc_inputs[] = {
-    { RCC_APB2Periph_GPIOB, GPIO_ADC_NMOS, PIN_ADC_NMOS, ADC_Channel_9 }
+    { RCC_APB2Periph_GPIOA, GPIO_ADC_NMOS, PIN_ADC_NMOS, ADC_Channel_1 }
 };
 typedef char ADC_InputCountCheck[(sizeof(s_adc_inputs) / sizeof(s_adc_inputs[0]) == ADC_INPUT_COUNT) ? 1 : -1];
 

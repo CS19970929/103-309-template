@@ -2,7 +2,7 @@
 
 ## ADC 与 RTC
 
-- 当前只有 PB1 / ADC1 Channel 9 的 MOS NTC 输入。新增采样只扩展 `ADC_INPUT` 和 `s_adc_inputs`，每路软件触发单次转换，不使用 TIM2、DMA 或 ADC 中断。
+- 当前只有 PA1 / ADC1 Channel 1 的 MOS NTC 输入，与旧提交 `886feee` 中实际启用的通道及用户确认的接线一致。重构时曾误按旧 `GPIO_ADC_NMOS` 定义改为 PB1 / Channel 9，已恢复 PA1 并修正引脚定义；不能依据过时注释切换采样通道。新增采样只扩展 `ADC_INPUT` 和 `s_adc_inputs`，每路软件触发单次转换，不使用 TIM2、DMA 或 ADC 中断。
 - RUN 主循环先执行 `ADC_Task`，再消费完整的新采样组。启动配置和有界校准结束后等待稳定，丢弃一次真实转换，随后取 8 次转换、去掉最大最小值后平均。每轮采样完成后间隔 100 ms。
 - 只有确认 EOC 且未超时的数据才能进入采样组；零值、满量程、NTC 表范围外和非法校准结果只表示采样不可用，不能直接视为 MOS 高温。上报保留最近有效温度，但保护不得拿这个缓存推进确认时间。
 - `DataLoad_MosTemperature` 是 MOS NTC 查表、原有 K/B 校准和上报编码的唯一入口，保持 `(摄氏度 + 40) * 10` 编码和原校准含义。

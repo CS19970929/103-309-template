@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import argparse
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / '103 + 309/Project/Source'
@@ -33,11 +34,14 @@ typedef int32_t INT32;
 typedef struct { int unused; } GPIO_TypeDef;
 typedef struct { int GPIO_Mode, GPIO_Pin; } GPIO_InitTypeDef;
 typedef struct { int ADC_ExternalTrigConv, ADC_NbrOfChannel; } ADC_InitTypeDef;
-static GPIO_TypeDef gpio_b;
-#define GPIO_ADC_NMOS (&gpio_b)
-#define PIN_ADC_NMOS 2
+static GPIO_TypeDef gpio_a, gpio_b;
+#define GPIOA (&gpio_a)
+#define GPIOB (&gpio_b)
+#define GPIO_Pin_1 2
+#define RCC_APB2Periph_GPIOA 4
 #define RCC_APB2Periph_GPIOB 1
 #define RCC_APB2Periph_ADC1 2
+#define ADC_Channel_1 1
 #define ADC_Channel_9 9
 #define ADC1 1
 #define ADC_FLAG_EOC 1
@@ -58,7 +62,9 @@ static void RCC_APB2PeriphClockCmd(int p,int en) { if(p==RCC_APB2Periph_ADC1) ad
 static void ADC_Cmd(int p,int en) { adc_enabled=en; }
 static void ADC_DeInit(int p) { eoc=0; }
 static void GPIO_StructInit(GPIO_InitTypeDef *p) { memset(p,0,sizeof(*p)); }
-static void GPIO_Init(GPIO_TypeDef *p,GPIO_InitTypeDef *cfg) {}
+static void GPIO_Init(GPIO_TypeDef *p,GPIO_InitTypeDef *cfg) {
+    assert(p==GPIOA && cfg->GPIO_Pin==GPIO_Pin_1 && cfg->GPIO_Mode==GPIO_Mode_AIN);
+}
 static void RCC_ADCCLKConfig(int p) {}
 static void ADC_StructInit(ADC_InitTypeDef *p) { memset(p,0,sizeof(*p)); }
 static void ADC_Init(int p,ADC_InitTypeDef *cfg) { assert(cfg->ADC_NbrOfChannel==1); }
@@ -85,7 +91,7 @@ int main(void) {
     assert(!ADC_TakeSample(ADC_INPUT_MOS,&raw));
     for(i=0;i<100;++i) ADC_Task();
     assert(conversions==0 && !ADC_TakeSample(ADC_INPUT_MOS,&raw));
-    start_sweep(); assert(selected_channel==9);
+    start_sweep(); assert(selected_channel==1); /* Board MOS NTC is on PA1. */
     /* Merely advancing time without an EOC cannot produce temperature. */
     tick+=ADC_CONVERSION_TIMEOUT_TICKS; ADC_Task();
     assert(ADC_TakeSample(ADC_INPUT_MOS,&raw)==ADC_SAMPLE_INVALID && raw==99);
@@ -157,6 +163,46 @@ UINT8 ADC_TakeSample(enum ADC_INPUT input, UINT16 *raw) {
     UINT8 status=sample_status; sample_status=ADC_SAMPLE_NONE;
     if(status==ADC_SAMPLE_READY) *raw=sample_raw;
     return status;
+}
+'''
+
+ADC_MEASUREMENT_TESTS = r'''
+static void sample_pins(UINT16 pa1_raw, UINT16 pb1_raw) {
+    int i;
+    tick+=ADC_SAMPLE_PERIOD_TICKS; ADC_Task();
+    for(i=0;i<9;++i) {
+        conversion=selected_channel==1 ? pa1_raw : pb1_raw;
+        eoc=1; ADC_Task(); DataLoad_MosTemperature();
+    }
+}
+int main(void) {
+    int i;
+    reset_case(); InitADC();
+    sample_pins(2048,2048);
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==650);
+    sample_pins(1509,2048); /* Heat the connected PA1 probe from 25 C to 40 C. */
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==800);
+    sample_pins(1509,400); /* PB1 is unrelated to MOS temperature. */
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==800);
+    sample_pins(0,400); /* Invalid input retains display but cannot trip heat. */
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==800);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    tick+=ADC_SAMPLE_PERIOD_TICKS; ADC_Task();
+    conversion=400; eoc=1; tick+=ADC_CONVERSION_TIMEOUT_TICKS;
+    ADC_Task(); DataLoad_MosTemperature(); /* A delayed EOC is not fresh heat. */
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==800);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    ADC_StopForLowPower(); Fault_PauseMeasurements(); tick+=100000;
+    InitADC(); ADC_Task(); DataLoad_MosTemperature();
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    sample_pins(2048,400);
+    assert(g_stCellInfoReport.u16Temperature[MOS_TEMP1]==650);
+    for(i=0;i<11;++i) sample_pins(400,2048);
+    assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    for(i=0;i<11;++i) sample_pins(2048,400);
+    assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    puts("PASS PA1 MOS: probe heating -> ADC -> NTC -> report -> heat latch/recovery, invalid/late input, RUN restore");
+    return 0;
 }
 '''
 
@@ -531,7 +577,11 @@ def main():
             env[key] = value
     compiler = sorted((vs / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/cl.exe'))[-1]
     adc = (SOURCE / 'ADC.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
-    run_c('adc', ADC_STUBS + (SOURCE / 'ADC.h').read_text() + adc + ADC_TESTS, output, env, compiler)
+    # Read the real board pin definitions, rather than repeating them in a stub.
+    gpio = '\n'.join(line for line in (SOURCE / 'conf/conf_gpio.h').read_text(encoding='utf-8').splitlines()
+                     if re.match(r'#define\s+(GPIO_ADC_NMOS|PIN_ADC_NMOS)\b', line)) + '\n'
+    adc_stubs = ADC_STUBS + gpio
+    run_c('adc', adc_stubs + (SOURCE / 'ADC.h').read_text() + adc + ADC_TESTS, output, env, compiler)
     upper = (SOURCE / 'Sci_Upper.h').read_text(encoding='utf-8', errors='replace')
     # Use only the real protocol fault bit layout, not the rest of the report.
     bits = upper[upper.index('struct MDLCHGFAULT_BITS'):
@@ -547,7 +597,7 @@ def main():
         measurement = subprocess.check_output(
             ['git','show','HEAD:103 + 309/Project/Source/DataDeal.c'], cwd=ROOT).decode('utf-8')
         print('Measurement fixture: committed DataDeal.c; worktree injection is excluded explicitly')
-    elif 'temperature = sys_time.test_mos_temp;' in measurement:
+    elif re.search(r'(?m)^[ \t]*temperature\s*=\s*sys_time\.test_mos_temp\s*;', measurement):
         raise SystemExit('Worktree overrides real MOS temperature with sys_time.test_mos_temp. '
                          'Use --committed-measurement to test the committed NTC path without changing it.')
     conversion += function(measurement, 'void DataLoad_MosTemperature(')
@@ -565,6 +615,11 @@ def main():
     run_c('protection', ADC_STUBS + (SOURCE / 'ADC.h').read_text() +
           (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits +
           FAULT_STUBS + driver + fault + conversion + parameters + PARAMETER_TESTS + FAULT_TESTS,
+          output, env, compiler)
+    real_adc_stubs = FAULT_STUBS.replace(function(FAULT_STUBS, 'UINT8 ADC_TakeSample(').rstrip(), '')
+    run_c('mos_measurement', adc_stubs + (SOURCE / 'ADC.h').read_text() + adc +
+          (SOURCE / 'Fault.h').read_text(encoding='utf-8') + bits + real_adc_stubs + driver +
+          fault + conversion + function(FAULT_TESTS, 'static void reset_case(') + ADC_MEASUREMENT_TESTS,
           output, env, compiler)
     afe = (SOURCE / 'SH367309_DataDeal.c').read_text(encoding='utf-8')
     afe_prefix = afe[afe.index('int AFE_PARAM_WRITE_Flag'):afe.index('static void AFE_CopyCurValues')]
