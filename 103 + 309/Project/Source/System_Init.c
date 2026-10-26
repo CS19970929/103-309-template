@@ -315,8 +315,10 @@ void IWDG_Feed(void)
 
 void TIM3_IRQHandler(void)
 {
+	IRQ_DEBUG_ENTER(tim3.irq);
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
+		IRQ_DEBUG_COUNT(tim3.update);
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
 		// sys_time.rtc_sec_cnt = RTC_GetCounter();

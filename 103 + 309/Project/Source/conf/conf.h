@@ -7,6 +7,7 @@
 #include "stm32f10x.h"
 #include "conf_gpio.h"
 #include "Project_Config.h"
+#include "IrqDebug.h"
 
 #define __EnableLowPowerDebug__
 // #define __SOC_5_PROTECT_
@@ -137,6 +138,9 @@ typedef enum GPIO_TYPE {
 
 typedef struct
 {
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+  volatile IRQ_DEBUG irq;
+#endif
   uint32_t    can_rcv_cnt_test;
   uint32_t    last_ext_comm_cnt_can;
   volatile uint32_t can_rcv_cnt;
@@ -144,12 +148,7 @@ typedef struct
   uint32_t    App_AFEGet_cnt;
   uint32_t    App_SH367309_Monitor_cnt;
 
-  uint32_t    sci1_irq_cnt;
-  uint32_t    sci2_irq_cnt;
-  uint32_t    sci3_irq_cnt;
 
-  uint16_t    cnt_PA0_irq;
-  uint16_t    cnt_bms1_keyirq;
   uint16_t    pec_err_cnt;
 
   uint16_t    CHG;
@@ -166,8 +165,6 @@ typedef struct
   uint16_t    enter_rtc_delay;
   uint32_t    rtc_sleep_cnt;
   uint32_t    rtc_sec_cnt;
-  volatile uint32_t rtc_alm_cnt;
-  uint32_t    rtc_irq_cnt;
 
   uint8_t     isdebugenable;
   bool        typec_curr_sim;

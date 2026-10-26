@@ -1,7 +1,6 @@
 /* Host stubs around the real candidate-wake and STOP-cycle functions. */
 volatile enum irqWakeup g_irq_t;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
-static struct { UINT32 rtc_sec_cnt; } sys_time;
 static int adc_on, gpio_led, stop_rtc, wake_external, inject_frame, returned_to_sleep;
 static int wake_afe, deep_requests;
 static int gpio_ctlc;

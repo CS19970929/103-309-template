@@ -54,9 +54,9 @@
 #endif
 
 // <q> Enable IRQ debug counters
-// <i> Keeps lightweight interrupt counters for Keil watch and STOP wakeup debug.
+// <i> sys_time.irq: counts and STOP snapshots, available in Release too; 0 removes the instrumentation.
 #ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_ENABLE 0
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
 #endif
 
 // <q> Enable IRQ debug event ring

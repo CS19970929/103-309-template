@@ -349,10 +349,13 @@ void Sys_StopMode(void)
     LowPower_ClearWakeupPending();
 
     __disable_irq();
+    IRQ_DEBUG_STOP_BEGIN();
     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+    IRQ_DEBUG_STOP_CAPTURE();
 
     cpu_frequency_conf();
     __enable_irq();
+    IRQ_DEBUG_STOP_END();
     // __set_PRIMASK(0);
 }
 

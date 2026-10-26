@@ -94,6 +94,20 @@ static void Sci_ReceiveByte(struct SCI_PORT *port, UINT8 data, UINT32 now)
 static void Sci_PortIRQ(struct SCI_PORT *port)
 {
     UINT16 status=(UINT16)port->usart->SR;
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+    volatile UART_IRQ_DEBUG *debug = (port->usart==USART1) ? &sys_time.irq.uart1 :
+        (port->usart==USART2) ? &sys_time.irq.uart2 : &sys_time.irq.uart3;
+    debug->last_sr=status;
+    debug->last_cr1=port->usart->CR1;
+    debug->last_cr3=port->usart->CR3;
+    if (status & SCI_USART_ERRORS) debug->last_error_sr=status;
+    if (status & USART_SR_ORE) IrqDebug_Count(&debug->ore,0U);
+    if (status & USART_SR_NE) IrqDebug_Count(&debug->noise,0U);
+    if (status & USART_SR_FE) IrqDebug_Count(&debug->framing,0U);
+    if (status & USART_SR_PE) IrqDebug_Count(&debug->parity,0U);
+    if ((status & USART_SR_IDLE) && (port->usart->CR1 & USART_CR1_IDLEIE))
+        IrqDebug_Count(&debug->idle,0U);
+#endif
     if (status & SCI_USART_ERRORS)
     {
         volatile UINT16 dummy=(UINT16)port->usart->DR; /* SR then DR clears errors. */
@@ -106,10 +120,16 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     if ((status & USART_SR_RXNE) && (port->usart->CR1 & USART_CR1_RXNEIE))
     {
         UINT8 data=(UINT8)port->usart->DR;
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+        IrqDebug_Count(&debug->rxne,0U);
+#endif
         Sci_ReceiveByte(port,data,SysTime_GetMicroseconds());
     }
     if ((port->usart->SR & USART_SR_TXE) && (port->usart->CR1 & USART_CR1_TXEIE))
     {
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+        IrqDebug_Count(&debug->txe,0U);
+#endif
         if (port->tx_index < port->tx_length)
             port->usart->DR=port->message.u16Buffer[port->tx_index++];
         if (port->tx_index >= port->tx_length)
@@ -120,6 +140,9 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     }
     if ((port->usart->SR & USART_SR_TC) && (port->usart->CR1 & USART_CR1_TCIE))
     {
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+        IrqDebug_Count(&debug->tc,0U);
+#endif
         USART_ClearFlag(port->usart,USART_FLAG_TC);
         if (port->message.reset_after_tx)
             u8FlashUpdateFlag=1U;

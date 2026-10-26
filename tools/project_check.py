@@ -221,7 +221,6 @@ RELEASE_FORBIDDEN_DEFINES = {
     "_DEBUG_CODE",
     "PROJECT_CFG_DEBUG_WATCH_ENABLE",
     "PROJECT_CFG_DEBUG_MONITOR_ENABLE",
-    "PROJECT_CFG_IRQ_DEBUG_ENABLE",
     "PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE",
     "FLASH64K_APP_QUICK_TEST_ENABLE",
     "FLASH64K_APP_USE_TEST_ENABLE",
@@ -231,7 +230,6 @@ DEBUG_ONLY_SOURCE_FILES = {
     "../Source/DebugHooks.c",
     "../Source/DebugWatch.c",
     "../Source/SystemDebug.c",
-    "../Source/IrqDebug.c",
 }
 STARTUP_DEFAULT_HANDLER_SOURCE_FILE = "../Source/StartupDefaultHandler.c"
 RUNTIME_DEBUG_FORBIDDEN_TOKENS = [
@@ -563,10 +561,10 @@ def check_keil_targets(reporter):
             reporter.ok("FD_Debug enables g_dbg snapshot under g_dbg_watch")
 
         irq_value = find_define_value(debug["defines"], "PROJECT_CFG_IRQ_DEBUG_ENABLE")
-        if irq_value != "1":
-            reporter.fail("FD_Debug should define PROJECT_CFG_IRQ_DEBUG_ENABLE=1 for IRQ counters")
+        if irq_value is not None:
+            reporter.fail("FD_Debug IRQ observation must follow Project_Config.h instead of a target override")
         else:
-            reporter.ok("FD_Debug enables IRQ debug counters")
+            reporter.ok("FD_Debug IRQ observation follows Project_Config.h")
 
         irq_event_value = find_define_value(debug["defines"], "PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE")
         if irq_event_value != "0":

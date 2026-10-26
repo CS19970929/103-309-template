@@ -94,7 +94,28 @@ int main(void)
     UINT32 counters[11];
     host_storage_init(); StorageFlash_InitStatistics(RCC_CSR_PORRSTF,BOOT_FLAG_RESET_VALUE);
     setup_report(); InitUSART_CommonUpper();
+    /* All error flags on all three USARTs, including simultaneous errors.
+     * No TXE/TC counts when their interrupt enables are off. */
+    for(i=0;i<3;++i) {
+        struct SCI_PORT *port=(i==0) ? &s_port1 : (i==1) ? &s_port2 : &s_port3;
+        volatile UART_IRQ_DEBUG *debug=(i==0) ? &sys_time.irq.uart1 :
+            (i==1) ? &sys_time.irq.uart2 : &sys_time.irq.uart3;
+        port->usart->SR=SCI_USART_ERRORS|USART_SR_RXNE|USART_SR_TXE|USART_SR_TC;
+        Sci_PortIRQ(port);
+        assert(debug->ore==1 && debug->noise==1 && debug->framing==1 && debug->parity==1);
+        assert(!debug->rxne && !debug->txe && !debug->tc && primask==0);
+        assert(debug->last_error_sr==port->usart->SR && port->protocol==SCI_DISCARD);
+        port->usart->SR=0;
+        primask=1; receive(port,0x11); assert(primask==1 && debug->rxne==1); primask=0;
+        assert(debug->last_error_sr & USART_SR_ORE);
+        port->usart->CR1 |= USART_CR1_IDLEIE; port->usart->SR=USART_SR_IDLE;
+        Sci_PortIRQ(port); assert(debug->idle==1);
+        Sci_ArmReceiver(port); port->usart->SR=0;
+    }
+    puts("PASS USART IRQ counters: all ports, simultaneous ORE/NE/FE/PE, enabled RX/TX/IDLE, error snapshot and PRIMASK preservation");
     check_customer(&s_port1); check_customer(&s_port2);
+    assert(sys_time.irq.uart1.rxne && sys_time.irq.uart1.txe && sys_time.irq.uart1.tc);
+    assert(sys_time.irq.uart2.rxne && sys_time.irq.uart2.txe && sys_time.irq.uart2.tc);
     /* Each port changes protocol from frame to frame. Both replies remain private. */
     modbus_request(mb,1,3,0xD000,1);
     request(&s_port1,mb,8); request(&s_port2,data1_request,7);

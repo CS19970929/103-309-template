@@ -135,6 +135,7 @@ if r.returncode: raise SystemExit(r.returncode)
 core=code[:code.index('static int frame(')]
 cut=core.index('#define')
 fixtures=(ROOT/'tools/uart_host_cases.h').read_text(encoding='utf-8')
+fixtures+=func((src/'IrqDebug.c').read_text(encoding='utf-8'),'void IrqDebug_Count(')
 combo=core[:cut]+fixtures+'\n'+core[cut:]
 combo=combo.replace('static void SleepDeal_RecordExternalComm(void) {}',
                     'static void SleepDeal_RecordExternalComm(void) { ++comm_activity; }')

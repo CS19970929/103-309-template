@@ -25,6 +25,7 @@ static GPIO_TypeDef gpio_a,gpio_b,gpio_d;
 #define USART_SR_RXNE 16
 #define USART_SR_TXE 32
 #define USART_SR_TC 64
+#define USART_SR_IDLE 128
 #define USART_CR1_RE 1
 #define USART_CR1_TE 2
 #define USART_CR1_RXNEIE 4
@@ -59,6 +60,9 @@ static GPIO_TypeDef gpio_a,gpio_b,gpio_d;
 #define _COMMOM_UPPER_SCI2
 #define _COMMOM_UPPER_SCI3
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
+#include "IrqDebug.h"
+static struct { volatile IRQ_DEBUG irq; UINT32 rtc_sec_cnt; } sys_time;
 static UINT32 clock_us;
 static UINT32 clock_step;
 static UINT8 primask, u8FlashUpdateFlag, host_off;

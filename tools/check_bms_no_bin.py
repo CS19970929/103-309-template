@@ -2,6 +2,7 @@
 import argparse
 import os
 import re
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -9,11 +10,14 @@ import xml.etree.ElementTree as ET
 
 
 def main():
+    sys.stdout.reconfigure(errors='replace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=['FD_Release', 'FD_Debug'], default='FD_Release')
     parser.add_argument('--uv4', default=r'C:\Keil_v5\UV4\UV4.exe')
     parser.add_argument('--switch-mode', type=int, choices=[0, 1],
                         help='Override the switch mode in the disposable project only')
+    parser.add_argument('--irq-debug', type=int, choices=[0, 1],
+                        help='Override IRQ observation in the disposable project only')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     project = root / '103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx'
@@ -27,6 +31,12 @@ def main():
         defines = target.find('TargetOption/TargetArmAds/Cads/VariousControls/Define')
         defines.text = (defines.text or '') + f',PROJECT_CFG_SWITCH_MODE={args.switch_mode}'
         print(f'Switch mode override: {args.switch_mode}', flush=True)
+    if args.irq_debug is not None:
+        defines = target.find('TargetOption/TargetArmAds/Cads/VariousControls/Define')
+        values = [item for item in (defines.text or '').split(',')
+                  if not item.strip().startswith('PROJECT_CFG_IRQ_DEBUG_ENABLE=')]
+        defines.text = ','.join(values + [f'PROJECT_CFG_IRQ_DEBUG_ENABLE={args.irq_debug}'])
+        print(f'IRQ observation override: {args.irq_debug}', flush=True)
     temp_root = Path(os.environ['LOCALAPPDATA']) / 'CodexTemp/103-309-copy'
     temp_root.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix='no-bin-', dir=temp_root))
@@ -47,11 +57,11 @@ def main():
         for source in group.findall('Files/File'):
             if source.findtext('FileOption/CommonProperty/IncludeInBuild') != '0':
                 compiled_sources.add(os.path.normcase(source.findtext('FilePath', '')))
-    missing = [name for name in ('Sci_Upper.c', 'Sci_Uart.c', 'Sci_Customer.c')
+    missing = [name for name in ('Sci_Upper.c', 'Sci_Uart.c', 'Sci_Customer.c', 'IrqDebug.c')
                if os.path.normcase(str(root / '103 + 309/Project/Source' / name))
                not in compiled_sources]
     if missing:
-        raise SystemExit(f'{args.target}: UART sources missing from the build: {", ".join(missing)}. '
+        raise SystemExit(f'{args.target}: required sources missing from the build: {", ".join(missing)}. '
                          'Restore the project entries and reload the project in Keil.')
     common = target.find('TargetOption/TargetCommonOption')
     common.find('OutputDirectory').text = str(output / 'Objects') + '\\'

@@ -54,6 +54,7 @@
  */
 void NMI_Handler(void)
 {
+  IRQ_DEBUG_CORE(nmi);
 }
 
 __asm void wait()
@@ -92,6 +93,7 @@ static void Fault_ResetOrHold(UINT16 reason)
  */
 void HardFault_Handler(void)
 {
+  IRQ_DEBUG_CORE(hardfault);
   Fault_ResetOrHold(FAULT_REASON_HARD);
 }
 
@@ -102,6 +104,7 @@ void HardFault_Handler(void)
  */
 void MemManage_Handler(void)
 {
+  IRQ_DEBUG_CORE(memmanage);
   Fault_ResetOrHold(FAULT_REASON_MEM);
 }
 
@@ -112,6 +115,7 @@ void MemManage_Handler(void)
  */
 void BusFault_Handler(void)
 {
+  IRQ_DEBUG_CORE(busfault);
   Fault_ResetOrHold(FAULT_REASON_BUS);
 }
 
@@ -122,6 +126,7 @@ void BusFault_Handler(void)
  */
 void UsageFault_Handler(void)
 {
+  IRQ_DEBUG_CORE(usagefault);
   Fault_ResetOrHold(FAULT_REASON_USAGE);
 }
 
@@ -132,6 +137,7 @@ void UsageFault_Handler(void)
  */
 void SVC_Handler(void)
 {
+  IRQ_DEBUG_CORE(svc);
 }
 
 /**
@@ -141,6 +147,7 @@ void SVC_Handler(void)
  */
 void DebugMon_Handler(void)
 {
+  IRQ_DEBUG_CORE(debugmon);
 }
 
 /**
@@ -150,6 +157,7 @@ void DebugMon_Handler(void)
  */
 void PendSV_Handler(void)
 {
+  IRQ_DEBUG_CORE(pendsv);
 }
 
 /**
@@ -159,6 +167,7 @@ void PendSV_Handler(void)
  */
 void SysTick_Handler(void)
 {
+  IRQ_DEBUG_ENTER(core.systick);
 }
 
 /******************************************************************************/
@@ -173,10 +182,12 @@ void SysTick_Handler(void)
 void EXTI0_IRQHandler(void)
 {
   UINT8 handled = 0U;
+  IRQ_DEBUG_ENTER(exti.irq0);
 
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
-    sys_time.cnt_PA0_irq++;
+    IRQ_DEBUG_COUNT(exti.line0);
+
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line0);
   }
@@ -188,9 +199,11 @@ void EXTI0_IRQHandler(void)
 void EXTI2_IRQHandler(void)
 {
   UINT8 handled = 0U;
+  IRQ_DEBUG_ENTER(exti.irq2);
 
   if (EXTI_GetITStatus(EXTI_Line2) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line2);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line2);
   }
@@ -202,9 +215,11 @@ void EXTI2_IRQHandler(void)
 void EXTI3_IRQHandler(void)
 {
   UINT8 handled = 0U;
+  IRQ_DEBUG_ENTER(exti.irq3);
 
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line3);
     handled = 1U;
     g_irq_t = uart2_irq;
     EXTI_ClearITPendingBit(EXTI_Line3);
@@ -217,14 +232,17 @@ void EXTI3_IRQHandler(void)
 void EXTI15_10_IRQHandler(void)
 {
   UINT8 handled = 0U;
+  IRQ_DEBUG_ENTER(exti.irq15_10);
 
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line12);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line12);
   }
   if (EXTI_GetITStatus(EXTI_Line13) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line13);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line13);
   }
@@ -241,26 +259,31 @@ void EXTI15_10_IRQHandler(void)
 void EXTI9_5_IRQHandler(void)
 {
   UINT8 handled = 0U;
+  IRQ_DEBUG_ENTER(exti.irq9_5);
 
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line5);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line5);
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line6);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line6);
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
+    IRQ_DEBUG_COUNT(exti.line7);
     handled = 1U;
     g_irq_t = uart1_irq;
     EXTI_ClearITPendingBit(EXTI_Line7);
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
-    sys_time.cnt_bms1_keyirq++;
+    IRQ_DEBUG_COUNT(exti.line9);
+
     handled = 1U;
     g_irq_t = soc_key;
     EXTI_ClearITPendingBit(EXTI_Line9);
@@ -297,14 +320,16 @@ void EXTI9_5_IRQHandler(void)
 // 以下的是非共有的，如果多处使用到，则移动到it.c文件
 void USART1_IRQHandler(void)
 {
-  sys_time.sci1_irq_cnt++;
+  IRQ_DEBUG_ENTER(uart1.irq);
+
 #ifdef _COMMOM_UPPER_SCI1
   Sci1_CommonUpper_IRQHandler();
 #endif
 }
 void USART2_IRQHandler(void)
 {
-  sys_time.sci2_irq_cnt++;
+  IRQ_DEBUG_ENTER(uart2.irq);
+
 #ifdef _COMMOM_UPPER_SCI2
   Sci2_CommonUpper_IRQHandler();
 #endif
@@ -312,7 +337,8 @@ void USART2_IRQHandler(void)
 #ifdef _COMMOM_UPPER_SCI3
 void USART3_IRQHandler(void)
 {
-  sys_time.sci3_irq_cnt++;
+  IRQ_DEBUG_ENTER(uart3.irq);
+
   Sci3_CommonUpper_IRQHandler();
 }
 #endif

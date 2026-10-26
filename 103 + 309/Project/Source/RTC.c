@@ -497,6 +497,7 @@ static void RTC_HandleAlarmWakeup(void)
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 	{
+		IRQ_DEBUG_COUNT(rtc.alarm_flag);
 		RTC_ClearITPendingBit(RTC_IT_ALR);
 		RTC_WaitForLastTaskSafe();
 		had_alarm = 1;
@@ -504,6 +505,7 @@ static void RTC_HandleAlarmWakeup(void)
 
 	if (EXTI_GetITStatus(EXTI_Line17) != RESET)
 	{
+		IRQ_DEBUG_COUNT(exti.line17);
 		EXTI_ClearITPendingBit(EXTI_Line17);
 		had_alarm = 1;
 	}
@@ -515,20 +517,29 @@ static void RTC_HandleAlarmWakeup(void)
 		 * period. Unsigned subtraction also handles the 32-bit counter wrap.
 		 */
 		s_rtc.last_wakeup_seconds = RTC_GetCounter() - s_rtc.stop_start_counter;
-		sys_time.rtc_alm_cnt++;
 		s_rtc.wake = true;
 	}
 }
 
 void RTCAlarm_IRQHandler(void)
 {
+	IRQ_DEBUG_ENTER(rtc.alarm_irq);
+	IRQ_DEBUG_SET(rtc.last_crl, RTC->CRL);
+	IRQ_DEBUG_SET(rtc.last_crh, RTC->CRH);
 	RTC_HandleAlarmWakeup();
 }
 
 void RTC_IRQHandler(void)
 {
+	IRQ_DEBUG_ENTER(rtc.irq);
+	IRQ_DEBUG_SET(rtc.last_crl, RTC->CRL);
+	IRQ_DEBUG_SET(rtc.last_crh, RTC->CRH);
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+	if (RTC->CRL & RTC_FLAG_OW) IRQ_DEBUG_COUNT(rtc.overflow_seen);
+#endif
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
 	{
+		IRQ_DEBUG_COUNT(rtc.second);
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		// sys_time.rtc_sec_cnt++;
 		s_rtc.disp = 1;				   // Enable time update

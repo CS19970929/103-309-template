@@ -1080,10 +1080,13 @@ void App_Can(void)
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	CanRxMsg rx_msg;
+	IRQ_DEBUG_ENTER(can.rx0_irq);
+	IRQ_DEBUG_SET(can.last_rf0r, CAN1->RF0R);
 
 	while (CAN_MessagePending(CAN1, CAN_FIFO0) != 0U)
 	{
 		sys_time.can_rcv_cnt++;
+		IRQ_DEBUG_COUNT(can.rx0_frames);
 		CAN_Receive(CAN1, CAN_FIFO0, &rx_msg);
 		can_handle_rx_msg(&rx_msg);
 	}

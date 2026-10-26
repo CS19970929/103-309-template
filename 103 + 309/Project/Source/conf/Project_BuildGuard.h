@@ -118,9 +118,8 @@
 	((PROJECT_CFG_DEBUG_WATCH_ENABLE != 0) || \
 	 (PROJECT_CFG_DEBUG_MONITOR_ENABLE != 0) || \
 	 (PROJECT_CFG_DEBUG_HUB_AUTORUN_ENABLE != 0) || \
-	 (PROJECT_CFG_IRQ_DEBUG_ENABLE != 0) || \
 	 (PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE != 0))
-#error "Debug watch, system debug and IRQ debug must stay disabled for release build profile"
+#error "Debug watch, system debug and IRQ event ring must stay disabled for release build profile"
 #endif
 
 /* SOC checks */
