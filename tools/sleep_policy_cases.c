@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <setjmp.h>
 typedef uint8_t UINT8; typedef uint16_t UINT16; typedef uint32_t UINT32;
 typedef int32_t INT32;
 typedef int FLASH_Status;
@@ -10,7 +11,7 @@ typedef int FLASH_Status;
 #include "SleepDeal.h"
 #include "rtc_sleep.h"
 #define LIFEPO
-#define Feed_IWatchDog ((void)0)
+#define Feed_IWatchDog (++watchdog_feeds)
 #define GPIO_CHG_IN 1
 #define PIN_CHG_IN 1
 #define Bit_SET 1
@@ -23,6 +24,9 @@ static int key=1,charger,adc_on,led,ctlc,one_second;
 static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy,flash_busy;
 static UINT32 tick,now_ms,release_at_ms,charge_at_ms,rtc_counter;
 static UINT16 bkp[4];
+static UINT16 expected_sleep_flag;
+static int watchdog_feeds,reset_during_stop;
+static jmp_buf reset_point;
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key;
@@ -66,6 +70,8 @@ static void fake_reset(void) { ++deep_calls; }
 static void IOstatus_DeepMode(void) { adc_on=0; }
 static void InitWakeUp_DeepMode(void) {}
 static void Sys_StopMode(void) {
+    if(expected_sleep_flag) assert(BootFlag_Read()==expected_sleep_flag);
+    if(reset_during_stop) longjmp(reset_point,1);
     ++stop_calls;
     if(scripted_key) key=(stop_calls==1) ? 1 : 0;
     g_irq_t=(scripted_key==2 && stop_calls>1) ? soc_key : stop_source;
@@ -129,6 +135,8 @@ static void reset_case(void) {
     rtc_wake=comm_busy=can_busy=flash_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; afe_status_ok=1; soc_now=55;
     OtherElement.u16Sleep_TimeNormal=10080;
+    expected_sleep_flag=0;
+    watchdog_feeds=reset_during_stop=0;
     BootFlag_Clear();
 }
 int main(void) {
@@ -161,7 +169,10 @@ int main(void) {
     tick+=1000; assert(!SleepDeal_TakeKeySleepRequest());
     /* The resetting DEEP path shares the same release and 1 s qualification. */
     reset_case(); BootFlag_Write(FLASH_DEEP_SLEEP_VALUE); key=0; scripted_key=1;
+    expected_sleep_flag=FLASH_DEEP_SLEEP_VALUE;
     SleepDeal_HandleBootSleepStartup(); assert(stop_calls==2 && now_ms==1000);
+    assert(BootFlag_Read()==BOOT_FLAG_RESET_VALUE);
+    assert(watchdog_feeds>=104);
     tick=1000; assert(!SleepDeal_TakeKeySleepRequest());
     reset_case(); charger=1; assert(SleepDeal_IsWakeupValid() && now_ms==0);
     assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
@@ -170,7 +181,8 @@ int main(void) {
     assert(soc_now==0 && zero_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); LowPower_Request(NO_SLEEP);
-    scripted_key=1; key=0; SleepDeal_HandleBootSleepStartup();
+    scripted_key=1; key=0; expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
+    SleepDeal_HandleBootSleepStartup();
     SleepDeal_UpdateOverdischarge(1);
     assert(zero_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     key=1; g_stCellInfoReport.u16VCellMin=2200;
@@ -187,6 +199,17 @@ int main(void) {
     afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
     assert(!rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
     puts("PASS UV: confirmed new event -> zero SOC and immediate DEEP; wake with active UV stays running, recovery re-arms, both RTC modes, failed status does not authorize UV");
+    reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); reset_during_stop=1;
+    if(setjmp(reset_point)==0) { SleepDeal_HandleBootSleepStartup(); assert(0); }
+    assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
+    memset(&s_sleep,0,sizeof(s_sleep)); reset_during_stop=0; key=0; scripted_key=1;
+    expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
+    SleepDeal_HandleBootSleepStartup(); assert(SleepDeal_HasHandledOverdischarge());
+    assert(BootFlag_Read()==BOOT_FLAG_RESET_VALUE);
+    reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); charger=1;
+    SleepDeal_HandleBootSleepStartup();
+    assert(SleepDeal_HasHandledOverdischarge() && BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
+    puts("PASS deep restart: sleep reason survives reset during STOP wait; release/1 s wake still required; watchdog feeds and charger reason preserved");
     reset_case(); assert(!SleepDeal_NormalIdleExpired(0));
     rtc_counter=604799; assert(!SleepDeal_NormalIdleExpired(0));
     ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));

@@ -220,7 +220,9 @@ static void SleepDeal_WaitStopWakeup(void)
 {
 	do
 	{
+		Feed_IWatchDog;
 		Sys_StopMode();
+		Feed_IWatchDog;
 	} while (!SleepDeal_IsWakeupValid());
 }
 
@@ -241,12 +243,13 @@ void SleepDeal_HandleBootSleepStartup(void)
 	case FLASH_DEEP_SLEEP_VALUE:
 	case FLASH_UNDERVOLTAGE_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
-		BootFlag_Clear();
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
 		SleepDeal_ResetKeyState();
 		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
+		/* Keep the sleep reason across any reset while still waiting. */
+		if (!s_sleep.chg_wake) BootFlag_Clear();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 		s_sleep.boot_sleep = 1U;
