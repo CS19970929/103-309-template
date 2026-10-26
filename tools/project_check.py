@@ -58,7 +58,6 @@ FACTORY_AGING_C = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.c"
 FACTORY_AGING_H = ROOT / "103 + 309" / "Project" / "Source" / "FactoryAging.h"
 FLASH_C = ROOT / "103 + 309" / "Project" / "Source" / "Flash.c"
 FLASH_H = ROOT / "103 + 309" / "Project" / "Source" / "Flash.h"
-UPGRADE_PARAM_POLICY_H = ROOT / "103 + 309" / "Project" / "Source" / "UpgradeParamPolicy.h"
 LEDBAR_C = ROOT / "103 + 309" / "Project" / "Source" / "LedBar.c"
 LOGRECORD_C = ROOT / "103 + 309" / "Project" / "Source" / "LogRecord.c"
 FAULT_SNAPSHOT_H = ROOT / "103 + 309" / "Project" / "Source" / "FaultSnapshot.h"
@@ -251,12 +250,11 @@ RELEASE_SAFE_DEFAULTS = {
 FORBIDDEN_PROJECT_CONFIG_MACROS = {
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_IAP_ENABLE",
-    "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE",
 }
 GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_HOST_WRITE_ENABLE",
     "PROJECT_CFG_IAP_ENABLE",
-    "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE",
+    "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION",
     "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
@@ -271,7 +269,6 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
-    "PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT",
 ]
 
 
@@ -734,14 +731,15 @@ def check_release_defaults(reporter):
 
 
 def check_required_board_features(reporter):
-    required = [PROJECT_CONFIG, BUILD_GUARD, FLASH_C, UPGRADE_PARAM_POLICY_H, FACTORY_AGING_C]
+    eeprom_c = ROOT / "103 + 309" / "Project" / "Source" / "EEPROM.c"
+    required = [PROJECT_CONFIG, BUILD_GUARD, FLASH_C, eeprom_c, FACTORY_AGING_C]
     if any(not path.exists() for path in required):
         return
 
     project_config = read_text(PROJECT_CONFIG)
     build_guard = read_text(BUILD_GUARD)
     flash_c = read_text(FLASH_C)
-    policy_h = read_text(UPGRADE_PARAM_POLICY_H)
+    eeprom = read_text(eeprom_c)
     aging_c = read_text(FACTORY_AGING_C)
 
     if (
@@ -756,17 +754,15 @@ def check_required_board_features(reporter):
         reporter.fail("IAP must be always compiled and must not be a Project_Config.h switch")
 
     if (
-        "PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE" not in project_config
-        and "#define UPGRADE_PARAM_POLICY_ENABLE        1" in policy_h
-        and "#error \"Upgrade parameter policy is a required board feature and must not be disabled\"" in policy_h
-        and "PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION" in policy_h
-        and "PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD" in policy_h
-        and "PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT" in policy_h
-        and "Upgrade parameter policy is a required board feature" in build_guard
+        "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION" in project_config
+        and "BMS_SOFTWARE_VERDION_DEFAULT" in eeprom
+        and "StorageFlash_ResetParameters(&defaults)" in eeprom
+        and "defaults->initializing=1U" in flash_c
+        and "address<FLASH_STATS_A" in flash_c
     ):
-        reporter.ok("upgrade parameter policy mechanism is required while reset policy remains configurable")
+        reporter.ok("firmware-version reset uses a durable intent and excludes statistics")
     else:
-        reporter.fail("upgrade parameter policy must always be present while keeping version/reset settings configurable")
+        reporter.fail("firmware-version reset must preserve statistics and commit reset intent first")
 
     if (
         "PROJECT_CFG_FACTORY_AGING_ENABLE" not in project_config

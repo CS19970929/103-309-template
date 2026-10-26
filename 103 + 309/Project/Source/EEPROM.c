@@ -1,5 +1,4 @@
 #include "main.h"
-#include "UpgradeParamPolicy.h"
 #include "SocEnhance.h"
 #include "Heat_Cool.h"
 
@@ -20,7 +19,7 @@ typedef char EEPROM_HeatCoolSizeCheck[(sizeof(struct HEAT_COOL_ELEMENT) ==
 
 /*
  * Store current K/B in existing reserved words so the RW parameter record size
- * stays unchanged. Old records have 0xFFFF here and keep calibration defaults.
+ * includes both charge and discharge calibration.
  */
 #define RW_PARAM_CURRENT_CAL_MAGIC_INDEX       ((UINT16)0U)
 #define RW_PARAM_CURRENT_CAL_VERSION_INDEX     ((UINT16)1U)
@@ -231,27 +230,6 @@ UINT8 EEPROM_SaveRWParametersToFlash(void)
 	return StorageFlash_SaveRwParamData(&data);
 }
 
-static void EEPROM_LoadRWParametersFromFlash(void)
-{
-	STORAGE_FLASH_RW_PARAM_DATA data;
-	UINT16 i;
-
-	/* Legacy records contain only the first three blocks. */
-	for (i = 0; i < FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT; ++i)
-	{
-		data.heat_cool[i] = *(&Heat_Cool_Element.u16Heat_OpenTemp + i);
-	}
-
-	if (StorageFlash_LoadRwParamData(&data) && EEPROM_RWParamDataIsValid(&data))
-	{
-		EEPROM_ApplyRWParamData(&data);
-		return;
-	}
-
-	System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-	(void)EEPROM_SaveRWParametersToFlash();
-}
-
 static void EEPROM_LoadDefaultRuntimeData(void)
 {
 	EEPROM_LoadDefaultProtect();
@@ -263,112 +241,41 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 }
 
-#if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_RESET_SOC_CONFIG
-static void EEPROM_LoadDefaultSocConfig(void)
+
+UINT8 InitE2PROM(void)
 {
-	const struct OTHER_ELEMENT other_default = OtherElement_default;
+    STORAGE_FLASH_CONFIG_DATA defaults, stored;
+    UINT16 i;
+    UINT8 valid;
+    const AFE_Value_Typedef *afe=&AFE_Parameters_RS485_Struction.u16VcellOvp;
+    static const UINT8 version[32]=BMS_SOFTWARE_VERDION_DEFAULT;
+    typedef char VersionFitsConfig[(sizeof(BMS_SOFTWARE_VERDION_DEFAULT)<=sizeof(version)) ? 1 : -1];
 
-	OtherElement.u16Soc_TableSelect = other_default.u16Soc_TableSelect;
-	OtherElement.u16Soc_Ah = other_default.u16Soc_Ah;
-	OtherElement.u16Soc_Cycle_times = other_default.u16Soc_Cycle_times;
-	OtherElement.u16Soc_V_100 = other_default.u16Soc_V_100;
-	OtherElement.u16Soc_V_0 = other_default.u16Soc_V_0;
-}
-#endif
-
-#if UPGRADE_PARAM_POLICY_ENABLE && UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
-static void EEPROM_LoadDefaultBalanceOpenVoltage(void)
-{
-	const struct OTHER_ELEMENT other_default = OtherElement_default;
-
-	OtherElement.u16Balance_OpenVoltage = other_default.u16Balance_OpenVoltage;
-}
-#endif
-
-UINT8 UpgradeParamPolicy_ApplyOnce(void)
-{
-#if (!UPGRADE_PARAM_POLICY_ENABLE) || (!UPGRADE_PARAM_POLICY_HAS_ACTION)
-	return 1;
-#else
-	UINT8 result;
-	UINT8 rw_param_dirty;
-
-#if (!UPGRADE_PARAM_FORCE_REAPPLY)
-	if (FlashReadOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG) == UPGRADE_PARAM_POLICY_VERSION)
-	{
-		return 1;
-	}
-#endif
-
-	result = 1;
-	rw_param_dirty = 0;
-
-#if UPGRADE_PARAM_RESET_AFE
-	if (!EEPROM_ResetData_AFE_ParametersToDefault())
-	{
-		result = 0;
-	}
-#endif
-
-#if UPGRADE_PARAM_RESET_PROTECT
-	EEPROM_LoadDefaultProtect();
-	rw_param_dirty = 1;
-#endif
-
-#if UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE
-	EEPROM_LoadDefaultBalanceOpenVoltage();
-	rw_param_dirty = 1;
-#endif
-
-#if UPGRADE_PARAM_RESET_SOC_CONFIG
-	EEPROM_LoadDefaultSocConfig();
-	rw_param_dirty = 1;
-#endif
-
-#if UPGRADE_PARAM_UPDATE_OTHER_ELEMENT
-	EEPROM_LoadDefaultOtherElement();
-	rw_param_dirty = 1;
-#endif
-
-	if (rw_param_dirty && !EEPROM_SaveRWParametersToFlash())
-	{
-		result = 0;
-	}
-
-#if UPGRADE_PARAM_RESET_SOC_SNAPSHOT
-	if (result && !SOC_ResetStoredSnapshotToDefault())
-	{
-		result = 0;
-	}
-#endif
-
-#if UPGRADE_PARAM_RESET_EVENT_RECORD
-	if (result && !EEPROM_ResetData_EventRecord_ToDefault())
-	{
-		result = 0;
-	}
-#endif
-
-	if (!result)
-	{
-		return 0;
-	}
-
- 	if (FlashWriteOneHalfWord(FLASH_ADDR_UPGRADE_PARAM_FLAG, UPGRADE_PARAM_POLICY_VERSION) != FLASH_COMPLETE)
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		return 0;
-	}
-
-	return 1;
-#endif
-}
-
-void InitE2PROM(void)
-{
-	EEPROM_LoadDefaultRuntimeData();
-	EEPROM_LoadRWParametersFromFlash();
-	ReadEEPROM_AFE_Parameters();
-	ReadEEPROM_EventRecord_Parameters();
-	UpgradeParamPolicy_ApplyOnce();
+    EEPROM_LoadDefaultRuntimeData();
+    memset(&defaults,0,sizeof(defaults));
+    EEPROM_BuildRWParamData(&defaults.rw);
+    for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i) defaults.afe[i]=afe[i].defaultValue;
+    memcpy(defaults.reset_version,version,sizeof(version));
+    if (!EEPROM_RWParamDataIsValid(&defaults.rw)) return 0U;
+    for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
+        if (defaults.afe[i]<afe[i].minValue || defaults.afe[i]>afe[i].maxValue) return 0U;
+    valid=StorageFlash_LoadConfig(&stored);
+    if (valid) {
+        valid=(UINT8)(stored.initializing==0U && EEPROM_RWParamDataIsValid(&stored.rw));
+        for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
+            if (stored.afe[i]<afe[i].minValue || stored.afe[i]>afe[i].maxValue) valid=0U;
+    }
+    if (!valid || (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION &&
+                  memcmp(stored.reset_version,version,sizeof(version))!=0)) {
+        if (!StorageFlash_ResetParameters(&defaults)) {
+            System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+            return 0U;
+        }
+        stored=defaults;
+    }
+    EEPROM_ApplyRWParamData(&stored.rw);
+    for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
+        (&AFE_Parameters_RS485_Struction.u16VcellOvp)[i].curValue=stored.afe[i];
+    ReadEEPROM_EventRecord_Parameters();
+    return 1U;
 }

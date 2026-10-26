@@ -43,8 +43,10 @@
 #error "IAP is a required board feature and must not be disabled"
 #endif
 
-#if defined(PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE) && (PROJECT_CFG_UPGRADE_PARAM_POLICY_ENABLE != 1)
-#error "Upgrade parameter policy is a required board feature and must not be disabled"
+
+
+#if (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION != 0) && (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION != 1)
+#error "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION must be 0 or 1"
 #endif
 
 #if defined(PROJECT_CFG_FACTORY_AGING_ENABLE) && (PROJECT_CFG_FACTORY_AGING_ENABLE != 1)

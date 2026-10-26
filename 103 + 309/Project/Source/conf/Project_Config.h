@@ -155,35 +155,9 @@
 #define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
 // </h>
 
-// <h>Upgrade Parameter Policy
-
-// <o> Policy version <0x0000-0xFFFE>
-#define PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION 0x0003
-
-// <q> Reset AFE params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_AFE 1
-
-// <q> Reset protection params on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_PROTECT 1
-
-// <q> Reset balance open voltage on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_BALANCE_OPEN_VOLTAGE 1
-
-// <q> Reset SOC config on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_CONFIG 1
-
-// <q> Reset SOC snapshot on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_SOC_SNAPSHOT 1
-
-// <q> Reset event record on upgrade
-#define PROJECT_CFG_UPGRADE_PARAM_RESET_EVENT_RECORD 1
-
-// <q> Update all OtherElement words from firmware defaults on upgrade
-// <i> Values come from OtherElement_default in DataDeal.h.
-// <i> Raise policy version when enabling this action for a release package.
-#define PROJECT_CFG_UPGRADE_PARAM_UPDATE_OTHER_ELEMENT 1
-
-// </h>
+// <q> Reset all parameters once on each new firmware version
+// <i> Uses the complete BMS_SOFTWARE_VERDION_DEFAULT string. Statistics are preserved.
+#define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION 1
 
 // <<< end of configuration section >>>
 

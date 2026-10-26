@@ -24,12 +24,17 @@ def main():
             env[key] = value
     compiler = sorted((vs / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/cl.exe'))[-1]
     flash = (SOURCE / 'Flash.c').read_text(encoding='utf-8')
-    # Exercise the production record/config implementation, without the old
-    # storage engine or the unrelated SRAM IAP mailbox and MCU-reset routines.
-    flash = flash[:flash.index('static UINT16 StorageFlash_RecordSpan(')]
+    # Omit only the unrelated SRAM IAP mailbox and MCU-reset routines.
+    flash = flash[:flash.index('UINT16 FlashReadOneHalfWord(UINT32 faddr)')]
     flash = flash.replace('#include "main.h"', '')
     code = (ROOT / 'tools/storage_host_cases.c').read_text(encoding='utf-8')
     code = code.replace('/* PRODUCTION_SOURCE */', flash)
+    eeprom = (SOURCE / 'EEPROM.c').read_text(encoding='utf-8')
+    initializer = eeprom[eeprom.index('UINT8 InitE2PROM(void)'):]
+    # Simulate reflashing several firmware versions in one host process.
+    initializer = initializer.replace('static const UINT8 version[32]=BMS_SOFTWARE_VERDION_DEFAULT;',
+                                      'UINT8 version[32]; memcpy(version,firmware_version,32);')
+    code = code.replace('/* CONFIG_INIT_SOURCE */', initializer)
     path = output / 'storage.c'
     path.write_text(code, encoding='utf-8')
     exe = output / 'storage.exe'

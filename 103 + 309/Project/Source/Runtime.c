@@ -2,6 +2,7 @@
 #include "Runtime.h"
 
 UINT8 SeriesNum = 7;
+static UINT8 s_boot_ready;
 
 void Runtime_Boot(void)
 {
@@ -14,7 +15,7 @@ void Runtime_Boot(void)
 
 	InitNVIC();
 	InitIO();
-	InitE2PROM();
+	if (!InitE2PROM()) return;
 	InitAFE1();
 	InitCan();
 
@@ -36,10 +37,12 @@ void Runtime_Boot(void)
 	EnableLowPowerDebug();
 	LogRecord_RequestStartup();
 	Init_IWDG();
+	s_boot_ready=1U;
 }
 
 void Runtime_RunOnce(void)
 {
+	if (!s_boot_ready) return;
 	SysTime_LatchTaskFlags();
 
 	ADC_Task();
