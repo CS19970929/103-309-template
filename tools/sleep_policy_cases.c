@@ -31,6 +31,10 @@ static jmp_buf reset_point;
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key,key_irq_during_verify,current_wakeup;
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+static UINT8 self_test_active;
+static UINT8 FlashSelfTest_IsActive(void) { return self_test_active; }
+#endif
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 #define ERROR_STATUS_AFE1 1
 static UINT8 System_ERROR_UserCallback(int command) { return (UINT8)!afe_status_ok; }
@@ -151,6 +155,9 @@ static void reset_case(void) {
     expected_sleep_flag=0;
     watchdog_feeds=reset_during_stop=key_irq_during_verify=current_wakeup=0;
     BootFlag_Clear();
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    self_test_active=0U;
+#endif
 }
 int main(void) {
     int i;
@@ -360,5 +367,25 @@ int main(void) {
     assert(now_ms==1000); tick=1000; assert(!SleepDeal_TakeKeySleepRequest());
 #endif
     puts("PASS idle: exact 7 days across STOP, minute range, RTC wrap, 256-frame wrap, charge/discharge/UART/CAN reset, ignored VNormal, HICCUP promotion without ADC, CTLC restore");
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    reset_case(); self_test_active=1U; sys_time.time_enter_rtc=1;
+    for(i=0;i<20;++i) lp_update_sleep_request();
+    rtc_counter=604800; lp_update_sleep_request();
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !g_stLowPowerRtcStatus.idle &&
+        (g_stLowPowerRtcStatus.block & LP_BLOCK_STORAGE_TEST));
+    self_test_active=0U; lp_update_sleep_request(); assert(g_stLowPowerRtcStatus.mode==HICCUP_MODE);
+    reset_case(); self_test_active=1U; key=0;
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
+    key=1;
+#endif
+    assert(!SleepDeal_TakeKeySleepRequest()); tick=KEY_SLEEP_TICKS; scripted_key=1; rtc_sleep();
+    assert(stop_calls==2 && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    reset_case(); self_test_active=1U; SleepDeal_UpdateOverdischarge(1U); rtc_sleep();
+    assert(deep_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    reset_case(); self_test_active=1U; g_stCellInfoReport.u16VCellMin=2200;
+    for(i=0;i<60;++i) lp_update_sleep_request();
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    puts("PASS self-test sleep: automatic HICCUP/7-day idle held; completion releases; both key modes and confirmed/timed DEEP retain priority");
+#endif
     return 0;
 }

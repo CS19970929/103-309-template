@@ -43,6 +43,7 @@ void Runtime_Boot(void)
 	LogRecord_RequestStartup();
 	Init_IWDG();
 	s_boot_ready=1U;
+	FlashSelfTest_Init(reset_cause);
 }
 
 void Runtime_RunOnce(void)
@@ -66,6 +67,7 @@ void Runtime_RunOnce(void)
 
 	App_LogRecord();
 	StorageFlash_StatisticsTask();
+	FlashSelfTest_Task();
 
 	Feed_IWatchDog;
 

@@ -26,11 +26,11 @@ def main():
     afe=(SOURCE/'rtc_sleep_afe_sh367309.c').read_text(encoding='utf-8')
     code=code.replace('/* AFE_WAKE_SOURCE */',afe[afe.index('UINT8 RtcSleep_AfePortHasAfeWake('):])
     path=output/'sleep.c'; path.write_text(code,encoding='utf-8')
-    for mode in (0,1):
-        exe=output/f'sleep-{mode}.exe'
+    for mode,self_test in ((0,0),(1,0),(0,1),(1,1)):
+        exe=output/f'sleep-{mode}-{self_test}.exe'
         result=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(SOURCE),
-            f'/DPROJECT_CFG_SWITCH_MODE={mode}',str(path),'/Fe:'+str(exe),
-            '/Fo:'+str(output/f'sleep-{mode}.obj')],cwd=output,env=env,capture_output=True,text=True,errors='replace')
+            f'/DPROJECT_CFG_SWITCH_MODE={mode}',f'/DPROJECT_CFG_STORAGE_SELF_TEST_ENABLE={self_test}',str(path),'/Fe:'+str(exe),
+            '/Fo:'+str(output/f'sleep-{mode}-{self_test}.obj')],cwd=output,env=env,capture_output=True,text=True,errors='replace')
         if result.returncode: raise RuntimeError(result.stdout+result.stderr)
         subprocess.run([str(exe)],cwd=output,check=True)
     guard=output/'guard.c'

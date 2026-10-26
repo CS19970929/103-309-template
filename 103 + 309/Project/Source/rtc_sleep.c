@@ -178,6 +178,18 @@ static void lp_update_sleep_request(void)
     }
 
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    /* Test traffic is activity, not a new sleep mode. Key requests and the
+     * confirmed/low-voltage DEEP selection above retain their priority. */
+    if (FlashSelfTest_IsActive()) {
+        g_stLowPowerRtcStatus.idle=0U;
+        (void)SleepDeal_NormalIdleExpired(1U);
+        g_stLowPowerRtcStatus.block |= LP_BLOCK_STORAGE_TEST;
+        lp_update_block_debug(g_stLowPowerRtcStatus.block);
+        lp_refresh_status();
+        return;
+    }
+#endif
     lp_update_block_debug(g_stLowPowerRtcStatus.block);
     if (SleepDeal_NormalIdleExpired((UINT8)(
         (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |

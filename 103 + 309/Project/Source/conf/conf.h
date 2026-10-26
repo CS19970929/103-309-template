@@ -8,6 +8,7 @@
 #include "conf_gpio.h"
 #include "Project_Config.h"
 #include "IrqDebug.h"
+#include "FlashSelfTest.h"
 
 #define __EnableLowPowerDebug__
 // #define __SOC_5_PROTECT_
@@ -140,6 +141,9 @@ typedef struct
 {
 #if PROJECT_CFG_IRQ_DEBUG_ENABLE
   volatile IRQ_DEBUG irq;
+#endif
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+  volatile FLASH_SELF_TEST flash_test;
 #endif
   uint32_t    can_rcv_cnt_test;
   uint32_t    last_ext_comm_cnt_can;

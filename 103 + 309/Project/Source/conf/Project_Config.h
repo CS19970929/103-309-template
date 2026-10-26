@@ -65,6 +65,29 @@
 #define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
 #endif
 
+// <q> Enable automatic Flash self-test (DESTRUCTIVE to reserved test pages)
+// <i> Keeps real BMS data separate; blocks automatic idle sleep only while active.
+// <i> Watch sys_time.flash_test. Completion persists; use the documented test-area erase to rerun.
+#ifndef PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 0
+#endif
+// <o> SOC test commits <1000-1000000000>
+#ifndef PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES
+#define PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES 240000
+#endif
+// <o> Log test commits including clears <1000-1000000000>
+#ifndef PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES
+#define PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES 400000
+#endif
+// <o> Fault-mask test commits <1000-1000000000>
+#ifndef PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES
+#define PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES 200000
+#endif
+// <o> Configuration test commits <100-1000000000>
+#ifndef PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES
+#define PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES 2000
+#endif
+
 // <q> Enable AFE current raw debug injection
 // <i> Debug/test only. Allows software or debugger to replace SH367309 CADC current raw samples.
 // <i> Default off; when enabled, injection still remains inactive until a target mask is set.

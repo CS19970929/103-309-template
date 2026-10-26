@@ -24,12 +24,44 @@ UINT8 StorageFlash_IsBusy(void)
 	return s_flash.busy;
 }
 
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+#define FLASH_TEST_ERASE_LIMIT 10000U
+static void FlashSelfTest_Fail(UINT32 error, UINT32 address)
+{
+    volatile FLASH_SELF_TEST *test=&sys_time.flash_test;
+    if (!test->first_error) {
+        test->first_error=error;
+        test->first_error_address=address;
+    }
+    test->status=(error==FLASH_TEST_BUDGET_ERROR) ? FLASH_TEST_BUDGET_LIMIT : FLASH_TEST_FAIL;
+}
+
+static UINT8 FlashSelfTest_Address(UINT32 address)
+{
+    return (UINT8)(address>=FLASH_SELF_TEST_BEGIN && address<FLASH_SELF_TEST_END);
+}
+#endif
+
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 {
 	UINT32 offset;
 	FLASH_Status result;
 
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    if (FlashSelfTest_Address(page_addr) &&
+        sys_time.flash_test.session_erases[(page_addr-FLASH_SELF_TEST_BEGIN)/FLASH_STORAGE_PAGE_SIZE]>=FLASH_TEST_ERASE_LIMIT) {
+        FlashSelfTest_Fail(FLASH_TEST_BUDGET_ERROR,page_addr);
+        return FLASH_ERROR_PG;
+    }
+#endif
 	result = FLASH_ErasePage(page_addr);
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    if (FlashSelfTest_Address(page_addr)) {
+        if (result==FLASH_COMPLETE)
+            ++sys_time.flash_test.session_erases[(page_addr-FLASH_SELF_TEST_BEGIN)/FLASH_STORAGE_PAGE_SIZE];
+        else FlashSelfTest_Fail(FLASH_TEST_ERASE_ERROR,page_addr);
+    }
+#endif
 	if (result != FLASH_COMPLETE)
 	{
 		return result;
@@ -39,6 +71,9 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 	{
 		if (FlashReadOneHalfWord(page_addr + offset) != 0xFFFF)
 		{
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+            if (FlashSelfTest_Address(page_addr)) FlashSelfTest_Fail(FLASH_TEST_VERIFY_ERROR,page_addr+offset);
+#endif
 			return FLASH_ERROR_PG;
 		}
 	}
@@ -51,6 +86,12 @@ static FLASH_Status FlashProgramHalfWordVerified(uint32_t addr, uint16_t data)
 	FLASH_Status result;
 
 	result = FLASH_ProgramHalfWord(addr, data);
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    if (FlashSelfTest_Address(addr)) {
+        if (result==FLASH_COMPLETE) ++sys_time.flash_test.session_halfwords;
+        else FlashSelfTest_Fail(FLASH_TEST_PROGRAM_ERROR,addr);
+    }
+#endif
 	if (result != FLASH_COMPLETE)
 	{
 		return result;
@@ -58,6 +99,9 @@ static FLASH_Status FlashProgramHalfWordVerified(uint32_t addr, uint16_t data)
 
 	if (FlashReadOneHalfWord(addr) != data)
 	{
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+        if (FlashSelfTest_Address(addr)) FlashSelfTest_Fail(FLASH_TEST_VERIFY_ERROR,addr);
+#endif
 		return FLASH_ERROR_PG;
 	}
 
@@ -139,6 +183,11 @@ static UINT8 Storage_Newer(UINT32 a, UINT32 b)
 
 static UINT8 Storage_AddressValid(UINT32 address, UINT32 length)
 {
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+    if (FlashSelfTest_Address(address))
+        return (UINT8)(*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)>=128U &&
+                      length<=FLASH_SELF_TEST_END-address && (address & 1U)==0U);
+#endif
     return (UINT8)(*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)>=128U &&
                    address>=FLASH_STORAGE_BEGIN && address<FLASH_STORAGE_END &&
                    length<=FLASH_STORAGE_END-address && (address & 1U)==0U);
@@ -709,12 +758,17 @@ damaged:
     System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 }
 
+static void Storage_UpdateFaultStatisticsAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT16 active_faults)
+{
+    if (!runtime->available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
+        active_faults==runtime->data.active_faults) return;
+    Storage_StatsApply(&runtime->data,STATS_FAULT_MASK,active_faults);
+    if (!runtime->dirty) (void)Storage_StatsSaveAt(base,runtime,STATS_FAULT_MASK,active_faults);
+}
+
 void StorageFlash_UpdateFaultStatistics(UINT16 active_faults)
 {
-    if (!s_statistics.available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
-        active_faults==s_statistics.data.active_faults) return;
-    Storage_StatsApply(&s_statistics.data,STATS_FAULT_MASK,active_faults);
-    if (!s_statistics.dirty) (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_FAULT_MASK,active_faults);
+    Storage_UpdateFaultStatisticsAt(FLASH_STATS_A,&s_statistics,active_faults);
 }
 
 UINT8 StorageFlash_ReadStatistics(UINT32 counts[FLASH_STATISTICS_COUNT])
@@ -754,6 +808,428 @@ void StorageFlash_PrintBootCheck(void)
         (unsigned long)Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(STORAGE_FLASH_CONFIG_DATA)),
         (unsigned long)Storage_StateLatest(FLASH_STATE_A),(unsigned long)Storage_LogLatestPage(FLASH_LOG_A));
 }
+
+/* Only the test build has a second set of data and a background runner.
+ * Address arguments are private: production wrappers never select test pages. */
+#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
+#define FLASH_TEST_SIGNATURE 0x54535431UL
+#define FLASH_TEST_INTERVAL_TICKS 2U
+#define FLASH_TEST_LOG_CLEAR_PERIOD 1024U
+#define FLASH_TEST_BOOT_COUNT 17U
+#define FLASH_TEST_LOG_CAPACITY ((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/sizeof(STORAGE_LOG_ENTRY))
+#define FLASH_TEST_STATS_CAPACITY ((FLASH_STORAGE_PAGE_SIZE-sizeof(STORAGE_RECORD)-sizeof(STORAGE_STATS_DATA))/sizeof(STORAGE_STATS_ENTRY))
+static const UINT32 s_self_test_goals[FLASH_TEST_DOMAIN_COUNT]={
+    PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES, PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES,
+    PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES, PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES
+};
+static UINT32 s_self_test_tick, s_self_test_ore;
+static UINT16 s_self_test_overflow;
+static UINT8 s_self_test_loaded, s_self_test_erase_page;
+typedef char FlashTestProgressFits[(sizeof(FLASH_SELF_TEST_PROGRESS)<=sizeof(STORAGE_FLASH_RW_PARAM_DATA)) ? 1 : -1];
+typedef char FlashTestAreaEnds[(FLASH_SELF_TEST_END==FLASH_STORAGE_BEGIN &&
+    FLASH_SELF_TEST_BEGIN==FLASH_PARAMETER_RESET_BEGIN) ? 1 : -1];
+
+static UINT32 FlashSelfTest_UartErrors(void)
+{
+#if PROJECT_CFG_IRQ_DEBUG_ENABLE
+    return sys_time.irq.uart1.ore+sys_time.irq.uart2.ore+sys_time.irq.uart3.ore;
+#else
+    return 0U;
+#endif
+}
+
+static void FlashSelfTest_MakeConfig(STORAGE_FLASH_CONFIG_DATA *config)
+{
+    FLASH_SELF_TEST_PROGRESS progress;
+    memcpy(&progress,(const void *)&sys_time.flash_test.progress,sizeof(progress));
+    memset(config,(UINT8)(progress.count[FLASH_TEST_CONFIG]^0x5AU),sizeof(*config));
+    memcpy(&config->rw,&progress,sizeof(progress));
+}
+
+static UINT8 FlashSelfTest_SaveProgress(UINT8 duplicate)
+{
+    STORAGE_FLASH_CONFIG_DATA expected, actual;
+    UINT32 before;
+    FlashSelfTest_MakeConfig(&expected);
+    if (!Storage_SaveConfigAt(FLASH_SELF_TEST_CONFIG,&expected) ||
+        !Storage_LoadConfigAt(FLASH_SELF_TEST_CONFIG,&actual) || memcmp(&expected,&actual,sizeof(actual))) return 0U;
+    ++sys_time.flash_test.checks;
+    if (duplicate) {
+        before=sys_time.flash_test.session_halfwords;
+        if (!Storage_SaveConfigAt(FLASH_SELF_TEST_CONFIG,&expected) || before!=sys_time.flash_test.session_halfwords) return 0U;
+        ++sys_time.flash_test.checks;
+    }
+    return 1U;
+}
+
+static UINT8 FlashSelfTest_Advance(UINT32 phase)
+{
+    sys_time.flash_test.progress.phase=phase;
+    return FlashSelfTest_SaveProgress(0U);
+}
+
+static UINT8 FlashSelfTest_StateValid(void)
+{
+    UINT32 page,address;
+    for (page=FLASH_SELF_TEST_STATE;page<FLASH_SELF_TEST_STATE+2U*FLASH_STORAGE_PAGE_SIZE;page+=FLASH_STORAGE_PAGE_SIZE)
+        for (address=page;address+STORAGE_STATE_SPAN<=page+FLASH_STORAGE_PAGE_SIZE;address+=STORAGE_STATE_SPAN)
+            if (!StorageFlash_IsAreaBlank(address,STORAGE_STATE_SPAN) &&
+                !Storage_RecordValid(address,STORAGE_STATE_MAGIC,sizeof(STORAGE_STATE))) return 0U;
+    return 1U;
+}
+
+static UINT8 FlashSelfTest_LoadProgress(void)
+{
+    STORAGE_FLASH_CONFIG_DATA actual, expected;
+    FLASH_SELF_TEST_PROGRESS progress;
+    UINT8 i;
+    for (i=0U;i<2U;++i) {
+        UINT32 address=FLASH_SELF_TEST_CONFIG+(UINT32)i*FLASH_STORAGE_PAGE_SIZE;
+        if (!StorageFlash_IsAreaBlank(address,FLASH_STORAGE_PAGE_SIZE) &&
+            !Storage_RecordValid(address,STORAGE_CONFIG_MAGIC,sizeof(actual))) return 0U;
+    }
+    if (!Storage_LoadConfigAt(FLASH_SELF_TEST_CONFIG,&actual)) {
+        if (!StorageFlash_IsAreaBlank(FLASH_SELF_TEST_BEGIN,FLASH_SELF_TEST_END-FLASH_SELF_TEST_BEGIN)) return 0U;
+        return FlashSelfTest_SaveProgress(0U);
+    }
+    memcpy(&progress,&actual.rw,sizeof(progress));
+    if (progress.signature!=FLASH_TEST_SIGNATURE || progress.phase>FLASH_TEST_COMPLETE ||
+        memcmp(progress.goal,s_self_test_goals,sizeof(progress.goal))) {
+        FlashSelfTest_Fail(FLASH_TEST_PROFILE_ERROR,FLASH_SELF_TEST_CONFIG); return 0U;
+    }
+    for (i=0U;i<FLASH_TEST_DOMAIN_COUNT;++i)
+        if (progress.count[i]>progress.goal[i]) return 0U;
+    memcpy((void *)&sys_time.flash_test.progress,&progress,sizeof(progress));
+    FlashSelfTest_MakeConfig(&expected);
+    if (memcmp(&actual,&expected,sizeof(actual))) return 0U;
+    sys_time.flash_test.resumed=1U;
+    return 1U;
+}
+
+static void FlashSelfTest_MakeSoc(STORAGE_FLASH_SOC_DATA *soc, UINT32 ordinal)
+{
+    UINT32 step=ordinal%200U;
+    memset(soc,0,sizeof(*soc));
+    soc->u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;
+    soc->u16SocNow=(UINT16)(step<=100U ? step : 200U-step);
+    soc->u16MaxErrorPercent=100U;
+    soc->u32CycleTimes=(ordinal/200U)*100U+(step>100U ? step-100U : 0U);
+    soc->u32CapFull=360000U;
+    soc->u32CapNow=soc->u32CapFull*soc->u16SocNow/100U;
+    soc->u32LearnPassedAs10=(ordinal%100U)*36U;
+    soc->u16DsgSocInt=(UINT16)(ordinal%100U);
+    soc->u16Flags=(UINT16)((ordinal/200U)&1U);
+    /* A test-only token in existing reserved bytes makes restart validation
+     * unambiguous. It is never written to the production SOC pair. */
+    memcpy(soc->u16Reserved,&ordinal,sizeof(ordinal));
+}
+
+static UINT8 FlashSelfTest_CheckSoc(UINT32 ordinal)
+{
+    STORAGE_FLASH_SOC_DATA actual, expected;
+    FlashSelfTest_MakeSoc(&expected,ordinal);
+    if (!Storage_LoadSocAt(FLASH_SELF_TEST_STATE,&actual)) return 0U;
+    ++sys_time.flash_test.checks;
+    return (UINT8)(memcmp(&actual,&expected,sizeof(actual))==0);
+}
+
+static UINT8 FlashSelfTest_SocStep(void)
+{
+    STORAGE_FLASH_SOC_DATA soc;
+    STORAGE_FLASH_FACTORY_AGING_DATA aging, actual_aging;
+    UINT32 ordinal=0U, before;
+    if (!FlashSelfTest_StateValid()) return 0U;
+    if (Storage_LoadSocAt(FLASH_SELF_TEST_STATE,&soc)) {
+        memcpy(&ordinal,soc.u16Reserved,sizeof(ordinal));
+        if (!ordinal || ordinal>s_self_test_goals[FLASH_TEST_SOC] || !FlashSelfTest_CheckSoc(ordinal)) return 0U;
+    } else if (sys_time.flash_test.progress.count[FLASH_TEST_SOC]) return 0U;
+    sys_time.flash_test.progress.count[FLASH_TEST_SOC]=ordinal;
+    aging.u32Elapsed10ms=ordinal/200U;
+    aging.u16State=FLASH_FACTORY_AGING_STATE_RUNNING; aging.u16DurationHours=12U;
+    if (!Storage_LoadFactoryAgingAt(FLASH_SELF_TEST_STATE,&actual_aging)) {
+        if (ordinal || !StorageFlash_IsAreaBlank(FLASH_SELF_TEST_STATE,2U*FLASH_STORAGE_PAGE_SIZE)) return 0U;
+    } else if (memcmp(&aging,&actual_aging,sizeof(aging))) {
+        if (!ordinal || ordinal%200U || actual_aging.u32Elapsed10ms+1U!=aging.u32Elapsed10ms ||
+            actual_aging.u16State!=aging.u16State || actual_aging.u16DurationHours!=aging.u16DurationHours) return 0U;
+    } else goto aging_ready;
+    {
+        if (!Storage_SaveFactoryAgingAt(FLASH_SELF_TEST_STATE,&aging) ||
+            !Storage_LoadFactoryAgingAt(FLASH_SELF_TEST_STATE,&actual_aging) ||
+            memcmp(&aging,&actual_aging,sizeof(aging))) return 0U;
+        return (UINT8)(ordinal==0U || FlashSelfTest_CheckSoc(ordinal));
+    }
+aging_ready:
+    if (ordinal==s_self_test_goals[FLASH_TEST_SOC]) return FlashSelfTest_Advance(FLASH_TEST_LOG_PHASE);
+    FlashSelfTest_MakeSoc(&soc,ordinal+1U);
+    if (!Storage_SaveSocAt(FLASH_SELF_TEST_STATE,&soc) || !FlashSelfTest_CheckSoc(ordinal+1U) ||
+        !Storage_LoadFactoryAgingAt(FLASH_SELF_TEST_STATE,&actual_aging) || memcmp(&aging,&actual_aging,sizeof(aging))) return 0U;
+    sys_time.flash_test.progress.count[FLASH_TEST_SOC]=ordinal+1U;
+    if (((ordinal+1U)%64U)==0U) {
+        before=sys_time.flash_test.session_halfwords;
+        if (!Storage_SaveSocAt(FLASH_SELF_TEST_STATE,&soc) || before!=sys_time.flash_test.session_halfwords) return 0U;
+    }
+    return 1U;
+}
+
+static UINT16 FlashSelfTest_LogValue(UINT32 ordinal)
+{
+    if ((ordinal%FLASH_TEST_LOG_CLEAR_PERIOD)==0U) return STORAGE_LOG_CLEAR;
+    return (UINT16)((VCELL_OVP+ordinal%10U) | (((ordinal/10U)%172U)<<8));
+}
+
+static UINT8 FlashSelfTest_LogCount(UINT32 *count)
+{
+    UINT32 page=Storage_LogLatestPage(FLASH_SELF_TEST_LOG), address, entries=0U, generation;
+    if (!page) {
+        *count=0U;
+        return StorageFlash_IsAreaBlank(FLASH_SELF_TEST_LOG,2U*FLASH_STORAGE_PAGE_SIZE);
+    }
+    generation=((const STORAGE_RECORD *)page)->sequence;
+    if (!generation || generation>1U+s_self_test_goals[FLASH_TEST_LOG]/FLASH_TEST_LOG_CAPACITY) return 0U;
+    for (address=page+STORAGE_LOG_START;address+sizeof(STORAGE_LOG_ENTRY)<=page+FLASH_STORAGE_PAGE_SIZE;address+=sizeof(STORAGE_LOG_ENTRY)) {
+        if (StorageFlash_IsAreaBlank(address,sizeof(STORAGE_LOG_ENTRY))) continue;
+        /* The self-test never hides a torn slot as a successful test write. */
+        if (!Storage_LogEntryValid((const STORAGE_LOG_ENTRY *)address)) return 0U;
+        ++entries;
+    }
+    *count=(generation-1U)*FLASH_TEST_LOG_CAPACITY+entries;
+    return (UINT8)(*count<=s_self_test_goals[FLASH_TEST_LOG]);
+}
+
+static UINT8 FlashSelfTest_CheckLog(UINT32 count)
+{
+    UINT8 point, records[100][2];
+    UINT16 i,index,value;
+    UINT32 available=count%FLASH_TEST_LOG_CLEAR_PERIOD;
+    if (!Storage_LoadLogAt(FLASH_SELF_TEST_LOG,&point,records) || point>100U) return 0U;
+    if (available>100U) available=100U;
+    for (i=0U;i<100U;++i) {
+        index=(UINT16)((point+99U-i)%100U);
+        value=i<available ? FlashSelfTest_LogValue(count-i) : 0U;
+        if (records[index][0]!=(UINT8)value || records[index][1]!=(UINT8)(value>>8)) return 0U;
+    }
+    ++sys_time.flash_test.checks;
+    return 1U;
+}
+
+static UINT8 FlashSelfTest_LogStep(void)
+{
+    UINT32 count;
+    if (!FlashSelfTest_LogCount(&count) || !FlashSelfTest_CheckLog(count)) return 0U;
+    sys_time.flash_test.progress.count[FLASH_TEST_LOG]=count;
+    if (count==s_self_test_goals[FLASH_TEST_LOG]) return FlashSelfTest_Advance(FLASH_TEST_STATS_PHASE);
+    if (!Storage_LogAppend(FLASH_SELF_TEST_LOG,FlashSelfTest_LogValue(count+1U)) || !FlashSelfTest_CheckLog(count+1U)) return 0U;
+    sys_time.flash_test.progress.count[FLASH_TEST_LOG]=count+1U;
+    return 1U;
+}
+
+static UINT8 FlashSelfTest_ReadStats(STORAGE_STATISTICS *runtime)
+{
+    UINT32 page=Storage_StatsPage(FLASH_SELF_TEST_STATS),address;
+    memset(runtime,0,sizeof(*runtime));
+    if (!page || !Storage_StatsReplay(page,runtime)) return 0U;
+    for (address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
+         address+sizeof(STORAGE_STATS_ENTRY)<=page+FLASH_STORAGE_PAGE_SIZE;address+=sizeof(STORAGE_STATS_ENTRY))
+        if (!StorageFlash_IsAreaBlank(address,sizeof(STORAGE_STATS_ENTRY)) &&
+            !Storage_StatsEntryValid((const STORAGE_STATS_ENTRY *)address)) return 0U;
+    runtime->available=1U;
+    ++sys_time.flash_test.checks;
+    return 1U;
+}
+
+static void FlashSelfTest_MakeStats(STORAGE_STATS_DATA *expected, UINT32 ordinal, UINT32 boots)
+{
+    UINT8 i;
+    UINT32 rises=(ordinal+1U)/2U;
+    memset(expected,0,sizeof(*expected));
+    for (i=0U;i<10U;++i) expected->count[i]=(rises+9U-i)/10U;
+    expected->count[10]=boots;
+    expected->active_faults=(UINT16)((ordinal&1U) ? (1U<<((ordinal/2U)%10U)) : 0U);
+}
+
+static UINT8 FlashSelfTest_StatsStep(void)
+{
+    STORAGE_STATISTICS runtime, reloaded;
+    STORAGE_STATS_DATA expected;
+    UINT32 ordinal=0U,rises=0U,boots;
+    UINT8 i;
+    UINT32 phase=sys_time.flash_test.progress.phase;
+    if (!FlashSelfTest_ReadStats(&runtime)) {
+        if (phase!=FLASH_TEST_STATS_PHASE || sys_time.flash_test.progress.count[FLASH_TEST_STATS] ||
+            !StorageFlash_IsAreaBlank(FLASH_SELF_TEST_STATS,2U*FLASH_STORAGE_PAGE_SIZE)) return 0U;
+        memset(&runtime,0,sizeof(runtime)); runtime.available=1U; runtime.data.count[10]=1U;
+        return Storage_StatsSaveAt(FLASH_SELF_TEST_STATS,&runtime,STATS_BOOT,0U);
+    }
+    boots=runtime.data.count[10];
+    if (phase==FLASH_TEST_STATS_PHASE) {
+        for (i=0U;i<10U;++i) {
+            if (runtime.data.count[i]>s_self_test_goals[FLASH_TEST_STATS]-rises) return 0U;
+            rises+=runtime.data.count[i];
+        }
+        if (rises>s_self_test_goals[FLASH_TEST_STATS] || (rises==0U && runtime.data.active_faults)) return 0U;
+        ordinal=2U*rises-(runtime.data.active_faults ? 1U : 0U);
+        FlashSelfTest_MakeStats(&expected,ordinal,1U);
+        if (ordinal>s_self_test_goals[FLASH_TEST_STATS] || memcmp(&expected,&runtime.data,sizeof(expected))) return 0U;
+        sys_time.flash_test.progress.count[FLASH_TEST_STATS]=ordinal;
+        if (ordinal==s_self_test_goals[FLASH_TEST_STATS]) return FlashSelfTest_Advance(FLASH_TEST_BOOT_PHASE);
+        FlashSelfTest_MakeStats(&expected,ordinal+1U,1U);
+        Storage_UpdateFaultStatisticsAt(FLASH_SELF_TEST_STATS,&runtime,expected.active_faults);
+        if (runtime.dirty || !FlashSelfTest_ReadStats(&reloaded) || memcmp(&expected,&reloaded.data,sizeof(expected))) return 0U;
+        sys_time.flash_test.progress.count[FLASH_TEST_STATS]=ordinal+1U;
+    } else if (phase==FLASH_TEST_BOOT_PHASE) {
+        FlashSelfTest_MakeStats(&expected,s_self_test_goals[FLASH_TEST_STATS],boots);
+        if (!boots || boots>FLASH_TEST_BOOT_COUNT || memcmp(&expected,&runtime.data,sizeof(expected))) return 0U;
+        if (boots==FLASH_TEST_BOOT_COUNT) return FlashSelfTest_Advance(FLASH_TEST_CLEAR_PHASE);
+        Storage_StatsApply(&runtime.data,STATS_BOOT,0U);
+        if (!Storage_StatsSaveAt(FLASH_SELF_TEST_STATS,&runtime,STATS_BOOT,0U)) return 0U;
+    } else if (phase==FLASH_TEST_CLEAR_PHASE) {
+        FlashSelfTest_MakeStats(&expected,s_self_test_goals[FLASH_TEST_STATS],FLASH_TEST_BOOT_COUNT);
+        if (!memcmp(&expected,&runtime.data,sizeof(expected)) && expected.active_faults!=STORAGE_STATS_FAULT_BITS) {
+            Storage_UpdateFaultStatisticsAt(FLASH_SELF_TEST_STATS,&runtime,STORAGE_STATS_FAULT_BITS);
+            if (runtime.dirty) return 0U;
+        } else {
+            Storage_StatsApply(&expected,STATS_FAULT_MASK,STORAGE_STATS_FAULT_BITS);
+            if (!memcmp(&expected,&runtime.data,sizeof(expected))) {
+                Storage_StatsApply(&runtime.data,STATS_CLEAR,0U);
+                if (!Storage_StatsSaveAt(FLASH_SELF_TEST_STATS,&runtime,STATS_CLEAR,0U)) return 0U;
+            } else {
+                Storage_StatsApply(&expected,STATS_CLEAR,0U);
+                if (memcmp(&expected,&runtime.data,sizeof(expected))) return 0U;
+                /* Same active fault after clear must neither count nor write. */
+                ordinal=sys_time.flash_test.session_halfwords;
+                Storage_UpdateFaultStatisticsAt(FLASH_SELF_TEST_STATS,&runtime,STORAGE_STATS_FAULT_BITS);
+                if (ordinal!=sys_time.flash_test.session_halfwords) return 0U;
+                return FlashSelfTest_Advance(FLASH_TEST_RECOVER_PHASE);
+            }
+        }
+    } else {
+        memset(&expected,0,sizeof(expected)); expected.count[10]=FLASH_TEST_BOOT_COUNT;
+        expected.active_faults=STORAGE_STATS_FAULT_BITS;
+        if (!memcmp(&expected,&runtime.data,sizeof(expected))) {
+            Storage_UpdateFaultStatisticsAt(FLASH_SELF_TEST_STATS,&runtime,0U);
+        } else {
+            expected.active_faults=0U;
+            if (!memcmp(&expected,&runtime.data,sizeof(expected))) Storage_UpdateFaultStatisticsAt(FLASH_SELF_TEST_STATS,&runtime,1U);
+            else {
+                expected.count[0]=1U; expected.active_faults=1U;
+                if (memcmp(&expected,&runtime.data,sizeof(expected))) return 0U;
+                return FlashSelfTest_Advance(FLASH_TEST_FINAL_PHASE);
+            }
+        }
+        if (runtime.dirty) return 0U;
+    }
+    if (!FlashSelfTest_ReadStats(&reloaded) || memcmp(&runtime.data,&reloaded.data,sizeof(runtime.data))) return 0U;
+    return 1U;
+}
+
+static UINT8 FlashSelfTest_CheckFinal(void)
+{
+    STORAGE_STATISTICS statistics;
+    STORAGE_STATS_DATA expected;
+    STORAGE_FLASH_FACTORY_AGING_DATA aging;
+    UINT32 count;
+    UINT8 i;
+    for (i=0U;i<FLASH_TEST_DOMAIN_COUNT;++i)
+        if (sys_time.flash_test.progress.count[i]!=s_self_test_goals[i]) return 0U;
+    if (!FlashSelfTest_CheckSoc(s_self_test_goals[FLASH_TEST_SOC]) ||
+        !Storage_LoadFactoryAgingAt(FLASH_SELF_TEST_STATE,&aging) ||
+        aging.u32Elapsed10ms!=s_self_test_goals[FLASH_TEST_SOC]/200U ||
+        aging.u16State!=FLASH_FACTORY_AGING_STATE_RUNNING || aging.u16DurationHours!=12U ||
+        !FlashSelfTest_LogCount(&count) || count!=s_self_test_goals[FLASH_TEST_LOG] ||
+        !FlashSelfTest_CheckLog(count) || !FlashSelfTest_ReadStats(&statistics)) return 0U;
+    memset(&expected,0,sizeof(expected)); expected.count[0]=1U;
+    expected.count[10]=FLASH_TEST_BOOT_COUNT; expected.active_faults=1U;
+    return (UINT8)(memcmp(&expected,&statistics.data,sizeof(expected))==0);
+}
+
+void FlashSelfTest_Init(uint32_t reset_cause)
+{
+    volatile FLASH_SELF_TEST *test=&sys_time.flash_test;
+    memset((void *)test,0,sizeof(*test));
+    test->status=FLASH_TEST_RUNNING;
+    test->progress.signature=FLASH_TEST_SIGNATURE;
+    memcpy((void *)test->progress.goal,s_self_test_goals,sizeof(s_self_test_goals));
+    s_self_test_loaded=0U; s_self_test_erase_page=2U;
+    s_self_test_tick=SysTime_Get10msTickCount();
+    s_self_test_ore=FlashSelfTest_UartErrors();
+    s_self_test_overflow=SysTime_Get200msTaskOverflowCount();
+    if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) {
+        FlashSelfTest_Fail(FLASH_TEST_PROFILE_ERROR,FLASH_SIZE_REG_ADDR); return;
+    }
+    /* Upper bounds include initialization, aging updates and phase checkpoints.
+     * This is a cycle-count budget, not a ten-year retention certificate. */
+    test->budget_ok=(UINT8)(s_self_test_goals[FLASH_TEST_CONFIG]/2U+16U<FLASH_TEST_ERASE_LIMIT &&
+        (s_self_test_goals[FLASH_TEST_SOC]+s_self_test_goals[FLASH_TEST_SOC]/200U+2U)/
+            (2U*(FLASH_STORAGE_PAGE_SIZE/STORAGE_STATE_SPAN))+2U<FLASH_TEST_ERASE_LIMIT &&
+        s_self_test_goals[FLASH_TEST_LOG]/(2U*FLASH_TEST_LOG_CAPACITY)+2U<FLASH_TEST_ERASE_LIMIT &&
+        s_self_test_goals[FLASH_TEST_STATS]/(2U*FLASH_TEST_STATS_CAPACITY)+8U<FLASH_TEST_ERASE_LIMIT);
+    if (!test->budget_ok) FlashSelfTest_Fail(FLASH_TEST_BUDGET_ERROR,FLASH_SELF_TEST_BEGIN);
+    else if (reset_cause & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF))
+        FlashSelfTest_Fail(FLASH_TEST_WATCHDOG_ERROR,0U);
+}
+
+uint8_t FlashSelfTest_IsActive(void)
+{
+    return (uint8_t)(sys_time.flash_test.status==FLASH_TEST_RUNNING);
+}
+
+void FlashSelfTest_Task(void)
+{
+    volatile FLASH_SELF_TEST *test=&sys_time.flash_test;
+    UINT32 now=SysTime_Get10msTickCount(), phase;
+    UINT8 ok=1U;
+    if (!FlashSelfTest_IsActive() || g_stLowPowerRtcStatus.mode!=NO_SLEEP) return;
+    if (s_self_test_ore!=FlashSelfTest_UartErrors()) {
+        FlashSelfTest_Fail(FLASH_TEST_UART_ERROR,0U); return;
+    }
+    if (s_self_test_overflow!=SysTime_Get200msTaskOverflowCount()) {
+        FlashSelfTest_Fail(FLASH_TEST_SCHEDULER_ERROR,0U); return;
+    }
+    if ((UINT32)(now-s_self_test_tick)<FLASH_TEST_INTERVAL_TICKS || StorageFlash_IsBusy() ||
+        u8FlashUpdateFlag || Sci_IsAnyPortBusy() || Can_IsBusy() || SysTime_HasPendingTaskFlags() ||
+        System_ERROR_UserCallback(ERROR_STATUS_AFE1)) return;
+    s_self_test_tick=now;
+    if (!s_self_test_loaded) {
+        if (!FlashSelfTest_LoadProgress()) FlashSelfTest_Fail(FLASH_TEST_READ_ERROR,FLASH_SELF_TEST_CONFIG);
+        else s_self_test_loaded=1U;
+        return;
+    }
+    phase=test->progress.phase;
+    switch (phase) {
+    case FLASH_TEST_PREPARE:
+        if (s_self_test_erase_page<8U) {
+            StorageFlash_BeginWrite();
+            ok=Storage_Erase(FLASH_SELF_TEST_BEGIN+(UINT32)s_self_test_erase_page*FLASH_STORAGE_PAGE_SIZE);
+            StorageFlash_EndWrite();
+            if (ok) ++s_self_test_erase_page;
+        } else ok=FlashSelfTest_Advance(FLASH_TEST_CONFIG_PHASE);
+        break;
+    case FLASH_TEST_CONFIG_PHASE:
+        if (test->progress.count[FLASH_TEST_CONFIG]==s_self_test_goals[FLASH_TEST_CONFIG])
+            ok=FlashSelfTest_Advance(FLASH_TEST_SOC_PHASE);
+        else {
+            ++test->progress.count[FLASH_TEST_CONFIG];
+            ok=FlashSelfTest_SaveProgress((UINT8)((test->progress.count[FLASH_TEST_CONFIG]%64U)==0U));
+            if (!ok) --test->progress.count[FLASH_TEST_CONFIG];
+        }
+        break;
+    case FLASH_TEST_SOC_PHASE: ok=FlashSelfTest_SocStep(); break;
+    case FLASH_TEST_LOG_PHASE: ok=FlashSelfTest_LogStep(); break;
+    case FLASH_TEST_STATS_PHASE:
+    case FLASH_TEST_BOOT_PHASE:
+    case FLASH_TEST_CLEAR_PHASE:
+    case FLASH_TEST_RECOVER_PHASE: ok=FlashSelfTest_StatsStep(); break;
+    case FLASH_TEST_FINAL_PHASE:
+    case FLASH_TEST_COMPLETE:
+        ok=FlashSelfTest_CheckFinal();
+        if (ok && phase!=FLASH_TEST_COMPLETE) ok=FlashSelfTest_Advance(FLASH_TEST_COMPLETE);
+        if (ok && test->status==FLASH_TEST_RUNNING) test->status=FLASH_TEST_PASS;
+        break;
+    default: ok=0U; break;
+    }
+    if (!ok && test->status==FLASH_TEST_RUNNING) FlashSelfTest_Fail(FLASH_TEST_VERIFY_ERROR,FLASH_SELF_TEST_BEGIN);
+}
+#endif
 
 UINT16 FlashReadOneHalfWord(UINT32 faddr)
 {
