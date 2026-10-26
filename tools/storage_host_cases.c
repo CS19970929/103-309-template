@@ -302,7 +302,7 @@ static void test_statistics(void) {
     restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     /* Fill this page, then cut every erase/header/checkpoint half-word at rotation. */
     while(1) {
-        page=Storage_StatsPage();
+        page=Storage_StatsPage(FLASH_STATS_A);
         entry_address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
         while(entry_address+sizeof(STORAGE_STATS_ENTRY)<=page+1024 &&
               !StorageFlash_IsAreaBlank(entry_address,sizeof(STORAGE_STATS_ENTRY))) entry_address+=sizeof(STORAGE_STATS_ENTRY);
@@ -351,7 +351,7 @@ static void test_statistics(void) {
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     assert(StorageFlash_ReadStatistics(counts) && counts[1]==1 && counts[10]==4);
     /* Committed corruption is an error, not a fresh zero lifetime counter. */
-    page=Storage_StatsPage();
+    page=Storage_StatsPage(FLASH_STATS_A);
     *(UINT16 *)(page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA)+4)^=1;
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE);
     assert(!StorageFlash_ReadStatistics(counts) && !StorageFlash_ClearFaultStatistics());
@@ -397,7 +397,7 @@ int main(void) {
     assert(StorageFlash_SaveFactoryAgingData(&aging));
     assert(StorageFlash_SaveSocData(&soc));
     for(i=0;i<30;++i) { soc.u16SocNow=(UINT16)i; assert(StorageFlash_SaveSocData(&soc)); }
-    while ((Storage_StateLatest() & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
+    while ((Storage_StateLatest(FLASH_STATE_A) & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
         ++soc.u16SocNow; assert(StorageFlash_SaveSocData(&soc));
     }
     previous_soc=soc.u16SocNow;

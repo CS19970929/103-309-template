@@ -201,33 +201,43 @@ static UINT32 Storage_SelectPair(UINT32 a, UINT32 b, UINT32 magic, UINT16 length
                          ((const STORAGE_RECORD *)a)->sequence) ? b : a;
 }
 
-UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
+static UINT8 Storage_LoadConfigAt(UINT32 base, STORAGE_FLASH_CONFIG_DATA *data)
 {
     UINT32 address;
     if (data==0) return 0U;
-    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
+    address=Storage_SelectPair(base,(base+FLASH_STORAGE_PAGE_SIZE),STORAGE_CONFIG_MAGIC,sizeof(*data));
     if (!address) return 0U;
     memcpy(data,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*data));
     return 1U;
 }
 
-UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
+static UINT8 Storage_SaveConfigAt(UINT32 base, const STORAGE_FLASH_CONFIG_DATA *data)
 {
     UINT32 address, target, sequence=1U;
     UINT8 result;
     if (data==0) return 0U;
-    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
+    address=Storage_SelectPair(base,(base+FLASH_STORAGE_PAGE_SIZE),STORAGE_CONFIG_MAGIC,sizeof(*data));
     if (address) {
         if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) return 1U;
         sequence=((const STORAGE_RECORD *)address)->sequence+1U;
     }
-    target=address==FLASH_CONFIG_A ? FLASH_CONFIG_B : FLASH_CONFIG_A;
+    target=address==base ? (base+FLASH_STORAGE_PAGE_SIZE) : base;
     StorageFlash_BeginWrite();
     result=(UINT8)(Storage_Erase(target) &&
         Storage_WriteRecord(target,STORAGE_CONFIG_MAGIC,sequence,data,sizeof(*data)));
     StorageFlash_EndWrite();
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
+}
+
+UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
+{
+    return Storage_LoadConfigAt(FLASH_CONFIG_A,data);
+}
+
+UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
+{
+    return Storage_SaveConfigAt(FLASH_CONFIG_A,data);
 }
 
 static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
@@ -259,10 +269,10 @@ typedef struct {
 } STORAGE_STATE;
 #define STORAGE_STATE_SPAN (sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATE))
 
-static UINT32 Storage_StateLatest(void)
+static UINT32 Storage_StateLatest(UINT32 base)
 {
     UINT32 page, address, latest=0U;
-    for (page=FLASH_STATE_A; page<=FLASH_STATE_B; page+=FLASH_STORAGE_PAGE_SIZE) {
+    for (page=base; page<base+2U*FLASH_STORAGE_PAGE_SIZE; page+=FLASH_STORAGE_PAGE_SIZE) {
         for (address=page; address+STORAGE_STATE_SPAN<=page+FLASH_STORAGE_PAGE_SIZE;
              address+=STORAGE_STATE_SPAN) {
             if (Storage_RecordValid(address,STORAGE_STATE_MAGIC,sizeof(STORAGE_STATE)) &&
@@ -273,16 +283,16 @@ static UINT32 Storage_StateLatest(void)
     return latest;
 }
 
-static void Storage_LoadState(STORAGE_STATE *state)
+static void Storage_LoadState(UINT32 base, STORAGE_STATE *state)
 {
-    UINT32 address=Storage_StateLatest();
+    UINT32 address=Storage_StateLatest(base);
     memset(state,0,sizeof(*state));
     if (address) memcpy(state,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*state));
 }
 
-static UINT8 Storage_SaveState(const STORAGE_STATE *state)
+static UINT8 Storage_SaveState(UINT32 base, const STORAGE_STATE *state)
 {
-    UINT32 latest=Storage_StateLatest(), page=FLASH_STATE_A, address, next;
+    UINT32 latest=Storage_StateLatest(base), page=base, address, next;
     UINT32 sequence=1U;
     UINT8 result=0U;
     if (latest) {
@@ -296,7 +306,7 @@ static UINT8 Storage_SaveState(const STORAGE_STATE *state)
         if (!StorageFlash_IsAreaBlank(address,STORAGE_STATE_SPAN)) next=address+STORAGE_STATE_SPAN;
     StorageFlash_BeginWrite();
     if (next+STORAGE_STATE_SPAN>page+FLASH_STORAGE_PAGE_SIZE) {
-        next=page==FLASH_STATE_A ? FLASH_STATE_B : FLASH_STATE_A;
+        next=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
         if (!Storage_Erase(next)) goto done;
     }
     result=Storage_WriteRecord(next,STORAGE_STATE_MAGIC,sequence,state,sizeof(*state));
@@ -306,40 +316,60 @@ done:
     return result;
 }
 
-UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
+static UINT8 Storage_LoadSocAt(UINT32 base, STORAGE_FLASH_SOC_DATA *data)
 {
     STORAGE_STATE state;
     if (!data) return 0U;
-    Storage_LoadState(&state);
+    Storage_LoadState(base,&state);
     if (!(state.valid & STORAGE_STATE_SOC) || state.soc.u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION) return 0U;
     *data=state.soc;
     return 1U;
 }
 
-UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
+static UINT8 Storage_SaveSocAt(UINT32 base, const STORAGE_FLASH_SOC_DATA *data)
 {
     STORAGE_STATE state;
     if (!data || data->u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION) return 0U;
-    Storage_LoadState(&state); state.soc=*data; state.valid|=STORAGE_STATE_SOC;
-    return Storage_SaveState(&state);
+    Storage_LoadState(base,&state); state.soc=*data; state.valid|=STORAGE_STATE_SOC;
+    return Storage_SaveState(base,&state);
 }
 
-UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
+static UINT8 Storage_LoadFactoryAgingAt(UINT32 base, STORAGE_FLASH_FACTORY_AGING_DATA *data)
 {
     STORAGE_STATE state;
     if (!data) return 0U;
-    Storage_LoadState(&state);
+    Storage_LoadState(base,&state);
     if (!(state.valid & STORAGE_STATE_AGING)) return 0U;
     *data=state.aging;
     return 1U;
 }
 
-UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
+static UINT8 Storage_SaveFactoryAgingAt(UINT32 base, const STORAGE_FLASH_FACTORY_AGING_DATA *data)
 {
     STORAGE_STATE state;
     if (!data) return 0U;
-    Storage_LoadState(&state); state.aging=*data; state.valid|=STORAGE_STATE_AGING;
-    return Storage_SaveState(&state);
+    Storage_LoadState(base,&state); state.aging=*data; state.valid|=STORAGE_STATE_AGING;
+    return Storage_SaveState(base,&state);
+}
+
+UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
+{
+    return Storage_LoadSocAt(FLASH_STATE_A,data);
+}
+
+UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
+{
+    return Storage_SaveSocAt(FLASH_STATE_A,data);
+}
+
+UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    return Storage_LoadFactoryAgingAt(FLASH_STATE_A,data);
+}
+
+UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    return Storage_SaveFactoryAgingAt(FLASH_STATE_A,data);
 }
 
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
@@ -388,9 +418,9 @@ typedef struct { UINT16 data, crc, commit; } STORAGE_LOG_ENTRY;
 typedef char StorageLogCapacityCheck[((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/
                       sizeof(STORAGE_LOG_ENTRY)>FLASH_STORAGE_LOG_RECORD_COUNT) ? 1 : -1];
 
-static UINT32 Storage_LogLatestPage(void)
+static UINT32 Storage_LogLatestPage(UINT32 base)
 {
-    return Storage_SelectPair(FLASH_LOG_A,FLASH_LOG_B,STORAGE_LOG_MAGIC,sizeof(STORAGE_LOG_CHECKPOINT));
+    return Storage_SelectPair(base,base+FLASH_STORAGE_PAGE_SIZE,STORAGE_LOG_MAGIC,sizeof(STORAGE_LOG_CHECKPOINT));
 }
 
 static UINT8 Storage_LogEntryValid(const STORAGE_LOG_ENTRY *entry)
@@ -417,9 +447,9 @@ static void Storage_LogReplay(UINT32 page, UINT8 *point, UINT8 records[100][2])
     }
 }
 
-UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
+static UINT8 Storage_LoadLogAt(UINT32 base, UINT8 *point, UINT8 records[100][2])
 {
-    UINT32 latest=Storage_LogLatestPage();
+    UINT32 latest=Storage_LogLatestPage(base);
     const STORAGE_LOG_CHECKPOINT *checkpoint;
     if (!point || !records) return 0U;
     *point=0U; memset(records,0,200U);
@@ -432,15 +462,15 @@ UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
     return 1U;
 }
 
-static UINT8 Storage_LogAppend(UINT16 data)
+static UINT8 Storage_LogAppend(UINT32 base, UINT16 data)
 {
-    UINT32 page=Storage_LogLatestPage(), address, next, sequence=1U;
+    UINT32 page=Storage_LogLatestPage(base), address, next, sequence=1U;
     STORAGE_LOG_CHECKPOINT checkpoint;
     STORAGE_LOG_ENTRY entry;
     UINT8 result=0U;
     StorageFlash_BeginWrite();
     if (!page) {
-        page=FLASH_LOG_A;
+        page=base;
         memset(&checkpoint,0,sizeof(checkpoint));
         if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
     }
@@ -450,8 +480,8 @@ static UINT8 Storage_LogAppend(UINT16 data)
     if (next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
         sequence=((const STORAGE_RECORD *)page)->sequence+1U;
         memset(&checkpoint,0,sizeof(checkpoint));
-        if (!StorageFlash_LoadLogData(&checkpoint.point,checkpoint.records)) goto done;
-        page=page==FLASH_LOG_A ? FLASH_LOG_B : FLASH_LOG_A;
+        if (!Storage_LoadLogAt(base,&checkpoint.point,checkpoint.records)) goto done;
+        page=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
         if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
         next=page+STORAGE_LOG_START;
     }
@@ -469,13 +499,18 @@ done:
     return result;
 }
 
+UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
+{
+    return Storage_LoadLogAt(FLASH_LOG_A,point,records);
+}
+
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta)
 {
     if (event==0xFFU || delta>171U) return 0U;
-    return Storage_LogAppend((UINT16)(event | ((UINT16)delta<<8)));
+    return Storage_LogAppend(FLASH_LOG_A,(UINT16)(event | ((UINT16)delta<<8)));
 }
 
-UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(STORAGE_LOG_CLEAR); }
+UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(FLASH_LOG_A,STORAGE_LOG_CLEAR); }
 
 UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
 {
@@ -495,14 +530,14 @@ UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
         StorageFlash_EndWrite();
     } else {
         if (config->initializing & (STORAGE_PARAM_RESET_SOC | STORAGE_PARAM_RESET_AGING)) {
-            Storage_LoadState(&state);
+            Storage_LoadState(FLASH_STATE_A,&state);
             if (config->initializing & STORAGE_PARAM_RESET_SOC) {
                 memset(&state.soc,0,sizeof(state.soc)); state.valid &= ~STORAGE_STATE_SOC;
             }
             if (config->initializing & STORAGE_PARAM_RESET_AGING) {
                 memset(&state.aging,0,sizeof(state.aging)); state.valid &= ~STORAGE_STATE_AGING;
             }
-            if (!Storage_SaveState(&state)) return 0U;
+            if (!Storage_SaveState(FLASH_STATE_A,&state)) return 0U;
         }
         if ((config->initializing & STORAGE_PARAM_RESET_LOG) && !StorageFlash_ClearLog()) return 0U;
     }
@@ -526,16 +561,17 @@ typedef struct {
     UINT8 type, reserved;
     UINT16 value, crc, commit;
 } STORAGE_STATS_ENTRY;
-static struct {
+typedef struct {
     STORAGE_STATS_DATA data;
     UINT32 last_attempt_tick;
     UINT8 available, dirty;
-} s_statistics;
+} STORAGE_STATISTICS;
+static STORAGE_STATISTICS s_statistics;
 typedef char StorageStatsEntrySizeCheck[(sizeof(STORAGE_STATS_ENTRY)==8U) ? 1 : -1];
 
-static UINT32 Storage_StatsPage(void)
+static UINT32 Storage_StatsPage(UINT32 base)
 {
-    return Storage_SelectPair(FLASH_STATS_A,FLASH_STATS_B,STORAGE_STATS_MAGIC,sizeof(STORAGE_STATS_DATA));
+    return Storage_SelectPair(base,base+FLASH_STORAGE_PAGE_SIZE,STORAGE_STATS_MAGIC,sizeof(STORAGE_STATS_DATA));
 }
 
 static void Storage_StatsIncrement(UINT32 *count)
@@ -563,25 +599,25 @@ static UINT8 Storage_StatsEntryValid(const STORAGE_STATS_ENTRY *entry)
          ((entry->type==STATS_BOOT || entry->type==STATS_CLEAR) && entry->value==0U)));
 }
 
-static UINT8 Storage_StatsReplay(UINT32 page)
+static UINT8 Storage_StatsReplay(UINT32 page, STORAGE_STATISTICS *runtime)
 {
     UINT32 address;
-    memcpy(&s_statistics.data,(const void *)(page+sizeof(STORAGE_RECORD)),sizeof(s_statistics.data));
-    if (s_statistics.data.active_faults & ~STORAGE_STATS_FAULT_BITS) return 0U;
+    memcpy(&runtime->data,(const void *)(page+sizeof(STORAGE_RECORD)),sizeof(runtime->data));
+    if (runtime->data.active_faults & ~STORAGE_STATS_FAULT_BITS) return 0U;
     for (address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
          address+sizeof(STORAGE_STATS_ENTRY)<=page+FLASH_STORAGE_PAGE_SIZE;
          address+=sizeof(STORAGE_STATS_ENTRY)) {
         const STORAGE_STATS_ENTRY *entry=(const STORAGE_STATS_ENTRY *)address;
         if (entry->commit!=STORAGE_RECORD_COMMIT) continue; /* incomplete append */
         if (!Storage_StatsEntryValid(entry)) return 0U; /* damaged committed data */
-        Storage_StatsApply(&s_statistics.data,entry->type,entry->value);
+        Storage_StatsApply(&runtime->data,entry->type,entry->value);
     }
     return 1U;
 }
 
-static UINT8 Storage_StatsSave(UINT8 type, UINT16 value)
+static UINT8 Storage_StatsSaveAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT8 type, UINT16 value)
 {
-    UINT32 page=Storage_StatsPage(), address, next=0U, sequence=1U;
+    UINT32 page=Storage_StatsPage(base), address, next=0U, sequence=1U;
     STORAGE_STATS_ENTRY entry;
     UINT8 result=0U;
     if (page) {
@@ -590,14 +626,14 @@ static UINT8 Storage_StatsSave(UINT8 type, UINT16 value)
         for (address=next; address+sizeof(entry)<=page+FLASH_STORAGE_PAGE_SIZE; address+=sizeof(entry))
             if (!StorageFlash_IsAreaBlank(address,sizeof(entry))) next=address+sizeof(entry);
     }
-    s_statistics.last_attempt_tick=SysTime_Get10msTickCount();
+    runtime->last_attempt_tick=SysTime_Get10msTickCount();
     StorageFlash_BeginWrite();
     /* RAM already includes the requested change. A checkpoint after an
      * uncertain write avoids replaying a delta twice or losing earlier faults. */
-    if (!page || s_statistics.dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
-        address=page==FLASH_STATS_A ? FLASH_STATS_B : FLASH_STATS_A;
+    if (!page || runtime->dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
+        address=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
         result=(UINT8)(Storage_Erase(address) && Storage_WriteRecord(address,STORAGE_STATS_MAGIC,
-                            sequence,&s_statistics.data,sizeof(s_statistics.data)));
+                            sequence,&runtime->data,sizeof(runtime->data)));
     } else {
         entry.type=type; entry.reserved=0U; entry.value=value;
         entry.crc=Storage_CrcUpdate(0xFFFFU,(const UINT8 *)&entry,4U);
@@ -610,7 +646,7 @@ static UINT8 Storage_StatsSave(UINT8 type, UINT16 value)
                        memcmp((const void *)next,&entry,sizeof(entry))==0);
     }
     StorageFlash_EndWrite();
-    s_statistics.dirty=(UINT8)!result;
+    runtime->dirty=(UINT8)!result;
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
 }
@@ -653,20 +689,20 @@ void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
          sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE));
     memset(&s_statistics,0,sizeof(s_statistics));
     if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) goto damaged;
-    page=Storage_StatsPage();
+    page=Storage_StatsPage(FLASH_STATS_A);
     if (page) {
-        if (!Storage_StatsReplay(page)) goto damaged;
+        if (!Storage_StatsReplay(page,&s_statistics)) goto damaged;
         s_statistics.available=1U;
         if (!sleep_reset) {
             Storage_StatsApply(&s_statistics.data,STATS_BOOT,0U);
-            (void)Storage_StatsSave(STATS_BOOT,0U);
+            (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_BOOT,0U);
         }
     } else if ((StorageFlash_IsAreaBlank(FLASH_STATS_A,FLASH_STORAGE_PAGE_SIZE) &&
                 StorageFlash_IsAreaBlank(FLASH_STATS_B,FLASH_STORAGE_PAGE_SIZE)) ||
                Storage_StatsInitialWriteInterrupted()) {
         s_statistics.available=1U;
         s_statistics.data.count[10]=1U;
-        (void)Storage_StatsSave(STATS_BOOT,0U);
+        (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_BOOT,0U);
     } else goto damaged;
     return;
 damaged:
@@ -678,7 +714,7 @@ void StorageFlash_UpdateFaultStatistics(UINT16 active_faults)
     if (!s_statistics.available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
         active_faults==s_statistics.data.active_faults) return;
     Storage_StatsApply(&s_statistics.data,STATS_FAULT_MASK,active_faults);
-    if (!s_statistics.dirty) (void)Storage_StatsSave(STATS_FAULT_MASK,active_faults);
+    if (!s_statistics.dirty) (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_FAULT_MASK,active_faults);
 }
 
 UINT8 StorageFlash_ReadStatistics(UINT32 counts[FLASH_STATISTICS_COUNT])
@@ -694,7 +730,7 @@ UINT8 StorageFlash_ClearFaultStatistics(void)
     if (!s_statistics.available) return 0U;
     previous=s_statistics.data;
     Storage_StatsApply(&s_statistics.data,STATS_CLEAR,0U);
-    if (Storage_StatsSave(STATS_CLEAR,0U)) return 1U;
+    if (Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_CLEAR,0U)) return 1U;
     s_statistics.data=previous;
     return 0U;
 }
@@ -703,12 +739,12 @@ void StorageFlash_StatisticsTask(void)
 {
     if (s_statistics.available && s_statistics.dirty &&
         (UINT32)(SysTime_Get10msTickCount()-s_statistics.last_attempt_tick)>=STORAGE_STATS_RETRY_TICKS)
-        (void)Storage_StatsSave(0U,0U);
+        (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,0U,0U);
 }
 
 void StorageFlash_FlushStatistics(void)
 {
-    if (s_statistics.available && s_statistics.dirty) (void)Storage_StatsSave(0U,0U);
+    if (s_statistics.available && s_statistics.dirty) (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,0U,0U);
 }
 
 void StorageFlash_PrintBootCheck(void)
@@ -716,7 +752,7 @@ void StorageFlash_PrintBootCheck(void)
     printf("\r\n[FLASH_BOOT] flash=%uKB page=%lu config=0x%08lX state=0x%08lX log=0x%08lX\r\n",
         *((volatile UINT16 *)FLASH_SIZE_REG_ADDR),(unsigned long)FLASH_STORAGE_PAGE_SIZE,
         (unsigned long)Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(STORAGE_FLASH_CONFIG_DATA)),
-        (unsigned long)Storage_StateLatest(),(unsigned long)Storage_LogLatestPage());
+        (unsigned long)Storage_StateLatest(FLASH_STATE_A),(unsigned long)Storage_LogLatestPage(FLASH_LOG_A));
 }
 
 UINT16 FlashReadOneHalfWord(UINT32 faddr)
