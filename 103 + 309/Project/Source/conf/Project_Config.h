@@ -78,7 +78,7 @@
 #define PROJECT_SWITCH_PUSHBUTTON 1
 // <o> Switch mode
 //   <0=> Maintained: shorted RUN, open NORMAL (50 ms debounce)
-//   <1=> Pushbutton: hold 3 s NORMAL; NORMAL IRQ wake/restart hold; other sleep 1 s wake/release
+//   <1=> Pushbutton: hold 3 s NORMAL; HICCUP IRQ wake/restart hold; NORMAL/DEEP 1 s wake/release
 // <i> Both modes retain charger wake and protective DEEP priority.
 // <i> Maintained mode stays RUN while charger input is active; opening takes effect after removal.
 #ifndef PROJECT_CFG_SWITCH_MODE

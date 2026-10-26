@@ -225,7 +225,9 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
     if (RtcSleep_PortHasCurrentWake(&source) != 0U)
     {
-        g_irq_t = source;
+        /* A simultaneous current wake must retain the switch IRQ so the
+         * HICCUP key wake can start its 3 s hold after RUN restoration. */
+        if (g_irq_t != soc_key) g_irq_t = source;
         return true;
     }
 
@@ -412,7 +414,7 @@ void rtc_sleep(void)
             LowPower_Request(NO_SLEEP);
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
-            SleepDeal_ResetKeyState((UINT8)(sleep_mode==NORMAL_MODE && g_irq_t==soc_key));
+            SleepDeal_ResetKeyState((UINT8)(sleep_mode==HICCUP_MODE && g_irq_t==soc_key));
 
             g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
             RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
