@@ -142,14 +142,22 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     UINT8 charge_block;
     UINT8 discharge_block;
 
-    /* Recovery exceptions belong to these directional faults only. */
-    charge_block = (UINT8)((g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp ||
+    /* Common shutdowns must never be released by reverse current. */
+    if (g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp ||
+        s_host_mos_off == 3U || (!charge_on && !discharge_on))
+        return SH367309_SetMosPermits(0U, 0U);
+
+    /* Common-port reverse conduction releases a directional request temporarily;
+     * keep the request/latch so it applies again when reverse current stops. */
+    charge_block = (UINT8)((!charge_on || (s_host_mos_off & 1U) ||
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IchgOcp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgOtp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellChgUtp) &&
         !(reverse_valid && g_stCellInfoReport.u16IDischg >= FAULT_REVERSE_CURRENT_A10));
-    discharge_block = (UINT8)((g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp ||
+    discharge_block = (UINT8)((!discharge_on || (s_host_mos_off & 2U) ||
+        g_stCellInfoReport.unMdlFault_Second.bits.b1IdischgOcp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp ||
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgOtp ||
@@ -160,13 +168,7 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     discharge_block |= (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow &&
         !(reverse_valid && g_stCellInfoReport.u16Ichg >= FAULT_REVERSE_CURRENT_A10));
 #endif
-    /* A common fault can only add a block; directional recovery cannot erase it. */
-    charge_block |= g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
-    discharge_block |= g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp;
-    charge_block |= (UINT8)(s_host_mos_off & 1U);
-    discharge_block |= (UINT8)(s_host_mos_off & 2U);
-    return SH367309_SetMosPermits((UINT8)(charge_on && !charge_block),
-                                 (UINT8)(discharge_on && !discharge_block));
+    return SH367309_SetMosPermits((UINT8)!charge_block, (UINT8)!discharge_block);
 }
 
 UINT8 Fault_MosParametersValid(const struct PRT_E2ROM_PARAS *parameters)

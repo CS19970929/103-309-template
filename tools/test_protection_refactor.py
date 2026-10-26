@@ -222,10 +222,51 @@ static void reset_case(void) {
 }
 int main(void) {
     unsigned n; int i;
+    /* A host close stays requested while reverse current temporarily conducts. */
+    for(n=1;n<=2;++n) {
+        reset_case();
+        assert(Fault_SetHostMosOff((UINT8)n));
+        assert(((hardware_conf>>4)&3)==(3U^n));
+        if(n==1) g_stCellInfoReport.u16IDischg=9;
+        else g_stCellInfoReport.u16Ichg=9;
+        Fault_UpdateCurrentProtection(1);
+        assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        if(n==1) g_stCellInfoReport.u16IDischg=10;
+        else g_stCellInfoReport.u16Ichg=10;
+        Fault_UpdateCurrentProtection(1);
+        assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
+        assert(s_host_mos_off==n);
+        g_stCellInfoReport.u16Ichg=g_stCellInfoReport.u16IDischg=0;
+        Fault_UpdateCurrentProtection(1);
+        assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        assert(s_host_mos_off==n);
+        if(n==1) g_stCellInfoReport.u16IDischg=10;
+        else g_stCellInfoReport.u16Ichg=10;
+        Fault_UpdateCurrentProtection(1);
+        AFE_PARAM_WRITE_Flag=1;
+        assert(!Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        AFE_PARAM_WRITE_Flag=0; fail_write=1;
+        assert(!Fault_ApplyMosPermits(1,1) && s_host_mos_off==n);
+        fail_write=0;
+        assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
+        tick+=51; /* Stale current cannot hold the temporary release. */
+        assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        tick=UINT32_MAX-10; Fault_PauseMeasurements(); Fault_UpdateCurrentProtection(1);
+        tick+=20;
+        assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
+        Fault_UpdateCurrentProtection(0);
+        assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        Fault_UpdateCurrentProtection(1);
+        assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
+        Fault_PauseMeasurements();
+        assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
+        assert(s_host_mos_off==n);
+    }
     /* Every combination of AFE directional faults, both software latches,
-       MOS heat and reverse current. Expected outcomes come from safety rules. */
-    for(n=0;n<32768;++n) {
+       MOS heat, host requests, caller requests and reverse current. */
+    for(n=0;n<131072;++n) {
         unsigned charge_fault, discharge_fault, reverse_charge, reverse_discharge, heat;
+        unsigned host=(n>>15)&3, requested;
         reset_case();
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp=(n>>0)&1;
         g_stCellInfoReport.unMdlFault_Third.bits.b1IchgOcp=(n>>1)&1;
@@ -243,12 +284,17 @@ int main(void) {
         g_stCellInfoReport.u16Ichg=(UINT16)(reverse_charge*10);
         g_stCellInfoReport.u16IDischg=(UINT16)(reverse_discharge*10);
         Fault_UpdateCurrentProtection((n>>14)&1);
-        charge_fault=((n&15)!=0)||((n>>9)&1);
-        discharge_fault=((n&0x1f0)!=0)||((n>>10)&1);
         if(!(n&0x4000)) reverse_charge=reverse_discharge=0;
-        assert(Fault_ApplyMosPermits(1,1));
-        assert(((hardware_conf>>4)&1)==!(heat || (charge_fault && !reverse_discharge)));
-        assert(((hardware_conf>>5)&1)==!(heat || (discharge_fault && !reverse_charge)));
+        assert(Fault_SetHostMosOff((UINT8)host));
+        for(requested=0;requested<4;++requested) {
+            unsigned common=heat || host==3 || requested==0;
+            charge_fault=((n&15)!=0)||((n>>9)&1)||(host&1)||!(requested&1);
+            discharge_fault=((n&0x1f0)!=0)||((n>>10)&1)||(host&2)||!(requested&2);
+            assert(Fault_ApplyMosPermits((UINT8)(requested&1),(UINT8)((requested>>1)&1)));
+            assert(((hardware_conf>>4)&1)==!(common || (charge_fault && !reverse_discharge)));
+            assert(((hardware_conf>>5)&1)==!(common || (discharge_fault && !reverse_charge)));
+            assert(s_host_mos_off==host);
+        }
     }
     for(n=0;n<4;++n) {
         reset_case(); g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=1;
@@ -344,7 +390,7 @@ int main(void) {
     sample_status=ADC_SAMPLE_INVALID; DataLoad_MosTemperature();
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
     test_parameter_transaction();
-    puts("PASS protection: 32768 combinations, independent latches, timed recovery, one record, CONF failures/retry");
+    puts("PASS protection: 524288 permit combinations, host reverse flow/zero/freshness/STOP, independent latches, CONF retry");
     puts("PASS MOS: trigger/recovery hysteresis, invalid/old samples, STOP, wrap, parameter fallback, real NTC path");
     return 0;
 }
