@@ -169,7 +169,7 @@ static void host_reset_state(void)
 static void host_set_snapshot(UINT16 soc)
 {
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
-	s_flash_soc.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION_V2;
+	s_flash_soc.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;
 	s_flash_soc.u16SocNow = soc;
 	s_flash_soc.u16DsgSocInt = 0U;
 	s_flash_soc.u16MaxErrorPercent = 100U;

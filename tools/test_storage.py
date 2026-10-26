@@ -33,11 +33,22 @@ def main():
                         if line.lstrip().startswith('#define') and 'RCC_CSR_' in line))
     code = code.replace('/* PRODUCTION_SOURCE */', flash)
     eeprom = (SOURCE / 'EEPROM.c').read_text(encoding='utf-8')
-    initializer = eeprom[eeprom.index('UINT8 InitE2PROM(void)'):]
+    initializer = '\n'.join(line for line in eeprom.splitlines() if not line.startswith('#include'))
     # Simulate reflashing several firmware versions in one host process.
     initializer = initializer.replace('static const UINT8 version[32]=BMS_SOFTWARE_VERDION_DEFAULT;',
                                       'UINT8 version[32]; memcpy(version,firmware_version,32);')
     code = code.replace('/* CONFIG_INIT_SOURCE */', initializer)
+    conf = (SOURCE / 'conf/conf.h').read_text(encoding='utf-8')
+    data = (SOURCE / 'DataDeal.h').read_text(encoding='utf-8')
+    headers = (SOURCE / 'conf/Project_Config.h').read_text(encoding='utf-8') + '\n'
+    headers += '#if PROJECT_CFG_BAT_CHEMISTRY == 1\n#define LIFEPO\n#else\n#define TERNARYLI\n#endif\n'
+    headers += 'enum { SOC_TABLE_LIFEPO=1, SOC_TABLE_TERNARYLI=2 };\n'
+    headers += conf[conf.index('#define   CURR_10A'):conf.index('typedef enum GPIO_TYPE')]
+    headers += data[data.index('enum tagInfoForKBArray {'):data.index('#define AFE_CURRENT_DIAG_VERSION')]
+    for name in ('Fault.h','Heat_Cool.h','SH367309_DataDeal.h'):
+        text = (SOURCE / name).read_text(encoding='utf-8',errors='replace')
+        headers += '\n'.join(line for line in text.splitlines() if not line.startswith('#include'))+'\n'
+    code = code.replace('/* PARAMETER_HEADERS */',headers)
     log = (SOURCE / 'LogRecord.c').read_text(encoding='utf-8')
     log_code = log[:log.index('void App_LogRecord(void)')]
     log_code += log[log.index('void Sci_ACK_0x03_ReadRegs_EventRecord('):log.index('void Sci_WrReg_0x06_Reset_EventRecord(')]

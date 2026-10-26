@@ -2,10 +2,11 @@
 #include <windows.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 typedef uint8_t UINT8; typedef uint16_t UINT16; typedef uint32_t UINT32;
-typedef int32_t INT32;
+typedef int8_t INT8; typedef int16_t INT16; typedef int32_t INT32;
 typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG } FLASH_Status;
 #define STM32F10X_MD
 #define FLASH_FLAG_EOP 1
@@ -46,19 +47,25 @@ static void host_storage_init(void) {
     *(UINT16 *)0x1FFFF7E0=128;
 }
 /* PRODUCTION_SOURCE */
-/* Only the unrelated application parameter tables are stubbed. The real boot
- * initializer, version comparison, reset sequencing and Flash code run below. */
-typedef struct { UINT16 minValue,maxValue,curValue,defaultValue; } AFE_Value_Typedef;
-static struct { AFE_Value_Typedef u16VcellOvp,rest[23]; } AFE_Parameters_RS485_Struction;
-static STORAGE_FLASH_RW_PARAM_DATA runtime_rw;
+/* Actual parameter tables, validators and boot initializer. */
+/* PARAMETER_HEADERS */
+struct PRT_E2ROM_PARAS PRT_E2ROMParas;
+struct OTHER_ELEMENT OtherElement;
+UINT16 g_u16CalibCoefK[KB_NUM];
+INT16 g_i16CalibCoefB[KB_NUM];
+UINT8 SeriesNum;
+UINT32 g_u32CS_Res_AFE;
+AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction=AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
+#define E2P_PARA_NUM_PROTECT FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT
+#define E2P_PARA_NUM_OTHER_ELEMENT1 FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT
+#define E2P_PARA_NUM_RESERVED_RW_PARAM FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT
+#define ERROR_REMOVE_EEPROM_COM 0
 static int reset_on_version=1;
 static char firmware_version[32]="storage-test-v1";
+#undef BMS_SOFTWARE_VERDION_DEFAULT
 #define BMS_SOFTWARE_VERDION_DEFAULT firmware_version
+#undef PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION
 #define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION reset_on_version
-static void EEPROM_LoadDefaultRuntimeData(void) { memset(&runtime_rw,0x11,sizeof(runtime_rw)); }
-static void EEPROM_BuildRWParamData(STORAGE_FLASH_RW_PARAM_DATA *data) { *data=runtime_rw; }
-static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data) { return data->protect[0]!=0xFFFF; }
-static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data) { runtime_rw=*data; }
 /* CONFIG_INIT_SOURCE */
 /* LOG_SOURCE */
 static unsigned char saved[16384];
@@ -212,7 +219,10 @@ static void test_statistics(void) {
     error_after_commit=1; assert(StorageFlash_ClearFaultStatistics()); error_after_commit=0;
     StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(2);
     assert(StorageFlash_ClearLog());
-    assert(InitE2PROM()); assert(StorageFlash_ReadStatistics(counts) && counts[1]==1);
+    reset_on_version=1; strcpy(firmware_version,"storage-test-v4");
+    assert(InitE2PROM());
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[1]==1 && counts[10]==4);
     /* Committed corruption is an error, not a fresh zero lifetime counter. */
     page=Storage_StatsPage();
     *(UINT16 *)(page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA)+4)^=1;
@@ -225,6 +235,7 @@ int main(void) {
     STORAGE_FLASH_SOC_DATA soc,loaded_soc;
     STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,FLASH_FACTORY_AGING_STATE_RUNNING,12},loaded_aging;
     int writes,cut,i;
+    UINT16 previous_soc;
     host_storage_init();
     memset(&old_value,0x12,sizeof(old_value)); memset(&new_value,0x34,sizeof(new_value));
     assert(!StorageFlash_LoadConfig(&loaded));
@@ -259,38 +270,40 @@ int main(void) {
     assert(StorageFlash_SaveFactoryAgingData(&aging));
     assert(StorageFlash_SaveSocData(&soc));
     for(i=0;i<30;++i) { soc.u16SocNow=(UINT16)i; assert(StorageFlash_SaveSocData(&soc)); }
+    while ((Storage_StateLatest() & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
+        ++soc.u16SocNow; assert(StorageFlash_SaveSocData(&soc));
+    }
+    previous_soc=soc.u16SocNow;
     save_flash(); soc.u16SocNow=90;
     mutations=0; assert(StorageFlash_SaveSocData(&soc)); writes=mutations;
     for(cut=0;cut<=writes;++cut) {
         restore_flash(); cut_after=cut; StorageFlash_SaveSocData(&soc); cut_after=-1;
         assert(StorageFlash_LoadSocData(&loaded_soc));
-        assert(loaded_soc.u16SocNow==29 || loaded_soc.u16SocNow==90);
+        assert(loaded_soc.u16SocNow==previous_soc || loaded_soc.u16SocNow==90);
         assert(StorageFlash_LoadFactoryAgingData(&loaded_aging) && !memcmp(&aging,&loaded_aging,sizeof(aging)));
     }
     puts("PASS storage: SOC/aging merge, state append and rotation, power cuts retain complete state");
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
-    for(i=0;i<24;++i) {
-        AFE_Value_Typedef *value=(&AFE_Parameters_RS485_Struction.u16VcellOvp)+i;
-        value->minValue=0; value->maxValue=1000; value->defaultValue=100;
-    }
     memset((void *)FLASH_STATS_A,0x5A,2048);
     assert(InitE2PROM());
-    runtime_rw.protect[0]=123; assert(StorageFlash_SaveRwParamData(&runtime_rw));
-    mutations=0; assert(InitE2PROM() && runtime_rw.protect[0]==123 && !mutations);
+    PRT_E2ROMParas.u16VcellOvp_First=4001; assert(EEPROM_SaveRWParametersToFlash());
+    mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4001 && !mutations);
     assert(StorageFlash_SaveSocData(&soc)); assert(StorageFlash_AppendLog(1,171));
     save_flash(); strcpy(firmware_version,"storage-test-v2");
     mutations=0; assert(InitE2PROM()); writes=mutations;
     for(cut=0;cut<=writes;++cut) {
         restore_flash(); cut_after=cut; InitE2PROM(); cut_after=-1;
-        assert(InitE2PROM() && runtime_rw.protect[0]==0x1111);
+        assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==COV_1);
         assert(!StorageFlash_LoadSocData(&loaded_soc));
         assert(!StorageFlash_LoadFactoryAgingData(&loaded_aging));
         for(i=0;i<2048;++i) assert(((UINT8 *)FLASH_STATS_A)[i]==0x5A);
         mutations=0; assert(InitE2PROM() && !mutations);
     }
     strcpy(firmware_version,"storage-test-v3"); reset_on_version=0;
-    runtime_rw.protect[0]=456; assert(StorageFlash_SaveRwParamData(&runtime_rw));
-    mutations=0; assert(InitE2PROM() && runtime_rw.protect[0]==456 && !mutations);
+    PRT_E2ROMParas.u16VcellOvp_First=4002; assert(EEPROM_SaveRWParametersToFlash());
+    mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4002 && !mutations);
+    assert(StorageFlash_LoadConfig(&loaded)); loaded.rw.reserved[0]=0xFFFF;
+    assert(!EEPROM_RWParamDataIsValid(&loaded.rw));
     printf("PASS storage: real boot init, once per version, disabled switch, %d interrupted resets, statistics untouched\n",writes+1);
     test_log();
     test_statistics();

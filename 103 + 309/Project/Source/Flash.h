@@ -30,7 +30,6 @@
 #define FLASH_SLEEP_RESET_VALUE          ((UINT16)0xFFFF)
 
 #define BOOT_FLAG_RESET_VALUE            FLASH_SLEEP_RESET_VALUE
-#define STORAGE_FLASH_SOC_API_DECLARED   1
 
 typedef struct
 {

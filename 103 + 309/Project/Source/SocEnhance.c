@@ -7,27 +7,6 @@
 #include <string.h>
 #include <stdint.h>
 
-#ifndef STORAGE_FLASH_SOC_API_DECLARED
-typedef struct
-{
-	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT16 u16MaxErrorPercent;
-	UINT32 u32CycleTimes;
-	UINT32 u32CapNow;
-	UINT32 u32CapFull;
-	UINT32 u32LearnPassedAs10;
-	UINT16 u16LearnAnchorSoc;
-	UINT16 u16LearnState;
-	UINT16 u16Flags;
-	UINT16 u16Reserved[4];
-} STORAGE_FLASH_SOC_DATA;
-
-extern UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data);
-extern UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
-#endif
-
 #define SOC_TICK_MS                  ((UINT32)200U)
 #define SOC_TICKS_PER_SECOND         ((UINT16)5U)
 #define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)

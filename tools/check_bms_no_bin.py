@@ -1,6 +1,7 @@
 """Check the active BMS target with its own link settings, without HEX/BIN or hooks."""
 import argparse
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -82,6 +83,17 @@ def main():
         raise SystemExit('Unexpected image output: ' + str(images))
     if result.returncode != 0 or not list(output.rglob('*.axf')):
         raise SystemExit(result.returncode or 1)
+    maps = list(output.rglob('*.map'))
+    if len(maps) != 1:
+        raise SystemExit('Expected exactly one MAP for storage boundary verification')
+    map_text = maps[0].read_text(encoding='utf-8', errors='replace')
+    region = re.search(r'Load Region LR_IROM1 \(Base: (0x[0-9a-fA-F]+), Size: (0x[0-9a-fA-F]+), Max: (0x[0-9a-fA-F]+)', map_text)
+    if not region:
+        raise SystemExit('LR_IROM1 is missing from MAP')
+    base, size, maximum = (int(value, 16) for value in region.groups())
+    if base != 0x08004800 or maximum != 0x17800 or size > maximum:
+        raise SystemExit('App load region must fit [0x08004800, 0x0801C000)')
+    print(f'MAP boundary verified: App 0x{base:08X}..0x{base+size:08X}; storage starts 0x0801C000')
 
 
 if __name__ == '__main__':

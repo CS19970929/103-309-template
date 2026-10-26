@@ -19,6 +19,12 @@ if ($appAddress -ne 0x08004800) {
     throw "Refuse to flash SOC app at $Address. This project app starts at 0x08004800; 0x08000000 is the IAP area."
 }
 
+$imageLength = (Get-Item -LiteralPath $resolvedBin.Path).Length
+$appLimit = [uint32]0x0801C000
+if ($imageLength -le 0 -or $imageLength -gt ([long]$appLimit - $appAddress)) {
+    throw "Refuse image length $imageLength. App must fit [0x08004800, 0x0801C000); storage and lifetime statistics must be preserved."
+}
+
 $args = @(
     "-c", "port=SWD",
     "-w", $resolvedBin.Path,
@@ -30,6 +36,7 @@ $args = @(
 Write-Host "SOC app flash target:"
 Write-Host "  bin:     $($resolvedBin.Path)"
 Write-Host "  address: $Address"
+Write-Host "  bytes:   $imageLength (end must be <= 0x0801C000)"
 Write-Host "  note:    IAP stays at 0x08000000; only app area is programmed."
 
 if (-not $Flash) {

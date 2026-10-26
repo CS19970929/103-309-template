@@ -176,7 +176,7 @@ static UINT8 EEPROM_RWParamDataIsValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
 		return 0;
 	}
 
-	if (EEPROM_RWParamHasCurrentCalib(data) &&
+	if (!EEPROM_RWParamHasCurrentCalib(data) ||
 		!EEPROM_CurrentCalibValuesValid(
 			data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX],
 			(INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX],
@@ -205,13 +205,10 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 		*(&Heat_Cool_Element.u16Heat_OpenTemp + i) = data->heat_cool[i];
 	}
 
-	if (EEPROM_RWParamHasCurrentCalib(data))
-	{
-		g_u16CalibCoefK[MDL_ICHG] = data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX];
-		g_i16CalibCoefB[MDL_ICHG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX];
-		g_u16CalibCoefK[MDL_IDSG] = data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX];
-		g_i16CalibCoefB[MDL_IDSG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX];
-	}
+	g_u16CalibCoefK[MDL_ICHG] = data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX];
+	g_i16CalibCoefB[MDL_ICHG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX];
+	g_u16CalibCoefK[MDL_IDSG] = data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX];
+	g_i16CalibCoefB[MDL_IDSG] = (INT16)data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX];
 
 	EEPROM_UpdateOtherElementRuntime();
 }
