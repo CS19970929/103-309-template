@@ -223,6 +223,7 @@ static void test_statistics(void) {
     assert(StorageFlash_ClearLog());
     reset_on_version=1; strcpy(firmware_version,"storage-test-v4");
     assert(InitE2PROM());
+    assert(OtherElement.u16Sleep_TimeNormal==10080);
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     assert(StorageFlash_ReadStatistics(counts) && counts[1]==1 && counts[10]==4);
     /* Committed corruption is an error, not a fresh zero lifetime counter. */

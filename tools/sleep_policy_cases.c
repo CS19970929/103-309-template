@@ -27,12 +27,14 @@ static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key;
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
+#define ERROR_STATUS_AFE1 1
+static UINT8 System_ERROR_UserCallback(int command) { return (UINT8)!afe_status_ok; }
 static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
 static struct { UINT16 time_enter_rtc; UINT32 rtc_sec_cnt; } sys_time={5,0};
-static struct { UINT16 u16Sleep_Vlow,u16Sleep_TimeVlow,u16Sleep_TimeNormal; } OtherElement={2600,1,10080};
+static struct { UINT16 u16Sleep_Vlow,u16Sleep_TimeVlow,u16Sleep_TimeNormal,u16Sleep_VNormal; } OtherElement={2600,1,10080,3200};
 static struct {
     UINT16 u16VCellMin,u16VCell[32],u16Ichg,u16IDischg;
     union { UINT16 all; struct { UINT16 b1CellUvp:1; } bits; } unMdlFault_Third,unMdlFault_Second;
@@ -66,8 +68,9 @@ static void InitWakeUp_DeepMode(void) {}
 static void Sys_StopMode(void) {
     ++stop_calls;
     if(scripted_key) key=(stop_calls==1) ? 1 : 0;
-    g_irq_t=stop_source; ++rtc_counter;
-    if(stop_source==NO_IRQ) rtc_wake=1;
+    g_irq_t=(scripted_key==2 && stop_calls>1) ? soc_key : stop_source;
+    ++rtc_counter;
+    if(g_irq_t==NO_IRQ) rtc_wake=1;
 }
 static UINT16 RtcSleep_PortGetChargeCurrentMa(void) { return g_stCellInfoReport.u16Ichg; }
 static UINT16 RtcSleep_PortGetDischargeCurrentMa(void) { return g_stCellInfoReport.u16IDischg; }
@@ -97,6 +100,7 @@ static void IOstatus_RTCMode(void) { adc_on=0; }
 static void InitWakeUp_RTCMode(void) {}
 static void InitWakeUp_Base(void) {}
 static void LowPower_DisableUartWakeup(void) {}
+static void LowPower_DisableWakeupExti(void) {}
 static void InitTimer(void) {}
 static void InitUSART_CommonUpper(void) {}
 static UINT8 Sci_VerifyWakeFrames(void) { return 0; }
@@ -124,6 +128,7 @@ static void reset_case(void) {
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=flash_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; afe_status_ok=1; soc_now=55;
+    OtherElement.u16Sleep_TimeNormal=10080;
     BootFlag_Clear();
 }
 int main(void) {
@@ -180,7 +185,50 @@ int main(void) {
     }
     reset_case(); key=1; stop_source=NO_IRQ; rtc_wake=1;
     afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
-    assert(rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
+    assert(!rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
     puts("PASS UV: confirmed new event -> zero SOC and immediate DEEP; wake with active UV stays running, recovery re-arms, both RTC modes, failed status does not authorize UV");
+    reset_case(); assert(!SleepDeal_NormalIdleExpired(0));
+    rtc_counter=604799; assert(!SleepDeal_NormalIdleExpired(0));
+    ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    reset_case(); rtc_counter=UINT32_MAX-100; assert(!SleepDeal_NormalIdleExpired(0));
+    rtc_counter+=604799; assert(!SleepDeal_NormalIdleExpired(0));
+    ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    reset_case(); rtc_counter=1000; assert(!SleepDeal_NormalIdleExpired(0));
+    rtc_counter=900; assert(!SleepDeal_NormalIdleExpired(0));
+    rtc_counter+=604799; assert(!SleepDeal_NormalIdleExpired(0));
+    ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    reset_case(); assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=604799;
+    for(i=0;i<256;++i) SleepDeal_RecordExternalComm();
+    ++rtc_counter; assert(!SleepDeal_NormalIdleExpired(0));
+    rtc_counter+=604799; assert(!SleepDeal_NormalIdleExpired(0));
+    ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    reset_case(); OtherElement.u16Sleep_TimeNormal=65000;
+    assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=3900000-1;
+    assert(!SleepDeal_NormalIdleExpired(0)); ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    reset_case(); OtherElement.u16Sleep_TimeNormal=1;
+    assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=59; assert(!SleepDeal_NormalIdleExpired(0));
+    ++rtc_counter; assert(SleepDeal_NormalIdleExpired(0));
+    for(i=0;i<4;++i) {
+        reset_case(); sys_time.time_enter_rtc=65535; lp_update_sleep_request();
+        rtc_counter=604799;
+        if(i==0) g_stCellInfoReport.u16Ichg=10;
+        if(i==1) g_stCellInfoReport.u16IDischg=10;
+        if(i==2) can_busy=1;
+        if(i==3) comm_busy=1;
+        lp_update_sleep_request(); ++rtc_counter;
+        g_stCellInfoReport.u16Ichg=g_stCellInfoReport.u16IDischg=0; can_busy=comm_busy=0;
+        lp_update_sleep_request(); assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    }
+    reset_case(); sys_time.time_enter_rtc=65535; OtherElement.u16Sleep_VNormal=65535;
+    lp_update_sleep_request(); rtc_counter=604800; lp_update_sleep_request();
+    assert(g_stLowPowerRtcStatus.mode==NORMAL_MODE);
+    reset_case(); assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=604799;
+    g_stLowPowerRtcStatus.mode=HICCUP_MODE; stop_source=NO_IRQ; key=1; ctlc=1;
+    assert(rtc_sleep_run_hiccup_cycle() && g_stLowPowerRtcStatus.mode==NORMAL_MODE && !ctlc && !adc_on);
+    /* Promotion to NORMAL still restores CTLC after a later qualified wake. */
+    reset_case(); assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=604799;
+    g_stLowPowerRtcStatus.mode=HICCUP_MODE; stop_source=NO_IRQ; scripted_key=2; ctlc=1;
+    rtc_sleep(); assert(ctlc==1 && restore_calls==1 && adc_on);
+    puts("PASS idle: exact 7 days across STOP, minute range, RTC wrap, 256-frame wrap, charge/discharge/UART/CAN reset, ignored VNormal, HICCUP promotion without ADC, CTLC restore");
     return 0;
 }

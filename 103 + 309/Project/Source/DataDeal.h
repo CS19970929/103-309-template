@@ -107,8 +107,8 @@ struct OTHER_ELEMENT {
 	UINT16 u16CurLimit_Vdelta;		//mV
 	UINT16 u16CurLimit_Cur;			//A*10
 
-    UINT16 u16Sleep_VNormal;      	//mV
-	UINT16 u16Sleep_TimeNormal;		//min
+    UINT16 u16Sleep_VNormal;      	// retained protocol field; unused by NORMAL sleep
+	UINT16 u16Sleep_TimeNormal;		// idle minutes; default 10080 (7 days)
     UINT16 u16Sleep_Vlow;     		//mV
 	UINT16 u16Sleep_TimeVlow;		//min
 	UINT16 u16Sleep_VirCur_Chg;     //A *10
@@ -153,14 +153,14 @@ struct OTHER_ELEMENT {
 #define OtherElement_default 	{4160,	30,	20,		0,	0,		0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_TERNARYLI,	0,		1000,	30,\
-	                             3200,	7200,	3000,	1,		10,		10,	240,3,\
+	                             3200,	10080,	3000,	1,		10,		10,	240,3,\
 	                             BMS_CAPCITY,	1,		4180,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))
 #define OtherElement_default 	{3550,	50,	20,	0,	0,	0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
-	                             3200,	7200,	2800,	1,	10,	10,	240, 3,\
+	                             3200,	10080,	2800,	1,	10,	10,	240, 3,\
 	                             BMS_CAPCITY,	3,		3550,	2850,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif

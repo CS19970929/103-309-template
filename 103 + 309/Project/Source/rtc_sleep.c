@@ -179,6 +179,13 @@ static void lp_update_sleep_request(void)
 
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
     lp_update_block_debug(g_stLowPowerRtcStatus.block);
+    if (SleepDeal_NormalIdleExpired((UINT8)(
+        (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |
+         LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_FLASH_BUSY | LP_BLOCK_UPGRADE))!=0U ||
+        System_ERROR_UserCallback(ERROR_STATUS_AFE1)))) {
+        LowPower_Request(NORMAL_MODE);
+        return;
+    }
     if (g_stLowPowerRtcStatus.block != 0U)
     {
         g_stLowPowerRtcStatus.idle = 0U;
@@ -207,6 +214,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
     if (RtcSleep_PortUpdateRtcData() == 0U)
     {
+        (void)SleepDeal_NormalIdleExpired(1U);
         return true;
     }
 
@@ -323,6 +331,18 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
+        if (g_stLowPowerRtcStatus.mode==HICCUP_MODE &&
+            SleepDeal_NormalIdleExpired((UINT8)(CheckChargeMa() || CheckDischargeMa() || CheckKeyActive()))) {
+            /* Stay in STOP policy: clear HICCUP wake lines, then configure the
+             * existing NORMAL wake sources. ADC is not restored here. */
+            LowPower_Request(NORMAL_MODE);
+            MCUO_AFE_CTLC=0;
+            LowPower_DisableWakeupExti();
+            IOstatus_RTCMode();
+            Init_RTC();
+            InitWakeUp_Base();
+        }
+
         MCUO_DEBUG_LED1 = 1;
         return true;
     }
@@ -382,7 +402,7 @@ void rtc_sleep(void)
 
         if (g_stLowPowerRtcStatus.mode==DEEP_MODE) return;
 
-        if (sleep_mode == NORMAL_MODE)
+        if (g_stLowPowerRtcStatus.mode == NORMAL_MODE)
             MCUO_AFE_CTLC = 1;
 
         RtcSleep_PortDisableStopWakeup();

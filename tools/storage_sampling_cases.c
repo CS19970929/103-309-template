@@ -21,6 +21,7 @@ static void Fault_ApplyMosPermits(UINT8 a,UINT8 b) { ++mos_applied; }
 static void Sci_CustomerUpdateCounters(void) { assert(mos_applied); ++updated; }
 static void App_SOC(void) { soc_processed=1; }
 static void SleepDeal_UpdateOverdischarge(UINT8 active) { assert(soc_processed); ++uv_updates; }
+static UINT8 SleepDeal_NormalIdleExpired(UINT8 activity) { assert(activity && !fault_valid); return 0; }
 /* AFE_TASK_SOURCE */
 int main(void) {
     int a,b;

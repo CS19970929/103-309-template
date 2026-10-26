@@ -4,6 +4,15 @@ volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
 static struct { UINT32 rtc_sec_cnt; } sys_time;
 static int adc_on, gpio_led, stop_rtc, wake_external, inject_frame, returned_to_sleep;
 static int wake_afe, deep_requests;
+static int gpio_ctlc;
+#define MCUO_AFE_CTLC gpio_ctlc
+static UINT8 CheckChargeMa(void) { return 0; }
+static UINT8 CheckDischargeMa(void) { return 0; }
+static UINT8 CheckKeyActive(void) { return 0; }
+static UINT8 SleepDeal_NormalIdleExpired(UINT8 activity) { return 0; }
+static void LowPower_Request(enum _SLEEP_MODE mode) { g_stLowPowerRtcStatus.mode=(UINT8)mode; }
+static void LowPower_DisableWakeupExti(void) {}
+static void Init_RTC(void) {}
 static enum irqWakeup stop_source;
 static UINT8 injected[9];
 static UINT16 injected_count;

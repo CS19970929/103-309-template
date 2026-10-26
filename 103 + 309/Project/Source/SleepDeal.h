@@ -13,6 +13,7 @@ void SleepDeal_ResetKeyState(void);
 UINT8 SleepDeal_TakeKeySleepRequest(void);
 void SleepDeal_UpdateOverdischarge(UINT8 active);
 UINT8 SleepDeal_HasHandledOverdischarge(void);
+UINT8 SleepDeal_NormalIdleExpired(UINT8 activity);
 UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void);
 void SleepDeal_HandleBootSleepStartup(void);
 

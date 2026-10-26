@@ -9,6 +9,8 @@ typedef struct SLEEP_RUNTIME_TAG
 	UINT8 key_state;
 	UINT32 key_press_tick;
 	UINT8 undervoltage_handled;
+	UINT8 normal_idle_tracking;
+	UINT32 normal_idle_since;
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
@@ -66,6 +68,7 @@ UINT8 SleepDeal_TakeKeySleepRequest(void)
 {
 	UINT32 now=SysTime_Get10msTickCount();
 	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
+	s_sleep.normal_idle_tracking=0U;
 	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
 	if (s_sleep.key_state==KEY_READY) {
 		s_sleep.key_press_tick=now;
@@ -104,6 +107,32 @@ UINT8 SleepDeal_HasHandledOverdischarge(void)
 	return s_sleep.undervoltage_handled;
 }
 
+UINT8 SleepDeal_NormalIdleExpired(UINT8 activity)
+{
+	UINT32 now;
+	if (activity || OtherElement.u16Sleep_TimeNormal==0U) {
+		s_sleep.normal_idle_tracking=0U;
+		return 0U;
+	}
+	/* RTC continues through STOP. The 10 ms RUN tick is restarted on wake and
+	 * cannot measure a multi-day idle interval. TimeNormal remains minutes. */
+	now=RTC_GetCounter();
+	if (!s_sleep.normal_idle_tracking) {
+		s_sleep.normal_idle_since=now;
+		s_sleep.normal_idle_tracking=1U;
+		return 0U;
+	}
+	/* Backward RTC correction is not a multi-day idle interval. */
+	if ((INT32)(now-s_sleep.normal_idle_since)<0) {
+		s_sleep.normal_idle_since=now;
+		return 0U;
+	}
+	if ((UINT32)(now-s_sleep.normal_idle_since)<(UINT32)OtherElement.u16Sleep_TimeNormal*60U)
+		return 0U;
+	s_sleep.normal_idle_tracking=0U;
+	return 1U;
+}
+
 static void BootFlag_EnableAccess(void)
 {
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
@@ -129,6 +158,9 @@ static void SleepDeal_MarkBootFromSleepChargerWakeup(void)
 void SleepDeal_RecordExternalComm(void)
 {
 	s_sleep.ext_comm++;
+	/* Reset directly: 256 valid frames between policy polls must not hide
+	 * activity when the existing small communication counter wraps. */
+	s_sleep.normal_idle_tracking=0U;
 }
 
 UINT8 SleepDeal_GetExternalCommCounter(void)

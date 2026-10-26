@@ -1008,6 +1008,8 @@ void App_AFEGet(void)
     App_SOC();
     if (fault_valid)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp);
+    else
+        (void)SleepDeal_NormalIdleExpired(1U);
 
 #ifdef VCELL_DISP_TEST
     // {

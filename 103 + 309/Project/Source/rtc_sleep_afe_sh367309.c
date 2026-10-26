@@ -94,5 +94,11 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
         //     return 1U;
         // }
     }
+    else {
+        /* A failed status read is not evidence of UV or a safe idle interval. */
+        (void)SleepDeal_NormalIdleExpired(1U);
+        if (source!=0) *source=error_wake;
+        return 1U;
+    }
     return 0U;
 }
