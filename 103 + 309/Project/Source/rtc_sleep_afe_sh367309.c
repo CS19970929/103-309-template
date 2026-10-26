@@ -70,6 +70,11 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
         SystemRuntime_SetMosStatus(SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET,
                                    SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
         Fault_ChangeToMCU();
+        SleepDeal_UpdateOverdischarge(SH367309_Reg_Store.REG_BSTATUS1.bits.UV);
+        if (g_stLowPowerRtcStatus.mode==DEEP_MODE) {
+            if (source!=0) *source=cuv_wake;
+            return 1U;
+        }
 
         // if (!SystemRuntime_IsDischargeMosOpen())
         // {

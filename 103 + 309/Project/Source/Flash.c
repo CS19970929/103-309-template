@@ -630,7 +630,8 @@ void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
     UINT8 sleep_reset=(UINT8)((reset_cause & RCC_CSR_SFTRSTF)!=0U &&
         (reset_cause & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF | RCC_CSR_PORRSTF | RCC_CSR_LPWRRSTF))==0U &&
         (sleep_flag==FLASH_NORMAL_SLEEP_VALUE || sleep_flag==FLASH_HICCUP_SLEEP_VALUE ||
-         sleep_flag==FLASH_DEEP_SLEEP_VALUE || sleep_flag==FLASH_SLEEP_CHARGER_WAKE_VALUE));
+         sleep_flag==FLASH_DEEP_SLEEP_VALUE || sleep_flag==FLASH_SLEEP_CHARGER_WAKE_VALUE ||
+         sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE));
     memset(&s_statistics,0,sizeof(s_statistics));
     if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) goto damaged;
     page=Storage_StatsPage();

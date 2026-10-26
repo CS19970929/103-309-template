@@ -22,7 +22,11 @@ static UINT32 RTC_GetCounter(void) { return 1; }
 static void RtcSleep_PortEnterStop(void) { assert(!adc_on); g_irq_t=stop_source; }
 static void initAFE1_IIC(void) { assert(!adc_on); }
 static UINT8 RTC_IsStopWakeup(void) { return (UINT8)stop_rtc; }
-static bool rtc_sleep_has_wakeup_exception(void) { assert(!adc_on); return wake_afe != 0; }
+static bool rtc_sleep_has_wakeup_exception(void) {
+    assert(!adc_on);
+    if(wake_afe==2) g_stLowPowerRtcStatus.mode=DEEP_MODE;
+    return wake_afe != 0;
+}
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
 static void RtcSleep_PortApplySocRtcRest(UINT32 seconds) {}
 static void lp_refresh_status(void) {}
@@ -78,7 +82,10 @@ static void test_wake_paths(void)
     wake_afe=1;
     assert(!rtc_sleep_run_hiccup_cycle() && !adc_on); wake_afe=0;
     g_stCellInfoReport.u16VCellMin=2500;
-    assert(rtc_sleep_run_hiccup_cycle() && deep_requests==1 && !adc_on);
+    assert(rtc_sleep_run_hiccup_cycle() && deep_requests==0 && !adc_on);
+    wake_afe=2;
+    assert(!rtc_sleep_run_hiccup_cycle() && deep_requests==1 && !adc_on);
+    wake_afe=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
     stop_source=NO_IRQ; stop_rtc=1;
     g_stCellInfoReport.u16VCellMin=3300;
     assert(rtc_sleep_run_hiccup_cycle() && !adc_on);

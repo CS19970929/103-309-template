@@ -26,6 +26,8 @@ static UINT16 bkp[4];
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key;
+static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
+static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
@@ -35,7 +37,11 @@ static struct {
     UINT16 u16VCellMin,u16VCell[32],u16Ichg,u16IDischg;
     union { UINT16 all; struct { UINT16 b1CellUvp:1; } bits; } unMdlFault_Third,unMdlFault_Second;
 } g_stCellInfoReport;
-static struct { struct { struct { UINT8 SC,UV; } bits; } REG_BSTATUS1; } SH367309_Reg_Store;
+static struct {
+    UINT8 u8_MTP_BALANCEH;
+    struct { struct { UINT8 SC,UV; } bits; } REG_BSTATUS1;
+    struct { struct { UINT8 CHG_FET,DSG_FET; } bits; } REG_BSTATUS3;
+} SH367309_Reg_Store;
 static struct { struct { UINT16 curValue; } u16VcellUvp; } AFE_Parameters_RS485_Struction;
 static UINT32 SysTime_Get10msTickCount(void) { return tick; }
 static UINT32 SysTime_GetMicroseconds(void) { now_ms+=1; return now_ms*1000; }
@@ -61,6 +67,7 @@ static void Sys_StopMode(void) {
     ++stop_calls;
     if(scripted_key) key=(stop_calls==1) ? 1 : 0;
     g_irq_t=stop_source; ++rtc_counter;
+    if(stop_source==NO_IRQ) rtc_wake=1;
 }
 static UINT16 RtcSleep_PortGetChargeCurrentMa(void) { return g_stCellInfoReport.u16Ichg; }
 static UINT16 RtcSleep_PortGetDischargeCurrentMa(void) { return g_stCellInfoReport.u16IDischg; }
@@ -76,7 +83,15 @@ static UINT8 RtcSleep_PortIsOneSecondTick(void) { return (UINT8)one_second; }
 static void RtcSleep_PortCommitResetSleep(UINT8 mode) { assert(mode==DEEP_MODE); ++deep_calls; }
 static UINT8 RtcSleep_PortUpdateRtcData(void) { return 1; }
 static UINT8 RtcSleep_PortHasCurrentWake(enum irqWakeup *source) { return 0; }
-static UINT8 RtcSleep_PortHasAfeWake(enum irqWakeup *source) { return 0; }
+#define MTP_BALANCEH 1
+static UINT8 MTPRead(int address,int count,UINT8 *data) {
+    if(!afe_status_ok) return 0;
+    SH367309_Reg_Store.REG_BSTATUS1.bits.UV=(UINT8)afe_uv; return 1;
+}
+static void SystemRuntime_SetMosStatus(UINT8 chg,UINT8 dsg) {}
+static void Fault_ChangeToMCU(void) { g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=(UINT16)afe_uv; }
+/* AFE_WAKE_SOURCE */
+static UINT8 RtcSleep_PortHasAfeWake(enum irqWakeup *source) { return RtcSleep_AfePortHasAfeWake(source); }
 static void Init_RTC(void) {}
 static void IOstatus_RTCMode(void) { adc_on=0; }
 static void InitWakeUp_RTCMode(void) {}
@@ -108,6 +123,7 @@ static void reset_case(void) {
     tick=now_ms=release_at_ms=charge_at_ms=rtc_counter=0;
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=flash_busy=0; stop_source=soc_key;
+    afe_uv=zero_calls=0; afe_status_ok=1; soc_now=55;
     BootFlag_Clear();
 }
 int main(void) {
@@ -145,5 +161,26 @@ int main(void) {
     reset_case(); charger=1; assert(SleepDeal_IsWakeupValid() && now_ms==0);
     assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     puts("PASS key: 3 s RUN hold, 1 s wake in all modes, release/re-press guard, no queued-tick acceleration, wrap, immediate sleep request and charger wake");
+    reset_case(); SleepDeal_UpdateOverdischarge(1);
+    assert(soc_now==0 && zero_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
+    memset(&s_sleep,0,sizeof(s_sleep)); LowPower_Request(NO_SLEEP);
+    scripted_key=1; key=0; SleepDeal_HandleBootSleepStartup();
+    SleepDeal_UpdateOverdischarge(1);
+    assert(zero_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    key=1; g_stCellInfoReport.u16VCellMin=2200;
+    for(i=0;i<120;++i) lp_update_sleep_request();
+    assert(g_stLowPowerRtcStatus.mode!=DEEP_MODE);
+    SleepDeal_UpdateOverdischarge(0); SleepDeal_UpdateOverdischarge(1);
+    assert(zero_calls==2 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    for(i=0;i<2;++i) {
+        reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
+        key=1; stop_source=NO_IRQ; afe_uv=1;
+        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==1 && !adc_on && !restore_calls);
+    }
+    reset_case(); key=1; stop_source=NO_IRQ; rtc_wake=1;
+    afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+    assert(rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
+    puts("PASS UV: confirmed new event -> zero SOC and immediate DEEP; wake with active UV stays running, recovery re-arms, both RTC modes, failed status does not authorize UV");
     return 0;
 }

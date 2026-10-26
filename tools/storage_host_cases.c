@@ -152,6 +152,8 @@ static void test_statistics(void) {
     assert(StorageFlash_ReadStatistics(counts) && counts[0]==1 && counts[10]==2);
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     assert(StorageFlash_ReadStatistics(counts) && counts[10]==2);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_UNDERVOLTAGE_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[10]==2);
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF|RCC_CSR_IWDGRSTF,FLASH_DEEP_SLEEP_VALUE);
     assert(StorageFlash_ReadStatistics(counts) && counts[10]==3);
     StorageFlash_InitStatistics(RCC_CSR_WWDGRSTF,FLASH_NORMAL_SLEEP_VALUE);

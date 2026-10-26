@@ -134,6 +134,11 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
+    if (SleepDeal_HasHandledOverdischarge()) {
+        g_stLowPowerRtcStatus.force=0U;
+        g_stLowPowerRtcStatus.vlow=0U;
+        return 0U;
+    }
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
         (RtcSleep_PortGetChargeCurrentMa() <= LOW_POWER_DEEP_SLEEP_ICHG_LIMIT))
     {
@@ -193,6 +198,13 @@ static bool rtc_sleep_has_wakeup_exception(void)
 {
     enum irqWakeup source = NO_IRQ;
 
+    /* A confirmed UV event has priority over key/UART/current wake. Read AFE
+     * status even in NORMAL; a closed DSG MOS alone is not undervoltage. */
+    if (RtcSleep_PortHasAfeWake(&source) != 0U) {
+        g_irq_t=source;
+        return true;
+    }
+
     if (RtcSleep_PortUpdateRtcData() == 0U)
     {
         return true;
@@ -204,12 +216,6 @@ static bool rtc_sleep_has_wakeup_exception(void)
     }
 
     if (RtcSleep_PortHasCurrentWake(&source) != 0U)
-    {
-        g_irq_t = source;
-        return true;
-    }
-
-    if (RtcSleep_PortHasAfeWake(&source) != 0U)
     {
         g_irq_t = source;
         return true;
@@ -260,11 +266,11 @@ static bool rtc_sleep_verify_uart_wakeup(void)
      * same protective deep sleep checked on a periodic RTC wake. */
     if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
     {
-        if (rtc_sleep_has_wakeup_exception())
+        if (rtc_sleep_has_wakeup_exception()) {
+            if (g_stLowPowerRtcStatus.mode==DEEP_MODE)
+                low_power_log_and_commit_sleep(DEEP_MODE);
             return true;
-        if (g_stCellInfoReport.u16VCellMin <= AFE_Parameters_RS485_Struction.u16VcellUvp.curValue ||
-            !SystemRuntime_IsDischargeMosOpen())
-            low_power_log_and_commit_sleep(DEEP_MODE);
+        }
     }
     IOstatus_RTCMode();
     if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
@@ -288,6 +294,12 @@ static bool rtc_sleep_run_hiccup_cycle(void)
     MCUO_DEBUG_LED1 = 0;
     initAFE1_IIC();
 
+    if (rtc_sleep_has_wakeup_exception()) {
+        if (g_stLowPowerRtcStatus.mode==DEEP_MODE)
+            low_power_log_and_commit_sleep(DEEP_MODE);
+        return false;
+    }
+
     if (g_irq_t==soc_key) {
         if (SleepDeal_IsWakeupValid()) return false;
         MCUO_DEBUG_LED1=1;
@@ -302,7 +314,7 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         return true;
     }
 
-    if ((RTC_IsStopWakeup() != 0U) && !rtc_sleep_has_wakeup_exception())
+    if (RTC_IsStopWakeup() != 0U)
     {
         ++g_stLowPowerRtcStatus.cycles;
         g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
@@ -310,13 +322,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
         RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
-
-        if (g_stCellInfoReport.u16VCellMin <= AFE_Parameters_RS485_Struction.u16VcellUvp.curValue ||
-            !SystemRuntime_IsDischargeMosOpen())
-        {
-            low_power_log_and_commit_sleep(DEEP_MODE);
-            // return false;
-        }
 
         MCUO_DEBUG_LED1 = 1;
         return true;
@@ -374,6 +379,8 @@ void rtc_sleep(void)
         while (rtc_sleep_run_hiccup_cycle())
         {
         }
+
+        if (g_stLowPowerRtcStatus.mode==DEEP_MODE) return;
 
         if (sleep_mode == NORMAL_MODE)
             MCUO_AFE_CTLC = 1;

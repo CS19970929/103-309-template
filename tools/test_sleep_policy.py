@@ -23,6 +23,8 @@ def main():
     for marker,name in (('SLEEP_SOURCE','SleepDeal.c'),('RTC_SOURCE','rtc_sleep.c')):
         text=(SOURCE/name).read_text(encoding='utf-8')
         code=code.replace('/* '+marker+' */','\n'.join(line for line in text.splitlines() if not line.startswith('#include')))
+    afe=(SOURCE/'rtc_sleep_afe_sh367309.c').read_text(encoding='utf-8')
+    code=code.replace('/* AFE_WAKE_SOURCE */',afe[afe.index('UINT8 RtcSleep_AfePortHasAfeWake('):])
     path=output/'sleep.c'; path.write_text(code,encoding='utf-8')
     exe=output/'sleep.exe'
     result=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(SOURCE),

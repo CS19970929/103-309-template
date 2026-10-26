@@ -1006,6 +1006,8 @@ void App_AFEGet(void)
     /* Both frames belong to this cycle; invalid cached zeros are not recovery. */
     if (sample_valid && fault_valid) Sci_CustomerUpdateCounters();
     App_SOC();
+    if (fault_valid)
+        SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp);
 
 #ifdef VCELL_DISP_TEST
     // {

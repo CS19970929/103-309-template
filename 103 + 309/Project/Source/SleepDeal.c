@@ -8,6 +8,7 @@ typedef struct SLEEP_RUNTIME_TAG
 	UINT8 chg_wake;
 	UINT8 key_state;
 	UINT32 key_press_tick;
+	UINT8 undervoltage_handled;
 } SLEEP_RUNTIME;
 
 static SLEEP_RUNTIME s_sleep;
@@ -78,13 +79,29 @@ UINT8 SleepDeal_TakeKeySleepRequest(void)
 
 void SleepDeal_Continue(UINT8 sleep_mode)
 {
-	UINT16 boot_flag = FLASH_DEEP_SLEEP_VALUE;
+	UINT16 boot_flag = s_sleep.undervoltage_handled ? FLASH_UNDERVOLTAGE_SLEEP_VALUE : FLASH_DEEP_SLEEP_VALUE;
 
 	LowPowerSleep_SaveResetState();
 	BootFlag_Write(boot_flag);
 	InitAFE1_Sleep(0);
 	AFE_Sleep();
 	MCU_RESET();
+}
+
+void SleepDeal_UpdateOverdischarge(UINT8 active)
+{
+	/* Call only after a successful AFE status read. Recovery re-arms the edge;
+	 * a wake while UV remains active is allowed to display zero and recharge. */
+	if (!active) { s_sleep.undervoltage_handled=0U; return; }
+	if (s_sleep.undervoltage_handled) return;
+	s_sleep.undervoltage_handled=1U;
+	SOC_RequestSetOnce(0U);
+	LowPower_Request(DEEP_MODE);
+}
+
+UINT8 SleepDeal_HasHandledOverdischarge(void)
+{
+	return s_sleep.undervoltage_handled;
 }
 
 static void BootFlag_EnableAccess(void)
@@ -137,6 +154,7 @@ UINT16 BootFlag_Read(void)
 	case FLASH_HICCUP_SLEEP_VALUE:
 	case FLASH_NORMAL_SLEEP_VALUE:
 	case FLASH_DEEP_SLEEP_VALUE:
+	case FLASH_UNDERVOLTAGE_SLEEP_VALUE:
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
 	case FLASH_SLEEP_RESET_VALUE:
 		return flag;
@@ -181,6 +199,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 	sleep_flag = BootFlag_Read();
 	s_sleep.boot_sleep = 0U;
 	s_sleep.chg_wake = 0U;
+	s_sleep.undervoltage_handled=(UINT8)(sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
@@ -188,6 +207,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 	case FLASH_NORMAL_SLEEP_VALUE:
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
+	case FLASH_UNDERVOLTAGE_SLEEP_VALUE:
 		s_sleep.boot_sleep = 1U;
 		BootFlag_Clear();
 		IOstatus_DeepMode();
