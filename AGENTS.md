@@ -4,11 +4,11 @@
 
 - 本仓库主 BMS 固件位于 `103 + 309/Project`，是裸机 STM32F1 工程。
 - 主工程文件是 `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`，有效 Keil 目标为 `FD_Release` 和 `FD_Debug`。
-- Keil `Device` 当前为 `STM32F103C8`，编译宏包含 `STM32F10X_MD` 和 `USE_STDPERIPH_DRIVER`；这描述的是当前工程配置，不等同于已经确认实物型号。
+- 主 BMS 实物 MCU 已由用户于 2026-10-26 确认为 `STM32F103CBT6`：128 KB Flash、20 KB SRAM、1 KB Flash 擦除页。两个 Keil 目标使用 `STM32F103CB`，保留 `STM32F10X_MD` 和 `USE_STDPERIPH_DRIVER`。
 - MCU 外设实现必须以仓库内 `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0` 的头文件、驱动源码和当前工程已有实现为依据；禁止凭 STM32F0、其他 STM32F1 型号或 HAL 经验猜测。
 - 当前 AFE 路径以 `SH367309` 为主，真实行为以 `I2C_AFE1.*`、`SH367309_DataDeal.*`、`SH367309_Func.*` 和相关端口实现为准。
 - `firmware/comm_tool_f103ret6` 是独立的 STM32F103RET6 通信工具固件，使用其自己的 Keil 工程、地址布局和 STM32F10x StdPeriph 配置；不得与主 BMS 固件参数混用。
-- 已知需要核对的硬件差异：主工程名含 `103RCT6`，Keil `Device` 为 `STM32F103C8`，而持久化地址位于 `0x08010000` 以上且代码检查 Flash 容量至少为 128 KB。修改器件、Flash 容量、链接布局或擦除页大小前，必须核实实物丝印、容量寄存器和量产硬件，不得根据文件名或 Keil 选项单独下结论。
+- 主工程名中的 `103RCT6` 是历史命名，不代表实物型号；后续器件或容量变更须核对实际硬件、容量寄存器和工程配置，不根据文件名推断。
 - 产品型号、板号和发布版本必须从当前配置、工程文件或用户输入确认；不要仅凭目录名推断。
 
 ## 默认工作方式
@@ -35,9 +35,16 @@
 - 时间差、计数、缩放和协议转换必须检查 signed/unsigned、截断、溢出及 tick 回绕。
 - 注释解释硬件约束、时序、兼容原因和异常行为，不逐句翻译代码。
 
+## 同口 BMS 的 MOS 仲裁
+
+- 本项目遵循全局同口 BMS 反向临时导通规则，所有单路软件关断统一进入 `Fault_ApplyMosPermits`；维护软件保护、客户协议或其他关断入口时均须检查反向放行和原请求恢复。
+- 当前反向门限为 1 A（既有 A*10 电流值为 10），RUN 按 200 ms 电流采样节拍更新仲裁。读取无效、STOP 暂停测量或超过 500 ms 未更新时，撤销反向放行资格；门限和时间属于本项目配置，不作为其他项目默认值。
+- MOS 过温、客户 `xx=3` 和显式双路关断保持两路关闭。AFE 参数等待应用或失败时禁止新增许可；许可写入通过 `SH367309_SetMosPermits` 读取、按需修改并回读核对。保护回归入口为 `tools/test_protection_refactor.py`，实际 MOS 动作仍需板上验证。
+
 ## 参数与持久化
 
 - IAP 起始地址为 `0x08000000`，主 BMS App 起始地址为 `0x08004800`；地址定义以 `Flash.h`、Keil 工程和 scatter 文件三者一致为准。
+- APP 链接范围为 `[0x08004800, 0x0801C000)`，最大长度 `0x17800`，保留后续持久化区；物理 Flash 范围为 `[0x08000000, 0x08020000)`。应用 SRAM 范围为 `[0x20000000, 0x20004FE0)`，末尾 32 字节保留给 IAP 邮箱，不能因同步器件型号而放开这些边界。
 - 当前参数与状态存储集中在 `0x0801C000`～`0x0801FC00` 区域，具体 slot、页面大小和兼容逻辑以 `103 + 309/Project/Source/Flash.h`、`Flash.c`、`EEPROM.c` 为准。
 - 持久化记录包含 magic、版本、长度、sequence 和 CRC；修改结构时必须检查旧版本读取、双 slot/日志页切换、写后校验和掉电一致性。
 - 参数升级策略版本由 `PROJECT_CFG_UPGRADE_PARAM_POLICY_VERSION` 控制，落盘标志地址为 `FLASH_ADDR_UPGRADE_PARAM_FLAG`。不得因未知或旧版本标志而无条件覆盖全部历史参数；只执行当前发布明确要求的迁移动作。
