@@ -35,6 +35,7 @@ static const struct SCI_READ_WINDOW s_read_windows[] = {
     {RS485_ADDR_AGING_STATUS, RS485_ADDR_AGING_STATUS_WORDS, 0x80U, SCI_READ_LCD, 0U},
     {RS485_ADDR_EVENT_RECORD, FLASH_STORAGE_LOG_RECORD_COUNT, 8U, SCI_READ_LCD, 0U},
     {RS485_ADDR_SN_READ, PRODUCT_ID_LENGTH_MAX*3U/2U, 2U, SCI_READ_LCD, 1U},
+    {RS485_ADDR_BATTERY_NUMBER_READ, 11U, 4U, SCI_READ_LCD, 1U},
     {RS485_ADDR_RO_FA_RTC, Record_len*7U, 1U, SCI_READ_LCD, 1U},
     {RS485_ADDR_RO_LCD, 5U, 0U, SCI_READ_LCD, 1U},
     {RS485_ADDR_RW_AFE_PARAMETER, AFE_PARAMETES_TOTAL_LENGTH, 0U, SCI_READ_AFE, 0U},
@@ -121,6 +122,13 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	u16SciRegAddr = s->u16Buffer[3] + (s->u16Buffer[2] << 8);
 	switch (u16SciRegAddr)
 	{
+	case RS485_CMD_ADDR_SET_BAUD_MODE:
+		{
+			UINT16 mode=(UINT16)((s->u16Buffer[4]<<8) | s->u16Buffer[5]);
+			if (mode<1U || mode>3U) Sci_SetWrError(s,RS485_ERROR_DATA_INVALID);
+			else if (!Sci_RequestBaudMode(mode)) Sci_SetWrError(s,RS485_ERROR_CMD_INVALID);
+		}
+		break;
 	case RS485_CMD_ADDR_RESET_CALIB_COEF:
 		Sci_WrReg_0x06_Reset_CalibCoef(s);
 		break;
@@ -560,6 +568,18 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 
 	switch (u16SciRegStartAddr)
 	{
+	case RS485_ADDR_BATTERY_NUMBER_WRITE:
+		if (Sci_GetWrRegNum(s)!=6U || s->u16Buffer[6]!=12U || s->u16Buffer[18]!=0xFFU)
+			Sci_SetWrError(s,RS485_ERROR_DATA_INVALID);
+		else {
+			UINT16 i;
+			for (i=7U; i<18U; ++i)
+				if (s->u16Buffer[i]<0x20U || s->u16Buffer[i]>0x7EU) break;
+			if (i!=18U) Sci_SetWrError(s,RS485_ERROR_DATA_INVALID);
+			else if (!StorageFlash_WriteBatteryNumber(&s->u16Buffer[7]))
+				Sci_SetWrError(s,RS485_ERROR_CMD_INVALID);
+		}
+		break;
 	case RS485_CMD_ADDR_SOC_VOLTAGE1:
 		Sci_WrRegs_0x10_SocTable(s);
 		break;
@@ -635,6 +655,12 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
 			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
+			break;
+
+		case 4: /* for-c034 requests 11 registers; its first 11 bytes are ASCII. */
+			memset(t_u8BuffTemp,0xFF,22U);
+			if (!StorageFlash_ReadBatteryNumber(t_u8BuffTemp))
+				Sci_SetWrError(s,RS485_ERROR_CMD_INVALID);
 			break;
 
 		case 8:
@@ -859,11 +885,12 @@ void Sci_ACK_0x03(struct RS485MSG *s)
 {
 	UINT8 i = 0U;
 	UINT16 u16SciTemp;
+	if (s->AckType == RS485_ACK_POS && s->u16RdRegStartAddrActure >= RS485_ADDR_RW_CALIB)
+		Sci_LoadReadData(s);
 	if (s->AckType == RS485_ACK_POS)
 	{
 		if (s->u16RdRegStartAddrActure >= RS485_ADDR_RW_CALIB)
 		{
-            Sci_LoadReadData(s);
 			// 头码，前三个字节保持不变
 			s->u16Buffer[0] = (s->u16Buffer[0] != 0) ? RS485_SLAVE_ADDR : s->u16Buffer[0];
 			s->u16Buffer[1] = s->enRs485CmdType;

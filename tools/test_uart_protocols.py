@@ -29,7 +29,11 @@ typedef uint8_t UINT8; typedef uint16_t UINT16; typedef uint32_t UINT32;
 typedef int8_t INT8; typedef int16_t INT16; typedef int32_t INT32;
 '''
 pre+='\n'.join(line for line in hdr.splitlines() if line.startswith('#define'))+'\n'
-pre+=decl(hdr,'enum RS485_CMD_E {')+decl(hdr,'struct RS485MSG {')
+pre+=decl(hdr,'enum RS485_CMD_E {')+decl(hdr,'enum RS485_CMD_RW_E {')+decl(hdr,'struct RS485MSG {')
+pre+='\n'.join(line for line in (src/'DataDeal.h').read_text(encoding='utf-8').splitlines()
+               if line.startswith('#define') and 'BMS_SOFTWARE_VERDION_DEFAULT' in line)+'\n'
+pre+='\n'.join(line for line in (src/'conf/Project_Config.h').read_text(encoding='utf-8').splitlines()
+               if line.startswith('#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA '))+'\n'
 pre+=decl((src/'DataDeal.h').read_text(encoding='utf-8'),'enum tagInfoForKBArray {')
 pre+=r'''
 #define E2P_PARA_NUM_PROTECT 65
@@ -59,6 +63,7 @@ static void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s,UINT8 *p) { fill(p,0x21)
 static void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s,UINT8 *p) { fill(p,0x20); }
 static void Sci_PutCurrentDiagWords(UINT8 *p,UINT16 *index) {fill(p,0xc1);}
 static void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 *p) {fill(p,0xe0);}
+UINT8 StorageFlash_ReadBatteryNumber(UINT8 *number);
 '''
 code=pre+sci[sci.index('enum SCI_READ_BLOCK {'):sci.index('void Sci_WrRegs_0x10_CalibCoef(')]+func(pub,'UINT16 Sci_CRC16RTU(')
 for sig in ['static void Sci_SetWrError(', 'static UINT8 Sci_RangeFits(', 'static const struct SCI_READ_WINDOW *Sci_FindReadWindow(',
@@ -69,6 +74,7 @@ for sig in ['static void Sci_SetWrError(', 'static UINT8 Sci_RangeFits(', 'stati
             'UINT8 Sci_ModbusFeed(', 'UINT8 Sci_ModbusFrameValid(',
             'void Sci_ModbusProcessFrame(']:code+=func(sci,sig)
 code+=r'''
+UINT8 StorageFlash_ReadBatteryNumber(UINT8 *number) { memset(number,'0',11); return 1; }
 static int frame(struct RS485MSG *s, UINT8 slave,UINT8 function,UINT16 address,UINT16 value,int corrupt) {
  UINT8 p[8]; UINT16 crc; int i,complete=0;
  p[0]=slave;p[1]=function;p[2]=(UINT8)(address>>8);p[3]=(UINT8)address;p[4]=(UINT8)(value>>8);p[5]=(UINT8)value;
@@ -137,6 +143,7 @@ cut=core.index('#define')
 fixtures=(ROOT/'tools/uart_host_cases.h').read_text(encoding='utf-8')
 fixtures+=func((src/'IrqDebug.c').read_text(encoding='utf-8'),'void IrqDebug_Count(')
 combo=core[:cut]+fixtures+'\n'+core[cut:]
+combo=combo.replace(func(combo,'UINT8 StorageFlash_ReadBatteryNumber('),'')
 combo=combo.replace('static void SleepDeal_RecordExternalComm(void) {}',
                     'static void SleepDeal_RecordExternalComm(void) { ++comm_activity; }')
 for name in ('struct SOC_CAL_ELEMENT_UPPER {','struct MDLCHGFAULT_BITS',
@@ -159,6 +166,39 @@ flash_stub=flash_stub.replace('/* RESET_FLAGS */','\n'.join(line for line in ven
     if line.lstrip().startswith('#define') and 'RCC_CSR_' in line))
 flash=(src/'Flash.c').read_text(encoding='utf-8').split('UINT16 FlashReadOneHalfWord(UINT32 faddr)')[0]
 combo+=flash_stub+flash.replace('#include "main.h"','')
+combo+='''
+#define FAULT_CURRENT_MAX_GAP_TICKS 50U
+static UINT8 s_current_valid;
+static UINT32 s_current_tick;
+static void soc_param_lib_init(void) {}
+static void SOC_IntEnhance_Ctrl(int32_t current_ma) {}
+'''
+combo+=func((src/'Fault.c').read_text(encoding='utf-8'),'UINT8 Fault_IsCurrentSampleFresh(')
+combo+=(src/'SOC.c').read_text(encoding='utf-8').replace('#include "main.h"','')
+
+# Execute real write dispatchers; only unrelated existing commands use stubs.
+dispatch=''
+for signature in ('void Sci_Deal_WrReg_0x06(', 'void Sci_Deal_WrRegs_0x10('):
+    body=func(sci,signature)
+    name=signature.split('(')[0].split()[-1]
+    dispatch+=body.replace(name+'(', 'Real_'+name+'(',1)
+    combo=combo.replace('static '+signature+'struct RS485MSG *s) { ++writes; }',
+                        'void Real_'+name+'(struct RS485MSG *s);\nstatic '+signature+
+                        'struct RS485MSG *s) { ++writes; Real_'+name+'(s); }')
+known={'Sci_SetWrError','Sci_RequestBaudMode','Sci_GetWrRegNum','Sci_IsCalibPairStart',
+       'Sci_Deal_WrReg_0x06','Sci_Deal_WrRegs_0x10'}
+for name in sorted(set(re.findall(r'\b(Sci_\w+)\(',dispatch))-known):
+    if name=='Sci_WrRegs_0x10_AFE_Parameters':
+        combo+='static UINT8 '+name+'(UINT16 a,struct RS485MSG *s) { return 0; }\n'
+    elif name in ('Sci_WrReg_0x06_Reset_AFE_Parameters','Sci_WrReg_0x06_Reset_EventRecord'):
+        combo+='static void '+name+'(struct RS485MSG *s) {}\n'
+    else:
+        signature=func(sci,'void '+name+'(').split('{',1)[0]
+        combo+=signature+'{ }\n'
+combo+='UINT8 Sci_RequestBaudMode(UINT16 mode);\n'
+for signature in ('static UINT16 Sci_GetWrRegNum(', 'static UINT8 Sci_IsCalibPairStart('):
+    combo+=func(sci,signature)
+combo+=dispatch
 for name in ('Sci_Customer.c','Sci_Uart.c'):
     combo+='\n'.join(line for line in (src/name).read_text(encoding='utf-8').splitlines()
                       if not line.startswith('#include'))+'\n'
@@ -188,6 +228,50 @@ r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
 if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
 subprocess.run([str(out/'uart_clock.exe')],cwd=out,check=True)
 
+# Compile the actual wake-source selection with each persisted runtime rate.
+wake_config=r'''
+#include <stdint.h>
+#include <assert.h>
+#include <stdio.h>
+#define UART1_WAKEUP_ENABLE
+#define RS485_WAKEUP_ENABLE
+#define _COMMOM_UPPER_SCI1
+#define _COMMOM_UPPER_SCI2
+#define GPIOB 1
+#define GPIOA 2
+#define GPIO_Pin_7 7
+#define GPIO_Pin_3 3
+#define GPIO_PortSourceGPIOB 1
+#define GPIO_PortSourceGPIOA 2
+#define GPIO_PinSource7 7
+#define GPIO_PinSource3 3
+#define EXTI_Line7 1
+#define EXTI_Line3 2
+#define EXTI_Trigger_Falling 0
+#define EXTI9_5_IRQn 0
+#define EXTI3_IRQn 0
+static uint32_t baud;
+static unsigned wake_mask;
+static uint32_t Sci_GetBaudRate(void) { return baud; }
+static void Conf_InitWakeupInputExti(int gpio,int pin,int port,int source,int line,int edge,int irq) { wake_mask|=line; }
+'''
+wake_config+=func((src/'conf/conf.c').read_text(encoding='utf-8'),'static void Conf_InitUartWakeup(')
+wake_config+='''
+int main(void) {
+    baud=9600; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==3);
+    baud=19200; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==3);
+    baud=115200; wake_mask=0; Conf_InitUartWakeup(); assert(wake_mask==0);
+    puts("PASS runtime baud STOP wake: both UARTs enabled at 9600/19200 and disabled at 115200");
+    return 0;
+}
+'''
+(out/'wake_baud.c').write_text(wake_config,encoding='utf-8')
+r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
+                  str(out/'wake_baud.c'),'/Fe:'+str(out/'wake_baud.exe'),
+                  '/Fo:'+str(out/'wake_baud.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
+if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
+subprocess.run([str(out/'wake_baud.exe')],cwd=out,check=True)
+
 # Compile the read-only product policy against the real write dispatchers too.
 readonly=combo[:combo.index('static const UINT8 data1_request')]
 readonly=readonly.replace('#define PROJECT_CFG_HOST_WRITE_ENABLE 1',
@@ -210,6 +294,13 @@ int main(void) {
     Sci_ResetMessage(&m); Sci_Deal_WrRegs_0x10(&m);
     assert(m.AckType==RS485_ACK_NEG && m.ErrorType==RS485_ERROR_NO_PERMISSION);
     assert(Sci_HostWriteWords(0x1102,&value,1)==RS485_ERROR_NO_PERMISSION);
+    assert(Sci_HostWriteWords(0x1008,&value,1)==RS485_ERROR_NO_PERMISSION);
+    m.u16Buffer[2]=0x10; m.u16Buffer[3]=8;
+    Sci_Deal_WrReg_0x06(&m);
+    assert(m.ErrorType==RS485_ERROR_NO_PERMISSION && !s_baud_change_pending);
+    m.u16Buffer[2]=0xFF; m.u16Buffer[3]=0xF3;
+    Sci_Deal_WrRegs_0x10(&m);
+    assert(m.ErrorType==RS485_ERROR_NO_PERMISSION);
     puts("PASS read-only policy: both Modbus write functions, CAN word writes and customer MOS control rejected");
     return 0;
 }

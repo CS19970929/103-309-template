@@ -357,6 +357,55 @@ static void test_statistics(void) {
     assert(!StorageFlash_ReadStatistics(counts) && !StorageFlash_ClearFaultStatistics());
     puts("PASS statistics: 32-bit lifetime, 11 fields, deduplicated edges/reboots, STOP versus watchdog, rotation cuts, clear cuts, bounded retry/wrap, saturation, reset/log isolation, corruption rejection");
 }
+static void test_communication_storage(void)
+{
+    STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
+    UINT8 number[11];
+    int operation,cut,writes,result,total=0;
+    assert(StorageFlash_LoadConfig(&old_value));
+    old_value.initializing=0;
+    for(cut=15;cut<24;++cut) old_value.rw.reserved[cut]=0xFFFF;
+    assert(StorageFlash_SaveConfig(&old_value));
+    assert(StorageFlash_GetBaudMode()==1);
+    assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"00000000000",11));
+    for(operation=0;operation<4;++operation) {
+        assert(StorageFlash_LoadConfig(&old_value)); save_flash(); mutations=0;
+        if(operation & 1) result=StorageFlash_WriteBatteryNumber((const UINT8 *)(operation==1 ? "BAT00000001" : "BAT00000002"));
+        else result=StorageFlash_SetBaudMode(operation==0 ? 2 : 3);
+        assert(result); writes=mutations;
+        assert(StorageFlash_LoadConfig(&new_value));
+        for(cut=0;cut<=writes;++cut) {
+            restore_flash(); cut_after=cut;
+            if(operation & 1) result=StorageFlash_WriteBatteryNumber((const UINT8 *)(operation==1 ? "BAT00000001" : "BAT00000002"));
+            else result=StorageFlash_SetBaudMode(operation==0 ? 2 : 3);
+            assert(StorageFlash_LoadConfig(&loaded));
+            assert(!memcmp(&loaded,result ? &new_value : &old_value,sizeof(loaded)));
+            assert(!memcmp((void *)FLASH_STATE_A,saved+(FLASH_STATE_A-FLASH_PARAMETER_RESET_BEGIN),FLASH_STORAGE_END-FLASH_STATE_A));
+            ++total;
+        }
+        restore_flash(); assert(StorageFlash_SaveConfig(&new_value));
+    }
+    mutations=0;
+    assert(StorageFlash_SetBaudMode(3));
+    assert(StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000002"));
+    assert(!mutations);
+    assert(!StorageFlash_SetBaudMode(0) && !StorageFlash_SetBaudMode(4));
+    assert(!StorageFlash_WriteBatteryNumber(0) && !StorageFlash_ReadBatteryNumber(0));
+    assert(!StorageFlash_WriteBatteryNumber((const UINT8 *)"BAD\x80" "0000000") && !mutations);
+    /* Normal parameter/calibration saves preserve both new private fields. */
+    assert(EEPROM_SaveRWParametersToFlash());
+    assert(StorageFlash_GetBaudMode()==3);
+    assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
+    reset_on_version=0; memset(s_param_versions,0,sizeof(s_param_versions));
+    assert(InitE2PROM());
+    assert(StorageFlash_GetBaudMode()==3);
+    assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
+    assert(StorageFlash_LoadConfig(&loaded)); loaded.initializing=STORAGE_PARAM_RESET_LOG;
+    assert(StorageFlash_SaveConfig(&loaded));
+    assert(!StorageFlash_SetBaudMode(1) && !StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000003"));
+    printf("PASS communication storage: %d cuts, first/update writes, complete old/new config, state/log/statistics isolation, defaults, no-op, boot and RW-save preservation\n",total);
+}
+
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
     STORAGE_FLASH_SOC_DATA soc,loaded_soc;
@@ -435,5 +484,6 @@ int main(void) {
     test_log();
     test_module_updates();
     test_statistics();
+    test_communication_storage();
     return 0;
 }

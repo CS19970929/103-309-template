@@ -60,6 +60,12 @@ void Fault_PauseMeasurements(void)
     Fault_ResetMosConfirmation();
 }
 
+UINT8 Fault_IsCurrentSampleFresh(void)
+{
+    return (UINT8)(s_current_valid &&
+        (UINT32)(SysTime_Get10msTickCount()-s_current_tick)<=FAULT_CURRENT_MAX_GAP_TICKS);
+}
+
 void Fault_UpdateCurrentProtection(UINT8 sample_valid)
 {
     UINT32 now = SysTime_Get10msTickCount();

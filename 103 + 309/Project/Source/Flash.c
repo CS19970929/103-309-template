@@ -289,6 +289,58 @@ UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
     return Storage_SaveConfigAt(FLASH_CONFIG_A,data);
 }
 
+UINT16 StorageFlash_GetBaudMode(void)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    UINT16 mode;
+    if (!StorageFlash_LoadConfig(&config)) return 1U;
+    mode=config.rw.reserved[STORAGE_BAUD_MODE_INDEX];
+    return (mode>=1U && mode<=3U) ? mode : 1U;
+}
+
+UINT8 StorageFlash_SetBaudMode(UINT16 mode)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    if (mode<1U || mode>3U || !StorageFlash_LoadConfig(&config) || config.initializing)
+        return 0U;
+    config.rw.reserved[STORAGE_BAUD_MODE_INDEX]=mode;
+    return StorageFlash_SaveConfig(&config);
+}
+
+UINT8 StorageFlash_ReadBatteryNumber(UINT8 number[BATTERY_NUMBER_LENGTH])
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    UINT16 i, value;
+    if (!number || !StorageFlash_LoadConfig(&config)) return 0U;
+    if (config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]==0xFFFFU) {
+        memset(number,'0',BATTERY_NUMBER_LENGTH);
+        return 1U;
+    }
+    if (config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]!=STORAGE_BATTERY_NUMBER_TAG)
+        return 0U;
+    for (i=0U; i<BATTERY_NUMBER_LENGTH; ++i) {
+        value=config.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+i/2U];
+        number[i]=(UINT8)((i & 1U) ? value : value>>8);
+        if (number[i]<0x20U || number[i]>0x7EU) return 0U;
+    }
+    return 1U;
+}
+
+UINT8 StorageFlash_WriteBatteryNumber(const UINT8 number[BATTERY_NUMBER_LENGTH])
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    UINT16 i;
+    if (!number) return 0U;
+    for (i=0U; i<BATTERY_NUMBER_LENGTH; ++i)
+        if (number[i]<0x20U || number[i]>0x7EU) return 0U;
+    if (!StorageFlash_LoadConfig(&config) || config.initializing) return 0U;
+    for (i=0U; i<6U; ++i)
+        config.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+i]=(UINT16)(
+            ((UINT16)number[2U*i]<<8) | (i<5U ? number[2U*i+1U] : 0xFFU));
+    config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]=STORAGE_BATTERY_NUMBER_TAG;
+    return StorageFlash_SaveConfig(&config);
+}
+
 static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
 {
 	UINT16 offset;

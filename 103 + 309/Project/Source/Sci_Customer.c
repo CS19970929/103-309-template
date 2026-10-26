@@ -2,6 +2,7 @@
 #include "Sci_Protocol.h"
 
 #define CUSTOMER_CELL_COUNT 7U
+static const UINT8 s_customer_software_version[32]=BMS_SOFTWARE_VERDION_DEFAULT;
 
 static void Customer_PutLE(UINT8 *buffer, UINT16 *index, UINT16 value)
 {
@@ -130,8 +131,8 @@ void Sci_CustomerProcessFrame(struct RS485MSG *message)
         {
             b[0]=0xAAU; b[1]=0xEDU; b[2]=15U; index=3U;
             Customer_PutLE(b,&index,g_stCellInfoReport.SocElement.u16Cycle_times);
-            b[index++]=ProductionInfor.BMS_SoftWareVersion[0];
-            b[index++]=ProductionInfor.BMS_SoftWareVersion[1];
+            b[index++]=s_customer_software_version[0];
+            b[index++]=s_customer_software_version[1];
             for (i=0U; i<11U; ++i) b[index++]=ProductionInfor.BMS_SerialNumber[i];
             b[index]=Customer_Bcc(&b[3],15U); ++index;
             b[index++]=0xFAU;
@@ -144,8 +145,9 @@ void Sci_CustomerProcessFrame(struct RS485MSG *message)
             else
             {
                 Customer_PutLE(b,&index,(UINT16)(g_stCellInfoReport.SocElement.u16CapacityFull/10U));
-                /* No remaining-time estimator is defined by this product. */
-                for (i=0U; i<14U; ++i) b[index++]=0U;
+                Customer_PutLE(b,&index,SOC_GetRemainingMinutes(1U));
+                Customer_PutLE(b,&index,SOC_GetRemainingMinutes(0U));
+                for (i=0U; i<10U; ++i) b[index++]=0U;
             }
             b[3]=(UINT8)(index-4U);
             b[index]=Customer_Bcc(&b[2],(UINT16)(index-2U)); ++index;

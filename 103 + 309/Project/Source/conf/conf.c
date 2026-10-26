@@ -157,11 +157,13 @@ void LowPower_DisableUartWakeup(void)
 
 static void Conf_InitUartWakeup(void)
 {
-#if defined(UART1_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI1) && UART1_BAUD != 115200U
+#if defined(UART1_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI1)
+    if (Sci_GetBaudRate()!=115200U)
     Conf_InitWakeupInputExti(GPIOB, GPIO_Pin_7, GPIO_PortSourceGPIOB,
         GPIO_PinSource7, EXTI_Line7, EXTI_Trigger_Falling, EXTI9_5_IRQn);
 #endif
-#if defined(RS485_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI2) && UART2_BAUD != 115200U
+#if defined(RS485_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI2)
+    if (Sci_GetBaudRate()!=115200U)
     Conf_InitWakeupInputExti(GPIOA, GPIO_Pin_3, GPIO_PortSourceGPIOA,
         GPIO_PinSource3, EXTI_Line3, EXTI_Trigger_Falling, EXTI3_IRQn);
 #endif

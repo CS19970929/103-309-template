@@ -19,6 +19,12 @@
 /* reserved[0..5] hold current calibration; [6..14] are private update tags.
  * Do not reorder groups: their positions are part of the stored format. */
 #define STORAGE_PARAM_VERSION_FIRST 6U
+/* Private fields fit the existing 24-word reserved area; record size is unchanged. */
+#define STORAGE_BAUD_MODE_INDEX 15U
+#define STORAGE_BATTERY_NUMBER_INDEX 16U
+#define STORAGE_BATTERY_NUMBER_TAG_INDEX 22U
+#define STORAGE_BATTERY_NUMBER_TAG 0x424EU
+#define BATTERY_NUMBER_LENGTH 11U
 enum STORAGE_PARAM_GROUP {
     STORAGE_PARAM_AFE, STORAGE_PARAM_PROTECT, STORAGE_PARAM_SOC,
     STORAGE_PARAM_OTHER, STORAGE_PARAM_CALIB, STORAGE_PARAM_HEAT_COOL,
@@ -99,6 +105,10 @@ typedef struct {
 
 UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data);
 UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data);
+UINT16 StorageFlash_GetBaudMode(void);
+UINT8 StorageFlash_SetBaudMode(UINT16 mode);
+UINT8 StorageFlash_ReadBatteryNumber(UINT8 number[BATTERY_NUMBER_LENGTH]);
+UINT8 StorageFlash_WriteBatteryNumber(const UINT8 number[BATTERY_NUMBER_LENGTH]);
 UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config);
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta);
 UINT8 StorageFlash_ClearLog(void);

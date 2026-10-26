@@ -17,6 +17,7 @@ struct SCI_PORT {
     volatile UINT8 protocol, frame_pending;
 };
 static struct SCI_PORT s_port1 = {USART1, UART1_BAUD};
+static UINT8 s_baud_change_pending;
 #ifdef _COMMOM_UPPER_SCI2
 static struct SCI_PORT s_port2 = {USART2, UART2_BAUD};
 #endif
@@ -273,6 +274,15 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
 
 void InitUSART_CommonUpper(void)
 {
+    UINT16 mode=StorageFlash_GetBaudMode();
+    UINT32 baud=(mode==3U) ? 115200U : (mode==2U ? 19200U : 9600U);
+    s_port1.baud=baud;
+#ifdef _COMMOM_UPPER_SCI2
+    s_port2.baud=baud;
+#endif
+#ifdef _COMMOM_UPPER_SCI3
+    s_port3.baud=baud;
+#endif
 #ifdef _COMMOM_UPPER_SCI1
     Sci_InitPort(&s_port1,USART1_IRQn,1U,RCC_APB2Periph_USART1,GPIOB,
         GPIO_Pin_6,GPIO_Pin_7,GPIO_Remap_USART1);
@@ -307,7 +317,7 @@ static UINT8 Sci_PortBusy(const struct SCI_PORT *port)
         port->tx_length || port->frame_pending);
 }
 
-UINT8 Sci_IsAnyPortBusy(void)
+static UINT8 Sci_PortsBusy(void)
 {
     UINT8 busy=0U;
 #ifdef _COMMOM_UPPER_SCI1
@@ -320,6 +330,23 @@ UINT8 Sci_IsAnyPortBusy(void)
     busy |= Sci_PortBusy(&s_port3);
 #endif
     return busy;
+}
+
+UINT8 Sci_IsAnyPortBusy(void)
+{
+    return (UINT8)(s_baud_change_pending || Sci_PortsBusy());
+}
+
+UINT32 Sci_GetBaudRate(void)
+{
+    return s_port1.baud;
+}
+
+UINT8 Sci_RequestBaudMode(UINT16 mode)
+{
+    if (s_baud_change_pending || !StorageFlash_SetBaudMode(mode)) return 0U;
+    s_baud_change_pending=1U;
+    return 1U;
 }
 
 UINT8 Sci_VerifyWakeFrames(void)
@@ -373,4 +400,15 @@ void App_CommonUpper(void)
 #ifdef _COMMOM_UPPER_SCI3
     Sci_ServicePort(&s_port3,0U);
 #endif
+    if (s_baud_change_pending) {
+        UINT32 primask=__get_PRIMASK();
+        __disable_irq();
+        /* TC has returned the old-rate ACK buffer before all ports go idle.
+         * A broadcast has no ACK; a failed TX switches after its bounded timeout. */
+        if (!Sci_PortsBusy()) {
+            InitUSART_CommonUpper();
+            s_baud_change_pending=0U;
+        }
+        if (!primask) __enable_irq();
+    }
 }

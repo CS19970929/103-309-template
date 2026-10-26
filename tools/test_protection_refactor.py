@@ -26,6 +26,7 @@ def function(text, signature):
 
 ADC_STUBS = r'''
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -253,12 +254,15 @@ int main(void) {
         assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
         tick=UINT32_MAX-10; Fault_PauseMeasurements(); Fault_UpdateCurrentProtection(1);
         tick+=20;
+        assert(Fault_IsCurrentSampleFresh());
         assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
         Fault_UpdateCurrentProtection(0);
+        assert(!Fault_IsCurrentSampleFresh());
         assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
         Fault_UpdateCurrentProtection(1);
         assert(Fault_ApplyMosPermits(1,1) && (hardware_conf&0x30)==0x30);
         Fault_PauseMeasurements();
+        assert(!Fault_IsCurrentSampleFresh());
         assert(Fault_ApplyMosPermits(1,1) && ((hardware_conf>>4)&3)==(3U^n));
         assert(s_host_mos_off==n);
     }
