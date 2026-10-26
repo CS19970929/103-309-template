@@ -864,7 +864,7 @@ void StorageFlash_PrintBootCheck(void)
 /* Only the test build has a second set of data and a background runner.
  * Address arguments are private: production wrappers never select test pages. */
 #if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-#define FLASH_TEST_SIGNATURE 0x54535431UL
+#define FLASH_TEST_SIGNATURE 0x54535432UL
 #define FLASH_TEST_LOG_CLEAR_PERIOD 1024U
 #define FLASH_TEST_BOOT_COUNT 17U
 #define FLASH_TEST_LOG_CAPACITY ((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/sizeof(STORAGE_LOG_ENTRY))
@@ -892,9 +892,23 @@ static UINT32 FlashSelfTest_UartErrors(void)
 static void FlashSelfTest_MakeConfig(STORAGE_FLASH_CONFIG_DATA *config)
 {
     FLASH_SELF_TEST_PROGRESS progress;
+    UINT8 number[BATTERY_NUMBER_LENGTH];
+    UINT32 serial;
+    UINT16 i;
     memcpy(&progress,(const void *)&sys_time.flash_test.progress,sizeof(progress));
     memset(config,(UINT8)(progress.count[FLASH_TEST_CONFIG]^0x5AU),sizeof(*config));
     memcpy(&config->rw,&progress,sizeof(progress));
+    /* Exercise real communication-field values without applying them to UART. */
+    serial=progress.count[FLASH_TEST_CONFIG];
+    config->rw.reserved[STORAGE_BAUD_MODE_INDEX]=(UINT16)(serial%3U+1U);
+    for (i=BATTERY_NUMBER_LENGTH;i>0U;--i) {
+        number[i-1U]=(UINT8)('0'+serial%10U);
+        serial/=10U;
+    }
+    for (i=0U;i<(BATTERY_NUMBER_LENGTH+1U)/2U;++i)
+        config->rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+i]=(UINT16)(
+            ((UINT16)number[2U*i]<<8) | (2U*i+1U<BATTERY_NUMBER_LENGTH ? number[2U*i+1U] : 0xFFU));
+    config->rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]=STORAGE_BATTERY_NUMBER_TAG;
 }
 
 static UINT8 FlashSelfTest_SaveProgress(UINT8 duplicate)

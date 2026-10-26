@@ -35,15 +35,34 @@ static void reset_test(void) {
     *(UINT16 *)0x1FFFF7E0=128; tick=0; g_stLowPowerRtcStatus.mode=NO_SLEEP;
     restart_test(RCC_CSR_PORRSTF);
 }
+static void check_communication_pattern(void) {
+    STORAGE_FLASH_CONFIG_DATA config;
+    FLASH_SELF_TEST_PROGRESS progress;
+    char number[BATTERY_NUMBER_LENGTH+1U];
+    UINT16 i,word;
+    assert(Storage_LoadConfigAt(FLASH_SELF_TEST_CONFIG,&config));
+    memcpy(&progress,&config.rw,sizeof(progress));
+    assert(config.rw.reserved[STORAGE_BAUD_MODE_INDEX]==progress.count[FLASH_TEST_CONFIG]%3U+1U);
+    assert(config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]==STORAGE_BATTERY_NUMBER_TAG);
+    snprintf(number,sizeof(number),"%011lu",(unsigned long)progress.count[FLASH_TEST_CONFIG]);
+    for(i=0;i<BATTERY_NUMBER_LENGTH;++i) {
+        word=config.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+i/2U];
+        assert((UINT8)((i & 1U) ? word : word>>8)==(UINT8)number[i]);
+    }
+    assert((config.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+BATTERY_NUMBER_LENGTH/2U] & 0xFFU)==0xFFU);
+}
 static void test_completion_and_isolation(void) {
     STORAGE_FLASH_CONFIG_DATA config,actual_config;
     STORAGE_FLASH_SOC_DATA soc,actual_soc;
     UINT32 counts[11],baseline[11],n=0U;
-    UINT8 point,records[100][2],expected_records[100][2];
+    UINT8 number[BATTERY_NUMBER_LENGTH],point,records[100][2],expected_records[100][2];
     UINT8 expected_point;
     int saved_mutations,stage_resets=0;
     reset_test();
-    memset(&config,0x35,sizeof(config)); assert(StorageFlash_SaveConfig(&config));
+    memset(&config,0x35,sizeof(config)); config.initializing=0U;
+    assert(StorageFlash_SaveConfig(&config) && StorageFlash_SetBaudMode(3U));
+    assert(StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
+    assert(StorageFlash_LoadConfig(&config));
     memset(&soc,0,sizeof(soc)); soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION; soc.u16SocNow=37;
     assert(StorageFlash_SaveSocData(&soc));
     assert(StorageFlash_AppendLog(VCELL_OVP,3));
@@ -56,6 +75,7 @@ static void test_completion_and_isolation(void) {
             soc.u16SocNow=(UINT16)(n%101U); assert(StorageFlash_SaveSocData(&soc));
         }
         step(); assert(++n<500000U);
+        if(sys_time.flash_test.progress.phase==FLASH_TEST_CONFIG_PHASE) check_communication_pattern();
         if(stage_resets<5 && sys_time.flash_test.progress.phase==(UINT32)(FLASH_TEST_SOC_PHASE+stage_resets) &&
             (n%137U)==0U) {
             restart_test(RCC_CSR_SFTRSTF); ++stage_resets;
@@ -69,13 +89,15 @@ static void test_completion_and_isolation(void) {
     assert(sys_time.flash_test.progress.count[FLASH_TEST_STATS]==PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES);
     assert(sys_time.flash_test.progress.count[FLASH_TEST_CONFIG]==PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES);
     assert(StorageFlash_LoadConfig(&actual_config) && !memcmp(&actual_config,&config,sizeof(config)));
+    assert(StorageFlash_GetBaudMode()==3U);
+    assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000001",BATTERY_NUMBER_LENGTH));
     assert(StorageFlash_LoadSocData(&actual_soc) && !memcmp(&actual_soc,&soc,sizeof(soc)));
     assert(StorageFlash_LoadLogData(&point,records) && point==expected_point && !memcmp(records,expected_records,200));
     assert(StorageFlash_ReadStatistics(counts) && !memcmp(counts,baseline,sizeof(counts)));
     saved_mutations=mutations;
     restart_test(RCC_CSR_PORRSTF); step(); step();
     assert(sys_time.flash_test.status==FLASH_TEST_PASS && sys_time.flash_test.resumed && mutations==saved_mutations);
-    puts("PASS self-test: goals, repeated rotations/clears, restart/resume, completion marker; interleaved production config/SOC/log/statistics unchanged");
+    puts("PASS self-test: valid baud/11-byte serial/tag patterns, goals, rotations/clears, restart/resume, completion marker; production communication/config/SOC/log/statistics unchanged");
 }
 static void test_pause_and_noop(void) {
     int i,before;
@@ -103,6 +125,8 @@ static void test_pause_and_noop(void) {
 static void test_failures(void) {
     int before;
     UINT32 address;
+    STORAGE_FLASH_CONFIG_DATA config;
+    FLASH_SELF_TEST_PROGRESS progress;
     reset_test(); step(); before=mutations; cut_after=mutations; step();
     assert(sys_time.flash_test.status==FLASH_TEST_FAIL && sys_time.flash_test.first_error==FLASH_TEST_ERASE_ERROR);
     cut_after=-1; step(); assert(mutations==before);
@@ -130,7 +154,14 @@ static void test_failures(void) {
     assert(sys_time.flash_test.status==FLASH_TEST_FAIL && sys_time.flash_test.first_error==FLASH_TEST_WATCHDOG_ERROR && !mutations);
     reset_test(); before=mutations; ++sys_time.irq.uart1.ore; step();
     assert(sys_time.flash_test.status==FLASH_TEST_FAIL && sys_time.flash_test.first_error==FLASH_TEST_UART_ERROR && mutations==before);
+    reset_test(); step(); assert(Storage_LoadConfigAt(FLASH_SELF_TEST_CONFIG,&config));
+    memcpy(&progress,&config.rw,sizeof(progress)); progress.signature=0x54535431UL;
+    memcpy(&config.rw,&progress,sizeof(progress));
+    assert(Storage_SaveConfigAt(FLASH_SELF_TEST_CONFIG,&config)); before=mutations;
+    restart_test(RCC_CSR_SFTRSTF); step();
+    assert(sys_time.flash_test.status==FLASH_TEST_FAIL && sys_time.flash_test.first_error==FLASH_TEST_PROFILE_ERROR && mutations==before);
     puts("PASS self-test faults: erase/program/post-commit errors stop; corrupt state/log/statistics and unknown data preserved; 64 KiB and watchdog rejected");
+    puts("PASS self-test profile: older TST1 marker rejected without erasing or accepting its result");
 }
 int main(void) {
     host_storage_init();

@@ -150,6 +150,8 @@ static void test_module_updates(void) {
     for(group=0;group<STORAGE_PARAM_COUNT;++group)
         custom.rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]=0xFFFF;
     assert(EEPROM_RWParamDataIsValid(&custom.rw) && StorageFlash_SaveConfig(&custom));
+    assert(StorageFlash_SetBaudMode(3U) && StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
+    assert(StorageFlash_LoadConfig(&custom));
     soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION; soc.u16SocNow=37; soc.u32CycleTimes=12345;
     assert(StorageFlash_SaveSocData(&soc) && StorageFlash_SaveFactoryAgingData(&aging));
     assert(StorageFlash_AppendLog(7,8)); save_flash();
@@ -173,6 +175,8 @@ static void test_module_updates(void) {
             assert(actual.rw.heat_cool[word]==((mask&(1U<<STORAGE_PARAM_HEAT_COOL)) ? defaults.rw.heat_cool[word] : custom.rw.heat_cool[word]));
         for(group=0;group<STORAGE_PARAM_COUNT;++group)
             assert(actual.rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]==((mask&(1U<<group)) ? 1U : 0xFFFFU));
+        for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
+            assert(actual.rw.reserved[word]==custom.rw.reserved[word]);
         assert(!actual.initializing && !memcmp(actual.reset_version,custom.reset_version,32));
         assert(StorageFlash_LoadSocData(&loaded_soc)==!(mask&(1U<<STORAGE_PARAM_SOC_STATE)));
         if(!(mask&(1U<<STORAGE_PARAM_SOC_STATE))) assert(!memcmp(&soc,&loaded_soc,sizeof(soc)));
@@ -212,6 +216,8 @@ static void test_module_updates(void) {
             assert(InitE2PROM() && StorageFlash_LoadConfig(&actual) && !actual.initializing);
             for(word=0;word<STORAGE_PARAM_COUNT;++word)
                 assert(actual.rw.reserved[STORAGE_PARAM_VERSION_FIRST+word]==(s_param_versions[word] ? 1U : 0xFFFFU));
+            for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
+                assert(actual.rw.reserved[word]==custom.rw.reserved[word]);
             assert(StorageFlash_LoadSocData(&loaded_soc)==!s_param_versions[STORAGE_PARAM_SOC_STATE]);
             assert(StorageFlash_LoadFactoryAgingData(&loaded_aging)==!s_param_versions[STORAGE_PARAM_AGING_STATE]);
             assert(StorageFlash_LoadLogData(&point,records) && point==!s_param_versions[STORAGE_PARAM_LOG]);
@@ -244,10 +250,12 @@ static void test_module_updates(void) {
     assert(InitE2PROM() && StorageFlash_LoadConfig(&actual));
     assert(!memcmp(actual.afe,defaults.afe,sizeof(actual.afe)));
     assert(!memcmp(actual.rw.other,defaults.rw.other,sizeof(actual.rw.other)));
+    for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
+        assert(actual.rw.reserved[word]==defaults.rw.reserved[word]);
     assert(!StorageFlash_LoadSocData(&loaded_soc) && !StorageFlash_LoadFactoryAgingData(&loaded_aging));
     assert(StorageFlash_LoadLogData(&point,records) && !point);
     for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
-    printf("PASS module updates: all 512 selections, current-format preservation, independent SOC/Other/state, host saves, version steps, %d power cuts, pending intent survives disabled switches, statistics unchanged\n",cut_checks);
+    printf("PASS module updates: all 512 selections, baud/serial/tag preserved including %d power cuts; factory reset restores defaults; independent SOC/Other/state, host saves, pending intent, statistics unchanged\n",cut_checks);
 }
 
 static void test_statistics(void) {
@@ -400,10 +408,34 @@ static void test_communication_storage(void)
     assert(InitE2PROM());
     assert(StorageFlash_GetBaudMode()==3);
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
+    for(operation=0;operation<11;++operation) {
+        memset(number,'A',sizeof(number)); number[operation]=0x1F; mutations=0;
+        assert(!StorageFlash_WriteBatteryNumber(number) && !mutations);
+        number[operation]=0x7F;
+        assert(!StorageFlash_WriteBatteryNumber(number) && !mutations);
+    }
+    assert(StorageFlash_WriteBatteryNumber((const UINT8 *)" ~09AZaz-_."));
+    assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number," ~09AZaz-_.",11));
+    assert(StorageFlash_LoadConfig(&old_value));
+    assert(old_value.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX]==0x207EU);
+    assert(old_value.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+5U]==0x2EFFU);
+    loaded=old_value; loaded.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]=0x1234U;
+    assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+    assert(!StorageFlash_ReadBatteryNumber(number) && !mutations);
+    loaded=old_value; loaded.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX]=0x1F7EU;
+    assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+    assert(!StorageFlash_ReadBatteryNumber(number) && !mutations);
+    for(operation=0;operation<=4;operation+=4) {
+        loaded=old_value; loaded.rw.reserved[STORAGE_BAUD_MODE_INDEX]=(UINT16)operation;
+        assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+        assert(StorageFlash_GetBaudMode()==1U && !mutations);
+    }
+    assert(StorageFlash_SaveConfig(&old_value));
     assert(StorageFlash_LoadConfig(&loaded)); loaded.initializing=STORAGE_PARAM_RESET_LOG;
     assert(StorageFlash_SaveConfig(&loaded));
     assert(!StorageFlash_SetBaudMode(1) && !StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000003"));
     printf("PASS communication storage: %d cuts, first/update writes, complete old/new config, state/log/statistics isolation, defaults, no-op, boot and RW-save preservation\n",total);
+    puts("PASS communication fields: ASCII endpoints, all 11 invalid positions, high-byte-first packing, padding, invalid tag/data rejection, invalid baud fallback");
 }
 
 int main(void) {
