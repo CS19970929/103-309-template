@@ -91,6 +91,8 @@ int main(void)
 {
     UINT8 b[251], saved[251], mb[8], bad[9], mos[9]={0xDD,0x5A,0xE1,2,0,3,0xFF,0x1A,0x77};
     UINT16 i,n; int activity, before;
+    UINT32 counters[11];
+    host_storage_init(); StorageFlash_InitStatistics(RCC_CSR_PORRSTF,BOOT_FLAG_RESET_VALUE);
     setup_report(); InitUSART_CommonUpper();
     check_customer(&s_port1); check_customer(&s_port2);
     /* Each port changes protocol from frame to frame. Both replies remain private. */
@@ -134,10 +136,24 @@ int main(void)
     request(&s_port1,counters_request,7); Sci_ServicePort(&s_port1,0);
     assert(transmit(&s_port1,b)==29 && b[3]==22 && b[4]==0 && b[5]==1 && b[11]==1 && b[25]==1);
     request(&s_port1,clear_request,9); Sci_ServicePort(&s_port1,0); transmit(&s_port1,b);
-    Sci_CustomerUpdateCounters(); assert(s_counters[0]==0 && s_counters[3]==0 && s_counters[10]==1);
+    Sci_CustomerUpdateCounters(); assert(StorageFlash_ReadStatistics(counters));
+    assert(counters[0]==0 && counters[3]==0 && counters[10]==1);
     SH367309_Reg_Store.REG_BSTATUS1.bits.SC=0; Sci_CustomerUpdateCounters();
-    s_counters[0]=0xFFFF; SH367309_Reg_Store.REG_BSTATUS1.bits.SC=1;
-    Sci_CustomerUpdateCounters(); assert(s_counters[0]==0xFFFF);
+    s_statistics.data.count[0]=70000; s_statistics.dirty=1; StorageFlash_FlushStatistics();
+    SH367309_Reg_Store.REG_BSTATUS1.bits.SC=1;
+    Sci_CustomerUpdateCounters(); assert(StorageFlash_ReadStatistics(counters) && counters[0]==70001);
+    request(&s_port2,counters_request,7); Sci_ServicePort(&s_port2,0);
+    assert(transmit(&s_port2,b)==29 && b[4]==0xFF && b[5]==0xFF);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    request(&s_port2,counters_request,7); Sci_ServicePort(&s_port2,0);
+    assert(transmit(&s_port2,b)==29 && b[4]==0xFF && b[5]==0xFF && b[25]==1);
+    mutations=0; cut_after=0;
+    request(&s_port2,clear_request,9); Sci_ServicePort(&s_port2,0);
+    assert(transmit(&s_port2,b)==7 && b[2]==0x80); cut_after=-1;
+    s_statistics.available=0;
+    request(&s_port1,counters_request,7); Sci_ServicePort(&s_port1,0);
+    assert(transmit(&s_port1,b)==7 && b[2]==0x80 && b[3]==0);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     /* Exact RTU silence, legal one-character IDLE, and invalid >t1.5 gaps. */
     quiet(&s_port1); receive(&s_port1,mb[0]); receive(&s_port1,mb[1]); receive(&s_port1,mb[2]);
     clock_us+=Sci_CharacterUs(&s_port1)*12U/10U; Sci_ServicePort(&s_port1,0);

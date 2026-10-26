@@ -238,7 +238,6 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	EEPROM_LoadDefaultHeatCool();
 
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
-	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_STORE);
 }
 
 

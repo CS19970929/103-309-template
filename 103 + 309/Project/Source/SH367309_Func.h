@@ -259,7 +259,7 @@ bool SH367309_UpdataAfeConfig(void);
 void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void);
 
 
-void App_SH367309(void);
+UINT8 App_SH367309(void);
 
 #endif	/* SH367309_FUNC_H */
 

@@ -28,6 +28,9 @@ def main():
     flash = flash[:flash.index('UINT16 FlashReadOneHalfWord(UINT32 faddr)')]
     flash = flash.replace('#include "main.h"', '')
     code = (ROOT / 'tools/storage_host_cases.c').read_text(encoding='utf-8')
+    vendor = (ROOT / '103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x.h').read_text(encoding='utf-8', errors='replace')
+    code = code.replace('/* RESET_FLAGS */', '\n'.join(line for line in vendor.splitlines()
+                        if line.lstrip().startswith('#define') and 'RCC_CSR_' in line))
     code = code.replace('/* PRODUCTION_SOURCE */', flash)
     eeprom = (SOURCE / 'EEPROM.c').read_text(encoding='utf-8')
     initializer = eeprom[eeprom.index('UINT8 InitE2PROM(void)'):]
@@ -47,6 +50,25 @@ def main():
                              '/I' + str(SOURCE), str(path), '/Fe:' + str(exe),
                              '/Fo:' + str(output / 'storage.obj')], cwd=output, env=env,
                             capture_output=True, text=True, errors='replace')
+    if result.returncode:
+        raise RuntimeError(result.stdout + result.stderr)
+    subprocess.run([str(exe)], cwd=output, check=True)
+    task = (SOURCE / 'DataDeal.c').read_text(encoding='utf-8')
+    task = task[task.index('void App_AFEGet(void)'):]
+    # App_AFEGet is currently the last definition; use its balanced body only.
+    depth = 0
+    for index in range(task.index('{'), len(task)):
+        depth += (task[index]=='{')-(task[index]=='}')
+        if depth==0:
+            task=task[:index+1]
+            break
+    sampling = (ROOT / 'tools/storage_sampling_cases.c').read_text(encoding='utf-8')
+    path = output / 'sampling.c'
+    path.write_text(sampling.replace('/* AFE_TASK_SOURCE */',task), encoding='utf-8')
+    exe = output / 'sampling.exe'
+    result = subprocess.run([str(compiler), '/nologo', '/W3', '/utf-8', '/TC', '/std:c11',
+                             str(path), '/Fe:' + str(exe), '/Fo:' + str(output / 'sampling.obj')],
+                            cwd=output, env=env, capture_output=True, text=True, errors='replace')
     if result.returncode:
         raise RuntimeError(result.stdout + result.stderr)
     subprocess.run([str(exe)], cwd=output, check=True)

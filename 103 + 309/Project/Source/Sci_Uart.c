@@ -341,7 +341,6 @@ void Sci_StopForLowPower(void)
 
 void App_CommonUpper(void)
 {
-    Sci_CustomerUpdateCounters();
 #ifdef _COMMOM_UPPER_SCI1
     Sci_ServicePort(&s_port1,0U);
 #endif

@@ -87,6 +87,13 @@ UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data);
 UINT8 StorageFlash_ResetParameters(STORAGE_FLASH_CONFIG_DATA *defaults);
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta);
 UINT8 StorageFlash_ClearLog(void);
+#define FLASH_STATISTICS_COUNT 11U
+void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag);
+void StorageFlash_UpdateFaultStatistics(UINT16 active_faults);
+UINT8 StorageFlash_ReadStatistics(UINT32 counts[FLASH_STATISTICS_COUNT]);
+UINT8 StorageFlash_ClearFaultStatistics(void);
+void StorageFlash_StatisticsTask(void);
+void StorageFlash_FlushStatistics(void);
 
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);

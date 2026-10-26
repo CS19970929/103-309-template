@@ -151,6 +151,13 @@ static struct { struct { UINT16 curValue; } u16TChgOTp,u16VcellOvp,u16VcellUvp,
 } AFE_Parameters_RS485_Struction;
 static struct { struct { struct { UINT8 SC; } bits; } REG_BSTATUS1; } SH367309_Reg_Store;
 '''
+# Use the real statistics storage as well as the real UART/protocol code.
+flash_stub=(ROOT/'tools/storage_host_cases.c').read_text(encoding='utf-8').split('/* PRODUCTION_SOURCE */')[0]
+vendor=(ROOT/'103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x.h').read_text(encoding='utf-8',errors='replace')
+flash_stub=flash_stub.replace('/* RESET_FLAGS */','\n'.join(line for line in vendor.splitlines()
+    if line.lstrip().startswith('#define') and 'RCC_CSR_' in line))
+flash=(src/'Flash.c').read_text(encoding='utf-8').split('UINT16 FlashReadOneHalfWord(UINT32 faddr)')[0]
+combo+=flash_stub+flash.replace('#include "main.h"','')
 for name in ('Sci_Customer.c','Sci_Uart.c'):
     combo+='\n'.join(line for line in (src/name).read_text(encoding='utf-8').splitlines()
                       if not line.startswith('#include'))+'\n'
@@ -165,7 +172,7 @@ combo+=(src/'rtc_sleep.h').read_text(encoding='utf-8')+'\n'+cases[:a]+wake+'\n'+
 combo=combo.replace('    puts("PASS both UARTs:', '    test_wake_paths();\n    puts("PASS both UARTs:')
 
 (out/'uart_combined.c').write_text(combo,encoding='utf-8')
-r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
+r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(src),
                   str(out/'uart_combined.c'),'/Fe:'+str(out/'uart_combined.exe'),
                   '/Fo:'+str(out/'uart_combined.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
 if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
@@ -207,7 +214,7 @@ int main(void) {
 }
 '''
 (out/'uart_readonly.c').write_text(readonly,encoding='utf-8')
-r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',
+r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(src),
                   str(out/'uart_readonly.c'),'/Fe:'+str(out/'uart_readonly.exe'),
                   '/Fo:'+str(out/'uart_readonly.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
 if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)

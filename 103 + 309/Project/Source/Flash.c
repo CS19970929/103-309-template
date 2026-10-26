@@ -185,7 +185,9 @@ static UINT8 Storage_WriteRecord(UINT32 address, UINT32 magic, UINT32 sequence,
     if (result==FLASH_COMPLETE)
         result=FlashProgramHalfWordVerified(address+14U,STORAGE_RECORD_COMMIT);
     FLASH_Lock();
-    return (UINT8)(result==FLASH_COMPLETE && Storage_RecordValid(address,magic,length) &&
+    /* A readable committed record is authoritative even if the peripheral
+     * reported an error after programming its final half-word. */
+    return (UINT8)(Storage_RecordValid(address,magic,length) &&
                   memcmp((const void *)(address+sizeof(h)),payload,length)==0);
 }
 
@@ -431,7 +433,6 @@ static UINT8 Storage_LogAppend(UINT16 data)
     UINT32 page=Storage_LogLatestPage(), address, next, sequence=1U;
     STORAGE_LOG_CHECKPOINT checkpoint;
     STORAGE_LOG_ENTRY entry;
-    FLASH_Status status;
     UINT8 result=0U;
     StorageFlash_BeginWrite();
     if (!page) {
@@ -454,9 +455,10 @@ static UINT8 Storage_LogAppend(UINT16 data)
     entry.commit=STORAGE_RECORD_COMMIT;
     FLASH_Unlock();
     FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
-    status=FlashProgramBytesVerified(next,(const UINT8 *)&entry,sizeof(entry));
+    (void)FlashProgramBytesVerified(next,(const UINT8 *)&entry,sizeof(entry));
     FLASH_Lock();
-    result=(UINT8)(status==FLASH_COMPLETE && Storage_LogEntryValid((const STORAGE_LOG_ENTRY *)next));
+    result=(UINT8)(Storage_LogEntryValid((const STORAGE_LOG_ENTRY *)next) &&
+                  memcmp((const void *)next,&entry,sizeof(entry))==0);
 done:
     StorageFlash_EndWrite();
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
@@ -487,6 +489,206 @@ UINT8 StorageFlash_ResetParameters(STORAGE_FLASH_CONFIG_DATA *defaults)
     StorageFlash_EndWrite();
     defaults->initializing=0U;
     return StorageFlash_SaveConfig(defaults);
+}
+
+/* Lifetime statistics have their own pages and never depend on the log ring.
+ * Falling edges must also be stored, so a continuous fault is not counted again
+ * after reset or the customer's clear command. */
+#define STORAGE_STATS_MAGIC 0x53545331UL
+#define STORAGE_STATS_FAULT_BITS 0x03FFU
+#define STORAGE_STATS_RETRY_TICKS 100U
+enum { STATS_FAULT_MASK=1, STATS_BOOT, STATS_CLEAR };
+typedef struct {
+    UINT32 count[FLASH_STATISTICS_COUNT];
+    UINT16 active_faults;
+    UINT16 reserved;
+} STORAGE_STATS_DATA;
+typedef struct {
+    UINT8 type, reserved;
+    UINT16 value, crc, commit;
+} STORAGE_STATS_ENTRY;
+static struct {
+    STORAGE_STATS_DATA data;
+    UINT32 last_attempt_tick;
+    UINT8 available, dirty;
+} s_statistics;
+typedef char StorageStatsEntrySizeCheck[(sizeof(STORAGE_STATS_ENTRY)==8U) ? 1 : -1];
+
+static UINT32 Storage_StatsPage(void)
+{
+    return Storage_SelectPair(FLASH_STATS_A,FLASH_STATS_B,STORAGE_STATS_MAGIC,sizeof(STORAGE_STATS_DATA));
+}
+
+static void Storage_StatsIncrement(UINT32 *count)
+{
+    if (*count!=0xFFFFFFFFUL) ++*count;
+}
+
+static void Storage_StatsApply(STORAGE_STATS_DATA *data, UINT8 type, UINT16 value)
+{
+    UINT8 i;
+    if (type==STATS_FAULT_MASK) {
+        UINT16 rising=(UINT16)(value & (UINT16)~data->active_faults);
+        for (i=0U; i<FLASH_STATISTICS_COUNT-1U; ++i)
+            if (rising & (1U<<i)) Storage_StatsIncrement(&data->count[i]);
+        data->active_faults=value;
+    } else if (type==STATS_BOOT) Storage_StatsIncrement(&data->count[10]);
+    else if (type==STATS_CLEAR) memset(data->count,0,10U*sizeof(UINT32));
+}
+
+static UINT8 Storage_StatsEntryValid(const STORAGE_STATS_ENTRY *entry)
+{
+    return (UINT8)(entry->commit==STORAGE_RECORD_COMMIT && entry->reserved==0U &&
+        entry->crc==Storage_CrcUpdate(0xFFFFU,(const UINT8 *)entry,4U) &&
+        ((entry->type==STATS_FAULT_MASK && (entry->value & ~STORAGE_STATS_FAULT_BITS)==0U) ||
+         ((entry->type==STATS_BOOT || entry->type==STATS_CLEAR) && entry->value==0U)));
+}
+
+static UINT8 Storage_StatsReplay(UINT32 page)
+{
+    UINT32 address;
+    memcpy(&s_statistics.data,(const void *)(page+sizeof(STORAGE_RECORD)),sizeof(s_statistics.data));
+    if (s_statistics.data.active_faults & ~STORAGE_STATS_FAULT_BITS) return 0U;
+    for (address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
+         address+sizeof(STORAGE_STATS_ENTRY)<=page+FLASH_STORAGE_PAGE_SIZE;
+         address+=sizeof(STORAGE_STATS_ENTRY)) {
+        const STORAGE_STATS_ENTRY *entry=(const STORAGE_STATS_ENTRY *)address;
+        if (entry->commit!=STORAGE_RECORD_COMMIT) continue; /* incomplete append */
+        if (!Storage_StatsEntryValid(entry)) return 0U; /* damaged committed data */
+        Storage_StatsApply(&s_statistics.data,entry->type,entry->value);
+    }
+    return 1U;
+}
+
+static UINT8 Storage_StatsSave(UINT8 type, UINT16 value)
+{
+    UINT32 page=Storage_StatsPage(), address, next=0U, sequence=1U;
+    STORAGE_STATS_ENTRY entry;
+    UINT8 result=0U;
+    if (page) {
+        sequence=((const STORAGE_RECORD *)page)->sequence+1U;
+        next=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
+        for (address=next; address+sizeof(entry)<=page+FLASH_STORAGE_PAGE_SIZE; address+=sizeof(entry))
+            if (!StorageFlash_IsAreaBlank(address,sizeof(entry))) next=address+sizeof(entry);
+    }
+    s_statistics.last_attempt_tick=SysTime_Get10msTickCount();
+    StorageFlash_BeginWrite();
+    /* RAM already includes the requested change. A checkpoint after an
+     * uncertain write avoids replaying a delta twice or losing earlier faults. */
+    if (!page || s_statistics.dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
+        address=page==FLASH_STATS_A ? FLASH_STATS_B : FLASH_STATS_A;
+        result=(UINT8)(Storage_Erase(address) && Storage_WriteRecord(address,STORAGE_STATS_MAGIC,
+                            sequence,&s_statistics.data,sizeof(s_statistics.data)));
+    } else {
+        entry.type=type; entry.reserved=0U; entry.value=value;
+        entry.crc=Storage_CrcUpdate(0xFFFFU,(const UINT8 *)&entry,4U);
+        entry.commit=STORAGE_RECORD_COMMIT;
+        FLASH_Unlock();
+        FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+        (void)FlashProgramBytesVerified(next,(const UINT8 *)&entry,sizeof(entry));
+        FLASH_Lock();
+        result=(UINT8)(Storage_StatsEntryValid((const STORAGE_STATS_ENTRY *)next) &&
+                       memcmp((const void *)next,&entry,sizeof(entry))==0);
+    }
+    StorageFlash_EndWrite();
+    s_statistics.dirty=(UINT8)!result;
+    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    return result;
+}
+
+/* Recognize only a prefix of our known first initialization write. This allows
+ * a first-install power cut to resume, without treating arbitrary damaged
+ * lifetime data or an incompatible format as an empty statistics area. */
+static UINT8 Storage_StatsInitialWriteInterrupted(void)
+{
+    STORAGE_RECORD header;
+    STORAGE_STATS_DATA initial;
+    const UINT16 *expected, *actual;
+    UINT16 i, value;
+    UINT8 blank_seen=0U;
+    if (!StorageFlash_IsAreaBlank(FLASH_STATS_B,FLASH_STORAGE_PAGE_SIZE) ||
+        FlashReadOneHalfWord(FLASH_STATS_A+14U)!=0xFFFFU ||
+        !StorageFlash_IsAreaBlank(FLASH_STATS_A+sizeof(header)+sizeof(initial),
+            FLASH_STORAGE_PAGE_SIZE-sizeof(header)-sizeof(initial))) return 0U;
+    memset(&initial,0,sizeof(initial)); initial.count[10]=1U;
+    header.magic=STORAGE_STATS_MAGIC; header.sequence=1U; header.length=sizeof(initial);
+    header.format=STORAGE_RECORD_FORMAT; header.commit=0xFFFFU;
+    header.crc=Storage_RecordCrc(&header,&initial);
+    for (i=0U; i<7U+sizeof(initial)/2U; ++i) {
+        if (i<7U) { expected=(const UINT16 *)&header+i; actual=(const UINT16 *)FLASH_STATS_A+i; }
+        else { expected=(const UINT16 *)&initial+(i-7U); actual=(const UINT16 *)(FLASH_STATS_A+sizeof(header))+(i-7U); }
+        value=*actual;
+        if (value==0xFFFFU) blank_seen=1U;
+        else if (blank_seen || value!=*expected) return 0U;
+    }
+    return 1U;
+}
+
+void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
+{
+    UINT32 page;
+    UINT8 sleep_reset=(UINT8)((reset_cause & RCC_CSR_SFTRSTF)!=0U &&
+        (reset_cause & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF | RCC_CSR_PORRSTF | RCC_CSR_LPWRRSTF))==0U &&
+        (sleep_flag==FLASH_NORMAL_SLEEP_VALUE || sleep_flag==FLASH_HICCUP_SLEEP_VALUE ||
+         sleep_flag==FLASH_DEEP_SLEEP_VALUE || sleep_flag==FLASH_SLEEP_CHARGER_WAKE_VALUE));
+    memset(&s_statistics,0,sizeof(s_statistics));
+    if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) goto damaged;
+    page=Storage_StatsPage();
+    if (page) {
+        if (!Storage_StatsReplay(page)) goto damaged;
+        s_statistics.available=1U;
+        if (!sleep_reset) {
+            Storage_StatsApply(&s_statistics.data,STATS_BOOT,0U);
+            (void)Storage_StatsSave(STATS_BOOT,0U);
+        }
+    } else if ((StorageFlash_IsAreaBlank(FLASH_STATS_A,FLASH_STORAGE_PAGE_SIZE) &&
+                StorageFlash_IsAreaBlank(FLASH_STATS_B,FLASH_STORAGE_PAGE_SIZE)) ||
+               Storage_StatsInitialWriteInterrupted()) {
+        s_statistics.available=1U;
+        s_statistics.data.count[10]=1U;
+        (void)Storage_StatsSave(STATS_BOOT,0U);
+    } else goto damaged;
+    return;
+damaged:
+    System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+}
+
+void StorageFlash_UpdateFaultStatistics(UINT16 active_faults)
+{
+    if (!s_statistics.available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
+        active_faults==s_statistics.data.active_faults) return;
+    Storage_StatsApply(&s_statistics.data,STATS_FAULT_MASK,active_faults);
+    if (!s_statistics.dirty) (void)Storage_StatsSave(STATS_FAULT_MASK,active_faults);
+}
+
+UINT8 StorageFlash_ReadStatistics(UINT32 counts[FLASH_STATISTICS_COUNT])
+{
+    if (!counts || !s_statistics.available) return 0U;
+    memcpy(counts,s_statistics.data.count,sizeof(s_statistics.data.count));
+    return 1U;
+}
+
+UINT8 StorageFlash_ClearFaultStatistics(void)
+{
+    STORAGE_STATS_DATA previous;
+    if (!s_statistics.available) return 0U;
+    previous=s_statistics.data;
+    Storage_StatsApply(&s_statistics.data,STATS_CLEAR,0U);
+    if (Storage_StatsSave(STATS_CLEAR,0U)) return 1U;
+    s_statistics.data=previous;
+    return 0U;
+}
+
+void StorageFlash_StatisticsTask(void)
+{
+    if (s_statistics.available && s_statistics.dirty &&
+        (UINT32)(SysTime_Get10msTickCount()-s_statistics.last_attempt_tick)>=STORAGE_STATS_RETRY_TICKS)
+        (void)Storage_StatsSave(0U,0U);
+}
+
+void StorageFlash_FlushStatistics(void)
+{
+    if (s_statistics.available && s_statistics.dirty) (void)Storage_StatsSave(0U,0U);
 }
 
 void StorageFlash_PrintBootCheck(void)

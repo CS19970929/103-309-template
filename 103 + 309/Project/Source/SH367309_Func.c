@@ -317,7 +317,7 @@ void Fault_ChangeToMCU(void)
 	SH367309_RecordFaultOnActive(&su8_CellDsgOtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.OTD, CellDsgOTp_Third);
 }
 
-void App_SH367309_Monitor(void)
+static UINT8 App_SH367309_Monitor(void)
 {
 	static UINT8 su8_EEPR_WR_Flag = 0;
 	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
@@ -368,17 +368,20 @@ void App_SH367309_Monitor(void)
 		{
 			System_ERROR_UserCallback(ERROR_CLIENT);
 		}
+		return 1U;
 	}
 	else
 	{
 		// 读取失败，要做点什么事情？
 		// 进入深度休眠咯？
 	}
+	return 0U;
 }
 
-void App_SH367309(void)
+UINT8 App_SH367309(void)
 {
-	App_SH367309_Monitor();
+	UINT8 valid=App_SH367309_Monitor();
 	if (AFE_PARAM_WRITE_Flag && SH367309_UpdataAfeConfig())
 		open_ctlc();
+	return valid;
 }

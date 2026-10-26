@@ -12,11 +12,14 @@ typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG } FLASH_Status;
 #define FLASH_FLAG_PGERR 2
 #define FLASH_FLAG_WRPRTERR 4
 #define ERROR_EEPROM_STORE 1
+/* RESET_FLAGS */
+static UINT32 tick;
+static UINT32 SysTime_Get10msTickCount(void) { return tick; }
 #include "Flash.h"
 struct RS485MSG;
 #include "LogRecord.h"
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
-static int mutations, cut_after=-1, errors;
+static int mutations, cut_after=-1, errors, error_after_commit;
 static void System_ERROR_UserCallback(int error) { ++errors; }
 static void FLASH_Unlock(void) {}
 static void FLASH_Lock(void) {}
@@ -32,9 +35,16 @@ static FLASH_Status FLASH_ProgramHalfWord(uint32_t address,uint16_t value) {
     UINT16 *p=(UINT16 *)(uintptr_t)address;
     assert(address>=FLASH_STORAGE_BEGIN && address<FLASH_STORAGE_END && !(address & 1));
     if(!mutation_allowed()) return FLASH_ERROR_PG;
-    assert((*p & value)==value); ++mutations; *p=value; return FLASH_COMPLETE;
+    assert((*p & value)==value); ++mutations; *p=value;
+    return error_after_commit && value==0xA55A ? FLASH_ERROR_PG : FLASH_COMPLETE;
 }
 UINT16 FlashReadOneHalfWord(UINT32 address) { return *(UINT16 *)(uintptr_t)address; }
+static void host_storage_init(void) {
+    assert(VirtualAlloc((void *)0x08000000,0x20000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x08000000);
+    memset((void *)0x08000000,0xFF,0x20000);
+    assert(VirtualAlloc((void *)0x1FFF0000,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x1FFF0000);
+    *(UINT16 *)0x1FFFF7E0=128;
+}
 /* PRODUCTION_SOURCE */
 /* Only the unrelated application parameter tables are stubbed. The real boot
  * initializer, version comparison, reset sequencing and Flash code run below. */
@@ -109,15 +119,113 @@ static void test_log(void) {
     assert(s_log_record.eventLatch[CHG_OTP] && seconds==0);
     puts("PASS log: 6-byte appends, 402-event wrap/reboot, all rotation cut points, 200 torn writes, atomic clear, retry, unchanged 200-byte host view");
 }
+static void test_statistics(void) {
+    UINT32 counts[11],old_count,new_count;
+    int i,writes,cut;
+    UINT32 page,entry_address;
+    memset((void *)FLASH_STATS_A,0xFF,2048);
+    mutations=0;
+    StorageFlash_InitStatistics(RCC_CSR_PORRSTF,BOOT_FLAG_RESET_VALUE);
+    writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        memset((void *)FLASH_STATS_A,0xFF,2048); mutations=0; cut_after=cut;
+        StorageFlash_InitStatistics(RCC_CSR_PORRSTF,BOOT_FLAG_RESET_VALUE); cut_after=-1;
+        StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE);
+        assert(StorageFlash_ReadStatistics(counts) && (counts[10]==1 || counts[10]==2) && !s_statistics.dirty);
+    }
+    memset((void *)FLASH_STATS_A,0xFF,2048);
+    StorageFlash_InitStatistics(RCC_CSR_PORRSTF,BOOT_FLAG_RESET_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[10]==1);
+    StorageFlash_UpdateFaultStatistics(0x3FF);
+    StorageFlash_UpdateFaultStatistics(0x3FF);
+    assert(StorageFlash_ReadStatistics(counts));
+    for(i=0;i<10;++i) assert(counts[i]==1);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE);
+    StorageFlash_UpdateFaultStatistics(0x3FF);
+    assert(StorageFlash_ReadStatistics(counts) && counts[0]==1 && counts[10]==2);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[10]==2);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF|RCC_CSR_IWDGRSTF,FLASH_DEEP_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[10]==3);
+    StorageFlash_InitStatistics(RCC_CSR_WWDGRSTF,FLASH_NORMAL_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[10]==4);
+    assert(StorageFlash_ClearFaultStatistics());
+    StorageFlash_UpdateFaultStatistics(0x3FF);
+    assert(StorageFlash_ReadStatistics(counts) && counts[0]==0 && counts[10]==4);
+    StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(0x3FF);
+    assert(StorageFlash_ReadStatistics(counts) && counts[9]==1);
+    /* More than two page capacities: replay only the newest checkpoint/page. */
+    for(i=0;i<300;++i) { StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(1); }
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_NORMAL_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[0]==301 && counts[9]==1 && counts[10]==4);
+    save_flash(); mutations=0;
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE); writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        cut_after=cut; StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE); cut_after=-1;
+        StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        assert(StorageFlash_ReadStatistics(counts) && counts[0]==301 && (counts[10]==4 || counts[10]==5));
+    }
+    restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    /* Fill this page, then cut every erase/header/checkpoint half-word at rotation. */
+    while(1) {
+        page=Storage_StatsPage();
+        entry_address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
+        while(entry_address+sizeof(STORAGE_STATS_ENTRY)<=page+1024 &&
+              !StorageFlash_IsAreaBlank(entry_address,sizeof(STORAGE_STATS_ENTRY))) entry_address+=sizeof(STORAGE_STATS_ENTRY);
+        if(entry_address+sizeof(STORAGE_STATS_ENTRY)>page+1024) break;
+        StorageFlash_UpdateFaultStatistics(s_statistics.data.active_faults ? 0 : 1);
+    }
+    assert(StorageFlash_ReadStatistics(counts)); old_count=counts[0];
+    save_flash(); mutations=0;
+    StorageFlash_UpdateFaultStatistics(s_statistics.data.active_faults ? 0 : 1);
+    assert(StorageFlash_ReadStatistics(counts)); new_count=counts[0]; writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        cut_after=cut; StorageFlash_UpdateFaultStatistics(s_statistics.data.active_faults ? 0 : 1); cut_after=-1;
+        StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        assert(StorageFlash_ReadStatistics(counts) && (counts[0]==old_count || counts[0]==new_count) && counts[10]==4);
+    }
+    /* Delayed retry persists the RAM checkpoint, never re-adds uncertain deltas. */
+    restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    tick=UINT32_MAX-10; mutations=0; cut_after=0;
+    StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(1);
+    StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(1);
+    assert(s_statistics.dirty); assert(StorageFlash_ReadStatistics(counts)); new_count=counts[0];
+    cut_after=-1; mutations=0; tick+=99; StorageFlash_StatisticsTask(); assert(!mutations);
+    ++tick; StorageFlash_StatisticsTask(); assert(!s_statistics.dirty);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[0]==new_count);
+    save_flash(); mutations=0; assert(StorageFlash_ClearFaultStatistics()); writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        cut_after=cut; StorageFlash_ClearFaultStatistics(); cut_after=-1;
+        StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+        assert(StorageFlash_ReadStatistics(counts) && (counts[0]==new_count || counts[0]==0) && counts[10]==4);
+    }
+    restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    s_statistics.data.count[0]=0xFFFFFFFFUL; s_statistics.data.count[1]=70000;
+    s_statistics.dirty=1; StorageFlash_FlushStatistics();
+    StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(3);
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
+    assert(StorageFlash_ReadStatistics(counts) && counts[0]==0xFFFFFFFFUL && counts[1]==70001);
+    error_after_commit=1; assert(StorageFlash_ClearFaultStatistics()); error_after_commit=0;
+    StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(2);
+    assert(StorageFlash_ClearLog());
+    assert(InitE2PROM()); assert(StorageFlash_ReadStatistics(counts) && counts[1]==1);
+    /* Committed corruption is an error, not a fresh zero lifetime counter. */
+    page=Storage_StatsPage();
+    *(UINT16 *)(page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA)+4)^=1;
+    StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE);
+    assert(!StorageFlash_ReadStatistics(counts) && !StorageFlash_ClearFaultStatistics());
+    puts("PASS statistics: 32-bit lifetime, 11 fields, deduplicated edges/reboots, STOP versus watchdog, rotation cuts, clear cuts, bounded retry/wrap, saturation, reset/log isolation, corruption rejection");
+}
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
     STORAGE_FLASH_SOC_DATA soc,loaded_soc;
     STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,FLASH_FACTORY_AGING_STATE_RUNNING,12},loaded_aging;
     int writes,cut,i;
-    assert(VirtualAlloc((void *)0x08000000,0x20000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x08000000);
-    memset((void *)0x08000000,0xFF,0x20000);
-    assert(VirtualAlloc((void *)0x1FFF0000,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x1FFF0000);
-    *(UINT16 *)0x1FFFF7E0=128;
+    host_storage_init();
     memset(&old_value,0x12,sizeof(old_value)); memset(&new_value,0x34,sizeof(new_value));
     assert(!StorageFlash_LoadConfig(&loaded));
     assert(StorageFlash_SaveConfig(&old_value)); save_flash();
@@ -185,5 +293,6 @@ int main(void) {
     mutations=0; assert(InitE2PROM() && runtime_rw.protect[0]==456 && !mutations);
     printf("PASS storage: real boot init, once per version, disabled switch, %d interrupted resets, statistics untouched\n",writes+1);
     test_log();
+    test_statistics();
     return 0;
 }

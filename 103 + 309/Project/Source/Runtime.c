@@ -6,6 +6,11 @@ static UINT8 s_boot_ready;
 
 void Runtime_Boot(void)
 {
+	UINT32 reset_cause=RCC->CSR;
+	UINT16 sleep_flag=BootFlag_Read();
+	RCC_ClearFlag();
+	/* Capture reset evidence before RTC setup can clear RCC/backup state. */
+	StorageFlash_InitStatistics(reset_cause,sleep_flag);
 	Init_RTC();
 
 	InitDelay();
@@ -56,6 +61,7 @@ void Runtime_RunOnce(void)
 	App_FlashUpdate();
 
 	App_LogRecord();
+	StorageFlash_StatisticsTask();
 
 	Feed_IWatchDog;
 

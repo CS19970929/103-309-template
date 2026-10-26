@@ -484,7 +484,7 @@ static void close_ctlc(void) { ctl=0; }
 static void open_ctlc(void) { ctl=1; }
 static void initAFE1_IIC(void) {}
 static void AfeCurrent_StartupZeroCal(void) { ++calibration_calls; }
-static void App_SH367309_Monitor(void) {}
+static UINT8 App_SH367309_Monitor(void) { return 1U; }
 '''
 
 AFE_TESTS = r'''
@@ -677,7 +677,7 @@ def main():
     ntc = (SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8')
     ntc = ntc[ntc.index('const UINT16 iSheldTemp_10K_NTC'):ntc.index('// 前26个')]
     startup = function((SOURCE / 'I2C_AFE1.c').read_text(encoding='utf-8'), 'void InitAFE1(void)')
-    app = function((SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8'), 'void App_SH367309(void)')
+    app = function((SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8'), 'UINT8 App_SH367309(void)')
     permit_stub = '''UINT8 MosStartup_ApplyInitialState(void) {
         ++startup_calls; if(permit_fail || AFE_PARAM_WRITE_Flag) return 0;
         permits=heat_latched ? 0 : 3; return 1;

@@ -2,10 +2,6 @@
 #include "Sci_Protocol.h"
 
 #define CUSTOMER_CELL_COUNT 7U
-#define CUSTOMER_COUNTER_COUNT 11U
-/* RAM counters since this boot. The last field is this boot's restart count. */
-static UINT16 s_counters[CUSTOMER_COUNTER_COUNT] = {0U,0U,0U,0U,0U,0U,0U,0U,0U,0U,1U};
-static UINT16 s_previous_faults;
 
 static void Customer_PutLE(UINT8 *buffer, UINT16 *index, UINT16 value)
 {
@@ -38,12 +34,7 @@ void Sci_CustomerUpdateCounters(void)
         (fault->b1CellOvp << 3) | (fault->b1CellChgOtp << 4) |
         (fault->b1CellChgUtp << 5) | (fault->b1CellDischgOtp << 6) |
         (fault->b1CellDischgUtp << 7) | (fault->b1BatOvp << 8) | (fault->b1BatUvp << 9));
-    UINT16 rising = (UINT16)(mask & (UINT16)~s_previous_faults);
-    UINT8 i;
-    for (i=0U; i<CUSTOMER_COUNTER_COUNT-1U; ++i)
-        if ((rising & (1U << i)) && s_counters[i] != 0xFFFFU)
-            ++s_counters[i];
-    s_previous_faults = mask;
+    StorageFlash_UpdateFaultStatistics(mask);
 }
 
 UINT8 Sci_CustomerFeed(struct RS485MSG *message, UINT8 data)
@@ -129,6 +120,7 @@ void Sci_CustomerProcessFrame(struct RS485MSG *message)
     UINT8 *b=message->u16Buffer;
     UINT8 command=b[2], status=0U;
     UINT16 index=4U, i, checksum;
+    UINT32 counters[FLASH_STATISTICS_COUNT];
     message->AckLenth=0U;
     if (!Sci_CustomerFrameValid(message))
         return;
@@ -164,10 +156,11 @@ void Sci_CustomerProcessFrame(struct RS485MSG *message)
     {
         if (b[1] == 0xA5U && command == 0xAAU && b[3] == 0U)
         {
-            for (i=0U; i<CUSTOMER_COUNTER_COUNT; ++i)
-            {
-                b[index++]=(UINT8)(s_counters[i] >> 8);
-                b[index++]=(UINT8)s_counters[i];
+            if (!StorageFlash_ReadStatistics(counters)) status=0x80U;
+            else for (i=0U; i<FLASH_STATISTICS_COUNT; ++i) {
+                UINT16 count=(UINT16)(counters[i]>0xFFFFU ? 0xFFFFU : counters[i]);
+                b[index++]=(UINT8)(count >> 8);
+                b[index++]=(UINT8)count;
             }
         }
         else
@@ -175,7 +168,7 @@ void Sci_CustomerProcessFrame(struct RS485MSG *message)
 #if PROJECT_CFG_HOST_WRITE_ENABLE
             if (b[1] == 0x5AU && command == 1U && b[3] == 2U && b[4] == 0x28U && b[5] == 0x28U)
             {
-                for (i=0U; i<CUSTOMER_COUNTER_COUNT-1U; ++i) s_counters[i]=0U;
+                status=StorageFlash_ClearFaultStatistics() ? 0U : 0x80U;
             }
             else if (b[1] == 0x5AU && command == 0xE1U && b[3] == 2U && b[4] == 0U && b[5] <= 3U)
                 status = Fault_SetHostMosOff(b[5]) ? 0U : 0x80U;

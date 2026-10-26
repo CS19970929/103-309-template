@@ -1,4 +1,5 @@
 #include "main.h"
+#include "Sci_Protocol.h"
 #include "CurrentCalibration.h"
 
 const unsigned char SeriesSelect_AFE1[16][16] = {
@@ -982,7 +983,7 @@ void close_ctlc(void)
 
 void App_AFEGet(void)
 {
-    UINT8 sample_valid;
+    UINT8 sample_valid, fault_valid;
     if (0U == SysTime_Take200msTaskPeriod())
         return;
 
@@ -999,9 +1000,11 @@ void App_AFEGet(void)
     // test_Autocurrent_cycle();
 
     Fault_UpdateCurrentProtection(sample_valid);
-    App_SH367309();
+    fault_valid=App_SH367309();
     charger_detect_and_keyLogi_200ms();
     Fault_ApplyMosPermits(1U, 1U);
+    /* Both frames belong to this cycle; invalid cached zeros are not recovery. */
+    if (sample_valid && fault_valid) Sci_CustomerUpdateCounters();
     App_SOC();
 
 #ifdef VCELL_DISP_TEST
