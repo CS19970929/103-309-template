@@ -865,7 +865,6 @@ void StorageFlash_PrintBootCheck(void)
  * Address arguments are private: production wrappers never select test pages. */
 #if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
 #define FLASH_TEST_SIGNATURE 0x54535431UL
-#define FLASH_TEST_INTERVAL_TICKS 2U
 #define FLASH_TEST_LOG_CLEAR_PERIOD 1024U
 #define FLASH_TEST_BOOT_COUNT 17U
 #define FLASH_TEST_LOG_CAPACITY ((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/sizeof(STORAGE_LOG_ENTRY))
@@ -874,7 +873,7 @@ static const UINT32 s_self_test_goals[FLASH_TEST_DOMAIN_COUNT]={
     PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES, PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES,
     PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES, PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES
 };
-static UINT32 s_self_test_tick, s_self_test_ore;
+static UINT32 s_self_test_ore;
 static UINT16 s_self_test_overflow;
 static UINT8 s_self_test_loaded, s_self_test_erase_page;
 typedef char FlashTestProgressFits[(sizeof(FLASH_SELF_TEST_PROGRESS)<=sizeof(STORAGE_FLASH_RW_PARAM_DATA)) ? 1 : -1];
@@ -1202,7 +1201,6 @@ void FlashSelfTest_Init(uint32_t reset_cause)
     test->progress.signature=FLASH_TEST_SIGNATURE;
     memcpy((void *)test->progress.goal,s_self_test_goals,sizeof(s_self_test_goals));
     s_self_test_loaded=0U; s_self_test_erase_page=2U;
-    s_self_test_tick=SysTime_Get10msTickCount();
     s_self_test_ore=FlashSelfTest_UartErrors();
     s_self_test_overflow=SysTime_Get200msTaskOverflowCount();
     if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) {
@@ -1228,7 +1226,7 @@ uint8_t FlashSelfTest_IsActive(void)
 void FlashSelfTest_Task(void)
 {
     volatile FLASH_SELF_TEST *test=&sys_time.flash_test;
-    UINT32 now=SysTime_Get10msTickCount(), phase;
+    UINT32 phase;
     UINT8 ok=1U;
     if (!FlashSelfTest_IsActive() || g_stLowPowerRtcStatus.mode!=NO_SLEEP) return;
     if (s_self_test_ore!=FlashSelfTest_UartErrors()) {
@@ -1237,10 +1235,11 @@ void FlashSelfTest_Task(void)
     if (s_self_test_overflow!=SysTime_Get200msTaskOverflowCount()) {
         FlashSelfTest_Fail(FLASH_TEST_SCHEDULER_ERROR,0U); return;
     }
-    if ((UINT32)(now-s_self_test_tick)<FLASH_TEST_INTERVAL_TICKS || StorageFlash_IsBusy() ||
+    /* One action per main-loop pass; normal tasks always run before this call.
+     * Flash latency limits throughput, without an additional idle interval. */
+    if (StorageFlash_IsBusy() ||
         u8FlashUpdateFlag || Sci_IsAnyPortBusy() || Can_IsBusy() || SysTime_HasPendingTaskFlags() ||
         System_ERROR_UserCallback(ERROR_STATUS_AFE1)) return;
-    s_self_test_tick=now;
     if (!s_self_test_loaded) {
         if (!FlashSelfTest_LoadProgress()) FlashSelfTest_Fail(FLASH_TEST_READ_ERROR,FLASH_SELF_TEST_CONFIG);
         else s_self_test_loaded=1U;

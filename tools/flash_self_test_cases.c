@@ -20,7 +20,7 @@ static void restart_test(UINT32 cause) {
     memset(hw_erases,0,sizeof(hw_erases)); hw_halfwords=0;
     FlashSelfTest_Init(cause);
 }
-static void step(void) { tick+=2U; FlashSelfTest_Task(); }
+static void step(void) { FlashSelfTest_Task(); }
 static void until_phase(UINT32 phase) {
     int tries=0;
     while(sys_time.flash_test.progress.phase!=phase && FlashSelfTest_IsActive()) {
@@ -90,10 +90,15 @@ static void test_pause_and_noop(void) {
     while(sys_time.flash_test.progress.count[FLASH_TEST_SOC]<64U) step();
     assert(sys_time.flash_test.status==FLASH_TEST_RUNNING);
     assert(!memcmp(production_before,(void *)FLASH_STORAGE_BEGIN,sizeof(production_before)));
-    tick=UINT32_MAX-1U; s_self_test_tick=tick; before=mutations;
-    FlashSelfTest_Task(); assert(mutations==before); tick+=2U; FlashSelfTest_Task(); assert(mutations>before);
+    before=mutations; step();
+    assert(mutations>before && sys_time.flash_test.progress.count[FLASH_TEST_SOC]==65U);
+    pending=1; before=mutations; step(); assert(mutations==before);
+    pending=0; step();
+    assert(mutations>before && sys_time.flash_test.progress.count[FLASH_TEST_SOC]==66U);
+    tick=UINT32_MAX; step(); tick=0U; step();
+    assert(sys_time.flash_test.progress.count[FLASH_TEST_SOC]==68U);
     task_overflow=1; step(); assert(sys_time.flash_test.status==FLASH_TEST_FAIL && sys_time.flash_test.first_error==FLASH_TEST_SCHEDULER_ERROR);
-    puts("PASS self-test scheduling: UART/CAN/pending/AFE/IAP/NORMAL defer, duplicate no-write checks, tick wrap, scheduler error stops");
+    puts("PASS self-test scheduling: no tick wait, one SOC commit per pass; UART/CAN/pending/AFE/IAP/NORMAL defer, duplicate no-write checks, tick wrap, scheduler error stops");
 }
 static void test_failures(void) {
     int before;
