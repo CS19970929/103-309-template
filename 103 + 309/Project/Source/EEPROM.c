@@ -1,6 +1,7 @@
 #include "main.h"
 #include "SocEnhance.h"
 #include "Heat_Cool.h"
+#include <stddef.h>
 
 struct HEAT_COOL_ELEMENT Heat_Cool_Element;
 
@@ -16,6 +17,17 @@ typedef char EEPROM_HeatCoolSizeCheck[(sizeof(struct HEAT_COOL_ELEMENT) ==
 #if FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT != E2P_PARA_NUM_RESERVED_RW_PARAM
 #error "RW parameter reserved word count mismatch"
 #endif
+
+typedef char EEPROM_ParamVersionSizeCheck[(STORAGE_PARAM_VERSION_FIRST+STORAGE_PARAM_COUNT
+    <=FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT) ? 1 : -1];
+
+static const UINT16 s_param_versions[STORAGE_PARAM_COUNT] = {
+    PROJECT_CFG_PARAM_AFE_VERSION, PROJECT_CFG_PARAM_PROTECT_VERSION,
+    PROJECT_CFG_PARAM_SOC_VERSION, PROJECT_CFG_PARAM_OTHER_VERSION,
+    PROJECT_CFG_PARAM_CALIB_VERSION, PROJECT_CFG_PARAM_HEAT_COOL_VERSION,
+    PROJECT_CFG_PARAM_SOC_STATE_VERSION, PROJECT_CFG_PARAM_AGING_STATE_VERSION,
+    PROJECT_CFG_PARAM_LOG_VERSION
+};
 
 /*
  * Store current K/B in existing reserved words so the RW parameter record size
@@ -238,6 +250,46 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 }
 
 
+static UINT8 EEPROM_IsSocParameter(UINT16 word)
+{
+    return (UINT8)(word==offsetof(struct OTHER_ELEMENT,u16Soc_TableSelect)/sizeof(UINT16) ||
+        (word>=offsetof(struct OTHER_ELEMENT,u16Soc_Ah)/sizeof(UINT16) &&
+         word<=offsetof(struct OTHER_ELEMENT,u16Soc_V_0)/sizeof(UINT16)));
+}
+
+static UINT8 EEPROM_UpdateModules(STORAGE_FLASH_CONFIG_DATA *stored,
+                                 const STORAGE_FLASH_CONFIG_DATA *defaults)
+{
+    UINT16 group, word;
+    UINT8 changed=0U;
+    for (group=0U; group<STORAGE_PARAM_COUNT; ++group) {
+        if (!s_param_versions[group] ||
+            stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]==s_param_versions[group]) continue;
+        switch (group) {
+        case STORAGE_PARAM_AFE:
+            memcpy(stored->afe,defaults->afe,sizeof(stored->afe)); break;
+        case STORAGE_PARAM_PROTECT:
+            memcpy(stored->rw.protect,defaults->rw.protect,sizeof(stored->rw.protect)); break;
+        case STORAGE_PARAM_SOC:
+        case STORAGE_PARAM_OTHER:
+            for (word=0U; word<FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT; ++word)
+                if (EEPROM_IsSocParameter(word)==(group==STORAGE_PARAM_SOC))
+                    stored->rw.other[word]=defaults->rw.other[word];
+            break;
+        case STORAGE_PARAM_CALIB:
+            memcpy(stored->rw.reserved,defaults->rw.reserved,STORAGE_PARAM_VERSION_FIRST*sizeof(UINT16)); break;
+        case STORAGE_PARAM_HEAT_COOL:
+            memcpy(stored->rw.heat_cool,defaults->rw.heat_cool,sizeof(stored->rw.heat_cool)); break;
+        case STORAGE_PARAM_SOC_STATE: stored->initializing |= STORAGE_PARAM_RESET_SOC; break;
+        case STORAGE_PARAM_AGING_STATE: stored->initializing |= STORAGE_PARAM_RESET_AGING; break;
+        case STORAGE_PARAM_LOG: stored->initializing |= STORAGE_PARAM_RESET_LOG; break;
+        }
+        stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]=s_param_versions[group];
+        changed=1U;
+    }
+    return (UINT8)(!changed || StorageFlash_CommitParameterUpdate(stored));
+}
+
 UINT8 InitE2PROM(void)
 {
     STORAGE_FLASH_CONFIG_DATA defaults, stored;
@@ -250,6 +302,8 @@ UINT8 InitE2PROM(void)
     EEPROM_LoadDefaultRuntimeData();
     memset(&defaults,0,sizeof(defaults));
     EEPROM_BuildRWParamData(&defaults.rw);
+    for (i=0U; i<STORAGE_PARAM_COUNT; ++i)
+        defaults.rw.reserved[STORAGE_PARAM_VERSION_FIRST+i]=s_param_versions[i];
     for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i) defaults.afe[i]=afe[i].defaultValue;
     memcpy(defaults.reset_version,version,sizeof(version));
     if (!EEPROM_RWParamDataIsValid(&defaults.rw)) return 0U;
@@ -257,21 +311,25 @@ UINT8 InitE2PROM(void)
         if (defaults.afe[i]<afe[i].minValue || defaults.afe[i]>afe[i].maxValue) return 0U;
     valid=StorageFlash_LoadConfig(&stored);
     if (valid) {
-        valid=(UINT8)(stored.initializing==0U && EEPROM_RWParamDataIsValid(&stored.rw));
+        valid=(UINT8)((stored.initializing & ~STORAGE_PARAM_RESET_MASK)==0U && EEPROM_RWParamDataIsValid(&stored.rw));
         for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
             if (stored.afe[i]<afe[i].minValue || stored.afe[i]>afe[i].maxValue) valid=0U;
     }
+    /* Finish a committed intent even when this firmware disables that group. */
+    if (valid && stored.initializing && !StorageFlash_CommitParameterUpdate(&stored)) goto failed;
     if (!valid || (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION &&
                   memcmp(stored.reset_version,version,sizeof(version))!=0)) {
-        if (!StorageFlash_ResetParameters(&defaults)) {
-            System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-            return 0U;
-        }
+        defaults.initializing=STORAGE_PARAM_RESET_ALL;
+        if (!StorageFlash_CommitParameterUpdate(&defaults)) goto failed;
         stored=defaults;
     }
+    else if (!EEPROM_UpdateModules(&stored,&defaults)) goto failed;
     EEPROM_ApplyRWParamData(&stored.rw);
     for (i=0; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
         (&AFE_Parameters_RS485_Struction.u16VcellOvp)[i].curValue=stored.afe[i];
     ReadEEPROM_EventRecord_Parameters();
     return 1U;
+failed:
+    System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    return 0U;
 }

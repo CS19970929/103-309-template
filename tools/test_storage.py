@@ -1,5 +1,6 @@
 """Run the real Flash storage code with half-word power-cut injection (no board writes)."""
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -37,6 +38,8 @@ def main():
     # Simulate reflashing several firmware versions in one host process.
     initializer = initializer.replace('static const UINT8 version[32]=BMS_SOFTWARE_VERDION_DEFAULT;',
                                       'UINT8 version[32]; memcpy(version,firmware_version,32);')
+    initializer = initializer.replace('static const UINT16 s_param_versions[STORAGE_PARAM_COUNT]',
+                                      'static UINT16 s_param_versions[STORAGE_PARAM_COUNT]')
     code = code.replace('/* CONFIG_INIT_SOURCE */', initializer)
     conf = (SOURCE / 'conf/conf.h').read_text(encoding='utf-8')
     data = (SOURCE / 'DataDeal.h').read_text(encoding='utf-8')
@@ -64,6 +67,33 @@ def main():
     if result.returncode:
         raise RuntimeError(result.stdout + result.stderr)
     subprocess.run([str(exe)], cwd=output, check=True)
+    # Check the actual build guard with each bad value, using only disposable
+    # header copies. The worktree configuration is never changed by tests.
+    guards = output / 'guards'
+    guards.mkdir()
+    (guards / 'Project_BuildGuard.h').write_bytes((SOURCE / 'conf/Project_BuildGuard.h').read_bytes())
+    guard_source = guards / 'guard.c'
+    guard_source.write_text('#include "Project_BuildGuard.h"\n')
+    config_text = (SOURCE / 'conf/Project_Config.h').read_text(encoding='utf-8')
+    version_macros = re.findall(r'^#define (PROJECT_CFG_PARAM_\w+_VERSION) ', config_text, re.M)
+    assert len(version_macros) == 9
+
+    def check_guard(values, expected_ok):
+        configured = config_text
+        for name, value in values.items():
+            configured = re.sub(r'(^#define ' + name + r')\s+[^\n]+',
+                                lambda match: match[1] + ' ' + str(value), configured, flags=re.M)
+        (guards / 'Project_Config.h').write_text(configured, encoding='utf-8')
+        checked = subprocess.run([str(compiler), '/nologo', '/EP', '/TC', str(guard_source)],
+                                 cwd=guards, env=env, capture_output=True)
+        assert (checked.returncode == 0) == expected_ok, checked.stderr.decode(errors='replace')
+
+    check_guard({}, True)
+    check_guard(dict.fromkeys(version_macros, 65534), True)
+    for name in version_macros:
+        for bad_value in (-1, 65535):
+            check_guard({name: bad_value}, False)
+    print('PASS module version guards: default, maximum and all 18 invalid configurations')
     task = (SOURCE / 'DataDeal.c').read_text(encoding='utf-8')
     task = task[task.index('void App_AFEGet(void)'):]
     # App_AFEGet is currently the last definition; use its balanced body only.

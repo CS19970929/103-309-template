@@ -255,6 +255,15 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_HOST_WRITE_ENABLE",
     "PROJECT_CFG_IAP_ENABLE",
     "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION",
+    "PROJECT_CFG_PARAM_AFE_VERSION",
+    "PROJECT_CFG_PARAM_PROTECT_VERSION",
+    "PROJECT_CFG_PARAM_SOC_VERSION",
+    "PROJECT_CFG_PARAM_OTHER_VERSION",
+    "PROJECT_CFG_PARAM_CALIB_VERSION",
+    "PROJECT_CFG_PARAM_HEAT_COOL_VERSION",
+    "PROJECT_CFG_PARAM_SOC_STATE_VERSION",
+    "PROJECT_CFG_PARAM_AGING_STATE_VERSION",
+    "PROJECT_CFG_PARAM_LOG_VERSION",
     "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
     "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
@@ -756,8 +765,9 @@ def check_required_board_features(reporter):
     if (
         "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION" in project_config
         and "BMS_SOFTWARE_VERDION_DEFAULT" in eeprom
-        and "StorageFlash_ResetParameters(&defaults)" in eeprom
-        and "defaults->initializing=1U" in flash_c
+        and "StorageFlash_CommitParameterUpdate(&defaults)" in eeprom
+        and "defaults.initializing=STORAGE_PARAM_RESET_ALL" in eeprom
+        and "if (!StorageFlash_SaveConfig(config)) return 0U;" in flash_c
         and "address<FLASH_STATS_A" in flash_c
     ):
         reporter.ok("firmware-version reset uses a durable intent and excludes statistics")

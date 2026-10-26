@@ -370,7 +370,11 @@ UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 {
     STORAGE_FLASH_CONFIG_DATA config;
     if (!data || !StorageFlash_LoadConfig(&config)) return 0U;
-    config.rw=*data;
+    /* A normal host parameter save must not erase private module versions. */
+    memcpy(config.rw.protect,data->protect,sizeof(config.rw.protect));
+    memcpy(config.rw.other,data->other,sizeof(config.rw.other));
+    memcpy(config.rw.reserved,data->reserved,STORAGE_PARAM_VERSION_FIRST*sizeof(UINT16));
+    memcpy(config.rw.heat_cool,data->heat_cool,sizeof(config.rw.heat_cool));
     return StorageFlash_SaveConfig(&config);
 }
 
@@ -473,22 +477,37 @@ UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta)
 
 UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(STORAGE_LOG_CLEAR); }
 
-UINT8 StorageFlash_ResetParameters(STORAGE_FLASH_CONFIG_DATA *defaults)
+UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
 {
     UINT32 address;
-    if (!defaults) return 0U;
+    STORAGE_STATE state;
+    if (!config || (config->initializing & ~STORAGE_PARAM_RESET_MASK)) return 0U;
     /* Durable intent precedes all destructive erases. A reboot resumes this
      * operation before loading state or permitting normal AFE startup. */
-    defaults->initializing=1U;
-    if (!StorageFlash_SaveConfig(defaults)) return 0U;
-    StorageFlash_BeginWrite();
-    for (address=FLASH_PARAMETER_RESET_BEGIN; address<FLASH_STATS_A; address+=FLASH_STORAGE_PAGE_SIZE) {
-        if (address==FLASH_CONFIG_A || address==FLASH_CONFIG_B) continue;
-        if (!Storage_Erase(address)) { StorageFlash_EndWrite(); return 0U; }
+    if (!StorageFlash_SaveConfig(config)) return 0U;
+    if (!config->initializing) return 1U;
+    if (config->initializing & STORAGE_PARAM_RESET_ALL) {
+        StorageFlash_BeginWrite();
+        for (address=FLASH_PARAMETER_RESET_BEGIN; address<FLASH_STATS_A; address+=FLASH_STORAGE_PAGE_SIZE) {
+            if (address==FLASH_CONFIG_A || address==FLASH_CONFIG_B) continue;
+            if (!Storage_Erase(address)) { StorageFlash_EndWrite(); return 0U; }
+        }
+        StorageFlash_EndWrite();
+    } else {
+        if (config->initializing & (STORAGE_PARAM_RESET_SOC | STORAGE_PARAM_RESET_AGING)) {
+            Storage_LoadState(&state);
+            if (config->initializing & STORAGE_PARAM_RESET_SOC) {
+                memset(&state.soc,0,sizeof(state.soc)); state.valid &= ~STORAGE_STATE_SOC;
+            }
+            if (config->initializing & STORAGE_PARAM_RESET_AGING) {
+                memset(&state.aging,0,sizeof(state.aging)); state.valid &= ~STORAGE_STATE_AGING;
+            }
+            if (!Storage_SaveState(&state)) return 0U;
+        }
+        if ((config->initializing & STORAGE_PARAM_RESET_LOG) && !StorageFlash_ClearLog()) return 0U;
     }
-    StorageFlash_EndWrite();
-    defaults->initializing=0U;
-    return StorageFlash_SaveConfig(defaults);
+    config->initializing=0U;
+    return StorageFlash_SaveConfig(config);
 }
 
 /* Lifetime statistics have their own pages and never depend on the log ring.

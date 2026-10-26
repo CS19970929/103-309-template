@@ -16,6 +16,21 @@
 #define FLASH_STORAGE_LOG_RECORD_COUNT   ((UINT16)100)
 #define FLASH_STORAGE_SOC_DATA_VERSION ((UINT16)0x0002)
 
+/* reserved[0..5] hold current calibration; [6..14] are private update tags.
+ * Do not reorder groups: their positions are part of the stored format. */
+#define STORAGE_PARAM_VERSION_FIRST 6U
+enum STORAGE_PARAM_GROUP {
+    STORAGE_PARAM_AFE, STORAGE_PARAM_PROTECT, STORAGE_PARAM_SOC,
+    STORAGE_PARAM_OTHER, STORAGE_PARAM_CALIB, STORAGE_PARAM_HEAT_COOL,
+    STORAGE_PARAM_SOC_STATE, STORAGE_PARAM_AGING_STATE, STORAGE_PARAM_LOG,
+    STORAGE_PARAM_COUNT
+};
+#define STORAGE_PARAM_RESET_ALL   1U
+#define STORAGE_PARAM_RESET_SOC   2U
+#define STORAGE_PARAM_RESET_AGING 4U
+#define STORAGE_PARAM_RESET_LOG   8U
+#define STORAGE_PARAM_RESET_MASK 15U
+
 
 /* Factory aging state belongs to the shared state journal. */
 #define FLASH_FACTORY_AGING_DONE_VALUE   ((UINT16)0xA93D)
@@ -79,12 +94,12 @@ typedef struct {
     UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
     STORAGE_FLASH_RW_PARAM_DATA rw;
     UINT8 reset_version[32];
-    UINT16 initializing;
+    UINT16 initializing; /* Durable pending STORAGE_PARAM_RESET_* bits. */
 } STORAGE_FLASH_CONFIG_DATA;
 
 UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data);
 UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data);
-UINT8 StorageFlash_ResetParameters(STORAGE_FLASH_CONFIG_DATA *defaults);
+UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config);
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta);
 UINT8 StorageFlash_ClearLog(void);
 #define FLASH_STATISTICS_COUNT 11U
