@@ -30,7 +30,7 @@ static int watchdog_feeds,reset_during_stop;
 static jmp_buf reset_point;
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
-static int scripted_key;
+static int scripted_key,key_irq_during_verify;
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 #define ERROR_STATUS_AFE1 1
 static UINT8 System_ERROR_UserCallback(int command) { return (UINT8)!afe_status_ok; }
@@ -74,8 +74,14 @@ static void Sys_StopMode(void) {
     if(expected_sleep_flag) assert(BootFlag_Read()==expected_sleep_flag);
     if(reset_during_stop) longjmp(reset_point,1);
     ++stop_calls;
-    if(scripted_key) key=(stop_calls==1) ? 1 : 0;
-    g_irq_t=(scripted_key==2 && stop_calls>1) ? soc_key : stop_source;
+    if(scripted_key==3) {
+        /* Held RTC and release IRQ stay asleep; a new press IRQ wakes. */
+        key=(stop_calls==3) ? 1 : 0;
+        g_irq_t=(stop_calls==2) ? NO_IRQ : soc_key;
+    } else {
+        if(scripted_key) key=(stop_calls==1) ? 1 : 0;
+        g_irq_t=(scripted_key==2 && stop_calls>1) ? soc_key : stop_source;
+    }
     ++rtc_counter;
     if(g_irq_t==NO_IRQ) rtc_wake=1;
 }
@@ -108,9 +114,12 @@ static void InitWakeUp_RTCMode(void) {}
 static void InitWakeUp_Base(void) {}
 static void LowPower_DisableUartWakeup(void) {}
 static void LowPower_DisableWakeupExti(void) {}
-static void InitTimer(void) {}
+static void InitTimer(void) { tick=0; }
 static void InitUSART_CommonUpper(void) {}
-static UINT8 Sci_VerifyWakeFrames(void) { return 0; }
+static UINT8 Sci_VerifyWakeFrames(void) {
+    if(key_irq_during_verify) { g_irq_t=soc_key; key_irq_during_verify=0; }
+    return 0;
+}
 static UINT8 SystemRuntime_IsDischargeMosOpen(void) { return 1; }
 static void RTC_ClearStopWakeup(void) { rtc_wake=0; }
 static void RTC_WKTimeConfig(void) {}
@@ -120,7 +129,7 @@ static void initAFE1_IIC(void) {}
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
 static void RtcSleep_PortApplySocRtcRest(UINT32 seconds) {}
 static void RtcSleep_PortDisableStopWakeup(void) {}
-static void RtcSleep_PortRestoreAfterStop(void) { ++restore_calls; adc_on=1; }
+static void RtcSleep_PortRestoreAfterStop(void) { ++restore_calls; InitTimer(); adc_on=1; }
 static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
 /* SLEEP_SOURCE */
 /* RTC_SOURCE */
@@ -137,7 +146,7 @@ static void reset_case(void) {
     afe_uv=zero_calls=0; afe_status_ok=1; soc_now=55;
     OtherElement.u16Sleep_TimeNormal=10080;
     expected_sleep_flag=0;
-    watchdog_feeds=reset_during_stop=0;
+    watchdog_feeds=reset_during_stop=key_irq_during_verify=0;
     BootFlag_Clear();
 }
 int main(void) {
@@ -175,7 +184,7 @@ int main(void) {
     assert(!SleepDeal_TakeKeySleepRequest()); /* Short stays RUN. */
     /* A switch that was already shorted before protective DEEP is not a
      * fresh wake: it must open, then close after reset. */
-    reset_case(); key=0; SleepDeal_ResetKeyState();
+    reset_case(); key=0; SleepDeal_ResetKeyState(0U);
     assert(!SleepDeal_IsWakeupValid() && !now_ms);
     key=1; assert(!SleepDeal_IsWakeupValid()); key=0;
     assert(SleepDeal_IsWakeupValid() && now_ms==50);
@@ -196,17 +205,48 @@ int main(void) {
     tick=5000; assert(!SleepDeal_TakeKeySleepRequest());
     key=1; assert(!SleepDeal_TakeKeySleepRequest());
     key=0; assert(!SleepDeal_TakeKeySleepRequest()); tick+=300; assert(SleepDeal_TakeKeySleepRequest());
-    /* Both STOP modes reject a short key candidate and qualify the full 1 s. */
-    for(i=0;i<2;++i) {
-        reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
-        key=0; release_at_ms=990; assert(rtc_sleep_run_hiccup_cycle() && !adc_on);
-        release_at_ms=0; key=0; now_ms=0;
-        assert(!rtc_sleep_run_hiccup_cycle() && now_ms==1000 && !adc_on);
-    }
-    reset_case(); key=0; assert(!SleepDeal_TakeKeySleepRequest()); tick=300;
-    scripted_key=1; rtc_sleep();
-    assert(stop_calls==2 && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
-    tick+=1000; assert(!SleepDeal_TakeKeySleepRequest());
+    /* HICCUP retains the 1 s confirmation and release guard. */
+    reset_case(); g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+    key=0; release_at_ms=990; assert(rtc_sleep_run_hiccup_cycle() && !adc_on);
+    release_at_ms=0; key=0; now_ms=0;
+    assert(!rtc_sleep_run_hiccup_cycle() && now_ms==1000 && !adc_on);
+    reset_case(); g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+    key=0; scripted_key=1; rtc_sleep();
+    assert(stop_calls==2 && restore_calls==1 && now_ms==1000);
+    tick=1000; assert(!SleepDeal_TakeKeySleepRequest());
+    /* NORMAL accepts the pressed-switch IRQ immediately, including an
+     * already-held key state. Releasing after the sleep hold stays asleep. */
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE; key=1;
+    assert(rtc_sleep_run_hiccup_cycle() && !now_ms && !adc_on);
+    key=0; SleepDeal_ResetKeyState(0U);
+    assert(!rtc_sleep_run_hiccup_cycle() && !now_ms && !adc_on);
+    /* NORMAL must never qualify an old low level on RTC or unrelated wake. */
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE; key=0; stop_source=NO_IRQ;
+    for(i=0;i<3;++i) assert(rtc_sleep_run_hiccup_cycle() && now_ms==0 && !adc_on);
+    stop_source=uart1_irq;
+    assert(rtc_sleep_run_hiccup_cycle() && now_ms<=302 && !adc_on);
+    /* A key IRQ arriving during UART qualification also bypasses the hold. */
+    key_irq_during_verify=1; now_ms=0;
+    assert(!rtc_sleep_run_hiccup_cycle() && now_ms<10 && !adc_on);
+    /* RUN timer is reset by restore: start the 3 s interval afterwards.
+     * No release is needed; continued holding after re-entry stays asleep
+     * across RTC and only a new switch IRQ wakes it again. */
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE; key=0; tick=12345;
+    rtc_sleep();
+    assert(stop_calls==1 && restore_calls==1 && !tick && !now_ms && adc_on);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    tick=299; for(i=0;i<1000;++i) assert(!SleepDeal_TakeKeySleepRequest());
+    rtc_sleep(); assert(stop_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    tick=300; scripted_key=3; rtc_sleep();
+    assert(stop_calls==4 && restore_calls==2 && !tick && !now_ms && adc_on);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && g_stLowPowerRtcStatus.cycles==1);
+    assert(key==0 && !SleepDeal_TakeKeySleepRequest());
+    /* Releasing before 3 s cancels the old timer; the next hold starts anew. */
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE; key=0; rtc_sleep();
+    tick=299; key=1; assert(!SleepDeal_TakeKeySleepRequest());
+    tick=1000; key=0; assert(!SleepDeal_TakeKeySleepRequest());
+    tick+=299; assert(!SleepDeal_TakeKeySleepRequest()); ++tick;
+    assert(SleepDeal_TakeKeySleepRequest());
     /* The resetting DEEP path shares the same release and 1 s qualification. */
     reset_case(); BootFlag_Write(FLASH_DEEP_SLEEP_VALUE); key=0; scripted_key=1;
     expected_sleep_flag=FLASH_DEEP_SLEEP_VALUE;
@@ -216,7 +256,7 @@ int main(void) {
     tick=1000; assert(!SleepDeal_TakeKeySleepRequest());
     reset_case(); charger=1; assert(SleepDeal_IsWakeupValid() && now_ms==0);
     assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
-    puts("PASS key: 3 s RUN hold, 1 s wake in all modes, release/re-press guard, no queued-tick acceleration, wrap, immediate sleep request and charger wake");
+    puts("PASS key: NORMAL IRQ wakes immediately and re-arms 3 s hold after timer restore; held RTC stays asleep; HICCUP/DEEP retain 1 s wake and release guard; bounce/wrap/charger");
 #endif
     reset_case(); SleepDeal_UpdateOverdischarge(1);
     assert(soc_now==0 && zero_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
@@ -236,6 +276,8 @@ int main(void) {
         key=1; stop_source=NO_IRQ; afe_uv=1;
         assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==1 && !adc_on && !restore_calls);
     }
+    reset_case(); key=0; stop_source=soc_key; afe_uv=1; g_stLowPowerRtcStatus.mode=NORMAL_MODE;
+    assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==1 && !adc_on && !restore_calls && !now_ms);
     reset_case(); key=1; stop_source=NO_IRQ; rtc_wake=1;
     afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
     assert(!rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);

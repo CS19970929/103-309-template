@@ -43,9 +43,15 @@ UINT8 SleepDeal_IsWakeupValid(void)
 	if (SleepDeal_IsChargerWakeupActive())
 	{
 		SleepDeal_MarkBootFromSleepChargerWakeup();
-		SleepDeal_ResetKeyState();
+		SleepDeal_ResetKeyState(0U);
 		return 1;
 	}
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_PUSHBUTTON
+	/* NORMAL accepts a pressed-switch IRQ without a hold check. Neither
+	 * releasing after the sleep hold nor an old low level on RTC wakes RUN. */
+	if (g_stLowPowerRtcStatus.mode==NORMAL_MODE)
+		return (UINT8)(g_irq_t==soc_key && SleepDeal_IsKeyPressed());
+#endif
 	if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
 	if (s_sleep.key_state==KEY_WAIT_RELEASE) return 0U;
 	/* TIM3 is stopped here. Use bounded input qualification after the STOP
@@ -55,7 +61,7 @@ UINT8 SleepDeal_IsWakeupValid(void)
 		Feed_IWatchDog;
 		if (SleepDeal_IsChargerWakeupActive()) {
 			SleepDeal_MarkBootFromSleepChargerWakeup();
-			SleepDeal_ResetKeyState();
+			SleepDeal_ResetKeyState(0U);
 			return 1U;
 		}
 		if (!SleepDeal_IsKeyPressed()) { s_sleep.key_state=KEY_READY; return 0U; }
@@ -64,9 +70,18 @@ UINT8 SleepDeal_IsWakeupValid(void)
 	return 1U;
 }
 
-void SleepDeal_ResetKeyState(void)
+void SleepDeal_ResetKeyState(UINT8 normal_key_wake)
 {
 	s_sleep.key_state=SleepDeal_IsKeyPressed() ? KEY_WAIT_RELEASE : KEY_READY;
+#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_PUSHBUTTON
+	if (normal_key_wake && s_sleep.key_state==KEY_WAIT_RELEASE) {
+		/* Start only after RUN restores its timer; InitTimer resets the tick. */
+		s_sleep.key_press_tick=SysTime_Get10msTickCount();
+		s_sleep.key_state=KEY_TIMING;
+	}
+#else
+	(void)normal_key_wake;
+#endif
 }
 
 UINT8 SleepDeal_TakeKeySleepRequest(void)
@@ -260,7 +275,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 		s_sleep.boot_sleep = 1U;
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
-		SleepDeal_ResetKeyState();
+		SleepDeal_ResetKeyState(0U);
 		// Sys_StandbyMode();		//??????IO???
 		SleepDeal_WaitStopWakeup();
 		/* Keep the sleep reason across any reset while still waiting. */

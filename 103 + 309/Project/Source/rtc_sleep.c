@@ -234,7 +234,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
-    SleepDeal_ResetKeyState();
+    SleepDeal_ResetKeyState(0U);
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
     Init_RTC();
@@ -402,7 +402,8 @@ void rtc_sleep(void)
 
         if (g_stLowPowerRtcStatus.mode==DEEP_MODE) return;
 
-        if (g_stLowPowerRtcStatus.mode == NORMAL_MODE)
+        sleep_mode=g_stLowPowerRtcStatus.mode;
+        if (sleep_mode == NORMAL_MODE)
             MCUO_AFE_CTLC = 1;
 
         RtcSleep_PortDisableStopWakeup();
@@ -411,7 +412,7 @@ void rtc_sleep(void)
             LowPower_Request(NO_SLEEP);
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
-            SleepDeal_ResetKeyState();
+            SleepDeal_ResetKeyState((UINT8)(sleep_mode==NORMAL_MODE && g_irq_t==soc_key));
 
             g_stLowPowerRtcStatus.last = g_stLowPowerRtcStatus.sleep;
             RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
