@@ -91,6 +91,28 @@ typedef struct
 	UINT16 u16DurationHours;
 } STORAGE_FLASH_FACTORY_AGING_DATA;
 
+/* STM32F103CB: eight 1 KiB pages. Statistics are outside parameter resets. */
+#define FLASH_STORAGE_BEGIN             ((UINT32)0x0801E000U)
+#define FLASH_STORAGE_END               ((UINT32)0x08020000U)
+#define FLASH_CONFIG_A                  FLASH_STORAGE_BEGIN
+#define FLASH_CONFIG_B                  ((UINT32)0x0801E400U)
+#define FLASH_STATE_A                   ((UINT32)0x0801E800U)
+#define FLASH_STATE_B                   ((UINT32)0x0801EC00U)
+#define FLASH_LOG_A                     ((UINT32)0x0801F000U)
+#define FLASH_LOG_B                     ((UINT32)0x0801F400U)
+#define FLASH_STATS_A                   ((UINT32)0x0801F800U)
+#define FLASH_STATS_B                   ((UINT32)0x0801FC00U)
+
+typedef struct {
+    UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
+    STORAGE_FLASH_RW_PARAM_DATA rw;
+    UINT8 reset_version[32];
+    UINT16 initializing;
+} STORAGE_FLASH_CONFIG_DATA;
+
+UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data);
+UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data);
+
 FLASH_Status FlashWriteOneHalfWord(uint32_t StartAddr, uint16_t Buffer);
 UINT16 FlashReadOneHalfWord(UINT32 faddr);
 UINT8 AppUpgrade_RequestIap(void);

@@ -159,6 +159,139 @@ static FLASH_Status FlashProgramBytesVerified(uint32_t addr, const UINT8 *data, 
 	return result;
 }
 
+
+static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length);
+
+/* A record becomes visible only after its final half-word is committed. */
+#define STORAGE_RECORD_FORMAT 0x5301U
+#define STORAGE_RECORD_COMMIT 0xA55AU
+#define STORAGE_CONFIG_MAGIC  0x43464731UL
+
+typedef struct {
+    UINT32 magic;
+    UINT32 sequence;
+    UINT16 length;
+    UINT16 crc;
+    UINT16 format;
+    UINT16 commit;
+} STORAGE_RECORD;
+
+typedef char StorageRecordSizeCheck[(sizeof(STORAGE_RECORD)==16U) ? 1 : -1];
+typedef char StorageConfigSizeCheck[(sizeof(STORAGE_FLASH_CONFIG_DATA)+sizeof(STORAGE_RECORD)
+                                   <=FLASH_STORAGE_PAGE_SIZE) ? 1 : -1];
+
+static UINT16 Storage_CrcUpdate(UINT16 crc, const UINT8 *data, UINT16 length)
+{
+    UINT8 bit;
+    while (length-- != 0U) {
+        crc ^= *data++;
+        for (bit=0U; bit<8U; ++bit)
+            crc=(crc & 1U) ? (UINT16)((crc>>1)^0xA001U) : (UINT16)(crc>>1);
+    }
+    return crc;
+}
+
+static UINT16 Storage_RecordCrc(const STORAGE_RECORD *header, const void *payload)
+{
+    UINT16 crc=Storage_CrcUpdate(0xFFFFU,(const UINT8 *)header,10U);
+    crc=Storage_CrcUpdate(crc,(const UINT8 *)&header->format,2U);
+    return Storage_CrcUpdate(crc,(const UINT8 *)payload,header->length);
+}
+
+static UINT8 Storage_Newer(UINT32 a, UINT32 b)
+{
+    return (UINT8)((INT32)(a-b)>0);
+}
+
+static UINT8 Storage_AddressValid(UINT32 address, UINT32 length)
+{
+    return (UINT8)(address>=FLASH_STORAGE_BEGIN && address<FLASH_STORAGE_END &&
+                   length<=FLASH_STORAGE_END-address && (address & 1U)==0U);
+}
+
+static UINT8 Storage_Erase(UINT32 address)
+{
+    FLASH_Status result;
+    if (!Storage_AddressValid(address,FLASH_STORAGE_PAGE_SIZE) ||
+        (address & (FLASH_STORAGE_PAGE_SIZE-1U))!=0U)
+        return 0U;
+    FLASH_Unlock();
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+    result=FlashErasePageVerified(address);
+    FLASH_Lock();
+    return (UINT8)(result==FLASH_COMPLETE);
+}
+
+static UINT8 Storage_RecordValid(UINT32 address, UINT32 magic, UINT16 length)
+{
+    const STORAGE_RECORD *h=(const STORAGE_RECORD *)address;
+    if (!Storage_AddressValid(address,(UINT32)sizeof(*h)+length)) return 0U;
+    return (UINT8)(h->magic==magic && h->format==STORAGE_RECORD_FORMAT &&
+        h->length==length && h->commit==STORAGE_RECORD_COMMIT &&
+        h->crc==Storage_RecordCrc(h,(const void *)(address+sizeof(*h))));
+}
+
+static UINT8 Storage_WriteRecord(UINT32 address, UINT32 magic, UINT32 sequence,
+                                const void *payload, UINT16 length)
+{
+    STORAGE_RECORD h;
+    FLASH_Status result;
+    if (payload==0 || !Storage_AddressValid(address,sizeof(h)+(UINT32)length) ||
+        !StorageFlash_IsAreaBlank(address,(UINT16)(sizeof(h)+length))) return 0U;
+    h.magic=magic; h.sequence=sequence; h.length=length;
+    h.format=STORAGE_RECORD_FORMAT; h.commit=0xFFFFU;
+    h.crc=Storage_RecordCrc(&h,payload);
+    FLASH_Unlock();
+    FLASH_ClearFlag(FLASH_FLAG_EOP | FLASH_FLAG_PGERR | FLASH_FLAG_WRPRTERR);
+    result=FlashProgramBytesVerified(address,(const UINT8 *)&h,14U);
+    if (result==FLASH_COMPLETE)
+        result=FlashProgramBytesVerified(address+sizeof(h),(const UINT8 *)payload,length);
+    if (result==FLASH_COMPLETE)
+        result=FlashProgramHalfWordVerified(address+14U,STORAGE_RECORD_COMMIT);
+    FLASH_Lock();
+    return (UINT8)(result==FLASH_COMPLETE && Storage_RecordValid(address,magic,length) &&
+                  memcmp((const void *)(address+sizeof(h)),payload,length)==0);
+}
+
+static UINT32 Storage_SelectPair(UINT32 a, UINT32 b, UINT32 magic, UINT16 length)
+{
+    UINT8 va=Storage_RecordValid(a,magic,length);
+    UINT8 vb=Storage_RecordValid(b,magic,length);
+    if (!va) return vb ? b : 0U;
+    if (!vb) return a;
+    return Storage_Newer(((const STORAGE_RECORD *)b)->sequence,
+                         ((const STORAGE_RECORD *)a)->sequence) ? b : a;
+}
+
+UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
+{
+    UINT32 address;
+    if (data==0) return 0U;
+    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
+    if (!address) return 0U;
+    memcpy(data,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*data));
+    return 1U;
+}
+
+UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
+{
+    UINT32 address, target, sequence=1U;
+    UINT8 result;
+    if (data==0) return 0U;
+    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
+    if (address) {
+        if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) return 1U;
+        sequence=((const STORAGE_RECORD *)address)->sequence+1U;
+    }
+    target=address==FLASH_CONFIG_A ? FLASH_CONFIG_B : FLASH_CONFIG_A;
+    StorageFlash_BeginWrite();
+    result=(UINT8)(Storage_Erase(target) &&
+        Storage_WriteRecord(target,STORAGE_CONFIG_MAGIC,sequence,data,sizeof(*data)));
+    StorageFlash_EndWrite();
+    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    return result;
+}
+
 static UINT16 StorageFlash_RecordSpan(UINT16 payload_length)
 {
 	UINT16 record_span;
