@@ -652,9 +652,9 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 			break;
 
 		case 2: // 序列号，�件版�号，�件版��
-			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
-			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
-			Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
+			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
+			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
+			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
 			break;
 
 		case 4: /* for-c034 requests 11 registers; its first 11 bytes are ASCII. */
@@ -1435,6 +1435,7 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
  */
 void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 {
+#if 0
 	UINT16 u16WrSNlength;
 
 	u16WrSNlength = (UINT16)((UINT16)s->u16Buffer[5] + ((UINT16)s->u16Buffer[4] << 8)) << 1;
@@ -1467,6 +1468,7 @@ void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
 		s->ErrorType = RS485_ERROR_CMD_INVALID;
 		break;
 	}
+#endif
 }
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)

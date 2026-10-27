@@ -13,12 +13,12 @@
 #define RS485_ADDR_RW_AFE_PARAMETER  0x2400
 
 #ifdef LIFEPO
-#define AFE_COV           (3750)
+#define AFE_COV           (3650)
 #define AFE_COV_recover   (3500)
 #define AFE_COV_filter     100
 
-#define AFE_CUV           (2500)
-#define AFE_CUV_recover     (2800)
+#define AFE_CUV           (3000)
+#define AFE_CUV_recover     (3100)
 #define AFE_CUV_filter     (100)
 #else
 #define AFE_COV           (4225)
@@ -34,12 +34,12 @@
 #define AFE_OTC_recover     ((45 + 40) * 10)
 #define AFE_OTC_filter      100
 
-#define AFE_UTC           ((0 + 40) * 10)
-#define AFE_UTC_recover     ((3 + 40) * 10)
+#define AFE_UTC           ((2 + 40) * 10)
+#define AFE_UTC_recover     ((5 + 40) * 10)
 #define AFE_UTC_filter      100
 
-#define AFE_OTD           ((70 + 40) * 10)
-#define AFE_OTD_recover     ((60 + 40) * 10)
+#define AFE_OTD           ((60 + 40) * 10)
+#define AFE_OTD_recover     ((55 + 40) * 10)
 #define AFE_OTD_filter      100
 
 #define AFE_UTD         ((-20 + 40) * 10)
@@ -47,11 +47,11 @@
 #define AFE_UTD_filter      100
 
 
-#define AFE_OCC1_filter  	(10)
+#define AFE_OCC1_filter  	(100)
 #define AFE_OCC2_filter  	(10)
 
 #define AFE_ODC1_filter  	(100)
-#define AFE_ODC2_filter  	(50)
+#define AFE_ODC2_filter  	(60)
 
 
 /*curValue*/  /*defaultValue*/ /*maxValue*/ /*minValue*/

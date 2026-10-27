@@ -35,8 +35,8 @@ volatile struct LOW_POWER_BLOCK_DEBUG g_stLowPowerBlockDebug;
 
 typedef uint8_t (*BlockCheckFunc)(void);
 
-static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 5U) ? 1U : 0U; }
-static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 5U) ? 1U : 0U; }
+static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 2U) ? 1U : 0U; }
+static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 2U) ? 1U : 0U; }
 static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
 static uint8_t CheckFlashBusy(void) { return StorageFlash_IsBusy() ? 1U : 0U; }

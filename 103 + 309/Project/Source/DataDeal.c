@@ -307,6 +307,7 @@ void DataLoad_MosTemperature(void)
     temperature = temperature / 10 - 40;
     temperature = (temperature * g_u16CalibCoefK[MDL_TEMP_MOS1] + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     temperature = temperature * 10 + 400;
+    // temperature = sys_time.test_mos_temp;
     if (temperature < 0 || temperature > 2000)
     {
         goto invalid;

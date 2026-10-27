@@ -439,11 +439,6 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
-              <FileName>Runtime.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Runtime.c</FilePath>
-            </File>
-            <File>
               <FileName>StartupDefaultHandler.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
@@ -494,14 +489,14 @@
               <FilePath>..\Source\ProductionID.c</FilePath>
             </File>
             <File>
+              <FileName>Runtime.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Runtime.c</FilePath>
+            </File>
+            <File>
               <FileName>Can_HDX.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>CanFeidaoFrames.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
               <FileName>LogRecord.c</FileName>
@@ -1298,11 +1293,6 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
-              <FileName>Runtime.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\Runtime.c</FilePath>
-            </File>
-            <File>
               <FileName>StartupDefaultHandler.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
@@ -1353,14 +1343,14 @@
               <FilePath>..\Source\ProductionID.c</FilePath>
             </File>
             <File>
+              <FileName>Runtime.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\Runtime.c</FilePath>
+            </File>
+            <File>
               <FileName>Can_HDX.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Can_HDX.c</FilePath>
-            </File>
-            <File>
-              <FileName>CanFeidaoFrames.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\CanFeidaoFrames.c</FilePath>
             </File>
             <File>
               <FileName>LogRecord.c</FileName>

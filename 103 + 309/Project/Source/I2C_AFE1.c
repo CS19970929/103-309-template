@@ -598,8 +598,6 @@ void InitAFE1(void)
 	AFE_Reset();
 	ready = (UINT8)(AFE_IsReady() == 0U);
 	SH367309_UpdataAfeConfig();
-	MosStartup_ApplyInitialState();
-
 	/*
 	 * Boot-zero calibration is self-gated by its status. It runs once after
 	 * every MCU reset (including deep-sleep reset) and returns immediately on

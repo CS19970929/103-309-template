@@ -87,7 +87,7 @@ static UINT8 Refresh_Parameters(void)
 		temp = 0xFF;
 	}
 #elif (defined(LIFEPO))
-	temp = (3500 + 10) / 20;
+	temp = (3400 + 10) / 20;
 	if (temp > 0xFF)
 	{
 		temp = 0xFF;

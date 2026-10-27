@@ -10,14 +10,14 @@
 #include "IrqDebug.h"
 #include "FlashSelfTest.h"
 
-#define __EnableLowPowerDebug__
+// #define __EnableLowPowerDebug__
 // #define __SOC_5_PROTECT_
 // #define DISP_VBAT_AND_TEMP_
 // #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
 
-// #define __VIRTURE_CURRENT__
+#define __VIRTURE_CURRENT__
 
 
 #define T3MAX         0
@@ -112,12 +112,12 @@
 #define CS_Res			2
 #define CS_Res_Num		3
 #define CBC_DelayT		128
-#define CBC_Cur_DSG		(80)
+#define CBC_Cur_DSG		(100)
 
-#define AFE_OCC1       		(300) 
+#define AFE_OCC1       		(200) 
 #define AFE_OCC2       		(300) 
-#define AFE_ODC1       		(350) 
-#define AFE_ODC2       		(350) 
+#define AFE_ODC1       		(200) 
+#define AFE_ODC2       		(450) 
 #elif (LEVEL_CURR == CURR_40A)
 #define CS_Res			2
 #define CS_Res_Num		6
@@ -151,6 +151,7 @@ typedef struct
   uint64_t    test_main_cycle;
   uint32_t    App_AFEGet_cnt;
   uint32_t    App_SH367309_Monitor_cnt;
+  uint16_t    test_mos_temp;
 
 
   uint16_t    pec_err_cnt;
@@ -162,7 +163,6 @@ typedef struct
   uint16_t    cnt_enter_dsg_open;
 
   uint8_t     wakeup_reason;
-  bool        wakeup_rtc;
   uint8_t     time_enter_rtc;
   bool        power_on;
 

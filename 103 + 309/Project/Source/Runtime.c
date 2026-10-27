@@ -41,7 +41,7 @@ void Runtime_Boot(void)
 
 	EnableLowPowerDebug();
 	LogRecord_RequestStartup();
-	Init_IWDG();
+	// Init_IWDG();
 	s_boot_ready=1U;
 	FlashSelfTest_Init(reset_cause);
 }

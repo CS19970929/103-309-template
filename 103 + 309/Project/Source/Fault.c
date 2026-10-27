@@ -14,8 +14,6 @@ UINT8 FaultPoint_Third;
 
 UINT8 FaultPoint_Third2;
 
-void FaultWarnRecord2(enum FaultFlag num);
-
 void FaultWarnRecord2(enum FaultFlag num)
 {
 	if (FaultPoint_Third2 >= Record_len)

@@ -56,7 +56,7 @@
 // <q> Enable IRQ debug counters
 // <i> sys_time.irq: counts and STOP snapshots, available in Release too; 0 removes the instrumentation.
 #ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
+#define PROJECT_CFG_IRQ_DEBUG_ENABLE 0
 #endif
 
 // <q> Enable IRQ debug event ring
@@ -69,7 +69,7 @@
 // <i> Keeps real BMS data separate; blocks automatic idle sleep only while active.
 // <i> Watch sys_time.flash_test. Completion persists; use the documented test-area erase to rerun.
 #ifndef PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 0
+#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 1
 #endif
 // <o> SOC test commits <1000-1000000000>
 #ifndef PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES
@@ -195,33 +195,33 @@
 // <q> Reset ALL parameters once on each new firmware version
 // <i> Factory reset takes priority over the module versions below. Statistics are always preserved.
 // <i> Keep 0 for selective updates; 1 uses the complete BMS_SOFTWARE_VERDION_DEFAULT string.
-#define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION 0
+#define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION 1
 
 // Each module: 0 = preserve; 1..65534 = apply compiled defaults once when the
 // saved version differs. Increment only the modules to update. Reusing a
 // version does not overwrite host changes or repeat on reboot/reflash.
 // <o> AFE parameter version <0-65534>
-#define PROJECT_CFG_PARAM_AFE_VERSION 0
+#define PROJECT_CFG_PARAM_AFE_VERSION 1
 // <o> Software protection parameter version <0-65534>
-#define PROJECT_CFG_PARAM_PROTECT_VERSION 0
+#define PROJECT_CFG_PARAM_PROTECT_VERSION 1
 // <o> SOC configuration version <0-65534>
 // <i> Table selection, rated capacity, initial cycle count and full/empty voltages; keeps SOC state.
-#define PROJECT_CFG_PARAM_SOC_VERSION 0
+#define PROJECT_CFG_PARAM_SOC_VERSION 1
 // <o> Other parameter version <0-65534>
 // <i> Excludes the SOC fields above; protocol addresses are unchanged.
-#define PROJECT_CFG_PARAM_OTHER_VERSION 0
+#define PROJECT_CFG_PARAM_OTHER_VERSION 1
 // <o> Current calibration version <0-65534>
-#define PROJECT_CFG_PARAM_CALIB_VERSION 0
+#define PROJECT_CFG_PARAM_CALIB_VERSION 1
 // <o> Heating/cooling parameter version <0-65534>
-#define PROJECT_CFG_PARAM_HEAT_COOL_VERSION 0
+#define PROJECT_CFG_PARAM_HEAT_COOL_VERSION 1
 // <o> SOC state reset version <0-65534>
 // <i> Explicitly discards SOC/capacity/cycle snapshot; startup rebuilds it by the existing SOC rules.
-#define PROJECT_CFG_PARAM_SOC_STATE_VERSION 0
+#define PROJECT_CFG_PARAM_SOC_STATE_VERSION 1
 // <o> Factory aging state reset version <0-65534>
 #define PROJECT_CFG_PARAM_AGING_STATE_VERSION 0
 // <o> Recent 100 logs clear version <0-65534>
 // <i> Does not clear the customer's lifetime event counters.
-#define PROJECT_CFG_PARAM_LOG_VERSION 0
+#define PROJECT_CFG_PARAM_LOG_VERSION 1
 // </h>
 
 // <<< end of configuration section >>>
