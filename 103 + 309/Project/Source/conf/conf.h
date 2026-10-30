@@ -17,7 +17,7 @@
 #define _COMMOM_UPPER_SCI2
 
 
-#define __VIRTURE_CURRENT__
+// #define __VIRTURE_CURRENT__
 
 
 #define T3MAX         0

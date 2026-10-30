@@ -30,12 +30,12 @@
 #define AFE_CUV_filter     (100)
 #endif // LIFEPO
 
-#define AFE_OTC           ((50 + 40) * 10)
-#define AFE_OTC_recover     ((45 + 40) * 10)
+#define AFE_OTC           ((55 + 40) * 10)
+#define AFE_OTC_recover     ((50 + 40) * 10)
 #define AFE_OTC_filter      100
 
-#define AFE_UTC           ((2 + 40) * 10)
-#define AFE_UTC_recover     ((5 + 40) * 10)
+#define AFE_UTC           ((0 + 40) * 10)
+#define AFE_UTC_recover     ((3 + 40) * 10)
 #define AFE_UTC_filter      100
 
 #define AFE_OTD           ((60 + 40) * 10)

@@ -201,27 +201,27 @@
 // saved version differs. Increment only the modules to update. Reusing a
 // version does not overwrite host changes or repeat on reboot/reflash.
 // <o> AFE parameter version <0-65534>
-#define PROJECT_CFG_PARAM_AFE_VERSION 1
+#define PROJECT_CFG_PARAM_AFE_VERSION 8
 // <o> Software protection parameter version <0-65534>
-#define PROJECT_CFG_PARAM_PROTECT_VERSION 1
+#define PROJECT_CFG_PARAM_PROTECT_VERSION 8
 // <o> SOC configuration version <0-65534>
 // <i> Table selection, rated capacity, initial cycle count and full/empty voltages; keeps SOC state.
-#define PROJECT_CFG_PARAM_SOC_VERSION 1
+#define PROJECT_CFG_PARAM_SOC_VERSION 8
 // <o> Other parameter version <0-65534>
 // <i> Excludes the SOC fields above; protocol addresses are unchanged.
-#define PROJECT_CFG_PARAM_OTHER_VERSION 1
+#define PROJECT_CFG_PARAM_OTHER_VERSION 8
 // <o> Current calibration version <0-65534>
-#define PROJECT_CFG_PARAM_CALIB_VERSION 1
+#define PROJECT_CFG_PARAM_CALIB_VERSION 8
 // <o> Heating/cooling parameter version <0-65534>
-#define PROJECT_CFG_PARAM_HEAT_COOL_VERSION 1
+#define PROJECT_CFG_PARAM_HEAT_COOL_VERSION 8
 // <o> SOC state reset version <0-65534>
 // <i> Explicitly discards SOC/capacity/cycle snapshot; startup rebuilds it by the existing SOC rules.
-#define PROJECT_CFG_PARAM_SOC_STATE_VERSION 1
+#define PROJECT_CFG_PARAM_SOC_STATE_VERSION 8
 // <o> Factory aging state reset version <0-65534>
-#define PROJECT_CFG_PARAM_AGING_STATE_VERSION 1
+#define PROJECT_CFG_PARAM_AGING_STATE_VERSION 8
 // <o> Recent 100 logs clear version <0-65534>
 // <i> Does not clear the customer's lifetime event counters.
-#define PROJECT_CFG_PARAM_LOG_VERSION 1
+#define PROJECT_CFG_PARAM_LOG_VERSION 8
 // </h>
 
 // <<< end of configuration section >>>

@@ -139,7 +139,7 @@ struct OTHER_ELEMENT {
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num* 2000/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
 
-#define BMS_CAPCITY     200
+#define BMS_CAPCITY     245
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\
