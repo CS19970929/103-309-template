@@ -132,14 +132,14 @@ struct OTHER_ELEMENT {
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "10"  //32
 #define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
 
-#define SNum 		16
+#define SNum 		7
 
 
 
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num* 2000/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
 
-#define BMS_CAPCITY     300
+#define BMS_CAPCITY     200
 
 #define OtherElement_min		{1000,	1,		0,		0,		0,	0,	0,	0,\
 	                           	 0,		0,		0,		0,\
@@ -157,11 +157,11 @@ struct OTHER_ELEMENT {
 	                             BMS_CAPCITY,	1,		4180,	3000,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #elif (defined(LIFEPO))
-#define OtherElement_default 	{3550,	50,	20,	0,	0,	0,	0,	0,\
+#define OtherElement_default 	{3300,	50,	20,	0,	0,	0,	0,	0,\
 	                             CS_Cur_CHGmax,	CS_Cur_DSGmax,CBC_DelayT,CBC_Cur_DSG,\
 	                             SOC_TABLE_LIFEPO,0,1000,30,\
 	                             3200,	10080,	2800,	1,	10,	10,	240, 3,\
-	                             BMS_CAPCITY,	3,		3550,	2850,\
+	                             BMS_CAPCITY,	3,		3550,	3050,\
 	                             SNum,CS_Res,CS_Res_Num,10}
 #endif
 

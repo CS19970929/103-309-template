@@ -69,7 +69,7 @@
 // <i> Keeps real BMS data separate; blocks automatic idle sleep only while active.
 // <i> Watch sys_time.flash_test. Completion persists; use the documented test-area erase to rerun.
 #ifndef PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 1
+#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 0
 #endif
 // <o> SOC test commits <1000-1000000000>
 #ifndef PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES
@@ -218,7 +218,7 @@
 // <i> Explicitly discards SOC/capacity/cycle snapshot; startup rebuilds it by the existing SOC rules.
 #define PROJECT_CFG_PARAM_SOC_STATE_VERSION 1
 // <o> Factory aging state reset version <0-65534>
-#define PROJECT_CFG_PARAM_AGING_STATE_VERSION 0
+#define PROJECT_CFG_PARAM_AGING_STATE_VERSION 1
 // <o> Recent 100 logs clear version <0-65534>
 // <i> Does not clear the customer's lifetime event counters.
 #define PROJECT_CFG_PARAM_LOG_VERSION 1
