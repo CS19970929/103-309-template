@@ -42,7 +42,7 @@ struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
   uint8_t rtc;
   uint8_t comm;
-  uint8_t reserved;
+  uint8_t comm_wakeup; /* ISR latches a configured communication wake edge. */
   uint16_t idle;
   uint16_t idleMax;
   uint16_t force;

@@ -207,8 +207,9 @@ cases=(ROOT/'tools/uart_protocol_cases.c').read_text(encoding='utf-8')
 a=cases.index('int main(void)')
 wake=(ROOT/'tools/uart_wake_cases.h').read_text(encoding='utf-8')
 rtc=(src/'rtc_sleep.c').read_text(encoding='utf-8')
-wake=wake.replace('/* REAL_RTC_FUNCTIONS */',func(rtc,'static bool rtc_sleep_verify_uart_wakeup(')+
-                  func(rtc,'static bool rtc_sleep_run_hiccup_cycle('))
+wake=wake.replace('/* REAL_RTC_FUNCTIONS */',func(rtc,'static bool rtc_sleep_run_hiccup_cycle('))
+irq_source=(ROOT/'103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x_it.c').read_text(encoding='utf-8')
+wake=wake.replace('/* REAL_WAKE_IRQS */',''.join(func(irq_source,'void '+name+'(') for name in ('EXTI3_IRQHandler','EXTI9_5_IRQHandler','EXTI15_10_IRQHandler')))
 combo+=(src/'rtc_sleep.h').read_text(encoding='utf-8')+'\n'+cases[:a]+wake+'\n'+cases[a:]
 combo=combo.replace('    puts("PASS both UARTs:', '    test_wake_paths();\n    puts("PASS both UARTs:')
 

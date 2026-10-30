@@ -245,6 +245,7 @@ static bool rtc_sleep_has_wakeup_exception(void)
 
 static void rtc_sleep_prepare_rtc(void)
 {
+    g_stLowPowerRtcStatus.comm_wakeup=0U;
     SleepDeal_ResetKeyState(0U);
     g_stLowPowerRtcStatus.cycles = 0U;
     g_stLowPowerRtcStatus.sleep = 0U;
@@ -263,40 +264,6 @@ static void rtc_sleep_prepare_rtc(void)
     g_irq_t = NO_IRQ;
     MCUO_DEBUG_LED1 = 1;
     lp_refresh_status();
-}
-
-#define LP_UART_VERIFY_TIMEOUT_US 300000U
-static bool rtc_sleep_verify_uart_wakeup(void)
-{
-    UINT32 start;
-    LowPower_DisableUartWakeup();
-    /* Only the clock and UART are restored. ADC and MOS confirmation stay paused. */
-    InitTimer();
-    InitUSART_CommonUpper();
-    start=SysTime_GetMicroseconds();
-    do
-    {
-        Feed_IWatchDog;
-        if (SleepDeal_IsWakeupValid() || Sci_VerifyWakeFrames())
-            return true;
-    } while ((UINT32)(SysTime_GetMicroseconds()-start) < LP_UART_VERIFY_TIMEOUT_US);
-
-    /* Invalid traffic must not conceal a real current/AFE wake or prevent the
-     * same protective deep sleep checked on a periodic RTC wake. */
-    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
-    {
-        if (rtc_sleep_has_wakeup_exception()) {
-            if (g_stLowPowerRtcStatus.mode==DEEP_MODE)
-                low_power_log_and_commit_sleep(DEEP_MODE);
-            return true;
-        }
-    }
-    IOstatus_RTCMode();
-    if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
-        InitWakeUp_RTCMode();
-    else
-        InitWakeUp_Base();
-    return false;
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
@@ -319,17 +286,15 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         return false;
     }
 
+    /* An edge authorizes RUN, not a protocol command. Keep a separate latch
+     * because the shared IRQ source can be overwritten by a switch edge. */
+    if (g_stLowPowerRtcStatus.comm_wakeup ||
+        g_irq_t==uart1_irq || g_irq_t==uart2_irq || g_irq_t==rs485_irq)
+        return false;
+
     if (g_irq_t==soc_key) {
         if (SleepDeal_IsWakeupValid()) return false;
         MCUO_DEBUG_LED1=1;
-        return true;
-    }
-
-    if (g_irq_t == uart1_irq || g_irq_t == uart2_irq)
-    {
-        if (rtc_sleep_verify_uart_wakeup())
-            return false;
-        MCUO_DEBUG_LED1 = 1;
         return true;
     }
 
@@ -421,6 +386,7 @@ void rtc_sleep(void)
         {
             RTC_ClearStopWakeup();
             LowPower_Request(NO_SLEEP);
+            g_stLowPowerRtcStatus.comm_wakeup=0U;
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
             SleepDeal_ResetKeyState((UINT8)(sleep_mode==HICCUP_MODE && g_irq_t==soc_key));

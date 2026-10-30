@@ -30,7 +30,7 @@ static int watchdog_feeds,reset_during_stop;
 static jmp_buf reset_point;
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
-static int scripted_key,key_irq_during_verify,current_wakeup;
+static int scripted_key,current_wakeup;
 #if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
 static UINT8 self_test_active;
 static UINT8 FlashSelfTest_IsActive(void) { return self_test_active; }
@@ -86,6 +86,9 @@ static void Sys_StopMode(void) {
         if(scripted_key) key=(stop_calls==1) ? 1 : 0;
         g_irq_t=(scripted_key==2 && stop_calls>1) ? soc_key : stop_source;
     }
+    if(g_stLowPowerRtcStatus.mode==HICCUP_MODE &&
+       (g_irq_t==uart1_irq || g_irq_t==uart2_irq || g_irq_t==rs485_irq))
+        g_stLowPowerRtcStatus.comm_wakeup=1U;
     ++rtc_counter;
     if(g_irq_t==NO_IRQ) rtc_wake=1;
 }
@@ -123,10 +126,6 @@ static void LowPower_DisableUartWakeup(void) {}
 static void LowPower_DisableWakeupExti(void) {}
 static void InitTimer(void) { tick=0; }
 static void InitUSART_CommonUpper(void) {}
-static UINT8 Sci_VerifyWakeFrames(void) {
-    if(key_irq_during_verify) { g_irq_t=soc_key; key_irq_during_verify=0; }
-    return 0;
-}
 static UINT8 SystemRuntime_IsDischargeMosOpen(void) { return 1; }
 static void RTC_ClearStopWakeup(void) { rtc_wake=0; }
 static void RTC_WKTimeConfig(void) {}
@@ -154,7 +153,7 @@ static void reset_case(void) {
     OtherElement.u16Sleep_Vlow=2600; OtherElement.u16Sleep_TimeVlow=1;
     OtherElement.u16Sleep_TimeNormal=10080;
     expected_sleep_flag=0;
-    watchdog_feeds=reset_during_stop=key_irq_during_verify=current_wakeup=0;
+    watchdog_feeds=reset_during_stop=current_wakeup=0;
     BootFlag_Clear();
 #if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
     self_test_active=0U;
@@ -237,14 +236,15 @@ int main(void) {
     assert(rtc_sleep_run_hiccup_cycle() && !now_ms && !adc_on);
     key=0; SleepDeal_ResetKeyState(0U);
     assert(!rtc_sleep_run_hiccup_cycle() && !now_ms && !adc_on);
-    /* HICCUP never qualifies an old low level on RTC or unrelated UART. */
+    /* An old key level cannot wake RTC, but a communication edge wakes directly. */
     reset_case(); g_stLowPowerRtcStatus.mode=HICCUP_MODE; key=0; stop_source=NO_IRQ;
     for(i=0;i<3;++i) assert(rtc_sleep_run_hiccup_cycle() && now_ms==0 && !adc_on);
     stop_source=uart1_irq;
-    assert(rtc_sleep_run_hiccup_cycle() && now_ms<=302 && !adc_on);
-    /* A key IRQ arriving during UART qualification also bypasses the hold. */
-    key_irq_during_verify=1; now_ms=0;
-    assert(!rtc_sleep_run_hiccup_cycle() && now_ms<10 && !adc_on);
+    assert(!rtc_sleep_run_hiccup_cycle() && now_ms==0 && !adc_on);
+    reset_case(); key=1; stop_source=uart1_irq; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+    rtc_sleep();
+    assert(stop_calls==1 && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP && adc_on);
+    assert(!g_stLowPowerRtcStatus.comm_wakeup);
     /* RUN timer resets on restore: arm the HICCUP key's 3 s afterwards.
      * On expiry this changes to NORMAL. Held RTC and release IRQ must stay
      * asleep, then the next press must pass NORMAL's 1 s confirmation. */

@@ -349,9 +349,13 @@ void Sys_StopMode(void)
     LowPower_ClearWakeupPending();
 
     __disable_irq();
-    IRQ_DEBUG_STOP_BEGIN();
-    PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
-    IRQ_DEBUG_STOP_CAPTURE();
+    /* A communication IRQ handled during STOP preparation must not be lost
+     * when pending bits are cleared. New masked IRQs still wake WFI normally. */
+    if (!g_stLowPowerRtcStatus.comm_wakeup) {
+        IRQ_DEBUG_STOP_BEGIN();
+        PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+        IRQ_DEBUG_STOP_CAPTURE();
+    }
 
     cpu_frequency_conf();
     __enable_irq();

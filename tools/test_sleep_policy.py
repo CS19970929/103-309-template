@@ -7,6 +7,15 @@ import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/'103 + 309/Project/Source'
 
+def function(text,signature):
+    start=text.index(signature)
+    brace=text.index('{',start)
+    depth=0
+    for pos in range(brace,len(text)):
+        depth+=(text[pos]=='{')-(text[pos]=='}')
+        if depth==0: return text[start:pos+1]
+    raise ValueError(signature)
+
 def main():
     parent=Path(os.environ['LOCALAPPDATA'])/'CodexTemp/103-309-copy'
     parent.mkdir(parents=True,exist_ok=True)
@@ -40,6 +49,15 @@ def main():
             f'/DPROJECT_CFG_SWITCH_MODE={mode}',str(guard)],cwd=output,env=env,capture_output=True)
         assert (result.returncode==0)==(mode in (0,1)),result.stderr.decode(errors='replace')
     print('PASS switch mode guard: accepts 0/1, rejects -1/2')
+    stop=(ROOT/'tools/stop_entry_cases.c').read_text(encoding='utf-8')
+    stop=stop.replace('/* STOP_ENTRY_SOURCE */',function(
+        (SOURCE/'conf/conf.c').read_text(encoding='utf-8'),'void Sys_StopMode('))
+    path=output/'stop-entry.c'; path.write_text(stop,encoding='utf-8')
+    exe=output/'stop-entry.exe'
+    result=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11',str(path),
+        '/Fe:'+str(exe),'/Fo:'+str(output/'stop-entry.obj')],cwd=output,env=env,capture_output=True,text=True,errors='replace')
+    if result.returncode: raise RuntimeError(result.stdout+result.stderr)
+    subprocess.run([str(exe)],cwd=output,check=True)
     print(f'Host evidence only; files: {output}')
 
 if __name__=='__main__': main()

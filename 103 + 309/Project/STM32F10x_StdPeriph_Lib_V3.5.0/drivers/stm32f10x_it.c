@@ -222,6 +222,8 @@ void EXTI3_IRQHandler(void)
     IRQ_DEBUG_COUNT(exti.line3);
     handled = 1U;
     g_irq_t = uart2_irq;
+    if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
+      g_stLowPowerRtcStatus.comm_wakeup=1U;
     EXTI_ClearITPendingBit(EXTI_Line3);
   }
   if (handled == 0U)
@@ -238,6 +240,9 @@ void EXTI15_10_IRQHandler(void)
   {
     IRQ_DEBUG_COUNT(exti.line12);
     handled = 1U;
+    g_irq_t = rs485_irq;
+    if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
+      g_stLowPowerRtcStatus.comm_wakeup=1U;
     EXTI_ClearITPendingBit(EXTI_Line12);
   }
   if (EXTI_GetITStatus(EXTI_Line13) != RESET)
@@ -278,6 +283,8 @@ void EXTI9_5_IRQHandler(void)
     IRQ_DEBUG_COUNT(exti.line7);
     handled = 1U;
     g_irq_t = uart1_irq;
+    if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
+      g_stLowPowerRtcStatus.comm_wakeup=1U;
     EXTI_ClearITPendingBit(EXTI_Line7);
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
