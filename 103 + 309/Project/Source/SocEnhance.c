@@ -4,9 +4,6 @@
 
 #define SOC_TICK_MS ((UINT32)200U)
 #define SOC_MAMS_PER_AS10 ((UINT32)100000U)
-#define SOC_BOARD_SELF_CONSUMPTION_MA ((UINT16)PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA)
-#define SOC_SOH_MIN ((UINT8)80U)
-#define SOC_SOH_CYCLE_STEP ((UINT16)100U)
 
 typedef struct {
     UINT32 cap_factory_as10;
@@ -16,7 +13,6 @@ typedef struct {
     UINT32 dsg_acc_as10;
     int32_t rem_mams;
     UINT8 soc;
-    UINT8 soh;
 } SOC_STATE;
 typedef struct {
     UINT32 cycle_x100;
@@ -54,20 +50,11 @@ static UINT32 soc_factory_cap_as10_from(UINT16 cap_a10)
 	return (UINT32)cap_a10 * 3600U;
 }
 
-static UINT8 soc_soh_from_cycle(UINT32 cycle_x100)
-{
-	UINT32 drop = (cycle_x100 / 100U) / SOC_SOH_CYCLE_STEP;
-	return (drop >= (UINT32)(100U - SOC_SOH_MIN)) ? SOC_SOH_MIN : (UINT8)(100U - drop);
-}
-
 static void soc_refresh_capacity_base(void)
 {
-	s_soc.soh = soc_soh_from_cycle(s_soc.cycle_x100);
-	s_soc.cap_full_as10 = (UINT32)(((uint64_t)s_soc.cap_factory_as10 * s_soc.soh) / 100ULL);
-	if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
-	{
-		s_soc.cap_now_as10 = s_soc.cap_full_as10;
-	}
+    s_soc.cap_full_as10 = s_soc.cap_factory_as10;
+    if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
+        s_soc.cap_now_as10 = s_soc.cap_full_as10;
 }
 
 static UINT8 soc_from_cap(void)
@@ -105,7 +92,7 @@ void SOC_PublishReportData(void)
 	UINT32 cycles = s_soc.cycle_x100 / 100U;
 
 	g_stCellInfoReport.SocElement.u16Soc = s_soc.soc;
-	g_stCellInfoReport.SocElement.u16Soh = s_soc.soh;
+	g_stCellInfoReport.SocElement.u16Soh = 100U;
 	g_stCellInfoReport.SocElement.u16CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
 	g_stCellInfoReport.SocElement.u16CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
 	g_stCellInfoReport.SocElement.u16CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
@@ -192,10 +179,13 @@ static void soc_load_or_default(void)
 		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
 			(data.u32LearnPassedAs10 % unit) :
 			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
-		if (((data.u32CapNow != 0U) || (data.u16SocNow == 0U)) &&
-			(data.u32CapNow <= s_soc.cap_full_as10))
+		if ((data.u32CapFull > 0U) && (data.u32CapNow <= data.u32CapFull) &&
+			((data.u32CapNow != 0U) || (data.u16SocNow == 0U)))
 		{
-			s_soc.cap_now_as10 = data.u32CapNow;
+            /* Preserve the stored SOC ratio when removing old SOH derating
+             * or applying a changed rated capacity. The V2 layout is unchanged. */
+			s_soc.cap_now_as10 = (UINT32)(((uint64_t)data.u32CapNow *
+                s_soc.cap_full_as10) / data.u32CapFull);
 			s_soc.soc = soc_from_cap();
 		}
 		else
@@ -220,8 +210,7 @@ static void soc_integrate(int32_t net_current_ma)
 	int64_t acc_mams;
 	int64_t cap_now_as10;
 
-	acc_mams = (((int64_t)net_current_ma -
-		(int64_t)SOC_BOARD_SELF_CONSUMPTION_MA) * (int64_t)SOC_TICK_MS) +
+	acc_mams = ((int64_t)net_current_ma * (int64_t)SOC_TICK_MS) +
 		(int64_t)s_soc.rem_mams;
 	delta_as10 = (int32_t)(acc_mams / (int64_t)SOC_MAMS_PER_AS10);
 	s_soc.rem_mams = (int32_t)(acc_mams % (int64_t)SOC_MAMS_PER_AS10);
@@ -267,7 +256,7 @@ UINT8 SOC_ResetStoredSnapshotToDefault(void)
 	STORAGE_FLASH_SOC_DATA data;
 	UINT32 cap_factory = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
 	UINT32 cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-	UINT32 cap_full = (UINT32)(((uint64_t)cap_factory * soc_soh_from_cycle(cycle_x100)) / 100ULL);
+	UINT32 cap_full = cap_factory;
 
 	memset(&data, 0, sizeof(data));
 	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;

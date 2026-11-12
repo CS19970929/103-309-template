@@ -93,7 +93,7 @@ static void test_remaining_time(void)
 {
     UINT8 b[251];
     UINT16 charge, discharge;
-    const UINT32 load=PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA;
+    const UINT32 load=0U;
     setup_report();
     g_stCellInfoReport.SocElement.u16CapacityFull=1000;
     g_stCellInfoReport.SocElement.u16CapacityNow=900;

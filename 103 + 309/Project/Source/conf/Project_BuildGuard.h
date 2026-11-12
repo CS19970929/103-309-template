@@ -3,10 +3,6 @@
 
 #include "Project_Config.h"
 
-#ifndef PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA
-#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 30
-#endif
-
 #ifndef PROJECT_CFG_HOST_WRITE_ENABLE
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 #endif
@@ -130,11 +126,6 @@
 	 (PROJECT_CFG_DEBUG_HUB_AUTORUN_ENABLE != 0) || \
 	 (PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE != 0))
 #error "Debug watch, system debug and IRQ event ring must stay disabled for release build profile"
-#endif
-
-/* SOC checks */
-#if (PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA > 1000)
-#error "Invalid PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA"
 #endif
 
 /* log */

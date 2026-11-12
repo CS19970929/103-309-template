@@ -133,11 +133,6 @@
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
 // </h>
 
-// <h>SOC current integration
-// <o> Board self consumption mA <0-1000>
-#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15
-// </h>
-
 // <h>Flash parameter updates after firmware upgrade
 // <q> Reset ALL parameters once on each new firmware version
 // <i> Factory reset takes priority over the module versions below. Statistics are always preserved.

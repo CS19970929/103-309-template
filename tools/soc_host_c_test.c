@@ -109,8 +109,36 @@ static void test_manual_and_restore(void) {
     }
     puts("PASS manual SOC: endpoints, immediate snapshot, reload");
 }
+
+static void test_no_self_consumption_and_invalid_samples(void) {
+    UINT16 cap_before;
+    reset_case(245,80);cap_before=g_stCellInfoReport.SocElement.u16CapacityNow;
+    run_seconds(72U*3600U,0,3300);
+    assert(g_stCellInfoReport.SocElement.u16CapacityNow==cap_before);
+    current_fresh=0;run_seconds(3600,-6000,3000);
+    assert(g_stCellInfoReport.SocElement.u16CapacityNow==cap_before);
+    current_fresh=1;run_seconds(3600,-6000,3000);
+    expect_capacity(245,expected_capacity(245,80,-6000,3600));
+    puts("PASS no self consumption:72h zero current; invalid reads pause and recovery resumes");
+}
+static void test_no_soh_derating(void) {
+    reset_case(245,35);
+    stored.u32CycleTimes=200000U;
+    stored.u32CapFull=245U*3600U*80U/100U;
+    stored.u32CapNow=stored.u32CapFull*35U/100U;
+    InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==35);
+    assert(g_stCellInfoReport.SocElement.u16Soh==100);
+    assert(g_stCellInfoReport.SocElement.u16CapacityFull==2450);
+    assert(g_stCellInfoReport.SocElement.u16Cycle_times==2000);
+    run_seconds(3600,-1100,3400);
+    expect_capacity(245,expected_capacity(245,35,-1100,3600));
+    puts("PASS no SOH derating: preserves old snapshot SOC ratio and cycle statistics");
+}
+
 int main(void) {
     test_startup();test_voltage_independence();test_current_resolution();
     test_customer_case();test_bounds();test_manual_and_restore();
-    puts("PASS SOC production C:6 groups");return 0;
+    test_no_self_consumption_and_invalid_samples();test_no_soh_derating();
+    puts("PASS SOC production C:8 groups");return 0;
 }
