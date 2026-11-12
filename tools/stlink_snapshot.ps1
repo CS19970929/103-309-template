@@ -90,9 +90,9 @@ $commands.Add("p/x g_stCellInfoReport.SocElement")
 $commands.Add("p/x s_soc")
 
 if ($SocBreak) {
-    $commands.Add("hbreak SOC_IntEnhance_Ctrl")
+    $commands.Add("hbreak App_SOC")
     $commands.Add("continue")
-    $commands.Add("printf `"\n--- hit SOC_IntEnhance_Ctrl ---\n`"")
+    $commands.Add("printf `"\n--- hit App_SOC ---\n`"")
     $commands.Add("info registers pc sp lr xpsr")
     $commands.Add("bt")
     $commands.Add("p/d net_current_ma")

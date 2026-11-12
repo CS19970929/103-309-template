@@ -1,5 +1,5 @@
 #include "main.h"
-#include "SocEnhance.h"
+#include "SOC.h"
 #include "Heat_Cool.h"
 #include <stddef.h>
 

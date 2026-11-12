@@ -509,11 +509,6 @@
               <FilePath>..\Source\ShortFunc.c</FilePath>
             </File>
             <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
-            </File>
-            <File>
               <FileName>SH367309_DataDeal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\SH367309_DataDeal.c</FilePath>
@@ -1361,11 +1356,6 @@
               <FileName>ShortFunc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\ShortFunc.c</FilePath>
-            </File>
-            <File>
-              <FileName>SocEnhance.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\SocEnhance.c</FilePath>
             </File>
             <File>
               <FileName>SH367309_DataDeal.c</FileName>

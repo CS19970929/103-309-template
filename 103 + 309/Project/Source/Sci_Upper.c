@@ -818,13 +818,27 @@ void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 }
 
+/* Read-only legacy protocol data; not a SOC calibration input. */
 static UINT16 Sci_GetSocTableWord(UINT16 index)
 {
-#if (PROJECT_CFG_BAT_CHEMISTRY == 1)
-	return SOC_Table_LiFePO[index];
+    static const UINT16 table[SOC_TABLE_SIZE] = {
+#if PROJECT_CFG_BAT_CHEMISTRY == 1
+
+	3336, 100, 3332, 90, 3330, 80, 3327, 75, 3316, 70, 3301, 65,
+	3294, 60, 3291, 55, 3290, 50, 3288, 45, 3286, 40, 3279, 35,
+	3266, 30, 3254, 25, 3236, 20, 3212, 15, 3198, 10, 3112, 5,
+	2950, 0, 1000, 0, 1000, 0,
+
 #else
-	return SocTable_TernaryLi[index];
+
+	4160, 100, 4100, 95, 4050, 90, 3995, 85, 3935, 80, 3880, 75,
+	3835, 70, 3795, 65, 3760, 60, 3725, 55, 3695, 50, 3670, 45,
+	3645, 40, 3615, 35, 3585, 30, 3555, 25, 3525, 20, 3480, 15,
+	3400, 10, 3250, 5, 3000, 0,
+
 #endif
+    };
+    return table[index];
 }
 
 void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s, UINT8 t_u8BuffTemp[])

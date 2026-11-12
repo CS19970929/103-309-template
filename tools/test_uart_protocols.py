@@ -170,11 +170,11 @@ combo+='''
 #define FAULT_CURRENT_MAX_GAP_TICKS 50U
 static UINT8 s_current_valid;
 static UINT32 s_current_tick;
-static void soc_param_lib_init(void) {}
-static void SOC_IntEnhance_Ctrl(int32_t current_ma) {}
 '''
 combo+=func((src/'Fault.c').read_text(encoding='utf-8'),'UINT8 Fault_IsCurrentSampleFresh(')
-combo+=(src/'SOC.c').read_text(encoding='utf-8').replace('#include "main.h"','')
+soc_source=(src/'SOC.c').read_text(encoding='utf-8')
+combo+='\n'.join(line for line in soc_source.splitlines() if line.startswith('#define SOC_TIME_'))+'\n'
+combo+=func(soc_source,'UINT16 SOC_GetRemainingMinutes(')
 
 # Execute real write dispatchers; only unrelated existing commands use stubs.
 dispatch=''
