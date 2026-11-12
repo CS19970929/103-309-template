@@ -934,7 +934,7 @@ static void MonitorAFE_UpdateSleepDelay(UINT8 is_error, UINT16 *delay_tick)
         if (++(*delay_tick) >= MONITOR_AFE_SLEEP_DELAY_TICKS)
         {
             *delay_tick = 0;
-            LowPower_Request(NORMAL_MODE);
+            LowPower_Request(DEEP_MODE);
         }
     }
     else

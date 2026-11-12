@@ -28,7 +28,8 @@ static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy,flash
 static UINT32 tick,now_ms,release_at_ms,charge_at_ms,rtc_counter;
 static UINT16 bkp[6];
 static UINT8 sleep_save_ok=1U;
-static unsigned sleep_save_calls, storage_errors;
+static unsigned sleep_save_calls, storage_errors, sleep_log_calls, afe_sleep_calls;
+static UINT32 runtime_seconds, sleep_log_seconds;
 static UINT16 expected_sleep_flag;
 static int watchdog_feeds,reset_during_stop;
 static jmp_buf reset_point;
@@ -77,7 +78,7 @@ static UINT16 BKP_ReadBackupRegister(int reg) { return bkp[reg]; }
 static UINT8 LowPowerSleep_SaveResetState(void) { ++sleep_save_calls; return sleep_save_ok; }
 static UINT8 LowPowerSleep_SaveCoreState(void) { return sleep_save_ok; }
 static void InitAFE1_Sleep(int n) {}
-static void AFE_Sleep(void) {}
+static void AFE_Sleep(void) { ++afe_sleep_calls; }
 static void fake_reset(void) { ++deep_calls; }
 #define MCU_RESET() fake_reset()
 static void IOstatus_DeepMode(void) { adc_on=0; }
@@ -111,7 +112,8 @@ static UINT8 RTC_IsStopWakeup(void) { return (UINT8)rtc_wake; }
 static UINT16 RtcSleep_PortGetCellMinMv(void) { return g_stCellInfoReport.u16VCellMin; }
 static UINT16 RtcSleep_PortGetLowVoltageSleepMv(void) { return OtherElement.u16Sleep_Vlow; }
 static UINT8 RtcSleep_PortIsOneSecondTick(void) { return (UINT8)one_second; }
-static void RtcSleep_PortCommitResetSleep(UINT8 mode) { assert(mode==DEEP_MODE); ++deep_calls; }
+static void LogRecord_RequestSleep(void) { ++sleep_log_calls; sleep_log_seconds=runtime_seconds; }
+/* RESET_SLEEP_SOURCE */
 static UINT8 RtcSleep_PortUpdateRtcData(void) { return 1; }
 static UINT8 RtcSleep_PortHasCurrentWake(enum irqWakeup *source) {
     if(current_wakeup) { *source=current_wake; return 1; }
@@ -143,12 +145,15 @@ static void initAFE1_IIC(void) {}
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
 static void RtcSleep_PortDisableStopWakeup(void) {}
 static void RtcSleep_PortRestoreAfterStop(void) { ++restore_calls; InitTimer(); adc_on=1; }
-static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
+static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) { runtime_seconds+=seconds; }
 /* SLEEP_SOURCE */
 /* RTC_SOURCE */
+/* ERROR_SLEEP_SOURCE */
 static void reset_case(void) {
     memset(&s_sleep,0,sizeof(s_sleep));
     memset(bkp,0,sizeof(bkp));sleep_save_ok=1U;sleep_save_calls=storage_errors=0;
+    sleep_log_calls=afe_sleep_calls=0;
+    runtime_seconds=sleep_log_seconds=0;
     memset((void *)&g_stLowPowerRtcStatus,0,sizeof(g_stLowPowerRtcStatus));
     g_stLowPowerRtcStatus.mode=NO_SLEEP;
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
@@ -384,7 +389,7 @@ int main(void) {
     lp_update_sleep_request(); rtc_counter+=59; lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
     ++rtc_counter; lp_update_sleep_request();
-    assert(g_stLowPowerRtcStatus.mode==NORMAL_MODE);
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
     LowPower_Request(NO_SLEEP); SleepDeal_ResetKeyState(0U);
 #if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_PUSHBUTTON
     key=0;
@@ -395,7 +400,7 @@ int main(void) {
     assert(g_stLowPowerRtcStatus.mode==NORMAL_MODE);
     LowPower_Request(DEEP_MODE); rtc_sleep();
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && deep_calls==1 && !zero_calls);
-    puts("PASS UV wake: key/charger wakes keep configured voltage/minute delay and second cadence; voltage/charge guards, idle NORMAL, both switches and explicit DEEP requests remain effective");
+    puts("PASS UV wake: key/charger wakes keep configured voltage/minute delay and second cadence; voltage/charge guards, idle DEEP, both switches and explicit DEEP requests remain effective");
     reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); reset_during_stop=1;
     if(setjmp(reset_point)==0) { SleepDeal_HandleBootSleepStartup(); assert(0); }
     assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
@@ -443,18 +448,50 @@ int main(void) {
     }
     reset_case(); sys_time.time_enter_rtc=65535; OtherElement.u16Sleep_VNormal=65535;
     lp_update_sleep_request(); rtc_counter=604800; lp_update_sleep_request();
-    assert(g_stLowPowerRtcStatus.mode==NORMAL_MODE);
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    rtc_sleep();
+    assert(deep_calls==1 && sleep_save_calls==1 && sleep_log_calls==1 && afe_sleep_calls==1);
+    assert(BootFlag_Read()==FLASH_DEEP_SLEEP_VALUE && !restore_calls && !zero_calls);
     reset_case(); assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=604799;
     g_stLowPowerRtcStatus.mode=HICCUP_MODE; stop_source=NO_IRQ; key=1; ctlc=1;
-    assert(rtc_sleep_run_hiccup_cycle() && g_stLowPowerRtcStatus.mode==NORMAL_MODE && !ctlc && !adc_on);
-    /* Promotion to NORMAL still restores CTLC after a later qualified wake. */
-    reset_case(); assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=604799;
-    g_stLowPowerRtcStatus.mode=HICCUP_MODE; stop_source=NO_IRQ; scripted_key=2; ctlc=1;
-    rtc_sleep(); assert(ctlc==1 && restore_calls==1 && adc_on);
-#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_PUSHBUTTON
-    assert(now_ms==1000); tick=1000; assert(!SleepDeal_TakeKeySleepRequest());
-#endif
-    puts("PASS idle: exact 7 days across STOP, minute range, RTC wrap, 256-frame wrap, charge/discharge/UART/CAN reset, ignored VNormal, HICCUP promotion without ADC, CTLC restore");
+    g_stLowPowerRtcStatus.sleep=604799;
+    assert(!rtc_sleep_run_hiccup_cycle() && g_stLowPowerRtcStatus.mode==DEEP_MODE && !adc_on);
+    assert(deep_calls==1 && sleep_save_calls==1 && sleep_log_calls==1 && afe_sleep_calls==1);
+    assert(runtime_seconds==604800 && sleep_log_seconds==604800);
+    assert(BootFlag_Read()==FLASH_DEEP_SLEEP_VALUE && !restore_calls && !zero_calls);
+    /* The outer HICCUP loop must not restore RUN or re-enable ADC on expiry. */
+    reset_case(); OtherElement.u16Sleep_TimeNormal=1;
+    assert(!SleepDeal_NormalIdleExpired(0)); rtc_counter=59;
+    g_stLowPowerRtcStatus.mode=HICCUP_MODE; stop_source=NO_IRQ; ctlc=1;
+    rtc_sleep();
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && deep_calls==1 && !restore_calls && !adc_on);
+    assert(sleep_save_calls==1 && sleep_log_calls==1 && afe_sleep_calls==1);
+    /* Maintained-switch entry restarts idle timing; credit all STOP cycles. */
+    assert(runtime_seconds==g_stLowPowerRtcStatus.sleep && runtime_seconds>0);
+    assert(sleep_log_seconds==runtime_seconds);
+    puts("PASS idle: exact 7 days across STOP, minute range, RTC wrap, 256-frame wrap, charge/discharge/UART/CAN reset, ignored VNormal, RUN/HICCUP commit DEEP without ADC or RUN restore");
+    /* Persistent AFE/storage faults share this timer. Recovery cancels it;
+     * snapshot failure must still retain the DEEP reason and reset path. */
+    {
+        UINT16 delay_tick=0;
+        reset_case();
+        assert(MONITOR_AFE_SLEEP_DELAY_TICKS==1500U);
+        MonitorAFE_UpdateSleepDelay(1U,0);
+        for(i=0;i<MONITOR_AFE_SLEEP_DELAY_TICKS-1;++i)
+            MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
+        assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !deep_calls);
+        MonitorAFE_UpdateSleepDelay(0U,&delay_tick); assert(!delay_tick);
+        for(i=0;i<MONITOR_AFE_SLEEP_DELAY_TICKS-1;++i)
+            MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
+        assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+        MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
+        assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && !delay_tick);
+        sleep_save_ok=0U; rtc_sleep();
+        assert(deep_calls==1 && sleep_save_calls==1 && sleep_log_calls==1 && afe_sleep_calls==1);
+        assert(BootFlag_Read()==FLASH_DEEP_SLEEP_VALUE && bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE);
+        assert(!restore_calls && !adc_on && !zero_calls);
+    }
+    puts("PASS error sleep: 5-minute boundary, recovery restarts delay, AFE/storage timeout requests DEEP, failed snapshot retains sleep reason and reset");
 #if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
     reset_case(); self_test_active=1U; sys_time.time_enter_rtc=1;
     for(i=0;i<20;++i) lp_update_sleep_request();

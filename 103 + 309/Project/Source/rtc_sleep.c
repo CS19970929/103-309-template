@@ -192,7 +192,7 @@ static void lp_update_sleep_request(void)
         (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |
          LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_FLASH_BUSY | LP_BLOCK_UPGRADE))!=0U ||
         System_ERROR_UserCallback(ERROR_STATUS_AFE1)))) {
-        LowPower_Request(NORMAL_MODE);
+        LowPower_Request(DEEP_MODE);
         return;
     }
     if (g_stLowPowerRtcStatus.block != 0U)
@@ -309,14 +309,12 @@ static bool rtc_sleep_run_hiccup_cycle(void)
 
         if (g_stLowPowerRtcStatus.mode==HICCUP_MODE &&
             SleepDeal_NormalIdleExpired((UINT8)(CheckChargeMa() || CheckDischargeMa() || CheckKeyActive()))) {
-            /* Stay in STOP policy: clear HICCUP wake lines, then configure the
-             * existing NORMAL wake sources. ADC is not restored here. */
-            LowPower_Request(NORMAL_MODE);
-            MCUO_AFE_CTLC=0;
-            LowPower_DisableWakeupExti();
-            IOstatus_RTCMode();
-            Init_RTC();
-            InitWakeUp_Base();
+            /* Commit before resetting: HICCUP has kept SOC only in RAM.
+             * ADC and normal business remain paused throughout the handoff. */
+            LowPower_Request(DEEP_MODE);
+            RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
+            low_power_log_and_commit_sleep(DEEP_MODE);
+            return false;
         }
 
         MCUO_DEBUG_LED1 = 1;

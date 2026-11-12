@@ -108,7 +108,7 @@ struct OTHER_ELEMENT {
 	UINT16 u16CurLimit_Cur;			//A*10
 
     UINT16 u16Sleep_VNormal;      	// retained protocol field; unused by NORMAL sleep
-	UINT16 u16Sleep_TimeNormal;		// idle minutes; default 10080 (7 days)
+	UINT16 u16Sleep_TimeNormal;		// idle minutes before DEEP; default 10080 (7 days)
     UINT16 u16Sleep_Vlow;     		//mV
 	UINT16 u16Sleep_TimeVlow;		//min
 	UINT16 u16Sleep_VirCur_Chg;     //A *10
