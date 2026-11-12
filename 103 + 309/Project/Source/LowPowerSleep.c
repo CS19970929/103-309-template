@@ -4,7 +4,10 @@
 void LowPowerSleep_SaveCoreState(void)
 {
 	Can_PrepareSleep();
-	SOC_SaveSnapshotBeforeSleep();
+    /* HICCUP retains RAM; do not wear Flash on every automatic idle STOP.
+     * Manual NORMAL and reset/DEEP save the exact remaining capacity. */
+    if (g_stLowPowerRtcStatus.mode != HICCUP_MODE)
+        (void)SOC_SaveSnapshot();
 	StorageFlash_FlushStatistics();
 }
 

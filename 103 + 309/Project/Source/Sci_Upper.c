@@ -479,19 +479,10 @@ static void Sci_ApplyProtectSideEffects(UINT16 offset, UINT16 count)
     if (Sci_RangeOverlaps(offset, count,
         RS485_CMD_ADDR_TMOS_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST, 5U))
         Fault_ResetMosConfirmation();
-	if (Sci_RangeOverlaps(offset,
-						  count,
-						  0,
-						  (UINT16)(RS485_CMD_ADDR_TCHG_OTP_FIRST - RS485_CMD_ADDR_VCELL_OVP_FIRST)))
-	{
-		InitData_SOC();
-	}
 }
 
 static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 {
-	UINT8 reload_soc = 0U;
-	UINT8 reset_soc_capacity = 0U;
 
 	if (Sci_RangeOverlaps(offset, count, 0, 8))
 	{
@@ -509,21 +500,8 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 		AFE_PARAM_WRITE_Flag = 1;
 	}
 
-	if (Sci_RangeOverlaps(offset, count, 24, 4))
-	{
-		reload_soc = 1U;
-		reset_soc_capacity = 1U;
-	}
-
-	if (reload_soc)
-	{
-		InitData_SOC();
-	}
-
-	if (reset_soc_capacity)
-	{
-		SOC_RequestCapacityReset();
-	}
+    if (Sci_RangeOverlaps(offset, count, 24, 2))
+        SOC_ApplyParameters(Sci_RangeOverlaps(offset, count, 25, 1));
 
 	if (Sci_RangeOverlaps(offset, count, 28, 4))
 	{
@@ -1387,7 +1365,6 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	if (!EEPROM_SaveRWParametersToFlash())
 	{
 		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_OTHER_ELEMENT1);
-		Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 		return;
 	}
@@ -1586,7 +1563,6 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 			return;
 		}
 		Fault_ResetMosConfirmation();
-		InitData_SOC();
 	}
 	else
 	{
@@ -1660,7 +1636,8 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 	u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
 	if (u16SciRegData <= 100)
 	{
-		SOC_RequestSetOnce((UINT8)u16SciRegData);
+        if (!SOC_RequestSetOnce((UINT8)u16SciRegData))
+            Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 	}
 	else
 	{

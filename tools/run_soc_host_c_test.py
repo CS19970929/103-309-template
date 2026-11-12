@@ -1,5 +1,4 @@
 """Compile and exercise the real SOC C implementation; all outputs stay in user temp."""
-import argparse
 import os
 from pathlib import Path
 import re
@@ -15,15 +14,44 @@ def run():
     parent = Path(tempfile.gettempdir()) / "CodexTemp/103-309-copy"
     parent.mkdir(parents=True, exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix="soc-host-", dir=parent))
-    config = (SOURCE / "conf/Project_Config.h").read_text(encoding="utf-8")
-    match = re.search(r"^#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA (\d+)", config, re.M)
-    self_ma = int(match.group(1)) if match else 0
-    sources = [SOURCE / "SocEnhance.c", SOURCE / "SOC.c"]
-    production = "\n".join(line for path in sources if path.exists()
-                           for line in path.read_text(encoding="utf-8").splitlines()
-                           if not line.startswith("#include"))
-    cases = (ROOT / "tools/soc_host_c_test.c").read_text(encoding="utf-8")
-    code = "#define HOST_SELF_MA " + str(self_ma) + "\n" + cases.replace("/* PRODUCTION_SOURCE */", production)
+    def function(text, signature):
+        start = text.index(signature)
+        brace = text.index('{', start)
+        while ';' in text[start:brace]:
+            start = text.index(signature, start + len(signature))
+            brace = text.index('{', start)
+        depth = 0
+        for pos in range(brace, len(text)):
+            depth += (text[pos] == '{') - (text[pos] == '}')
+            if depth == 0:
+                return text[start:pos+1] + '\n'
+        raise ValueError(signature)
+
+    production = '\n'.join(line for line in (SOURCE / 'SOC.c').read_text(encoding='utf-8').splitlines()
+                           if not line.startswith('#include'))
+    data = (SOURCE / 'DataDeal.h').read_text(encoding='utf-8')
+    begin = data.index('struct OTHER_ELEMENT {')
+    parameters = data[begin:data.index('};', begin)+2] + '\n'
+    for name in ('OtherElement_min', 'OtherElement_max'):
+        lines = data[re.search(r'^#define\s+' + name, data, re.M).start():].splitlines()
+        selected = []
+        for line in lines:
+            selected.append(line)
+            if not line.rstrip().endswith('\\'):
+                break
+        parameters += '\n'.join(selected) + '\n'
+    sci = (SOURCE / 'Sci_Upper.c').read_text(encoding='utf-8')
+    signatures = ('static void Sci_SetWrError(', 'static UINT16 Sci_GetWrRegNum(',
+                  'static UINT16 Sci_GetWrValue(', 'static UINT8 Sci_WrRegsByteCountValid(',
+                  'static UINT8 Sci_RangeFits(', 'static UINT8 Sci_RangeOverlaps(',
+                  'static void Sci_CopyWords(', 'static UINT8 Sci_WrValuesInRange(',
+                  'static void Sci_WriteWordsFromRequest(', 'static void Sci_ApplyOtherElementSideEffects(',
+                  'void Sci_WrRegs_0x10_OtherElement(', 'void Sci_WrReg_0x06_SetSocOnce(')
+    production += '\n'.join(function(sci, signature) for signature in signatures)
+    production += '\n'.join(line for line in (SOURCE / 'LowPowerSleep.c').read_text(encoding='utf-8').splitlines()
+                            if not line.startswith('#include'))
+    cases = (ROOT / 'tools/soc_host_c_test.c').read_text(encoding='utf-8')
+    code = cases.replace('/* PARAMETER_TYPES */', parameters).replace('/* PRODUCTION_SOURCE */', production)
     test_source = output / "soc.c"
     test_source.write_text(code, encoding="utf-8")
     env = os.environ.copy()

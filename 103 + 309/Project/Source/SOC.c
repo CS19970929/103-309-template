@@ -2,251 +2,198 @@
 #include <stdint.h>
 #include <string.h>
 
-#define SOC_TICK_MS ((UINT32)200U)
-#define SOC_MAMS_PER_AS10 ((UINT32)100000U)
-
-typedef struct {
-    UINT32 cap_factory_as10;
-    UINT32 cap_full_as10;
-    UINT32 cap_now_as10;
-    UINT32 cycle_x100;
-    UINT32 dsg_acc_as10;
-    int32_t rem_mams;
-    UINT8 soc;
-} SOC_STATE;
-typedef struct {
-    UINT32 cycle_x100;
-    UINT32 cap_full_as10;
-    UINT8 soc;
-} SOC_SAVE_MARK;
-static SOC_STATE s_soc;
-static SOC_SAVE_MARK s_saved_soc;
-static const UINT8 s_soc_default_startup_percent = 60U;
-static void soc_save_current_snapshot(void);
-
-static UINT32 soc_factory_cap_as10_from(UINT16 cap_a10)
-{
-	return (UINT32)cap_a10 * 3600U;
-}
-
-static void soc_refresh_capacity_base(void)
-{
-    s_soc.cap_full_as10 = s_soc.cap_factory_as10;
-    if (s_soc.cap_now_as10 > s_soc.cap_full_as10)
-        s_soc.cap_now_as10 = s_soc.cap_full_as10;
-}
-
-static UINT8 soc_from_cap(void)
-{
-	UINT32 soc;
-
-	if (s_soc.cap_now_as10 >= s_soc.cap_full_as10)
-	{
-		return 100U;
-	}
-	soc = (UINT32)(((uint64_t)s_soc.cap_now_as10 * 100ULL +
-		(s_soc.cap_full_as10 / 2U)) / s_soc.cap_full_as10);
-	return (soc > 100U) ? 100U : (UINT8)soc;
-}
-
-static UINT16 soc_cap_to_ah100(UINT32 cap_as10)
-{
-	UINT32 cap = (cap_as10 + 180U) / 360U;
-	return (cap > 0xFFFFU) ? 0xFFFFU : (UINT16)cap;
-}
-
-static void soc_set(UINT8 soc)
-{
-	if (soc > 100U)
-	{
-		soc = 100U;
-	}
-	s_soc.soc = soc;
-	s_soc.cap_now_as10 = (UINT32)(((uint64_t)s_soc.cap_full_as10 * soc) / 100ULL);
-	s_soc.rem_mams = 0U;
-}
-
-static void soc_publish_report(void)
-{
-	UINT32 cycles = s_soc.cycle_x100 / 100U;
-
-	g_stCellInfoReport.SocElement.u16Soc = s_soc.soc;
-	g_stCellInfoReport.SocElement.u16Soh = 100U;
-	g_stCellInfoReport.SocElement.u16CapacityNow = soc_cap_to_ah100(s_soc.cap_now_as10);
-	g_stCellInfoReport.SocElement.u16CapacityFull = soc_cap_to_ah100(s_soc.cap_full_as10);
-	g_stCellInfoReport.SocElement.u16CapacityFactory = soc_cap_to_ah100(s_soc.cap_factory_as10);
-	g_stCellInfoReport.SocElement.u16Cycle_times = (cycles > 0xFFFFU) ? 0xFFFFU : (UINT16)cycles;
-}
-
-void SOC_RequestCapacityReset(void)
-{
-	UINT8 soc_keep = s_soc.soc;
-
-	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
-	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-	s_soc.dsg_acc_as10 = 0U;
-	soc_refresh_capacity_base();
-	soc_set(soc_keep);
-	soc_save_current_snapshot();
-	soc_publish_report();
-}
-
-void SOC_RequestSetOnce(UINT8 soc)
-{
-	soc_set(soc);
-	soc_save_current_snapshot();
-	soc_publish_report();
-}
-
-static UINT8 soc_save(void)
-{
-	STORAGE_FLASH_SOC_DATA data;
-	UINT32 unit = s_soc.cap_factory_as10 / 100U;
-
-	memset(&data, 0, sizeof(data));
-	data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;
-	data.u16SocNow = s_soc.soc;
-	data.u16MaxErrorPercent = 100U;
-	data.u32CycleTimes = s_soc.cycle_x100;
-	data.u32CapNow = s_soc.cap_now_as10;
-	data.u32CapFull = s_soc.cap_full_as10;
-	data.u32LearnPassedAs10 = s_soc.dsg_acc_as10;
-	/* Reserved calibration fields remain zero in the existing V2 format. */
-	data.u16DsgSocInt = (UINT16)(((uint64_t)s_soc.dsg_acc_as10 * 100ULL) / unit);
-	if (data.u16DsgSocInt > 100U)
-	{
-		data.u16DsgSocInt = 100U;
-	}
-	return StorageFlash_SaveSocData(&data);
-}
-
-static void soc_update_save_mark(void)
-{
-	s_saved_soc.soc = s_soc.soc;
-	s_saved_soc.cycle_x100 = s_soc.cycle_x100;
-	s_saved_soc.cap_full_as10 = s_soc.cap_full_as10;
-}
-
-static void soc_save_current_snapshot(void)
-{
-	if (soc_save())
-	{
-		soc_update_save_mark();
-	}
-}
-
-static void soc_save_if_needed(void)
-{
-	if ((s_soc.soc != s_saved_soc.soc) ||
-		(s_soc.cycle_x100 != s_saved_soc.cycle_x100) ||
-		(s_soc.cap_full_as10 != s_saved_soc.cap_full_as10))
-	{
-		soc_save_current_snapshot();
-	}
-}
-
-static void soc_load_or_default(void)
-{
-	STORAGE_FLASH_SOC_DATA data;
-	UINT8 valid = StorageFlash_LoadSocData(&data);
-	UINT32 unit = s_soc.cap_factory_as10 / 100U;
-
-	if (valid && (data.u16SocNow <= 100U) && (data.u16DsgSocInt <= 100U))
-	{
-		s_soc.cycle_x100 = data.u32CycleTimes;
-		soc_refresh_capacity_base();
-		s_soc.dsg_acc_as10 = (data.u32LearnPassedAs10 != 0U) ?
-			(data.u32LearnPassedAs10 % unit) :
-			(UINT32)(((uint64_t)unit * data.u16DsgSocInt) / 100ULL);
-		if ((data.u32CapFull > 0U) && (data.u32CapNow <= data.u32CapFull) &&
-			((data.u32CapNow != 0U) || (data.u16SocNow == 0U)))
-		{
-            /* Preserve the stored SOC ratio when removing old SOH derating
-             * or applying a changed rated capacity. The V2 layout is unchanged. */
-			s_soc.cap_now_as10 = (UINT32)(((uint64_t)data.u32CapNow *
-                s_soc.cap_full_as10) / data.u32CapFull);
-			s_soc.soc = soc_from_cap();
-		}
-		else
-		{
-			soc_set((UINT8)data.u16SocNow);
-		}
-
-	}
-	else
-	{
-		s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-		soc_refresh_capacity_base();
-		soc_set(s_soc_default_startup_percent);
-		(void)soc_save();
-	}
-	soc_update_save_mark();
-}
-
-static void soc_integrate(int32_t net_current_ma)
-{
-	int32_t delta_as10;
-	int64_t acc_mams;
-	int64_t cap_now_as10;
-
-	acc_mams = ((int64_t)net_current_ma * (int64_t)SOC_TICK_MS) +
-		(int64_t)s_soc.rem_mams;
-	delta_as10 = (int32_t)(acc_mams / (int64_t)SOC_MAMS_PER_AS10);
-	s_soc.rem_mams = (int32_t)(acc_mams % (int64_t)SOC_MAMS_PER_AS10);
-	if (delta_as10 == 0)
-	{
-		return;
-	}
-	if (delta_as10 < 0)
-	{
-		UINT32 dsg_as10 = (UINT32)(-(int64_t)delta_as10);
-		UINT32 unit = s_soc.cap_factory_as10 / 100U;
-
-		s_soc.dsg_acc_as10 += dsg_as10;
-		s_soc.cycle_x100 += s_soc.dsg_acc_as10 / unit;
-		s_soc.dsg_acc_as10 %= unit;
-		soc_refresh_capacity_base();
-	}
-	cap_now_as10 = (int64_t)s_soc.cap_now_as10 + (int64_t)delta_as10;
-	if (cap_now_as10 < 0)
-	{
-		cap_now_as10 = 0;
-	}
-	else if (cap_now_as10 > (int64_t)s_soc.cap_full_as10)
-	{
-		cap_now_as10 = (int64_t)s_soc.cap_full_as10;
-	}
-	s_soc.cap_now_as10 = (UINT32)cap_now_as10;
-	s_soc.soc = soc_from_cap();
-}
-
-void InitData_SOC(void)
-{
-	memset(&s_soc, 0, sizeof(s_soc));
-	s_soc.cap_factory_as10 = soc_factory_cap_as10_from(OtherElement.u16Soc_Ah);
-	s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-	soc_refresh_capacity_base();
-	soc_load_or_default();
-	soc_publish_report();
-}
-
-void SOC_SaveSnapshotBeforeSleep(void)
-{
-	soc_save_if_needed();
-}
-
-
-
+#define SOC_TICK_MS 200U
+#define SOC_MAMS_PER_AS10 100000L
+#define SOC_DEFAULT_PERCENT 60U
+#define SOC_SAVE_RETRY_10MS_TICKS 100U
 #define SOC_TIME_CURRENT_MIN_MA 200L
 #define SOC_TIME_UNKNOWN_MINUTES 0xFFFFU
 #define SOC_TIME_MAX_MINUTES 0xFFFEU
 
+/* Capacity uses 0.1 A*s; only this module owns the integrator and remainder. */
+typedef struct {
+    UINT32 full_as10;
+    UINT32 now_as10;
+    UINT32 cycle_x100;
+    UINT32 passed_as10;
+    int32_t remainder_mams;
+} SOC_STATE;
+static SOC_STATE s_soc;
+static struct {
+    UINT32 cycles;
+    UINT32 retry_tick;
+    UINT8 percent;
+    UINT8 valid;
+    UINT8 retry_active;
+} s_saved;
+
+static UINT8 soc_percent(void)
+{
+    if (s_soc.full_as10 == 0U) return 0U;
+    return (UINT8)(((uint64_t)s_soc.now_as10 * 100U + s_soc.full_as10 / 2U) /
+                   s_soc.full_as10);
+}
+
+static UINT16 soc_capacity_ah100(UINT32 capacity_as10)
+{
+    UINT32 value = (capacity_as10 + 180U) / 360U;
+    return value > 0xFFFFU ? 0xFFFFU : (UINT16)value;
+}
+
+static void soc_publish_report(void)
+{
+    UINT32 cycles = s_soc.cycle_x100 / 100U;
+    g_stCellInfoReport.SocElement.u16Soc = soc_percent();
+    /* Keep the historical cycle-based SOH estimate separate from SOC capacity. */
+    g_stCellInfoReport.SocElement.u16Soh = cycles / 100U >= 20U ?
+        80U : (UINT16)(100U - cycles / 100U);
+    g_stCellInfoReport.SocElement.u16CapacityNow = soc_capacity_ah100(s_soc.now_as10);
+    g_stCellInfoReport.SocElement.u16CapacityFull = soc_capacity_ah100(s_soc.full_as10);
+    g_stCellInfoReport.SocElement.u16CapacityFactory = soc_capacity_ah100(s_soc.full_as10);
+    g_stCellInfoReport.SocElement.u16Cycle_times = cycles > 0xFFFFU ? 0xFFFFU : (UINT16)cycles;
+}
+
+UINT8 SOC_SaveSnapshot(void)
+{
+    STORAGE_FLASH_SOC_DATA data;
+    UINT32 unit = s_soc.full_as10 / 100U;
+    if (unit == 0U) return 0U;
+    memset(&data, 0, sizeof(data));
+    data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;
+    data.u16SocNow = soc_percent();
+    data.u16MaxErrorPercent = 100U;
+    data.u32CycleTimes = s_soc.cycle_x100;
+    data.u32CapNow = s_soc.now_as10;
+    data.u32CapFull = s_soc.full_as10;
+    data.u32LearnPassedAs10 = s_soc.passed_as10;
+    data.u16DsgSocInt = (UINT16)((uint64_t)s_soc.passed_as10 * 100U / unit);
+    /* Keep the V2 layout; all retired calibration fields stay zero. */
+    if (!StorageFlash_SaveSocData(&data)) {
+        s_saved.retry_tick = SysTime_Get10msTickCount();
+        s_saved.retry_active = 1U;
+        return 0U;
+    }
+    s_saved.percent = (UINT8)data.u16SocNow;
+    s_saved.cycles = s_soc.cycle_x100 / 100U;
+    s_saved.valid = 1U;
+    s_saved.retry_active = 0U;
+    return 1U;
+}
+
+static void soc_save_if_changed(void)
+{
+    if (s_soc.full_as10 == 0U) return;
+    /* Whole-cycle statistics share SOC saves. The old 0.01-cycle trigger
+     * caused a second write between adjacent integer SOC transitions. */
+    if (s_saved.valid && s_saved.percent == soc_percent() &&
+        s_saved.cycles == s_soc.cycle_x100 / 100U) return;
+    if (s_saved.retry_active && (UINT32)(SysTime_Get10msTickCount() -
+        s_saved.retry_tick) < SOC_SAVE_RETRY_10MS_TICKS) return;
+    (void)SOC_SaveSnapshot();
+}
+
+void InitData_SOC(void)
+{
+    STORAGE_FLASH_SOC_DATA data;
+    UINT32 unit;
+    memset(&s_soc, 0, sizeof(s_soc));
+    memset(&s_saved, 0, sizeof(s_saved));
+    s_soc.full_as10 = (UINT32)OtherElement.u16Soc_Ah * 3600U;
+    unit = s_soc.full_as10 / 100U;
+    if (unit != 0U && StorageFlash_LoadSocData(&data) &&
+        data.u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION &&
+        data.u16SocNow <= 100U && data.u16DsgSocInt <= 100U) {
+        s_soc.cycle_x100 = data.u32CycleTimes;
+        s_soc.passed_as10 = data.u32LearnPassedAs10 != 0U ?
+            data.u32LearnPassedAs10 % unit : (UINT32)((uint64_t)unit * data.u16DsgSocInt / 100U) % unit;
+        if (data.u32CapFull != 0U && data.u32CapNow <= data.u32CapFull &&
+            (data.u32CapNow != 0U || data.u16SocNow == 0U)) {
+            /* Preserve SOC, including its fraction, across old SOH snapshots
+             * and rated-capacity changes without changing the Flash format. */
+            s_soc.now_as10 = (UINT32)((uint64_t)data.u32CapNow *
+                s_soc.full_as10 / data.u32CapFull);
+        } else {
+            s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * data.u16SocNow / 100U);
+        }
+        s_saved.percent = soc_percent();
+        s_saved.cycles = s_soc.cycle_x100 / 100U;
+        s_saved.valid = 1U;
+    } else if (unit != 0U) {
+        s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+        s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * SOC_DEFAULT_PERCENT / 100U);
+        (void)SOC_SaveSnapshot();
+    }
+    soc_publish_report();
+}
+
+UINT8 SOC_RequestSetOnce(UINT8 percent)
+{
+    SOC_STATE previous = s_soc;
+    if (percent > 100U || s_soc.full_as10 == 0U) return 0U;
+    s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * percent / 100U);
+    s_soc.remainder_mams = 0;
+    if (!SOC_SaveSnapshot()) {
+        s_soc = previous;
+        return 0U;
+    }
+    soc_publish_report();
+    return 1U;
+}
+
+void SOC_ApplyParameters(UINT8 cycle_count_written)
+{
+    UINT32 full = (UINT32)OtherElement.u16Soc_Ah * 3600U;
+    if (full == 0U) return;
+    if (s_soc.full_as10 != 0U) {
+        s_soc.now_as10 = (UINT32)((uint64_t)s_soc.now_as10 * full / s_soc.full_as10);
+        s_soc.passed_as10 = (UINT32)((uint64_t)s_soc.passed_as10 * full / s_soc.full_as10);
+    } else {
+        s_soc.now_as10 = (UINT32)((uint64_t)full * SOC_DEFAULT_PERCENT / 100U);
+    }
+    s_soc.full_as10 = full;
+    s_soc.remainder_mams = 0;
+    if (cycle_count_written) {
+        s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+        s_soc.passed_as10 = 0U;
+    }
+    s_saved.valid = 0U;
+    (void)SOC_SaveSnapshot();
+    soc_publish_report();
+}
+
+static void soc_integrate_current(int32_t current_ma)
+{
+    int64_t total_mams = (int64_t)current_ma * SOC_TICK_MS + s_soc.remainder_mams;
+    int32_t delta_as10 = (int32_t)(total_mams / SOC_MAMS_PER_AS10);
+    int64_t capacity;
+    s_soc.remainder_mams = (int32_t)(total_mams % SOC_MAMS_PER_AS10);
+    if (delta_as10 == 0) return;
+    if (delta_as10 < 0) {
+        UINT32 unit = s_soc.full_as10 / 100U;
+        UINT32 steps;
+        s_soc.passed_as10 += (UINT32)(-(int64_t)delta_as10);
+        steps = s_soc.passed_as10 / unit;
+        s_soc.passed_as10 %= unit;
+        s_soc.cycle_x100 = UINT32_MAX - s_soc.cycle_x100 < steps ?
+            UINT32_MAX : s_soc.cycle_x100 + steps;
+    }
+    capacity = (int64_t)s_soc.now_as10 + delta_as10;
+    if (capacity <= 0) {
+        capacity = 0;
+        s_soc.remainder_mams = 0;
+    } else if (capacity >= s_soc.full_as10) {
+        capacity = s_soc.full_as10;
+        s_soc.remainder_mams = 0;
+    }
+    s_soc.now_as10 = (UINT32)capacity;
+}
+
 void App_SOC(void)
 {
-	if (!Fault_IsCurrentSampleFresh())
-        return;
-    soc_integrate(AfeCurrent_GetCurrent_mA());
-    soc_save_if_needed();
+    if (s_soc.full_as10 != 0U && Fault_IsCurrentSampleFresh())
+        soc_integrate_current(AfeCurrent_GetCurrent_mA());
+    /* A failed first save must retry even when measurement is unavailable. */
+    soc_save_if_changed();
     soc_publish_report();
 }
 
@@ -267,7 +214,6 @@ UINT16 SOC_GetRemainingMinutes(UINT8 charging)
     current_ma=(int64_t)measured_ma;
     if (charging) {
         if (measured_ma<SOC_TIME_CURRENT_MIN_MA) return 0U;
-        if (current_ma<=0) return SOC_TIME_UNKNOWN_MINUTES;
         capacity=(UINT32)(full-now);
     }
     else {

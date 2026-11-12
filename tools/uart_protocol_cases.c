@@ -139,7 +139,7 @@ static void test_remaining_time(void)
     g_stCellInfoReport.SocElement.u16CapacityNow=0;
     measured_ma=-1000; assert(!SOC_GetRemainingMinutes(0)); /* Empty while discharging. */
     setup_report(); s_current_valid=0;
-    puts("PASS remaining time: real SOC getter, charge/discharge LE fields, board load, idle/invalid/stale, wrap, limits");
+    puts("PASS remaining time: real SOC getter, charge/discharge LE fields, measured current, idle/invalid/stale, wrap, limits");
 }
 
 static void battery_number_request(UINT8 *b,const char *number)

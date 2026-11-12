@@ -32,8 +32,6 @@ pre+='\n'.join(line for line in hdr.splitlines() if line.startswith('#define'))+
 pre+=decl(hdr,'enum RS485_CMD_E {')+decl(hdr,'enum RS485_CMD_RW_E {')+decl(hdr,'struct RS485MSG {')
 pre+='\n'.join(line for line in (src/'DataDeal.h').read_text(encoding='utf-8').splitlines()
                if line.startswith('#define') and 'BMS_SOFTWARE_VERDION_DEFAULT' in line)+'\n'
-pre+='\n'.join(line for line in (src/'conf/Project_Config.h').read_text(encoding='utf-8').splitlines()
-               if line.startswith('#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA '))+'\n'
 pre+=decl((src/'DataDeal.h').read_text(encoding='utf-8'),'enum tagInfoForKBArray {')
 pre+=r'''
 #define E2P_PARA_NUM_PROTECT 65
