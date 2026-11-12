@@ -57,6 +57,30 @@ def main():
     log_code += log[log.index('void Sci_ACK_0x03_ReadRegs_EventRecord('):log.index('void Sci_WrReg_0x06_Reset_EventRecord(')]
     log_code += log[log.index('UINT8 EEPROM_ResetData_EventRecord_ToDefault(void)'):]
     code = code.replace('/* LOG_SOURCE */', log_code.replace('#include "main.h"', ''))
+    soc = '\n'.join(line for line in (SOURCE / 'SOC.c').read_text(encoding='utf-8').splitlines()
+                    if not line.startswith('#include'))
+    sci = (SOURCE / 'Sci_Upper.c').read_text(encoding='utf-8')
+    def function(signature):
+        start = sci.index(signature)
+        brace = sci.index('{', start)
+        while ';' in sci[start:brace]:
+            start = sci.index(signature, start + len(signature))
+            brace = sci.index('{', start)
+        depth = 0
+        for position in range(brace, len(sci)):
+            depth += (sci[position] == '{') - (sci[position] == '}')
+            if depth == 0:
+                return sci[start:position+1] + '\n'
+        raise ValueError(signature)
+    for signature in ('static void Sci_SetWrError(', 'static UINT16 Sci_GetWrRegNum(',
+                      'static UINT16 Sci_GetWrValue(', 'static UINT8 Sci_WrRegsByteCountValid(',
+                      'static UINT8 Sci_RangeFits(', 'static UINT8 Sci_RangeOverlaps(',
+                      'static void Sci_CopyWords(', 'static UINT8 Sci_WrValuesInRange(',
+                      'static void Sci_WriteWordsFromRequest(', 'static void Sci_ApplyOtherElementSideEffects(',
+                      'void Sci_WrRegs_0x10_OtherElement(', 'void Sci_WrReg_0x06_Reset_OtherCanAdd('):
+        soc += function(signature)
+    cases = (ROOT / 'tools/soc_persistence_cases.c').read_text(encoding='utf-8')
+    code = code.replace('/* SOC_PERSISTENCE_TESTS */', cases.replace('/* SOC_AND_PARAMETER_SOURCE */', soc))
     path = output / 'storage.c'
     path.write_text(code, encoding='utf-8')
     exe = output / 'storage.exe'

@@ -25,6 +25,7 @@ UINT32 SysTime_Get10msTickCount(void) { return s_host_afe_current_sample_seq * 2
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
+UINT16 StorageFlash_GetSocCycleGeneration(void) { return STORAGE_SOC_CYCLE_GENERATION_NONE; }
 
 typedef struct
 {

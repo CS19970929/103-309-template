@@ -289,6 +289,13 @@ UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
     return Storage_SaveConfigAt(FLASH_CONFIG_A,data);
 }
 
+UINT16 StorageFlash_GetSocCycleGeneration(void)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    if (!StorageFlash_LoadConfig(&config)) return STORAGE_SOC_CYCLE_GENERATION_NONE;
+    return config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
+}
+
 UINT16 StorageFlash_GetBaudMode(void)
 {
     STORAGE_FLASH_CONFIG_DATA config;
@@ -435,6 +442,25 @@ static UINT8 Storage_SaveSocAt(UINT32 base, const STORAGE_FLASH_SOC_DATA *data)
     return Storage_SaveState(base,&state);
 }
 
+UINT8 StorageFlash_ResumeSocCycleWrite(const STORAGE_FLASH_CONFIG_DATA *config)
+{
+    STORAGE_STATE state;
+    UINT16 generation;
+    if (!config) return 0U;
+    generation=config->rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
+    if (generation==STORAGE_SOC_CYCLE_GENERATION_NONE) return 1U;
+    Storage_LoadState(FLASH_STATE_A,&state);
+    if (!(state.valid & STORAGE_STATE_SOC) ||
+        state.soc.u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION ||
+        state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]==generation) return 1U;
+    /* Finish the committed command before module defaults can change its value. */
+    state.soc.u32CycleTimes=(UINT32)config->rw.other[STORAGE_SOC_CYCLE_PARAMETER_INDEX]*100U;
+    state.soc.u32LearnPassedAs10=0U;
+    state.soc.u16DsgSocInt=0U;
+    state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=generation;
+    return Storage_SaveState(FLASH_STATE_A,&state);
+}
+
 static UINT8 Storage_LoadFactoryAgingAt(UINT32 base, STORAGE_FLASH_FACTORY_AGING_DATA *data)
 {
     STORAGE_STATE state;
@@ -497,10 +523,21 @@ UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data)
     return 1U;
 }
 
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
+UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data, UINT8 cycle_count_written)
 {
     STORAGE_FLASH_CONFIG_DATA config;
+    STORAGE_STATE state;
+    UINT16 generation;
     if (!data || !StorageFlash_LoadConfig(&config)) return 0U;
+    if (cycle_count_written) {
+        generation=config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
+        generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
+        Storage_LoadState(FLASH_STATE_A,&state);
+        /* Skip the last snapshot tag even after wrap and repeated failed saves. */
+        if (generation==state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX])
+            generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
+        config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX]=generation;
+    }
     /* A normal host parameter save must not erase private module versions. */
     memcpy(config.rw.protect,data->protect,sizeof(config.rw.protect));
     memcpy(config.rw.other,data->other,sizeof(config.rw.other));

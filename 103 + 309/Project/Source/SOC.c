@@ -17,6 +17,7 @@ typedef struct {
     UINT32 cycle_x100;
     UINT32 passed_as10;
     int32_t remainder_mams;
+    UINT16 cycle_generation;
 } SOC_STATE;
 static SOC_STATE s_soc;
 static struct {
@@ -67,6 +68,7 @@ UINT8 SOC_SaveSnapshot(void)
     data.u32CapFull = s_soc.full_as10;
     data.u32LearnPassedAs10 = s_soc.passed_as10;
     data.u16DsgSocInt = (UINT16)((uint64_t)s_soc.passed_as10 * 100U / unit);
+    data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=s_soc.cycle_generation;
     /* Keep the V2 layout; all retired calibration fields stay zero. */
     if (!StorageFlash_SaveSocData(&data)) {
         s_saved.retry_tick = SysTime_Get10msTickCount();
@@ -98,6 +100,7 @@ void InitData_SOC(void)
     UINT32 unit;
     memset(&s_soc, 0, sizeof(s_soc));
     memset(&s_saved, 0, sizeof(s_saved));
+    s_soc.cycle_generation = StorageFlash_GetSocCycleGeneration();
     s_soc.full_as10 = (UINT32)OtherElement.u16Soc_Ah * 3600U;
     unit = s_soc.full_as10 / 100U;
     if (unit != 0U && StorageFlash_LoadSocData(&data) &&
@@ -118,6 +121,13 @@ void InitData_SOC(void)
         s_saved.percent = soc_percent();
         s_saved.cycles = s_soc.cycle_x100 / 100U;
         s_saved.valid = 1U;
+        if (s_soc.cycle_generation != STORAGE_SOC_CYCLE_GENERATION_NONE &&
+            data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX] != s_soc.cycle_generation) {
+            s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+            s_soc.passed_as10 = 0U;
+            s_saved.valid = 0U;
+            (void)SOC_SaveSnapshot();
+        }
     } else if (unit != 0U) {
         s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
         s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * SOC_DEFAULT_PERCENT / 100U);
@@ -153,6 +163,8 @@ void SOC_ApplyParameters(UINT8 cycle_count_written)
     s_soc.full_as10 = full;
     s_soc.remainder_mams = 0;
     if (cycle_count_written) {
+        /* The config tag is already durable, so reboot can finish a failed save. */
+        s_soc.cycle_generation = StorageFlash_GetSocCycleGeneration();
         s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
         s_soc.passed_as10 = 0U;
     }

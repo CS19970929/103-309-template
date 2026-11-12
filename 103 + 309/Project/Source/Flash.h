@@ -24,6 +24,11 @@
 #define STORAGE_BATTERY_NUMBER_INDEX 16U
 #define STORAGE_BATTERY_NUMBER_TAG_INDEX 22U
 #define STORAGE_BATTERY_NUMBER_TAG 0x424EU
+/* Existing private words link a committed cycle command to its SOC snapshot. */
+#define STORAGE_SOC_CYCLE_GENERATION_INDEX 23U
+#define STORAGE_SOC_CYCLE_GENERATION_NONE 0xFFFFU
+#define STORAGE_SOC_CYCLE_PARAMETER_INDEX 25U
+#define STORAGE_SOC_CYCLE_SNAPSHOT_INDEX 0U
 #define BATTERY_NUMBER_LENGTH 11U
 enum STORAGE_PARAM_GROUP {
     STORAGE_PARAM_AFE, STORAGE_PARAM_PROTECT, STORAGE_PARAM_SOC,
@@ -128,7 +133,9 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count);
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
 UINT8 StorageFlash_LoadRwParamData(STORAGE_FLASH_RW_PARAM_DATA *data);
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data);
+UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data, UINT8 cycle_count_written);
+UINT16 StorageFlash_GetSocCycleGeneration(void);
+UINT8 StorageFlash_ResumeSocCycleWrite(const STORAGE_FLASH_CONFIG_DATA *config);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
 UINT8 StorageFlash_LoadFactoryAgingData(STORAGE_FLASH_FACTORY_AGING_DATA *data);
 UINT8 StorageFlash_SaveFactoryAgingData(const STORAGE_FLASH_FACTORY_AGING_DATA *data);

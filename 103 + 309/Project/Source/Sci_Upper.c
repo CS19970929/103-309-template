@@ -1261,7 +1261,7 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s)
 	g_u16CalibCoefK[calib_index] = k;
 	g_i16CalibCoefB[calib_index] = b;
 
-	if (!EEPROM_SaveRWParametersToFlash())
+	if (!EEPROM_SaveRWParametersToFlash(0U))
 	{
 		g_u16CalibCoefK[calib_index] = old_k;
 		g_i16CalibCoefB[calib_index] = old_b;
@@ -1309,7 +1309,7 @@ void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s)
         return;
     }
 
-	if (!EEPROM_SaveRWParametersToFlash())
+	if (!EEPROM_SaveRWParametersToFlash(0U))
 	{
 		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_PROTECT);
 		Sci_ApplyProtectSideEffects(offset, u16WrRegNum);
@@ -1362,7 +1362,7 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	Sci_CopyWords(snapshot, base, E2P_PARA_NUM_OTHER_ELEMENT1);
 	Sci_WriteWordsFromRequest(s, base, offset, u16WrRegNum);
 
-	if (!EEPROM_SaveRWParametersToFlash())
+	if (!EEPROM_SaveRWParametersToFlash(Sci_RangeOverlaps(offset, u16WrRegNum, 25U, 1U)))
 	{
 		Sci_CopyWords(base, snapshot, E2P_PARA_NUM_OTHER_ELEMENT1);
 		Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
@@ -1506,7 +1506,7 @@ void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 		g_i16CalibCoefB[MDL_IDSG] = SYSBDEFAULT;
 	}
 
-	if (!EEPROM_SaveRWParametersToFlash())
+	if (!EEPROM_SaveRWParametersToFlash(0U))
 	{
 		g_u16CalibCoefK[MDL_ICHG] = old_chg_k;
 		g_i16CalibCoefB[MDL_ICHG] = old_chg_b;
@@ -1556,7 +1556,7 @@ void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s)
 			*(base + i) = *(&PrtE2PARAS_Default.u16VcellOvp_First + i);
 		}
 
-		if (!EEPROM_SaveRWParametersToFlash())
+		if (!EEPROM_SaveRWParametersToFlash(0U))
 		{
 			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_PROTECT);
 			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
@@ -1588,10 +1588,9 @@ void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s)
 			*(base + i) = *(&OtherElement_Default.u16Balance_OpenVoltage + i);
 		}
 
-		if (!EEPROM_SaveRWParametersToFlash())
+		if (!EEPROM_SaveRWParametersToFlash(1U))
 		{
 			Sci_CopyWords(base, snapshot, E2P_PARA_NUM_OTHER_ELEMENT1);
-			Sci_ApplyOtherElementSideEffects(0, E2P_PARA_NUM_OTHER_ELEMENT1);
 			Sci_SetWrError(s, RS485_ERROR_CMD_INVALID);
 			return;
 		}

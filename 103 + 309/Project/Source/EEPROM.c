@@ -225,7 +225,7 @@ static void EEPROM_ApplyRWParamData(const STORAGE_FLASH_RW_PARAM_DATA *data)
 	EEPROM_UpdateOtherElementRuntime();
 }
 
-UINT8 EEPROM_SaveRWParametersToFlash(void)
+UINT8 EEPROM_SaveRWParametersToFlash(UINT8 cycle_count_written)
 {
 	STORAGE_FLASH_RW_PARAM_DATA data;
 
@@ -236,7 +236,7 @@ UINT8 EEPROM_SaveRWParametersToFlash(void)
 		return 0;
 	}
 
-	return StorageFlash_SaveRwParamData(&data);
+	return StorageFlash_SaveRwParamData(&data,cycle_count_written);
 }
 
 static void EEPROM_LoadDefaultRuntimeData(void)
@@ -249,6 +249,9 @@ static void EEPROM_LoadDefaultRuntimeData(void)
 	System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
 }
 
+
+typedef char EEPROM_SocCycleOffsetCheck[(offsetof(struct OTHER_ELEMENT,u16Soc_Cycle_times)/
+    sizeof(UINT16)==STORAGE_SOC_CYCLE_PARAMETER_INDEX) ? 1 : -1];
 
 static UINT8 EEPROM_IsSocParameter(UINT16 word)
 {
@@ -317,6 +320,7 @@ UINT8 InitE2PROM(void)
     }
     /* Finish a committed intent even when this firmware disables that group. */
     if (valid && stored.initializing && !StorageFlash_CommitParameterUpdate(&stored)) goto failed;
+    if (valid && !StorageFlash_ResumeSocCycleWrite(&stored)) goto failed;
     if (!valid || (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION &&
                   memcmp(stored.reset_version,version,sizeof(version))!=0)) {
         defaults.initializing=STORAGE_PARAM_RESET_ALL;

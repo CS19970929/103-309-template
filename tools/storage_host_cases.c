@@ -192,7 +192,7 @@ static void test_module_updates(void) {
      * reapply defaults over the host's own edits. Changing the firmware string
      * alone also must not trigger the disabled factory reset. */
     PRT_E2ROMParas.u16VcellOvp_First=4002;
-    assert(EEPROM_SaveRWParametersToFlash());
+    assert(EEPROM_SaveRWParametersToFlash(0U));
     strcpy(firmware_version,"module-next-firmware"); mutations=0;
     assert(InitE2PROM() && !mutations && PRT_E2ROMParas.u16VcellOvp_First==4002);
     s_param_versions[STORAGE_PARAM_PROTECT]=0;
@@ -401,7 +401,7 @@ static void test_communication_storage(void)
     assert(!StorageFlash_WriteBatteryNumber(0) && !StorageFlash_ReadBatteryNumber(0));
     assert(!StorageFlash_WriteBatteryNumber((const UINT8 *)"BAD\x80" "0000000") && !mutations);
     /* Normal parameter/calibration saves preserve both new private fields. */
-    assert(EEPROM_SaveRWParametersToFlash());
+    assert(EEPROM_SaveRWParametersToFlash(0U));
     assert(StorageFlash_GetBaudMode()==3);
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
     reset_on_version=0; memset(s_param_versions,0,sizeof(s_param_versions));
@@ -437,6 +437,8 @@ static void test_communication_storage(void)
     printf("PASS communication storage: %d cuts, first/update writes, complete old/new config, state/log/statistics isolation, defaults, no-op, boot and RW-save preservation\n",total);
     puts("PASS communication fields: ASCII endpoints, all 11 invalid positions, high-byte-first packing, padding, invalid tag/data rejection, invalid baud fallback");
 }
+
+/* SOC_PERSISTENCE_TESTS */
 
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
@@ -494,7 +496,7 @@ int main(void) {
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
     assert(InitE2PROM());
-    PRT_E2ROMParas.u16VcellOvp_First=4001; assert(EEPROM_SaveRWParametersToFlash());
+    PRT_E2ROMParas.u16VcellOvp_First=4001; assert(EEPROM_SaveRWParametersToFlash(0U));
     mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4001 && !mutations);
     assert(StorageFlash_SaveSocData(&soc)); assert(StorageFlash_AppendLog(1,171));
     save_flash(); strcpy(firmware_version,"storage-test-v2");
@@ -508,7 +510,7 @@ int main(void) {
         mutations=0; assert(InitE2PROM() && !mutations);
     }
     strcpy(firmware_version,"storage-test-v3"); reset_on_version=0;
-    PRT_E2ROMParas.u16VcellOvp_First=4002; assert(EEPROM_SaveRWParametersToFlash());
+    PRT_E2ROMParas.u16VcellOvp_First=4002; assert(EEPROM_SaveRWParametersToFlash(0U));
     mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4002 && !mutations);
     assert(StorageFlash_LoadConfig(&loaded)); loaded.rw.reserved[0]=0xFFFF;
     assert(!EEPROM_RWParamDataIsValid(&loaded.rw));
@@ -517,5 +519,6 @@ int main(void) {
     test_module_updates();
     test_statistics();
     test_communication_storage();
+    test_soc_cycle_persistence();
     return 0;
 }

@@ -42,7 +42,13 @@ UINT8 Fault_IsCurrentSampleFresh(void) { return current_fresh; }
 struct RS485MSG { UINT8 u16Buffer[80],AckType,ErrorType; };
 static UINT8 AFE_PARAM_WRITE_Flag,SeriesNum,parameter_failure;
 static UINT32 g_u32CS_Res_AFE;
-static UINT8 EEPROM_SaveRWParametersToFlash(void) { return (UINT8)!parameter_failure; }
+static UINT16 cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
+UINT16 StorageFlash_GetSocCycleGeneration(void) { return cycle_generation; }
+static UINT8 EEPROM_SaveRWParametersToFlash(UINT8 cycle_count_written) {
+    if(parameter_failure) return 0U;
+    if(cycle_count_written) cycle_generation=cycle_generation>=0xFFFEU ? 1U : (UINT16)(cycle_generation+1U);
+    return 1U;
+}
 enum {NORMAL_MODE,HICCUP_MODE,DEEP_MODE,NO_SLEEP};
 static struct {UINT8 mode;} g_stLowPowerRtcStatus;
 static unsigned can_sleeps,statistics_flushes;
@@ -54,6 +60,7 @@ static void reset_case(UINT16 capacity_a10,UINT8 soc) {
     memset(&stored,0,sizeof(stored));
     OtherElement.u16Soc_Ah=capacity_a10; OtherElement.u16Soc_Cycle_times=3U;
     OtherElement.u16Soc_V_100=3550U; OtherElement.u16Soc_V_0=3050U;
+    cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
     stored_valid=write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
     InitData_SOC();SOC_RequestSetOnce(soc);
 }
@@ -180,6 +187,20 @@ static void test_parameter_side_effects(void) {
     assert(msg.AckType==RS485_ACK_POS && stored.u32CycleTimes==4200);
     puts("PASS real parameter writes: V0/V100 preserve state; capacity keeps ratio; cycles explicit; failed write rolls back");
 }
+static void test_cycle_write_recovery(void) {
+    struct RS485MSG msg;UINT32 capacity;
+    reset_case(245,80);stored.u32CycleTimes=12345;InitData_SOC();capacity=stored.u32CapNow;
+    write_failure=1;write_parameter(0x2319,1,&msg);
+    assert(msg.AckType==RS485_ACK_POS && stored.u32CycleTimes==12345);
+    assert(g_stCellInfoReport.SocElement.u16Cycle_times==1);
+    InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Cycle_times==1);
+    write_failure=0;run_seconds(1,0,3400);
+    assert(stored.u32CycleTimes==100 && stored.u32CapNow==capacity && !stored.u32LearnPassedAs10);
+    stored.u32CycleTimes=12345;InitData_SOC();write_failure=1;
+    write_parameter(0x2319,1,&msg);write_failure=0;InitData_SOC();
+    assert(stored.u32CycleTimes==100); /* An explicit same-value write is a new command. */
+    puts("PASS cycle command recovery: durable generation, failed snapshot/reboot, retry and same-value reset");
+}
 static void test_manual_storage_failure(void) {
     struct RS485MSG msg;
     reset_case(245,80);write_failure=1;
@@ -279,8 +300,8 @@ int main(void) {
     test_startup();test_voltage_independence();test_current_resolution();
     test_customer_case();test_bounds();test_manual_and_restore();
     test_no_self_consumption_and_invalid_samples();test_no_soh_derating();
-    test_parameter_side_effects();test_manual_storage_failure();test_save_retry();
+    test_parameter_side_effects();test_cycle_write_recovery();test_manual_storage_failure();test_save_retry();
     test_sleep_and_reset();test_soh_boundaries();test_sizes_and_invalid_capacity();
     test_random_profile();test_snapshot_semantics();
-    puts("PASS SOC production C:16 groups");return 0;
+    puts("PASS SOC production C:17 groups");return 0;
 }
