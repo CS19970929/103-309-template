@@ -83,13 +83,6 @@ UINT32 RtcSleep_PortGetLastWakeupSeconds(void)
     return RTC_GetLastWakeupPeriodSeconds();
 }
 
-void RtcSleep_PortApplySocRtcRest(UINT32 rest_seconds)
-{
-    SOC_ApplyRtcRelaxationCompensation(rest_seconds,
-                                       g_stCellInfoReport.u16VCellMin,
-                                       g_stCellInfoReport.u16VCellMax);
-}
-
 void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds)
 {
     extern UINT32 su32_Interval_S_Tcnt;

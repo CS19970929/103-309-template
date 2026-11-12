@@ -133,7 +133,6 @@ static UINT32 RTC_GetCounter(void) { return rtc_counter; }
 static void RtcSleep_PortEnterStop(void) { Sys_StopMode(); }
 static void initAFE1_IIC(void) {}
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
-static void RtcSleep_PortApplySocRtcRest(UINT32 seconds) {}
 static void RtcSleep_PortDisableStopWakeup(void) {}
 static void RtcSleep_PortRestoreAfterStop(void) { ++restore_calls; InitTimer(); adc_on=1; }
 static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
@@ -285,13 +284,13 @@ int main(void) {
     puts("PASS key: NORMAL/DEEP need 1 s wake and release/re-press; HICCUP IRQ wakes immediately and arms 3 s hold after timer restore; RTC/release stay asleep; concurrent current/UART, bounce/wrap/charger");
 #endif
     reset_case(); SleepDeal_UpdateOverdischarge(1);
-    assert(soc_now==0 && zero_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    assert(soc_now==55 && zero_calls==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); LowPower_Request(NO_SLEEP);
     scripted_key=1; key=0; expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
     SleepDeal_HandleBootSleepStartup();
     SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    assert(zero_calls==0 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     key=1; g_stCellInfoReport.u16VCellMin=2200;
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
     for(i=0;i<59;++i) lp_update_sleep_request();
@@ -299,21 +298,21 @@ int main(void) {
     lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_UpdateOverdischarge(0); SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==2 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    assert(zero_calls==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     for(i=0;i<2;++i) {
         reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
         key=1; stop_source=NO_IRQ; afe_uv=1;
-        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==1 && !adc_on && !restore_calls);
+        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && !adc_on && !restore_calls);
     }
     for(i=0;i<2;++i) {
         reset_case(); key=0; stop_source=soc_key; afe_uv=1;
         g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
-        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==1 && !adc_on && !restore_calls && !now_ms);
+        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && !adc_on && !restore_calls && !now_ms);
     }
     reset_case(); key=1; stop_source=NO_IRQ; rtc_wake=1;
     afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
     assert(!rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
-    puts("PASS UV: new event zeros SOC and requests immediate DEEP; same UV after wake does not retrigger; forced low-voltage timer remains active; recovery re-arms, both RTC modes, invalid status");
+    puts("PASS UV: new event preserves SOC and requests immediate DEEP; same UV after wake does not retrigger; forced low-voltage timer remains active; recovery re-arms, both RTC modes, invalid status");
     /* Both qualified key and charger wakes retain the handled UV state, but
      * neither may disable the configurable low-voltage sleep timer. */
     for(i=0;i<2;++i) {

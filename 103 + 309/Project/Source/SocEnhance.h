@@ -21,7 +21,6 @@ extern const UINT16 SocTable_TernaryLi[SOC_TABLE_SIZE];
 #endif
 
 void SOC_IntEnhance_Ctrl(int32_t net_current_ma);
-void SOC_ApplyRtcRelaxationCompensation(UINT32 rest_seconds, UINT16 vcell_min, UINT16 vcell_max);
 void SOC_SaveSnapshotBeforeSleep(void);
 void SOC_PublishReportData(void);
 void SOC_RequestCapacityReset(void);

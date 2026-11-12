@@ -133,62 +133,9 @@
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
 // </h>
 
-// <h>SOC Calibration
-//
-// Keep this section short. Only product tuning or field-debug values should be
-// PROJECT_CFG_* macros. Algorithm-internal constants stay in SocEnhance.c.
-
-// <o> Full confirm min cell margin mV <0-500>
-// <i> Full-charge calibration requires max cell voltage near the compile-time full voltage.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV 80
-
-// <o> Full confirm max cell delta mV <0-1000>
-// <i> Blocks full-charge calibration when cell imbalance is larger than this value.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV 120
-
-// <o> Full confirm time seconds <1-600>
-// <i> Continuous full-charge confirmation time before SOC can be raised by one step.
-#define PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS 15
-
-// <o> Calibration min valid cell voltage mV <1000-3500>
-// <i> Rejects OCV/full/low-tail calibration when a cell voltage is below this range.
-#define PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV 2000
-
-// <o> Calibration max valid cell voltage mV <3600-6000>
-// <i> Rejects OCV/full/low-tail calibration when a cell voltage is above this range.
-#define PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV 5000
-
-// <o> Sag holdoff seconds <0-1800>
-// <i> Delays OCV/low-tail calibration after heavy discharge to avoid rebound miscalibration.
-#define PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS 30
-
-// <o> Sag allow offset mV <0-500>
-// <i> Sag hold blocks calibration only while Vmin is above empty voltage plus this offset.
-#define PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV 50
-
-// <q> Enable rest OCV slow downward calibration
-// <i> When enabled, rest OCV triggers once after long stable rest to correct drift and self-discharge.
-#define PROJECT_CFG_SOC_REST_OCV_ENABLE 1
-
-// <o> Rest OCV wait seconds <60-43200>
-// <i> Minimum stable-rest time before rest OCV target can be trusted. 3600 = 1 hour.
-#define PROJECT_CFG_SOC_REST_OCV_SECONDS 3600
-
-// <o> Rest down step seconds <60-43200>
-// <i> Long-rest slow-down period; each period allows at most one SOC step toward OCV target.
-#define PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS 1800
-
-// <o> Auto calibration max step percent <1-10>
-// <i> Maximum SOC change per automatic calibration step.
-#define PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT 1
-
+// <h>SOC current integration
 // <o> Board self consumption mA <0-1000>
-// <i> Normal running self-consumption current included in coulomb counting.
 #define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA 15
-
-// <o> Empty tail start offset mV <0-1000>
-// <i> Enables low-tail downward calibration when Vmin is below empty voltage plus this offset.
-#define PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV 400
 // </h>
 
 // <h>Flash parameter updates after firmware upgrade

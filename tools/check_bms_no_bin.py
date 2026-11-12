@@ -105,7 +105,10 @@ def main():
     images = list(output.rglob('*.bin')) + list(output.rglob('*.hex'))
     if images:
         raise SystemExit('Unexpected image output: ' + str(images))
-    if result.returncode != 0 or not list(output.rglob('*.axf')):
+    summary = re.search(r'-\s*(\d+) Error\(s\),\s*(\d+) Warning\(s\)', text)
+    # uVision returns 1 for a successful build containing warnings.
+    if (result.returncode not in (0, 1) or not list(output.rglob('*.axf')) or
+            summary is None or int(summary.group(1)) != 0):
         raise SystemExit(result.returncode or 1)
     maps = list(output.rglob('*.map'))
     if len(maps) != 1:

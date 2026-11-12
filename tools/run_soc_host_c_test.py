@@ -1,120 +1,63 @@
-#!/usr/bin/env python3
-"""Build and run host tests against the real MCU SOC C sources."""
-
+"""Compile and exercise the real SOC C implementation; all outputs stay in user temp."""
+import argparse
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
-import sys
-from pathlib import Path
-
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_DIR = ROOT / "build" / "host_tests"
-SOURCE_DIR = ROOT / "103 + 309" / "Project" / "Source"
-STM32_LIB = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0"
-CONF_DIR = SOURCE_DIR / "conf"
+SOURCE = ROOT / "103 + 309/Project/Source"
 
 
-def compiler() -> str:
-    env_cc = os.environ.get("CC")
-    if env_cc:
-        return env_cc
-    for candidate in ("clang", "cc", "gcc"):
-        found = shutil.which(candidate)
-        if found:
-            return found
-    raise RuntimeError("no C compiler found; install clang/gcc or set CC")
-
-
-def configured_board_self_consumption_ma() -> int:
-    text = (CONF_DIR / "Project_Config.h").read_text(encoding="utf-8", errors="ignore")
-    match = re.search(r"^\s*#define\s+PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA\s+(\d+)\b",
-                      text,
-                      re.MULTILINE)
-    return int(match.group(1)) if match else 30
-
-
-def conf_override_dir(board_self_consumption_ma: int) -> Path:
-    target = BUILD_DIR / f"conf_board_self_{board_self_consumption_ma}"
-    target.mkdir(parents=True, exist_ok=True)
-    for name in ("conf.h", "Project_Config.h", "Project_BuildGuard.h"):
-        text = (CONF_DIR / name).read_text(encoding="utf-8", errors="ignore")
-        if name == "Project_Config.h":
-            text = re.sub(
-                r"(^\s*#define\s+PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA\s+)\d+(\b)",
-                rf"\g<1>{board_self_consumption_ma}\2",
-                text,
-                flags=re.MULTILINE,
-            )
-        (target / name).write_text(text, encoding="utf-8")
-    return target
-
-
-def build_and_run(cc: str, exe: Path, extra_defines=None, board_self_consumption_ma=None) -> None:
-    extra_defines = extra_defines or []
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    override_conf = (conf_override_dir(board_self_consumption_ma)
-                     if board_self_consumption_ma is not None else None)
-
-    include_dirs = [
-        SOURCE_DIR,
-    ]
-    if override_conf is not None:
-        include_dirs.append(override_conf)
-    include_dirs.extend([
-        SOURCE_DIR / "conf",
-        SOURCE_DIR / "easylogger" / "inc",
-        ROOT / "103 + 309" / "Project" / "Users",
-        STM32_LIB / "drivers",
-        STM32_LIB / "inc",
-        ROOT / "103 + 309" / "Libraries" / "CMSIS" / "CM3" / "CoreSupport",
-        ROOT / "103 + 309" / "Libraries" / "CMSIS" / "CM3" / "DeviceSupport" / "ST" / "STM32F10x",
-        ROOT / "103 + 309" / "Libraries" / "STM32F10x_StdPeriph_Driver" / "inc",
-    ])
-
-    cmd = [
-        cc,
-        "-std=c99",
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-        "-Wno-unused-variable",
-        "-ffunction-sections",
-        "-fdata-sections",
-        "-DSTM32F10X_HD",
-        "-DUSE_STDPERIPH_DRIVER",
-        *extra_defines,
-        *(("-I" + str(path)) for path in include_dirs),
-        str(ROOT / "tools" / "soc_host_c_test.c"),
-        str(SOURCE_DIR / "SOC.c"),
-        str(SOURCE_DIR / "SocEnhance.c"),
-        "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections",
-        "-o",
-        str(exe),
-    ]
-
-    label = ("current config" if board_self_consumption_ma is None
-             else f"board_self={board_self_consumption_ma}mA")
-    print("Building SOC host C test with:", cc, exe.name, label, flush=True)
-    subprocess.run(cmd, cwd=ROOT, check=True)
-    print("Running", exe, flush=True)
-    subprocess.run([str(exe)], cwd=ROOT, check=True)
-
-
-def main() -> int:
-    cc = compiler()
-    current_self = configured_board_self_consumption_ma()
-    variants = []
-    for value in (current_self, 0, 30, 1000):
-        if value not in variants:
-            variants.append(value)
-
-    for value in variants:
-        suffix = f"board_self_{value}"
-        build_and_run(cc, BUILD_DIR / f"soc_host_c_test_{suffix}", board_self_consumption_ma=value)
-    return 0
+def run():
+    parent = Path(tempfile.gettempdir()) / "CodexTemp/103-309-copy"
+    parent.mkdir(parents=True, exist_ok=True)
+    output = Path(tempfile.mkdtemp(prefix="soc-host-", dir=parent))
+    config = (SOURCE / "conf/Project_Config.h").read_text(encoding="utf-8")
+    match = re.search(r"^#define PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA (\d+)", config, re.M)
+    self_ma = int(match.group(1)) if match else 0
+    sources = [SOURCE / "SocEnhance.c", SOURCE / "SOC.c"]
+    production = "\n".join(line for path in sources if path.exists()
+                           for line in path.read_text(encoding="utf-8").splitlines()
+                           if not line.startswith("#include"))
+    cases = (ROOT / "tools/soc_host_c_test.c").read_text(encoding="utf-8")
+    code = "#define HOST_SELF_MA " + str(self_ma) + "\n" + cases.replace("/* PRODUCTION_SOURCE */", production)
+    test_source = output / "soc.c"
+    test_source.write_text(code, encoding="utf-8")
+    env = os.environ.copy()
+    vs = Path(r"C:\Program Files\Microsoft Visual Studio\2022\Community")
+    if os.name == "nt" and (vs / "Common7/Tools/VsDevCmd.bat").exists():
+        setup = output / "compiler-env.bat"
+        setup.write_text('@echo off\ncall "' + str(vs / "Common7/Tools/VsDevCmd.bat") +
+                         '" -no_logo -arch=x64 -host_arch=x64 >nul\nset\n')
+        for line in subprocess.check_output(["cmd.exe", "/d", "/c", str(setup)], text=True, errors="replace").splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key:
+                env[key] = value
+        cc = sorted((vs / "VC/Tools/MSVC").glob("*/bin/Hostx64/x64/cl.exe"))[-1]
+        exe = output / "soc.exe"
+        cmd = [str(cc), "/nologo", "/W4", "/WX", "/utf-8", "/TC", "/std:c11",
+               "/I" + str(SOURCE), str(test_source), "/Fe:" + str(exe), "/Fo:" + str(output / "soc.obj")]
+    else:
+        cc = os.environ.get("CC") or shutil.which("clang") or shutil.which("gcc")
+        if not cc:
+            raise RuntimeError("A host C compiler is required")
+        exe = output / "soc"
+        cmd = [str(cc), "-std=c99", "-Wall", "-Wextra", "-Werror", "-I" + str(SOURCE),
+               str(test_source), "-o", str(exe)]
+    result = subprocess.run(cmd, cwd=output, env=env, capture_output=True, text=True, errors="replace")
+    (output / "build.log").write_text(result.stdout + result.stderr, encoding="utf-8")
+    if result.returncode:
+        raise RuntimeError(result.stdout + result.stderr)
+    result = subprocess.run([str(exe)], cwd=output, capture_output=True, text=True)
+    (output / "results.txt").write_text(result.stdout + result.stderr, encoding="utf-8")
+    print(result.stdout, end="")
+    print("SOC host evidence:", output)
+    if result.returncode:
+        raise SystemExit(result.returncode)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    run()

@@ -124,11 +124,10 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 void SleepDeal_UpdateOverdischarge(UINT8 active)
 {
 	/* Call only after a successful AFE status read. Recovery re-arms the edge;
-	 * a wake while UV remains active is allowed to display zero and recharge. */
+	 * a wake while UV remains active is allowed to report SOC and recharge. */
 	if (!active) { s_sleep.undervoltage_handled=0U; return; }
 	if (s_sleep.undervoltage_handled) return;
 	s_sleep.undervoltage_handled=1U;
-	SOC_RequestSetOnce(0U);
 	LowPower_Request(DEEP_MODE);
 }
 

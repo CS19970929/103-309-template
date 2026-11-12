@@ -304,7 +304,6 @@ static bool rtc_sleep_run_hiccup_cycle(void)
         g_stLowPowerRtcStatus.sleep += RtcSleep_PortGetLastWakeupSeconds();
         g_stLowPowerRtcStatus.test_sample_voltage = g_stCellInfoReport.u16VCell[0];
 
-        RtcSleep_PortApplySocRtcRest(g_stLowPowerRtcStatus.sleep);
         lp_refresh_status();
 
         if (g_stLowPowerRtcStatus.mode==HICCUP_MODE &&

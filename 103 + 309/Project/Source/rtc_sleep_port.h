@@ -25,7 +25,6 @@ void RtcSleep_PortDisableStopWakeup(void);
 void RtcSleep_PortRestoreAfterStop(void);
 uint32_t RtcSleep_PortGetLastWakeupSeconds(void);
 
-void RtcSleep_PortApplySocRtcRest(uint32_t rest_seconds);
 void RtcSleep_PortAddRuntimeSeconds(uint32_t seconds);
 
 void cpu_frequency_conf(void);
