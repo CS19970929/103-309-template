@@ -10,15 +10,15 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD_DIR = ROOT / "build" / "host_tests"
+BUILD_DIR = Path(tempfile.gettempdir()) / "CodexTemp/103-309-copy/soc-visual"
 SOURCE_DIR = ROOT / "103 + 309" / "Project" / "Source"
-STM32_LIB = ROOT / "103 + 309" / "Project" / "STM32F10x_StdPeriph_Lib_V3.5.0"
 
 
 @dataclass
@@ -41,6 +41,11 @@ def compiler() -> str:
     env_cc = os.environ.get("CC")
     if env_cc:
         return env_cc
+    if os.name == 'nt':
+        vs = Path(r'C:\Program Files\Microsoft Visual Studio\2022\Community')
+        found = sorted((vs / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/cl.exe'))
+        if found:
+            return str(found[-1])
     for candidate in ("clang", "cc", "gcc"):
         found = shutil.which(candidate)
         if found:
@@ -50,35 +55,50 @@ def compiler() -> str:
 
 def build_trace_exe(cc: str, exe: Path) -> None:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        cc,
-        "-std=c99",
-        "-Wall",
-        "-Wextra",
-        "-Wno-unused-parameter",
-        "-Wno-unused-variable",
-        "-ffunction-sections",
-        "-fdata-sections",
-        "-DSTM32F10X_HD",
-        "-DUSE_STDPERIPH_DRIVER",
-        "-I" + str(SOURCE_DIR),
-        "-I" + str(SOURCE_DIR / "conf"),
-        "-I" + str(SOURCE_DIR / "easylogger" / "inc"),
-        "-I" + str(ROOT / "103 + 309" / "Project" / "Users"),
-        "-I" + str(STM32_LIB / "drivers"),
-        "-I" + str(STM32_LIB / "inc"),
-        "-I" + str(ROOT / "103 + 309" / "Libraries" / "CMSIS" / "CM3" / "CoreSupport"),
-        "-I" + str(ROOT / "103 + 309" / "Libraries" / "CMSIS" / "CM3" / "DeviceSupport" / "ST" / "STM32F10x"),
-        "-I" + str(ROOT / "103 + 309" / "Libraries" / "STM32F10x_StdPeriph_Driver" / "inc"),
-        str(ROOT / "tools" / "soc_host_visual_trace.c"),
-        str(SOURCE_DIR / "SOC.c"),
-        str(SOURCE_DIR / "SocEnhance.c"),
-        "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections",
-        "-o",
-        str(exe),
-    ]
-    print("Building SOC visual trace with:", cc, exe.name, flush=True)
-    subprocess.run(cmd, cwd=ROOT, check=True)
+    # Compile unchanged SOC logic with measurement/storage stubs, without MCU headers.
+    data = (SOURCE_DIR / 'DataDeal.h').read_text(encoding='utf-8')
+    start = data.index('struct OTHER_ELEMENT {')
+    parameters = data[start:data.index('};', start)+2]
+    header = """#ifndef SOC_TRACE_MAIN_H
+#define SOC_TRACE_MAIN_H
+#include <stdint.h>
+typedef uint8_t UINT8;typedef uint16_t UINT16;typedef uint32_t UINT32;
+typedef int16_t INT16;typedef int32_t INT32;typedef int FLASH_Status;
+#include "conf/Project_Config.h"
+#include "Flash.h"
+#include "SOC.h"
+""" + parameters + """
+struct stCell_Info {UINT16 u16VCellMin,u16VCellMax,u16VCellDelta,u16VCellTotle,u16Ichg,u16IDischg;
+    struct {UINT16 u16Soc,u16Soh,u16CapacityNow,u16CapacityFull,u16CapacityFactory,u16Cycle_times;} SocElement;};
+struct SYSTEM_ERROR {int unused;};enum SYSTEM_ERROR_COMMAND {HOST_UNUSED};
+extern struct OTHER_ELEMENT OtherElement;
+extern struct stCell_Info g_stCellInfoReport;
+INT32 AfeCurrent_GetCurrent_mA(void);
+UINT8 Fault_IsCurrentSampleFresh(void);
+UINT32 SysTime_Get10msTickCount(void);
+#endif
+"""
+    (BUILD_DIR / 'main.h').write_text(header, encoding='utf-8')
+    for original, name in ((SOURCE_DIR / 'SOC.c', 'soc.c'),
+                           (ROOT / 'tools/soc_host_visual_trace.c', 'trace.c')):
+        (BUILD_DIR / name).write_bytes(original.read_bytes())
+    env = os.environ.copy()
+    if Path(cc).name.lower() == 'cl.exe':
+        vs = Path(r'C:\Program Files\Microsoft Visual Studio\2022\Community')
+        setup = BUILD_DIR / 'compiler-env.bat'
+        setup.write_text('@echo off\ncall "' + str(vs / 'Common7/Tools/VsDevCmd.bat') +
+                         '" -no_logo -arch=x64 -host_arch=x64 >nul\nset\n')
+        for line in subprocess.check_output(['cmd.exe','/d','/c',str(setup)], text=True, errors='replace').splitlines():
+            key, sep, value = line.partition('=')
+            if sep and key:
+                env[key] = value
+        cmd = [cc, '/nologo', '/W4', '/WX', '/utf-8', '/TC', '/std:c11', '/I' + str(SOURCE_DIR),
+               str(BUILD_DIR / 'soc.c'), str(BUILD_DIR / 'trace.c'), '/Fe:' + str(exe)]
+    else:
+        cmd = [cc, '-std=c99', '-Wall', '-Wextra', '-Werror', '-I' + str(SOURCE_DIR),
+               str(BUILD_DIR / 'soc.c'), str(BUILD_DIR / 'trace.c'), '-o', str(exe)]
+    print('Building real SOC C visual trace:', cc, flush=True)
+    subprocess.run(cmd, cwd=BUILD_DIR, env=env, check=True)
 
 
 def run_trace(exe: Path, csv_path: Path) -> None:
@@ -124,7 +144,7 @@ def scenario_note(name: str) -> str:
         "hill_climb": "大电流爬坡产生压降，但不能误判为空电。",
         "fast_current_pulses": "快变电流按 200ms 采样平均值积分，曲线应平滑。",
         "deep_cutoff": "接近控制器截止电压时，SOC 应在低压末端收敛到 0。",
-        "charge_anchor": "充电积分到 99 后等待高压锚点，确认后才发布 100。",
+        "charge_anchor": "充电积分自然达到100，电压不再修正SOC。",
     }
     return notes.get(name, "")
 
@@ -145,11 +165,9 @@ def summarize(name: str, rows: list[dict[str, object]]) -> ScenarioSummary:
     elif name == "fast_current_pulses":
         passed = max_abs_error <= 8.0 and 60 <= internal_end <= 70
     elif name == "deep_cutoff":
-        passed = min_vmin <= 3050 and internal_end == 0 and public_end <= 5
+        passed = max_abs_error <= 0.51 and public_end == internal_end
     elif name == "charge_anchor":
-        bulk_rows = [row for row in rows if row["segment"] == "bulk-charge"]
-        bulk_max = max(int(row["internal_soc"]) for row in bulk_rows) if bulk_rows else internal_end
-        passed = bulk_max <= 99 and internal_end == 100
+        passed = internal_end == 100 and max_abs_error <= 0.51
     else:
         passed = True
 
@@ -408,7 +426,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
 <body>
 <main>
   <h1>SOC 真实 C 逻辑可视化测试报告</h1>
-  <p>数据来源：编译并运行当前工程的 <code>SOC.c</code> + <code>SocEnhance.c</code>，CSV 明细为 <code>{csv_name}</code>。</p>
+  <p>数据来源：编译并运行当前工程的 <code>SOC.c</code>，CSV 明细为 <code>{csv_name}</code>。</p>
 
   <section class="intro">
     <h2>怎么看</h2>
@@ -416,7 +434,7 @@ def render_html(grouped: dict[str, list[dict[str, object]]],
       <li>蓝线是真实容量推算 SOC，用来给测试场景提供参考基准。</li>
       <li>橙线是真实 C 代码内部 SOC，来自 host trace harness 的 Flash snapshot。</li>
       <li>绿线是对外发布 SOC；当前已取消独立显示平滑层，因此它等于内部 SOC。</li>
-      <li>灰线是最低单体电压，红线是电流，用来判断压降和校准是否合理。</li>
+      <li>灰线是最低单体电压，红线是电流，用于观察负载变化；电压不参与SOC校准。</li>
     </ul>
   </section>
 

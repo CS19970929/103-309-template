@@ -1,6 +1,6 @@
 #include "main.h"
 #include "Flash.h"
-#include "SocEnhance.h"
+#include "SOC.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +18,10 @@ UINT8 SeriesNum = 10U;
 static UINT16 s_host_typec_out_current_mA;
 static UINT32 s_host_vbat_mV;
 static UINT32 s_host_afe_current_sample_seq;
+static INT32 s_host_current_ma;
+INT32 AfeCurrent_GetCurrent_mA(void) { return s_host_current_ma; }
+UINT8 Fault_IsCurrentSampleFresh(void) { return 1U; }
+UINT32 SysTime_Get10msTickCount(void) { return s_host_afe_current_sample_seq * 20U; }
 
 static STORAGE_FLASH_SOC_DATA s_flash_soc;
 static UINT8 s_flash_soc_valid;
@@ -283,6 +287,7 @@ static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 	s_host_vbat_mV = (UINT32)vmin * (UINT32)SeriesNum;
 	g_stCellInfoReport.u16Ichg = ichg;
 	g_stCellInfoReport.u16IDischg = idsg;
+	s_host_current_ma = ((INT32)ichg - (INT32)idsg) * 100;
 	++s_host_afe_current_sample_seq;
 	App_SOC();
 }

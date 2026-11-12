@@ -37,6 +37,8 @@ SOH 保留原循环估算：每累计 100 次等效放电循环下降 1%，最�
 
 24.5 Ah 从 100% 开始，1.1 A 放电 30 分钟后为 98%；再以 6 A 放电两小时后为 49%、剩余 11.95 Ah。SOH 为 80% 时仍按同一额定容量积分。一次放空和再充至 99% 的快照调用由约 299 次降到 200 次；不是 Flash 寿命验收结论。
 
+`tools/soc_visual_report.py` 另编译真实 `SOC.c`，完成城市骑行、爬坡、脉冲负载、低电量和充电 5 组场景，与独立容量模型的最大 SOC 差不超过 0.51 个百分点。SOC 测试界面的纯积分参考模型 5 组场景也通过，最新测试工具已重新编译为 `dist/BMS_SOC_Test_UI.exe`。
+
 同时运行 `tools/test_storage.py`、`tools/test_uart_protocols.py`、`tools/test_sleep_policy.py`、`tools/test_protection_refactor.py` 和电流 K/B host 回归。Release/Debug 使用 `tools/check_bms_no_bin.py`，只在用户临时区生成 AXF/MAP，检查 App `[0x08004800,0x0801C000)` 边界，不生成 BIN/HEX，不烧录。
 
 主机桩和编译不代表实板电流精度、真实掉电、Flash 寿命或充放电验收；板上应复核电流零点、K/B、24.5 Ah 参数、长按关机恢复和至少一次受控充放电。

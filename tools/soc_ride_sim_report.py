@@ -147,7 +147,6 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
     max_current = 0
     duration = 0
     soc_start = model.soc
-    charge_pre_anchor_max = model.soc
 
     for segment in factory():
         for tick in range(segment.seconds * TICKS_PER_SECOND):
@@ -166,8 +165,6 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
             max_current = max(max_current, segment.idsg_a10, segment.ichg_a10)
             error = abs(model.soc - pack.soc)
             max_abs_error = max(max_abs_error, error)
-            if name == "charge_anchor" and segment.name == "bulk-charge":
-                charge_pre_anchor_max = max(charge_pre_anchor_max, model.soc)
             if tick % TICKS_PER_SECOND == 0:
                 sample_rows.append(
                     {
@@ -199,10 +196,10 @@ def run_scenario(name: str, sample_rows: list[dict[str, object]]) -> ScenarioRes
         notes = "200ms/5Hz current pulse tracking should follow sampled average current"
     elif name == "deep_cutoff":
         passed = min_vmin <= 3050 and model.soc == 0
-        notes = "接近控制器截止电压时应收敛到零"
+        notes = "实际放出容量耗尽后SOC归零，电压不参与修正"
     elif name == "charge_anchor":
-        passed = charge_pre_anchor_max <= 99 and model.soc == 100
-        notes = "满电电压锚点确认前不应发布未确认 100"
+        passed = model.soc == 100 and max_abs_error <= 0.51
+        notes = "充电积分自然达到100，不依赖满充电压锚点"
 
     return ScenarioResult(
         name=name,
@@ -239,7 +236,7 @@ def write_report(path: Path, results: list[ScenarioResult], csv_path: Path) -> N
         "- 电流输入使用 `A * 10`，与固件 `u16Ichg/u16IDischg` 一致。",
         "- MCU SOC 安时积分节拍为 `200ms/5Hz`；快变电流测试按每个 200ms 样本平均电流校验。",
         "- 电压由真实容量 SOC 反推 OCV，并叠加放电压降、充电极化和单体不一致。",
-        "- 被测对象是 `tools/soc_replay_test.py` 中镜像 `SocEnhance.c` 的主机模型。",
+        "- 被测对象是 `tools/soc_replay_test.py` 中的纯安时积分参考模型；固件验收使用 `tools/run_soc_host_c_test.py` 执行实际 `SOC.c`。",
         "- CSV 明细文件：`{0}`。".format(csv_path.name),
         "",
         "## 汇总",

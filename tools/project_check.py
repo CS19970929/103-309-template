@@ -35,7 +35,6 @@ DATADEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.c"
 DATADEAL_H = ROOT / "103 + 309" / "Project" / "Source" / "DataDeal.h"
 I2C_AFE1_C = ROOT / "103 + 309" / "Project" / "Source" / "I2C_AFE1.c"
 SOC_C = ROOT / "103 + 309" / "Project" / "Source" / "SOC.c"
-SOC_ENHANCE_C = ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c"
 SCI_UPPER_C = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.c"
 SCI_UPPER_H = ROOT / "103 + 309" / "Project" / "Source" / "Sci_Upper.h"
 SLEEPDEAL_C = ROOT / "103 + 309" / "Project" / "Source" / "SleepDeal.c"
@@ -263,18 +262,6 @@ GUARD_REQUIRED_TOKENS = [
     "PROJECT_CFG_PARAM_SOC_STATE_VERSION",
     "PROJECT_CFG_PARAM_AGING_STATE_VERSION",
     "PROJECT_CFG_PARAM_LOG_VERSION",
-    "PROJECT_CFG_SOC_FULL_CONFIRM_SECONDS",
-    "PROJECT_CFG_SOC_FULL_CONFIRM_MIN_CELL_MARGIN_MV",
-    "PROJECT_CFG_SOC_FULL_CONFIRM_MAX_CELL_DELTA_MV",
-    "PROJECT_CFG_SOC_CALIBRATION_MIN_CELL_VALID_MV",
-    "PROJECT_CFG_SOC_CALIBRATION_MAX_CELL_VALID_MV",
-    "PROJECT_CFG_SOC_SAG_HOLDOFF_SECONDS",
-    "PROJECT_CFG_SOC_SAG_ALLOW_OFFSET_MV",
-    "PROJECT_CFG_SOC_REST_OCV_SECONDS",
-    "PROJECT_CFG_SOC_REST_DOWN_STEP_SECONDS",
-    "PROJECT_CFG_SOC_CALIBRATION_STEP_PERCENT",
-    "PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA",
-    "PROJECT_CFG_SOC_EMPTY_TAIL_START_OFFSET_MV",
     "PROJECT_CFG_FACTORY_AGING_ENABLE",
     "PROJECT_CFG_FACTORY_AGING_DURATION_SECONDS",
 ]
@@ -861,7 +848,6 @@ def check_release_map(reporter):
         ROOT / "103 + 309" / "Project" / "Source" / "main.c",
         ROOT / "103 + 309" / "Project" / "Source" / "Flash.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SOC.c",
-        ROOT / "103 + 309" / "Project" / "Source" / "SocEnhance.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SH367309_Func.c",
         ROOT / "103 + 309" / "Project" / "Source" / "SH367309_DataDeal.c",
     ]
@@ -940,14 +926,11 @@ def check_soc_parameter_side_effects(reporter):
         return
 
     body = text[start:end]
-    if (
-        "Sci_RangeOverlaps(offset, count, 24, 4)" in body
-        and "reload_soc = 1U;" in body
-        and "SOC_RequestCapacityReset();" in body
-    ):
-        reporter.ok("SOC capacity parameter writes refresh SOC runtime state")
+    if ('SOC_ApplyParameters(' in body and 'InitData_SOC();' not in body and
+            'Sci_RangeOverlaps(offset, count, 24, 2)' in body):
+        reporter.ok("SOC writes update only capacity/cycles without resetting state for voltage fields")
     else:
-        reporter.fail("SOC capacity side effects must refresh SOC runtime state")
+        reporter.fail("SOC parameter side effects must preserve runtime state")
 
 
 def check_sci_host_write_policy(reporter):
@@ -984,48 +967,14 @@ def check_sci_host_write_policy(reporter):
 
 
 def check_soc_current_and_typec_policy(reporter):
-    required_files = [ADC_H, DATADEAL_C, SOC_C, SOC_ENHANCE_C]
-    if any(not path.exists() for path in required_files):
-        return
-
-    adc_h = read_text(ADC_H)
-    datadeal_c = read_text(DATADEAL_C)
-    soc_c = read_text(SOC_C)
-    soc_enhance_c = read_text(SOC_ENHANCE_C)
-
-    legacy_typec_current_path = (
-        "g_u16TypeCBatEquivCurrent_A10" in adc_h
-        and "g_u16TypeCOutCurrent_mA" in soc_c
-    )
-    getter_typec_current_path = (
-        "UINT16 ADC_GetTypeCOutCurrentMilliAmp(void);" in adc_h
-        and "ADC_GetTypeCOutCurrentMilliAmp()" in soc_c
-    )
-    typec_current_not_added_directly = (
-        "report_idsg + (UINT32)g_u16TypeCOutCurrent_A10" not in soc_c
-        and "report_idsg + (UINT32)g_u16TypeCOutCurrent_mA" not in soc_c
-        and "report_idsg + (UINT32)ADC_GetTypeCOutCurrentMilliAmp()" not in soc_c
-    )
-
-    if (
-        "TYPEC_OUT_VOLTAGE_MV" in adc_h
-        and "TYPEC_DCDC_EFFICIENCY_PERMILLE" in adc_h
-        and "SOC_GetTypeCBatEquivCurrentA10" in soc_c
-        and (legacy_typec_current_path or getter_typec_current_path)
-        and typec_current_not_added_directly
-    ):
-        reporter.ok("Type-C SOC path uses battery-side equivalent current")
+    text = read_text(SOC_C)
+    removed = ('SOC_GetTypeCBatEquivCurrentA10', 'SOC_GetNetCurrentMilliAmp',
+               'SOC_ApplyRtcRelaxationCompensation', 'PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA')
+    if (all(name not in text for name in removed) and
+            'AfeCurrent_GetCurrent_mA()' in text and 'Fault_IsCurrentSampleFresh()' in text):
+        reporter.ok("SOC uses only fresh measured current; automatic corrections removed")
     else:
-        reporter.fail("Type-C output current must be converted before entering SOC")
-
-    if (
-        "#define SOC_CURRENT_ACTIVE_A10       ((UINT16)2U)" in soc_enhance_c
-        and "#define AFE_CURRENT_OUTPUT_DEADBAND_MA ((UINT32)200U)" in datadeal_c
-        and "#define AFE_CURRENT_OUTPUT_DEADBAND_A10 ((UINT16)2U)" in datadeal_c
-    ):
-        reporter.ok("SOC active current threshold and AFE output deadband are 0.2A")
-    else:
-        reporter.fail("SOC active current threshold and AFE output deadband must stay at 0.2A")
+        reporter.fail("SOC must integrate fresh measured current without retired correction paths")
 
 
 def check_low_power_cleanup(reporter):
