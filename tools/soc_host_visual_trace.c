@@ -15,6 +15,8 @@ struct stCell_Info g_stCellInfoReport;
 volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
+int AFE_PARAM_WRITE_Flag;
+struct HOST_LOW_POWER_STATUS g_stLowPowerRtcStatus = {NO_SLEEP};
 static UINT16 s_host_typec_out_current_mA;
 static UINT32 s_host_vbat_mV;
 static UINT32 s_host_afe_current_sample_seq;
@@ -161,6 +163,7 @@ static void host_apply_default_config(void)
 
 static void host_reset_state(void)
 {
+	g_stLowPowerRtcStatus.mode = NO_SLEEP;
 	memset(&g_stCellInfoReport, 0, sizeof(g_stCellInfoReport));
 	memset((void *)&System_ErrFlag, 0, sizeof(System_ErrFlag));
 	memset(&s_flash_soc, 0, sizeof(s_flash_soc));
@@ -281,6 +284,7 @@ static void host_init_with_voltage(UINT16 vmax, UINT16 vmin)
 
 static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 {
+	UINT8 i;
 	g_stCellInfoReport.u16VCellMax = vmax;
 	g_stCellInfoReport.u16VCellMin = vmin;
 	g_stCellInfoReport.u16VCellDelta = (UINT16)(vmax - vmin);
@@ -289,8 +293,10 @@ static void host_tick(UINT16 vmax, UINT16 vmin, UINT16 ichg, UINT16 idsg)
 	g_stCellInfoReport.u16Ichg = ichg;
 	g_stCellInfoReport.u16IDischg = idsg;
 	s_host_current_ma = ((INT32)ichg - (INT32)idsg) * 100;
+	for (i=0U; i<32U; ++i) g_stCellInfoReport.u16VCell[i] = i<SeriesNum ? vmin : 61001U;
+	g_stCellInfoReport.u16VCell[0] = vmax;
 	++s_host_afe_current_sample_seq;
-	App_SOC();
+	App_SOC(1U, 1U);
 }
 
 static void host_pack_step(double *cap_now, UINT16 idsg_a10, UINT16 ichg_a10)
@@ -400,6 +406,18 @@ static void host_run_scenario(const HOST_SCENARIO *scenario)
 				}
 				host_tick(vmax, vmin, segment->ichg_a10, segment->idsg_a10);
 				host_pack_step(&cap_now, segment->idsg_a10, segment->ichg_a10);
+				if (strcmp(scenario->name, "deep_cutoff") == 0 && vmin <= 3000U)
+				{
+					/* The real project requests DEEP immediately at confirmed UV.
+					 * Do not invent another 30 seconds of business after cutoff. */
+					SOC_NotifyOverdischarge();
+					SOC_SaveSnapshot();
+					g_stLowPowerRtcStatus.mode = DEEP_MODE;
+					host_emit_row(scenario->name, time_s + 1U, "uv-protect-sleep",
+						host_true_soc(cap_now), host_internal_soc(), vmax, vmin,
+						segment->ichg_a10, segment->idsg_a10);
+					return;
+				}
 				if ((tick % HOST_TICKS_PER_SECOND) == (UINT32)(HOST_TICKS_PER_SECOND - 1U))
 				{
 					++time_s;

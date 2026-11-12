@@ -19,7 +19,7 @@ static UINT8 App_SH367309(void) { return (UINT8)fault_valid; }
 static void charger_detect_and_keyLogi_200ms(void) {}
 static void Fault_ApplyMosPermits(UINT8 a,UINT8 b) { ++mos_applied; }
 static void Sci_CustomerUpdateCounters(void) { assert(mos_applied); ++updated; }
-static void App_SOC(void) { soc_processed=1; }
+static void App_SOC(UINT8 sample_valid,UINT8 fault_valid) { soc_processed=1; }
 static void SleepDeal_UpdateOverdischarge(UINT8 active) { assert(soc_processed); ++uv_updates; }
 static UINT8 SleepDeal_NormalIdleExpired(UINT8 activity) { assert(activity && !fault_valid); return 0; }
 /* AFE_TASK_SOURCE */

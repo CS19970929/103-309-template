@@ -1006,7 +1006,7 @@ void App_AFEGet(void)
     Fault_ApplyMosPermits(1U, 1U);
     /* Both frames belong to this cycle; invalid cached zeros are not recovery. */
     if (sample_valid && fault_valid) Sci_CustomerUpdateCounters();
-    App_SOC();
+    App_SOC(sample_valid, fault_valid);
     if (fault_valid)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp);
     else

@@ -3,7 +3,12 @@ static INT32 persistence_current_ma;
 static UINT8 persistence_current_fresh=1U;
 INT32 AfeCurrent_GetCurrent_mA(void) { return persistence_current_ma; }
 UINT8 Fault_IsCurrentSampleFresh(void) { return persistence_current_fresh; }
-struct {struct {UINT16 u16Soc,u16Soh,u16CapacityNow,u16CapacityFull,u16CapacityFactory,u16Cycle_times;} SocElement;} g_stCellInfoReport;
+struct {UINT16 u16VCellMin,u16VCellMax,u16VCell[32];
+    struct {struct {UINT8 b1CellUvp,b1CellOvp;} bits;} unMdlFault_Third;
+    struct {UINT16 u16Soc,u16Soh,u16CapacityNow,u16CapacityFull,u16CapacityFactory,u16Cycle_times;} SocElement;
+} g_stCellInfoReport;
+enum {NORMAL_MODE,HICCUP_MODE,DEEP_MODE,NO_SLEEP};
+static struct {UINT8 mode;} g_stLowPowerRtcStatus;
 #define RS485_CMD_ADDR_BALANCE_OV 0x2300U
 #define RS485_ACK_POS 0U
 #define RS485_ACK_NEG 1U
@@ -15,10 +20,15 @@ int AFE_PARAM_WRITE_Flag;
 
 static void persistence_boot(void)
 {
+    unsigned i;
     memset(&s_flash,0,sizeof(s_flash));
     persistence_current_ma=0;tick=0;
+    persistence_current_fresh=1U;g_stLowPowerRtcStatus.mode=NO_SLEEP;
     assert(InitE2PROM());
     InitData_SOC();
+    AFE_PARAM_WRITE_Flag=0;
+    g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;
+    for(i=0;i<32;i++) g_stCellInfoReport.u16VCell[i]=i<SeriesNum ? 3300U : 61001U;
 }
 
 static void persistence_prepare(void)
@@ -29,11 +39,66 @@ static void persistence_prepare(void)
     memset((void *)FLASH_STATS_A,0x5A,2048);
     memset(s_param_versions,0,sizeof(s_param_versions));reset_on_version=0;
     cut_after=-1;error_after_commit=0;
-    persistence_boot();assert(SOC_RequestSetOnce(80));
+    persistence_boot();
     assert(StorageFlash_LoadSocData(&data));
+    data.u16SocNow=80U;data.u32CapNow=data.u32CapFull*80U/100U;
     data.u32CycleTimes=12345;data.u32LearnPassedAs10=1234;
     assert(StorageFlash_SaveSocData(&data));InitData_SOC();
     assert(StorageFlash_SaveFactoryAgingData(&aging));
+}
+
+static void test_soc_smooth_persistence(void)
+{
+    STORAGE_FLASH_SOC_DATA old,data;
+    int total,cut,ack;
+    unsigned i;
+    persistence_prepare();assert(StorageFlash_LoadSocData(&old));save_flash();mutations=0;
+    assert(SOC_RequestSetOnce(35));total=mutations;
+    for(cut=0;cut<=total;cut++) {
+        restore_flash();persistence_boot();mutations=0;cut_after=cut;
+        ack=SOC_RequestSetOnce(35);cut_after=-1;persistence_boot();
+        assert(StorageFlash_LoadSocData(&data));
+        assert(data.u32CapNow==old.u32CapNow && s_soc.now_as10==old.u32CapNow);
+        assert((s_soc.manual_target==35U)==(ack!=0));
+    }
+    printf("PASS smooth target transaction: %d half-word cuts, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
+    persistence_prepare();assert(SOC_RequestSetOnce(35));
+    AFE_PARAM_WRITE_Flag=0;
+    g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;
+    for(i=0;i<32;i++) g_stCellInfoReport.u16VCell[i]=i<SeriesNum ? 3300U : 61001U;
+    for(i=0;i<150;i++) {tick+=20U;App_SOC(1,1);}
+    assert(StorageFlash_LoadSocData(&old));save_flash();mutations=0;
+    assert(SOC_SaveSnapshot());total=mutations;
+    assert(StorageFlash_LoadSocData(&data));
+    for(cut=0;cut<=total;cut++) {
+        UINT32 before;
+        restore_flash();persistence_boot();mutations=0;cut_after=cut;
+        /* Restart the interrupted final save with exactly the same payload. */
+        (void)StorageFlash_SaveSocData(&data);cut_after=-1;persistence_boot();
+        assert(s_soc.now_as10==old.u32CapNow || s_soc.now_as10==data.u32CapNow);
+        assert(s_soc.manual_target==35U);before=s_soc.now_as10;
+        tick+=100000U;App_SOC(1,1);assert(s_soc.now_as10==before);
+        tick+=20U;App_SOC(1,1);assert(before-s_soc.now_as10>0U && before-s_soc.now_as10<=177U);
+    }
+    printf("PASS smooth progress journal: %d half-word cuts, old/new complete capacity and target retained, no boot catch-up\n",total+1);
+    persistence_prepare();persistence_current_ma=-100;
+    g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[1]=3040U;
+    for(i=0;i<150;i++) {tick+=20U;App_SOC(1,1);}
+    {
+        UINT32 entry=s_soc.low_entry_as10;
+        assert(entry!=0U && StorageFlash_LoadSocData(&old));save_flash();mutations=0;
+        assert(SOC_SaveSnapshot());total=mutations;assert(StorageFlash_LoadSocData(&data));
+        for(cut=0;cut<=total;cut++) {
+            restore_flash();persistence_boot();mutations=0;cut_after=cut;
+            (void)StorageFlash_SaveSocData(&data);cut_after=-1;persistence_boot();
+            assert(s_soc.now_as10==old.u32CapNow || s_soc.now_as10==data.u32CapNow);
+            assert(s_soc.low_entry_as10==entry);
+            persistence_current_ma=-100;g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[1]=3040U;
+            for(i=0;i<60;i++) {tick+=20U;App_SOC(1,1);}
+            assert(s_soc.low_entry_as10==entry); /* Never rebuild from a lower restored capacity. */
+        }
+    }
+    printf("PASS low reference journal: %d half-word cuts, exact entry/capacity restore, no compounded tail correction\n",total+1);
 }
 
 static void persistence_write(UINT16 value,UINT8 with_capacity,struct RS485MSG *msg)

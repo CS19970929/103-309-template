@@ -9,7 +9,9 @@ typedef int32_t INT32; typedef int FLASH_Status;
 #define SOC_TABLE_SIZE 42
 /* PARAMETER_TYPES */
 struct OTHER_ELEMENT OtherElement;
-struct { UINT16 u16VCellMin,u16VCellMax; struct {
+struct { UINT16 u16VCellMin,u16VCellMax,u16VCell[32];
+    struct {struct {UINT8 b1CellUvp,b1CellOvp;} bits;} unMdlFault_Third;
+    struct {
     UINT16 u16Soc,u16Soh,u16CapacityNow,u16CapacityFull,u16CapacityFactory,u16Cycle_times;
 } SocElement; } g_stCellInfoReport;
 static STORAGE_FLASH_SOC_DATA stored;
@@ -67,14 +69,25 @@ static void reset_case(UINT16 capacity_a10,UINT8 soc) {
     OtherElement.u16Soc_V_100=3550U; OtherElement.u16Soc_V_0=3050U;
     transient_save_failures=sleep_save_errors=sleep_watchdog_feeds=0;
     cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
-    stored_valid=write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
-    InitData_SOC();SOC_RequestSetOnce(soc);
+    stored_valid=1U;write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
+    stored.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;stored.u16SocNow=soc;
+    stored.u32CapFull=(UINT32)capacity_a10*3600U;stored.u32CapNow=(UINT32)((uint64_t)stored.u32CapFull*soc/100U);
+    stored.u32CycleTimes=300U;
+    SeriesNum=7U;OtherElement.u16Sys_SeriesNum=7U;AFE_PARAM_WRITE_Flag=0U;
+    g_stLowPowerRtcStatus.mode=NO_SLEEP;
+    InitData_SOC();
+}
+static void set_voltages(UINT16 minimum,UINT16 maximum) {
+    unsigned i;
+    g_stCellInfoReport.u16VCellMin=minimum;g_stCellInfoReport.u16VCellMax=maximum;
+    for(i=0;i<32;i++) g_stCellInfoReport.u16VCell[i]=i<SeriesNum ? minimum : 61001U;
+    g_stCellInfoReport.u16VCell[0]=maximum;
 }
 static void run_seconds(UINT32 seconds,INT32 measured_ma,UINT16 voltage_mv) {
     UINT32 ticks=seconds*5U;
     host_current_ma=measured_ma;
-    g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=voltage_mv;
-    while(ticks-- != 0U) { host_tick+=20U; App_SOC(); }
+    set_voltages(voltage_mv,voltage_mv);
+    while(ticks-- != 0U) { host_tick+=20U; App_SOC(1U,1U); }
 }
 static UINT32 expected_capacity(UINT16 capacity_a10,UINT8 start,INT32 ma,UINT32 seconds) {
     int64_t full=(int64_t)capacity_a10*3600;
@@ -100,15 +113,14 @@ static void test_startup(void) {
     puts("PASS startup: no snapshot starts at60 independent of cell voltage");
 }
 static void test_voltage_independence(void) {
-    const UINT16 volts[]={0,2000,2850,3000,3050,3100,3300,3400,3450,3451,3550,4180,5000,61001};unsigned i;
+    const UINT16 volts[]={0,3051,3100,3300,3400,3450,3451,3550,4180,5000,61001};unsigned i;
     for(i=0;i<sizeof(volts)/sizeof(volts[0]);++i) {
         reset_case(245,80);run_seconds(1800,-1100,volts[i]);
         expect_capacity(245,expected_capacity(245,80,-1100,1800));
-        assert(stored.u16Flags==0);
     }
-    reset_case(245,68);run_seconds(1800,0,3550);
+    reset_case(245,68);run_seconds(1800,0,3549);
     expect_capacity(245,expected_capacity(245,68,0,1800));
-    puts("PASS voltage: no full/empty/OCV correction across14 voltage inputs");
+    puts("PASS normal discharge: no automatic correction above3050mV or from invalid voltages");
 }
 static void test_current_resolution(void) {
     const INT32 currents[]={-6000,-1100,-200,-199,-101,-1,0,1,101,199,200,1100,6000};unsigned i;
@@ -138,11 +150,14 @@ static void test_bounds(void) {
 static void test_manual_and_restore(void) {
     const UINT8 values[]={0,1,35,60,99,100};unsigned i;
     for(i=0;i<sizeof(values)/sizeof(values[0]);++i) {
-        reset_case(245,80);SOC_RequestSetOnce(values[i]);
-        assert(stored.u16SocNow==values[i]);InitData_SOC();
+        UINT32 seconds=(UINT32)(values[i]>80 ? values[i]-80 : 80-values[i])*10U+1U;
+        reset_case(245,80);assert(SOC_RequestSetOnce(values[i]));
+        assert(stored.u16SocNow==80 && g_stCellInfoReport.SocElement.u16Soc==80);
+        InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==80);
+        run_seconds(seconds,0,3300);InitData_SOC();
         assert(g_stCellInfoReport.SocElement.u16Soc==values[i]);
     }
-    puts("PASS manual SOC: endpoints, immediate snapshot, reload");
+    puts("PASS manual SOC: durable targets, no request/boot jump, gradual endpoints and completion reload");
 }
 
 static void test_no_self_consumption_and_invalid_samples(void) {
@@ -152,7 +167,7 @@ static void test_no_self_consumption_and_invalid_samples(void) {
     assert(g_stCellInfoReport.SocElement.u16CapacityNow==cap_before);
     current_fresh=0;run_seconds(3600,-6000,3000);
     assert(g_stCellInfoReport.SocElement.u16CapacityNow==cap_before);
-    current_fresh=1;run_seconds(3600,-6000,3000);
+    current_fresh=1;run_seconds(3600,-6000,3300);
     expect_capacity(245,expected_capacity(245,80,-6000,3600));
     puts("PASS no self consumption:72h zero current; invalid reads pause and recovery resumes");
 }
@@ -214,8 +229,8 @@ static void test_manual_storage_failure(void) {
     memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
     assert(msg.AckType==RS485_ACK_NEG && msg.ErrorType==RS485_ERROR_CMD_INVALID);
     write_failure=0;memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
-    assert(msg.AckType==RS485_ACK_POS && stored.u16SocNow==35);
-    assert(!SOC_RequestSetOnce(101));assert(stored.u16SocNow==35);
+    assert(msg.AckType==RS485_ACK_POS && stored.u16SocNow==80 && stored.u16LearnAnchorSoc==35);
+    assert(!SOC_RequestSetOnce(101));assert(stored.u16SocNow==80 && stored.u16LearnAnchorSoc==35);
     puts("PASS real manual command: persistence failure rejects and preserves previous SOC; valid retry succeeds");
 }
 static void test_save_retry(void) {
@@ -229,9 +244,9 @@ static void test_save_retry(void) {
     assert(stored.u16SocNow==g_stCellInfoReport.SocElement.u16Soc);
     reset_case(245,80);stored_valid=0;write_failure=1;save_attempts=0;
     host_tick=UINT32_MAX-50U;InitData_SOC();write_failure=0;
-    {unsigned i;for(i=0;i<1000;i++) App_SOC();assert(save_attempts==1);}
-    host_tick=30;App_SOC();assert(save_attempts==1);
-    host_tick=49;App_SOC();assert(save_attempts==2 && stored_valid);
+    {unsigned i;for(i=0;i<1000;i++) App_SOC(1U,1U);assert(save_attempts==1);}
+    host_tick=30;App_SOC(1U,1U);assert(save_attempts==1);
+    host_tick=49;App_SOC(1U,1U);assert(save_attempts==2 && stored_valid);
     puts("PASS snapshot retry: first-write recovery, real1Hz timeout, backlog and32-bit tick wrap");
 }
 static void test_sleep_and_reset(void) {
@@ -281,7 +296,7 @@ static void test_soh_boundaries(void) {
 static void test_sizes_and_invalid_capacity(void) {
     const UINT16 caps[]={1,245,270,6553,65000};unsigned i;
     for(i=0;i<sizeof(caps)/sizeof(caps[0]);++i) {
-        reset_case(caps[i],50);run_seconds(60,-1100,3000);
+        reset_case(caps[i],50);run_seconds(60,-1100,3300);
         expect_capacity(caps[i],expected_capacity(caps[i],50,-1100,60));
     }
     reset_case(0,50);run_seconds(60,INT32_MIN,3000);
@@ -303,7 +318,7 @@ static void test_random_profile(void) {
         g_stCellInfoReport.u16VCellMin=(UINT16)(2000U+random%2500U);
         if(current_fresh) reference+=(int64_t)host_current_ma*200;
         if(reference<0) reference=0;if(reference>full) reference=full;
-        host_tick+=20U;App_SOC();
+        host_tick+=20U;App_SOC(1U,1U);
         if(n%997U==0U) {
             assert(SOC_SaveSnapshot());expected=(UINT32)(reference/100000);
             error=(int64_t)stored.u32CapNow-expected;assert(error>=-1 && error<=1);
@@ -321,12 +336,16 @@ static void test_snapshot_semantics(void) {
     printf("PASS snapshot semantics: invalid data fallback, retired flags ignored, discharge/recharge saves=%u\n",save_attempts);
 }
 
+/* SMOOTHING_TESTS */
 int main(void) {
+    setvbuf(stdout,NULL,_IONBF,0);
     test_startup();test_voltage_independence();test_current_resolution();
     test_customer_case();test_bounds();test_manual_and_restore();
     test_no_self_consumption_and_invalid_samples();test_no_soh_derating();
     test_parameter_side_effects();test_cycle_write_recovery();test_manual_storage_failure();test_save_retry();
     test_sleep_and_reset();test_sleep_save_failure();test_soh_boundaries();test_sizes_and_invalid_capacity();
     test_random_profile();test_snapshot_semantics();
-    puts("PASS SOC production C:18 groups");return 0;
+    test_smooth_full();test_smooth_low_window();test_smooth_manual_bounds();
+    test_smooth_timing_and_invalid();test_smooth_restore_and_sleep();test_smooth_legacy_and_parameter_reset();
+    puts("PASS SOC production C:24 groups");return 0;
 }

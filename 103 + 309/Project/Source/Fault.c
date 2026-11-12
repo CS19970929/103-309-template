@@ -55,6 +55,7 @@ void Fault_PauseMeasurements(void)
 {
     /* STOP, reset and failed reads do not acknowledge any confirmed fault. */
     s_current_valid = 0U;
+    SOC_PauseCalibration();
     Fault_ResetMosConfirmation();
 }
 

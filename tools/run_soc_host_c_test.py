@@ -51,6 +51,7 @@ def run():
     production += '\n'.join(line for line in (SOURCE / 'LowPowerSleep.c').read_text(encoding='utf-8').splitlines()
                             if not line.startswith('#include'))
     cases = (ROOT / 'tools/soc_host_c_test.c').read_text(encoding='utf-8')
+    cases = cases.replace('/* SMOOTHING_TESTS */', (ROOT / 'tools/soc_smoothing_cases.c').read_text(encoding='utf-8'))
     code = cases.replace('/* PARAMETER_TYPES */', parameters).replace('/* PRODUCTION_SOURCE */', production)
     test_source = output / "soc.c"
     test_source.write_text(code, encoding="utf-8")
@@ -82,6 +83,8 @@ def run():
     result = subprocess.run([str(exe)], cwd=output, capture_output=True, text=True)
     (output / "results.txt").write_text(result.stdout + result.stderr, encoding="utf-8")
     print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="")
     print("SOC host evidence:", output)
     if result.returncode:
         raise SystemExit(result.returncode)

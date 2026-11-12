@@ -41,6 +41,7 @@ static UINT8 self_test_active;
 static UINT8 FlashSelfTest_IsActive(void) { return self_test_active; }
 #endif
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
+static unsigned soc_empty_targets;
 #define ERROR_STATUS_AFE1 1
 #define ERROR_EEPROM_STORE 2
 static UINT8 System_ERROR_UserCallback(int command) {
@@ -48,6 +49,7 @@ static UINT8 System_ERROR_UserCallback(int command) {
     return (UINT8)!afe_status_ok;
 }
 static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
+static void SOC_NotifyOverdischarge(void) { ++soc_empty_targets; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
@@ -162,7 +164,7 @@ static void reset_case(void) {
     tick=now_ms=release_at_ms=charge_at_ms=rtc_counter=0;
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=flash_busy=0; stop_source=soc_key;
-    afe_uv=zero_calls=0; afe_status_ok=1; soc_now=55;
+    afe_uv=zero_calls=0; soc_empty_targets=0; afe_status_ok=1; soc_now=55;
     OtherElement.u16Sleep_Vlow=2600; OtherElement.u16Sleep_TimeVlow=1;
     OtherElement.u16Sleep_TimeNormal=10080;
     expected_sleep_flag=0;
@@ -317,13 +319,13 @@ int main(void) {
     puts("PASS key: NORMAL/DEEP need 1 s wake and release/re-press; HICCUP IRQ wakes immediately and arms 3 s hold after timer restore; RTC/release stay asleep; concurrent current/UART, bounce/wrap/charger");
 #endif
     reset_case(); SleepDeal_UpdateOverdischarge(1);
-    assert(soc_now==55 && zero_calls==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    assert(soc_now==55 && zero_calls==0 && soc_empty_targets==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); LowPower_Request(NO_SLEEP);
     scripted_key=1; key=0; expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
     SleepDeal_HandleBootSleepStartup();
     SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==0 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    assert(zero_calls==0 && soc_empty_targets==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     key=1; g_stCellInfoReport.u16VCellMin=2200;
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
     for(i=0;i<59;++i) lp_update_sleep_request();
@@ -331,11 +333,11 @@ int main(void) {
     lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_UpdateOverdischarge(0); SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    assert(zero_calls==0 && soc_empty_targets==2 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     for(i=0;i<2;++i) {
         reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
         key=1; stop_source=NO_IRQ; afe_uv=1;
-        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && !adc_on && !restore_calls);
+        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && soc_empty_targets==1 && !adc_on && !restore_calls);
     }
     for(i=0;i<2;++i) {
         reset_case(); key=0; stop_source=soc_key; afe_uv=1;

@@ -129,6 +129,7 @@ void SleepDeal_UpdateOverdischarge(UINT8 active)
 	if (!active) { s_sleep.undervoltage_handled=0U; return; }
 	if (s_sleep.undervoltage_handled) return;
 	s_sleep.undervoltage_handled=1U;
+	SOC_NotifyOverdischarge();
 	LowPower_Request(DEEP_MODE);
 }
 

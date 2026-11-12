@@ -125,6 +125,7 @@ int main(void) {
 '''
 
 FAULT_STUBS = r'''
+static void SOC_PauseCalibration(void) {}
 static struct {
     union MDLCHGFAULT_REG unMdlFault_Second, unMdlFault_Third;
     UINT16 u16Ichg, u16IDischg;

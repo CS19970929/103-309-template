@@ -52,6 +52,7 @@ static bool rtc_sleep_has_wakeup_exception(void) {
     return wake_afe != 0 || wake_external;
 }
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
+static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
 static void RtcSleep_PortApplySocRtcRest(UINT32 seconds) {}
 static void lp_refresh_status(void) {}
 static void low_power_log_and_commit_sleep(UINT8 mode) { assert(mode==DEEP_MODE); ++deep_requests; }

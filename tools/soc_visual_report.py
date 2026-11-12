@@ -68,7 +68,8 @@ typedef int16_t INT16;typedef int32_t INT32;typedef int FLASH_Status;
 #include "Flash.h"
 #include "SOC.h"
 """ + parameters + """
-struct stCell_Info {UINT16 u16VCellMin,u16VCellMax,u16VCellDelta,u16VCellTotle,u16Ichg,u16IDischg;
+struct stCell_Info {UINT16 u16VCellMin,u16VCellMax,u16VCellDelta,u16VCellTotle,u16Ichg,u16IDischg,u16VCell[32];
+    struct {struct {UINT8 b1CellUvp,b1CellOvp;} bits;} unMdlFault_Third;
     struct {UINT16 u16Soc,u16Soh,u16CapacityNow,u16CapacityFull,u16CapacityFactory,u16Cycle_times;} SocElement;};
 struct SYSTEM_ERROR {int unused;};enum SYSTEM_ERROR_COMMAND {HOST_UNUSED};
 extern struct OTHER_ELEMENT OtherElement;
@@ -76,6 +77,11 @@ extern struct stCell_Info g_stCellInfoReport;
 INT32 AfeCurrent_GetCurrent_mA(void);
 UINT8 Fault_IsCurrentSampleFresh(void);
 UINT32 SysTime_Get10msTickCount(void);
+enum {NORMAL_MODE,HICCUP_MODE,DEEP_MODE,NO_SLEEP};
+struct HOST_LOW_POWER_STATUS {UINT8 mode;};
+extern struct HOST_LOW_POWER_STATUS g_stLowPowerRtcStatus;
+extern int AFE_PARAM_WRITE_Flag;
+extern UINT8 SeriesNum;
 #endif
 """
     (BUILD_DIR / 'main.h').write_text(header, encoding='utf-8')
@@ -143,8 +149,8 @@ def scenario_note(name: str) -> str:
         "city_commute": "城市混合骑行应跟随安时积分，对外 SOC 不应乱跳。",
         "hill_climb": "大电流爬坡产生压降，但不能误判为空电。",
         "fast_current_pulses": "快变电流按 200ms 采样平均值积分，曲线应平滑。",
-        "deep_cutoff": "接近控制器截止电压时，SOC 应在低压末端收敛到 0。",
-        "charge_anchor": "充电积分自然达到100，电压不再修正SOC。",
+        "deep_cutoff": "3050mV以上保持积分；低压限速修正，3000mV保护立即休眠，未收敛不强制清零。",
+        "charge_anchor": "积分与最高单体满充目标共同推进，额外校准平滑限速。",
     }
     return notes.get(name, "")
 
@@ -165,7 +171,22 @@ def summarize(name: str, rows: list[dict[str, object]]) -> ScenarioSummary:
     elif name == "fast_current_pulses":
         passed = max_abs_error <= 8.0 and 60 <= internal_end <= 70
     elif name == "deep_cutoff":
-        passed = max_abs_error <= 0.51 and public_end == internal_end
+        # The synthetic cell curve is an integration reference, not an OCV
+        # calibration truth. Keep the exact oracle above the user's boundary;
+        # within the tail check the independent rate/continuity contract.
+        above = [row for row in rows if int(row["vmin_mv"]) > 3050]
+        unchanged = all(abs(int(row["internal_soc"]) - float(row["true_soc"])) <= 0.51 for row in above)
+        bounded = True
+        for previous, row in zip(rows, rows[1:]):
+            seconds = int(row["time_s"]) - int(previous["time_s"])
+            drop = int(previous["cap_now_ah100"]) - int(row["cap_now_ah100"])
+            measured_drop = int(row["idsg_a10"]) * seconds / 360.0
+            # The trace uses 27Ah; Ah*100 reports have one unit rounding error.
+            correction_limit = 2700 * seconds / 1000.0
+            bounded &= (0 <= drop <= measured_drop + correction_limit + 1.0 and
+                        0 <= int(previous["public_soc"]) - int(row["public_soc"]) <= 1)
+        passed = (unchanged and bounded and public_end == internal_end and
+                  str(last["segment"]) == "uv-protect-sleep" and int(last["vmin_mv"]) <= 3000)
     elif name == "charge_anchor":
         passed = internal_end == 100 and max_abs_error <= 0.51
     else:

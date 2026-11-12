@@ -519,6 +519,6 @@ int main(void) {
     test_module_updates();
     test_statistics();
     test_communication_storage();
-    test_soc_cycle_persistence();
+    test_soc_cycle_persistence();test_soc_smooth_persistence();
     return 0;
 }
