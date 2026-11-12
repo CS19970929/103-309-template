@@ -14,6 +14,10 @@ struct { UINT16 u16VCellMin,u16VCellMax; struct {
 } SocElement; } g_stCellInfoReport;
 static STORAGE_FLASH_SOC_DATA stored;
 static UINT8 stored_valid,write_failure,current_fresh=1U;
+static unsigned transient_save_failures, sleep_save_errors, sleep_watchdog_feeds;
+#define ERROR_EEPROM_STORE 1
+#define Feed_IWatchDog (++sleep_watchdog_feeds)
+static void System_ERROR_UserCallback(int error) { assert(error==ERROR_EEPROM_STORE); ++sleep_save_errors; }
 static INT32 host_current_ma;
 static unsigned save_attempts;
 static UINT32 host_tick;
@@ -25,6 +29,7 @@ UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data) {
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data) {
     ++save_attempts;
     if(write_failure) return 0U;
+    if(transient_save_failures) { --transient_save_failures; return 0U; }
     stored=*data; stored_valid=1U; return 1U;
 }
 INT32 AfeCurrent_GetCurrent_mA(void) { return host_current_ma; }
@@ -60,6 +65,7 @@ static void reset_case(UINT16 capacity_a10,UINT8 soc) {
     memset(&stored,0,sizeof(stored));
     OtherElement.u16Soc_Ah=capacity_a10; OtherElement.u16Soc_Cycle_times=3U;
     OtherElement.u16Soc_V_100=3550U; OtherElement.u16Soc_V_0=3050U;
+    transient_save_failures=sleep_save_errors=sleep_watchdog_feeds=0;
     cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
     stored_valid=write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
     InitData_SOC();SOC_RequestSetOnce(soc);
@@ -239,6 +245,25 @@ static void test_sleep_and_reset(void) {
     InitData_SOC();expect_capacity(245,exact);assert(can_sleeps && statistics_flushes);
     puts("PASS sleep: HICCUP keeps RAM without forced writes; NORMAL/DEEP save exact Ah and restore");
 }
+static void test_sleep_save_failure(void) {
+    unsigned attempts,feeds,flushes;UINT32 exact;
+    reset_case(245,80);run_seconds(60,-1100,3400);exact=expected_capacity(245,80,-1100,60);
+    attempts=save_attempts;feeds=sleep_watchdog_feeds;flushes=statistics_flushes;
+    transient_save_failures=1;g_stLowPowerRtcStatus.mode=DEEP_MODE;
+    assert(LowPowerSleep_SaveResetState());
+    assert(save_attempts==attempts+2 && stored.u32CapNow==exact && !sleep_save_errors);
+    assert(sleep_watchdog_feeds==feeds+2 && statistics_flushes==flushes+1);
+    write_failure=1;attempts=save_attempts;flushes=statistics_flushes;
+    assert(!LowPowerSleep_SaveResetState());
+    assert(save_attempts==attempts+2 && sleep_save_errors==1 && statistics_flushes==flushes+1);
+    attempts=save_attempts;g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+    assert(LowPowerSleep_SaveCoreState() && save_attempts==attempts);
+    assert(!LowPowerSleep_SaveResetState() && save_attempts==attempts+2);
+    assert(sleep_save_errors==2); /* Reset saving cannot be skipped by a stale HICCUP mode. */
+    write_failure=0;g_stLowPowerRtcStatus.mode=NORMAL_MODE;attempts=save_attempts;
+    assert(LowPowerSleep_SaveCoreState() && save_attempts==attempts+1);
+    puts("PASS sleep failures: transient retry, persistent two-attempt bound, watchdog, statistics and reset always saves");
+}
 static void test_soh_boundaries(void) {
     const UINT32 cycles[]={0,99,100,199,200,1999,2000,10000,42949672};unsigned i;
     for(i=0;i<sizeof(cycles)/sizeof(cycles[0]);++i) {
@@ -301,7 +326,7 @@ int main(void) {
     test_customer_case();test_bounds();test_manual_and_restore();
     test_no_self_consumption_and_invalid_samples();test_no_soh_derating();
     test_parameter_side_effects();test_cycle_write_recovery();test_manual_storage_failure();test_save_retry();
-    test_sleep_and_reset();test_soh_boundaries();test_sizes_and_invalid_capacity();
+    test_sleep_and_reset();test_sleep_save_failure();test_soh_boundaries();test_sizes_and_invalid_capacity();
     test_random_profile();test_snapshot_semantics();
-    puts("PASS SOC production C:17 groups");return 0;
+    puts("PASS SOC production C:18 groups");return 0;
 }

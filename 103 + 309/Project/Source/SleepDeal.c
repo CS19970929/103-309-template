@@ -26,6 +26,7 @@ enum { KEY_READY, KEY_TIMING, KEY_WAIT_RELEASE };
 
 static void SleepDeal_MarkBootFromSleepChargerWakeup(void);
 static void SleepDeal_WaitStopWakeup(void);
+static void SleepDeal_RecordSocSaveResult(UINT8 saved);
 
 static UINT8 SleepDeal_IsChargerWakeupActive(void)
 {
@@ -114,7 +115,7 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 {
 	UINT16 boot_flag = s_sleep.undervoltage_handled ? FLASH_UNDERVOLTAGE_SLEEP_VALUE : FLASH_DEEP_SLEEP_VALUE;
 
-	LowPowerSleep_SaveResetState();
+	SleepDeal_RecordSocSaveResult(LowPowerSleep_SaveResetState());
 	BootFlag_Write(boot_flag);
 	InitAFE1_Sleep(0);
 	AFE_Sleep();
@@ -165,6 +166,26 @@ static void BootFlag_EnableAccess(void)
 
 #define SLEEP_BKP_FLAG_REG BKP_DR2
 #define SLEEP_BKP_INV_REG BKP_DR3
+/* DR1 is RTC; DR2/3 hold the sleep reason. DR4/5 survive software reset. */
+#define SOC_SAVE_BKP_FLAG_REG BKP_DR4
+#define SOC_SAVE_BKP_INV_REG BKP_DR5
+#define SOC_SAVE_FAILED_VALUE ((UINT16)0x5346U)
+
+static void SleepDeal_RecordSocSaveResult(UINT8 saved)
+{
+    UINT16 value=saved ? 0U : SOC_SAVE_FAILED_VALUE;
+    BootFlag_EnableAccess();
+    BKP_WriteBackupRegister(SOC_SAVE_BKP_FLAG_REG,value);
+    BKP_WriteBackupRegister(SOC_SAVE_BKP_INV_REG,(UINT16)(~value));
+}
+
+static void SleepDeal_RestoreSocSaveFailure(void)
+{
+    BootFlag_EnableAccess();
+    if (BKP_ReadBackupRegister(SOC_SAVE_BKP_FLAG_REG)==SOC_SAVE_FAILED_VALUE &&
+        BKP_ReadBackupRegister(SOC_SAVE_BKP_INV_REG)==(UINT16)(~SOC_SAVE_FAILED_VALUE))
+        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+}
 
 void BootFlag_Write(UINT16 flag)
 {
@@ -254,6 +275,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 {
 	UINT16 sleep_flag;
 
+	SleepDeal_RestoreSocSaveFailure();
 	sleep_flag = BootFlag_Read();
 	s_sleep.boot_sleep = 0U;
 	s_sleep.chg_wake = 0U;

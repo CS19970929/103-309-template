@@ -260,7 +260,8 @@ static void rtc_sleep_prepare_rtc(void)
         InitWakeUp_Base();
     }
 
-    LowPowerSleep_SaveCoreState();
+    /* STOP retains RAM on failure; the save helper latches the storage error. */
+    (void)LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
     MCUO_DEBUG_LED1 = 1;
     lp_refresh_status();

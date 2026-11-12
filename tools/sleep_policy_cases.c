@@ -20,11 +20,15 @@ typedef int FLASH_Status;
 #define RCC_APB1Periph_BKP 2
 #define BKP_DR2 2
 #define BKP_DR3 3
+#define BKP_DR4 4
+#define BKP_DR5 5
 #define ENABLE 1
 static int key=1,charger,adc_on,led,ctlc,one_second;
 static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy,flash_busy;
 static UINT32 tick,now_ms,release_at_ms,charge_at_ms,rtc_counter;
-static UINT16 bkp[4];
+static UINT16 bkp[6];
+static UINT8 sleep_save_ok=1U;
+static unsigned sleep_save_calls, storage_errors;
 static UINT16 expected_sleep_flag;
 static int watchdog_feeds,reset_during_stop;
 static jmp_buf reset_point;
@@ -37,7 +41,11 @@ static UINT8 FlashSelfTest_IsActive(void) { return self_test_active; }
 #endif
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 #define ERROR_STATUS_AFE1 1
-static UINT8 System_ERROR_UserCallback(int command) { return (UINT8)!afe_status_ok; }
+#define ERROR_EEPROM_STORE 2
+static UINT8 System_ERROR_UserCallback(int command) {
+    if(command==ERROR_EEPROM_STORE) { ++storage_errors; return 0U; }
+    return (UINT8)!afe_status_ok;
+}
 static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
@@ -66,8 +74,8 @@ static void RCC_APB1PeriphClockCmd(int peripheral,int enable) {}
 static void PWR_BackupAccessCmd(int enable) {}
 static void BKP_WriteBackupRegister(int reg,UINT16 value) { bkp[reg]=value; }
 static UINT16 BKP_ReadBackupRegister(int reg) { return bkp[reg]; }
-static void LowPowerSleep_SaveResetState(void) {}
-static void LowPowerSleep_SaveCoreState(void) {}
+static UINT8 LowPowerSleep_SaveResetState(void) { ++sleep_save_calls; return sleep_save_ok; }
+static UINT8 LowPowerSleep_SaveCoreState(void) { return sleep_save_ok; }
 static void InitAFE1_Sleep(int n) {}
 static void AFE_Sleep(void) {}
 static void fake_reset(void) { ++deep_calls; }
@@ -140,6 +148,7 @@ static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
 /* RTC_SOURCE */
 static void reset_case(void) {
     memset(&s_sleep,0,sizeof(s_sleep));
+    memset(bkp,0,sizeof(bkp));sleep_save_ok=1U;sleep_save_calls=storage_errors=0;
     memset((void *)&g_stLowPowerRtcStatus,0,sizeof(g_stLowPowerRtcStatus));
     g_stLowPowerRtcStatus.mode=NO_SLEEP;
     memset(&g_stCellInfoReport,0,sizeof(g_stCellInfoReport));
@@ -158,8 +167,27 @@ static void reset_case(void) {
     self_test_active=0U;
 #endif
 }
+static void test_sleep_save_diagnostic(void) {
+    reset_case();g_stLowPowerRtcStatus.mode=DEEP_MODE;s_sleep.undervoltage_handled=1U;
+    sleep_save_ok=0U;SleepDeal_Continue(DEEP_MODE);
+    assert(sleep_save_calls==1 && deep_calls==1); /* Failure does not veto protective reset. */
+    assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
+    assert(bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE && bkp[BKP_DR5]==(UINT16)(~SOC_SAVE_FAILED_VALUE));
+    memset(&s_sleep,0,sizeof(s_sleep));storage_errors=0;charger=1;
+    SleepDeal_HandleBootSleepStartup();
+    assert(storage_errors==1 && bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE);
+    assert(SleepDeal_IsBootFromSleepChargerWakeup());
+    storage_errors=0;SleepDeal_HandleBootSleepStartup();assert(storage_errors==1);
+    bkp[BKP_DR5]^=1U;storage_errors=0;BootFlag_Clear();
+    SleepDeal_HandleBootSleepStartup();assert(!storage_errors); /* Reject a torn marker. */
+    sleep_save_ok=1U;SleepDeal_Continue(DEEP_MODE);
+    assert(deep_calls==2 && !bkp[BKP_DR4] && bkp[BKP_DR5]==0xFFFFU);
+    storage_errors=0;BootFlag_Clear();SleepDeal_HandleBootSleepStartup();assert(!storage_errors);
+    puts("PASS DEEP save diagnostics: failure retains protective reset/reason, marker survives restart, charger wake, torn marker rejected, success clears");
+}
 int main(void) {
     int i;
+    test_sleep_save_diagnostic();
 #if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
     reset_case(); adc_on=1; key=0;
     for(tick=0;tick<1000;++tick) assert(!SleepDeal_TakeKeySleepRequest());
