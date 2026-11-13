@@ -352,7 +352,7 @@ def check_serial_iap_refactor_contract(reporter):
 
 SOURCE = ROOT / "103 + 309/Project/Source"
 PROJECT = ROOT / "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx"
-REMOVED_SOURCES = {"IrqDebug.c", "StartupDefaultHandler.c", "ShortFunc.c",
+REMOVED_SOURCES = {"EEPROM.c", "EEPROM.h", "IrqDebug.c", "StartupDefaultHandler.c", "ShortFunc.c",
                    "DebugHooks.c", "DebugWatch.c", "SystemDebug.c"}
 REMOVED_TOKENS = ("IrqDebug", "IRQ_DEBUG_", "FlashSelfTest", "STORAGE_SELF_TEST",
                   "AFE_CURRENT_DIAG", "AFE_CURRENT_DEBUG_INJECT", "VCELL_DISP_TEST",
@@ -399,7 +399,7 @@ def check_bms(reporter):
             reporter.fail("Required retained behavior missing: " + token)
     if not (SOURCE / "Heat_Cool.c").exists() or not (SOURCE / "Heat_Cool.h").exists():
         reporter.fail("Retained heating source/parameter header missing")
-    for path in ("IrqDebug.c", "IrqDebug.h", "FlashSelfTest.h", "StartupDefaultHandler.c", "ShortFunc.c", "ShortFunc.h"):
+    for path in ("EEPROM.c", "EEPROM.h", "IrqDebug.c", "IrqDebug.h", "FlashSelfTest.h", "StartupDefaultHandler.c", "ShortFunc.c", "ShortFunc.h"):
         if (SOURCE / path).exists():
             reporter.fail("Removed source still exists: " + path)
     flash = (SOURCE / "Flash.h").read_text(encoding="utf-8")
@@ -412,11 +412,21 @@ def check_bms(reporter):
             reporter.fail("Flash boundary changed: " + macro)
     if "((UINT32)0x400U)" not in flash:
         reporter.fail("Flash erase page must remain 1 KiB")
-    eeprom = (SOURCE / "EEPROM.h").read_text(encoding="utf-8")
-    macros = set(re.findall(r"^#define\s+(\w+)",eeprom,re.M))
-    if macros != {"EEPROM_H", "E2P_PARA_NUM_PROTECT", "E2P_PARA_NUM_RTC",
-                  "E2P_PARA_NUM_OTHER_ELEMENT1", "E2P_PARA_NUM_RESERVED_RW_PARAM"}:
-        reporter.fail("EEPROM header must expose only live parameter counts")
+    for macro, count in {"E2P_PARA_NUM_PROTECT":65, "E2P_PARA_NUM_RTC":12,
+                         "E2P_PARA_NUM_OTHER_ELEMENT1":32}.items():
+        if not re.search(r"^#define\s+"+macro+r"\s+"+str(count)+r"$",flash,re.M):
+            reporter.fail("Shared parameter count changed: " + macro)
+    for token in ("STORAGE_FLASH_CONFIG_DATA", "STORAGE_FLASH_RW_PARAM_DATA",
+                  "STORAGE_FLASH_FACTORY_AGING_DATA", "StorageFlash_LoadConfig",
+                  "StorageFlash_SaveConfig", "StorageFlash_CommitParameterUpdate",
+                  "StorageFlash_ResumeSocCycleWrite", "FlashReadOneHalfWord"):
+        if token in flash:
+            reporter.fail("Storage implementation leaked through public header: " + token)
+    for token in ("InitE2PROM", "EEPROM_SaveRWParametersToFlash", "Storage_LoadConfigAt",
+                  "Storage_SaveConfigAt", "Storage_LoadSocAt", "Storage_SaveSocAt",
+                  "Storage_LoadLogAt", "StorageFlash_SaveRwParamData", "StorageFlash_LoadAfeData"):
+        if token in code:
+            reporter.fail("Retired storage wrapper still present: " + token)
     reporter.ok("BMS instrumentation removed; retained features and Flash boundaries checked")
 
 

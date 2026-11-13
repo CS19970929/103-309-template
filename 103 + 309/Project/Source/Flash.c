@@ -1,4 +1,55 @@
 #include "main.h"
+#include "Heat_Cool.h"
+#include <stddef.h>
+
+/* On-Flash layout. Keep field order, widths and reserved-word meanings. */
+#define FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT 24
+#define FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT 24
+/* reserved[0..5] hold current calibration; [6..14] are private update tags.
+ * Do not reorder groups: their positions are part of the stored format. */
+#define STORAGE_PARAM_VERSION_FIRST 6U
+/* Private fields fit the existing 24-word reserved area; record size is unchanged. */
+#define STORAGE_BAUD_MODE_INDEX 15U
+#define STORAGE_BATTERY_NUMBER_INDEX 16U
+#define STORAGE_BATTERY_NUMBER_TAG_INDEX 22U
+#define STORAGE_BATTERY_NUMBER_TAG 0x424EU
+/* Existing private words link a committed cycle command to its SOC snapshot. */
+#define STORAGE_SOC_CYCLE_GENERATION_INDEX 23U
+enum STORAGE_PARAM_GROUP {
+    STORAGE_PARAM_AFE, STORAGE_PARAM_PROTECT, STORAGE_PARAM_SOC,
+    STORAGE_PARAM_OTHER, STORAGE_PARAM_CALIB, STORAGE_PARAM_HEAT_COOL,
+    STORAGE_PARAM_SOC_STATE, STORAGE_PARAM_AGING_STATE, STORAGE_PARAM_LOG,
+    STORAGE_PARAM_COUNT
+};
+#define STORAGE_PARAM_RESET_ALL   1U
+#define STORAGE_PARAM_RESET_SOC   2U
+#define STORAGE_PARAM_RESET_AGING 4U
+#define STORAGE_PARAM_RESET_LOG   8U
+#define STORAGE_PARAM_RESET_MASK 15U
+
+typedef struct
+{
+	UINT16 protect[E2P_PARA_NUM_PROTECT];
+	UINT16 other[E2P_PARA_NUM_OTHER_ELEMENT1];
+	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
+	UINT16 heat_cool[FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT];
+} STORAGE_FLASH_RW_PARAM_DATA;
+
+typedef struct
+{
+	UINT32 u32Elapsed10ms;
+	UINT16 u16State;
+	UINT16 u16DurationHours;
+} STORAGE_FLASH_FACTORY_AGING_DATA;
+
+typedef struct {
+    UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
+    STORAGE_FLASH_RW_PARAM_DATA rw;
+    UINT8 reset_version[32];
+    UINT16 initializing; /* Durable pending STORAGE_PARAM_RESET_* bits. */
+} STORAGE_FLASH_CONFIG_DATA;
+
+static UINT16 FlashReadOneHalfWord(UINT32 faddr);
 
 #define FLASH_SIZE_REG_ADDR ((UINT32)0x1FFFF7E0)
 
@@ -24,7 +75,6 @@ UINT8 StorageFlash_IsBusy(void)
 {
 	return s_flash.busy;
 }
-
 
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 {
@@ -95,7 +145,6 @@ static FLASH_Status FlashProgramBytesVerified(uint32_t addr, const UINT8 *data, 
 	return result;
 }
 
-
 static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length);
 
 /* A record becomes visible only after its final half-word is committed. */
@@ -112,6 +161,14 @@ typedef struct {
     UINT16 commit;
 } STORAGE_RECORD;
 
+typedef char StorageRwLayoutCheck[(sizeof(STORAGE_FLASH_RW_PARAM_DATA)==290U) ? 1 : -1];
+typedef char StorageConfigLayoutCheck[(sizeof(STORAGE_FLASH_CONFIG_DATA)==372U &&
+    offsetof(STORAGE_FLASH_CONFIG_DATA,rw)==48U &&
+    offsetof(STORAGE_FLASH_CONFIG_DATA,reset_version)==338U &&
+    offsetof(STORAGE_FLASH_CONFIG_DATA,initializing)==370U) ? 1 : -1];
+typedef char StorageSocLayoutCheck[(sizeof(STORAGE_FLASH_SOC_DATA)==40U &&
+    offsetof(STORAGE_FLASH_SOC_DATA,u32CycleTimes)==8U &&
+    offsetof(STORAGE_FLASH_SOC_DATA,u16Reserved)==30U) ? 1 : -1];
 typedef char StorageRecordSizeCheck[(sizeof(STORAGE_RECORD)==16U) ? 1 : -1];
 typedef char StorageConfigSizeCheck[(sizeof(STORAGE_FLASH_CONFIG_DATA)+sizeof(STORAGE_RECORD)
                                    <=FLASH_STORAGE_PAGE_SIZE) ? 1 : -1];
@@ -203,27 +260,27 @@ static UINT32 Storage_SelectPair(UINT32 a, UINT32 b, UINT32 magic, UINT16 length
                          ((const STORAGE_RECORD *)a)->sequence) ? b : a;
 }
 
-static UINT8 Storage_LoadConfigAt(UINT32 base, STORAGE_FLASH_CONFIG_DATA *data)
+static UINT8 Storage_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
 {
     UINT32 address;
     if (data==0) return 0U;
-    address=Storage_SelectPair(base,(base+FLASH_STORAGE_PAGE_SIZE),STORAGE_CONFIG_MAGIC,sizeof(*data));
+    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
     if (!address) return 0U;
     memcpy(data,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*data));
     return 1U;
 }
 
-static UINT8 Storage_SaveConfigAt(UINT32 base, const STORAGE_FLASH_CONFIG_DATA *data)
+static UINT8 Storage_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
 {
     UINT32 address, target, sequence=1U;
     UINT8 result;
     if (data==0) return 0U;
-    address=Storage_SelectPair(base,(base+FLASH_STORAGE_PAGE_SIZE),STORAGE_CONFIG_MAGIC,sizeof(*data));
+    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
     if (address) {
         if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) return 1U;
         sequence=((const STORAGE_RECORD *)address)->sequence+1U;
     }
-    target=address==base ? (base+FLASH_STORAGE_PAGE_SIZE) : base;
+    target=address==FLASH_CONFIG_A ? FLASH_CONFIG_B : FLASH_CONFIG_A;
     StorageFlash_BeginWrite();
     result=(UINT8)(Storage_Erase(target) &&
         Storage_WriteRecord(target,STORAGE_CONFIG_MAGIC,sequence,data,sizeof(*data)));
@@ -232,20 +289,10 @@ static UINT8 Storage_SaveConfigAt(UINT32 base, const STORAGE_FLASH_CONFIG_DATA *
     return result;
 }
 
-UINT8 StorageFlash_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
-{
-    return Storage_LoadConfigAt(FLASH_CONFIG_A,data);
-}
-
-UINT8 StorageFlash_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
-{
-    return Storage_SaveConfigAt(FLASH_CONFIG_A,data);
-}
-
 UINT16 StorageFlash_GetSocCycleGeneration(void)
 {
     STORAGE_FLASH_CONFIG_DATA config;
-    if (!StorageFlash_LoadConfig(&config)) return STORAGE_SOC_CYCLE_GENERATION_NONE;
+    if (!Storage_LoadConfig(&config)) return STORAGE_SOC_CYCLE_GENERATION_NONE;
     return config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
 }
 
@@ -253,7 +300,7 @@ UINT16 StorageFlash_GetBaudMode(void)
 {
     STORAGE_FLASH_CONFIG_DATA config;
     UINT16 mode;
-    if (!StorageFlash_LoadConfig(&config)) return 1U;
+    if (!Storage_LoadConfig(&config)) return 1U;
     mode=config.rw.reserved[STORAGE_BAUD_MODE_INDEX];
     return (mode>=1U && mode<=3U) ? mode : 1U;
 }
@@ -261,17 +308,17 @@ UINT16 StorageFlash_GetBaudMode(void)
 UINT8 StorageFlash_SetBaudMode(UINT16 mode)
 {
     STORAGE_FLASH_CONFIG_DATA config;
-    if (mode<1U || mode>3U || !StorageFlash_LoadConfig(&config) || config.initializing)
+    if (mode<1U || mode>3U || !Storage_LoadConfig(&config) || config.initializing)
         return 0U;
     config.rw.reserved[STORAGE_BAUD_MODE_INDEX]=mode;
-    return StorageFlash_SaveConfig(&config);
+    return Storage_SaveConfig(&config);
 }
 
 UINT8 StorageFlash_ReadBatteryNumber(UINT8 number[BATTERY_NUMBER_LENGTH])
 {
     STORAGE_FLASH_CONFIG_DATA config;
     UINT16 i, value;
-    if (!number || !StorageFlash_LoadConfig(&config)) return 0U;
+    if (!number || !Storage_LoadConfig(&config)) return 0U;
     if (config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]==0xFFFFU) {
         memset(number,'0',BATTERY_NUMBER_LENGTH);
         return 1U;
@@ -293,12 +340,12 @@ UINT8 StorageFlash_WriteBatteryNumber(const UINT8 number[BATTERY_NUMBER_LENGTH])
     if (!number) return 0U;
     for (i=0U; i<BATTERY_NUMBER_LENGTH; ++i)
         if (number[i]<0x20U || number[i]>0x7EU) return 0U;
-    if (!StorageFlash_LoadConfig(&config) || config.initializing) return 0U;
+    if (!Storage_LoadConfig(&config) || config.initializing) return 0U;
     for (i=0U; i<6U; ++i)
         config.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+i]=(UINT16)(
             ((UINT16)number[2U*i]<<8) | (i<5U ? number[2U*i+1U] : 0xFFU));
     config.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]=STORAGE_BATTERY_NUMBER_TAG;
-    return StorageFlash_SaveConfig(&config);
+    return Storage_SaveConfig(&config);
 }
 
 static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
@@ -316,7 +363,6 @@ static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
 	return 1;
 }
 
-
 /* State snapshots are small and append within the active page. A failed tail
  * is skipped; page rotation commits the replacement before the old is reused. */
 #define STORAGE_STATE_MAGIC 0x53544131UL
@@ -329,11 +375,12 @@ typedef struct {
     UINT16 reserved;
 } STORAGE_STATE;
 #define STORAGE_STATE_SPAN (sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATE))
+typedef char StorageStateLayoutCheck[(sizeof(STORAGE_STATE)==52U && STORAGE_STATE_SPAN==68U) ? 1 : -1];
 
-static UINT32 Storage_StateLatest(UINT32 base)
+static UINT32 Storage_StateLatest(void)
 {
     UINT32 page, address, latest=0U;
-    for (page=base; page<base+2U*FLASH_STORAGE_PAGE_SIZE; page+=FLASH_STORAGE_PAGE_SIZE) {
+    for (page=FLASH_STATE_A; page<FLASH_STATE_A+2U*FLASH_STORAGE_PAGE_SIZE; page+=FLASH_STORAGE_PAGE_SIZE) {
         for (address=page; address+STORAGE_STATE_SPAN<=page+FLASH_STORAGE_PAGE_SIZE;
              address+=STORAGE_STATE_SPAN) {
             if (Storage_RecordValid(address,STORAGE_STATE_MAGIC,sizeof(STORAGE_STATE)) &&
@@ -344,16 +391,16 @@ static UINT32 Storage_StateLatest(UINT32 base)
     return latest;
 }
 
-static void Storage_LoadState(UINT32 base, STORAGE_STATE *state)
+static void Storage_LoadState(STORAGE_STATE *state)
 {
-    UINT32 address=Storage_StateLatest(base);
+    UINT32 address=Storage_StateLatest();
     memset(state,0,sizeof(*state));
     if (address) memcpy(state,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*state));
 }
 
-static UINT8 Storage_SaveState(UINT32 base, const STORAGE_STATE *state)
+static UINT8 Storage_SaveState(const STORAGE_STATE *state)
 {
-    UINT32 latest=Storage_StateLatest(base), page=base, address, next;
+    UINT32 latest=Storage_StateLatest(), page=FLASH_STATE_A, address, next;
     UINT32 sequence=1U;
     UINT8 result=0U;
     if (latest) {
@@ -367,7 +414,7 @@ static UINT8 Storage_SaveState(UINT32 base, const STORAGE_STATE *state)
         if (!StorageFlash_IsAreaBlank(address,STORAGE_STATE_SPAN)) next=address+STORAGE_STATE_SPAN;
     StorageFlash_BeginWrite();
     if (next+STORAGE_STATE_SPAN>page+FLASH_STORAGE_PAGE_SIZE) {
-        next=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
+        next=page==FLASH_STATE_A ? FLASH_STATE_B : FLASH_STATE_A;
         if (!Storage_Erase(next)) goto done;
     }
     result=Storage_WriteRecord(next,STORAGE_STATE_MAGIC,sequence,state,sizeof(*state));
@@ -377,32 +424,32 @@ done:
     return result;
 }
 
-static UINT8 Storage_LoadSocAt(UINT32 base, STORAGE_FLASH_SOC_DATA *data)
+UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
 {
     STORAGE_STATE state;
     if (!data) return 0U;
-    Storage_LoadState(base,&state);
+    Storage_LoadState(&state);
     if (!(state.valid & STORAGE_STATE_SOC) || state.soc.u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION) return 0U;
     *data=state.soc;
     return 1U;
 }
 
-static UINT8 Storage_SaveSocAt(UINT32 base, const STORAGE_FLASH_SOC_DATA *data)
+UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
 {
     STORAGE_STATE state;
     if (!data || data->u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION) return 0U;
-    Storage_LoadState(base,&state); state.soc=*data; state.valid|=STORAGE_STATE_SOC;
-    return Storage_SaveState(base,&state);
+    Storage_LoadState(&state); state.soc=*data; state.valid|=STORAGE_STATE_SOC;
+    return Storage_SaveState(&state);
 }
 
-UINT8 StorageFlash_ResumeSocCycleWrite(const STORAGE_FLASH_CONFIG_DATA *config)
+static UINT8 Storage_ResumeSocCycleWrite(const STORAGE_FLASH_CONFIG_DATA *config)
 {
     STORAGE_STATE state;
     UINT16 generation;
     if (!config) return 0U;
     generation=config->rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
     if (generation==STORAGE_SOC_CYCLE_GENERATION_NONE) return 1U;
-    Storage_LoadState(FLASH_STATE_A,&state);
+    Storage_LoadState(&state);
     if (!(state.valid & STORAGE_STATE_SOC) ||
         state.soc.u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION ||
         state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]==generation) return 1U;
@@ -411,57 +458,15 @@ UINT8 StorageFlash_ResumeSocCycleWrite(const STORAGE_FLASH_CONFIG_DATA *config)
     state.soc.u32LearnPassedAs10=0U;
     state.soc.u16DsgSocInt=0U;
     state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=generation;
-    return Storage_SaveState(FLASH_STATE_A,&state);
-}
-
-UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data)
-{
-    return Storage_LoadSocAt(FLASH_STATE_A,data);
-}
-
-UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data)
-{
-    return Storage_SaveSocAt(FLASH_STATE_A,data);
-}
-
-UINT8 StorageFlash_LoadAfeData(UINT16 *values, UINT16 word_count)
-{
-    STORAGE_FLASH_CONFIG_DATA config;
-    if (!values || word_count!=FLASH_STORAGE_AFE_WORD_COUNT || !StorageFlash_LoadConfig(&config)) return 0U;
-    memcpy(values,config.afe,sizeof(config.afe));
-    return 1U;
+    return Storage_SaveState(&state);
 }
 
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count)
 {
     STORAGE_FLASH_CONFIG_DATA config;
-    if (!values || word_count!=FLASH_STORAGE_AFE_WORD_COUNT || !StorageFlash_LoadConfig(&config)) return 0U;
+    if (!values || word_count!=FLASH_STORAGE_AFE_WORD_COUNT || !Storage_LoadConfig(&config)) return 0U;
     memcpy(config.afe,values,sizeof(config.afe));
-    return StorageFlash_SaveConfig(&config);
-}
-
-
-UINT8 StorageFlash_SaveRwParamData(const STORAGE_FLASH_RW_PARAM_DATA *data, UINT8 cycle_count_written)
-{
-    STORAGE_FLASH_CONFIG_DATA config;
-    STORAGE_STATE state;
-    UINT16 generation;
-    if (!data || !StorageFlash_LoadConfig(&config)) return 0U;
-    if (cycle_count_written) {
-        generation=config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
-        generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
-        Storage_LoadState(FLASH_STATE_A,&state);
-        /* Skip the last snapshot tag even after wrap and repeated failed saves. */
-        if (generation==state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX])
-            generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
-        config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX]=generation;
-    }
-    /* A normal host parameter save must not erase private module versions. */
-    memcpy(config.rw.protect,data->protect,sizeof(config.rw.protect));
-    memcpy(config.rw.other,data->other,sizeof(config.rw.other));
-    memcpy(config.rw.reserved,data->reserved,STORAGE_PARAM_VERSION_FIRST*sizeof(UINT16));
-    memcpy(config.rw.heat_cool,data->heat_cool,sizeof(config.rw.heat_cool));
-    return StorageFlash_SaveConfig(&config);
+    return Storage_SaveConfig(&config);
 }
 
 /* Each page starts with a committed checkpoint. This also preserves all 100
@@ -474,9 +479,9 @@ typedef struct { UINT16 data, crc, commit; } STORAGE_LOG_ENTRY;
 typedef char StorageLogCapacityCheck[((FLASH_STORAGE_PAGE_SIZE-STORAGE_LOG_START)/
                       sizeof(STORAGE_LOG_ENTRY)>FLASH_STORAGE_LOG_RECORD_COUNT) ? 1 : -1];
 
-static UINT32 Storage_LogLatestPage(UINT32 base)
+static UINT32 Storage_LogLatestPage(void)
 {
-    return Storage_SelectPair(base,base+FLASH_STORAGE_PAGE_SIZE,STORAGE_LOG_MAGIC,sizeof(STORAGE_LOG_CHECKPOINT));
+    return Storage_SelectPair(FLASH_LOG_A,FLASH_LOG_B,STORAGE_LOG_MAGIC,sizeof(STORAGE_LOG_CHECKPOINT));
 }
 
 static UINT8 Storage_LogEntryValid(const STORAGE_LOG_ENTRY *entry)
@@ -503,9 +508,9 @@ static void Storage_LogReplay(UINT32 page, UINT8 *point, UINT8 records[100][2])
     }
 }
 
-static UINT8 Storage_LoadLogAt(UINT32 base, UINT8 *point, UINT8 records[100][2])
+UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
 {
-    UINT32 latest=Storage_LogLatestPage(base);
+    UINT32 latest=Storage_LogLatestPage();
     const STORAGE_LOG_CHECKPOINT *checkpoint;
     if (!point || !records) return 0U;
     *point=0U; memset(records,0,200U);
@@ -518,15 +523,15 @@ static UINT8 Storage_LoadLogAt(UINT32 base, UINT8 *point, UINT8 records[100][2])
     return 1U;
 }
 
-static UINT8 Storage_LogAppend(UINT32 base, UINT16 data)
+static UINT8 Storage_LogAppend(UINT16 data)
 {
-    UINT32 page=Storage_LogLatestPage(base), address, next, sequence=1U;
+    UINT32 page=Storage_LogLatestPage(), address, next, sequence=1U;
     STORAGE_LOG_CHECKPOINT checkpoint;
     STORAGE_LOG_ENTRY entry;
     UINT8 result=0U;
     StorageFlash_BeginWrite();
     if (!page) {
-        page=base;
+        page=FLASH_LOG_A;
         memset(&checkpoint,0,sizeof(checkpoint));
         if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
     }
@@ -536,8 +541,8 @@ static UINT8 Storage_LogAppend(UINT32 base, UINT16 data)
     if (next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
         sequence=((const STORAGE_RECORD *)page)->sequence+1U;
         memset(&checkpoint,0,sizeof(checkpoint));
-        if (!Storage_LoadLogAt(base,&checkpoint.point,checkpoint.records)) goto done;
-        page=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
+        if (!StorageFlash_LoadLogData(&checkpoint.point,checkpoint.records)) goto done;
+        page=page==FLASH_LOG_A ? FLASH_LOG_B : FLASH_LOG_A;
         if (!Storage_Erase(page) || !Storage_WriteRecord(page,STORAGE_LOG_MAGIC,sequence,&checkpoint,sizeof(checkpoint))) goto done;
         next=page+STORAGE_LOG_START;
     }
@@ -555,27 +560,22 @@ done:
     return result;
 }
 
-UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[100][2])
-{
-    return Storage_LoadLogAt(FLASH_LOG_A,point,records);
-}
-
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta)
 {
     if (event==0xFFU || delta>171U) return 0U;
-    return Storage_LogAppend(FLASH_LOG_A,(UINT16)(event | ((UINT16)delta<<8)));
+    return Storage_LogAppend((UINT16)(event | ((UINT16)delta<<8)));
 }
 
-UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(FLASH_LOG_A,STORAGE_LOG_CLEAR); }
+UINT8 StorageFlash_ClearLog(void) { return Storage_LogAppend(STORAGE_LOG_CLEAR); }
 
-UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
+static UINT8 Storage_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
 {
     UINT32 address;
     STORAGE_STATE state;
     if (!config || (config->initializing & ~STORAGE_PARAM_RESET_MASK)) return 0U;
     /* Durable intent precedes all destructive erases. A reboot resumes this
      * operation before loading state or permitting normal AFE startup. */
-    if (!StorageFlash_SaveConfig(config)) return 0U;
+    if (!Storage_SaveConfig(config)) return 0U;
     if (!config->initializing) return 1U;
     if (config->initializing & STORAGE_PARAM_RESET_ALL) {
         StorageFlash_BeginWrite();
@@ -586,19 +586,19 @@ UINT8 StorageFlash_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
         StorageFlash_EndWrite();
     } else {
         if (config->initializing & (STORAGE_PARAM_RESET_SOC | STORAGE_PARAM_RESET_AGING)) {
-            Storage_LoadState(FLASH_STATE_A,&state);
+            Storage_LoadState(&state);
             if (config->initializing & STORAGE_PARAM_RESET_SOC) {
                 memset(&state.soc,0,sizeof(state.soc)); state.valid &= ~STORAGE_STATE_SOC;
             }
             if (config->initializing & STORAGE_PARAM_RESET_AGING) {
                 memset(&state.aging,0,sizeof(state.aging)); state.valid &= ~STORAGE_STATE_AGING;
             }
-            if (!Storage_SaveState(FLASH_STATE_A,&state)) return 0U;
+            if (!Storage_SaveState(&state)) return 0U;
         }
         if ((config->initializing & STORAGE_PARAM_RESET_LOG) && !StorageFlash_ClearLog()) return 0U;
     }
     config->initializing=0U;
-    return StorageFlash_SaveConfig(config);
+    return Storage_SaveConfig(config);
 }
 
 /* Lifetime statistics have their own pages and never depend on the log ring.
@@ -625,9 +625,9 @@ typedef struct {
 static STORAGE_STATISTICS s_statistics;
 typedef char StorageStatsEntrySizeCheck[(sizeof(STORAGE_STATS_ENTRY)==8U) ? 1 : -1];
 
-static UINT32 Storage_StatsPage(UINT32 base)
+static UINT32 Storage_StatsPage(void)
 {
-    return Storage_SelectPair(base,base+FLASH_STORAGE_PAGE_SIZE,STORAGE_STATS_MAGIC,sizeof(STORAGE_STATS_DATA));
+    return Storage_SelectPair(FLASH_STATS_A,FLASH_STATS_B,STORAGE_STATS_MAGIC,sizeof(STORAGE_STATS_DATA));
 }
 
 static void Storage_StatsIncrement(UINT32 *count)
@@ -671,9 +671,9 @@ static UINT8 Storage_StatsReplay(UINT32 page, STORAGE_STATISTICS *runtime)
     return 1U;
 }
 
-static UINT8 Storage_StatsSaveAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT8 type, UINT16 value)
+static UINT8 Storage_SaveStatistics(UINT8 type, UINT16 value)
 {
-    UINT32 page=Storage_StatsPage(base), address, next=0U, sequence=1U;
+    UINT32 page=Storage_StatsPage(), address, next=0U, sequence=1U;
     STORAGE_STATS_ENTRY entry;
     UINT8 result=0U;
     if (page) {
@@ -682,14 +682,14 @@ static UINT8 Storage_StatsSaveAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT8
         for (address=next; address+sizeof(entry)<=page+FLASH_STORAGE_PAGE_SIZE; address+=sizeof(entry))
             if (!StorageFlash_IsAreaBlank(address,sizeof(entry))) next=address+sizeof(entry);
     }
-    runtime->last_attempt_tick=SysTime_Get10msTickCount();
+    s_statistics.last_attempt_tick=SysTime_Get10msTickCount();
     StorageFlash_BeginWrite();
     /* RAM already includes the requested change. A checkpoint after an
      * uncertain write avoids replaying a delta twice or losing earlier faults. */
-    if (!page || runtime->dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
-        address=page==base ? base+FLASH_STORAGE_PAGE_SIZE : base;
+    if (!page || s_statistics.dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
+        address=page==FLASH_STATS_A ? FLASH_STATS_B : FLASH_STATS_A;
         result=(UINT8)(Storage_Erase(address) && Storage_WriteRecord(address,STORAGE_STATS_MAGIC,
-                            sequence,&runtime->data,sizeof(runtime->data)));
+                            sequence,&s_statistics.data,sizeof(s_statistics.data)));
     } else {
         entry.type=type; entry.reserved=0U; entry.value=value;
         entry.crc=Storage_CrcUpdate(0xFFFFU,(const UINT8 *)&entry,4U);
@@ -702,7 +702,7 @@ static UINT8 Storage_StatsSaveAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT8
                        memcmp((const void *)next,&entry,sizeof(entry))==0);
     }
     StorageFlash_EndWrite();
-    runtime->dirty=(UINT8)!result;
+    s_statistics.dirty=(UINT8)!result;
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
 }
@@ -745,37 +745,32 @@ void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
          sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE));
     memset(&s_statistics,0,sizeof(s_statistics));
     if (*((volatile UINT16 *)FLASH_SIZE_REG_ADDR)<128U) goto damaged;
-    page=Storage_StatsPage(FLASH_STATS_A);
+    page=Storage_StatsPage();
     if (page) {
         if (!Storage_StatsReplay(page,&s_statistics)) goto damaged;
         s_statistics.available=1U;
         if (!sleep_reset) {
             Storage_StatsApply(&s_statistics.data,STATS_BOOT,0U);
-            (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_BOOT,0U);
+            (void)Storage_SaveStatistics(STATS_BOOT,0U);
         }
     } else if ((StorageFlash_IsAreaBlank(FLASH_STATS_A,FLASH_STORAGE_PAGE_SIZE) &&
                 StorageFlash_IsAreaBlank(FLASH_STATS_B,FLASH_STORAGE_PAGE_SIZE)) ||
                Storage_StatsInitialWriteInterrupted()) {
         s_statistics.available=1U;
         s_statistics.data.count[10]=1U;
-        (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_BOOT,0U);
+        (void)Storage_SaveStatistics(STATS_BOOT,0U);
     } else goto damaged;
     return;
 damaged:
     System_ERROR_UserCallback(ERROR_EEPROM_STORE);
 }
 
-static void Storage_UpdateFaultStatisticsAt(UINT32 base, STORAGE_STATISTICS *runtime, UINT16 active_faults)
-{
-    if (!runtime->available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
-        active_faults==runtime->data.active_faults) return;
-    Storage_StatsApply(&runtime->data,STATS_FAULT_MASK,active_faults);
-    if (!runtime->dirty) (void)Storage_StatsSaveAt(base,runtime,STATS_FAULT_MASK,active_faults);
-}
-
 void StorageFlash_UpdateFaultStatistics(UINT16 active_faults)
 {
-    Storage_UpdateFaultStatisticsAt(FLASH_STATS_A,&s_statistics,active_faults);
+    if (!s_statistics.available || (active_faults & ~STORAGE_STATS_FAULT_BITS)!=0U ||
+        active_faults==s_statistics.data.active_faults) return;
+    Storage_StatsApply(&s_statistics.data,STATS_FAULT_MASK,active_faults);
+    if (!s_statistics.dirty) (void)Storage_SaveStatistics(STATS_FAULT_MASK,active_faults);
 }
 
 UINT8 StorageFlash_ReadStatistics(UINT32 counts[FLASH_STATISTICS_COUNT])
@@ -791,7 +786,7 @@ UINT8 StorageFlash_ClearFaultStatistics(void)
     if (!s_statistics.available) return 0U;
     previous=s_statistics.data;
     Storage_StatsApply(&s_statistics.data,STATS_CLEAR,0U);
-    if (Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,STATS_CLEAR,0U)) return 1U;
+    if (Storage_SaveStatistics(STATS_CLEAR,0U)) return 1U;
     s_statistics.data=previous;
     return 0U;
 }
@@ -800,15 +795,282 @@ void StorageFlash_StatisticsTask(void)
 {
     if (s_statistics.available && s_statistics.dirty &&
         (UINT32)(SysTime_Get10msTickCount()-s_statistics.last_attempt_tick)>=STORAGE_STATS_RETRY_TICKS)
-        (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,0U,0U);
+        (void)Storage_SaveStatistics(0U,0U);
 }
 
 void StorageFlash_FlushStatistics(void)
 {
-    if (s_statistics.available && s_statistics.dirty) (void)Storage_StatsSaveAt(FLASH_STATS_A,&s_statistics,0U,0U);
+    if (s_statistics.available && s_statistics.dirty) (void)Storage_SaveStatistics(0U,0U);
 }
 
-UINT16 FlashReadOneHalfWord(UINT32 faddr)
+/* Parameter defaults and runtime application. */
+struct HEAT_COOL_ELEMENT Heat_Cool_Element;
+
+static const struct PRT_E2ROM_PARAS s_protect_default = E2P_PROTECT_DEFAULT_PRT;
+static const struct PRT_E2ROM_PARAS s_protect_min = E2P_PROTECT_MIN_PRT;
+static const struct PRT_E2ROM_PARAS s_protect_max = E2P_PROTECT_MAX_PRT;
+static const struct OTHER_ELEMENT s_other_default = OtherElement_default;
+static const struct OTHER_ELEMENT s_other_min = OtherElement_min;
+static const struct OTHER_ELEMENT s_other_max = OtherElement_max;
+static const struct HEAT_COOL_ELEMENT s_heat_cool_default = HeatCoolElement_Default;
+static const struct HEAT_COOL_ELEMENT s_heat_cool_min = HeatCoolElement_Min;
+static const struct HEAT_COOL_ELEMENT s_heat_cool_max = HeatCoolElement_Max;
+static const UINT8 s_reset_version[32] = BMS_SOFTWARE_VERDION_DEFAULT;
+
+typedef char StorageProtectSizeCheck[(sizeof(s_protect_default)==E2P_PARA_NUM_PROTECT*sizeof(UINT16)) ? 1 : -1];
+typedef char StorageOtherSizeCheck[(sizeof(s_other_default)==E2P_PARA_NUM_OTHER_ELEMENT1*sizeof(UINT16)) ? 1 : -1];
+typedef char StorageHeatCoolSizeCheck[(sizeof(s_heat_cool_default)==FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT*sizeof(UINT16)) ? 1 : -1];
+typedef char StorageVersionSizeCheck[(sizeof(BMS_SOFTWARE_VERDION_DEFAULT)<=sizeof(s_reset_version)) ? 1 : -1];
+typedef char StorageParamVersionSizeCheck[(STORAGE_PARAM_VERSION_FIRST+STORAGE_PARAM_COUNT<=FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT) ? 1 : -1];
+typedef char StorageCycleOffsetCheck[(offsetof(struct OTHER_ELEMENT,u16Soc_Cycle_times)/sizeof(UINT16)==STORAGE_SOC_CYCLE_PARAMETER_INDEX) ? 1 : -1];
+
+static const UINT16 s_param_versions[STORAGE_PARAM_COUNT] = {
+    PROJECT_CFG_PARAM_AFE_VERSION, PROJECT_CFG_PARAM_PROTECT_VERSION,
+    PROJECT_CFG_PARAM_SOC_VERSION, PROJECT_CFG_PARAM_OTHER_VERSION,
+    PROJECT_CFG_PARAM_CALIB_VERSION, PROJECT_CFG_PARAM_HEAT_COOL_VERSION,
+    PROJECT_CFG_PARAM_SOC_STATE_VERSION, PROJECT_CFG_PARAM_AGING_STATE_VERSION,
+    PROJECT_CFG_PARAM_LOG_VERSION
+};
+
+/*
+ * Store current K/B in existing reserved words so the RW parameter record size
+ * includes both charge and discharge calibration.
+ */
+#define RW_PARAM_CURRENT_CAL_MAGIC_INDEX       ((UINT16)0U)
+#define RW_PARAM_CURRENT_CAL_VERSION_INDEX     ((UINT16)1U)
+#define RW_PARAM_CURRENT_CAL_CHG_K_INDEX       ((UINT16)2U)
+#define RW_PARAM_CURRENT_CAL_CHG_B_INDEX       ((UINT16)3U)
+#define RW_PARAM_CURRENT_CAL_DSG_K_INDEX       ((UINT16)4U)
+#define RW_PARAM_CURRENT_CAL_DSG_B_INDEX       ((UINT16)5U)
+#define RW_PARAM_CURRENT_CAL_MAGIC             ((UINT16)0x4349U)
+#define RW_PARAM_CURRENT_CAL_VERSION           ((UINT16)3U)
+
+static const UINT16 s_current_calibration_default[STORAGE_PARAM_VERSION_FIRST] = {
+    RW_PARAM_CURRENT_CAL_MAGIC, RW_PARAM_CURRENT_CAL_VERSION,
+    SYSKDEFAULT, (UINT16)SYSBDEFAULT, SYSKDEFAULT, (UINT16)SYSBDEFAULT
+};
+
+static UINT8 Storage_CurrentCalibrationValid(UINT16 chg_k, INT16 chg_b,
+                                            UINT16 dsg_k, INT16 dsg_b)
+{
+	if ((chg_k < CURRENT_CAL_K_MIN) || (chg_k > CURRENT_CAL_K_MAX) ||
+		(dsg_k < CURRENT_CAL_K_MIN) || (dsg_k > CURRENT_CAL_K_MAX))
+	{
+		return 0U;
+	}
+	if ((chg_b < CURRENT_CAL_B_MIN_Q10_A) || (chg_b > CURRENT_CAL_B_MAX_Q10_A) ||
+		(dsg_b < CURRENT_CAL_B_MIN_Q10_A) || (dsg_b > CURRENT_CAL_B_MAX_Q10_A))
+	{
+		return 0U;
+	}
+	return 1U;
+}
+
+static UINT8 Storage_WordsInRange(const UINT16 *values, const UINT16 *min_values, const UINT16 *max_values, UINT16 count)
+{
+	UINT16 i;
+
+	for (i = 0; i < count; ++i)
+	{
+		if ((values[i] < min_values[i]) || (values[i] > max_values[i]))
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static UINT8 Storage_RWParametersValid(const STORAGE_FLASH_RW_PARAM_DATA *data)
+{
+	if (!Storage_WordsInRange(data->protect,
+								 &s_protect_min.u16VcellOvp_First,
+								 &s_protect_max.u16VcellOvp_First,
+								 E2P_PARA_NUM_PROTECT))
+	{
+		return 0;
+	}
+	if (!Storage_WordsInRange(data->other,
+								 &s_other_min.u16Balance_OpenVoltage,
+								 &s_other_max.u16Balance_OpenVoltage,
+								 E2P_PARA_NUM_OTHER_ELEMENT1))
+	{
+		return 0;
+	}
+	if (!Storage_WordsInRange(data->heat_cool,
+								 &s_heat_cool_min.u16Heat_OpenTemp,
+								 &s_heat_cool_max.u16Heat_OpenTemp,
+								 FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT))
+	{
+		return 0;
+	}
+
+	if (data->reserved[RW_PARAM_CURRENT_CAL_MAGIC_INDEX]!=RW_PARAM_CURRENT_CAL_MAGIC ||
+        data->reserved[RW_PARAM_CURRENT_CAL_VERSION_INDEX]!=RW_PARAM_CURRENT_CAL_VERSION ||
+		!Storage_CurrentCalibrationValid(
+			data->reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX],
+			(INT16)data->reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX],
+			data->reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX],
+			(INT16)data->reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX]))
+	{
+		return 0;
+	}
+	return 1;
+}
+
+/* Construct a snapshot without changing live parameters before a successful commit. */
+static void Storage_BuildDefaultConfig(STORAGE_FLASH_CONFIG_DATA *config)
+{
+    UINT16 i;
+    const AFE_Value_Typedef *afe=&AFE_Parameters_RS485_Struction.u16VcellOvp;
+    memset(config,0,sizeof(*config));
+    memcpy(config->rw.protect,&s_protect_default,sizeof(config->rw.protect));
+    memcpy(config->rw.other,&s_other_default,sizeof(config->rw.other));
+    memcpy(config->rw.heat_cool,&s_heat_cool_default,sizeof(config->rw.heat_cool));
+    memset(config->rw.reserved,0xFF,sizeof(config->rw.reserved));
+    memcpy(config->rw.reserved,s_current_calibration_default,sizeof(s_current_calibration_default));
+    for (i=0U; i<STORAGE_PARAM_COUNT; ++i)
+        config->rw.reserved[STORAGE_PARAM_VERSION_FIRST+i]=s_param_versions[i];
+    for (i=0U; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i) config->afe[i]=afe[i].defaultValue;
+    memcpy(config->reset_version,s_reset_version,sizeof(config->reset_version));
+}
+
+static UINT8 Storage_ConfigValid(const STORAGE_FLASH_CONFIG_DATA *config)
+{
+    UINT16 i;
+    const AFE_Value_Typedef *afe=&AFE_Parameters_RS485_Struction.u16VcellOvp;
+    if ((config->initializing & ~STORAGE_PARAM_RESET_MASK)!=0U ||
+        !Storage_RWParametersValid(&config->rw)) return 0U;
+    for (i=0U; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
+        if (config->afe[i]<afe[i].minValue || config->afe[i]>afe[i].maxValue) return 0U;
+    return 1U;
+}
+
+static void Storage_ApplyConfig(const STORAGE_FLASH_CONFIG_DATA *config)
+{
+    UINT16 i;
+    memcpy(&PRT_E2ROMParas,config->rw.protect,sizeof(config->rw.protect));
+    memcpy(&OtherElement,config->rw.other,sizeof(config->rw.other));
+    memcpy(&Heat_Cool_Element,config->rw.heat_cool,sizeof(config->rw.heat_cool));
+    /* Only current calibration is persisted; all other K/B retain their defaults. */
+    for (i=0U; i<KB_NUM; ++i) {
+        g_u16CalibCoefK[i]=SYSKDEFAULT;
+        g_i16CalibCoefB[i]=SYSBDEFAULT;
+    }
+    g_u16CalibCoefK[MDL_ICHG]=config->rw.reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX];
+    g_i16CalibCoefB[MDL_ICHG]=(INT16)config->rw.reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX];
+    g_u16CalibCoefK[MDL_IDSG]=config->rw.reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX];
+    g_i16CalibCoefB[MDL_IDSG]=(INT16)config->rw.reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX];
+    SeriesNum=(UINT8)OtherElement.u16Sys_SeriesNum;
+    if (OtherElement.u16Sys_CS_Res!=0U)
+        g_u32CS_Res_AFE=((UINT32)OtherElement.u16Sys_CS_Res_Num*1000U)/OtherElement.u16Sys_CS_Res;
+    for (i=0U; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i)
+        (&AFE_Parameters_RS485_Struction.u16VcellOvp)[i].curValue=config->afe[i];
+}
+
+static UINT8 Storage_IsSocParameter(UINT16 word)
+{
+    return (UINT8)(word==offsetof(struct OTHER_ELEMENT,u16Soc_TableSelect)/sizeof(UINT16) ||
+        (word>=offsetof(struct OTHER_ELEMENT,u16Soc_Ah)/sizeof(UINT16) &&
+         word<=offsetof(struct OTHER_ELEMENT,u16Soc_V_0)/sizeof(UINT16)));
+}
+
+static UINT8 Storage_UpdateModules(STORAGE_FLASH_CONFIG_DATA *stored)
+{
+    UINT16 group, word;
+    UINT8 changed=0U;
+    const AFE_Value_Typedef *afe=&AFE_Parameters_RS485_Struction.u16VcellOvp;
+    const UINT16 *other_default=(const UINT16 *)&s_other_default;
+    for (group=0U; group<STORAGE_PARAM_COUNT; ++group) {
+        if (!s_param_versions[group] ||
+            stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]==s_param_versions[group]) continue;
+        switch (group) {
+        case STORAGE_PARAM_AFE:
+            for (word=0U; word<FLASH_STORAGE_AFE_WORD_COUNT; ++word)
+                stored->afe[word]=afe[word].defaultValue;
+            break;
+        case STORAGE_PARAM_PROTECT:
+            memcpy(stored->rw.protect,&s_protect_default,sizeof(stored->rw.protect)); break;
+        case STORAGE_PARAM_SOC:
+        case STORAGE_PARAM_OTHER:
+            for (word=0U; word<E2P_PARA_NUM_OTHER_ELEMENT1; ++word)
+                if (Storage_IsSocParameter(word)==(group==STORAGE_PARAM_SOC))
+                    stored->rw.other[word]=other_default[word];
+            break;
+        case STORAGE_PARAM_CALIB:
+            memcpy(stored->rw.reserved,s_current_calibration_default,STORAGE_PARAM_VERSION_FIRST*sizeof(UINT16)); break;
+        case STORAGE_PARAM_HEAT_COOL:
+            memcpy(stored->rw.heat_cool,&s_heat_cool_default,sizeof(stored->rw.heat_cool)); break;
+        case STORAGE_PARAM_SOC_STATE: stored->initializing |= STORAGE_PARAM_RESET_SOC; break;
+        case STORAGE_PARAM_AGING_STATE: stored->initializing |= STORAGE_PARAM_RESET_AGING; break;
+        case STORAGE_PARAM_LOG: stored->initializing |= STORAGE_PARAM_RESET_LOG; break;
+        }
+        stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]=s_param_versions[group];
+        changed=1U;
+    }
+    return (UINT8)(!changed || Storage_CommitParameterUpdate(stored));
+}
+
+UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    STORAGE_STATE state;
+    UINT16 generation;
+    if (!Storage_LoadConfig(&config)) return 0U;
+    /* Preserve versions, baud mode, battery number and cycle generation. */
+    memcpy(config.rw.protect,&PRT_E2ROMParas,sizeof(config.rw.protect));
+    memcpy(config.rw.other,&OtherElement,sizeof(config.rw.other));
+    memcpy(config.rw.heat_cool,&Heat_Cool_Element,sizeof(config.rw.heat_cool));
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_MAGIC_INDEX]=RW_PARAM_CURRENT_CAL_MAGIC;
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_VERSION_INDEX]=RW_PARAM_CURRENT_CAL_VERSION;
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_CHG_K_INDEX]=g_u16CalibCoefK[MDL_ICHG];
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX]=(UINT16)g_i16CalibCoefB[MDL_ICHG];
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX]=g_u16CalibCoefK[MDL_IDSG];
+    config.rw.reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX]=(UINT16)g_i16CalibCoefB[MDL_IDSG];
+    if (!Storage_RWParametersValid(&config.rw)) {
+        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+        return 0U;
+    }
+    if (cycle_count_written) {
+        generation=config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
+        generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
+        Storage_LoadState(&state);
+        /* Skip the last snapshot tag even after wrap and repeated failed saves. */
+        if (generation==state.soc.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX])
+            generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
+        config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX]=generation;
+    }
+    return Storage_SaveConfig(&config);
+}
+
+UINT8 StorageFlash_InitParameters(void)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    UINT8 valid;
+    System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
+    /* Check compiled defaults on every boot, even when a stored record exists. */
+    Storage_BuildDefaultConfig(&config);
+    if (!Storage_ConfigValid(&config)) return 0U;
+    valid=(UINT8)(Storage_LoadConfig(&config) && Storage_ConfigValid(&config));
+    /* Resume committed intents before module updates or applying live parameters. */
+    if (valid && config.initializing && !Storage_CommitParameterUpdate(&config)) goto failed;
+    if (valid && !Storage_ResumeSocCycleWrite(&config)) goto failed;
+    if (!valid || (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION &&
+                  memcmp(config.reset_version,s_reset_version,sizeof(config.reset_version))!=0)) {
+        Storage_BuildDefaultConfig(&config);
+        config.initializing=STORAGE_PARAM_RESET_ALL;
+        if (!Storage_CommitParameterUpdate(&config)) goto failed;
+    } else if (!Storage_UpdateModules(&config)) goto failed;
+    Storage_ApplyConfig(&config);
+    ReadEEPROM_EventRecord_Parameters();
+    return 1U;
+failed:
+    System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    return 0U;
+}
+
+/* App-to-IAP mailbox. */
+static UINT16 FlashReadOneHalfWord(UINT32 faddr)
 {
 	return *(vu16 *)faddr;
 }

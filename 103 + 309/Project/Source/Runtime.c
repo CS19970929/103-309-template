@@ -20,7 +20,7 @@ void Runtime_Boot(void)
 
 	InitNVIC();
 	InitIO();
-	if (!InitE2PROM()) return;
+	if (!StorageFlash_InitParameters()) return;
 	InitAFE1();
 	InitCan();
 

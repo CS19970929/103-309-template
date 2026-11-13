@@ -22,7 +22,7 @@ struct RS485MSG;
 #include "LogRecord.h"
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
 static int mutations, cut_after=-1, errors, error_after_commit;
-static void System_ERROR_UserCallback(int error) { ++errors; }
+static void System_ERROR_UserCallback(int error) { if(error==ERROR_EEPROM_STORE) ++errors; }
 static void FLASH_Unlock(void) {}
 static void FLASH_Lock(void) {}
 static void FLASH_ClearFlag(int flags) {}
@@ -40,35 +40,18 @@ static FLASH_Status FLASH_ProgramHalfWord(uint32_t address,uint16_t value) {
     assert((*p & value)==value); ++mutations; *p=value;
     return error_after_commit && value==0xA55A ? FLASH_ERROR_PG : FLASH_COMPLETE;
 }
-UINT16 FlashReadOneHalfWord(UINT32 address) { return *(UINT16 *)(uintptr_t)address; }
+static UINT16 FlashReadOneHalfWord(UINT32 address) { return *(UINT16 *)(uintptr_t)address; }
 static void host_storage_init(void) {
     assert(VirtualAlloc((void *)0x08000000,0x20000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x08000000);
     memset((void *)0x08000000,0xFF,0x20000);
     assert(VirtualAlloc((void *)0x1FFF0000,0x10000,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE)==(void *)0x1FFF0000);
     *(UINT16 *)0x1FFFF7E0=128;
 }
-/* PRODUCTION_SOURCE */
-
-/* Seed reserved aging fields to verify SOC/reset operations preserve the wire layout. */
-static UINT8 test_load_aging(STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-    STORAGE_STATE state;
-    Storage_LoadState(FLASH_STATE_A, &state);
-    if (!(state.valid & STORAGE_STATE_AGING)) return 0U;
-    *data = state.aging;
-    return 1U;
-}
-static UINT8 test_save_aging(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-    STORAGE_STATE state;
-    Storage_LoadState(FLASH_STATE_A, &state);
-    state.aging = *data;
-    state.valid |= STORAGE_STATE_AGING;
-    return Storage_SaveState(FLASH_STATE_A, &state);
-}
-
+/* STORAGE_HARDWARE_STUBS_END */
 /* Actual parameter tables, validators and boot initializer. */
 /* PARAMETER_HEADERS */
+#undef PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC
+#define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
 struct PRT_E2ROM_PARAS PRT_E2ROMParas;
 struct OTHER_ELEMENT OtherElement;
 UINT16 g_u16CalibCoefK[KB_NUM];
@@ -76,9 +59,6 @@ INT16 g_i16CalibCoefB[KB_NUM];
 UINT8 SeriesNum;
 UINT32 g_u32CS_Res_AFE;
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction=AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
-#define E2P_PARA_NUM_PROTECT FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT
-#define E2P_PARA_NUM_OTHER_ELEMENT1 FLASH_STORAGE_RW_PARAM_OTHER_WORD_COUNT
-#define E2P_PARA_NUM_RESERVED_RW_PARAM FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT
 #define ERROR_REMOVE_EEPROM_COM 0
 static int reset_on_version=1;
 static char firmware_version[32]="storage-test-v1";
@@ -86,7 +66,30 @@ static char firmware_version[32]="storage-test-v1";
 #define BMS_SOFTWARE_VERDION_DEFAULT firmware_version
 #undef PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION
 #define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION reset_on_version
-/* CONFIG_INIT_SOURCE */
+
+/* PRODUCTION_SOURCE */
+
+/* Historical aging value is a compatibility fixture, not an active factory-aging API. */
+#define TEST_AGING_STATE_RUNNING 0xA931U
+
+/* Seed reserved aging fields to verify SOC/reset operations preserve the wire layout. */
+static UINT8 test_load_aging(STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    STORAGE_STATE state;
+    Storage_LoadState(&state);
+    if (!(state.valid & STORAGE_STATE_AGING)) return 0U;
+    *data = state.aging;
+    return 1U;
+}
+static UINT8 test_save_aging(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    STORAGE_STATE state;
+    Storage_LoadState(&state);
+    state.aging = *data;
+    state.valid |= STORAGE_STATE_AGING;
+    return Storage_SaveState(&state);
+}
+
 /* LOG_SOURCE */
 static unsigned char saved[16384];
 static void save_flash(void) { memcpy(saved,(void *)FLASH_PARAMETER_RESET_BEGIN,sizeof(saved)); }
@@ -149,14 +152,14 @@ static void test_log(void) {
 static void test_module_updates(void) {
     STORAGE_FLASH_CONFIG_DATA defaults,custom,actual;
     STORAGE_FLASH_SOC_DATA soc={0},loaded_soc;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,FLASH_FACTORY_AGING_STATE_RUNNING,12},loaded_aging;
+    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12},loaded_aging;
     UINT8 point,records[100][2];
     unsigned mask;
     int group,word,writes,cut,pending_checked=0,cut_checks=0;
     reset_on_version=0; memset(s_param_versions,0,sizeof(s_param_versions));
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
-    assert(InitE2PROM() && StorageFlash_LoadConfig(&defaults));
+    assert(StorageFlash_InitParameters() && Storage_LoadConfig(&defaults));
     assert(sizeof(defaults)==372); /* Current on-Flash record size is unchanged. */
     custom=defaults;
     ++custom.afe[0]; custom.rw.protect[0]=4001;
@@ -168,9 +171,9 @@ static void test_module_updates(void) {
      * clear any parameters, logs or state. This does not read older formats. */
     for(group=0;group<STORAGE_PARAM_COUNT;++group)
         custom.rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]=0xFFFF;
-    assert(EEPROM_RWParamDataIsValid(&custom.rw) && StorageFlash_SaveConfig(&custom));
+    assert(Storage_RWParametersValid(&custom.rw) && Storage_SaveConfig(&custom));
     assert(StorageFlash_SetBaudMode(3U) && StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
-    assert(StorageFlash_LoadConfig(&custom));
+    assert(Storage_LoadConfig(&custom));
     soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION; soc.u16SocNow=37; soc.u32CycleTimes=12345;
     assert(StorageFlash_SaveSocData(&soc) && test_save_aging(&aging));
     assert(StorageFlash_AppendLog(7,8)); save_flash();
@@ -178,10 +181,10 @@ static void test_module_updates(void) {
     for(mask=0;mask<(1U<<STORAGE_PARAM_COUNT);++mask) {
         restore_flash();
         for(group=0;group<STORAGE_PARAM_COUNT;++group) s_param_versions[group]=(mask>>group)&1U;
-        assert(InitE2PROM() && StorageFlash_LoadConfig(&actual));
+        assert(StorageFlash_InitParameters() && Storage_LoadConfig(&actual));
         for(word=0;word<FLASH_STORAGE_AFE_WORD_COUNT;++word)
             assert(actual.afe[word]==((mask&(1U<<STORAGE_PARAM_AFE)) ? defaults.afe[word] : custom.afe[word]));
-        for(word=0;word<FLASH_STORAGE_RW_PARAM_PROTECT_WORD_COUNT;++word)
+        for(word=0;word<E2P_PARA_NUM_PROTECT;++word)
             assert(actual.rw.protect[word]==((mask&(1U<<STORAGE_PARAM_PROTECT)) ? defaults.rw.protect[word] : custom.rw.protect[word]));
         for(word=0;word<32;++word) {
             /* These five offsets are the existing protocol's SOC fields. */
@@ -205,21 +208,21 @@ static void test_module_updates(void) {
         if(mask&(1U<<STORAGE_PARAM_LOG)) assert(point==0 && records[0][0]==0);
         else assert(point==1 && records[0][0]==7 && records[0][1]==8);
         for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
-        mutations=0; assert(InitE2PROM() && !mutations);
+        mutations=0; assert(StorageFlash_InitParameters() && !mutations);
     }
     /* A normal parameter write must retain the tags, so the next boot cannot
      * reapply defaults over the host's own edits. Changing the firmware string
      * alone also must not trigger the disabled factory reset. */
     PRT_E2ROMParas.u16VcellOvp_First=4002;
-    assert(EEPROM_SaveRWParametersToFlash(0U));
+    assert(StorageFlash_SaveParameters(0U));
     strcpy(firmware_version,"module-next-firmware"); mutations=0;
-    assert(InitE2PROM() && !mutations && PRT_E2ROMParas.u16VcellOvp_First==4002);
+    assert(StorageFlash_InitParameters() && !mutations && PRT_E2ROMParas.u16VcellOvp_First==4002);
     s_param_versions[STORAGE_PARAM_PROTECT]=0;
-    assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4002);
+    assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==4002);
     s_param_versions[STORAGE_PARAM_PROTECT]=1;
-    mutations=0; assert(InitE2PROM() && !mutations && PRT_E2ROMParas.u16VcellOvp_First==4002);
+    mutations=0; assert(StorageFlash_InitParameters() && !mutations && PRT_E2ROMParas.u16VcellOvp_First==4002);
     s_param_versions[STORAGE_PARAM_PROTECT]=2;
-    assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==defaults.rw.protect[0]);
+    assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==defaults.rw.protect[0]);
     /* Cut each erase/half-word in each update, plus a combined state/log
      * update. A failed boot must not proceed; the next boot completes it. */
     for(group=0;group<=STORAGE_PARAM_COUNT;++group) {
@@ -229,10 +232,10 @@ static void test_module_updates(void) {
             s_param_versions[STORAGE_PARAM_AGING_STATE]=1;
             s_param_versions[STORAGE_PARAM_LOG]=1;
         } else s_param_versions[group]=1;
-        mutations=0; assert(InitE2PROM()); writes=mutations;
+        mutations=0; assert(StorageFlash_InitParameters()); writes=mutations;
         for(cut=0;cut<=writes;++cut) {
-            restore_flash(); cut_after=cut; InitE2PROM(); cut_after=-1;
-            assert(InitE2PROM() && StorageFlash_LoadConfig(&actual) && !actual.initializing);
+            restore_flash(); cut_after=cut; StorageFlash_InitParameters(); cut_after=-1;
+            assert(StorageFlash_InitParameters() && Storage_LoadConfig(&actual) && !actual.initializing);
             for(word=0;word<STORAGE_PARAM_COUNT;++word)
                 assert(actual.rw.reserved[STORAGE_PARAM_VERSION_FIRST+word]==(s_param_versions[word] ? 1U : 0xFFFFU));
             for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
@@ -241,16 +244,16 @@ static void test_module_updates(void) {
             assert(test_load_aging(&loaded_aging)==!s_param_versions[STORAGE_PARAM_AGING_STATE]);
             assert(StorageFlash_LoadLogData(&point,records) && point==!s_param_versions[STORAGE_PARAM_LOG]);
             for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
-            mutations=0; assert(InitE2PROM() && !mutations);
+            mutations=0; assert(StorageFlash_InitParameters() && !mutations);
             ++cut_checks;
         }
     }
     for(cut=0;cut<=writes;++cut) {
-        restore_flash(); cut_after=cut; InitE2PROM(); cut_after=-1;
-        assert(StorageFlash_LoadConfig(&actual));
+        restore_flash(); cut_after=cut; StorageFlash_InitParameters(); cut_after=-1;
+        assert(Storage_LoadConfig(&actual));
         if(actual.initializing) {
             memset(s_param_versions,0,sizeof(s_param_versions));
-            assert(InitE2PROM() && !StorageFlash_LoadSocData(&loaded_soc) &&
+            assert(StorageFlash_InitParameters() && !StorageFlash_LoadSocData(&loaded_soc) &&
                    !test_load_aging(&loaded_aging));
             assert(StorageFlash_LoadLogData(&point,records) && point==0);
             pending_checked=1; break;
@@ -260,13 +263,13 @@ static void test_module_updates(void) {
     /* First use records enabled versions too, including the maximum. */
     memset((void *)FLASH_CONFIG_A,0xFF,2048);
     for(group=0;group<STORAGE_PARAM_COUNT;++group) s_param_versions[group]=65534;
-    assert(InitE2PROM() && StorageFlash_LoadConfig(&actual));
+    assert(StorageFlash_InitParameters() && Storage_LoadConfig(&actual));
     for(group=0;group<STORAGE_PARAM_COUNT;++group)
         assert(actual.rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]==65534);
-    mutations=0; assert(InitE2PROM() && !mutations);
+    mutations=0; assert(StorageFlash_InitParameters() && !mutations);
     /* An explicitly requested factory reset wins even with every group off. */
     restore_flash(); memset(s_param_versions,0,sizeof(s_param_versions)); reset_on_version=1;
-    assert(InitE2PROM() && StorageFlash_LoadConfig(&actual));
+    assert(StorageFlash_InitParameters() && Storage_LoadConfig(&actual));
     assert(!memcmp(actual.afe,defaults.afe,sizeof(actual.afe)));
     assert(!memcmp(actual.rw.other,defaults.rw.other,sizeof(actual.rw.other)));
     for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
@@ -329,7 +332,7 @@ static void test_statistics(void) {
     restore_flash(); StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     /* Fill this page, then cut every erase/header/checkpoint half-word at rotation. */
     while(1) {
-        page=Storage_StatsPage(FLASH_STATS_A);
+        page=Storage_StatsPage();
         entry_address=page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA);
         while(entry_address+sizeof(STORAGE_STATS_ENTRY)<=page+1024 &&
               !StorageFlash_IsAreaBlank(entry_address,sizeof(STORAGE_STATS_ENTRY))) entry_address+=sizeof(STORAGE_STATS_ENTRY);
@@ -373,12 +376,12 @@ static void test_statistics(void) {
     StorageFlash_UpdateFaultStatistics(0); StorageFlash_UpdateFaultStatistics(2);
     assert(StorageFlash_ClearLog());
     reset_on_version=1; strcpy(firmware_version,"storage-test-v4");
-    assert(InitE2PROM());
+    assert(StorageFlash_InitParameters());
     assert(OtherElement.u16Sleep_TimeNormal==10080);
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,FLASH_DEEP_SLEEP_VALUE);
     assert(StorageFlash_ReadStatistics(counts) && counts[1]==1 && counts[10]==4);
     /* Committed corruption is an error, not a fresh zero lifetime counter. */
-    page=Storage_StatsPage(FLASH_STATS_A);
+    page=Storage_StatsPage();
     *(UINT16 *)(page+sizeof(STORAGE_RECORD)+sizeof(STORAGE_STATS_DATA)+4)^=1;
     StorageFlash_InitStatistics(RCC_CSR_SFTRSTF,BOOT_FLAG_RESET_VALUE);
     assert(!StorageFlash_ReadStatistics(counts) && !StorageFlash_ClearFaultStatistics());
@@ -389,28 +392,28 @@ static void test_communication_storage(void)
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
     UINT8 number[11];
     int operation,cut,writes,result,total=0;
-    assert(StorageFlash_LoadConfig(&old_value));
+    assert(Storage_LoadConfig(&old_value));
     old_value.initializing=0;
     for(cut=15;cut<24;++cut) old_value.rw.reserved[cut]=0xFFFF;
-    assert(StorageFlash_SaveConfig(&old_value));
+    assert(Storage_SaveConfig(&old_value));
     assert(StorageFlash_GetBaudMode()==1);
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"00000000000",11));
     for(operation=0;operation<4;++operation) {
-        assert(StorageFlash_LoadConfig(&old_value)); save_flash(); mutations=0;
+        assert(Storage_LoadConfig(&old_value)); save_flash(); mutations=0;
         if(operation & 1) result=StorageFlash_WriteBatteryNumber((const UINT8 *)(operation==1 ? "BAT00000001" : "BAT00000002"));
         else result=StorageFlash_SetBaudMode(operation==0 ? 2 : 3);
         assert(result); writes=mutations;
-        assert(StorageFlash_LoadConfig(&new_value));
+        assert(Storage_LoadConfig(&new_value));
         for(cut=0;cut<=writes;++cut) {
             restore_flash(); cut_after=cut;
             if(operation & 1) result=StorageFlash_WriteBatteryNumber((const UINT8 *)(operation==1 ? "BAT00000001" : "BAT00000002"));
             else result=StorageFlash_SetBaudMode(operation==0 ? 2 : 3);
-            assert(StorageFlash_LoadConfig(&loaded));
+            assert(Storage_LoadConfig(&loaded));
             assert(!memcmp(&loaded,result ? &new_value : &old_value,sizeof(loaded)));
             assert(!memcmp((void *)FLASH_STATE_A,saved+(FLASH_STATE_A-FLASH_PARAMETER_RESET_BEGIN),FLASH_STORAGE_END-FLASH_STATE_A));
             ++total;
         }
-        restore_flash(); assert(StorageFlash_SaveConfig(&new_value));
+        restore_flash(); assert(Storage_SaveConfig(&new_value));
     }
     mutations=0;
     assert(StorageFlash_SetBaudMode(3));
@@ -420,11 +423,11 @@ static void test_communication_storage(void)
     assert(!StorageFlash_WriteBatteryNumber(0) && !StorageFlash_ReadBatteryNumber(0));
     assert(!StorageFlash_WriteBatteryNumber((const UINT8 *)"BAD\x80" "0000000") && !mutations);
     /* Normal parameter/calibration saves preserve both new private fields. */
-    assert(EEPROM_SaveRWParametersToFlash(0U));
+    assert(StorageFlash_SaveParameters(0U));
     assert(StorageFlash_GetBaudMode()==3);
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
     reset_on_version=0; memset(s_param_versions,0,sizeof(s_param_versions));
-    assert(InitE2PROM());
+    assert(StorageFlash_InitParameters());
     assert(StorageFlash_GetBaudMode()==3);
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number,"BAT00000002",11));
     for(operation=0;operation<11;++operation) {
@@ -435,26 +438,68 @@ static void test_communication_storage(void)
     }
     assert(StorageFlash_WriteBatteryNumber((const UINT8 *)" ~09AZaz-_."));
     assert(StorageFlash_ReadBatteryNumber(number) && !memcmp(number," ~09AZaz-_.",11));
-    assert(StorageFlash_LoadConfig(&old_value));
+    assert(Storage_LoadConfig(&old_value));
     assert(old_value.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX]==0x207EU);
     assert(old_value.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX+5U]==0x2EFFU);
     loaded=old_value; loaded.rw.reserved[STORAGE_BATTERY_NUMBER_TAG_INDEX]=0x1234U;
-    assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+    assert(Storage_SaveConfig(&loaded)); mutations=0;
     assert(!StorageFlash_ReadBatteryNumber(number) && !mutations);
     loaded=old_value; loaded.rw.reserved[STORAGE_BATTERY_NUMBER_INDEX]=0x1F7EU;
-    assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+    assert(Storage_SaveConfig(&loaded)); mutations=0;
     assert(!StorageFlash_ReadBatteryNumber(number) && !mutations);
     for(operation=0;operation<=4;operation+=4) {
         loaded=old_value; loaded.rw.reserved[STORAGE_BAUD_MODE_INDEX]=(UINT16)operation;
-        assert(StorageFlash_SaveConfig(&loaded)); mutations=0;
+        assert(Storage_SaveConfig(&loaded)); mutations=0;
         assert(StorageFlash_GetBaudMode()==1U && !mutations);
     }
-    assert(StorageFlash_SaveConfig(&old_value));
-    assert(StorageFlash_LoadConfig(&loaded)); loaded.initializing=STORAGE_PARAM_RESET_LOG;
-    assert(StorageFlash_SaveConfig(&loaded));
+    assert(Storage_SaveConfig(&old_value));
+    assert(Storage_LoadConfig(&loaded)); loaded.initializing=STORAGE_PARAM_RESET_LOG;
+    assert(Storage_SaveConfig(&loaded));
     assert(!StorageFlash_SetBaudMode(1) && !StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000003"));
     printf("PASS communication storage: %d cuts, first/update writes, complete old/new config, state/log/statistics isolation, defaults, no-op, boot and RW-save preservation\n",total);
     puts("PASS communication fields: ASCII endpoints, all 11 invalid positions, high-byte-first packing, padding, invalid tag/data rejection, invalid baud fallback");
+}
+
+static void test_parameter_application(void)
+{
+    STORAGE_FLASH_CONFIG_DATA defaults;
+    struct PRT_E2ROM_PARAS protect_before;
+    struct OTHER_ELEMENT other_before;
+    struct HEAT_COOL_ELEMENT heat_before;
+    UINT16 k_before[KB_NUM]; INT16 b_before[KB_NUM];
+    AFE_Parameters_RS485_Typedef afe_before;
+    UINT8 series_before; UINT32 resistance_before;
+    assert(StorageFlash_InitParameters());
+    PRT_E2ROMParas.u16VcellOvp_First=4003;
+    assert(StorageFlash_SaveParameters(0U));
+    protect_before=PRT_E2ROMParas; other_before=OtherElement; heat_before=Heat_Cool_Element;
+    memcpy(k_before,g_u16CalibCoefK,sizeof(k_before));
+    memcpy(b_before,g_i16CalibCoefB,sizeof(b_before));
+    afe_before=AFE_Parameters_RS485_Struction;
+    series_before=SeriesNum; resistance_before=g_u32CS_Res_AFE;
+    mutations=0;
+    Storage_BuildDefaultConfig(&defaults);
+    assert(Storage_ConfigValid(&defaults) && !mutations);
+    assert(!memcmp(&protect_before,&PRT_E2ROMParas,sizeof(protect_before)));
+    assert(!memcmp(&other_before,&OtherElement,sizeof(other_before)));
+    assert(!memcmp(&heat_before,&Heat_Cool_Element,sizeof(heat_before)));
+    assert(!memcmp(k_before,g_u16CalibCoefK,sizeof(k_before)));
+    assert(!memcmp(b_before,g_i16CalibCoefB,sizeof(b_before)));
+    assert(!memcmp(&afe_before,&AFE_Parameters_RS485_Struction,sizeof(afe_before)));
+    assert(SeriesNum==series_before && g_u32CS_Res_AFE==resistance_before);
+    strcpy(firmware_version,"storage-test-apply"); reset_on_version=1;
+    mutations=0; cut_after=0;
+    assert(!StorageFlash_InitParameters()); cut_after=-1;
+    assert(!memcmp(&protect_before,&PRT_E2ROMParas,sizeof(protect_before)));
+    assert(!memcmp(&other_before,&OtherElement,sizeof(other_before)));
+    assert(!memcmp(&heat_before,&Heat_Cool_Element,sizeof(heat_before)));
+    assert(!memcmp(k_before,g_u16CalibCoefK,sizeof(k_before)));
+    assert(!memcmp(b_before,g_i16CalibCoefB,sizeof(b_before)));
+    assert(!memcmp(&afe_before,&AFE_Parameters_RS485_Struction,sizeof(afe_before)));
+    assert(SeriesNum==series_before && g_u32CS_Res_AFE==resistance_before);
+    assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==COV_1);
+    mutations=0; assert(StorageFlash_InitParameters() && !mutations);
+    puts("PASS parameter application: pure default snapshot, failed boot preserves all live parameters, successful commit applies once");
 }
 
 /* SOC_PERSISTENCE_TESTS */
@@ -462,44 +507,44 @@ static void test_communication_storage(void)
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
     STORAGE_FLASH_SOC_DATA soc,loaded_soc;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,FLASH_FACTORY_AGING_STATE_RUNNING,12},loaded_aging;
+    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12},loaded_aging;
     int writes,cut,i;
     UINT16 previous_soc;
     host_storage_init();
     memset(&old_value,0x12,sizeof(old_value)); memset(&new_value,0x34,sizeof(new_value));
-    assert(!StorageFlash_LoadConfig(&loaded));
-    assert(StorageFlash_SaveConfig(&old_value)); save_flash();
-    mutations=0; assert(StorageFlash_SaveConfig(&old_value) && mutations==0);
-    assert(StorageFlash_SaveConfig(&new_value)); writes=mutations;
+    assert(!Storage_LoadConfig(&loaded));
+    assert(Storage_SaveConfig(&old_value)); save_flash();
+    mutations=0; assert(Storage_SaveConfig(&old_value) && mutations==0);
+    assert(Storage_SaveConfig(&new_value)); writes=mutations;
     for(cut=0;cut<=writes;++cut) {
         restore_flash(); cut_after=cut;
-        StorageFlash_SaveConfig(&new_value);
+        Storage_SaveConfig(&new_value);
         cut_after=-1; memset(&s_flash,0,sizeof(s_flash));
-        assert(StorageFlash_LoadConfig(&loaded));
+        assert(Storage_LoadConfig(&loaded));
         assert(!memcmp(&loaded,&old_value,sizeof(loaded)) || !memcmp(&loaded,&new_value,sizeof(loaded)));
-        assert(StorageFlash_SaveConfig(&new_value));
-        assert(StorageFlash_LoadConfig(&loaded) && !memcmp(&loaded,&new_value,sizeof(loaded)));
+        assert(Storage_SaveConfig(&new_value));
+        assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&new_value,sizeof(loaded)));
     }
     /* Corrupt metadata and commit words, not just the payload. */
     restore_flash(); *(UINT32 *)(FLASH_CONFIG_A+4)^=1;
-    assert(!StorageFlash_LoadConfig(&loaded));
+    assert(!Storage_LoadConfig(&loaded));
     restore_flash(); *(UINT16 *)(FLASH_CONFIG_A+14)=0xFFFF;
-    assert(!StorageFlash_LoadConfig(&loaded));
+    assert(!Storage_LoadConfig(&loaded));
     restore_flash();
     assert(Storage_Erase(FLASH_CONFIG_B));
     assert(Storage_WriteRecord(FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,UINT32_MAX,&new_value,sizeof(new_value)));
     assert(Storage_Erase(FLASH_CONFIG_A));
     assert(Storage_WriteRecord(FLASH_CONFIG_A,STORAGE_CONFIG_MAGIC,0,&old_value,sizeof(old_value)));
-    assert(StorageFlash_LoadConfig(&loaded) && !memcmp(&loaded,&old_value,sizeof(loaded)));
+    assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&old_value,sizeof(loaded)));
     assert(!Storage_Erase(0x08004800) && !Storage_Erase(FLASH_STORAGE_END));
-    assert(!StorageFlash_SaveConfig(0) && !StorageFlash_LoadConfig(0));
+    assert(!Storage_SaveConfig(0) && !Storage_LoadConfig(0));
     printf("PASS storage: config atomic commit, %d cut points, header CRC, sequence wrap, bounds, no-op saves\n",writes+1);
     /* Shared state updates retain the other owner's last committed data. */
     memset(&soc,0,sizeof(soc)); soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;
     assert(test_save_aging(&aging));
     assert(StorageFlash_SaveSocData(&soc));
     for(i=0;i<30;++i) { soc.u16SocNow=(UINT16)i; assert(StorageFlash_SaveSocData(&soc)); }
-    while ((Storage_StateLatest(FLASH_STATE_A) & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
+    while ((Storage_StateLatest() & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
         ++soc.u16SocNow; assert(StorageFlash_SaveSocData(&soc));
     }
     previous_soc=soc.u16SocNow;
@@ -514,26 +559,27 @@ int main(void) {
     puts("PASS storage: SOC/aging merge, state append and rotation, power cuts retain complete state");
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
-    assert(InitE2PROM());
-    PRT_E2ROMParas.u16VcellOvp_First=4001; assert(EEPROM_SaveRWParametersToFlash(0U));
-    mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4001 && !mutations);
+    assert(StorageFlash_InitParameters());
+    PRT_E2ROMParas.u16VcellOvp_First=4001; assert(StorageFlash_SaveParameters(0U));
+    mutations=0; assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==4001 && !mutations);
     assert(StorageFlash_SaveSocData(&soc)); assert(StorageFlash_AppendLog(1,171));
     save_flash(); strcpy(firmware_version,"storage-test-v2");
-    mutations=0; assert(InitE2PROM()); writes=mutations;
+    mutations=0; assert(StorageFlash_InitParameters()); writes=mutations;
     for(cut=0;cut<=writes;++cut) {
-        restore_flash(); cut_after=cut; InitE2PROM(); cut_after=-1;
-        assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==COV_1);
+        restore_flash(); cut_after=cut; StorageFlash_InitParameters(); cut_after=-1;
+        assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==COV_1);
         assert(!StorageFlash_LoadSocData(&loaded_soc));
         assert(!test_load_aging(&loaded_aging));
         for(i=0;i<2048;++i) assert(((UINT8 *)FLASH_STATS_A)[i]==0x5A);
-        mutations=0; assert(InitE2PROM() && !mutations);
+        mutations=0; assert(StorageFlash_InitParameters() && !mutations);
     }
     strcpy(firmware_version,"storage-test-v3"); reset_on_version=0;
-    PRT_E2ROMParas.u16VcellOvp_First=4002; assert(EEPROM_SaveRWParametersToFlash(0U));
-    mutations=0; assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==4002 && !mutations);
-    assert(StorageFlash_LoadConfig(&loaded)); loaded.rw.reserved[0]=0xFFFF;
-    assert(!EEPROM_RWParamDataIsValid(&loaded.rw));
+    PRT_E2ROMParas.u16VcellOvp_First=4002; assert(StorageFlash_SaveParameters(0U));
+    mutations=0; assert(StorageFlash_InitParameters() && PRT_E2ROMParas.u16VcellOvp_First==4002 && !mutations);
+    assert(Storage_LoadConfig(&loaded)); loaded.rw.reserved[0]=0xFFFF;
+    assert(!Storage_RWParametersValid(&loaded.rw));
     printf("PASS storage: real boot init, once per version, disabled switch, %d interrupted resets, statistics untouched\n",writes+1);
+    test_parameter_application();
     test_log();
     test_module_updates();
     test_statistics();

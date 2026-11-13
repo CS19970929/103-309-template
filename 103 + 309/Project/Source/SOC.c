@@ -192,7 +192,7 @@ void InitData_SOC(void)
     memset(&s_saved, 0, sizeof(s_saved));
     SOC_PauseCalibration();
     s_soc.manual_target = SOC_NO_MANUAL_TARGET;
-    /* Runtime_Boot calls InitE2PROM first; Flash owns cycle-command recovery. */
+    /* Runtime_Boot calls StorageFlash_InitParameters first; Flash owns cycle-command recovery. */
     s_soc.cycle_generation = StorageFlash_GetSocCycleGeneration();
     s_soc.full_as10 = (UINT32)OtherElement.u16Soc_Ah * 3600U;
     s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;

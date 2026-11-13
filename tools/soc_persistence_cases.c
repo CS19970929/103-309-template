@@ -24,7 +24,7 @@ static void persistence_boot(void)
     memset(&s_flash,0,sizeof(s_flash));
     persistence_current_ma=0;tick=0;
     persistence_current_fresh=1U;g_stLowPowerRtcStatus.mode=NO_SLEEP;
-    assert(InitE2PROM());
+    assert(StorageFlash_InitParameters());
     InitData_SOC();
     AFE_PARAM_WRITE_Flag=0;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;
@@ -34,7 +34,7 @@ static void persistence_boot(void)
 static void persistence_prepare(void)
 {
     STORAGE_FLASH_SOC_DATA data;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,FLASH_FACTORY_AGING_STATE_RUNNING,12};
+    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12};
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
     memset(s_param_versions,0,sizeof(s_param_versions));reset_on_version=0;
@@ -66,7 +66,7 @@ static void test_soc_smooth_persistence(void)
         !data.u16DsgSocInt && !data.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]);
     /* Without an inverse word, CRC still rejects a torn/altered target. */
     {
-        UINT32 address=Storage_StateLatest(FLASH_STATE_A)+sizeof(STORAGE_RECORD)+
+        UINT32 address=Storage_StateLatest()+sizeof(STORAGE_RECORD)+
             offsetof(STORAGE_STATE,soc)+offsetof(STORAGE_FLASH_SOC_DATA,u16LearnAnchorSoc);
         *(UINT8 *)address^=1U;
         persistence_boot();assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET);
@@ -146,7 +146,7 @@ static void persistence_cycle_cuts(UINT8 rotation,UINT8 with_capacity,UINT8 same
     if(rotation) {
         unsigned guard;
         for(guard=0;guard<30;guard++) {
-            if((Storage_StateLatest(FLASH_STATE_A)&1023U)==14U*STORAGE_STATE_SPAN) break;
+            if((Storage_StateLatest()&1023U)==14U*STORAGE_STATE_SPAN) break;
             assert(test_load_aging(&aging));++aging.u32Elapsed10ms;
             assert(test_save_aging(&aging));
         }
@@ -158,7 +158,7 @@ static void persistence_cycle_cuts(UINT8 rotation,UINT8 with_capacity,UINT8 same
         UINT8 committed;
         restore_flash();persistence_boot();mutations=0;cut_after=cut;
         persistence_write(target,with_capacity,&msg);
-        assert(StorageFlash_LoadConfig(&config));
+        assert(Storage_LoadConfig(&config));
         committed=(UINT8)(config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX]!=STORAGE_SOC_CYCLE_GENERATION_NONE);
         assert((msg.AckType==RS485_ACK_POS)==committed);
         cut_after=-1;persistence_boot();assert(StorageFlash_LoadSocData(&data));
@@ -189,11 +189,11 @@ static void test_soc_cycle_persistence(void)
     persistence_cycle_cuts(0,0,0);persistence_cycle_cuts(1,0,0);
     persistence_cycle_cuts(0,1,0);persistence_cycle_cuts(0,0,1);
     persistence_prepare();OtherElement.u16Soc_Cycle_times=42;
-    assert(EEPROM_SaveRWParametersToFlash(1U));save_flash();mutations=0;
-    assert(InitE2PROM());total=mutations;
+    assert(StorageFlash_SaveParameters(1U));save_flash();mutations=0;
+    assert(StorageFlash_InitParameters());total=mutations;
     for(cut=0;cut<=total;cut++) {
         restore_flash();mutations=0;cut_after=cut;
-        if(!InitE2PROM()) assert(errors); /* Boot must not run with incomplete recovery. */
+        if(!StorageFlash_InitParameters()) assert(errors); /* Boot must not run with incomplete recovery. */
         cut_after=-1;persistence_boot();assert(StorageFlash_LoadSocData(&data));
         assert(data.u32CycleTimes==4200 && !data.u32LearnPassedAs10);
         mutations=0;persistence_boot();assert(!mutations);++recovery_cuts;
@@ -208,12 +208,12 @@ static void test_soc_cycle_persistence(void)
     assert(StorageFlash_SaveSocData(&data));persistence_boot();assert(StorageFlash_LoadSocData(&data));
     assert(data.u32CycleTimes==4321 && data.u32LearnPassedAs10==432);
     /* Generation wrap skips a stale snapshot tag, so it cannot look applied. */
-    persistence_prepare();assert(StorageFlash_LoadConfig(&config));
+    persistence_prepare();assert(Storage_LoadConfig(&config));
     config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX]=0xFFFE;
-    assert(StorageFlash_SaveConfig(&config));assert(StorageFlash_LoadSocData(&data));
+    assert(Storage_SaveConfig(&config));assert(StorageFlash_LoadSocData(&data));
     data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=1;
     assert(StorageFlash_SaveSocData(&data));OtherElement.u16Soc_Cycle_times=7;
-    assert(EEPROM_SaveRWParametersToFlash(1U));assert(StorageFlash_GetSocCycleGeneration()==2);
+    assert(StorageFlash_SaveParameters(1U));assert(StorageFlash_GetSocCycleGeneration()==2);
     persistence_boot();assert(g_stCellInfoReport.SocElement.u16Cycle_times==7);
     /* Whole-Other defaults are also explicit cycle writes; failures have no SOC side effects. */
     persistence_prepare();cut_after=0;mutations=0;memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=1;

@@ -55,7 +55,7 @@ static UINT8 AFE_PARAM_WRITE_Flag,SeriesNum,parameter_failure;
 static UINT32 g_u32CS_Res_AFE;
 static UINT16 cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
 UINT16 StorageFlash_GetSocCycleGeneration(void) { return cycle_generation; }
-static UINT8 EEPROM_SaveRWParametersToFlash(UINT8 cycle_count_written) {
+UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written) {
     if(parameter_failure) return 0U;
     if(cycle_count_written) cycle_generation=cycle_generation>=0xFFFEU ? 1U : (UINT16)(cycle_generation+1U);
     return 1U;

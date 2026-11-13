@@ -158,7 +158,7 @@ static void test_communication_settings(void)
     UINT16 i, mode;
     int before;
     memset(&config,0xFF,sizeof(config)); config.initializing=0;
-    assert(StorageFlash_SaveConfig(&config));
+    assert(Storage_SaveConfig(&config));
     InitUSART_CommonUpper();
     assert(s_port1.baud==9600 && s_port2.baud==9600 && StorageFlash_GetBaudMode()==1);
     modbus_request(mb,1,3,0xC004,11);

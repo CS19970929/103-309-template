@@ -408,7 +408,7 @@ PARAMETER_STUBS = r'''
 #define RS485_ERROR_CMD_INVALID 3
 struct RS485MSG { UINT16 u16Buffer[160]; UINT8 AckType, ErrorType; };
 static int save_calls, save_fails;
-static UINT8 EEPROM_SaveRWParametersToFlash(UINT8 cycle_count_written) { ++save_calls; return (UINT8)!save_fails; }
+static UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written) { ++save_calls; return (UINT8)!save_fails; }
 static void InitData_SOC(void) {}
 '''
 
