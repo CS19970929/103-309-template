@@ -12,92 +12,130 @@ Time_T sys_time = {
                                RCC_APB2Periph_GPIOD | \
                                RCC_APB2Periph_GPIOE)
 #define CONF_APB2_IO_CLOCKS (RCC_APB2Periph_AFIO | CONF_APB2_GPIO_CLOCKS)
-#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO |  \
+#define CONF_APB2_WAKEUP_CLOCKS (RCC_APB2Periph_AFIO | \
                                  RCC_APB2Periph_GPIOA | \
                                  RCC_APB2Periph_GPIOB | \
                                  RCC_APB2Periph_GPIOC)
 
-static void Conf_InitGpioMode(GPIO_TypeDef *gpio, uint16_t pin, GPIOMode_TypeDef mode)
-{
-    GPIO_InitTypeDef GPIO_InitStructure;
+static GPIO_TypeDef * const s_gpio_ports[] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE };
+static const uint8_t s_gpio_port_sources[] = {
+    GPIO_PortSourceGPIOA, GPIO_PortSourceGPIOB, GPIO_PortSourceGPIOC,
+    GPIO_PortSourceGPIOD, GPIO_PortSourceGPIOE
+};
 
-    GPIO_InitStructure.GPIO_Pin = pin;
-    GPIO_InitStructure.GPIO_Mode = mode;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-    GPIO_Init(gpio, &GPIO_InitStructure);
+static void Conf_InitGpioMode(GPIO_TypeDef *gpio, uint16_t pin,
+                              GPIOMode_TypeDef mode, GPIOSpeed_TypeDef speed)
+{
+    GPIO_InitTypeDef config;
+
+    config.GPIO_Pin = pin;
+    config.GPIO_Mode = mode;
+    config.GPIO_Speed = speed;
+    GPIO_Init(gpio, &config);
 }
 
-static void Conf_InitWakeupInputExti(GPIO_TypeDef *gpio,
-                                     uint16_t pin,
-                                     uint8_t port_source,
-                                     uint8_t pin_source,
-                                     uint32_t exti_line,
-                                     EXTITrigger_TypeDef trigger,
-                                     uint8_t irq_channel)
+void Board_EnableIrq(const BoardIrqConfig *config)
 {
-    EXTI_InitTypeDef EXTI_InitStruct;
-    NVIC_InitTypeDef NVIC_InitStructure;
+    NVIC_InitTypeDef nvic;
 
-    Conf_InitGpioMode(gpio, pin, GPIO_Mode_IN_FLOATING);
-    GPIO_EXTILineConfig(port_source, pin_source);
+    nvic.NVIC_IRQChannel = config->channel;
+    nvic.NVIC_IRQChannelPreemptionPriority = config->preemption_priority;
+    nvic.NVIC_IRQChannelSubPriority = config->sub_priority;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+}
 
-    EXTI_InitStruct.EXTI_Line = exti_line;
-    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-    EXTI_InitStruct.EXTI_Trigger = trigger;
-    EXTI_InitStruct.EXTI_LineCmd = ENABLE;
-    EXTI_Init(&EXTI_InitStruct);
+void Board_InitIoGroup(BoardIoGroup group)
+{
+    uint32_t i;
 
-    NVIC_InitStructure.NVIC_IRQChannel = irq_channel;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x01;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x01;
-    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-    NVIC_Init(&NVIC_InitStructure);
+    RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
+    /* Preload ALL power latches before enabling any output in the group. */
+    for (i = 0U; i < BOARD_IO_COUNT; ++i) {
+        const BoardIoConfig *io = &g_board_io[i];
+        if (io->init_group == group &&
+            (io->initial_level == BOARD_LOW_BEFORE_MODE ||
+             io->initial_level == BOARD_HIGH_BEFORE_MODE)) {
+            GPIO_WriteBit(io->gpio, BOARD_IO_PIN(i),
+                io->initial_level == BOARD_HIGH_BEFORE_MODE ? Bit_SET : Bit_RESET);
+        }
+    }
+    for (i = 0U; i < BOARD_IO_COUNT; ++i) {
+        const BoardIoConfig *io = &g_board_io[i];
+        if (io->init_group == group) {
+            Conf_InitGpioMode(io->gpio, BOARD_IO_PIN(i), io->mode, io->speed);
+        }
+    }
+    /* AFE CTL and software I2C retain their existing mode-before-level order. */
+    for (i = 0U; i < sizeof(s_gpio_ports) / sizeof(s_gpio_ports[0]); ++i) {
+        uint32_t id;
+        uint16_t high_pins = 0U;
+        uint16_t low_pins = 0U;
+        for (id = 0U; id < BOARD_IO_COUNT; ++id) {
+            const BoardIoConfig *io = &g_board_io[id];
+            if (io->init_group == group && io->gpio == s_gpio_ports[i]) {
+                if (io->initial_level == BOARD_HIGH_AFTER_MODE) high_pins |= BOARD_IO_PIN(id);
+                if (io->initial_level == BOARD_LOW_AFTER_MODE) low_pins |= BOARD_IO_PIN(id);
+            }
+        }
+        if (high_pins != 0U) GPIO_SetBits(s_gpio_ports[i], high_pins);
+        if (low_pins != 0U) GPIO_ResetBits(s_gpio_ports[i], low_pins);
+    }
+}
+
+static uint32_t Conf_WakeupLine(BoardWakeupId id)
+{
+    return BOARD_IO_PIN(g_board_wakeup[id].io);
+}
+
+static void Conf_InitWakeupInputExti(const BoardWakeupConfig *config)
+{
+    const BoardIoConfig *io = &g_board_io[config->io];
+    EXTI_InitTypeDef exti;
+    uint32_t i;
+
+    /* AFIO source is selected from the same port as the GPIO row. */
+    for (i = 0U; i < sizeof(s_gpio_ports) / sizeof(s_gpio_ports[0]); ++i) {
+        if (s_gpio_ports[i] == io->gpio) {
+            Conf_InitGpioMode(io->gpio, BOARD_IO_PIN(config->io), io->mode, io->speed);
+            GPIO_EXTILineConfig(s_gpio_port_sources[i], io->pin_source);
+            exti.EXTI_Line = BOARD_IO_PIN(config->io);
+            exti.EXTI_Mode = EXTI_Mode_Interrupt;
+            exti.EXTI_Trigger = config->trigger;
+            exti.EXTI_LineCmd = ENABLE;
+            EXTI_Init(&exti);
+            Board_EnableIrq(&config->irq);
+            return;
+        }
+    }
 }
 
 static void LowPower_ConfigWakeupExti(uint32_t line, EXTITrigger_TypeDef trigger, FunctionalState cmd)
 {
-    EXTI_InitTypeDef EXTI_InitStruct;
+    EXTI_InitTypeDef exti;
 
-    EXTI_InitStruct.EXTI_Line = line;
-    EXTI_InitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
-    EXTI_InitStruct.EXTI_Trigger = trigger;
-    EXTI_InitStruct.EXTI_LineCmd = cmd;
-    EXTI_Init(&EXTI_InitStruct);
+    exti.EXTI_Line = line;
+    exti.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti.EXTI_Trigger = trigger;
+    exti.EXTI_LineCmd = cmd;
+    EXTI_Init(&exti);
 }
 
-static void Conf_InitMainPowerRails(BitAction m_stb,
-                                    BitAction ad_en,
-                                    BitAction cmnt_en,
-                                    BitAction sw_en,
-                                    BitAction ble_en)
+static void Conf_SetPortsAnalog(uint8_t keep_mask)
 {
-    GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, m_stb);
-    GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, ad_en);
-    GPIO_WriteBit(GPIO_BLE_EN, PIN_BLE_EN, ble_en);
-    GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, cmnt_en);
-    GPIO_WriteBit(GPIO_SW_EN, PIN_SW_EN, sw_en);
+    uint32_t port;
+    uint32_t i;
 
-    Conf_InitGpioMode(GPIO_M_STB, PIN_M_STB, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_AD_EN, PIN_AD_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_BLE_EN, PIN_BLE_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_CMNT_EN, PIN_CMNT_EN, GPIO_Mode_Out_PP);
-    Conf_InitGpioMode(GPIO_SW_EN, PIN_SW_EN, GPIO_Mode_Out_PP);
-}
-
-static void Conf_InitRunSharedIo(void)
-{
-    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
-
-    Conf_InitMainPowerRails(Bit_SET,
-                            Bit_RESET,
-                            Bit_RESET,
-                            Bit_SET,
-                            Bit_RESET);
-
-    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
+    for (port = 0U; port < sizeof(s_gpio_ports) / sizeof(s_gpio_ports[0]); ++port) {
+        uint16_t pins = GPIO_Pin_All;
+        for (i = 0U; i < BOARD_IO_COUNT; ++i) {
+            if (g_board_io[i].gpio == s_gpio_ports[port] &&
+                (g_board_io[i].stop_keep & keep_mask) != 0U) {
+                pins &= (uint16_t)~BOARD_IO_PIN(i);
+            }
+        }
+        if (pins != 0U) Conf_InitGpioMode(s_gpio_ports[port], pins, GPIO_Mode_AIN, GPIO_Speed_2MHz);
+    }
 }
 
 static void Conf_PrepareStopEntry(void)
@@ -107,25 +145,15 @@ static void Conf_PrepareStopEntry(void)
     ADC_StopForLowPower();
 }
 
-static void Conf_InitAllPortsAnalog(void)
-{
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOB, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
-}
-
 void LowPower_ClearWakeupPending(void)
 {
-    EXTI_ClearITPendingBit(EXTI_Line3);
-    EXTI_ClearITPendingBit(EXTI_Line0);
-    EXTI_ClearITPendingBit(EXTI_Line9);
-    EXTI_ClearITPendingBit(EXTI_Line12);
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_UART2));
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_CHARGER));
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_SWITCH));
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_CMNT));
     EXTI_ClearITPendingBit(EXTI_Line13);
-
 #if defined(UART1_WAKEUP_ENABLE)
-    EXTI_ClearITPendingBit(EXTI_Line7);
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_UART1));
 #endif
     NVIC_ClearPendingIRQ(EXTI0_IRQn);
     NVIC_ClearPendingIRQ(EXTI3_IRQn);
@@ -136,111 +164,65 @@ void LowPower_ClearWakeupPending(void)
 void LowPower_DisableWakeupExti(void)
 {
     LowPower_DisableUartWakeup();
-    LowPower_ConfigWakeupExti(EXTI_Line0, EXTI_Trigger_Falling, DISABLE);
-    LowPower_ConfigWakeupExti(EXTI_Line9, EXTI_Trigger_Falling, DISABLE);
-    LowPower_ConfigWakeupExti(EXTI_Line12, EXTI_Trigger_Rising, DISABLE);
+    LowPower_ConfigWakeupExti(Conf_WakeupLine(BOARD_WAKE_CHARGER), EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(Conf_WakeupLine(BOARD_WAKE_SWITCH), EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(Conf_WakeupLine(BOARD_WAKE_CMNT), EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line13, EXTI_Trigger_Rising, DISABLE);
     LowPower_ConfigWakeupExti(EXTI_Line17, EXTI_Trigger_Rising, DISABLE);
-
     LowPower_ClearWakeupPending();
 }
 
 void LowPower_DisableUartWakeup(void)
 {
-    LowPower_ConfigWakeupExti(EXTI_Line7, EXTI_Trigger_Falling, DISABLE);
-    LowPower_ConfigWakeupExti(EXTI_Line3, EXTI_Trigger_Falling, DISABLE);
-    EXTI_ClearITPendingBit(EXTI_Line7);
-    EXTI_ClearITPendingBit(EXTI_Line3);
+    LowPower_ConfigWakeupExti(Conf_WakeupLine(BOARD_WAKE_UART1), EXTI_Trigger_Falling, DISABLE);
+    LowPower_ConfigWakeupExti(Conf_WakeupLine(BOARD_WAKE_UART2), EXTI_Trigger_Falling, DISABLE);
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_UART1));
+    EXTI_ClearITPendingBit(Conf_WakeupLine(BOARD_WAKE_UART2));
 }
 
 static void Conf_InitUartWakeup(void)
 {
 #if defined(UART1_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI1)
-    Conf_InitWakeupInputExti(GPIOB, GPIO_Pin_7, GPIO_PortSourceGPIOB,
-        GPIO_PinSource7, EXTI_Line7, EXTI_Trigger_Falling, EXTI9_5_IRQn);
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_UART1]);
 #endif
 #if defined(RS485_WAKEUP_ENABLE) && defined(_COMMOM_UPPER_SCI2)
-    Conf_InitWakeupInputExti(GPIOA, GPIO_Pin_3, GPIO_PortSourceGPIOA,
-        GPIO_PinSource3, EXTI_Line3, EXTI_Trigger_Falling, EXTI3_IRQn);
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_UART2]);
 #endif
 }
 
 void InitIO_rtc(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
-
-    Conf_InitGpioMode(GPIO_CHG_IN, PIN_CHG_IN, GPIO_Mode_IN_FLOATING);
-
-    Conf_InitGpioMode(GPIO_SW, PIN_SW, GPIO_Mode_IN_FLOATING);
-    Conf_InitGpioMode(GPIO_RF_EN, PIN_RF_EN, GPIO_Mode_Out_PP);
-
-    Conf_InitMainPowerRails(Bit_SET,
-                            Bit_RESET,
-                            Bit_RESET,
-                            Bit_SET,
-                            Bit_RESET);
+    Board_InitIoGroup(BOARD_INIT_RUN_SHARED);
+    Board_InitIoGroup(BOARD_INIT_POWER);
 }
 
 void InitIO(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_IO_CLOCKS, ENABLE);
-
-    {
-        Conf_InitGpioMode(GPIOB, PIN_AFE1_PRO_EN | PIN_AFE1_CTL, GPIO_Mode_Out_PP);
-        MCUO_AFE_CTLC = 0;
-    }
-
-    Conf_InitRunSharedIo();
+    Board_InitIoGroup(BOARD_INIT_AFE_CONTROL);
+    Board_InitIoGroup(BOARD_INIT_RUN_SHARED);
+    Board_InitIoGroup(BOARD_INIT_POWER);
+    Board_InitIoGroup(BOARD_INIT_DEBUG_LED);
 }
 
 void InitWakeUp_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
-
     jtag_disableAndConfIO();
-    Conf_InitWakeupInputExti(GPIO_CHG_IN,
-                             PIN_CHG_IN,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource0,
-                             EXTI_Line0,
-                             EXTI_Trigger_Rising,
-                             EXTI0_IRQn);
-    Conf_InitWakeupInputExti(GPIO_SW,
-                             PIN_SW,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource9,
-                             EXTI_Line9,
-                             EXTI_Trigger_Rising_Falling,
-                             EXTI9_5_IRQn);
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_CHARGER]);
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_SWITCH]);
 }
 
 void InitWakeUp_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
-
     jtag_disableAndConfIO();
-
-    Conf_InitWakeupInputExti(GPIO_SW,
-                             PIN_SW,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource9,
-                             EXTI_Line9,
-                             EXTI_Trigger_Rising_Falling,
-                             EXTI9_5_IRQn);
-
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_SWITCH]);
     Conf_InitUartWakeup();
-
-    Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
-                             PIN_INT_WK_CMNT,
-                             GPIO_PortSourceGPIOB,
-                             GPIO_PinSource12,
-                             EXTI_Line12,
-                             EXTI_Trigger_Rising,
-                             EXTI15_10_IRQn);
+    Conf_InitWakeupInputExti(&g_board_wakeup[BOARD_WAKE_CMNT]);
 }
 
-// ???standby?????PA0?wkup???
-// ???????????????
 void InitWakeUp_DeepMode(void)
 {
     InitWakeUp_Base();
@@ -249,26 +231,15 @@ void InitWakeUp_DeepMode(void)
 void IOstatus_Base(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
-
-    Conf_InitAllPortsAnalog();
-
+    Conf_SetPortsAnalog(BOARD_KEEP_NONE);
     Conf_PrepareStopEntry();
 }
 
 void IOstatus_RTCMode(void)
 {
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
-
-    Conf_InitGpioMode(GPIOA, GPIO_Pin_All, GPIO_Mode_AIN);
-    if (g_stLowPowerRtcStatus.mode == NORMAL_MODE)
-        Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_DBG_LED), GPIO_Mode_AIN);
-    else
-        Conf_InitGpioMode(GPIOB, GPIO_Pin_All & (~PIN_AFE1_CTL) & (~PIN_AFE1_PRO_EN) & (~PIN_DBG_LED) & (~PIN_BLE_EN), GPIO_Mode_AIN);
-
-    Conf_InitGpioMode(GPIOC, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
-    Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
-
+    Conf_SetPortsAnalog(g_stLowPowerRtcStatus.mode == NORMAL_MODE ?
+        BOARD_KEEP_NORMAL : BOARD_KEEP_HICCUP);
     Conf_PrepareStopEntry();
 }
 

@@ -188,15 +188,13 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port)
     return 1U;
 }
 
-static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
-    UINT32 clock, GPIO_TypeDef *gpio, UINT16 tx, UINT16 rx, UINT32 remap)
+static void Sci_InitPort(struct SCI_PORT *port, const BoardUartConfig *config)
 {
-    GPIO_InitTypeDef io;
     USART_InitTypeDef uart;
-    NVIC_InitTypeDef nvic;
     volatile UINT16 dummy;
-    if (apb2) RCC_APB2PeriphClockCmd(clock,ENABLE);
-    else RCC_APB1PeriphClockCmd(clock,ENABLE);
+    port->usart=config->usart;
+    if (config->apb2) RCC_APB2PeriphClockCmd(config->clock,ENABLE);
+    else RCC_APB1PeriphClockCmd(config->clock,ENABLE);
     USART_Cmd(port->usart,DISABLE);
     port->usart->CR1=0U;
     dummy=(UINT16)port->usart->SR;
@@ -204,12 +202,8 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     (void)dummy;
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA |
         RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOD,ENABLE);
-    if (remap) GPIO_PinRemapConfig(remap,ENABLE);
-    GPIO_StructInit(&io);
-    io.GPIO_Pin=tx; io.GPIO_Mode=GPIO_Mode_AF_PP; io.GPIO_Speed=GPIO_Speed_10MHz;
-    GPIO_Init(gpio,&io);
-    io.GPIO_Pin=rx; io.GPIO_Mode=GPIO_Mode_IN_FLOATING;
-    GPIO_Init(gpio,&io);
+    if (config->remap) GPIO_PinRemapConfig(config->remap,ENABLE);
+    Board_InitIoGroup(config->io_group);
     USART_StructInit(&uart);
     uart.USART_BaudRate=port->baud;
     uart.USART_Mode=USART_Mode_Rx | USART_Mode_Tx;
@@ -218,11 +212,7 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     /* All protocol state is initialized before enabling USART/NVIC. */
     Sci_ArmReceiver(port);
     port->last_rx_us=SysTime_GetMicroseconds();
-    nvic.NVIC_IRQChannel=irq;
-    nvic.NVIC_IRQChannelPreemptionPriority=1U;
-    nvic.NVIC_IRQChannelSubPriority=3U;
-    nvic.NVIC_IRQChannelCmd=ENABLE;
-    NVIC_Init(&nvic);
+    Board_EnableIrq(&config->irq);
     USART_Cmd(port->usart,ENABLE);
 }
 
@@ -235,12 +225,10 @@ void InitUSART_CommonUpper(void)
     s_port2.baud=baud;
 #endif
 #ifdef _COMMOM_UPPER_SCI1
-    Sci_InitPort(&s_port1,USART1_IRQn,1U,RCC_APB2Periph_USART1,GPIOB,
-        GPIO_Pin_6,GPIO_Pin_7,GPIO_Remap_USART1);
+    Sci_InitPort(&s_port1,&g_board_uart1);
 #endif
 #ifdef _COMMOM_UPPER_SCI2
-    Sci_InitPort(&s_port2,USART2_IRQn,0U,RCC_APB1Periph_USART2,GPIOA,
-        GPIO_Pin_2,GPIO_Pin_3,0U);
+    Sci_InitPort(&s_port2,&g_board_uart2);
 #endif
 }
 

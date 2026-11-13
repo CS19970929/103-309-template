@@ -1,5 +1,7 @@
 #ifndef I2C_AFE1_H
 #define I2C_AFE1_H
+
+#include "Board_Config.h"
 #define AFE_ID				0x34
 
 
@@ -31,17 +33,25 @@ struct SH367309_Read {			/* AD Read	*/
 
 
 
-#define TWI_CLK_OUT		{GPIOB->CRH&=0xFFFFFFF0;GPIOB->CRH|=(UINT32)3<<(0<<2);}
-#define TWI_CLK_IN      {GPIOB->CRH&=0xFFFFFFF0;GPIOB->CRH|=(UINT32)8<<(0<<2);}
-#define TWI_CLK_HIGH	(PBout(8) = 1)
-#define TWI_CLK_LOW	    (PBout(8) = 0)
+/* Software I2C uses CRH directly. Keep its fast, compile-time pin selection. */
+#if (BOARD_AFE_I2C_SCL_SOURCE < 8U || BOARD_AFE_I2C_SCL_SOURCE > 15U || \
+     BOARD_AFE_I2C_SDA_SOURCE < 8U || BOARD_AFE_I2C_SDA_SOURCE > 15U || \
+     BOARD_AFE_I2C_SCL_SOURCE == BOARD_AFE_I2C_SDA_SOURCE)
+#error "AFE software I2C requires two different CRH pins (8..15)"
+#endif
+#define TWI_CLK_SHIFT ((BOARD_AFE_I2C_SCL_SOURCE - 8U) * 4U)
+#define TWI_DAT_SHIFT ((BOARD_AFE_I2C_SDA_SOURCE - 8U) * 4U)
+#define TWI_CLK_OUT {BOARD_AFE_I2C_GPIO->CRH &= ~(0x0FUL << TWI_CLK_SHIFT); BOARD_AFE_I2C_GPIO->CRH |= 3UL << TWI_CLK_SHIFT;}
+#define TWI_CLK_IN  {BOARD_AFE_I2C_GPIO->CRH &= ~(0x0FUL << TWI_CLK_SHIFT); BOARD_AFE_I2C_GPIO->CRH |= 8UL << TWI_CLK_SHIFT;}
+#define TWI_DAT_OUT {BOARD_AFE_I2C_GPIO->CRH &= ~(0x0FUL << TWI_DAT_SHIFT); BOARD_AFE_I2C_GPIO->CRH |= 3UL << TWI_DAT_SHIFT;}
+#define TWI_DAT_IN  {BOARD_AFE_I2C_GPIO->CRH &= ~(0x0FUL << TWI_DAT_SHIFT); BOARD_AFE_I2C_GPIO->CRH |= 8UL << TWI_DAT_SHIFT;}
+#define TWI_CLK_HIGH (BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->ODR, BOARD_AFE_I2C_SCL_SOURCE) = 1)
+#define TWI_CLK_LOW  (BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->ODR, BOARD_AFE_I2C_SCL_SOURCE) = 0)
+#define TWI_DAT_HIGH (BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->ODR, BOARD_AFE_I2C_SDA_SOURCE) = 1)
+#define TWI_DAT_LOW  (BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->ODR, BOARD_AFE_I2C_SDA_SOURCE) = 0)
+#define TWI_RD_CLK   BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->IDR, BOARD_AFE_I2C_SCL_SOURCE)
+#define TWI_RD_DAT   BIT_ADDR((uint32_t)&BOARD_AFE_I2C_GPIO->IDR, BOARD_AFE_I2C_SDA_SOURCE)
 
-#define TWI_DAT_OUT		{GPIOB->CRH&=0xFFFFFF0F;GPIOB->CRH|=(UINT32)3<<(1<<2);}
-#define TWI_DAT_IN      {GPIOB->CRH&=0xFFFFFF0F;GPIOB->CRH|=(UINT32)8<<(1<<2);}
-#define TWI_DAT_HIGH	(PBout(9) = 1)
-#define TWI_DAT_LOW	    (PBout(9) = 0)
-#define TWI_RD_CLK		(PBin(8))  //����SDA
-#define TWI_RD_DAT		(PBin(9))  //����SDA
 
 extern struct SH367309_Read SH367309_Read_AFE1;
 extern AFEDATA Registers_AFE1;

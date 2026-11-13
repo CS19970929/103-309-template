@@ -1,8 +1,8 @@
 #include "main.h"
 #include <string.h>
 
-#define CAN_POWER_ON_LEVEL Bit_RESET
-#define CAN_POWER_OFF_LEVEL Bit_SET
+#define CAN_POWER_ON_LEVEL (g_board_can.power_on_level)
+#define CAN_POWER_OFF_LEVEL (g_board_can.power_off_level)
 
 #define HDX_CAN_FRAME_ID_MIN ((UINT8)0x00U)
 #define HDX_CAN_FRAME_ID_MAX ((UINT8)0x11U)
@@ -875,6 +875,7 @@ static void can_handle_rx_msg(const CanRxMsg *rx_msg)
 
 static void InitCan_GPIO(void)
 {
+	const BoardIoConfig *power = &g_board_io[BOARD_IO_CMNT_EN];
 	GPIO_InitTypeDef gpio;
 
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB, ENABLE);
@@ -882,31 +883,17 @@ static void InitCan_GPIO(void)
 
 	GPIO_WriteBit(GPIO_CMNT_EN, PIN_CMNT_EN, CAN_POWER_ON_LEVEL);
 	gpio.GPIO_Pin = PIN_CMNT_EN;
-	gpio.GPIO_Mode = GPIO_Mode_Out_PP;
-	gpio.GPIO_Speed = GPIO_Speed_2MHz;
+	gpio.GPIO_Mode = power->mode;
+	gpio.GPIO_Speed = power->speed;
 	GPIO_Init(GPIO_CMNT_EN, &gpio);
 	can_power_on();
 
-	gpio.GPIO_Pin = GPIO_Pin_11;
-	gpio.GPIO_Mode = GPIO_Mode_IPU;
-	gpio.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOA, &gpio);
-
-	gpio.GPIO_Pin = GPIO_Pin_12;
-	gpio.GPIO_Mode = GPIO_Mode_AF_PP;
-	gpio.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOA, &gpio);
+	Board_InitIoGroup(BOARD_INIT_CAN);
 }
 
 static void InitCan_NVIC(void)
 {
-	NVIC_InitTypeDef nvic;
-
-	nvic.NVIC_IRQChannel = USB_LP_CAN1_RX0_IRQn;
-	nvic.NVIC_IRQChannelPreemptionPriority = 1U;
-	nvic.NVIC_IRQChannelSubPriority = 1U;
-	nvic.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&nvic);
+	Board_EnableIrq(&g_board_can.irq);
 }
 
 static void InitCan_Filter(void)
@@ -927,22 +914,10 @@ static void InitCan_Filter(void)
 
 static void InitCan_CAN1(void)
 {
-	CAN_InitTypeDef can;
+	CAN_InitTypeDef can = g_board_can.init;
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
 	CAN_DeInit(CAN1);
-	CAN_StructInit(&can);
-	can.CAN_TTCM = DISABLE;
-	can.CAN_ABOM = ENABLE;
-	can.CAN_AWUM = DISABLE;
-	can.CAN_NART = ENABLE;
-	can.CAN_RFLM = DISABLE;
-	can.CAN_TXFP = DISABLE;
-	can.CAN_Mode = CAN_Mode_Normal;
-	can.CAN_SJW = CAN_SJW_1tq;
-	can.CAN_BS1 = CAN_BS1_5tq;
-	can.CAN_BS2 = CAN_BS2_2tq;
-	can.CAN_Prescaler = 2U;
 	(void)CAN_Init(CAN1, &can);
 	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);
 }

@@ -31,15 +31,8 @@ void Init_IWDG(void)
 #if PROJECT_CFG_WDOG_ENABLE
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE); // 使能PWR外设时钟，待机模式，RTC，看门狗
 	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);		// 打开独立看门狗寄存器操作权限
-#ifndef __FUNC_RTC__
-	IWDG_SetPrescaler(IWDG_Prescaler_64); // 预分频系数
-	IWDG_SetReload(800);				  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-#else
-	IWDG_SetPrescaler(IWDG_Prescaler_256); // 预分频系数
-	IWDG_SetReload(0x0FFF);				   // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-										   // 800——1.28s，80——128ms
-#endif					  // 设置重载计数值，k = Xms / (1 / (40KHz/64)) = X/64*40; 4096最高
-						  // 800——1.28s，80——128ms
+    IWDG_SetPrescaler(g_board_iwdg.prescaler);
+    IWDG_SetReload(g_board_iwdg.reload);
 	IWDG_ReloadCounter(); // 喂狗
 	IWDG_Enable();		  // 使能IWDG
 #endif
@@ -57,7 +50,7 @@ void InitNVIC(void)
 // 非PCLK1(最大36MHz)，所以为72MHz
 static UINT16 Timer_GetPrescalerFor100kHz(void)
 {
-	UINT32 div = SystemCoreClock / 100000U;
+	UINT32 div = SystemCoreClock / g_board_timer3.counter_hz;
 
 	if (div == 0U)
 	{
@@ -93,14 +86,13 @@ static void SysTime_ResetCounters(void)
 void InitTimer(void)
 {
 	TIM_TimeBaseInitTypeDef timer_init;
-	NVIC_InitTypeDef nvic_init;
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
 	TIM_Cmd(TIM3, DISABLE);
 	TIM_ITConfig(TIM3, TIM_IT_Update, DISABLE);
 
 	timer_init.TIM_Prescaler = Timer_GetPrescalerFor100kHz();
-	timer_init.TIM_Period = 999U;
+	timer_init.TIM_Period = g_board_timer3.period;
 	timer_init.TIM_ClockDivision = TIM_CKD_DIV1;
 	timer_init.TIM_CounterMode = TIM_CounterMode_Up;
 	timer_init.TIM_RepetitionCounter = 0x00;
@@ -109,11 +101,7 @@ void InitTimer(void)
 	TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 	TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
 
-	nvic_init.NVIC_IRQChannel = TIM3_IRQn;
-	nvic_init.NVIC_IRQChannelPreemptionPriority = 0;
-	nvic_init.NVIC_IRQChannelSubPriority = 3;
-	nvic_init.NVIC_IRQChannelCmd = ENABLE;
-	NVIC_Init(&nvic_init);
+	Board_EnableIrq(&g_board_timer3.irq);
 
 	SysTime_ResetCounters();
 	TIM_Cmd(TIM3, ENABLE);

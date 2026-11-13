@@ -759,6 +759,16 @@
               <FilePath>..\Source\conf\conf.c</FilePath>
             </File>
             <File>
+              <FileName>Board_Config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\conf\Board_Config.c</FilePath>
+            </File>
+            <File>
+              <FileName>Board_Config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\conf\Board_Config.h</FilePath>
+            </File>
+            <File>
               <FileName>conf.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Source\conf\conf.h</FilePath>
@@ -1536,6 +1546,16 @@
               <FileName>conf.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\conf\conf.c</FilePath>
+            </File>
+            <File>
+              <FileName>Board_Config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Source\conf\Board_Config.c</FilePath>
+            </File>
+            <File>
+              <FileName>Board_Config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Source\conf\Board_Config.h</FilePath>
             </File>
             <File>
               <FileName>conf.h</FileName>

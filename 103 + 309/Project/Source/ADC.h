@@ -1,7 +1,7 @@
 #ifndef ADC_H
 #define ADC_H
 
-/* Keep this order aligned with s_adc_inputs in ADC.c. */
+/* Keep this order aligned with g_board_adc_inputs in Board_Config.c. */
 enum ADC_INPUT {
     ADC_INPUT_MOS,
     ADC_INPUT_COUNT

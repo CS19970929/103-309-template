@@ -6,18 +6,6 @@
 #define ADC_CONVERSION_TIMEOUT_TICKS 3U   /* Bounded polling, including loop latency. */
 #define ADC_FILTER_SAMPLES         8U
 
-typedef struct {
-    UINT32 gpio_clock;
-    GPIO_TypeDef *gpio;
-    UINT16 pin;
-    UINT8 channel;
-} ADC_INPUT_CONFIG;
-
-static const ADC_INPUT_CONFIG s_adc_inputs[] = {
-    { RCC_APB2Periph_GPIOA, GPIO_ADC_NMOS, PIN_ADC_NMOS, ADC_Channel_1 }
-};
-typedef char ADC_InputCountCheck[(sizeof(s_adc_inputs) / sizeof(s_adc_inputs[0]) == ADC_INPUT_COUNT) ? 1 : -1];
-
 enum ADC_STATE { ADC_OFF, ADC_SETTLING, ADC_WAIT, ADC_DISCARD, ADC_SAMPLING };
 
 static struct {
@@ -46,19 +34,10 @@ void ADC_StopForLowPower(void)
 void InitADC(void)
 {
     ADC_InitTypeDef adc;
-    GPIO_InitTypeDef gpio;
     UINT32 timeout;
-    UINT8 i;
 
     ADC_StopForLowPower();
-    for (i = 0U; i < ADC_INPUT_COUNT; ++i)
-    {
-        RCC_APB2PeriphClockCmd(s_adc_inputs[i].gpio_clock, ENABLE);
-        GPIO_StructInit(&gpio);
-        gpio.GPIO_Mode = GPIO_Mode_AIN;
-        gpio.GPIO_Pin = s_adc_inputs[i].pin;
-        GPIO_Init(s_adc_inputs[i].gpio, &gpio);
-    }
+    Board_InitIoGroup(BOARD_INIT_ADC);
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
     RCC_ADCCLKConfig(RCC_PCLK2_Div8); /* <= 9 MHz even with PCLK2 = 72 MHz. */
@@ -115,7 +94,8 @@ void ADC_Task(void)
         if (elapsed < (s_adc.state == ADC_SETTLING ? ADC_SETTLE_TICKS : ADC_SAMPLE_PERIOD_TICKS))
             return;
         s_adc.input = 0U;
-        ADC_RegularChannelConfig(ADC1, s_adc_inputs[0].channel, 1U, ADC_SampleTime_239Cycles5);
+        ADC_RegularChannelConfig(ADC1, g_board_adc_inputs[0].channel, 1U,
+                                 g_board_adc_inputs[0].sample_time);
         s_adc.state = ADC_DISCARD;
         ADC_StartConversion();
         return;
@@ -155,8 +135,8 @@ void ADC_Task(void)
                 s_adc.state = ADC_WAIT;
                 return;
             }
-            ADC_RegularChannelConfig(ADC1, s_adc_inputs[s_adc.input].channel, 1U,
-                                     ADC_SampleTime_239Cycles5);
+            ADC_RegularChannelConfig(ADC1, g_board_adc_inputs[s_adc.input].channel, 1U,
+                                     g_board_adc_inputs[s_adc.input].sample_time);
             s_adc.state = ADC_DISCARD;
         }
     }

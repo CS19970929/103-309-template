@@ -627,10 +627,13 @@ def main():
             env[key] = value
     compiler = sorted((vs / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/cl.exe'))[-1]
     adc = (SOURCE / 'ADC.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
-    # Read the real board pin definitions, rather than repeating them in a stub.
-    gpio = '\n'.join(line for line in (SOURCE / 'conf/conf_gpio.h').read_text(encoding='utf-8').splitlines()
-                     if re.match(r'#define\s+(GPIO_ADC_NMOS|PIN_ADC_NMOS)\b', line)) + '\n'
-    adc_stubs = ADC_STUBS + gpio
+    board = (SOURCE / 'conf/Board_Config.c').read_text(encoding='utf-8')
+    a = board.index('const BoardAdcInputConfig g_board_adc_inputs')
+    adc_config = board[a:board.index('\n};', a) + 3]
+    adc_stubs = ADC_STUBS + (SOURCE / 'ADC.h').read_text() + \
+        'typedef struct { UINT8 channel, sample_time; } BoardAdcInputConfig;\n' + \
+        adc_config + '\n#define BOARD_INIT_ADC 1\n' + \
+        'static void Board_InitIoGroup(int group) { assert(group==BOARD_INIT_ADC); }\n'
     run_c('adc', adc_stubs + (SOURCE / 'ADC.h').read_text() + adc + ADC_TESTS, output, env, compiler)
     upper = (SOURCE / 'Sci_Upper.h').read_text(encoding='utf-8', errors='replace')
     # Use only the real protocol fault bit layout, not the rest of the report.

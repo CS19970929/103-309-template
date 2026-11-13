@@ -17,7 +17,6 @@
 #define PBout(n)   BIT_ADDR(GPIOB_ODR_Addr,n)  //���
 #define PBin(n)    BIT_ADDR(GPIOB_IDR_Addr,n)  //����
 
-#define MCUI_ENI_DI1		PAin(9)		//I��1
 
 
 union SYS_TIME {

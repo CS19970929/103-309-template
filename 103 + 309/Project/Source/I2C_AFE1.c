@@ -548,13 +548,7 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 // 0为sleep模式，1为idle模式
 void InitAFE1_Sleep(UINT8 mode)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
+	Board_InitIoGroup(BOARD_INIT_AFE_I2C);
 
 	AFE_IsReady();
 	// 因为已经初始化过了，休眠的时候调用，不需要再次初始化参数
@@ -568,13 +562,7 @@ void InitAFE1_Sleep(UINT8 mode)
 
 void initAFE1_IIC(void)
 {
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOB, GPIO_Pin_8 | GPIO_Pin_9); // 输出高
+	Board_InitIoGroup(BOARD_INIT_AFE_I2C);
 }
 
 /*******************************************************************************

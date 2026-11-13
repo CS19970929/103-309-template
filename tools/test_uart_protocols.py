@@ -139,6 +139,22 @@ if r.returncode: raise SystemExit(r.returncode)
 core=code[:code.index('static int frame(')]
 cut=core.index('#define')
 fixtures=(ROOT/'tools/uart_host_cases.h').read_text(encoding='utf-8')
+# Hardware application is covered by test_board_config; transport uses the real UART descriptors.
+board_header=(src/'conf/Board_Config.h').read_text(encoding='utf-8')
+board_source=(src/'conf/Board_Config.c').read_text(encoding='utf-8')
+for name in ('BoardIoGroup','BoardIrqConfig','BoardUartConfig'):
+    end=board_header.index('} '+name+';')+len('} '+name+';')
+    fixtures+='\n'+board_header[board_header.rfind('typedef ',0,end):end]+'\n'
+for name in ('g_board_uart1','g_board_uart2'):
+    fixtures+=decl(board_source,'const BoardUartConfig '+name)
+fixtures+=r'''
+static void Board_InitIoGroup(BoardIoGroup group) {
+    assert(group==BOARD_INIT_UART1 || group==BOARD_INIT_UART2);
+}
+static void Board_EnableIrq(const BoardIrqConfig *config) {
+    assert(config->preemption_priority==1 && config->sub_priority==3);
+}
+'''
 combo=core[:cut]+fixtures+'\n'+core[cut:]
 combo=combo.replace(func(combo,'UINT8 StorageFlash_ReadBatteryNumber('),'')
 combo=combo.replace('static void SleepDeal_RecordExternalComm(void) {}',
@@ -264,23 +280,13 @@ wake_config=r'''
 #define RS485_WAKEUP_ENABLE
 #define _COMMOM_UPPER_SCI1
 #define _COMMOM_UPPER_SCI2
-#define GPIOB 1
-#define GPIOA 2
-#define GPIO_Pin_7 7
-#define GPIO_Pin_3 3
-#define GPIO_PortSourceGPIOB 1
-#define GPIO_PortSourceGPIOA 2
-#define GPIO_PinSource7 7
-#define GPIO_PinSource3 3
-#define EXTI_Line7 1
-#define EXTI_Line3 2
-#define EXTI_Trigger_Falling 0
-#define EXTI9_5_IRQn 0
-#define EXTI3_IRQn 0
+enum { BOARD_WAKE_UART1, BOARD_WAKE_UART2 };
+typedef struct { unsigned mask; } BoardWakeupConfig;
+static const BoardWakeupConfig g_board_wakeup[]={{1U},{2U}};
 static uint32_t baud;
 static unsigned wake_mask;
 static uint32_t Sci_GetBaudRate(void) { return baud; }
-static void Conf_InitWakeupInputExti(int gpio,int pin,int port,int source,int line,int edge,int irq) { wake_mask|=line; }
+static void Conf_InitWakeupInputExti(const BoardWakeupConfig *config) { wake_mask|=config->mask; }
 '''
 wake_config+=func((src/'conf/conf.c').read_text(encoding='utf-8'),'static void Conf_InitUartWakeup(')
 wake_config+='''

@@ -2,63 +2,39 @@
 #define CONF_GPIO_H
 
 #include "System_Init.h"
+#include "Board_Config.h"
 
+/* Compatibility names only. Edit the physical IO rows in Board_Config.c. */
+#define GPIO_CHG_IN       BOARD_IO_GPIO(BOARD_IO_CHG_IN)
+#define PIN_CHG_IN        BOARD_IO_PIN(BOARD_IO_CHG_IN)
+#define GPIO_INT_WK_CMNT  BOARD_IO_GPIO(BOARD_IO_CMNT_WAKE)
+#define PIN_INT_WK_CMNT   BOARD_IO_PIN(BOARD_IO_CMNT_WAKE)
+#define GPIO_SW           BOARD_IO_GPIO(BOARD_IO_SWITCH)
+#define PIN_SW            BOARD_IO_PIN(BOARD_IO_SWITCH)
+#define PIN_AFE1_CTL      BOARD_IO_PIN(BOARD_IO_AFE_CTL)
+#define PIN_AFE1_PRO_EN   BOARD_IO_PIN(BOARD_IO_AFE_PRO)
+#define GPIO_DBG_LED      BOARD_IO_GPIO(BOARD_IO_DEBUG_LED)
+#define PIN_DBG_LED       BOARD_IO_PIN(BOARD_IO_DEBUG_LED)
+#define GPIO_RF_EN        BOARD_IO_GPIO(BOARD_IO_RF_EN)
+#define PIN_RF_EN         BOARD_IO_PIN(BOARD_IO_RF_EN)
+#define GPIO_CMNT_EN      BOARD_IO_GPIO(BOARD_IO_CMNT_EN)
+#define PIN_CMNT_EN       BOARD_IO_PIN(BOARD_IO_CMNT_EN)
+#define GPIO_ADC_NMOS     BOARD_IO_GPIO(BOARD_IO_MOS_NTC)
+#define PIN_ADC_NMOS      BOARD_IO_PIN(BOARD_IO_MOS_NTC)
+#define GPIO_M_STB        BOARD_IO_GPIO(BOARD_IO_M_STB)
+#define PIN_M_STB         BOARD_IO_PIN(BOARD_IO_M_STB)
+#define GPIO_AD_EN        BOARD_IO_GPIO(BOARD_IO_AD_EN)
+#define PIN_AD_EN         BOARD_IO_PIN(BOARD_IO_AD_EN)
+#define GPIO_BLE_EN       BOARD_IO_GPIO(BOARD_IO_BLE_EN)
+#define PIN_BLE_EN        BOARD_IO_PIN(BOARD_IO_BLE_EN)
+#define GPIO_SW_EN        BOARD_IO_GPIO(BOARD_IO_SW_EN)
+#define PIN_SW_EN         BOARD_IO_PIN(BOARD_IO_SW_EN)
 
-#include "stm32f10x.h"
-
-
-/**********************************************/
-#define MCUO_DEBUG_LED1 	PBout(15)		//LED1
-
-#define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
-#define MCUO_AFE_CTLC 		PBout(14)		//��������
-
-/**********************************************/
-//todo 注意rtc休眠唤醒前后，外设、io状态，power
-#define GPIO_CHG_IN                 GPIOA                  //5v充电识别信号；充电唤醒？什么沿；充电关放电；
-#define PIN_CHG_IN                  GPIO_Pin_0
-
-#define GPIO_INT_WK_CMNT            GPIOB                  //todo can唤醒
-#define PIN_INT_WK_CMNT             GPIO_Pin_12
-
-//todo 待确认逻辑
-#define GPIO_SW                     GPIOA
-#define PIN_SW                      GPIO_Pin_9
-
-#define PIN_AFE1_CTL         GPIO_Pin_14
-//todo afe ship pin待确认
-//todo afe alm pin待确认
-//todo afe mode pin待确认
-
-#define GPIO_DBG_LED        GPIOB
-#define PIN_DBG_LED         GPIO_Pin_15
-
-//todo afe mode c073 看是否影响，输出低就行了，应该不用管，后面测试没问题直接 删掉
-#define GPIO_RF_EN                  GPIOA                   //todo !!!熔断保险丝控制io
-#define PIN_RF_EN                   GPIO_Pin_7
-
-#define PIN_AFE1_PRO_EN         GPIO_Pin_0
-
-//todo 供电 给谁的？？？
-#define GPIO_CMNT_EN                GPIOA                   //(power) can供电？？？
-#define PIN_CMNT_EN                 GPIO_Pin_4
-
-
-/* MOS NTC is wired to PA1 / ADC1_IN1 on this board. */
-#define GPIO_ADC_NMOS        GPIOA
-#define PIN_ADC_NMOS         GPIO_Pin_1
-
-#define GPIO_M_STB                  GPIOA                   //(power)
-#define PIN_M_STB                   GPIO_Pin_15
-
-#define GPIO_AD_EN                  GPIOB                   //todo (power) ???
-#define PIN_AD_EN                   GPIO_Pin_3
-
-#define GPIO_BLE_EN                  GPIOB                   //todo (power) ???
-#define PIN_BLE_EN                   GPIO_Pin_4
-
-
-#define GPIO_SW_EN             GPIOB                   //(power)
-#define PIN_SW_EN              GPIO_Pin_5
+/* Keep bit-band lvalue semantics used by the existing business code. */
+#define BOARD_IO_OUTPUT(id) BIT_ADDR((uint32_t)&BOARD_IO_GPIO(id)->ODR, g_board_io[(id)].pin_source)
+#define MCUO_DEBUG_LED1    BOARD_IO_OUTPUT(BOARD_IO_DEBUG_LED)
+#define MCUO_AFE_VPRO      BOARD_IO_OUTPUT(BOARD_IO_AFE_PRO)
+#define MCUO_AFE_CTLC      BOARD_IO_OUTPUT(BOARD_IO_AFE_CTL)
+#define MCUI_ENI_DI1       BIT_ADDR((uint32_t)&GPIO_SW->IDR, g_board_io[BOARD_IO_SWITCH].pin_source)
 
 #endif
