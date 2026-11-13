@@ -343,8 +343,7 @@ int main(void) {
     assert(!SH367309_SetMosPermits(1,1) && hardware_conf==0x08);
     AFE_PARAM_WRITE_Flag=0; assert(SH367309_SetMosPermits(1,1) && hardware_conf==0x38);
     reset_case(); hardware_conf=0x08; SH367309_Reg_Store.REG_MTP_CONF.all=0x38;
-    AFE_IDLE(); assert(hardware_conf==0x09);
-    AFE_Sleep(); assert(hardware_conf==0x0b); /* A stale permit shadow cannot reopen either MOS. */
+    AFE_Sleep(); assert(hardware_conf==0x0a); /* A stale permit shadow cannot reopen either MOS. */
     reset_case();
     for(i=0;i<1000;++i) Fault_UpdateMosTemperature(1,1350);
     assert(!g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
@@ -640,7 +639,7 @@ def main():
     driver = (SOURCE / 'SH367309_Func.c').read_text(encoding='utf-8')
     driver = ''.join(function(driver, sig) for sig in (
         'static UINT8 SH367309_WriteConfBits(', 'UINT8 SH367309_SetMosPermits(',
-        'static void AFE_SetLowPowerBit(', 'void AFE_IDLE(', 'void AFE_Sleep('))
+        'static void AFE_SetLowPowerBit(', 'void AFE_Sleep('))
     fault = (SOURCE / 'Fault.c').read_text(encoding='utf-8').replace('#include "main.h"', '')
     conversion = function((SOURCE / 'PubFunc.c').read_text(encoding='utf-8'), 'UINT16 GetEndValue(')
     measurement = (SOURCE / 'DataDeal.c').read_text(encoding='utf-8')

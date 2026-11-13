@@ -48,6 +48,25 @@ static void host_storage_init(void) {
     *(UINT16 *)0x1FFFF7E0=128;
 }
 /* PRODUCTION_SOURCE */
+
+/* Seed reserved aging fields to verify SOC/reset operations preserve the wire layout. */
+static UINT8 test_load_aging(STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    STORAGE_STATE state;
+    Storage_LoadState(FLASH_STATE_A, &state);
+    if (!(state.valid & STORAGE_STATE_AGING)) return 0U;
+    *data = state.aging;
+    return 1U;
+}
+static UINT8 test_save_aging(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
+{
+    STORAGE_STATE state;
+    Storage_LoadState(FLASH_STATE_A, &state);
+    state.aging = *data;
+    state.valid |= STORAGE_STATE_AGING;
+    return Storage_SaveState(FLASH_STATE_A, &state);
+}
+
 /* Actual parameter tables, validators and boot initializer. */
 /* PARAMETER_HEADERS */
 struct PRT_E2ROM_PARAS PRT_E2ROMParas;
@@ -153,7 +172,7 @@ static void test_module_updates(void) {
     assert(StorageFlash_SetBaudMode(3U) && StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
     assert(StorageFlash_LoadConfig(&custom));
     soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION; soc.u16SocNow=37; soc.u32CycleTimes=12345;
-    assert(StorageFlash_SaveSocData(&soc) && StorageFlash_SaveFactoryAgingData(&aging));
+    assert(StorageFlash_SaveSocData(&soc) && test_save_aging(&aging));
     assert(StorageFlash_AppendLog(7,8)); save_flash();
     /* All 512 selections: every unselected word and data owner is retained. */
     for(mask=0;mask<(1U<<STORAGE_PARAM_COUNT);++mask) {
@@ -180,7 +199,7 @@ static void test_module_updates(void) {
         assert(!actual.initializing && !memcmp(actual.reset_version,custom.reset_version,32));
         assert(StorageFlash_LoadSocData(&loaded_soc)==!(mask&(1U<<STORAGE_PARAM_SOC_STATE)));
         if(!(mask&(1U<<STORAGE_PARAM_SOC_STATE))) assert(!memcmp(&soc,&loaded_soc,sizeof(soc)));
-        assert(StorageFlash_LoadFactoryAgingData(&loaded_aging)==!(mask&(1U<<STORAGE_PARAM_AGING_STATE)));
+        assert(test_load_aging(&loaded_aging)==!(mask&(1U<<STORAGE_PARAM_AGING_STATE)));
         if(!(mask&(1U<<STORAGE_PARAM_AGING_STATE))) assert(!memcmp(&aging,&loaded_aging,sizeof(aging)));
         assert(StorageFlash_LoadLogData(&point,records));
         if(mask&(1U<<STORAGE_PARAM_LOG)) assert(point==0 && records[0][0]==0);
@@ -219,7 +238,7 @@ static void test_module_updates(void) {
             for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
                 assert(actual.rw.reserved[word]==custom.rw.reserved[word]);
             assert(StorageFlash_LoadSocData(&loaded_soc)==!s_param_versions[STORAGE_PARAM_SOC_STATE]);
-            assert(StorageFlash_LoadFactoryAgingData(&loaded_aging)==!s_param_versions[STORAGE_PARAM_AGING_STATE]);
+            assert(test_load_aging(&loaded_aging)==!s_param_versions[STORAGE_PARAM_AGING_STATE]);
             assert(StorageFlash_LoadLogData(&point,records) && point==!s_param_versions[STORAGE_PARAM_LOG]);
             for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
             mutations=0; assert(InitE2PROM() && !mutations);
@@ -232,7 +251,7 @@ static void test_module_updates(void) {
         if(actual.initializing) {
             memset(s_param_versions,0,sizeof(s_param_versions));
             assert(InitE2PROM() && !StorageFlash_LoadSocData(&loaded_soc) &&
-                   !StorageFlash_LoadFactoryAgingData(&loaded_aging));
+                   !test_load_aging(&loaded_aging));
             assert(StorageFlash_LoadLogData(&point,records) && point==0);
             pending_checked=1; break;
         }
@@ -252,7 +271,7 @@ static void test_module_updates(void) {
     assert(!memcmp(actual.rw.other,defaults.rw.other,sizeof(actual.rw.other)));
     for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
         assert(actual.rw.reserved[word]==defaults.rw.reserved[word]);
-    assert(!StorageFlash_LoadSocData(&loaded_soc) && !StorageFlash_LoadFactoryAgingData(&loaded_aging));
+    assert(!StorageFlash_LoadSocData(&loaded_soc) && !test_load_aging(&loaded_aging));
     assert(StorageFlash_LoadLogData(&point,records) && !point);
     for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
     printf("PASS module updates: all 512 selections, baud/serial/tag preserved including %d power cuts; factory reset restores defaults; independent SOC/Other/state, host saves, pending intent, statistics unchanged\n",cut_checks);
@@ -477,7 +496,7 @@ int main(void) {
     printf("PASS storage: config atomic commit, %d cut points, header CRC, sequence wrap, bounds, no-op saves\n",writes+1);
     /* Shared state updates retain the other owner's last committed data. */
     memset(&soc,0,sizeof(soc)); soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;
-    assert(StorageFlash_SaveFactoryAgingData(&aging));
+    assert(test_save_aging(&aging));
     assert(StorageFlash_SaveSocData(&soc));
     for(i=0;i<30;++i) { soc.u16SocNow=(UINT16)i; assert(StorageFlash_SaveSocData(&soc)); }
     while ((Storage_StateLatest(FLASH_STATE_A) & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
@@ -490,7 +509,7 @@ int main(void) {
         restore_flash(); cut_after=cut; StorageFlash_SaveSocData(&soc); cut_after=-1;
         assert(StorageFlash_LoadSocData(&loaded_soc));
         assert(loaded_soc.u16SocNow==previous_soc || loaded_soc.u16SocNow==90);
-        assert(StorageFlash_LoadFactoryAgingData(&loaded_aging) && !memcmp(&aging,&loaded_aging,sizeof(aging)));
+        assert(test_load_aging(&loaded_aging) && !memcmp(&aging,&loaded_aging,sizeof(aging)));
     }
     puts("PASS storage: SOC/aging merge, state append and rotation, power cuts retain complete state");
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
@@ -505,7 +524,7 @@ int main(void) {
         restore_flash(); cut_after=cut; InitE2PROM(); cut_after=-1;
         assert(InitE2PROM() && PRT_E2ROMParas.u16VcellOvp_First==COV_1);
         assert(!StorageFlash_LoadSocData(&loaded_soc));
-        assert(!StorageFlash_LoadFactoryAgingData(&loaded_aging));
+        assert(!test_load_aging(&loaded_aging));
         for(i=0;i<2048;++i) assert(((UINT8 *)FLASH_STATS_A)[i]==0x5A);
         mutations=0; assert(InitE2PROM() && !mutations);
     }

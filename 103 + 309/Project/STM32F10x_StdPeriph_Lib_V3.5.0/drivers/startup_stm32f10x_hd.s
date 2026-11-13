@@ -199,7 +199,6 @@ SysTick_Handler PROC
                 ENDP
 
 Default_Handler PROC
-                IMPORT  IrqDebug_RecordUnhandledVector
 
                 EXPORT  WWDG_IRQHandler            [WEAK]
                 EXPORT  PVD_IRQHandler             [WEAK]
@@ -322,7 +321,6 @@ DMA2_Channel1_IRQHandler
 DMA2_Channel2_IRQHandler
 DMA2_Channel3_IRQHandler
 DMA2_Channel4_5_IRQHandler
-                BL      IrqDebug_RecordUnhandledVector
                 B       .
 
                 ENDP

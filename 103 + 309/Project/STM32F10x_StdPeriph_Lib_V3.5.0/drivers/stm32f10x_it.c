@@ -54,13 +54,8 @@
  */
 void NMI_Handler(void)
 {
-  IRQ_DEBUG_CORE(nmi);
 }
 
-__asm void wait()
-{
-  BX lr
-}
 
 static void Fault_SaveReason(UINT16 reason)
 {
@@ -70,20 +65,13 @@ static void Fault_SaveReason(UINT16 reason)
   BKP_WriteBackupRegister(FAULT_BKP_REASON_INV_REG, (UINT16)(~reason));
 }
 
-static void Fault_ResetOrHold(UINT16 reason)
+static void Fault_ResetWithReason(UINT16 reason)
 {
   Fault_SaveReason(reason);
-#ifdef _DEBUG_
-  while (1)
-  {
-    wait();
-  }
-#else
   NVIC_SystemReset();
   while (1)
   {
   }
-#endif
 }
 
 /**
@@ -93,8 +81,7 @@ static void Fault_ResetOrHold(UINT16 reason)
  */
 void HardFault_Handler(void)
 {
-  IRQ_DEBUG_CORE(hardfault);
-  Fault_ResetOrHold(FAULT_REASON_HARD);
+  Fault_ResetWithReason(FAULT_REASON_HARD);
 }
 
 /**
@@ -104,8 +91,7 @@ void HardFault_Handler(void)
  */
 void MemManage_Handler(void)
 {
-  IRQ_DEBUG_CORE(memmanage);
-  Fault_ResetOrHold(FAULT_REASON_MEM);
+  Fault_ResetWithReason(FAULT_REASON_MEM);
 }
 
 /**
@@ -115,8 +101,7 @@ void MemManage_Handler(void)
  */
 void BusFault_Handler(void)
 {
-  IRQ_DEBUG_CORE(busfault);
-  Fault_ResetOrHold(FAULT_REASON_BUS);
+  Fault_ResetWithReason(FAULT_REASON_BUS);
 }
 
 /**
@@ -126,8 +111,7 @@ void BusFault_Handler(void)
  */
 void UsageFault_Handler(void)
 {
-  IRQ_DEBUG_CORE(usagefault);
-  Fault_ResetOrHold(FAULT_REASON_USAGE);
+  Fault_ResetWithReason(FAULT_REASON_USAGE);
 }
 
 /**
@@ -137,7 +121,6 @@ void UsageFault_Handler(void)
  */
 void SVC_Handler(void)
 {
-  IRQ_DEBUG_CORE(svc);
 }
 
 /**
@@ -147,7 +130,6 @@ void SVC_Handler(void)
  */
 void DebugMon_Handler(void)
 {
-  IRQ_DEBUG_CORE(debugmon);
 }
 
 /**
@@ -157,7 +139,6 @@ void DebugMon_Handler(void)
  */
 void PendSV_Handler(void)
 {
-  IRQ_DEBUG_CORE(pendsv);
 }
 
 /**
@@ -167,7 +148,6 @@ void PendSV_Handler(void)
  */
 void SysTick_Handler(void)
 {
-  IRQ_DEBUG_ENTER(core.systick);
 }
 
 /******************************************************************************/
@@ -182,11 +162,9 @@ void SysTick_Handler(void)
 void EXTI0_IRQHandler(void)
 {
   UINT8 handled = 0U;
-  IRQ_DEBUG_ENTER(exti.irq0);
 
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line0);
 
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line0);
@@ -199,11 +177,9 @@ void EXTI0_IRQHandler(void)
 void EXTI2_IRQHandler(void)
 {
   UINT8 handled = 0U;
-  IRQ_DEBUG_ENTER(exti.irq2);
 
   if (EXTI_GetITStatus(EXTI_Line2) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line2);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line2);
   }
@@ -215,11 +191,9 @@ void EXTI2_IRQHandler(void)
 void EXTI3_IRQHandler(void)
 {
   UINT8 handled = 0U;
-  IRQ_DEBUG_ENTER(exti.irq3);
 
   if (EXTI_GetITStatus(EXTI_Line3) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line3);
     handled = 1U;
     g_irq_t = uart2_irq;
     if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
@@ -234,11 +208,9 @@ void EXTI3_IRQHandler(void)
 void EXTI15_10_IRQHandler(void)
 {
   UINT8 handled = 0U;
-  IRQ_DEBUG_ENTER(exti.irq15_10);
 
   if (EXTI_GetITStatus(EXTI_Line12) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line12);
     handled = 1U;
     g_irq_t = rs485_irq;
     if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
@@ -247,7 +219,6 @@ void EXTI15_10_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line13) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line13);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line13);
   }
@@ -264,23 +235,19 @@ void EXTI15_10_IRQHandler(void)
 void EXTI9_5_IRQHandler(void)
 {
   UINT8 handled = 0U;
-  IRQ_DEBUG_ENTER(exti.irq9_5);
 
   if (EXTI_GetITStatus(EXTI_Line5) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line5);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line5);
   }
   if (EXTI_GetITStatus(EXTI_Line6) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line6);
     handled = 1U;
     EXTI_ClearITPendingBit(EXTI_Line6);
   }
   if (EXTI_GetITStatus(EXTI_Line7) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line7);
     handled = 1U;
     g_irq_t = uart1_irq;
     if (g_stLowPowerRtcStatus.mode==HICCUP_MODE)
@@ -289,7 +256,6 @@ void EXTI9_5_IRQHandler(void)
   }
   if (EXTI_GetITStatus(EXTI_Line9) != RESET)
   {
-    IRQ_DEBUG_COUNT(exti.line9);
 
     handled = 1U;
     g_irq_t = soc_key;
@@ -327,7 +293,6 @@ void EXTI9_5_IRQHandler(void)
 // 以下的是非共有的，如果多处使用到，则移动到it.c文件
 void USART1_IRQHandler(void)
 {
-  IRQ_DEBUG_ENTER(uart1.irq);
 
 #ifdef _COMMOM_UPPER_SCI1
   Sci1_CommonUpper_IRQHandler();
@@ -335,19 +300,10 @@ void USART1_IRQHandler(void)
 }
 void USART2_IRQHandler(void)
 {
-  IRQ_DEBUG_ENTER(uart2.irq);
 
 #ifdef _COMMOM_UPPER_SCI2
   Sci2_CommonUpper_IRQHandler();
 #endif
 }
-#ifdef _COMMOM_UPPER_SCI3
-void USART3_IRQHandler(void)
-{
-  IRQ_DEBUG_ENTER(uart3.irq);
-
-  Sci3_CommonUpper_IRQHandler();
-}
-#endif
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

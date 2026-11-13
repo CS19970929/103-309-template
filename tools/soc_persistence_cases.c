@@ -44,7 +44,7 @@ static void persistence_prepare(void)
     data.u16SocNow=80U;data.u32CapNow=data.u32CapFull*80U/100U;
     data.u32CycleTimes=12345;data.u32LearnPassedAs10=1234;
     assert(StorageFlash_SaveSocData(&data));InitData_SOC();
-    assert(StorageFlash_SaveFactoryAgingData(&aging));
+    assert(test_save_aging(&aging));
 }
 
 static void test_soc_smooth_persistence(void)
@@ -128,8 +128,8 @@ static void persistence_cycle_cuts(UINT8 rotation,UINT8 with_capacity,UINT8 same
         unsigned guard;
         for(guard=0;guard<30;guard++) {
             if((Storage_StateLatest(FLASH_STATE_A)&1023U)==14U*STORAGE_STATE_SPAN) break;
-            assert(StorageFlash_LoadFactoryAgingData(&aging));++aging.u32Elapsed10ms;
-            assert(StorageFlash_SaveFactoryAgingData(&aging));
+            assert(test_load_aging(&aging));++aging.u32Elapsed10ms;
+            assert(test_save_aging(&aging));
         }
         assert(guard<30);
     }

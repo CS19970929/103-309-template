@@ -439,16 +439,6 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
-              <FileName>StartupDefaultHandler.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
-            </File>
-            <File>
-              <FileName>IrqDebug.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IrqDebug.c</FilePath>
-            </File>
-            <File>
               <FileName>Sci_Uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Sci_Uart.c</FilePath>
@@ -502,11 +492,6 @@
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
-            </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
             </File>
             <File>
               <FileName>SH367309_DataDeal.c</FileName>
@@ -724,31 +709,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_can.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_cec.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_cec.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_crc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_crc.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dac.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dac.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dbgmcu.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dbgmcu.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dma.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_exti.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_exti.c</FilePath>
@@ -759,19 +719,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_flash.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_fsmc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_fsmc.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_gpio.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_i2c.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_i2c.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_iwdg.c</FileName>
@@ -794,16 +744,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_rtc.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_sdio.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_sdio.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_spi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_spi.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_tim.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_tim.c</FilePath>
@@ -812,11 +752,6 @@
               <FileName>stm32f10x_usart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_usart.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_wwdg.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_wwdg.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1186,7 +1121,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER,PROJECT_CFG_BUILD_PROFILE=1,PROJECT_CFG_DEBUG_WATCH_ENABLE=1,PROJECT_CFG_DEBUG_MONITOR_ENABLE=1,PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE=0,_DEBUG_</Define>
+              <Define>STM32F10X_MD,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
               <IncludePath>..\Lib;..\STM32F10x_StdPeriph_Lib_V3.5.0\drivers;..\STM32F10x_StdPeriph_Lib_V3.5.0\inc;..\Source;..\Source\conf;..\Source\easylogger\inc</IncludePath>
             </VariousControls>
@@ -1288,16 +1223,6 @@
               <FilePath>..\Source\RTC.c</FilePath>
             </File>
             <File>
-              <FileName>StartupDefaultHandler.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\StartupDefaultHandler.c</FilePath>
-            </File>
-            <File>
-              <FileName>IrqDebug.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\IrqDebug.c</FilePath>
-            </File>
-            <File>
               <FileName>Sci_Uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\Sci_Uart.c</FilePath>
@@ -1351,11 +1276,6 @@
               <FileName>LogRecord.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Source\LogRecord.c</FilePath>
-            </File>
-            <File>
-              <FileName>ShortFunc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Source\ShortFunc.c</FilePath>
             </File>
             <File>
               <FileName>SH367309_DataDeal.c</FileName>
@@ -1573,31 +1493,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_can.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_cec.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_cec.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_crc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_crc.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dac.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dac.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dbgmcu.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dbgmcu.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_dma.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_dma.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_exti.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_exti.c</FilePath>
@@ -1608,19 +1503,9 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_flash.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_fsmc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_fsmc.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_gpio.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_gpio.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_i2c.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_i2c.c</FilePath>
             </File>
             <File>
               <FileName>stm32f10x_iwdg.c</FileName>
@@ -1643,16 +1528,6 @@
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_rtc.c</FilePath>
             </File>
             <File>
-              <FileName>stm32f10x_sdio.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_sdio.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_spi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_spi.c</FilePath>
-            </File>
-            <File>
               <FileName>stm32f10x_tim.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_tim.c</FilePath>
@@ -1661,11 +1536,6 @@
               <FileName>stm32f10x_usart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_usart.c</FilePath>
-            </File>
-            <File>
-              <FileName>stm32f10x_wwdg.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\STM32F10x_StdPeriph_Lib_V3.5.0\src\stm32f10x_wwdg.c</FilePath>
             </File>
           </Files>
         </Group>

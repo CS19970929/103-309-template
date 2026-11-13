@@ -5,9 +5,6 @@
 int AFE_PARAM_WRITE_Flag = 1;
 
 static const UINT16 s_sh_afe_ocd1v_occv[16] = {20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 160, 180, 200};
-#if 0
-static const UINT16 s_sh_afe_ocd2v[16] = {30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200, 300, 400, 500};
-#endif
 const UINT16 g_u16ShAfeScvTable[16] = {50, 80, 110, 140, 170, 200, 230, 260, 290, 320, 350, 400, 500, 600, 800, 1000};
 static const UINT16 s_sh_afe_ovt_uvt[16] = {100, 200, 300, 400, 600, 800, 1000, 2000, 3000, 4000, 6000, 8000, 10000, 20000, 30000, 40000};
 const UINT16 g_u16ShAfeSctTable[16] = {0, 64, 128, 192, 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960};
@@ -20,9 +17,6 @@ AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction = AFE_PARAMETERS_RS4
 extern UINT8 ucMTPBuffer[26];
 extern const UINT16 iSheldTemp_10K_NTC[141];
 
-#define DSG_CHG_OCP_DELAY_TIME (30 * 100)
-#define OFF 0
-#define ON 1
 
 int Choose_Right_Value(UINT32 cur_Value, const UINT16 *AFE_list)
 {
@@ -398,35 +392,4 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 
 	AFE_PARAM_WRITE_Flag = 1;
 	return 1;
-}
-
-void ReadEEPROM_AFE_Parameters(void)
-{
-	UINT16 i;
-	AFE_Value_Typedef *P = &AFE_Parameters_RS485_Struction.u16VcellOvp;
-	UINT16 values[AFE_PARAMETES_TOTAL_LENGTH];
-	UINT8 use_default = 0;
-
-	if (!StorageFlash_LoadAfeData(values, AFE_PARAMETES_TOTAL_LENGTH))
-	{
-		use_default = 1;
-	}
-
-	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
-	{
-		if (!use_default)
-		{
-			(P + i)->curValue = values[i];
-			if (((P + i)->curValue < (P + i)->minValue) || ((P + i)->curValue > (P + i)->maxValue))
-			{
-				use_default = 1;
-			}
-		}
-	}
-
-	if (use_default)
-	{
-		System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-		EEPROM_ResetData_AFE_ParametersToDefault();
-	}
 }

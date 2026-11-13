@@ -160,8 +160,6 @@ void SystemRuntime_MarkBootReady(void);
 void SystemRuntime_SetProjectVersion(UINT8 project_version);
 void SystemRuntime_SetAfeStatus(UINT8 afe_index, UINT8 is_ok);
 void SystemRuntime_SetMosStatus(UINT8 charge_on, UINT8 discharge_on);
-UINT8 SystemRuntime_IsChargeMosOpen(void);
-UINT8 SystemRuntime_IsDischargeMosOpen(void);
 UINT32 SystemRuntime_GetStatusSnapshot(void);
 
 #endif	/* SYSTEM_MONITOR_H */

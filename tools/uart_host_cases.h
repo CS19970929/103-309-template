@@ -58,11 +58,8 @@ static GPIO_TypeDef gpio_a,gpio_b,gpio_d;
 #define DISABLE 0
 #define _COMMOM_UPPER_SCI1
 #define _COMMOM_UPPER_SCI2
-#define _COMMOM_UPPER_SCI3
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
-#define PROJECT_CFG_IRQ_DEBUG_ENABLE 1
-#include "IrqDebug.h"
-static struct { volatile IRQ_DEBUG irq; UINT32 rtc_sec_cnt; } sys_time;
+static struct { UINT32 rtc_sec_cnt; } sys_time;
 static UINT32 clock_us;
 static UINT32 clock_step;
 static UINT8 primask, u8FlashUpdateFlag, host_off;

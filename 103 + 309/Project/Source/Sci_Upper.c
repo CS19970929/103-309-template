@@ -9,13 +9,6 @@ static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 struct stCell_Info g_stCellInfoReport;
 volatile UINT8 u8FlashUpdateFlag = 0;
 
-/*
- * Temporary V25~V32 diagnostic overlay.
- * RAM-only by design: power-on/reset defaults to normal cell display.
- * Host function ID 0x07 enables/disables it through 0x1102/0x1103.
- */
-#define SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY ((UINT16)0x0007U)
-static UINT8 g_u8CurrentDiagVcellDisplayEnable = 0U;
 
 static void Sci_SetWrError(struct RS485MSG *s, UINT8 error);
 static UINT8 Sci_RangeFits(UINT16 offset, UINT16 count, UINT16 total);
@@ -31,7 +24,6 @@ static const struct SCI_READ_WINDOW s_read_windows[] = {
     {RS485_ADDR_RO_START2, RS485_RO_TOTAL_WORDS-96U, 96U, SCI_READ_REPORT, 0U},
     {RS485_ADDR_RO_START1, RS485_RO_TOTAL_WORDS-63U, 63U, SCI_READ_REPORT, 0U},
     {RS485_ADDR_RO_START0, RS485_RO_TOTAL_WORDS, 0U, SCI_READ_REPORT, 0U},
-    {RS485_ADDR_CURRENT_DIAG, RS485_ADDR_CURRENT_DIAG_WORDS, 0x100U, SCI_READ_LCD, 0U},
     {RS485_ADDR_AGING_STATUS, RS485_ADDR_AGING_STATUS_WORDS, 0x80U, SCI_READ_LCD, 0U},
     {RS485_ADDR_EVENT_RECORD, FLASH_STORAGE_LOG_RECORD_COUNT, 8U, SCI_READ_LCD, 0U},
     {RS485_ADDR_SN_READ, PRODUCT_ID_LENGTH_MAX*3U/2U, 2U, SCI_READ_LCD, 1U},
@@ -51,24 +43,15 @@ void Sci_WrRegs_0x10_CalibCoef(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_Protect(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_SocTable(struct RS485MSG *s);
 void Sci_WrRegs_0x10_RTC(struct RS485MSG *s);
-void Sci_WrRegs_0x10_Balance(struct RS485MSG *s);
-void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s);
-void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s);
-void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s);
-void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s);
 void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s);
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s);
-void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s);
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectRecord(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_ProtectElement(struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_OtherCanAdd(struct RS485MSG *s);
 void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s);
-void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s);
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s);
-void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s);
-void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s);
 
 void CRC_verify(struct RS485MSG *s)
 {
@@ -150,7 +133,7 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 		break;
 
 	case RS485_CMD_ADDR_SYSTEM_FUNCTION_OFF:
-		Sci_WrReg_0x06_BMS_FunctionOFF(s);
+		Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
 		break;
 
 	case RS485_CMD_ADDR_SET_ONCE_SOC:
@@ -165,15 +148,6 @@ void Sci_Deal_WrReg_0x06(struct RS485MSG *s)
 	case RS485_CMD_ADDR_RESET_EVENT_RECORD:
 		Sci_WrReg_0x06_Reset_EventRecord(s);
 		break;
-
-	// case RS485_CMD_ADDR_FACTORY_AGING_RESET_TIME:
-	// 	Sci_WrReg_0x06_FactoryAgingResetTime(s);
-	// 	break;
-
-	// case RS485_CMD_ADDR_FACTORY_AGING_SET_HOURS:
-	// 	Sci_WrReg_0x06_FactoryAgingSetHours(s);
-	// 	break;
-
 	default:
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_NO_PERMISSION;
@@ -218,116 +192,6 @@ static void Sci_PutWordBE(UINT8 buff[], UINT16 *index, UINT16 value)
 	buff[(*index)++] = (UINT8)value;
 }
 
-static void Sci_PutDWordBE(UINT8 buff[], UINT16 *index, UINT32 value)
-{
-	Sci_PutWordBE(buff, index, (UINT16)(value >> 16));
-	Sci_PutWordBE(buff, index, (UINT16)value);
-}
-
-static UINT16 Sci_EncodeSignedWord(INT32 value, INT32 bias)
-{
-	INT32 encoded = value + bias;
-
-	if (encoded < 0)
-	{
-		encoded = 0;
-	}
-	else if (encoded > 0xFFFF)
-	{
-		encoded = 0xFFFF;
-	}
-
-	return (UINT16)encoded;
-}
-
-static UINT16 Sci_GetCurrentDiagVcellWord(const AFE_CURRENT_DIAG *diag, UINT16 vcell_index)
-{
-	if (diag == 0)
-	{
-		return 61001U;
-	}
-
-	switch (vcell_index)
-	{
-	case 24U: /* V25 */
-		return (UINT16)diag->zeroStatus;
-	case 25U: /* V26 */
-		return Sci_EncodeSignedWord((INT32)diag->bootRaw1, 1000);
-	case 26U: /* V27 */
-		return Sci_EncodeSignedWord((INT32)diag->bootRaw2, 1000);
-	case 27U: /* V28 */
-		return Sci_EncodeSignedWord(diag->zeroRawX4, 10000);
-	case 28U: /* V29 */
-		return Sci_EncodeSignedWord((INT32)diag->runtimeRaw, 1000);
-	case 29U: /* V30 */
-		return Sci_EncodeSignedWord(diag->correctedRawX4, 10000);
-	case 30U: /* V31: charge current, 1 mA/LSB */
-		if (diag->current_mA <= 0)
-		{
-			return 0U;
-		}
-		if ((UINT32)diag->current_mA > 0xFFFFU)
-		{
-			return 0xFFFFU;
-		}
-		return (UINT16)diag->current_mA;
-	case 31U: /* V32: discharge current magnitude, 1 mA/LSB */
-		if (diag->current_mA >= 0)
-		{
-			return 0U;
-		}
-		if (diag->current_mA < -65535)
-		{
-			return 0xFFFFU;
-		}
-		return (UINT16)(-diag->current_mA);
-	default:
-		return 61001U;
-	}
-}
-
-static void Sci_PutCurrentDiagWords(UINT8 buff[], UINT16 *index)
-{
-	AFE_CURRENT_DIAG diag;
-	UINT16 flags = 0U;
-
-	AfeCurrent_GetDiagnostics(&diag);
-
-	if (diag.zeroValid != 0U)
-	{
-		flags |= 0x0001U;
-	}
-	if (SleepDeal_IsBootFromSleepStartup() != 0U)
-	{
-		flags |= 0x0002U;
-	}
-	if (diag.current_mA > 0)
-	{
-		flags |= 0x0004U;
-	}
-	else if (diag.current_mA < 0)
-	{
-		flags |= 0x0008U;
-	}
-	if (diag.zeroValid == 0U)
-	{
-		flags |= 0x0010U;
-	}
-
-	Sci_PutWordBE(buff, index, diag.version);                       /* C100 */
-	Sci_PutWordBE(buff, index, (UINT16)diag.zeroStatus);           /* C101 */
-	Sci_PutWordBE(buff, index, flags);                             /* C102 */
-	Sci_PutWordBE(buff, index, (UINT16)diag.bootRaw1);             /* C103 */
-	Sci_PutWordBE(buff, index, (UINT16)diag.bootRaw2);             /* C104 */
-	Sci_PutDWordBE(buff, index, (UINT32)diag.zeroRawX4);           /* C105-C106 */
-	Sci_PutWordBE(buff, index, (UINT16)diag.runtimeRaw);           /* C107 */
-	Sci_PutDWordBE(buff, index, (UINT32)diag.correctedRawX4);      /* C108-C109 */
-	Sci_PutDWordBE(buff, index, (UINT32)diag.current_mA);          /* C10A-C10B */
-	Sci_PutWordBE(buff, index, diag.deadband_mA);                  /* C10C */
-	Sci_PutWordBE(buff, index, (UINT16)diag.mtpConf);              /* C10D */
-	Sci_PutWordBE(buff, index, (UINT16)diag.bstatus3);             /* C10E */
-	Sci_PutWordBE(buff, index, diag.debugInjectFlags);              /* C10F debug injection flags */
-}
 
 static void Sci_PutZeroWordsBE(UINT8 buff[], UINT16 *index, UINT16 count)
 {
@@ -369,31 +233,6 @@ static void Sci_PutLatestFaultWords(UINT8 buff[], UINT16 *index, const UINT16 re
 	value = (UINT16)((record[Sci_RecordBackIndex(point, 2U)] << 8) |
 					 record[Sci_RecordBackIndex(point, 3U)]);
 	Sci_PutWordBE(buff, index, value);
-}
-
-static void Sci_CopyProductIdBytes(UINT8 dst[],
-								   UINT16 *length,
-								   const struct RS485MSG *s,
-								   UINT16 byte_count)
-{
-	UINT8 i;
-
-	for (i = 0; i < PRODUCT_ID_LENGTH_MAX; ++i)
-	{
-		dst[i] = (i < byte_count) ? (UINT8)s->u16Buffer[7 + i] : 0U;
-	}
-
-	*length = byte_count;
-}
-
-static void Sci_PutBytes(UINT8 buff[], UINT16 *index, const UINT8 src[], UINT16 count)
-{
-	UINT16 i;
-
-	for (i = 0; i < count; ++i)
-	{
-		buff[(*index)++] = src[i];
-	}
 }
 
 static UINT8 Sci_WrRegsByteCountValid(const struct RS485MSG *s, UINT16 reg_count)
@@ -486,12 +325,7 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
 
 	if (Sci_RangeOverlaps(offset, count, 0, 8))
 	{
-#if AFE_TYPE == bq76xx_afe
-#elif AFE_TYPE == sh36xx
 		AFE_PARAM_WRITE_Flag = 1;
-#else
-#error "error!!!"
-#endif
 	}
 
 	if (Sci_RangeOverlaps(offset, count, 8, 8) ||
@@ -572,7 +406,7 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 	case RS485_ADDR_SN_SERIAL_NUM:
 	case RS485_ADDR_SN_HAEDWARE_VER:
 	case RS485_ADDR_SN_SOFTWARE_VER:
-		Sci_WrRegs_0x10_SN_Version(u16SciRegStartAddr, s);
+		/* Historical identity writes are acknowledged without changing the identity. */
 		break;
 
 	case RS485_CMD_ADDR_FLASH_CONNECT:
@@ -597,13 +431,7 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	INT8 k;
 
 	i = 0;
-	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD)) &&
-		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD + RS485_ADDR_CURRENT_DIAG_WORDS)))
-	{
-		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_CURRENT_DIAG - RS485_ADDR_RO_LCD));
-		Sci_PutCurrentDiagWords(t_u8BuffTemp, &i);
-	}
-	else if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
+	if ((s->u16RdRegStartAddr >= (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD)) &&
 		(s->u16RdRegStartAddr < (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD + FLASH_STORAGE_LOG_RECORD_COUNT)))
 	{
 		u16SourceOffset = (UINT16)(s->u16RdRegStartAddr - (UINT16)(RS485_ADDR_EVENT_RECORD - RS485_ADDR_RO_LCD));
@@ -661,15 +489,11 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	UINT16 u16SciTemp;
 	UINT16 i = 0, j;
 	UINT32 status_snapshot;
-	UINT32 feature_mask;
-	AFE_CURRENT_DIAG current_diag;
 
-	AfeCurrent_GetDiagnostics(&current_diag);
 
     for (j=0U; j<32U; ++j)
     {
-        u16SciTemp = (g_u8CurrentDiagVcellDisplayEnable && j>=24U) ?
-            Sci_GetCurrentDiagVcellWord(&current_diag,j) : g_stCellInfoReport.u16VCell[j];
+        u16SciTemp = g_stCellInfoReport.u16VCell[j];
         Sci_PutWordBE(t_u8BuffTemp,&i,u16SciTemp);
     }
     Sci_PutWordBE(t_u8BuffTemp,&i,g_stCellInfoReport.u16VCellMax);
@@ -716,7 +540,6 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	}
 
 	status_snapshot = SystemRuntime_GetStatusSnapshot();
-	feature_mask = 0;
 	switch (OPEN)
 	{
 	case 0:
@@ -734,11 +557,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = (UINT16)(status_snapshot >> 16);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	u16SciTemp = (UINT16)(feature_mask & 0x0000FFFF);
-	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
-
-	u16SciTemp = (UINT16)(feature_mask >> 16);
-	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
+	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 2U);
 
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 8U);
 
@@ -750,7 +569,7 @@ void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 	u16SciTemp = BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
 	Sci_PutWordBE(t_u8BuffTemp, &i, u16SciTemp);
 
-	/* SOC_TEST status padding (16 words) — retained for protocol compatibility */
+	/* Reserved report padding (16 words) — retained for protocol compatibility */
 	Sci_PutZeroWordsBE(t_u8BuffTemp, &i, 16U);
 }
 
@@ -1375,31 +1194,6 @@ void Sci_WrRegs_0x10_OtherElement(UINT16 u16Channel, struct RS485MSG *s)
 	Sci_ApplyOtherElementSideEffects(offset, u16WrRegNum);
 }
 
-void Sci_WrRegs_0x10_Balance(struct RS485MSG *s)
-{
-	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_BALANCE_OV, s);
-}
-
-void Sci_WrRegs_0x10_SysOther(struct RS485MSG *s)
-{
-	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_CS_CUR_CHGMAX, s);
-}
-
-void Sci_WrRegs_0x10_SleepElement(struct RS485MSG *s)
-{
-	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SLEEP_V_NORMAL, s);
-}
-
-void Sci_WrRegs_0x10_SocElement(struct RS485MSG *s)
-{
-	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SOC_AH, s);
-}
-
-void Sci_WrRegs_0x10_SystemElement(struct RS485MSG *s)
-{
-	Sci_WrRegs_0x10_OtherElement(RS485_CMD_ADDR_SYS_SERIES_NUM, s);
-}
-
 void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 {
 	UINT16 u16WrRegNum;
@@ -1427,43 +1221,6 @@ void Sci_WrRegs_0x10_FlashConnect(struct RS485MSG *s)
 /* 把BMS序列号，�件版�号， �件版�号写� ohterInfor结构�
  * startADDR  如起始地�
  */
-void Sci_WrRegs_0x10_SN_Version(UINT16 startADDR, struct RS485MSG *s)
-{
-#if 0
-	UINT16 u16WrSNlength;
-
-	u16WrSNlength = (UINT16)((UINT16)s->u16Buffer[5] + ((UINT16)s->u16Buffer[4] << 8)) << 1;
-
-	switch (startADDR - RS485_ADDR_SN_SERIAL_NUM)
-	{
-	case 0:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_SerialNumber,
-							   &ProductionInfor.BMS_SerialNumberLength,
-							   s,
-							   u16WrSNlength);
-		break;
-
-	case 1:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_HardWareVersion,
-							   &ProductionInfor.BMS_HardWareVersionLength,
-							   s,
-							   u16WrSNlength);
-		break;
-
-	case 2:
-		Sci_CopyProductIdBytes(ProductionInfor.BMS_SoftWareVersion,
-							   &ProductionInfor.BMS_SoftWareVersionLength,
-							   s,
-							   u16WrSNlength);
-		break;
-
-	default:
-		s->AckType = RS485_ACK_NEG;
-		s->ErrorType = RS485_ERROR_CMD_INVALID;
-		break;
-	}
-#endif
-}
 
 void Sci_WrReg_0x06_Reset_CalibCoef(struct RS485MSG *s)
 {
@@ -1611,9 +1368,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
     UINT16 id = (UINT16)(s->u16Buffer[5] | (s->u16Buffer[4] << 8));
     switch (id)
     {
-    case SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY:
-        g_u8CurrentDiagVcellDisplayEnable = 1U;
-        break;
     case 10U:
         LowPower_Request(DEEP_MODE);
         break;
@@ -1623,14 +1377,6 @@ void Sci_WrReg_0x06_BMS_FunctionON(struct RS485MSG *s)
     }
 }
 
-void Sci_WrReg_0x06_BMS_FunctionOFF(struct RS485MSG *s)
-{
-    UINT16 id = (UINT16)(s->u16Buffer[5] | (s->u16Buffer[4] << 8));
-    if (id == SCI_BMS_FUNCTION_CURRENT_DIAG_DISPLAY)
-        g_u8CurrentDiagVcellDisplayEnable = 0U;
-    else
-        Sci_SetWrError(s, RS485_ERROR_DATA_INVALID);
-}
 
 void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 {
@@ -1646,50 +1392,4 @@ void Sci_WrReg_0x06_SetSocOnce(struct RS485MSG *s)
 		s->AckType = RS485_ACK_NEG;
 		s->ErrorType = RS485_ERROR_DATA_INVALID;
 	}
-}
-
-void Sci_WrReg_0x06_FactoryAgingResetTime(struct RS485MSG *s)
-{
-	// UINT16 u16SciRegData;
-
-	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	// if (u16SciRegData != 0x005AU)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
-	// 	return;
-	// }
-
-	// if (FactoryAging_ResetTimeByHost() == 0U)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
-	// }
-}
-
-void Sci_WrReg_0x06_FactoryAgingSetHours(struct RS485MSG *s)
-{
-	// UINT16 u16SciRegData;
-
-	// u16SciRegData = s->u16Buffer[5] + (s->u16Buffer[4] << 8);
-	// if ((u16SciRegData < FACTORY_AGING_DURATION_HOURS_MIN) ||
-	// 	(u16SciRegData > FACTORY_AGING_DURATION_HOURS_MAX))
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_DATA_INVALID;
-	// 	return;
-	// }
-
-	// if (FactoryAging_SetDurationHoursByHost(u16SciRegData) == 0U)
-	// {
-	// 	s->AckType = RS485_ACK_NEG;
-	// 	s->ErrorType = RS485_ERROR_CMD_INVALID;
-	// }
-}
-
-/* Both UARTs carry protocols. A printf must never inject bytes into a frame. */
-int fputc(int ch, FILE *f)
-{
-    (void)f;
-    return ch;
 }

@@ -4,7 +4,6 @@
 #include "conf.h"
 
 
-#define E2P_ADDR_E2POS_AFE_Parameters			3000		//到974，AFE参数保存到eeprom的起始地址
 #define RS485_CMD_ADDR_AFE_ROM_PARAMETERS_START 0x2400  
 #define RS485_CMD_ADDR_AFE_ROM_PARAMETERS_END 	0x2417
 #define AFE_PARAMETES_TOTAL_LENGTH  			24    //单位，寄存器
@@ -32,19 +31,15 @@
 
 #define AFE_OTC           ((55 + 40) * 10)
 #define AFE_OTC_recover     ((50 + 40) * 10)
-#define AFE_OTC_filter      100
 
 #define AFE_UTC           ((0 + 40) * 10)
 #define AFE_UTC_recover     ((3 + 40) * 10)
-#define AFE_UTC_filter      100
 
 #define AFE_OTD           ((60 + 40) * 10)
 #define AFE_OTD_recover     ((55 + 40) * 10)
-#define AFE_OTD_filter      100
 
 #define AFE_UTD         ((-20 + 40) * 10)
 #define AFE_UTD_recover     ((-10 + 40) * 10)
-#define AFE_UTD_filter      100
 
 
 #define AFE_OCC1_filter  	(100)
@@ -186,8 +181,6 @@ typedef	struct {
 	BYTE_11H_19H_TypeDef	m11H_19H;
 }AFE_ROM_PARAMETERS_TypeDef;
 
-
-
 /******************************* AFE保护参数结构体 *****************************/
 typedef struct {
 	UINT16 curValue;			//当前值
@@ -239,7 +232,6 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel,struct RS485MSG *s);
 void Sci_WrReg_0x06_Reset_AFE_Parameters(struct RS485MSG *s);
 
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void);
-void ReadEEPROM_AFE_Parameters(void);
 
 
 extern int AFE_PARAM_WRITE_Flag;

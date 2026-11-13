@@ -134,8 +134,6 @@ struct OTHER_ELEMENT {
 
 #define SNum 		7
 
-
-
 #define CS_Cur_CHGmax	((INT32)CS_Res_Num* 2000/CS_Res-10)
 #define CS_Cur_DSGmax	CS_Cur_CHGmax
 
@@ -173,15 +171,6 @@ struct OTHER_ELEMENT {
 	                             65000,50000,50000,50000,\
 	                             32,65000,10000,50000}
 
-
-
-
-#define AFE_CURRENT_DIAG_VERSION ((UINT16)2U)
-
-#define AFE_CURRENT_DEBUG_INJECT_RUNTIME   ((UINT8)0x01U)
-#define AFE_CURRENT_DEBUG_INJECT_BOOT_ZERO ((UINT8)0x02U)
-#define AFE_CURRENT_DEBUG_INJECT_ALL       ((UINT8)(AFE_CURRENT_DEBUG_INJECT_RUNTIME | AFE_CURRENT_DEBUG_INJECT_BOOT_ZERO))
-
 enum AFE_CURRENT_ZERO_STATUS_E {
 	AFE_CURRENT_ZERO_NOT_RUN = 0,
 	AFE_CURRENT_ZERO_VALID,
@@ -193,34 +182,6 @@ enum AFE_CURRENT_ZERO_STATUS_E {
 	AFE_CURRENT_ZERO_OUT_OF_RANGE
 };
 
-typedef struct _AFE_CURRENT_DIAG {
-	UINT16 version;
-	UINT8 zeroStatus;
-	UINT8 zeroValid;
-	INT16 bootRaw1;
-	INT16 bootRaw2;
-	INT32 zeroRawX4;
-	INT16 runtimeRaw;
-	INT32 correctedRawX4;
-	INT32 current_mA;
-	UINT16 deadband_mA;
-	UINT8 mtpConf;
-	UINT8 bstatus3;
-	UINT16 debugInjectFlags;
-} AFE_CURRENT_DIAG;
-
-#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-typedef struct _AFE_CURRENT_DEBUG_INJECT
-{
-	volatile INT16 raw;
-	volatile UINT8 targetMask;
-} AFE_CURRENT_DEBUG_INJECT;
-
-extern volatile AFE_CURRENT_DEBUG_INJECT g_afeCurrentDebugInject;
-void AfeCurrent_DebugInjectRaw(INT16 raw, UINT8 targetMask);
-void AfeCurrent_DebugInjectClear(void);
-#endif
-
 extern UINT16 g_u16CalibCoefK[KB_NUM];
 extern INT16  g_i16CalibCoefB[KB_NUM];
 extern struct OTHER_ELEMENT OtherElement;
@@ -228,9 +189,7 @@ extern UINT32 g_u32CS_Res_AFE;
 
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
-INT32 AfeCurrent_GetMeasuredCurrent_mA(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
-void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag);
 void open_ctlc(void);
 void close_ctlc(void);
 

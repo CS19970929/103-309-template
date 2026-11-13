@@ -58,7 +58,7 @@
 
 - `python -B tools/run_soc_host_c_test.py`：24 组真实 C 回归，包含 3051 mV 边界、低压轨迹及反复进入、最高单体/零尾流、200 ms 及整段限速、手动协议、计时回绕、暂停/无效数据、重启、过放/充电唤醒、旧标志、容量/电流极值和 20 万次随机积分基准。
 - `python -B tools/test_storage.py`：真实 Flash 日志与参数恢复；新增目标提交、进度保存和低压参考保存各 35 个半字写入中断点，检查 ACK/持久化一致、完整旧/新状态及重启不补扣。
-- `python -B tools/test_sleep_policy.py`：两种按键、自测开关、RUN/RTC UV 共用通知、持续 UV 不重复通知、立即 DEEP、失败保存与 watchdog。
+- `python -B tools/test_sleep_policy.py`：两种按键模式、RUN/RTC UV 共用通知、持续 UV 不重复通知、立即 DEEP、失败保存与 watchdog。
 - `python -B tools/test_protection_refactor.py`、`python -B tools/test_uart_protocols.py`：保护、反向导通、采样暂停与协议/唤醒回归。
 - `python -B tools/check_bms_no_bin.py --target FD_Release` / `FD_Debug`：用户临时区生成 AXF/MAP，关闭所有 BIN/HEX 和构建后处理，核对 App `[0x08004800,0x0801C000)`。
 

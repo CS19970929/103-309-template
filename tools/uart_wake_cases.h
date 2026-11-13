@@ -16,8 +16,6 @@ static UINT32 exti_pending;
 #define EXTI_Line9 (1U<<9)
 #define EXTI_Line12 (1U<<12)
 #define EXTI_Line13 (1U<<13)
-#undef IRQ_DEBUG_ENTER
-#define IRQ_DEBUG_ENTER(member) (++sys_time.irq.member)
 static int EXTI_GetITStatus(UINT32 line) { return (exti_pending & line)!=0U; }
 static void EXTI_ClearITPendingBit(UINT32 line) { exti_pending &= ~line; }
 /* REAL_WAKE_IRQS */
@@ -54,7 +52,6 @@ static bool rtc_sleep_has_wakeup_exception(void) {
 static UINT32 RtcSleep_PortGetLastWakeupSeconds(void) { return 1; }
 static void RtcSleep_PortAddRuntimeSeconds(UINT32 seconds) {}
 static void RtcSleep_PortApplySocRtcRest(UINT32 seconds) {}
-static void lp_refresh_status(void) {}
 static void low_power_log_and_commit_sleep(UINT8 mode) { assert(mode==DEEP_MODE); ++deep_requests; }
 /* REAL_RTC_FUNCTIONS */
 static void test_wake_paths(void) {

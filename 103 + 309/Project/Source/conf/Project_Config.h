@@ -8,10 +8,6 @@
 
 // <h>Project Basic Configuration
 
-// <o> Battery type
-//   <0=> Master BAT_MASTER 20A
-//   <1=> Slave  BAT_SLAVE  40A
-#define PROJECT_CFG_BAT_TYPE 1
 
 // <o> Battery chemistry
 //   <0=> Ternary Lithium TERNARYLI
@@ -21,23 +17,6 @@
 // <q> Enable host write registers
 #define PROJECT_CFG_HOST_WRITE_ENABLE 1
 
-// <o> Firmware year <0-99>
-#define PROJECT_CFG_FD_YEAR 26
-
-// <o> Firmware month <1-12>
-#define PROJECT_CFG_FD_MONTH 5
-
-// <o> Firmware day <1-31>
-#define PROJECT_CFG_FD_DAY 9
-
-// <o> Firmware version <0-65535>
-#define PROJECT_CFG_VERSION 5
-
-// <o> AFE type
-//   <0=> bq76xx
-//   <1=> sh36xx
-#define PROJECT_CFG_AFE_TYPE 1
-
 // <h>Feature Switches
 
 // <q> Enable IWDG
@@ -46,54 +25,6 @@
 // <q> Enable RTC
 #define PROJECT_CFG_RTC_ENABLE 1
 
-// <q> Enable debug system monitor
-// <i> Exports g_dbg global struct with all IO/peripheral/function states for Keil watch.
-// <i> Release must keep disabled.
-#ifndef PROJECT_CFG_DEBUG_MONITOR_ENABLE
-#define PROJECT_CFG_DEBUG_MONITOR_ENABLE 0
-#endif
-
-// <q> Enable IRQ debug counters
-// <i> sys_time.irq: counts and STOP snapshots, available in Release too; 0 removes the instrumentation.
-#ifndef PROJECT_CFG_IRQ_DEBUG_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_ENABLE 0
-#endif
-
-// <q> Enable IRQ debug event ring
-// <i> High-rate interrupts are counted but not pushed into the event ring.
-#ifndef PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE
-#define PROJECT_CFG_IRQ_DEBUG_EVENT_ENABLE 0
-#endif
-
-// <q> Enable automatic Flash self-test (DESTRUCTIVE to reserved test pages)
-// <i> Keeps real BMS data separate; blocks automatic idle sleep only while active.
-// <i> Watch sys_time.flash_test. Completion persists; use the documented test-area erase to rerun.
-#ifndef PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-#define PROJECT_CFG_STORAGE_SELF_TEST_ENABLE 0
-#endif
-// <o> SOC test commits <1000-1000000000>
-#ifndef PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES
-#define PROJECT_CFG_STORAGE_SELF_TEST_SOC_WRITES 240000
-#endif
-// <o> Log test commits including clears <1000-1000000000>
-#ifndef PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES
-#define PROJECT_CFG_STORAGE_SELF_TEST_LOG_WRITES 400000
-#endif
-// <o> Fault-mask test commits <1000-1000000000>
-#ifndef PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES
-#define PROJECT_CFG_STORAGE_SELF_TEST_STATS_WRITES 200000
-#endif
-// <o> Configuration test commits <100-1000000000>
-#ifndef PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES
-#define PROJECT_CFG_STORAGE_SELF_TEST_CONFIG_WRITES 2000
-#endif
-
-// <q> Enable AFE current raw debug injection
-// <i> Debug/test only. Allows software or debugger to replace SH367309 CADC current raw samples.
-// <i> Default off; when enabled, injection still remains inactive until a target mask is set.
-#ifndef PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-#define PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE 0
-#endif
 // </h>
 
 // <h>Switch behavior (PA9, shorted = low)

@@ -116,28 +116,6 @@ void Fault_UpdateCurrentProtection(UINT8 sample_valid)
         }
     }
 
-#ifdef __SOC_5_PROTECT_
-    {
-        static UINT32 soc_low_ticks;
-        if (g_stCellInfoReport.SocElement.u16Soc > 5U ||
-            g_stCellInfoReport.u16Ichg >= FAULT_REVERSE_CURRENT_A10)
-        {
-            soc_low_ticks = 0U;
-            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow =
-                (g_stCellInfoReport.SocElement.u16Soc <= 5U);
-        }
-        else
-        {
-            g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow = 1U;
-            soc_low_ticks += elapsed;
-            if (soc_low_ticks >= 360000U)
-            {
-                soc_low_ticks = 0U;
-                LowPower_Request(DEEP_MODE);
-            }
-        }
-    }
-#endif
 }
 
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
@@ -169,10 +147,6 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
         SH367309_Reg_Store.REG_BSTATUS1.bits.SC) &&
         !(reverse_valid && g_stCellInfoReport.u16Ichg >= FAULT_REVERSE_CURRENT_A10));
-#ifdef __SOC_5_PROTECT_
-    discharge_block |= (UINT8)(g_stCellInfoReport.unMdlFault_Third.bits.b1SocLow &&
-        !(reverse_valid && g_stCellInfoReport.u16Ichg >= FAULT_REVERSE_CURRENT_A10));
-#endif
     return SH367309_SetMosPermits((UINT8)!charge_block, (UINT8)!discharge_block);
 }
 

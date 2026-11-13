@@ -2,6 +2,7 @@
 """Build and run host tests for the production current K/B math."""
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -49,6 +50,42 @@ def main() -> int:
     subprocess.run(cmd, cwd=BUILD_DIR, env=env, check=True)
     print("Running", exe, flush=True)
     subprocess.run([str(exe)], cwd=BUILD_DIR, check=True)
+    source = (SOURCE_DIR / 'DataDeal.c').read_text(encoding='utf-8')
+    header = (SOURCE_DIR / 'DataDeal.h').read_text(encoding='utf-8')
+    conf = (SOURCE_DIR / 'SH367309_Func.h').read_text(encoding='utf-8', errors='replace')
+    def function(name):
+        match = re.search(r'^.*\b'+name+r'\([^;{}]*\)\s*\{',source,re.M)
+        start=match.start(); brace=source.index('{',start);depth=1;end=brace+1
+        while depth:
+            depth+=(source[end]=='{')-(source[end]=='}');end+=1
+        return source[start:end]+'\n'
+    constants='\n'.join(line for line in source.splitlines() if line.startswith((
+        '#define AFE_CURRENT_', '#define BOOT_CURRENT_', '#define CURRENT_')))+'\n'
+    i2c=(SOURCE_DIR/'I2C_AFE1.h').read_text(encoding='utf-8',errors='replace')
+    constants+='\n'.join(line for line in i2c.splitlines() if re.match(r'#define MTP_(CONF|BSTATUS3|ADC2)\b',line))+'\n'
+    types=source[source.index('typedef struct _AFE_CURRENT_RUNTIME'):source.index('} AFE_CURRENT_RUNTIME;')+len('} AFE_CURRENT_RUNTIME;')]
+    types+=header[header.index('enum AFE_CURRENT_ZERO_STATUS_E'):header.index('};',header.index('enum AFE_CURRENT_ZERO_STATUS_E'))+2]
+    types+=conf[conf.index('typedef union __MTP_REG_CONF'):conf.index('}MTP_REG_CONF;')+len('}MTP_REG_CONF;')]
+    names=('DataLoad_CurrentRawToSigned','DataLoad_CurrentAbsI32','DataLoad_CurrentRawX4ToMilliAmpX4',
+           'DataLoad_CurrentMilliAmpX4ToMilliAmp','DataLoad_CurrentReadCadcRaw','AfeCurrent_BootZeroFail',
+           'AfeCurrent_WaitFreshSample','AfeCurrent_PrepareBootZero','AfeCurrent_CheckBootZeroSafe',
+           'AfeCurrent_StartupZeroCal','AfeCurrent_GetCurrent_mA','DataLoad_CurrentApplyCalibrationX4',
+           'DataLoad_CurrentMilliAmpX4ToA10','DataLoad_Current')
+    cases=(ROOT/'tools/current_sampling_cases.c').read_text(encoding='utf-8-sig')
+    cases=cases.replace('/* CURRENT_TYPES */',constants+types)
+    cases=cases.replace('/* CURRENT_FUNCTIONS */','\n'.join(function(name) for name in names))
+    fixture=BUILD_DIR/'current_sampling.c';fixture.write_text(cases,encoding='utf-8')
+    for virtual in (False,True):
+        target=BUILD_DIR/('current_sampling_virtual.exe' if virtual else 'current_sampling.exe')
+        if Path(cc).name.lower()=='cl.exe':
+            build=[str(cc),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(SOURCE_DIR),
+                   str(fixture),'/Fe:'+str(target),'/Fo:'+str(target.with_suffix('.obj'))]
+            if virtual:build.append('/D__VIRTURE_CURRENT__')
+        else:
+            build=[str(cc),'-std=c99','-I'+str(SOURCE_DIR),str(fixture),'-o',str(target)]
+            if virtual:build.append('-D__VIRTURE_CURRENT__')
+        subprocess.run(build,cwd=BUILD_DIR,env=env,check=True)
+        subprocess.run([str(target)],cwd=BUILD_DIR,check=True)
     return 0
 
 

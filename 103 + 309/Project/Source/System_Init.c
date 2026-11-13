@@ -4,8 +4,6 @@ volatile union SYS_TIME g_st_SysTimeFlag;
 static volatile union SYS_TIME s_st_SysTimePending;
 static volatile UINT32 s_u32Sys10msTickCount = 0U;
 
-static UINT8 s_u8Cnt50ms = 0;
-static UINT8 s_u8Cnt100ms = 0;
 static UINT8 s_u8Cnt200ms = 0;
 static UINT8 s_u8Cnt1000ms = 0;
 
@@ -15,7 +13,6 @@ static UINT16 fac_ms = 0;
 #define SYS_TIME_200MS_PENDING_LIMIT ((UINT8)5U)
 
 static volatile UINT8 s_u8Sys200msPendingPeriods = 0U;
-static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 
 #define LOW_POWER_DEBUG_MASK (DBGMCU_CR_DBG_SLEEP |     \
 							  DBGMCU_CR_DBG_STOP |      \
@@ -23,13 +20,9 @@ static volatile UINT16 s_u16Sys200msOverflowCnt = 0U;
 							  DBGMCU_CR_DBG_IWDG_STOP | \
 							  DBGMCU_CR_DBG_WWDG_STOP)
 
-void EnableLowPowerDebug(void)
+void ClearLowPowerDebug(void)
 {
-#ifdef __EnableLowPowerDebug__
-	DBGMCU->CR |= LOW_POWER_DEBUG_MASK;
-#else
 	DBGMCU->CR &= (UINT32)(~LOW_POWER_DEBUG_MASK);
-#endif
 }
 
 // 使用LSI
@@ -87,13 +80,9 @@ static void SysTime_ResetCounters(void)
 	g_st_SysTimeFlag.all = 0U;
 	s_st_SysTimePending.all = 0U;
 	s_u32Sys10msTickCount = 0U;
-
-	s_u8Cnt50ms = 0U;
-	s_u8Cnt100ms = 0U;
 	s_u8Cnt200ms = 0U;
 	s_u8Cnt1000ms = 0U;
 	s_u8Sys200msPendingPeriods = 0U;
-	s_u16Sys200msOverflowCnt = 0U;
 
 	if (primask == 0U)
 	{
@@ -190,11 +179,6 @@ void SysTime_LatchTaskFlags(void)
 	}
 }
 
-UINT8 SysTime_HasPendingTaskFlags(void)
-{
-	return (s_st_SysTimePending.all != 0U) ? 1U : 0U;
-}
-
 UINT32 SysTime_Get10msTickCount(void)
 {
 	UINT32 tick_count;
@@ -248,31 +232,11 @@ UINT8 SysTime_Take200msTaskPeriod(void)
 	return has_period;
 }
 
-UINT16 SysTime_Get200msTaskOverflowCount(void)
-{
-	UINT16 overflow_count;
-	UINT32 primask = __get_PRIMASK();
-
-	__disable_irq();
-	overflow_count = s_u16Sys200msOverflowCnt;
-
-	if (primask == 0U)
-	{
-		__enable_irq();
-	}
-
-	return overflow_count;
-}
-
 static void SysTime_Post200msTaskPeriod(void)
 {
 	if (s_u8Sys200msPendingPeriods < SYS_TIME_200MS_PENDING_LIMIT)
 	{
 		s_u8Sys200msPendingPeriods++;
-	}
-	else if (s_u16Sys200msOverflowCnt < (UINT16)0xFFFFU)
-	{
-		s_u16Sys200msOverflowCnt++;
 	}
 }
 
@@ -281,22 +245,9 @@ static void SysTime_Post10msTick(void)
 	s_u32Sys10msTickCount++;
 	s_st_SysTimePending.bits.b1Sys10msFlag = 1U;
 
-	if (++s_u8Cnt50ms >= 5U)
-	{
-		s_u8Cnt50ms = 0U;
-		s_st_SysTimePending.bits.b1Sys50msFlag = 1U;
-	}
-
-	if (++s_u8Cnt100ms >= 10U)
-	{
-		s_u8Cnt100ms = 0U;
-		s_st_SysTimePending.bits.b1Sys100msFlag = 1U;
-	}
-
 	if (++s_u8Cnt200ms >= 20U)
 	{
 		s_u8Cnt200ms = 0U;
-		s_st_SysTimePending.bits.b1Sys200msFlag = 1U;
 		SysTime_Post200msTaskPeriod();
 	}
 
@@ -315,31 +266,10 @@ void IWDG_Feed(void)
 
 void TIM3_IRQHandler(void)
 {
-	IRQ_DEBUG_ENTER(tim3.irq);
 	if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
 	{
-		IRQ_DEBUG_COUNT(tim3.update);
 		TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
 		SysTime_Post10msTick();
-		// sys_time.rtc_sec_cnt = RTC_GetCounter();
 
-		// switch (sleep_state)
-		// {
-		// case 0:
-		// 	if (1 == MCUI_ENI_DI1 && !g_stCellInfoReport.u16Ichg)
-		// 	{
-		// 		MCUO_AFE_CTLC = 0;
-		// 		if (!IsChargeActive())
-		// 		{
-		// 			MCUO_AFE_CTLC = 1;
-		// 			LowPower_Request(NORMAL_MODE);
-		// 		}
-		// 		else
-		// 			MCUO_AFE_CTLC = 1;
-		// 	}
-		// 	break;
-		// default:
-		// 	break;
-		// }
 	}
 }

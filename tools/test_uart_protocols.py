@@ -59,14 +59,13 @@ static void Sci_ACK_0x03_RW_Data_OtherCanAdd(struct RS485MSG *s,UINT8 *p) { fill
 static void Sci_ACK_0x03_RW_Data_Other(struct RS485MSG *s,UINT8 *p) { fill(p,0x22); }
 static void Sci_ACK_0x03_RW_Data_Pro(struct RS485MSG *s,UINT8 *p) { fill(p,0x21); }
 static void Sci_ACK_0x03_RW_Data_Cali(struct RS485MSG *s,UINT8 *p) { fill(p,0x20); }
-static void Sci_PutCurrentDiagWords(UINT8 *p,UINT16 *index) {fill(p,0xc1);}
 static void Sci_ACK_0x03_ReadRegs_EventRecord(UINT8 *p) {fill(p,0xe0);}
 UINT8 StorageFlash_ReadBatteryNumber(UINT8 *number);
 '''
 code=pre+sci[sci.index('enum SCI_READ_BLOCK {'):sci.index('void Sci_WrRegs_0x10_CalibCoef(')]+func(pub,'UINT16 Sci_CRC16RTU(')
 for sig in ['static void Sci_SetWrError(', 'static UINT8 Sci_RangeFits(', 'static const struct SCI_READ_WINDOW *Sci_FindReadWindow(',
             'static void Sci_PutWordBE(', 'static void Sci_PutZeroWordsBE(', 'static UINT8 Sci_RecordBackIndex(',
-            'static void Sci_PutBytes(', 'static void Sci_PutFactoryAgingStatusWords(',
+            'static void Sci_PutFactoryAgingStatusWords(',
             'void Sci_ACK_0x03_ReadRegs_LCD(', 'static void Sci_LoadReadData(', 'void Sci_ACK_0x03(', 'UINT8 Sci_HostReadWords(', 'void Sci_ACK_0x06_0x10(',
             'void CRC_verify(', 'void Sci_Deal_ReadRegs_0x03(', 'void Sci_ResetMessage(',
             'UINT8 Sci_ModbusFeed(', 'UINT8 Sci_ModbusFrameValid(',
@@ -112,6 +111,7 @@ int main(void) {
   UINT16 words[123]; int before=writes;
   assert(Sci_HostReadWords(0xc002,48,words)==0);
   assert(Sci_HostReadWords(0xc003,1,words)==RS485_ERROR_ADDR_INVALID);
+  assert(Sci_HostReadWords(0xc100,16,words)==RS485_ERROR_ADDR_INVALID);
   assert(Sci_HostReadWords(0xd200,18,words)==0);
   assert(Sci_HostReadWords(0xd200,19,words)==RS485_ERROR_ADDR_INVALID);
   assert(Sci_HostReadWords(0xd000,32768,words)==RS485_ERROR_DATA_INVALID);
@@ -139,7 +139,6 @@ if r.returncode: raise SystemExit(r.returncode)
 core=code[:code.index('static int frame(')]
 cut=core.index('#define')
 fixtures=(ROOT/'tools/uart_host_cases.h').read_text(encoding='utf-8')
-fixtures+=func((src/'IrqDebug.c').read_text(encoding='utf-8'),'void IrqDebug_Count(')
 combo=core[:cut]+fixtures+'\n'+core[cut:]
 combo=combo.replace(func(combo,'UINT8 StorageFlash_ReadBatteryNumber('),'')
 combo=combo.replace('static void SleepDeal_RecordExternalComm(void) {}',
@@ -157,6 +156,33 @@ static struct { struct { UINT16 curValue; } u16TChgOTp,u16VcellOvp,u16VcellUvp,
 } AFE_Parameters_RS485_Struction;
 static struct { struct { struct { UINT8 SC; } bits; } REG_BSTATUS1; } SH367309_Reg_Store;
 '''
+# Exercise the actual report serializer, including its fixed historical offsets.
+combo=combo.replace('static void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s,UINT8 *p) { fill(p,0xd0); }',
+                    'void Sci_ACK_0x03_ReadRegs_Data(struct RS485MSG *s,UINT8 *p);')
+combo+=(src/'System_Monitor.h').read_text(encoding='utf-8',errors='replace')+'\n'
+combo+=decl((src/'RTC.h').read_text(encoding='utf-8',errors='replace'),'struct RTC_ELEMENT {')
+combo+=r'''
+volatile struct SYSTEM_ERROR System_ErrFlag;
+static struct RTC_ELEMENT RTC_time;
+static UINT16 Fault_record_Third2[Record_len];
+static UINT8 FaultPoint_Third2;
+#define OPEN 1
+#define RCC_APB1Periph_PWR 1
+#define RCC_APB1Periph_BKP 2
+#define FAULT_BKP_REASON_REG 11
+#define FAULT_BKP_REASON_INV_REG 12
+static void PWR_BackupAccessCmd(int enabled) {}
+static UINT16 BKP_ReadBackupRegister(int reg) { return reg==11 ? 0x4846U : (UINT16)~0x4846U; }
+UINT32 SystemRuntime_GetStatusSnapshot(void) { return 0x12345678UL; }
+static struct { UINT16 u16VCell[16]; } SH367309_Read_AFE1;
+'''
+combo+=func(sci,'static void Sci_PutLatestFaultWords(')+func(sci,'void Sci_ACK_0x03_ReadRegs_Data(')
+data=(src/'DataDeal.c').read_text(encoding='utf-8')
+start=data.index('const unsigned char SeriesSelect_AFE1')
+combo+=data[start:data.index('};',start)+2]+'\n'+func(data,'void DataLoad_CellVolt(')
+combo+=(src/'rtc_sleep.h').read_text(encoding='utf-8')+'\n'
+combo+='static void LowPower_Request(enum _SLEEP_MODE mode);\n'
+
 # Use the real statistics storage as well as the real UART/protocol code.
 flash_stub=(ROOT/'tools/storage_host_cases.c').read_text(encoding='utf-8').split('/* PRODUCTION_SOURCE */')[0]
 vendor=(ROOT/'103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x.h').read_text(encoding='utf-8',errors='replace')
@@ -186,7 +212,9 @@ for signature in ('void Sci_Deal_WrReg_0x06(', 'void Sci_Deal_WrRegs_0x10('):
 known={'Sci_SetWrError','Sci_RequestBaudMode','Sci_GetWrRegNum','Sci_IsCalibPairStart',
        'Sci_Deal_WrReg_0x06','Sci_Deal_WrRegs_0x10'}
 for name in sorted(set(re.findall(r'\b(Sci_\w+)\(',dispatch))-known):
-    if name=='Sci_WrRegs_0x10_AFE_Parameters':
+    if name=='Sci_WrReg_0x06_BMS_FunctionON':
+        combo+=func(sci,'void '+name+'(')
+    elif name=='Sci_WrRegs_0x10_AFE_Parameters':
         combo+='static UINT8 '+name+'(UINT16 a,struct RS485MSG *s) { return 0; }\n'
     elif name in ('Sci_WrReg_0x06_Reset_AFE_Parameters','Sci_WrReg_0x06_Reset_EventRecord'):
         combo+='static void '+name+'(struct RS485MSG *s) {}\n'
@@ -273,6 +301,8 @@ subprocess.run([str(out/'wake_baud.exe')],cwd=out,check=True)
 
 # Compile the read-only product policy against the real write dispatchers too.
 readonly=combo[:combo.index('static const UINT8 data1_request')]
+readonly=readonly.replace('static void LowPower_Request(enum _SLEEP_MODE mode);',
+                          'static void LowPower_Request(enum _SLEEP_MODE mode) {}')
 readonly=readonly.replace('#define PROJECT_CFG_HOST_WRITE_ENABLE 1',
                           '#define PROJECT_CFG_HOST_WRITE_ENABLE 0')
 readonly=readonly.replace('void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s);',

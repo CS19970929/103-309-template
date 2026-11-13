@@ -53,7 +53,7 @@ try {
     Add-Section $lines "Recent Commits" (Run-Text { git log --oneline -5 })
     Add-Section $lines "Key Config" (Run-Text {
         Select-String -Path "103 + 309\Project\Source\conf\Project_Config.h" `
-            -Pattern "PROJECT_CFG_BUILD_PROFILE|PROJECT_CFG_WDOG_ENABLE|PROJECT_CFG_SOC_BOARD_SELF_CONSUMPTION_MA|PROJECT_CFG_SOC_TEST_MODE_ENABLE|PROJECT_CFG_DEBUG_WATCH_ENABLE" |
+            -Pattern "PROJECT_CFG_WDOG_ENABLE|PROJECT_CFG_SWITCH_MODE|PROJECT_CFG_BAT_CHEMISTRY" |
             ForEach-Object { "{0}:{1}: {2}" -f $_.Path,$_.LineNumber,$_.Line.Trim() }
     })
     Add-Section $lines "Project Check" (Run-Text { py -3.9 tools\project_check.py -q })

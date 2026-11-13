@@ -36,10 +36,6 @@ static jmp_buf reset_point;
 static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key,current_wakeup;
-#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-static UINT8 self_test_active;
-static UINT8 FlashSelfTest_IsActive(void) { return self_test_active; }
-#endif
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 static unsigned soc_empty_targets;
 #define ERROR_STATUS_AFE1 1
@@ -170,9 +166,6 @@ static void reset_case(void) {
     expected_sleep_flag=0;
     watchdog_feeds=reset_during_stop=current_wakeup=0;
     BootFlag_Clear();
-#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-    self_test_active=0U;
-#endif
 }
 static void test_sleep_save_diagnostic(void) {
     reset_case();g_stLowPowerRtcStatus.mode=DEEP_MODE;s_sleep.undervoltage_handled=1U;
@@ -183,7 +176,7 @@ static void test_sleep_save_diagnostic(void) {
     memset(&s_sleep,0,sizeof(s_sleep));storage_errors=0;charger=1;
     SleepDeal_HandleBootSleepStartup();
     assert(storage_errors==1 && bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE);
-    assert(SleepDeal_IsBootFromSleepChargerWakeup());
+    assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     storage_errors=0;SleepDeal_HandleBootSleepStartup();assert(storage_errors==1);
     bkp[BKP_DR5]^=1U;storage_errors=0;BootFlag_Clear();
     SleepDeal_HandleBootSleepStartup();assert(!storage_errors); /* Reject a torn marker. */
@@ -290,7 +283,7 @@ int main(void) {
     rtc_sleep(); assert(stop_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     tick=300; scripted_key=3; rtc_sleep();
     assert(stop_calls==4 && restore_calls==2 && !tick && now_ms==1000 && adc_on);
-    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && g_stLowPowerRtcStatus.cycles==1);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && runtime_seconds==1);
     tick=1000; assert(key==0 && !SleepDeal_TakeKeySleepRequest());
     /* Releasing before 3 s cancels the HICCUP wake timer. */
     reset_case(); g_stLowPowerRtcStatus.mode=HICCUP_MODE; key=0; rtc_sleep();
@@ -494,25 +487,5 @@ int main(void) {
         assert(!restore_calls && !adc_on && !zero_calls);
     }
     puts("PASS error sleep: 5-minute boundary, recovery restarts delay, AFE/storage timeout requests DEEP, failed snapshot retains sleep reason and reset");
-#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-    reset_case(); self_test_active=1U; sys_time.time_enter_rtc=1;
-    for(i=0;i<20;++i) lp_update_sleep_request();
-    rtc_counter=604800; lp_update_sleep_request();
-    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !g_stLowPowerRtcStatus.idle &&
-        (g_stLowPowerRtcStatus.block & LP_BLOCK_STORAGE_TEST));
-    self_test_active=0U; lp_update_sleep_request(); assert(g_stLowPowerRtcStatus.mode==HICCUP_MODE);
-    reset_case(); self_test_active=1U; key=0;
-#if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
-    key=1;
-#endif
-    assert(!SleepDeal_TakeKeySleepRequest()); tick=KEY_SLEEP_TICKS; scripted_key=1; rtc_sleep();
-    assert(stop_calls==2 && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
-    reset_case(); self_test_active=1U; SleepDeal_UpdateOverdischarge(1U); rtc_sleep();
-    assert(deep_calls==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
-    reset_case(); self_test_active=1U; g_stCellInfoReport.u16VCellMin=2200;
-    for(i=0;i<60;++i) lp_update_sleep_request();
-    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
-    puts("PASS self-test sleep: automatic HICCUP/7-day idle held; completion releases; both key modes and confirmed/timed DEEP retain priority");
-#endif
     return 0;
 }

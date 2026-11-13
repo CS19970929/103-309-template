@@ -22,14 +22,3 @@ void InitProID(void)
 {
 	InitProID_DefaultData();
 }
-
-
-void WriteProID_Default(void)
-{
-	InitProID_DefaultData();
-}
-
-void App_ProID_Deal(void)
-{
-	/* Production ID is initialized during boot; keep this hook for runtime heartbeat. */
-}

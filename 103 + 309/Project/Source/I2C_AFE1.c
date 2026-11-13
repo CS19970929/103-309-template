@@ -5,7 +5,6 @@ struct SH367309_Read SH367309_Read_AFE1;
 
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 static const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
-	// AD(kΩ*100)		(Temp+40)*10
 	11611,
 	100, //-30
 	8935,
@@ -97,7 +96,6 @@ void Delay4us(void)
 	__delay_us(4U);
 }
 
-#ifdef _TWI_COM
 /*******************************************************************************
 Function: CRC8cal()
 Description:  calculate CRC
@@ -445,7 +443,6 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 	return result;
 }
 
-#endif
 
 // RAM类型寄存器，用这个函数写，大于0x40的类型
 // Output: result:1--OK，0--Error
@@ -562,7 +559,6 @@ void InitAFE1_Sleep(UINT8 mode)
 	AFE_IsReady();
 	// 因为已经初始化过了，休眠的时候调用，不需要再次初始化参数
 	// 这玩意会复位模拟前端，导致MOS开关打开关闭反复
-	// SH367309_UpdataAfeConfig();
 
 	if (mode)
 	{
@@ -609,25 +605,11 @@ void InitAFE1(void)
 		open_ctlc();
 }
 
-/*调试心得
-1，I2C没有上拉，导致AFE发送数据波形异常，上不到3.3V
-2，波形正常后，发现读回来的数据有问题
-3，第一时间应该是观察存储数据的数组的实际值和自带上位机读取的值作对比，而不是通过分析波形，再逻辑分析仪解析波形，这样太慢了。
-4，果然还是030小端存储导致的数据相反错误
-*/
 
-/*
-1，&Registers_AFE1--为结构体的首地址，不过该地址类型为结构体类型(实际上也是结构体第一个字节的地址)
-2，(UINT8*)&Registers_AFE1--把该结构体类型的地址转化为UINT8类型的地址(实际上数值没变，也是结构体第一个字节的地址，类型变了而已)
-3，(UINT8)&Registers_AFE1--把该地址值(32位数据)强制转化为8位数据，例如0x2000 0A17转为0x17
-*/
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
 	UINT8 i, result = 0;
 	UINT32 u32temp = 0;
-
-	// if(sys_time.enbale_afe_err_test)
-	// 	return 1;
 
 	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
 	{ // demo代码返回1为OK，
@@ -647,7 +629,6 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
 
 		// 电流要不要加滤波1s除以4，demo是这样的，现在先观察一下
-		// SH367309_Read_AFE1.i16Current = (UINT16)((UINT32)U16_SwapEndian(Registers_AFE1.Cadc)*200/(21470*RSENSE));		//TODO
 		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
 	}
 	else

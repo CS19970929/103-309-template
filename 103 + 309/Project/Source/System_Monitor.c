@@ -150,16 +150,6 @@ void SystemRuntime_SetMosStatus(UINT8 charge_on, UINT8 discharge_on)
 	s_system_status.bits.b1Status_MOS_DSG = (discharge_on != 0U) ? 1U : 0U;
 }
 
-UINT8 SystemRuntime_IsChargeMosOpen(void)
-{
-	return s_system_status.bits.b1Status_MOS_CHG;
-}
-
-UINT8 SystemRuntime_IsDischargeMosOpen(void)
-{
-	return s_system_status.bits.b1Status_MOS_DSG;
-}
-
 UINT32 SystemRuntime_GetStatusSnapshot(void)
 {
 	return s_system_status.all;

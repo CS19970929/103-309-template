@@ -101,8 +101,6 @@
 #define BIT0_7_PFV				(UINT8)(5000/20)				//���ι���籣����ѹ���üĴ������Ŵ�һЩ���������
 #define BYTE_0BH_PFV			BIT0_7_PFV
 
-
-
 #define BIT4_7_OCD1V			(0<<4)		//1000���ŵ��������1������ѹ=100mV��0000Ϊ20mV
 #define BIT0_3_OCD1T			(6)			//0110���ŵ����1������ʱ1s
 #define BYTE_0CH_OCD1V_OCD1T	BIT4_7_OCD1V|BIT0_3_OCD1T
@@ -241,18 +239,12 @@ typedef enum _FAULT_AFE_TO_MCU {
 
 extern SH367309_REG_STORE SH367309_Reg_Store;
 
-
-
-UINT8 AFE_CheckStatus(void);
 UINT8 AFE_IsReady(void);
 void AFE_Reset(void);
 
 void AFE_Sleep(void);
-void AFE_IDLE(void);
-void AFE_SHIP(void);
 UINT32 AFE_CalcuVbat(void);
 
-UINT8 SH367309_SC_DelayT_Set(void);
 void SH367309_DriverMos_Ctrl(GPIO_Type Type, UINT8 OnOFF);
 UINT8 SH367309_SetMosPermits(UINT8 charge_on, UINT8 discharge_on);
 bool SH367309_UpdataAfeConfig(void);

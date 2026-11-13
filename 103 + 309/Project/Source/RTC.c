@@ -2,24 +2,13 @@
 
 typedef struct RTC_RUNTIME_TAG
 {
-	__IO UINT8 disp;
 	volatile bool wake;
 	UINT32 stop_start_counter;
 	UINT32 last_wakeup_seconds;
-	struct RTC_ELEMENT time;
 } RTC_RUNTIME;
 
-static RTC_RUNTIME s_rtc = {
-	0U,
-	false,
-	0U,
-	0U,
-	{0}
-};
+static RTC_RUNTIME s_rtc;
 struct RTC_ELEMENT RTC_time;
-
-static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
 
 #define RTC_CLOCK_OK             0U
 #define RTC_CLOCK_USE_LSI        1U
@@ -28,16 +17,6 @@ static const UINT8 month_days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30,
 #define RTC_WAIT_TIMEOUT         ((UINT32)0x00FFFFFFU)
 // #define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)10U)
 #define RTC_WAKEUP_DEFAULT_SECONDS ((UINT32)3U)
-
-static UINT8 RTC_GetMonthDays(UINT32 month, UINT8 is_leap_year)
-{
-	if ((month == 2U) && (is_leap_year != 0U))
-	{
-		return 29U;
-	}
-
-	return month_days[month - 1U];
-}
 
 static void RTC_EnableBackupAccess(void)
 {
@@ -159,49 +138,6 @@ static UINT8 RTC_ReinitWithLsiClock(void)
 	return RTC_CLOCK_USE_LSI;
 }
 
-void Second_To_RTCtime(UINT32 AllSecond, struct RTC_ELEMENT *RTCtime)
-{
-
-	UINT32 i;
-	UINT32 Second_res, Day;
-	UINT8 is_leap_year;
-
-	Day = AllSecond / SEC_DAY;		  /* 有多少天 */
-	Second_res = AllSecond % SEC_DAY; /* 今天的时间，单位s */
-
-	/* Hours, minutes, seconds are easy */
-	RTCtime->RTC_Time_Hour = Second_res / 3600;
-	RTCtime->RTC_Time_Minute = (Second_res % 3600) / 60;
-	RTCtime->RTC_Time_Second = (Second_res % 3600) % 60;
-
-	for (i = UNIX_TIME_YEAR; Day >= Days_in_year(i); i++)
-	{ // 算出当前年份，起始的计数年份为1970年
-		Day -= Days_in_year(i);
-	}
-	i %= 100; // 只保留后两位
-	RTCtime->RTC_Time_Year = (UINT8)i;
-
-	is_leap_year = Leapyear(RTCtime->RTC_Time_Year);
-	for (i = 1; Day >= RTC_GetMonthDays(i, is_leap_year); i++)
-	{
-		Day -= RTC_GetMonthDays(i, is_leap_year);
-	}
-	RTCtime->RTC_Time_Month = (UINT8)i;
-
-	RTCtime->RTC_Time_Day = (UINT8)Day + 1; // 计算当前日期
-
-	// GregorianDay(tm);						//计算星期几
-}
-
-void Get_RTC_Time(void)
-{
-	UINT32 u32BJ_SecondTimeVar;
-
-	u32BJ_SecondTimeVar = RTC_GetCounter() + TIME_ZOOM;
-	Second_To_RTCtime(u32BJ_SecondTimeVar, &s_rtc.time); // 把定时器的值转换为北京时间
-	RTC_time = s_rtc.time;
-}
-
 // 此函数为——Linux源码中的mktime算法修改为——易读懂型
 // 1970年1月1日0时为UNIX TIME的纪元时间
 UINT32 Seccond_Cal(struct RTC_ELEMENT *RTC_t)
@@ -286,8 +222,6 @@ static UINT8 RTC_ClockConfig(UINT8 need_full_init)
 	}
 	else
 	{
-		//++RTC_Faultcnt;											//RTC错误单数为LSE出错
-		// System_ERROR_UserCallback(ERROR_LSE);
 		if (!RTC_EnableLsiClock())
 		{
 			return RTC_CLOCK_INIT_FAILED;
@@ -309,7 +243,6 @@ static void RTC_ClearAlarmPending(void)
 
 static void RTC_DisableSecondInterrupt(void)
 {
-	// RTC_ITConfig(RTC_IT_SEC, DISABLE);
 	RTC_WaitForLastTaskSafe();
 	RTC_ClearITPendingBit(RTC_IT_SEC);
 	RTC_WaitForLastTaskSafe();
@@ -346,7 +279,6 @@ void RTC_TimeConfig(void)
 {
 	struct RTC_ELEMENT Systmtime = {2018, 12, 31, 23, 59, 30, 0, 0, 0, 0, 0, 0};
 
-	// GregorianDay(tm);			//计算星期
 	RTC_SetCounter(Seccond_Cal(&Systmtime) - TIME_ZOOM); // 由日期计算时间戳并写入到RTC计数寄存器
 	RTC_WaitForLastTaskSafe();
 }
@@ -355,7 +287,6 @@ void RTC_AlarmConfig(void)
 {
 	NVIC_InitTypeDef NVIC_InitStructure;
 	EXTI_InitTypeDef EXTI_InitStructure;
-
 
 	//------------EXTI17 配置 -------------------
 	EXTI_InitStructure.EXTI_Line = EXTI_Line17;
@@ -461,24 +392,12 @@ void Init_RTC(void)
 		}
 		else if (RCC_GetFlagStatus(RCC_FLAG_PINRST) != RESET)
 		{ // 这是啥
-			// printf("\r\n External Reset occurred....\n\r");
 		}
 		RCC_ClearFlag();
-		// RTC_TimeShow();				//Display the RTC Time and Alarm，这个后面会用到
-		// RTC_AlarmShow();
 	}
 	RTC_ClearAlarmPending();
 	RTC_AlarmConfig();
 	RTC_NVIC_Config();
-}
-void App_RTC(void)
-{
-	if (0 == s_rtc.disp)
-	{
-		return;
-	}
-	Get_RTC_Time();
-	s_rtc.disp = 0;
 }
 
 UINT8 RTC_IsStopWakeup(void)
@@ -497,7 +416,6 @@ static void RTC_HandleAlarmWakeup(void)
 
 	if (RTC_GetITStatus(RTC_IT_ALR) != RESET)
 	{
-		IRQ_DEBUG_COUNT(rtc.alarm_flag);
 		RTC_ClearITPendingBit(RTC_IT_ALR);
 		RTC_WaitForLastTaskSafe();
 		had_alarm = 1;
@@ -505,7 +423,6 @@ static void RTC_HandleAlarmWakeup(void)
 
 	if (EXTI_GetITStatus(EXTI_Line17) != RESET)
 	{
-		IRQ_DEBUG_COUNT(exti.line17);
 		EXTI_ClearITPendingBit(EXTI_Line17);
 		had_alarm = 1;
 	}
@@ -523,26 +440,15 @@ static void RTC_HandleAlarmWakeup(void)
 
 void RTCAlarm_IRQHandler(void)
 {
-	IRQ_DEBUG_ENTER(rtc.alarm_irq);
-	IRQ_DEBUG_SET(rtc.last_crl, RTC->CRL);
-	IRQ_DEBUG_SET(rtc.last_crh, RTC->CRH);
 	RTC_HandleAlarmWakeup();
 }
 
 void RTC_IRQHandler(void)
 {
-	IRQ_DEBUG_ENTER(rtc.irq);
-	IRQ_DEBUG_SET(rtc.last_crl, RTC->CRL);
-	IRQ_DEBUG_SET(rtc.last_crh, RTC->CRH);
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-	if (RTC->CRL & RTC_FLAG_OW) IRQ_DEBUG_COUNT(rtc.overflow_seen);
-#endif
 	if (RTC_GetITStatus(RTC_IT_SEC) != RESET)
 	{
-		IRQ_DEBUG_COUNT(rtc.second);
 		RTC_ClearITPendingBit(RTC_IT_SEC); // Clear the RTC Second interrupt
 		// sys_time.rtc_sec_cnt++;
-		s_rtc.disp = 1;				   // Enable time update
 		RTC_WaitForLastTaskSafe();		   // Wait until last write operation on RTC registers has finished
 	}
 
@@ -551,4 +457,3 @@ void RTC_IRQHandler(void)
 		RTC_HandleAlarmWakeup();
 	}
 }
-

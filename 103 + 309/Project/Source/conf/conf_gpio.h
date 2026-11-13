@@ -3,15 +3,8 @@
 
 #include "System_Init.h"
 
-//#define __STM32F0__
-#define __STM32F1__
 
-#ifdef __STM32F0__
-#include "stm32f0xx.h"
-#endif // __STM32F0__
-#ifdef __STM32F1__
 #include "stm32f10x.h"
-#endif // __STM32F1__
 
 
 /**********************************************/
@@ -20,12 +13,6 @@
 #define MCUO_AFE_VPRO 		PBout(0)		//AFE_VPRO
 #define MCUO_AFE_CTLC 		PBout(14)		//��������
 
-
-#define GPIO_SCI1_TX	     GPIOB
-#define PIN_SCI1_TX	     GPIO_Pin_6
-
-#define GPIO_SCI1_RX	     GPIOB
-#define PIN_SCI1_RX	     GPIO_Pin_7
 /**********************************************/
 //todo 注意rtc休眠唤醒前后，外设、io状态，power
 #define GPIO_CHG_IN                 GPIOA                  //5v充电识别信号；充电唤醒？什么沿；充电关放电；
@@ -38,7 +25,6 @@
 #define GPIO_SW                     GPIOA
 #define PIN_SW                      GPIO_Pin_9
 
-#define GPIO_AFE1_CTL        GPIOB
 #define PIN_AFE1_CTL         GPIO_Pin_14
 //todo afe ship pin待确认
 //todo afe alm pin待确认
@@ -51,15 +37,12 @@
 #define GPIO_RF_EN                  GPIOA                   //todo !!!熔断保险丝控制io
 #define PIN_RF_EN                   GPIO_Pin_7
 
-#define GPIO_AFE1_PRO_EN        GPIOB
 #define PIN_AFE1_PRO_EN         GPIO_Pin_0
 
 //todo 供电 给谁的？？？
 #define GPIO_CMNT_EN                GPIOA                   //(power) can供电？？？
 #define PIN_CMNT_EN                 GPIO_Pin_4
 
-#define GPIO_HT_CHG                GPIOA                   //(power) can供电？？？
-#define PIN_HT_CHG                 GPIO_Pin_5
 
 /* MOS NTC is wired to PA1 / ADC1_IN1 on this board. */
 #define GPIO_ADC_NMOS        GPIOA

@@ -39,11 +39,10 @@ void Runtime_Boot(void)
 	SystemRuntime_SetProjectVersion(1U);
 	InitProID();
 
-	EnableLowPowerDebug();
+	ClearLowPowerDebug();
 	LogRecord_RequestStartup();
 	Init_IWDG();
 	s_boot_ready=1U;
-	FlashSelfTest_Init(reset_cause);
 }
 
 void Runtime_RunOnce(void)
@@ -67,9 +66,7 @@ void Runtime_RunOnce(void)
 
 	App_LogRecord();
 	StorageFlash_StatisticsTask();
-	FlashSelfTest_Task();
 
 	Feed_IWatchDog;
 
-	// __WFI();
 }

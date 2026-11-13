@@ -4,7 +4,6 @@
 typedef struct SLEEP_RUNTIME_TAG
 {
 	volatile UINT8 ext_comm;
-	UINT8 boot_sleep;
 	UINT8 chg_wake;
 	UINT8 key_state;
 	UINT32 key_press_tick;
@@ -246,21 +245,7 @@ void BootFlag_Clear(void)
 	BootFlag_Write(BOOT_FLAG_RESET_VALUE);
 }
 
-UINT8 SleepDeal_IsBootFromSleepStartup(void)
-{
-	return s_sleep.boot_sleep;
-}
 
-UINT8 SleepDeal_IsBootFromSleepChargerWakeup(void)
-{
-	if ((s_sleep.chg_wake == 0U) &&
-		(BootFlag_Read() == FLASH_SLEEP_CHARGER_WAKE_VALUE))
-	{
-		s_sleep.chg_wake = 1U;
-	}
-
-	return s_sleep.chg_wake;
-}
 
 static void SleepDeal_WaitStopWakeup(void)
 {
@@ -278,7 +263,6 @@ void SleepDeal_HandleBootSleepStartup(void)
 
 	SleepDeal_RestoreSocSaveFailure();
 	sleep_flag = BootFlag_Read();
-	s_sleep.boot_sleep = 0U;
 	s_sleep.chg_wake = 0U;
 	s_sleep.undervoltage_handled=(UINT8)(sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
 	switch (sleep_flag)
@@ -289,7 +273,6 @@ void SleepDeal_HandleBootSleepStartup(void)
 		break;
 	case FLASH_DEEP_SLEEP_VALUE:
 	case FLASH_UNDERVOLTAGE_SLEEP_VALUE:
-		s_sleep.boot_sleep = 1U;
 		IOstatus_DeepMode();
 		InitWakeUp_DeepMode();
 		SleepDeal_ResetKeyState(0U);
@@ -299,7 +282,6 @@ void SleepDeal_HandleBootSleepStartup(void)
 		if (!s_sleep.chg_wake) BootFlag_Clear();
 		break;
 	case FLASH_SLEEP_CHARGER_WAKE_VALUE:
-		s_sleep.boot_sleep = 1U;
 		s_sleep.chg_wake = 1U;
 		break;
 	case FLASH_SLEEP_RESET_VALUE:

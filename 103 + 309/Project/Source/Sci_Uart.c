@@ -21,9 +21,6 @@ static UINT8 s_baud_change_pending;
 #ifdef _COMMOM_UPPER_SCI2
 static struct SCI_PORT s_port2 = {USART2, UART2_BAUD};
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-static struct SCI_PORT s_port3 = {USART3, UART3_BAUD};
-#endif
 
 static UINT32 Sci_CharacterUs(const struct SCI_PORT *port)
 {
@@ -95,20 +92,6 @@ static void Sci_ReceiveByte(struct SCI_PORT *port, UINT8 data, UINT32 now)
 static void Sci_PortIRQ(struct SCI_PORT *port)
 {
     UINT16 status=(UINT16)port->usart->SR;
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-    volatile UART_IRQ_DEBUG *debug = (port->usart==USART1) ? &sys_time.irq.uart1 :
-        (port->usart==USART2) ? &sys_time.irq.uart2 : &sys_time.irq.uart3;
-    debug->last_sr=status;
-    debug->last_cr1=port->usart->CR1;
-    debug->last_cr3=port->usart->CR3;
-    if (status & SCI_USART_ERRORS) debug->last_error_sr=status;
-    if (status & USART_SR_ORE) IrqDebug_Count(&debug->ore,0U);
-    if (status & USART_SR_NE) IrqDebug_Count(&debug->noise,0U);
-    if (status & USART_SR_FE) IrqDebug_Count(&debug->framing,0U);
-    if (status & USART_SR_PE) IrqDebug_Count(&debug->parity,0U);
-    if ((status & USART_SR_IDLE) && (port->usart->CR1 & USART_CR1_IDLEIE))
-        IrqDebug_Count(&debug->idle,0U);
-#endif
     if (status & SCI_USART_ERRORS)
     {
         volatile UINT16 dummy=(UINT16)port->usart->DR; /* SR then DR clears errors. */
@@ -121,16 +104,10 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     if ((status & USART_SR_RXNE) && (port->usart->CR1 & USART_CR1_RXNEIE))
     {
         UINT8 data=(UINT8)port->usart->DR;
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-        IrqDebug_Count(&debug->rxne,0U);
-#endif
         Sci_ReceiveByte(port,data,SysTime_GetMicroseconds());
     }
     if ((port->usart->SR & USART_SR_TXE) && (port->usart->CR1 & USART_CR1_TXEIE))
     {
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-        IrqDebug_Count(&debug->txe,0U);
-#endif
         if (port->tx_index < port->tx_length)
             port->usart->DR=port->message.u16Buffer[port->tx_index++];
         if (port->tx_index >= port->tx_length)
@@ -141,9 +118,6 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     }
     if ((port->usart->SR & USART_SR_TC) && (port->usart->CR1 & USART_CR1_TCIE))
     {
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-        IrqDebug_Count(&debug->tc,0U);
-#endif
         USART_ClearFlag(port->usart,USART_FLAG_TC);
         if (port->message.reset_after_tx)
             u8FlashUpdateFlag=1U;
@@ -152,9 +126,8 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     }
 }
 
-/* validate_only holds a validated wake request, without executing writes or TX.
- * frame_pending: 0 receiving, 1 complete, 2 validated wake request held for RUN. */
-static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
+/* A complete valid frame is processed only in the RUN main loop. */
+static UINT8 Sci_ServicePort(struct SCI_PORT *port)
 {
     UINT32 now, elapsed;
     UINT32 primask=__get_PRIMASK();
@@ -168,8 +141,6 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
             (UINT32)port->tx_length*Sci_CharacterUs(port)+SCI_TX_MARGIN_US)
             Sci_ArmReceiver(port); /* No reset-after-ACK when TX times out. */
     }
-    else if (port->frame_pending == 2U)
-        ready=2U;
     else if (!(port->usart->SR & USART_SR_RXNE))
     {
         if (port->frame_pending &&
@@ -189,8 +160,6 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
         }
     }
     if (primask == 0U) __enable_irq();
-    if (ready == 2U)
-        return 1U;
     if (!ready)
         return 0U;
     valid=(port->protocol == SCI_MODBUS) ? Sci_ModbusFrameValid(&port->message) :
@@ -200,11 +169,6 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port, UINT8 validate_only)
         Sci_ArmReceiver(port);
         port->protocol=SCI_DISCARD; /* Do not execute a nested prefix in bad data. */
         return 0U;
-    }
-    if (validate_only)
-    {
-        port->frame_pending=2U;
-        return 1U;
     }
     SleepDeal_RecordExternalComm();
     if (port->protocol == SCI_MODBUS)
@@ -231,7 +195,6 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     USART_InitTypeDef uart;
     NVIC_InitTypeDef nvic;
     volatile UINT16 dummy;
-    UINT8 held=(UINT8)(port->frame_pending == 2U);
     if (apb2) RCC_APB2PeriphClockCmd(clock,ENABLE);
     else RCC_APB1PeriphClockCmd(clock,ENABLE);
     USART_Cmd(port->usart,DISABLE);
@@ -253,17 +216,8 @@ static void Sci_InitPort(struct SCI_PORT *port, IRQn_Type irq, UINT8 apb2,
     USART_Init(port->usart,&uart);
     port->usart->CR3 |= USART_CR3_EIE;
     /* All protocol state is initialized before enabling USART/NVIC. */
-    if (held)
-    {
-        port->frame_pending=1U;
-        port->last_rx_us=SysTime_GetMicroseconds()-Sci_FrameGapUs(port)-SCI_CLOCK_STEP_US;
-        port->usart->CR1 &= (UINT16)~USART_CR1_RE;
-    }
-    else
-    {
-        Sci_ArmReceiver(port);
-        port->last_rx_us=SysTime_GetMicroseconds();
-    }
+    Sci_ArmReceiver(port);
+    port->last_rx_us=SysTime_GetMicroseconds();
     nvic.NVIC_IRQChannel=irq;
     nvic.NVIC_IRQChannelPreemptionPriority=1U;
     nvic.NVIC_IRQChannelSubPriority=3U;
@@ -280,9 +234,6 @@ void InitUSART_CommonUpper(void)
 #ifdef _COMMOM_UPPER_SCI2
     s_port2.baud=baud;
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-    s_port3.baud=baud;
-#endif
 #ifdef _COMMOM_UPPER_SCI1
     Sci_InitPort(&s_port1,USART1_IRQn,1U,RCC_APB2Periph_USART1,GPIOB,
         GPIO_Pin_6,GPIO_Pin_7,GPIO_Remap_USART1);
@@ -291,10 +242,6 @@ void InitUSART_CommonUpper(void)
     Sci_InitPort(&s_port2,USART2_IRQn,0U,RCC_APB1Periph_USART2,GPIOA,
         GPIO_Pin_2,GPIO_Pin_3,0U);
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-    Sci_InitPort(&s_port3,USART3_IRQn,0U,RCC_APB1Periph_USART3,GPIOD,
-        GPIO_Pin_8,GPIO_Pin_9,GPIO_FullRemap_USART3);
-#endif
 }
 
 void Sci1_CommonUpper_IRQHandler(void) { Sci_PortIRQ(&s_port1); }
@@ -302,12 +249,6 @@ void Sci2_CommonUpper_IRQHandler(void)
 {
 #ifdef _COMMOM_UPPER_SCI2
     Sci_PortIRQ(&s_port2);
-#endif
-}
-void Sci3_CommonUpper_IRQHandler(void)
-{
-#ifdef _COMMOM_UPPER_SCI3
-    Sci_PortIRQ(&s_port3);
 #endif
 }
 
@@ -326,9 +267,6 @@ static UINT8 Sci_PortsBusy(void)
 #ifdef _COMMOM_UPPER_SCI2
     busy |= Sci_PortBusy(&s_port2);
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-    busy |= Sci_PortBusy(&s_port3);
-#endif
     return busy;
 }
 
@@ -337,10 +275,6 @@ UINT8 Sci_IsAnyPortBusy(void)
     return (UINT8)(s_baud_change_pending || Sci_PortsBusy());
 }
 
-UINT32 Sci_GetBaudRate(void)
-{
-    return s_port1.baud;
-}
 
 UINT8 Sci_RequestBaudMode(UINT16 mode)
 {
@@ -349,17 +283,6 @@ UINT8 Sci_RequestBaudMode(UINT16 mode)
     return 1U;
 }
 
-UINT8 Sci_VerifyWakeFrames(void)
-{
-    UINT8 valid=0U;
-#ifdef _COMMOM_UPPER_SCI1
-    valid |= Sci_ServicePort(&s_port1,1U);
-#endif
-#ifdef _COMMOM_UPPER_SCI2
-    valid |= Sci_ServicePort(&s_port2,1U);
-#endif
-    return valid;
-}
 
 static void Sci_StopPort(struct SCI_PORT *port)
 {
@@ -384,21 +307,15 @@ void Sci_StopForLowPower(void)
 #ifdef _COMMOM_UPPER_SCI2
     Sci_StopPort(&s_port2);
 #endif
-#ifdef _COMMOM_UPPER_SCI3
-    Sci_StopPort(&s_port3);
-#endif
 }
 
 void App_CommonUpper(void)
 {
 #ifdef _COMMOM_UPPER_SCI1
-    Sci_ServicePort(&s_port1,0U);
+    Sci_ServicePort(&s_port1);
 #endif
 #ifdef _COMMOM_UPPER_SCI2
-    Sci_ServicePort(&s_port2,0U);
-#endif
-#ifdef _COMMOM_UPPER_SCI3
-    Sci_ServicePort(&s_port3,0U);
+    Sci_ServicePort(&s_port2);
 #endif
     if (s_baud_change_pending) {
         UINT32 primask=__get_PRIMASK();

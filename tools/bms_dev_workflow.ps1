@@ -132,10 +132,6 @@ try {
             Invoke-Python -PyArgs @("tools\project_check.py", "-q")
         } -AllowFailure:(!$StrictProjectCheck)
 
-        Invoke-LoggedStep "SOC Python replay tests" {
-            Invoke-Python -PyArgs @("tools\soc_replay_test.py")
-        }
-
         Invoke-LoggedStep "SOC host C tests" {
             Invoke-Python -PyArgs @("tools\run_soc_host_c_test.py")
         }

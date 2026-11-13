@@ -47,7 +47,7 @@ def main():
     headers += '#if PROJECT_CFG_BAT_CHEMISTRY == 1\n#define LIFEPO\n#else\n#define TERNARYLI\n#endif\n'
     headers += 'enum { SOC_TABLE_LIFEPO=1, SOC_TABLE_TERNARYLI=2 };\n'
     headers += conf[conf.index('#define   CURR_10A'):conf.index('typedef enum GPIO_TYPE')]
-    headers += data[data.index('enum tagInfoForKBArray {'):data.index('#define AFE_CURRENT_DIAG_VERSION')]
+    headers += data[data.index('enum tagInfoForKBArray {'):data.index('enum AFE_CURRENT_ZERO_STATUS_E')]
     for name in ('Fault.h','Heat_Cool.h','SH367309_DataDeal.h'):
         text = (SOURCE / name).read_text(encoding='utf-8',errors='replace')
         headers += '\n'.join(line for line in text.splitlines() if not line.startswith('#include'))+'\n'

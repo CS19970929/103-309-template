@@ -2,7 +2,6 @@
 
 SH367309_REG_STORE SH367309_Reg_Store;
 
-
 //-40到100的数值
 const UINT16 iSheldTemp_10K_NTC[141] = {20375, 19204, 18115, 17100, 16152, 15266, 14437, 13661, 12934, 12251,
 								  11611, 11008, 10442, 9909, 9407, 8935, 8489, 8068, 7672, 7297,
@@ -43,7 +42,6 @@ void AFE_Reset(void)
 		if(!MTPWrite(AFE_ID, 0xEA, 1, WrBuf)) {              //0xEA, 0xC0?A CRC
 			MTPWrite(AFE_ID, 0xEA, 1, WrBuf);
 		}
-		//MTPWrite(0xEA, 1, WrBuf);
 	}
 	*/
 
@@ -73,16 +71,8 @@ void AFE_Sleep(void)
 
 // 进入IDLE模式
 // 1，有错误，不能进入
-void AFE_IDLE(void)
-{
-	AFE_SetLowPowerBit(0x01U);
-}
 
 // 进入休眠模式
-void AFE_SHIP(void)
-{
-	// MCUO_AFE_SHIP = 0;
-}
 
 // 1，出问题，同时上报系统AFE错误
 // 0，没问题
@@ -107,7 +97,6 @@ UINT8 AFE_IsReady(void)
 		Delay1ms(20);
 		if (++TempCnt >= 50)
 		{
-			// System_ERROR_UserCallback(ERROR_AFE1);
 			result = 1;
 			break;
 		}
@@ -121,16 +110,6 @@ UINT8 AFE_IsReady(void)
 }
 
 // 1：状态查询失败。0：成功
-UINT8 AFE_CheckStatus(void)
-{
-	UINT8 result = 0;
-
-	if (!MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all))
-	{
-		result = 1;
-	}
-	return result;
-}
 
 /*******************************************************************************
 Function:EnableAFEWdtCadc()
@@ -145,42 +124,6 @@ void SH367309_Enable_AFE_Wdt_Cadc_Drivers(void)
 }
 
 // 1：修改失败。0：修改成功
-UINT8 SH367309_SC_DelayT_Set(void)
-{
-	UINT8 result = 0;
-	UINT8 u8temp_now = 0;
-	UINT8 u8temp_need = 0;
-	UINT8 u8temp_write = 0;
-
-	u8temp_now = SH367309_Reg_Store.u8_MTP_SCV_SCT & 0x0F;
-	u8temp_need = OtherElement.u16CBC_DelayT >> 6; // 除以64得出等级，其表格就是以64us为一个等级的
-	if (u8temp_need > 15)
-		u8temp_need = 15;
-
-	if (u8temp_now != u8temp_need)
-	{
-		u8temp_write = (UINT8)((SH367309_Reg_Store.u8_MTP_SCV_SCT & 0xF0) | u8temp_need);
-
-		if (MTPWriteROM(0x0E, 1, &u8temp_write))
-		{
-			SH367309_Reg_Store.u8_MTP_SCV_SCT = u8temp_write;
-			OtherElement.u16CBC_DelayT = (UINT16)u8temp_need << 6;
-		}
-		else
-		{
-			// 写失败
-			OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
-			result = 1;
-		}
-	}
-	else
-	{
-		// 相同，则修改上传参数便可
-		OtherElement.u16CBC_DelayT = (UINT16)u8temp_now << 6;
-	}
-
-	return result;
-}
 
 /* CONF permits are independent of BSTATUS3's physical MOS output. */
 static UINT8 SH367309_WriteConfBits(UINT8 mask, UINT8 value)
@@ -292,24 +235,6 @@ void Fault_ChangeToMCU(void)
 								 SH367309_Reg_Store.REG_BSTATUS1.bits.OCD1 || SH367309_Reg_Store.REG_BSTATUS1.bits.OCD2,
 								 IdischgOcp_Third);
 
-	// switch (su8_IdischgOcp2_Flag)
-	// {
-	// case 0:
-	// 	if (g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
-	// 	{
-	// 		FaultWarnRecord2(IdischgOcp_Third);
-	// 		su8_IdischgOcp2_Flag = 1;
-	// 	}
-	// 	break;
-	// case 1:
-	// 	if (!g_stCellInfoReport.unMdlFault_Third.bits.b1IdischgOcp)
-	// 	{
-	// 		su8_IdischgOcp2_Flag = 0;
-	// 	}
-	// 	break;
-	// default:
-	// 	break;
-	// }
 	SH367309_RecordFaultOnActive(&su8_IchgOcp_Flag, SH367309_Reg_Store.REG_BSTATUS1.bits.OCC, IchgOcp_Third);
 	SH367309_RecordFaultOnActive(&su8_CellChgUtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.UTC, CellChgUTp_Third);
 	SH367309_RecordFaultOnActive(&su8_CellChgOtp_Flag, SH367309_Reg_Store.REG_BSTATUS2.bits.OTC, CellChgOTp_Third);
@@ -320,11 +245,8 @@ void Fault_ChangeToMCU(void)
 static UINT8 App_SH367309_Monitor(void)
 {
 	static UINT8 su8_EEPR_WR_Flag = 0;
-	// if(MTPRead(MTP_BSTATUS1, 3, &SH367309_Reg_Store.REG_BSTATUS1.all)) {
 	if (MTPRead(MTP_BALANCEH, 5, &SH367309_Reg_Store.u8_MTP_BALANCEH))
 	{
-		// g_stCellInfoReport.u16BalanceFlag1 = SH367309_Reg_Store.u8_MTP_BALANCEL;
-		// g_stCellInfoReport.u16BalanceFlag2 = SH367309_Reg_Store.u8_MTP_BALANCEH;
 		SystemRuntime_SetMosStatus(SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET,
 								   SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
 

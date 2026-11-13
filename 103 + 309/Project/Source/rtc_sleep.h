@@ -34,41 +34,20 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 #define LP_BLOCK_FLASH_BUSY   (1UL << 5)
 #define LP_BLOCK_UPGRADE      (1UL << 6)
 #define LP_BLOCK_FAULT        (1UL << 7)
-#define LP_BLOCK_LED_ACTIVE   (1UL << 8)
-#define LP_BLOCK_AGING        (1UL << 9)
-#define LP_BLOCK_STORAGE_TEST (1UL << 10)
 
 struct LOW_POWER_RTC_STATUS {
   uint8_t mode;
-  uint8_t rtc;
   uint8_t comm;
   uint8_t comm_wakeup; /* ISR latches a configured communication wake edge. */
   uint16_t idle;
-  uint16_t idleMax;
   uint16_t force;
-  uint16_t reserved16;
   uint32_t vlow;
   uint32_t block;
   uint32_t sleep;
-  uint32_t last;
-  uint32_t cycles;
-  uint16_t test_sample_voltage;
 };
 
-/* Keil Watch: each field mirrors one bit of g_stLowPowerRtcStatus.block. */
-struct LOW_POWER_BLOCK_DEBUG {
-  uint8_t charge_current : 1;
-  uint8_t discharge_current : 1;
-  uint8_t comm_busy : 1;
-  uint8_t key_active : 1;
-  uint8_t external_comm : 1;
-  uint8_t flash_busy : 1;
-  uint8_t upgrade : 1;
-  uint8_t fault : 1;
-};
 
 extern volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus;
-extern volatile struct LOW_POWER_BLOCK_DEBUG g_stLowPowerBlockDebug;
 extern volatile enum irqWakeup g_irq_t;
 
 void LowPower_Request(enum _SLEEP_MODE mode);

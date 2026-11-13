@@ -69,8 +69,7 @@ static void Conf_InitMainPowerRails(BitAction m_stb,
                                     BitAction ad_en,
                                     BitAction cmnt_en,
                                     BitAction sw_en,
-                                    BitAction ble_en,
-                                    BitAction boost_en)
+                                    BitAction ble_en)
 {
     GPIO_WriteBit(GPIO_M_STB, PIN_M_STB, m_stb);
     GPIO_WriteBit(GPIO_AD_EN, PIN_AD_EN, ad_en);
@@ -96,8 +95,7 @@ static void Conf_InitRunSharedIo(void)
                             Bit_RESET,
                             Bit_RESET,
                             Bit_SET,
-                            Bit_RESET,
-                            Bit_SET);
+                            Bit_RESET);
 
     Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
 }
@@ -180,8 +178,7 @@ void InitIO_rtc(void)
                             Bit_RESET,
                             Bit_RESET,
                             Bit_SET,
-                            Bit_RESET,
-                            Bit_SET);
+                            Bit_RESET);
 }
 
 void InitIO(void)
@@ -201,7 +198,6 @@ void InitWakeUp_Base(void)
     RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
 
     jtag_disableAndConfIO();
-#if 1
     Conf_InitWakeupInputExti(GPIO_CHG_IN,
                              PIN_CHG_IN,
                              GPIO_PortSourceGPIOA,
@@ -216,39 +212,6 @@ void InitWakeUp_Base(void)
                              EXTI_Line9,
                              EXTI_Trigger_Rising_Falling,
                              EXTI9_5_IRQn);
-#endif
-}
-
-void InitWakeUp_NormalMode(void)
-{
-    RCC_APB2PeriphClockCmd(CONF_APB2_WAKEUP_CLOCKS, ENABLE);
-
-    jtag_disableAndConfIO();
-
-    // Conf_InitWakeupInputExti(GPIO_CHG_IN,
-    //                          PIN_CHG_IN,
-    //                          GPIO_PortSourceGPIOA,
-    //                          GPIO_PinSource0,
-    //                          EXTI_Line0,
-    //                          EXTI_Trigger_Rising_Falling,
-    //                          EXTI0_IRQn);
-    Conf_InitWakeupInputExti(GPIO_SW,
-                             PIN_SW,
-                             GPIO_PortSourceGPIOA,
-                             GPIO_PinSource9,
-                             EXTI_Line9,
-                             EXTI_Trigger_Rising_Falling,
-                             EXTI9_5_IRQn);
-
-    Conf_InitUartWakeup();
-
-    Conf_InitWakeupInputExti(GPIO_INT_WK_CMNT,
-                             PIN_INT_WK_CMNT,
-                             GPIO_PortSourceGPIOB,
-                             GPIO_PinSource12,
-                             EXTI_Line12,
-                             EXTI_Trigger_Rising,
-                             EXTI15_10_IRQn);
 }
 
 void InitWakeUp_RTCMode(void)
@@ -257,13 +220,6 @@ void InitWakeUp_RTCMode(void)
 
     jtag_disableAndConfIO();
 
-    // Conf_InitWakeupInputExti(GPIO_CHG_IN,
-    //                          PIN_CHG_IN,
-    //                          GPIO_PortSourceGPIOA,
-    //                          GPIO_PinSource0,
-    //                          EXTI_Line0,
-    //                          EXTI_Trigger_Rising_Falling,
-    //                          EXTI0_IRQn);
     Conf_InitWakeupInputExti(GPIO_SW,
                              PIN_SW,
                              GPIO_PortSourceGPIOA,
@@ -295,12 +251,6 @@ void IOstatus_Base(void)
     RCC_APB2PeriphClockCmd(CONF_APB2_GPIO_CLOCKS, ENABLE);
 
     Conf_InitAllPortsAnalog();
-    // Conf_InitMainPowerRails(Bit_RESET,
-    //                         Bit_RESET,
-    //                         Bit_SET,
-    //                         Bit_RESET,
-    //                         Bit_RESET,
-    //                         Bit_RESET);
 
     Conf_PrepareStopEntry();
 }
@@ -319,19 +269,7 @@ void IOstatus_RTCMode(void)
     Conf_InitGpioMode(GPIOD, GPIO_Pin_All, GPIO_Mode_AIN);
     Conf_InitGpioMode(GPIOE, GPIO_Pin_All, GPIO_Mode_AIN);
 
-    // Conf_InitMainPowerRails(Bit_RESET,
-    //                         Bit_SET,
-    //                         Bit_SET,
-    //                         Bit_RESET,
-    //                         Bit_RESET,
-    //                         Bit_SET);
-
     Conf_PrepareStopEntry();
-}
-
-void IOstatus_NormalMode(void)
-{
-    IOstatus_Base();
 }
 
 void IOstatus_DeepMode(void)
@@ -352,27 +290,17 @@ void Sys_StopMode(void)
     /* A communication IRQ handled during STOP preparation must not be lost
      * when pending bits are cleared. New masked IRQs still wake WFI normally. */
     if (!g_stLowPowerRtcStatus.comm_wakeup) {
-        IRQ_DEBUG_STOP_BEGIN();
         PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
-        IRQ_DEBUG_STOP_CAPTURE();
     }
 
     cpu_frequency_conf();
     __enable_irq();
-    IRQ_DEBUG_STOP_END();
-    // __set_PRIMASK(0);
 }
 
-void test_rtc_led_display(void)
-{
-    Conf_InitGpioMode(GPIO_DBG_LED, PIN_DBG_LED, GPIO_Mode_Out_PP);
-    MCUO_DEBUG_LED1 = 0;
-}
 void InitRunAfterStopWakeup(void)
 {
     InitDelay();
     RTC_RestoreRunInterrupts();
-    // InitIO();
     InitIO_rtc();
 
     ADC_StopForLowPower();

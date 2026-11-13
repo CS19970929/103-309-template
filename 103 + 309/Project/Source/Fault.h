@@ -201,16 +201,12 @@ struct PRT_E2ROM_PARAS {
 #define COV_2           3600
 #define COV_3           3650
 #define COV_recover     3500
-#define COV_filter1      100
-#define COV_filter2     100
 #define COV_filter3     100
 
 #define CUV_1           3000
 #define CUV_2           3000
 #define CUV_3           2900
 #define CUV_recover     3000
-#define CUV_filter1      100
-#define CUV_filter2     100
 #define CUV_filter3     100
 
 #define BOV_1           (350 * SNum)
@@ -221,8 +217,6 @@ struct PRT_E2ROM_PARAS {
 // #define BOV_2           (2920)
 // #define BOV_3           (3000)
 // #define BOV_recover     (2800)
-#define BOV_filter1      100 
-#define BOV_filter2     100 
 #define BOV_filter3     100 
 
 
@@ -230,8 +224,6 @@ struct PRT_E2ROM_PARAS {
 #define BUV_2           (300 * SNum)
 #define BUV_3           (290 * SNum)
 #define BUV_recover     (300 * SNum)
-#define BUV_filter1      100 
-#define BUV_filter2     100 
 #define BUV_filter3     100 
 
 
@@ -239,72 +231,54 @@ struct PRT_E2ROM_PARAS {
 #define OTC_2           ((50 + 40) * 10)
 #define OTC_3           ((55 + 40) * 10)
 #define OTC_recover     ((50 + 40) * 10)
-#define OTC_filter1       100
-#define OTC_filter2      100
 #define OTC_filter3      100
 
 #define UTC_1           ((5 + 40) * 10)
 #define UTC_2           ((3 + 40) * 10)
 #define UTC_3           ((0 + 40) * 10)
 #define UTC_recover     ((3 + 40) * 10)
-#define UTC_filter1      100
-#define UTC_filter2      100
 #define UTC_filter3      100
 
 #define OTD_1           ((50 + 40) * 10)
 #define OTD_2           ((50 + 40) * 10)
 #define OTD_3           ((60 + 40) * 10)
 #define OTD_recover     ((50 + 40) * 10)
-#define OTD_filter1      100
-#define OTD_filter2      100
 #define OTD_filter3      100
 
 #define UTD_1           ((-10 + 40) * 10)
 #define UTD_2           ((-15 + 40) * 10)
 #define UTD_3           ((-20 + 40) * 10)
 #define UTD_recover     ((-10 + 40) * 10)
-#define UTD_filter1      100
-#define UTD_filter2      100
 #define UTD_filter3      100
 
 #define mos_1           ((75 + 40) * 10)
 #define mos_2           ((85 + 40) * 10)
 #define mos_3           ((95 + 40) * 10)
 #define mos_recover     ((80 + 40) * 10)
-#define mos_filter1      100
-#define mos_filter2      100
 #define mos_filter3      100
 
 #define VDELTER_1       600
 #define VDELTER_2       800
 #define VDELTER_3       1000
 #define VDELTER_recover 800
-#define VDELTER_filter1  100
-#define VDELTER_filter2  100
 #define VDELTER_filter3  100
 
 #define socLow_1        20
 #define socLow_2        10
 #define socLow_3        5
 #define socLow_recover  11
-#define socLow_filter1   100
-#define socLow_filter2   100
 #define socLow_filter3   100
 
 #define OCC_1       (100) 
 #define OCC_2       (150) 
 #define OCC_3       (200) 
 #define OCC_recover (100) 
-#define OCC_filter1  (100 * 5) 
-#define OCC_filter2  (100 * 5) 
 #define OCC_filter3  10 
 
 #define ODC_1       (100) 
 #define ODC_2       (150) 
 #define ODC_3       (200) 
 #define ODC_recover (100) 
-#define ODC_filter1  (100 * 5) 
-#define ODC_filter2  (100 * 5) 
 #define ODC_filter3  10
 
 
@@ -337,10 +311,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*压差过大*/VDELTER_1,	VDELTER_2,	VDELTER_3,	VDELTER_recover,	VDELTER_filter3,\
 		        				 /*电量过低*/socLow_1,	socLow_2,	socLow_3,	socLow_recover,		socLow_filter3}
 
-
-
-
-
 #define E2P_PROTECT_MAX_PRT		{/*���ڹ�ѹ*/5000,	5000,	5000,	5000,	50000,\
 								 /*���ڵ�ѹ*/5000,	5000,	5000,	5000,	50000,\
 								 /*��ѹ��ѹ*/20000,	20000,	20000,	20000,	50000,\
@@ -354,9 +324,6 @@ struct PRT_E2ROM_PARAS {
 		        				 /*��������*/2000,	2000,	2000,	2000,	50000,\
 		        				 /*ѹ�����*/2000,	2000,	2000,	2000,	50000,\
 		        				 /*��������*/50,	50,		50,		50,		50000}
-
-
-
 
 #define Record_len 10
 

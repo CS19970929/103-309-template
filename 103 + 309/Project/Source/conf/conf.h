@@ -1,36 +1,16 @@
 #ifndef CONF_H
 #define CONF_H
 
-#include "stdio.h"
 #include "stdint.h"
 #include "stdbool.h"
 #include "stm32f10x.h"
 #include "conf_gpio.h"
 #include "Project_Config.h"
-#include "IrqDebug.h"
-#include "FlashSelfTest.h"
 
-// #define __EnableLowPowerDebug__
-// #define __SOC_5_PROTECT_
-// #define DISP_VBAT_AND_TEMP_
-// #define VCELL_DISP_TEST
 #define _COMMOM_UPPER_SCI2
 
 
 // #define __VIRTURE_CURRENT__
-
-
-#define T3MAX         0
-#define T3            1
-
-#define BAT_MASTER  (0)
-#define BAT_SLAVE   (1)
-
-#define BAT_TYPE     PROJECT_CFG_BAT_TYPE
-
-#define FD_YEAR      PROJECT_CFG_FD_YEAR
-#define FD_MONTH     PROJECT_CFG_FD_MONTH
-#define FD_DAY       PROJECT_CFG_FD_DAY
 
 #if (PROJECT_CFG_BAT_CHEMISTRY == 0)
 #define TERNARYLI
@@ -40,9 +20,6 @@
 #error "Invalid PROJECT_CFG_BAT_CHEMISTRY"
 #endif
 
-#if PROJECT_CFG_WDOG_ENABLE
-#define wdog_enable
-#endif
 
 #if PROJECT_CFG_RTC_ENABLE
 #define __FUNC_RTC__
@@ -63,7 +40,6 @@
 #error "Invalid PROJECT_CFG_SCI1_ROLE"
 #endif
 
-#define VERSION  (PROJECT_CFG_VERSION)
 
 #define   CURR_10A     0
 #define   CURR_15A     1
@@ -71,11 +47,8 @@
 #define   CURR_30A     3
 #define   CURR_40A     4
 
-#define bq76xx_afe  0
-#define sh36xx      1
 
 #define LEVEL_CURR  CURR_30A
-#define AFE_TYPE    PROJECT_CFG_AFE_TYPE
 
 #if (LEVEL_CURR == CURR_10A)
 #define CS_Res			2
@@ -139,12 +112,6 @@ typedef enum GPIO_TYPE {
 
 typedef struct
 {
-#if PROJECT_CFG_IRQ_DEBUG_ENABLE
-  volatile IRQ_DEBUG irq;
-#endif
-#if PROJECT_CFG_STORAGE_SELF_TEST_ENABLE
-  volatile FLASH_SELF_TEST flash_test;
-#endif
   uint32_t    can_rcv_cnt_test;
   uint32_t    last_ext_comm_cnt_can;
   volatile uint32_t can_rcv_cnt;
@@ -179,12 +146,10 @@ extern Time_T  sys_time;
 
 void InitIO(void);
 void InitWakeUp_Base(void);
-void InitWakeUp_NormalMode(void);
 void InitWakeUp_RTCMode(void);
 void InitWakeUp_DeepMode(void);
 void IOstatus_Base(void);
 void IOstatus_RTCMode(void);
-void IOstatus_NormalMode(void);
 void IOstatus_DeepMode(void);
 void LowPower_ClearWakeupPending(void);
 void LowPower_DisableUartWakeup(void);

@@ -13,10 +13,6 @@
 #define PWR_STOPEntry_WFI 1
 static volatile struct { uint8_t comm_wakeup; } g_stLowPowerRtcStatus;
 static int irq_masked, inject_edge, stop_calls, clock_restores;
-static int stop_begin, stop_capture, stop_end;
-#define IRQ_DEBUG_STOP_BEGIN() (++stop_begin)
-#define IRQ_DEBUG_STOP_CAPTURE() (++stop_capture)
-#define IRQ_DEBUG_STOP_END() (++stop_end)
 static void RCC_APB1PeriphClockCmd(int peripheral,int state) {}
 static void TIM_Cmd(int timer,int state) {}
 static void TIM_ClearITPendingBit(int timer,int flags) {}
@@ -36,10 +32,9 @@ int main(void) {
         for(during_prepare=0;during_prepare<=1;++during_prepare) {
             g_stLowPowerRtcStatus.comm_wakeup=(uint8_t)before_entry;
             inject_edge=during_prepare;
-            irq_masked=stop_calls=clock_restores=stop_begin=stop_capture=stop_end=0;
+            irq_masked=stop_calls=clock_restores=0;
             Sys_StopMode();
             assert(stop_calls==!(before_entry || during_prepare));
-            assert(stop_begin==stop_calls && stop_capture==stop_calls && stop_end==1);
             assert(clock_restores==1 && !irq_masked);
             assert(g_stLowPowerRtcStatus.comm_wakeup==(before_entry || during_prepare));
         }

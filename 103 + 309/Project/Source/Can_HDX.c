@@ -318,10 +318,6 @@ UINT8 Can_HDX_Transmit(CanTxMsg *msg)
 	return can_transmit(msg, CAN_TX_SOURCE_REQUEST);
 }
 
-UINT8 Can_HDX_TransmitPeriodic(CanTxMsg *msg)
-{
-	return can_transmit(msg, CAN_TX_SOURCE_PERIODIC);
-}
 
 static void hdx_put_u16_be(UINT8 *data, UINT8 offset, UINT16 value)
 {
@@ -968,30 +964,6 @@ void InitCan(void)
 	can_power_on();
 }
 
-static UINT8 can_has_pending_work(void)
-{
-	if (s_tx.count != 0U)
-	{
-		return 1U;
-	}
-	if (s_tx.mailbox != CAN_TxStatus_NoMailBox)
-	{
-		return 1U;
-	}
-	if (s_comm_tool.read_block_active != 0U)
-	{
-		return 1U;
-	}
-	if (s_comm_tool.cmd_count != 0U)
-	{
-		return 1U;
-	}
-	if (hdx_has_pending_request() != 0U)
-	{
-		return 1U;
-	}
-	return ((CAN1->TSR & CAN_TSR_TME) != CAN_TSR_TME) ? 1U : 0U;
-}
 
 static UINT8 can_has_sleep_blocking_work(void)
 {
@@ -1028,14 +1000,6 @@ static UINT8 can_has_sleep_blocking_work(void)
 	return 0U;
 }
 
-UINT8 Can_PeekBusy(void)
-{
-	if (can_has_pending_work() != 0U)
-	{
-		return 1U;
-	}
-	return (sys_time.last_ext_comm_cnt_can != sys_time.can_rcv_cnt) ? 1U : 0U;
-}
 
 UINT8 Can_IsBusy(void)
 {
@@ -1080,13 +1044,10 @@ void App_Can(void)
 void USB_LP_CAN1_RX0_IRQHandler(void)
 {
 	CanRxMsg rx_msg;
-	IRQ_DEBUG_ENTER(can.rx0_irq);
-	IRQ_DEBUG_SET(can.last_rf0r, CAN1->RF0R);
 
 	while (CAN_MessagePending(CAN1, CAN_FIFO0) != 0U)
 	{
 		sys_time.can_rcv_cnt++;
-		IRQ_DEBUG_COUNT(can.rx0_frames);
 		CAN_Receive(CAN1, CAN_FIFO0, &rx_msg);
 		can_handle_rx_msg(&rx_msg);
 	}

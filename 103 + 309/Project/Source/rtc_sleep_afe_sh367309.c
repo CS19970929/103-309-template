@@ -76,23 +76,6 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
             return 1U;
         }
 
-        // if (!SystemRuntime_IsDischargeMosOpen())
-        // {
-        //     if (source != 0)
-        //     {
-        //         *source = chg_dsg_close;
-        //     }
-        //     return 1U;
-        // }
-
-        // if (g_stCellInfoReport.unMdlFault_Third.all != 0U)
-        // {
-        //     if (source != 0)
-        //     {
-        //         *source = error_wake;
-        //     }
-        //     return 1U;
-        // }
     }
     else {
         /* A failed status read is not evidence of UV or a safe idle interval. */

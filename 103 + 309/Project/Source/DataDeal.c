@@ -36,26 +36,16 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
 #define BOOT_CURRENT_FET_STATUS_MASK ((UINT8)0x07U)
 #define CURRENT_FIXED_SCALE ((UINT32)4U)
 #define CURRENT_REPORT_MA_PER_LSB ((UINT16)100U)
-/* Preserve the product-visible 0.2 A deadband regardless of calibration result. */
-// #define CURRENT_DEADBAND_MA ((UINT16)200U)
+/* Keep the configured product deadband in mA. */
 #define CURRENT_DEADBAND_MA ((UINT16)0U)
 
 typedef struct _AFE_CURRENT_RUNTIME
 {
     /* Boot zero is stored in raw-count x4 units to retain half-count averaging. */
     INT32 zeroOffsetRawX4;
-    INT32 correctedRawX4;
-    /* Calibrated signed current before product deadband. Unit: mA. */
-    INT32 measured_mA;
     /* Effective signed current after product deadband. Unit: mA. */
     INT32 current_mA;
-    INT16 bootRaw1;
-    INT16 bootRaw2;
-    INT16 runtimeRaw;
-    UINT16 deadband_mA;
     UINT8 zeroStatus;
-    UINT8 lastMtpConf;
-    UINT8 lastBstatus3;
 } AFE_CURRENT_RUNTIME;
 
 typedef struct _AFE_MONITOR_CH
@@ -79,44 +69,12 @@ typedef struct _DATA_RUNTIME
 
 static DATA_RUNTIME s_data = {0};
 
-#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-volatile AFE_CURRENT_DEBUG_INJECT g_afeCurrentDebugInject = {0, 0U};
-
-void AfeCurrent_DebugInjectRaw(INT16 raw, UINT8 targetMask)
-{
-    g_afeCurrentDebugInject.raw = raw;
-    g_afeCurrentDebugInject.targetMask = (UINT8)(targetMask & AFE_CURRENT_DEBUG_INJECT_ALL);
-}
-
-void AfeCurrent_DebugInjectClear(void)
-{
-    g_afeCurrentDebugInject.targetMask = 0U;
-    g_afeCurrentDebugInject.raw = 0;
-}
-
-static UINT8 AfeCurrent_DebugGetInjectedRaw(UINT8 target, UINT16 *raw_code)
-{
-    if ((raw_code != 0) &&
-        ((g_afeCurrentDebugInject.targetMask & target) != 0U))
-    {
-        *raw_code = (UINT16)g_afeCurrentDebugInject.raw;
-        return 1U;
-    }
-
-    return 0U;
-}
-#endif
-
 UINT16 g_u16CalibCoefK[KB_NUM];
 INT16 g_i16CalibCoefB[KB_NUM];
 
 UINT32 g_u32CS_Res_AFE;
 
 struct OTHER_ELEMENT OtherElement;
-
-void charger_detect_and_keyLogi_200ms(void)
-{
-}
 
 void Init_Registers(UINT8 num)
 {
@@ -145,39 +103,6 @@ void Init_Registers(UINT8 num)
 // 假设先确定用AFE1还是本身的KB的话，会出现问题。如下：
 // 假设需要整体校准，行，AFE1先行，然后发现某几串出问题，继续使用本身KB值，然后本身KB值需要同步前面AFE1的KB值一起算才行
 // 如果又变成单独使用本身KB值校准，出现错误。
-#if 0
-void DataLoad_CellVolt(void)
-{
-    UINT8 i;
-    UINT8 series_num = SeriesNum;
-    INT32 t_i32temp;
-
-    for (i = 0; i < series_num; ++i)
-    {
-        UINT8 afe_index = i;
-
-        if (series_num < 5U)
-        {
-            afe_index = 0U;
-        }
-        else if ((series_num == 13U) && (i == 8U))
-        {
-            afe_index = 9U;
-        }
-
-        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[afe_index];
-        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
-    }
-
-    if (series_num < 32)
-    {
-        for (i = series_num; i < 25; ++i)
-        {
-            g_stCellInfoReport.u16VCell[i] = 61001;
-        }
-    }
-}
-#endif
 
 void DataLoad_CellVolt(void)
 {
@@ -190,7 +115,6 @@ void DataLoad_CellVolt(void)
         g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
     }
 
-#ifndef VCELL_DISP_TEST
     if (SeriesNum < 32)
     {
         for (i = SeriesNum; i < 32; ++i)
@@ -198,7 +122,6 @@ void DataLoad_CellVolt(void)
             g_stCellInfoReport.u16VCell[i] = 61001;
         }
     }
-#endif // !1
 }
 
 void DataLoad_CellVoltMaxMinFind(void)
@@ -233,11 +156,6 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    // 单片机读总压
-    // u32VCellTotle = ((ADC_GetResult(ADC_VBC)*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // AFE读总压
-    // u32VCellTotle = ((g_stBq769x0_Read_AFE1.u32VBat*g_u16CalibCoefK[VOLT_VBUS])>>10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS]*1000;
-    // 所有单节电池电压加起来
     u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
 
     g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // 除以10
@@ -307,7 +225,6 @@ void DataLoad_MosTemperature(void)
     temperature = temperature / 10 - 40;
     temperature = (temperature * g_u16CalibCoefK[MDL_TEMP_MOS1] + g_i16CalibCoefB[MDL_TEMP_MOS1]) >> 10;
     temperature = temperature * 10 + 400;
-    // temperature = sys_time.test_mos_temp;
     if (temperature < 0 || temperature > 2000)
     {
         goto invalid;
@@ -404,13 +321,6 @@ static UINT8 DataLoad_CurrentReadCadcRaw(UINT16 *raw_code)
         return 0U;
     }
 
-#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-    if (AfeCurrent_DebugGetInjectedRaw(AFE_CURRENT_DEBUG_INJECT_BOOT_ZERO, raw_code))
-    {
-        return 1U;
-    }
-#endif
-
     raw_be = 0U;
     if (MTPRead(MTP_ADC2, 2, (UINT8 *)&raw_be))
     {
@@ -426,7 +336,6 @@ static void AfeCurrent_BootZeroFail(UINT8 status)
 {
     s_data.cur.zeroOffsetRawX4 = 0;
     s_data.cur.zeroStatus = status;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
 }
 
 static void AfeCurrent_WaitFreshSample(void)
@@ -468,8 +377,6 @@ static UINT8 AfeCurrent_CheckBootZeroSafe(void)
         return 0U;
     }
 
-    s_data.cur.lastMtpConf = confirmed_conf.all;
-
     if ((!confirmed_conf.bits.CADCON) ||
         confirmed_conf.bits.CHGMOS ||
         confirmed_conf.bits.DSGMOS ||
@@ -484,8 +391,6 @@ static UINT8 AfeCurrent_CheckBootZeroSafe(void)
         AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_SAMPLE_READ_ERROR);
         return 0U;
     }
-
-    s_data.cur.lastBstatus3 = bstatus3;
     if ((bstatus3 & BOOT_CURRENT_FET_STATUS_MASK) != 0U)
     {
         AfeCurrent_BootZeroFail((UINT8)AFE_CURRENT_ZERO_FET_ACTIVE);
@@ -508,15 +413,7 @@ void AfeCurrent_StartupZeroCal(void)
     }
 
     s_data.cur.zeroOffsetRawX4 = 0;
-    s_data.cur.correctedRawX4 = 0;
-    s_data.cur.measured_mA = 0;
     s_data.cur.current_mA = 0;
-    s_data.cur.bootRaw1 = 0;
-    s_data.cur.bootRaw2 = 0;
-    s_data.cur.runtimeRaw = 0;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
-    s_data.cur.lastMtpConf = 0U;
-    s_data.cur.lastBstatus3 = 0U;
 
     if (!AfeCurrent_PrepareBootZero())
     {
@@ -531,7 +428,6 @@ void AfeCurrent_StartupZeroCal(void)
         return;
     }
     raw1 = DataLoad_CurrentRawToSigned(raw_code);
-    s_data.cur.bootRaw1 = (INT16)raw1;
 
     AfeCurrent_WaitFreshSample();
     if ((!AfeCurrent_CheckBootZeroSafe()) ||
@@ -541,7 +437,6 @@ void AfeCurrent_StartupZeroCal(void)
         return;
     }
     raw2 = DataLoad_CurrentRawToSigned(raw_code);
-    s_data.cur.bootRaw2 = (INT16)raw2;
 
     if ((DataLoad_CurrentAbsI32(raw1) > BOOT_CURRENT_ZERO_MAX_ABS_COUNTS) ||
         (DataLoad_CurrentAbsI32(raw2) > BOOT_CURRENT_ZERO_MAX_ABS_COUNTS))
@@ -560,43 +455,11 @@ void AfeCurrent_StartupZeroCal(void)
     /* ((raw1 + raw2) / 2) * 4 == (raw1 + raw2) * 2. */
     s_data.cur.zeroOffsetRawX4 = (raw1 + raw2) * 2;
     s_data.cur.zeroStatus = (UINT8)AFE_CURRENT_ZERO_VALID;
-    s_data.cur.deadband_mA = CURRENT_DEADBAND_MA;
-}
-
-INT32 AfeCurrent_GetMeasuredCurrent_mA(void)
-{
-    return s_data.cur.measured_mA;
 }
 
 INT32 AfeCurrent_GetCurrent_mA(void)
 {
     return s_data.cur.current_mA;
-}
-
-void AfeCurrent_GetDiagnostics(AFE_CURRENT_DIAG *diag)
-{
-    if (diag == 0)
-    {
-        return;
-    }
-
-    diag->version = AFE_CURRENT_DIAG_VERSION;
-    diag->zeroStatus = s_data.cur.zeroStatus;
-    diag->zeroValid = (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID) ? 1U : 0U;
-    diag->bootRaw1 = s_data.cur.bootRaw1;
-    diag->bootRaw2 = s_data.cur.bootRaw2;
-    diag->zeroRawX4 = s_data.cur.zeroOffsetRawX4;
-    diag->runtimeRaw = s_data.cur.runtimeRaw;
-    diag->correctedRawX4 = s_data.cur.correctedRawX4;
-    diag->current_mA = s_data.cur.current_mA;
-    diag->deadband_mA = s_data.cur.deadband_mA;
-    diag->mtpConf = s_data.cur.lastMtpConf;
-    diag->bstatus3 = s_data.cur.lastBstatus3;
-#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-    diag->debugInjectFlags = (UINT16)g_afeCurrentDebugInject.targetMask;
-#else
-    diag->debugInjectFlags = 0U;
-#endif
 }
 
 /*
@@ -635,79 +498,6 @@ static UINT16 DataLoad_CurrentMilliAmpX4ToA10(UINT32 current_mA_x4)
     return (UINT16)report_value;
 }
 
-void test_Autocurrent_cycle(void)
-{
-    static uint8_t step = 0;
-
-    switch (step)
-    {
-    case 0:
-        if (g_stCellInfoReport.SocElement.u16Soc < 99)
-        {
-            step = 1;
-            sys_time.CHG = BMS_CAPCITY * 5;
-            sys_time.DSG = 0;
-            g_stCellInfoReport.u16Ichg = sys_time.CHG;
-            g_stCellInfoReport.u16IDischg = 0;
-        }
-        else
-        {
-            step = 1;
-        }
-        break;
-    case 1:
-    {
-        if (g_stCellInfoReport.SocElement.u16Soc >= 99)
-        {
-            step = 2;
-            sys_time.CHG = 0;
-            sys_time.DSG = BMS_CAPCITY * 5;
-            g_stCellInfoReport.u16Ichg = 0;
-            g_stCellInfoReport.u16IDischg = sys_time.DSG;
-        }
-        break;
-    }
-    case 2:
-        if (g_stCellInfoReport.SocElement.u16Soc <= 1)
-        {
-            step = 0;
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-void DataLoad_soc_test(void)
-{
-    static uint8_t test_state = 0;
-
-    switch (test_state)
-    {
-    case 0:
-        if (sys_time.isdebugenable == 1)
-        {
-            g_stCellInfoReport.u16Ichg = sys_time.CHG;
-            g_stCellInfoReport.u16IDischg = 0;
-            test_state = 1;
-        }
-        else
-        {
-            g_stCellInfoReport.u16Ichg = 0;
-            g_stCellInfoReport.u16IDischg = sys_time.DSG;
-            test_state = 1;
-        }
-        break;
-    case 1:
-        g_stCellInfoReport.u16Ichg = 0;
-        g_stCellInfoReport.u16IDischg = 0;
-        test_state = 0;
-        break;
-    default:
-        test_state = 0;
-        break;
-    }
-}
 void DataLoad_Current(void)
 {
     UINT16 raw_code;
@@ -715,14 +505,13 @@ void DataLoad_Current(void)
     INT32 corrected_raw_x4;
     INT32 nominal_mA_x4;
     INT32 calibrated_mA_x4;
+    INT32 measured_mA;
     UINT32 calibrated_abs_mA_x4;
     UINT32 calibrated_abs_mA;
+
     UINT16 deadband_mA;
 
     raw_code = SH367309_Read_AFE1.u16Current;
-#if PROJECT_CFG_AFE_CURRENT_DEBUG_INJECT_ENABLE
-    (void)AfeCurrent_DebugGetInjectedRaw(AFE_CURRENT_DEBUG_INJECT_RUNTIME, &raw_code);
-#endif
     raw_signed = DataLoad_CurrentRawToSigned(raw_code);
     corrected_raw_x4 = raw_signed * (INT32)CURRENT_FIXED_SCALE;
     if (s_data.cur.zeroStatus == (UINT8)AFE_CURRENT_ZERO_VALID)
@@ -750,15 +539,15 @@ void DataLoad_Current(void)
 
     if (calibrated_mA_x4 > 0)
     {
-        s_data.cur.measured_mA = (INT32)calibrated_abs_mA;
+        measured_mA = (INT32)calibrated_abs_mA;
     }
     else if (calibrated_mA_x4 < 0)
     {
-        s_data.cur.measured_mA = -(INT32)calibrated_abs_mA;
+        measured_mA = -(INT32)calibrated_abs_mA;
     }
     else
     {
-        s_data.cur.measured_mA = 0;
+        measured_mA = 0;
     }
 
     deadband_mA = CURRENT_DEADBAND_MA;
@@ -768,12 +557,8 @@ void DataLoad_Current(void)
     }
     else
     {
-        s_data.cur.current_mA = s_data.cur.measured_mA;
+        s_data.cur.current_mA = measured_mA;
     }
-
-    s_data.cur.runtimeRaw = (INT16)raw_signed;
-    s_data.cur.correctedRawX4 = corrected_raw_x4;
-    s_data.cur.deadband_mA = deadband_mA;
 
     /*
      * Keep the legacy public data model unchanged: charge/discharge are still
@@ -801,7 +586,6 @@ void DataLoad_Current(void)
         g_stCellInfoReport.u16IDischg = sys_time.DSG;
 
         virtual_mA = ((INT32)sys_time.CHG - (INT32)sys_time.DSG) * 100;
-        s_data.cur.measured_mA = virtual_mA;
         s_data.cur.current_mA = virtual_mA;
     }
 #endif
@@ -980,8 +764,6 @@ void close_ctlc(void)
     MCUO_AFE_CTLC = 0;
 }
 
-
-
 void App_AFEGet(void)
 {
     UINT8 sample_valid, fault_valid;
@@ -997,12 +779,9 @@ void App_AFEGet(void)
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
     DataLoad_Current();
-    // DataLoad_soc_test();
-    // test_Autocurrent_cycle();
 
     Fault_UpdateCurrentProtection(sample_valid);
     fault_valid=App_SH367309();
-    charger_detect_and_keyLogi_200ms();
     Fault_ApplyMosPermits(1U, 1U);
     /* Both frames belong to this cycle; invalid cached zeros are not recovery. */
     if (sample_valid && fault_valid) Sci_CustomerUpdateCounters();
@@ -1012,13 +791,4 @@ void App_AFEGet(void)
     else
         (void)SleepDeal_NormalIdleExpired(1U);
 
-#ifdef VCELL_DISP_TEST
-    // {
-    //     g_stCellInfoReport.u16VCell[27] = g_stLowPowerRtcStatus.test_sample_voltage;
-    //     g_stCellInfoReport.u16VCell[28] = g_stLowPowerRtcStatus.last;
-    //     g_stCellInfoReport.u16VCell[29] = g_stLowPowerRtcStatus.cycles;
-    //     g_stCellInfoReport.u16VCell[30] = g_stLowPowerRtcStatus.sleep;
-    // }
-    g_stCellInfoReport.u16VCell[31] = sys_time.rtc_sec_cnt;
-#endif
 }

@@ -10,14 +10,9 @@
 #ifndef UART2_BAUD
 #define UART2_BAUD 9600U
 #endif
-#ifndef UART3_BAUD
-#define UART3_BAUD 9600U
-#endif
 
 #define	SCI_TX_BUF_LEN			251   	//��־��¼��������Ϊ250
 #define RS485_MAX_BUFFER_SIZE 	251		//
-
-
 
 //485 cmd type
 enum RS485_CMD_E {
@@ -96,7 +91,6 @@ struct stCell_Info {
 //RS485״̬��״̬
 #define	RS485_STA_IDLE				0
 #define	RS485_STA_RX_COMPLETE		1
-#define	RS485_STA_RX_OK				2
 #define	RS485_STA_TX_COMPLETE		3
 
 
@@ -146,11 +140,9 @@ struct RS485MSG {
 #define RS485_ADDR_RO_START2			(UINT16)0xD200
 
 #define RS485_RO_BASE_WORDS				((UINT16)98U)
-/* SOC_TEST padding retained for protocol compatibility */
-#define RS485_RO_SOC_TEST_PAD_WORDS		((UINT16)16U)
-#define RS485_RO_TOTAL_WORDS			((UINT16)(RS485_RO_BASE_WORDS + RS485_RO_SOC_TEST_PAD_WORDS))
-
-
+/* Reserved words retained for protocol compatibility */
+#define RS485_RO_RESERVED_WORDS		((UINT16)16U)
+#define RS485_RO_TOTAL_WORDS			((UINT16)(RS485_RO_BASE_WORDS + RS485_RO_RESERVED_WORDS))
 
 //������ֻ��һ�Σ���
 #define RS485_ADDR_RO_LCD       		0xC000
@@ -162,9 +154,6 @@ struct RS485MSG {
 #define RS485_ADDR_AGING_STATUS			0xC080
 #define RS485_ADDR_AGING_STATUS_WORDS	5U
 
-/* Independent read-only current calibration diagnostics block. */
-#define RS485_ADDR_CURRENT_DIAG			0xC100
-#define RS485_ADDR_CURRENT_DIAG_WORDS	16U
 
 #define RS485_ADDR_SN_SERIAL_NUM		0xFFF0
 #define RS485_ADDR_SN_HAEDWARE_VER		0xFFF1
@@ -173,7 +162,6 @@ struct RS485MSG {
 #define RS485_CMD_ADDR_SET_BAUD_MODE 0x1008U
 
 UINT8 Sci_RequestBaudMode(UINT16 mode);
-UINT32 Sci_GetBaudRate(void);
 
 
 #define RS485_CMD_ADDR_FLASH_CONNECT	0xFFFD		//MCU与上位机连接标志
@@ -510,12 +498,10 @@ extern struct stCell_Info g_stCellInfoReport;
 UINT8 Sci_HostReadWords(UINT16 u16StartAddr, UINT16 u16Count, UINT16 *pu16Words);
 UINT8 Sci_HostWriteWords(UINT16 u16StartAddr, const UINT16 *pu16Words, UINT16 u16Count);
 UINT8 Sci_IsAnyPortBusy(void);
-UINT8 Sci_VerifyWakeFrames(void);
 void Sci_StopForLowPower(void);
 
 void Sci1_CommonUpper_IRQHandler(void);
 void Sci2_CommonUpper_IRQHandler(void);
-void Sci3_CommonUpper_IRQHandler(void);
 void InitUSART_CommonUpper(void);
 void App_CommonUpper(void);
 
