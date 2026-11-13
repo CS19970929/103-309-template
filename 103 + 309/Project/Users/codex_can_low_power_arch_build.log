@@ -1,8 +1,0 @@
-*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
-Build target 'Target 1'
-compiling Can_HDX.c...
-linking...
-Program Size: Code=52140 RO-data=2932 RW-data=1512 ZI-data=6168  
-After Build - User command #1: fromelf.exe --bin -o "E:\TODO\103 + 309 - 副本\103 + 309\Project\Users\Objects\CommomSH367309_16series_103RCT6_C.bin" "E:\TODO\103 + 309 - 副本\103 + 309\Project\Users\Objects\CommomSH367309_16series_103RCT6_C.axf"
-".\Objects\CommomSH367309_16series_103RCT6_C.axf" - 0 Error(s), 0 Warning(s).
-Build Time Elapsed:  00:00:01
