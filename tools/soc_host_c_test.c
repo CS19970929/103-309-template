@@ -24,8 +24,12 @@ static INT32 host_current_ma;
 static unsigned save_attempts;
 static UINT32 host_tick;
 static UINT32 SysTime_Get10msTickCount(void) { return host_tick; }
+static UINT16 stored_percent(void) {
+    if(!stored.u32CapFull) return stored.u16SocNow;
+    return (UINT16)(((uint64_t)stored.u32CapNow*100U+stored.u32CapFull/2U)/stored.u32CapFull);
+}
 UINT8 StorageFlash_LoadSocData(STORAGE_FLASH_SOC_DATA *data) {
-    if(!stored_valid) return 0U;
+    if(!stored_valid || stored.u16FormatVersion!=FLASH_STORAGE_SOC_DATA_VERSION) return 0U;
     *data=stored; return 1U;
 }
 UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data) {
@@ -108,7 +112,7 @@ static void test_startup(void) {
         reset_case(245,80);stored_valid=0;
         g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=volts[i];
         InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==60);
-        assert(stored_valid && stored.u16SocNow==60);
+        assert(stored_valid && stored_percent()==60);
     }
     puts("PASS startup: no snapshot starts at60 independent of cell voltage");
 }
@@ -152,7 +156,7 @@ static void test_manual_and_restore(void) {
     for(i=0;i<sizeof(values)/sizeof(values[0]);++i) {
         UINT32 seconds=(UINT32)(values[i]>80 ? values[i]-80 : 80-values[i])*10U+1U;
         reset_case(245,80);assert(SOC_RequestSetOnce(values[i]));
-        assert(stored.u16SocNow==80 && g_stCellInfoReport.SocElement.u16Soc==80);
+        assert(stored_percent()==80 && g_stCellInfoReport.SocElement.u16Soc==80);
         InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==80);
         run_seconds(seconds,0,3300);InitData_SOC();
         assert(g_stCellInfoReport.SocElement.u16Soc==values[i]);
@@ -208,40 +212,39 @@ static void test_parameter_side_effects(void) {
     assert(msg.AckType==RS485_ACK_POS && stored.u32CycleTimes==4200);
     puts("PASS real parameter writes: V0/V100 preserve state; capacity keeps ratio; cycles explicit; failed write rolls back");
 }
-static void test_cycle_write_recovery(void) {
+static void test_cycle_write_retry(void) {
     struct RS485MSG msg;UINT32 capacity;
     reset_case(245,80);stored.u32CycleTimes=12345;InitData_SOC();capacity=stored.u32CapNow;
     write_failure=1;write_parameter(0x2319,1,&msg);
     assert(msg.AckType==RS485_ACK_POS && stored.u32CycleTimes==12345);
     assert(g_stCellInfoReport.SocElement.u16Cycle_times==1);
-    InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Cycle_times==1);
     write_failure=0;run_seconds(1,0,3400);
     assert(stored.u32CycleTimes==100 && stored.u32CapNow==capacity && !stored.u32LearnPassedAs10);
     stored.u32CycleTimes=12345;InitData_SOC();write_failure=1;
-    write_parameter(0x2319,1,&msg);write_failure=0;InitData_SOC();
+    write_parameter(0x2319,1,&msg);write_failure=0;run_seconds(1,0,3400);
     assert(stored.u32CycleTimes==100); /* An explicit same-value write is a new command. */
-    puts("PASS cycle command recovery: durable generation, failed snapshot/reboot, retry and same-value reset");
+    puts("PASS cycle command runtime retry: failed snapshot and same-value reset; real boot recovery covered by test_storage.py");
 }
 static void test_manual_storage_failure(void) {
     struct RS485MSG msg;
     reset_case(245,80);write_failure=1;
-    assert(!SOC_RequestSetOnce(35));assert(stored.u16SocNow==80 && g_stCellInfoReport.SocElement.u16Soc==80);
+    assert(!SOC_RequestSetOnce(35));assert(stored_percent()==80 && g_stCellInfoReport.SocElement.u16Soc==80);
     memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
     assert(msg.AckType==RS485_ACK_NEG && msg.ErrorType==RS485_ERROR_CMD_INVALID);
     write_failure=0;memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
-    assert(msg.AckType==RS485_ACK_POS && stored.u16SocNow==80 && stored.u16LearnAnchorSoc==35);
-    assert(!SOC_RequestSetOnce(101));assert(stored.u16SocNow==80 && stored.u16LearnAnchorSoc==35);
+    assert(msg.AckType==RS485_ACK_POS && stored_percent()==80 && stored.u16LearnAnchorSoc==35);
+    assert(!SOC_RequestSetOnce(101));assert(stored_percent()==80 && stored.u16LearnAnchorSoc==35);
     puts("PASS real manual command: persistence failure rejects and preserves previous SOC; valid retry succeeds");
 }
 static void test_save_retry(void) {
     unsigned attempts;
     reset_case(245,80);stored_valid=0;write_failure=1;save_attempts=0;InitData_SOC();
     assert(save_attempts==1 && !stored_valid);write_failure=0;current_fresh=0;run_seconds(1,0,3400);
-    assert(stored_valid && stored.u16SocNow==60);
+    assert(stored_valid && stored_percent()==60);
     reset_case(245,80);write_failure=1;attempts=save_attempts;run_seconds(600,-6000,3400);
-    assert(stored.u16SocNow==80 && save_attempts-attempts<=600);
+    assert(stored_percent()==80 && save_attempts-attempts<=600);
     write_failure=0;run_seconds(1,0,3400);
-    assert(stored.u16SocNow==g_stCellInfoReport.SocElement.u16Soc);
+    assert(stored_percent()==g_stCellInfoReport.SocElement.u16Soc);
     reset_case(245,80);stored_valid=0;write_failure=1;save_attempts=0;
     host_tick=UINT32_MAX-50U;InitData_SOC();write_failure=0;
     {unsigned i;for(i=0;i<1000;i++) App_SOC(1U,1U);assert(save_attempts==1);}
@@ -331,6 +334,20 @@ static void test_snapshot_semantics(void) {
     assert(g_stCellInfoReport.SocElement.u16Soc==80);
     stored.u16SocNow=101;InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==60);
     stored.u16FormatVersion=1;InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==60);
+    /* Old percent-only capacity and discharge remainder remain readable. */
+    reset_case(245,80);stored.u32CapNow=stored.u32CapFull=0;
+    stored.u16DsgSocInt=50;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==80 && s_soc.passed_as10==4410U);
+    /* New records restore exact capacity, including zero, with no percent copy. */
+    assert(SOC_SaveSnapshot());
+    assert(stored.u16LearnState==STORAGE_SOC_STATE_TAG && !stored.u16SocNow &&
+        !stored.u16DsgSocInt && !stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]);
+    stored.u32CapNow=0;stored.u16SocNow=101;stored.u16DsgSocInt=0xFFFF;
+    InitData_SOC();assert(!g_stCellInfoReport.SocElement.u16Soc && s_soc.passed_as10==4410U);
+    stored.u32CapNow=stored.u32CapFull+1U;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==60);
+    assert(SOC_SaveSnapshot());stored.u32CapFull=0;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==60);
     reset_case(245,100);save_attempts=0;run_seconds(14664,-6000,3400);run_seconds(14664,6000,3400);
     assert(save_attempts<=202);
     printf("PASS snapshot semantics: invalid data fallback, retired flags ignored, discharge/recharge saves=%u\n",save_attempts);
@@ -342,7 +359,7 @@ int main(void) {
     test_startup();test_voltage_independence();test_current_resolution();
     test_customer_case();test_bounds();test_manual_and_restore();
     test_no_self_consumption_and_invalid_samples();test_no_soh_derating();
-    test_parameter_side_effects();test_cycle_write_recovery();test_manual_storage_failure();test_save_retry();
+    test_parameter_side_effects();test_cycle_write_retry();test_manual_storage_failure();test_save_retry();
     test_sleep_and_reset();test_sleep_save_failure();test_soh_boundaries();test_sizes_and_invalid_capacity();
     test_random_profile();test_snapshot_semantics();
     test_smooth_full();test_smooth_low_window();test_smooth_manual_bounds();

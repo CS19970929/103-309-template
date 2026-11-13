@@ -52,8 +52,27 @@ static void test_soc_smooth_persistence(void)
     STORAGE_FLASH_SOC_DATA old,data;
     int total,cut,ack;
     unsigned i;
-    persistence_prepare();assert(StorageFlash_LoadSocData(&old));save_flash();mutations=0;
+    persistence_prepare();assert(StorageFlash_LoadSocData(&old));
+    /* Start from a shipped V2 smooth snapshot; reads must not force a rewrite. */
+    old.u16LearnState=STORAGE_SOC_SMOOTH_TAG;old.u16SocNow=80U;
+    old.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]=(UINT16)(STORAGE_SOC_SMOOTH_TAG^0xFFFFU);
+    assert(StorageFlash_SaveSocData(&old));mutations=0;persistence_boot();assert(!mutations);
+    assert(sizeof(old)==40U && offsetof(STORAGE_FLASH_SOC_DATA,u32CapNow)==12U &&
+        offsetof(STORAGE_FLASH_SOC_DATA,u16Reserved)==30U);
+    save_flash();mutations=0;
     assert(SOC_RequestSetOnce(35));total=mutations;
+    assert(StorageFlash_LoadSocData(&data));
+    assert(data.u16LearnState==STORAGE_SOC_STATE_TAG && !data.u16SocNow &&
+        !data.u16DsgSocInt && !data.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]);
+    /* Without an inverse word, CRC still rejects a torn/altered target. */
+    {
+        UINT32 address=Storage_StateLatest(FLASH_STATE_A)+sizeof(STORAGE_RECORD)+
+            offsetof(STORAGE_STATE,soc)+offsetof(STORAGE_FLASH_SOC_DATA,u16LearnAnchorSoc);
+        *(UINT8 *)address^=1U;
+        persistence_boot();assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET);
+        assert(s_soc.now_as10==old.u32CapNow && StorageFlash_LoadSocData(&data));
+        assert(data.u16LearnState==STORAGE_SOC_SMOOTH_TAG);
+    }
     for(cut=0;cut<=total;cut++) {
         restore_flash();persistence_boot();mutations=0;cut_after=cut;
         ack=SOC_RequestSetOnce(35);cut_after=-1;persistence_boot();
@@ -61,7 +80,7 @@ static void test_soc_smooth_persistence(void)
         assert(data.u32CapNow==old.u32CapNow && s_soc.now_as10==old.u32CapNow);
         assert((s_soc.manual_target==35U)==(ack!=0));
     }
-    printf("PASS smooth target transaction: %d half-word cuts, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
+    printf("PASS smooth target transaction: %d half-word cuts, legacy/new layout, CRC rejection, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
     persistence_prepare();assert(SOC_RequestSetOnce(35));
     AFE_PARAM_WRITE_Flag=0;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;

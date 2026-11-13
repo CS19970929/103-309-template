@@ -329,7 +329,9 @@ static double host_true_soc(double cap_now)
 
 static UINT16 host_internal_soc(void)
 {
-	return s_flash_soc.u16SocNow;
+	if (s_flash_soc.u32CapFull == 0U) return s_flash_soc.u16SocNow;
+	return (UINT16)(((uint64_t)s_flash_soc.u32CapNow * 100U + s_flash_soc.u32CapFull / 2U) /
+					s_flash_soc.u32CapFull);
 }
 
 static void host_emit_row(const char *scenario,

@@ -106,31 +106,27 @@ static void soc_publish_report(void)
 UINT8 SOC_SaveSnapshot(void)
 {
     STORAGE_FLASH_SOC_DATA data;
-    UINT32 unit = s_soc.full_as10 / 100U;
-    if (unit == 0U) return 0U;
+    if (s_soc.full_as10 == 0U) return 0U;
     memset(&data, 0, sizeof(data));
     data.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;
-    data.u16SocNow = soc_percent();
     /* Retired V2 word: bind a pending full target to its voltage setting. */
     data.u16MaxErrorPercent = OtherElement.u16Soc_V_100;
     data.u32CycleTimes = s_soc.cycle_x100;
     data.u32CapNow = s_soc.now_as10;
     data.u32CapFull = s_soc.full_as10;
     data.u32LearnPassedAs10 = s_soc.passed_as10;
-    data.u16DsgSocInt = (UINT16)((uint64_t)s_soc.passed_as10 * 100U / unit);
     data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=s_soc.cycle_generation;
-    data.u16LearnState = STORAGE_SOC_SMOOTH_TAG;
+    data.u16LearnState = STORAGE_SOC_STATE_TAG;
     data.u16LearnAnchorSoc = s_soc.manual_target;
     data.u16Flags = s_soc.calibration_flags;
     data.u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] = (UINT16)s_soc.low_entry_as10;
     data.u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX] = (UINT16)(s_soc.low_entry_as10 >> 16);
-    data.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX] = (UINT16)(STORAGE_SOC_SMOOTH_TAG ^ 0xFFFFU);
     if (!StorageFlash_SaveSocData(&data)) {
         s_saved.retry_tick = SysTime_Get10msTickCount();
         s_saved.retry_active = 1U;
         return 0U;
     }
-    s_saved.percent = (UINT8)data.u16SocNow;
+    s_saved.percent = soc_percent();
     s_saved.cycles = s_soc.cycle_x100 / 100U;
     s_saved.valid = 1U;
     s_saved.retry_active = 0U;
@@ -149,72 +145,70 @@ static void soc_save_if_changed(void)
     (void)SOC_SaveSnapshot();
 }
 
+/* Decode historical V2 fields once. Current snapshots have one capacity source;
+ * record CRC/commit checking is owned by StorageFlash_LoadSocData(). */
+static UINT8 soc_restore_snapshot(const STORAGE_FLASH_SOC_DATA *data)
+{
+    UINT32 full = data->u32CapFull;
+    UINT32 now = data->u32CapNow;
+    UINT32 passed = data->u32LearnPassedAs10;
+    UINT32 unit = s_soc.full_as10 / 100U;
+    UINT32 entry = (UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] |
+        ((UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX] << 16);
+    UINT16 flags = data->u16Flags;
+    UINT8 current_format = (UINT8)(data->u16LearnState == STORAGE_SOC_STATE_TAG);
+
+    if (!current_format) {
+        if (data->u16SocNow > 100U || data->u16DsgSocInt > 100U) return 0U;
+        if (full == 0U || now > full || (now == 0U && data->u16SocNow != 0U)) {
+            full = s_soc.full_as10;
+            now = (UINT32)((uint64_t)full * data->u16SocNow / 100U);
+        }
+        if (passed == 0U) passed = (UINT32)((uint64_t)unit * data->u16DsgSocInt / 100U);
+    }
+    if (full == 0U || now > full) return 0U;
+    s_soc.now_as10 = (UINT32)((uint64_t)now * s_soc.full_as10 / full);
+    s_soc.cycle_x100 = data->u32CycleTimes;
+    s_soc.passed_as10 = passed % unit;
+
+    if ((current_format || (data->u16LearnState == STORAGE_SOC_SMOOTH_TAG &&
+         data->u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX] == (UINT16)(STORAGE_SOC_SMOOTH_TAG ^ 0xFFFFU))) &&
+        (flags & (UINT16)(~SOC_CALIBRATION_FLAGS)) == 0U &&
+        (flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY)) != (SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
+        (!(flags & SOC_TARGET_FULL) || (flags & SOC_FULL_LATCHED)) &&
+        (data->u16LearnAnchorSoc <= 100U || data->u16LearnAnchorSoc == SOC_NO_MANUAL_TARGET) &&
+        data->u32CapFull != 0U && entry <= data->u32CapFull) {
+        s_soc.low_entry_as10 = (UINT32)((uint64_t)entry * s_soc.full_as10 / data->u32CapFull);
+        s_soc.manual_target = data->u16LearnAnchorSoc;
+        s_soc.calibration_flags = flags;
+    }
+    return 1U;
+}
+
 void InitData_SOC(void)
 {
     STORAGE_FLASH_SOC_DATA data;
-    UINT32 unit;
-    UINT8 full_setting_changed = 0U;
     memset(&s_soc, 0, sizeof(s_soc));
     memset(&s_saved, 0, sizeof(s_saved));
     SOC_PauseCalibration();
     s_soc.manual_target = SOC_NO_MANUAL_TARGET;
+    /* Runtime_Boot calls InitE2PROM first; Flash owns cycle-command recovery. */
     s_soc.cycle_generation = StorageFlash_GetSocCycleGeneration();
     s_soc.full_as10 = (UINT32)OtherElement.u16Soc_Ah * 3600U;
-    unit = s_soc.full_as10 / 100U;
-    if (unit != 0U && StorageFlash_LoadSocData(&data) &&
-        data.u16FormatVersion == FLASH_STORAGE_SOC_DATA_VERSION &&
-        data.u16SocNow <= 100U && data.u16DsgSocInt <= 100U) {
-        s_soc.cycle_x100 = data.u32CycleTimes;
-        s_soc.passed_as10 = data.u32LearnPassedAs10 != 0U ?
-            data.u32LearnPassedAs10 % unit : (UINT32)((uint64_t)unit * data.u16DsgSocInt / 100U) % unit;
-        if (data.u32CapFull != 0U && data.u32CapNow <= data.u32CapFull &&
-            (data.u32CapNow != 0U || data.u16SocNow == 0U)) {
-            /* Preserve SOC, including its fraction, across old SOH snapshots
-             * and rated-capacity changes without changing the Flash format. */
-            s_soc.now_as10 = (UINT32)((uint64_t)data.u32CapNow *
-                s_soc.full_as10 / data.u32CapFull);
-        } else {
-            s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * data.u16SocNow / 100U);
-        }
-        if (data.u16LearnState == STORAGE_SOC_SMOOTH_TAG &&
-            data.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX] == (UINT16)(STORAGE_SOC_SMOOTH_TAG ^ 0xFFFFU) &&
-            (data.u16Flags & (UINT16)(~SOC_CALIBRATION_FLAGS)) == 0U &&
-            (data.u16Flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY)) != (SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
-            (!(data.u16Flags & SOC_TARGET_FULL) || (data.u16Flags & SOC_FULL_LATCHED)) &&
-            (data.u16LearnAnchorSoc <= 100U || data.u16LearnAnchorSoc == SOC_NO_MANUAL_TARGET) &&
-            data.u32CapFull != 0U) {
-            UINT32 entry = (UINT32)data.u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] |
-                ((UINT32)data.u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX] << 16);
-            if (entry <= data.u32CapFull) {
-                s_soc.low_entry_as10 = (UINT32)((uint64_t)entry * s_soc.full_as10 / data.u32CapFull);
-                s_soc.manual_target = data.u16LearnAnchorSoc;
-                s_soc.calibration_flags = data.u16Flags;
-                if (data.u16MaxErrorPercent != OtherElement.u16Soc_V_100) {
-                    s_soc.calibration_flags &= (UINT16)(~(SOC_TARGET_FULL | SOC_FULL_LATCHED));
-                    full_setting_changed = 1U;
-                }
-            }
-        }
+    s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
+    s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * SOC_DEFAULT_PERCENT / 100U);
+    if (s_soc.full_as10 != 0U && StorageFlash_LoadSocData(&data) && soc_restore_snapshot(&data)) {
         s_saved.percent = soc_percent();
         s_saved.cycles = s_soc.cycle_x100 / 100U;
         s_saved.valid = 1U;
-        if (s_soc.cycle_generation != STORAGE_SOC_CYCLE_GENERATION_NONE &&
-            data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX] != s_soc.cycle_generation) {
-            s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-            s_soc.passed_as10 = 0U;
+        if (data.u16MaxErrorPercent != OtherElement.u16Soc_V_100 &&
+            (s_soc.calibration_flags & (SOC_TARGET_FULL | SOC_FULL_LATCHED))) {
+            /* Retire a stale full goal even if power failed after config commit. */
+            s_soc.calibration_flags &= (UINT16)(~(SOC_TARGET_FULL | SOC_FULL_LATCHED));
             s_saved.valid = 0U;
-            (void)SOC_SaveSnapshot();
-        } else if (full_setting_changed) {
-            /* Retire the stale goal durably; a later voltage change back must
-             * not revive an old confirmation. Failure uses normal retries. */
-            s_saved.valid = 0U;
-            (void)SOC_SaveSnapshot();
         }
-    } else if (unit != 0U) {
-        s_soc.cycle_x100 = (UINT32)OtherElement.u16Soc_Cycle_times * 100U;
-        s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * SOC_DEFAULT_PERCENT / 100U);
-        (void)SOC_SaveSnapshot();
     }
+    soc_save_if_changed();
     soc_publish_report();
 }
 

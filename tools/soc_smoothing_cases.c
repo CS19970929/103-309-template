@@ -149,6 +149,11 @@ static void test_smooth_legacy_and_parameter_reset(void)
     run_seconds(60,0,3300);assert(s_soc.now_as10==441000U);
     assert(SOC_RequestSetOnce(35));run_seconds(30,0,3300);assert(SOC_SaveSnapshot());
     before=s_soc.now_as10;InitData_SOC();assert(s_soc.now_as10==before && s_soc.manual_target==35U);
+    /* Existing tagged snapshots still require their historical inverse. */
+    stored.u16LearnState=STORAGE_SOC_SMOOTH_TAG;
+    stored.u16SocNow=stored_percent();
+    stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]=(UINT16)(STORAGE_SOC_SMOOTH_TAG^0xFFFFU);
+    InitData_SOC();assert(s_soc.now_as10==before && s_soc.manual_target==35U);
     stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]^=1U;InitData_SOC();
     assert(s_soc.now_as10==before && s_soc.manual_target==SOC_NO_MANUAL_TARGET);
     reset_case(245,50);smooth_seconds(9,0,3100,3550);before=s_soc.now_as10;

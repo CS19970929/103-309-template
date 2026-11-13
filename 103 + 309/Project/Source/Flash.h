@@ -29,7 +29,9 @@
 #define STORAGE_SOC_CYCLE_GENERATION_NONE 0xFFFFU
 #define STORAGE_SOC_CYCLE_PARAMETER_INDEX 25U
 #define STORAGE_SOC_CYCLE_SNAPSHOT_INDEX 0U
-/* SOC V2 keeps its size. Only this tag pair enables smooth-calibration fields. */
+/* V2 layout is fixed. The current tag omits derived percentages/inverse;
+ * the old tag pair is read only for existing smooth-calibration snapshots. */
+#define STORAGE_SOC_STATE_TAG 0x5343U
 #define STORAGE_SOC_SMOOTH_TAG 0x534DU
 #define STORAGE_SOC_LOW_ENTRY_LO_INDEX 1U
 #define STORAGE_SOC_LOW_ENTRY_HI_INDEX 2U
@@ -66,17 +68,17 @@ enum STORAGE_PARAM_GROUP {
 typedef struct
 {
 	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;
-	UINT16 u16DsgSocInt;
-	UINT16 u16MaxErrorPercent;
-	UINT32 u32CycleTimes;
-	UINT32 u32CapNow;
-	UINT32 u32CapFull;
-	UINT32 u32LearnPassedAs10;
-	UINT16 u16LearnAnchorSoc;
-	UINT16 u16LearnState;
-	UINT16 u16Flags;
-	UINT16 u16Reserved[4];
+	UINT16 u16SocNow;           /* Legacy percent; new snapshots leave zero. */
+	UINT16 u16DsgSocInt;        /* Legacy discharge percent; now zero. */
+	UINT16 u16MaxErrorPercent;  /* Full-calibration voltage, mV. */
+	UINT32 u32CycleTimes;       /* Equivalent discharge cycles * 100. */
+	UINT32 u32CapNow;           /* Remaining capacity, 0.1 A*s. */
+	UINT32 u32CapFull;          /* Capacity basis for proportional restore. */
+	UINT32 u32LearnPassedAs10;  /* Discharge below the next 0.01 cycle. */
+	UINT16 u16LearnAnchorSoc;   /* Manual target 0..100, or 0xFFFF. */
+	UINT16 u16LearnState;       /* SOC state tag, not a learning state. */
+	UINT16 u16Flags;            /* Full target/latch and empty target. */
+	UINT16 u16Reserved[4];      /* Cycle generation, low reference lo/hi, unused. */
 } STORAGE_FLASH_SOC_DATA;
 
 typedef struct
