@@ -4,7 +4,9 @@ param(
     [ValidateSet("FD_Release", "FD_Debug")]
     [string]$Target = "FD_Release",
     [string]$PythonVersion = "3.9",
+    [switch]$ProjectCheck,
     [switch]$StrictProjectCheck,
+    [switch]$GenerateImage,
     [switch]$Flash,
     [switch]$Probe,
     [switch]$DeepProbe,
@@ -20,6 +22,11 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Project = Join-Path $RepoRoot "103 + 309\Project\Users\CommomSH367309_16series_103RCT6_C.uvprojx"
 $ProjectUsers = Join-Path $RepoRoot "103 + 309\Project\Users"
+$noImageResult = $null
+
+if ($GenerateImage -and $Mode -notin @("build", "flash", "full")) {
+    throw "-GenerateImage requires -Mode build, flash or full"
+}
 
 function Invoke-LoggedStep {
     param(
@@ -51,7 +58,7 @@ function Invoke-LoggedStep {
 function Invoke-Python {
     param([string[]]$PyArgs)
     $py = (Get-Command py.exe -ErrorAction Stop).Source
-    & $py "-$PythonVersion" @PyArgs
+    & $py "-$PythonVersion" -B @PyArgs
 }
 
 function Invoke-KeilBuild {
@@ -127,11 +134,13 @@ try {
     Write-Host "  target: $Target"
     Write-Host "  root:   $RepoRoot"
 
-    if ($Mode -eq "quick" -or $Mode -eq "full") {
+    if ($Mode -eq "full" -or $ProjectCheck -or $StrictProjectCheck) {
         Invoke-LoggedStep "Project consistency check" {
             Invoke-Python -PyArgs @("tools\project_check.py", "-q")
         } -AllowFailure:(!$StrictProjectCheck)
+    }
 
+    if ($Mode -eq "quick" -or $Mode -eq "full") {
         Invoke-LoggedStep "SOC host C tests" {
             Invoke-Python -PyArgs @("tools\run_soc_host_c_test.py")
         }
@@ -142,8 +151,18 @@ try {
     }
 
     if ($Mode -eq "build" -or $Mode -eq "flash" -or $Mode -eq "full") {
-        Invoke-LoggedStep "Keil build $Target" {
-            Invoke-KeilBuild -BuildTarget $Target
+        # Image generation is explicit; a flash request includes building its image.
+        if ($GenerateImage -or $Mode -eq "flash" -or ($Mode -eq "full" -and $Flash)) {
+            Invoke-LoggedStep "Keil image build $Target" {
+                Invoke-KeilBuild -BuildTarget $Target
+            }
+        }
+        else {
+            $noImageResult = Join-Path $env:TEMP ("bms_check_{0}.json" -f [Guid]::NewGuid().ToString("N"))
+            Invoke-LoggedStep "Keil check without BIN/HEX $Target" {
+                Invoke-Python -PyArgs @("tools\check_bms_no_bin.py", "--target", $Target, "--uv4", $Uv4,
+                                       "--result-json", $noImageResult)
+            }
         }
     }
 
@@ -158,7 +177,16 @@ try {
     }
 
     if ($Mode -eq "probe" -or ($Mode -eq "full" -and $Probe) -or ($Mode -eq "flash" -and $Probe)) {
-        $elf = Get-ArtifactPath -BuildTarget $Target -Ext "axf"
+        if ($noImageResult) {
+            # A no-image build lives in user temp; never probe with a stale worktree AXF.
+            $elf = [string](Get-Content -LiteralPath $noImageResult -Raw -Encoding UTF8 | ConvertFrom-Json).axf
+            if ([string]::IsNullOrWhiteSpace($elf) -or -not (Test-Path -LiteralPath $elf -PathType Leaf)) {
+                throw "No-image build did not report an existing AXF"
+            }
+        }
+        else {
+            $elf = Get-ArtifactPath -BuildTarget $Target -Ext "axf"
+        }
         Invoke-LoggedStep "ST-Link runtime snapshot" {
             $probeArgs = @(
                 "-ExecutionPolicy", "Bypass",
@@ -176,7 +204,9 @@ try {
     }
 
     if (-not [string]::IsNullOrWhiteSpace($Port)) {
-        $csv = "SOC_ONLINE_MONITOR_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmmss")
+        $monitorDir = Join-Path $env:TEMP "CodexTemp\103-309-copy"
+        New-Item -ItemType Directory -Path $monitorDir -Force | Out-Null
+        $csv = Join-Path $monitorDir ("SOC_ONLINE_MONITOR_{0}.csv" -f [Guid]::NewGuid().ToString("N"))
         Invoke-LoggedStep "SOC online monitor $Port@$Baud" {
             Invoke-Python -PyArgs @(
                 "tools\soc_online_monitor.py",

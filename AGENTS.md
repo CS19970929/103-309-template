@@ -5,7 +5,7 @@
 - 本仓库主 BMS 固件位于 `103 + 309/Project`，是裸机 STM32F1 工程。
 - 主工程文件是 `103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvprojx`，有效 Keil 目标为 `FD_Release` 和 `FD_Debug`。
 - 主 BMS 实物 MCU 已由用户于 2026-10-26 确认为 `STM32F103CBT6`：128 KB Flash、20 KB SRAM、1 KB Flash 擦除页。两个 Keil 目标使用 `STM32F103CB`，保留 `STM32F10X_MD` 和 `USE_STDPERIPH_DRIVER`。
-- MCU 外设实现必须以仓库内 `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0` 的头文件、驱动源码和当前工程已有实现为依据；禁止凭 STM32F0、其他 STM32F1 型号或 HAL 经验猜测。
+- MCU 外设实现沿用仓库内 `103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0` 的头文件、驱动源码和现有体系；硬件限制以 STM32F103CBT6 对应官方手册和 Errata 为准，发现现有实现冲突时先核实。禁止凭 STM32F0、其他 STM32F1 型号或 HAL 经验猜测。
 - 当前 AFE 路径以 `SH367309` 为主，真实行为以 `I2C_AFE1.*`、`SH367309_DataDeal.*`、`SH367309_Func.*` 和相关端口实现为准。
 - `firmware/comm_tool_f103ret6` 是独立的 STM32F103RET6 通信工具固件，使用其自己的 Keil 工程、地址布局和 STM32F10x StdPeriph 配置；不得与主 BMS 固件参数混用。
 - 主工程名中的 `103RCT6` 是历史命名，不代表实物型号；后续器件或容量变更须核对实际硬件、容量寄存器和工程配置，不根据文件名推断。
@@ -14,11 +14,11 @@
 ## 默认工作方式
 
 - 全部使用中文回答；函数名、寄存器名、协议字段名保持英文原文。
-- 当前源码是第一可信来源；旧文档、历史记录和记忆只能作为参考。
+- 当前源码和工具输出证明软件现状，用户要求和产品合同确定预期行为，官方手册和 Errata 确定硬件限制；旧文档、历史记录和记忆仅作参考。
 - 日常开发以解决当前明确问题为目标，优先小步净删减、少改文件、少加变量、少加封装。
-- 不要默认做全量项目审查、需求确认表、长篇文档、`change_log` 或 `test_plan` 更新；只有用户明确要求、发布收口或安全边界变化时才做。
+- 按本次行为影响维护最相关的必要说明；不默认新增全量审查、需求表、长篇文档或更新 `change_log`、`test_plan`。协议、安全边界和发布流程变化必须记录。
 - 验证采用目标化验证：改哪个模块就跑相关脚本、host test、静态检查或最小编译检查；不要默认跑全仓噪声很大的 `project_check.py --quiet`。
-- 用户要求每条修改单独提交时，一个逻辑变更一个 commit；只白名单 stage 本次相关文件，不带入 `todo.md`、未跟踪文件或无关脏文件。
+- 用户要求每条修改单独提交时，一个逻辑变更一个 commit；只白名单 stage 本次相关文件（包括本次新增文件），不带入 `todo.md`、原有无关未跟踪文件或脏文件。
 
 ## 代码原则
 
@@ -46,7 +46,7 @@
 - IAP 起始地址为 `0x08000000`，主 BMS App 起始地址为 `0x08004800`；地址定义以 `Flash.h`、Keil 工程和 scatter 文件三者一致为准。
 - APP 链接范围为 `[0x08004800, 0x0801C000)`，最大长度 `0x17800`，保留后续持久化区；物理 Flash 范围为 `[0x08000000, 0x08020000)`。应用 SRAM 范围为 `[0x20000000, 0x20004FE0)`，末尾 32 字节保留给 IAP 邮箱，不能因同步器件型号而放开这些边界。
 - 当前配置、状态、日志、统计各占两个 1 KB 页，位于 `0x0801E000`～`0x0801FFFF`。修改持久化、升级清空或事件计数前，阅读 `docs/flash-storage.md` 并运行 `tools/test_storage.py`；校验提交标记、CRC、序号、切页和掉电恢复。
-- 按用户明确要求不迁移旧参数格式。`PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION` 控制按完整 `BMS_SOFTWARE_VERDION_DEFAULT` 版本字符串执行一次参数清空；发布时维护该版本字符串。清空过程先提交意图、完成后提交结果，中断后继续完成。
+- 本项目按用户明确授权不迁移旧参数格式，属于全局旧数据兼容规则的例外，不授权改变存储布局或清空统计。`PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION` 控制按完整 `BMS_SOFTWARE_VERDION_DEFAULT` 版本字符串执行一次参数清空；发布时维护该版本字符串。清空过程先提交意图、完成后提交结果，中断后继续完成。
 - 统计页 `0x0801F800`、`0x0801FC00` 独立保存客户命令4计数；参数初始化、日志覆盖和日志清空均须保留统计。客户命令5可清零前 10 项故障次数，保留重启次数和当前故障掩码；统计损坏须返回错误，不能静默清零。
 - 修改 Flash 地址、页大小、参数数量、CRC、版本字段或升级策略属于安全边界变化，必须同步最相关文档或脚本并完成针对性验证。
 
@@ -77,18 +77,25 @@
 
 ## 构建与目标化验证
 
-- 主固件最小发布构建命令：
+- 主固件默认无镜像编译检查命令：
   `powershell -ExecutionPolicy Bypass -File .\tools\bms_dev_workflow.ps1 -Mode build -Target FD_Release`
+- 默认 `build` 复用 `tools/check_bms_no_bin.py`，在用户临时区关闭 BIN/HEX 及构建钩子，编译 AXF/MAP 并校验 App 链接边界；不修改原 Keil 工程。
+- 只有用户明确要求固件镜像时，才给上述命令增加 `-GenerateImage`，由原 Keil 工程在既定输出目录生成镜像。`flash` 或 `full -Flash` 明确请求生成镜像并走安全 App 烧录；普通编译、测试或文档列出的命令不构成镜像或烧录授权。
 - 需要调试目标时使用同一脚本的 `-Target FD_Debug`；不要把 Debug 产物当作发布或量产烧录文件。
 - SOC 相关改动可使用：
   `powershell -ExecutionPolicy Bypass -File .\tools\bms_dev_workflow.ps1 -Mode quick`
+- `quick` 只运行 SOC 和电流校准 host C 回归；显式加 `-ProjectCheck` 才做全仓一致性检查，`-StrictProjectCheck` 同时要求该检查成功。`full` 显式扩大为全仓检查、host 回归和默认无镜像编译，不隐含生成 BIN 或烧录。
+- 修改工作流入口时运行 `py -B tools/test_bms_dev_workflow.py`；该回归在用户临时区使用工具替身，不生成镜像或连接硬件。`full -Probe` 使用本次无镜像编译的临时 AXF，单独 `probe` 仍使用工程既有 AXF。
 - 只在改动确实跨越多个模块或用户明确要求时扩大全量检查；已有 `c073.cppcheck` 可作为相关静态分析入口，发现工具自身配置错误时要与代码问题区分报告。
-- 构建日志和临时分析目录必须写入用户临时区；项目约定的正式固件产物继续使用 Keil 目标的既有输出目录。
+- Codex 日志和临时分析目录写入用户临时区；允许工程既定输出目录中的正常编译中间产物和已授权正式固件产物，不在项目内另建 Codex 临时目录。
 - 未连接硬件或未执行烧录时必须明确说明，不得把编译、host test 或 dry-run 描述成板上验证。
 
 ## 上位机与显示要求
 
+- 本节 CAN 工具独立于通用串口/BLE 客户端，继续维护本仓库原源码和固定 EXE；串口/BLE Windows、Android、CLI 的开发入口仍是 `C:\Users\Administrator\source\bms-client` 的 `client/main`，不因新板型另起产品分支。
 - 修改用户上位机代码后，必须立即编译最新 exe。
 - CAN 用户上位机固定在 `BMS_CommTool_Upgrade_UI.exe` 基础上修改，生成文件必须覆盖 `dist\BMS_CommTool_Upgrade_UI.exe`，不要另起新的 exe 名称。
 - 老化剩余时间必须在原上位机界面里单独可见，入口是 `其它功能 -> 常用功能 -> 读取老化时间`，通过 `0x13 BMS_AGING_STATUS` 解析 `0x14F80208` 广播。
 - BMS 序列号、硬件版本、软件版本必须在原上位机 `实时监控` 界面最底部边栏显示，读取来源固定为 `0xC002` 的 48 个寄存器。
+
+全局规则的版本快照见 `docs/codex-global-rules.md`，仅用于追溯；实际全局文件为 `C:\Users\Administrator\.codex\AGENTS.md`。

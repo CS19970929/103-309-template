@@ -1,5 +1,6 @@
 """Check the active BMS target with its own link settings, without HEX/BIN or hooks."""
 import argparse
+import json
 import os
 import re
 import sys
@@ -14,6 +15,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=['FD_Release', 'FD_Debug'], default='FD_Release')
     parser.add_argument('--uv4', default=r'C:\Keil_v5\UV4\UV4.exe')
+    parser.add_argument('--result-json', type=Path,
+                        help='Write the verified AXF path for the calling workflow')
     parser.add_argument('--switch-mode', type=int, choices=[0, 1],
                         help='Override the switch mode in the disposable project only')
     args = parser.parse_args()
@@ -105,6 +108,8 @@ def main():
     if base != 0x08004800 or maximum != 0x17800 or size > maximum:
         raise SystemExit('App load region must fit [0x08004800, 0x0801C000)')
     print(f'MAP boundary verified: App 0x{base:08X}..0x{base+size:08X}; storage starts 0x0801C000')
+    if args.result_json:
+        args.result_json.write_text(json.dumps({'axf': str(next(output.rglob('*.axf')))}), encoding='utf-8')
 
 
 if __name__ == '__main__':
