@@ -42,7 +42,7 @@ typedef struct
 typedef struct {
     UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
     STORAGE_FLASH_RW_PARAM_DATA rw;
-    UINT8 reset_version[32];
+    UINT8 reserved_legacy[32]; /* Retain offset/CRC, unused by current firmware. */
     UINT16 initializing; /* Durable pending STORAGE_PARAM_RESET_* bits. */
 } STORAGE_FLASH_CONFIG_DATA;
 
@@ -142,7 +142,7 @@ typedef struct {
 typedef char StorageRwLayoutCheck[(sizeof(STORAGE_FLASH_RW_PARAM_DATA)==290U) ? 1 : -1];
 typedef char StorageConfigLayoutCheck[(sizeof(STORAGE_FLASH_CONFIG_DATA)==372U &&
     offsetof(STORAGE_FLASH_CONFIG_DATA,rw)==48U &&
-    offsetof(STORAGE_FLASH_CONFIG_DATA,reset_version)==338U &&
+    offsetof(STORAGE_FLASH_CONFIG_DATA,reserved_legacy)==338U &&
     offsetof(STORAGE_FLASH_CONFIG_DATA,initializing)==370U) ? 1 : -1];
 typedef char StorageSocLayoutCheck[(sizeof(STORAGE_FLASH_SOC_DATA)==40U &&
     offsetof(STORAGE_FLASH_SOC_DATA,u32CycleTimes)==8U &&
@@ -814,12 +814,10 @@ static const struct OTHER_ELEMENT s_other_max = OtherElement_max;
 static const struct HEAT_COOL_ELEMENT s_heat_cool_default = HeatCoolElement_Default;
 static const struct HEAT_COOL_ELEMENT s_heat_cool_min = HeatCoolElement_Min;
 static const struct HEAT_COOL_ELEMENT s_heat_cool_max = HeatCoolElement_Max;
-static const UINT8 s_reset_version[32] = BMS_SOFTWARE_VERDION_DEFAULT;
 
 typedef char StorageProtectSizeCheck[(sizeof(s_protect_default)==E2P_PARA_NUM_PROTECT*sizeof(UINT16)) ? 1 : -1];
 typedef char StorageOtherSizeCheck[(sizeof(s_other_default)==E2P_PARA_NUM_OTHER_ELEMENT1*sizeof(UINT16)) ? 1 : -1];
 typedef char StorageHeatCoolSizeCheck[(sizeof(s_heat_cool_default)==FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT*sizeof(UINT16)) ? 1 : -1];
-typedef char StorageVersionSizeCheck[(sizeof(BMS_SOFTWARE_VERDION_DEFAULT)<=sizeof(s_reset_version)) ? 1 : -1];
 typedef char StorageParamVersionSizeCheck[(STORAGE_PARAM_VERSION_FIRST+STORAGE_PARAM_COUNT<=FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT) ? 1 : -1];
 typedef char StorageCycleOffsetCheck[(offsetof(struct OTHER_ELEMENT,u16Soc_Cycle_times)/sizeof(UINT16)==STORAGE_SOC_CYCLE_PARAMETER_INDEX) ? 1 : -1];
 
@@ -924,7 +922,6 @@ static void Storage_BuildDefaultConfig(STORAGE_FLASH_CONFIG_DATA *config)
     config->rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]=PROJECT_CFG_STORAGE_UPDATE_GENERATION;
     config->rw.reserved[STORAGE_UPDATE_TAG_INDEX]=STORAGE_UPDATE_TAG;
     for (i=0U; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i) config->afe[i]=afe[i].defaultValue;
-    memcpy(config->reset_version,s_reset_version,sizeof(config->reset_version));
 }
 
 static UINT8 Storage_ConfigValid(const STORAGE_FLASH_CONFIG_DATA *config)

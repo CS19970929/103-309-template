@@ -177,7 +177,7 @@ static void test_module_updates(void) {
         assert(actual.rw.reserved[STORAGE_UPDATE_TAG_INDEX]==STORAGE_UPDATE_TAG);
         for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
             assert(actual.rw.reserved[word]==custom.rw.reserved[word]);
-        assert(!actual.initializing && !memcmp(actual.reset_version,custom.reset_version,32));
+        assert(!actual.initializing && !memcmp(actual.reserved_legacy,custom.reserved_legacy,32));
         assert(StorageFlash_LoadSocData(&loaded_soc)==!(mask&(1U<<STORAGE_PARAM_SOC_STATE)));
         if(!(mask&(1U<<STORAGE_PARAM_SOC_STATE))) assert(!memcmp(&soc,&loaded_soc,sizeof(soc)));
         assert(StorageFlash_LoadLogData(&point,records));

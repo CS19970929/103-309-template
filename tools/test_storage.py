@@ -28,12 +28,6 @@ def main():
     # Omit only the unrelated SRAM IAP mailbox and MCU-reset routines.
     flash = flash.split('/* App-to-IAP mailbox. */')[0]
     flash = '\n'.join(line for line in flash.splitlines() if not line.startswith('#include'))
-    # Simulate several firmware versions in one process using the real initializer.
-    flash = flash.replace('static const UINT8 s_reset_version[32] = BMS_SOFTWARE_VERDION_DEFAULT;',
-                          '#define s_reset_version ((const UINT8 *)firmware_version)')
-    flash = flash.replace('sizeof(s_reset_version)', '32U')
-    flash = flash.replace('static const UINT16 s_param_versions[STORAGE_PARAM_COUNT]',
-                          'static UINT16 s_param_versions[STORAGE_PARAM_COUNT]')
     code = (ROOT / 'tools/storage_host_cases.c').read_text(encoding='utf-8')
     vendor = (ROOT / '103 + 309/Project/STM32F10x_StdPeriph_Lib_V3.5.0/drivers/stm32f10x.h').read_text(encoding='utf-8', errors='replace')
     code = code.replace('/* RESET_FLAGS */', '\n'.join(line for line in vendor.splitlines()
