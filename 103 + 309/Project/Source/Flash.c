@@ -48,6 +48,14 @@ typedef struct {
 
 static UINT16 FlashReadOneHalfWord(UINT32 faddr);
 
+/* Watchable last hardware error: 1 erase, 2 erase verify,
+ * 3 program, 4 program verify, 5 record verify. Zero means no error. */
+static volatile struct {
+    UINT32 address;
+    UINT16 status;
+    UINT8 stage;
+} s_flash_error;
+
 #define FLASH_SIZE_REG_ADDR ((UINT32)0x1FFFF7E0)
 
 #define APP_UPGRADE_MAILBOX_ADDR ((UINT32)0x20004FE0)
@@ -62,6 +70,9 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 	result = FLASH_ErasePage(page_addr);
 	if (result != FLASH_COMPLETE)
 	{
+		s_flash_error.address=page_addr;
+		s_flash_error.status=(UINT16)result;
+		s_flash_error.stage=1U;
 		return result;
 	}
 
@@ -69,6 +80,9 @@ static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 	{
 		if (FlashReadOneHalfWord(page_addr + offset) != 0xFFFF)
 		{
+			s_flash_error.address=page_addr+offset;
+			s_flash_error.status=(UINT16)FLASH_ERROR_PG;
+			s_flash_error.stage=2U;
 			return FLASH_ERROR_PG;
 		}
 	}
@@ -83,11 +97,17 @@ static FLASH_Status FlashProgramHalfWordVerified(uint32_t addr, uint16_t data)
 	result = FLASH_ProgramHalfWord(addr, data);
 	if (result != FLASH_COMPLETE)
 	{
+		s_flash_error.address=addr;
+		s_flash_error.status=(UINT16)result;
+		s_flash_error.stage=3U;
 		return result;
 	}
 
 	if (FlashReadOneHalfWord(addr) != data)
 	{
+		s_flash_error.address=addr;
+		s_flash_error.status=(UINT16)FLASH_ERROR_PG;
+		s_flash_error.stage=4U;
 		return FLASH_ERROR_PG;
 	}
 
@@ -224,8 +244,14 @@ static UINT8 Storage_WriteRecord(UINT32 address, UINT32 magic, UINT32 sequence,
     FLASH_Lock();
     /* A readable committed record is authoritative even if the peripheral
      * reported an error after programming its final half-word. */
-    return (UINT8)(Storage_RecordValid(address,magic,length) &&
-                  memcmp((const void *)(address+sizeof(h)),payload,length)==0);
+    if (Storage_RecordValid(address,magic,length) &&
+        memcmp((const void *)(address+sizeof(h)),payload,length)==0) return 1U;
+    if (result==FLASH_COMPLETE) {
+        s_flash_error.address=address;
+        s_flash_error.status=(UINT16)FLASH_ERROR_PG;
+        s_flash_error.stage=5U;
+    }
+    return 0U;
 }
 
 static UINT32 Storage_SelectPair(UINT32 a, UINT32 b, UINT32 magic, UINT16 length)
