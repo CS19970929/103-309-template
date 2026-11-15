@@ -10,6 +10,21 @@
 
 static CtFirmwareInfo s_fw_info;
 
+/* Same reflected CRC-32 used by the PC uploader (zlib.crc32). */
+static uint32_t cache_crc32(const uint8_t *data, uint32_t length)
+{
+    uint32_t crc=0xFFFFFFFFu, i;
+    uint8_t bit;
+    for (i=0u; i<length; ++i)
+    {
+        crc ^= data[i];
+        for (bit=0u; bit<8u; ++bit)
+            crc=(crc >> 1) ^ ((crc & 1u) ? 0xEDB88320u : 0u);
+        if ((i & 1023u)==0u) CtWatchdog_Feed();
+    }
+    return crc ^ 0xFFFFFFFFu;
+}
+
 static uint32_t align_up_page(uint32_t value)
 {
     return (value + CT_SELF_FLASH_PAGE_SIZE - 1u) & ~(CT_SELF_FLASH_PAGE_SIZE - 1u);
@@ -123,7 +138,11 @@ void CtFlash_Init(void)
     const CtFirmwareInfo *stored;
 
     stored = (const CtFirmwareInfo *)CT_FW_META_PAGE;
-    if ((stored->magic == CT_FW_MAGIC) && (stored->valid == CT_FW_VALID))
+    if ((stored->magic == CT_FW_MAGIC) && (stored->valid == CT_FW_VALID) &&
+        (stored->size > 0u) && (stored->size <= CT_FW_CACHE_SIZE) &&
+        app_addr_supported(stored->app_addr, stored->size) &&
+        CtCrc16_Calc((const uint8_t *)CT_FW_CACHE_BASE, stored->size) == stored->crc16 &&
+        cache_crc32((const uint8_t *)CT_FW_CACHE_BASE, stored->size) == stored->crc32)
     {
         memcpy(&s_fw_info, stored, sizeof(s_fw_info));
     }
@@ -168,7 +187,9 @@ int CtFlash_Begin(uint32_t app_addr, uint32_t size, uint16_t crc16, uint32_t crc
 
 int CtFlash_Write(uint32_t offset, const uint8_t *data, uint16_t length)
 {
-    if ((length == 0u) || !range_in_cache(offset, length))
+    if ((length == 0u) || !range_in_cache(offset, length) ||
+        (s_fw_info.magic != CT_FW_MAGIC) || (offset > s_fw_info.size) ||
+        (length > s_fw_info.size - offset))
     {
         return 0;
     }
@@ -178,6 +199,7 @@ int CtFlash_Write(uint32_t offset, const uint8_t *data, uint16_t length)
 int CtFlash_End(uint32_t size, uint16_t crc16, uint32_t crc32)
 {
     uint16_t actual_crc;
+    CtFirmwareInfo committed;
 
     if ((s_fw_info.magic != CT_FW_MAGIC) || (s_fw_info.size != size) ||
         (s_fw_info.crc16 != crc16) || (s_fw_info.crc32 != crc32))
@@ -186,13 +208,18 @@ int CtFlash_End(uint32_t size, uint16_t crc16, uint32_t crc32)
     }
 
     actual_crc = CtCrc16_Calc((const uint8_t *)CT_FW_CACHE_BASE, size);
-    if (actual_crc != crc16)
+    if (actual_crc != crc16 ||
+        cache_crc32((const uint8_t *)CT_FW_CACHE_BASE, size) != crc32)
     {
         return 0;
     }
 
-    s_fw_info.valid = CT_FW_VALID;
-    return save_info(&s_fw_info);
+    committed=s_fw_info;
+    committed.valid=CT_FW_VALID;
+    if (!save_info(&committed))
+        return 0;
+    s_fw_info=committed;
+    return 1;
 }
 
 int CtFlash_Read(uint32_t offset, uint8_t *data, uint16_t length)
