@@ -355,6 +355,8 @@ PROJECT = ROOT / "103 + 309/Project/Users/CommomSH367309_16series_103RCT6_C.uvpr
 REMOVED_SOURCES = {"EEPROM.c", "EEPROM.h", "IrqDebug.c", "StartupDefaultHandler.c", "ShortFunc.c",
                    "DebugHooks.c", "DebugWatch.c", "SystemDebug.c"}
 REMOVED_TOKENS = ("IrqDebug", "IRQ_DEBUG_", "FlashSelfTest", "STORAGE_SELF_TEST",
+                   "STORAGE_FLASH_FACTORY_AGING_DATA", "STORAGE_SOC_SMOOTH_TAG",
+                   "PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION",
                   "AFE_CURRENT_DIAG", "AFE_CURRENT_DEBUG_INJECT", "VCELL_DISP_TEST",
                   "__SOC_5_PROTECT_", "g_stLowPowerBlockDebug", "g_dbg")
 

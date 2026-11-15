@@ -1,7 +1,7 @@
-# Heat_Cool_Element Flash 存储
+# 加热/制冷参数持久化
 
-主 BMS 的 RW 参数现在与 AFE 参数共用 `0x0801E000`、`0x0801E400` 配置双页，地址与掉电流程见 [Flash 参数与事件存储](flash-storage.md)。RW 数据为 290 字节，包括保护参数、`OtherElement`、校准保留字，以及按 `HEAT_COOL_ELEMENT` 字段顺序保存的 24 个 `UINT16`。
+主 BMS 的 `HEAT_COOL_ELEMENT` 24 个 `UINT16` 仍属于配置双页（`0x0801E000` / `0x0801E400`），与 AFE、保护和 Other 参数共用372字节配置载荷、CRC16、提交标记与回读校验。普通参数修改时使用 `StorageFlash_SaveParameters(0U)`，上电使用 `StorageFlash_InitParameters()` 恢复。
 
-按当前产品要求不再读取 242 字节旧格式。启动选择完整有效的新配置；首次初始化由 `HeatCoolElement_Default` 填充，加热参数与其他参数一起参与校验和版本清空。
+默认不因软件版本字符串变化而清空。需要有意更新加热/制冷默认参数时，设置 `PROJECT_CFG_STORAGE_UPDATE_GENERATION` 为新的非零代次，`PROJECT_CFG_STORAGE_UPDATE_MASK` 包含 bit5（`0x20`）；提交成功后不重复覆盖客户值。
 
-当前 `FD_Release` 和 `FD_Debug` 未编入旧 `Heat_Cool.c` 控制逻辑。`HEAT_OPEN_CURR` 在当前配置中未定义，默认取 `500U`，与旧控制代码中“50 A 关闭加热”的条件一致。参数可通过 `EEPROM_SaveRWParametersToFlash()` 存储，并在 `InitE2PROM()` 中恢复；本次未增加新的通信寄存器或启用加热控制。
+`FD_Release` / `FD_Debug` 当前没有启用旧 `Heat_Cool.c` 控制实现，但加热、制冷参数表与存储保留，不能作为无用历史字段删除。原协议未新增控制寄存器。
