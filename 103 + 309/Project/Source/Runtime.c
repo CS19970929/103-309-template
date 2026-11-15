@@ -8,6 +8,7 @@ void Runtime_Boot(void)
 {
 	UINT32 reset_cause=RCC->CSR;
 	UINT16 sleep_flag=BootFlag_Read();
+	UINT8 attempt, storage_ready=0U;
 	RCC_ClearFlag();
 	/* Capture reset evidence before RTC setup can clear RCC/backup state. */
 	StorageFlash_InitStatistics(reset_cause,sleep_flag);
@@ -20,7 +21,21 @@ void Runtime_Boot(void)
 
 	InitNVIC();
 	InitIO();
-	if (!StorageFlash_InitParameters()) return;
+	/* A temporary programming failure can recover; damaged data never auto-erases. */
+	for (attempt=0U; attempt<3U; ++attempt) {
+		if (StorageFlash_InitParameters()) { storage_ready=1U; break; }
+		__delay_ms(20U);
+	}
+	if (!storage_ready) {
+		/* Keep the AFE uninitialized and the system outside normal MOS arbitration.
+		 * Feed the watchdog in a deterministic fault loop for probe diagnostics. */
+		ClearLowPowerDebug();
+		Init_IWDG();
+		for (;;) {
+			Feed_IWatchDog;
+			__delay_ms(100U);
+		}
+	}
 	InitAFE1();
 	InitCan();
 
