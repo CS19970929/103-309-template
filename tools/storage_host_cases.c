@@ -23,7 +23,7 @@ struct RS485MSG;
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
 static int mutations, cut_after=-1, errors, error_after_commit;
 static UINT8 host_active_errors[ERROR_NUM+1];
-static UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND error) {
+UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND error) {
     if(error==ERROR_EEPROM_STORE) ++errors;
     return 0U;
 }
