@@ -43,6 +43,33 @@ static UINT8 s_host_mos_off;
 static UINT8 s_mos_sensor_missing;
 static UINT8 s_mos_sensor_ok_samples;
 static UINT32 s_mos_sensor_missing_tick;
+static UINT8 s_mos_sensor_fault;
+static UINT8 s_pack_sensor_fault;
+static UINT8 s_pack_sensor_ok_count;
+
+static void Fault_UpdateTemperatureDiagnostic(void)
+{
+    SystemError_SetActive(ERROR_TEMP_BREAK,
+        (UINT8)(s_mos_sensor_fault || s_pack_sensor_fault));
+}
+
+/* 0: valid AFE pack NTCs; 1: I2C failure; 2: invalid pack NTCs. */
+void Fault_UpdatePackTemperatureResult(UINT8 sample_result)
+{
+    if (sample_result == 1U) return; /* No new sensor evidence. */
+    if (sample_result == 2U)
+    {
+        s_pack_sensor_fault = 1U;
+        s_pack_sensor_ok_count = 0U;
+        close_ctlc();
+    }
+    else
+    {
+        if (s_pack_sensor_ok_count < 3U) ++s_pack_sensor_ok_count;
+        if (s_pack_sensor_ok_count >= 3U) s_pack_sensor_fault = 0U;
+    }
+    Fault_UpdateTemperatureDiagnostic();
+}
 
 UINT8 Fault_SetHostMosOff(UINT8 mask)
 {
@@ -201,7 +228,8 @@ void Fault_MosSensorWatchdog(void)
     }
     if ((UINT32)(now - s_mos_sensor_missing_tick) >= FAULT_MOS_SENSOR_TIMEOUT_TICKS)
     {
-        SystemError_SetActive(ERROR_TEMP_BREAK, 1U);
+        s_mos_sensor_fault = 1U;
+        Fault_UpdateTemperatureDiagnostic();
         close_ctlc();
     }
 }
@@ -226,7 +254,10 @@ void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature)
     if (s_mos_sensor_ok_samples < FAULT_MOS_SENSOR_RECOVER_SAMPLES)
         ++s_mos_sensor_ok_samples;
     if (s_mos_sensor_ok_samples >= FAULT_MOS_SENSOR_RECOVER_SAMPLES)
-        SystemError_SetActive(ERROR_TEMP_BREAK, 0U);
+    {
+        s_mos_sensor_fault = 0U;
+        Fault_UpdateTemperatureDiagnostic();
+    }
     /* Keep legacy Flash records intact. Invalid old MOS settings use the
        existing factory trip/recovery/delay locally, without rewriting storage. */
     if (!Fault_MosParametersValid(&PRT_E2ROMParas))

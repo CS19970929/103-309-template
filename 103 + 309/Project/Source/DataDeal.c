@@ -629,11 +629,11 @@ UINT8 AFE_IsHealthy(void)
                    !AFE_PARAM_WRITE_Flag);
 }
 
-static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 status_ok)
+static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 status_ok, UINT8 wire_ok)
 {
     AFE_MONITOR_RUNTIME *mon = &s_data.mon;
     UINT32 now = SysTime_Get10msTickCount();
-    UINT8 complete = (UINT8)(data_ok && status_ok);
+    UINT8 complete = (UINT8)(wire_ok && status_ok);
 
     mon->data_valid = data_ok;
     if (data_ok) mon->last_data_tick = now;
@@ -723,12 +723,14 @@ void close_ctlc(void)
 
 void App_AFEGet(void)
 {
-    UINT8 data_ok, status_ok, mos_ok;
+    UINT8 data_ok, status_ok, mos_ok, sample_result;
     if (SysTime_Take200msTaskPeriod() == 0U)
         return;
 
     MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-    data_ok = (UINT8)(UpdateVoltageFromBqMaximo() == 0U);
+    sample_result = UpdateVoltageFromBqMaximo();
+    data_ok = (UINT8)(sample_result == 0U);
+    Fault_UpdatePackTemperatureResult(sample_result);
     if (data_ok)
     {
         DataLoad_CellVolt();
@@ -739,7 +741,7 @@ void App_AFEGet(void)
     }
     Fault_UpdateCurrentProtection(data_ok);
     status_ok = App_SH367309();
-    AFE_MonitorUpdate(data_ok, status_ok);
+    AFE_MonitorUpdate(data_ok, status_ok, (UINT8)(sample_result != 1U));
 
     App_SOC(data_ok, status_ok);
     if (status_ok)

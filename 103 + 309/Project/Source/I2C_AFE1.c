@@ -592,7 +592,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
         /* The two fitted pack NTC channels are required; reject invalid data
            before updating any published measurement. */
         if (t1 == 0U || t2 == 0U || t1 >= 32769U || t2 >= 32769U)
-            return 1U;
+            return 2U; /* Sensor invalid; I2C transaction succeeded. */
 		for (i = 0; i < SeriesNum; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32

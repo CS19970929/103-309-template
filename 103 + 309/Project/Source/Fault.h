@@ -347,6 +347,7 @@ UINT8 Fault_MosParametersValid(const struct PRT_E2ROM_PARAS *parameters);
 void Fault_ResetMosConfirmation(void);
 void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature);
 void Fault_MosSensorWatchdog(void);
+void Fault_UpdatePackTemperatureResult(UINT8 sample_result);
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on);
 UINT8 Fault_SetHostMosOff(UINT8 mask);
 
