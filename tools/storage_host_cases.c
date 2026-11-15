@@ -462,7 +462,9 @@ int main(void) {
     int writes,cut,i;
     UINT16 previous_soc;
     host_storage_init();
-    memset(&old_value,0x12,sizeof(old_value)); memset(&new_value,0x34,sizeof(new_value));
+    Storage_BuildDefaultConfig(&old_value);
+    new_value=old_value;
+    ++new_value.rw.protect[0];
     assert(!Storage_LoadConfig(&loaded));
     assert(Storage_SaveConfig(&old_value)); save_flash();
     mutations=0; assert(Storage_SaveConfig(&old_value) && mutations==0);
@@ -481,6 +483,18 @@ int main(void) {
     assert(!Storage_LoadConfig(&loaded));
     restore_flash(); *(UINT16 *)(FLASH_CONFIG_A+14)=0xFFFF;
     assert(!Storage_LoadConfig(&loaded));
+    restore_flash();
+    /* A newer CRC-valid but unsafe configuration must not mask an older safe copy. */
+    {
+        STORAGE_FLASH_CONFIG_DATA unsafe=new_value;
+        unsafe.rw.protect[0]=0xFFFFU;
+        assert(!Storage_SaveConfig(&unsafe));
+        assert(Storage_Erase(FLASH_CONFIG_B));
+        assert(Storage_WriteRecord(FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,2U,&unsafe,sizeof(unsafe)));
+        assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&old_value,sizeof(loaded)));
+        assert(Storage_SaveConfig(&new_value));
+        assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&new_value,sizeof(loaded)));
+    }
     restore_flash();
     assert(Storage_Erase(FLASH_CONFIG_B));
     assert(Storage_WriteRecord(FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,UINT32_MAX,&new_value,sizeof(new_value)));

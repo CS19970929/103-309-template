@@ -238,12 +238,35 @@ static UINT32 Storage_SelectPair(UINT32 a, UINT32 b, UINT32 magic, UINT16 length
                          ((const STORAGE_RECORD *)a)->sequence) ? b : a;
 }
 
+/* CRC/commit prove integrity; safe application also requires legal parameters. */
+static UINT8 Storage_ConfigValid(const STORAGE_FLASH_CONFIG_DATA *config);
+
+static UINT32 Storage_SelectConfig(void)
+{
+    const STORAGE_FLASH_CONFIG_DATA *a=(const void *)(FLASH_CONFIG_A+sizeof(STORAGE_RECORD));
+    const STORAGE_FLASH_CONFIG_DATA *b=(const void *)(FLASH_CONFIG_B+sizeof(STORAGE_RECORD));
+    UINT8 va=Storage_RecordValid(FLASH_CONFIG_A,STORAGE_CONFIG_MAGIC,sizeof(*a));
+    UINT8 vb=Storage_RecordValid(FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*b));
+    /* Never hide a committed in-progress reset by falling back to an old page. */
+    if (va && !Storage_ConfigValid(a)) {
+        if (a->initializing) return 0U;
+        va=0U;
+    }
+    if (vb && !Storage_ConfigValid(b)) {
+        if (b->initializing) return 0U;
+        vb=0U;
+    }
+    if (!va) return vb ? FLASH_CONFIG_B : 0U;
+    if (!vb) return FLASH_CONFIG_A;
+    return Storage_Newer(((const STORAGE_RECORD *)FLASH_CONFIG_B)->sequence,
+                         ((const STORAGE_RECORD *)FLASH_CONFIG_A)->sequence) ?
+                         FLASH_CONFIG_B : FLASH_CONFIG_A;
+}
+
 static UINT8 Storage_LoadConfig(STORAGE_FLASH_CONFIG_DATA *data)
 {
-    UINT32 address;
-    if (data==0) return 0U;
-    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
-    if (!address) return 0U;
+    UINT32 address=Storage_SelectConfig();
+    if (!data || !address) return 0U;
     memcpy(data,(const void *)(address+sizeof(STORAGE_RECORD)),sizeof(*data));
     return 1U;
 }
@@ -252,8 +275,11 @@ static UINT8 Storage_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
 {
     UINT32 address, target, sequence=1U;
     UINT8 result;
-    if (data==0) return 0U;
-    address=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*data));
+    if (!data || !Storage_ConfigValid(data)) {
+        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+        return 0U;
+    }
+    address=Storage_SelectConfig();
     if (address) {
         if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) return 1U;
         sequence=((const STORAGE_RECORD *)address)->sequence+1U;
@@ -1000,10 +1026,6 @@ UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written)
     config.rw.reserved[RW_PARAM_CURRENT_CAL_CHG_B_INDEX]=(UINT16)g_i16CalibCoefB[MDL_ICHG];
     config.rw.reserved[RW_PARAM_CURRENT_CAL_DSG_K_INDEX]=g_u16CalibCoefK[MDL_IDSG];
     config.rw.reserved[RW_PARAM_CURRENT_CAL_DSG_B_INDEX]=(UINT16)g_i16CalibCoefB[MDL_IDSG];
-    if (!Storage_RWParametersValid(&config.rw)) {
-        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
-        return 0U;
-    }
     if (cycle_count_written) {
         generation=config.rw.reserved[STORAGE_SOC_CYCLE_GENERATION_INDEX];
         generation=generation>=0xFFFEU ? 1U : (UINT16)(generation+1U);
@@ -1024,7 +1046,7 @@ UINT8 StorageFlash_InitParameters(void)
     /* Check compiled defaults on every boot, even when a stored record exists. */
     Storage_BuildDefaultConfig(&config);
     if (!Storage_ConfigValid(&config)) return 0U;
-    valid=(UINT8)(Storage_LoadConfig(&config) && Storage_ConfigValid(&config));
+    valid=Storage_LoadConfig(&config);
     /* Resume committed intents before module updates or applying live parameters. */
     if (valid && config.initializing && !Storage_CommitParameterUpdate(&config)) goto failed;
     if (valid && !Storage_ResumeSocCycleWrite(&config)) goto failed;
