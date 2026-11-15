@@ -31,6 +31,8 @@ NORMAL_MODE = 0, HICCUP_MODE, DEEP_MODE, NO_SLEEP,
 #define LP_BLOCK_COMM         (1UL << 2)
 #define LP_BLOCK_KEY          (1UL << 3)
 #define LP_BLOCK_EXT_COMM     (1UL << 4)
+#define LP_BLOCK_AFE          (1UL << 5)
+#define LP_BLOCK_STORAGE      (1UL << 8)
 #define LP_BLOCK_UPGRADE      (1UL << 6)
 #define LP_BLOCK_FAULT        (1UL << 7)
 

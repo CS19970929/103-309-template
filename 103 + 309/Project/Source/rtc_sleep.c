@@ -19,55 +19,36 @@
 volatile enum irqWakeup g_irq_t = NO_IRQ;
 volatile struct LOW_POWER_RTC_STATUS g_stLowPowerRtcStatus = {NO_SLEEP};
 
-typedef uint8_t (*BlockCheckFunc)(void);
-
 static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >= 2U) ? 1U : 0U; }
 static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 2U) ? 1U : 0U; }
-static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
-static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
-static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U || g_stCellInfoReport.unMdlFault_Second.all != 0U || SH367309_Reg_Store.REG_BSTATUS1.bits.SC) ? 1U : 0U; }
 
-typedef struct
-{
-    uint32_t mask;
-    BlockCheckFunc check;
-} BlockReasonEntry;
-
-static const BlockReasonEntry s_block_table[] = {
-    {LP_BLOCK_CHARGE, CheckChargeMa},
-    {LP_BLOCK_DISCHARGE, CheckDischargeMa},
-    {LP_BLOCK_COMM, CheckCommBusy},
-    {LP_BLOCK_KEY, CheckKeyActive},
-    {LP_BLOCK_UPGRADE, CheckUpgrade},
-    {LP_BLOCK_FAULT, CheckFault},
-};
-
-#define BLOCK_TABLE_SIZE (sizeof(s_block_table) / sizeof(s_block_table[0]))
-
+/* Explicit predicates are simpler than a function-pointer table here. */
 uint32_t LP_GetBlockReason(void)
 {
-    uint32_t reason = 0U;
-    uint32_t i;
+    uint32_t block=0U;
+    uint8_t comm=RtcSleep_PortGetExternalCommCounter();
 
-    for (i = 0U; i < BLOCK_TABLE_SIZE; i++)
+    if (CheckChargeMa()) block|=LP_BLOCK_CHARGE;
+    if (CheckDischargeMa()) block|=LP_BLOCK_DISCHARGE;
+    if (Sci_IsAnyPortBusy() || Can_IsBusy()) block|=LP_BLOCK_COMM;
+    if (CheckKeyActive()) block|=LP_BLOCK_KEY;
+    if (u8FlashUpdateFlag) block|=LP_BLOCK_UPGRADE;
+    if (g_stCellInfoReport.unMdlFault_Third.all ||
+        g_stCellInfoReport.unMdlFault_Second.all ||
+        SH367309_Reg_Store.REG_BSTATUS1.bits.SC ||
+        SystemError_IsActive(ERROR_STATUS_TEMP_BREAK))
+        block|=LP_BLOCK_FAULT;
+    if (!AFE_IsHealthy() || !AFE_IsDataFresh()) block|=LP_BLOCK_AFE;
+    if (SystemError_IsActive(ERROR_STATUS_EEPROM_STORE) ||
+        SystemError_IsActive(ERROR_STATUS_EEPROM_COM))
+        block|=LP_BLOCK_STORAGE;
+    if (comm != g_stLowPowerRtcStatus.comm)
     {
-        if (s_block_table[i].check() != 0U)
-        {
-            reason |= s_block_table[i].mask;
-        }
+        g_stLowPowerRtcStatus.comm=comm;
+        block|=LP_BLOCK_EXT_COMM;
     }
-
-    {
-        uint8_t comm = RtcSleep_PortGetExternalCommCounter();
-        if (comm != g_stLowPowerRtcStatus.comm)
-        {
-            g_stLowPowerRtcStatus.comm = comm;
-            reason |= LP_BLOCK_EXT_COMM;
-        }
-    }
-
-    return reason;
+    return block;
 }
 
 void low_power_log_and_commit_sleep(uint8_t sleep_mode)
@@ -98,6 +79,13 @@ void LowPower_Request(enum _SLEEP_MODE mode)
 
 static uint8_t lp_select_deep_if_low_voltage(void)
 {
+    /* Cached AFE data cannot start or advance low-voltage sleep timers. */
+    if (!AFE_IsHealthy() || !AFE_IsDataFresh())
+    {
+        g_stLowPowerRtcStatus.force=0U;
+        g_stLowPowerRtcStatus.vlow=0U;
+        return 0U;
+    }
     /* UV handling only suppresses its immediate event request. The existing
      * low-voltage timers must still run after a protective sleep wake. */
     if ((RtcSleep_PortGetCellMinMv() <= LOW_POWER_FORCE_DEEP_SLEEP_MV) &&
@@ -139,8 +127,8 @@ static void lp_update_sleep_request(void)
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
     if (SleepDeal_NormalIdleExpired((UINT8)(
         (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |
-         LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_UPGRADE))!=0U ||
-        System_ERROR_UserCallback(ERROR_STATUS_AFE1)))) {
+         LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_UPGRADE |
+         LP_BLOCK_AFE | LP_BLOCK_STORAGE | LP_BLOCK_FAULT))!=0U)))) {
         LowPower_Request(DEEP_MODE);
         return;
     }
