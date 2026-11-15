@@ -189,6 +189,23 @@ void Fault_ResetMosConfirmation(void)
     s_mos_confirm_ticks = FAULT_MOS_CONFIRM_IDLE;
 }
 
+/* Called when no fresh NTC sample is available. Does not reset the
+   temperature protection confirmation on normal ADC sampling gaps. */
+void Fault_MosSensorWatchdog(void)
+{
+    UINT32 now = SysTime_Get10msTickCount();
+    if (!s_mos_sensor_missing)
+    {
+        s_mos_sensor_missing = 1U;
+        s_mos_sensor_missing_tick = now;
+    }
+    if ((UINT32)(now - s_mos_sensor_missing_tick) >= FAULT_MOS_SENSOR_TIMEOUT_TICKS)
+    {
+        SystemError_SetActive(ERROR_TEMP_BREAK, 1U);
+        close_ctlc();
+    }
+}
+
 void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature)
 {
     UINT32 now = SysTime_Get10msTickCount();
@@ -201,16 +218,7 @@ void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature)
     if (!sample_valid)
     {
         s_mos_sensor_ok_samples = 0U;
-        if (!s_mos_sensor_missing)
-        {
-            s_mos_sensor_missing = 1U;
-            s_mos_sensor_missing_tick = now;
-        }
-        if ((UINT32)(now - s_mos_sensor_missing_tick) >= FAULT_MOS_SENSOR_TIMEOUT_TICKS)
-        {
-            SystemError_SetActive(ERROR_TEMP_BREAK, 1U);
-            close_ctlc();
-        }
+        Fault_MosSensorWatchdog();
         Fault_ResetMosConfirmation();
         return;
     }

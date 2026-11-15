@@ -216,7 +216,8 @@ void DataLoad_MosTemperature(void)
 
     if (status == ADC_SAMPLE_NONE)
     {
-        Fault_UpdateMosTemperature(0U, 0U);
+        /* No new sample is not an invalid sample: keep thermal debounce. */
+        Fault_MosSensorWatchdog();
         return;
     }
     if (status != ADC_SAMPLE_READY)
