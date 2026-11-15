@@ -68,6 +68,7 @@ void Runtime_RunOnce(void)
 	ADC_Task();
 	DataLoad_MosTemperature();
 	App_AFEGet();
+    SystemRuntime_ObservePersistentFailures();
 	if (g_stLowPowerRtcStatus.mode==DEEP_MODE) {
 		rtc_sleep();
 		return;

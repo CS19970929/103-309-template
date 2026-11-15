@@ -62,6 +62,20 @@ static volatile struct {
 #define APP_UPGRADE_MAILBOX_MAGIC ((UINT32)0x49415031)
 #define APP_UPGRADE_MAILBOX_REQUEST ((UINT32)0x5AA55AA5)
 typedef struct { UINT32 magic, magic_inv, request, request_inv, crc; } APP_UPGRADE_MAILBOX;
+/* One active error per storage domain: success elsewhere cannot hide failure. */
+#define STORAGE_ERROR_CONFIG 1U
+#define STORAGE_ERROR_SOC   2U
+#define STORAGE_ERROR_LOG   4U
+#define STORAGE_ERROR_STATS 8U
+static UINT8 s_storage_error_domains;
+static void Storage_RecordResult(UINT8 domain, UINT8 success)
+{
+    if (success) s_storage_error_domains &= (UINT8)~domain;
+    else s_storage_error_domains |= domain;
+    SystemError_SetActive(ERROR_EEPROM_STORE,
+                          (UINT8)(s_storage_error_domains != 0U));
+}
+
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 {
 	UINT32 offset;
@@ -302,12 +316,15 @@ static UINT8 Storage_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
     UINT32 address, target, sequence=1U;
     UINT8 result;
     if (!data || !Storage_ConfigValid(data)) {
-        System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+        Storage_RecordResult(STORAGE_ERROR_CONFIG, 0U);
         return 0U;
     }
     address=Storage_SelectConfig();
     if (address) {
-        if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) return 1U;
+        if (memcmp((const void *)(address+sizeof(STORAGE_RECORD)),data,sizeof(*data))==0) {
+            Storage_RecordResult(STORAGE_ERROR_CONFIG, 1U);
+            return 1U;
+        }
         sequence=((const STORAGE_RECORD *)address)->sequence+1U;
     }
     target=address==FLASH_CONFIG_A ? FLASH_CONFIG_B : FLASH_CONFIG_A;
@@ -315,7 +332,7 @@ static UINT8 Storage_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
     result=(UINT8)(Storage_Erase(target) &&
         Storage_WriteRecord(target,STORAGE_CONFIG_MAGIC,sequence,data,sizeof(*data)));
 
-    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_CONFIG, result);
     return result;
 }
 
@@ -433,7 +450,10 @@ static UINT8 Storage_SaveState(const STORAGE_STATE *state)
     UINT32 sequence=1U;
     UINT8 result=0U;
     if (latest) {
-        if (!memcmp((const void *)(latest+sizeof(STORAGE_RECORD)),state,sizeof(*state))) return 1U;
+        if (!memcmp((const void *)(latest+sizeof(STORAGE_RECORD)),state,sizeof(*state))) {
+            Storage_RecordResult(STORAGE_ERROR_SOC, 1U);
+            return 1U;
+        }
         page=latest & ~(FLASH_STORAGE_PAGE_SIZE-1U);
         sequence=((const STORAGE_RECORD *)latest)->sequence+1U;
     }
@@ -449,7 +469,7 @@ static UINT8 Storage_SaveState(const STORAGE_STATE *state)
     result=Storage_WriteRecord(next,STORAGE_STATE_MAGIC,sequence,state,sizeof(*state));
 done:
 
-    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_SOC, result);
     return result;
 }
 
@@ -585,7 +605,7 @@ static UINT8 Storage_LogAppend(UINT16 data)
                   memcmp((const void *)next,&entry,sizeof(entry))==0);
 done:
 
-    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_LOG, result);
     return result;
 }
 
@@ -728,7 +748,7 @@ static UINT8 Storage_SaveStatistics(UINT8 type, UINT16 value)
     }
 
     s_statistics.dirty=(UINT8)!result;
-    if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_STATS, result);
     return result;
 }
 
@@ -774,6 +794,7 @@ void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
     if (page) {
         if (!Storage_StatsReplay(page,&s_statistics)) goto damaged;
         s_statistics.available=1U;
+        Storage_RecordResult(STORAGE_ERROR_STATS, 1U);
         if (!sleep_reset) {
             Storage_StatsApply(&s_statistics.data,STATS_BOOT,0U);
             (void)Storage_SaveStatistics(STATS_BOOT,0U);
@@ -782,12 +803,13 @@ void StorageFlash_InitStatistics(UINT32 reset_cause, UINT16 sleep_flag)
                 StorageFlash_IsAreaBlank(FLASH_STATS_B,FLASH_STORAGE_PAGE_SIZE)) ||
                Storage_StatsInitialWriteInterrupted()) {
         s_statistics.available=1U;
+        Storage_RecordResult(STORAGE_ERROR_STATS, 1U);
         s_statistics.data.count[10]=1U;
         (void)Storage_SaveStatistics(STATS_BOOT,0U);
     } else goto damaged;
     return;
 damaged:
-    System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_STATS, 0U);
 }
 
 void StorageFlash_UpdateFaultStatistics(UINT16 active_faults)
@@ -1111,10 +1133,11 @@ UINT8 StorageFlash_InitParameters(void)
         if (!Storage_SaveConfig(&config)) goto failed;
     } else if (!Storage_UpdateModules(&config)) goto failed;
     Storage_ApplyConfig(&config);
+    Storage_RecordResult(STORAGE_ERROR_CONFIG, 1U);
     ReadEEPROM_EventRecord_Parameters();
     return 1U;
 failed:
-    System_ERROR_UserCallback(ERROR_EEPROM_STORE);
+    Storage_RecordResult(STORAGE_ERROR_CONFIG, 0U);
     return 0U;
 }
 

@@ -18,6 +18,8 @@ static const UINT8 s_u8SystemErrorFieldOffset[ERROR_NUM + 1] = {
 };
 
 static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode);
+static UINT32 s_persistent_error_tick;
+static UINT8 s_persistent_error_tracking;
 
 static volatile UINT8 *System_ErrorCommandField(enum SYSTEM_ERROR_COMMAND errorCode)
 {
@@ -128,6 +130,26 @@ UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND code)
     volatile UINT8 *flag = (code >= ERROR_AFE1 && code <= ERROR_NUM) ?
         System_ErrorField(code) : System_ErrorCommandField(code);
     return (UINT8)(flag != 0 && *flag != 0U);
+}
+
+void SystemRuntime_ObservePersistentFailures(void)
+{
+    UINT8 bad = (UINT8)(SystemError_IsActive(ERROR_STATUS_EEPROM_STORE) ||
+                        SystemError_IsActive(ERROR_STATUS_EEPROM_COM) ||
+                        SystemError_IsActive(ERROR_STATUS_TEMP_BREAK));
+    UINT32 now = SysTime_Get10msTickCount();
+    if (!bad)
+    {
+        s_persistent_error_tracking = 0U;
+        return;
+    }
+    if (!s_persistent_error_tracking)
+    {
+        s_persistent_error_tick = now;
+        s_persistent_error_tracking = 1U;
+    }
+    else if ((UINT32)(now - s_persistent_error_tick) >= 30000U)
+        LowPower_Request(DEEP_MODE);
 }
 
 void InitSystemMonitorData_EEPROM(void)
