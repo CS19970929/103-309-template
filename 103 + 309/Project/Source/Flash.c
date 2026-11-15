@@ -8,6 +8,10 @@
 /* reserved[0..5] hold current calibration; [6..14] are private update tags.
  * Do not reorder groups: their positions are part of the stored format. */
 #define STORAGE_PARAM_VERSION_FIRST 6U
+/* Single explicit update generation and group mask; retain the stored layout. */
+#define STORAGE_UPDATE_GENERATION_INDEX STORAGE_PARAM_VERSION_FIRST
+#define STORAGE_UPDATE_TAG_INDEX (STORAGE_PARAM_VERSION_FIRST + 1U)
+#define STORAGE_UPDATE_TAG 0x5355U
 /* Private fields fit the existing 24-word reserved area; record size is unchanged. */
 #define STORAGE_BAUD_MODE_INDEX 15U
 #define STORAGE_BATTERY_NUMBER_INDEX 16U
@@ -805,13 +809,6 @@ typedef char StorageVersionSizeCheck[(sizeof(BMS_SOFTWARE_VERDION_DEFAULT)<=size
 typedef char StorageParamVersionSizeCheck[(STORAGE_PARAM_VERSION_FIRST+STORAGE_PARAM_COUNT<=FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT) ? 1 : -1];
 typedef char StorageCycleOffsetCheck[(offsetof(struct OTHER_ELEMENT,u16Soc_Cycle_times)/sizeof(UINT16)==STORAGE_SOC_CYCLE_PARAMETER_INDEX) ? 1 : -1];
 
-static const UINT16 s_param_versions[STORAGE_PARAM_COUNT] = {
-    PROJECT_CFG_PARAM_AFE_VERSION, PROJECT_CFG_PARAM_PROTECT_VERSION,
-    PROJECT_CFG_PARAM_SOC_VERSION, PROJECT_CFG_PARAM_OTHER_VERSION,
-    PROJECT_CFG_PARAM_CALIB_VERSION, PROJECT_CFG_PARAM_HEAT_COOL_VERSION,
-    PROJECT_CFG_PARAM_SOC_STATE_VERSION, PROJECT_CFG_PARAM_AGING_STATE_VERSION,
-    PROJECT_CFG_PARAM_LOG_VERSION
-};
 
 /*
  * Store current K/B in existing reserved words so the RW parameter record size
@@ -910,8 +907,8 @@ static void Storage_BuildDefaultConfig(STORAGE_FLASH_CONFIG_DATA *config)
     memcpy(config->rw.heat_cool,&s_heat_cool_default,sizeof(config->rw.heat_cool));
     memset(config->rw.reserved,0xFF,sizeof(config->rw.reserved));
     memcpy(config->rw.reserved,s_current_calibration_default,sizeof(s_current_calibration_default));
-    for (i=0U; i<STORAGE_PARAM_COUNT; ++i)
-        config->rw.reserved[STORAGE_PARAM_VERSION_FIRST+i]=s_param_versions[i];
+    config->rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]=PROJECT_CFG_STORAGE_UPDATE_GENERATION;
+    config->rw.reserved[STORAGE_UPDATE_TAG_INDEX]=STORAGE_UPDATE_TAG;
     for (i=0U; i<FLASH_STORAGE_AFE_WORD_COUNT; ++i) config->afe[i]=afe[i].defaultValue;
     memcpy(config->reset_version,s_reset_version,sizeof(config->reset_version));
 }
@@ -959,12 +956,21 @@ static UINT8 Storage_IsSocParameter(UINT16 word)
 static UINT8 Storage_UpdateModules(STORAGE_FLASH_CONFIG_DATA *stored)
 {
     UINT16 group, word;
+    UINT16 generation=PROJECT_CFG_STORAGE_UPDATE_GENERATION;
+    UINT16 mask=PROJECT_CFG_STORAGE_UPDATE_MASK;
     UINT8 changed=0U;
     const AFE_Value_Typedef *afe=&AFE_Parameters_RS485_Struction.u16VcellOvp;
     const UINT16 *other_default=(const UINT16 *)&s_other_default;
+    if (stored->rw.reserved[STORAGE_UPDATE_TAG_INDEX]!=STORAGE_UPDATE_TAG) {
+        /* Preserve an existing current-format configuration before replacing old tags. */
+        stored->rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]=0U;
+        stored->rw.reserved[STORAGE_UPDATE_TAG_INDEX]=STORAGE_UPDATE_TAG;
+        changed=1U;
+    }
+    if (!generation || stored->rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]==generation)
+        return (UINT8)(!changed || Storage_SaveConfig(stored));
     for (group=0U; group<STORAGE_PARAM_COUNT; ++group) {
-        if (!s_param_versions[group] ||
-            stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]==s_param_versions[group]) continue;
+        if ((mask & (1U<<group))==0U) continue;
         switch (group) {
         case STORAGE_PARAM_AFE:
             for (word=0U; word<FLASH_STORAGE_AFE_WORD_COUNT; ++word)
@@ -986,10 +992,9 @@ static UINT8 Storage_UpdateModules(STORAGE_FLASH_CONFIG_DATA *stored)
         case STORAGE_PARAM_AGING_STATE: stored->initializing |= STORAGE_PARAM_RESET_AGING; break;
         case STORAGE_PARAM_LOG: stored->initializing |= STORAGE_PARAM_RESET_LOG; break;
         }
-        stored->rw.reserved[STORAGE_PARAM_VERSION_FIRST+group]=s_param_versions[group];
-        changed=1U;
     }
-    return (UINT8)(!changed || Storage_CommitParameterUpdate(stored));
+    stored->rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]=generation;
+    return Storage_CommitParameterUpdate(stored);
 }
 
 UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written)
@@ -1036,8 +1041,7 @@ UINT8 StorageFlash_InitParameters(void)
     /* Resume committed intents before module updates or applying live parameters. */
     if (valid && config.initializing && !Storage_CommitParameterUpdate(&config)) goto failed;
     if (valid && !Storage_ResumeSocCycleWrite(&config)) goto failed;
-    if (!valid || (PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION &&
-                  memcmp(config.reset_version,s_reset_version,sizeof(config.reset_version))!=0)) {
+    if (!valid) {
         Storage_BuildDefaultConfig(&config);
         config.initializing=STORAGE_PARAM_RESET_ALL;
         if (!Storage_CommitParameterUpdate(&config)) goto failed;

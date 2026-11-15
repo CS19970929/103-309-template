@@ -64,37 +64,15 @@
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 3600
 // </h>
 
-// <h>Flash parameter updates after firmware upgrade
-// <q> Reset ALL parameters once on each new firmware version
-// <i> Factory reset takes priority over the module versions below. Statistics are always preserved.
-// <i> Keep 0 for selective updates; 1 uses the complete BMS_SOFTWARE_VERDION_DEFAULT string.
-#define PROJECT_CFG_RESET_PARAMS_ON_NEW_VERSION 1
-
-// Each module: 0 = preserve; 1..65534 = apply compiled defaults once when the
-// saved version differs. Increment only the modules to update. Reusing a
-// version does not overwrite host changes or repeat on reboot/reflash.
-// <o> AFE parameter version <0-65534>
-#define PROJECT_CFG_PARAM_AFE_VERSION 8
-// <o> Software protection parameter version <0-65534>
-#define PROJECT_CFG_PARAM_PROTECT_VERSION 8
-// <o> SOC configuration version <0-65534>
-// <i> Table selection, rated capacity, initial cycle count and full/empty voltages; keeps SOC state.
-#define PROJECT_CFG_PARAM_SOC_VERSION 8
-// <o> Other parameter version <0-65534>
-// <i> Excludes the SOC fields above; protocol addresses are unchanged.
-#define PROJECT_CFG_PARAM_OTHER_VERSION 8
-// <o> Current calibration version <0-65534>
-#define PROJECT_CFG_PARAM_CALIB_VERSION 8
-// <o> Heating/cooling parameter version <0-65534>
-#define PROJECT_CFG_PARAM_HEAT_COOL_VERSION 8
-// <o> SOC state reset version <0-65534>
-// <i> Explicitly discards SOC/capacity/cycle snapshot; startup rebuilds it by the existing SOC rules.
-#define PROJECT_CFG_PARAM_SOC_STATE_VERSION 8
-// <o> Factory aging state reset version <0-65534>
-#define PROJECT_CFG_PARAM_AGING_STATE_VERSION 8
-// <o> Recent 100 logs clear version <0-65534>
-// <i> Does not clear the customer's lifetime event counters.
-#define PROJECT_CFG_PARAM_LOG_VERSION 8
+// <h>Explicit Flash parameter update
+// <o> Parameter update generation <0-65534>
+// <i> 0 = preserve stored parameters. Increment only for an intentional update.
+#define PROJECT_CFG_STORAGE_UPDATE_GENERATION 0
+// <o> Parameter update mask <0-511>
+// <i> Bits: 0 AFE, 1 protection, 2 SOC, 3 other, 4 current K/B,
+// <i> 5 heat/cool, 6 SOC state, 7 reserved aging, 8 recent log.
+// <i> Keep mask 0 when generation 0. Lifetime statistics are preserved.
+#define PROJECT_CFG_STORAGE_UPDATE_MASK 0
 // </h>
 
 // <<< end of configuration section >>>
