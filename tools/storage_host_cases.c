@@ -13,7 +13,7 @@ typedef enum { FLASH_COMPLETE, FLASH_ERROR_PG } FLASH_Status;
 #define FLASH_FLAG_EOP 1
 #define FLASH_FLAG_PGERR 2
 #define FLASH_FLAG_WRPRTERR 4
-#define ERROR_EEPROM_STORE 1
+#include "System_Monitor.h"
 /* RESET_FLAGS */
 static UINT32 tick;
 static UINT32 SysTime_Get10msTickCount(void) { return tick; }
@@ -22,7 +22,19 @@ struct RS485MSG;
 #include "LogRecord.h"
 #define PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC 0
 static int mutations, cut_after=-1, errors, error_after_commit;
-static void System_ERROR_UserCallback(int error) { if(error==ERROR_EEPROM_STORE) ++errors; }
+static UINT8 host_active_errors[ERROR_NUM+1];
+static UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND error) {
+    if(error==ERROR_EEPROM_STORE) ++errors;
+    return 0U;
+}
+void SystemError_SetActive(enum SYSTEM_ERROR_COMMAND error, UINT8 active) {
+    if(error>=ERROR_AFE1 && error<=ERROR_NUM)
+        host_active_errors[error]=(UINT8)(active!=0U);
+    if(error==ERROR_EEPROM_STORE && active) ++errors;
+}
+UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND error) {
+    return (error>=ERROR_AFE1 && error<=ERROR_NUM) ? host_active_errors[error] : 0U;
+}
 static void FLASH_Unlock(void) {}
 static void FLASH_Lock(void) {}
 static void FLASH_ClearFlag(int flags) {}
@@ -59,7 +71,6 @@ INT16 g_i16CalibCoefB[KB_NUM];
 UINT8 SeriesNum;
 UINT32 g_u32CS_Res_AFE;
 AFE_Parameters_RS485_Typedef AFE_Parameters_RS485_Struction=AFE_PARAMETERS_RS485_STRUCTION_DEFAULT;
-#define ERROR_REMOVE_EEPROM_COM 0
 static UINT16 update_generation,update_mask;
 static char firmware_version[32]="storage-test-v1";
 #undef BMS_SOFTWARE_VERDION_DEFAULT
