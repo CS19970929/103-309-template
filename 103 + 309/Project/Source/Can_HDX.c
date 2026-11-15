@@ -17,6 +17,8 @@
 enum
 {
 	CAN_TX_TIMEOUT_TICKS = 20U,
+    CAN_REINIT_TICKS = 500U,
+    CAN_FAILURE_CONFIRM = 3U,
 	CAN_TX_QUEUE_SIZE = 32U,
 	COMM_TOOL_CAN_CMD_QUEUE_SIZE = 4U,
 	CAN_TX_SOURCE_PERIODIC = 0U,
@@ -63,7 +65,9 @@ typedef struct
 
 typedef struct
 {
-	UINT32 tick;
+    UINT32 tick;
+    UINT32 last_init_tick;
+    UINT8 ready, failures, successes;
 } CanRuntime;
 
 typedef struct
@@ -136,7 +140,7 @@ static void can_handle_rx_msg(const CanRxMsg *rx_msg);
 static void InitCan_GPIO(void);
 static void InitCan_NVIC(void);
 static void InitCan_Filter(void);
-static void InitCan_CAN1(void);
+static UINT8 InitCan_CAN1(void);
 
 static UINT8 can_tick_elapsed(UINT32 now_tick, UINT32 start_tick, UINT32 wait_ticks)
 {
@@ -258,6 +262,27 @@ static UINT8 can_queue_has_request(void)
 	return 0U;
 }
 
+/* Link errors are diagnostic; they must not change BMS MOS permits. */
+static void can_record_tx_result(UINT8 ok)
+{
+    if (ok)
+    {
+        s_runtime.failures=0U;
+        if (s_runtime.successes < CAN_FAILURE_CONFIRM)
+            ++s_runtime.successes;
+        if (s_runtime.successes >= CAN_FAILURE_CONFIRM)
+            SystemError_SetActive(ERROR_STATUS_CAN, 0U);
+    }
+    else
+    {
+        s_runtime.successes=0U;
+        if (s_runtime.failures < CAN_FAILURE_CONFIRM)
+            ++s_runtime.failures;
+        if (s_runtime.failures >= CAN_FAILURE_CONFIRM)
+            SystemError_SetActive(ERROR_STATUS_CAN, 1U);
+    }
+}
+
 static void can_service_tx(UINT32 now_tick)
 {
 	CanTxItem item;
@@ -268,11 +293,13 @@ static void can_service_tx(UINT32 now_tick)
 		status = CAN_TransmitStatus(CAN1, s_tx.mailbox);
 		if ((status == CAN_TxStatus_Ok) || (status == CAN_TxStatus_Failed))
 		{
+            can_record_tx_result((UINT8)(status == CAN_TxStatus_Ok));
 			can_clear_tx_done(s_tx.mailbox);
 			can_mark_tx_idle();
 		}
 		else if (can_tick_elapsed(now_tick, s_tx.start_tick, CAN_TX_TIMEOUT_TICKS))
 		{
+            can_record_tx_result(0U);
 			can_cancel_tx(s_tx.mailbox);
 			can_mark_tx_idle();
 		}
@@ -289,6 +316,7 @@ static void can_service_tx(UINT32 now_tick)
 		}
 		else
 		{
+            can_record_tx_result(0U);
 			can_mark_tx_idle();
 		}
 	}
@@ -912,20 +940,23 @@ static void InitCan_Filter(void)
 	CAN_FilterInit(&filter);
 }
 
-static void InitCan_CAN1(void)
+static UINT8 InitCan_CAN1(void)
 {
-	CAN_InitTypeDef can = g_board_can.init;
-
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
-	CAN_DeInit(CAN1);
-	(void)CAN_Init(CAN1, &can);
-	CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);
+    CAN_InitTypeDef can=g_board_can.init;
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+    CAN_DeInit(CAN1);
+    if (CAN_Init(CAN1, &can) != CAN_InitStatus_Success)
+        return 0U;
+    CAN_ITConfig(CAN1, CAN_IT_FMP0, ENABLE);
+    return 1U;
 }
 
 void InitCan(void)
 {
 	can_mark_tx_idle();
-	s_runtime.tick = 0U;
+    s_runtime.tick = 0U;
+    s_runtime.last_init_tick = SysTime_Get10msTickCount();
+    s_runtime.failures = s_runtime.successes = 0U;
 	s_comm_tool.write_pending = 0U;
 	s_comm_tool.enter_iap_delay_ticks = 0U;
 	comm_tool_stop_read_block_stream();
@@ -934,8 +965,9 @@ void InitCan(void)
 	hdx_clear_pending_requests();
 	InitCan_GPIO();
 	InitCan_NVIC();
-	InitCan_CAN1();
-	InitCan_Filter();
+    s_runtime.ready=InitCan_CAN1();
+    if (s_runtime.ready) InitCan_Filter();
+    SystemError_SetActive(ERROR_STATUS_CAN, (UINT8)!s_runtime.ready);
 	can_power_on();
 }
 
@@ -1005,7 +1037,16 @@ void App_Can(void)
 	UINT32 now_tick = SysTime_Get10msTickCount();
 	UINT8 app_cmd_data[8];
 
-	s_runtime.tick = now_tick;
+    s_runtime.tick = now_tick;
+    /* ABOM handles transient bus-off; reinitialize only after a sustained
+       fault or an earlier CAN_Init failure. */
+    if (!s_runtime.ready || (CAN1->ESR & CAN_ESR_BOFF))
+    {
+        SystemError_SetActive(ERROR_STATUS_CAN, 1U);
+        if ((UINT32)(now_tick - s_runtime.last_init_tick) >= CAN_REINIT_TICKS)
+            InitCan();
+        return;
+    }
 	if (comm_tool_take_cmd(app_cmd_data) != 0U)
 	{
 		comm_tool_handle_cmd_data(app_cmd_data);
