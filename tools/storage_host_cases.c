@@ -462,6 +462,18 @@ int main(void) {
     int writes,cut,i;
     UINT16 previous_soc;
     host_storage_init();
+    /* The first install may be interrupted at any erase or half-word write. */
+    update_generation=update_mask=0;
+    mutations=0;assert(StorageFlash_InitParameters());writes=mutations;
+    for(cut=0;cut<=writes;++cut) {
+        memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
+        mutations=0;cut_after=cut;(void)StorageFlash_InitParameters();cut_after=-1;
+        assert(StorageFlash_InitParameters());
+    }
+    memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
+    *(UINT16 *)FLASH_CONFIG_A=0x1111U;
+    assert(!StorageFlash_InitParameters()); /* Damaged data cannot be factory initialized. */
+    memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     Storage_BuildDefaultConfig(&old_value);
     new_value=old_value;
     ++new_value.rw.protect[0];
