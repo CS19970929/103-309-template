@@ -35,9 +35,14 @@ static UINT8 s_current_valid;
 #define FAULT_MOS_MAX_GAP_TICKS 30U
 #define FAULT_MOS_RECOVERY_TICKS 100U
 #define FAULT_MOS_CONFIRM_IDLE 0xFFFFU
+#define FAULT_MOS_SENSOR_TIMEOUT_TICKS 500U
+#define FAULT_MOS_SENSOR_RECOVER_SAMPLES 3U
 static UINT32 s_mos_tick;
 static UINT16 s_mos_confirm_ticks = FAULT_MOS_CONFIRM_IDLE;
 static UINT8 s_host_mos_off;
+static UINT8 s_mos_sensor_missing;
+static UINT8 s_mos_sensor_ok_samples;
+static UINT32 s_mos_sensor_missing_tick;
 
 UINT8 Fault_SetHostMosOff(UINT8 mask)
 {
@@ -57,6 +62,8 @@ void Fault_PauseMeasurements(void)
     s_current_valid = 0U;
     SOC_PauseCalibration();
     Fault_ResetMosConfirmation();
+    s_mos_sensor_missing = 0U;
+    s_mos_sensor_ok_samples = 0U;
 }
 
 UINT8 Fault_IsCurrentSampleFresh(void)
@@ -144,6 +151,7 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
 
     /* Common shutdowns must never be released by reverse current. */
     if (g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp ||
+        SystemError_IsActive(ERROR_STATUS_TEMP_BREAK) ||
         s_host_mos_off == 3U || (!charge_on && !discharge_on))
         return Fault_WriteMos(0U, 0U);
 
@@ -192,9 +200,25 @@ void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature)
 
     if (!sample_valid)
     {
+        s_mos_sensor_ok_samples = 0U;
+        if (!s_mos_sensor_missing)
+        {
+            s_mos_sensor_missing = 1U;
+            s_mos_sensor_missing_tick = now;
+        }
+        if ((UINT32)(now - s_mos_sensor_missing_tick) >= FAULT_MOS_SENSOR_TIMEOUT_TICKS)
+        {
+            SystemError_SetActive(ERROR_TEMP_BREAK, 1U);
+            close_ctlc();
+        }
         Fault_ResetMosConfirmation();
         return;
     }
+    s_mos_sensor_missing = 0U;
+    if (s_mos_sensor_ok_samples < FAULT_MOS_SENSOR_RECOVER_SAMPLES)
+        ++s_mos_sensor_ok_samples;
+    if (s_mos_sensor_ok_samples >= FAULT_MOS_SENSOR_RECOVER_SAMPLES)
+        SystemError_SetActive(ERROR_TEMP_BREAK, 0U);
     /* Keep legacy Flash records intact. Invalid old MOS settings use the
        existing factory trip/recovery/delay locally, without rewriting storage. */
     if (!Fault_MosParametersValid(&PRT_E2ROMParas))

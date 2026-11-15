@@ -5,8 +5,9 @@
 #define ADC_SAMPLE_PERIOD_TICKS    10U    /* 100 ms between sweeps. */
 #define ADC_CONVERSION_TIMEOUT_TICKS 3U   /* Bounded polling, including loop latency. */
 #define ADC_FILTER_SAMPLES         8U
+#define ADC_INIT_RETRY_TICKS       500U /* 5 s */
 
-enum ADC_STATE { ADC_OFF, ADC_SETTLING, ADC_WAIT, ADC_DISCARD, ADC_SAMPLING };
+enum ADC_STATE { ADC_OFF, ADC_RETRY, ADC_SETTLING, ADC_WAIT, ADC_DISCARD, ADC_SAMPLING };
 
 static struct {
     UINT32 tick;
@@ -70,7 +71,9 @@ void InitADC(void)
 
 failed:
     ADC_StopForLowPower();
-    System_ERROR_UserCallback(ERROR_ADC);
+    s_adc.tick = SysTime_Get10msTickCount();
+    s_adc.state = ADC_RETRY;
+    SystemError_SetActive(ERROR_ADC, 1U);
 }
 
 static void ADC_StartConversion(void)
@@ -87,6 +90,12 @@ void ADC_Task(void)
 
     if (s_adc.state == ADC_OFF)
         return;
+    if (s_adc.state == ADC_RETRY)
+    {
+        if ((UINT32)(SysTime_Get10msTickCount() - s_adc.tick) >= ADC_INIT_RETRY_TICKS)
+            InitADC();
+        return;
+    }
 
     elapsed = SysTime_Get10msTickCount() - s_adc.tick;
     if (s_adc.state == ADC_SETTLING || s_adc.state == ADC_WAIT)
@@ -128,7 +137,7 @@ void ADC_Task(void)
             s_adc.raw[s_adc.input] = (UINT16)((s_adc.sum - s_adc.min - s_adc.max) /
                                               (ADC_FILTER_SAMPLES - 2U));
             s_adc.ready[s_adc.input] = ADC_SAMPLE_READY;
-            System_ERROR_UserCallback(ERROR_REMOVE_ADC);
+            SystemError_SetActive(ERROR_ADC, 0U);
             if (++s_adc.input == ADC_INPUT_COUNT)
             {
                 s_adc.tick = SysTime_Get10msTickCount();
@@ -147,7 +156,7 @@ invalid:
     s_adc.ready[s_adc.input] = ADC_SAMPLE_INVALID;
     s_adc.tick = SysTime_Get10msTickCount();
     s_adc.state = ADC_WAIT;
-    System_ERROR_UserCallback(ERROR_ADC);
+    SystemError_SetActive(ERROR_ADC, 1U);
 }
 
 UINT8 ADC_TakeSample(enum ADC_INPUT input, UINT16 *raw)

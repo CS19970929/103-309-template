@@ -586,7 +586,13 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 	UINT32 u32temp = 0;
 
 	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
-	{ // demo代码返回1为OK，
+	{
+        UINT16 t1 = U16_SwapEndian(Registers_AFE1.Temp1);
+        UINT16 t2 = U16_SwapEndian(Registers_AFE1.Temp2);
+        /* The two fitted pack NTC channels are required; reject invalid data
+           before updating any published measurement. */
+        if (t1 == 0U || t2 == 0U || t1 >= 32769U || t2 >= 32769U)
+            return 1U;
 		for (i = 0; i < SeriesNum; i++)
 		{
 			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
@@ -598,9 +604,8 @@ UINT8 UpdateVoltageFromBqMaximo(void)
 		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp2)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp2));
 		UPDNLMT16(u32temp, 65535, 0);
 		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp3)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp3));
-		UPDNLMT16(u32temp, 65535, 0);
-		SH367309_Read_AFE1.u16TempBat[2] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
+        /* Third pack NTC is not fitted or reported on this board. */
+        SH367309_Read_AFE1.u16TempBat[2] = 0U;
 
 		// 电流要不要加滤波1s除以4，demo是这样的，现在先观察一下
 		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);

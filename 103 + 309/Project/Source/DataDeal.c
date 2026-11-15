@@ -215,7 +215,10 @@ void DataLoad_MosTemperature(void)
     UINT8 status = ADC_TakeSample(ADC_INPUT_MOS, &raw);
 
     if (status == ADC_SAMPLE_NONE)
+    {
+        Fault_UpdateMosTemperature(0U, 0U);
         return;
+    }
     if (status != ADC_SAMPLE_READY)
         goto invalid;
     /* Outside the characterized NTC table is unavailable, not confirmed heat. */
@@ -236,7 +239,6 @@ void DataLoad_MosTemperature(void)
     return;
 
 invalid:
-    System_ERROR_UserCallback(ERROR_ADC);
     Fault_UpdateMosTemperature(0U, 0U);
 }
 
