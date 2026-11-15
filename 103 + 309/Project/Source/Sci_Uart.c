@@ -15,6 +15,8 @@ struct SCI_PORT {
     UINT32 tx_started_us;
     volatile UINT16 tx_index, tx_length;
     volatile UINT8 protocol, frame_pending;
+    /* Diagnostic-only counters: never affect safety or wire protocol. */
+    volatile UINT16 rx_errors, bad_frames, tx_timeouts, last_sr_error;
 };
 static struct SCI_PORT s_port1 = {USART1, UART1_BAUD};
 static UINT8 s_baud_change_pending;
@@ -94,6 +96,8 @@ static void Sci_PortIRQ(struct SCI_PORT *port)
     UINT16 status=(UINT16)port->usart->SR;
     if (status & SCI_USART_ERRORS)
     {
+        port->last_sr_error=(UINT16)(status & SCI_USART_ERRORS);
+        if (port->rx_errors != 0xFFFFU) ++port->rx_errors;
         volatile UINT16 dummy=(UINT16)port->usart->DR; /* SR then DR clears errors. */
         (void)dummy;
         Sci_ArmReceiver(port);
@@ -139,7 +143,10 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port)
     {
         if ((UINT32)(now-port->tx_started_us) >
             (UINT32)port->tx_length*Sci_CharacterUs(port)+SCI_TX_MARGIN_US)
-            Sci_ArmReceiver(port); /* No reset-after-ACK when TX times out. */
+        {
+            if (port->tx_timeouts != 0xFFFFU) ++port->tx_timeouts;
+            Sci_ArmReceiver(port); /* Never reset or upgrade after a TX timeout. */
+        }
     }
     else if (!(port->usart->SR & USART_SR_RXNE))
     {
@@ -166,6 +173,7 @@ static UINT8 Sci_ServicePort(struct SCI_PORT *port)
         Sci_CustomerFrameValid(&port->message);
     if (!valid)
     {
+        if (port->bad_frames != 0xFFFFU) ++port->bad_frames;
         Sci_ArmReceiver(port);
         port->protocol=SCI_DISCARD; /* Do not execute a nested prefix in bad data. */
         return 0U;
