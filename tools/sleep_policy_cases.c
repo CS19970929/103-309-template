@@ -37,9 +37,24 @@ static UINT8 comm_counter,u8FlashUpdateFlag;
 static enum irqWakeup stop_source;
 static int scripted_key,current_wakeup;
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
+static int fake_storage_fault, fake_sensor_fault, fake_afe_healthy=1, fake_afe_fresh=1;
+static int rtc_init_ok=1, rtc_alarm_ok=1;
 static unsigned soc_empty_targets;
 #define ERROR_STATUS_AFE1 1
 #define ERROR_EEPROM_STORE 2
+#define ERROR_STATUS_EEPROM_STORE 3
+#define ERROR_STATUS_EEPROM_COM 4
+#define ERROR_STATUS_TEMP_BREAK 5
+static UINT8 SystemError_IsActive(int code) {
+    if(code==ERROR_STATUS_EEPROM_STORE) return (UINT8)fake_storage_fault;
+    if(code==ERROR_STATUS_TEMP_BREAK) return (UINT8)fake_sensor_fault;
+    return 0U;
+}
+static UINT8 AFE_IsHealthy(void) { return (UINT8)fake_afe_healthy; }
+static UINT8 AFE_IsDataFresh(void) { return (UINT8)fake_afe_fresh; }
+static void AFE_MonitorResumeAfterStop(void) {}
+static void close_ctlc(void);
+void SystemRuntime_PausePersistentFailureTimers(void);
 static UINT8 System_ERROR_UserCallback(int command) {
     if(command==ERROR_EEPROM_STORE) { ++storage_errors; return 0U; }
     return (UINT8)!afe_status_ok;
@@ -49,6 +64,7 @@ static void SOC_NotifyOverdischarge(void) { ++soc_empty_targets; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
+static void close_ctlc(void) { ctlc=0; }
 static struct { UINT16 time_enter_rtc; UINT32 rtc_sec_cnt; } sys_time={5,0};
 static struct { UINT16 u16Sleep_Vlow,u16Sleep_TimeVlow,u16Sleep_TimeNormal,u16Sleep_VNormal; } OtherElement={2600,1,10080,3200};
 static struct {
@@ -125,7 +141,7 @@ static void SystemRuntime_SetMosStatus(UINT8 chg,UINT8 dsg) {}
 static void Fault_ChangeToMCU(void) { g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=(UINT16)afe_uv; }
 /* AFE_WAKE_SOURCE */
 static UINT8 RtcSleep_PortHasAfeWake(enum irqWakeup *source) { return RtcSleep_AfePortHasAfeWake(source); }
-static void Init_RTC(void) {}
+static UINT8 Init_RTC(void) { return (UINT8)rtc_init_ok; }
 static void IOstatus_RTCMode(void) { adc_on=0; }
 static void InitWakeUp_RTCMode(void) {}
 static void InitWakeUp_Base(void) {}
@@ -135,7 +151,7 @@ static void InitTimer(void) { tick=0; }
 static void InitUSART_CommonUpper(void) {}
 static UINT8 SystemRuntime_IsDischargeMosOpen(void) { return 1; }
 static void RTC_ClearStopWakeup(void) { rtc_wake=0; }
-static void RTC_WKTimeConfig(void) {}
+static UINT8 RTC_WKTimeConfig(void) { return (UINT8)rtc_alarm_ok; }
 static UINT32 RTC_GetCounter(void) { return rtc_counter; }
 static void RtcSleep_PortEnterStop(void) { Sys_StopMode(); }
 static void initAFE1_IIC(void) {}
@@ -160,6 +176,10 @@ static void reset_case(void) {
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; soc_empty_targets=0; afe_status_ok=1; soc_now=55;
+    fake_storage_fault=fake_sensor_fault=0;
+    fake_afe_healthy=fake_afe_fresh=1;
+    rtc_init_ok=rtc_alarm_ok=1;
+    s_persistent_error_tracking=0U;
     OtherElement.u16Sleep_Vlow=2600; OtherElement.u16Sleep_TimeVlow=1;
     OtherElement.u16Sleep_TimeNormal=10080;
     expected_sleep_flag=0;
@@ -464,27 +484,35 @@ int main(void) {
     assert(runtime_seconds==g_stLowPowerRtcStatus.sleep && runtime_seconds>0);
     assert(sleep_log_seconds==runtime_seconds);
     puts("PASS idle: exact 7 days across STOP, minute range, RTC wrap, 256-frame wrap, charge/discharge/UART/CAN reset, ignored VNormal, RUN/HICCUP commit DEEP without ADC or RUN restore");
-    /* Persistent AFE/storage faults share this timer. Recovery cancels it;
-     * snapshot failure must still retain the DEEP reason and reset path. */
-    {
-        UINT16 delay_tick=0;
-        reset_case();
-        assert(MONITOR_AFE_SLEEP_DELAY_TICKS==1500U);
-        MonitorAFE_UpdateSleepDelay(1U,0);
-        for(i=0;i<MONITOR_AFE_SLEEP_DELAY_TICKS-1;++i)
-            MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
-        assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !deep_calls);
-        MonitorAFE_UpdateSleepDelay(0U,&delay_tick); assert(!delay_tick);
-        for(i=0;i<MONITOR_AFE_SLEEP_DELAY_TICKS-1;++i)
-            MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
-        assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
-        MonitorAFE_UpdateSleepDelay(1U,&delay_tick);
-        assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && !delay_tick);
-        sleep_save_ok=0U; rtc_sleep();
-        assert(deep_calls==1 && sleep_save_calls==1 && sleep_log_calls==1 && afe_sleep_calls==1);
-        assert(BootFlag_Read()==FLASH_DEEP_SLEEP_VALUE && bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE);
-        assert(!restore_calls && !adc_on && !zero_calls);
-    }
-    puts("PASS error sleep: 5-minute boundary, recovery restarts delay, AFE/storage timeout requests DEEP, failed snapshot retains sleep reason and reset");
+    /* Persistent storage and sensor faults use a real 10-ms clock delta;
+       recovery restarts the timeout without any 8-bit wraparound. */
+    reset_case();
+    fake_storage_fault=1;
+    SystemRuntime_ObservePersistentFailures();
+    tick=29999U;
+    SystemRuntime_ObservePersistentFailures();
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    fake_storage_fault=0;
+    SystemRuntime_ObservePersistentFailures();
+    fake_storage_fault=1; tick=40000U;
+    SystemRuntime_ObservePersistentFailures();
+    tick=69999U;
+    SystemRuntime_ObservePersistentFailures();
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    tick=70000U;
+    SystemRuntime_ObservePersistentFailures();
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    sleep_save_ok=0U; rtc_sleep();
+    assert(deep_calls==1 && sleep_save_calls==1 && sleep_log_calls==1);
+    assert(BootFlag_Read()==FLASH_DEEP_SLEEP_VALUE && bkp[BKP_DR4]==SOC_SAVE_FAILED_VALUE);
+
+    /* RTC configuration failure must restore RUN without executing WFI. */
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE;
+    rtc_alarm_ok=0; rtc_sleep();
+    assert(!stop_calls && restore_calls==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    reset_case(); g_stLowPowerRtcStatus.mode=NORMAL_MODE;
+    rtc_init_ok=0; rtc_sleep();
+    assert(!stop_calls && !restore_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    puts("PASS error sleep: fault timeouts, recovery, failed snapshot and RTC STOP guards");
     return 0;
 }

@@ -36,11 +36,11 @@ def main():
     code=code.replace('/* AFE_WAKE_SOURCE */',afe[afe.index('UINT8 RtcSleep_AfePortHasAfeWake('):])
     port=(SOURCE/'rtc_sleep_port.c').read_text(encoding='utf-8')
     code=code.replace('/* RESET_SLEEP_SOURCE */',function(port,'void RtcSleep_PortCommitResetSleep('))
-    data=(SOURCE/'DataDeal.c').read_text(encoding='utf-8')
-    monitor='\n'.join(line for line in data.splitlines() if line.startswith((
-        '#define MONITOR_AFE_TASK_PERIOD_MS ', '#define MONITOR_AFE_SLEEP_DELAY_SEC ',
-        '#define MONITOR_AFE_SLEEP_DELAY_TICKS ')))
-    code=code.replace('/* ERROR_SLEEP_SOURCE */',monitor+'\n'+function(data,'static void MonitorAFE_UpdateSleepDelay('))
+    monitor=(SOURCE/'System_Monitor.c').read_text(encoding='utf-8')
+    timer='static UINT32 s_persistent_error_tick;\nstatic UINT8 s_persistent_error_tracking;\n'
+    timer+=function(monitor,'void SystemRuntime_PausePersistentFailureTimers(')+'\n'
+    timer+=function(monitor,'void SystemRuntime_ObservePersistentFailures(')
+    code=code.replace('/* ERROR_SLEEP_SOURCE */',timer)
     path=output/'sleep.c'; path.write_text(code,encoding='utf-8')
     for mode in (0,1):
         exe=output/f'sleep-{mode}.exe'

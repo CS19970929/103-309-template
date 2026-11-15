@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+typedef uint32_t UINT32;
 
 #define RCC_APB1Periph_PWR 1
 #define RCC_APB1Periph_TIM3 2
@@ -19,6 +20,7 @@ static void TIM_ClearITPendingBit(int timer,int flags) {}
 static void LowPower_ClearWakeupPending(void) {
     if(inject_edge) g_stLowPowerRtcStatus.comm_wakeup=1U;
 }
+static UINT32 __get_PRIMASK(void) { return (UINT32)irq_masked; }
 static void __disable_irq(void) { irq_masked=1; }
 static void __enable_irq(void) { assert(clock_restores==1); irq_masked=0; }
 static void PWR_EnterSTOPMode(int regulator,int entry) {
