@@ -349,6 +349,7 @@ void Fault_UpdateMosTemperature(UINT8 sample_valid, UINT16 temperature);
 void Fault_MosSensorWatchdog(void);
 void Fault_UpdatePackTemperatureResult(UINT8 sample_result);
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on);
+UINT8 Fault_CanOpenCtl(void);
 UINT8 Fault_SetHostMosOff(UINT8 mask);
 
 #endif	/* FAULT_H */

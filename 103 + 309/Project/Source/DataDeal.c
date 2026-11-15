@@ -754,7 +754,8 @@ void App_AFEGet(void)
     mos_ok = Fault_ApplyMosPermits(1U, 1U);
     if (data_ok && status_ok)
         Sci_CustomerUpdateCounters();
-    if (mos_ok && AFE_IsHealthy() && data_ok && status_ok)
+    if (mos_ok && AFE_IsHealthy() && data_ok && status_ok &&
+        Fault_CanOpenCtl())
         open_ctlc();
     AFE_ApplyPendingConfiguration(data_ok, status_ok);
 }

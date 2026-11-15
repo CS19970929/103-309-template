@@ -163,6 +163,14 @@ static UINT8 Fault_WriteMos(UINT8 charge_on, UINT8 discharge_on)
     return ok;
 }
 
+UINT8 Fault_CanOpenCtl(void)
+{
+    return (UINT8)(s_host_mos_off != 3U &&
+        !g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp &&
+        !SystemError_IsActive(ERROR_STATUS_TEMP_BREAK) &&
+        !SystemError_IsActive(ERROR_STATUS_AFE1));
+}
+
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
 {
     UINT8 reverse_valid = (UINT8)(s_current_valid &&
