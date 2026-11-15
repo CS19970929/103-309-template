@@ -128,7 +128,7 @@ static void lp_update_sleep_request(void)
     if (SleepDeal_NormalIdleExpired((UINT8)(
         (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |
          LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_UPGRADE |
-         LP_BLOCK_AFE | LP_BLOCK_STORAGE | LP_BLOCK_FAULT))!=0U)))) {
+         LP_BLOCK_AFE | LP_BLOCK_STORAGE | LP_BLOCK_FAULT))!=0U))) {
         LowPower_Request(DEEP_MODE);
         return;
     }
