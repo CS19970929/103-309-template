@@ -232,47 +232,46 @@ static UINT8 RTC_ClockConfig(UINT8 need_full_init)
 	return result;
 }
 
-static void RTC_ClearAlarmPending(void)
+static UINT8 RTC_ClearAlarmPending(void)
 {
-	RTC_ClearITPendingBit(RTC_IT_ALR);
-	RTC_ClearFlag(RTC_FLAG_ALR);
-	RTC_WaitForLastTaskSafe();
-	EXTI_ClearITPendingBit(EXTI_Line17);
-	NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    RTC_ClearITPendingBit(RTC_IT_ALR);
+    RTC_ClearFlag(RTC_FLAG_ALR);
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    EXTI_ClearITPendingBit(EXTI_Line17);
+    NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    return 1U;
 }
 
-static void RTC_DisableSecondInterrupt(void)
+static UINT8 RTC_DisableSecondInterrupt(void)
 {
-	RTC_WaitForLastTaskSafe();
-	RTC_ClearITPendingBit(RTC_IT_SEC);
-	RTC_WaitForLastTaskSafe();
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    RTC_ITConfig(RTC_IT_SEC, DISABLE);
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    RTC_ClearITPendingBit(RTC_IT_SEC);
+    return RTC_WaitForLastTaskSafe();
 }
 
-static void RTC_DisableAlarmInterrupt(void)
+static UINT8 RTC_DisableAlarmInterrupt(void)
 {
-	RTC_ITConfig(RTC_IT_ALR, DISABLE);
-	//todo ??
-	RTC_WaitForLastTaskSafe();
-	RTC_ClearAlarmPending();
+    RTC_ITConfig(RTC_IT_ALR, DISABLE);
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    return RTC_ClearAlarmPending();
 }
 
-static void RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
+static UINT8 RTC_EnableAlarmAfterSeconds(UINT32 wake_seconds)
 {
-	UINT32 start_counter;
-
-	if (wake_seconds == 0U)
-	{
-		wake_seconds = 1U;
-	}
-	RTC_ClearAlarmPending();
-	start_counter = RTC_GetCounter();
-	s_rtc.stop_start_counter = start_counter;
-	s_rtc.last_wakeup_seconds = 0U;
-	RTC_SetAlarm(start_counter + wake_seconds);
-	RTC_WaitForLastTaskSafe();
-	RTC_ITConfig(RTC_IT_ALR, ENABLE);
-	RTC_WaitForLastTaskSafe();
-	NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    UINT32 start_counter;
+    if (wake_seconds == 0U) wake_seconds = 1U;
+    if (!RTC_ClearAlarmPending()) return 0U;
+    start_counter = RTC_GetCounter();
+    s_rtc.stop_start_counter = start_counter;
+    s_rtc.last_wakeup_seconds = 0U;
+    RTC_SetAlarm(start_counter + wake_seconds);
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    RTC_ITConfig(RTC_IT_ALR, ENABLE);
+    if (!RTC_WaitForLastTaskSafe()) return 0U;
+    NVIC_ClearPendingIRQ(RTCAlarm_IRQn);
+    return 1U;
 }
 
 void RTC_TimeConfig(void)
@@ -319,7 +318,7 @@ UINT32 RTC_GetWakeupPeriodSeconds(void)
 {
 	if(g_stLowPowerRtcStatus.mode == NORMAL_MODE)
 	{
-		return 20;
+		return 10; /* IWDG keeps running in STOP; leave LSI tolerance margin. */
 	}
 	return RTC_WAKEUP_DEFAULT_SECONDS;
 }
@@ -329,15 +328,20 @@ UINT32 RTC_GetLastWakeupPeriodSeconds(void)
 	return s_rtc.last_wakeup_seconds;
 }
 
-void RTC_WKTimeConfig(void)
+UINT8 RTC_WKTimeConfig(void)
 {
-	UINT32 wake_seconds;
-
-	RTC_EnableBackupAccess();
-	RTC_DisableSecondInterrupt();
-	RTC_DisableAlarmInterrupt();
-	wake_seconds = RTC_GetWakeupPeriodSeconds();
-	RTC_EnableAlarmAfterSeconds(wake_seconds);
+    UINT32 wake_seconds;
+    RTC_EnableBackupAccess();
+    if (!RTC_DisableSecondInterrupt() || !RTC_DisableAlarmInterrupt())
+        goto failed;
+    wake_seconds = RTC_GetWakeupPeriodSeconds();
+    if (!RTC_EnableAlarmAfterSeconds(wake_seconds))
+        goto failed;
+    return 1U;
+failed:
+    (void)RTC_DisableAlarmInterrupt();
+    SystemError_SetActive(ERROR_LSE, 1U);
+    return 0U;
 }
 
 void RTC_DisableStopWakeup(void)
@@ -357,8 +361,8 @@ void RTC_RestoreRunInterrupts(void)
 	RTC_WaitForLastTaskSafe();
 }
 
-void Init_RTC(void)
-{ // 使能PWR外设时钟，待机模式，RTC，看门狗
+UINT8 Init_RTC(void)
+{ // RTC must be ready before STOP; never hide a failed clock setup.
 	UINT8 need_full_init;
 	UINT8 clock_status;
 
@@ -373,14 +377,19 @@ void Init_RTC(void)
 		clock_status = RTC_ClockConfig(need_full_init);
 	}
 
-	if (clock_status == RTC_CLOCK_INIT_FAILED)
-	{
-		return;
-	}
+	if (clock_status == RTC_CLOCK_INIT_FAILED || clock_status == RTC_CLOCK_NEED_REINIT)
+    {
+        SystemError_SetActive(ERROR_LSE, 1U);
+        return 0U;
+    }
 
 	if (need_full_init)
 	{ // 读取备份里面的值是否被写过。
 		RTC_TimeConfig();
+        if (!RTC_WaitForLastTaskSafe()) {
+            SystemError_SetActive(ERROR_LSE, 1U);
+            return 0U;
+        }
 		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
 	}
 	else
@@ -395,9 +404,16 @@ void Init_RTC(void)
 		}
 		RCC_ClearFlag();
 	}
-	RTC_ClearAlarmPending();
+    if (!RTC_ClearAlarmPending()) {
+        SystemError_SetActive(ERROR_LSE, 1U);
+        return 0U;
+    }
 	RTC_AlarmConfig();
 	RTC_NVIC_Config();
+    /* Record LSI fallback without treating a working fallback as STOP failure. */
+    SystemError_SetActive(ERROR_LSE, (UINT8)
+        ((RCC->BDCR & RCC_BDCR_RTCSEL) == RCC_BDCR_RTCSEL_LSI));
+    return 1U;
 }
 
 UINT8 RTC_IsStopWakeup(void)

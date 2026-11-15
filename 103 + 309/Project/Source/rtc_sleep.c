@@ -178,12 +178,12 @@ static bool rtc_sleep_has_wakeup_exception(void)
     return false;
 }
 
-static void rtc_sleep_prepare_rtc(void)
+static bool rtc_sleep_prepare_rtc(void)
 {
+    if (!Init_RTC()) return false;
     g_stLowPowerRtcStatus.comm_wakeup=0U;
     SleepDeal_ResetKeyState(0U);
     g_stLowPowerRtcStatus.sleep = 0U;
-    Init_RTC();
     IOstatus_RTCMode();
     if (g_stLowPowerRtcStatus.mode == HICCUP_MODE)
     {
@@ -198,13 +198,14 @@ static void rtc_sleep_prepare_rtc(void)
     (void)LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
     MCUO_DEBUG_LED1 = 1;
+    return true;
 }
 
 static bool rtc_sleep_run_hiccup_cycle(void)
 {
     // todo !!!!
     RTC_ClearStopWakeup();
-    RTC_WKTimeConfig();
+    if (!RTC_WKTimeConfig()) return false; /* Restore RUN, never enter blind STOP. */
     sys_time.rtc_sec_cnt = RTC_GetCounter();
     g_irq_t = NO_IRQ;
 
@@ -293,7 +294,10 @@ void rtc_sleep(void)
         break;
     case NORMAL_MODE:
     case HICCUP_MODE:
-        rtc_sleep_prepare_rtc();
+        if (!rtc_sleep_prepare_rtc()) {
+            LowPower_Request(NO_SLEEP);
+            break;
+        }
         if (sleep_mode == NORMAL_MODE)
             MCUO_AFE_CTLC = 0;
 

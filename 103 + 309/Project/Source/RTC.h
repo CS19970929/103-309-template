@@ -36,10 +36,10 @@ UINT32 RTC_GetWakeupPeriodSeconds(void);
 UINT32 RTC_GetLastWakeupPeriodSeconds(void);
 UINT8 RTC_IsStopWakeup(void);
 void RTC_ClearStopWakeup(void);
-void RTC_WKTimeConfig(void);
+UINT8 RTC_WKTimeConfig(void);
 void RTC_DisableStopWakeup(void);
 void RTC_RestoreRunInterrupts(void);
-void Init_RTC(void);
+UINT8 Init_RTC(void);
 
 #endif	/* RTC_H */
 
