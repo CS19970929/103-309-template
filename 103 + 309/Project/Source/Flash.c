@@ -273,15 +273,15 @@ static UINT32 Storage_SelectConfig(void)
     const STORAGE_FLASH_CONFIG_DATA *b=(const void *)(FLASH_CONFIG_B+sizeof(STORAGE_RECORD));
     UINT8 va=Storage_RecordValid(FLASH_CONFIG_A,STORAGE_CONFIG_MAGIC,sizeof(*a));
     UINT8 vb=Storage_RecordValid(FLASH_CONFIG_B,STORAGE_CONFIG_MAGIC,sizeof(*b));
-    /* Never hide a committed in-progress reset by falling back to an old page. */
-    if (va && !Storage_ConfigValid(a)) {
-        if (a->initializing) return 0U;
-        va=0U;
+    UINT32 latest=Storage_SelectPair(FLASH_CONFIG_A,FLASH_CONFIG_B,
+                                      STORAGE_CONFIG_MAGIC,sizeof(*a));
+    /* Only the newest committed pending transaction can block recovery. */
+    if (latest) {
+        const STORAGE_FLASH_CONFIG_DATA *pending=(const void *)(latest+sizeof(STORAGE_RECORD));
+        if (pending->initializing && !Storage_ConfigValid(pending)) return 0U;
     }
-    if (vb && !Storage_ConfigValid(b)) {
-        if (b->initializing) return 0U;
-        vb=0U;
-    }
+    if (va && !Storage_ConfigValid(a)) va=0U;
+    if (vb && !Storage_ConfigValid(b)) vb=0U;
     if (!va) return vb ? FLASH_CONFIG_B : 0U;
     if (!vb) return FLASH_CONFIG_A;
     return Storage_Newer(((const STORAGE_RECORD *)FLASH_CONFIG_B)->sequence,

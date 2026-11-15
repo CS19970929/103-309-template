@@ -506,6 +506,17 @@ int main(void) {
         assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&old_value,sizeof(loaded)));
         assert(Storage_SaveConfig(&new_value));
         assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&new_value,sizeof(loaded)));
+        unsafe=old_value;
+        unsafe.initializing=STORAGE_PARAM_RESET_SOC;
+        unsafe.rw.protect[0]=0xFFFFU;
+        /* An invalid older pending record must not mask a newer valid record. */
+        assert(Storage_Erase(FLASH_CONFIG_A));
+        assert(Storage_WriteRecord(FLASH_CONFIG_A,STORAGE_CONFIG_MAGIC,1U,&unsafe,sizeof(unsafe)));
+        assert(Storage_LoadConfig(&loaded) && !memcmp(&loaded,&new_value,sizeof(loaded)));
+        /* An invalid latest pending transaction must not be silently rolled back. */
+        assert(Storage_Erase(FLASH_CONFIG_A));
+        assert(Storage_WriteRecord(FLASH_CONFIG_A,STORAGE_CONFIG_MAGIC,3U,&unsafe,sizeof(unsafe)));
+        assert(!Storage_LoadConfig(&loaded));
     }
     restore_flash();
     assert(Storage_Erase(FLASH_CONFIG_B));
