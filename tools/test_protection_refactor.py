@@ -55,6 +55,21 @@ static GPIO_TypeDef gpio_a, gpio_b;
 #define RESET 0
 #define ERROR_ADC 1
 #define ERROR_REMOVE_ADC 0
+#define ERROR_AFE1 2
+#define ERROR_STATUS_AFE1 3
+#define ERROR_TEMP_BREAK 4
+#define ERROR_STATUS_TEMP_BREAK 5
+#define ERROR_RESERVED_21 6
+static UINT8 test_error_state[8];
+static void SystemError_SetActive(int code, UINT8 active) {
+    if(code==ERROR_AFE1 || code==ERROR_TEMP_BREAK || code==ERROR_RESERVED_21)
+        test_error_state[code]=active ? 1U : 0U;
+}
+static UINT8 SystemError_IsActive(int code) {
+    if(code==ERROR_STATUS_AFE1) return test_error_state[ERROR_AFE1];
+    if(code==ERROR_STATUS_TEMP_BREAK) return test_error_state[ERROR_TEMP_BREAK];
+    return 0U;
+}
 static UINT32 tick;
 static int eoc, calibration_stuck, selected_channel, conversions, adc_enabled, adc_clock;
 static UINT16 conversion;
@@ -126,6 +141,8 @@ int main(void) {
 
 FAULT_STUBS = r'''
 static void SOC_PauseCalibration(void) {}
+static int forced_ctl_close;
+static void close_ctlc(void) { ++forced_ctl_close; }
 static struct {
     union MDLCHGFAULT_REG unMdlFault_Second, unMdlFault_Third;
     UINT16 u16Ichg, u16IDischg;
@@ -220,7 +237,9 @@ static void reset_case(void) {
     PRT_E2ROMParas.u16TmosOTp_Rcv=1200;
     PRT_E2ROMParas.u16TmosOTp_Filter=100;
     s_charge_recovery_ticks=s_discharge_recovery_ticks=0;
-    s_host_mos_off=0; tick=0; Fault_PauseMeasurements();
+    s_host_mos_off=0; tick=0; forced_ctl_close=0;
+    memset(test_error_state,0,sizeof(test_error_state));
+    Fault_PauseMeasurements();
 }
 int main(void) {
     unsigned n; int i;
@@ -469,6 +488,7 @@ static struct { UINT16 u16Sys_CS_Res_Num, u16Sys_CS_Res; } OtherElement={2,2};
 static UINT32 g_u32CS_Res_AFE;
 static UINT8 SeriesNum=16, ucMTPBuffer[26], hardware_rom[25];
 static int MCUO_AFE_VPRO, ctl, resets, startup_calls, calibration_calls;
+static int parameter_apply_requests;
 static int tr_fail, ready_fail, rom_write_fail, permit_fail, heat_latched;
 static int rom_reads, rom_read_fail, saved, save_fail, rom_writes, permits;
 static int MTPRead(int addr,int len,UINT8 *p) {
@@ -500,6 +520,7 @@ static void reset_afe(void) {
     AFE_PARAM_WRITE_Flag=1; tr_fail=ready_fail=rom_write_fail=permit_fail=heat_latched=0;
     rom_reads=rom_read_fail=rom_writes=saved=save_fail=resets=startup_calls=calibration_calls=permits=0;
     ctl=1;
+    parameter_apply_requests=0;
 }
 int main(void) {
     struct RS485MSG request;
@@ -541,18 +562,21 @@ int main(void) {
     request.u16Buffer[5]=1; request.u16Buffer[6]=1;
     Sci_WrRegs_0x10_AFE_Parameters(0,&request);
     assert(request.ErrorType==RS485_ERROR_CMD_INVALID && saved==0);
-    reset_afe(); rom_write_fail=1; App_SH367309();
-    assert(AFE_PARAM_WRITE_Flag && ctl==0 && startup_calls==0);
-    /* Successful ROM writes but failed readback: equal-profile retry must reopen
-       only after readiness and the MOS permit have both been confirmed. */
-    reset_afe(); rom_read_fail=3; App_SH367309();
-    assert(AFE_PARAM_WRITE_Flag && ctl==0 && startup_calls==0);
-    rom_read_fail=0; heat_latched=1; App_SH367309();
-    assert(!AFE_PARAM_WRITE_Flag && ctl==1 && startup_calls==1 && permits==0);
-    reset_afe(); ready_fail=1; InitAFE1(); assert(ctl==0 && permits==0);
-    reset_afe(); permit_fail=1; InitAFE1(); assert(ctl==0 && permits==0);
-    reset_afe(); heat_latched=1; InitAFE1(); assert(ctl==1 && permits==0);
-    puts("PASS AFE: 600 ms OCD1, wide timing sweep, NTC bounds, TR/ROM/readback failures, retry and startup gates");
+    reset_afe(); rom_write_fail=1;
+    assert(!SH367309_UpdataAfeConfig());
+    assert(AFE_PARAM_WRITE_Flag && ctl==0 && resets==0);
+    /* Explicit parameter apply is not a normal communication recovery.
+       Readback failure retains a pending request and never reopens CTL. */
+    reset_afe(); rom_read_fail=3;
+    assert(!SH367309_UpdataAfeConfig());
+    assert(AFE_PARAM_WRITE_Flag && ctl==0 && resets==0);
+    rom_read_fail=0; heat_latched=1;
+    assert(SH367309_UpdataAfeConfig());
+    assert(!AFE_PARAM_WRITE_Flag && ctl==0 && startup_calls==1 && permits==0);
+    reset_afe(); ready_fail=1; InitAFE1(); assert(ctl==0);
+    reset_afe(); permit_fail=1; InitAFE1(); assert(ctl==0);
+    reset_afe(); heat_latched=1; InitAFE1(); assert(ctl==0);
+    puts("PASS AFE: NTC bounds, write/readback failures, no reset after failed ROM, closed CTL at boot");
     return 0;
 }
 '''
@@ -690,7 +714,9 @@ def main():
         permits=heat_latched ? 0 : 3; return 1;
     }\n'''
     run_c('afe', ADC_STUBS + AFE_STUBS + afe_header +
-          'UINT8 MosStartup_ApplyInitialState(void);\n' + ntc + afe_prefix + afe_source +
+          'UINT8 MosStartup_ApplyInitialState(void);\n' + ntc + afe_prefix +
+          'static void AFE_RequestParameterApply(void) { ++parameter_apply_requests; AFE_PARAM_WRITE_Flag=1; ctl=0; }\n' +
+          afe_source +
           permit_stub + startup + app + AFE_TESTS, output, env, compiler)
     rtc = function((SOURCE / 'rtc_sleep_afe_sh367309.c').read_text(encoding='utf-8'),
                    'UINT8 RtcSleep_AfePortUpdateRtcData(')

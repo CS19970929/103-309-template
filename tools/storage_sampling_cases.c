@@ -8,7 +8,14 @@ static struct { struct { struct { UINT8 b1CellUvp; } bits; } unMdlFault_Third; }
 #define MCUO_DEBUG_LED1 led
 static int SysTime_Take200msTaskPeriod(void) { return period; }
 static UINT8 UpdateVoltageFromBqMaximo(void) { return (UINT8)voltage_failed; }
-static void MonitorAFE(int n,UINT8 failed) { assert(failed==voltage_failed); }
+static void AFE_MonitorUpdate(UINT8 data_ok,UINT8 status_ok) {
+    assert(data_ok==(UINT8)!voltage_failed && status_ok==(UINT8)fault_valid);
+}
+static UINT8 AFE_IsHealthy(void) { return 0U; }
+static void open_ctlc(void) {}
+static void AFE_ApplyPendingConfiguration(UINT8 data_ok,UINT8 status_ok) {
+    assert(data_ok==(UINT8)!voltage_failed && status_ok==(UINT8)fault_valid);
+}
 static void DataLoad_CellVolt(void) {}
 static void DataLoad_CellVoltMaxMinFind(void) {}
 static void DataLoad_Temperature(void) {}
@@ -17,7 +24,7 @@ static void DataLoad_Current(void) {}
 static void Fault_UpdateCurrentProtection(UINT8 valid) { assert(valid==!voltage_failed); }
 static UINT8 App_SH367309(void) { return (UINT8)fault_valid; }
 static void charger_detect_and_keyLogi_200ms(void) {}
-static void Fault_ApplyMosPermits(UINT8 a,UINT8 b) { ++mos_applied; }
+static UINT8 Fault_ApplyMosPermits(UINT8 a,UINT8 b) { ++mos_applied; return 1U; }
 static void Sci_CustomerUpdateCounters(void) { assert(mos_applied); ++updated; }
 static void App_SOC(UINT8 sample_valid,UINT8 fault_valid) { soc_processed=1; }
 static void SleepDeal_UpdateOverdischarge(UINT8 active) { assert(soc_processed); ++uv_updates; }
