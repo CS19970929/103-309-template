@@ -97,25 +97,25 @@ def main():
     guard_source = guards / 'guard.c'
     guard_source.write_text('#include "Project_BuildGuard.h"\n')
     config_text = (SOURCE / 'conf/Project_Config.h').read_text(encoding='utf-8')
-    version_macros = re.findall(r'^#define (PROJECT_CFG_PARAM_\w+_VERSION) ', config_text, re.M)
-    assert len(version_macros) == 9
-
     def check_guard(values, expected_ok):
         configured = config_text
         for name, value in values.items():
-            configured = re.sub(r'(^#define ' + name + r')\s+[^\n]+',
+            configured = re.sub(r'(^#define ' + name + r')\\s+[^\\n]+',
                                 lambda match: match[1] + ' ' + str(value), configured, flags=re.M)
         (guards / 'Project_Config.h').write_text(configured, encoding='utf-8')
         checked = subprocess.run([str(compiler), '/nologo', '/EP', '/TC', str(guard_source)],
                                  cwd=guards, env=env, capture_output=True)
         assert (checked.returncode == 0) == expected_ok, checked.stderr.decode(errors='replace')
 
+    gen = 'PROJECT_CFG_STORAGE_UPDATE_GENERATION'
+    mask = 'PROJECT_CFG_STORAGE_UPDATE_MASK'
     check_guard({}, True)
-    check_guard(dict.fromkeys(version_macros, 65534), True)
-    for name in version_macros:
-        for bad_value in (-1, 65535):
-            check_guard({name: bad_value}, False)
-    print('PASS module version guards: default, maximum and all 18 invalid configurations')
+    check_guard({gen: 65534, mask: 511}, True)
+    for values in ({gen: -1}, {gen: 65535}, {mask: -1}, {mask: 512},
+                   {gen: 1, mask: 0}, {gen: 0, mask: 1}):
+        check_guard(values, False)
+    print('PASS storage update generation/mask build guards')
+
     task = (SOURCE / 'DataDeal.c').read_text(encoding='utf-8')
     task = task[task.index('void App_AFEGet(void)'):]
     # App_AFEGet is currently the last definition; use its balanced body only.

@@ -37,7 +37,7 @@ static void persistence_prepare(void)
     STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12};
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
-    memset(s_param_versions,0,sizeof(s_param_versions));reset_on_version=0;
+    update_generation=update_mask=0;
     cut_after=-1;error_after_commit=0;
     persistence_boot();
     assert(StorageFlash_LoadSocData(&data));
@@ -199,7 +199,7 @@ static void test_soc_cycle_persistence(void)
         mutations=0;persistence_boot();assert(!mutations);++recovery_cuts;
     }
     /* Complete a committed cycle command before a SOC module default update. */
-    restore_flash();s_param_versions[STORAGE_PARAM_SOC]=123;
+    restore_flash();update_generation=123U;update_mask=1U<<STORAGE_PARAM_SOC;
     persistence_boot();assert(StorageFlash_LoadSocData(&data));
     assert(data.u32CycleTimes==4200 && g_stCellInfoReport.SocElement.u16Cycle_times==42);
     assert(OtherElement.u16Soc_Cycle_times!=42); /* New config default did not cancel the command. */
