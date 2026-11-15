@@ -154,7 +154,7 @@ UINT8 SH367309_SetMosPermits(UINT8 charge_on, UINT8 discharge_on)
         (charge_on ? 0x10U : 0U) | (discharge_on ? 0x20U : 0U)));
 }
 
-void SH367309_DriverMos_Ctrl(GPIO_Type type, UINT8 on)
+UINT8 SH367309_DriverMos_Ctrl(GPIO_Type type, UINT8 on)
 {
     UINT8 mask;
     switch (type)
@@ -162,9 +162,9 @@ void SH367309_DriverMos_Ctrl(GPIO_Type type, UINT8 on)
     case GPIO_PreCHG: mask = 0x40U; break;
     case GPIO_CHG: mask = 0x10U; break;
     case GPIO_DSG: mask = 0x20U; break;
-    default: return;
+    default: return 0U;
     }
-    SH367309_WriteConfBits(mask, on ? mask : 0U);
+    return SH367309_WriteConfBits(mask, on ? mask : 0U);
 }
 
 static void SH367309_RecordFaultOnActive(UINT8 *latched, UINT8 active, enum FaultFlag fault)

@@ -1169,8 +1169,10 @@ void App_FlashUpdate(void)
 {
 	if (1 == u8FlashUpdateFlag)
 	{
-		SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
-		SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
+		/* Hardware CTL remains low through the IAP transition. */
+		close_ctlc();
+		(void)SH367309_DriverMos_Ctrl(GPIO_CHG, 0);
+		(void)SH367309_DriverMos_Ctrl(GPIO_DSG, 0);
 		__delay_ms(10);
 		u8FlashUpdateFlag = 0;
 		__disable_fault_irq();

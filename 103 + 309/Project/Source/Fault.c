@@ -118,6 +118,17 @@ void Fault_UpdateCurrentProtection(UINT8 sample_valid)
 
 }
 
+/* All software MOS requests reach this readback-checked hardware writer.
+ * Reserved error 21 is used only as an internal MOS-apply diagnostic. */
+static UINT8 Fault_WriteMos(UINT8 charge_on, UINT8 discharge_on)
+{
+    UINT8 ok = SH367309_SetMosPermits(charge_on, discharge_on);
+    SystemError_SetActive(ERROR_RESERVED_21, (UINT8)!ok);
+    if (!ok && (!charge_on || !discharge_on))
+        close_ctlc(); /* CTLC=3 safety fallback, subject to board validation. */
+    return ok;
+}
+
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
 {
     UINT8 reverse_valid = (UINT8)(s_current_valid &&
@@ -125,10 +136,16 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     UINT8 charge_block;
     UINT8 discharge_block;
 
+    if (SystemError_IsActive(ERROR_STATUS_AFE1))
+    {
+        close_ctlc();
+        return 0U;
+    }
+
     /* Common shutdowns must never be released by reverse current. */
     if (g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp ||
         s_host_mos_off == 3U || (!charge_on && !discharge_on))
-        return SH367309_SetMosPermits(0U, 0U);
+        return Fault_WriteMos(0U, 0U);
 
     /* Common-port reverse conduction releases a directional request temporarily;
      * keep the request/latch so it applies again when reverse current stops. */
@@ -147,7 +164,7 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellDischgUtp ||
         SH367309_Reg_Store.REG_BSTATUS1.bits.SC) &&
         !(reverse_valid && g_stCellInfoReport.u16Ichg >= FAULT_REVERSE_CURRENT_A10));
-    return SH367309_SetMosPermits((UINT8)!charge_block, (UINT8)!discharge_block);
+    return Fault_WriteMos((UINT8)!charge_block, (UINT8)!discharge_block);
 }
 
 UINT8 Fault_MosParametersValid(const struct PRT_E2ROM_PARAS *parameters)

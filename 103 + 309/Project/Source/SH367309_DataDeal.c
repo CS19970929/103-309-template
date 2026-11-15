@@ -259,11 +259,15 @@ bool SH367309_UpdataAfeConfig(void)
 			MCUO_AFE_VPRO = 0;
 			Delay1ms(1);
 
+			/* No reset on failed/partial EEPROM programming. */
 			close_ctlc();
-			AFE_Reset();
-			Delay1ms(5);
-			if (AFE_IsReady() != 0U)
-				ret = false;
+			if (ret)
+			{
+				AFE_Reset();
+				Delay1ms(5);
+				if (AFE_IsReady() != 0U)
+					ret = false;
+			}
 			if (ret && !MosStartup_ApplyInitialState())
 				ret = false;
 			if (!ret)
