@@ -57,25 +57,6 @@ static UINT16 FlashReadOneHalfWord(UINT32 faddr);
 #define APP_UPGRADE_MAILBOX_MAGIC ((UINT32)0x49415031)
 #define APP_UPGRADE_MAILBOX_REQUEST ((UINT32)0x5AA55AA5)
 typedef struct { UINT32 magic, magic_inv, request, request_inv, crc; } APP_UPGRADE_MAILBOX;
-typedef struct { volatile UINT8 busy; } FLASH_RUNTIME;
-
-static FLASH_RUNTIME s_flash;
-
-static void StorageFlash_BeginWrite(void)
-{
-	s_flash.busy = 1U;
-}
-
-static void StorageFlash_EndWrite(void)
-{
-	s_flash.busy = 0U;
-}
-
-UINT8 StorageFlash_IsBusy(void)
-{
-	return s_flash.busy;
-}
-
 static FLASH_Status FlashErasePageVerified(uint32_t page_addr)
 {
 	UINT32 offset;
@@ -281,10 +262,10 @@ static UINT8 Storage_SaveConfig(const STORAGE_FLASH_CONFIG_DATA *data)
         sequence=((const STORAGE_RECORD *)address)->sequence+1U;
     }
     target=address==FLASH_CONFIG_A ? FLASH_CONFIG_B : FLASH_CONFIG_A;
-    StorageFlash_BeginWrite();
+
     result=(UINT8)(Storage_Erase(target) &&
         Storage_WriteRecord(target,STORAGE_CONFIG_MAGIC,sequence,data,sizeof(*data)));
-    StorageFlash_EndWrite();
+
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
 }
@@ -412,14 +393,14 @@ static UINT8 Storage_SaveState(const STORAGE_STATE *state)
     for (address=page; address+STORAGE_STATE_SPAN<=page+FLASH_STORAGE_PAGE_SIZE;
          address+=STORAGE_STATE_SPAN)
         if (!StorageFlash_IsAreaBlank(address,STORAGE_STATE_SPAN)) next=address+STORAGE_STATE_SPAN;
-    StorageFlash_BeginWrite();
+
     if (next+STORAGE_STATE_SPAN>page+FLASH_STORAGE_PAGE_SIZE) {
         next=page==FLASH_STATE_A ? FLASH_STATE_B : FLASH_STATE_A;
         if (!Storage_Erase(next)) goto done;
     }
     result=Storage_WriteRecord(next,STORAGE_STATE_MAGIC,sequence,state,sizeof(*state));
 done:
-    StorageFlash_EndWrite();
+
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
 }
@@ -529,7 +510,7 @@ static UINT8 Storage_LogAppend(UINT16 data)
     STORAGE_LOG_CHECKPOINT checkpoint;
     STORAGE_LOG_ENTRY entry;
     UINT8 result=0U;
-    StorageFlash_BeginWrite();
+
     if (!page) {
         page=FLASH_LOG_A;
         memset(&checkpoint,0,sizeof(checkpoint));
@@ -555,7 +536,7 @@ static UINT8 Storage_LogAppend(UINT16 data)
     result=(UINT8)(Storage_LogEntryValid((const STORAGE_LOG_ENTRY *)next) &&
                   memcmp((const void *)next,&entry,sizeof(entry))==0);
 done:
-    StorageFlash_EndWrite();
+
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;
 }
@@ -578,12 +559,12 @@ static UINT8 Storage_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
     if (!Storage_SaveConfig(config)) return 0U;
     if (!config->initializing) return 1U;
     if (config->initializing & STORAGE_PARAM_RESET_ALL) {
-        StorageFlash_BeginWrite();
+
         for (address=FLASH_PARAMETER_RESET_BEGIN; address<FLASH_STATS_A; address+=FLASH_STORAGE_PAGE_SIZE) {
             if (address==FLASH_CONFIG_A || address==FLASH_CONFIG_B) continue;
-            if (!Storage_Erase(address)) { StorageFlash_EndWrite(); return 0U; }
+            if (!Storage_Erase(address)) { return 0U; }
         }
-        StorageFlash_EndWrite();
+
     } else {
         if (config->initializing & (STORAGE_PARAM_RESET_SOC | STORAGE_PARAM_RESET_AGING)) {
             Storage_LoadState(&state);
@@ -683,7 +664,7 @@ static UINT8 Storage_SaveStatistics(UINT8 type, UINT16 value)
             if (!StorageFlash_IsAreaBlank(address,sizeof(entry))) next=address+sizeof(entry);
     }
     s_statistics.last_attempt_tick=SysTime_Get10msTickCount();
-    StorageFlash_BeginWrite();
+
     /* RAM already includes the requested change. A checkpoint after an
      * uncertain write avoids replaying a delta twice or losing earlier faults. */
     if (!page || s_statistics.dirty || next+sizeof(entry)>page+FLASH_STORAGE_PAGE_SIZE) {
@@ -701,7 +682,7 @@ static UINT8 Storage_SaveStatistics(UINT8 type, UINT16 value)
         result=(UINT8)(Storage_StatsEntryValid((const STORAGE_STATS_ENTRY *)next) &&
                        memcmp((const void *)next,&entry,sizeof(entry))==0);
     }
-    StorageFlash_EndWrite();
+
     s_statistics.dirty=(UINT8)!result;
     if (!result) System_ERROR_UserCallback(ERROR_EEPROM_STORE);
     return result;

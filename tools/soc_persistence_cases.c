@@ -21,7 +21,7 @@ int AFE_PARAM_WRITE_Flag;
 static void persistence_boot(void)
 {
     unsigned i;
-    memset(&s_flash,0,sizeof(s_flash));
+    
     persistence_current_ma=0;tick=0;
     persistence_current_fresh=1U;g_stLowPowerRtcStatus.mode=NO_SLEEP;
     assert(StorageFlash_InitParameters());

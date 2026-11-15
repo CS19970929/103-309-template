@@ -88,7 +88,6 @@ UINT8 StorageFlash_SaveSocData(const STORAGE_FLASH_SOC_DATA *data);
 UINT8 StorageFlash_SaveAfeData(const UINT16 *values, UINT16 word_count);
 UINT16 StorageFlash_GetSocCycleGeneration(void);
 UINT8 StorageFlash_LoadLogData(UINT8 *point, UINT8 records[FLASH_STORAGE_LOG_RECORD_COUNT][2]);
-UINT8 StorageFlash_IsBusy(void);
 
 void App_FlashUpdate(void);
 

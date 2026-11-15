@@ -25,7 +25,6 @@ static uint8_t CheckChargeMa(void) { return (RtcSleep_PortGetChargeCurrentMa() >
 static uint8_t CheckDischargeMa(void) { return (RtcSleep_PortGetDischargeCurrentMa() >= 2U) ? 1U : 0U; }
 static uint8_t CheckCommBusy(void) { return (Sci_IsAnyPortBusy() || Can_IsBusy()) ? 1U : 0U; }
 static uint8_t CheckKeyActive(void) { return RtcSleep_PortIsMcuWakeActive(); }
-static uint8_t CheckFlashBusy(void) { return StorageFlash_IsBusy() ? 1U : 0U; }
 static uint8_t CheckUpgrade(void) { return (u8FlashUpdateFlag != 0U) ? 1U : 0U; }
 static uint8_t CheckFault(void) { return (g_stCellInfoReport.unMdlFault_Third.all != 0U || g_stCellInfoReport.unMdlFault_Second.all != 0U || SH367309_Reg_Store.REG_BSTATUS1.bits.SC) ? 1U : 0U; }
 
@@ -40,7 +39,6 @@ static const BlockReasonEntry s_block_table[] = {
     {LP_BLOCK_DISCHARGE, CheckDischargeMa},
     {LP_BLOCK_COMM, CheckCommBusy},
     {LP_BLOCK_KEY, CheckKeyActive},
-    {LP_BLOCK_FLASH_BUSY, CheckFlashBusy},
     {LP_BLOCK_UPGRADE, CheckUpgrade},
     {LP_BLOCK_FAULT, CheckFault},
 };
@@ -141,7 +139,7 @@ static void lp_update_sleep_request(void)
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
     if (SleepDeal_NormalIdleExpired((UINT8)(
         (g_stLowPowerRtcStatus.block & (LP_BLOCK_CHARGE | LP_BLOCK_DISCHARGE |
-         LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_FLASH_BUSY | LP_BLOCK_UPGRADE))!=0U ||
+         LP_BLOCK_COMM | LP_BLOCK_KEY | LP_BLOCK_EXT_COMM | LP_BLOCK_UPGRADE))!=0U ||
         System_ERROR_UserCallback(ERROR_STATUS_AFE1)))) {
         LowPower_Request(DEEP_MODE);
         return;

@@ -95,7 +95,7 @@ static unsigned char saved[16384];
 static void save_flash(void) { memcpy(saved,(void *)FLASH_PARAMETER_RESET_BEGIN,sizeof(saved)); }
 static void restore_flash(void) {
     memcpy((void *)FLASH_PARAMETER_RESET_BEGIN,saved,sizeof(saved)); mutations=0; cut_after=-1;
-    memset(&s_flash,0,sizeof(s_flash));
+    
 }
 static void test_log(void) {
     UINT8 expected[200]={0},before[200],actual[200],next[200];
@@ -519,7 +519,7 @@ int main(void) {
     for(cut=0;cut<=writes;++cut) {
         restore_flash(); cut_after=cut;
         Storage_SaveConfig(&new_value);
-        cut_after=-1; memset(&s_flash,0,sizeof(s_flash));
+        cut_after=-1; 
         assert(Storage_LoadConfig(&loaded));
         assert(!memcmp(&loaded,&old_value,sizeof(loaded)) || !memcmp(&loaded,&new_value,sizeof(loaded)));
         assert(Storage_SaveConfig(&new_value));

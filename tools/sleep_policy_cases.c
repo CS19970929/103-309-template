@@ -24,7 +24,7 @@ typedef int FLASH_Status;
 #define BKP_DR5 5
 #define ENABLE 1
 static int key=1,charger,adc_on,led,ctlc,one_second;
-static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy,flash_busy;
+static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy;
 static UINT32 tick,now_ms,release_at_ms,charge_at_ms,rtc_counter;
 static UINT16 bkp[6];
 static UINT8 sleep_save_ok=1U;
@@ -104,7 +104,6 @@ static UINT16 RtcSleep_PortGetDischargeCurrentMa(void) { return g_stCellInfoRepo
 static UINT8 RtcSleep_PortIsMcuWakeActive(void) { return key==0; }
 static UINT8 Sci_IsAnyPortBusy(void) { return (UINT8)comm_busy; }
 static UINT8 Can_IsBusy(void) { return (UINT8)can_busy; }
-static UINT8 StorageFlash_IsBusy(void) { return (UINT8)flash_busy; }
 static UINT8 RtcSleep_PortGetExternalCommCounter(void) { return SleepDeal_GetExternalCommCounter(); }
 static UINT8 RTC_IsStopWakeup(void) { return (UINT8)rtc_wake; }
 static UINT16 RtcSleep_PortGetCellMinMv(void) { return g_stCellInfoReport.u16VCellMin; }
@@ -159,7 +158,7 @@ static void reset_case(void) {
     AFE_Parameters_RS485_Struction.u16VcellUvp.curValue=2800;
     tick=now_ms=release_at_ms=charge_at_ms=rtc_counter=0;
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
-    rtc_wake=comm_busy=can_busy=flash_busy=0; stop_source=soc_key;
+    rtc_wake=comm_busy=can_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; soc_empty_targets=0; afe_status_ok=1; soc_now=55;
     OtherElement.u16Sleep_Vlow=2600; OtherElement.u16Sleep_TimeVlow=1;
     OtherElement.u16Sleep_TimeNormal=10080;
