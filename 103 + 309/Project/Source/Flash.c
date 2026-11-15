@@ -1038,22 +1038,54 @@ UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written)
     return Storage_SaveConfig(&config);
 }
 
+/* A torn first installation may be erased and retried only if every written
+ * half-word matches the expected initial record prefix. */
+static UINT8 Storage_FirstConfigWriteInterrupted(const STORAGE_FLASH_CONFIG_DATA *defaults)
+{
+    STORAGE_RECORD header;
+    UINT16 offset, actual, expected;
+    UINT8 blank_seen=0U;
+    if (!StorageFlash_IsAreaBlank(FLASH_CONFIG_B,FLASH_STORAGE_PAGE_SIZE) ||
+        FlashReadOneHalfWord(FLASH_CONFIG_A+14U)!=0xFFFFU ||
+        !StorageFlash_IsAreaBlank(FLASH_CONFIG_A+sizeof(header)+sizeof(*defaults),
+            FLASH_STORAGE_PAGE_SIZE-sizeof(header)-sizeof(*defaults))) return 0U;
+    header.magic=STORAGE_CONFIG_MAGIC;
+    header.sequence=1U;
+    header.length=sizeof(*defaults);
+    header.format=STORAGE_RECORD_FORMAT;
+    header.commit=0xFFFFU;
+    header.crc=Storage_RecordCrc(&header,defaults);
+    for (offset=0U; offset<sizeof(header)+sizeof(*defaults); offset+=2U) {
+        if (offset==14U) continue; /* Commit must remain erased. */
+        actual=FlashReadOneHalfWord(FLASH_CONFIG_A+offset);
+        expected=offset<sizeof(header) ?
+            ((const UINT16 *)&header)[offset/2U] :
+            ((const UINT16 *)defaults)[(offset-sizeof(header))/2U];
+        if (actual==0xFFFFU && expected!=0xFFFFU) blank_seen=1U;
+        else if (actual!=expected || (blank_seen && actual!=0xFFFFU)) return 0U;
+    }
+    return 1U;
+}
+
 UINT8 StorageFlash_InitParameters(void)
 {
     STORAGE_FLASH_CONFIG_DATA config;
     UINT8 valid;
     System_ERROR_UserCallback(ERROR_REMOVE_EEPROM_COM);
-    /* Check compiled defaults on every boot, even when a stored record exists. */
     Storage_BuildDefaultConfig(&config);
-    if (!Storage_ConfigValid(&config)) return 0U;
+    if (!Storage_ConfigValid(&config)) goto failed;
     valid=Storage_LoadConfig(&config);
-    /* Resume committed intents before module updates or applying live parameters. */
     if (valid && config.initializing && !Storage_CommitParameterUpdate(&config)) goto failed;
     if (valid && !Storage_ResumeSocCycleWrite(&config)) goto failed;
     if (!valid) {
         Storage_BuildDefaultConfig(&config);
-        config.initializing=STORAGE_PARAM_RESET_ALL;
-        if (!Storage_CommitParameterUpdate(&config)) goto failed;
+        /* Reject nonblank damaged data instead of implicitly erasing valid state. */
+        if (!StorageFlash_IsAreaBlank(FLASH_STATE_A,2U*FLASH_STORAGE_PAGE_SIZE) ||
+            !StorageFlash_IsAreaBlank(FLASH_LOG_A,2U*FLASH_STORAGE_PAGE_SIZE)) goto failed;
+        if (!(StorageFlash_IsAreaBlank(FLASH_CONFIG_A,FLASH_STORAGE_PAGE_SIZE) &&
+              StorageFlash_IsAreaBlank(FLASH_CONFIG_B,FLASH_STORAGE_PAGE_SIZE)) &&
+            !Storage_FirstConfigWriteInterrupted(&config)) goto failed;
+        if (!Storage_SaveConfig(&config)) goto failed;
     } else if (!Storage_UpdateModules(&config)) goto failed;
     Storage_ApplyConfig(&config);
     ReadEEPROM_EventRecord_Parameters();
