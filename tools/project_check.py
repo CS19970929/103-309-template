@@ -143,6 +143,8 @@ def check_comm_tool_can_iap_contract(reporter):
     start_ps1 = read_text(COMM_TOOL_HOST_START)
     uart_select_ps1 = read_text(COMM_TOOL_UART_SELECT_SCRIPT)
     config_h = read_text(COMM_TOOL_SOURCE / "ct_config.h")
+    if not re.search(r"^#define\s+CT_BMS_APP_LIMIT_ADDR\s+0x0801C000u\s*$", config_h, re.M):
+        reporter.fail("BMS upgrade image must end before persistent Flash (0x0801C000)")
     protocol_c = read_text(COMM_TOOL_SOURCE / "ct_protocol.c")
     debug_log_c = read_text(COMM_TOOL_SOURCE / "ct_debug_log.c")
     debug_log_h = read_text(COMM_TOOL_SOURCE / "ct_debug_log.h")

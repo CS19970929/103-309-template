@@ -65,4 +65,4 @@ SOC 仍为40字节数据、V2布局，当前仅接受 `u16LearnState=0x5343` 的
 
 验证入口（Windows MSVC + Keil ARMCC5 环境）：`python -B tools/test_storage.py`、`python -B tools/run_soc_host_c_test.py`、`python -B tools/test_uart_protocols.py`、`python -B tools/test_sleep_policy.py`、`python -B tools/test_protection_refactor.py`、`python -B tools/project_check.py -q`，以及 `tools/check_bms_no_bin.py --target FD_Release` / `FD_Debug`。
 
-主机半字中断测试不是实板掉电、Flash 编程电压、耐久性和 UART/CAN 擦页期间时序的验收；任何真实烧录还必须确认目标 IAP 不越过 `0x0801C000`。
+主机半字中断测试不是实板掉电、Flash 编程电压、耐久性和 UART/CAN 擦页期间时序的验收；通信工具镜像缓存上界已收紧到 `0x0801C000`；任何真实烧录还必须确认目标 BMS IAP 也独立拒绝越界固件。
