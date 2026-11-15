@@ -740,8 +740,6 @@ void App_AFEGet(void)
     Fault_UpdateCurrentProtection(data_ok);
     status_ok = App_SH367309();
     AFE_MonitorUpdate(data_ok, status_ok);
-    if (data_ok && status_ok)
-        Sci_CustomerUpdateCounters();
 
     App_SOC(data_ok, status_ok);
     if (status_ok)
@@ -752,6 +750,8 @@ void App_AFEGet(void)
     /* Normal permits are applied once. CTL releases only after a verified
        healthy cycle, successful register readback and no pending profile. */
     mos_ok = Fault_ApplyMosPermits(1U, 1U);
+    if (data_ok && status_ok)
+        Sci_CustomerUpdateCounters();
     if (mos_ok && AFE_IsHealthy() && data_ok && status_ok)
         open_ctlc();
     AFE_ApplyPendingConfiguration(data_ok, status_ok);
