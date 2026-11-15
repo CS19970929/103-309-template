@@ -141,31 +141,28 @@ static void test_smooth_restore_and_sleep(void)
     puts("PASS smoothing resume: exact capacity/reference restore, UV target only, immediate DEEP save, no reboot zero, charge cancels old UV target");
 }
 
-static void test_smooth_legacy_and_parameter_reset(void)
+static void test_smooth_tag_and_parameter_reset(void)
 {
     struct RS485MSG msg;UINT32 before;
     reset_case(245,50);stored.u16Flags=0xFFFF;stored.u16LearnAnchorSoc=0;
-    stored.u16LearnState=1;InitData_SOC();assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET);
-    run_seconds(60,0,3300);assert(s_soc.now_as10==441000U);
+    stored.u16LearnState=1;InitData_SOC();
+    assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET && soc_percent()==60U);
+    reset_case(245,50);
     assert(SOC_RequestSetOnce(35));run_seconds(30,0,3300);assert(SOC_SaveSnapshot());
-    before=s_soc.now_as10;InitData_SOC();assert(s_soc.now_as10==before && s_soc.manual_target==35U);
-    /* Existing tagged snapshots still require their historical inverse. */
-    stored.u16LearnState=STORAGE_SOC_SMOOTH_TAG;
-    stored.u16SocNow=stored_percent();
-    stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]=(UINT16)(STORAGE_SOC_SMOOTH_TAG^0xFFFFU);
-    InitData_SOC();assert(s_soc.now_as10==before && s_soc.manual_target==35U);
-    stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]^=1U;InitData_SOC();
-    assert(s_soc.now_as10==before && s_soc.manual_target==SOC_NO_MANUAL_TARGET);
+    before=s_soc.now_as10;InitData_SOC();
+    assert(s_soc.now_as10==before && s_soc.manual_target==35U);
+    /* Unsupported historical tags are ignored rather than decoded. */
+    stored.u16LearnState=0x534DU;InitData_SOC();
+    assert(soc_percent()==60U && s_soc.manual_target==SOC_NO_MANUAL_TARGET);
     reset_case(245,50);smooth_seconds(9,0,3100,3550);before=s_soc.now_as10;
     write_parameter(0x231A,3600,&msg);assert(msg.AckType==RS485_ACK_POS && s_soc.now_as10==before);
     smooth_seconds(20,0,3100,3550);assert(s_soc.now_as10==before);
     write_parameter(0x231A,3550,&msg);smooth_seconds(9,0,3100,3550);assert(s_soc.now_as10==before);
     smooth_seconds(2,0,3100,3550);assert(s_soc.now_as10>before);
     assert(SOC_SaveSnapshot());before=s_soc.now_as10;
-    /* Config can commit just before reset, before its RAM side effects run. */
     OtherElement.u16Soc_V_100=3600;InitData_SOC();
     assert(s_soc.now_as10==before && !(s_soc.calibration_flags&(SOC_TARGET_FULL|SOC_FULL_LATCHED)));
     assert(stored.u16MaxErrorPercent==3600 && !(stored.u16Flags&(SOC_TARGET_FULL|SOC_FULL_LATCHED)));
     smooth_seconds(20,0,3100,3550);assert(s_soc.now_as10==before);
-    puts("PASS smoothing compatibility: old flags ignored, target reload continuous, invalid tag inert, full-voltage update resets confirmation");
+    puts("PASS smoothing restore: current tag, unsupported history discarded, full-voltage change");
 }

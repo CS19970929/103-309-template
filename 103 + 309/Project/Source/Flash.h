@@ -23,10 +23,8 @@
 /* V2 layout is fixed. The current tag omits derived percentages/inverse;
  * the old tag pair is read only for existing smooth-calibration snapshots. */
 #define STORAGE_SOC_STATE_TAG 0x5343U
-#define STORAGE_SOC_SMOOTH_TAG 0x534DU
 #define STORAGE_SOC_LOW_ENTRY_LO_INDEX 1U
 #define STORAGE_SOC_LOW_ENTRY_HI_INDEX 2U
-#define STORAGE_SOC_SMOOTH_INV_INDEX 3U
 #define BATTERY_NUMBER_LENGTH 11U
 #define FLASH_NORMAL_SLEEP_VALUE         ((UINT16)0x1234)
 #define FLASH_DEEP_SLEEP_VALUE           ((UINT16)0x1235)
@@ -40,8 +38,8 @@
 typedef struct
 {
 	UINT16 u16FormatVersion;
-	UINT16 u16SocNow;           /* Legacy percent; new snapshots leave zero. */
-	UINT16 u16DsgSocInt;        /* Legacy discharge percent; now zero. */
+	UINT16 u16SocNow;           /* Reserved: always zero in current snapshots. */
+	UINT16 u16DsgSocInt;        /* Reserved: always zero in current snapshots. */
 	UINT16 u16MaxErrorPercent;  /* Full-calibration voltage, mV. */
 	UINT32 u32CycleTimes;       /* Equivalent discharge cycles * 100. */
 	UINT32 u32CapNow;           /* Remaining capacity, 0.1 A*s. */

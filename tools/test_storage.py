@@ -100,7 +100,7 @@ def main():
     def check_guard(values, expected_ok):
         configured = config_text
         for name, value in values.items():
-            configured = re.sub(r'(^#define ' + name + r')\\s+[^\\n]+',
+            configured = re.sub(r'(^#define ' + name + r')\s+[^\n]+',
                                 lambda match: match[1] + ' ' + str(value), configured, flags=re.M)
         (guards / 'Project_Config.h').write_text(configured, encoding='utf-8')
         checked = subprocess.run([str(compiler), '/nologo', '/EP', '/TC', str(guard_source)],
@@ -110,7 +110,7 @@ def main():
     gen = 'PROJECT_CFG_STORAGE_UPDATE_GENERATION'
     mask = 'PROJECT_CFG_STORAGE_UPDATE_MASK'
     check_guard({}, True)
-    check_guard({gen: 65534, mask: 511}, True)
+    check_guard({gen: 65534, mask: 255}, True)
     for values in ({gen: -1}, {gen: 65535}, {mask: -1}, {mask: 512},
                    {gen: 1, mask: 0}, {gen: 0, mask: 1}):
         check_guard(values, False)

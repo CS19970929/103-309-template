@@ -74,7 +74,7 @@ static void reset_case(UINT16 capacity_a10,UINT8 soc) {
     transient_save_failures=sleep_save_errors=sleep_watchdog_feeds=0;
     cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
     stored_valid=1U;write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
-    stored.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;stored.u16SocNow=soc;
+    stored.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;stored.u16LearnState=STORAGE_SOC_STATE_TAG;stored.u16SocNow=soc;
     stored.u32CapFull=(UINT32)capacity_a10*3600U;stored.u32CapNow=(UINT32)((uint64_t)stored.u32CapFull*soc/100U);
     stored.u32CycleTimes=300U;
     SeriesNum=7U;OtherElement.u16Sys_SeriesNum=7U;AFE_PARAM_WRITE_Flag=0U;
@@ -330,27 +330,24 @@ static void test_random_profile(void) {
     puts("PASS randomized:200000 ticks, signed pulses, invalid samples, saturation and independent mA*ms oracle");
 }
 static void test_snapshot_semantics(void) {
-    reset_case(245,80);stored.u16Flags=0xFFFF;stored.u32CapFull=0;stored.u32CapNow=0;InitData_SOC();
-    assert(g_stCellInfoReport.SocElement.u16Soc==80);
-    stored.u16SocNow=101;InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==60);
-    stored.u16FormatVersion=1;InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==60);
-    /* Old percent-only capacity and discharge remainder remain readable. */
-    reset_case(245,80);stored.u32CapNow=stored.u32CapFull=0;
-    stored.u16DsgSocInt=50;InitData_SOC();
-    assert(g_stCellInfoReport.SocElement.u16Soc==80 && s_soc.passed_as10==4410U);
-    /* New records restore exact capacity, including zero, with no percent copy. */
-    assert(SOC_SaveSnapshot());
-    assert(stored.u16LearnState==STORAGE_SOC_STATE_TAG && !stored.u16SocNow &&
-        !stored.u16DsgSocInt && !stored.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]);
-    stored.u32CapNow=0;stored.u16SocNow=101;stored.u16DsgSocInt=0xFFFF;
-    InitData_SOC();assert(!g_stCellInfoReport.SocElement.u16Soc && s_soc.passed_as10==4410U);
+    reset_case(245,80);
+    stored.u32CapFull=0;stored.u32CapNow=0;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==60);
+    reset_case(245,80);stored.u16LearnState=1;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==60);
+    reset_case(245,80);stored.u16FormatVersion=1;InitData_SOC();
+    assert(g_stCellInfoReport.SocElement.u16Soc==60);
+    reset_case(245,80);assert(SOC_SaveSnapshot());
+    assert(stored.u16LearnState==STORAGE_SOC_STATE_TAG &&
+        !stored.u16SocNow && !stored.u16DsgSocInt && !stored.u16Reserved[3]);
+    stored.u32CapNow=0;stored.u16SocNow=101;stored.u16DsgSocInt=0xFFFFU;
+    InitData_SOC();assert(!g_stCellInfoReport.SocElement.u16Soc);
     stored.u32CapNow=stored.u32CapFull+1U;InitData_SOC();
     assert(g_stCellInfoReport.SocElement.u16Soc==60);
-    assert(SOC_SaveSnapshot());stored.u32CapFull=0;InitData_SOC();
-    assert(g_stCellInfoReport.SocElement.u16Soc==60);
-    reset_case(245,100);save_attempts=0;run_seconds(14664,-6000,3400);run_seconds(14664,6000,3400);
+    reset_case(245,100);save_attempts=0;
+    run_seconds(14664,-6000,3400);run_seconds(14664,6000,3400);
     assert(save_attempts<=202);
-    printf("PASS snapshot semantics: invalid data fallback, retired flags ignored, discharge/recharge saves=%u\n",save_attempts);
+    printf("PASS snapshot semantics: current tag required, exact zero, invalid capacity fallback, saves=%u\n",save_attempts);
 }
 
 /* SMOOTHING_TESTS */
@@ -363,6 +360,6 @@ int main(void) {
     test_sleep_and_reset();test_sleep_save_failure();test_soh_boundaries();test_sizes_and_invalid_capacity();
     test_random_profile();test_snapshot_semantics();
     test_smooth_full();test_smooth_low_window();test_smooth_manual_bounds();
-    test_smooth_timing_and_invalid();test_smooth_restore_and_sleep();test_smooth_legacy_and_parameter_reset();
+    test_smooth_timing_and_invalid();test_smooth_restore_and_sleep();test_smooth_tag_and_parameter_reset();
     puts("PASS SOC production C:24 groups");return 0;
 }

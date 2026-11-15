@@ -22,12 +22,12 @@
 enum STORAGE_PARAM_GROUP {
     STORAGE_PARAM_AFE, STORAGE_PARAM_PROTECT, STORAGE_PARAM_SOC,
     STORAGE_PARAM_OTHER, STORAGE_PARAM_CALIB, STORAGE_PARAM_HEAT_COOL,
-    STORAGE_PARAM_SOC_STATE, STORAGE_PARAM_AGING_STATE, STORAGE_PARAM_LOG,
+    STORAGE_PARAM_SOC_STATE, STORAGE_PARAM_LOG,
     STORAGE_PARAM_COUNT
 };
 #define STORAGE_PARAM_RESET_ALL   1U
 #define STORAGE_PARAM_RESET_SOC   2U
-#define STORAGE_PARAM_RESET_AGING 4U
+#define STORAGE_PARAM_RESET_RESERVED 4U /* Old pending bit; no aging behavior. */
 #define STORAGE_PARAM_RESET_LOG   8U
 #define STORAGE_PARAM_RESET_MASK 15U
 
@@ -38,13 +38,6 @@ typedef struct
 	UINT16 reserved[FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT];
 	UINT16 heat_cool[FLASH_STORAGE_RW_PARAM_HEAT_COOL_WORD_COUNT];
 } STORAGE_FLASH_RW_PARAM_DATA;
-
-typedef struct
-{
-	UINT32 u32Elapsed10ms;
-	UINT16 u16State;
-	UINT16 u16DurationHours;
-} STORAGE_FLASH_FACTORY_AGING_DATA;
 
 typedef struct {
     UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
@@ -352,10 +345,9 @@ static UINT8 StorageFlash_IsAreaBlank(uint32_t addr, UINT16 length)
  * is skipped; page rotation commits the replacement before the old is reused. */
 #define STORAGE_STATE_MAGIC 0x53544131UL
 #define STORAGE_STATE_SOC 1U
-#define STORAGE_STATE_AGING 2U
 typedef struct {
     STORAGE_FLASH_SOC_DATA soc;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging;
+    UINT8 reserved_aging[8]; /* Preserve current record offsets, no aging logic. */
     UINT16 valid;
     UINT16 reserved;
 } STORAGE_STATE;
@@ -570,14 +562,10 @@ static UINT8 Storage_CommitParameterUpdate(STORAGE_FLASH_CONFIG_DATA *config)
         }
 
     } else {
-        if (config->initializing & (STORAGE_PARAM_RESET_SOC | STORAGE_PARAM_RESET_AGING)) {
+        if (config->initializing & STORAGE_PARAM_RESET_SOC) {
             Storage_LoadState(&state);
-            if (config->initializing & STORAGE_PARAM_RESET_SOC) {
-                memset(&state.soc,0,sizeof(state.soc)); state.valid &= ~STORAGE_STATE_SOC;
-            }
-            if (config->initializing & STORAGE_PARAM_RESET_AGING) {
-                memset(&state.aging,0,sizeof(state.aging)); state.valid &= ~STORAGE_STATE_AGING;
-            }
+            memset(&state.soc,0,sizeof(state.soc));
+            state.valid &= (UINT16)~STORAGE_STATE_SOC;
             if (!Storage_SaveState(&state)) return 0U;
         }
         if ((config->initializing & STORAGE_PARAM_RESET_LOG) && !StorageFlash_ClearLog()) return 0U;
@@ -989,7 +977,6 @@ static UINT8 Storage_UpdateModules(STORAGE_FLASH_CONFIG_DATA *stored)
         case STORAGE_PARAM_HEAT_COOL:
             memcpy(stored->rw.heat_cool,&s_heat_cool_default,sizeof(stored->rw.heat_cool)); break;
         case STORAGE_PARAM_SOC_STATE: stored->initializing |= STORAGE_PARAM_RESET_SOC; break;
-        case STORAGE_PARAM_AGING_STATE: stored->initializing |= STORAGE_PARAM_RESET_AGING; break;
         case STORAGE_PARAM_LOG: stored->initializing |= STORAGE_PARAM_RESET_LOG; break;
         }
     }

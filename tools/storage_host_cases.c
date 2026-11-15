@@ -71,27 +71,6 @@ static char firmware_version[32]="storage-test-v1";
 
 /* PRODUCTION_SOURCE */
 
-/* Historical aging value is a compatibility fixture, not an active factory-aging API. */
-#define TEST_AGING_STATE_RUNNING 0xA931U
-
-/* Seed reserved aging fields to verify SOC/reset operations preserve the wire layout. */
-static UINT8 test_load_aging(STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-    STORAGE_STATE state;
-    Storage_LoadState(&state);
-    if (!(state.valid & STORAGE_STATE_AGING)) return 0U;
-    *data = state.aging;
-    return 1U;
-}
-static UINT8 test_save_aging(const STORAGE_FLASH_FACTORY_AGING_DATA *data)
-{
-    STORAGE_STATE state;
-    Storage_LoadState(&state);
-    state.aging = *data;
-    state.valid |= STORAGE_STATE_AGING;
-    return Storage_SaveState(&state);
-}
-
 /* LOG_SOURCE */
 static unsigned char saved[16384];
 static void save_flash(void) { memcpy(saved,(void *)FLASH_PARAMETER_RESET_BEGIN,sizeof(saved)); }
@@ -154,7 +133,6 @@ static void test_log(void) {
 static void test_module_updates(void) {
     STORAGE_FLASH_CONFIG_DATA defaults,custom,actual;
     STORAGE_FLASH_SOC_DATA soc={0},loaded_soc;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12},loaded_aging;
     UINT8 point,records[100][2];
     unsigned mask;
     int group,word,writes,cut,cut_checks=0;
@@ -176,7 +154,7 @@ static void test_module_updates(void) {
     assert(StorageFlash_SetBaudMode(3U) && StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
     assert(Storage_LoadConfig(&custom));
     soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;soc.u16SocNow=37;soc.u32CycleTimes=12345;
-    assert(StorageFlash_SaveSocData(&soc) && test_save_aging(&aging));
+    assert(StorageFlash_SaveSocData(&soc));
     assert(StorageFlash_AppendLog(7,8));save_flash();
     for(mask=0U;mask<(1U<<STORAGE_PARAM_COUNT);++mask) {
         restore_flash();
@@ -202,7 +180,6 @@ static void test_module_updates(void) {
         assert(!actual.initializing && !memcmp(actual.reset_version,custom.reset_version,32));
         assert(StorageFlash_LoadSocData(&loaded_soc)==!(mask&(1U<<STORAGE_PARAM_SOC_STATE)));
         if(!(mask&(1U<<STORAGE_PARAM_SOC_STATE))) assert(!memcmp(&soc,&loaded_soc,sizeof(soc)));
-        assert(test_load_aging(&loaded_aging)==!(mask&(1U<<STORAGE_PARAM_AGING_STATE)));
         assert(StorageFlash_LoadLogData(&point,records));
         if(mask&(1U<<STORAGE_PARAM_LOG)) assert(point==0 && records[0][0]==0);
         else assert(point==1 && records[0][0]==7 && records[0][1]==8);
@@ -223,7 +200,7 @@ static void test_module_updates(void) {
     for(group=0;group<=STORAGE_PARAM_COUNT;++group) {
         restore_flash();update_generation=3U;
         update_mask=(UINT16)(group==STORAGE_PARAM_COUNT ?
-            ((1U<<STORAGE_PARAM_SOC_STATE)|(1U<<STORAGE_PARAM_AGING_STATE)|(1U<<STORAGE_PARAM_LOG)) :
+            ((1U<<STORAGE_PARAM_SOC_STATE)|(1U<<STORAGE_PARAM_LOG)) :
             (1U<<group));
         mutations=0;assert(StorageFlash_InitParameters());writes=mutations;
         for(cut=0;cut<=writes;++cut) {
@@ -233,7 +210,6 @@ static void test_module_updates(void) {
             assert(StorageFlash_LoadLogData(&point,records));
             assert(point==((update_mask&(1U<<STORAGE_PARAM_LOG))?0:1));
             assert(StorageFlash_LoadSocData(&loaded_soc)==!(update_mask&(1U<<STORAGE_PARAM_SOC_STATE)));
-            assert(test_load_aging(&loaded_aging)==!(update_mask&(1U<<STORAGE_PARAM_AGING_STATE)));
             for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
             mutations=0;assert(StorageFlash_InitParameters() && !mutations);
             ++cut_checks;
@@ -250,7 +226,7 @@ static void test_module_updates(void) {
     assert(StorageFlash_InitParameters() && Storage_LoadConfig(&actual));
     assert(!memcmp(actual.afe,defaults.afe,sizeof(actual.afe)));
     assert(!memcmp(actual.rw.other,defaults.rw.other,sizeof(actual.rw.other)));
-    assert(!StorageFlash_LoadSocData(&loaded_soc) && !test_load_aging(&loaded_aging));
+    assert(!StorageFlash_LoadSocData(&loaded_soc));
     assert(StorageFlash_LoadLogData(&point,records) && !point);
     for(word=0;word<2048;++word) assert(((UINT8 *)FLASH_STATS_A)[word]==0x5A);
     printf("PASS module update mask: all selections and %d power-cut cases; no version-string reset, statistics preserved\n",cut_checks);
@@ -483,7 +459,6 @@ static void test_parameter_application(void)
 int main(void) {
     STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
     STORAGE_FLASH_SOC_DATA soc,loaded_soc;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12},loaded_aging;
     int writes,cut,i;
     UINT16 previous_soc;
     host_storage_init();
@@ -515,10 +490,9 @@ int main(void) {
     assert(!Storage_Erase(0x08004800) && !Storage_Erase(FLASH_STORAGE_END));
     assert(!Storage_SaveConfig(0) && !Storage_LoadConfig(0));
     printf("PASS storage: config atomic commit, %d cut points, header CRC, sequence wrap, bounds, no-op saves\n",writes+1);
-    /* Shared state updates retain the other owner's last committed data. */
+    /* A valid SOC snapshot remains recoverable through state page rotation. */
     memset(&soc,0,sizeof(soc)); soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;
-    assert(test_save_aging(&aging));
-    assert(StorageFlash_SaveSocData(&soc));
+        assert(StorageFlash_SaveSocData(&soc));
     for(i=0;i<30;++i) { soc.u16SocNow=(UINT16)i; assert(StorageFlash_SaveSocData(&soc)); }
     while ((Storage_StateLatest() & (FLASH_STORAGE_PAGE_SIZE-1U))+2U*STORAGE_STATE_SPAN<=FLASH_STORAGE_PAGE_SIZE) {
         ++soc.u16SocNow; assert(StorageFlash_SaveSocData(&soc));
@@ -530,9 +504,8 @@ int main(void) {
         restore_flash(); cut_after=cut; StorageFlash_SaveSocData(&soc); cut_after=-1;
         assert(StorageFlash_LoadSocData(&loaded_soc));
         assert(loaded_soc.u16SocNow==previous_soc || loaded_soc.u16SocNow==90);
-        assert(test_load_aging(&loaded_aging) && !memcmp(&aging,&loaded_aging,sizeof(aging)));
     }
-    puts("PASS storage: SOC/aging merge, state append and rotation, power cuts retain complete state");
+    puts("PASS storage: SOC state append and rotation, power cuts retain complete state");
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
     update_generation=update_mask=0;

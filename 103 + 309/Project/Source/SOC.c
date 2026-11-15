@@ -147,40 +147,29 @@ static void soc_save_if_changed(void)
 
 /* Decode historical V2 fields once. Current snapshots have one capacity source;
  * record CRC/commit checking is owned by StorageFlash_LoadSocData(). */
+/* Only the current tagged V2 payload is accepted; CRC and commit are checked by Flash.c. */
 static UINT8 soc_restore_snapshot(const STORAGE_FLASH_SOC_DATA *data)
 {
-    UINT32 full = data->u32CapFull;
-    UINT32 now = data->u32CapNow;
-    UINT32 passed = data->u32LearnPassedAs10;
-    UINT32 unit = s_soc.full_as10 / 100U;
-    UINT32 entry = (UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] |
-        ((UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX] << 16);
-    UINT16 flags = data->u16Flags;
-    UINT8 current_format = (UINT8)(data->u16LearnState == STORAGE_SOC_STATE_TAG);
+    UINT32 full=data->u32CapFull;
+    UINT32 unit=s_soc.full_as10/100U;
+    UINT32 entry=(UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] |
+        ((UINT32)data->u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX]<<16);
+    UINT16 flags=data->u16Flags;
 
-    if (!current_format) {
-        if (data->u16SocNow > 100U || data->u16DsgSocInt > 100U) return 0U;
-        if (full == 0U || now > full || (now == 0U && data->u16SocNow != 0U)) {
-            full = s_soc.full_as10;
-            now = (UINT32)((uint64_t)full * data->u16SocNow / 100U);
-        }
-        if (passed == 0U) passed = (UINT32)((uint64_t)unit * data->u16DsgSocInt / 100U);
-    }
-    if (full == 0U || now > full) return 0U;
-    s_soc.now_as10 = (UINT32)((uint64_t)now * s_soc.full_as10 / full);
-    s_soc.cycle_x100 = data->u32CycleTimes;
-    s_soc.passed_as10 = passed % unit;
+    if (data->u16LearnState!=STORAGE_SOC_STATE_TAG || full==0U ||
+        data->u32CapNow>full || unit==0U) return 0U;
 
-    if ((current_format || (data->u16LearnState == STORAGE_SOC_SMOOTH_TAG &&
-         data->u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX] == (UINT16)(STORAGE_SOC_SMOOTH_TAG ^ 0xFFFFU))) &&
-        (flags & (UINT16)(~SOC_CALIBRATION_FLAGS)) == 0U &&
-        (flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY)) != (SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
+    s_soc.now_as10=(UINT32)((uint64_t)data->u32CapNow*s_soc.full_as10/full);
+    s_soc.cycle_x100=data->u32CycleTimes;
+    s_soc.passed_as10=data->u32LearnPassedAs10%unit;
+    if ((flags & (UINT16)(~SOC_CALIBRATION_FLAGS))==0U &&
+        (flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY))!=(SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
         (!(flags & SOC_TARGET_FULL) || (flags & SOC_FULL_LATCHED)) &&
-        (data->u16LearnAnchorSoc <= 100U || data->u16LearnAnchorSoc == SOC_NO_MANUAL_TARGET) &&
-        data->u32CapFull != 0U && entry <= data->u32CapFull) {
-        s_soc.low_entry_as10 = (UINT32)((uint64_t)entry * s_soc.full_as10 / data->u32CapFull);
-        s_soc.manual_target = data->u16LearnAnchorSoc;
-        s_soc.calibration_flags = flags;
+        (data->u16LearnAnchorSoc<=100U || data->u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET) &&
+        entry<=full) {
+        s_soc.low_entry_as10=(UINT32)((uint64_t)entry*s_soc.full_as10/full);
+        s_soc.manual_target=data->u16LearnAnchorSoc;
+        s_soc.calibration_flags=flags;
     }
     return 1U;
 }

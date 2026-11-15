@@ -34,7 +34,6 @@ static void persistence_boot(void)
 static void persistence_prepare(void)
 {
     STORAGE_FLASH_SOC_DATA data;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging={1234,TEST_AGING_STATE_RUNNING,12};
     memset((void *)FLASH_PARAMETER_RESET_BEGIN,0xFF,16384);
     memset((void *)FLASH_STATS_A,0x5A,2048);
     update_generation=update_mask=0;
@@ -44,7 +43,6 @@ static void persistence_prepare(void)
     data.u16SocNow=80U;data.u32CapNow=data.u32CapFull*80U/100U;
     data.u32CycleTimes=12345;data.u32LearnPassedAs10=1234;
     assert(StorageFlash_SaveSocData(&data));InitData_SOC();
-    assert(test_save_aging(&aging));
 }
 
 static void test_soc_smooth_persistence(void)
@@ -53,17 +51,16 @@ static void test_soc_smooth_persistence(void)
     int total,cut,ack;
     unsigned i;
     persistence_prepare();assert(StorageFlash_LoadSocData(&old));
-    /* Start from a shipped V2 smooth snapshot; reads must not force a rewrite. */
-    old.u16LearnState=STORAGE_SOC_SMOOTH_TAG;old.u16SocNow=80U;
-    old.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]=(UINT16)(STORAGE_SOC_SMOOTH_TAG^0xFFFFU);
-    assert(StorageFlash_SaveSocData(&old));mutations=0;persistence_boot();assert(!mutations);
+    /* Current tagged snapshots restore directly without an unnecessary rewrite. */
+    assert(old.u16LearnState==STORAGE_SOC_STATE_TAG);
+    mutations=0;persistence_boot();assert(!mutations);
     assert(sizeof(old)==40U && offsetof(STORAGE_FLASH_SOC_DATA,u32CapNow)==12U &&
         offsetof(STORAGE_FLASH_SOC_DATA,u16Reserved)==30U);
     save_flash();mutations=0;
     assert(SOC_RequestSetOnce(35));total=mutations;
     assert(StorageFlash_LoadSocData(&data));
     assert(data.u16LearnState==STORAGE_SOC_STATE_TAG && !data.u16SocNow &&
-        !data.u16DsgSocInt && !data.u16Reserved[STORAGE_SOC_SMOOTH_INV_INDEX]);
+        !data.u16DsgSocInt && !data.u16Reserved[3U]);
     /* Without an inverse word, CRC still rejects a torn/altered target. */
     {
         UINT32 address=Storage_StateLatest()+sizeof(STORAGE_RECORD)+
@@ -71,7 +68,7 @@ static void test_soc_smooth_persistence(void)
         *(UINT8 *)address^=1U;
         persistence_boot();assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET);
         assert(s_soc.now_as10==old.u32CapNow && StorageFlash_LoadSocData(&data));
-        assert(data.u16LearnState==STORAGE_SOC_SMOOTH_TAG);
+        assert(data.u16LearnState==STORAGE_SOC_STATE_TAG);
     }
     for(cut=0;cut<=total;cut++) {
         restore_flash();persistence_boot();mutations=0;cut_after=cut;
@@ -80,7 +77,7 @@ static void test_soc_smooth_persistence(void)
         assert(data.u32CapNow==old.u32CapNow && s_soc.now_as10==old.u32CapNow);
         assert((s_soc.manual_target==35U)==(ack!=0));
     }
-    printf("PASS smooth target transaction: %d half-word cuts, legacy/new layout, CRC rejection, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
+    printf("PASS smooth target transaction: %d half-word cuts, current layout, CRC rejection, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
     persistence_prepare();assert(SOC_RequestSetOnce(35));
     AFE_PARAM_WRITE_Flag=0;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;
@@ -138,7 +135,6 @@ static void persistence_cycle_cuts(UINT8 rotation,UINT8 with_capacity,UINT8 same
 {
     STORAGE_FLASH_SOC_DATA data;
     STORAGE_FLASH_CONFIG_DATA config;
-    STORAGE_FLASH_FACTORY_AGING_DATA aging;
     struct RS485MSG msg;
     int total,cut,new_config=0;
     UINT16 target;
@@ -147,8 +143,10 @@ static void persistence_cycle_cuts(UINT8 rotation,UINT8 with_capacity,UINT8 same
         unsigned guard;
         for(guard=0;guard<30;guard++) {
             if((Storage_StateLatest()&1023U)==14U*STORAGE_STATE_SPAN) break;
-            assert(test_load_aging(&aging));++aging.u32Elapsed10ms;
-            assert(test_save_aging(&aging));
+            STORAGE_STATE snapshot;
+            Storage_LoadState(&snapshot);
+            ++snapshot.reserved_aging[0];
+            assert(Storage_SaveState(&snapshot));
         }
         assert(guard<30);
     }
@@ -222,5 +220,5 @@ static void test_soc_cycle_persistence(void)
     cut_after=-1;memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=1;
     Sci_WrReg_0x06_Reset_OtherCanAdd(&msg);assert(msg.AckType==RS485_ACK_POS);
     persistence_boot();assert(g_stCellInfoReport.SocElement.u16Cycle_times==OtherElement.u16Soc_Cycle_times);
-    printf("PASS SOC cycle recovery: %u interrupted boot retries; module update, accumulated cycles, tag wrap, defaults failure and legacy snapshots\n",recovery_cuts);
+    printf("PASS SOC cycle recovery: %u interrupted boot retries; module update, accumulated cycles, tag wrap, defaults failure and current snapshots\n",recovery_cuts);
 }

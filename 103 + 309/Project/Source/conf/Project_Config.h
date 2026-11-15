@@ -68,9 +68,9 @@
 // <o> Parameter update generation <0-65534>
 // <i> 0 = preserve stored parameters. Increment only for an intentional update.
 #define PROJECT_CFG_STORAGE_UPDATE_GENERATION 0
-// <o> Parameter update mask <0-511>
+// <o> Parameter update mask <0-255>
 // <i> Bits: 0 AFE, 1 protection, 2 SOC, 3 other, 4 current K/B,
-// <i> 5 heat/cool, 6 SOC state, 7 reserved aging, 8 recent log.
+// <i> 5 heat/cool, 6 SOC state, 7 recent log.
 // <i> Keep mask 0 when generation 0. Lifetime statistics are preserved.
 #define PROJECT_CFG_STORAGE_UPDATE_MASK 0
 // </h>
