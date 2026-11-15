@@ -470,11 +470,6 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 		Delay1ms(1);
 	}
 
-	if (!result)
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
-	}
-
 	return result;
 }
 
@@ -502,11 +497,6 @@ UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 		WrAddr++;
 		WrBuf++;
 		Delay1ms(40);
-	}
-
-	if (!result)
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
 	}
 
 	return result;
@@ -538,10 +528,6 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 		result = TwiRead(AFE_ID, RdAddr, Length, RdBuf);
 	}
 
-	if (!result)
-	{
-		System_ERROR_UserCallback(ERROR_AFE1);
-	}
 	return result;
 }
 
@@ -589,8 +575,8 @@ void InitAFE1(void)
 	 */
 	AfeCurrent_StartupZeroCal();
 
-	if (ready && !AFE_PARAM_WRITE_Flag && MosStartup_ApplyInitialState())
-		open_ctlc();
+	/* Leave CTL closed until full RUN samples requalify communication. */
+    (void)ready;
 }
 
 

@@ -21,13 +21,12 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} // 16
 };
 
-#define MONITOR_AFE_FAIL_LIMIT ((UINT8)50)
-#define MONITOR_AFE_RECOVER_TRIGGER ((UINT8)30)
-#define MONITOR_AFE_RECOVER_RETRY_STEP ((UINT8)5U)
-#define MONITOR_AFE_WAKE_RETRY_LIMIT ((UINT8)20)
-#define MONITOR_AFE_TASK_PERIOD_MS ((UINT16)200)
-#define MONITOR_AFE_SLEEP_DELAY_SEC ((UINT16)(5U * 60U))
-#define MONITOR_AFE_SLEEP_DELAY_TICKS ((UINT16)((MONITOR_AFE_SLEEP_DELAY_SEC * 1000U) / MONITOR_AFE_TASK_PERIOD_MS))
+#define AFE_MONITOR_FAIL_LIMIT 3U
+#define AFE_MONITOR_RECOVER_LIMIT 3U
+#define AFE_MONITOR_MIN_SAMPLE_TICKS 15U
+#define AFE_MONITOR_DEEP_TICKS 30000U
+#define AFE_CONFIG_RETRY_TICKS 500U
+#define AFE_CONFIG_MAX_ATTEMPTS 3U
 #define AFE_CURRENT_ADC_FULL_SCALE_MV ((UINT32)200U)
 #define AFE_CURRENT_ADC_DENOMINATOR ((UINT32)21470U)
 #define BOOT_CURRENT_ZERO_SAMPLE_INTERVAL_MS ((UINT16)300U)
@@ -48,17 +47,20 @@ typedef struct _AFE_CURRENT_RUNTIME
     UINT8 zeroStatus;
 } AFE_CURRENT_RUNTIME;
 
-typedef struct _AFE_MONITOR_CH
-{
-    UINT8 faultCnt;
-    UINT8 wakeCnt;
-    UINT8 errorReported;
-} AFE_MONITOR_CH;
-
 typedef struct _AFE_MONITOR_RUNTIME
 {
-    AFE_MONITOR_CH ch[2];
-    UINT16 sleepDelay[3];
+    UINT32 fault_tick;
+    UINT32 last_eval_tick;
+    UINT32 last_data_tick;
+    UINT8 fail_count;
+    UINT8 ok_count;
+    UINT8 evaluated;
+    UINT8 data_valid;
+    UINT8 healthy;
+    UINT8 fault;
+    UINT8 config_attempts;
+    UINT8 config_attempted;
+    UINT32 config_attempt_tick;
 } AFE_MONITOR_RUNTIME;
 
 typedef struct _DATA_RUNTIME
@@ -591,167 +593,110 @@ void DataLoad_Current(void)
 #endif
 }
 
-static void MonitorAFE_SetStatus(UINT8 num, UINT8 is_ok)
+/* No AFE software reset or EEPROM programming from communication recovery. */
+void AFE_MonitorInvalidate(void)
 {
-    switch (num)
-    {
-    case 0:
-        SystemRuntime_SetAfeStatus(0U, is_ok);
-        break;
-    case 1:
-        SystemRuntime_SetAfeStatus(1U, is_ok);
-        break;
-    default:
-        break;
-    }
+    s_data.mon.data_valid = 0U;
+    s_data.mon.healthy = 0U;
+    s_data.mon.ok_count = 0U;
+    s_data.mon.evaluated = 0U;
+    SystemRuntime_SetAfeStatus(0U, 0U);
+    Fault_PauseMeasurements();
 }
 
-static AFE_MONITOR_CH *MonitorAFE_GetChannel(UINT8 num);
-static void MonitorAFE_ReportError(UINT8 num)
+UINT8 AFE_IsDataFresh(void)
 {
-    switch (num)
-    {
-    case 0:
-        System_ERROR_UserCallback(ERROR_AFE1);
-        break;
-    case 1:
-        System_ERROR_UserCallback(ERROR_AFE2);
-        break;
-    default:
-        break;
-    }
+    return (UINT8)(s_data.mon.data_valid &&
+        (UINT32)(SysTime_Get10msTickCount() - s_data.mon.last_data_tick) <= 50U);
 }
 
-static void MonitorAFE_ClearError(UINT8 num)
+UINT8 AFE_IsHealthy(void)
 {
-    switch (num)
-    {
-    case 0:
-        System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
-        break;
-    case 1:
-        System_ERROR_UserCallback(ERROR_REMOVE_AFE2);
-        break;
-    default:
-        break;
-    }
+    return (UINT8)(s_data.mon.healthy && !s_data.mon.fault &&
+                   !AFE_PARAM_WRITE_Flag);
 }
 
-static void MonitorAFE_Recover(UINT8 num)
+static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 status_ok)
 {
-    switch (num)
+    AFE_MONITOR_RUNTIME *mon = &s_data.mon;
+    UINT32 now = SysTime_Get10msTickCount();
+    UINT8 complete = (UINT8)(data_ok && status_ok);
+
+    mon->data_valid = data_ok;
+    if (data_ok) mon->last_data_tick = now;
+
+    /* Pending periods may be drained in one RUN tick: never count them
+       as separate fault or recovery confirmations. */
+    if (!mon->evaluated ||
+        (UINT32)(now - mon->last_eval_tick) >= AFE_MONITOR_MIN_SAMPLE_TICKS)
     {
-    case 0:
-        InitAFE1();
-        break;
-    case 1:
-        SH367309_Enable_AFE_Wdt_Cadc_Drivers();
-        break;
-    default:
-        break;
-    }
-}
-
-static void MonitorAFE_UpdateChannel(UINT8 num, UINT8 result, UINT8 *fault_cnt, UINT8 *wake_cnt)
-{
-    AFE_MONITOR_CH *channel;
-
-    if ((fault_cnt == 0) || (wake_cnt == 0))
-    {
-        return;
-    }
-
-    channel = MonitorAFE_GetChannel(num);
-    if (channel == 0)
-    {
-        return;
-    }
-
-    if (result != 0)
-    {
-        UINT8 recover_slot;
-
-        if (*fault_cnt < 0xFFU)
+        mon->evaluated = 1U;
+        mon->last_eval_tick = now;
+        if (complete)
         {
-            ++(*fault_cnt);
-        }
-
-        if (*fault_cnt >= MONITOR_AFE_RECOVER_TRIGGER)
-        {
-            recover_slot = (UINT8)((*fault_cnt - MONITOR_AFE_RECOVER_TRIGGER) / MONITOR_AFE_RECOVER_RETRY_STEP);
-            if ((recover_slot == *wake_cnt) && (*wake_cnt < MONITOR_AFE_WAKE_RETRY_LIMIT))
+            mon->fail_count = 0U;
+            if (mon->ok_count < AFE_MONITOR_RECOVER_LIMIT)
+                ++mon->ok_count;
+            if (mon->ok_count >= AFE_MONITOR_RECOVER_LIMIT)
             {
-                MonitorAFE_Recover(num);
-                ++(*wake_cnt);
+                mon->fault = 0U;
+                mon->healthy = 1U;
+                SystemError_SetActive(ERROR_AFE1, 0U);
             }
         }
-
-        if ((*fault_cnt >= MONITOR_AFE_FAIL_LIMIT) && (channel->errorReported == 0U))
+        else
         {
-            Init_Registers(num);
-            channel->errorReported = 1U;
-            MonitorAFE_ReportError(num);
+            mon->ok_count = 0U;
+            mon->healthy = 0U;
+            if (mon->fail_count < AFE_MONITOR_FAIL_LIMIT)
+                ++mon->fail_count;
+            if (mon->fail_count >= AFE_MONITOR_FAIL_LIMIT && !mon->fault)
+            {
+                mon->fault = 1U;
+                mon->fault_tick = now;
+                SystemError_SetActive(ERROR_AFE1, 1U);
+                close_ctlc(); /* CTLC=3 is required and must be verified on board. */
+            }
         }
-
-        MonitorAFE_SetStatus(num, 0);
     }
-    else
-    {
-        *fault_cnt = 0U;
-        *wake_cnt = 0U;
-        channel->errorReported = 0U;
-
-        MonitorAFE_SetStatus(num, 1);
-        MonitorAFE_ClearError(num);
-    }
+    SystemRuntime_SetAfeStatus(0U, (UINT8)(complete && mon->healthy));
+    if (mon->fault && (UINT32)(now - mon->fault_tick) >= AFE_MONITOR_DEEP_TICKS)
+        LowPower_Request(DEEP_MODE);
 }
 
-static void MonitorAFE_UpdateSleepDelay(UINT8 is_error, UINT16 *delay_tick)
+void AFE_RequestParameterApply(void)
 {
-    if (delay_tick == 0)
+    s_data.mon.config_attempts = 0U;
+    s_data.mon.config_attempted = 0U;
+    AFE_PARAM_WRITE_Flag = 1;
+    close_ctlc();
+    AFE_MonitorInvalidate();
+}
+
+static void AFE_ApplyPendingConfiguration(UINT8 data_ok, UINT8 status_ok)
+{
+    AFE_MONITOR_RUNTIME *mon = &s_data.mon;
+    UINT32 now = SysTime_Get10msTickCount();
+
+    if (!AFE_PARAM_WRITE_Flag)
     {
+        mon->config_attempts = 0U;
+        mon->config_attempted = 0U;
         return;
     }
+    if (!data_ok || !status_ok ||
+        mon->config_attempts >= AFE_CONFIG_MAX_ATTEMPTS)
+        return;
+    if (mon->config_attempted &&
+        (UINT32)(now - mon->config_attempt_tick) < AFE_CONFIG_RETRY_TICKS)
+        return;
 
-    if (is_error)
-    {
-        if (++(*delay_tick) >= MONITOR_AFE_SLEEP_DELAY_TICKS)
-        {
-            *delay_tick = 0;
-            LowPower_Request(DEEP_MODE);
-        }
-    }
-    else
-    {
-        *delay_tick = 0;
-    }
-}
-
-static AFE_MONITOR_CH *MonitorAFE_GetChannel(UINT8 num)
-{
-    if (num >= 2U)
-    {
-        return 0;
-    }
-
-    return &s_data.mon.ch[num];
-}
-
-void MonitorAFE(UINT8 num, UINT8 Result)
-{
-    AFE_MONITOR_CH *channel;
-
-    channel = MonitorAFE_GetChannel(num);
-    if (channel != 0)
-    {
-        MonitorAFE_UpdateChannel(num, Result, &channel->faultCnt, &channel->wakeCnt);
-    }
-
-    MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE1), &s_data.mon.sleepDelay[0]);
-    MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE2), &s_data.mon.sleepDelay[1]);
-    /* A Flash save failure is diagnosed but must not force protective DEEP. */
-    MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM),
-                                &s_data.mon.sleepDelay[2]);
+    mon->config_attempted = 1U;
+    mon->config_attempt_tick = now;
+    ++mon->config_attempts;
+    close_ctlc();
+    if (SH367309_UpdataAfeConfig())
+        AFE_MonitorInvalidate(); /* Require fresh frames after any configuration. */
 }
 
 void open_ctlc(void)
@@ -765,29 +710,36 @@ void close_ctlc(void)
 
 void App_AFEGet(void)
 {
-    UINT8 sample_valid, fault_valid;
-    if (0U == SysTime_Take200msTaskPeriod())
+    UINT8 data_ok, status_ok, mos_ok;
+    if (SysTime_Take200msTaskPeriod() == 0U)
         return;
 
     MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
-    sample_valid = (UINT8)(UpdateVoltageFromBqMaximo() == 0U);
-    MonitorAFE(0, (UINT8)!sample_valid);
+    data_ok = (UINT8)(UpdateVoltageFromBqMaximo() == 0U);
+    if (data_ok)
+    {
+        DataLoad_CellVolt();
+        DataLoad_CellVoltMaxMinFind();
+        DataLoad_Temperature();
+        DataLoad_TemperatureMaxMinFind();
+        DataLoad_Current();
+    }
+    Fault_UpdateCurrentProtection(data_ok);
+    status_ok = App_SH367309();
+    AFE_MonitorUpdate(data_ok, status_ok);
+    if (data_ok && status_ok)
+        Sci_CustomerUpdateCounters();
 
-    DataLoad_CellVolt();
-    DataLoad_CellVoltMaxMinFind();
-    DataLoad_Temperature();
-    DataLoad_TemperatureMaxMinFind();
-    DataLoad_Current();
-
-    Fault_UpdateCurrentProtection(sample_valid);
-    fault_valid=App_SH367309();
-    Fault_ApplyMosPermits(1U, 1U);
-    /* Both frames belong to this cycle; invalid cached zeros are not recovery. */
-    if (sample_valid && fault_valid) Sci_CustomerUpdateCounters();
-    App_SOC(sample_valid, fault_valid);
-    if (fault_valid)
+    App_SOC(data_ok, status_ok);
+    if (status_ok)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp);
     else
         (void)SleepDeal_NormalIdleExpired(1U);
 
+    /* Normal permits are applied once. CTL releases only after a verified
+       healthy cycle, successful register readback and no pending profile. */
+    mos_ok = Fault_ApplyMosPermits(1U, 1U);
+    if (mos_ok && AFE_IsHealthy() && data_ok && status_ok)
+        open_ctlc();
+    AFE_ApplyPendingConfiguration(data_ok, status_ok);
 }

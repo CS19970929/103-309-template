@@ -330,7 +330,7 @@ UINT8 Sci_WrRegs_0x10_AFE_Parameters(UINT16 u16Channel, struct RS485MSG *s)
 			return 1;
 		}
 
-		AFE_PARAM_WRITE_Flag = 1;
+		AFE_RequestParameterApply();
 		return 1;
 	}
 
@@ -391,6 +391,6 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 		return 0;
 	}
 
-	AFE_PARAM_WRITE_Flag = 1;
+	AFE_RequestParameterApply();
 	return 1;
 }

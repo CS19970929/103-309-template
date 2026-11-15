@@ -102,10 +102,6 @@ UINT8 AFE_IsReady(void)
 		}
 	}
 
-	if (result == 0U)
-	{
-		System_ERROR_UserCallback(ERROR_REMOVE_AFE1);
-	}
 	return result;
 }
 
@@ -302,8 +298,5 @@ static UINT8 App_SH367309_Monitor(void)
 
 UINT8 App_SH367309(void)
 {
-	UINT8 valid=App_SH367309_Monitor();
-	if (AFE_PARAM_WRITE_Flag && SH367309_UpdataAfeConfig())
-		open_ctlc();
-	return valid;
+    return App_SH367309_Monitor();
 }

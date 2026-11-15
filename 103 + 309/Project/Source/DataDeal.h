@@ -190,6 +190,10 @@ extern UINT32 g_u32CS_Res_AFE;
 void App_AFEGet(  void);
 void AfeCurrent_StartupZeroCal(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
+UINT8 AFE_IsHealthy(void);
+UINT8 AFE_IsDataFresh(void);
+void AFE_MonitorInvalidate(void);
+void AFE_RequestParameterApply(void);
 void open_ctlc(void);
 void close_ctlc(void);
 
