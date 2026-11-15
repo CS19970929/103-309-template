@@ -749,9 +749,8 @@ void MonitorAFE(UINT8 num, UINT8 Result)
 
     MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE1), &s_data.mon.sleepDelay[0]);
     MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_AFE2), &s_data.mon.sleepDelay[1]);
-    /* Sleep after persistent storage communication faults too. */
-    MonitorAFE_UpdateSleepDelay((UINT8)(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM) ||
-                                        System_ERROR_UserCallback(ERROR_STATUS_EEPROM_STORE)),
+    /* A Flash save failure is diagnosed but must not force protective DEEP. */
+    MonitorAFE_UpdateSleepDelay(System_ERROR_UserCallback(ERROR_STATUS_EEPROM_COM),
                                 &s_data.mon.sleepDelay[2]);
 }
 

@@ -165,11 +165,12 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 		flag = System_ErrorField(errorCode);
 		if (flag != 0)
 		{
-			if (errorCode == ERROR_TEMP_BREAK)
+			if (errorCode == ERROR_TEMP_BREAK || errorCode == ERROR_EEPROM_STORE)
 			{
+				/* Persistent error is a diagnostic latch, not a wraparound counter. */
 				*flag = 1U;
 			}
-			else if (errorCode != ERROR_EEPROM_STORE)
+			else
 			{
 				++(*flag);
 			}
