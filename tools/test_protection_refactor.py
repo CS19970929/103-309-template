@@ -238,6 +238,7 @@ static void reset_case(void) {
     PRT_E2ROMParas.u16TmosOTp_Filter=100;
     s_charge_recovery_ticks=s_discharge_recovery_ticks=0;
     s_host_mos_off=0; tick=0; forced_ctl_close=0;
+    s_mos_sensor_fault=s_pack_sensor_fault=s_pack_sensor_ok_count=0U;
     memset(test_error_state,0,sizeof(test_error_state));
     Fault_PauseMeasurements();
 }
@@ -412,6 +413,17 @@ int main(void) {
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
     sample_status=ADC_SAMPLE_INVALID; DataLoad_MosTemperature();
     assert(g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp);
+    /* Pack and MOS NTC errors are independent; one healthy sensor cannot
+       clear the other's diagnosed failure. */
+    reset_case(); Fault_UpdatePackTemperatureResult(2U);
+    assert(SystemError_IsActive(ERROR_STATUS_TEMP_BREAK));
+    for(i=0;i<3;++i) { tick+=10; Fault_UpdateMosTemperature(1U,650U); }
+    assert(SystemError_IsActive(ERROR_STATUS_TEMP_BREAK));
+    for(i=0;i<3;++i) Fault_UpdatePackTemperatureResult(0U);
+    assert(!SystemError_IsActive(ERROR_STATUS_TEMP_BREAK));
+    assert(Fault_CanOpenCtl());
+    g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp=1U;
+    assert(!Fault_CanOpenCtl());
     test_parameter_transaction();
     puts("PASS protection: 524288 permit combinations, host reverse flow/zero/freshness/STOP, independent latches, CONF retry");
     puts("PASS MOS: trigger/recovery hysteresis, invalid/old samples, STOP, wrap, parameter fallback, real NTC path");

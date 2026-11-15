@@ -8,9 +8,14 @@ static struct { struct { struct { UINT8 b1CellUvp; } bits; } unMdlFault_Third; }
 #define MCUO_DEBUG_LED1 led
 static int SysTime_Take200msTaskPeriod(void) { return period; }
 static UINT8 UpdateVoltageFromBqMaximo(void) { return (UINT8)voltage_failed; }
-static void AFE_MonitorUpdate(UINT8 data_ok,UINT8 status_ok) {
+static void AFE_MonitorUpdate(UINT8 data_ok,UINT8 status_ok,UINT8 wire_ok) {
     assert(data_ok==(UINT8)!voltage_failed && status_ok==(UINT8)fault_valid);
+    assert(wire_ok==(UINT8)!voltage_failed);
 }
+static void Fault_UpdatePackTemperatureResult(UINT8 result) {
+    assert(result==(UINT8)voltage_failed);
+}
+static UINT8 Fault_CanOpenCtl(void) { return 1U; }
 static UINT8 AFE_IsHealthy(void) { return 0U; }
 static void open_ctlc(void) {}
 static void AFE_ApplyPendingConfiguration(UINT8 data_ok,UINT8 status_ok) {
