@@ -115,6 +115,21 @@ static volatile UINT8 *System_ErrorField(enum SYSTEM_ERROR_COMMAND errorCode)
 	return &(((volatile UINT8 *)&System_ErrFlag)[offset]);
 }
 
+/* Current fault state and legacy protocol counters must not be confused. */
+void SystemError_SetActive(enum SYSTEM_ERROR_COMMAND code, UINT8 active)
+{
+    volatile UINT8 *flag = (code >= ERROR_AFE1 && code <= ERROR_NUM) ?
+        System_ErrorField(code) : System_ErrorCommandField(code);
+    if (flag != 0) *flag = active ? 1U : 0U;
+}
+
+UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND code)
+{
+    volatile UINT8 *flag = (code >= ERROR_AFE1 && code <= ERROR_NUM) ?
+        System_ErrorField(code) : System_ErrorCommandField(code);
+    return (UINT8)(flag != 0 && *flag != 0U);
+}
+
 void InitSystemMonitorData_EEPROM(void)
 {
 	s_system_status.all = SYSTEM_STATUS_DEFAULT_MASK;
@@ -170,7 +185,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode)
 				/* Persistent error is a diagnostic latch, not a wraparound counter. */
 				*flag = 1U;
 			}
-			else
+			else if (*flag < 0xFFU)
 			{
 				++(*flag);
 			}
