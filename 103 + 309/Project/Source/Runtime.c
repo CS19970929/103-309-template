@@ -9,6 +9,8 @@ void Runtime_Boot(void)
 	UINT32 reset_cause=RCC->CSR;
 	UINT16 sleep_flag=BootFlag_Read();
 	UINT8 attempt, storage_ready=0U;
+    /* Read BKP evidence before RTC fallback can reinitialize the domain. */
+    SystemRuntime_CaptureFaultSnapshot();
 	RCC_ClearFlag();
 	/* Capture reset evidence before RTC setup can clear RCC/backup state. */
 	StorageFlash_InitStatistics(reset_cause,sleep_flag);

@@ -1,7 +1,9 @@
 #include "main.h"
+#include "FaultSnapshot.h"
 
 volatile struct SYSTEM_ERROR System_ErrFlag;
 volatile union System_Status s_system_status;
+volatile struct CPU_FAULT_DIAG g_lastCpuFault;
 
 #define SYSTEM_ERROR_FIELD_INVALID ((UINT8)0xFFU)
 /* Keep these masks in sync with System_Monitor.h bitfield order. */
@@ -155,6 +157,22 @@ void SystemRuntime_ObservePersistentFailures(void)
     }
     else if ((UINT32)(now - s_persistent_error_tick) >= 30000U)
         LowPower_Request(DEEP_MODE);
+}
+
+void SystemRuntime_CaptureFaultSnapshot(void)
+{
+    UINT16 reason=BKP_ReadBackupRegister(FAULT_BKP_REASON_REG);
+    UINT16 inverse=BKP_ReadBackupRegister(FAULT_BKP_REASON_INV_REG);
+    if ((UINT16)(reason ^ inverse) != 0xFFFFU) return;
+    if (reason != FAULT_REASON_HARD && reason != FAULT_REASON_MEM &&
+        reason != FAULT_REASON_BUS && reason != FAULT_REASON_USAGE)
+        return;
+    g_lastCpuFault.reason=reason;
+    g_lastCpuFault.cfsr_lo=BKP_ReadBackupRegister(FAULT_BKP_CFSR_LO_REG);
+    g_lastCpuFault.cfsr_hi=BKP_ReadBackupRegister(FAULT_BKP_CFSR_HI_REG);
+    g_lastCpuFault.hfsr_hi=BKP_ReadBackupRegister(FAULT_BKP_HFSR_HI_REG);
+    /* Reserved status 22 means a previous CPU fault was observed at boot. */
+    SystemError_SetActive(ERROR_RESERVED_22, 1U);
 }
 
 void InitSystemMonitorData_EEPROM(void)

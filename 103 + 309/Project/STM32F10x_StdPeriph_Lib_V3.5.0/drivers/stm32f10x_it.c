@@ -61,6 +61,11 @@ static void Fault_SaveReason(UINT16 reason)
 {
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
   PWR_BackupAccessCmd(ENABLE);
+  /* Commit the inverse last; partial evidence must not appear valid. */
+  BKP_WriteBackupRegister(FAULT_BKP_REASON_INV_REG, 0U);
+  BKP_WriteBackupRegister(FAULT_BKP_CFSR_LO_REG, (UINT16)SCB->CFSR);
+  BKP_WriteBackupRegister(FAULT_BKP_CFSR_HI_REG, (UINT16)(SCB->CFSR >> 16));
+  BKP_WriteBackupRegister(FAULT_BKP_HFSR_HI_REG, (UINT16)(SCB->HFSR >> 16));
   BKP_WriteBackupRegister(FAULT_BKP_REASON_REG, reason);
   BKP_WriteBackupRegister(FAULT_BKP_REASON_INV_REG, (UINT16)(~reason));
 }

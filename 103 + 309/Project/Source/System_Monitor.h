@@ -151,6 +151,11 @@ union System_Status {				//TODO�����⣬Heat��Cool��û��
 };
 
 
+struct CPU_FAULT_DIAG {
+    UINT16 reason;
+    UINT16 cfsr_lo, cfsr_hi, hfsr_hi;
+};
+extern volatile struct CPU_FAULT_DIAG g_lastCpuFault;
 extern volatile struct SYSTEM_ERROR System_ErrFlag;
 extern volatile union System_Status s_system_status;
 
@@ -160,6 +165,7 @@ void SystemError_SetActive(enum SYSTEM_ERROR_COMMAND code, UINT8 active);
 UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND code);
 void SystemRuntime_ObservePersistentFailures(void);
 void SystemRuntime_PausePersistentFailureTimers(void);
+void SystemRuntime_CaptureFaultSnapshot(void);
 void SystemRuntime_MarkBootReady(void);
 void SystemRuntime_SetProjectVersion(UINT8 project_version);
 void SystemRuntime_SetAfeStatus(UINT8 afe_index, UINT8 is_ok);
