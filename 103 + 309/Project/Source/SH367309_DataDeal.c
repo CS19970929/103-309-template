@@ -374,10 +374,10 @@ void Sci_ACK_0x03_RW_AFE_Parameters(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 {
 	UINT8 i;
+	UINT16 snapshot[AFE_PARAMETES_TOTAL_LENGTH];
 	UINT16 *P = (UINT16 *)&AFE_Parameters_RS485_Struction.u16VcellOvp.defaultValue;
 
-	RTC_SetCounter(0);
-
+	AFE_CopyCurValues(snapshot);
 	Feed_IWatchDog;
 	for (i = 0; i < AFE_PARAMETES_TOTAL_LENGTH; ++i)
 	{
@@ -387,6 +387,7 @@ UINT8 EEPROM_ResetData_AFE_ParametersToDefault(void)
 
 	if (!AFE_SaveCurValuesToFlash())
 	{
+		AFE_RestoreCurValues(snapshot);
 		return 0;
 	}
 
