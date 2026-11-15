@@ -250,6 +250,7 @@ void IOstatus_DeepMode(void)
 
 void Sys_StopMode(void)
 {
+    UINT32 primask = __get_PRIMASK();
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
     TIM_Cmd(TIM3, DISABLE);
@@ -265,7 +266,7 @@ void Sys_StopMode(void)
     }
 
     cpu_frequency_conf();
-    __enable_irq();
+    if (primask == 0U) __enable_irq();
 }
 
 void InitRunAfterStopWakeup(void)

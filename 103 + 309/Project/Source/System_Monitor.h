@@ -159,6 +159,7 @@ UINT8 System_ERROR_UserCallback(enum SYSTEM_ERROR_COMMAND errorCode);
 void SystemError_SetActive(enum SYSTEM_ERROR_COMMAND code, UINT8 active);
 UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND code);
 void SystemRuntime_ObservePersistentFailures(void);
+void SystemRuntime_PausePersistentFailureTimers(void);
 void SystemRuntime_MarkBootReady(void);
 void SystemRuntime_SetProjectVersion(UINT8 project_version);
 void SystemRuntime_SetAfeStatus(UINT8 afe_index, UINT8 is_ok);

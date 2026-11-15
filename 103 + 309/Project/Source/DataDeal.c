@@ -607,6 +607,16 @@ void AFE_MonitorInvalidate(void)
     Fault_PauseMeasurements();
 }
 
+/* STOP resets the RUN tick. Keep confirmed faults, but do not include
+   offline time in the five-minute communication fault timeout. */
+void AFE_MonitorResumeAfterStop(void)
+{
+    AFE_MonitorInvalidate();
+    s_data.mon.fail_count = 0U;
+    if (s_data.mon.fault)
+        s_data.mon.fault_tick = SysTime_Get10msTickCount();
+}
+
 UINT8 AFE_IsDataFresh(void)
 {
     return (UINT8)(s_data.mon.data_valid &&

@@ -194,7 +194,8 @@ static bool rtc_sleep_prepare_rtc(void)
         InitWakeUp_Base();
     }
 
-    /* STOP retains RAM on failure; the save helper latches the storage error. */
+    /* STOP time must not count as ongoing RUN failure monitoring. */
+    SystemRuntime_PausePersistentFailureTimers();
     (void)LowPowerSleep_SaveCoreState();
     g_irq_t = NO_IRQ;
     MCUO_DEBUG_LED1 = 1;
@@ -308,8 +309,7 @@ void rtc_sleep(void)
         if (g_stLowPowerRtcStatus.mode==DEEP_MODE) return;
 
         sleep_mode=g_stLowPowerRtcStatus.mode;
-        if (sleep_mode == NORMAL_MODE)
-            MCUO_AFE_CTLC = 1;
+        /* Never release CTL with STOP-era protection/cache state. */
 
         RtcSleep_PortDisableStopWakeup();
         {
@@ -318,6 +318,8 @@ void rtc_sleep(void)
             g_stLowPowerRtcStatus.comm_wakeup=0U;
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
+            AFE_MonitorResumeAfterStop();
+            close_ctlc();
             SleepDeal_ResetKeyState((UINT8)(sleep_mode==HICCUP_MODE && g_irq_t==soc_key));
             RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
         }

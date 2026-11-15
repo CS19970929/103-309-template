@@ -132,6 +132,11 @@ UINT8 SystemError_IsActive(enum SYSTEM_ERROR_COMMAND code)
     return (UINT8)(flag != 0 && *flag != 0U);
 }
 
+void SystemRuntime_PausePersistentFailureTimers(void)
+{
+    s_persistent_error_tracking = 0U;
+}
+
 void SystemRuntime_ObservePersistentFailures(void)
 {
     UINT8 bad = (UINT8)(SystemError_IsActive(ERROR_STATUS_EEPROM_STORE) ||
