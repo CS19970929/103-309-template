@@ -387,8 +387,13 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
     } else if (!(flags & SOC_TARGET_FULL)) {
         s_cal.full_ticks = 0U;
     }
-    if (full_mv <= low_mv || full_mv > SOC_CELL_MAX_MV)
-        flags &= (UINT16)~(SOC_TARGET_FULL | SOC_FULL_LATCHED);
+    if (full_mv <= low_mv || full_mv > SOC_CELL_MAX_MV ||
+        ((flags & SOC_TARGET_FULL) && min_mv <= low_mv)) {
+        /* Relaxation at normal voltage is fine. A collapse into the
+         * low-SOC window invalidates an unfinished upper calibration. */
+        flags &= (UINT16)~(SOC_TARGET_FULL | SOC_FULL_LATCHED | SOC_CHARGE_SEEN);
+        s_cal.remainder = 0U;
+    }
 
     if (flags != s_soc.calibration_flags) s_saved.valid = 0U;
     s_soc.calibration_flags = flags;
