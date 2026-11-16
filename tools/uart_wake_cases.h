@@ -30,7 +30,7 @@ static void IOstatus_RTCMode(void) { assert(!adc_on); }
 static void InitWakeUp_Base(void) {}
 static UINT8 SleepDeal_IsWakeupValid(void) { return (UINT8)wake_external; }
 static void RTC_ClearStopWakeup(void) {}
-static void RTC_WKTimeConfig(void) {}
+static bool RTC_WKTimeConfig(void) { return true; }
 static UINT32 RTC_GetCounter(void) { return 1; }
 static void RtcSleep_PortEnterStop(void) {
     assert(!adc_on);
