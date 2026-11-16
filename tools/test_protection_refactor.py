@@ -156,7 +156,7 @@ static struct {
         UINT8 all;
         struct { UINT8 IDLE:1, SLEEP:1, ENWDT:1, CADCON:1, CHGMOS:1, DSGMOS:1, PCHMOS:1, OCRC:1; } bits;
     } REG_MTP_CONF;
-    struct { struct { UINT8 SC; } bits; } REG_BSTATUS1;
+    struct { struct { UINT8 SC, PF; } bits; } REG_BSTATUS1;
 } SH367309_Reg_Store;
 static UINT8 hardware_conf=0x38, AFE_PARAM_WRITE_Flag;
 static int reads, writes, fail_read, fail_write, bad_verify;

@@ -12,6 +12,7 @@
 
 struct OTHER_ELEMENT OtherElement;
 struct stCell_Info g_stCellInfoReport;
+struct HOST_AFE_PARAMETERS AFE_Parameters_RS485_Struction;
 volatile struct SYSTEM_ERROR System_ErrFlag;
 
 UINT8 SeriesNum = 10U;
@@ -157,6 +158,7 @@ static void host_apply_default_config(void)
 	OtherElement.u16Soc_TableSelect = SOC_TABLE_TERNARYLI;
 	OtherElement.u16Soc_V_100 = 4180U;
 	OtherElement.u16Soc_V_0 = 3000U;
+    AFE_Parameters_RS485_Struction.u16VcellUvp.curValue=2700U;
 	OtherElement.u16Sys_SeriesNum = 10U;
 	SeriesNum = 10U;
 }
@@ -180,7 +182,9 @@ static void host_set_snapshot(UINT16 soc)
 	s_flash_soc.u16FormatVersion = FLASH_STORAGE_SOC_DATA_VERSION;
 	s_flash_soc.u16SocNow = soc;
 	s_flash_soc.u16DsgSocInt = 0U;
-	s_flash_soc.u16MaxErrorPercent = 100U;
+	s_flash_soc.u16MaxErrorPercent = OtherElement.u16Soc_V_100;
+    s_flash_soc.u16LearnState = STORAGE_SOC_STATE_TAG;
+    s_flash_soc.u16LearnAnchorSoc = 0xFFFFU;
 	s_flash_soc.u32CycleTimes = 300U;
 	s_flash_soc.u32CapFull = (UINT32)HOST_CAP_FACTORY_AS10;
 	s_flash_soc.u32CapNow = host_cap_now_from_soc(soc);

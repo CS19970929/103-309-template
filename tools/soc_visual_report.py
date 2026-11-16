@@ -74,6 +74,8 @@ struct stCell_Info {UINT16 u16VCellMin,u16VCellMax,u16VCellDelta,u16VCellTotle,u
 struct SYSTEM_ERROR {int unused;};enum SYSTEM_ERROR_COMMAND {HOST_UNUSED};
 extern struct OTHER_ELEMENT OtherElement;
 extern struct stCell_Info g_stCellInfoReport;
+struct HOST_AFE_PARAMETERS {struct {UINT16 curValue;} u16VcellUvp;};
+extern struct HOST_AFE_PARAMETERS AFE_Parameters_RS485_Struction;
 INT32 AfeCurrent_GetCurrent_mA(void);
 UINT8 Fault_IsCurrentSampleFresh(void);
 UINT32 SysTime_Get10msTickCount(void);
