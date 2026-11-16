@@ -17,6 +17,8 @@ DEEP 继续使用 1 秒确认及松手后重按规则；保持型各模式维持
 
 PA9 使用双边沿中断，以识别松手/断开。需要输入确认的模式在主流程中有界等待并按既有方式喂狗；按键型 HICCUP 开关中断跳过等待，仍保留确认过放的优先检查。ADC 在 STOP 与唤醒条件判断期间保持关闭，只有恢复 RUN 才按原顺序重新初始化、等待有效采样。旧 `_DI_SWITCH_*` 宏已移除，只有 `PROJECT_CFG_SWITCH_MODE` 决定策略。
 
+HICCUP 退出 STOP 回到 RUN 时保留原 CTL 电平，不因唤醒主动关断两路 MOS，也不主动打开原本关闭的 CTL。恢复仍作废 STOP 前的测量与反向放行证据，保留已有故障锁存；故障关断继续由既有保护路径执行。NORMAL 在进入时已关闭 CTL，唤醒后仍等待新鲜 AFE 数据和正常 MOS 仲裁通过，再允许恢复，不能直接按旧缓存放行。
+
 DEEP 等待期间保留备份域休眠原因，只有按键确认成功后才清除；充电唤醒保留既有充电标志。等待中发生复位仍回到 DEEP 等待，不把复位当成用户唤醒。STOP 前后及按键确认期间按既有方式喂狗。
 
 验证入口 `python tools/test_sleep_policy.py` 分别编译两个模式，使用实际 `SleepDeal.c`、`rtc_sleep.c`、复位休眠提交入口和异常延时函数，以主机硬件替身覆盖 NORMAL 的 1 秒确认与松手再按、HICCUP 短接中断即时唤醒、恢复 tick 后连续短接 3 秒进入 NORMAL、电流同时唤醒、UART 边沿直接唤醒、RUN/HICCUP 长期空闲到期提交 DEEP、异常持续 5 分钟及恢复重计时、保存失败仍进入 DEEP、持续短接与松手不回 RUN、DEEP、保持型断开/短接、抖动、tick 回绕及充电唤醒；实板按键、电流和 MOS 动作需单独验收。无 BIN 工程验证可用 `python tools/check_bms_no_bin.py --target FD_Release --switch-mode 0`（或 1），只覆盖临时工程的编译宏，不修改工作区配置。

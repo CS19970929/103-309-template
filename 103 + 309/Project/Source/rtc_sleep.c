@@ -317,7 +317,9 @@ void rtc_sleep(void)
         if (g_stLowPowerRtcStatus.mode==DEEP_MODE) return;
 
         sleep_mode=g_stLowPowerRtcStatus.mode;
-        /* Never release CTL with STOP-era protection/cache state. */
+        /* HICCUP retains CTL through STOP; waking must not pulse it low.
+         * NORMAL stays closed from entry until normal AFE/MOS arbitration
+         * authorizes release with fresh data. */
 
         RtcSleep_PortDisableStopWakeup();
         {
@@ -327,7 +329,6 @@ void rtc_sleep(void)
             // todo 仔细梳理下配置
             RtcSleep_PortRestoreAfterStop();
             AFE_MonitorResumeAfterStop();
-            close_ctlc();
             SleepDeal_ResetKeyState((UINT8)(sleep_mode==HICCUP_MODE && g_irq_t==soc_key));
             RtcSleep_PortAddRuntimeSeconds(g_stLowPowerRtcStatus.sleep);
         }

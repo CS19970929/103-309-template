@@ -25,6 +25,7 @@ typedef int FLASH_Status;
 #define ENABLE 1
 static int key=1,charger,adc_on,led,ctlc,one_second;
 static int stop_calls,restore_calls,deep_calls,rtc_wake,comm_busy,can_busy;
+static unsigned ctl_close_calls,afe_resume_calls;
 static UINT32 tick,now_ms,release_at_ms,charge_at_ms,rtc_counter;
 static UINT16 bkp[6];
 static UINT8 sleep_save_ok=1U;
@@ -53,7 +54,7 @@ static UINT8 SystemError_IsActive(int code) {
 }
 static UINT8 AFE_IsHealthy(void) { return (UINT8)fake_afe_healthy; }
 static UINT8 AFE_IsDataFresh(void) { return (UINT8)fake_afe_fresh; }
-static void AFE_MonitorResumeAfterStop(void) {}
+static void AFE_MonitorResumeAfterStop(void) { ++afe_resume_calls; }
 static void close_ctlc(void);
 void SystemRuntime_PausePersistentFailureTimers(void);
 static UINT8 System_ERROR_UserCallback(int command) {
@@ -67,7 +68,7 @@ static UINT8 SOC_HasPendingFull(void) { return (UINT8)fake_full_pending; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
-static void close_ctlc(void) { ctlc=0; }
+static void close_ctlc(void) { ++ctl_close_calls; ctlc=0; }
 static struct { UINT16 time_enter_rtc; UINT32 rtc_sec_cnt; } sys_time={5,0};
 static struct { UINT16 u16Sleep_Vlow,u16Sleep_TimeVlow,u16Sleep_TimeNormal,u16Sleep_VNormal; } OtherElement={2600,1,10080,3200};
 static struct {
@@ -189,7 +190,40 @@ static void reset_case(void) {
     OtherElement.u16Sleep_TimeNormal=10080;
     expected_sleep_flag=0;
     watchdog_feeds=reset_during_stop=current_wakeup=0;
+    ctl_close_calls=afe_resume_calls=0;
     BootFlag_Clear();
+}
+static void test_stop_run_ctl_retention(void) {
+    const enum irqWakeup sources[]={soc_key,uart1_irq,uart2_irq,rs485_irq,NO_IRQ};
+    unsigned i,level;
+    /* HICCUP retains either CTL level; waking does not request a MOS change. */
+    for(i=0;i<sizeof(sources)/sizeof(sources[0]);++i) {
+        for(level=0;level<2;++level) {
+            reset_case();ctlc=(int)level;g_stLowPowerRtcStatus.mode=HICCUP_MODE;
+            stop_source=sources[i];key=1;scripted_key=(sources[i]==soc_key);
+            current_wakeup=(sources[i]==NO_IRQ);
+            rtc_sleep();
+            assert(stop_calls==(sources[i]==soc_key ? 2 : 1));
+            assert(restore_calls==1 && afe_resume_calls==1);
+            assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && ctlc==(int)level);
+            assert(ctl_close_calls==0);
+        }
+    }
+    /* RTC checks that return to STOP must not pulse CTL either. */
+    reset_case();ctlc=1;g_stLowPowerRtcStatus.mode=HICCUP_MODE;stop_source=NO_IRQ;
+    for(i=0;i<3;++i) assert(rtc_sleep_run_hiccup_cycle() && ctlc==1);
+    assert(!restore_calls && !ctl_close_calls && !afe_resume_calls);
+    /* Failed alarm setup returns to RUN without introducing a shutdown. */
+    reset_case();ctlc=1;g_stLowPowerRtcStatus.mode=HICCUP_MODE;rtc_alarm_ok=0;
+    rtc_sleep();
+    assert(!stop_calls && restore_calls==1 && afe_resume_calls==1);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && ctlc==1 && !ctl_close_calls);
+    /* NORMAL intentionally closes CTL at entry; wake cannot blindly reopen it. */
+    reset_case();ctlc=1;g_stLowPowerRtcStatus.mode=NORMAL_MODE;key=0;scripted_key=1;
+    rtc_sleep();
+    assert(restore_calls==1 && afe_resume_calls==1 && ctlc==0);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    puts("PASS STOP/RUN CTL: HICCUP retains open/closed state on key/UART/current wake, RTC checks and alarm failure; NORMAL stays closed pending arbitration");
 }
 static void test_sleep_save_diagnostic(void) {
     reset_case();g_stLowPowerRtcStatus.mode=DEEP_MODE;s_sleep.undervoltage_handled=1U;
@@ -211,6 +245,7 @@ static void test_sleep_save_diagnostic(void) {
 }
 int main(void) {
     int i;
+    test_stop_run_ctl_retention();
     test_sleep_save_diagnostic();
 #if PROJECT_CFG_SWITCH_MODE == PROJECT_SWITCH_MAINTAINED
     reset_case(); adc_on=1; key=0;
