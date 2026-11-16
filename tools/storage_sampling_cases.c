@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 typedef uint8_t UINT8;
-static int led,period,sample_result,fault_valid,pf,updated,mos_applied,soc_processed,uv_updates,ctl_closed;
+static int led,period,sample_result,fault_valid,pf,updated,mos_applied,soc_processed,uv_updates,ctl_closed,history_invalidations;
 static struct { struct { struct { UINT8 b1CellUvp; } bits; } unMdlFault_Third; } g_stCellInfoReport;
 static struct { struct { struct { UINT8 PF; } bits; } REG_BSTATUS1; } SH367309_Reg_Store;
 #define MCUO_DEBUG_LED1 led
@@ -24,6 +24,7 @@ static void AFE_ApplyPendingConfiguration(UINT8 data_ok,UINT8 status_ok) {
     assert(data_ok==(UINT8)(sample_result==0 && fault_valid && !pf));
     assert(status_ok==(UINT8)fault_valid);
 }
+static void AfeCell_InvalidatePairHistory(void) { ++history_invalidations; }
 static void DataLoad_CellVolt(void) {}
 static void DataLoad_CellVoltMaxMinFind(void) {}
 static void DataLoad_Temperature(void) {}
@@ -51,11 +52,13 @@ int main(void) {
     for(a=0;a<4;++a) for(b=0;b<2;++b) for(c=0;c<2;++c) {
         period=1; sample_result=a; fault_valid=b; pf=c;
         SH367309_Reg_Store.REG_BSTATUS1.bits.PF=(UINT8)pf;
-        updated=mos_applied=soc_processed=uv_updates=ctl_closed=0;
+        updated=mos_applied=soc_processed=uv_updates=ctl_closed=history_invalidations=0;
         App_AFEGet();
         assert(mos_applied==1 && updated==(a==0 && b && !c));
         assert(uv_updates==b);
         assert(ctl_closed==(b && c));
+        assert(history_invalidations==
+            ((a==1 || a==2) ? 1 : 0) + ((!b || c) ? 1 : 0));
     }
     period=0; updated=mos_applied=0; App_AFEGet(); assert(!updated && !mos_applied);
     puts("PASS AFE sampling: 0/1/2/3 results, status failure and PF reject SOC and statistics before MOS arbitration");

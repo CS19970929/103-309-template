@@ -731,12 +731,18 @@ void App_AFEGet(void)
     MCUO_DEBUG_LED1 = !MCUO_DEBUG_LED1;
     sample_result = UpdateVoltageFromBqMaximo();
     data_ok = (UINT8)(sample_result == 0U);
+    /* An I2C/NTC outage invalidates the comparison baseline. A malformed
+     * cell frame keeps the last good frame to reject repeated broken-wire
+     * values instead of accepting their second occurrence. */
+    if (sample_result == 1U || sample_result == 2U)
+        AfeCell_InvalidatePairHistory();
     Fault_UpdatePackTemperatureResult(sample_result);
     status_ok = App_SH367309();
     /* PF can freeze VADC/CADC. A complete CELL frame must not be published
      * until this cycle's AFE status also confirms it is usable. */
     if (!status_ok || SH367309_Reg_Store.REG_BSTATUS1.bits.PF) {
         data_ok = 0U;
+        AfeCell_InvalidatePairHistory(); /* PF may freeze the entire ADC frame. */
         if (status_ok) close_ctlc();
     }
     if (data_ok)
