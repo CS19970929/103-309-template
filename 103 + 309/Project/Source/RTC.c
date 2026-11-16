@@ -340,7 +340,7 @@ UINT8 RTC_WKTimeConfig(void)
     return 1U;
 failed:
     (void)RTC_DisableAlarmInterrupt();
-    SystemError_SetActive(ERROR_LSE, 1U);
+    // SystemError_SetActive(ERROR_LSE, 1U);
     return 0U;
 }
 
@@ -379,7 +379,7 @@ UINT8 Init_RTC(void)
 
 	if (clock_status == RTC_CLOCK_INIT_FAILED || clock_status == RTC_CLOCK_NEED_REINIT)
     {
-        SystemError_SetActive(ERROR_LSE, 1U);
+        // SystemError_SetActive(ERROR_LSE, 1U);
         return 0U;
     }
 
@@ -387,7 +387,7 @@ UINT8 Init_RTC(void)
 	{ // 读取备份里面的值是否被写过。
 		RTC_TimeConfig();
         if (!RTC_WaitForLastTaskSafe()) {
-            SystemError_SetActive(ERROR_LSE, 1U);
+            // SystemError_SetActive(ERROR_LSE, 1U);
             return 0U;
         }
 		BKP_WriteBackupRegister(BKP_DR1, RTC_BKP_DATA);
@@ -405,14 +405,14 @@ UINT8 Init_RTC(void)
 		RCC_ClearFlag();
 	}
     if (!RTC_ClearAlarmPending()) {
-        SystemError_SetActive(ERROR_LSE, 1U);
+        // SystemError_SetActive(ERROR_LSE, 1U);
         return 0U;
     }
 	RTC_AlarmConfig();
 	RTC_NVIC_Config();
     /* Record LSI fallback without treating a working fallback as STOP failure. */
-    SystemError_SetActive(ERROR_LSE, (UINT8)
-        ((RCC->BDCR & RCC_BDCR_RTCSEL) == RCC_BDCR_RTCSEL_LSI));
+    // SystemError_SetActive(ERROR_LSE, (UINT8)
+        // ((RCC->BDCR & RCC_BDCR_RTCSEL) == RCC_BDCR_RTCSEL_LSI));
     return 1U;
 }
 
