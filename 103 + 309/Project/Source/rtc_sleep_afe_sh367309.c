@@ -23,7 +23,8 @@ void DataLoad_Current(void);
 
 UINT8 RtcSleep_AfePortUpdateRtcData(void)
 {
-    if (UpdateVoltageFromBqMaximo())
+    UINT8 sample_result = UpdateVoltageFromBqMaximo();
+    if (sample_result == 1U)
     {
         return 0U;
     }
@@ -31,7 +32,8 @@ UINT8 RtcSleep_AfePortUpdateRtcData(void)
     DataLoad_CellVoltMaxMinFind();
     DataLoad_Temperature();
     DataLoad_TemperatureMaxMinFind();
-    return 1U;
+    /* Reporting readable values does not qualify an invalid wake sample. */
+    return (UINT8)(sample_result == 0U);
 }
 
 UINT8 RtcSleep_AfePortHasCurrentWake(enum irqWakeup *source)

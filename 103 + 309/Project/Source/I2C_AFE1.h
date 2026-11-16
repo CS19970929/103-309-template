@@ -65,8 +65,10 @@ UINT8 AFE_TakeCommFailure(void);
 void InitAFE1_Sleep(UINT8 mode);
 void InitAFE1(void);
 /* 0=valid; 1=I2C failure; 2=pack NTC invalid; 3=cell voltage/mapping
- * invalid. Reject invalid frames before publishing new measurement data. */
+ * invalid. Quality gates protection/SOC; reports may still publish reads. */
 UINT8 UpdateVoltageFromBqMaximo(void);
+/* Always decode for reporting; return whether the cell quality is valid. */
+UINT8 AfeCell_DecodeMv(UINT16 raw_word, UINT16 *voltage_mv);
 void AfeCell_InvalidatePairHistory(void);
 
 void initAFE1_IIC(void);

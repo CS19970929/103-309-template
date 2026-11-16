@@ -37,7 +37,7 @@ static UINT8 TwiWrite(UINT8 id, UINT8 addr, UINT8 len, UINT8 *p) {
 APP_STUBS = r'''
 #define DEEP_MODE 2U
 static UINT8 ctl, afe_status, sleep_mode, input_sample, task_pending=1U;
-static UINT8 MCUO_DEBUG_LED1, soc_data_ok;
+static UINT8 MCUO_DEBUG_LED1, soc_data_ok, published_comm_fault;
 static unsigned published, config_calls, counter_calls;
 static void open_ctlc(void) { ctl=1U; }
 static void SystemRuntime_SetAfeStatus(UINT8 index, UINT8 ok) {
@@ -55,7 +55,9 @@ static UINT8 App_SH367309(void) {
     UINT8 ignored;
     return MTPRead(0x41U, 5U, &ignored);
 }
-static void DataLoad_CellVolt(void) { ++published; }
+static void DataLoad_CellVolt(void) {
+    ++published; published_comm_fault=SystemError_IsActive(ERROR_STATUS_AFE1);
+}
 static void DataLoad_CellVoltMaxMinFind(void) {}
 static void DataLoad_Temperature(void) {}
 static void DataLoad_TemperatureMaxMinFind(void) {}
@@ -99,7 +101,7 @@ int main(void) {
     reset_monitor(); input_sample=3U; cycles(3U);
     assert(!SystemError_IsActive(ERROR_STATUS_AFE1) && afe_status);
     assert(AFE_HasDataFault() && !AFE_IsHealthy() && !AFE_IsDataFresh());
-    assert(!ctl && !(hardware_conf&0x30U) && !published && !soc_data_ok);
+    assert(!ctl && !(hardware_conf&0x30U) && published==3U && !soc_data_ok);
     assert(!Fault_CanOpenCtl());
     for(i=0;i<4U;i++) {
         g_stCellInfoReport.u16Ichg=20U; g_stCellInfoReport.u16IDischg=20U;
@@ -111,7 +113,7 @@ int main(void) {
     input_sample=0U; cycles(2U); assert(AFE_HasDataFault() && !ctl);
     cycles(1U); assert(!AFE_HasDataFault() && !ctl && s_host_mos_off==3U);
     assert(Fault_SetHostMosOff(0U)); cycles(1U); assert(ctl && AFE_IsHealthy());
-    assert((hardware_conf&0x30U)==0x30U && published==4U && soc_data_ok);
+    assert((hardware_conf&0x30U)==0x30U && published==7U && soc_data_ok);
 
     reset_monitor(); cycles(3U); assert(ctl);
     input_sample=3U; cycles(2U); assert(!AFE_HasDataFault());
@@ -135,9 +137,11 @@ int main(void) {
     assert(!SystemError_IsActive(ERROR_STATUS_AFE1) && AFE_HasDataFault());
     reset_monitor();
     for(i=0;i<3U;i++) { read_failures=2; cycles(1U); }
-    assert(SystemError_IsActive(ERROR_STATUS_AFE1));
-    cycles(2U); assert(SystemError_IsActive(ERROR_STATUS_AFE1));
+    assert(SystemError_IsActive(ERROR_STATUS_AFE1) && published_comm_fault);
+    cycles(2U); assert(SystemError_IsActive(ERROR_STATUS_AFE1) && !soc_data_ok);
+    assert(published_comm_fault && !Fault_IsCurrentSampleFresh());
     cycles(1U); assert(!SystemError_IsActive(ERROR_STATUS_AFE1) && ctl);
+    assert(!published_comm_fault && soc_data_ok);
 
     /* MTP retries: only final failure is latched, and success cannot erase it. */
     reset_monitor(); read_failures=1; assert(MTPRead(0x46U,1U,&value));

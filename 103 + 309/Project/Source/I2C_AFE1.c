@@ -612,14 +612,16 @@ void AfeCell_InvalidatePairHistory(void)
     s_cell_pair_history_valid = 0U;
 }
 
-static UINT8 AfeCell_DecodeMv(UINT16 raw_word, UINT16 *voltage_mv)
+UINT8 AfeCell_DecodeMv(UINT16 raw_word, UINT16 *voltage_mv)
 {
     INT32 raw = (INT32)(INT16)U16_SwapEndian(raw_word);
     INT32 mv = raw * 5 / 32;
-    if (raw <= 0 || mv > (INT32)AFE_CELL_MAX_MV || voltage_mv == 0)
+    if (voltage_mv == 0)
         return 0U;
-    *voltage_mv = (UINT16)mv;
-    return 1U;
+    /* Preserve the reading for publication even when quality is invalid.
+       Negative mV cannot be represented by the existing unsigned protocol. */
+    *voltage_mv = (UINT16)(mv > 0 ? mv : 0);
+    return (UINT8)(raw > 0 && mv <= (INT32)AFE_CELL_MAX_MV);
 }
 
 /* A floating shared node often shifts two adjacent cells in opposite
@@ -640,64 +642,62 @@ static UINT8 AfeCell_SuspiciousPair(UINT16 old_a, UINT16 old_b,
 
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
-	UINT8 i, result = 0;
+    UINT8 i, result = 0U;
     UINT8 mapped;
     UINT16 used = 0U;
     UINT16 cell_mv[16] = {0U};
-	UINT32 u32temp = 0;
+    UINT16 temp_raw;
+    UINT32 resistance;
 
-	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
-	{
-        UINT16 t1 = U16_SwapEndian(Registers_AFE1.Temp1);
-        UINT16 t2 = U16_SwapEndian(Registers_AFE1.Temp2);
-        /* The two fitted pack NTC channels are required; reject invalid data
-           before updating any published measurement. */
-        if (t1 == 0U || t2 == 0U || t1 >= 32769U || t2 >= 32769U)
-            return 2U; /* Sensor invalid; I2C transaction succeeded. */
-        if (SeriesNum < 5U || SeriesNum > 16U)
+    if (!MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
+        return 1U;
+
+    /* A bad CELL must not freeze independent current/NTC readings. Each
+       valid NTC updates independently; invalid NTCs retain their cache. */
+    for (i = 0U; i < 2U; ++i)
+    {
+        temp_raw = U16_SwapEndian(i == 0U ? Registers_AFE1.Temp1 : Registers_AFE1.Temp2);
+        if (temp_raw == 0U || temp_raw >= 32769U)
+        {
+            result = 2U;
+            continue;
+        }
+        resistance = ((UINT32)SH367309_Reg_Store.TR_ResRef * temp_raw) /
+                     (32769U - temp_raw);
+        UPDNLMT16(resistance, 65535, 0);
+        SH367309_Read_AFE1.u16TempBat[i] =
+            GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, (UINT16)resistance);
+    }
+    SH367309_Read_AFE1.u16TempBat[2] = 0U;
+    SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
+    if (result == 2U)
+        return result;
+
+    if (SeriesNum < 5U || SeriesNum > 16U)
+        return 3U;
+    for (i = 0U; i < SeriesNum; ++i)
+    {
+        mapped = SeriesSelect_AFE1[SeriesNum - 1U][i];
+        if (mapped >= 16U || (used & (UINT16)(1U << mapped)) != 0U ||
+            !AfeCell_DecodeMv(Registers_AFE1.Cell[mapped], &cell_mv[mapped]))
             return 3U;
-        for (i = 0U; i < SeriesNum; ++i)
+        used |= (UINT16)(1U << mapped);
+    }
+    if (s_cell_pair_history_valid)
+    {
+        for (i = 1U; i < SeriesNum; ++i)
         {
-            mapped = SeriesSelect_AFE1[SeriesNum - 1U][i];
-            if (mapped >= 16U || (used & (UINT16)(1U << mapped)) != 0U ||
-                !AfeCell_DecodeMv(Registers_AFE1.Cell[mapped], &cell_mv[mapped]))
+            UINT8 a = SeriesSelect_AFE1[SeriesNum - 1U][i - 1U];
+            UINT8 b = SeriesSelect_AFE1[SeriesNum - 1U][i];
+            if (AfeCell_SuspiciousPair(SH367309_Read_AFE1.u16VCell[a],
+                                      SH367309_Read_AFE1.u16VCell[b],
+                                      cell_mv[a], cell_mv[b]))
                 return 3U;
-            used |= (UINT16)(1U << mapped);
         }
-        /* Compare only with a recent successful RUN sample. After STOP,
-         * parameter changes or failed reads, no old sample is trusted. */
-        if (s_cell_pair_history_valid)
-        {
-            for (i = 1U; i < SeriesNum; ++i)
-            {
-                UINT8 a = SeriesSelect_AFE1[SeriesNum - 1U][i - 1U];
-                UINT8 b = SeriesSelect_AFE1[SeriesNum - 1U][i];
-                if (AfeCell_SuspiciousPair(
-                        SH367309_Read_AFE1.u16VCell[a],
-                        SH367309_Read_AFE1.u16VCell[b],
-                        cell_mv[a], cell_mv[b]))
-                    return 3U;
-            }
-        }
-        /* All-or-nothing: no partial publication of invalid voltage data. */
-        memcpy(SH367309_Read_AFE1.u16VCell, cell_mv, sizeof(cell_mv));
-        s_cell_pair_history_valid = 1U;
-
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp1)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp1));
-		UPDNLMT16(u32temp, 65535, 0);
-		SH367309_Read_AFE1.u16TempBat[0] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp2)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp2));
-		UPDNLMT16(u32temp, 65535, 0);
-		SH367309_Read_AFE1.u16TempBat[1] = GetEndValue(iSheldTemp_10K_AFE, (UINT16)LENGTH_TBLTEMP_AFE_10K, u32temp);
-        /* Third pack NTC is not fitted or reported on this board. */
-        SH367309_Read_AFE1.u16TempBat[2] = 0U;
-
-		// 电流要不要加滤波1s除以4，demo是这样的，现在先观察一下
-		SH367309_Read_AFE1.u16Current = U16_SwapEndian(Registers_AFE1.Cadc);
-	}
-	else
-	{
-		result = 1;
-	}
-	return result;
+    }
+    /* Only accepted frames replace the pair-comparison baseline.
+       Reporting decodes Registers_AFE1 directly, including bad cells. */
+    memcpy(SH367309_Read_AFE1.u16VCell, cell_mv, sizeof(cell_mv));
+    s_cell_pair_history_valid = 1U;
+    return 0U;
 }

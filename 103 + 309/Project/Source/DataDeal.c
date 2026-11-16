@@ -114,19 +114,23 @@ void Init_Registers(UINT8 num)
 void DataLoad_CellVolt(void)
 {
     UINT8 i;
-    INT32 t_i32temp;
+    UINT8 channel;
+    UINT8 comm_fault = SystemError_IsActive(ERROR_STATUS_AFE1);
 
-    for (i = 0; i < SeriesNum; ++i)
+    for (i = 0U; i < 32U; ++i)
     {
-        t_i32temp = (UINT32)SH367309_Read_AFE1.u16VCell[SeriesSelect_AFE1[SeriesNum - 1][i]];
-        g_stCellInfoReport.u16VCell[i] = (UINT16)t_i32temp;
-    }
-
-    if (SeriesNum < 32)
-    {
-        for (i = SeriesNum; i < 32; ++i)
+        if (i >= SeriesNum)
+            g_stCellInfoReport.u16VCell[i] = 61001U;
+        else if (comm_fault || SeriesNum < 5U || SeriesNum > 16U)
+            g_stCellInfoReport.u16VCell[i] = 0U;
+        else
         {
-            g_stCellInfoReport.u16VCell[i] = 61001;
+            channel = SeriesSelect_AFE1[SeriesNum - 1U][i];
+            if (channel < 16U)
+                (void)AfeCell_DecodeMv(Registers_AFE1.Cell[channel],
+                                     &g_stCellInfoReport.u16VCell[i]);
+            else
+                g_stCellInfoReport.u16VCell[i] = 0U;
         }
     }
 }
@@ -147,7 +151,7 @@ void DataLoad_CellVoltMaxMinFind(void)
     t_u8VcellMinPosition = 0;
     u32VCellTotle = 0;
 
-    for (i = 0; i < SeriesNum; i++)
+    for (i = 0; i < SeriesNum && i < 32U; i++)
     {
         t_u16VcellTemp = g_stCellInfoReport.u16VCell[i];
         u32VCellTotle += g_stCellInfoReport.u16VCell[i];
@@ -163,7 +167,9 @@ void DataLoad_CellVoltMaxMinFind(void)
         }
     }
 
-    u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
+    /* A calibration offset cannot turn a comm-fault placeholder into voltage. */
+    if (!SystemError_IsActive(ERROR_STATUS_AFE1))
+        u32VCellTotle = ((u32VCellTotle * g_u16CalibCoefK[VOLT_VBUS]) >> 10) + (UINT32)g_i16CalibCoefB[VOLT_VBUS] * 1000;
 
     g_stCellInfoReport.u16VCellTotle = (UINT16)((u32VCellTotle * 1638 >> 14) & 0xFFFF); // 除以10
     g_stCellInfoReport.u16VCellMax = t_u16VcellMaxTemp;                                 // max cell voltage
@@ -763,28 +769,39 @@ void App_AFEGet(void)
      * values instead of accepting their second occurrence. */
     if (sample_result == 1U || sample_result == 2U)
         AfeCell_InvalidatePairHistory();
-    Fault_UpdatePackTemperatureResult(sample_result);
     status_ok = App_SH367309();
-    /* PF can freeze VADC/CADC. A complete CELL frame must not be published
-     * until this cycle's AFE status also confirms it is usable. */
+    /* PF can freeze VADC/CADC. Readable values may be displayed, but this
+     * cycle's status must also qualify them for SOC and protective release. */
     if (!status_ok || SH367309_Reg_Store.REG_BSTATUS1.bits.PF) {
         data_ok = 0U;
         AfeCell_InvalidatePairHistory(); /* PF may freeze the entire ADC frame. */
         if (status_ok) close_ctlc();
     }
-    if (data_ok)
+    /* Communication success permits publication, not protective release.
+       A bad CELL/NTC or PF must not freeze other readable measurements. */
+    if (sample_result != 1U)
     {
-        DataLoad_CellVolt();
-        DataLoad_CellVoltMaxMinFind();
         DataLoad_Temperature();
         DataLoad_TemperatureMaxMinFind();
         DataLoad_Current();
     }
-    Fault_UpdateCurrentProtection(data_ok);
+    Fault_UpdatePackTemperatureResult(sample_result);
     /* Invalid CELL/NTC values are successful sampling-register reads.
        The monitor also checks final MTP failures from MOS/config access. */
     comm_ok = (UINT8)(sample_result != 1U && status_ok);
     AFE_MonitorUpdate(data_ok, comm_ok);
+    /* Report zeros during confirmed comm failure are not measured zeros.
+       They must never qualify SOC, reverse permits or UV recovery. */
+    if (SystemError_IsActive(ERROR_STATUS_AFE1))
+        data_ok = 0U;
+    Fault_UpdateCurrentProtection(data_ok);
+    /* Apply the newly confirmed/cleared comm fault in the same cycle.
+       Failed reads before confirmation retain the preceding report. */
+    if (sample_result != 1U || SystemError_IsActive(ERROR_STATUS_AFE1))
+    {
+        DataLoad_CellVolt();
+        DataLoad_CellVoltMaxMinFind();
+    }
     App_SOC(data_ok, status_ok);
     if (status_ok)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp,

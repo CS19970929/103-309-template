@@ -598,6 +598,7 @@ RTC_STUBS = r'''
 #define USART1 1
 #define USART2 2
 static int adc_on, adc_starts, order, afe_temperatures;
+static UINT8 rtc_sample_result;
 static struct { int wakeup_rtc; } sys_time;
 static void InitDelay(void) { assert(order==0); order=1; }
 static void RTC_RestoreRunInterrupts(void) { assert(order==1); order=2; }
@@ -610,7 +611,7 @@ static void InitCan(void) { assert(order==5); order=6; }
 static void InitADC(void) { assert(order==6 && tick==0); adc_on=1; ++adc_starts; order=7; }
 static int RTC_IsStopWakeup(void) { return 1; }
 static void initAFE1_IIC(void) { assert(order==7); order=8; }
-static UINT8 UpdateVoltageFromBqMaximo(void) { return 0; }
+static UINT8 UpdateVoltageFromBqMaximo(void) { return rtc_sample_result; }
 static void DataLoad_CellVolt(void) {}
 static void DataLoad_CellVoltMaxMinFind(void) {}
 static void DataLoad_Temperature(void) { assert(!adc_on); ++afe_temperatures; }
@@ -623,6 +624,12 @@ int main(void) {
     ADC_StopForLowPower();
     for(i=0;i<100;++i) assert(RtcSleep_AfePortUpdateRtcData());
     assert(!adc_on && adc_starts==0 && afe_temperatures==100);
+    rtc_sample_result=3U;
+    assert(!RtcSleep_AfePortUpdateRtcData() && afe_temperatures==101);
+    rtc_sample_result=2U;
+    assert(!RtcSleep_AfePortUpdateRtcData() && afe_temperatures==102);
+    rtc_sample_result=1U;
+    assert(!RtcSleep_AfePortUpdateRtcData() && afe_temperatures==102);
     tick=100000;
     InitRunAfterStopWakeup();
     assert(adc_on && adc_starts==1 && order==8);
