@@ -740,17 +740,16 @@ void App_AFEGet(void)
         DataLoad_TemperatureMaxMinFind();
         DataLoad_Current();
     }
-    Fault_UpdateCurrentProtection(data_ok);
     status_ok = App_SH367309();
-    /* PF may freeze VADC/CADC registers: never report them as fresh SOC
-       evidence or allow CTL to reopen during a PF status. */
-    AFE_MonitorUpdate(data_ok, status_ok,
-        (UINT8)(data_ok && (!status_ok || !SH367309_Reg_Store.REG_BSTATUS1.bits.PF)));
-    if (status_ok && SH367309_Reg_Store.REG_BSTATUS1.bits.PF)
-        close_ctlc();
-
-    App_SOC((UINT8)(data_ok &&
-        (!status_ok || !SH367309_Reg_Store.REG_BSTATUS1.bits.PF)), status_ok);
+    /* PF may freeze VADC/CADC; failed status cannot certify freshness.
+     * Apply the same validity to protection, SOC, reports and MOS release. */
+    if (!status_ok || SH367309_Reg_Store.REG_BSTATUS1.bits.PF) {
+        data_ok = 0U;
+        if (status_ok) close_ctlc();
+    }
+    Fault_UpdateCurrentProtection(data_ok);
+    AFE_MonitorUpdate(data_ok, status_ok, data_ok);
+    App_SOC(data_ok, status_ok);
     if (status_ok)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp,
             data_ok);
