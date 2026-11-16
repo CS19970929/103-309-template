@@ -1,0 +1,32 @@
+name: SOC and CELL safety host tests
+
+on:
+  push:
+    branches:
+      - codex/soc-cell-voltage-openwire-20261116
+  pull_request:
+    paths:
+      - "103 + 309/Project/Source/SOC.c"
+      - "103 + 309/Project/Source/I2C_AFE1.c"
+      - "103 + 309/Project/Source/DataDeal.c"
+      - "tools/soc_*"
+      - "tools/run_soc_host_c_test.py"
+      - "tools/test_afe_cell_voltage.py"
+      - ".github/workflows/soc-safety-host.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  host-c:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify CELL signed raw, open-wire heuristic and mapping
+        run: python -B tools/test_afe_cell_voltage.py
+      - name: Run production SOC C host regression
+        run: python -B tools/run_soc_host_c_test.py
