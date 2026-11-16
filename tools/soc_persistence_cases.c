@@ -50,71 +50,81 @@ static void test_soc_smooth_persistence(void)
     STORAGE_FLASH_SOC_DATA old,data;
     int total,cut,ack;
     unsigned i;
+    UINT32 set_capacity;
     persistence_prepare();assert(StorageFlash_LoadSocData(&old));
-    /* Current tagged snapshots restore directly without an unnecessary rewrite. */
-    assert(old.u16LearnState==STORAGE_SOC_STATE_TAG);
     mutations=0;persistence_boot();assert(!mutations);
     assert(sizeof(old)==40U && offsetof(STORAGE_FLASH_SOC_DATA,u32CapNow)==12U &&
-        offsetof(STORAGE_FLASH_SOC_DATA,u16Reserved)==30U);
+           offsetof(STORAGE_FLASH_SOC_DATA,u16Reserved)==30U);
+
+    /* Manual command is an atomic capacity jump. A failed write restores
+       the old RAM capacity, and reboot sees either the old or new journal. */
     save_flash();mutations=0;
     assert(SOC_RequestSetOnce(35));total=mutations;
     assert(StorageFlash_LoadSocData(&data));
-    assert(data.u16LearnState==STORAGE_SOC_STATE_TAG && !data.u16SocNow &&
-        !data.u16DsgSocInt && !data.u16Reserved[3U]);
-    /* Without an inverse word, CRC still rejects a torn/altered target. */
-    {
-        UINT32 address=Storage_StateLatest()+sizeof(STORAGE_RECORD)+
-            offsetof(STORAGE_STATE,soc)+offsetof(STORAGE_FLASH_SOC_DATA,u16LearnAnchorSoc);
-        *(UINT8 *)address^=1U;
-        persistence_boot();assert(s_soc.manual_target==SOC_NO_MANUAL_TARGET);
-        assert(s_soc.now_as10==old.u32CapNow && StorageFlash_LoadSocData(&data));
-        assert(data.u16LearnState==STORAGE_SOC_STATE_TAG);
-    }
+    set_capacity=(UINT32)((uint64_t)data.u32CapFull*35U/100U);
+    assert(data.u32CapNow==set_capacity && data.u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET &&
+           !data.u16SocNow && !data.u16DsgSocInt && !data.u16Reserved[3U]);
     for(cut=0;cut<=total;cut++) {
         restore_flash();persistence_boot();mutations=0;cut_after=cut;
         ack=SOC_RequestSetOnce(35);cut_after=-1;persistence_boot();
         assert(StorageFlash_LoadSocData(&data));
-        assert(data.u32CapNow==old.u32CapNow && s_soc.now_as10==old.u32CapNow);
-        assert((s_soc.manual_target==35U)==(ack!=0));
+        assert(data.u32CapNow==(ack ? set_capacity : old.u32CapNow));
+        assert(s_soc.now_as10==data.u32CapNow);
     }
-    printf("PASS smooth target transaction: %d half-word cuts, current layout, CRC rejection, ACK iff target committed, request/reboot capacity unchanged\n",total+1);
-    persistence_prepare();assert(SOC_RequestSetOnce(35));
-    AFE_PARAM_WRITE_Flag=0;
-    g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCellMax=3300U;
-    for(i=0;i<32;i++) g_stCellInfoReport.u16VCell[i]=i<SeriesNum ? 3300U : 61001U;
-    for(i=0;i<150;i++) {tick+=20U;App_SOC(1,1);}
-    assert(StorageFlash_LoadSocData(&old));save_flash();mutations=0;
-    assert(SOC_SaveSnapshot());total=mutations;
+    printf("PASS manual SOC atomic commit: %d half-word cuts, ACK iff new capacity durable\n",total+1);
+
+    /* CRC failure in the newly committed capacity falls back to the
+       previous valid snapshot rather than interpreting corrupted SOC. */
+    restore_flash();persistence_boot();assert(SOC_RequestSetOnce(35));
+    {
+        UINT32 addr=Storage_StateLatest()+sizeof(STORAGE_RECORD)+
+            offsetof(STORAGE_STATE,soc)+offsetof(STORAGE_FLASH_SOC_DATA,u32CapNow);
+        *(UINT8 *)addr^=1U;
+        persistence_boot();
+        assert(s_soc.now_as10==old.u32CapNow);
+    }
+
+    /* A confirmed full goal is durable, and neither boot nor low-voltage
+       relaxation consumes the smooth correction budget instantaneously. */
+    persistence_prepare();persistence_current_ma=200;
+    g_stCellInfoReport.u16VCellMax=g_stCellInfoReport.u16VCell[0]=3550U;
+    for(i=0;i<60;i++) {tick+=20U;App_SOC(1,1);}
+    assert(SOC_HasPendingFull() && SOC_SaveSnapshot());
     assert(StorageFlash_LoadSocData(&data));
-    for(cut=0;cut<=total;cut++) {
-        UINT32 before;
-        restore_flash();persistence_boot();mutations=0;cut_after=cut;
-        /* Restart the interrupted final save with exactly the same payload. */
-        (void)StorageFlash_SaveSocData(&data);cut_after=-1;persistence_boot();
-        assert(s_soc.now_as10==old.u32CapNow || s_soc.now_as10==data.u32CapNow);
-        assert(s_soc.manual_target==35U);before=s_soc.now_as10;
-        tick+=100000U;App_SOC(1,1);assert(s_soc.now_as10==before);
-        tick+=20U;App_SOC(1,1);assert(before-s_soc.now_as10>0U && before-s_soc.now_as10<=177U);
+    assert((data.u16Flags & SOC_TARGET_FULL)!=0U);
+    persistence_boot();assert(SOC_HasPendingFull());
+    {
+        UINT32 before=s_soc.now_as10;
+        tick+=20U;App_SOC(1,1);
+        assert(s_soc.now_as10==before);
+        for(i=0;i<520U;i++) {tick+=20U;App_SOC(1,1);}
+        assert(s_soc.now_as10==s_soc.full_as10 && !SOC_HasPendingFull());
     }
-    printf("PASS smooth progress journal: %d half-word cuts, old/new complete capacity and target retained, no boot catch-up\n",total+1);
+    puts("PASS full target restore: voltage relaxed, no reboot catch-up, eventual100");
+
+    /* Low-voltage entry is retained across torn state-page writes: the
+       original reference must not be recomputed from an already smaller SOC. */
     persistence_prepare();persistence_current_ma=-100;
     g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[1]=3040U;
     for(i=0;i<150;i++) {tick+=20U;App_SOC(1,1);}
     {
         UINT32 entry=s_soc.low_entry_as10;
-        assert(entry!=0U && StorageFlash_LoadSocData(&old));save_flash();mutations=0;
-        assert(SOC_SaveSnapshot());total=mutations;assert(StorageFlash_LoadSocData(&data));
+        assert(entry!=0U && StorageFlash_LoadSocData(&old));
+        save_flash();mutations=0;
+        assert(SOC_SaveSnapshot());total=mutations;
+        assert(StorageFlash_LoadSocData(&data));
         for(cut=0;cut<=total;cut++) {
             restore_flash();persistence_boot();mutations=0;cut_after=cut;
             (void)StorageFlash_SaveSocData(&data);cut_after=-1;persistence_boot();
             assert(s_soc.now_as10==old.u32CapNow || s_soc.now_as10==data.u32CapNow);
             assert(s_soc.low_entry_as10==entry);
-            persistence_current_ma=-100;g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[1]=3040U;
+            persistence_current_ma=-100;
+            g_stCellInfoReport.u16VCellMin=g_stCellInfoReport.u16VCell[1]=3040U;
             for(i=0;i<60;i++) {tick+=20U;App_SOC(1,1);}
-            assert(s_soc.low_entry_as10==entry); /* Never rebuild from a lower restored capacity. */
+            assert(s_soc.low_entry_as10==entry);
         }
     }
-    printf("PASS low reference journal: %d half-word cuts, exact entry/capacity restore, no compounded tail correction\n",total+1);
+    printf("PASS low entry persistence: %d half-word cuts, no compounded correction\n",total+1);
 }
 
 static void persistence_write(UINT16 value,UINT8 with_capacity,struct RS485MSG *msg)
