@@ -2,6 +2,8 @@
 
 适用 `STM32F103CBT6 + SH367309` 主工程，两个 Keil 目标共用同一份配置。不包含独立的 `firmware/comm_tool_f103ret6`；未加入有效目标的 `Heat_Cool.c` 也不会因此启用。
 
+工程开关、产品默认值与升级后按组更新参数的完整说明见 [主 BMS 配置与升级更新手册](configuration-and-upgrade.md)。本文说明板级映射与外设配置。
+
 ## 维护入口
 
 硬件配置集中在 `103 + 309/Project/Source/conf/Board_Config.c`：
