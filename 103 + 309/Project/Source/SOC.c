@@ -11,7 +11,8 @@
 #define SOC_TIME_MAX_MINUTES 0xFFFEU
 #define SOC_CELL_MAX_MV 5000U
 #define SOC_CELL_MAX_DELTA_MV 800U /* SOC endpoint evidence requires plausible spread. */
-#define SOC_FULL_REST_MARGIN_MV 50U /* All cells near SOC100: zero tail current. */
+#define SOC_FULL_REST_MARGIN_MV 50U /* Whole-pack near SOC100: zero tail current. */
+#define SOC_FULL_PREPARE_MV 50U /* Preconfirm near endpoint before charger stops. */
 #define SOC_CONFIRM_TICKS 1000U /* 10 s, in real 10 ms RUN ticks. */
 #define SOC_MAX_SAMPLE_GAP_TICKS 50U
 #define SOC_SMOOTH_DENOMINATOR 100000U /* Low-end: 1% per 10 seconds. */
@@ -365,13 +366,18 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
         s_cal.remainder = 0U;
     }
 
+    /* Preconfirm at SOC100-50mV; after 10s near the endpoint one brief
+     * crossing of SOC100 is sufficient to catch a fast-cutoff charger.
+     * This retains the original no-tail-current and no-jump requirements. */
     if (full_mv > low_mv && full_mv <= SOC_CELL_MAX_MV &&
         !(flags & (SOC_TARGET_FULL | SOC_MANUAL_OVERRIDE)) &&
+        current_ma > -SOC_CHARGE_EVIDENCE_MA &&
         ((flags & SOC_CHARGE_SEEN) ||
          min_mv >= (UINT16)(full_mv - SOC_FULL_REST_MARGIN_MV)) &&
-        max_mv >= full_mv && min_mv > empty_mv) {
+        max_mv >= (UINT16)(full_mv - SOC_FULL_PREPARE_MV) &&
+        min_mv > empty_mv) {
         s_cal.full_ticks = soc_confirm_ticks(s_cal.full_ticks, elapsed);
-        if (s_cal.full_ticks == SOC_CONFIRM_TICKS) {
+        if (s_cal.full_ticks == SOC_CONFIRM_TICKS && max_mv >= full_mv) {
             flags = (UINT16)((flags & (UINT16)~(SOC_TARGET_EMPTY | SOC_CHARGE_SEEN)) |
                 SOC_TARGET_FULL | SOC_FULL_LATCHED);
             s_soc.low_entry_as10 = 0U;
