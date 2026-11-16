@@ -289,6 +289,12 @@ static UINT16 soc_confirm_ticks(UINT16 ticks, UINT32 elapsed)
     return elapsed >= SOC_CONFIRM_TICKS - ticks ? SOC_CONFIRM_TICKS : (UINT16)(ticks + elapsed);
 }
 
+UINT8 SOC_HasPendingFull(void)
+{
+    return (UINT8)((s_soc.calibration_flags & SOC_TARGET_FULL) != 0U &&
+                   s_soc.now_as10 < s_soc.full_as10);
+}
+
 UINT8 SOC_CellVoltagesValid(void)
 {
     UINT8 i;

@@ -12,7 +12,10 @@ void App_SOC(uint8_t sample_valid, uint8_t fault_valid);
 void SOC_PauseCalibration(void);
 void SOC_ResetVoltageCalibration(void);
 /* Records a target only; never changes capacity or waits before protective sleep. */
+/* Call only after a fresh, plausible UV frame is confirmed by SleepDeal. */
 void SOC_NotifyOverdischarge(void);
+uint8_t SOC_CellVoltagesValid(void);
+uint8_t SOC_HasPendingFull(void);
 uint8_t SOC_SaveSnapshot(void);
 void SOC_ApplyParameters(uint8_t cycle_count_written);
 /* Persist a smooth target; success never means an immediate capacity change. */

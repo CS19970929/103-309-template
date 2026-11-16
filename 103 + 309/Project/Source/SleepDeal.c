@@ -121,15 +121,22 @@ void SleepDeal_Continue(UINT8 sleep_mode)
 	MCU_RESET();
 }
 
-void SleepDeal_UpdateOverdischarge(UINT8 active)
+void SleepDeal_UpdateOverdischarge(UINT8 active, UINT8 voltage_fresh)
 {
-	/* Call only after a successful AFE status read. Recovery re-arms the edge;
-	 * a wake while UV remains active is allowed to report SOC and recharge. */
-	if (!active) { s_sleep.undervoltage_handled=0U; return; }
-	if (s_sleep.undervoltage_handled) return;
-	s_sleep.undervoltage_handled=1U;
-	SOC_NotifyOverdischarge();
-	LowPower_Request(DEEP_MODE);
+    /* Hardware UV protection always wins. Do not make a permanent SOC
+     * zero decision from a cached, signed-invalid or PF-frozen ADC frame. */
+    if (!active) { s_sleep.undervoltage_handled=0U; return; }
+    if (voltage_fresh && !AFE_PARAM_WRITE_Flag &&
+        !SH367309_Reg_Store.REG_BSTATUS1.bits.PF &&
+        SOC_CellVoltagesValid() &&
+        g_stCellInfoReport.u16VCellMin <=
+            (UINT32)AFE_Parameters_RS485_Struction.u16VcellUvp.curValue + 20U)
+        SOC_NotifyOverdischarge();
+    /* Even if an earlier UV had invalid voltage, a later valid sample can
+       still correct SOC; the protective DEEP edge remains one-shot. */
+    if (s_sleep.undervoltage_handled) return;
+    s_sleep.undervoltage_handled=1U;
+    LowPower_Request(DEEP_MODE);
 }
 
 UINT8 SleepDeal_NormalIdleExpired(UINT8 activity)

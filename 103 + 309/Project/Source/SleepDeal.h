@@ -10,7 +10,7 @@ UINT8 SleepDeal_GetExternalCommCounter(void);
 UINT8 SleepDeal_IsWakeupValid(void);
 void SleepDeal_ResetKeyState(UINT8 hiccup_key_wake);
 UINT8 SleepDeal_TakeKeySleepRequest(void);
-void SleepDeal_UpdateOverdischarge(UINT8 active);
+void SleepDeal_UpdateOverdischarge(UINT8 active, UINT8 voltage_fresh);
 UINT8 SleepDeal_NormalIdleExpired(UINT8 activity);
 void SleepDeal_HandleBootSleepStartup(void);
 
