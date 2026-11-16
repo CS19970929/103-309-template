@@ -152,6 +152,38 @@ static void test_smooth_restore_and_sleep(void)
     puts("PASS empty: trusted UV is immediate zero, saved before DEEP, reboot zero and normal charging from zero");
 }
 
+
+/* Repeat independently confirmed anchors without altering real discharge cycles.
+ * A three-cycle host trace proves cumulative SOC error does not survive a
+ * trustworthy 0/100 anchor; it is not evidence for arbitrary partial cycles. */
+static void test_repeated_soc_endpoints(void)
+{
+    unsigned cycle;
+    UINT32 cycles_before,passed_before;
+    reset_case(245,68);
+    for (cycle=0; cycle<3U; ++cycle) {
+        UINT32 before;
+        smooth_seconds(11,250,3505,3550);
+        assert(SOC_HasPendingFull());
+        smooth_seconds(110,0,3300,3400);
+        assert(s_soc.now_as10==s_soc.full_as10 && soc_percent()==100U);
+        before=s_soc.now_as10;
+        cycles_before=s_soc.cycle_x100;
+        passed_before=s_soc.passed_as10;
+        smooth_seconds(300,-6000,3200,3300);
+        assert(s_soc.now_as10<before && s_soc.cycle_x100>=cycles_before);
+        cycles_before=s_soc.cycle_x100;
+        passed_before=s_soc.passed_as10;
+        SOC_NotifyOverdischarge(); /* Prevalidated real UV by SleepDeal. */
+        assert(soc_percent()==0U && s_soc.now_as10==0U &&
+               s_soc.cycle_x100==cycles_before &&
+               s_soc.passed_as10==passed_before);
+        assert(SOC_SaveSnapshot());
+        InitData_SOC();
+        assert(s_soc.now_as10==0U);
+    }
+    puts("PASS SOC endpoints: 3 full-discharge-validated-UV cycles, durable zero/full anchors, genuine cycles only");
+}
 static void test_smooth_tag_and_parameter_reset(void)
 {
     struct RS485MSG msg;UINT32 before;

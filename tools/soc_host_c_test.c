@@ -367,5 +367,6 @@ int main(void) {
     test_random_profile();test_snapshot_semantics();
     test_smooth_full();test_smooth_low_window();test_smooth_manual_bounds();
     test_smooth_timing_and_invalid();test_smooth_restore_and_sleep();test_smooth_tag_and_parameter_reset();
+    test_repeated_soc_endpoints();
     puts("PASS SOC production C:24 groups");return 0;
 }
