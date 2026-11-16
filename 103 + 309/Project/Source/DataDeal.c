@@ -732,6 +732,13 @@ void App_AFEGet(void)
     sample_result = UpdateVoltageFromBqMaximo();
     data_ok = (UINT8)(sample_result == 0U);
     Fault_UpdatePackTemperatureResult(sample_result);
+    status_ok = App_SH367309();
+    /* PF can freeze VADC/CADC. A complete CELL frame must not be published
+     * until this cycle's AFE status also confirms it is usable. */
+    if (!status_ok || SH367309_Reg_Store.REG_BSTATUS1.bits.PF) {
+        data_ok = 0U;
+        if (status_ok) close_ctlc();
+    }
     if (data_ok)
     {
         DataLoad_CellVolt();
@@ -739,13 +746,6 @@ void App_AFEGet(void)
         DataLoad_Temperature();
         DataLoad_TemperatureMaxMinFind();
         DataLoad_Current();
-    }
-    status_ok = App_SH367309();
-    /* PF may freeze VADC/CADC; failed status cannot certify freshness.
-     * Apply the same validity to protection, SOC, reports and MOS release. */
-    if (!status_ok || SH367309_Reg_Store.REG_BSTATUS1.bits.PF) {
-        data_ok = 0U;
-        if (status_ok) close_ctlc();
     }
     Fault_UpdateCurrentProtection(data_ok);
     AFE_MonitorUpdate(data_ok, status_ok, data_ok);
