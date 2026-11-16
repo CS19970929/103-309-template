@@ -30,3 +30,20 @@ jobs:
         run: python -B tools/test_afe_cell_voltage.py
       - name: Run production SOC C host regression
         run: python -B tools/run_soc_host_c_test.py
+
+  windows-host:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Real Flash state, parameter and power-cut host tests
+        run: python -B tools/test_storage.py
+      - name: Deep sleep, RTC and confirmed UV policy
+        run: python -B tools/test_sleep_policy.py
+      - name: MOS, AFE and protection regressions
+        run: python -B tools/test_protection_refactor.py
+      - name: UART protocol regression
+        run: python -B tools/test_uart_protocols.py
