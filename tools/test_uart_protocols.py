@@ -261,7 +261,14 @@ combo=combo.replace('    puts("PASS both UARTs:', '    test_wake_paths();\n    p
 r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+str(src),
                   str(out/'uart_combined.c'),'/Fe:'+str(out/'uart_combined.exe'),
                   '/Fo:'+str(out/'uart_combined.obj')],cwd=out,env=env,capture_output=True,text=True,errors='replace')
-if r.returncode: print(r.stdout,r.stderr);raise SystemExit(r.returncode)
+if r.returncode:
+    print(r.stdout,r.stderr)
+    lines=combo.splitlines()
+    for match in re.finditer(r'uart_combined\\.c\\((\\d+)\\)',r.stdout+r.stderr):
+        line=int(match.group(1))
+        for i in range(max(0,line-5),min(len(lines),line+3)):
+            print(f'generated C {i+1}: {lines[i]}')
+    raise SystemExit(r.returncode)
 subprocess.run([str(out/'uart_combined.exe')],cwd=out,check=True)
 clock=(ROOT/'tools/uart_clock_cases.c').read_text(encoding='utf-8')
 clock=clock.replace('/* REAL_CLOCK_FUNCTION */',
