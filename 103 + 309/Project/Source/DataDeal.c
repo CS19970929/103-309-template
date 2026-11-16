@@ -741,11 +741,18 @@ void App_AFEGet(void)
     }
     Fault_UpdateCurrentProtection(data_ok);
     status_ok = App_SH367309();
-    AFE_MonitorUpdate(data_ok, status_ok, data_ok);
+    /* PF may freeze VADC/CADC registers: never report them as fresh SOC
+       evidence or allow CTL to reopen during a PF status. */
+    AFE_MonitorUpdate(data_ok, status_ok,
+        (UINT8)(data_ok && (!status_ok || !SH367309_Reg_Store.REG_BSTATUS1.bits.PF)));
+    if (status_ok && SH367309_Reg_Store.REG_BSTATUS1.bits.PF)
+        close_ctlc();
 
-    App_SOC(data_ok, status_ok);
+    App_SOC((UINT8)(data_ok &&
+        (!status_ok || !SH367309_Reg_Store.REG_BSTATUS1.bits.PF)), status_ok);
     if (status_ok)
-        SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp);
+        SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp,
+            data_ok);
     else
         (void)SleepDeal_NormalIdleExpired(1U);
 
@@ -755,7 +762,7 @@ void App_AFEGet(void)
     if (data_ok && status_ok)
         Sci_CustomerUpdateCounters();
     if (mos_ok && AFE_IsHealthy() && data_ok && status_ok &&
-        Fault_CanOpenCtl())
+        !SH367309_Reg_Store.REG_BSTATUS1.bits.PF && Fault_CanOpenCtl())
         open_ctlc();
     AFE_ApplyPendingConfiguration(data_ok, status_ok);
 }

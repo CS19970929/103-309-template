@@ -168,7 +168,8 @@ UINT8 Fault_CanOpenCtl(void)
     return (UINT8)(s_host_mos_off != 3U &&
         !g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp &&
         !SystemError_IsActive(ERROR_STATUS_TEMP_BREAK) &&
-        !SystemError_IsActive(ERROR_STATUS_AFE1));
+        !SystemError_IsActive(ERROR_STATUS_AFE1) &&
+        !SH367309_Reg_Store.REG_BSTATUS1.bits.PF);
 }
 
 UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)

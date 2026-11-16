@@ -70,7 +70,12 @@ UINT8 RtcSleep_AfePortHasAfeWake(enum irqWakeup *source)
         SystemRuntime_SetMosStatus(SH367309_Reg_Store.REG_BSTATUS3.bits.CHG_FET,
                                    SH367309_Reg_Store.REG_BSTATUS3.bits.DSG_FET);
         Fault_ChangeToMCU();
-        SleepDeal_UpdateOverdischarge(SH367309_Reg_Store.REG_BSTATUS1.bits.UV);
+        /* Status alone is not fresh CELL evidence in RTC STOP. Hardware
+           UV protection precedes this bounded read; DEEP remains immediate
+           if the frame is invalid or unavailable. */
+        SleepDeal_UpdateOverdischarge(SH367309_Reg_Store.REG_BSTATUS1.bits.UV,
+            SH367309_Reg_Store.REG_BSTATUS1.bits.UV ?
+                RtcSleep_AfePortUpdateRtcData() : 0U);
         if (g_stLowPowerRtcStatus.mode==DEEP_MODE) {
             if (source!=0) *source=cuv_wake;
             return 1U;

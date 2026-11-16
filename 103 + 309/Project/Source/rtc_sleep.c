@@ -123,6 +123,14 @@ static void lp_update_sleep_request(void)
     {
         return;
     }
+    /* The charger can stop before the confirmed full target reaches 100%.
+     * Keep RUN for that short ramp, but never block an explicit DEEP or an
+     * AFE failure/low-voltage sleep request. */
+    if (SOC_HasPendingFull() && AFE_IsHealthy() && AFE_IsDataFresh())
+    {
+        g_stLowPowerRtcStatus.idle = 0U;
+        return;
+    }
 
     g_stLowPowerRtcStatus.block = LP_GetBlockReason();
     if (SleepDeal_NormalIdleExpired((UINT8)(
