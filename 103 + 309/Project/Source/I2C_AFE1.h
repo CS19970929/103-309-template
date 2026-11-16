@@ -65,6 +65,7 @@ void InitAFE1(void);
 /* 0=valid; 1=I2C failure; 2=pack NTC invalid; 3=cell voltage/mapping
  * invalid. Reject invalid frames before publishing new measurement data. */
 UINT8 UpdateVoltageFromBqMaximo(void);
+void AfeCell_InvalidatePairHistory(void);
 
 void initAFE1_IIC(void);
 

@@ -589,6 +589,15 @@ void InitAFE1(void)
 #define AFE_CELL_PAIR_STEP_MV 800L
 #define AFE_CELL_PAIR_SUM_DELTA_MV 200L
 
+/* One-bit history validity, independent of failed sample freshness. A
+ * rejected disconnection must not become "valid" on its second frame. */
+static UINT8 s_cell_pair_history_valid;
+
+void AfeCell_InvalidatePairHistory(void)
+{
+    s_cell_pair_history_valid = 0U;
+}
+
 static UINT8 AfeCell_DecodeMv(UINT16 raw_word, UINT16 *voltage_mv)
 {
     INT32 raw = (INT32)(INT16)U16_SwapEndian(raw_word);
@@ -643,7 +652,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
         }
         /* Compare only with a recent successful RUN sample. After STOP,
          * parameter changes or failed reads, no old sample is trusted. */
-        if (AFE_IsDataFresh())
+        if (s_cell_pair_history_valid)
         {
             for (i = 1U; i < SeriesNum; ++i)
             {
@@ -658,6 +667,7 @@ UINT8 UpdateVoltageFromBqMaximo(void)
         }
         /* All-or-nothing: no partial publication of invalid voltage data. */
         memcpy(SH367309_Read_AFE1.u16VCell, cell_mv, sizeof(cell_mv));
+        s_cell_pair_history_valid = 1U;
 
 		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp1)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp1));
 		UPDNLMT16(u32temp, 65535, 0);

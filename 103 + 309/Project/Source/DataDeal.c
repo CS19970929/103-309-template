@@ -599,6 +599,7 @@ void DataLoad_Current(void)
 /* No AFE software reset or EEPROM programming from communication recovery. */
 void AFE_MonitorInvalidate(void)
 {
+    AfeCell_InvalidatePairHistory();
     s_data.mon.data_valid = 0U;
     s_data.mon.healthy = 0U;
     s_data.mon.ok_count = 0U;
