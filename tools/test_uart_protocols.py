@@ -208,6 +208,9 @@ flash_stub=flash_stub.replace('/* RESET_FLAGS */','\n'.join(line for line in ven
     if line.lstrip().startswith('#define') and 'RCC_CSR_' in line))
 flash=(src/'Flash.c').read_text(encoding='utf-8').split('/* Parameter defaults and runtime application. */')[0]
 combo+=flash_stub+'\n'.join(line for line in flash.splitlines() if not line.startswith('#include'))
+# This UART-only fixture cuts Flash.c before parameter validators; the full
+# validation/CRC/transaction implementation is exercised by test_storage.py.
+combo+='\nstatic UINT8 Storage_ConfigValid(const STORAGE_FLASH_CONFIG_DATA *config) { return (UINT8)(config != 0); }\n'
 combo+='''
 #define FAULT_CURRENT_MAX_GAP_TICKS 50U
 static UINT8 s_current_valid;
