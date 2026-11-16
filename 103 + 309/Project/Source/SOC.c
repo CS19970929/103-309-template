@@ -10,6 +10,8 @@
 #define SOC_TIME_UNKNOWN_MINUTES 0xFFFFU
 #define SOC_TIME_MAX_MINUTES 0xFFFEU
 #define SOC_CELL_MAX_MV 5000U
+#define SOC_CELL_MAX_DELTA_MV 800U /* SOC endpoint evidence requires plausible spread. */
+#define SOC_FULL_REST_MARGIN_MV 50U /* All cells near SOC100: zero tail current. */
 #define SOC_CONFIRM_TICKS 1000U /* 10 s, in real 10 ms RUN ticks. */
 #define SOC_MAX_SAMPLE_GAP_TICKS 50U
 #define SOC_SMOOTH_DENOMINATOR 100000U /* Low-end: 1% per 10 seconds. */
@@ -22,7 +24,8 @@ enum {
     SOC_FULL_LATCHED = 2U,
     SOC_TARGET_EMPTY = 4U, /* Legacy pending UV intent; retired on new events. */
     SOC_CHARGE_SEEN = 8U,
-    SOC_CALIBRATION_FLAGS = 15U
+    SOC_MANUAL_OVERRIDE = 16U, /* Manual SOC stays authoritative until real current. */
+    SOC_CALIBRATION_FLAGS = 31U
 };
 
 /* Capacity uses 0.1 A*s; only this module owns the integrator and remainder. */
@@ -220,7 +223,7 @@ UINT8 SOC_RequestSetOnce(UINT8 percent)
     s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * percent / 100U);
     s_soc.remainder_mams = 0;
     s_soc.low_entry_as10 = 0U;
-    s_soc.calibration_flags = 0U;
+    s_soc.calibration_flags = SOC_MANUAL_OVERRIDE;
     if (!SOC_SaveSnapshot()) {
         s_soc = previous;
         return 0U;
@@ -299,7 +302,9 @@ UINT8 SOC_CellVoltagesValid(void)
     if (SeriesNum < 5U || SeriesNum > 16U ||
         g_stCellInfoReport.u16VCellMin == 0U ||
         g_stCellInfoReport.u16VCellMin > g_stCellInfoReport.u16VCellMax ||
-        g_stCellInfoReport.u16VCellMax > SOC_CELL_MAX_MV) return 0U;
+        g_stCellInfoReport.u16VCellMax > SOC_CELL_MAX_MV ||
+        (UINT32)g_stCellInfoReport.u16VCellMax -
+            g_stCellInfoReport.u16VCellMin > SOC_CELL_MAX_DELTA_MV) return 0U;
     for (i = 0U; i < SeriesNum; ++i)
         if (g_stCellInfoReport.u16VCell[i] == 0U ||
             g_stCellInfoReport.u16VCell[i] > SOC_CELL_MAX_MV) return 0U;
@@ -347,19 +352,23 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
     UINT16 max_mv = g_stCellInfoReport.u16VCellMax;
     UINT32 target;
 
-    /* Evidence of prior charging, not a requirement on terminal current.
-     * A measured discharge retires an unfinished upper target. */
-    if (current_ma >= SOC_CHARGE_EVIDENCE_MA && !(flags & SOC_TARGET_FULL) &&
-        s_soc.now_as10 < s_soc.full_as10)
-        flags |= SOC_CHARGE_SEEN;
-    else if (current_ma <= -SOC_CHARGE_EVIDENCE_MA) {
-        flags &= (UINT16)~(SOC_CHARGE_SEEN | SOC_TARGET_FULL | SOC_FULL_LATCHED);
+    /* No charger-specific tail current. Prior charging OR all cells near
+     * SOC100 qualifies. Manual setting blocks static full until real current. */
+    if (current_ma >= SOC_CHARGE_EVIDENCE_MA) {
+        flags &= (UINT16)~SOC_MANUAL_OVERRIDE;
+        if (!(flags & SOC_TARGET_FULL) && s_soc.now_as10 < s_soc.full_as10)
+            flags |= SOC_CHARGE_SEEN;
+    } else if (current_ma <= -SOC_CHARGE_EVIDENCE_MA) {
+        flags &= (UINT16)~(SOC_MANUAL_OVERRIDE | SOC_CHARGE_SEEN |
+                           SOC_TARGET_FULL | SOC_FULL_LATCHED);
         s_cal.full_ticks = 0U;
         s_cal.remainder = 0U;
     }
 
     if (full_mv > low_mv && full_mv <= SOC_CELL_MAX_MV &&
-        !(flags & SOC_TARGET_FULL) && (flags & SOC_CHARGE_SEEN) &&
+        !(flags & (SOC_TARGET_FULL | SOC_MANUAL_OVERRIDE)) &&
+        ((flags & SOC_CHARGE_SEEN) ||
+         min_mv >= (UINT16)(full_mv - SOC_FULL_REST_MARGIN_MV)) &&
         max_mv >= full_mv && min_mv > empty_mv) {
         s_cal.full_ticks = soc_confirm_ticks(s_cal.full_ticks, elapsed);
         if (s_cal.full_ticks == SOC_CONFIRM_TICKS) {
@@ -378,12 +387,12 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
     if (flags != s_soc.calibration_flags) s_saved.valid = 0U;
     s_soc.calibration_flags = flags;
 
-    /* After a trustworthy full confirmation, complete the saved target even
-     * if the charger stops and cell voltage relaxes. No extra rest-time
-     * correction exists before this confirmation. */
+    /* After a trustworthy full confirmation, keep the 100% target through
+     * charger stop and voltage relaxation, tolerating zero-current noise.
+     * Ordinary rest has no upward SOC correction. */
     if (flags & SOC_TARGET_FULL) {
         s_cal.low_ticks = 0U;
-        if (current_ma >= 0) {
+        if (current_ma > -SOC_CHARGE_EVIDENCE_MA) {
             soc_smooth_towards(s_soc.full_as10, elapsed,
                                SOC_FULL_SMOOTH_DENOMINATOR);
             if (s_soc.now_as10 == s_soc.full_as10) {
