@@ -29,11 +29,30 @@ static void test_smooth_full(void)
     }
     assert(s_soc.now_as10==s_soc.full_as10 && last==100U && !SOC_HasPendingFull());
     assert(s_soc.cycle_x100==300U && !s_soc.passed_as10);
+    /* Charger tail current can be zero for the entire detected window:
+       a consistently high whole pack still qualifies a full endpoint. */
+    reset_case(245,70);
+    smooth_seconds(11,0,3510,3550);
+    assert(SOC_HasPendingFull());
+    smooth_seconds(35,0,3320,3380);
+    assert(soc_percent()==100U && !SOC_HasPendingFull());
+    /* Host-assigned SOC must not be overwritten just by an unchanged
+       resting battery that still has high terminal voltage. */
+    reset_case(245,70);
+    assert(SOC_RequestSetOnce(35));
+    smooth_seconds(30,0,3510,3550);
+    assert(soc_percent()==35U && !SOC_HasPendingFull());
+    smooth_seconds(12,200,3510,3550);
+    assert(SOC_HasPendingFull());
+    /* Small signed zero-point noise must not stall a confirmed target. */
+    before=s_soc.now_as10;
+    smooth_seconds(1,-50,3310,3400);
+    assert(s_soc.now_as10>before && SOC_HasPendingFull());
     reset_case(245,50);smooth_seconds(12,200,3300,3550);
     assert(SOC_HasPendingFull());before=s_soc.now_as10;
     smooth_seconds(2,-500,3300,3400);
     assert(!SOC_HasPendingFull() && s_soc.now_as10<before);
-    puts("PASS full: prior charge evidence, no idle false-positive, latched until100 after voltage relaxation, bounded non-jumping correction, discharge cancel");
+    puts("PASS full: true zero-tail full, manual authority, small zero-noise tolerance, latched100, discharge cancel");
 }
 
 static void test_smooth_low_window(void)
@@ -105,6 +124,9 @@ static void test_smooth_timing_and_invalid(void)
     set_voltages(0,3550);host_tick+=20;App_SOC(1,1);assert(s_soc.now_as10==before);
     SeriesNum=17;set_voltages(3300,3550);host_tick+=20;App_SOC(1,1);
     assert(s_soc.now_as10==before);
+    SeriesNum=7;set_voltages(2700,4100);
+    assert(!SOC_CellVoltagesValid()); /* Stable boot-time disconnection case. */
+    set_voltages(3200,3500);assert(SOC_CellVoltagesValid());
     SeriesNum=7;host_tick=UINT32_MAX-9U;SOC_PauseCalibration();
     smooth_tick(0,3300,3300,1,1);assert(s_soc.now_as10==before);
     smooth_tick(0,3300,3300,1,1);assert(s_soc.now_as10>before);
