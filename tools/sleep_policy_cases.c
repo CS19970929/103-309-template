@@ -378,8 +378,12 @@ int main(void) {
     reset_case();g_stLowPowerRtcStatus.mode=HICCUP_MODE;afe_uv=1;fake_uv_cells_valid=1;
     g_stCellInfoReport.u16VCellMin=2700;
     assert(!rtc_sleep_run_hiccup_cycle());
-    printf("RTC trusted UV trace: deep=%d soc=%d targets=%u mode=%u\\n",
-           deep_calls,soc_now,soc_empty_targets,(unsigned)g_stLowPowerRtcStatus.mode);
+    fprintf(stderr, "RTC trusted UV trace: deep=%d soc=%d targets=%u mode=%u vmin=%u uv=%u pf=%u valid=%d fresh=%d\\n",
+           deep_calls,soc_now,soc_empty_targets,(unsigned)g_stLowPowerRtcStatus.mode,
+           (unsigned)g_stCellInfoReport.u16VCellMin,
+           (unsigned)SH367309_Reg_Store.REG_BSTATUS1.bits.UV,
+           (unsigned)SH367309_Reg_Store.REG_BSTATUS1.bits.PF,
+           fake_uv_cells_valid,fake_afe_fresh);
     assert(deep_calls==1);
     assert(soc_now==0);
     assert(soc_empty_targets==1);
