@@ -426,7 +426,9 @@ int main(void) {
      * requests. Only a new confirmed UV event has immediate priority. */
     reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); charger=1;
     SleepDeal_HandleBootSleepStartup(); charger=0; afe_uv=1;
-    g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
+    /* This checks an old handled sleep reason, not a current UV fault:
+       an active UV legitimately blocks the ordinary idle timer. */
+    g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=0;
     OtherElement.u16Sleep_TimeNormal=1;
     lp_update_sleep_request(); rtc_counter+=59; lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
