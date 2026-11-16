@@ -26,6 +26,13 @@ def function(source: str, signature: str) -> str:
 def run() -> None:
     driver = (SOURCE / "I2C_AFE1.c").read_text(encoding="utf-8")
     mapping = (SOURCE / "DataDeal.c").read_text(encoding="utf-8")
+    mapping_header = (SOURCE / "DataDeal.h").read_text(encoding="utf-8")
+    main_header = (SOURCE / "main.h").read_text(encoding="utf-8")
+    # This guard catches the real ARMCC5 failure: the table existed in
+    # DataDeal.c but was invisible in the I2C_AFE1.c translation unit.
+    declaration = "extern const unsigned char SeriesSelect_AFE1[16][16];"
+    if declaration not in mapping_header or '#include "DataDeal.h"' not in main_header:
+        raise RuntimeError("AFE channel mapping must be declared in DataDeal.h and reached by main.h")
     tables = mapping[mapping.index("const unsigned char SeriesSelect_AFE1[16][16]"):mapping.index("};", mapping.index("const unsigned char SeriesSelect_AFE1[16][16]")) + 2]
     defines = "\n".join(line for line in driver.splitlines() if
                          line.startswith("#define AFE_CELL_"))
