@@ -15,7 +15,7 @@ const unsigned char SeriesSelect_AFE1[16][16] = {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0},      // 10
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 0, 0, 0, 0},     // 11
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 0, 0, 0},    // 12
-    {0, 1, 2, 3, 4, 5, 6, 7, 9, 9, 10, 11, 12, 0, 0, 0},   // 13
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0, 0, 0},   // 13
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 0},  // 14
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0}, // 15
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15} // 16
@@ -741,7 +741,7 @@ void App_AFEGet(void)
     }
     Fault_UpdateCurrentProtection(data_ok);
     status_ok = App_SH367309();
-    AFE_MonitorUpdate(data_ok, status_ok, (UINT8)(sample_result != 1U));
+    AFE_MonitorUpdate(data_ok, status_ok, data_ok);
 
     App_SOC(data_ok, status_ok);
     if (status_ok)

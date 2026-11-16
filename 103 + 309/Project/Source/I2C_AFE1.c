@@ -1,4 +1,5 @@
 #include "main.h"
+#include <string.h>
 
 AFEDATA Registers_AFE1;
 struct SH367309_Read SH367309_Read_AFE1;
@@ -580,9 +581,46 @@ void InitAFE1(void)
 }
 
 
+
+/* CELL is a signed 16-bit VADC result (SH367309 V0.9A, section 12.1.2).
+ * A floating VC lead can produce negative codes: unsigned conversion
+ * formerly fabricated 9-10V cells from those negative values. */
+#define AFE_CELL_MAX_MV 5000U
+#define AFE_CELL_PAIR_STEP_MV 800L
+#define AFE_CELL_PAIR_SUM_DELTA_MV 200L
+
+static UINT8 AfeCell_DecodeMv(UINT16 raw_word, UINT16 *voltage_mv)
+{
+    INT32 raw = (INT32)(INT16)U16_SwapEndian(raw_word);
+    INT32 mv = raw * 5 / 32;
+    if (raw <= 0 || mv > (INT32)AFE_CELL_MAX_MV || voltage_mv == 0)
+        return 0U;
+    *voltage_mv = (UINT16)mv;
+    return 1U;
+}
+
+/* A floating shared node often shifts two adjacent cells in opposite
+ * directions with nearly unchanged sum. Suspicion != wire-break proof. */
+static UINT8 AfeCell_SuspiciousPair(UINT16 old_a, UINT16 old_b,
+                                   UINT16 new_a, UINT16 new_b)
+{
+    INT32 da = (INT32)new_a - old_a;
+    INT32 db = (INT32)new_b - old_b;
+    INT32 sum = da + db;
+    return (UINT8)(((da >= AFE_CELL_PAIR_STEP_MV &&
+                      db <= -AFE_CELL_PAIR_STEP_MV) ||
+                     (db >= AFE_CELL_PAIR_STEP_MV &&
+                      da <= -AFE_CELL_PAIR_STEP_MV)) &&
+                    sum >= -AFE_CELL_PAIR_SUM_DELTA_MV &&
+                    sum <= AFE_CELL_PAIR_SUM_DELTA_MV);
+}
+
 UINT8 UpdateVoltageFromBqMaximo(void)
 {
 	UINT8 i, result = 0;
+    UINT8 mapped;
+    UINT16 used = 0U;
+    UINT16 cell_mv[16] = {0U};
 	UINT32 u32temp = 0;
 
 	if (MTPRead(MTP_TEMP1, sizeof(Registers_AFE1), (UINT8 *)&Registers_AFE1))
@@ -593,10 +631,33 @@ UINT8 UpdateVoltageFromBqMaximo(void)
            before updating any published measurement. */
         if (t1 == 0U || t2 == 0U || t1 >= 32769U || t2 >= 32769U)
             return 2U; /* Sensor invalid; I2C transaction succeeded. */
-		for (i = 0; i < SeriesNum; i++)
-		{
-			SH367309_Read_AFE1.u16VCell[i] = ((UINT32)U16_SwapEndian(Registers_AFE1.Cell[i]) * 5 >> 5); ////Vcell*5/32
-		}
+        if (SeriesNum < 5U || SeriesNum > 16U)
+            return 3U;
+        for (i = 0U; i < SeriesNum; ++i)
+        {
+            mapped = SeriesSelect_AFE1[SeriesNum - 1U][i];
+            if (mapped >= 16U || (used & (UINT16)(1U << mapped)) != 0U ||
+                !AfeCell_DecodeMv(Registers_AFE1.Cell[mapped], &cell_mv[mapped]))
+                return 3U;
+            used |= (UINT16)(1U << mapped);
+        }
+        /* Compare only with a recent successful RUN sample. After STOP,
+         * parameter changes or failed reads, no old sample is trusted. */
+        if (AFE_IsDataFresh())
+        {
+            for (i = 1U; i < SeriesNum; ++i)
+            {
+                UINT8 a = SeriesSelect_AFE1[SeriesNum - 1U][i - 1U];
+                UINT8 b = SeriesSelect_AFE1[SeriesNum - 1U][i];
+                if (AfeCell_SuspiciousPair(
+                        SH367309_Read_AFE1.u16VCell[a],
+                        SH367309_Read_AFE1.u16VCell[b],
+                        cell_mv[a], cell_mv[b]))
+                    return 3U;
+            }
+        }
+        /* All-or-nothing: no partial publication of invalid voltage data. */
+        memcpy(SH367309_Read_AFE1.u16VCell, cell_mv, sizeof(cell_mv));
 
 		u32temp = ((UINT32)SH367309_Reg_Store.TR_ResRef * U16_SwapEndian(Registers_AFE1.Temp1)) / (32769 - U16_SwapEndian(Registers_AFE1.Temp1));
 		UPDNLMT16(u32temp, 65535, 0);
