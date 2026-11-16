@@ -38,6 +38,7 @@ static enum irqWakeup stop_source;
 static int scripted_key,current_wakeup;
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 static int fake_storage_fault, fake_sensor_fault, fake_afe_healthy=1, fake_afe_fresh=1;
+static int fake_full_pending, AFE_PARAM_WRITE_Flag;
 static int rtc_init_ok=1, rtc_alarm_ok=1;
 static unsigned soc_empty_targets;
 #define ERROR_STATUS_AFE1 1
@@ -60,7 +61,9 @@ static UINT8 System_ERROR_UserCallback(int command) {
     return (UINT8)!afe_status_ok;
 }
 static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
-static void SOC_NotifyOverdischarge(void) { ++soc_empty_targets; }
+static void SOC_NotifyOverdischarge(void) { ++soc_empty_targets; soc_now=0; }
+static UINT8 SOC_CellVoltagesValid(void) { return (UINT8)fake_afe_fresh; }
+static UINT8 SOC_HasPendingFull(void) { return (UINT8)fake_full_pending; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
 #define MCUO_AFE_CTLC ctlc
@@ -73,7 +76,7 @@ static struct {
 } g_stCellInfoReport;
 static struct {
     UINT8 u8_MTP_BALANCEH;
-    struct { struct { UINT8 SC,UV; } bits; } REG_BSTATUS1;
+        struct { struct { UINT8 SC,UV,PF; } bits; } REG_BSTATUS1;
     struct { struct { UINT8 CHG_FET,DSG_FET; } bits; } REG_BSTATUS3;
 } SH367309_Reg_Store;
 static struct { struct { UINT16 curValue; } u16VcellUvp; } AFE_Parameters_RS485_Struction;
@@ -128,6 +131,7 @@ static UINT8 RtcSleep_PortIsOneSecondTick(void) { return (UINT8)one_second; }
 static void LogRecord_RequestSleep(void) { ++sleep_log_calls; sleep_log_seconds=runtime_seconds; }
 /* RESET_SLEEP_SOURCE */
 static UINT8 RtcSleep_PortUpdateRtcData(void) { return 1; }
+static UINT8 RtcSleep_AfePortUpdateRtcData(void) { return (UINT8)fake_afe_fresh; }
 static UINT8 RtcSleep_PortHasCurrentWake(enum irqWakeup *source) {
     if(current_wakeup) { *source=current_wake; return 1; }
     return 0;
@@ -176,7 +180,7 @@ static void reset_case(void) {
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; soc_empty_targets=0; afe_status_ok=1; soc_now=55;
-    fake_storage_fault=fake_sensor_fault=0;
+    fake_storage_fault=fake_sensor_fault=fake_full_pending=AFE_PARAM_WRITE_Flag=0;
     fake_afe_healthy=fake_afe_fresh=1;
     rtc_init_ok=rtc_alarm_ok=1;
     s_persistent_error_tracking=0U;
@@ -330,26 +334,26 @@ int main(void) {
     assert(BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     puts("PASS key: NORMAL/DEEP need 1 s wake and release/re-press; HICCUP IRQ wakes immediately and arms 3 s hold after timer restore; RTC/release stay asleep; concurrent current/UART, bounce/wrap/charger");
 #endif
-    reset_case(); SleepDeal_UpdateOverdischarge(1);
-    assert(soc_now==55 && zero_calls==0 && soc_empty_targets==1 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    reset_case(); SleepDeal_UpdateOverdischarge(1,1);
+    assert(soc_now==55 && zero_calls==0 && soc_empty_targets==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     SleepDeal_Continue(DEEP_MODE); assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); LowPower_Request(NO_SLEEP);
     scripted_key=1; key=0; expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
     SleepDeal_HandleBootSleepStartup();
-    SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==0 && soc_empty_targets==1 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
+    SleepDeal_UpdateOverdischarge(1,1);
+    assert(zero_calls==0 && soc_empty_targets==0 && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     key=1; g_stCellInfoReport.u16VCellMin=2200;
     g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
     for(i=0;i<59;++i) lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==NO_SLEEP);
     lp_update_sleep_request();
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE);
-    SleepDeal_UpdateOverdischarge(0); SleepDeal_UpdateOverdischarge(1);
-    assert(zero_calls==0 && soc_empty_targets==2 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
+    SleepDeal_UpdateOverdischarge(0,0); SleepDeal_UpdateOverdischarge(1,1);
+    assert(zero_calls==0 && soc_empty_targets==0 && g_stLowPowerRtcStatus.mode==DEEP_MODE);
     for(i=0;i<2;++i) {
         reset_case(); g_stLowPowerRtcStatus.mode=(UINT8)(i ? NORMAL_MODE : HICCUP_MODE);
         key=1; stop_source=NO_IRQ; afe_uv=1;
-        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && soc_empty_targets==1 && !adc_on && !restore_calls);
+        assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 && zero_calls==0 && soc_empty_targets==0 && !adc_on && !restore_calls);
     }
     for(i=0;i<2;++i) {
         reset_case(); key=0; stop_source=soc_key; afe_uv=1;
@@ -359,6 +363,26 @@ int main(void) {
     reset_case(); key=1; stop_source=NO_IRQ; rtc_wake=1;
     afe_uv=1; afe_status_ok=0; g_stLowPowerRtcStatus.mode=HICCUP_MODE;
     assert(!rtc_sleep_run_hiccup_cycle() && !deep_calls && !zero_calls);
+    /* A UV with valid evidence may jump, but a stale frame or PF may not.
+       Protection itself remains active in every case. */
+    reset_case();g_stCellInfoReport.u16VCellMin=2700;
+    SleepDeal_UpdateOverdischarge(1,0);
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && soc_now==55 && !soc_empty_targets);
+    LowPower_Request(NO_SLEEP);
+    SleepDeal_UpdateOverdischarge(1,1);
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && soc_now==0 && soc_empty_targets==1);
+    reset_case();g_stCellInfoReport.u16VCellMin=2700;
+    SH367309_Reg_Store.REG_BSTATUS1.bits.PF=1;
+    SleepDeal_UpdateOverdischarge(1,1);
+    assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && soc_now==55 && !soc_empty_targets);
+    reset_case();g_stLowPowerRtcStatus.mode=HICCUP_MODE;afe_uv=1;
+    g_stCellInfoReport.u16VCellMin=2700;
+    assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 &&
+           soc_now==0 && soc_empty_targets==1);
+    reset_case();fake_full_pending=1;fake_afe_healthy=fake_afe_fresh=1;
+    for(i=0;i<100;i++) lp_update_sleep_request();
+    assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && g_stLowPowerRtcStatus.idle==0U);
+    fake_full_pending=0;
     puts("PASS UV: new event preserves SOC and requests immediate DEEP; same UV after wake does not retrigger; forced low-voltage timer remains active; recovery re-arms, both RTC modes, invalid status");
     /* Both qualified key and charger wakes retain the handled UV state, but
      * neither may disable the configurable low-voltage sleep timer. */
@@ -368,7 +392,7 @@ int main(void) {
         if(i) charger=1;
         else { key=0; scripted_key=1; }
         SleepDeal_HandleBootSleepStartup();
-        SleepDeal_UpdateOverdischarge(1);
+        SleepDeal_UpdateOverdischarge(1,1);
         assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
         key=0; SleepDeal_ResetKeyState(0U);
         g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp=1;
@@ -386,7 +410,7 @@ int main(void) {
         assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !g_stLowPowerRtcStatus.vlow);
         one_second=1;
         for(seconds=0;seconds<119;++seconds) {
-            SleepDeal_UpdateOverdischarge(1);
+            SleepDeal_UpdateOverdischarge(1,1);
             rtc_sleep();
             assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && !deep_calls && !zero_calls);
         }
@@ -410,7 +434,7 @@ int main(void) {
 #endif
     assert(!SleepDeal_TakeKeySleepRequest()); tick+=KEY_SLEEP_TICKS;
     assert(SleepDeal_TakeKeySleepRequest()); LowPower_Request(NORMAL_MODE);
-    SleepDeal_UpdateOverdischarge(1);
+    SleepDeal_UpdateOverdischarge(1,1);
     assert(g_stLowPowerRtcStatus.mode==NORMAL_MODE);
     LowPower_Request(DEEP_MODE); rtc_sleep();
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && deep_calls==1 && !zero_calls);
@@ -420,12 +444,12 @@ int main(void) {
     assert(BootFlag_Read()==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
     memset(&s_sleep,0,sizeof(s_sleep)); reset_during_stop=0; key=0; scripted_key=1;
     expected_sleep_flag=FLASH_UNDERVOLTAGE_SLEEP_VALUE;
-    SleepDeal_HandleBootSleepStartup(); SleepDeal_UpdateOverdischarge(1);
+    SleepDeal_HandleBootSleepStartup(); SleepDeal_UpdateOverdischarge(1,1);
     assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP);
     assert(BootFlag_Read()==BOOT_FLAG_RESET_VALUE);
     reset_case(); BootFlag_Write(FLASH_UNDERVOLTAGE_SLEEP_VALUE); charger=1;
     SleepDeal_HandleBootSleepStartup();
-    SleepDeal_UpdateOverdischarge(1);
+    SleepDeal_UpdateOverdischarge(1,1);
     assert(!zero_calls && g_stLowPowerRtcStatus.mode==NO_SLEEP && BootFlag_Read()==FLASH_SLEEP_CHARGER_WAKE_VALUE);
     puts("PASS deep restart: sleep reason survives reset during STOP wait; configured key qualification required; watchdog feeds and charger reason preserved");
     reset_case(); assert(!SleepDeal_NormalIdleExpired(0));
