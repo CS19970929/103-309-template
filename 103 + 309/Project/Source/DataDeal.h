@@ -182,6 +182,10 @@ enum AFE_CURRENT_ZERO_STATUS_E {
 	AFE_CURRENT_ZERO_OUT_OF_RANGE
 };
 
+/* Physical AFE cell-channel mapping shared with I2C_AFE1.c.
+ * Definition is owned by DataDeal.c; keep both translation units in sync. */
+extern const unsigned char SeriesSelect_AFE1[16][16];
+
 extern UINT16 g_u16CalibCoefK[KB_NUM];
 extern INT16  g_i16CalibCoefB[KB_NUM];
 extern struct OTHER_ELEMENT OtherElement;
