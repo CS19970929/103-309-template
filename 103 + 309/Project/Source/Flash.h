@@ -45,9 +45,9 @@ typedef struct
 	UINT32 u32CapNow;           /* Remaining capacity, 0.1 A*s. */
 	UINT32 u32CapFull;          /* Capacity basis for proportional restore. */
 	UINT32 u32LearnPassedAs10;  /* Discharge below the next 0.01 cycle. */
-	UINT16 u16LearnAnchorSoc;   /* Manual target 0..100, or 0xFFFF. */
+	UINT16 u16LearnAnchorSoc;   /* Retired manual-target slot; new snapshots use 0xFFFF. */
 	UINT16 u16LearnState;       /* SOC state tag, not a learning state. */
-	UINT16 u16Flags;            /* Full target/latch and empty target. */
+	UINT16 u16Flags;            /* Confirmed full, charge evidence; old empty tag is retired. */
 	UINT16 u16Reserved[4];      /* Cycle generation, low reference lo/hi, unused. */
 } STORAGE_FLASH_SOC_DATA;
 
