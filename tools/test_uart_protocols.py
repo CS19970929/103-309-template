@@ -264,7 +264,7 @@ r=subprocess.run([str(compiler),'/nologo','/W3','/utf-8','/TC','/std:c11','/I'+s
 if r.returncode:
     print(r.stdout,r.stderr)
     lines=combo.splitlines()
-    for match in re.finditer(r'uart_combined\\.c\\((\\d+)\\)',r.stdout+r.stderr):
+    for match in re.finditer(r'uart_combined[.]c[(]([0-9]+)[)]',r.stdout+r.stderr):
         line=int(match.group(1))
         for i in range(max(0,line-5),min(len(lines),line+3)):
             print(f'generated C {i+1}: {lines[i]}')
