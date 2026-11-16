@@ -61,6 +61,12 @@ static void test_smooth_full(void)
     assert(s_soc.now_as10>before && SOC_HasPendingFull());
     reset_case(245,50);smooth_seconds(12,200,3300,3550);
     assert(SOC_HasPendingFull());before=s_soc.now_as10;
+    smooth_tick(0,3020,3400,1U,1U);
+    assert(!SOC_HasPendingFull() && s_soc.now_as10==before);
+    /* Normal relaxation stays in the allowed upper target path; a deep
+       low-SOC collapse does not. Rebuild a new valid target before discharge. */
+    reset_case(245,50);smooth_seconds(12,200,3300,3550);
+    assert(SOC_HasPendingFull());before=s_soc.now_as10;
     smooth_seconds(2,-500,3300,3400);
     assert(!SOC_HasPendingFull() && s_soc.now_as10<before);
     puts("PASS full: true zero-tail full, manual authority, small zero-noise tolerance, latched100, discharge cancel");
