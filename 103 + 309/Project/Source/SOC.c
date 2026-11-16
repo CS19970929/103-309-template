@@ -9,12 +9,9 @@
 #define SOC_TIME_CURRENT_MIN_MA 200L
 #define SOC_TIME_UNKNOWN_MINUTES 0xFFFFU
 #define SOC_TIME_MAX_MINUTES 0xFFFEU
-#define SOC_LOW_START_MV 3050U
-#define SOC_EMPTY_MV 3000U
 #define SOC_CELL_MAX_MV 5000U
 #define SOC_CONFIRM_TICKS 1000U /* 10 s, in real 10 ms RUN ticks. */
 #define SOC_MAX_SAMPLE_GAP_TICKS 50U
-#define SOC_FULL_RELEASE_MV 50U
 #define SOC_SMOOTH_DENOMINATOR 100000U /* Low-end: 1% per 10 seconds. */
 #define SOC_FULL_SMOOTH_DENOMINATOR 10000U /* Confirmed full: 1% per second. */
 #define SOC_CHARGE_EVIDENCE_MA 100L /* Positive current seen before the terminal. */
@@ -176,13 +173,14 @@ static UINT8 soc_restore_snapshot(const STORAGE_FLASH_SOC_DATA *data)
 
     s_soc.now_as10=(UINT32)((uint64_t)data->u32CapNow*s_soc.full_as10/full);
     s_soc.cycle_x100=data->u32CycleTimes;
-    s_soc.passed_as10=data->u32LearnPassedAs10%unit;
+    s_soc.passed_as10=(UINT32)(((uint64_t)data->u32LearnPassedAs10 *
+        s_soc.full_as10 / full) % unit);
     if ((flags & (UINT16)(~SOC_CALIBRATION_FLAGS))==0U &&
         (flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY))!=(SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
         (!(flags & SOC_TARGET_FULL) || (flags & SOC_FULL_LATCHED)) &&
         entry<=full) {
         s_soc.low_entry_as10=(UINT32)((uint64_t)entry*s_soc.full_as10/full);
-        s_soc.calibration_flags=flags;
+        s_soc.calibration_flags=(UINT16)(flags & (UINT16)~SOC_TARGET_EMPTY);
     }
     return 1U;
 }
@@ -201,7 +199,7 @@ void InitData_SOC(void)
     if (s_soc.full_as10 != 0U && StorageFlash_LoadSocData(&data) && soc_restore_snapshot(&data)) {
         s_saved.percent = soc_percent();
         s_saved.cycles = s_soc.cycle_x100 / 100U;
-        s_saved.valid = 1U;
+        s_saved.valid = (UINT8)((data.u16Flags & SOC_TARGET_EMPTY) == 0U);
         if (data.u16MaxErrorPercent != OtherElement.u16Soc_V_100 &&
             (s_soc.calibration_flags & (SOC_TARGET_FULL | SOC_FULL_LATCHED))) {
             /* Retire a stale full goal even if power failed after config commit. */
@@ -351,7 +349,8 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
 
     /* Evidence of prior charging, not a requirement on terminal current.
      * A measured discharge retires an unfinished upper target. */
-    if (current_ma >= SOC_CHARGE_EVIDENCE_MA && !(flags & SOC_TARGET_FULL))
+    if (current_ma >= SOC_CHARGE_EVIDENCE_MA && !(flags & SOC_TARGET_FULL) &&
+        s_soc.now_as10 < s_soc.full_as10)
         flags |= SOC_CHARGE_SEEN;
     else if (current_ma <= -SOC_CHARGE_EVIDENCE_MA) {
         flags &= (UINT16)~(SOC_CHARGE_SEEN | SOC_TARGET_FULL | SOC_FULL_LATCHED);
