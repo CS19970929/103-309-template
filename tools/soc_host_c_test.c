@@ -9,6 +9,7 @@ typedef int32_t INT32; typedef int FLASH_Status;
 #define SOC_TABLE_SIZE 42
 /* PARAMETER_TYPES */
 struct OTHER_ELEMENT OtherElement;
+static struct { struct { UINT16 curValue; } u16VcellUvp; } AFE_Parameters_RS485_Struction;
 struct { UINT16 u16VCellMin,u16VCellMax,u16VCell[32];
     struct {struct {UINT8 b1CellUvp,b1CellOvp;} bits;} unMdlFault_Third;
     struct {
@@ -71,6 +72,7 @@ static void reset_case(UINT16 capacity_a10,UINT8 soc) {
     memset(&stored,0,sizeof(stored));
     OtherElement.u16Soc_Ah=capacity_a10; OtherElement.u16Soc_Cycle_times=3U;
     OtherElement.u16Soc_V_100=3550U; OtherElement.u16Soc_V_0=3050U;
+    AFE_Parameters_RS485_Struction.u16VcellUvp.curValue=3000U;
     transient_save_failures=sleep_save_errors=sleep_watchdog_feeds=0;
     cycle_generation=STORAGE_SOC_CYCLE_GENERATION_NONE;
     stored_valid=1U;write_failure=parameter_failure=0U;current_fresh=1U;host_current_ma=0;save_attempts=0U;host_tick=0;
@@ -154,14 +156,15 @@ static void test_bounds(void) {
 static void test_manual_and_restore(void) {
     const UINT8 values[]={0,1,35,60,99,100};unsigned i;
     for(i=0;i<sizeof(values)/sizeof(values[0]);++i) {
-        UINT32 seconds=(UINT32)(values[i]>80 ? values[i]-80 : 80-values[i])*10U+1U;
-        reset_case(245,80);assert(SOC_RequestSetOnce(values[i]));
-        assert(stored_percent()==80 && g_stCellInfoReport.SocElement.u16Soc==80);
-        InitData_SOC();assert(g_stCellInfoReport.SocElement.u16Soc==80);
-        run_seconds(seconds,0,3300);InitData_SOC();
+        reset_case(245,80);
+        assert(SOC_RequestSetOnce(values[i]));
+        assert(stored_percent()==values[i] &&
+               g_stCellInfoReport.SocElement.u16Soc==values[i] &&
+               stored.u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET);
+        InitData_SOC();
         assert(g_stCellInfoReport.SocElement.u16Soc==values[i]);
     }
-    puts("PASS manual SOC: durable targets, no request/boot jump, gradual endpoints and completion reload");
+    puts("PASS manual SOC: immediate jump, durable precise capacity and reboot restore");
 }
 
 static void test_no_self_consumption_and_invalid_samples(void) {
@@ -232,8 +235,11 @@ static void test_manual_storage_failure(void) {
     memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
     assert(msg.AckType==RS485_ACK_NEG && msg.ErrorType==RS485_ERROR_CMD_INVALID);
     write_failure=0;memset(&msg,0,sizeof(msg));msg.u16Buffer[5]=35;Sci_WrReg_0x06_SetSocOnce(&msg);
-    assert(msg.AckType==RS485_ACK_POS && stored_percent()==80 && stored.u16LearnAnchorSoc==35);
-    assert(!SOC_RequestSetOnce(101));assert(stored_percent()==80 && stored.u16LearnAnchorSoc==35);
+    assert(msg.AckType==RS485_ACK_POS && stored_percent()==35 &&
+           g_stCellInfoReport.SocElement.u16Soc==35 &&
+           stored.u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET);
+    assert(!SOC_RequestSetOnce(101));assert(stored_percent()==35 &&
+           stored.u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET);
     puts("PASS real manual command: persistence failure rejects and preserves previous SOC; valid retry succeeds");
 }
 static void test_save_retry(void) {
