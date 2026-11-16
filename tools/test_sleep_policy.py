@@ -21,6 +21,8 @@ def main():
     parent.mkdir(parents=True,exist_ok=True)
     output=Path(tempfile.mkdtemp(prefix='sleep-host-',dir=parent))
     vs=Path(r'C:\Program Files\Microsoft Visual Studio\2022\Community')
+    if not (vs/'Common7/Tools/VsDevCmd.bat').exists():
+        vs=Path(r'C:\Program Files\Microsoft Visual Studio\2022\Enterprise')
     setup=output/'compiler-env.bat'
     setup.write_text('@echo off\ncall "'+str(vs/'Common7/Tools/VsDevCmd.bat')+'" -no_logo -arch=x64 -host_arch=x64 >nul\nset\n')
     env=os.environ.copy()

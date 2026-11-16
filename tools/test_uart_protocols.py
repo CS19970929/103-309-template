@@ -124,6 +124,8 @@ int main(void) {
 '''
 (out/'uart_contract_probe.c').write_text(code,encoding='utf-8')
 vs=Path(r'C:/Program Files/Microsoft Visual Studio/2022/Community')
+if not (vs/'Common7/Tools/VsDevCmd.bat').exists():
+    vs=Path(r'C:\Program Files\Microsoft Visual Studio\2022\Enterprise')
 setup=out/'compiler-env.bat';setup.write_text('@echo off\ncall "'+str(vs/'Common7/Tools/VsDevCmd.bat')+'" -no_logo -arch=x64 -host_arch=x64 >nul\nset\n')
 env=os.environ.copy()
 for line in subprocess.check_output(['cmd.exe','/d','/c',str(setup)],text=True,errors='replace').splitlines():
