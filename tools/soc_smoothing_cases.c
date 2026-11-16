@@ -29,6 +29,17 @@ static void test_smooth_full(void)
     }
     assert(s_soc.now_as10==s_soc.full_as10 && last==100U && !SOC_HasPendingFull());
     assert(s_soc.cycle_x100==300U && !s_soc.passed_as10);
+    /* Charger has 10s near SOC100, touches the final threshold for only
+       one 200ms sample, then opens immediately: target must survive. */
+    reset_case(245,45);
+    smooth_seconds(11,200,3300,3510);
+    assert(!SOC_HasPendingFull());
+    smooth_tick(0,3300,3550,1,1);
+    assert(SOC_HasPendingFull());
+    assert(SOC_SaveSnapshot());
+    InitData_SOC();assert(SOC_HasPendingFull());
+    smooth_seconds(70,0,3300,3400);
+    assert(soc_percent()==100U && !SOC_HasPendingFull());
     /* Charger tail current can be zero for the entire detected window:
        a consistently high whole pack still qualifies a full endpoint. */
     reset_case(245,70);
