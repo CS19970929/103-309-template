@@ -337,8 +337,9 @@ static void Sci_ApplyOtherElementSideEffects(UINT16 offset, UINT16 count)
     if (Sci_RangeOverlaps(offset, count, 24, 2))
         SOC_ApplyParameters(Sci_RangeOverlaps(offset, count, 25, 1));
     if (Sci_RangeOverlaps(offset, count, 26, 2) ||
-        Sci_RangeOverlaps(offset, count, 28, 1))
+        Sci_RangeOverlaps(offset, count, 28, 1)) {
         SOC_ResetVoltageCalibration();
+    }
 
 	if (Sci_RangeOverlaps(offset, count, 28, 4))
 	{
