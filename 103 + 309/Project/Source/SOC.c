@@ -15,13 +15,17 @@
 #define SOC_CONFIRM_TICKS 1000U /* 10 s, in real 10 ms RUN ticks. */
 #define SOC_MAX_SAMPLE_GAP_TICKS 50U
 #define SOC_FULL_RELEASE_MV 50U
-#define SOC_SMOOTH_DENOMINATOR 100000U /* 1 percentage point per 10 s. */
+#define SOC_SMOOTH_DENOMINATOR 100000U /* Low-end: 1% per 10 seconds. */
+#define SOC_FULL_SMOOTH_DENOMINATOR 10000U /* Confirmed full: 1% per second. */
+#define SOC_CHARGE_EVIDENCE_MA 100L /* Positive current seen before the terminal. */
+#define SOC_SAVE_MIN_INTERVAL_TICKS 1000U /* Normal integer-SOC saves: >=10s apart. */
 #define SOC_NO_MANUAL_TARGET 0xFFFFU
 enum {
     SOC_TARGET_FULL = 1U,
     SOC_FULL_LATCHED = 2U,
-    SOC_TARGET_EMPTY = 4U,
-    SOC_CALIBRATION_FLAGS = 7U
+    SOC_TARGET_EMPTY = 4U, /* Legacy pending UV intent; retired on new events. */
+    SOC_CHARGE_SEEN = 8U,
+    SOC_CALIBRATION_FLAGS = 15U
 };
 
 /* Capacity uses 0.1 A*s; only this module owns the integrator and remainder. */
@@ -33,7 +37,6 @@ typedef struct {
     int32_t remainder_mams;
     UINT16 cycle_generation;
     UINT32 low_entry_as10;
-    UINT16 manual_target;
     UINT16 calibration_flags;
 } SOC_STATE;
 static SOC_STATE s_soc;
@@ -49,10 +52,13 @@ static struct {
 static struct {
     UINT32 cycles;
     UINT32 retry_tick;
+    UINT32 last_write_tick;
     UINT8 percent;
     UINT8 valid;
     UINT8 retry_active;
 } s_saved;
+
+static void soc_publish_report(void);
 
 void SOC_PauseCalibration(void)
 {
@@ -69,12 +75,17 @@ void SOC_ResetVoltageCalibration(void)
 
 void SOC_NotifyOverdischarge(void)
 {
-    /* SleepDeal calls once per new UV event, including the RTC status path.
-     * The existing sleep save persists this intent and the unchanged capacity. */
-    s_soc.manual_target = SOC_NO_MANUAL_TARGET;
-    s_soc.calibration_flags = SOC_TARGET_EMPTY;
+    /* Called only after fresh, plausible cell data and a verified AFE UV bit.
+     * Protective MOS shutdown/DEEP entry must not depend on this calibration. */
+    if (s_soc.now_as10 == 0U && s_soc.calibration_flags == 0U)
+        return;
+    s_soc.now_as10 = 0U;
+    s_soc.remainder_mams = 0;
+    s_soc.low_entry_as10 = 0U;
+    s_soc.calibration_flags = 0U;
     s_saved.valid = 0U;
     SOC_PauseCalibration();
+    soc_publish_report();
 }
 
 static UINT8 soc_percent(void)
@@ -117,7 +128,7 @@ UINT8 SOC_SaveSnapshot(void)
     data.u32LearnPassedAs10 = s_soc.passed_as10;
     data.u16Reserved[STORAGE_SOC_CYCLE_SNAPSHOT_INDEX]=s_soc.cycle_generation;
     data.u16LearnState = STORAGE_SOC_STATE_TAG;
-    data.u16LearnAnchorSoc = s_soc.manual_target;
+    data.u16LearnAnchorSoc = SOC_NO_MANUAL_TARGET;
     data.u16Flags = s_soc.calibration_flags;
     data.u16Reserved[STORAGE_SOC_LOW_ENTRY_LO_INDEX] = (UINT16)s_soc.low_entry_as10;
     data.u16Reserved[STORAGE_SOC_LOW_ENTRY_HI_INDEX] = (UINT16)(s_soc.low_entry_as10 >> 16);
@@ -128,6 +139,7 @@ UINT8 SOC_SaveSnapshot(void)
     }
     s_saved.percent = soc_percent();
     s_saved.cycles = s_soc.cycle_x100 / 100U;
+    s_saved.last_write_tick = SysTime_Get10msTickCount();
     s_saved.valid = 1U;
     s_saved.retry_active = 0U;
     return 1U;
@@ -140,6 +152,9 @@ static void soc_save_if_changed(void)
      * caused a second write between adjacent integer SOC transitions. */
     if (s_saved.valid && s_saved.percent == soc_percent() &&
         s_saved.cycles == s_soc.cycle_x100 / 100U) return;
+    /* Critical flag changes set valid=0 and bypass this normal wear limit. */
+    if (s_saved.valid && (UINT32)(SysTime_Get10msTickCount() -
+        s_saved.last_write_tick) < SOC_SAVE_MIN_INTERVAL_TICKS) return;
     if (s_saved.retry_active && (UINT32)(SysTime_Get10msTickCount() -
         s_saved.retry_tick) < SOC_SAVE_RETRY_10MS_TICKS) return;
     (void)SOC_SaveSnapshot();
@@ -165,10 +180,8 @@ static UINT8 soc_restore_snapshot(const STORAGE_FLASH_SOC_DATA *data)
     if ((flags & (UINT16)(~SOC_CALIBRATION_FLAGS))==0U &&
         (flags & (SOC_TARGET_FULL | SOC_TARGET_EMPTY))!=(SOC_TARGET_FULL | SOC_TARGET_EMPTY) &&
         (!(flags & SOC_TARGET_FULL) || (flags & SOC_FULL_LATCHED)) &&
-        (data->u16LearnAnchorSoc<=100U || data->u16LearnAnchorSoc==SOC_NO_MANUAL_TARGET) &&
         entry<=full) {
         s_soc.low_entry_as10=(UINT32)((uint64_t)entry*s_soc.full_as10/full);
-        s_soc.manual_target=data->u16LearnAnchorSoc;
         s_soc.calibration_flags=flags;
     }
     return 1U;
@@ -180,7 +193,6 @@ void InitData_SOC(void)
     memset(&s_soc, 0, sizeof(s_soc));
     memset(&s_saved, 0, sizeof(s_saved));
     SOC_PauseCalibration();
-    s_soc.manual_target = SOC_NO_MANUAL_TARGET;
     /* Runtime_Boot calls StorageFlash_InitParameters first; Flash owns cycle-command recovery. */
     s_soc.cycle_generation = StorageFlash_GetSocCycleGeneration();
     s_soc.full_as10 = (UINT32)OtherElement.u16Soc_Ah * 3600U;
@@ -205,15 +217,18 @@ UINT8 SOC_RequestSetOnce(UINT8 percent)
 {
     SOC_STATE previous = s_soc;
     if (percent > 100U || s_soc.full_as10 == 0U) return 0U;
-    s_soc.manual_target = percent;
-    s_soc.calibration_flags = 0U;
+    /* An explicit host command is one of the two authorized SOC jumps.
+     * Only acknowledge when the new precise capacity has been committed. */
+    s_soc.now_as10 = (UINT32)((uint64_t)s_soc.full_as10 * percent / 100U);
+    s_soc.remainder_mams = 0;
     s_soc.low_entry_as10 = 0U;
+    s_soc.calibration_flags = 0U;
     if (!SOC_SaveSnapshot()) {
         s_soc = previous;
         return 0U;
     }
-    /* ACK means the target is durable; current capacity has not jumped. */
     SOC_PauseCalibration();
+    soc_publish_report();
     return 1U;
 }
 
@@ -274,10 +289,10 @@ static UINT16 soc_confirm_ticks(UINT16 ticks, UINT32 elapsed)
     return elapsed >= SOC_CONFIRM_TICKS - ticks ? SOC_CONFIRM_TICKS : (UINT16)(ticks + elapsed);
 }
 
-static UINT8 soc_cell_voltages_valid(void)
+UINT8 SOC_CellVoltagesValid(void)
 {
     UINT8 i;
-    if (SeriesNum == 0U || SeriesNum > 16U ||
+    if (SeriesNum < 5U || SeriesNum > 16U ||
         g_stCellInfoReport.u16VCellMin == 0U ||
         g_stCellInfoReport.u16VCellMin > g_stCellInfoReport.u16VCellMax ||
         g_stCellInfoReport.u16VCellMax > SOC_CELL_MAX_MV) return 0U;
@@ -300,15 +315,14 @@ static UINT32 soc_calibration_elapsed(void)
     return elapsed;
 }
 
-static void soc_smooth_towards(UINT32 target, UINT32 elapsed)
+static void soc_smooth_towards(UINT32 target, UINT32 elapsed, UINT32 denominator)
 {
     uint64_t credit;
     UINT32 step;
-    /* A backlog cannot spend several sampling periods of correction at once. */
     if (elapsed > SOC_TICK_MS / 10U) elapsed = SOC_TICK_MS / 10U;
     credit = (uint64_t)s_soc.full_as10 * elapsed + s_cal.remainder;
-    step = (UINT32)(credit / SOC_SMOOTH_DENOMINATOR);
-    s_cal.remainder = (UINT32)(credit % SOC_SMOOTH_DENOMINATOR);
+    step = (UINT32)(credit / denominator);
+    s_cal.remainder = (UINT32)(credit % denominator);
     if (target > s_soc.now_as10) {
         if (step > target - s_soc.now_as10) step = target - s_soc.now_as10;
         s_soc.now_as10 += step;
@@ -321,57 +335,65 @@ static void soc_smooth_towards(UINT32 target, UINT32 elapsed)
 
 static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
 {
-    UINT32 target;
     UINT16 flags = s_soc.calibration_flags;
     UINT16 full_mv = OtherElement.u16Soc_V_100;
+    UINT16 low_mv = OtherElement.u16Soc_V_0;
+    UINT16 empty_mv = AFE_Parameters_RS485_Struction.u16VcellUvp.curValue;
     UINT16 min_mv = g_stCellInfoReport.u16VCellMin;
     UINT16 max_mv = g_stCellInfoReport.u16VCellMax;
+    UINT32 target;
 
-    if (s_soc.manual_target != SOC_NO_MANUAL_TARGET) {
-        target = (UINT32)((uint64_t)s_soc.full_as10 * s_soc.manual_target / 100U);
-        if (current_ma < 0 && (min_mv > SOC_LOW_START_MV || target > s_soc.now_as10)) {
-            s_cal.remainder = 0U;
-            return;
-        }
-        soc_smooth_towards(target, elapsed);
-        if (s_soc.now_as10 == target) {
-            s_soc.manual_target = SOC_NO_MANUAL_TARGET;
-            s_saved.valid = 0U;
-        }
-        return;
+    /* Evidence of prior charging, not a requirement on terminal current.
+     * A measured discharge retires an unfinished upper target. */
+    if (current_ma >= SOC_CHARGE_EVIDENCE_MA && !(flags & SOC_TARGET_FULL))
+        flags |= SOC_CHARGE_SEEN;
+    else if (current_ma <= -SOC_CHARGE_EVIDENCE_MA) {
+        flags &= (UINT16)~(SOC_CHARGE_SEEN | SOC_TARGET_FULL | SOC_FULL_LATCHED);
+        s_cal.full_ticks = 0U;
+        s_cal.remainder = 0U;
     }
 
-    if (full_mv > SOC_LOW_START_MV && full_mv <= SOC_CELL_MAX_MV) {
-        if (flags & SOC_FULL_LATCHED) {
-            if (max_mv < full_mv - SOC_FULL_RELEASE_MV) {
-                s_cal.full_ticks = soc_confirm_ticks(s_cal.full_ticks, elapsed);
-                if (s_cal.full_ticks == SOC_CONFIRM_TICKS) {
-                    flags &= (UINT16)(~(SOC_FULL_LATCHED | SOC_TARGET_FULL));
-                    s_cal.full_ticks = 0U;
-                }
-            } else s_cal.full_ticks = 0U;
-        } else if (max_mv >= full_mv) {
-            s_cal.full_ticks = soc_confirm_ticks(s_cal.full_ticks, elapsed);
-            if (s_cal.full_ticks == SOC_CONFIRM_TICKS ||
-                g_stCellInfoReport.unMdlFault_Third.bits.b1CellOvp) {
-                flags = (UINT16)((flags & (UINT16)(~SOC_TARGET_EMPTY)) |
-                    SOC_FULL_LATCHED | SOC_TARGET_FULL);
-                if (s_soc.low_entry_as10) s_saved.valid = 0U;
-                s_soc.low_entry_as10 = 0U;
-                s_cal.full_ticks = 0U;
-            }
-        } else s_cal.full_ticks = 0U;
-    } else {
-        flags &= (UINT16)(~(SOC_FULL_LATCHED | SOC_TARGET_FULL));
+    if (full_mv > low_mv && full_mv <= SOC_CELL_MAX_MV &&
+        !(flags & SOC_TARGET_FULL) && (flags & SOC_CHARGE_SEEN) &&
+        max_mv >= full_mv && min_mv > empty_mv) {
+        s_cal.full_ticks = soc_confirm_ticks(s_cal.full_ticks, elapsed);
+        if (s_cal.full_ticks == SOC_CONFIRM_TICKS) {
+            flags = (UINT16)((flags & (UINT16)~(SOC_TARGET_EMPTY | SOC_CHARGE_SEEN)) |
+                SOC_TARGET_FULL | SOC_FULL_LATCHED);
+            s_soc.low_entry_as10 = 0U;
+            s_cal.full_ticks = 0U;
+            s_cal.remainder = 0U;
+        }
+    } else if (!(flags & SOC_TARGET_FULL)) {
         s_cal.full_ticks = 0U;
     }
+    if (full_mv <= low_mv || full_mv > SOC_CELL_MAX_MV)
+        flags &= (UINT16)~(SOC_TARGET_FULL | SOC_FULL_LATCHED);
+
     if (flags != s_soc.calibration_flags) s_saved.valid = 0U;
     s_soc.calibration_flags = flags;
 
-    /* Even a restored/manual UV target never authorizes automatic correction
-     * above 3050 mV, at rest, or during charging. Keep one entry reference
-     * across voltage rebounds; re-entering the same dip must not compound it. */
-    if (current_ma < 0 && min_mv <= SOC_LOW_START_MV) {
+    /* After a trustworthy full confirmation, complete the saved target even
+     * if the charger stops and cell voltage relaxes. No extra rest-time
+     * correction exists before this confirmation. */
+    if (flags & SOC_TARGET_FULL) {
+        s_cal.low_ticks = 0U;
+        if (current_ma >= 0) {
+            soc_smooth_towards(s_soc.full_as10, elapsed,
+                               SOC_FULL_SMOOTH_DENOMINATOR);
+            if (s_soc.now_as10 == s_soc.full_as10) {
+                s_soc.calibration_flags &= (UINT16)~(SOC_TARGET_FULL |
+                    SOC_FULL_LATCHED | SOC_CHARGE_SEEN);
+                s_saved.valid = 0U;
+            }
+        } else s_cal.remainder = 0U;
+        return;
+    }
+
+    /* Only discharging cells may receive a low-end correction. SOC_V_0 is
+     * the start of the smoothing window; the actual AFE UV is the end. */
+    if (low_mv > empty_mv && low_mv <= SOC_CELL_MAX_MV &&
+        current_ma < 0 && min_mv <= low_mv) {
         s_cal.low_ticks = soc_confirm_ticks(s_cal.low_ticks, elapsed);
         if (s_cal.low_ticks == SOC_CONFIRM_TICKS) {
             if (s_soc.low_entry_as10 == 0U && s_soc.now_as10 != 0U) {
@@ -379,21 +401,15 @@ static void soc_update_calibration(INT32 current_ma, UINT32 elapsed)
                 s_saved.valid = 0U;
             }
             target = 0U;
-            if (!(flags & SOC_TARGET_EMPTY) && min_mv > SOC_EMPTY_MV)
+            if (min_mv > empty_mv)
                 target = (UINT32)((uint64_t)s_soc.low_entry_as10 *
-                    (min_mv - SOC_EMPTY_MV) / (SOC_LOW_START_MV - SOC_EMPTY_MV));
+                                  (min_mv - empty_mv) / (low_mv - empty_mv));
             if (s_soc.now_as10 > target) {
-                soc_smooth_towards(target, elapsed);
+                soc_smooth_towards(target, elapsed, SOC_SMOOTH_DENOMINATOR);
                 return;
             }
         }
     } else s_cal.low_ticks = 0U;
-
-    if ((flags & SOC_TARGET_FULL) && current_ma >= 0 &&
-        max_mv >= full_mv - SOC_FULL_RELEASE_MV) {
-        soc_smooth_towards(s_soc.full_as10, elapsed);
-        return;
-    }
     s_cal.remainder = 0U;
 }
 
@@ -405,11 +421,11 @@ void App_SOC(UINT8 sample_valid, UINT8 fault_valid)
         g_stLowPowerRtcStatus.mode != DEEP_MODE);
     if (s_soc.full_as10 != 0U && current_valid) soc_integrate_current(current_ma);
     if (s_soc.full_as10 != 0U && current_valid && fault_valid &&
-        !AFE_PARAM_WRITE_Flag && soc_cell_voltages_valid()) {
+        !AFE_PARAM_WRITE_Flag && SOC_CellVoltagesValid()) {
         elapsed = soc_calibration_elapsed();
         /* Reuse the 10s confirmation to reject tiny positive noise pulses.
          * This only retires an old low reference; it never qualifies full. */
-        if (current_ma > 0 && (s_soc.low_entry_as10 ||
+        if (current_ma >= SOC_CHARGE_EVIDENCE_MA && (s_soc.low_entry_as10 ||
             (s_soc.calibration_flags & SOC_TARGET_EMPTY))) {
             s_cal.charge_ticks = soc_confirm_ticks(s_cal.charge_ticks, elapsed);
             if (s_cal.charge_ticks == SOC_CONFIRM_TICKS) {
