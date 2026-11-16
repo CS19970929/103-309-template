@@ -62,6 +62,8 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf);
 UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf);
 void InitAFE1_Sleep(UINT8 mode);
 void InitAFE1(void);
+/* 0=valid; 1=I2C failure; 2=pack NTC invalid; 3=cell voltage/mapping
+ * invalid. Reject invalid frames before publishing new measurement data. */
 UINT8 UpdateVoltageFromBqMaximo(void);
 
 void initAFE1_IIC(void);
