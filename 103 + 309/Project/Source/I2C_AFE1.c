@@ -4,6 +4,17 @@
 AFEDATA Registers_AFE1;
 struct SH367309_Read SH367309_Read_AFE1;
 
+/* All MTP accesses run in the main loop, including RTC checks. Preserve
+   a final transaction failure until the next RUN communication check. */
+static UINT8 s_afe_comm_failed;
+
+UINT8 AFE_TakeCommFailure(void)
+{
+    UINT8 failed = s_afe_comm_failed;
+    s_afe_comm_failed = 0U;
+    return failed;
+}
+
 #define LENGTH_TBLTEMP_AFE_10K ((UINT16)56)
 static const UINT16 iSheldTemp_10K_AFE[LENGTH_TBLTEMP_AFE_10K] = {
 	11611,
@@ -450,7 +461,7 @@ UINT8 TwiRead(UINT8 SlaveID, UINT16 RdAddr, UINT8 Length, UINT8 *RdBuf)
 // 这个返回值就不改了，和目前体系相反，别的函数返回来就行
 UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
-	UINT8 result;
+	UINT8 result = 0U;
 	UINT8 i;
 	Feed_IWatchDog;
 
@@ -471,6 +482,7 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 		Delay1ms(1);
 	}
 
+	if (!result) s_afe_comm_failed = 1U;
 	return result;
 }
 
@@ -479,7 +491,7 @@ UINT8 MTPWrite(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 // 这个返回值就不改了，和目前体系相反，别的函数返回来就行
 UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 {
-	UINT8 result;
+	UINT8 result = 0U;
 	UINT8 i;
 
 	for (i = 0; i < Length; i++)
@@ -500,6 +512,7 @@ UINT8 MTPWriteROM(UINT8 WrAddr, UINT8 Length, UINT8 *WrBuf)
 		Delay1ms(40);
 	}
 
+	if (!result) s_afe_comm_failed = 1U;
 	return result;
 }
 
@@ -529,6 +542,7 @@ UINT8 MTPRead(UINT8 RdAddr, UINT8 Length, UINT8 *RdBuf)
 		result = TwiRead(AFE_ID, RdAddr, Length, RdBuf);
 	}
 
+	if (!result) s_afe_comm_failed = 1U;
 	return result;
 }
 

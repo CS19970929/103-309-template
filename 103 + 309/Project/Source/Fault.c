@@ -169,6 +169,7 @@ UINT8 Fault_CanOpenCtl(void)
         !g_stCellInfoReport.unMdlFault_Third.bits.b1TmosOtp &&
         !SystemError_IsActive(ERROR_STATUS_TEMP_BREAK) &&
         !SystemError_IsActive(ERROR_STATUS_AFE1) &&
+        !AFE_HasDataFault() &&
         !SH367309_Reg_Store.REG_BSTATUS1.bits.PF);
 }
 
@@ -183,6 +184,12 @@ UINT8 Fault_ApplyMosPermits(UINT8 charge_on, UINT8 discharge_on)
     {
         close_ctlc();
         return 0U;
+    }
+
+    if (AFE_HasDataFault())
+    {
+        close_ctlc();
+        return Fault_WriteMos(0U, 0U);
     }
 
     /* Common shutdowns must never be released by reverse current. */

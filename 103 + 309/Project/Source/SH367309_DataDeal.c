@@ -199,7 +199,6 @@ bool Write_Parameters(void)
 	{
 		if (verify[i] != P[i])
 		{
-			System_ERROR_UserCallback(ERROR_AFE1);
 			return false;
 		}
 	}
@@ -219,7 +218,6 @@ bool SH367309_UpdataAfeConfig(void)
 		if (!Refresh_Parameters())
 		{
 			AFE_PARAM_WRITE_Flag = 1;
-			System_ERROR_UserCallback(ERROR_AFE1);
 			return false;
 		}
 		{

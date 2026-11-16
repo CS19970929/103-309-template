@@ -139,7 +139,6 @@ static UINT8 SH367309_WriteConfBits(UINT8 mask, UINT8 value)
         if (!MTPWrite(MTP_CONF, 1U, &desired) ||
             !MTPRead(MTP_CONF, 1U, &verify) || (verify & mask) != (desired & mask))
         {
-            System_ERROR_UserCallback(ERROR_AFE1);
             return 0U;
         }
         current = verify;

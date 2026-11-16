@@ -140,6 +140,7 @@ int main(void) {
 '''
 
 FAULT_STUBS = r'''
+static UINT8 AFE_HasDataFault(void) { return 0U; }
 static void SOC_PauseCalibration(void) {}
 static int forced_ctl_close;
 static void close_ctlc(void) { ++forced_ctl_close; }

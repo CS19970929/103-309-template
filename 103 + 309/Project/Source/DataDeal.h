@@ -196,6 +196,8 @@ void AfeCurrent_StartupZeroCal(void);
 INT32 AfeCurrent_GetCurrent_mA(void);
 UINT8 AFE_IsHealthy(void);
 UINT8 AFE_IsDataFresh(void);
+/* Confirmed unusable measurements; independent of the comm error field. */
+UINT8 AFE_HasDataFault(void);
 void AFE_MonitorInvalidate(void);
 void AFE_MonitorResumeAfterStop(void);
 void AFE_RequestParameterApply(void);

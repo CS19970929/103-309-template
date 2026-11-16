@@ -47,17 +47,22 @@ typedef struct _AFE_CURRENT_RUNTIME
     UINT8 zeroStatus;
 } AFE_CURRENT_RUNTIME;
 
-typedef struct _AFE_MONITOR_RUNTIME
+typedef struct _AFE_FAULT_RUNTIME
 {
     UINT32 fault_tick;
-    UINT32 last_eval_tick;
-    UINT32 last_data_tick;
     UINT8 fail_count;
     UINT8 ok_count;
+    UINT8 fault;
+} AFE_FAULT_RUNTIME;
+
+typedef struct _AFE_MONITOR_RUNTIME
+{
+    AFE_FAULT_RUNTIME comm;
+    AFE_FAULT_RUNTIME sample;
+    UINT32 last_eval_tick;
+    UINT32 last_data_tick;
     UINT8 evaluated;
     UINT8 data_valid;
-    UINT8 healthy;
-    UINT8 fault;
     UINT8 config_attempts;
     UINT8 config_attempted;
     UINT32 config_attempt_tick;
@@ -601,21 +606,24 @@ void AFE_MonitorInvalidate(void)
 {
     AfeCell_InvalidatePairHistory();
     s_data.mon.data_valid = 0U;
-    s_data.mon.healthy = 0U;
-    s_data.mon.ok_count = 0U;
+    s_data.mon.comm.ok_count = 0U;
+    s_data.mon.sample.ok_count = 0U;
     s_data.mon.evaluated = 0U;
     SystemRuntime_SetAfeStatus(0U, 0U);
     Fault_PauseMeasurements();
 }
 
-/* STOP resets the RUN tick. Keep confirmed faults, but do not include
-   offline time in the five-minute communication fault timeout. */
+/* STOP resets the RUN tick. Keep both confirmed faults, but exclude
+   offline time from their independent five-minute timeouts. */
 void AFE_MonitorResumeAfterStop(void)
 {
     AFE_MonitorInvalidate();
-    s_data.mon.fail_count = 0U;
-    if (s_data.mon.fault)
-        s_data.mon.fault_tick = SysTime_Get10msTickCount();
+    s_data.mon.comm.fail_count = 0U;
+    s_data.mon.sample.fail_count = 0U;
+    if (s_data.mon.comm.fault)
+        s_data.mon.comm.fault_tick = SysTime_Get10msTickCount();
+    if (s_data.mon.sample.fault)
+        s_data.mon.sample.fault_tick = SysTime_Get10msTickCount();
 }
 
 UINT8 AFE_IsDataFresh(void)
@@ -626,15 +634,46 @@ UINT8 AFE_IsDataFresh(void)
 
 UINT8 AFE_IsHealthy(void)
 {
-    return (UINT8)(s_data.mon.healthy && !s_data.mon.fault &&
+    return (UINT8)(s_data.mon.comm.ok_count >= AFE_MONITOR_RECOVER_LIMIT &&
+                   s_data.mon.sample.ok_count >= AFE_MONITOR_RECOVER_LIMIT &&
+                   !s_data.mon.comm.fault && !s_data.mon.sample.fault &&
                    !AFE_PARAM_WRITE_Flag);
 }
 
-static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 status_ok, UINT8 wire_ok)
+UINT8 AFE_HasDataFault(void)
+{
+    return s_data.mon.sample.fault;
+}
+
+/* The same confirmation limits apply to two independent failure causes. */
+static void AFE_UpdateFault(AFE_FAULT_RUNTIME *state, UINT8 ok, UINT32 now)
+{
+    if (ok)
+    {
+        state->fail_count = 0U;
+        if (state->ok_count < AFE_MONITOR_RECOVER_LIMIT)
+            ++state->ok_count;
+        if (state->ok_count >= AFE_MONITOR_RECOVER_LIMIT)
+            state->fault = 0U;
+    }
+    else
+    {
+        state->ok_count = 0U;
+        if (state->fail_count < AFE_MONITOR_FAIL_LIMIT)
+            ++state->fail_count;
+        if (state->fail_count >= AFE_MONITOR_FAIL_LIMIT && !state->fault)
+        {
+            state->fault = 1U;
+            state->fault_tick = now;
+        }
+    }
+}
+
+static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 comm_ok)
 {
     AFE_MONITOR_RUNTIME *mon = &s_data.mon;
     UINT32 now = SysTime_Get10msTickCount();
-    UINT8 complete = (UINT8)(wire_ok && status_ok);
+    UINT8 comm_failed;
 
     mon->data_valid = data_ok;
     if (data_ok) mon->last_data_tick = now;
@@ -644,37 +683,25 @@ static void AFE_MonitorUpdate(UINT8 data_ok, UINT8 status_ok, UINT8 wire_ok)
     if (!mon->evaluated ||
         (UINT32)(now - mon->last_eval_tick) >= AFE_MONITOR_MIN_SAMPLE_TICKS)
     {
+        /* Do not consume a failure during same-tick backlog draining. */
+        comm_failed = AFE_TakeCommFailure();
+        comm_ok = (UINT8)(comm_ok && !comm_failed);
         mon->evaluated = 1U;
         mon->last_eval_tick = now;
-        if (complete)
-        {
-            mon->fail_count = 0U;
-            if (mon->ok_count < AFE_MONITOR_RECOVER_LIMIT)
-                ++mon->ok_count;
-            if (mon->ok_count >= AFE_MONITOR_RECOVER_LIMIT)
-            {
-                mon->fault = 0U;
-                mon->healthy = 1U;
-                SystemError_SetActive(ERROR_AFE1, 0U);
-            }
-        }
-        else
-        {
-            mon->ok_count = 0U;
-            mon->healthy = 0U;
-            if (mon->fail_count < AFE_MONITOR_FAIL_LIMIT)
-                ++mon->fail_count;
-            if (mon->fail_count >= AFE_MONITOR_FAIL_LIMIT && !mon->fault)
-            {
-                mon->fault = 1U;
-                mon->fault_tick = now;
-                SystemError_SetActive(ERROR_AFE1, 1U);
-                close_ctlc(); /* CTLC=3 is required and must be verified on board. */
-            }
-        }
+        AFE_UpdateFault(&mon->comm, comm_ok, now);
+        AFE_UpdateFault(&mon->sample, data_ok, now);
+        /* Only transaction failures own the externally visible comm error.
+           Invalid CELL/NTC data and PF still close outputs independently. */
+        SystemError_SetActive(ERROR_AFE1, mon->comm.fault);
+        if (mon->comm.fault || mon->sample.fault)
+            close_ctlc();
     }
-    SystemRuntime_SetAfeStatus(0U, (UINT8)(complete && mon->healthy));
-    if (mon->fault && (UINT32)(now - mon->fault_tick) >= AFE_MONITOR_DEEP_TICKS)
+    SystemRuntime_SetAfeStatus(0U, (UINT8)(comm_ok && !mon->comm.fault &&
+        mon->comm.ok_count >= AFE_MONITOR_RECOVER_LIMIT));
+    if ((mon->comm.fault &&
+         (UINT32)(now - mon->comm.fault_tick) >= AFE_MONITOR_DEEP_TICKS) ||
+        (mon->sample.fault &&
+         (UINT32)(now - mon->sample.fault_tick) >= AFE_MONITOR_DEEP_TICKS))
         LowPower_Request(DEEP_MODE);
 }
 
@@ -724,7 +751,7 @@ void close_ctlc(void)
 
 void App_AFEGet(void)
 {
-    UINT8 data_ok, status_ok, mos_ok, sample_result;
+    UINT8 data_ok, status_ok, mos_ok, sample_result, comm_ok;
     if (SysTime_Take200msTaskPeriod() == 0U)
         return;
 
@@ -754,7 +781,10 @@ void App_AFEGet(void)
         DataLoad_Current();
     }
     Fault_UpdateCurrentProtection(data_ok);
-    AFE_MonitorUpdate(data_ok, status_ok, data_ok);
+    /* Invalid CELL/NTC values are successful sampling-register reads.
+       The monitor also checks final MTP failures from MOS/config access. */
+    comm_ok = (UINT8)(sample_result != 1U && status_ok);
+    AFE_MonitorUpdate(data_ok, comm_ok);
     App_SOC(data_ok, status_ok);
     if (status_ok)
         SleepDeal_UpdateOverdischarge(g_stCellInfoReport.unMdlFault_Third.bits.b1CellUvp,
