@@ -372,6 +372,15 @@ int main(void) {
     LowPower_Request(NO_SLEEP);fake_uv_cells_valid=1;
     SleepDeal_UpdateOverdischarge(1,1);
     assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && soc_now==0 && soc_empty_targets==1);
+    /* UV remains latched during the first seconds of charger recovery:
+       do not zero a second time after charging has added capacity. */
+    soc_now=6;
+    SleepDeal_UpdateOverdischarge(1,1);
+    assert(soc_now==6 && soc_empty_targets==1);
+    SleepDeal_UpdateOverdischarge(0,0);
+    SleepDeal_UpdateOverdischarge(1,1);
+    assert(soc_now==0 && soc_empty_targets==2);
+
     reset_case();g_stCellInfoReport.u16VCellMin=2700;
     SH367309_Reg_Store.REG_BSTATUS1.bits.PF=1;
     SleepDeal_UpdateOverdischarge(1,1);

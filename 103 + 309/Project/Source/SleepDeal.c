@@ -8,6 +8,7 @@ typedef struct SLEEP_RUNTIME_TAG
 	UINT8 key_state;
 	UINT32 key_press_tick;
 	UINT8 undervoltage_handled;
+	UINT8 uv_soc_calibrated; /* Once per continuous UV event; charging must not re-zero. */
 	UINT8 normal_idle_tracking;
 	UINT32 normal_idle_since;
 } SLEEP_RUNTIME;
@@ -125,15 +126,22 @@ void SleepDeal_UpdateOverdischarge(UINT8 active, UINT8 voltage_fresh)
 {
     /* Hardware UV protection always wins. Do not make a permanent SOC
      * zero decision from a cached, signed-invalid or PF-frozen ADC frame. */
-    if (!active) { s_sleep.undervoltage_handled=0U; return; }
-    if (voltage_fresh && !AFE_PARAM_WRITE_Flag &&
+    if (!active) {
+        s_sleep.undervoltage_handled = 0U;
+        s_sleep.uv_soc_calibrated = 0U;
+        return;
+    }
+    if (!s_sleep.uv_soc_calibrated && voltage_fresh &&
+        !AFE_PARAM_WRITE_Flag &&
         !SH367309_Reg_Store.REG_BSTATUS1.bits.PF &&
         SOC_CellVoltagesValid() &&
         g_stCellInfoReport.u16VCellMin <=
-            (UINT32)AFE_Parameters_RS485_Struction.u16VcellUvp.curValue + 20U)
+            (UINT32)AFE_Parameters_RS485_Struction.u16VcellUvp.curValue + 20U) {
         SOC_NotifyOverdischarge();
-    /* Even if an earlier UV had invalid voltage, a later valid sample can
-       still correct SOC; the protective DEEP edge remains one-shot. */
+        s_sleep.uv_soc_calibrated = 1U;
+    }
+    /* A later valid sample may correct an initially untrusted UV once.
+     * A continuing hardware UV must not repeatedly erase new charge. */
     if (s_sleep.undervoltage_handled) return;
     s_sleep.undervoltage_handled=1U;
     LowPower_Request(DEEP_MODE);
@@ -272,6 +280,7 @@ void SleepDeal_HandleBootSleepStartup(void)
 	sleep_flag = BootFlag_Read();
 	s_sleep.chg_wake = 0U;
 	s_sleep.undervoltage_handled=(UINT8)(sleep_flag==FLASH_UNDERVOLTAGE_SLEEP_VALUE);
+	s_sleep.uv_soc_calibrated=0U; /* Requalify using a fresh cell frame after boot. */
 	switch (sleep_flag)
 	{
 	case FLASH_HICCUP_SLEEP_VALUE:
