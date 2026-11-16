@@ -38,7 +38,7 @@ static enum irqWakeup stop_source;
 static int scripted_key,current_wakeup;
 static int afe_uv,afe_status_ok=1,soc_now,zero_calls;
 static int fake_storage_fault, fake_sensor_fault, fake_afe_healthy=1, fake_afe_fresh=1;
-static int fake_full_pending, AFE_PARAM_WRITE_Flag;
+static int fake_full_pending, fake_uv_cells_valid, AFE_PARAM_WRITE_Flag;
 static int rtc_init_ok=1, rtc_alarm_ok=1;
 static unsigned soc_empty_targets;
 #define ERROR_STATUS_AFE1 1
@@ -62,7 +62,7 @@ static UINT8 System_ERROR_UserCallback(int command) {
 }
 static void SOC_RequestSetOnce(UINT8 value) { assert(value==0); soc_now=value; ++zero_calls; }
 static void SOC_NotifyOverdischarge(void) { ++soc_empty_targets; soc_now=0; }
-static UINT8 SOC_CellVoltagesValid(void) { return (UINT8)fake_afe_fresh; }
+static UINT8 SOC_CellVoltagesValid(void) { return (UINT8)(fake_afe_fresh && fake_uv_cells_valid); }
 static UINT8 SOC_HasPendingFull(void) { return (UINT8)fake_full_pending; }
 #define MCUI_ENI_DI1 key
 #define MCUO_DEBUG_LED1 led
@@ -180,7 +180,7 @@ static void reset_case(void) {
     key=1; charger=adc_on=stop_calls=restore_calls=deep_calls=scripted_key=one_second=0;
     rtc_wake=comm_busy=can_busy=0; stop_source=soc_key;
     afe_uv=zero_calls=0; soc_empty_targets=0; afe_status_ok=1; soc_now=55;
-    fake_storage_fault=fake_sensor_fault=fake_full_pending=AFE_PARAM_WRITE_Flag=0;
+    fake_storage_fault=fake_sensor_fault=fake_full_pending=fake_uv_cells_valid=AFE_PARAM_WRITE_Flag=0;
     fake_afe_healthy=fake_afe_fresh=1;
     rtc_init_ok=rtc_alarm_ok=1;
     s_persistent_error_tracking=0U;
@@ -368,14 +368,14 @@ int main(void) {
     reset_case();g_stCellInfoReport.u16VCellMin=2700;
     SleepDeal_UpdateOverdischarge(1,0);
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && soc_now==55 && !soc_empty_targets);
-    LowPower_Request(NO_SLEEP);
+    LowPower_Request(NO_SLEEP);fake_uv_cells_valid=1;
     SleepDeal_UpdateOverdischarge(1,1);
     assert(g_stLowPowerRtcStatus.mode==NO_SLEEP && soc_now==0 && soc_empty_targets==1);
     reset_case();g_stCellInfoReport.u16VCellMin=2700;
     SH367309_Reg_Store.REG_BSTATUS1.bits.PF=1;
     SleepDeal_UpdateOverdischarge(1,1);
     assert(g_stLowPowerRtcStatus.mode==DEEP_MODE && soc_now==55 && !soc_empty_targets);
-    reset_case();g_stLowPowerRtcStatus.mode=HICCUP_MODE;afe_uv=1;
+    reset_case();g_stLowPowerRtcStatus.mode=HICCUP_MODE;afe_uv=1;fake_uv_cells_valid=1;
     g_stCellInfoReport.u16VCellMin=2700;
     assert(!rtc_sleep_run_hiccup_cycle() && deep_calls==1 &&
            soc_now==0 && soc_empty_targets==1);
