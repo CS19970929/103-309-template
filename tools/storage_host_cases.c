@@ -163,6 +163,10 @@ static void test_module_updates(void) {
         custom.rw.reserved[group]=8U;
     assert(Storage_SaveConfig(&custom));
     assert(StorageFlash_SetBaudMode(3U) && StorageFlash_WriteBatteryNumber((const UINT8 *)"BAT00000001"));
+    {
+        const UINT8 serial[32]="2611170002";
+        assert(StorageFlash_WriteSerialNumber(serial,sizeof(serial)));
+    }
     assert(Storage_LoadConfig(&custom));
     soc.u16FormatVersion=FLASH_STORAGE_SOC_DATA_VERSION;soc.u16SocNow=37;soc.u32CycleTimes=12345;
     assert(StorageFlash_SaveSocData(&soc));
@@ -186,6 +190,8 @@ static void test_module_updates(void) {
             assert(actual.rw.heat_cool[word]==((mask&(1U<<STORAGE_PARAM_HEAT_COOL)) ? defaults.rw.heat_cool[word] : custom.rw.heat_cool[word]));
         assert(actual.rw.reserved[STORAGE_UPDATE_GENERATION_INDEX]==(mask ? 1U : 0U));
         assert(actual.rw.reserved[STORAGE_UPDATE_TAG_INDEX]==STORAGE_UPDATE_TAG);
+        assert(actual.rw.reserved[STORAGE_SERIAL_TAG_INDEX]==custom.rw.reserved[STORAGE_SERIAL_TAG_INDEX]);
+        assert(actual.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]==custom.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]);
         for(word=STORAGE_BAUD_MODE_INDEX;word<FLASH_STORAGE_RW_PARAM_RESERVED_WORD_COUNT;++word)
             assert(actual.rw.reserved[word]==custom.rw.reserved[word]);
         assert(!actual.initializing && !memcmp(actual.reserved_legacy,custom.reserved_legacy,32));
@@ -465,6 +471,64 @@ static void test_parameter_application(void)
     puts("PASS parameter application: pure default snapshot, failed boot preserves all live parameters, successful commit applies once");
 }
 
+static void test_serial_storage(void)
+{
+    const UINT8 serials[2][32]={"2611170002","12345678901234567890123456789012"};
+    STORAGE_FLASH_CONFIG_DATA old_value,new_value,loaded;
+    UINT8 serial[32];
+    int operation,cut,writes,result,total=0;
+    assert(Storage_LoadConfig(&old_value));
+    old_value.initializing=0U;
+    old_value.rw.reserved[STORAGE_SERIAL_TAG_INDEX]=8U;
+    old_value.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]=8U;
+    memset(old_value.reserved_legacy,0,sizeof(old_value.reserved_legacy));
+    memcpy(old_value.reserved_legacy,"old-software-version",20);
+    assert(Storage_SaveConfig(&old_value)); mutations=0;
+    memset(serial,0xA5,sizeof(serial));
+    assert(!StorageFlash_ReadSerialNumber(serial,sizeof(serial)) && !mutations && serial[0]==0xA5U);
+    for(operation=0;operation<2;++operation) {
+        assert(Storage_LoadConfig(&old_value)); save_flash(); mutations=0;
+        assert(StorageFlash_WriteSerialNumber(serials[operation],32U)); writes=mutations;
+        assert(Storage_LoadConfig(&new_value));
+        loaded=new_value;
+        memcpy(loaded.reserved_legacy,old_value.reserved_legacy,32U);
+        loaded.rw.reserved[STORAGE_SERIAL_TAG_INDEX]=old_value.rw.reserved[STORAGE_SERIAL_TAG_INDEX];
+        loaded.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]=old_value.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX];
+        assert(!memcmp(&loaded,&old_value,sizeof(loaded)));
+        for(cut=0;cut<=writes;++cut) {
+            restore_flash(); cut_after=cut;
+            result=StorageFlash_WriteSerialNumber(serials[operation],32U); cut_after=-1;
+            assert(Storage_LoadConfig(&loaded));
+            assert(!memcmp(&loaded,result ? &new_value : &old_value,sizeof(loaded)));
+            if(result || operation) {
+                assert(StorageFlash_ReadSerialNumber(serial,sizeof(serial)));
+                assert(!memcmp(serial,serials[result ? operation : 0],sizeof(serial)));
+            } else assert(!StorageFlash_ReadSerialNumber(serial,sizeof(serial)));
+            assert(!memcmp((void *)FLASH_STATE_A,saved+(FLASH_STATE_A-FLASH_PARAMETER_RESET_BEGIN),FLASH_STORAGE_END-FLASH_STATE_A));
+            ++total;
+        }
+        restore_flash(); assert(Storage_SaveConfig(&new_value));
+    }
+    mutations=0;
+    assert(StorageFlash_WriteSerialNumber(serials[1],32U) && !mutations);
+    assert(!StorageFlash_WriteSerialNumber(0,32U) && !StorageFlash_ReadSerialNumber(0,32U));
+    for(cut=0;cut<=33;++cut) if(cut!=32) {
+        assert(!StorageFlash_WriteSerialNumber(serials[0],(UINT16)cut));
+        assert(!StorageFlash_ReadSerialNumber(serial,(UINT16)cut) && !mutations);
+    }
+    assert(StorageFlash_SaveParameters(0U) && StorageFlash_InitParameters());
+    assert(StorageFlash_ReadSerialNumber(serial,sizeof(serial)) && !memcmp(serial,serials[1],32U));
+    error_after_commit=1;
+    assert(StorageFlash_WriteSerialNumber(serials[0],32U)); error_after_commit=0;
+    assert(StorageFlash_ReadSerialNumber(serial,sizeof(serial)) && !memcmp(serial,serials[0],32U));
+    assert(Storage_LoadConfig(&old_value));
+    loaded=old_value; loaded.initializing=STORAGE_PARAM_RESET_LOG;
+    assert(Storage_SaveConfig(&loaded)); mutations=0;
+    assert(!StorageFlash_WriteSerialNumber(serials[1],32U) && !mutations);
+    assert(Storage_SaveConfig(&old_value));
+    printf("PASS serial storage: %d first/update power cuts, legacy slot/tag isolation, complete old/new records, 32-byte bounds, no-op, commit readback, parameter/boot preservation\n",total);
+}
+
 /* SOC_PERSISTENCE_TESTS */
 
 int main(void) {
@@ -575,6 +639,7 @@ int main(void) {
     test_module_updates();
     test_statistics();
     test_communication_storage();
+    test_serial_storage();
     test_soc_cycle_persistence();test_soc_smooth_persistence();
     return 0;
 }

@@ -229,13 +229,101 @@ static void test_communication_settings(void)
 static UINT16 report_word(const UINT8 *data,UINT16 offset) {
     return (UINT16)((data[offset*2U]<<8)|data[offset*2U+1U]);
 }
+
+static void serial_number_request(UINT8 *b,const UINT8 *serial)
+{
+    UINT16 crc;
+    b[0]=1; b[1]=0x10; b[2]=0xFF; b[3]=0xF0;
+    b[4]=0; b[5]=16; b[6]=32;
+    memcpy(b+7,serial,32U);
+    crc=Sci_CRC16RTU(b,39U); b[39]=(UINT8)crc; b[40]=(UINT8)(crc>>8);
+}
+
+static void check_customer_serial(struct SCI_PORT *port,const UINT8 *serial)
+{
+    UINT8 b[251];
+    request(port,data2_request,sizeof(data2_request)); Sci_ServicePort(port);
+    assert(transmit(port,b)==20 && b[0]==0xAA && b[1]==0xED && b[2]==15);
+    assert(!memcmp(b+7,serial,11U) && b[18]==Customer_Bcc(b+3,15U) && b[19]==0xFA);
+}
+
+static void test_serial_number(void)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    UINT8 mb[41],b[251],serial[32],previous[32];
+    UINT16 port_index,i,crc;
+    int before;
+    assert(Storage_LoadConfig(&config));
+    config.rw.reserved[STORAGE_SERIAL_TAG_INDEX]=8U;
+    config.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]=8U;
+    memcpy(config.reserved_legacy,"legacy-version",15U);
+    assert(Storage_SaveConfig(&config)); mutations=0;
+    InitProID(); InitUSART_CommonUpper();
+    assert(!mutations && !memcmp(ProductionInfor.BMS_SerialNumber,BMS_SERIAL_NUMBER_DEFAULT,sizeof(BMS_SERIAL_NUMBER_DEFAULT)));
+    check_customer_serial(&s_port1,ProductionInfor.BMS_SerialNumber);
+    for(port_index=0U;port_index<2U;++port_index) {
+        struct SCI_PORT *port=port_index ? &s_port2 : &s_port1;
+        memset(serial,0,sizeof(serial)); memcpy(serial,port_index ? "2611170003" : "2611170002",10U);
+        serial_number_request(mb,serial);
+        request(port,mb,sizeof(mb)); quiet(port);
+        assert(transmit(port,b)==8 && b[1]==0x10 && b[5]==16);
+        assert(!memcmp(ProductionInfor.BMS_SerialNumber,serial,32U) && ProductionInfor.BMS_SerialNumberLength==11U);
+        before=mutations;
+        request(port,mb,sizeof(mb)); quiet(port); assert(transmit(port,b)==8 && mutations==before);
+        memset(&ProductionInfor,0xA5,sizeof(ProductionInfor)); InitProID();
+        assert(!memcmp(ProductionInfor.BMS_SerialNumber,serial,32U) && mutations==before);
+        check_customer_serial(port,serial);
+        modbus_request(mb,1,3,0xC002,48);
+        request(port,mb,8); quiet(port);
+        assert(transmit(port,b)==101 && b[2]==96 && !memcmp(b+3,serial,32U));
+        assert(!memcmp(b+35,ProductionInfor.BMS_HardWareVersion,32U));
+        assert(!memcmp(b+67,ProductionInfor.BMS_SoftWareVersion,32U));
+        memcpy(previous,serial,32U); serial[0]='9'; serial_number_request(mb,serial);
+        cut_after=0; mutations=0;
+        request(port,mb,sizeof(mb)); quiet(port);
+        assert(transmit(port,b)==5 && b[1]==0x90 && b[2]==RS485_ERROR_CMD_INVALID); cut_after=-1;
+        assert(!memcmp(ProductionInfor.BMS_SerialNumber,previous,32U));
+        InitProID(); check_customer_serial(port,previous);
+        before=mutations; mb[40]^=1U;
+        request(port,mb,sizeof(mb)); quiet(port); assert(!port->tx_length && mutations==before);
+        for(i=0U;i<32U;++i) {
+            memset(serial,'A',sizeof(serial)); serial[i]=0x7FU; serial_number_request(mb,serial);
+            request(port,mb,sizeof(mb)); quiet(port);
+            assert(transmit(port,b)==5 && b[2]==RS485_ERROR_DATA_INVALID && mutations==before);
+        }
+        memset(serial,0,sizeof(serial)); serial_number_request(mb,serial);
+        request(port,mb,sizeof(mb)); quiet(port);
+        assert(transmit(port,b)==5 && b[2]==RS485_ERROR_DATA_INVALID);
+        serial[0]='A'; serial[2]='B'; serial_number_request(mb,serial);
+        request(port,mb,sizeof(mb)); quiet(port);
+        assert(transmit(port,b)==5 && b[2]==RS485_ERROR_DATA_INVALID && mutations==before);
+        serial_number_request(mb,previous); mb[5]=15; mb[6]=30;
+        crc=Sci_CRC16RTU(mb,37U); mb[37]=(UINT8)crc; mb[38]=(UINT8)(crc>>8);
+        request(port,mb,39U); quiet(port);
+        assert(transmit(port,b)==5 && b[2]==RS485_ERROR_DATA_INVALID && mutations==before);
+        assert(!memcmp(ProductionInfor.BMS_SerialNumber,previous,32U));
+    }
+    memcpy(serial,"12345678901234567890123456789012",32U);
+    serial_number_request(mb,serial); request(&s_port1,mb,sizeof(mb)); quiet(&s_port1);
+    assert(transmit(&s_port1,b)==8 && ProductionInfor.BMS_SerialNumberLength==32U);
+    InitProID(); check_customer_serial(&s_port2,serial);
+    serial[0]='B'; serial_number_request(mb,serial); mb[0]=0;
+    crc=Sci_CRC16RTU(mb,39U); mb[39]=(UINT8)crc; mb[40]=(UINT8)(crc>>8);
+    request(&s_port2,mb,sizeof(mb)); quiet(&s_port2); assert(!s_port2.tx_length);
+    InitProID(); check_customer_serial(&s_port1,serial);
+    battery_number_request(mb,"BAT12345678"); request(&s_port1,mb,21U); quiet(&s_port1);
+    assert(transmit(&s_port1,b)==8); InitProID();
+    assert(!memcmp(ProductionInfor.BMS_SerialNumber,serial,32U));
+    puts("PASS serial: real FFF0 -> Flash -> ProductionInfor -> C002/customer data2, both UARTs, reboot/default, 32-byte maximum, no-op, failure, CRC/ASCII/length, broadcast, independent FFF3");
+}
+
 static void test_report_cleanup(void) {
     struct { UINT8 data[RS485_RO_TOTAL_WORDS*2U]; UINT32 guard; } output;
     struct RS485MSG message;
     UINT16 i,word;
     memset(&message,0,sizeof(message)); memset(&output,0xa5,sizeof(output));
     output.guard=0x12345678UL;
-    for(i=0;i<16U;++i) SH367309_Read_AFE1.u16VCell[i]=(UINT16)(3300U+i);
+    for(i=0;i<16U;++i) Registers_AFE1.Cell[i]=(UINT16)U16_SwapEndian(((3300U+i)*32U+4U)/5U);
     DataLoad_CellVolt();
     Sci_ACK_0x03_ReadRegs_Data(&message,output.data);
     assert(output.guard==0x12345678UL);
@@ -368,6 +456,7 @@ int main(void)
     }
     test_remaining_time();
     test_communication_settings();
+    test_serial_number();
     puts("PASS both UARTs: protocol switching/interleaving, all six customer commands, units, checksums, bounds");
     puts("PASS RTU: t1.5/t3.5, invalid gaps, wrap, TX timeout, per-port IAP ACK, STOP retry");
     return 0;

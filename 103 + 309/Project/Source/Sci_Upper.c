@@ -405,6 +405,24 @@ void Sci_Deal_WrRegs_0x10(struct RS485MSG *s)
 		break;
 
 	case RS485_ADDR_SN_SERIAL_NUM:
+		{
+			UINT16 i;
+			UINT8 ended=0U;
+			if (Sci_GetWrRegNum(s)!=PRODUCT_ID_LENGTH_MAX/2U ||
+				s->u16Buffer[6]!=PRODUCT_ID_LENGTH_MAX || s->u16Buffer[7]==0U) {
+				Sci_SetWrError(s,RS485_ERROR_DATA_INVALID);
+				break;
+			}
+			for (i=7U; i<7U+PRODUCT_ID_LENGTH_MAX; ++i) {
+				UINT8 value=s->u16Buffer[i];
+				if (value==0U) ended=1U;
+				else if (ended || value<0x20U || value>0x7EU) break;
+			}
+			if (i!=7U+PRODUCT_ID_LENGTH_MAX) Sci_SetWrError(s,RS485_ERROR_DATA_INVALID);
+			else if (!ProductionID_WriteSerialNumber(&s->u16Buffer[7]))
+				Sci_SetWrError(s,RS485_ERROR_CMD_INVALID);
+		}
+		break;
 	case RS485_ADDR_SN_HAEDWARE_VER:
 	case RS485_ADDR_SN_SOFTWARE_VER:
 		/* Historical identity writes are acknowledged without changing the identity. */
@@ -461,10 +479,10 @@ void Sci_ACK_0x03_ReadRegs_LCD(struct RS485MSG *s, UINT8 t_u8BuffTemp[])
 			}
 			break;
 
-		case 2: // 序列号，�件版�号，�件版��
-			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SerialNumber, PRODUCT_ID_LENGTH_MAX);
-			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_HardWareVersion, PRODUCT_ID_LENGTH_MAX);
-			// Sci_PutBytes(t_u8BuffTemp, &i, ProductionInfor.BMS_SoftWareVersion, PRODUCT_ID_LENGTH_MAX);
+		case 2: /* C002: serial, hardware and software, 32 bytes each. */
+			memcpy(t_u8BuffTemp,ProductionInfor.BMS_SerialNumber,PRODUCT_ID_LENGTH_MAX);
+			memcpy(t_u8BuffTemp+PRODUCT_ID_LENGTH_MAX,ProductionInfor.BMS_HardWareVersion,PRODUCT_ID_LENGTH_MAX);
+			memcpy(t_u8BuffTemp+2U*PRODUCT_ID_LENGTH_MAX,ProductionInfor.BMS_SoftWareVersion,PRODUCT_ID_LENGTH_MAX);
 			break;
 
 		case 4: /* for-c034 requests 11 registers; its first 11 bytes are ASCII. */

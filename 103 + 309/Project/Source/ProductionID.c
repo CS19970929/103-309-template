@@ -2,6 +2,15 @@
 
 PRODUCTION_ID_INFO ProductionInfor;
 
+static void ProductionID_ApplySerialNumber(const UINT8 *serial)
+{
+    UINT16 length=0U;
+    memcpy(ProductionInfor.BMS_SerialNumber,serial,PRODUCT_ID_LENGTH_MAX);
+    while (length<PRODUCT_ID_LENGTH_MAX && serial[length]!=0U) ++length;
+    ProductionInfor.BMS_SerialNumberLength=(UINT16)(
+        length<PRODUCT_ID_LENGTH_MAX ? length+1U : PRODUCT_ID_LENGTH_MAX);
+}
+
 static void InitProID_DefaultData(void)
 {
 	UINT8 harewareCount = sizeof(BMS_HARDWARE_VERDION_DEFAULT) > PRODUCT_ID_LENGTH_MAX ? PRODUCT_ID_LENGTH_MAX : sizeof(BMS_HARDWARE_VERDION_DEFAULT);
@@ -20,5 +29,16 @@ static void InitProID_DefaultData(void)
 
 void InitProID(void)
 {
+	UINT8 serial[PRODUCT_ID_LENGTH_MAX];
 	InitProID_DefaultData();
+	if (StorageFlash_ReadSerialNumber(serial,sizeof(serial)))
+		ProductionID_ApplySerialNumber(serial);
+}
+
+UINT8 ProductionID_WriteSerialNumber(const UINT8 *serial)
+{
+    /* Publish only the value confirmed by the committed A/B Flash record. */
+    if (!StorageFlash_WriteSerialNumber(serial,PRODUCT_ID_LENGTH_MAX)) return 0U;
+    ProductionID_ApplySerialNumber(serial);
+    return 1U;
 }

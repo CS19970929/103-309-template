@@ -12,6 +12,10 @@
 #define STORAGE_UPDATE_GENERATION_INDEX STORAGE_PARAM_VERSION_FIRST
 #define STORAGE_UPDATE_TAG_INDEX (STORAGE_PARAM_VERSION_FIRST + 1U)
 #define STORAGE_UPDATE_TAG 0x5355U
+/* Only this tag pair gives the legacy 32-byte slot a serial-number meaning. */
+#define STORAGE_SERIAL_TAG_INDEX 8U
+#define STORAGE_SERIAL_TAG_INV_INDEX 9U
+#define STORAGE_SERIAL_TAG 0x534EU
 /* Private fields fit the existing 24-word reserved area; record size is unchanged. */
 #define STORAGE_BAUD_MODE_INDEX 15U
 #define STORAGE_BATTERY_NUMBER_INDEX 16U
@@ -42,7 +46,7 @@ typedef struct
 typedef struct {
     UINT16 afe[FLASH_STORAGE_AFE_WORD_COUNT];
     STORAGE_FLASH_RW_PARAM_DATA rw;
-    UINT8 reserved_legacy[32]; /* Retain offset/CRC, unused by current firmware. */
+    UINT8 reserved_legacy[32]; /* Tagged serial number; retain size and offset. */
     UINT16 initializing; /* Durable pending STORAGE_PARAM_RESET_* bits. */
 } STORAGE_FLASH_CONFIG_DATA;
 
@@ -358,6 +362,30 @@ UINT8 StorageFlash_SetBaudMode(UINT16 mode)
     if (mode<1U || mode>3U || !Storage_LoadConfig(&config) || config.initializing)
         return 0U;
     config.rw.reserved[STORAGE_BAUD_MODE_INDEX]=mode;
+    return Storage_SaveConfig(&config);
+}
+
+UINT8 StorageFlash_ReadSerialNumber(UINT8 *serial, UINT16 length)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    if (!serial || length!=sizeof(config.reserved_legacy) || !Storage_LoadConfig(&config))
+        return 0U;
+    if (config.rw.reserved[STORAGE_SERIAL_TAG_INDEX]!=STORAGE_SERIAL_TAG ||
+        config.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]!=(UINT16)~STORAGE_SERIAL_TAG)
+        return 0U;
+    memcpy(serial,config.reserved_legacy,length);
+    return 1U;
+}
+
+UINT8 StorageFlash_WriteSerialNumber(const UINT8 *serial, UINT16 length)
+{
+    STORAGE_FLASH_CONFIG_DATA config;
+    if (!serial || length!=sizeof(config.reserved_legacy) ||
+        !Storage_LoadConfig(&config) || config.initializing)
+        return 0U;
+    memcpy(config.reserved_legacy,serial,length);
+    config.rw.reserved[STORAGE_SERIAL_TAG_INDEX]=STORAGE_SERIAL_TAG;
+    config.rw.reserved[STORAGE_SERIAL_TAG_INV_INDEX]=(UINT16)~STORAGE_SERIAL_TAG;
     return Storage_SaveConfig(&config);
 }
 

@@ -31,7 +31,9 @@ typedef int8_t INT8; typedef int16_t INT16; typedef int32_t INT32;
 pre+='\n'.join(line for line in hdr.splitlines() if line.startswith('#define'))+'\n'
 pre+=decl(hdr,'enum RS485_CMD_E {')+decl(hdr,'enum RS485_CMD_RW_E {')+decl(hdr,'struct RS485MSG {')
 pre+='\n'.join(line for line in (src/'DataDeal.h').read_text(encoding='utf-8').splitlines()
-               if line.startswith('#define') and 'BMS_SOFTWARE_VERDION_DEFAULT' in line)+'\n'
+               if line.startswith('#define') and any(name in line for name in
+                   ('BMS_SOFTWARE_VERDION_DEFAULT','BMS_HARDWARE_VERDION_DEFAULT','BMS_SERIAL_NUMBER_DEFAULT')))+'\n'
+pre+=(src/'ProductionID.h').read_text(encoding='utf-8')+'\n'
 pre+=decl((src/'DataDeal.h').read_text(encoding='utf-8'),'enum tagInfoForKBArray {')
 pre+=r'''
 #define E2P_PARA_NUM_PROTECT 65
@@ -41,12 +43,11 @@ pre+=r'''
 #define AFE_PARAMETES_TOTAL_LENGTH 24
 #define RS485_ADDR_RW_AFE_PARAMETER 0x2400
 #define FLASH_STORAGE_LOG_RECORD_COUNT 100
-#define PRODUCT_ID_LENGTH_MAX 32
 #define Record_len 10
 static UINT8 g_u8SCITxBuff[SCI_TX_BUF_LEN];
 static UINT16 Fault_record_Third[Record_len];
 static UINT8 FaultPoint_Third;
-static struct {UINT8 BMS_SerialNumber[32], BMS_HardWareVersion[32], BMS_SoftWareVersion[32];} ProductionInfor;
+PRODUCTION_ID_INFO ProductionInfor;
 void Sci_Deal_ReadRegs_0x03(struct RS485MSG *s);
 static int writes;
 static void SleepDeal_RecordExternalComm(void) {}
@@ -192,10 +193,15 @@ static UINT8 FaultPoint_Third2;
 static void PWR_BackupAccessCmd(int enabled) {}
 static UINT16 BKP_ReadBackupRegister(int reg) { return reg==11 ? 0x4846U : (UINT16)~0x4846U; }
 UINT32 SystemRuntime_GetStatusSnapshot(void) { return 0x12345678UL; }
-static struct { UINT16 u16VCell[16]; } SH367309_Read_AFE1;
+static struct { UINT16 Cell[16]; } Registers_AFE1;
 '''
 combo+=func(sci,'static void Sci_PutLatestFaultWords(')+func(sci,'void Sci_ACK_0x03_ReadRegs_Data(')
 data=(src/'DataDeal.c').read_text(encoding='utf-8')
+afe=(src/'I2C_AFE1.c').read_text(encoding='utf-8')
+combo+='\n'.join(line for line in (src/'main.h').read_text(encoding='utf-8').splitlines()
+                if line.startswith('#define U16_SwapEndian'))+'\n'
+combo+='\n'.join(line for line in afe.splitlines() if line.startswith('#define AFE_CELL_MAX_MV'))+'\n'
+combo+=func(afe,'UINT8 AfeCell_DecodeMv(')
 start=data.index('const unsigned char SeriesSelect_AFE1')
 combo+=data[start:data.index('};',start)+2]+'\n'+func(data,'void DataLoad_CellVolt(')
 combo+=(src/'rtc_sleep.h').read_text(encoding='utf-8')+'\n'
@@ -211,6 +217,8 @@ combo+=flash_stub+'\n'.join(line for line in flash.splitlines() if not line.star
 # This UART-only fixture cuts Flash.c before parameter validators; the full
 # validation/CRC/transaction implementation is exercised by test_storage.py.
 combo+='\nstatic UINT8 Storage_ConfigValid(const STORAGE_FLASH_CONFIG_DATA *config) { return (UINT8)(config != 0); }\n'
+combo+='\n'.join(line for line in (src/'ProductionID.c').read_text(encoding='utf-8').splitlines()
+                if not line.startswith('#include'))+'\n'
 combo+='''
 #define FAULT_CURRENT_MAX_GAP_TICKS 50U
 static UINT8 s_current_valid;
@@ -348,6 +356,7 @@ int main(void) {
     m.u16Buffer[2]=0xFF; m.u16Buffer[3]=0xF3;
     Sci_Deal_WrRegs_0x10(&m);
     assert(m.ErrorType==RS485_ERROR_NO_PERMISSION);
+    assert(Sci_HostWriteWords(0xFFF0,&value,1)==RS485_ERROR_NO_PERMISSION);
     puts("PASS read-only policy: both Modbus write functions, CAN word writes and customer MOS control rejected");
     return 0;
 }

@@ -22,6 +22,8 @@ extern PRODUCTION_ID_INFO ProductionInfor;
 
 
 void InitProID(void);
+/* Fixed 32-byte ASCII buffer with zero padding, validated by the protocol. */
+UINT8 ProductionID_WriteSerialNumber(const UINT8 *serial);
 
 
 #endif	/* PRODUCTIONID_H */

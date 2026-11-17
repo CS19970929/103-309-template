@@ -67,6 +67,8 @@ UINT8 StorageFlash_InitParameters(void);
 UINT8 StorageFlash_SaveParameters(UINT8 cycle_count_written);
 UINT16 StorageFlash_GetBaudMode(void);
 UINT8 StorageFlash_SetBaudMode(UINT16 mode);
+UINT8 StorageFlash_ReadSerialNumber(UINT8 *serial, UINT16 length);
+UINT8 StorageFlash_WriteSerialNumber(const UINT8 *serial, UINT16 length);
 UINT8 StorageFlash_ReadBatteryNumber(UINT8 number[BATTERY_NUMBER_LENGTH]);
 UINT8 StorageFlash_WriteBatteryNumber(const UINT8 number[BATTERY_NUMBER_LENGTH]);
 UINT8 StorageFlash_AppendLog(UINT8 event, UINT8 delta);

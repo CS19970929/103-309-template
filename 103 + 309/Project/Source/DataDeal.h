@@ -130,7 +130,7 @@ struct OTHER_ELEMENT {
 
 #define  BMS_HARDWARE_VERDION_DEFAULT   "LiTech"
 #define  BMS_SOFTWARE_VERDION_DEFAULT   "10"  //32
-#define  BMS_SERIAL_NUMBER_DEFAULT  	  "LiTech"
+#define  BMS_SERIAL_NUMBER_DEFAULT  	  "2611170001"
 
 #define SNum 		7
 

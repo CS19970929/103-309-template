@@ -230,7 +230,7 @@ AFE 与软件保护是两个独立参数组。只改 `Fault.h` 不会改 AFE 硬
 | `sys_time.time_enter_rtc` | `conf/conf.c` 的 `Time_T sys_time` 初始化 | 直接随新 App 复位初始化生效，不需要 MASK；它是连续符合条件后进入 HICCUP 的秒数，`uint8_t`，不是 7 天 DEEP 参数 |
 | RTC 周期检查间隔 | `RTC.c` 的 `RTC_WAKEUP_DEFAULT_SECONDS` | 固件常量，当前不使用 Other 的 `0x2316/0x2317` 控制，不需要 MASK |
 | 同类日志限频 | `PROJECT_CFG_LOG_RECORD_REPEAT_MIN_INTERVAL_SEC` | 直接生效；清旧日志是另一个动作，须 bit7 |
-| 硬件版本、软件版本、BMS 序列号默认字符串 | `DataDeal.h` 的 `BMS_HARDWARE_VERDION_DEFAULT`、`BMS_SOFTWARE_VERDION_DEFAULT`、`BMS_SERIAL_NUMBER_DEFAULT` | `ProductionID.c` 每次启动从固件初始化身份信息，无需 MASK；与另行持久化的 11 字节电池编号区分 |
+| 硬件版本、软件版本、BMS 序列号默认字符串 | `DataDeal.h` 的 `BMS_HARDWARE_VERDION_DEFAULT`、`BMS_SOFTWARE_VERDION_DEFAULT`、`BMS_SERIAL_NUMBER_DEFAULT` | 硬件/软件版本每次启动取固件宏；BMS 序列号优先加载 `0xFFF0` 写入的 Flash 值，未保存过时才用默认宏，无需 MASK；普通参数保存和按组更新保留已写入序列号。与另行持久化的11字节电池编号区分 |
 | GPIO、UART、CAN、ADC、IWDG 板级映射 | `conf/Board_Config.h` / `.c` | 固件配置，见板级文档；MASK 不负责迁移引脚、协议或 Flash 地址 |
 | 虚拟电流调试 | `conf.h` 的 `__VIRTURE_CURRENT__` 和 RAM 中 `sys_time.isdebugenable`、`CHG`、`DSG` | 编入该宏且运行使能为 1 时以虚拟 A×10 电流替代上报、SOC 和软件电流保护的输入；这是调试入口，不是持久化更新选项 |
 
